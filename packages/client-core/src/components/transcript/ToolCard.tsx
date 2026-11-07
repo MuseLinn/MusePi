@@ -8,7 +8,7 @@ import type { ToolRenderHost, ToolResultImage } from "../../tool-render/types";
 import { computerShotsOf, detailsRecord, resultImagesOf } from "../../tool-render/util";
 import { ImageCardStack } from "./image-card-stack";
 import { toolKind } from "./toolcard-shared";
-import { widgetStandaloneEnabled } from "./widget-standalone";
+import { WidgetCard, widgetPayloadFromResult, widgetStandaloneEnabled } from "./widget-standalone";
 
 /** Hoist a tool result's image blocks out of the foldable card: the card
  *  keeps the text/log content (its ZCode summary), while the media renders
@@ -88,11 +88,18 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 			? (partialResult as ToolResultMessage)
 			: undefined;
 	const effectiveResult = result ?? structuredPartial;
-	// With the standalone widget display on, the widget's visual lives on
-	// its own card in the message flow — the tool-call card folds to its
-	// summary line (the musepi-gui-widget-expanded pref only applies when the
-	// standalone display is off). Board cards keep their own default.
-	const artifactDefaultOpen = name === "widget" && widgetStandaloneEnabled() ? false : widgetDefaultOpen();
+	// A widget call IS its artifact: with the standalone display on, the card
+	// replaces the tool row instead of appearing under a folded one. One
+	// payload, one surface — a closed row above a second copy read as a
+	// duplication bug.
+	if (name === "widget" && widgetStandaloneEnabled()) {
+		const payload = widgetPayloadFromResult(effectiveResult);
+		if (payload) return <WidgetCard payload={payload} host={host} className="tr-widget-inplace" />;
+	}
+	// Artifact cards are the deliverable, not process noise, so they never
+	// start collapsed. The expanded preference only applies to a widget shown
+	// inline (standalone display off).
+	const artifactDefaultOpen = name === "widget" ? widgetDefaultOpen() : true;
 	// Artifact cards own their visualization (widget/board) — leave their
 	// media inside. For every other tool, strip image blocks out of the
 	// card content so the fold never re-hides them, and render them inline.

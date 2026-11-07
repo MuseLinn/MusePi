@@ -4162,6 +4162,14 @@ export const settings = {
 	"{0} {1}": "{0} {1}",
 	" · ": " · ",
 	" │ ": " │ ",
+	"Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter":
+		"关闭、本地摘要、Mnemopi SQLite、Hindsight 远端记忆或 Sharpshooter",
+	Sharpshooter: "Sharpshooter（项目决策）",
+	"Friction-gated project decision files (architecture/product/style), consolidated in the background":
+		"按摩擦门槛抽取的项目决策文件（架构/产品/风格），后台合并",
+	"Hindsight Global Scope": "Hindsight 全局作用域",
+	"Let retain and learn take scope: global, which stores a memory without the project tag so every project recalls it. Needs global or per-project-tagged scoping":
+		"允许 retain 和 learn 使用 scope: global，写入不带项目标签的记忆，使每个项目都能 recall。需要 global 或 per-project-tagged 作用域",
 } as const;
 
 /** Key union for the settings domain (mirrors the guest-client locale split). */

@@ -14,6 +14,7 @@ export function SchemaTabSection({
 	excludeGroups,
 	excludeKeys,
 	excludePrefixes,
+	conditions,
 }: {
 	rpc: RpcClient | null;
 	tabs: string[];
@@ -33,6 +34,9 @@ export function SchemaTabSection({
 	 * prefixes is skipped (e.g. the voice page drops all `stt.` rows when
 	 * the 语音输入 plugin unit is disabled — the page is plugin-driven). */
 	excludePrefixes?: readonly string[];
+	/** Condition evaluators that need GUI-side state (plugin registry, …)
+	 *  not present in the fetched settings values. Memoize at the call site. */
+	conditions?: Record<string, (values: Record<string, unknown>) => boolean>;
 }): ReactNode {
 	const [schema, setSchema] = useState<SchemaItem[] | null>(null);
 	const [values, setValues] = useState<Record<string, unknown>>({});
@@ -88,6 +92,7 @@ export function SchemaTabSection({
 			values={values}
 			onChange={onChange}
 			error={error}
+			conditions={conditions}
 			renderExtra={(key, value, commit) =>
 				key === "display.taskCardStyle" ? (
 					<TaskCardStylePreview value={value} onPick={style => commit("display.taskCardStyle", style)} />

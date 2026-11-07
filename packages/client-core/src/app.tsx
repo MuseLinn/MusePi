@@ -1,4 +1,4 @@
-import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
+import type { AssistantMessage, AttachmentGetResult, AttachmentStatResult, SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AgentDrawer } from "./components/agents/AgentDrawer";
@@ -634,6 +634,13 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 				void client.sendPrompt(text).catch(error => {
 					console.error("[transcript] prompt failed:", error);
 				});
+			},
+			// User-message attachment cards: size probe and paged text preview.
+			// Both methods already exist on the daemon; the host only exposes them.
+			attachment: {
+				stat: hash => client.rpc<AttachmentStatResult>("attachment.stat", { hash }),
+				read: (hash, offset, limit) =>
+					client.rpc<AttachmentGetResult | { error: string }>("attachment.get", { hash, offset, limit }),
 			},
 		}),
 		[agentIds, client],

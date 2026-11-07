@@ -675,12 +675,29 @@ export async function listSubagentSessions(storage: SessionStorage = new FileSes
 		// badge them distinctly and block interactive sends.
 		const { isAdvisorTranscriptName } = await import("../advisor/transcript-recorder");
 		for (const s of sessions) {
-			if (isAdvisorTranscriptName(path.basename(s.path))) s.advisor = true;
+			if (isAdvisorTranscriptName(path.basename(s.path))) {
+				s.advisor = true;
+				continue;
+			}
+			// Transcripts written before spawn-time titles (or by a CLI path that
+			// never set one) still have a stable label: the filename is the agent
+			// id (`<subId>.jsonl`). Without it the session tree shows "untitled"
+			// for every historical subagent.
+			if (!s.title) s.title = subagentSessionLabel(s.path);
 		}
 		return sessions;
 	} catch {
 		return [];
 	}
+}
+
+/** Agent id carried by a subagent transcript filename (`<subId>.jsonl`), used
+ *  as the row label when the transcript has no title slot. */
+export function subagentSessionLabel(sessionPath: string): string | undefined {
+	const base = path.basename(sessionPath);
+	if (!base.endsWith(".jsonl")) return undefined;
+	const label = base.slice(0, -".jsonl".length);
+	return label.length > 0 && !label.startsWith("__advisor") ? label : undefined;
 }
 
 /** Exported for testing */

@@ -227,6 +227,21 @@ export const tools = {
 	"tools.importChromeDataDescription":
 		"从 Chrome 最近使用的 Profile 一次性导入 Cookie 和 LocalStorage；不会持续同步、刷新已打开页面或修改 Chrome 数据",
 	"tools.importBrowserData": "导入浏览器数据",
+	"tools.importChromeDataShared": "从 Chrome 导入数据",
+	"tools.importChromeDataSharedDescription":
+		"从默认 Chrome Profile 复制 Cookie 和 LocalStorage 到共享自动化 Chromium；不包含密码，也不导入右栏受管浏览器 Profile。",
+	"tools.importChromeDataSuccess": "Chrome 数据已导入共享自动化 Chromium",
+	"tools.importChromeDataFailed": "Chrome 数据导入失败",
+	"tools.importChromeDataDismiss": "关闭 Chrome 导入提示",
+	"tools.browserDataSettings": "浏览器数据设置",
+	"tools.importing": "正在导入…",
+	"tools.sharedChromium": "共享 Chromium",
+	"tools.sharedChromiumExtensionsDescription": "共享自动化 Chromium 中安装的扩展",
+	"tools.loadingExtensions": "正在加载扩展…",
+	"tools.browserExtensionsToolbar": "扩展工具栏按钮",
+	"tools.browserExtensionsToolbarDescription": "在受管浏览器工具栏显示扩展按钮；隐藏后仍可从设置管理。",
+	"tools.browserShowFullUrl": "显示完整网址",
+	"tools.browserShowFullUrlDescription": "在受管浏览器地址栏显示完整地址，而不是仅显示主机名。",
 	"tools.clearBrowserCache": "清除内置浏览器缓存",
 	"tools.clearBrowserCacheDescription": "清除 HTTP 缓存、Cache Storage 和 Service Worker，保留 Cookie 和本地站点数据",
 	"tools.clearCache": "清除缓存",
@@ -511,7 +526,7 @@ export const tools = {
 		"端侧语音听写（Whisper / SenseVoice / Parakeet 档位，首次使用自动下载）。开关镜像 stt.enabled；配置项即 stt.* 设置键，与设置页语音分区同一条存储。",
 	"tools.extBuiltinTts": "语音播报（TTS）",
 	"tools.extBuiltinTtsDesc":
-		"流式神经语音朗读（Kokoro-82M / MeloTTS 中文，首次使用自动下载）。开关镜像 speech.enabled；配置项即 tts.* 设置键，与设置页语音分区同一条存储。",
+		"流式神经语音朗读（Kokoro-82M / MeloTTS 中文，首次使用自动下载）。开关镜像 tts.autoRead；配置项即 tts.* 设置键，与设置页语音分区同一条存储。",
 	"tools.extBuiltinTerminal": "终端",
 	"tools.extBuiltinTerminalDesc":
 		"会话终端后端（bun-pty → node-pty 自动回退），驱动 TUI 终端与 GUI 终端面板。只读展示：无总开关语义；终端面板从自身 UI 关闭。",
@@ -779,7 +794,6 @@ export const tools = {
 	"tools.skillVersionUnpinned": "无版本锁定",
 	"tools.skillEnabled": "启用",
 	"tools.skillDisabled": "已停用",
-	"tools.skillBundledNoUninstall": "内置 · 随客户端分发 · 不可卸载",
 	"tools.skillAllTitle": "全部技能",
 	"tools.skillViewGrid": "网格视图",
 	"tools.skillViewList": "列表视图",
@@ -987,6 +1001,7 @@ export const tools = {
 	"annotation.attached": "标注已附加到输入框",
 	"annotation.noPage": "请先加载页面再标注",
 	"annotation.failed": "无法标注此页面",
+	"annotation.startFailed": "标注未能启动，请重试",
 	"annotation.panelTitle": "标注详情",
 	"annotation.panelClose": "关闭",
 	"annotation.panelGeometry": "定位与几何",
@@ -1784,6 +1799,8 @@ export const tools = {
 	// ── Tool card titles：wire 名 → 可读名（ToolView 的「已使用 X（参数）」）──
 	"tools.usedTool": "已使用 {tool}",
 	"tools.usingTool": "正在使用 {tool}",
+	"tools.widgetWaiting": "等待你的选择",
+	"tools.widgetAnswered": "已回复",
 	"tools.argOpen": "（",
 	"tools.argClose": "）",
 	"tools.toolApplyPatch": "应用补丁",
@@ -1858,6 +1875,15 @@ export const tools = {
 	// 文件树链接标记
 	"tools.fileTreeSymlink": "符号链接",
 	"tools.fileTreeSymlinkTarget": "符号链接 → {target}",
+	// 用户消息里的非图片附件卡（[Attachment] blob:// 引用行）
+	"tools.attachmentCards": "附件",
+	"tools.attachmentPreview": "预览",
+	"tools.attachmentCopyRef": "复制引用",
+	"tools.attachmentPreviewTitle": "附件预览",
+	"tools.attachmentPreviewUnavailable": "无法预览",
+	"tools.attachmentPreviewFailed": "无法读取附件",
+	"tools.attachmentLoadMore": "继续加载",
+	"tools.attachmentSave": "另存为",
 } as const;
 
 /** Key union for the tools domain (source of truth). */

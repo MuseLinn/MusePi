@@ -19,7 +19,7 @@
 有对应结构类型就用 **card**（有 schema、有默认值、更省 token）。
 只有当答案需要自由布局时才用 **page**：
 
-Use it when the answer is mostly data or structure the user would otherwise have to picture: numbers compared across several items (sizes, counts, timings, costs, test or benchmark results), a breakdown or share of a whole, a trend over time, options compared on several criteria, a timeline of events, or how components connect. Use it too when the answer is about how something looks: a proposed interface change shown as it would appear, before and after side by side, or layout options to choose between. Do not use it for a few numbers or a short list that reads fine as text, for code, or when the user asked for plain text. At most one page per answer.
+<!-- WIDGET_RENDER_WHEN: injected from when.ts, the same text the system prompt carries -->
 
 **不要**用于：普通文字回答、逐行代码解释、文件列表、破坏性/阻塞输入流程、
 大型长驻应用。

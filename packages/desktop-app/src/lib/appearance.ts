@@ -120,14 +120,39 @@ export const WEEKDAY_KEYS = [
 
 /** Time-format preference values (设置 → 外观 → 时间格式, TIME_FMT_KEY). */
 export type TimeFormatPref = "auto" | "12h" | "24h";
+const TIME_FORMAT_PREFS: readonly TimeFormatPref[] = ["auto", "12h", "24h"];
 
-/** Read the time-format pref (TIME_FMT_KEY) — storage-safe. */
-export function readTimeFormat(): TimeFormatPref | null {
+/** Week-start preference values (设置 → 外观 → 一周起始日, WEEK_START_KEY). */
+export type WeekStartPref = "auto" | "monday" | "sunday";
+const WEEK_START_PREFS: readonly WeekStartPref[] = ["auto", "monday", "sunday"];
+
+/** Resolve one stored preference against its allowed option ids.
+ *
+ *  The stored value is the option id ("auto"), never the label: an earlier
+ *  build kept the i18n key ("general.auto") in component state, so the
+ *  dropdown matched no option and rendered the raw key, and the resolvers
+ *  below silently missed. Values written by that build are normalized here
+ *  so a stale pref cannot disable the setting. Unknown values yield null
+ *  (caller falls back to its default) instead of leaking into the UI. */
+function readPref<T extends string>(key: string, allowed: readonly T[]): T | null {
 	try {
-		return (localStorage.getItem(TIME_FMT_KEY) as TimeFormatPref | null) ?? null;
+		const raw = localStorage.getItem(key);
+		if (raw === null) return null;
+		const id = raw.startsWith("general.") ? raw.slice("general.".length) : raw;
+		return (allowed as readonly string[]).includes(id) ? (id as T) : null;
 	} catch {
 		return null; // storage unavailable
 	}
+}
+
+/** Read the time-format pref (TIME_FMT_KEY) — storage-safe. */
+export function readTimeFormat(): TimeFormatPref | null {
+	return readPref(TIME_FMT_KEY, TIME_FORMAT_PREFS);
+}
+
+/** Read the week-start pref (WEEK_START_KEY) — storage-safe. */
+export function readWeekStart(): WeekStartPref | null {
+	return readPref(WEEK_START_KEY, WEEK_START_PREFS);
 }
 
 /** Resolve a time-format pref to the Intl `hour12` flag. The historical
@@ -152,10 +177,7 @@ export function timeFormatOptions(
  *  day index (0 = Sunday). Calendar grids and weekday pickers rotate to
  *  match instead of hardcoding Sunday first. */
 export function weekStartIndex(): number {
-	const v = localStorage.getItem(WEEK_START_KEY);
-	if (v === "sunday") return 0;
-	if (v === "monday") return 1;
-	return 1; // auto → Monday (zh-CN)
+	return readWeekStart() === "sunday" ? 0 : 1; // auto → Monday (zh-CN)
 }
 
 /** Weekday i18n keys ordered from the configured week start. */

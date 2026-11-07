@@ -40,7 +40,7 @@ function baseName(path: string): string {
 }
 
 /** `src/foo.tsx` → `TSX`, `notes.md` → `MD`, no ext → `` */
-function extBadge(path: string): string {
+export function extBadge(path: string): string {
 	const name = baseName(path);
 	const dot = name.lastIndexOf(".");
 	if (dot <= 0 || dot === name.length - 1) return "";

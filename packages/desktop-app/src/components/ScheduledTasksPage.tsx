@@ -181,6 +181,11 @@ export function ScheduledTasksPage({
 	const [runs, setRuns] = useState<CronRun[]>([]);
 	const [draft, setDraft] = useState<CronTask | null>(null);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
+	/** Left-panel controls (ChatGPT 定时任务 panel parity): the 260px column
+	 *  is not just a workspace list — it owns search + status filtering + the
+	 *  new-task action, so the destination can be worked without the header. */
+	const [query, setQuery] = useState("");
+	const [statusFilter, setStatusFilter] = useState<"all" | "enabled" | "paused" | "failed">("all");
 	const [deleteTarget, setDeleteTarget] = useState<CronTask | null>(null);
 	const [busy, setBusy] = useState(false);
 	const aliveRef = useRef(true);
@@ -271,10 +276,22 @@ export function ScheduledTasksPage({
 		return [...ids];
 	};
 
-	// Workspace grouping (openchamber: folders per project; ~ for home).
+	// Workspace grouping (openchamber: folders per project; ~ for home). The
+	// panel's search + status filter narrow the SAME task list the detail pane
+	// reads, so selecting a row never asks the daemon for a second copy.
+	const visibleTasks = useMemo(() => {
+		const q = query.trim().toLowerCase();
+		return tasks.filter(task => {
+			if (q && !task.name.toLowerCase().includes(q) && !(task.cwd ?? "").toLowerCase().includes(q)) return false;
+			if (statusFilter === "enabled" && !task.enabled) return false;
+			if (statusFilter === "paused" && task.enabled) return false;
+			if (statusFilter === "failed" && task.state?.lastStatus !== "error") return false;
+			return true;
+		});
+	}, [tasks, query, statusFilter]);
 	const groups = useMemo(() => {
 		const byCwd = new Map<string, CronTask[]>();
-		for (const task of tasks) {
+		for (const task of visibleTasks) {
 			const key = task.cwd?.trim() || "~";
 			const list = byCwd.get(key) ?? [];
 			list.push(task);
@@ -283,10 +300,23 @@ export function ScheduledTasksPage({
 		return [...byCwd.entries()]
 			.sort(([a], [b]) => (a === "~" ? -1 : b === "~" ? 1 : a.localeCompare(b)))
 			.map(([cwd, list]) => ({ cwd, tasks: list.sort((a, b) => a.name.localeCompare(b.name)) }));
-	}, [tasks]);
+	}, [visibleTasks]);
 	// Workspace headers name the folder (full path on the header's title); two
 	// workspaces sharing a basename widen to their parent.
 	const workspaceLabels = useMemo(() => projectLabels(groups.map(group => group.cwd)), [groups]);
+	/** One new-task draft for both the page header and the left panel. */
+	const openNew = (): void => {
+		setDraft({
+			id: "",
+			name: "",
+			enabled: true,
+			schedule: { kind: "daily", times: ["09:00"] },
+			prompt: "",
+			cwd: "",
+			thinkingLevel: "default",
+			state: { createdAt: Date.now() },
+		});
+	};
 
 	const save = (task: CronTask): void => {
 		if (!rpc) return;
@@ -390,22 +420,7 @@ export function ScheduledTasksPage({
 				}
 				actions={
 					<>
-						<button
-							type="button"
-							className="gui-btn gui-scheduled-new"
-							onClick={() =>
-								setDraft({
-									id: "",
-									name: "",
-									enabled: true,
-									schedule: { kind: "daily", times: ["09:00"] },
-									prompt: "",
-									cwd: "",
-									thinkingLevel: "default",
-									state: { createdAt: Date.now() },
-								})
-							}
-						>
+						<button type="button" className="gui-btn gui-scheduled-new" onClick={openNew}>
 							<Icon name="add" className="h-4 w-4" />
 							<span>{t("settings.scheduledNew")}</span>
 						</button>
@@ -472,8 +487,47 @@ export function ScheduledTasksPage({
 				</div>
 			) : (
 				<div className="gui-scheduled-body">
-					{/* Workspace columns (openchamber parity) */}
+					{/* Workspace columns (openchamber parity). The left column is
+					 * the destination's own panel: title + count, new task,
+					 * search and status filter, then the workspace-grouped list. */}
 					<div className="gui-scheduled-ws">
+						<div className="gui-scheduled-panel-head">
+							<div className="gui-scheduled-panel-title">
+								<span className="min-w-0 flex-1 truncate">{t("settings.scheduledTasks")}</span>
+								<span className="gui-scheduled-ws-count">{visibleTasks.length}</span>
+							</div>
+							<button type="button" className="gui-btn gui-scheduled-panel-new" onClick={openNew}>
+								<Icon name="add" className="h-3.5 w-3.5" />
+								<span>{t("settings.scheduledNew")}</span>
+							</button>
+							<label className="gui-scheduled-panel-search">
+								<Icon name="search" className="h-3.5 w-3.5 shrink-0" />
+								<input
+									value={query}
+									onChange={event => setQuery(event.target.value)}
+									placeholder={t("settings.search")}
+									aria-label={t("settings.search")}
+								/>
+							</label>
+							<select
+								className="gui-scheduled-panel-filter"
+								value={statusFilter}
+								onChange={event =>
+									setStatusFilter(event.target.value as "all" | "enabled" | "paused" | "failed")
+								}
+								aria-label={t("settings.scheduledFilterStatus")}
+							>
+								<option value="all">{t("settings.scheduledFilterAll")}</option>
+								<option value="enabled">{t("settings.scheduledEnabled")}</option>
+								<option value="paused">{t("settings.scheduledFilterPaused")}</option>
+								<option value="failed">{t("settings.scheduledFilterFailed")}</option>
+							</select>
+						</div>
+						{groups.length === 0 && (
+							<div className="gui-scheduled-panel-empty">
+								{tasks.length === 0 ? t("settings.scheduledEmptyTitle") : t("settings.scheduledNoMatches")}
+							</div>
+						)}
 						{groups.map(group => (
 							<div key={group.cwd} className="gui-scheduled-ws-block">
 								<div className="gui-scheduled-ws-head">

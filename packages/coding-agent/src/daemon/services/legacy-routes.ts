@@ -260,6 +260,7 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"tts.modelDelete",
 	"tts.modelDownload",
 	"tts.modelStatus",
+	"tts.rewrite",
 	"tts.synthesize",
 	"updates.check",
 	"workflows.list",

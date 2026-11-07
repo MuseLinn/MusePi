@@ -2,11 +2,11 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { isEnoent, logger } from "@musepi/pi-utils";
+import { BLOB_HASH_RE, BLOB_REF_PREFIX } from "@musepi/pi-wire";
 
-const BLOB_PREFIX = "blob:sha256:";
+const BLOB_PREFIX = BLOB_REF_PREFIX;
 
-/** Canonical blob hash shape: exactly 64 lowercase hex chars (a SHA-256 digest). */
-export const BLOB_HASH_RE = /^[a-f0-9]{64}$/;
+export { BLOB_HASH_RE };
 
 export interface BlobPutOptions {
 	/** Optional file extension for a sidecar hardlink/copy that OS openers can type-detect. */

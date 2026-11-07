@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { resolveHour12, timeFormatOptions } from "./appearance";
+import { readTimeFormat, readWeekStart, resolveHour12, timeFormatOptions, weekStartIndex } from "./appearance";
 
 /**
  * 设置 → 外观 → 时间格式 (TIME_FMT_KEY): the render layer must honor the
@@ -33,5 +33,68 @@ describe("timeFormatOptions", () => {
 		// The whole point of the helper: stray hard-coded hour12 in extra
 		// must not resurrect the old always-24h behavior.
 		expect(timeFormatOptions({ hour12: false }, "12h").hour12).toBe(true);
+	});
+});
+
+/** Install a minimal localStorage over the given entries (bun has no DOM). */
+function withStorage(entries: Record<string, string>): void {
+	const data = new Map(Object.entries(entries));
+	Object.defineProperty(globalThis, "localStorage", {
+		configurable: true,
+		value: {
+			getItem: (key: string) => data.get(key) ?? null,
+			setItem: (key: string, value: string) => void data.set(key, value),
+			removeItem: (key: string) => void data.delete(key),
+		},
+	});
+}
+
+/**
+ * 设置 → 外观 → 时间格式 / 一周起始日: the stored value is the option id,
+ * never an i18n key. A build that kept `general.auto` in state rendered the
+ * raw key in the dropdown and made every resolver miss; the readers must
+ * normalize such leftovers instead of returning them.
+ */
+describe("readTimeFormat", () => {
+	it("returns null when unset so the caller falls back to its default", () => {
+		withStorage({});
+		expect(readTimeFormat()).toBeNull();
+	});
+
+	it("reads the stored option id", () => {
+		withStorage({ "musepi-gui-timefmt": "12h" });
+		expect(readTimeFormat()).toBe("12h");
+	});
+
+	it("normalizes a legacy i18n-key value to its option id", () => {
+		withStorage({ "musepi-gui-timefmt": "general.auto" });
+		expect(readTimeFormat()).toBe("auto");
+	});
+
+	it("rejects unknown values instead of surfacing them", () => {
+		withStorage({ "musepi-gui-timefmt": "general.bogus" });
+		expect(readTimeFormat()).toBeNull();
+	});
+});
+
+describe("readWeekStart / weekStartIndex", () => {
+	it("maps the stored id to a weekday index", () => {
+		withStorage({ "musepi-gui-weekstart": "sunday" });
+		expect(readWeekStart()).toBe("sunday");
+		expect(weekStartIndex()).toBe(0);
+
+		withStorage({ "musepi-gui-weekstart": "monday" });
+		expect(weekStartIndex()).toBe(1);
+	});
+
+	it("treats the unset pref as Monday (zh-CN) rather than failing", () => {
+		withStorage({});
+		expect(weekStartIndex()).toBe(1);
+	});
+
+	it("normalizes a legacy i18n-key value so the week start still applies", () => {
+		withStorage({ "musepi-gui-weekstart": "general.sunday" });
+		expect(readWeekStart()).toBe("sunday");
+		expect(weekStartIndex()).toBe(0);
 	});
 });

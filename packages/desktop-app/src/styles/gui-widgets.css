@@ -618,7 +618,68 @@
 	min-height: 0;
 	overflow-y: auto;
 	overflow-x: hidden;
-	padding-right: 4px;
+	/* A real destination panel (ChatGPT 定时任务 left panel parity): its own
+	 * surface + chrome, not a bare list of workspace cards. */
+	padding: 10px;
+	border: 1px solid rgba(128, 128, 128, 0.18);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	box-shadow: var(--gui-card-shadow);
+}
+.gui-scheduled-panel-head {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	flex-shrink: 0;
+	padding-bottom: 8px;
+	border-bottom: 1px solid rgba(128, 128, 128, 0.16);
+}
+.gui-scheduled-panel-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	font-weight: 600;
+}
+.gui-scheduled-panel-new {
+	width: 100%;
+	justify-content: center;
+}
+.gui-scheduled-panel-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 28px;
+	padding: 0 8px;
+	border-radius: var(--radius-md);
+	background: rgba(128, 128, 128, 0.08);
+	color: var(--color-text-muted);
+}
+.gui-scheduled-panel-search input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+}
+.gui-scheduled-panel-filter {
+	height: 28px;
+	padding: 0 8px;
+	border: 1px solid rgba(128, 128, 128, 0.18);
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+}
+.gui-scheduled-panel-empty {
+	padding: 16px 8px;
+	text-align: center;
+	font-size: 12px;
+	opacity: 0.6;
 }
 .gui-scheduled-ws-block {
 	border: 1px solid rgba(128, 128, 128, 0.18);
@@ -1167,11 +1228,13 @@
  * shared tone contract in gui-tone.css — the same custom properties the board
  * card resolves, so a preview and the card it previews cannot drift. */
 
-/* ── widget card faces (kimi immersive parity) ──────────────────────────
- * Every widget carries its own card surface — dark widgets get the deep
- * gradient shell (like the vinyl player), light ones a soft frosted
- * panel, blue ones the accent tint. No outer border anywhere: the
- * widget surface IS the card. */
+/* ── widget card faces ──────────────────────────────────────────────────
+ * A card's surface belongs to its TONE (`gui-tone.css`), not to the widget: the
+ * shell paints `--gui-tone-step` and resolves the label ramp from it. A face may
+ * paint its own background only when it also PINS the matching label tokens
+ * (clock/ticker below) — a literal surface under a tone-derived ramp is what
+ * rendered `default`/`blue` cards as light text on a near-white face in dark
+ * theme, and as dark text on a dark face in light theme. */
 .gui-widget-clock,
 .gui-widget-ticker {
 	position: relative;
@@ -1186,23 +1249,14 @@
 	color: #f4f4f5;
 	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
+/* Transparent faces: the tone supplies the surface, the labels and the
+ * separator, so one widget reads correctly on a default/dark/light/blue card
+ * and follows the scheme without a second palette. */
 .gui-widget-metric,
 .gui-widget-todo,
 .gui-widget-slider,
 .gui-widget-calc,
-.gui-widget-gallery {
-	position: relative;
-	width: 100%;
-	height: 100%;
-	border-radius: var(--radius-xl);
-	padding: 14px;
-	overflow: hidden;
-	background: linear-gradient(160deg, #fbfbf9 0%, #f3f3f0 100%);
-	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.9),
-		inset 0 0 0 1px rgba(0, 0, 0, 0.05),
-		0 1px 2px rgba(0, 0, 0, 0.04);
-}
+.gui-widget-gallery,
 .gui-widget-pomodoro {
 	position: relative;
 	width: 100%;
@@ -1210,12 +1264,11 @@
 	border-radius: var(--radius-xl);
 	padding: 14px;
 	overflow: hidden;
-	background:
-		radial-gradient(120% 90% at 82% 0%, rgba(77, 163, 255, 0.18), rgba(77, 163, 255, 0) 50%),
-		linear-gradient(160deg, #eaf3fc 0%, #dcebf8 100%);
-	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.9),
-		inset 0 0 0 1px rgba(77, 163, 255, 0.14);
+	background: transparent;
+	/* A tone-derived hairline instead of the old literal inset highlight: it
+	 * keeps the card an object on a white app surface in light theme without
+	 * owning the surface again. */
+	box-shadow: inset 0 0 0 1px var(--gui-tone-separator);
 }
 /* Dark card faces must not collide with the light theme tokens. */
 .gui-widget-clock,

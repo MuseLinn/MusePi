@@ -108,3 +108,82 @@ it("overlaps registry refresh with session-file opening and session setup", asyn
 	refreshGate.resolve();
 	expect((await run).exitCode).toBe(0);
 });
+
+it("titles a spawned subagent from its spawn label and exposes it to the roster", async () => {
+	// The task wire schema carries no description, but a named spawn (`tasks[]`
+	// item `name`) does: the session title and the roster name must be that
+	// label, never the shared agent *type* ("task") every spawn would repeat.
+	const tempDir = TempDir.createSync("@pi-task-title-");
+	tempDirs.push(tempDir);
+	const authStorage = await AuthStorage.create(tempDir.join("auth.db"));
+	authStorages.push(authStorage);
+
+	const sessionManager = SessionManager.inMemory(tempDir.path());
+	vi.spyOn(SessionManager, "open").mockResolvedValue(sessionManager);
+
+	const setSessionName = vi.fn(async (_name: string, _source: string) => {});
+	const listeners: Array<(event: AgentSessionEvent) => void> = [];
+	const session = {
+		state: { messages: [] },
+		agent: { state: { systemPrompt: ["test"] } },
+		model: undefined,
+		extensionRunner: undefined,
+		sessionManager: { appendSessionInit: () => {}, setSessionName },
+		getActiveToolNames: () => ["yield"],
+		getEnabledToolNames: () => ["yield"],
+		setActiveToolsByName: async () => {},
+		subscribe: (listener: (event: AgentSessionEvent) => void) => {
+			listeners.push(listener);
+			return () => {};
+		},
+		prompt: async () => {
+			for (const listener of listeners) {
+				listener({
+					type: "tool_execution_end",
+					toolCallId: "yield",
+					toolName: "yield",
+					result: { content: [], details: { status: "success", data: { ok: true } } },
+					isError: false,
+				} as AgentSessionEvent);
+			}
+		},
+		waitForIdle: async () => {},
+		getLastAssistantMessage: () => undefined,
+		abort: async () => {},
+		dispose: async () => {},
+		setIrcWakeTurnObserver: () => {},
+		subscribeRunState: () => () => {},
+		hasPendingAsyncWork: () => false,
+		getAsyncJobSnapshot: () => null,
+		settleAsyncWork: async () => {},
+	} as unknown as AgentSession;
+
+	let capturedOptions: { agentDisplayName?: string } | undefined;
+	vi.spyOn(sdkModule, "createAgentSession").mockImplementation(async options => {
+		capturedOptions = options as { agentDisplayName?: string };
+		const result: CreateAgentSessionResult = {
+			session,
+			extensionsResult: { extensions: [], errors: [], runtime: new ExtensionRuntime() },
+			setToolUIContext: () => {},
+			eventBus: new EventBus(),
+		};
+		return result;
+	});
+
+	const run = await runSubprocess({
+		cwd: tempDir.path(),
+		artifactsDir: tempDir.path(),
+		agent: { name: "task", description: "test", systemPrompt: "test", source: "bundled" },
+		task: "Run the five-round dialogue",
+		description: "Alice",
+		index: 0,
+		id: "Alice",
+		authStorage,
+		enableLsp: false,
+		enableIrc: false,
+	});
+
+	expect(run.exitCode).toBe(0);
+	expect(capturedOptions?.agentDisplayName).toBe("Alice");
+	expect(setSessionName).toHaveBeenCalledWith("Alice", "auto");
+});

@@ -68,7 +68,7 @@ const zhVoice = {
 	"Say “submit”": "说「submit」",
 	"Raw text": "原文",
 	"Sanitized (no code/markdown)": "净化（去代码/Markdown）",
-	Summarized: "摘要",
+	Summarized: "精简（前两句）",
 	"ext builtin stt component whisper": "Whisper 引擎",
 	"Whisper tiers (Fast / Balanced / Turbo) on the transformers.js engine.":
 		"transformers.js 引擎上的 Whisper 档位（Fast / Balanced / Turbo）。",
@@ -141,6 +141,11 @@ const zhVoice = {
 	"Try again": "重试",
 	"all speech engines disabled hint":
 		"该单元的全部引擎已在插件组件设置中停用，暂无可选模型；可在能力中心重新启用对应组件。",
+	"Streaming preview": "流式试听",
+	"Stop streaming preview": "停止试听",
+	"How the read-aloud settings fit together": "朗读设置如何配合",
+	"read aloud dependency hint":
+		"「自动朗读新回复」决定回复生成时是否出声；「语音朗读模式」只作用于自动朗读，手动点消息上的朗读按钮始终读那一条。「朗读内容」先决定保留、净化或精简文本；开启「增强语音速写」后会先用 @tiny 模型把文本改写成口语，模型不可用再回退到前一项的处理。「朗读模型」与「本地 TTS 声音」服务桌面朗读和本地 TTS 后端；「文字转语音提供商」只影响 tts 工具生成音频文件。",
 } as const;
 
 registerTranslations("zh-CN", zhVoice);
@@ -205,7 +210,7 @@ registerTranslations("en-US", {
 	"Say “submit”": "Say “submit”",
 	"Raw text": "Raw text",
 	"Sanitized (no code/markdown)": "Sanitized (no code/markdown)",
-	Summarized: "Summarized",
+	Summarized: "Condensed (first two sentences)",
 	"ext builtin stt component whisper": "ext builtin stt component whisper",
 	"Whisper tiers (Fast / Balanced / Turbo) on the transformers.js engine.":
 		"Whisper tiers (Fast / Balanced / Turbo) on the transformers.js engine.",
@@ -280,4 +285,9 @@ registerTranslations("en-US", {
 	"Try again": "Try again",
 	"all speech engines disabled hint":
 		"All engines for this unit are disabled in the plugin's component settings — no model to pick; re-enable the component in the capability center.",
+	"Streaming preview": "Streaming preview",
+	"Stop streaming preview": "Stop streaming preview",
+	"How the read-aloud settings fit together": "How the read-aloud settings fit together",
+	"read aloud dependency hint":
+		"Auto-read decides whether replies are spoken as they are generated; read-aloud scope only applies to auto-read — clicking the read-aloud button on a message always speaks that message. Read content decides whether text is kept, cleaned or condensed; with Enhanced Speech Rewriting on, the @tiny model first rewrites the text into spoken prose and falls back to that cleaning when the model is unavailable. The local model and local TTS voice serve desktop read-aloud and the local TTS backend; Text-to-Speech Provider only affects audio files produced by the tts tool.",
 } as const satisfies Record<keyof typeof zhVoice, string>);

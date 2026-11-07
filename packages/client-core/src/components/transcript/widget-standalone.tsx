@@ -1,18 +1,18 @@
 /**
- * Widget standalone display — the visualization rendered as its own card
- * in the transcript flow (and mirrored into the GUI right-panel widget
- * tab), instead of being buried inside the collapsed tool-call card.
+ * Widget card — the visualization rendered in the transcript flow (and
+ * mirrored into the GUI right-panel widget tab).
  *
- * - `musepi-gui-widget-standalone` (localStorage, default ON) gates the
- *   standalone card; when ON the tool-call card defaults to collapsed.
- * - `WidgetStandaloneCards` renders the deduped successful widget payloads
- *   of one assistant message, file-preview-card style (user request:
- *   "类似文件预览卡片那种单独的").
- * - `WidgetCard` + `WidgetFullscreen` are host-agnostic (used by the
- *   collab transcript and the GUI sidebar tab alike).
+ * A widget call IS the artifact. With the standalone display on
+ * (`musepi-gui-widget-standalone`, default ON) the tool card renders this
+ * card **in place of** its row, so the payload is drawn exactly once; with
+ * it off the call keeps its inline card and this file only supplies the
+ * shared `WidgetCard` chrome.
+ *
+ * `WidgetCard` + `WidgetFullscreen` are host-agnostic (used by the collab
+ * transcript and the GUI sidebar tab alike).
  */
 
-import type { AssistantContent, ToolResultMessage } from "@musepi/pi-wire";
+import type { ToolResultMessage } from "@musepi/pi-wire";
 import { Check as CheckIconData, Code2 as Code2IconData, Copy as CopyIconData, Eye as EyeIconData } from "lucide";
 import { Download, ImageDown, Images, Maximize2, MoreHorizontal, X } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
@@ -44,31 +44,20 @@ export interface WidgetPayload {
 	title?: string;
 }
 
-/** Successful widget tool-result payloads of one assistant message,
- *  deduped by content (a re-render of the same widget collapses to one
- *  card), last occurrence wins. */
-export function collectWidgetPayloads(
-	content: readonly AssistantContent[],
-	results: ReadonlyMap<string, ToolResultMessage>,
-): WidgetPayload[] {
-	const seen = new Map<string, WidgetPayload>();
-	for (const block of content) {
-		if (block.type !== "toolCall" || block.name !== "widget") continue;
-		const result = results.get(block.id);
-		if (!result || result.isError === true) continue;
-		const details = result.details;
-		if (typeof details !== "object" || details === null) continue;
-		const rec = details as Record<string, unknown>;
-		const type = typeof rec.type === "string" ? rec.type : "";
-		if (!type || typeof rec.data !== "object" || rec.data === null) continue;
-		const payload: WidgetPayload = {
-			type,
-			data: rec.data as Record<string, unknown>,
-			...(typeof rec.title === "string" && rec.title.length > 0 ? { title: rec.title } : {}),
-		};
-		seen.set(JSON.stringify(payload), payload);
-	}
-	return [...seen.values()];
+/** A successful widget tool result as the card payload, or null when there is
+ *  nothing renderable (error, no details, stale type). */
+export function widgetPayloadFromResult(result: ToolResultMessage | undefined): WidgetPayload | null {
+	if (!result || result.isError === true) return null;
+	const details = result.details;
+	if (typeof details !== "object" || details === null) return null;
+	const rec = details as Record<string, unknown>;
+	const type = typeof rec.type === "string" ? rec.type : "";
+	if (!type || typeof rec.data !== "object" || rec.data === null) return null;
+	return {
+		type,
+		data: rec.data as Record<string, unknown>,
+		...(typeof rec.title === "string" && rec.title.length > 0 ? { title: rec.title } : {}),
+	};
 }
 
 /**
@@ -102,10 +91,14 @@ export function latestWidgetFromEntries(entries: readonly unknown[]): WidgetPayl
 export function WidgetFullscreen({
 	payload,
 	host,
+	rasterizeCard,
 	onClose,
 }: {
 	payload: WidgetPayload;
 	host?: ToolRenderHost;
+	/** The host's card capture, threaded so the fullscreen view keeps the same
+	 *  annotation entry the inline card has. */
+	rasterizeCard?: (element: HTMLElement) => Promise<Blob | null>;
 	onClose(): void;
 }): ReactNode {
 	useEffect(() => {
@@ -129,6 +122,7 @@ export function WidgetFullscreen({
 					data={payload.data}
 					title={payload.title ?? ""}
 					sendPrompt={host?.sendPrompt}
+					rasterizeCard={rasterizeCard}
 				/>
 			</div>
 		</div>,
@@ -317,6 +311,10 @@ export function WidgetCard({
 }): ReactNode {
 	const [fullscreen, setFullscreen] = useState(false);
 	const [showCode, setShowCode] = useState(false);
+	/** One-click source copy. The card menu already offers it, but "copy the
+	 *  code" is the most frequent action after looking at a widget, and it was
+	 *  two clicks deep behind "⋯". */
+	const [copied, setCopied] = useState(false);
 	const cardRef = useRef<HTMLDivElement | null>(null);
 	useWidgetRegistryVersion();
 	const def = widgetDef(payload.type);
@@ -338,6 +336,13 @@ export function WidgetCard({
 				if (element) void host.copyImage?.(element);
 			}
 		: undefined;
+	const copySource = (): void => {
+		void navigator.clipboard.writeText(source.text).then(() => {
+			setCopied(true);
+			window.setTimeout(() => setCopied(false), 1400);
+		});
+	};
+	const copyLabel = copied ? t("settings.copied") : t("settings.copyCode");
 	return (
 		<div ref={cardRef} className={className ?? ""}>
 			<InlineWidget
@@ -345,9 +350,19 @@ export function WidgetCard({
 				data={payload.data}
 				title={title}
 				sendPrompt={host?.sendPrompt}
+				rasterizeCard={host?.rasterizeCard}
 				codeView={showCode ? source : null}
 				actions={
 					<>
+						<button
+							type="button"
+							className="tv-widget-fs-btn"
+							title={copyLabel}
+							aria-label={copyLabel}
+							onClick={copySource}
+						>
+							<MorphIcon icon={copied ? CheckIconData : CopyIconData} size={12} spring="snappy" />
+						</button>
 						<WidgetCardMenu
 							source={source}
 							saveImage={saveImage}
@@ -367,30 +382,14 @@ export function WidgetCard({
 					</>
 				}
 			/>
-			{fullscreen && <WidgetFullscreen payload={payload} host={host} onClose={() => setFullscreen(false)} />}
-		</div>
-	);
-}
-
-/** Standalone cards for one settled assistant message (file-preview-card
- *  style, "行间自适应交互式展示"). Returns null when disabled or empty. */
-export function WidgetStandaloneCards({
-	content,
-	results,
-	host,
-}: {
-	content: readonly AssistantContent[];
-	results: ReadonlyMap<string, ToolResultMessage>;
-	host?: ToolRenderHost;
-}): ReactNode {
-	if (!widgetStandaloneEnabled()) return null;
-	const payloads = collectWidgetPayloads(content, results);
-	if (payloads.length === 0) return null;
-	return (
-		<div className="tr-widget-standalone" aria-label={t("settings.widgetPreview")}>
-			{payloads.map(payload => (
-				<WidgetCard key={JSON.stringify(payload)} payload={payload} host={host} />
-			))}
+			{fullscreen && (
+				<WidgetFullscreen
+					payload={payload}
+					host={host}
+					rasterizeCard={host?.rasterizeCard}
+					onClose={() => setFullscreen(false)}
+				/>
+			)}
 		</div>
 	);
 }

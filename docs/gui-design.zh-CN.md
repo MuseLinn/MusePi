@@ -52,7 +52,13 @@ lang: zh-CN
 - **精致度是验收条件**：在代表性宽度下检查完整界面，覆盖长文本和本地化内容，并按场景检查空态、加载、错误、禁用和键盘焦点。功能正确、测试通过也不能接受重复标题、意外换行、对齐冲突、嵌套卡面、拥挤控件或其他可避免的视觉噪音。
 
 - **三栏 shell**(openchamber 共识布局):左 SessionSidebar(会话/分组/项目)+ 中 ChatView(消息流 + 圆角 composer)+ 右 ContextPanel(始终可见)。`gui-shell` 是 flex ROW——每个全宽 pane(SettingsView 等)必须 `flex:1; min-width:0`,否则塌缩到内容宽。
+- **应用 rail(两级左栏,2026-11-07)**：常驻 52px 目的地列(`.gui-rail`,`components/AppRail.tsx`)位于面板槽之前,面板收缩到 0 宽也不会把人困住——回去的路不属于被收起的那一层;设置往返仍然只替换侧栏槽位,rail 保持挂载。顶部有 48px 拖拽带(`.gui-rail-top`,与 `GuiHeader` 的 `h-12` 齐平)且刻意留空:rail 自己规避顶栏,不动顶栏——全窗唯一的折叠按钮仍是无框窗口 `left:16px` 的那组固定控件。目的地从带下开始,绝不落进窗口标题栏那一行(2026-11-07 回归:第一个图标压在顶栏上;2026-11-08:rail 里多出的第二个折叠按钮与顶栏重复)。按钮为纯图标,带 tooltip 与可访问名称,`aria-current="page"` 只标记面板当前显示的那一个目的地,未读圆点为装饰(`aria-hidden`)。目的地是首页 / 任务中心 / 看板 / 问题与拉取请求 / 能力中心(按插件能力开关)/ 设置;新建与搜索留在面板里——它们是操作不是目的地,`SessionSidebar` 里重复这些目的地的菜单行已删除。每个目的地各自拥有左栏:首页显示会话列表、设置显示设置导航、页面型目的地把会话侧栏折起(display:none,不卸载),让页面自己占满宽度;唯一决策点是 `computeSettingsShellState({pageDestinationActive})`,rail 的首页把列表带回来。页面型目的地不渲染收起按钮,双击空白也不做看不见的响应。rail 是真正的 flex 子元素而非覆盖层:侧栏拖拽把手与各 pane 偏移都从 `RAIL_WIDTH` 推导。
+- **rail 底部入口(2026-11-08)**：实例菜单、快捷键、远程控制原先只在可收起的侧栏 footer,面板折起或切到页面目的地就全没了。现在固定在 rail 底部组(对齐 ChatGPT 底部账户/更多区):`InstanceButton` 增加 `compact` 变体,只显示连接状态点但 portal 菜单完整;快捷键与手机远程控制为并列图标按钮,设置仍在最下。`SessionSidebar.showFooter`(默认 true)让两级壳层关掉重复 footer,其它宿主与侧栏契约测试保持默认。compact 按钮与其它 rail 按钮几何一致(36×36、`--radius-md`)。
+- **卡片几何契约(2026-11-08)**：所有目的地的浮起卡片(会话、欢迎页、右面板、终端坞、看板、任务中心、问题与 PR、能力中心)共用一套几何。`.gui-chat-surface` 承担窗口 gutter(`margin: var(--gui-card-gutter)` = 8px),里面的卡片再承担一层同样的 gutter,因此每张卡片距所在列边缘都是 16px;圆角 `var(--radius-2xl)`(16px)、阴影 `var(--gui-card-shadow)`、表面 `var(--color-surface)`。`.gui-float-card` 覆盖会话/欢迎页/右面板,`.gui-page-card` 覆盖经 `ChatSurfaceShell` 渲染的页面目的地。禁止 Tailwind `m-2`、`rounded-2xl` 和旧的单卡阴影 `0 4px 24px rgba(0,0,0,.25)`:两级左栏改变列宽后,正是它们让页面卡片比会话卡片少 8px 外边距、阴影更重。REA 参照:ChatGPT 的 `PageSurface` 对所有目的地只有一套 inset/radius。已用 headless Chrome 计算样式核对:会话卡与页面卡的 left/top/right/bottom/width/height/radius/shadow/background 完全一致(diff `[]`)。
+- **顶栏共存与悬停浮层(2026-11-08)**：`--gui-rail-w`(52px)是唯一的 CSS 宽度,收起时的 `.gui-header-spacer` 减去它——只为固定控件组真正压到聊天列的那部分留位,会话标题与标签前不再凭空多出 52px 空白。没有左面板的目的地(看板 / PR / 能力中心)隐藏折叠按钮,但保留「收起」值的 spacer——它的几何与面板收起完全相同,去掉 spacer 会让会话标题滑到顶栏控件底下(`GuiHeader.panelAvailable`)。面板收起后,鼠标进入 rail 会浮出**同一个已挂载**的 SessionSidebar:`fixed`、`top:48px`、`left:calc(--gui-rail-w + 8px)`、`z-index:42`、圆角投影表面、8px 滑入、移开 140ms 收起——对齐 ChatGPT 的 `app-shell-floating-left-panel`(fixed、不占布局宽、不建第二份列表)。纯函数 `lib/rail-peek.ts` 是唯一闸门。REA 依据:`Layout[data-app-shell-docking-peek]` 在浮层接管表面时清掉侧栏分隔线,顶栏的 `tracksAppShellHover` 写 hover store,浮层动画是 `initial{x:-8}→animate{x:0}`。
+- **任务中心有自己的左面板(2026-11-08)**：这个目的地的 260px 列不再只是一串工作区分组。它承载标题 + 计数、新建任务、搜索、状态过滤(全部 / 已启用 / 已暂停 / 最近失败——REA:ChatGPT 的 `automations.scheduled.filter.option` 是 `active|paused|completed`;MusePi 映射到真实的 `CronTask.enabled` / `state.lastStatus`,不杜撰「已完成」态)。过滤收窄的是右侧详情共用的同一份 `cron.list` 快照,不发第二次请求,也不复制选中状态。
 - **窄屏桌面 shell**：≤640px 时会话侧栏改为覆盖式抽屉；关闭时隐藏且 inert，打开时不压缩聊天列。会话标签支持键盘选择与导航，设置折叠按钮提供可访问名称，看板空状态提供直接的新建标签操作。
+- **移动端远程控制弹窗**：宽屏以双栏承载扫码共享和 Bot 渠道，低于 800px 改为单列。共享范围、安全影响和主操作组成一条连续流程；缺少 cloudflared 时显示本地化恢复卡，提供安装指南、重试和按需展开的技术详情，不再用原始错误块抢占界面。Bot 行去掉重复的「关闭」文案，保留真实连接状态和异常详情，操作的可访问名称包含渠道名，凭据标签始终可见。渠道加载、空清单和加载失败分别呈现，次要插件清单默认折叠。
 - **设置面板**(2026-09-24 起槽位替换,退役聊天列覆盖层):设置壳层**复用主布局**——设置导航填入应用侧栏的槽位(`.gui-settings-nav-slot`,同位置 + 同宽度语言;SettingsView 将导航列 portal 进去),内容填聊天列,顶部保留 48px 窗口拖拽条(`gui-settings-content` 固定高度滚动容器,`width:100% + max-width + margin-inline:auto` 居中列;上限为 `--gui-settings-content-max` = `clamp(840px, 78%, 1080px)`——840px 是 openchamber 的定值,保留为下限使普通窗口几何与参照一致,宽面板下升至 1080px,避免高分辨率最大化窗口把内容列晾在空白里)。真实侧栏与聊天列 header + surface 在下层保持挂载(`.gui-side-keeper` / `.gui-chat-col-keeper`,仅 display:none),关闭设置即恢复工作区——分组展开态、转录、虚拟列表无一重挂(槽位决策表:`lib/settings-shell.ts`)。
 - **Shell 精简透明度**：设置 → Shell 在高级精简设置旁展示实测命令数、节省字节、加权压缩率和按过滤器统计。被精简的 Bash 结果显示过滤器与单条压缩率；宿主支持时，「查看原始输出」在所属会话中打开宽幅只读 `DialogFrame`。预览复用现有模态焦点栈，提供可见关闭操作和滚动边缘羽化；大内容明确标记截断，不做静默裁切。
 - **一级工作区页头**：任务中心、看板、问题与拉取请求、能力中心统一使用 `WorkspacePageHeader`，承载前导返回按钮、`h1`、可选说明/元信息/操作区与可选 tab 行。看板首页返回工作区，已打开看板返回集合；各页面不再自造标题几何，也不在尾侧重复放返回按钮。
@@ -146,9 +152,11 @@ lang: zh-CN
 ### 伙伴(Agent Companion,BitFun parity,2026-08-06)
 
 - **默认形象：内置球体品牌伙伴（2026-11-05）**：`DEFAULT_PET_ID = BUILTIN_SVG_ID`（`musepi-note-bot`），由 `PetSprite.tsx` 的内置分支绘制手绘球体——`.gui-pet-svg__shell` 加 `lib/pet-face.ts` 的表情层（眼动追踪、眨眼、31 态情绪）、`lib/pet-decor.ts` 的 `headphones` 配饰，以及 `pet-gesture` 按压/拖拽弹簧；这张脸的 `happy` 环也是应用与站点 Logo 的表情来源。设置与首次启动的列表以它开头，其后是全部 Petdex 精灵图预设；显式保存的选择优先，未知 id 回落到球体。`ThinkingOrb` 画布不是伙伴形象——它仍是智能体头像与顶栏活动指示器。
+- **两种绘制模式（2026-11-08）**：伙伴只有两个渲染器，且选择本身不保存模式。`PetMode = "vector" | "sprite"` 由解析出的 id 推导——`modeForPackage` 把 `format:"svg"` 映射到 vector、sheet/atlas 映射到 sprite，内置球体是 vector。设置页与首次启动先选模式，网格只显示该模式的形象；雪碧图导入只在 sprite 下出现，vector 列出内置球体与 SVG 导入。切换模式会恢复该模式上次的选择（`musepi-gui-pet-vector-id` / `musepi-gui-pet-sprite-id`），`musepi-gui-pet-id` 仍是唯一活动选择，所以模式出现之前存下的数据按推导归位，不需要迁移写入。
 - **预置**:10 个内置 Petdex 预置(`src/lib/pet.ts` 的 `BUILTIN_PETDEX`,sprite 在 `public/pets/`,768×936 = 8×9 网格,96×104 帧,来源 BitFun MIT)。设置页网格按「已导入 → 预设」分组;卡片 = rest 帧缩略图(`zoom: 0.66` 缩放,不裁 transform 动画)+ 名称 + 描述 2 行截断;选中卡 accent 边框 + 14px check(`gui-pet-card__check` 必须显式 width/height——Icon 组件无默认尺寸,漏写会渲染成 219px)。
 - **形象选择**:`.gui-pet-trigger` 行显示当前伙伴缩略图 + 名称 + 箭头(展开翻转);预览缩略图用 `zoom: 0.55`。删除按钮只出现在导入卡,hover 显现,`stopPropagation` 防选中。
 - **渲染形态**(PetSprite.tsx + gui.css):`.gui-petdex-sprite` 必须 `image-rendering: pixelated`;帧循环 + 每 mood 一个 transform 动画(`PETDEX_MOOD_ANIM`:rest 2.4s+breathe、working 1.16s+work bob、hover 1.44s+lift、dragging 0.96s+wiggle),两者同时挂同一元素(不同属性不冲突);mood 行映射 rest=0/hover=1/dragging=2/error=5/waiting=6/working=7/analyzing=8。内置球体不使用 Petdex 的悬停/拖拽行和方向镜像：指针速度驱动独立的连续手势层，产生倾斜、拉伸、提起与阻尼落地；该层与会话动作、交互动效和眼动组合。
+- **显式状态图集**：`format:"atlas"` 导入包声明帧几何和命名行，不再硬套旧版 8×9 网格。标准行是 `idle`、`running_left`、`running_right`、`working`、`waiting`、`failed`、`idle_random_1`、`idle_random_2`；额外命名行是双击桌面伙伴播放的一次性动作，不占用标准状态。拖拽直接选择对应方向的动画，不重复镜像；空闲动作播放完回到实时会话行；指针、睡眠和会话状态保持优先。包还可提供低饱和气泡配色，但只有三个六位 hex 齐全且前景／背景对比度至少 4.5:1 时才采用；错误／问题语义和默认玻璃几何仍由应用管理。
 - **尺寸归一化与大小调节**(2026-08-06):所有 Petdex 形象按 **rest 行内容高度统一渲染**(`PET_CONTENT_TARGET_H = 100`,k = 100/contentH)——导入包的帧尺寸各异(Doraemon 192×208 vs 内置 96×104),不归一化会 2 倍大小、阴影溢出画布。contentH 来源:内置走 `BUILTIN_PETDEX.contentH`(实测写死),导入包 import 时 `measurePetdex()` 测量,旧包由 `migratePetdexContent()`(usePet 挂载时)自动补测回写。**伙伴大小滑块**(设置 → 伙伴,`musepi-gui-pet-scale` 60–150%,默认 100)乘在归一化之上;桌面宠物窗口由主窗口桥 `pet-activity {scale}` 推送(跨窗口 localStorage 不可靠),输入框内宠物直接读 pref。
 - **窗口与阴影边界**：宠物窗口固定为 320×290（`PET_WINDOW_SIZE`），宠物锚定 `bottom: 52px`，并保留足够的投影空间。窗口包含 sprite 和唯一的气泡模式／数量控件。会话卡片位于独立、按内容定尺的 `bubbles.html` 窗口，底边与 sprite 保持 8px 间距，限制在当前工作区内，并随宠物移动。空气泡栈会隐藏该窗口。单击不再打开交互面板。
 - **气泡栈**：临时通知最多 5 条（`MAX_VISIBLE_BUBBLES`），非问题通知 8 秒后自动消失。卡片使用 20px 圆角、自绘玻璃材质和宽高双轴形变。三种模式为 `stacked`（优先卡片加「N more」标记）、`expanded`（完整列表）和 `hidden`（只保留桌宠旁的数量控件）。点击折叠卡片正文展开列表；点击展开卡片正文打开对应会话并保持列表展开，通知则打开主窗口。独立的 ↗ 按钮打开会话或主窗口。回复、打开、批准、拒绝、停止、关闭和清除操作不会触发卡片正文。桌宠旁的控件是唯一模式开关，按 `expanded → stacked → hidden → stacked` 循环。
@@ -436,6 +444,10 @@ turn
 
 **折叠边界规则**：① 段划分 = 原始输入 + 每条 accepted guide 各一段（ZCode `workSegments` 语义），段内保持 CLI row 全序；② 历史轮一律折叠，当前轮工作段默认展开随流式追加；③ 聚合状态取段内最差（任一 err → err；否则 running；否则 ✓），耗时为段内工具耗时之和；④ 折叠的是"工作过程"不是"信息"——latestAssistantTextRow / tail rows / hook 行 / 用户气泡一律不参与折叠；⑤ 展开/收起 `--spring-liquid` 0.25s，chevron 旋转同步。与既有 pre-compaction 折叠（`collapseCompacted`，按时间切）独立共存。
 
+**IRC 流量行（`irc:*`）**：每条消息一行，不并入工作段折叠。路由（`from → to`）由 `details` 组成，`content` 里的 `[IRC …]` 头与 incoming 的 `<irc>` 模板都不渲染；三种 kind 只差视觉权重——`relay`（旁观的双方流量）最轻，`incoming` 读作发给当前会话，`autoreply` 带 `auto` / `reply` 标签。同一对 agent 的连续消息共享一次路由头，正文超过 3 行截断并提供显式展开——一段往返问答不再逐条重复发言人。
+
+**后台任务结算卡（`async-job-result`）**：L1 卡片（复用 `.tr-async-result` 外壳），头行是状态字形（✓ / ✕ / ⊘，按 completed / failed / cancelled 取色）+ agent 名 + `[type]` + 时长 + 状态文字 + 行数/体积；`<output>` 以等宽正文展示，超过 8 行截断并淡出，展开按钮是显式出口；尾部 idle / `history://` 提示降为一行 faint 文本。卡片只表达"这个 job 结算了"，运行中的实时状态仍由右侧子代理面板承担，不在这里重复。
+
 **设置开关（2026-09-26 补齐，Kimi Code 桌面端 parity，入口：外观 → 聊天设置）**：
 
 - **消息自动折叠**（默认开）：回合完成（非流式 in-flight）时该轮工作段自动收为折叠态、仅展示总结——这是 §5r 折叠的默认行为，开关控制渲染默认态（`defaultRoundFoldExpanded` 取反，纯渲染偏好，不改折叠内核）。**流式中当前轮永不收**（in-flight 轮豁免，`working` 边界同 `buildRoundFolds`）。关闭 = 已完成轮的活动摘要默认展开、逐条呈现工具过程。存储键沿用 `musepi-gui-chat-roundfold` 的反义映射（键语义仍是"默认展开"），原「活动默认展开」开关由此替换，旧设置值无缝迁移、无需新存储通道。
@@ -558,6 +570,7 @@ turn
 - 受管浏览器宿主仍是运行时与重启持久化权威。每个受管标签恰好对应一个右侧面板标签，`target` 与 `dedupeKey` 都使用受管 id；浏览器面板不再渲染内部标签条。新增/打开、激活、关闭、复制、分栏位置与 Agent 揭示都经该 id 双向协调，稳定 webview 宿主不会重挂。恢复面板时过滤持久化的 `browser` 与旧 `settings.browser` 项，由宿主恢复后重建有效投影。
 - 每个内置面板标签显示注册表图标。浏览器标签使用页面 favicon，失败时回退到浏览器图标，这些视觉均为装饰。受管 id 处于忙碌或有已派发 Agent 操作时，对应标签即使在后台也显示 Agent badge，并提供可读的运行状态文本。
 - 浏览器菜单根据活动受管标签派生可用性。无标签或位于 `about:blank` 时，页内查找、打印、缩放、设备工具栏显隐、页面保持焦点、截图、复制网址与硬刷新均禁用；在系统浏览器打开额外限定 HTTP(S)。下载、历史、清除浏览数据与浏览器设置保持全局可用。打印、截图、下载目录与清数据失败会显示反馈。
+- **浏览器扩展与 Profile 数据**：设置 → 浏览器通过共享 `Segmented` 分为常规、扩展、数据三视图。可隐藏的扩展按钮经 `useFloatingMenu` 打开非模态弹层，内含可关闭的导入卡、真实 Chrome Relay 状态/操作与共享 Chromium 扩展清单。导入只把默认 Chrome Profile 的 Cookie 和 LocalStorage 复制到共享自动化 Chromium，不包含密码、右栏 Electron 分区、Profile 选择或持续同步。工具栏显隐和完整网址显示共用浏览器偏好 store，仍可在设置 → 扩展中修改。
 - 设备栏是一条 36px 的紧凑控件行，全部使用带当前值文本的 `GuiSelect`：尺寸预设、可选的模拟宽高、页面背景（常驻色点 + 当前值，不再依赖悬停显示选中）与显示比例。预设覆盖响应式、当前 iPhone/Pixel/Galaxy 手机、折叠屏、iPad 与 1280/1440/1920 桌面；旧 phone/tablet/desktop 键保持可选以兼容持久化。宽高旁提供滑块浮层，除文本输入外可实时拖动调节。背景是单选菜单，不是三个悬停色块。隐藏即整个设备栏不渲染，页面模拟同时回落到自适应/自动；浏览器菜单是唯一显隐入口。窄面板依次让出显示比例、背景与尺寸，绝不折成两行。
 - 通用 tooltip 在每次悬停/聚焦交互时读取最新 `title`，仅在未出现外部新标题时恢复旧值。最大化控件的 React 所有者同步维护最大化/还原的图标、tooltip 与可访问名称，命令式 FLIP 控制器不再写入过期文案。
 
@@ -811,7 +824,19 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 - **附图通道**：标注完成时在宿主 window 上派发 `musepi-gui-attach-annotation`。`Composer` 与 `WelcomeComposer` 监听后把注释文本追加进草稿、经 `addFiles` 登记 PNG——监听 effect 必须写在 `addFiles` 定义之后（前向引用会以 TDZ 错误暴毙），且双方经 ref 注册，避免每次渲染都重挂 DOM 监听。
 - **浏览器栏**：受管浏览器主行新增三个玻璃图标按钮——标注（铅笔）、开发者工具（code-slash，对 webview 调 `openDevTools()`）、外部打开（external-link，`shell.openExternal`）——归入 `gui-browser-tools` 组；缩放三件套收进 ⋯ 菜单（`gui-browser-menu-zoom`）。旧的选元素菜单项、选中选择器 chip 与 `pickElement` 宿主导出已删除。
 - **卡片入口**：`HtmlCard` 右上角挂液态玻璃悬浮按钮（`.gui-widget-annotate-btn`）；srcdoc 卡片经 postMessage 握手。ContextPanel 回退面板的旧拾取器不动。
+- **所有展示面都有入口（2026-11-08）**：只要宿主提供 `ToolRenderHost.rasterizeCard`，按钮就渲染，内联工具卡、独立小组件卡与全屏浮层都会传这个能力（独立卡此前漏传，所以标注入口只出现在展开的工具卡里）。截图在点击时解析卡片元素，而不是渲染时读取 ref。取消标注现在会经同一条 `musepi-widget-annotated` 通道回传空结果：此前 iframe 内的 `__musepiAnnotateRunning` 守卫在取消后不复位，按钮之后的每次点击都被静默丢弃。
+- **收起行（2026-11-08）**：小组件工具的括号内显示小组件标题，没有标题才回落到类型。此前重复卡片标签与类型（「组件 · html」），而摘要槽是 `flex: 1`，文字被拉满整行、右括号被顶到行尾。
+- **一个面，原位替代（2026-11-08）**：开启独立展示后，小组件卡片**替代**工具调用行，而不是渲染在它下面——同一份 payload 此前被画两遍（折叠行 + 消息末尾的卡片）。`ToolCard` 对成功的 `widget` 结果直接返回共享的 `WidgetCard`，位置、菜单、全屏与标注都属于这一张卡；回合折叠时该行仍被保留（`round-collapse` 把 widget 调用列入 exempt）。产物卡（`widget`/`board`/`schedule_task`）不再默认收起，`musepi-gui-widget-expanded` 只作用于关闭独立展示时的内联卡。
+- **工具条行与高度记忆（2026-11-08）**：页面 face 的标注按钮放进页面上方独立一行（`.gui-widget-html-tools`），不再浮在页面右上角压住页面自己的控件；这一行无论按钮是否出现都占位，触屏与键盘用户也能看到（不再只在 hover 时出现）。iframe 实测高度按页面内容记住（有界 Map，键是页面字节的哈希），虚拟列表卸载再挂载时恢复原高度，不会从 320px 下限重新长一遍。卡片本身撑满消息列（`.tr-widget-inplace`）：它此前是 `align-items: flex-start` 的 flex 列子项，横向尺寸取标题的 max-content，iframe 于是停在 300px 固有宽度。overlay 现在通过注入内联 `<script>` 进入沙箱：渲染进程 CSP 允许 `'unsafe-inline'` 但没有 `'unsafe-eval'`，srcdoc iframe 继承该策略，原来的 `eval` 被静默拦截——按钮只会回传一个空结果，看起来毫无反应。
+- **iframe 生命周期与交互（2026-11-08）**：首次 load 或尺寸上报之前保持 `opacity: 0`，深色主题下虚拟列表重挂不再白闪（空间按记住的高度占住）。页面按内容高度显示（下限 48px、上限 20000px）——启动样式不再给 html/body 设 `height:100%`，那会让上报高度变成循环——根字号跟随对话正文，并同步 `--page-rem`，让 kit 样式与 rem 标记一致。页面获得焦点时保留所有按键，bootstrap 把自己没有处理的 ⌘/Ctrl 组合键转发出去（复制/全选/撤销除外，页面自己的输入框内除外），宿主在 frame 元素上回放；滚轮或滑动被页面自己的滚动容器处理掉时不上报，其余情况宿主回放，让对话围着页面滚动。需要用户选择的页面（`awaitAnswer`）在下方保留「等待你的选择」，直到页面提交回答。
 - **i18n**：`annotation.*`（13 个 key）+ `tools.browserDevTools`，tools 域，中英同步。
+
+## 5ad.2. 用户消息的附件卡（2026-11-08）
+
+- 非图片附件以参考行 `[Attachment] blob://<hash> (name)` 传输，因为模型就是靠它寻址。transcript 只在**渲染时**把这些行剥离（存储与提示词逐字节不变），改渲染成一排文件卡：扩展名徽标、文件名、`attachment.stat` 的大小、预览、复制引用。`[Attachment:名]`（只有名字、没有地址）不生成卡片，原样留在正文。
+- 预览按 8 MiB 分页走 `attachment.get`。首字节含 NUL 或 UTF-8 解码失败的内容判为二进制，不解码；宿主提供 `save` 时该状态变成另存动作。
+- 能力是可选的（`ToolRenderHost.attachment`：stat/read/save）。缺失时卡片照常渲染、预览动作不出现，guest 与 HTML 导出不会因此报错。
+- 手机与浏览器访客的输入框用同一套 RPC 发附件：8 MiB 以内 `attachment.put`，更大走 `attachment.begin/chunk/commit`（3 MiB 分片）。远程客户端不能用 `attachment.putFile`——路径在设备上，不在 daemon 宿主机上。
 
 ## 5ad.1. 浏览器 Agent 控制与操作转录（2026-10-25）
 

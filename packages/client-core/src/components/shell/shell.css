@@ -5036,6 +5036,70 @@
 	border: 0.5px solid var(--border);
 }
 
+/* Non-image chip: a pill rather than a thumbnail — the name is the identity. */
+.sh-attach-file {
+	position: relative;
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	max-width: 220px;
+	height: 44px;
+	padding: 0 22px 0 10px;
+	border: 0.5px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg-inset);
+	color: var(--fg);
+	font-size: 12px;
+}
+
+.sh-attach-file svg {
+	flex: none;
+	color: var(--fg-muted);
+}
+
+.sh-attach-file[data-status="uploading"] {
+	opacity: 0.72;
+}
+
+.sh-attach-file[data-status="error"] {
+	border-color: color-mix(in oklab, var(--err) 45%, transparent);
+}
+
+.sh-attach-file-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sh-attach-file-state {
+	flex: none;
+	color: var(--fg-muted);
+	font-size: 11px;
+}
+
+.sh-attach-file-state--error {
+	color: var(--err);
+}
+
+.sh-composer--drop {
+	position: relative;
+}
+
+.sh-composer-drop {
+	position: absolute;
+	inset: 0;
+	z-index: 2;
+	display: grid;
+	place-items: center;
+	border: 1px dashed var(--border-strong);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--bg) 72%, transparent);
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-sm);
+	pointer-events: none;
+}
+
 .sh-attach-remove {
 	position: absolute;
 	top: -5px;

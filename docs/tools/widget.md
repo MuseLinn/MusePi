@@ -6,11 +6,33 @@
 - Entry: `packages/coding-agent/src/bundled-plugins/visuals/index.ts` (built-in Cordis plugin `musepi-visuals`)
 - Tool implementation: `packages/coding-agent/src/bundled-plugins/visuals/tool.ts`
 - Model-facing prompt: `packages/coding-agent/src/bundled-plugins/visuals/prompt.md`
+- Trigger rule (single source): `packages/coding-agent/src/bundled-plugins/visuals/when.ts`
 - Key collaborators:
   - `packages/coding-agent/src/tools/board.ts` — `board schema` surfaces the same `WIDGET_TYPES` table.
   - `packages/client-core/src/widgets/registry.ts` — the shared widget registry (components + defaults) the renderer uses.
   - `packages/client-core/src/widgets/page-kit.ts` — the stylesheet and ready-class list every `page` face receives.
   - `packages/client-core/src/tool-render/tools/widget.tsx` — transcript renderer: inline shell, local data state, error boundary degradation.
+
+## Prompting the model
+
+Capability alone does not make an agent call a tool. The "when to visualize"
+rule lives in `visuals/when.ts` and is rendered into TWO readers:
+
+1. the `widget` tool description (`prompt.md` carries a marker, `tool.ts`
+   expands it), and
+2. the **system prompt** (`system-prompt.md`, `# Visual answers`), gated on
+   `{{#if (includes tools "widget")}}` so a session without the tool never
+   receives instructions to call it.
+
+`buildSystemPrompt` supplies `widgetRenderWhen` from the same constant.
+Stated only in the tool description the rule went unread: asked for a
+breakdown of lines of code per package, an agent answered with a list and
+drew the chart only when asked. The rule also names its own limits (no widget
+for two numbers, short lists, code, or a plain-text request; at most one page
+per answer; never restate what the card already shows) — a rule without
+limits turns every answer into a card.
+
+Contract: `packages/coding-agent/test/visual-prompt.test.ts`.
 
 ## Inputs
 

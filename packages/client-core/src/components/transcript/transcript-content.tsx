@@ -46,7 +46,8 @@ import { TurnSourcesCard } from "./turn-sources-card.js";
 import { isUsageReport, parseUsageReport, UsageCard } from "./usage-card";
 import { useHoldAnchor } from "./use-hold-anchor";
 import { useWorkingNow } from "./use-working-now";
-import { WidgetStandaloneCards } from "./widget-standalone";
+import { UserAttachmentCards } from "./user-attachment-cards";
+import { type AttachmentRef, parseAttachmentRefs } from "./user-attachments";
 
 export function ThinkingBlock({
 	text,
@@ -566,6 +567,7 @@ export function UserMsgContent({
 	displayContext,
 	onJumpToMessage,
 	onPreviewImage,
+	host,
 }: {
 	content: string | readonly (TextContent | ImageContent | VideoContent)[];
 	plain: boolean;
@@ -575,6 +577,9 @@ export function UserMsgContent({
 	/** Open the full-size image preview lightbox at this message image
 	 *  (all of the message's images form the gallery). */
 	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	/** Host capabilities for the non-image attachment cards (size + preview).
+	 *  Absent in guests/exports: the cards still render, without those actions. */
+	host?: ToolRenderHost;
 }): ReactNode {
 	const contexts = normalizeDisplayContexts(displayContext);
 	const cards = contexts.map((context, index) => (
@@ -582,8 +587,29 @@ export function UserMsgContent({
 	));
 	const userText = (text: string): ReactNode => {
 		const remainder = textWithoutDisplayContext(text, displayContext);
-		return remainder ? <UserText text={remainder} plain={plain} collapse={collapse} /> : null;
+		const visible = parseAttachmentRefs(remainder).text;
+		return visible ? <UserText text={visible} plain={plain} collapse={collapse} /> : null;
 	};
+	// Attachment references live in the message text (the model reads them);
+	// the transcript lifts them out of the body and renders cards instead.
+	const attachments = useMemo(() => {
+		const refs: AttachmentRef[] = [];
+		const seen = new Set<string>();
+		const texts =
+			typeof content === "string"
+				? [textWithoutDisplayContext(content, displayContext)]
+				: content.flatMap(block =>
+						block.type === "text" ? [textWithoutDisplayContext(block.text, displayContext)] : [],
+					);
+		for (const text of texts) {
+			for (const ref of parseAttachmentRefs(text).refs) {
+				if (seen.has(ref.hash)) continue;
+				seen.add(ref.hash);
+				refs.push(ref);
+			}
+		}
+		return refs;
+	}, [content, displayContext]);
 	// All image blocks of this message, in order — the preview gallery.
 	const images = useMemo(() => {
 		if (typeof content === "string") return [];
@@ -592,11 +618,14 @@ export function UserMsgContent({
 			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("settings.attachment") }));
 	}, [content]);
 	if (typeof content === "string") {
-		if (contexts.length === 0) return <UserText text={content} plain={plain} collapse={collapse} />;
+		const parsed = parseAttachmentRefs(textWithoutDisplayContext(content, displayContext));
+		if (contexts.length === 0 && parsed.refs.length === 0)
+			return <UserText text={content} plain={plain} collapse={collapse} />;
 		return (
 			<>
 				{cards}
-				{userText(content)}
+				{parsed.text ? <UserText text={parsed.text} plain={plain} collapse={collapse} /> : null}
+				{attachments.length > 0 && <UserAttachmentCards refs={attachments} host={host} />}
 			</>
 		);
 	}
@@ -629,6 +658,7 @@ export function UserMsgContent({
 				}
 			})}
 			{images.length > 1 && <ImageCardStack items={images} onOpen={i => onPreviewImage?.(images, i)} />}
+			{attachments.length > 0 && <UserAttachmentCards refs={attachments} host={host} />}
 			{cards}
 		</>
 	);
@@ -1224,10 +1254,6 @@ export function AssistantBody({
 					<FileCards items={artifacts} />
 				) : null)}
 			{!pending && sources !== undefined && <TurnSourcesCard sources={sources} />}
-			{/* Standalone widget display (config 开启): the visualization
-			 * renders as its own adaptive card in the message flow, like a
-			 * file-preview card — the tool-call card folds to its summary. */}
-			{!pending && <WidgetStandaloneCards content={message.content} results={results} host={host} />}
 			{pending ? (
 				<WorkingLine start={runStartTs ?? message.timestamp} meta={modelLevelMeta(message.model, thinkingLevel)} />
 			) : roundDuration !== undefined ? (

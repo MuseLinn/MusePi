@@ -33,7 +33,13 @@ import "../../i18n/voice";
 import { useConfirm } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { useExtensionRegistry } from "../../lib/slot-host";
-import { speak, startDictation, type VoiceActivity } from "../../lib/voice";
+import {
+	createIncrementalSpeaker,
+	type IncrementalSpeaker,
+	speak,
+	startDictation,
+	type VoiceActivity,
+} from "../../lib/voice";
 import { Icon } from "../../vendor/oc-icons";
 import { SpeakerEnrollment } from "../composer/speaker-enrollment";
 import { MockComposer, MockConversationPreview, MockUserRow } from "../MockConversationPreview";
@@ -584,7 +590,15 @@ const TTS_SAMPLE_MARKDOWN = [
  *  values (read live from settings.get, so the test always matches what
  *  chat playback will use). State machine carried over from the former
  *  TtsTestCard, unchanged. Exported for the voice-settings contract tests. */
-export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown: string }): ReactNode {
+export function SpeakAction({
+	rpc,
+	markdown,
+	sessionId,
+}: {
+	rpc: RpcClient | null;
+	markdown: string;
+	sessionId?: string | null;
+}): ReactNode {
 	const [state, setState] = useState<"idle" | "loading" | "speaking" | "error">("idle");
 	const [err, setErr] = useState("");
 	const stopRef = useRef<(() => void) | null>(null);
@@ -599,7 +613,9 @@ export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown
 		setState("loading");
 		setErr("");
 		void rpc
-			?.request<Record<string, unknown>>("settings.get", { keys: ["tts.localVoice", "tts.rate", "tts.inputMode"] })
+			?.request<Record<string, unknown>>("settings.get", {
+				keys: ["tts.localVoice", "tts.rate", "tts.inputMode", "tts.enhanced"],
+			})
 			.then(
 				v =>
 					new Promise<void>(resolve => {
@@ -613,6 +629,10 @@ export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown
 									typeof v["tts.inputMode"] === "string"
 										? (v["tts.inputMode"] as "raw" | "sanitize" | "summarize")
 										: undefined,
+								// The preview must speak exactly what auto-read
+								// would: same rewrite, same session credentials.
+								enhanced: v["tts.enhanced"] === true,
+								sessionId: sessionId ?? undefined,
 							},
 							(a: VoiceActivity) => {
 								if (a.phase === "speaking") setState("speaking");
@@ -648,6 +668,94 @@ export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown
 				reducedMotion="user"
 				className="h-3.5 w-3.5"
 			/>
+		</button>
+	);
+}
+
+/**
+ * 流式试听：把固定样本按时间片模拟模型 delta，喂给与自动朗读同一个
+ * 增量控制器。不发消息也能听到「第一句出声时后面还在生成」的节奏。
+ * Exported for the voice-settings contract tests.
+ */
+export function StreamPreviewAction({
+	rpc,
+	markdown,
+	sessionId,
+}: {
+	rpc: RpcClient | null;
+	markdown: string;
+	sessionId?: string | null;
+}): ReactNode {
+	const [running, setRunning] = useState(false);
+	const speakerRef = useRef<IncrementalSpeaker | null>(null);
+	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const stop = useCallback(() => {
+		if (timerRef.current) clearTimeout(timerRef.current);
+		timerRef.current = null;
+		speakerRef.current?.stop();
+		speakerRef.current = null;
+		setRunning(false);
+	}, []);
+	useEffect(() => stop, [stop]);
+
+	const start = async (): Promise<void> => {
+		if (!rpc) return;
+		stop();
+		let v: Record<string, unknown>;
+		try {
+			v = await rpc.request<Record<string, unknown>>("settings.get", {
+				keys: ["tts.localVoice", "tts.rate", "tts.inputMode", "tts.enhanced"],
+			});
+		} catch {
+			return;
+		}
+		const speaker = createIncrementalSpeaker(
+			rpc,
+			{
+				voice: typeof v["tts.localVoice"] === "string" ? (v["tts.localVoice"] as string) : undefined,
+				rate: typeof v["tts.rate"] === "number" ? (v["tts.rate"] as number) : undefined,
+				mode:
+					typeof v["tts.inputMode"] === "string"
+						? (v["tts.inputMode"] as "raw" | "sanitize" | "summarize")
+						: undefined,
+				enhanced: v["tts.enhanced"] === true,
+				sessionId: sessionId ?? undefined,
+			},
+			activity => {
+				if (activity.phase === "done" || activity.phase === "stopped" || activity.phase === "error") {
+					setRunning(false);
+				}
+			},
+		);
+		speakerRef.current = speaker;
+		setRunning(true);
+		let cursor = 0;
+		const step = (): void => {
+			if (speakerRef.current !== speaker) return;
+			cursor = Math.min(markdown.length, cursor + 14);
+			speaker.feed(markdown.slice(0, cursor));
+			if (cursor < markdown.length) timerRef.current = setTimeout(step, 180);
+			else speaker.finish();
+		};
+		step();
+	};
+
+	const toggle = (): void => {
+		if (running) stop();
+		else void start();
+	};
+	const label = running ? tLoose("Stop streaming preview") : tLoose("Streaming preview");
+	return (
+		<button
+			type="button"
+			className={`tr-action${running ? " tr-action--speaking" : ""}`}
+			title={label}
+			aria-label={label}
+			disabled={!rpc}
+			onClick={toggle}
+		>
+			<MorphIcon icon={Volume2IconData} size={14} spring="snappy" reducedMotion="user" className="h-3.5 w-3.5" />
 		</button>
 	);
 }
@@ -692,7 +800,7 @@ function DisabledVoicePluginNote({
 }
 
 /** Settings → 语音。 */
-export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export function VoiceSection({ rpc, sessionId }: { rpc: RpcClient | null; sessionId?: string | null }): ReactNode {
 	// Schema keys render via SchemaTabSection below — minus stt.modelName and
 	// tts.localModel, which the two picker cards render as radio rows (bare
 	// enum dropdowns made the tiers unreadable). The shared device picker owns
@@ -720,6 +828,16 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const ttsItem = useMemo(() => registry?.extensions.find(e => e.id === "tts"), [registry]);
 	const sttOn = sttItem ? sttItem.state === "active" : true;
 	const ttsOn = ttsItem ? ttsItem.state === "active" : true;
+	// Condition names in the daemon schema are evaluated here instead of
+	// falling through to the GUI's "unknown condition = visible" default.
+	// The plugin registry is GUI-side state, not a settings value.
+	const schemaConditions = useMemo(
+		() => ({
+			sttPluginEnabled: () => sttOn,
+			ttsPluginEnabled: () => ttsOn,
+		}),
+		[sttOn, ttsOn],
+	);
 	// Entry-component state and the daemon model catalog share the same fiber registry.
 	const sttHiddenTiers = useMemo(() => hiddenTiersFromComponents(sttItem?.components, STT_COMPONENT_TIERS), [sttItem]);
 	const ttsHiddenTiers = useMemo(() => hiddenTiersFromComponents(ttsItem?.components, TTS_COMPONENT_TIERS), [ttsItem]);
@@ -816,7 +934,14 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				groups={["Speech"]}
 				excludeKeys={["stt.modelName", "tts.localModel", ...(ttsOn ? [] : (["providers.tts"] as const))]}
 				excludePrefixes={[...(sttOn ? [] : (["stt."] as const)), ...(ttsOn ? [] : (["tts.", "speech."] as const))]}
+				conditions={schemaConditions}
 			/>
+			{ttsOn && (
+				<div className="gui-settings-section">
+					<div className="gui-settings-section-title">{tLoose("How the read-aloud settings fit together")}</div>
+					<div className="gui-settings-section-desc">{tLoose("read aloud dependency hint")}</div>
+				</div>
+			)}
 			{sttOn && (
 				<div className="gui-settings-section">
 					<div className="gui-settings-row">
@@ -871,7 +996,14 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				<MockConversationPreview
 					showAvatars={showAvatars}
 					assistantMarkdown={TTS_SAMPLE_MARKDOWN}
-					assistantActions={ttsOn ? <SpeakAction rpc={rpc} markdown={TTS_SAMPLE_MARKDOWN} /> : undefined}
+					assistantActions={
+						ttsOn ? (
+							<>
+								<SpeakAction rpc={rpc} markdown={TTS_SAMPLE_MARKDOWN} sessionId={sessionId} />
+								<StreamPreviewAction rpc={rpc} markdown={TTS_SAMPLE_MARKDOWN} sessionId={sessionId} />
+							</>
+						) : undefined
+					}
 					extraMessages={dictatedMessages.map((text, i) => (
 						<MockUserRow key={`${i}:${text}`} markdown={text} showAvatar={showAvatars} />
 					))}

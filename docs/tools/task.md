@@ -43,7 +43,7 @@ The wire schema is shape-swapped by `task.batch` (default on). One unit of work 
 | `schemaMode` | `"permissive" \| "strict"` | No | Validation mode for the effective output schema. Overrides the parent session mode; defaults to `permissive`. Item field in batch shape, top-level in flat shape. |
 | `isolated` | `boolean` | No | Run in an isolated workspace and return patches. Exists only when `task.isolation.mode` is not `none`; per item in batch shape, top-level in flat shape. Isolated agents are torn down at completion — not revivable. |
 
-There is no wire label field: the one-line UI label shown in the TUI/registry is generated automatically from the `task` text by the tiny/title model (fire-and-forget), so callers never provide it.
+There is no wire label field. A spawn's UI label, session title and roster name are its `name` (the registry/IRC id) when provided — `Alice` stays `Alice` in the transcript card, the session tree and the agents panel. Without `name`, the one-line label is generated from the `task` text by the tiny/title model (fire-and-forget), while the session title and roster name fall back to the generated `AdjectiveNoun` id. The `agent` type (`task`, `scout`, …) is a badge, never the instance label. Transcripts written before spawn-time titles fall back to their filename (`<id>.jsonl`) in the session tree; advisor transcripts keep their advisor marker instead.
 
 Runtime stays permissive: the flat form is accepted even while `task.batch` is on (internal callers such as the commit flow's `analyze_files`, and stale transcripts). The model only ever sees one shape.
 

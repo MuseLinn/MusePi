@@ -23,6 +23,7 @@ const LABELS: MarkdownLabels = {
 	user: "用户",
 	assistant: "助手",
 	advisor: "顾问",
+	ircMe: "我",
 };
 
 let seq = 0;
@@ -81,6 +82,35 @@ function advisor(note: string, display = true): SessionEntry {
 	} as unknown as SessionEntry;
 }
 
+/** Real relay shape: the bracketed route lives in `content`, the clean body in
+ *  `details.body`. */
+function irc(
+	from: string | undefined,
+	to: string | undefined,
+	body: string,
+	customType = from && to ? "irc:relay" : from ? "irc:incoming" : "irc:autoreply",
+	display = true,
+): SessionEntry {
+	const details: Record<string, unknown> = { body };
+	if (from) details.from = from;
+	if (to) details.to = to;
+	if (customType === "irc:incoming") {
+		details.message = body;
+		delete details.body;
+	}
+	return {
+		type: "custom_message",
+		id: nextId(),
+		parentId: null,
+		timestamp: "2026-10-03T00:00:04.000Z",
+		customType,
+		display,
+		content: `[IRC ${from ?? "you"} → ${to ?? "me"}]\n\n${body}`,
+		details,
+		attribution: "agent",
+	} as unknown as SessionEntry;
+}
+
 describe("buildSessionMarkdown", () => {
 	test("exports advisor cards — a message-only filter dropped them silently", () => {
 		const md = buildSessionMarkdown("优化时间范围", [user("问题"), advisor("ms→points 要用 round()")], LABELS);
@@ -98,6 +128,35 @@ describe("buildSessionMarkdown", () => {
 	test("keeps a hidden advisor note out", () => {
 		const md = buildSessionMarkdown("t", [user("q"), advisor("内部的计划推 nudge", false)], LABELS);
 		expect(md).not.toContain("nudge");
+	});
+
+	test("exports IRC relay traffic with its route and clean body", () => {
+		const md = buildSessionMarkdown(
+			"t",
+			[user("q"), irc("Alice", "Bob", "第 1 轮：带上水电解制氧机。"), assistant("a")],
+			LABELS,
+		);
+		expect(md).toContain("## IRC · Alice → Bob");
+		expect(md).toContain("第 1 轮：带上水电解制氧机。");
+		expect(md).not.toContain("[IRC");
+	});
+
+	test("exports a received DM and an autoreply with the reader's side named", () => {
+		const md = buildSessionMarkdown(
+			"t",
+			[irc("Alice", undefined, "你好"), irc(undefined, "Bob", "稍后回你")],
+			LABELS,
+		);
+		expect(md).toContain("## IRC · Alice → 我");
+		expect(md).toContain("## IRC · 我 → Bob (auto)");
+		expect(md).toContain("你好");
+		expect(md).toContain("稍后回你");
+	});
+
+	test("keeps a hidden IRC row out", () => {
+		const md = buildSessionMarkdown("t", [irc("Alice", "Bob", "内部旁观", "irc:relay", false)], LABELS);
+		expect(md).not.toContain("内部旁观");
+		expect(md).not.toContain("IRC ·");
 	});
 
 	test("keeps user and assistant prose, in order, and skips tool results", () => {

@@ -78,7 +78,7 @@ import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useStore } from "../lib/use-store";
 import { onUserAvatarChanged, readUserAvatarPrefs, type UserAvatarPrefs } from "../lib/user-avatar";
-import { speak } from "../lib/voice";
+import { createIncrementalSpeaker, type IncrementalSpeaker, speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
 import { ApprovalCard } from "./ApprovalCard";
@@ -617,6 +617,9 @@ export function ChatView({
 						"tts.autoRead",
 						"tts.rate",
 						"tts.inputMode",
+						"tts.readMode",
+						"tts.enhanced",
+						"tts.localVoice",
 					],
 				})
 				.then(v => {
@@ -643,55 +646,111 @@ export function ChatView({
 			cls.remove("gui-chat-no-smooth");
 		}
 	}, [displaySettings["display.smoothStreaming"]]);
-	// TTS 自动朗读(tts.autoRead):空闲时检测新的 settled assistant 消息并朗读。
-	const lastAutoReadIdRef = useRef<string | null>(null);
+	// TTS 自动朗读(tts.autoRead): delta 级边生成边朗读。每次快照更新都把当前
+	// 完整回复喂给同一个控制器；它只挑出新完成的句子合成，第一句出声时模型
+	// 还在写下一段。回合/会话切换时重建控制器，回合结束时 flush 尾句。
+	const autoSpeakerRef = useRef<IncrementalSpeaker | null>(null);
+	const autoSpeakerKeyRef = useRef<string | null>(null);
+	// The last assistant message already on screen when a session is opened is
+	// history, not a new reply. Without this guard, enabling auto-read and
+	// switching sessions would read that old reply (or the whole last turn)
+	// aloud on mount.
+	const autoReadBaselineRef = useRef<{ sessionId: string; lastId: string | null } | null>(null);
 	useEffect(() => {
-		if (displaySettings["tts.autoRead"] !== true) return;
-		if (!snap || snap.working || snap.streaming) return;
-		let lastId: string | null = null;
-		let lastText = "";
-		for (let i = snap.entries.length - 1; i >= 0; i--) {
-			const e = snap.entries[i];
-			if (e.type === "message" && e.message.role === "assistant" && !e.message.duration) continue;
-			if (e.type === "message" && e.message.role === "assistant") {
-				lastId = e.id;
-				lastText = (e.message.content as { type?: string; text?: string }[])
-					.filter(block => block.type === "text")
-					.map(block => block.text ?? "")
-					.join(" ");
-				break;
-			}
+		if (displaySettings["tts.autoRead"] !== true || !rpc) {
+			autoSpeakerRef.current?.stop();
+			autoSpeakerRef.current = null;
+			autoSpeakerKeyRef.current = null;
+			return;
 		}
-		if (!lastId || lastId === lastAutoReadIdRef.current) return;
-		lastAutoReadIdRef.current = lastId;
-		if (!lastText.trim()) return;
-		stopSpeakRef.current = speak(
-			lastText,
-			rpc,
-			{
-				rate: typeof displaySettings["tts.rate"] === "number" ? (displaySettings["tts.rate"] as number) : undefined,
-				// Same content-mode contract the TTS test card uses: anything
-				// but "raw"/"summarize" (unset, "sanitize", garbage) keeps
-				// speak()'s default sanitize behavior.
-				mode:
-					displaySettings["tts.inputMode"] === "raw" || displaySettings["tts.inputMode"] === "summarize"
-						? displaySettings["tts.inputMode"]
-						: undefined,
-			},
-			activity => {
-				if (activity.phase === "speaking") setSpeakingId(lastId);
-				else if (activity.phase === "done" || activity.phase === "stopped") {
-					stopSpeakRef.current = null;
-					setSpeakingId(prev => (prev === lastId ? null : prev));
-				} else if (activity.phase === "error") {
-					stopSpeakRef.current = null;
-					setSpeakingId(prev => (prev === lastId ? null : prev));
-					dispatchNotification("error", { lastMessage: activity.message });
-				}
-			},
-		);
-		setSpeakingId(lastId);
-	}, [snap, displaySettings["tts.autoRead"], displaySettings["tts.rate"], displaySettings["tts.inputMode"], rpc]);
+		if (!snap) return;
+		const mode = displaySettings["tts.readMode"];
+		const includeThinking = mode === "all";
+		const parts: string[] = [];
+		let lastId: string | null = null;
+		for (const e of snap.entries) {
+			if (e.type === "message" && e.message.role === "user") {
+				parts.length = 0; // turn boundary
+				continue;
+			}
+			if (e.type !== "message" || e.message.role !== "assistant") continue;
+			lastId = e.id;
+			const blocks = e.message.content as { type?: string; text?: string; thinking?: string }[];
+			const text = blocks
+				.filter(block => block.type === "text" || (includeThinking && block.type === "thinking"))
+				.map(block => block.text ?? block.thinking ?? "")
+				.join(" ");
+			if (text.trim()) parts.push(text);
+		}
+		if (!lastId) return;
+		const sid = store?.sessionId ?? "";
+		if (autoReadBaselineRef.current?.sessionId !== sid) {
+			autoReadBaselineRef.current = { sessionId: sid, lastId };
+		}
+		// Skip a settled reply that was already present when the session
+		// opened. A reply that STARTED streaming while mounted already owns a
+		// controller, so it must still reach finish() below.
+		if (
+			!snap.streaming &&
+			!snap.working &&
+			lastId === autoReadBaselineRef.current.lastId &&
+			autoSpeakerRef.current === null
+		) {
+			return;
+		}
+		const key = `${sid}:${lastId}`;
+		if (autoSpeakerKeyRef.current !== key) {
+			autoSpeakerRef.current?.stop();
+			stopSpeakRef.current?.(); // manual read-aloud must not overlap
+			stopSpeakRef.current = null;
+			autoSpeakerKeyRef.current = key;
+			autoSpeakerRef.current = createIncrementalSpeaker(
+				rpc,
+				{
+					voice:
+						typeof displaySettings["tts.localVoice"] === "string"
+							? (displaySettings["tts.localVoice"] as string)
+							: undefined,
+					rate:
+						typeof displaySettings["tts.rate"] === "number" ? (displaySettings["tts.rate"] as number) : undefined,
+					mode:
+						displaySettings["tts.inputMode"] === "raw" || displaySettings["tts.inputMode"] === "summarize"
+							? displaySettings["tts.inputMode"]
+							: undefined,
+					enhanced: displaySettings["tts.enhanced"] === true,
+					sessionId: store?.sessionId,
+				},
+				activity => {
+					if (activity.phase === "speaking") setSpeakingId(lastId);
+					else if (activity.phase === "done" || activity.phase === "stopped") {
+						setSpeakingId(prev => (prev === lastId ? null : prev));
+					} else if (activity.phase === "error") {
+						setSpeakingId(prev => (prev === lastId ? null : prev));
+						dispatchNotification("error", { lastMessage: activity.message });
+					}
+				},
+			);
+		}
+		const fullText = mode === "yield" ? (parts.at(-1) ?? "") : parts.join(" ");
+		if (fullText.trim()) autoSpeakerRef.current?.feed(fullText);
+		if (!snap.streaming && !snap.working) autoSpeakerRef.current?.finish();
+	}, [
+		snap,
+		rpc,
+		store?.sessionId,
+		displaySettings["tts.autoRead"],
+		displaySettings["tts.rate"],
+		displaySettings["tts.inputMode"],
+		displaySettings["tts.readMode"],
+		displaySettings["tts.enhanced"],
+		displaySettings["tts.localVoice"],
+	]);
+	useEffect(
+		() => () => {
+			autoSpeakerRef.current?.stop();
+		},
+		[],
+	);
 	// One container, two scenes, BIDIRECTIONAL transition: the incoming
 	// scene mounts (fade/zoom in) while the outgoing one lingers 420ms
 	// with a fade-out before unmounting.
@@ -3015,6 +3074,10 @@ export function ChatView({
 																		setSpeakingId(null);
 																		return;
 																	}
+																	// Manual read-aloud takes over the shared audio graph.
+																	autoSpeakerRef.current?.stop();
+																	autoSpeakerRef.current = null;
+																	autoSpeakerKeyRef.current = null;
 																	const entryId = id ?? null;
 																	stopSpeakRef.current = speak(
 																		text,

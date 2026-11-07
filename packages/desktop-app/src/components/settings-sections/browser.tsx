@@ -1,9 +1,21 @@
-import { t } from "@musepi/client-core";
+import { Segmented, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState, useSyncExternalStore } from "react";
+import {
+	BROWSER_PREFERENCES_CHANGED_EVENT,
+	type BrowserSettingsTab,
+	readBrowserExtensionsToolbarVisible,
+	readBrowserSettingsTab,
+	readBrowserShowFullUrl,
+	writeBrowserExtensionsToolbarVisible,
+	writeBrowserSettingsTab,
+	writeBrowserShowFullUrl,
+} from "../../lib/browser-preferences";
 import { pickDirectory } from "../../lib/electron";
 import { getHostState, subscribeHost } from "../../lib/managed-browser-host";
 import type { RpcClient } from "../../lib/rpc";
+import { BrowserExtensionsPanel } from "../browser-extensions-panel";
+import { BrowserImportCard } from "../browser-import-card";
 import { GuiSelect } from "../GuiSelect";
 
 interface BrowserTabInfo {
@@ -12,16 +24,12 @@ interface BrowserTabInfo {
 	url: string;
 }
 
-interface BrowserExtensionInfo {
-	id: string;
-	name: string;
-	version: string;
-}
-
-/** 浏览器 section: shared automation Chromium status + defaults + the
- *  MusePi Browser Relay extension (chrome.debugger bridge into the user's own
- *  Chrome — kimi webbridge 同款) install entry. */
+/** Browser engine and Agent defaults, real-Chrome Relay/extensions, and
+ *  shared-profile data operations. Each view owns one task group. */
 export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	const [settingsTab, setSettingsTab] = useState<BrowserSettingsTab>(readBrowserSettingsTab);
+	const [extensionsToolbar, setExtensionsToolbar] = useState(readBrowserExtensionsToolbarVisible);
+	const [showFullUrl, setShowFullUrl] = useState(readBrowserShowFullUrl);
 	const [headless, setHeadless] = useState<boolean | null>(null);
 	const [relay, setRelay] = useState<boolean | null>(null);
 	const [gui, setGui] = useState<boolean | null>(null);
@@ -36,16 +44,6 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [endpoint, setEndpoint] = useState<string | null>(null);
 	const [profileDir, setProfileDir] = useState<string | null>(null);
 	const [tabCount, setTabCount] = useState<number | null>(null);
-	const [extensions, setExtensions] = useState<BrowserExtensionInfo[] | null>(null);
-	const [relayStatus, setRelayStatus] = useState<{
-		installed: boolean;
-		serving: boolean;
-		connected: boolean;
-		extensionDir: string;
-	} | null>(null);
-	const [installing, setInstalling] = useState(false);
-	const [importing, setImporting] = useState(false);
-	const [importMsg, setImportMsg] = useState<string | null>(null);
 	const [clearing, setClearing] = useState(false);
 	const [glow, setGlow] = useState<boolean | null>(null);
 	// 托管浏览器桥是**渲染端**事实(主进程 CDP 桥的绑定端口、agent 标签页),
@@ -54,6 +52,21 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const host = useSyncExternalStore(subscribeHost, getHostState);
 	const bridgePort = host.port;
 	const agentTab = host.tabs.find(tab => tab.agent) ?? null;
+
+	useEffect(() => {
+		const onPreferences = (event: Event): void => {
+			const detail = (event as CustomEvent<{ key?: string; value?: unknown }>).detail;
+			if (detail?.key === "settingsTab" && typeof detail.value === "string") {
+				setSettingsTab(readBrowserSettingsTab());
+			} else if (detail?.key === "extensionsToolbar") {
+				setExtensionsToolbar(readBrowserExtensionsToolbarVisible());
+			} else if (detail?.key === "showFullUrl") {
+				setShowFullUrl(readBrowserShowFullUrl());
+			}
+		};
+		window.addEventListener(BROWSER_PREFERENCES_CHANGED_EVENT, onPreferences);
+		return () => window.removeEventListener(BROWSER_PREFERENCES_CHANGED_EVENT, onPreferences);
+	}, []);
 
 	const refresh = (): void => {
 		if (!rpc) return;
@@ -104,17 +117,6 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			.request<{ tabs?: BrowserTabInfo[] }>("browser.tabs", {})
 			.then(res => setTabCount(res?.tabs?.length ?? 0))
 			.catch(() => setTabCount(0));
-		void rpc
-			.request<{ extensions?: BrowserExtensionInfo[] }>("browser.extensions", {})
-			.then(res => setExtensions(res?.extensions ?? []))
-			.catch(() => setExtensions([]));
-		void rpc
-			.request<{ installed: boolean; serving: boolean; connected: boolean; extensionDir: string }>(
-				"browser.relayStatus",
-				{},
-			)
-			.then(res => setRelayStatus(res))
-			.catch(() => setRelayStatus(null));
 	};
 
 	useEffect(() => {
@@ -150,464 +152,444 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		});
 	};
 
-	const installRelay = (): void => {
-		if (!rpc || installing) return;
-		setInstalling(true);
-		void rpc
-			.request("browser.relayInstall", {})
-			.then(() => refresh())
-			.finally(() => setInstalling(false));
-	};
-	const uninstallRelay = (): void => {
-		if (!rpc || installing) return;
-		setInstalling(true);
-		void rpc
-			.request("browser.relayUninstall", {})
-			.then(() => refresh())
-			.finally(() => setInstalling(false));
-	};
-
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("settings.browser")}</h2>
 			<p className="gui-settings-page-desc">{t("tools.browserSettingsDescription")}</p>
-			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("tools.browserEngine")}</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.headlessBrowser")}</div>
-						<div className="gui-settings-row-desc">{t("tools.headlessBrowserDescription")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={headless === true}
-						className={`gui-toggle${headless === true ? " gui-toggle--on" : ""}`}
-						onClick={() => setBool("browser.headless", !(headless === true))}
-						aria-label={t("tools.headlessBrowser")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.browserRelay")}</div>
-						<div className="gui-settings-row-desc">{t("tools.browserRelayDescription")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={relay === true}
-						className={`gui-toggle${relay === true ? " gui-toggle--on" : ""}`}
-						onClick={() => setBool("browser.relay", !(relay === true))}
-						aria-label={t("tools.browserRelay")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.managedBrowser")}</div>
-						<div className="gui-settings-row-desc">{t("tools.managedBrowserDescription")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={gui === true}
-						className={`gui-toggle${gui === true ? " gui-toggle--on" : ""}`}
-						onClick={() => setBool("browser.gui", !(gui === true))}
-						aria-label={t("tools.managedBrowser")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				{/* 托管浏览器桥地址:桥运行时以它的实际端口为准(9230-9239
-				 * 是重试区间),这里填的值只在没有桥时兜底。 */}
-				<div className="gui-settings-row">
-					<div className="min-w-0 flex-1">
-						<div className="gui-settings-row-label">{t("tools.managedBrowserUrl")}</div>
-						<div className="gui-settings-row-desc">{t("tools.managedBrowserUrlDescription")}</div>
-						<input
-							className="gui-input mt-1.5"
-							value={guiUrl ?? ""}
-							spellCheck={false}
-							placeholder="http://127.0.0.1:9230"
-							aria-label={t("tools.managedBrowserUrl")}
-							onChange={e => setGuiUrl(e.target.value)}
-							onBlur={() => {
-								if (guiUrl === null) return;
-								void rpc
-									?.request("settings.set", { key: "browser.guiUrl", value: guiUrl.trim() })
-									.then(() => {
-										refresh();
-										window.dispatchEvent(new Event("musepi-browser-settings-changed"));
-									})
-									.catch(() => {});
-							}}
-						/>
-					</div>
-				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.browserChannelPriority")}</div>
-						<div className="gui-settings-row-desc">{t("tools.browserChannelPriorityDescription")}</div>
-					</div>
-				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.publicInternetOnly")}</div>
-						<div className="gui-settings-row-desc">{t("tools.publicInternetOnlyDescription")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={restrictToPublic === true}
-						className={`gui-toggle${restrictToPublic === true ? " gui-toggle--on" : ""}`}
-						onClick={() => setBool("browser.policy.restrictToPublic", !(restrictToPublic === true))}
-						aria-label={t("tools.publicInternetOnly")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				{/* Relay extension (chrome.debugger bridge — kimi webbridge 同款):
-				 * 安装/卸载 + 三层状态(文件写出 / server 在跑 / 扩展握手)。 */}
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.browserRelayExtension")}</div>
-						<div className="gui-settings-row-desc">
-							{relayStatus === null
-								? "…"
-								: !relayStatus.installed
-									? t("tools.browserRelayExtensionDescription")
-									: relayStatus.connected
-										? t("tools.browserRelayConnected")
-										: relayStatus.serving
-											? t("tools.browserRelayServingWaiting")
-											: t("tools.browserRelayInstalledNot")}
-						</div>
-					</div>
-					{relayStatus?.installed ? (
-						<button
-							type="button"
-							className="gui-btn gui-btn--small gui-btn--danger"
-							disabled={installing}
-							onClick={uninstallRelay}
-						>
-							{installing ? "…" : t("tools.uninstall")}
-						</button>
-					) : (
-						<button type="button" className="gui-btn gui-btn--small" disabled={installing} onClick={installRelay}>
-							{installing ? "…" : t("tools.install")}
-						</button>
-					)}
-				</div>
-			</div>
-			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("settings.browserAgentSettings")}</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("settings.browserAgentControl")}</div>
-						<div className="gui-settings-row-desc">{t("settings.browserAgentControlDescription")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={agentControl === true}
-						className={`gui-toggle${agentControl === true ? " gui-toggle--on" : ""}`}
-						onClick={() => setBool("browser.agentControl", !(agentControl === true))}
-						aria-label={t("settings.browserAgentControl")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("settings.browserSearchEngine")}</div>
-						<div className="gui-settings-row-desc">{t("settings.browserSearchEngineDescription")}</div>
-					</div>
-					<GuiSelect
-						className="gui-input max-w-[200px]"
-						value={searchEngine}
-						onChange={v => setValue("browser.searchEngine", v)}
-						ariaLabel={t("settings.browserSearchEngine")}
-						options={[
-							{ value: "google", label: t("settings.browserSearchGoogle") },
-							{ value: "bing", label: t("settings.browserSearchBing") },
-							{ value: "duckduckgo", label: t("settings.browserSearchDuckDuckGo") },
-							{ value: "baidu", label: t("settings.browserSearchBaidu") },
-						]}
-					/>
-				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("settings.browserAskWhereToSave")}</div>
-						<div className="gui-settings-row-desc">{t("settings.browserAskWhereToSaveDescription")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={askWhereToSave === true}
-						className={`gui-toggle${askWhereToSave === true ? " gui-toggle--on" : ""}`}
-						onClick={() => setBool("browser.download.askWhereToSave", !(askWhereToSave === true))}
-						aria-label={t("settings.browserAskWhereToSave")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				<div className="gui-settings-row">
-					<div className="min-w-0 flex-1">
-						<div className="gui-settings-row-label">{t("settings.browserDownloadDir")}</div>
-						<div className="gui-settings-row-desc">{t("settings.browserDownloadDirDescription")}</div>
-						<div className="mt-1.5 flex gap-1.5">
-							<input
-								className="gui-input min-w-0 flex-1"
-								value={downloadDir}
-								spellCheck={false}
-								placeholder={t("settings.browserDownloadDirPlaceholder")}
-								aria-label={t("settings.browserDownloadDir")}
-								onChange={e => setDownloadDir(e.target.value)}
-								onBlur={() => setValue("browser.download.dir", downloadDir.trim())}
-							/>
+			<Segmented
+				className="gui-browser-settings-tabs"
+				value={settingsTab}
+				onChange={next => {
+					setSettingsTab(next);
+					writeBrowserSettingsTab(next);
+				}}
+				ariaLabel={t("settings.browser")}
+				options={[
+					{ value: "general", label: t("settings.general2") },
+					{ value: "extensions", label: t("tools.extensions") },
+					{ value: "data", label: t("tools.browserData") },
+				]}
+			/>
+			{settingsTab === "general" && (
+				<>
+					<div className="gui-settings-section">
+						<div className="gui-settings-section-title">{t("tools.browserEngine")}</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("tools.headlessBrowser")}</div>
+								<div className="gui-settings-row-desc">{t("tools.headlessBrowserDescription")}</div>
+							</div>
 							<button
 								type="button"
-								className="gui-btn gui-btn--small"
-								onClick={() => {
-									void pickDirectory().then(dir => {
-										if (!dir) return;
-										setDownloadDir(dir);
-										setValue("browser.download.dir", dir);
-									});
-								}}
+								role="switch"
+								aria-checked={headless === true}
+								className={`gui-toggle${headless === true ? " gui-toggle--on" : ""}`}
+								onClick={() => setBool("browser.headless", !(headless === true))}
+								aria-label={t("tools.headlessBrowser")}
 							>
-								{t("settings.browserDownloadDirChoose")}
+								<span className="gui-toggle-knob" />
+							</button>
+						</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("tools.browserRelay")}</div>
+								<div className="gui-settings-row-desc">{t("tools.browserRelayDescription")}</div>
+							</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={relay === true}
+								className={`gui-toggle${relay === true ? " gui-toggle--on" : ""}`}
+								onClick={() => setBool("browser.relay", !(relay === true))}
+								aria-label={t("tools.browserRelay")}
+							>
+								<span className="gui-toggle-knob" />
+							</button>
+						</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("tools.managedBrowser")}</div>
+								<div className="gui-settings-row-desc">{t("tools.managedBrowserDescription")}</div>
+							</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={gui === true}
+								className={`gui-toggle${gui === true ? " gui-toggle--on" : ""}`}
+								onClick={() => setBool("browser.gui", !(gui === true))}
+								aria-label={t("tools.managedBrowser")}
+							>
+								<span className="gui-toggle-knob" />
+							</button>
+						</div>
+						{/* 托管浏览器桥地址:桥运行时以它的实际端口为准(9230-9239
+						 * 是重试区间),这里填的值只在没有桥时兜底。 */}
+						<div className="gui-settings-row">
+							<div className="min-w-0 flex-1">
+								<div className="gui-settings-row-label">{t("tools.managedBrowserUrl")}</div>
+								<div className="gui-settings-row-desc">{t("tools.managedBrowserUrlDescription")}</div>
+								<input
+									className="gui-input mt-1.5"
+									value={guiUrl ?? ""}
+									spellCheck={false}
+									placeholder="http://127.0.0.1:9230"
+									aria-label={t("tools.managedBrowserUrl")}
+									onChange={e => setGuiUrl(e.target.value)}
+									onBlur={() => {
+										if (guiUrl === null) return;
+										void rpc
+											?.request("settings.set", { key: "browser.guiUrl", value: guiUrl.trim() })
+											.then(() => {
+												refresh();
+												window.dispatchEvent(new Event("musepi-browser-settings-changed"));
+											})
+											.catch(() => {});
+									}}
+								/>
+							</div>
+						</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("tools.browserChannelPriority")}</div>
+								<div className="gui-settings-row-desc">{t("tools.browserChannelPriorityDescription")}</div>
+							</div>
+						</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("tools.publicInternetOnly")}</div>
+								<div className="gui-settings-row-desc">{t("tools.publicInternetOnlyDescription")}</div>
+							</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={restrictToPublic === true}
+								className={`gui-toggle${restrictToPublic === true ? " gui-toggle--on" : ""}`}
+								onClick={() => setBool("browser.policy.restrictToPublic", !(restrictToPublic === true))}
+								aria-label={t("tools.publicInternetOnly")}
+							>
+								<span className="gui-toggle-knob" />
 							</button>
 						</div>
 					</div>
-				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("settings.browserDownloadLimit")}</div>
-						<div className="gui-settings-row-desc">{t("settings.browserDownloadLimitDescription")}</div>
-					</div>
-					<GuiSelect
-						className="gui-input max-w-[200px]"
-						value={agentMaxBytes}
-						onChange={v => setValue("browser.download.agentMaxBytes", Number(v))}
-						ariaLabel={t("settings.browserDownloadLimit")}
-						options={[
-							{ value: "536870912", label: `512 ${t("settings.browserSizeMb")}` },
-							{ value: "1073741824", label: `1 ${t("settings.browserSizeGb")}` },
-							{ value: "2147483648", label: `2 ${t("settings.browserSizeGb")}` },
-							{ value: "5368709120", label: `5 ${t("settings.browserSizeGb")}` },
-							{ value: "10737418240", label: `10 ${t("settings.browserSizeGb")}` },
-						]}
-					/>
-				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("settings.browserDefaultZoom")}</div>
-						<div className="gui-settings-row-desc">{t("settings.browserDefaultZoomDescription")}</div>
-					</div>
-					<GuiSelect
-						className="gui-input max-w-[200px]"
-						value={zoom}
-						onChange={v => setValue("browser.zoom", Number(v))}
-						ariaLabel={t("settings.browserDefaultZoom")}
-						options={[
-							{ value: "0.75", label: "75%" },
-							{ value: "0.9", label: "90%" },
-							{ value: "1", label: "100%" },
-							{ value: "1.1", label: "110%" },
-							{ value: "1.25", label: "125%" },
-							{ value: "1.5", label: "150%" },
-						]}
-					/>
-				</div>
-				<div className="gui-settings-row">
-					<div className="min-w-0 flex-1">
-						<div className="gui-settings-row-label">{t("settings.browserUserAgent")}</div>
-						<div className="gui-settings-row-desc">{t("settings.browserUserAgentDescription")}</div>
-						<input
-							className="gui-input mt-1.5"
-							value={userAgent}
-							spellCheck={false}
-							placeholder={t("settings.browserUserAgentPlaceholder")}
-							aria-label={t("settings.browserUserAgent")}
-							onChange={e => setUserAgent(e.target.value)}
-							onBlur={() => setValue("browser.userAgent", userAgent.trim())}
-						/>
-					</div>
-				</div>
-			</div>
-			{/* Computer-use screen glow: full-screen edge + target highlight
-			 * while the agent operates the desktop (computer.glow) — its own
-			 * section, this tab covers desktop automation too. */}
-			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("tools.desktopOperationHints")}</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.computerGlow")}</div>
-						<div className="gui-settings-row-desc">{t("tools.computerGlowDescription")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={glow === true}
-						className={`gui-toggle${glow === true ? " gui-toggle--on" : ""}`}
-						onClick={() => setBool("computer.glow", !(glow === true))}
-						aria-label={t("tools.computerGlow")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				{glow === true && (
-					<div className="gui-computer-glow-preview" aria-hidden="true">
-						<div className="gui-cgp-edge" />
-						<div className="gui-cgp-badge">
-							<span className="gui-cgp-dot" />
-							<span>AI 正在操作桌面</span>
-						</div>
-						<div className="gui-cgp-finder">
-							<div className="gui-cgp-finder-bar">
-								<span className="gui-cgp-light gui-cgp-light--close" />
-								<span className="gui-cgp-light gui-cgp-light--min" />
-								<span className="gui-cgp-light gui-cgp-light--max" />
-								<span className="gui-cgp-finder-title">Finder</span>
+					<div className="gui-settings-section">
+						<div className="gui-settings-section-title">{t("settings.browserAgentSettings")}</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("settings.browserAgentControl")}</div>
+								<div className="gui-settings-row-desc">{t("settings.browserAgentControlDescription")}</div>
 							</div>
-							<div className="gui-cgp-finder-body">
-								<div className="gui-cgp-finder-side" />
-								<div className="gui-cgp-finder-files">
-									<i />
-									<i />
-									<i />
-									<i />
-									<i />
-									<i />
-								</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={agentControl === true}
+								className={`gui-toggle${agentControl === true ? " gui-toggle--on" : ""}`}
+								onClick={() => setBool("browser.agentControl", !(agentControl === true))}
+								aria-label={t("settings.browserAgentControl")}
+							>
+								<span className="gui-toggle-knob" />
+							</button>
+						</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("settings.browserSearchEngine")}</div>
+								<div className="gui-settings-row-desc">{t("settings.browserSearchEngineDescription")}</div>
 							</div>
+							<GuiSelect
+								className="gui-input max-w-[200px]"
+								value={searchEngine}
+								onChange={v => setValue("browser.searchEngine", v)}
+								ariaLabel={t("settings.browserSearchEngine")}
+								options={[
+									{ value: "google", label: t("settings.browserSearchGoogle") },
+									{ value: "bing", label: t("settings.browserSearchBing") },
+									{ value: "duckduckgo", label: t("settings.browserSearchDuckDuckGo") },
+									{ value: "baidu", label: t("settings.browserSearchBaidu") },
+								]}
+							/>
 						</div>
-						<div className="gui-cgp-ring" />
-					</div>
-				)}
-			</div>
-			{/* Browser data (zcode 浏览器数据 parity): one-time Chrome
-			 * import, cache clear, full clear. */}
-			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("tools.browserData")}</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.importChromeData")}</div>
-						<div className="gui-settings-row-desc">{t("tools.importChromeDataDescription")}</div>
-					</div>
-					<button
-						type="button"
-						className="gui-btn gui-btn--small"
-						disabled={importing}
-						onClick={() => {
-							if (!rpc || importing) return;
-							setImporting(true);
-							void rpc
-								.request<{ ok?: boolean; importedFrom?: string; error?: string }>("browser.importChrome", {})
-								.then(res => setImportMsg(res?.ok ? (res.importedFrom ?? "") : (res?.error ?? "")))
-								.finally(() => setImporting(false));
-						}}
-					>
-						{importing ? "…" : t("tools.importBrowserData")}
-					</button>
-				</div>
-				{importMsg && <div className="px-3 pb-2 text-[11.5px] text-[var(--color-text-faint)]">{importMsg}</div>}
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.clearBrowserCache")}</div>
-						<div className="gui-settings-row-desc">{t("tools.clearBrowserCacheDescription")}</div>
-					</div>
-					<button
-						type="button"
-						className="gui-btn gui-btn--small"
-						disabled={clearing}
-						onClick={() => {
-							if (!rpc || clearing) return;
-							setClearing(true);
-							void rpc.request("browser.clearCache", {}).finally(() => setClearing(false));
-						}}
-					>
-						{clearing ? "…" : t("tools.clearCache")}
-					</button>
-				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.clearAllBrowserData")}</div>
-						<div className="gui-settings-row-desc">{t("tools.clearAllBrowserDataDescription")}</div>
-					</div>
-					<button
-						type="button"
-						className="gui-btn gui-btn--small gui-btn--danger"
-						disabled={clearing}
-						onClick={() => {
-							if (!rpc || clearing) return;
-							setClearing(true);
-							void rpc.request("browser.clearAll", {}).finally(() => setClearing(false));
-						}}
-					>
-						{clearing ? "…" : t("tools.clearAll")}
-					</button>
-				</div>
-			</div>
-			{/* Shared browser status + installed extensions */}
-			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("tools.runningState")}</div>
-				{/* 通道一:托管浏览器桥(桌面应用右栏内置浏览器,agent 默认接管) */}
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.managedBrowserBridge")}</div>
-						<div className="gui-settings-row-desc">
-							{bridgePort !== null
-								? t("tools.managedBrowserBridgeRunningWithPort", { port: String(bridgePort) })
-								: t("tools.managedBrowserBridgeIdle")}
-							{" · "}
-							{agentTab ? t("tools.managedBrowserAgentTab") : t("tools.managedBrowserAgentTabIdle")}
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("settings.browserAskWhereToSave")}</div>
+								<div className="gui-settings-row-desc">{t("settings.browserAskWhereToSaveDescription")}</div>
+							</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={askWhereToSave === true}
+								className={`gui-toggle${askWhereToSave === true ? " gui-toggle--on" : ""}`}
+								onClick={() => setBool("browser.download.askWhereToSave", !(askWhereToSave === true))}
+								aria-label={t("settings.browserAskWhereToSave")}
+							>
+								<span className="gui-toggle-knob" />
+							</button>
 						</div>
-					</div>
-					{bridgePort !== null && <span className="gui-provider-chip">{t("tools.running")}</span>}
-				</div>
-				{/* 通道二:共享无头浏览器(没有托管桥时的兜底) */}
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("tools.sharedHeadlessBrowser")}</div>
-						<div className="gui-settings-row-desc">
-							{endpoint
-								? t("tools.sharedBrowserRunningTabsWithTabs", { tabs: tabCount ?? 0 })
-								: t("tools.sharedBrowserIdle")}
-						</div>
-					</div>
-					{endpoint && <span className="gui-provider-chip">{t("tools.running")}</span>}
-				</div>
-				{profileDir && (
-					<div className="px-3 pb-2">
-						<div className="truncate text-[11px] text-[var(--color-text-faint)]" title={profileDir}>
-							{profileDir}
-						</div>
-					</div>
-				)}
-				<div className="gui-group-label px-3 pb-1 pt-2">{t("tools.extensions")}</div>
-				{extensions === null ? (
-					<div className="px-3 text-[12px] text-[var(--color-text-faint)]">…</div>
-				) : extensions.length === 0 ? (
-					<div className="px-3 pb-2 text-[12px] text-[var(--color-text-faint)]">{t("tools.noExtensions")}</div>
-				) : (
-					extensions.map(ext => (
-						<div key={ext.id} className="gui-agent-card">
+						<div className="gui-settings-row">
 							<div className="min-w-0 flex-1">
-								<div className="flex items-center gap-1.5">
-									<span className="truncate text-[13px] font-medium">{ext.name}</span>
-									<span className="gui-provider-chip">{ext.version}</span>
+								<div className="gui-settings-row-label">{t("settings.browserDownloadDir")}</div>
+								<div className="gui-settings-row-desc">{t("settings.browserDownloadDirDescription")}</div>
+								<div className="mt-1.5 flex gap-1.5">
+									<input
+										className="gui-input min-w-0 flex-1"
+										value={downloadDir}
+										spellCheck={false}
+										placeholder={t("settings.browserDownloadDirPlaceholder")}
+										aria-label={t("settings.browserDownloadDir")}
+										onChange={e => setDownloadDir(e.target.value)}
+										onBlur={() => setValue("browser.download.dir", downloadDir.trim())}
+									/>
+									<button
+										type="button"
+										className="gui-btn gui-btn--small"
+										onClick={() => {
+											void pickDirectory().then(dir => {
+												if (!dir) return;
+												setDownloadDir(dir);
+												setValue("browser.download.dir", dir);
+											});
+										}}
+									>
+										{t("settings.browserDownloadDirChoose")}
+									</button>
 								</div>
-								<div className="truncate text-[11px] text-[var(--color-text-faint)]">{ext.id}</div>
 							</div>
 						</div>
-					))
-				)}
-			</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("settings.browserDownloadLimit")}</div>
+								<div className="gui-settings-row-desc">{t("settings.browserDownloadLimitDescription")}</div>
+							</div>
+							<GuiSelect
+								className="gui-input max-w-[200px]"
+								value={agentMaxBytes}
+								onChange={v => setValue("browser.download.agentMaxBytes", Number(v))}
+								ariaLabel={t("settings.browserDownloadLimit")}
+								options={[
+									{ value: "536870912", label: `512 ${t("settings.browserSizeMb")}` },
+									{ value: "1073741824", label: `1 ${t("settings.browserSizeGb")}` },
+									{ value: "2147483648", label: `2 ${t("settings.browserSizeGb")}` },
+									{ value: "5368709120", label: `5 ${t("settings.browserSizeGb")}` },
+									{ value: "10737418240", label: `10 ${t("settings.browserSizeGb")}` },
+								]}
+							/>
+						</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("settings.browserDefaultZoom")}</div>
+								<div className="gui-settings-row-desc">{t("settings.browserDefaultZoomDescription")}</div>
+							</div>
+							<GuiSelect
+								className="gui-input max-w-[200px]"
+								value={zoom}
+								onChange={v => setValue("browser.zoom", Number(v))}
+								ariaLabel={t("settings.browserDefaultZoom")}
+								options={[
+									{ value: "0.75", label: "75%" },
+									{ value: "0.9", label: "90%" },
+									{ value: "1", label: "100%" },
+									{ value: "1.1", label: "110%" },
+									{ value: "1.25", label: "125%" },
+									{ value: "1.5", label: "150%" },
+								]}
+							/>
+						</div>
+						<div className="gui-settings-row">
+							<div className="min-w-0 flex-1">
+								<div className="gui-settings-row-label">{t("settings.browserUserAgent")}</div>
+								<div className="gui-settings-row-desc">{t("settings.browserUserAgentDescription")}</div>
+								<input
+									className="gui-input mt-1.5"
+									value={userAgent}
+									spellCheck={false}
+									placeholder={t("settings.browserUserAgentPlaceholder")}
+									aria-label={t("settings.browserUserAgent")}
+									onChange={e => setUserAgent(e.target.value)}
+									onBlur={() => setValue("browser.userAgent", userAgent.trim())}
+								/>
+							</div>
+						</div>
+					</div>
+					{/* Computer-use screen glow: full-screen edge + target highlight
+					 * while the agent operates the desktop (computer.glow) — its own
+					 * section, this tab covers desktop automation too. */}
+					<div className="gui-settings-section">
+						<div className="gui-settings-section-title">{t("tools.desktopOperationHints")}</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("tools.computerGlow")}</div>
+								<div className="gui-settings-row-desc">{t("tools.computerGlowDescription")}</div>
+							</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={glow === true}
+								className={`gui-toggle${glow === true ? " gui-toggle--on" : ""}`}
+								onClick={() => setBool("computer.glow", !(glow === true))}
+								aria-label={t("tools.computerGlow")}
+							>
+								<span className="gui-toggle-knob" />
+							</button>
+						</div>
+						{glow === true && (
+							<div className="gui-computer-glow-preview" aria-hidden="true">
+								<div className="gui-cgp-edge" />
+								<div className="gui-cgp-badge">
+									<span className="gui-cgp-dot" />
+									<span>AI 正在操作桌面</span>
+								</div>
+								<div className="gui-cgp-finder">
+									<div className="gui-cgp-finder-bar">
+										<span className="gui-cgp-light gui-cgp-light--close" />
+										<span className="gui-cgp-light gui-cgp-light--min" />
+										<span className="gui-cgp-light gui-cgp-light--max" />
+										<span className="gui-cgp-finder-title">Finder</span>
+									</div>
+									<div className="gui-cgp-finder-body">
+										<div className="gui-cgp-finder-side" />
+										<div className="gui-cgp-finder-files">
+											<i />
+											<i />
+											<i />
+											<i />
+											<i />
+											<i />
+										</div>
+									</div>
+								</div>
+								<div className="gui-cgp-ring" />
+							</div>
+						)}
+					</div>
+				</>
+			)}
+			{settingsTab === "data" && (
+				<div className="gui-settings-section">
+					<div className="gui-settings-section-title">{t("tools.browserData")}</div>
+					<BrowserImportCard rpc={rpc} />
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("tools.clearBrowserCache")}</div>
+							<div className="gui-settings-row-desc">{t("tools.clearBrowserCacheDescription")}</div>
+						</div>
+						<button
+							type="button"
+							className="gui-btn gui-btn--small"
+							disabled={clearing}
+							onClick={() => {
+								if (!rpc || clearing) return;
+								setClearing(true);
+								void rpc.request("browser.clearCache", {}).finally(() => setClearing(false));
+							}}
+						>
+							{clearing ? "…" : t("tools.clearCache")}
+						</button>
+					</div>
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("tools.clearAllBrowserData")}</div>
+							<div className="gui-settings-row-desc">{t("tools.clearAllBrowserDataDescription")}</div>
+						</div>
+						<button
+							type="button"
+							className="gui-btn gui-btn--small gui-btn--danger"
+							disabled={clearing}
+							onClick={() => {
+								if (!rpc || clearing) return;
+								setClearing(true);
+								void rpc.request("browser.clearAll", {}).finally(() => setClearing(false));
+							}}
+						>
+							{clearing ? "…" : t("tools.clearAll")}
+						</button>
+					</div>
+				</div>
+			)}
+			{settingsTab === "general" && (
+				<div className="gui-settings-section">
+					<div className="gui-settings-section-title">{t("tools.runningState")}</div>
+					{/* 通道一:托管浏览器桥(桌面应用右栏内置浏览器,agent 默认接管) */}
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("tools.managedBrowserBridge")}</div>
+							<div className="gui-settings-row-desc">
+								{bridgePort !== null
+									? t("tools.managedBrowserBridgeRunningWithPort", { port: String(bridgePort) })
+									: t("tools.managedBrowserBridgeIdle")}
+								{" · "}
+								{agentTab ? t("tools.managedBrowserAgentTab") : t("tools.managedBrowserAgentTabIdle")}
+							</div>
+						</div>
+						{bridgePort !== null && <span className="gui-provider-chip">{t("tools.running")}</span>}
+					</div>
+					{/* 通道二:共享无头浏览器(没有托管桥时的兜底) */}
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("tools.sharedHeadlessBrowser")}</div>
+							<div className="gui-settings-row-desc">
+								{endpoint
+									? t("tools.sharedBrowserRunningTabsWithTabs", { tabs: tabCount ?? 0 })
+									: t("tools.sharedBrowserIdle")}
+							</div>
+						</div>
+						{endpoint && <span className="gui-provider-chip">{t("tools.running")}</span>}
+					</div>
+					{profileDir && (
+						<div className="px-3 pb-2">
+							<div className="truncate text-[11px] text-[var(--color-text-faint)]" title={profileDir}>
+								{profileDir}
+							</div>
+						</div>
+					)}
+				</div>
+			)}
+			{settingsTab === "extensions" && (
+				<>
+					<div className="gui-settings-section">
+						<BrowserExtensionsPanel rpc={rpc} />
+					</div>
+					<div className="gui-settings-section">
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("tools.browserExtensionsToolbar")}</div>
+								<div className="gui-settings-row-desc">{t("tools.browserExtensionsToolbarDescription")}</div>
+							</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={extensionsToolbar}
+								className={`gui-toggle${extensionsToolbar ? " gui-toggle--on" : ""}`}
+								onClick={() => {
+									const next = !extensionsToolbar;
+									setExtensionsToolbar(next);
+									writeBrowserExtensionsToolbarVisible(next);
+								}}
+								aria-label={t("tools.browserExtensionsToolbar")}
+							>
+								<span className="gui-toggle-knob" />
+							</button>
+						</div>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("tools.browserShowFullUrl")}</div>
+								<div className="gui-settings-row-desc">{t("tools.browserShowFullUrlDescription")}</div>
+							</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={showFullUrl}
+								className={`gui-toggle${showFullUrl ? " gui-toggle--on" : ""}`}
+								onClick={() => {
+									const next = !showFullUrl;
+									setShowFullUrl(next);
+									writeBrowserShowFullUrl(next);
+								}}
+								aria-label={t("tools.browserShowFullUrl")}
+							>
+								<span className="gui-toggle-knob" />
+							</button>
+						</div>
+					</div>
+				</>
+			)}
 		</>
 	);
 }

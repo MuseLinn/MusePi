@@ -124,7 +124,10 @@
 }
 
 .tv-sum {
-	flex: 1;
+	/* Hug the summary text: the parent `.tv-arg` already fills the row, so a
+	 * growing summary would push the closing paren to the far edge and read as
+	 * a stray character (a widget summary is short, so the gap was obvious). */
+	flex: 0 1 auto;
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1131,12 +1134,67 @@
 	font-size: var(--ui-font-size-sm);
 }
 
-/* Inline custom-HTML faces: the shared .gui-widget-html iframe is
- * height:100%, which collapses to the 150px iframe default inside an
- * auto-height transcript card. Give it a usable floor here — the board
- * canvas sizes the same class explicitly and is untouched by this. */
+/* Inline custom-HTML faces: the shared .gui-widget-html iframe is height:100%,
+ * which collapses to the 150px iframe default inside an auto-height transcript
+ * card. The frame is sized from the page's own report; the floor only keeps a
+ * first-paint placeholder and a genuinely empty page from vanishing. */
 .tv-widget-body .gui-widget-html {
-	min-height: 320px;
+	min-height: 48px;
+}
+
+/* A page face owns the whole card: no inset, square inner corners, and the
+ * frame reaches both card edges. The card's own overflow/radius still clip it,
+ * so the page never paints outside the shell. Insetting a full page is what
+ * made it read as a narrow strip next to the rest of the timeline. */
+.tv-widget--page .tv-widget-body {
+	padding: 0;
+}
+.tv-widget--page .gui-widget-html-wrap {
+	display: flex;
+	flex-direction: column;
+}
+/* The annotation entry gets a row of its own above the frame: floating it
+ * over the page's top-right corner covers the page's own controls there. The
+ * row keeps its height whether or not the button is showing, so hovering
+ * never moves the page. */
+.tv-widget--page .gui-widget-html-tools {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	min-height: 28px;
+	padding: 4px 8px 0;
+}
+.tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn {
+	position: static;
+	opacity: 0.55;
+}
+.tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn:hover,
+.tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn:focus-visible,
+.tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn--active {
+	opacity: 1;
+}
+/* Touch screens have no hover: the entry stays fully visible instead of
+ * being unreachable in a desktop file's hover-only rule. */
+@media (hover: none) {
+	.tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn {
+		opacity: 1;
+	}
+}
+.tv-widget--page .gui-widget-html {
+	border-radius: 0;
+	background: var(--color-bg, transparent);
+}
+
+/* Waiting-page status: a page that asks the user to choose answers into the
+ * conversation, so the card itself has to say it is still waiting. */
+.tv-widget-ask {
+	padding: 6px 12px;
+	border-top: 1px solid var(--tv-border);
+	font-size: 11.5px;
+	color: var(--tv-muted);
+}
+.tv-widget-ask--done {
+	color: var(--tv-ok);
 }
 
 /* The shared widgets reference the GUI theme tokens; bridge them here
@@ -1157,7 +1215,13 @@
 	--radius-xl: 12px;
 }
 
-/* Pomodoro widget (kimi Hello-World parity). */
+/* Pomodoro widget (kimi Hello-World parity).
+ *
+ * Colours go through the CARD tokens (`--color-*`, `--border`) rather than the
+ * `tv-` transcript tokens: the same component renders on a board card, where the
+ * tone (gui-tone.css) supplies that ramp, and inside `.tv-widget`, which bridges
+ * the same names. `--tv-fg` has no value outside `.tv-card`, so it fell back to a
+ * fixed light ink and vanished on a light card. */
 .gui-widget-pomodoro {
 	display: flex;
 	flex-direction: column;
@@ -1174,17 +1238,17 @@
 .gui-widget-pomodoro-mode {
 	padding: 3px 10px;
 	border-radius: 999px;
-	border: 1px solid var(--tv-border);
+	border: 1px solid var(--border);
 	background: transparent;
-	color: var(--tv-muted);
+	color: var(--color-text-muted);
 	font-size: var(--ui-font-size-xs);
 	cursor: pointer;
 }
 
 .gui-widget-pomodoro-mode--active {
-	background: var(--tv-fg);
-	color: var(--tv-inset);
-	border-color: var(--tv-fg);
+	background: var(--color-text);
+	color: var(--gui-tone-step, var(--color-surface-raised));
+	border-color: var(--color-text);
 }
 
 .gui-widget-pomodoro-ring-wrap {
@@ -1199,13 +1263,13 @@
 }
 
 .gui-widget-pomodoro-ring-bg {
-	stroke: var(--tv-border);
+	stroke: var(--border);
 	stroke-width: 8;
 	fill: none;
 }
 
 .gui-widget-pomodoro-ring-fg {
-	stroke: var(--tv-accent, oklch(0.674 0.23 341));
+	stroke: var(--color-accent);
 	stroke-width: 8;
 	fill: none;
 	stroke-linecap: round;
@@ -1224,12 +1288,12 @@
 	font-size: 30px;
 	font-weight: 500;
 	font-variant-numeric: tabular-nums;
-	color: var(--tv-fg);
+	color: var(--color-text);
 }
 
 .gui-widget-pomodoro-state {
 	font-size: 11px;
-	color: var(--tv-faint);
+	color: var(--color-text-faint);
 }
 
 .gui-widget-pomodoro-actions {
@@ -1240,30 +1304,30 @@
 .gui-widget-pomodoro-btn {
 	padding: 5px 18px;
 	border-radius: var(--radius-lg);
-	border: 1px solid var(--tv-border);
+	border: 1px solid var(--border);
 	background: transparent;
-	color: var(--tv-fg);
+	color: var(--color-text);
 	font-size: 12.5px;
 	cursor: pointer;
 }
 
 .gui-widget-pomodoro-btn--primary {
-	background: var(--tv-fg);
-	color: var(--tv-inset);
-	border-color: var(--tv-fg);
+	background: var(--color-text);
+	color: var(--gui-tone-step, var(--color-surface-raised));
+	border-color: var(--color-text);
 }
 
 .gui-widget-pomodoro-stats {
 	display: flex;
 	gap: 18px;
 	font-size: 11.5px;
-	color: var(--tv-muted);
+	color: var(--color-text-muted);
 	font-variant-numeric: tabular-nums;
 }
 
 .gui-widget-pomodoro-hint {
 	font-size: 11px;
-	color: var(--tv-faint);
+	color: var(--color-text-faint);
 }
 
 /* board save tool card — jump into the dashboard from chat */

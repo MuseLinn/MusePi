@@ -61,7 +61,7 @@ import { trackLateCleanup } from "../utils/late-cleanup";
 import { buildNamedToolChoice } from "../utils/tool-choice";
 import type { WorkspaceTree } from "../workspace-tree";
 import { attributeSubagentError } from "./error-attribution";
-import { generateTaskLabel } from "./label";
+import { generateTaskLabel, subagentSessionTitle } from "./label";
 import { resolveAgentPrewalkDefault } from "./prewalk";
 import { isReadOnlyAgent } from "./read-only-policy";
 import { subprocessToolRegistry } from "./subprocess-tool-registry";
@@ -3230,7 +3230,7 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				parentTaskPrefix: id,
 				parentAgentId: options.parentAgentId,
 				agentId: id,
-				agentDisplayName: agent.name,
+				agentDisplayName: subagentSessionTitle(options.description, id),
 				expectedAgentRef,
 				enableLsp: lspEnabled,
 				enableIrc: options.enableIrc,
@@ -3265,6 +3265,12 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				throw err;
 			}
 			sessionCreatedAt = performance.now();
+			// Deterministic spawn title: the caller's `name` ("Alice"), else the
+			// agent id. Without this the transcript keeps an empty title slot and
+			// every session tree/roster surface falls back to "untitled" or the
+			// shared agent type. `setSessionName` refuses to overwrite a user
+			// rename, so a resumed session keeps its /rename.
+			await session.sessionManager.setSessionName?.(subagentSessionTitle(options.description, id), "auto");
 			// Keep the child's `hasUI: false` construction (MCP/LSP startup paths
 			// stay headless) and attach the parent UI only after the session exists.
 			if (injectedUIContext) setSessionToolUIContext?.(injectedUIContext, true);

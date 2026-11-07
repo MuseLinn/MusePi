@@ -19,6 +19,7 @@ import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getSessionsDir, isEnoent } from "@musepi/pi-utils";
+import { ARTIFACT_SESSION_ID_RE } from "@musepi/pi-wire";
 import { artifactsDirsFromRegistry } from "./registry-helpers";
 import type { InternalResource, InternalUrl, ProtocolHandler, ResolveContext, UrlCompletion } from "./types";
 
@@ -30,7 +31,6 @@ const MAX_INLINE_ARTIFACT_BYTES = 8 * 1024 * 1024;
  */
 const MAX_WORKSPACE_DIRS = 256;
 const MAX_ARTIFACT_SUBDIRS = 128;
-const SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 /** Filesystem location for a session artifact, resolved without materializing its content. */
 export interface ResolvedArtifactFile {
@@ -51,7 +51,7 @@ interface ArtifactTarget {
  * `.`/`..`, and no dot-prefixed escape names.
  */
 function parseSessionId(raw: string): string {
-	if (!SESSION_ID_PATTERN.test(raw) || raw === "." || raw === ".." || raw.startsWith(".")) {
+	if (!ARTIFACT_SESSION_ID_RE.test(raw) || raw === "." || raw === ".." || raw.startsWith(".")) {
 		throw new Error(
 			`Invalid artifact session ID: ${raw}. Expected a session file name made of letters, digits, ".", "_" and "-", without path separators.`,
 		);

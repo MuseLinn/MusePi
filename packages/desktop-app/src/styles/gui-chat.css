@@ -1294,8 +1294,11 @@ body.gui-resizing .gui-pane-resize-x::after {
 	-webkit-app-region: no-drag;
 }
 
-/* Windows/Linux have no macOS traffic lights — reclaim the 84px clearance
- * (the float controls sit at the window edge, level with the header row). */
+/* Windows/Linux have no macOS traffic lights — the cluster stays at the
+ * window edge, level with the header row. The app rail does NOT move it:
+ * its own top band is transparent and empty for the first 48px, so the
+ * titlebar owns that strip and the control lands above the rail, exactly
+ * as the right-hand rail avoids the header by living inside the surface. */
 :root[data-platform="win32"] .gui-float-controls--overlay,
 :root[data-platform="linux"] .gui-float-controls--overlay {
 	left: 16px;
@@ -1312,13 +1315,17 @@ body.gui-resizing .gui-pane-resize-x::after {
 }
 
 .gui-header-spacer[data-collapsed="true"] {
-	width: calc(var(--gui-float-controls-width, 86px) + 8px);
+	/* The cluster is fixed at left:16, but the chat column now starts at the
+	 * rail's right edge (--gui-rail-w). Reserve only the part of the cluster
+	 * that actually overlaps the chat column; keeping the full width here
+	 * pushed the session tabs / title ~52px too far right. */
+	width: calc(var(--gui-float-controls-width, 86px) - var(--gui-rail-w, 52px) + 8px);
 }
 
 /* macOS: the cluster anchors at left:84 (traffic-light clearance), so the
- * spacer additionally covers 84 − 16 baseline padding. */
+ * spacer additionally covers 84 − 16 baseline padding — still minus the rail. */
 :root[data-platform="darwin"] .gui-header-spacer[data-collapsed="true"] {
-	width: calc(68px + var(--gui-float-controls-width, 86px) + 8px);
+	width: calc(68px + var(--gui-float-controls-width, 86px) - var(--gui-rail-w, 52px) + 8px);
 }
 
 .gui-sidebar-toggle {
@@ -5588,6 +5595,23 @@ body.gui-resizing .gui-pane-right {
 .gui-pane-right--inner,
 .gui-right-rail {
 	margin: var(--gui-card-gutter);
+}
+
+/* ── Page-destination cards (board / scheduled / PR / capability) ──────
+ * ChatSurfaceShell used to paint a bare Tailwind card: `m-2` + the OLD
+ * single-card `0 4px 24px rgba(0,0,0,.25)` shadow. ChatView instead puts a
+ * window gutter on `.gui-chat-surface` AND a card gutter on
+ * `.gui-chat-column`, so the two-tier rail made the mismatch obvious: page
+ * cards sat 8px closer to every edge and cast a heavier shadow than the
+ * chat/welcome cards. One geometry for every destination: same two-layer
+ * gutter, same `.gui-float-card` radius/shadow tokens (REA: ChatGPT's
+ * PageSurface owns a single inset + radius for every destination). */
+.gui-page-card {
+	margin: var(--gui-card-gutter);
+	border-radius: var(--radius-2xl);
+	box-shadow: var(--gui-card-shadow);
+	background-color: var(--color-surface);
+	overflow: hidden;
 }
 
 /* The dock carries the same side/bottom gutter but NO top margin: the

@@ -326,6 +326,70 @@ button.tr-display-context-source:hover {
 	color: var(--fg-faint);
 }
 
+/* Background job settlement (`async-job-result`): the status line follows the
+ * job, the output stays a bounded preview, and the model's `<task-result>`
+ * envelope never renders. */
+.tr-async-job {
+	gap: 6px;
+}
+
+.tr-async-job-status {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.tr-async-job--err .tr-async-result-done {
+	color: var(--error, #f85149);
+}
+
+.tr-async-job--warn .tr-async-result-done {
+	color: var(--warning, #d9a13b);
+}
+
+.tr-async-job--accent .tr-async-result-done {
+	color: var(--accent);
+}
+
+.tr-async-job-output {
+	margin: 0;
+	max-width: 100%;
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	line-height: 1.5;
+	color: var(--fg-faint);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.tr-async-job-output--clamped {
+	max-height: 12em;
+	overflow: hidden;
+	mask-image: linear-gradient(to bottom, black 72%, transparent);
+	-webkit-mask-image: linear-gradient(to bottom, black 72%, transparent);
+}
+
+.tr-async-job-more {
+	align-self: flex-start;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+
+.tr-async-job-more:hover {
+	color: var(--color-accent);
+}
+
+.tr-async-job-hint {
+	max-width: 100%;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+	overflow-wrap: anywhere;
+}
+
 
 /* 工具注册表时间线注入行（扩展/插件热插拔；display-only custom_message）。 */
 .tr-tool-registry {
@@ -2994,44 +3058,114 @@ a.tr-tool-search-title:hover {
 	color: var(--color-text-muted);
 }
 
-/* Sender label above the body (TUI card parity: `IRC ⟵ from` header).
- * Rendered inside the row body — the 40px gutter cannot fit agent ids
- * like "SurveyOpenchamber", which used to truncate mid-name. */
-.tr-irc-from {
-	align-self: flex-start;
+/* Route header. Composed from `details` — the bracketed `[IRC a → b]` line
+ * inside `content` is stripped, so an exchange reads as one conversation
+ * instead of repeating its own attribution above every message. */
+.tr-irc-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.tr-irc-route {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
+
+.tr-irc-from,
+.tr-irc-to {
 	max-width: 100%;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	padding: 0 5px;
 	border-radius: var(--radius-sm);
-	background: var(--accent-muted);
-	color: var(--accent);
 	font-family: var(--font-mono);
 	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	line-height: 16px;
 }
 
+.tr-irc-from {
+	background: var(--accent-muted);
+	color: var(--accent);
+}
+
+.tr-irc-to {
+	background: var(--bg-inset);
+	color: var(--color-text-muted);
+}
+
+.tr-irc-arrow {
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+.tr-irc-tag {
+	padding: 0 4px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xs);
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+	line-height: 14px;
+}
+
+/* Relay is observed peer traffic — the quietest form. */
+.tr-irc--relay {
+	color: var(--color-text-faint);
+}
+
+.tr-irc--incoming {
+	color: var(--color-text);
+}
+
+/* Three lines, then a fade instead of a hard clip; `展开全文` lifts it. */
+.tr-irc-body--clamped {
+	max-height: 4.6em;
+	overflow: hidden;
+	mask-image: linear-gradient(to bottom, black 60%, transparent);
+	-webkit-mask-image: linear-gradient(to bottom, black 60%, transparent);
+}
+
+.tr-irc-more {
+	align-self: flex-start;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+}
+
+.tr-irc-more:hover {
+	color: var(--color-accent);
+}
+
 .tr-irc .tr-md p {
 	margin: 0;
 }
 
-/* ── Standalone widget display (config 开启): the visualization as its
- *    own adaptive card in the message flow, file-preview-card style. The
- *    card is the shared .tv-widget shell; only the flow placement and the
- *    fullscreen affordance are new. ─────────────────────────────────── */
-.tr-widget-standalone {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin-top: 8px;
-	/* 消息流窄时内联 widget 仍保底一个可读宽度（不溢出，窄容器取 100%）。
-	 * 300px 保底替代旧 420px——窄流(如紧凑右侧栏)下 420px 会横向撑破,
-	 * 300px 更贴近大多数 widget 的合理最小可视宽度。 */
+/* ── Widget card in place of its tool row (config 开启): the visualization
+ *    is the call's artifact, so it replaces the row instead of sitting under
+ *    a folded one. Only the flow spacing is new; the card is the shared
+ *    .tv-widget shell. ─────────────────────────────────────────────────── */
+.tr-widget-inplace {
+	/* The transcript body is a flex column with `align-items: flex-start`, so
+	 * a child sizes to its content — an iframe's intrinsic 300px would leave
+	 * the visualization as a narrow strip in a wide column. Stretch it and
+	 * every layer down to the frame. */
+	align-self: stretch;
+	width: 100%;
+	margin: 6px 0;
+	min-width: 0;
 	max-width: 100%;
-	min-width: min(300px, 100%);
-	overflow-x: hidden;
+}
+.tr-widget-inplace .tv-widget,
+.tr-widget-inplace .tv-widget-body {
+	width: 100%;
 }
 
 .tv-widget-actions {
@@ -3040,6 +3174,23 @@ a.tr-tool-search-title:hover {
 	align-items: center;
 	gap: 2px;
 	flex-shrink: 0;
+}
+
+/* Card actions stay out of the way while reading and fade in on approach —
+ * the same hover-bar idea as the desktop assistants (added 2026-11-07):
+ * visible chrome on every widget made a column of cards look like a toolbar
+ * grid. Keyboard focus reveals them too, and coarse pointers (no hover) keep
+ * the bar permanently visible so touch users never lose the controls. */
+@media (hover: hover) and (pointer: fine) {
+	.tr-widget-inplace .tv-widget-actions {
+		opacity: 0;
+		transition: opacity 120ms ease-out;
+	}
+
+	.tr-widget-inplace .tv-widget:hover .tv-widget-actions,
+	.tr-widget-inplace .tv-widget:focus-within .tv-widget-actions {
+		opacity: 1;
+	}
 }
 
 .tv-widget-fs-btn {

@@ -92,13 +92,12 @@ export {
 } from "./components/transcript/Transcript";
 export { buildTurnIndex, TURN_SUMMARY_MAX, type TurnIndexItem } from "./components/transcript/turn-index";
 export {
-	collectWidgetPayloads,
 	latestWidgetFromEntries,
 	WIDGET_STANDALONE_KEY,
 	WidgetCard,
 	WidgetFullscreen,
 	type WidgetPayload,
-	WidgetStandaloneCards,
+	widgetPayloadFromResult,
 	widgetStandaloneEnabled,
 } from "./components/transcript/widget-standalone";
 export {

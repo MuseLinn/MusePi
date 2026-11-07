@@ -15,6 +15,8 @@
  *   open                   → slot mounted, sidebar + chat keepers hidden
  *   open + leavingSettings → same, nav slot flagged for its blur-out
  *   closed (after leave)   → identical to closed (keepers reveal, slot gone)
+ *   page destination       → sidebar keeper hidden only (the page owns the
+ *                            surface; the chat column keeps rendering it)
  */
 
 export interface SettingsShellState {
@@ -33,13 +35,19 @@ export interface SettingsShellState {
 export function computeSettingsShellState(state: {
 	settingsOpen: boolean;
 	leavingSettings: boolean;
+	/** A page destination (board / scheduled / PR board / capability center)
+	 *  owns the surface. Those pages carry their own header and back path, so
+	 *  the session panel folds away instead of sitting next to a surface it
+	 *  does not describe — the rail's 首页 destination brings it back. The
+	 *  sidebar stays mounted (display:none), so expanded groups survive. */
+	pageDestinationActive?: boolean;
 }): SettingsShellState {
 	const settingsActive = state.settingsOpen || state.leavingSettings;
 	return {
 		settingsActive,
 		navSlotMounted: settingsActive,
 		navSlotLeaving: state.leavingSettings,
-		sideKeeperHidden: settingsActive,
+		sideKeeperHidden: settingsActive || state.pageDestinationActive === true,
 		chatColKeeperHidden: settingsActive,
 	};
 }

@@ -35,6 +35,7 @@ const INTERNAL_URL_SELECTOR_PART_RE = new RegExp(
 const INTERNAL_SCHEMES_WITH_SELECTORS: Record<string, true> = {
 	agent: true,
 	artifact: true,
+	blob: true,
 	issue: true,
 	history: true,
 	local: true,
@@ -59,6 +60,7 @@ const NARROW_NO_BREAK_SPACE = "\u202F";
 const TOP_LEVEL_INTERNAL_URL_PREFIXES = [
 	"agent://",
 	"artifact://",
+	"blob://",
 	"skill://",
 	"rule://",
 	"security://",

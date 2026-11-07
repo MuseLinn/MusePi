@@ -1,19 +1,16 @@
 import { Segmented, type SegmentedOption, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { openExternalUrl } from "../lib/electron";
 import { useConfirm } from "../lib/prompt-dialog";
+import { channelStateText, isCloudflaredMissing } from "../lib/remote-access";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { QrCode } from "../vendor/qrcode";
 import { DialogFrame } from "./DialogFrame";
 import { Reveal } from "./Reveal";
 
-/** Share scope: what the guest link exposes. */
-const SHARE_SCOPE_SEGMENTS: SegmentedOption<"session" | "workspace" | "tunnel">[] = [
-	{ value: "session", label: t("general.currentSession") },
-	{ value: "workspace", label: t("tools.workspace") },
-	{ value: "tunnel", label: t("settings.publicTunnel") },
-];
+type ShareMode = "session" | "workspace" | "tunnel";
 
 interface RemoteAccessGuest {
 	name: string;
@@ -29,7 +26,31 @@ interface RemoteAccessInfo {
 	participants?: RemoteAccessGuest[];
 }
 
-/** Draw a QR symbol (collab-proto encoder, byte mode) onto a canvas. */
+interface ChannelInfo {
+	kind: string;
+	state: string;
+	detail?: string;
+	config: Record<string, unknown>;
+}
+
+interface ChannelPlugin {
+	kind: string;
+	label: string;
+	origin: string;
+	registered: boolean;
+}
+
+const CLOUDFLARED_INSTALL_URL =
+	"https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/";
+const CHANNEL_NAMES: Record<string, string> = {
+	discord: "Discord",
+	wechat: "WeChat",
+	telegram: "Telegram",
+	feishu: "Feishu",
+	lark: "Lark",
+	"huawei-today": "Huawei Today",
+};
+
 function drawQr(canvas: HTMLCanvasElement, text: string): void {
 	const qr = QrCode.encodeText(text, "M");
 	const scale = 6;
@@ -49,17 +70,7 @@ function drawQr(canvas: HTMLCanvasElement, text: string): void {
 	}
 }
 
-/**
- * Mobile remote control dialog: scan to join a live collab share of the
- * current session (daemon collab.* RPC, LAN relay), plus the bot-channel
- * section (live daemon state — channels.list/start/stop).
- */
-/** iLink's `qrcode_img_content` is NOT an image — live API returns the URL
- *  the QR must ENCODE (the liteapp.weixin.qq.com scan target; rendering it
- *  as <img> 404s and was the "二维码不显示" bug). So an https URL is
- *  rasterized HERE with the built-in QR encoder (crisp SVG data URI). A real
- *  image URL (ending in an image extension) still renders as <img>, and a
- *  raw base64 PNG (older adapter shape) gets the data:image wrapper. */
+/** iLink's qrcode_img_content is a URL to encode, not an image URL. */
 function channelQrSrc(raw: string): string {
 	if (raw.startsWith("data:")) return raw;
 	if (/^https?:\/\//i.test(raw)) {
@@ -78,7 +89,7 @@ function channelQrSrc(raw: string): string {
 	}
 	return `data:image/png;base64,${raw}`;
 }
-/** 各 bot channel 的可识别 logo（discord 用内置 icon，其余内联简化 SVG）。 */
+
 function channelLogo(kind: string): ReactNode {
 	switch (kind) {
 		case "discord":
@@ -133,138 +144,40 @@ export function RemoteAccessDialog({
 	const { confirm } = useConfirm();
 	const qrRef = useRef<HTMLCanvasElement | null>(null);
 	const [webLink, setWebLink] = useState<string | null>(null);
-	const [mode, setMode] = useState<"session" | "workspace" | "tunnel">("session");
+	const [mode, setMode] = useState<ShareMode>("session");
 	const [pairCode, setPairCode] = useState<string | null>(null);
-	/** When the live pair code dies; null until one is minted. */
 	const [pairCodeExpiresAt, setPairCodeExpiresAt] = useState<number | null>(null);
-	/** 1s clock driving the pair-code countdown; only ticks while a code is live. */
 	const [now, setNow] = useState(() => Date.now());
-	/** Watch-only link copy feedback (mirrors `copied`). */
 	const [copiedView, setCopiedView] = useState(false);
-	const [channels, setChannels] = useState<
-		{ kind: string; state: string; detail?: string; config: Record<string, unknown> }[] | null
-	>(null);
+	const [channels, setChannels] = useState<ChannelInfo[] | null>(null);
+	const [channelsError, setChannelsError] = useState(false);
 	const [expandedKind, setExpandedKind] = useState<string | null>(null);
 	const [configDraft, setConfigDraft] = useState<Record<string, string>>({});
-	/** Per-kind start failure — silently swallowing channels.start errors left
-	 *  users clicking "start" with zero feedback (QR never appeared). */
 	const [startErrors, setStartErrors] = useState<Record<string, string>>({});
-	const [plugins, setPlugins] = useState<
-		{ kind: string; label: string; origin: string; registered: boolean }[] | null
-	>(null);
+	const [busyChannel, setBusyChannel] = useState<string | null>(null);
+	const [plugins, setPlugins] = useState<ChannelPlugin[] | null>(null);
+	const [reloadingPlugins, setReloadingPlugins] = useState(false);
+
+	const refreshChannels = useCallback(async (): Promise<void> => {
+		if (!rpc) return;
+		try {
+			const list = await rpc.request<ChannelInfo[]>("channels.list", {});
+			setChannels(list);
+			setChannelsError(false);
+		} catch {
+			setChannelsError(true);
+		}
+	}, [rpc]);
 
 	const refreshPlugins = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
 		try {
-			const list = await rpc.request<{ kind: string; label: string; origin: string; registered: boolean }[]>(
-				"channels.plugins",
-				{},
-			);
+			const list = await rpc.request<ChannelPlugin[]>("channels.plugins", {});
 			setPlugins(list);
 		} catch {
 			setPlugins([]);
 		}
 	}, [rpc]);
-
-	const reloadPlugins = async (): Promise<void> => {
-		if (!rpc) return;
-		await rpc
-			.request("channels.reloadPlugins", {})
-			.then(() => Promise.all([refreshChannels(), refreshPlugins()]))
-			.catch(() => {});
-	};
-
-	const saveConfig = async (kind: string): Promise<void> => {
-		if (!rpc) return;
-		setStartErrors(e => ({ ...e, [kind]: "" }));
-		try {
-			await rpc.request("channels.configure", { kind, config: configDraft });
-			await rpc.request("channels.start", { kind });
-			// Only collapse on success — keep the form open on failure so the
-			// error lands next to the fields the user just filled.
-			setExpandedKind(null);
-		} catch (err) {
-			setStartErrors(e => ({ ...e, [kind]: err instanceof Error ? err.message : String(err) }));
-		}
-		await refreshChannels();
-		setConfigDraft({});
-	};
-
-	/** Direct start for channels without a config form (hot-plugged plugin
-	 *  channels): previously the 启动 button silently expanded nothing and
-	 *  the channel was unreachable from the GUI. Uses the persisted config;
-	 *  failures surface in the row (same startErrors channel as the form). */
-	const startChannel = async (kind: string): Promise<void> => {
-		if (!rpc) return;
-		setStartErrors(e => ({ ...e, [kind]: "" }));
-		try {
-			await rpc.request("channels.start", { kind });
-		} catch (err) {
-			setStartErrors(e => ({ ...e, [kind]: err instanceof Error ? err.message : String(err) }));
-		}
-		await refreshChannels();
-	};
-
-	/** 解绑 (unlink): stop the channel AND drop its persisted credentials.
-	 *  Destructive (the next start needs a fresh QR login), so confirmation
-	 *  requires an explicit click; Escape cancels. */
-	const unlinkChannel = async (kind: string): Promise<void> => {
-		if (!rpc) return;
-		const ok = await confirm(t("settings.unlinkChannelConfirm"), t("settings.unlink"), { destructive: true });
-		if (!ok) return;
-		await rpc.request("channels.unlink", { kind }).catch(() => {});
-		await refreshChannels();
-	};
-
-	const channelFields: Record<string, { key: string; label: string; secret: boolean; optional?: boolean }[]> = {
-		discord: [{ key: "token", label: t("Bot token"), secret: true }],
-		// token optional: empty → the channel falls back to QR login (wechat.ts
-		// start(): #fetchQr + waiting_scan). The save button must not lock on it
-		// (issue #28) — the QR itself is rendered from status().config.qrUrl.
-		wechat: [{ key: "token", label: t("Token (optional — QR login if empty)"), secret: true, optional: true }],
-		"huawei-today": [
-			{ key: "apiKey", label: t("PERSONAL-API-KEY"), secret: true },
-			{ key: "uid", label: t("PERSONAL-UID"), secret: false },
-		],
-		// Missing forms used to leave these rows dead: clicking 启动 expanded
-		// nothing (fields undefined) and the channel could never be started
-		// from the GUI — the adapter-side required config lived only in the
-		// daemon (telegram.ts needs token; feishu.ts needs appId/appSecret).
-		telegram: [{ key: "token", label: t("Bot token (from @BotFather)"), secret: true }],
-		feishu: [
-			{ key: "appId", label: t("App ID"), secret: false },
-			{ key: "appSecret", label: t("App Secret"), secret: true },
-		],
-		lark: [
-			{ key: "appId", label: t("App ID"), secret: false },
-			{ key: "appSecret", label: t("App Secret"), secret: true },
-		],
-	};
-
-	const refreshChannels = useCallback(async (): Promise<void> => {
-		if (!rpc) return;
-		try {
-			const list = await rpc.request<
-				{ kind: string; state: string; detail?: string; config: Record<string, unknown> }[]
-			>("channels.list", {});
-			setChannels(list);
-		} catch {
-			setChannels([]);
-		}
-	}, [rpc]);
-
-	const genPairCode = async (): Promise<void> => {
-		if (!rpc) return;
-		try {
-			const res = await rpc.request<{ code: string; expiresInSeconds: number }>("remote-access.pair.generate", {});
-			setPairCode(res.code);
-			setPairCodeExpiresAt(Date.now() + res.expiresInSeconds * 1000);
-			setNow(Date.now());
-		} catch {
-			setPairCode(null);
-			setPairCodeExpiresAt(null);
-		}
-	};
 
 	const refresh = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
@@ -279,13 +192,6 @@ export function RemoteAccessDialog({
 		}
 	}, [rpc, sessionId]);
 
-	// Boot refresh — ONLY while the dialog is open. DialogFrame keeps children
-	// mounted through the exit animation, so a closed dialog still runs its
-	// hooks; without the open gate this fired on every render (refresh's old
-	// unstable identity retriggered the effect per render → setInfo → render →
-	// …), spamming channels.list/plugins/collab.status ~70×/s at the daemon
-	// from the moment the GUI connected (observed as 689 calls in 13s, with
-	// the daemon dying mid-session-create under the storm).
 	useEffect(() => {
 		if (!open) return;
 		void refresh();
@@ -297,9 +203,6 @@ export function RemoteAccessDialog({
 		if (webLink && qrRef.current) drawQr(qrRef.current, webLink);
 	}, [webLink]);
 
-	// While a channel is mid-login (connecting / waiting_scan) poll its status
-	// so the QR appears and a completed scan flips the row to "connected"
-	// without manual refresh. Idle channels schedule nothing.
 	const pendingChannel = (channels ?? []).some(c => c.state === "connecting" || c.state === "waiting_scan");
 	useEffect(() => {
 		if (!open || !pendingChannel || !rpc) return;
@@ -307,16 +210,103 @@ export function RemoteAccessDialog({
 		return () => window.clearInterval(timer);
 	}, [open, pendingChannel, rpc, refreshChannels]);
 
-	// Countdown clock for the pair code, bounded to the code's lifetime so an
-	// idle dialog schedules no timers.
 	useEffect(() => {
 		if (pairCodeExpiresAt === null) return;
 		const timer = window.setInterval(() => setNow(Date.now()), 1000);
 		return () => window.clearInterval(timer);
 	}, [pairCodeExpiresAt]);
 
+	const reloadPlugins = async (): Promise<void> => {
+		if (!rpc || reloadingPlugins) return;
+		setReloadingPlugins(true);
+		try {
+			await rpc.request("channels.reloadPlugins", {});
+			await Promise.all([refreshChannels(), refreshPlugins()]);
+		} finally {
+			setReloadingPlugins(false);
+		}
+	};
+
+	const toggleConfig = (kind: string): void => {
+		if (expandedKind !== kind) setConfigDraft({});
+		setExpandedKind(expandedKind === kind ? null : kind);
+		setStartErrors(errors => ({ ...errors, [kind]: "" }));
+	};
+
+	const saveConfig = async (kind: string): Promise<void> => {
+		if (!rpc || busyChannel) return;
+		setBusyChannel(kind);
+		setStartErrors(errors => ({ ...errors, [kind]: "" }));
+		try {
+			await rpc.request("channels.configure", { kind, config: configDraft });
+			await rpc.request("channels.start", { kind });
+			setExpandedKind(null);
+			setConfigDraft({});
+		} catch (err) {
+			setStartErrors(errors => ({ ...errors, [kind]: err instanceof Error ? err.message : String(err) }));
+		} finally {
+			await refreshChannels();
+			setBusyChannel(null);
+		}
+	};
+
+	const startChannel = async (kind: string): Promise<void> => {
+		if (!rpc || busyChannel) return;
+		setBusyChannel(kind);
+		setStartErrors(errors => ({ ...errors, [kind]: "" }));
+		try {
+			await rpc.request("channels.start", { kind });
+		} catch (err) {
+			setStartErrors(errors => ({ ...errors, [kind]: err instanceof Error ? err.message : String(err) }));
+		} finally {
+			await refreshChannels();
+			setBusyChannel(null);
+		}
+	};
+
+	const stopChannel = async (kind: string): Promise<void> => {
+		if (!rpc || busyChannel) return;
+		setBusyChannel(kind);
+		try {
+			await rpc.request("channels.stop", { kind });
+		} catch (err) {
+			setStartErrors(errors => ({ ...errors, [kind]: err instanceof Error ? err.message : String(err) }));
+		} finally {
+			await refreshChannels();
+			setBusyChannel(null);
+		}
+	};
+
+	const unlinkChannel = async (kind: string): Promise<void> => {
+		if (!rpc || busyChannel) return;
+		const ok = await confirm(t("settings.unlinkChannelConfirm"), t("settings.unlink"), { destructive: true });
+		if (!ok) return;
+		setBusyChannel(kind);
+		try {
+			await rpc.request("channels.unlink", { kind });
+		} catch (err) {
+			setStartErrors(errors => ({ ...errors, [kind]: err instanceof Error ? err.message : String(err) }));
+		} finally {
+			await refreshChannels();
+			setBusyChannel(null);
+		}
+	};
+
+	const genPairCode = async (): Promise<void> => {
+		if (!rpc) return;
+		try {
+			const res = await rpc.request<{ code: string; expiresInSeconds: number }>("remote-access.pair.generate", {});
+			setPairCode(res.code);
+			setPairCodeExpiresAt(Date.now() + res.expiresInSeconds * 1000);
+			setNow(Date.now());
+		} catch {
+			setPairCode(null);
+			setPairCodeExpiresAt(null);
+		}
+	};
+
 	const startShare = async (): Promise<void> => {
-		if (!rpc || (mode === "session" && !sessionId)) return;
+		if (!rpc || busy || (mode === "session" && !sessionId)) return;
 		setBusy(true);
 		setError(null);
 		try {
@@ -334,14 +324,19 @@ export function RemoteAccessDialog({
 	};
 
 	const stopShare = async (): Promise<void> => {
-		if (!rpc) return;
-		await rpc
-			.request("remote-access.stop", {
+		if (!rpc || busy) return;
+		setBusy(true);
+		try {
+			await rpc.request("remote-access.stop", {
 				...(sessionId !== null ? { sessionId } : {}),
-			})
-			.catch(() => {});
-		setInfo({ hosting: false });
-		setWebLink(null);
+			});
+			setInfo({ hosting: false });
+			setWebLink(null);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setBusy(false);
+		}
 	};
 
 	const copyLink = async (): Promise<void> => {
@@ -350,9 +345,7 @@ export function RemoteAccessDialog({
 			await navigator.clipboard.writeText(webLink);
 			setCopied(true);
 			setTimeout(() => setCopied(false), 1500);
-		} catch {
-			// clipboard unavailable
-		}
+		} catch {}
 	};
 
 	const copyViewLink = async (): Promise<void> => {
@@ -362,21 +355,47 @@ export function RemoteAccessDialog({
 			await navigator.clipboard.writeText(viewLink);
 			setCopiedView(true);
 			setTimeout(() => setCopiedView(false), 1500);
-		} catch {
-			// clipboard unavailable
-		}
+		} catch {}
 	};
 
+	const channelFields: Record<string, { key: string; label: string; secret: boolean; optional?: boolean }[]> = {
+		discord: [{ key: "token", label: t("Bot token"), secret: true }],
+		wechat: [{ key: "token", label: t("Token (optional — QR login if empty)"), secret: true, optional: true }],
+		"huawei-today": [
+			{ key: "apiKey", label: t("PERSONAL-API-KEY"), secret: true },
+			{ key: "uid", label: t("PERSONAL-UID"), secret: false },
+		],
+		telegram: [{ key: "token", label: t("Bot token (from @BotFather)"), secret: true }],
+		feishu: [
+			{ key: "appId", label: t("App ID"), secret: false },
+			{ key: "appSecret", label: t("App Secret"), secret: true },
+		],
+		lark: [
+			{ key: "appId", label: t("App ID"), secret: false },
+			{ key: "appSecret", label: t("App Secret"), secret: true },
+		],
+	};
+	const shareScopeSegments: SegmentedOption<ShareMode>[] = [
+		{ value: "session", label: t("general.currentSession") },
+		{ value: "workspace", label: t("tools.workspace") },
+		{ value: "tunnel", label: t("settings.publicTunnel") },
+	];
 	const hosting = info?.hosting ?? false;
-	/** Seconds until the live pair code dies; null when none was minted. */
 	const pairSecondsLeft = pairCodeExpiresAt === null ? null : Math.max(0, Math.ceil((pairCodeExpiresAt - now) / 1000));
-	// Tunnel mode needs no session: it shares the workspace when no session
-	// is open (daemon treats tunnel-without-sessionId as workspace mode).
 	const canShare = !busy && rpc !== null && (mode === "workspace" || mode === "tunnel" || sessionId !== null);
 	const sessionHint =
 		sessionId !== null && sessionTitle
 			? t(`share session "{title}" live on the local network`, { title: sessionTitle })
 			: t("settings.shareSessionLiveLocal");
+	const scopeHint =
+		sessionId === null && mode === "session"
+			? t("settings.openCreateSessionFirst")
+			: mode === "workspace"
+				? t("general.shareWholeWorkspaceGuests")
+				: mode === "tunnel"
+					? t("settings.publicTunnelAnyone.info")
+					: sessionHint;
+	const tunnelMissing = error !== null && isCloudflaredMissing(error);
 
 	return (
 		<DialogFrame
@@ -386,48 +405,50 @@ export function RemoteAccessDialog({
 			className="gui-collab-dialog"
 		>
 			<div className="gui-dialog-head">
-				<span className="text-[14px] font-semibold">{t("settings.mobileRemoteControl")}</span>
+				<h1 className="gui-collab-dialog-title">{t("settings.mobileRemoteControl")}</h1>
 				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
 					<Icon name="close" className="h-4 w-4" />
 				</button>
 			</div>
 			<div className="gui-collab-grid">
-				{/* Left: scan-to-connect controls. */}
-				<section className="gui-collab-col">
+				<section className="gui-collab-col gui-collab-share">
 					<div className="gui-collab-col-head">
 						<Icon name="smartphone" className="h-4 w-4" />
-						<span>{t("settings.scanConnect")}</span>
+						<h2>{t("settings.scanConnect")}</h2>
 					</div>
 					<p className="gui-collab-desc">{t("settings.scanYourPhoneCamera")}</p>
-					<div className="gui-collab-status">
-						<span className="gui-collab-dot" />
-						<span>{hosting ? t("settings.waitingPhoneConnection") : t("settings.ready")}</span>
-						{hosting && (
-							<button type="button" className="gui-btn gui-btn-stop ml-auto" onClick={() => void stopShare()}>
-								<Icon name="stop" className="h-3 w-3" />
-								<span>{t("settings.stop")}</span>
-							</button>
-						)}
-					</div>
-					{/* Who is watching right now — the only way to tell an idle share
-					 * from one with a guest attached (and whether they may prompt). */}
-					{hosting && (info?.participants?.length ?? 0) > 0 ? (
-						<div className="mt-1 flex flex-wrap gap-1">
-							{(info?.participants ?? []).map(p => (
-								<span
-									key={`${p.role}:${p.name}`}
-									className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--color-text-muted)]"
-								>
-									{p.readOnly ? t("settings.text", { name: p.name }) : p.name}
-								</span>
-							))}
-						</div>
-					) : null}
-					{error && <div className="gui-collab-error">{error}</div>}
 					{hosting && webLink ? (
-						<>
+						<div className="gui-collab-hosting">
+							<div className="gui-collab-status">
+								<span className="gui-collab-dot" aria-hidden="true" />
+								<span>{t("settings.waitingPhoneConnection")}</span>
+								<button
+									type="button"
+									className="gui-btn gui-btn-stop gui-collab-stop"
+									disabled={busy}
+									onClick={() => void stopShare()}
+								>
+									<Icon name="stop" className="h-3 w-3" />
+									<span>{t("settings.stopSharing")}</span>
+								</button>
+							</div>
+							{(info?.participants?.length ?? 0) > 0 ? (
+								<div className="gui-collab-participants">
+									{(info?.participants ?? []).map(p => (
+										<span key={`${p.role}:${p.name}`}>
+											{p.readOnly ? t("settings.text", { name: p.name }) : p.name}
+										</span>
+									))}
+								</div>
+							) : null}
+							{error ? (
+								<div className="gui-collab-error" role="alert">
+									<Icon name="error-warning" className="h-4 w-4" />
+									<span>{error}</span>
+								</div>
+							) : null}
 							<div className="gui-collab-qr">
-								<canvas ref={qrRef} />
+								<canvas ref={qrRef} aria-label={t("settings.scanQrCode")} />
 							</div>
 							<div className="gui-collab-actions">
 								<button type="button" className="gui-btn" onClick={() => void refresh()}>
@@ -435,23 +456,20 @@ export function RemoteAccessDialog({
 									<span>{t("settings.refresh")}</span>
 								</button>
 								<button type="button" className="gui-btn" onClick={() => void copyLink()}>
-									<Icon name="external-link" className="h-3.5 w-3.5" />
-									<span>{copied ? t("settings.copied") : t("settings.copyLink")}</span>
+									<Icon name={copied ? "check" : "file-copy"} className="h-3.5 w-3.5" />
+									<span aria-live="polite">{copied ? t("settings.copied") : t("settings.copyLink")}</span>
 								</button>
-								{/* Watch-only links are minted alongside the write link; the
-								 * pane never showed them, so read-only sharing was TUI-only. */}
 								{info?.viewLink ? (
 									<button type="button" className="gui-btn" onClick={() => void copyViewLink()}>
 										<Icon name="eye" className="h-3.5 w-3.5" />
-										<span>{copiedView ? t("settings.copied") : t("settings.copyWatchOnlyLink")}</span>
+										<span aria-live="polite">
+											{copiedView ? t("settings.copied") : t("settings.copyWatchOnlyLink")}
+										</span>
 									</button>
 								) : null}
 							</div>
-							{/* MusePi Mobile pair code: no-camera fallback to the QR. */}
 							<div className="gui-collab-pair">
-								<span className="text-[12px] text-[var(--color-text-faint)]">
-									{t("settings.useMusepiMobilePair")}
-								</span>
+								<span className="gui-collab-pair-title">{t("settings.useMusepiMobilePair")}</span>
 								<div className="gui-collab-pair-row">
 									<span className="gui-collab-pair-code">{pairCode ?? "——————"}</span>
 									<button type="button" className="gui-btn" onClick={() => void genPairCode()}>
@@ -459,7 +477,7 @@ export function RemoteAccessDialog({
 										<span>{t("settings.getCode")}</span>
 									</button>
 								</div>
-								<span className="text-[11px] text-[var(--color-text-faint)]">
+								<span className="gui-collab-pair-hint">
 									{pairSecondsLeft === null
 										? t("settings.enter6DigitCodeMusepiMobile")
 										: pairSecondsLeft > 0
@@ -467,207 +485,289 @@ export function RemoteAccessDialog({
 											: t("settings.codeHasExpiredGet")}
 								</span>
 							</div>
-						</>
+						</div>
 					) : (
-						<div className="gui-collab-idle">
+						<div className="gui-collab-setup">
 							<Segmented
-								className="gui-seg--compact"
+								className="gui-collab-scope"
 								value={mode}
-								options={SHARE_SCOPE_SEGMENTS}
-								onChange={v => setMode(v)}
+								options={shareScopeSegments}
+								ariaLabel={t("settings.shareScope")}
+								disabled={busy}
+								onChange={next => {
+									setMode(next);
+									setError(null);
+								}}
 							/>
-							<button
-								type="button"
-								className="gui-btn gui-btn-primary"
-								disabled={!canShare}
-								onClick={() => void startShare()}
-							>
-								<Icon name="send-plane" className="h-3.5 w-3.5" />
-								<span>{busy ? t("settings.starting") : t("settings.startSharing")}</span>
-							</button>
-							<p className="gui-collab-hint">
-								{sessionId === null && mode === "session"
-									? t("settings.openCreateSessionFirst")
-									: mode === "workspace"
-										? t("general.shareWholeWorkspaceGuests")
-										: mode === "tunnel"
-											? t("settings.publicTunnelAnyone.info")
-											: sessionHint}
-							</p>
+							<div className="gui-collab-scope-summary">
+								<Icon name={mode === "tunnel" ? "error-warning" : "information"} className="h-4 w-4" />
+								<div>
+									<h3>{shareScopeSegments.find(option => option.value === mode)?.label}</h3>
+									<p>{scopeHint}</p>
+								</div>
+							</div>
+							{tunnelMissing ? (
+								<div className="gui-collab-recovery" role="alert">
+									<Icon name="error-warning" className="h-5 w-5" />
+									<div className="gui-collab-recovery-content">
+										<h3>{t("settings.cloudflaredRequired")}</h3>
+										<p>{t("settings.cloudflaredRequiredHint")}</p>
+										<div className="gui-collab-recovery-actions">
+											<button
+												type="button"
+												className="gui-btn"
+												onClick={() => void openExternalUrl(CLOUDFLARED_INSTALL_URL)}
+											>
+												<Icon name="external-link" className="h-3.5 w-3.5" />
+												<span>{t("settings.viewInstallGuide")}</span>
+											</button>
+											<button
+												type="button"
+												className="gui-btn gui-btn-primary"
+												disabled={!canShare}
+												onClick={() => void startShare()}
+											>
+												<Icon name="refresh" className="h-3.5 w-3.5" />
+												<span>{busy ? t("settings.starting") : t("settings.retry")}</span>
+											</button>
+										</div>
+										<details className="gui-collab-technical">
+											<summary>{t("settings.technicalDetails")}</summary>
+											<pre>{error}</pre>
+										</details>
+									</div>
+								</div>
+							) : (
+								<>
+									{error ? (
+										<div className="gui-collab-error" role="alert">
+											<Icon name="error-warning" className="h-4 w-4" />
+											<span>{error}</span>
+										</div>
+									) : null}
+									<button
+										type="button"
+										className="gui-btn gui-btn-primary gui-collab-start"
+										disabled={!canShare}
+										onClick={() => void startShare()}
+									>
+										<Icon name="send-plane" className="h-3.5 w-3.5" />
+										<span>
+											{busy
+												? t("settings.starting")
+												: error
+													? t("settings.retry")
+													: t("settings.startSharing")}
+										</span>
+									</button>
+								</>
+							)}
 						</div>
 					)}
 				</section>
-				{/* Right: bot channels (live status from daemon). */}
-				<section className="gui-collab-col">
+				<section className="gui-collab-col gui-collab-channel-col">
 					<div className="gui-collab-col-head">
 						<Icon name="robot" className="h-4 w-4" />
-						<span>{t("settings.useBotChannel")}</span>
+						<h2>{t("settings.useBotChannel")}</h2>
 					</div>
 					<p className="gui-collab-desc">{t("settings.connectChatBotLonger")}</p>
-					<div className="gui-collab-bots">
-						{(channels ?? []).map(c => {
-							const label = c.kind;
-							const on = c.state === "connected" || c.state === "connecting" || c.state === "waiting_scan";
-							const fields = channelFields[c.kind];
-							// 启动层级（issue: 点启动不出二维码）：只有存在“必填”字段的渠道
-							// 才需要先展开表单（保存并启动）；wechat 的 token 是可选的（空=
-							// QR 登录），点启动直接连，二维码立刻出现。表单仍可经齿轮进入
-							// （想预置 token 跳过扫码时用）。
-							const needsForm = !!fields && fields.some(f => !f.optional);
-							const qrUrl = typeof c.config?.qrUrl === "string" ? c.config.qrUrl : "";
-							const waitingScan = c.state === "waiting_scan";
-							return (
-								<div key={c.kind} className="gui-collab-bot-wrap">
-									<div className={`gui-collab-bot${on ? "" : " gui-collab-bot--off"}`}>
-										<span className={`gui-collab-bot-ico gui-collab-bot-ico--${c.kind}`}>
-											{channelLogo(c.kind)}
-										</span>
-										<div className="min-w-0 flex-1">
-											<div className="flex items-center gap-2">
-												<span className="text-[13px] font-medium capitalize">{label}</span>
-												<span className={`gui-collab-dot${on ? "" : " gui-collab-dot--off"}`} />
-											</div>
-											<div className="truncate text-[12px] text-[var(--color-text-faint)]">
-												{c.detail ?? (c.state === "off" ? t("settings.off") : c.state)}
-											</div>
-										</div>
-										{on ? (
-											<div className="flex items-center gap-1">
-												{/* 停止：仅断开连接（token 已持久化，再次启动直连），无需确认。 */}
-												<button
-													type="button"
-													className="gui-btn gui-btn-sm"
-													disabled={c.state === "connecting"}
-													onClick={() => {
-														void rpc
-															?.request("channels.stop", { kind: c.kind })
-															.then(() => refreshChannels())
-															.catch(() => refreshChannels());
-													}}
+					<div className="gui-collab-channels">
+						{channelsError ? (
+							<div className="gui-collab-channel-message" role="alert">
+								<Icon name="error-warning" className="h-4 w-4" />
+								<div>
+									<strong>{t("settings.channelsLoadFailed")}</strong>
+									<p>{t("settings.channelsLoadFailedHint")}</p>
+									<button type="button" className="gui-btn gui-btn-sm" onClick={() => void refreshChannels()}>
+										<Icon name="refresh" className="h-3 w-3" />
+										<span>{t("settings.retry")}</span>
+									</button>
+								</div>
+							</div>
+						) : channels === null ? (
+							<div className="gui-collab-loading">
+								<Icon name="loader" className="h-3.5 w-3.5 animate-spin" />
+								<span>{t("settings.loadingChannels")}</span>
+							</div>
+						) : channels.length === 0 ? (
+							<div className="gui-collab-loading">{t("settings.noChannelsConfigured")}</div>
+						) : (
+							<ul className="gui-collab-bots">
+								{channels.map(c => {
+									const label =
+										plugins?.find(plugin => plugin.kind === c.kind)?.label ?? CHANNEL_NAMES[c.kind] ?? c.kind;
+									const on = c.state === "connected" || c.state === "connecting" || c.state === "waiting_scan";
+									const fields = channelFields[c.kind];
+									const needsForm = !!fields && fields.some(field => !field.optional);
+									const qrUrl = typeof c.config?.qrUrl === "string" ? c.config.qrUrl : "";
+									const waitingScan = c.state === "waiting_scan";
+									const channelBusy = busyChannel === c.kind;
+									const stateKind = channelStateText(c.state, c.detail);
+									const stateText =
+										stateKind === "connected"
+											? (c.detail ?? t("settings.connected"))
+											: stateKind === "connecting"
+												? (c.detail ?? t("settings.connecting"))
+												: stateKind === "waiting"
+													? (c.detail ?? t("settings.waitingForScan"))
+													: stateKind === "detail"
+														? c.detail
+														: null;
+									return (
+										<li key={c.kind} className="gui-collab-bot-wrap">
+											<div className="gui-collab-bot">
+												<span
+													className={`gui-collab-bot-ico gui-collab-bot-ico--${c.kind}`}
+													aria-hidden="true"
 												>
-													{t("settings.stop")}
-												</button>
-												{/* 解绑：断开 + 清除凭证（下次要重新扫码），二次确认。 */}
-												<button
-													type="button"
-													className="gui-btn gui-btn-sm"
-													title={t("settings.unlink")}
-													onClick={() => void unlinkChannel(c.kind)}
-												>
-													<Icon name="link-unlink-m" className="h-3 w-3" />
-													<span>{t("settings.unlink")}</span>
-												</button>
-											</div>
-										) : (
-											<div className="flex items-center gap-1">
-												<button
-													type="button"
-													className="gui-btn gui-btn-sm"
-													onClick={() => {
-														if (needsForm) {
-															setExpandedKind(expandedKind === c.kind ? null : c.kind);
-														} else {
-															// 全字段可选（wechat QR 登录）或无已知表单（插件渠道）
-															// — 直接用持久化配置启动，二维码立即出现。
-															void startChannel(c.kind);
-														}
-													}}
-												>
-													{t("settings.start")}
-												</button>
-												{fields && (
-													<button
-														type="button"
-														className="gui-btn gui-btn-sm"
-														title={t("settings.configureChannel")}
-														aria-label={t("settings.configureChannel")}
-														onClick={() => setExpandedKind(expandedKind === c.kind ? null : c.kind)}
-													>
-														<Icon name="settings-3" className="h-3 w-3" />
-													</button>
+													{channelLogo(c.kind)}
+												</span>
+												<div className="gui-collab-bot-copy">
+													<div className="gui-collab-bot-title">
+														<span>{label}</span>
+														<span
+															className={`gui-collab-dot${on ? "" : " gui-collab-dot--off"}`}
+															aria-hidden="true"
+														/>
+													</div>
+													{stateText ? <div className="gui-collab-bot-status">{stateText}</div> : null}
+												</div>
+												{on ? (
+													<div className="gui-collab-bot-actions">
+														<button
+															type="button"
+															className="gui-btn gui-btn-sm"
+															disabled={channelBusy || c.state === "connecting"}
+															aria-label={t("settings.stopChannelWithName", { name: label })}
+															onClick={() => void stopChannel(c.kind)}
+														>
+															{channelBusy ? t("settings.stopping") : t("settings.stop")}
+														</button>
+														<button
+															type="button"
+															className="gui-btn gui-btn-sm gui-collab-icon-action"
+															title={t("settings.unlinkChannelWithName", { name: label })}
+															aria-label={t("settings.unlinkChannelWithName", { name: label })}
+															disabled={channelBusy}
+															onClick={() => void unlinkChannel(c.kind)}
+														>
+															<Icon name="link-unlink-m" className="h-3.5 w-3.5" />
+														</button>
+													</div>
+												) : (
+													<div className="gui-collab-bot-actions">
+														<button
+															type="button"
+															className="gui-btn gui-btn-sm"
+															disabled={channelBusy}
+															aria-label={t("settings.connectChannelWithName", { name: label })}
+															onClick={() => {
+																if (needsForm) toggleConfig(c.kind);
+																else void startChannel(c.kind);
+															}}
+														>
+															{channelBusy ? t("settings.connecting") : t("settings.connect")}
+														</button>
+														{fields ? (
+															<button
+																type="button"
+																className="gui-btn gui-btn-sm gui-collab-icon-action"
+																title={t("settings.configureChannelWithName", { name: label })}
+																aria-label={t("settings.configureChannelWithName", { name: label })}
+																aria-expanded={expandedKind === c.kind}
+																onClick={() => toggleConfig(c.kind)}
+															>
+																<Icon name="settings-3" className="h-3.5 w-3.5" />
+															</button>
+														) : null}
+													</div>
 												)}
 											</div>
-										)}
-									</div>
-									{/* QR login (issue #28): the backend exposes the WeChat login
-									 *  QR via status().config.qrUrl while waiting for a scan —
-									 *  render it inline so the user can actually scan it.
-									 *  iLink returns raw base64 PNG → channelQrSrc wraps it.
-									 *  Reveal = 条件区块动效规范 (expand/collapse animation). */}
-									<Reveal open={waitingScan && !!qrUrl}>
-										{qrUrl ? (
-											<div className="gui-collab-channel-qr">
-												<img src={channelQrSrc(qrUrl)} alt={t("WeChat login QR")} />
-												<span>{c.detail ?? t("settings.scanQrCode")}</span>
-											</div>
-										) : null}
-									</Reveal>
-									{startErrors[c.kind] && <div className="gui-collab-error">{startErrors[c.kind]}</div>}
-									<Reveal open={expandedKind === c.kind && !!fields}>
-										{fields && (
-											<div className="gui-collab-channel-config">
-												{fields.map(f => (
-													<input
-														key={f.key}
-														className="gui-collab-channel-input"
-														type={f.secret ? "password" : "text"}
-														placeholder={f.label}
-														value={configDraft[f.key] ?? ""}
-														onChange={e => setConfigDraft(d => ({ ...d, [f.key]: e.target.value }))}
-														autoComplete="off"
-													/>
-												))}
-												<button
-													type="button"
-													className="gui-btn gui-btn-primary gui-btn-sm"
-													disabled={!fields.every(f => f.optional || (configDraft[f.key] ?? "").trim())}
-													onClick={() => void saveConfig(c.kind)}
-												>
-													{t("settings.saveStart")}
-												</button>
-											</div>
-										)}
-									</Reveal>
-								</div>
-							);
-						})}
-						{(channels ?? []).length === 0 && (
-							<div className="text-[12px] text-[var(--color-text-faint)]">
-								{t("settings.noChannelsConfigured")}
-							</div>
+											<Reveal open={waitingScan && !!qrUrl}>
+												{qrUrl ? (
+													<div className="gui-collab-channel-qr">
+														<img src={channelQrSrc(qrUrl)} alt={t("WeChat login QR")} />
+														<span>{c.detail ?? t("settings.scanQrCode")}</span>
+													</div>
+												) : null}
+											</Reveal>
+											{startErrors[c.kind] ? (
+												<div className="gui-collab-error" role="alert">
+													<Icon name="error-warning" className="h-4 w-4" />
+													<span>{startErrors[c.kind]}</span>
+												</div>
+											) : null}
+											<Reveal open={expandedKind === c.kind && !!fields}>
+												{fields ? (
+													<div className="gui-collab-channel-config">
+														{fields.map(field => (
+															<label key={field.key} className="gui-collab-channel-field">
+																<span>{field.label}</span>
+																<input
+																	className="gui-collab-channel-input"
+																	type={field.secret ? "password" : "text"}
+																	aria-label={field.label}
+																	required={!field.optional}
+																	value={configDraft[field.key] ?? ""}
+																	onChange={event =>
+																		setConfigDraft(draft => ({
+																			...draft,
+																			[field.key]: event.target.value,
+																		}))
+																	}
+																	autoComplete="off"
+																/>
+															</label>
+														))}
+														<button
+															type="button"
+															className="gui-btn gui-btn-primary gui-btn-sm"
+															disabled={
+																channelBusy ||
+																!fields.every(
+																	field => field.optional || (configDraft[field.key] ?? "").trim(),
+																)
+															}
+															onClick={() => void saveConfig(c.kind)}
+														>
+															{channelBusy ? t("settings.connecting") : t("settings.saveStart")}
+														</button>
+													</div>
+												) : null}
+											</Reveal>
+										</li>
+									);
+								})}
+							</ul>
 						)}
 					</div>
-					{/* Plugin inventory (game-mod style): builtin + hot-plugged
-					 * channel modules; reload rescans the plugin directory. */}
-					<div className="mt-2 border-t border-[var(--border)] pt-2">
-						<div className="flex items-center justify-between">
-							<span className="text-[11px] uppercase tracking-wider text-[var(--color-text-faint)]">
-								{t("settings.channelPlugins")}
-							</span>
+					<details className="gui-collab-plugins">
+						<summary>
+							<span>{t("settings.channelPlugins")}</span>
+							<span className="gui-collab-plugin-count">{plugins?.length ?? 0}</span>
+						</summary>
+						<div className="gui-collab-plugin-body">
 							<button
 								type="button"
 								className="gui-btn gui-btn-sm"
-								title={t("settings.reloadPlugins")}
-								onClick={() => void reloadPlugins()}
+								disabled={reloadingPlugins}
+								onClick={() => void reloadPlugins().catch(() => {})}
 							>
-								<Icon name="refresh" className="h-3 w-3" />
+								<Icon name="refresh" className={`h-3 w-3${reloadingPlugins ? " animate-spin" : ""}`} />
+								<span>{reloadingPlugins ? t("settings.loading") : t("settings.reloadPlugins")}</span>
 							</button>
+							<div className="gui-collab-plugin-list">
+								{(plugins ?? []).map(plugin => (
+									<span key={plugin.kind} title={plugin.origin}>
+										{plugin.label}
+									</span>
+								))}
+								{(plugins ?? []).length === 0 ? (
+									<span className="gui-collab-no-plugins">{t("settings.noPlugins")}</span>
+								) : null}
+							</div>
 						</div>
-						<div className="mt-1 flex flex-wrap gap-1">
-							{(plugins ?? []).map(p => (
-								<span
-									key={p.kind}
-									className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--color-text-muted)]"
-									title={p.origin}
-								>
-									{p.label}
-								</span>
-							))}
-							{(plugins ?? []).length === 0 && (
-								<span className="text-[11px] text-[var(--color-text-faint)]">{t("settings.noPlugins")}</span>
-							)}
-						</div>
-					</div>
+					</details>
 				</section>
 			</div>
 		</DialogFrame>

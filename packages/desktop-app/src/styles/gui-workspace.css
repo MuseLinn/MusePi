@@ -1292,24 +1292,41 @@
 	color: var(--color-text);
 }
 
-/* Screen 1: installed-skills card grid. */
+/* Screen 1: installed-skills card grid.
+ *
+ * 卡片几何的**唯一来源**在这里：已安装（.gui-cap-card）与技能市场
+ * （.gui-skill-market-card / -fcard）共用同一组尺寸、间距与字号节奏。
+ * 两个列表各写一份的历史结果是同一个页面里两种密度：已安装卡片 4 行
+ * 10.5px 挤在一起、脚注贴着下边框，市场卡片 3 行描述 + 11.5px 文字，
+ * 行高与列宽都对不上。改这里就是改两处；不要再给某一侧单独写尺寸。 */
 .gui-cap-grid-wrap {
 	overflow-y: auto;
 	min-height: 0;
 	flex: 1;
 }
 
-.gui-cap-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-	gap: 10px;
+/* 列宽与间距走自定义属性：网格与卡片共用，避免数字两处漂移。 */
+:root {
+	--cap-card-min: 220px;
+	--cap-card-gap: 12px;
 }
 
-.gui-cap-card {
+.gui-cap-grid,
+.gui-skill-market-featured,
+.gui-skill-market-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(var(--cap-card-min), 1fr));
+	gap: var(--cap-card-gap);
+}
+
+.gui-cap-card,
+.gui-skill-market-card,
+.gui-skill-market-fcard {
+	position: relative;
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
-	padding: 12px;
+	gap: 8px;
+	padding: 12px 14px 14px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: var(--color-surface-raised);
@@ -1320,45 +1337,62 @@
 		box-shadow 150ms var(--spring);
 }
 
-.gui-cap-card:hover {
+.gui-cap-card:hover,
+.gui-skill-market-card:hover,
+.gui-skill-market-fcard:hover {
 	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
 	transform: translateY(-1px);
 	box-shadow: var(--shadow-md, 0 4px 12px rgb(0 0 0 / 0.08));
 }
 
-.gui-cap-card-top {
+/* 顶行：字形 + 名称 + 角上动作（已安装是 ⋮，市场是安装/已装/转圈）。 */
+.gui-cap-card-top,
+.gui-skill-market-card-h,
+.gui-skill-market-fcard-h {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 8px;
 	min-width: 0;
 }
 
-.gui-cap-card-name {
+.gui-cap-card-name,
+.gui-skill-market-card-name,
+.gui-skill-market-fcard-name {
 	flex: 1;
 	min-width: 0;
 	font-size: 13px;
-	font-weight: 500;
+	font-weight: 600;
 	color: var(--color-text);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
-.gui-cap-card-desc {
-	font-size: var(--ui-font-size-xs);
-	line-height: 1.45;
-	color: var(--color-text-dim, var(--color-text-faint));
+/* 描述固定 2 行高：单行描述的卡片不会比两行的矮一截，同一行永远齐平。 */
+.gui-cap-card-desc,
+.gui-skill-market-card-desc,
+.gui-skill-market-fcard-desc {
+	margin: 0;
+	font-size: 11.5px;
+	line-height: 17px;
+	min-height: 34px;
+	color: var(--color-text-muted);
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
 	overflow: hidden;
-	min-height: 2.9em;
 }
 
-.gui-cap-card-foot {
+/* 脚注行钉底（margin-top: auto）：描述只有一行时标签仍贴着卡片底部，
+ * 整行卡片的下沿因此读成一条线。 */
+.gui-cap-card-foot,
+.gui-skill-market-card-f {
 	display: flex;
-	gap: 4px;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
 	min-height: 18px;
+	margin-top: auto;
 }
 
 .gui-cap-empty {
@@ -1951,25 +1985,21 @@
 	border: 1px solid color-mix(in oklab, currentColor 22%, transparent);
 }
 
-/* 卡片顶行:字形 + 名字 + ⋮。名字 flex:1 把 ⋮ 推到最右。 */
-.gui-cap-card .gui-cap-card-top {
-	align-items: flex-start;
-	gap: 8px;
-}
-
+/* 卡片顶行:字形 + 名字 + 角上动作。名字 flex:1 把动作推到最右；
+ * 动作尺寸与市场卡片的安装角标一致（22px），两个列表的顶行同高。 */
 .gui-cap-card-menu {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 20px;
-	height: 20px;
+	flex: 0 0 auto;
+	width: 22px;
+	height: 22px;
 	margin-left: auto;
 	border: 0;
 	border-radius: var(--radius-sm);
 	background: transparent;
 	color: var(--color-text-faint);
 	cursor: pointer;
-	flex-shrink: 0;
 	transition:
 		color 120ms var(--spring),
 		background 120ms var(--spring);
@@ -1980,17 +2010,11 @@
 	color: var(--color-text);
 }
 
-/* 副行 `官方 · SkillHub · v2.1.0` —— 比描述更淡、比页脚更实。 */
+/* 脚注里的 meta（`官方 · SkillHub · v2.1.0`）：10.5px、单行、可收缩到
+ * 省略号。min-width:0 是关键 —— 少了它，长串会顶着卡片右边缘溢出。 */
 .gui-cap-card-meta {
+	min-width: 0;
 	font-size: 10.5px;
-	color: var(--color-text-faint);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.gui-cap-card-note {
-	font-size: 10px;
 	color: var(--color-text-faint);
 	white-space: nowrap;
 	overflow: hidden;
@@ -4733,11 +4757,22 @@
 
 /* ── Capability center first-class page (设计稿 05): header tabs +
  * body under the gui-agents-center shell. ── */
+/* 页头、主 tab 条、子分段条与正文共用同一条 20px 栏线。此前主 tab 条
+ * 叠加了三层缩进（页头 18 + tab 槽 34 + 本行 20 = 72px），比正文右移
+ * 50px，读起来像悬在中间：tab 是整页的分段，必须与下面的列表左缘对齐。 */
+.gui-capability-page .gui-workspace-header {
+	padding: 14px 20px 8px;
+}
+
+.gui-capability-page .gui-workspace-header-tabs {
+	padding-left: 0;
+}
+
 .gui-capability-tabs {
 	display: flex;
 	align-items: center;
 	gap: 4px;
-	padding: 2px 20px 0;
+	padding: 0;
 }
 
 .gui-capability-tab {
@@ -4960,13 +4995,15 @@
 	gap: 10px;
 }
 
+/* 分段标题行与已安装页的 `全部技能 · N` 同一排版（12.5/600 主色 +
+ * 11.5 淡色计数）：两个列表的小标题读起来必须是一级。 */
 .gui-skill-market-section-h {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	font-size: 12px;
+	font-size: 12.5px;
 	font-weight: 600;
-	color: var(--color-text-muted);
+	color: var(--color-text);
 }
 
 .gui-skill-market-section-title {
@@ -4993,83 +5030,19 @@
 	cursor: pointer;
 }
 
-.gui-skill-market-featured,
-.gui-skill-market-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-	gap: 12px;
-}
+/* 市场卡片（推荐套件 / 精选）的几何与字号全部来自上方「卡片几何的唯一
+ * 来源」那条规则 —— 这里只保留市场独有的一条：角上的安装按钮与顶行
+ * 同排，不再绝对定位压在名字上（长名字的最后几个字曾被它盖住）。 */
 
-.gui-skill-market-fcard,
-.gui-skill-market-card {
-	display: flex;
-	flex-direction: column;
-	border: 1px solid color-mix(in oklab, var(--color-text-faint) 18%, transparent);
-	border-radius: var(--radius-lg);
-	background: var(--color-surface-raised);
-	transition:
-		border-color 140ms var(--spring),
-		transform 140ms var(--spring);
-}
-
-.gui-skill-market-fcard:hover,
-.gui-skill-market-card:hover {
-	border-color: var(--color-accent);
-	transform: translateY(-1px);
-}
-
-.gui-skill-market-fcard {
-	gap: 8px;
-	padding: 12px 14px;
-}
-
-.gui-skill-market-fcard-h,
-.gui-skill-market-card-h {
-	display: flex;
-	align-items: center;
-	gap: 8px;
+/* 卡片脚注文字（作者 / ★ / ↓）与已安装卡片的 meta、note 同一字号与
+ * 省略规则；min-width:0 让它在 flex 行里可收缩，长串不会顶破卡片。 */
+.gui-skill-market-meta {
 	min-width: 0;
-}
-
-.gui-skill-market-fcard-name,
-.gui-skill-market-card-name {
-	flex: 1;
-	min-width: 0;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space: nowrap;
-	font-size: 12.5px;
-	font-weight: 600;
-	color: var(--color-text);
-}
-
-.gui-skill-market-fcard-desc,
-.gui-skill-market-card-desc {
-	margin: 0;
-	font-size: 11.5px;
-	line-height: 16px;
-	color: var(--color-text-muted);
-	display: -webkit-box;
-	-webkit-line-clamp: 3;
-	-webkit-box-orient: vertical;
-	overflow: hidden;
-}
-
-.gui-skill-market-card {
-	gap: 8px;
-	padding: 12px 14px;
-}
-
-.gui-skill-market-card-f {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin-top: auto;
-}
-
-.gui-skill-market-meta {
-	font-size: 11px;
-	color: var(--color-text-faint);
 }
 
 .gui-skill-market-open {
@@ -5082,12 +5055,16 @@
 	color: var(--color-accent);
 }
 
+/* 认证徽章与已安装卡片的「启用」tag 同一种胶囊（描边 + 淡金底 + 10px
+ * 半粗）：两个列表的脚注行因此是同一个构件，而不是两种小标签。 */
 .gui-skill-market-badge {
 	flex: 0 0 auto;
-	padding: 1px 6px;
+	padding: 0 6px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 45%, transparent);
 	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 	font-size: 10px;
+	font-weight: 600;
 	color: var(--color-accent);
 }
 
@@ -5184,46 +5161,42 @@
 	cursor: default;
 }
 
-/* 卡片右上角的小「+」:与实心按钮同色,尺寸收敛成角标。 */
+/* 卡片顶行末位的安装动作：与已安装卡片的 ⋮ 同一颗 22px 幽灵按钮。
+ * 曾经它是实心金块并绝对定位在右上角 —— 既压住长名字的最后几个字，
+ * 也让市场的卡片比已安装的卡片多一个重量级元素。 */
 .gui-skill-market-plus {
-	position: absolute;
-	top: 10px;
-	right: 10px;
+	flex: 0 0 auto;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	width: 22px;
 	height: 22px;
+	margin-left: auto;
 	border: 0;
 	border-radius: var(--radius-sm);
-	background: var(--color-accent);
-	color: var(--color-accent-fg, #1a1204);
+	background: transparent;
+	color: var(--color-accent);
 	cursor: pointer;
-	opacity: 0.9;
 	transition:
-		opacity 120ms var(--spring),
-		transform 120ms var(--spring);
+		background 120ms var(--spring),
+		color 120ms var(--spring);
 }
 
 .gui-skill-market-plus:hover {
-	opacity: 1;
-	transform: scale(1.06);
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
 }
 
-/* 角标态:安装中(转圈、锁定)、已安装(绿色对勾、不可再点)。
- * 两者都禁掉 hover 放大,避免和"不可操作"信号打架。 */
+/* 角标态:安装中(转圈、锁定)、已安装(绿色对勾、不可再点)。 */
 .gui-skill-market-plus:disabled {
 	cursor: default;
 }
 
 .gui-skill-market-plus:disabled:hover {
-	opacity: 0.9;
-	transform: none;
+	background: transparent;
 }
 
 .gui-skill-market-plus--done {
-	background: var(--color-success, oklch(0.72 0.19 150));
-	color: oklch(0.25 0.05 150);
+	color: var(--color-success, oklch(0.72 0.19 150));
 }
 
 @keyframes gui-skill-market-spin {
@@ -5271,8 +5244,9 @@
 	color: var(--color-text-faint);
 }
 
-/* 「+ 添加技能」与卡片预览弹窗：L3 玻璃底、边框、sheen 与共享阴影；
- * z-index 3000，220ms 入场 / 140ms 退场，closing 后由 JS 卸载。 */
+/* 「+ 添加技能」对话框：L3 玻璃底、边框、sheen 与共享阴影；
+ * z-index 3000，220ms 入场 / 140ms 退场，closing 后由 JS 卸载。
+ * 卡片点开的技能详情不走这里 —— 它是复用 gui-cap-drawer* 的右侧抽屉。 */
 .gui-skill-market-dialog-backdrop {
 	position: fixed;
 	inset: 0;
@@ -5390,104 +5364,63 @@
 		box-shadow 160ms var(--spring);
 }
 
+/* 抬升幅度与已安装卡片同一条（-1px + 同一层阴影）：两个列表的 hover
+ * 反馈必须是同一个动作，否则并排看像两套组件。 */
 .gui-skill-market-clickable:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 10px 26px color-mix(in oklab, var(--color-shadow, #000) 20%, transparent);
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-md, 0 4px 12px rgb(0 0 0 / 0.08));
 }
 
 .gui-skill-market-clickable:active {
 	transform: translateY(0) scale(0.99);
 }
 
-/* ── 预览弹窗（信息先览）：头部横排 + 可滚动正文 + 底部动作条 ──
- * 固定高度：内容经 RPC 异步到达，高度稳定后 loading → 正文的切换不再
- * 造成弹窗尺寸突变。 */
-.gui-skill-market-preview {
-	width: min(560px, calc(100vw - 48px));
-	height: min(600px, calc(100vh - 96px));
+/* ── 技能市场预览：外壳直接复用 gui-cap-drawer*（「我安装的」技能详情
+ * 抽屉），这里只补市场侧独有的两处排版 —— 头部 40px 字形与文件清单卡片。
+ * 不要再给预览写一套平行的弹窗尺寸/头部/正文规则：两个入口各写一份，样式
+ * 就一定会漂成两种。 */
+.gui-skill-market-glyph--lg {
+	border-radius: var(--radius-lg);
+	font-size: 16px;
 }
 
-.gui-skill-market-preview-h {
-	display: flex;
-	flex: none;
-	align-items: center;
-	gap: 10px;
-	min-width: 0;
+/* 动作行的次级链接（来源主页）用按钮外观，去掉锚点默认下划线。 */
+.gui-skill-market-preview-link {
+	justify-content: center;
+	text-decoration: none;
 }
 
-.gui-skill-market-preview-h .gui-skill-market-glyph {
-	width: 34px;
-	height: 34px;
-	border-radius: var(--radius-md);
-}
-
-.gui-skill-market-preview-title {
-	display: flex;
-	flex: 1;
-	min-width: 0;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.gui-skill-market-preview-name {
-	font-size: 14px;
-	font-weight: 600;
-	color: var(--color-text);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.gui-skill-market-preview-body {
-	display: flex;
-	flex: 1;
-	min-height: 0;
-	flex-direction: column;
-	gap: 10px;
-	overflow-y: auto;
-	padding: 2px 2px 4px;
-}
-
-.gui-skill-market-preview-md {
-	margin: 0;
-	padding: 10px 12px;
-	border: 1px solid color-mix(in oklab, var(--color-text-faint) 16%, transparent);
-	border-radius: var(--radius-md);
-	background: color-mix(in oklab, var(--color-surface) 55%, transparent);
-	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
-	font-size: 11.5px;
-	line-height: 17px;
-	color: var(--color-text);
-	white-space: pre-wrap;
-	word-break: break-word;
-}
-
-.gui-skill-market-preview-detail {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-}
-
-/* 预览弹窗内的次级文字提到 muted：玻璃底上 faint 对比度不够。 */
-.gui-skill-market-preview-h .gui-skill-market-meta,
-.gui-skill-market-preview-detail .gui-skill-market-meta {
-	color: var(--color-text-muted);
-}
-
+/* 文件清单与审计条目：玻璃底上垫一张 paper 卡片，等宽行距便于扫路径。 */
 .gui-skill-market-preview-files ul {
-	margin: 4px 0 0;
-	padding: 0 0 0 16px;
-	font-size: 11.5px;
+	margin: 6px 0 0;
+	padding: 8px 10px;
+	list-style: none;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-surface) 45%, transparent);
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+	font-size: var(--ui-font-size-xs);
 	line-height: 18px;
 	color: var(--color-text-muted);
+	overflow-wrap: anywhere;
+}
+
+/* 每行 = 路径 + 右侧字节数；路径先换行，尺寸不折行。 */
+.gui-skill-market-preview-files ul li {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.gui-skill-market-preview-size {
+	flex: none;
+	color: var(--color-text-faint);
+	white-space: nowrap;
 }
 
 .gui-skill-market-preview-files a {
 	color: var(--color-accent);
-}
-
-.gui-skill-market-flex {
-	flex: 1;
 }
 
 .gui-skill-market-dialog-h {

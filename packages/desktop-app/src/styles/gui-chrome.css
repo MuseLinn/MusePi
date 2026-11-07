@@ -130,80 +130,197 @@
 	background: color-mix(in oklab, var(--color-danger) 15%, transparent);
 }
 
-/* ── Nav rail (OpenChamber-style: icon+label items, content below) ──── */
+/* ── App rail (two-tier shell: 52px destinations, panel underneath) ────
+ * Adopted from the ChatGPT desktop layout: the rail never leaves the window,
+ * so collapsing the panel to width 0 cannot strand the user. The width is
+ * duplicated in JS (RAIL_WIDTH, components/AppRail.tsx) because the side
+ * resize handle is absolutely positioned from it. */
 
-.gui-navrail {
-	width: 240px;
+/* One width for the rail in CSS and JS (RAIL_WIDTH, components/AppRail.tsx).
+ * The titlebar spacer subtracts it; never hard-code 52px in two places. */
+:root {
+	--gui-rail-w: 52px;
+}
+
+.gui-rail {
+	width: var(--gui-rail-w);
 	flex-shrink: 0;
 	display: flex;
 	flex-direction: column;
-	border-right: 1px solid var(--border);
-	/* Transparent over the workspace glass layer (.gui-main). */
+	align-items: center;
+	gap: 4px;
+	padding: 0 0 8px;
+	min-height: 0;
+	/* Transparent over the workspace glass layer (.gui-main): the rail reads
+	 * as the left edge of the same material as the panel beside it. */
 	background: transparent;
-	min-height: 0;
+	user-select: none;
 }
 
-.gui-navrail-top {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding: 8px;
+/* Top band: keeps the first destination out of the window's titlebar/drag
+ * strip and gives the rail its own grabbable area. Height matches the chat
+ * header (`h-12`). It is intentionally EMPTY: the window's single fold/unfold
+ * control is the fixed titlebar cluster at `left:68px` (gui-chat.css), which
+ * used to collide with a second toggle rendered here. */
+.gui-rail-top {
+	height: 48px;
+	width: 100%;
 	flex-shrink: 0;
-}
-
-.gui-navrail-content {
-	flex: 1;
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
-	overflow: hidden;
-}
-
-.gui-navrail-bottom {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding: 8px;
-	flex-shrink: 0;
-	border-top: 1px solid var(--border);
-}
-
-.gui-navitem {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	padding: 8px 10px;
+	justify-content: center;
+	-webkit-app-region: drag;
+}
+
+.gui-rail-group {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	flex-shrink: 0;
+}
+
+/* Destinations scroll: a pin-heavy rail must not push 设置 / collapse out of
+ * reach, so only the middle band scrolls (fade-mask track, no scrollbar). */
+.gui-rail-scroll {
+	flex: 1;
+	min-height: 0;
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	overflow-y: auto;
+	scrollbar-width: none;
+}
+
+.gui-rail-scroll::-webkit-scrollbar {
+	display: none;
+}
+
+/* Rail-hosted instance pill: the full menu travels with it, only the label
+ * and chevron are dropped. Beats `.gui-instance-btn` (loaded later from
+ * gui-chat.css) on specificity so the button keeps rail geometry. */
+.gui-instance--compact .gui-instance-btn.gui-rail-btn {
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	gap: 0;
+	justify-content: center;
+	flex-shrink: 0;
 	border-radius: var(--radius-md);
+	/* A lone status dot reads as an unread indicator, not a button — give
+	 * the compact instance entry a faint outline so its affordance is clear. */
+	border-color: color-mix(in oklab, var(--color-text) 12%, transparent);
+}
+
+.gui-rail-btn {
+	position: relative;
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	border: 1px solid transparent;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--color-text-muted);
 	cursor: pointer;
-	font-size: var(--ui-font-size-sm);
-	width: 100%;
-	text-align: left;
+	/* The rail's top band is a window drag surface; its controls are not. */
+	-webkit-app-region: no-drag;
+	transition:
+		background 120ms ease-out,
+		color 120ms ease-out;
 }
 
-.gui-navitem:hover {
-	background: var(--color-surface-raised);
+.gui-rail-btn:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
 	color: var(--color-text);
 }
 
-.gui-navitem--active {
+.gui-rail-btn:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 1px;
+}
+
+.gui-rail-btn--active {
 	background: var(--color-accent-soft);
 	border-color: var(--color-accent-bd);
 	color: var(--color-accent);
 }
 
-.gui-navitem-icon {
+.gui-rail-icon {
 	width: 18px;
 	height: 18px;
-	flex-shrink: 0;
 }
 
-.gui-navitem-label {
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+/* Unread activity is a dot, not a count: a two-digit badge is unreadable in
+ * 52px and the rail is a destination switch, not an inbox. */
+.gui-rail-dot {
+	position: absolute;
+	top: 7px;
+	right: 7px;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-surface) 70%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-rail-btn {
+		transition: none;
+	}
+}
+
+/* ── Hover-peek (docked panel closed) ─────────────────────────────────
+ * ChatGPT's floating left panel is `fixed bottom-0 left-0 z-42`, starts at
+ * the titlebar's bottom edge, and slides in from x:-8 as a rounded elevated
+ * surface. We reuse the SAME mounted SessionSidebar: no second instance, no
+ * re-mount, no layout width. The rail owns the hover state; the keeper only
+ * supplies the surface. Selector also beats `.gui-pane-side--immersive`
+ * (loaded later from gui-chat.css) without !important. */
+.gui-side-keeper--peek {
+	width: 0;
+	min-width: 0;
+}
+
+.gui-side-keeper--peek > .gui-pane-side.gui-pane-side--immersive {
+	position: fixed;
+	left: calc(var(--gui-rail-w) + 8px);
+	top: 48px;
+	bottom: 8px;
+	z-index: 42;
+	border-radius: var(--radius-2xl);
+	box-shadow: var(--gui-card-shadow);
+	background: var(--color-surface);
+	opacity: 0;
+	transform: translateX(-8px);
+	pointer-events: none;
+	transition:
+		opacity 140ms ease-out,
+		transform 140ms var(--spring);
+}
+
+.gui-side-keeper--peek[data-peek-open="true"] > .gui-pane-side.gui-pane-side--immersive {
+	opacity: 1;
+	transform: translateX(0);
+	pointer-events: auto;
+}
+
+@media (max-width: 720px) {
+	/* Narrow windows already have a full drawer; a second floating panel
+	 * would stack two surfaces over the same content. */
+	.gui-side-keeper--peek > .gui-pane-side.gui-pane-side--immersive {
+		display: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-side-keeper--peek > .gui-pane-side.gui-pane-side--immersive {
+		transition: none;
+	}
 }
 
 

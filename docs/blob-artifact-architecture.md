@@ -145,9 +145,11 @@ If file sink creation fails (I/O error, missing path, etc.), sink falls back to 
 Two different strings share the `blob` name:
 
 - `blob:sha256:<hash>` is a persistence reference inside session entry payloads. `SessionManager` resolves it during session load; the router never sees it.
-- `blob://<hash>` is an internal URL scheme handled by `BlobProtocolHandler`. It addresses the same global blob directory, validates the hash against `BLOB_HASH_RE` before joining any path, and returns text. Inline resolution is capped at 8 MiB, and a blob that `isProbablyBinary` reports as binary is rejected instead of decoded into mojibake.
+- `blob://<hash>` is an internal URL scheme handled by `BlobProtocolHandler`. It addresses the same global blob directory, validates the hash against `BLOB_HASH_RE` before joining any path, and returns text. Inline resolution is capped at 8 MiB, and a blob that `isProbablyBinary` reports as binary is rejected instead of decoded into mojibake. `read` resolves the backing path and applies line selectors (`:N`, `:N-M`, `:raw:N-M`), so text above the cap is paged instead of refused; other callers get the capped whole-resource form.
 
 `attachment.put` and `attachment.putFile` return this very URL, so a chat attachment is addressed by content and read through the same handler as any other internal URL.
+
+Three write paths share that store: inline base64 (`attachment.put`, bounded by the 16 MiB RPC frame), a daemon-side read for a file already on this machine (`attachment.putFile`), and 3 MiB chunks (`attachment.begin` / `chunk` / `commit`) for clients that can only send RPC frames. Chunk `n` is written at offset `n × chunkSize`, so every chunk but the last must be full width; commit rejects a hole, a mismatched declared size, and leaves the store untouched on either failure. `attachment.abort` drops the temp file, `stop()` drops them all, and an uncommitted upload expires after 10 minutes.
 
 ### `artifact://<id>` and `artifact://<sessionId>/<id>`
 

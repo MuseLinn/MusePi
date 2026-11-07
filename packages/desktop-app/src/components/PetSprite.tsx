@@ -9,17 +9,25 @@
  *    CSS background-position; mood selects the row, columns cycle frames.
  */
 
-import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type CSSProperties,
+	type AnimationEvent as ReactAnimationEvent,
+	type ReactNode,
+	type RefObject,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import {
 	activePet,
 	migratePetdexContent,
 	moodOfState,
 	PET_CONTENT_TARGET_H,
-	PETDEX_COLUMNS,
 	PETDEX_MOOD_ANIM,
-	PETDEX_MOOD_ROW,
-	PETDEX_ROW_FRAMES_DEFAULT,
-	PETDEX_ROWS,
+	type PetAtlasGeometry,
+	type PetAtlasState,
+	type PetDescriptor,
 	type PetDisplayMode,
 	type PetdexMood,
 	type PetInteraction,
@@ -27,6 +35,7 @@ import {
 	petEnabled,
 	petMode,
 	petScale,
+	resolvePetAnimation,
 } from "../lib/pet";
 import { type PetAccessory, type PetDecor, petDecor } from "../lib/pet-decor";
 import { effectsForState, PetEffects, type PetEffectTier, TIER_STRENGTH } from "../lib/pet-effects";
@@ -67,7 +76,7 @@ export type { GazeVec } from "../lib/pet-gaze";
 export function usePet(): {
 	enabled: boolean;
 	mode: PetDisplayMode;
-	pet: ReturnType<typeof activePet>;
+	pet: PetDescriptor;
 	decor: PetDecor;
 } {
 	const [state, setState] = useState(() => ({
@@ -974,9 +983,14 @@ function PetdexStateStage({
 	frozen,
 	smooth,
 	isSvg,
+	columns,
+	rowCount,
 	row,
 	valid,
 	cycleMs,
+	loop,
+	animationKey,
+	onCycleEnd,
 	u,
 	artW,
 	artH,
@@ -988,9 +1002,14 @@ function PetdexStateStage({
 	frozen: boolean;
 	smooth: boolean;
 	isSvg: boolean;
+	columns: number;
+	rowCount: number;
 	row: number;
 	valid: number;
 	cycleMs: number;
+	loop: boolean;
+	animationKey?: string;
+	onCycleEnd?(): void;
 	/** px per face unit — the stage-to-host scale. */
 	u: number;
 	/** Art frame size in face units (content height = full box). */
@@ -1004,7 +1023,6 @@ function PetdexStateStage({
 	useEffect(() => {
 		let raf = 0;
 		let last = performance.now();
-		// Per-entry clock, like the source: every state replays its arrival.
 		entryRef.current = 0;
 		const motion = STATE_MOTION[state] ?? {};
 		const strength = TIER_STRENGTH[tier];
@@ -1014,9 +1032,6 @@ function PetdexStateStage({
 			entryRef.current += dt;
 			const m = motionRef.current;
 			if (m) {
-				// Same engine as the builtin's BODY system; the effects read
-				// the same entry clock (clockRef), so the dash tails stay
-				// welded to the flight the body rides.
 				m.style.transform = motionTransform(motion, entryRef.current, strength, FACE_BOX, entryRef.current) || "";
 			}
 			raf = requestAnimationFrame(tick);
@@ -1032,13 +1047,9 @@ function PetdexStateStage({
 		width: `${artW}px`,
 		height: `${artH}px`,
 		backgroundImage: `url("${src}")`,
-		// The element is ONE frame; the background remains the WHOLE atlas.
-		// Sizing both to artW/artH squeezed every frame into that one box.
-		backgroundSize: isSvg ? `${artW}px ${artH}px` : `${artW * PETDEX_COLUMNS}px ${artH * PETDEX_ROWS}px`,
+		backgroundSize: `${artW * columns}px ${artH * rowCount}px`,
 		backgroundPosition: isSvg ? "0 0" : `0 ${-(row * artH)}px`,
-		// The JS motion owns the body transform in state mode — the mood's
-		// CSS transform animation would compound with it.
-		animation: frozen ? "none" : `gui-petdex-cycle ${cycleMs}ms steps(${valid}) infinite`,
+		animation: frozen ? "none" : `gui-petdex-cycle ${cycleMs}ms steps(${valid}) ${loop ? "infinite" : "1 forwards"}`,
 		...(isSvg ? {} : { "--gui-petdex-cycle-end": `${-(artW * valid)}px` }),
 	} as CSSProperties;
 
@@ -1048,6 +1059,9 @@ function PetdexStateStage({
 		top: 0,
 		overflow: "visible",
 		pointerEvents: "none",
+	};
+	const onAnimationEnd = (event: ReactAnimationEvent<HTMLDivElement>): void => {
+		if (!loop && event.animationName === "gui-petdex-cycle") onCycleEnd?.();
 	};
 
 	return (
@@ -1064,11 +1078,6 @@ function PetdexStateStage({
 				}}
 			>
 				<svg viewBox={`0 0 ${FACE_BOX} ${FACE_BOX}`} width={FACE_BOX} height={FACE_BOX} style={fxBox}>
-					{/* The dots/pops/glyph paint with url(#gui-pet-grad-shell) —
-					 * the builtin defines that gradient in its own defs; a host
-					 * page with ONLY an imported pet has no such def, so this
-					 * svg carries the identical fallback (duplicate ids resolve
-					 * to the first occurrence, which is the same gradient). */}
 					<defs>
 						<radialGradient id="gui-pet-grad-shell" cx="0.34" cy="0.26" r="0.92">
 							<stop offset="0" stopColor="var(--gui-pet-shell-a, oklch(89.07% 0.0798 79.84deg))" />
@@ -1079,13 +1088,12 @@ function PetdexStateStage({
 					<PetEffects state={state} layer="behind" tier={tier} clockRef={entryRef} htmlBodyRef={bodyRef} />
 				</svg>
 				<div ref={motionRef} style={{ position: "absolute", inset: 0 }}>
-					{/* The body unit the effects drive (dots dissolve it, the
-					 * glyph steps it aside) — separate from the motion wrapper
-					 * so the two transforms compose instead of clobbering. */}
 					<div ref={bodyRef} style={{ position: "absolute", inset: 0 }}>
 						<div
+							key={animationKey}
 							className={`gui-petdex-sprite gui-petdex-sprite--${mood}${smooth || isSvg ? " gui-petdex-sprite--smooth" : ""}`}
 							style={artStyle}
+							onAnimationEnd={onAnimationEnd}
 						/>
 					</div>
 				</div>
@@ -1097,18 +1105,13 @@ function PetdexStateStage({
 	);
 }
 
-/** Petdex spritesheet pet — CSS background-position frame animation with a
- *  mood-driven cycle speed and a paired transform animation (BitFun parity:
- *  rest breathes slowly, working bobs fast, hover lifts, dragging wiggles).
- *  `mood` accepts the petdex-only hover/dragging states (rows 1/2) that the
- *  floating desktop pet uses. `contentH` (rest-row content height, scanned
- *  at import / known for builtins) normalizes the visual size so imported
- *  sheets with larger frames render at the same body size as builtins;
- *  `scale` is the user's size slider (0.6–1.5).
- *
- *  `state` switches the sprite onto the 31-state axis: body motion and
- *  effects come from the shared engine (see PetdexStateStage) instead of
- *  the mood CSS keyframes — the imported-pet parity with the builtin. */
+export interface PetSpriteAction {
+	name: string;
+	nonce: number;
+}
+
+/** Spritesheet pet with a shared descriptor for legacy Petdex grids,
+ *  explicit-state atlases and single-frame SVG packages. */
 export function PetdexSprite({
 	mood,
 	src,
@@ -1116,57 +1119,51 @@ export function PetdexSprite({
 	height,
 	format,
 	rows,
+	atlas,
+	states,
 	contentH,
 	scale = 1,
 	frozen = false,
 	smooth = false,
 	state,
 	tier = "full",
+	action = null,
+	direction = "left",
+	onActionEnd,
 }: {
 	mood: PetdexMood;
 	src: string;
 	width: number;
 	height: number;
-	/** "svg" renders the WHOLE image as one static frame (user SVG import);
-	 *  default/absent is the 8×9 petdex frame grid. */
-	format?: "sheet" | "svg";
+	format?: "sheet" | "atlas" | "svg";
 	rows?: readonly number[];
+	atlas?: PetAtlasGeometry;
+	states?: Readonly<Record<string, PetAtlasState>>;
 	contentH?: number;
 	scale?: number;
-	/** Freeze the frame loop (background-position steps) but keep the mood's
-	 *  transform animation. Hovering a pet should read as "looking at you",
-	 *  not as running — the hover row's frames are a walk cycle on most
-	 *  packs, and stepping them reads as motion with no direction context. */
 	frozen?: boolean;
-	/** Smooth (bilinear) downscaling for vector-style sheets — the pixel-art
-	 *  `image-rendering: pixelated` treatment would alias them badly. */
 	smooth?: boolean;
-	/** Session state (pet.ts PetState) — opts the sprite into the state
-	 *  axis (motion + effects). Absent → legacy mood-keyframe behaviour. */
 	state?: PetState | null;
-	/** Render-size tier for the state axis (scales motion + effects). */
 	tier?: PetEffectTier;
+	action?: PetSpriteAction | null;
+	direction?: "left" | "right";
+	onActionEnd?(): void;
 }): ReactNode {
 	const anim = PETDEX_MOOD_ANIM[mood];
-	// Body-size normalization + user scale: scale the frame and the whole
-	// sheet together (background-size must match the element scaling).
-	// An SVG import has no frame grid — its width/height ARE the frame, and
-	// the whole image is content, so contentH === height at import.
 	const isSvg = format === "svg";
-	const frameW = isSvg ? width : width / PETDEX_COLUMNS;
-	const frameH = isSvg ? height : height / PETDEX_ROWS;
-	const row = PETDEX_MOOD_ROW[mood];
-	// Cycle only the row's valid frames — sheets pad calm rows with empty
-	// columns, and stepping into one blanks the pet for a frame each loop.
-	const valid = isSvg
-		? 1
-		: Math.min(PETDEX_COLUMNS, Math.max(1, (rows ?? PETDEX_ROW_FRAMES_DEFAULT)[row] ?? PETDEX_COLUMNS));
+	const descriptor = resolvePetAnimation(
+		{ width, height, format, rows, atlas, states },
+		mood,
+		action?.name,
+		direction,
+	);
+	const { frameW, frameH, columns, rowCount, row, valid, cycleMs, loop } = descriptor;
 	const k = scale * (contentH && contentH > 0 ? PET_CONTENT_TARGET_H / contentH : 1);
+	const animationKey = action ? `${action.name}:${action.nonce}` : undefined;
+	const onAnimationEnd = (event: ReactAnimationEvent<HTMLDivElement>): void => {
+		if (!loop && event.animationName === "gui-petdex-cycle") onActionEnd?.();
+	};
 
-	// ── State axis: the imported pet as a blobstudio "uploaded logo".
-	// The frame box is expressed in face units (its height maps to the full
-	// FACE_BOX), so pet-motion amplitudes and pet-effects coordinates keep
-	// their source proportions at any host size.
 	if (state) {
 		const u = frameH > 0 ? (frameH * k) / FACE_BOX : 1;
 		return (
@@ -1178,9 +1175,14 @@ export function PetdexSprite({
 				frozen={frozen}
 				smooth={smooth}
 				isSvg={isSvg}
+				columns={columns}
+				rowCount={rowCount}
 				row={row}
 				valid={valid}
-				cycleMs={anim.cycleMs}
+				cycleMs={cycleMs}
+				loop={loop}
+				animationKey={animationKey}
+				onCycleEnd={onActionEnd}
 				u={u}
 				artW={FACE_BOX * (frameW / frameH)}
 				artH={FACE_BOX}
@@ -1192,29 +1194,32 @@ export function PetdexSprite({
 		width: `${frameW * k}px`,
 		height: `${frameH * k}px`,
 		backgroundImage: `url("${src}")`,
-		backgroundSize: `${width * k}px ${height * k}px`,
-		// An SVG import has ONE frame — the row offset would shift the whole
-		// image out of the box (blank pet on hover/dragging rows).
+		backgroundSize: `${frameW * columns * k}px ${frameH * rowCount * k}px`,
 		backgroundPosition: isSvg ? "0 0" : `0 ${-(row * frameH * k)}px`,
 		animation: frozen
 			? `gui-petdex-${anim.transform} ${anim.transformMs}ms ease-in-out infinite`
-			: `gui-petdex-cycle ${anim.cycleMs}ms steps(${valid}) infinite, gui-petdex-${anim.transform} ${anim.transformMs}ms ease-in-out infinite`,
+			: `gui-petdex-cycle ${cycleMs}ms steps(${valid}) ${loop ? "infinite" : "1 forwards"}, gui-petdex-${anim.transform} ${anim.transformMs}ms ease-in-out infinite`,
 		...(frozen || isSvg ? {} : { "--gui-petdex-cycle-end": `${-(frameW * valid * k)}px` }),
 	} as CSSProperties;
-	// An imported SVG is always vector-sharp — the pixelated class would
-	// alias it, so the smooth treatment is forced on.
 	return (
 		<div
+			key={animationKey}
 			className={`gui-petdex-sprite gui-petdex-sprite--${mood}${smooth || isSvg ? " gui-petdex-sprite--smooth" : ""}`}
 			style={style}
+			onAnimationEnd={onAnimationEnd}
 			aria-hidden
 		/>
 	);
 }
 
-/** Unified pet renderer: builtin sphere or petdex spritesheet.
+/** Unified pet renderer, dispatching on the descriptor's drawing mode.
  *
- *  Sizing is deliberately NOT the same for the two kinds:
+ *  `vector` + builtin → the hand-drawn sphere engine below; every other
+ *  resolved pet (sprite sheets, atlases, single-frame SVG packages) draws
+ *  packaged art through `PetdexSprite`. The mode is the only dispatch key —
+ *  `PetdexPackage.format` is read by the frame resolver, never by callers.
+ *
+ *  Sizing is deliberately NOT the same for the two paths:
  *
  *  - petdex spritesheets bake their own frame geometry, so they carry an
  *    inline width/height (that is their intrinsic size) — unchanged.
@@ -1246,6 +1251,9 @@ export function PetSprite({
 	interaction,
 	gloss,
 	accessory,
+	action = null,
+	direction = "left",
+	onActionEnd,
 }: {
 	mood: PetdexMood;
 	/** Session state (pet.ts PetState) — only when the host has moved to the
@@ -1256,82 +1264,79 @@ export function PetSprite({
 	state?: PetState | null;
 	/** Render-size tier — builtin and petdex state mode. Defaults to "full". */
 	tier?: PetEffectTier;
-	pet:
-		| { kind: "builtin"; id: string }
-		| {
-				kind: "petdex";
-				pkg: {
-					spritesheet: string;
-					width: number;
-					height: number;
-					format?: "sheet" | "svg";
-					rows?: readonly number[];
-					contentH?: number;
-					smooth?: boolean;
-				};
-		  };
-	/** Builtin-only fallback box (px) for hosts that size the wrapper via
-	 *  CSS: used when the box has neither a width nor a height to resolve
-	 *  against. Petdex ignores it — its sheet carries the real geometry. */
+	pet: PetDescriptor;
+	/** Fallback box (px) for the vector-builtin path when the host sizes the
+	 *  wrapper via CSS. Packaged art carries its own frame geometry. */
 	size?: number;
+	/** Packaged art only: frame scale (the sprite size slider). */
 	scale?: number;
-	/** Passed through to PetdexSprite (freeze frame loop, keep transform). */
+	/** Packaged art only: freeze the frame loop, keep the transform. */
 	frozen?: boolean;
-	/** Eye-tracking target for the builtin sprite (petdex sheets ignore it —
-	 *  their frames are baked bitmaps, the eyes cannot move). */
+	/** Vector-builtin only: eye-tracking target. Packaged frames are baked
+	 *  bitmaps, so their eyes cannot move. */
 	gazeRef?: GazeRef;
-	/** Pointer gesture input for the builtin's independent deformation rig. */
+	/** Vector-builtin only: pointer gesture input for the deformation rig. */
 	gestureRef?: RefObject<PetGestureInput>;
-	/** Transient user reaction, layered over `mood`. Builtin-only: an imported
-	 *  spritesheet has no reaction rows to play, so it is ignored there rather
-	 *  than remapping the pet to an unrelated row. */
+	/** Vector-builtin only: transient user reaction layered over `mood`. A
+	 *  packaged pet keeps its own frame instead of remapping to a row it does
+	 *  not have. */
 	interaction?: PetInteraction | null;
-	/** Builtin-only surface shading (pet-decor.ts). Pass the live pref from
-	 *  usePet()/usePetDecor(); an explicit value previews an option in
+	/** Vector-builtin only surface shading (pet-decor.ts). Pass the live pref
+	 *  from usePet()/usePetDecor(); an explicit value previews an option in
 	 *  settings. (Omitting does NOT read storage — there is no subscription
 	 *  in this subtree.) */
 	gloss?: boolean;
-	/** Builtin-only wearable (pet-decor.ts). Same contract as `gloss`. */
+	/** Vector-builtin only wearable (pet-decor.ts). Same contract as `gloss`. */
 	accessory?: PetAccessory;
+	/** Packaged art only: one-shot atlas action, walk direction, its end. */
+	action?: PetSpriteAction | null;
+	direction?: "left" | "right";
+	onActionEnd?(): void;
 }): ReactNode {
-	if (pet.kind === "petdex") {
-		// Sheets keep their own scale slider: their intrinsic size is the
-		// frame grid, so nothing else can size them.
+	if (pet.mode === "vector" && pet.kind === "builtin") {
+		// The builtin orb speaks hover/dragging natively — no face mapping.
+		// The box publishes its own ratio (see PET_BOX_RATIO) so no stylesheet
+		// has to hardcode a number that must track the VIEW constants.
 		return (
-			<PetdexSprite
-				mood={mood}
-				src={pet.pkg.spritesheet}
-				width={pet.pkg.width}
-				height={pet.pkg.height}
-				format={pet.pkg.format}
-				rows={pet.pkg.rows}
-				contentH={pet.pkg.contentH}
-				scale={scale ?? petScale()}
-				frozen={frozen}
-				smooth={pet.pkg.smooth}
-				state={state}
-				tier={tier}
-			/>
+			<div
+				className="gui-pet"
+				style={{ "--gui-pet-fallback": `${size}px`, "--gui-pet-ratio": `${PET_BOX_RATIO}` } as CSSProperties}
+			>
+				<BuiltinPetSprite
+					mood={mood}
+					state={state}
+					tier={tier}
+					gazeRef={gazeRef}
+					gestureRef={gestureRef}
+					interaction={interaction}
+					gloss={gloss}
+					accessory={accessory}
+				/>
+			</div>
 		);
 	}
-	// The builtin orb speaks hover/dragging natively — no face mapping.
-	// The box publishes its own ratio (see PET_BOX_RATIO) so no stylesheet
-	// has to hardcode a number that must track the VIEW constants.
+	// Sprite mode, and vector packages: both are packaged art drawn through
+	// the frame descriptor (a single-frame SVG reports one frame). Sheets keep
+	// their own scale slider because their intrinsic size is the frame grid.
 	return (
-		<div
-			className="gui-pet"
-			style={{ "--gui-pet-fallback": `${size}px`, "--gui-pet-ratio": `${PET_BOX_RATIO}` } as CSSProperties}
-		>
-			<BuiltinPetSprite
-				mood={mood}
-				state={state}
-				tier={tier}
-				gazeRef={gazeRef}
-				gestureRef={gestureRef}
-				interaction={interaction}
-				gloss={gloss}
-				accessory={accessory}
-			/>
-		</div>
+		<PetdexSprite
+			mood={mood}
+			src={pet.pkg.spritesheet}
+			width={pet.pkg.width}
+			height={pet.pkg.height}
+			format={pet.pkg.format}
+			rows={pet.pkg.rows}
+			atlas={pet.pkg.atlas}
+			states={pet.pkg.states}
+			contentH={pet.pkg.contentH}
+			scale={scale ?? petScale()}
+			frozen={frozen}
+			smooth={pet.pkg.smooth}
+			state={state}
+			tier={tier}
+			action={action}
+			direction={direction}
+			onActionEnd={onActionEnd}
+		/>
 	);
 }

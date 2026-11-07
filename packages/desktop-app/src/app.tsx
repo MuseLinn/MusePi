@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActionToastStack } from "./components/ActionToast";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
+import { AppRail, RAIL_WIDTH, type RailItem } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
 import { CommandPalette } from "./components/CommandPalette";
@@ -24,6 +25,7 @@ import { FloatingScrollbar } from "./components/FloatingScrollbar";
 import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
 import { GuiHeader } from "./components/GuiHeader";
 import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
+import { InstanceButton } from "./components/InstanceButton";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { PrBoardPage } from "./components/PrBoardPage";
 import type { ReminderRow } from "./components/RemindersPanel";
@@ -49,6 +51,7 @@ import { UpdateDialog } from "./components/UpdateDialog";
 import { UpdateToast } from "./components/UpdateToast";
 import { type ActionToastInput, pushActionToast } from "./lib/action-toast";
 import { applyAppearancePrefs } from "./lib/appearance";
+import { writeBrowserSettingsTab } from "./lib/browser-preferences";
 import {
 	daemonMethodProbeParams,
 	isMissingDaemonExtensionError,
@@ -70,6 +73,7 @@ import type { PetSessionCard } from "./lib/pet";
 import { activePet, moodFromState, petEnabled, petMode, petScale, stateFromSignals } from "./lib/pet";
 import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
+import { railPeekEligible } from "./lib/rail-peek";
 import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./lib/remote-hosts";
 import { ExpectedDisconnects, RpcClient, type StreamEvent } from "./lib/rpc";
 import { captureSelectionContext, captureSelectionText } from "./lib/selection-capture";
@@ -322,8 +326,12 @@ function ChatSurfaceShell({ leave, children }: { leave?: boolean; children: Reac
 	return (
 		<div className={leave ? "gui-view-leave" : "gui-view-enter"}>
 			<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-				<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-					{children}
+				{/* Identical two-layer geometry to ChatView: window gutter on the
+				 * surface + card gutter on the floating card. Page destinations
+				 * must not look 8px wider or cast a different shadow (see
+				 * `.gui-page-card` in gui-chat.css). */}
+				<div className="gui-chat-surface flex min-h-0 flex-1 flex-col" style={{ margin: "var(--gui-card-gutter)" }}>
+					<div className="gui-page-card flex min-h-0 flex-1 flex-col">{children}</div>
 				</div>
 			</div>
 		</div>
@@ -708,6 +716,24 @@ function AppInner(): ReactNode {
 	// Panel collapse: side rail and context panel fold to thin
 	// strips with a reopen button.
 	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("musepi-gui-side") === "0");
+	/** Hover-peek: while the panel is docked closed, entering the rail slides
+	 *  the session list out as a floating surface. It never re-docks itself —
+	 *  only the titlebar toggle (or 首页) restores the docked width. */
+	const [railPeek, setRailPeek] = useState(false);
+	const peekTimerRef = useRef<number | null>(null);
+	const openPeek = useCallback((): void => {
+		if (peekTimerRef.current !== null) {
+			clearTimeout(peekTimerRef.current);
+			peekTimerRef.current = null;
+		}
+		setRailPeek(true);
+	}, []);
+	const closePeek = useCallback((): void => {
+		if (peekTimerRef.current !== null) clearTimeout(peekTimerRef.current);
+		// The pointer crosses a gap between rail and floating panel; a short
+		// grace period keeps the panel from flashing out mid-move.
+		peekTimerRef.current = window.setTimeout(() => setRailPeek(false), 140);
+	}, []);
 	const [narrowSidebarOpen, setNarrowSidebarOpen] = useState(false);
 	const [sideWidth, setSideWidth] = useState<number>(() => Number(localStorage.getItem("musepi-gui-side-w") ?? 256));
 	const toggleSidebar = useCallback((): void => {
@@ -1100,13 +1126,34 @@ function AppInner(): ReactNode {
 	// + chat surface) stay mounted underneath, display:none, so closing
 	// restores the session view without a re-mount. Slot/keeper decisions:
 	// lib/settings-shell.ts (contract-tested).
-	const shell = computeSettingsShellState({ settingsOpen, leavingSettings });
+	// A page destination owns the surface (its own header and back path), so
+	// the session panel folds away instead of describing a surface it does not
+	// own. The rail's 首页 destination brings it back; nothing unmounts.
+	const pageDestinationActive = boardOpen || scheduledOpen || capabilityOpen || prBoardOpen;
+	const shell = computeSettingsShellState({ settingsOpen, leavingSettings, pageDestinationActive });
 	const settingsActive = shell.settingsActive;
+	// A floating panel is only meaningful while the docked one is closed and
+	// the destination actually HAS a left panel. Clearing the state here (not
+	// in the render branch after the early return) keeps the hook order stable.
+	const peekEligible = railPeekEligible({
+		sideCollapsed,
+		pageDestinationActive,
+		settingsActive,
+		narrowSidebarOpen,
+	});
+	useEffect(() => {
+		if (!peekEligible) setRailPeek(false);
+	}, [peekEligible]);
 	// Cross-component navigation into a settings section (welcome composer
 	// 自定义补充 chip): open the pane on the requested section.
 	useEffect(() => {
 		const onOpenSection = (e: Event): void => {
 			const section = (e as CustomEvent<string>).detail;
+			if (section === "browser:extensions" || section === "browser:data") {
+				writeBrowserSettingsTab(section === "browser:data" ? "data" : "extensions");
+				openSettings("browser");
+				return;
+			}
 			if (section === "skills" || section === "suggestions" || section === "browser" || section === "mcp") {
 				// Pass the section INTO openSettings — its 150ms blur-in timer
 				// owns the final setSettingsSection, so a separate pre-set here
@@ -3009,6 +3056,7 @@ function AppInner(): ReactNode {
 				user: t("general.user"),
 				assistant: t("general.assistant"),
 				advisor: t("general.advisor"),
+				ircMe: t("transcript.ircMe"),
 			});
 			const blob = new Blob([markdown], { type: "text/markdown" });
 			const a = document.createElement("a");
@@ -4033,6 +4081,111 @@ function AppInner(): ReactNode {
 		);
 	}
 
+	/** App rail (two-tier shell): the permanent destination column left of the
+	 *  panel. Each destination owns what the panel shows — 首页 the session
+	 *  list, 设置 the settings nav, page destinations their own surface — so a
+	 *  flat predicate over the mutually exclusive view flags is enough to name
+	 *  the current one. 新建 / 搜索 stay in the panel: they are actions, not
+	 *  destinations, and had been duplicated here. */
+	const peekOpen = peekEligible && railPeek;
+	const railDestinations: RailItem[] = [
+		{
+			id: "home",
+			label: "general.home",
+			icon: "home",
+			active: !pageDestinationActive && !settingsActive,
+			onSelect: () => {
+				closeSettings();
+				viewSwapRef.current("chat");
+			},
+		},
+		{
+			id: "scheduled",
+			label: "settings.scheduledTasks",
+			icon: "calendar-schedule",
+			active: scheduledOpen,
+			/** A scheduled task just finished — the rail dot replaces the old
+			 *  sidebar glow row (that menu row now lives in the rail). */
+			unread: cronGlow,
+			onSelect: () => viewSwapRef.current("scheduled"),
+		},
+		{
+			id: "board",
+			label: "settings.board",
+			icon: "layout-column",
+			active: boardOpen,
+			onSelect: () => viewSwapRef.current("board"),
+		},
+		{
+			id: "prboard",
+			label: "settings.prBoard",
+			icon: "git-pull-request",
+			active: prBoardOpen,
+			onSelect: () => viewSwapRef.current("prboard"),
+		},
+	];
+	// Capability center is gated on plugin availability, so it joins the rail
+	// at runtime instead of rendering a dead destination.
+	if (capabilityAvailable) {
+		railDestinations.push({
+			id: "capability",
+			label: "tools.capabilityCenter",
+			icon: "star",
+			active: capabilityOpen,
+			onSelect: () => {
+				setCapabilityTab("skills");
+				viewSwapRef.current("capability");
+			},
+		});
+	}
+	const railSettings: RailItem = {
+		id: "settings",
+		label: "settings.settings",
+		icon: "settings-3",
+		active: settingsActive,
+		onSelect: () => openSettings(),
+	};
+	/** The old sidebar footer lived INSIDE the collapsible panel, so folding
+	 *  it or switching to a page destination hid the instance menu, shortcuts
+	 *  and remote control. The rail is the only permanent chrome — keep one
+	 *  copy of those entries there (ChatGPT's account/more rail footer). */
+	const railFooter = (
+		<>
+			<InstanceButton
+				compact
+				rpc={rpc ?? null}
+				connected={status === "open"}
+				daemonUrl={url}
+				hosts={hosts}
+				onSwitchHost={switchHost}
+				onAddHost={addHost}
+				onRemoveHost={removeHost}
+				onOpenSettings={openSettings}
+				onReconnect={() => void boot()}
+				onDisconnect={disconnect}
+				onOpenWorkspace={handleOpenRemoteWorkspace}
+			/>
+			<button
+				type="button"
+				className="gui-rail-btn"
+				title={t("general.keyboardShortcuts")}
+				aria-label={t("general.keyboardShortcuts")}
+				onClick={() => setShortcutsOpen(true)}
+			>
+				<Icon name="command" className="gui-rail-icon" />
+			</button>
+			<button
+				type="button"
+				className="gui-rail-btn"
+				title={t("settings.mobileRemoteControl")}
+				aria-label={t("settings.mobileRemoteControl")}
+				onClick={() => setCollabOpen(true)}
+			>
+				<Icon name="smartphone" className="gui-rail-icon" />
+			</button>
+		</>
+	);
+
 	return (
 		<div className="gui-shell">
 			{error && (
@@ -4059,13 +4212,28 @@ function AppInner(): ReactNode {
 				 * the top edge, the three panes below it sharing its surface
 				 * (no divider, same frosted tint). */}
 				<div className="gui-main relative flex min-h-0 flex-1">
+					{/* Two-tier left column: the rail is a real flex child (not an
+					 * overlay), so the panel slot and the chat column are pushed
+					 * right by exactly its width — the same geometry ChatGPT's
+					 * desktop shell uses. Keeping it outside the side-keeper means
+					 * it also survives the settings round-trip, when the sidebar
+					 * itself is display:none. */}
+					<AppRail
+						destinations={railDestinations}
+						settings={railSettings}
+						footerActions={railFooter}
+						panelAvailable={!pageDestinationActive && !settingsActive}
+						onTogglePanel={toggleSidebar}
+						onPointerEnter={peekEligible ? openPeek : undefined}
+						onPointerLeave={peekEligible ? closePeek : undefined}
+					/>
 					{/* The side resizer must not float while the settings shell
 					 * hides the sidebar — otherwise a stray handle line rides the
 					 * settings nav slot (its left comes from the sidebar width). */}
 					{!sideCollapsed && !shell.sideKeeperHidden && (
 						<div
 							className="gui-resize-x gui-resize-x--side"
-							style={{ left: sideWidth - 3 }}
+							style={{ left: RAIL_WIDTH + sideWidth - 3 }}
 							onMouseDown={e => {
 								e.preventDefault();
 								startResize(e.clientX, sideWidth, 180, 420);
@@ -4086,7 +4254,17 @@ function AppInner(): ReactNode {
 					 * survive the settings round-trip. Narrow windows use the same
 					 * mounted sidebar as a drawer instead of deleting its content. */}
 					<div
-						className={`${shell.sideKeeperHidden ? "gui-side-keeper gui-side-keeper--hidden" : "gui-side-keeper"}${narrowSidebarOpen ? " gui-side-keeper--drawer-open" : ""}`}
+						className={[
+							"gui-side-keeper",
+							shell.sideKeeperHidden ? "gui-side-keeper--hidden" : "",
+							narrowSidebarOpen ? "gui-side-keeper--drawer-open" : "",
+							peekEligible ? "gui-side-keeper--peek" : "",
+						]
+							.filter(Boolean)
+							.join(" ")}
+						data-peek-open={peekOpen ? "true" : undefined}
+						onPointerEnter={peekEligible ? openPeek : undefined}
+						onPointerLeave={peekEligible ? closePeek : undefined}
 						onClickCapture={event => {
 							if (narrowSidebarOpen && event.target instanceof Element && event.target.closest("button")) {
 								setNarrowSidebarOpen(false);
@@ -4103,32 +4281,6 @@ function AppInner(): ReactNode {
 							onDisconnect={disconnect}
 							onOpenConnect={() => setConnectOpen(true)}
 							onOpenWorkspace={handleOpenRemoteWorkspace}
-							onOpenBoard={() => viewSwapRef.current("board")}
-							boardActive={boardOpen}
-							onOpenPrBoard={() => viewSwapRef.current("prboard")}
-							prBoardActive={prBoardOpen}
-							onOpenScheduled={() => viewSwapRef.current("scheduled")}
-							scheduledActive={scheduledOpen}
-							cronGlow={cronGlow}
-							// 侧边栏能力中心按钮：直接点击落到「技能」tab
-							// （发现分段）；悬停菜单才直达各 tab。
-							onOpenCapability={
-								capabilityAvailable
-									? () => {
-											setCapabilityTab("skills");
-											viewSwapRef.current("capability");
-										}
-									: undefined
-							}
-							capabilityActive={capabilityOpen}
-							onOpenCapabilityTab={
-								capabilityAvailable
-									? tab => {
-											setCapabilityTab(tab);
-											viewSwapRef.current("capability");
-										}
-									: undefined
-							}
 							onOpenSettings={openSettings}
 							onOpenCollab={() => setCollabOpen(true)}
 							onOpenShortcuts={() => setShortcutsOpen(true)}
@@ -4143,7 +4295,7 @@ function AppInner(): ReactNode {
 							onCreateProject={() => setNewProjectOpen(true)}
 							onImportSessions={() => setImportOpen(true)}
 							modeCatalog={welcomeModes}
-							collapsed={narrowSidebarOpen ? false : sideCollapsed}
+							collapsed={peekOpen || narrowSidebarOpen ? false : sideCollapsed}
 							width={sideWidth}
 							onDeleteArchived={deleteSession}
 							onDeleteSession={deleteSession}
@@ -4156,6 +4308,7 @@ function AppInner(): ReactNode {
 							onSwitchHost={switchHost}
 							onAddHost={addHost}
 							onRemoveHost={removeHost}
+							showFooter={false}
 						/>
 					</div>
 					{settingsActive && (
@@ -4185,7 +4338,8 @@ function AppInner(): ReactNode {
 							<GuiHeader
 								store={store}
 								rpc={rpc}
-								sideCollapsed={narrowSidebarOpen ? false : sideCollapsed}
+								sideCollapsed={pageDestinationActive ? false : narrowSidebarOpen ? false : sideCollapsed}
+								panelAvailable={!pageDestinationActive}
 								onToggleSidebar={toggleSidebar}
 								paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
 								pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
@@ -4338,27 +4492,32 @@ function AppInner(): ReactNode {
 												 * mounted for its blur-out, then chat enters. */
 												<div className="gui-view-leave">
 													<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-														<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-															<BoardPage
-																onBack={() => viewSwapRef.current("chat")}
-																rpc={rpc}
-																cwd={project ?? sessionMeta.get(selectedId ?? "")?.cwd ?? undefined}
-																jumpId={boardJumpId}
-																onJumpConsumed={() => setBoardJumpId(null)}
-																onChatCreate={text => {
-																	// 对话创建 (kimi parity): leave the board and prompt the
-																	// agent to design boards; with text, create a session
-																	// (Creation flow: Creator persona) and send it
-																	// right away.
-																	const trimmed = text.trim();
-																	if (!trimmed) {
-																		startNewTask();
-																		return;
-																	}
-																	const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
-																	void createAndSend(prompt, "creator");
-																}}
-															/>
+														<div
+															className="gui-chat-surface flex min-h-0 flex-1 flex-col"
+															style={{ margin: "var(--gui-card-gutter)" }}
+														>
+															<div className="gui-page-card flex min-h-0 flex-1 flex-col">
+																<BoardPage
+																	onBack={() => viewSwapRef.current("chat")}
+																	rpc={rpc}
+																	cwd={project ?? sessionMeta.get(selectedId ?? "")?.cwd ?? undefined}
+																	jumpId={boardJumpId}
+																	onJumpConsumed={() => setBoardJumpId(null)}
+																	onChatCreate={text => {
+																		// 对话创建 (kimi parity): leave the board and prompt the
+																		// agent to design boards; with text, create a session
+																		// (Creation flow: Creator persona) and send it
+																		// right away.
+																		const trimmed = text.trim();
+																		if (!trimmed) {
+																			startNewTask();
+																			return;
+																		}
+																		const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
+																		void createAndSend(prompt, "creator");
+																	}}
+																/>
+															</div>
 														</div>
 													</div>
 												</div>

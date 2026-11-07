@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ManagedBrowserPane } from "../src/components/ManagedBrowserPane";
+import { writeBrowserExtensionsToolbarVisible, writeBrowserShowFullUrl } from "../src/lib/browser-preferences";
 import { closeTab, createTab, getHostState, setBrowserSession } from "../src/lib/managed-browser-host";
+import type { RpcClient } from "../src/lib/rpc";
 
 const originalElectronAPI = window.electronAPI;
 let host: HTMLDivElement;
@@ -12,9 +14,16 @@ let root: Root;
 beforeEach(() => {
 	for (const tab of getHostState().tabs) closeTab(tab.id, { notifyMain: false });
 	setBrowserSession(null);
-	window.localStorage.removeItem("musepi-gui-managed-browser-history");
-	window.localStorage.removeItem("musepi-gui-managed-browser-zoom");
-	window.localStorage.removeItem("musepi-gui-browser-device-toolbar");
+	for (const key of [
+		"musepi-gui-managed-browser-history",
+		"musepi-gui-managed-browser-zoom",
+		"musepi-gui-browser-device-toolbar",
+		"musepi-gui-browser-extensions-toolbar",
+		"musepi-gui-browser-show-full-url",
+		"musepi-gui-browser-import-dismissed",
+	]) {
+		window.localStorage.removeItem(key);
+	}
 	Object.defineProperty(window, "electronAPI", {
 		configurable: true,
 		writable: true,
@@ -27,12 +36,29 @@ beforeEach(() => {
 			copyText: vi.fn().mockResolvedValue(true),
 		},
 	});
+	const rpc = {
+		request: vi.fn((method: string) => {
+			if (method === "settings.get") return Promise.resolve({});
+			if (method === "browser.relayStatus") {
+				return Promise.resolve({
+					installed: false,
+					serving: false,
+					connected: false,
+					extensionDir: "C:\\MusePi\\relay",
+				});
+			}
+			if (method === "browser.extensions")
+				return Promise.resolve({ extensions: [], profileDir: "C:\\MusePi\\profile" });
+			if (method === "browser.importChrome") return Promise.resolve({ ok: true });
+			return Promise.reject(new Error(`Unexpected RPC ${method}`));
+		}),
+	} as unknown as RpcClient;
 	void createTab("https://example.com/", { tabId: "page" }).catch(() => {});
 	host = document.createElement("div");
 	host.id = "root";
 	document.body.appendChild(host);
 	root = createRoot(host);
-	act(() => root.render(<ManagedBrowserPane open={false} />));
+	act(() => root.render(<ManagedBrowserPane open={false} rpc={rpc} />));
 });
 
 afterEach(() => {
@@ -41,9 +67,16 @@ afterEach(() => {
 	for (const tab of getHostState().tabs) closeTab(tab.id, { notifyMain: false });
 	setBrowserSession(null);
 	Object.defineProperty(window, "electronAPI", { configurable: true, writable: true, value: originalElectronAPI });
-	window.localStorage.removeItem("musepi-gui-managed-browser-history");
-	window.localStorage.removeItem("musepi-gui-managed-browser-zoom");
-	window.localStorage.removeItem("musepi-gui-browser-device-toolbar");
+	for (const key of [
+		"musepi-gui-managed-browser-history",
+		"musepi-gui-managed-browser-zoom",
+		"musepi-gui-browser-device-toolbar",
+		"musepi-gui-browser-extensions-toolbar",
+		"musepi-gui-browser-show-full-url",
+		"musepi-gui-browser-import-dismissed",
+	]) {
+		window.localStorage.removeItem(key);
+	}
 	vi.restoreAllMocks();
 });
 
@@ -120,5 +153,49 @@ describe("managed browser pane menu regressions", () => {
 			await Bun.sleep(20);
 		});
 		expect(select).toHaveBeenCalledTimes(1);
+	});
+
+	it("opens import and Relay actions on a blank tab and dismisses them with Escape", async () => {
+		act(() => {
+			closeTab("page", { notifyMain: false });
+			void createTab("about:blank", { tabId: "blank" }).catch(() => {});
+		});
+		const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Extensions"]');
+		expect(trigger).not.toBeNull();
+		await act(async () => {
+			trigger!.click();
+			await Bun.sleep(0);
+		});
+		const popup = document.querySelector(".gui-browser-extensions-popup");
+		expect(popup?.textContent).toContain("Import Chrome data");
+		expect(popup?.textContent).toContain("MusePi Browser Relay");
+		expect(popup?.textContent).toContain("Shared Chromium");
+
+		act(() =>
+			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })),
+		);
+		await act(async () => Bun.sleep(160));
+		expect(document.querySelector(".gui-browser-extensions-popup")).toBeNull();
+	});
+
+	it("updates the extensions button and full-URL display when preferences change", () => {
+		expect(host.querySelector('[aria-label="Extensions"]')).not.toBeNull();
+		act(() => writeBrowserExtensionsToolbarVisible(false));
+		expect(host.querySelector('[aria-label="Extensions"]')).toBeNull();
+		act(() => writeBrowserExtensionsToolbarVisible(true));
+		expect(host.querySelector('[aria-label="Extensions"]')).not.toBeNull();
+
+		expect(host.querySelector(".gui-browser-address-display")?.textContent).toContain("https://example.com");
+		act(() => writeBrowserShowFullUrl(false));
+		expect(host.querySelector(".gui-browser-address-display")?.textContent).toBe("example.com");
+		act(() => writeBrowserShowFullUrl(true));
+		expect(host.querySelector(".gui-browser-address-display")?.textContent).toContain("https://example.com");
+	});
+
+	it("keeps new-tab, annotation, and developer tools available in the overflow menu", () => {
+		openMenu();
+		expect(menuButton("New tab")).toBeDefined();
+		expect(menuButton("Annotate")).toBeDefined();
+		expect(menuButton("Developer tools")).toBeDefined();
 	});
 });

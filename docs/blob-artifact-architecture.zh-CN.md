@@ -145,9 +145,11 @@ Artifact 类型共享此目录：
 两个字符串共用 `blob` 这个名字：
 
 - `blob:sha256:<hash>` 是 session 条目载荷内的持久化引用，由 `SessionManager` 在会话加载时解析，router 不会看到它。
-- `blob://<hash>` 是由 `BlobProtocolHandler` 处理的内部 URL scheme，指向同一个全局 blob 目录；拼路径前先用 `BLOB_HASH_RE` 校验哈希，返回文本。内联解析上限 8 MiB；`isProbablyBinary` 判定为二进制的 blob 会被拒绝，而不是解码成乱码。
+- `blob://<hash>` 是由 `BlobProtocolHandler` 处理的内部 URL scheme，指向同一个全局 blob 目录；拼路径前先用 `BLOB_HASH_RE` 校验哈希，返回文本。内联解析上限 8 MiB；`isProbablyBinary` 判定为二进制的 blob 会被拒绝，而不是解码成乱码。`read` 会解析到真实文件并按行选择器（`:N`、`:N-M`、`:raw:N-M`）切片，所以超过上限的文本是按需分页而不是整篇拒绝；其它调用方仍走受上限约束的整篇解析。
 
 `attachment.put` 与 `attachment.putFile` 返回的正是这个 URL，所以聊天附件的寻址方式就是内容本身，读取走模型读其它内部 URL 的同一条路径。
+
+写入同一个存储的路径有三条：内联 base64（`attachment.put`，受 16 MiB 单帧限制）、宿主自己读盘（`attachment.putFile`，文件已在本机时用）、以及 3 MiB 分片（`attachment.begin` / `chunk` / `commit`，只能发 RPC 帧的客户端用）。第 n 片写在 `n × chunkSize` 偏移处，所以除最后一片外都必须写满；commit 会拒绝空洞与不相符的声明大小，两种情况都不改动存储。`attachment.abort` 丢弃临时文件，`stop()` 全部丢弃，未提交的上传 10 分钟后过期。
 
 ### `artifact://<id>` 与 `artifact://<sessionId>/<id>`
 

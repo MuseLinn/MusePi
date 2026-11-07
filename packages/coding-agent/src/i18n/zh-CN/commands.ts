@@ -421,7 +421,7 @@ export const commands = {
 	"commands.enableDisableMarketplacePlugin": "启用或禁用此市场插件",
 	"commands.enableDisablePlugin": "启用或禁用此插件",
 	"commands.enableSpeechText.desc":
-		"通过 stt.enabled 启用语音转文字，然后按住 Space 说话（或绑定 app.stt.toggle）；通过 speechgen.enabled 启用语音生成工具；通过 speech.enabled 让回复朗读出声。",
+		"通过 stt.enabled 启用语音转文字，然后按住 Space 说话（或绑定 app.stt.toggle）；通过 speechgen.enabled 启用语音生成工具；通过 tts.autoRead 让回复朗读出声。",
 	"commands.enabled": "启用：",
 	"commands.enterClickToggle.info": "Enter / 点击切换 · 选 Done 或 Esc 应用（留空 = 无工具；read/grep/glob = 默认）",
 	"commands.enterModelPattern": "输入模型模式（留空清除覆盖）",
@@ -1118,8 +1118,8 @@ export const commands = {
 	"Edit OAuth settings": "编辑 OAuth 设置",
 	"Enable or disable this marketplace plugin": "启用或禁用此市场插件",
 	"Enable or disable this plugin": "启用或禁用此插件",
-	"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via speech.enabled.":
-		"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via speech.enabled.",
+	"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via tts.autoRead.":
+		"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via tts.autoRead.",
 	"Enabled:": "启用：",
 	"Enter / click toggle · select Done or Esc to apply (empty = no tools; read/grep/glob = default)":
 		"Enter / click toggle · select Done or Esc to apply (empty = no tools; read/grep/glob = default)",

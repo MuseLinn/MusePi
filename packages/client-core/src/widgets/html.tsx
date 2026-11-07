@@ -84,6 +84,43 @@ const MAX_SUBMIT_TEXT = 8_000;
  *  unbounded object through postMessage twice per answer. */
 const MAX_SUBMIT_DATA = 8_000;
 
+/** How long the frame gets to report that the overlay started before the host
+ *  treats the click as failed and says so. */
+const ANNOTATION_START_TIMEOUT_MS = 1500;
+
+/** Frame height bounds: a short page keeps a minimal block, and a runaway page
+ *  stops at a readable cap instead of growing the transcript without end. */
+const MIN_FRAME_HEIGHT = 48;
+const MAX_FRAME_HEIGHT = 20_000;
+
+/** Last measured height per page face, keyed by its own bytes. A virtualized
+ *  transcript unmounts off-screen rows; without this the iframe restarts at
+ *  the inline floor and grows again under the reader's scroll. Bounded so a
+ *  long session cannot pin every page it has ever shown. */
+const rememberedFrameHeights = new Map<string, number>();
+const MAX_REMEMBERED_FRAME_HEIGHTS = 500;
+
+function rememberFrameHeight(key: string, height: number): void {
+	// Re-insert to keep the map in least-recently-used order.
+	rememberedFrameHeights.delete(key);
+	rememberedFrameHeights.set(key, height);
+	if (rememberedFrameHeights.size > MAX_REMEMBERED_FRAME_HEIGHTS) {
+		const oldest = rememberedFrameHeights.keys().next().value;
+		if (oldest !== undefined) rememberedFrameHeights.delete(oldest);
+	}
+}
+
+/** 32-bit FNV-1a: a stable, cheap key for one page's bytes. No crypto import in
+ *  a browser bundle, and a collision only restores a wrong height once. */
+function fnv1a(text: string): string {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < text.length; i++) {
+		hash ^= text.charCodeAt(i);
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return (hash >>> 0).toString(36);
+}
+
 /** One card answers at most once. Without this a double-click — or a face
  * that re-posts on every render — sends a second identical user message, and
  * the agent then sees the user "choosing" the same option twice. */
@@ -283,6 +320,7 @@ function bootScript(
 	mountId: string,
 	theme: "dark" | "light",
 	tokens: Record<string, string>,
+	baseFontPx: number,
 ): string {
 	const root = Object.entries(tokens)
 		.map(([k, v]) => `document.documentElement.style.setProperty(${JSON.stringify(k)}, ${JSON.stringify(v)});`)
@@ -297,6 +335,11 @@ window.musepiWidgetData = window.__WIDGET_DATA__;
 // Host-resolved design tokens (the sandbox is a null origin and cannot
 // read the app's custom properties itself).
 ${root}
+// The page inherits the chat's body size, so agent markup in rem/em follows
+// the interface size setting instead of the browser's 16px default. Set after
+// the token dump: tokens may carry their own --page-rem.
+document.documentElement.style.fontSize = ${JSON.stringify(`${baseFontPx}px`)};
+document.documentElement.style.setProperty("--page-rem", ${JSON.stringify(`${baseFontPx}px`)});
 window.musepiWidgetTokens = ${JSON.stringify(tokens)};
 window.DaimonCanvas = window.DaimonCanvas || { canvasId: ${JSON.stringify(canvasId)}, mountId: ${JSON.stringify(mountId)} };
 function ompReportHeight() {
@@ -315,8 +358,45 @@ window.musepiSubmit = function (text, data) {
 window.addEventListener("load", ompReportHeight);
 window.addEventListener("resize", ompReportHeight);
 new MutationObserver(ompReportHeight).observe(document.documentElement, { subtree: true, childList: true, attributes: true });
+// A focused frame keeps every key, so the app's Cmd/Ctrl shortcuts die while
+// the page has focus. Pass on the chords the page left alone; clipboard,
+// select-all and undo stay the page's own.
+function ompForwardKey(e, kind) {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.isComposing) return;
+  var t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""))) return;
+  if (kind === "down" && e.defaultPrevented) return;
+  var k = String(e.key || "").toLowerCase();
+  if (k === "c" || k === "v" || k === "x" || k === "a" || k === "z") return;
+  try { parent.postMessage({ type: "musepi-widget-key", kind: kind, key: e.key, code: e.code, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey }, "*"); } catch (err) {}
+}
+window.addEventListener("keydown", function (e) { ompForwardKey(e, "down"); });
+window.addEventListener("keyup", function (e) { ompForwardKey(e, "up"); });
+// A page as tall as its frame never scrolls inside; hand the wheel back so it
+// scrolls the chat around the page instead of dying on the frame.
+function ompCanScroll(node, deltaY) {
+  while (node && node.nodeType === 1) {
+    var style = getComputedStyle(node);
+    if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1) {
+      var atTop = node.scrollTop <= 0;
+      var atBottom = node.scrollTop + node.clientHeight >= node.scrollHeight - 1;
+      return !((deltaY < 0 && atTop) || (deltaY > 0 && atBottom));
+    }
+    node = node.parentElement;
+  }
+  return false;
+}
+window.addEventListener("wheel", function (e) {
+  if (ompCanScroll(e.target, e.deltaY)) return;
+  try { parent.postMessage({ type: "musepi-widget-wheel", deltaY: e.deltaY, deltaMode: e.deltaMode }, "*"); } catch (err) {}
+}, { passive: true });
 window.addEventListener("message", function (e) {
   var d = e.data;
+  if (d && d.type === "musepi-widget-font" && typeof d.px === "number") {
+    document.documentElement.style.fontSize = d.px + "px";
+    document.documentElement.style.setProperty("--page-rem", d.px + "px");
+    ompReportHeight();
+  }
   if (d && d.type === "musepi-widget-answered") {
     window.musepiWidgetAnswered = true;
     // The answer the host accepted, so the face can render "you picked A"
@@ -342,7 +422,19 @@ window.addEventListener("message", function (e) {
 // 统一标注握手:宿主把 overlay 脚本经 postMessage 送进来(不透明源沙箱挡住
 // 了宿主对 frame document 的直接访问,只能靠消息)。overlay 在 frame 内部
 // 自己的 document 上跑,元素拾取/区域/绘制与内置浏览器是同一份实现。
+//
+// The host page's CSP allows 'unsafe-inline' but not 'unsafe-eval', and a
+// srcdoc frame inherits it — eval here was silently blocked and the button
+// did nothing. Inline script injection runs under 'unsafe-inline', so the
+// overlay arrives the same way the face's own scripts do.
 window.__musepiAnnotateRunning = false;
+function musepiRunInline(source) {
+  var script = document.createElement("script");
+  script.textContent = source;
+  var root = document.documentElement || document.head || document.body;
+  root.appendChild(script);
+  if (script.parentNode) script.parentNode.removeChild(script);
+}
 window.addEventListener("message", function (e) {
   var d = e.data;
   if (d && d.type === "musepi-widget-annotate" && typeof d.script === "string") {
@@ -353,8 +445,15 @@ window.addEventListener("message", function (e) {
       try { parent.postMessage({ type: "musepi-widget-annotated", payload: payload }, "*"); } catch (err) {}
     };
     try {
-      var running = eval(d.script);
+      // The overlay is a new Promise(...) expression: publish its value on a
+      // global from inside the injected script, then read it here.
+      musepiRunInline("window.__musepiAnnotationResult = (" + d.script + ");");
+      var running = window.__musepiAnnotationResult;
+      try { delete window.__musepiAnnotationResult; } catch (err) {}
       if (running && typeof running.then === "function") {
+        // The host waits for this before calling the entry live: a script the
+        // policy blocked never settles, and silence reads as a broken button.
+        try { parent.postMessage({ type: "musepi-widget-annotation-started" }, "*"); } catch (err) {}
         running.then(done, function () { done(null); });
       } else {
         done(null);
@@ -362,8 +461,16 @@ window.addEventListener("message", function (e) {
     } catch (err) { done(null); }
   }
   if (d && d.type === "musepi-widget-annotate-cancel" && typeof d.teardown === "string") {
-    try { eval(d.teardown); } catch (err) {}
+    var wasRunning = window.__musepiAnnotateRunning;
+    try { musepiRunInline(d.teardown); } catch (err) {}
     window.__musepiAnnotateRunning = false;
+    // The overlay promise only settles when the user finishes, so a cancel
+    // left the guard true and every later click was dropped silently — the
+    // button turned into a no-op for the rest of the session. Report the
+    // cancel so the host clears its own "annotating" state too.
+    if (wasRunning) {
+      try { parent.postMessage({ type: "musepi-widget-annotated", payload: null }, "*"); } catch (err) {}
+    }
   }
 });
 </script>`;
@@ -416,12 +523,20 @@ export function HtmlCard({
 		setAnnotating(false);
 	}, [data.data, theme, raw]);
 
+	// The page's root size follows the chat body, so rem/em markup scales with
+	// the interface size setting instead of the browser's 16px default.
+	const baseFontPx =
+		typeof document === "undefined"
+			? 16
+			: Math.round(Number.parseFloat(getComputedStyle(document.body).fontSize) || 16);
 	const doc = useMemo(() => {
 		if (!raw || oversize) return "";
 		const payload = (data.data ?? {}) as Record<string, unknown>;
 		const head =
 			`<meta charset="utf-8">` +
-			`<style>html,body{margin:0;padding:0;height:100%;box-sizing:border-box}*{box-sizing:border-box}` +
+			// No height:100% on html/body: the frame is sized to the page's own
+			// content, and a viewport-height body made the report circular.
+			`<style>html,body{margin:0;padding:0;box-sizing:border-box}*{box-sizing:border-box}` +
 			// Native form controls / scrollbars follow the injected scheme.
 			`html.musepi-theme-dark,html.omp-theme-dark{color-scheme:dark}` +
 			`html.musepi-theme-light,html.omp-theme-light{color-scheme:light}` +
@@ -434,10 +549,10 @@ export function HtmlCard({
 			PAGE_KIT_CSS +
 			`</style>`;
 		const tokens = readFaceTokens();
-		const boot = bootScript(canvasId ?? "", mountId ?? "", theme, tokens);
+		const boot = bootScript(canvasId ?? "", mountId ?? "", theme, tokens, baseFontPx);
 		const bootData = `<script>window.__WIDGET_DATA__ = ${JSON.stringify(payload)};</script>`;
 		return head + bootData + boot + raw;
-	}, [raw, oversize, data.data, canvasId, mountId, theme]);
+	}, [raw, oversize, data.data, canvasId, mountId, theme, baseFontPx]);
 
 	// Push data changes into the live frame (task refresh / editor edit).
 	useEffect(() => {
@@ -449,7 +564,27 @@ export function HtmlCard({
 		);
 	}, [data.data, raw]);
 
+	// Follow the interface size setting without rebuilding the frame (a rebuild
+	// would drop the page's own script state).
+	useEffect(() => {
+		const frame = frameRef.current;
+		if (!frame?.contentWindow || !raw) return;
+		frame.contentWindow.postMessage({ type: "musepi-widget-font", px: baseFontPx }, "*");
+	}, [baseFontPx, raw]);
+
 	// ── 统一标注(与内置浏览器同一份 overlay,经 postMessage 握手进沙箱) ──
+
+	/** The frame has to answer before the overlay counts as running: posting
+	 *  blindly left a dead button when the bridge could not start (a blocked
+	 *  script, a frame rebuilt mid-click). */
+	const annotationProbeRef = useRef<number | null>(null);
+
+	const clearAnnotationProbe = (): void => {
+		if (annotationProbeRef.current !== null) {
+			window.clearTimeout(annotationProbeRef.current);
+			annotationProbeRef.current = null;
+		}
+	};
 
 	const startCardAnnotation = (): void => {
 		const frame = frameRef.current;
@@ -463,9 +598,21 @@ export function HtmlCard({
 			"*",
 		);
 		setAnnotating(true);
+		// Keys (Escape, the comment field) belong to the page once the overlay
+		// is up; without this they stay on the host document.
+		frame.focus();
+		clearAnnotationProbe();
+		annotationProbeRef.current = window.setTimeout(() => {
+			annotationProbeRef.current = null;
+			setAnnotating(false);
+			// Surfaced rather than silent: a blocked script is invisible from
+			// here, and "the button does nothing" is not a reportable bug.
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("annotation.startFailed") }));
+		}, ANNOTATION_START_TIMEOUT_MS);
 	};
 
 	const cancelCardAnnotation = (): void => {
+		clearAnnotationProbe();
 		frameRef.current?.contentWindow?.postMessage(
 			{ type: "musepi-widget-annotate-cancel", teardown: ANNOTATION_TEARDOWN_SCRIPT },
 			"*",
@@ -511,24 +658,97 @@ export function HtmlCard({
 		const onMsg = (e: MessageEvent): void => {
 			if (e.source !== (frameRef.current?.contentWindow ?? null)) return;
 			const annotated = e.data as { type?: string; payload?: unknown } | null;
+			if (annotated?.type === "musepi-widget-annotation-started") {
+				clearAnnotationProbe();
+				return;
+			}
 			if (annotated?.type !== "musepi-widget-annotated") return;
+			clearAnnotationProbe();
 			setAnnotating(false);
 			void finishCardAnnotationRef.current(annotated.payload);
 		};
 		window.addEventListener("message", onMsg);
-		return () => window.removeEventListener("message", onMsg);
+		return () => {
+			window.removeEventListener("message", onMsg);
+			clearAnnotationProbe();
+		};
 	}, [raw]);
 
 	// The sandbox face reports its content height (musepi-widget-resize) so the
 	// iframe grows to fit instead of clamping to the 320px inline floor —
 	// tall faces stop being cut off, short faces stop leaving dead space.
-	const [frameHeight, setFrameHeight] = useState<number | null>(null);
+	// The measured height is remembered per page (keyed by its own bytes), so
+	// a virtualized transcript that unmounts a card and mounts it again
+	// restores the size instead of growing from the floor under the reader.
+	const frameKey = useMemo(() => (raw ? `${raw.length}:${fnv1a(raw)}` : ""), [raw]);
+	const [frameHeight, setFrameHeight] = useState<number | null>(() =>
+		frameKey ? (rememberedFrameHeights.get(frameKey) ?? null) : null,
+	);
+	// Nothing is painted until the page has laid out once: a dark-theme frame
+	// briefly shows the browser's white canvas when the timeline remounts it.
+	const [frameReady, setFrameReady] = useState(false);
+	useEffect(() => {
+		setFrameHeight(frameKey ? (rememberedFrameHeights.get(frameKey) ?? null) : null);
+	}, [frameKey]);
 	useEffect(() => {
 		if (!raw) return;
 		const onMsg = (e: MessageEvent): void => {
-			const msg = readWidgetFaceMessage(e.source, frameRef.current?.contentWindow ?? null, e.data);
+			const frame = frameRef.current;
+			if (e.source !== (frame?.contentWindow ?? null)) return;
+			const kind = (e.data as { type?: string } | null)?.type;
+			if (kind === "musepi-widget-key") {
+				if (!frame) return;
+				const k = e.data as {
+					kind?: string;
+					key?: string;
+					code?: string;
+					ctrl?: boolean;
+					meta?: boolean;
+					shift?: boolean;
+					alt?: boolean;
+				};
+				if (k.kind !== "down" && k.kind !== "up") return;
+				// Replay the chord on the frame element: the app's shortcut
+				// handling listens on window and sees an ordinary key outside any
+				// text field, so no per-shortcut list has to stay in sync.
+				frame.dispatchEvent(
+					new KeyboardEvent(k.kind === "down" ? "keydown" : "keyup", {
+						key: String(k.key ?? ""),
+						code: String(k.code ?? ""),
+						ctrlKey: k.ctrl === true,
+						metaKey: k.meta === true,
+						shiftKey: k.shift === true,
+						altKey: k.alt === true,
+						bubbles: true,
+						cancelable: true,
+						composed: true,
+					}),
+				);
+				return;
+			}
+			if (kind === "musepi-widget-wheel") {
+				if (!frame) return;
+				const w = e.data as { deltaY?: number; deltaMode?: number };
+				const deltaY = typeof w.deltaY === "number" ? w.deltaY : 0;
+				if (deltaY === 0) return;
+				// deltaMode 1 is lines, 2 is pages.
+				const step = w.deltaMode === 1 ? 16 : w.deltaMode === 2 ? frame.clientHeight : 1;
+				frame.dispatchEvent(
+					new WheelEvent("wheel", {
+						deltaY: deltaY * step,
+						deltaMode: 0,
+						bubbles: true,
+						cancelable: true,
+					}),
+				);
+				return;
+			}
+			const msg = readWidgetFaceMessage(e.source, frame?.contentWindow ?? null, e.data);
 			if (msg?.kind === "resize") {
-				setFrameHeight(prev => (prev === msg.height ? prev : msg.height));
+				const height = Math.min(MAX_FRAME_HEIGHT, Math.max(MIN_FRAME_HEIGHT, msg.height));
+				if (frameKey) rememberFrameHeight(frameKey, height);
+				setFrameReady(true);
+				setFrameHeight(prev => (prev === height ? prev : height));
 			} else if (msg?.kind === "submit") {
 				const claimed = gateRef.current.claim(msg.text);
 				if (claimed === null) return;
@@ -550,16 +770,18 @@ export function HtmlCard({
 	return (
 		<div className="gui-widget-html-wrap">
 			{annotateCapture && (
-				<button
-					type="button"
-					className={`gui-widget-annotate-btn${annotating ? " gui-widget-annotate-btn--active" : ""}`}
-					title={annotating ? t("annotation.stop") : t("annotation.toggle")}
-					aria-label={annotating ? t("annotation.stop") : t("annotation.toggle")}
-					aria-pressed={annotating}
-					onClick={() => (annotating ? cancelCardAnnotation() : startCardAnnotation())}
-				>
-					{annotating ? "✕" : "✎"}
-				</button>
+				<div className="gui-widget-html-tools">
+					<button
+						type="button"
+						className={`gui-widget-annotate-btn${annotating ? " gui-widget-annotate-btn--active" : ""}`}
+						title={annotating ? t("annotation.stop") : t("annotation.toggle")}
+						aria-label={annotating ? t("annotation.stop") : t("annotation.toggle")}
+						aria-pressed={annotating}
+						onClick={() => (annotating ? cancelCardAnnotation() : startCardAnnotation())}
+					>
+						{annotating ? "✕" : "✎"}
+					</button>
+				</div>
 			)}
 			<iframe
 				ref={frameRef}
@@ -571,12 +793,20 @@ export function HtmlCard({
 				// replay the accepted answer so the face still shows its settled
 				// state instead of looking answerable again.
 				onLoad={() => {
+					// The page has painted something of its own by now (or its
+					// script will report a height immediately).
+					setFrameReady(true);
 					const answer = answerRef.current;
 					if (answer)
 						frameRef.current?.contentWindow?.postMessage({ type: "musepi-widget-answered", ...answer }, "*");
 				}}
 				style={{
 					height: frameHeight !== null ? `${frameHeight}px` : undefined,
+					// A remount under a dark theme flashes the frame's white canvas
+					// before the page paints; hold the space at its remembered
+					// height and reveal on the first load or size report.
+					opacity: frameReady ? 1 : 0,
+					transition: "opacity 120ms ease-out",
 					...(interactive ? {} : { pointerEvents: "none" }),
 				}}
 			/>

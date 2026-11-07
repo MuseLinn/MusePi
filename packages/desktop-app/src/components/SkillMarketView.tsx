@@ -1,6 +1,8 @@
-import { type TranslationKey, t } from "@musepi/client-core";
+import { isTopModal, Markdown, type TranslationKey, t, useModalFocus } from "@musepi/client-core";
+import { formatBytes } from "@musepi/pi-utils/format";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { marketEntryInstalled, rememberSkillMarketIcons } from "../lib/skill-market";
 import { Icon } from "../vendor/oc-icons";
@@ -688,16 +690,19 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 }
 
 /** Colored initial tile: the catalogs ship icons for some skills only, and a
- *  missing remote image must not leave an empty hole in the card. */
-function SkillGlyph({ entry }: { entry: SkillEntry }): ReactNode {
+ *  missing remote image must not leave an empty hole in the card.
+ *  `size` 只有抽屉头部用到（40px，与「我安装的」技能详情同尺寸）。 */
+function SkillGlyph({ entry, size }: { entry: SkillEntry; size?: number }): ReactNode {
 	const [broken, setBroken] = useState(false);
+	const box = size ? { width: size, height: size } : undefined;
 	if (entry.iconUrl && !broken) {
 		return (
 			<img
-				className="gui-skill-market-glyph"
+				className={`gui-skill-market-glyph${size ? " gui-skill-market-glyph--lg" : ""}`}
 				src={entry.iconUrl}
 				alt=""
 				loading="lazy"
+				style={box}
 				onError={() => setBroken(true)}
 			/>
 		);
@@ -705,8 +710,8 @@ function SkillGlyph({ entry }: { entry: SkillEntry }): ReactNode {
 	const hue = (entry.slug.charCodeAt(0) * 37) % 360;
 	return (
 		<span
-			className="gui-skill-market-glyph gui-skill-market-glyph--fallback"
-			style={{ background: `oklch(0.28 0.06 ${hue})` }}
+			className={`gui-skill-market-glyph gui-skill-market-glyph--fallback${size ? " gui-skill-market-glyph--lg" : ""}`}
+			style={{ background: `oklch(0.28 0.06 ${hue})`, ...box }}
 		>
 			{entry.name.slice(0, 1)}
 		</span>
@@ -801,20 +806,25 @@ function FeaturedCard({
 			onClick={onOpen}
 			title={entry.descriptionZh || entry.description || entry.name}
 		>
-			<CardAddButton
-				entry={entry}
-				installed={installed}
-				busy={busy}
-				onInstall={onInstall}
-				onCancel={onCancel}
-				onOpen={onOpen}
-			/>
+			{/* 角上动作放进顶行（不再绝对定位）：长名字的最后几个字曾被角标压住。 */}
 			<div className="gui-skill-market-fcard-h">
 				<SkillGlyph entry={entry} />
 				<span className="gui-skill-market-fcard-name">{entry.name}</span>
+				<CardAddButton
+					entry={entry}
+					installed={installed}
+					busy={busy}
+					onInstall={onInstall}
+					onCancel={onCancel}
+					onOpen={onOpen}
+				/>
 			</div>
 			<p className="gui-skill-market-fcard-desc">{entry.descriptionZh || entry.description}</p>
-			{entry.author ? <footer className="gui-skill-market-meta">{entry.author}</footer> : null}
+			{entry.author ? (
+				<footer className="gui-skill-market-card-f">
+					<span className="gui-skill-market-meta">{entry.author}</span>
+				</footer>
+			) : null}
 		</article>
 	);
 }
@@ -846,21 +856,23 @@ function SkillCard({
 			onClick={onOpen}
 			title={entry.descriptionZh || entry.description || entry.name}
 		>
-			<CardAddButton
-				entry={entry}
-				installed={installed}
-				busy={busy}
-				onInstall={onInstall}
-				onCancel={onCancel}
-				onOpen={onOpen}
-			/>
 			<div className="gui-skill-market-card-h">
 				<SkillGlyph entry={entry} />
 				<span className="gui-skill-market-card-name">{entry.name}</span>
-				{entry.verified ? <span className="gui-skill-market-badge">{t("general.skillMarketVerified")}</span> : null}
+				<CardAddButton
+					entry={entry}
+					installed={installed}
+					busy={busy}
+					onInstall={onInstall}
+					onCancel={onCancel}
+					onOpen={onOpen}
+				/>
 			</div>
 			<p className="gui-skill-market-card-desc">{entry.descriptionZh || entry.description}</p>
+			{/* 认证徽章下移到脚注行：顶行留给名字，脚注与已安装卡片的
+			 * 「标签 + 说明」同构（左徽章、右淡色文字）。 */}
 			<footer className="gui-skill-market-card-f">
+				{entry.verified ? <span className="gui-skill-market-badge">{t("general.skillMarketVerified")}</span> : null}
 				<span className="gui-skill-market-meta">{meta.join(" · ")}</span>
 			</footer>
 		</article>
@@ -974,12 +986,31 @@ function AddSkillDialog({
 	);
 }
 
-/** 卡片点击的信息先览弹窗（液态玻璃 + spring 动效，样式见
- *  gui-workspace.css 的 gui-skill-market-dialog* 族）。两个来源各取所长：
+/** SkillHub 详情 RPC 的形状（只取 GUI 渲染用到的字段）。 */
+interface PreviewDetail {
+	latestVersion?: string;
+	description?: string;
+	descriptionZh?: string;
+	files?: { path: string; size: number }[];
+	security?: { status?: string; statusText?: string; reportUrl?: string }[];
+}
+
+type PreviewTab = "overview" | "content" | "security";
+
+/** 文件清单封顶：SkillHub 条目最多带 72 个文件，全量平铺只剩噪音。 */
+const PREVIEW_FILE_LIMIT = 40;
+
+/** 卡片点击的信息先览 —— 与「我安装的」技能详情（`SkillDrawer`）同一套
+ *  外壳：`gui-cap-drawer*` 右下 480px 玻璃抽屉、头部字形 + 名称 + meta、
+ *  动作行、tab 条、键值组。两侧共用同一族 class 而不是各写一份样式，两个
+ *  入口才不会各自漂移。portal 到 body：能力中心面板内有 backdrop-filter
+ *  祖先，会改掉 position:fixed 的包含块，就地渲染的弹层会锚在面板而不是
+ *  视口（抽屉对不齐、遮罩也盖不住侧栏）。
+ *  两个来源各取所长：
  *  - skills.sh：daemon 从发布者仓库直读 SKILL.md 正文（搜索接口不带描述，
- *    正文预览补上「看不到内容」的缺口）；
+ *    正文预览补上「看不到内容」的缺口），这里按 Markdown 渲染；
  *  - SkillHub：详情 RPC（版本 + 文件清单 + 安全审计）。
- *  footer 的来源感知安装与卡片角标同一条 `skills.marketplace.install` 路由。
+ *  动作行的安装与卡片角标同一条 `skills.marketplace.install` 路由。
  *  导出供契约测试挂载（预览描述的"加载完成不得比加载中少"渲染契约）。 */
 export function SkillPreviewDialog({
 	rpc,
@@ -999,14 +1030,11 @@ export function SkillPreviewDialog({
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [markdown, setMarkdown] = useState<string | null>(null);
-	const [detail, setDetail] = useState<{
-		latestVersion?: string;
-		description?: string;
-		descriptionZh?: string;
-		files?: { path: string; size: number }[];
-		security?: { status?: string; statusText?: string; reportUrl?: string }[];
-	} | null>(null);
-	const { closing, dialogRef, requestClose } = useDialogLifecycle(onClose);
+	const [detail, setDetail] = useState<PreviewDetail | null>(null);
+	const [tab, setTab] = useState<PreviewTab>("overview");
+	const [closing, setClosing] = useState(false);
+	const drawerRef = useModalFocus<HTMLDivElement>(true);
+	const closeTimerRef = useRef<number | null>(null);
 
 	useEffect(() => {
 		if (!rpc) return;
@@ -1015,6 +1043,7 @@ export function SkillPreviewDialog({
 		setError(null);
 		setMarkdown(null);
 		setDetail(null);
+		setTab("overview");
 		void rpc
 			.request<{ content?: string | null; detail?: unknown }>("skills.marketplace.preview", {
 				source: entry.source,
@@ -1026,7 +1055,7 @@ export function SkillPreviewDialog({
 				if (entry.source === "skills.sh") {
 					setMarkdown(res?.content ?? null);
 				} else {
-					setDetail((res?.detail ?? null) as typeof detail);
+					setDetail((res?.detail ?? null) as PreviewDetail | null);
 				}
 			})
 			.catch((e: unknown) => alive && setError(e instanceof Error ? e.message : String(e)))
@@ -1036,157 +1065,212 @@ export function SkillPreviewDialog({
 		};
 	}, [rpc, entry]);
 
-	const meta: string[] = [];
-	if (entry.author) meta.push(entry.author);
-	if (typeof entry.stars === "number") meta.push(`★ ${fmtCount(entry.stars)}`);
-	if (typeof entry.downloads === "number") meta.push(`↓ ${fmtCount(entry.downloads)}`);
-	if (typeof entry.installs === "number" && !entry.downloads) meta.push(`↓ ${fmtCount(entry.installs)}`);
+	// §5u 退场梯：卡片 140ms 出场，宿主多留 40ms —— 180ms 定时器拥有卸载。
+	const requestClose = useCallback((): void => {
+		if (closing) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			onClose();
+			return;
+		}
+		setClosing(true);
+		closeTimerRef.current = window.setTimeout(onClose, 180);
+	}, [closing, onClose]);
 
-	return (
+	useEffect(
+		() => () => {
+			if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+		},
+		[],
+	);
+
+	// Escape 只归栈顶抽屉（与 SkillDrawer 同一条共享栈契约）。
+	const requestCloseRef = useRef(requestClose);
+	requestCloseRef.current = requestClose;
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent): void => {
+			const drawer = drawerRef.current;
+			if (event.key !== "Escape" || !drawer || !isTopModal(drawer)) return;
+			event.preventDefault();
+			event.stopPropagation();
+			requestCloseRef.current();
+		};
+		document.addEventListener("keydown", onKey, true);
+		return () => document.removeEventListener("keydown", onKey, true);
+	}, [drawerRef]);
+
+	// 描述粘住：detail 拉回的更全描述优先，回落搜索条目自带的描述；只在
+	// 概览 tab 渲染一处 —— 加载完成不得比加载中信息更少，detail 与 entry
+	// 同文也不得重复两段。
+	const description = detail?.descriptionZh || detail?.description || entry.descriptionZh || entry.description || "";
+	const version = detail?.latestVersion || entry.version;
+	const files = detail?.files ?? [];
+	const security = detail?.security ?? [];
+	const sourceLabel =
+		entry.source === "skillhub" ? t("general.skillMarketSourceSkillhub") : t("general.skillMarketSourceSkills");
+	const metaText = [sourceLabel, entry.author].filter(Boolean).join(" · ");
+	const downloads = entry.downloads ?? entry.installs;
+	// 内容 tab 对两个来源是不同东西：skills.sh 给 SKILL.md 正文，SkillHub 只给文件清单。
+	const tabItems: [PreviewTab, string][] = [
+		["overview", t("tools.skillTabOverview")],
+		["content", entry.source === "skills.sh" ? t("tools.skillTabSkillmd") : t("general.skillMarketPreviewFiles")],
+	];
+	if (security.length > 0) tabItems.push(["security", t("general.skillMarketPreviewSecurity")]);
+
+	return createPortal(
 		<div
-			className={`gui-skill-market-dialog-backdrop${closing ? " gui-skill-market-dialog-backdrop--closing" : ""}`}
-			role="presentation"
-			onClick={ev => {
-				ev.stopPropagation();
-				requestClose();
-			}}
+			className={`gui-cap-drawer-root${closing ? " gui-cap-drawer-root--closing" : ""}`}
+			role="dialog"
+			aria-modal="true"
+			aria-label={entry.name}
 		>
-			<div
-				ref={dialogRef}
-				tabIndex={-1}
-				className="gui-skill-market-dialog gui-skill-market-preview"
-				role="dialog"
-				aria-label={entry.name}
-				onClick={ev => ev.stopPropagation()}
-			>
-				<div className="gui-skill-market-dialog-h gui-skill-market-preview-h">
-					<SkillGlyph entry={entry} />
-					<div className="gui-skill-market-preview-title">
-						<span className="gui-skill-market-preview-name">{entry.name}</span>
-						<span className="gui-skill-market-meta">
-							{entry.source === "skillhub"
-								? t("general.skillMarketSourceSkillhub")
-								: t("general.skillMarketSourceSkills")}
-							{meta.length > 0 ? ` · ${meta.join(" · ")}` : ""}
-						</span>
+			<div className="gui-cap-drawer-backdrop" onClick={requestClose} />
+			<div ref={drawerRef} className="gui-cap-drawer" tabIndex={-1}>
+				<div className="gui-cap-drawer-head">
+					<SkillGlyph entry={entry} size={40} />
+					<div className="gui-cap-drawer-titles">
+						<div className="gui-cap-drawer-name">{entry.name}</div>
+						<div className="gui-cap-drawer-meta">
+							<span className="gui-cap-drawer-meta-text">{metaText}</span>
+							{entry.verified ? (
+								<span className="gui-skill-market-badge">{t("general.skillMarketVerified")}</span>
+							) : null}
+						</div>
 					</div>
 					<button
 						type="button"
-						className="gui-skill-market-page"
-						onClick={requestClose}
+						className="gui-cap-drawer-close"
 						aria-label={t("settings.close")}
+						onClick={requestClose}
 					>
-						✕
+						<Icon name="close" className="h-4 w-4" />
 					</button>
 				</div>
-
-				<div className="gui-skill-market-preview-body">
-					{/* 描述粘住：detail 拉回的更全描述优先，回落搜索条目自带的描述；
-					 *  只在 body 顶部渲染一处 —— 加载完成不得比加载中信息更少，
-					 *  detail 与 entry 同文也不得重复两段。 */}
-					{detail?.descriptionZh || detail?.description || entry.descriptionZh || entry.description ? (
-						<p className="gui-skill-market-card-desc">
-							{detail?.descriptionZh || detail?.description || entry.descriptionZh || entry.description}
-						</p>
+				<div className="gui-cap-drawer-actions">
+					{installed ? (
+						<button type="button" className="gui-btn gui-cap-drawer-primary" disabled>
+							<Icon name="check" className="h-3.5 w-3.5" /> {t("general.skillMarketInstalled")}
+						</button>
+					) : (
+						<button type="button" className="gui-btn gui-cap-drawer-primary" disabled={busy} onClick={onInstall}>
+							{busy ? t("tools.installing") : t("general.skillMarketInstall")}
+						</button>
+					)}
+					{entry.homepage ? (
+						<a
+							className="gui-btn gui-skill-market-preview-link"
+							href={entry.homepage}
+							target="_blank"
+							rel="noreferrer"
+						>
+							{t("general.skillMarketHomepage")}
+						</a>
 					) : null}
-
-					{loading ? <p className="gui-skill-market-note">{t("general.skillMarketPreviewLoading")}</p> : null}
-					{error ? <p className="gui-skill-market-warn">{error}</p> : null}
-
-					{!loading && !error && entry.source === "skills.sh" ? (
-						markdown ? (
-							<pre className="gui-skill-market-preview-md">{markdown}</pre>
-						) : (
-							<p className="gui-skill-market-note">{t("general.skillMarketPreviewNone")}</p>
-						)
-					) : null}
-
-					{!loading && !error && entry.source === "skillhub" ? (
-						detail ? (
-							<div className="gui-skill-market-preview-detail">
-								{detail.latestVersion ? (
-									<p className="gui-skill-market-meta">
-										{t("general.skillMarketPreviewVersion")} v{detail.latestVersion}
+				</div>
+				{error ? <div className="gui-ext-plugins-error">{error}</div> : null}
+				<div className="gui-cap-drawer-tabs" role="tablist">
+					{tabItems.map(([id, label]) => (
+						<button
+							key={id}
+							type="button"
+							role="tab"
+							aria-selected={tab === id}
+							className={`gui-cap-drawer-tab${tab === id ? " gui-cap-drawer-tab--on" : ""}`}
+							onClick={() => setTab(id)}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+				<div className="gui-cap-drawer-body">
+					{tab === "overview" ? (
+						<div className="gui-cap-drawer-overview">
+							{description ? (
+								<>
+									<div className="gui-cap-drawer-section">{t("tools.skillOverviewSummary")}</div>
+									<p className="gui-cap-drawer-section-text" data-skill-summary>
+										{description}
 									</p>
+								</>
+							) : null}
+							<div className="gui-cap-drawer-section">{t("tools.skillKvSourceGroup")}</div>
+							<div className="gui-cap-drawer-kv">
+								<span className="gui-cap-drawer-kv-key">{t("tools.skillKvSource")}</span>
+								<span className="gui-cap-drawer-kv-val">{sourceLabel}</span>
+								<span className="gui-cap-drawer-kv-key">{t("general.skillMarketPreviewVersion")}</span>
+								<span className="gui-cap-drawer-kv-val">{version ? `v${version}` : "—"}</span>
+								{entry.author ? (
+									<>
+										<span className="gui-cap-drawer-kv-key">{t("general.skillMarketPreviewAuthor")}</span>
+										<span className="gui-cap-drawer-kv-val">{entry.author}</span>
+									</>
 								) : null}
-								{detail.files && detail.files.length > 0 ? (
-									<div className="gui-skill-market-preview-files">
-										<p className="gui-skill-market-meta">
-											{t("general.skillMarketPreviewFiles")} · {detail.files.length}
-										</p>
-										<ul>
-											{detail.files.slice(0, 30).map(f => (
-												<li key={f.path}>
-													{f.path}
-													{f.size > 0 ? ` (${f.size} B)` : ""}
-												</li>
-											))}
-											{detail.files.length > 30 ? <li>…</li> : null}
-										</ul>
-									</div>
+								{typeof entry.stars === "number" ? (
+									<>
+										<span className="gui-cap-drawer-kv-key">{t("general.skillMarketPreviewStars")}</span>
+										<span className="gui-cap-drawer-kv-val">{fmtCount(entry.stars)}</span>
+									</>
 								) : null}
-								{detail.security && detail.security.length > 0 ? (
-									<div className="gui-skill-market-preview-files">
-										<p className="gui-skill-market-meta">{t("general.skillMarketPreviewSecurity")}</p>
-										<ul>
-											{detail.security.map((s, i) => (
-												<li key={i}>
-													{s.statusText ?? s.status ?? "?"}
-													{s.reportUrl ? (
-														<>
-															{" · "}
-															<a href={s.reportUrl} target="_blank" rel="noreferrer">
-																{s.reportUrl}
-															</a>
-														</>
-													) : null}
-												</li>
-											))}
-										</ul>
-									</div>
+								{typeof downloads === "number" ? (
+									<>
+										<span className="gui-cap-drawer-kv-key">{t("general.skillMarketPreviewDownloads")}</span>
+										<span className="gui-cap-drawer-kv-val">{fmtCount(downloads)}</span>
+									</>
 								) : null}
-								{!detail.latestVersion && (!detail.files || detail.files.length === 0) ? (
-									<p className="gui-skill-market-note">{t("general.skillMarketPreviewNone")}</p>
-								) : null}
+							</div>
+						</div>
+					) : null}
+					{tab === "content" ? (
+						loading ? (
+							<p className="gui-skill-market-note">{t("general.skillMarketPreviewLoading")}</p>
+						) : entry.source === "skills.sh" ? (
+							markdown ? (
+								<Markdown text={markdown} />
+							) : (
+								<p className="gui-skill-market-note">{t("general.skillMarketPreviewNone")}</p>
+							)
+						) : files.length > 0 ? (
+							<div className="gui-skill-market-preview-files">
+								<div className="gui-cap-drawer-section">
+									{t("general.skillMarketPreviewFiles")} · {files.length}
+								</div>
+								<ul>
+									{files.slice(0, PREVIEW_FILE_LIMIT).map(f => (
+										<li key={f.path}>
+											{f.path}
+											{f.size > 0 ? (
+												<span className="gui-skill-market-preview-size">{formatBytes(f.size)}</span>
+											) : null}
+										</li>
+									))}
+									{files.length > PREVIEW_FILE_LIMIT ? <li>…</li> : null}
+								</ul>
 							</div>
 						) : (
 							<p className="gui-skill-market-note">{t("general.skillMarketPreviewNone")}</p>
 						)
 					) : null}
-				</div>
-
-				<div className="gui-skill-market-dialog-f">
-					{entry.homepage ? (
-						<a
-							className="gui-skill-market-link"
-							href={entry.homepage}
-							target="_blank"
-							rel="noreferrer"
-							onClick={ev => ev.stopPropagation()}
-						>
-							{t("general.skillMarketHomepage")}
-						</a>
+					{tab === "security" ? (
+						<div className="gui-skill-market-preview-files">
+							<ul>
+								{security.map((s, i) => (
+									<li key={i}>
+										{s.statusText ?? s.status ?? "?"}
+										{s.reportUrl ? (
+											<>
+												{" · "}
+												<a href={s.reportUrl} target="_blank" rel="noreferrer">
+													{s.reportUrl}
+												</a>
+											</>
+										) : null}
+									</li>
+								))}
+							</ul>
+						</div>
 					) : null}
-					<span className="gui-skill-market-flex" aria-hidden />
-					{installed ? (
-						<button type="button" className="gui-skill-market-add" disabled>
-							<Icon name="check" className="h-3.5 w-3.5" /> {t("general.skillMarketInstalled")}
-						</button>
-					) : (
-						<button
-							type="button"
-							className="gui-skill-market-add"
-							disabled={busy}
-							onClick={ev => {
-								ev.stopPropagation();
-								onInstall();
-							}}
-						>
-							{busy ? t("tools.installing") : t("general.skillMarketInstall")}
-						</button>
-					)}
 				</div>
 			</div>
-		</div>
+		</div>,
+		document.body,
 	);
 }

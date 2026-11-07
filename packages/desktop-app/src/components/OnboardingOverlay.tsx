@@ -46,7 +46,7 @@ import { Reveal } from "./Reveal";
 /** Exit animation duration (mirrors gui-obo-card-out below). */
 const ONBOARDING_EXIT_MS = 180;
 
-import { type PetdexPackage, petForId, petId } from "../lib/pet";
+import { type PetDescriptor, petForId, petId } from "../lib/pet";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
@@ -188,7 +188,7 @@ function StepDemo({
 	);
 }
 
-type PreviewPet = { kind: "builtin"; id: string } | { kind: "petdex"; pkg: PetdexPackage };
+type PreviewPet = PetDescriptor;
 
 function DemoContent({
 	step,

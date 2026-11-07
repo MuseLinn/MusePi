@@ -373,7 +373,7 @@ try {
 	);
 	assert(
 		"voice schema owns speech, provider, and Live Voice settings without duplicates",
-		["stt.enabled", "tts.localModel", "speech.enabled", "providers.tts", "live.voice"].every(key =>
+		["stt.enabled", "tts.localModel", "tts.autoRead", "providers.tts", "live.voice"].every(key =>
 			voiceKeys.has(key),
 		) && misplacedVoiceKeys.length === 0,
 		{ voiceKeys: [...voiceKeys], misplacedVoiceKeys },

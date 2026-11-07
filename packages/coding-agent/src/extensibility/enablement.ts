@@ -34,7 +34,7 @@ export type EnablementPredicate = () => boolean;
  */
 export type SubsystemSwitchKey =
 	| "stt.enabled"
-	| "speech.enabled"
+	| "tts.autoRead"
 	| "browser.enabled"
 	| "computer.enabled"
 	| "lsp.enabled"
@@ -88,7 +88,7 @@ const UNARY_CONDITIONS: Readonly<Record<string, EnablementPredicate>> = {
 	/** Speech input is configured and enabled. */
 	sttEnabled: () => readSubsystemEnabled("stt.enabled") ?? READ_FAILURE_AS_GATE,
 	/** Speech output is configured and enabled. */
-	speechEnabled: () => readSubsystemEnabled("speech.enabled") ?? READ_FAILURE_AS_GATE,
+	speechEnabled: () => readSubsystemEnabled("tts.autoRead") ?? READ_FAILURE_AS_GATE,
 	/** The browser subsystem's own switch is on. */
 	browserEnabled: () => readSubsystemEnabled("browser.enabled") ?? READ_FAILURE_AS_GATE,
 	/** Computer use's own switch is on. */

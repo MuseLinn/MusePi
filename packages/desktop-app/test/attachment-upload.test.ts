@@ -129,6 +129,31 @@ describe("uploadAttachmentFiles — one channel for both composers", () => {
 		}
 	});
 
+	test("uses the upload staged when the chip appeared instead of re-sending", async () => {
+		const { client, puts, filePuts } = fakeRpc();
+		const staged = Promise.resolve({
+			ref: { scheme: "blob" as const, hash: "b".repeat(64), size: 3, mimeType: "text/plain", name: "s.txt" },
+			url: `blob://${"b".repeat(64)}`,
+		});
+
+		const refs = await uploadAttachmentFiles(client, "/ws", [{ file: file("s.txt"), name: "s.txt", staged }]);
+
+		expect(puts).toHaveLength(0);
+		expect(filePuts).toHaveLength(0);
+		expect(refs).toEqual([`[Attachment] blob://${"b".repeat(64)} (s.txt)`]);
+	});
+
+	test("a staged upload that failed is retried rather than blocking the send", async () => {
+		const { client, puts } = fakeRpc();
+		const refs = await uploadAttachmentFiles(client, "/ws", [
+			{ file: file("r.txt", "retry"), name: "r.txt", staged: Promise.resolve({ error: "boom" }) },
+		]);
+
+		expect(puts).toHaveLength(1);
+		expect(refs).toHaveLength(1);
+		expect(Buffer.from(puts[0]!.content, "base64").toString()).toBe("retry");
+	});
+
 	test("same-name chips keep their own bytes instead of overwriting each other", async () => {
 		// Content addressing makes the hash the identity: two files called
 		// "a.log" produce two blobs, so the second can no longer displace the

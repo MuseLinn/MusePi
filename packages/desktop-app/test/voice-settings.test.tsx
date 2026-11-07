@@ -4,7 +4,12 @@ import { setLocale } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { MockAssistantRow, MockConversationPreview, MockUserRow } from "../src/components/MockConversationPreview";
-import { SpeakAction, TtsModelPickerCard, VoiceSection } from "../src/components/settings-sections/voice";
+import {
+	SpeakAction,
+	StreamPreviewAction,
+	TtsModelPickerCard,
+	VoiceSection,
+} from "../src/components/settings-sections/voice";
 import { PromptProvider } from "../src/lib/prompt-dialog";
 import type { RpcClient, StreamEvent } from "../src/lib/rpc";
 
@@ -258,7 +263,7 @@ describe("语音测试共用模拟会话视图", () => {
 			await new Promise(resolve => setTimeout(resolve, 0));
 		});
 		const get = fake.calls("settings.get")[0] as { keys: string[] };
-		expect(get.keys).toEqual(["tts.localVoice", "tts.rate", "tts.inputMode"]);
+		expect(get.keys).toEqual(["tts.localVoice", "tts.rate", "tts.inputMode", "tts.enhanced"]);
 		const synth = fake.calls("tts.synthesize")[0] as { text: string };
 		expect(typeof synth.text).toBe("string");
 		expect(synth.text.length).toBeGreaterThan(0);
@@ -397,6 +402,41 @@ describe("local model management", () => {
 		});
 		expect(fake.calls("tts.modelDelete")).toEqual([{ modelKey: "kokoro" }]);
 		expect(fake.calls("tts.modelDownload")).toEqual([]);
+		act(() => root.unmount());
+		host.remove();
+	});
+});
+
+describe("streaming read-aloud preview", () => {
+	test("feeds the sample as deltas into the incremental speaker", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("settings.get", {
+			"tts.localVoice": "af_heart",
+			"tts.rate": 1,
+			"tts.inputMode": "sanitize",
+		});
+		fake.responses.set("tts.synthesize", { audio: null, sampleRate: 0, error: "stop" });
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		act(() =>
+			root.render(
+				createElement(StreamPreviewAction, {
+					rpc: asRpc(fake),
+					markdown: "第一句。第二句。",
+					sessionId: "session-1",
+				}),
+			),
+		);
+		const button = host.querySelector<HTMLButtonElement>("button")!;
+		expect(button.getAttribute("aria-label")).toBe("流式试听");
+		act(() => button.click());
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 120));
+		});
+		const get = fake.calls("settings.get")[0] as { keys: string[] };
+		expect(get.keys).toContain("tts.enhanced");
+		expect(fake.calls("tts.synthesize").length).toBeGreaterThan(0);
 		act(() => root.unmount());
 		host.remove();
 	});

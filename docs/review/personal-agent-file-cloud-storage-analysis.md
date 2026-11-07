@@ -273,9 +273,11 @@ comma 的会话权威是 DB + S3 段式日志，客户端只是投影；MusePi �
 
 桌面端本来就能通过 `electronAPI.getDroppedFilePath` 拿到本地路径（视频附件已经在用）。让运行时自己读盘、自己哈希，字节根本不进 RPC。没有新能力面：`fs.readBytes` 本来就接受任意绝对路径，同一信任域。剪贴板 blob 和读不到的路径回退到内联。
 
-**B. 分片上传——给远程/移动端**
+**B. 分片上传——给远程/移动端（已实现）**
 
-`attachment.begin({ name, mimeType, size })` → `{ uploadId, chunkSize }`；`attachment.chunk({ uploadId, index, content })`；`attachment.commit({ uploadId })` → 同一个 `{ ref, url }`；`abort` 清理。chunk 取 3 MiB 原文（4 MiB base64），远低于 16 MiB 闸。落在临时目录、commit 时 rename 进 blob 存储，天然幂等（内容寻址让重复提交无害）。需要：uploadId 的 TTL（10 分钟）、并发上限（≤4）、进程重启时清理临时目录。**现在不做**——没有远程客户端用得到，先做就是空转接口。
+`attachment.begin({ name, mimeType, size })` → `{ uploadId, chunkSize }`；`attachment.chunk({ uploadId, index, content })`；`attachment.commit({ uploadId })` → 同一个 `{ ref, url }`；`abort` 清理。chunk 取 3 MiB 原文（4 MiB base64），远低于 16 MiB 闸。第 n 片写在 `n × chunkSize`，所以除最后一片外必须写满；commit 拒绝空洞与大小不符，临时文件不进入 blob 目录。TTL 10 分钟、同时最多 4 个，`stop()` 全部丢弃。
+
+**现状**：本地客户端走 `putFile`（零传输），远程客户端走分片；两条路都落到同一个内容寻址存储，引用形态一致。
 
 **C. WS 二进制帧**
 

@@ -1,9 +1,21 @@
-import { type TranslationKey, t } from "@musepi/client-core";
+import { type TranslationKey, t, tLoose } from "@musepi/client-core";
 import { CircleCheck as CircleCheckIconData, Circle as CircleIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useEffect, useState } from "react";
+import "../i18n/pet-style";
 import { tapFeedback } from "../lib/haptic";
-import { BUILTIN_PETDEX, BUILTIN_SVG_ID, loadPetdex, type PetdexPackage, petForId, petId, setPetId } from "../lib/pet";
+import {
+	BUILTIN_PETDEX,
+	BUILTIN_SVG_ID,
+	loadPetdex,
+	modeForPackage,
+	type PetdexPackage,
+	type PetMode,
+	petForId,
+	petId,
+	setPetId,
+	setPetMode,
+} from "../lib/pet";
 import {
 	PET_ACCESSORIES,
 	PET_DECOR_FLAGS,
@@ -77,22 +89,40 @@ export function PersonalizeSetup({
 		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
 	};
 
-	const petOptions = [
+	const petOptions: { id: string; displayName: string; description: string; mode: PetMode }[] = [
 		{
 			id: BUILTIN_SVG_ID,
 			displayName: t("settings.builtinPet"),
 			description: t("settings.builtinPetDescription"),
+			mode: "vector",
 		},
 		...BUILTIN_PETDEX.map(p => ({
 			id: p.id,
 			displayName: t(p.displayName as TranslationKey),
 			description: t(p.description as TranslationKey),
+			mode: "sprite" as const,
 		})),
-		...petdex.map(p => ({ id: p.id, displayName: p.displayName, description: p.description ?? "" })),
+		...petdex.map(p => ({
+			id: p.id,
+			displayName: p.displayName,
+			description: p.description ?? "",
+			mode: modeForPackage(p),
+		})),
 	];
+	// The style follows the resolved selection: choosing a pet of the other
+	// mode moves the switch, and picking a style restores that mode's pick.
+	const style = petForId(selectedPet).mode;
+	const visiblePetOptions = petOptions.filter(p => p.mode === style);
 	// Decoration layers only exist on the builtin sphere; an imported sheet is
 	// a baked bitmap.
 	const builtinSelected = petForId(selectedPet).kind === "builtin";
+
+	const pickStyle = (mode: PetMode): void => {
+		tapFeedback();
+		setPetMode(mode);
+		setSelectedPet(petId());
+		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
+	};
 
 	const pickPetMode = (mode: "input" | "desktop"): void => {
 		onPetModeChange(mode);
@@ -160,10 +190,32 @@ export function PersonalizeSetup({
 				</button>
 			</div>
 
+			<div className="gui-obo-pers-section">
+				<div className="gui-obo-pers-label">{tLoose("settings.petStyle")}</div>
+				<div className="flex items-center gap-1.5">
+					<button
+						type="button"
+						className={`gui-obo-seg${style === "vector" ? " gui-obo-seg--active" : ""}`}
+						aria-pressed={style === "vector"}
+						onClick={() => pickStyle("vector")}
+					>
+						{tLoose("settings.petStyleVector")}
+					</button>
+					<button
+						type="button"
+						className={`gui-obo-seg${style === "sprite" ? " gui-obo-seg--active" : ""}`}
+						aria-pressed={style === "sprite"}
+						onClick={() => pickStyle("sprite")}
+					>
+						{tLoose("settings.petStyleSprite")}
+					</button>
+				</div>
+			</div>
+
 			<div className="gui-obo-pers-section gui-obo-pers-section--stack">
 				<div className="gui-obo-pers-label">{t("tools.petAppearance")}</div>
 				<div className="gui-obo-pet-grid" role="radiogroup" aria-label={t("tools.petAppearance")}>
-					{petOptions.map((p, index) => {
+					{visiblePetOptions.map((p, index) => {
 						const selected = selectedPet === p.id;
 						return (
 							<button
@@ -179,14 +231,14 @@ export function PersonalizeSetup({
 								onKeyDown={e => {
 									let nextIndex: number | null = null;
 									if (e.key === "ArrowRight" || e.key === "ArrowDown")
-										nextIndex = (index + 1) % petOptions.length;
+										nextIndex = (index + 1) % visiblePetOptions.length;
 									if (e.key === "ArrowLeft" || e.key === "ArrowUp")
-										nextIndex = (index - 1 + petOptions.length) % petOptions.length;
+										nextIndex = (index - 1 + visiblePetOptions.length) % visiblePetOptions.length;
 									if (e.key === "Home") nextIndex = 0;
-									if (e.key === "End") nextIndex = petOptions.length - 1;
+									if (e.key === "End") nextIndex = visiblePetOptions.length - 1;
 									if (nextIndex === null) return;
 									e.preventDefault();
-									const next = petOptions[nextIndex];
+									const next = visiblePetOptions[nextIndex];
 									if (!next) return;
 									pickPet(next.id);
 									e.currentTarget.parentElement

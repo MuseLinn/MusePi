@@ -36,6 +36,7 @@ export function InlineWidget({
 	data,
 	title,
 	sendPrompt,
+	ask = false,
 	rasterizeCard,
 	actions,
 	codeView = null,
@@ -44,6 +45,9 @@ export function InlineWidget({
 	data: Record<string, unknown>;
 	title: string;
 	sendPrompt?: (text: string) => void;
+	/** The face asks the user to choose: keep a status line until an answer
+	 *  leaves the card. */
+	ask?: boolean;
 	/** 统一标注(桌面渲染器提供卡片 rasterize 时才有):把卡片元素拍成图,
 	 *  html 卡片的标注截图由它合成。 */
 	rasterizeCard?: (element: HTMLElement) => Promise<Blob | null>;
@@ -53,6 +57,15 @@ export function InlineWidget({
 	codeView?: WidgetSource | null;
 }): ReactNode {
 	const [local, setLocal] = useState<Record<string, unknown>>(data);
+	const [answered, setAnswered] = useState(false);
+	// A face hands an answer to the conversation through sendPrompt; wrapping it
+	// here is the only signal the card has that the user chose something.
+	const submit = sendPrompt
+		? (text: string) => {
+				setAnswered(true);
+				sendPrompt(text);
+			}
+		: undefined;
 	// Re-render when a plugin contributes this type after the session loaded.
 	useWidgetRegistryVersion();
 	// The card mounts while the tool is still running — the result (and
@@ -70,8 +83,13 @@ export function InlineWidget({
 	const rootRef = useRef<HTMLDivElement | null>(null);
 	const def = widgetDef(type);
 	if (!def) return <span className="tv-row-val">{t("settings.widgetUnknown")}</span>;
+	// A custom-HTML face is a whole page, not a component on a card: it takes
+	// the full card width with no body padding, the way the page expects to be
+	// laid out. Component widgets keep the inset so their own chrome reads as a
+	// card.
+	const isPage = type === "html";
 	return (
-		<div className="tv-widget" ref={rootRef}>
+		<div className={`tv-widget${isPage ? " tv-widget--page" : ""}`} ref={rootRef}>
 			<div className="tv-widget-head">
 				<span className="tv-widget-title">{title}</span>
 				<span className="tv-widget-tag">{type}</span>
@@ -87,16 +105,31 @@ export function InlineWidget({
 						<def.Component
 							data={local}
 							update={patch => setLocal(prev => ({ ...prev, ...patch }))}
-							sendPrompt={sendPrompt}
+							sendPrompt={submit}
 							annotateCapture={
-								rasterizeCard && rootRef.current
-									? () => rasterizeCard(rootRef.current as HTMLElement)
+								// Resolve the element at capture time, not render time: on the
+								// first paint `rootRef` is still empty, and gating on it made
+								// the entry appear only after some later re-render (or never,
+								// on a static widget).
+								rasterizeCard
+									? () => {
+											const element = rootRef.current;
+											return element ? rasterizeCard(element) : Promise.resolve(null);
+										}
 									: undefined
 							}
 						/>
 					</WidgetErrorBoundary>
 				)}
 			</div>
+			{ask && (
+				// A waiting page names its state under the page: the card is answered
+				// elsewhere (the answer becomes a user message), so without this the
+				// page just looks unresponsive.
+				<div className={`tv-widget-ask${answered ? " tv-widget-ask--done" : ""}`}>
+					{answered ? t("tools.widgetAnswered") : t("tools.widgetWaiting")}
+				</div>
+			)}
 		</div>
 	);
 }
@@ -113,11 +146,16 @@ export function InlineWidget({
 export const widgetRenderer: ToolRenderer = {
 	Summary: ({ args, result }: ToolRenderProps): string => {
 		// The payload rides `result.details` on the wire ({type, data,
-		// title?} — the widget tool's WidgetToolDetails); `args.type` covers
-		// the running state where the result has not landed yet.
+		// title?} — the widget tool's WidgetToolDetails); `args` covers the
+		// running state where the result has not landed yet. The slot is the
+		// card's parenthetical, so a titled widget names itself there instead
+		// of repeating the tool label ("组件 · html"), which left the row
+		// looking like a stray paren pair around a type tag.
 		const details = detailsRecord(result);
-		const type = str(details?.type) ?? str((isRecord(args) ? args : null)?.type) ?? "";
-		return `${t("settings.widget")}${type ? ` · ${type}` : ""}`;
+		const rawArgs = isRecord(args) ? args : null;
+		const title = str(details?.title) ?? str(rawArgs?.title);
+		const type = str(details?.type) ?? str(rawArgs?.type) ?? "";
+		return title || type;
 	},
 	Body: ({ args, result, host }: ToolRenderProps): ReactNode => {
 		useWidgetRegistryVersion();
@@ -140,6 +178,7 @@ export const widgetRenderer: ToolRenderer = {
 				data={data}
 				title={title}
 				sendPrompt={host?.sendPrompt}
+				ask={details?.awaitAnswer === true}
 				rasterizeCard={host?.rasterizeCard}
 			/>
 		);

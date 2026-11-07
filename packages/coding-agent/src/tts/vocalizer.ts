@@ -141,9 +141,9 @@ export class Vocalizer {
 	 * pipeline (enhanced vs mechanical) is latched per utterance.
 	 */
 	pushDelta(text: string): void {
-		if (this.#suspensions > 0 || !settings.get("speech.enabled")) return;
+		if (this.#suspensions > 0 || !settings.get("tts.autoRead")) return;
 		if (!text) return;
-		if (this.#enhanced || (!this.#speakable && this.#enhancer && settings.get("speech.enhanced"))) {
+		if (this.#enhanced || (!this.#speakable && this.#enhancer && settings.get("tts.enhanced"))) {
 			this.#pushEnhanced(text);
 			return;
 		}
@@ -356,7 +356,7 @@ export class Vocalizer {
 		// first enabled tier (resolveEnabledTtsModel) — the synthesis path
 		// never loads a denied engine even if the setting still points at one.
 		const modelKey = resolveEnabledTtsModel(settings.get("tts.localModel") as string | undefined).key;
-		const voice = settings.get("speech.voice") || DEFAULT_TTS_VOICE;
+		const voice = settings.get("tts.localVoice") || DEFAULT_TTS_VOICE;
 		const handle = ttsClient.synthesizeStream(modelKey, { voice, signal: abort.signal });
 		const player = this.#createPlayer();
 		player.setGain(this.#ducked ? DUCK_GAIN : 1);

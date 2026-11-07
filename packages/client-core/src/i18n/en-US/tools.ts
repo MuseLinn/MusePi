@@ -233,6 +233,23 @@ export const tools = {
 	"tools.importChromeDataDescription":
 		"One-time import of cookies and localStorage from Chrome's most recently used profile; does not keep syncing, refresh open pages, or modify Chrome data",
 	"tools.importBrowserData": "Import browser data",
+	"tools.importChromeDataShared": "Import Chrome data",
+	"tools.importChromeDataSharedDescription":
+		"Copy cookies and localStorage from your default Chrome profile into the shared automation Chromium. Passwords and the managed browser profile are not included.",
+	"tools.importChromeDataSuccess": "Chrome data imported into the shared automation Chromium",
+	"tools.importChromeDataFailed": "Chrome import failed",
+	"tools.importChromeDataDismiss": "Dismiss Chrome import",
+	"tools.browserDataSettings": "Browser data settings",
+	"tools.importing": "Importing…",
+	"tools.sharedChromium": "Shared Chromium",
+	"tools.sharedChromiumExtensionsDescription": "Extensions installed in the shared automation Chromium",
+	"tools.loadingExtensions": "Loading extensions…",
+	"tools.browserExtensionsToolbar": "Extensions toolbar button",
+	"tools.browserExtensionsToolbarDescription":
+		"Show the extensions button in the managed-browser toolbar. Settings remains available when hidden.",
+	"tools.browserShowFullUrl": "Show full URLs",
+	"tools.browserShowFullUrlDescription":
+		"Display the full address in the managed-browser address bar instead of only the hostname.",
 	"tools.clearBrowserCache": "Clear built-in browser cache",
 	"tools.clearBrowserCacheDescription":
 		"Clears HTTP cache, Cache Storage, and Service Workers, keeping cookies and local site data",
@@ -527,7 +544,7 @@ export const tools = {
 		"On-device speech-to-text dictation (Whisper / SenseVoice / Parakeet tiers, downloaded on first use). The toggle mirrors stt.enabled; config fields are the stt.* settings keys — one storage with the settings page.",
 	"tools.extBuiltinTts": "Speech Output (TTS)",
 	"tools.extBuiltinTtsDesc":
-		"Streaming neural text-to-speech readback (Kokoro-82M / MeloTTS 中文, downloaded on first use). The toggle mirrors speech.enabled; config fields are the tts.* settings keys — one storage with the settings page.",
+		"Streaming neural text-to-speech readback (Kokoro-82M / MeloTTS 中文, downloaded on first use). The toggle mirrors tts.autoRead; config fields are the tts.* settings keys — one storage with the settings page.",
 	"tools.extBuiltinTerminal": "Terminal",
 	"tools.extBuiltinTerminalDesc":
 		"Session terminal backend (bun-pty → node-pty auto-fallback) powering the TUI terminal and the GUI terminal panel. Read-only display: no master switch — close the terminal panel from its own UI.",
@@ -812,7 +829,6 @@ export const tools = {
 	"tools.skillVersionUnpinned": "Unpinned",
 	"tools.skillEnabled": "Enabled",
 	"tools.skillDisabled": "Disabled",
-	"tools.skillBundledNoUninstall": "Built-in · ships with the client · cannot uninstall",
 	"tools.skillAllTitle": "All skills",
 	"tools.skillViewGrid": "Grid view",
 	"tools.skillViewList": "List view",
@@ -1025,6 +1041,7 @@ export const tools = {
 	"annotation.attached": "Annotation attached to the composer",
 	"annotation.noPage": "Load a page before annotating",
 	"annotation.failed": "Could not annotate this page",
+	"annotation.startFailed": "The annotation overlay could not start. Try again.",
 	"annotation.panelTitle": "Annotation details",
 	"annotation.panelClose": "Close",
 	"annotation.panelGeometry": "Position & geometry",
@@ -1835,6 +1852,8 @@ export const tools = {
 	// ── Tool card titles: wire name → readable name ("Used X (args)") ─────────
 	"tools.usedTool": "Used {tool}",
 	"tools.usingTool": "Using {tool}",
+	"tools.widgetWaiting": "Waiting for your choice",
+	"tools.widgetAnswered": "Answered",
 	"tools.argOpen": "(",
 	"tools.argClose": ")",
 	"tools.toolApplyPatch": "Apply patch",
@@ -1909,4 +1928,13 @@ export const tools = {
 	// File tree symlink markers
 	"tools.fileTreeSymlink": "Symbolic link",
 	"tools.fileTreeSymlinkTarget": "Symlink → {target}",
+	// Non-image attachment cards in user messages ([Attachment] blob:// lines)
+	"tools.attachmentCards": "Attachments",
+	"tools.attachmentPreview": "Preview",
+	"tools.attachmentCopyRef": "Copy reference",
+	"tools.attachmentPreviewTitle": "Attachment preview",
+	"tools.attachmentPreviewUnavailable": "Preview unavailable",
+	"tools.attachmentPreviewFailed": "Could not read attachment",
+	"tools.attachmentLoadMore": "Load more",
+	"tools.attachmentSave": "Save as",
 } as const satisfies Record<ToolsKey, string>;

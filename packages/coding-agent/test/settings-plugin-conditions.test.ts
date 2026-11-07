@@ -34,13 +34,16 @@ describe("plugin-owned settings visibility", () => {
 	});
 
 	test("tts settings follow only the tts package state", () => {
+		// Write the legacy alias, not tts.autoRead: the global Settings singleton
+		// is shared across test files and a direct write here would make the
+		// "unreadable switch" contract in enablement.test.ts read a real value.
 		settings.set("speech.enabled", false);
 		expect(getSettingDef("tts.autoRead")?.condition?.()).toBe(true);
 		settings.set("disabledExtensions", ["tts"]);
 		expect(getSettingDef("tts.autoRead")?.condition?.()).toBe(false);
 		expect(getSettingDef("tts.localModel")?.condition?.()).toBe(false);
-		expect(getSettingDef("speech.voice")?.condition?.()).toBe(false);
-		expect(getSettingDef("speech.enabled")?.condition).toBeUndefined();
+		expect(getSettingDef("tts.localVoice")?.condition?.()).toBe(false);
+		expect(getSettingDef("tts.readMode")?.condition?.()).toBe(false);
 	});
 
 	test("browser settings follow the browser package", () => {

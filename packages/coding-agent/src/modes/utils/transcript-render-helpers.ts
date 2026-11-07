@@ -7,6 +7,7 @@
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import { type Component, Text } from "@musepi/pi-tui";
 import { formatBytes, formatDuration } from "@musepi/pi-utils";
+import { asyncJobResultView } from "@musepi/pi-wire";
 import {
 	type CustomMessage,
 	type FileMentionMessage,
@@ -14,7 +15,17 @@ import {
 	shouldRenderAbortReason,
 } from "../../session/messages";
 import { createIrcMessageCard } from "../../tools/hub";
-import { replaceTabs, TRUNCATE_LENGTHS, truncateToWidth } from "../../tools/render-utils";
+import {
+	createCachedComponent,
+	Ellipsis,
+	getPreviewLines,
+	replaceTabs,
+	type ToolUIColor,
+	type ToolUIStatus,
+	TRUNCATE_LENGTHS,
+	truncateToWidth,
+} from "../../tools/render-utils";
+import { renderStatusLine } from "../../tui";
 import { canonicalizeMessage } from "../../utils/thinking-display";
 import { ToolActivityContainer } from "../components/tool-activity";
 import { TranscriptBlock } from "../components/transcript-container";
@@ -65,6 +76,89 @@ export function buildAsyncResultBlock(message: CustomOrHookMessage): ToolActivit
 		block.addChild(new Text(line, 1, 0));
 	}
 	return new ToolActivityContainer(block);
+}
+
+const ASYNC_JOB_COLLAPSED_LINES = 6;
+const ASYNC_JOB_EXPANDED_LINES = 60;
+
+function asyncJobStatusIcon(status: string): ToolUIStatus {
+	switch (status.toLowerCase()) {
+		case "completed":
+			return "done";
+		case "failed":
+			return "error";
+		case "cancelled":
+		case "canceled":
+			return "aborted";
+		case "running":
+			return "running";
+		default:
+			return "info";
+	}
+}
+
+function asyncJobStatusColor(status: string): ToolUIColor {
+	switch (status.toLowerCase()) {
+		case "completed":
+			return "success";
+		case "failed":
+			return "error";
+		case "cancelled":
+		case "canceled":
+			return "warning";
+		case "running":
+			return "accent";
+		default:
+			return "muted";
+	}
+}
+
+/**
+ * Render an `async-job-result` settlement card: a status line (outcome, agent,
+ * type, duration) over a bounded output preview plus the trailing idle /
+ * `history://` hint. `content` is the model-facing `<task-result>` envelope, so
+ * only `asyncJobResultView` reads it and the markup never reaches the screen.
+ */
+export function buildAsyncJobResultBlock(message: CustomOrHookMessage, getExpanded: () => boolean): Component {
+	const view = asyncJobResultView(message.content, message.details);
+	const meta = [
+		view.type ? `[${view.type}]` : undefined,
+		view.duration ? `(${view.duration})` : undefined,
+		view.lines ? `${view.lines} lines` : undefined,
+		view.size,
+	].filter((part): part is string => part !== undefined && part.trim().length > 0);
+	return createCachedComponent(
+		getExpanded,
+		(width, expanded) => {
+			const lines = [
+				renderStatusLine(
+					{
+						icon: asyncJobStatusIcon(view.status),
+						title: view.label,
+						badge: { label: view.status, color: asyncJobStatusColor(view.status) },
+						meta,
+					},
+					theme,
+				),
+			];
+			if (view.output) {
+				const max = expanded ? ASYNC_JOB_EXPANDED_LINES : ASYNC_JOB_COLLAPSED_LINES;
+				const preview = getPreviewLines(view.output, max, Math.max(40, width - 4), Ellipsis.Unicode);
+				const quote = `  ${theme.fg("dim", "│")} `;
+				for (const line of preview) {
+					lines.push(`${quote}${theme.fg("toolOutput", replaceTabs(line))}`);
+				}
+				const total = view.output.split("\n").filter(line => line.trim().length > 0).length;
+				const hidden = total - Math.min(total, max);
+				if (!expanded && hidden > 0) {
+					lines.push(`${quote}${theme.fg("dim", `… +${hidden} more ${hidden === 1 ? "line" : "lines"}`)}`);
+				}
+			}
+			if (view.hint) lines.push(`  ${theme.fg("dim", replaceTabs(view.hint.replace(/`/g, "")))}`);
+			return lines.map(line => truncateToWidth(line, width, Ellipsis.Unicode));
+		},
+		{ paddingX: 1 },
+	);
 }
 
 /**

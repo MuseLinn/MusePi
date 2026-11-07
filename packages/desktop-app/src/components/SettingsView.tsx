@@ -433,7 +433,7 @@ export function SettingsView({
 							{activeSection === "git" && <GitSection rpc={rpc} />}
 							{activeSection === "shortcuts" && <ShortcutsSection />}
 							{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
-							{activeSection === "voice" && <VoiceSection rpc={rpc} />}
+							{activeSection === "voice" && <VoiceSection rpc={rpc} sessionId={sessionId} />}
 							{activeSection === "context" && <ContextSection rpc={rpc} />}
 							{activeSection === "files" && <FilesLspSection rpc={rpc} />}
 							{activeSection === "memory" && <MemorySection rpc={rpc} />}

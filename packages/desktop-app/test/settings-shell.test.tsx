@@ -16,6 +16,8 @@ import { computeSettingsShellState } from "../src/lib/settings-shell";
  *    decision point app.tsx renders from. The live click-through it drives
  *    (open → nav click switches content → back restores the sidebar) was
  *    verified via CDP against the built bundle; see the task report.
+ *    A page destination (board/scheduled/PR/capability) hides the sidebar
+ *    keeper only — its own surface keeps rendering in the chat column.
  * 2. The nav column (SettingsNav) is controlled and slot-agnostic: clicking
  *    a row reports the row's section id through onSelect, and the highlight
  *    follows the activeSection prop — the click→switch chain the settings
@@ -71,6 +73,33 @@ describe("computeSettingsShellState", () => {
 			sideKeeperHidden: false,
 			chatColKeeperHidden: false,
 		});
+	});
+
+	test("page destination folds the session panel but keeps the chat column alive", () => {
+		// 看板 / 任务中心 / PR / 能力中心 own the surface: the session list
+		// would describe a view that is not on screen. The sidebar stays
+		// MOUNTED (display:none) so returning to 首页 restores expanded
+		// groups without a re-mount.
+		const s = computeSettingsShellState({
+			settingsOpen: false,
+			leavingSettings: false,
+			pageDestinationActive: true,
+		});
+		expect(s.sideKeeperHidden).toBe(true);
+		expect(s.chatColKeeperHidden).toBe(false);
+		expect(s.settingsActive).toBe(false);
+		expect(s.navSlotMounted).toBe(false);
+	});
+
+	test("settings still hides both keepers while a page destination is flagged", () => {
+		const s = computeSettingsShellState({
+			settingsOpen: true,
+			leavingSettings: false,
+			pageDestinationActive: true,
+		});
+		expect(s.sideKeeperHidden).toBe(true);
+		expect(s.chatColKeeperHidden).toBe(true);
+		expect(s.navSlotMounted).toBe(true);
 	});
 });
 

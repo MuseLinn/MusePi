@@ -157,6 +157,12 @@ export const general = {
 	"general.mentionFile": "Mention file (@)",
 	"general.insertSession": "Insert session (#)",
 	"general.addImages": "Add images",
+	"general.addAttachments": "Upload file",
+	"general.attachments": "Attachments",
+	"general.attachmentUploading": "Uploading…",
+	"general.attachmentUploadFailed": "Upload failed",
+	"general.attachmentUploadFailedNamed": "{name} failed to upload",
+	"general.attachmentUploadPending": "Wait for attachments to finish uploading",
 	"general.planModeHint": "Let the agent lay out a plan first, then modify files",
 	"general.planMode": "Plan mode",
 	"general.insertUltrathink": "Insert ultrathink",
@@ -778,7 +784,7 @@ export const general = {
 	"general.skillMarketInstallRetry": "Retry",
 	"general.skillMarketInstallFailed": "Install failed: network unreachable ({msg}). Check your connection and retry.",
 	"general.skillMarketInstallFailedScriptDeclined": "Install failed: install scripts declined.",
-	// Card-click preview dialog (look before you install).
+	// Card-click preview drawer (look before you install; same shell as the installed-skill drawer).
 	"general.skillMarketInstall": "Install",
 	"general.skillMarketHomepage": "Source page",
 	"general.skillMarketPreviewLoading": "Loading preview…",
@@ -786,6 +792,9 @@ export const general = {
 	"general.skillMarketPreviewVersion": "Latest version",
 	"general.skillMarketPreviewFiles": "Files",
 	"general.skillMarketPreviewSecurity": "Security audit",
+	"general.skillMarketPreviewAuthor": "Author",
+	"general.skillMarketPreviewStars": "Stars",
+	"general.skillMarketPreviewDownloads": "Downloads",
 	"general.skillMarketSearchSkills": "skills.sh is a search source — type a keyword to query its catalog",
 	// 能力中心 → 技能 tab 的子分段（发现 / 我安装的 N）。
 	"general.discover": "Discover",
@@ -1532,4 +1541,6 @@ export const general = {
 	"general.sessionInfoMore": "Show more ({count})",
 	"general.sessionInfoUntitled": "Untitled session",
 	"general.sessionInfoPlugins": "Plugins",
+	"general.appRail": "App navigation",
+	"general.home": "Home",
 } as const satisfies Record<GeneralKey, string>;

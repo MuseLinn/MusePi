@@ -557,6 +557,8 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - 协议零改动——chips 只是 draft 填充，发送仍走 prompt 帧
 - 协议约束检查：guest 无 set-model/附件帧 → AttachMenu / ThinkingSelector / SlashRow(daemon commands.list) 不吸收，避免半成品
 
+> **更新（2026-11-08）**：guest 已具备附件通道——`attachment.put`（≤8 MiB 单帧）与 `attachment.begin/chunk/commit`（3 MiB 分片）都在既有 RPC 表里，移动端用 `packages/client-core/src/lib/attachment-upload.ts` 上传后把 `[Attachment] blob://<hash> (name)` prepend 到提示词。移动端**不能**用 `attachment.putFile`：路径在手机上，daemon 在另一台机器上。上面「不吸收 AttachMenu」的结论只对当时的协议成立，现在附件面板可用，`set-model` 仍未开放。
+
 **E2E 验证**：连接 → 选空会话（Board cleanup）→ 9 chips（8+more）→ 点击 "探索代码库" 填入 "带我了解这个代码库的结构和关键模块" + 聚焦 + 发送可用 → 展开 16 chips 全部渲染。
 
 ### 11.9 空态问候 + 真实 daemon 验证 + Harmony 壳落地（2026-08-25）

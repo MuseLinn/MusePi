@@ -121,7 +121,7 @@ describe("Composer draft sending", () => {
 
 		await act(async () => textarea?.focus());
 		expect(inner?.dataset.expanded).toBe("true");
-		await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Add images"]')?.click());
+		await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Attachments"]')?.click());
 		expect(document.querySelector('[role="dialog"]')).not.toBeNull();
 		expect(inner?.dataset.expanded).toBe("true");
 		expect(document.querySelector<HTMLTextAreaElement>(".sh-composer-input")).toBe(textarea);

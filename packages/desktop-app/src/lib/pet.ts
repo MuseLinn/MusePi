@@ -8,8 +8,11 @@
  *   - musepi-gui-pet-id     pet id (builtin or imported petdex id)
  *   - musepi-gui-petdex     JSON list of imported petdex packages
  *
- * A pet is either a builtin SVG companion (drawn in PetSprite.tsx) or an
- * imported Petdex package (pet.json + spritesheet, 8×9 frame grid).
+ * A pet is drawn in one of two modes: `vector` (the builtin SVG companion
+ * drawn in PetSprite.tsx, or a single-frame SVG package) or `sprite` (a
+ * Petdex package — 8×9 frame grid or named-state atlas). The mode is derived
+ * from the resolved descriptor, never stored as its own pref: the selected
+ * id already implies it.
  */
 
 import type { OrbState } from "../vendor/thinking-orbs";
@@ -147,6 +150,10 @@ export type { PetInteraction } from "./pet-face";
 export { INTERACTION_HOLD_MS, PET_INTERACTIONS, randomPetInteraction } from "./pet-face";
 export type PetDisplayMode = "input" | "desktop";
 
+/** How the companion is drawn. Derived from the selection's shape — see
+ *  {@link modeForPackage} and {@link petForId}; never a stored pref. */
+export type PetMode = "vector" | "sprite";
+
 /**
  * Authoritative session card pushed from the main window — one entry per
  * session that deserves a bubble: working sessions (live status line) and
@@ -238,8 +245,9 @@ export interface PetActivity {
 	 *  petdex registry lives in the main window's localStorage, which the
 	 *  pet window cannot read under file://). Pushed on change and whenever
 	 *  the pet window re-requests state, so imported theme packages render
-	 *  in the floating pet too. */
-	pet?: { kind: "builtin"; id: string } | { kind: "petdex"; pkg: PetdexPackage };
+	 *  in the floating pet too. Carries the derived `mode`, so the pet window
+	 *  does not re-resolve the package shape. */
+	pet?: PetDescriptor;
 }
 
 export const PET_MOODS: readonly PetMood[] = ["rest", "working", "waiting", "analyzing", "error"];
@@ -249,9 +257,8 @@ export const PET_DISPLAY_MODES: readonly PetDisplayMode[] = ["input", "desktop"]
 export const BUILTIN_PET_ID = "musepi";
 
 /** Builtin vector note-bot id (PetSprite's hand-drawn SVG mascot). The
- *  "musepi" id belongs to the AI-generated spritesheet preset below, so
- *  the vector bot carries its own id — without it petForId would always
- *  resolve "musepi" to the sheet and the SVG branch would be dead code. */
+ *  "musepi" id belongs to the AI-generated spritesheet preset below, so the
+ *  vector companion carries its own id to stay selectable. */
 export const BUILTIN_SVG_ID = "musepi-note-bot";
 
 /** Builtin spritesheet presets — the MusePi sheet (AI-designed smooth art,
@@ -389,11 +396,11 @@ export const BUILTIN_PETDEX: readonly {
 
 /** Petdex spritesheet frame grid (petdex.dev / Codux pet atlas convention). */
 export const PETDEX_COLUMNS = 8;
-export const PETDEX_ROWS = 9;
+const PETDEX_ROWS = 9;
 
 /** Spritesheet row per mood — same mapping BitFun/OpenPets use
  *  (rest=0, hover=1, dragging=2, error=5, waiting=6, working=7, analyzing=8). */
-export const PETDEX_MOOD_ROW: Record<PetdexMood, number> = {
+const PETDEX_MOOD_ROW: Record<PetdexMood, number> = {
 	rest: 0,
 	hover: 1,
 	dragging: 2,
@@ -422,10 +429,29 @@ export const PETDEX_MOOD_ANIM: Record<PetdexMood, { cycleMs: number; transform: 
  *  renders an EMPTY frame once per loop — the desktop pet visibly blanks
  *  every cycle (the "flicker"); the frame cycle must stop at the last
  *  valid column. Rows 3/4 map to no mood (kept 8 as a safe default). */
-export const PETDEX_ROW_FRAMES_DEFAULT: readonly number[] = [6, 8, 8, 8, 8, 8, 6, 6, 6];
+const PETDEX_ROW_FRAMES_DEFAULT: readonly number[] = [6, 8, 8, 8, 8, 8, 6, 6, 6];
 
-/** Imported Petdex package (from a petdex.dev zip) — or a user-dropped
- *  single SVG (format "svg", 2026-09-20). */
+export interface PetAtlasGeometry {
+	frameWidth: number;
+	frameHeight: number;
+	rows: number;
+	columns: number;
+}
+
+export interface PetAtlasState {
+	row: number;
+	frames: number;
+	fps: number;
+	loop?: boolean;
+}
+
+export interface PetBubbleTheme {
+	background: string;
+	foreground: string;
+	border: string;
+}
+
+/** Imported Petdex, explicit-state atlas, or a user-dropped single SVG. */
 export interface PetdexPackage {
 	id: string;
 	displayName: string;
@@ -434,15 +460,14 @@ export interface PetdexPackage {
 	/** Natural spritesheet pixel size, resolved at import time. */
 	width: number;
 	height: number;
-	/** `sheet` (default) is the 8×9 petdex frame grid; `svg` is a single
-	 *  user-drawn vector — width/height are the WHOLE image, there is no
-	 *  frame grid, and the mood system degrades to the transform row
-	 *  (bob/lift/wiggle) over one static frame. Absent for old packages. */
-	format?: "sheet" | "svg";
-	/** Valid (non-blank) frames per row, scanned at import — the frame
-	 *  cycle must not step into transparent padding columns. Absent for
-	 *  packages stored before the scan existed → PETDEX_ROW_FRAMES_DEFAULT. */
+	/** `sheet` (default) is the 8×9 Petdex grid. `atlas` uses the manifest's
+	 *  geometry and named states. `svg` is one static vector frame. */
+	format?: "sheet" | "atlas" | "svg";
+	/** Valid (non-blank) frames per legacy Petdex row, scanned at import. */
 	rows?: readonly number[];
+	atlas?: PetAtlasGeometry;
+	states?: Readonly<Record<string, PetAtlasState>>;
+	theme?: { bubble?: Partial<PetBubbleTheme> };
 	/** Rest-row (row 0) opaque content height, scanned at import — the
 	 *  renderer normalizes every pet to PET_CONTENT_TARGET_H so imported
 	 *  sheets with larger frames (192×208 vs builtin 96×104) render the
@@ -453,6 +478,135 @@ export interface PetdexPackage {
 	/** Smooth (bilinear) rendering instead of pixel-art pixelated. */
 	smooth?: boolean;
 	importedAt: number;
+}
+
+/** A resolved companion: its drawing mode plus the payload that mode draws.
+ *  `vector` is the builtin sphere or a single-frame SVG package; `sprite` is
+ *  always a frame grid. Callers dispatch on `mode` — `format` stays package
+ *  metadata and is not an alternative dispatch key. */
+export type PetDescriptor =
+	| { mode: "vector"; kind: "builtin"; id: string }
+	| { mode: "vector"; kind: "petdex"; pkg: PetdexPackage }
+	| { mode: "sprite"; kind: "petdex"; pkg: PetdexPackage };
+
+/** The mode a package's shape implies. Single-frame SVG packages are vector
+ *  art; every frame format (`sheet` default and `atlas`) plays rows. */
+export function modeForPackage(pkg: Pick<PetdexPackage, "format">): PetMode {
+	return pkg.format === "svg" ? "vector" : "sprite";
+}
+
+export interface PetAnimationDescriptor {
+	frameW: number;
+	frameH: number;
+	columns: number;
+	rowCount: number;
+	row: number;
+	valid: number;
+	cycleMs: number;
+	loop: boolean;
+}
+
+export type PetAnimationSource = Pick<PetdexPackage, "width" | "height" | "format" | "rows" | "atlas" | "states">;
+
+const ATLAS_STANDARD_STATES = new Set([
+	"idle",
+	"running_left",
+	"running_right",
+	"working",
+	"waiting",
+	"failed",
+	"idle_random_1",
+	"idle_random_2",
+]);
+
+/** Convert either sheet contract into the renderer's single animation shape.
+ *  An explicit atlas never falls through to the legacy nine-row scanner. */
+export function resolvePetAnimation(
+	source: PetAnimationSource,
+	mood: PetdexMood,
+	action?: string | null,
+	direction: "left" | "right" = "left",
+): PetAnimationDescriptor {
+	if (source.format === "svg") {
+		return {
+			frameW: source.width,
+			frameH: source.height,
+			columns: 1,
+			rowCount: 1,
+			row: 0,
+			valid: 1,
+			cycleMs: PETDEX_MOOD_ANIM[mood].cycleMs,
+			loop: true,
+		};
+	}
+	if (source.format === "atlas" && source.atlas && source.states) {
+		const { atlas, states } = source;
+		const candidates = action
+			? [action, "idle"]
+			: mood === "dragging"
+				? [direction === "right" ? "running_right" : "running_left", "running_left", "idle"]
+				: mood === "working" || mood === "analyzing"
+					? ["working", "idle"]
+					: mood === "waiting"
+						? ["waiting", "idle"]
+						: mood === "error"
+							? ["failed", "idle"]
+							: ["idle"];
+		const name = candidates.find(candidate => states[candidate]) ?? "idle";
+		const state = states[name] ?? states.idle!;
+		return {
+			frameW: atlas.frameWidth,
+			frameH: atlas.frameHeight,
+			columns: atlas.columns,
+			rowCount: atlas.rows,
+			row: state.row,
+			valid: state.frames,
+			cycleMs: (state.frames / state.fps) * 1000,
+			loop: state.loop ?? true,
+		};
+	}
+	const row = PETDEX_MOOD_ROW[mood];
+	return {
+		frameW: source.width / PETDEX_COLUMNS,
+		frameH: source.height / PETDEX_ROWS,
+		columns: PETDEX_COLUMNS,
+		rowCount: PETDEX_ROWS,
+		row,
+		valid: Math.min(PETDEX_COLUMNS, Math.max(1, (source.rows ?? PETDEX_ROW_FRAMES_DEFAULT)[row] ?? PETDEX_COLUMNS)),
+		cycleMs: PETDEX_MOOD_ANIM[mood].cycleMs,
+		loop: true,
+	};
+}
+
+export function petAmbientActions(pkg: PetdexPackage): string[] {
+	if (pkg.format !== "atlas" || !pkg.states) return [];
+	return ["idle_random_1", "idle_random_2"].filter(name => pkg.states![name]);
+}
+
+export function petCustomActions(pkg: PetdexPackage): string[] {
+	if (pkg.format !== "atlas" || !pkg.states) return [];
+	return Object.keys(pkg.states).filter(name => !ATLAS_STANDARD_STATES.has(name));
+}
+
+function hexLuminance(hex: string): number {
+	const channels = [1, 3, 5].map(offset => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255);
+	const linear = channels.map(value => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4));
+	return 0.2126 * linear[0]! + 0.7152 * linear[1]! + 0.0722 * linear[2]!;
+}
+
+/** Package colors are optional. Invalid or unreadable colors leave the
+ *  application's glass bubble and semantic status colors untouched. */
+export function petBubbleTheme(pkg: Pick<PetdexPackage, "theme">): PetBubbleTheme | null {
+	const bubble = pkg.theme?.bubble;
+	if (!bubble) return null;
+	const { background, foreground, border } = bubble;
+	if (![background, foreground, border].every(value => typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value))) {
+		return null;
+	}
+	const bg = hexLuminance(background!);
+	const fg = hexLuminance(foreground!);
+	const contrast = (Math.max(bg, fg) + 0.05) / (Math.min(bg, fg) + 0.05);
+	return contrast >= 4.5 ? { background: background!, foreground: foreground!, border: border! } : null;
 }
 
 export function petEnabled(): boolean {
@@ -476,6 +630,21 @@ export function petMode(): PetDisplayMode {
  *  stays selectable; an explicit stored pick always wins. */
 export const DEFAULT_PET_ID = BUILTIN_SVG_ID;
 
+/** Sprite-mode default when that mode has no remembered pick. */
+export const DEFAULT_SPRITE_PET_ID = BUILTIN_PETDEX[0]!.id;
+
+function defaultPetIdForMode(mode: PetMode): string {
+	return mode === "vector" ? BUILTIN_SVG_ID : DEFAULT_SPRITE_PET_ID;
+}
+
+/** Last pick per mode. `musepi-gui-pet-id` stays the single active selection;
+ *  these keys only keep the other side alive across a mode switch. A mode is
+ *  never stored on its own — the id implies it. */
+const PET_ID_BY_MODE_KEY: Record<PetMode, string> = {
+	vector: "musepi-gui-pet-vector-id",
+	sprite: "musepi-gui-pet-sprite-id",
+};
+
 export function petId(): string {
 	try {
 		return localStorage.getItem("musepi-gui-pet-id") ?? DEFAULT_PET_ID;
@@ -487,8 +656,53 @@ export function petId(): string {
 export function setPetId(id: string): void {
 	try {
 		localStorage.setItem("musepi-gui-pet-id", id);
+		localStorage.setItem(PET_ID_BY_MODE_KEY[petForId(id).mode], id);
 	} catch {
 		// storage unavailable
+	}
+}
+
+/** Mode an id resolves to, or null when the id no longer names anything (a
+ *  stale pick left behind by a deleted package). */
+function modeOfKnownId(id: string): PetMode | null {
+	const pet = petForId(id);
+	const known = pet.kind === "builtin" ? pet.id === id : pet.pkg.id === id;
+	return known ? pet.mode : null;
+}
+
+/** Selection a mode would activate: its remembered pick, else the current
+ *  pick when it already belongs there, else the mode's default. Stored ids
+ *  from before modes existed resolve through the same {@link petForId}
+ *  derivation, so old data needs no migration write. */
+export function petIdForMode(mode: PetMode): string {
+	const remembered = readStoredPetId(PET_ID_BY_MODE_KEY[mode]);
+	if (remembered && modeOfKnownId(remembered) === mode) return remembered;
+	const current = petId();
+	if (modeOfKnownId(current) === mode) return current;
+	return defaultPetIdForMode(mode);
+}
+
+/** Switch drawing mode, restoring that mode's last selection. The mode being
+ *  left keeps its pick for the next switch back. */
+export function setPetMode(mode: PetMode): void {
+	const current = petId();
+	const currentMode = modeOfKnownId(current);
+	if (currentMode === mode) return;
+	if (currentMode) {
+		try {
+			localStorage.setItem(PET_ID_BY_MODE_KEY[currentMode], current);
+		} catch {
+			// storage unavailable
+		}
+	}
+	setPetId(petIdForMode(mode));
+}
+
+function readStoredPetId(key: string): string | null {
+	try {
+		return localStorage.getItem(key);
+	} catch {
+		return null;
 	}
 }
 
@@ -519,16 +733,17 @@ export function savePetdex(pets: PetdexPackage[]): void {
 	}
 }
 
-/** Resolve any pet id to a renderable descriptor (preset grid previews,
- *  unknown ids → the builtin sphere fallback). */
-export function petForId(id: string): { kind: "builtin"; id: string } | { kind: "petdex"; pkg: PetdexPackage } {
+/** Resolve any pet id to a renderable descriptor with its drawing mode
+ *  (preset grid previews, unknown ids → the builtin sphere fallback). */
+export function petForId(id: string): PetDescriptor {
 	// The vector sphere is rendered by PetSprite directly (no sheet).
-	if (id === BUILTIN_SVG_ID) return { kind: "builtin", id: BUILTIN_SVG_ID };
+	if (id === BUILTIN_SVG_ID) return { mode: "vector", kind: "builtin", id: BUILTIN_SVG_ID };
 	const pkg = loadPetdex().find(p => p.id === id);
-	if (pkg) return { kind: "petdex", pkg };
+	if (pkg) return { mode: modeForPackage(pkg), kind: "petdex", pkg };
 	const builtin = BUILTIN_PETDEX.find(p => p.id === id);
 	if (builtin) {
 		return {
+			mode: "sprite",
 			kind: "petdex",
 			pkg: {
 				id: builtin.id,
@@ -543,12 +758,12 @@ export function petForId(id: string): { kind: "builtin"; id: string } | { kind: 
 			},
 		};
 	}
-	return { kind: "builtin", id: DEFAULT_PET_ID };
+	return { mode: "vector", kind: "builtin", id: DEFAULT_PET_ID };
 }
 
 /** Resolve the active pet: imported petdex, builtin preset, or the builtin
  *  sphere fallback. */
-export function activePet(): { kind: "builtin"; id: string } | { kind: "petdex"; pkg: PetdexPackage } {
+export function activePet(): PetDescriptor {
 	return petForId(petId());
 }
 
@@ -692,7 +907,12 @@ export function migratePetdexContent(): void {
 				im.src = p.spritesheet;
 				await promise;
 				if (im.naturalWidth && im.naturalHeight) {
-					const { contentH } = measurePetdex(im);
+					const contentH =
+						p.format === "svg"
+							? im.naturalHeight
+							: p.format === "atlas" && p.atlas
+								? measurePetAtlas(im, p.atlas).contentH
+								: measurePetdex(im).contentH;
 					if (contentH > 0) {
 						p.contentH = contentH;
 						changed = true;
@@ -709,17 +929,19 @@ export function migratePetdexContent(): void {
 	})();
 }
 
-/** Scan a decoded spritesheet once for both the per-row valid frame counts
- *  (cells with >1% opaque pixels — sheets pad unused columns with
- *  transparent cells and the cycle must stop before them) and the rest-row
- *  (row 0) opaque content height used for size normalization. Used at
- *  import time — builtins carry known values. */
-export function measurePetdex(img: HTMLImageElement): { rows: number[]; contentH: number } {
+/** Scan a decoded grid for legacy valid-frame counts and the rest-row
+ *  content height shared by both import formats. */
+function measureGrid(
+	img: HTMLImageElement,
+	columns: number,
+	rowCount: number,
+	fallbackRows: readonly number[],
+): { rows: number[]; contentH: number } {
 	const width = img.naturalWidth;
 	const height = img.naturalHeight;
-	const fw = Math.floor(width / PETDEX_COLUMNS);
-	const fh = Math.floor(height / PETDEX_ROWS);
-	const fallback = { rows: [...PETDEX_ROW_FRAMES_DEFAULT], contentH: fh };
+	const fw = Math.floor(width / columns);
+	const fh = Math.floor(height / rowCount);
+	const fallback = { rows: [...fallbackRows], contentH: fh };
 	if (!fw || !fh) return fallback;
 	const canvas = document.createElement("canvas");
 	canvas.width = width;
@@ -734,19 +956,13 @@ export function measurePetdex(img: HTMLImageElement): { rows: number[]; contentH
 		return fallback;
 	}
 	const rows: number[] = [];
-	// Opaque-pixel threshold per cell. BitFun's own frames are >1% of the
-	// cell, but imported sheets can carry thin/partial frames (a staff, a
-	// sword, a trailing scarf) that still legitimately animate — 1% would
-	// drop them and truncate the cycle. 0.25% keeps real frames while
-	// ignoring near-empty noise cells.
+	// Thin partial frames count as content; near-empty noise cells do not.
 	const threshold = Math.max(1, Math.floor(fw * fh * 0.0025));
-	// Rest-row content bounds: row 0 across its valid columns (the row is
-	//  where the pet rests — the size the eye judges first).
 	let restTop = fh;
 	let restBottom = 0;
-	for (let r = 0; r < PETDEX_ROWS; r++) {
+	for (let r = 0; r < rowCount; r++) {
 		let valid = 0;
-		for (let c = 0; c < PETDEX_COLUMNS; c++) {
+		for (let c = 0; c < columns; c++) {
 			let opaque = 0;
 			let top = fh;
 			let bottom = 0;
@@ -771,4 +987,16 @@ export function measurePetdex(img: HTMLImageElement): { rows: number[]; contentH
 	}
 	const contentH = restBottom > restTop ? restBottom - restTop + 1 : fh;
 	return { rows, contentH };
+}
+
+/** Legacy Petdex packages derive frame counts from alpha. */
+export function measurePetdex(img: HTMLImageElement): { rows: number[]; contentH: number } {
+	return measureGrid(img, PETDEX_COLUMNS, PETDEX_ROWS, PETDEX_ROW_FRAMES_DEFAULT);
+}
+
+/** Atlas packages use declared frames; only visual-size normalization needs
+ *  an alpha measurement. */
+export function measurePetAtlas(img: HTMLImageElement, atlas: PetAtlasGeometry): { contentH: number } {
+	const { contentH } = measureGrid(img, atlas.columns, atlas.rows, []);
+	return { contentH };
 }

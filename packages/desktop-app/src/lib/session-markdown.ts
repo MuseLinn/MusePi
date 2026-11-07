@@ -1,3 +1,4 @@
+import { type IrcPresentation, ircPresentation } from "@musepi/client-core/src/lib/irc";
 import { advisorNoteText, type SessionEntry } from "@musepi/pi-wire";
 
 /**
@@ -23,6 +24,8 @@ export interface MarkdownLabels {
 	user: string;
 	assistant: string;
 	advisor: string;
+	/** The reader's own side of an IRC route ("我"). */
+	ircMe: string;
 }
 
 function textOf(content: unknown): string {
@@ -32,8 +35,16 @@ function textOf(content: unknown): string {
 }
 
 interface ConversationBlock {
-	role: "user" | "assistant" | "advisor";
+	role: "user" | "assistant" | "advisor" | "irc";
 	text: string;
+	/** IRC rows carry their route; the heading formats it with the labels. */
+	irc?: IrcPresentation;
+}
+
+function ircRoute(irc: IrcPresentation, me: string): string {
+	if (irc.kind === "incoming") return `${irc.from ?? "?"} → ${me}`;
+	if (irc.kind === "autoreply") return `${me} → ${irc.to ?? "?"} (auto)`;
+	return `${irc.from ?? "?"} → ${irc.to ?? "?"}`;
 }
 
 /** Reader-facing rows of a session, in order.
@@ -46,6 +57,12 @@ function conversationBlocks(entries: readonly SessionEntry[]): ConversationBlock
 	for (const e of entries) {
 		if (e.type === "custom_message") {
 			if (!e.display) continue;
+			if (e.customType.startsWith("irc:")) {
+				const irc = ircPresentation(e.customType, e.content, e.details);
+				if (!irc.body) continue;
+				blocks.push({ role: "irc", text: irc.body, irc });
+				continue;
+			}
 			const note = advisorNoteText(e.details).trim();
 			if (!note) continue;
 			blocks.push({ role: "advisor", text: note });
@@ -65,6 +82,10 @@ function conversationBlocks(entries: readonly SessionEntry[]): ConversationBlock
 export function buildSessionMarkdown(title: string, entries: readonly SessionEntry[], labels: MarkdownLabels): string {
 	const lines: string[] = [`# ${title}`, ""];
 	for (const block of conversationBlocks(entries)) {
+		if (block.role === "irc") {
+			if (block.irc) lines.push(`## IRC · ${ircRoute(block.irc, labels.ircMe)}`, "", block.text, "");
+			continue;
+		}
 		lines.push(`## ${labels[block.role]}`, "", block.text, "");
 	}
 	return lines.join("\n");

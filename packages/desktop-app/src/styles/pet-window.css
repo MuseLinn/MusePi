@@ -301,12 +301,15 @@
 	max-width: 320px;
 	box-sizing: border-box;
 	padding: 10px 12px;
-	border: 1px solid var(--glass-border);
+	border: 1px solid var(--pet-package-bubble-border, var(--glass-border));
 	border-radius: var(--radius-xl);
 	/* Transparent desktop windows cannot reliably sample the OS wallpaper.
 	 * The base stays near-opaque so message text reads over whatever is behind
-	 * the pet; the sheen keeps the glass edge without washing the content out. */
-	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 95%, var(--pet-surface));
+	 * the pet; the sheen keeps the glass edge without washing the content out.
+	 * A package theme replaces only the base and border; the sheen, geometry,
+	 * semantic status colors and default glass recipe remain application-owned. */
+	background: var(--glass-sheen),
+		var(--pet-package-bubble-bg, color-mix(in oklab, var(--glass-bg-strong) 95%, var(--pet-surface)));
 	box-shadow: var(--pet-bubble-shadow);
 	pointer-events: auto;
 	transition:
@@ -318,7 +321,7 @@
 .pet-bubble:hover,
 .pet-bubble:focus-within {
 	background: var(--glass-sheen),
-		color-mix(in oklab, var(--glass-bg-strong) 97%, var(--color-text) 3%);
+		color-mix(in oklab, var(--pet-package-bubble-bg, var(--glass-bg-strong)) 97%, var(--color-text) 3%);
 }
 
 /* Collapsed stack card — same fixed width as the expanded list (the

@@ -11,7 +11,7 @@ import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import type { ReactNode } from "react";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { collectWidgetPayloads, latestWidgetFromEntries } from "../src/components/transcript/widget-standalone";
+import { latestWidgetFromEntries, widgetPayloadFromResult } from "../src/components/transcript/widget-standalone";
 import { widgetDataEq, widgetRenderer } from "../src/tool-render/tools/widget";
 import type { ToolRenderProps } from "../src/tool-render/types";
 import { WidgetErrorBoundary } from "../src/widgets/error-boundary";
@@ -189,40 +189,19 @@ describe("widget standalone payload extraction", () => {
 		return { id, content: [], details, isError };
 	}
 
-	it("collects successful widget payloads from an assistant message", () => {
-		const content = [call("a", "widget"), call("b", "bash")];
-		const results = new Map([
-			[
-				result("a", { type: "calc", data: { amount: 2000 }, title: "个税" }).id,
-				result("a", { type: "calc", data: { amount: 2000 }, title: "个税" }),
-			],
-			[result("b", { type: "bash", data: {} }).id, result("b", { type: "bash", data: {} })],
-		] as never);
-		const payloads = collectWidgetPayloads(content as never, results as never);
-		expect(payloads).toHaveLength(1);
-		expect(payloads[0]!.type).toBe("calc");
-		expect(payloads[0]!.data).toEqual({ amount: 2000 });
-		expect(payloads[0]!.title).toBe("个税");
+	it("builds the card payload from one successful widget result", () => {
+		const payload = widgetPayloadFromResult(
+			result("a", { type: "calc", data: { amount: 2000 }, title: "个税" }) as never,
+		);
+		expect(payload?.type).toBe("calc");
+		expect(payload?.data).toEqual({ amount: 2000 });
+		expect(payload?.title).toBe("个税");
 	});
 
-	it("dedupes re-renders of the same widget (last wins)", () => {
-		const content = [call("a", "widget"), call("b", "widget")];
-		const first = { type: "html", data: { html: "<div>x</div>" } };
-		const second = { type: "html", data: { html: "<div>x</div>" } };
-		const results = new Map([
-			[result("a", first).id, result("a", first)],
-			[result("b", second).id, result("b", second)],
-		] as never);
-		const payloads = collectWidgetPayloads(content as never, results as never);
-		expect(payloads).toHaveLength(1);
-	});
-
-	it("skips failed widget calls", () => {
-		const content = [call("a", "widget")];
-		const results = new Map([
-			[result("a", { type: "html", data: {} }, true).id, result("a", { type: "html", data: {} }, true)],
-		] as never);
-		expect(collectWidgetPayloads(content as never, results as never)).toHaveLength(0);
+	it("has no payload for a failed or payload-less widget call", () => {
+		expect(widgetPayloadFromResult(result("a", { type: "html", data: {} }, true) as never)).toBeNull();
+		expect(widgetPayloadFromResult(result("a", {}) as never)).toBeNull();
+		expect(widgetPayloadFromResult(undefined)).toBeNull();
 	});
 
 	it("finds the latest widget across session entries (sidebar tab)", () => {

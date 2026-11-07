@@ -9,6 +9,15 @@ import { generateSessionTitle } from "../utils/title-generator";
 
 const TASK_LABEL_SYSTEM_PROMPT = prompt.render(taskLabelSystemPrompt);
 
+/** Session title / roster name for a spawned subagent: the caller's spawn
+ *  label (`name` on a `tasks[]` item), else the agent id. Never the shared
+ *  agent *type* name — every unnamed spawn of the same agent would collide on
+ *  "task" and the session tree would show one name for all of them. */
+export function subagentSessionTitle(label: string | undefined, id: string): string {
+	const trimmed = label?.trim();
+	return trimmed !== undefined && trimmed.length > 0 ? trimmed : id;
+}
+
 /** Compresses a delegated assignment into a one-sentence UI label via the tiny title model — fired by the executor spawn path because the task wire schema no longer carries a `description`; null on empty input or failure. */
 export async function generateTaskLabel(
 	assignment: string,

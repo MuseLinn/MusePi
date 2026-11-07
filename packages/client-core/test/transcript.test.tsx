@@ -403,6 +403,198 @@ describe("TTSR / IRC custom_message rendering", () => {
 		expect(html).not.toContain("<irc>");
 		expect(html).not.toContain("</irc>");
 	});
+
+	function ircEntry(overrides: {
+		id: string;
+		customType: string;
+		content: string;
+		details: Record<string, unknown> | null;
+	}): SessionEntry {
+		return {
+			type: "custom_message",
+			parentId: null,
+			timestamp: "2026-08-09T00:00:05Z",
+			display: true,
+			...overrides,
+		} as unknown as SessionEntry;
+	}
+
+	it("composes a relay route from details instead of echoing the content header", () => {
+		const entry = ircEntry({
+			id: "irc-relay-1",
+			customType: "irc:relay",
+			content: "[IRC `Alice` → `Bob`]\n\n第 1 轮：带上水电解制氧机。",
+			details: { from: "Alice", to: "Bob", body: "第 1 轮：带上水电解制氧机。" },
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-irc--relay");
+		expect(html).not.toContain("[IRC");
+		expect(html).toContain(">Alice<");
+		expect(html).toContain(">Bob<");
+		expect(html.split("第 1 轮：带上水电解制氧机。")).toHaveLength(2);
+	});
+
+	it("names an autoreply's sender as this session, never the customType", () => {
+		const entry = ircEntry({
+			id: "irc-auto-1",
+			customType: "irc:autoreply",
+			content: "[IRC you → `Alice` (auto)]\n\n收到，稍后回复。",
+			details: { to: "Alice", body: "收到，稍后回复。", replyTo: "m9" },
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-irc--autoreply");
+		expect(html).not.toContain('tr-irc-from">irc<');
+		expect(html).toContain(">Alice<");
+		expect(html).toContain("收到，稍后回复。");
+	});
+
+	it("renders consecutive messages from one pair with a single route header", () => {
+		const first = ircEntry({
+			id: "irc-run-1",
+			customType: "irc:relay",
+			content: "[IRC `Alice` → `Bob`]\n\n第一问",
+			details: { from: "Alice", to: "Bob", body: "第一问" },
+		});
+		const second = ircEntry({
+			id: "irc-run-2",
+			customType: "irc:relay",
+			content: "[IRC `Bob` → `Alice`]\n\n第一答",
+			details: { from: "Bob", to: "Alice", body: "第一答" },
+		});
+		const samePair = renderTranscript({ entries: [first, second], working: false });
+		expect((samePair.match(/tr-irc-head/g) ?? []).length).toBe(1);
+		expect(samePair).toContain("第一问");
+		expect(samePair).toContain("第一答");
+	});
+
+	it("keeps the route header when the next message changes pair", () => {
+		const ab = ircEntry({
+			id: "irc-pair-1",
+			customType: "irc:relay",
+			content: "[IRC `Alice` → `Bob`]\n\n甲",
+			details: { from: "Alice", to: "Bob", body: "甲" },
+		});
+		const ac = ircEntry({
+			id: "irc-pair-2",
+			customType: "irc:relay",
+			content: "[IRC `Alice` → `Carol`]\n\n乙",
+			details: { from: "Alice", to: "Carol", body: "乙" },
+		});
+		const html = renderTranscript({ entries: [ab, ac], working: false });
+		expect((html.match(/tr-irc-head/g) ?? []).length).toBe(2);
+	});
+
+	it("clamps a long body and offers an expansion control", () => {
+		const body = Array.from({ length: 8 }, (_, i) => `第 ${i + 1} 行内容，用来证实正文被截断。`).join("\n");
+		const entry = ircEntry({
+			id: "irc-long-1",
+			customType: "irc:relay",
+			content: `[IRC \`Alice\` → \`Bob\`]\n\n${body}`,
+			details: { from: "Alice", to: "Bob", body },
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-irc-body--clamped");
+		expect(html).toContain("tr-irc-more");
+	});
+
+	it("does not offer expansion for a body that fits", () => {
+		const entry = ircEntry({
+			id: "irc-short-1",
+			customType: "irc:relay",
+			content: "[IRC `Alice` → `Bob`]\n\n短句",
+			details: { from: "Alice", to: "Bob", body: "短句" },
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).not.toContain("tr-irc-body--clamped");
+		expect(html).not.toContain("tr-irc-more");
+	});
+});
+
+describe("async-job-result settlement card", () => {
+	function jobEntry(overrides: {
+		content: string;
+		details: Record<string, unknown>;
+		display?: boolean;
+	}): SessionEntry {
+		return {
+			type: "custom_message",
+			id: "job-1",
+			parentId: null,
+			timestamp: "2026-11-07T17:13:33Z",
+			customType: "async-job-result",
+			display: overrides.display ?? true,
+			content: overrides.content,
+			details: overrides.details,
+			attribution: "agent",
+		} as unknown as SessionEntry;
+	}
+
+	const envelope = (output: string, attrs = 'id="Alice" agent="task" status="completed" duration="2m57s"'): string =>
+		`Background task job "Alice" completed:\n\n<task-result ${attrs}>\n<meta lines="4" size="974B"/>\n<output>\n${output}\n</output>\n</task-result>\n\nAlice is now idle — message it via \`hub\` to follow up; transcript at history://Alice`;
+
+	it("renders a settled background job as a card, never the task-result envelope", () => {
+		const entry = jobEntry({
+			content: envelope('{\n  "reportSentToMain": true\n}'),
+			details: { jobId: "Alice", status: "completed", label: "Alice" },
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-async-job");
+		expect(html).not.toContain("tr-custom");
+		expect(html).not.toContain("<task-result");
+		expect(html).not.toContain("<meta");
+		expect(html).not.toContain("<output>");
+		expect(html).not.toContain("Background task job");
+		expect(html).toContain("Alice");
+		expect(html).toContain("2m57s");
+		expect(html).toContain("reportSentToMain");
+		expect(html).toContain("history://Alice");
+	});
+
+	it("marks a failed job with the error tone", () => {
+		const entry = jobEntry({
+			content: envelope("boom", 'id="Bob" agent="task" status="failed" duration="3s"').replace(
+				'Background task job "Alice" completed',
+				'Background task job "Bob" failed',
+			),
+			details: { jobId: "Bob", status: "failed", label: "Bob" },
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-async-job--err");
+		expect(html).toContain("boom");
+	});
+
+	it("renders a restart replay that has no output body", () => {
+		const entry = jobEntry({
+			content: 'Background task job "Alice" completed.',
+			details: { jobId: "Alice", status: "completed", label: "Alice" },
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-async-job");
+		expect(html).not.toContain("Background task job");
+		expect(html).toContain("Alice");
+	});
+
+	it("keeps a hidden job card out", () => {
+		const entry = jobEntry({
+			content: envelope("hidden output"),
+			details: { jobId: "Alice", status: "completed", label: "Alice" },
+			display: false,
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).not.toContain("tr-async-job");
+		expect(html).not.toContain("hidden output");
+	});
+
+	it("clamps a long output and offers expansion", () => {
+		const output = Array.from({ length: 14 }, (_, i) => `行 ${i + 1}：job output`).join("\n");
+		const entry = jobEntry({
+			content: envelope(output),
+			details: { jobId: "Alice", status: "completed", label: "Alice" },
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-async-job-output--clamped");
+		expect(html).toContain("tr-async-job-more");
+	});
 });
 
 describe("Transcript display-settings parity (TUI)", () => {

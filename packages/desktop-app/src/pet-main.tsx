@@ -39,14 +39,16 @@ import {
 	useState,
 } from "react";
 import { createRoot } from "react-dom/client";
-import { type GazeVec, PetSprite, usePet, usePetDecor } from "./components/PetSprite";
+import { type GazeVec, PetSprite, type PetSpriteAction, usePet, usePetDecor } from "./components/PetSprite";
 import { PET_ENTER_MS, PetTransition, type PetTransitionPhase } from "./components/PetTransition";
 import {
 	type PetActivity,
-	type PetdexPackage,
+	type PetDescriptor,
 	type PetInteraction,
 	type PetMood,
 	type PetState,
+	petAmbientActions,
+	petCustomActions,
 	petScale,
 	randomPetInteraction,
 } from "./lib/pet";
@@ -117,17 +119,7 @@ function PetApp(): ReactNode {
 	// this window under file://) — it pushes the active pet descriptor on
 	// pet:activity; until the first push lands we render the local hook's
 	// reading (the same builtin default).
-	const [pushedPet, setPushedPet] = useState<
-		| {
-				kind: "builtin";
-				id: string;
-		  }
-		| {
-				kind: "petdex";
-				pkg: PetdexPackage;
-		  }
-		| null
-	>(null);
+	const [pushedPet, setPushedPet] = useState<PetDescriptor | null>(null);
 	const pet = pushedPet ?? localPet;
 	// Surface shading (pet-decor.ts) — the floating pet is the one renderer
 	// that has NO settings page of its own, so it subscribes to the same
@@ -144,6 +136,11 @@ function PetApp(): ReactNode {
 	// to a livelier idle row (thinking / lingering) so it has a life of its own
 	// instead of breathing in place forever (open-design `pet-overlay` parity).
 	const [ambientMood, setAmbientMood] = useState<PetMood | null>(null);
+	const [ambientAction, setAmbientAction] = useState<PetSpriteAction | null>(null);
+	const [customAction, setCustomAction] = useState<PetSpriteAction | null>(null);
+	const actionNonceRef = useRef(0);
+	const ambientCompletionRef = useRef<(() => void) | null>(null);
+	const lastCustomActionRef = useRef<string | null>(null);
 	// Transient user reaction (poke / notice / pre-sleep). Layered OVER the
 	// mood, never written to it — see pet-face.ts PET_INTERACTIONS.
 	const [interaction, setInteraction] = useState<PetInteraction | null>(null);
@@ -280,8 +277,8 @@ function PetApp(): ReactNode {
 		});
 	}, []);
 	useEffect(() => {
-		gazeMirrorRef.current = pet.kind === "petdex" && (flip || dockSide === "left");
-	}, [flip, dockSide, pet.kind]);
+		gazeMirrorRef.current = pet.kind === "petdex" && ((flip && pet.pkg.format !== "atlas") || dockSide === "left");
+	}, [flip, dockSide, pet]);
 
 	// Dock side after an edge snap (settings → 宠物 → 挂靠左右侧): the
 	// main process pushes it; the edge highlight bar follows.
@@ -346,8 +343,9 @@ function PetApp(): ReactNode {
 	// window is deliberately generous so the pet reads calm rather than fidgety.
 	// Any user gesture (hover / drag) cancels the beat via cleanup.
 	useEffect(() => {
-		if (mood !== "rest" || hovering || dragging) {
+		if (mood !== "rest" || hovering || dragging || customAction) {
 			setAmbientMood(null);
+			setAmbientAction(null);
 			return;
 		}
 		if (pet.kind !== "petdex") return;
@@ -357,31 +355,52 @@ function PetApp(): ReactNode {
 		const AMBIENT_REST_VARIANCE_MS = 9000;
 		const AMBIENT_INITIAL_DELAY_MIN_MS = 4000;
 		const AMBIENT_INITIAL_DELAY_VARIANCE_MS = 4000;
-		// Idle-friendly rows that read as "considering / lingering" rather than
-		// task work — swapped in for a beat then released back to rest.
 		const AMBIENT_MOODS: PetMood[] = ["waiting", "analyzing"];
+		const packageActions = petAmbientActions(pet.pkg);
 		let playTimer: number | undefined;
 		let restTimer: number | undefined;
 
-		const playBeat = (): void => {
+		const scheduleRest = (): void => {
+			const restMs = AMBIENT_REST_MIN_MS + Math.floor(Math.random() * AMBIENT_REST_VARIANCE_MS);
+			restTimer = window.setTimeout(playBeat, restMs);
+		};
+		const finishPackageAction = (): void => {
+			setAmbientAction(null);
+			scheduleRest();
+		};
+		ambientCompletionRef.current = finishPackageAction;
+
+		function playBeat(): void {
+			if (packageActions.length > 0) {
+				const name = packageActions[Math.floor(Math.random() * packageActions.length)]!;
+				actionNonceRef.current += 1;
+				setAmbientAction({ name, nonce: actionNonceRef.current });
+				return;
+			}
 			setAmbientMood(AMBIENT_MOODS[Math.floor(Math.random() * AMBIENT_MOODS.length)] ?? "waiting");
 			const playMs = AMBIENT_PLAY_MIN_MS + Math.floor(Math.random() * AMBIENT_PLAY_VARIANCE_MS);
 			playTimer = window.setTimeout(() => {
 				setAmbientMood(null);
-				const restMs = AMBIENT_REST_MIN_MS + Math.floor(Math.random() * AMBIENT_REST_VARIANCE_MS);
-				restTimer = window.setTimeout(playBeat, restMs);
+				scheduleRest();
 			}, playMs);
-		};
+		}
 
 		const initialDelay = AMBIENT_INITIAL_DELAY_MIN_MS + Math.floor(Math.random() * AMBIENT_INITIAL_DELAY_VARIANCE_MS);
 		restTimer = window.setTimeout(playBeat, initialDelay);
 
 		return () => {
+			ambientCompletionRef.current = null;
 			if (playTimer !== undefined) window.clearTimeout(playTimer);
 			if (restTimer !== undefined) window.clearTimeout(restTimer);
 			setAmbientMood(null);
+			setAmbientAction(null);
 		};
-	}, [mood, hovering, dragging, pet]);
+	}, [mood, hovering, dragging, pet, customAction]);
+
+	useEffect(() => {
+		if (mood === "rest") return;
+		setCustomAction(null);
+	}, [mood]);
 
 	// Sleep scheduler: 60s with no gesture and no task activity (mood at
 	// rest) → asleep. Any change to mood/hover/drag re-runs this effect,
@@ -598,6 +617,7 @@ function PetApp(): ReactNode {
 		};
 	};
 
+	const petIdentity = pet.kind === "petdex" ? pet.pkg.id : pet.id;
 	// The renderer kind is the mechanism boundary. A selection change ends the
 	// old mechanism's gesture before the other engine mounts: Petdex must not
 	// inherit orb deformation, and the orb must not inherit a bitmap mirror,
@@ -606,6 +626,8 @@ function PetApp(): ReactNode {
 		setDragging(false);
 		setFlip(false);
 		setAmbientMood(null);
+		setAmbientAction(null);
+		setCustomAction(null);
 		setInteraction(null);
 		const drag = dragRef.current;
 		drag.pressed = false;
@@ -617,7 +639,7 @@ function PetApp(): ReactNode {
 		pendingMoveRef.current = null;
 		releaseGesture();
 		void bridge?.petDragEnd?.();
-	}, [pet.kind]);
+	}, [pet.kind, petIdentity]);
 
 	const resetDrag = (): void => {
 		if (!dragRef.current.pressed) return;
@@ -774,9 +796,20 @@ function PetApp(): ReactNode {
 			if (clickTimerRef.current !== null) window.clearTimeout(clickTimerRef.current);
 			clickTimerRef.current = null;
 			lastClickRef.current = 0;
-			const pick = randomPetInteraction(lastReactionRef.current, ["dozing"]);
-			lastReactionRef.current = pick;
-			setInteraction(pick);
+			const packageActions = pet.kind === "petdex" && mood === "rest" ? petCustomActions(pet.pkg) : [];
+			if (packageActions.length > 0) {
+				const candidates = packageActions.filter(name => name !== lastCustomActionRef.current);
+				const pool = candidates.length > 0 ? candidates : packageActions;
+				const name = pool[Math.floor(Math.random() * pool.length)]!;
+				lastCustomActionRef.current = name;
+				actionNonceRef.current += 1;
+				setCustomAction({ name, nonce: actionNonceRef.current });
+				setInteraction(null);
+			} else {
+				const pick = randomPetInteraction(lastReactionRef.current, ["dozing"]);
+				lastReactionRef.current = pick;
+				setInteraction(pick);
+			}
 			// Disarm (no drag happened — pointer just went down and up).
 			void bridge?.petDragEnd?.();
 			return;
@@ -806,10 +839,19 @@ function PetApp(): ReactNode {
 	// Pointer rows belong to Petdex. The orb keeps its session direction and
 	// composes pointer deformation on the independent gesture rig.
 	const displayState = petdexPointer || ambientMood ? null : sessionState;
+	// Package actions play only over a calm rest row. Pointer, sleep and live
+	// session states keep their existing priority; a hidden one-shot resumes
+	// when the pet returns to rest instead of replacing a more important row.
+	const displayAction =
+		pet.kind === "petdex" && !petdexPointer && !ambientMood && !sleeping && mood === "rest"
+			? (customAction ?? ambientAction)
+			: null;
 	// Sleep owns the face. Petdex drag owns its walk row; the builtin keeps its
 	// poke expression while the gesture rig carries the drag.
 	const displayInteraction = (pet.kind === "petdex" && dragging) || sleeping ? null : interaction;
-	const mirrored = pet.kind === "petdex" && (flip || dockSide === "left");
+	// Explicit atlases own separate left/right rows. Mirroring those rows would
+	// reverse the direction a second time; legacy sheets still need the mirror.
+	const mirrored = pet.kind === "petdex" && ((flip && pet.pkg.format !== "atlas") || dockSide === "left");
 	// The transition belongs to the brand sphere — an imported spritesheet
 	// has no sphere to converge into, so petdex keeps the instant swap.
 	const petTransition = pet.kind === "builtin" ? transition : "idle";
@@ -888,6 +930,16 @@ function PetApp(): ReactNode {
 							gazeRef={gazeRef}
 							gestureRef={gestureRef}
 							interaction={displayInteraction}
+							action={displayAction}
+							direction={flip ? "right" : "left"}
+							onActionEnd={() => {
+								if (customAction) {
+									setCustomAction(null);
+									return;
+								}
+								if (ambientCompletionRef.current) ambientCompletionRef.current();
+								else setAmbientAction(null);
+							}}
 						/>
 					</div>
 					<PetTransition phase={petTransition} />

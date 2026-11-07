@@ -1016,7 +1016,7 @@ export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 		// Speak the question(s) aloud before surfacing them. Ask vocalizes in every
 		// mode — it's the assistant addressing the user — gated only by speech.enabled
 		// (the vocalizer re-checks the setting and no-ops when disabled).
-		if (this.session.settings.get("speech.enabled")) {
+		if (this.session.settings.get("tts.autoRead")) {
 			vocalizer.speak(params.questions.map(q => q.question).join("\n"));
 		}
 

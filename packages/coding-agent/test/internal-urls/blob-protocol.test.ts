@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as path from "node:path";
-import { BlobProtocolHandler } from "@musepi/pi-coding-agent/internal-urls/blob-protocol";
+import { BlobProtocolHandler, resolveBlobFile } from "@musepi/pi-coding-agent/internal-urls/blob-protocol";
 import { parseInternalUrl } from "@musepi/pi-coding-agent/internal-urls/parse";
 import { InternalUrlRouter } from "@musepi/pi-coding-agent/internal-urls/router";
 import { BlobStore } from "@musepi/pi-coding-agent/session/blob-store";
@@ -74,6 +74,15 @@ describe("blob:// resolution", () => {
 		const hash = await put(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0x02]));
 
 		await expect(handler.resolve(parseInternalUrl(`blob://${hash}`))).rejects.toThrow(/binary data/);
+	});
+
+	it("exposes the backing path without reading bytes, so read can page it", async () => {
+		const body = "line one\nline two\nline three\n";
+		const hash = await put(Buffer.from(body));
+
+		const resolved = await resolveBlobFile(parseInternalUrl(`blob://${hash}`));
+
+		expect(resolved).toEqual({ hash, path: path.join(getBlobsDir(), hash), size: Buffer.byteLength(body) });
 	});
 
 	it("is registered with the router as an immutable resource", async () => {

@@ -89,13 +89,7 @@ export function PomodoroCard({
 				))}
 			</div>
 			<div className="gui-widget-pomodoro-ring-wrap">
-				<Donut
-					value={pct}
-					size={150}
-					strokeWidth={8}
-					color="var(--tv-accent, oklch(0.674 0.23 341))"
-					trackColor="var(--tv-border)"
-				>
+				<Donut value={pct} size={150} strokeWidth={8} color="var(--color-accent)" trackColor="var(--border)">
 					<div className="gui-widget-pomodoro-center">
 						<span className="gui-widget-pomodoro-time">{fmt(left)}</span>
 						<span className="gui-widget-pomodoro-state">

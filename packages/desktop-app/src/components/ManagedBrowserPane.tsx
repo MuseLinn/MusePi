@@ -24,7 +24,13 @@ import { MorphIcon } from "morphicons/react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { type AnnotationHost, cancelAnnotationSession, runAnnotationSession } from "../lib/annotation-session";
+import { formatAddressDisplayParts } from "../lib/browser-address";
 import { browserMenuModel } from "../lib/browser-menu-model";
+import {
+	BROWSER_PREFERENCES_CHANGED_EVENT,
+	readBrowserExtensionsToolbarVisible,
+	readBrowserShowFullUrl,
+} from "../lib/browser-preferences";
 import {
 	beginViewportDrag,
 	cancelViewportDragOnBlank,
@@ -78,6 +84,8 @@ import {
 	readBrowserDeviceToolbarVisibility,
 	setBrowserDeviceToolbarVisibility,
 } from "./browser-device-toolbar";
+import { BrowserExtensionsPanel } from "./browser-extensions-panel";
+import { BrowserImportCard } from "./browser-import-card";
 import { BrowserUploadDialog } from "./browser-upload-dialog";
 import { ContextMenu } from "./ContextMenu";
 
@@ -225,20 +233,6 @@ function faviconUrl(url: string): string | undefined {
 	}
 }
 
-interface AddressDisplayParts {
-	url: string;
-	title?: string;
-}
-
-function formatAddressDisplayParts(url: string, title?: string): AddressDisplayParts {
-	if (url === EMPTY_URL) return { url: "" };
-	const cleanTitle = title?.trim();
-	if (!cleanTitle) return { url };
-	const fallback = labelFromUrl(url);
-	if (cleanTitle === fallback || cleanTitle === url) return { url };
-	return { url: url.replace(/\/+$/, ""), title: cleanTitle };
-}
-
 function isHistoryUrl(url: string): boolean {
 	return url !== EMPTY_URL && (/^https?:\/\//i.test(url) || /^musepi-file:\/\//i.test(url));
 }
@@ -295,6 +289,18 @@ export function ManagedBrowserPane({
 	const [suggestionIndex, setSuggestionIndex] = useState(-1);
 	const [history, setHistory] = useState<BrowserHistoryEntry[]>(() => loadHistory());
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [extensionsOpen, setExtensionsOpen] = useState(false);
+	const [extensionsToolbarVisible, setExtensionsToolbarVisible] = useState(readBrowserExtensionsToolbarVisible);
+	const [showFullUrl, setShowFullUrl] = useState(readBrowserShowFullUrl);
+	useEffect(() => {
+		const onPreferences = (event: Event): void => {
+			const detail = (event as CustomEvent<{ key?: string }>).detail;
+			if (detail?.key === "extensionsToolbar") setExtensionsToolbarVisible(readBrowserExtensionsToolbarVisible());
+			if (detail?.key === "showFullUrl") setShowFullUrl(readBrowserShowFullUrl());
+		};
+		window.addEventListener(BROWSER_PREFERENCES_CHANGED_EVENT, onPreferences);
+		return () => window.removeEventListener(BROWSER_PREFERENCES_CHANGED_EVENT, onPreferences);
+	}, []);
 	// Settings → 浏览器: read on mount and re-read when the settings page
 	// commits (it dispatches `musepi-browser-settings-changed`), then push the
 	// result to main so open tabs and tabs created later share one policy.
@@ -826,7 +832,7 @@ export function ManagedBrowserPane({
 		return historySuggestions.filter(item => `${item.label} ${item.detail}`.toLocaleLowerCase().includes(query));
 	}, [addressEditing, addressValue, history]);
 
-	// Both dropdowns render through the app's single floating-menu primitive:
+	// Every dropdown renders through the app's single floating-menu primitive:
 	// its portal is the only tier that can paint over the page (the pane sits
 	// inside the chat surface's stacking context while the page host is a
 	// root-level element), and it owns positioning, enter/exit and dismissal.
@@ -842,7 +848,14 @@ export function ManagedBrowserPane({
 		className: "gui-browser-menu",
 		align: "right",
 	});
-	const addressDisplayParts = addressEditing ? { url: "" } : formatAddressDisplayParts(activeUrl, activeTab?.title);
+	const { anchorRef: extensionsAnchorRef, renderMenu: renderExtensionsMenu } = useFloatingMenu(
+		extensionsOpen,
+		setExtensionsOpen,
+		{ className: "gui-browser-extensions-popup", align: "right" },
+	);
+	const addressDisplayParts = addressEditing
+		? { url: "" }
+		: formatAddressDisplayParts(activeUrl, activeTab?.title, showFullUrl);
 	const shownAddressValue = addressEditing ? addressValue : "";
 	const pageIconUrl = faviconUrl(activeUrl);
 
@@ -1119,6 +1132,53 @@ export function ManagedBrowserPane({
 					</button>
 				</div>
 				<div className="gui-browser-actions">
+					{extensionsToolbarVisible ? (
+						<div ref={extensionsAnchorRef} className="gui-browser-action-item">
+							<button
+								type="button"
+								className={`gui-browser-icon-btn${extensionsOpen ? " gui-browser-icon-btn--active" : ""}`}
+								aria-label={t("tools.extensions")}
+								title={t("tools.extensions")}
+								aria-haspopup="dialog"
+								aria-expanded={extensionsOpen}
+								onClick={() => {
+									setExtensionsOpen(open => !open);
+									setMenuOpen(false);
+									setSuggestionsOpen(false);
+								}}
+							>
+								<Icon name="apps-2-ai" className="h-4 w-4" />
+							</button>
+							{renderExtensionsMenu(
+								<div role="dialog" aria-modal="false" aria-label={t("tools.extensions")}>
+									<div className="gui-browser-extensions-popup-head">
+										<span>{t("tools.extensions")}</span>
+										<button
+											type="button"
+											className="gui-browser-icon-btn"
+											aria-label={t("settings.close")}
+											title={t("settings.close")}
+											onClick={() => setExtensionsOpen(false)}
+										>
+											<Icon name="close" className="h-3.5 w-3.5" />
+										</button>
+									</div>
+									<BrowserImportCard
+										rpc={rpc}
+										compact
+										dismissible
+										onOpenData={() => {
+											setExtensionsOpen(false);
+											window.dispatchEvent(
+												new CustomEvent("musepi-gui-open-settings-section", { detail: "browser:data" }),
+											);
+										}}
+									/>
+									<BrowserExtensionsPanel rpc={rpc} compact />
+								</div>,
+							)}
+						</div>
+					) : null}
 					<div ref={actionsAnchorRef} className="gui-browser-action-item">
 						<button
 							type="button"
@@ -1127,6 +1187,7 @@ export function ManagedBrowserPane({
 							title={t("tools.browserMenu")}
 							onClick={() => {
 								setMenuOpen(o => !o);
+								setExtensionsOpen(false);
 								setSuggestionsOpen(false);
 							}}
 						>
@@ -1134,6 +1195,41 @@ export function ManagedBrowserPane({
 						</button>
 						{renderActionsMenu(
 							<div role="menu">
+								<button
+									type="button"
+									role="menuitem"
+									onClick={() => {
+										setMenuOpen(false);
+										void createTab(EMPTY_URL).catch(() => {});
+									}}
+								>
+									<Icon name="add" className="h-3.5 w-3.5" />
+									{t("tools.browserNewTab")}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									disabled={isBlank}
+									onClick={() => {
+										setMenuOpen(false);
+										handleAnnotate();
+									}}
+								>
+									<Icon name="pencil" className="h-3.5 w-3.5" />
+									{t("annotation.toggle")}
+								</button>
+								<button
+									type="button"
+									role="menuitem"
+									disabled={isBlank}
+									onClick={() => {
+										setMenuOpen(false);
+										hostElement(host.activeId ?? "")?.openDevTools();
+									}}
+								>
+									<Icon name="code-sslash" className="h-3.5 w-3.5" />
+									{t("tools.browserDevTools")}
+								</button>
 								<button
 									type="button"
 									role="menuitem"

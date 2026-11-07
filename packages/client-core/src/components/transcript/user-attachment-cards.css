@@ -1,0 +1,140 @@
+/* User-message attachment cards (reuse .tr-file-card chrome) + the text
+ * preview overlay. The card row sits in the user row's attachment area,
+ * right-aligned like the message bubble and the image stack. */
+.tr-attach-cards {
+	margin-top: 8px;
+}
+
+.tr-row--user .tr-attach-cards {
+	width: min(100%, 420px);
+	margin-left: auto;
+}
+
+.tr-attach-size {
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	font-variant-numeric: tabular-nums;
+}
+
+/* ── Attachment text preview ─────────────────────────────────────────── */
+.tr-attach-preview {
+	position: fixed;
+	inset: 0;
+	z-index: 3000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 40px;
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+}
+
+.tr-attach-preview-panel {
+	display: flex;
+	flex-direction: column;
+	width: min(760px, 100%);
+	max-height: min(80vh, 720px);
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg-raised);
+	box-shadow: 0 24px 64px oklch(0 0 0 / 38%);
+}
+
+.tr-attach-preview-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+	padding: 8px 8px 8px 12px;
+	border-bottom: 1px solid var(--border);
+}
+
+.tr-attach-preview-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.tr-attach-preview-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: var(--radius-sm);
+	color: var(--color-text-muted);
+}
+
+.tr-attach-preview-close:hover {
+	background: var(--color-hover);
+	color: var(--color-text);
+}
+
+.tr-attach-preview-text {
+	margin: 0;
+	padding: 12px;
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	color: var(--color-text);
+}
+
+.tr-attach-preview-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 40px 20px;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+}
+
+.tr-attach-preview-action {
+	padding: 3px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--color-text);
+}
+
+.tr-attach-preview-action:hover:not(:disabled) {
+	background: var(--color-hover);
+}
+
+.tr-attach-preview-action:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.tr-attach-preview-foot {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-shrink: 0;
+	padding: 6px 12px;
+	border-top: 1px solid var(--border);
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.tr-attach-preview-progress {
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-attach-preview-error {
+	color: var(--color-danger);
+}

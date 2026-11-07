@@ -4,18 +4,21 @@ import {
 	Camera,
 	Check,
 	ChevronDown,
+	FileText,
 	Images,
 	Mic,
 	MicOff,
+	Paperclip,
 	Plus,
 	SendHorizontal,
 	Square,
 	Volume2,
 	X,
 } from "lucide-react";
-import type { KeyboardEvent, ReactNode, RefObject } from "react";
+import type { ClipboardEvent, DragEvent, KeyboardEvent, ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { attachmentReferenceLine, composePromptWithAttachments, uploadAttachment } from "../../lib/attachment-upload";
 import { useBackLayer } from "../../lib/back-stack";
 import { isMobileShell } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
@@ -55,6 +58,21 @@ const THINKING_KEY: Record<ThinkingLadder, Parameters<typeof t>[0]> = {
 export interface ComposerProps {
 	client: SessionClient;
 }
+
+/**
+ * One non-image chip. Bytes upload as soon as the file is picked; send waits
+ * for every chip to settle so a prompt never carries a reference whose blob
+ * never landed.
+ */
+interface PendingFile {
+	id: string;
+	name: string;
+	status: "uploading" | "ready" | "error";
+	url?: string;
+	error?: string;
+}
+
+let pendingFileSeq = 0;
 
 /** Textarea metrics: line-height 22px + 6px vertical padding × 2 (kept in sync with shell.css). */
 const LINE_PX = 22;
@@ -802,6 +820,11 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	// #handlePrompt already consumes them). Previews are object URLs; every
 	// exit path (send / remove / unmount) revokes them.
 	const [pending, setPending] = useState<PendingAttachment[]>([]);
+	// Non-image chips. Bytes go through the daemon's attachment RPCs as soon as
+	// the file is picked; the chip tracks whether its `blob://` reference exists
+	// yet, and send refuses while any upload is in flight.
+	const [files, setFiles] = useState<PendingFile[]>([]);
+	const [dragging, setDragging] = useState(false);
 	const [attachOpen, setAttachOpen] = useState(false);
 	// model/thinking capsule (design 二期 F1/F2): model is read-only (the host
 	// session owns it); thinking selection goes out as a `config` frame and
@@ -809,6 +832,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const [modelSheetOpen, setModelSheetOpen] = useState(false);
 	const galleryRef = useRef<HTMLInputElement | null>(null);
 	const cameraRef = useRef<HTMLInputElement | null>(null);
+	const fileRef = useRef<HTMLInputElement | null>(null);
 	const pendingRef = useRef<PendingAttachment[]>([]);
 	useEffect(() => {
 		pendingRef.current = pending;
@@ -857,19 +881,24 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const voice = voiceCtl.voice;
 	const voiceBusy = voice.kind === "recording" || voice.kind === "transcribing";
 	// editor-draft mode keeps submit enabled even for whitespace-only prefill;
-	// image-only prompts (no caption) are also submittable. Voice capture owns
-	// the input slot while active — sending mid-recording would be surprising.
+	// image/file-only prompts (no caption) are also submittable. Voice capture
+	// owns the input slot while active — sending mid-recording would be
+	// surprising. An upload still in flight disables send outright: the prompt
+	// would otherwise carry no reference for that chip.
+	const uploadingFiles = files.some(f => f.status === "uploading");
 	const canSend =
 		canPrompt &&
 		!sending &&
+		!uploadingFiles &&
 		voice.kind === "idle" &&
-		(text.trim().length > 0 || pending.length > 0 || uiRequest?.kind === "editor");
+		(text.trim().length > 0 || pending.length > 0 || files.length > 0 || uiRequest?.kind === "editor");
 	const expanded =
 		layout !== "compact" ||
 		engaged ||
 		attachOpen ||
 		modelSheetOpen ||
 		pending.length > 0 ||
+		files.length > 0 ||
 		voice.kind !== "idle" ||
 		text.includes("\n");
 
@@ -880,14 +909,25 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const send = useCallback(async (): Promise<void> => {
 		const trimmed = text.trim();
 		if (!canPrompt || sendingRef.current) return;
-		if (!trimmed && pending.length === 0) return;
+		if (!trimmed && pending.length === 0 && files.length === 0) return;
+		if (files.some(f => f.status === "uploading")) {
+			setSendError(t("general.attachmentUploadPending"));
+			return;
+		}
+		const failed = files.find(f => f.status === "error" || !f.url);
+		if (failed) {
+			setSendError(t("general.attachmentUploadFailedNamed", { name: failed.name }));
+			return;
+		}
 		sendingRef.current = true;
 		setSending(true);
 		setSendError(null);
 		try {
-			await client.sendPrompt(trimmed, toImageContent(pending));
+			const references = files.map(f => attachmentReferenceLine(f.url ?? "", f.name));
+			await client.sendPrompt(composePromptWithAttachments(trimmed, references), toImageContent(pending));
 			revokePreviews(pending);
 			setPending([]);
+			setFiles([]);
 			setText("");
 			haptic(8);
 		} catch (error) {
@@ -896,26 +936,100 @@ export function Composer({ client }: ComposerProps): ReactNode {
 			sendingRef.current = false;
 			setSending(false);
 		}
-	}, [client, canPrompt, text, pending]);
+	}, [client, canPrompt, text, pending, files]);
 
-	/** Encodes picked image files into pending attachments (queued behind the
-	 * current state; failures reject individually without blocking the batch). */
-	const addFiles = useCallback(async (files: FileList | null): Promise<void> => {
-		if (!files || files.length === 0) return;
-		const picked = Array.from(files).filter(f => f.type.startsWith("image/"));
-		if (picked.length === 0) return;
-		const encoded: PendingAttachment[] = [];
-		for (const file of picked) {
-			try {
-				encoded.push(await processImageFile(file));
-			} catch {
-				// Undecodable image — skip it rather than failing the batch.
+	/** Uploads one non-image file and keeps its chip in step with the RPC.
+	 *  Uploads run one at a time: the daemon keeps at most four uncommitted
+	 *  chunked sessions and evicts the oldest on the fifth, so parallel large
+	 *  picks could otherwise cancel each other. */
+	const uploadQueue = useRef<Promise<void>>(Promise.resolve());
+	const uploadFile = useCallback(
+		(file: File): void => {
+			const id = `file-${Date.now()}-${pendingFileSeq++}`;
+			setFiles(current => [...current, { id, name: file.name || "attachment", status: "uploading" }]);
+			uploadQueue.current = uploadQueue.current
+				.then(() => uploadAttachment(client, file))
+				.then(result => {
+					setFiles(current =>
+						current.map(chip => (chip.id === id ? { ...chip, status: "ready", url: result.url } : chip)),
+					);
+				})
+				.catch((error: unknown) => {
+					const message = error instanceof Error ? error.message : String(error);
+					setFiles(current =>
+						current.map(chip => (chip.id === id ? { ...chip, status: "error", error: message } : chip)),
+					);
+					haptic(30);
+				});
+		},
+		[client],
+	);
+
+	/** Splits a pick/paste/drop batch: images keep the existing `prompt.images`
+	 *  channel, everything else uploads through the attachment RPCs. */
+	const addFiles = useCallback(
+		async (picked: FileList | readonly File[] | null): Promise<void> => {
+			if (!picked) return;
+			const batch = Array.from(picked);
+			if (batch.length === 0) return;
+			for (const file of batch) {
+				if (!file.type.startsWith("image/")) uploadFile(file);
 			}
-		}
-		if (encoded.length === 0) return;
-		setPending(current => [...current, ...encoded]);
-		haptic(8);
+			const images = batch.filter(f => f.type.startsWith("image/"));
+			if (images.length === 0) return;
+			const encoded: PendingAttachment[] = [];
+			for (const file of images) {
+				try {
+					encoded.push(await processImageFile(file));
+				} catch {
+					// Undecodable image — skip it rather than failing the batch.
+				}
+			}
+			if (encoded.length === 0) return;
+			setPending(current => [...current, ...encoded]);
+			haptic(8);
+		},
+		[uploadFile],
+	);
+
+	const onPaste = useCallback(
+		(event: ClipboardEvent<HTMLTextAreaElement>): void => {
+			const picked = [...event.clipboardData.items]
+				.filter(item => item.kind === "file")
+				.map(item => item.getAsFile())
+				.filter((file): file is File => file !== null);
+			if (picked.length === 0) return;
+			event.preventDefault();
+			void addFiles(picked);
+		},
+		[addFiles],
+	);
+
+	const onDragOver = useCallback(
+		(event: DragEvent<HTMLDivElement>): void => {
+			if (!canPrompt || !event.dataTransfer.types.includes("Files")) return;
+			event.preventDefault();
+			setDragging(true);
+		},
+		[canPrompt],
+	);
+
+	const onDragLeave = useCallback((event: DragEvent<HTMLDivElement>): void => {
+		if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+		setDragging(false);
 	}, []);
+
+	const onDrop = useCallback(
+		(event: DragEvent<HTMLDivElement>): void => {
+			setDragging(false);
+			if (!canPrompt) return;
+			const picked = [...event.dataTransfer.files];
+			if (picked.length === 0) return;
+			event.preventDefault();
+			void addFiles(picked);
+		},
+		[canPrompt, addFiles],
+	);
 
 	const removePending = useCallback((id: string): void => {
 		setPending(current => {
@@ -923,6 +1037,11 @@ export function Composer({ client }: ComposerProps): ReactNode {
 			if (target) URL.revokeObjectURL(target.previewUrl);
 			return current.filter(p => p.id !== id);
 		});
+		haptic(8);
+	}, []);
+
+	const removeFile = useCallback((id: string): void => {
+		setFiles(current => current.filter(chip => chip.id !== id));
 		haptic(8);
 	}, []);
 
@@ -1013,7 +1132,17 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	}
 
 	return (
-		<div className="sh-composer">
+		<div
+			className={`sh-composer${dragging ? " sh-composer--drop" : ""}`}
+			onDragOver={onDragOver}
+			onDragLeave={onDragLeave}
+			onDrop={onDrop}
+		>
+			{dragging && (
+				<div className="sh-composer-drop" aria-hidden>
+					{t("general.dropFilesToAttach")}
+				</div>
+			)}
 			{sendError && (
 				<p className="sh-composer-error" role="alert">
 					{sendError}
@@ -1031,8 +1160,8 @@ export function Composer({ client }: ComposerProps): ReactNode {
 					/>
 				</div>
 			)}
-			{canPrompt && pending.length > 0 && (
-				<div ref={attachChipsRef} className="sh-attach-chips" role="list" aria-label={t("general.addImages")}>
+			{canPrompt && (pending.length > 0 || files.length > 0) && (
+				<div ref={attachChipsRef} className="sh-attach-chips" role="list" aria-label={t("general.attachments")}>
 					{pending.map(p => (
 						<div key={p.id} className="sh-attach-chip" role="listitem">
 							<img src={p.previewUrl} alt={p.name} className="sh-attach-thumb" />
@@ -1042,6 +1171,35 @@ export function Composer({ client }: ComposerProps): ReactNode {
 								onClick={() => removePending(p.id)}
 								title={t("composer.removeAttachment")}
 								aria-label={`${t("composer.removeAttachment")}: ${p.name}`}
+							>
+								<X size={9} />
+							</button>
+						</div>
+					))}
+					{files.map(f => (
+						<div
+							key={f.id}
+							className="sh-attach-file"
+							data-status={f.status}
+							role="listitem"
+							title={f.status === "error" ? f.error : f.name}
+						>
+							<FileText size={14} aria-hidden />
+							<span className="sh-attach-file-name">{f.name}</span>
+							{f.status === "uploading" && (
+								<span className="sh-attach-file-state">{t("general.attachmentUploading")}</span>
+							)}
+							{f.status === "error" && (
+								<span className="sh-attach-file-state sh-attach-file-state--error">
+									{t("general.attachmentUploadFailed")}
+								</span>
+							)}
+							<button
+								type="button"
+								className="sh-attach-remove"
+								onClick={() => removeFile(f.id)}
+								title={t("composer.removeAttachment")}
+								aria-label={`${t("composer.removeAttachment")}: ${f.name}`}
 							>
 								<X size={9} />
 							</button>
@@ -1079,6 +1237,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							data-morph-id="composer-input"
 							value={text}
 							onChange={e => setText(e.target.value)}
+							onPaste={onPaste}
 							onFocus={() => setEngaged(true)}
 							onBlur={() => setEngaged(false)}
 							onKeyDown={onKeyDown}
@@ -1105,8 +1264,8 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							type="button"
 							className="sh-btn sh-attach-btn"
 							onClick={() => setAttachOpen(true)}
-							title={t("general.addImages")}
-							aria-label={t("general.addImages")}
+							title={t("general.attachments")}
+							aria-label={t("general.attachments")}
 						>
 							<Plus size={18} />
 						</button>
@@ -1187,17 +1346,21 @@ export function Composer({ client }: ComposerProps): ReactNode {
 					)}
 				</div>
 				<div className="sh-composer-end">
-					{canPrompt && voice.kind === "idle" && !busy && !sending && (layout !== "compact" || !canSend) && (
-						<button
-							type="button"
-							className="sh-btn sh-attach-btn sh-composer-mic"
-							onClick={voiceCtl.start}
-							title={t("settings.voiceInput")}
-							aria-label={t("settings.voiceInput")}
-						>
-							<Mic size={17} />
-						</button>
-					)}
+					{canPrompt &&
+						voice.kind === "idle" &&
+						!busy &&
+						!sending &&
+						(layout !== "compact" || (!canSend && files.length === 0)) && (
+							<button
+								type="button"
+								className="sh-btn sh-attach-btn sh-composer-mic"
+								onClick={voiceCtl.start}
+								title={t("settings.voiceInput")}
+								aria-label={t("settings.voiceInput")}
+							>
+								<Mic size={17} />
+							</button>
+						)}
 					{busy && !readOnly ? (
 						showWorking ? (
 							<button
@@ -1231,7 +1394,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 								<Square size={12} />
 							</button>
 						)
-					) : layout !== "compact" || canSend || sending ? (
+					) : layout !== "compact" || canSend || sending || files.length > 0 ? (
 						<button
 							type="button"
 							ref={sendMorphRef}
@@ -1239,7 +1402,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 							data-morph-id="composer-send"
 							onClick={send}
 							disabled={!canSend}
-							title={t("composer.send")}
+							title={uploadingFiles ? t("general.attachmentUploadPending") : t("composer.send")}
 							aria-label={t("composer.send")}
 						>
 							<SendHorizontal size={15} /> <span className="sh-btn-label">{t("settings.send")}</span>
@@ -1271,11 +1434,22 @@ export function Composer({ client }: ComposerProps): ReactNode {
 					e.target.value = "";
 				}}
 			/>
+			<input
+				ref={fileRef}
+				type="file"
+				multiple
+				hidden
+				onChange={e => {
+					void addFiles(e.target.files);
+					e.target.value = "";
+				}}
+			/>
 			<AttachSheet
 				open={attachOpen}
 				onClose={() => setAttachOpen(false)}
 				onCamera={() => cameraRef.current?.click()}
 				onLibrary={() => galleryRef.current?.click()}
+				onFile={() => fileRef.current?.click()}
 			/>
 			<MessageQueueSheet
 				open={queueOpen}
@@ -1302,7 +1476,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 
 /**
  * Bottom action sheet choosing an attachment source (design frame
- * 「Session 附件流」): camera capture vs library picker. Reuses the
+ * 「Session 附件流」): camera capture, library picker, or any file. Reuses the
  * sessions-sheet visual language (`ss-*` frosted floating card + grabber).
  * The sheet itself never touches files — it just triggers the hidden inputs
  * owned by the composer, so selection state survives sheet unmount.
@@ -1312,11 +1486,13 @@ function AttachSheet({
 	onClose,
 	onCamera,
 	onLibrary,
+	onFile,
 }: {
 	open: boolean;
 	onClose(): void;
 	onCamera(): void;
 	onLibrary(): void;
+	onFile(): void;
 }): ReactNode {
 	// Always mounted; the visible/closing stage drives the CSS animations so
 	// a close never pops the card off screen (SessionsSheet convention).
@@ -1359,7 +1535,7 @@ function AttachSheet({
 				className={`ss-card sh-attach-card${closing ? " ss-closing" : ""}`}
 				role="dialog"
 				aria-modal="true"
-				aria-label={t("general.addImages")}
+				aria-label={t("general.attachments")}
 				onClick={e => e.stopPropagation()}
 				onAnimationEnd={() => {
 					if (closing) setStage("hidden");
@@ -1367,7 +1543,7 @@ function AttachSheet({
 			>
 				<div className="ss-grabber" aria-hidden />
 				<div className="ss-card-head">
-					<h2 className="ss-card-title">{t("general.addImages")}</h2>
+					<h2 className="ss-card-title">{t("general.attachments")}</h2>
 					<button type="button" className="ss-close" onClick={onClose} title={t("settings.close")}>
 						<X size={16} />
 					</button>
@@ -1394,6 +1570,17 @@ function AttachSheet({
 					>
 						<Images size={18} />
 						<span>{t("composer.chooseLibrary")}</span>
+					</button>
+					<button
+						type="button"
+						className="sh-attach-option"
+						onClick={() => {
+							onClose();
+							onFile();
+						}}
+					>
+						<Paperclip size={18} />
+						<span>{t("general.addAttachments")}</span>
 					</button>
 				</div>
 				<p className="sh-attach-hint">{t("composer.attachImagesHint")}</p>

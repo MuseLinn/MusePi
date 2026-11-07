@@ -1533,8 +1533,9 @@ export function ModelSection({
 								<div className="gui-settings-section-title">{t("settings.sideChannelModel")}</div>
 								<div className="gui-settings-section-desc">{t("settings.sideChannelModelDescription")}</div>
 								<div className="gui-settings-row">
+									{/* Section title already names this single control; repeating
+									 * the label on the row read as two separate settings. */}
 									<div>
-										<div className="gui-settings-row-label">{t("settings.sideChannelModel")}</div>
 										<div className="gui-settings-row-desc">{t("settings.sideChannelModelLabel")}</div>
 									</div>
 									<GuiSelect

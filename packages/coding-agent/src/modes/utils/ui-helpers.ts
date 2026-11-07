@@ -56,6 +56,7 @@ import { createAssistantMessageComponent } from "./interactive-context-helpers";
 import {
 	assistantHasVisibleContent,
 	assistantUsageIsBilled,
+	buildAsyncJobResultBlock,
 	buildAsyncResultBlock,
 	buildFileMentionBlock,
 	buildIrcMessageCard,
@@ -174,6 +175,10 @@ export class UiHelpers {
 			case "hookMessage":
 			case "custom": {
 				if (message.display) {
+					if (message.customType === "async-job-result") {
+						this.ctx.chatContainer.addChild(buildAsyncJobResultBlock(message, () => this.ctx.toolOutputExpanded));
+						break;
+					}
 					if (message.customType === "async-result") {
 						const component = buildAsyncResultBlock(message);
 						this.ctx.chatContainer.addChild(component);

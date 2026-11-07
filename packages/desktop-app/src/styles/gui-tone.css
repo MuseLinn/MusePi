@@ -40,6 +40,12 @@
 	 * and cleared to fully transparent for `default`/`plain` tones. */
 	--gui-tone-tint: transparent;
 
+	/* The direction "deeper into this card" moves. Derived steps (`sunken`,
+	 * `hover`) mix toward this, not toward `--fg`: on a card whose labels are
+	 * pinned dark (the `light` tone) mixing toward the app's light-theme `--fg`
+	 * lightened the recesses instead of deepening them. */
+	--gui-tone-ink: var(--fg);
+
 	/* Text ramp: derived from the card's own surface rather than from --fg, so
 	 * a tinted card keeps readable text instead of inheriting the app's. */
 	--gui-tone-label-1: color-mix(in oklab, var(--fg) 94%, var(--gui-tone-tint));
@@ -78,6 +84,7 @@
 	--gui-tone-label-2: #6b6b74;
 	--gui-tone-label-3: #8b8b94;
 	--gui-tone-label-4: #a6a6ae;
+	--gui-tone-ink: #1f1f24;
 }
 
 [data-tone="dark"] {
@@ -90,6 +97,7 @@
 	--gui-tone-label-3: #7a7a82;
 	--gui-tone-label-4: #5c5c64;
 	--gui-tone-separator: #2c2c34;
+	--gui-tone-ink: #e8e8ea;
 }
 
 /* The card surface contract: the four widgets-visible tokens every tone must
@@ -108,7 +116,7 @@
 	--color-text-secondary: var(--gui-tone-label-2);
 	--color-text-muted: var(--gui-tone-label-3);
 	--color-text-faint: var(--gui-tone-label-4);
-	--color-surface-sunken: color-mix(in oklab, var(--gui-tone-step) 92%, var(--fg) 8%);
-	--color-surface-hover: color-mix(in oklab, var(--gui-tone-step) 88%, var(--fg) 14%);
+	--color-surface-sunken: color-mix(in oklab, var(--gui-tone-step) 92%, var(--gui-tone-ink) 8%);
+	--color-surface-hover: color-mix(in oklab, var(--gui-tone-step) 88%, var(--gui-tone-ink) 14%);
 	--border: var(--gui-tone-separator);
 }

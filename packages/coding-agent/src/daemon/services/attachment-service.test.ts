@@ -134,6 +134,93 @@ describe("attachment.putFile", () => {
 	});
 });
 
+describe("attachment.begin / chunk / commit / abort", () => {
+	test("assembles chunks in any order and commits the same reference put would", async () => {
+		const { service: svc } = service();
+		const CHUNK = 3 * 1024 * 1024;
+		const head = Buffer.alloc(CHUNK, 0x41);
+		const tail = Buffer.from("tail");
+		const begun = await svc.begin({ name: "a.bin", mimeType: "application/x-test", size: head.length + tail.length });
+		if ("error" in begun) throw new Error(begun.error);
+
+		// Deliberately out of order: chunk 1 carries the tail at its own offset.
+		const second = await svc.chunk({ uploadId: begun.uploadId, index: 1, content: tail.toString("base64") });
+		const first = await svc.chunk({ uploadId: begun.uploadId, index: 0, content: head.toString("base64") });
+		expect(second).toEqual({ received: tail.length, chunks: 1 });
+		expect(first).toEqual({ received: head.length + tail.length, chunks: 2 });
+
+		const committed = await svc.commit({ uploadId: begun.uploadId });
+		if ("error" in committed) throw new Error(committed.error);
+		const expected = Buffer.concat([head, tail]);
+		expect(committed.ref.hash).toBe(sha256(expected));
+		expect(committed.ref.size).toBe(expected.length);
+		expect(committed.ref.name).toBe("a.bin");
+		expect(committed.ref.mimeType).toBe("application/x-test");
+		// The temp file is gone after commit.
+		expect(await svc.chunk({ uploadId: begun.uploadId, index: 0, content: "" })).toEqual({
+			error: "unknown upload",
+		});
+	});
+
+	test("rejects a short middle chunk instead of storing a sparse file", async () => {
+		const { service: svc } = service();
+		const begun = await svc.begin({ name: "short.bin" });
+		if ("error" in begun) throw new Error(begun.error);
+		await svc.chunk({ uploadId: begun.uploadId, index: 0, content: Buffer.from("abc").toString("base64") });
+		await svc.chunk({ uploadId: begun.uploadId, index: 1, content: "YQ==" });
+
+		expect(await svc.commit({ uploadId: begun.uploadId })).toEqual({
+			error: `chunk 0 is 3 bytes; expected ${3 * 1024 * 1024}`,
+		});
+	});
+
+	test("rejects a commit whose size does not match the declared total", async () => {
+		const { service: svc } = service();
+		const begun = await svc.begin({ name: "b.bin", size: 10 });
+		if ("error" in begun) throw new Error(begun.error);
+		await svc.chunk({ uploadId: begun.uploadId, index: 0, content: Buffer.from("short").toString("base64") });
+
+		expect(await svc.commit({ uploadId: begun.uploadId })).toEqual({
+			error: "size mismatch (5 of 10 bytes)",
+		});
+	});
+
+	test("refuses to commit across a hole", async () => {
+		const { service: svc } = service();
+		const begun = await svc.begin({ name: "c.bin" });
+		if ("error" in begun) throw new Error(begun.error);
+		await svc.chunk({ uploadId: begun.uploadId, index: 0, content: "YQ==" });
+		await svc.chunk({ uploadId: begun.uploadId, index: 2, content: "Yg==" });
+
+		expect(await svc.commit({ uploadId: begun.uploadId })).toEqual({ error: "missing chunk 1" });
+	});
+
+	test("abort drops the upload and is idempotent", async () => {
+		const { service: svc } = service();
+		const begun = await svc.begin({ name: "d.bin" });
+		if ("error" in begun) throw new Error(begun.error);
+
+		expect(await svc.abort({ uploadId: begun.uploadId })).toEqual({ ok: true });
+		expect(await svc.abort({ uploadId: begun.uploadId })).toEqual({ ok: true });
+		expect(await svc.commit({ uploadId: begun.uploadId })).toEqual({ error: "unknown upload" });
+	});
+
+	test("rejects malformed chunks and unknown uploads", async () => {
+		const { service: svc } = service();
+		const begun = await svc.begin({ name: "e.bin" });
+		if ("error" in begun) throw new Error(begun.error);
+
+		expect(await svc.chunk({ uploadId: begun.uploadId, index: 0, content: "not base64!" })).toEqual({
+			error: "invalid base64 content",
+		});
+		expect(await svc.chunk({ uploadId: begun.uploadId, index: -1, content: "YQ==" })).toEqual({
+			error: "invalid chunk index",
+		});
+		expect(await svc.chunk({ uploadId: "nope", index: 0, content: "YQ==" })).toEqual({ error: "unknown upload" });
+		await svc.abort({ uploadId: begun.uploadId });
+	});
+});
+
 describe("attachment.stat", () => {
 	test("reports size for a stored blob and false for anything else", async () => {
 		const { service: svc } = service();

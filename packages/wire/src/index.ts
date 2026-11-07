@@ -355,6 +355,98 @@ export function advisorNoteText(details: unknown): string {
 		.join("; ");
 }
 
+/**
+ * Display shape of an `async-job-result` custom message: the daemon's card for
+ * a settled background job (most visibly a subagent task), written by normal
+ * delivery and by the restart replay.
+ *
+ * `content` is the model-facing `<task-result>` envelope from
+ * `prompts/tools/task-summary.md` (or the replay sentence), so every surface
+ * must compose its card from `details` plus the envelope's inner
+ * `<output>`/`<preview>`, duration and `<meta>` — rendering `content` directly
+ * puts the markup in front of the reader.
+ */
+export interface AsyncJobResultView {
+	jobId?: string;
+	label: string;
+	status: string;
+	type?: string;
+	duration?: string;
+	output?: string;
+	lines?: number;
+	size?: string;
+	/** Trailing model-facing sentence after the envelope ("is now idle …"). */
+	hint?: string;
+}
+
+const ASYNC_JOB_PREFIX = /^\s*Background\s+([\w-]+)\s+job\s+"([^"]*)"\s+([^:\n.]+)[.:]?/i;
+const ASYNC_JOB_ENVELOPE = /<task-result\b([^>]*)>([\s\S]*?)<\/task-result>/i;
+const ASYNC_JOB_META = /<meta\b([^>]*)\/?>/i;
+const ASYNC_JOB_OUTPUT = /<(output|preview)\b[^>]*>\n?([\s\S]*?)\n?<\/\1>/i;
+const ASYNC_JOB_ATTR = /([\w-]+)\s*=\s*"([^"]*)"/g;
+
+function contentText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter((b): b is { type: "text"; text: string } => typeof b === "object" && b !== null && b.type === "text")
+		.map(b => b.text)
+		.join(" ");
+}
+
+function asyncJobAttrs(block: string | undefined): Record<string, string> {
+	const found: Record<string, string> = {};
+	if (!block) return found;
+	for (const match of block.matchAll(ASYNC_JOB_ATTR)) {
+		const [, key, value] = match;
+		if (key && value !== undefined) found[key] = value;
+	}
+	return found;
+}
+
+function asyncJobStrField(details: unknown, key: string): string | undefined {
+	if (details === null || typeof details !== "object" || !(key in details)) return undefined;
+	const value = (details as Record<string, unknown>)[key];
+	return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
+
+export function asyncJobResultView(content: unknown, details: unknown): AsyncJobResultView {
+	const text = contentText(content).trim();
+	const prefix = ASYNC_JOB_PREFIX.exec(text);
+	const envelope = ASYNC_JOB_ENVELOPE.exec(text);
+	const envAttrs = asyncJobAttrs(envelope?.[1]);
+	const inner = envelope?.[2] ?? "";
+	const metaAttrs = asyncJobAttrs(ASYNC_JOB_META.exec(inner)?.[1]);
+	const output = ASYNC_JOB_OUTPUT.exec(inner)?.[2]?.trim();
+	const afterEnvelope = envelope ? text.slice(envelope.index + envelope[0].length) : "";
+	const hint = afterEnvelope.replace(/^[\s.:]+/, "").trim();
+	// A restart-replay entry can carry only the daemon's sentence; the body (if
+	// any) follows its colon. Keep it as output so a human still sees it.
+	const replayBody =
+		!envelope && prefix
+			? text
+					.slice(prefix[0].length)
+					.replace(/^\s*:?\s*/, "")
+					.trim()
+			: "";
+	const label =
+		asyncJobStrField(details, "label") ?? envAttrs.id ?? prefix?.[2] ?? asyncJobStrField(details, "jobId") ?? "job";
+	const status = asyncJobStrField(details, "status") ?? envAttrs.status ?? prefix?.[3] ?? "completed";
+	const jobId = asyncJobStrField(details, "jobId") ?? envAttrs.id ?? prefix?.[2];
+	const lines = Number(metaAttrs.lines);
+	return {
+		jobId,
+		label,
+		status,
+		type: prefix?.[1] ?? envAttrs.agent,
+		duration: envAttrs.duration,
+		output: output || replayBody || undefined,
+		lines: Number.isFinite(lines) && lines > 0 ? lines : undefined,
+		size: metaAttrs.size,
+		hint: hint || undefined,
+	};
+}
+
 /** Frozen round-total record, shared by the daemon (agent_end in the
  *  materialized view) and every GUI write side: ONE key space, so daemon-seeded
  *  snapshots and live GUI writes hit the same lookup. Key = 回合起点
@@ -457,28 +549,118 @@ export type AgentEvent =
 	  };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// File references
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Canonical blob hash shape: exactly 64 lowercase hex chars (a SHA-256 digest). */
+export const BLOB_HASH_RE = /^[a-f0-9]{64}$/;
+
+/** Persisted blob reference prefix: `BlobStore` results and transport image data. */
+export const BLOB_REF_PREFIX = "blob:sha256:";
+
+/** Readable blob reference prefix, carried by prompt lines and `read`. */
+export const BLOB_URL_PREFIX = "blob://";
+
+/**
+ * Artifact session id charset: a session file basename without `.jsonl`. The id
+ * is joined into a filesystem path below the sessions root, so separators are
+ * excluded by construction.
+ */
+export const ARTIFACT_SESSION_ID_RE = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * Reference to file bytes crossing the daemon/GUI/tool boundary.
+ *
+ * - `blob` — content-addressed bytes; `hash` is the identity, the rest is
+ *   display metadata supplied by the uploading client.
+ * - `artifact` — a numbered session artifact. Without `sessionId` it resolves
+ *   in the caller's session; with one it is pinned to that session.
+ * - `workspace` — a workspace-relative path.
+ */
+export type FileRef =
+	| { scheme: "blob"; hash: string; size?: number; mimeType?: string; name?: string }
+	| { scheme: "artifact"; sessionId?: string; seq: string }
+	| { scheme: "workspace"; path: string };
+
+/** Blob branch of {@link FileRef}; attachment results only ever store blobs. */
+export type BlobFileRef = Extract<FileRef, { scheme: "blob" }>;
+
+/** Attachment results always echo the display metadata the upload supplied. */
+export type AttachmentFileRef = BlobFileRef & { size: number; mimeType: string; name: string };
+
+/** Absolute-reference prefix; a workspace path never carries one. */
+const SCHEME_PREFIX_RE = /^[A-Za-z][A-Za-z0-9+.-]*:/;
+
+function isArtifactSessionId(value: string): boolean {
+	return ARTIFACT_SESSION_ID_RE.test(value) && value !== "." && value !== ".." && !value.startsWith(".");
+}
+
+/**
+ * Split an `artifact://` payload into its optional session pin and numeric seq.
+ * The seq is a per-session counter, so a non-numeric id cannot name an artifact.
+ */
+function parseArtifactRef(rest: string): FileRef | null {
+	const slash = rest.indexOf("/");
+	if (slash < 0) return /^\d+$/.test(rest) ? { scheme: "artifact", seq: rest } : null;
+	const sessionId = rest.slice(0, slash);
+	const seq = rest.slice(slash + 1);
+	if (!isArtifactSessionId(sessionId) || !/^\d+$/.test(seq)) return null;
+	return { scheme: "artifact", sessionId, seq };
+}
+
+/**
+ * A workspace ref must stay inside the workspace: absolute roots (POSIX, UNC,
+ * or a Windows drive) and any `..` segment would address something else.
+ */
+function parseWorkspaceRef(value: string): FileRef | null {
+	if (!value || SCHEME_PREFIX_RE.test(value) || value.startsWith("/") || value.startsWith("\\")) return null;
+	if (value.split(/[\\/]+/).includes("..")) return null;
+	return { scheme: "workspace", path: value };
+}
+
+/**
+ * Parse one reference into a {@link FileRef}, or null when it is not a valid
+ * reference. Blob hashes, artifact session ids, and workspace escapes are
+ * rejected here, so every caller shares one validation boundary.
+ */
+export function parseFileRef(input: string): FileRef | null {
+	const value = input.trim();
+	if (value.startsWith(BLOB_REF_PREFIX)) {
+		const hash = value.slice(BLOB_REF_PREFIX.length);
+		return BLOB_HASH_RE.test(hash) ? { scheme: "blob", hash } : null;
+	}
+	if (value.startsWith(BLOB_URL_PREFIX)) {
+		const hash = value.slice(BLOB_URL_PREFIX.length);
+		return BLOB_HASH_RE.test(hash) ? { scheme: "blob", hash } : null;
+	}
+	if (value.startsWith("artifact://")) return parseArtifactRef(value.slice("artifact://".length));
+	if (SCHEME_PREFIX_RE.test(value)) return null;
+	return parseWorkspaceRef(value);
+}
+
+/**
+ * Render a reference in the form consumers read: blobs and artifacts as their
+ * URL form, workspace refs as the relative path itself.
+ */
+export function formatFileRef(ref: FileRef): string {
+	switch (ref.scheme) {
+		case "blob":
+			return `${BLOB_URL_PREFIX}${ref.hash}`;
+		case "artifact":
+			return ref.sessionId ? `artifact://${ref.sessionId}/${ref.seq}` : `artifact://${ref.seq}`;
+		case "workspace":
+			return ref.path;
+	}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Attachments (attachment.put / attachment.get / attachment.stat)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Reference to bytes the daemon holds in its blob store, addressed by content.
- * `hash` is the identity; `mimeType` and `name` are display metadata supplied
- * once by the uploading client and echoed back unchanged.
- */
-export interface BlobFileRef {
-	scheme: "blob";
-	/** SHA-256 hex of the stored bytes. */
-	hash: string;
-	size: number;
-	mimeType: string;
-	/** Original file name, for prompt lines and chips. */
-	name: string;
-}
-
 /** `attachment.put` success payload. */
 export interface AttachmentPutResult {
-	ref: BlobFileRef;
-	/** `blob://<hash>` — the reference prompt lines carry. */
+	ref: AttachmentFileRef;
+	/** `formatFileRef(ref)` — the reference prompt lines carry. */
 	url: string;
 }
 
@@ -585,6 +767,14 @@ export interface TtsModelStatusResponse {
 	models: TtsModelRow[];
 	downloads?: string[];
 	defaultKey?: string;
+}
+
+/** `tts.rewrite` payload: one markdown block rewritten into spoken prose by
+ *  the session's tiny/smol role. `null` means no model/key resolved, the
+ *  rewrite timed out or failed, or the block was judged unspeakable — the
+ *  caller falls back to mechanical sanitization. */
+export interface TtsRewriteResponse {
+	text: string | null;
 }
 
 /**

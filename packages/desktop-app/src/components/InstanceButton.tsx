@@ -29,6 +29,10 @@ export function InstanceButton({
 	onReconnect,
 	onDisconnect,
 	onOpenWorkspace,
+	/** Rail variant: the destination column must keep the instance menu
+	 *  reachable when the sidebar is collapsed or a page destination owns
+	 *  the surface. Only the status dot shows; the full menu is unchanged. */
+	compact = false,
 }: {
 	rpc: RpcClient | null;
 	connected: boolean;
@@ -41,6 +45,7 @@ export function InstanceButton({
 	onReconnect(): void;
 	onDisconnect(): void;
 	onOpenWorkspace(cwd: string): void;
+	compact?: boolean;
 }): ReactNode {
 	const btnRef = useRef<HTMLButtonElement | null>(null);
 	const [open, setOpen] = useState(false);
@@ -97,11 +102,11 @@ export function InstanceButton({
 	}, [open, hosts, daemonUrl]);
 
 	return (
-		<div className="gui-instance">
+		<div className={`gui-instance${compact ? " gui-instance--compact" : ""}`}>
 			<button
 				type="button"
 				ref={btnRef}
-				className="gui-instance-btn gui-instance-btn--recessed"
+				className={compact ? "gui-instance-btn gui-rail-btn" : "gui-instance-btn gui-instance-btn--recessed"}
 				title={t("general.instanceInfo")}
 				aria-label={t("general.instanceInfo")}
 				aria-expanded={open}
@@ -110,8 +115,8 @@ export function InstanceButton({
 				<span
 					className={`h-2 w-2 shrink-0 rounded-full ${connected ? "bg-[var(--color-success)]" : "bg-[var(--color-danger)]"}`}
 				/>
-				<span>{t("general.local")}</span>
-				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+				{!compact && <span>{t("general.local")}</span>}
+				{!compact && <Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />}
 			</button>
 			<MenuPopup
 				open={open}

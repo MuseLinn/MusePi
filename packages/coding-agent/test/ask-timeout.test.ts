@@ -26,7 +26,7 @@ function createAskTool(): AskTool {
 			get(key: string): unknown {
 				if (key === "ask.timeout") return 0.01;
 				if (key === "ask.notify") return "off";
-				if (key === "speech.enabled") return false;
+				if (key === "tts.autoRead") return false;
 				return undefined;
 			},
 		},

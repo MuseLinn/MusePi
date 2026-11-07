@@ -43,6 +43,22 @@ beforeAll(async () => {
 	);
 	// Malformed transcript at the same depth must be dropped, not surfaced.
 	await fsp.writeFile(path.join(root, "1730000000000_parent-id", "garbage.jsonl"), "not json at all\n");
+	// Sub-agent transcript without a title slot: the filename is the agent id,
+	// so the listing must surface it as the row label instead of leaving the
+	// session untitled.
+	await fsp.writeFile(
+		path.join(root, "1730000000000_parent-id", "untitled-agent.jsonl"),
+		[
+			JSON.stringify({
+				type: "session",
+				id: "untitled-agent",
+				cwd: "/repo",
+				timestamp: "2026-09-30T00:00:00.000Z",
+			}),
+			JSON.stringify({ type: "message", message: { role: "user", content: "child prompt" } }),
+			"",
+		].join("\n"),
+	);
 });
 
 afterAll(async () => {
@@ -52,8 +68,16 @@ afterAll(async () => {
 describe("sub-agent transcript listing", () => {
 	it("finds two-level-deep transcripts while the parent stays out of the subagent layer", async () => {
 		const subs = await listSubagentSessions();
-		expect(subs.map(s => s.id)).toEqual(["sub-1"]);
-		expect(subs[0]?.path.endsWith(path.join("proj", "1730000000000_parent-id", "sub-1.jsonl"))).toBe(true);
+		expect(subs.map(s => s.id).sort()).toEqual(["sub-1", "untitled-agent"]);
+		expect(
+			subs.find(s => s.id === "sub-1")?.path.endsWith(path.join("proj", "1730000000000_parent-id", "sub-1.jsonl")),
+		).toBe(true);
+	});
+
+	it("labels a transcript without a title slot by its agent id", async () => {
+		const subs = await listSubagentSessions();
+		const untitled = subs.find(s => s.id === "untitled-agent");
+		expect(untitled?.title).toBe("untitled-agent");
 	});
 
 	it("drops malformed transcripts instead of surfacing them as sessions", async () => {

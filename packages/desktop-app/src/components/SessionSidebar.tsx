@@ -114,16 +114,6 @@ export function SessionSidebar({
 	onDisconnect,
 	onOpenConnect,
 	onOpenWorkspace,
-	onOpenBoard,
-	boardActive,
-	onOpenPrBoard,
-	prBoardActive,
-	onOpenScheduled,
-	scheduledActive,
-	cronGlow,
-	onOpenCapability,
-	capabilityActive,
-	onOpenCapabilityTab,
 	onOpenSettings,
 	onPickFolder,
 	onCreateProject,
@@ -142,6 +132,7 @@ export function SessionSidebar({
 	onToggleUnread,
 	onImportSessions,
 	modeCatalog,
+	showFooter = true,
 	rpc,
 	connected,
 	daemonUrl,
@@ -174,22 +165,6 @@ export function SessionSidebar({
 	onDisconnect(): void;
 	onOpenConnect(): void;
 	onOpenWorkspace(cwd: string): void;
-	onOpenBoard?(): void;
-	onOpenScheduled?(): void;
-	scheduledActive?: boolean;
-	/** A scheduled task finished recently — the 定时任务 button glows. */
-	cronGlow?: boolean;
-	/** Board view is the active scene — its nav item renders selected. */
-	boardActive?: boolean;
-	/** Open the PR/issue board (main view); its nav item renders selected. */
-	onOpenPrBoard?(): void;
-	prBoardActive?: boolean;
-	/** 能力中心枢纽 (WorkBuddy 式单入口): 主点击区进能力中心默认页,
-	 *  尾部 chevron 弹下拉直达 技能/插件/扩展/市场 四个 tab。 */
-	onOpenCapability?(): void;
-	capabilityActive?: boolean;
-	/** 枢纽下拉直达 —— 落地能力中心的指定 tab。 */
-	onOpenCapabilityTab?(tab: "skills" | "plugins" | "marketplace"): void;
 	onOpenSettings(): void;
 	/** 打开文件夹 — native directory picker (Electron dialog). */
 	onPickFolder?(): void;
@@ -233,6 +208,10 @@ export function SessionSidebar({
 	/** modes.list catalog (builtin + user-created presets) — forwarded to the
 	 *  hover card's mode row (shared naming chain, lib/mode-label.ts). */
 	modeCatalog?: readonly ModeLabelEntry[] | null;
+	/** Render the bottom instance/shortcuts/settings/remote footer. The two-
+	 *  tier shell hosts those entries in the permanent rail, so app.tsx sets
+	 *  false; other hosts (and the sidebar contract tests) keep the default. */
+	showFooter?: boolean;
 	/** Mini chat: pop a session row out into the
 	 *  picture-in-picture mini chat window (Electron); non-Electron hosts
 	 *  should fall back to opening the session in place. */
@@ -314,24 +293,6 @@ export function SessionSidebar({
 		return () => observer.disconnect();
 	}, [syncTabstrip]);
 	const [projMenu, setProjMenu] = useState(false);
-	// 能力中心枢纽悬停菜单：鼠标悬停行即弹出直达 tab 的浮层（单一
-	// 按钮，无独立 chevron），走全局 MenuPopup（portal + 互斥 +
-	// gui-menu-in/out 动画单一权威）。菜单是 portal 渲染，行与菜单
-	// 之间的鼠标迁移靠延迟关（HOVER_CLOSE_MS）兜住。
-	const [capHubOpen, setCapHubOpen] = useState(false);
-	const capHubAnchorRef = useRef<HTMLDivElement | null>(null);
-	const capHubCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const openCapHub = (): void => {
-		if (capHubCloseTimerRef.current) {
-			clearTimeout(capHubCloseTimerRef.current);
-			capHubCloseTimerRef.current = null;
-		}
-		setCapHubOpen(true);
-	};
-	const scheduleCapHubClose = (): void => {
-		if (capHubCloseTimerRef.current) clearTimeout(capHubCloseTimerRef.current);
-		capHubCloseTimerRef.current = setTimeout(() => setCapHubOpen(false), 180);
-	};
 	// Tab-row quick toggle: null = per-group state, true = all open, false = all closed.
 	const [groupsAll, setGroupsAll] = useState<boolean | null>(null);
 	const [pinned, setPinned] = useState<string[]>(() => {
@@ -992,95 +953,6 @@ export function SessionSidebar({
 						<span>{t("settings.search")}</span>
 						<span className="gui-menu-kbd">{shortcutLabel("⌘K")}</span>
 					</button>
-					{onOpenScheduled && (
-						<button
-							type="button"
-							className={`gui-menu-item${scheduledActive ? " gui-menu-item--active" : ""}${cronGlow ? " gui-menu-item--glow" : ""}`}
-							onClick={onOpenScheduled}
-							title={t("settings.scheduledTasks")}
-						>
-							<Icon name="calendar-schedule" className="h-4 w-4" />
-							<span>{t("settings.scheduledTasks")}</span>
-						</button>
-					)}
-					{onOpenBoard && (
-						<button
-							type="button"
-							className={`gui-menu-item${boardActive ? " gui-menu-item--active" : ""}`}
-							onClick={onOpenBoard}
-							title={t("settings.board")}
-						>
-							<Icon name="layout-column" className="h-4 w-4" />
-							<span>{t("settings.board")}</span>
-						</button>
-					)}
-					{onOpenPrBoard && (
-						<button
-							type="button"
-							className={`gui-menu-item${prBoardActive ? " gui-menu-item--active" : ""}`}
-							onClick={onOpenPrBoard}
-							title={t("pr board")}
-						>
-							<Icon name="git-pull-request" className="h-4 w-4" />
-							<span>{t("pr board")}</span>
-						</button>
-					)}
-					{onOpenCapability && (
-						/* 能力中心枢纽：单一按钮——悬停弹出直达 tab 的浮层，
-						 * 直接点击进技能市场（app 侧落 marketplace tab）。 */
-						<div
-							ref={capHubAnchorRef}
-							className={`gui-menu-item gui-menu-item--hub${capabilityActive ? " gui-menu-item--active" : ""}`}
-							onMouseEnter={openCapHub}
-							onMouseLeave={scheduleCapHubClose}
-						>
-							<button
-								type="button"
-								className="gui-menu-item-hub-main"
-								onClick={() => {
-									if (capHubCloseTimerRef.current) clearTimeout(capHubCloseTimerRef.current);
-									setCapHubOpen(false);
-									onOpenCapability();
-								}}
-								onFocus={openCapHub}
-								onBlur={scheduleCapHubClose}
-								title={t("tools.capabilityCenter")}
-							>
-								<Icon name="star" className="h-4 w-4" />
-								<span>{t("tools.capabilityCenter")}</span>
-							</button>
-							<MenuPopup
-								open={capHubOpen}
-								onOpenChange={setCapHubOpen}
-								anchor={capHubAnchorRef.current}
-								className="gui-cap-hub-menu"
-							>
-								<div onMouseEnter={openCapHub} onMouseLeave={scheduleCapHubClose}>
-									{(
-										[
-											["skills", "sparkling", t("tools.skillsTab")],
-											["plugins", "plug", t("settings.plugins")],
-											["marketplace", "plug-2", t("guest.marketplace")],
-										] as ["skills" | "plugins" | "marketplace", string, string][]
-									).map(([id, icon, label]) => (
-										<button
-											key={id}
-											type="button"
-											className="gui-view-opt"
-											onClick={() => {
-												if (capHubCloseTimerRef.current) clearTimeout(capHubCloseTimerRef.current);
-												setCapHubOpen(false);
-												onOpenCapabilityTab?.(id);
-											}}
-										>
-											<Icon name={icon as Parameters<typeof Icon>[0]["name"]} className="h-3.5 w-3.5" />
-											<span>{label}</span>
-										</button>
-									))}
-								</div>
-							</MenuPopup>
-						</div>
-					)}
 				</div>
 				{/* Group / project tabs: the capsule wraps ONLY the two pills; the
 				 * right cluster carries a collapse/expand-all quick toggle plus the
@@ -1841,51 +1713,55 @@ export function SessionSidebar({
 					</div>
 				</div>
 				{/* User footer: instance info (connection state, latency, host
-				 * switcher) on the left; settings/session actions on the right. */}
-				<div className="gui-sidebar-footer flex items-center justify-between gap-1.5 border-t border-[var(--border)] px-3 py-2">
-					<InstanceButton
-						rpc={rpc ?? null}
-						connected={connected}
-						daemonUrl={daemonUrl}
-						hosts={hosts}
-						onSwitchHost={onSwitchHost}
-						onAddHost={onAddHost}
-						onRemoveHost={onRemoveHost}
-						onOpenSettings={onOpenSettings}
-						onReconnect={onReconnect}
-						onDisconnect={onDisconnect}
-						onOpenWorkspace={onOpenWorkspace}
-					/>
-					<div className="flex items-center gap-1.5">
-						<button
-							type="button"
-							className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-							onClick={onOpenShortcuts}
-							title={t("general.keyboardShortcuts")}
-							aria-label={t("general.keyboardShortcuts")}
-						>
-							<Icon name="command" className="h-4 w-4" />
-						</button>{" "}
-						<button
-							type="button"
-							className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-							onClick={onOpenSettings}
-							title={t("settings.settings")}
-							aria-label={t("settings.settings")}
-						>
-							<Icon name="settings-3" className="h-4 w-4" />
-						</button>
-						<button
-							type="button"
-							className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-							onClick={onOpenCollab}
-							title={t("settings.mobileRemoteControl")}
-							aria-label={t("settings.mobileRemoteControl")}
-						>
-							<Icon name="smartphone" className="h-4 w-4" />
-						</button>
+				 * switcher) on the left; settings/session actions on the right.
+				 * `showFooter` lets a host move these entries into a permanent
+				 * rail instead of losing them when this panel folds. */}
+				{showFooter && (
+					<div className="gui-sidebar-footer flex items-center justify-between gap-1.5 border-t border-[var(--border)] px-3 py-2">
+						<InstanceButton
+							rpc={rpc ?? null}
+							connected={connected}
+							daemonUrl={daemonUrl}
+							hosts={hosts}
+							onSwitchHost={onSwitchHost}
+							onAddHost={onAddHost}
+							onRemoveHost={onRemoveHost}
+							onOpenSettings={onOpenSettings}
+							onReconnect={onReconnect}
+							onDisconnect={onDisconnect}
+							onOpenWorkspace={onOpenWorkspace}
+						/>
+						<div className="flex items-center gap-1.5">
+							<button
+								type="button"
+								className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
+								onClick={onOpenShortcuts}
+								title={t("general.keyboardShortcuts")}
+								aria-label={t("general.keyboardShortcuts")}
+							>
+								<Icon name="command" className="h-4 w-4" />
+							</button>{" "}
+							<button
+								type="button"
+								className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
+								onClick={onOpenSettings}
+								title={t("settings.settings")}
+								aria-label={t("settings.settings")}
+							>
+								<Icon name="settings-3" className="h-4 w-4" />
+							</button>
+							<button
+								type="button"
+								className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
+								onClick={onOpenCollab}
+								title={t("settings.mobileRemoteControl")}
+								aria-label={t("settings.mobileRemoteControl")}
+							>
+								<Icon name="smartphone" className="h-4 w-4" />
+							</button>
+						</div>
 					</div>
-				</div>
+				)}
 			</div>
 			{/* Session right-click menu: archive, copy id. */}
 			<ContextMenu

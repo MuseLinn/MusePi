@@ -2628,11 +2628,12 @@ ipcMain.handle("bubbles-advance-mode", () => {
 	return { ok: true };
 });
 
-// ── Petdex import (Petdex zip → unpack → pet.json + spritesheet) ────────
+// ── Pet package import (zip → unpack → pet.json + spritesheet) ──────────
 // Unpacks with the system bsdtar (`tar -xf`) which handles zip on macOS,
 // Linux and Windows alike. Returns the package without image dimensions —
 // the renderer decodes the data URL to fill width/height.
 const { execFile, execFileSync, spawn } = require("node:child_process");
+const { readPetPackage } = require("./pet-package.cjs");
 
 async function importPetdexFromZip(zipPath) {
 	const dest = path.join(app.getPath("userData"), "pets", `pet-${Date.now()}`);
@@ -2641,25 +2642,7 @@ async function importPetdexFromZip(zipPath) {
 		// windowsHide: GUI 主进程无控制台，tar 是控制台程序，缺它每次导入弹 conhost。
 		execFile("tar", ["-xf", zipPath, "-C", dest], { windowsHide: true }, (err) => (err ? reject(err) : resolve()));
 	});
-	const petJsonPath = path.join(dest, "pet.json");
-	let meta;
-	try {
-		meta = JSON.parse(fs.readFileSync(petJsonPath, "utf8"));
-	} catch {
-		return { error: "invalid-petdex" };
-	}
-	const spritesheetRel = typeof meta.spritesheetPath === "string" ? meta.spritesheetPath : "spritesheet.webp";
-	const sheetPath = path.join(dest, spritesheetRel);
-	if (!fs.existsSync(sheetPath)) return { error: "missing-spritesheet" };
-	const ext = path.extname(sheetPath).toLowerCase();
-	const mime = ext === ".png" ? "image/png" : ext === ".gif" ? "image/gif" : "image/webp";
-	const dataUrl = `data:${mime};base64,${fs.readFileSync(sheetPath).toString("base64")}`;
-	return {
-		id: typeof meta.id === "string" && meta.id ? meta.id : `pet-${Date.now()}`,
-		displayName: typeof meta.displayName === "string" && meta.displayName ? meta.displayName : "Petdex pet",
-		description: typeof meta.description === "string" ? meta.description : null,
-		spritesheet: dataUrl,
-	};
+	return readPetPackage(dest, "Petdex pet");
 }
 
 // Sleep/wake (合盖待机): Electron tears down the renderer's WebSocket on
@@ -2709,25 +2692,7 @@ ipcMain.handle("pet-import-codex", async () => {
 	});
 	const dir = picked.filePaths?.[0];
 	if (!dir) return null;
-	const petJsonPath = path.join(dir, "pet.json");
-	let meta;
-	try {
-		meta = JSON.parse(fs.readFileSync(petJsonPath, "utf8"));
-	} catch {
-		return { error: "invalid-codex" };
-	}
-	const spritesheetRel = typeof meta.spritesheetPath === "string" ? meta.spritesheetPath : "spritesheet.webp";
-	const sheetPath = path.join(dir, spritesheetRel);
-	if (!fs.existsSync(sheetPath)) return { error: "missing-spritesheet" };
-	const ext = path.extname(sheetPath).toLowerCase();
-	const mime = ext === ".png" ? "image/png" : ext === ".gif" ? "image/gif" : "image/webp";
-	const dataUrl = `data:${mime};base64,${fs.readFileSync(sheetPath).toString("base64")}`;
-	return {
-		id: typeof meta.id === "string" && meta.id ? meta.id : `pet-${Date.now()}`,
-		displayName: typeof meta.displayName === "string" && meta.displayName ? meta.displayName : "Codex pet",
-		description: typeof meta.description === "string" ? meta.description : null,
-		spritesheet: dataUrl,
-	};
+	return readPetPackage(dir, "Codex pet");
 });
 
 // ── Petdex market (内嵌搜索/预览/安装) ───────────────────────────────────

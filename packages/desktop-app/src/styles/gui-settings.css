@@ -360,12 +360,19 @@
  * corners), no chrome. Slim drag strip on top; pin-top/close buttons
  * are larger and appear on hover (kimi desktop-card language). */
 .gui-pin {
-	width: 100vw;
-	height: 100vh;
+	/* Shadow room: the card used to be exactly the viewport (100vw/100vh),
+	 * so its box-shadow painted outside the window surface and was clipped —
+	 * the pinned card floated with no edge separation and fused with whatever
+	 * sat behind it (the board card it was pinned from, for one), whose
+	 * lighter fill then showed through the transparent corner notches and
+	 * read as a square coloured backdrop. These insets are pure shadow
+	 * margin; the window keeps the card's size. */
+	position: fixed;
+	inset: 16px 16px 32px;
 	border-radius: var(--radius-2xl);
 	overflow: hidden;
-	background: var(--color-surface-raised);
-	/* Desktop-card entrance: resolves from a soft blur (kimi 固定至桌面). */
+	/* Card surface belongs to the tone (gui-tone.css) — same ramp as the
+	 * board card this was pinned from. */
 	animation: gui-pin-in 320ms var(--spring);
 	box-shadow:
 		0 2px 2px -1px rgba(0, 0, 0, 0.3),
@@ -2065,15 +2072,15 @@
 }
 
 
-/* ── Collab remote-control dialog (ZCode 移动端远程控制) ────────────────── */
+/* ── Collab remote-control dialog ─────────────────────────────────────── */
 
-.gui-collab-dialog {
+.gui-dialog.gui-collab-dialog {
 	display: flex;
 	flex-direction: column;
-	width: min(760px, 92vw);
+	width: min(1040px, 94vw);
 	height: auto;
 	max-height: 84vh;
-	border-radius: var(--radius-2xl);
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: var(--color-surface);
 	box-shadow:
@@ -2083,18 +2090,28 @@
 	overflow: hidden;
 }
 
+.gui-collab-dialog-title {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+}
+
 .gui-collab-grid {
 	display: grid;
-	grid-template-columns: 1fr 1fr;
+	flex: 1 1 auto;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	align-items: start;
 	gap: 0;
 	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 .gui-collab-col {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
-	padding: 18px 20px;
+	gap: 14px;
+	padding: 22px 24px;
 	min-width: 0;
 }
 
@@ -2108,6 +2125,12 @@
 	gap: 8px;
 	font-size: var(--ui-font-size);
 	font-weight: 600;
+}
+
+.gui-collab-col-head h2 {
+	margin: 0;
+	font-size: inherit;
+	font-weight: inherit;
 }
 
 /* ── 插件详情液态玻璃弹层（dsh 插件详情页 parity）+ 「包含的组件」段 +
@@ -2351,9 +2374,113 @@
 
 
 .gui-collab-desc {
+	margin: 0;
 	font-size: 12.5px;
-	line-height: 1.5;
+	line-height: 1.55;
 	color: var(--color-text-muted);
+}
+
+.gui-collab-setup,
+.gui-collab-hosting {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding-top: 4px;
+}
+
+.gui-collab-scope.gui-seg {
+	width: 100%;
+	max-width: none;
+}
+
+.gui-collab-scope-summary {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--color-surface-raised);
+}
+
+.gui-collab-scope-summary > svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+	color: var(--color-text-muted);
+}
+
+.gui-collab-scope-summary h3,
+.gui-collab-recovery h3 {
+	margin: 0 0 4px;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.gui-collab-scope-summary p,
+.gui-collab-recovery p,
+.gui-collab-channel-message p {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.55;
+	color: var(--color-text-muted);
+}
+
+.gui-collab-start {
+	justify-content: center;
+	width: 100%;
+	min-height: 38px;
+}
+
+.gui-collab-recovery {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 14px;
+	border: 1px solid color-mix(in oklab, var(--color-error) 32%, transparent);
+	border-radius: var(--radius-xl);
+	background: color-mix(in oklab, var(--color-error) 8%, transparent);
+}
+
+.gui-collab-recovery > svg {
+	flex-shrink: 0;
+	margin-top: 1px;
+	color: var(--color-error);
+}
+
+.gui-collab-recovery-content {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-collab-recovery-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+.gui-collab-technical {
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
+.gui-collab-technical summary {
+	width: fit-content;
+	cursor: pointer;
+}
+
+.gui-collab-technical pre {
+	max-height: 120px;
+	margin: 8px 0 0;
+	overflow: auto;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	user-select: text;
 }
 
 .gui-collab-status {
@@ -2364,16 +2491,33 @@
 	color: var(--color-text-muted);
 }
 
+.gui-collab-stop {
+	margin-left: auto;
+}
+
+.gui-collab-participants {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.gui-collab-participants > span {
+	padding: 2px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-full);
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
 .gui-collab-dot {
-	width: 8px;
-	height: 8px;
+	width: 7px;
+	height: 7px;
+	flex-shrink: 0;
 	border-radius: 50%;
 	background: var(--color-ok);
 	box-shadow: 0 0 8px color-mix(in oklab, var(--color-ok) 60%, transparent);
 }
 
-/* Off-channel dot: was unstyled, so stopped channels still glowed green
- * (the modifier class existed in the markup with no rule behind it). */
 .gui-collab-dot--off {
 	background: var(--color-text-faint);
 	box-shadow: none;
@@ -2383,12 +2527,12 @@
 .gui-collab-qr {
 	display: flex;
 	justify-content: center;
-	padding: 8px 0;
+	padding: 4px 0;
 }
 
 .gui-collab-qr canvas {
-	width: 200px;
-	height: 200px;
+	width: 184px;
+	height: 184px;
 	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: #fff;
@@ -2396,118 +2540,157 @@
 
 .gui-collab-actions {
 	display: flex;
+	flex-wrap: wrap;
 	gap: 8px;
 	justify-content: center;
 }
 
 .gui-collab-error {
-	padding: 6px 10px;
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 9px 11px;
+	border: 1px solid color-mix(in oklab, var(--color-error) 24%, transparent);
 	border-radius: var(--radius-lg);
-	background: color-mix(in oklab, var(--color-error) 12%, transparent);
+	background: color-mix(in oklab, var(--color-error) 8%, transparent);
 	color: var(--color-error);
-	font-size: 12.5px;
+	font-size: 12px;
+	line-height: 1.5;
+	overflow-wrap: anywhere;
 }
 
-.gui-collab-idle {
+.gui-collab-error > svg {
+	flex-shrink: 0;
+	margin-top: 1px;
+}
+
+.gui-collab-pair {
 	display: flex;
 	flex-direction: column;
-	align-items: center;
-	gap: 10px;
-	padding: 40px 0;
+	gap: 8px;
+	padding-top: 14px;
+	border-top: 1px solid var(--border);
 }
 
-.gui-collab-hint {
-	font-size: var(--ui-font-size-xs);
+.gui-collab-pair-title,
+.gui-collab-pair-hint {
+	font-size: 11px;
+	line-height: 1.5;
 	color: var(--color-text-faint);
+}
+
+.gui-collab-pair-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.gui-collab-channels {
+	min-height: 80px;
+}
+
+.gui-collab-loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 80px;
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+.gui-collab-channel-message {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--color-surface-raised);
+}
+
+.gui-collab-channel-message > svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+	color: var(--color-error);
+}
+
+.gui-collab-channel-message strong {
+	display: block;
+	margin-bottom: 4px;
+	font-size: 12px;
+}
+
+.gui-collab-channel-message .gui-btn {
+	margin-top: 10px;
 }
 
 .gui-collab-bots {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 0;
+	margin: 0;
+	padding: 0;
+	list-style: none;
 }
 
-/* Expanded per-channel config form (token input + save button). Lives under
- * the bot row; stacked column so the button can never overlap the input. */
-.gui-collab-channel-config {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	margin: 8px 12px 2px;
-	padding: 12px;
-	border-radius: var(--radius-xl);
-	border: 1px solid var(--border);
-	background: var(--color-surface);
-}
-
-.gui-collab-channel-config .gui-btn {
-	align-self: flex-end;
-}
-
-.gui-collab-channel-input {
-	width: 100%;
-	padding: 8px 10px;
-	font-size: 12px;
-	color: var(--color-text);
-	background: var(--color-surface-raised);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-lg);
-	outline: none;
-	transition: border-color var(--transition-fast);
-}
-
-.gui-collab-channel-input:focus {
-	border-color: var(--color-accent);
-}
-
-/* QR login (issue #28): WeChat login QR surfaced from status().config.qrUrl
- * while the channel waits for a scan. Centered under the bot row. */
-.gui-collab-channel-qr {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 6px;
-	margin: 8px 12px 2px;
-	padding: 12px;
-	border-radius: var(--radius-xl);
-	border: 1px dashed var(--border);
-	background: var(--color-surface);
-}
-
-.gui-collab-channel-qr img {
-	width: 148px;
-	height: 148px;
-	border-radius: var(--radius-lg);
-	background: #fff; /* QR codes are black-on-white by contract — never themed */
-}
-
-.gui-collab-channel-qr span {
-	font-size: 12px;
-	color: var(--color-text-faint);
+.gui-collab-bot-wrap + .gui-collab-bot-wrap {
+	border-top: 1px solid var(--border);
 }
 
 .gui-collab-bot {
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	padding: 10px 12px;
-	border-radius: var(--radius-xl);
-	border: 1px solid var(--border);
-	background: var(--color-surface-raised);
+	gap: 12px;
+	min-height: 62px;
+	padding: 10px 2px;
 }
 
-.gui-collab-bot--disabled {
-	opacity: 0.55;
+.gui-collab-bot-copy {
+	flex: 1;
+	min-width: 0;
+}
+
+.gui-collab-bot-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.gui-collab-bot-status {
+	margin-top: 3px;
+	overflow: hidden;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-collab-bot-actions {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	flex-shrink: 0;
+}
+
+.gui-collab-icon-action {
+	justify-content: center;
+	min-width: 30px;
+	padding-inline: 7px;
 }
 
 .gui-collab-bot-ico {
-	width: 28px;
-	height: 28px;
-	border-radius: var(--radius-lg);
-	flex-shrink: 0;
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	width: 30px;
+	height: 30px;
+	flex-shrink: 0;
+	border-radius: var(--radius-lg);
 	color: #fff;
 }
 
@@ -2518,24 +2701,166 @@
 .gui-collab-bot-ico--telegram { background: #2aabee; }
 .gui-collab-bot-ico--huawei-today { background: #c7000b; }
 
-.gui-collab-bot-mgmt {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	gap: 8px;
-	margin-top: auto;
-	padding: 8px 12px;
-	border-radius: var(--radius-lg);
+.gui-collab-channel-config {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin: 0 0 12px 42px;
+	padding: 12px;
 	border: 1px solid var(--border);
-	background: transparent;
-	color: var(--color-text-muted);
-	font-size: var(--ui-font-size-sm);
-	cursor: pointer;
+	border-radius: var(--radius-xl);
+	background: var(--color-surface-raised);
 }
 
-.gui-collab-bot-mgmt:disabled {
-	opacity: 0.5;
-	cursor: default;
+.gui-collab-channel-config .gui-btn {
+	align-self: flex-end;
+}
+
+.gui-collab-channel-field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
+.gui-collab-channel-input {
+	width: 100%;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	outline: none;
+	background: var(--color-surface);
+	color: var(--color-text);
+	font-size: 12px;
+	transition: border-color var(--transition-fast);
+}
+
+.gui-collab-channel-input:focus {
+	border-color: var(--color-accent);
+}
+
+.gui-collab-channel-qr {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	margin: 0 0 12px 42px;
+	padding: 12px;
+	border: 1px dashed var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--color-surface-raised);
+}
+
+.gui-collab-channel-qr img {
+	width: 148px;
+	height: 148px;
+	border-radius: var(--radius-lg);
+	background: #fff;
+}
+
+.gui-collab-channel-qr span {
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+.gui-collab-plugins {
+	margin-top: 4px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-collab-plugins summary {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 12px 2px 4px;
+	font-size: 12px;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	list-style: none;
+}
+
+.gui-collab-plugins summary::-webkit-details-marker {
+	display: none;
+}
+
+.gui-collab-plugins summary::before {
+	content: "▸" / "";
+}
+
+.gui-collab-plugins[open] summary::before {
+	content: "▾" / "";
+}
+
+.gui-collab-plugin-count {
+	margin-left: auto;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-collab-plugin-body {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 10px 2px 2px;
+}
+
+.gui-collab-plugin-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.gui-collab-plugin-list > span {
+	padding: 2px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-full);
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
+.gui-collab-plugin-list > .gui-collab-no-plugins {
+	padding: 0;
+	border: 0;
+}
+
+.gui-collab-dialog button:focus-visible,
+.gui-collab-dialog summary:focus-visible,
+.gui-collab-dialog input:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
+@media (max-width: 800px) {
+	.gui-collab-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.gui-collab-col {
+		padding: 20px;
+	}
+
+	.gui-collab-col:first-child {
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+	}
+}
+
+@media (max-width: 520px) {
+	.gui-collab-bot {
+		flex-wrap: wrap;
+	}
+
+	.gui-collab-bot-actions {
+		width: 100%;
+		justify-content: flex-end;
+	}
+
+	.gui-collab-channel-config,
+	.gui-collab-channel-qr {
+		margin-left: 0;
+	}
 }
 
 /* ZCode container treatment: panes are color fields, not hairline boxes —
@@ -6156,11 +6481,10 @@ body.gui-resizing {
 }
 
 /* ── B1: zoom / viewport frame / loading / agent occupancy (§3.2) ───── */
-/* Pane root carries the container query for the narrow-panel collapse
- * (§3.2.4). Tiered (user 2026-09-22: 窄面板下地址栏按钮全消失只剩输入框):
- * ≤480px tightens the chrome padding; nav, tools and actions stay live at
- * every width. The standing − 100% ＋ zoom group moved into the ⋯ menu
- * (gui-browser-menu-zoom), so there is nothing left to hide. */
+/* Pane root carries the container query for the narrow-panel collapse.
+ * At ≤480px the address field keeps its minimum usable width: annotation,
+ * developer tools and new-tab move to the existing overflow menu instead of
+ * consuming the same row twice. Navigation, extensions and More stay live. */
 .gui-browser-pane {
 	container-type: inline-size;
 }
@@ -6170,6 +6494,11 @@ body.gui-resizing {
 		gap: 4px;
 		padding-left: 6px;
 		padding-right: 6px;
+	}
+
+	.gui-browser-pane .gui-browser-tools,
+	.gui-browser-pane .gui-browser-actions > .gui-browser-icon-btn:last-child {
+		display: none;
 	}
 }
 
@@ -6760,5 +7089,168 @@ body.gui-resizing {
 		font-size: 12px;
 		color: var(--color-text-faint);
 		text-align: center;
+	}
+}
+
+
+/* Browser settings views and the managed-browser extensions popup. */
+.gui-browser-settings-tabs {
+	max-width: 360px;
+	margin-bottom: 16px;
+}
+
+.gui-browser-extensions-popup {
+	width: min(420px, calc(100vw - 16px));
+	padding: 8px;
+	overflow-y: auto;
+}
+
+.gui-browser-extensions-popup-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-height: 30px;
+	padding: 0 4px 6px 8px;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+}
+
+.gui-browser-import-card {
+	display: grid;
+	grid-template-columns: 30px minmax(0, 1fr) auto;
+	align-items: start;
+	gap: 10px;
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+}
+
+.gui-browser-import-card--compact {
+	margin-bottom: 12px;
+}
+
+.gui-settings-section > .gui-browser-import-card {
+	margin: 12px;
+}
+
+.gui-browser-import-logo,
+.gui-browser-extension-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 30px;
+	height: 30px;
+	border-radius: var(--radius-md);
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+}
+
+.gui-browser-import-copy,
+.gui-browser-extension-copy {
+	min-width: 0;
+}
+
+.gui-browser-import-title,
+.gui-browser-extension-name,
+.gui-browser-extension-heading {
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.gui-browser-import-description,
+.gui-browser-extension-description,
+.gui-browser-extension-group-desc {
+	margin-top: 2px;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+}
+
+.gui-browser-import-actions {
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 3px;
+}
+
+.gui-browser-import-feedback {
+	margin-top: 6px;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+}
+
+.gui-browser-import-feedback--success {
+	color: var(--color-accent);
+}
+
+.gui-browser-import-feedback--error,
+.gui-browser-extension-error {
+	color: var(--color-danger);
+}
+
+.gui-browser-extension-group + .gui-browser-extension-group {
+	margin-top: 14px;
+}
+
+.gui-browser-extension-heading {
+	margin-bottom: 4px;
+}
+
+.gui-browser-extension-group-desc {
+	margin-bottom: 6px;
+}
+
+.gui-browser-extension-row {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	min-width: 0;
+	padding: 7px 0;
+}
+
+.gui-browser-extension-row .gui-browser-extension-copy {
+	flex: 1 1 auto;
+}
+
+.gui-browser-extension-list {
+	max-height: 184px;
+	overflow-y: auto;
+}
+
+.gui-browser-extension-empty {
+	padding: 10px 0;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-browser-extension-error {
+	margin-top: 8px;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+}
+
+@container (max-width: 420px) {
+	.gui-browser-import-card {
+		grid-template-columns: 30px minmax(0, 1fr);
+	}
+
+	.gui-browser-import-actions {
+		grid-column: 2;
+	}
+}
+
+@media (max-width: 520px) {
+	.gui-settings-section .gui-browser-import-card {
+		grid-template-columns: 30px minmax(0, 1fr);
+	}
+
+	.gui-settings-section .gui-browser-import-actions {
+		grid-column: 2;
 	}
 }

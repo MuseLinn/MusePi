@@ -11,6 +11,7 @@
  * runtime, node builtins) and must tolerate partial/malformed `args` and
  * `details` — these arrive as plain JSON over the wire.
  */
+import type { AttachmentGetResult, AttachmentStatResult } from "@musepi/pi-wire";
 import type { ComponentType } from "react";
 
 export interface ToolResultText {
@@ -92,6 +93,22 @@ export interface ToolRenderHost {
 	 * opening the project-knowledge surface on that plan.
 	 */
 	showPlan?(request: { directory: string; id: string; title: string }): void;
+	/**
+	 * Stored attachment blobs (`[Attachment] blob://<hash>` in a user message).
+	 * The members mirror the daemon's `attachment.stat` / `attachment.get`
+	 * pair, so a host wires them without a second protocol: `stat` answers
+	 * existence and full size, `read` returns one base64 page (the daemon caps
+	 * each page at 8 MiB) and `save` opens the host's save/open flow for blobs
+	 * the text preview cannot decode.
+	 *
+	 * Hosts without it (guests, HTML exports) omit the capability entirely;
+	 * attachment cards still render, with no size and no preview action.
+	 */
+	attachment?: {
+		stat?(hash: string): Promise<AttachmentStatResult>;
+		read?(hash: string, offset?: number, limit?: number): Promise<AttachmentGetResult | { error: string }>;
+		save?(hash: string, name: string): void;
+	};
 }
 
 /**

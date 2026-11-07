@@ -53,6 +53,10 @@ export interface SpeakOptions {
 	rate?: number;
 	/** 朗读内容模式 */
 	mode?: "raw" | "sanitize" | "summarize";
+	/** `tts.enhanced`: rewrite blocks through the tiny/smol role before synthesis. */
+	enhanced?: boolean;
+	/** Session whose model registry/credentials the rewrite runs under. */
+	sessionId?: string;
 }
 
 /* ── 设备枚举 ─────────────────────────────────────────────────── */
@@ -751,6 +755,95 @@ function friendlySpeakError(raw: string | undefined): string {
 	return message;
 }
 
+/** `tts.rewrite` runs a bounded LLM completion (6 s daemon-side timeout);
+ *  leave headroom for the RPC round trip without inheriting the 180 s
+ *  synthesis cap, which would hang read-aloud on a dead session. */
+const REWRITE_RPC_TIMEOUT_MS = 10_000;
+/** SpeechEnhancer caps in-flight rewrites; match it so one long reply cannot
+ *  fan out into a burst of tiny-model requests. */
+const REWRITE_MAX_CONCURRENCY = 2;
+const REWRITE_MAX_BLOCKS = 20;
+
+/**
+ * Split markdown into blank-line-delimited blocks without splitting a fenced
+ * code block. The rewrite prompt needs the WHOLE fence (it replaces code with
+ * one spoken clause), so a fence always stays inside one block. Pure and
+ * exported for contract tests.
+ */
+export function splitRewriteBlocks(text: string): string[] {
+	const blocks: string[] = [];
+	let current: string[] = [];
+	let fence: "`" | "~" | null = null;
+	for (const line of text.split("\n")) {
+		const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1]?.[0];
+		if (marker === "`" || marker === "~") {
+			if (fence === null) fence = marker;
+			else if (fence === marker) fence = null;
+		}
+		if (line.trim() === "" && fence === null) {
+			if (current.length > 0) blocks.push(current.join("\n").trim());
+			current = [];
+			continue;
+		}
+		current.push(line);
+	}
+	if (current.length > 0) blocks.push(current.join("\n").trim());
+	return blocks.filter(Boolean);
+}
+
+/** One tts.rewrite call. `null` = no model, timeout or transport failure;
+ *  `""` = the model judged the block unspeakable. */
+async function rewriteBlock(rpc: RpcClient, sessionId: string, block: string): Promise<string | null> {
+	try {
+		const res = await rpc.request<{ text: string | null }>(
+			"tts.rewrite",
+			{ sessionId, text: block },
+			{ timeoutMs: REWRITE_RPC_TIMEOUT_MS },
+		);
+		return res?.text ?? null;
+	} catch {
+		return null;
+	}
+}
+
+/** Rewrite each block through tts.rewrite, falling back to mechanical
+ *  sanitization per block when the model is unavailable, times out, fails, or
+ *  judges the block unspeakable (empty string = skip the block entirely). */
+async function rewriteForSpeech(
+	raw: string,
+	rpc: RpcClient,
+	sessionId: string,
+	isStopped: () => boolean,
+	mode: "raw" | "sanitize" | "summarize" = "sanitize",
+): Promise<string> {
+	const blocks = splitRewriteBlocks(raw);
+	if (blocks.length === 0) return sanitizeForSpeech(raw, mode);
+	const head = blocks.slice(0, REWRITE_MAX_BLOCKS);
+	const tail = blocks
+		.slice(REWRITE_MAX_BLOCKS)
+		.map(block => sanitizeForSpeech(block, mode))
+		.join(" ");
+	const out: string[] = new Array(head.length);
+	let next = 0;
+	const worker = async (): Promise<void> => {
+		while (next < head.length && !isStopped()) {
+			const i = next++;
+			const block = head[i]!;
+			const rewritten = await rewriteBlock(rpc, sessionId, block);
+			if (rewritten === "") continue;
+			out[i] = rewritten ? rewritten.trim() : sanitizeForSpeech(block, mode);
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(REWRITE_MAX_CONCURRENCY, head.length) }, () => worker()));
+	// An empty result means every block was judged unspeakable (pure code or
+	// markup) — stay silent, matching the rewrite prompt's contract, instead
+	// of falling back to the mechanical placeholder text. Otherwise the
+	// content-mode setting still applies AFTER rewriting, so 精简/原文 are
+	// never silently ignored when 增强语音速写 is on.
+	const joined = [...out.filter(Boolean), tail].filter(Boolean).join(" ").trim();
+	return joined ? sanitizeForSpeech(joined, mode) : "";
+}
+
 export function speak(
 	text: string,
 	rpc: RpcClient | null,
@@ -759,21 +852,18 @@ export function speak(
 ): () => void {
 	const clean = sanitizeForSpeech(text, options?.mode ?? "sanitize");
 	if (rpc) {
-		const segments = splitSpeakableSentences(clean);
-		if (segments.length === 0) {
-			onState?.({ phase: "error", message: t("settings.voiceErrorTtsEmpty") });
-			return () => {};
-		}
 		let stopped = false;
 		let graph: { ctx: AudioContext; gain: GainNode } | null = null;
 		let cursor = 0;
 		const liveSources = new Set<AudioBufferSourceNode>();
-		const synthesize = (index: number): Promise<{ audio: number[] | null; sampleRate: number; error?: string }> =>
+		const synthesize = (
+			segmentText: string,
+		): Promise<{ audio: number[] | null; sampleRate: number; error?: string }> =>
 			rpc
 				.request<{ audio: number[] | null; sampleRate: number; error?: string }>(
 					"tts.synthesize",
 					{
-						text: segments[index],
+						text: segmentText,
 						...(options?.voice ? { voice: options.voice } : {}),
 					},
 					// First use warms the model inside the call — same class as stt.transcribe.
@@ -786,7 +876,19 @@ export function speak(
 				}));
 		void (async (): Promise<void> => {
 			try {
-				let pending = synthesize(0);
+				const prepared =
+					options?.enhanced && options.sessionId
+						? await rewriteForSpeech(text, rpc, options.sessionId, () => stopped, options.mode ?? "sanitize")
+						: clean;
+				if (stopped) return;
+				const segments = splitSpeakableSentences(prepared);
+				if (segments.length === 0) {
+					// Enhanced mode intentionally stays silent when the rewrite
+					// judged every block unspeakable; that is not an error.
+					if (!options?.enhanced) onState?.({ phase: "error", message: t("settings.voiceErrorTtsEmpty") });
+					return;
+				}
+				let pending = synthesize(segments[0]!);
 				for (let i = 0; i < segments.length; i += 1) {
 					const res = await pending;
 					if (stopped) return;
@@ -795,7 +897,7 @@ export function speak(
 						return;
 					}
 					// Segment N+1 synthesizes while segment N plays.
-					if (i + 1 < segments.length) pending = synthesize(i + 1);
+					if (i + 1 < segments.length) pending = synthesize(segments[i + 1]!);
 					if (!graph) {
 						graph = speakGraph();
 						cursor = graph.ctx.currentTime;
@@ -881,6 +983,236 @@ export function speak(
 		onState?.({ phase: "error", message: String(err) });
 		return () => {};
 	}
+}
+
+/**
+ * Read-aloud that keeps pace with a STREAMING reply (terminal vocalizer
+ * parity). `feed` receives the CURRENT FULL text of the reply on every
+ * snapshot update; only newly completed sentences are synthesized, so the
+ * first sentence plays while the model is still writing the next one.
+ */
+export interface IncrementalSpeaker {
+	feed(fullText: string): void;
+	/** Flush the trailing fragment at turn end. */
+	finish(): void;
+	/** Stop playback and drop queued segments. */
+	stop(): void;
+}
+
+/** Only one streaming read-aloud may own the shared audio graph. */
+let activeIncremental: IncrementalSpeaker | null = null;
+/** A segment is complete only when its tail is sentence-final punctuation. */
+const SENTENCE_END_RE = /[。！？.!?…][」』》”’）)\]"']*\s*$/u;
+/** Delta mode rewrites per sentence; bound the LLM calls for one reply. */
+const REWRITE_SENTENCE_BUDGET = 12;
+
+/** Character offset of the LAST fence that is still open, or null. A half
+ *  code block must never be cut into sentences (or sent to the rewriter)
+ *  mid-stream; text BEFORE the fence can still be spoken immediately.
+ *  Same marker scan as splitRewriteBlocks, which needs per-line state. */
+function unclosedFenceStart(text: string): number | null {
+	let fence: "`" | "~" | null = null;
+	let start = 0;
+	let offset = 0;
+	for (const line of text.split("\n")) {
+		const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1]?.[0];
+		if (marker === "`" || marker === "~") {
+			if (fence === null) {
+				fence = marker;
+				start = offset;
+			} else if (fence === marker) fence = null;
+		}
+		offset += line.length + 1;
+	}
+	return fence !== null ? start : null;
+}
+
+export function createIncrementalSpeaker(
+	rpc: RpcClient,
+	options: SpeakOptions,
+	onState?: (activity: VoiceActivity) => void,
+): IncrementalSpeaker {
+	activeIncremental?.stop();
+	let seen = "";
+	let carry = "";
+	let stopped = false;
+	let finished = false;
+	let doneReported = false;
+	let draining = false;
+	let started = false;
+	let errored = false;
+	let ownsActive = false;
+	let rewriteCount = 0;
+	const queue: string[] = [];
+	let graph: { ctx: AudioContext; gain: GainNode } | null = null;
+	let cursor = 0;
+	const liveSources = new Set<AudioBufferSourceNode>();
+
+	const reportDone = (): void => {
+		if (stopped || !finished || draining || queue.length > 0 || carry || doneReported) return;
+		doneReported = true;
+		if (ownsActive) activeTts = null;
+		onState?.({ phase: "done" });
+	};
+
+	const prepare = async (segment: string): Promise<string> => {
+		const mode = options.mode ?? "sanitize";
+		const fallback = sanitizeForSpeech(segment, mode);
+		if (!options.enhanced || !options.sessionId || rewriteCount >= REWRITE_SENTENCE_BUDGET) return fallback;
+		rewriteCount += 1;
+		const rewritten = await rewriteBlock(rpc, options.sessionId, segment);
+		if (rewritten === null) return fallback;
+		// Keep the content-mode setting effective after the rewrite.
+		return sanitizeForSpeech(rewritten, mode);
+	};
+
+	const synthesizeAndPlay = async (text: string): Promise<boolean> => {
+		let res: { audio: number[] | null; sampleRate: number; error?: string };
+		try {
+			res = await rpc.request<{ audio: number[] | null; sampleRate: number; error?: string }>(
+				"tts.synthesize",
+				{ text, ...(options.voice ? { voice: options.voice } : {}) },
+				{ timeoutMs: SPEECH_RPC_TIMEOUT_MS },
+			);
+		} catch (err) {
+			res = { audio: null, sampleRate: 0, error: err instanceof Error ? err.message : String(err) };
+		}
+		if (stopped) return false;
+		if (!res?.audio || res.audio.length === 0) {
+			// A dead backend must not emit one error toast per remaining sentence.
+			if (!errored) {
+				errored = true;
+				onState?.({ phase: "error", message: friendlySpeakError(res?.error) });
+			}
+			return false;
+		}
+		if (!graph) {
+			graph = speakGraph();
+			cursor = graph.ctx.currentTime;
+			void graph.ctx.resume().catch(() => {});
+			activeTts = {
+				duck: () => {
+					if (speakGain) speakGain.gain.value = 0.25;
+				},
+				pause: () => {
+					void speakCtx?.suspend().catch(() => {});
+				},
+				resume: () => {
+					if (speakGain) speakGain.gain.value = 1;
+					void speakCtx?.resume().catch(() => {});
+				},
+			};
+			ownsActive = true;
+		}
+		const wav = pcmToWav(res.audio, res.sampleRate || 24_000);
+		const buffer = await graph.ctx.decodeAudioData(wav.buffer as ArrayBuffer);
+		if (stopped) return false;
+		const source = graph.ctx.createBufferSource();
+		source.buffer = buffer;
+		const rate = options.rate && options.rate > 0 ? options.rate : 1;
+		if (rate !== 1) source.playbackRate.value = rate;
+		source.connect(graph.gain);
+		source.onended = () => liveSources.delete(source);
+		liveSources.add(source);
+		const startAt = Math.max(cursor, graph.ctx.currentTime + SEGMENT_GAP_SEC);
+		source.start(startAt);
+		cursor = startAt + buffer.duration / rate;
+		if (!started) {
+			started = true;
+			onState?.({ phase: "speaking" });
+		}
+		return true;
+	};
+
+	const drain = (): void => {
+		if (draining) return;
+		draining = true;
+		void (async (): Promise<void> => {
+			try {
+				while (!stopped && queue.length > 0) {
+					const segment = queue.shift()!;
+					const text = await prepare(segment);
+					if (stopped) return;
+					if (!text.trim()) continue;
+					try {
+						// A failed synthesis means the backend is gone; stop
+						// queueing RPCs for the rest of the reply.
+						if (!(await synthesizeAndPlay(text))) return;
+					} catch (err) {
+						if (!errored) {
+							errored = true;
+							onState?.({
+								phase: "error",
+								message: friendlySpeakError(err instanceof Error ? err.message : String(err)),
+							});
+						}
+						return;
+					}
+				}
+			} finally {
+				draining = false;
+				reportDone();
+			}
+		})();
+	};
+	const enqueue = (segment: string): void => {
+		queue.push(segment);
+		drain();
+	};
+
+	const controller: IncrementalSpeaker = {
+		feed(fullText) {
+			if (stopped || finished) return;
+			// Prefix check tolerates a snapshot that re-sends the same text; a
+			// changed prefix means the caller handed us a different reply and
+			// the ChatView key guard should have rebuilt the controller.
+			const fresh = fullText.startsWith(seen) ? fullText.slice(seen.length) : fullText;
+			seen = fullText;
+			if (!fresh) return;
+			const pending = carry + fresh;
+			// A fence that is still open means the model is mid-code-block.
+			// Speak everything BEFORE it now, hold the fence (and any trailing
+			// text) until it closes — half a code block must never be cut into
+			// sentences or sent to the rewriter.
+			const fenceStart = unclosedFenceStart(pending);
+			const before = fenceStart === null ? pending : pending.slice(0, fenceStart);
+			const segments = splitSpeakableSentences(before);
+			const ended = SENTENCE_END_RE.test(before);
+			const complete = ended ? segments : segments.slice(0, -1);
+			carry = (ended ? "" : (segments.at(-1) ?? "")) + (fenceStart === null ? "" : pending.slice(fenceStart));
+			for (const segment of complete) enqueue(segment);
+		},
+		finish() {
+			if (stopped || finished) return;
+			finished = true;
+			if (carry.trim()) {
+				const tail = carry;
+				carry = "";
+				enqueue(tail);
+			}
+			reportDone();
+		},
+		stop() {
+			if (stopped) return;
+			stopped = true;
+			finished = true;
+			queue.length = 0;
+			carry = "";
+			for (const source of liveSources) {
+				try {
+					source.stop();
+				} catch {
+					// Already ended.
+				}
+			}
+			liveSources.clear();
+			if (activeIncremental === controller) activeIncremental = null;
+			if (ownsActive) activeTts = null;
+			onState?.({ phase: "stopped" });
+		},
+	};
+	activeIncremental = controller;
+	return controller;
 }
 
 export function voiceAvailable(): boolean {

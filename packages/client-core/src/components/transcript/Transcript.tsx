@@ -15,18 +15,22 @@ function hapticTap(): void {
 	}
 }
 
+import { asyncJobResultView } from "@musepi/pi-wire";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Fragment, memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
 import { fmtDuration, fmtTokens } from "../../lib/format";
+import { ircPresentation } from "../../lib/irc";
 import type { ToolRenderHost } from "../../tool-render";
 import { ImageLightbox } from "../image-lightbox";
+import { AsyncJobResultCard } from "./async-job-result";
 import { BashCard } from "./bash-card";
 import { TurnErrorBody } from "./error-notice";
 import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
+import { IrcCard, ircPairKeyOf } from "./irc-message";
 import { collectQuoteMarks } from "./quote-anchor";
 import { QuoteHighlightLayer } from "./quote-highlight";
 import { roundTimerKeyByRow } from "./render-units";
@@ -726,6 +730,9 @@ interface EntryRowProps {
 	onStopSpeak?(): void;
 	/** The user message whose reply this assistant row is (retry target). */
 	retryTarget?: { id: string; text: string } | null;
+	/** This IRC row continues the previous row's agent pair (header already
+	 *  rendered). */
+	ircContinued?: boolean;
 	/** transcript.node seat 注入 —— 按条目派发(见 TranscriptProps)。 */
 	renderTranscriptNode?: (node: TranscriptNodeInjection) => ReactNode;
 }
@@ -817,6 +824,7 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 	if (prev.artifacts !== next.artifacts) return false;
 	if (prev.turnFiles !== next.turnFiles || prev.sources !== next.sources) return false;
 	if (prev.thinkingLevel !== next.thinkingLevel) return false;
+	if (prev.ircContinued !== next.ircContinued) return false;
 	if (prev.onRevert !== next.onRevert || prev.onFork !== next.onFork) return false;
 	if (prev.retryTarget !== next.retryTarget) return false;
 	if (prev.onSpeak !== next.onSpeak || prev.onSaveImage !== next.onSaveImage) return false;
@@ -853,6 +861,7 @@ function renderCustomMessage({
 	onPreviewImage,
 	advisorOpen = false,
 	onToggleAdvisor,
+	ircContinued = false,
 }: {
 	customType: string;
 	content: CustomMessageEntry["content"];
@@ -863,6 +872,9 @@ function renderCustomMessage({
 	/** Advisor-card expansion (transcript-level, keyed by the entry id). */
 	advisorOpen?: boolean;
 	onToggleAdvisor?(): void;
+	/** This IRC row continues the previous row's agent pair: the route header
+	 *  is already on screen, so the row renders its body only. */
+	ircContinued?: boolean;
 }): ReactNode {
 	if (customType === "collab-prompt") {
 		const from =
@@ -898,6 +910,14 @@ function renderCustomMessage({
 		return (
 			<Row kind="custom" gutter="" title={timestamp} turnStart>
 				<AdvisorBlock notes={notes} open={advisorOpen} onToggle={() => onToggleAdvisor?.()} />
+			</Row>
+		);
+	}
+	if (customType === "async-job-result") {
+		if (!display) return null;
+		return (
+			<Row kind="custom" gutter="" title={timestamp}>
+				<AsyncJobResultCard view={asyncJobResultView(content, details)} />
 			</Row>
 		);
 	}
@@ -955,35 +975,13 @@ function renderCustomMessage({
 		return null;
 	}
 	if (customType.startsWith("irc:")) {
-		const from =
-			details !== null && typeof details === "object" && "from" in details && typeof details.from === "string"
-				? details.from
-				: "irc";
-		// irc:incoming content is the rendered LLM prompt template
-		// (irc-incoming.md) — literal <irc>…</irc> scaffolding plus
-		// reply instructions that must not reach the UI. The clean
-		// body lives in details.message (mirror the TUI card, which
-		// renders card.body = details.message); fall back to content
-		// with the wrapper stripped for snapshots without details.
-		// relay/autoreply content is already display-shaped
-		// ([IRC a → b] header + body), so keep it verbatim.
-		const body =
-			details !== null && typeof details === "object" && "message" in details && typeof details.message === "string"
-				? details.message
-				: undefined;
-		const shown =
-			customType === "irc:incoming"
-				? (body ??
-					msgText({ content })
-						.replace(/^\s*<irc>\s*/i, "")
-						.replace(/\s*<\/irc>\s*$/i, ""))
-				: content;
+		if (!display) return null;
+		const irc = ircPresentation(customType, content, details);
 		return (
 			<Row kind="custom" gutter="" title={timestamp}>
-				<div className="tr-irc">
-					<span className="tr-irc-from">{from}</span>
-					<MsgContent content={shown} onPreviewImage={onPreviewImage} />
-				</div>
+				<IrcCard presentation={irc} continued={ircContinued}>
+					<MsgContent content={irc.body} onPreviewImage={onPreviewImage} />
+				</IrcCard>
 			</Row>
 		);
 	}
@@ -1099,6 +1097,7 @@ const EntryRow = memo(function EntryRow({
 	speaking,
 	onStopSpeak,
 	retryTarget,
+	ircContinued = false,
 	renderTranscriptNode,
 	errorAttempt,
 }: EntryRowProps): ReactNode {
@@ -1120,6 +1119,7 @@ const EntryRow = memo(function EntryRow({
 						onPreviewImage,
 						advisorOpen,
 						onToggleAdvisor: onToggleAdvisor ? () => onToggleAdvisor(advisorKeyOf(entry)) : undefined,
+						ircContinued,
 					});
 				}
 				// A turn that produced no reply at all is a fact about the request, not
@@ -1159,6 +1159,7 @@ const EntryRow = memo(function EntryRow({
 									collapse={collapseLongUserMessages}
 									onJumpToMessage={onJumpToMessage}
 									onPreviewImage={onPreviewImage}
+									host={host}
 								/>
 							</Row>
 						);
@@ -1227,6 +1228,7 @@ const EntryRow = memo(function EntryRow({
 					onPreviewImage,
 					advisorOpen,
 					onToggleAdvisor: onToggleAdvisor ? () => onToggleAdvisor(advisorKeyOf(entry)) : undefined,
+					ircContinued,
 				});
 			case "compaction": {
 				const label =
@@ -2276,6 +2278,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// lookup of the previous entry (equivalent — the old seeding code
 		// documented exactly this equivalence).
 		const before = entries[absIdx - 1];
+		// Consecutive IRC rows between the same two agents share one route
+		// header: a relayed back-and-forth otherwise repeats `a → b` on every
+		// line. The pair key is direction-free, so a reply continues the route.
+		const ircPair = ircPairKeyOf(entry);
+		const ircContinued = ircPair !== null && ircPair === (before ? ircPairKeyOf(before) : null);
 		const prevIsAssistant =
 			before?.type === "message" && (before.message.role === "assistant" || before.message.role === "toolResult");
 		// M1 turn header: rendered above the turn-start row (the user
@@ -2474,6 +2481,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						turnFiles={turnSurfacesByFinal.files.get(entry.id)}
 						sources={turnSurfacesByFinal.sources.get(entry.id)}
 						errorAttempt={entry.id !== undefined ? errorPlan.ownedByAssistant.get(entry.id)?.attempt : undefined}
+						ircContinued={ircContinued}
 						thinkingLevel={thinkingLevel}
 						streamingLast={streamingLast}
 						runStartTs={streamingLast ? lastUserTs : undefined}

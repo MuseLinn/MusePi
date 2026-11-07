@@ -982,9 +982,10 @@ function InstalledSkillsPane({
 											</button>
 										</div>
 										<div className="gui-cap-card-desc">{s.description || "—"}</div>
-										<div className="gui-cap-card-meta">
-											{skillLevelLabel(s)} · {skillOriginLabel(s)} · {skillVersionLabel(s)}
-										</div>
+										{/* 三行结构（顶行 / 描述 / 脚注）与市场卡片一致：状态标签在左、
+										 * 淡色 meta 在右。曾把 级别·来源·版本 单列一行、再把「内置 ·
+										 * 随客户端分发 · 不可卸载」塞进脚注 —— 同一件事说两遍，还把
+										 * 脚注挤到贴着下边框。不可卸载的说明留在详情抽屉的风险块里。 */}
 										<div className="gui-cap-card-foot">
 											{s.ignored ? (
 												<span className="gui-ext-item-tag gui-ext-item-tag--err">
@@ -995,9 +996,9 @@ function InstalledSkillsPane({
 													{t("tools.skillEnabled")}
 												</span>
 											)}
-											{!uninstallable(s) && skillLevel(s) === "builtin" && (
-												<span className="gui-cap-card-note">{t("tools.skillBundledNoUninstall")}</span>
-											)}
+											<span className="gui-cap-card-meta">
+												{skillLevelLabel(s)} · {skillOriginLabel(s)} · {skillVersionLabel(s)}
+											</span>
 										</div>
 									</div>
 								);

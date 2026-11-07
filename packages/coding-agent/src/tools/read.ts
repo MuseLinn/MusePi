@@ -11,6 +11,7 @@ import type {
 } from "@musepi/pi-agent-core";
 import type { ImageContent, TextContent, VideoContent } from "@musepi/pi-ai";
 import { type ImageMetadata, isProbablyBinary, logger, prompt, readImageMetadata } from "@musepi/pi-utils";
+import { formatFileRef } from "@musepi/pi-wire";
 import {
 	canonicalSnapshotKey,
 	getFileSnapshotStore,
@@ -21,7 +22,8 @@ import {
 import { normalizeToLF } from "../edit/normalize";
 import { isNotebookPath, readEditableNotebookText } from "../edit/notebook";
 import { InternalUrlRouter, resolveLocalUrlToFile, resolveLocalUrlToPath } from "../internal-urls";
-import { type ResolvedArtifactFile, resolveArtifactFile } from "../internal-urls/artifact-protocol";
+import { resolveArtifactFile } from "../internal-urls/artifact-protocol";
+import { resolveBlobFile } from "../internal-urls/blob-protocol";
 import { parseInternalUrl } from "../internal-urls/parse";
 import type { InternalUrl } from "../internal-urls/types";
 import readDescription from "../prompts/tools/read.md" with { type: "text" };
@@ -1702,40 +1704,33 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		return toolResult<ReadToolDetails>(details).text(summary).sourcePath(absolutePath).done();
 	}
 
-	#formatArtifactWorkflowNotice(artifact: ResolvedArtifactFile, artifactUrl: string): string {
-		const displayPath = shortenPath(artifact.path);
-		return `Artifact storage: ${displayPath} (${formatBytes(artifact.size)}). Use ${artifactUrl}:N-M to page, ${artifactUrl}:raw:N-M for verbatim chunks, and the artifact file path for search/copy workflows.`;
+	#formatTextResourceWorkflowNotice(ref: { path: string; size: number; href: string; noun: string }): string {
+		const displayPath = shortenPath(ref.path);
+		const label = ref.noun === "artifact" ? "Artifact storage" : "Blob storage";
+		return `${label}: ${displayPath} (${formatBytes(ref.size)}). Use ${ref.href}:N-M to page, ${ref.href}:raw:N-M for verbatim chunks, and the ${ref.noun} file path for search/copy workflows.`;
 	}
 
-	#formatRawArtifactBlockedNotice(artifact: ResolvedArtifactFile, artifactUrl: string): string {
-		const displayPath = shortenPath(artifact.path);
-		return `Unbounded raw read blocked for ${artifactUrl} (${formatBytes(
-			artifact.size,
-		)}). Reading the whole artifact verbatim can exhaust memory. Use ${artifactUrl}:raw:1-3000 for bounded verbatim chunks, ${artifactUrl}:1-3000 for numbered exploration, and the artifact file path for search/copy workflows: ${displayPath}`;
+	#formatRawReadBlockedNotice(ref: { size: number; href: string }): string {
+		return `Unbounded raw read blocked for ${ref.href} (${formatBytes(
+			ref.size,
+		)}). Reading the whole resource verbatim can exhaust memory. Use ${ref.href}:raw:1-3000 for bounded verbatim chunks, ${ref.href}:1-3000 for numbered exploration, and the backing file path for search/copy workflows.`;
 	}
 
-	async #readArtifactFile(
+	async #readTextResourceFile(
 		url: InternalUrl,
 		parsedSel: ParsedSelector,
-		signal?: AbortSignal,
+		signal: AbortSignal | undefined,
+		ref: { path: string; size: number; href: string; noun: string },
 	): Promise<AgentToolResult<ReadToolDetails>> {
-		const artifact = await resolveArtifactFile(url, {
-			cwd: this.session.cwd,
-			settings: this.session.settings,
-			signal,
-			localProtocolOptions: this.session.localProtocolOptions,
-			skills: this.session.skills,
-		});
-		const artifactUrl = `artifact://${artifact.id}`;
 		const details: ReadToolDetails = {
-			resolvedPath: artifact.path,
+			resolvedPath: ref.path,
 			contentType: "text/plain",
 		};
 
-		if (parsedSel.kind === "raw" && artifact.size > MAX_ARTIFACT_RAW_INLINE_BYTES) {
+		if (parsedSel.kind === "raw" && ref.size > MAX_ARTIFACT_RAW_INLINE_BYTES) {
 			return toolResult<ReadToolDetails>(details)
-				.text(this.#formatRawArtifactBlockedNotice(artifact, artifactUrl))
-				.sourcePath(artifact.path)
+				.text(this.#formatRawReadBlockedNotice(ref))
+				.sourcePath(ref.path)
 				.sourceInternal(url.href)
 				.done();
 		}
@@ -1744,9 +1739,9 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		const displayMode = resolveFileDisplayMode(this.session, { raw: rawSelector, immutable: true });
 		if (isMultiRange(parsedSel) && parsedSel.kind === "lines") {
 			const read = await this.#readLocalFileMultiRange(
-				artifact.path,
+				ref.path,
 				parsedSel.ranges,
-				artifact.size,
+				ref.size,
 				parsedSel,
 				displayMode,
 				undefined,
@@ -1756,14 +1751,14 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			if (read.bridgeResult) return read.bridgeResult;
 			if (read.displayContent) details.displayContent = read.displayContent;
 			let text = read.outputText;
-			if (!rawSelector && artifact.size > MAX_ARTIFACT_RAW_INLINE_BYTES) {
+			if (!rawSelector && ref.size > MAX_ARTIFACT_RAW_INLINE_BYTES) {
 				text = text
-					? `${text}\n\n[${this.#formatArtifactWorkflowNotice(artifact, artifactUrl)}]`
-					: this.#formatArtifactWorkflowNotice(artifact, artifactUrl);
+					? `${text}\n\n[${this.#formatTextResourceWorkflowNotice(ref)}]`
+					: this.#formatTextResourceWorkflowNotice(ref);
 			}
 			const resultBuilder = toolResult<ReadToolDetails>(details)
 				.text(text)
-				.sourcePath(artifact.path)
+				.sourcePath(ref.path)
 				.sourceInternal(url.href);
 			if (read.columnTruncated > 0) resultBuilder.limits({ columnMax: read.columnTruncated });
 			return resultBuilder.done();
@@ -1783,13 +1778,13 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		const selectedLineLimit = effectiveLimit + leadingContext + trailingContext;
 		const maxBytesForRead = Math.max(DEFAULT_MAX_BYTES, maxLinesToCollect * 512);
 		const streamResult = await streamLinesFromFile(
-			artifact.path,
+			ref.path,
 			startLine,
 			maxLinesToCollect,
 			maxBytesForRead,
 			selectedLineLimit,
 			signal,
-			{ includeTerminalNewline: rawSelector, stopScanAfterCollect: artifact.size > SNAPSHOT_MAX_BYTES },
+			{ includeTerminalNewline: rawSelector, stopScanAfterCollect: ref.size > SNAPSHOT_MAX_BYTES },
 		);
 		const {
 			lines: collectedLines,
@@ -1805,10 +1800,12 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			const suggestion =
 				totalFileLines === 0
 					? "The artifact is empty."
-					: `Use ${artifactUrl}:1 to read from the start, or ${artifactUrl}:${totalFileLines} to read the last line.`;
+					: `Use ${ref.href}:1 to read from the start, or ${ref.href}:${totalFileLines} to read the last line.`;
 			return toolResult<ReadToolDetails>(details)
-				.text(`Line ${requestedStart + 1} is beyond end of artifact (${totalFileLines} lines total). ${suggestion}`)
-				.sourcePath(artifact.path)
+				.text(
+					`Line ${requestedStart + 1} is beyond end of ${ref.noun} (${totalFileLines} lines total). ${suggestion}`,
+				)
+				.sourcePath(ref.path)
 				.sourceInternal(url.href)
 				.done();
 		}
@@ -1876,20 +1873,20 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			} else if (startLine + collectedLines.length < totalFileLines || !reachedEof) {
 				const nextOffset = startLine + collectedLines.length + 1;
 				outputText += reachedEof
-					? `\n\n[${totalFileLines - (startLine + collectedLines.length)} more lines in artifact. Use ${artifactUrl}:${nextOffset} to continue]`
-					: `\n\n[More lines in artifact (${formatBytes(artifact.size)} total; not scanned to EOF). Use ${artifactUrl}:${nextOffset} to continue]`;
+					? `\n\n[${totalFileLines - (startLine + collectedLines.length)} more lines in ${ref.noun}. Use ${ref.href}:${nextOffset} to continue]`
+					: `\n\n[More lines in ${ref.noun} (${formatBytes(ref.size)} total; not scanned to EOF). Use ${ref.href}:${nextOffset} to continue]`;
 			}
 		}
 
-		if (!rawSelector && artifact.size > MAX_ARTIFACT_RAW_INLINE_BYTES) {
-			outputText += `\n\n[${this.#formatArtifactWorkflowNotice(artifact, artifactUrl)}]`;
+		if (!rawSelector && ref.size > MAX_ARTIFACT_RAW_INLINE_BYTES) {
+			outputText += `\n\n[${this.#formatTextResourceWorkflowNotice(ref)}]`;
 		}
 		if (reachedEof) details.totalLines = totalFileLines;
 		if (displayContent) details.displayContent = displayContent;
 		if (truncationInfo) details.truncation = truncationInfo.result;
 		const resultBuilder = toolResult<ReadToolDetails>(details)
 			.text(outputText)
-			.sourcePath(artifact.path)
+			.sourcePath(ref.path)
 			.sourceInternal(url.href);
 		if (truncationInfo) resultBuilder.truncation(truncationInfo.result, truncationInfo.options);
 		return resultBuilder.done();
@@ -1923,7 +1920,31 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			hasExtraction = hasPathExtraction || hasQueryExtraction;
 		}
 		if (scheme === "artifact") {
-			return this.#readArtifactFile(urlMeta, parsedSel, signal);
+			const artifact = await resolveArtifactFile(urlMeta, {
+				cwd: this.session.cwd,
+				settings: this.session.settings,
+				signal,
+				localProtocolOptions: this.session.localProtocolOptions,
+				skills: this.session.skills,
+			});
+			return this.#readTextResourceFile(urlMeta, parsedSel, signal, {
+				path: artifact.path,
+				size: artifact.size,
+				href: formatFileRef({ scheme: "artifact", seq: artifact.id }),
+				noun: "artifact",
+			});
+		}
+		// Blobs take the same path-based reader as artifacts: a large text
+		// attachment is paged by the read tool instead of hitting the protocol's
+		// whole-resource inline cap.
+		if (scheme === "blob") {
+			const blob = await resolveBlobFile(urlMeta);
+			return this.#readTextResourceFile(urlMeta, parsedSel, signal, {
+				path: blob.path,
+				size: blob.size,
+				href: formatFileRef({ scheme: "blob", hash: blob.hash }),
+				noun: "blob",
+			});
 		}
 
 		// local:// files are real on-disk paths. Detect image files and emit a

@@ -29,6 +29,10 @@ export interface ComposerAttachment {
 	size: number;
 	/** Raw bytes for file chips (not persisted with the draft). */
 	file?: File;
+	/** Upload started when the chip was staged, so send waits only for the tail
+	 *  of work that is usually finished. Memory-only, like `file`. A failure is
+	 *  recorded as `{ error }`; the send path retries by path then inline. */
+	staged?: Promise<AttachmentPutResult | { error: string } | null>;
 	/** Send-time upload in flight → progress ring overlay. */
 	uploading?: boolean;
 	/** Board-drawn chip (SketchPad): clicking it reopens the canvas for
@@ -166,38 +170,41 @@ export function uniqueAttachmentName(name: string, taken: ReadonlySet<string>): 
  *  creates exists — but the channel and the reference format must not drift
  *  between them. Throws on the first failure so the caller can abort the send
  *  (a message whose attachments never landed just confuses the agent). */
+type AttachmentUploadResult = AttachmentPutResult | { error: string } | null;
+
+/** Upload one file: by path when this machine can name it, inline otherwise.
+ *  Throws only when the RPC itself fails; a daemon-side rejection comes back
+ *  as `{ error }` so the caller can try the next channel. */
+async function uploadOneAttachment(rpc: RpcClient, file: File, name: string): Promise<AttachmentUploadResult> {
+	const mimeType = file.type || "application/octet-stream";
+	// Same-machine fast path: the daemon reads the file itself, so the bytes
+	// never enter the RPC frame (a base64 body is capped at ~12 MiB by the
+	// 16 MiB frame limit).
+	const localPath = localFilePath(file);
+	if (localPath) {
+		const byPath = await rpc.request<AttachmentPutResult | { error: string }>("attachment.putFile", {
+			path: localPath,
+			name,
+			mimeType,
+		});
+		if (byPath && !("error" in byPath)) return byPath;
+	}
+	const content = await readFileAsBase64(file);
+	return rpc.request<AttachmentPutResult | { error: string }>("attachment.put", { name, mimeType, content });
+}
+
 export async function uploadAttachmentFiles(
 	rpc: RpcClient,
 	_cwd: string | null | undefined,
-	files: readonly { file?: File; name: string }[],
+	files: readonly { file?: File; name: string; staged?: Promise<AttachmentUploadResult> }[],
 ): Promise<string[]> {
 	const refs: string[] = [];
 	for (const chip of files) {
 		if (!chip.file) throw new Error("attachment expired re-add");
-		const mimeType = chip.file.type || "application/octet-stream";
-		// Same-machine fast path: the daemon reads the file itself, so the bytes
-		// never enter the RPC frame (a base64 body is capped at ~12 MiB by the
-		// 16 MiB frame limit). Pasted blobs and unreadable paths fall back to the
-		// inline form.
-		const localPath = localFilePath(chip.file);
-		let res: AttachmentPutResult | { error: string } | null = localPath
-			? await rpc.request<AttachmentPutResult | { error: string }>("attachment.putFile", {
-					path: localPath,
-					name: chip.name,
-					mimeType,
-				})
-			: null;
-		if (localPath && (!res || "error" in res)) {
-			res = null;
-		}
-		if (!res) {
-			const content = await readFileAsBase64(chip.file);
-			res = await rpc.request<AttachmentPutResult | { error: string }>("attachment.put", {
-				name: chip.name,
-				mimeType,
-				content,
-			});
-		}
+		// A staged upload started when the chip appeared; send only waits for
+		// whatever is left of it. A stale failure falls through to a fresh one.
+		let res = chip.staged ? await chip.staged : null;
+		if (!res || "error" in res) res = await uploadOneAttachment(rpc, chip.file, chip.name);
 		if (!res || "error" in res) throw new Error(res?.error ?? "attachment upload failed");
 		refs.push(`[Attachment] ${res.url} (${chip.name})`);
 	}
@@ -417,6 +424,10 @@ export function useAttachments(rpc: RpcClient): {
 				name: f.name,
 				size: f.size,
 				file: f,
+				// Start the upload with the chip, not with the send: a large file
+				// then overlaps with the time the user spends writing. An unsent
+				// chip leaves an unreferenced blob, which the blob GC reclaims.
+				staged: uploadOneAttachment(rpc, f, f.name).catch(() => null),
 			})),
 		]);
 		setAttachments(prev => {

@@ -75,9 +75,10 @@ const cases: PreviewCase[] = [
 	},
 ];
 
-/** 统计一段描述文本在弹窗里出现的段落次数（重复渲染契约）。 */
+/** 统计一段描述文本在弹窗里出现的段落次数（重复渲染契约）。
+ *  描述段用 `data-skill-summary` 标记，不绑具体样式类 —— 外观换壳不该动契约。 */
 function descParagraphCount(host: HTMLElement, text: string): number {
-	return Array.from(host.querySelectorAll("p.gui-skill-market-card-desc")).filter(p => p.textContent === text).length;
+	return Array.from(host.querySelectorAll("p[data-skill-summary]")).filter(p => p.textContent === text).length;
 }
 
 function makeRpc(detail: Record<string, unknown> | null): RpcClient {
@@ -130,12 +131,51 @@ for (const c of cases) {
 			await act(async () => {
 				await Promise.resolve();
 			});
-			expect(host.textContent).not.toContain("正在加载预览");
-			expect(host.textContent).toContain(c.expectDesc);
+			// 抽屉 portal 到 document.body（视口锚定），断言从弹层本身取。
+			const dialog = document.querySelector('[role="dialog"]');
+			expect(dialog).not.toBeNull();
+			expect(dialog?.textContent).not.toContain("正在加载预览");
+			expect(dialog?.textContent).toContain(c.expectDesc);
 			// 描述只渲染一处：detail 与 entry 同文时不得叠两段。
-			expect(descParagraphCount(host, c.expectDesc)).toBe(1);
+			expect(descParagraphCount(dialog as HTMLElement, c.expectDesc)).toBe(1);
 			await act(async () => root.unmount());
 			host.remove();
 		});
 	});
 }
+
+// 样式对齐契约：市场预览复用「我安装的」技能详情抽屉外壳（gui-cap-drawer*）。
+// 另起一套平行弹窗就会漂成两种观感 —— 这条断言把外壳钉住。
+describe("SkillPreviewDialog 外壳 = 技能详情抽屉", () => {
+	test("挂载 gui-cap-drawer* 外壳并 portal 到 body", async () => {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		await act(async () => {
+			root.render(
+				createElement(SkillPreviewDialog, {
+					rpc: makeRpc({ latestVersion: "1.2.4", files: [{ path: "SKILL.md", size: 7953 }] }),
+					entry: entryOf(cases[0]),
+					installed: false,
+					busy: false,
+					onInstall: () => {},
+					onClose: () => {},
+				}),
+			);
+		});
+		await act(async () => {
+			await Promise.resolve();
+		});
+		const rootEl = document.querySelector(".gui-cap-drawer-root");
+		expect(rootEl).not.toBeNull();
+		// portal：抽屉不在挂载点里，而在 body 直下。
+		expect(host.querySelector(".gui-cap-drawer-root")).toBeNull();
+		expect(rootEl?.querySelector(".gui-cap-drawer-backdrop")).not.toBeNull();
+		expect(rootEl?.querySelector(".gui-cap-drawer .gui-cap-drawer-head")).not.toBeNull();
+		expect(rootEl?.querySelector(".gui-cap-drawer .gui-cap-drawer-actions")).not.toBeNull();
+		expect(rootEl?.querySelectorAll(".gui-cap-drawer-tabs .gui-cap-drawer-tab").length).toBeGreaterThanOrEqual(2);
+		expect(rootEl?.querySelector(".gui-cap-drawer-body")).not.toBeNull();
+		await act(async () => root.unmount());
+		host.remove();
+	});
+});

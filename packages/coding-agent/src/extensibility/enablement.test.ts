@@ -1,4 +1,5 @@
-import { describe, expect, it } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
+import { resetSettingsForTest } from "../config/settings";
 import {
 	enablementHolds,
 	isKnownEnablementCondition,
@@ -62,7 +63,7 @@ describe("enablement condition registry", () => {
 		// Reading the keys back through the schema is what makes the overlap
 		// checkable without inspecting either registry's source.
 		const { SETTINGS_SCHEMA } = await import("../config/settings-schema");
-		for (const key of ["stt.enabled", "speech.enabled", "browser.enabled", "computer.enabled", "lsp.enabled"]) {
+		for (const key of ["stt.enabled", "tts.autoRead", "browser.enabled", "computer.enabled", "lsp.enabled"]) {
 			expect({ key, present: key in SETTINGS_SCHEMA }).toEqual({ key, present: true });
 		}
 		// `shell.enabled` is the exception, and it is recorded rather than left to
@@ -86,6 +87,11 @@ describe("enablement condition registry", () => {
  * really reaches rather than a defensive branch.
  */
 describe("unreadable subsystem switches", () => {
+	// Other test files initialize the global Settings singleton (and may load a
+	// real config.yml). Reset per test so "before settings are initialized" is
+	// an actual state rather than a coincidence of file execution order.
+	beforeEach(() => resetSettingsForTest());
+
 	it("keeps a plugin out when its switch cannot be read", () => {
 		// Refusing to answer is not permission to load.
 		expect(enablementHolds("lspEnabled")).toBe(false);
@@ -106,7 +112,7 @@ describe("unreadable subsystem switches", () => {
 		// failure direction is worth specifying at all. Settings cannot be read
 		// before `Settings.init`, so both directions below are answers to "I do
 		// not know", not answers to "no".
-		const keys = ["lsp.enabled", "browser.enabled", "stt.enabled", "speech.enabled", "computer.enabled"] as const;
+		const keys = ["lsp.enabled", "browser.enabled", "stt.enabled", "tts.autoRead", "computer.enabled"] as const;
 		for (const key of keys) {
 			expect({ key, answer: readSubsystemEnabled(key) }).toEqual({ key, answer: undefined });
 		}

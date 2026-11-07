@@ -150,6 +150,12 @@ export const general = {
 	"general.mentionFile": "提及文件（@）",
 	"general.insertSession": "插入会话（#）",
 	"general.addImages": "添加图片",
+	"general.addAttachments": "上传文件",
+	"general.attachments": "附件",
+	"general.attachmentUploading": "上传中…",
+	"general.attachmentUploadFailed": "上传失败",
+	"general.attachmentUploadFailedNamed": "{name} 上传失败",
+	"general.attachmentUploadPending": "附件仍在上传，请稍候",
 	"general.planModeHint": "先让智能体梳理计划，再修改文件",
 	"general.planMode": "计划模式",
 	"general.insertUltrathink": "插入 ultrathink",
@@ -759,7 +765,7 @@ export const general = {
 	"general.skillMarketInstallRetry": "重试",
 	"general.skillMarketInstallFailed": "安装失败：网络不可达（{msg}）。请检查网络后重试。",
 	"general.skillMarketInstallFailedScriptDeclined": "安装失败：已拒绝安装脚本。",
-	// 卡片点击预览弹窗（信息先览，再决定安装）。
+	// 卡片点击预览抽屉（信息先览，再决定安装；与「我安装的」技能详情同一套抽屉外壳）。
 	"general.skillMarketInstall": "安装",
 	"general.skillMarketHomepage": "来源主页",
 	"general.skillMarketPreviewLoading": "正在加载预览…",
@@ -767,6 +773,9 @@ export const general = {
 	"general.skillMarketPreviewVersion": "最新版本",
 	"general.skillMarketPreviewFiles": "文件清单",
 	"general.skillMarketPreviewSecurity": "安全审计",
+	"general.skillMarketPreviewAuthor": "作者",
+	"general.skillMarketPreviewStars": "收藏",
+	"general.skillMarketPreviewDownloads": "下载",
 	"general.skillMarketSearchSkills": "skills.sh 是搜索源：输入关键词即可检索其目录",
 	// 能力中心 → 技能 tab 的子分段（发现 / 我安装的 N）。
 	"general.discover": "发现",
@@ -1512,6 +1521,8 @@ export const general = {
 	"general.sessionInfoMore": "查看更多（{count}）",
 	"general.sessionInfoUntitled": "未命名会话",
 	"general.sessionInfoPlugins": "插件",
+	"general.appRail": "应用导航",
+	"general.home": "首页",
 } as const;
 
 /** Key union for the general settings domain (source of truth). */

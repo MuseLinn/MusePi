@@ -61,6 +61,21 @@ const CONDITIONS: Record<string, (values: Record<string, unknown>) => boolean> =
 	unexpectedStopDetection: v => v["features.unexpectedStopDetection"] === true,
 };
 
+/** Resolve one row's visibility. Exported so a page can assert its condition
+ *  overrides without mounting the whole settings surface. */
+export function isSettingShown(
+	item: Pick<SchemaItem, "ui">,
+	values: Record<string, unknown>,
+	conditions?: Record<string, (values: Record<string, unknown>) => boolean>,
+): boolean {
+	const cond = item.ui?.condition;
+	if (!cond) return true;
+	const evaluate = conditions?.[cond] ?? CONDITIONS[cond];
+	// Unknown names stay visible (parity-safe), but a page that knows the
+	// answer — e.g. the voice tab's plugin state — must win over that default.
+	return evaluate ? evaluate(values) : true;
+}
+
 /**
  * Record-typed setting (retry.fallbackChains, tools.approval,
  * providers.maxInFlightRequests…): edited as compact JSON, committed on
@@ -316,11 +331,15 @@ export function SchemaSettings({
 	onChange,
 	error,
 	renderExtra,
+	conditions,
 }: {
 	items: SchemaItem[];
 	values: Record<string, unknown>;
 	onChange(key: string, value: unknown): void;
 	error?: string | null;
+	/** Per-tab overrides for condition names that depend on GUI-side state
+	 *  (plugin registry, window capabilities) rather than on settings values. */
+	conditions?: Record<string, (values: Record<string, unknown>) => boolean>;
 	/** Optional per-key extra renderer under a row (e.g. the task-card-style
 	 *  preview). Third arg is the row's commit(key, value) so the extra can
 	 *  act as the control (click-to-switch preview). When it renders for a
@@ -344,10 +363,7 @@ export function SchemaSettings({
 		dispatchSettingsChanged(key);
 	};
 
-	const shown = (item: SchemaItem): boolean => {
-		const cond = item.ui?.condition;
-		return !cond || (CONDITIONS[cond]?.(values) ?? true);
-	};
+	const shown = (item: SchemaItem): boolean => isSettingShown(item, values, conditions);
 
 	// Preserve schema order, grouping rows under their ui.group headings.
 	const renderGroups = (list: SchemaItem[], tui: boolean): ReactNode => {
@@ -377,8 +393,11 @@ export function SchemaSettings({
 								const label = item.ui?.label ?? item.key;
 								const desc = item.ui?.description;
 								const credential = isCredential(item);
-								const cond = item.ui?.condition;
-								const rowShown = !cond || (CONDITIONS[cond]?.(values) ?? true);
+								// Must use the same evaluator as `visible` above: a
+								// per-tab conditions override has to reach BOTH the
+								// group collapse and the individual row, or a
+								// plugin-disabled row stays visible via Reveal.
+								const rowShown = shown(item);
 								// Custom per-key extra (e.g. the click-to-switch
 								// task-card-style preview): when it renders, it
 								// IS the control — hide the standard one.

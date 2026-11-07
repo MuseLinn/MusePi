@@ -58,6 +58,22 @@ import {
 export type * from "./settings-schema";
 export * from "./settings-schema";
 
+/**
+ * Legacy read-aloud keys → the unified tts.* key that owns the value now.
+ *
+ * The desktop and terminal used to expose two independent voice config
+ * groups (tts.* for tts.synthesize, speech.* for the vocalizer). Both shells
+ * read the tts.* keys today. A config.yml written before the merge may still
+ * carry only speech.*, so get() falls back to it when the tts.* key was never
+ * written — no migration write, no silent reset of a user's choice.
+ */
+const LEGACY_READ_ALOUD_KEYS: Readonly<Record<string, string>> = {
+	"tts.autoRead": "speech.enabled",
+	"tts.readMode": "speech.mode",
+	"tts.enhanced": "speech.enhanced",
+	"tts.localVoice": "speech.voice",
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════════════
@@ -511,7 +527,11 @@ export class Settings {
 			return this.#resolvedCache.get(path) as SettingValue<P>;
 		}
 
-		const value = getByPath(this.#merged, SETTING_PATH_SEGMENTS[path]);
+		let value = getByPath(this.#merged, SETTING_PATH_SEGMENTS[path]);
+		if (value === undefined) {
+			const legacy = LEGACY_READ_ALOUD_KEYS[path];
+			if (legacy) value = this.getRaw(legacy);
+		}
 		const resolved =
 			value !== undefined ? (resolvePathScopedStringArray(path, value, this.#cwd) ?? value) : getDefault(path);
 		this.#resolvedCache.set(path, resolved);

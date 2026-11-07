@@ -28,21 +28,38 @@ function parseBlobHash(url: InternalUrl): string {
 	return hash;
 }
 
+/** A blob located on disk without reading its bytes. */
+export interface ResolvedBlobFile {
+	hash: string;
+	path: string;
+	size: number;
+}
+
+/**
+ * Resolve a `blob://<hash>` URL to its backing file.
+ *
+ * `read` uses this to apply line selectors without going through the text
+ * resolution cap: a large text attachment can be paged even though a full
+ * inline resolution would be refused.
+ */
+export async function resolveBlobFile(url: InternalUrl): Promise<ResolvedBlobFile> {
+	const hash = parseBlobHash(url);
+	const blobPath = path.join(getBlobsDir(), hash);
+	try {
+		const stat = await Bun.file(blobPath).stat();
+		return { hash, path: blobPath, size: stat.size };
+	} catch (err) {
+		if (isEnoent(err)) throw new Error(`Blob not found: blob://${hash}`);
+		throw err;
+	}
+}
+
 export class BlobProtocolHandler implements ProtocolHandler {
 	readonly scheme = "blob";
 	readonly immutable = true;
 
 	async resolve(url: InternalUrl, context?: ResolveContext): Promise<InternalResource> {
-		const hash = parseBlobHash(url);
-		const blobPath = path.join(getBlobsDir(), hash);
-
-		let size: number;
-		try {
-			size = (await Bun.file(blobPath).stat()).size;
-		} catch (err) {
-			if (isEnoent(err)) throw new Error(`Blob not found: blob://${hash}`);
-			throw err;
-		}
+		const { hash, path: blobPath, size } = await resolveBlobFile(url);
 
 		// Path-only callers (search/grep, bash URL expansion) only need the
 		// backing file, so they must not pay for bytes of any size.
@@ -58,7 +75,7 @@ export class BlobProtocolHandler implements ProtocolHandler {
 
 		if (size > MAX_INLINE_BLOB_BYTES) {
 			throw new Error(
-				`Blob ${hash} is ${size} bytes; full internal resolution is blocked. Use read with offset/limit against ${blobPath}, or the blob file path directly in search/copy workflows.`,
+				`Blob ${hash} is ${size} bytes; full internal resolution is blocked. Read it with line selectors (blob://${hash}:1-3000 or blob://${hash}:raw:1-3000), or use the blob file path for search/copy workflows: ${blobPath}`,
 			);
 		}
 

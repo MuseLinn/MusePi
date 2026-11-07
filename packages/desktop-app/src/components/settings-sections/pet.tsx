@@ -1,23 +1,32 @@
-import { SpotlightCard, type TranslationKey, t } from "@musepi/client-core";
+import { Segmented, type SegmentedOption, SpotlightCard, type TranslationKey, t, tLoose } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import "../../i18n/pet-style";
 import {
 	BUILTIN_PETDEX,
 	BUILTIN_SVG_ID,
-	DEFAULT_PET_ID,
 	loadPetdex,
+	measurePetAtlas,
 	measurePetdex,
+	modeForPackage,
 	PET_CONTENT_TARGET_H,
 	PET_SCALE_MAX,
 	PET_SCALE_MIN,
 	PETDEX_COLUMNS,
+	type PetAtlasGeometry,
+	type PetAtlasState,
 	type PetDisplayMode,
 	type PetdexPackage,
+	type PetMode,
 	petEnabled,
+	petForId,
 	petId,
+	petIdForMode,
 	petMode,
 	petScale,
 	savePetdex,
+	setPetId,
+	setPetMode,
 	setPetScale,
 } from "../../lib/pet";
 // The card previews (BuiltinPetSprite's gloss/accessory) still read the
@@ -28,25 +37,70 @@ import { GuiSelect } from "../GuiSelect";
 import { BuiltinPetSprite, PetdexSprite } from "../PetSprite";
 import { Reveal } from "../Reveal";
 
+/** Style picker: the mode gate that decides which creation paths the
+ *  appearance section offers. */
+const PET_STYLE_SEGMENTS: SegmentedOption<PetMode>[] = [
+	{ value: "vector", label: tLoose("settings.petStyleVector") },
+	{ value: "sprite", label: tLoose("settings.petStyleSprite") },
+];
+
 /** Agent companion (伙伴, BitFun parity): master switch + display mode
- * (input / floating desktop pet) + appearance (preset grid or imported
- * Petdex package). Prefs are renderer-local; the desktop pet window is
- * driven through the Electron bridge (pet-mode IPC). */
+ * (input / floating desktop pet) + appearance (drawing style first — vector
+ * orb or spritesheet — then that style's presets and imports). Prefs are
+ * renderer-local; the desktop pet window is driven through the Electron
+ * bridge (pet-mode IPC). */
 interface PetGridEntry {
 	id: string;
 	name: string;
 	description: string;
+	mode: PetMode;
 	src: string;
 	width: number;
 	height: number;
-	format?: "sheet" | "svg";
+	format?: "sheet" | "atlas" | "svg";
 	rows?: readonly number[];
+	atlas?: PetAtlasGeometry;
+	states?: Readonly<Record<string, PetAtlasState>>;
 	contentH?: number;
 	smooth?: boolean;
 	/** Code-owned renderer instead of a spritesheet — `src`/`width`/`height`
 	 *  are unused for these entries. */
 	renderer?: "note";
 	source: "preset" | "user";
+}
+
+type ImportedPet = Omit<PetdexPackage, "width" | "height" | "rows" | "contentH" | "importedAt"> & {
+	width?: number;
+	height?: number;
+	rows?: readonly number[];
+	contentH?: number;
+};
+
+function completePetPackage(raw: ImportedPet, img: HTMLImageElement): PetdexPackage | null {
+	const width = img.naturalWidth;
+	const height = img.naturalHeight;
+	if (!width || !height) return null;
+	const description = typeof raw.description === "string" && raw.description.trim() ? raw.description : undefined;
+	if (raw.format === "atlas") {
+		if (
+			!raw.atlas ||
+			!raw.states ||
+			raw.atlas.frameWidth * raw.atlas.columns !== width ||
+			raw.atlas.frameHeight * raw.atlas.rows !== height
+		) {
+			return null;
+		}
+		return {
+			...raw,
+			description,
+			width,
+			height,
+			contentH: measurePetAtlas(img, raw.atlas).contentH,
+			importedAt: Date.now(),
+		};
+	}
+	const { rows, contentH } = measurePetdex(img);
+	return { ...raw, description, width, height, rows, contentH, importedAt: Date.now() };
 }
 
 /** One selectable companion card in the appearance grid: rest-frame
@@ -82,7 +136,7 @@ export function PetCard({
 				}}
 			>
 				<span className="gui-pet-card__thumb">
-					{entry.renderer === "note" ? (
+					{entry.mode === "vector" && entry.renderer === "note" ? (
 						<BuiltinPetSprite mood="rest" />
 					) : (
 						<PetdexSprite
@@ -92,6 +146,8 @@ export function PetCard({
 							height={entry.height}
 							format={entry.format}
 							rows={entry.rows}
+							atlas={entry.atlas}
+							states={entry.states}
 							contentH={entry.contentH}
 							smooth={entry.smooth}
 						/>
@@ -293,22 +349,12 @@ export function PetMarket({
 			img.onload = () => resolveDecoded();
 			img.onerror = () => resolveDecoded();
 			await decoded;
-			if (!img.naturalWidth || !img.naturalHeight) {
-				setError("undecodable spritesheet");
+			const pkg = completePetPackage(raw, img);
+			if (!pkg) {
+				setError("invalid spritesheet geometry");
 				return;
 			}
-			const { rows, contentH } = measurePetdex(img);
-			onInstalled({
-				id: raw.id,
-				displayName: raw.displayName,
-				description: typeof raw.description === "string" && raw.description ? raw.description : undefined,
-				spritesheet: raw.spritesheet,
-				width: img.naturalWidth,
-				height: img.naturalHeight,
-				rows,
-				contentH,
-				importedAt: Date.now(),
-			});
+			onInstalled(pkg);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -377,7 +423,16 @@ export function PetSection(): ReactNode {
 	};
 	const pickPet = (id: string): void => {
 		setSelectedPetId(id);
-		setPref("musepi-gui-pet-id", id);
+		setPetId(id);
+		commit();
+	};
+	// Derived from the resolved selection, not tracked separately: picking a
+	// pet of the other mode moves the style with it.
+	const style = petForId(selectedPetId).mode;
+	const pickStyle = (mode: PetMode): void => {
+		setPetMode(mode);
+		setSelectedPetId(petId());
+		commit();
 	};
 	const importPetdex = async (): Promise<void> => {
 		const electronAPI = (
@@ -443,23 +498,12 @@ export function PetSection(): ReactNode {
 		img.onload = () => resolveDecoded();
 		img.onerror = () => resolveDecoded();
 		await decoded;
-		if (!img.naturalWidth || !img.naturalHeight) {
-			console.error("[pet] spritesheet undecodable");
+		const pkg = completePetPackage(raw, img);
+		if (!pkg) {
+			console.error("[pet] invalid spritesheet geometry");
 			setImportError(t("settings.petImportFailed"));
 			return;
 		}
-		const { rows, contentH } = measurePetdex(img);
-		const pkg: PetdexPackage = {
-			id: raw.id,
-			displayName: raw.displayName,
-			description: typeof raw.description === "string" && raw.description ? raw.description : undefined,
-			spritesheet: raw.spritesheet,
-			width: img.naturalWidth,
-			height: img.naturalHeight,
-			rows,
-			contentH,
-			importedAt: Date.now(),
-		};
 		const next = [...petdex.filter(p => p.id !== pkg.id), pkg];
 		savePetdex(next);
 		setPetdex(next);
@@ -471,7 +515,7 @@ export function PetSection(): ReactNode {
 		savePetdex(next);
 		setPetdex(next);
 		if (selectedPetId === id) {
-			pickPet(DEFAULT_PET_ID);
+			pickPet(petIdForMode(style));
 		}
 	};
 	// ── User SVG import (2026-09-20) ────────────────────────────────────
@@ -567,6 +611,7 @@ export function PetSection(): ReactNode {
 		id: BUILTIN_SVG_ID,
 		name: t("settings.builtinPet"),
 		description: t("settings.builtinPetDescription"),
+		mode: "vector",
 		src: "",
 		width: 0,
 		height: 0,
@@ -580,6 +625,7 @@ export function PetSection(): ReactNode {
 				id: p.id,
 				name: t(p.displayName as TranslationKey),
 				description: t(p.description as TranslationKey),
+				mode: "sprite",
 				src: p.spritesheetPath,
 				width: p.width,
 				height: p.height,
@@ -594,15 +640,20 @@ export function PetSection(): ReactNode {
 		id: p.id,
 		name: p.displayName,
 		description: p.description ?? "",
+		mode: modeForPackage(p),
 		src: p.spritesheet,
 		width: p.width,
 		height: p.height,
 		format: p.format,
 		rows: p.rows,
+		atlas: p.atlas,
+		states: p.states,
 		contentH: p.contentH,
 		smooth: p.smooth,
 		source: "user",
 	}));
+	const userEntriesForStyle = userEntries.filter(e => e.mode === style);
+	const presetEntriesForStyle = presetEntries.filter(e => e.mode === style);
 	const allEntries = [...userEntries, ...presetEntries];
 	const selectedEntry = allEntries.find(e => e.id === selectedPetId) ?? null;
 	return (
@@ -711,6 +762,18 @@ export function PetSection(): ReactNode {
 				<div className="gui-settings-section-title">{t("tools.petAppearance")}</div>
 				{enabled && (
 					<>
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{tLoose("settings.petStyle")}</div>
+								<div className="gui-settings-row-desc">{tLoose("settings.petStyleDescription")}</div>
+							</div>
+							<Segmented
+								ariaLabel={tLoose("settings.petStyle")}
+								value={style}
+								options={PET_STYLE_SEGMENTS}
+								onChange={mode => pickStyle(mode)}
+							/>
+						</div>
 						{/* Appearance (BitFun parity): header row with refresh +
 						 * import, a trigger showing the selected pet, and an
 						 * expandable preset grid grouped 预设 / 已导入. */}
@@ -732,40 +795,50 @@ export function PetSection(): ReactNode {
 								>
 									<Icon name="refresh" className="h-3.5 w-3.5" />
 								</button>
-								<button
-									type="button"
-									className="gui-btn"
-									onClick={() => void importPetdex()}
-									disabled={importing || !isDesktopShell}
-									title={isDesktopShell ? t("settings.importPetdex") : t("settings.desktopPetNeedsDesktop")}
-								>
-									<Icon name="add" className="h-3.5 w-3.5" />
-									{importing ? "…" : t("settings.importPetdex")}
-								</button>
-								<button
-									type="button"
-									className="gui-btn"
-									onClick={() => void importCodexPet()}
-									disabled={importing || !isDesktopShell}
-									title={
-										isDesktopShell ? t("settings.importCodexSprite") : t("settings.desktopPetNeedsDesktop")
-									}
-								>
-									<Icon name="download" className="h-3.5 w-3.5" />
-									{importing ? "…" : t("settings.importCodexSprite")}
-								</button>
-								{/* User SVG import — renderer-side file pick, no
-								 * desktop-shell gate (a file input works everywhere). */}
-								<button
-									type="button"
-									className="gui-btn"
-									onClick={importSvgPet}
-									disabled={importing}
-									title={t("settings.importSvg")}
-								>
-									<Icon name="file-add" className="h-3.5 w-3.5" />
-									{importing ? "…" : t("settings.importSvg")}
-								</button>
+								{style === "sprite" && (
+									<>
+										<button
+											type="button"
+											className="gui-btn"
+											onClick={() => void importPetdex()}
+											disabled={importing || !isDesktopShell}
+											title={
+												isDesktopShell ? t("settings.importPetdex") : t("settings.desktopPetNeedsDesktop")
+											}
+										>
+											<Icon name="add" className="h-3.5 w-3.5" />
+											{importing ? "…" : t("settings.importPetdex")}
+										</button>
+										<button
+											type="button"
+											className="gui-btn"
+											onClick={() => void importCodexPet()}
+											disabled={importing || !isDesktopShell}
+											title={
+												isDesktopShell
+													? t("settings.importCodexSprite")
+													: t("settings.desktopPetNeedsDesktop")
+											}
+										>
+											<Icon name="download" className="h-3.5 w-3.5" />
+											{importing ? "…" : t("settings.importCodexSprite")}
+										</button>
+									</>
+								)}
+								{style === "vector" && (
+									/* User SVG import — renderer-side file pick, no
+									 * desktop-shell gate (a file input works everywhere). */
+									<button
+										type="button"
+										className="gui-btn"
+										onClick={importSvgPet}
+										disabled={importing}
+										title={t("settings.importSvg")}
+									>
+										<Icon name="file-add" className="h-3.5 w-3.5" />
+										{importing ? "…" : t("settings.importSvg")}
+									</button>
+								)}
 								<input
 									ref={svgInputRef}
 									type="file"
@@ -792,7 +865,7 @@ export function PetSection(): ReactNode {
 							onClick={() => setExpanded(v => !v)}
 						>
 							<span className="gui-pet-trigger__thumb">
-								{selectedEntry && selectedEntry.renderer !== "note" ? (
+								{selectedEntry && (selectedEntry.mode !== "vector" || selectedEntry.renderer !== "note") ? (
 									<PetdexSprite
 										mood="rest"
 										src={selectedEntry.src}
@@ -800,6 +873,8 @@ export function PetSection(): ReactNode {
 										height={selectedEntry.height}
 										format={selectedEntry.format}
 										rows={selectedEntry.rows}
+										atlas={selectedEntry.atlas}
+										states={selectedEntry.states}
 										contentH={selectedEntry.contentH}
 										smooth={selectedEntry.smooth}
 									/>
@@ -815,10 +890,10 @@ export function PetSection(): ReactNode {
 						</button>
 						<Reveal open={expanded}>
 							<div className="gui-pet-grid" role="radiogroup" aria-label={t("settings.companionAppearance")}>
-								{userEntries.length > 0 && (
+								{userEntriesForStyle.length > 0 && (
 									<div className="gui-pet-group-label">{t("settings.petImported")}</div>
 								)}
-								{userEntries.map(entry => (
+								{userEntriesForStyle.map(entry => (
 									<PetCard
 										key={entry.id}
 										entry={entry}
@@ -827,8 +902,10 @@ export function PetSection(): ReactNode {
 										onDelete={() => removePet(entry.id)}
 									/>
 								))}
-								<div className="gui-pet-group-label">{t("settings.petPresets")}</div>
-								{presetEntries.map(entry => (
+								{presetEntriesForStyle.length > 0 && (
+									<div className="gui-pet-group-label">{t("settings.petPresets")}</div>
+								)}
+								{presetEntriesForStyle.map(entry => (
 									<PetCard
 										key={entry.id}
 										entry={entry}
@@ -838,15 +915,17 @@ export function PetSection(): ReactNode {
 								))}
 							</div>
 						</Reveal>
-						<PetMarket
-							petdex={petdex}
-							onInstalled={pkg => {
-								const next = [...petdex.filter(p => p.id !== pkg.id), pkg];
-								setPetdex(next);
-								savePetdex(next);
-								pickPet(pkg.id);
-							}}
-						/>
+						{style === "sprite" && (
+							<PetMarket
+								petdex={petdex}
+								onInstalled={pkg => {
+									const next = [...petdex.filter(p => p.id !== pkg.id), pkg];
+									setPetdex(next);
+									savePetdex(next);
+									pickPet(pkg.id);
+								}}
+							/>
+						)}
 					</>
 				)}
 			</div>

@@ -182,7 +182,7 @@ export const commands: TranslationMap = {
 	"commands.enableMarketplacePlugin": "Enable a marketplace plugin",
 	"commands.enableMcpServer": "Enable an MCP server",
 	"commands.enableSpeechText.desc":
-		"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via speech.enabled.",
+		"Enable speech-to-text via stt.enabled, then hold Space to talk (or bind app.stt.toggle); enable the speech-generation tool via speechgen.enabled; speak replies aloud via tts.autoRead.",
 	"commands.enabled": "Enabled:",
 	"commands.enqueueMemoryConsolidationMaintenance": "Enqueue memory consolidation maintenance",
 	"commands.enterClickToggle.info":

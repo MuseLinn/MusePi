@@ -38,8 +38,8 @@
 import { setLocale, t } from "@musepi/client-core";
 import { ArrowUp, ArrowUpRight, Check, MessageSquare, Square, X } from "lucide";
 import { MorphIcon } from "morphicons/react";
-import { isValidElement, type ReactNode, useEffect, useRef, useState } from "react";
-import type { PetActivity, PetSessionCard } from "./lib/pet";
+import { type CSSProperties, isValidElement, type ReactNode, useEffect, useRef, useState } from "react";
+import { type PetActivity, type PetBubbleTheme, type PetSessionCard, petBubbleTheme } from "./lib/pet";
 import { useScrollShadow } from "./lib/use-scroll-shadow";
 
 interface PetBubblesBridge {
@@ -136,6 +136,9 @@ export function PetBubbles(): ReactNode {
 	// Authoritative session cards pushed by the main window (working +
 	// unread finished sessions).
 	const [cards, setCards] = useState<PetSessionCard[]>([]);
+	// Optional package palette. Invalid or low-contrast values resolve to null,
+	// which leaves every package CSS variable unset and preserves the glass UI.
+	const [packageTheme, setPackageTheme] = useState<PetBubbleTheme | null>(null);
 	// iOS Notification-Center style collapse: stacked shows the top card +
 	// "N more" chip; expanded the full list; hidden only the count badge.
 	const [stackMode, setStackMode] = useState<StackMode>("stacked");
@@ -170,6 +173,9 @@ export function PetBubbles(): ReactNode {
 			setStackMode(current => (current === "hidden" ? "stacked" : current));
 		};
 		const off = bridge?.onPetActivity?.(payload => {
+			if (payload.pet) {
+				setPackageTheme(payload.pet.kind === "petdex" ? petBubbleTheme(payload.pet.pkg) : null);
+			}
 			if (Array.isArray(payload.sessions)) {
 				const hidden = hiddenSessionsRef.current;
 				for (const card of payload.sessions) {
@@ -874,14 +880,23 @@ export function PetBubbles(): ReactNode {
 
 	if (stackMode === "hidden") return null;
 
+	const stackStyle: CSSProperties = {
+		...(packageTheme
+			? ({
+					"--color-text": packageTheme.foreground,
+					"--pet-package-bubble-bg": packageTheme.background,
+					"--pet-package-bubble-border": packageTheme.border,
+				} as CSSProperties)
+			: {}),
+		...(stackMorph ? { width: `${stackMorph.from.width}px`, height: `${stackMorph.from.height}px` } : {}),
+	};
+
 	if (stackMode === "expanded") {
 		return (
 			<div
 				ref={stackRef}
 				className={`pet-bubbles pet-bubbles--expanded${stackMorph ? " pet-bubbles--morphing" : ""}`}
-				style={
-					stackMorph ? { width: `${stackMorph.from.width}px`, height: `${stackMorph.from.height}px` } : undefined
-				}
+				style={stackStyle}
 				data-top-scroll="false"
 				data-bottom-scroll="false"
 				aria-live="polite"
@@ -902,7 +917,7 @@ export function PetBubbles(): ReactNode {
 		<div
 			ref={stackRef}
 			className={`pet-bubbles pet-bubbles--stacked${stackMorph ? " pet-bubbles--morphing pet-bubbles--shrinking" : ""}`}
-			style={stackMorph ? { width: `${stackMorph.from.width}px`, height: `${stackMorph.from.height}px` } : undefined}
+			style={stackStyle}
 			aria-live="polite"
 		>
 			{more > 1 && <span className="pet-bubbles__stack-layer pet-bubbles__stack-layer--far" aria-hidden />}

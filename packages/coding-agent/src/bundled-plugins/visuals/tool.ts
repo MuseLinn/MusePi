@@ -16,6 +16,7 @@ import type { ToolExample } from "@musepi/pi-ai";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import type { ExtensionWidget } from "../../extensibility/extensions/widget-types";
 import widgetDescription from "./prompt.md" with { type: "text" };
+import { WIDGET_RENDER_WHEN } from "./when";
 import { CLOCK_WIDGET } from "./widgets/clock";
 import { METRIC_WIDGET } from "./widgets/metric";
 
@@ -321,25 +322,14 @@ const MAX_PAGE_HTML = MAX_WIDGET_HTML;
 const MAX_PAGE_TITLE = 120;
 
 /**
- * When a page beats prose, and when it does not.
- *
- * Both the tool description and the line every session carries state it.
- * Stated only in the tool description it went unread: asked for a breakdown of
- * lines of code per package, an agent answered with a list and drew the chart
- * only when asked. Interface mockups are named on their own — listed only as
- * data, the cases read to a literal model as "charts only", while a proposed
- * UI change is where a page helps most. The limits matter as much as the
- * cases: a page for two numbers is worse than a sentence.
+ * The "when to render" rule is owned by `when.ts`: the system prompt and
+ * this tool description must say the same thing, or the model only sees the
+ * copy it happens to read. Stated only in the tool description it went
+ * unread — asked for a breakdown of lines of code per package, an agent
+ * answered with a list and drew the chart only when asked. The prompt.md
+ * marker is expanded here so there is no second copy of the wording.
  */
-export const RENDER_PAGE_WHEN =
-	"Use it when the answer is mostly data or structure the user would otherwise have to picture:" +
-	" numbers compared across several items (sizes, counts, timings, costs, test or benchmark results)," +
-	" a breakdown or share of a whole, a trend over time, options compared on several criteria," +
-	" a timeline of events, or how components connect." +
-	" Use it too when the answer is about how something looks: a proposed interface change shown as it would appear," +
-	" before and after side by side, or layout options to choose between." +
-	" Do not use it for a few numbers or a short list that reads fine as text, for code, or when the user asked for plain text." +
-	" At most one page per answer.";
+const toolDescription = widgetDescription.replace(/<!-- WIDGET_RENDER_WHEN[^>]*-->/, WIDGET_RENDER_WHEN);
 
 /**
  * Local image paths a page names, in order, at most 12.
@@ -368,6 +358,9 @@ const widgetSchema = type({
 	"type?": type("string").describe(`Widget type (action=card): ${Object.keys(WIDGET_TYPES).join(" / ")}`),
 	"data?": type("object").describe("Widget data fields per type (defaults fill the rest)"),
 	"title?": type("string").describe("Optional card title (defaults to the widget name)"),
+	"awaitAnswer?": type("boolean").describe(
+		'Set when the page asks the user to choose something (action=page): the chat keeps a "waiting for your choice" line under the page until they answer',
+	),
 	"html?": type("string").describe(
 		'The page\'s HTML, complete document with inline CSS (action=page). Ready classes in the app\'s look: .musepi-box, .musepi-muted, .musepi-table (around a <table>; scrolls sideways), .musepi-num, .musepi-badge[data-tone="success|warning|danger|info"], .musepi-dot, .musepi-bar (style="--value:62%;--color:var(--chart-2)"), .musepi-steps (an <ol>), .musepi-form/.musepi-field/.musepi-input/.musepi-switch/.musepi-segmented, .musepi-options/.musepi-option/.musepi-button (data-variant="outline"|"danger"). Theme vars: --bg, --bg-raised, --fg, --fg-muted, --border, --accent, --accent-fg, --color-success/warning/danger/info, --chart-1..5, --radius-*, --font-sans/mono. Size text in rem/em; never 100vh or height:100% on html/body; give a wide table .musepi-table and charts a fixed pixel height',
 	),
@@ -384,6 +377,9 @@ export interface WidgetToolDetails {
 	/** Local image paths the page names; the chat swaps them for file contents
 	 *  (a sandboxed page cannot read the filesystem itself). */
 	images?: string[];
+	/** The page asks the user to choose; the card keeps a waiting line until
+	 *  an answer leaves it. */
+	awaitAnswer?: boolean;
 }
 
 /** What the tool reads from the session context: plugin widget types. */
@@ -404,7 +400,7 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 	 *  in the slate. */
 	readonly enabled = ({ settings }: { settings: { get(key: string): unknown } }): boolean =>
 		settings.get("widget.enabled") !== false;
-	readonly description = widgetDescription;
+	readonly description = toolDescription;
 	readonly parameters = widgetSchema;
 	readonly examples: readonly ToolExample<typeof widgetSchema.infer>[] = [
 		{
@@ -469,6 +465,7 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 				data: { html },
 				html,
 				images: renderPageImageSources(html),
+				...(params.awaitAnswer === true ? { awaitAnswer: true } : {}),
 			};
 			if (title) details.title = title;
 			return {

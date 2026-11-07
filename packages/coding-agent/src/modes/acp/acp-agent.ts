@@ -239,7 +239,7 @@ function buildAcpSpeechModelsCatalog(): Record<string, unknown> {
 			speechToTextModel: "stt.modelName",
 			textToSpeechModel: "tts.localModel",
 			textToSpeechVoice: "tts.localVoice",
-			speechVoice: "speech.voice",
+			speechVoice: "tts.localVoice",
 		},
 		defaults: {
 			speechToTextModel: DEFAULT_STT_MODEL_KEY,
@@ -254,7 +254,7 @@ function buildAcpSpeechModelsCatalog(): Record<string, unknown> {
 		textToSpeech: {
 			modelSetting: "tts.localModel",
 			voiceSetting: "tts.localVoice",
-			speechVoiceSetting: "speech.voice",
+			speechVoiceSetting: "tts.localVoice",
 			defaultModel: DEFAULT_TTS_LOCAL_MODEL_KEY,
 			defaultVoice: DEFAULT_TTS_VOICE,
 			models: TTS_LOCAL_MODELS.map(

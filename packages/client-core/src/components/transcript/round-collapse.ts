@@ -63,7 +63,7 @@ export interface RoundFold {
 	preview: string;
 	/** Absolute indexes of entries that must stay visible even while the
 	 *  fold is closed: (a) assistant messages carrying SUCCESSFUL widget tool
-	 *  calls — the standalone widget card is the turn's artifact; (b) tail
+	 *  calls — the widget card IS the turn's artifact; (b) tail
 	 *  and hook rows (design doc §C) — turn accompaniment, not process. */
 	exempt: number[];
 }
@@ -361,7 +361,7 @@ function pushFold(
 export function isInsideFold(folds: readonly RoundFold[], idx: number): boolean {
 	// The reply row is never hidden (see finalIdx): expanding a fold must not
 	// swallow the answer the turn produced. Widget rows (see exempt) stay
-	// visible too — the standalone card IS the artifact.
+	// visible too — the widget card IS the artifact.
 	// endIdx is INCLUSIVE (it is the turn's last row).
 	return folds.some(f => idx > f.startIdx && idx <= f.endIdx && idx !== f.finalIdx && !f.exempt.includes(idx));
 }

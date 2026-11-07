@@ -248,4 +248,38 @@ describe("desktop pet bubble state transitions", () => {
 		expect(document.querySelector(".pet-bubbles--stacked")).not.toBeNull();
 		expect(bridge.reads).toEqual([]);
 	});
+
+	test("applies only a readable package bubble palette", () => {
+		const bridge = mountBubbles();
+		const pet = {
+			kind: "petdex" as const,
+			pkg: {
+				id: "atlas-pet",
+				displayName: "Atlas pet",
+				spritesheet: "data:image/png;base64,AA==",
+				width: 64,
+				height: 64,
+				importedAt: 1,
+				theme: { bubble: { background: "#5F6B62", foreground: "#FFFFFF", border: "#87928A" } },
+			},
+		};
+		bridge.push({ pet, sessions: [firstCard] });
+		const stack = document.querySelector<HTMLElement>(".pet-bubbles--stacked")!;
+		expect(stack.style.getPropertyValue("--pet-package-bubble-bg")).toBe("#5F6B62");
+		expect(stack.style.getPropertyValue("--pet-package-bubble-border")).toBe("#87928A");
+		expect(stack.style.getPropertyValue("--color-text")).toBe("#FFFFFF");
+
+		bridge.push({
+			pet: {
+				...pet,
+				pkg: {
+					...pet.pkg,
+					theme: { bubble: { background: "#FFFFFF", foreground: "#FFFF00", border: "#87928A" } },
+				},
+			},
+		});
+		expect(stack.style.getPropertyValue("--pet-package-bubble-bg")).toBe("");
+		expect(stack.style.getPropertyValue("--pet-package-bubble-border")).toBe("");
+		expect(stack.style.getPropertyValue("--color-text")).toBe("");
+	});
 });

@@ -9,6 +9,20 @@ export const transcript = {
 	"transcript.runEditWithCount": "编辑了 {count} 个文件",
 	"transcript.runCommandWithCount": "运行了 {count} 个命令",
 	"transcript.runOtherWithCount": "执行了 {count} 次其他操作",
+	// ── IRC / 代理间消息 ──────────────────────────────────────────────────────
+	"transcript.ircMe": "我",
+	"transcript.ircAuto": "auto",
+	"transcript.ircReply": "回复",
+	"transcript.ircShowMore": "展开全文",
+	"transcript.ircShowLess": "收起",
+	// ── 后台任务结算卡 ────────────────────────────────────────────────────────
+	"transcript.asyncJobCompleted": "已完成",
+	"transcript.asyncJobFailed": "失败",
+	"transcript.asyncJobCancelled": "已取消",
+	"transcript.asyncJobRunning": "运行中",
+	"transcript.asyncJobLines": "{count} 行",
+	"transcript.asyncJobShowMore": "展开输出",
+	"transcript.asyncJobShowLess": "收起输出",
 	// ── Transcript ────────────────────────────────────────────────────────────
 	"transcript.redacted": " · 已隐去",
 	"transcript.text": "（提供方已隐去）",

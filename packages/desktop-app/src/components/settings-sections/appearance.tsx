@@ -41,10 +41,14 @@ import {
 	EDITOR_FONT_KEY,
 	LIGHT_CODE_THEMES,
 	MONO_FONT_KEY,
+	readTimeFormat,
+	readWeekStart,
 	TIME_FMT_KEY,
+	type TimeFormatPref,
 	UI_FONT_KEY,
 	UI_FONT_OPTIONS,
 	WEEK_START_KEY,
+	type WeekStartPref,
 } from "../../lib/appearance";
 import { applyGlassMaterial } from "../../lib/glass";
 import { nativeHighlight } from "../../lib/highlight";
@@ -208,14 +212,11 @@ export function AppearanceSection({
 	);
 	const [codeFont, setCodeFont] = useState<number>(() => Number(localStorage.getItem(EDITOR_FONT_KEY) ?? 13));
 	const [density, setDensity] = useState<number>(() => Number(localStorage.getItem(DENSITY_KEY) ?? 100));
-	const [timeFmt, setTimeFmt] = useState<"general.auto" | "12h" | "24h">(
-		() => (localStorage.getItem(TIME_FMT_KEY) as "general.auto" | "12h" | "24h") ?? "general.auto",
-	);
-	const [weekStart, setWeekStart] = useState<"general.auto" | "general.monday" | "general.sunday">(
-		() =>
-			(localStorage.getItem(WEEK_START_KEY) as "general.auto" | "general.monday" | "general.sunday") ??
-			"general.auto",
-	);
+	// Preference state holds the option id ("auto" | "12h" | "24h"), never the
+	// i18n key: the dropdown matches on id and falls back to the raw value
+	// when nothing matches, so a key in state rendered as "general.auto".
+	const [timeFmt, setTimeFmt] = useState<TimeFormatPref>(() => readTimeFormat() ?? "auto");
+	const [weekStart, setWeekStart] = useState<WeekStartPref>(() => readWeekStart() ?? "auto");
 	const [uiFont, setUiFont] = useState<string>(() => localStorage.getItem(UI_FONT_KEY) ?? DEFAULT_UI_FONT.id);
 	const [monoFont, setMonoFont] = useState<string>(() => localStorage.getItem(MONO_FONT_KEY) ?? DEFAULT_CODE_FONT.id);
 	const [turnRailSide, setTurnRailSide] = useState<TurnRailSide>(
@@ -693,8 +694,7 @@ export function AppearanceSection({
 					<GuiSelect
 						className="gui-settings-select"
 						value={timeFmt}
-						onChange={nv => {
-							const v = nv as "general.auto" | "12h" | "24h";
+						onChange={v => {
 							setTimeFmt(v);
 							setPref(TIME_FMT_KEY, v);
 						}}
@@ -710,8 +710,7 @@ export function AppearanceSection({
 					<GuiSelect
 						className="gui-settings-select"
 						value={weekStart}
-						onChange={nv => {
-							const v = nv as "general.auto" | "general.monday" | "general.sunday";
+						onChange={v => {
 							setWeekStart(v);
 							setPref(WEEK_START_KEY, v);
 						}}

@@ -81,7 +81,12 @@ function openInLabel(app: { id: string; label: string }): string {
 
 /** Transcript labels shared by the Markdown export and the clipboard copies. */
 function sessionMarkdownLabels(): MarkdownLabels {
-	return { user: t("general.user"), assistant: t("general.assistant"), advisor: t("general.advisor") };
+	return {
+		user: t("general.user"),
+		assistant: t("general.assistant"),
+		advisor: t("general.advisor"),
+		ircMe: t("transcript.ircMe"),
+	};
 }
 
 import { AgentAvatar } from "./AgentAvatar";
@@ -110,6 +115,7 @@ export function GuiHeader({
 	store,
 	rpc,
 	sideCollapsed,
+	panelAvailable = true,
 	onToggleSidebar,
 	paused,
 	pausedAt,
@@ -146,6 +152,10 @@ export function GuiHeader({
 	/** Sidebar collapsed: pad the header left so the title clears the
 	 * traffic lights (window-anchored, like TitlebarLeftControls). */
 	sideCollapsed: boolean;
+	/** False for a page destination with no left panel (board / PR / capability
+	 *  center): the fold button would fold nothing, and the collapsed spacer
+	 *  would shove the session tabs into the far left. */
+	panelAvailable?: boolean;
 	onToggleSidebar(): void;
 	/** Per-session agent freeze (TUI `/pause` parity): engaged state + epoch
 	 *  ms when the freeze began (drives the live hold timer). */
@@ -749,21 +759,23 @@ export function GuiHeader({
 			 * no-drag reliably. Sidebar toggle + the project-actions capsule
 			 * (auto-discover dev server / stop while running), the toggle and the actions capsule both work from here. */}
 			<div className="gui-float-controls gui-float-controls--overlay" ref={floatRef}>
-				<button
-					type="button"
-					className="gui-sidebar-toggle"
-					title={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
-					aria-label={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
-					onClick={onToggleSidebar}
-				>
-					<MorphIcon
-						icon={sideCollapsed ? PanelRightIconData : PanelLeftIconData}
-						size={16}
-						spring="snappy"
-						reducedMotion="user"
-						className="h-4 w-4"
-					/>
-				</button>
+				{panelAvailable && (
+					<button
+						type="button"
+						className="gui-sidebar-toggle"
+						title={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
+						aria-label={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
+						onClick={onToggleSidebar}
+					>
+						<MorphIcon
+							icon={sideCollapsed ? PanelRightIconData : PanelLeftIconData}
+							size={16}
+							spring="snappy"
+							reducedMotion="user"
+							className="h-4 w-4"
+						/>
+					</button>
+				)}
 				<div className="gui-openin-capsule">
 					<button
 						type="button"
@@ -889,10 +901,16 @@ export function GuiHeader({
 					</MenuPopup>
 				</div>
 			</div>
-			{/* §5t collapsed-sidebar carve spacer: reserves the float
-			 * cluster's measured width so the session-title pill never
-			 * slides underneath it (drag strip carved out). */}
-			<div className="gui-header-spacer" data-collapsed={sideCollapsed ? "true" : undefined} aria-hidden="true" />
+			{/* §5t collapsed-sidebar carve spacer: reserves the part of the
+			 * fixed float cluster that overlaps the chat column. A page
+			 * destination has no panel, so its geometry is the SAME as a
+			 * collapsed sidebar — the spacer must still apply, or the session
+			 * title lands underneath the cluster. Only the fold button goes. */}
+			<div
+				className="gui-header-spacer"
+				data-collapsed={sideCollapsed || !panelAvailable ? "true" : undefined}
+				aria-hidden="true"
+			/>
 			<div className="flex min-w-0 flex-1 items-center gap-0.5">
 				{/* Session title = switcher trigger: clicking opens 新建会话 +
 				 * recent sessions. Essential when the sidebar is collapsed. */}

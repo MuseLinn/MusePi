@@ -14,6 +14,16 @@ describe("splitInternalUrlSel", () => {
 		expect(splitInternalUrlSel("artifact://3:50-")).toEqual({ path: "artifact://3", sel: "50-" });
 	});
 
+	it("peels selectors from a blob hash, which never contains a colon", () => {
+		const hash = "a".repeat(64);
+		expect(splitInternalUrlSel(`blob://${hash}:1-100`)).toEqual({ path: `blob://${hash}`, sel: "1-100" });
+		expect(splitInternalUrlSel(`blob://${hash}:raw:1-10`)).toEqual({
+			path: `blob://${hash}`,
+			sel: "raw:1-10",
+		});
+		expect(splitInternalUrlSel(`blob://${hash}`)).toEqual({ path: `blob://${hash}` });
+	});
+
 	it("peels a `raw` selector", () => {
 		expect(splitInternalUrlSel("artifact://3:raw")).toEqual({ path: "artifact://3", sel: "raw" });
 	});
