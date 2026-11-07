@@ -398,11 +398,42 @@ export class MaterializedView {
 			timestamp: new Date(message.timestamp).toISOString(),
 			message,
 		};
+		this.#attachToSplicedCard(entry, message.role);
 		this.#messages.set(key, entry);
 		this.#entries.push(entry);
 		this.#structureRev += 1;
 		this.#entriesRev += 1;
 		this.#dirtyEntries.add(entry);
+	}
+
+	/**
+	 * Reconnect a message that the live seam spliced past a visible custom
+	 * card (advisor note, IRC card): `stampLiveMessageParentId` points a new
+	 * message at the nearest MESSAGE ancestor, so the card and the reply land
+	 * as SIBLINGS under the same parent. The transcript then drops the card —
+	 * it is off the active path as soon as the reply arrives — and the session
+	 * map reads it as a re-answer branch of the previous turn instead of a
+	 * turn of its own.
+	 *
+	 * The SDK chain is honest (the card sits between the parent and the reply),
+	 * and the persisted snapshot keeps it that way, so this restores the same
+	 * chain on the live path. Conditions, all three:
+	 *  - the card is the entry IMMEDIATELY before the message (journal order),
+	 *  - it shares the message's stamped parent (that is what "spliced" means),
+	 *  - it is display-visible (a hidden bookkeeping card must not enter the
+	 *    transcript chain).
+	 * A user message is never re-parented: after a rewind the previous branch's
+	 * card can still be the newest entry and share the target's parent, and
+	 * adopting it would resurrect advice from the discarded branch.
+	 */
+	#attachToSplicedCard(entry: { parentId: string | null }, role: string): void {
+		if (role === "user") return;
+		const parentId = entry.parentId;
+		if (typeof parentId !== "string") return;
+		const last = this.#entries[this.#entries.length - 1];
+		if (last?.type !== "custom_message") return;
+		if (last.display === false || last.parentId !== parentId) return;
+		entry.parentId = last.id;
 	}
 
 	/**
@@ -421,17 +452,21 @@ export class MaterializedView {
 			while (this.#customMessages.has(`${key}#${n}`)) n += 1;
 			key = `${key}#${n}`;
 		}
+		const existing = this.#customMessages.get(key);
 		const entry: CustomMessageEntry = {
 			type: "custom_message",
 			id: key,
-			parentId: message.parentId ?? null,
+			// The start frame may already have been re-linked onto a preceding
+			// card (#attachToSplicedCard). The end frame carries the raw wire
+			// stamp, so the resolved parent must win here or the replacement
+			// silently reverts the card to the spliced parent.
+			parentId: existing?.parentId ?? message.parentId ?? null,
 			timestamp: new Date(message.timestamp).toISOString(),
 			customType: message.customType,
 			content: message.content,
 			display: message.display ?? true,
 			...(message.details !== undefined ? { details: message.details } : {}),
 		};
-		const existing = this.#customMessages.get(key);
 		this.#customMessages.set(key, entry);
 		if (existing) {
 			const idx = this.#entries.indexOf(existing);
@@ -444,6 +479,9 @@ export class MaterializedView {
 				return;
 			}
 		}
+		// Two cards in a row splice the same way a reply does: the second one's
+		// stamped parent is the nearest MESSAGE ancestor, not the first card.
+		this.#attachToSplicedCard(entry, message.role);
 		this.#entries.push(entry);
 		this.#structureRev += 1;
 		this.#entriesRev += 1;

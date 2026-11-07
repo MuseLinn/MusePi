@@ -245,6 +245,99 @@ describe("MaterializedView custom-role message projection", () => {
 	});
 });
 
+/**
+ * Live 父链修复(#attachToSplicedCard):`stampLiveMessageParentId` 把新消息
+ * 指向「最近的 MESSAGE 祖先」,顾问卡因此与后续消息成为兄弟 —— 卡片一拿到
+ * 回复就掉出活跃路径(转录里消失),地图把卡片读成上一轮的重答分支。
+ * 修复后 wire 上仍是被拼接的父,projection 还原诚实链:卡 → 回复。
+ */
+describe("MaterializedView live-spliced card chain repair", () => {
+	function ev(type: "message_start" | "message_end", message: unknown): AgentEvent {
+		return { type, message } as unknown as AgentEvent;
+	}
+	function card(timestamp: number, opts: { display?: boolean; parentId?: string | null } = {}): unknown {
+		return {
+			role: "custom",
+			customType: "advisor",
+			content: "<advisory/>",
+			display: opts.display ?? true,
+			parentId: opts.parentId ?? null,
+			details: { notes: [{ note: "n" }] },
+			timestamp,
+		};
+	}
+	function reply(timestamp: number, parentId: string | null): unknown {
+		return { role: "assistant", content: "ok", parentId, timestamp };
+	}
+	function user(timestamp: number, parentId: string | null = null): unknown {
+		return { role: "user", content: "go", parentId, timestamp };
+	}
+
+	test("a reply spliced past a visible card hangs off the card", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(ev("message_end", user(1)));
+		view.apply(ev("message_end", card(2, { parentId: "user:1" })));
+		// Daemon stamp: nearest MESSAGE ancestor = user:1 (card skipped).
+		view.apply(ev("message_end", reply(3, "user:1")));
+
+		const entries = view.snapshot().entries;
+		expect(entries.map(e => e.id)).toEqual(["user:1", "custom:2", "assistant:3"]);
+		expect(entries.map(e => e.parentId)).toEqual([null, "user:1", "custom:2"]);
+	});
+
+	test("a user message keeps its stamped parent (rewind must not adopt stale advice)", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(ev("message_end", user(1)));
+		view.apply(ev("message_end", card(2, { parentId: "user:1" })));
+		// The user typed again on the pre-advice branch: same parent as the card.
+		view.apply(ev("message_end", user(3, "user:1")));
+
+		expect(view.snapshot().entries[2]).toMatchObject({ id: "user:3", parentId: "user:1" });
+	});
+
+	test("a hidden card (display:false) does not capture the next message", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(ev("message_end", user(1)));
+		view.apply(ev("message_end", card(2, { display: false, parentId: "user:1" })));
+		view.apply(ev("message_end", reply(3, "user:1")));
+
+		expect(view.snapshot().entries[2]).toMatchObject({ id: "assistant:3", parentId: "user:1" });
+	});
+
+	test("a card whose parent differs from the message's is left alone", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(ev("message_end", user(1)));
+		view.apply(ev("message_end", user(2, "user:1")));
+		view.apply(ev("message_end", card(3, { parentId: "user:1" })));
+		// Not spliced: this reply descends from user:2, the card descends from user:1.
+		view.apply(ev("message_end", reply(4, "user:2")));
+
+		expect(view.snapshot().entries[3]).toMatchObject({ id: "assistant:4", parentId: "user:2" });
+	});
+
+	test("two visible cards in a row chain onto each other, and the end frame keeps the link", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(ev("message_end", user(1)));
+		view.apply(ev("message_end", card(2, { parentId: "user:1" })));
+		view.apply(ev("message_start", card(3, { parentId: "user:1" })));
+		view.apply(ev("message_end", card(3, { parentId: "user:1" })));
+
+		// The end frame re-projects the raw wire stamp; the resolved chain wins.
+		expect(view.snapshot().entries[2]).toMatchObject({ id: "custom:3", parentId: "custom:2" });
+	});
+
+	test("the repaired chain survives a snapshot round-trip (persisted sessions reload honest)", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(ev("message_end", user(1)));
+		view.apply(ev("message_end", card(2, { parentId: "user:1" })));
+		view.apply(ev("message_end", reply(3, "user:1")));
+
+		const snap = view.snapshot();
+		const restored = MaterializedView.fromSnapshot("s1", "/tmp", snap);
+		expect(restored?.snapshot().entries.map(e => e.parentId)).toEqual([null, "user:1", "custom:2"]);
+	});
+});
+
 describe("MaterializedView round durations (agent_end freeze)", () => {
 	function messageEvent(type: "message_start" | "message_end", message: unknown): AgentEvent {
 		return { type, message } as unknown as AgentEvent;

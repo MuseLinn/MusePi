@@ -156,6 +156,22 @@ export class AgentRegistry {
 			activity: input.activity,
 			history: input.history,
 		};
+		// Id takeover — worth a log line, never a rejection. Every top-level
+		// session registers as "Main" (sdk.ts defaults the id), so opening a
+		// second conversation replaces the first one's ref; when the newer
+		// session tears down it unregisters the id, and the older live session
+		// becomes unreachable (`hub send` → `Unknown agent "Main"`). Registering
+		// must still succeed — a second conversation has to work — so make the
+		// hand-off visible in the daemon log instead of failing silently.
+		const previous = this.#refs.get(ref.id);
+		if (previous?.session && previous.session !== ref.session) {
+			logger.warn("Agent registry id takeover: a live ref was replaced by a newer session", {
+				id: ref.id,
+				previousKind: previous.kind,
+				previousStatus: previous.status,
+				nextKind: ref.kind,
+			});
+		}
 		this.#refs.set(ref.id, ref);
 		this.#emit({ type: "registered", ref });
 		return ref;

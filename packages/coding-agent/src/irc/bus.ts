@@ -105,10 +105,20 @@ export class IrcBus {
 		const message: IrcMessage = { ...msg, id: Snowflake.next(), ts: Date.now() };
 		const ref = this.#registry.get(message.to);
 		if (!ref) {
+			// Every top-level session registers as "Main" on the one
+			// process-global registry, so the newest conversation takes the
+			// slot and its teardown releases the id — leaving an older live
+			// session addressable only until then. That reads from the sender's
+			// side as a bare "Unknown agent", which subagents report as "Main
+			// vanished mid-conversation"; name the mechanism when the target is
+			// the shared main id so the report is diagnosable.
 			return {
 				to: message.to,
 				outcome: "failed",
-				error: `Unknown agent "${message.to}" — check \`irc list\` for live peers.`,
+				error:
+					message.to === MAIN_AGENT_ID
+						? `Unknown agent "${message.to}" — no main agent is registered right now. Every top-level session shares this id, so another conversation's teardown can release it while this one is still running; retry, or ask the user to reopen this conversation.`
+						: `Unknown agent "${message.to}" — check \`irc list\` for live peers.`,
 			};
 		}
 		if (ref.status === "aborted") {

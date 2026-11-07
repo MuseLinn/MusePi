@@ -418,6 +418,8 @@ daemon RPC:
 - **live 消息树的剩余 seam**:daemon 发射端在 message 事件上打标(`agentSession.sessionManager.leafEntry()?.parentId` 于转发点 server.ts `agentSession.subscribe` 处)——落实后 GUI 轨迹面板即可加「时间线/分支树」切换(复用 `buildMessageTree`)。TUI `/trace` 方案见 `docs/archive/tui-trace-plan.md`。
 - **2026-09-24 更新**:`buildMessageTree` 唯一的画布消费方(`SessionTreeCanvas`)已下线——会话地图收敛为单一轮级视图(§24)。数据 seam 保留:TrajectoryView 的分支树模式仍从 `buildMessageTree` 渲染,live `parentId` 打标依旧是 live 分支视图的前置条件。
 
+- **2026-11-07 打标只连到消息祖先,投影层补回卡片链**:`stampLiveMessageParentId` 把新消息挂到「最近的 MESSAGE 祖先」上(该函数还要服务 model_change/thinking_level_change 这类没有 messageKey 的叶子),于是顾问卡与它之后的助手回复成为**同父兄弟**——卡片一拿到回复就掉出活跃路径(转录里闪过即消失),地图把它读成上一轮的「重答」分支,画布比轮数标签多一格(实机回归,会话 01a1a5a1)。修复放在投影层而非打标层:`MaterializedView` 在日志序相邻 + 同父 + `display` 可见三条同时成立时,把新消息重新挂到那张卡片上(`#attachToSplicedCard`),user 消息永不重挂(撤回后旧分支的建议不能复活);卡片自身被 `message_end` 重投影时保留已解析的父链。`packages/desktop-app/test/advisor-live-chain.test.ts` 把「投影 → 活跃路径 → 轨迹 → 地图」整条链路串起来,并保留一份未修复形态的对照,断言它会复现消失与假分支。仍待处理的同类缺口:`DaemonServer.#leafMoveSnapshot` 的活跃路径只收 message 行,树操作(撤回/切分支)后卡片仍可能从 pinned 路径里掉出去。
+
 ## 16. 转录自定义消息渲染 + 流式 markdown 契约(2026-08-22)
 
 `guest-client` `components/transcript/Transcript.tsx` 的 `custom_message` 分支按 `entry.customType` 分派,已处理:

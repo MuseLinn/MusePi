@@ -942,12 +942,21 @@
  * Geometry contract: segments are `flex: 1 1 0` with NO gap, so a segment
  * is exactly `(100% - 2 * pad) / --seg-count` wide and the thumb steps in
  * its own widths (`translateX(index * 100%)`). Any label length works.
- * React writes --seg-count / --seg-index; CSS owns the rest. */
+ * React writes --seg-count / --seg-index; CSS owns the rest.
+ *
+ * Equal-width segments share ONE width, so the longest label sets all of
+ * them — and CSS cannot read "widest" from a set of siblings: `flex: 1 1 0`
+ * splits the SUM of the labels, so 「运行中」+「全部」 gives each segment half
+ * of ~60px and the long one is silently cut (labels are nowrap + overflow
+ * hidden). `--seg-min` is the widest segment's required width, measured by
+ * the component (Segmented.tsx `segmentFitWidth`); the floor below keeps
+ * every segment at least that wide. min-width wins over max-width, so a long
+ * label grows the control past the 260px cap instead of being clipped. */
 .gui-seg {
 	position: relative;
 	display: inline-flex;
 	width: 100%;
-	min-width: 160px;
+	min-width: max(160px, calc(var(--seg-count) * var(--seg-min, 0px) + 4px));
 	max-width: 260px;
 	padding: 2px;
 	border-radius: var(--radius-lg);
@@ -963,7 +972,7 @@
  * the default 260px stretch. */
 .gui-seg--compact {
 	width: auto;
-	min-width: 0;
+	min-width: calc(var(--seg-count) * var(--seg-min, 0px) + 4px);
 	max-width: none;
 }
 

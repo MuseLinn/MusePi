@@ -938,7 +938,7 @@ export const tools = {
 	// ── Session maintenance + jobs HUD (right-panel ContextPanel) ───────
 	"tools.jobs": "Jobs",
 	"tools.jobsRunning": "Running",
-	"tools.jobsRecent": "Recent",
+	"tools.jobsRecent": "Finished",
 	"tools.jobsCancel": "Cancel",
 	"tools.jobsQueued": "Queued",
 	"tools.jobsDelivering": "Delivering",

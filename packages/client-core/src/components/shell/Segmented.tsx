@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /** One segment of a sliding segmented control. */
 export type SegmentedOption<T extends string> = {
@@ -11,6 +11,35 @@ export type SegmentedOption<T extends string> = {
 	/** Tooltip / accessible name — falls back to `label`. */
 	title?: string;
 };
+
+/** Box metrics of one rendered segment. */
+export type SegmentBox = {
+	/** Inner width the segment currently has. */
+	clientWidth: number;
+	/** The label span, when the segment has one. */
+	label?: { clientWidth: number; scrollWidth: number };
+};
+
+/**
+ * Width the widest segment actually needs. Equal-width segments share one
+ * width, so the longest label sets all of them — and CSS cannot read "widest"
+ * from siblings (a `flex: 1 1 0` container splits the SUM of the labels, so
+ * 「运行中」+「全部」 gives each segment half of 60px and clips the long one).
+ * A clipped label reports the full text width through `scrollWidth`, which is
+ * exactly the number CSS needs: text + the segment's own chrome (padding +
+ * icon + gap, recovered as `clientWidth - label.clientWidth`). Pure so the rule
+ * is testable without layout.
+ */
+export function segmentFitWidth(items: readonly SegmentBox[]): number {
+	let widest = 0;
+	for (const item of items) {
+		const need = item.label
+			? item.label.scrollWidth + Math.max(0, item.clientWidth - item.label.clientWidth)
+			: item.clientWidth;
+		widest = Math.max(widest, need);
+	}
+	return Math.ceil(widest);
+}
 
 /**
  * Segmented control with a single sliding thumb (iOS/ HarmonyOS "方案切换"
@@ -30,7 +59,14 @@ export type SegmentedOption<T extends string> = {
  *   switch's "already active" feedback). It animates the standalone
  *   `translate` property so it composes with the thumb's `transform`
  *   offset instead of dropping it.
+ * - **Segments are never narrower than their longest label** — the width is
+ *   measured and published as `--seg-min` (see {@link segmentFitWidth}).
  */
+
+/** `useLayoutEffect` that degrades to `useEffect` when there is no DOM, so
+ *  SSR `renderToStaticMarkup` callers do not log React's "does nothing on the
+ *  server" warning for a purely visual measurement. */
+const useMeasuredLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 export function Segmented<T extends string>({
 	value,
 	options,
@@ -65,6 +101,7 @@ export function Segmented<T extends string>({
 	const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 	const [armed, setArmed] = useState(false);
 	const itemsRef = useRef<(HTMLButtonElement | null)[]>([]);
+	const rootRef = useRef<HTMLDivElement | null>(null);
 
 	// Arm the thumb transition one frame after mount: the first paint must
 	// already sit on the active segment (no slide-in from index 0).
@@ -72,6 +109,36 @@ export function Segmented<T extends string>({
 		const id = requestAnimationFrame(() => setArmed(true));
 		return () => cancelAnimationFrame(id);
 	}, []);
+
+	// Publish the widest segment's required width as `--seg-min`; CSS turns it
+	// into `min-width: var(--seg-count) * var(--seg-min)` so the equal-width
+	// segments are never narrower than their longest label (labels are
+	// `nowrap` + `overflow: hidden`, so an under-sized control silently clips
+	// instead of overflowing). Written straight to the node — a var that only
+	// drives one min-width must not cost a render pass on every control.
+	const labelKey = `${iconOnly ? "i" : "t"}:${options.map(o => o.label).join("\u0000")}`;
+	useMeasuredLayoutEffect(() => {
+		// `labelKey` is the only input that changes the measurement (labels or
+		// the icon-only switch); `options` is a fresh array each render and
+		// would re-measure forever.
+		const measure = (): void => {
+			const root = rootRef.current;
+			if (!root) return;
+			const boxes: SegmentBox[] = [];
+			for (const item of root.querySelectorAll<HTMLElement>(".gui-seg-item")) {
+				const label = item.querySelector<HTMLElement>(".gui-seg-item-label");
+				boxes.push({
+					clientWidth: item.clientWidth,
+					...(label ? { label: { clientWidth: label.clientWidth, scrollWidth: label.scrollWidth } } : {}),
+				});
+			}
+			const fit = segmentFitWidth(boxes);
+			if (fit > 0) root.style.setProperty("--seg-min", `${fit}px`);
+		};
+		measure();
+		window.addEventListener("resize", measure);
+		return () => window.removeEventListener("resize", measure);
+	}, [labelKey]);
 
 	const thumbIndex = disabled ? activeIndex : (hoverIndex ?? activeIndex);
 
@@ -106,6 +173,7 @@ export function Segmented<T extends string>({
 
 	return (
 		<div
+			ref={rootRef}
 			className={`gui-seg${iconOnly ? " gui-seg--icon" : ""}${armed ? " gui-seg--armed" : ""}${shake ? " gui-seg--shake" : ""}${className ? ` ${className}` : ""}`}
 			role="radiogroup"
 			aria-label={ariaLabel}

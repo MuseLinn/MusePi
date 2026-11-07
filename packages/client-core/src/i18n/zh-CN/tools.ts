@@ -903,7 +903,7 @@ export const tools = {
 	// ── 会话维护 + 任务 HUD(右面板 ContextPanel) ────────────────────────
 	"tools.jobs": "任务",
 	"tools.jobsRunning": "运行中",
-	"tools.jobsRecent": "最近",
+	"tools.jobsRecent": "已结束",
 	"tools.jobsCancel": "取消",
 	"tools.jobsQueued": "排队中",
 	"tools.jobsDelivering": "投递中",

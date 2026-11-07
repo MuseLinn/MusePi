@@ -2048,6 +2048,14 @@ export const JOB_OUTPUT_TAIL_LIMIT = 4000;
 /** Poll cadence for the jobs list and the selected job's output (ms). */
 const JOBS_POLL_INTERVAL_MS = 1000;
 
+/** Settled jobs requested for the「全部」filter. The daemon defaults to 8
+ *  (TUI `/jobs` parity), which made the option a quiet lie: 12 finished jobs
+ *  in one session showed 8 and the missing ones looked like data loss. 50 is
+ *  the retained-history window a panel can actually render (the pane
+ *  scrolls); `session.jobs` answers from an in-memory list, so the payload
+ *  stays small. */
+const JOBS_RECENT_LIMIT = 50;
+
 /** `session.jobOutput` takes a UTF-8 *byte* tail; a character is at most four
  *  bytes, so this window still holds JOB_OUTPUT_TAIL_LIMIT multi-byte
  *  characters before the display trim. */
@@ -2124,7 +2132,7 @@ export function JobsPane({
 		let alive = true;
 		const poll = (): void => {
 			void rpc
-				.request<JobsData>("session.jobs", { sessionId })
+				.request<JobsData>("session.jobs", { sessionId, recentLimit: JOBS_RECENT_LIMIT })
 				.then(d => {
 					if (!alive) return;
 					setData(d);

@@ -6,6 +6,18 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **顾问消息不再「闪过一次就消失」**：顾问笔记插进会话后，下一条助手回复落地时会把卡片挤出活跃路径，转录里只剩一瞬间；会话地图同时又把它读成上一条回复的「重答」分支，画布比轮数标签多一格。根因是 live 父链打标把新消息挂到最近的**消息**祖先上，卡片与回复因此成了同父兄弟。现在投影层还原诚实链（卡片 → 回复），卡片留在路径上，顾问轮回到主线——地图与轮数标签重新同口径。
+  - EN: Advisor notes no longer flash once and vanish. Once the next assistant reply landed it pushed the card off the active path, so the transcript showed it for a moment only; the session map simultaneously read it as a re-answer branch of the previous reply and drew one node more than the round count claimed. The live parent-chain stamp attaches a new message to the nearest **message** ancestor, which made the card and the reply siblings of one parent. The projection layer now restores the honest chain (card → reply), so the card stays on the path and the advisor round returns to the main line: map and round label agree again.
+
+- **「运行中 / 全部」滑块不再截字**：等宽分段控件按各标签宽度之和定宽再平分，最长的那颗被静默裁掉（「运行中」只显示一半）。组件现在量出最宽段并写成 `--seg-min`，CSS 用它设下界，中英文标签都不再截字，滑块仍与段同宽。
+  - EN: The Running / All slider no longer clips its labels. Equal-width segments sized by the SUM of their labels and then split it evenly, silently cutting the longest one. The control now measures the widest segment and publishes it as `--seg-min`, and CSS uses it as a floor: CJK and English labels both stay whole while the thumb keeps matching one segment exactly.
+
+- **任务面板的「全部」名副其实**：选项写着「全部」却只列 8 条已结束任务，第二个分节还叫「最近」，看起来像历史记录丢了。现在取 50 条已结束任务并把分节改名为「已结束」，「全部」= 运行中 + 已结束。
+  - EN: The jobs panel's All filter now means all. It listed only 8 finished jobs while the second section was called Recent, which read as lost history; the pane now asks for 50 and names the section Finished, so All is running plus finished.
+
+- **子 agent 报 `Unknown agent Main` 时有据可查**：每个顶层会话都注册同一个 `Main` id，较新的会话抢占该槽位，它退出时会把 id 一并注销——先前的会话还活着，却再也收不到 IRC。错误文案现在说明这条共享 id 机制，registry 发生顶替时写入日志；按会话隔离主 agent id 的改造留待后续。
+  - EN: A subagent reporting `Unknown agent Main` is now diagnosable. Every top-level session registers the same `Main` id, so a newer conversation takes the slot and releases it on teardown, leaving an earlier live session unreachable over IRC. The error message now names the shared-id mechanism and the registry logs the takeover; per-session main-agent ids remain a follow-up.
+
 - **启动等待不再被误报为卡死**：查找、启动、校验、连接各阶段独立计时，阶段一推进就重置窗口；正常的多秒等待只显示当前阶段和「仍在继续」的信息提示，只有单阶段真正停住或整次启动超时才提示 daemon 可能卡住，并给出「导出诊断」与「重启应用」。阶段与提示文案改为同一套规范的交叉淡入淡出，读写全局动效 token，关闭动效时直接切换。
   - EN: Normal startup waits no longer read as a hang. Each boot phase (probe, spawn, version gate, connect) has its own budget and resets the clock when the phase advances; a slow but progressing start shows only the phase and an informational "still working" note, and the daemon-stuck diagnosis with recovery actions appears only when a phase stalls or the whole boot times out. Phase and notice copy now cross-fade through one shared status-text primitive on the global motion tokens, swapping instantly when motion is off.
 

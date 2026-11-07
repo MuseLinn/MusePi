@@ -133,6 +133,48 @@ describe("IRC", () => {
 			expect(bus.unreadCount("0-Sub")).toBe(0);
 		});
 
+		it("names the shared-main-id hand-off when Main is not registered", async () => {
+			// 实机回归(会话 01a1a5a1):子 agent 回投时 registry 里没有 Main,
+			// 它只看到一句 "Unknown agent Main"。每个顶层会话都用同一个
+			// "Main" id 注册,较新的会话抢占槽位、它退出时把 id 一起注销 ——
+			// 老会话仍活着却再也收不到 IRC。错误文案要把机制说出来。
+			const ghost = await bus.send({ from: "0-Sub", to: "nobody", body: "ping" });
+			expect(ghost).toEqual({
+				to: "nobody",
+				outcome: "failed",
+				error: 'Unknown agent "nobody" — check `irc list` for live peers.',
+			});
+
+			const main = await bus.send({ from: "0-Sub", to: "Main", body: "ping" });
+			expect(main.outcome).toBe("failed");
+			expect(main.error).toContain("no main agent is registered right now");
+			expect(main.error).toContain("shares this id");
+		});
+
+		it("a newer top-level session takes the shared Main id and its teardown releases it", () => {
+			// 当前设计的真实后果(不是断言"应该如此"):同一进程里两个顶层
+			// 会话都注册 "Main",后注册者占位;它注销后 id 消失,先注册的
+			// 那个仍然活着的会话从此不可寻址。修法是给每个会话独立的主
+			// agent id(或让 registry 保留被顶替的活 ref),那是一次跨 irc/
+			// hub/history 的改造 —— 在此之前先把这个行为钉住,免得当成
+			// 偶发竞态查错方向。
+			const first = makeFakeSession();
+			const firstRef = registry.register({ id: "Main", displayName: "main", kind: "main", session: first.session });
+			const second = makeFakeSession();
+			const secondRef = registry.register({
+				id: "Main",
+				displayName: "main",
+				kind: "main",
+				session: second.session,
+			});
+
+			expect(registry.get("Main")).toBe(secondRef);
+			expect(firstRef.session).toBe(first.session);
+
+			registry.unregister("Main", secondRef);
+			expect(registry.get("Main")).toBeUndefined();
+		});
+
 		it("relays only subagent-to-subagent traffic to the main UI", async () => {
 			const main = makeFakeSession();
 			registry.register({ id: "Main", displayName: "main", kind: "main", session: main.session });
