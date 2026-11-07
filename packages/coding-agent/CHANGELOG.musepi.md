@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **顾问笔记不再被当成用户发言**：顾问的 `<advisory>` 块以 `custom` 消息发出，核心层转成 `developer`，而凡是没有会话中段 `developer`/`system` 槽位的 provider（`openai.com`/Azure 之外的 OpenAI 兼容宿主、不支持 mid-conversation-system 的 Anthropic）都会把它降级成普通 `user` 消息。系统提示词此前从不解释这个标签，主代理于是把整块读成用户输入——实机回出「你提醒得对」。`<conventions>` 现在显式声明 `<advisory>` 来自独立顾问模型，既不是用户也不是权威指令。
+  - EN: Advisor notes are no longer mistaken for the user's own words. A note travels as a `custom` message that the core converts to `developer`, and every provider without a mid-conversation `developer`/`system` slot (OpenAI-compatible hosts outside `openai.com`/Azure, Anthropic below mid-conversation-system support) collapses that to a plain `user` message. The system prompt never explained the tag, so the primary read the whole block as user input and answered "you're right to remind me". The `<conventions>` block now states that `<advisory>` comes from a separate advisor model — neither the user nor an authoritative instruction.
+
 - **顾问消息不再「闪过一次就消失」**：顾问笔记插进会话后，下一条助手回复落地时会把卡片挤出活跃路径，转录里只剩一瞬间；会话地图同时又把它读成上一条回复的「重答」分支，画布比轮数标签多一格。根因是 live 父链打标把新消息挂到最近的**消息**祖先上，卡片与回复因此成了同父兄弟。现在投影层还原诚实链（卡片 → 回复），卡片留在路径上，顾问轮回到主线——地图与轮数标签重新同口径。
   - EN: Advisor notes no longer flash once and vanish. Once the next assistant reply landed it pushed the card off the active path, so the transcript showed it for a moment only; the session map simultaneously read it as a re-answer branch of the previous reply and drew one node more than the round count claimed. The live parent-chain stamp attaches a new message to the nearest **message** ancestor, which made the card and the reply siblings of one parent. The projection layer now restores the honest chain (card → reply), so the card stays on the path and the advisor round returns to the main line: map and round label agree again.
 

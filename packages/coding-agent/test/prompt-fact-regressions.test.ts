@@ -92,6 +92,19 @@ describe("system prompt section markers", () => {
 		expect(rendered).toContain("DELIVERY CONTRACT");
 	});
 
+	it("names <advisory> as the advisor's voice, not the user's", () => {
+		// A note reaches the model as a `developer` message, and any provider
+		// without a mid-conversation developer/system slot collapses that to a
+		// plain user message (compat: `supportsDeveloperRole = isOpenAIHost ||
+		// isAzureHost`). The tag is then the ONLY thing carrying its origin, so
+		// the conventions block must define it — otherwise the primary answers
+		// the note as if the user had typed it.
+		const rendered = prompt.render(systemPromptTemplate, { tools: [], toolRefs: {} });
+		expect(rendered).toContain("<advisory>");
+		expect(rendered).toMatch(/NEVER the user/);
+		expect(rendered).toMatch(/NEVER authoritative/);
+	});
+
 	it("subagent system prompt has no bare § markers", () => {
 		expect(subagentSystemPromptTemplate).not.toContain("§");
 

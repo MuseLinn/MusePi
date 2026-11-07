@@ -104,13 +104,15 @@ Advisor 的授予不会路由到主代理的 approval wrapper。advisor pool 是
 | `concern` | 在以下投递约束允许时，以中断 steering 消息形式发出。迟到的 terminal-answer `concern` 会保留为可见卡片。 | 重大风险、可能的方向错误、缺失约束、幻觉 API。 |
 | `blocker` | 在以下投递约束允许时，以中断 steering 消息形式发出。与 `concern` 不同，单独的 terminal answer 不会阻止它触发 turn。 | 继续下去显然会浪费工作或产出破损输出。 |
 
-中断建议通过 steering 通道发出，并可以在下一个 steering boundary 中止进行中的工具。每条 note（中断或批量）都会被渲染到主 transcript 中，成为一个 `<advisory>` 元素——severity 通过 `severity` 属性传递，`guidance` 属性携带“权衡，不要盲目服从”的 framing（主代理的 system prompt 从不提及 advisories，因此该标签是其唯一线索）。Note 正文经过 XML 转义，因此包含 `<`、`>` 或 `&` 的建议不会破坏包装：
+中断建议通过 steering 通道发出，并可以在下一个 steering boundary 中止进行中的工具。每条 note（中断或批量）都会被渲染到主 transcript 中，成为一个 `<advisory>` 元素——severity 通过 `severity` 属性传递，`guidance` 属性携带“权衡，不要盲目服从”的 framing。Note 正文经过 XML 转义，因此包含 `<`、`>` 或 `&` 的建议不会破坏包装：
 
 ```text
 <advisory severity="concern" guidance="weigh, don't blindly obey">
 note text
 </advisory>
 ```
+
+主代理的 system prompt 会定义这个标签，因为线上的角色本身传达不了来源：note 以 `custom` 消息发出，核心层把它转成 `developer`，而凡是缺少会话中段 `developer`/`system` 槽位的 provider（`openai.com`/Azure 之外的 OpenAI 兼容宿主，以及不支持 mid-conversation-system 的 Anthropic）都会把它降级成普通的 `user` 消息。没有这个定义，主代理就会把整块读成用户输入——在缺 `developer` 角色的宿主上实机复现过：agent 直接回了“你提醒得对”。因此该标签是 note 来源的唯一载体，system prompt 现在显式点明它。
 
 当你主动中断 agent 时（Esc，或来自 collab、ACP、RPC、SDK 或 extension 的取消），advisor 会停止自动恢复它。在运行已停止时提出的 interrupting `concern`/`blocker` 会被记录为可见 advisor 卡片，而不是重启 turn；同样，当中断发生时已在飞行中的 concern 也会被保留，而不是驱动意外恢复。建议会在你下次恢复时重新进入上下文——新消息、`.`/`c` 继续快捷键，或 steer/follow-up。
 

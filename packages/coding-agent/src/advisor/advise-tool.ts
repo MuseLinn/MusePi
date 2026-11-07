@@ -44,8 +44,9 @@ export interface AdvisorMessageDetails {
 /**
  * Behavioral framing for the watched agent — advice, not orders. Carried as a
  * tag attribute (rather than a prose header) so the rendered agent-facing output
- * stays a clean `<advisory>` block. The primary agent's system prompt never
- * mentions advisories, so this is its only cue for how to treat them.
+ * stays a clean `<advisory>` block. The system prompt's `<conventions>` block
+ * names the tag as an advisor's voice, which is what keeps it from being read as
+ * a user message once a provider collapses the `developer` role into `user`.
  */
 const ADVISOR_GUIDANCE = "weigh, don't blindly obey";
 
