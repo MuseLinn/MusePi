@@ -1752,8 +1752,9 @@ export function ChatView({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[runTreeOp, branchTipOf, branchTo],
 	);
-	// switchToNode: 统一树节点切换入口(画布双击/MessageTree 行点击/面包屑)。
+	// switchToNode: 统一树节点切换入口(画布双击/面包屑/分支切换)。
 	// 对齐 TUI /tree 的 navigateTree 语义——移动到目标 leaf + 滚动 + 回填草稿。
+	// 消息树浮窗的行点击不再走这里:那是纯跳转(onJump),不改变 leaf。
 	const switchToNode = useCallback(
 		async (id: string, opts?: { backfillDraft?: boolean }): Promise<void> => {
 			// Tree-op guard (runTreeOp): moving the leaf under an in-flight run
@@ -2769,6 +2770,19 @@ export function ChatView({
 												</button>
 											</div>
 										</div>
+										{/* Message-tree navigation sits in the header row, left of the
+										 * session-info toggle. The old absolute button floated over
+										 * the first transcript row and stole its hover/quote pill.
+										 * No onNavigateTo: a row click is a jump, not a leaf switch. */}
+										<MessageTreeButton
+											entries={snap?.entries ?? []}
+											onJump={entryId => requestJump({ entryId })}
+											onFork={(entry, text, includeTarget) =>
+												void forkFromMessage(entry.id, text, includeTarget)
+											}
+											onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
+											activePathIds={trustedPathIds}
+										/>
 										{onToggleSessionInfo && (
 											<button
 												type="button"
@@ -3104,28 +3118,9 @@ export function ChatView({
 													 * canonical .tr-back-bottom (M1.10 follow re-arm).
 													 * The old desktop-local JumpToBottomButton was a DUPLICATE of
 													 * it (user: 滚动到底部的按钮有俩) and has been removed. */}
-													{/* Message-tree navigation (TUI tree-selector parity):
-													 * a floating searchable turn tree — jump to any
-													 * position in the conversation, or fork a new session
-													 * from any node (user nodes re-answer with the message
-													 * text; assistant/toolResult nodes continue from the
-													 * node). Anchored to the WRAP (not the outer column) so
-													 * the pause banner — which lives in the column above
-													 * the wrap — can never sit under it. */}
-													<MessageTreeButton
-														entries={snap?.entries ?? []}
-														onJump={entryId => requestJump({ entryId })}
-														onNavigateTo={entry =>
-															// TUI tree-selector parity: 行点击切换 leaf(而非仅
-															// 滚动),与画布双击同一入口。
-															switchToNode(entry.id)
-														}
-														onFork={(entry, text, includeTarget) =>
-															void forkFromMessage(entry.id, text, includeTarget)
-														}
-														onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
-														activePathIds={trustedPathIds}
-													/>
+													{/* Message-tree navigation now lives in the chat head row
+													 * (left of the session-info toggle), so it no longer
+													 * overlays the transcript's first row. */}
 													{/* In-message text selection actions:
 													 * quote a snippet (not the whole message), quote it with a comment, copy,
 													 * start a new session from it, or append it to the workspace notes. */}

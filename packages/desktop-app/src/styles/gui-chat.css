@@ -4722,12 +4722,13 @@ body.gui-resizing .gui-pane-right {
 }
 
 /* ── Message-tree navigation (TUI tree-selector parity) ───────────────────
- * Floating button at the transcript's top-right opens a searchable turn
- * tree; clicking a row jumps the transcript to that entry. */
+ * In-flow in the chat head row, directly left of the session-info toggle.
+ * The panel is positioned against that row, not against the transcript —
+ * the old absolute button floated over the first message and stole its
+ * hover/quote pill. Clicking a row jumps; it never switches the leaf. */
 .gui-mtree-toggle {
-	position: absolute;
-	top: 8px;
-	right: 36px; /* clear of the turn rail (right: 4px, width 24px) */
+	position: relative;
+	flex: none;
 	z-index: 20;
 	display: flex;
 	align-items: center;
@@ -4735,8 +4736,10 @@ body.gui-resizing .gui-pane-right {
 	width: 28px;
 	height: 28px;
 	border-radius: var(--radius-lg);
-	border: 1px solid color-mix(in oklab, var(--color-border) 60%, transparent);
-	background: color-mix(in oklab, var(--color-surface) 85%, transparent);
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
 	color: var(--color-text-muted);
 	transition: color 0.15s ease, background 0.15s ease;
 }
@@ -4748,13 +4751,15 @@ body.gui-resizing .gui-pane-right {
 
 .gui-mtree-panel {
 	position: absolute;
-	top: 42px;
-	right: 36px;
+	/* Anchored to .gui-chat-head (position: relative), whose height is one
+	 * control row — a percentage max-height would collapse the panel. */
+	top: calc(100% + 6px);
+	right: 12px;
 	z-index: 40;
 	display: flex;
 	flex-direction: column;
 	width: min(360px, calc(100% - 48px));
-	max-height: 60%;
+	max-height: min(60vh, 520px);
 	border-radius: var(--radius-xl);
 	border: 1px solid color-mix(in oklab, var(--color-border) 80%, transparent);
 	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
@@ -5662,6 +5667,9 @@ body.gui-resizing .gui-pane-right {
 	gap: 6px;
 	flex: 0 0 auto;
 	padding: 8px 12px 0;
+	/* Positioning context for the message-tree panel, which is mounted in
+	 * this row and must hang below it without covering the transcript head. */
+	position: relative;
 }
 .gui-chat-head-left {
 	display: flex;
