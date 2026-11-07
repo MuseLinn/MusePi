@@ -92,6 +92,15 @@ describe("selectLaunchablePanelTabs", () => {
 		expect(selectPanelTabComponent([compaction, tool], "ext:panel.tab.compaction")).toBe(compaction);
 	});
 
+	it("keeps the host-owned browser pane out of the rail launcher", () => {
+		const browser = comp({ slot: "panel.tab.browser", extensionId: "browser-ui", code: "c" });
+		const tool = comp({ slot: "panel.tab.tool", extensionId: "tool", code: "c" });
+		// The rail already has a built-in browser surface; a second launchable
+		// item showed the same globe twice.
+		expect(selectLaunchablePanelTabs([browser, tool])).toEqual([tool]);
+		expect(selectPanelTabComponent([browser, tool], "browser")).toBe(browser);
+	});
+
 	it("keeps the reserved file slot out of the generic extension launcher", () => {
 		const files = comp({ slot: "panel.tab.files", extensionId: "file-workspace", code: "c" });
 		const tool = comp({ slot: "panel.tab.tool", extensionId: "tool", code: "c" });

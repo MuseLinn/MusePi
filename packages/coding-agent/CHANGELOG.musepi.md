@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **右侧面板标签可再次拖动，浏览器入口不再重复**：面板标签改用与 rail 相同的指针传感器（此前是旧版鼠标传感器），拖动排序与拖到右半区新建分栏恢复响应；浏览器由内置 surface 承载，配套插件不再额外注册一个 rail 入口。
+  - EN: Right-panel tabs drag again: the strip uses the same pointer sensor as the rail instead of the legacy mouse sensor, so reorder and drag-to-split respond; the browser pane is launched by its built-in surface, and the companion plugin no longer registers a second rail entry.
+
 - **空态聚焦光带改为入场强调**：欢迎页输入框的聚焦光带只扫 3 秒后停止，不再在打字时常驻重绘；专注模式不显示光带。
   - EN: The welcome composer's focus beam is now an entrance accent: it sweeps for three seconds and stops instead of repainting while you type, and focus mode never shows it.
 
@@ -15,8 +18,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **会话信息卡在各颜色主题下都清晰可读**：卡片内的次级文字改为从卡片主文字色派生两档，不再直接取主题的 `--fg-faint`（部分深色预设低到 oklch 0.42，叠在提亮的玻璃上几乎看不见）；短标签在窄列里改为单行省略，不再把中文逐字折成竖排；图标按钮与折叠标题补上原生 button 背景/边框重置，深色预设下不再出现浅色实心方块。
   - EN: The session info card stays readable across colour presets. Secondary text is derived from the card's own primary text instead of the theme's `--fg-faint` — as low as oklch 0.42 in some dark presets and nearly invisible on the lifted glass. Short labels now ellipsise on one line instead of stacking CJK glyphs vertically, and icon/disclosure buttons reset their native buttonface fill so they stop painting as pale solid blocks.
 
-- **右侧面板标签恢复拖动排序与分栏**：分栏落点不再在 `onDragStart` 的同一帧切换 `disabled` 与 `display`，那会重建 dnd-kit 的落点集合、让 `over` 恒为空；碰撞检测在传感器没有指针坐标时回退到被拖标签中心，并改用稳定引用，不再每次渲染重建。手势护盾改为常驻、只翻转命中状态，避免拖拽起始帧插入全屏节点。
-  - EN: Right-panel tabs can be dragged to reorder and split again. The split drop zone no longer toggles `disabled` and `display` in the `onDragStart` render — that rebuilt dnd-kit's droppable set in the same frame it measured rects and left `over` null. Collision detection falls back to the dragged chip's centre when the sensor reports no pointer and keeps a stable callback. The gesture shield stays mounted and only flips hit-testing, so no full-screen node is inserted at drag start.
+- **右侧面板标签拖拽的落点与手势调整**：分栏落点不再在 `onDragStart` 的同一帧切换 `disabled` 与 `display`，碰撞检测在传感器没有指针坐标时回退到被拖标签中心并改用稳定引用，手势护盾改为常驻、只翻转命中状态；标签条改为桌面按下鼠标即激活拖拽、触摸长按激活，并把拖拽监听器放到属性末尾。
+  - EN: Adjusted the right-panel tab drag pipeline. The split drop zone no longer toggles `disabled` and `display` in the `onDragStart` render, collision detection falls back to the dragged chip's centre when the sensor reports no pointer and keeps a stable callback, the gesture shield stays mounted and only flips hit-testing, and tab drags now arm on mousedown (long-press on touch) with activator listeners bound last.
 
 - **拖文件到会话即可添加附件**：从系统拖文件到窗口任意位置时，会话卡上浮出「松开鼠标添加附件」的虚线锚点，指针在卡片（或欢迎页卡片）内才显示；松手把文件交给当前 composer，图片进入既有的缩放/附件流程，其他文件成文件 chip。窗口里无人认领的文件拖拽由该锚点接管：插件安装落点、弹窗和两个输入框各自处理自己的拖拽，锚点不抢落点；在卡片外松手不会产生附件、也不会让窗口导航到文件；Esc 或移出卡片即撤销。欢迎页输入框也补上了自己的 dragover 处理。
   - EN: Dropping OS files onto the session now attaches them. A dashed "Drop to attach files" anchor appears over the chat card while files hang over the window, and only while the pointer is inside that card (or the welcome card). Releasing stages the files on the mounted composer — images through the existing resize/attachment pipeline, other files as file chips. The anchor claims only unclaimed file drags for the window: the plugin-install dropzone, open dialogs and both composer textareas keep their own drop handling; a release outside the card stages nothing and never navigates the window to the file; Escape or leaving the card withdraws it. The welcome composer now prevents dragover on its own too.

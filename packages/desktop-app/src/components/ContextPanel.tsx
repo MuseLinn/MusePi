@@ -861,6 +861,9 @@ export function ContextPanel({
 	// One DndContext spans both column strips so a tab drags across
 	// columns; the drag-end routes same-column pairs to reorder and
 	// cross-column pairs (or column drop zones) to moveToColumn.
+	// Desktop drags arm on mousedown; touch keeps the long-press gate so a
+	// swipe still scrolls the strip. This drops the pointer activator's
+	// isPrimary/button preconditions on Electron.
 	const splitSensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
 		useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),

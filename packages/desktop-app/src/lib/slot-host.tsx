@@ -810,9 +810,14 @@ export function selectPanelTabComponent(components: readonly SlotComponent[], vi
 	});
 }
 
+/** Panel tabs the rail already launches through a built-in surface. Their
+ *  extension contribution renders the body; a second rail entry would show the
+ *  same surface twice (browser appeared as two globes). */
+const HOST_OWNED_PANEL_SLOTS: ReadonlySet<string> = new Set([FILE_WORKSPACE_SLOT, "panel.tab.browser"]);
+
 export function selectLaunchablePanelTabs(components: readonly SlotComponent[]): SlotComponent[] {
 	return components.filter(
-		component => component.slot !== FILE_WORKSPACE_SLOT && component.availability !== "on-demand",
+		component => !HOST_OWNED_PANEL_SLOTS.has(component.slot) && component.availability !== "on-demand",
 	);
 }
 

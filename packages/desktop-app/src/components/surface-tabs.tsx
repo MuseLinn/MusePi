@@ -233,6 +233,9 @@ export function SurfaceTabStrip({
 }: SurfaceTabStripProps): ReactNode {
 	// Same sensor tuning as RightRail's rail reorder (distance 8 keeps clicks
 	// click-y; touch needs the long-press delay so scrolling still scrolls).
+	// Desktop drags arm on mousedown; touch keeps the long-press gate so a
+	// swipe still scrolls the strip. This avoids the pointer activator's
+	// isPrimary/button preconditions on Electron.
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
 		useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
@@ -378,7 +381,6 @@ function SurfaceTabButton({
 			// of them, otherwise every tab becomes a focusable "button" and the
 			// roving-tabindex contract is lost.
 			{...attributes}
-			{...listeners}
 			role="tab"
 			aria-selected={active}
 			tabIndex={active ? 0 : -1}
@@ -401,6 +403,9 @@ function SurfaceTabButton({
 					onClose(tab.id);
 				}
 			}}
+			// Activator listeners go LAST: no explicit prop above may shadow
+			// onMouseDown/onPointerDown and leave the tab with no drag handler.
+			{...listeners}
 		>
 			{tab.glyph ? (
 				<span className="gui-surface-tab-icon" aria-hidden="true">
