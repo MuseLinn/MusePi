@@ -206,6 +206,7 @@ export const general = {
 		"The original reply stays on the tree as a sibling branch — undo jumps back, or send a new message to commit the new branch.",
 	"general.branchFailed": "Could not move the branch",
 	"general.bootTakingLongerThan": "Boot is taking longer than usual — the local daemon may be stuck",
+	"general.bootPhaseSlow": "This step is taking a little longer, still working…",
 	"general.bootPhaseProbe": "Looking for the local daemon…",
 	"general.bootPhaseSpawn": "Starting the local daemon…",
 	"general.bootPhaseGate": "Checking the daemon version…",

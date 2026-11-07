@@ -1703,6 +1703,63 @@ button.gui-stats-pill {
 	border: 0;
 }
 
+/* Two fixed status slots. StatusText cross-fades old and new copy inside a
+ * single grid cell. The column width is fixed rather than content-sized:
+ * phase copy and the long stall notice have very different widths in both
+ * locales, and a content-sized column would resize (and re-wrap) the box on
+ * every state change. 420px holds the longest notice on one line; below that
+ * the copy wraps instead of widening. Recovery only mounts when stalled. */
+.gui-splash-status {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	inline-size: min(420px, 80vw);
+	text-align: center;
+}
+
+.gui-splash-status .gui-status-text {
+	display: block;
+	inline-size: 100%;
+}
+
+.gui-splash-status .gui-status-text-stack {
+	justify-items: center;
+	/* Both lines keep their row while the notice is empty: a note appearing
+	 * must not move the phase copy above it. */
+	min-block-size: 1.2em;
+	min-block-size: 1lh;
+}
+
+.gui-splash-recovery {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	animation: gui-splash-recovery-in var(--gui-motion-fade-in) ease both;
+}
+
+@keyframes gui-splash-recovery-in {
+	from {
+		opacity: 0;
+		transform: translateY(var(--gui-motion-slide-y));
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.gui-motion-off .gui-splash-recovery {
+	animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-splash-recovery {
+		animation: none;
+	}
+}
+
 @keyframes gui-splash-progress-indeterminate {
 	from {
 		transform: translateX(-100%);

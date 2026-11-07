@@ -1,4 +1,4 @@
-import { BlurText, t } from "@musepi/client-core";
+import { BlurText, StatusText, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { ThinkingOrb } from "../vendor/thinking-orbs";
@@ -9,9 +9,32 @@ import { SplashOrb } from "./SplashOrb";
  *  featureless hold. */
 export type BootPhase = "probe" | "spawn" | "gate" | "connect";
 
-/** Brand-only hold before the splash admits the start is slow. A warm daemon
- *  connects in ~150ms, so this never fires on the common path. */
+/** Default gate for `useSlowBoot` when no per-phase budget applies. A warm
+ *  daemon connects in ~150ms, so this never fires on the common path. */
 const SLOW_BOOT_MS = 8_000;
+
+/** Three display states, not a binary slow/fast split. `slow` is informational;
+ *  only `stalled` may claim the daemon is stuck and offer recovery controls. */
+export type BootStatus = "normal" | "slow" | "stalled";
+
+export type BootTimings = {
+	/** Budget per phase before the line turns informational. Phases cost
+	 *  different amounts of work: spawning a daemon and running the version /
+	 *  capability gate are far slower than a port probe or a WS handshake. */
+	budgets: Record<BootPhase, number>;
+	/** Extra time past a phase budget before that phase is called stalled. */
+	stallExtraMs: number;
+	/** Whole-boot backstop: a boot that keeps advancing through phases but
+	 *  never finishes must still surface recovery eventually. */
+	totalStallMs: number;
+};
+
+/** Production budgets, overridable in tests via `useBootStatus`'s third arg. */
+export const BOOT_TIMINGS: BootTimings = {
+	budgets: { probe: 8_000, spawn: 20_000, gate: 15_000, connect: 8_000 },
+	stallExtraMs: 15_000,
+	totalStallMs: 60_000,
+};
 
 /** Orb hand-off after the shell becomes ready: the booting particle orb
  *  cross-fades into the static brand sphere, and the splash stays mounted
@@ -76,20 +99,33 @@ export async function restartApplication(): Promise<boolean> {
 }
 
 /**
- * Slow-boot gate: true once `enabled` has stayed set for `delayMs`. The
- * timer restarts on each activation so a retry gets a fresh window.
+ * Slow-boot gate: true once `enabled` has stayed set for `delayMs`. A changed
+ * `resetKey` (the boot phase) starts a fresh window, and a retry (enabled
+ * false → true) does the same. Time spent in one state is never charged to
+ * the next one.
  */
-export function useSlowBoot(enabled: boolean, delayMs: number = SLOW_BOOT_MS): boolean {
+export function useSlowBoot(enabled: boolean, delayMs: number = SLOW_BOOT_MS, resetKey?: string): boolean {
 	const [slow, setSlow] = useState(false);
 	useEffect(() => {
-		if (!enabled) {
-			setSlow(false);
-			return;
-		}
+		setSlow(false);
+		if (!enabled) return;
 		const timer = setTimeout(() => setSlow(true), delayMs);
 		return () => clearTimeout(timer);
-	}, [enabled, delayMs]);
+	}, [enabled, delayMs, resetKey]);
 	return slow;
+}
+
+/**
+ * Per-phase watchdog. Both thresholds restart when the phase changes, so a
+ * slow-but-progressing boot never accumulates into a false "daemon stuck".
+ * The whole-boot timer is the only phase-independent backstop.
+ */
+export function useBootStatus(booting: boolean, phase: BootPhase, timings: BootTimings = BOOT_TIMINGS): BootStatus {
+	const budget = timings.budgets[phase];
+	const slow = useSlowBoot(booting, budget, phase);
+	const phaseStalled = useSlowBoot(booting, budget + timings.stallExtraMs, phase);
+	const totalStalled = useSlowBoot(booting, timings.totalStallMs);
+	return totalStalled || phaseStalled ? "stalled" : slow ? "slow" : "normal";
 }
 
 /**
@@ -187,14 +223,21 @@ function motionOff(): boolean {
 
 export function StartupSplash({
 	phase,
+	status,
 	slow = false,
 	ready = false,
 }: {
 	phase?: BootPhase;
+	/** Three-level status from `useBootStatus`. */
+	status?: BootStatus;
+	/** Compatibility alias: the boolean view maps to `stalled`. */
 	slow?: boolean;
 	ready?: boolean;
 } = {}): ReactNode {
 	const [paused] = useState(motionOff);
+	const level: BootStatus = status ?? (slow ? "stalled" : "normal");
+	const notice =
+		level === "slow" ? t("general.bootPhaseSlow") : level === "stalled" ? t("general.bootTakingLongerThan") : null;
 	return (
 		<div className="gui-splash">
 			<div className="gui-splash-inner">
@@ -215,18 +258,16 @@ export function StartupSplash({
 					<span className="gui-splash-progress-fill" />
 				</div>
 				<progress className="gui-splash-progress-native" aria-label={t("settings.loading")} />
-				{phase && (
-					<p className="gui-note" role="status">
-						{bootPhaseLabel(phase)}
-					</p>
-				)}
-				{slow && (
-					<>
-						<p className="gui-note" role="status">
-							{t("general.bootTakingLongerThan")}
-						</p>
+				{/* Both lines are fixed status slots: phase → phase and notice →
+				 *  notice cross-fade in place, never a hard text swap or a jump. */}
+				<div className="gui-splash-status">
+					<StatusText className="gui-note" text={phase ? bootPhaseLabel(phase) : null} />
+					<StatusText className={`gui-note${level === "stalled" ? " gui-error" : ""}`} text={notice} />
+				</div>
+				{level === "stalled" && (
+					<div className="gui-splash-recovery">
 						<BootRecoveryActions />
-					</>
+					</div>
 				)}
 			</div>
 		</div>

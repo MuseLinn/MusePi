@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **启动等待不再被误报为卡死**：查找、启动、校验、连接各阶段独立计时，阶段一推进就重置窗口；正常的多秒等待只显示当前阶段和「仍在继续」的信息提示，只有单阶段真正停住或整次启动超时才提示 daemon 可能卡住，并给出「导出诊断」与「重启应用」。阶段与提示文案改为同一套规范的交叉淡入淡出，读写全局动效 token，关闭动效时直接切换。
+  - EN: Normal startup waits no longer read as a hang. Each boot phase (probe, spawn, version gate, connect) has its own budget and resets the clock when the phase advances; a slow but progressing start shows only the phase and an informational "still working" note, and the daemon-stuck diagnosis with recovery actions appears only when a phase stalls or the whole boot times out. Phase and notice copy now cross-fade through one shared status-text primitive on the global motion tokens, swapping instantly when motion is off.
+
 - **拖动标签不再整条上下漂移**：标签条只跟随横向指针位移，往下拖去分栏时标签留在自己那一行；右侧 rail 只沿列表方向移动，横向拖动不再让条目斜着跑。碰撞检测仍读真实指针位置，所以拖到右半区新建分栏、分栏间跨列都没受影响。
   - EN: Dragging a tab no longer slides the strip vertically: a tab follows the pointer on X only and stays on its own row when you drag downward to split, and the right rail moves on Y only so its items no longer drift sideways. Collision detection still reads the real pointer position, so drag-to-split and cross-column moves are unchanged.
 

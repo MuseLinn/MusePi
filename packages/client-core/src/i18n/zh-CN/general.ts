@@ -195,6 +195,7 @@ export const general = {
 	"general.jumpBackHint": "原回复保留为树上的分支——撤销可跳回原节点，或发送新消息提交新分支。",
 	"general.branchFailed": "分支切换失败",
 	"general.bootTakingLongerThan": "启动时间过长 — 本地 daemon 可能卡住了",
+	"general.bootPhaseSlow": "这一步比预期久一些，仍在继续…",
 	"general.bootPhaseProbe": "正在查找本地 daemon…",
 	"general.bootPhaseSpawn": "正在启动本地 daemon…",
 	"general.bootPhaseGate": "正在校验 daemon 版本…",

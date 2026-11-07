@@ -4355,6 +4355,73 @@
 	transition: none;
 }
 
+/* ── StatusText: in-place cross-fade for state copy (gui-design.md §3a) ────
+ * Old and new strings share one grid cell: a status change never reflows the
+ * surrounding layout. Durations/travel read the shared motion tokens; the
+ * fallbacks keep hosts that do not load gui-base.css on the same ladder. */
+.gui-status-text-stack {
+	display: grid;
+	align-items: center;
+	/* A slot that has to wrap splits its two lines evenly instead of leaving
+	 * one orphan word: a status line is short copy, so balance always applies. */
+	text-wrap: balance;
+}
+
+.gui-status-text-stack > span {
+	grid-area: 1 / 1;
+	min-width: 0;
+}
+
+.gui-status-text-current {
+	animation: gui-status-in var(--gui-motion-fade-in, 160ms) ease both;
+}
+
+.gui-status-text-leaving {
+	pointer-events: none;
+	animation: gui-status-out var(--gui-motion-fade-out, 160ms) ease both;
+}
+
+@keyframes gui-status-in {
+	from {
+		opacity: 0;
+		transform: translateY(var(--gui-motion-slide-y, 6px));
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes gui-status-out {
+	from {
+		opacity: 1;
+		transform: none;
+	}
+	to {
+		opacity: 0;
+		transform: translateY(calc(-1 * var(--gui-motion-slide-y, 6px)));
+	}
+}
+
+.gui-motion-off .gui-status-text-current,
+.gui-motion-off .gui-status-text-leaving {
+	animation: none;
+}
+
+.gui-motion-off .gui-status-text-leaving {
+	display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-status-text-current,
+	.gui-status-text-leaving {
+		animation: none;
+	}
+	.gui-status-text-leaving {
+		display: none;
+	}
+}
+
 /* ── ShinyText (reactbits parity, zero-dep): gradient text + sweeping
  * highlight band (background-position keyframes, no JS). */
 .gui-shiny-text {

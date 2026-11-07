@@ -39,7 +39,7 @@ import {
 	type BootPhase,
 	BootRecoveryActions,
 	StartupSplash,
-	useSlowBoot,
+	useBootStatus,
 	useSplashHold,
 } from "./components/StartupSplash";
 import { useSessionInfoCardVisibility } from "./components/session-info-card";
@@ -685,10 +685,11 @@ function AppInner(): ReactNode {
 	const [connectError, setConnectError] = useState<string | null>(null);
 	const [booting, setBooting] = useState(true);
 	// Splash diagnostics: the stage boot() is in (probe → spawn → gate →
-	// connect) and the 8s slow-start gate. Both are in-memory only — they
-	// describe THIS attempt, so a retry starts from a clean stage.
+	// connect) and a per-phase watchdog. Both are in-memory only — they
+	// describe THIS attempt, so a retry starts from a clean stage. Each phase
+	// owns its own budget; cumulative time across phases never trips it.
 	const [bootPhase, setBootPhase] = useState<BootPhase>("probe");
-	const bootSlow = useSlowBoot(booting);
+	const bootStatus = useBootStatus(booting, bootPhase);
 	// The splash outlives `booting` by one orb hand-off (particle orb → brand
 	// sphere), so the shell never cuts in on a half-formed splash.
 	const splashHold = useSplashHold(booting);
@@ -3714,7 +3715,7 @@ function AppInner(): ReactNode {
 	if (booting || splashHold) {
 		return (
 			<div className="gui-shell">
-				<StartupSplash phase={bootPhase} slow={bootSlow} ready={!booting} />
+				<StartupSplash phase={bootPhase} status={bootStatus} ready={!booting} />
 			</div>
 		);
 	}

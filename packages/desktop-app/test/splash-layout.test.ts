@@ -11,6 +11,12 @@ const { ensureChromiumExecutable } = require("../../coding-agent/src/tools/brows
 const CSS = ["gui-base.css", "gui-composer.css"]
 	.map(file => fs.readFileSync(path.resolve(import.meta.dir, "../src/styles", file), "utf8"))
 	.join("\n");
+// StatusText lives in client-core; its stylesheet is part of the shared
+// motion ladder, so the visual checks load it alongside the desktop CSS.
+const SHELL_CSS = `${CSS}\n${fs.readFileSync(
+	path.resolve(import.meta.dir, "../../client-core/src/components/shell/shell.css"),
+	"utf8",
+)}`;
 
 const executablePath = await ensureChromiumExecutable();
 if (!executablePath) throw new Error("No Chromium executable resolved");
@@ -77,6 +83,51 @@ describe("splash content", () => {
 		await Bun.sleep(250);
 		const second = await page.screenshot({ clip });
 		expect(Buffer.from(first).equals(Buffer.from(second))).toBe(false);
+	});
+
+	it("cross-fades status copy on the token ladder and drops it under motion-off", async () => {
+		const html = renderToStaticMarkup(React.createElement(StartupSplash, { phase: "gate", status: "stalled" }));
+		await page.setContent(`<style>${SHELL_CSS}</style>${html}`);
+		const animation = (selector: string) =>
+			page.evaluate(sel => {
+				const element = document.querySelector(sel);
+				if (!element) throw new Error(`missing ${sel}`);
+				const style = getComputedStyle(element);
+				return { name: style.animationName, duration: style.animationDuration };
+			}, selector);
+
+		expect(await animation(".gui-status-text-current")).toEqual({ name: "gui-status-in", duration: "0.16s" });
+		expect(await animation(".gui-splash-recovery")).toEqual({ name: "gui-splash-recovery-in", duration: "0.16s" });
+
+		await page.evaluate(() => document.documentElement.classList.add("gui-motion-off"));
+		try {
+			expect((await animation(".gui-status-text-current")).name).toBe("none");
+			expect((await animation(".gui-splash-recovery")).name).toBe("none");
+		} finally {
+			await page.evaluate(() => document.documentElement.classList.remove("gui-motion-off"));
+		}
+	});
+
+	it("keeps the status box fixed across phase and status changes", async () => {
+		const box = async (phase: string, status?: string) => {
+			const html = renderToStaticMarkup(React.createElement(StartupSplash, { phase, status }));
+			await page.setContent(`<style>${SHELL_CSS}</style>${html}`);
+			return page.evaluate(() => {
+				const rect = document.querySelector(".gui-splash-status")?.getBoundingClientRect();
+				return rect
+					? { x: Math.round(rect.x), y: Math.round(rect.y), width: rect.width, height: rect.height }
+					: null;
+			});
+		};
+		// A progressing boot only changes copy: phase → phase and normal → slow
+		// must not move or resize the column at all.
+		const normal = await box("probe", "normal");
+		expect(await box("gate", "slow")).toEqual(normal);
+		// Stalled may add a wrapped notice line plus the recovery controls, but
+		// the column never widens — every state shares one fixed track width.
+		const stalled = await box("gate", "stalled");
+		expect(stalled?.width).toBe(normal?.width);
+		expect(stalled?.height).toBeGreaterThanOrEqual(normal?.height ?? 0);
 	});
 });
 

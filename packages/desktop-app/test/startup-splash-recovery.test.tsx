@@ -1,17 +1,21 @@
 import "./happy-dom-shim"; // MUST be first: the component graph defines DOM-bound modules at evaluation time.
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { getLocaleSnapshot, setLocale, t } from "@musepi/client-core";
+import { getLocaleSnapshot, StatusText, setLocale, t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+	BOOT_TIMINGS,
 	type BootPhase,
 	BootRecoveryActions,
+	type BootStatus,
+	type BootTimings,
 	bootPhaseLabel,
 	exportDiagnostics,
 	readRendererErrorLog,
 	restartApplication,
 	StartupSplash,
+	useBootStatus,
 	useSlowBoot,
 } from "../src/components/StartupSplash";
 
@@ -72,11 +76,31 @@ describe("startup splash stages", () => {
 		expect(html).toContain(t("general.bootRestartApp"));
 		expect(html.match(/<button/g)?.length).toBe(2);
 	});
+
+	it("slow is informational: no stuck claim, no recovery controls", () => {
+		const html = renderToStaticMarkup(<StartupSplash phase="gate" status="slow" />);
+		expect(html).toContain(t("general.bootPhaseSlow"));
+		expect(html).not.toContain(t("general.bootTakingLongerThan"));
+		expect(html).not.toContain("gui-btn");
+	});
+
+	it("reserves the stuck claim and recovery controls for stalled", () => {
+		const html = renderToStaticMarkup(<StartupSplash phase="gate" status="stalled" />);
+		expect(html).toContain(t("general.bootTakingLongerThan"));
+		expect(html).toContain("gui-error");
+		expect(html.match(/<button/g)?.length).toBe(2);
+	});
+
+	it("keeps both status lines in fixed slots even when there is no notice", () => {
+		const html = renderToStaticMarkup(<StartupSplash phase="probe" />);
+		expect(html.match(/gui-status-text-stack/g)?.length).toBe(2);
+		expect(html).toContain('role="status"');
+	});
 });
 
 describe("useSlowBoot", () => {
-	function Probe({ enabled, delayMs }: { enabled: boolean; delayMs: number }) {
-		const slow = useSlowBoot(enabled, delayMs);
+	function Probe({ enabled, delayMs, resetKey }: { enabled: boolean; delayMs: number; resetKey?: string }) {
+		const slow = useSlowBoot(enabled, delayMs, resetKey);
 		return <span data-slow={slow ? "1" : "0"} />;
 	}
 
@@ -110,6 +134,134 @@ describe("useSlowBoot", () => {
 			await Bun.sleep(60);
 		});
 		expect(slowFlag()).toBe("1");
+	});
+
+	it("restarts on a phase change even when the delay is unchanged", async () => {
+		act(() => root.render(<Probe enabled delayMs={40} resetKey="gate" />));
+		await act(async () => {
+			await Bun.sleep(60);
+		});
+		expect(slowFlag()).toBe("1");
+
+		act(() => root.render(<Probe enabled delayMs={40} resetKey="connect" />));
+		expect(slowFlag()).toBe("0");
+		await act(async () => {
+			await Bun.sleep(60);
+		});
+		expect(slowFlag()).toBe("1");
+	});
+});
+
+/** Small budgets keep the watchdog tests sub-second; production values are
+ *  pinned separately so a test cannot silently redefine the real behaviour. */
+const FAST_TIMINGS: BootTimings = {
+	budgets: { probe: 30, spawn: 30, gate: 30, connect: 30 },
+	stallExtraMs: 40,
+	totalStallMs: 5_000,
+};
+
+describe("useBootStatus", () => {
+	function Probe({ booting, phase }: { booting: boolean; phase: BootPhase }) {
+		const status: BootStatus = useBootStatus(booting, phase, FAST_TIMINGS);
+		return <span data-status={status} />;
+	}
+
+	const status = (): string | null => host.querySelector("[data-status]")?.getAttribute("data-status") ?? null;
+
+	it("gives costly phases a longer budget than quick ones", () => {
+		expect(BOOT_TIMINGS.budgets.gate).toBeGreaterThan(BOOT_TIMINGS.budgets.connect);
+		expect(BOOT_TIMINGS.budgets.spawn).toBeGreaterThan(BOOT_TIMINGS.budgets.probe);
+		expect(BOOT_TIMINGS.totalStallMs).toBeGreaterThan(BOOT_TIMINGS.stallExtraMs);
+	});
+
+	it("starts a fresh window on every phase change", async () => {
+		act(() => root.render(<Probe booting phase="gate" />));
+		expect(status()).toBe("normal");
+		await act(async () => {
+			await Bun.sleep(45);
+		});
+		expect(status()).toBe("slow");
+
+		act(() => root.render(<Probe booting phase="connect" />));
+		expect(status()).toBe("normal");
+		await act(async () => {
+			await Bun.sleep(45);
+		});
+		expect(status()).toBe("slow");
+	});
+
+	it("never calls a progressing boot stalled", async () => {
+		const phases: BootPhase[] = ["probe", "connect", "gate", "connect", "spawn", "connect"];
+		act(() => root.render(<Probe booting phase="probe" />));
+		for (const phase of phases) {
+			act(() => root.render(<Probe booting phase={phase} />));
+			await act(async () => {
+				await Bun.sleep(20);
+			});
+			expect(status()).not.toBe("stalled");
+		}
+	});
+
+	it("escalates only when one phase stops advancing", async () => {
+		act(() => root.render(<Probe booting phase="gate" />));
+		await act(async () => {
+			await Bun.sleep(90);
+		});
+		expect(status()).toBe("stalled");
+	});
+
+	it("clears a stalled status as soon as the boot ends", async () => {
+		act(() => root.render(<Probe booting phase="gate" />));
+		await act(async () => {
+			await Bun.sleep(90);
+		});
+		expect(status()).toBe("stalled");
+		act(() => root.render(<Probe booting={false} phase="gate" />));
+		expect(status()).toBe("normal");
+	});
+});
+
+describe("StatusText", () => {
+	it("renders one accessible status line and no leaving layer on first paint", () => {
+		const html = renderToStaticMarkup(<StatusText text="Checking…" />);
+		expect(html).toContain('role="status"');
+		expect(html).toContain('aria-live="polite"');
+		expect(html).toContain("gui-status-text-current");
+		expect(html).not.toContain("gui-status-text-leaving");
+	});
+
+	it("cross-fades the outgoing copy and retires it on animationend", async () => {
+		act(() => root.render(<StatusText text="first" />));
+		act(() => root.render(<StatusText text="second" />));
+
+		const leaving = host.querySelector(".gui-status-text-leaving");
+		expect(leaving?.textContent).toBe("first");
+		expect(leaving?.getAttribute("aria-hidden")).toBe("true");
+		expect(host.querySelector(".gui-status-text-current")?.textContent).toBe("second");
+
+		await act(async () => {
+			host.querySelector(".gui-status-text-leaving")?.dispatchEvent(new Event("animationend", { bubbles: true }));
+		});
+		expect(host.querySelector(".gui-status-text-leaving")).toBeNull();
+	});
+
+	it("swaps instantly under gui-motion-off", () => {
+		document.documentElement.classList.add("gui-motion-off");
+		try {
+			act(() => root.render(<StatusText text="first" />));
+			act(() => root.render(<StatusText text="second" />));
+			expect(host.querySelector(".gui-status-text-leaving")).toBeNull();
+			expect(host.querySelector(".gui-status-text-current")?.textContent).toBe("second");
+		} finally {
+			document.documentElement.classList.remove("gui-motion-off");
+		}
+	});
+
+	it("clears the line when text becomes null", () => {
+		act(() => root.render(<StatusText text="notice" />));
+		act(() => root.render(<StatusText text={null} />));
+		expect(host.querySelector(".gui-status-text-current")).toBeNull();
+		expect(host.querySelector(".gui-status-text-leaving")?.textContent).toBe("notice");
 	});
 });
 
