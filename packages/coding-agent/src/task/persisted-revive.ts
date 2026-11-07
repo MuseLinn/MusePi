@@ -6,7 +6,7 @@ import { formatModelRoleAlias } from "../config/model-roles";
 import type { Settings } from "../config/settings";
 import { MCPManager } from "../mcp/manager";
 import type { PersistedSubagentReviverFactory } from "../registry/agent-lifecycle";
-import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { AgentRegistry, isMainAgentId } from "../registry/agent-registry";
 import { createAgentSession } from "../sdk";
 import type { AgentSession } from "../session/agent-session";
 import type { AuthStorage } from "../session/auth-storage";
@@ -75,11 +75,12 @@ export function createPersistedSubagentReviverFactory(
 		const init = peek.init;
 		// taskDepth drives real capability gating (task-spawn allowance, memory
 		// startup, …); derive it from the persisted parent chain rather than
-		// assuming a fixed level.
+		// assuming a fixed level. Any main id terminates the walk — the bare
+		// `Main` or a session-scoped `Main-2` from a concurrent conversation.
 		let taskDepth = 1;
 		let parentId = ref.parentId;
 		const seen = new Set<string>();
-		while (parentId && parentId !== MAIN_AGENT_ID && !seen.has(parentId)) {
+		while (parentId && !isMainAgentId(parentId) && !seen.has(parentId)) {
 			seen.add(parentId);
 			taskDepth++;
 			parentId = registry.get(parentId)?.parentId;

@@ -10,7 +10,7 @@
  */
 
 import { AgentLifecycleManager } from "../../registry/agent-lifecycle";
-import { AgentRegistry, MAIN_AGENT_ID, type RegistryEvent } from "../../registry/agent-registry";
+import { AgentRegistry, isMainAgentId, type RegistryEvent } from "../../registry/agent-registry";
 import type { AgentSession } from "../../session/agent-session";
 import { setTerminalTitleState } from "../../utils/title-generator";
 import type { InteractiveModeContext } from "../types";
@@ -39,7 +39,7 @@ export class SessionFocusController {
 	/** Focus the main view on an agent's live session. Throws an Error with a user-displayable message. */
 	async focusAgent(id: string): Promise<void> {
 		if (this.ctx.collabGuest) throw new Error("Viewing agents is unavailable in a collab session.");
-		if (id === MAIN_AGENT_ID) return this.unfocus();
+		if (isMainAgentId(id)) return this.unfocus();
 		const session = await this.lifecycle().ensureLive(id);
 		if (id === this.#focusedAgentId && session === this.#attachedSession) return;
 		this.#focusedAgentId = id;
@@ -53,7 +53,7 @@ export class SessionFocusController {
 	async focusParent(): Promise<void> {
 		if (!this.#focusedAgentId) return;
 		const parentId = this.registry.get(this.#focusedAgentId)?.parentId;
-		if (parentId && parentId !== MAIN_AGENT_ID && this.registry.get(parentId)) {
+		if (parentId && !isMainAgentId(parentId) && this.registry.get(parentId)) {
 			return this.focusAgent(parentId);
 		}
 		return this.unfocus();

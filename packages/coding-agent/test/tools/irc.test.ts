@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import * as path from "node:path";
 import { Agent } from "@musepi/pi-agent-core";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import type { SettingPath } from "@musepi/pi-coding-agent/config/settings-schema";
+import { registerArtifactsDir } from "@musepi/pi-coding-agent/internal-urls/registry-helpers";
 import { IrcBus, type IrcMessage } from "@musepi/pi-coding-agent/irc/bus";
 import { AgentLifecycleManager } from "@musepi/pi-coding-agent/registry/agent-lifecycle";
 import { AgentRegistry } from "@musepi/pi-coding-agent/registry/agent-registry";
@@ -10,6 +14,8 @@ import type { CustomMessage } from "@musepi/pi-coding-agent/session/messages";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { type CoordinationDetails, HubTool, isIrcEnabled } from "@musepi/pi-coding-agent/tools/hub";
+import { executeList } from "@musepi/pi-coding-agent/tools/hub/messaging";
+import { removeWithRetries } from "@musepi/pi-utils";
 
 interface FakeSession {
 	session: AgentSession;
@@ -133,46 +139,70 @@ describe("IRC", () => {
 			expect(bus.unreadCount("0-Sub")).toBe(0);
 		});
 
-		it("names the shared-main-id hand-off when Main is not registered", async () => {
-			// 实机回归(会话 01a1a5a1):子 agent 回投时 registry 里没有 Main,
-			// 它只看到一句 "Unknown agent Main"。每个顶层会话都用同一个
-			// "Main" id 注册,较新的会话抢占槽位、它退出时把 id 一起注销 ——
-			// 老会话仍活着却再也收不到 IRC。错误文案要把机制说出来。
+		it("names the live peers when the recipient is not registered", async () => {
+			const sub = makeFakeSession();
+			registry.register({ id: "alice", displayName: "task", kind: "sub", session: sub.session });
 			const ghost = await bus.send({ from: "0-Sub", to: "nobody", body: "ping" });
-			expect(ghost).toEqual({
-				to: "nobody",
-				outcome: "failed",
-				error: 'Unknown agent "nobody" — check `irc list` for live peers.',
-			});
-
-			const main = await bus.send({ from: "0-Sub", to: "Main", body: "ping" });
-			expect(main.outcome).toBe("failed");
-			expect(main.error).toContain("no main agent is registered right now");
-			expect(main.error).toContain("shares this id");
+			expect(ghost.outcome).toBe("failed");
+			expect(ghost.error).toContain('Unknown agent "nobody"');
+			expect(ghost.error).toContain("live peers: alice");
 		});
 
-		it("a newer top-level session takes the shared Main id and its teardown releases it", () => {
-			// 当前设计的真实后果(不是断言"应该如此"):同一进程里两个顶层
-			// 会话都注册 "Main",后注册者占位;它注销后 id 消失,先注册的
-			// 那个仍然活着的会话从此不可寻址。修法是给每个会话独立的主
-			// agent id(或让 registry 保留被顶替的活 ref),那是一次跨 irc/
-			// hub/history 的改造 —— 在此之前先把这个行为钉住,免得当成
-			// 偶发竞态查错方向。
-			const first = makeFakeSession();
-			const firstRef = registry.register({ id: "Main", displayName: "main", kind: "main", session: first.session });
-			const second = makeFakeSession();
-			const secondRef = registry.register({
+		it("points at the retained transcript when a settled agent is no longer registered", async () => {
+			// 实机回归:alice 结算后被释放,`hub send alice` 只回一句
+			// "Unknown agent",读起来像"工作丢了"。转录其实还在盘上 ——
+			// 错误文案必须把它指出来。
+			const dir = await mkdtemp(path.join(tmpdir(), "irc-transcript-"));
+			const release = registerArtifactsDir(dir);
+			try {
+				await Bun.write(path.join(dir, "alice.jsonl"), "");
+				const receipt = await bus.send({ from: "0-Sub", to: "alice", body: "ping" });
+				expect(receipt.outcome).toBe("failed");
+				expect(receipt.error).toContain('Unknown agent "alice"');
+				expect(receipt.error).toContain("history://alice");
+			} finally {
+				release();
+				await removeWithRetries(dir);
+			}
+		});
+
+		it("resolves a bare Main to the sender's own conversation, never a sibling one", async () => {
+			// 两个顶层会话各有一个主 agent id(裸 Main + 作用域化的 Main-2)。
+			// 子 agent 若仍按旧提示词写 `hub send Main`,必须落到自己那条
+			// 会话的主 agent 上 —— 而不是抢到裸 id 的那一个。
+			const otherMain = makeFakeSession();
+			registry.register({ id: "Main", displayName: "main", kind: "main", session: otherMain.session });
+			const ownMain = makeFakeSession();
+			const ownRef = registry.register({
 				id: "Main",
 				displayName: "main",
 				kind: "main",
-				session: second.session,
+				session: ownMain.session,
+			});
+			expect(ownRef.id).toBe("Main-2");
+
+			const alice = makeFakeSession();
+			registry.register({
+				id: "alice",
+				displayName: "task",
+				kind: "sub",
+				parentId: ownRef.id,
+				session: alice.session,
 			});
 
-			expect(registry.get("Main")).toBe(secondRef);
-			expect(firstRef.session).toBe(first.session);
+			const receipt = await bus.send({ from: "alice", to: "Main", body: "round 2" });
+			// The receipt carries the resolved id, not the alias the caller wrote.
+			expect(receipt).toEqual({ to: "Main-2", outcome: "injected" });
+			expect(ownMain.delivered.map(msg => msg.body)).toEqual(["round 2"]);
+			expect(otherMain.delivered).toEqual([]);
 
-			registry.unregister("Main", secondRef);
-			expect(registry.get("Main")).toBeUndefined();
+			// `hub list` from inside that conversation: its own main, nobody else's.
+			const roster = await executeList(registry, "alice");
+			const rows = (roster.content[0] as { text: string }).text
+				.split("\n")
+				.filter(line => line.startsWith("- "))
+				.map(line => line.slice(2).split(" ")[0]);
+			expect(rows).toEqual(["Main-2"]);
 		});
 
 		it("relays only subagent-to-subagent traffic to the main UI", async () => {

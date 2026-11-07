@@ -6,6 +6,14 @@ Agent Hub is the interactive TUI for watching and controlling subagents associat
 
 The Hub also discovers parked subagents from the current session's persisted artifacts when a session is resumed. Advisor transcript files appear as read-only rows.
 
+## Agent identity
+
+The registry is process-global, so identity is scoped per conversation. The first live top-level session holds the bare `Main` id; every further concurrent session registers as `Main-2`, `Main-3`, and so on. No session can take over another's id, and a session's teardown only releases the id it owns.
+
+A subagent addresses `Main` relatively: the bus resolves it through that agent's own lineage, so it always lands on the main agent of its own conversation. Peer rosters (`hub list`, broadcasts, the `# IRC Peers` block) are likewise conversation-scoped — another session's main is not a peer.
+
+A settled subagent stays `parked` with its transcript retained: messaging it revives it, and a released agent's transcript remains readable at `history://<id>`.
+
 ## Open the Hub
 
 | Input          | Behavior                                                                                       |

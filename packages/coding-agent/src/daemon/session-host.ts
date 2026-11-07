@@ -1017,11 +1017,12 @@ export class DaemonSessionHost {
 	/** In-flight history-session reactivations (dedupe concurrent subscribe/send). */
 	readonly #activating = new Map<string, Promise<LiveSession>>();
 	/** Serializes top-level session bootstraps. Two concurrent createAgentSession
-	 *  calls both default to agentId "Main" on the process-global AgentRegistry,
-	 *  and the loser's pre-registration CAS fails with 'Agent "Main" was replaced
-	 *  during session initialization' (sdk.ts pre-registers the id before
-	 *  construction). The GUI fires sessions.create / sessions.reopen and
-	 *  provider/model RPCs concurrently on fresh roots, so this must hold. */
+	 *  calls share the process-global AgentRegistry and its single-writer model
+	 *  registry / MCP caches, and the second one's pre-registration would race
+	 *  the first one's `attachSession`. The GUI fires sessions.create /
+	 *  sessions.reopen and provider/model RPCs concurrently on fresh roots, so
+	 *  this must hold. Id collisions no longer fail here — the registry re-keys
+	 *  a second live main to a scoped id (`Main-2`, see AgentRegistry.register). */
 	#bootstrapChain: Promise<unknown> = Promise.resolve();
 	/** In-flight ensureRegistry bootstrap (dedupes concurrent provider/model
 	 *  RPCs); cleared on settle so a failed bootstrap can be retried. */

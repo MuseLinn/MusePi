@@ -15,6 +15,23 @@ import { oneLineLabel } from "../task/types";
 
 export const MAIN_AGENT_ID = "Main";
 
+/**
+ * Separator for a session-scoped main id (`Main-2`). The bare id belongs to
+ * the first live top-level session; every further concurrent session gets the
+ * next free scoped variant. See {@link AgentRegistry.register}.
+ */
+const SCOPED_MAIN_PREFIX = `${MAIN_AGENT_ID}-`;
+
+/**
+ * True for the bare main id and every session-scoped variant. Callers that
+ * mean "is this a main agent" (roster filters, relay suppression, parent
+ * fallbacks) must use this instead of comparing against {@link MAIN_AGENT_ID}:
+ * two live conversations no longer share one id.
+ */
+export function isMainAgentId(id: string): boolean {
+	return id === MAIN_AGENT_ID || id.startsWith(SCOPED_MAIN_PREFIX);
+}
+
 /** Sidecar marker retained beside a child transcript after an explicit kill. */
 const AGENT_TOMBSTONE_SUFFIX = ".tombstone";
 
@@ -141,10 +158,34 @@ export class AgentRegistry {
 		return false;
 	}
 
+	/**
+	 * Claim the `main` slot for a new top-level session.
+	 *
+	 * The bare `Main` id belongs to whoever holds it first; a second live
+	 * conversation would otherwise overwrite that ref and its teardown would
+	 * unregister the id, leaving the first session alive but unreachable
+	 * (`hub send Main` → `Unknown agent "Main"`). Minting a scoped id keeps
+	 * both sessions addressable: each one's subagents learn its real id from
+	 * `session.getAgentId()`, and {@link IrcBus} still resolves a bare `Main`
+	 * to the sender's own root.
+	 */
+	#mintScopedMainId(): string {
+		let n = 2;
+		while (this.#refs.has(`${SCOPED_MAIN_PREFIX}${n}`)) n += 1;
+		return `${SCOPED_MAIN_PREFIX}${n}`;
+	}
+
 	register(input: RegisterInput): AgentRef {
 		const now = Date.now();
+		// Only the main slot is re-keyed. Subagent ids are their artifact names
+		// (`<Id>.jsonl`) and their callers already own the id, so a collision
+		// there stays a takeover.
+		const id =
+			input.kind === "main" && this.#refs.has(input.id) && isMainAgentId(input.id)
+				? this.#mintScopedMainId()
+				: input.id;
 		const ref: AgentRef = {
-			id: input.id,
+			id,
 			displayName: input.displayName,
 			kind: input.kind,
 			parentId: input.parentId,
@@ -156,13 +197,11 @@ export class AgentRegistry {
 			activity: input.activity,
 			history: input.history,
 		};
-		// Id takeover — worth a log line, never a rejection. Every top-level
-		// session registers as "Main" (sdk.ts defaults the id), so opening a
-		// second conversation replaces the first one's ref; when the newer
-		// session tears down it unregisters the id, and the older live session
-		// becomes unreachable (`hub send` → `Unknown agent "Main"`). Registering
-		// must still succeed — a second conversation has to work — so make the
-		// hand-off visible in the daemon log instead of failing silently.
+		// Subagent id takeover — worth a log line, never a rejection. A rerun
+		// reusing an artifact-name id replaces the previous ref; registering
+		// must still succeed, so make the hand-off visible in the daemon log
+		// instead of failing silently. The main slot never reaches this branch:
+		// it is re-keyed above while the previous owner is still registered.
 		const previous = this.#refs.get(ref.id);
 		if (previous?.session && previous.session !== ref.session) {
 			logger.warn("Agent registry id takeover: a live ref was replaced by a newer session", {
@@ -292,9 +331,38 @@ export class AgentRegistry {
 	 * Flat namespace: every other agent is visible.
 	 */
 	listVisibleTo(id: string): AgentRef[] {
+		// Peers are scoped to the sender's own conversation: another top-level
+		// session's main is not this agent's parent and must not appear in its
+		// roster, even though both live on the one process-global registry.
+		// A sender with no resolvable root (unparented manual registration,
+		// orphan restored from disk) keeps the pre-scoping view of the bare
+		// main slot rather than losing its only route to a main agent.
+		const root = this.mainOf(id);
+		const unscopedMain = root === undefined;
 		return this.list().filter(
-			ref => ref.id !== id && ref.kind !== "advisor" && (ref.status === "running" || ref.status === "idle"),
+			ref =>
+				ref.id !== id &&
+				ref.kind !== "advisor" &&
+				(ref.status === "running" || ref.status === "idle") &&
+				(ref.kind !== "main" || ref.id === root || (unscopedMain && ref.id === MAIN_AGENT_ID)),
 		);
+	}
+
+	/**
+	 * Registry id of the main agent that roots `id`'s lineage — `id` itself when
+	 * it is a main. Undefined when the chain is broken (an unregistered parent,
+	 * or an orphan restored from disk). Used to scope peer rosters and to resolve
+	 * a bare `Main` address from inside a subagent.
+	 */
+	mainOf(id: string): string | undefined {
+		let cursor = this.#refs.get(id);
+		const seen = new Set<string>();
+		while (cursor && !seen.has(cursor.id)) {
+			if (cursor.kind === "main") return cursor.id;
+			seen.add(cursor.id);
+			cursor = cursor.parentId ? this.#refs.get(cursor.parentId) : undefined;
+		}
+		return undefined;
 	}
 
 	/** Whether a ref's claimed running state is corroborated by its attached live session. */

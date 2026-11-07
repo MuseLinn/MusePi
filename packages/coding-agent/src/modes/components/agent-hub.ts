@@ -33,7 +33,13 @@ import type { MessageRenderer } from "../../extensibility/extensions/types";
 import { t } from "../../i18n/index.js";
 import { IrcBus } from "../../irc/bus";
 import { AgentLifecycleManager } from "../../registry/agent-lifecycle";
-import { type AgentRef, AgentRegistry, type AgentStatus, MAIN_AGENT_ID } from "../../registry/agent-registry";
+import {
+	type AgentRef,
+	AgentRegistry,
+	type AgentStatus,
+	isMainAgentId,
+	MAIN_AGENT_ID,
+} from "../../registry/agent-registry";
 import { registerPersistedSubagents } from "../../registry/persisted-agents";
 import { USER_INTERRUPT_LABEL } from "../../session/messages";
 import { shortenPath, truncateToWidth } from "../../tools/render-utils";
@@ -427,7 +433,7 @@ export class AgentHubOverlayComponent extends Container implements SelectListMou
 
 	#refreshRows(): void {
 		const selectedId = this.#rows[this.#selectedRow]?.id;
-		const refs = this.#registry.list().filter(ref => ref.id !== MAIN_AGENT_ID);
+		const refs = this.#registry.list().filter(ref => !isMainAgentId(ref.id));
 		this.#observedById = new Map();
 		for (const session of this.#observers.getSessions()) this.#observedById.set(session.id, session);
 		const rowOrder = this.#rowOrder;
@@ -879,7 +885,7 @@ export class AgentHubOverlayComponent extends Container implements SelectListMou
 		if (ref.displayName && ref.displayName !== ref.id) {
 			fields.push(theme.fg("dim", sanitizeDisplayText(ref.displayName)));
 		}
-		if (this.#viewMode === "roster" && ref.parentId && ref.parentId !== MAIN_AGENT_ID) {
+		if (this.#viewMode === "roster" && ref.parentId && !isMainAgentId(ref.parentId)) {
 			fields.push(theme.fg("dim", `↳ ${sanitizeDisplayText(ref.parentId)}`));
 		}
 		if (ref.kind === "advisor") {

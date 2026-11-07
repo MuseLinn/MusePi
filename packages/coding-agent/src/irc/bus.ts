@@ -16,8 +16,9 @@
  */
 
 import { logger, Snowflake } from "@musepi/pi-utils";
+import { hasResolvableTranscript } from "../internal-urls/registry-helpers";
 import { AgentLifecycleManager } from "../registry/agent-lifecycle";
-import { AgentRegistry, MAIN_AGENT_ID } from "../registry/agent-registry";
+import { AgentRegistry, isMainAgentId, MAIN_AGENT_ID } from "../registry/agent-registry";
 import type { CustomMessage } from "../session/messages";
 
 export interface IrcMessage {
@@ -103,22 +104,24 @@ export class IrcBus {
 		opts?: { expectsReply?: boolean; suppressRelay?: boolean },
 	): Promise<IrcDeliveryReceipt> {
 		const message: IrcMessage = { ...msg, id: Snowflake.next(), ts: Date.now() };
-		const ref = this.#registry.get(message.to);
+		const ref = this.#resolveRecipient(message.to, message.from);
 		if (!ref) {
-			// Every top-level session registers as "Main" on the one
-			// process-global registry, so the newest conversation takes the
-			// slot and its teardown releases the id — leaving an older live
-			// session addressable only until then. That reads from the sender's
-			// side as a bare "Unknown agent", which subagents report as "Main
-			// vanished mid-conversation"; name the mechanism when the target is
-			// the shared main id so the report is diagnosable.
+			const peers = this.#registry.listVisibleTo(message.from).map(peer => peer.id);
+			const hint =
+				isMainAgentId(message.to) && !this.#registry.mainOf(message.from)
+					? " The sender is not attached to any live main agent (its conversation was closed or replaced)."
+					: "";
+			// A settled agent's ref is gone but its transcript usually is not:
+			// say so, rather than letting "Unknown agent" read as "the work is
+			// lost". `hasResolvableTranscript` is the same predicate the
+			// history:// hints use, so the pointer is always readable.
+			const transcript = (await hasResolvableTranscript(message.to))
+				? ` Its transcript is still readable at history://${message.to}.`
+				: "";
 			return {
 				to: message.to,
 				outcome: "failed",
-				error:
-					message.to === MAIN_AGENT_ID
-						? `Unknown agent "${message.to}" — no main agent is registered right now. Every top-level session shares this id, so another conversation's teardown can release it while this one is still running; retry, or ask the user to reopen this conversation.`
-						: `Unknown agent "${message.to}" — check \`irc list\` for live peers.`,
+				error: `Unknown agent "${message.to}" — live peers: ${peers.length > 0 ? peers.join(", ") : "none"}.${transcript}${hint}`,
 			};
 		}
 		if (ref.status === "aborted") {
@@ -152,6 +155,10 @@ export class IrcBus {
 			(lifecycleOwnsRegistry && (lifecycle.isParking(message.to) || lifecycle.has(message.to)));
 
 		const priorSession = ref.session;
+		// Normalize the address once resolved: waiters, mailboxes and the
+		// delivery receipt are all keyed by the registry id, so a bare `Main`
+		// alias must not leak past this point.
+		message.to = ref.id;
 		let revived = false;
 		if (needsLifecycleGate) {
 			try {
@@ -373,6 +380,26 @@ export class IrcBus {
 	}
 
 	/**
+	 * Resolve `to` to a registered ref, tolerating a bare `Main` address.
+	 *
+	 * A subagent learns its parent's id from the peer roster, but a model that
+	 * saw `Main` in an older transcript (or normalized `Main-2` back to `Main`)
+	 * still means "my own main" — not "whichever conversation happens to hold
+	 * the bare id". Resolve through the sender's lineage so the address is
+	 * scoped to its own conversation instead of failing or crossing sessions.
+	 */
+	#resolveRecipient(to: string, from: string): ReturnType<AgentRegistry["get"]> {
+		// Only the bare alias is conversation-relative: an explicit scoped id
+		// (`Main-3`) always means exactly that agent.
+		if (to === MAIN_AGENT_ID) {
+			const rootId = this.#registry.mainOf(from);
+			const root = rootId ? this.#registry.get(rootId) : undefined;
+			if (root) return root;
+		}
+		return this.#registry.get(to);
+	}
+
+	/**
 	 * Surface agent↔agent traffic as a display-only card on the main session
 	 * UI. Skipped when the main agent is either endpoint: as recipient its
 	 * own `deliverIrcMessage` (or `wait` tool result) already shows the
@@ -380,8 +407,11 @@ export class IrcBus {
 	 * outbound body — relaying it again would duplicate it in the transcript.
 	 */
 	#relayToMainUi(message: IrcMessage): void {
-		if (message.to === MAIN_AGENT_ID || message.from === MAIN_AGENT_ID) return;
-		const mainSession = this.#registry.get(MAIN_AGENT_ID)?.session;
+		if (isMainAgentId(message.to) || isMainAgentId(message.from)) return;
+		// Relay into the recipient's own conversation, not whichever session
+		// happens to hold the bare id; unparented traffic keeps the old target.
+		const rootId = this.#registry.mainOf(message.to);
+		const mainSession = (rootId ? this.#registry.get(rootId) : this.#registry.get(MAIN_AGENT_ID))?.session;
 		if (!mainSession) return;
 		const record: CustomMessage = {
 			role: "custom",

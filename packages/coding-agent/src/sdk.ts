@@ -2032,7 +2032,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	const scopedAsyncJobManager = asyncJobManager ?? (options.parentTaskPrefix ? AsyncJobManager.instance() : undefined);
 
 	const agentRegistry = options.agentRegistry ?? AgentRegistry.global();
-	const resolvedAgentId = options.agentId ?? options.parentTaskPrefix ?? MAIN_AGENT_ID;
+	// Reassigned at registration when the registry re-keys a top-level session
+	// to a scoped main id (`Main-2`) because another conversation already holds
+	// the bare `Main` slot. Every closure below reads it late, so the session,
+	// its subagents (`parentId`), and its teardown all use the real id.
+	let resolvedAgentId = options.agentId ?? options.parentTaskPrefix ?? MAIN_AGENT_ID;
 	const resolvedAgentDisplayName =
 		options.agentDisplayName ?? ((options.taskDepth ?? 0) > 0 || options.parentTaskPrefix ? "sub" : "main");
 	const agentKind = (options.taskDepth ?? 0) > 0 || options.parentTaskPrefix ? ("sub" as const) : ("main" as const);
@@ -3820,6 +3824,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		if (!registeredAgentRef) {
 			throw new Error(`Agent "${resolvedAgentId}" is already owned by another session generation.`);
 		}
+		// The registry may have re-keyed this main to a scoped id (see
+		// AgentRegistry.register). Adopt it before anything binds to the id:
+		// the session config, subagent `parentId`, IRC roster and the teardown
+		// guard all read `resolvedAgentId` afterwards.
+		resolvedAgentId = registeredAgentRef.id;
 		// A reused parked ref remains parked until the new AgentSession is fully
 		// constructed and attached. Startup failure therefore leaves it revivable.
 		hasRegistered = options.expectedAgentRef === undefined || options.expectedAgentRef === null;

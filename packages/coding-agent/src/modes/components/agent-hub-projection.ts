@@ -1,5 +1,5 @@
 import type { AgentMetricsSummary, AgentRef, AgentStatus } from "../../registry/agent-registry";
-import { MAIN_AGENT_ID } from "../../registry/agent-registry";
+import { isMainAgentId, MAIN_AGENT_ID } from "../../registry/agent-registry";
 import type { ObservableSession } from "../session-observer-registry";
 
 export type AgentMetrics = AgentMetricsSummary;
@@ -171,7 +171,7 @@ export function projectAgentTree(refs: readonly AgentRef[]): AgentTreeProjection
 	const children = new Map<string, AgentRef[]>();
 	for (const ref of refs) {
 		const parent =
-			ref.parentId && ref.parentId !== MAIN_AGENT_ID && ids.has(ref.parentId) ? ref.parentId : MAIN_AGENT_ID;
+			ref.parentId && !isMainAgentId(ref.parentId) && ids.has(ref.parentId) ? ref.parentId : MAIN_AGENT_ID;
 		parentById.set(ref.id, parent);
 		const siblings = children.get(parent);
 		if (siblings) siblings.push(ref);

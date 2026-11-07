@@ -29,7 +29,7 @@ import {
 	type AgentRefExpectation,
 	AgentRegistry,
 	getAgentTombstonePath,
-	MAIN_AGENT_ID,
+	isMainAgentId,
 	type RegistryEvent,
 } from "./agent-registry";
 
@@ -153,7 +153,7 @@ export class AgentLifecycleManager {
 	 * resolves to that ref (or that ref's session).
 	 */
 	adopt(id: string, opts: AdoptOptions, expected?: AgentRefExpectation): void {
-		if (id === MAIN_AGENT_ID) return;
+		if (isMainAgentId(id)) return;
 		const ref = this.#registry.get(id);
 		if (!ref || (expected !== undefined && ref !== expected && ref.session !== expected)) {
 			logger.warn("AgentLifecycleManager.adopt: unknown or replaced agent id", { id });

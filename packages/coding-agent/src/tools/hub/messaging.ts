@@ -16,7 +16,7 @@ import type { Settings } from "../../config/settings";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
 import { IrcBus, type IrcDeliveryReceipt, type IrcMessage } from "../../irc/bus";
 import type { Theme } from "../../modes/theme/theme";
-import { type AgentRegistry, MAIN_AGENT_ID } from "../../registry/agent-registry";
+import { type AgentRegistry, isMainAgentId, MAIN_AGENT_ID } from "../../registry/agent-registry";
 import { registerPersistedSubagents } from "../../registry/persisted-agents";
 import { canSpawnAtDepth } from "../../task/types";
 import { Ellipsis, renderStatusLine, renderTreeList, truncateToWidth } from "../../tui";
@@ -97,8 +97,19 @@ export async function executeList(
 	}
 
 	const bus = IrcBus.global();
+	// One conversation's roster never reaches into a sibling conversation: a
+	// second live session owns its own main id (`Main-2`) and the sender would
+	// otherwise see — and be able to message — an agent it has no business with.
+	const root = registry.mainOf(senderId);
+	const unscopedMain = root === undefined;
 	const peers = refs
-		.filter(ref => ref.id !== senderId && ref.status !== "aborted" && ref.kind !== "advisor")
+		.filter(
+			ref =>
+				ref.id !== senderId &&
+				ref.status !== "aborted" &&
+				ref.kind !== "advisor" &&
+				(ref.kind !== "main" || ref.id === root || (unscopedMain && ref.id === MAIN_AGENT_ID)),
+		)
 		.map(ref => ({
 			id: ref.id,
 			displayName: ref.displayName,
@@ -207,7 +218,7 @@ export async function executeSend(
 		// A broadcast that also reaches the main agent delivers the body to it
 		// directly (its own incoming card); relaying the sibling legs to the
 		// main UI would then show the same body once per other recipient.
-		const suppressRelay = isBroadcast && targets.includes(MAIN_AGENT_ID);
+		const suppressRelay = isBroadcast && targets.some(target => isMainAgentId(target));
 		const receipts = await Promise.all(
 			targets.map(target =>
 				bus.send(
