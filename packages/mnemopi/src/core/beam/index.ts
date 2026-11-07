@@ -56,6 +56,7 @@ import type {
 	SleepResult,
 } from "./types";
 
+export { clipRecallContent } from "./recall";
 export { initBeam } from "./schema";
 export type * from "./types";
 

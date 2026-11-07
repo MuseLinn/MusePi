@@ -52,14 +52,9 @@ describe("reconcileEmbeddingModel on store open", () => {
 		const { db, ids } = seedDb(OLD_MODEL);
 		const memory = new Mnemopi({ db, embeddings: { model: NEW_MODEL, provider: fakeEmbed() } });
 		try {
-			// Reconcile fired in the constructor: stale vector rows are gone and the
-			// episodic binary vector was cleared. The async rebuild is enqueued but
-			// has not yet run.
-			expect(countEmbeddings(memory)).toBe(0);
-			const ep = memory.conn.query("SELECT binary_vector AS v FROM episodic_memory WHERE id = 'ep-1'").get() as {
-				v: Uint8Array | null;
-			};
-			expect(ep.v).toBeNull();
+			// Reconcile stages the migration as a tracked background task and keeps
+			// the stale vectors until the whole corpus embeds under the new model.
+			expect(countEmbeddings(memory)).toBe(2);
 			expect(memory.beam.pendingExtractions.size).toBeGreaterThanOrEqual(1);
 
 			// The background rebuild repopulates every live memory, stamped with the

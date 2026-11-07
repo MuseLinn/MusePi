@@ -3465,7 +3465,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 			const memoryBackend = restrictToolNames ? undefined : await resolveMemoryBackend(settings);
 			const memoryInstructions = memoryBackend
-				? await memoryBackend.buildDeveloperInstructions(agentDir, settings, session)
+				? await memoryBackend.buildDeveloperInstructions(agentDir, settings.getCwd(), settings, session)
 				: undefined;
 
 			// Runtime appendices no longer compose the base append prompt: the

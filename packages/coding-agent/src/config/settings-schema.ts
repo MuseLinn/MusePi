@@ -572,6 +572,12 @@ export const SETTINGS_SCHEMA = {
 		values: ["off", "1", "3", "5"] as const,
 		default: "off",
 		ui: {
+			options: [
+				{ value: "off", label: "Off" },
+				{ value: "1", label: "1" },
+				{ value: "3", label: "3" },
+				{ value: "5", label: "5" },
+			],
 			tab: "model",
 			group: "Advisor",
 			label: "Advisor Sync Backlog",
@@ -1341,6 +1347,11 @@ export const SETTINGS_SCHEMA = {
 		values: ["off", "auto", "always"] as const,
 		default: "auto",
 		ui: {
+			options: [
+				{ value: "off", label: "Off" },
+				{ value: "auto", label: "Auto" },
+				{ value: "always", label: "Always" },
+			],
 			tab: "appearance",
 			tuiOnly: true,
 			group: "Display",
@@ -2084,6 +2095,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["all", "one-at-a-time"] as const,
 		default: "one-at-a-time",
 		ui: {
+			options: [
+				{ value: "all", label: "All" },
+				{ value: "one-at-a-time", label: "One at a time" },
+			],
 			tab: "interaction",
 			group: "Input",
 			label: "Steering Mode",
@@ -2096,6 +2111,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["all", "one-at-a-time"] as const,
 		default: "one-at-a-time",
 		ui: {
+			options: [
+				{ value: "all", label: "All" },
+				{ value: "one-at-a-time", label: "One at a time" },
+			],
 			tab: "interaction",
 			group: "Input",
 			label: "Follow-Up Mode",
@@ -2108,6 +2127,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["immediate", "wait"] as const,
 		default: "immediate",
 		ui: {
+			options: [
+				{ value: "immediate", label: "Immediate" },
+				{ value: "wait", label: "Wait" },
+			],
 			tab: "interaction",
 			group: "Input",
 			label: "Interrupt Mode",
@@ -2146,6 +2169,11 @@ export const SETTINGS_SCHEMA = {
 		values: ["branch", "tree", "none"] as const,
 		default: "tree",
 		ui: {
+			options: [
+				{ value: "branch", label: "Branch" },
+				{ value: "tree", label: "Tree" },
+				{ value: "none", label: "None" },
+			],
 			tab: "interaction",
 			group: "Input",
 			label: "Double-Escape Action",
@@ -2158,6 +2186,13 @@ export const SETTINGS_SCHEMA = {
 		values: ["default", "no-tools", "user-only", "labeled-only", "all"] as const,
 		default: "default",
 		ui: {
+			options: [
+				{ value: "default", label: "Default" },
+				{ value: "no-tools", label: "No tools" },
+				{ value: "user-only", label: "User only" },
+				{ value: "labeled-only", label: "Labeled only" },
+				{ value: "all", label: "All" },
+			],
 			tab: "interaction",
 			tuiOnly: true,
 			group: "Input",
@@ -2300,7 +2335,6 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "interaction",
-			tuiOnly: true,
 			group: "Startup & Updates",
 			label: "Check for Updates",
 			description: "Check for musepi updates on startup",
@@ -2348,7 +2382,6 @@ export const SETTINGS_SCHEMA = {
 		default: "summary",
 		ui: {
 			tab: "interaction",
-			tuiOnly: true,
 			group: "Startup & Updates",
 			label: "Startup Changelog",
 			description: "Choose whether update notes start as a summary, full details, or stay hidden",
@@ -2422,6 +2455,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["on", "off"] as const,
 		default: "on",
 		ui: {
+			options: [
+				{ value: "on", label: "On" },
+				{ value: "off", label: "Off" },
+			],
 			tab: "interaction",
 			tuiOnly: true,
 			group: "Notifications",
@@ -2435,6 +2472,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["on", "off"] as const,
 		default: "off",
 		ui: {
+			options: [
+				{ value: "on", label: "On" },
+				{ value: "off", label: "Off" },
+			],
 			tab: "interaction",
 			tuiOnly: true,
 			group: "Notifications",
@@ -2466,6 +2507,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["on", "off"] as const,
 		default: "on",
 		ui: {
+			options: [
+				{ value: "on", label: "On" },
+				{ value: "off", label: "Off" },
+			],
 			tab: "interaction",
 			tuiOnly: true,
 			group: "Notifications",
@@ -3181,13 +3226,13 @@ export const SETTINGS_SCHEMA = {
 	// `memories.enabled` flag is migration input only; see config/settings.ts.
 	"memory.backend": {
 		type: "enum",
-		values: ["off", "local", "hindsight", "mnemopi"] as const,
+		values: ["off", "local", "hindsight", "mnemopi", "sharpshooter"] as const,
 		default: "off",
 		ui: {
 			tab: "memory",
 			group: "General",
 			label: "Memory Backend",
-			description: "Off, local summary pipeline, Mnemopi SQLite, or Hindsight remote memory",
+			description: "Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
 			options: [
 				{ value: "off", label: "Off", description: "No memory subsystem runs" },
 				{ value: "local", label: "Local", description: "Local rollout summarisation pipeline (memory_summary.md)" },
@@ -3196,6 +3241,12 @@ export const SETTINGS_SCHEMA = {
 					value: "mnemopi",
 					label: "Mnemopi",
 					description: "Local SQLite recall/retain backend with optional embeddings",
+				},
+				{
+					value: "sharpshooter",
+					label: "Sharpshooter",
+					description:
+						"Friction-gated project decision files (architecture/product/style), consolidated in the background",
 				},
 			],
 		},
@@ -3473,6 +3524,12 @@ export const SETTINGS_SCHEMA = {
 	"mnemopi.injectionTokenLimit": { type: "number", default: 5000 },
 	"mnemopi.debug": { type: "boolean", default: false },
 
+	// Sharpshooter project-decision memory.
+	"sharpshooter.model": { type: "string", default: undefined },
+	"sharpshooter.minPromptLength": { type: "number", default: 16 },
+	"sharpshooter.intervalMinutes": { type: "number", default: 5 },
+	"sharpshooter.injectionTokenLimit": { type: "number", default: 15000 },
+
 	// Hindsight (https://hindsight.vectorize.io)
 	"hindsight.apiUrl": {
 		type: "string",
@@ -3540,6 +3597,18 @@ export const SETTINGS_SCHEMA = {
 						"Shared bank, retains tagged with project:<cwd>. Recall surfaces project + untagged global memories together",
 				},
 			],
+			condition: "hindsightActive",
+		},
+	},
+	"hindsight.globalScope": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "memory",
+			group: "Hindsight",
+			label: "Hindsight Global Scope",
+			description:
+				"Let retain and learn take scope: global, which stores a memory without the project tag so every project recalls it. Needs global or per-project-tagged scoping",
 			condition: "hindsightActive",
 		},
 	},
@@ -3654,6 +3723,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["discard", "keep"] as const,
 		default: "discard",
 		ui: {
+			options: [
+				{ value: "discard", label: "Discard" },
+				{ value: "keep", label: "Keep" },
+			],
 			tab: "context",
 			group: "Rules (TTSR)",
 			label: "TTSR Context Mode",
@@ -3671,10 +3744,10 @@ export const SETTINGS_SCHEMA = {
 			label: "TTSR Interrupt Mode",
 			description: "When to interrupt mid-stream vs inject warning after completion",
 			options: [
-				{ value: "always", label: "always", description: "Interrupt on prose and tool streams" },
-				{ value: "prose-only", label: "prose-only", description: "Interrupt only on reply/thinking matches" },
-				{ value: "tool-only", label: "tool-only", description: "Interrupt only on tool-call argument matches" },
-				{ value: "never", label: "never", description: "Never interrupt; inject warning after completion" },
+				{ value: "always", label: "Always", description: "Interrupt on prose and tool streams" },
+				{ value: "prose-only", label: "Prose only", description: "Interrupt only on reply/thinking matches" },
+				{ value: "tool-only", label: "Tool only", description: "Interrupt only on tool-call argument matches" },
+				{ value: "never", label: "Never", description: "Never interrupt; inject warning after completion" },
 			],
 		},
 	},
@@ -3684,6 +3757,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["once", "after-gap"] as const,
 		default: "once",
 		ui: {
+			options: [
+				{ value: "once", label: "Once" },
+				{ value: "after-gap", label: "After a gap" },
+			],
 			tab: "context",
 			group: "Rules (TTSR)",
 			label: "TTSR Repeat Mode",
@@ -3741,6 +3818,12 @@ export const SETTINGS_SCHEMA = {
 		values: EDIT_MODES,
 		default: "hashline",
 		ui: {
+			options: [
+				{ value: "apply_patch", label: "Apply patch" },
+				{ value: "hashline", label: "Hashline" },
+				{ value: "patch", label: "Patch" },
+				{ value: "replace", label: "Replace" },
+			],
 			tab: "files",
 			group: "Editing",
 			label: "Edit Mode",
@@ -4103,6 +4186,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["auto", "off"] as const,
 		default: "auto",
 		ui: {
+			options: [
+				{ value: "auto", label: "Auto" },
+				{ value: "off", label: "Off" },
+			],
 			tab: "shell",
 			group: "Bash",
 			label: "direnv Auto-Load",
@@ -4177,6 +4264,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["default", "aggressive"] as const,
 		default: "default",
 		ui: {
+			options: [
+				{ value: "default", label: "Default" },
+				{ value: "aggressive", label: "Aggressive" },
+			],
 			tab: "shell",
 			group: "Bash",
 			label: "Shell Minimizer Source Outline",
@@ -4245,6 +4336,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["session", "per-call"] as const,
 		default: "session",
 		ui: {
+			options: [
+				{ value: "session", label: "Session" },
+				{ value: "per-call", label: "Per call" },
+			],
 			tab: "shell",
 			group: "Eval & Runtimes",
 			label: "Python Kernel Mode",
@@ -5679,7 +5774,6 @@ export const SETTINGS_SCHEMA = {
 		default: false,
 		ui: {
 			tab: "appearance",
-			tuiOnly: true,
 			group: "Display",
 			label: "Show Resolved Model Badge",
 			description: "Display the actual model ID used by each subagent in the task widget status line",
@@ -5980,7 +6074,8 @@ export const SETTINGS_SCHEMA = {
 			tab: "voice",
 			group: "Speech",
 			label: "Auto-read new replies",
-			description: "Automatically read aloud new assistant replies via the local TTS engine",
+			description:
+				"Read assistant replies aloud — the desktop speaks the settled reply sentence-by-sentence, the terminal speaks it as it streams",
 			condition: "ttsPluginEnabled",
 		},
 	},
@@ -6005,6 +6100,16 @@ export const SETTINGS_SCHEMA = {
 			label: "Read content",
 			description:
 				"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.",
+			// Enum values without declared options get synthesized by the
+			// daemon as { value, label: value }, so the dropdown painted the
+			// bare ids "raw"/"sanitize"/"summarize" with no translation. These
+			// source sentences are the same ones the built-in TTS plugin's
+			// config panel uses, and both locales carry their translations.
+			options: [
+				{ value: "raw", label: "Raw text" },
+				{ value: "sanitize", label: "Sanitized (no code/markdown)" },
+				{ value: "summarize", label: "Summarized" },
+			],
 			condition: "ttsPluginEnabled",
 		},
 	},
@@ -6013,6 +6118,10 @@ export const SETTINGS_SCHEMA = {
 		values: ["duck", "pause"],
 		default: "duck",
 		ui: {
+			options: [
+				{ value: "duck", label: "Duck" },
+				{ value: "pause", label: "Pause" },
+			],
 			tab: "voice",
 			group: "Speech",
 			label: "Dictation barge-in",
@@ -6022,17 +6131,14 @@ export const SETTINGS_SCHEMA = {
 			hidden: true,
 		},
 	},
-	"speech.enabled": {
-		type: "boolean",
-		default: false,
-		ui: {
-			tab: "voice",
-			group: "Speech",
-			label: "Speech Vocalization",
-			description: "Speak the assistant's output aloud through the speakers as it streams",
-		},
-	},
-	"speech.mode": {
+	// ── Unified read-aloud controls ────────────────────────────────────
+	// The desktop (tts.synthesize, sentence-streamed) and the terminal
+	// (vocalizer, delta-streamed) used to own two independent config
+	// groups. Both now read these tts.* keys, so one switch, one scope and
+	// one voice drive both shells. speech.* below stays as hidden legacy
+	// aliases: Settings.get() falls back to them when a tts.* key was never
+	// written, so an older config.yml keeps working without a migration.
+	"tts.readMode": {
 		type: "enum",
 		values: ["all", "assistant", "yield"] as const,
 		default: "assistant",
@@ -6050,10 +6156,56 @@ export const SETTINGS_SCHEMA = {
 			condition: "ttsPluginEnabled",
 		},
 	},
+	"tts.enhanced": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "voice",
+			group: "Speech",
+			label: "Enhanced Speech Rewriting",
+			description:
+				"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure",
+			// Both shells use the same SpeechEnhancer: the terminal wires it
+			// directly into the vocalizer, the desktop calls tts.rewrite over
+			// RPC. Not terminal-only.
+			condition: "ttsPluginEnabled",
+		},
+	},
+	"speech.enabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "voice",
+			group: "Speech",
+			label: "Speech Vocalization",
+			description: "Speak the assistant's output aloud through the speakers as it streams",
+			hidden: true,
+		},
+	},
+	"speech.mode": {
+		type: "enum",
+		values: ["all", "assistant", "yield"] as const,
+		default: "assistant",
+		ui: {
+			hidden: true,
+			tab: "voice",
+			group: "Speech",
+			label: "Speech Vocalization Mode",
+			description:
+				"What to speak: all = assistant messages + thinking; assistant = messages only; yield = only the final message at turn end",
+			options: [
+				{ value: "all", label: "All (messages + thinking)" },
+				{ value: "assistant", label: "Assistant messages" },
+				{ value: "yield", label: "Final message only" },
+			],
+			condition: "ttsPluginEnabled",
+		},
+	},
 	"speech.enhanced": {
 		type: "boolean",
 		default: false,
 		ui: {
+			hidden: true,
 			tab: "voice",
 			group: "Speech",
 			label: "Enhanced Speech Rewriting",
@@ -6067,6 +6219,7 @@ export const SETTINGS_SCHEMA = {
 		values: TTS_LOCAL_VOICE_VALUES,
 		default: DEFAULT_TTS_VOICE,
 		ui: {
+			hidden: true,
 			tab: "voice",
 			group: "Speech",
 			label: "Speech Vocalization Voice",

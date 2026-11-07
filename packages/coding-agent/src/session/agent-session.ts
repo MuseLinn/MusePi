@@ -166,6 +166,7 @@ import type { HindsightSessionState } from "../hindsight/state";
 import { type LocalProtocolOptions, resolveLocalUrlToPath } from "../internal-urls";
 import type { IrcMessage } from "../irc/bus";
 import type { DaemonCompletionNotification } from "../launch/protocol";
+import { MEMORY_RECALL_CHANGES_MESSAGE_TYPE } from "../memory-backend/recall-entry";
 import { shutdownMnemopiEmbedClient } from "../mnemopi/embed-client";
 import { getMnemopiSessionState, type MnemopiSessionState, setMnemopiSessionState } from "../mnemopi/state";
 import { containsMagicKeyword, listMagicKeywords } from "../modes/magic-keyword-registry";
@@ -5257,8 +5258,8 @@ export class AgentSession {
 		return this.#tools.refreshBaseSystemPrompt();
 	}
 
-	#buildSystemPromptForAgentStart(promptText: string): Promise<string[]> {
-		return this.#tools.buildSystemPromptForAgentStart(promptText);
+	#buildSystemPromptForAgentStart(promptText: string, signal?: AbortSignal) {
+		return this.#tools.buildSystemPromptForAgentStart(promptText, signal);
 	}
 
 	/** Replaces connected MCP tools and enables them immediately. */
@@ -6397,7 +6398,19 @@ export class AgentSession {
 			const disposingBeforeTransition = this.#isDisposed;
 			await this.#memory.transition;
 			if ((this.#isDisposed && !disposingBeforeTransition) || this.#promptGeneration !== generation) return false;
-			const beforeAgentStartSystemPrompt = await this.#buildSystemPromptForAgentStart(expandedText);
+			const promptPreparation = await this.#buildSystemPromptForAgentStart(expandedText);
+			const beforeAgentStartSystemPrompt = promptPreparation.systemPrompt;
+			if (promptPreparation.memoryNotice) {
+				messages.push({
+					role: "custom",
+					customType: MEMORY_RECALL_CHANGES_MESSAGE_TYPE,
+					content: promptPreparation.memoryNotice.content,
+					details: promptPreparation.memoryNotice.details,
+					display: false,
+					attribution: "agent",
+					timestamp: Date.now(),
+				});
+			}
 
 			let baseXdevCatalogDelivered = true;
 			// Emit before_agent_start extension event
@@ -6447,6 +6460,9 @@ export class AgentSession {
 
 			// Bail out if a newer abort/prompt cycle has started since we began setup
 			if (this.#promptGeneration !== generation) {
+				return false;
+			}
+			if (promptPreparation.commit && !promptPreparation.commit()) {
 				return false;
 			}
 

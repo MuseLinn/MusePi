@@ -180,7 +180,7 @@ function projectBank(configured: string | undefined, cwd: string): string {
 	return limitBankName(base ? `${base}-${project}` : project);
 }
 
-function projectBankSegment(projectRoot: string): string {
+export function projectBankSegment(projectRoot: string): string {
 	const project = sanitizeBankName(path.basename(projectRoot)) ?? "default";
 	return limitBankName(`${project}-${Bun.hash(projectRoot).toString(36)}`);
 }

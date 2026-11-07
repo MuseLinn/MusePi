@@ -20,6 +20,7 @@ export async function resolveMemoryBackend(settings: Settings): Promise<MemoryBa
 	const id = settings.get("memory.backend");
 	if (id === "hindsight") return (await import("../hindsight/backend")).hindsightBackend;
 	if (id === "mnemopi") return (await import("../mnemopi/backend")).mnemopiBackend;
+	if (id === "sharpshooter") return (await import("../sharpshooter/backend")).sharpshooterBackend;
 	if (id === "local") return localBackend;
 	return offBackend;
 }

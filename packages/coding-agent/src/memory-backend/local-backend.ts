@@ -21,7 +21,7 @@ export const localBackend: MemoryBackend = {
 	start(options) {
 		startMemoryStartupTask(options);
 	},
-	async buildDeveloperInstructions(agentDir, settings, session) {
+	async buildDeveloperInstructions(agentDir, _cwd, settings, session) {
 		return buildMemoryToolDeveloperInstructions(agentDir, settings, session);
 	},
 	async clear(agentDir, cwd, session) {

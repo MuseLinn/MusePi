@@ -8,6 +8,9 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { hindsightBackend, reloadMentalModelsForSession } from "@musepi/pi-coding-agent/hindsight/backend";
@@ -54,6 +57,8 @@ function makeFakeSession(deps: FakeSessionDeps) {
 								},
 				})),
 			getCwd: () => deps.cwd ?? "/tmp",
+			getBranch: () => [],
+			appendCustomEntry: vi.fn(),
 			getSessionFile: () => null,
 			getSessionId: () => deps.sessionId ?? "",
 		},
@@ -93,7 +98,7 @@ describe("hindsightBackend.start", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -111,7 +116,7 @@ describe("hindsightBackend.start", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -130,7 +135,7 @@ describe("hindsightBackend.start", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -156,7 +161,7 @@ describe("hindsightBackend.start", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -164,14 +169,14 @@ describe("hindsightBackend.start", () => {
 		entries.push({ role: "user", text: "first user message that is long enough" });
 		entries.push({ role: "assistant", text: "first assistant reply that is long enough" });
 		session.emit({ type: "agent_end", messages: [] });
-		await Bun.sleep(0);
+		await Bun.sleep(10);
 		expect(retainSpy).toHaveBeenCalledTimes(0);
 
 		// Turn 2: hits the threshold
 		entries.push({ role: "user", text: "second user message that is long enough" });
 		entries.push({ role: "assistant", text: "second reply that is long enough" });
 		session.emit({ type: "agent_end", messages: [] });
-		await Bun.sleep(0);
+		await Bun.sleep(10);
 		expect(retainSpy).toHaveBeenCalledTimes(1);
 		expect(retainSpy.mock.calls[0]?.[2]?.timestamp).toBeInstanceOf(Date);
 	});
@@ -188,7 +193,7 @@ describe("hindsightBackend.start", () => {
 			session: parentSession as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		const parentState = parentSession.getHindsightSessionState();
@@ -199,7 +204,7 @@ describe("hindsightBackend.start", () => {
 			session: subSession as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 1,
 			parentHindsightSessionState: parentState,
 		});
@@ -225,7 +230,7 @@ describe("hindsightBackend.start", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 1,
 		});
 
@@ -259,7 +264,7 @@ describe("hindsightBackend.preCompactionContext", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -283,7 +288,7 @@ describe("hindsightBackend.preCompactionContext", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -316,7 +321,7 @@ describe("hindsightBackend first-turn injection", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -324,14 +329,15 @@ describe("hindsightBackend first-turn injection", () => {
 			results: [{ id: "1", text: "Can prefers concise communication" }],
 		} as never);
 
-		const block = await hindsightBackend.beforeAgentStartPrompt?.(
+		const preparation = await hindsightBackend.beforeAgentStartPrompt?.(
 			session as never,
 			"What do I know about this user?",
 		);
-		expect(block).toContain("<memories>");
-		expect(block).toContain("Can prefers concise communication");
+		expect(preparation?.context).toContain("<memories>");
+		expect(preparation?.context).toContain("Can prefers concise communication");
+		expect(preparation?.commit()).toBe(true);
 		expect(session.getHindsightSessionState()?.hasRecalledForFirstTurn).toBe(true);
-		expect(session.getHindsightSessionState()?.lastRecallSnippet).toBe(block);
+		expect(session.getHindsightSessionState()?.lastRecallSnippet).toBe(preparation?.context);
 	});
 
 	it("does not let agent_start preempt first-turn recall injection", async () => {
@@ -347,7 +353,7 @@ describe("hindsightBackend first-turn injection", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -365,8 +371,12 @@ describe("hindsightBackend first-turn injection", () => {
 		expect(session.getHindsightSessionState()?.hasRecalledForFirstTurn).toBe(false);
 
 		// beforeAgentStartPrompt is the sole, awaited injection path.
-		const block = await hindsightBackend.beforeAgentStartPrompt?.(session as never, "What is the canary phrase?");
-		expect(block).toContain("PURPLE-OTTER-9931");
+		const preparation = await hindsightBackend.beforeAgentStartPrompt?.(
+			session as never,
+			"What is the canary phrase?",
+		);
+		expect(preparation?.context).toContain("PURPLE-OTTER-9931");
+		expect(preparation?.commit()).toBe(true);
 		expect(session.getHindsightSessionState()?.hasRecalledForFirstTurn).toBe(true);
 	});
 
@@ -380,14 +390,14 @@ describe("hindsightBackend first-turn injection", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
 		const state = session.getHindsightSessionState();
 		state!.lastRecallSnippet = "<memories>\nremembered fact\n</memories>";
 
-		const prompt = await hindsightBackend.buildDeveloperInstructions("/tmp", settings, session as never);
+		const prompt = await hindsightBackend.buildDeveloperInstructions("/tmp", "/tmp", settings, session as never);
 		expect(prompt).toContain("<memories>");
 		expect(prompt).toContain("</memories>");
 		expect(prompt).toContain("remembered fact");
@@ -407,14 +417,14 @@ describe("hindsightBackend first-turn injection", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		const state = session.getHindsightSessionState();
 		state!.mentalModelsSnippet = "<mental_models>\n# User Preferences\nprefers tabs\n</mental_models>";
 		state!.lastRecallSnippet = "<memories>\nrecalled fact\n</memories>";
 
-		const prompt = await hindsightBackend.buildDeveloperInstructions("/tmp", settings, session as never);
+		const prompt = await hindsightBackend.buildDeveloperInstructions("/tmp", "/tmp", settings, session as never);
 		// `<memories>` and `<mental_models>` are mentioned in STATIC_INSTRUCTIONS
 		// bullets too. Match the actual injected block opener (tag + newline)
 		// to disambiguate documentation prose from the injected payloads.
@@ -443,7 +453,7 @@ describe("hindsightBackend first-turn injection", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		// Wait for the kicked-off load to settle.
@@ -491,7 +501,7 @@ describe("hindsightBackend first-turn injection", () => {
 			session: parent as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		const child = makeFakeSession({ sessionId: "alias-child" });
@@ -499,7 +509,7 @@ describe("hindsightBackend first-turn injection", () => {
 			session: child as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 1,
 			parentHindsightSessionState: parent.getHindsightSessionState(),
 		});
@@ -527,7 +537,7 @@ describe("hindsightBackend.clear", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		expect(session.getHindsightSessionState()).toBeDefined();
@@ -554,7 +564,7 @@ describe("hindsightBackend.clear", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -595,7 +605,7 @@ describe("hindsightBackend live bank routing", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -604,7 +614,7 @@ describe("hindsightBackend live bank routing", () => {
 
 		settings.set("hindsight.bankId", "Minigames");
 		// Hook is sync but the rebuild is async; yield once so the handler runs.
-		await Bun.sleep(0);
+		await Bun.sleep(10);
 
 		const next = session.getHindsightSessionState();
 		expect(next?.bankId).toBe("Minigames");
@@ -627,7 +637,7 @@ describe("hindsightBackend live bank routing", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
@@ -636,7 +646,7 @@ describe("hindsightBackend live bank routing", () => {
 		expect(initial?.retainTags).toBeUndefined();
 
 		settings.set("hindsight.scoping", "per-project");
-		await Bun.sleep(0);
+		await Bun.sleep(10);
 
 		const next = session.getHindsightSessionState();
 		expect(next?.bankId).toBe("omp-proj");
@@ -659,13 +669,13 @@ describe("hindsightBackend live bank routing", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 
 		const initial = session.getHindsightSessionState();
 		settings.set("hindsight.bankId", "omp"); // unchanged
-		await Bun.sleep(0);
+		await Bun.sleep(10);
 
 		expect(session.getHindsightSessionState()).toBe(initial);
 	});
@@ -691,7 +701,7 @@ describe("hindsightBackend live bank routing", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		const initial = session.getHindsightSessionState();
@@ -700,7 +710,7 @@ describe("hindsightBackend live bank routing", () => {
 		// Operator clears the bankId via the TUI — `settings.set(path, "")` is
 		// the same call shape `#setSettingValue` uses for an empty text input.
 		settings.set("hindsight.bankId", "");
-		await Bun.sleep(0);
+		await Bun.sleep(10);
 
 		const next = session.getHindsightSessionState();
 		expect(next).not.toBe(initial);
@@ -708,7 +718,7 @@ describe("hindsightBackend live bank routing", () => {
 		// so the reset bank id picks up the project suffix from cwd.
 		expect(next?.bankId).toBe("omp-_new_xengamekit");
 
-		next!.enqueueRetain("post-reset fact", "reset routing");
+		await next!.enqueueRetain("call-reset", [{ content: "post-reset fact", context: "reset routing" }]);
 		await next!.flushRetainQueue();
 
 		expect(retainBatchSpy).toHaveBeenCalledTimes(1);
@@ -733,18 +743,18 @@ describe("hindsightBackend live bank routing", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		expect(session.getHindsightSessionState()?.bankId).toBe("Minigames-_NEW_XenGameKit");
 
 		settings.set("hindsight.bankId", "");
-		await Bun.sleep(0);
+		await Bun.sleep(10);
 
 		const next = session.getHindsightSessionState();
 		expect(next?.bankId).toBe("omp");
 
-		next!.enqueueRetain("post-reset global fact");
+		await next!.enqueueRetain("call-global", [{ content: "post-reset global fact" }]);
 		await next!.flushRetainQueue();
 
 		expect(retainBatchSpy).toHaveBeenCalledTimes(1);
@@ -771,7 +781,7 @@ describe("hindsightBackend live bank routing", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		expect(session.listenerCount()).toBe(1);
@@ -782,14 +792,14 @@ describe("hindsightBackend live bank routing", () => {
 		settings.set("hindsight.bankIdPrefix", "live");
 		settings.set("hindsight.bankId", "Minigames");
 		settings.set("hindsight.scoping", "per-project");
-		await Bun.sleep(0);
+		await Bun.sleep(10);
 
 		const next = session.getHindsightSessionState();
 		expect(next?.bankId).toBe("live-Minigames-proj");
 		expect(session.listenerCount()).toBe(1);
 
 		session.emit({ type: "agent_end", messages: [] });
-		await Bun.sleep(0);
+		await Bun.sleep(10);
 
 		expect(retainSpy).toHaveBeenCalledTimes(1);
 		expect(retainSpy.mock.calls[0][0]).toBe("live-Minigames-proj");
@@ -829,7 +839,7 @@ describe("hindsightBackend live bank routing", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		await session.getHindsightSessionState()?.mentalModelsLoadPromise;
@@ -881,12 +891,12 @@ describe("hindsightBackend retain queue flush on session teardown", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		const state = session.getHindsightSessionState();
 
-		state!.enqueueRetain("durable fact", "test context");
+		await state!.enqueueRetain("call-durable", [{ content: "durable fact", context: "test context" }]);
 
 		// AgentSession.dispose order: flush first, THEN clear, THEN dispose.
 		// Reversed (clear → flush), `#doFlush`'s identity check would fail and
@@ -903,11 +913,9 @@ describe("hindsightBackend retain queue flush on session teardown", () => {
 		expect(items[0].timestamp).toBeInstanceOf(Date);
 	});
 
-	// Companion contract test: documents the failure mode the dispose-order
-	// fix prevents. If the session pointer is cleared first, the queue's
-	// identity guard drops the spliced batch (and `retainBatch` is NOT
-	// called). This is exactly what was happening before the fix.
-	it("drops the spliced batch when the session pointer is cleared before flush (anti-regression)", async () => {
+	// The durable outbox decouples delivery from the session pointer: a retain
+	// acknowledged before the session vanished still reaches the server.
+	it("delivers an acknowledged retain after the session pointer is cleared", async () => {
 		const retainBatchSpy = vi.spyOn(HindsightApi.prototype, "retainBatch").mockResolvedValue({} as never);
 		vi.spyOn(HindsightApi.prototype, "createBank").mockResolvedValue({} as never);
 
@@ -921,16 +929,16 @@ describe("hindsightBackend retain queue flush on session teardown", () => {
 			session: session as never,
 			settings,
 			modelRegistry: {} as never,
-			agentDir: "/tmp",
+			agentDir: mkdtempSync(join(tmpdir(), "musepi-hindsight-")),
 			taskDepth: 0,
 		});
 		const state = session.getHindsightSessionState();
-		state!.enqueueRetain("dropped fact");
+		await state!.enqueueRetain("call-dropped", [{ content: "dropped fact" }]);
 
-		// Buggy order — clear THEN flush. The queue's identity check fails.
 		session.setHindsightSessionState(undefined);
 		await state!.flushRetainQueue();
 
-		expect(retainBatchSpy).not.toHaveBeenCalled();
+		expect(retainBatchSpy).toHaveBeenCalledTimes(1);
+		expect(retainBatchSpy.mock.calls[0][1][0]?.content).toBe("dropped fact");
 	});
 });

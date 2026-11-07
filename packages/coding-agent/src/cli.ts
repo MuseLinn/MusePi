@@ -162,6 +162,7 @@ const STT_WORKER_ARG = "__omp_worker_stt";
 const VOICE_FRONTEND_WORKER_ARG = "__omp_worker_voice_frontend";
 const TTS_WORKER_ARG = "__omp_worker_tts";
 const MNEMOPI_EMBED_WORKER_ARG = "__omp_worker_mnemopi_embed";
+const MNEMOPI_EMBED_SERVER_ARG = "__omp_worker_mnemopi_embed_server";
 
 async function runWorkerEntrypoint(arg: string | undefined): Promise<boolean> {
 	if (arg === TINY_WORKER_ARG) {
@@ -240,6 +241,11 @@ async function runWorkerEntrypoint(arg: string | undefined): Promise<boolean> {
 	if (arg === MNEMOPI_EMBED_WORKER_ARG) {
 		const { startMnemopiEmbedWorker } = await import("./mnemopi/embed-worker");
 		await runIpcSubprocessWorker(startMnemopiEmbedWorker);
+		return true;
+	}
+	if (arg === MNEMOPI_EMBED_SERVER_ARG) {
+		const { startMnemopiEmbedServerFromEnvironment } = await import("./mnemopi/embed-server");
+		await startMnemopiEmbedServerFromEnvironment();
 		return true;
 	}
 	if (arg === TERMINAL_OUTPUT_WORKER_ARG) {

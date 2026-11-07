@@ -3,13 +3,18 @@ import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import { logger } from "@musepi/pi-utils";
 import { sanitizeSkillName, writeManagedSkill } from "../autolearn/managed-skills";
 import { isNameClaimedByAuthoredSkill } from "../extensibility/skills";
+import { isGlobalMemoryScopeAvailable } from "../memory-backend/global-scope";
 import { localBackend } from "../memory-backend/local-backend";
 import learnDescription from "../prompts/tools/learn.md" with { type: "text" };
 import type { ToolSession } from ".";
 
+/** Offered only where every project recalls a global item; see {@link isGlobalMemoryScopeAvailable}. */
 const learnSchema = type({
 	memory: type("string").describe("the durable, self-contained lesson to remember (what, when, why)"),
 	"context?": type("string").describe("optional source context for the lesson"),
+	"scope?": type("'project' | 'global'").describe(
+		"storage scope; defaults to project, global is for durable cross-project knowledge",
+	),
 	"skill?": type({
 		action: "'create' | 'update'",
 		name: type("string").describe("kebab-case skill name"),
@@ -49,30 +54,37 @@ export class LearnTool implements AgentTool<typeof learnSchema> {
 		return new LearnTool(session);
 	}
 
-	async execute(_id: string, params: LearnParams): Promise<AgentToolResult> {
+	async execute(toolCallId: string, params: LearnParams): Promise<AgentToolResult> {
 		// 1) Persist or queue the lesson to long-term memory (mirrors MemoryRetainTool).
 		const backend = this.session.settings.get("memory.backend");
+		if (params.scope === "global" && !isGlobalMemoryScopeAvailable(this.session)) {
+			throw new Error(`Global memory scope is not available with the ${backend} memory backend.`);
+		}
 		let memoryMessage = "Lesson stored";
 		if (backend === "mnemopi") {
 			const state = this.session.getMnemopiSessionState?.();
 			if (!state) {
 				throw new Error("Mnemopi backend is not initialised for this session.");
 			}
-			const id = state.rememberScoped(params.memory, {
-				source: "coding-agent-learn",
-				importance: 0.8,
-				metadata: {
-					session_id: state.sessionId,
-					cwd: state.session.sessionManager.getCwd(),
-					context: params.context ?? null,
-					tool: "learn",
+			const id = state.rememberScoped(
+				params.memory,
+				{
+					source: "coding-agent-learn",
+					importance: 0.8,
+					metadata: {
+						session_id: state.sessionId,
+						cwd: state.session.sessionManager.getCwd(),
+						context: params.context ?? null,
+						tool: "learn",
+					},
+					scope: "bank",
+					extract: true,
+					extractEntities: true,
+					veracity: "tool",
+					memoryType: "fact",
 				},
-				scope: "bank",
-				extract: true,
-				extractEntities: true,
-				veracity: "tool",
-				memoryType: "fact",
-			});
+				params.scope === "global" ? state.getGlobalRetainTarget() : undefined,
+			);
 			// rememberScoped returns undefined when the retain failed (closed DB /
 			// disk error); mirror mnemopiBackend.save and fail loudly rather than
 			// reporting (and minting a skill for) a lesson that was silently dropped.
@@ -92,7 +104,9 @@ export class LearnTool implements AgentTool<typeof learnSchema> {
 			if (!state) {
 				throw new Error("Hindsight backend is not initialised for this session.");
 			}
-			state.enqueueRetain(params.memory, params.context);
+			await state.enqueueRetain(toolCallId, [
+				{ content: params.memory, context: params.context, scope: params.scope },
+			]);
 			memoryMessage = "Lesson queued for retention";
 		}
 

@@ -39,6 +39,13 @@ import type { ClientBridge, ClientBridgePermissionOutcome } from "./client-bridg
 import type { CustomMessage } from "./messages";
 import type { SessionManager } from "./session-manager";
 
+/** Result of staging memory prompt injection for one turn. */
+export interface SystemPromptPreparation {
+	systemPrompt: string[];
+	memoryNotice?: { content: string; details: unknown };
+	commit?: () => boolean;
+}
+
 /** Capabilities borrowed from the owning AgentSession. */
 export interface SessionToolsHost {
 	agent: Agent;
@@ -1459,13 +1466,21 @@ export class SessionTools {
 	}
 
 	/** Applies one-turn memory prompt injection before an agent run. */
-	async buildSystemPromptForAgentStart(promptText: string): Promise<string[]> {
+	async buildSystemPromptForAgentStart(promptText: string, signal?: AbortSignal): Promise<SystemPromptPreparation> {
 		const backend = await resolveMemoryBackend(this.#host.settings);
-		if (!backend.beforeAgentStartPrompt) return this.#baseSystemPrompt;
+		if (!backend.beforeAgentStartPrompt) return { systemPrompt: this.#baseSystemPrompt };
 
 		try {
-			const injected = await backend.beforeAgentStartPrompt(this.#host.memoryBackendSession(), promptText);
-			if (!injected) return this.#baseSystemPrompt;
+			const memory = await backend.beforeAgentStartPrompt(this.#host.memoryBackendSession(), promptText, signal);
+			if (!memory) return { systemPrompt: this.#baseSystemPrompt };
+			const injected = memory.context;
+			if (!injected) {
+				return {
+					systemPrompt: this.#baseSystemPrompt,
+					memoryNotice: memory.notice,
+					commit: () => memory.commit(),
+				};
+			}
 
 			const previousBaseSystemPrompt = this.#baseSystemPrompt;
 			try {
@@ -1481,20 +1496,27 @@ export class SessionTools {
 				this.#baseSystemPrompt.length !== previousBaseSystemPrompt.length ||
 				this.#baseSystemPrompt.some((part, index) => part !== previousBaseSystemPrompt[index])
 			) {
-				return this.#baseSystemPrompt;
+				return { systemPrompt: this.#baseSystemPrompt };
 			}
 
-			this.#host.captureMemoryPromotionSnapshot(previousBaseSystemPrompt);
 			const stablePrompt = [...previousBaseSystemPrompt, injected];
-			this.#baseSystemPrompt = stablePrompt;
-			this.#applyAgentSystemPrompt(stablePrompt);
-			return stablePrompt;
+			return {
+				systemPrompt: stablePrompt,
+				memoryNotice: memory.notice,
+				commit: () => {
+					if (!memory.commit()) return false;
+					this.#host.captureMemoryPromotionSnapshot(previousBaseSystemPrompt);
+					this.#baseSystemPrompt = stablePrompt;
+					this.#applyAgentSystemPrompt(stablePrompt);
+					return true;
+				},
+			};
 		} catch (err) {
 			logger.debug("Memory backend beforeAgentStartPrompt failed", {
 				backend: backend.id,
 				error: String(err),
 			});
-			return this.#baseSystemPrompt;
+			return { systemPrompt: this.#baseSystemPrompt };
 		}
 	}
 

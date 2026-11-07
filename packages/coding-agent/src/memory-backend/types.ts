@@ -13,7 +13,7 @@ import type { HindsightSessionState } from "../hindsight/state";
 import type { MnemopiSessionState } from "../mnemopi/state";
 import type { AgentSession } from "../session/agent-session";
 
-export type MemoryBackendId = "off" | "local" | "hindsight" | "mnemopi";
+export type MemoryBackendId = "off" | "local" | "hindsight" | "mnemopi" | "sharpshooter";
 
 export interface MemoryBackendStatus {
 	backend: MemoryBackendId;
@@ -92,6 +92,19 @@ export interface MemoryBackendStartOptions {
 	parentMnemopiSessionState?: MnemopiSessionState;
 }
 
+/** A successful recall, including an empty result, staged until user-turn delivery. */
+export interface MemoryPromptPreparation {
+	context?: string;
+	/**
+	 * Model-facing note delivered with this turn's user message, e.g. what changed in the
+	 * memories a reused recall holds. Persisted in the transcript as a hidden custom message
+	 * whose `details` carry the backend's bookkeeping, so both land only once delivered.
+	 */
+	notice?: { content: string; details: unknown };
+	/** Commit synchronously after delivery validation; false rejects lost ownership without state writes. */
+	commit(): boolean;
+}
+
 export interface MemoryBackend {
 	readonly id: MemoryBackendId;
 
@@ -110,6 +123,7 @@ export interface MemoryBackend {
 	 */
 	buildDeveloperInstructions(
 		agentDir: string,
+		cwd: string,
 		settings: Settings,
 		session?: AgentSession,
 	): Promise<string | undefined>;
@@ -138,6 +152,13 @@ export interface MemoryBackend {
 
 	/** Render backend-specific memory diagnostics as markdown (`/memory diagnose`). */
 	diagnose?(agentDir: string, cwd: string, session?: AgentSession): Promise<string | undefined>;
+	/** Render pending deltas awaiting consolidation (`/memory queue`). */
+	queuePreview?(context: MemoryBackendOperationContext): Promise<string | undefined>;
+	/**
+	 * Apply live edits to this backend's own `<id>.*` settings in a running
+	 * top-level session. When omitted, the session re-applies the whole backend.
+	 */
+	applySettings?(session: AgentSession, changed: readonly string[]): Promise<void>;
 	/**
 	 * Optional hook to inject a backend-specific block into the current turn's
 	 * system prompt before the agent starts generating.
@@ -147,7 +168,11 @@ export interface MemoryBackend {
 	 * system prompt for this turn only; callers may separately cache it and
 	 * surface it through `buildDeveloperInstructions()` on later rebuilds.
 	 */
-	beforeAgentStartPrompt?(session: AgentSession, promptText: string): Promise<string | undefined>;
+	beforeAgentStartPrompt?(
+		session: AgentSession,
+		promptText: string,
+		signal?: AbortSignal,
+	): Promise<MemoryPromptPreparation | undefined>;
 
 	/**
 	 * Optional hook to splice extra context into a compaction summarization.
@@ -162,5 +187,6 @@ export interface MemoryBackend {
 		messages: AgentMessage[],
 		settings: Settings,
 		session?: AgentSession,
+		signal?: AbortSignal,
 	): Promise<string | undefined>;
 }

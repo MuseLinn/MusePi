@@ -1063,3 +1063,8 @@ export function getInstallId(): string {
 export function __resetInstallIdCacheForTests(): void {
 	cachedInstallId = null;
 }
+
+/** Get the machine-shared mnemopi embedding server runtime directory. */
+export function getMnemopiEmbedRuntimeDir(): string {
+	return dirs.rootSubdir("run/mnemopi-embed", "state");
+}

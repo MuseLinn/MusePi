@@ -22,6 +22,8 @@ export interface HindsightConfig {
 	bankId: string | null;
 	bankIdPrefix: string;
 	scoping: HindsightScoping;
+	/** Whether `retain`/`learn` may store `scope: "global"` items untagged; opt-in through `hindsight.globalScope`. */
+	globalScope?: boolean;
 	bankMission: string;
 	retainMission: string | null;
 
@@ -151,6 +153,7 @@ export function loadHindsightConfig(settings: Settings, env: NodeJS.ProcessEnv =
 		bankId: bankIdEnv ?? settings.get("hindsight.bankId") ?? null,
 		bankIdPrefix: settings.get("hindsight.bankIdPrefix") ?? "",
 		scoping: scopingEnv ?? settingsScoping ?? "per-project-tagged",
+		globalScope: settings.get("hindsight.globalScope"),
 		bankMission: bankMissionEnv ?? settings.get("hindsight.bankMission") ?? "",
 		retainMission: settings.get("hindsight.retainMission") ?? null,
 

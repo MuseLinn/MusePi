@@ -10,7 +10,7 @@
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import { logger } from "@musepi/pi-utils";
 import { onHindsightScopeChanged, type Settings } from "../config/settings";
-import type { MemoryBackend, MemoryBackendStartOptions } from "../memory-backend/types";
+import type { MemoryBackend, MemoryBackendStartOptions, MemoryPromptPreparation } from "../memory-backend/types";
 import type { AgentSession } from "../session/agent-session";
 import { type BankScope, computeBankScope } from "./bank";
 import { createHindsightClient } from "./client";
@@ -60,6 +60,7 @@ export const hindsightBackend: MemoryBackend = {
 					recallTagsMatch: parent.recallTagsMatch,
 					config: parent.config,
 					session,
+					agentDir: options.agentDir,
 					banksSet: parent.banksSet,
 					lastRetainedTurn: 0,
 					hasRecalledForFirstTurn: true,
@@ -80,10 +81,10 @@ export const hindsightBackend: MemoryBackend = {
 			return;
 		}
 
-		await installPrimaryState(session, settings, new Set());
+		await installPrimaryState(session, settings, new Set(), options.agentDir);
 	},
 
-	async buildDeveloperInstructions(_agentDir, settings, session): Promise<string | undefined> {
+	async buildDeveloperInstructions(_agentDir, _cwd, settings, session): Promise<string | undefined> {
 		const config = loadHindsightConfig(settings);
 		if (!isHindsightConfigured(config)) return undefined;
 
@@ -101,11 +102,21 @@ export const hindsightBackend: MemoryBackend = {
 		return parts.join("\n\n");
 	},
 
-	async beforeAgentStartPrompt(session: AgentSession, promptText: string): Promise<string | undefined> {
+	async beforeAgentStartPrompt(
+		session: AgentSession,
+		promptText: string,
+		signal?: AbortSignal,
+	): Promise<MemoryPromptPreparation | undefined> {
 		const state = session.getHindsightSessionState();
 		if (!state) return undefined;
 
-		return await state.beforeAgentStartPrompt(promptText);
+		const preparation = await state.beforeAgentStartPrompt(promptText, signal);
+		if (!preparation) return undefined;
+		return {
+			context: preparation.context,
+			notice: preparation.notice,
+			commit: () => session.getHindsightSessionState() === state && preparation.commit(),
+		};
 	},
 
 	async clear(_agentDir, _cwd, session): Promise<void> {
@@ -199,6 +210,7 @@ async function installPrimaryState(
 	session: AgentSession,
 	settings: Settings,
 	banksSet: Set<string>,
+	agentDir: string,
 ): Promise<HindsightSessionState | undefined> {
 	const sessionId = session.sessionId;
 	if (!sessionId) return undefined;
@@ -235,6 +247,7 @@ async function installPrimaryState(
 		recallTagsMatch: scope.recallTagsMatch,
 		config,
 		session,
+		agentDir,
 		banksSet,
 		lastRetainedTurn: 0,
 		hasRecalledForFirstTurn: false,
@@ -292,7 +305,7 @@ async function rebuildPrimaryStateOnScopeChange(session: AgentSession): Promise<
 	if (bankScopesEqual(next, current)) return;
 
 	// Preserve the banksSet so we don't re-PUT banks we've already confirmed.
-	await installPrimaryState(session, settings, current.banksSet);
+	await installPrimaryState(session, settings, current.banksSet, current.agentDir);
 }
 
 /** Tag-array equality: order matters because we never reorder on the way in. */

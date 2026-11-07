@@ -6,7 +6,7 @@
  */
 import * as path from "node:path";
 import type { FileLock as NativeFileLock } from "@musepi/pi-natives";
-import { tryAcquireFileLock } from "@musepi/pi-natives/file-lock";
+import { tryAcquireFileLock as acquireNativeFileLock } from "@musepi/pi-natives/file-lock";
 
 /** Controls bounded waiting when an advisory file lock is contended. */
 export interface FileLockOptions {
@@ -26,7 +26,7 @@ function getLockPath(filePath: string): string {
 }
 
 function tryAcquireLock(lockPath: string): NativeFileLock | null {
-	const lock = tryAcquireFileLock(lockPath);
+	const lock = acquireNativeFileLock(lockPath);
 	if (lock.acquired) return lock;
 	lock.release();
 	return null;
@@ -67,3 +67,8 @@ export const __internalsForTesting = {
 	tryAcquireLock,
 	getLockPath,
 };
+
+/** Non-blocking acquisition for callers that skip a contended destination. */
+export function tryAcquireFileLock(filePath: string): NativeFileLock | null {
+	return tryAcquireLock(getLockPath(filePath));
+}

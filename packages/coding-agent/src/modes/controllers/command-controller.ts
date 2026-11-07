@@ -634,7 +634,12 @@ export class CommandController {
 		const backend = await resolveMemoryBackend(this.ctx.settings);
 
 		if (action === "view") {
-			const payload = await backend.buildDeveloperInstructions(agentDir, this.ctx.settings, this.ctx.session);
+			const payload = await backend.buildDeveloperInstructions(
+				agentDir,
+				this.ctx.sessionManager.getCwd(),
+				this.ctx.settings,
+				this.ctx.session,
+			);
 			if (!payload) {
 				this.ctx.showWarning(t("settings.memoryPayloadEmpty"));
 				return;
@@ -669,6 +674,43 @@ export class CommandController {
 			try {
 				await backend.enqueue(agentDir, this.ctx.sessionManager.getCwd(), this.ctx.session);
 				this.ctx.showStatus(t("settings.memoryConsolidationEnqueued"));
+			} catch (error) {
+				this.ctx.showError(
+					t("settings.memoryEnqueueFailedWith0").replace(
+						"{0}",
+						error instanceof Error ? error.message : String(error),
+					),
+				);
+			}
+			return;
+		}
+
+		if (action === "queue") {
+			try {
+				const payload = await backend.queuePreview?.({
+					agentDir,
+					cwd: this.ctx.sessionManager.getCwd(),
+					session: this.ctx.session,
+				});
+				if (!payload) {
+					this.ctx.showWarning(t("settings.memoryQueueUnavailable").replace("{0}", backend.id));
+					return;
+				}
+				showMarkdownPanel(this.ctx, t("settings.memoryQueueTitle"), payload);
+			} catch (error) {
+				this.ctx.showError(
+					t("settings.memoryFailedWith0With1")
+						.replace("{0}", action)
+						.replace("{1}", error instanceof Error ? error.message : String(error)),
+				);
+			}
+			return;
+		}
+
+		if (action === "sync") {
+			try {
+				await backend.enqueue(agentDir, this.ctx.sessionManager.getCwd(), this.ctx.session);
+				this.ctx.showStatus(t("settings.memorySyncRan"));
 			} catch (error) {
 				this.ctx.showError(
 					t("settings.memoryEnqueueFailedWith0").replace(

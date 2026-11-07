@@ -10,6 +10,7 @@ import {
 	type RemoteLlmOptions,
 } from "./local-llm";
 import { getMnemopiRuntimeOptions } from "./runtime-options";
+import { clipToWindow, DEFAULT_INPUT_CHARS } from "./text-window";
 
 const TRUE_VALUES: Record<string, true> = { "1": true, true: true, yes: true, on: true };
 
@@ -378,7 +379,7 @@ export async function extractFactCategories(
 	if (typeof text !== "string" || text.trim() === "") {
 		return emptyFactCategories();
 	}
-	const prompt = buildExtractionPrompt(text);
+	const prompt = buildExtractionPrompt(clipToWindow(text, DEFAULT_INPUT_CHARS));
 
 	// Configured completion (host-injected runtime LLM, e.g. the coding-agent's smol
 	// or a local on-device model). Mirrors consolidation's precedence: when a

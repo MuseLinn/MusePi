@@ -9,7 +9,8 @@
 
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { HindsightApi } from "@musepi/pi-coding-agent/hindsight/client";
@@ -102,6 +103,7 @@ function registerState(client: HindsightApi, settings?: Settings, opts: Register
 		sessionId: TEST_SESSION_ID,
 		client,
 		bankId: "test-bank",
+		agentDir: mkdtempSync(path.join(tmpdir(), "musepi-hindsight-outbox-")),
 		retainTags: opts.retainTags,
 		recallTags: opts.recallTags,
 		recallTagsMatch: opts.recallTagsMatch,
@@ -1118,7 +1120,7 @@ describe("Mnemopi backend lifecycle", () => {
 			message: "Search aborted.",
 		});
 
-		const rememberSpy = vi.spyOn(state, "rememberScoped").mockReturnValue(undefined);
+		const rememberSpy = vi.spyOn(state, "rememberScoped").mockReturnValue(undefined as never);
 		await expect(
 			mnemopiBackend.save!({ agentDir: "/tmp/agent", cwd: "/tmp", session }, { content: "memory without id" }),
 		).resolves.toMatchObject({

@@ -401,6 +401,8 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 			{ name: "reset", description: "Alias for clear" },
 			{ name: "enqueue", description: "Enqueue memory consolidation maintenance" },
 			{ name: "rebuild", description: "Alias for enqueue" },
+			{ name: "queue", description: "Show pending memory deltas awaiting consolidation" },
+			{ name: "sync", description: "Run memory consolidation now" },
 			{ name: "mm list", description: "List mental models on the active bank" },
 			{ name: "mm show", description: "Show one mental model (id required)" },
 			{
@@ -420,6 +422,7 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 				case "view": {
 					const payload = await backend.buildDeveloperInstructions(
 						runtime.settings.getAgentDir(),
+						runtime.cwd,
 						runtime.settings,
 						runtime.session,
 					);
@@ -439,6 +442,20 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 					await runtime.output("Memory consolidation enqueued.");
 					return commandConsumed();
 				}
+				case "queue": {
+					const payload = await backend.queuePreview?.({
+						agentDir: runtime.settings.getAgentDir(),
+						cwd: runtime.cwd,
+						session: runtime.session,
+					});
+					await runtime.output(payload ?? `Memory queue is not available for the ${backend.id} backend.`);
+					return commandConsumed();
+				}
+				case "sync": {
+					await backend.enqueue(runtime.settings.getAgentDir(), runtime.cwd, runtime.session);
+					await runtime.output("Memory consolidation ran.");
+					return commandConsumed();
+				}
 				case "stats":
 				case "diagnose": {
 					const hook = verb === "stats" ? backend.stats : backend.diagnose;
@@ -452,7 +469,7 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 						runtime,
 					);
 				default:
-					return usage("Usage: /memory <view|stats|diagnose|clear|reset|enqueue|rebuild>", runtime);
+					return usage("Usage: /memory <view|stats|diagnose|queue|sync|clear|reset|enqueue|rebuild>", runtime);
 			}
 		},
 		handleTui: async (command, runtime) => {

@@ -37,6 +37,7 @@ import { DesktopSession, getWorkProfile } from "@musepi/pi-natives";
 import {
 	$env,
 	getAgentDir,
+	getBlobsDir,
 	getConfigRootDir,
 	getMCPConfigPath,
 	getSessionsDir,
@@ -53,6 +54,7 @@ import type {
 	SttModelStatusResponse,
 	TtsModelRow,
 	TtsModelStatusResponse,
+	TtsRewriteResponse,
 	AgentEvent as WireAgentEvent,
 	WireMessage,
 } from "@musepi/pi-wire";
@@ -107,6 +109,7 @@ import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compa
 	type: "text",
 };
 import { createRemoteApprovalProvider } from "../remote-access/approval-provider";
+import { BlobStore, isBlobRef, resolveImageData } from "../session/blob-store";
 import type { CompactMode } from "../session/compact-modes";
 import {
 	createForeignSessionStore,
@@ -612,6 +615,10 @@ import { readGithubPrReviewComments } from "./github-pr-review";
 import { ApprovalService } from "./services/approval-service";
 import { ArchiveService } from "./services/archive-service";
 import {
+	type AttachmentAbortParams,
+	type AttachmentBeginParams,
+	type AttachmentChunkParams,
+	type AttachmentCommitParams,
 	type AttachmentGetParams,
 	type AttachmentPutFileParams,
 	type AttachmentPutParams,
@@ -682,6 +689,28 @@ export {
 } from "./session-host";
 
 // ── Method dispatch ─────────────────────────────────────────────────────────
+/**
+ * Resolve content-addressed image parts before they reach the agent.
+ *
+ * `session.send` accepts either inline base64 or a `blob:sha256:` reference, so
+ * a remote client can address an image it never has in memory. A reference that
+ * no longer resolves is a stale attachment: fail the send instead of handing the
+ * provider an empty image.
+ */
+async function resolveImageRefs<T extends { data: string }>(images: T[] | undefined): Promise<T[] | undefined> {
+	if (!images?.some(image => isBlobRef(image.data))) return images;
+	const store = new BlobStore(getBlobsDir());
+	return Promise.all(
+		images.map(async image => {
+			if (!isBlobRef(image.data)) return image;
+			const data = await resolveImageData(store, image.data);
+			if (isBlobRef(data)) {
+				throw new Error("Attachment expired: the image blob is gone; attach it again");
+			}
+			return { ...image, data };
+		}),
+	);
+}
 
 export class DaemonServer {
 	readonly #host: DaemonSessionHost;
@@ -4625,7 +4654,9 @@ export class DaemonServer {
 								...(requestIdentity && requestFingerprint ? { requestIdentity, requestFingerprint } : {}),
 							}
 						: undefined;
-				const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : undefined;
+				const images = await resolveImageRefs(
+					Array.isArray(p.images) && p.images.length > 0 ? p.images : undefined,
+				);
 				// Video attachments arrive as content parts too, but by reference:
 				// a clip is never base64 in the request (provider APIs accept a
 				// URL/file part or degrade it to a text marker).
@@ -5868,6 +5899,31 @@ export class DaemonServer {
 				});
 				return { text };
 			}
+			case "tts.rewrite": {
+				// Enhanced read-aloud (`tts.enhanced`): rewrite one markdown
+				// block into spoken prose with the session's tiny/smol role.
+				// The terminal vocalizer constructs SpeechEnhancer directly;
+				// this route gives the desktop the SAME service through RPC so
+				// both shells share one rewrite implementation. Returns null
+				// on any failure — the caller keeps the sanitized text.
+				const p = (params ?? {}) as { sessionId: string; text: string };
+				if (typeof p.sessionId !== "string" || typeof p.text !== "string" || !p.text.trim()) {
+					throw new Error("sessionId and text required");
+				}
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const session = live.agentSession;
+				if (!session.settings.get("tts.enhanced")) return { text: null } satisfies TtsRewriteResponse;
+				const { SpeechEnhancer } = await import("../tts/speech-enhancer");
+				const enhancer = new SpeechEnhancer({
+					settings: session.settings,
+					registry: session.modelRegistry,
+					sessionId: p.sessionId,
+					metadataResolver: provider => session.agent.metadataForProvider(provider),
+				});
+				const text = await enhancer.rewrite(p.text);
+				return { text } satisfies TtsRewriteResponse;
+			}
 			case "tts.synthesize": {
 				// TUI-parity speech synthesis: Kokoro-82M local model via the
 				// same tts-client worker the TUI uses.
@@ -6988,7 +7044,7 @@ export class DaemonServer {
 				if (!settings) throw new Error("settings unavailable");
 				const { resolveMemoryBackend } = await import("../memory-backend/resolve");
 				const backend = await resolveMemoryBackend(settings);
-				const text = await backend.buildDeveloperInstructions(getAgentDir(), settings);
+				const text = await backend.buildDeveloperInstructions(getAgentDir(), settings.getCwd(), settings);
 				return { text: text ?? "(no instructions)" };
 			}
 			case "memory.stats": {
@@ -7260,7 +7316,9 @@ export class DaemonServer {
 						});
 						// Media attachments (composer chips) ride on the kickoff —
 						// TUI input.images parity, plus video parts.
-						const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : undefined;
+						const images = await resolveImageRefs(
+							Array.isArray(p.images) && p.images.length > 0 ? p.images : undefined,
+						);
 						const videos = Array.isArray(p.videos) && p.videos.length > 0 ? p.videos : undefined;
 						try {
 							if (g.isStreaming) {
@@ -8843,6 +8901,20 @@ export class DaemonServer {
 				return this.#services
 					.get<AttachmentService>("attachments")
 					.putFile((params ?? {}) as AttachmentPutFileParams);
+			}
+			case "attachment.begin": {
+				return this.#services.get<AttachmentService>("attachments").begin((params ?? {}) as AttachmentBeginParams);
+			}
+			case "attachment.chunk": {
+				return this.#services.get<AttachmentService>("attachments").chunk((params ?? {}) as AttachmentChunkParams);
+			}
+			case "attachment.commit": {
+				return this.#services
+					.get<AttachmentService>("attachments")
+					.commit((params ?? {}) as AttachmentCommitParams);
+			}
+			case "attachment.abort": {
+				return this.#services.get<AttachmentService>("attachments").abort((params ?? {}) as AttachmentAbortParams);
 			}
 			case "attachment.get": {
 				return this.#services.get<AttachmentService>("attachments").get((params ?? {}) as AttachmentGetParams);

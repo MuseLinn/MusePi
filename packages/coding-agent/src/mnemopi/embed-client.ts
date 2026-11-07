@@ -13,6 +13,7 @@ import {
 	workerEnvFromParent,
 } from "../subprocess/worker-client";
 import type { MnemopiEmbedModelId, MnemopiEmbedWorkerInbound, MnemopiEmbedWorkerOutbound } from "./embed-protocol";
+import { connectSharedMnemopiEmbedServer } from "./embed-shared";
 
 /**
  * Parent-side handle for the mnemopi embeddings subprocess. The runtime
@@ -106,11 +107,17 @@ export class MnemopiEmbedClient {
 	#unsubscribeError: (() => void) | null = null;
 	#pending = new Map<string, PendingRequest>();
 	#nextRequestId = 0;
-	#spawnWorker: () => MnemopiEmbedWorkerHandle;
+	#spawnWorker: (
+		model: MnemopiEmbedModelId,
+		cacheDir: string | undefined,
+	) => MnemopiEmbedWorkerHandle | Promise<MnemopiEmbedWorkerHandle>;
 	#requestTimeoutMs: number;
 
 	constructor(
-		spawnWorker: () => MnemopiEmbedWorkerHandle = spawnMnemopiEmbedWorker,
+		spawnWorker: (
+			model: MnemopiEmbedModelId,
+			cacheDir: string | undefined,
+		) => MnemopiEmbedWorkerHandle | Promise<MnemopiEmbedWorkerHandle> = createMnemopiEmbedWorker,
 		requestTimeoutMs: number = EMBED_REQUEST_TIMEOUT_MS,
 	) {
 		this.#spawnWorker = spawnWorker;
@@ -130,7 +137,7 @@ export class MnemopiEmbedClient {
 		cacheDir: string | undefined,
 	): Promise<MnemopiSubprocessEmbeddingModel | null> {
 		try {
-			const worker = this.#ensureWorker();
+			const worker = await this.#ensureWorker(model, cacheDir);
 			const id = String(++this.#nextRequestId);
 			const { promise, resolve } = Promise.withResolvers<boolean>();
 			this.#pending.set(id, { kind: "init", model, resolve });
@@ -176,7 +183,7 @@ export class MnemopiEmbedClient {
 		texts: string[],
 		batchSize: number | undefined,
 	): Promise<number[][]> {
-		const worker = this.#ensureWorker();
+		const worker = await this.#ensureWorker(model, cacheDir);
 		const id = String(++this.#nextRequestId);
 		const { promise, resolve } = Promise.withResolvers<number[][] | Error>();
 		this.#pending.set(id, { kind: "embed", model, resolve });
@@ -235,9 +242,9 @@ export class MnemopiEmbedClient {
 		yield vectors;
 	}
 
-	#ensureWorker(): MnemopiEmbedWorkerHandle {
+	async #ensureWorker(model: MnemopiEmbedModelId, cacheDir: string | undefined): Promise<MnemopiEmbedWorkerHandle> {
 		if (this.#worker) return this.#worker;
-		const worker = this.#spawnWorker();
+		const worker = await this.#spawnWorker(model, cacheDir);
 		this.#worker = worker;
 		this.#unsubscribeMessage = worker.onMessage(message => this.#handleMessage(message));
 		this.#unsubscribeError = worker.onError(error => this.#handleWorkerError(error));
@@ -275,6 +282,21 @@ export class MnemopiEmbedClient {
 		}
 		this.#pending.clear();
 		void this.terminate();
+	}
+}
+
+async function createMnemopiEmbedWorker(
+	model: MnemopiEmbedModelId,
+	cacheDir: string | undefined,
+): Promise<MnemopiEmbedWorkerHandle> {
+	if (process.env.MUSEPI_MNEMOPI_EMBED_SHARED === "0") return spawnMnemopiEmbedWorker();
+	try {
+		return await connectSharedMnemopiEmbedServer(model, cacheDir);
+	} catch (error) {
+		logger.debug("mnemopi-embed: shared server unavailable; using per-process worker", {
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return spawnMnemopiEmbedWorker();
 	}
 }
 
