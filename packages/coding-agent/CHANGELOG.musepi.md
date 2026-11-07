@@ -6,14 +6,17 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
-- **标签条补上拖放上下文兜底**：外层 DndContext 未生效时，标签仍然渲染、带 dnd-kit 的无障碍属性，却没有任何拖拽处理器且不会报错；现在标签条自建本地上下文，排序可用。外层正常时仍共用上下文，跨列移动与分栏落点不变。
-  - EN: The tab strip now falls back to a local DndContext when no parent drag context is active — a state where tabs still render with dnd-kit's aria attributes but no press arms a drag and no error is logged. Reorder works in that state; the shared context still drives cross-column moves and the split drop zone when present.
+- **标签与 rail 恢复拖拽，分栏与跨列拖动一并修好**：React 19 移除了 `react-dom` 的 `unstable_batchedUpdates`，而 dnd-kit 6.3.1 在拖拽开始与结束时仍调用它并抛错，异常打断了整条拖拽派发——按下有效、却没有一次拖拽真正生效。补丁落在 `patches/`，把该调用换成本地透传；标签排序、rail 排序、拖到右半区新建分栏、分栏间跨列移动因此全部恢复。标签条同时不再自建 drag 上下文：此前的手势被截留在条内，面板的分栏落点因此永远不会激活。
+  - EN: Tabs and the rail drag again, together with drag-to-split and cross-column moves. React 19 removed `react-dom`'s `unstable_batchedUpdates`, which dnd-kit 6.3.1 still calls when a drag starts and ends; the throw aborted the whole drag dispatch, so a press armed but no gesture ever took effect. A patch under `patches/` routes the call through a local pass-through, restoring tab reorder, rail reorder, drag-to-split onto the body's right half, and moves across split columns. The strip also stops nesting its own drag context — that trapped the gesture inside the strip, so the panel's split drop zone never armed.
+
+- **开发实例重启不再留下旧窗口**：`relaunch-gui.mjs` 此前把仓库路径写死成上游目录名，改名或复制出来的检出匹配不到任何 Electron 进程，于是每次重启都在旧构建上再叠一个新窗口，改动看起来没生效。现在按当前检出的根目录匹配，旧实例（含其 daemon）先退出再启动。
+  - EN: Restarting a dev instance no longer leaves the previous window behind. `relaunch-gui.mjs` hard-coded the upstream directory name in its process filter, so a renamed or copied checkout matched no Electron process and every restart stacked a new window on the stale build, making changes look ignored. The filter now anchors on this checkout's root and quits the old instance (daemon included) before starting.
 
 - **消息树移到会话卡头部，记录点击改为跳转**：消息树按钮从覆盖首条消息的浮动位置移进聊天卡顶部、信息卡按钮左侧；点击记录只滚动并高亮该消息，不再切换会话 leaf。画布双击与面包屑仍走节点切换。
   - EN: The message-tree button moved from its floating spot over the first message into the chat header, left of the session-info toggle. Clicking a row now jumps to that message instead of switching the session leaf; canvas double-click and breadcrumbs still switch nodes.
 
-- **右侧面板标签可再次拖动，浏览器入口不再重复**：面板标签改用与 rail 相同的指针传感器（此前是旧版鼠标传感器），拖动排序与拖到右半区新建分栏恢复响应；浏览器由内置 surface 承载，配套插件不再额外注册一个 rail 入口。
-  - EN: Right-panel tabs drag again: the strip uses the same pointer sensor as the rail instead of the legacy mouse sensor, so reorder and drag-to-split respond; the browser pane is launched by its built-in surface, and the companion plugin no longer registers a second rail entry.
+- **面板标签改用指针传感器，浏览器入口不再重复**：面板标签与 rail 统一使用指针传感器，替换旧版鼠标传感器；浏览器由内置 surface 承载，配套插件不再额外注册一个 rail 入口。
+  - EN: Panel tabs now use the same pointer sensor as the rail instead of the legacy mouse sensor, and the browser pane is launched by its built-in surface: the companion plugin no longer registers a second rail entry.
 
 - **空态聚焦光带改为入场强调**：欢迎页输入框的聚焦光带只扫 3 秒后停止，不再在打字时常驻重绘；专注模式不显示光带。
   - EN: The welcome composer's focus beam is now an entrance accent: it sweeps for three seconds and stops instead of repainting while you type, and focus mode never shows it.

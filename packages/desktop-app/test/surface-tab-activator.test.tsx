@@ -1,7 +1,8 @@
 import "./happy-dom-shim";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
+import { DndContext, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { SurfaceTabStrip, SurfaceTabStripSortable } from "../src/components/surface-tabs";
 
@@ -78,29 +79,36 @@ describe("SurfaceTabStrip drag activator", () => {
 		}
 	});
 
-	it("falls back to a local DndContext when the parent context is missing", () => {
-		// A missing parent context is invisible in the DOM: tabs still render
-		// with dnd-kit's aria attributes, but the default context has zero
-		// activators so no press can ever arm a drag. The strip must supply
-		// its own context in that state.
+	it("binds the parent context's activator instead of nesting its own", () => {
+		// The panel shares ONE context across the strip and the body so a tab can
+		// be dragged onto the split zone. An inner context here would swallow the
+		// gesture: the parent's drag start never fires and its drop zones stay
+		// unarmed. The strip must therefore render straight into the parent.
 		const host = document.createElement("div");
 		document.body.appendChild(host);
 		hosts.push(host);
 		const root = createRoot(host);
 		roots.push(root);
-		act(() =>
-			root.render(
-				<SurfaceTabStripSortable
-					tabs={[{ id: "a", title: "A" }]}
-					activeId="a"
-					onActivate={() => {}}
-					onClose={() => {}}
-					onReorder={() => {}}
-				/>,
-			),
-		);
-		const tab = host.querySelector(".gui-surface-tab");
-		expect(tab).not.toBeNull();
-		expect(typeof reactProps(tab!)?.onPointerDown).toBe("function");
+		const WithParent = (): ReactNode => {
+			const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+			return (
+				<DndContext sensors={sensors}>
+					<SurfaceTabStripSortable
+						tabs={[
+							{ id: "a", title: "A" },
+							{ id: "b", title: "B" },
+						]}
+						activeId="a"
+						onActivate={() => {}}
+						onClose={() => {}}
+						onReorder={() => {}}
+					/>
+				</DndContext>
+			);
+		};
+		act(() => root.render(<WithParent />));
+		const tabs = [...host.querySelectorAll(".gui-surface-tab")];
+		expect(tabs.length).toBe(2);
+		for (const tab of tabs) expect(typeof reactProps(tab)?.onPointerDown).toBe("function");
 	});
 });

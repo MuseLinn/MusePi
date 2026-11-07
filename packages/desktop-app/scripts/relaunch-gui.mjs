@@ -8,13 +8,25 @@
  * so unrelated apps (Kimi, etc.) are never touched.
  */
 import { execFileSync, spawn } from "node:child_process";
+import { resolve } from "node:path";
 import { requestGracefulQuit, waitForPidsExit } from "./graceful-quit.mjs";
 
 // Match only Electron binaries inside this repo so unrelated apps (Kimi,
 // etc.) are never touched. Per-platform layout: macOS runs from the .app
 // bundle, Windows/Linux from dist/electron(.exe).
-const REPO_ELECTRON =
-	/harness-engineering[\\/]musepi-omp[\\/]node_modules[\\/]\.bun[\\/]electron@[^\\/]+[\\/]node_modules[\\/]electron[\\/]dist[\\/](?:Electron\.app\/Contents\/MacOS\/Electron|electron(?:\.exe)?)/;
+//
+// Anchor on THIS checkout's root: the previous pattern hard-coded the
+// upstream sibling directory name, so a renamed/copied fork (this one) matched
+// nothing and every relaunch stacked a second window on the stale build.
+const repoRoot = resolve(import.meta.dir, "..", "..", "..");
+const normalizePath = p => p.replace(/\//g, "\\").toLowerCase();
+const REPO_PREFIX = `${normalizePath(repoRoot)}\\`;
+const REPO_ELECTRON_TAIL =
+	/node_modules[\\/]\.bun[\\/]electron@[^\\/]+[\\/]node_modules[\\/]electron[\\/]dist[\\/](electron(\.exe)?|electron\.app[\\/]contents[\\/]macos[\\/]electron)$/;
+const isRepoElectronPath = p => {
+	const normalized = normalizePath(p);
+	return normalized.startsWith(REPO_PREFIX) && REPO_ELECTRON_TAIL.test(normalized);
+};
 
 function runningPids() {
 	const pids = [];
@@ -32,7 +44,7 @@ function runningPids() {
 		);
 		for (const line of out.split(/\r?\n/)) {
 			const [pidStr, ...rest] = line.split("\t");
-			if (rest.length === 0 || !REPO_ELECTRON.test(rest.join("\t"))) continue;
+			if (rest.length === 0 || !isRepoElectronPath(rest.join("\t"))) continue;
 			const pid = Number.parseInt(pidStr, 10);
 			if (Number.isFinite(pid)) pids.push(pid);
 		}
@@ -40,7 +52,7 @@ function runningPids() {
 	}
 	const out = execFileSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" });
 	for (const line of out.split("\n")) {
-		if (!REPO_ELECTRON.test(line)) continue;
+		if (!isRepoElectronPath(line)) continue;
 		const pid = Number.parseInt(line.trim().split(/\s+/)[0], 10);
 		if (Number.isFinite(pid)) pids.push(pid);
 	}
