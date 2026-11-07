@@ -5,15 +5,39 @@ import { openExternalUrl } from "../../lib/electron";
 import { onGitPrefsChanged, readShowIgnored, writeShowIgnored } from "../../lib/git-prefs";
 import { useConfirm, usePrompt } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
+import {
+	onUserAvatarChanged,
+	readUserAvatarMode,
+	syncUserAvatarUrl,
+	type UserAvatarMode,
+	writeUserAvatarMode,
+} from "../../lib/user-avatar";
 import { Icon } from "../../vendor/oc-icons";
 
-/** Changes view: flat file list vs grouped tree. */
-const CHANGES_VIEW_SEGMENTS: SegmentedOption<"flat" | "tree">[] = [
-	{ value: "flat", label: t("general.flatList") },
-	{ value: "tree", label: t("general.treeView") },
-];
+/* Both segment lists are built per render instead of at module load: `t()`
+ * reads the live locale, so a module-level array would keep the labels of
+ * whatever language was active when the bundle was imported. */
 
-/** Read-only keyboard shortcut reference. */
+/** Changes view: flat file list vs grouped tree. */
+function changesViewSegments(): SegmentedOption<"flat" | "tree">[] {
+	return [
+		{ value: "flat", label: t("general.flatList") },
+		{ value: "tree", label: t("general.treeView") },
+	];
+}
+
+/** Chat-bubble avatar source. The fallback order (GitHub → identity pixel
+ *  face → initial) lives in the row description, so the segments stay one
+ *  short label each — a 38px square button was never able to hold them. */
+function userAvatarSegments(): SegmentedOption<UserAvatarMode>[] {
+	return [
+		{ value: "auto", label: t("settings.userAvatarAuto") },
+		{ value: "punk", label: t("settings.userAvatarPunk") },
+		{ value: "initial", label: t("settings.userAvatarInitial") },
+	];
+}
+
+/** `github.authStatus` payload (gh CLI or device-flow login). */
 interface GitAuthState {
 	installed?: boolean;
 	authenticated?: boolean;
@@ -51,27 +75,19 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const { confirm } = useConfirm();
 	// ── GitHub auth ──────────────────────────────────────────────────────
 	const [avatarFailed, setAvatarFailed] = useState(false);
-	const [userAvatarMode, setUserAvatarMode] = useState<string>(() => {
-		try {
-			return localStorage.getItem("musepi-gui-user-avatar-mode") ?? "auto";
-		} catch {
-			return "auto";
-		}
-	});
-	const pickUserAvatarMode = (mode: "auto" | "punk" | "initial"): void => {
+	const [userAvatarMode, setUserAvatarMode] = useState<UserAvatarMode>(readUserAvatarMode);
+	// Another window writes the same key; follow it so the control never
+	// shows the value this window happened to mount with.
+	useEffect(() => onUserAvatarChanged(() => setUserAvatarMode(readUserAvatarMode())), []);
+	const pickUserAvatarMode = (mode: UserAvatarMode): void => {
 		setUserAvatarMode(mode);
-		try {
-			localStorage.setItem("musepi-gui-user-avatar-mode", mode);
-		} catch {
-			// storage unavailable — session-only choice
-		}
-		window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
+		writeUserAvatarMode(mode);
 	};
 	const [auth, setAuth] = useState<GitAuthState | null>(null);
 	const [authLoading, setAuthLoading] = useState(false);
 	const [flow, setFlow] = useState<GitDeviceFlow | null>(null);
 	const [flowError, setFlowError] = useState<string | null>(null);
-	const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const pollRef = useRef<number | null>(null);
 
 	const refreshAuth = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
@@ -81,8 +97,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			setAuth(next);
 			// Sync the GitHub avatar to the chat user bubble (UserAvatar
 			// reads this key synchronously — zero RPC per message).
-			if (next?.avatarUrl) localStorage.setItem("musepi-gui-user-avatar", next.avatarUrl);
-			else localStorage.removeItem("musepi-gui-user-avatar");
+			syncUserAvatarUrl(next?.avatarUrl ?? null);
 		} catch (err) {
 			// RPC failure (e.g. daemon predates github.authStatus) is NOT the
 			// same as gh missing — keep the detail so the UI can say so.
@@ -95,17 +110,19 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	useEffect(() => {
 		void refreshAuth();
 		return () => {
-			if (pollRef.current) clearTimeout(pollRef.current);
+			if (pollRef.current !== null) window.clearTimeout(pollRef.current);
 		};
 	}, [refreshAuth]);
 
-	// new login → re-enable the avatar image (previous one may have failed)
+	// New login → re-enable the avatar image: a picture that 404'd once must
+	// not keep the account row on its fallback glyph after reconnecting.
+	const authAvatarUrl = auth?.avatarUrl ?? null;
 	useEffect(() => {
 		setAvatarFailed(false);
-	}, []);
+	}, [authAvatarUrl]);
 
 	const stopFlow = (): void => {
-		if (pollRef.current) clearTimeout(pollRef.current);
+		if (pollRef.current !== null) window.clearTimeout(pollRef.current);
 		pollRef.current = null;
 		setFlow(null);
 		setFlowError(null);
@@ -136,7 +153,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					error?: string;
 				}>("github.authPoll", { deviceCode: flowState.deviceCode, interval: flowState.interval });
 				if (res.pending) {
-					pollRef.current = setTimeout(
+					pollRef.current = window.setTimeout(
 						() => void pollFlow(flowState),
 						(res.interval ?? flowState.interval) * 1000,
 					);
@@ -169,7 +186,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			const started = res as GitDeviceFlow;
 			setFlow(started);
 			void openExternalUrl(started.verificationUri);
-			pollRef.current = setTimeout(() => void pollFlow(started), Math.max(5, started.interval) * 1000);
+			pollRef.current = window.setTimeout(() => void pollFlow(started), Math.max(5, started.interval) * 1000);
 		} catch (err) {
 			setFlowError(err instanceof Error ? err.message : String(err));
 		}
@@ -498,26 +515,12 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					<div className="gui-settings-row-label">{t("settings.userAvatarSource")}</div>
 					<div className="gui-settings-row-desc">{t("settings.userAvatarSourceDescription")}</div>
 				</div>
-				<div className="flex items-center gap-1">
-					{(
-						[
-							["auto", t("settings.userAvatarAuto")],
-							["punk", t("settings.userAvatarPunk")],
-							["initial", t("settings.userAvatarInitial")],
-						] as const
-					).map(([mode, label]) => (
-						<button
-							key={mode}
-							type="button"
-							className={`gui-avatar-opt${userAvatarMode === mode ? " gui-avatar-opt--active" : ""}`}
-							title={label}
-							aria-pressed={userAvatarMode === mode}
-							onClick={() => pickUserAvatarMode(mode)}
-						>
-							<span className="px-1 text-[11px] font-medium">{label}</span>
-						</button>
-					))}
-				</div>
+				<Segmented
+					ariaLabel={t("settings.userAvatarSource")}
+					value={userAvatarMode}
+					options={userAvatarSegments()}
+					onChange={pickUserAvatarMode}
+				/>
 			</div>
 
 			<div className="gui-settings-section">
@@ -627,7 +630,7 @@ export function GitPrefsRow(): ReactNode {
 				<Segmented
 					ariaLabel={t("general.changesView")}
 					value={view}
-					options={CHANGES_VIEW_SEGMENTS}
+					options={changesViewSegments()}
 					onChange={v => {
 						setViewState(v);
 						localStorage.setItem("musepi-gui-git-view", v);

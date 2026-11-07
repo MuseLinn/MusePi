@@ -77,6 +77,7 @@ import { type UsePanelTabsResult, usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useStore } from "../lib/use-store";
+import { onUserAvatarChanged, readUserAvatarPrefs, type UserAvatarPrefs } from "../lib/user-avatar";
 import { speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
@@ -138,23 +139,17 @@ function activityRowsToNumber(value: unknown): number {
 }
 
 /**
- * User gutter avatar — GitHub avatar (synced by the settings Git tab via
- * `musepi-gui-user-avatar`, `https://github.com/<login>.png`) with the git
- * identity's initial as fallback; the title carries the git name/email
- * (falls back to the generic user chip).
+ * User gutter avatar — one of three sources (设置 → Git → 用户头像来源,
+ * `lib/user-avatar.ts`): `auto` = GitHub avatar (`https://github.com/
+ * <login>.png`) → the identity-derived pixel face → the initial chip;
+ * `punk` = the user-chosen pixel face; `initial` = the letter chip only
+ * (no network). The title carries the git name/email (falls back to the
+ * generic user chip).
  */
 function UserAvatar({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	const [user, setUser] = useState<GitUser | null>(null);
 	const [avatarFailed, setAvatarFailed] = useState(false);
-	// Synchronous read: every message bubble renders one of these — a per-
-	// instance RPC would fan out; localStorage is set by the Git tab.
-	const avatarUrl = (() => {
-		try {
-			return localStorage.getItem("musepi-gui-user-avatar") || null;
-		} catch {
-			return null;
-		}
-	})();
+	const [prefs, setPrefs] = useState<UserAvatarPrefs>(readUserAvatarPrefs);
 	useEffect(() => {
 		let cancelled = false;
 		void readGitUser(rpc, cwd).then(u => {
@@ -164,30 +159,23 @@ function UserAvatar({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			cancelled = true;
 		};
 	}, [rpc, cwd]);
+	// The picture can change under a mounted bubble (login, logout, a new
+	// GitHub account), so the source is state, not a render-time read:
+	// without this the bubble kept the URL it first painted with.
+	useEffect(() => {
+		const sync = (): void => {
+			const next = readUserAvatarPrefs();
+			setPrefs(prev => (prev.mode === next.mode && prev.url === next.url ? prev : next));
+		};
+		return onUserAvatarChanged(sync);
+	}, []);
+	const { mode: avatarMode, url: avatarUrl } = prefs;
+	// A new picture (or a retry after switching back) must clear the failure
+	// latch; otherwise one broken URL pins every bubble to the fallback face
+	// for the life of the session.
 	useEffect(() => {
 		setAvatarFailed(false);
-	}, []);
-	// Avatar source mode (设置 → 通用 → 用户头像来源): auto = GitHub →
-	// pixel face → initial; punk = always the deterministic pixel face;
-	// initial = letter chip only (no network, no pixel). Listens to
-	// omp-avatar-changed so a settings change applies immediately.
-	const readMode = (): string => {
-		try {
-			return localStorage.getItem("musepi-gui-user-avatar-mode") ?? "auto";
-		} catch {
-			return "auto";
-		}
-	};
-	const [avatarMode, setAvatarMode] = useState<string>(readMode);
-	useEffect(() => {
-		const on = (): void => setAvatarMode(readMode());
-		window.addEventListener("omp-avatar-changed", on);
-		window.addEventListener("storage", on);
-		return () => {
-			window.removeEventListener("omp-avatar-changed", on);
-			window.removeEventListener("storage", on);
-		};
-	}, []);
+	}, [avatarUrl, avatarMode]);
 	const initial = user?.name?.trim().charAt(0)?.toLocaleUpperCase() ?? "";
 	const title = user ? (user.email ? `${user.name} <${user.email}>` : user.name) : t("settings.you");
 	const punkFace = user?.name?.trim() ? (

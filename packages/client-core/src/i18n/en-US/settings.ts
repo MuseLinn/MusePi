@@ -1057,8 +1057,8 @@ export const settings = {
 	"settings.faceSeed": "Face seed",
 	"settings.userAvatarSource": "User avatar source",
 	"settings.userAvatarSourceDescription":
-		"Your avatar in the chat bubble: GitHub photo, deterministic pixel face, or the initial letter chip.",
-	"settings.userAvatarAuto": "Auto (GitHub → pixel)",
+		"Your avatar in the chat bubble: GitHub photo → identity-derived pixel face → initial letter.",
+	"settings.userAvatarAuto": "Auto",
 	"settings.userAvatarPunk": "Pixel face",
 	"settings.userAvatarInitial": "Initial letter",
 	"settings.dotMatrixBackgroundDescription":
