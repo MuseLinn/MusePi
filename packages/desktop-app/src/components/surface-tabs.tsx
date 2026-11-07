@@ -19,6 +19,7 @@ import {
 	type DragEndEvent,
 	PointerSensor,
 	TouchSensor,
+	useDndContext,
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
@@ -268,7 +269,7 @@ export function SurfaceTabStrip({
 /** The sortable strip content WITHOUT a DndContext — for embedding inside a
  *  parent-owned context (panel split columns share one context so a tab can
  *  drag across columns; the parent decides reorder-vs-move from the over id). */
-export function SurfaceTabStripSortable({
+function SurfaceTabStripContent({
 	tabs,
 	activeId,
 	onActivate,
@@ -338,6 +339,41 @@ export function SurfaceTabStripSortable({
 				})}
 			</SortableContext>
 		</div>
+	);
+}
+
+/**
+ * Strip content for a parent-owned DndContext (panel split columns).
+ *
+ * A missing or inert parent context is invisible in the DOM: the tabs still
+ * render, still carry dnd-kit's `aria-roledescription`/`aria-describedby`,
+ * but the default context supplies zero activators, so no pointer press ever
+ * arms a drag and no error is logged. `windowRect` is null only on that
+ * default context — a mounted DndContext measures its owner window — and is
+ * the one public field that distinguishes the two. Fall back to a local
+ * DndContext in that state. When the parent owns the drag (normal case) the
+ * content is returned untouched, so cross-column moves and the split drop
+ * zone keep using the shared context.
+ */
+export function SurfaceTabStripSortable(props: SurfaceTabStripProps): ReactNode {
+	const { windowRect } = useDndContext();
+	const fallbackSensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+		useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+	);
+	const content = <SurfaceTabStripContent {...props} />;
+	if (windowRect !== null) return content;
+
+	const onDragEnd = (event: DragEndEvent): void => {
+		const active = String(event.active.id);
+		const over = event.over ? String(event.over.id) : null;
+		if (!over || active === over) return;
+		props.onReorder(active, over);
+	};
+	return (
+		<DndContext sensors={fallbackSensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+			{content}
+		</DndContext>
 	);
 }
 

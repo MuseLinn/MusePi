@@ -6,6 +6,12 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **标签条补上拖放上下文兜底**：外层 DndContext 未生效时，标签仍然渲染、带 dnd-kit 的无障碍属性，却没有任何拖拽处理器且不会报错；现在标签条自建本地上下文，排序可用。外层正常时仍共用上下文，跨列移动与分栏落点不变。
+  - EN: The tab strip now falls back to a local DndContext when no parent drag context is active — a state where tabs still render with dnd-kit's aria attributes but no press arms a drag and no error is logged. Reorder works in that state; the shared context still drives cross-column moves and the split drop zone when present.
+
+- **消息树移到会话卡头部，记录点击改为跳转**：消息树按钮从覆盖首条消息的浮动位置移进聊天卡顶部、信息卡按钮左侧；点击记录只滚动并高亮该消息，不再切换会话 leaf。画布双击与面包屑仍走节点切换。
+  - EN: The message-tree button moved from its floating spot over the first message into the chat header, left of the session-info toggle. Clicking a row now jumps to that message instead of switching the session leaf; canvas double-click and breadcrumbs still switch nodes.
+
 - **右侧面板标签可再次拖动，浏览器入口不再重复**：面板标签改用与 rail 相同的指针传感器（此前是旧版鼠标传感器），拖动排序与拖到右半区新建分栏恢复响应；浏览器由内置 surface 承载，配套插件不再额外注册一个 rail 入口。
   - EN: Right-panel tabs drag again: the strip uses the same pointer sensor as the rail instead of the legacy mouse sensor, so reorder and drag-to-split respond; the browser pane is launched by its built-in surface, and the companion plugin no longer registers a second rail entry.
 
