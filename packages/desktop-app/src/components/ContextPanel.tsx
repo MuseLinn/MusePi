@@ -43,6 +43,7 @@ import {
 import { createPortal } from "react-dom";
 import { browserPanelDescriptor, browserTarget, reconcileBrowserPanelTabs } from "../lib/browser-panel-tabs";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
+import { restrictToXAxis } from "../lib/dnd-axis";
 import {
 	canMoveEditorHistory,
 	type EditorHistoryDirection,
@@ -1464,6 +1465,7 @@ export function ContextPanel({
 						<DndContext
 							sensors={splitSensors}
 							collisionDetection={panelDropCollision}
+							modifiers={[restrictToXAxis]}
 							onDragStart={e => setStripDragId(String(e.active.id))}
 							onDragEnd={e => {
 								setStripDragId(null);
@@ -1584,6 +1586,7 @@ export function ContextPanel({
 						<DndContext
 							sensors={splitSensors}
 							collisionDetection={panelDropCollision}
+							modifiers={[restrictToXAxis]}
 							onDragStart={e => setStripDragId(String(e.active.id))}
 							onDragEnd={onStripDragEnd}
 							onDragCancel={() => setStripDragId(null)}

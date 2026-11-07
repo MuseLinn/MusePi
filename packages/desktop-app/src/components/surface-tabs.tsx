@@ -27,6 +27,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { t } from "@musepi/client-core";
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { restrictToXAxis } from "../lib/dnd-axis";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useTabMotion } from "../lib/use-tab-motion";
 import { FillWipeIcon } from "./FillWipeIcon";
@@ -249,7 +250,12 @@ export function SurfaceTabStrip({
 	};
 
 	return (
-		<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+		<DndContext
+			sensors={sensors}
+			collisionDetection={closestCenter}
+			modifiers={[restrictToXAxis]}
+			onDragEnd={onDragEnd}
+		>
 			<SurfaceTabStripSortable
 				tabs={tabs}
 				activeId={activeId}

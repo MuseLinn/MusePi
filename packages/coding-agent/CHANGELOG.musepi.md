@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **拖动标签不再整条上下漂移**：标签条只跟随横向指针位移，往下拖去分栏时标签留在自己那一行；右侧 rail 只沿列表方向移动，横向拖动不再让条目斜着跑。碰撞检测仍读真实指针位置，所以拖到右半区新建分栏、分栏间跨列都没受影响。
+  - EN: Dragging a tab no longer slides the strip vertically: a tab follows the pointer on X only and stays on its own row when you drag downward to split, and the right rail moves on Y only so its items no longer drift sideways. Collision detection still reads the real pointer position, so drag-to-split and cross-column moves are unchanged.
+
 - **标签与 rail 恢复拖拽，分栏与跨列拖动一并修好**：React 19 移除了 `react-dom` 的 `unstable_batchedUpdates`，而 dnd-kit 6.3.1 在拖拽开始与结束时仍调用它并抛错，异常打断了整条拖拽派发——按下有效、却没有一次拖拽真正生效。补丁落在 `patches/`，把该调用换成本地透传；标签排序、rail 排序、拖到右半区新建分栏、分栏间跨列移动因此全部恢复。标签条同时不再自建 drag 上下文：此前的手势被截留在条内，面板的分栏落点因此永远不会激活。
   - EN: Tabs and the rail drag again, together with drag-to-split and cross-column moves. React 19 removed `react-dom`'s `unstable_batchedUpdates`, which dnd-kit 6.3.1 still calls when a drag starts and ends; the throw aborted the whole drag dispatch, so a press armed but no gesture ever took effect. A patch under `patches/` routes the call through a local pass-through, restoring tab reorder, rail reorder, drag-to-split onto the body's right half, and moves across split columns. The strip also stops nesting its own drag context — that trapped the gesture inside the strip, so the panel's split drop zone never armed.
 

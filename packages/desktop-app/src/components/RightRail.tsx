@@ -13,6 +13,7 @@ import { type TranslationKey, t } from "@musepi/client-core";
 import { ChevronLeft as ChevronLeftIconData, ChevronRight as ChevronRightIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { restrictToYAxis } from "../lib/dnd-axis";
 import { FILE_WORKSPACE_SURFACE } from "../lib/file-workspace";
 import type { RpcClient } from "../lib/rpc";
 import {
@@ -356,6 +357,7 @@ export function RightRail({
 				<DndContext
 					sensors={sensors}
 					collisionDetection={closestCenter}
+					modifiers={[restrictToYAxis]}
 					onDragStart={() => setDragging(true)}
 					onDragEnd={onDragEnd}
 					onDragCancel={() => setDragging(false)}

@@ -2,7 +2,6 @@ import {
 	closestCenter,
 	DndContext,
 	type DragEndEvent,
-	type Modifier,
 	MouseSensor,
 	TouchSensor,
 	useSensor,
@@ -13,11 +12,10 @@ import { CSS as DndCSS } from "@dnd-kit/utilities";
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { restrictToXAxis } from "../lib/dnd-axis";
 import { SESSION_TAB_EDGE_FADE_PX, sessionTabRevealDelta } from "../lib/session-tab-reveal";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
-
-const restrictToXAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
 /** Firefox reports wheel deltas in lines rather than pixels. */
 const WHEEL_LINE_PIXELS = 16;
