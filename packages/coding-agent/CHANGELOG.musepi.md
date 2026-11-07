@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-08
+
 - **浏览器扩展、Chrome 导入与真实 Chrome 中继有了统一入口**：受管浏览器工具栏新增可隐藏的扩展按钮，弹层内可直接查看 Chrome 导入、MusePi Browser Relay 和共享 Chromium 扩展；设置 → 浏览器拆成常规 / 扩展 / 数据三视图，并提供完整网址显示开关。导入流程现在有等待、成功与失败反馈，明确只把默认 Chrome Profile 的 Cookie 和 LocalStorage 复制到共享自动化 Chromium，不宣称支持密码、受管分区导入或持续同步；标签、Agent 控制和真实 Chrome Relay 仍沿用原有实现。
   - EN: Browser extensions, Chrome import, and the real-Chrome relay now have a unified entry point. An optional Extensions button in the managed-browser toolbar opens Chrome import, MusePi Browser Relay, and shared-Chromium extensions, while Settings → Browser is split into General, Extensions, and Data with a full-URL preference. Import now reports progress, success, and failure, and clearly copies only cookies and localStorage from the default Chrome profile into the shared automation Chromium; it does not claim password import, managed-partition import, or synchronization. Tabs, Agent controls, and the real-Chrome Relay keep their existing implementations.
 
