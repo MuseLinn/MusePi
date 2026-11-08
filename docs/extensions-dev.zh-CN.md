@@ -858,6 +858,8 @@ plan/goal/vibe 运行时上下文刻意保持宿主持有的 custom 消息：`Ag
 
 Cordis 插件可以用 `pi.registerMemoryBackendProvider({ id, create(settings) })` 替换一个后端实现。provider 在内置后端之前解析；同一 id 的第二个 provider 会被拒绝；返回的 disposer 恢复内置实现。扩展卸载或重载时 runner 也会执行该 disposer，被替换的后端不会比插件活得更久。
 
+provider 也可以贡献**新**后端 id，而不仅是替换：`registerMemoryBackendProvider({ id: "mybank", label, description, create })` 注册后 `memory.backend` 接受该 id（`getEnumValues` 合并 provider 注册表），设置选择器以 provider 自己的 label / description 追加该项。插件卸载后选项消失；仍指向该 id 的配置回退到 `off`，不会解析到别人的实现。
+
 `memory.*` 仍是核心契约：每条路由都调用活动后端的成员，插件不能另立方法名。因此替换后端时，`memory.status/view/stats/diagnose/clear/enqueue` 会一起切换。`memory.workspace*` 由可选的 `workspaceDir(agentDir, cwd)` 能力决定：返回目录的后端才拥有设置页文件浏览，未实现的返回 `supported: false` 并拒绝读取或定位，而不是列出属于另一种实现的本地文件。
 
 这是把记忆管理面（设置页、`/memory`、工具、RPC）迁入第一方 Cordis 包的最小 seam。provider seam 已经存在；目前还没有第一方记忆插件注册 provider，因此内置后端仍是默认实现。

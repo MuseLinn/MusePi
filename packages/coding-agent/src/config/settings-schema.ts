@@ -8,6 +8,7 @@ import {
 } from "../blob-broker/destinations";
 import { DEFAULT_RELAY_URL } from "../collab/protocol";
 import { DEFAULT_LIVE_VOICE, LIVE_VOICE_OPTIONS, LIVE_VOICE_VALUES } from "../live/voices";
+import { memoryBackendIds } from "../memory-backend/providers";
 import {
 	COMPACTION_METHOD_CHOICES,
 	type CompactionMethod,
@@ -6827,10 +6828,13 @@ export function getType(path: SettingPath): SettingDef["type"] {
 	return SETTINGS_SCHEMA[path].type;
 }
 
-/** Get enum values for an enum setting */
+/** Get enum values for an enum setting. `memory.backend` also accepts ids a
+ *  plugin contributed, so its list is composed from the provider registry. */
 export function getEnumValues(path: SettingPath): readonly string[] | undefined {
 	const def = SETTINGS_SCHEMA[path];
-	return "values" in def ? (def.values as readonly string[]) : undefined;
+	if (!("values" in def)) return undefined;
+	const values = def.values as readonly string[];
+	return path === "memory.backend" ? memoryBackendIds(values) : values;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

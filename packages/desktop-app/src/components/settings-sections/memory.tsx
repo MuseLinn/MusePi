@@ -42,8 +42,12 @@ function backendLabel(id: string): string {
 			return t("settings.memoryBackendHindsight");
 		case "sharpshooter":
 			return t("settings.memoryBackendSharpshooter");
-		default:
+		case "off":
 			return t("settings.memoryBackendOff");
+		default:
+			// A plugin-contributed backend: the provider's own id is the only
+			// name the host has for it.
+			return id;
 	}
 }
 
@@ -58,8 +62,10 @@ function backendHint(id: string): string {
 			return t("settings.memoryHintHindsight");
 		case "sharpshooter":
 			return t("settings.memoryHintSharpshooter");
-		default:
+		case "off":
 			return t("settings.memoryHintOff");
+		default:
+			return "";
 	}
 }
 
@@ -394,7 +400,7 @@ function MemoryMaintenance({ rpc, status, loading, statusError, onReload }: Memo
 							<StatusChip on={s.searchable} label={t("settings.memorySearchable")} />
 						</div>
 					</div>
-					<div className="gui-memory-status-note">{backendHint(s.backend)}</div>
+					{backendHint(s.backend) ? <div className="gui-memory-status-note">{backendHint(s.backend)}</div> : null}
 					<div className="gui-memory-status-grid">
 						{s.workingCount !== undefined && (
 							<div className="gui-memory-status-item">

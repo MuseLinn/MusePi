@@ -13,7 +13,12 @@ import type { HindsightSessionState } from "../hindsight/state";
 import type { MnemopiSessionState } from "../mnemopi/state";
 import type { AgentSession } from "../session/agent-session";
 
-export type MemoryBackendId = "off" | "local" | "hindsight" | "mnemopi" | "sharpshooter";
+/**
+ * Built-in backend ids. A plugin may contribute another id through
+ * `registerMemoryBackendProvider`; the open arm keeps the built-ins discoverable
+ * in completion while allowing a provider-owned id through the same type.
+ */
+export type MemoryBackendId = "off" | "local" | "hindsight" | "mnemopi" | "sharpshooter" | (string & {});
 
 export interface MemoryBackendStatus {
 	backend: MemoryBackendId;

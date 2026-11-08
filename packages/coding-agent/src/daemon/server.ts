@@ -8270,6 +8270,24 @@ export class DaemonServer {
 								item.ui = { ...ui, options: values.map(v => ({ value: v, label: v })) };
 							}
 						}
+						// Contributed memory backends are choices too: append the
+						// provider's own label/description so a plugin backend is
+						// selectable without a host change.
+						if (key === "memory.backend") {
+							const { listMemoryBackendProviders } = await import("../memory-backend/providers");
+							const declared = (ui.options as Array<{ value: string }> | undefined) ?? [];
+							const known = new Set(declared.map(option => option.value));
+							const contributed = listMemoryBackendProviders()
+								.filter(provider => !known.has(provider.id))
+								.map(provider => ({
+									value: provider.id,
+									label: provider.label ?? provider.id,
+									...(provider.description ? { description: provider.description } : {}),
+								}));
+							if (contributed.length > 0) {
+								item.ui = { ...ui, options: [...declared, ...contributed] };
+							}
+						}
 						// `options: "runtime"` (theme.dark/theme.light) — resolve the
 						// runtime list daemon-side so the GUI renders a real select
 						// instead of the TUI's runtime-populated submenu. The TUI

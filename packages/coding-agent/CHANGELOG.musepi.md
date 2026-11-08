@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **记忆后端由注册表驱动，插件可以新增或替换**：`MemoryBackendProvider` 增加 `label` / `description`；`memory.backend` 的枚举值合并已注册 provider，设置页把 provider 的显示名与说明追加为选项，TUI 与 GUI 都能直接选择插件贡献的后端。插件卸载后选项消失，仍指向该 id 的配置回退到 `off`；替换内置 id 依旧生效。未知后端的设置状态卡显示 id，不再误标为 Off。
+  - EN: Memory backends are now registry-driven, and a plugin can add or replace one. `MemoryBackendProvider` gained `label` / `description`; `memory.backend` merges registered provider ids into its enum, the settings picker appends each provider's own label and description, and both TUI and GUI can select a contributed backend. Unloading the plugin removes the option and a config still pointing at the id falls back to `off`; replacing a built-in id keeps working. The status card shows a contributed backend's id instead of labelling it Off.
+
 - **第一方插件入口有一致性测试守卫，并修复两个不合规入口**：`design-guidance` 在迁移时丢掉了具名的 `apply` 导出，插件加载直接失败、设计简报整体消失；现已改回标准入口，`product-skills` 也补上 `name` / `inject`。coding-agent 与 desktop 各新增一处一致性测试，校验每个插件包都有 `name` / `inject` / `apply`、没有 default 导出、不使用平铺 `pi.register*`，且清单里的入口文件真实存在。
   - EN: A conformance test now guards first-party plugin entries, and two non-conforming entries are fixed. `design-guidance` lost its named `apply` export during the migration, so the plugin failed to load and the design briefs disappeared; it is back on the standard entry, and `product-skills` gained `name` / `inject`. New conformance tests in coding-agent and desktop assert that every plugin package exports `name` / `inject` / `apply`, has no default export, never uses a flat `pi.register*` alias, and keeps manifest entries pointing at real files.
 

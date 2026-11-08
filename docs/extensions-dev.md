@@ -730,6 +730,8 @@ Both the core memory system and extension code resolve the same backend for the 
 
 A Cordis plugin can replace one backend implementation with `pi.registerMemoryBackendProvider({ id, create(settings) })`. The provider is consulted before the built-in backend, a second provider for the same id is refused, and the returned disposer restores the built-in implementation. The runner also runs that disposer on extension unload/reload, so a replaced backend cannot outlive its plugin.
 
+A provider may also contribute a **new** backend id, not only replace one: `registerMemoryBackendProvider({ id: "mybank", label, description, create })` makes `memory.backend` accept that id (`getEnumValues` merges the provider registry) and adds it to the settings picker with the provider's own label and description. Unloading the plugin removes the option, and a config still pointing at the id falls back to `off` instead of resolving to a foreign implementation.
+
 `memory.*` stays a core contract: every route calls a member of the active backend instead of letting a plugin register method names of its own. Replacing the backend therefore moves `memory.status/view/stats/diagnose/clear/enqueue` with it. `memory.workspace*` follows the optional `workspaceDir(agentDir, cwd)` capability: a backend that returns a directory gets the settings file browser, and one that omits it answers `supported: false` and refuses reads or reveals instead of listing local files that belong to a different implementation.
 
 This is the seam for moving the memory management surface (settings page, `/memory`, tools, RPC) into a first-party Cordis package. The provider seam now exists; no first-party memory plugin registers one yet, so the built-in backends remain the default.

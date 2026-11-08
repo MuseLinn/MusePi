@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { Settings } from "../src/config/settings";
+import { getEnumValues } from "../src/config/settings-schema";
 import { getMemoryRoot } from "../src/memories";
 import { registerMemoryBackendProvider } from "../src/memory-backend/providers";
 import { resolveMemoryBackend } from "../src/memory-backend/resolve";
@@ -51,6 +52,27 @@ describe("memory backend providers", () => {
 		disposers.push(dispose);
 		const replaced = await resolveMemoryBackend(settings);
 		expect(replaced.workspaceDir).toBeUndefined();
+	});
+
+	it("makes a contributed backend selectable in memory.backend", async () => {
+		const settings = Settings.isolated({ "memory.backend": "pluginbank" });
+		const builtInOnly = getEnumValues("memory.backend") ?? [];
+		expect(builtInOnly).not.toContain("pluginbank");
+
+		const dispose = registerMemoryBackendProvider({
+			id: "pluginbank",
+			label: "Plugin bank",
+			description: "Backend contributed by a plugin",
+			create: () => fakeBackend("pluginbank" as never),
+		});
+		disposers.push(dispose);
+
+		expect(getEnumValues("memory.backend")).toContain("pluginbank");
+		expect(await resolveMemoryBackend(settings)).toMatchObject({ id: "pluginbank" });
+
+		dispose();
+		expect(getEnumValues("memory.backend")).not.toContain("pluginbank");
+		expect((await resolveMemoryBackend(settings)).id).toBe("off");
 	});
 
 	it("refuses a second provider for the same backend id", () => {
