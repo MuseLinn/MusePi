@@ -1958,15 +1958,15 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	 * reload and accumulated: a plugin reloaded five times left four orphaned
 	 * timers.
 	 *
-	 * The cleanup runs on unload, session shutdown and registration rollback,
-	 * and a throw inside it is isolated so one bad cleanup cannot strand the
-	 * rest. State stays readable while cleanups run, so a cleanup can flush what
-	 * the plugin accumulated.
+	 * The cleanup belongs to the scope the call was made in (dsh semantics):
+	 * called from `apply`, it lives with the extension's fiber and runs on
+	 * unload or reload; called inside a session handler (`session_start`), it
+	 * lives with the session fiber and runs when the session ends. A throw
+	 * inside it is isolated so one bad cleanup cannot strand the rest.
 	 *
-	 * Every plugin gets this, including bundled host packages: the ledger is keyed
-	 * by the extension instance, so unlinking the plugin runs its cleanups whether
-	 * it was mounted through Cordis or loaded as a bundled entry. Returns a
-	 * disposer that removes this one cleanup without unloading the plugin.
+	 * Returns a disposer that removes this one cleanup without unloading. When
+	 * a plugin runs without a fiber (legacy mount), the per-instance ledger is
+	 * still used and the cleanup runs on unload and session shutdown.
 	 */
 	effect(cleanup: () => void | Promise<void>, label?: string): () => void;
 

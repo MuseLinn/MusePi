@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`ctx.effect` 的归属跟随调用点**：在 `apply` 里注册的清理归扩展自己的 fiber，卸载/重载时执行；在 `session_start` 等会话处理器里注册的归会话 fiber，会话结束即执行。插件实例因此可以跨会话复用而不丢 apply 期资源，会话资源也不会被下一个会话继承；没有 fiber 的旧式装载继续使用实例账本，卸载与会话停止都会执行。
+  - EN: `ctx.effect` now belongs to the scope where it was registered. A cleanup registered in `apply` lives with the extension's own fiber and runs on unload or reload; one registered inside a session handler (`session_start`) lives with the session fiber and runs when the session ends. A plugin instance can therefore be reused across sessions without losing resources opened at apply time, and session resources never carry into the next session. Legacy loads without a fiber keep the per-instance ledger and still run on unload and session shutdown.
+
 - **会话作用域归 runner，派发按会话过滤**：`ctx.session` 的 Cordis fiber 从 runtime 移到 runner，当前作用域通过 `AsyncLocalStorage` 传给正在执行的处理器；派发以 carrier 作为 subject，Cordis `Context.filter` 只放行「无标签（实例/宿主级）」与「本会话」的监听，所以同一个事件总线可以同时服务多个会话而不串台，为插件实例跨会话共享铺路。会话关闭后 runner 保留会话标识，迟到派发仍被过滤到该会话，不会广播给同一总线上的其他会话。
   - EN: The session scope now belongs to the runner, and dispatch is filtered per session. `ctx.session`'s Cordis fiber moved from the runtime to the runner, and the active scope reaches handlers through `AsyncLocalStorage`; dispatch passes a carrier as the event subject so `Context.filter` admits only untagged (instance/host-scope) listeners and the dispatching session's own. One event bus can therefore serve several sessions without cross-talk, clearing the way for shared plugin instances. A closed session keeps its identity on the runner, so a late dispatch is still filtered to it instead of broadcasting to every listener on the bus.
 

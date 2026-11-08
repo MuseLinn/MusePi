@@ -620,12 +620,14 @@ is a package the distribution ships, **not a separate kind of thing**」——�
 
 | 原语 | 依赖 | 现状 |
 |---|---|---|
-| `ctx.effect(cleanup)` | 一条按 Extension 实例记账的清理账本 | 所有已装载插件都有；cordis fiber、bundled 宿主装载器 reset、会话 runner 收尾三条路径都会反向执行 |
+| `ctx.effect(cleanup)` | 归属调用点的 Cordis fiber | `apply` 里注册归扩展 fiber（卸载/重载执行）；会话处理器里注册归会话 fiber（会话结束执行）；无 fiber 的旧式装载回退到实例账本 |
 | `ctx.state` | 一个随卸载清空的 fiber 作用域存储 | 仍只发给 cordis 插件 |
 
 账本按 `Extension` 实例存放，所以“谁来回收”不再是 cordis 独占的问题：bundled 宿主插件（如 `musepi-hmr` 的 watcher）在宿主装载器 reset 时被回收，会话扩展在 runner 收尾时被回收。`effect` 返回 disposer，可单独撤销一条登记而不卸载整个插件。
 
 插件卸载只走一个入口：effects、事件监听 disposer 与 state 一起清空，任何一条卸载路径都不会漏掉监听；会话停止只执行 effects，因为 runner 可能复用，监听要留到真正卸载。
+
+`ctx.effect` 的归属跟随调用点（与 dsh 一致）：在 `apply` 里注册的清理归扩展 fiber，卸载/重载时执行；在 `session_start` 等会话处理器里注册的归会话 fiber，会话结束即执行。没有 fiber 的旧式装载仍用实例账本，卸载与会话停止都会执行。
 
 会话级监听用 `ctx.session.on(event, handler)`（dsh 的 `agent.ctx`）：作用域是一个真实的 Cordis fiber（`eventBus.inject`），监听登记进 fiber 的 effect 账本，由 fiber 销毁回收，没有旁路账本。作用域在 `session_start` 派发前打开、会话收尾时销毁，监听不会带到下一个会话；`session_start` 重放（插件重载后的 `refreshSessionStart`）会先销毁旧 fiber 再建新的，所以只重注册、不叠加。`ctx.on` 仍是实例级（活到插件卸载），两者分工与 dsh 的 `ctx.on` / `agent.ctx` 一致；会话外 `ctx.session` 为 `undefined`，插件必须按可选处理。
 

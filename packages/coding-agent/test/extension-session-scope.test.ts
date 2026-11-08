@@ -195,6 +195,30 @@ describe("ctx.session", () => {
 		tempDir.removeSync();
 	});
 
+	it("ties an effect to the scope it was registered in", async () => {
+		// dsh semantics: register where you are. `apply` owns the instance;
+		// a `session_start` handler owns the session.
+		const order: string[] = [];
+		const { runner, extension } = await makeRunner(pi => {
+			pi.effect(() => {
+				order.push("instance");
+			});
+			pi.on("session_start", () => {
+				pi.effect(() => {
+					order.push("session");
+				});
+			});
+		});
+
+		await emitSessionStartEvent(runner);
+		await emitSessionShutdownEvent(runner);
+		expect(order).toEqual(["session"]);
+
+		await disposePluginPrimitives(extension);
+		expect(order).toEqual(["session", "instance"]);
+		tempDir.removeSync();
+	});
+
 	it("owns instance listeners with the extension's own fiber", async () => {
 		// dsh's plugin instance is a fiber; here the extension record keeps the
 		// registrations but the fiber owns them, so unload is one dispose.

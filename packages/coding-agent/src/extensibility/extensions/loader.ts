@@ -506,6 +506,12 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	/** Register a cleanup owned by this extension (dsh `ctx.effect`); the
 	 *  disposer removes just this record. Unloading the plugin runs them all. */
 	effect(cleanup: () => void | Promise<void>, label?: string): () => void {
+		// Ownership follows the call site, like dsh: an effect registered in
+		// `apply` belongs to the extension's fiber, one registered inside a
+		// session handler belongs to the session's fiber. No third ledger.
+		const scope = currentSessionScope();
+		if (scope) return scope.context.effect(() => cleanup) as unknown as () => void;
+		if (this.ownContext) return this.ownContext.effect(() => cleanup) as unknown as () => void;
 		return registerEffect(this.extension, cleanup, label);
 	}
 
