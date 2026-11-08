@@ -18,15 +18,20 @@ For packaged user-facing extension CLIs/features, see [`user-facing-packages.md`
 
 ## What an extension is
 
-An extension is a TS/JS module exporting a default factory:
+A new extension is a **Cordis plugin (Track A)** with a named entry and the `ctx.*` namespaces:
 
 ```ts
 import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 
-export default function myExtension(pi: ExtensionAPI) {
-  // register handlers/tools/commands/renderers
+export const name = "my-extension";
+export const inject = [] as const;
+
+export function apply(ctx: ExtensionAPI) {
+  // ctx.tools / ctx.commands / ctx.prompts / ctx.slots / ctx.rpc / ctx.memory / ctx.hmr
 }
 ```
+
+The flat `pi.register*` surface below is the legacy API (Track B). Existing extensions that use `export default function (pi)` keep working, but new code follows `docs/plugin-tracks.md`, and the entry shape is enforced by the plugin conformance tests.
 
 Extensions can combine all of the following in one module:
 

@@ -18,15 +18,20 @@
 
 ## 什么是扩展
 
-扩展是一个 TS/JS 模块，默认导出 factory：
+新扩展是**Cordis 插件（Track A）**：具名入口 + `ctx.*` 命名空间：
 
 ```ts
 import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 
-export default function myExtension(pi: ExtensionAPI) {
-  // 注册 handlers/tools/commands/renderers
+export const name = "my-extension";
+export const inject = [] as const;
+
+export function apply(ctx: ExtensionAPI) {
+  // ctx.tools / ctx.commands / ctx.prompts / ctx.slots / ctx.rpc / ctx.memory / ctx.hmr
 }
 ```
+
+下文出现的平铺 `pi.register*` 是 legacy 接口（Track B）。既有的 `export default function (pi)` 扩展继续可用，但新代码按 `docs/plugin-tracks.md` 写，入口形状由插件一致性测试强制。
 
 一个扩展模块可以组合以下能力：
 
