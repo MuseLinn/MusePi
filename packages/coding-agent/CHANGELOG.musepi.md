@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **单次通知事件批量迁到 Cordis serial**：`session_switch/branch/tree/compact`、`goal_updated`、`agent_start/end`、`auto_compaction_*`、`auto_retry_*`、`retry_fallback_*`、`ttsr_triggered`、`todo_reminder` 以 `serial` 保持注册顺序，零监听时短路。新增顺序回归。
+  - EN: One-shot notification events now dispatch through Cordis `serial` — `session_switch/branch/tree/compact`, `goal_updated`, `agent_start/end`, `auto_compaction_*`, `auto_retry_*`, `retry_fallback_*`, `ttsr_triggered`, and `todo_reminder` — preserving registration order and short-circuiting with no listeners. A new ordering test pins it.
+
 - **流式/通知事件改走 Cordis parallel，`ctx.on` 支持 `prepend`**：`message_start/update/end`、`tool_execution_*`、`turn_start/end` 并发派发，零监听时仍短路；`ctx.on(event, handler, { prepend })` 对已迁事件是 Cordis 全局顺序，对 legacy 事件只在同一扩展内提前。新增两类顺序回归。
   - EN: Streaming and notification events now dispatch through Cordis `parallel` — `message_start/update/end`, `tool_execution_*`, `turn_start/end` — and still short-circuit with no listeners. `ctx.on(event, handler, { prepend })` gives Cordis global ordering for migrated events and within-extension ordering for legacy ones. Two ordering tests were added.
 

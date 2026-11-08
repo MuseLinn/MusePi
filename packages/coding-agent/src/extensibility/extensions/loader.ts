@@ -115,6 +115,26 @@ const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set([
  *  other result is remembered and the chain continues, as the old loop did. */
 /** Notification/streaming events: dispatched concurrently (no results, and
  *  the order between listeners does not change what the agent does). */
+/** One-shot notifications with no result: serial keeps the registration order,
+ *  which is the only ordering guarantee the old loop had. */
+export const CORDIS_SERIAL_EVENTS: ReadonlySet<string> = new Set([
+	"session_switch",
+	"session_branch",
+	"session_tree",
+	"session_compact",
+	"goal_updated",
+	"agent_start",
+	"agent_end",
+	"auto_compaction_start",
+	"auto_compaction_end",
+	"auto_retry_start",
+	"auto_retry_end",
+	"retry_fallback_applied",
+	"retry_fallback_succeeded",
+	"ttsr_triggered",
+	"todo_reminder",
+]);
+
 export const CORDIS_PARALLEL_EVENTS: ReadonlySet<string> = new Set([
 	"message_start",
 	"message_update",
@@ -505,7 +525,10 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	 *  their dispatch mode is Cordis's (`serial` / `parallel`). The timeout is
 	 *  wrapped inside the listener, leaving bail/serial results intact. */
 	on<F extends HandlerFn>(event: string, handler: F, options?: { prepend?: boolean }): () => void {
-		if ((CORDIS_LIFECYCLE_EVENTS.has(event) || CORDIS_PARALLEL_EVENTS.has(event)) && this.runtime.eventBus) {
+		if (
+			(CORDIS_LIFECYCLE_EVENTS.has(event) || CORDIS_PARALLEL_EVENTS.has(event) || CORDIS_SERIAL_EVENTS.has(event)) &&
+			this.runtime.eventBus
+		) {
 			const bus = this.runtime.eventBus;
 			const wrapped = async (...args: unknown[]): Promise<unknown> => {
 				// `tool_call` is fail-closed: timeout or throw blocks the tool. That

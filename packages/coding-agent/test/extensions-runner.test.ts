@@ -2443,6 +2443,45 @@ describe("ExtensionRunner", () => {
 		});
 	});
 
+	describe("one-shot Cordis events", () => {
+		it("runs agent_end listeners in registration order", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "agent-end-a.ts"),
+				`
+				export default function(pi) {
+					pi.on("agent_end", () => {
+						globalThis.__agentEndOrder.push("a");
+					});
+				}
+			`,
+			);
+			fs.writeFileSync(
+				path.join(extensionsDir, "agent-end-b.ts"),
+				`
+				export default function(pi) {
+					pi.on("agent_end", () => {
+						globalThis.__agentEndOrder.push("b");
+					});
+				}
+			`,
+			);
+			const state = globalThis as typeof globalThis & { __agentEndOrder?: string[] };
+			state.__agentEndOrder = [];
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			await runner.emit({ type: "agent_end", messages: [] } as never);
+			expect(state.__agentEndOrder).toEqual(["a", "b"]);
+			delete state.__agentEndOrder;
+		});
+	});
+
 	describe("service tier API", () => {
 		it("restricts tiers to values supported by each provider family", () => {
 			expectTypeOf<"scale">().toExtend<ExtensionServiceTier<"openai">>();
