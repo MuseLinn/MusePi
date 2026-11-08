@@ -610,7 +610,7 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	// through the same module loader as any plugin — a bundled unit is a package
 	// the distribution ships, not a separate kind of thing.
 	try {
-		for (const extPath of await discoverBundledPluginPaths()) {
+		for (const extPath of await discoverBundledPluginPaths({ scope: "all" })) {
 			// `native`, not `user`: the distribution ships these. Listing them as the
 			// user's own makes the removal affordance lie — there is nothing for the
 			// user to remove.
@@ -631,6 +631,13 @@ interface BundledPluginPackage {
 	entries: string[];
 	/** A preset-owned package; excluded from ambient session/extension discovery. */
 	presetOnly: boolean;
+	/**
+	 * A host-scope package (`musepi.scope: "host"`): mounted once per host
+	 * process, before the first session, and never per session. Its
+	 * registrations are process-wide by design — a memory backend provider, a
+	 * service — so a session-less RPC sees them too.
+	 */
+	hostScope: boolean;
 }
 
 /**
@@ -669,7 +676,10 @@ async function readBundledPluginPackages(): Promise<BundledPluginPackage[]> {
 			if (!dirent.isDirectory()) continue;
 			const pkgDir = path.join(root, dirent.name);
 			const manifestPath = path.join(pkgDir, "package.json");
-			let manifest: { name?: unknown; musepi?: { extensions?: unknown; presetOnly?: unknown } };
+			let manifest: {
+				name?: unknown;
+				musepi?: { extensions?: unknown; presetOnly?: unknown; scope?: unknown };
+			};
 			try {
 				manifest = (await Bun.file(manifestPath).json()) as typeof manifest;
 			} catch {
@@ -691,6 +701,7 @@ async function readBundledPluginPackages(): Promise<BundledPluginPackage[]> {
 				name: manifest.name,
 				entries: resolvedEntries,
 				presetOnly: manifest.musepi?.presetOnly === true,
+				hostScope: manifest.musepi?.scope === "host",
 			});
 		}
 	}
@@ -706,10 +717,23 @@ async function readBundledPluginPackages(): Promise<BundledPluginPackage[]> {
  * would either double-register a selected persona or leave an inert package in
  * every session's extension inventory. Preset mounting resolves them through
  * {@link discoverBundledPresetPluginPackages} instead.
+ *
+ * `scope` selects which lifecycle the caller mounts:
+ * - `session` (default) — per-session packages; host-scope ones are skipped so a
+ *   process-wide registration is not repeated once per session.
+ * - `host` — only `musepi.scope: "host"` packages, mounted once per host process.
+ * - `all` — every non-preset package, for inventory/listing surfaces that must
+ *   show what ships regardless of when it mounts.
  */
-export async function discoverBundledPluginPaths(): Promise<string[]> {
+export async function discoverBundledPluginPaths(
+	options: { scope?: "session" | "host" | "all" } = {},
+): Promise<string[]> {
+	const scope = options.scope ?? "session";
 	const packages = await readBundledPluginPackages();
-	return packages.filter(pkg => !pkg.presetOnly).flatMap(pkg => pkg.entries);
+	return packages
+		.filter(pkg => !pkg.presetOnly)
+		.filter(pkg => (scope === "all" ? true : scope === "host" ? pkg.hostScope : !pkg.hostScope))
+		.flatMap(pkg => pkg.entries);
 }
 
 /**

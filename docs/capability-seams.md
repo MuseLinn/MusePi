@@ -31,6 +31,7 @@
 | Cordis 二级左栏面板 | `packages/desktop-app/src/plugins/scheduled-panel/index.ts`（`sidebar.panel.scheduled`；前缀声明在 `packages/collab-proto/src/extension-slots.ts`） | 同文件头部；宿主按 `data-panel` 选面板，插件缺失/编译失败回退内置组件，`task-nav` 经宿主模块表共享；悬停预览按 rail 按钮的 `panelId` 派发 |
 | 第一方子系统插件与 entry 组件 | `packages/coding-agent/src/bundled-plugins/*/package.json`、`packages/coding-agent/src/daemon/cordis-dynamic-plugins.ts`（`musepi.host` / `musepi.components` / `CordisDynamicPluginRuntime`） | 各包入口与运行时文件头部 |
 | 记忆后端 provider seam | `packages/coding-agent/src/memory-backend/providers.ts`（`MemoryBackendProvider` / `registerMemoryBackendProvider`） | 同文件头部；插件可替换内置后端或新增 id，`memory.backend` 枚举与设置选项由注册表合并，卸载即恢复。`memory.*` 是核心契约，路由只调用活动后端；`workspaceDir` 可选能力决定 `memory.workspace*` 是否可用 |
+| 宿主级（host-half）内置插件 | `packages/coding-agent/src/bundled-plugins/loader.ts`（`ensureHostHalfPluginsLoaded`）、清单 `musepi.scope: "host"` | 同文件头部；daemon 开监听前装载一次，会话装载跳过；首个消费者为 `bundled-plugins/memory-sharpshooter` 注册后端 provider |
 | 第三方 Cordis 插件适配 | `packages/coding-agent/src/extensibility/plugins/compat/modern-web-guidance-adapter.ts`（`modern_web_guidance` / 同名虚拟技能） | 同文件头部；安装缓存适配见 `third-party-cordis.ts` |
 | 外部产品子智能体 | `packages/coding-agent/src/task/types.ts`（`task.external-subagent` / `AgentDefinition.external`）、`packages/coding-agent/src/task/external-executable-probe.ts`（`probeExecutable`） | 同文件 `ExternalSubagentUpdate` 前六字段声明；探针声明见探针文件头部 |
 

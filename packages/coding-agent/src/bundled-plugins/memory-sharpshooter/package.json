@@ -1,0 +1,14 @@
+{
+	"name": "musepi-memory-sharpshooter",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Sharpshooter memory backend",
+		"description": "Host-half adapter that registers the Sharpshooter engine as a memory backend provider.",
+		"icon": "◈",
+		"scope": "host",
+		"extensions": ["./index.ts"]
+	}
+}

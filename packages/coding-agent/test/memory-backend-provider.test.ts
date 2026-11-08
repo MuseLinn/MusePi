@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { Settings } from "../src/config/settings";
 import { getEnumValues } from "../src/config/settings-schema";
 import { getMemoryRoot } from "../src/memories";
-import { registerMemoryBackendProvider } from "../src/memory-backend/providers";
+import { findMemoryBackendProvider, registerMemoryBackendProvider } from "../src/memory-backend/providers";
 import { resolveMemoryBackend } from "../src/memory-backend/resolve";
 import type { MemoryBackend } from "../src/memory-backend/types";
 
@@ -73,6 +73,24 @@ describe("memory backend providers", () => {
 		dispose();
 		expect(getEnumValues("memory.backend")).not.toContain("pluginbank");
 		expect((await resolveMemoryBackend(settings)).id).toBe("off");
+	});
+
+	it("registers the Sharpshooter engine through the host-half adapter", async () => {
+		const { apply } = await import("../src/bundled-plugins/memory-sharpshooter/index");
+		let dispose: (() => void) | undefined;
+		apply({
+			memory: {
+				registerBackendProvider: (provider: never) => {
+					dispose = registerMemoryBackendProvider(provider);
+					return dispose;
+				},
+			},
+		} as never);
+		disposers.push(dispose!);
+		expect(findMemoryBackendProvider("sharpshooter")).toMatchObject({ id: "sharpshooter", label: "Sharpshooter" });
+		expect(await resolveMemoryBackend(Settings.isolated({ "memory.backend": "sharpshooter" }))).toMatchObject({
+			id: "sharpshooter",
+		});
 	});
 
 	it("refuses a second provider for the same backend id", () => {

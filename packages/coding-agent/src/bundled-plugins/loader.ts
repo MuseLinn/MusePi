@@ -124,3 +124,21 @@ export function ensureBundledPluginsLoaded(cwd: string): Promise<boolean> {
 export function resetBundledPluginsLoaded(): void {
 	bundledPluginLoader.reset();
 }
+
+/**
+ * Host-scope packages (`musepi.scope: "host"`) mount once per host process,
+ * before the first session. Their `apply` registers process-wide facts — a
+ * memory backend provider, a service — that a session-less RPC must also see,
+ * so mounting them per session would register the same thing once per session.
+ */
+const hostPluginLoader = createBundledPluginLoader(() => discoverBundledPluginPaths({ scope: "host" }));
+
+/** Mount the host-scope bundled packages once. Returns false after the shared attempt completed. */
+export function ensureHostHalfPluginsLoaded(cwd: string): Promise<boolean> {
+	return hostPluginLoader.ensure(cwd);
+}
+
+/** Test helper: forget the process-wide host loader state so a test can load again. */
+export function resetHostHalfPluginsLoaded(): void {
+	hostPluginLoader.reset();
+}

@@ -17,7 +17,24 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { SETTINGS_SCHEMA } from "../src/config/settings-schema";
 import { discoverBundledPluginPaths } from "../src/discovery/builtin";
 import { ExtensionRuntime, loadExtensionFromFactory } from "../src/extensibility/extensions/loader";
+import { resolvePluginEntry, toFactory } from "../src/extensibility/plugins/runtime/cordis-entry";
 import { resetMagicKeywordRegistry } from "../src/modes/magic-keyword-registry";
+
+/** Load a bundled package through the same entry resolution the host uses. */
+async function loadEntry(entry: string): Promise<ExtensionRuntime> {
+	const mod = await import(entry);
+	const resolved = resolvePluginEntry(mod as never);
+	if (!resolved) throw new Error(`bundled plugin exports nothing loadable: ${entry}`);
+	const runtime = new ExtensionRuntime();
+	await loadExtensionFromFactory(
+		toFactory(resolved) as never,
+		process.cwd(),
+		new (await import("../src/utils/event-bus")).EventBus(),
+		runtime,
+		entry,
+	);
+	return runtime;
+}
 
 beforeEach(() => {
 	resetMagicKeywordRegistry();
@@ -38,15 +55,7 @@ describe("bundled magic-keywords package", () => {
 		const entry = paths.find(p => p.replaceAll("\\", "/").includes("magic-keywords"));
 		if (!entry) throw new Error("magic-keywords package should be discovered");
 
-		const mod = (await import(entry)) as { default: (pi: never) => void };
-		const runtime = new ExtensionRuntime();
-		await loadExtensionFromFactory(
-			mod.default as never,
-			process.cwd(),
-			new (await import("../src/utils/event-bus")).EventBus(),
-			runtime,
-			entry,
-		);
+		const runtime = await loadEntry(entry);
 
 		const registered = runtime.pendingMagicKeywordRegistrations;
 		// One keyword per schema key, by name. The third keyword's identity is
@@ -73,15 +82,7 @@ describe("bundled magic-keywords package", () => {
 		const entry = paths.find(p => p.replaceAll("\\", "/").includes("magic-keywords"));
 		if (!entry) throw new Error("magic-keywords package should be discovered");
 
-		const mod = (await import(entry)) as { default: (pi: never) => void };
-		const runtime = new ExtensionRuntime();
-		await loadExtensionFromFactory(
-			mod.default as never,
-			process.cwd(),
-			new (await import("../src/utils/event-bus")).EventBus(),
-			runtime,
-			entry,
-		);
+		const runtime = await loadEntry(entry);
 
 		for (const keyword of runtime.pendingMagicKeywordRegistrations) {
 			// A notice template rendered to nothing means the registration is a

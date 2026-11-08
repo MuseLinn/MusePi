@@ -9269,6 +9269,12 @@ export async function startDaemon(
 	// 挂载失败在这里抛出，经 commands/serve.ts 冒泡成启动失败。
 	await server.settleHostServices();
 
+	// Host-half bundled plugins mount once per daemon process, before the first
+	// connection: what they register (memory backend providers, services) must
+	// exist for session-less RPC such as `memory.status`, not only for sessions.
+	const { ensureHostHalfPluginsLoaded } = await import("../bundled-plugins/loader");
+	await ensureHostHalfPluginsLoaded(host.cwd());
+
 	// Process-global freeze state rides to every subscribed GUI (daemon-wide
 	// pause overlay stays in sync across clients regardless of which one
 	// toggled it); per-session pause rides the session stream separately.

@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **宿主级插件在 daemon 启动时装载**：清单新增 `musepi.scope: "host"`，这类内置包在开监听前、首个会话之前挂载一次，会话装载跳过它们；`discoverBundledPluginPaths` 按 `session` / `host` / `all` 三种视图发现。首个消费者是 `memory-sharpshooter`：它把 Sharpshooter 引擎注册为记忆后端 provider，核心仍保留内置回退，TUI 行为不变。
+  - EN: Host-scope plugins now mount when the daemon starts. A manifest can declare `musepi.scope: "host"`; such packages load once before listening and before the first session, and session loading skips them. `discoverBundledPluginPaths` exposes `session` / `host` / `all` views. The first consumer is `memory-sharpshooter`, which registers the Sharpshooter engine as a memory backend provider; the core keeps the built-in fallback, so terminal behavior is unchanged.
+
 - **记忆后端由注册表驱动，插件可以新增或替换**：`MemoryBackendProvider` 增加 `label` / `description`；`memory.backend` 的枚举值合并已注册 provider，设置页把 provider 的显示名与说明追加为选项，TUI 与 GUI 都能直接选择插件贡献的后端。插件卸载后选项消失，仍指向该 id 的配置回退到 `off`；替换内置 id 依旧生效。未知后端的设置状态卡显示 id，不再误标为 Off。
   - EN: Memory backends are now registry-driven, and a plugin can add or replace one. `MemoryBackendProvider` gained `label` / `description`; `memory.backend` merges registered provider ids into its enum, the settings picker appends each provider's own label and description, and both TUI and GUI can select a contributed backend. Unloading the plugin removes the option and a config still pointing at the id falls back to `off`; replacing a built-in id keeps working. The status card shows a contributed backend's id instead of labelling it Off.
 

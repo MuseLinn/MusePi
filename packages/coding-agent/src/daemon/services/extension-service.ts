@@ -172,7 +172,7 @@ export class ExtensionService implements DaemonService {
 				import("../../extensibility/extensions/plugin-manifest"),
 				import("../../discovery/helpers"),
 			]);
-		for (const entryPath of await discoverBundledPluginPaths()) {
+		for (const entryPath of await discoverBundledPluginPaths({ scope: "all" })) {
 			const name = getExtensionNameFromPath(entryPath);
 			if (name !== id) continue;
 			const meta = await readExtensionPluginMeta(entryPath);
