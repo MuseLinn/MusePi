@@ -17,7 +17,6 @@
  * does not own.
  */
 import type { ExtensionAPI } from "../../extensibility/extensions/types";
-import type { CordisPluginEntry } from "../../extensibility/plugins/runtime/cordis-entry";
 import { getDesignSystem } from "../../presets/design-systems";
 import {
 	ASSET_POLICY_BRIEFS,
@@ -77,13 +76,8 @@ export function registerDesignGuidance(ctx: ExtensionAPI): void {
 	});
 }
 
-const designGuidance: CordisPluginEntry = {
-	name,
-	inject,
-	provide,
-	apply(ctx) {
-		registerDesignGuidance(ctx as ExtensionAPI);
-	},
-};
+export function apply(ctx: ExtensionAPI): void {
+	registerDesignGuidance(ctx);
+}
 
 export type { AssetPolicy };

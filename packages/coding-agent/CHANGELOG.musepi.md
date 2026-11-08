@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **第一方插件入口有一致性测试守卫，并修复两个不合规入口**：`design-guidance` 在迁移时丢掉了具名的 `apply` 导出，插件加载直接失败、设计简报整体消失；现已改回标准入口，`product-skills` 也补上 `name` / `inject`。coding-agent 与 desktop 各新增一处一致性测试，校验每个插件包都有 `name` / `inject` / `apply`、没有 default 导出、不使用平铺 `pi.register*`，且清单里的入口文件真实存在。
+  - EN: A conformance test now guards first-party plugin entries, and two non-conforming entries are fixed. `design-guidance` lost its named `apply` export during the migration, so the plugin failed to load and the design briefs disappeared; it is back on the standard entry, and `product-skills` gained `name` / `inject`. New conformance tests in coding-agent and desktop assert that every plugin package exports `name` / `inject` / `apply`, has no default export, never uses a flat `pi.register*` alias, and keeps manifest entries pointing at real files.
+
 - **`session_start` 告诉插件它在为哪个 agent 工作**：事件新增可选 `{ agentId, source }`，`source` 区分主 agent 与 `task` 子 agent。每个 session-bound agent 本来就各有一份 runner，`apply` 即该作用域的 setup、`session_shutdown` 即回收；插件不必再从 `agentId` 猜测身份。
   - EN: `session_start` now tells a plugin which agent it serves. The event carries optional `{ agentId, source }`, where `source` distinguishes the primary agent from a `task` subagent. Each session-bound agent already gets its own runner, so `apply` is that scope's setup and `session_shutdown` is its teardown; plugins no longer have to infer the role from `agentId`.
 
