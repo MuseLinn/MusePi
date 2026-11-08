@@ -1373,11 +1373,21 @@ export interface HmrSurface {
 	readonly enabled: boolean;
 	/** Subscribe to a named event (`hmr/change` per file batch, `hmr/reload`
 	 *  when a reload pass starts for that batch). Returns a disposer. */
-	on(event: "hmr/change" | "hmr/reload", listener: (change: HmrChange) => void | Promise<void>): () => void;
+	on(
+		event: "hmr/change" | "hmr/reload",
+		listener: (change: HmrChange) => void | Promise<void>,
+		options?: { prepend?: boolean },
+	): () => void;
 	/** Alias for `on("hmr/change", …)`. */
 	onChange(listener: (change: HmrChange) => void | Promise<void>): () => void;
 	/** Run the current listeners as if the watched files had just changed. */
 	reload(): Promise<void>;
+	/** Serialize work against reload batches (dsh `runExclusive`). */
+	runExclusive<T>(transaction: () => Promise<T> | T): Promise<T>;
+	/** Entries that own `file`; empty when no graph is attached. */
+	getLinked(file: string): readonly string[];
+	/** Importer chain from `file` to its entry; empty when unmanaged. */
+	getOuterStack(file: string): readonly string[];
 }
 
 export interface ExtensionAPI extends PluginContextNamespaces {

@@ -12,45 +12,44 @@ description: 为 MusePi（TUI/CLI + 桌面 GUI）开发扩展——custom tools�
 | **Custom tool** | 模型可调用的函数（execute + Zod schema） | `extensibility/custom-tools/loader.ts` |
 | **Extension** | 生命周期/事件框架——可注册工具、拦截/修改事件 | `extensibility/extensions/`（loader/runner） |
 | **Hook** | 外部 pre/post 命令脚本（如 tool_call 拦截） | `extensibility/hooks` |
-| **Plugin** | 可安装的扩展包（`musepi.extensions` 清单，`omp`/`pi` 遗留兼容） | `extensibility/plugins` |
+| **Plugin (Track A)** | Cordis 插件包：具名导出 `name/inject/provide/apply`，`ctx.*` 服务面 | `extensibility/plugins`、`src/bundled-plugins/*` |
+| **Plugin (Track B)** | `omp`/`pi` 遗留扩展包：`export default` factory + 平铺 `pi.register*`，只作兼容 | `extensibility/extensions` |
 | **Slash command** | 斜杠命令（`/xxx`） | `extensibility/slash-commands.ts` |
 | **Skill** | 静态知识包（SKILL.md） | `extensibility/skills.ts` + `discovery/builtin.ts` |
 
-## 快速路径：最小扩展（够用 90% 场景）
+## 快速路径：Track A 插件（新代码一律用这个）
 
-写一个 TS 文件（默认导出 factory），放到 `~/.musepi/agent/extensions/<name>/index.ts`（用户级）或 `<cwd>/.musepi/extensions/<name>/index.ts`（项目级）：
+入口是**具名导出三件套**，不要 `export default`：
 
 ```ts
 import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 
-export default function (pi: ExtensionAPI) {
-	const z = pi.zod;
-	pi.setLabel("My Extension");
+export const name = "my-plugin";
+export const inject = [] as const;          // 依赖的宿主服务名；不满足则拒绝装载
+export const provide = [] as const;         // apply 返回值里暴露给别的插件的键
 
-	pi.on("tool_call", async (event) => {
+export async function apply(ctx: ExtensionAPI, config?: Record<string, unknown>): Promise<void> {
+	ctx.on("tool_call", async event => {
 		if (event.toolName === "bash" && /rm -rf/.test(event.input.command ?? "")) {
 			return { block: true, reason: "Blocked by extension policy" };
 		}
-	});
+	}); // 返回值是 disposer，只注销这一个监听
 
-	pi.registerTool({
-		name: "my_tool",
-		label: "My Tool",
-		description: "…",
-		parameters: z.object({ query: z.string() }),
-		async execute(_id, params, _signal, _onUpdate, _ctx) {
-			return { content: [{ type: "text", text: `got ${params.query}` }] };
-		},
-	});
-
-	pi.registerCommand("my-cmd", {
-		description: "…",
-		handler: async (_args, ctx) => ctx.ui.notify("hi", "info"),
-	});
+	ctx.tools.register({ name: "my_tool", /* … */ } as never);
+	ctx.commands.register("my-cmd", { handler: async (_args, c) => c.ui.notify("hi", "info") });
+	ctx.effect(() => clearInterval(timer), "my-plugin:timer"); // 卸载时反向执行
 }
 ```
 
-扩展在 **Bun 运行时**执行：ESM 模块（无 `require`）、顶层 `export default` factory、可用 `await import()` 按需加载依赖。扩展代码与其他扩展共享进程——**不要**在扩展里做长阻塞/全局状态污染。
+- 服务面：`ctx.tools` / `commands` / `settings` / `prompts` / `slots` / `rpc` / `subagents` / `magicKeywords` / `memory` / `hmr`。平铺的 `pi.register*` 只是 legacy 别名，新插件不要用。
+- `apply` 第二参是清单 `musepi.config` 的钳制后取值；`ctx.cwd` 是装载根。
+- 需要跨插件服务：入口 `provide: ["foo"]`，`apply` 返回 `{ foo: service }`；消费者 `inject: ["foo"]` 后用 `ctx.service("foo")`。
+- **host 作用域**：`musepi.scope: "host"` 的包由宿主进程启动时装载一次（daemon 开监听前 / 首个会话前），会话装载跳过。放进程级注册（后端 provider、全局服务），不要放会话工具。
+- 写进 `src/bundled-plugins/<name>/` 或 `packages/desktop-app/src/plugins/<name>/` 时，入口形状由 `test/first-party-plugin-conformance.test.ts` 与 `packages/desktop-app/test/plugin-conformance.test.ts` 强制校验。
+
+**Track B 兼容路径**：老的 `export default function (pi) { pi.registerTool(...) }` 仍能加载，但只用于既有扩展；新插件不要这么写。两轨边界见 `docs/plugin-tracks.md`。
+
+扩展在 **Bun 运行时**执行：ESM 模块（无 `require`）、可用 `await import()` 按需加载依赖。扩展代码与其他扩展共享进程——**不要**在扩展里做长阻塞/全局状态污染。
 
 ## 加载与发现（怎么让 musepi 看到你的扩展）
 
@@ -58,7 +57,7 @@ export default function (pi: ExtensionAPI) {
 2. **显式配置**：`~/.musepi/agent/config.yml` 的 `extensions:` 数组（路径/包目录）或 `-e/--extension` CLI flag
 3. **禁用**：`disabledExtensions: [extension-module:<name>]`（name = 目录/文件名）；`--no-extensions` 全关
 4. **验证**：`musepi /extensions` 列出已加载扩展；扩展里的 `console.error` 进 daemon/TUI 日志
-5. **改动生效（HMR 热拔插）**：改扩展**入口文件**后 daemon watcher ~500ms 内广播 `extensions.changed`，GUI ~1s 刷新，活跃会话执行 `reloadExtension`（忙会话挂起、agent_end 补做）——**不用重启 daemon**；会话内工具下次调用生效，未重注册的旧工具名被移除。注意：**子模块改动不热生效**（Bun 模块缓存只重键入口 specifier）——多文件扩展改了子模块要 touch 入口文件。扩展内存态不迁移。只有改了扩展的发现/加载机制本身、或 daemon 侧注册代码时才需要重启 daemon（GUI 菜单"重启 daemon"）；TUI 新会话即生效
+5. **改动生效（HMR 热拔插）**：改扩展**入口文件**后 daemon watcher ~500ms 内广播 `extensions.changed`，GUI ~1s 刷新，活跃会话执行 `reloadExtension`（忙会话挂起、agent_end 补做）——**不用重启 daemon**；会话内工具下次调用生效，未重注册的旧工具名被移除。子模块改动也会生效：watcher 按整张源码图的 mtime 判定，命中后重载属主入口，加载标签逐级盖到相对 import（回归：`test/extensibility/legacy-pi-submodule-reload.test.ts`），不必再 touch 入口。扩展内存态不迁移。只有改了扩展的发现/加载机制本身、或 daemon 侧注册代码时才需要重启 daemon（GUI 菜单"重启 daemon"）；TUI 新会话即生效
 
 ## 插件配置（manifest config + pi.config，dsh 管理页 parity）
 
@@ -81,6 +80,11 @@ daemon 会话给 agent 挂了一组扩展自举工具，让创造类任务不靠
 
 激活方式：普通会话里 `/extensions` 斜杠命令；**creator（创造）预设自动激活整环**（settings `tools.extensionMetaTools`，会话起即顶层可用，不走 xd:// 设备）。默认不激活的原因：普通会话不为这 10 个工具的 schema 付费。
 
+## 进程级能力：`ctx.hmr` 与记忆后端
+
+- **`ctx.hmr`**（由 host 插件 `musepi-hmr` provide）：`on("hmr/change" | "hmr/reload", listener, { prepend })`、`runExclusive(tx)`、`getLinked(file)` / `getOuterStack(file)`、`reload()`、`enabled`。监听不随插件自动回收，用 `ctx.effect(off)` 挂到账本。配置（`base/root/ignored/debounce`）来自该包自己的 `musepi.config`。
+- **`ctx.memory.registerBackendProvider({ id, label, description, create })`**：注册或替换一个记忆后端。新 id 会自动出现在 `memory.backend` 的枚举与设置选择器里，卸载后消失；核心四种（off/local/mnemopi/hindsight/sharpshooter）仍是内置 provider。`memory.*` RPC 是核心契约，替换实现即可，不要另立方法名。
+
 ## Cordis 插件运行时（组件 / 子 fiber / 兼容性预检）
 
 - **组件**：插件 package.json `musepi.components` 声明组件数组（`[{ id, label?, deny? }]`）；宿主为组件建独立子 fiber，设置页可对单组件启停（deny 列表落盘）。整插件 reload 时组件一并重建。
@@ -94,6 +98,8 @@ daemon 会话给 agent 挂了一组扩展自举工具，让创造类任务不靠
 | 任务 | 文档 |
 |---|---|
 | 扩展 API 全貌/事件名/命令上下文 | `docs/extensions.md` |
+| 插件两轨与入口规范 | `docs/plugin-tracks.md` |
+| 能力缝（provider/service/slot 所有权） | `docs/capability-seams.md` |
 | 插件配置（manifest config / pi.config / 资源卡） | `docs/extensions-dev.md` §13 |
 | 加载机制细节（发现顺序/路径解析/禁用） | `docs/extension-loading.md` |
 | 自定义工具（模型直接调用） | `docs/custom-tools.md` |

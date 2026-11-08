@@ -387,6 +387,10 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 			reload: async () => {
 				await getHostService<HmrService>("hmr")?.reload();
 			},
+			runExclusive: async transaction =>
+				(await getHostService<HmrService>("hmr")?.runExclusive(transaction)) ?? (await transaction()),
+			getLinked: file => getHostService<HmrService>("hmr")?.getLinked(file) ?? [],
+			getOuterStack: file => getHostService<HmrService>("hmr")?.getOuterStack(file) ?? [],
 		};
 	}
 

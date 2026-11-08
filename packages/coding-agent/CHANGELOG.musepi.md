@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`ctx.hmr` 对插件补齐事务与模块查询，扩展作者技能改讲 Track A**：插件拿到的 `ctx.hmr` 现在与宿主同面——`runExclusive(tx)`、`getLinked(file)`、`getOuterStack(file)`，`on` 也接受 `prepend`。`musepi-extension-dev` 技能与 `docs/skills/authoring-extensions.md` 改为具名导出 + `ctx.*` 入口，并纠正“子模块改动需 touch 入口”的旧说法、补上 `list` 配置与 `musepi.scope: "host"`。
+  - EN: Plugins now see the full `ctx.hmr` surface — `runExclusive(tx)`, `getLinked(file)`, `getOuterStack(file)`, and `prepend` on `on`. The `musepi-extension-dev` skill and `docs/skills/authoring-extensions.md` now teach the named Cordis entry and `ctx.*` namespaces, fix the outdated "touch the entry for submodule edits" rule, and cover `list` config fields and `musepi.scope: "host"`.
+
 - **配置字段新增 `list` 类型，`root` / `ignored` 改用列表**：清单可声明 `type: "list"` 与 `string[]` 默认值；wire 侧把数组或逗号/换行分隔的字符串统一钳制成 `string[]`，GUI 配置表单以逗号输入编辑。`musepi-hmr` 的 `root`（相对 `base`）与 `ignored` 因此支持多个值，留空仍沿用原生扩展/插件根。
   - EN: Config fields gained a `list` type, and `root` / `ignored` now use it. A manifest may declare `type: "list"` with a `string[]` default; the wire layer coerces arrays or comma/newline separated strings to `string[]`, and the GUI config form edits one comma-separated field. `musepi-hmr`'s `root` (relative to `base`) and `ignored` therefore accept multiple values, while an empty `root` keeps the native extension/plugin roots.
 

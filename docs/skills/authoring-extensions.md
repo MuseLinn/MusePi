@@ -12,14 +12,17 @@ Extensions are the primary way to add capabilities to `oh-my-pi`. A single exten
 ```ts
 import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 
-export default function (pi: ExtensionAPI) {
-  pi.on("session_start", async (_event, ctx) => {
-    ctx.ui.notify("My extension loaded!", "info");
+export const name = "hello";
+export const inject = [] as const;
+
+export function apply(ctx: ExtensionAPI) {
+  ctx.on("session_start", async (_event, event) => {
+    event.ui.notify("My extension loaded!", "info");
   });
 }
 ```
 
-That is a working extension. Drop it into `~/.musepi/agent/extensions/hello.ts` and restart musepi to see the notification.
+That is a working Cordis plugin (Track A). Drop it into `~/.musepi/agent/extensions/hello.ts` and restart musepi to see the notification. The legacy `export default function (pi)` shape still loads for compatibility, but new code uses the named entry plus the `ctx.*` namespaces; see `docs/plugin-tracks.md`.
 
 ## Full example
 
@@ -28,20 +31,23 @@ The following extension registers a slash command, a tool, and a session-start h
 ```ts
 import type { ExtensionAPI } from "@musepi/pi-coding-agent";
 
-export default function myExtension(pi: ExtensionAPI) {
-  const z = pi.zod;
+export const name = "my-extension";
+export const inject = [] as const;
+
+export function apply(api: ExtensionAPI) {
+  const z = api.zod;
 
   // Runs once when the session loads
-  pi.on("session_start", async (_event, ctx) => {
-    ctx.ui.notify(`Session ready in ${ctx.cwd}`, "info");
+  api.on("session_start", async (_event, event) => {
+    event.ui.notify(`Session ready in ${event.cwd}`, "info");
   });
 
   // Slash command: /greet
-  pi.registerCommand("greet", {
+  api.commands.register("greet", {
     description: "Send a greeting into the conversation",
     handler: async (args, ctx) => {
       const name = args.trim() || "world";
-      pi.sendMessage(
+      api.sendMessage(
         {
           customType: "greeting",
           content: `Hello, ${name}!`,
@@ -55,7 +61,7 @@ export default function myExtension(pi: ExtensionAPI) {
   });
 
   // LLM-callable tool
-  pi.registerTool({
+  api.tools.register({
     name: "word_count",
     label: "Word Count",
     description: "Count the words in a string",
@@ -103,13 +109,14 @@ To package an extension as an installable plugin, add an `omp` field to `package
 ```json
 {
   "name": "my-musepi-extension",
-  "omp": {
-    "extensions": ["./src/main.ts"]
+  "musepi": {
+    "extensions": ["./src/main.ts"],
+    "scope": "session"
   }
 }
 ```
 
-The legacy `pi` key is also accepted for backwards compatibility:
+`scope: "host"` mounts the package once per host process (before the first session) instead of per session — use it for process-wide registrations such as a memory backend provider. The legacy `omp` and `pi` keys are still accepted for backwards compatibility:
 
 ```json
 {
