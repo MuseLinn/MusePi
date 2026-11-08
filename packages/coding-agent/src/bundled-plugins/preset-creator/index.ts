@@ -20,7 +20,7 @@ export const provide = [] as const;
 export const creatorPersonaSections = [{ name: "mode:creator:role", order: 25, text: persona }] as const;
 
 /** Cordis entry: register the persona section on the fiber that owns it. */
-export default function presetCreator(pi: ExtensionAPI): void {
-	pi.setLabel("MusePi Creator Persona");
-	for (const section of creatorPersonaSections) pi.registerPrompt(section);
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("MusePi Creator Persona");
+	for (const section of creatorPersonaSections) ctx.prompts.register(section);
 }

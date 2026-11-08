@@ -4,10 +4,10 @@ export const name = "musepi-builtin-themes";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	builtinThemes(pi);
+export function apply(ctx: ExtensionAPI): void {
+	builtinThemes(ctx);
 }
 
-export default function builtinThemes(pi: ExtensionAPI): void {
-	pi.setLabel("内置主题包");
+function builtinThemes(ctx: ExtensionAPI): void {
+	ctx.setLabel("内置主题包");
 }

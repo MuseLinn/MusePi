@@ -36,15 +36,13 @@ export function createCodexExecutor(
 		);
 }
 
-export function apply(pi: ExtensionAPI): void {
-	pi.setLabel("实验性 Codex 子智能体");
-	registerExternalExecutableProbe(pi, "codex");
-	const executor = pi.config.getAll().then(config => createCodexExecutor(config));
-	pi.registerSubagent({
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("实验性 Codex 子智能体");
+	registerExternalExecutableProbe(ctx, "codex");
+	const executor = ctx.config.getAll().then(config => createCodexExecutor(config));
+	ctx.subagents.register({
 		name: "codex",
 		description: "Experimental: delegate a one-shot coding task to the native Codex app-server.",
 		external: context => executor.then(run => run(context)),
 	});
 }
-
-export default apply;

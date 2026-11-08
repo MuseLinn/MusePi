@@ -49,15 +49,13 @@ export function createClaudeCodeExecutor(
 	};
 }
 
-export function apply(pi: ExtensionAPI): void {
-	pi.setLabel("实验性 Claude Code 子智能体");
-	registerExternalExecutableProbe(pi, "claude");
-	const executor = pi.config.getAll().then(config => createClaudeCodeExecutor(config));
-	pi.registerSubagent({
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("实验性 Claude Code 子智能体");
+	registerExternalExecutableProbe(ctx, "claude");
+	const executor = ctx.config.getAll().then(config => createClaudeCodeExecutor(config));
+	ctx.subagents.register({
 		name: "claude-code",
 		description: "Experimental: delegate a one-shot coding task to the native Claude Code CLI.",
 		external: context => executor.then(run => run(context)),
 	});
 }
-
-export default apply;

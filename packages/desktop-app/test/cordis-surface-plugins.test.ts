@@ -3,12 +3,12 @@ import { apply as applyBrowser } from "../src/plugins/browser-ui/index";
 import { apply as applyPanel } from "../src/plugins/panel/index";
 
 function registrations(
-	apply: (api: { setLabel(label: string): void; registerComponent(component: unknown): void }) => void,
+	apply: (api: { setLabel(label: string): void; slots: { register(component: unknown): void } }) => void,
 ) {
 	const components: Array<{ slot: string; moduleUrl: string }> = [];
 	apply({
 		setLabel: () => {},
-		registerComponent: component => components.push(component as { slot: string; moduleUrl: string }),
+		slots: { register: component => components.push(component as { slot: string; moduleUrl: string }) },
 	});
 	return components;
 }

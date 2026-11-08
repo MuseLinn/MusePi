@@ -39,8 +39,10 @@ describe("compaction summary plugin", () => {
 		const registrations: unknown[] = [];
 		apply({
 			setLabel() {},
-			registerComponent(descriptor: unknown) {
-				registrations.push(descriptor);
+			slots: {
+				register(descriptor: unknown) {
+					registrations.push(descriptor);
+				},
 			},
 			logger: { info() {} },
 		} as never);

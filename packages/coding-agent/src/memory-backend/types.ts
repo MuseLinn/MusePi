@@ -77,9 +77,20 @@ export interface MemoryBackendOperationContext {
 }
 
 export interface MemoryRuntimeContext {
+	/** Active backend id without the full status payload. */
+	backend(): Promise<MemoryBackendId>;
 	status(): Promise<MemoryBackendStatus>;
 	search(query: string, options?: MemoryBackendSearchOptions): Promise<MemoryBackendSearchResult>;
 	save(input: string | MemoryBackendSaveInput): Promise<MemoryBackendSaveResult>;
+	/** Wipe the active backend's persisted data (`/memory clear`). */
+	clear(): Promise<void>;
+	/** Force consolidation/retention (`/memory enqueue`). */
+	enqueue(): Promise<void>;
+	/** Current prompt-injection payload (`/memory view`). */
+	view(): Promise<string | undefined>;
+	/** Backend statistics and diagnostics. */
+	stats(): Promise<string | undefined>;
+	diagnose(): Promise<string | undefined>;
 }
 
 export interface MemoryBackendStartOptions {

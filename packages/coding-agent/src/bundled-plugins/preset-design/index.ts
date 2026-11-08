@@ -33,7 +33,7 @@ export const designPersonaSections = [
 ] as const;
 
 /** Cordis entry: register the design sections on the fiber that owns them. */
-export default function presetDesign(pi: ExtensionAPI): void {
-	pi.setLabel("MusePi Design Persona");
-	for (const section of designPersonaSections) pi.registerPrompt(section);
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("MusePi Design Persona");
+	for (const section of designPersonaSections) ctx.prompts.register(section);
 }

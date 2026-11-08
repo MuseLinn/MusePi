@@ -94,6 +94,7 @@ export const HOST_SERVICES: ReadonlySet<string> = new Set([
 	"settings",
 	"commands",
 	"attachments",
+	"memory",
 ]);
 
 /** A registry that knows only the host (no plugin providers). */

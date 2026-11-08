@@ -34,12 +34,12 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 /** Cordis 入口。 */
-export function apply(pi: ExtensionAPI): void {
-	statsPills(pi);
+export function apply(ctx: ExtensionAPI): void {
+	statsPills(ctx);
 }
 
-export default function statsPills(pi: ExtensionAPI): void {
-	pi.setLabel("MusePi 性能与用量");
+function statsPills(ctx: ExtensionAPI): void {
+	ctx.setLabel("MusePi 性能与用量");
 
 	// `composer.dock` 是输入卡下方的整行座位，正是这类「一行读数」
 	// 该待的位置——读数属于 composer 的页脚行，跟在输入卡之后，不占用
@@ -47,12 +47,12 @@ export default function statsPills(pi: ExtensionAPI): void {
 	//
 	// `order` 取一个较小值：统计行是页脚的第一行，排在其它停靠条目
 	// 之前才符合阅读顺序（先看用量，再看其它提示）。
-	pi.registerComponent({
+	ctx.slots.register({
 		slot: "composer.dock",
 		moduleUrl: "./ui/stats-row.tsx",
 		label: "性能与用量",
 		order: 10,
 	});
 
-	pi.logger.info("[stats-pills] composer stats row registered (composer.dock)");
+	ctx.logger.info("[stats-pills] composer stats row registered (composer.dock)");
 }

@@ -5,11 +5,11 @@ export const name = "musepi-computer";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	computer(pi);
-	if (pi.promptHost) registerComputerPrompts(pi.promptHost);
+export function apply(ctx: ExtensionAPI): void {
+	computer(ctx);
+	if (ctx.promptHost) registerComputerPrompts(ctx.promptHost);
 }
 
-export default function computer(pi: ExtensionAPI): void {
-	pi.setLabel("电脑操作");
+function computer(ctx: ExtensionAPI): void {
+	ctx.setLabel("电脑操作");
 }

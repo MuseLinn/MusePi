@@ -326,7 +326,7 @@ export function navGroups(
 	// built-in nav id (so `sessions` stays a valid section) and skip its
 	// duplicate extension row below.
 	for (const c of extTabs) {
-		if (c.slot === "settings.tab.sessions") continue;
+		if (c.slot === "settings.tab.sessions" || c.slot === "settings.tab.memory") continue;
 		groups[1]!.items.push({
 			id: `ext:${c.slot}`,
 			icon: "plug",

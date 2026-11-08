@@ -7,6 +7,7 @@ import { isGlobalMemoryScopeAvailable } from "../memory-backend/global-scope";
 import { localBackend } from "../memory-backend/local-backend";
 import learnDescription from "../prompts/tools/learn.md" with { type: "text" };
 import type { ToolSession } from ".";
+import { extensionOwnsTool } from "./tool-ownership";
 
 /** Offered only where every project recalls a global item; see {@link isGlobalMemoryScopeAvailable}. */
 const learnSchema = type({
@@ -48,6 +49,7 @@ export class LearnTool implements AgentTool<typeof learnSchema> {
 	constructor(private readonly session: ToolSession) {}
 
 	static createIf(session: ToolSession): LearnTool | null {
+		if (extensionOwnsTool(session, "learn")) return null;
 		if (!session.settings.get("autolearn.enabled")) return null;
 		const backend = session.settings.get("memory.backend");
 		if (backend !== "hindsight" && backend !== "mnemopi" && backend !== "local") return null;

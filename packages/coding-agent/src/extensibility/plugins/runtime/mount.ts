@@ -156,7 +156,16 @@ function withCordisPrimitives(api: ExtensionAPI, extension: Extension): Extensio
 			keys: (): string[] => stateKeys(extension),
 		},
 	};
-	return Object.assign(api, primitives) as ExtensionAPI;
+	const registerMemoryBackendProvider = api.registerMemoryBackendProvider.bind(api);
+	return Object.assign(api, primitives, {
+		registerMemoryBackendProvider(
+			provider: Parameters<ExtensionAPI["registerMemoryBackendProvider"]>[0],
+		): () => void {
+			const dispose = registerMemoryBackendProvider(provider);
+			registerEffect(extension, dispose, `memory-backend:${provider.id}`);
+			return dispose;
+		},
+	}) as ExtensionAPI;
 }
 
 /**
@@ -221,6 +230,7 @@ function createPluginExtension(entryPath: string, resolvedPath: string): Extensi
 		widgets: [],
 		notificationChannels: [],
 		services: [],
+		memoryBackendProviders: [],
 		themeTokens: [],
 		mediaProviders: [],
 		designSystems: [],

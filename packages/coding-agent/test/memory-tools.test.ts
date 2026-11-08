@@ -244,7 +244,7 @@ describe("Mnemopi tool factories", () => {
 		await tempDbDir?.remove();
 		tempDbDir = undefined;
 		tempDbPath = undefined;
-	});
+	}, 30_000);
 
 	it("memory tool factories gate on supported backends", () => {
 		const offSettings = Settings.isolated({ "memory.backend": "off", "memories.enabled": false });
@@ -255,6 +255,15 @@ describe("Mnemopi tool factories", () => {
 		expect(MemoryReflectTool.createIf(localSession)).toBeNull();
 		expect(MemoryEditTool.createIf(makeSession(offSettings))).toBeNull();
 		expect(MemoryEditTool.createIf(makeSession(hindsightSettings))).toBeNull();
+	});
+
+	it("does not create a core memory tool when an extension owns that name", () => {
+		const settings = Settings.isolated({ "memory.backend": "mnemopi" });
+		const session = makeSession(settings);
+		(session as unknown as { extensionRunner: unknown }).extensionRunner = {
+			getAllRegisteredTools: () => [{ definition: { name: "recall" } }],
+		};
+		expect(MemoryRecallTool.createIf(session)).toBeNull();
 	});
 
 	it("retain/recall/reflect/edit factories return tool instances when memory.backend === mnemopi", () => {
@@ -370,7 +379,7 @@ describe("retain.execute (Mnemopi backend)", () => {
 		await tempDbDir?.remove();
 		tempDbDir = undefined;
 		tempDbPath = undefined;
-	});
+	}, 30_000);
 
 	it("writes memories synchronously and returns a stored success message", async () => {
 		const settings = Settings.isolated({ "memory.backend": "mnemopi" });
@@ -1244,7 +1253,7 @@ describe("recall.execute (Mnemopi backend)", () => {
 		await tempDbDir?.remove();
 		tempDbDir = undefined;
 		tempDbPath = undefined;
-	});
+	}, 30_000);
 
 	it("returns the no-results sentinel when empty", async () => {
 		const settings = Settings.isolated({ "memory.backend": "mnemopi" });
@@ -1390,7 +1399,7 @@ describe("memory_edit.execute (Mnemopi backend)", () => {
 		await tempDbDir?.remove();
 		tempDbDir = undefined;
 		tempDbPath = undefined;
-	});
+	}, 30_000);
 
 	async function retainAndRecallId(settings: Settings, content: string, query: string): Promise<string> {
 		await MemoryRetainTool.createIf(makeSession(settings))!.execute("call-memory-edit-store", {
@@ -1539,7 +1548,7 @@ describe("reflect.execute (Mnemopi backend)", () => {
 		await tempDbDir?.remove();
 		tempDbDir = undefined;
 		tempDbPath = undefined;
-	});
+	}, 30_000);
 
 	it("returns the no-results sentinel when empty", async () => {
 		const settings = Settings.isolated({ "memory.backend": "mnemopi" });

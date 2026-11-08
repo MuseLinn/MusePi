@@ -4,9 +4,9 @@ export const name = "musepi-compaction-summary";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	pi.setLabel("MusePi 压缩摘要");
-	pi.registerComponent({
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("MusePi 压缩摘要");
+	ctx.slots.register({
 		slot: "panel.tab.compaction",
 		moduleUrl: "./ui/summary-panel.tsx",
 		label: "压缩摘要",
@@ -14,5 +14,3 @@ export function apply(pi: ExtensionAPI): void {
 		availability: "on-demand",
 	});
 }
-
-export default apply;

@@ -5,11 +5,11 @@ export const name = "musepi-browser";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	browser(pi);
-	if (pi.promptHost) registerBrowserPrompts(pi.promptHost);
+export function apply(ctx: ExtensionAPI): void {
+	browser(ctx);
+	if (ctx.promptHost) registerBrowserPrompts(ctx.promptHost);
 }
 
-export default function browser(pi: ExtensionAPI): void {
-	pi.setLabel("浏览器");
+function browser(ctx: ExtensionAPI): void {
+	ctx.setLabel("浏览器");
 }

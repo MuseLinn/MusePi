@@ -2,6 +2,7 @@ import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import memoryEditDescription from "../prompts/tools/memory-edit.md" with { type: "text" };
 import type { ToolSession } from ".";
+import { extensionOwnsTool } from "./tool-ownership";
 
 const memoryEditSchema = type({
 	op: type("'update' | 'forget' | 'invalidate'").describe("memory edit operation"),
@@ -26,6 +27,7 @@ export class MemoryEditTool implements AgentTool<typeof memoryEditSchema> {
 	constructor(private readonly session: ToolSession) {}
 
 	static createIf(session: ToolSession): MemoryEditTool | null {
+		if (extensionOwnsTool(session, "memory_edit")) return null;
 		const backend = session.settings.get("memory.backend");
 		if (backend !== "mnemopi") return null;
 		return new MemoryEditTool(session);

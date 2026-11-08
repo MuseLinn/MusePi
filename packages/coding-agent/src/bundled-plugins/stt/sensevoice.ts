@@ -3,6 +3,6 @@ import { activateSttEngine } from "../../voice/engine-registry";
 
 export const name = "stt-engine-sensevoice";
 
-export default function sensevoice(pi: ExtensionAPI): void {
-	pi.effect!(activateSttEngine("sensevoice"), "stt-engine:sensevoice");
+export default function sensevoice(ctx: ExtensionAPI): void {
+	ctx.effect!(activateSttEngine("sensevoice"), "stt-engine:sensevoice");
 }

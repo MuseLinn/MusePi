@@ -5,13 +5,13 @@ export const name = "musepi-file-tools";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	fileTools(pi);
+export function apply(ctx: ExtensionAPI): void {
+	fileTools(ctx);
 	// The session prompt host is optional in the extension API type (external
 	// callers may omit it), so guard before registering the tool sections.
-	if (pi.promptHost) registerFileToolPrompts(pi.promptHost);
+	if (ctx.promptHost) registerFileToolPrompts(ctx.promptHost);
 }
 
-export default function fileTools(pi: ExtensionAPI): void {
-	pi.setLabel("文件工具与索引");
+function fileTools(ctx: ExtensionAPI): void {
+	ctx.setLabel("文件工具与索引");
 }

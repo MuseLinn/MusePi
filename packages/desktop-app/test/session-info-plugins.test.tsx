@@ -85,8 +85,10 @@ describe("session-info-plugins Cordis 插件", () => {
 		const components: Array<{ slot: string; moduleUrl: string; label?: string }> = [];
 		apply({
 			setLabel() {},
-			registerComponent(component) {
-				components.push(component);
+			slots: {
+				register(component) {
+					components.push(component);
+				},
 			},
 		});
 		expect(components).toEqual([{ slot: SESSION_INFO_SLOT, moduleUrl: "./page.tsx", label: "插件" }]);

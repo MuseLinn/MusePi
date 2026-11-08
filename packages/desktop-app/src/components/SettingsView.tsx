@@ -100,6 +100,11 @@ export function SettingsView({
 	const extSessionsTab = extSettingsTabs.find(
 		tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}sessions` && tab.code.length > 0 && !tab.error,
 	);
+	// 记忆插件页:声明 `settings.tab.memory` 的扩展接管内置「记忆」分区。
+	// 插件停用/未装载时保留内置 MemorySection。
+	const extMemoryTab = extSettingsTabs.find(
+		tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}memory` && tab.code.length > 0 && !tab.error,
+	);
 	// 单行偏好槽:settings.action.<id> 组件。
 	const actionItems = useSlotComponentsByPrefix(rpc, SETTINGS_ACTION_SLOT_PREFIX);
 	// Nav groups are the single source of truth for "which section ids exist":
@@ -436,7 +441,12 @@ export function SettingsView({
 							{activeSection === "voice" && <VoiceSection rpc={rpc} sessionId={sessionId} />}
 							{activeSection === "context" && <ContextSection rpc={rpc} />}
 							{activeSection === "files" && <FilesLspSection rpc={rpc} />}
-							{activeSection === "memory" && <MemorySection rpc={rpc} />}
+							{activeSection === "memory" &&
+								(extMemoryTab ? (
+									<SlotComponentMount item={extMemoryTab} rpc={rpc} sessionId={sessionId} />
+								) : (
+									<MemorySection rpc={rpc} />
+								))}
 							{activeSection === "skills" && <SkillsSection rpc={rpc} />}
 							{activeSection.startsWith("ext:")
 								? (() => {

@@ -2044,14 +2044,20 @@ describe("ExtensionRunner", () => {
 				sessionManager,
 				modelRegistry,
 				() => ({
+					backend: async () => "mnemopi" as const,
 					status: async () => ({
-						backend: "mnemopi",
+						backend: "mnemopi" as const,
 						active: true,
 						writable: true,
 						searchable: true,
 					}),
-					search: async query => ({ backend: "mnemopi", query, count: 0, items: [] }),
-					save: async () => ({ backend: "mnemopi", stored: 1 }),
+					search: async query => ({ backend: "mnemopi" as const, query, count: 0, items: [] }),
+					save: async () => ({ backend: "mnemopi" as const, stored: 1 }),
+					clear: async () => {},
+					enqueue: async () => {},
+					view: async () => undefined,
+					stats: async () => undefined,
+					diagnose: async () => undefined,
 				}),
 			);
 			runner.initialize(
@@ -3911,6 +3917,7 @@ describe("ExtensionRunner", () => {
 				widgets: [],
 				notificationChannels: [],
 				services: [],
+				memoryBackendProviders: [],
 				themeTokens: [],
 				mediaProviders: [],
 				designSystems: [],

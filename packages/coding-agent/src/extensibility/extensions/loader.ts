@@ -32,6 +32,7 @@ import type { ExecOptions } from "../../exec/exec";
 import { execCommand } from "../../exec/exec";
 // Runtime self-reference: dereference this namespace only inside loader functions to keep the index.ts cycle safe.
 import * as PiCodingAgent from "../../index";
+import { registerMemoryBackendProvider as registerMemoryProvider } from "../../memory-backend/providers";
 import type { StoredPluginCredential } from "../../plugin-credentials";
 import { getPluginCredentialManager } from "../../plugin-credentials";
 import type { PromptHostSurface, ScopedPromptHostLedger } from "../../prompts/host";
@@ -324,13 +325,51 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	 */
 	readonly pendingMagicKeywordRegistrations: RegisteredMagicKeyword[] = [];
 
+	readonly tools: ExtensionAPI["tools"];
+	readonly commands: ExtensionAPI["commands"];
+	readonly settings: ExtensionAPI["settings"];
+	readonly prompts: ExtensionAPI["prompts"];
+	readonly slots: ExtensionAPI["slots"];
+	readonly rpc: ExtensionAPI["rpc"];
+	readonly subagents: ExtensionAPI["subagents"];
+	readonly magicKeywords: ExtensionAPI["magicKeywords"];
+	readonly memory: ExtensionAPI["memory"];
+
 	constructor(
 		public readonly pi: typeof PiCodingAgent,
 		private readonly extension: Extension,
 		private readonly runtime: IExtensionRuntime,
 		private readonly cwd: string,
 		public readonly events: EventBus,
-	) {}
+	) {
+		const self = this;
+		this.tools = {
+			register: this.registerTool.bind(this),
+			registerView: this.registerToolView.bind(this),
+		};
+		this.commands = {
+			register: this.registerCommand.bind(this),
+			registerShortcut: this.registerShortcut.bind(this),
+		};
+		this.settings = { register: this.registerSetting.bind(this) };
+		this.prompts = {
+			register: this.registerPrompt.bind(this),
+			get host() {
+				return self.promptHost;
+			},
+		};
+		this.slots = {
+			register: this.registerComponent.bind(this),
+			registerWidget: this.registerWidget.bind(this),
+		};
+		this.rpc = {
+			register: this.registerRpc.bind(this),
+			webRoute: this.registerWebRoute.bind(this),
+		};
+		this.subagents = { register: this.registerSubagent.bind(this) };
+		this.magicKeywords = { register: this.registerMagicKeyword.bind(this) };
+		this.memory = { registerBackendProvider: this.registerMemoryBackendProvider.bind(this) };
+	}
 
 	/**
 	 * Session prompt host scoped to THIS extension: registrations without an
@@ -414,6 +453,12 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 
 	registerSetting(setting: ExtensionSetting): void {
 		this.extension.settings.set(setting.key, setting);
+	}
+
+	registerMemoryBackendProvider(provider: Parameters<typeof registerMemoryProvider>[0]): () => void {
+		const dispose = registerMemoryProvider(provider);
+		this.extension.memoryBackendProviders.push(dispose);
+		return dispose;
 	}
 
 	/**
@@ -839,6 +884,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		widgets: [],
 		notificationChannels: [],
 		services: [],
+		memoryBackendProviders: [],
 		themeTokens: [],
 		mediaProviders: [],
 		designSystems: [],

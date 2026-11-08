@@ -39,9 +39,9 @@ function frameResult(frame: { device: string; png: Uint8Array; capturedAt: numbe
 	};
 }
 
-export function apply(pi: ExtensionAPI): void {
-	pi.setLabel("MusePi Android 模拟器");
-	const ready = Promise.all([pi.config.get<string>("adbPath"), pi.config.get<string>("emulatorPath")]).then(
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("MusePi Android 模拟器");
+	const ready = Promise.all([ctx.config.get<string>("adbPath"), ctx.config.get<string>("emulatorPath")]).then(
 		([adbPath, emulatorPath]) =>
 			new AndroidDeviceService({ adbPath: adbPath || undefined, emulatorPath: emulatorPath || undefined }),
 	);
@@ -51,7 +51,7 @@ export function apply(pi: ExtensionAPI): void {
 		handler: (service: AndroidDeviceService, value: unknown, cwd: string) => unknown | Promise<unknown>,
 	) => {
 		const rpc: ExtensionRpcHandler = async (value, ctx) => handler(await ready, value, ctx.cwd);
-		pi.registerRpc(method, rpc);
+		ctx.rpc.register(method, rpc);
 	};
 
 	register("devices", async android => {
@@ -103,21 +103,19 @@ export function apply(pi: ExtensionAPI): void {
 		return { device: input.device, logs: await android.logcat(input.device, input) };
 	});
 
-	pi.registerTool(createAndroidEmulatorTool(pi.arktype, service()));
-	pi.registerToolView("android_emulator", {
+	ctx.tools.register(createAndroidEmulatorTool(ctx.arktype, service()));
+	ctx.tools.registerView("android_emulator", {
 		moduleUrl: "./ui/tool-view.tsx",
 		label: "Android 模拟器",
 	});
-	pi.registerComponent({
+	ctx.slots.register({
 		slot: "panel.tab.android-emulator",
 		moduleUrl: "./ui/emulator-panel.tsx",
 		label: "Android 模拟器",
 		order: 30,
 		availability: "on-demand",
 	});
-	pi.effect?.(() => {
+	ctx.effect?.(() => {
 		void ready.then(android => android.dispose());
 	});
 }
-
-export default apply;

@@ -9,21 +9,21 @@
  * - 检视入口：本目录与 `chat-view-plugin.test.tsx`。
  */
 interface ChatViewPluginApi {
+	readonly slots: {
+		register(component: { slot: string; moduleUrl: string; label: string; availability?: string }): void;
+	};
 	setLabel(label: string): void;
-	registerComponent(component: { slot: "app.chat"; moduleUrl: "./page.tsx"; label: string }): void;
 }
 
 export const name = "musepi-chat-view";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ChatViewPluginApi): void {
-	pi.setLabel("MusePi 会话页");
-	pi.registerComponent({
+export function apply(ctx: ChatViewPluginApi): void {
+	ctx.setLabel("MusePi 会话页");
+	ctx.slots.register({
 		slot: "app.chat",
 		moduleUrl: "./page.tsx",
 		label: "会话",
 	});
 }
-
-export default apply;

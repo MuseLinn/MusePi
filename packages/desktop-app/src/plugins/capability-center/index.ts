@@ -9,21 +9,21 @@
  * - 检视入口：本目录与 `capability-center-plugin.test.tsx`。
  */
 interface CapabilityPluginApi {
+	readonly slots: {
+		register(component: { slot: string; moduleUrl: string; label: string; availability?: string }): void;
+	};
 	setLabel(label: string): void;
-	registerComponent(component: { slot: "app.capability"; moduleUrl: "./page.tsx"; label: string }): void;
 }
 
 export const name = "musepi-capability-center";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: CapabilityPluginApi): void {
-	pi.setLabel("MusePi 能力中心");
-	pi.registerComponent({
+export function apply(ctx: CapabilityPluginApi): void {
+	ctx.setLabel("MusePi 能力中心");
+	ctx.slots.register({
 		slot: "app.capability",
 		moduleUrl: "./page.tsx",
 		label: "能力中心",
 	});
 }
-
-export default apply;

@@ -150,14 +150,16 @@ describe("preset composition owns selection, packages own persona text", () => {
 		const registered: Array<{ name: string; order: number; text: string }> = [];
 		const api = {
 			setLabel: () => {},
-			registerPrompt: (section: { name: string; order: number; text: unknown }) => {
-				if (typeof section.text === "string") registered.push({ ...section, text: section.text });
+			prompts: {
+				register: (section: { name: string; order: number; text: unknown }) => {
+					if (typeof section.text === "string") registered.push({ ...section, text: section.text });
+				},
 			},
 			logger: { info: () => {} },
 		} as unknown as ExtensionAPI;
 
 		const design = await import("../src/bundled-plugins/preset-design/index");
-		await design.default(api);
+		await design.apply(api);
 		expect(registered.map(section => [section.name, section.order])).toEqual([
 			["mode:design:role", 25],
 			["mode:design:workflow", 30],
@@ -170,7 +172,7 @@ describe("preset composition owns selection, packages own persona text", () => {
 
 		registered.length = 0;
 		const chat = await import("../src/bundled-plugins/preset-chat/index");
-		await chat.default(api);
+		await chat.apply(api);
 		expect(registered.map(section => section.name)).toEqual(["mode:chat:persona"]);
 		expect(registered[0]!.text).toBe(`${CHAT_PERSONA_HEAD}只回答结论,不做多余分析;优先给出最小可行的方案。`);
 	});

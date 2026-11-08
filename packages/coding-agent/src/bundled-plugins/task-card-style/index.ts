@@ -7,11 +7,11 @@ export const provide = [] as const;
 
 const registerTaskCardStyle = createTaskCardStyleExtension({ enabled: true });
 
-export function apply(pi: ExtensionAPI): void {
-	taskCardStyle(pi);
+export function apply(ctx: ExtensionAPI): void {
+	taskCardStyle(ctx);
 }
 
-export default function taskCardStyle(pi: ExtensionAPI): void {
-	pi.setLabel("Swarm 任务卡片");
-	registerTaskCardStyle(pi);
+function taskCardStyle(ctx: ExtensionAPI): void {
+	ctx.setLabel("Swarm 任务卡片");
+	registerTaskCardStyle(ctx);
 }

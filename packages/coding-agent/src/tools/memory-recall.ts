@@ -4,6 +4,7 @@ import { logger, untilAborted } from "@musepi/pi-utils";
 import { formatCurrentTime, formatMemories } from "../hindsight/content";
 import recallDescription from "../prompts/tools/recall.md" with { type: "text" };
 import type { ToolSession } from ".";
+import { extensionOwnsTool } from "./tool-ownership";
 
 const memoryRecallSchema = type({
 	query: type("string").describe("natural language search query"),
@@ -24,6 +25,7 @@ export class MemoryRecallTool implements AgentTool<typeof memoryRecallSchema> {
 	constructor(private readonly session: ToolSession) {}
 
 	static createIf(session: ToolSession): MemoryRecallTool | null {
+		if (extensionOwnsTool(session, "recall")) return null;
 		const backend = session.settings.get("memory.backend");
 		if (backend !== "hindsight" && backend !== "mnemopi") return null;
 		return new MemoryRecallTool(session);

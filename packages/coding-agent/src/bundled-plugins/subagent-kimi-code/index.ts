@@ -58,15 +58,13 @@ export function createKimiCodeExecutor(
 	};
 }
 
-export function apply(pi: ExtensionAPI): void {
-	pi.setLabel("实验性 Kimi Code 子智能体");
-	registerExternalExecutableProbe(pi, "kimi");
-	const executor = pi.config.getAll().then(config => createKimiCodeExecutor(config));
-	pi.registerSubagent({
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("实验性 Kimi Code 子智能体");
+	registerExternalExecutableProbe(ctx, "kimi");
+	const executor = ctx.config.getAll().then(config => createKimiCodeExecutor(config));
+	ctx.subagents.register({
 		name: "kimi-code",
 		description: "Experimental: delegate a one-shot coding task to the native Kimi Code CLI.",
 		external: context => executor.then(run => run(context)),
 	});
 }
-
-export default apply;

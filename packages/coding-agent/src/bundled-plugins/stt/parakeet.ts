@@ -3,6 +3,6 @@ import { activateSttEngine } from "../../voice/engine-registry";
 
 export const name = "stt-engine-parakeet";
 
-export default function parakeet(pi: ExtensionAPI): void {
-	pi.effect!(activateSttEngine("parakeet"), "stt-engine:parakeet");
+export default function parakeet(ctx: ExtensionAPI): void {
+	ctx.effect!(activateSttEngine("parakeet"), "stt-engine:parakeet");
 }

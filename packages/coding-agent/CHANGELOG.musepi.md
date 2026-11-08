@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **记忆设置页由 Cordis 插件提供，并补上后端替换 seam**：设置 → 记忆现在是一个第一方 Cordis 页面，后端配置优先展示、工作区记忆仅在本地下显示、状态卡使用本地化后端说明与状态标签，维护操作重新分组；插件缺失或编译失败时仍回退内置页面。新增 `MemoryBackendProvider`，插件可替换任一记忆后端，卸载时自动恢复内置实现；扩展已注册同名记忆工具时，核心不再重复创建。
+  - EN: The memory settings page is now provided by a first-party Cordis plugin, and a backend replacement seam is available. Settings → Memory puts backend configuration first, shows the workspace browser only for the local backend, renders localized backend hints and status chips, and regroups maintenance actions; the built-in page remains the fallback when the plugin is missing or fails to compile. A new `MemoryBackendProvider` lets a plugin replace any memory backend and restores the built-in implementation on unload; when an extension registers a memory tool with the same name, the core no longer creates a duplicate.
+
 ## [0.7.2] - 2026-11-08
 
 - **浏览器扩展、Chrome 导入与真实 Chrome 中继有了统一入口**：受管浏览器工具栏新增可隐藏的扩展按钮，弹层内可直接查看 Chrome 导入、MusePi Browser Relay 和共享 Chromium 扩展；设置 → 浏览器拆成常规 / 扩展 / 数据三视图，并提供完整网址显示开关。导入流程现在有等待、成功与失败反馈，明确只把默认 Chrome Profile 的 Cookie 和 LocalStorage 复制到共享自动化 Chromium，不宣称支持密码、受管分区导入或持续同步；标签、Agent 控制和真实 Chrome Relay 仍沿用原有实现。

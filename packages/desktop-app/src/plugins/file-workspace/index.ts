@@ -12,27 +12,22 @@ import { FILE_WORKSPACE_SLOT } from "../../lib/file-workspace";
  * - 检视入口：本目录与 `file-workspace-plugin.test.tsx`。
  */
 interface FileWorkspacePluginApi {
+	readonly slots: {
+		register(component: { slot: string; moduleUrl: string; label: string; availability?: string }): void;
+	};
 	setLabel(label: string): void;
-	registerComponent(component: {
-		slot: typeof FILE_WORKSPACE_SLOT;
-		moduleUrl: "./page.tsx";
-		label: string;
-		availability: "always";
-	}): void;
 }
 
 export const name = "musepi-file-workspace";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: FileWorkspacePluginApi): void {
-	pi.setLabel("MusePi 文件工作区");
-	pi.registerComponent({
+export function apply(ctx: FileWorkspacePluginApi): void {
+	ctx.setLabel("MusePi 文件工作区");
+	ctx.slots.register({
 		slot: FILE_WORKSPACE_SLOT,
 		moduleUrl: "./page.tsx",
 		label: "文件",
 		availability: "always",
 	});
 }
-
-export default apply;

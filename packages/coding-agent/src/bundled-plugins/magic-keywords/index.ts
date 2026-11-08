@@ -48,16 +48,16 @@ export const provide = [] as const;
  * registration list is exactly the two-implementations drift this codebase
  * treats as a bug.
  */
-export function apply(pi: ExtensionAPI): void {
-	magicKeywords(pi);
+export function apply(ctx: ExtensionAPI): void {
+	magicKeywords(ctx);
 }
 
-export default function magicKeywords(pi: ExtensionAPI): void {
-	pi.setLabel("MusePi Magic Keywords");
+function magicKeywords(ctx: ExtensionAPI): void {
+	ctx.setLabel("MusePi Magic Keywords");
 
 	// ultrathink: full-spectrum rainbow (hue 0..330), matches the compiled-in
 	// highlighter's sweep exactly.
-	pi.registerMagicKeyword({
+	ctx.magicKeywords.register({
 		name: "ultrathink",
 		description: "Let standalone ultrathink request maximum automatic thinking and append its hidden notice",
 		notice: ULTRATHINK_NOTICE,
@@ -69,7 +69,7 @@ export default function magicKeywords(pi: ExtensionAPI): void {
 	// rendered per submission against the active tool list, and it DECLINES
 	// when the task tool is absent — a notice demanding subagent dispatch would
 	// ask for a capability the session does not have.
-	pi.registerMagicKeyword({
+	ctx.magicKeywords.register({
 		name: "orchestrate",
 		description: "Let standalone orchestrate append its hidden multi-agent orchestration notice",
 		notice: renderOrchestrateNotice({ tools: [] }),
@@ -83,7 +83,7 @@ export default function magicKeywords(pi: ExtensionAPI): void {
 	// is "workflowz" — the extra z keeps it from colliding with ordinary prose
 	// about workflows. The notice is a per-turn template (task batch + scout
 	// availability), and it DECLINES when either driving tool is absent.
-	pi.registerMagicKeyword({
+	ctx.magicKeywords.register({
 		name: "workflow",
 		trigger: "workflowz",
 		description: "Let standalone workflowz append its hidden eval workflow notice",
@@ -96,5 +96,5 @@ export default function magicKeywords(pi: ExtensionAPI): void {
 		highlight: { from: 30, to: 150 },
 	});
 
-	pi.logger.info("[magic-keywords] first-party keyword package loaded (3 keywords)");
+	ctx.logger.info("[magic-keywords] first-party keyword package loaded (3 keywords)");
 }

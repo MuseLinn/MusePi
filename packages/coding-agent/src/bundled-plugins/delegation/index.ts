@@ -5,9 +5,7 @@ export const name = "musepi-delegation";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	pi.setLabel("任务委托");
-	if (pi.promptHost) registerDelegationPrompts(pi.promptHost);
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("任务委托");
+	if (ctx.promptHost) registerDelegationPrompts(ctx.promptHost);
 }
-
-export default { name, inject, provide, apply };

@@ -19,9 +19,7 @@ export const name = "musepi-board";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	pi.setLabel("MusePi 看板");
-	pi.registerTool(new BoardTool());
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("MusePi 看板");
+	ctx.tools.register(new BoardTool());
 }
-
-export default apply;

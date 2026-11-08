@@ -22,12 +22,10 @@ export const name = "musepi-visuals";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	pi.setLabel("MusePi 可视化");
-	pi.registerTool(new WidgetTool());
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("MusePi 可视化");
+	ctx.tools.register(new WidgetTool());
 	// The seam pilots: metadata + renderer travel as one widget type each.
-	pi.registerWidget(METRIC_WIDGET);
-	pi.registerWidget(CLOCK_WIDGET);
+	ctx.slots.registerWidget(METRIC_WIDGET);
+	ctx.slots.registerWidget(CLOCK_WIDGET);
 }
-
-export default apply;

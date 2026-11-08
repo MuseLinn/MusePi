@@ -4,10 +4,10 @@ export const name = "musepi-tool-cards";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	toolCards(pi);
+export function apply(ctx: ExtensionAPI): void {
+	toolCards(ctx);
 }
 
-export default function toolCards(pi: ExtensionAPI): void {
-	pi.setLabel("工具卡片渲染器");
+function toolCards(ctx: ExtensionAPI): void {
+	ctx.setLabel("工具卡片渲染器");
 }

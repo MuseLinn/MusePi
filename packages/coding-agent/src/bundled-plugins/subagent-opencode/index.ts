@@ -56,15 +56,13 @@ export function createOpenCodeExecutor(
 	};
 }
 
-export function apply(pi: ExtensionAPI): void {
-	pi.setLabel("实验性 OpenCode 子智能体");
-	registerExternalExecutableProbe(pi, "opencode");
-	const executor = pi.config.getAll().then(config => createOpenCodeExecutor(config));
-	pi.registerSubagent({
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("实验性 OpenCode 子智能体");
+	registerExternalExecutableProbe(ctx, "opencode");
+	const executor = ctx.config.getAll().then(config => createOpenCodeExecutor(config));
+	ctx.subagents.register({
 		name: "opencode",
 		description: "Experimental: delegate a one-shot coding task to the native OpenCode CLI.",
 		external: context => executor.then(run => run(context)),
 	});
 }
-
-export default apply;

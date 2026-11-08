@@ -4,10 +4,10 @@ export const name = "musepi-terminal";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	terminal(pi);
+export function apply(ctx: ExtensionAPI): void {
+	terminal(ctx);
 }
 
-export default function terminal(pi: ExtensionAPI): void {
-	pi.setLabel("终端");
+function terminal(ctx: ExtensionAPI): void {
+	ctx.setLabel("终端");
 }

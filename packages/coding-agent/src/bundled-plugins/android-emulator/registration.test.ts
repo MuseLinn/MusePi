@@ -83,17 +83,23 @@ describe("Cordis plugin registration", () => {
 		const pi = {
 			arktype: type,
 			setLabel() {},
-			registerRpc(method: string, handler: ExtensionRpcHandler) {
-				rpcs.set(method, handler);
+			rpc: {
+				register(method: string, handler: ExtensionRpcHandler) {
+					rpcs.set(method, handler);
+				},
 			},
-			registerTool(tool: ToolDefinition) {
-				tools.push(tool);
+			tools: {
+				register(tool: ToolDefinition) {
+					tools.push(tool);
+				},
+				registerView(tool: string, options: { moduleUrl: string; label?: string }) {
+					toolViews.push({ tool, ...options });
+				},
 			},
-			registerComponent(component: ExtensionComponent) {
-				components.push(component);
-			},
-			registerToolView(tool: string, options: { moduleUrl: string; label?: string }) {
-				toolViews.push({ tool, ...options });
+			slots: {
+				register(component: ExtensionComponent) {
+					components.push(component);
+				},
 			},
 			effect(effect: () => void) {
 				effects.push(effect);

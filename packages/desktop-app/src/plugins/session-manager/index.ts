@@ -11,27 +11,22 @@
  * - 检视入口：本目录与 `test/session-manager-plugin.test.tsx`。
  */
 interface SessionManagerPluginApi {
+	readonly slots: {
+		register(component: { slot: string; moduleUrl: string; label: string; availability?: string }): void;
+	};
 	setLabel(label: string): void;
-	registerComponent(component: {
-		slot: "settings.tab.sessions";
-		moduleUrl: "./page.tsx";
-		label: string;
-		availability: "always";
-	}): void;
 }
 
 export const name = "musepi-session-manager";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: SessionManagerPluginApi): void {
-	pi.setLabel("MusePi 会话管理");
-	pi.registerComponent({
+export function apply(ctx: SessionManagerPluginApi): void {
+	ctx.setLabel("MusePi 会话管理");
+	ctx.slots.register({
 		slot: "settings.tab.sessions",
 		moduleUrl: "./page.tsx",
 		label: "会话",
 		availability: "always",
 	});
 }
-
-export default apply;

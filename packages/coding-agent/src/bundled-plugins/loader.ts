@@ -32,7 +32,7 @@ import { EventBus } from "../utils/event-bus";
  * delegation gates, file-tool guidance, browser/computer/LSP/host-integration
  * notes — must hold in every real session regardless of discovery options.
  * They are still mounted PER SESSION (each factory binds that session's
- * `pi.promptHost`), never globally.
+ * `ctx.promptHost`), never globally.
  */
 const SESSION_PROMPT_PACKAGE_DIRS: ReadonlySet<string> = new Set([
 	"delegation",

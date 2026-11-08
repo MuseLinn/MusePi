@@ -13,7 +13,7 @@
  * the composer, and both briefs disappear with it.
  *
  * Extension-registered design systems keep their own text in
- * `pi.registerDesignSystem`; this plugin reads that registry only for ids it
+ * `ctx.registerDesignSystem`; this plugin reads that registry only for ids it
  * does not own.
  */
 import type { ExtensionAPI } from "../../extensibility/extensions/types";
@@ -65,13 +65,13 @@ export function renderAssetPolicyBrief(selection: unknown): string | undefined {
  * section is registered, so a selection change replaces the rendered brief
  * instead of adding a second one.
  */
-export function registerDesignGuidance(pi: ExtensionAPI): void {
-	pi.setLabel("设计/素材简报");
-	pi.registerPrompt({
+export function registerDesignGuidance(ctx: ExtensionAPI): void {
+	ctx.setLabel("设计/素材简报");
+	ctx.prompts.register({
 		...DESIGN_SYSTEM_SECTION,
 		text: context => renderDesignSystemBrief(context.designSystemId),
 	});
-	pi.registerPrompt({
+	ctx.prompts.register({
 		...ASSET_POLICY_SECTION,
 		text: context => renderAssetPolicyBrief(context.assetPolicy),
 	});
@@ -81,11 +81,9 @@ const designGuidance: CordisPluginEntry = {
 	name,
 	inject,
 	provide,
-	apply(pi) {
-		registerDesignGuidance(pi as ExtensionAPI);
+	apply(ctx) {
+		registerDesignGuidance(ctx as ExtensionAPI);
 	},
 };
-
-export default designGuidance;
 
 export type { AssetPolicy };

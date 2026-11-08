@@ -60,12 +60,29 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 	},
 	{
 		kind: "plugin-module",
+		name: "memory",
+		displayName: "MusePi Memory",
+		description:
+			"Backend selection, workspace memory browser, live status, and maintenance in one Cordis-owned page.",
+		annotate: true,
+		raw: { name: "memory", kind: "plugin-module" },
+	},
+	{
+		kind: "plugin-module",
 		name: "file-workspace",
 		displayName: "MusePi File Workspace",
 		description:
 			"Workspace tree, Monaco and Markdown editing, PDF and document previews, and file references in one Cordis-owned panel.",
 		annotate: true,
 		raw: { name: "file-workspace", kind: "plugin-module" },
+	},
+	{
+		kind: "plugin-module",
+		name: "scheduled-panel",
+		displayName: "MusePi Scheduled Panel",
+		description: "Task-center second-tier sidebar panel: search, status filter and workspace groups.",
+		annotate: true,
+		raw: { name: "scheduled-panel", kind: "plugin-module" },
 	},
 ];
 

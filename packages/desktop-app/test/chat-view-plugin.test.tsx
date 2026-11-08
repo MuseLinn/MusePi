@@ -20,8 +20,10 @@ describe("chat-view Cordis plugin", () => {
 		const components: ExtensionComponent[] = [];
 		apply({
 			setLabel() {},
-			registerComponent(component: ExtensionComponent) {
-				components.push(component);
+			slots: {
+				register(component: ExtensionComponent) {
+					components.push(component);
+				},
 			},
 		} as unknown as ExtensionAPI);
 		expect(components).toEqual([expect.objectContaining({ slot: "app.chat", moduleUrl: "./page.tsx" })]);

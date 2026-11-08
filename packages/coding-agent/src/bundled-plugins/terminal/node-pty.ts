@@ -5,9 +5,9 @@ import type { ExtensionAPI } from "../../extensibility/extensions/types";
 export const name = "terminal-provider-nodepty";
 export const inject = ["terminal:backends"] as const;
 
-export default function nodePty(pi: ExtensionAPI): void {
-	const registry = pi.service!<TerminalRegistry>("terminal:backends");
+export default function nodePty(ctx: ExtensionAPI): void {
+	const registry = ctx.service!<TerminalRegistry>("terminal:backends");
 	if (!registry) throw new Error("terminal:backends service unavailable");
 	const unregister = registry.registerBackend("node-pty", createNodePtyBackend());
-	pi.effect!(unregister, "terminal-backend:node-pty");
+	ctx.effect!(unregister, "terminal-backend:node-pty");
 }

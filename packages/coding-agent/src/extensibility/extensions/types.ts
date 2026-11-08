@@ -10,11 +10,11 @@
  * 能力缝声明（M2-2.4，索引：docs/capability-seams.md「扩展 API（register* 面）」）：
  * - 名称+ns：`ExtensionAPI`（pi 对象，extension-module 加载期注入；新增面
  *   `config`（manifest 声明式配置读取，2026-09-30，extensions-dev.md §13））。
- * - 输入：扩展 factory 的注册调用（registerTool/registerCommand/
- *   registerComponent/registerRpc/registerSkill/registerToolView/registerPrompt/
- *   registerMode/registerSetting/registerShortcut/registerFlag/
- *   registerFileWriteFallback/registerFileDeleteFallback 等）+ 运行时查询
- *   （getFlag/config.get/config.getAll）。
+ * - 输入：扩展 factory 的注册调用。规范入口是 `ctx.*` 命名空间
+ *   （`ctx.tools.register` / `ctx.commands.register` / `ctx.slots.register` /
+ *   `ctx.prompts.register` / `ctx.rpc.register` / `ctx.settings.register` 等）；
+ *   平铺的 `registerTool/registerCommand/registerComponent/...` 只作为 legacy
+ *   兼容别名保留。运行时查询走 `getFlag/config.get/config.getAll`。
  * - 输出：进程内注册表（extension 对象的 Map/数组）+ `extensions.list` /
  *   会话工具/命令/GUI 槽位挂载/声明式配置管理页（config+resources 经
  *   extensions.list 下发）。
@@ -81,6 +81,7 @@ import type * as PiCodingAgent from "../../index";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
 import type { MCPServerConfig } from "../../mcp/types";
 import type { MemoryRuntimeContext } from "../../memory-backend";
+import type { MemoryBackendProvider } from "../../memory-backend/providers";
 import type { CustomEditor } from "../../modes/components/custom-editor";
 import type { Theme } from "../../modes/theme/theme";
 import type { PresetPluginRow } from "../../presets/resolve";
@@ -1328,7 +1329,39 @@ export type ExtensionServiceTier<Family extends ServiceTierFamily> = Family exte
 /**
  * ExtensionAPI passed to extension factory functions.
  */
-export interface ExtensionAPI {
+/**
+ * dsh-aligned Track A context namespaces. New plugins receive the same object
+ * as `pi` and should program against these services; the flat `pi.*` methods
+ * remain as legacy aliases.
+ */
+export interface PluginContextNamespaces {
+	readonly tools: {
+		register: ExtensionAPI["registerTool"];
+		registerView: ExtensionAPI["registerToolView"];
+	};
+	readonly commands: {
+		register: ExtensionAPI["registerCommand"];
+		registerShortcut: ExtensionAPI["registerShortcut"];
+	};
+	readonly settings: { register: ExtensionAPI["registerSetting"] };
+	readonly prompts: {
+		register: ExtensionAPI["registerPrompt"];
+		readonly host?: PromptHostSurface;
+	};
+	readonly slots: {
+		register: ExtensionAPI["registerComponent"];
+		registerWidget: ExtensionAPI["registerWidget"];
+	};
+	readonly rpc: {
+		register: ExtensionAPI["registerRpc"];
+		webRoute: ExtensionAPI["registerWebRoute"];
+	};
+	readonly subagents: { register: ExtensionAPI["registerSubagent"] };
+	readonly magicKeywords: { register: ExtensionAPI["registerMagicKeyword"] };
+	readonly memory: { registerBackendProvider: ExtensionAPI["registerMemoryBackendProvider"] };
+}
+
+export interface ExtensionAPI extends PluginContextNamespaces {
 	// =========================================================================
 	// Module Access
 	// =========================================================================
@@ -1694,6 +1727,12 @@ export interface ExtensionAPI {
 		name: string,
 		service: { start?: () => void | Promise<void>; stop?: () => void | Promise<void> },
 	): void;
+
+	/** Replace one memory backend implementation for this process. The returned
+	 *  disposer restores the built-in backend and is also run automatically when
+	 *  the extension unloads or reloads. Only one provider per backend id may be
+	 *  registered at a time. */
+	registerMemoryBackendProvider(provider: MemoryBackendProvider): () => void;
 
 	/** Contribute a theme token (a *new* key, never overriding a built-in theme
 	 *  color/background/symbol). The runner aggregates these and hands them to
@@ -2514,6 +2553,9 @@ export interface Extension {
 	/** Background services declared by the extension (registerService): the
 	 *  runner calls each `start` on load and each `stop` on unload/shutdown. */
 	services: ExtensionService[];
+	/** Disposers for memory backend providers registered by the extension;
+	 *  run on unload/reload before another provider may take the same id. */
+	memoryBackendProviders: Array<() => void>;
 	/** Theme tokens contributed by the extension (registerThemeToken), merged
 	 *  into the theme as *new* keys only; dropped on unload so the theme
 	 *  re-renders with them removed. */

@@ -15,6 +15,7 @@ export function SchemaTabSection({
 	excludeKeys,
 	excludePrefixes,
 	conditions,
+	onChanged,
 }: {
 	rpc: RpcClient | null;
 	tabs: string[];
@@ -37,6 +38,8 @@ export function SchemaTabSection({
 	/** Condition evaluators that need GUI-side state (plugin registry, …)
 	 *  not present in the fetched settings values. Memoize at the call site. */
 	conditions?: Record<string, (values: Record<string, unknown>) => boolean>;
+	/** Notified after a setting write succeeds, for pages with live state. */
+	onChanged?: (key: string, value: unknown) => void;
 }): ReactNode {
 	const [schema, setSchema] = useState<SchemaItem[] | null>(null);
 	const [values, setValues] = useState<Record<string, unknown>>({});
@@ -76,7 +79,10 @@ export function SchemaTabSection({
 		setValues(prev => ({ ...prev, [key]: value }));
 		void rpc
 			.request("settings.set", { key, value })
-			.then(() => setError(null))
+			.then(() => {
+				setError(null);
+				onChanged?.(key, value);
+			})
 			.catch(err => {
 				setValues(prev => {
 					const next = { ...prev };

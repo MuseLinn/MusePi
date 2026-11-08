@@ -60,10 +60,10 @@ Discovered JavaScript and TypeScript hooks use the production extension chain: `
 
 一个扩展模块可以组合:
 
-- 事件处理:`pi.on("session:start" | "tool:call" | "tool:result" | "message" | ...)`
-- LLM 工具:`pi.registerTool({ name, description, parameters, execute })`(进入工具注册表,权限链照常生效)
-- 子智能体:`pi.registerSubagent({ name, description, systemPrompt, external })`;本地 Agent 必须提供非空 `systemPrompt`,外部 Agent 改为提供一次性 `external(context)` 执行器,并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物。子智能体类型本身已是 Cordis 插件能力;本地子智能体的多轮接续属于运行时生命周期(`hub send` / `agents.chat` / 冷恢复),不需要第二个 Agent 定义。共享任务板等团队协作应是独立 Cordis 插件,可参考 DSH 将团队服务、模型工具与 UI 拆包的做法,不要把任务所有权塞进 `registerSubagent`。
-- 斜杠命令:`pi.registerCommand(...)`(TUI `/cmd` + GUI 命令面板)
+- 事件处理:`ctx.on("session:start" | "tool:call" | "tool:result" | "message" | ...)`
+- LLM 工具:`ctx.tools.register({ name, description, parameters, execute })`(进入工具注册表,权限链照常生效)
+- 子智能体:`ctx.subagents.register({ name, description, systemPrompt, external })`;本地 Agent 必须提供非空 `systemPrompt`,外部 Agent 改为提供一次性 `external(context)` 执行器,并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物。子智能体类型本身已是 Cordis 插件能力;本地子智能体的多轮接续属于运行时生命周期(`hub send` / `agents.chat` / 冷恢复),不需要第二个 Agent 定义。共享任务板等团队协作应是独立 Cordis 插件,可参考 DSH 将团队服务、模型工具与 UI 拆包的做法,不要把任务所有权塞进子智能体注册。
+- 斜杠命令:`ctx.commands.register(...)`(TUI `/cmd` + GUI 命令面板)
 - 快捷键/flags、自定义消息渲染、会话/消息注入(`sendMessage` / `sendUserMessage` / `appendEntry`)
 - **工具执行拦截**:每个工具执行都被扩展拦截层包裹(`tool_call` / `tool_result` 事件可介入)
 
@@ -173,6 +173,7 @@ export default function (pi: ExtensionAPI): void {
 - `panel.shell` — full right-panel shell (single). The `panel` plugin owns tabs, split layout, and maximize presentation; `app.chat` does not bundle it.
 - `browser.host` — persistent managed-browser guest host (single), mounted at the app root independently of `panel.tab.browser`. Both artifacts bind the same `window.MusePiManagedBrowserHost` store instead of bundling separate copies.
 - `settings.tab.<id>` — 设置页左侧导航项:扩展声明一个设置页即出现在设置导航,内容区挂载组件。
+- `sidebar.panel.<destination id>` — 二级左栏面板(2026-11-08):宿主按 rail 目的地 id 取唯一贡献,挂进 `.gui-side-keeper`,由 `data-panel` 决定显隐;几何读 keeper 上的 `--gui-side-w`,不接宿主专用 props。编译插件通过宿主模块表共享 `lib/scheduled-task-nav`(`task-nav`),否则会拿到另一份快照 store。插件停用或编译失败时宿主回退内置面板,目的地仍可用。
 - `rail.<id>` — 右缘图标轨(前缀命名空间;`rail.right` 是保留的精确槽)
 - `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端(list 语义,多扩展可同槽)
 - `panel.right` / `settings.extensions` — 旧保留槽(仍可用)。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载,见下):注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染,并注入 `settingsScope` 读写代理。
@@ -711,6 +712,24 @@ closes. The symptoms are "every UI edit leaves another stylesheet behind" and
 order. Do **not** write a test that replays the host's steps — it would pass
 while the host is broken.
 
+## 18.2 Host memory service (`ctx.memory`)
+
+A session extension receives the live memory backend through `ctx.memory`:
+
+| Member | Meaning |
+|---|---|
+| `backend()` | Active backend id (`off`, `local`, `mnemopi`, `hindsight`, `sharpshooter`). |
+| `status()` | The same structured status the settings page and `/memory` read. |
+| `search()`, `save()` | Structured recall and explicit writes, when the backend supports them. |
+| `clear()`, `enqueue()` | The `/memory clear` and `/memory enqueue` operations. |
+| `view()`, `stats()`, `diagnose()` | The prompt payload and backend reports behind `/memory view/stats/diagnose`. |
+
+Both the core memory system and extension code resolve the same backend for the session. A host-half memory plugin (tools, commands, lifecycle) should call `ctx.memory` instead of importing `memory-backend` internals; the desktop settings page is a renderer component and reads the daemon's `memory.*` RPC. `"memory"` is also a host service name for a Cordis plugin's `inject`; `pi.service("memory")` intentionally returns `undefined` because host capabilities are exposed as `ctx.memory`, not as plugin-provided objects.
+
+A Cordis plugin can replace one backend implementation with `pi.registerMemoryBackendProvider({ id, create(settings) })`. The provider is consulted before the built-in backend, a second provider for the same id is refused, and the returned disposer restores the built-in implementation. The runner also runs that disposer on extension unload/reload, so a replaced backend cannot outlive its plugin.
+
+This is the seam for moving the memory management surface (settings page, `/memory`, tools, RPC) into a first-party Cordis package. The provider seam now exists; no first-party memory plugin registers one yet, so the built-in backends remain the default.
+
 ## 19. Frozen host module table for compiled plugins (2026-11-03)
 
 A compiled component is a standalone ESM bundle. Every app import it does not externalize is copied into that bundle — including modules that hold **React context or module-level state**. The copies then diverge: a bundled `prompt-dialog` reads its own default context, so `confirm` resolves `false` without showing a dialog; a bundled toast store never reaches the host's toaster; a bundled floating-menu module owns a second mutex, so two menus can be open at once. Copying a pure helper is harmless; copying an identity-bearing module is a silent behavioral bug.
@@ -757,7 +776,7 @@ const hostModules = {
 |---|---|---|
 | `prompt-dialog` | `lib/prompt-dialog.tsx` | Prompt/confirm React context |
 | `managed-browser-host` | `lib/managed-browser-host.ts` | Managed-browser host store |
-| `action-toast` | `lib/action-toast.ts` | Toast list and subscribers |
+| `action-toast` | `lib/action-toast.ts` (re-exports the `client-core` store) | Toast list and subscribers, shared by the desktop and guest/mobile shells |
 | `file-workspace` | `lib/file-workspace.ts` | File preview buffers |
 | `floating-menu` | `lib/use-floating-menu.tsx` | Module-level menu mutex |
 | `update-ux` | `lib/update-ux.ts` | Update-toast/dialog shared flags and subscriber set |

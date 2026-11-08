@@ -10,6 +10,10 @@ import type {
 export function createMemoryRuntimeContext(context: MemoryBackendOperationContext): MemoryRuntimeContext {
 	const settings = context.session?.settings;
 	return {
+		async backend() {
+			if (!settings) return "off";
+			return (await resolveMemoryBackend(settings)).id;
+		},
 		async status() {
 			if (!settings) {
 				return {
@@ -45,6 +49,31 @@ export function createMemoryRuntimeContext(context: MemoryBackendOperationContex
 			return backend.save
 				? await backend.save(context, normalized)
 				: unavailableSave(backend.id, `Memory save is not available for the ${backend.id} backend.`);
+		},
+		async clear() {
+			if (!settings) return;
+			const backend = await resolveMemoryBackend(settings);
+			await backend.clear(context.agentDir, context.cwd, context.session);
+		},
+		async enqueue() {
+			if (!settings) return;
+			const backend = await resolveMemoryBackend(settings);
+			await backend.enqueue(context.agentDir, context.cwd, context.session);
+		},
+		async view() {
+			if (!settings) return undefined;
+			const backend = await resolveMemoryBackend(settings);
+			return backend.buildDeveloperInstructions(context.agentDir, context.cwd, settings, context.session);
+		},
+		async stats() {
+			if (!settings) return undefined;
+			const backend = await resolveMemoryBackend(settings);
+			return backend.stats?.(context.agentDir, context.cwd, context.session);
+		},
+		async diagnose() {
+			if (!settings) return undefined;
+			const backend = await resolveMemoryBackend(settings);
+			return backend.diagnose?.(context.agentDir, context.cwd, context.session);
 		},
 	};
 }

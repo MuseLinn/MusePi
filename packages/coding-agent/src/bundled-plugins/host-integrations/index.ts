@@ -5,9 +5,7 @@ export const name = "musepi-host-integrations";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	pi.setLabel("宿主集成");
-	if (pi.promptHost) registerHostIntegrationPrompts(pi.promptHost);
+export function apply(ctx: ExtensionAPI): void {
+	ctx.setLabel("宿主集成");
+	if (ctx.promptHost) registerHostIntegrationPrompts(ctx.promptHost);
 }
-
-export default { name, inject, provide, apply };

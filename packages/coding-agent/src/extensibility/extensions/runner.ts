@@ -1764,6 +1764,16 @@ export class ExtensionRunner {
 	}
 
 	#stopServicesForExtension(ext: Extension): void {
+		for (const dispose of ext.memoryBackendProviders.splice(0)) {
+			try {
+				dispose();
+			} catch (error) {
+				logger.warn("Memory backend provider cleanup threw", {
+					extensionPath: ext.path,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
 		for (const service of ext.services) {
 			if (typeof service.stop !== "function") continue;
 			this.#invokeServiceLifecycle("service_stop", ext.path, service.stop);

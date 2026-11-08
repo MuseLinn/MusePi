@@ -3,6 +3,6 @@ import { activateSttEngine } from "../../voice/engine-registry";
 
 export const name = "stt-engine-whisper";
 
-export default function whisper(pi: ExtensionAPI): void {
-	pi.effect!(activateSttEngine("whisper"), "stt-engine:whisper");
+export default function whisper(ctx: ExtensionAPI): void {
+	ctx.effect!(activateSttEngine("whisper"), "stt-engine:whisper");
 }

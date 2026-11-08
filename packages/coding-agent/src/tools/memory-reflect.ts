@@ -4,6 +4,7 @@ import { logger, untilAborted } from "@musepi/pi-utils";
 import { ensureBankExists } from "../hindsight/bank";
 import reflectDescription from "../prompts/tools/reflect.md" with { type: "text" };
 import type { ToolSession } from ".";
+import { extensionOwnsTool } from "./tool-ownership";
 
 const memoryReflectSchema = type({
 	query: type("string").describe("question to answer"),
@@ -25,6 +26,7 @@ export class MemoryReflectTool implements AgentTool<typeof memoryReflectSchema> 
 	constructor(private readonly session: ToolSession) {}
 
 	static createIf(session: ToolSession): MemoryReflectTool | null {
+		if (extensionOwnsTool(session, "reflect")) return null;
 		const backend = session.settings.get("memory.backend");
 		if (backend !== "hindsight" && backend !== "mnemopi") return null;
 		return new MemoryReflectTool(session);

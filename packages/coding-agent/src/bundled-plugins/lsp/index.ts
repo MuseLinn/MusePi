@@ -5,11 +5,11 @@ export const name = "musepi-lsp";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: ExtensionAPI): void {
-	lsp(pi);
-	if (pi.promptHost) registerLspPrompts(pi.promptHost);
+export function apply(ctx: ExtensionAPI): void {
+	lsp(ctx);
+	if (ctx.promptHost) registerLspPrompts(ctx.promptHost);
 }
 
-export default function lsp(pi: ExtensionAPI): void {
-	pi.setLabel("语言服务（LSP）");
+function lsp(ctx: ExtensionAPI): void {
+	ctx.setLabel("语言服务（LSP）");
 }

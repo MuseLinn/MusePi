@@ -166,8 +166,10 @@ describe("session-manager Cordis plugin", () => {
 		const registrations: unknown[] = [];
 		apply({
 			setLabel() {},
-			registerComponent(component) {
-				registrations.push(component);
+			slots: {
+				register(component) {
+					registrations.push(component);
+				},
 			},
 		});
 		expect(registrations).toEqual([

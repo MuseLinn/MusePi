@@ -3,6 +3,7 @@ import type { AgentTool, AgentToolResult } from "@musepi/pi-agent-core";
 import { isGlobalMemoryScopeAvailable } from "../memory-backend/global-scope";
 import retainDescription from "../prompts/tools/retain.md" with { type: "text" };
 import type { ToolSession } from ".";
+import { extensionOwnsTool } from "./tool-ownership";
 
 const memoryRetainSchema = type({
 	items: type({
@@ -31,6 +32,7 @@ export class MemoryRetainTool implements AgentTool<typeof memoryRetainSchema> {
 	constructor(private readonly session: ToolSession) {}
 
 	static createIf(session: ToolSession): MemoryRetainTool | null {
+		if (extensionOwnsTool(session, "retain")) return null;
 		const backend = session.settings.get("memory.backend");
 		if (backend !== "hindsight" && backend !== "mnemopi") return null;
 		return new MemoryRetainTool(session);

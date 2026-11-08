@@ -48,10 +48,10 @@ Creator 快捷创建只发送用户的自然语言需求。预设 prompt 持有�
 
 一个扩展模块可以组合：
 
-- 事件处理：`pi.on("session:start" | "tool:call" | "tool:result" | "message" | ...)`
-- LLM 工具：`pi.registerTool({ name, description, parameters, execute })`（进入工具注册表，权限链照常生效）
-- 子智能体：`pi.registerSubagent({ name, description, systemPrompt, external })`；本地 Agent 必须提供非空 `systemPrompt`，外部 Agent 改为提供一次性 `external(context)` 执行器，并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物。子智能体类型本身已是 Cordis 插件能力；本地子智能体的多轮接续属于运行时生命周期（`hub send` / `agents.chat` / 冷恢复），不需要第二个 Agent 定义。共享任务板等团队协作应是独立 Cordis 插件，可参考 DSH 将团队服务、模型工具与 UI 拆包的做法，不要把任务所有权塞进 `registerSubagent`。
-- 斜杠命令：`pi.registerCommand(...)`（TUI `/cmd` + GUI 命令面板）
+- 事件处理：`ctx.on("session:start" | "tool:call" | "tool:result" | "message" | ...)`
+- LLM 工具：`ctx.tools.register({ name, description, parameters, execute })`（进入工具注册表，权限链照常生效）
+- 子智能体：`ctx.subagents.register({ name, description, systemPrompt, external })`；本地 Agent 必须提供非空 `systemPrompt`，外部 Agent 改为提供一次性 `external(context)` 执行器，并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物。子智能体类型本身已是 Cordis 插件能力；本地子智能体的多轮接续属于运行时生命周期（`hub send` / `agents.chat` / 冷恢复），不需要第二个 Agent 定义。共享任务板等团队协作应是独立 Cordis 插件，可参考 DSH 将团队服务、模型工具与 UI 拆包的做法，不要把任务所有权塞进子智能体注册。
+- 斜杠命令：`ctx.commands.register(...)`（TUI `/cmd` + GUI 命令面板）
 - 快捷键/flags、自定义消息渲染、会话/消息注入（`sendMessage` / `sendUserMessage` / `appendEntry`）
 - **工具执行拦截**：每个工具执行都被扩展拦截层包裹（`tool_call` / `tool_result` 事件可介入）
 
@@ -161,6 +161,7 @@ export default function (pi: ExtensionAPI): void {
 - `panel.shell` — 完整右栏壳（single）。`panel` 插件拥有标签、分栏和最大化呈现，`app.chat` 不再打包右栏。
 - `browser.host` — 常驻受管浏览器 guest 宿主（single），在应用根部挂载，独立于 `panel.tab.browser`。两个产物共享 `window.MusePiManagedBrowserHost`，不分别打包 store。
 - `settings.tab.<id>` — 设置页左侧导航项：扩展声明一个设置页即出现在设置导航，内容区挂载组件。
+- `sidebar.panel.<destination id>` — 二级左栏面板（2026-11-08）：宿主按 rail 目的地 id 取唯一贡献，挂进 `.gui-side-keeper`，由 `data-panel` 决定显隐；几何读 keeper 上的 `--gui-side-w`，不接宿主专用 props。编译插件通过宿主模块表共享 `lib/scheduled-task-nav`（`task-nav`），否则会拿到另一份快照 store。插件停用或编译失败时宿主回退内置面板，目的地仍可用。
 - `rail.<id>` — 右缘图标轨（前缀命名空间；`rail.right` 是保留的精确槽）
 - `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端（list 语义，多扩展可同槽）
 - `panel.right` / `settings.extensions` — 旧保留槽（仍可用）。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载，见下）：注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染，并注入 `settingsScope` 读写代理。
@@ -742,7 +743,7 @@ const hostModules = {
 |---|---|---|
 | `prompt-dialog` | `lib/prompt-dialog.tsx` | prompt/confirm 的 React context |
 | `managed-browser-host` | `lib/managed-browser-host.ts` | 受管浏览器宿主 store |
-| `action-toast` | `lib/action-toast.ts` | toast 列表与订阅者 |
+| `action-toast` | `lib/action-toast.ts`（re-export `client-core` 的 store） | toast 列表与订阅者，桌面与 guest/mobile 共用 |
 | `file-workspace` | `lib/file-workspace.ts` | 文件预览缓冲区 |
 | `floating-menu` | `lib/use-floating-menu.tsx` | 模块级菜单 mutex |
 | `update-ux` | `lib/update-ux.ts` | 更新提示/对话框共享的标志位与订阅者集合 |
@@ -838,3 +839,21 @@ plan/goal/vibe 运行时上下文刻意保持宿主持有的 custom 消息：`Ag
 日期、cwd、skills/rules、工具清单与 persona/预设数据仍在 `buildSystemPrompt`；不要把提示词面描述成已全部插件化。
 
 **回归锚点**：`packages/coding-agent/test/prompts-registry.test.ts`、`packages/coding-agent/test/prompts-composer.test.ts`、`packages/coding-agent/test/prompts-host.test.ts`、`packages/coding-agent/test/prompt-host-session.test.ts`、`packages/coding-agent/test/prompt-project-context.test.ts`、`packages/coding-agent/src/prompts/{orders,registry,composer,host,store,types,project-context}.ts`、`packages/coding-agent/src/bundled-plugins/loader.ts`。
+
+## 20. 宿主记忆服务（`ctx.memory`）
+
+会话扩展通过 `ctx.memory` 读取当前记忆后端：
+
+| 成员 | 含义 |
+|---|---|
+| `backend()` | 活动后端 id（`off`、`local`、`mnemopi`、`hindsight`、`sharpshooter`）。 |
+| `status()` | 设置页与 `/memory` 读取的同一份结构化状态。 |
+| `search()`、`save()` | 后端支持时提供结构化召回与显式写入。 |
+| `clear()`、`enqueue()` | 对应 `/memory clear` 与 `/memory enqueue`。 |
+| `view()`、`stats()`、`diagnose()` | 对应 `/memory view/stats/diagnose` 的提示词载荷与后端报告。 |
+
+核心记忆系统与扩展代码为同一会话解析同一个后端。宿主半体的记忆插件（工具、命令、生命周期）应调用 `ctx.memory`，而不是导入 `memory-backend` 内部模块；桌面设置页是渲染侧组件，读取 daemon 的 `memory.*` RPC。`"memory"` 同时是 Cordis 插件 `inject` 可声明的宿主服务名；`pi.service("memory")` 有意返回 `undefined`，因为宿主能力通过 `ctx.memory` 暴露，而不是插件 `provide` 的对象。
+
+Cordis 插件可以用 `pi.registerMemoryBackendProvider({ id, create(settings) })` 替换一个后端实现。provider 在内置后端之前解析；同一 id 的第二个 provider 会被拒绝；返回的 disposer 恢复内置实现。扩展卸载或重载时 runner 也会执行该 disposer，被替换的后端不会比插件活得更久。
+
+这是把记忆管理面（设置页、`/memory`、工具、RPC）迁入第一方 Cordis 包的最小 seam。provider seam 已经存在；目前还没有第一方记忆插件注册 provider，因此内置后端仍是默认实现。

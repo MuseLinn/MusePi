@@ -11,21 +11,21 @@
  * - 检视入口:本目录与 `test/session-info-plugins.test.tsx`。
  */
 interface SessionInfoPluginsPluginApi {
+	readonly slots: {
+		register(component: { slot: string; moduleUrl: string; label: string; availability?: string }): void;
+	};
 	setLabel(label: string): void;
-	registerComponent(component: { slot: "chat.session-info.plugins"; moduleUrl: "./page.tsx"; label: string }): void;
 }
 
 export const name = "musepi-session-info-plugins";
 export const inject = [] as const;
 export const provide = [] as const;
 
-export function apply(pi: SessionInfoPluginsPluginApi): void {
-	pi.setLabel("MusePi 会话信息插件分区");
-	pi.registerComponent({
+export function apply(ctx: SessionInfoPluginsPluginApi): void {
+	ctx.setLabel("MusePi 会话信息插件分区");
+	ctx.slots.register({
 		slot: "chat.session-info.plugins",
 		moduleUrl: "./page.tsx",
 		label: "插件",
 	});
 }
-
-export default apply;
