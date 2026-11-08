@@ -1260,14 +1260,13 @@ export class CordisDynamicPluginRuntime {
 		await record.fiber.dispose();
 		// Services go first: nothing may inject a name whose provider is gone.
 		this.#forgetProvidedServices(record.key);
-		// The ledger undoes registrations; `pi.effect` cleanups are NOT
-		// registrations, so they need their own pass. Running them after the
+		// The ledger undoes registrations; `pi.effect` cleanups and listeners are
+		// NOT registrations, so they need their own pass. Running them after the
 		// fiber is gone is deliberate: a cleanup that touches a registration
 		// must see the world as it was, not a half-torn-down one.
 		const { disposePluginPrimitives } = await import("../extensibility/plugins/runtime/cordis-primitives");
 		if (extension) {
 			await disposePluginPrimitives(extension);
-			for (const dispose of extension.eventListenerDisposers?.splice(0) ?? []) dispose();
 		}
 		// The component DECLARATIONS survive the unload: a package toggle is an
 		// install/uninstall of the whole plugin, and the management surface

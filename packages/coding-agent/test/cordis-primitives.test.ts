@@ -22,6 +22,7 @@ import {
 	disposePluginPrimitives,
 	pendingEffectCount,
 	registerEffect,
+	runEffects,
 	stateDelete,
 	stateGet,
 	stateHas,
@@ -226,5 +227,50 @@ describe("failed mount cleanup", () => {
 		expect(stateHas(ext, "partial")).toBe(false);
 		// The dropped effect is gone, so a later dispose also runs nothing.
 		expect(pendingEffectCount(ext)).toBe(0);
+	});
+});
+
+describe("plugin listener ledger", () => {
+	test("a full dispose drains listeners alongside effects", async () => {
+		// Unload used to rely on every call site remembering a second loop. The
+		// paths that forgot left listeners registered on the shared runtime bus,
+		// so a reloaded plugin fired twice.
+		const ext = fakeExtension();
+		let off = 0;
+		ext.eventListenerDisposers = [() => (off += 1), () => (off += 1)];
+		registerEffect(ext, () => (off += 1));
+
+		await disposePluginPrimitives(ext);
+
+		expect(off).toBe(3);
+		expect(ext.eventListenerDisposers).toHaveLength(0);
+	});
+
+	test("a throwing listener disposer does not strand the others", async () => {
+		const ext = fakeExtension();
+		let off = 0;
+		ext.eventListenerDisposers = [
+			() => {
+				throw new Error("boom");
+			},
+			() => (off += 1),
+		];
+
+		await disposePluginPrimitives(ext);
+
+		expect(off).toBe(1);
+	});
+
+	test("session stop keeps listeners: runEffects does not touch the ledger", async () => {
+		// The runner outlives a session, so a session-scoped drain must not
+		// unregister listeners — that was the lost `agent_end` regression.
+		const ext = fakeExtension();
+		let off = 0;
+		ext.eventListenerDisposers = [() => (off += 1)];
+
+		await runEffects(ext);
+
+		expect(off).toBe(0);
+		expect(ext.eventListenerDisposers).toHaveLength(1);
 	});
 });

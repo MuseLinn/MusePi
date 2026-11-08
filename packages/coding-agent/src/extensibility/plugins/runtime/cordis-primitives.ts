@@ -153,16 +153,26 @@ export function stateKeys(extension: Extension): string[] {
 }
 
 /**
- * Run every cleanup and drop the state, for a plugin that is going away.
+ * Run every cleanup, drop the plugin's listeners, and drop the state, for a
+ * plugin that is going away.
  *
- * This is the entry point the mount pipeline calls on unload. It is
- * `runEffects` plus the state clear, because both must go: a cleanup that
- * references state the plugin set is the normal case, so the state has to
- * outlive the cleanups — which `runEffects` already guarantees (it clears state
- * AFTER the cleanups run).
+ * This is the entry point the mount pipeline calls on unload: effects,
+ * listener disposers, and state all belong to one plugin instance, so they go
+ * together and no unload path can forget one of them. Session stop is narrow
+ * on purpose — it calls `runEffects` and keeps the listeners, because the
+ * runner may outlive the session.
  */
 export async function disposePluginPrimitives(extension: Extension): Promise<number> {
-	return runEffects(extension);
+	const ran = await runEffects(extension);
+	// Isolated like the effects: one broken disposer must not strand the rest.
+	for (const dispose of extension.eventListenerDisposers?.splice(0) ?? []) {
+		try {
+			dispose();
+		} catch (error) {
+			console.warn("[plugin] listener disposer failed:", error);
+		}
+	}
+	return ran;
 }
 
 /**

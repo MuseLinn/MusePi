@@ -634,6 +634,8 @@ is a package the distribution ships, **not a separate kind of thing**」——�
 
 账本按 `Extension` 实例存放，所以“谁来回收”不再是 cordis 独占的问题：bundled 宿主插件（如 `musepi-hmr` 的 watcher）在宿主装载器 reset 时被回收，会话扩展在 runner 收尾时被回收。`effect` 返回 disposer，可单独撤销一条登记而不卸载整个插件。
 
+插件卸载只走一个入口：effects、事件监听 disposer 与 state 一起清空，任何一条卸载路径都不会漏掉监听；会话停止只执行 effects，因为 runner 可能复用，监听要留到真正卸载。
+
 `state` 没有同步放宽：它要求一个卸载即清空的作用域，而 legacy 扩展按模块级变量写，拿到一个“看起来能用”的 state 只会让两份实例各自持有一半状态。`ExtensionAPI` 上 `state` 仍是可选的（`state?`），代码里必须按可选处理。
 
 ### 写插件时怎么选

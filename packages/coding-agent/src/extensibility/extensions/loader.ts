@@ -97,70 +97,9 @@ import { namespaceOf, type PluginWebRouteRequest, scopeRoute } from "./web-route
 
 installLegacyPiSpecifierShim();
 
-/** Lifecycle events dispatched through the runtime's Cordis event context
- *  instead of the legacy per-extension loop. Moved one family at a time. */
-const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set([
-	"session_start",
-	"session_shutdown",
-	"session_before_switch",
-	"session_before_branch",
-	"session_before_compact",
-	"session_before_tree",
-	"tool_call",
-	"tool_result",
-	"context",
-	"input",
-	"session.compacting",
-	"session_stop",
-	"user_bash",
-	"user_python",
-	"resources_discover",
-	"before_agent_start",
-	"before_provider_request",
-	"after_provider_response",
-	"cache_warming_decision",
-]);
-
 /** Cancelable pre-events: `cancel: true` stops the chain (serial bail); any
  *  other result is remembered and the chain continues, as the old loop did. */
-/** Notification/streaming events: dispatched concurrently (no results, and
- *  the order between listeners does not change what the agent does). */
-/** One-shot notifications with no result: serial keeps the registration order,
- *  which is the only ordering guarantee the old loop had. */
-export const CORDIS_SERIAL_EVENTS: ReadonlySet<string> = new Set([
-	"session_switch",
-	"session_branch",
-	"session_tree",
-	"session_compact",
-	"goal_updated",
-	"agent_start",
-	"agent_end",
-	"auto_compaction_start",
-	"auto_compaction_end",
-	"auto_retry_start",
-	"auto_retry_end",
-	"retry_fallback_applied",
-	"retry_fallback_succeeded",
-	"ttsr_triggered",
-	"todo_reminder",
-	"credential_disabled",
-	"mcp_notification",
-	"tool_approval_requested",
-	"tool_approval_resolved",
-]);
-
-export const CORDIS_PARALLEL_EVENTS: ReadonlySet<string> = new Set([
-	"message_start",
-	"message_update",
-	"message_end",
-	"tool_execution_start",
-	"tool_execution_update",
-	"tool_execution_end",
-	"turn_start",
-	"turn_end",
-]);
-
-const CORDIS_CANCELABLE_EVENTS: ReadonlySet<string> = new Set([
+const CANCELABLE_PRE_EVENTS: ReadonlySet<string> = new Set([
 	"session_before_switch",
 	"session_before_branch",
 	"session_before_compact",
@@ -530,10 +469,9 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	/** Register one listener; the return value removes it again (Cordis
 	 *  `ctx.on`). The extension unload still clears every listener it owns.
 	 *
-	 *  Lifecycle events listed in {@link CORDIS_LIFECYCLE_EVENTS} register in
-	 *  the runtime's Cordis event context instead of the legacy handler map, so
-	 *  their dispatch mode is Cordis's (`serial` / `parallel`). The timeout is
-	 *  wrapped inside the listener, leaving bail/serial results intact. */
+	 *  Every event registers in the runtime's Cordis event context; the runner
+	 *  picks `serial` / `parallel` per event. The timeout is wrapped inside the
+	 *  listener, leaving bail/serial results intact. */
 	on<F extends HandlerFn>(event: string, handler: F, options?: { prepend?: boolean }): () => void {
 		{
 			// One registry for every event: unknown names still work because the
@@ -705,7 +643,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 						}
 						return undefined;
 					}
-					if (CORDIS_CANCELABLE_EVENTS.has(event)) {
+					if (CANCELABLE_PRE_EVENTS.has(event)) {
 						const cancels = (result as { cancel?: unknown } | undefined)?.cancel === true;
 						if (cancels) return result;
 						if (result !== undefined) this.runtime.beforeEventResults?.set(args[0] as object, result);

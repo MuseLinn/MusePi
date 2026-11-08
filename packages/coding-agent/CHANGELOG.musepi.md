@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **事件派发收成一张穷尽表，插件卸载不再漏清监听**：runner 里按事件名硬编码的派发分支合并为 `EVENT_DISPATCH`——键就是事件联合类型，新增事件不声明模式即编译失败；迁移时遗留、从未被读取的 `CORDIS_LIFECYCLE_EVENTS` 删除。插件的 effect、事件监听 disposer 与 state 现在由 `disposePluginPrimitives` 一个入口清空，四条此前只清 effect 的卸载路径（bundled 宿主 reset、动态组件卸载、插件管理卸载、preset 卸载）不再把监听留在 runtime 的事件上下文里，重载也不会叠成双份；会话停止仍只清 effect，监听保留到真正卸载。
+  - EN: Event dispatch is one exhaustive table and unload no longer forgets listeners. The runner's per-event hardcoded branches collapse into `EVENT_DISPATCH`, keyed by the event union so a new event cannot ship without a declared mode; the migration leftover `CORDIS_LIFECYCLE_EVENTS`, never read, is gone. Effects, listener disposers, and state now drain through one entry point, `disposePluginPrimitives`, so the four unload paths that used to clear effects only (bundled host reset, dynamic component unload, plugin-management uninstall, preset teardown) no longer leave listeners on the runtime's event context and a reload cannot stack a second copy; session stop still drains effects only and keeps listeners until a real unload.
+
 - **事件系统只剩一份实现：`Extension.handlers` 删除**：动态沙箱的撤销改为弹出 Cordis 监听 disposer，`CordisDynamicPluginRuntime.emit` 改走共享 runtime 的事件总线；runner 的所有手写兜底循环、`hasHandlers` 的 map 分支与 `Extension.handlers` 字段一并删除，诊断计数改用监听账本。会话停止只清 effect，不误删监听（runner 可复用）；重载/卸载才回收监听。
   - EN: The event system now has one implementation and `Extension.handlers` is gone. The dynamic sandbox undoes registrations by popping the Cordis listener disposer, `CordisDynamicPluginRuntime.emit` dispatches through the shared runtime's event bus, and every hand-written fallback loop, the `hasHandlers` map branch, and the `handlers` field are removed; diagnostics count the listener ledger instead. Session stop drains effects without touching listeners (the runner may be reused); reload/unload reclaims them.
 

@@ -25,9 +25,9 @@ import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
 import { type AgentDefinition, normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
-import { disposePluginPrimitives } from "../plugins/runtime/cordis-primitives";
+import { disposePluginPrimitives, runEffects } from "../plugins/runtime/cordis-primitives";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
-import { CORDIS_PARALLEL_EVENTS, CORDIS_SERIAL_EVENTS, extensionHostOwner, loadExtensions } from "./loader";
+import { extensionHostOwner, loadExtensions } from "./loader";
 import { ManagedTimers } from "./managed-timers";
 import { type ExtensionMcpHost, ExtensionMcpRegistry } from "./mcp-servers";
 import { createExtensionModelQuery } from "./model-api";
@@ -353,6 +353,7 @@ type RunnerEmitEvent = Exclude<
 	| ToolCallEvent
 	| ToolResultEvent
 	| UserBashEvent
+	| UserPythonEvent
 	| ContextEvent
 	| CacheWarmingDecisionEvent
 	| BeforeProviderRequestEvent
@@ -386,6 +387,58 @@ type RunnerEmitResult<TEvent extends RunnerEmitEvent> = TEvent extends { type: "
 					: TEvent extends { type: "session_stop" }
 						? SessionStopEventResult | undefined
 						: undefined;
+
+/**
+ * Dispatch mode per event, keyed by the event union so a new event cannot be
+ * added without deciding how it is dispatched.
+ *
+ * `serial` keeps registration order and ignores results; `parallel` runs
+ * concurrently (notification/streaming events whose order cannot change what
+ * the agent does); `remember` runs serially, stops on a truthy result (cancel,
+ * continued) and otherwise takes the last remembered result.
+ *
+ * dsh picks the mode at each emit site (`ctx.serial` / `ctx.parallel` /
+ * `ctx.bail`). MusePi declares it once here because the runner exposes a single
+ * `emit(event)` entry: one declaration cannot drift between call sites, and the
+ * record below makes the choice exhaustive at compile time.
+ */
+const EVENT_DISPATCH: Readonly<Record<RunnerEmitEvent["type"], "serial" | "parallel" | "remember">> = {
+	session_start: "serial",
+	session_shutdown: "parallel",
+	session_before_switch: "remember",
+	session_switch: "serial",
+	session_before_branch: "remember",
+	session_branch: "serial",
+	session_before_compact: "remember",
+	"session.compacting": "remember",
+	session_compact: "serial",
+	session_stop: "remember",
+	session_before_tree: "remember",
+	session_tree: "serial",
+	goal_updated: "serial",
+	agent_start: "serial",
+	agent_end: "serial",
+	message_start: "parallel",
+	message_update: "parallel",
+	message_end: "parallel",
+	tool_execution_start: "parallel",
+	tool_execution_update: "parallel",
+	tool_execution_end: "parallel",
+	turn_start: "parallel",
+	turn_end: "parallel",
+	auto_compaction_start: "serial",
+	auto_compaction_end: "serial",
+	auto_retry_start: "serial",
+	auto_retry_end: "serial",
+	retry_fallback_applied: "serial",
+	retry_fallback_succeeded: "serial",
+	ttsr_triggered: "serial",
+	todo_reminder: "serial",
+	credential_disabled: "serial",
+	mcp_notification: "serial",
+	tool_approval_requested: "serial",
+	tool_approval_resolved: "serial",
+};
 
 // Session-lifecycle handler types live once in session-handler-types (imported
 // above for local use); re-exported here to keep this module's public API stable.
@@ -1160,10 +1213,9 @@ export class ExtensionRunner {
 		if (index === -1) return [];
 		const extension = this.extensions[index]!;
 		const toolNames = [...extension.tools.keys()];
-		for (const dispose of extension.eventListenerDisposers?.splice(0) ?? []) dispose();
 		this.extensions.splice(index, 1);
 		this.#extensionEntryMtimes.delete(resolvedTarget);
-		this.#stopServicesForExtension(extension);
+		this.#stopServicesForExtension(extension, { full: true });
 		this.startServices();
 		this.applyThemeTokens();
 		return toolNames;
@@ -1251,10 +1303,9 @@ export class ExtensionRunner {
 		}
 		this.extensions[index] = replacement;
 		this.#recordExtensionEntryMtime(replacement.resolvedPath);
-		// Drain the old instance's effects (Cordis lifecycle listeners included)
-		// before the replacement is live, so one emit cannot run both.
+		// Full teardown of the old instance before the replacement is live, so
+		// one emit cannot run both: effects, listeners, and state.
 		await disposePluginPrimitives(oldExt);
-		for (const dispose of oldExt.eventListenerDisposers?.splice(0) ?? []) dispose();
 		this.#stopServicesForExtension(oldExt);
 		this.startServices();
 		this.applyThemeTokens();
@@ -1783,11 +1834,11 @@ export class ExtensionRunner {
 		this.#startedServices.clear();
 	}
 
-	#stopServicesForExtension(ext: Extension): void {
-		// Same ledger the cordis mount drains: effects and registration disposers
-		// are one lifetime, so a session extension's watcher/socket is reclaimed
-		// with its services instead of surviving unload.
-		void disposePluginPrimitives(ext);
+	#stopServicesForExtension(ext: Extension, options?: { full?: boolean }): void {
+		// Session stop drains effects only: the runner may be reused, so listeners
+		// stay until a real teardown. `full` is removal/unload, which drains the
+		// plugin instance — effects, listeners, and state.
+		void (options?.full ? disposePluginPrimitives(ext) : runEffects(ext));
 		for (const dispose of ext.memoryBackendProviders.splice(0)) {
 			try {
 				dispose();
@@ -1961,79 +2012,29 @@ export class ExtensionRunner {
 	}
 
 	async emit<TEvent extends RunnerEmitEvent>(event: TEvent): Promise<RunnerEmitResult<TEvent>> {
-		// Migrated lifecycle events dispatch through Cordis: `session_start` is
-		// serial (ordering preserved), `session_shutdown` is parallel (teardown
-		// must not queue behind a hung handler). Both keep listener timeouts.
-		if (event.type === "session_start" || event.type === "session_shutdown") {
-			const bus = this.runtime.eventBus;
-			const count = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
-			if (!bus || count === 0) return undefined as RunnerEmitResult<TEvent>;
-			const ctx = this.createContext();
-			if (event.type === "session_shutdown") {
-				await bus.parallel(event.type, event, ctx);
-			} else {
-				await bus.serial(event.type, event, ctx);
-			}
+		const bus = this.runtime.eventBus;
+		// Zero listeners skip context allocation entirely.
+		if (!bus || (this.runtime.eventHandlerCounts?.get(event.type) ?? 0) === 0) {
 			return undefined as RunnerEmitResult<TEvent>;
 		}
-
-		// `session.compacting` / `session_stop` carry a result: the last valid one
-		// wins, and a stop that asks to continue stops the chain immediately.
-		if (event.type === "session.compacting" || event.type === "session_stop") {
-			const bus = this.runtime.eventBus;
-			const count = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
-			if (!bus || count === 0) return undefined as RunnerEmitResult<TEvent>;
-			const ctx = this.createContext();
-			const continued = await bus.serial(event.type, event, ctx);
-			if (continued) return continued as RunnerEmitResult<TEvent>;
-			if (event.type === "session_stop" && event.signal.aborted) {
-				return undefined as RunnerEmitResult<TEvent>;
-			}
-			const remembered = this.runtime.beforeEventResults?.get(event as object);
-			this.runtime.beforeEventResults?.delete(event as object);
-			return remembered as RunnerEmitResult<TEvent>;
-		}
-
-		// One-shot notifications keep registration order (`serial`) and carry no
-		// result; zero listeners skip context allocation entirely.
-		if (CORDIS_SERIAL_EVENTS.has(event.type)) {
-			const bus = this.runtime.eventBus;
-			const count = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
-			if (!bus || count === 0) return undefined as RunnerEmitResult<TEvent>;
-			await bus.serial(event.type, event, this.createContext());
-			return undefined as RunnerEmitResult<TEvent>;
-		}
-
-		// Streaming/notification events run concurrently and carry no result.
-		if (CORDIS_PARALLEL_EVENTS.has(event.type)) {
-			const bus = this.runtime.eventBus;
-			const count = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
-			if (!bus || count === 0) return undefined as RunnerEmitResult<TEvent>;
+		const mode = EVENT_DISPATCH[event.type];
+		if (mode === "parallel") {
+			// Notification/streaming events: order between listeners cannot change
+			// what the agent does, so teardown never queues behind a hung handler.
 			await bus.parallel(event.type, event, this.createContext());
 			return undefined as RunnerEmitResult<TEvent>;
 		}
-
-		// Cancelable pre-events keep the old contract: `cancel: true` stops the
-		// chain, any other result is remembered (last one wins) and dispatch
-		// continues. Cordis `serial` bails on the cancel result only.
-		if (
-			event.type === "session_before_switch" ||
-			event.type === "session_before_branch" ||
-			event.type === "session_before_compact" ||
-			event.type === "session_before_tree"
-		) {
-			const bus = this.runtime.eventBus;
-			const count = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
-			if (!bus || count === 0) return undefined as RunnerEmitResult<TEvent>;
-			const ctx = this.createContext();
-			const cancelled = await bus.serial(event.type, event, ctx);
-			if (cancelled) return cancelled as RunnerEmitResult<TEvent>;
-			const remembered = this.runtime.beforeEventResults?.get(event as object);
-			this.runtime.beforeEventResults?.delete(event as object);
-			return remembered as RunnerEmitResult<TEvent>;
+		const result = await bus.serial(event.type, event, this.createContext());
+		if (mode === "serial") return undefined as RunnerEmitResult<TEvent>;
+		// `remember`: a truthy result (cancel / continued) stops the chain; any
+		// other result was remembered by the listener, last one wins.
+		if (result) return result as RunnerEmitResult<TEvent>;
+		if (event.type === "session_stop" && event.signal.aborted) {
+			return undefined as RunnerEmitResult<TEvent>;
 		}
-
-		return undefined as RunnerEmitResult<TEvent>;
+		const remembered = this.runtime.beforeEventResults?.get(event as object);
+		this.runtime.beforeEventResults?.delete(event as object);
+		return remembered as RunnerEmitResult<TEvent>;
 	}
 
 	async emitToolResult(event: ToolResultEvent): Promise<ToolResultEventResult | undefined> {
