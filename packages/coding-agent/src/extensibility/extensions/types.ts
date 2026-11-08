@@ -2485,12 +2485,32 @@ export interface ExtensionCommandContextActions {
 /** Full runtime = state + actions, including host-compatible service-tier fallbacks. */
 export type SetServiceTierHandler = (family: ServiceTierFamily, tier: ServiceTier | undefined) => void;
 
+/**
+ * The Cordis event surface used for lifecycle events that are already migrated.
+ * Structural on purpose: the loader/runtime live in loader.ts, and importing
+ * the concrete Context type here would tie the contract to one implementation.
+ */
+export interface ExtensionEventBusSurface {
+	on(name: string, listener: (...args: unknown[]) => unknown): () => boolean;
+	serial(name: string, ...args: unknown[]): Promise<unknown>;
+	parallel(name: string, ...args: unknown[]): Promise<unknown>;
+}
+
 export interface ExtensionRuntime
 	extends ExtensionRuntimeState,
 		ExtensionMediaRegistryState,
 		ExtensionDesignRegistryState,
 		ExtensionMagicKeywordRegistryState,
 		ExtensionActions {
+	/** Cordis event context owning the migrated lifecycle listeners. */
+	eventBus?: ExtensionEventBusSurface;
+	/** Live listener counts per migrated event, so `hasHandlers` stays exact. */
+	eventHandlerCounts?: Map<string, number>;
+	/** The runner's error channel for migrated listeners (timeout / throw). */
+	eventErrorSink?: (error: { extensionPath: string; event: string; error: string }) => void;
+	/** Tool-registration promises started inside a handler, drained within the
+	 *  same timeout budget (the runner owns the barrier). */
+	awaitPendingRegistrations?: () => Promise<void> | undefined;
 	getServiceTiers: GetServiceTiersHandler;
 	setServiceTier: SetServiceTierHandler;
 }

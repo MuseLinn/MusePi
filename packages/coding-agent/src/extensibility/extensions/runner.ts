@@ -25,6 +25,7 @@ import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
 import { type AgentDefinition, normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
+import { disposePluginPrimitives } from "../plugins/runtime/cordis-primitives";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
 import { extensionHostOwner, loadExtensions } from "./loader";
 import { ManagedTimers } from "./managed-timers";
@@ -107,8 +108,21 @@ interface BeforeAgentStartCombinedResult {
 
 export type ExtensionErrorListener = (error: ExtensionError) => void;
 
-export const EXTENSION_HANDLER_TIMEOUT_MS = 30_000;
-let extensionHandlerTimeoutMs = EXTENSION_HANDLER_TIMEOUT_MS;
+import {
+	defaultExtensionHandlerTimeoutMs,
+	EXTENSION_HANDLER_TIMEOUT_MS,
+	handlerTimeoutForEvent,
+	normalizeHandlerTimeout,
+} from "./handler-timeout";
+
+export {
+	EXTENSION_HANDLER_TIMEOUT_MS,
+	handlerTimeoutForEvent,
+	normalizeHandlerTimeout,
+	SESSION_SHUTDOWN_HANDLER_TIMEOUT_MS,
+	testSetExtensionHandlerTimeoutMs,
+	testSetSessionShutdownHandlerTimeoutMs,
+} from "./handler-timeout";
 
 /**
  * Plugins that ship with the host: source-tree bundled plugins, the repo's
@@ -127,36 +141,6 @@ function isHostOwnedExtension(ext: Extension): boolean {
 
 function throwUnsupportedServiceTierAction(): never {
 	throw new Error("This extension host does not support service-tier actions");
-}
-
-export function testSetExtensionHandlerTimeoutMs(timeoutMs: number): void {
-	extensionHandlerTimeoutMs = timeoutMs;
-}
-
-function normalizeHandlerTimeout(timeoutMs: number): number {
-	return Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : EXTENSION_HANDLER_TIMEOUT_MS;
-}
-
-/**
- * Dedicated cap for `session_shutdown` handlers. The generic 30s budget is
- * appropriate for events extensions can observe (e.g. `session_start`,
- * `before_provider_request`), but `session_shutdown` is fire-and-forget
- * teardown — extensions receive no result and the user has already asked to
- * leave. A hung handler (e.g. an extension waiting on a stuck IPC pipe to a
- * companion app) MUST NOT hold Ctrl+C / `/exit` hostage for the full window.
- * See issue #2600.
- */
-export const SESSION_SHUTDOWN_HANDLER_TIMEOUT_MS = 2_000;
-let sessionShutdownHandlerTimeoutMs = SESSION_SHUTDOWN_HANDLER_TIMEOUT_MS;
-
-export function testSetSessionShutdownHandlerTimeoutMs(timeoutMs: number): void {
-	sessionShutdownHandlerTimeoutMs = timeoutMs;
-}
-
-/** Per-event handler budget. Defaults to the generic cap; `session_shutdown`
- *  uses its own short cap so teardown stays prompt. */
-function handlerTimeoutForEvent(eventType: string): number {
-	return eventType === "session_shutdown" ? sessionShutdownHandlerTimeoutMs : extensionHandlerTimeoutMs;
 }
 
 const EXTENSION_HANDLER_TIMEOUT = Symbol("extensionHandlerTimeout");
@@ -767,6 +751,12 @@ export class ExtensionRunner {
 		for (const extension of extensions) {
 			this.#recordExtensionEntryMtime(extension.resolvedPath);
 		}
+		// Migrated lifecycle listeners report through the same error channel the
+		// legacy loops use, so a timed-out or throwing handler stays visible.
+		this.runtime.eventErrorSink = error => {
+			this.emitError(error);
+		};
+		this.runtime.awaitPendingRegistrations = () => this.#toolRegistrationBarrier;
 	}
 
 	/** Snapshot the entry mtime of a loaded extension (best-effort; missing
@@ -1233,6 +1223,9 @@ export class ExtensionRunner {
 		const loadResult = await loadExtensions([oldExt.path], cwd ?? this.cwd, undefined, {
 			fresh: true,
 			promptHost: sessionHost,
+			// The replacement registers into the SAME runtime so migrated
+			// lifecycle listeners land on the event bus this runner dispatches to.
+			runtime: this.runtime,
 		});
 		const replacement = loadResult.extensions[0];
 		if (!replacement) {
@@ -1269,6 +1262,9 @@ export class ExtensionRunner {
 		}
 		this.extensions[index] = replacement;
 		this.#recordExtensionEntryMtime(replacement.resolvedPath);
+		// Drain the old instance's effects (Cordis lifecycle listeners included)
+		// before the replacement is live, so one emit cannot run both.
+		await disposePluginPrimitives(oldExt);
 		this.#stopServicesForExtension(oldExt);
 		this.startServices();
 		this.applyThemeTokens();
@@ -1342,7 +1338,7 @@ export class ExtensionRunner {
 			try {
 				const scope = this.#toolRegistrationScope.getStore();
 				const registrationSignal =
-					scope && !scope.closed ? scope.signal : AbortSignal.timeout(extensionHandlerTimeoutMs);
+					scope && !scope.closed ? scope.signal : AbortSignal.timeout(EXTENSION_HANDLER_TIMEOUT_MS);
 				const pending = listener(tool, registrationSignal);
 				if (pending) trackRegistration(pending);
 			} catch (error) {
@@ -1525,6 +1521,8 @@ export class ExtensionRunner {
 	}
 
 	hasHandlers(eventType: string): boolean {
+		const migrated = this.runtime.eventHandlerCounts?.get(eventType);
+		if (migrated !== undefined && migrated > 0) return true;
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get(eventType);
 			if (handlers && handlers.length > 0) {
@@ -1807,7 +1805,7 @@ export class ExtensionRunner {
 		// Same ledger the cordis mount drains: effects and registration disposers
 		// are one lifetime, so a session extension's watcher/socket is reclaimed
 		// with its services instead of surviving unload.
-		void import("../plugins/runtime/cordis-primitives").then(module => module.disposePluginPrimitives(ext));
+		void disposePluginPrimitives(ext);
 		for (const dispose of ext.memoryBackendProviders.splice(0)) {
 			try {
 				dispose();
@@ -1903,9 +1901,6 @@ export class ExtensionRunner {
 			event.type === "session_before_tree"
 		);
 	}
-	#isSessionShutdownEvent(event: RunnerEmitEvent): event is Extract<RunnerEmitEvent, { type: "session_shutdown" }> {
-		return event.type === "session_shutdown";
-	}
 	async #runHandlerWithTimeout<TEvent extends { type: string }, TResult>(
 		handler: (event: TEvent, ctx: ExtensionContext) => Promise<TResult | undefined> | TResult | undefined,
 		event: TEvent,
@@ -1992,27 +1987,28 @@ export class ExtensionRunner {
 	}
 
 	async emit<TEvent extends RunnerEmitEvent>(event: TEvent): Promise<RunnerEmitResult<TEvent>> {
+		// Migrated lifecycle events dispatch through Cordis: `session_start` is
+		// serial (ordering preserved), `session_shutdown` is parallel (teardown
+		// must not queue behind a hung handler). Both keep listener timeouts.
+		if (event.type === "session_start" || event.type === "session_shutdown") {
+			const bus = this.runtime.eventBus;
+			const count = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
+			if (!bus || count === 0) return undefined as RunnerEmitResult<TEvent>;
+			const ctx = this.createContext();
+			if (event.type === "session_shutdown") {
+				await bus.parallel(event.type, event, ctx);
+			} else {
+				await bus.serial(event.type, event, ctx);
+			}
+			return undefined as RunnerEmitResult<TEvent>;
+		}
+
 		// Defer the per-event context allocation (and the Promise.race/Bun.sleep
 		// timeout machinery) to the first matching handler. Streaming sessions emit
 		// message_update / tool_execution_* per delta with usually no extension
 		// subscribed; building `ctx` for a zero-handler event is pure waste.
 		let ctx: ExtensionContext | undefined;
 		let result: SessionBeforeEventResult | SessionCompactingResult | SessionStopEventResult | undefined;
-
-		if (this.#isSessionShutdownEvent(event)) {
-			const timeoutMs = handlerTimeoutForEvent(event.type);
-			const promises: Promise<unknown>[] = [];
-			for (const ext of this.extensions) {
-				const handlers = ext.handlers.get(event.type);
-				if (!handlers || handlers.length === 0) continue;
-				ctx ??= this.createContext();
-				for (const handler of handlers) {
-					promises.push(this.#runHandlerWithTimeout(handler, event, ctx, ext, timeoutMs));
-				}
-			}
-			if (promises.length > 0) await Promise.all(promises);
-			return result as RunnerEmitResult<TEvent>;
-		}
 
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get(event.type);
@@ -2069,7 +2065,7 @@ export class ExtensionRunner {
 					currentEvent,
 					ctx,
 					ext,
-					extensionHandlerTimeoutMs,
+					EXTENSION_HANDLER_TIMEOUT_MS,
 				)) as ToolResultEventResult | undefined;
 				if (!handlerResult) continue;
 
@@ -2115,7 +2111,7 @@ export class ExtensionRunner {
 	async emitToolCall(event: ToolCallEvent, signal?: AbortSignal): Promise<ToolCallEventResult | undefined> {
 		const ctx = this.createContext();
 		const timeoutMs = normalizeHandlerTimeout(
-			this.settings?.get("extensionHandlers.toolCallTimeoutMs") ?? extensionHandlerTimeoutMs,
+			this.settings?.get("extensionHandlers.toolCallTimeoutMs") ?? defaultExtensionHandlerTimeoutMs(),
 		);
 		let result: ToolCallEventResult | undefined;
 
@@ -2179,7 +2175,7 @@ export class ExtensionRunner {
 					event,
 					ctx,
 					ext,
-					extensionHandlerTimeoutMs,
+					EXTENSION_HANDLER_TIMEOUT_MS,
 				);
 				if (handlerResult) {
 					return handlerResult as R;
@@ -2214,7 +2210,7 @@ export class ExtensionRunner {
 					event,
 					ctx,
 					ext,
-					extensionHandlerTimeoutMs,
+					EXTENSION_HANDLER_TIMEOUT_MS,
 				);
 				const result = handlerResult as ResourcesDiscoverResult | undefined;
 
@@ -2246,9 +2242,13 @@ export class ExtensionRunner {
 		for (const ext of this.extensions) {
 			for (const handler of ext.handlers.get("input") ?? []) {
 				const event: InputEvent = { type: "input", text: currentText, images: currentImages, source };
-				const result = (await this.#runHandlerWithTimeout(handler, event, ctx, ext, extensionHandlerTimeoutMs)) as
-					| InputEventResult
-					| undefined;
+				const result = (await this.#runHandlerWithTimeout(
+					handler,
+					event,
+					ctx,
+					ext,
+					defaultExtensionHandlerTimeoutMs(),
+				)) as InputEventResult | undefined;
 				if (result?.handled) return result;
 				if (result?.text !== undefined) currentText = result.text;
 				if (result?.images !== undefined) currentImages = result.images;
@@ -2294,7 +2294,7 @@ export class ExtensionRunner {
 					event,
 					ctx,
 					ext,
-					extensionHandlerTimeoutMs,
+					EXTENSION_HANDLER_TIMEOUT_MS,
 				);
 
 				if (handlerResult && (handlerResult as ContextEventResult).messages) {
@@ -2325,7 +2325,7 @@ export class ExtensionRunner {
 					event,
 					ctx,
 					ext,
-					extensionHandlerTimeoutMs,
+					EXTENSION_HANDLER_TIMEOUT_MS,
 				);
 				if (handlerResult !== undefined) {
 					currentPayload = handlerResult;
@@ -2352,7 +2352,7 @@ export class ExtensionRunner {
 					requestId: response.requestId,
 					metadata: response.metadata,
 				};
-				await this.#runHandlerWithTimeout(handler, event, ctx, ext, extensionHandlerTimeoutMs);
+				await this.#runHandlerWithTimeout(handler, event, ctx, ext, defaultExtensionHandlerTimeoutMs());
 			}
 		}
 	}
@@ -2383,7 +2383,7 @@ export class ExtensionRunner {
 					event,
 					ctx,
 					ext,
-					extensionHandlerTimeoutMs,
+					EXTENSION_HANDLER_TIMEOUT_MS,
 				);
 
 				if (handlerResult) {

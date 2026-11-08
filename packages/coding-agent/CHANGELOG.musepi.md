@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`session_start` / `session_shutdown` 改走 Cordis 分发**：两者注册进 runtime 的 Cordis 事件上下文，分别以 `serial` 与 `parallel` 派发；超时与错误仍走原有 error 通道（`handler timed out after Nms` 文本不变），工具注册屏障计入同一预算。热重载会先跑完旧实例的 effect（含生命周期监听）再挂新实例，一次 emit 不会跑两遍。
+  - EN: `session_start` / `session_shutdown` now dispatch through the runtime's Cordis event context — `serial` for start and `parallel` for shutdown — while timeouts and errors keep the existing error channel and `handler timed out after Nms` text, and tool-registration barriers count against the same budget. Hot reload drains the old instance's effects (lifecycle listeners included) before the replacement is live, so one emit never runs both.
+
 - **`ctx.hmr` 对插件补齐事务与模块查询，扩展作者技能改讲 Track A**：插件拿到的 `ctx.hmr` 现在与宿主同面——`runExclusive(tx)`、`getLinked(file)`、`getOuterStack(file)`，`on` 也接受 `prepend`。`musepi-extension-dev` 技能与 `docs/skills/authoring-extensions.md` 改为具名导出 + `ctx.*` 入口，并纠正“子模块改动需 touch 入口”的旧说法、补上 `list` 配置与 `musepi.scope: "host"`。
   - EN: Plugins now see the full `ctx.hmr` surface — `runExclusive(tx)`, `getLinked(file)`, `getOuterStack(file)`, and `prepend` on `on`. The `musepi-extension-dev` skill and `docs/skills/authoring-extensions.md` now teach the named Cordis entry and `ctx.*` namespaces, fix the outdated "touch the entry for submodule edits" rule, and cover `list` config fields and `musepi.scope: "host"`.
 

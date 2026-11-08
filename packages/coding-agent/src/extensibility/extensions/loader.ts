@@ -4,6 +4,7 @@
 import type * as fs1 from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { Context } from "@deepseek-ai/cordis";
 import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES } from "@musepi/collab-proto/extension-slots";
 import { type } from "@musepi/musepi-type";
 import * as zod from "@musepi/musepi-type/zod";
@@ -54,6 +55,7 @@ import { getHostService } from "../plugins/runtime/host-services";
 import { getAllPluginExtensionPaths } from "../plugins/runtime/loader";
 import { resolvePath, withHostGuard } from "../utils";
 import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
+import { handlerTimeoutForEvent } from "./handler-timeout";
 import { readExtensionPluginMeta } from "./plugin-manifest";
 import type {
 	AssistantThinkingRenderer,
@@ -91,6 +93,10 @@ import { namespaceOf, type PluginWebRouteRequest, scopeRoute } from "./web-route
 
 installLegacyPiSpecifierShim();
 
+/** Lifecycle events dispatched through the runtime's Cordis event context
+ *  instead of the legacy per-extension loop. Moved one family at a time. */
+const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set(["session_start", "session_shutdown"]);
+
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 type LoadedExtensionModule = PluginEntryModule;
 
@@ -112,6 +118,10 @@ export class ExtensionRuntimeNotInitializedError extends Error {
  */
 export class ExtensionRuntime implements IExtensionRuntime {
 	flagValues = new Map<string, boolean | string>();
+	/** Cordis event context for lifecycle events already migrated off the
+	 *  hand-written loops (`session_start`, `session_shutdown`). */
+	readonly eventBus: IExtensionRuntime["eventBus"] = new Context() as unknown as IExtensionRuntime["eventBus"];
+	readonly eventHandlerCounts = new Map<string, number>();
 	pendingProviderRegistrations: Array<{ name: string; config: ProviderConfig; sourceId: string }> = [];
 	readonly promptHostLedgers = new Map<string, ScopedPromptHostLedger>();
 	/** Session prompt host; set by the owning session before factories run. */
@@ -447,8 +457,64 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	}
 
 	/** Register one listener; the return value removes it again (Cordis
-	 *  `ctx.on`). The extension unload still clears every listener it owns. */
+	 *  `ctx.on`). The extension unload still clears every listener it owns.
+	 *
+	 *  Lifecycle events listed in {@link CORDIS_LIFECYCLE_EVENTS} register in
+	 *  the runtime's Cordis event context instead of the legacy handler map, so
+	 *  their dispatch mode is Cordis's (`serial` / `parallel`). The timeout is
+	 *  wrapped inside the listener, leaving bail/serial results intact. */
 	on<F extends HandlerFn>(event: string, handler: F): () => void {
+		if (CORDIS_LIFECYCLE_EVENTS.has(event) && this.runtime.eventBus) {
+			const bus = this.runtime.eventBus;
+			const wrapped = async (...args: unknown[]): Promise<void> => {
+				// Read the budget at dispatch time: tests and hosts change it after
+				// the plugin has loaded.
+				const timeoutMs = handlerTimeoutForEvent(event);
+				let timer: Timer | undefined;
+				const timeout = new Promise<never>((_resolve, reject) => {
+					timer = setTimeout(() => reject(new Error(`handler timed out after ${timeoutMs}ms`)), timeoutMs);
+					timer.unref?.();
+				});
+				const work = (async () => {
+					await handler(...args);
+					const pending = this.runtime.awaitPendingRegistrations?.();
+					if (pending) await pending;
+				})();
+				try {
+					await Promise.race([work, timeout]);
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error);
+					if (message.startsWith("handler timed out")) {
+						logger.warn("Extension handler timed out", {
+							extensionPath: this.extension.path,
+							event,
+							timeoutMs,
+						});
+					}
+					const report = this.runtime.eventErrorSink;
+					if (report) report({ extensionPath: this.extension.path, event, error: message });
+					else
+						logger.warn("extension lifecycle listener failed", {
+							path: this.extension.path,
+							event,
+							error: message,
+						});
+				} finally {
+					if (timer) clearTimeout(timer);
+				}
+			};
+			const off = bus.on(event, wrapped);
+			const counts = this.runtime.eventHandlerCounts;
+			counts?.set(event, (counts.get(event) ?? 0) + 1);
+			const dispose = () => {
+				off();
+				const live = counts?.get(event);
+				if (live !== undefined && counts) counts.set(event, Math.max(0, live - 1));
+			};
+			registerEffect(this.extension, dispose, `event:${event}`);
+			return dispose;
+		}
+
 		const list = this.extension.handlers.get(event) ?? [];
 		list.push(handler);
 		this.extension.handlers.set(event, list);
@@ -1133,12 +1199,12 @@ export async function loadExtensions(
 	paths: string[],
 	cwd: string,
 	eventBus?: EventBus,
-	options?: { fresh?: boolean; promptHost?: PromptHostSurface },
+	options?: { fresh?: boolean; promptHost?: PromptHostSurface; runtime?: IExtensionRuntime },
 ): Promise<LoadExtensionsResult> {
 	const extensions: Extension[] = [];
 	const errors: Array<{ path: string; error: string }> = [];
 	const resolvedEventBus = eventBus ?? new EventBus();
-	const runtime = new ExtensionRuntime();
+	const runtime = options?.runtime ?? new ExtensionRuntime();
 	// The session prompt host travels on the runtime so every factory binding
 	// (including cordis mounts reusing this runtime) sees the same host.
 	runtime.promptHost = options?.promptHost;
