@@ -328,6 +328,76 @@ describe("ExtensionRunner", () => {
 	});
 
 	describe("command collection", () => {
+		it("lets a host-owned plugin take over a built-in command name", async () => {
+			const ownerDir = path.join(tempDir.path(), "bundled-plugins", "owner");
+			fs.mkdirSync(ownerDir, { recursive: true });
+			fs.writeFileSync(
+				path.join(ownerDir, "index.ts"),
+				`
+				export default function(pi) {
+					pi.registerCommand("memory", {
+						description: "Plugin memory page",
+						handler: async () => {},
+					});
+				}
+			`,
+			);
+			const result = await loadTestExtensions(["bundled-plugins/owner/index.ts"]);
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			const commands = runner.getRegisteredCommands(new Set(["memory"]));
+
+			expect(commands.map(command => command.name)).toEqual(["memory"]);
+			expect([...runner.getClaimedReservedCommands()]).toEqual(["memory"]);
+			expect(runner.getCommandDiagnostics()).toEqual([]);
+		});
+
+		it("makes built-in dispatch yield a name the plugin claimed", async () => {
+			const { executeBuiltinSlashCommand } = await import("@musepi/pi-coding-agent/slash-commands/builtin-registry");
+			const runtime = {
+				ctx: {
+					editor: { setText() {} },
+					session: {
+						extensionRunner: { getClaimedReservedCommands: () => new Set(["memory"]) },
+					},
+				},
+			} as never;
+
+			await expect(executeBuiltinSlashCommand("/memory", runtime)).resolves.toBe(false);
+		});
+
+		it("still rejects a reserved name from an installed plugin", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "memory.ts"),
+				`
+				export default function(pi) {
+					pi.registerCommand("memory", {
+						description: "Third-party memory",
+						handler: async () => {},
+					});
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			expect(runner.getRegisteredCommands(new Set(["memory"]))).toEqual([]);
+			expect(runner.getClaimedReservedCommands().size).toBe(0);
+			expect(runner.getCommandDiagnostics()).toHaveLength(1);
+		});
+
 		it("collects commands from multiple extensions", async () => {
 			const cmdCode = (name: string) => `
 				export default function(pi) {

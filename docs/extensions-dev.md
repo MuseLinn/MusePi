@@ -67,6 +67,8 @@ Discovered JavaScript and TypeScript hooks use the production extension chain: `
 - 快捷键/flags、自定义消息渲染、会话/消息注入(`sendMessage` / `sendUserMessage` / `appendEntry`)
 - **工具执行拦截**:每个工具执行都被扩展拦截层包裹(`tool_call` / `tool_result` 事件可介入)
 
+内置命令名(如 `/memory`)默认保留给核心实现:第三方扩展注册同名命令会被跳过并记录冲突告警。随宿主分发的第一方插件(`bundled-plugins/`、`desktop-plugins/`)注册同名命令即接管该名字,内建实现作为插件缺席或编译失败时的回退,命令补全与分发都优先走插件。
+
 ## 3. Agent 开发规范(步骤)
 
 ### 3.1 结构

@@ -1,5 +1,5 @@
 # Consistency record for plugin-tracks.md / plugin-tracks.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/plugin-tracks
-plugin-tracks.md: 67ae9fb17bbaea0951d1df73f77dfff3cc30ed2b
-plugin-tracks.zh-CN.md: 5b3a7a98235563159d1dea1e27a159c29f5ca1ce
+plugin-tracks.md: 9a726580f86e02aab6b7fbe77608ace4ffdb7a39
+plugin-tracks.zh-CN.md: e41c1150319cd66ab414f2be9c54cfeb4319fb33

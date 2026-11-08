@@ -110,6 +110,21 @@ export type ExtensionErrorListener = (error: ExtensionError) => void;
 export const EXTENSION_HANDLER_TIMEOUT_MS = 30_000;
 let extensionHandlerTimeoutMs = EXTENSION_HANDLER_TIMEOUT_MS;
 
+/**
+ * Plugins that ship with the host: source-tree bundled plugins, the repo's
+ * desktop plugin packages, and their staged release copies. Only these may
+ * take over a built-in command name; an installed third-party plugin keeps
+ * the collision warning because the user did not opt into losing `/memory`.
+ */
+function isHostOwnedExtension(ext: Extension): boolean {
+	const normalized = ext.resolvedPath.replaceAll("\\", "/");
+	return (
+		normalized.includes("/bundled-plugins/") ||
+		normalized.includes("/desktop-plugins/") ||
+		normalized.includes("/packages/desktop-app/src/plugins/")
+	);
+}
+
 function throwUnsupportedServiceTierAction(): never {
 	throw new Error("This extension host does not support service-tier actions");
 }
@@ -523,6 +538,10 @@ export class ExtensionRunner {
 	#shutdownHandler: ShutdownHandler = () => {};
 	#getMemoryFn?: () => MemoryRuntimeContext | undefined;
 	#commandDiagnostics: Array<{ type: string; message: string; path: string }> = [];
+	/** Reserved command names taken over by a host-owned plugin on the last
+	 *  `getRegisteredCommands(reserved)` pass. Built-in dispatch yields these
+	 *  names to the plugin instead of running the core implementation. */
+	#claimedReservedCommands: Set<string> = new Set();
 	#toolRegistrationScope = new AsyncLocalStorage<ToolRegistrationScope>();
 	#toolRegistrationBarrier: Promise<void> | undefined;
 	/**
@@ -1528,23 +1547,41 @@ export class ExtensionRunner {
 
 	getRegisteredCommands(reserved?: ReadonlySet<string>): RegisteredCommand[] {
 		this.#commandDiagnostics = [];
+		this.#claimedReservedCommands = new Set();
 
 		const commands = new Map<string, RegisteredCommand>();
 		for (const ext of this.extensions) {
+			const hostOwned = isHostOwnedExtension(ext);
 			for (const command of ext.commands.values()) {
 				if (reserved?.has(command.name)) {
-					const message = `Extension command '${command.name}' from ${ext.path} conflicts with built-in commands. Skipping.`;
-					this.#commandDiagnostics.push({ type: "warning", message, path: ext.path });
-					if (!this.hasUI()) {
-						logger.warn(message);
+					if (hostOwned) {
+						// A first-party plugin owns this name outright: the
+						// built-in command is the fallback for sessions where
+						// the plugin is absent, not a lock on the name.
+						this.#claimedReservedCommands.add(command.name);
+					} else {
+						const message = `Extension command '${command.name}' from ${ext.path} conflicts with built-in commands. Skipping.`;
+						this.#commandDiagnostics.push({ type: "warning", message, path: ext.path });
+						if (!this.hasUI()) {
+							logger.warn(message);
+						}
+						continue;
 					}
-					continue;
 				}
 
 				commands.set(command.name, command);
 			}
 		}
 		return [...commands.values()];
+	}
+
+	/**
+	 * Built-in command names a host-owned plugin has taken over. Dispatch asks
+	 * this before running the core implementation; an empty set keeps every
+	 * built-in in charge.
+	 */
+	getClaimedReservedCommands(): ReadonlySet<string> {
+		return this.#claimedReservedCommands;
 	}
 
 	getCommandDiagnostics(): Array<{ type: string; message: string; path: string }> {

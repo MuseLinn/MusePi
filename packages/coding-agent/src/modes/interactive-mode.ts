@@ -886,10 +886,15 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		const skillCommandList = this.#rebuildSkillCommandsFromSession();
 
-		const builtinCommands: SlashCommand[] = buildTuiBuiltinSlashCommands({ ctx: this }).map(cmd => ({
-			...cmd,
-			icon: getSlashCommandTypeIcon(cmd.icon ?? "action"),
-		}));
+		// A host-owned plugin that owns a built-in name replaces its built-in
+		// row in completion and help, matching the dispatch precedence.
+		const extensionCommandNames = new Set(hookCommands.map(cmd => cmd.name));
+		const builtinCommands: SlashCommand[] = buildTuiBuiltinSlashCommands({ ctx: this })
+			.filter(cmd => !extensionCommandNames.has(cmd.name))
+			.map(cmd => ({
+				...cmd,
+				icon: getSlashCommandTypeIcon(cmd.icon ?? "action"),
+			}));
 		// Store pending commands for init() where file commands are loaded async
 		this.#pendingSlashCommands = [...builtinCommands, ...hookCommands, ...customCommands, ...skillCommandList];
 

@@ -131,6 +131,15 @@ export async function executeBuiltinSlashCommand(
 
 	const command = BUILTIN_SLASH_COMMAND_LOOKUP.get(parsed.name);
 	if (!command) return false;
+	// A host-owned plugin may own a built-in name. Yield before any argument or
+	// guest gating so the extension command path (`session.prompt`) handles it
+	// exactly like a non-reserved command; collab guests keep the built-in gate.
+	if (
+		!runtime.ctx.collabGuest &&
+		runtime.ctx.session?.extensionRunner?.getClaimedReservedCommands?.().has(command.name)
+	) {
+		return false;
+	}
 	if (parsed.args.length > 0 && !command.allowArgs) {
 		return false;
 	}
