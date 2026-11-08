@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **会话作用域归 runner，派发按会话过滤**：`ctx.session` 的 Cordis fiber 从 runtime 移到 runner，当前作用域通过 `AsyncLocalStorage` 传给正在执行的处理器；派发以 carrier 作为 subject，Cordis `Context.filter` 只放行「无标签（实例/宿主级）」与「本会话」的监听，所以同一个事件总线可以同时服务多个会话而不串台，为插件实例跨会话共享铺路。会话关闭后 runner 保留会话标识，迟到派发仍被过滤到该会话，不会广播给同一总线上的其他会话。
+  - EN: The session scope now belongs to the runner, and dispatch is filtered per session. `ctx.session`'s Cordis fiber moved from the runtime to the runner, and the active scope reaches handlers through `AsyncLocalStorage`; dispatch passes a carrier as the event subject so `Context.filter` admits only untagged (instance/host-scope) listeners and the dispatching session's own. One event bus can therefore serve several sessions without cross-talk, clearing the way for shared plugin instances. A closed session keeps its identity on the runner, so a late dispatch is still filtered to it instead of broadcasting to every listener on the bus.
+
 - **插件实例现在是一个 Cordis fiber**：扩展装载时在自己的 fiber 里执行 `apply`（`eventBus.inject`），`pi.on` 登记的监听归该 fiber 的 effect 账本所有，重载、卸载、回滚统一 `fiber.dispose()`；监听列表只保留精确计数与没有 fiber 的装载路径，不再承担所有权。`ctx.session` 仍是它下面更窄的一层 fiber，会话结束只回收会话级监听。工厂抛错会让 fiber 拒绝，装载错误仍是 `Failed to load extension: …`。
   - EN: A plugin instance is now its own Cordis fiber. The factory runs inside `eventBus.inject`, every `pi.on` listener belongs to that fiber's effect ledger, and reload, unload, and rollback are one `fiber.dispose()`; the listener list keeps exact counts and the loaders that run without a fiber but no longer owns cleanup. `ctx.session` remains a narrower fiber underneath, so a session end reclaims only session-scoped listeners. A factory throw rejects the fiber and keeps the `Failed to load extension: …` error contract.
 

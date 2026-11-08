@@ -629,7 +629,7 @@ is a package the distribution ships, **not a separate kind of thing**」——�
 
 会话级监听用 `ctx.session.on(event, handler)`（dsh 的 `agent.ctx`）：作用域是一个真实的 Cordis fiber（`eventBus.inject`），监听登记进 fiber 的 effect 账本，由 fiber 销毁回收，没有旁路账本。作用域在 `session_start` 派发前打开、会话收尾时销毁，监听不会带到下一个会话；`session_start` 重放（插件重载后的 `refreshSessionStart`）会先销毁旧 fiber 再建新的，所以只重注册、不叠加。`ctx.on` 仍是实例级（活到插件卸载），两者分工与 dsh 的 `ctx.on` / `agent.ctx` 一致；会话外 `ctx.session` 为 `undefined`，插件必须按可选处理。
 
-与 dsh 的隔离手段对比：dsh 的插件实例挂在宿主 loader 的 fiber 上（`app-boot` 的 `ctx.plugin(Loader)`），一个宿主总线服务多个 agent，所以派发要带 scope 载体（`scopeTarget` + Cordis `Context.filter`）把监听过滤到对应 agent；只有确实需要 per-agent 实例时才在 `agentCtx.plugin(...)` 里装子插件（如 ACP 的 MCP client）。MusePi 的扩展实例按 session 装载，每个 session 有自己的 runtime 与事件总线（SDK、ACP、子 agent 都各自装载），所以会话 fiber 只承担会话级注册的所有权，不需要派发过滤。约定：一个 runtime 同一时刻只服务一个活跃 session；若将来要让多个会话共用一个总线，必须补上同样的载体过滤，否则会话监听会互相收到事件。
+与 dsh 的隔离手段对比：dsh 的插件实例挂在宿主 loader 的 fiber 上（`app-boot` 的 `ctx.plugin(Loader)`），一个宿主总线服务多个 agent，所以派发要带 scope 载体（`scopeTarget` + Cordis `Context.filter`）把监听过滤到对应 agent；只有确实需要 per-agent 实例时才在 `agentCtx.plugin(...)` 里装子插件（如 ACP 的 MCP client）。MusePi 现在采用同一机制：会话作用域归 runner，派发携带 carrier，`Context.filter` 只放行「无标签（实例/宿主级）」与「本会话」的监听，所以一个事件总线可以同时服务多个会话而不串台；同一 runtime 同时服务多个活跃会话时，实例级监听按设计接收全部会话事件。插件实例若要跨会话共享，还需把 prompt 贡献与 effect 等会话级注册迁到会话作用域——那是下一步的契约迁移。
 
 实例级监听同样归 fiber：每个扩展装载时在自己的 Cordis fiber 里执行 `apply`（`eventBus.inject`），`pi.on` 登记的监听进该 fiber 的 effect 账本，重载、卸载、回滚只需 `fiber.dispose()`；`eventListenerDisposers` 列表只用于精确计数和没有 fiber 的装载路径，不再承担所有权。
 

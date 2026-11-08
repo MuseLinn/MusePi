@@ -57,6 +57,7 @@ import { resolvePath, withHostGuard } from "../utils";
 import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
 import { handlerTimeoutForEvent } from "./handler-timeout";
 import { readExtensionPluginMeta } from "./plugin-manifest";
+import { currentSessionScope } from "./session-dispatch";
 import { sessionStopContinues } from "./session-stop-result";
 import { applyToolResultPatch } from "./tool-result-patch";
 import type {
@@ -442,7 +443,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	 * `effect`, so Cordis — not a hand-kept ledger — owns disposal.
 	 */
 	get session(): PluginContextNamespaces["session"] {
-		const scope = this.runtime.sessionScope;
+		const scope = currentSessionScope();
 		if (!scope) return undefined;
 		const on = ((event: string, handler: HandlerFn, options?: { prepend?: boolean }) =>
 			scope.context.effect(() =>

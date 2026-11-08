@@ -1405,6 +1405,8 @@ export interface HmrSurface {
  *  so disposing the fiber reclaims every listener the session owns — the same
  *  ownership dsh gets from `agent.ctx`. */
 export interface ExtensionSessionScope {
+	/** Identity the dispatch carrier filters on. */
+	readonly key: object;
 	readonly context: ExtensionEventBusSurface & {
 		/** Cordis `ctx.effect`: the cleanup is owned by the session fiber. */
 		effect(execute: () => void | (() => void)): () => void;
@@ -2656,10 +2658,6 @@ export interface ExtensionRuntime
 		ExtensionActions {
 	/** Cordis event context owning the migrated lifecycle listeners. */
 	eventBus?: ExtensionEventBusSurface;
-	/** The live session's Cordis fiber (`ctx.session`). The runner opens it at
-	 *  `session_start`, disposes it at session teardown, and its disposal
-	 *  reclaims every listener the session registered. */
-	sessionScope?: ExtensionSessionScope;
 	/** Live listener counts per migrated event, so `hasHandlers` stays exact. */
 	eventHandlerCounts?: Map<string, number>;
 	/** The runner's error channel for migrated listeners (timeout / throw). */

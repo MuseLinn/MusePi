@@ -39,6 +39,7 @@ import {
 	type ScheduleRecord,
 	type ScheduleUpdate,
 } from "./schedule";
+import { runInSessionScope, SESSION_SCOPE_TAG, sessionCarrier } from "./session-dispatch";
 import type {
 	AfterProviderResponseEvent,
 	AssistantThinkingRenderer,
@@ -67,6 +68,7 @@ import type {
 	ExtensionNotificationMessage,
 	ExtensionRuntime,
 	ExtensionService,
+	ExtensionSessionScope,
 	ExtensionShortcut,
 	ExtensionStatusBarSegment,
 	ExtensionUIContext,
@@ -583,6 +585,14 @@ export class ExtensionRunner {
 	#claimedReservedCommands: Set<string> = new Set();
 	#toolRegistrationScope = new AsyncLocalStorage<ToolRegistrationScope>();
 	#toolRegistrationBarrier: Promise<void> | undefined;
+	/** The live session's Cordis fiber (dsh's agent scope). Owned by the runner,
+	 *  not the runtime: one runtime may serve several sessions once instances
+	 *  are shared, and each keeps its own scope. */
+	#sessionScope: ExtensionSessionScope | undefined;
+	/** The runner's session identity, kept after the scope closes: a late
+	 *  dispatch must still be filtered to this session instead of reaching
+	 *  every listener on a shared bus. */
+	#sessionKey: object | undefined;
 	/**
 	 * Live `onToolRegistered` subscriptions, keyed by the raw listener so a
 	 * newly loaded extension (modes v2 `loadExtension` 启用方向) can have the
@@ -1080,7 +1090,7 @@ export class ExtensionRunner {
 		const bus = this.runtime.eventBus;
 		if (!bus || (this.runtime.eventHandlerCounts?.get(event.type) ?? 0) === 0) return event.action;
 		const state = { action: event.action };
-		await bus.serial(event.type, event, this.createContext(), state);
+		await this.#serial(event.type, event, this.createContext(), state);
 		return state.action;
 	}
 
@@ -1844,24 +1854,29 @@ export class ExtensionRunner {
 		await this.closeSessionScope();
 		const bus = this.runtime.eventBus;
 		if (!bus) return;
+		const key = {};
 		let context: Context | undefined;
 		const fiber = (bus as unknown as Context).inject({}, scope => {
-			context = scope as Context;
+			// The tag is what the dispatch carrier filters on. `extend` keeps the
+			// same fiber (one disposal) and the same event registry.
+			context = (scope as Context).extend({ [SESSION_SCOPE_TAG]: key });
 		});
 		// Awaiting the fiber settles once its context is active; `ctx.session`
 		// must be usable by the `session_start` listeners dispatched next.
 		await fiber;
 		if (!context) return;
-		this.runtime.sessionScope = {
-			context: context as unknown as NonNullable<typeof this.runtime.sessionScope>["context"],
+		this.#sessionKey = key;
+		this.#sessionScope = {
+			key,
+			context: context as unknown as NonNullable<ExtensionSessionScope["context"]>,
 			dispose: () => fiber.dispose(),
 		};
 	}
 
 	/** Dispose the live session fiber; no-op when no session was open. */
 	async closeSessionScope(): Promise<void> {
-		const scope = this.runtime.sessionScope;
-		this.runtime.sessionScope = undefined;
+		const scope = this.#sessionScope;
+		this.#sessionScope = undefined;
 		await scope?.dispose();
 	}
 
@@ -2052,6 +2067,44 @@ export class ExtensionRunner {
 		return handlerResult as TResult | undefined;
 	}
 
+	/**
+	 * Dispatch one serial event in the live session's scope.
+	 *
+	 * The carrier is what Cordis filters on: instance- and host-scope listeners
+	 * (untagged) receive every event, session listeners only their own. The
+	 * ambient scope makes `ctx.session` resolve correctly inside a handler even
+	 * when one runtime serves several sessions.
+	 */
+	#serial(name: string, ...args: unknown[]): Promise<unknown> {
+		const bus = this.runtime.eventBus as unknown as
+			| {
+					serial(subject: object, name: string, ...args: unknown[]): Promise<unknown>;
+					serial(name: string, ...args: unknown[]): Promise<unknown>;
+			  }
+			| undefined;
+		if (!bus) return Promise.resolve(undefined);
+		const key = this.#sessionKey;
+		if (!key) return bus.serial(name, ...(args as never[]));
+		const carrier = sessionCarrier(key);
+		const scope = this.#sessionScope;
+		return runInSessionScope(scope, () => bus.serial(carrier, name, ...(args as never[])));
+	}
+
+	#parallel(name: string, ...args: unknown[]): Promise<unknown> {
+		const bus = this.runtime.eventBus as unknown as
+			| {
+					parallel(subject: object, name: string, ...args: unknown[]): Promise<unknown>;
+					parallel(name: string, ...args: unknown[]): Promise<unknown>;
+			  }
+			| undefined;
+		if (!bus) return Promise.resolve(undefined);
+		const key = this.#sessionKey;
+		if (!key) return bus.parallel(name, ...(args as never[]));
+		const carrier = sessionCarrier(key);
+		const scope = this.#sessionScope;
+		return runInSessionScope(scope, () => bus.parallel(carrier, name, ...(args as never[])));
+	}
+
 	async emit<TEvent extends RunnerEmitEvent>(event: TEvent): Promise<RunnerEmitResult<TEvent>> {
 		const bus = this.runtime.eventBus;
 		// Zero listeners skip context allocation entirely.
@@ -2062,10 +2115,10 @@ export class ExtensionRunner {
 		if (mode === "parallel") {
 			// Notification/streaming events: order between listeners cannot change
 			// what the agent does, so teardown never queues behind a hung handler.
-			await bus.parallel(event.type, event, this.createContext());
+			await this.#parallel(event.type, event, this.createContext());
 			return undefined as RunnerEmitResult<TEvent>;
 		}
-		const result = await bus.serial(event.type, event, this.createContext());
+		const result = await this.#serial(event.type, event, this.createContext());
 		if (mode === "serial") return undefined as RunnerEmitResult<TEvent>;
 		// `remember`: a truthy result (cancel / continued) stops the chain; any
 		// other result was remembered by the listener, last one wins.
@@ -2083,7 +2136,7 @@ export class ExtensionRunner {
 		if (!bus || (this.runtime.eventHandlerCounts?.get("tool_result") ?? 0) === 0) return undefined;
 		const currentEvent: ToolResultEvent = { ...event };
 		const state = { event: currentEvent, modified: false };
-		await bus.serial("tool_result", currentEvent, this.createContext(), state);
+		await this.#serial("tool_result", currentEvent, this.createContext(), state);
 		if (!state.modified) return undefined;
 		return { content: state.event.content, details: state.event.details, isError: state.event.isError };
 	}
@@ -2109,7 +2162,7 @@ export class ExtensionRunner {
 		const timeoutMs = normalizeHandlerTimeout(
 			this.settings?.get("extensionHandlers.toolCallTimeoutMs") ?? defaultExtensionHandlerTimeoutMs(),
 		);
-		const blocked = await bus.serial("tool_call", event, this.createContext(), { timeoutMs, signal });
+		const blocked = await this.#serial("tool_call", event, this.createContext(), { timeoutMs, signal });
 		if (blocked) return blocked as ToolCallEventResult;
 		if (signal?.aborted) {
 			return { block: true, reason: `Tool execution was cancelled while an extension handler was pending` };
@@ -2133,7 +2186,7 @@ export class ExtensionRunner {
 	): Promise<R | undefined> {
 		const bus = this.runtime.eventBus;
 		if (!bus || (this.runtime.eventHandlerCounts?.get(eventName) ?? 0) === 0) return undefined;
-		const result = await bus.serial(eventName, event, this.createContext());
+		const result = await this.#serial(eventName, event, this.createContext());
 		return (result as R | undefined) ?? undefined;
 	}
 
@@ -2153,7 +2206,12 @@ export class ExtensionRunner {
 		};
 		const bus = this.runtime.eventBus;
 		if (!bus || (this.runtime.eventHandlerCounts?.get("resources_discover") ?? 0) === 0) return state;
-		await bus.serial("resources_discover", { type: "resources_discover", cwd, reason }, this.createContext(), state);
+		await this.#serial(
+			"resources_discover",
+			{ type: "resources_discover", cwd, reason },
+			this.createContext(),
+			state,
+		);
 		return state;
 	}
 
@@ -2166,7 +2224,7 @@ export class ExtensionRunner {
 		const bus = this.runtime.eventBus;
 		if (!bus || (this.runtime.eventHandlerCounts?.get("input") ?? 0) === 0) return {};
 		const state = { text, images, source };
-		const handled = (await bus.serial("input", null, this.createContext(), state)) as InputEventResult | undefined;
+		const handled = (await this.#serial("input", null, this.createContext(), state)) as InputEventResult | undefined;
 		if (handled?.handled) return handled;
 		const transformed: InputEventResult = {};
 		if (state.text !== text) transformed.text = state.text;
@@ -2187,7 +2245,7 @@ export class ExtensionRunner {
 			currentMessages = [...messages];
 		}
 		const state = { messages: currentMessages };
-		await bus.serial("context", null, this.createContext(), state);
+		await this.#serial("context", null, this.createContext(), state);
 		return state.messages;
 	}
 
@@ -2196,7 +2254,7 @@ export class ExtensionRunner {
 		const bus = this.runtime.eventBus;
 		if (!bus || (this.runtime.eventHandlerCounts?.get("before_provider_request") ?? 0) === 0) return payload;
 		const state = { payload };
-		await bus.serial(
+		await this.#serial(
 			"before_provider_request",
 			{ type: "before_provider_request", payload },
 			this.createContext(model),
@@ -2209,7 +2267,7 @@ export class ExtensionRunner {
 	async emitAfterProviderResponse(response: ProviderResponseMetadata, model?: Model): Promise<void> {
 		const bus = this.runtime.eventBus;
 		if (!bus || (this.runtime.eventHandlerCounts?.get("after_provider_response") ?? 0) === 0) return;
-		await bus.serial(
+		await this.#serial(
 			"after_provider_response",
 			{
 				type: "after_provider_response",
@@ -2231,7 +2289,7 @@ export class ExtensionRunner {
 		if (!bus || (this.runtime.eventHandlerCounts?.get("before_agent_start") ?? 0) === 0) return undefined;
 
 		const state = { messages: [] as unknown[], systemPrompt, systemPromptModified: false };
-		await bus.serial(
+		await this.#serial(
 			"before_agent_start",
 			{ type: "before_agent_start", prompt, images, systemPrompt },
 			this.createContext(),

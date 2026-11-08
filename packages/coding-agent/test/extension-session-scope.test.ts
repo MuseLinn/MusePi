@@ -145,6 +145,56 @@ describe("ctx.session", () => {
 		tempDir.removeSync();
 	});
 
+	it("routes each session's events only to that session's listeners on a shared runtime", async () => {
+		// The carrier is what makes shared instances safe: two sessions on one
+		// bus each register an untagged `session_start` handler, and each
+		// dispatch of `agent_end` must reach only the dispatching session.
+		let calls = 0;
+		const runtime = new ExtensionRuntime();
+		const extension = await loadExtensionFromFactory(
+			pi => {
+				pi.on("session_start", () => {
+					pi.session?.on("agent_end", () => {
+						calls += 1;
+					});
+				});
+			},
+			tempDir.path(),
+			new EventBus(),
+			runtime,
+			path.join(extensionsDir, "shared-session-scope.ts"),
+		);
+		const runnerA = new ExtensionRunner(
+			[extension],
+			runtime,
+			tempDir.path(),
+			SessionManager.inMemory(),
+			null as never,
+		);
+		const runnerB = new ExtensionRunner(
+			[extension],
+			runtime,
+			tempDir.path(),
+			SessionManager.inMemory(),
+			null as never,
+		);
+
+		await emitSessionStartEvent(runnerA);
+		await emitSessionStartEvent(runnerB);
+
+		await runnerA.emit({ type: "agent_end", messages: [] });
+		expect(calls).toBe(1);
+		await runnerB.emit({ type: "agent_end", messages: [] });
+		expect(calls).toBe(2);
+
+		await emitSessionShutdownEvent(runnerA);
+		await runnerA.emit({ type: "agent_end", messages: [] });
+		expect(calls).toBe(2);
+		await emitSessionShutdownEvent(runnerB);
+		expect(runnerA.hasHandlers("agent_end")).toBe(false);
+		tempDir.removeSync();
+	});
+
 	it("owns instance listeners with the extension's own fiber", async () => {
 		// dsh's plugin instance is a fiber; here the extension record keeps the
 		// registrations but the fiber owns them, so unload is one dispose.
