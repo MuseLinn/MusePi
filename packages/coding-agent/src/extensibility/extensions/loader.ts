@@ -76,6 +76,7 @@ import type {
 	ExtensionPromptSection,
 	ExtensionRpcHandler,
 	ExtensionService,
+	ExtensionSessionScopeStore,
 	ExtensionSetting,
 	ExtensionSkillDeclaration,
 	ExtensionWidget,
@@ -83,6 +84,7 @@ import type {
 	LoadExtensionsResult,
 	MediaProviderConfig,
 	MessageRenderer,
+	PluginContextNamespaces,
 	ProviderConfig,
 	RegisteredCommand,
 	RegisteredDesignSystem,
@@ -327,6 +329,44 @@ export function extensionHostOwner(extensionPath: string): string {
 	return `ext:${getExtensionNameFromPath(extensionPath)}`;
 }
 
+/**
+ * Listener ledger for one session (dsh: the agent-scoped context a plugin
+ * receives when an agent is created).
+ *
+ * A plugin wires per-session listeners in `session_start`; the runner opens the
+ * scope before that dispatch and closes it at session teardown, so a listener
+ * can never reach the next session. Closing is also safe after the extension
+ * unload already drained the same disposer: `on`'s disposer is idempotent.
+ */
+export class SessionListenerScope implements ExtensionSessionScopeStore {
+	closed = false;
+	readonly #disposers: Array<() => void> = [];
+
+	track(dispose: () => void): () => void {
+		let done = false;
+		const off = () => {
+			if (done) return;
+			done = true;
+			const index = this.#disposers.indexOf(off);
+			if (index >= 0) this.#disposers.splice(index, 1);
+			dispose();
+		};
+		if (this.closed) {
+			off();
+			return off;
+		}
+		this.#disposers.push(off);
+		return off;
+	}
+
+	dispose(): void {
+		this.closed = true;
+		// Reverse order, like the effect ledger: inner registrations go first.
+		for (const off of [...this.#disposers].reverse()) off();
+		this.#disposers.length = 0;
+	}
+}
+
 class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly logger = logger;
 	readonly typebox = TypeBox;
@@ -412,6 +452,20 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 			getLinked: file => getHostService<HmrService>("hmr")?.getLinked(file) ?? [],
 			getOuterStack: file => getHostService<HmrService>("hmr")?.getOuterStack(file) ?? [],
 		};
+	}
+
+	/**
+	 * The live session's registration scope (dsh's agent-scoped context).
+	 * Undefined outside a session, so a listener wired in `session_start` cannot
+	 * silently outlive it; the returned `on` is this extension's own, keeping
+	 * timeouts, error attribution and handler counts identical.
+	 */
+	get session(): PluginContextNamespaces["session"] {
+		const scope = this.runtime.sessionScope;
+		if (!scope || scope.closed) return undefined;
+		const on = ((event: string, handler: HandlerFn, options?: { prepend?: boolean }) =>
+			scope.track(this.on(event, handler, options))) as ExtensionAPI["on"];
+		return { on };
 	}
 
 	/**
@@ -673,7 +727,12 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 			const off = bus.on(event, wrapped, options);
 			const counts = this.runtime.eventHandlerCounts;
 			counts?.set(event, (counts.get(event) ?? 0) + 1);
+			let disposed = false;
 			const dispose = () => {
+				// Session close and plugin unload can both reach one listener; a
+				// second decrement would under-count and disable later dispatches.
+				if (disposed) return;
+				disposed = true;
 				off();
 				const live = counts?.get(event);
 				if (live !== undefined && counts) counts.set(event, Math.max(0, live - 1));

@@ -238,7 +238,9 @@ describe("plugin listener ledger", () => {
 		const ext = fakeExtension();
 		let off = 0;
 		ext.eventListenerDisposers = [() => (off += 1), () => (off += 1)];
-		registerEffect(ext, () => (off += 1));
+		registerEffect(ext, () => {
+			off += 1;
+		});
 
 		await disposePluginPrimitives(ext);
 

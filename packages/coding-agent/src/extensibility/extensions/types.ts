@@ -1361,6 +1361,17 @@ export interface PluginContextNamespaces {
 	readonly magicKeywords: { register: ExtensionAPI["registerMagicKeyword"] };
 	readonly memory: { registerBackendProvider: ExtensionAPI["registerMemoryBackendProvider"] };
 	/**
+	 * The live session's registration scope (dsh's agent-scoped context).
+	 *
+	 * Undefined outside a session: a plugin wires per-session listeners in
+	 * `session_start`, and they are disposed when the session ends, so they
+	 * never reach the next one. `ctx.on` stays instance-scoped — it lives until
+	 * the plugin unloads.
+	 */
+	readonly session?: {
+		on: ExtensionAPI["on"];
+	};
+	/**
 	 * Host-level hot reload (dsh's `ctx.hmr`). False when the host started no
 	 * watcher (print mode, tests): subscriptions still return a disposer so a
 	 * plugin does not branch at registration time.
@@ -1388,6 +1399,16 @@ export interface HmrSurface {
 	getLinked(file: string): readonly string[];
 	/** Importer chain from `file` to its entry; empty when unmanaged. */
 	getOuterStack(file: string): readonly string[];
+}
+
+/** Mutable session scope the runner owns; plugins only see its `on`. */
+export interface ExtensionSessionScopeStore {
+	readonly closed: boolean;
+	/** Track a listener disposer until the session ends. The returned function
+	 *  removes it early and is idempotent. */
+	track(dispose: () => void): () => void;
+	/** Drop every tracked listener; later registrations dispose immediately. */
+	dispose(): void;
 }
 
 export interface ExtensionAPI extends PluginContextNamespaces {
@@ -2633,6 +2654,10 @@ export interface ExtensionRuntime
 		ExtensionActions {
 	/** Cordis event context owning the migrated lifecycle listeners. */
 	eventBus?: ExtensionEventBusSurface;
+	/** Listener ledger for the live session (`ctx.session`). The runner opens it
+	 *  at `session_start`, closes it at session teardown, and a closed scope
+	 *  disposes later registrations immediately. */
+	sessionScope?: ExtensionSessionScopeStore;
 	/** Live listener counts per migrated event, so `hasHandlers` stays exact. */
 	eventHandlerCounts?: Map<string, number>;
 	/** The runner's error channel for migrated listeners (timeout / throw). */

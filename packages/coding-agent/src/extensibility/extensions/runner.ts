@@ -27,7 +27,7 @@ import { type AgentDefinition, normalizeSubagentDefinition, type SubagentDefinit
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
 import { disposePluginPrimitives, runEffects } from "../plugins/runtime/cordis-primitives";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
-import { extensionHostOwner, loadExtensions } from "./loader";
+import { extensionHostOwner, loadExtensions, SessionListenerScope } from "./loader";
 import { ManagedTimers } from "./managed-timers";
 import { type ExtensionMcpHost, ExtensionMcpRegistry } from "./mcp-servers";
 import { createExtensionModelQuery } from "./model-api";
@@ -470,6 +470,9 @@ export async function emitSessionStartEvent(
 	agent?: { agentId?: string; source?: "main" | "subagent" },
 ): Promise<boolean> {
 	if (!extensionRunner) return false;
+	// Open the session scope before the dispatch: listeners registered by a
+	// `session_start` handler belong to this session and go away with it.
+	extensionRunner.openSessionScope();
 	if (!extensionRunner.hasHandlers("session_start")) return false;
 	try {
 		await extensionRunner.emit({ type: "session_start", agentId: agent?.agentId, source: agent?.source });
@@ -1827,7 +1830,23 @@ export class ExtensionRunner {
 		}
 	}
 
+	/**
+	 * Open the live session's listener scope (dsh: the agent-scoped context).
+	 *
+	 * A new session never inherits listeners: the previous scope is closed
+	 * first, which is also what makes `refreshSessionStart` (a re-emitted
+	 * `session_start` after a plugin reload) re-register instead of stacking.
+	 */
+	openSessionScope(): void {
+		this.runtime.sessionScope?.dispose();
+		this.runtime.sessionScope = new SessionListenerScope();
+	}
+
 	stopServices(): void {
+		// Session teardown closes the session scope with the effects: a listener
+		// wired in `session_start` must not reach the next session.
+		this.runtime.sessionScope?.dispose();
+		this.runtime.sessionScope = undefined;
 		for (const ext of this.extensions) {
 			this.#stopServicesForExtension(ext);
 		}
