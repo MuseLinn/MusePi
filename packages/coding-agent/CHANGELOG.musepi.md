@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`session_before_*` 也迁到 Cordis serial，并保留取消语义**：`session_before_switch/branch/compact/tree` 现在与 start/shutdown 同一事件上下文，以 `serial` 派发；只有 `cancel: true` 中断链，其余结果按“最后一个有效值”记住后继续，与旧循环一致（新增取消/继续两例回归）。
+  - EN: `session_before_*` events now use Cordis `serial` with the old cancel contract. `session_before_switch/branch/compact/tree` share the lifecycle event context; only `cancel: true` stops the chain, while any other result is remembered (last one wins) and dispatch continues, matching the previous loop. New tests pin both the continue and cancel paths.
+
 - **`session_start` / `session_shutdown` 改走 Cordis 分发**：两者注册进 runtime 的 Cordis 事件上下文，分别以 `serial` 与 `parallel` 派发；超时与错误仍走原有 error 通道（`handler timed out after Nms` 文本不变），工具注册屏障计入同一预算。热重载会先跑完旧实例的 effect（含生命周期监听）再挂新实例，一次 emit 不会跑两遍。
   - EN: `session_start` / `session_shutdown` now dispatch through the runtime's Cordis event context — `serial` for start and `parallel` for shutdown — while timeouts and errors keep the existing error channel and `handler timed out after Nms` text, and tool-registration barriers count against the same budget. Hot reload drains the old instance's effects (lifecycle listeners included) before the replacement is live, so one emit never runs both.
 

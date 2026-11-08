@@ -95,7 +95,23 @@ installLegacyPiSpecifierShim();
 
 /** Lifecycle events dispatched through the runtime's Cordis event context
  *  instead of the legacy per-extension loop. Moved one family at a time. */
-const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set(["session_start", "session_shutdown"]);
+const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set([
+	"session_start",
+	"session_shutdown",
+	"session_before_switch",
+	"session_before_branch",
+	"session_before_compact",
+	"session_before_tree",
+]);
+
+/** Cancelable pre-events: `cancel: true` stops the chain (serial bail); any
+ *  other result is remembered and the chain continues, as the old loop did. */
+const CORDIS_CANCELABLE_EVENTS: ReadonlySet<string> = new Set([
+	"session_before_switch",
+	"session_before_branch",
+	"session_before_compact",
+	"session_before_tree",
+]);
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 type LoadedExtensionModule = PluginEntryModule;
@@ -122,6 +138,7 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	 *  hand-written loops (`session_start`, `session_shutdown`). */
 	readonly eventBus: IExtensionRuntime["eventBus"] = new Context() as unknown as IExtensionRuntime["eventBus"];
 	readonly eventHandlerCounts = new Map<string, number>();
+	readonly beforeEventResults = new WeakMap<object, unknown>();
 	pendingProviderRegistrations: Array<{ name: string; config: ProviderConfig; sourceId: string }> = [];
 	readonly promptHostLedgers = new Map<string, ScopedPromptHostLedger>();
 	/** Session prompt host; set by the owning session before factories run. */
@@ -466,7 +483,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	on<F extends HandlerFn>(event: string, handler: F): () => void {
 		if (CORDIS_LIFECYCLE_EVENTS.has(event) && this.runtime.eventBus) {
 			const bus = this.runtime.eventBus;
-			const wrapped = async (...args: unknown[]): Promise<void> => {
+			const wrapped = async (...args: unknown[]): Promise<unknown> => {
 				// Read the budget at dispatch time: tests and hosts change it after
 				// the plugin has loaded.
 				const timeoutMs = handlerTimeoutForEvent(event);
@@ -476,12 +493,19 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 					timer.unref?.();
 				});
 				const work = (async () => {
-					await handler(...args);
+					const result = await handler(...args);
 					const pending = this.runtime.awaitPendingRegistrations?.();
 					if (pending) await pending;
+					return result;
 				})();
 				try {
-					await Promise.race([work, timeout]);
+					const result = await Promise.race([work, timeout]);
+					if (CORDIS_CANCELABLE_EVENTS.has(event)) {
+						const cancels = (result as { cancel?: unknown } | undefined)?.cancel === true;
+						if (cancels) return result;
+						if (result !== undefined) this.runtime.beforeEventResults?.set(args[0] as object, result);
+					}
+					return undefined;
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
 					if (message.startsWith("handler timed out")) {

@@ -1893,14 +1893,6 @@ export class ExtensionRunner {
 		};
 	}
 
-	#isSessionBeforeEvent(event: RunnerEmitEvent): event is SessionBeforeEvent {
-		return (
-			event.type === "session_before_switch" ||
-			event.type === "session_before_branch" ||
-			event.type === "session_before_compact" ||
-			event.type === "session_before_tree"
-		);
-	}
 	async #runHandlerWithTimeout<TEvent extends { type: string }, TResult>(
 		handler: (event: TEvent, ctx: ExtensionContext) => Promise<TResult | undefined> | TResult | undefined,
 		event: TEvent,
@@ -2003,6 +1995,26 @@ export class ExtensionRunner {
 			return undefined as RunnerEmitResult<TEvent>;
 		}
 
+		// Cancelable pre-events keep the old contract: `cancel: true` stops the
+		// chain, any other result is remembered (last one wins) and dispatch
+		// continues. Cordis `serial` bails on the cancel result only.
+		if (
+			event.type === "session_before_switch" ||
+			event.type === "session_before_branch" ||
+			event.type === "session_before_compact" ||
+			event.type === "session_before_tree"
+		) {
+			const bus = this.runtime.eventBus;
+			const count = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
+			if (!bus || count === 0) return undefined as RunnerEmitResult<TEvent>;
+			const ctx = this.createContext();
+			const cancelled = await bus.serial(event.type, event, ctx);
+			if (cancelled) return cancelled as RunnerEmitResult<TEvent>;
+			const remembered = this.runtime.beforeEventResults?.get(event as object);
+			this.runtime.beforeEventResults?.delete(event as object);
+			return remembered as RunnerEmitResult<TEvent>;
+		}
+
 		// Defer the per-event context allocation (and the Promise.race/Bun.sleep
 		// timeout machinery) to the first matching handler. Streaming sessions emit
 		// message_update / tool_execution_* per delta with usually no extension
@@ -2023,13 +2035,6 @@ export class ExtensionRunner {
 					ext,
 					handlerTimeoutForEvent(event.type),
 				);
-
-				if (this.#isSessionBeforeEvent(event) && handlerResult) {
-					result = handlerResult as SessionBeforeEventResult;
-					if (result.cancel) {
-						return result as RunnerEmitResult<TEvent>;
-					}
-				}
 
 				if (event.type === "session.compacting" && handlerResult) {
 					result = handlerResult as SessionCompactingResult;

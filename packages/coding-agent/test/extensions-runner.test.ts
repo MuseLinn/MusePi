@@ -2249,6 +2249,61 @@ describe("ExtensionRunner", () => {
 		});
 	});
 
+	describe("cancelable session events", () => {
+		it("keeps the last non-cancel result while continuing, and stops on cancel", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "before-first.ts"),
+				`
+				export default function(pi) {
+					pi.on("session_before_switch", () => ({ cancel: false, marker: "first" }));
+				}
+			`,
+			);
+			fs.writeFileSync(
+				path.join(extensionsDir, "before-last.ts"),
+				`
+				export default function(pi) {
+					pi.on("session_before_switch", () => ({ cancel: false, marker: "last" }));
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			expect(await runner.emit({ type: "session_before_switch", reason: "new" })).toMatchObject({
+				cancel: false,
+				marker: "last",
+			});
+
+			fs.writeFileSync(
+				path.join(extensionsDir, "before-cancel.ts"),
+				`
+				export default function(pi) {
+					pi.on("session_before_switch", () => ({ cancel: true, marker: "cancelled" }));
+				}
+			`,
+			);
+			const withCancel = await loadTestExtensions();
+			const cancelling = new ExtensionRunner(
+				withCancel.extensions,
+				withCancel.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			expect(await cancelling.emit({ type: "session_before_switch", reason: "new" })).toMatchObject({
+				cancel: true,
+				marker: "cancelled",
+			});
+		});
+	});
+
 	describe("service tier API", () => {
 		it("restricts tiers to values supported by each provider family", () => {
 			expectTypeOf<"scale">().toExtend<ExtensionServiceTier<"openai">>();

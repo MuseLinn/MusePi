@@ -2511,6 +2511,9 @@ export interface ExtensionRuntime
 	/** Tool-registration promises started inside a handler, drained within the
 	 *  same timeout budget (the runner owns the barrier). */
 	awaitPendingRegistrations?: () => Promise<void> | undefined;
+	/** Non-cancel results from `session_before_*` listeners, keyed by the event
+	 *  object of the current dispatch (last one wins, matching the old loop). */
+	beforeEventResults?: WeakMap<object, unknown>;
 	getServiceTiers: GetServiceTiersHandler;
 	setServiceTier: SetServiceTierHandler;
 }
