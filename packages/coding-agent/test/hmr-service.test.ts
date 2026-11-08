@@ -44,6 +44,21 @@ describe("hmr service", () => {
 		await service.dispose();
 	});
 
+	it("publishes hmr/change and hmr/reload for one batch", async () => {
+		const service = createHmrService([], 0);
+		const seen: string[] = [];
+		service.on("hmr/change", () => {
+			seen.push("change");
+		});
+		service.on("hmr/reload", () => {
+			seen.push("reload");
+		});
+
+		await service.reload();
+		expect(seen).toEqual(["change", "reload"]);
+		await service.dispose();
+	});
+
 	it("serializes transactions so a reload never interleaves an install", async () => {
 		const service = createHmrService([], 0);
 		const log: string[] = [];
@@ -86,6 +101,33 @@ describe("hmr service", () => {
 		detach();
 		expect(service.getLinked("/plugin/leaf.ts")).toEqual([]);
 		await service.dispose();
+	});
+
+	it("honors base/root/ignored/debounce from the plugin config", async () => {
+		const { apply } = await import("../src/bundled-plugins/hmr/index");
+		const { mkdtemp, mkdir, rm } = await import("node:fs/promises");
+		const { tmpdir } = await import("node:os");
+		const path = await import("node:path");
+		const dir = await mkdtemp(path.join(tmpdir(), "musepi-hmr-config-"));
+		await mkdir(path.join(dir, "watched"));
+		let cleanup: (() => void) | undefined;
+		try {
+			const result = await apply(
+				{
+					cwd: dir,
+					effect: (fn: () => void) => {
+						cleanup = fn;
+						return () => {};
+					},
+				} as never,
+				{ base: dir, root: "watched", ignored: "**/tmp/**", debounce: 5 },
+			);
+			expect(result.hmr.roots).toEqual([path.join(dir, "watched")]);
+			expect(result.hmr.enabled).toBe(true);
+		} finally {
+			cleanup?.();
+			await rm(dir, { recursive: true, force: true });
+		}
 	});
 
 	it("reports no watcher for an empty root set", () => {

@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **HMR 事件名与配置字段对齐 dsh**：`ctx.hmr` 现在发布 `hmr/change` 与 `hmr/reload` 两个事件（`onChange` 保留为别名）；`musepi-hmr` 的配置补齐 `debounce`、`base`、`root`、`ignored`，`root` 留空时仍用原生的扩展/插件根。另确认模块级重载本就成立：Track B 按整张源码图的 mtime 判定并重载属主入口（`legacy-pi-submodule-reload` 覆盖），Track A 走 `ProfileModuleGraph.plan` 的同一套身份比较，缓存击穿由加载标签对整图生效。
+  - EN: HMR event names and configuration now match dsh. `ctx.hmr` publishes `hmr/change` and `hmr/reload` (`onChange` remains an alias), and `musepi-hmr` gained `debounce`, `base`, `root`, and `ignored`; an empty `root` keeps the native extension/plugin roots. Module-level reload was already in place: Track B decides from the whole source graph's mtimes and reloads the owning entry (covered by `legacy-pi-submodule-reload`), while Track A uses the same identities through `ProfileModuleGraph.plan`, with the load tag busting the entire graph.
+
 - **补齐 HMR 与插件生命周期的四个缺口**：`ctx.hmr` 新增 `runExclusive`（安装/配置写入与重载批次串行）、`getLinked` / `getOuterStack`（来自 loader 模块图的归属与 importer 链）；`musepi-hmr` 的 `debounceMs` 改由自己的 `musepi.config` 提供，`apply(ctx, config)` 现在真的收到声明字段；`ctx.effect` 放宽到所有插件并由统一的 Extension 账本回收，bundled 宿主装载器 reset、会话 runner 收尾与 cordis fiber 三条路径一致，watcher 不再泄漏。
   - EN: Four HMR and plugin-lifecycle gaps are closed. `ctx.hmr` gained `runExclusive` (installs and config writes serialize against reload batches), plus `getLinked` / `getOuterStack` (entry ownership and importer chains from the loader's module graph). `musepi-hmr` now reads `debounceMs` from its own `musepi.config`, and `apply(ctx, config)` actually receives the declared fields. `ctx.effect` is available to every plugin and drained by one Extension-keyed ledger, so the bundled host loader's reset, the session runner's teardown, and the cordis fiber all reclaim the same way — the watcher no longer leaks.
 

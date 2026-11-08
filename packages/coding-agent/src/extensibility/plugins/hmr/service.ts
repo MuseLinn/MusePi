@@ -23,6 +23,15 @@ export interface HmrChange {
 
 export type HmrListener = (change: HmrChange) => void | Promise<void>;
 
+/**
+ * Event names follow dsh: `hmr/change` reports a file batch, `hmr/reload`
+ * reports that a reload pass has started for that batch. They are delivered on
+ * the service (the same object `ctx.hmr` is) rather than through the extension
+ * event bus, because HMR is process-wide while extension listeners are
+ * session-scoped.
+ */
+export type HmrEventName = "hmr/change" | "hmr/reload";
+
 /** Module-graph questions a loader can answer for the service (dsh `getLinked`
  *  / `getOuterStack`). Absent until a host attaches its graph. */
 export interface HmrGraphQueries {
@@ -35,9 +44,11 @@ export interface HmrGraphQueries {
 export interface HmrService {
 	readonly enabled: boolean;
 	readonly roots: readonly string[];
-	/** Subscribe to batched changes. Returns a disposer; subscriptions are not
+	/** Subscribe to a named event. Returns a disposer; subscriptions are not
 	 *  tied to a plugin's lifetime automatically, so call `ctx.effect` with the
 	 *  disposer when the listener must not outlive its owner. */
+	on(event: HmrEventName, listener: HmrListener): () => void;
+	/** Alias for `on("hmr/change", …)`, the pre-event-name surface. */
 	onChange(listener: HmrListener): () => void;
 	/** Run the current listeners as if the watched files had changed. */
 	reload(): Promise<void>;
@@ -57,7 +68,8 @@ export interface HmrService {
 class WatchedHmrService implements HmrService {
 	readonly roots: readonly string[];
 	readonly #debounceMs: number;
-	readonly #listeners = new Set<HmrListener>();
+	readonly #ignored: readonly string[];
+	readonly #listeners = new Map<HmrEventName, Set<HmrListener>>();
 	readonly #pending = new Set<string>();
 	#timer: Timer | null = null;
 	#watcher: FSWatcher | null = null;
@@ -65,21 +77,31 @@ class WatchedHmrService implements HmrService {
 	#queue: Promise<unknown> = Promise.resolve();
 	#graph: HmrGraphQueries | null = null;
 
-	constructor(roots: readonly string[], debounceMs: number) {
+	constructor(roots: readonly string[], debounceMs: number, ignored: readonly string[] = []) {
 		this.roots = roots;
 		this.#debounceMs = debounceMs;
+		this.#ignored = ignored;
 	}
 
 	get enabled(): boolean {
 		return !this.#disposed && this.roots.length > 0;
 	}
 
-	onChange(listener: HmrListener): () => void {
+	on(event: HmrEventName, listener: HmrListener): () => void {
 		if (this.#disposed) return () => {};
-		this.#listeners.add(listener);
+		let set = this.#listeners.get(event);
+		if (!set) {
+			set = new Set();
+			this.#listeners.set(event, set);
+		}
+		set.add(listener);
 		return () => {
-			this.#listeners.delete(listener);
+			this.#listeners.get(event)?.delete(listener);
 		};
+	}
+
+	onChange(listener: HmrListener): () => void {
+		return this.on("hmr/change", listener);
 	}
 
 	async reload(): Promise<void> {
@@ -122,7 +144,7 @@ class WatchedHmrService implements HmrService {
 				// Editors write through rename, which shows up as add+unlink of the
 				// same path; a short settle window collapses that into one reload.
 				awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 30 },
-				ignored: /(?:^|[/\\])(?:\.git|node_modules[/\\]\.cache)(?:[/\\]|$)/,
+				ignored: [/(?:^|[/\\])(?:\.git|node_modules[/\\]\.cache)(?:[/\\]|$)/, ...this.#ignored],
 			});
 			this.#watcher.on("all", (_event, changed) => {
 				if (changed) this.#pending.add(changed);
@@ -169,21 +191,27 @@ class WatchedHmrService implements HmrService {
 		const paths = [...this.#pending];
 		this.#pending.clear();
 		const change: HmrChange = { trigger, paths };
-		for (const listener of [...this.#listeners]) {
-			try {
-				void Promise.resolve(listener(change)).catch(error => {
-					logger.warn("hmr listener failed", { error: String(error) });
-				});
-			} catch (error) {
-				logger.warn("hmr listener failed", { error: String(error) });
+		for (const event of ["hmr/change", "hmr/reload"] as const) {
+			for (const listener of [...(this.#listeners.get(event) ?? [])]) {
+				try {
+					void Promise.resolve(listener(change)).catch(error => {
+						logger.warn("hmr listener failed", { event, error: String(error) });
+					});
+				} catch (error) {
+					logger.warn("hmr listener failed", { event, error: String(error) });
+				}
 			}
 		}
 	}
 }
 
 /** Create (and start) one watcher over `roots`. The host plugin owns disposal. */
-export function createHmrService(roots: readonly string[], debounceMs = 100): HmrService {
-	const service = new WatchedHmrService(roots, debounceMs);
+export function createHmrService(
+	roots: readonly string[],
+	debounceMs = 100,
+	ignored: readonly string[] = [],
+): HmrService {
+	const service = new WatchedHmrService(roots, debounceMs, ignored);
 	service.start();
 	return service;
 }

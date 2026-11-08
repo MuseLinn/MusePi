@@ -7,12 +7,35 @@
 	"musepi": {
 		"label": "Hot reload",
 		"description": "Host-scope watcher that provides ctx.hmr for every host.",
-		"icon": "◈",
+		"icon": "\u25c8",
 		"scope": "host",
-		"extensions": ["./index.ts"],
+		"extensions": [
+			"./index.ts"
+		],
 		"config": [
 			{
-				"key": "debounceMs",
+				"key": "base",
+				"type": "string",
+				"label": "Watch base",
+				"description": "Base directory for relative root entries. Defaults to the host process cwd.",
+				"default": ""
+			},
+			{
+				"key": "root",
+				"type": "string",
+				"label": "Watch roots",
+				"description": "Comma-separated roots, resolved against base. Empty keeps the native extension/plugin roots.",
+				"default": ""
+			},
+			{
+				"key": "ignored",
+				"type": "string",
+				"label": "Ignored globs",
+				"description": "Comma-separated globs excluded on top of .git and the module cache.",
+				"default": ""
+			},
+			{
+				"key": "debounce",
 				"type": "number",
 				"label": "Debounce (ms)",
 				"description": "How long file changes are coalesced before one reload batch is emitted.",

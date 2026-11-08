@@ -106,6 +106,7 @@ import type {
 import type { ApprovalMode } from "../../tools/approval";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
 import type { EventBus } from "../../utils/event-bus";
+import type { HmrChange } from "../plugins/hmr/service";
 import type {
 	AgentEndEvent,
 	AgentStartEvent,
@@ -145,7 +146,6 @@ import type {
 	TurnEndEvent,
 	TurnStartEvent,
 } from "../shared-events";
-import type { HmrChange } from "../plugins/hmr/service";
 import type { SlashCommandInfo } from "../slash-commands";
 import type { ScheduleCreate, ScheduleRecord, ScheduleUpdate } from "./schedule";
 import type { UrlSchemeDefinition } from "./url-schemes";
@@ -1371,7 +1371,10 @@ export interface PluginContextNamespaces {
 /** The `ctx.hmr` service surface a plugin sees. */
 export interface HmrSurface {
 	readonly enabled: boolean;
-	/** Subscribe to batched change notifications. Returns a disposer. */
+	/** Subscribe to a named event (`hmr/change` per file batch, `hmr/reload`
+	 *  when a reload pass starts for that batch). Returns a disposer. */
+	on(event: "hmr/change" | "hmr/reload", listener: (change: HmrChange) => void | Promise<void>): () => void;
+	/** Alias for `on("hmr/change", …)`. */
 	onChange(listener: (change: HmrChange) => void | Promise<void>): () => void;
 	/** Run the current listeners as if the watched files had just changed. */
 	reload(): Promise<void>;
@@ -1405,7 +1408,10 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	// Event Subscription
 	// =========================================================================
 
-	on(event: "resources_discover", handler: ExtensionHandler<ResourcesDiscoverEvent, ResourcesDiscoverResult>): () => void;
+	on(
+		event: "resources_discover",
+		handler: ExtensionHandler<ResourcesDiscoverEvent, ResourcesDiscoverResult>,
+	): () => void;
 	on(event: "session_start", handler: ExtensionHandler<SessionStartEvent>): () => void;
 	on(
 		event: "session_before_switch",
@@ -1421,14 +1427,20 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 		event: "session_before_compact",
 		handler: ExtensionHandler<SessionBeforeCompactEvent, SessionBeforeCompactResult>,
 	): () => void;
-	on(event: "session.compacting", handler: ExtensionHandler<SessionCompactingEvent, SessionCompactingResult>): () => void;
+	on(
+		event: "session.compacting",
+		handler: ExtensionHandler<SessionCompactingEvent, SessionCompactingResult>,
+	): () => void;
 	on(
 		event: "cache_warming_decision",
 		handler: ExtensionHandler<CacheWarmingDecisionEvent, CacheWarmingDecisionEventResult>,
 	): () => void;
 	on(event: "session_compact", handler: ExtensionHandler<SessionCompactEvent>): () => void;
 	on(event: "session_shutdown", handler: ExtensionHandler<SessionShutdownEvent>): () => void;
-	on(event: "session_before_tree", handler: ExtensionHandler<SessionBeforeTreeEvent, SessionBeforeTreeResult>): () => void;
+	on(
+		event: "session_before_tree",
+		handler: ExtensionHandler<SessionBeforeTreeEvent, SessionBeforeTreeResult>,
+	): () => void;
 	on(event: "session_tree", handler: ExtensionHandler<SessionTreeEvent>): () => void;
 	on(event: "context", handler: ExtensionHandler<ContextEvent, ContextEventResult>): () => void;
 	on(
@@ -1436,7 +1448,10 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 		handler: ExtensionHandler<BeforeProviderRequestEvent, BeforeProviderRequestEventResult>,
 	): () => void;
 	on(event: "after_provider_response", handler: ExtensionHandler<AfterProviderResponseEvent>): () => void;
-	on(event: "before_agent_start", handler: ExtensionHandler<BeforeAgentStartEvent, BeforeAgentStartEventResult>): () => void;
+	on(
+		event: "before_agent_start",
+		handler: ExtensionHandler<BeforeAgentStartEvent, BeforeAgentStartEventResult>,
+	): () => void;
 	on(event: "agent_start", handler: ExtensionHandler<AgentStartEvent>): () => void;
 	on(event: "agent_end", handler: ExtensionHandler<AgentEndEvent>): () => void;
 	on(event: "session_stop", handler: ExtensionHandler<SessionStopEvent, SessionStopEventResult>): () => void;
