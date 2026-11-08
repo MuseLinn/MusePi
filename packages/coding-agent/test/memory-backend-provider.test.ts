@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { Settings } from "../src/config/settings";
+import { getMemoryRoot } from "../src/memories";
 import { registerMemoryBackendProvider } from "../src/memory-backend/providers";
 import { resolveMemoryBackend } from "../src/memory-backend/resolve";
 import type { MemoryBackend } from "../src/memory-backend/types";
@@ -39,6 +40,17 @@ describe("memory backend providers", () => {
 		dispose();
 		const builtIn = await resolveMemoryBackend(settings);
 		expect(await builtIn.buildDeveloperInstructions("/tmp", "/tmp", settings, undefined)).not.toBe("provider:local");
+	});
+
+	it("lets the provider decide whether a browsable workspace exists", async () => {
+		const settings = Settings.isolated({ "memory.backend": "local" });
+		const builtIn = await resolveMemoryBackend(settings);
+		expect(builtIn.workspaceDir?.("/tmp/agent", "/tmp/project")).toBe(getMemoryRoot("/tmp/agent", "/tmp/project"));
+
+		const dispose = registerMemoryBackendProvider({ id: "local", create: () => fakeBackend("local") });
+		disposers.push(dispose);
+		const replaced = await resolveMemoryBackend(settings);
+		expect(replaced.workspaceDir).toBeUndefined();
 	});
 
 	it("refuses a second provider for the same backend id", () => {

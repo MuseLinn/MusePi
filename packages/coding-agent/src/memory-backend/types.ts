@@ -163,6 +163,15 @@ export interface MemoryBackend {
 
 	/** Render backend-specific memory diagnostics as markdown (`/memory diagnose`). */
 	diagnose?(agentDir: string, cwd: string, session?: AgentSession): Promise<string | undefined>;
+	/**
+	 * Directory holding this workspace's browsable memory files, when the
+	 * backend keeps memory as a file tree. The settings browser lists this
+	 * directory's siblings and reads its `.md` files; absent means the backend
+	 * has no browsable workspace (remote or opaque stores) and the
+	 * `memory.workspace*` routes report that instead of reading local files
+	 * that do not belong to the active backend.
+	 */
+	workspaceDir?(agentDir: string, cwd: string): string | undefined;
 	/** Render pending deltas awaiting consolidation (`/memory queue`). */
 	queuePreview?(context: MemoryBackendOperationContext): Promise<string | undefined>;
 	/**

@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **记忆工作区浏览跟随后端，而不是固定读本地目录**：`MemoryBackend` 新增可选 `workspaceDir(agentDir, cwd)`；`memory.workspace*` 先解析活动后端，未实现该能力时返回 `supported: false` 并拒绝读取/定位，只有返回目录的后端才拥有设置页文件浏览。`memory.*` 继续作为核心契约，替换 provider 即整体切换。
+  - EN: The memory workspace browser now follows the backend instead of always reading a local directory. `MemoryBackend` gained an optional `workspaceDir(agentDir, cwd)`; `memory.workspace*` resolves the active backend first, answers `supported: false` and refuses reads or reveals when the capability is absent, and only a backend that returns a directory owns the settings file browser. `memory.*` stays a core contract, so replacing the provider switches the whole surface.
+
 - **内置命令名可由第一方插件接管**：`/memory` 这类保留名以前对扩展一律跳过；现在随宿主分发的插件（`bundled-plugins/`、`desktop-plugins/` 与仓库内插件包）注册同名命令即接管，内建实现退化为插件缺席时的回退，命令补全与分发优先走插件；第三方插件仍保留冲突告警。
   - EN: First-party plugins can now own a built-in command name. Reserved names such as `/memory` used to be skipped for every extension; a plugin shipped with the host (`bundled-plugins/`, `desktop-plugins/`, and in-repo plugin packages) now takes the name over, the built-in becomes the fallback for when the plugin is absent, and completion and dispatch prefer the plugin. Installed third-party plugins still get the collision warning.
 

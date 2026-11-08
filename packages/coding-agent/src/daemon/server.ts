@@ -1513,15 +1513,25 @@ export class DaemonServer {
 	 *  directory name under the memories root — the GUI only ever echoes
 	 *  names this RPC itself handed out, but the check is enforced here:
 	 *  no separators, no `..`, must exist. */
+	/**
+	 * Resolve the browsable memory directory for one workspace through the
+	 * active backend. `null` means this backend keeps no file tree, so the
+	 * workspace routes report unsupported instead of listing local files that
+	 * belong to a different implementation.
+	 */
 	async #memoryWorkspaceDir(p: {
 		cwd?: unknown;
 		slug?: unknown;
-	}): Promise<{ rootDir: string; slug: string; dir: string }> {
-		const { getMemoryRoot } = await import("../memories");
-		const { getMemoriesDir } = await import("@musepi/pi-utils");
+	}): Promise<{ rootDir: string; slug: string; dir: string } | null> {
+		const settings = this.#host.settings();
+		if (!settings) return null;
+		const { resolveMemoryBackend } = await import("../memory-backend/resolve");
+		const backend = await resolveMemoryBackend(settings);
 		const agentDir = getAgentDir();
-		const rootDir = getMemoriesDir(agentDir);
 		const cwd = typeof p.cwd === "string" && p.cwd.length > 0 ? path.resolve(p.cwd) : this.#host.cwd();
+		const ownDir = backend.workspaceDir?.(agentDir, cwd);
+		if (!ownDir) return null;
+		const rootDir = path.dirname(ownDir);
 		const slug =
 			typeof p.slug === "string" &&
 			p.slug.startsWith("--") &&
@@ -1529,7 +1539,7 @@ export class DaemonServer {
 			!p.slug.includes("..") &&
 			fs.existsSync(path.join(rootDir, p.slug))
 				? p.slug
-				: path.basename(getMemoryRoot(agentDir, cwd));
+				: path.basename(ownDir);
 		return { rootDir, slug, dir: path.join(rootDir, slug) };
 	}
 
@@ -7098,7 +7108,9 @@ export class DaemonServer {
 				// 各工作区目录 + 选中工作区的 .md 记忆文件列表(mtime 降序)。
 				// 目录缺失时列出空集(该工作区还没有记忆产物)。
 				const p = (params ?? {}) as { cwd?: unknown; slug?: unknown };
-				const { rootDir, slug, dir } = await this.#memoryWorkspaceDir(p);
+				const workspace = await this.#memoryWorkspaceDir(p);
+				if (!workspace) return { root: "", slug: "", workspaces: [], files: [], supported: false };
+				const { rootDir, slug, dir } = workspace;
 				const workspaces: string[] = [];
 				try {
 					for (const e of fs.readdirSync(rootDir, { withFileTypes: true })) {
@@ -7118,13 +7130,15 @@ export class DaemonServer {
 					if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
 				}
 				files.sort((a, b) => b.mtimeMs - a.mtimeMs);
-				return { root: dir, slug, workspaces: workspaces.sort(), files };
+				return { root: dir, slug, workspaces: workspaces.sort(), files, supported: true };
 			}
 			case "memory.workspaceRead": {
 				// 读取一个记忆 .md 供面板内查看。name 只接受根内裸文件名,
 				// 上限 512KB(面板阅读用,不是编辑器)。
 				const p = (params ?? {}) as { cwd?: unknown; slug?: unknown; name?: unknown };
-				const { dir } = await this.#memoryWorkspaceDir(p);
+				const workspace = await this.#memoryWorkspaceDir(p);
+				if (!workspace) throw new Error("the active memory backend has no browsable workspace");
+				const { dir } = workspace;
 				const name = typeof p.name === "string" ? p.name : "";
 				if (
 					!name ||
@@ -7146,7 +7160,9 @@ export class DaemonServer {
 				// daemon 宿主侧执行 —— 远程 daemon 的 GUI 会在远程机器上打开,
 				// 与其它 daemon 侧路径语义一致。
 				const p = (params ?? {}) as { cwd?: unknown; slug?: unknown; name?: unknown };
-				const { dir } = await this.#memoryWorkspaceDir(p);
+				const workspace = await this.#memoryWorkspaceDir(p);
+				if (!workspace) throw new Error("the active memory backend has no browsable workspace");
+				const { dir } = workspace;
 				let target = dir;
 				if (typeof p.name === "string" && p.name) {
 					const name = p.name;

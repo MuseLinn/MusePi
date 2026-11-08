@@ -3,6 +3,7 @@ import {
 	clearMemoryData,
 	clearMemoryToolDeveloperInstructionsCache,
 	enqueueMemoryConsolidation,
+	getMemoryRoot,
 	saveLearnedLesson,
 	startMemoryStartupTask,
 } from "../memories";
@@ -41,6 +42,9 @@ export const localBackend: MemoryBackend = {
 		// the frozen one.
 		clearMemoryToolDeveloperInstructionsCache(context.session);
 		return result;
+	},
+	workspaceDir(agentDir, cwd) {
+		return getMemoryRoot(agentDir, cwd);
 	},
 	async status() {
 		return {
