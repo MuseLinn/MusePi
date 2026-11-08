@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`ctx.hmr` 的事件改走真实 Cordis 事件服务**：`hmr/change` / `hmr/reload` 不再由自建监听表分发，而是注册进 Cordis 的事件 registry，支持 `prepend` 顺序；单监听失败仍被隔离，不会中断同批其他监听。这是事件总线吸收的第一阶段，会话/工具事件的分发模式迁移另列计划。
+  - EN: `ctx.hmr` events now go through a real Cordis event service. `hmr/change` / `hmr/reload` are registered in the Cordis registry instead of a private listener table and support `prepend` ordering, while one failing listener stays isolated. This is the first stage of the event-bus absorption; session and tool event dispatch modes are a separate, staged migration.
+
 - **HMR 事件名与配置字段对齐 dsh**：`ctx.hmr` 现在发布 `hmr/change` 与 `hmr/reload` 两个事件（`onChange` 保留为别名）；`musepi-hmr` 的配置补齐 `debounce`、`base`、`root`、`ignored`，`root` 留空时仍用原生的扩展/插件根。另确认模块级重载本就成立：Track B 按整张源码图的 mtime 判定并重载属主入口（`legacy-pi-submodule-reload` 覆盖），Track A 走 `ProfileModuleGraph.plan` 的同一套身份比较，缓存击穿由加载标签对整图生效。
   - EN: HMR event names and configuration now match dsh. `ctx.hmr` publishes `hmr/change` and `hmr/reload` (`onChange` remains an alias), and `musepi-hmr` gained `debounce`, `base`, `root`, and `ignored`; an empty `root` keeps the native extension/plugin roots. Module-level reload was already in place: Track B decides from the whole source graph's mtimes and reloads the owning entry (covered by `legacy-pi-submodule-reload`), while Track A uses the same identities through `ProfileModuleGraph.plan`, with the load tag busting the entire graph.
 

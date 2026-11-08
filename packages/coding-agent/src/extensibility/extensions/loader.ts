@@ -381,7 +381,8 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 			get enabled() {
 				return getHostService<HmrService>("hmr")?.enabled ?? false;
 			},
-			on: (event, listener) => getHostService<HmrService>("hmr")?.on(event, listener) ?? (() => {}),
+			on: (event, listener, options?: { prepend?: boolean }) =>
+				getHostService<HmrService>("hmr")?.on(event, listener, options) ?? (() => {}),
 			onChange: listener => getHostService<HmrService>("hmr")?.onChange(listener) ?? (() => {}),
 			reload: async () => {
 				await getHostService<HmrService>("hmr")?.reload();

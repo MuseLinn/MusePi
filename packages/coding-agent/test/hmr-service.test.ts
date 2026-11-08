@@ -59,6 +59,25 @@ describe("hmr service", () => {
 		await service.dispose();
 	});
 
+	it("dispatches through Cordis, so prepend orders a listener first", async () => {
+		const service = createHmrService([], 0);
+		const seen: string[] = [];
+		service.on("hmr/change", () => {
+			seen.push("normal");
+		});
+		service.on(
+			"hmr/change",
+			() => {
+				seen.push("prepended");
+			},
+			{ prepend: true },
+		);
+
+		await service.reload();
+		expect(seen).toEqual(["prepended", "normal"]);
+		await service.dispose();
+	});
+
 	it("serializes transactions so a reload never interleaves an install", async () => {
 		const service = createHmrService([], 0);
 		const log: string[] = [];

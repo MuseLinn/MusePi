@@ -10,6 +10,7 @@
  * changed and in what batch, and each host decides which caches to drop.
  */
 
+import { Context } from "@deepseek-ai/cordis";
 import { logger } from "@musepi/pi-utils";
 import { type FSWatcher, watch } from "chokidar";
 
@@ -25,9 +26,10 @@ export type HmrListener = (change: HmrChange) => void | Promise<void>;
 
 /**
  * Event names follow dsh: `hmr/change` reports a file batch, `hmr/reload`
- * reports that a reload pass has started for that batch. They are delivered on
- * the service (the same object `ctx.hmr` is) rather than through the extension
- * event bus, because HMR is process-wide while extension listeners are
+ * reports that a reload pass has started for that batch. They are dispatched
+ * through a real Cordis event service (the mechanism dsh uses: one registry,
+ * `prepend` ordering, parallel/serial dispatch); the context is local to the
+ * service because HMR is process-wide while the runner's event context is
  * session-scoped.
  */
 export type HmrEventName = "hmr/change" | "hmr/reload";
@@ -44,10 +46,12 @@ export interface HmrGraphQueries {
 export interface HmrService {
 	readonly enabled: boolean;
 	readonly roots: readonly string[];
-	/** Subscribe to a named event. Returns a disposer; subscriptions are not
-	 *  tied to a plugin's lifetime automatically, so call `ctx.effect` with the
-	 *  disposer when the listener must not outlive its owner. */
-	on(event: HmrEventName, listener: HmrListener): () => void;
+	/** Subscribe to a named event through the Cordis event service — same
+	 *  registry, dispatch and `prepend` ordering as dsh. Returns a disposer;
+	 *  subscriptions are not tied to a plugin's lifetime automatically, so call
+	 *  `ctx.effect` with the disposer when the listener must not outlive its
+	 *  owner. */
+	on(event: HmrEventName, listener: HmrListener, options?: { prepend?: boolean }): () => void;
 	/** Alias for `on("hmr/change", …)`, the pre-event-name surface. */
 	onChange(listener: HmrListener): () => void;
 	/** Run the current listeners as if the watched files had changed. */
@@ -65,11 +69,21 @@ export interface HmrService {
 	dispose(): Promise<void>;
 }
 
+/** The slice of Cordis's event service this file uses (its `Events` map is
+ *  typed empty for a bare Context, so the names are cast at the boundary). */
+interface HmrEventBus {
+	on(name: string, listener: (change: HmrChange) => unknown, options?: { prepend?: boolean }): () => boolean;
+	parallel(name: string, ...args: unknown[]): Promise<unknown>;
+}
+
 class WatchedHmrService implements HmrService {
 	readonly roots: readonly string[];
 	readonly #debounceMs: number;
 	readonly #ignored: readonly string[];
-	readonly #listeners = new Map<HmrEventName, Set<HmrListener>>();
+	/** The Cordis event service for `hmr/*`. A bare Context is its own event
+	 *  bus; listeners are owned by the disposers we keep. */
+	readonly #bus = new Context() as unknown as HmrEventBus;
+	readonly #disposers: Array<() => boolean> = [];
 	readonly #pending = new Set<string>();
 	#timer: Timer | null = null;
 	#watcher: FSWatcher | null = null;
@@ -87,16 +101,23 @@ class WatchedHmrService implements HmrService {
 		return !this.#disposed && this.roots.length > 0;
 	}
 
-	on(event: HmrEventName, listener: HmrListener): () => void {
+	on(event: HmrEventName, listener: HmrListener, options?: { prepend?: boolean }): () => void {
 		if (this.#disposed) return () => {};
-		let set = this.#listeners.get(event);
-		if (!set) {
-			set = new Set();
-			this.#listeners.set(event, set);
-		}
-		set.add(listener);
+		// One listener failure must not stop its siblings, so the isolation
+		// wrapper sits inside Cordis's dispatch rather than around it.
+		const wrapped = async (change: HmrChange): Promise<void> => {
+			try {
+				await listener(change);
+			} catch (error) {
+				logger.warn("hmr listener failed", { event, error: String(error) });
+			}
+		};
+		const dispose = this.#bus.on(event, wrapped, options);
+		this.#disposers.push(dispose);
 		return () => {
-			this.#listeners.get(event)?.delete(listener);
+			dispose();
+			const index = this.#disposers.indexOf(dispose);
+			if (index >= 0) this.#disposers.splice(index, 1);
 		};
 	}
 
@@ -164,7 +185,7 @@ class WatchedHmrService implements HmrService {
 			clearTimeout(this.#timer);
 			this.#timer = null;
 		}
-		this.#listeners.clear();
+		for (const dispose of this.#disposers.splice(0)) dispose();
 		this.#pending.clear();
 		const watcher = this.#watcher;
 		this.#watcher = null;
@@ -192,15 +213,9 @@ class WatchedHmrService implements HmrService {
 		this.#pending.clear();
 		const change: HmrChange = { trigger, paths };
 		for (const event of ["hmr/change", "hmr/reload"] as const) {
-			for (const listener of [...(this.#listeners.get(event) ?? [])]) {
-				try {
-					void Promise.resolve(listener(change)).catch(error => {
-						logger.warn("hmr listener failed", { event, error: String(error) });
-					});
-				} catch (error) {
-					logger.warn("hmr listener failed", { event, error: String(error) });
-				}
-			}
+			void this.#bus.parallel(event, change).catch(error => {
+				logger.warn("hmr dispatch failed", { event, error: String(error) });
+			});
 		}
 	}
 }
