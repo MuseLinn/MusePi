@@ -112,6 +112,9 @@ const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set([
 	"input",
 	"session.compacting",
 	"session_stop",
+	"user_bash",
+	"user_python",
+	"resources_discover",
 ]);
 
 /** Cancelable pre-events: `cancel: true` stops the chain (serial bail); any
@@ -154,12 +157,6 @@ const CORDIS_CANCELABLE_EVENTS: ReadonlySet<string> = new Set([
 	"session_before_branch",
 	"session_before_compact",
 	"session_before_tree",
-	"tool_call",
-	"tool_result",
-	"context",
-	"input",
-	"session.compacting",
-	"session_stop",
 ]);
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
@@ -634,6 +631,34 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 						const state = args[2] as { event: ToolResultEvent; modified: boolean } | undefined;
 						if (state && applyToolResultPatch(state.event, result as ToolResultEventResult | undefined)) {
 							state.modified = true;
+						}
+						return undefined;
+					}
+					if (event === "session.compacting") {
+						if (result !== undefined) this.runtime.beforeEventResults?.set(args[0] as object, result);
+						return undefined;
+					}
+					if (event === "user_bash" || event === "user_python") {
+						// First non-empty result wins (the old loop's bail).
+						return result ?? undefined;
+					}
+					if (event === "resources_discover") {
+						const state = args[2] as {
+							skillPaths: Array<{ path: string; extensionPath: string }>;
+							promptPaths: Array<{ path: string; extensionPath: string }>;
+							themePaths: Array<{ path: string; extensionPath: string }>;
+						};
+						const patch = result as
+							| { skillPaths?: string[]; promptPaths?: string[]; themePaths?: string[] }
+							| undefined;
+						for (const path of patch?.skillPaths ?? []) {
+							state.skillPaths.push({ path, extensionPath: this.extension.path });
+						}
+						for (const path of patch?.promptPaths ?? []) {
+							state.promptPaths.push({ path, extensionPath: this.extension.path });
+						}
+						for (const path of patch?.themePaths ?? []) {
+							state.themePaths.push({ path, extensionPath: this.extension.path });
 						}
 						return undefined;
 					}

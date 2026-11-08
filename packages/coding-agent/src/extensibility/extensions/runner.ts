@@ -2215,6 +2215,12 @@ export class ExtensionRunner {
 		eventName: "user_bash" | "user_python",
 	): Promise<R | undefined> {
 		const ctx = this.createContext();
+		const bus = this.runtime.eventBus;
+		const cordisCount = this.runtime.eventHandlerCounts?.get(eventName) ?? 0;
+		if (bus && cordisCount > 0) {
+			const result = await bus.serial(eventName, event, ctx);
+			return (result as R | undefined) ?? undefined;
+		}
 
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get(eventName);
@@ -2249,6 +2255,14 @@ export class ExtensionRunner {
 		const skillPaths: Array<{ path: string; extensionPath: string }> = [];
 		const promptPaths: Array<{ path: string; extensionPath: string }> = [];
 		const themePaths: Array<{ path: string; extensionPath: string }> = [];
+
+		const bus = this.runtime.eventBus;
+		const cordisCount = this.runtime.eventHandlerCounts?.get("resources_discover") ?? 0;
+		if (bus && cordisCount > 0) {
+			const state = { skillPaths, promptPaths, themePaths };
+			await bus.serial("resources_discover", { type: "resources_discover", cwd, reason }, ctx, state);
+			return state;
+		}
 
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get("resources_discover");

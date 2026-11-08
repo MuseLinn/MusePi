@@ -2482,6 +2482,79 @@ describe("ExtensionRunner", () => {
 		});
 	});
 
+	describe("user events and resource discovery", () => {
+		it("returns the first user_bash result", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "user-bash-a.ts"),
+				`
+				export default function(pi) {
+					pi.on("user_bash", () => ({ result: { stdout: "a" } }));
+				}
+			`,
+			);
+			fs.writeFileSync(
+				path.join(extensionsDir, "user-bash-b.ts"),
+				`
+				export default function(pi) {
+					pi.on("user_bash", () => ({ result: { stdout: "b" } }));
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			expect(
+				await runner.emitUserBash({
+					type: "user_bash",
+					command: "ls",
+					excludeFromContext: false,
+					cwd: tempDir.path(),
+				}),
+			).toEqual({ result: { stdout: "a" } } as never);
+		});
+
+		it("accumulates discovered resources with the owning extension path", async () => {
+			const skillExt = path.join(extensionsDir, "resources-skill.ts");
+			const promptExt = path.join(extensionsDir, "resources-prompt.ts");
+			fs.writeFileSync(
+				skillExt,
+				`
+				export default function(pi) {
+					pi.on("resources_discover", () => ({ skillPaths: ["/skills/a"] }));
+				}
+			`,
+			);
+			fs.writeFileSync(
+				promptExt,
+				`
+				export default function(pi) {
+					pi.on("resources_discover", () => ({ promptPaths: ["/prompts/b"] }));
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			expect(await runner.emitResourcesDiscover(tempDir.path(), "startup")).toEqual({
+				skillPaths: [{ path: "/skills/a", extensionPath: skillExt }],
+				promptPaths: [{ path: "/prompts/b", extensionPath: promptExt }],
+				themePaths: [],
+			});
+		});
+	});
+
 	describe("service tier API", () => {
 		it("restricts tiers to values supported by each provider family", () => {
 			expectTypeOf<"scale">().toExtend<ExtensionServiceTier<"openai">>();

@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`user_bash` / `user_python` / `resources_discover` 迁到 Cordis serial**：前两者首个非空结果即中断（旧的 bail 语义），`resources_discover` 按扩展路径累积三类资源；同时补上 `session.compacting` 的结果记忆分支（上一批只做了登记）。新增 user_bash 首结果与资源归属两例回归。
+  - EN: `user_bash` / `user_python` / `resources_discover` now dispatch through Cordis serial. The first non-empty user-event result bails (the old semantics), and resource discovery accumulates all three path kinds with their owning extension; the missing `session.compacting` result-memory branch is wired as well. New tests cover first-result-wins and resource attribution.
+
 - **`session.compacting` / `session_stop` 迁到 Cordis serial**：compacting 保留最后一个有效结果；stop 在“继续 + 带上下文”时立即中断并返回该结果，`event.signal` 经执行器合成到 handler 预算（含超时与错误上报）。续跑判定抽成 `sessionStopContinues`，两条路径共用。
   - EN: `session.compacting` and `session_stop` now dispatch through Cordis serial. Compacting keeps the last valid result; stop bails immediately when it asks to continue with context, with `event.signal` composed into the handler budget by the executor (timeout and error reporting included). The continuation predicate is shared through `sessionStopContinues`.
 
