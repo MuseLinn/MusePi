@@ -28,6 +28,8 @@ Track A 的 `apply` 收到同一个对象，既是 `pi`（平铺兼容面），�
 
 内置命令名（如 `/memory`）默认是保留名：第三方插件注册同名命令会被跳过并告警。宿主内置目录（`bundled-plugins/`、`desktop-plugins/`，以及仓库内的 `packages/*/src/plugins/`）中的插件可以接管保留名——内建实现退化为插件缺席时的回退，命令补全与分发优先使用插件实现。
 
+RPC 与设置不走接管：`memory.*` 这类方法是核心契约，路由只调用活动后端的成员，替换实现走 `ctx.memory.registerBackendProvider`；设置键的所有者是读取它的包，核心记忆运行时读取 `memory.*`，因此这些键固定在核心 schema，`ctx.settings.register` 只追加扩展自己命名空间内的键，与核心键同名时在 `settings.schema` 合并阶段被忽略。这与 dsh 一致：Remote 方法由服务包拥有、插件通过 adapter 替换实现；每个包导出自己的 `Config`，不存在跨包替换同一键。
+
 ---
 
 ## 2. 命名规则（本次改造的重点）
