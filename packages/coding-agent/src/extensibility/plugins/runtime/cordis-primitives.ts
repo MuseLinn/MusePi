@@ -51,13 +51,24 @@ const stateRegistry = new WeakMap<Extension, Map<string, unknown>>();
  * preserved: cleanups run in reverse registration order, so a resource opened
  * after another is closed before it.
  */
-export function registerEffect(extension: Extension, cleanup: () => void | Promise<void>, label = "anonymous"): void {
+export function registerEffect(
+	extension: Extension,
+	cleanup: () => void | Promise<void>,
+	label = "anonymous",
+): () => void {
 	let list = effectRegistry.get(extension);
 	if (list === undefined) {
 		list = [];
 		effectRegistry.set(extension, list);
 	}
-	list.push({ cleanup, label });
+	const entry = { cleanup, label };
+	list.push(entry);
+	return () => {
+		const current = effectRegistry.get(extension);
+		if (!current) return;
+		const index = current.indexOf(entry);
+		if (index >= 0) current.splice(index, 1);
+	};
 }
 
 /**

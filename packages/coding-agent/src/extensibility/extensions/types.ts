@@ -1385,6 +1385,10 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	/** File logger for error/warning/debug messages */
 	logger: typeof PiLogger;
 
+	/** Mounting root this plugin was loaded for (dsh exposes the same as part of
+	 *  the plugin context). */
+	readonly cwd: string;
+
 	/** Injected TypeBox shim for legacy `Type.Object(...)` parameter authoring. */
 	typebox: typeof TypeBox;
 
@@ -1763,7 +1767,7 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	 *  re-registers it. */
 	registerStatusBarSegment(id: string, options: { label: string; order?: number; renderKey?: string }): void;
 
-	// Cordis primitives (Track A only — see the note below)
+	// Effect ledger (every tracked plugin; dsh's `ctx.effect`)
 	// =========================================================================
 
 	/**
@@ -1780,11 +1784,12 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	 * rest. State stays readable while cleanups run, so a cleanup can flush what
 	 * the plugin accumulated.
 	 *
-	 * ⚠️ **Track A (cordis plugins) only.** A legacy extension has no fiber to
-	 * scope this to, so it is absent there — check `"effect" in pi` before use,
-	 * or ship as a cordis plugin. See `docs/plugin-tracks.md`.
+	 * Every plugin gets this, including bundled host packages: the ledger is keyed
+	 * by the extension instance, so unlinking the plugin runs its cleanups whether
+	 * it was mounted through Cordis or loaded as a bundled entry. Returns a
+	 * disposer that removes this one cleanup without unloading the plugin.
 	 */
-	effect?(cleanup: () => void | Promise<void>, label?: string): void;
+	effect(cleanup: () => void | Promise<void>, label?: string): () => void;
 
 	/**
 	 * Fiber-scoped state for this plugin.
@@ -2215,8 +2220,9 @@ export interface ProviderModelConfig {
 /** Extension factory function type. Supports both sync and async initialization. */
 export type ExtensionFactory = (
 	pi: ExtensionAPI,
-	/** Host facts the API object does not carry; `cwd` is the mounting root. */
-	context?: { cwd: string },
+	/** Coerced values of the plugin's declared `musepi.config` fields (dsh's
+	 *  `apply(ctx, config)`). Empty for a plugin that declares none. */
+	config?: Record<string, unknown>,
 ) => void | Promise<void>;
 
 // ============================================================================

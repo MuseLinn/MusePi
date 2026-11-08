@@ -1804,6 +1804,10 @@ export class ExtensionRunner {
 	}
 
 	#stopServicesForExtension(ext: Extension): void {
+		// Same ledger the cordis mount drains: effects and registration disposers
+		// are one lifetime, so a session extension's watcher/socket is reclaimed
+		// with its services instead of surviving unload.
+		void import("../plugins/runtime/cordis-primitives").then(module => module.disposePluginPrimitives(ext));
 		for (const dispose of ext.memoryBackendProviders.splice(0)) {
 			try {
 				dispose();

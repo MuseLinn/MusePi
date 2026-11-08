@@ -9,6 +9,15 @@
 		"description": "Host-scope watcher that provides ctx.hmr for every host.",
 		"icon": "◈",
 		"scope": "host",
-		"extensions": ["./index.ts"]
+		"extensions": ["./index.ts"],
+		"config": [
+			{
+				"key": "debounceMs",
+				"type": "number",
+				"label": "Debounce (ms)",
+				"description": "How long file changes are coalesced before one reload batch is emitted.",
+				"default": 120
+			}
+		]
 	}
 }

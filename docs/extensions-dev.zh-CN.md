@@ -614,34 +614,23 @@ is a package the distribution ships, **not a separate kind of thing**」——�
 四条——两次独立装载只求值一次、`fresh` 重新求值、编辑后 `fresh` 拿到新字节而普通
 装载仍取旧字节、形似 bundled 目录的路径不再有第二类语义。
 
-## 18. `pi.effect` / `pi.state` 只属于 cordis 插件(2026-10-19)
+## 18. `ctx.effect` 属于所有插件，`ctx.state` 仍只属于 cordis 插件
 
-宿主有两条插件装载路径，能力面**故意不同**：cordis 插件拿得到 `pi.effect` 与
-`pi.state`，legacy 扩展拿不到。它们是 `undefined`，不在原型上、不抛错。
+`effect` 与 `state` 的差别不在“进不进 cordis”，而在**有没有可挂的生命周期对象**：
 
-### 为什么 legacy 侧不给
+| 原语 | 依赖 | 现状 |
+|---|---|---|
+| `ctx.effect(cleanup)` | 一条按 Extension 实例记账的清理账本 | 所有已装载插件都有；cordis fiber、bundled 宿主装载器 reset、会话 runner 收尾三条路径都会反向执行 |
+| `ctx.state` | 一个随卸载清空的 fiber 作用域存储 | 仍只发给 cordis 插件 |
 
-两者都需要一个**可以挂东西的生命周期对象**才能成立：
+账本按 `Extension` 实例存放，所以“谁来回收”不再是 cordis 独占的问题：bundled 宿主插件（如 `musepi-hmr` 的 watcher）在宿主装载器 reset 时被回收，会话扩展在 runner 收尾时被回收。`effect` 返回 disposer，可单独撤销一条登记而不卸载整个插件。
 
-| 原语 | 依赖 |
-|---|---|
-| `pi.effect(cleanup)` | 一条 fiber 效果账本——卸载时反向执行登记的清理 |
-| `pi.state` | 一个随卸载清空的 fiber 作用域存储 |
-
-legacy 扩展按模块级状态写，没有 fiber 可挂。给它一个「看起来能用」的 `effect`
-是最坏的选项：登记进去了，但没有任何时机触发清理——**副作用泄漏，且泄漏得无声**，
-因为 API 的存在本身就承诺了回收。所以这一侧不发这两个方法，扩展作者拿到的
-`undefined` 就是「这条路在这里不存在」的诚实回答。
+`state` 没有同步放宽：它要求一个卸载即清空的作用域，而 legacy 扩展按模块级变量写，拿到一个“看起来能用”的 state 只会让两份实例各自持有一半状态。`ExtensionAPI` 上 `state` 仍是可选的（`state?`），代码里必须按可选处理。
 
 ### 写插件时怎么选
 
-- 需要清理定时器、监听器、子进程 → 写成 cordis 插件（`export function apply(pi)`），
-  用 `pi.effect(() => clearInterval(t))`。
-- 只是想注册工具 / 命令 / provider → 两者都行，用 legacy 的 `export default function`
-  即可，不必为了 `effect` 换形态。
-
-`ExtensionAPI` 上这两个成员是**可选**的（`effect?` / `state?`），类型层面就把
-「legacy 装载拿不到」表达了；代码里必须按可选处理，不要断言非空。
+- 打开定时器、监听器、子进程、watcher → 用 `ctx.effect(() => cleanup())`，所有形态都可以。
+- 需要随插件卸载清空的可变状态 → 写成 cordis 插件用 `ctx.state`，或把状态收敛到闭包里。
 
 ## 18. 插件 UI 模块的 `apply(ctx)` 生命周期(2026-10-24)
 
@@ -860,7 +849,7 @@ Cordis 插件可以用 `pi.registerMemoryBackendProvider({ id, create(settings) 
 
 provider 也可以贡献**新**后端 id，而不仅是替换：`registerMemoryBackendProvider({ id: "mybank", label, description, create })` 注册后 `memory.backend` 接受该 id（`getEnumValues` 合并 provider 注册表），设置选择器以 provider 自己的 label / description 追加该项。插件卸载后选项消失；仍指向该 id 的配置回退到 `off`，不会解析到别人的实现。
 
-`ctx.hmr` 报告宿主级热重载，由 host 作用域的 `musepi-hmr` 包（`provide: ["hmr"]`）经宿主服务注册表提供。没有 watcher 时（未装载 host 插件、测试）`enabled` 为 false；`onChange(listener)` 每个稳定窗口收到一批 `{ trigger: "watch" | "manual", paths }`，返回 disposer；`reload()` 让当前监听按“文件刚变过”跑一次。watcher 是进程级单例——daemon、TUI、ACP、SDK 共用一份——但反应归各宿主：daemon 失效扩展缓存并广播 `extensions.changed`，终端只失效发现缓存，插件自行决定重载对自身意味着什么。监听若不应长于其所有者，用 `ctx.effect(dispose)` 登记。
+`ctx.hmr` 报告宿主级热重载，由 host 作用域的 `musepi-hmr` 包（`provide: ["hmr"]`）经宿主服务注册表提供；`debounceMs` 来自该包自己的 `musepi.config`，经 `apply(ctx, config)` 传入。没有 watcher 时（未装载 host 插件、测试）`enabled` 为 false；`onChange(listener)` 每个稳定窗口收到一批 `{ trigger: "watch" | "manual", paths }`，返回 disposer；`reload()` 让当前监听按“文件刚变过”跑一次。`runExclusive(tx)` 让安装/配置写入与重载批次串行，谁都不会看到半应用状态；`getLinked(file)` 返回拥有该文件的入口，`getOuterStack(file)` 给出到入口的 importer 链——两者都来自 loader 的模块图，未挂图时返回空。watcher 是进程级单例——daemon、TUI、ACP、SDK 共用一份——但反应归各宿主：daemon 失效扩展缓存并广播 `extensions.changed`，终端只失效发现缓存，插件自行决定重载对自身意味着什么。监听若不应长于其所有者，用 `ctx.effect(dispose)` 登记。
 
 `memory.*` 仍是核心契约：每条路由都调用活动后端的成员，插件不能另立方法名。因此替换后端时，`memory.status/view/stats/diagnose/clear/enqueue` 会一起切换。`memory.workspace*` 由可选的 `workspaceDir(agentDir, cwd)` 能力决定：返回目录的后端才拥有设置页文件浏览，未实现的返回 `supported: false` 并拒绝读取或定位，而不是列出属于另一种实现的本地文件。
 

@@ -121,6 +121,47 @@ export class ProfileModuleGraph {
 		};
 	}
 
+	/** Entries whose managed file set contains `file` (dsh `getLinked`). */
+	linkedEntries(file: string): readonly string[] {
+		const entries: string[] = [];
+		for (const [entry, graph] of this.#sources) {
+			if (managedFiles(graph).has(file)) entries.push(entry);
+		}
+		return entries;
+	}
+
+	/**
+	 * Importer chain from `file` up to its owning entry, outermost first (dsh
+	 * `getOuterStack`). One chain: the first graph that claims the file wins,
+	 * because that is the plugin a reload of `file` would restart.
+	 */
+	outerStack(file: string): readonly string[] {
+		for (const [entry, graph] of this.#sources) {
+			const files = managedFiles(graph);
+			if (!files.has(file)) continue;
+			const parents = new Map<string, string>();
+			for (const [importer, dependencies] of graph.dependencies) {
+				for (const dependency of dependencies) {
+					if (!files.has(dependency) || parents.has(dependency)) continue;
+					parents.set(dependency, importer);
+				}
+			}
+			const chain: string[] = [];
+			const seen = new Set<string>();
+			let current = file;
+			while (!seen.has(current)) {
+				seen.add(current);
+				chain.push(current);
+				const parent = parents.get(current);
+				if (parent === undefined) break;
+				current = parent;
+			}
+			if (chain[chain.length - 1] !== entry) chain.push(entry);
+			return chain.reverse();
+		}
+		return [];
+	}
+
 	clear(): void {
 		this.#sources.clear();
 		this.#identities.clear();

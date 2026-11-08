@@ -49,6 +49,7 @@ import { installLegacyPiSpecifierShim, loadLegacyPiModule } from "../plugins/com
 import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../plugins/compat/plugin-compatibility";
 import type { HmrService } from "../plugins/hmr/service";
 import { type PluginEntryModule, resolvePluginEntry, toFactory } from "../plugins/runtime/cordis-entry";
+import { registerEffect } from "../plugins/runtime/cordis-primitives";
 import { getHostService } from "../plugins/runtime/host-services";
 import { getAllPluginExtensionPaths } from "../plugins/runtime/loader";
 import { resolvePath, withHostGuard } from "../utils";
@@ -342,7 +343,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		public readonly pi: typeof PiCodingAgent,
 		private readonly extension: Extension,
 		private readonly runtime: IExtensionRuntime,
-		private readonly cwd: string,
+		public readonly cwd: string,
 		public readonly events: EventBus,
 	) {
 		const self = this;
@@ -431,6 +432,12 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		const [fields, store] = await Promise.all([this.#configFields(), readPluginConfigStore()]);
 		const id = `extension-module:${getExtensionNameFromPath(this.extension.path)}`;
 		return coerceConfigValues(fields, store[id]);
+	}
+
+	/** Register a cleanup owned by this extension (dsh `ctx.effect`); the
+	 *  disposer removes just this record. Unloading the plugin runs them all. */
+	effect(cleanup: () => void | Promise<void>, label?: string): () => void {
+		return registerEffect(this.extension, cleanup, label);
 	}
 
 	/** Register one listener; the return value removes it again (Cordis
@@ -925,7 +932,7 @@ async function runExtensionFactory(
 	factory: ExtensionFactory,
 	api: ExtensionAPI,
 	runtime: IExtensionRuntime,
-	cwd: string,
+	config?: Record<string, unknown>,
 ): Promise<unknown> {
 	const providerRegistrationCheckpoint = [...runtime.pendingProviderRegistrations];
 	const mediaProviderCheckpoint = [...runtime.pendingMediaProviderRegistrations];
@@ -934,7 +941,7 @@ async function runExtensionFactory(
 	try {
 		// The factory's return value is the object its `provide` names refer to
 		// (Cordis `apply` contract); host-scope loading publishes it.
-		return await factory(api, { cwd });
+		return await factory(api, config);
 	} catch (error) {
 		runtime.pendingProviderRegistrations.splice(
 			0,
@@ -1041,7 +1048,7 @@ async function bindExtension(
 	try {
 		const extension = createExtension(extensionPath, imported.resolvedPath);
 		const api = wrapApi(createConcreteExtensionAPI(extension, runtime, cwd, eventBus), extension);
-		await withHostGuard(() => runExtensionFactory(factory, api, runtime, cwd));
+		await withHostGuard(() => runExtensionFactory(factory, api, runtime));
 
 		return { extension, error: null };
 	} catch (err) {
@@ -1083,10 +1090,12 @@ export async function loadExtensionFromFactory(
 	name = "<inline>",
 	/** Optional sink for the factory's return value (the `provide` payload). */
 	capture?: { published?: unknown },
+	/** Coerced `musepi.config` values, handed to `apply(ctx, config)`. */
+	config?: Record<string, unknown>,
 ): Promise<Extension> {
 	const extension = createExtension(name, name);
 	const api = createConcreteExtensionAPI(extension, runtime, cwd, eventBus);
-	const published = await runExtensionFactory(factory, api, runtime, cwd);
+	const published = await runExtensionFactory(factory, api, runtime, config);
 	if (capture) capture.published = published;
 	return extension;
 }

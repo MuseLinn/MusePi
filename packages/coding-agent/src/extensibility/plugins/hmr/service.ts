@@ -23,6 +23,15 @@ export interface HmrChange {
 
 export type HmrListener = (change: HmrChange) => void | Promise<void>;
 
+/** Module-graph questions a loader can answer for the service (dsh `getLinked`
+ *  / `getOuterStack`). Absent until a host attaches its graph. */
+export interface HmrGraphQueries {
+	/** Entries whose managed file set contains `file`. */
+	linkedEntries(file: string): readonly string[];
+	/** Importer chain from `file` up to its entry, outermost first. */
+	outerStack(file: string): readonly string[];
+}
+
 export interface HmrService {
 	readonly enabled: boolean;
 	readonly roots: readonly string[];
@@ -32,6 +41,16 @@ export interface HmrService {
 	onChange(listener: HmrListener): () => void;
 	/** Run the current listeners as if the watched files had changed. */
 	reload(): Promise<void>;
+	/** Serialize a transaction against reload batches (dsh `runExclusive`):
+	 *  installs and config writes use this so they never observe a half-applied
+	 *  reload. Nested calls queue instead of interleaving. */
+	runExclusive<T>(transaction: () => Promise<T> | T): Promise<T>;
+	/** Entries that own `file`; empty when the file is not part of a plugin. */
+	getLinked(file: string): readonly string[];
+	/** Importer chain from `file` to its entry; empty when unmanaged. */
+	getOuterStack(file: string): readonly string[];
+	/** Attach the loader's module graph. Returns a disposer. */
+	attachGraph(graph: HmrGraphQueries): () => void;
 	dispose(): Promise<void>;
 }
 
@@ -43,6 +62,8 @@ class WatchedHmrService implements HmrService {
 	#timer: Timer | null = null;
 	#watcher: FSWatcher | null = null;
 	#disposed = false;
+	#queue: Promise<unknown> = Promise.resolve();
+	#graph: HmrGraphQueries | null = null;
 
 	constructor(roots: readonly string[], debounceMs: number) {
 		this.roots = roots;
@@ -63,7 +84,34 @@ class WatchedHmrService implements HmrService {
 
 	async reload(): Promise<void> {
 		if (this.#disposed) return;
-		this.#flush("manual");
+		await this.runExclusive(() => this.#flush("manual"));
+	}
+
+	runExclusive<T>(transaction: () => Promise<T> | T): Promise<T> {
+		const run = this.#queue.then(
+			() => transaction(),
+			() => transaction(),
+		);
+		this.#queue = run.then(
+			() => undefined,
+			() => undefined,
+		);
+		return run;
+	}
+
+	getLinked(file: string): readonly string[] {
+		return this.#graph?.linkedEntries(file) ?? [];
+	}
+
+	getOuterStack(file: string): readonly string[] {
+		return this.#graph?.outerStack(file) ?? [];
+	}
+
+	attachGraph(graph: HmrGraphQueries): () => void {
+		this.#graph = graph;
+		return () => {
+			if (this.#graph === graph) this.#graph = null;
+		};
 	}
 
 	start(): void {
@@ -111,7 +159,9 @@ class WatchedHmrService implements HmrService {
 		if (this.#timer !== null) return;
 		this.#timer = setTimeout(() => {
 			this.#timer = null;
-			this.#flush("watch");
+			void this.runExclusive(() => this.#flush("watch")).catch(error => {
+				logger.warn("hmr batch failed", { error: String(error) });
+			});
 		}, this.#debounceMs);
 	}
 

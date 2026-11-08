@@ -91,6 +91,24 @@ describe("profile module graph propagation", () => {
 		expect(plan.pending.map(item => item.file)).toEqual([host, dependency]);
 	});
 
+	test("answers which entry owns a file and the importer chain above it", () => {
+		const profiles = new ProfileModuleGraph();
+		profiles.observe(
+			target("/profile/a.ts"),
+			graph("/profile/a.ts", {
+				"/profile/a.ts": ["/profile/mid.ts"],
+				"/profile/mid.ts": ["/profile/leaf.ts"],
+				"/profile/leaf.ts": [],
+			}),
+		);
+		profiles.observe(target("/profile/b.ts"), graph("/profile/b.ts", { "/profile/b.ts": [] }));
+
+		expect(profiles.linkedEntries("/profile/leaf.ts")).toEqual(["/profile/a.ts"]);
+		expect(profiles.outerStack("/profile/leaf.ts")).toEqual(["/profile/a.ts", "/profile/mid.ts", "/profile/leaf.ts"]);
+		expect(profiles.linkedEntries("/outside.ts")).toEqual([]);
+		expect(profiles.outerStack("/outside.ts")).toEqual([]);
+	});
+
 	test("duplicate composition rows retain their row identities when they share an entry", () => {
 		const profiles = new ProfileModuleGraph();
 		profiles.observe(target("/profile/a.ts", "row-a"), graph("/profile/a.ts", { "/profile/a.ts": [] }));

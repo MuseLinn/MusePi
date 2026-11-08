@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **补齐 HMR 与插件生命周期的四个缺口**：`ctx.hmr` 新增 `runExclusive`（安装/配置写入与重载批次串行）、`getLinked` / `getOuterStack`（来自 loader 模块图的归属与 importer 链）；`musepi-hmr` 的 `debounceMs` 改由自己的 `musepi.config` 提供，`apply(ctx, config)` 现在真的收到声明字段；`ctx.effect` 放宽到所有插件并由统一的 Extension 账本回收，bundled 宿主装载器 reset、会话 runner 收尾与 cordis fiber 三条路径一致，watcher 不再泄漏。
+  - EN: Four HMR and plugin-lifecycle gaps are closed. `ctx.hmr` gained `runExclusive` (installs and config writes serialize against reload batches), plus `getLinked` / `getOuterStack` (entry ownership and importer chains from the loader's module graph). `musepi-hmr` now reads `debounceMs` from its own `musepi.config`, and `apply(ctx, config)` actually receives the declared fields. `ctx.effect` is available to every plugin and drained by one Extension-keyed ledger, so the bundled host loader's reset, the session runner's teardown, and the cordis fiber all reclaim the same way — the watcher no longer leaks.
+
 - **HMR 变成真正的 host 插件，`on()` 返回值可注销监听**：热重载不再是 daemon 私有实现——`musepi-hmr`（`musepi.scope: "host"`）通过 `provide: ["hmr"]` 发布服务，宿主侧经新的宿主服务注册表读回，插件照旧用 `ctx.hmr.onChange`。新增 `host-services` 注册表承载 host 插件发布的对象；`ctx.on` / `pi.on` 现在返回 disposer（Cordis 语义），插件可只撤销单个监听而无需整体卸载。
   - EN: HMR is now a real host plugin, and `on()` returns a disposer. Hot reload is no longer daemon-private: `musepi-hmr` (`musepi.scope: "host"`) publishes the service through `provide: ["hmr"]`, the host reads it back from a new host service registry, and plugins keep using `ctx.hmr.onChange`. The registry also carries any object a host plugin publishes; `ctx.on` / `pi.on` now return a disposer (the Cordis contract), so a plugin can remove one listener without unloading.
 

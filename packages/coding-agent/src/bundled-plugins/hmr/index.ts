@@ -13,8 +13,8 @@ export const name = "musepi-hmr";
 export const inject = [] as const;
 export const provide = ["hmr"] as const;
 
-export async function apply(ctx: ExtensionAPI, context?: { cwd: string }): Promise<{ hmr: HmrService }> {
-	const roots = (await resolveExtensionWatchRoots(context?.cwd ?? process.cwd())).filter(root => {
+export async function apply(ctx: ExtensionAPI, config?: Record<string, unknown>): Promise<{ hmr: HmrService }> {
+	const roots = (await resolveExtensionWatchRoots(ctx.cwd)).filter(root => {
 		try {
 			// A root that does not exist yet is not an error: discovery's TTL scan
 			// still picks the plugin up once it appears.
@@ -24,7 +24,8 @@ export async function apply(ctx: ExtensionAPI, context?: { cwd: string }): Promi
 			return false;
 		}
 	});
-	const service = createHmrService(roots, 120);
-	ctx.effect?.(() => service.dispose(), "hmr:watcher");
+	const debounceMs = typeof config?.debounceMs === "number" ? config.debounceMs : 120;
+	const service = createHmrService(roots, debounceMs);
+	ctx.effect(() => service.dispose(), "hmr:watcher");
 	return { hmr: service };
 }

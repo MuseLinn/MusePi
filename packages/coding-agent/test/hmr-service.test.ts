@@ -44,6 +44,50 @@ describe("hmr service", () => {
 		await service.dispose();
 	});
 
+	it("serializes transactions so a reload never interleaves an install", async () => {
+		const service = createHmrService([], 0);
+		const log: string[] = [];
+		let release!: () => void;
+		const gate = new Promise<void>(resolve => {
+			release = resolve;
+		});
+
+		const first = service.runExclusive(async () => {
+			log.push("first:start");
+			await gate;
+			log.push("first:end");
+		});
+		const second = service.runExclusive(() => {
+			log.push("second");
+		});
+
+		release();
+		await Promise.all([first, second]);
+		expect(log).toEqual(["first:start", "first:end", "second"]);
+		await service.dispose();
+	});
+
+	it("answers linked-entry and importer-chain queries once a graph is attached", async () => {
+		const service = createHmrService([], 0);
+		const detach = service.attachGraph({
+			linkedEntries: file => (file.endsWith("/leaf.ts") ? ["/plugin/index.ts"] : []),
+			outerStack: file =>
+				file.endsWith("/leaf.ts") ? ["/plugin/index.ts", "/plugin/mid.ts", "/plugin/leaf.ts"] : [],
+		});
+
+		expect(service.getLinked("/plugin/leaf.ts")).toEqual(["/plugin/index.ts"]);
+		expect(service.getOuterStack("/plugin/leaf.ts")).toEqual([
+			"/plugin/index.ts",
+			"/plugin/mid.ts",
+			"/plugin/leaf.ts",
+		]);
+		expect(service.getLinked("/elsewhere.ts")).toEqual([]);
+
+		detach();
+		expect(service.getLinked("/plugin/leaf.ts")).toEqual([]);
+		await service.dispose();
+	});
+
 	it("reports no watcher for an empty root set", () => {
 		const service = createHmrService([]);
 		expect(service.enabled).toBe(false);

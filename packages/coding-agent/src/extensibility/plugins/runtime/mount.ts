@@ -145,8 +145,8 @@ export interface MountContext {
  */
 function withCordisPrimitives(api: ExtensionAPI, extension: Extension): ExtensionAPI {
 	const primitives = {
-		effect(cleanup: () => void | Promise<void>, label?: string): void {
-			registerEffect(extension, cleanup, label);
+		effect(cleanup: () => void | Promise<void>, label?: string): () => void {
+			return registerEffect(extension, cleanup, label);
 		},
 		state: {
 			get: <T>(key: string): T | undefined => stateGet<T>(extension, key),

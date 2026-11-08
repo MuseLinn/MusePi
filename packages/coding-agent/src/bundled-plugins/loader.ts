@@ -21,11 +21,8 @@ import { logger } from "@musepi/pi-utils";
 import { discoverBundledPluginPaths } from "../discovery/builtin";
 import { ExtensionRuntime, loadExtensionFromFactory } from "../extensibility/extensions/loader";
 import type { Extension } from "../extensibility/extensions/types";
-import {
-	isCordisPluginEntry,
-	resolvePluginEntry,
-	toFactory,
-} from "../extensibility/plugins/runtime/cordis-entry";
+import { isCordisPluginEntry, resolvePluginEntry, toFactory } from "../extensibility/plugins/runtime/cordis-entry";
+import { disposePluginPrimitives } from "../extensibility/plugins/runtime/cordis-primitives";
 import { provideHostService } from "../extensibility/plugins/runtime/host-services";
 import { registerMagicKeyword } from "../modes/magic-keyword-registry";
 import { EventBus } from "../utils/event-bus";
@@ -61,6 +58,29 @@ const SESSION_PROMPT_PACKAGE_DIRS: ReadonlySet<string> = new Set([
 export async function discoverBundledSessionPromptPluginPaths(): Promise<string[]> {
 	const paths = await discoverBundledPluginPaths();
 	return paths.filter(entryPath => SESSION_PROMPT_PACKAGE_DIRS.has(path.basename(path.dirname(entryPath))));
+}
+
+/**
+ * Coerce the values of one bundled package's declared `musepi.config` fields,
+ * the same read `ctx.config` performs (one store, one id scheme).
+ */
+async function readDeclaredConfig(entry: string): Promise<Record<string, unknown>> {
+	const [
+		{ readExtensionPluginMeta },
+		{ readPluginConfigStore },
+		{ coerceConfigValues },
+		{ getExtensionNameFromPath },
+	] = await Promise.all([
+		import("../extensibility/extensions/plugin-manifest"),
+		import("../extensibility/extensions-center/plugin-config-store"),
+		import("@musepi/pi-wire"),
+		import("../discovery/helpers"),
+	]);
+	const meta = await readExtensionPluginMeta(entry);
+	if (!meta || meta.fields.length === 0) return {};
+	const store = await readPluginConfigStore();
+	const id = `extension-module:${getExtensionNameFromPath(entry)}`;
+	return coerceConfigValues(meta.fields, store[id]);
 }
 
 export interface BundledPluginLoader {
@@ -106,6 +126,7 @@ export function createBundledPluginLoader(
 							runtime,
 							entry,
 							capture,
+							await readDeclaredConfig(entry),
 						);
 						mounted.push(extension);
 						// Host-scope packages publish their `provide` objects into the
@@ -140,6 +161,9 @@ export function createBundledPluginLoader(
 			for (const dispose of serviceDisposers.splice(0)) dispose();
 			for (const extension of mounted.splice(0)) {
 				for (const dispose of extension.memoryBackendProviders.splice(0)) dispose();
+				// The same ledger the cordis mount uses: a bundled host plugin's
+				// watcher/socket is reclaimed here instead of leaking until exit.
+				void disposePluginPrimitives(extension);
 			}
 			loaded = false;
 			inFlight = undefined;

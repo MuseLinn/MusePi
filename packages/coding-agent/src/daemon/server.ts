@@ -1401,7 +1401,6 @@ export class DaemonServer {
 	#pauseConns = new Set<DaemonConnection>();
 
 	#extensionWatcherStarted = false;
-	#extensionWatcherTimer: Timer | null = null;
 	/** Detaches this daemon from the process-wide HMR service on shutdown. */
 	#hmrUnsubscribe: (() => void) | null = null;
 
@@ -1432,46 +1431,51 @@ export class DaemonServer {
 				// No HMR plugin (disabled or failed): discovery TTL still applies.
 				return;
 			}
-			this.#hmrUnsubscribe = service.onChange(() => this.#scheduleExtensionReload());
+			// Reload work joins the same queue installs/config writes use, so a
+			// batch is never half-applied. `getLinked`/`getOuterStack` answer from
+			// the loader's module graph.
+			this.#hmrUnsubscribe = service.onChange(() => {
+				void service.runExclusive(() => this.#applyExtensionReload());
+			});
+			const dynamic = await this.#getDynamicPlugins();
+			service.attachGraph(dynamic.moduleGraph);
 		})().catch(err => {
 			logger.warn("daemon: hmr service unavailable; discovery TTL still applies", { err: String(err) });
 		});
 	}
 
-	#scheduleExtensionReload(): void {
-		if (this.#extensionWatcherTimer) return;
-		this.#extensionWatcherTimer = setTimeout(() => {
-			this.#extensionWatcherTimer = null;
-			this.#services.get<ExtensionService>("extensions").invalidateCaches();
-			// 扩展声明的技能经 MarketplaceService.getSkills 合并:扩展源变更
-			// 时一并失效,否则虚拟技能列表最多滞后 10s TTL。
-			this.#services.get<MarketplaceService>("marketplace").invalidateSkillsCache();
-			void import("./extension-artifact-compiler").then(m => m.invalidateExtensionCaches());
-			// bundle/profile 组合读的也是插件面（bundle 的 patch 文件、profile
-			// 的 bundles 清单），与插件清单同一批失效入口。
-			this.#services.get<BundleService>("bundles").invalidate();
-			this.#services.get<EventService>("events").broadcastExtensionsChanged();
-			// 扩展贡献的 provider(registerProvider → ModelRegistry)随重载重注册,
-			// 模型目录跟着变 —— 会话内的模型选择器常驻挂载且只认 models.changed
-			// (ModelSelector 订阅),只广播 extensions.changed 会让它停在旧列表,
-			// 插件新增/修改的模型要重进会话才可见。
-			this.#services.get<EventService>("events").broadcastModelsChanged();
-			// P5 HMR v2: session-scoped hot reload of loaded extensions whose
-			// entry changed on disk. The watcher callback filename is
-			// unreliable (empty/short names on Windows recursive watch), so
-			// the per-entry mtime comparison decides what changed.
-			this.#reloadChangedSessionExtensions();
-			// Host-level (cordis) plugins reconcile on the same tick. Clearing the
-			// TTL caches above only means "recompute next time someone asks" — and
-			// the RPC that ends up asking (design.systems.list) may not arrive for
-			// minutes. Without this the watcher fires, the caches clear, and the
-			// plugin keeps running its old code until an unrelated call happens to
-			// reconcile it, which looks exactly like HMR being broken.
-			void this.#services
-				.get<ExtensionService>("extensions")
-				.getExtensionRuntimeLoad()
-				.catch(err => logger.warn("host-level plugin reconcile after a watched change failed", { err }));
-		}, 500);
+	/** Apply one HMR batch. The service already coalesces file events, so this
+	 *  runs once per batch and only inside its `runExclusive` queue. */
+	#applyExtensionReload(): void {
+		this.#services.get<ExtensionService>("extensions").invalidateCaches();
+		// 扩展声明的技能经 MarketplaceService.getSkills 合并:扩展源变更
+		// 时一并失效,否则虚拟技能列表最多滞后 10s TTL。
+		this.#services.get<MarketplaceService>("marketplace").invalidateSkillsCache();
+		void import("./extension-artifact-compiler").then(m => m.invalidateExtensionCaches());
+		// bundle/profile 组合读的也是插件面（bundle 的 patch 文件、profile
+		// 的 bundles 清单），与插件清单同一批失效入口。
+		this.#services.get<BundleService>("bundles").invalidate();
+		this.#services.get<EventService>("events").broadcastExtensionsChanged();
+		// 扩展贡献的 provider(registerProvider → ModelRegistry)随重载重注册,
+		// 模型目录跟着变 —— 会话内的模型选择器常驻挂载且只认 models.changed
+		// (ModelSelector 订阅),只广播 extensions.changed 会让它停在旧列表,
+		// 插件新增/修改的模型要重进会话才可见。
+		this.#services.get<EventService>("events").broadcastModelsChanged();
+		// P5 HMR v2: session-scoped hot reload of loaded extensions whose
+		// entry changed on disk. The watcher callback filename is
+		// unreliable (empty/short names on Windows recursive watch), so
+		// the per-entry mtime comparison decides what changed.
+		this.#reloadChangedSessionExtensions();
+		// Host-level (cordis) plugins reconcile on the same tick. Clearing the
+		// TTL caches above only means "recompute next time someone asks" — and
+		// the RPC that ends up asking (design.systems.list) may not arrive for
+		// minutes. Without this the watcher fires, the caches clear, and the
+		// plugin keeps running its old code until an unrelated call happens to
+		// reconcile it, which looks exactly like HMR being broken.
+		void this.#services
+			.get<ExtensionService>("extensions")
+			.getExtensionRuntimeLoad()
+			.catch(err => logger.warn("host-level plugin reconcile after a watched change failed", { err }));
 	}
 
 	/** 预设目录(决策 #5):env MUSEPI_MODES_DIR 可覆盖(隔离测试),默认 <home>/.musepi/modes。 */

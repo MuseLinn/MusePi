@@ -609,6 +609,11 @@ export class CordisDynamicPluginRuntime {
 		this.#host = host;
 	}
 
+	/** The loader's module graph, for the HMR service's `getLinked` / `getOuterStack`. */
+	get moduleGraph(): ProfileModuleGraph {
+		return this.#graphs;
+	}
+
 	/** Publish a host-owned service to plugin components. Unlike a plugin-provided
 	 * service, this object survives plugin unload; component registrations on it do not. */
 	provideHostService(name: string, service: unknown): void {
