@@ -142,8 +142,8 @@ import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import type { CordisDynamicPluginRuntime } from "./cordis-dynamic-plugins";
 import { writeProjectMirror } from "./creation";
-import { resolveExtensionWatchRoots } from "../extensibility/plugins/hmr/roots";
-import { startHmrService, stopHmrService } from "../extensibility/plugins/hmr/service";
+import type { HmrService } from "../extensibility/plugins/hmr/service";
+import { getHostService } from "../extensibility/plugins/runtime/host-services";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
 import { catchupPlan } from "./journal";
 
@@ -807,11 +807,10 @@ export class DaemonServer {
 	/** 拆卸 cordis 根 Context（daemon close 路径调用；双跑期幂等且不触碰
 	 *  服务 stop——回滚后 P1 代码路径不受影响）。 */
 	async disposeHostContext(): Promise<void> {
-		// The watcher holds OS handles; leaving it open keeps the process alive and
-		// keeps reacting to edits after the daemon said it was gone.
+		// The HMR plugin owns the watcher; the daemon only releases its
+		// subscription so the process-level service can outlive a daemon instance.
 		this.#hmrUnsubscribe?.();
 		this.#hmrUnsubscribe = null;
-		await stopHmrService();
 		await this.#hostContext.dispose();
 	}
 
@@ -1421,30 +1420,22 @@ export class DaemonServer {
 	#startExtensionWatcher(): void {
 		if (this.#extensionWatcherStarted) return;
 		this.#extensionWatcherStarted = true;
-		// Watching is the process-wide HMR service's job (`ctx.hmr`); the daemon
-		// only decides what a batch means for its own surfaces. Roots come from
-		// `resolveExtensionWatchRoots` rather than a list written here, because a
-		// hand-written one had drifted from what discovery loads and the
-		// installed-plugin roots had no hot reload at all.
-		void resolveExtensionWatchRoots(this.#host.cwd())
-			.then(roots => {
-				const usable = roots.filter(root => {
-					try {
-						// A root that does not exist yet is not an error: discovery's TTL
-						// scan still picks the plugin up once it appears.
-						fs.statSync(root);
-						return true;
-					} catch {
-						return false;
-					}
-				});
-				if (usable.length === 0) return;
-				const service = startHmrService({ roots: usable, debounceMs: 120 });
-				this.#hmrUnsubscribe = service.onChange(() => this.#scheduleExtensionReload());
-			})
-			.catch(err => {
-				logger.warn("daemon: extension watch roots unresolved; discovery TTL still applies", { err });
-			});
+		// Watching is the `hmr` host plugin's job; the daemon only decides what a
+		// batch means for its own surfaces. The plugin must be mounted before the
+		// subscription can resolve, so this waits for the host plugins rather
+		// than racing the constructor.
+		void (async () => {
+			const { ensureHostHalfPluginsLoaded } = await import("../bundled-plugins/loader");
+			await ensureHostHalfPluginsLoaded(this.#host.cwd());
+			const service = getHostService<HmrService>("hmr");
+			if (!service) {
+				// No HMR plugin (disabled or failed): discovery TTL still applies.
+				return;
+			}
+			this.#hmrUnsubscribe = service.onChange(() => this.#scheduleExtensionReload());
+		})().catch(err => {
+			logger.warn("daemon: hmr service unavailable; discovery TTL still applies", { err: String(err) });
+		});
 	}
 
 	#scheduleExtensionReload(): void {

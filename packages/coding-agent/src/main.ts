@@ -22,6 +22,7 @@ import {
 	VERSION,
 } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
+import { ensureHostHalfPluginsLoaded } from "./bundled-plugins/loader";
 import { reset as resetCapabilities } from "./capability";
 import { type Args, reportUnrecognizedFlags, validateToolNames } from "./cli/args";
 import { applyExtensionFlags, type ExtensionFlagSink } from "./cli/extension-flags";
@@ -57,9 +58,9 @@ import { formatExtensionLoadNotifications } from "./extensibility/extensions/loa
 import { loadExtensions } from "./extensibility/extensions/loader";
 import { ExtensionRunner } from "./extensibility/extensions/runner";
 import type { ExtensionUIContext } from "./extensibility/extensions/types";
-import { resolveExtensionWatchRoots } from "./extensibility/plugins/hmr/roots";
-import { startHmrService } from "./extensibility/plugins/hmr/service";
+import type { HmrService } from "./extensibility/plugins/hmr/service";
 import { scheduleMarketplaceAutoUpdate } from "./extensibility/plugins/management/marketplace-auto-update";
+import { getHostService } from "./extensibility/plugins/runtime/host-services";
 import { setLocale } from "./i18n/index.js";
 import { registerDaemonProjectPresence } from "./launch/presence";
 import type { MCPManager } from "./mcp";
@@ -463,17 +464,9 @@ export function createAcpSessionFactory(args: AcpSessionFactoryOptions): AcpSess
  * explicit full reload (MCP servers, skills, slash commands).
  */
 async function startTuiHmr(cwd: string): Promise<void> {
-	const roots = (await resolveExtensionWatchRoots(cwd)).filter(root => {
-		try {
-			fsSync.statSync(root);
-			return true;
-		} catch {
-			return false;
-		}
-	});
-	if (roots.length === 0) return;
-	const service = startHmrService({ roots, debounceMs: 120 });
-	if (service.roots.length === 0) return;
+	await ensureHostHalfPluginsLoaded(cwd);
+	const service = getHostService<HmrService>("hmr");
+	if (!service?.enabled) return;
 	service.onChange(() => {
 		clearPluginRootsAndCaches();
 		resetCapabilities();

@@ -21,7 +21,12 @@ import { logger } from "@musepi/pi-utils";
 import { discoverBundledPluginPaths } from "../discovery/builtin";
 import { ExtensionRuntime, loadExtensionFromFactory } from "../extensibility/extensions/loader";
 import type { Extension } from "../extensibility/extensions/types";
-import { resolvePluginEntry, toFactory } from "../extensibility/plugins/runtime/cordis-entry";
+import {
+	isCordisPluginEntry,
+	resolvePluginEntry,
+	toFactory,
+} from "../extensibility/plugins/runtime/cordis-entry";
+import { provideHostService } from "../extensibility/plugins/runtime/host-services";
 import { registerMagicKeyword } from "../modes/magic-keyword-registry";
 import { EventBus } from "../utils/event-bus";
 
@@ -68,10 +73,12 @@ export interface BundledPluginLoader {
 /** Create an independently stateful loader. Concurrent callers share the same attempt. */
 export function createBundledPluginLoader(
 	discover: () => Promise<string[]> = discoverBundledPluginPaths,
+	options: { publishProvidedServices?: boolean } = {},
 ): BundledPluginLoader {
 	let loaded = false;
 	let inFlight: Promise<void> | undefined;
 	const mounted: Extension[] = [];
+	const serviceDisposers: Array<() => void> = [];
 	return {
 		ensure: async cwd => {
 			if (loaded) return false;
@@ -91,14 +98,26 @@ export function createBundledPluginLoader(
 							throw new Error(`bundled plugin exports nothing loadable: ${entry}`);
 						}
 						const runtime = new ExtensionRuntime();
+						const capture: { published?: unknown } = {};
 						const extension = await loadExtensionFromFactory(
 							toFactory(resolved) as never,
 							cwd,
 							eventBus,
 							runtime,
 							entry,
+							capture,
 						);
 						mounted.push(extension);
+						// Host-scope packages publish their `provide` objects into the
+						// process-wide registry (Cordis `apply` return contract).
+						if (options.publishProvidedServices && isCordisPluginEntry(resolved)) {
+							const payload = capture.published as Record<string, unknown> | undefined;
+							for (const name of resolved.provide ?? []) {
+								const service = payload?.[name];
+								if (service === undefined) continue;
+								serviceDisposers.push(provideHostService(name, service));
+							}
+						}
 						for (const keyword of runtime.pendingMagicKeywordRegistrations) {
 							registerMagicKeyword(keyword);
 						}
@@ -118,6 +137,7 @@ export function createBundledPluginLoader(
 			}
 		},
 		reset: () => {
+			for (const dispose of serviceDisposers.splice(0)) dispose();
 			for (const extension of mounted.splice(0)) {
 				for (const dispose of extension.memoryBackendProviders.splice(0)) dispose();
 			}
@@ -145,7 +165,9 @@ export function resetBundledPluginsLoaded(): void {
  * memory backend provider, a service — that a session-less RPC must also see,
  * so mounting them per session would register the same thing once per session.
  */
-const hostPluginLoader = createBundledPluginLoader(() => discoverBundledPluginPaths({ scope: "host" }));
+const hostPluginLoader = createBundledPluginLoader(() => discoverBundledPluginPaths({ scope: "host" }), {
+	publishProvidedServices: true,
+});
 
 /** Mount the host-scope bundled packages once. Returns false after the shared attempt completed. */
 export function ensureHostHalfPluginsLoaded(cwd: string): Promise<boolean> {

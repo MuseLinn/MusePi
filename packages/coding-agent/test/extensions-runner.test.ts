@@ -2211,6 +2211,44 @@ describe("ExtensionRunner", () => {
 		});
 	});
 
+	describe("listener disposal", () => {
+		it("removes one listener through the disposer returned by on()", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "off.ts"),
+				`
+				export default function(pi) {
+					globalThis.__onCalls = 0;
+					globalThis.__offListener = pi.on("session_start", () => {
+						globalThis.__onCalls += 1;
+					});
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			const state = globalThis as typeof globalThis & {
+				__onCalls?: number;
+				__offListener?: () => void;
+			};
+
+			await emitSessionStartEvent(runner, { agentId: "Main", source: "main" });
+			expect(state.__onCalls).toBe(1);
+
+			state.__offListener?.();
+			await emitSessionStartEvent(runner, { agentId: "Main", source: "main" });
+			expect(state.__onCalls).toBe(1);
+
+			delete state.__onCalls;
+			delete state.__offListener;
+		});
+	});
+
 	describe("service tier API", () => {
 		it("restricts tiers to values supported by each provider family", () => {
 			expectTypeOf<"scale">().toExtend<ExtensionServiceTier<"openai">>();

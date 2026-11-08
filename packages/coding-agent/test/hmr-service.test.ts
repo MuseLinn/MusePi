@@ -1,19 +1,18 @@
 /**
- * The HMR watcher is one process-wide service; hosts react to its batches on
- * their own terms, and plugins subscribe through `ctx.hmr`.
+ * The HMR plugin provides the process-wide `hmr` service; this test covers the
+ * service contract itself and the `ctx.hmr` resolution that reads it back.
  */
 import { afterEach, describe, expect, it } from "bun:test";
-import { ExtensionRuntime, loadExtensionFromFactory } from "../src/extensibility/extensions/loader";
-import { getHmrService, startHmrService, stopHmrService } from "../src/extensibility/plugins/hmr/service";
-import { EventBus } from "../src/utils/event-bus";
+import { createHmrService } from "../src/extensibility/plugins/hmr/service";
+import { clearHostServices, provideHostService } from "../src/extensibility/plugins/runtime/host-services";
 
-afterEach(async () => {
-	await stopHmrService();
+afterEach(() => {
+	clearHostServices();
 });
 
 describe("hmr service", () => {
 	it("notifies subscribers and disposes individually", async () => {
-		const service = startHmrService({ roots: [] });
+		const service = createHmrService([], 0);
 		const seen: string[] = [];
 		const dispose = service.onChange(change => {
 			seen.push(`${change.trigger}:${change.paths.length}`);
@@ -26,13 +25,12 @@ describe("hmr service", () => {
 		await service.reload();
 		expect(seen).toEqual(["manual:0"]);
 
-		await stopHmrService();
-		expect(getHmrService()).toBeNull();
+		await service.dispose();
 		expect(service.enabled).toBe(false);
 	});
 
 	it("isolates a throwing listener from its siblings", async () => {
-		const service = startHmrService({ roots: [] });
+		const service = createHmrService([], 0);
 		let second = 0;
 		service.onChange(() => {
 			throw new Error("boom");
@@ -43,17 +41,28 @@ describe("hmr service", () => {
 
 		await service.reload();
 		expect(second).toBe(1);
+		await service.dispose();
 	});
 
-	it("exposes the running service to plugins as ctx.hmr", async () => {
-		startHmrService({ roots: [] });
-		let enabled: boolean | undefined;
-		let dispose: (() => void) | undefined;
+	it("reports no watcher for an empty root set", () => {
+		const service = createHmrService([]);
+		expect(service.enabled).toBe(false);
+	});
+});
 
+describe("ctx.hmr", () => {
+	it("reads the provided host service", async () => {
+		const { ExtensionRuntime, loadExtensionFromFactory } = await import("../src/extensibility/extensions/loader");
+		const { EventBus } = await import("../src/utils/event-bus");
+		const service = createHmrService([], 0);
+		const disposeService = provideHostService("hmr", service);
+
+		let enabled: boolean | undefined;
+		let off: (() => void) | undefined;
 		await loadExtensionFromFactory(
 			ctx => {
 				enabled = ctx.hmr.enabled;
-				dispose = ctx.hmr.onChange(() => {});
+				off = ctx.hmr.onChange(() => {});
 			},
 			process.cwd(),
 			new EventBus(),
@@ -61,17 +70,22 @@ describe("hmr service", () => {
 			"<hmr-test>",
 		);
 
-		expect(enabled).toBe(true);
-		expect(typeof dispose).toBe("function");
+		expect(enabled).toBe(false); // empty roots: service is not watching
+		expect(typeof off).toBe("function");
+		off?.();
+		disposeService();
+		await service.dispose();
 	});
 
-	it("reports a disabled surface when no host started a watcher", async () => {
+	it("hands back a no-op surface when no host provided the service", async () => {
+		const { ExtensionRuntime, loadExtensionFromFactory } = await import("../src/extensibility/extensions/loader");
+		const { EventBus } = await import("../src/utils/event-bus");
 		let enabled: boolean | undefined;
-		let dispose: (() => void) | undefined;
+		let off: (() => void) | undefined;
 		await loadExtensionFromFactory(
 			ctx => {
 				enabled = ctx.hmr.enabled;
-				dispose = ctx.hmr.onChange(() => {});
+				off = ctx.hmr.onChange(() => {});
 			},
 			process.cwd(),
 			new EventBus(),
@@ -79,6 +93,6 @@ describe("hmr service", () => {
 			"<hmr-test>",
 		);
 		expect(enabled).toBe(false);
-		expect(typeof dispose).toBe("function");
+		expect(typeof off).toBe("function");
 	});
 });

@@ -1,12 +1,13 @@
 /**
- * Host-level hot reload as a service, mirroring dsh's `ctx.hmr`.
+ * Host-level hot reload, exposed as a host plugin (`musepi-hmr`, `musepi.scope:
+ * "host"`) that provides `ctx.hmr` — the dsh shape, where HMR is a Cordis
+ * service rather than daemon-private machinery.
  *
  * The watcher is one per process: the same roots serve the daemon (whose
  * extension caches and GUI slots refresh on change) and every other host
- * (TUI/ACP/SDK), so a plugin that reacts to its own reload only needs one
+ * (TUI/ACP/SDK), so a plugin that reacts to its own reload needs one
  * subscription. Detection and reaction are separate: this service reports what
- * changed and in what batch, and each host decides which caches to drop —
- * those decisions differ per surface and do not belong in a shared watcher.
+ * changed and in what batch, and each host decides which caches to drop.
  */
 
 import { logger } from "@musepi/pi-utils";
@@ -49,7 +50,7 @@ class WatchedHmrService implements HmrService {
 	}
 
 	get enabled(): boolean {
-		return !this.#disposed;
+		return !this.#disposed && this.roots.length > 0;
 	}
 
 	onChange(listener: HmrListener): () => void {
@@ -130,24 +131,9 @@ class WatchedHmrService implements HmrService {
 	}
 }
 
-let current: WatchedHmrService | null = null;
-
-/** The process-wide service, or null when no host started one. */
-export function getHmrService(): HmrService | null {
-	return current;
-}
-
-/** Start (or reuse) the process-wide watcher over `roots`. */
-export function startHmrService(options: { roots: readonly string[]; debounceMs?: number }): HmrService {
-	if (current?.enabled) return current;
-	const service = new WatchedHmrService(options.roots, options.debounceMs ?? 100);
+/** Create (and start) one watcher over `roots`. The host plugin owns disposal. */
+export function createHmrService(roots: readonly string[], debounceMs = 100): HmrService {
+	const service = new WatchedHmrService(roots, debounceMs);
 	service.start();
-	current = service;
 	return service;
-}
-
-export async function stopHmrService(): Promise<void> {
-	const service = current;
-	current = null;
-	await service?.dispose();
 }

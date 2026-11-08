@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **HMR 变成真正的 host 插件，`on()` 返回值可注销监听**：热重载不再是 daemon 私有实现——`musepi-hmr`（`musepi.scope: "host"`）通过 `provide: ["hmr"]` 发布服务，宿主侧经新的宿主服务注册表读回，插件照旧用 `ctx.hmr.onChange`。新增 `host-services` 注册表承载 host 插件发布的对象；`ctx.on` / `pi.on` 现在返回 disposer（Cordis 语义），插件可只撤销单个监听而无需整体卸载。
+  - EN: HMR is now a real host plugin, and `on()` returns a disposer. Hot reload is no longer daemon-private: `musepi-hmr` (`musepi.scope: "host"`) publishes the service through `provide: ["hmr"]`, the host reads it back from a new host service registry, and plugins keep using `ctx.hmr.onChange`. The registry also carries any object a host plugin publishes; `ctx.on` / `pi.on` now return a disposer (the Cordis contract), so a plugin can remove one listener without unloading.
+
 - **热重载成为 `ctx.hmr` 服务，daemon 与终端共用一份 watcher**：进程级单一 watcher 按稳定窗口把变更合成一批（`trigger: watch | manual`），插件用 `ctx.hmr.onChange` 订阅、`reload()` 手动触发；宿主各管各的反应——daemon 失效扩展缓存并广播 `extensions.changed`，TUI/ACP/SDK 失效发现缓存。原先写在 daemon 里的 chokidar 监听与监视根解析一并迁入该服务。
   - EN: Hot reload is now the `ctx.hmr` service, and the daemon and terminal share one watcher. A single process-wide watcher batches changes per settle window (`trigger: watch | manual`); plugins subscribe with `ctx.hmr.onChange` and can force a pass with `reload()`. Each host owns its reaction — the daemon drops extension caches and broadcasts `extensions.changed`, while TUI/ACP/SDK drop discovery caches. The daemon's private chokidar watcher and watch-root resolution moved into the service.
 

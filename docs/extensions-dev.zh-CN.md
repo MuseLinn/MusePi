@@ -48,7 +48,7 @@ Creator 快捷创建只发送用户的自然语言需求。预设 prompt 持有�
 
 一个扩展模块可以组合：
 
-- 事件处理：`ctx.on("session_start" | "tool_call" | "tool_result" | "message" | ...)`。每个 session-bound agent（主 agent 与每个子 agent）各拿一份独立 runner，`session_start` 携带 `{ agentId, source }`（`source` 为 `main` 或 `subagent`）；`session_shutdown` 与该 runner 的定时器、服务、文件回退一起清理，所以 `apply` 就是该 agent 作用域内的 setup
+- 事件处理：`ctx.on("session_start" | "tool_call" | "tool_result" | "message" | ...)`。每个 session-bound agent（主 agent 与每个子 agent）各拿一份独立 runner，`session_start` 携带 `{ agentId, source }`（`source` 为 `main` 或 `subagent`）；`on()` 返回的 disposer 只注销该监听（Cordis `ctx.on` 语义），插件卸载仍清空它注册的全部监听；`session_shutdown` 与该 runner 的定时器、服务、文件回退一起清理，所以 `apply` 就是该 agent 作用域内的 setup
 - LLM 工具：`ctx.tools.register({ name, description, parameters, execute })`（进入工具注册表，权限链照常生效）
 - 子智能体：`ctx.subagents.register({ name, description, systemPrompt, external })`；本地 Agent 必须提供非空 `systemPrompt`，外部 Agent 改为提供一次性 `external(context)` 执行器，并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物。子智能体类型本身已是 Cordis 插件能力；本地子智能体的多轮接续属于运行时生命周期（`hub send` / `agents.chat` / 冷恢复），不需要第二个 Agent 定义。共享任务板等团队协作应是独立 Cordis 插件，可参考 DSH 将团队服务、模型工具与 UI 拆包的做法，不要把任务所有权塞进子智能体注册。
 - 斜杠命令：`ctx.commands.register(...)`（TUI `/cmd` + GUI 命令面板）
@@ -860,7 +860,7 @@ Cordis 插件可以用 `pi.registerMemoryBackendProvider({ id, create(settings) 
 
 provider 也可以贡献**新**后端 id，而不仅是替换：`registerMemoryBackendProvider({ id: "mybank", label, description, create })` 注册后 `memory.backend` 接受该 id（`getEnumValues` 合并 provider 注册表），设置选择器以 provider 自己的 label / description 追加该项。插件卸载后选项消失；仍指向该 id 的配置回退到 `off`，不会解析到别人的实现。
 
-`ctx.hmr` 报告宿主级热重载。宿主没有启动 watcher 时（print 模式、测试）`enabled` 为 false；`onChange(listener)` 每个稳定窗口收到一批 `{ trigger: "watch" | "manual", paths }`，返回 disposer；`reload()` 让当前监听按“文件刚变过”跑一次。watcher 是进程级单例——daemon、TUI、ACP、SDK 共用一份——但反应归各宿主：daemon 失效扩展缓存并广播 `extensions.changed`，终端只失效发现缓存，插件自行决定重载对自身意味着什么。监听若不应长于其所有者，用 `ctx.effect(dispose)` 登记。
+`ctx.hmr` 报告宿主级热重载，由 host 作用域的 `musepi-hmr` 包（`provide: ["hmr"]`）经宿主服务注册表提供。没有 watcher 时（未装载 host 插件、测试）`enabled` 为 false；`onChange(listener)` 每个稳定窗口收到一批 `{ trigger: "watch" | "manual", paths }`，返回 disposer；`reload()` 让当前监听按“文件刚变过”跑一次。watcher 是进程级单例——daemon、TUI、ACP、SDK 共用一份——但反应归各宿主：daemon 失效扩展缓存并广播 `extensions.changed`，终端只失效发现缓存，插件自行决定重载对自身意味着什么。监听若不应长于其所有者，用 `ctx.effect(dispose)` 登记。
 
 `memory.*` 仍是核心契约：每条路由都调用活动后端的成员，插件不能另立方法名。因此替换后端时，`memory.status/view/stats/diagnose/clear/enqueue` 会一起切换。`memory.workspace*` 由可选的 `workspaceDir(agentDir, cwd)` 能力决定：返回目录的后端才拥有设置页文件浏览，未实现的返回 `supported: false` 并拒绝读取或定位，而不是列出属于另一种实现的本地文件。
 

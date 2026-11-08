@@ -1,0 +1,14 @@
+{
+	"name": "musepi-hmr",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Hot reload",
+		"description": "Host-scope watcher that provides ctx.hmr for every host.",
+		"icon": "◈",
+		"scope": "host",
+		"extensions": ["./index.ts"]
+	}
+}

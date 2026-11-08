@@ -47,8 +47,9 @@ import * as TypeBox from "../legacy-typebox";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../plugins/compat/compatibility-store";
 import { installLegacyPiSpecifierShim, loadLegacyPiModule } from "../plugins/compat/legacy-pi-compat";
 import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../plugins/compat/plugin-compatibility";
-import { getHmrService } from "../plugins/hmr/service";
+import type { HmrService } from "../plugins/hmr/service";
 import { type PluginEntryModule, resolvePluginEntry, toFactory } from "../plugins/runtime/cordis-entry";
+import { getHostService } from "../plugins/runtime/host-services";
 import { getAllPluginExtensionPaths } from "../plugins/runtime/loader";
 import { resolvePath, withHostGuard } from "../utils";
 import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
@@ -377,11 +378,11 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		// and hand back a no-op disposer rather than forcing a branch.
 		this.hmr = {
 			get enabled() {
-				return getHmrService()?.enabled ?? false;
+				return getHostService<HmrService>("hmr")?.enabled ?? false;
 			},
-			onChange: listener => getHmrService()?.onChange(listener) ?? (() => {}),
+			onChange: listener => getHostService<HmrService>("hmr")?.onChange(listener) ?? (() => {}),
 			reload: async () => {
-				await getHmrService()?.reload();
+				await getHostService<HmrService>("hmr")?.reload();
 			},
 		};
 	}
@@ -432,10 +433,18 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		return coerceConfigValues(fields, store[id]);
 	}
 
-	on<F extends HandlerFn>(event: string, handler: F): void {
+	/** Register one listener; the return value removes it again (Cordis
+	 *  `ctx.on`). The extension unload still clears every listener it owns. */
+	on<F extends HandlerFn>(event: string, handler: F): () => void {
 		const list = this.extension.handlers.get(event) ?? [];
 		list.push(handler);
 		this.extension.handlers.set(event, list);
+		return () => {
+			const current = this.extension.handlers.get(event);
+			if (!current) return;
+			const index = current.indexOf(handler);
+			if (index >= 0) current.splice(index, 1);
+		};
 	}
 
 	registerTool<TParams extends TSchema = TSchema, TDetails = unknown>(tool: ToolDefinition<TParams, TDetails>): void {
@@ -916,13 +925,16 @@ async function runExtensionFactory(
 	factory: ExtensionFactory,
 	api: ExtensionAPI,
 	runtime: IExtensionRuntime,
-): Promise<void> {
+	cwd: string,
+): Promise<unknown> {
 	const providerRegistrationCheckpoint = [...runtime.pendingProviderRegistrations];
 	const mediaProviderCheckpoint = [...runtime.pendingMediaProviderRegistrations];
 	const designSystemCheckpoint = [...runtime.pendingDesignSystemRegistrations];
 
 	try {
-		await factory(api);
+		// The factory's return value is the object its `provide` names refer to
+		// (Cordis `apply` contract); host-scope loading publishes it.
+		return await factory(api, { cwd });
 	} catch (error) {
 		runtime.pendingProviderRegistrations.splice(
 			0,
@@ -1029,7 +1041,7 @@ async function bindExtension(
 	try {
 		const extension = createExtension(extensionPath, imported.resolvedPath);
 		const api = wrapApi(createConcreteExtensionAPI(extension, runtime, cwd, eventBus), extension);
-		await withHostGuard(() => runExtensionFactory(factory, api, runtime));
+		await withHostGuard(() => runExtensionFactory(factory, api, runtime, cwd));
 
 		return { extension, error: null };
 	} catch (err) {
@@ -1069,10 +1081,13 @@ export async function loadExtensionFromFactory(
 	eventBus: EventBus,
 	runtime: IExtensionRuntime,
 	name = "<inline>",
+	/** Optional sink for the factory's return value (the `provide` payload). */
+	capture?: { published?: unknown },
 ): Promise<Extension> {
 	const extension = createExtension(name, name);
 	const api = createConcreteExtensionAPI(extension, runtime, cwd, eventBus);
-	await runExtensionFactory(factory, api, runtime);
+	const published = await runExtensionFactory(factory, api, runtime, cwd);
+	if (capture) capture.published = published;
 	return extension;
 }
 
