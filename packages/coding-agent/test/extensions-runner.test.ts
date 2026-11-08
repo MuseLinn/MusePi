@@ -2016,7 +2016,9 @@ describe("ExtensionRunner", () => {
 				vi.advanceTimersByTime(10);
 				for (let i = 0; i < 3; i++) await Promise.resolve();
 				vi.advanceTimersByTime(0);
-				for (let i = 0; i < 5; i++) await Promise.resolve();
+				// Cordis serial dispatch adds a bounded number of microtask turns
+				// between the timeout firing and the caller's promise settling.
+				for (let i = 0; i < 10; i++) await Promise.resolve();
 
 				expect(settled).toBe(true);
 				expect(await decision).toEqual({

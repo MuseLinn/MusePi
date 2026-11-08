@@ -2514,6 +2514,18 @@ export interface ExtensionRuntime
 	/** Non-cancel results from `session_before_*` listeners, keyed by the event
 	 *  object of the current dispatch (last one wins, matching the old loop). */
 	beforeEventResults?: WeakMap<object, unknown>;
+	/** The runner's handler executor: timeout, signal, tool-registration drain
+	 *  and error reporting for one listener. Cordis dispatch calls this so the
+	 *  fail-closed gate keeps exactly the legacy semantics. */
+	handlerExecutor?: (
+		handler: (event: unknown, ctx: ExtensionContext) => unknown,
+		event: { type: string },
+		ctx: ExtensionContext,
+		extension: Extension,
+		timeoutMs: number,
+		onFailure: (kind: "timeout" | "error", message: string) => unknown,
+		signal?: AbortSignal,
+	) => Promise<unknown>;
 	getServiceTiers: GetServiceTiersHandler;
 	setServiceTier: SetServiceTierHandler;
 }

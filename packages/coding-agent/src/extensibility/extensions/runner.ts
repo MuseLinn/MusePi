@@ -757,6 +757,16 @@ export class ExtensionRunner {
 			this.emitError(error);
 		};
 		this.runtime.awaitPendingRegistrations = () => this.#toolRegistrationBarrier;
+		this.runtime.handlerExecutor = (handler, event, ctx, extension, timeoutMs, onFailure, signal) =>
+			this.#runHandlerWithTimeout(
+				handler as never,
+				event as never,
+				ctx,
+				extension,
+				timeoutMs,
+				onFailure as never,
+				signal,
+			);
 	}
 
 	/** Snapshot the entry mtime of a loaded extension (best-effort; missing
@@ -2119,6 +2129,19 @@ export class ExtensionRunner {
 			this.settings?.get("extensionHandlers.toolCallTimeoutMs") ?? defaultExtensionHandlerTimeoutMs(),
 		);
 		let result: ToolCallEventResult | undefined;
+
+		const bus = this.runtime.eventBus;
+		const cordisCount = this.runtime.eventHandlerCounts?.get("tool_call") ?? 0;
+		if (bus && cordisCount > 0) {
+			const blocked = await bus.serial("tool_call", event, ctx, { timeoutMs, signal });
+			if (blocked) return blocked as ToolCallEventResult;
+			if (signal?.aborted) {
+				return { block: true, reason: `Tool execution was cancelled while an extension handler was pending` };
+			}
+			const remembered = this.runtime.beforeEventResults?.get(event as object);
+			this.runtime.beforeEventResults?.delete(event as object);
+			return remembered as ToolCallEventResult | undefined;
+		}
 
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get("tool_call");

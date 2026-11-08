@@ -102,6 +102,7 @@ const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set([
 	"session_before_branch",
 	"session_before_compact",
 	"session_before_tree",
+	"tool_call",
 ]);
 
 /** Cancelable pre-events: `cancel: true` stops the chain (serial bail); any
@@ -111,6 +112,7 @@ const CORDIS_CANCELABLE_EVENTS: ReadonlySet<string> = new Set([
 	"session_before_branch",
 	"session_before_compact",
 	"session_before_tree",
+	"tool_call",
 ]);
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
@@ -484,6 +486,34 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		if (CORDIS_LIFECYCLE_EVENTS.has(event) && this.runtime.eventBus) {
 			const bus = this.runtime.eventBus;
 			const wrapped = async (...args: unknown[]): Promise<unknown> => {
+				// `tool_call` is fail-closed: timeout or throw blocks the tool. That
+				// gate is the runner's executor (signal, registration drain, error
+				// channel), not the generic timeout wrapper below.
+				if (event === "tool_call") {
+					const options = args[2] as { timeoutMs: number; signal?: AbortSignal } | undefined;
+					const timeoutMs = options?.timeoutMs ?? handlerTimeoutForEvent(event);
+					const execute = this.runtime.handlerExecutor;
+					if (!execute) return undefined;
+					const result = await execute(
+						handler as (event: unknown, ctx: ExtensionContext) => unknown,
+						args[0] as { type: string },
+						args[1] as ExtensionContext,
+						this.extension,
+						timeoutMs,
+						(kind, message) => ({
+							block: true,
+							reason:
+								kind === "timeout"
+									? `Extension ${this.extension.path} timed out after ${timeoutMs}ms`
+									: `Extension ${this.extension.path} failed: ${message}`,
+						}),
+						options?.signal,
+					);
+					if ((result as { block?: boolean } | undefined)?.block === true) return result;
+					if (result !== undefined) this.runtime.beforeEventResults?.set(args[0] as object, result);
+					return undefined;
+				}
+
 				// Read the budget at dispatch time: tests and hosts change it after
 				// the plugin has loaded.
 				const timeoutMs = handlerTimeoutForEvent(event);

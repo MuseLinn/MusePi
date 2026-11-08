@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`tool_call` 门禁迁到 Cordis serial，保持 fail-closed**：`tool_call` 监听进入同一事件上下文，以 `serial` 顺序派发；超时或抛错仍返回 `block: true`（原因文本不变），首个 block 立即中断，非 block 结果保留最后一个有效值。超时、信号中断、工具注册屏障与错误上报继续由 runner 的执行器处理，语义未变。
+  - EN: The `tool_call` gate now dispatches through Cordis `serial` and stays fail-closed. A timeout or throw still returns `block: true` with the same reason text, the first block stops the chain, and non-block results keep the last valid value. Timeout, signal abort, tool-registration barriers, and error reporting still come from the runner's executor, so behavior is unchanged.
+
 - **`session_before_*` 也迁到 Cordis serial，并保留取消语义**：`session_before_switch/branch/compact/tree` 现在与 start/shutdown 同一事件上下文，以 `serial` 派发；只有 `cancel: true` 中断链，其余结果按“最后一个有效值”记住后继续，与旧循环一致（新增取消/继续两例回归）。
   - EN: `session_before_*` events now use Cordis `serial` with the old cancel contract. `session_before_switch/branch/compact/tree` share the lifecycle event context; only `cancel: true` stops the chain, while any other result is remembered (last one wins) and dispatch continues, matching the previous loop. New tests pin both the continue and cancel paths.
 
