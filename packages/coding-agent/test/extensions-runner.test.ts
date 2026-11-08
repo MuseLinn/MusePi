@@ -2306,6 +2306,74 @@ describe("ExtensionRunner", () => {
 		});
 	});
 
+	describe("accumulating events", () => {
+		it("threads context rewrites so a later listener sees the earlier one", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "ctx-a.ts"),
+				`
+				export default function(pi) {
+					pi.on("context", event => ({
+						messages: [...event.messages, { role: "user", content: "from-a" }],
+					}));
+				}
+			`,
+			);
+			fs.writeFileSync(
+				path.join(extensionsDir, "ctx-b.ts"),
+				`
+				export default function(pi) {
+					pi.on("context", event => {
+						const seenA = event.messages.some(message => message.content === "from-a");
+						return { messages: [...event.messages, { role: "user", content: seenA ? "b-sees-a" : "b-missed-a" }] };
+					});
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			const messages = await runner.emitContext([{ role: "user", content: "seed" } as never]);
+			expect(messages.map(message => (message as { content?: unknown }).content)).toEqual([
+				"seed",
+				"from-a",
+				"b-sees-a",
+			]);
+		});
+
+		it("threads input rewrites and stops on handled", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "input-a.ts"),
+				`
+				export default function(pi) {
+					pi.on("input", event => ({ text: event.text + "-a" }));
+				}
+			`,
+			);
+			fs.writeFileSync(
+				path.join(extensionsDir, "input-b.ts"),
+				`
+				export default function(pi) {
+					pi.on("input", event => ({ text: event.text + "-b" }));
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			expect(await runner.emitInput("hello", undefined, "interactive")).toEqual({ text: "hello-a-b" });
+		});
+	});
+
 	describe("service tier API", () => {
 		it("restricts tiers to values supported by each provider family", () => {
 			expectTypeOf<"scale">().toExtend<ExtensionServiceTier<"openai">>();

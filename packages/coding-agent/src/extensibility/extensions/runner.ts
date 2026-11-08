@@ -2268,6 +2268,18 @@ export class ExtensionRunner {
 		let currentText = text;
 		let currentImages = images;
 
+		const bus = this.runtime.eventBus;
+		const cordisCount = this.runtime.eventHandlerCounts?.get("input") ?? 0;
+		if (bus && cordisCount > 0) {
+			const state = { text: currentText, images: currentImages, source };
+			const handled = (await bus.serial("input", null, ctx, state)) as InputEventResult | undefined;
+			if (handled?.handled) return handled;
+			const transformed: InputEventResult = {};
+			if (state.text !== text) transformed.text = state.text;
+			if (state.images !== images) transformed.images = state.images as ImageContent[] | undefined;
+			return transformed;
+		}
+
 		for (const ext of this.extensions) {
 			for (const handler of ext.handlers.get("input") ?? []) {
 				const event: InputEvent = { type: "input", text: currentText, images: currentImages, source };
@@ -2292,12 +2304,16 @@ export class ExtensionRunner {
 	async emitContext(messages: AgentMessage[]): Promise<AgentMessage[]> {
 		const ctx = this.createContext();
 
+		const bus = this.runtime.eventBus;
+		const cordisCount = this.runtime.eventHandlerCounts?.get("context") ?? 0;
 		// Check if any extensions actually have context handlers before cloning
-		let hasContextHandlers = false;
-		for (const ext of this.extensions) {
-			if (ext.handlers.get("context")?.length) {
-				hasContextHandlers = true;
-				break;
+		let hasContextHandlers = cordisCount > 0;
+		if (!hasContextHandlers) {
+			for (const ext of this.extensions) {
+				if (ext.handlers.get("context")?.length) {
+					hasContextHandlers = true;
+					break;
+				}
 			}
 		}
 		if (!hasContextHandlers) return messages;
@@ -2310,6 +2326,12 @@ export class ExtensionRunner {
 			// or ProviderPayload). Fall back to a shallow array clone — extensions should
 			// return new message arrays rather than mutating in place.
 			currentMessages = [...messages];
+		}
+
+		if (bus && cordisCount > 0) {
+			const state = { messages: currentMessages };
+			await bus.serial("context", null, ctx, state);
+			return state.messages;
 		}
 
 		for (const ext of this.extensions) {

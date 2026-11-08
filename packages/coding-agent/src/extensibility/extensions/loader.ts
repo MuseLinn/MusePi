@@ -107,6 +107,8 @@ const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set([
 	"session_before_tree",
 	"tool_call",
 	"tool_result",
+	"context",
+	"input",
 ]);
 
 /** Cancelable pre-events: `cancel: true` stops the chain (serial bail); any
@@ -118,6 +120,8 @@ const CORDIS_CANCELABLE_EVENTS: ReadonlySet<string> = new Set([
 	"session_before_tree",
 	"tool_call",
 	"tool_result",
+	"context",
+	"input",
 ]);
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
@@ -528,13 +532,41 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 					timer.unref?.();
 				});
 				const work = (async () => {
-					const result = await handler(...args);
+					// `context` / `input` handlers receive an event built from the
+					// dispatch-scoped state, so each listener sees the previous
+					// listener's rewrite (the accumulated value lives in args[2]).
+					let callArgs = args;
+					if (event === "context") {
+						const state = args[2] as { messages: unknown[] };
+						callArgs = [{ type: "context", messages: state.messages }, args[1]] as unknown[];
+					} else if (event === "input") {
+						const state = args[2] as { text: string; images: unknown; source: string };
+						callArgs = [
+							{ type: "input", text: state.text, images: state.images, source: state.source },
+							args[1],
+						] as unknown[];
+					}
+					const result = await handler(...callArgs);
 					const pending = this.runtime.awaitPendingRegistrations?.();
 					if (pending) await pending;
 					return result;
 				})();
 				try {
 					const result = await Promise.race([work, timeout]);
+					if (event === "context") {
+						const state = args[2] as { messages: unknown[] };
+						const patch = result as { messages?: unknown[] } | undefined;
+						if (patch?.messages !== undefined) state.messages = patch.messages;
+						return undefined;
+					}
+					if (event === "input") {
+						const state = args[2] as { text: string; images: unknown; source: string };
+						const patch = result as { handled?: boolean; text?: string; images?: unknown } | undefined;
+						if (patch?.handled) return patch;
+						if (patch?.text !== undefined) state.text = patch.text;
+						if (patch?.images !== undefined) state.images = patch.images;
+						return undefined;
+					}
 					if (event === "tool_result") {
 						// The dispatcher owns the accumulated event; the listener only
 						// returns its patch, exactly like the old loop.

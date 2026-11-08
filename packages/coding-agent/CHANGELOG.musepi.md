@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`context` / `input` 迁到 Cordis serial**：两者与 `tool_result` 同一模式——监听器返回 patch，派发侧在同一个状态上累积，后者看到前者的改写；`input` 的 `handled` 仍然立即中断。新增“后一个监听能看到前一个的改写”的回归。
+  - EN: `context` and `input` now dispatch through Cordis serial with the same accumulated-state pattern as `tool_result`: listeners return a patch, the dispatcher applies it to one state, and later listeners see earlier rewrites; `input` still stops immediately on `handled`. New tests pin the cross-listener visibility.
+
 - **`tool_result` 改写迁到 Cordis serial**：监听器只返回自己的 patch，派发侧把 patch 依次应用到同一个累积事件上，后者能看到前者的修改（last-write-wins，与旧循环一致）；单个 patch 的应用抽成 `applyToolResultPatch`，两条派发路径共用。
   - EN: `tool_result` rewrites now dispatch through Cordis serial. Each listener returns only its patch; the dispatcher applies it to one accumulated event in order, so later listeners see earlier changes (last-write-wins, as before). Patch application is shared by both paths through `applyToolResultPatch`.
 
