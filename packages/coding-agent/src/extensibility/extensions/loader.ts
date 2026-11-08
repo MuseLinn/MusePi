@@ -57,6 +57,7 @@ import { resolvePath, withHostGuard } from "../utils";
 import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
 import { handlerTimeoutForEvent } from "./handler-timeout";
 import { readExtensionPluginMeta } from "./plugin-manifest";
+import { applyToolResultPatch } from "./tool-result-patch";
 import type {
 	AssistantThinkingRenderer,
 	ComposerShapeDefinition,
@@ -88,6 +89,8 @@ import type {
 	RegisteredMediaProvider,
 	ToolDefinition,
 	ToolInfo,
+	ToolResultEvent,
+	ToolResultEventResult,
 } from "./types";
 import { namespaceOf, type PluginWebRouteRequest, scopeRoute } from "./web-route-scope";
 
@@ -103,6 +106,7 @@ const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set([
 	"session_before_compact",
 	"session_before_tree",
 	"tool_call",
+	"tool_result",
 ]);
 
 /** Cancelable pre-events: `cancel: true` stops the chain (serial bail); any
@@ -113,6 +117,7 @@ const CORDIS_CANCELABLE_EVENTS: ReadonlySet<string> = new Set([
 	"session_before_compact",
 	"session_before_tree",
 	"tool_call",
+	"tool_result",
 ]);
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
@@ -530,6 +535,15 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 				})();
 				try {
 					const result = await Promise.race([work, timeout]);
+					if (event === "tool_result") {
+						// The dispatcher owns the accumulated event; the listener only
+						// returns its patch, exactly like the old loop.
+						const state = args[2] as { event: ToolResultEvent; modified: boolean } | undefined;
+						if (state && applyToolResultPatch(state.event, result as ToolResultEventResult | undefined)) {
+							state.modified = true;
+						}
+						return undefined;
+					}
 					if (CORDIS_CANCELABLE_EVENTS.has(event)) {
 						const cancels = (result as { cancel?: unknown } | undefined)?.cancel === true;
 						if (cancels) return result;

@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`tool_result` 改写迁到 Cordis serial**：监听器只返回自己的 patch，派发侧把 patch 依次应用到同一个累积事件上，后者能看到前者的修改（last-write-wins，与旧循环一致）；单个 patch 的应用抽成 `applyToolResultPatch`，两条派发路径共用。
+  - EN: `tool_result` rewrites now dispatch through Cordis serial. Each listener returns only its patch; the dispatcher applies it to one accumulated event in order, so later listeners see earlier changes (last-write-wins, as before). Patch application is shared by both paths through `applyToolResultPatch`.
+
 - **`tool_call` 门禁迁到 Cordis serial，保持 fail-closed**：`tool_call` 监听进入同一事件上下文，以 `serial` 顺序派发；超时或抛错仍返回 `block: true`（原因文本不变），首个 block 立即中断，非 block 结果保留最后一个有效值。超时、信号中断、工具注册屏障与错误上报继续由 runner 的执行器处理，语义未变。
   - EN: The `tool_call` gate now dispatches through Cordis `serial` and stays fail-closed. A timeout or throw still returns `block: true` with the same reason text, the first block stops the chain, and non-block results keep the last valid value. Timeout, signal abort, tool-registration barriers, and error reporting still come from the runner's executor, so behavior is unchanged.
 

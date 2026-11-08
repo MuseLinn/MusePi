@@ -38,6 +38,7 @@ import {
 	type ScheduleRecord,
 	type ScheduleUpdate,
 } from "./schedule";
+import { applyToolResultPatch } from "./tool-result-patch";
 import type {
 	AfterProviderResponseEvent,
 	AssistantThinkingRenderer,
@@ -2070,6 +2071,19 @@ export class ExtensionRunner {
 		const currentEvent: ToolResultEvent = { ...event };
 		let modified = false;
 
+		const bus = this.runtime.eventBus;
+		const cordisCount = this.runtime.eventHandlerCounts?.get("tool_result") ?? 0;
+		if (bus && cordisCount > 0) {
+			const state = { event: currentEvent, modified: false };
+			await bus.serial("tool_result", currentEvent, ctx, state);
+			if (!state.modified) return undefined;
+			return {
+				content: state.event.content,
+				details: state.event.details,
+				isError: state.event.isError,
+			};
+		}
+
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get("tool_result");
 			if (!handlers || handlers.length === 0) continue;
@@ -2082,20 +2096,7 @@ export class ExtensionRunner {
 					ext,
 					EXTENSION_HANDLER_TIMEOUT_MS,
 				)) as ToolResultEventResult | undefined;
-				if (!handlerResult) continue;
-
-				if (handlerResult.content !== undefined) {
-					currentEvent.content = handlerResult.content;
-					modified = true;
-				}
-				if (handlerResult.details !== undefined) {
-					currentEvent.details = handlerResult.details;
-					modified = true;
-				}
-				if (handlerResult.isError !== undefined) {
-					currentEvent.isError = handlerResult.isError;
-					modified = true;
-				}
+				if (applyToolResultPatch(currentEvent, handlerResult)) modified = true;
 			}
 		}
 
