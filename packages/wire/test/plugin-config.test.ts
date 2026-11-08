@@ -7,6 +7,18 @@ import { parseConfigFields, parsePluginExperimental, parsePluginResources } from
  * 一个坏字段拖垮整个扩展的登记(回退保护①)。
  */
 
+describe("list config fields", () => {
+	it("accepts a string[] default and rejects a non-array default", () => {
+		const parsed = parseConfigFields([
+			{ key: "roots", type: "list", default: ["."] },
+			{ key: "bad", type: "list", default: "." },
+		]);
+		expect(parsed.fields.map(field => field.key)).toEqual(["roots"]);
+		expect(parsed.errors).toHaveLength(1);
+		expect(parsed.errors[0]?.code).toBe("field-bad-default");
+	});
+});
+
 describe("parseConfigFields", () => {
 	it("absent config parses to empty without errors", () => {
 		expect(parseConfigFields(undefined)).toEqual({ fields: [], errors: [] });

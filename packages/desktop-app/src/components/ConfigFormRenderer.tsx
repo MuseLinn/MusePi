@@ -178,6 +178,33 @@ function ConfigFieldRow({
 						onChange={event => onChange(desc.key, event.target.value)}
 					/>
 				);
+			case "list": {
+				const items = Array.isArray(value)
+					? value.filter((item): item is string => typeof item === "string")
+					: Array.isArray(desc.default)
+						? desc.default.filter((item): item is string => typeof item === "string")
+						: [];
+				return (
+					<input
+						id={inputId}
+						name={desc.key}
+						type="text"
+						className="gui-plugin-config-input"
+						value={items.join(", ")}
+						aria-label={desc.key}
+						disabled={disabled}
+						onChange={event =>
+							onChange(
+								desc.key,
+								event.target.value
+									.split(",")
+									.map(item => item.trim())
+									.filter(item => item.length > 0),
+							)
+						}
+					/>
+				);
+			}
 			case "string":
 				return (
 					<div className="gui-plugin-config-control">

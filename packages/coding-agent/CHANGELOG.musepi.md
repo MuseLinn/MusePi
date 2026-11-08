@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **配置字段新增 `list` 类型，`root` / `ignored` 改用列表**：清单可声明 `type: "list"` 与 `string[]` 默认值；wire 侧把数组或逗号/换行分隔的字符串统一钳制成 `string[]`，GUI 配置表单以逗号输入编辑。`musepi-hmr` 的 `root`（相对 `base`）与 `ignored` 因此支持多个值，留空仍沿用原生扩展/插件根。
+  - EN: Config fields gained a `list` type, and `root` / `ignored` now use it. A manifest may declare `type: "list"` with a `string[]` default; the wire layer coerces arrays or comma/newline separated strings to `string[]`, and the GUI config form edits one comma-separated field. `musepi-hmr`'s `root` (relative to `base`) and `ignored` therefore accept multiple values, while an empty `root` keeps the native extension/plugin roots.
+
 - **`ctx.hmr` 的事件改走真实 Cordis 事件服务**：`hmr/change` / `hmr/reload` 不再由自建监听表分发，而是注册进 Cordis 的事件 registry，支持 `prepend` 顺序；单监听失败仍被隔离，不会中断同批其他监听。这是事件总线吸收的第一阶段，会话/工具事件的分发模式迁移另列计划。
   - EN: `ctx.hmr` events now go through a real Cordis event service. `hmr/change` / `hmr/reload` are registered in the Cordis registry instead of a private listener table and support `prepend` ordering, while one failing listener stays isolated. This is the first stage of the event-bus absorption; session and tool event dispatch modes are a separate, staged migration.
 

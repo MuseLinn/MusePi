@@ -22,17 +22,17 @@
 			},
 			{
 				"key": "root",
-				"type": "string",
+				"type": "list",
 				"label": "Watch roots",
 				"description": "Comma-separated roots, resolved against base. Empty keeps the native extension/plugin roots.",
-				"default": ""
+				"default": []
 			},
 			{
 				"key": "ignored",
-				"type": "string",
+				"type": "list",
 				"label": "Ignored globs",
 				"description": "Comma-separated globs excluded on top of .git and the module cache.",
-				"default": ""
+				"default": []
 			},
 			{
 				"key": "debounce",

@@ -14,14 +14,16 @@ export const name = "musepi-hmr";
 export const inject = [] as const;
 export const provide = ["hmr"] as const;
 
-/** Split a comma-separated config value into non-empty entries. */
+/** Normalize a list-typed config value (array, or comma-separated string). */
 function list(value: unknown): string[] {
-	return typeof value === "string"
-		? value
-				.split(",")
-				.map(item => item.trim())
-				.filter(item => item.length > 0)
-		: [];
+	if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
+	if (typeof value === "string") {
+		return value
+			.split(",")
+			.map(item => item.trim())
+			.filter(item => item.length > 0);
+	}
+	return [];
 }
 
 export async function apply(ctx: ExtensionAPI, config?: Record<string, unknown>): Promise<{ hmr: HmrService }> {

@@ -12,8 +12,16 @@ const FLAG: ConfigFieldDesc = { key: "flag", type: "boolean", default: true };
 const MODEL: ConfigFieldDesc = { key: "model", type: "select", default: "base", options: ["base", "large"] };
 const PROMPT: ConfigFieldDesc = { key: "prompt", type: "string", default: "hello" };
 const BIN: ConfigFieldDesc = { key: "bin", type: "path", default: "" };
+const ROOTS: ConfigFieldDesc = { key: "roots", type: "list", default: ["."] };
 
 describe("coerceConfigFieldValue", () => {
+	test("list accepts string arrays and splits a comma/newline separated string", () => {
+		expect(coerceConfigFieldValue(ROOTS, ["a", "b"])).toEqual(["a", "b"]);
+		expect(coerceConfigFieldValue(ROOTS, "a, b\nc")).toEqual(["a", "b", "c"]);
+		expect(coerceConfigFieldValue(ROOTS, [1, "b"])).toEqual(["b"]);
+		expect(coerceConfigFieldValue(ROOTS, undefined)).toEqual(["."]);
+	});
+
 	test("boolean accepts only real booleans, non-boolean falls back to default", () => {
 		expect(coerceConfigFieldValue(FLAG, false)).toBe(false);
 		// "false" 字符串不是 boolean → 回退 default(true),证明没有字符串真值转换。

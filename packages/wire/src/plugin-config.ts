@@ -11,7 +11,7 @@
 /** 单个配置字段的声明式描述(渲染器的输入)。 */
 export interface ConfigFieldDesc {
 	key: string;
-	type: "boolean" | "number" | "string" | "select" | "path";
+	type: "boolean" | "number" | "string" | "select" | "path" | "list";
 	/** 缺省值;缺席 = 必填。 */
 	default?: unknown;
 	min?: number;
@@ -115,7 +115,7 @@ export interface ParsedConfigFields {
 	errors: ConfigFieldError[];
 }
 
-const FIELD_TYPES = new Set(["boolean", "number", "string", "select", "path"]);
+const FIELD_TYPES = new Set(["boolean", "number", "string", "select", "path", "list"]);
 const RESTARTS = new Set(["none", "session", "daemon"]);
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -157,7 +157,8 @@ export function parseConfigFields(raw: unknown): ParsedConfigFields {
 				(type === "boolean" && t === "boolean") ||
 				(type === "number" && t === "number") ||
 				((type === "string" || type === "path") && t === "string") ||
-				(type === "select" && (t === "string" || t === "number"));
+				(type === "select" && (t === "string" || t === "number")) ||
+				(type === "list" && Array.isArray(item.default) && item.default.every(v => typeof v === "string"));
 			if (!ok) {
 				errors.push({ code: "field-bad-default", field: key, detail: t });
 				continue;
@@ -273,6 +274,18 @@ export function coerceConfigFieldValue(desc: ConfigFieldDesc, raw: unknown): unk
 		case "string":
 		case "path":
 			return typeof raw === "string" ? raw : desc.default;
+		case "list": {
+			// One wire shape for a list: string[]. A hand-written config file or a
+			// GUI text input may hand over a comma/newline separated string.
+			if (Array.isArray(raw)) return raw.filter((item): item is string => typeof item === "string");
+			if (typeof raw === "string") {
+				return raw
+					.split(/\r?\n|,/)
+					.map(item => item.trim())
+					.filter(item => item.length > 0);
+			}
+			return desc.default;
+		}
 	}
 }
 
