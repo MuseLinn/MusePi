@@ -636,7 +636,7 @@ is a package the distribution ships, **not a separate kind of thing**」——�
 
 插件卸载只走一个入口：effects、事件监听 disposer 与 state 一起清空，任何一条卸载路径都不会漏掉监听；会话停止只执行 effects，因为 runner 可能复用，监听要留到真正卸载。
 
-会话级监听用 `ctx.session.on(event, handler)`（dsh 的 `agent.ctx`）：作用域在 `session_start` 派发前打开、会话收尾时关闭，监听不会带到下一个会话；`session_start` 重放（插件重载后的 `refreshSessionStart`）会先关旧作用域再开新的，所以只重注册、不叠加。`ctx.on` 仍是实例级（活到插件卸载），两者分工与 dsh 的 `ctx.on` / `agent.ctx` 一致；会话外 `ctx.session` 为 `undefined`，插件必须按可选处理。
+会话级监听用 `ctx.session.on(event, handler)`（dsh 的 `agent.ctx`）：作用域是一个真实的 Cordis fiber（`eventBus.inject`），监听登记进 fiber 的 effect 账本，由 fiber 销毁回收，没有旁路账本。作用域在 `session_start` 派发前打开、会话收尾时销毁，监听不会带到下一个会话；`session_start` 重放（插件重载后的 `refreshSessionStart`）会先销毁旧 fiber 再建新的，所以只重注册、不叠加。`ctx.on` 仍是实例级（活到插件卸载），两者分工与 dsh 的 `ctx.on` / `agent.ctx` 一致；会话外 `ctx.session` 为 `undefined`，插件必须按可选处理。
 
 `state` 没有同步放宽：它要求一个卸载即清空的作用域，而 legacy 扩展按模块级变量写，拿到一个“看起来能用”的 state 只会让两份实例各自持有一半状态。`ExtensionAPI` 上 `state` 仍是可选的（`state?`），代码里必须按可选处理。
 

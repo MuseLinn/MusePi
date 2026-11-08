@@ -4,6 +4,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { Context } from "@deepseek-ai/cordis";
 import type {
 	AgentMessage,
 	AgentTool,
@@ -27,7 +28,7 @@ import { type AgentDefinition, normalizeSubagentDefinition, type SubagentDefinit
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
 import { disposePluginPrimitives, runEffects } from "../plugins/runtime/cordis-primitives";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
-import { extensionHostOwner, loadExtensions, SessionListenerScope } from "./loader";
+import { extensionHostOwner, loadExtensions } from "./loader";
 import { ManagedTimers } from "./managed-timers";
 import { type ExtensionMcpHost, ExtensionMcpRegistry } from "./mcp-servers";
 import { createExtensionModelQuery } from "./model-api";
@@ -472,7 +473,7 @@ export async function emitSessionStartEvent(
 	if (!extensionRunner) return false;
 	// Open the session scope before the dispatch: listeners registered by a
 	// `session_start` handler belong to this session and go away with it.
-	extensionRunner.openSessionScope();
+	await extensionRunner.openSessionScope();
 	if (!extensionRunner.hasHandlers("session_start")) return false;
 	try {
 		await extensionRunner.emit({ type: "session_start", agentId: agent?.agentId, source: agent?.source });
@@ -501,7 +502,7 @@ export async function emitSessionShutdownEvent(extensionRunner: ExtensionRunner 
 	} finally {
 		extensionRunner.disposeFileFallbacks();
 		extensionRunner.clearManagedTimers();
-		extensionRunner.stopServices();
+		await extensionRunner.stopServices();
 		await extensionRunner.releaseMcpServers();
 		extensionRunner.releaseUrlSchemes();
 	}
@@ -1831,26 +1832,47 @@ export class ExtensionRunner {
 	}
 
 	/**
-	 * Open the live session's listener scope (dsh: the agent-scoped context).
+	 * Open the live session's Cordis fiber (dsh: the agent-scoped context).
 	 *
-	 * A new session never inherits listeners: the previous scope is closed
-	 * first, which is also what makes `refreshSessionStart` (a re-emitted
-	 * `session_start` after a plugin reload) re-register instead of stacking.
+	 * The fiber's own disposal reclaims every listener registered through
+	 * `ctx.session`, so session cleanup needs no parallel ledger. A new session
+	 * never inherits listeners: the previous fiber is disposed first, which is
+	 * also what makes `refreshSessionStart` (a re-emitted `session_start` after
+	 * a plugin reload) re-register instead of stacking.
 	 */
-	openSessionScope(): void {
-		this.runtime.sessionScope?.dispose();
-		this.runtime.sessionScope = new SessionListenerScope();
+	async openSessionScope(): Promise<void> {
+		await this.closeSessionScope();
+		const bus = this.runtime.eventBus;
+		if (!bus) return;
+		let context: Context | undefined;
+		const fiber = (bus as unknown as Context).inject({}, scope => {
+			context = scope as Context;
+		});
+		// Awaiting the fiber settles once its context is active; `ctx.session`
+		// must be usable by the `session_start` listeners dispatched next.
+		await fiber;
+		if (!context) return;
+		this.runtime.sessionScope = {
+			context: context as unknown as NonNullable<typeof this.runtime.sessionScope>["context"],
+			dispose: () => fiber.dispose(),
+		};
 	}
 
-	stopServices(): void {
-		// Session teardown closes the session scope with the effects: a listener
-		// wired in `session_start` must not reach the next session.
-		this.runtime.sessionScope?.dispose();
+	/** Dispose the live session fiber; no-op when no session was open. */
+	async closeSessionScope(): Promise<void> {
+		const scope = this.runtime.sessionScope;
 		this.runtime.sessionScope = undefined;
+		await scope?.dispose();
+	}
+
+	async stopServices(): Promise<void> {
 		for (const ext of this.extensions) {
 			this.#stopServicesForExtension(ext);
 		}
 		this.#startedServices.clear();
+		// Last: the synchronous teardown above runs even if the fiber disposal
+		// below rejects, and a caller that does not await still gets it.
+		await this.closeSessionScope();
 	}
 
 	#stopServicesForExtension(ext: Extension, options?: { full?: boolean }): void {

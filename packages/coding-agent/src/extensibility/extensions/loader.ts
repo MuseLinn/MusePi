@@ -76,7 +76,6 @@ import type {
 	ExtensionPromptSection,
 	ExtensionRpcHandler,
 	ExtensionService,
-	ExtensionSessionScopeStore,
 	ExtensionSetting,
 	ExtensionSkillDeclaration,
 	ExtensionWidget,
@@ -329,44 +328,6 @@ export function extensionHostOwner(extensionPath: string): string {
 	return `ext:${getExtensionNameFromPath(extensionPath)}`;
 }
 
-/**
- * Listener ledger for one session (dsh: the agent-scoped context a plugin
- * receives when an agent is created).
- *
- * A plugin wires per-session listeners in `session_start`; the runner opens the
- * scope before that dispatch and closes it at session teardown, so a listener
- * can never reach the next session. Closing is also safe after the extension
- * unload already drained the same disposer: `on`'s disposer is idempotent.
- */
-export class SessionListenerScope implements ExtensionSessionScopeStore {
-	closed = false;
-	readonly #disposers: Array<() => void> = [];
-
-	track(dispose: () => void): () => void {
-		let done = false;
-		const off = () => {
-			if (done) return;
-			done = true;
-			const index = this.#disposers.indexOf(off);
-			if (index >= 0) this.#disposers.splice(index, 1);
-			dispose();
-		};
-		if (this.closed) {
-			off();
-			return off;
-		}
-		this.#disposers.push(off);
-		return off;
-	}
-
-	dispose(): void {
-		this.closed = true;
-		// Reverse order, like the effect ledger: inner registrations go first.
-		for (const off of [...this.#disposers].reverse()) off();
-		this.#disposers.length = 0;
-	}
-}
-
 class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly logger = logger;
 	readonly typebox = TypeBox;
@@ -457,14 +418,21 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	/**
 	 * The live session's registration scope (dsh's agent-scoped context).
 	 * Undefined outside a session, so a listener wired in `session_start` cannot
-	 * silently outlive it; the returned `on` is this extension's own, keeping
-	 * timeouts, error attribution and handler counts identical.
+	 * silently outlive it. Registration goes through the session fiber's
+	 * `effect`, so Cordis — not a hand-kept ledger — owns disposal.
 	 */
 	get session(): PluginContextNamespaces["session"] {
 		const scope = this.runtime.sessionScope;
-		if (!scope || scope.closed) return undefined;
+		if (!scope) return undefined;
 		const on = ((event: string, handler: HandlerFn, options?: { prepend?: boolean }) =>
-			scope.track(this.on(event, handler, options))) as ExtensionAPI["on"];
+			scope.context.effect(() =>
+				this.#registerListener(
+					scope.context as NonNullable<IExtensionRuntime["eventBus"]>,
+					event,
+					handler,
+					options,
+				),
+			)) as ExtensionAPI["on"];
 		return { on };
 	}
 
@@ -527,220 +495,233 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	 *  picks `serial` / `parallel` per event. The timeout is wrapped inside the
 	 *  listener, leaving bail/serial results intact. */
 	on<F extends HandlerFn>(event: string, handler: F, options?: { prepend?: boolean }): () => void {
-		{
-			// One registry for every event: unknown names still work because the
-			// dispatcher only cares about the name at emit time.
-			let bus = this.runtime.eventBus;
-			if (!bus) {
-				bus = new Context() as unknown as NonNullable<IExtensionRuntime["eventBus"]>;
-				this.runtime.eventBus = bus;
+		// One registry for every event: unknown names still work because the
+		// dispatcher only cares about the name at emit time.
+		let bus = this.runtime.eventBus;
+		if (!bus) {
+			bus = new Context() as unknown as NonNullable<IExtensionRuntime["eventBus"]>;
+			this.runtime.eventBus = bus;
+		}
+		return this.#registerListener(bus, event, handler, options);
+	}
+
+	/**
+	 * The listener body shared by `on` (instance scope) and `ctx.session.on`
+	 * (session-fiber scope). Registering on a different Cordis context changes
+	 * only who owns the disposer — timeout, result and error contracts stay the
+	 * same, because they live in this wrapper.
+	 */
+	#registerListener(
+		bus: NonNullable<IExtensionRuntime["eventBus"]>,
+		event: string,
+		handler: HandlerFn,
+		options?: { prepend?: boolean },
+	): () => void {
+		const wrapped = async (...args: unknown[]): Promise<unknown> => {
+			// `tool_call` is fail-closed: timeout or throw blocks the tool. That
+			// gate is the runner's executor (signal, registration drain, error
+			// channel), not the generic timeout wrapper below.
+			if (event === "tool_call") {
+				const options = args[2] as { timeoutMs: number; signal?: AbortSignal } | undefined;
+				const timeoutMs = options?.timeoutMs ?? handlerTimeoutForEvent(event);
+				const execute = this.runtime.handlerExecutor;
+				if (!execute) return undefined;
+				const result = await execute(
+					handler as (event: unknown, ctx: ExtensionContext) => unknown,
+					args[0] as { type: string },
+					args[1] as ExtensionContext,
+					this.extension,
+					timeoutMs,
+					(kind, message) => ({
+						block: true,
+						reason:
+							kind === "timeout"
+								? `Extension ${this.extension.path} timed out after ${timeoutMs}ms`
+								: `Extension ${this.extension.path} failed: ${message}`,
+					}),
+					options?.signal,
+				);
+				if ((result as { block?: boolean } | undefined)?.block === true) return result;
+				if (result !== undefined) this.runtime.beforeEventResults?.set(args[0] as object, result);
+				return undefined;
 			}
-			const wrapped = async (...args: unknown[]): Promise<unknown> => {
-				// `tool_call` is fail-closed: timeout or throw blocks the tool. That
-				// gate is the runner's executor (signal, registration drain, error
-				// channel), not the generic timeout wrapper below.
-				if (event === "tool_call") {
-					const options = args[2] as { timeoutMs: number; signal?: AbortSignal } | undefined;
-					const timeoutMs = options?.timeoutMs ?? handlerTimeoutForEvent(event);
-					const execute = this.runtime.handlerExecutor;
-					if (!execute) return undefined;
-					const result = await execute(
-						handler as (event: unknown, ctx: ExtensionContext) => unknown,
-						args[0] as { type: string },
-						args[1] as ExtensionContext,
-						this.extension,
-						timeoutMs,
-						(kind, message) => ({
-							block: true,
-							reason:
-								kind === "timeout"
-									? `Extension ${this.extension.path} timed out after ${timeoutMs}ms`
-									: `Extension ${this.extension.path} failed: ${message}`,
-						}),
-						options?.signal,
-					);
-					if ((result as { block?: boolean } | undefined)?.block === true) return result;
+
+			// `session_stop` owns a settle signal; the executor composes it with the
+			// budget and reports timeout/errors exactly as the legacy path did.
+			if (event === "session_stop") {
+				const ev = args[0] as { signal?: AbortSignal };
+				const execute = this.runtime.handlerExecutor;
+				if (!execute) return undefined;
+				const result = await execute(
+					handler as (event: unknown, ctx: ExtensionContext) => unknown,
+					ev as { type: string },
+					args[1] as ExtensionContext,
+					this.extension,
+					handlerTimeoutForEvent(event),
+					() => undefined,
+					ev.signal,
+				);
+				if (sessionStopContinues(result as never)) return result;
+				if (result !== undefined) this.runtime.beforeEventResults?.set(ev as object, result);
+				return undefined;
+			}
+
+			// Read the budget at dispatch time: tests and hosts change it after
+			// the plugin has loaded.
+			const timeoutMs = handlerTimeoutForEvent(event);
+			let timer: Timer | undefined;
+			const timeout = new Promise<never>((_resolve, reject) => {
+				timer = setTimeout(() => reject(new Error(`handler timed out after ${timeoutMs}ms`)), timeoutMs);
+				timer.unref?.();
+			});
+			const work = (async () => {
+				// `context` / `input` handlers receive an event built from the
+				// dispatch-scoped state, so each listener sees the previous
+				// listener's rewrite (the accumulated value lives in args[2]).
+				let callArgs = args;
+				if (event === "context") {
+					const state = args[2] as { messages: unknown[] };
+					callArgs = [{ type: "context", messages: state.messages }, args[1]] as unknown[];
+				} else if (event === "input") {
+					const state = args[2] as { text: string; images: unknown; source: string };
+					callArgs = [
+						{ type: "input", text: state.text, images: state.images, source: state.source },
+						args[1],
+					] as unknown[];
+				} else if (event === "before_agent_start") {
+					const state = args[2] as { systemPrompt: string[] };
+					callArgs = [{ ...(args[0] as object), systemPrompt: state.systemPrompt }, args[1]] as unknown[];
+				} else if (event === "before_provider_request") {
+					const state = args[2] as { payload: unknown };
+					callArgs = [{ type: "before_provider_request", payload: state.payload }, args[1]] as unknown[];
+				}
+				const result = await handler(...callArgs);
+				const pending = this.runtime.awaitPendingRegistrations?.();
+				if (pending) await pending;
+				return result;
+			})();
+			try {
+				const result = await Promise.race([work, timeout]);
+				if (event === "context") {
+					const state = args[2] as { messages: unknown[] };
+					const patch = result as { messages?: unknown[] } | undefined;
+					if (patch?.messages !== undefined) state.messages = patch.messages;
+					return undefined;
+				}
+				if (event === "input") {
+					const state = args[2] as { text: string; images: unknown; source: string };
+					const patch = result as { handled?: boolean; text?: string; images?: unknown } | undefined;
+					if (patch?.handled) return patch;
+					if (patch?.text !== undefined) state.text = patch.text;
+					if (patch?.images !== undefined) state.images = patch.images;
+					return undefined;
+				}
+				if (event === "tool_result") {
+					// The dispatcher owns the accumulated event; the listener only
+					// returns its patch, exactly like the old loop.
+					const state = args[2] as { event: ToolResultEvent; modified: boolean } | undefined;
+					if (state && applyToolResultPatch(state.event, result as ToolResultEventResult | undefined)) {
+						state.modified = true;
+					}
+					return undefined;
+				}
+				if (event === "before_agent_start") {
+					const state = args[2] as {
+						messages: unknown[];
+						systemPrompt: string[];
+						systemPromptModified: boolean;
+					};
+					const patch = result as { message?: unknown; systemPrompt?: string | string[] } | undefined;
+					if (patch?.message) state.messages.push(patch.message);
+					if (patch?.systemPrompt !== undefined) {
+						state.systemPrompt =
+							typeof patch.systemPrompt === "string" ? [patch.systemPrompt] : patch.systemPrompt;
+						state.systemPromptModified = true;
+					}
+					return undefined;
+				}
+				if (event === "before_provider_request") {
+					const state = args[2] as { payload: unknown };
+					if (result !== undefined) state.payload = result;
+					return undefined;
+				}
+				if (event === "cache_warming_decision") {
+					const state = args[2] as { action: unknown };
+					const patch = result as { action?: unknown } | undefined;
+					if (patch?.action !== undefined) state.action = patch.action;
+					return undefined;
+				}
+				if (event === "session.compacting") {
 					if (result !== undefined) this.runtime.beforeEventResults?.set(args[0] as object, result);
 					return undefined;
 				}
-
-				// `session_stop` owns a settle signal; the executor composes it with the
-				// budget and reports timeout/errors exactly as the legacy path did.
-				if (event === "session_stop") {
-					const ev = args[0] as { signal?: AbortSignal };
-					const execute = this.runtime.handlerExecutor;
-					if (!execute) return undefined;
-					const result = await execute(
-						handler as (event: unknown, ctx: ExtensionContext) => unknown,
-						ev as { type: string },
-						args[1] as ExtensionContext,
-						this.extension,
-						handlerTimeoutForEvent(event),
-						() => undefined,
-						ev.signal,
-					);
-					if (sessionStopContinues(result as never)) return result;
-					if (result !== undefined) this.runtime.beforeEventResults?.set(ev as object, result);
+				if (event === "user_bash" || event === "user_python") {
+					// First non-empty result wins (the old loop's bail).
+					return result ?? undefined;
+				}
+				if (event === "resources_discover") {
+					const state = args[2] as {
+						skillPaths: Array<{ path: string; extensionPath: string }>;
+						promptPaths: Array<{ path: string; extensionPath: string }>;
+						themePaths: Array<{ path: string; extensionPath: string }>;
+					};
+					const patch = result as
+						| { skillPaths?: string[]; promptPaths?: string[]; themePaths?: string[] }
+						| undefined;
+					for (const path of patch?.skillPaths ?? []) {
+						state.skillPaths.push({ path, extensionPath: this.extension.path });
+					}
+					for (const path of patch?.promptPaths ?? []) {
+						state.promptPaths.push({ path, extensionPath: this.extension.path });
+					}
+					for (const path of patch?.themePaths ?? []) {
+						state.themePaths.push({ path, extensionPath: this.extension.path });
+					}
 					return undefined;
 				}
-
-				// Read the budget at dispatch time: tests and hosts change it after
-				// the plugin has loaded.
-				const timeoutMs = handlerTimeoutForEvent(event);
-				let timer: Timer | undefined;
-				const timeout = new Promise<never>((_resolve, reject) => {
-					timer = setTimeout(() => reject(new Error(`handler timed out after ${timeoutMs}ms`)), timeoutMs);
-					timer.unref?.();
-				});
-				const work = (async () => {
-					// `context` / `input` handlers receive an event built from the
-					// dispatch-scoped state, so each listener sees the previous
-					// listener's rewrite (the accumulated value lives in args[2]).
-					let callArgs = args;
-					if (event === "context") {
-						const state = args[2] as { messages: unknown[] };
-						callArgs = [{ type: "context", messages: state.messages }, args[1]] as unknown[];
-					} else if (event === "input") {
-						const state = args[2] as { text: string; images: unknown; source: string };
-						callArgs = [
-							{ type: "input", text: state.text, images: state.images, source: state.source },
-							args[1],
-						] as unknown[];
-					} else if (event === "before_agent_start") {
-						const state = args[2] as { systemPrompt: string[] };
-						callArgs = [{ ...(args[0] as object), systemPrompt: state.systemPrompt }, args[1]] as unknown[];
-					} else if (event === "before_provider_request") {
-						const state = args[2] as { payload: unknown };
-						callArgs = [{ type: "before_provider_request", payload: state.payload }, args[1]] as unknown[];
-					}
-					const result = await handler(...callArgs);
-					const pending = this.runtime.awaitPendingRegistrations?.();
-					if (pending) await pending;
-					return result;
-				})();
-				try {
-					const result = await Promise.race([work, timeout]);
-					if (event === "context") {
-						const state = args[2] as { messages: unknown[] };
-						const patch = result as { messages?: unknown[] } | undefined;
-						if (patch?.messages !== undefined) state.messages = patch.messages;
-						return undefined;
-					}
-					if (event === "input") {
-						const state = args[2] as { text: string; images: unknown; source: string };
-						const patch = result as { handled?: boolean; text?: string; images?: unknown } | undefined;
-						if (patch?.handled) return patch;
-						if (patch?.text !== undefined) state.text = patch.text;
-						if (patch?.images !== undefined) state.images = patch.images;
-						return undefined;
-					}
-					if (event === "tool_result") {
-						// The dispatcher owns the accumulated event; the listener only
-						// returns its patch, exactly like the old loop.
-						const state = args[2] as { event: ToolResultEvent; modified: boolean } | undefined;
-						if (state && applyToolResultPatch(state.event, result as ToolResultEventResult | undefined)) {
-							state.modified = true;
-						}
-						return undefined;
-					}
-					if (event === "before_agent_start") {
-						const state = args[2] as {
-							messages: unknown[];
-							systemPrompt: string[];
-							systemPromptModified: boolean;
-						};
-						const patch = result as { message?: unknown; systemPrompt?: string | string[] } | undefined;
-						if (patch?.message) state.messages.push(patch.message);
-						if (patch?.systemPrompt !== undefined) {
-							state.systemPrompt =
-								typeof patch.systemPrompt === "string" ? [patch.systemPrompt] : patch.systemPrompt;
-							state.systemPromptModified = true;
-						}
-						return undefined;
-					}
-					if (event === "before_provider_request") {
-						const state = args[2] as { payload: unknown };
-						if (result !== undefined) state.payload = result;
-						return undefined;
-					}
-					if (event === "cache_warming_decision") {
-						const state = args[2] as { action: unknown };
-						const patch = result as { action?: unknown } | undefined;
-						if (patch?.action !== undefined) state.action = patch.action;
-						return undefined;
-					}
-					if (event === "session.compacting") {
-						if (result !== undefined) this.runtime.beforeEventResults?.set(args[0] as object, result);
-						return undefined;
-					}
-					if (event === "user_bash" || event === "user_python") {
-						// First non-empty result wins (the old loop's bail).
-						return result ?? undefined;
-					}
-					if (event === "resources_discover") {
-						const state = args[2] as {
-							skillPaths: Array<{ path: string; extensionPath: string }>;
-							promptPaths: Array<{ path: string; extensionPath: string }>;
-							themePaths: Array<{ path: string; extensionPath: string }>;
-						};
-						const patch = result as
-							| { skillPaths?: string[]; promptPaths?: string[]; themePaths?: string[] }
-							| undefined;
-						for (const path of patch?.skillPaths ?? []) {
-							state.skillPaths.push({ path, extensionPath: this.extension.path });
-						}
-						for (const path of patch?.promptPaths ?? []) {
-							state.promptPaths.push({ path, extensionPath: this.extension.path });
-						}
-						for (const path of patch?.themePaths ?? []) {
-							state.themePaths.push({ path, extensionPath: this.extension.path });
-						}
-						return undefined;
-					}
-					if (CANCELABLE_PRE_EVENTS.has(event)) {
-						const cancels = (result as { cancel?: unknown } | undefined)?.cancel === true;
-						if (cancels) return result;
-						if (result !== undefined) this.runtime.beforeEventResults?.set(args[0] as object, result);
-					}
-					return undefined;
-				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
-					if (message.startsWith("handler timed out")) {
-						logger.warn("Extension handler timed out", {
-							extensionPath: this.extension.path,
-							event,
-							timeoutMs,
-						});
-					}
-					const report = this.runtime.eventErrorSink;
-					if (report) report({ extensionPath: this.extension.path, event, error: message });
-					else
-						logger.warn("extension lifecycle listener failed", {
-							path: this.extension.path,
-							event,
-							error: message,
-						});
-				} finally {
-					if (timer) clearTimeout(timer);
+				if (CANCELABLE_PRE_EVENTS.has(event)) {
+					const cancels = (result as { cancel?: unknown } | undefined)?.cancel === true;
+					if (cancels) return result;
+					if (result !== undefined) this.runtime.beforeEventResults?.set(args[0] as object, result);
 				}
-			};
-			const off = bus.on(event, wrapped, options);
-			const counts = this.runtime.eventHandlerCounts;
-			counts?.set(event, (counts.get(event) ?? 0) + 1);
-			let disposed = false;
-			const dispose = () => {
-				// Session close and plugin unload can both reach one listener; a
-				// second decrement would under-count and disable later dispatches.
-				if (disposed) return;
-				disposed = true;
-				off();
-				const live = counts?.get(event);
-				if (live !== undefined && counts) counts.set(event, Math.max(0, live - 1));
-			};
-			this.extension.eventListenerDisposers ??= [];
-			this.extension.eventListenerDisposers.push(dispose);
-			return dispose;
-		}
+				return undefined;
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				if (message.startsWith("handler timed out")) {
+					logger.warn("Extension handler timed out", {
+						extensionPath: this.extension.path,
+						event,
+						timeoutMs,
+					});
+				}
+				const report = this.runtime.eventErrorSink;
+				if (report) report({ extensionPath: this.extension.path, event, error: message });
+				else
+					logger.warn("extension lifecycle listener failed", {
+						path: this.extension.path,
+						event,
+						error: message,
+					});
+			} finally {
+				if (timer) clearTimeout(timer);
+			}
+		};
+		const off = bus.on(event, wrapped, options);
+		const counts = this.runtime.eventHandlerCounts;
+		counts?.set(event, (counts.get(event) ?? 0) + 1);
+		let disposed = false;
+		const dispose = () => {
+			// Session close and plugin unload can both reach one listener; a
+			// second decrement would under-count and disable later dispatches.
+			if (disposed) return;
+			disposed = true;
+			off();
+			const live = counts?.get(event);
+			if (live !== undefined && counts) counts.set(event, Math.max(0, live - 1));
+		};
+		this.extension.eventListenerDisposers ??= [];
+		this.extension.eventListenerDisposers.push(dispose);
+		return dispose;
 	}
 
 	registerTool<TParams extends TSchema = TSchema, TDetails = unknown>(tool: ToolDefinition<TParams, TDetails>): void {

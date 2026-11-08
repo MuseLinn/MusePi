@@ -1401,14 +1401,16 @@ export interface HmrSurface {
 	getOuterStack(file: string): readonly string[];
 }
 
-/** Mutable session scope the runner owns; plugins only see its `on`. */
-export interface ExtensionSessionScopeStore {
-	readonly closed: boolean;
-	/** Track a listener disposer until the session ends. The returned function
-	 *  removes it early and is idempotent. */
-	track(dispose: () => void): () => void;
-	/** Drop every tracked listener; later registrations dispose immediately. */
-	dispose(): void;
+/** A live session's Cordis fiber. `ctx.session` registers through its context,
+ *  so disposing the fiber reclaims every listener the session owns — the same
+ *  ownership dsh gets from `agent.ctx`. */
+export interface ExtensionSessionScope {
+	readonly context: ExtensionEventBusSurface & {
+		/** Cordis `ctx.effect`: the cleanup is owned by the session fiber. */
+		effect(execute: () => void | (() => void)): () => void;
+	};
+	/** Dispose the fiber; resolves once every session listener is gone. */
+	dispose(): Promise<void>;
 }
 
 export interface ExtensionAPI extends PluginContextNamespaces {
@@ -2654,10 +2656,10 @@ export interface ExtensionRuntime
 		ExtensionActions {
 	/** Cordis event context owning the migrated lifecycle listeners. */
 	eventBus?: ExtensionEventBusSurface;
-	/** Listener ledger for the live session (`ctx.session`). The runner opens it
-	 *  at `session_start`, closes it at session teardown, and a closed scope
-	 *  disposes later registrations immediately. */
-	sessionScope?: ExtensionSessionScopeStore;
+	/** The live session's Cordis fiber (`ctx.session`). The runner opens it at
+	 *  `session_start`, disposes it at session teardown, and its disposal
+	 *  reclaims every listener the session registered. */
+	sessionScope?: ExtensionSessionScope;
 	/** Live listener counts per migrated event, so `hasHandlers` stays exact. */
 	eventHandlerCounts?: Map<string, number>;
 	/** The runner's error channel for migrated listeners (timeout / throw). */
