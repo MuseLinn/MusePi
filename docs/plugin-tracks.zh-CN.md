@@ -30,7 +30,7 @@ Track A 的 `apply` 收到同一个对象，既是 `pi`（平铺兼容面），�
 
 内置命令名（如 `/memory`）默认是保留名：第三方插件注册同名命令会被跳过并告警。宿主内置目录（`bundled-plugins/`、`desktop-plugins/`，以及仓库内的 `packages/*/src/plugins/`）中的插件可以接管保留名——内建实现退化为插件缺席时的回退，命令补全与分发优先使用插件实现。
 
-插件清单可以声明 `musepi.scope: "host"`：这类包由宿主进程在启动时装载一次（daemon 在开监听前、首个会话之前），会话装载会跳过它们。它适合注册进程级事实——记忆后端 provider、服务——因为 `memory.status` 这类 RPC 在没有会话时也要解析后端。普通插件（默认 `session`）仍按会话装载；`discoverBundledPluginPaths({ scope })` 的三个作用域（`session` / `host` / `all`）分别服务会话装载、宿主装载与扩展中心清单。注意：TUI 进程目前没有宿主装载点，host-scope 后端在那里走内置回退。
+插件清单可以声明 `musepi.scope: "host"`：这类包由宿主进程在启动时装载一次（daemon 在开监听前、首个会话之前），会话装载会跳过它们。它适合注册进程级事实——记忆后端 provider、服务——因为 `memory.status` 这类 RPC 在没有会话时也要解析后端。普通插件（默认 `session`）仍按会话装载；`discoverBundledPluginPaths({ scope })` 的三个作用域（`session` / `host` / `all`）分别服务会话装载、宿主装载与扩展中心清单。其它宿主（TUI / ACP / SDK / print）在 `createAgentSession` 里同一处调用 `ensureHostHalfPluginsLoaded`，所以所有宿主在同一时机看到同一批进程级注册；每个进程只装载一次。
 
 RPC 与设置不走接管：`memory.*` 这类方法是核心契约，路由只调用活动后端的成员，替换实现走 `ctx.memory.registerBackendProvider`；设置键的所有者是读取它的包，核心记忆运行时读取 `memory.*`，因此这些键固定在核心 schema，`ctx.settings.register` 只追加扩展自己命名空间内的键，与核心键同名时在 `settings.schema` 合并阶段被忽略。这与 dsh 一致：Remote 方法由服务包拥有、插件通过 adapter 替换实现；每个包导出自己的 `Config`，不存在跨包替换同一键。
 

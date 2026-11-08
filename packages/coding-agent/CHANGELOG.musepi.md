@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **TUI、ACP 与 SDK 也装载宿主级插件**：除 daemon 在开监听前装载外，`createAgentSession` 也会在首个会话前调用同一个 `ensureHostHalfPluginsLoaded`，每个进程一次。宿主级插件注册的后端 provider 因此在终端、ACP、SDK 与桌面端都一致可见，TUI 不再依赖内置回退；宿主装载器重置时会先执行注册 disposer，再允许重新装载。
+  - EN: The TUI, ACP, and SDK now mount host-scope plugins too. Besides the daemon mounting them before it listens, `createAgentSession` calls the same `ensureHostHalfPluginsLoaded` before the first session, once per process. Backend providers registered by host-scope packages are therefore visible on the terminal, ACP, SDK, and desktop alike, and the TUI no longer depends on the built-in fallback. Resetting the host loader runs the registration disposers before allowing another mount.
+
 - **宿主级插件在 daemon 启动时装载**：清单新增 `musepi.scope: "host"`，这类内置包在开监听前、首个会话之前挂载一次，会话装载跳过它们；`discoverBundledPluginPaths` 按 `session` / `host` / `all` 三种视图发现。首个消费者是 `memory-sharpshooter`：它把 Sharpshooter 引擎注册为记忆后端 provider，核心仍保留内置回退，TUI 行为不变。
   - EN: Host-scope plugins now mount when the daemon starts. A manifest can declare `musepi.scope: "host"`; such packages load once before listening and before the first session, and session loading skips them. `discoverBundledPluginPaths` exposes `session` / `host` / `all` views. The first consumer is `memory-sharpshooter`, which registers the Sharpshooter engine as a memory backend provider; the core keeps the built-in fallback, so terminal behavior is unchanged.
 

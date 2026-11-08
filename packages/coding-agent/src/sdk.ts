@@ -75,7 +75,11 @@ import { type ScheduledTaskHandle, scheduleTaskTool } from "./tools/schedule-tas
 import "./discovery";
 import { createImageUrlServiceFromSettings } from "./blob-broker/service";
 import { wrapStreamFnWithBlobUrlFallback } from "./blob-broker/stream-fallback";
-import { discoverBundledSessionPromptPluginPaths, ensureBundledPluginsLoaded } from "./bundled-plugins/loader";
+import {
+	discoverBundledSessionPromptPluginPaths,
+	ensureBundledPluginsLoaded,
+	ensureHostHalfPluginsLoaded,
+} from "./bundled-plugins/loader";
 import { initializeWithSettings } from "./discovery";
 import { discoverBundledPresetPluginPackages } from "./discovery/builtin";
 import { setInvocationConfiguredExtensions, withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
@@ -2665,6 +2669,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// loads here too: they ship as a bundled plugin package, and this is the
 		// one site that must guarantee them regardless of discovery options.
 		await ensureBundledPluginsLoaded(cwd);
+		// Host-scope packages (`musepi.scope: "host"`) register process-wide
+		// facts such as memory backend providers. The daemon mounts them before
+		// it listens; every other host — TUI, ACP, SDK, print — mounts them here,
+		// before the first session resolves a backend, so both paths agree.
+		await ensureHostHalfPluginsLoaded(cwd);
 		// A caller-supplied `preloadedExtensions` runtime may be a minimal stub
 		// (tests do exactly that, and the SDK documents accepting one when no
 		// extension hooks fire), so this queue is optional rather than assumed.

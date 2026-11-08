@@ -20,6 +20,7 @@ import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
 import { discoverBundledPluginPaths } from "../discovery/builtin";
 import { ExtensionRuntime, loadExtensionFromFactory } from "../extensibility/extensions/loader";
+import type { Extension } from "../extensibility/extensions/types";
 import { resolvePluginEntry, toFactory } from "../extensibility/plugins/runtime/cordis-entry";
 import { registerMagicKeyword } from "../modes/magic-keyword-registry";
 import { EventBus } from "../utils/event-bus";
@@ -59,6 +60,8 @@ export async function discoverBundledSessionPromptPluginPaths(): Promise<string[
 
 export interface BundledPluginLoader {
 	ensure(cwd: string): Promise<boolean>;
+	/** Forget the attempt and dispose what it mounted (`memoryBackendProviders`
+	 *  and other registration disposers). */
 	reset(): void;
 }
 
@@ -68,6 +71,7 @@ export function createBundledPluginLoader(
 ): BundledPluginLoader {
 	let loaded = false;
 	let inFlight: Promise<void> | undefined;
+	const mounted: Extension[] = [];
 	return {
 		ensure: async cwd => {
 			if (loaded) return false;
@@ -87,7 +91,14 @@ export function createBundledPluginLoader(
 							throw new Error(`bundled plugin exports nothing loadable: ${entry}`);
 						}
 						const runtime = new ExtensionRuntime();
-						await loadExtensionFromFactory(toFactory(resolved) as never, cwd, eventBus, runtime, entry);
+						const extension = await loadExtensionFromFactory(
+							toFactory(resolved) as never,
+							cwd,
+							eventBus,
+							runtime,
+							entry,
+						);
+						mounted.push(extension);
 						for (const keyword of runtime.pendingMagicKeywordRegistrations) {
 							registerMagicKeyword(keyword);
 						}
@@ -107,6 +118,9 @@ export function createBundledPluginLoader(
 			}
 		},
 		reset: () => {
+			for (const extension of mounted.splice(0)) {
+				for (const dispose of extension.memoryBackendProviders.splice(0)) dispose();
+			}
 			loaded = false;
 			inFlight = undefined;
 		},
