@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`session_start` 告诉插件它在为哪个 agent 工作**：事件新增可选 `{ agentId, source }`，`source` 区分主 agent 与 `task` 子 agent。每个 session-bound agent 本来就各有一份 runner，`apply` 即该作用域的 setup、`session_shutdown` 即回收；插件不必再从 `agentId` 猜测身份。
+  - EN: `session_start` now tells a plugin which agent it serves. The event carries optional `{ agentId, source }`, where `source` distinguishes the primary agent from a `task` subagent. Each session-bound agent already gets its own runner, so `apply` is that scope's setup and `session_shutdown` is its teardown; plugins no longer have to infer the role from `agentId`.
+
 - **记忆工作区浏览跟随后端，而不是固定读本地目录**：`MemoryBackend` 新增可选 `workspaceDir(agentDir, cwd)`；`memory.workspace*` 先解析活动后端，未实现该能力时返回 `supported: false` 并拒绝读取/定位，只有返回目录的后端才拥有设置页文件浏览。`memory.*` 继续作为核心契约，替换 provider 即整体切换。
   - EN: The memory workspace browser now follows the backend instead of always reading a local directory. `MemoryBackend` gained an optional `workspaceDir(agentDir, cwd)`; `memory.workspace*` resolves the active backend first, answers `supported: false` and refuses reads or reveals when the capability is absent, and only a backend that returns a directory owns the settings file browser. `memory.*` stays a core contract, so replacing the provider switches the whole surface.
 

@@ -433,11 +433,14 @@ export type ShutdownHandler = () => void;
  * rest, and a failure is logged rather than failing session construction —
  * starting a session must never depend on an extension behaving.
  */
-export async function emitSessionStartEvent(extensionRunner: ExtensionRunner | undefined): Promise<boolean> {
+export async function emitSessionStartEvent(
+	extensionRunner: ExtensionRunner | undefined,
+	agent?: { agentId?: string; source?: "main" | "subagent" },
+): Promise<boolean> {
 	if (!extensionRunner) return false;
 	if (!extensionRunner.hasHandlers("session_start")) return false;
 	try {
-		await extensionRunner.emit({ type: "session_start" });
+		await extensionRunner.emit({ type: "session_start", agentId: agent?.agentId, source: agent?.source });
 		return true;
 	} catch (error) {
 		logger.warn("Failed to emit session_start event", { error: String(error) });

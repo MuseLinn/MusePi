@@ -19,6 +19,7 @@ import {
 import {
 	EXTENSION_HANDLER_TIMEOUT_MS,
 	ExtensionRunner,
+	emitSessionStartEvent,
 	SESSION_SHUTDOWN_HANDLER_TIMEOUT_MS,
 	testSetExtensionHandlerTimeoutMs,
 	testSetSessionShutdownHandlerTimeoutMs,
@@ -2166,6 +2167,47 @@ describe("ExtensionRunner", () => {
 				searchable: true,
 			});
 			delete globalState.__ompMemoryStatus;
+		});
+	});
+
+	describe("agent identity on session_start", () => {
+		it("tells a handler which agent it was composed for", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "agent-identity.ts"),
+				`
+				export default function(pi) {
+					pi.on("session_start", event => {
+						globalThis.__sessionStartEvent = event;
+					});
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+			const globalState = globalThis as typeof globalThis & { __sessionStartEvent?: unknown };
+			delete globalState.__sessionStartEvent;
+
+			await emitSessionStartEvent(runner, { agentId: "Main", source: "main" });
+			expect(globalState.__sessionStartEvent).toMatchObject({
+				type: "session_start",
+				agentId: "Main",
+				source: "main",
+			});
+
+			delete globalState.__sessionStartEvent;
+			await emitSessionStartEvent(runner, { agentId: "task-7", source: "subagent" });
+			expect(globalState.__sessionStartEvent).toMatchObject({
+				type: "session_start",
+				agentId: "task-7",
+				source: "subagent",
+			});
+			delete globalState.__sessionStartEvent;
 		});
 	});
 

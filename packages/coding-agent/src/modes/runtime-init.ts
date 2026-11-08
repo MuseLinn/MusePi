@@ -144,5 +144,5 @@ export async function initializeExtensions(session: AgentSession, options: Initi
 	);
 
 	runner.onError(reportRuntimeError);
-	await runner.emit({ type: "session_start" });
+	await runner.emit({ type: "session_start", agentId: session.getAgentId(), source: "main" });
 }

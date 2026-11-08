@@ -25,9 +25,17 @@ import type { TodoItem } from "../tools/todo";
 // Session Events
 // ============================================================================
 
-/** Fired on initial session load */
+/** Fired on initial session load, once per session-bound agent. */
 export interface SessionStartEvent {
 	type: "session_start";
+	/** Registry identity of the agent this runner serves ("Main" or a subagent id). */
+	agentId?: string;
+	/**
+	 * Whether this agent is the session's primary agent or a subagent spawned by
+	 * `task`. Each agent gets its own runner, so a handler registered here owns
+	 * exactly one agent's world and is torn down with `session_shutdown`.
+	 */
+	source?: "main" | "subagent";
 }
 
 /** Fired before switching to another session (can be cancelled) */

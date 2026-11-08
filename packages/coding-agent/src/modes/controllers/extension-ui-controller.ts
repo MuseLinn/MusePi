@@ -309,6 +309,8 @@ export class ExtensionUiController {
 		// Emit session_start event
 		await extensionRunner.emit({
 			type: "session_start",
+			agentId: this.ctx.session.getAgentId(),
+			source: "main",
 		});
 	}
 

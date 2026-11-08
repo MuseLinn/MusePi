@@ -4968,7 +4968,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// `pi.on("session_start", …)` type-checked. The failure mode was silent:
 		// the handler simply never ran, so a plugin had no way to reach the
 		// context until a turn happened to fire a tool event.
-		await emitSessionStartEvent(extensionRunner);
+		await emitSessionStartEvent(extensionRunner, { agentId: session.getAgentId(), source: "main" });
 
 		return {
 			session,

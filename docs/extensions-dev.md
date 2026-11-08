@@ -60,7 +60,7 @@ Discovered JavaScript and TypeScript hooks use the production extension chain: `
 
 一个扩展模块可以组合:
 
-- 事件处理:`ctx.on("session:start" | "tool:call" | "tool:result" | "message" | ...)`
+- 事件处理:`ctx.on("session_start" | "tool_call" | "tool_result" | "message" | ...)`。每个 session-bound agent(主 agent 与每个子 agent)各拿一份独立 runner,`session_start` 携带 `{ agentId, source }`(`source` 为 `main` 或 `subagent`);`session_shutdown` 与该 runner 的定时器、服务、文件回退一起清理,所以 `apply` 就是该 agent 作用域内的 setup
 - LLM 工具:`ctx.tools.register({ name, description, parameters, execute })`(进入工具注册表,权限链照常生效)
 - 子智能体:`ctx.subagents.register({ name, description, systemPrompt, external })`;本地 Agent 必须提供非空 `systemPrompt`,外部 Agent 改为提供一次性 `external(context)` 执行器,并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物。子智能体类型本身已是 Cordis 插件能力;本地子智能体的多轮接续属于运行时生命周期(`hub send` / `agents.chat` / 冷恢复),不需要第二个 Agent 定义。共享任务板等团队协作应是独立 Cordis 插件,可参考 DSH 将团队服务、模型工具与 UI 拆包的做法,不要把任务所有权塞进子智能体注册。
 - 斜杠命令:`ctx.commands.register(...)`(TUI `/cmd` + GUI 命令面板)
