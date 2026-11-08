@@ -913,8 +913,9 @@ export interface CachedSessionDiscovery {
 	promptTemplates: PromptTemplate[];
 	slashCommands: FileSlashCommand[];
 	skills: Skill[];
-	/** Extension SOURCE PATHS only — loading still happens per session so
-	 *  each Extension binds to its own session's ExtensionAPI. */
+	/** Extension SOURCE PATHS only — loading happens per `(cwd, entry set)`
+	 *  through the shared session-plugin cache; per-session work (listeners,
+	 *  prompt contributions, effects) is scoped to the session. */
 	extensionPaths: string[];
 }
 
@@ -2431,6 +2432,20 @@ export class DaemonSessionHost {
 	/** Daemon working directory (notes/other project-scoped RPCs). */
 	cwd(): string {
 		return this.#options.cwd ?? process.cwd();
+	}
+
+	/**
+	 * Preload the workspace's extension modes at daemon startup so agent presets
+	 * declared by extensions are listable before any session exists (dsh's host
+	 * presets). The load goes through the shared session-plugin cache, so the
+	 * first real session reuses these instances instead of running the factories
+	 * again; `mountPlugin` records the modes in the host registry.
+	 */
+	async preloadExtensionModes(cwd: string = this.cwd()): Promise<void> {
+		const discovery = await this.#discoveryFor(cwd, getAgentDir());
+		const { loadSessionPluginsCached } = await import("../extensibility/plugins/runtime/session-loader");
+		const loaded = await loadSessionPluginsCached(discovery.extensionPaths, cwd, this.#eventBus);
+		loaded.release();
 	}
 
 	/**

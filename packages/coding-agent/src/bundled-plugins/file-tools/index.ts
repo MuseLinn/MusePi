@@ -9,7 +9,11 @@ export function apply(ctx: ExtensionAPI): void {
 	fileTools(ctx);
 	// The session prompt host is optional in the extension API type (external
 	// callers may omit it), so guard before registering the tool sections.
-	if (ctx.promptHost) registerFileToolPrompts(ctx.promptHost);
+	// Prompt contributions are session-scoped (dsh: register when the agent
+	// exists), so a shared instance can serve several sessions.
+	ctx.on("session_start", () => {
+		if (ctx.promptHost) registerFileToolPrompts(ctx.promptHost);
+	});
 }
 
 function fileTools(ctx: ExtensionAPI): void {

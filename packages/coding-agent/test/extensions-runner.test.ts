@@ -33,6 +33,7 @@ import type {
 	InputEventResult,
 } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { ExtensionToolWrapper } from "@musepi/pi-coding-agent/extensibility/extensions/wrapper";
+import { disposePluginPrimitives } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/cordis-primitives";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { getProjectAgentDir, logger, TempDir } from "@musepi/pi-utils";
@@ -4767,8 +4768,9 @@ describe("ExtensionRunner", () => {
 			// start() runs on load; a throwing start is isolated and does not abort the rest.
 			runner.startServices();
 			expect(Boolean(g.__svcStarted)).toBe(true);
-			// stop is always called for both services (including the one whose start threw).
-			runner.stopServices();
+			// Services belong to the instance (dsh: the plugin fiber), not the
+			// session, so unloading the instance is what stops them.
+			for (const extension of result.extensions) await disposePluginPrimitives(extension);
 			expect(Boolean(g.__svcStopped)).toBe(true);
 			expect(Boolean(g.__svcBoomyStopped)).toBe(true);
 		});

@@ -7,7 +7,11 @@ export const provide = [] as const;
 
 export function apply(ctx: ExtensionAPI): void {
 	browser(ctx);
-	if (ctx.promptHost) registerBrowserPrompts(ctx.promptHost);
+	// Prompt contributions are session-scoped (dsh: register when the agent
+	// exists), so a shared instance can serve several sessions.
+	ctx.on("session_start", () => {
+		if (ctx.promptHost) registerBrowserPrompts(ctx.promptHost);
+	});
 }
 
 function browser(ctx: ExtensionAPI): void {

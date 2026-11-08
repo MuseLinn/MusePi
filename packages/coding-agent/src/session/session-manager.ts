@@ -2192,6 +2192,23 @@ export class SessionManager {
 		return entry.id;
 	}
 
+	/**
+	 * Persist the selected agent preset in the session header (dsh's
+	 * `agentPreset`; stored as `modeId`, the field resume readers already use).
+	 * `null` clears it. Rewrites the file so a resumed session sees the change
+	 * without waiting for another append.
+	 */
+	setModeId(modeId: string | null): void {
+		const next = modeId === null ? undefined : modeId;
+		if ((this.#header.modeId ?? undefined) === next) return;
+		if (next === undefined) delete this.#header.modeId;
+		else this.#header.modeId = next;
+		if (!this.#persist || !this.#sessionFile) return;
+		this.#fileIsCurrent = false;
+		this.#rewriteRequired = true;
+		this.#rewriteSynchronously();
+	}
+
 	appendModeChange(mode: string, data?: Record<string, unknown>): string {
 		const entry: ModeChangeEntry = { type: "mode_change", ...this.#freshEntryFields(), mode, data };
 		this.#recordEntry(entry);

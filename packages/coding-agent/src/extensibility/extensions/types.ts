@@ -1407,6 +1407,13 @@ export interface HmrSurface {
 export interface ExtensionSessionScope {
 	/** Identity the dispatch carrier filters on. */
 	readonly key: object;
+	/** This session's prompt host; `ctx.promptHost` is only available inside a
+	 *  session, so contributions register per session instead of at apply. */
+	readonly promptHost?: PromptHostSurface;
+	/** Per-owner replay records for this session's prompt host. Kept on the
+	 *  scope, not the runtime: concurrent sessions sharing an instance set must
+	 *  not replay each other's contributions. */
+	readonly promptHostLedgers: Map<string, ScopedPromptHostLedger>;
 	readonly context: ExtensionEventBusSurface & {
 		/** Cordis `ctx.effect`: the cleanup is owned by the session fiber. */
 		effect(execute: () => void | (() => void)): () => void;
@@ -1829,10 +1836,11 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	/**
 	 * Session prompt host, when the running session wires one.
 	 *
-	 * The host is the single owner for section, context, variable and tool
-	 * providers; register on it to attach contributions to a scope, lane and
-	 * owner. Absent in hosts that still assemble prompts through the legacy
-	 * composer only, so guard before use.
+	 * Session-scoped: it is only present inside a session (`session_start` and
+	 * later), never in `apply`, so contributions register per session and a
+	 * shared instance cannot send one session's sections into another. Absent
+	 * in hosts that still assemble prompts through the legacy composer only,
+	 * so guard before use.
 	 */
 	readonly promptHost?: PromptHostSurface;
 
@@ -1918,10 +1926,11 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 		options?: { label?: string },
 	): (message: ExtensionNotificationMessage) => void;
 
-	/** Declare a long-lived background service. `start` runs when the extension
-	 *  loads; `stop` runs on unload / session shutdown / rollback. The runner
-	 *  guarantees `stop` is always called, isolates a throw, and the service
-	 *  must not leave residual processes. */
+	/** Declare a long-lived background service. `start` runs once when the
+	 *  extension instance loads; `stop` runs when that instance unloads or
+	 *  reloads — not at session end, because a shared instance may still serve
+	 *  other sessions (dsh: the plugin fiber owns its services). The runner
+	 *  isolates a throw, and the service must not leave residual processes. */
 	registerService(
 		name: string,
 		service: { start?: () => void | Promise<void>; stop?: () => void | Promise<void> },
@@ -2805,6 +2814,9 @@ export interface Extension {
 	 *  registers inside it, so disposal — reload, unload, rollback — is one
 	 *  `fiber.dispose()` instead of a second ownership mechanism. */
 	fiber?: { dispose(): Promise<void> };
+	/** Services were started for this instance. They belong to the instance
+	 *  (not the session), so a shared instance starts them once. */
+	servicesStarted?: boolean;
 	/** Theme tokens contributed by the extension (registerThemeToken), merged
 	 *  into the theme as *new* keys only; dropped on unload so the theme
 	 *  re-renders with them removed. */

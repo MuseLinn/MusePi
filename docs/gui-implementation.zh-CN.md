@@ -520,7 +520,7 @@ daemon RPC:
 自 2026-08-25 核对（P3 ❌ / P4 service ❌）后已落地。在 `extensibility/extensions/`：
 - **`registerNotificationChannel(channel,{label})` → send(message)**：runner 的 `onNotification` sink 把每次 send 转发 → daemon → GUI（与内置 notify 事件并列渲染）；channel+send 在 unload 时整体丢弃，重载即重注册。`ExtensionNotificationMessage { text, title?, kind? }`。
 - **`registerThemeToken(key,value)`**：runner 聚合 token（`applyThemeTokens`）；主题**只加新键**（绝不覆盖内置 color/background/symbol）；unload 时丢弃该 token，主题重渲染时移除。
-- **`registerService(name,{start?,stop?})`**：长驻后台服务；`start` 在装载时跑（`startServices`），`stop` 在 unload / 会话关闭 / rollback 时跑——有守卫（必被调用、抛出被隔离），且不得残留进程。
+- **`registerService(name,{start?,stop?})`**：长驻后台服务；`start` 在实例装载时跑一次（`startServices`），`stop` 在该实例卸载或重载时跑——不在会话结束时跑，因为共享实例可能仍在服务其他会话——有守卫（必被调用、抛出被隔离），且不得残留进程。
 
 ### 看板 widget 数据代理缺口 + 调度引擎（board-dashboard.md）
 `widget.data` 代理 RPC **未实现**（行情卡为静态默认值；数据源 agent 代理是剩余 M4 工作）；**调度执行引擎已在 GUI 侧实现**（`guest-client` task-run 执行引擎 + BoardPage 30s poll 消费 `data.task.schedule`；手动 run 走同一执行器而非 setTimeout）。

@@ -2879,6 +2879,118 @@ export class DaemonServer {
 				if (!def) throw new Error(`Unknown mode: ${p.id}`);
 				return def;
 			}
+			case "agentPresets.list": {
+				// dsh's `agentPresets.list`: every declarative preset source — file
+				// presets, profile presets, and modes contributed by extensions (the
+				// host registry is populated by mounts and by the daemon preload).
+				// File presets win an id collision.
+				const { listModeIds, loadModeFile, ensureModeTemplates } = await import("../presets/resolve");
+				const { readDefaultPresetId, collectProfilePresetDefinitions } = await import(
+					"../extensibility/plugins/profile/profile-presets"
+				);
+				const { listHostExtensionModes } = await import("../extensibility/extensions/host-modes");
+				const dir = this.#modesDir();
+				ensureModeTemplates(dir);
+				const home = os.homedir();
+				const defaultId = await readDefaultPresetId(this.#host.cwd(), home);
+				const presets: Array<{
+					id: string;
+					name: string;
+					description?: string;
+					order: number;
+					default: boolean;
+					source: "file" | "profile" | "extension";
+				}> = [];
+				const seen = new Set<string>();
+				for (const [index, id] of listModeIds(dir).entries()) {
+					const def = loadModeFile(dir, id);
+					presets.push({
+						id,
+						name: def?.label ?? id,
+						description: def?.description,
+						order: index,
+						default: id === defaultId,
+						source: "file",
+					});
+					seen.add(id);
+				}
+				for (const def of await collectProfilePresetDefinitions(this.#host.cwd(), home)) {
+					if (seen.has(def.id)) continue;
+					presets.push({
+						id: def.id,
+						name: def.label ?? def.id,
+						description: def.description,
+						order: presets.length,
+						default: def.id === defaultId,
+						source: "profile",
+					});
+					seen.add(def.id);
+				}
+				for (const { mode } of listHostExtensionModes()) {
+					if (seen.has(mode.id)) continue;
+					presets.push({
+						id: mode.id,
+						name: mode.label ?? mode.id,
+						description: mode.description,
+						order: 1000 + presets.length,
+						default: mode.id === defaultId,
+						source: "extension",
+					});
+					seen.add(mode.id);
+				}
+				return { presets };
+			}
+			case "agentPresets.read": {
+				// dsh's `agentPresets.read`: the preset's document. File presets return
+				// their YAML bytes; profile and extension presets are serialized here
+				// (dynamic prompt text is shown as a placeholder, never as code).
+				const { loadModeFile, modeFilePath, ensureModeTemplates } = await import("../presets/resolve");
+				const { collectProfilePresetDefinitions } = await import(
+					"../extensibility/plugins/profile/profile-presets"
+				);
+				const { listHostExtensionModes } = await import("../extensibility/extensions/host-modes");
+				const p = (params ?? {}) as { agentPreset?: string; id?: string };
+				const id = p.agentPreset ?? p.id;
+				if (typeof id !== "string" || id === "") throw new Error("agentPreset is required");
+				const dir = this.#modesDir();
+				ensureModeTemplates(dir);
+				if (loadModeFile(dir, id)) {
+					return { id, document: fs.readFileSync(modeFilePath(dir, id), "utf8"), source: "file" };
+				}
+				const home = os.homedir();
+				const profile = (await collectProfilePresetDefinitions(this.#host.cwd(), home)).find(def => def.id === id);
+				if (profile) return { id, document: YAML.stringify(profile), source: "profile" };
+				const mode = listHostExtensionModes().find(entry => entry.mode.id === id)?.mode;
+				if (mode) {
+					const document = {
+						...mode,
+						prompt: mode.prompt?.map(section => ({
+							...section,
+							text: typeof section.text === "string" ? section.text : "<dynamic>",
+						})),
+					};
+					return { id, document: YAML.stringify(document), source: "extension" };
+				}
+				throw new Error(`Unknown agent preset: ${id}`);
+			}
+			case "agentPresets.select": {
+				// dsh's `agentPresets.select`: switch the session's preset and persist
+				// it in the session header (stored as `modeId`, read back as agentPreset).
+				const p = (params ?? {}) as { sessionId?: string; agentPreset?: string | null };
+				if (typeof p.sessionId !== "string" || p.sessionId === "") throw new Error("sessionId is required");
+				const id = p.agentPreset ?? null;
+				const live = this.#host.get(p.sessionId);
+				if (live) {
+					const result = await live.agentSession.setMode(id, { hot: true });
+					if (!result.ok) throw new Error(result.error ?? "preset switch failed");
+					if (!result.deferred) this.#host.persistHeaderPatch(p.sessionId, { modeId: id });
+					return { ok: true, deferred: result.deferred === true, agentPreset: id };
+				}
+				if (!this.#host.persistHeaderPatch(p.sessionId, { modeId: id })) {
+					throw new Error(`Unknown session: ${p.sessionId}`);
+				}
+				return { ok: true, persisted: true, agentPreset: id };
+			}
 			case "modes.save": {
 				// 保存 = 校验(结构 + 环/悬空 + 扩展存在性)→ 写文件 → 广播。
 				const {
@@ -9249,6 +9361,30 @@ export async function startDaemon(
 	// exist for session-less RPC such as `memory.status`, not only for sessions.
 	const { ensureHostHalfPluginsLoaded } = await import("../bundled-plugins/loader");
 	await ensureHostHalfPluginsLoaded(host.cwd());
+
+	// Presets declared by extensions are host-level (dsh): warm the mode registry
+	// and the session-plugin cache before the first session. Every known
+	// workspace is preloaded, not only the daemon cwd, so a project's extension
+	// presets are listable before its first session. Sequential on purpose: each
+	// discovery loads settings and scans a tree, and startup must not fan out
+	// over dozens of workspaces at once. Fire-and-forget: listening never waits.
+	void (async () => {
+		const { presetPreloadCwds } = await import("./preset-preload");
+		let workspaces: Awaited<ReturnType<import("./services/workspace-registry").WorkspaceRegistry["list"]>> = [];
+		try {
+			const { WorkspaceRegistry } = await import("./services/workspace-registry");
+			workspaces = await new WorkspaceRegistry().list();
+		} catch (error) {
+			logger.warn("Workspace list for preset preload failed", { error: String(error) });
+		}
+		for (const cwd of presetPreloadCwds(host.cwd(), workspaces)) {
+			try {
+				await host.preloadExtensionModes(cwd);
+			} catch (error) {
+				logger.warn("Extension mode preload failed", { cwd, error: String(error) });
+			}
+		}
+	})();
 
 	// Process-global freeze state rides to every subscribed GUI (daemon-wide
 	// pause overlay stays in sync across clients regardless of which one

@@ -20,6 +20,9 @@ import type { ExtensionSessionScope } from "./types";
 /** Tag that marks a listener context as owned by one session. */
 export const SESSION_SCOPE_TAG: unique symbol = Symbol("musepi.sessionScope");
 
+/** Tag that marks a listener context as owned by one preset generation. */
+export const PRESET_SCOPE_TAG: unique symbol = Symbol("musepi.presetScope");
+
 const activeScope = new AsyncLocalStorage<ExtensionSessionScope>();
 
 /** The session scope of the dispatch currently running, if any. */
@@ -39,11 +42,14 @@ export function runInSessionScope<T>(scope: ExtensionSessionScope | undefined, f
  * whose context was tagged with a different session. Untagged listeners stay
  * global, which is what instance- and host-scope plugins rely on.
  */
-export function sessionCarrier(key: object): object {
+export function sessionCarrier(key: object, presetKey?: object): object {
 	return {
 		[Context.filter](listenerContext: unknown): boolean {
-			const tag = (listenerContext as Record<symbol, unknown> | undefined)?.[SESSION_SCOPE_TAG];
-			return tag === undefined || tag === key;
+			const tags = listenerContext as Record<symbol, unknown> | undefined;
+			const sessionTag = tags?.[SESSION_SCOPE_TAG];
+			const presetTag = tags?.[PRESET_SCOPE_TAG];
+			if (sessionTag === undefined && presetTag === undefined) return true;
+			return sessionTag === key || (presetKey !== undefined && presetTag === presetKey);
 		},
 	};
 }

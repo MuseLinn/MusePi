@@ -57,7 +57,7 @@ import { resolvePath, withHostGuard } from "../utils";
 import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
 import { handlerTimeoutForEvent } from "./handler-timeout";
 import { readExtensionPluginMeta } from "./plugin-manifest";
-import { currentSessionScope } from "./session-dispatch";
+import { currentSessionScope, PRESET_SCOPE_TAG } from "./session-dispatch";
 import { sessionStopContinues } from "./session-stop-result";
 import { applyToolResultPatch } from "./tool-result-patch";
 import type {
@@ -464,13 +464,30 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	 * re-running the factory. Undefined when no session wired a host.
 	 */
 	get promptHost(): PromptHostSurface | undefined {
-		const host = this.runtime.promptHost;
+		// Session-scoped by design (dsh: prompt contributions register when the
+		// agent exists). Reading it in `apply` returns undefined; register in
+		// `session_start` instead. This is what lets instances be shared.
+		const scope = currentSessionScope();
+		if (!scope) {
+			// The old contract let a plugin register at apply and capture the
+			// host. That silently stops working now, so name the plugin once.
+			if (!this.#warnedPromptHostOutsideSession) {
+				this.#warnedPromptHostOutsideSession = true;
+				logger.warn("promptHost read outside a session; register contributions in session_start", {
+					extensionPath: this.extension.path,
+				});
+			}
+			return undefined;
+		}
+		const host = scope.promptHost;
 		if (!host) return undefined;
 		const owner = extensionHostOwner(this.extension.path);
-		let ledger = this.runtime.promptHostLedgers.get(owner);
+		const ledgers = currentSessionScope()?.promptHostLedgers;
+		if (!ledgers) return undefined;
+		let ledger = ledgers.get(owner);
 		if (!ledger) {
 			ledger = { entries: [] };
-			this.runtime.promptHostLedgers.set(owner, ledger);
+			ledgers.set(owner, ledger);
 		}
 		return scopePromptHostToOwner(host, owner, ledger);
 	}
@@ -491,6 +508,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	};
 
 	#configFieldsPromise: Promise<ConfigFieldDesc[]> | null = null;
+	#warnedPromptHostOutsideSession = false;
 
 	#configFields(): Promise<ConfigFieldDesc[]> {
 		this.#configFieldsPromise ??= readExtensionPluginMeta(this.extension.path).then(meta => meta?.fields ?? []);
@@ -1340,24 +1358,33 @@ async function importExtensionModule(
  * second ownership ledger. The listener list stays for exact counts and for
  * loaders that run a factory without a fiber.
  */
-async function runFactoryInFiber(
+export async function runFactoryInFiber(
 	extension: Extension,
 	runtime: IExtensionRuntime,
 	cwd: string,
 	eventBus: EventBus,
 	factory: ExtensionFactory,
-	wrapApi: (api: ExtensionAPI, extension: Extension) => ExtensionAPI,
+	createApi: (ownContext: Context) => ExtensionAPI,
 	config?: Record<string, unknown>,
+	/** Tag the instance's context as part of one preset generation. */
+	scopeTag?: object,
 ): Promise<unknown> {
 	const bus = ensureExtensionEventBus(runtime) as unknown as Context;
 	let published: unknown;
 	const fiber = bus.inject({}, async scope => {
-		const api = wrapApi(createConcreteExtensionAPI(extension, runtime, cwd, eventBus, scope as Context), extension);
+		const ownContext = scopeTag ? (scope as Context).extend({ [PRESET_SCOPE_TAG]: scopeTag }) : (scope as Context);
+		const api = createApi(ownContext);
 		published = await runExtensionFactory(factory, api, runtime, config);
 	});
 	// Errors from the factory reject the fiber; awaiting it keeps the load-time
-	// error contract (`Failed to load extension: …`) unchanged.
-	await fiber;
+	// error contract (`Failed to load extension: …`) unchanged. A failed load
+	// still disposes the half-started fiber so it cannot linger in the registry.
+	try {
+		await fiber;
+	} catch (error) {
+		await fiber.dispose().catch(() => {});
+		throw error;
+	}
 	extension.fiber = { dispose: () => fiber.dispose() };
 	return published;
 }
@@ -1384,7 +1411,11 @@ async function bindExtension(
 	}
 	try {
 		const extension = createExtension(extensionPath, imported.resolvedPath);
-		await withHostGuard(() => runFactoryInFiber(extension, runtime, cwd, eventBus, factory, wrapApi));
+		await withHostGuard(() =>
+			runFactoryInFiber(extension, runtime, cwd, eventBus, factory, ownContext =>
+				wrapApi(createConcreteExtensionAPI(extension, runtime, cwd, eventBus, ownContext), extension),
+			),
+		);
 
 		return { extension, error: null };
 	} catch (err) {
@@ -1430,7 +1461,15 @@ export async function loadExtensionFromFactory(
 	config?: Record<string, unknown>,
 ): Promise<Extension> {
 	const extension = createExtension(name, name);
-	const published = await runFactoryInFiber(extension, runtime, cwd, eventBus, factory, api => api, config);
+	const published = await runFactoryInFiber(
+		extension,
+		runtime,
+		cwd,
+		eventBus,
+		factory,
+		ownContext => createConcreteExtensionAPI(extension, runtime, cwd, eventBus, ownContext),
+		config,
+	);
 	if (capture) capture.published = published;
 	return extension;
 }

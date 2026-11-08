@@ -5041,6 +5041,18 @@ export class AgentSession {
 	 * switch immediately. Sessions without a mode-capable factory return
 	 * `{ ok: false, error }`.
 	 */
+	/** The selected agent preset (dsh's `agentPreset`); persisted as header `modeId`. */
+	getAgentPreset(): string | null {
+		return this.sessionManager.getHeader()?.modeId ?? null;
+	}
+
+	/** dsh-shaped alias: select (or clear) the session's agent preset. */
+	async selectAgentPreset(
+		agentPreset: string | null,
+	): Promise<{ ok: boolean; error?: string; deferred?: boolean }> {
+		return this.setMode(agentPreset, { hot: true });
+	}
+
 	async setMode(
 		modeId: string | null,
 		opts: { hot?: boolean } = {},

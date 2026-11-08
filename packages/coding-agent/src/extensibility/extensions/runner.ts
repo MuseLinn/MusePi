@@ -21,12 +21,14 @@ import type { Settings } from "../../config/settings";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
 import type { MemoryRuntimeContext } from "../../memory-backend";
 import { setExtensionThemeTokens, type Theme, theme } from "../../modes/theme/theme";
+import type { PromptHostSurface, ScopedPromptHostLedger } from "../../prompts/host";
 import { removeScopedPromptHostLedger, replayPromptHostLedger } from "../../prompts/host";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
 import { type AgentDefinition, normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
-import { disposePluginPrimitives, runEffects } from "../plugins/runtime/cordis-primitives";
+import { disposePluginPrimitives } from "../plugins/runtime/cordis-primitives";
+import { isSharedSessionExtension, retireSessionPluginGeneration } from "../plugins/runtime/session-loader";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
 import { extensionHostOwner, loadExtensions } from "./loader";
 import { ManagedTimers } from "./managed-timers";
@@ -67,7 +69,6 @@ import type {
 	ExtensionNotificationChannel,
 	ExtensionNotificationMessage,
 	ExtensionRuntime,
-	ExtensionService,
 	ExtensionSessionScope,
 	ExtensionShortcut,
 	ExtensionStatusBarSegment,
@@ -593,6 +594,14 @@ export class ExtensionRunner {
 	 *  dispatch must still be filtered to this session instead of reaching
 	 *  every listener on a shared bus. */
 	#sessionKey: object | undefined;
+	/** Scope key of the preset generation this session joined, if any. */
+	#presetKey: object | undefined;
+	/** Prompt host for the next session this runner opens. Set by the session
+	 *  factory so a cached runtime never races two sessions for one field. */
+	#promptHost?: PromptHostSurface;
+	/** Leaves the cached plugin generation when this session ends. */
+	#sessionRelease?: () => void;
+	#sessionReleased = false;
 	/**
 	 * Live `onToolRegistered` subscriptions, keyed by the raw listener so a
 	 * newly loaded extension (modes v2 `loadExtension` 启用方向) can have the
@@ -684,7 +693,6 @@ export class ExtensionRunner {
 	 *  forwards to the GUI; a subscriber throw is isolated. */
 	readonly #notificationSubscribers = new Set<(channel: string, message: ExtensionNotificationMessage) => void>();
 	/** Services whose `start` has already been invoked (dedup guard). */
-	readonly #startedServices = new Set<ExtensionService>();
 	/**
 	 * Disposers for the file-write/delete fallback trampolines installed in
 	 * {@link initialize}. The registry behind them is PROCESS-WIDE, so a runner
@@ -1229,7 +1237,11 @@ export class ExtensionRunner {
 		const toolNames = [...extension.tools.keys()];
 		this.extensions.splice(index, 1);
 		this.#extensionEntryMtimes.delete(resolvedTarget);
-		this.#stopServicesForExtension(extension, { full: true });
+		if (isSharedSessionExtension(extension)) {
+			retireSessionPluginGeneration(extension);
+		} else {
+			this.#stopServicesForExtension(extension, { full: true });
+		}
 		this.startServices();
 		this.applyThemeTokens();
 		return toolNames;
@@ -1271,8 +1283,8 @@ export class ExtensionRunner {
 		// replacement factory runs — same-name re-registrations would only
 		// shadow, and sections the new module drops must not linger.
 		const hostOwner = extensionHostOwner(oldExt.path);
-		const sessionHost = this.runtime.promptHost;
-		const oldLedger = sessionHost ? this.runtime.promptHostLedgers.get(hostOwner) : undefined;
+		const sessionHost = this.#sessionScope?.promptHost;
+		const oldLedger = sessionHost ? this.#sessionScope?.promptHostLedgers.get(hostOwner) : undefined;
 		if (sessionHost && oldLedger) removeScopedPromptHostLedger(sessionHost, hostOwner, oldLedger);
 		else if (sessionHost) sessionHost.removeByOwner(hostOwner);
 		// `fresh: true` — a reload MUST re-evaluate the entry module. Bun caches
@@ -1301,10 +1313,10 @@ export class ExtensionRunner {
 		// ran before this sync existed for the dynamic path), so create one —
 		// same pattern the loader uses when a factory first reaches the host.
 		if (sessionHost) {
-			let sessionLedger = this.runtime.promptHostLedgers.get(hostOwner);
+			let sessionLedger = this.#sessionScope?.promptHostLedgers.get(hostOwner);
 			if (!sessionLedger) {
 				sessionLedger = { entries: [] };
-				this.runtime.promptHostLedgers.set(hostOwner, sessionLedger);
+				this.#sessionScope?.promptHostLedgers.set(hostOwner, sessionLedger);
 			}
 			const freshLedger = loadResult.runtime.promptHostLedgers.get(hostOwner);
 			sessionLedger.entries = freshLedger ? [...freshLedger.entries] : [];
@@ -1318,9 +1330,15 @@ export class ExtensionRunner {
 		this.extensions[index] = replacement;
 		this.#recordExtensionEntryMtime(replacement.resolvedPath);
 		// Full teardown of the old instance before the replacement is live, so
-		// one emit cannot run both: effects, listeners, and state.
-		await disposePluginPrimitives(oldExt);
-		this.#stopServicesForExtension(oldExt);
+		// one emit cannot run both: effects, listeners, and state. A cached
+		// instance may still serve other sessions: retire its generation
+		// instead, and dispose it when the last session releases.
+		if (isSharedSessionExtension(oldExt)) {
+			retireSessionPluginGeneration(oldExt);
+		} else {
+			await disposePluginPrimitives(oldExt);
+			this.#stopServicesForExtension(oldExt, { full: true });
+		}
 		this.startServices();
 		this.applyThemeTokens();
 		logger.info("Extension hot-reloaded", { extensionPath: oldExt.path, removedTools: removedTools.length });
@@ -1439,13 +1457,13 @@ export class ExtensionRunner {
 		// creates one when its own API first reaches the host), so create it
 		// here — without it the disable→enable replay is a no-op and a failed
 		// reload cannot restore the old contributions.
-		const sessionHost = this.runtime.promptHost;
+		const sessionHost = this.#sessionScope?.promptHost;
 		if (sessionHost) {
 			const owner = extensionHostOwner(resolvedTarget);
-			let sessionLedger = this.runtime.promptHostLedgers.get(owner);
+			let sessionLedger = this.#sessionScope?.promptHostLedgers.get(owner);
 			if (!sessionLedger) {
 				sessionLedger = { entries: [] };
-				this.runtime.promptHostLedgers.set(owner, sessionLedger);
+				this.#sessionScope?.promptHostLedgers.set(owner, sessionLedger);
 			}
 			const freshLedger = loadResult.runtime.promptHostLedgers.get(owner);
 			sessionLedger.entries = freshLedger ? [...freshLedger.entries] : [];
@@ -1829,16 +1847,46 @@ export class ExtensionRunner {
 
 	/** Start every extension service whose `start` is not yet running. Each
 	 *  `start` is isolated: a throw/rejection is routed to onError and the
-	 *  remaining services still start. */
+	 *  remaining services still start.
+	 *
+	 *  Services belong to the instance, not the session (dsh: the plugin fiber
+	 *  owns them), so a shared instance starts them once even when several
+	 *  sessions use it. */
 	startServices(): void {
 		for (const ext of this.extensions) {
+			if (ext.servicesStarted) continue;
+			ext.servicesStarted = true;
 			for (const service of ext.services) {
 				if (typeof service.start !== "function") continue;
-				if (this.#startedServices.has(service)) continue;
-				this.#startedServices.add(service);
 				this.#invokeServiceLifecycle("service_start", ext.path, service.start);
 			}
 		}
+	}
+
+	/** This session's prompt host (undefined before `session_start`). */
+	getSessionPromptHost(): PromptHostSurface | undefined {
+		return this.#sessionScope?.promptHost;
+	}
+
+	/** Per-owner prompt replay records for this session. */
+	getSessionPromptHostLedgers(): Map<string, ScopedPromptHostLedger> | undefined {
+		return this.#sessionScope?.promptHostLedgers;
+	}
+
+	/** Bind the preset generation whose plugins this session joined. */
+	setPresetScopeKey(key: object | undefined): void {
+		this.#presetKey = key;
+	}
+
+	/** Bind this session's release from the shared plugin generation. */
+	setSessionRelease(release: (() => void) | undefined): void {
+		this.#sessionRelease = release;
+		this.#sessionReleased = false;
+	}
+
+	/** Bind the prompt host of the session this runner is about to open. */
+	setPromptHost(host: PromptHostSurface | undefined): void {
+		this.#promptHost = host;
 	}
 
 	/**
@@ -1868,6 +1916,12 @@ export class ExtensionRunner {
 		this.#sessionKey = key;
 		this.#sessionScope = {
 			key,
+			// The session's prompt host is per session, even when plugin
+			// instances are shared: contributions register in `session_start`.
+			promptHost: this.#promptHost ?? this.runtime.promptHost,
+			// Replay records are per session; a shared runtime must not carry one
+			// session's contributions into another.
+			promptHostLedgers: new Map(),
 			context: context as unknown as NonNullable<ExtensionSessionScope["context"]>,
 			dispose: () => fiber.dispose(),
 		};
@@ -1881,35 +1935,23 @@ export class ExtensionRunner {
 	}
 
 	async stopServices(): Promise<void> {
-		for (const ext of this.extensions) {
-			this.#stopServicesForExtension(ext);
-		}
-		this.#startedServices.clear();
-		// Last: the synchronous teardown above runs even if the fiber disposal
-		// below rejects, and a caller that does not await still gets it.
+		// Session boundary only. Services, memory-backend providers, apply-time
+		// effects, and instance listeners belong to the extension (dsh's plugin
+		// fiber) and stay alive for a shared instance; a plugin that needs
+		// session cleanup registers it in `session_start` with `ctx.effect`.
 		await this.closeSessionScope();
+		if (!this.#sessionReleased) {
+			this.#sessionReleased = true;
+			this.#sessionRelease?.();
+		}
 	}
 
 	#stopServicesForExtension(ext: Extension, options?: { full?: boolean }): void {
-		// Session stop drains effects only: the runner may be reused, so listeners
-		// stay until a real teardown. `full` is removal/unload, which drains the
-		// plugin instance — effects, listeners, and state.
-		void (options?.full ? disposePluginPrimitives(ext) : runEffects(ext));
-		for (const dispose of ext.memoryBackendProviders.splice(0)) {
-			try {
-				dispose();
-			} catch (error) {
-				logger.warn("Memory backend provider cleanup threw", {
-					extensionPath: ext.path,
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
-		}
-		for (const service of ext.services) {
-			if (typeof service.stop !== "function") continue;
-			this.#invokeServiceLifecycle("service_stop", ext.path, service.stop);
-			this.#startedServices.delete(service);
-		}
+		// `full` is removal/unload, the only place the instance is torn down.
+		// Services, memory-backend providers, listeners, and effects all drain
+		// there, so every unload path reclaims them the same way.
+		if (!options?.full) return;
+		void disposePluginPrimitives(ext);
 	}
 
 	#dispatchNotification(channel: string, message: ExtensionNotificationMessage): void {
@@ -2085,7 +2127,7 @@ export class ExtensionRunner {
 		if (!bus) return Promise.resolve(undefined);
 		const key = this.#sessionKey;
 		if (!key) return bus.serial(name, ...(args as never[]));
-		const carrier = sessionCarrier(key);
+		const carrier = sessionCarrier(key, this.#presetKey);
 		const scope = this.#sessionScope;
 		return runInSessionScope(scope, () => bus.serial(carrier, name, ...(args as never[])));
 	}
@@ -2100,9 +2142,19 @@ export class ExtensionRunner {
 		if (!bus) return Promise.resolve(undefined);
 		const key = this.#sessionKey;
 		if (!key) return bus.parallel(name, ...(args as never[]));
-		const carrier = sessionCarrier(key);
+		const carrier = sessionCarrier(key, this.#presetKey);
 		const scope = this.#sessionScope;
 		return runInSessionScope(scope, () => bus.parallel(carrier, name, ...(args as never[])));
+	}
+
+	/**
+	 * Dispatch a host-level event on this session's Cordis bus (dsh names such
+	 * events `domain/name`, e.g. `agent-preset/selected`). Delivery follows the
+	 * session carrier, so preset-scoped listeners see it and unrelated sessions
+	 * on a shared bus do not.
+	 */
+	async emitHostEvent(name: string, payload: unknown): Promise<void> {
+		await this.#serial(name, payload);
 	}
 
 	async emit<TEvent extends RunnerEmitEvent>(event: TEvent): Promise<RunnerEmitResult<TEvent>> {

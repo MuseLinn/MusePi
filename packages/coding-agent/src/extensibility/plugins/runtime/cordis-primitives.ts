@@ -30,6 +30,7 @@
  * "the plugin's side effects".
  */
 
+import { removeHostExtensionModes } from "../../extensions/host-modes";
 import type { Extension } from "../../extensions/types";
 
 /** One registered cleanup, with the label used in diagnostics. */
@@ -163,6 +164,9 @@ export function stateKeys(extension: Extension): string[] {
  * runner may outlive the session.
  */
 export async function disposePluginPrimitives(extension: Extension): Promise<number> {
+	// A disposed instance's preset declarations go with it; a reload re-records
+	// the replacement's modes through `mountPlugin`.
+	removeHostExtensionModes(extension.resolvedPath);
 	// The instance's own fiber goes first: listeners and fiber effects stop
 	// before the session-ledger effects run, so a cleanup cannot observe a
 	// half-removed listener set.
@@ -178,6 +182,28 @@ export async function disposePluginPrimitives(extension: Extension): Promise<num
 			dispose();
 		} catch (error) {
 			console.warn("[plugin] listener disposer failed:", error);
+		}
+	}
+	// Services and memory-backend providers belong to the instance, so every
+	// unload path reclaims them here instead of relying on the session runner.
+	if (extension.servicesStarted) {
+		extension.servicesStarted = false;
+		for (const service of extension.services ?? []) {
+			if (typeof service.stop !== "function") continue;
+			try {
+				const result = service.stop();
+				if (result instanceof Promise)
+					void result.catch(error => console.warn("[plugin] service stop failed:", error));
+			} catch (error) {
+				console.warn("[plugin] service stop failed:", error);
+			}
+		}
+	}
+	for (const dispose of extension.memoryBackendProviders?.splice(0) ?? []) {
+		try {
+			dispose();
+		} catch (error) {
+			console.warn("[plugin] memory backend provider cleanup failed:", error);
 		}
 	}
 	return ran;

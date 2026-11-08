@@ -7,5 +7,9 @@ export const provide = [] as const;
 
 export function apply(ctx: ExtensionAPI): void {
 	ctx.setLabel("任务委托");
-	if (ctx.promptHost) registerDelegationPrompts(ctx.promptHost);
+	// Prompt contributions are session-scoped (dsh: register when the agent
+	// exists), so a shared instance can serve several sessions.
+	ctx.on("session_start", () => {
+		if (ctx.promptHost) registerDelegationPrompts(ctx.promptHost);
+	});
 }

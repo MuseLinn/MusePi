@@ -34,8 +34,8 @@ import { EventBus } from "../utils/event-bus";
  * `setLabel` + register on the session prompt host, and their sections —
  * delegation gates, file-tool guidance, browser/computer/LSP/host-integration
  * notes — must hold in every real session regardless of discovery options.
- * They are still mounted PER SESSION (each factory binds that session's
- * `ctx.promptHost`), never globally.
+ * The factory is mounted once per `(cwd, entry set)`; each session re-registers
+ * these contributions in `session_start` against its own `ctx.promptHost`.
  */
 const SESSION_PROMPT_PACKAGE_DIRS: ReadonlySet<string> = new Set([
 	"delegation",

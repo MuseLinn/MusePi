@@ -32,8 +32,9 @@
 import type { EventBus } from "../../../utils/event-bus";
 import type { DynamicExtensionLoadErrorCode } from "../../extensions/dynamic-extension-error";
 import { DynamicExtensionLoadError } from "../../extensions/dynamic-extension-error";
-import { createConcreteExtensionAPI } from "../../extensions/loader";
-import type { Extension, ExtensionAPI } from "../../extensions/types";
+import { recordHostExtensionModes } from "../../extensions/host-modes";
+import { createConcreteExtensionAPI, runFactoryInFiber } from "../../extensions/loader";
+import type { Extension, ExtensionAPI, ExtensionFactory } from "../../extensions/types";
 // STATIC, not `await import()`: this module holds process-wide state (the source
 // graph snapshot the loader records, and the module cache it keys imports on). A
 // dynamic import resolved to a second instance in practice — the loader wrote
@@ -129,6 +130,9 @@ export interface MountContext {
 	fresh?: boolean;
 	/** A namespace already imported by a profile transaction preflight. */
 	module?: unknown;
+	/** Tag this instance as part of one preset generation, so instance-level
+	 *  listeners are filtered to sessions that joined that preset. */
+	scopeTag?: object;
 }
 
 /**
@@ -144,9 +148,14 @@ export interface MountContext {
  * uses.
  */
 function withCordisPrimitives(api: ExtensionAPI, extension: Extension): ExtensionAPI {
+	// Capture the base implementation BEFORE `Object.assign` overwrites `effect`
+	// on this very object; calling `api.effect` afterwards would recurse.
+	const baseEffect = api.effect.bind(api);
 	const primitives = {
 		effect(cleanup: () => void | Promise<void>, label?: string): () => void {
-			return registerEffect(extension, cleanup, label);
+			// Ownership follows the call site (apply → instance fiber, session
+			// handler → session fiber, legacy → ledger), implemented by the base.
+			return baseEffect(cleanup, label);
 		},
 		state: {
 			get: <T>(key: string): T | undefined => stateGet<T>(extension, key),
@@ -330,29 +339,41 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 	const declaresConfig = (entry as { Config?: unknown } | null)?.Config !== undefined;
 	const values = declaresConfig ? (await ctx.readConfig(ctx.entryPath).catch(() => ({ values: {} }))).values : {};
 	const extension = createPluginExtension(ctx.entryPath, ctx.entryPath);
-	const base = createConcreteExtensionAPI(extension, ctx.runtime, ctx.cwd, ctx.eventBus);
-	// Primitives first, then the ledger: the ledger wraps registrations into
-	// effects, and it must see the primitives too so a `register*` call made
-	// through the wrapped API is still recorded.
-	const primitives = withCordisPrimitives(base, extension);
-	// The service handle comes last so a plugin holds ONE api object: asking
-	// `pi.service("name")` in `apply` must resolve through the same registry the
-	// gate consulted, or a dependency could pass the check and still be
-	// unreachable at use time.
-	const withServices =
-		ctx.serviceRegistry === undefined ? primitives : withServiceAccess(primitives, ctx.serviceRegistry);
-	const api = ctx.wrapApi === undefined ? withServices : ctx.wrapApi(withServices, extension);
 
 	try {
-		// A cordis entry receives its declared config; the legacy factory keeps
-		// the single-argument call (passing a second arg is indistinguishable
+		// The factory runs inside the extension's own Cordis fiber, so listeners
+		// and apply-time effects are owned by the instance (dsh: a plugin is a
+		// fiber). A cordis entry receives its declared config; the legacy factory
+		// keeps the single-argument call (passing a second arg is indistinguishable
 		// from not passing it, but the types are clearer this way).
 		//
 		// A cordis entry's RETURN value is what it publishes: an object keyed by
 		// the names in its `provide`, handed to consumers through
 		// `pi.service(name)`. A legacy factory's return is ignored — it predates
 		// the contract and returning something there is not a publish.
-		const returned = await factory(api as never, values);
+		const returned = await runFactoryInFiber(
+			extension,
+			ctx.runtime,
+			ctx.cwd,
+			ctx.eventBus,
+			factory as unknown as ExtensionFactory,
+			ownContext => {
+				const base = createConcreteExtensionAPI(extension, ctx.runtime, ctx.cwd, ctx.eventBus, ownContext);
+				// Primitives first, then the ledger: the ledger wraps registrations
+				// into effects, and it must see the primitives too so a `register*`
+				// call made through the wrapped API is still recorded.
+				const primitives = withCordisPrimitives(base, extension);
+				// The service handle comes last so a plugin holds ONE api object:
+				// asking `pi.service("name")` in `apply` must resolve through the
+				// same registry the gate consulted, or a dependency could pass the
+				// check and still be unreachable at use time.
+				const withServices =
+					ctx.serviceRegistry === undefined ? primitives : withServiceAccess(primitives, ctx.serviceRegistry);
+				return ctx.wrapApi === undefined ? withServices : ctx.wrapApi(withServices, extension);
+			},
+			values,
+			ctx.scopeTag,
+		);
 		// Only a plain object is a publish. A string/number/array returned by a
 		// cordis entry is not one, and treating it as such would hand a consumer
 		// nonsense under a name it trusts.
@@ -360,6 +381,9 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 			typeof returned === "object" && returned !== null && !Array.isArray(returned)
 				? (returned as Record<string, unknown>)
 				: undefined;
+		// Host-level preset registry: a mode is listable without a live session
+		// once any mount has declared it (dsh registers presets at host level).
+		recordHostExtensionModes([extension]);
 		return { ok: true, extension, module, entry, config: values, published };
 	} catch (err) {
 		// A structured error thrown from inside the ledger (a command-name

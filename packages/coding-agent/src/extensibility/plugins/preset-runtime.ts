@@ -57,6 +57,8 @@ function services(scope: Context): ServiceRegistry {
 export class CordisPresetRuntime {
 	readonly #options: CordisPresetRuntimeOptions;
 	readonly #root = new Context();
+	/** Identity of this preset generation; instance listeners carry it. */
+	readonly key = {};
 	readonly #mounted = new Set<MountedPresetPlugin>();
 
 	constructor(options: CordisPresetRuntimeOptions) {
@@ -109,6 +111,7 @@ export class CordisPresetRuntime {
 						runtime: this.#options.runtime,
 						serviceRegistry: services(scope),
 						additionalInject: row.inject,
+						scopeTag: this.key,
 						readConfig: async path => {
 							const base = await this.#options.readConfig(path);
 							return { ...base, values: { ...base.values, ...(ownConfig ?? {}) } };

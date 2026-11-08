@@ -24,6 +24,7 @@
  *   queued provider / media-provider / design-system registrations land.
  */
 
+import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
 import type { PromptHostSurface } from "../../../prompts/host";
 import type { EventBus } from "../../../utils/event-bus";
@@ -32,6 +33,7 @@ import { ExtensionRuntime } from "../../extensions/loader";
 import type { Extension, LoadExtensionsResult } from "../../extensions/types";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../compat/compatibility-store";
 import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../compat/plugin-compatibility";
+import { disposePluginPrimitives } from "./cordis-primitives";
 import type { MountContext } from "./mount";
 import { mountPlugin } from "./mount";
 
@@ -59,6 +61,141 @@ export interface SessionPluginLoadOptions {
 	 * runtime so unrelated loads never share lifecycle state.
 	 */
 	runtime?: LoadExtensionsResult["runtime"];
+}
+
+/**
+ * Process-wide cache of session plugin loads, keyed by cwd + entry list.
+ *
+ * dsh mounts a preset once and lets every session of that preset join its
+ * scope. The equivalent here is the `(cwd, entry set)` pair, because a plugin
+ * instance captures `cwd` at apply time; session-bound work (listeners, prompt
+ * contributions, effects) is owned by the session scope, so one instance set
+ * can serve several sessions without cross-talk.
+ *
+ * Inline factory extensions never reach this cache: they are per-session by
+ * construction and are loaded by the caller.
+ */
+interface CachedSessionLoad {
+	readonly result: LoadExtensionsResult;
+	/** Live sessions joined to this generation. A retired generation is kept
+	 *  alive for them and disposed when the last one releases (dsh preset GC). */
+	users: number;
+	retired: boolean;
+	/** Registrations queued during the first load, replayed to every session
+	 *  that acquires the cache entry. A session may carry its own ModelRegistry,
+	 *  so draining once would leave the second session without them. */
+	readonly pending: {
+		providers: LoadExtensionsResult["runtime"]["pendingProviderRegistrations"];
+		media: LoadExtensionsResult["runtime"]["pendingMediaProviderRegistrations"];
+		design: LoadExtensionsResult["runtime"]["pendingDesignSystemRegistrations"];
+	};
+}
+
+const sessionLoadCache = new Map<string, Promise<CachedSessionLoad>>();
+
+/** Extensions owned by a cached generation. A per-session reload must not
+ *  dispose one another live session is still using. */
+const sharedExtensions = new WeakSet<Extension>();
+
+/** Whether this instance belongs to a cached (cross-session) generation. */
+export function isSharedSessionExtension(extension: Extension): boolean {
+	return sharedExtensions.has(extension);
+}
+
+async function disposeCachedGeneration(entry: CachedSessionLoad): Promise<void> {
+	for (const extension of entry.result.extensions) await disposePluginPrimitives(extension);
+}
+
+/**
+ * Retire the generation that owns `extension` (a per-session reload or
+ * removal). New sessions load a fresh generation; sessions already joined keep
+ * the old one until they release, then it is disposed.
+ */
+export function retireSessionPluginGeneration(extension: Extension): void {
+	for (const [key, pending] of sessionLoadCache) {
+		void pending
+			.then(entry => {
+				if (!entry.result.extensions.includes(extension)) return;
+				sessionLoadCache.delete(key);
+				entry.retired = true;
+				if (entry.users === 0) void disposeCachedGeneration(entry);
+			})
+			.catch(() => {});
+	}
+}
+
+/** Cache identity for one session load. The cwd is load-bearing: plugins
+ *  capture it in `apply`. */
+export function sessionPluginCacheKey(paths: readonly string[], cwd: string): string {
+	return `${path.resolve(cwd)}\u0000${[...paths]
+		.map(entry => path.resolve(entry))
+		.sort()
+		.join("\u0000")}`;
+}
+
+/** Drop every cached load (tests, and a full plugin-set change). */
+export function clearSessionPluginCache(): void {
+	sessionLoadCache.clear();
+}
+
+/**
+ * Load the session's plugins, reusing a previous load for the same
+ * `(cwd, entry set)`.
+ *
+ * `fresh` and a caller-supplied runtime bypass the cache: both mean "this load
+ * must be its own instance" (HMR re-evaluation, the CLI preload).
+ */
+export interface CachedSessionPluginLoad {
+	result: LoadExtensionsResult;
+	/** Leave this generation. The last user of a retired generation disposes it. */
+	release(): void;
+}
+
+export async function loadSessionPluginsCached(
+	paths: readonly string[],
+	cwd: string,
+	eventBus: EventBus,
+	options: SessionPluginLoadOptions = {},
+): Promise<CachedSessionPluginLoad> {
+	if (options.fresh === true || options.runtime !== undefined) {
+		return { result: await loadSessionPlugins(paths, cwd, eventBus, options), release: () => {} };
+	}
+	const key = sessionPluginCacheKey(paths, cwd);
+	let pending = sessionLoadCache.get(key);
+	if (!pending) {
+		pending = (async () => {
+			const result = await loadSessionPlugins(paths, cwd, eventBus, options);
+			for (const extension of result.extensions) sharedExtensions.add(extension);
+			return {
+				result,
+				users: 0,
+				retired: false,
+				pending: {
+					providers: [...result.runtime.pendingProviderRegistrations],
+					media: [...result.runtime.pendingMediaProviderRegistrations],
+					design: [...result.runtime.pendingDesignSystemRegistrations],
+				},
+			};
+		})();
+		sessionLoadCache.set(key, pending);
+		// A load that throws is not cached; the next session retries.
+		pending.catch(() => sessionLoadCache.delete(key));
+	}
+	const entry = await pending;
+	entry.users += 1;
+	let released = false;
+	const release = (): void => {
+		if (released) return;
+		released = true;
+		entry.users = Math.max(0, entry.users - 1);
+		if (entry.users === 0 && entry.retired) void disposeCachedGeneration(entry);
+	};
+	// Refill the queues: a session with its own ModelRegistry must still see
+	// the registrations, and `sdk` drains them per session.
+	entry.result.runtime.pendingProviderRegistrations = [...entry.pending.providers];
+	entry.result.runtime.pendingMediaProviderRegistrations = [...entry.pending.media];
+	entry.result.runtime.pendingDesignSystemRegistrations = [...entry.pending.design];
+	return { result: entry.result, release };
 }
 
 /**

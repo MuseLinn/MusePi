@@ -114,12 +114,18 @@ import {
 	type ToolDefinition,
 	wrapRegisteredTools,
 } from "./extensibility/extensions";
+import { listHostExtensionModes } from "./extensibility/extensions/host-modes";
 // Class import off the barrel: the extensions index deliberately omits it, so
 // the preload path takes it from the owning module like `session-loader` does.
 import { ExtensionRuntime } from "./extensibility/extensions/loader";
-import { CordisPresetRuntime, type MountedPresetPlugin } from "./extensibility/plugins/preset-runtime";
+import { acquirePreset, type PresetLease } from "./extensibility/plugins/preset-pool";
+import type { MountedPresetPlugin } from "./extensibility/plugins/preset-runtime";
 import { collectProfilePresetDefinitions } from "./extensibility/plugins/profile/profile-presets";
-import { defaultSessionConfigReader, loadSessionPlugins } from "./extensibility/plugins/runtime/session-loader";
+import {
+	defaultSessionConfigReader,
+	loadSessionPlugins,
+	loadSessionPluginsCached,
+} from "./extensibility/plugins/runtime/session-loader";
 import {
 	loadSkills as loadSkillsInternal,
 	type Skill,
@@ -162,6 +168,7 @@ import {
 	PromptHost,
 	removeScopedPromptHostLedger,
 	replayPromptHostLedger,
+	type ScopedPromptHostLedger,
 } from "./prompts/host";
 import { type ProjectContextHolder, registerProjectContextSections } from "./prompts/project-context";
 import extensionsInventoryTemplate from "./prompts/system/extensions-inventory.md" with { type: "text" };
@@ -1560,7 +1567,13 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		if (profileMatch) return { ...profileMatch };
 		const current = extensionRunnerRef ? extensionRunnerRef.getExtensionModes() : initialExtensionModes;
 		const match = current.find(s => s.mode.id === modeId);
-		return match ? ({ ...match.mode } as ModeDefinition) : undefined;
+		if (match) return { ...match.mode } as ModeDefinition;
+		// Host-level registry (dsh's global preset roster): a preset declared by
+		// an extension is resolvable even when THIS session's discovery did not
+		// load that extension — otherwise `agentPresets.list` would show rows a
+		// different workspace cannot select.
+		const hosted = listHostExtensionModes().find(entry => entry.mode.id === modeId);
+		return hosted ? ({ ...hosted.mode } as ModeDefinition) : undefined;
 	};
 
 	// Modes v2:modeRuntime 是可变的 —— session.setMode 热切换原地更新
@@ -1585,8 +1598,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		}
 		return { resolved: undefined, composer, activeExtensionIds: new Set() };
 	})();
-	let cordisPresetRuntime: CordisPresetRuntime | undefined;
+	let cordisPresetLease: PresetLease | undefined;
 	let cordisPresetRecords: MountedPresetPlugin[] = [];
+	/** Scope key of the preset generation this session joined (dispatch filter). */
+	let cordisPresetKey: object | undefined;
 	// Every session owns one PromptHost (core prompt pluginization): extension
 	// factories reach it through `pi.promptHost`, assembly merges its sections
 	// per baseSlots in `rebuildSystemPrompt`, and lifecycle switches release or
@@ -1595,22 +1610,28 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	// Session extension runtime, captured when the load paths below run so the
 	// owner-ledger helpers can reach the per-owner replay records.
 	let sessionExtensionRuntime: LoadExtensionsResult["runtime"] | undefined;
+	/** Leaves the cached plugin generation when this session ends. */
+	let sessionRuntimeRelease: (() => void) | undefined;
+	/** Prompt replay records live on the runner's session scope, so concurrent
+	 *  sessions sharing an instance set never replay each other's entries. */
+	const sessionPromptLedgers = (): Map<string, ScopedPromptHostLedger> | undefined =>
+		extensionRunnerRef?.getSessionPromptHostLedgers();
 	/** Release one extension owner's prompt-host contributions (disable/teardown direction). */
 	const removeExtensionHostSections = (extensionPath: string): void => {
 		const owner = extensionHostOwner(extensionPath);
-		const ledger = sessionExtensionRuntime?.promptHostLedgers.get(owner);
+		const ledger = sessionPromptLedgers()?.get(owner);
 		if (ledger) removeScopedPromptHostLedger(promptHost, owner, ledger);
 		else promptHost.removeByOwner(owner);
 	};
 	/** Forget one extension owner's recorded registrations (records are going away). */
 	const clearExtensionHostLedger = (extensionPath: string): void => {
-		const ledger = sessionExtensionRuntime?.promptHostLedgers.get(extensionHostOwner(extensionPath));
+		const ledger = sessionPromptLedgers()?.get(extensionHostOwner(extensionPath));
 		if (ledger) ledger.entries.length = 0;
 	};
 	/** Replay one extension owner's recorded registrations (re-enable direction). */
 	const replayExtensionHostSections = (extensionPath: string): void => {
 		const owner = extensionHostOwner(extensionPath);
-		const ledger = sessionExtensionRuntime?.promptHostLedgers.get(owner);
+		const ledger = sessionPromptLedgers()?.get(owner);
 		if (ledger) replayPromptHostLedger(promptHost, owner, ledger);
 	};
 	// A preset that declares a prompt composition but mounts none of it is a
@@ -1632,19 +1653,19 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		for (const [name, paths] of bundled) {
 			if (!entries.has(name)) entries.set(name, [...paths]);
 		}
-		const runtime = new CordisPresetRuntime({
+		const lease = await acquirePreset(registrationRuntime, resolved.id, resolved.plugins, {
 			cwd,
 			eventBus,
 			runtime: registrationRuntime,
 			readConfig: await defaultSessionConfigReader(),
 			entryResolver: { resolveEntries: async () => entries },
 		});
-		const result = await runtime.mount(resolved.plugins);
-		cordisPresetRuntime = runtime;
-		cordisPresetRecords = result.records;
-		cordisPresetMountErrors = result.errors;
-		for (const error of result.errors) logger.error("Failed to mount Cordis preset plugin", error);
-		return result;
+		cordisPresetLease = lease;
+		cordisPresetRecords = lease.records;
+		cordisPresetMountErrors = lease.errors;
+		cordisPresetKey = lease.key;
+		for (const error of lease.errors) logger.error("Failed to mount Cordis preset plugin", error);
+		return { records: lease.records, errors: lease.errors, key: lease.key };
 	};
 	const unmountCordisPreset = async (): Promise<void> => {
 		for (const record of cordisPresetRecords) {
@@ -1660,10 +1681,13 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			removeExtensionHostSections(record.extension.path);
 			clearExtensionHostLedger(record.extension.path);
 		}
-		await cordisPresetRuntime?.dispose();
-		cordisPresetRuntime = undefined;
+		// Leave the generation; the last session of a retired one disposes it.
+		cordisPresetLease?.release();
+		cordisPresetLease = undefined;
 		cordisPresetRecords = [];
 		cordisPresetMountErrors = [];
+		cordisPresetKey = undefined;
+		session.extensionRunner?.setPresetScopeKey(undefined);
 	};
 	// M3 §3:projectMetadata 挂可变 ref —— session.setDesignSystem 热写
 	// designSystemId 键,rebuildSystemPrompt 闭包每次重建都重读
@@ -2493,9 +2517,20 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				.filter(p => !p.startsWith("<inline"));
 		} else if (options.preloadedExtensionPaths) {
 			extensionPaths = await withCoreSessionPromptPaths(options.preloadedExtensionPaths);
-			extensionsResult = await logger.time("loadSessionPlugins", loadSessionPlugins, extensionPaths, cwd, eventBus, {
-				promptHost,
-			});
+			{
+				const cachedLoad = await logger.time(
+					"loadSessionPlugins",
+					loadSessionPluginsCached,
+					extensionPaths,
+					cwd,
+					eventBus,
+					{ promptHost },
+				);
+				// A per-session array: inline extensions and reloads must not
+				// mutate the generation other sessions joined.
+				extensionsResult = { ...cachedLoad.result, extensions: [...cachedLoad.result.extensions] };
+				sessionRuntimeRelease = cachedLoad.release;
+			}
 			for (const { path, error } of extensionsResult.errors) {
 				logger.error("Failed to load extension", { path, error });
 			}
@@ -2504,9 +2539,20 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				discoverSessionExtensionPaths(options, cwd, settings),
 			);
 			extensionPaths = await withCoreSessionPromptPaths(discovered);
-			extensionsResult = await logger.time("loadSessionPlugins", loadSessionPlugins, extensionPaths, cwd, eventBus, {
-				promptHost,
-			});
+			{
+				const cachedLoad = await logger.time(
+					"loadSessionPlugins",
+					loadSessionPluginsCached,
+					extensionPaths,
+					cwd,
+					eventBus,
+					{ promptHost },
+				);
+				// A per-session array: inline extensions and reloads must not
+				// mutate the generation other sessions joined.
+				extensionsResult = { ...cachedLoad.result, extensions: [...cachedLoad.result.extensions] };
+				sessionRuntimeRelease = cachedLoad.release;
+			}
 			for (const { path, error } of extensionsResult.errors) {
 				logger.error("Failed to load extension", { path, error });
 			}
@@ -3197,6 +3243,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		);
 
 		extensionRunnerRef = extensionRunner;
+		extensionRunner.setSessionRelease(sessionRuntimeRelease);
+		extensionRunner.setPresetScopeKey(cordisPresetKey);
+		// The runner opens the session scope with THIS session's prompt host;
+		// a cached runtime may still carry the previous session's value.
+		extensionRunner.setPromptHost(promptHost);
 		toolSession.extensionRunner = extensionRunner;
 
 		credentialDisabledTarget = extensionRunner;
@@ -4221,7 +4272,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				appliedModeSettingsKeys.length = 0;
 				await unmountCordisPreset();
 				modeRuntime.resolved = undefined;
+				sessionManager.setModeId(null);
 				await session.refreshBaseSystemPrompt();
+				void extensionRunner.emitHostEvent("agent-preset/selected", {
+					sessionId: session.sessionId,
+					agentPreset: null,
+				});
 				logger.info("Mode cleared", { sessionId: session.sessionId });
 				return { ok: true };
 			}
@@ -4236,6 +4292,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			await unmountCordisPreset();
 			if (next.plugins.length > 0) {
 				const mounted = await mountCordisPreset(next, extensionsResult.runtime);
+				extensionRunner.setPresetScopeKey(mounted.key);
 				for (const record of mounted.records) {
 					await extensionRunner.adoptExtension(record.extension);
 					const source = `ext:${extensionIdOf(record.extension.path)}`;
@@ -4375,7 +4432,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 			modeRuntime.resolved = next;
 			// 5) 重建 system prompt(经 composer 重组,§5.6)。
+			sessionManager.setModeId(next.id);
 			await session.refreshBaseSystemPrompt();
+			void extensionRunner.emitHostEvent("agent-preset/selected", {
+				sessionId: session.sessionId,
+				agentPreset: next.id,
+			});
 			logger.info("Mode hot-switched", { modeId, sessionId: session.sessionId });
 			return { ok: true };
 		};
@@ -4474,6 +4536,16 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			rebuildSystemPrompt,
 			collectPromptContexts: () =>
 				promptHost.collectContext({ ...(latestPromptContextOptions ?? {}), recordDelivery: false }),
+			// A preloaded contextFiles array (daemon path) is frozen at creation;
+			// a reload re-discovers it here so the rebuilt prompt carries the
+			// current AGENTS.md bytes instead of the startup copy.
+			reloadContextFiles: async () => {
+				contextFiles = await discoverContextFiles(sessionManager.getCwd(), agentDir, [
+					...(settings.get("disabledExtensions") ?? []),
+				]);
+				toolSession.contextFiles = contextFiles;
+				session.setAdvisorContextPrompt(formatAdvisorContextPrompt(contextFiles));
+			},
 			getXdevToolEntries: () => (toolSession.xdev ? xdevEntries(toolSession.xdev) : []),
 			xdev: toolSession.xdev,
 			presentationPinnedToolNames: explicitlyRequestedToolNameSet,
