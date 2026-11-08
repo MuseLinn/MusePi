@@ -27,7 +27,7 @@ import { type AgentDefinition, normalizeSubagentDefinition, type SubagentDefinit
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
 import { disposePluginPrimitives } from "../plugins/runtime/cordis-primitives";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
-import { extensionHostOwner, loadExtensions } from "./loader";
+import { CORDIS_PARALLEL_EVENTS, extensionHostOwner, loadExtensions } from "./loader";
 import { ManagedTimers } from "./managed-timers";
 import { type ExtensionMcpHost, ExtensionMcpRegistry } from "./mcp-servers";
 import { createExtensionModelQuery } from "./model-api";
@@ -2003,6 +2003,15 @@ export class ExtensionRunner {
 			} else {
 				await bus.serial(event.type, event, ctx);
 			}
+			return undefined as RunnerEmitResult<TEvent>;
+		}
+
+		// Streaming/notification events run concurrently and carry no result.
+		if (CORDIS_PARALLEL_EVENTS.has(event.type)) {
+			const bus = this.runtime.eventBus;
+			const count = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
+			if (!bus || count === 0) return undefined as RunnerEmitResult<TEvent>;
+			await bus.parallel(event.type, event, this.createContext());
 			return undefined as RunnerEmitResult<TEvent>;
 		}
 

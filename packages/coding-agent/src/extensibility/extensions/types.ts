@@ -1421,76 +1421,205 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	on(
 		event: "resources_discover",
 		handler: ExtensionHandler<ResourcesDiscoverEvent, ResourcesDiscoverResult>,
+		options?: { prepend?: boolean },
 	): () => void;
-	on(event: "session_start", handler: ExtensionHandler<SessionStartEvent>): () => void;
+	on(
+		event: "session_start",
+		handler: ExtensionHandler<SessionStartEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
 	on(
 		event: "session_before_switch",
 		handler: ExtensionHandler<SessionBeforeSwitchEvent, SessionBeforeSwitchResult>,
+		options?: { prepend?: boolean },
 	): () => void;
-	on(event: "session_switch", handler: ExtensionHandler<SessionSwitchEvent>): () => void;
+	on(
+		event: "session_switch",
+		handler: ExtensionHandler<SessionSwitchEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
 	on(
 		event: "session_before_branch",
 		handler: ExtensionHandler<SessionBeforeBranchEvent, SessionBeforeBranchResult>,
+		options?: { prepend?: boolean },
 	): () => void;
-	on(event: "session_branch", handler: ExtensionHandler<SessionBranchEvent>): () => void;
+	on(
+		event: "session_branch",
+		handler: ExtensionHandler<SessionBranchEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
 	on(
 		event: "session_before_compact",
 		handler: ExtensionHandler<SessionBeforeCompactEvent, SessionBeforeCompactResult>,
+		options?: { prepend?: boolean },
 	): () => void;
 	on(
 		event: "session.compacting",
 		handler: ExtensionHandler<SessionCompactingEvent, SessionCompactingResult>,
+		options?: { prepend?: boolean },
 	): () => void;
 	on(
 		event: "cache_warming_decision",
 		handler: ExtensionHandler<CacheWarmingDecisionEvent, CacheWarmingDecisionEventResult>,
+		options?: { prepend?: boolean },
 	): () => void;
-	on(event: "session_compact", handler: ExtensionHandler<SessionCompactEvent>): () => void;
-	on(event: "session_shutdown", handler: ExtensionHandler<SessionShutdownEvent>): () => void;
+	on(
+		event: "session_compact",
+		handler: ExtensionHandler<SessionCompactEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "session_shutdown",
+		handler: ExtensionHandler<SessionShutdownEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
 	on(
 		event: "session_before_tree",
 		handler: ExtensionHandler<SessionBeforeTreeEvent, SessionBeforeTreeResult>,
+		options?: { prepend?: boolean },
 	): () => void;
-	on(event: "session_tree", handler: ExtensionHandler<SessionTreeEvent>): () => void;
-	on(event: "context", handler: ExtensionHandler<ContextEvent, ContextEventResult>): () => void;
+	on(event: "session_tree", handler: ExtensionHandler<SessionTreeEvent>, options?: { prepend?: boolean }): () => void;
+	on(
+		event: "context",
+		handler: ExtensionHandler<ContextEvent, ContextEventResult>,
+		options?: { prepend?: boolean },
+	): () => void;
 	on(
 		event: "before_provider_request",
 		handler: ExtensionHandler<BeforeProviderRequestEvent, BeforeProviderRequestEventResult>,
+		options?: { prepend?: boolean },
 	): () => void;
-	on(event: "after_provider_response", handler: ExtensionHandler<AfterProviderResponseEvent>): () => void;
+	on(
+		event: "after_provider_response",
+		handler: ExtensionHandler<AfterProviderResponseEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
 	on(
 		event: "before_agent_start",
 		handler: ExtensionHandler<BeforeAgentStartEvent, BeforeAgentStartEventResult>,
+		options?: { prepend?: boolean },
 	): () => void;
-	on(event: "agent_start", handler: ExtensionHandler<AgentStartEvent>): () => void;
-	on(event: "agent_end", handler: ExtensionHandler<AgentEndEvent>): () => void;
-	on(event: "session_stop", handler: ExtensionHandler<SessionStopEvent, SessionStopEventResult>): () => void;
-	on(event: "turn_start", handler: ExtensionHandler<TurnStartEvent>): () => void;
-	on(event: "turn_end", handler: ExtensionHandler<TurnEndEvent>): () => void;
-	on(event: "message_start", handler: ExtensionHandler<MessageStartEvent>): () => void;
-	on(event: "message_update", handler: ExtensionHandler<MessageUpdateEvent>): () => void;
-	on(event: "message_end", handler: ExtensionHandler<MessageEndEvent>): () => void;
-	on(event: "tool_execution_start", handler: ExtensionHandler<ToolExecutionStartEvent>): () => void;
-	on(event: "tool_execution_update", handler: ExtensionHandler<ToolExecutionUpdateEvent>): () => void;
-	on(event: "tool_execution_end", handler: ExtensionHandler<ToolExecutionEndEvent>): () => void;
-	on(event: "auto_compaction_start", handler: ExtensionHandler<AutoCompactionStartEvent>): () => void;
-	on(event: "auto_compaction_end", handler: ExtensionHandler<AutoCompactionEndEvent>): () => void;
-	on(event: "auto_retry_start", handler: ExtensionHandler<AutoRetryStartEvent>): () => void;
-	on(event: "auto_retry_end", handler: ExtensionHandler<AutoRetryEndEvent>): () => void;
-	on(event: "retry_fallback_applied", handler: ExtensionHandler<RetryFallbackAppliedEvent>): () => void;
-	on(event: "retry_fallback_succeeded", handler: ExtensionHandler<RetryFallbackSucceededEvent>): () => void;
-	on(event: "ttsr_triggered", handler: ExtensionHandler<TtsrTriggeredEvent>): () => void;
-	on(event: "todo_reminder", handler: ExtensionHandler<TodoReminderEvent>): () => void;
-	on(event: "goal_updated", handler: ExtensionHandler<GoalUpdatedEvent>): () => void;
-	on(event: "credential_disabled", handler: ExtensionHandler<CredentialDisabledEvent>): () => void;
-	on(event: "input", handler: ExtensionHandler<InputEvent, InputEventResult>): () => void;
-	on(event: "tool_approval_requested", handler: ExtensionHandler<ToolApprovalRequestedEvent>): () => void;
-	on(event: "tool_approval_resolved", handler: ExtensionHandler<ToolApprovalResolvedEvent>): () => void;
-	on(event: "tool_call", handler: ExtensionHandler<ToolCallEvent, ToolCallEventResult>): () => void;
-	on(event: "tool_result", handler: ExtensionHandler<ToolResultEvent, ToolResultEventResult>): () => void;
-	on(event: "user_bash", handler: ExtensionHandler<UserBashEvent, UserBashEventResult>): () => void;
-	on(event: "user_python", handler: ExtensionHandler<UserPythonEvent, UserPythonEventResult>): () => void;
-	on(event: "mcp_notification", handler: ExtensionHandler<McpNotificationEvent>): () => void;
+	on(event: "agent_start", handler: ExtensionHandler<AgentStartEvent>, options?: { prepend?: boolean }): () => void;
+	on(event: "agent_end", handler: ExtensionHandler<AgentEndEvent>, options?: { prepend?: boolean }): () => void;
+	on(
+		event: "session_stop",
+		handler: ExtensionHandler<SessionStopEvent, SessionStopEventResult>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(event: "turn_start", handler: ExtensionHandler<TurnStartEvent>, options?: { prepend?: boolean }): () => void;
+	on(event: "turn_end", handler: ExtensionHandler<TurnEndEvent>, options?: { prepend?: boolean }): () => void;
+	on(
+		event: "message_start",
+		handler: ExtensionHandler<MessageStartEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "message_update",
+		handler: ExtensionHandler<MessageUpdateEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(event: "message_end", handler: ExtensionHandler<MessageEndEvent>, options?: { prepend?: boolean }): () => void;
+	on(
+		event: "tool_execution_start",
+		handler: ExtensionHandler<ToolExecutionStartEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "tool_execution_update",
+		handler: ExtensionHandler<ToolExecutionUpdateEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "tool_execution_end",
+		handler: ExtensionHandler<ToolExecutionEndEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "auto_compaction_start",
+		handler: ExtensionHandler<AutoCompactionStartEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "auto_compaction_end",
+		handler: ExtensionHandler<AutoCompactionEndEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "auto_retry_start",
+		handler: ExtensionHandler<AutoRetryStartEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "auto_retry_end",
+		handler: ExtensionHandler<AutoRetryEndEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "retry_fallback_applied",
+		handler: ExtensionHandler<RetryFallbackAppliedEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "retry_fallback_succeeded",
+		handler: ExtensionHandler<RetryFallbackSucceededEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "ttsr_triggered",
+		handler: ExtensionHandler<TtsrTriggeredEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "todo_reminder",
+		handler: ExtensionHandler<TodoReminderEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(event: "goal_updated", handler: ExtensionHandler<GoalUpdatedEvent>, options?: { prepend?: boolean }): () => void;
+	on(
+		event: "credential_disabled",
+		handler: ExtensionHandler<CredentialDisabledEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "input",
+		handler: ExtensionHandler<InputEvent, InputEventResult>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "tool_approval_requested",
+		handler: ExtensionHandler<ToolApprovalRequestedEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "tool_approval_resolved",
+		handler: ExtensionHandler<ToolApprovalResolvedEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "tool_call",
+		handler: ExtensionHandler<ToolCallEvent, ToolCallEventResult>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "tool_result",
+		handler: ExtensionHandler<ToolResultEvent, ToolResultEventResult>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "user_bash",
+		handler: ExtensionHandler<UserBashEvent, UserBashEventResult>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "user_python",
+		handler: ExtensionHandler<UserPythonEvent, UserPythonEventResult>,
+		options?: { prepend?: boolean },
+	): () => void;
+	on(
+		event: "mcp_notification",
+		handler: ExtensionHandler<McpNotificationEvent>,
+		options?: { prepend?: boolean },
+	): () => void;
 
 	// =========================================================================
 	// Tool Registration
@@ -2491,7 +2620,7 @@ export type SetServiceTierHandler = (family: ServiceTierFamily, tier: ServiceTie
  * the concrete Context type here would tie the contract to one implementation.
  */
 export interface ExtensionEventBusSurface {
-	on(name: string, listener: (...args: unknown[]) => unknown): () => boolean;
+	on(name: string, listener: (...args: unknown[]) => unknown, options?: { prepend?: boolean }): () => boolean;
 	serial(name: string, ...args: unknown[]): Promise<unknown>;
 	parallel(name: string, ...args: unknown[]): Promise<unknown>;
 }

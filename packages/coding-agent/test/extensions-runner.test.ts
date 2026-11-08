@@ -2374,6 +2374,75 @@ describe("ExtensionRunner", () => {
 		});
 	});
 
+	describe("Cordis registration options", () => {
+		it("prepend puts a migrated listener first", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "order-a.ts"),
+				`
+				export default function(pi) {
+					pi.on("session_start", () => {
+						globalThis.__cordisOrder.push("a");
+					});
+				}
+			`,
+			);
+			fs.writeFileSync(
+				path.join(extensionsDir, "order-b.ts"),
+				`
+				export default function(pi) {
+					pi.on("session_start", () => {
+						globalThis.__cordisOrder.push("b");
+					}, { prepend: true });
+				}
+			`,
+			);
+			const state = globalThis as typeof globalThis & { __cordisOrder?: string[] };
+			state.__cordisOrder = [];
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			await runner.emit({ type: "session_start" });
+			expect(state.__cordisOrder).toEqual(["b", "a"]);
+			delete state.__cordisOrder;
+		});
+
+		it("prepend orders listeners within one legacy extension", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "legacy-order.ts"),
+				`
+				export default function(pi) {
+					pi.on("session_switch", () => {
+						globalThis.__legacyOrder.push("a");
+					});
+					pi.on("session_switch", () => {
+						globalThis.__legacyOrder.push("b");
+					}, { prepend: true });
+				}
+			`,
+			);
+			const state = globalThis as typeof globalThis & { __legacyOrder?: string[] };
+			state.__legacyOrder = [];
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			await runner.emit({ type: "session_switch", reason: "new", previousSessionFile: undefined });
+			expect(state.__legacyOrder).toEqual(["b", "a"]);
+			delete state.__legacyOrder;
+		});
+	});
+
 	describe("service tier API", () => {
 		it("restricts tiers to values supported by each provider family", () => {
 			expectTypeOf<"scale">().toExtend<ExtensionServiceTier<"openai">>();

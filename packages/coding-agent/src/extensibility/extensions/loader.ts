@@ -113,6 +113,19 @@ const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set([
 
 /** Cancelable pre-events: `cancel: true` stops the chain (serial bail); any
  *  other result is remembered and the chain continues, as the old loop did. */
+/** Notification/streaming events: dispatched concurrently (no results, and
+ *  the order between listeners does not change what the agent does). */
+export const CORDIS_PARALLEL_EVENTS: ReadonlySet<string> = new Set([
+	"message_start",
+	"message_update",
+	"message_end",
+	"tool_execution_start",
+	"tool_execution_update",
+	"tool_execution_end",
+	"turn_start",
+	"turn_end",
+]);
+
 const CORDIS_CANCELABLE_EVENTS: ReadonlySet<string> = new Set([
 	"session_before_switch",
 	"session_before_branch",
@@ -491,8 +504,8 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	 *  the runtime's Cordis event context instead of the legacy handler map, so
 	 *  their dispatch mode is Cordis's (`serial` / `parallel`). The timeout is
 	 *  wrapped inside the listener, leaving bail/serial results intact. */
-	on<F extends HandlerFn>(event: string, handler: F): () => void {
-		if (CORDIS_LIFECYCLE_EVENTS.has(event) && this.runtime.eventBus) {
+	on<F extends HandlerFn>(event: string, handler: F, options?: { prepend?: boolean }): () => void {
+		if ((CORDIS_LIFECYCLE_EVENTS.has(event) || CORDIS_PARALLEL_EVENTS.has(event)) && this.runtime.eventBus) {
 			const bus = this.runtime.eventBus;
 			const wrapped = async (...args: unknown[]): Promise<unknown> => {
 				// `tool_call` is fail-closed: timeout or throw blocks the tool. That
@@ -603,7 +616,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 					if (timer) clearTimeout(timer);
 				}
 			};
-			const off = bus.on(event, wrapped);
+			const off = bus.on(event, wrapped, options);
 			const counts = this.runtime.eventHandlerCounts;
 			counts?.set(event, (counts.get(event) ?? 0) + 1);
 			const dispose = () => {
@@ -616,7 +629,8 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		}
 
 		const list = this.extension.handlers.get(event) ?? [];
-		list.push(handler);
+		if (options?.prepend) list.unshift(handler);
+		else list.push(handler);
 		this.extension.handlers.set(event, list);
 		return () => {
 			const current = this.extension.handlers.get(event);

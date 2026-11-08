@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **流式/通知事件改走 Cordis parallel，`ctx.on` 支持 `prepend`**：`message_start/update/end`、`tool_execution_*`、`turn_start/end` 并发派发，零监听时仍短路；`ctx.on(event, handler, { prepend })` 对已迁事件是 Cordis 全局顺序，对 legacy 事件只在同一扩展内提前。新增两类顺序回归。
+  - EN: Streaming and notification events now dispatch through Cordis `parallel` — `message_start/update/end`, `tool_execution_*`, `turn_start/end` — and still short-circuit with no listeners. `ctx.on(event, handler, { prepend })` gives Cordis global ordering for migrated events and within-extension ordering for legacy ones. Two ordering tests were added.
+
 - **`context` / `input` 迁到 Cordis serial**：两者与 `tool_result` 同一模式——监听器返回 patch，派发侧在同一个状态上累积，后者看到前者的改写；`input` 的 `handled` 仍然立即中断。新增“后一个监听能看到前一个的改写”的回归。
   - EN: `context` and `input` now dispatch through Cordis serial with the same accumulated-state pattern as `tool_result`: listeners return a patch, the dispatcher applies it to one state, and later listeners see earlier rewrites; `input` still stops immediately on `handled`. New tests pin the cross-listener visibility.
 
