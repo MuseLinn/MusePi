@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **插件实例现在是一个 Cordis fiber**：扩展装载时在自己的 fiber 里执行 `apply`（`eventBus.inject`），`pi.on` 登记的监听归该 fiber 的 effect 账本所有，重载、卸载、回滚统一 `fiber.dispose()`；监听列表只保留精确计数与没有 fiber 的装载路径，不再承担所有权。`ctx.session` 仍是它下面更窄的一层 fiber，会话结束只回收会话级监听。工厂抛错会让 fiber 拒绝，装载错误仍是 `Failed to load extension: …`。
+  - EN: A plugin instance is now its own Cordis fiber. The factory runs inside `eventBus.inject`, every `pi.on` listener belongs to that fiber's effect ledger, and reload, unload, and rollback are one `fiber.dispose()`; the listener list keeps exact counts and the loaders that run without a fiber but no longer owns cleanup. `ctx.session` remains a narrower fiber underneath, so a session end reclaims only session-scoped listeners. A factory throw rejects the fiber and keeps the `Failed to load extension: …` error contract.
+
 - **新增会话级注册面 `ctx.session`**：插件可以在 `session_start` 里用 `ctx.session.on(...)` 注册只属于本次会话的监听——作用域在事件派发前打开、会话收尾时关闭，监听不会带到下一个会话；`session_start` 重放（插件重载后的 `refreshSessionStart`）先关旧作用域再开新的，只重注册、不叠加。`ctx.on` 仍是实例级（活到插件卸载），与 dsh 的 `ctx.on` / `agent.ctx` 同一分工；会话外 `ctx.session` 为 `undefined`。监听 disposer 改为幂等，「会话关闭 + 插件卸载」双重释放不会把计数减成负数。
   - EN: Plugins can now register listeners for one session with `ctx.session.on(...)` inside `session_start`. The scope opens before the event dispatch and closes at session teardown, so a listener never reaches the next session; a replayed `session_start` (the `refreshSessionStart` after a plugin reload) closes the old scope first, so it re-registers instead of stacking. `ctx.on` stays instance-scoped until unload, matching dsh's `ctx.on` / `agent.ctx` split, and `ctx.session` is `undefined` outside a session. Listener disposers are now idempotent, so closing the session and unloading the plugin cannot under-count the listener ledger.
 

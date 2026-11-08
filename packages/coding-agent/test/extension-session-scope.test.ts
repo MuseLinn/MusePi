@@ -18,6 +18,7 @@ import {
 	emitSessionStartEvent,
 } from "@musepi/pi-coding-agent/extensibility/extensions/runner";
 import type { Extension, ExtensionAPI } from "@musepi/pi-coding-agent/extensibility/extensions/types";
+import { disposePluginPrimitives } from "@musepi/pi-coding-agent/extensibility/plugins/runtime/cordis-primitives";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { TempDir } from "@musepi/pi-utils";
 import { EventBus } from "../src/utils/event-bus";
@@ -139,11 +140,29 @@ describe("ctx.session", () => {
 		// Session close and extension unload both reach the same disposer; a
 		// second pass must not decrement the listener count below zero.
 		await emitSessionShutdownEvent(runner);
-		const { disposePluginPrimitives } = await import(
-			"@musepi/pi-coding-agent/extensibility/plugins/runtime/cordis-primitives"
-		);
 		await disposePluginPrimitives(extension);
 		expect(runner.hasHandlers("agent_end")).toBe(false);
+		tempDir.removeSync();
+	});
+
+	it("owns instance listeners with the extension's own fiber", async () => {
+		// dsh's plugin instance is a fiber; here the extension record keeps the
+		// registrations but the fiber owns them, so unload is one dispose.
+		let calls = 0;
+		const { runner, extension } = await makeRunner(pi => {
+			pi.on("agent_end", () => {
+				calls += 1;
+			});
+		});
+
+		expect(extension.fiber).toBeDefined();
+		await runner.emit({ type: "agent_end", messages: [] });
+		expect(calls).toBe(1);
+
+		await disposePluginPrimitives(extension);
+		expect(runner.hasHandlers("agent_end")).toBe(false);
+		await runner.emit({ type: "agent_end", messages: [] });
+		expect(calls).toBe(1);
 		tempDir.removeSync();
 	});
 });

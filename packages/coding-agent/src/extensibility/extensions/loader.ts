@@ -259,13 +259,32 @@ export class ExtensionRuntime implements IExtensionRuntime {
  * （bindExtension）与 cordis 宿主级动态装载（cordis-dynamic-plugins）
  * 共用同一 API 实例来源，换实现处只此一点，两条加载路径不会漂移。
  */
+/**
+ * The extension event context, created on first use.
+ *
+ * Shared by the lazy `on` path and the factory loader that starts the
+ * extension's own fiber on the same context.
+ */
+function ensureExtensionEventBus(runtime: IExtensionRuntime): NonNullable<IExtensionRuntime["eventBus"]> {
+	let bus = runtime.eventBus;
+	if (!bus) {
+		bus = new Context() as unknown as NonNullable<IExtensionRuntime["eventBus"]>;
+		runtime.eventBus = bus;
+	}
+	return bus;
+}
+
 export function createConcreteExtensionAPI(
 	extension: Extension,
 	runtime: IExtensionRuntime,
 	cwd: string,
 	eventBus: EventBus,
+	/** The extension's fiber context; listeners registered through it are owned
+	 *  by the fiber (dsh: a plugin is a fiber). Absent for loaders that run the
+	 *  factory outside one — the listener ledger still covers those. */
+	ownContext?: Context,
 ): ExtensionAPI {
-	return new ConcreteExtensionAPI(PiCodingAgent, extension, runtime, cwd, eventBus);
+	return new ConcreteExtensionAPI(PiCodingAgent, extension, runtime, cwd, eventBus, ownContext);
 }
 
 /**
@@ -366,6 +385,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		private readonly runtime: IExtensionRuntime,
 		public readonly cwd: string,
 		public readonly events: EventBus,
+		private readonly ownContext?: Context,
 	) {
 		const self = this;
 		this.tools = {
@@ -491,18 +511,22 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	/** Register one listener; the return value removes it again (Cordis
 	 *  `ctx.on`). The extension unload still clears every listener it owns.
 	 *
-	 *  Every event registers in the runtime's Cordis event context; the runner
-	 *  picks `serial` / `parallel` per event. The timeout is wrapped inside the
+	 *  Registration goes through the extension's own fiber when it has one, so
+	 *  unloading is `fiber.dispose()`; the listener ledger stays as the exact
+	 *  count and as the path for factories loaded without a fiber. The runner
+	 *  picks `serial` / `parallel` per event; the timeout is wrapped inside the
 	 *  listener, leaving bail/serial results intact. */
 	on<F extends HandlerFn>(event: string, handler: F, options?: { prepend?: boolean }): () => void {
 		// One registry for every event: unknown names still work because the
 		// dispatcher only cares about the name at emit time.
-		let bus = this.runtime.eventBus;
-		if (!bus) {
-			bus = new Context() as unknown as NonNullable<IExtensionRuntime["eventBus"]>;
-			this.runtime.eventBus = bus;
-		}
-		return this.#registerListener(bus, event, handler, options);
+		const bus = this.ownContext
+			? (this.ownContext as unknown as NonNullable<IExtensionRuntime["eventBus"]>)
+			: ensureExtensionEventBus(this.runtime);
+		const dispose = this.#registerListener(bus, event, handler, options);
+		// Fiber ownership: the disposer becomes an effect of this extension's
+		// fiber, so a reload/unload/rollback reclaims it with the instance.
+		if (this.ownContext) this.ownContext.effect(() => dispose);
+		return dispose;
 	}
 
 	/**
@@ -718,6 +742,11 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 			off();
 			const live = counts?.get(event);
 			if (live !== undefined && counts) counts.set(event, Math.max(0, live - 1));
+			// Drop the record as well: the list is the exact live-listener count
+			// (diagnostics read it), and a fiber disposal must not leave it stale.
+			const listeners = this.extension.eventListenerDisposers;
+			const index = listeners?.indexOf(dispose) ?? -1;
+			if (listeners && index >= 0) listeners.splice(index, 1);
 		};
 		this.extension.eventListenerDisposers ??= [];
 		this.extension.eventListenerDisposers.push(dispose);
@@ -1295,6 +1324,37 @@ async function importExtensionModule(
 	}
 }
 
+/**
+ * Run one extension factory inside its own Cordis fiber.
+ *
+ * dsh's plugin instance is a fiber; the extension record stays our bookkeeping
+ * object, but every listener registered through `pi.on` belongs to this fiber,
+ * so reload, unload and rollback dispose one scope instead of replaying a
+ * second ownership ledger. The listener list stays for exact counts and for
+ * loaders that run a factory without a fiber.
+ */
+async function runFactoryInFiber(
+	extension: Extension,
+	runtime: IExtensionRuntime,
+	cwd: string,
+	eventBus: EventBus,
+	factory: ExtensionFactory,
+	wrapApi: (api: ExtensionAPI, extension: Extension) => ExtensionAPI,
+	config?: Record<string, unknown>,
+): Promise<unknown> {
+	const bus = ensureExtensionEventBus(runtime) as unknown as Context;
+	let published: unknown;
+	const fiber = bus.inject({}, async scope => {
+		const api = wrapApi(createConcreteExtensionAPI(extension, runtime, cwd, eventBus, scope as Context), extension);
+		published = await runExtensionFactory(factory, api, runtime, config);
+	});
+	// Errors from the factory reject the fiber; awaiting it keeps the load-time
+	// error contract (`Failed to load extension: …`) unchanged.
+	await fiber;
+	extension.fiber = { dispose: () => fiber.dispose() };
+	return published;
+}
+
 /** Whether an extension entry lives under the host's bundled plugin tree. */
 function isBundledPluginPath(resolvedPath: string): boolean {
 	const normalized = resolvedPath.replaceAll("\\", "/");
@@ -1317,8 +1377,7 @@ async function bindExtension(
 	}
 	try {
 		const extension = createExtension(extensionPath, imported.resolvedPath);
-		const api = wrapApi(createConcreteExtensionAPI(extension, runtime, cwd, eventBus), extension);
-		await withHostGuard(() => runExtensionFactory(factory, api, runtime));
+		await withHostGuard(() => runFactoryInFiber(extension, runtime, cwd, eventBus, factory, wrapApi));
 
 		return { extension, error: null };
 	} catch (err) {
@@ -1364,8 +1423,7 @@ export async function loadExtensionFromFactory(
 	config?: Record<string, unknown>,
 ): Promise<Extension> {
 	const extension = createExtension(name, name);
-	const api = createConcreteExtensionAPI(extension, runtime, cwd, eventBus);
-	const published = await runExtensionFactory(factory, api, runtime, config);
+	const published = await runFactoryInFiber(extension, runtime, cwd, eventBus, factory, api => api, config);
 	if (capture) capture.published = published;
 	return extension;
 }

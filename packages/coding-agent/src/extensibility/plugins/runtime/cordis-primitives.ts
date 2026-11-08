@@ -163,6 +163,14 @@ export function stateKeys(extension: Extension): string[] {
  * runner may outlive the session.
  */
 export async function disposePluginPrimitives(extension: Extension): Promise<number> {
+	// The instance's own fiber goes first: listeners and fiber effects stop
+	// before the session-ledger effects run, so a cleanup cannot observe a
+	// half-removed listener set.
+	try {
+		await extension.fiber?.dispose();
+	} catch (error) {
+		console.warn("[plugin] fiber disposal failed:", error);
+	}
 	const ran = await runEffects(extension);
 	// Isolated like the effects: one broken disposer must not strand the rest.
 	for (const dispose of extension.eventListenerDisposers?.splice(0) ?? []) {

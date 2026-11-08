@@ -2799,8 +2799,14 @@ export interface Extension {
 	memoryBackendProviders: Array<() => void>;
 	/** Disposers for Cordis event listeners registered by the extension.
 	 *  Kept apart from the effect ledger: a session stop drains effects but the
-	 *  runner may be reused, so listeners stay until an actual reload/unload. */
+	 *  runner may be reused, so listeners stay until an actual reload/unload.
+	 *  With a fiber they are also fiber-owned; this list keeps the count exact
+	 *  for diagnostics and covers loaders that run without one. */
 	eventListenerDisposers?: Array<() => void>;
+	/** The extension's own Cordis fiber (dsh: a plugin is a fiber). `pi.on`
+	 *  registers inside it, so disposal — reload, unload, rollback — is one
+	 *  `fiber.dispose()` instead of a second ownership mechanism. */
+	fiber?: { dispose(): Promise<void> };
 	/** Theme tokens contributed by the extension (registerThemeToken), merged
 	 *  into the theme as *new* keys only; dropped on unload so the theme
 	 *  re-renders with them removed. */

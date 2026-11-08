@@ -631,6 +631,8 @@ is a package the distribution ships, **not a separate kind of thing**」——�
 
 与 dsh 的隔离手段对比：dsh 的插件实例挂在宿主 loader 的 fiber 上（`app-boot` 的 `ctx.plugin(Loader)`），一个宿主总线服务多个 agent，所以派发要带 scope 载体（`scopeTarget` + Cordis `Context.filter`）把监听过滤到对应 agent；只有确实需要 per-agent 实例时才在 `agentCtx.plugin(...)` 里装子插件（如 ACP 的 MCP client）。MusePi 的扩展实例按 session 装载，每个 session 有自己的 runtime 与事件总线（SDK、ACP、子 agent 都各自装载），所以会话 fiber 只承担会话级注册的所有权，不需要派发过滤。约定：一个 runtime 同一时刻只服务一个活跃 session；若将来要让多个会话共用一个总线，必须补上同样的载体过滤，否则会话监听会互相收到事件。
 
+实例级监听同样归 fiber：每个扩展装载时在自己的 Cordis fiber 里执行 `apply`（`eventBus.inject`），`pi.on` 登记的监听进该 fiber 的 effect 账本，重载、卸载、回滚只需 `fiber.dispose()`；`eventListenerDisposers` 列表只用于精确计数和没有 fiber 的装载路径，不再承担所有权。
+
 `state` 没有同步放宽：它要求一个卸载即清空的作用域，而 legacy 扩展按模块级变量写，拿到一个“看起来能用”的 state 只会让两份实例各自持有一半状态。`ExtensionAPI` 上 `state` 仍是可选的（`state?`），代码里必须按可选处理。
 
 ### 写插件时怎么选
