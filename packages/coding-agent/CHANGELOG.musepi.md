@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **剩余专用事件全部迁到 Cordis，插件事件派发至此统一**：`before_agent_start`（消息与 systemPrompt 累积）、`before_provider_request`（payload 逐次改写）、`after_provider_response`、`cache_warming_decision`（最后一个 action 生效）都进入同一事件上下文；`credential_disabled` / `mcp_notification` 走单次通知通道。新增三例真实 runner 回归（提示词链、payload 链、action 覆盖）。
+  - EN: The remaining dedicated events now dispatch through Cordis, so every plugin event uses one event context: `before_agent_start` (accumulated messages and systemPrompt), `before_provider_request` (payload rewrites chained), `after_provider_response`, and `cache_warming_decision` (last action wins); `credential_disabled` / `mcp_notification` use the one-shot notification path. Three real-runner tests cover the prompt chain, payload chain, and action override.
+
 - **`user_bash` / `user_python` / `resources_discover` 迁到 Cordis serial**：前两者首个非空结果即中断（旧的 bail 语义），`resources_discover` 按扩展路径累积三类资源；同时补上 `session.compacting` 的结果记忆分支（上一批只做了登记）。新增 user_bash 首结果与资源归属两例回归。
   - EN: `user_bash` / `user_python` / `resources_discover` now dispatch through Cordis serial. The first non-empty user-event result bails (the old semantics), and resource discovery accumulates all three path kinds with their owning extension; the missing `session.compacting` result-memory branch is wired as well. New tests cover first-result-wins and resource attribution.
 

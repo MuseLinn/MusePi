@@ -1027,6 +1027,14 @@ export class ExtensionRunner {
 	 */
 	async emitCacheWarmingDecision(event: CacheWarmingDecisionEvent): Promise<CacheWarmingAction> {
 		let action = event.action;
+
+		const bus = this.runtime.eventBus;
+		const cordisCount = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
+		if (bus && cordisCount > 0) {
+			const state = { action };
+			await bus.serial(event.type, event, this.createContext(), state);
+			return state.action;
+		}
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get(event.type);
 			if (!handlers || handlers.length === 0) continue;
@@ -2398,6 +2406,14 @@ export class ExtensionRunner {
 		const ctx = this.createContext(model);
 		let currentPayload = payload;
 
+		const bus = this.runtime.eventBus;
+		const cordisCount = this.runtime.eventHandlerCounts?.get("before_provider_request") ?? 0;
+		if (bus && cordisCount > 0) {
+			const state = { payload: currentPayload };
+			await bus.serial("before_provider_request", { type: "before_provider_request", payload }, ctx, state);
+			return state.payload;
+		}
+
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get("before_provider_request");
 			if (!handlers || handlers.length === 0) continue;
@@ -2427,6 +2443,23 @@ export class ExtensionRunner {
 	async emitAfterProviderResponse(response: ProviderResponseMetadata, model?: Model): Promise<void> {
 		const ctx = this.createContext(model);
 
+		const bus = this.runtime.eventBus;
+		const cordisCount = this.runtime.eventHandlerCounts?.get("after_provider_response") ?? 0;
+		if (bus && cordisCount > 0) {
+			await bus.serial(
+				"after_provider_response",
+				{
+					type: "after_provider_response",
+					status: response.status,
+					headers: response.headers,
+					requestId: response.requestId,
+					metadata: response.metadata,
+				},
+				ctx,
+			);
+			return;
+		}
+
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get("after_provider_response");
 			if (!handlers || handlers.length === 0) continue;
@@ -2453,6 +2486,26 @@ export class ExtensionRunner {
 		const messages: NonNullable<BeforeAgentStartEventResult["message"]>[] = [];
 		let currentSystemPrompt = systemPrompt;
 		let systemPromptModified = false;
+
+		const bus = this.runtime.eventBus;
+		const cordisCount = this.runtime.eventHandlerCounts?.get("before_agent_start") ?? 0;
+		if (bus && cordisCount > 0) {
+			const state = { messages: messages as unknown[], systemPrompt: systemPrompt, systemPromptModified: false };
+			await bus.serial(
+				"before_agent_start",
+				{ type: "before_agent_start", prompt, images, systemPrompt },
+				ctx,
+				state,
+			);
+			if (state.messages.length === 0 && !state.systemPromptModified) return undefined;
+			return {
+				messages:
+					state.messages.length > 0
+						? (state.messages as NonNullable<BeforeAgentStartEventResult["message"]>[])
+						: undefined,
+				systemPrompt: state.systemPromptModified ? state.systemPrompt : undefined,
+			};
+		}
 
 		for (const ext of this.extensions) {
 			const handlers = ext.handlers.get("before_agent_start");

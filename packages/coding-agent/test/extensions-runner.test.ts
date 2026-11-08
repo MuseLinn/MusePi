@@ -2555,6 +2555,113 @@ describe("ExtensionRunner", () => {
 		});
 	});
 
+	describe("dedicated Cordis events", () => {
+		it("chains before_agent_start messages and system prompts", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "bas-a.ts"),
+				`
+				export default function(pi) {
+					pi.on("before_agent_start", event => ({
+						message: { customType: "a", content: event.prompt, display: true },
+						systemPrompt: ["prompt-a"],
+					}));
+				}
+			`,
+			);
+			fs.writeFileSync(
+				path.join(extensionsDir, "bas-b.ts"),
+				`
+				export default function(pi) {
+					pi.on("before_agent_start", event => ({
+						systemPrompt: [...event.systemPrompt, "prompt-b"],
+					}));
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			const combined = await runner.emitBeforeAgentStart("hello", undefined, ["base"]);
+			expect(combined?.messages).toHaveLength(1);
+			expect(combined?.systemPrompt).toEqual(["prompt-a", "prompt-b"]);
+		});
+
+		it("threads before_provider_request payload rewrites", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "bpr-a.ts"),
+				`
+				export default function(pi) {
+					pi.on("before_provider_request", () => ({ wrappedBy: "a" }));
+				}
+			`,
+			);
+			fs.writeFileSync(
+				path.join(extensionsDir, "bpr-b.ts"),
+				`
+				export default function(pi) {
+					pi.on("before_provider_request", payload => ({ wrappedBy: "b", saw: payload }));
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			expect(await runner.emitBeforeProviderRequest({ original: true })).toEqual({
+				wrappedBy: "b",
+				saw: { type: "before_provider_request", payload: { wrappedBy: "a" } },
+			});
+		});
+
+		it("lets the last cache_warming_decision action win", async () => {
+			fs.writeFileSync(
+				path.join(extensionsDir, "cwd-a.ts"),
+				`
+				export default function(pi) {
+					pi.on("cache_warming_decision", () => ({ action: "warm" }));
+				}
+			`,
+			);
+			fs.writeFileSync(
+				path.join(extensionsDir, "cwd-b.ts"),
+				`
+				export default function(pi) {
+					pi.on("cache_warming_decision", () => ({ action: "stop" }));
+				}
+			`,
+			);
+			const result = await loadTestExtensions();
+			const runner = new ExtensionRunner(
+				result.extensions,
+				result.runtime,
+				tempDir.path(),
+				sessionManager,
+				modelRegistry,
+			);
+
+			expect(
+				await runner.emitCacheWarmingDecision({
+					type: "cache_warming_decision",
+					warmCost: 1,
+					missCost: 2,
+					continuationProbability: 0.5,
+					action: "warm",
+				}),
+			).toBe("stop");
+		});
+	});
+
 	describe("service tier API", () => {
 		it("restricts tiers to values supported by each provider family", () => {
 			expectTypeOf<"scale">().toExtend<ExtensionServiceTier<"openai">>();

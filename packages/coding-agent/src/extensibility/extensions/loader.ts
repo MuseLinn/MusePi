@@ -115,6 +115,10 @@ const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set([
 	"user_bash",
 	"user_python",
 	"resources_discover",
+	"before_agent_start",
+	"before_provider_request",
+	"after_provider_response",
+	"cache_warming_decision",
 ]);
 
 /** Cancelable pre-events: `cancel: true` stops the chain (serial bail); any
@@ -139,6 +143,8 @@ export const CORDIS_SERIAL_EVENTS: ReadonlySet<string> = new Set([
 	"retry_fallback_succeeded",
 	"ttsr_triggered",
 	"todo_reminder",
+	"credential_disabled",
+	"mcp_notification",
 ]);
 
 export const CORDIS_PARALLEL_EVENTS: ReadonlySet<string> = new Set([
@@ -603,6 +609,12 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 							{ type: "input", text: state.text, images: state.images, source: state.source },
 							args[1],
 						] as unknown[];
+					} else if (event === "before_agent_start") {
+						const state = args[2] as { systemPrompt: string[] };
+						callArgs = [{ ...(args[0] as object), systemPrompt: state.systemPrompt }, args[1]] as unknown[];
+					} else if (event === "before_provider_request") {
+						const state = args[2] as { payload: unknown };
+						callArgs = [{ type: "before_provider_request", payload: state.payload }, args[1]] as unknown[];
 					}
 					const result = await handler(...callArgs);
 					const pending = this.runtime.awaitPendingRegistrations?.();
@@ -632,6 +644,32 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 						if (state && applyToolResultPatch(state.event, result as ToolResultEventResult | undefined)) {
 							state.modified = true;
 						}
+						return undefined;
+					}
+					if (event === "before_agent_start") {
+						const state = args[2] as {
+							messages: unknown[];
+							systemPrompt: string[];
+							systemPromptModified: boolean;
+						};
+						const patch = result as { message?: unknown; systemPrompt?: string | string[] } | undefined;
+						if (patch?.message) state.messages.push(patch.message);
+						if (patch?.systemPrompt !== undefined) {
+							state.systemPrompt =
+								typeof patch.systemPrompt === "string" ? [patch.systemPrompt] : patch.systemPrompt;
+							state.systemPromptModified = true;
+						}
+						return undefined;
+					}
+					if (event === "before_provider_request") {
+						const state = args[2] as { payload: unknown };
+						if (result !== undefined) state.payload = result;
+						return undefined;
+					}
+					if (event === "cache_warming_decision") {
+						const state = args[2] as { action: unknown };
+						const patch = result as { action?: unknown } | undefined;
+						if (patch?.action !== undefined) state.action = patch.action;
 						return undefined;
 					}
 					if (event === "session.compacting") {
