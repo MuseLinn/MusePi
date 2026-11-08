@@ -57,6 +57,7 @@ import { resolvePath, withHostGuard } from "../utils";
 import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
 import { handlerTimeoutForEvent } from "./handler-timeout";
 import { readExtensionPluginMeta } from "./plugin-manifest";
+import { sessionStopContinues } from "./session-stop-result";
 import { applyToolResultPatch } from "./tool-result-patch";
 import type {
 	AssistantThinkingRenderer,
@@ -109,6 +110,8 @@ const CORDIS_LIFECYCLE_EVENTS: ReadonlySet<string> = new Set([
 	"tool_result",
 	"context",
 	"input",
+	"session.compacting",
+	"session_stop",
 ]);
 
 /** Cancelable pre-events: `cancel: true` stops the chain (serial bail); any
@@ -155,6 +158,8 @@ const CORDIS_CANCELABLE_EVENTS: ReadonlySet<string> = new Set([
 	"tool_result",
 	"context",
 	"input",
+	"session.compacting",
+	"session_stop",
 ]);
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
@@ -556,6 +561,26 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 					);
 					if ((result as { block?: boolean } | undefined)?.block === true) return result;
 					if (result !== undefined) this.runtime.beforeEventResults?.set(args[0] as object, result);
+					return undefined;
+				}
+
+				// `session_stop` owns a settle signal; the executor composes it with the
+				// budget and reports timeout/errors exactly as the legacy path did.
+				if (event === "session_stop") {
+					const ev = args[0] as { signal?: AbortSignal };
+					const execute = this.runtime.handlerExecutor;
+					if (!execute) return undefined;
+					const result = await execute(
+						handler as (event: unknown, ctx: ExtensionContext) => unknown,
+						ev as { type: string },
+						args[1] as ExtensionContext,
+						this.extension,
+						handlerTimeoutForEvent(event),
+						() => undefined,
+						ev.signal,
+					);
+					if (sessionStopContinues(result as never)) return result;
+					if (result !== undefined) this.runtime.beforeEventResults?.set(ev as object, result);
 					return undefined;
 				}
 

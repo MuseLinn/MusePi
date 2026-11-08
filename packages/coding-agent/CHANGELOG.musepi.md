@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`session.compacting` / `session_stop` 迁到 Cordis serial**：compacting 保留最后一个有效结果；stop 在“继续 + 带上下文”时立即中断并返回该结果，`event.signal` 经执行器合成到 handler 预算（含超时与错误上报）。续跑判定抽成 `sessionStopContinues`，两条路径共用。
+  - EN: `session.compacting` and `session_stop` now dispatch through Cordis serial. Compacting keeps the last valid result; stop bails immediately when it asks to continue with context, with `event.signal` composed into the handler budget by the executor (timeout and error reporting included). The continuation predicate is shared through `sessionStopContinues`.
+
 - **单次通知事件批量迁到 Cordis serial**：`session_switch/branch/tree/compact`、`goal_updated`、`agent_start/end`、`auto_compaction_*`、`auto_retry_*`、`retry_fallback_*`、`ttsr_triggered`、`todo_reminder` 以 `serial` 保持注册顺序，零监听时短路。新增顺序回归。
   - EN: One-shot notification events now dispatch through Cordis `serial` — `session_switch/branch/tree/compact`, `goal_updated`, `agent_start/end`, `auto_compaction_*`, `auto_retry_*`, `retry_fallback_*`, `ttsr_triggered`, and `todo_reminder` — preserving registration order and short-circuiting with no listeners. A new ordering test pins it.
 

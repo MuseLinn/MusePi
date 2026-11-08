@@ -2006,6 +2006,23 @@ export class ExtensionRunner {
 			return undefined as RunnerEmitResult<TEvent>;
 		}
 
+		// `session.compacting` / `session_stop` carry a result: the last valid one
+		// wins, and a stop that asks to continue stops the chain immediately.
+		if (event.type === "session.compacting" || event.type === "session_stop") {
+			const bus = this.runtime.eventBus;
+			const count = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
+			if (!bus || count === 0) return undefined as RunnerEmitResult<TEvent>;
+			const ctx = this.createContext();
+			const continued = await bus.serial(event.type, event, ctx);
+			if (continued) return continued as RunnerEmitResult<TEvent>;
+			if (event.type === "session_stop" && event.signal.aborted) {
+				return undefined as RunnerEmitResult<TEvent>;
+			}
+			const remembered = this.runtime.beforeEventResults?.get(event as object);
+			this.runtime.beforeEventResults?.delete(event as object);
+			return remembered as RunnerEmitResult<TEvent>;
+		}
+
 		// One-shot notifications keep registration order (`serial`) and carry no
 		// result; zero listeners skip context allocation entirely.
 		if (CORDIS_SERIAL_EVENTS.has(event.type)) {
@@ -2065,20 +2082,6 @@ export class ExtensionRunner {
 					ext,
 					handlerTimeoutForEvent(event.type),
 				);
-
-				if (event.type === "session.compacting" && handlerResult) {
-					result = handlerResult as SessionCompactingResult;
-				}
-
-				if (event.type === "session_stop" && handlerResult) {
-					result = handlerResult as SessionStopEventResult;
-					const hasContinuationContext =
-						(typeof result.additionalContext === "string" && result.additionalContext.length > 0) ||
-						(typeof result.reason === "string" && result.reason.length > 0);
-					if ((result.continue === true || result.decision === "block") && hasContinuationContext) {
-						return result as RunnerEmitResult<TEvent>;
-					}
-				}
 			}
 		}
 
