@@ -1,6 +1,6 @@
 import * as path from "node:path";
 import { getAgentDir, getConfigDirName, getPluginsDir } from "@musepi/pi-utils";
-import { resolveActiveProjectRegistryPath } from "../discovery/helpers";
+import { resolveActiveProjectRegistryPath } from "../../../discovery/helpers";
 
 /**
  * 扩展 / 插件热重载的监视根。

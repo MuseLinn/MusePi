@@ -145,6 +145,7 @@ import type {
 	TurnEndEvent,
 	TurnStartEvent,
 } from "../shared-events";
+import type { HmrChange } from "../plugins/hmr/service";
 import type { SlashCommandInfo } from "../slash-commands";
 import type { ScheduleCreate, ScheduleRecord, ScheduleUpdate } from "./schedule";
 import type { UrlSchemeDefinition } from "./url-schemes";
@@ -1359,6 +1360,21 @@ export interface PluginContextNamespaces {
 	readonly subagents: { register: ExtensionAPI["registerSubagent"] };
 	readonly magicKeywords: { register: ExtensionAPI["registerMagicKeyword"] };
 	readonly memory: { registerBackendProvider: ExtensionAPI["registerMemoryBackendProvider"] };
+	/**
+	 * Host-level hot reload (dsh's `ctx.hmr`). False when the host started no
+	 * watcher (print mode, tests): subscriptions still return a disposer so a
+	 * plugin does not branch at registration time.
+	 */
+	readonly hmr: HmrSurface;
+}
+
+/** The `ctx.hmr` service surface a plugin sees. */
+export interface HmrSurface {
+	readonly enabled: boolean;
+	/** Subscribe to batched change notifications. Returns a disposer. */
+	onChange(listener: (change: HmrChange) => void | Promise<void>): () => void;
+	/** Run the current listeners as if the watched files had just changed. */
+	reload(): Promise<void>;
 }
 
 export interface ExtensionAPI extends PluginContextNamespaces {

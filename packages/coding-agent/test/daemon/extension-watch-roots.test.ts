@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { getAgentDir, getConfigDirName } from "@musepi/pi-utils";
-import { resolveExtensionWatchRoots } from "../../src/daemon/extension-watch-roots";
+import { resolveExtensionWatchRoots } from "../../src/extensibility/plugins/hmr/roots";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
 
 /**

@@ -61,7 +61,6 @@ import type {
 import { deriveWindowStats } from "@musepi/pi-wire";
 import { messageKey } from "@musepi/sdk";
 import { YAML } from "bun";
-import { type FSWatcher, watch } from "chokidar";
 import { JobLedger } from "../async/job-ledger";
 import { AsyncJobManager } from "../async/job-manager";
 import { reset as resetCapabilities } from "../capability";
@@ -143,7 +142,8 @@ import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import type { CordisDynamicPluginRuntime } from "./cordis-dynamic-plugins";
 import { writeProjectMirror } from "./creation";
-import { resolveExtensionWatchRoots } from "./extension-watch-roots";
+import { resolveExtensionWatchRoots } from "../extensibility/plugins/hmr/roots";
+import { startHmrService, stopHmrService } from "../extensibility/plugins/hmr/service";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
 import { catchupPlan } from "./journal";
 
@@ -809,11 +809,9 @@ export class DaemonServer {
 	async disposeHostContext(): Promise<void> {
 		// The watcher holds OS handles; leaving it open keeps the process alive and
 		// keeps reacting to edits after the daemon said it was gone.
-		if (this.#extensionWatcher !== null) {
-			const watcher = this.#extensionWatcher;
-			this.#extensionWatcher = null;
-			await watcher.close().catch(() => {});
-		}
+		this.#hmrUnsubscribe?.();
+		this.#hmrUnsubscribe = null;
+		await stopHmrService();
 		await this.#hostContext.dispose();
 	}
 
@@ -1405,8 +1403,8 @@ export class DaemonServer {
 
 	#extensionWatcherStarted = false;
 	#extensionWatcherTimer: Timer | null = null;
-	/** The live chokidar watcher (closed on daemon shutdown). */
-	#extensionWatcher: FSWatcher | null = null;
+	/** Detaches this daemon from the process-wide HMR service on shutdown. */
+	#hmrUnsubscribe: (() => void) | null = null;
 
 	/** HMR: watch extension source/config directories; on change invalidate
 	 *  the extension scan + component compile/load caches and broadcast
@@ -1423,17 +1421,13 @@ export class DaemonServer {
 	#startExtensionWatcher(): void {
 		if (this.#extensionWatcherStarted) return;
 		this.#extensionWatcherStarted = true;
-		// chokidar, not `fs.watch({ recursive: true })`.
-		//
-		// The recursive form does not reliably deliver events for files nested
-		// several directories deep on Windows — measured here: a write from another
-		// process to `plugins/node_modules/<pkg>/src/helper.ts` produced ZERO events
-		// from `fs.watch`, while the same write through chokidar fired immediately.
-		// A plugin package is exactly that shape, so the recursive form would watch
-		// every installed plugin and never notice an edit to any of its modules —
-		// which reads as "HMR is broken" rather than "the watcher missed it".
+		// Watching is the process-wide HMR service's job (`ctx.hmr`); the daemon
+		// only decides what a batch means for its own surfaces. Roots come from
+		// `resolveExtensionWatchRoots` rather than a list written here, because a
+		// hand-written one had drifted from what discovery loads and the
+		// installed-plugin roots had no hot reload at all.
 		void resolveExtensionWatchRoots(this.#host.cwd())
-			.then(async roots => {
+			.then(roots => {
 				const usable = roots.filter(root => {
 					try {
 						// A root that does not exist yet is not an error: discovery's TTL
@@ -1445,22 +1439,8 @@ export class DaemonServer {
 					}
 				});
 				if (usable.length === 0) return;
-				try {
-					this.#extensionWatcher = watch(usable, {
-						// Recursive over the whole tree; the watcher itself walks nested
-						// directories on every platform.
-						ignoreInitial: true,
-						// Editors write through rename, which shows up as an add+unlink of
-						// the same path; a short settle window collapses that into one
-						// reload instead of three.
-						awaitWriteFinish: { stabilityThreshold: 120, pollInterval: 30 },
-						ignored: /(?:^|[/\\])(?:\.git|node_modules[/\\]\.cache)(?:[/\\]|$)/,
-					});
-					this.#extensionWatcher.on("all", () => this.#scheduleExtensionReload());
-					logger.info("extension watcher attached", { roots: usable });
-				} catch (err) {
-					logger.warn("extension watcher attach failed; discovery TTL still applies", { err: String(err) });
-				}
+				const service = startHmrService({ roots: usable, debounceMs: 120 });
+				this.#hmrUnsubscribe = service.onChange(() => this.#scheduleExtensionReload());
 			})
 			.catch(err => {
 				logger.warn("daemon: extension watch roots unresolved; discovery TTL still applies", { err });

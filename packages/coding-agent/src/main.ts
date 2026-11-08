@@ -57,6 +57,8 @@ import { formatExtensionLoadNotifications } from "./extensibility/extensions/loa
 import { loadExtensions } from "./extensibility/extensions/loader";
 import { ExtensionRunner } from "./extensibility/extensions/runner";
 import type { ExtensionUIContext } from "./extensibility/extensions/types";
+import { resolveExtensionWatchRoots } from "./extensibility/plugins/hmr/roots";
+import { startHmrService } from "./extensibility/plugins/hmr/service";
 import { scheduleMarketplaceAutoUpdate } from "./extensibility/plugins/management/marketplace-auto-update";
 import { setLocale } from "./i18n/index.js";
 import { registerDaemonProjectPresence } from "./launch/presence";
@@ -454,6 +456,31 @@ export function createAcpSessionFactory(args: AcpSessionFactoryOptions): AcpSess
 	};
 }
 
+/**
+ * Start the process-wide HMR watcher for the terminal host. Plugins see it as
+ * `ctx.hmr`; the terminal side only drops the discovery caches so the next
+ * session load reads the changed plugin. `/reload-plugins` remains the
+ * explicit full reload (MCP servers, skills, slash commands).
+ */
+async function startTuiHmr(cwd: string): Promise<void> {
+	const roots = (await resolveExtensionWatchRoots(cwd)).filter(root => {
+		try {
+			fsSync.statSync(root);
+			return true;
+		} catch {
+			return false;
+		}
+	});
+	if (roots.length === 0) return;
+	const service = startHmrService({ roots, debounceMs: 120 });
+	if (service.roots.length === 0) return;
+	service.onChange(() => {
+		clearPluginRootsAndCaches();
+		resetCapabilities();
+		void import("./daemon/extension-artifact-compiler").then(module => module.invalidateExtensionCaches());
+	});
+}
+
 async function runInteractiveMode(
 	session: AgentSession,
 	version: string,
@@ -472,6 +499,7 @@ async function runInteractiveMode(
 	initialImages?: ImageContent[],
 	joinLink?: string,
 ): Promise<void> {
+	void startTuiHmr(session.sessionManager.getCwd()).catch(() => {});
 	const mode = new InteractiveMode(
 		session,
 		version,

@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **热重载成为 `ctx.hmr` 服务，daemon 与终端共用一份 watcher**：进程级单一 watcher 按稳定窗口把变更合成一批（`trigger: watch | manual`），插件用 `ctx.hmr.onChange` 订阅、`reload()` 手动触发；宿主各管各的反应——daemon 失效扩展缓存并广播 `extensions.changed`，TUI/ACP/SDK 失效发现缓存。原先写在 daemon 里的 chokidar 监听与监视根解析一并迁入该服务。
+  - EN: Hot reload is now the `ctx.hmr` service, and the daemon and terminal share one watcher. A single process-wide watcher batches changes per settle window (`trigger: watch | manual`); plugins subscribe with `ctx.hmr.onChange` and can force a pass with `reload()`. Each host owns its reaction — the daemon drops extension caches and broadcasts `extensions.changed`, while TUI/ACP/SDK drop discovery caches. The daemon's private chokidar watcher and watch-root resolution moved into the service.
+
 - **TUI、ACP 与 SDK 也装载宿主级插件**：除 daemon 在开监听前装载外，`createAgentSession` 也会在首个会话前调用同一个 `ensureHostHalfPluginsLoaded`，每个进程一次。宿主级插件注册的后端 provider 因此在终端、ACP、SDK 与桌面端都一致可见，TUI 不再依赖内置回退；宿主装载器重置时会先执行注册 disposer，再允许重新装载。
   - EN: The TUI, ACP, and SDK now mount host-scope plugins too. Besides the daemon mounting them before it listens, `createAgentSession` calls the same `ensureHostHalfPluginsLoaded` before the first session, once per process. Backend providers registered by host-scope packages are therefore visible on the terminal, ACP, SDK, and desktop alike, and the TUI no longer depends on the built-in fallback. Resetting the host loader runs the registration disposers before allowing another mount.
 

@@ -47,6 +47,7 @@ import * as TypeBox from "../legacy-typebox";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../plugins/compat/compatibility-store";
 import { installLegacyPiSpecifierShim, loadLegacyPiModule } from "../plugins/compat/legacy-pi-compat";
 import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../plugins/compat/plugin-compatibility";
+import { getHmrService } from "../plugins/hmr/service";
 import { type PluginEntryModule, resolvePluginEntry, toFactory } from "../plugins/runtime/cordis-entry";
 import { getAllPluginExtensionPaths } from "../plugins/runtime/loader";
 import { resolvePath, withHostGuard } from "../utils";
@@ -334,6 +335,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly subagents: ExtensionAPI["subagents"];
 	readonly magicKeywords: ExtensionAPI["magicKeywords"];
 	readonly memory: ExtensionAPI["memory"];
+	readonly hmr: ExtensionAPI["hmr"];
 
 	constructor(
 		public readonly pi: typeof PiCodingAgent,
@@ -369,6 +371,19 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		this.subagents = { register: this.registerSubagent.bind(this) };
 		this.magicKeywords = { register: this.registerMagicKeyword.bind(this) };
 		this.memory = { registerBackendProvider: this.registerMemoryBackendProvider.bind(this) };
+		// `ctx.hmr` is process-level, not per-extension: the host starts one
+		// watcher and every plugin subscribes to the same batches. A plugin's
+		// disposer is its own; hosts that start no watcher report enabled=false
+		// and hand back a no-op disposer rather than forcing a branch.
+		this.hmr = {
+			get enabled() {
+				return getHmrService()?.enabled ?? false;
+			},
+			onChange: listener => getHmrService()?.onChange(listener) ?? (() => {}),
+			reload: async () => {
+				await getHmrService()?.reload();
+			},
+		};
 	}
 
 	/**

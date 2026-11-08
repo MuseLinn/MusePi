@@ -860,6 +860,8 @@ Cordis 插件可以用 `pi.registerMemoryBackendProvider({ id, create(settings) 
 
 provider 也可以贡献**新**后端 id，而不仅是替换：`registerMemoryBackendProvider({ id: "mybank", label, description, create })` 注册后 `memory.backend` 接受该 id（`getEnumValues` 合并 provider 注册表），设置选择器以 provider 自己的 label / description 追加该项。插件卸载后选项消失；仍指向该 id 的配置回退到 `off`，不会解析到别人的实现。
 
+`ctx.hmr` 报告宿主级热重载。宿主没有启动 watcher 时（print 模式、测试）`enabled` 为 false；`onChange(listener)` 每个稳定窗口收到一批 `{ trigger: "watch" | "manual", paths }`，返回 disposer；`reload()` 让当前监听按“文件刚变过”跑一次。watcher 是进程级单例——daemon、TUI、ACP、SDK 共用一份——但反应归各宿主：daemon 失效扩展缓存并广播 `extensions.changed`，终端只失效发现缓存，插件自行决定重载对自身意味着什么。监听若不应长于其所有者，用 `ctx.effect(dispose)` 登记。
+
 `memory.*` 仍是核心契约：每条路由都调用活动后端的成员，插件不能另立方法名。因此替换后端时，`memory.status/view/stats/diagnose/clear/enqueue` 会一起切换。`memory.workspace*` 由可选的 `workspaceDir(agentDir, cwd)` 能力决定：返回目录的后端才拥有设置页文件浏览，未实现的返回 `supported: false` 并拒绝读取或定位，而不是列出属于另一种实现的本地文件。
 
 这是把记忆管理面（设置页、`/memory`、工具、RPC）迁入第一方 Cordis 包的最小 seam。provider seam 已经存在；目前还没有第一方记忆插件注册 provider，因此内置后端仍是默认实现。
