@@ -145,6 +145,8 @@ export const CORDIS_SERIAL_EVENTS: ReadonlySet<string> = new Set([
 	"todo_reminder",
 	"credential_disabled",
 	"mcp_notification",
+	"tool_approval_requested",
+	"tool_approval_resolved",
 ]);
 
 export const CORDIS_PARALLEL_EVENTS: ReadonlySet<string> = new Set([

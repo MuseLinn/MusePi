@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **审批生命周期事件补入 Cordis 单次通道**：`tool_approval_requested` / `tool_approval_resolved` 是最后两个仍在旧派发的事件，现与其它通知事件共用 `serial`；插件事件的注册与派发至此没有遗留分支。
+  - EN: The approval lifecycle events are on the Cordis one-shot path too. `tool_approval_requested` / `tool_approval_resolved` were the last two events still on the legacy dispatcher; they now use `serial` like the other notifications, leaving no plugin event on the old path.
+
 - **剩余专用事件全部迁到 Cordis，插件事件派发至此统一**：`before_agent_start`（消息与 systemPrompt 累积）、`before_provider_request`（payload 逐次改写）、`after_provider_response`、`cache_warming_decision`（最后一个 action 生效）都进入同一事件上下文；`credential_disabled` / `mcp_notification` 走单次通知通道。新增三例真实 runner 回归（提示词链、payload 链、action 覆盖）。
   - EN: The remaining dedicated events now dispatch through Cordis, so every plugin event uses one event context: `before_agent_start` (accumulated messages and systemPrompt), `before_provider_request` (payload rewrites chained), `after_provider_response`, and `cache_warming_decision` (last action wins); `credential_disabled` / `mcp_notification` use the one-shot notification path. Three real-runner tests cover the prompt chain, payload chain, and action override.
 
