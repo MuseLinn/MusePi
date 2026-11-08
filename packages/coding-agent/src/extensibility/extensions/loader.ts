@@ -535,11 +535,14 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	 *  their dispatch mode is Cordis's (`serial` / `parallel`). The timeout is
 	 *  wrapped inside the listener, leaving bail/serial results intact. */
 	on<F extends HandlerFn>(event: string, handler: F, options?: { prepend?: boolean }): () => void {
-		if (
-			(CORDIS_LIFECYCLE_EVENTS.has(event) || CORDIS_PARALLEL_EVENTS.has(event) || CORDIS_SERIAL_EVENTS.has(event)) &&
-			this.runtime.eventBus
-		) {
-			const bus = this.runtime.eventBus;
+		{
+			// One registry for every event: unknown names still work because the
+			// dispatcher only cares about the name at emit time.
+			let bus = this.runtime.eventBus;
+			if (!bus) {
+				bus = new Context() as unknown as NonNullable<IExtensionRuntime["eventBus"]>;
+				this.runtime.eventBus = bus;
+			}
 			const wrapped = async (...args: unknown[]): Promise<unknown> => {
 				// `tool_call` is fail-closed: timeout or throw blocks the tool. That
 				// gate is the runner's executor (signal, registration drain, error
@@ -737,20 +740,10 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 				const live = counts?.get(event);
 				if (live !== undefined && counts) counts.set(event, Math.max(0, live - 1));
 			};
-			registerEffect(this.extension, dispose, `event:${event}`);
+			this.extension.eventListenerDisposers ??= [];
+			this.extension.eventListenerDisposers.push(dispose);
 			return dispose;
 		}
-
-		const list = this.extension.handlers.get(event) ?? [];
-		if (options?.prepend) list.unshift(handler);
-		else list.push(handler);
-		this.extension.handlers.set(event, list);
-		return () => {
-			const current = this.extension.handlers.get(event);
-			if (!current) return;
-			const index = current.indexOf(handler);
-			if (index >= 0) current.splice(index, 1);
-		};
 	}
 
 	registerTool<TParams extends TSchema = TSchema, TDetails = unknown>(tool: ToolDefinition<TParams, TDetails>): void {
@@ -1191,7 +1184,6 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 	return {
 		path: extensionPath,
 		resolvedPath,
-		handlers: new Map(),
 		tools: new Map(),
 		toolRegistrationListeners: new Set(),
 		assistantThinkingRenderers: [],
@@ -1215,6 +1207,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		notificationChannels: [],
 		services: [],
 		memoryBackendProviders: [],
+		eventListenerDisposers: [],
 		themeTokens: [],
 		mediaProviders: [],
 		designSystems: [],

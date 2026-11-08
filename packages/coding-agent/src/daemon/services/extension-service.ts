@@ -830,7 +830,7 @@ export class ExtensionService implements DaemonService {
 					label: ext.label ?? null,
 					tools: ext.tools.size,
 					commands: ext.commands.size,
-					handlers: ext.handlers.size,
+					handlers: ext.eventListenerDisposers?.length ?? 0,
 				})),
 				errors: result.errors,
 			};

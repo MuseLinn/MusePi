@@ -125,21 +125,23 @@ describe("third-party Cordis cache adaptation", () => {
 		const cache = await superpowersRoot();
 		await adaptThirdPartyCordisPlugin(cache);
 		const entryPath = path.join(cache, ".pi", "extensions", "superpowers.ts");
+		const runtime = new ExtensionRuntime();
 		const mounted = await mountPlugin({
 			entryPath,
 			cwd: cache,
 			eventBus: new EventBus(),
-			runtime: new ExtensionRuntime() as never,
+			runtime: runtime as never,
 			readConfig: async () => ({ fields: [], values: {} }),
 		});
 		if (!mounted.ok) throw new Error(mounted.message);
-		const handlers = mounted.extension.handlers.get("context");
-		expect(handlers).toHaveLength(1);
-		const handler = handlers![0] as unknown as (event: { messages: unknown[] }) => Promise<{ messages: unknown[] }>;
+		const bus = runtime.eventBus;
+		if (!bus) throw new Error("runtime has no event bus");
+		expect(runtime.eventHandlerCounts?.get("context")).toBe(1);
+		const state = { messages: [] as unknown[] };
+		await bus.serial("context" as never, null as never, {} as never, state as never);
+		expect(JSON.stringify(state.messages)).toContain("superpowers bootstrap");
 		for (const eventType of ["session_start", "session_compact"]) {
-			const result = await handler({ messages: [] });
-			expect(JSON.stringify(result.messages)).toContain("superpowers bootstrap");
-			expect(mounted.extension.handlers.has(eventType)).toBe(true);
+			expect(runtime.eventHandlerCounts?.get(eventType) ?? 0).toBeGreaterThan(0);
 		}
 	});
 });

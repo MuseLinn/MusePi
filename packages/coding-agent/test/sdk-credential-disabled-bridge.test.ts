@@ -6,12 +6,13 @@ import { AuthStorage, type CredentialDisabledEvent } from "@musepi/pi-ai";
 import * as oauthUtils from "@musepi/pi-ai/oauth";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import type { Extension, ExtensionError, ExtensionFactory } from "@musepi/pi-coding-agent/extensibility/extensions";
+import type { ExtensionError, ExtensionFactory } from "@musepi/pi-coding-agent/extensibility/extensions";
 import { ExtensionRunner } from "@musepi/pi-coding-agent/extensibility/extensions";
-import { ExtensionRuntime } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
+import { ExtensionRuntime, loadExtensionFromFactory } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
 import { createAgentSession } from "@musepi/pi-coding-agent/sdk";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
+import { EventBus } from "../src/utils/event-bus";
 
 interface SessionDirs {
 	cwd: string;
@@ -495,46 +496,18 @@ describe("createAgentSession credential_disabled subscription", () => {
 		const authStorage = await createAuthStorage(path.join(dirs.agentDir, "agent.db"));
 		const modelRegistry = new ModelRegistry(authStorage, path.join(dirs.agentDir, "models.json"));
 		try {
-			const throwingExtension: Extension = {
-				path: "test://throwing-credential-disabled",
-				resolvedPath: "test://throwing-credential-disabled",
-				handlers: new Map([
-					[
-						"credential_disabled",
-						[
-							async () => {
-								throw new Error("boom");
-							},
-						],
-					],
-				]),
-				tools: new Map(),
-				assistantThinkingRenderers: [],
-				fileWriteFallbackHandlers: [],
-				fileDeleteFallbackHandlers: [],
-				composerShapes: new Map(),
-				messageRenderers: new Map(),
-				commands: new Map(),
-				flags: new Map(),
-				shortcuts: new Map(),
-				settings: new Map(),
-				components: [],
-				promptSections: [],
-				modes: [],
-				rpcs: new Map(),
-				webRoutes: [],
-				skills: [],
-				subagents: new Map(),
-				toolViews: [],
-				widgets: [],
-				notificationChannels: [],
-				services: [],
-				themeTokens: [],
-				mediaProviders: [],
-				designSystems: [],
-				statusBarSegments: [],
-			};
 			const runtime = new ExtensionRuntime();
+			const throwingExtension = await loadExtensionFromFactory(
+				pi => {
+					pi.on("credential_disabled", async () => {
+						throw new Error("boom");
+					});
+				},
+				dirs.cwd,
+				new EventBus(),
+				runtime,
+				"test://throwing-credential-disabled",
+			);
 			const sessionManager = SessionManager.inMemory();
 			const runner = new ExtensionRunner([throwingExtension], runtime, dirs.cwd, sessionManager, modelRegistry);
 

@@ -208,7 +208,6 @@ function createPluginExtension(entryPath: string, resolvedPath: string): Extensi
 	return {
 		path: entryPath,
 		resolvedPath,
-		handlers: new Map(),
 		tools: new Map(),
 		assistantThinkingRenderers: [],
 		fileWriteFallbackHandlers: [],

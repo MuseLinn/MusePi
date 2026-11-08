@@ -2708,7 +2708,6 @@ export interface Extension {
 	path: string;
 	resolvedPath: string;
 	label?: string;
-	handlers: Map<string, HandlerFn[]>;
 	tools: Map<string, RegisteredTool<any, any>>;
 	toolRegistrationListeners?: Set<ToolRegistrationListener>;
 	assistantThinkingRenderers: AssistantThinkingRenderer[];
@@ -2771,6 +2770,10 @@ export interface Extension {
 	/** Disposers for memory backend providers registered by the extension;
 	 *  run on unload/reload before another provider may take the same id. */
 	memoryBackendProviders: Array<() => void>;
+	/** Disposers for Cordis event listeners registered by the extension.
+	 *  Kept apart from the effect ledger: a session stop drains effects but the
+	 *  runner may be reused, so listeners stay until an actual reload/unload. */
+	eventListenerDisposers?: Array<() => void>;
 	/** Theme tokens contributed by the extension (registerThemeToken), merged
 	 *  into the theme as *new* keys only; dropped on unload so the theme
 	 *  re-renders with them removed. */

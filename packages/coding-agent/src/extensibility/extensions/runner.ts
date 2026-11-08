@@ -38,7 +38,6 @@ import {
 	type ScheduleRecord,
 	type ScheduleUpdate,
 } from "./schedule";
-import { applyToolResultPatch } from "./tool-result-patch";
 import type {
 	AfterProviderResponseEvent,
 	AssistantThinkingRenderer,
@@ -48,11 +47,9 @@ import type {
 	BeforeProviderRequestEventResult,
 	CacheWarmingAction,
 	CacheWarmingDecisionEvent,
-	CacheWarmingDecisionEventResult,
 	CompactOptions,
 	ComposerShapeDefinition,
 	ContextEvent,
-	ContextEventResult,
 	ContextUsage,
 	Extension,
 	ExtensionActions,
@@ -81,7 +78,6 @@ import type {
 	RegisteredCommand,
 	RegisteredTool,
 	ResourcesDiscoverEvent,
-	ResourcesDiscoverResult,
 	SessionBeforeBranchResult,
 	SessionBeforeCompactResult,
 	SessionBeforeSwitchResult,
@@ -112,13 +108,11 @@ export type ExtensionErrorListener = (error: ExtensionError) => void;
 import {
 	defaultExtensionHandlerTimeoutMs,
 	EXTENSION_HANDLER_TIMEOUT_MS,
-	handlerTimeoutForEvent,
 	normalizeHandlerTimeout,
 } from "./handler-timeout";
 
 export {
 	EXTENSION_HANDLER_TIMEOUT_MS,
-	handlerTimeoutForEvent,
 	normalizeHandlerTimeout,
 	SESSION_SHUTDOWN_HANDLER_TIMEOUT_MS,
 	testSetExtensionHandlerTimeoutMs,
@@ -1026,32 +1020,13 @@ export class ExtensionRunner {
 	 * the extension error listeners and leave the warmer's decision standing.
 	 */
 	async emitCacheWarmingDecision(event: CacheWarmingDecisionEvent): Promise<CacheWarmingAction> {
-		let action = event.action;
-
 		const bus = this.runtime.eventBus;
-		const cordisCount = this.runtime.eventHandlerCounts?.get(event.type) ?? 0;
-		if (bus && cordisCount > 0) {
-			const state = { action };
-			await bus.serial(event.type, event, this.createContext(), state);
-			return state.action;
-		}
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get(event.type);
-			if (!handlers || handlers.length === 0) continue;
-			const ctx = this.createContext();
-			for (const handler of handlers) {
-				const result = (await this.#runHandlerWithTimeout(
-					handler,
-					event,
-					ctx,
-					ext,
-					handlerTimeoutForEvent(event.type),
-				)) as CacheWarmingDecisionEventResult | undefined;
-				if (result?.action !== undefined) action = result.action;
-			}
-		}
-		return action;
+		if (!bus || (this.runtime.eventHandlerCounts?.get(event.type) ?? 0) === 0) return event.action;
+		const state = { action: event.action };
+		await bus.serial(event.type, event, this.createContext(), state);
+		return state.action;
 	}
+
 	/** Registers the interactive transcript gate that must settle before a tool approval is presented. */
 	setToolApprovalPreviewWaiter(waiter: (toolCallId: string) => Promise<void>): () => void {
 		this.#toolApprovalPreviewWaiter = waiter;
@@ -1185,7 +1160,7 @@ export class ExtensionRunner {
 		if (index === -1) return [];
 		const extension = this.extensions[index]!;
 		const toolNames = [...extension.tools.keys()];
-		for (const handlers of extension.handlers.values()) handlers.length = 0;
+		for (const dispose of extension.eventListenerDisposers?.splice(0) ?? []) dispose();
 		this.extensions.splice(index, 1);
 		this.#extensionEntryMtimes.delete(resolvedTarget);
 		this.#stopServicesForExtension(extension);
@@ -1269,11 +1244,6 @@ export class ExtensionRunner {
 			sessionLedger.entries = freshLedger ? [...freshLedger.entries] : [];
 		}
 		const removedTools = [...oldExt.tools.keys()];
-		// Drop the old instance's handlers before the replacement is live so a
-		// re-registered handler cannot run twice for one event.
-		for (const handlers of oldExt.handlers.values()) {
-			handlers.length = 0;
-		}
 		// Carry the session's registration listeners onto the replacement so
 		// newly registered tools keep reaching the session tool registry.
 		if (oldExt.toolRegistrationListeners) {
@@ -1284,6 +1254,7 @@ export class ExtensionRunner {
 		// Drain the old instance's effects (Cordis lifecycle listeners included)
 		// before the replacement is live, so one emit cannot run both.
 		await disposePluginPrimitives(oldExt);
+		for (const dispose of oldExt.eventListenerDisposers?.splice(0) ?? []) dispose();
 		this.#stopServicesForExtension(oldExt);
 		this.startServices();
 		this.applyThemeTokens();
@@ -1540,15 +1511,7 @@ export class ExtensionRunner {
 	}
 
 	hasHandlers(eventType: string): boolean {
-		const migrated = this.runtime.eventHandlerCounts?.get(eventType);
-		if (migrated !== undefined && migrated > 0) return true;
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get(eventType);
-			if (handlers && handlers.length > 0) {
-				return true;
-			}
-		}
-		return false;
+		return (this.runtime.eventHandlerCounts?.get(eventType) ?? 0) > 0;
 	}
 
 	getMessageRenderer(customType: string): MessageRenderer | undefined {
@@ -2070,73 +2033,17 @@ export class ExtensionRunner {
 			return remembered as RunnerEmitResult<TEvent>;
 		}
 
-		// Defer the per-event context allocation (and the Promise.race/Bun.sleep
-		// timeout machinery) to the first matching handler. Streaming sessions emit
-		// message_update / tool_execution_* per delta with usually no extension
-		// subscribed; building `ctx` for a zero-handler event is pure waste.
-		let ctx: ExtensionContext | undefined;
-		let result: SessionBeforeEventResult | SessionCompactingResult | SessionStopEventResult | undefined;
-
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get(event.type);
-			if (!handlers || handlers.length === 0) continue;
-			ctx ??= this.createContext();
-
-			for (const handler of handlers) {
-				const handlerResult = await this.#runHandlerWithTimeout(
-					handler,
-					event,
-					ctx,
-					ext,
-					handlerTimeoutForEvent(event.type),
-				);
-			}
-		}
-
-		return result as RunnerEmitResult<TEvent>;
+		return undefined as RunnerEmitResult<TEvent>;
 	}
 
 	async emitToolResult(event: ToolResultEvent): Promise<ToolResultEventResult | undefined> {
-		const ctx = this.createContext();
-		const currentEvent: ToolResultEvent = { ...event };
-		let modified = false;
-
 		const bus = this.runtime.eventBus;
-		const cordisCount = this.runtime.eventHandlerCounts?.get("tool_result") ?? 0;
-		if (bus && cordisCount > 0) {
-			const state = { event: currentEvent, modified: false };
-			await bus.serial("tool_result", currentEvent, ctx, state);
-			if (!state.modified) return undefined;
-			return {
-				content: state.event.content,
-				details: state.event.details,
-				isError: state.event.isError,
-			};
-		}
-
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get("tool_result");
-			if (!handlers || handlers.length === 0) continue;
-
-			for (const handler of handlers) {
-				const handlerResult = (await this.#runHandlerWithTimeout(
-					handler,
-					currentEvent,
-					ctx,
-					ext,
-					EXTENSION_HANDLER_TIMEOUT_MS,
-				)) as ToolResultEventResult | undefined;
-				if (applyToolResultPatch(currentEvent, handlerResult)) modified = true;
-			}
-		}
-
-		if (!modified) return undefined;
-
-		return {
-			content: currentEvent.content,
-			details: currentEvent.details,
-			isError: currentEvent.isError,
-		};
+		if (!bus || (this.runtime.eventHandlerCounts?.get("tool_result") ?? 0) === 0) return undefined;
+		const currentEvent: ToolResultEvent = { ...event };
+		const state = { event: currentEvent, modified: false };
+		await bus.serial("tool_result", currentEvent, this.createContext(), state);
+		if (!state.modified) return undefined;
+		return { content: state.event.content, details: state.event.details, isError: state.event.isError };
 	}
 
 	/**
@@ -2155,59 +2062,19 @@ export class ExtensionRunner {
 	 * silent consent to run the tool.
 	 */
 	async emitToolCall(event: ToolCallEvent, signal?: AbortSignal): Promise<ToolCallEventResult | undefined> {
-		const ctx = this.createContext();
+		const bus = this.runtime.eventBus;
+		if (!bus || (this.runtime.eventHandlerCounts?.get("tool_call") ?? 0) === 0) return undefined;
 		const timeoutMs = normalizeHandlerTimeout(
 			this.settings?.get("extensionHandlers.toolCallTimeoutMs") ?? defaultExtensionHandlerTimeoutMs(),
 		);
-		let result: ToolCallEventResult | undefined;
-
-		const bus = this.runtime.eventBus;
-		const cordisCount = this.runtime.eventHandlerCounts?.get("tool_call") ?? 0;
-		if (bus && cordisCount > 0) {
-			const blocked = await bus.serial("tool_call", event, ctx, { timeoutMs, signal });
-			if (blocked) return blocked as ToolCallEventResult;
-			if (signal?.aborted) {
-				return { block: true, reason: `Tool execution was cancelled while an extension handler was pending` };
-			}
-			const remembered = this.runtime.beforeEventResults?.get(event as object);
-			this.runtime.beforeEventResults?.delete(event as object);
-			return remembered as ToolCallEventResult | undefined;
-		}
-
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get("tool_call");
-			if (!handlers || handlers.length === 0) continue;
-
-			for (const handler of handlers) {
-				const handlerResult = await this.#runHandlerWithTimeout(
-					handler,
-					event,
-					ctx,
-					ext,
-					timeoutMs,
-					(kind, message) => ({
-						block: true,
-						reason:
-							kind === "timeout"
-								? `Extension ${ext.path} timed out after ${timeoutMs}ms`
-								: `Extension ${ext.path} failed: ${message}`,
-					}),
-					signal,
-				);
-
-				if (handlerResult) {
-					result = handlerResult;
-					if (result.block) {
-						return result;
-					}
-				}
-			}
-		}
-
+		const blocked = await bus.serial("tool_call", event, this.createContext(), { timeoutMs, signal });
+		if (blocked) return blocked as ToolCallEventResult;
 		if (signal?.aborted) {
 			return { block: true, reason: `Tool execution was cancelled while an extension handler was pending` };
 		}
-		return result;
+		const remembered = this.runtime.beforeEventResults?.get(event as object);
+		this.runtime.beforeEventResults?.delete(event as object);
+		return remembered as ToolCallEventResult | undefined;
 	}
 
 	async emitUserBash(event: UserBashEvent): Promise<UserBashEventResult | undefined> {
@@ -2222,33 +2089,10 @@ export class ExtensionRunner {
 		event: UserBashEvent | UserPythonEvent,
 		eventName: "user_bash" | "user_python",
 	): Promise<R | undefined> {
-		const ctx = this.createContext();
 		const bus = this.runtime.eventBus;
-		const cordisCount = this.runtime.eventHandlerCounts?.get(eventName) ?? 0;
-		if (bus && cordisCount > 0) {
-			const result = await bus.serial(eventName, event, ctx);
-			return (result as R | undefined) ?? undefined;
-		}
-
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get(eventName);
-			if (!handlers || handlers.length === 0) continue;
-
-			for (const handler of handlers) {
-				const handlerResult = await this.#runHandlerWithTimeout(
-					handler,
-					event,
-					ctx,
-					ext,
-					EXTENSION_HANDLER_TIMEOUT_MS,
-				);
-				if (handlerResult) {
-					return handlerResult as R;
-				}
-			}
-		}
-
-		return undefined;
+		if (!bus || (this.runtime.eventHandlerCounts?.get(eventName) ?? 0) === 0) return undefined;
+		const result = await bus.serial(eventName, event, this.createContext());
+		return (result as R | undefined) ?? undefined;
 	}
 
 	async emitResourcesDiscover(
@@ -2259,47 +2103,16 @@ export class ExtensionRunner {
 		promptPaths: Array<{ path: string; extensionPath: string }>;
 		themePaths: Array<{ path: string; extensionPath: string }>;
 	}> {
-		const ctx = this.createContext();
-		const skillPaths: Array<{ path: string; extensionPath: string }> = [];
-		const promptPaths: Array<{ path: string; extensionPath: string }> = [];
-		const themePaths: Array<{ path: string; extensionPath: string }> = [];
-
+		type Entry = { path: string; extensionPath: string };
+		const state: { skillPaths: Entry[]; promptPaths: Entry[]; themePaths: Entry[] } = {
+			skillPaths: [],
+			promptPaths: [],
+			themePaths: [],
+		};
 		const bus = this.runtime.eventBus;
-		const cordisCount = this.runtime.eventHandlerCounts?.get("resources_discover") ?? 0;
-		if (bus && cordisCount > 0) {
-			const state = { skillPaths, promptPaths, themePaths };
-			await bus.serial("resources_discover", { type: "resources_discover", cwd, reason }, ctx, state);
-			return state;
-		}
-
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get("resources_discover");
-			if (!handlers || handlers.length === 0) continue;
-
-			for (const handler of handlers) {
-				const event: ResourcesDiscoverEvent = { type: "resources_discover", cwd, reason };
-				const handlerResult = await this.#runHandlerWithTimeout(
-					handler,
-					event,
-					ctx,
-					ext,
-					EXTENSION_HANDLER_TIMEOUT_MS,
-				);
-				const result = handlerResult as ResourcesDiscoverResult | undefined;
-
-				if (result?.skillPaths?.length) {
-					skillPaths.push(...result.skillPaths.map(path => ({ path, extensionPath: ext.path })));
-				}
-				if (result?.promptPaths?.length) {
-					promptPaths.push(...result.promptPaths.map(path => ({ path, extensionPath: ext.path })));
-				}
-				if (result?.themePaths?.length) {
-					themePaths.push(...result.themePaths.map(path => ({ path, extensionPath: ext.path })));
-				}
-			}
-		}
-
-		return { skillPaths, promptPaths, themePaths };
+		if (!bus || (this.runtime.eventHandlerCounts?.get("resources_discover") ?? 0) === 0) return state;
+		await bus.serial("resources_discover", { type: "resources_discover", cwd, reason }, this.createContext(), state);
+		return state;
 	}
 
 	/** Emit input event. Transforms chain, "handled" short-circuits. */
@@ -2308,60 +2121,20 @@ export class ExtensionRunner {
 		images: ImageContent[] | undefined,
 		source: "interactive" | "rpc" | "extension",
 	): Promise<InputEventResult> {
-		const ctx = this.createContext();
-		let currentText = text;
-		let currentImages = images;
-
 		const bus = this.runtime.eventBus;
-		const cordisCount = this.runtime.eventHandlerCounts?.get("input") ?? 0;
-		if (bus && cordisCount > 0) {
-			const state = { text: currentText, images: currentImages, source };
-			const handled = (await bus.serial("input", null, ctx, state)) as InputEventResult | undefined;
-			if (handled?.handled) return handled;
-			const transformed: InputEventResult = {};
-			if (state.text !== text) transformed.text = state.text;
-			if (state.images !== images) transformed.images = state.images as ImageContent[] | undefined;
-			return transformed;
-		}
-
-		for (const ext of this.extensions) {
-			for (const handler of ext.handlers.get("input") ?? []) {
-				const event: InputEvent = { type: "input", text: currentText, images: currentImages, source };
-				const result = (await this.#runHandlerWithTimeout(
-					handler,
-					event,
-					ctx,
-					ext,
-					defaultExtensionHandlerTimeoutMs(),
-				)) as InputEventResult | undefined;
-				if (result?.handled) return result;
-				if (result?.text !== undefined) currentText = result.text;
-				if (result?.images !== undefined) currentImages = result.images;
-			}
-		}
+		if (!bus || (this.runtime.eventHandlerCounts?.get("input") ?? 0) === 0) return {};
+		const state = { text, images, source };
+		const handled = (await bus.serial("input", null, this.createContext(), state)) as InputEventResult | undefined;
+		if (handled?.handled) return handled;
 		const transformed: InputEventResult = {};
-		if (currentText !== text) transformed.text = currentText;
-		if (currentImages !== images) transformed.images = currentImages;
+		if (state.text !== text) transformed.text = state.text;
+		if (state.images !== images) transformed.images = state.images as ImageContent[] | undefined;
 		return transformed;
 	}
 
 	async emitContext(messages: AgentMessage[]): Promise<AgentMessage[]> {
-		const ctx = this.createContext();
-
 		const bus = this.runtime.eventBus;
-		const cordisCount = this.runtime.eventHandlerCounts?.get("context") ?? 0;
-		// Check if any extensions actually have context handlers before cloning
-		let hasContextHandlers = cordisCount > 0;
-		if (!hasContextHandlers) {
-			for (const ext of this.extensions) {
-				if (ext.handlers.get("context")?.length) {
-					hasContextHandlers = true;
-					break;
-				}
-			}
-		}
-		if (!hasContextHandlers) return messages;
-
+		if (!bus || (this.runtime.eventHandlerCounts?.get("context") ?? 0) === 0) return messages;
 		let currentMessages: AgentMessage[];
 		try {
 			currentMessages = structuredClone(messages);
@@ -2371,110 +2144,40 @@ export class ExtensionRunner {
 			// return new message arrays rather than mutating in place.
 			currentMessages = [...messages];
 		}
-
-		if (bus && cordisCount > 0) {
-			const state = { messages: currentMessages };
-			await bus.serial("context", null, ctx, state);
-			return state.messages;
-		}
-
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get("context");
-			if (!handlers || handlers.length === 0) continue;
-
-			for (const handler of handlers) {
-				const event: ContextEvent = { type: "context", messages: currentMessages };
-				const handlerResult = await this.#runHandlerWithTimeout(
-					handler,
-					event,
-					ctx,
-					ext,
-					EXTENSION_HANDLER_TIMEOUT_MS,
-				);
-
-				if (handlerResult && (handlerResult as ContextEventResult).messages) {
-					currentMessages = (handlerResult as ContextEventResult).messages!;
-				}
-			}
-		}
-
-		return currentMessages;
+		const state = { messages: currentMessages };
+		await bus.serial("context", null, this.createContext(), state);
+		return state.messages;
 	}
 
 	/** Runs request payload hooks with the model used for that provider request. */
 	async emitBeforeProviderRequest(payload: unknown, model?: Model): Promise<BeforeProviderRequestEventResult> {
-		const ctx = this.createContext(model);
-		let currentPayload = payload;
-
 		const bus = this.runtime.eventBus;
-		const cordisCount = this.runtime.eventHandlerCounts?.get("before_provider_request") ?? 0;
-		if (bus && cordisCount > 0) {
-			const state = { payload: currentPayload };
-			await bus.serial("before_provider_request", { type: "before_provider_request", payload }, ctx, state);
-			return state.payload;
-		}
-
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get("before_provider_request");
-			if (!handlers || handlers.length === 0) continue;
-
-			for (const handler of handlers) {
-				const event: BeforeProviderRequestEvent = {
-					type: "before_provider_request",
-					payload: currentPayload,
-				};
-				const handlerResult = await this.#runHandlerWithTimeout(
-					handler,
-					event,
-					ctx,
-					ext,
-					EXTENSION_HANDLER_TIMEOUT_MS,
-				);
-				if (handlerResult !== undefined) {
-					currentPayload = handlerResult;
-				}
-			}
-		}
-
-		return currentPayload;
+		if (!bus || (this.runtime.eventHandlerCounts?.get("before_provider_request") ?? 0) === 0) return payload;
+		const state = { payload };
+		await bus.serial(
+			"before_provider_request",
+			{ type: "before_provider_request", payload },
+			this.createContext(model),
+			state,
+		);
+		return state.payload;
 	}
 
 	/** Runs response hooks with the model that produced that provider response. */
 	async emitAfterProviderResponse(response: ProviderResponseMetadata, model?: Model): Promise<void> {
-		const ctx = this.createContext(model);
-
 		const bus = this.runtime.eventBus;
-		const cordisCount = this.runtime.eventHandlerCounts?.get("after_provider_response") ?? 0;
-		if (bus && cordisCount > 0) {
-			await bus.serial(
-				"after_provider_response",
-				{
-					type: "after_provider_response",
-					status: response.status,
-					headers: response.headers,
-					requestId: response.requestId,
-					metadata: response.metadata,
-				},
-				ctx,
-			);
-			return;
-		}
-
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get("after_provider_response");
-			if (!handlers || handlers.length === 0) continue;
-
-			for (const handler of handlers) {
-				const event: AfterProviderResponseEvent = {
-					type: "after_provider_response",
-					status: response.status,
-					headers: response.headers,
-					requestId: response.requestId,
-					metadata: response.metadata,
-				};
-				await this.#runHandlerWithTimeout(handler, event, ctx, ext, defaultExtensionHandlerTimeoutMs());
-			}
-		}
+		if (!bus || (this.runtime.eventHandlerCounts?.get("after_provider_response") ?? 0) === 0) return;
+		await bus.serial(
+			"after_provider_response",
+			{
+				type: "after_provider_response",
+				status: response.status,
+				headers: response.headers,
+				requestId: response.requestId,
+				metadata: response.metadata,
+			},
+			this.createContext(model),
+		);
 	}
 
 	async emitBeforeAgentStart(
@@ -2482,71 +2185,23 @@ export class ExtensionRunner {
 		images: ImageContent[] | undefined,
 		systemPrompt: string[],
 	): Promise<BeforeAgentStartCombinedResult | undefined> {
-		const ctx = this.createContext();
-		const messages: NonNullable<BeforeAgentStartEventResult["message"]>[] = [];
-		let currentSystemPrompt = systemPrompt;
-		let systemPromptModified = false;
-
 		const bus = this.runtime.eventBus;
-		const cordisCount = this.runtime.eventHandlerCounts?.get("before_agent_start") ?? 0;
-		if (bus && cordisCount > 0) {
-			const state = { messages: messages as unknown[], systemPrompt: systemPrompt, systemPromptModified: false };
-			await bus.serial(
-				"before_agent_start",
-				{ type: "before_agent_start", prompt, images, systemPrompt },
-				ctx,
-				state,
-			);
-			if (state.messages.length === 0 && !state.systemPromptModified) return undefined;
-			return {
-				messages:
-					state.messages.length > 0
-						? (state.messages as NonNullable<BeforeAgentStartEventResult["message"]>[])
-						: undefined,
-				systemPrompt: state.systemPromptModified ? state.systemPrompt : undefined,
-			};
-		}
+		if (!bus || (this.runtime.eventHandlerCounts?.get("before_agent_start") ?? 0) === 0) return undefined;
 
-		for (const ext of this.extensions) {
-			const handlers = ext.handlers.get("before_agent_start");
-			if (!handlers || handlers.length === 0) continue;
-
-			for (const handler of handlers) {
-				const event: BeforeAgentStartEvent = {
-					type: "before_agent_start",
-					prompt,
-					images,
-					systemPrompt: currentSystemPrompt,
-				};
-				const handlerResult = await this.#runHandlerWithTimeout(
-					handler,
-					event,
-					ctx,
-					ext,
-					EXTENSION_HANDLER_TIMEOUT_MS,
-				);
-
-				if (handlerResult) {
-					const result = handlerResult as BeforeAgentStartEventResult;
-					if (result.message) {
-						messages.push(result.message);
-					}
-					if (result.systemPrompt !== undefined) {
-						currentSystemPrompt =
-							typeof result.systemPrompt === "string" ? [result.systemPrompt] : result.systemPrompt;
-						systemPromptModified = true;
-					}
-				}
-			}
-		}
-
-		if (messages.length > 0 || systemPromptModified) {
-			return {
-				messages: messages.length > 0 ? messages : undefined,
-				systemPrompt: systemPromptModified ? currentSystemPrompt : undefined,
-			};
-		}
-
-		return undefined;
+		const state = { messages: [] as unknown[], systemPrompt, systemPromptModified: false };
+		await bus.serial(
+			"before_agent_start",
+			{ type: "before_agent_start", prompt, images, systemPrompt },
+			this.createContext(),
+			state,
+		);
+		if (state.messages.length === 0 && !state.systemPromptModified) return undefined;
+		return {
+			messages:
+				state.messages.length > 0
+					? (state.messages as NonNullable<BeforeAgentStartEventResult["message"]>[])
+					: undefined,
+			systemPrompt: state.systemPromptModified ? state.systemPrompt : undefined,
+		};
 	}
 }

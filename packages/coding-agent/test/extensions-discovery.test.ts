@@ -532,7 +532,7 @@ describe("extensions discovery", () => {
 		expect(result.extensions).toHaveLength(1);
 		expect(result.extensions[0].path).toContain("chalk-logger.ts");
 		// The extension registers event handlers, not commands/tools
-		expect(result.extensions[0].handlers.size).toBeGreaterThan(0);
+		expect(result.runtime.eventHandlerCounts?.size ?? 0).toBeGreaterThan(0);
 	});
 
 	it("resolves dependencies from extension's own node_modules", async () => {
@@ -672,9 +672,9 @@ describe("extensions discovery", () => {
 
 		expect(result.errors).toHaveLength(0);
 		expect(result.extensions).toHaveLength(1);
-		expect(result.extensions[0].handlers.has("agent_start")).toBe(true);
-		expect(result.extensions[0].handlers.has("tool_call")).toBe(true);
-		expect(result.extensions[0].handlers.has("agent_end")).toBe(true);
+		expect(result.runtime.eventHandlerCounts?.has("agent_start")).toBe(true);
+		expect(result.runtime.eventHandlerCounts?.has("tool_call")).toBe(true);
+		expect(result.runtime.eventHandlerCounts?.has("agent_end")).toBe(true);
 	});
 
 	it("loads hookCapability JS factories as extension handlers", async () => {
@@ -694,7 +694,7 @@ describe("extensions discovery", () => {
 		const loadedHook = result.extensions.find(extension => extension.path === hookPath);
 
 		expect(result.errors).toHaveLength(0);
-		expect(loadedHook?.handlers.has("tool_call")).toBe(true);
+		expect(result.runtime.eventHandlerCounts?.has("tool_call")).toBe(true);
 	});
 
 	it("keeps discovered hooks separate from disabled extension package names", async () => {
@@ -729,7 +729,7 @@ describe("extensions discovery", () => {
 
 		expect(result.errors).toHaveLength(0);
 		expect(result.extensions.find(extension => extension.path === extensionPath)).toBeUndefined();
-		expect(loadedHook?.handlers.has("tool_call")).toBe(true);
+		expect(result.runtime.eventHandlerCounts?.has("tool_call")).toBe(true);
 	});
 
 	it("loads extension with shortcuts", async () => {

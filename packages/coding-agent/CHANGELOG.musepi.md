@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **事件系统只剩一份实现：`Extension.handlers` 删除**：动态沙箱的撤销改为弹出 Cordis 监听 disposer，`CordisDynamicPluginRuntime.emit` 改走共享 runtime 的事件总线；runner 的所有手写兜底循环、`hasHandlers` 的 map 分支与 `Extension.handlers` 字段一并删除，诊断计数改用监听账本。会话停止只清 effect，不误删监听（runner 可复用）；重载/卸载才回收监听。
+  - EN: The event system now has one implementation and `Extension.handlers` is gone. The dynamic sandbox undoes registrations by popping the Cordis listener disposer, `CordisDynamicPluginRuntime.emit` dispatches through the shared runtime's event bus, and every hand-written fallback loop, the `hasHandlers` map branch, and the `handlers` field are removed; diagnostics count the listener ledger instead. Session stop drains effects without touching listeners (the runner may be reused); reload/unload reclaims them.
+
 - **审批生命周期事件补入 Cordis 单次通道**：`tool_approval_requested` / `tool_approval_resolved` 是最后两个仍在旧派发的事件，现与其它通知事件共用 `serial`；插件事件的注册与派发至此没有遗留分支。
   - EN: The approval lifecycle events are on the Cordis one-shot path too. `tool_approval_requested` / `tool_approval_resolved` were the last two events still on the legacy dispatcher; they now use `serial` like the other notifications, leaving no plugin event on the old path.
 

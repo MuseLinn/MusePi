@@ -420,12 +420,10 @@ function removeIdentity(list: unknown[], item: unknown): void {
 function undoRegistration(verb: string, api: ExtensionAPI, extension: Extension, args: unknown[]): () => void {
 	switch (verb) {
 		case "on": {
-			const [event, handler] = args as [string, unknown];
+			// Listeners live in the Cordis registry now; the call pushed its
+			// disposer onto the extension's listener ledger, so undo pops it.
 			return () => {
-				const list = extension.handlers.get(event);
-				if (!list) return;
-				removeIdentity(list as unknown[], handler);
-				if (list.length === 0) extension.handlers.delete(event);
+				extension.eventListenerDisposers?.pop()?.();
 			};
 		}
 		case "registerCommand": {
@@ -1267,7 +1265,10 @@ export class CordisDynamicPluginRuntime {
 		// fiber is gone is deliberate: a cleanup that touches a registration
 		// must see the world as it was, not a half-torn-down one.
 		const { disposePluginPrimitives } = await import("../extensibility/plugins/runtime/cordis-primitives");
-		if (extension) await disposePluginPrimitives(extension);
+		if (extension) {
+			await disposePluginPrimitives(extension);
+			for (const dispose of extension.eventListenerDisposers?.splice(0) ?? []) dispose();
+		}
 		// The component DECLARATIONS survive the unload: a package toggle is an
 		// install/uninstall of the whole plugin, and the management surface
 		// must keep listing what the plugin declares (with each row reading
@@ -1318,20 +1319,12 @@ export class CordisDynamicPluginRuntime {
 		};
 	}
 
-	/** 触发宿主事件，分发给所有已订阅扩展（宿主面事件总线，句柄外）。 */
+	/** 触发宿主事件：走共享 runtime 的 Cordis 事件总线，卸载后的监听自然缺席。 */
 	emit(event: string, ...args: unknown[]): void {
-		for (const record of this.#records.values()) {
-			if (record.status !== "active" || !record.extension) continue;
-			const handlers = record.extension.handlers.get(event);
-			if (!handlers) continue;
-			for (const handler of [...handlers]) {
-				try {
-					handler(...args);
-				} catch (err) {
-					logger.warn("dynamic extension event handler threw", { name: record.name, err });
-				}
-			}
-		}
+		const runtime = this.#runtime;
+		const bus = runtime?.eventBus;
+		if (!bus || (runtime.eventHandlerCounts?.get(event) ?? 0) === 0) return;
+		void bus.parallel(event, ...args);
 	}
 
 	/**
