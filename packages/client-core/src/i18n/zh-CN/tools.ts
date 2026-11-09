@@ -665,6 +665,9 @@ export const tools = {
 	"tools.extAddFromMarketHint": "安装市场已收录的插件",
 	"tools.extAddFromSpec": "安装第三方插件",
 	"tools.extAddFromSpecHint": "支持 npm 包、Git 仓库和本地目录",
+	"tools.extCreateWithAgent": "让 Agent 创建插件",
+	"tools.extCreateWithAgentHint": "进入创造模式，制作属于你的插件",
+	"tools.extCreatePluginPrompt": "帮我创建一个插件。先问清我要做什么，再按插件规范实现并验证。",
 	"tools.extPluginsInstalled": "已安装",
 	// 插件列表按 Agent 预设分组（预设 = 一组插件组合）
 	"tools.extPluginsPresetGroup": "预设「{name}」",
@@ -732,7 +735,7 @@ export const tools = {
 	"tools.extConfigCount": "配置 ×{count}",
 	"tools.extPresetProvidedDetail": "由 Agent 预设按会话提供",
 	"tools.pluginsListScopeHint": "只列可启停或可配置的内置插件与已安装插件；预设组合概览在 设置 → 扩展与插件。",
-	"tools.pluginsInventoryScopeHint": "上半是预设组合概览（默认折叠）；下方统一管理全部内置与已安装插件。",
+	"tools.pluginsInventoryScopeHint": "统计卡可点击筛选；下方统一管理全部内置与已安装插件。",
 	"tools.extSearchPlugins": "搜索插件",
 	"tools.extFullName": "完整名称",
 	"tools.extensionType": "类型",

@@ -693,6 +693,10 @@ export const tools = {
 	"tools.extAddFromMarketHint": "Install a plugin listed in the marketplace",
 	"tools.extAddFromSpec": "Install a third-party plugin",
 	"tools.extAddFromSpecHint": "npm packages, Git repositories, and local directories",
+	"tools.extCreateWithAgent": "Let the Agent create a plugin",
+	"tools.extCreateWithAgentHint": "Enter creator mode and build your own plugin",
+	"tools.extCreatePluginPrompt":
+		"Help me create a plugin. Ask what it should do first, then implement and verify it following the plugin conventions.",
 	"tools.extPluginsInstalled": "Installed",
 	// Plugin list grouped by Agent preset (a preset is a plugin composition)
 	"tools.extPluginsPresetGroup": 'Preset "{name}"',
@@ -766,7 +770,7 @@ export const tools = {
 	"tools.pluginsListScopeHint":
 		"Toggleable and configurable built-in plugins plus installed ones. The preset composition overview lives in Settings → Extensions & plugins.",
 	"tools.pluginsInventoryScopeHint":
-		"The preset composition overview comes first, collapsed by default; every built-in and installed plugin is managed below.",
+		"The stat cards filter the list; every built-in and installed plugin is managed below.",
 	"tools.extSearchPlugins": "Search plugins",
 	"tools.extFullName": "Full name",
 	"tools.extensionType": "Type",

@@ -91,6 +91,10 @@ export interface ExtensionServiceDeps {
 	runtimeTargets?(): Promise<readonly PluginRuntimeTarget[]>;
 	/** extensions.changed 广播（宿主接 EventService，lazy 调用无循环）。 */
 	onChanged(): void;
+	/** Home directory used to read profile presets (tests isolate it). */
+	home?(): string;
+	/** The profile's default Agent preset id (tests inject a fixture). */
+	defaultPresetId?(): Promise<string>;
 	/**
 	 * Apply an entry-level plugin change to sessions that are already open
 	 * (package enable/disable). Absent → the change lands with the next session.
@@ -472,16 +476,19 @@ export class ExtensionService implements DaemonService {
 			// A composition row names a PACKAGE, while the "enabled in" map is keyed
 			// by the extension name derived from an entry path. Resolving the package
 			// to its extension entries is what lets the two spellings meet.
+			const home = this.#deps.home?.() ?? os.homedir();
 			const { getEnabledPlugins, resolvePluginExtensionPaths } = await import(
 				"../../extensibility/plugins/runtime/loader"
 			);
-			const installedPlugins = await getEnabledPlugins(this.#deps.cwd()).catch(() => []);
+			const installedPlugins = await getEnabledPlugins(this.#deps.cwd(), { home }).catch(() => []);
 			const extensionNamesOfPackage = (packageName: string): string[] => {
 				const plugin = installedPlugins.find(p => p.name === packageName);
 				if (!plugin) return [];
 				return resolvePluginExtensionPaths(plugin).map(entry => getExtensionNameFromPath(entry));
 			};
-			const defaultPresetId = await readDefaultPresetId(this.#deps.cwd(), os.homedir()).catch(() => "");
+			const defaultPresetId = await (
+				this.#deps.defaultPresetId?.() ?? readDefaultPresetId(this.#deps.cwd(), home)
+			).catch(() => "");
 			/** Root-fiber phase of one named entry, for the inventory card status. */
 			const fiberPhaseOf = (name: string): "active" | "failed" | null => {
 				const entry = extensions.find(ext => getExtensionNameFromPath(ext.path) === name);
@@ -510,7 +517,7 @@ export class ExtensionService implements DaemonService {
 			const { collectProfilePresetDefinitions } = await import(
 				"../../extensibility/plugins/profile/profile-presets"
 			);
-			for (const def of await collectProfilePresetDefinitions(this.#deps.cwd(), os.homedir())) {
+			for (const def of await collectProfilePresetDefinitions(this.#deps.cwd(), home)) {
 				if (!definitions.has(def.id)) definitions.set(def.id, def);
 			}
 			for (const id of definitions.keys()) {

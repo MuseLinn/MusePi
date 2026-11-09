@@ -2315,6 +2315,28 @@
 	padding-left: 4px;
 	padding-right: 4px;
 }
+/* Settings keeps the full inventory as a multi-card grid: each entry owns its
+ * surface, while the capability center stays a compact management list. */
+.gui-ext-plugins[data-variant="cards"] .gui-plugin-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+	gap: 10px;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	overflow: visible;
+}
+.gui-ext-plugins[data-variant="cards"] .gui-plugin-card {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	transition:
+		background 120ms ease,
+		border-color 120ms ease;
+}
+.gui-ext-plugins[data-variant="cards"] .gui-plugin-card:hover {
+	background: var(--color-surface-raised);
+}
 .gui-ext-plugins-scope {
 	padding: 2px 2px 8px;
 	font-size: 11px;

@@ -1,5 +1,5 @@
 import "./happy-dom-shim";
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, vi } from "bun:test";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { UnifiedPluginsView } from "../src/components/UnifiedPluginsView";
@@ -113,16 +113,61 @@ describe("plugin entrances", () => {
 
 	it("keeps the full inventory in settings with technical identity", async () => {
 		const view = await mount("cards");
-		// The inventory planes are collapsed overviews; the management groups
-		// below them still list every builtin entry.
-		expect(view.host.textContent).toContain("Session plugins · 2");
-		expect(view.host.textContent).toContain("Global plugins · 2");
+		// The overview is four stat cards; the management groups below still
+		// list every builtin entry.
+		expect(view.host.textContent).toContain("Session plugins");
+		expect(view.host.textContent).toContain("Global plugins");
+		expect(view.host.textContent).toContain("Work");
 		expect(view.host.textContent).toContain("Built-in plugin settings · 4");
 		expect(view.host.textContent).toContain("Tool cards");
 		expect(view.host.textContent).toContain("Chat persona");
 		expect(view.host.textContent).toContain("Read-only");
 		expect(view.host.textContent).toContain("Preset-only");
 		expect(view.host.textContent).toContain("Config ×1");
+		await view.unmount();
+	});
+
+	it("filters the management list from the overview cards", async () => {
+		const view = await mount("cards");
+		const sessionCard = Array.from(view.host.querySelectorAll<HTMLButtonElement>("button[aria-pressed]")).find(
+			button => button.textContent?.startsWith("Session plugins"),
+		);
+		expect(sessionCard).toBeDefined();
+
+		await act(async () => {
+			sessionCard!.click();
+		});
+		expect(view.host.textContent).toContain("Terminal");
+		expect(view.host.textContent).not.toContain("Tool cards");
+
+		// Clicking the active card clears the scope again.
+		await act(async () => {
+			sessionCard!.click();
+		});
+		expect(view.host.textContent).toContain("Tool cards");
+		await view.unmount();
+	});
+
+	it("routes the creator entry through the plugin-creation event", async () => {
+		const received = vi.fn();
+		window.addEventListener("musepi-create-plugin", received);
+		const view = await mount("cards");
+		const addButton = Array.from(view.host.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+			button.textContent?.includes("Add plugin"),
+		);
+		expect(addButton).toBeDefined();
+		await act(async () => {
+			addButton!.click();
+		});
+		const creatorItem = Array.from(document.querySelectorAll<HTMLButtonElement>("[role=menuitem]")).find(item =>
+			item.textContent?.includes("Let the Agent create a plugin"),
+		);
+		expect(creatorItem).toBeDefined();
+		await act(async () => {
+			creatorItem!.click();
+		});
+		expect(received).toHaveBeenCalledTimes(1);
+		window.removeEventListener("musepi-create-plugin", received);
 		await view.unmount();
 	});
 });

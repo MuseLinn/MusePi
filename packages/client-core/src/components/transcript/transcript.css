@@ -2045,15 +2045,36 @@ button.tr-display-context-source:hover {
 	z-index: 40;
 	min-width: 248px;
 	max-width: 340px;
-	padding: 8px 10px;
-	border: 1px solid var(--glass-hairline, var(--border));
-	border-radius: var(--radius-lg);
-	background: var(--glass-card-bg, var(--color-surface));
-	box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.28));
+	padding: 10px 12px;
+	/* L2 floating layer: popovers sit on the float fill with the strong
+	 * hairline and the specular rim, and a popover rounds at xl. */
+	border: 1px solid var(--glass-hairline-strong);
+	border-radius: var(--radius-xl);
+	background-color: var(--glass-float-bg);
+	box-shadow:
+		inset 0 1px 0 var(--glass-rim-hi),
+		inset 0 -1px 0 var(--glass-rim-lo),
+		var(--glass-float-shadow);
 	font-family: var(--font-mono);
 	font-size: 11px;
 	line-height: 17px;
 	color: var(--fg-muted);
+	animation: tr-usage-pop-in 120ms ease-out;
+}
+@keyframes tr-usage-pop-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.tr-usage-pop {
+		animation: none;
+	}
 }
 .tr-usage-pop-total {
 	display: flex;

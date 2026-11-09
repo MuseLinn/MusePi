@@ -1,6 +1,6 @@
 import { t } from "@musepi/client-core";
 import { coerceConfigValues } from "@musepi/pi-wire";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { type ExternalExecutableProbeResult, externalAgentBinary } from "../lib/external-agent-config";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -143,6 +143,26 @@ export function isPathInside(child: string, parent: string): boolean {
 	const base = normalizePathForCompare(parent);
 	const target = normalizePathForCompare(child);
 	return target.length > base.length && target.startsWith(`${base}/`);
+}
+
+/**
+ * Total manageable entries for the sidebar badge: the official manage lane +
+ * installed packages + user-level modules not owned by a package. Search
+ * filtering must not move this number, and it must count what the pane can
+ * actually show (not just `plugins.packages`, which is 0 when everything is
+ * built in).
+ */
+export function manageablePluginCount(
+	modules: ExtensionItem[],
+	packages: readonly PluginPackageEntry[],
+	variant: "list" | "cards" = "list",
+): number {
+	const official = officialPluginsFor(variant, modules);
+	const packaged = new Set(
+		modules.filter(e => !e.builtin && packages.some(p => isPathInside(e.path, p.path))).map(e => e.id),
+	);
+	const standalone = modules.filter(e => !e.builtin && !packaged.has(e.id)).length;
+	return official.length + packages.length + standalone;
 }
 
 /** i18n 键探测：命中返回译文，未命中返回 null（fallback 到 daemon 原文）。 */
@@ -493,6 +513,7 @@ export function UnifiedPluginsView({
 	onOpenMarketplace,
 	onError,
 	onPackagesRefreshed,
+	onCountChange,
 	variant = "list",
 }: {
 	rpc: RpcClient | null;
@@ -504,6 +525,9 @@ export function UnifiedPluginsView({
 	onError(message: string | null): void;
 	/** 父级持有插件包清单；spec 安装完成后由本视图回读并交给它替换。 */
 	onPackagesRefreshed?(packages: PluginPackageEntry[]): void;
+	/** 本面板可管理条目的总数（官方 manage 层 + 插件包 + 未归属模块），
+	 *  供二级左栏徽标使用；搜索过滤不影响它。 */
+	onCountChange?(count: number): void;
 	/** list = 能力中心的插件列表：只列真实插件模块（内置几个 + 用户
 	 *  安装/自建）与插件包；cards = 设置 → 扩展与插件：完整库存（含内置
 	 *  插件单元），管理导向。 */
@@ -532,6 +556,12 @@ export function UnifiedPluginsView({
 			description: t("tools.extAddFromSpecHint"),
 			icon: "download",
 			onSelect: () => setInstallOpen(true),
+		},
+		{
+			label: t("tools.extCreateWithAgent"),
+			description: t("tools.extCreateWithAgentHint"),
+			icon: "ai-agent",
+			onSelect: () => window.dispatchEvent(new CustomEvent("musepi-create-plugin")),
 		},
 	];
 	// 卸载在途标记（卡片直卸 + 详情弹层卸载共用,一次一个）。
@@ -621,6 +651,16 @@ export function UnifiedPluginsView({
 		() => plugins.filter(p => matchesQuery([p.name, p.description, p.path], normalizedQuery)),
 		[plugins, normalizedQuery],
 	);
+	// Sidebar badge: every manageable entry this pane can show — official
+	// manage lane + installed packages + user-level modules not owned by a
+	// package. Search filtering must not move it.
+	const totalPluginCount = useMemo(
+		() => manageablePluginCount(modules, plugins, variant),
+		[modules, plugins, variant],
+	);
+	useEffect(() => {
+		onCountChange?.(totalPluginCount);
+	}, [onCountChange, totalPluginCount]);
 	const detailItem = detailId ? (modules.find(e => e.id === detailId) ?? null) : null;
 
 	// dsh inventory planes: a preset's flattened composition is the session
@@ -635,22 +675,6 @@ export function UnifiedPluginsView({
 	const sessionNames = useMemo(() => new Set((sessionPreset?.rows ?? []).map(row => row.name)), [sessionPreset]);
 	const sessionPlugins = useMemo(() => official.filter(e => sessionNames.has(e.name)), [official, sessionNames]);
 	const globalPlugins = useMemo(() => official.filter(e => !sessionNames.has(e.name)), [official, sessionNames]);
-	// Management groups are type-based, not preset-based: configurable built-ins,
-	// experimental built-ins, then installed packages/modules. The inventory
-	// overview above them answers "what composes a session"; these answer "what
-	// can I manage here".
-	const builtinConfig = useMemo(() => official.filter(e => e.experimental !== true), [official]);
-	const experimentalBuiltins = useMemo(() => official.filter(e => e.experimental === true), [official]);
-	// The inventory is an overview: both planes start collapsed in the settings
-	// page and expand on demand. The capability center has no overview.
-	const [overviewOpen, setOverviewOpen] = useState<{ preset: boolean; global: boolean }>({
-		preset: false,
-		global: false,
-	});
-	const toggleOverview = (plane: "preset" | "global"): void => {
-		setOverviewOpen(current => ({ ...current, [plane]: !current[plane] }));
-	};
-
 	// 一个插件包 + 它目录下的扩展模块是同一个插件的两条链路 —— 包是列表的
 	// 唯一条目，模块收进包详情弹层的「包含的组件」。模块路径在包目录下即归
 	// 该包（module path = <pkg>/index.ts）。未归属任何已安装包的用户级模块
@@ -663,6 +687,55 @@ export function UnifiedPluginsView({
 		const packaged = new Set(packagedModules.map(e => e.id));
 		return installedModules.filter(e => !packaged.has(e.id));
 	}, [installedModules, packagedModules]);
+	// Management groups are type-based, not preset-based: configurable built-ins,
+	// experimental built-ins, then installed packages/modules. The inventory
+	// overview above them answers "what composes a session"; these answer "what
+	// can I manage here".
+	const builtinConfig = useMemo(() => official.filter(e => e.experimental !== true), [official]);
+	const experimentalBuiltins = useMemo(() => official.filter(e => e.experimental === true), [official]);
+	// Overview stats double as scope filters; clicking the active card clears it.
+	const [scope, setScope] = useState<"session" | "global" | "experimental" | "installed" | null>(null);
+	const overviewStats: Array<{
+		id: NonNullable<typeof scope>;
+		label: string;
+		value: number;
+		sub?: string;
+	}> = [
+		{
+			id: "session",
+			label: t("tools.extPluginsSession"),
+			value: sessionPlugins.length,
+			sub: selectedPreset?.label ?? t("tools.extPluginsSessionHint"),
+		},
+		{
+			id: "global",
+			label: t("tools.extPluginsGlobal"),
+			value: globalPlugins.length,
+			sub: t("tools.extPluginsGlobalHint"),
+		},
+		{
+			id: "experimental",
+			label: t("tools.extPluginsExperimental"),
+			value: experimentalBuiltins.length,
+		},
+		{
+			id: "installed",
+			label: t("tools.extPluginsInstalled"),
+			value: filteredPackages.length + standaloneModules.length,
+		},
+	];
+	const scopeMatches = (e: ExtensionItem): boolean => {
+		if (scope === null) return true;
+		if (scope === "session") return sessionNames.has(e.name);
+		if (scope === "global") return !sessionNames.has(e.name);
+		if (scope === "experimental") return e.experimental === true;
+		return false;
+	};
+	const scopedOfficial = scope === "installed" ? [] : official.filter(scopeMatches);
+	const scopedConfig = scopedOfficial.filter(e => e.experimental !== true);
+	const scopedExperimental = scopedOfficial.filter(e => e.experimental === true);
+	const showInstalled = scope === null || scope === "installed";
+
 	// 当前详情弹层打开的包 + 归属它的模块与设置组件。
 	const [packageDetail, setPackageDetail] = useState<PluginPackageEntry | null>(null);
 	const packageModules = useMemo(
@@ -759,96 +832,45 @@ export function UnifiedPluginsView({
 				standaloneModules.length === 0 && <div className="gui-ext-plugins-error">{t("tools.noMatches")}</div>}
 			{variant === "cards" ? (
 				<div className="gui-ext-list-scroll">
-					{/* Overview first: what composes a session, collapsed by default. */}
-					{sessionPlugins.length > 0 && (
-						<div className="gui-ext-group">
-							<div className="gui-ext-group-title gui-ext-group-title--row">
+					{/* Overview: four stat cards that double as scope filters. The
+					 * preset selector names the session plane, so the concept stays visible
+					 * even when a preset declares no rows. */}
+					<div className="gui-ext-overview">
+						<div className="gui-ext-stat-row">
+							{overviewStats.map(stat => (
 								<button
+									key={stat.id}
 									type="button"
-									className="gui-ext-disclosure"
-									aria-expanded={overviewOpen.preset}
-									onClick={() => toggleOverview("preset")}
+									className={`gui-ext-stat-card gui-ext-stat-card--filter${scope === stat.id ? " gui-ext-stat-card--active" : ""}`}
+									aria-pressed={scope === stat.id}
+									onClick={() => setScope(current => (current === stat.id ? null : stat.id))}
 								>
-									<Icon
-										name={overviewOpen.preset ? "arrow-down-s" : "arrow-right-s"}
-										className="h-3.5 w-3.5"
-									/>
-									<span>
-										{t("tools.extPluginsSession")} · {sessionPlugins.length}
-									</span>
+									<span className="gui-ext-stat-label">{stat.label}</span>
+									<span className="gui-ext-stat-value">{stat.value}</span>
+									{stat.sub !== undefined && <span className="gui-ext-stat-sub">{stat.sub}</span>}
 								</button>
-								{presets.length > 1 && selectedPreset !== undefined && (
-									<GuiSelect
-										value={selectedPreset.id}
-										onChange={setChosenPresetId}
-										ariaLabel={t("tools.extPluginsSession")}
-										options={presets.map(preset => ({ value: preset.id, label: preset.label }))}
-										className="gui-ext-preset-select"
-									/>
-								)}
-							</div>
-							<div className="gui-ext-plugins-scope">{t("tools.extPluginsSessionHint")}</div>
-							{overviewOpen.preset && (
-								<div className="gui-plugin-cards">
-									{sessionPlugins.map(e => (
-										<ModuleCard
-											key={`overview:${e.id}`}
-											e={e}
-											rpc={rpc}
-											busy={busyId !== null}
-											detail
-											onOpen={item => setDetailId(item.id)}
-											onToggle={toggleModule}
-										/>
-									))}
-								</div>
-							)}
+							))}
 						</div>
-					)}
-					{globalPlugins.length > 0 && (
+						{presets.length > 1 && selectedPreset !== undefined && (
+							<div className="gui-ext-preset-row">
+								<span className="gui-ext-plugins-scope">{t("tools.extPluginsSessionHint")}</span>
+								<GuiSelect
+									value={selectedPreset.id}
+									onChange={setChosenPresetId}
+									ariaLabel={t("tools.extPluginsSession")}
+									options={presets.map(preset => ({ value: preset.id, label: preset.label }))}
+									className="gui-ext-preset-select"
+								/>
+							</div>
+						)}
+					</div>
+					{scopedConfig.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								<button
-									type="button"
-									className="gui-ext-disclosure"
-									aria-expanded={overviewOpen.global}
-									onClick={() => toggleOverview("global")}
-								>
-									<Icon
-										name={overviewOpen.global ? "arrow-down-s" : "arrow-right-s"}
-										className="h-3.5 w-3.5"
-									/>
-									<span>
-										{t("tools.extPluginsGlobal")} · {globalPlugins.length}
-									</span>
-								</button>
-							</div>
-							<div className="gui-ext-plugins-scope">{t("tools.extPluginsGlobalHint")}</div>
-							{overviewOpen.global && (
-								<div className="gui-plugin-cards">
-									{globalPlugins.map(e => (
-										<ModuleCard
-											key={`overview:${e.id}`}
-											e={e}
-											rpc={rpc}
-											busy={busyId !== null}
-											detail
-											onOpen={item => setDetailId(item.id)}
-											onToggle={toggleModule}
-										/>
-									))}
-								</div>
-							)}
-						</div>
-					)}
-					{/* Management: every plugin this page can configure or toggle. */}
-					{builtinConfig.length > 0 && (
-						<div className="gui-ext-group">
-							<div className="gui-ext-group-title">
-								{t("tools.extPluginsConfig")} · {builtinConfig.length}
+								{t("tools.extPluginsConfig")} · {scopedConfig.length}
 							</div>
 							<div className="gui-plugin-cards">
-								{builtinConfig.map(e => (
+								{scopedConfig.map(e => (
 									<ModuleCard
 										key={`manage:${e.id}`}
 										e={e}
@@ -862,13 +884,13 @@ export function UnifiedPluginsView({
 							</div>
 						</div>
 					)}
-					{experimentalBuiltins.length > 0 && (
+					{scopedExperimental.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("tools.extPluginsExperimental")} · {experimentalBuiltins.length}
+								{t("tools.extPluginsExperimental")} · {scopedExperimental.length}
 							</div>
 							<div className="gui-plugin-cards">
-								{experimentalBuiltins.map(e => (
+								{scopedExperimental.map(e => (
 									<ModuleCard
 										key={`manage:${e.id}`}
 										e={e}
@@ -882,7 +904,7 @@ export function UnifiedPluginsView({
 							</div>
 						</div>
 					)}
-					{(filteredPackages.length > 0 || standaloneModules.length > 0) && (
+					{showInstalled && (filteredPackages.length > 0 || standaloneModules.length > 0) && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
 								{t("tools.extPluginsInstalled")} · {filteredPackages.length + standaloneModules.length}

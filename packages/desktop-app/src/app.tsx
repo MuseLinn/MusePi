@@ -2980,6 +2980,17 @@ function AppInner(): ReactNode {
 		[createAndSend, closeSettings],
 	);
 
+	/** Plugin pages → 「让 Agent 创建插件」: same creator flow, with the request
+	 *  stated as the first user message so the Creator preset can ask and build. */
+	useEffect(() => {
+		const onCreatePlugin = (): void => {
+			closeSettings();
+			void createAndSend(t("tools.extCreatePluginPrompt"), "creator");
+		};
+		window.addEventListener("musepi-create-plugin", onCreatePlugin);
+		return () => window.removeEventListener("musepi-create-plugin", onCreatePlugin);
+	}, [createAndSend, closeSettings]);
+
 	/** Persist a user-set session title (daemon session.rename), then
 	 *  refresh the tree so the new label lands everywhere at once. */
 	const renameSession = useCallback(

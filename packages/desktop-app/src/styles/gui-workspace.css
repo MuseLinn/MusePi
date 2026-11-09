@@ -4121,37 +4121,25 @@
 	color: var(--color-text-muted);
 	padding: 4px 2px 6px;
 }
-/* The session-plugin group carries the preset filter on the title line, the
- * same placement dsh uses; the select keeps the compact control height. */
-.gui-ext-group-title--row {
+/* Overview filter row: stat cards double as scope filters and the preset
+ * selector names the session plane. */
+.gui-ext-preset-select {
+	flex-shrink: 0;
+}
+.gui-ext-overview {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-bottom: 4px;
+}
+.gui-ext-preset-row {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
 }
-.gui-ext-preset-select {
-	flex-shrink: 0;
-}
-/* Collapsible group title: the whole heading is the disclosure control. */
-.gui-ext-disclosure {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
+.gui-ext-preset-row .gui-ext-plugins-scope {
 	padding: 0;
-	border: 0;
-	background: none;
-	color: inherit;
-	font: inherit;
-	cursor: pointer;
-	text-align: left;
-}
-.gui-ext-disclosure:hover {
-	color: var(--color-text);
-}
-.gui-ext-disclosure:focus-visible {
-	outline: 1px solid var(--accent);
-	outline-offset: 2px;
-	border-radius: var(--radius-sm);
 }
 .gui-btn--sm {
 	padding: 3px 10px;
@@ -4657,6 +4645,28 @@
 
 .gui-ext-stat-card--err {
 	border-color: color-mix(in oklab, var(--color-danger) 40%, var(--border));
+}
+
+/* Overview cards double as scope filters. */
+.gui-ext-stat-card--filter {
+	text-align: left;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+	transition:
+		border-color 120ms ease,
+		background 120ms ease;
+}
+.gui-ext-stat-card--filter:hover {
+	border-color: color-mix(in oklab, var(--accent) 35%, var(--border));
+}
+.gui-ext-stat-card--active {
+	border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+	background: color-mix(in oklab, var(--accent) 8%, var(--color-surface-raised));
+}
+.gui-ext-stat-card--filter:focus-visible {
+	outline: 1px solid var(--accent);
+	outline-offset: 2px;
 }
 
 .gui-ext-stat-value {
