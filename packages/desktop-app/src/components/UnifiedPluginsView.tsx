@@ -7,6 +7,7 @@ import type { RpcClient } from "../lib/rpc";
 import { type ExtensionItem, useExtensionRegistry } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { ConfigFormRenderer } from "./ConfigFormRenderer";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { GuiSelect } from "./GuiSelect";
 import { PluginDetailDialog } from "./PluginDetailDialog";
 import { kindGlyph, PluginIcon } from "./PluginIcon";
@@ -517,6 +518,22 @@ export function UnifiedPluginsView({
 	const [detailId, setDetailId] = useState<string | null>(null);
 	// spec 安装弹层：marketplace 只覆盖已收录的包,自建/未发布的插件走这条。
 	const [installOpen, setInstallOpen] = useState(false);
+	// 「添加插件」菜单锚点（市场 / 本机 spec 两条入口）。
+	const [addMenuPos, setAddMenuPos] = useState<{ x: number; y: number } | null>(null);
+	const addMenuItems: ContextMenuItem[] = [
+		{
+			label: t("tools.extAddFromMarket"),
+			description: t("tools.extAddFromMarketHint"),
+			icon: "plug-2",
+			onSelect: onOpenMarketplace,
+		},
+		{
+			label: t("tools.extAddFromSpec"),
+			description: t("tools.extAddFromSpecHint"),
+			icon: "download",
+			onSelect: () => setInstallOpen(true),
+		},
+	];
 	// 卸载在途标记（卡片直卸 + 详情弹层卸载共用,一次一个）。
 	const [uninstallBusy, setUninstallBusy] = useState(false);
 	const { confirm } = useConfirm();
@@ -618,6 +635,21 @@ export function UnifiedPluginsView({
 	const sessionNames = useMemo(() => new Set((sessionPreset?.rows ?? []).map(row => row.name)), [sessionPreset]);
 	const sessionPlugins = useMemo(() => official.filter(e => sessionNames.has(e.name)), [official, sessionNames]);
 	const globalPlugins = useMemo(() => official.filter(e => !sessionNames.has(e.name)), [official, sessionNames]);
+	// Management groups are type-based, not preset-based: configurable built-ins,
+	// experimental built-ins, then installed packages/modules. The inventory
+	// overview above them answers "what composes a session"; these answer "what
+	// can I manage here".
+	const builtinConfig = useMemo(() => official.filter(e => e.experimental !== true), [official]);
+	const experimentalBuiltins = useMemo(() => official.filter(e => e.experimental === true), [official]);
+	// The inventory is an overview: both planes start collapsed in the settings
+	// page and expand on demand. The capability center has no overview.
+	const [overviewOpen, setOverviewOpen] = useState<{ preset: boolean; global: boolean }>({
+		preset: false,
+		global: false,
+	});
+	const toggleOverview = (plane: "preset" | "global"): void => {
+		setOverviewOpen(current => ({ ...current, [plane]: !current[plane] }));
+	};
 
 	// 一个插件包 + 它目录下的扩展模块是同一个插件的两条链路 —— 包是列表的
 	// 唯一条目，模块收进包详情弹层的「包含的组件」。模块路径在包目录下即归
@@ -692,23 +724,30 @@ export function UnifiedPluginsView({
 					/>
 				</label>
 				<span className="gui-ext-plugins-toolbar-count">
-					{t("tools.extPluginsSession")} {sessionPlugins.length} · {t("tools.extPluginsGlobal")}{" "}
-					{globalPlugins.length} · {t("tools.extPluginsInstalled")}{" "}
+					{t("tools.extPluginsConfig")} {builtinConfig.length} · {t("tools.extPluginsExperimental")}{" "}
+					{experimentalBuiltins.length} · {t("tools.extPluginsInstalled")}{" "}
 					{filteredPackages.length + standaloneModules.length}
 				</span>
 				<button
 					type="button"
 					className="gui-btn gui-btn--sm gui-cap-action gui-cap-action--primary"
-					onClick={onOpenMarketplace}
+					aria-haspopup="menu"
+					aria-expanded={addMenuPos !== null}
+					onClick={event => {
+						const rect = event.currentTarget.getBoundingClientRect();
+						setAddMenuPos({ x: rect.right, y: rect.bottom + 4 });
+					}}
 				>
 					<Icon name="add" className="h-3.5 w-3.5" />
 					{t("tools.extAddPlugin")}
 				</button>
-				{/* 市场只收录已发布的包；自建插件、压缩包与本机目录从这里进。 */}
-				<button type="button" className="gui-btn gui-btn--sm gui-cap-action" onClick={() => setInstallOpen(true)}>
-					<Icon name="download" className="h-3.5 w-3.5" />
-					{t("settings.pluginInstallTitle")}
-				</button>
+				<ContextMenu
+					open={addMenuPos !== null}
+					x={addMenuPos?.x ?? 0}
+					y={addMenuPos?.y ?? 0}
+					onClose={() => setAddMenuPos(null)}
+					items={addMenuItems}
+				/>
 			</div>
 			<div className="gui-ext-plugins-scope">
 				{variant === "cards" ? t("tools.pluginsInventoryScopeHint") : t("tools.pluginsListScopeHint")}
@@ -720,12 +759,24 @@ export function UnifiedPluginsView({
 				standaloneModules.length === 0 && <div className="gui-ext-plugins-error">{t("tools.noMatches")}</div>}
 			{variant === "cards" ? (
 				<div className="gui-ext-list-scroll">
+					{/* Overview first: what composes a session, collapsed by default. */}
 					{sessionPlugins.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title gui-ext-group-title--row">
-								<span>
-									{t("tools.extPluginsSession")} · {sessionPlugins.length}
-								</span>
+								<button
+									type="button"
+									className="gui-ext-disclosure"
+									aria-expanded={overviewOpen.preset}
+									onClick={() => toggleOverview("preset")}
+								>
+									<Icon
+										name={overviewOpen.preset ? "arrow-down-s" : "arrow-right-s"}
+										className="h-3.5 w-3.5"
+									/>
+									<span>
+										{t("tools.extPluginsSession")} · {sessionPlugins.length}
+									</span>
+								</button>
 								{presets.length > 1 && selectedPreset !== undefined && (
 									<GuiSelect
 										value={selectedPreset.id}
@@ -737,11 +788,11 @@ export function UnifiedPluginsView({
 								)}
 							</div>
 							<div className="gui-ext-plugins-scope">{t("tools.extPluginsSessionHint")}</div>
-							{sessionPlugins.length > 0 ? (
+							{overviewOpen.preset && (
 								<div className="gui-plugin-cards">
 									{sessionPlugins.map(e => (
 										<ModuleCard
-											key={e.id}
+											key={`overview:${e.id}`}
 											e={e}
 											rpc={rpc}
 											busy={busyId !== null}
@@ -751,21 +802,75 @@ export function UnifiedPluginsView({
 										/>
 									))}
 								</div>
-							) : (
-								<div className="gui-ext-plugins-scope">{t("tools.noMatches")}</div>
 							)}
 						</div>
 					)}
 					{globalPlugins.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("tools.extPluginsGlobal")} · {globalPlugins.length}
+								<button
+									type="button"
+									className="gui-ext-disclosure"
+									aria-expanded={overviewOpen.global}
+									onClick={() => toggleOverview("global")}
+								>
+									<Icon
+										name={overviewOpen.global ? "arrow-down-s" : "arrow-right-s"}
+										className="h-3.5 w-3.5"
+									/>
+									<span>
+										{t("tools.extPluginsGlobal")} · {globalPlugins.length}
+									</span>
+								</button>
 							</div>
 							<div className="gui-ext-plugins-scope">{t("tools.extPluginsGlobalHint")}</div>
+							{overviewOpen.global && (
+								<div className="gui-plugin-cards">
+									{globalPlugins.map(e => (
+										<ModuleCard
+											key={`overview:${e.id}`}
+											e={e}
+											rpc={rpc}
+											busy={busyId !== null}
+											detail
+											onOpen={item => setDetailId(item.id)}
+											onToggle={toggleModule}
+										/>
+									))}
+								</div>
+							)}
+						</div>
+					)}
+					{/* Management: every plugin this page can configure or toggle. */}
+					{builtinConfig.length > 0 && (
+						<div className="gui-ext-group">
+							<div className="gui-ext-group-title">
+								{t("tools.extPluginsConfig")} · {builtinConfig.length}
+							</div>
 							<div className="gui-plugin-cards">
-								{globalPlugins.map(e => (
+								{builtinConfig.map(e => (
 									<ModuleCard
-										key={e.id}
+										key={`manage:${e.id}`}
+										e={e}
+										rpc={rpc}
+										busy={busyId !== null}
+										detail
+										onOpen={item => setDetailId(item.id)}
+										onToggle={toggleModule}
+									/>
+								))}
+							</div>
+						</div>
+					)}
+					{experimentalBuiltins.length > 0 && (
+						<div className="gui-ext-group">
+							<div className="gui-ext-group-title">
+								{t("tools.extPluginsExperimental")} · {experimentalBuiltins.length}
+							</div>
+							<div className="gui-plugin-cards">
+								{experimentalBuiltins.map(e => (
+									<ModuleCard
+										key={`manage:${e.id}`}
 										e={e}
 										rpc={rpc}
 										busy={busyId !== null}
@@ -800,7 +905,7 @@ export function UnifiedPluginsView({
 							<div className="gui-plugin-cards">
 								{standaloneModules.map(e => (
 									<ModuleCard
-										key={e.id}
+										key={`manage:${e.id}`}
 										e={e}
 										rpc={rpc}
 										busy={busyId !== null}
@@ -815,14 +920,15 @@ export function UnifiedPluginsView({
 				</div>
 			) : (
 				<div className="gui-ext-list-scroll">
-					{/* Same two planes as the settings inventory, classified by the
-					 * default preset's composition; management stays per row. */}
-					{sessionPlugins.length > 0 && (
+					{/* Management view: configure built-ins, then experimental units,
+					 * then installed packages. Preset classification lives in the
+					 * settings inventory overview, not here. */}
+					{builtinConfig.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("tools.extPluginsSession")} · {sessionPlugins.length}
+								{t("tools.extPluginsConfig")} · {builtinConfig.length}
 							</div>
-							{sessionPlugins.map(e => (
+							{builtinConfig.map(e => (
 								<ModuleRow
 									key={e.id}
 									e={e}
@@ -834,12 +940,12 @@ export function UnifiedPluginsView({
 							))}
 						</div>
 					)}
-					{globalPlugins.length > 0 && (
+					{experimentalBuiltins.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("tools.extPluginsGlobal")} · {globalPlugins.length}
+								{t("tools.extPluginsExperimental")} · {experimentalBuiltins.length}
 							</div>
-							{globalPlugins.map(e => (
+							{experimentalBuiltins.map(e => (
 								<ModuleRow
 									key={e.id}
 									e={e}

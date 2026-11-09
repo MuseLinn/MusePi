@@ -4132,6 +4132,27 @@
 .gui-ext-preset-select {
 	flex-shrink: 0;
 }
+/* Collapsible group title: the whole heading is the disclosure control. */
+.gui-ext-disclosure {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+.gui-ext-disclosure:hover {
+	color: var(--color-text);
+}
+.gui-ext-disclosure:focus-visible {
+	outline: 1px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
 .gui-btn--sm {
 	padding: 3px 10px;
 	font-size: 11px;

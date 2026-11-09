@@ -103,7 +103,7 @@ async function mount(variant: "list" | "cards"): Promise<{ host: HTMLElement; un
 describe("plugin entrances", () => {
 	it("keeps the capability center to the manageable official set", async () => {
 		const view = await mount("list");
-		expect(view.host.textContent).toContain("Session plugins 2");
+		expect(view.host.textContent).toContain("Built-in plugin settings · 2");
 		expect(view.host.textContent).toContain("Board");
 		expect(view.host.textContent).toContain("Terminal");
 		expect(view.host.textContent).not.toContain("Tool cards");
@@ -113,10 +113,11 @@ describe("plugin entrances", () => {
 
 	it("keeps the full inventory in settings with technical identity", async () => {
 		const view = await mount("cards");
-		// The default preset composes Board and Terminal; the remaining builtins
-		// are global. Both planes render, and the header counts all four.
-		expect(view.host.textContent).toContain("Session plugins 2");
-		expect(view.host.textContent).toContain("Global plugins 2");
+		// The inventory planes are collapsed overviews; the management groups
+		// below them still list every builtin entry.
+		expect(view.host.textContent).toContain("Session plugins · 2");
+		expect(view.host.textContent).toContain("Global plugins · 2");
+		expect(view.host.textContent).toContain("Built-in plugin settings · 4");
 		expect(view.host.textContent).toContain("Tool cards");
 		expect(view.host.textContent).toContain("Chat persona");
 		expect(view.host.textContent).toContain("Read-only");

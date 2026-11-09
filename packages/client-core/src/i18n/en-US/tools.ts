@@ -687,6 +687,12 @@ export const tools = {
 	"tools.extPluginsSessionHint": "Composed per session by the Agent preset",
 	"tools.extPluginsGlobal": "Global plugins",
 	"tools.extPluginsGlobalHint": "Shared by the system and every session",
+	"tools.extPluginsConfig": "Built-in plugin settings",
+	"tools.extPluginsExperimental": "Experimental plugins",
+	"tools.extAddFromMarket": "Browse the plugin marketplace",
+	"tools.extAddFromMarketHint": "Install a plugin listed in the marketplace",
+	"tools.extAddFromSpec": "Install a third-party plugin",
+	"tools.extAddFromSpecHint": "npm packages, Git repositories, and local directories",
 	"tools.extPluginsInstalled": "Installed",
 	// Plugin list grouped by Agent preset (a preset is a plugin composition)
 	"tools.extPluginsPresetGroup": 'Preset "{name}"',
@@ -758,9 +764,9 @@ export const tools = {
 	"tools.extConfigCount": "Config ×{count}",
 	"tools.extPresetProvidedDetail": "Provided per session by agent presets",
 	"tools.pluginsListScopeHint":
-		"Toggleable and configurable official plugins plus installed ones. Read-only inventory and preset-only plugins live in Settings → Extensions & plugins.",
+		"Toggleable and configurable built-in plugins plus installed ones. The preset composition overview lives in Settings → Extensions & plugins.",
 	"tools.pluginsInventoryScopeHint":
-		"Full inventory: read-only units and preset-only plugins included. Enablement, configuration and runtime state are managed here.",
+		"The preset composition overview comes first, collapsed by default; every built-in and installed plugin is managed below.",
 	"tools.extSearchPlugins": "Search plugins",
 	"tools.extFullName": "Full name",
 	"tools.extensionType": "Type",
