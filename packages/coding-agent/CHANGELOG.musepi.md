@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **欢迎页光带改为页面入场触发**：输入框边框光带在欢迎页显示后跑 3 秒即停，聚焦输入框不再重新触发；专注模式仍完全不显示。
+  - EN: The welcome composer's border beam now runs once for three seconds when the welcome page mounts instead of restarting on every input focus; focus mode still hides it.
+
 - **插件安装/升级/启停对已打开会话即时生效**：安装、卸载、市场升级与包启停不再只影响下一个会话，daemon 会把该包贡献的入口路径交给每个活跃会话，按已装载状态执行 load / reload / unload；流式会话把操作挂到回合结束后的空闲边界并报 `deferred`，不再中途替换工具面。结果经 `plugins.apply.state` 广播，安装弹窗在能力摘要下显示已生效、回合后生效或失败的会话数；同一入口的连续请求折叠为最后一次，单条失败不影响其它入口与会话。
   - EN: Plugin install, upgrade and enablement now reach sessions that are already open. Install, uninstall, marketplace upgrade and package toggles hand the package's entry paths to every live session, which loads, reloads or unloads each entry according to what it has mounted; a streaming session parks the operations until its next idle boundary and reports `deferred`, so a turn never has its tool surface swapped mid-flight. The outcome is broadcast as `plugins.apply.state`, and the install dialog shows live, after-this-turn, or failed session counts under the capability summary. Repeated requests for one entry collapse to the newest operation, and a single failed entry never blocks the others.
 

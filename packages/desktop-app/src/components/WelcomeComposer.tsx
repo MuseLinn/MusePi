@@ -809,37 +809,22 @@ export function WelcomeComposer({
 			window.removeEventListener("storage", refresh);
 		};
 	}, []);
-	// The focus beam is an entrance accent, not a permanent light source: it
-	// runs for three seconds after the composer gains focus, then stops so the
-	// heavy conic repaint ends. Focus (distraction-free) mode never shows it —
-	// the input should be the only thing on screen.
+	// The beam is a page-entrance accent, not a focus effect: it runs once for
+	// three seconds when the welcome page mounts, then stops so the heavy conic
+	// repaint ends. Focusing the input must not restart it. Focus
+	// (distraction-free) mode never shows it — the input should be the only
+	// thing on screen.
 	const [beamOn, setBeamOn] = useState(false);
-	const beamTimerRef = useRef<number | null>(null);
-	const stopBeam = useCallback((): void => {
-		if (beamTimerRef.current !== null) {
-			window.clearTimeout(beamTimerRef.current);
-			beamTimerRef.current = null;
-		}
-		setBeamOn(false);
-	}, []);
-	const startBeam = useCallback((): void => {
-		if (focused) return;
-		if (beamTimerRef.current !== null) window.clearTimeout(beamTimerRef.current);
-		setBeamOn(true);
-		beamTimerRef.current = window.setTimeout(() => {
-			beamTimerRef.current = null;
-			setBeamOn(false);
-		}, 3000);
-	}, [focused]);
 	useEffect(() => {
-		if (focused) stopBeam();
-	}, [focused, stopBeam]);
-	useEffect(
-		() => () => {
-			if (beamTimerRef.current !== null) window.clearTimeout(beamTimerRef.current);
-		},
-		[],
-	);
+		if (focused) return;
+		setBeamOn(true);
+		const timer = window.setTimeout(() => setBeamOn(false), 3000);
+		return () => window.clearTimeout(timer);
+		// Mount only: re-running on focus-mode toggles would restart the sweep.
+	}, []);
+	useEffect(() => {
+		if (focused) setBeamOn(false);
+	}, [focused]);
 	// Portaled workspace-picker popup (model/thinking selector parity): the
 	// frosted glass samples real content behind it, and the exit animates.
 	// Single-layer: className carries the visual (gui-proj-menu), the hook
@@ -1287,7 +1272,7 @@ export function WelcomeComposer({
 			requestAnimationFrame(() => autosize(taRef.current));
 			sfxFor("first");
 			// Same beam drop as the plain submit path — see the note there.
-			stopBeam();
+			setBeamOn(false);
 			void railRef.current
 				.submit(payload, {
 					thinkingLevel: thinking,
@@ -1314,13 +1299,12 @@ export function WelcomeComposer({
 		// Re-measure after the programmatic clear (onChange doesn't fire).
 		requestAnimationFrame(() => autosize(taRef.current));
 		sfxFor("first");
-		// Drop the focus beam the moment the prompt leaves: a focused Enter
-		// submit keeps the textarea focused, and the beam used to ride the
-		// welcome→session FLIP morph spinning — its per-frame conic repaints
-		// compete with the morph (the reported transition stutter). The
-		// leaving-scene freeze in gui-chat.css covers the overlap window;
-		// this makes the beam's display window end at send, not at unmount.
-		stopBeam();
+		// End the entrance beam the moment the prompt leaves: it must not ride
+		// the welcome→session FLIP morph spinning (the per-frame conic repaints
+		// compete with the morph). The leaving-scene freeze in gui-chat.css
+		// covers the overlap window; this makes the beam's display window end at
+		// send, not at unmount.
+		setBeamOn(false);
 		// Armed modes apply to the session this first prompt creates; the
 		// armed chips reset either way (goal needs text to be an objective).
 		const applyGoal = goalArmed && trimmed.length > 0;
@@ -1754,13 +1738,7 @@ export function WelcomeComposer({
 							/>
 						</div>
 					) : null}
-					<form
-						ref={formRef}
-						className="gui-welcome-form relative w-full"
-						onSubmit={submit}
-						onFocus={startBeam}
-						onBlur={stopBeam}
-					>
+					<form ref={formRef} className="gui-welcome-form relative w-full" onSubmit={submit}>
 						<ComposerFrame
 							className="gui-welcome-input"
 							hero
