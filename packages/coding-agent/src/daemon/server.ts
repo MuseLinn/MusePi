@@ -1762,11 +1762,34 @@ export class DaemonServer {
 
 	async handle(method: string, params: unknown, conn: DaemonConnection): Promise<unknown> {
 		switch (method) {
+			case "ping": {
+				// Transport-neutral alias of `system.ping`: the guest client's
+				// liveness probe uses ONE method name on every transport (the
+				// collab host answers `ping` the same way). Same purpose — a
+				// browser/WebView cannot send WS ping frames, so this RPC is how
+				// a socket the OS silently tore down gets noticed.
+				return { pong: Date.now() };
+			}
 			case "system.ping": {
 				// Liveness probe for the GUI's app-level keepalive (browsers
 				// cannot send WS ping frames; the renderer pings this RPC to
 				// detect sockets Electron tears down on system sleep).
 				return { pong: Date.now() };
+			}
+			case "system.quitInspection": {
+				// dsh's desktop `quit-inspection`: answer at quit time so a turn
+				// that started after the shell's last poll still counts. Running
+				// agents (generating/compacting/tool calls), queued messages,
+				// running background jobs, and armed session reminders.
+				const { inspectQuit } = await import("./quit-inspection");
+				const { AsyncJobManager } = await import("../async/job-manager");
+				const sessions = [...this.#host.allSessions()].map(live => ({
+					busy: isLiveSessionBusy(live),
+					queuedMessages: live.agentSession.queuedMessageCount,
+					runningJobs: live.agentSession.getAsyncJobSnapshot({ recentLimit: 0 })?.running.length ?? 0,
+					armedSchedules: live.agentSession.extensionRunner?.hasArmedSchedules() ? 1 : 0,
+				}));
+				return inspectQuit(sessions, AsyncJobManager.instance()?.runningCount() ?? 0);
 			}
 			case "system.shutdown": {
 				// Cooperative shutdown, requested by the desktop shell before it

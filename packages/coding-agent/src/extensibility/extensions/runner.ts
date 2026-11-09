@@ -1140,6 +1140,11 @@ export class ExtensionRunner {
 	 *  in load order. Consumed by the mode resolver's extraModes lookup so
 	 *  an extension-declared mode resolves like a file-based one (file wins
 	 *  on id collision — user data layer beats extension code layer). */
+	/** Whether this session holds scheduled reminders whose timers are armed. */
+	hasArmedSchedules(): boolean {
+		return this.#schedules.list().length > 0;
+	}
+
 	getExtensionModes(): Array<{ extensionId: string; mode: ExtensionModeDefinition }> {
 		const out: Array<{ extensionId: string; mode: ExtensionModeDefinition }> = [];
 		for (const extension of this.extensions) {

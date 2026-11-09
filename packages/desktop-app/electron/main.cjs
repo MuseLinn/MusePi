@@ -239,53 +239,69 @@ let daemonQuitHandled = false;
 	// close the window when we're exiting. User close on non-darwin hides
 	// to tray instead.
 	let quitting = false;
-	// Active-session guard state: the tray poll refreshes lastActiveCount
-	// (≤5s stale), and quittingConfirmed passes the guard on the second
-	// before-quit round (Electron re-fires it after our teardown quit()).
-	let lastActiveCount = 0;
+	// dsh's `quit-inspection`: ask the daemon at quit time whether stopping it
+	// would interrupt work (running agents, queued messages, live jobs) or lose
+	// armed scheduled reminders. Asked on demand, so a turn that started after
+	// the tray's last poll still counts.
 	let quittingConfirmed = false;
+	let sessionEnding = false;
+	if (process.platform !== "win32") powerMonitor.on("shutdown", () => { sessionEnding = true; });
 	app.on("before-quit", event => {
 		console.error("[main] before-quit");
-		// Active-session guard: quitting with agents mid-turn warns instead of
-		// silently killing them. A dialog-cancel aborts this quit attempt —
-		// the user keeps working. Runs before the daemon teardown holds the
-		// quit; the confirmed flag keeps the second pass (post app.quit())
-		// from asking again.
-		if (!quittingConfirmed && lastActiveCount > 0) {
-			const choice = dialog.showMessageBoxSync({
-				type: "warning",
-				buttons: ["仍然退出", "留在这里"],
-				defaultId: 1,
-				cancelId: 1,
-				// Main-process labels are Chinese-first (the pet menu precedent):
-				// the main process has no locale state.
-				message:
-					lastActiveCount === 1
-						? "还有 1 个会话正在运行——现在退出会中断它。确定要退出 MusePi 吗？"
-						: `还有 ${lastActiveCount} 个会话正在运行——现在退出会中断它们。确定要退出 MusePi 吗？`,
-			});
-			if (choice !== 0) return; // abort: no preventDefault, quit stops here
-			quittingConfirmed = true;
-		}
-		quitting = true;
+		// Second pass (fired by our own app.quit()): teardown already ran.
 		if (daemonQuitHandled) return;
-		daemonQuitHandled = true;
-		// No timers may outlive the quit — a pending pet dissolve is moot.
-		clearPetHideTimer();
-		// Electron does not await async quit handlers: hold the quit open while
-		// the owned daemon tears down (SIGTERM + grace window), then re-quit.
+		// Electron does not await async quit handlers: hold this quit open while
+		// the inspection and the owned daemon's teardown run.
 		event.preventDefault();
-	const { killOwnedDaemon } = require("./daemon.cjs");
-	killOwnedDaemon()
-		.then(killed => {
-			console.error(`[main] daemon teardown on quit: ${killed ? "killed" : "not owned"}`);
-		})
-		.catch(err => {
-			console.error("[main] daemon teardown on quit failed:", err?.message ?? err);
-		})
-		.finally(() => app.quit());
+		void (async () => {
+			if (!quittingConfirmed && !sessionEnding) {
+				const inspection = await inspectQuitTasks();
+				const unknown = inspection === "unknown";
+				const active = unknown || inspection?.activeTasks === true;
+				const scheduled = !unknown && inspection?.scheduledTasks === true;
+				if (active || scheduled) {
+					const choice = dialog.showMessageBoxSync({
+						type: "warning",
+						buttons: ["仍然退出", "留在这里"],
+						defaultId: 1,
+						cancelId: 1,
+						// Main-process labels are Chinese-first (the pet menu precedent):
+						// the main process has no locale state.
+						message:
+							active && scheduled
+								? "还有会话或任务正在运行，且有定时任务等待触发——现在退出会中断运行并取消定时任务。确定要退出 MusePi 吗？"
+								: active
+									? "还有会话或任务正在运行——现在退出会中断它们。确定要退出 MusePi 吗？"
+									: "有定时任务正在等待触发——现在退出会取消它们。确定要退出 MusePi 吗？",
+					});
+					// Cancel: the quit was prevented above, so the app keeps running.
+					if (choice !== 0) return;
+				}
+			}
+			quittingConfirmed = true;
+			quitting = true;
+			if (daemonQuitHandled) return;
+			daemonQuitHandled = true;
+			// No timers may outlive the quit — a pending pet dissolve is moot.
+			clearPetHideTimer();
+			const { killOwnedDaemon } = require("./daemon.cjs");
+			killOwnedDaemon()
+				.then(killed => {
+					console.error(`[main] daemon teardown on quit: ${killed ? "killed" : "not owned"}`);
+				})
+				.catch(err => {
+					console.error("[main] daemon teardown on quit failed:", err?.message ?? err);
+				})
+				.finally(() => app.quit());
+		})();
+	});
+app.on("open-url", (event, url) => {
+	event.preventDefault();
+	deliverOAuthCallback(url);
 });
 app.on("second-instance", (_event, argv) => {
+	const deepLink = findDeepLink(argv);
+	if (deepLink) deliverOAuthCallback(deepLink);
 	// `--quit-request` (relaunch-gui.mjs / dev-desktop.mjs): a dev relaunch
 	// asks the running instance to exit gracefully. Windows cannot deliver a
 	// catchable SIGTERM to a GUI process (Node maps it to TerminateProcess,
@@ -1716,6 +1732,22 @@ function trayRequest(method, params, timeoutMs = 4000) {
 }
 
 /**
+ * Ask the daemon what quitting would interrupt (dsh's `quit-inspection`).
+ * `null` = no daemon is running, so nothing can be interrupted; `"unknown"` =
+ * a daemon is there but did not answer in time, treated as active work so the
+ * user is warned instead of losing a turn silently.
+ */
+async function inspectQuitTasks() {
+	if (trayWs && trayWs.readyState === 1 /* OPEN */) {
+		const result = await trayRequest("system.quitInspection", {}, 1500);
+		return result !== null && typeof result === "object" ? result : "unknown";
+	}
+	const port = probe();
+	if (port && (await portOpen(port))) return "unknown";
+	return null;
+}
+
+/**
  * Tray "always allow": persist `tools.approval.<tool> = "allow"` so the next
  * call of the same tool skips the prompt. The approval wrapper reads the
  * record live on every call (`wrapper.ts` `settings.get("tools.approval")`),
@@ -1850,9 +1882,6 @@ function ensureTray() {
 						return;
 					}
 					if (frame && frame.id === "tray" && frame.result && typeof frame.result === "object") {
-						// The active-session quit guard reads this (≤5s stale).
-						const count = Number(frame.result.activeCount);
-						lastActiveCount = Number.isFinite(count) && count > 0 ? count : 0;
 						trayController.update(frame.result);
 					}
 				} catch {

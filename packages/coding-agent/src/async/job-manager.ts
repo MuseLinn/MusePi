@@ -438,6 +438,13 @@ export class AsyncJobManager {
 		return true;
 	}
 
+	/** Jobs still producing output (quit inspection treats them as interruptible work). */
+	runningCount(): number {
+		let count = 0;
+		for (const job of this.#jobs.values()) if (job.status === "running") count += 1;
+		return count;
+	}
+
 	getJob(id: string): AsyncJob | undefined {
 		return this.#jobs.get(id);
 	}
