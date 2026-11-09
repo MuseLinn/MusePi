@@ -655,13 +655,10 @@ export const tools = {
 	"tools.extResourcesMemory": "内存",
 	"tools.extResourcesSetup": "首次准备约 {minutes} 分钟",
 	"tools.extResourcesModels": "需下载模型",
-	"tools.extPluginsOfficial": "官方",
-	"tools.extPluginsBuiltin": "内置插件",
 	"tools.extPluginsSession": "会话插件",
 	"tools.extPluginsSessionHint": "由 Agent 预设按会话组成",
 	"tools.extPluginsGlobal": "全局插件",
 	"tools.extPluginsGlobalHint": "系统与所有会话共用",
-	"tools.extPresetsAll": "全部预设",
 	"tools.extPluginsInstalled": "已安装",
 	// 插件列表按 Agent 预设分组（预设 = 一组插件组合）
 	"tools.extPluginsPresetGroup": "预设「{name}」",

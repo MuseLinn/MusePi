@@ -683,13 +683,10 @@ export const tools = {
 	"tools.extResourcesMemory": "Memory",
 	"tools.extResourcesSetup": "First-time setup ≈ {minutes} min",
 	"tools.extResourcesModels": "Model downloads",
-	"tools.extPluginsOfficial": "Official",
-	"tools.extPluginsBuiltin": "Built-in plugins",
 	"tools.extPluginsSession": "Session plugins",
 	"tools.extPluginsSessionHint": "Composed per session by the Agent preset",
 	"tools.extPluginsGlobal": "Global plugins",
 	"tools.extPluginsGlobalHint": "Shared by the system and every session",
-	"tools.extPresetsAll": "All presets",
 	"tools.extPluginsInstalled": "Installed",
 	// Plugin list grouped by Agent preset (a preset is a plugin composition)
 	"tools.extPluginsPresetGroup": 'Preset "{name}"',
