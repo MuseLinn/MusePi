@@ -107,6 +107,7 @@ export {
 	type ParamsOf,
 	registerTranslationNamespace,
 	registerTranslations,
+	SESSION_OUTCOME_LABEL_KEYS,
 	setLocale,
 	subscribeLocale,
 	type TranslationKey,

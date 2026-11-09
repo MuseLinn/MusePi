@@ -152,7 +152,7 @@ function HistoryCard({ records, raw }: { records: Record<string, unknown>[]; raw
 				<thead>
 					<tr>
 						<th>{t("tools.browserTabTitle")}</th>
-						<th>URL</th>
+						<th>{t("tools.url")}</th>
 						<th>{t("tools.browserVisitedAt")}</th>
 					</tr>
 				</thead>

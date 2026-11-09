@@ -510,6 +510,10 @@ export default async function (pi: ExtensionAPI) {
 
 结果经 `plugins.apply.state` 广播：`application` 为 `applied`（全部立即生效）或 `pending`（至少一个会话推迟）；`applied` / `deferred` 是入口操作计数，`errors` 逐条带会话与路径。没有任何会话需要改动且无错误时不广播 —— 「应用到 0 个会话」不是值得提示的事实。
 
+### 插件库存的两个平面
+
+`extensions.list` 的 `presets[]` 带 `isDefault` 与 `rows`：`rows` 是该预设**继承折叠后的完整组合**（`extensions` 显式白名单 + `plugins` 组合行展开到扩展入口名），被父预设用 `enabled: false` 关掉的行仍保留并标记为停用。GUI 的会话插件面直接渲染选中预设的 rows，全局面是组合之外的其余内置条目；`enabledInPresets`（每个条目的「启用于」）由同一份 rows 反推，只作为事实行，不再充当分类依据。预设面读取失败时 `presets` 为空，清单主数据照常返回。
+
 ### 安装源与回退链
 
 三个设置键（`pluginRegistryMode` / `pluginRegistryUrl` / `pluginRegistryFallbacks`，均不带点号——点号键会被 Settings 当嵌套路径解析）决定安装问哪个源。默认模式先问官方源，遇到「换源可能有救」的失败再试公开镜像。

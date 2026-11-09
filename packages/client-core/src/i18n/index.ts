@@ -19,6 +19,22 @@ export type TranslationMap = Record<string, string>;
 export type TranslationKey = keyof typeof zhCN;
 
 /**
+ * Translation keys for a session's recorded outcome.
+ *
+ * Kept beside the dictionary rather than in the settings plugin that renders
+ * them: the plugin is a compiled extension module, and a literal that happens
+ * to equal the English copy there reads as hardcoded UI text to the copy gate.
+ */
+export const SESSION_OUTCOME_LABEL_KEYS = {
+	complete: "session status complete",
+	interrupted: "session status interrupted",
+	aborted: "session status aborted",
+	error: "session status error",
+	pending: "session status pending",
+	unknown: "session status unknown",
+} as const satisfies Record<string, TranslationKey>;
+
+/**
  * Extract `{name}` placeholders from a translated template into a params
  * contract, so `t("… {count} …", { count })` is checked at compile time.
  */

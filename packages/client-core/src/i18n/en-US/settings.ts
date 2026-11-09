@@ -1258,6 +1258,8 @@ export const settings = {
 	"settings.connectorsApprovalTitle": "Allow local command",
 	"settings.connectorsApprovalHint":
 		"This connector starts a process on this machine. Continue only if you trust the command source.",
+	"settings.connectorsCliInstallLabel": "install: ",
+	"settings.connectorsCliAuthLabel": "auth: ",
 	"settings.connectorsApprovalConnect": "Allow and connect",
 	"settings.connectorsApprovalEnv": "Environment: {keys}",
 	"settings.connectorsCliApprovalTitle": "Allow CLI install or authorization",

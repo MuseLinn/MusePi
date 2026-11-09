@@ -110,6 +110,27 @@ export interface ExtensionServiceDeps {
 	pluginConfigStorePath?(): string;
 }
 
+/** One row of a preset's flattened plugin composition (inventory plane). */
+export interface PresetCompositionRowView {
+	/** Module or extension name the row names. */
+	readonly name: string;
+	/** Composition row id, or null when the row declares none. */
+	readonly entryId: string | null;
+	/** Effective enablement after folding inherited rows. */
+	readonly enabled: boolean;
+	/** Root-fiber phase when the row is live; null when it is not mounted. */
+	readonly fiberPhase: "active" | "failed" | null;
+}
+
+/** One agent preset's identity and flattened composition. */
+export interface PresetCompositionView {
+	readonly id: string;
+	readonly label: string;
+	/** Whether a session naming no preset composes this one. */
+	readonly isDefault: boolean;
+	readonly rows: PresetCompositionRowView[];
+}
+
 export class ExtensionService implements DaemonService {
 	/** Disposers for the web routes we mounted; a reconcile drops them first. */
 	#mountedWebRoutes: Array<() => void> = [];
@@ -440,13 +461,14 @@ export class ExtensionService implements DaemonService {
 		// of the feature that was newer. 三态白名单里 undefined = 全部启用，不构成
 		// 「按预设提供」语义（只有显式声明的预设才算提供者）。fail-soft：预设面是
 		// 增益信息，任何一步失败都不阻塞清单主数据。
-		const presets: { id: string; label: string }[] = [];
+		const presets: PresetCompositionView[] = [];
 		const enabledInByName = new Map<string, string[]>();
 		try {
 			const { listModeIds, loadModeFile, resolveMode, ensureModeTemplates } = await import("../../presets/resolve");
 			const { t } = await import("../../i18n/index.js");
 			const { $env } = await import("@musepi/pi-utils");
 			const { getExtensionNameFromPath } = await import("../../discovery/helpers");
+			const { readDefaultPresetId } = await import("../../extensibility/plugins/profile/profile-presets");
 			// A composition row names a PACKAGE, while the "enabled in" map is keyed
 			// by the extension name derived from an entry path. Resolving the package
 			// to its extension entries is what lets the two spellings meet.
@@ -458,6 +480,29 @@ export class ExtensionService implements DaemonService {
 				const plugin = installedPlugins.find(p => p.name === packageName);
 				if (!plugin) return [];
 				return resolvePluginExtensionPaths(plugin).map(entry => getExtensionNameFromPath(entry));
+			};
+			const defaultPresetId = await readDefaultPresetId(this.#deps.cwd(), os.homedir()).catch(() => "");
+			/** Root-fiber phase of one named entry, for the inventory card status. */
+			const fiberPhaseOf = (name: string): "active" | "failed" | null => {
+				const entry = extensions.find(ext => getExtensionNameFromPath(ext.path) === name);
+				if (entry?.loadError) return "failed";
+				return entry?.state === "active" ? "active" : null;
+			};
+			/** A group row composes its children; only leaves name a module. */
+			const leavesOf = (
+				rows: readonly { name: string; id?: string; enabled?: boolean; group?: boolean; config?: unknown }[],
+				inherited = true,
+				out: Array<{ name: string; id: string | null; enabled: boolean }> = [],
+			): Array<{ name: string; id: string | null; enabled: boolean }> => {
+				for (const row of rows) {
+					const enabled = inherited && row.enabled !== false;
+					if (row.group && Array.isArray(row.config)) {
+						leavesOf(row.config as typeof rows, enabled, out);
+						continue;
+					}
+					out.push({ name: row.name, id: row.id ?? null, enabled });
+				}
+				return out;
 			};
 			const dir = this.#deps.modesDir?.() ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
 			ensureModeTemplates(dir);
@@ -480,15 +525,24 @@ export class ExtensionService implements DaemonService {
 				if (!resolved.extensionsExplicit && resolved.plugins.length === 0) continue;
 				const builtinName = t(`preset ${id} name` as never);
 				const label = !builtinName.startsWith("preset ") ? builtinName : (resolved.label ?? id);
-				presets.push({ id, label });
-				const contributed = [
-					...(resolved.extensions ?? []),
-					// Only enabled rows compose; a disabled row is how a child preset
-					// switches one of its parent's plugins off.
-					...resolved.plugins
-						.filter(row => row.enabled !== false)
-						.flatMap(row => extensionNamesOfPackage(row.name)),
-				];
+				// dsh's inventory plane: every row the preset composes, including a
+				// disabled row a child uses to switch a parent's plugin off.
+				const rows: PresetCompositionRowView[] = [];
+				const seen = new Set<string>();
+				const pushRow = (name: string, entryId: string | null, enabled: boolean): void => {
+					const key = `${entryId ?? ""}\u0000${name}`;
+					if (seen.has(key)) return;
+					seen.add(key);
+					rows.push({ name, entryId, enabled, fiberPhase: fiberPhaseOf(name) });
+				};
+				for (const name of resolved.extensions ?? []) pushRow(name, null, true);
+				for (const leaf of leavesOf(resolved.plugins)) {
+					const names = extensionNamesOfPackage(leaf.name);
+					if (names.length === 0) pushRow(leaf.name, leaf.id, leaf.enabled);
+					else for (const name of names) pushRow(name, leaf.id, leaf.enabled);
+				}
+				presets.push({ id, label, isDefault: id === defaultPresetId, rows });
+				const contributed = rows.filter(row => row.enabled).map(row => row.name);
 				for (const extName of contributed) {
 					const list = enabledInByName.get(extName);
 					if (list) {

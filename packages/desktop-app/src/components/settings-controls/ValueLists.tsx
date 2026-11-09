@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { APPROVAL_RULE_SAMPLE } from "../../lib/approval-rule-sample";
 
 function serialize(rows: readonly string[]): string[] {
 	return rows.map(row => row.trim()).filter(Boolean);
@@ -179,7 +180,7 @@ export function JsonListEditor({
 				rows={Math.min(16, Math.max(3, lines))}
 				disabled={disabled}
 				aria-label={ariaLabel}
-				placeholder={'[\n  { "match": "rm -rf *", "approval": "deny" }\n]'}
+				placeholder={APPROVAL_RULE_SAMPLE}
 				onFocus={() => {
 					focused.current = true;
 				}}

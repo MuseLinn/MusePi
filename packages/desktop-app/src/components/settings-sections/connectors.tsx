@@ -465,13 +465,17 @@ export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 													<div className="space-y-1 text-[11.5px]">
 														{approvalInstall && (
 															<div className="break-all">
-																<span className="text-[var(--color-text-muted)]">install: </span>
+																<span className="text-[var(--color-text-muted)]">
+																	{t("settings.connectorsCliInstallLabel")}
+																</span>
 																<code>{approvalInstall}</code>
 															</div>
 														)}
 														{approvalAuth && (
 															<div className="break-all">
-																<span className="text-[var(--color-text-muted)]">auth: </span>
+																<span className="text-[var(--color-text-muted)]">
+																	{t("settings.connectorsCliAuthLabel")}
+																</span>
 																<code>{approvalAuth}</code>
 															</div>
 														)}

@@ -606,23 +606,18 @@ export function UnifiedPluginsView({
 	);
 	const detailItem = detailId ? (modules.find(e => e.id === detailId) ?? null) : null;
 
-	// Session/global split: a builtin entry a preset composes per session is a
-	// session plugin; everything else is always on. The preset name (not id) is
-	// what the daemon records in enabledInPresets.
+	// dsh inventory planes: a preset's flattened composition is the session
+	// plane; builtin entries outside that composition are global. The switcher
+	// selects one preset (default first), and the capability-center list uses the
+	// default preset so both surfaces classify the same way.
 	const presets = data?.presets ?? [];
-	const [presetLabel, setPresetLabel] = useState<string>("");
-	const sessionPlugins = useMemo(
-		() => official.filter(e => e.presetOnly === true || (e.enabledInPresets?.length ?? 0) > 0),
-		[official],
-	);
-	const globalPlugins = useMemo(() => official.filter(e => !sessionPlugins.includes(e)), [official, sessionPlugins]);
-	const visibleSessionPlugins = useMemo(
-		() =>
-			presetLabel === ""
-				? sessionPlugins
-				: sessionPlugins.filter(e => e.enabledInPresets?.includes(presetLabel) === true),
-		[sessionPlugins, presetLabel],
-	);
+	const [chosenPresetId, setChosenPresetId] = useState<string | null>(null);
+	const defaultPreset = presets.find(preset => preset.isDefault) ?? presets[0];
+	const selectedPreset = presets.find(preset => preset.id === chosenPresetId) ?? defaultPreset;
+	const sessionPreset = variant === "cards" ? selectedPreset : defaultPreset;
+	const sessionNames = useMemo(() => new Set((sessionPreset?.rows ?? []).map(row => row.name)), [sessionPreset]);
+	const sessionPlugins = useMemo(() => official.filter(e => sessionNames.has(e.name)), [official, sessionNames]);
+	const globalPlugins = useMemo(() => official.filter(e => !sessionNames.has(e.name)), [official, sessionNames]);
 
 	// 一个插件包 + 它目录下的扩展模块是同一个插件的两条链路 —— 包是列表的
 	// 唯一条目，模块收进包详情弹层的「包含的组件」。模块路径在包目录下即归
@@ -658,9 +653,6 @@ export function UnifiedPluginsView({
 			.finally(() => setBusyId(null));
 		// daemon 广播 extensions.changed → registry 单例重拉，不本地乐观更新。
 	};
-
-	// 两个入口的官方分组标题不同名：能力中心是「官方」，设置是完整「内置插件」。
-	const officialLabel = variant === "cards" ? t("tools.extPluginsBuiltin") : t("tools.extPluginsOfficial");
 
 	// 双清空才是真空态：任一链路有货就展示统一清单。能力中心按 manage 层
 	// 计数——只有只读库存时不该声称「已加载插件」。
@@ -700,7 +692,8 @@ export function UnifiedPluginsView({
 					/>
 				</label>
 				<span className="gui-ext-plugins-toolbar-count">
-					{officialLabel} {official.length} · {t("tools.extPluginsInstalled")}{" "}
+					{t("tools.extPluginsSession")} {sessionPlugins.length} · {t("tools.extPluginsGlobal")}{" "}
+					{globalPlugins.length} · {t("tools.extPluginsInstalled")}{" "}
 					{filteredPackages.length + standaloneModules.length}
 				</span>
 				<button
@@ -731,25 +724,22 @@ export function UnifiedPluginsView({
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title gui-ext-group-title--row">
 								<span>
-									{t("tools.extPluginsSession")} · {visibleSessionPlugins.length}
+									{t("tools.extPluginsSession")} · {sessionPlugins.length}
 								</span>
-								{presets.length > 1 && (
+								{presets.length > 1 && selectedPreset !== undefined && (
 									<GuiSelect
-										value={presetLabel}
-										onChange={setPresetLabel}
+										value={selectedPreset.id}
+										onChange={setChosenPresetId}
 										ariaLabel={t("tools.extPluginsSession")}
-										options={[
-											{ value: "", label: t("tools.extPresetsAll") },
-											...presets.map(preset => ({ value: preset.label, label: preset.label })),
-										]}
+										options={presets.map(preset => ({ value: preset.id, label: preset.label }))}
 										className="gui-ext-preset-select"
 									/>
 								)}
 							</div>
 							<div className="gui-ext-plugins-scope">{t("tools.extPluginsSessionHint")}</div>
-							{visibleSessionPlugins.length > 0 ? (
+							{sessionPlugins.length > 0 ? (
 								<div className="gui-plugin-cards">
-									{visibleSessionPlugins.map(e => (
+									{sessionPlugins.map(e => (
 										<ModuleCard
 											key={e.id}
 											e={e}
@@ -825,15 +815,31 @@ export function UnifiedPluginsView({
 				</div>
 			) : (
 				<div className="gui-ext-list-scroll">
-					{/* Package management stays a two-section list. Preset composition and
-					 * failure details remain available in each item's detail dialog; they
-					 * must not duplicate every row on the management landing page. */}
-					{official.length > 0 && (
+					{/* Same two planes as the settings inventory, classified by the
+					 * default preset's composition; management stays per row. */}
+					{sessionPlugins.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{officialLabel} · {official.length}
+								{t("tools.extPluginsSession")} · {sessionPlugins.length}
 							</div>
-							{official.map(e => (
+							{sessionPlugins.map(e => (
+								<ModuleRow
+									key={e.id}
+									e={e}
+									rpc={rpc}
+									busy={busyId !== null}
+									onToggle={toggleModule}
+									onOpen={item => setDetailId(item.id)}
+								/>
+							))}
+						</div>
+					)}
+					{globalPlugins.length > 0 && (
+						<div className="gui-ext-group">
+							<div className="gui-ext-group-title">
+								{t("tools.extPluginsGlobal")} · {globalPlugins.length}
+							</div>
+							{globalPlugins.map(e => (
 								<ModuleRow
 									key={e.id}
 									e={e}

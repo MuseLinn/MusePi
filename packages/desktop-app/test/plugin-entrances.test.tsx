@@ -31,6 +31,18 @@ const MODULES: ExtensionItem[] = [
 	builtin({ id: "musepi-preset-chat", name: "preset-chat", displayName: "Chat persona", presetOnly: true }),
 ];
 
+const PRESETS = [
+	{
+		id: "work",
+		label: "Work",
+		isDefault: true,
+		rows: [
+			{ name: "board", entryId: "include:board", enabled: true, fiberPhase: "active" as const },
+			{ name: "terminal", entryId: "include:terminal", enabled: true, fiberPhase: "active" as const },
+		],
+	},
+];
+
 function makeRpc(): RpcClient {
 	return {
 		request: async (method: string) => {
@@ -44,6 +56,7 @@ function makeRpc(): RpcClient {
 					widgets: [],
 					statusBarSegments: [],
 					slots: { exact: [], prefixes: [] },
+					presets: PRESETS,
 				};
 			}
 			if (method === "plugins.packages") return { packages: [] };
@@ -90,7 +103,7 @@ async function mount(variant: "list" | "cards"): Promise<{ host: HTMLElement; un
 describe("plugin entrances", () => {
 	it("keeps the capability center to the manageable official set", async () => {
 		const view = await mount("list");
-		expect(view.host.textContent).toContain("Official 2");
+		expect(view.host.textContent).toContain("Session plugins 2");
 		expect(view.host.textContent).toContain("Board");
 		expect(view.host.textContent).toContain("Terminal");
 		expect(view.host.textContent).not.toContain("Tool cards");
@@ -100,7 +113,10 @@ describe("plugin entrances", () => {
 
 	it("keeps the full inventory in settings with technical identity", async () => {
 		const view = await mount("cards");
-		expect(view.host.textContent).toContain("Built-in plugins 4");
+		// The default preset composes Board and Terminal; the remaining builtins
+		// are global. Both planes render, and the header counts all four.
+		expect(view.host.textContent).toContain("Session plugins 2");
+		expect(view.host.textContent).toContain("Global plugins 2");
 		expect(view.host.textContent).toContain("Tool cards");
 		expect(view.host.textContent).toContain("Chat persona");
 		expect(view.host.textContent).toContain("Read-only");

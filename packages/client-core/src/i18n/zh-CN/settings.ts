@@ -1192,6 +1192,8 @@ export const settings = {
 	"settings.connectorsTokenSave": "保存并连接",
 	"settings.connectorsApprovalTitle": "允许运行本地命令",
 	"settings.connectorsApprovalHint": "该连接器会在本机启动一个进程。确认命令来源可信后再继续。",
+	"settings.connectorsCliInstallLabel": "安装：",
+	"settings.connectorsCliAuthLabel": "鉴权：",
 	"settings.connectorsApprovalConnect": "允许并连接",
 	"settings.connectorsApprovalEnv": "环境变量：{keys}",
 	"settings.connectorsCliApprovalTitle": "允许安装或授权 CLI",

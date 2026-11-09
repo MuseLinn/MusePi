@@ -449,8 +449,13 @@ export interface ExtensionRegistryData {
 	statusBarSegments: StatusBarSegmentItem[];
 	/** Slot contract from the daemon (collab-proto single authority). */
 	slots: { exact: readonly string[]; prefixes: readonly string[] };
-	/** dsh「会话插件」面:显式扩展白名单的预设清单(旧 daemon 无此字段)。 */
-	presets?: { id: string; label: string }[];
+	/** dsh「会话插件」面:完整组合的预设清单(旧 daemon 无该字段)。 */
+	presets?: {
+		id: string;
+		label: string;
+		isDefault?: boolean;
+		rows?: { name: string; entryId: string | null; enabled: boolean; fiberPhase: "active" | "failed" | null }[];
+	}[];
 }
 
 /** Props every extension component receives when mounted. Hosts pass what

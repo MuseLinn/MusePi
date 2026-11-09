@@ -1,5 +1,5 @@
 import type { TranslationKey } from "@musepi/client-core";
-import { Segmented, t, useArchivedSessions } from "@musepi/client-core";
+import { SESSION_OUTCOME_LABEL_KEYS, Segmented, t, useArchivedSessions } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hitText } from "../../components/settings-sections/shared";
@@ -51,14 +51,7 @@ import type { SessionLastPrompts, SessionListRow, SessionMessage, SessionSearchR
  * app-shell's hourly cleanup and this page agree on the same preferences.
  */
 
-const STATUS_LABEL: Record<SessionOutcome, TranslationKey> = {
-	complete: "session status complete",
-	interrupted: "session status interrupted",
-	aborted: "session status aborted",
-	error: "session status error",
-	pending: "session status pending",
-	unknown: "session status unknown",
-};
+const STATUS_LABEL: Record<SessionOutcome, TranslationKey> = SESSION_OUTCOME_LABEL_KEYS;
 
 const STATUS_DOT: Record<SessionOutcome, string> = {
 	complete: "bg-[var(--color-success)]",
