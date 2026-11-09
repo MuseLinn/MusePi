@@ -705,7 +705,12 @@ export function UnifiedPluginsView({
 			id: "session",
 			label: t("tools.extPluginsSession"),
 			value: sessionPlugins.length,
-			sub: selectedPreset?.label ?? t("tools.extPluginsSessionHint"),
+			sub:
+				selectedPreset === undefined
+					? t("tools.extPluginsSessionHint")
+					: sessionPlugins.length === 0
+						? t("tools.extPluginsSessionUndeclared", { preset: selectedPreset.label })
+						: selectedPreset.label,
 		},
 		{
 			id: "global",

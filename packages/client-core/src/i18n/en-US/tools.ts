@@ -685,6 +685,7 @@ export const tools = {
 	"tools.extResourcesModels": "Model downloads",
 	"tools.extPluginsSession": "Session plugins",
 	"tools.extPluginsSessionHint": "Composed per session by the Agent preset",
+	"tools.extPluginsSessionUndeclared": "“{preset}” declares no composition; all enabled plugins apply",
 	"tools.extPluginsGlobal": "Global plugins",
 	"tools.extPluginsGlobalHint": "Shared by the system and every session",
 	"tools.extPluginsConfig": "Built-in plugin settings",

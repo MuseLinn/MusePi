@@ -657,6 +657,7 @@ export const tools = {
 	"tools.extResourcesModels": "需下载模型",
 	"tools.extPluginsSession": "会话插件",
 	"tools.extPluginsSessionHint": "由 Agent 预设按会话组成",
+	"tools.extPluginsSessionUndeclared": "「{preset}」未声明组合，使用全部已启用插件",
 	"tools.extPluginsGlobal": "全局插件",
 	"tools.extPluginsGlobalHint": "系统与所有会话共用",
 	"tools.extPluginsConfig": "内置插件配置",
