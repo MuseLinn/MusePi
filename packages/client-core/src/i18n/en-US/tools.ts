@@ -696,8 +696,6 @@ export const tools = {
 	"tools.extAddFromSpecHint": "npm packages, Git repositories, and local directories",
 	"tools.extCreateWithAgent": "Let the Agent create a plugin",
 	"tools.extCreateWithAgentHint": "Enter creator mode and build your own plugin",
-	"tools.extCreatePluginPrompt":
-		"Help me create a plugin. Ask what it should do first, then implement and verify it following the plugin conventions.",
 	"tools.extPluginsInstalled": "Installed",
 	// Plugin list grouped by Agent preset (a preset is a plugin composition)
 	"tools.extPluginsPresetGroup": 'Preset "{name}"',

@@ -2980,16 +2980,17 @@ function AppInner(): ReactNode {
 		[createAndSend, closeSettings],
 	);
 
-	/** Plugin pages → 「让 Agent 创建插件」: same creator flow, with the request
-	 *  stated as the first user message so the Creator preset can ask and build. */
+	/** Plugin pages → 「让 Agent 创建插件」: open a blank Creator session, the
+	 *  same shape as the reference flow — the person types the request, so the
+	 *  Creator preset's prompt owns the interview instead of a canned message. */
 	useEffect(() => {
 		const onCreatePlugin = (): void => {
 			closeSettings();
-			void createAndSend(t("tools.extCreatePluginPrompt"), "creator");
+			void createSession({ modeId: "creator" });
 		};
 		window.addEventListener("musepi-create-plugin", onCreatePlugin);
 		return () => window.removeEventListener("musepi-create-plugin", onCreatePlugin);
-	}, [createAndSend, closeSettings]);
+	}, [createSession, closeSettings]);
 
 	/** Persist a user-set session title (daemon session.rename), then
 	 *  refresh the tree so the new label lands everywhere at once. */

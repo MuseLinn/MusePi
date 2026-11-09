@@ -668,7 +668,6 @@ export const tools = {
 	"tools.extAddFromSpecHint": "支持 npm 包、Git 仓库和本地目录",
 	"tools.extCreateWithAgent": "让 Agent 创建插件",
 	"tools.extCreateWithAgentHint": "进入创造模式，制作属于你的插件",
-	"tools.extCreatePluginPrompt": "帮我创建一个插件。先问清我要做什么，再按插件规范实现并验证。",
 	"tools.extPluginsInstalled": "已安装",
 	// 插件列表按 Agent 预设分组（预设 = 一组插件组合）
 	"tools.extPluginsPresetGroup": "预设「{name}」",
