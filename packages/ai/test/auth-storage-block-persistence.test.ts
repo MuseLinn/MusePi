@@ -348,27 +348,60 @@ describe("AuthStorage credential block persistence", () => {
 				updated_at: LEGACY_TIMESTAMP,
 			},
 		];
+		// v6→v7 commits its Codex block rewrite before the v8 version write; a
+		// forced v8 failure therefore leaves the migrated meter rows in place.
+		const postV7Rows = [
+			{
+				credential_id: codexRow.id,
+				provider_key: CODEX_PROVIDER_KEY,
+				block_scope: "chat",
+				blocked_until_ms: chatExpiryMs,
+				updated_at: LEGACY_TIMESTAMP,
+			},
+			{
+				credential_id: codexRow.id,
+				provider_key: CODEX_PROVIDER_KEY,
+				block_scope: "shared",
+				blocked_until_ms: chatExpiryMs,
+				updated_at: sparkUpdatedAt,
+			},
+			{
+				credential_id: codexRow.id,
+				provider_key: CODEX_PROVIDER_KEY,
+				block_scope: "spark",
+				blocked_until_ms: sharedExpiryMs,
+				updated_at: sparkUpdatedAt,
+			},
+			{
+				credential_id: anthropicRow.id,
+				provider_key: PROVIDER_KEY,
+				block_scope: "shared",
+				blocked_until_ms: FUTURE_BLOCK_MS,
+				updated_at: LEGACY_TIMESTAMP,
+			},
+		];
+		expect(readCredentialBlockRows(dbPath)).toEqual(preMigrationRows);
 		const failureDb = new Database(dbPath);
 		try {
 			failureDb.run(`
-				CREATE TRIGGER fail_auth_schema_v7_version_write
+				CREATE TRIGGER fail_auth_schema_v8_version_write
 				BEFORE INSERT ON auth_schema_version
-				WHEN NEW.version = 7
+				WHEN NEW.version = 8
 				BEGIN
-					SELECT RAISE(ABORT, 'forced v7 version write failure');
+					SELECT RAISE(ABORT, 'forced v8 version write failure');
 				END;
 			`);
 		} finally {
 			failureDb.close();
 		}
 
-		await expect(SqliteAuthCredentialStore.open(dbPath)).rejects.toThrow("forced v7 version write failure");
-		expect(readCredentialBlockRows(dbPath)).toEqual(preMigrationRows);
-		expect(readAuthSchemaVersion(dbPath)).toBe(6);
+		await expect(SqliteAuthCredentialStore.open(dbPath)).rejects.toThrow("forced v8 version write failure");
+		expect(readCredentialBlockRows(dbPath)).toEqual(postV7Rows);
+		expect(readAuthSchemaVersion(dbPath)).toBe(7);
 
 		const cleanupDb = new Database(dbPath);
 		try {
-			cleanupDb.run("DROP TRIGGER fail_auth_schema_v7_version_write");
+			cleanupDb.run("DROP TRIGGER fail_auth_schema_v8_version_write");
 		} finally {
 			cleanupDb.close();
 		}
@@ -425,12 +458,12 @@ describe("AuthStorage credential block persistence", () => {
 		firstReopen.close();
 		expect(readCredentialBlockRows(dbPath)).toEqual(expectedRows);
 		expect(readLegacyCodexSharedBlock(dbPath, codexRow.id)?.blocked_until_ms).toBe(chatExpiryMs);
-		expect(readAuthSchemaVersion(dbPath)).toBe(7);
+		expect(readAuthSchemaVersion(dbPath)).toBe(8);
 
 		const secondReopen = await SqliteAuthCredentialStore.open(dbPath);
 		secondReopen.close();
 		expect(readCredentialBlockRows(dbPath)).toEqual(expectedRows);
-		expect(readAuthSchemaVersion(dbPath)).toBe(7);
+		expect(readAuthSchemaVersion(dbPath)).toBe(8);
 	});
 
 	it("mirrors a legacy Codex shared insert into meter rows while hiding shared from current APIs", async () => {
@@ -707,7 +740,7 @@ describe("AuthStorage credential block persistence", () => {
 			const expiresAtMs = Date.now() + 3_600_000;
 			expect(migratedStore.tryAcquireCredentialRefreshLease(1, "test-owner", expiresAtMs)).toBe(true);
 			expect(migratedStore.getCredentialRefreshLeaseExpiresAt(1)).toBe(expiresAtMs);
-			expect(readAuthSchemaVersion(dbPath)).toBe(7);
+			expect(readAuthSchemaVersion(dbPath)).toBe(8);
 		} finally {
 			migratedStore.close();
 		}
@@ -758,7 +791,7 @@ describe("AuthStorage credential block persistence", () => {
 			const rows = migratedStore.listAuthCredentials(PROVIDER);
 			expect(rows).toHaveLength(1);
 			expect(rows[0]!.credential).toMatchObject({ type: "oauth", access: "legacy-access" });
-			expect(readAuthSchemaVersion(dbPath)).toBe(7);
+			expect(readAuthSchemaVersion(dbPath)).toBe(8);
 			expect(tableExists(dbPath, "auth_credential_blocks")).toBe(true);
 		} finally {
 			migratedStore.close();

@@ -170,6 +170,39 @@ export function getOpenAiRemoteCompactionPayload(
 	};
 }
 
+/** Provider-native payload a persisted compaction entry can replay. */
+export function getCompactionProviderPayload(
+	compaction: CompactionEntry | null | undefined,
+): ProviderPayload | undefined {
+	const openai = getOpenAiRemoteCompactionPayload(compaction);
+	if (openai) return openai;
+	const candidate = compaction?.preserveData?.anthropicCompaction;
+	if (!candidate || typeof candidate !== "object") return undefined;
+	const native = candidate as {
+		provider?: unknown;
+		content?: unknown;
+		signature?: unknown;
+		encryptedContent?: unknown;
+		toolChanges?: unknown;
+	};
+	if (typeof native.provider !== "string" || native.provider.length === 0) return undefined;
+	if (typeof native.content !== "string" || native.content.length === 0) return undefined;
+	return {
+		type: "anthropicCompaction",
+		provider: native.provider,
+		content: native.content,
+		...(typeof native.signature === "string" ? { signature: native.signature } : {}),
+		...(typeof native.encryptedContent === "string" ? { encryptedContent: native.encryptedContent } : {}),
+		...(Array.isArray(native.toolChanges)
+			? {
+					toolChanges: native.toolChanges.filter(
+						(item): item is Record<string, unknown> => item !== null && typeof item === "object",
+					),
+				}
+			: {}),
+	};
+}
+
 export function buildSessionContext(
 	entries: SessionEntry[],
 	leafId?: string | null,
@@ -419,8 +452,9 @@ export function buildSessionContext(
 			appendMessage(path[i]);
 		}
 	} else if (compaction) {
-		const providerPayload = getOpenAiRemoteCompactionPayload(compaction);
-		const remoteReplacementHistory = providerPayload?.items;
+		const providerPayload = getCompactionProviderPayload(compaction);
+		const remoteReplacementHistory =
+			providerPayload?.type === "openaiResponsesHistory" ? providerPayload.items : undefined;
 
 		// Re-attach any archived snapcompact frames so the model can keep
 		// reading the archived history after every context rebuild.

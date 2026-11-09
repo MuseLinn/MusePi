@@ -4,10 +4,8 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import {
 	BROWSER_PREFERENCES_CHANGED_EVENT,
 	type BrowserSettingsTab,
-	readBrowserExtensionsToolbarVisible,
 	readBrowserSettingsTab,
 	readBrowserShowFullUrl,
-	writeBrowserExtensionsToolbarVisible,
 	writeBrowserSettingsTab,
 	writeBrowserShowFullUrl,
 } from "../../lib/browser-preferences";
@@ -28,7 +26,6 @@ interface BrowserTabInfo {
  *  shared-profile data operations. Each view owns one task group. */
 export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [settingsTab, setSettingsTab] = useState<BrowserSettingsTab>(readBrowserSettingsTab);
-	const [extensionsToolbar, setExtensionsToolbar] = useState(readBrowserExtensionsToolbarVisible);
 	const [showFullUrl, setShowFullUrl] = useState(readBrowserShowFullUrl);
 	const [headless, setHeadless] = useState<boolean | null>(null);
 	const [relay, setRelay] = useState<boolean | null>(null);
@@ -58,8 +55,6 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			const detail = (event as CustomEvent<{ key?: string; value?: unknown }>).detail;
 			if (detail?.key === "settingsTab" && typeof detail.value === "string") {
 				setSettingsTab(readBrowserSettingsTab());
-			} else if (detail?.key === "extensionsToolbar") {
-				setExtensionsToolbar(readBrowserExtensionsToolbarVisible());
 			} else if (detail?.key === "showFullUrl") {
 				setShowFullUrl(readBrowserShowFullUrl());
 			}
@@ -166,7 +161,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				ariaLabel={t("settings.browser")}
 				options={[
 					{ value: "general", label: t("settings.general2") },
-					{ value: "extensions", label: t("tools.extensions") },
+					{ value: "extensions", label: t("tools.browserExternalIntegrations") },
 					{ value: "data", label: t("tools.browserData") },
 				]}
 			/>
@@ -547,26 +542,6 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<BrowserExtensionsPanel rpc={rpc} />
 					</div>
 					<div className="gui-settings-section">
-						<div className="gui-settings-row">
-							<div>
-								<div className="gui-settings-row-label">{t("tools.browserExtensionsToolbar")}</div>
-								<div className="gui-settings-row-desc">{t("tools.browserExtensionsToolbarDescription")}</div>
-							</div>
-							<button
-								type="button"
-								role="switch"
-								aria-checked={extensionsToolbar}
-								className={`gui-toggle${extensionsToolbar ? " gui-toggle--on" : ""}`}
-								onClick={() => {
-									const next = !extensionsToolbar;
-									setExtensionsToolbar(next);
-									writeBrowserExtensionsToolbarVisible(next);
-								}}
-								aria-label={t("tools.browserExtensionsToolbar")}
-							>
-								<span className="gui-toggle-knob" />
-							</button>
-						</div>
 						<div className="gui-settings-row">
 							<div>
 								<div className="gui-settings-row-label">{t("tools.browserShowFullUrl")}</div>

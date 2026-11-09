@@ -138,6 +138,7 @@ describe("Amazon Bedrock Claude Opus 5", () => {
 				maxTokens: 128_000,
 			};
 			expect(buildBedrockCompat(spec)).toEqual({
+				supportsServerCompaction: true,
 				promptCacheMode: "explicit",
 				supportsLongPromptCacheRetention: true,
 				promptCacheMinimumTokens: 512,

@@ -310,6 +310,14 @@ interface UiEnum<T extends readonly string[]> extends UiBase {
 interface UiNumber extends UiBase {
 	/** Submenu options. Without options, a numeric setting has no UI representation (intentional hide). */
 	options?: ReadonlyArray<SubmenuOption>;
+	/**
+	 * Free-number affordance hints (settings without `options`). The desktop
+	 * panel uses them for the stepper/slider; omitted means "derive from the
+	 * stored value". The TUI ignores them.
+	 */
+	min?: number;
+	max?: number;
+	step?: number;
 }
 
 interface UiString extends UiBase {
@@ -329,6 +337,13 @@ interface UiArray extends UiBase {
 	options?: ReadonlyArray<SubmenuOption>;
 	/** Selection order is meaningful; the editor renders positions and supports reordering. */
 	ordered?: boolean;
+	/**
+	 * Element shape for free-form arrays (no `options`), so an editor can pick
+	 * a row list for strings and a JSON list for objects. Omitted means
+	 * `"string"`; an object array MUST declare it, because a comma-separated
+	 * editor would split every element into garbage.
+	 */
+	item?: "string" | "record";
 }
 
 /** Wide ui shape exposed to consumers that walk the schema generically. */
@@ -336,6 +351,10 @@ export type AnyUiMetadata = UiBase & {
 	options?: ReadonlyArray<SubmenuOption> | "runtime";
 	secret?: boolean;
 	ordered?: boolean;
+	item?: "string" | "record";
+	min?: number;
+	max?: number;
+	step?: number;
 };
 
 /**
@@ -1710,6 +1729,7 @@ export const SETTINGS_SCHEMA = {
 			label: "Custom prompt sections",
 			description:
 				"User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections",
+			item: "record",
 		},
 	},
 	personality: {
@@ -2884,6 +2904,40 @@ export const SETTINGS_SCHEMA = {
 			label: "Async Compaction",
 			description:
 				"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed",
+		},
+	},
+
+	"compaction.modelThresholdsEnabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "context",
+			group: "Compaction",
+			label: "Per-Model Compaction Limits",
+			description: "Apply compaction.modelThresholds entries to the model they name instead of the global threshold",
+		},
+	},
+
+	"compaction.modelThresholds": {
+		type: "record",
+		default: {} as Record<string, number | string | null>,
+		ui: {
+			tab: "context",
+			group: "Compaction",
+			label: "Model Compaction Limits",
+			description:
+				"Per-model overrides keyed by `provider/model-id` (or a trailing `provider/…*` prefix): a token count is the base the policy scales, `f90000` is a fixed trigger, and `80%` replaces the threshold percentage",
+		},
+	},
+
+	"compaction.experimentalContextManagement": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "context",
+			group: "Compaction",
+			label: "Notes-backed context windows (experimental)",
+			description: "Keep persistent notes and searchable raw history across context windows",
 		},
 	},
 
@@ -4166,6 +4220,7 @@ export const SETTINGS_SCHEMA = {
 			label: "Bash Approval Patterns",
 			description:
 				"Ordered bash command approval rules. Each item has match and approval fields; only '*' wildcards are supported.",
+			item: "record",
 		},
 	},
 
@@ -5063,6 +5118,9 @@ export const SETTINGS_SCHEMA = {
 			group: "Grep & Browser",
 			label: "Default Zoom",
 			description: "Default zoom level applied to open and new browser tabs (0.25-3).",
+			min: 0.25,
+			max: 3,
+			step: 0.05,
 		},
 	},
 	"browser.userAgent": {
@@ -6089,6 +6147,9 @@ export const SETTINGS_SCHEMA = {
 			label: "Speech rate (0.5–2)",
 			description: "Playback rate for local TTS — 0.8× is common for reading aloud.",
 			condition: "ttsPluginEnabled",
+			min: 0.5,
+			max: 2,
+			step: 0.05,
 		},
 	},
 	"tts.inputMode": {
@@ -6862,10 +6923,15 @@ export interface CompactionSettings {
 	methodOrder: CompactionMethod[];
 	thresholdPercent: number;
 	thresholdTokens: number;
+	/** A model entry's token base standing in for the window; never configured directly. */
+	baseWindowTokens?: number;
 	reserveTokens: number | undefined;
 	keepRecentTokens: number;
 	midTurnEnabled: boolean;
 	asyncEnabled: boolean;
+	modelThresholdsEnabled: boolean;
+	modelThresholds: Record<string, number | string | null>;
+	experimentalContextManagement: boolean;
 	handoffSaveToDisk: boolean;
 	autoContinue: boolean;
 	remoteEndpoint: string | undefined;

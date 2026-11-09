@@ -1970,6 +1970,8 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 			signal,
 			localProtocolOptions: this.session.localProtocolOptions,
 			skills: this.session.skills,
+			experimentalContextManagement: this.session.settings.get("compaction.experimentalContextManagement") === true,
+			getSessionBranch: () => this.session.sessionManager?.getBranch(),
 			xd: {
 				read: async name => {
 					if (name === REPORT_ISSUE_DEVICE_NAME) return reportIssueDeviceUsage();

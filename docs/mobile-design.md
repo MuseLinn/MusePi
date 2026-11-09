@@ -137,7 +137,7 @@ Settings（独立全屏页）
 | 95 | QrScanner | 扫码全屏覆盖（ConnectScreen） |
 | 90 | SessionsSheet | 会话切换底部 sheet |
 | 85 | HostManager | 电脑管理底部玻璃 Sheet |
-| 84 | PanelMenu（窄屏） | ≤520px 折叠面板底部浮层 |
+| 84 | PanelMenu（窄屏） | `<840px`（`layout !== "wide"`）折叠面板底部浮层 |
 | 80 | AgentsRail | 子代理抽屉 |
 | 60 | 面板或设置 | 全屏页面返回当前草稿或会话 |
 | 40 | 会话返回 | 手机：会话 → 新草稿；桌面 web：会话 → 工作区目录 |
@@ -190,19 +190,21 @@ Settings（独立全屏页）
 
 #### Header（移动端收敛）
 
-桌面 header 的元素在 ≤640px 的取舍矩阵：
+桌面 header 的元素在 `<840px`（即 `ShellLayout !== "wide"`）的取舍矩阵：
 
-| 元素 | ≤640px | ≤520px | 理由 |
+| 元素 | compact（<600px 或短横屏） | medium（600–839px） | 理由 |
 |---|---|---|---|
 | 返回（面板/设置/会话） | ✅ 常显 | ✅ | 导航必需 |
-| 标题 + cwd | 标题 ✅ / cwd ❌ | 标题 ✅，单行省略并打开会话 Sheet | cwd 冗余 |
-| read-only / model / thinking chips | ❌ | ❌ | 只读有专门提示 |
+| 标题 + cwd | 标题 ✅ / cwd ❌ | 标题 ✅ / cwd ❌ | cwd 冗余（`.sh-cwd` 在 <840px 隐藏） |
+| read-only / model / thinking chips | read-only ✅ / 其余 ❌ | 同左 | 只读有专门提示 |
 | context gauge | ❌ | ❌ | 顶栏只保留核心动作 |
-| avatars / dot | ❌ | ❌ | 连接状态由 banner 表达 |
+| avatars | ❌ | ❌ | 参与者列表在设置页/会话 Sheet 里 |
+| 连接状态 dot | ✅ | ✅ | 常驻存活指示（§6.2 心跳）；banner 只在连接中/断线时出现 |
 | 面板按钮 | 折叠为 1 个"面板"菜单 | 同左 | 保留功能入口并控制溢出 |
+| 设置 | 面板菜单最后一项 | 同左 | **单会话主机（`sessions === null`）没有会话 Sheet，这是唯一入口** |
 | 新会话 | ✅ | ✅ | 高频核心动作，只清空焦点 |
 | theme / accent / language | 设置页 | 设置页 | 顶栏不放装饰性控件 |
-| 电脑管理 / 退出 | 会话 Sheet / 设置页 | 同左 | 避免顶栏拥挤 |
+| 电脑管理 / 退出 | 设置页 | 设置页 | 避免顶栏拥挤 |
 
 触控目标：`sh-btn-icon` ≤640px 时 `min-width/min-height: 44px`（§5.3）。
 
@@ -578,11 +580,21 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - 桥面与 JS 侧 capacitor.ts 的类型/路由完全对齐（getSystemBars via getWindowAvoidArea px→vp、badge、consumeDeepLink、__harmonyKeyboard/__harmonyDeepLink 推送）
 - `@StorageLink + @Watch` 标准模式做暖启动深链推送；module.json5 注册 INTERNET/CAMERA + musepi:// skill（phone+tablet）
 - `scripts/copy-web-assets.js`：guest-client dist → rawfile（mobile.html 提升为 index.html）；rawfile gitignored
-- 构建路径：guest-client build → copy-web-assets → DevEco Studio 打开签名运行（本机无 DevEco，ArkTS 未编译验证）
+- 构建路径：`client-core` build → `copy-web-assets` → `scripts/build-hap.mjs`（官方 `devecocli` headless 出包）。
+  **编译通过**（CLT 26.0.0.865 / SDK API 26 / hvigor 6.26.9，ArkTS 零 error 零 warn）；
+  **签名通过**（`devecocli signature generate --type debug` → `entry-default-signed.hap`，
+  签名材料在 `~/.ohos/config/`，签名配置是机器绑定的所以没有入库）。
+  **真机未验证**：无 USB 设备；模拟器要求固件开启虚拟化，本机
+  `VirtualizationFirmwareEnabled = False`，未下载镜像。接上开了调试的鸿蒙手机即可
+  `devecocli run`，随后用 `devecocli ui` 读取界面状态验收返回键三段行为。
+  工程结构同步升到 `modelVersion: 6.0.0`（根/entry 的 `oh-package.json5` + `hvigor-config.json5`），
+  补了缺失的 `entry/hvigorfile.ts`，`nodeOptions.maxOldSpaceSize: 8192` 解决打包 OOM；
+  `compatibleSdkVersion` 保持 `5.0.0(12)`。命令行工具链调用需清掉代理变量，否则
+  `devecocli` 报 `Invalid proxy authorization`。
 
 ### 11.10 旋转/断点过渡动效（2026-08-25，模拟器双向实测）
 
-横竖屏切换跨越宽度断点（768/640/520）时布局原为硬切。新增**断点几何过渡**：
+横竖屏切换跨越宽度断点（840/600/520）时布局原为硬切。新增**断点几何过渡**：
 
 - **机制**：纯 CSS `transition`（320ms `cubic-bezier(0.22,1,0.36,1)` 项目 spring 曲线）作用于
   `padding / gap / max-width / min-width / min-height / font-size`，注册在基础规则上，
@@ -734,3 +746,89 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - CollabSocket 自己负责 live／reconnecting 状态的重连。应用层只在 Guest 已 ended，或允许自动恢复的空状态下响应回前台／online；HostClient 不重复建连。用户主动退出后，自动恢复保持关闭，直到下一次显式连接。
 - 可写 Guest 通过 `approval-request`／`approval-response` 处理工具审批。daemon ApprovalBridge 是唯一结算方；主机完成后所有设备同步清除请求。只读 Guest 不接收审批，welcome、会话结束、工作区目录与取消聚焦都会清理过期请求。
 - 桌面分享对话框使用 `RemoteAccessDialog` 与 `remote-access.start/status/stop/pair.generate`。旧 `collab.*` RPC、`/collab` 深链和协议包保持兼容，不建立第二套分享状态。
+
+## 14. 2026-11-08 界面与生命周期专项核对
+
+参照 `references/bitfun`（`src/apps/mobile/design-system`、`remote-session-lifecycle.md`、
+`src/mobile-web`）与 `references/comma`（`clients/apps/android/docs/DESIGN.md`
+§6 动效、`design-foundation.md` 弹簧用法）逐屏核对，修复 11 项。
+
+### 14.1 可达性与信息架构
+
+- **单会话主机没有设置入口**：`sessions === null` 时不渲染 SessionsSheet（设置/电脑管理/退出都在它
+  的 footer 里），而 `<840px` 又隐藏 theme/accent/language/hosts/leave —— 设置页、断开连接、
+  管理电脑三个入口同时消失。修复：`settings` 加入 `PANEL_BUTTONS`（面板菜单最后一项，
+  wide 档同排图标按钮）。`HeaderBar.tsx`。
+- **水合期冒充空会话**：`selectWorkspaceSession` 立刻清空 entries 且 `phase=waiting`，
+  `WelcomeHint` 与建议 chips 把"正在载入历史"渲染成"全新会话"。修复：`hydrating`
+  （`entries` 空 + 无 stream + 非 live）显示骨架屏并抑制空态问候与 chips；
+  chips 的 `empty` 现在要求 live 或新会话草稿。`TranscriptSkeleton.tsx`（新增）、`app.tsx`、
+  `Composer.tsx`、`shell.css`。
+
+### 14.2 键盘与安全区
+
+- **浏览器/PWA 双重键盘补偿**：`.sh-app` 高度已跟随 `visualViewport.height`，视觉视口
+  fallback 又写了一次 `--mp-keyboard-inset`，composer 被抬高整整一个键盘高度（双指缩放同理）。
+  修复：fallback 移除，浏览器路径由容器高度负责、原生壳由 inset 负责，一屏一套机制。
+  `mobile.tsx`。
+- **Sheet 搜索框被 IME 遮挡**：`.ss-backdrop` 无键盘 inset，`resize:none` 下布局不收缩，
+  会话搜索与添加电脑表单被键盘盖住。修复：`.ss-backdrop` 加 `padding-bottom: var(--mp-keyboard-inset)`。
+- **Banner / Toast 压在系统栏下**：`.sh-banner` 固定 `top:8px`、`.sh-toasts` 固定 `bottom:12px`，
+  沉浸式壳里分别压在状态栏和手势条下。修复：补 `--safe-top` / `--safe-bottom` + 键盘 inset。
+
+### 14.3 触控与动效
+
+- **会话行滑动删除在触屏失效**：`.ss-item` 缺 `touch-action: pan-y`，纵向列表抢走手势。
+  修复：`touch-action: pan-y` + `transform` 过渡。
+- **拖拽/滑动松手是硬切**：sheet 拖拽与行滑动只看位移、不看速度，松手瞬移。按 comma §6.1
+  改为速度优先（`lib/drag-settle.ts`：松手速度先决定结果，再决定 settle 时长；
+  `isFlick` ≈650px/s；进度不夹 0–1），`requestAnimationFrame` 弹簧积分是后续上限。
+- **扫码重复连接**：成功闪屏 380ms 内每帧都重新解码并各自 `setTimeout(onResult)`，
+  一次扫码可建多个 GuestClient。修复：`accepted` 闩锁 + 后台释放摄像头、回前台重取。
+- **haptics 全部静默**：合并后 manifest 缺 `VIBRATE`，WebView 的 `navigator.vibrate`
+  被平台丢弃，§5.2 反馈表空转。修复：manifest 加 `VIBRATE`。
+- **冷启动品牌动效**：`BootSplash` 固定 1.66s 且不尊重 `prefers-reduced-motion`。
+  修复：reduced-motion 直接跳过（与 design-system 契约一致）。
+
+### 14.4 连接生命周期
+
+- **半开连接无感知**：collab 线没有心跳，Wi-Fi 切蜂窝 / NAT 超时 / Doze 冻结不会触发
+  `close`，UI 一直显示 live；`rpc` 也没有超时（`_opts` 从未实现），发送按钮可永久卡在
+  "sending"。修复：`lib/connection-health.ts` 15s 探测 + 5s 超时 + 一次 1.2s 重试，
+  两次失败走 `rejoin` 重建（重新 hello/welcome + 全量快照），回前台立即探测；
+  host 侧新增 `ping` RPC（任何回包——含错误——都证明双向通路）；`rpc` 实现
+  `opts.timeoutMs`；草稿首条消息的 `session.create` 与附件分片上传加 20s/120s 上限。
+  `collab/host.ts`、`lib/client.ts`、`lib/attachment-upload.ts`、`app.tsx`。
+- **切会话带着草稿走、被杀即丢**：Composer 的 text/attachments 是纯组件状态且无 key。
+  修复：草稿按 `连接::会话` 存 localStorage（`lib/drafts.ts`），切换时落盘并在发起会话
+  切换后按发送前的 key 清理；附件 chip 随会话切换丢弃（预览 URL 与 blob 引用属于旧会话）。
+- **通知误报**：`lastNotifiedRef` 初值 0，后台任何状态帧（progress/agents）都会把旧的
+  assistant 消息重推。修复：订阅时以当前最后一条 assistant 时间为基线。
+- **返回键吞 IME**：`backButton` 无条件走层栈，草稿页直接 `exitApp`。修复：
+  `--mp-keyboard-inset > 0` 时先 blur 并消费该次返回（`dismissKeyboardIfOpen`）。
+
+### 14.5 物理密度文字缩放
+
+- 15px 在 460ppi 手机与 415ppi 平板上物理尺寸不同。按 design-system `text_scale`：
+  `xdpi / density / 153.3`，夹在 [0.85, 1.18]，**只乘文字**（`--mp-text-scale` 进
+  `--ui-font-size`，几何不动）。数值来自新增的 `Insets.getDisplayMetrics`
+  （`InsetsPlugin.java`），无桥接的壳保持 1。`lib/text-scale.ts`（新增）。
+
+### 14.6 未做（记录在案）
+
+- HarmonyOS 返回键：已补齐实现（`Index.onBackPress()` 先收键盘、再走页面层栈、
+  最后交回系统；页面经 `harmonyNative.setBackDepth` 同步层栈深度，因为 `onBackPress`
+  必须同步作答而 `runJavaScript` 是异步的）。**已编译通过**（CLT 26.0.0.865 + SDK API 26，
+  ArkTS 零 error 零 warn，产出 `entry-default-unsigned.hap`）；补这一轮时还修掉了原先
+  从未暴露的编译错误：`web_webview` 不存在（应为 `webview`）、`window.getWindowAvoidArea`
+  是实例方法不是静态方法、`onKeyboardHeightChange` 是 window 事件不是 `Web` 属性、
+  `notificationManager.setNotificationBadgeNumber` 不存在（应为 `setBadgeNumber`）、
+  缺 `entry/hvigorfile.ts`、hvigor 5→6 的 `modelVersion`；**签名也已通过**（见下）。
+- 签名已通（`entry-default-signed.hap`，材料在 `~/.ohos/config/`，配置机器绑定不入库）。
+- 真机/模拟器验收仍未做：无 USB 设备；模拟器要固件虚拟化，本机
+  `VirtualizationFirmwareEnabled = False`。接上开了调试的鸿蒙手机即可 `devecocli run`，
+  再用 `devecocli ui` 读界面状态验收「先收键盘 → 关 sheet → 退应用」三段。
+  弹簧 settle 与扫码去重的手感也一并到那时复核。
+- `rpc` 默认超时仍为"无"（长任务如 `stt.transcribe` 需要）；只有移动端热点路径显式传入。
+- rAF 动画在页面隐藏时由平台自动暂停，`DotMatrixMark` 另有 IntersectionObserver 离屏门控，
+  本轮未再加显式暂停。

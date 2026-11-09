@@ -7,6 +7,7 @@ import { t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
 import { isMobileShell } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
+import { type DragSample, isFlick, settleMs, velocityFrom } from "../../lib/drag-settle";
 import { formatWhen, shortenPath } from "../../lib/format";
 import { haptic } from "../../lib/haptics";
 import { isTopModal, useModalFocus } from "../../lib/modal-focus";
@@ -59,8 +60,15 @@ export function SessionsSheet({
 	onOpenHosts?(): void;
 }): ReactNode {
 	const [dragY, setDragY] = useState(0);
+	// True while a finger owns the card: the inline transition must stay off so
+	// the card tracks the finger exactly, and come back for the settle.
+	const [draggingState, setDraggingState] = useState(false);
+	const [settle, setSettle] = useState(260);
 	const dragging = useRef(false);
 	const startY = useRef(0);
+	const dragYRef = useRef(0);
+	const lastSample = useRef<DragSample | null>(null);
+	const velocity = useRef(0);
 	const [query, setQuery] = useState("");
 	const filtered = useMemo(() => filterSessions(sessions, query), [sessions, query]);
 	// Only one row may sit open at a time (iOS list convention) — the sheet
@@ -146,7 +154,11 @@ export function SessionsSheet({
 		(e: React.PointerEvent) => {
 			if (prefersReduced) return;
 			dragging.current = true;
+			setDraggingState(true);
 			startY.current = e.clientY;
+			dragYRef.current = 0;
+			velocity.current = 0;
+			lastSample.current = { pos: e.clientY, t: e.timeStamp };
 		},
 		[prefersReduced],
 	);
@@ -154,16 +166,30 @@ export function SessionsSheet({
 	const onDragMove = useCallback((e: React.PointerEvent) => {
 		if (!dragging.current) return;
 		const dy = Math.max(0, e.clientY - startY.current);
+		dragYRef.current = dy;
 		setDragY(dy);
+		// Keep the raw (unclamped) value: an upward wiggle mid-drag is a
+		// negative velocity, and the release decision needs its sign.
+		velocity.current = velocityFrom(lastSample.current, { pos: e.clientY, t: e.timeStamp });
+		lastSample.current = { pos: e.clientY, t: e.timeStamp };
 	}, []);
 
 	const onDragEnd = useCallback(() => {
 		if (!dragging.current) return;
 		dragging.current = false;
-		setDragY(current => {
-			if (current >= DRAG_DISMISS_PX) onClose();
-			return current >= DRAG_DISMISS_PX ? current : 0;
-		});
+		setDraggingState(false);
+		const dy = dragYRef.current;
+		// Velocity decides first, position second (comma §6.1 handoff): a
+		// downward flick dismisses even when the finger stopped short.
+		const dismiss = dy >= DRAG_DISMISS_PX || isFlick(velocity.current, 1);
+		if (dismiss) {
+			setSettle(settleMs(DRAG_DISMISS_PX, velocity.current));
+			onClose();
+			return;
+		}
+		setSettle(settleMs(dy, velocity.current));
+		dragYRef.current = 0;
+		setDragY(0);
 	}, [onClose]);
 
 	if (stage === "hidden") return null;
@@ -176,7 +202,10 @@ export function SessionsSheet({
 				role="dialog"
 				aria-modal="true"
 				aria-label={t("general.sessions")}
-				style={dragY > 0 ? { transform: `translateY(${dragY}px)` } : undefined}
+				style={{
+					transform: `translateY(${dragY}px)`,
+					transition: draggingState || prefersReduced ? "none" : `transform ${settle}ms var(--spring-bouncy)`,
+				}}
 				onClick={e => e.stopPropagation()}
 				onAnimationEnd={onExitAnimEnd}
 			>
@@ -304,18 +333,23 @@ function SwipeableRow({
 }): ReactNode {
 	const [offset, setOffset] = useState(0); // ≤ 0; negative = revealed
 	const [dragging, setDragging] = useState(false);
+	const [settle, setSettle] = useState(260);
 	const [confirming, setConfirming] = useState(false);
 	const [renaming, setRenaming] = useState(false);
 	const [title, setTitle] = useState(session.title ?? "");
 	const startX = useRef(0);
 	const baseAtStart = useRef(0);
 	const moved = useRef(false);
+	const offsetRef = useRef(0);
+	const lastSample = useRef<DragSample | null>(null);
+	const velocity = useRef(0);
 
 	const open = offset <= -SWIPE_ACTIONS_PX + 2;
 	// Row state resets when another row opens.
 	useEffect(() => {
 		if (anySwiped) {
 			setOffset(0);
+			offsetRef.current = 0;
 			setConfirming(false);
 		}
 	}, [anySwiped]);
@@ -324,7 +358,10 @@ function SwipeableRow({
 		(e: React.PointerEvent) => {
 			startX.current = e.clientX;
 			baseAtStart.current = offset;
+			offsetRef.current = offset;
 			moved.current = false;
+			velocity.current = 0;
+			lastSample.current = { pos: e.clientX, t: e.timeStamp };
 			setDragging(true);
 		},
 		[offset],
@@ -340,30 +377,38 @@ function SwipeableRow({
 				haptic(8);
 			}
 			if (!moved.current) return;
-			setOffset(Math.max(-SWIPE_ACTIONS_PX - 24, Math.min(0, baseAtStart.current + dx)));
+			const next = Math.max(-SWIPE_ACTIONS_PX - 24, Math.min(0, baseAtStart.current + dx));
+			offsetRef.current = next;
+			setOffset(next);
+			velocity.current = velocityFrom(lastSample.current, { pos: e.clientX, t: e.timeStamp });
+			lastSample.current = { pos: e.clientX, t: e.timeStamp };
 		},
 		[dragging],
 	);
 
-	const onPointerUp = useCallback(
-		(e: React.PointerEvent) => {
-			if (!dragging) return;
-			setDragging(false);
-			if (moved.current) {
-				const dx = e.clientX - startX.current;
-				const willOpen = offset < -SWIPE_ACTIONS_PX / 2 || (dx < -40 && Math.abs(offset) > 8);
-				setOffset(willOpen ? -SWIPE_ACTIONS_PX : 0);
-				if (willOpen) {
-					haptic(12);
-					onSwiped(session.id);
-					setConfirming(false);
-				} else {
-					onSwiped(null);
-				}
-			}
-		},
-		[dragging, offset, onSwiped, session.id],
-	);
+	const onPointerUp = useCallback((): void => {
+		if (!dragging) return;
+		setDragging(false);
+		if (!moved.current) return;
+		const current = offsetRef.current;
+		// A leftward flick reveals even from a short drag, and a rightward
+		// flick closes an open row — the same velocity-first rule as the
+		// sheet's drag-dismiss (comma §6.1).
+		const willOpen = isFlick(velocity.current, -1) || current < -SWIPE_ACTIONS_PX / 2;
+		const willClose = isFlick(velocity.current, 1);
+		const open = willOpen && !willClose;
+		const target = open ? -SWIPE_ACTIONS_PX : 0;
+		setSettle(settleMs(target - current, velocity.current));
+		setOffset(target);
+		offsetRef.current = target;
+		if (open) {
+			haptic(12);
+			onSwiped(session.id);
+			setConfirming(false);
+		} else {
+			onSwiped(null);
+		}
+	}, [dragging, onSwiped, session.id]);
 
 	const commitRename = useCallback(async () => {
 		const next = title.trim();
@@ -438,7 +483,7 @@ function SwipeableRow({
 					className={`ss-item${active ? " ss-item--active" : ""}`}
 					style={{
 						transform: `translateX(${offset}px)`,
-						transition: dragging ? "none" : undefined,
+						transition: dragging ? "none" : `transform ${settle}ms var(--spring-liquid)`,
 					}}
 					onClick={() => {
 						if (moved.current) return;

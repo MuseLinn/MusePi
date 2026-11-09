@@ -8,6 +8,7 @@ import {
 } from "../lib/external-agent-config";
 import { ExecutablePathInput } from "./ExecutablePathInput";
 import { GuiSelect } from "./GuiSelect";
+import { TextListEditor } from "./settings-controls/ValueLists";
 import { NumberStepper } from "./settings-sections/shared";
 
 /**
@@ -19,7 +20,8 @@ import { NumberStepper } from "./settings-sections/shared";
  *
  * 类型映射:boolean → 开关行;number → NumberStepper(min/max/step);
  * select → ≤4 项走 Segmented 滑块、更多走 GuiSelect 下拉;
- * string/path → 文本行。restart 声明渲染为字段下方的生效时机提示。
+ * string/path → 文本行;list → 逐行值列表(不按逗号拼接)。
+ * restart 声明渲染为字段下方的生效时机提示。
  */
 export function ConfigFormRenderer({
 	fields,
@@ -185,23 +187,15 @@ function ConfigFieldRow({
 						? desc.default.filter((item): item is string => typeof item === "string")
 						: [];
 				return (
-					<input
-						id={inputId}
-						name={desc.key}
-						type="text"
-						className="gui-plugin-config-input"
-						value={items.join(", ")}
-						aria-label={desc.key}
+					<TextListEditor
+						values={items}
+						onChange={next => onChange(desc.key, next)}
+						placeholder={t("settings.valuePlaceholder")}
+						emptyHint={t("settings.listEmpty")}
+						addLabel={t("settings.addValue")}
+						removeLabel={t("settings.removeValue")}
+						ariaLabel={tLoose(desc.label ?? desc.key)}
 						disabled={disabled}
-						onChange={event =>
-							onChange(
-								desc.key,
-								event.target.value
-									.split(",")
-									.map(item => item.trim())
-									.filter(item => item.length > 0),
-							)
-						}
 					/>
 				);
 			}
@@ -241,10 +235,12 @@ function ConfigFieldRow({
 	})();
 
 	return (
-		<div className={`gui-settings-row${disabled ? " gui-settings-row--disabled" : ""}`}>
+		<div
+			className={`gui-settings-row${disabled ? " gui-settings-row--disabled" : ""}${desc.type === "list" ? " gui-settings-row--wide-control" : ""}`}
+		>
 			<div className="gui-plugin-config-field">
 				{/* label 声明(i18n 键或原文)优先,缺省回退设置键;经 tLoose 解析。 */}
-				<label className="gui-settings-row-label" htmlFor={inputId}>
+				<label className="gui-settings-row-label" htmlFor={desc.type === "list" ? undefined : inputId}>
 					{tLoose(desc.label ?? desc.key)}
 				</label>
 				{desc.description && <div className="gui-settings-row-desc">{tLoose(desc.description)}</div>}

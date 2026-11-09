@@ -1,7 +1,7 @@
 import type { ToolSession } from ".";
 
 /**
- * Registration is ownership (the dsh rule): when an extension already registers
+ * Registration is ownership: when an extension already registers
  * a tool with this name, the core factory must not create a second instance for
  * the session. The extension tool wins in the registry, and skipping the core
  * tool avoids duplicate work and double side effects.

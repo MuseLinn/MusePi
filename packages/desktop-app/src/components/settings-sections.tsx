@@ -10,11 +10,11 @@ export { AppearanceSection, CodePreviewCard } from "./settings-sections/appearan
 export { BrowserSection } from "./settings-sections/browser";
 export { ChatSection, PrefSegmented, PrefToggle } from "./settings-sections/chat";
 export { CommandsSection } from "./settings-sections/commands";
+export { ConnectorsSection } from "./settings-sections/connectors";
 export { ContextSection } from "./settings-sections/context";
 export { FilesLspSection } from "./settings-sections/files";
 export { GeneralSection, TaskCardStylePreview } from "./settings-sections/general";
 export { GitPrefsRow, GitSection } from "./settings-sections/git";
-export { HistorySection } from "./settings-sections/history";
 export { HooksSection } from "./settings-sections/hooks";
 export { IndexesSection } from "./settings-sections/indexes";
 export { InteractionSection } from "./settings-sections/interaction";

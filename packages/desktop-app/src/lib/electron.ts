@@ -1,6 +1,6 @@
 /**
  * Electron shell bridge (thin, typed) for the renderer: native directory
- * picker for ZCode-style "打开文件夹" project add. The daemon bridge lives in
+ * picker for the 添加项目 flow. The daemon bridge lives in
  * app.tsx (boot chain); this is only the dialog.
  */
 
@@ -17,6 +17,8 @@ export interface ElectronAPI {
 	 *  down; resolves true when adopted. */
 	adoptDaemon?(): Promise<boolean>;
 	openDirectory(): Promise<string | null>;
+	/** Open a directory in the OS file manager (Explorer/Finder/…). */
+	openPath(path: string): Promise<{ ok: boolean; error?: string }>;
 	copyText(text: string): Promise<boolean>;
 	/** Picture-in-picture mini chat window (openchamber mini chat);
 	 *  sessionId deep-links the window to that session. */
@@ -277,6 +279,20 @@ export async function restartDaemon(port: number): Promise<number | null> {
 export function projectName(path: string): string {
 	const parts = path.split(/[/\\]/).filter(Boolean);
 	return parts.at(-1) ?? path;
+}
+
+/** Open a folder in the OS file manager. Uses `shell.openPath`, which opens
+ *  the directory itself (Explorer/Finder/file manager) on every platform.
+ *  Returns false when the bridge is unavailable or the OS refused the path. */
+export async function openPathInFileManager(target: string): Promise<boolean> {
+	if (!isElectron()) return false;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		const result = await electronAPI.openPath(target);
+		return result?.ok !== false;
+	} catch {
+		return false;
+	}
 }
 
 /** Clipboard write (openchamber copy-path); browser fallback via execCommand. */

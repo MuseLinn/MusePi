@@ -52,6 +52,8 @@ import { BrowserOperationTracker, operationResultDetails, redactBrowserUrl } fro
 import { extractReadableFromHtml, type ReadableFormat } from "./readable";
 import { cloneSafe, RunOutput } from "./run-output";
 import type {
+	BrowserDialogInfo,
+	BrowserHandledDialog,
 	BrowserOperationAction,
 	Observation,
 	ObservationEntry,
@@ -244,6 +246,8 @@ interface TabApi {
 	observe(opts?: { includeAll?: boolean; viewportOnly?: boolean }): Promise<Observation>;
 	ariaSnapshot(selector?: string, opts?: AriaSnapshotOptions): Promise<string>;
 	screenshot(opts?: ScreenshotOptions): Promise<string>;
+	dialog(): Promise<BrowserDialogInfo | null>;
+	respondDialog(accept: boolean, text?: string): Promise<BrowserHandledDialog>;
 	extract(format?: ReadableFormat): Promise<string>;
 	click(selector: string): Promise<void>;
 	type(selector: string, text: string): Promise<void>;
@@ -422,7 +426,7 @@ interface RunPageScope {
  * Puppeteer's Page wraps an internal emitter, so `removeAllListeners("request")`
  * would also remove its forwarding listener; the facade removes only user handlers.
  */
-function createRunPageScope(page: Page): RunPageScope {
+function createRunPageScope(page: Page, hasOpenDialog: () => boolean = () => false): RunPageScope {
 	const requestHandlers: unknown[] = [];
 	const on = page.on;
 	const off = page.off;
@@ -497,6 +501,7 @@ function createRunPageScope(page: Page): RunPageScope {
 			else Reflect.deleteProperty(page, "removeAllListeners");
 			for (const handler of requestHandlers) Reflect.apply(off, page, ["request", handler]);
 			requestHandlers.length = 0;
+			if (hasOpenDialog()) return;
 			try {
 				await withTimeout(
 					page.setRequestInterception(false),
@@ -749,6 +754,8 @@ export interface InflightOp {
 	startedAt: number;
 }
 
+const DIALOG_OPEN = Symbol("dialog-open");
+
 interface ActiveRun {
 	id: string;
 	ac: AbortController;
@@ -763,6 +770,7 @@ interface ActiveRun {
 	inflight: Map<number, InflightOp>;
 	opCounter: number;
 	operations: BrowserOperationTracker;
+	dialogWaiters: Set<(value: typeof DIALOG_OPEN) => void>;
 }
 
 /** Human-readable label for a screenshot op, used in op tracking + timeout errors. */
@@ -775,11 +783,15 @@ export async function preparePageForScreenshot(
 	page: Pick<Page, "bringToFront" | "evaluate">,
 	signal: AbortSignal | undefined,
 	activate: boolean,
+	managedGui = false,
 ): Promise<void> {
 	if (activate) {
 		await untilAborted(signal, () => page.bringToFront()).catch(() => undefined);
 		return;
 	}
+	// Managed guests keep their own composited surface even when hidden or
+	// backgrounded, unlike a shared external-Chromium compositor target.
+	if (managedGui) return;
 	const visible = await untilAborted(signal, () => page.evaluate(() => document.visibilityState === "visible")).catch(
 		() => false,
 	);
@@ -1013,6 +1025,10 @@ export class WorkerCore {
 	#dialogPolicy?: DialogPolicy;
 	#dialogHandler?: (dialog: Dialog) => void;
 	#openDialog?: OpenDialogInfo;
+	#dialog?: Dialog;
+	#dialogInfo?: BrowserDialogInfo & { openedAt: number };
+	#dialogSeq = 0;
+	#handledDialogs: BrowserHandledDialog[] = [];
 	/** Managed-browser bridge origin; set only for the desktop GUI backend. */
 	#uploadBridge?: string;
 	/** CDP session carrying the file-chooser interception. */
@@ -1111,6 +1127,9 @@ export class WorkerCore {
 					this.#active.ac.abort(reason);
 				}
 				return;
+			case "stop-loading":
+				await this.#stopLoading();
+				return;
 			case "tool-reply":
 				this.#deliverToolReply(msg.id, msg.reply);
 				return;
@@ -1132,7 +1151,6 @@ export class WorkerCore {
 			});
 			if (payload.mode === "headless") {
 				this.#page = await this.#browser.newPage();
-				this.#observeDialogs();
 				await applyStealthPatches(this.#browser, this.#page, { browserSession: null, override: null });
 				await applyViewport(this.#page, payload.viewport);
 				if (payload.dialogs) this.#applyDialogPolicy(payload.dialogs);
@@ -1143,6 +1161,7 @@ export class WorkerCore {
 						timeout: payload.timeoutMs,
 					});
 				}
+				await this.#observeDialogs();
 			} else {
 				const target = await this.#findAttachedTarget(payload.targetId);
 				// Post-timeout recycle: unblock the target BEFORE adopting the page — an open
@@ -1153,7 +1172,7 @@ export class WorkerCore {
 				if (!page) throw new ToolError(`Target ${payload.targetId} is no longer available on the attached browser`);
 				this.#page = page;
 				await this.#claimRelayTarget(page);
-				this.#observeDialogs();
+				await this.#observeDialogs();
 				// The managed browser takes over file pickers BEFORE the first
 				// navigation below, so even an init-time goto cannot raise a
 				// native dialog.
@@ -1237,11 +1256,68 @@ export class WorkerCore {
 	#observeDialogs(): void {
 		const page = this.#requirePage();
 		page.on("dialog", dialog => {
-			this.#openDialog = { type: dialog.type(), message: dialog.message() };
+			this.#dialog = dialog;
+			this.#openDialogInfo(dialog.type(), dialog.message(), dialog.defaultValue());
 		});
 		page.on("framenavigated", frame => {
-			if (frame === page.mainFrame()) this.#openDialog = undefined;
+			if (frame === page.mainFrame()) {
+				this.#openDialog = undefined;
+				this.#settleDialog("cancelled", "auto");
+			}
 		});
+	}
+
+	#openDialogInfo(kind: BrowserDialogInfo["kind"], message: string, defaultValue?: string): void {
+		if (this.#dialogInfo) return;
+		this.#openDialog = { type: kind, message };
+		this.#dialogInfo = {
+			dialogId: `${this.#targetId ?? "tab"}:${++this.#dialogSeq}`,
+			tabId: this.#targetId ?? "tab",
+			kind,
+			message,
+			...(defaultValue !== undefined ? { defaultValue } : {}),
+			ageMs: 0,
+			openedAt: Date.now(),
+		};
+		this.#transport.send({ type: "dialog", pending: this.#pendingDialogs()[0] });
+		const active = this.#active;
+		if (active) {
+			for (const resolve of active.dialogWaiters) resolve(DIALOG_OPEN);
+			active.dialogWaiters.clear();
+		}
+	}
+
+	#pendingDialogs(): BrowserDialogInfo[] {
+		if (!this.#dialogInfo) return [];
+		const { openedAt: _openedAt, ...dialog } = this.#dialogInfo;
+		return [{ ...dialog, ageMs: Math.max(0, Date.now() - _openedAt) }];
+	}
+
+	#settleDialog(
+		outcome: BrowserHandledDialog["outcome"],
+		answerer: BrowserHandledDialog["answerer"],
+		text?: string,
+	): void {
+		if (!this.#dialogInfo) return;
+		const { openedAt: _openedAt, ageMs: _ageMs, ...dialog } = this.#dialogInfo;
+		const handled = { ...dialog, outcome, answerer, ...(text !== undefined ? { text } : {}) };
+		this.#handledDialogs.push(handled);
+		if (this.#handledDialogs.length > 20) this.#handledDialogs.shift();
+		this.#dialog = undefined;
+		this.#dialogInfo = undefined;
+		this.#openDialog = undefined;
+		this.#transport.send({ type: "dialog", handled });
+	}
+
+	async #respondDialog(accept: boolean, text?: string): Promise<BrowserHandledDialog> {
+		const dialog = this.#dialog;
+		if (!dialog) throw new ToolError("No pending dialog");
+		if (accept) await dialog.accept(text);
+		else await dialog.dismiss();
+		this.#settleDialog(accept ? "accepted" : "dismissed", "agent", text);
+		const handled = this.#handledDialogs.at(-1);
+		if (!handled) throw new ToolError("Dialog settlement was not recorded");
+		return handled;
 	}
 
 	/**
@@ -1418,7 +1494,7 @@ export class WorkerCore {
 		this.#targetId = targetId;
 		return {
 			url: redactBrowserUrl(page.url()),
-			title: await page.title().catch(() => undefined),
+			title: this.#dialogInfo ? undefined : await page.title().catch(() => undefined),
 			viewport: page.viewport() ?? DEFAULT_VIEWPORT,
 			targetId,
 		};
@@ -1432,7 +1508,7 @@ export class WorkerCore {
 			const action = policy === "accept" ? dialog.accept() : dialog.dismiss();
 			void action.then(
 				() => {
-					this.#openDialog = undefined;
+					this.#settleDialog(policy === "accept" ? "accepted" : "dismissed", "auto");
 				},
 				err =>
 					this.#log("debug", "Dialog auto-handler failed", {
@@ -1485,6 +1561,7 @@ export class WorkerCore {
 			floatingFailure,
 			inflight: new Map(),
 			opCounter: 0,
+			dialogWaiters: new Set(),
 			operations: new BrowserOperationTracker(msg.id, operations => {
 				this.#transport.send({ type: "activity", id: msg.id, operations });
 			}),
@@ -1496,7 +1573,7 @@ export class WorkerCore {
 		let runPage: RunPageScope | undefined;
 		try {
 			throwIfAborted(signal);
-			runPage = createRunPageScope(this.#requirePage());
+			runPage = createRunPageScope(this.#requirePage(), () => this.#dialogInfo !== undefined);
 			const browser = this.#requireBrowser();
 			const tabApi = this.#createTabApi(msg.name, msg.timeoutMs, signal, msg.session, output, screenshots, active);
 			const runtime = this.#ensureRuntime(msg.session);
@@ -1611,6 +1688,8 @@ export class WorkerCore {
 					returnValue: cloneSafe(returnValue),
 					screenshots,
 					operations: active.operations.snapshot(),
+					pendingDialogs: this.#pendingDialogs(),
+					handledDialogs: this.#handledDialogs.slice(-20),
 				},
 			});
 		}
@@ -1735,6 +1814,11 @@ export class WorkerCore {
 		}
 	}
 
+	#dialogEarly(active: ActiveRun): Promise<typeof DIALOG_OPEN> {
+		if (this.#dialogInfo) return Promise.resolve(DIALOG_OPEN);
+		return new Promise(resolve => active.dialogWaiters.add(resolve));
+	}
+
 	async #runOp<T>(
 		active: ActiveRun,
 		label: string,
@@ -1743,6 +1827,10 @@ export class WorkerCore {
 		fn: (signal: AbortSignal) => Promise<T>,
 		opts?: { selector?: string; zeroMatchAfterMs?: number },
 	): Promise<T> {
+		const dialogControl = label.startsWith("tab.dialog") || label.startsWith("tab.respondDialog");
+		if (!dialogControl && this.#dialogInfo) {
+			throw new ToolError(`DIALOG_OPEN: ${this.#dialogInfo.kind} dialog is pending; answer it before continuing`);
+		}
 		const opId = active.opCounter++;
 		const activity = browserOperationForLabel(label, opts?.selector);
 		const activityId = activity ? active.operations.start(activity.action, { target: activity.target }) : null;
@@ -1760,17 +1848,26 @@ export class WorkerCore {
 		// the finally (stops the watchdog's polling once the op settles either way).
 		const earlyAc = new AbortController();
 		try {
-			const result = watchdog
-				? await Promise.race([
-						fn(AbortSignal.any([opSignal, earlyAc.signal])),
-						this.#zeroMatchWatchdog(
-							watchdog.selector,
-							label,
-							watchdog.afterMs,
-							AbortSignal.any([opSignal, earlyAc.signal]),
-						),
-					])
-				: await fn(opSignal);
+			const attempts: Array<Promise<T | typeof DIALOG_OPEN>> = [
+				fn(watchdog ? AbortSignal.any([opSignal, earlyAc.signal]) : opSignal),
+			];
+			if (watchdog) {
+				attempts.push(
+					this.#zeroMatchWatchdog(
+						watchdog.selector,
+						label,
+						watchdog.afterMs,
+						AbortSignal.any([opSignal, earlyAc.signal]),
+					),
+				);
+			}
+			if (!dialogControl) attempts.push(this.#dialogEarly(active));
+			const outcome = await Promise.race(attempts);
+			if (outcome === DIALOG_OPEN) {
+				if (activityId) active.operations.complete(activityId);
+				return undefined as T;
+			}
+			const result = outcome as T;
 			if (activityId) {
 				active.operations.complete(activityId, operationResultDetails(result));
 				void this.#captureOperationPage(active, activityId);
@@ -1926,6 +2023,9 @@ export class WorkerCore {
 					}
 				}),
 			observe: opts => op("tab.observe()", quickOpMs, sig => this.#collectObservation({ ...opts, signal: sig })),
+			dialog: () => op("tab.dialog()", quickOpMs, async () => this.#pendingDialogs()[0] ?? null),
+			respondDialog: (accept, text) =>
+				op(`tab.respondDialog(${accept})`, quickOpMs, () => this.#respondDialog(accept, text)),
 			ariaSnapshot: (selector, opts) =>
 				op(
 					selector ? `tab.ariaSnapshot(${JSON.stringify(selector)})` : "tab.ariaSnapshot()",
@@ -1985,10 +2085,14 @@ export class WorkerCore {
 						}
 						const resolved = normalizeSelector(selector);
 						if (resolved.startsWith("text/")) await clickQueryHandlerText(page, resolved, actionOpMs, sig);
-						else
-							await untilAborted(sig, () =>
-								page.locator(resolved).setTimeout(actionOpMs).click({ signal: sig }),
-							);
+						else {
+							const handle = await this.#resolveActionHandle(resolved, actionOpMs, sig);
+							try {
+								await untilAborted(sig, () => handle.click());
+							} finally {
+								await handle.dispose().catch(() => undefined);
+							}
+						}
 					},
 					{ selector, zeroMatchAfterMs: ZERO_MATCH_FAIL_FAST_MS },
 				),
@@ -2242,7 +2346,8 @@ export class WorkerCore {
 		// For a user-driven browser, redundant activation would steal window focus.
 		// The supervisor disables it only after adopting the visible tab; if the user
 		// later switches away, reject capture rather than risk sibling-tab pixels.
-		await preparePageForScreenshot(page, signal, this.#activateForScreenshot);
+		// Managed guests own their composited surfaces and skip that visibility gate.
+		await preparePageForScreenshot(page, signal, this.#activateForScreenshot, this.#managedGui);
 		const fullPage = opts.selector ? false : (opts.fullPage ?? false);
 		const captureType = "png";
 		const captureMime = "image/png" as const;

@@ -146,6 +146,9 @@ export function TurnRail({
 	windowStartRef.current = windowStart;
 	const hoverRef = useRef(hover);
 	hoverRef.current = hover;
+	/** A selection/jump dismissed the list; it reopens only after the pointer
+	 *  leaves the rail, so motion at the destination cannot pop it back open. */
+	const dismissedRef = useRef(false);
 
 	const visibleCount = Math.min(turns.length, MAX_VISIBLE_TICKS);
 	const maxWindowStart = Math.max(0, turns.length - visibleCount);
@@ -410,6 +413,10 @@ export function TurnRail({
 	// pointer precision. Edge zones carousel the window.
 	const onTrackPointerMove = useCallback(
 		(e: React.PointerEvent<HTMLDivElement>): void => {
+			// The panel is a child of the track for geometry; its pointer moves
+			// are the panel's own business (row highlighting), not tick scrubbing.
+			if ((e.target as HTMLElement | null)?.closest(".gui-turn-panel")) return;
+			if (dismissedRef.current) return;
 			cancelHide();
 			const el = e.currentTarget;
 			const rel = relativeFromY(e.clientY, el);
@@ -429,10 +436,18 @@ export function TurnRail({
 
 	const onTrackPointerDown = useCallback(
 		(e: React.PointerEvent<HTMLDivElement>): void => {
+			if (e.button !== 0) return;
+			if ((e.target as HTMLElement | null)?.closest(".gui-turn-panel")) return;
 			const rel = relativeFromY(e.clientY, e.currentTarget);
 			if (rel !== null) jumpTo(windowStartRef.current + rel);
+			// A jump is a completed navigation: dismissing the list keeps it off
+			// the transcript at its destination. Browsing resumes after the
+			// pointer leaves the rail.
+			dismissedRef.current = true;
+			setHover(null);
+			stopCarousel();
 		},
-		[jumpTo, relativeFromY],
+		[jumpTo, relativeFromY, stopCarousel],
 	);
 
 	// Keyboard navigation: the gutter is focusable
@@ -578,7 +593,12 @@ export function TurnRail({
 		<div
 			className={`gui-turn-rail${style === "pacman" ? " gui-turn-rail--pacman" : ""}`}
 			data-side={side}
+			onPointerEnter={() => {
+				dismissedRef.current = false;
+				cancelHide();
+			}}
 			onPointerLeave={() => {
+				dismissedRef.current = false;
 				stopCarousel();
 				scheduleHide();
 			}}
@@ -669,6 +689,7 @@ export function TurnRail({
 						className="gui-turn-panel"
 						role="listbox"
 						onPointerDown={e => e.stopPropagation()}
+						onPointerMove={e => e.stopPropagation()}
 						onMouseEnter={cancelHide}
 						onMouseLeave={scheduleHide}
 					>
@@ -708,6 +729,7 @@ export function TurnRail({
 											}}
 											onClick={() => {
 												jumpTo(index);
+												dismissedRef.current = true;
 												setHover(null);
 											}}
 										>

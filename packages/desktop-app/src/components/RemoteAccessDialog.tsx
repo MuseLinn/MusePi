@@ -130,12 +130,14 @@ export function RemoteAccessDialog({
 	sessionTitle,
 	open,
 	onClose,
+	onOpenDisclaimer,
 }: {
 	rpc: RpcClient | null;
 	sessionId: string | null;
 	sessionTitle: string | null;
 	open: boolean;
 	onClose(): void;
+	onOpenDisclaimer(): void;
 }): ReactNode {
 	const [info, setInfo] = useState<RemoteAccessInfo | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -770,6 +772,9 @@ export function RemoteAccessDialog({
 					</details>
 				</section>
 			</div>
+			<button type="button" className="gui-remote-disclaimer-link" onClick={onOpenDisclaimer}>
+				{t("settings.viewRemoteDisclaimer")}
+			</button>
 		</DialogFrame>
 	);
 }

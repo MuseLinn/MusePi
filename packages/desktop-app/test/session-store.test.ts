@@ -1,4 +1,5 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
+import { dismissActionToast, getToasts } from "@musepi/client-core/src/lib/action-toast";
 import { GuiSessionStore } from "../src/lib/session-store";
 import { settle } from "./settle-store";
 
@@ -86,6 +87,10 @@ describe("GuiSessionStore subagent transcript availability", () => {
 function agentEvent(type: string, extra: Record<string, unknown> = {}) {
 	return { kind: "event", seq: 0, payload: { type, ...extra } };
 }
+
+afterEach(() => {
+	for (const toast of getToasts()) dismissActionToast(toast.id);
+});
 
 describe("GuiSessionStore working-state machine (stop capsule)", () => {
 	it("keeps working through mid-run turn boundaries and retires only at agent_end", async () => {
@@ -179,5 +184,25 @@ describe("GuiSessionStore round-duration key space (P0-2 shared recorder)", () =
 			"/tmp",
 		);
 		expect(store.getSnapshot().roundDurations.get(1_000)).toBe(1_600);
+	});
+});
+
+describe("GuiSessionStore session notices", () => {
+	it("routes a notice event into the toast stack", async () => {
+		const store = new GuiSessionStore("s1", { entries: [], cursor: 0 }, "/tmp");
+		store.apply(agentEvent("notice", { level: "warning", message: "daemon says" }));
+		await settle();
+		expect(getToasts().at(-1)).toMatchObject({ kind: "warning", message: "daemon says" });
+	});
+
+	it("keeps retry updates on one source key", async () => {
+		const store = new GuiSessionStore("s1", { entries: [], cursor: 0 }, "/tmp");
+		store.apply(agentEvent("auto_retry_start", { attempt: 1, maxAttempts: 3, delayMs: 100, errorMessage: "429" }));
+		await settle();
+		store.apply(agentEvent("auto_retry_end", { success: false, attempt: 1, finalError: "boom" }));
+		await settle();
+		const toasts = getToasts();
+		expect(toasts).toHaveLength(1);
+		expect(toasts[0]).toMatchObject({ kind: "error", message: "boom" });
 	});
 });

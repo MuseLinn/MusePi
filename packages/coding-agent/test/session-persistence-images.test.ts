@@ -107,7 +107,8 @@ describe("session image persistence", () => {
 			throw new Error("expected persisted assistant message");
 		}
 		const persistedImage = persisted.message.content.find(block => block.type === "image");
-		const persistedItem = persisted.message.providerPayload?.items[0];
+		const persistedPayload = persisted.message.providerPayload;
+		const persistedItem = persistedPayload?.type === "openaiResponsesHistory" ? persistedPayload.items[0] : undefined;
 		if (!persistedItem || typeof persistedItem.result !== "string") {
 			throw new Error("expected persisted image generation item");
 		}
@@ -121,7 +122,8 @@ describe("session image persistence", () => {
 			throw new Error("expected resolved assistant message");
 		}
 		const resolvedImage = resolved.message.content.find(block => block.type === "image");
-		const resolvedItem = resolved.message.providerPayload?.items[0];
+		const resolvedPayload = resolved.message.providerPayload;
+		const resolvedItem = resolvedPayload?.type === "openaiResponsesHistory" ? resolvedPayload.items[0] : undefined;
 		expect(resolvedImage?.data).toBe(data);
 		expect(resolvedItem?.result).toBe(data);
 	});

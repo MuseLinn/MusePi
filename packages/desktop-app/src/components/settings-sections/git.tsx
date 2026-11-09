@@ -2,7 +2,14 @@ import { Segmented, type SegmentedOption, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
-import { onGitPrefsChanged, readShowIgnored, writeShowIgnored } from "../../lib/git-prefs";
+import {
+	type ChangesView,
+	onGitPrefsChanged,
+	readChangesView,
+	readShowIgnored,
+	writeChangesView,
+	writeShowIgnored,
+} from "../../lib/git-prefs";
 import { useConfirm, usePrompt } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import {
@@ -613,13 +620,19 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 /** openchamber GitSettings parity: changes-view mode, gitmoji picker and
  *  show-gitignored — consumed by the right-pane DiffPane (same keys). */
 export function GitPrefsRow(): ReactNode {
-	const [view, setViewState] = useState<"flat" | "tree">(() =>
-		localStorage.getItem("musepi-gui-git-view") === "tree" ? "tree" : "flat",
-	);
+	const [view, setViewState] = useState<ChangesView>(readChangesView);
 	const [gitmoji, setGitmoji] = useState<boolean>(() => localStorage.getItem("musepi-gui-gitmoji") !== "0");
 	const [showIgnored, setShowIgnored] = useState<boolean>(() => readShowIgnored());
-	// The Files pane and the changes view write the same pref — follow it.
-	useEffect(() => onGitPrefsChanged(() => setShowIgnored(readShowIgnored())), []);
+	// The Files pane and the changes view write the same prefs — follow them
+	// so the segmented control never shows a stale value.
+	useEffect(
+		() =>
+			onGitPrefsChanged(() => {
+				setShowIgnored(readShowIgnored());
+				setViewState(readChangesView());
+			}),
+		[],
+	);
 	return (
 		<>
 			<div className="gui-settings-row">
@@ -633,7 +646,7 @@ export function GitPrefsRow(): ReactNode {
 					options={changesViewSegments()}
 					onChange={v => {
 						setViewState(v);
-						localStorage.setItem("musepi-gui-git-view", v);
+						writeChangesView(v);
 					}}
 				/>
 			</div>

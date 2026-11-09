@@ -16,8 +16,11 @@ import { computeSettingsShellState } from "../src/lib/settings-shell";
  *    decision point app.tsx renders from. The live click-through it drives
  *    (open → nav click switches content → back restores the sidebar) was
  *    verified via CDP against the built bundle; see the task report.
- *    A page destination (board/scheduled/PR/capability) hides the sidebar
- *    keeper only — its own surface keeps rendering in the chat column.
+ *    A page destination without a left panel (board/PR) hides the sidebar
+ *    keeper — its own surface keeps rendering in the chat column. Scheduled
+ *    and capability are the exceptions: each owns a real second-tier panel
+ *    in that slot (2026-11-08), so the keeper stays visible until settings
+ *    takes the slot back.
  * 2. The nav column (SettingsNav) is controlled and slot-agnostic: clicking
  *    a row reports the row's section id through onSelect, and the highlight
  *    follows the activeSection prop — the click→switch chain the settings
@@ -75,11 +78,10 @@ describe("computeSettingsShellState", () => {
 		});
 	});
 
-	test("page destination folds the session panel but keeps the chat column alive", () => {
-		// 看板 / 任务中心 / PR / 能力中心 own the surface: the session list
-		// would describe a view that is not on screen. The sidebar stays
-		// MOUNTED (display:none) so returning to 首页 restores expanded
-		// groups without a re-mount.
+	test("a page destination without a second-tier panel folds the session panel", () => {
+		// 看板 / PR own a single-column surface: the session list would
+		// describe a view that is not on screen. The sidebar stays MOUNTED
+		// (display:none) so returning to 首页 restores expanded groups.
 		const s = computeSettingsShellState({
 			settingsOpen: false,
 			leavingSettings: false,
@@ -89,6 +91,52 @@ describe("computeSettingsShellState", () => {
 		expect(s.chatColKeeperHidden).toBe(false);
 		expect(s.settingsActive).toBe(false);
 		expect(s.navSlotMounted).toBe(false);
+	});
+
+	test("scheduled destination keeps the slot visible for its second-tier panel", () => {
+		// The old layout put a 260px column inside the page instead. That
+		// column disappeared on the empty state and sat right of the slot, so
+		// the destination still read as one container with three tabs.
+		const s = computeSettingsShellState({
+			settingsOpen: false,
+			leavingSettings: false,
+			pageDestinationActive: true,
+			scheduledPanelActive: true,
+		});
+		expect(s.sideKeeperHidden).toBe(false);
+		expect(s.chatColKeeperHidden).toBe(false);
+		expect(s.settingsActive).toBe(false);
+		expect(s.navSlotMounted).toBe(false);
+	});
+
+	test("capability destination keeps the slot visible for its second-tier panel", () => {
+		// The three tabs used to be buttons inside the page header; they now
+		// live in the rail's sidebar slot, so folding the keeper would delete
+		// the destination's only navigation column.
+		const s = computeSettingsShellState({
+			settingsOpen: false,
+			leavingSettings: false,
+			pageDestinationActive: true,
+			capabilityPanelActive: true,
+		});
+		expect(s.sideKeeperHidden).toBe(false);
+		expect(s.chatColKeeperHidden).toBe(false);
+		expect(s.settingsActive).toBe(false);
+		expect(s.navSlotMounted).toBe(false);
+	});
+
+	test("settings takes the slot back from either second-tier panel", () => {
+		for (const panel of [{ scheduledPanelActive: true }, { capabilityPanelActive: true }]) {
+			const s = computeSettingsShellState({
+				settingsOpen: true,
+				leavingSettings: false,
+				pageDestinationActive: true,
+				...panel,
+			});
+			expect(s.sideKeeperHidden).toBe(true);
+			expect(s.navSlotMounted).toBe(true);
+			expect(s.chatColKeeperHidden).toBe(true);
+		}
 	});
 
 	test("settings still hides both keepers while a page destination is flagged", () => {

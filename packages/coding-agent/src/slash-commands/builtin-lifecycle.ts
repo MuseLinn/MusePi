@@ -578,7 +578,7 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 				await runtime.output(`Already in the workspace: ${resolved}`);
 				return commandConsumed();
 			}
-			await runtime.session.refreshBaseSystemPrompt();
+			await runtime.session.refreshSkills();
 			await runtime.output(formatWorkspaceDirectories(runtime, `Added ${added}.`));
 			return commandConsumed();
 		},
@@ -607,7 +607,7 @@ export const BUILTIN_LIFECYCLE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> =
 				await runtime.output(`Not a workspace directory: ${resolved}`);
 				return commandConsumed();
 			}
-			await runtime.session.refreshBaseSystemPrompt();
+			await runtime.session.refreshSkills();
 			await runtime.output(formatWorkspaceDirectories(runtime, `Removed ${removed}.`));
 			return commandConsumed();
 		},

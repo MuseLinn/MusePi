@@ -1,4 +1,4 @@
-import { PackageOpen, RefreshCw, SearchX } from "lucide-react";
+import { PackageOpen, RefreshCw, Search, SearchX } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -295,14 +295,17 @@ export function MarketplaceGrid({
 		<div ref={shellRef} className="mp-grid-shell" aria-busy={showLoading ? "true" : "false"}>
 			<header className="mp-grid-toolbar">
 				{showCatalogControls && (
-					<input
-						type="search"
-						className="mp-search"
-						placeholder={t("guest.pluginSearchPlaceholder")}
-						value={filter}
-						onChange={e => setFilter(e.target.value)}
-						aria-label={t("guest.pluginSearchLabel")}
-					/>
+					<label className="mp-search-field">
+						<Search size={14} strokeWidth={2} aria-hidden="true" />
+						<input
+							type="search"
+							className="mp-search"
+							placeholder={t("guest.pluginSearchPlaceholder")}
+							value={filter}
+							onChange={e => setFilter(e.target.value)}
+							aria-label={t("guest.pluginSearchLabel")}
+						/>
+					</label>
 				)}
 				{showCatalogControls ? (
 					<>
@@ -400,7 +403,7 @@ export function MarketplaceGrid({
 					>
 						<input
 							type="text"
-							className="mp-search"
+							className="mp-source-input"
 							placeholder={t("guest.marketplaceSourcePlaceholder")}
 							value={sourceInput}
 							onChange={e => setSourceInput(e.target.value)}

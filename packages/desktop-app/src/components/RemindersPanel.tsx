@@ -1,5 +1,5 @@
 import { relTime, t } from "@musepi/client-core";
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useState } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 
 /** One row of the welcome-scene reminders (kimi 实时提醒 parity). */
@@ -19,13 +19,14 @@ export interface ReminderRow {
 /** Persisted collapse preference: 1 = collapsed, 0 = expanded. */
 const COLLAPSED_KEY = "musepi-gui-reminders-collapsed";
 
-/** Row height budget (px): row padding 7+7 + 13px line ≈ 33 — keep a
- *  small headroom so the computed list height never clips a row. */
+/** Pre-layout floor for the list height (px): row padding 7+7 + 13px line
+ *  ≈ 33, plus headroom. The rendered rows are the authority once laid out;
+ *  this only keeps the first paint from collapsing the list. */
 const ROW_H = 34;
 /** List vertical padding (px): 2 top + 4 bottom in .gui-reminders-list. */
 const LIST_PAD = 6;
-/** Cap: beyond this many rows the list scrolls INSIDE the card, so the
- *  welcome composer is never pushed off-screen by unread growth. */
+/** Cap: beyond this height the list scrolls INSIDE the card, so the welcome
+ *  composer is never pushed off-screen by unread growth. */
 const MAX_LIST_H = 200;
 
 function loadCollapsed(): boolean {
@@ -57,6 +58,32 @@ export function RemindersPanel({
 	onMarkAllRead(): void;
 }): ReactNode {
 	const [collapsed, setCollapsed] = useState(loadCollapsed);
+	const listRef = useRef<HTMLDivElement | null>(null);
+	// Measured list height (rows + padding), not a row-count estimate: the
+	// estimate rounding up/down by a few px made a fully visible list scroll
+	// by 1–2px and paint a scrollbar. The estimate stays as the floor so a
+	// zero measurement (tests, pre-layout) never collapses the list.
+	const [measuredListH, setMeasuredListH] = useState<number | null>(null);
+	useLayoutEffect(() => {
+		const list = listRef.current;
+		if (!list) return;
+		const measure = (): void => {
+			const rows = list.querySelectorAll<HTMLElement>(".gui-reminder-row");
+			if (rows.length === 0) {
+				setMeasuredListH(null);
+				return;
+			}
+			let height = LIST_PAD;
+			for (const row of rows) height += row.getBoundingClientRect().height;
+			setMeasuredListH(Math.ceil(height));
+		};
+		measure();
+		if (typeof ResizeObserver !== "function") return;
+		const observer = new ResizeObserver(measure);
+		observer.observe(list);
+		for (const row of list.querySelectorAll(".gui-reminder-row")) observer.observe(row);
+		return () => observer.disconnect();
+	}, [reminders]);
 
 	// Persist the preference (side effect outside the state updater).
 	useEffect(() => {
@@ -75,7 +102,8 @@ export function RemindersPanel({
 	const unreadCount = reminders.reduce((n, r) => n + (r.unread ? 1 : 0), 0);
 	// Dynamic list height: content-scaled up to the cap (scrolls beyond),
 	// driven through a CSS var so height transitions animate both ways.
-	const listH = Math.min(reminders.length * ROW_H + LIST_PAD, MAX_LIST_H);
+	const estimatedH = reminders.length * ROW_H + LIST_PAD;
+	const listH = Math.min(Math.max(measuredListH ?? estimatedH, estimatedH), MAX_LIST_H);
 	return (
 		<section className="gui-reminders" aria-label={t("settings.realTimeReminders")}>
 			<div className="gui-reminders-head">
@@ -98,6 +126,7 @@ export function RemindersPanel({
 			</div>
 			<div
 				className="gui-reminders-list"
+				ref={listRef}
 				data-collapsed={collapsed ? "" : undefined}
 				style={{ "--list-h": `${listH}px` } as CSSProperties}
 				aria-hidden={collapsed}

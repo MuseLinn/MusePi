@@ -88,6 +88,7 @@ interface McpOAuthFlowRecord {
 	error?: string;
 	cancelled?: boolean;
 	controller: AbortController;
+	flow?: MCPOAuthFlow;
 }
 
 /** Refresh material captured at flow construction, persisted with the grant. */
@@ -109,12 +110,24 @@ function readString(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
 
+/** A custom scheme (or non-loopback host) cannot be served by our loopback listener. */
+function isExternalRedirect(uri: string): boolean {
+	try {
+		const parsed = new URL(uri);
+		const loopback = parsed.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(parsed.hostname);
+		return !loopback;
+	} catch {
+		return false;
+	}
+}
+
 export class McpOAuthService implements DaemonService {
 	readonly key = "mcpOAuth";
 	readonly routes = {
 		"mcp.oauth.start": "startFlow",
 		"mcp.oauth.status": "status",
 		"mcp.oauth.cancel": "cancel",
+		"mcp.oauth.callback": "callback",
 	} as const;
 
 	readonly #deps: McpOAuthServiceDeps;
@@ -129,10 +142,15 @@ export class McpOAuthService implements DaemonService {
 	 * 返回的 authorizationUrl 只发给发起请求的 GUI；真实登录在后台继续，
 	 * 状态由 `mcp.oauth.status` 轮询。
 	 */
-	async startFlow(params: { name?: unknown }): Promise<{ flowId: string; authorizationUrl: string }> {
+	async startFlow(params: { name?: unknown; redirectUri?: unknown }): Promise<{
+		flowId: string;
+		authorizationUrl: string;
+	}> {
 		const name = readString(params?.name);
 		if (!name) throw new Error("name required");
 		const { config, url } = await this.#resolveServer(name);
+		const requestedRedirectUri = readString(params?.redirectUri) || config.oauth?.redirectUri;
+		const externalCallback = requestedRedirectUri !== undefined && isExternalRedirect(requestedRedirectUri);
 		const controller = new AbortController();
 		const endpoints = await this.#resolveEndpoints(name, config, controller.signal);
 
@@ -152,7 +170,8 @@ export class McpOAuthService implements DaemonService {
 				clientSecret: material.clientSecret,
 				scopes: endpoints.scopes,
 				prompt: config.oauth?.prompt,
-				redirectUri: config.oauth?.redirectUri,
+				redirectUri: requestedRedirectUri,
+				externalCallback,
 				callbackPort: config.oauth?.callbackPort,
 				callbackPath: config.oauth?.callbackPath,
 				// TUI parity: a server-URL fallback resource is stripped when it
@@ -167,7 +186,7 @@ export class McpOAuthService implements DaemonService {
 		);
 
 		const flowId = randomUUID();
-		const record: McpOAuthFlowRecord = { flowId, server: name, status: "pending", controller };
+		const record: McpOAuthFlowRecord = { flowId, server: name, status: "pending", controller, flow };
 		this.#cancelPendingFor(name, "superseded by a newer OAuth login");
 		this.#register(record);
 
@@ -193,6 +212,20 @@ export class McpOAuthService implements DaemonService {
 			this.#flows.delete(flowId);
 			throw error instanceof Error ? error : new Error(String(error));
 		}
+	}
+
+	/**
+	 * RPC mcp.oauth.callback：桌面自定义协议收到的回调 URL。状态校验在
+	 * flow 内完成；不匹配的 URL 不会结束任何流程。
+	 */
+	callback(params: { url?: unknown }): { ok: true; flowId: string } {
+		const url = readString(params?.url);
+		if (!url) throw new Error("url required");
+		for (const record of this.#flows.values()) {
+			if (record.status !== "pending" || !record.flow) continue;
+			if (record.flow.submitCallbackUrl(url)) return { ok: true, flowId: record.flowId };
+		}
+		throw new Error("no pending OAuth flow accepted the callback");
 	}
 
 	/** RPC mcp.oauth.status：轮询一条流程的 pending/success/error。 */

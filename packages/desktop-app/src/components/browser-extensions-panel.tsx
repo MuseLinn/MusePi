@@ -25,13 +25,7 @@ function relayStatusText(status: RelayStatus | null): string {
 	return t("tools.browserRelayInstalledNot");
 }
 
-export function BrowserExtensionsPanel({
-	rpc,
-	compact = false,
-}: {
-	rpc: RpcClient | null;
-	compact?: boolean;
-}): ReactNode {
+export function BrowserExtensionsPanel({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [relay, setRelay] = useState<RelayStatus | null>(null);
 	const [extensions, setExtensions] = useState<BrowserExtensionInfo[] | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -80,7 +74,7 @@ export function BrowserExtensionsPanel({
 	};
 
 	return (
-		<div className={`gui-browser-extensions${compact ? " gui-browser-extensions--compact" : ""}`}>
+		<div className="gui-browser-extensions">
 			<section className="gui-browser-extension-group" aria-label={t("tools.browserRelayExtension")}>
 				<div className="gui-browser-extension-heading">{t("tools.browserRelayExtension")}</div>
 				<div className="gui-browser-extension-row">

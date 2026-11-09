@@ -195,6 +195,94 @@ describe("managed browser menu IPC", () => {
 			captureError = null;
 		}
 	});
+
+	it("projects real control, visibility and navigation state for the agent", () => {
+		const controller = new ManagedBrowserController();
+		const wc = {
+			isDestroyed: () => false,
+			isLoading: () => false,
+			canGoBack: () => true,
+			canGoForward: () => false,
+		};
+		controller.tabs.set("user-tab", { id: "user-tab", title: "User", url: "https://user.test/", wc });
+		controller.tabs.set("agent-tab", {
+			id: "agent-tab",
+			title: "Agent",
+			url: "https://agent.test/",
+			openedByAgent: true,
+			wc,
+		});
+		controller.activeTabId = "user-tab";
+		controller.agentTabId = "agent-tab";
+		controller.panelVisible = true;
+
+		expect(controller.agentState()).toEqual({
+			available: true,
+			panelVisible: true,
+			activeTabId: "agent-tab",
+			visibleTabId: "user-tab",
+			url: "https://agent.test/",
+			title: "Agent",
+			tabs: [
+				{
+					id: "user-tab",
+					title: "User",
+					url: "https://user.test/",
+					controlled: false,
+					visible: true,
+					loading: false,
+					canGoBack: true,
+					canGoForward: false,
+				},
+				{
+					id: "agent-tab",
+					title: "Agent",
+					url: "https://agent.test/",
+					controlled: true,
+					visible: false,
+					loading: false,
+					canGoBack: true,
+					canGoForward: false,
+				},
+			],
+		});
+	});
+
+	it("reveals the panel without creating, selecting or retargeting tabs", () => {
+		const controller = new ManagedBrowserController();
+		controller.tabs.set("user-tab", { id: "user-tab", title: "User", url: "https://user.test/" });
+		controller.tabs.set("agent-tab", { id: "agent-tab", title: "Agent", url: "https://agent.test/" });
+		controller.activeTabId = "user-tab";
+		controller.agentTabId = "agent-tab";
+		controller.panelVisible = false;
+		const published = [];
+		controller.sendToRenderer = (channel, payload) => published.push({ channel, payload });
+
+		expect(controller.activatePanel?.()).toEqual({ ok: true, panelVisible: true });
+		expect(controller.panelVisible).toBe(true);
+		expect(controller.activeTabId).toBe("user-tab");
+		expect(controller.agentTabId).toBe("agent-tab");
+		expect(controller.tabs.size).toBe(2);
+		expect(published).toHaveLength(1);
+		expect(published[0]).toMatchObject({
+			channel: "managed-browser:state",
+			payload: { agentActivity: true },
+		});
+	});
+
+	it("clears managed control on release without closing the tab", () => {
+		const controller = new ManagedBrowserController();
+		controller.tabs.set("agent-tab", { id: "agent-tab", title: "Agent", url: "https://agent.test/", openedByAgent: true });
+		controller.agentTabId = "agent-tab";
+		controller.activeTabId = "agent-tab";
+		controller.panelVisible = true;
+
+		expect(controller.releaseAgentTab()).toEqual({ ok: true });
+		expect(controller.agentTabId).toBeNull();
+		expect(controller.tabs.has("agent-tab")).toBe(true);
+		expect(controller.agentState().tabs[0].controlled).toBe(false);
+		expect(controller.agentState().activeTabId).toBeUndefined();
+	});
 });
 
 describe("managed browser menu preload", () => {

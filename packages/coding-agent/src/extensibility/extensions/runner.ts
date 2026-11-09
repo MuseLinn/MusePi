@@ -558,6 +558,14 @@ export class ExtensionRunner {
 	#hasPendingMessagesFn: () => boolean = () => false;
 	#getContextUsageFn: () => ContextUsage | undefined = () => undefined;
 	#compactFn: (instructionsOrOptions?: string | CompactOptions) => Promise<void> = async () => {};
+	#runIdleCompactionFn: () => Promise<void> = async () => {};
+	#hasDraftInputFn?: () => boolean;
+	#runEphemeralTurnFn?: ExtensionContextActions["runEphemeralTurn"];
+	#getGoalModeStateFn?: ExtensionContextActions["getGoalModeState"];
+	#getTodoPhasesFn?: ExtensionContextActions["getTodoPhases"];
+	#recordRecapFn?: ExtensionContextActions["recordRecap"];
+	#showRecapFn?: ExtensionContextActions["showRecap"];
+	#isSettledFn?: ExtensionContextActions["isSettled"];
 	#getSystemPromptFn: () => string[] = () => [];
 	#getAsyncJobSnapshotFn: () => AsyncJobSnapshot | null = () => null;
 	#getAsyncJobManagerFn: () => AsyncJobManager | undefined = () => undefined;
@@ -926,6 +934,14 @@ export class ExtensionRunner {
 		this.#hasPendingMessagesFn = contextActions.hasPendingMessages;
 		this.#shutdownHandler = contextActions.shutdown;
 		this.#getSystemPromptFn = contextActions.getSystemPrompt;
+		this.#runIdleCompactionFn = contextActions.runIdleCompaction ?? (async () => {});
+		this.#hasDraftInputFn = contextActions.hasDraftInput;
+		this.#runEphemeralTurnFn = contextActions.runEphemeralTurn;
+		this.#getGoalModeStateFn = contextActions.getGoalModeState;
+		this.#getTodoPhasesFn = contextActions.getTodoPhases;
+		this.#recordRecapFn = contextActions.recordRecap;
+		this.#showRecapFn = contextActions.showRecap;
+		this.#isSettledFn = contextActions.isSettled;
 
 		// Command context actions (optional, only for interactive mode)
 		if (commandContextActions) {
@@ -1702,6 +1718,18 @@ export class ExtensionRunner {
 			hasUI: this.hasUI(),
 			cwd: this.cwd,
 			sessionManager: this.sessionManager,
+			settings: this.settings ?? { get: () => undefined },
+			runIdleCompaction: () => this.#runIdleCompactionFn(),
+			hasDraftInput: this.#hasDraftInputFn,
+			runEphemeralTurn: this.#runEphemeralTurnFn,
+			getGoalModeState: this.#getGoalModeStateFn,
+			getTodoPhases: this.#getTodoPhasesFn,
+			recordRecap: this.#recordRecapFn,
+			showRecap: this.#showRecapFn,
+			isSettled: this.#isSettledFn,
+			appendCustomEntry: (customType, data) => this.sessionManager.appendCustomEntry(customType, data),
+			ensureSessionOnDisk: () => this.sessionManager.ensureOnDisk(),
+			flushSession: () => this.sessionManager.flush(),
 			modelRegistry: this.modelRegistry,
 			get model() {
 				return getModel();

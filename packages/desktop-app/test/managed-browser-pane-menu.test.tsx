@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ManagedBrowserPane } from "../src/components/ManagedBrowserPane";
-import { writeBrowserExtensionsToolbarVisible, writeBrowserShowFullUrl } from "../src/lib/browser-preferences";
+import { writeBrowserShowFullUrl } from "../src/lib/browser-preferences";
 import { closeTab, createTab, getHostState, setBrowserSession } from "../src/lib/managed-browser-host";
 import type { RpcClient } from "../src/lib/rpc";
 
@@ -18,9 +18,7 @@ beforeEach(() => {
 		"musepi-gui-managed-browser-history",
 		"musepi-gui-managed-browser-zoom",
 		"musepi-gui-browser-device-toolbar",
-		"musepi-gui-browser-extensions-toolbar",
 		"musepi-gui-browser-show-full-url",
-		"musepi-gui-browser-import-dismissed",
 	]) {
 		window.localStorage.removeItem(key);
 	}
@@ -29,6 +27,10 @@ beforeEach(() => {
 		writable: true,
 		value: {
 			managedBrowserClearData: vi.fn().mockResolvedValue({ ok: true }),
+			managedBrowserExtensionsList: vi.fn().mockResolvedValue({ extensions: [], errors: [] }),
+			managedBrowserExtensionsChoose: vi.fn().mockResolvedValue({ candidate: null }),
+			managedBrowserExtensionsInstall: vi.fn().mockResolvedValue({ ok: true }),
+			managedBrowserExtensionsRemove: vi.fn().mockResolvedValue({ ok: true }),
 			managedBrowserVisibility: vi.fn().mockResolvedValue({ ok: true }),
 			managedBrowserSetDevice: vi.fn().mockResolvedValue({ ok: true }),
 			managedBrowserSetZoom: vi.fn().mockResolvedValue({ ok: true }),
@@ -71,9 +73,7 @@ afterEach(() => {
 		"musepi-gui-managed-browser-history",
 		"musepi-gui-managed-browser-zoom",
 		"musepi-gui-browser-device-toolbar",
-		"musepi-gui-browser-extensions-toolbar",
 		"musepi-gui-browser-show-full-url",
-		"musepi-gui-browser-import-dismissed",
 	]) {
 		window.localStorage.removeItem(key);
 	}
@@ -155,11 +155,7 @@ describe("managed browser pane menu regressions", () => {
 		expect(select).toHaveBeenCalledTimes(1);
 	});
 
-	it("opens import and Relay actions on a blank tab and dismisses them with Escape", async () => {
-		act(() => {
-			closeTab("page", { notifyMain: false });
-			void createTab("about:blank", { tabId: "blank" }).catch(() => {});
-		});
+	it("opens managed extensions without offering external Relay or shared-Chromium content", async () => {
 		const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Extensions"]');
 		expect(trigger).not.toBeNull();
 		await act(async () => {
@@ -167,24 +163,12 @@ describe("managed browser pane menu regressions", () => {
 			await Bun.sleep(0);
 		});
 		const popup = document.querySelector(".gui-browser-extensions-popup");
-		expect(popup?.textContent).toContain("Import Chrome data");
-		expect(popup?.textContent).toContain("MusePi Browser Relay");
-		expect(popup?.textContent).toContain("Shared Chromium");
-
-		act(() =>
-			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })),
-		);
-		await act(async () => Bun.sleep(160));
-		expect(document.querySelector(".gui-browser-extensions-popup")).toBeNull();
+		expect(popup?.textContent).toContain("No extensions installed in this browser");
+		expect(popup?.textContent).not.toContain("Browser Relay");
+		expect(popup?.textContent).not.toContain("Shared Chromium");
 	});
 
-	it("updates the extensions button and full-URL display when preferences change", () => {
-		expect(host.querySelector('[aria-label="Extensions"]')).not.toBeNull();
-		act(() => writeBrowserExtensionsToolbarVisible(false));
-		expect(host.querySelector('[aria-label="Extensions"]')).toBeNull();
-		act(() => writeBrowserExtensionsToolbarVisible(true));
-		expect(host.querySelector('[aria-label="Extensions"]')).not.toBeNull();
-
+	it("updates the full-URL display when the preference changes", () => {
 		expect(host.querySelector(".gui-browser-address-display")?.textContent).toContain("https://example.com");
 		act(() => writeBrowserShowFullUrl(false));
 		expect(host.querySelector(".gui-browser-address-display")?.textContent).toBe("example.com");

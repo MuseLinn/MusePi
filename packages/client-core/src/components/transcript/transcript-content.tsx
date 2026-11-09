@@ -355,6 +355,80 @@ function usageRow(message: AssistantMessage): string {
 	return parts.join(" ");
 }
 
+/**
+ * The per-turn usage line plus its details popover.
+ *
+ * The line keeps the TUI's compact shape; the popover answers "where did these
+ * tokens go" with the same facts the usage surface reports. Cache rows appear
+ * turn actually used the cache — a first turn has nothing to report there, and
+ * printing zero-valued cache rows would read as a miss rather than as "not
+ * applicable yet".
+ */
+function TurnUsage({ message }: { message: AssistantMessage }): ReactNode {
+	const [open, setOpen] = useState(false);
+	const anchorRef = useRef<HTMLDivElement | null>(null);
+	useEffect(() => {
+		if (!open) return;
+		const onPointerDown = (event: PointerEvent): void => {
+			if (!anchorRef.current?.contains(event.target as Node)) setOpen(false);
+		};
+		const onKeyDown = (event: KeyboardEvent): void => {
+			if (event.key === "Escape") setOpen(false);
+		};
+		window.addEventListener("pointerdown", onPointerDown);
+		window.addEventListener("keydown", onKeyDown);
+		return () => {
+			window.removeEventListener("pointerdown", onPointerDown);
+			window.removeEventListener("keydown", onKeyDown);
+		};
+	}, [open]);
+
+	const usage = message.usage;
+	const total = usage.input + usage.cacheRead + usage.cacheWrite + usage.output;
+	const cacheDenominator = usage.cacheRead + usage.input;
+	const hitRate = cacheDenominator > 0 ? Math.round((usage.cacheRead / cacheDenominator) * 100) : undefined;
+	const full = (n: number): string => new Intl.NumberFormat("en-US").format(n);
+	const rows: Array<{ label: string; value: string }> = [];
+	if (message.provider !== undefined && message.provider !== "") {
+		rows.push({ label: t("transcript.usageProviderModel"), value: `${message.provider}/${message.model}` });
+	}
+	if (hitRate !== undefined && usage.cacheRead > 0) {
+		rows.push({ label: t("general.cacheHit"), value: `${hitRate}%` });
+	}
+	rows.push({ label: t("transcript.usageUncachedInput"), value: full(usage.input) });
+	if (usage.cacheRead > 0) rows.push({ label: t("sessionInfo.cacheRead"), value: full(usage.cacheRead) });
+	if (usage.cacheWrite > 0) rows.push({ label: t("sessionInfo.cacheWrite"), value: full(usage.cacheWrite) });
+	rows.push({ label: t("sessionInfo.output"), value: full(usage.output) });
+
+	return (
+		<div className="tr-usage-wrap" ref={anchorRef}>
+			<button
+				type="button"
+				className="tr-usage tr-usage--button"
+				aria-expanded={open}
+				aria-label={t("transcript.turnUsage")}
+				onClick={() => setOpen(current => !current)}
+			>
+				{usageRow(message)}
+			</button>
+			{open && (
+				<div className="tr-usage-pop" role="dialog" aria-label={t("transcript.turnUsage")}>
+					<div className="tr-usage-pop-total">
+						<span>{t("transcript.turnUsage")}</span>
+						<span className="tabular-nums">{t("transcript.usageTotalTokens", { tokens: full(total) })}</span>
+					</div>
+					{rows.map(row => (
+						<div className="tr-usage-pop-row" key={row.label}>
+							<span className="tr-usage-pop-label">{row.label}</span>
+							<span className="tr-usage-pop-value tabular-nums">{row.value}</span>
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
+
 export function MsgContent({
 	content,
 	onPreviewImage,
@@ -1260,7 +1334,7 @@ export function AssistantBody({
 				<WorkingLine start={0} freezeMs={roundDuration} meta={modelLevelMeta(message.model, thinkingLevel)} />
 			) : null}
 			{showTokenUsage && usageHere && !pending && !failed && message.duration !== undefined && (
-				<div className="tr-usage">{usageRow(message)}</div>
+				<TurnUsage message={message} />
 			)}
 		</>
 	);

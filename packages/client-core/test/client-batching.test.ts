@@ -1,7 +1,12 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
 import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
+import { dismissActionToast, getToasts } from "../src/lib/action-toast";
 import { GuestClient } from "../src/lib/client";
+
+afterEach(() => {
+	for (const toast of getToasts()) dismissActionToast(toast.id);
+});
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
 
@@ -34,7 +39,7 @@ describe("GuestClient notification batching", () => {
 		client.applyFrameForTest({ t: "event", event: { type: "notice", level: "info", message: "c", source: "bench" } });
 
 		// Snapshot is the latest applied state immediately...
-		expect(client.getSnapshot().notices.map(n => n.message)).toEqual(["a", "b", "c"]);
+		expect(getToasts().map(t => t.message)).toEqual(["a", "b", "c"]);
 		expect(client.getSnapshot().phase).toBe("live");
 		// ...but the notification is deferred: one window flush, not three.
 		expect(notified).toBe(0);
@@ -59,6 +64,6 @@ describe("GuestClient notification batching", () => {
 		client.applyFrameForTest({ t: "event", event: { type: "notice", level: "info", message: "c", source: "bench" } });
 		await Bun.sleep(25);
 		expect(notified).toBe(2);
-		expect(client.getSnapshot().notices.map(n => n.message)).toEqual(["a", "b", "c"]);
+		expect(getToasts().map(t => t.message)).toEqual(["a", "b", "c"]);
 	});
 });

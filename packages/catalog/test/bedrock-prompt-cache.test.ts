@@ -87,6 +87,7 @@ describe("Bedrock prompt-cache compat", () => {
 
 		for (const { id, minimumTokens, supportsLongRetention } of cases) {
 			expect(buildModel(bedrockSpec({ id })).compat).toEqual({
+				supportsServerCompaction: true,
 				promptCacheMode: minimumTokens === 0 ? "none" : "explicit",
 				supportsLongPromptCacheRetention: supportsLongRetention,
 				promptCacheMinimumTokens: minimumTokens,
@@ -100,6 +101,7 @@ describe("Bedrock prompt-cache compat", () => {
 
 	test("models exact cache-capable Nova IDs for explicit 5m checkpoints", () => {
 		const expected = {
+			supportsServerCompaction: false,
 			promptCacheMode: "explicit",
 			supportsLongPromptCacheRetention: false,
 			promptCacheMinimumTokens: 1024,

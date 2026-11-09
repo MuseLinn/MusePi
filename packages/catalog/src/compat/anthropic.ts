@@ -143,6 +143,9 @@ export function buildAnthropicCompat(spec: ModelSpec<"anthropic-messages">): Res
 		// Long cache retention is only sent to the official API by default;
 		// proxies opt in explicitly via `compat.supportsLongCacheRetention: true`.
 		supportsLongCacheRetention: official,
+		// On-demand compaction is a first-party Claude API beta; compatible
+		// proxies and cloud reroutes must opt in explicitly later.
+		supportsServerCompaction: official && spec.id.toLowerCase().startsWith("claude-"),
 		// First-party Claude API only. Bedrock/Vertex/Foundry and other
 		// Anthropic-compatible gateways reject mid-conversation system roles, so
 		// detection requires the canonical api.anthropic.com host plus a

@@ -35,7 +35,16 @@ import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { copyToClipboard, openExternalUrl } from "../lib/electron";
+import { requestGitRoot } from "../lib/git-root";
+import {
+	type GitFileStats,
+	type GitStatusFile,
+	type GitStatusView,
+	onGitStatusChanged,
+	readGitStatusCached,
+} from "../lib/git-status-cache";
 import type { PanelTab } from "../lib/panel-tabs";
+import { pathBaseName } from "../lib/project-label";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { SessionInfoPluginRow, SessionInfoSlotData } from "../lib/slot-host";
@@ -49,6 +58,7 @@ import {
 } from "../lib/slot-host";
 import { readHiddenSurfaces, SURFACE_HIDDEN_KEY, SURFACES, surfaceVisible } from "../lib/surfaces/registry";
 import { useFloatingMenu } from "../lib/use-floating-menu";
+import { useGitWatch } from "../lib/use-git-watch";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { Reveal } from "./Reveal";
@@ -75,9 +85,6 @@ const DOCK_MIN_CHAT_COLUMN_PX = 560;
  */
 export const SESSION_INFO_DOCK_MIN_ROW_PX = SESSION_INFO_DOCK_WIDTH_PX + 16 + 44 + 16 + 8 + DOCK_MIN_CHAT_COLUMN_PX;
 
-/** Tabs past this fold behind 「查看更多」 so the card stays a glanceable tile. */
-const VISIBLE_TAB_LIMIT = 6;
-
 /** Same cadence as the other working-tree readouts — they describe one tree. */
 const POLL_MS = 15_000;
 
@@ -86,10 +93,36 @@ interface UsageView {
 	model?: string | null;
 }
 
-/** Wire shape of `git.numstat`. */
-interface NumstatView {
-	files?: Array<{ path: string; added: number; removed: number; binary: boolean }>;
-	error?: string;
+/** One root from `session.directories.list` (primary first). */
+interface SessionDirectoryView {
+	path: string;
+	primary: boolean;
+	exists: boolean;
+}
+
+type DirectoryStatus = "loading" | "ready" | "non-git" | "missing" | "error";
+
+/** A changed file inside one root, flattened from staged/working/untracked. */
+interface DirectoryFileRow {
+	path: string;
+	status: string;
+	added: number;
+	removed: number;
+	binary: boolean;
+}
+
+interface DirectoryRow {
+	path: string;
+	primary: boolean;
+	exists: boolean;
+	state: DirectoryStatus;
+	branch?: string | null;
+	ahead?: number;
+	behind?: number;
+	files?: number;
+	added?: number;
+	removed?: number;
+	fileRows?: DirectoryFileRow[];
 }
 
 /** Current-branch PR from `github.prStatus`. */
@@ -101,14 +134,7 @@ interface PrView {
 	url: string;
 }
 
-interface ChangesView {
-	added: number;
-	removed: number;
-	files: number;
-}
-
 type UsageState = "loading" | "ready" | "error";
-type ChangesState = "loading" | "ready" | "none" | "error";
 /** Session-hygiene actions the header menu runs against the daemon. */
 type MaintenanceOp = "shake" | "fresh" | "clear";
 
@@ -191,8 +217,29 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-function hasChangesOf(changes: ChangesView | null): changes is ChangesView {
-	return changes !== null && changes.files > 0;
+/** Flatten `git.status`'s three lists into one row per path. A path that is
+ *  both staged and edited again keeps one row whose ± sums both sides. */
+function buildDirectoryFileRows(status: GitStatusView): DirectoryFileRow[] {
+	const byPath = new Map<string, DirectoryFileRow>();
+	const staged = status.fileStats?.staged ?? {};
+	const working = status.fileStats?.working ?? {};
+	const add = (files: GitStatusFile[] | undefined, stats: Record<string, GitFileStats>): void => {
+		for (const file of files ?? []) {
+			const stat = stats[file.path];
+			const existing = byPath.get(file.path);
+			byPath.set(file.path, {
+				path: file.path,
+				status: existing?.status ?? file.status,
+				added: (existing?.added ?? 0) + (stat?.added ?? 0),
+				removed: (existing?.removed ?? 0) + (stat?.removed ?? 0),
+				binary: (existing?.binary ?? false) || stat?.binary === true,
+			});
+		}
+	};
+	add(status.staged, staged);
+	add(status.unstaged, working);
+	add(status.untracked, working);
+	return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path));
 }
 
 /** A subagent still producing progress (vs. a finished one). */
@@ -371,21 +418,28 @@ export function SessionInfoCard({
 }: SessionInfoCardProps): ReactNode {
 	const [usage, setUsage] = useState<UsageView | null>(null);
 	const [usageState, setUsageState] = useState<UsageState>("loading");
-	const [changes, setChanges] = useState<ChangesView | null>(null);
-	const [changesState, setChangesState] = useState<ChangesState>("loading");
-	const [changesError, setChangesError] = useState<string | null>(null);
 	const [pr, setPr] = useState<PrView | null>(null);
+	const [directories, setDirectories] = useState<DirectoryRow[]>([]);
+	// Per-root disclosure. The primary root starts open (it is the session's
+	// own tree); additional roots start folded so a many-root project stays
+	// glanceable. `openDirs` wins once the user toggles a row.
+	const [openDirs, setOpenDirs] = useState<Record<string, boolean>>({});
+	useGitWatch(rpc, [cwd ?? "", ...directories.map(directory => directory.path)]);
+	const [directoryReload, setDirectoryReload] = useState(0);
 	const [reloadToken, setReloadToken] = useState(0);
-	const [showAllTabs, setShowAllTabs] = useState(false);
-	const [showAllSurfaces, setShowAllSurfaces] = useState(false);
+	// A finished agent turn is the natural refresh point; there is no timer.
+	const previousWorking = useRef(working);
+	useEffect(() => {
+		if (previousWorking.current && !working) setDirectoryReload(token => token + 1);
+		previousWorking.current = working;
+	}, [working]);
 
 	useEffect(() => {
 		if (!rpc || !sessionId) return;
 		let alive = true;
 		const load = async (): Promise<void> => {
-			const [usageResult, numstatResult, prResult] = await Promise.allSettled([
+			const [usageResult, prResult] = await Promise.allSettled([
 				rpc.request<UsageView | null>("session.contextUsage", { sessionId }),
-				cwd ? rpc.request<NumstatView>("git.numstat", { cwd }) : Promise.resolve(null),
 				cwd ? rpc.request<{ pr?: PrView | null }>("github.prStatus", { cwd }) : Promise.resolve(null),
 			]);
 			if (!alive) return;
@@ -399,51 +453,95 @@ export function SessionInfoCard({
 			} else {
 				setUsageState("error");
 			}
-
-			if (!cwd) {
-				setChanges({ added: 0, removed: 0, files: 0 });
-				setChangesState("none");
-				setChangesError(null);
-				return;
-			}
-			if (numstatResult.status === "rejected") {
-				setChangesState("error");
-				setChangesError(errorText(numstatResult.reason));
-				return;
-			}
-			const value = numstatResult.value;
-			const failure = typeof value?.error === "string" ? value.error : null;
-			if (failure === "not a git repository") {
-				// Outside a repository there is nothing to diff, and that is a
-				// readout, not a failure.
-				setChanges({ added: 0, removed: 0, files: 0 });
-				setChangesState("none");
-				setChangesError(null);
-				return;
-			}
-			if (failure) {
-				setChangesState("error");
-				setChangesError(failure);
-				return;
-			}
-			const files = value?.files ?? [];
-			setChanges({
-				added: files.reduce((sum, file) => sum + file.added, 0),
-				removed: files.reduce((sum, file) => sum + file.removed, 0),
-				files: files.length,
-			});
-			setChangesState("ready");
-			setChangesError(null);
 		};
 		setUsageState("loading");
-		setChangesState("loading");
 		void load();
 		const timer = setInterval(() => void load(), POLL_MS);
 		return () => {
 			alive = false;
 			clearInterval(timer);
 		};
-	}, [rpc, sessionId, cwd, reloadToken]);
+	}, [rpc, sessionId, cwd]);
+
+	// Project directories: the primary root and every added source use the same
+	// row — branch, file count and ± totals, with the primary carrying a badge.
+	// A non-Git source is a state, not an error.
+	useEffect(() => {
+		if (!rpc || !sessionId) {
+			setDirectories([]);
+			return;
+		}
+		let alive = true;
+		const load = async (): Promise<void> => {
+			const list = await rpc
+				.request<{ directories?: SessionDirectoryView[] }>("session.directories.list", { sessionId })
+				.catch(() => null);
+			const rows = list?.directories ?? [];
+			// Older daemons answer without the primary; the session cwd is still
+			// the one root the card must show.
+			const roots =
+				rows.some(directory => directory.primary) || !cwd
+					? rows
+					: [{ path: cwd, primary: true, exists: true }, ...rows];
+			const statuses: DirectoryRow[] = [];
+			// Four at a time: a project with many roots must not fan out one
+			// `git status` per directory in a single burst.
+			for (let index = 0; index < roots.length; index += 4) {
+				statuses.push(
+					...(await Promise.all(
+						roots.slice(index, index + 4).map(async (directory): Promise<DirectoryRow> => {
+							const base = {
+								path: directory.path,
+								primary: directory.primary,
+								exists: directory.exists,
+							};
+							if (!directory.exists) return { ...base, state: "missing" };
+							try {
+								const status = await readGitStatusCached(rpc, directory.path, { ttlMs: 30_000 });
+								if (!status || status.error) {
+									return {
+										...base,
+										state: status?.error === "not a git repository" ? "non-git" : "error",
+									};
+								}
+								const fileRows = buildDirectoryFileRows(status);
+								return {
+									...base,
+									state: "ready",
+									branch: status.branch ?? null,
+									ahead: status.ahead ?? 0,
+									behind: status.behind ?? 0,
+									files: fileRows.length,
+									added: status.added ?? 0,
+									removed: status.deleted ?? 0,
+									fileRows,
+								};
+							} catch {
+								return { ...base, state: "error" };
+							}
+						}),
+					)),
+				);
+			}
+			if (alive) setDirectories(statuses);
+		};
+		void load();
+		// No timer: refresh on the events that actually change the answer.
+		// The 15s cache still collapses a burst (focus + turn end + stage) into
+		// one request per root.
+		const refresh = (): void => {
+			if (!document.hidden) void load();
+		};
+		window.addEventListener("focus", refresh);
+		document.addEventListener("visibilitychange", refresh);
+		const offStatusChanged = onGitStatusChanged(refresh);
+		return () => {
+			alive = false;
+			window.removeEventListener("focus", refresh);
+			document.removeEventListener("visibilitychange", refresh);
+			offStatusChanged();
+		};
+	}, [rpc, sessionId, cwd, reloadToken, directoryReload]);
 
 	// A hidden-surface edit in another part of the GUI arrives as a storage event;
 	// re-reading on it keeps 「可打开」 honest without polling.
@@ -545,10 +643,6 @@ export function SessionInfoCard({
 		);
 	}, [rpc, sessionId, cwd, openSurfaces, hiddenSurfaces]);
 
-	const visibleTabs = showAllTabs ? tabs : tabs.slice(0, VISIBLE_TAB_LIMIT);
-	const foldedTabCount = tabs.length - visibleTabs.length;
-	const visibleSurfaces = showAllSurfaces ? surfaces : surfaces.slice(0, VISIBLE_TAB_LIMIT);
-	const foldedSurfaceCount = surfaces.length - visibleSurfaces.length;
 	const sessionTitle = title?.trim() || t("general.sessionInfoUntitled");
 	const model = usage?.model ?? null;
 	const retry = useCallback((): void => setReloadToken(token => token + 1), []);
@@ -771,30 +865,128 @@ export function SessionInfoCard({
 				</span>
 			</div>
 
-			<section className="gui-session-info-changes" data-state={changesState}>
-				<div className="gui-session-info-section-label">{t("general.sessionInfoChanges")}</div>
-				{changesState === "loading" ? (
+			<section className="gui-session-info-changes">
+				<div className="gui-session-info-section-label">{t("sessionInfo.projectDirectories")}</div>
+				{directories.length === 0 ? (
 					<p className="gui-session-info-note">{t("sessionInfo.loading")}</p>
-				) : changesState === "error" ? (
-					<div className="gui-session-info-error" role="alert">
-						<span className="gui-session-info-note">{t("sessionInfo.error")}</span>
-						{changesError ? <span className="gui-session-info-error-detail">{changesError}</span> : null}
-						<button type="button" className="gui-session-info-retry" onClick={retry}>
-							{t("sessionInfo.retry")}
-						</button>
-					</div>
-				) : changesState === "ready" && hasChangesOf(changes) ? (
-					<button
-						type="button"
-						className="gui-session-info-nums gui-session-info-nums--link"
-						title={t("general.sessionInfoChanges")}
-						onClick={() => onOpenSurface?.("git")}
-					>
-						<span className="gui-session-info-num-add">+{changes.added}</span>
-						<span className="gui-session-info-num-del">−{changes.removed}</span>
-					</button>
 				) : (
-					<p className="gui-session-info-note">{t("general.sessionInfoNoChanges")}</p>
+					directories.map(directory => {
+						const open = openDirs[directory.path] ?? directory.primary;
+						const collapsible = directory.state === "ready" || directory.state === "error";
+						const openGit = (): void => {
+							requestGitRoot(directory.path);
+							onOpenSurface?.("git");
+						};
+						const summary =
+							directory.state === "ready"
+								? t("general.changesFileCount", { count: directory.files ?? 0 })
+								: directory.state === "non-git"
+									? t("general.notGitDirectory")
+									: directory.state === "missing"
+										? t("sessionInfo.directoryMissing")
+										: directory.state === "loading"
+											? t("sessionInfo.loading")
+											: t("sessionInfo.unavailable");
+						const fileRows = directory.fileRows ?? [];
+						const visibleFiles = fileRows.slice(0, 6);
+						return (
+							<div key={directory.path} className="gui-session-info-dir-block" data-state={directory.state}>
+								<button
+									type="button"
+									className="gui-session-info-dir"
+									data-state={directory.state}
+									title={directory.path}
+									aria-expanded={collapsible ? open : undefined}
+									onClick={() => {
+										if (!collapsible) return;
+										setOpenDirs(current => ({ ...current, [directory.path]: !open }));
+									}}
+								>
+									{collapsible ? (
+										<Icon
+											name="arrow-down-s"
+											className={`gui-session-info-chev${open ? "" : " gui-session-info-chev--closed"}`}
+										/>
+									) : (
+										<span className="gui-session-info-chev-spacer" />
+									)}
+									<Icon name="folder" className="gui-session-info-row-icon" />
+									<span className="gui-session-info-dir-name">{pathBaseName(directory.path)}</span>
+									{directory.primary ? (
+										<span className="gui-session-info-dir-badge">{t("sessionInfo.primaryDirectory")}</span>
+									) : null}
+									<span className="gui-session-info-dir-status">{summary}</span>
+									{directory.state === "ready" ? (
+										<span className="gui-session-info-dir-nums">
+											<span className="gui-session-info-num-add">+{directory.added ?? 0}</span>
+											<span className="gui-session-info-num-del">−{directory.removed ?? 0}</span>
+										</span>
+									) : null}
+								</button>
+								{directory.state === "error" ? (
+									<button type="button" className="gui-session-info-dir-retry" onClick={retry}>
+										{t("sessionInfo.retry")}
+									</button>
+								) : null}
+								{collapsible ? (
+									<Reveal open={open}>
+										<div className="gui-session-info-dir-body">
+											<div className="gui-session-info-dir-branch">
+												<Icon name="git-branch" className="gui-session-info-row-icon" />
+												<span className="gui-session-info-dir-branch-name">
+													{directory.branch ?? t("sessionInfo.unavailable")}
+												</span>
+												{(directory.ahead ?? 0) > 0 ? (
+													<span className="gui-session-info-dir-track">↑{directory.ahead}</span>
+												) : null}
+												{(directory.behind ?? 0) > 0 ? (
+													<span className="gui-session-info-dir-track">↓{directory.behind}</span>
+												) : null}
+											</div>
+											{visibleFiles.length > 0 ? (
+												<ul className="gui-session-info-dir-files">
+													{visibleFiles.map(file => (
+														<li key={file.path}>
+															<button
+																type="button"
+																className="gui-session-info-file"
+																title={file.path}
+																onClick={openGit}
+															>
+																<span
+																	className="gui-session-info-file-status"
+																	data-status={file.status}
+																>
+																	{file.status}
+																</span>
+																<span className="gui-session-info-file-path">{file.path}</span>
+																{!file.binary && (file.added > 0 || file.removed > 0) ? (
+																	<span className="gui-session-info-dir-nums">
+																		<span className="gui-session-info-num-add">+{file.added}</span>
+																		<span className="gui-session-info-num-del">−{file.removed}</span>
+																	</span>
+																) : null}
+															</button>
+														</li>
+													))}
+												</ul>
+											) : (
+												<p className="gui-session-info-note">{t("general.sessionInfoNoChanges")}</p>
+											)}
+											{fileRows.length > visibleFiles.length ? (
+												<button type="button" className="gui-session-info-fold" onClick={openGit}>
+													{t("sessionInfo.moreFiles", { count: fileRows.length - visibleFiles.length })}
+												</button>
+											) : null}
+											<button type="button" className="gui-session-info-dir-open" onClick={openGit}>
+												{t("sessionInfo.openChanges")}
+											</button>
+										</div>
+									</Reveal>
+								) : null}
+							</div>
+						);
+					})
 				)}
 			</section>
 
@@ -933,6 +1125,7 @@ export function SessionInfoCard({
 			{connectorServers.length > 0 ? (
 				<section className="gui-session-info-connectors">
 					<ConnectorPanel
+						collapsible
 						snapshot={connectorSnapshot}
 						loadFailed={connectorsLoadFailed}
 						onToggleServer={name =>
@@ -994,7 +1187,7 @@ export function SessionInfoCard({
 					<p className="gui-session-info-note gui-session-info-tabs-empty">{t("general.sessionInfoNoTabs")}</p>
 				) : (
 					<ul className="gui-session-info-list">
-						{visibleTabs.map(item => {
+						{tabs.map(item => {
 							const active = item.id === activeTabId;
 							return (
 								<li key={item.id}>
@@ -1013,17 +1206,12 @@ export function SessionInfoCard({
 						})}
 					</ul>
 				)}
-				{foldedTabCount > 0 ? (
-					<button type="button" className="gui-session-info-more" onClick={() => setShowAllTabs(true)}>
-						{t("general.sessionInfoMore", { count: foldedTabCount })}
-					</button>
-				) : null}
 			</section>
 
 			<section className="gui-session-info-surfaces">
 				<div className="gui-session-info-section-label">{t("general.sessionInfoSurfaces")}</div>
 				<div className="gui-session-info-surface-grid">
-					{visibleSurfaces.map(surface => (
+					{surfaces.map(surface => (
 						<button
 							key={surface.id}
 							type="button"
@@ -1036,11 +1224,6 @@ export function SessionInfoCard({
 						</button>
 					))}
 				</div>
-				{foldedSurfaceCount > 0 ? (
-					<button type="button" className="gui-session-info-more" onClick={() => setShowAllSurfaces(true)}>
-						{t("general.sessionInfoMore", { count: foldedSurfaceCount })}
-					</button>
-				) : null}
 			</section>
 		</aside>
 	);

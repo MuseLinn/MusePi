@@ -147,7 +147,11 @@ function themeCanvasColor(): string {
  *  the canvas, so selection chrome must be resolved to a real value. */
 function themeAccentColor(): string {
 	if (typeof document === "undefined") return "#d9a441";
-	const v = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+	const v = getComputedStyle(document.documentElement)
+		.getPropertyValue("--accent")
+		.replace(/\/\*[\s\S]*?\*\//g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
 	return v || "#d9a441";
 }
 

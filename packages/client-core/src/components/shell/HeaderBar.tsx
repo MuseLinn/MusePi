@@ -9,6 +9,7 @@ import {
 	MessageSquare,
 	Package,
 	PanelRight,
+	Settings,
 	SquarePen,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -63,6 +64,24 @@ const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: 
 	{ panel: "workbench", icon: <PanelRight size={14} />, title: "settings.workbench" },
 	{ panel: "voice", icon: <AudioLines size={14} />, title: "settings.voice" },
 ];
+
+/**
+ * Settings is not a content panel, but it has to be reachable from every shell
+ * shape: the settings page, the host manager and "disconnect" all live behind
+ * it. It is normally reached through the sessions sheet footer, and a
+ * single-session host (`sessions === null`) has no sheet at all — while the
+ * compact header hides the theme, host and leave buttons. So: always in the
+ * narrow panel menu, and in the wide toolbar only when there is no sheet to
+ * reach it from.
+ */
+const SETTINGS_ENTRY: { panel: GuestPanel; icon: ReactNode; title: TranslationKey } = {
+	panel: "settings",
+	icon: <Settings size={14} />,
+	title: "settings.settings",
+};
+
+/** Narrow menu = content panels + settings: on a phone it is the only door. */
+const PANEL_MENU_BUTTONS = [...PANEL_BUTTONS, SETTINGS_ENTRY];
 
 export function HeaderBar({
 	client,
@@ -240,7 +259,7 @@ export function HeaderBar({
 										aria-label={t("general.panels")}
 									>
 										<div className="sh-switcher-title">{t("general.panels")}</div>
-										{PANEL_BUTTONS.map(({ panel, icon, title }) => (
+										{PANEL_MENU_BUTTONS.map(({ panel, icon, title }) => (
 											<button
 												key={panel}
 												type="button"
@@ -274,6 +293,21 @@ export function HeaderBar({
 								{icon}
 							</button>
 						))}
+						{/* Wide toolbar: when there is no sessions sheet to reach
+						 * settings from (single-session host), and on desktop web,
+						 * whose sheet footer — the mobile-only navigation strip —
+						 * does not render at all. */}
+						{(sessions == null || !mobile) && (
+							<button
+								type="button"
+								className={activePanel === "settings" ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
+								onClick={() => onSelectPanel(activePanel === "settings" ? null : "settings")}
+								title={t("settings.settings")}
+								aria-label={t("settings.settings")}
+							>
+								<Settings size={14} />
+							</button>
+						)}
 					</span>
 				)}
 				{(mobile || narrow) &&

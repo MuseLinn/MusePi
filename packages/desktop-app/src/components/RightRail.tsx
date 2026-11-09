@@ -10,7 +10,7 @@ import {
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type TranslationKey, t } from "@musepi/client-core";
-import { ChevronLeft as ChevronLeftIconData, ChevronRight as ChevronRightIconData } from "lucide";
+import { PanelRightClose as PanelRightCloseIconData, PanelRightOpen as PanelRightOpenIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { restrictToYAxis } from "../lib/dnd-axis";
@@ -490,13 +490,14 @@ export function RightRail({
 				</button>
 				<button
 					type="button"
-					className="gui-right-rail-btn"
+					className="gui-right-rail-btn gui-right-rail-collapse"
+					data-collapsed={rightPanelOpen ? "false" : "true"}
 					title={rightPanelOpen ? t("tools.collapse") : t("tools.expand")}
 					aria-label={rightPanelOpen ? t("general.collapseRightPanel") : t("general.expandRightPanel")}
 					onClick={() => onToggleRightPanel?.()}
 				>
 					<MorphIcon
-						icon={rightPanelOpen ? ChevronRightIconData : ChevronLeftIconData}
+						icon={rightPanelOpen ? PanelRightCloseIconData : PanelRightOpenIconData}
 						size={16}
 						spring="snappy"
 						reducedMotion="user"

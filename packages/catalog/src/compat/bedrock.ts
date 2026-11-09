@@ -143,6 +143,7 @@ const BEDROCK_ADAPTIVE_THINKING_STREAM_IDLE_TIMEOUT_MS = 900_000;
 /** Resolve Bedrock Converse prompt-cache and stream-watchdog compat once per model. */
 export function buildBedrockCompat(spec: ModelSpec<"bedrock-converse-stream">): ResolvedBedrockCompat {
 	const compat = { ...detectedBedrockCompat(spec.id) };
+	compat.supportsServerCompaction = spec.id.toLowerCase().includes("anthropic.claude");
 	compat.streamIdleTimeoutMs = spec.reasoning
 		? supportsAdaptiveThinkingDisplay(spec.id)
 			? BEDROCK_ADAPTIVE_THINKING_STREAM_IDLE_TIMEOUT_MS

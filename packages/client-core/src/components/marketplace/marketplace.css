@@ -26,16 +26,39 @@
 	align-items: center;
 }
 
-.mp-search {
-	flex: 1;
+/* Search field: one wrapper owns the surface (icon + input), so the same
+ * geometry works in every host; the desktop capability page re-skins it to
+ * its glass recipe without touching this shared component. */
+.mp-search-field {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1 1 220px;
 	min-width: 0;
-	padding: 6px 10px;
+	padding: 0 10px;
+	height: 34px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	background: var(--bg-inset);
+	color: var(--fg-faint);
+	transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.mp-search-field:focus-within {
+	border-color: var(--accent-bd);
+	box-shadow: 0 0 0 3px var(--ring);
+}
+
+.mp-search {
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
 	color: var(--fg);
 	font: inherit;
-	transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
 }
 
 .mp-search::placeholder {
@@ -44,8 +67,7 @@
 
 .mp-search:focus-visible {
 	outline: none;
-	border-color: var(--accent-bd);
-	box-shadow: 0 0 0 3px var(--ring);
+	box-shadow: none;
 }
 
 .mp-filter-bar {
@@ -160,6 +182,26 @@
 	display: flex;
 	gap: 8px;
 	align-items: center;
+}
+
+/* The source URL field is a standalone input (submit button beside it), not
+ * the toolbar search wrapper — keep the field recipe on the input itself. */
+.mp-source-input {
+	flex: 1;
+	min-width: 0;
+	height: 34px;
+	padding: 0 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-inset);
+	color: var(--fg);
+	font: inherit;
+}
+
+.mp-source-input:focus-visible {
+	outline: none;
+	border-color: var(--accent-bd);
+	box-shadow: 0 0 0 3px var(--ring);
 }
 
 .mp-source-list {

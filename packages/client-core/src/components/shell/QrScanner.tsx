@@ -30,6 +30,11 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 		let raf = 0;
 		let stream: MediaStream | null = null;
 		let lastDecode = 0;
+		// The overlay keeps painting for the 380 ms success flash. Without this
+		// latch every frame in that window re-decoded the same code and
+		// scheduled its own `onResult` — four or five connect attempts, each
+		// building a fresh GuestClient, from one scan.
+		let accepted = false;
 		const video = videoRef.current;
 		const canvas = canvasRef.current;
 		if (!video || !canvas) return;
@@ -40,6 +45,7 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 		const tick = (): void => {
 			if (!alive) return;
 			raf = requestAnimationFrame(tick);
+			if (accepted) return;
 			if (video.readyState < 2 || video.videoWidth === 0) return;
 			const w = video.videoWidth;
 			const h = video.videoHeight;
@@ -54,7 +60,8 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 					const result = jsQR(image.data, w, h);
 					if (result?.data) {
 						const link = result.data.trim();
-						if (link) {
+						if (link && !accepted) {
+							accepted = true;
 							setFound(true);
 							haptic([10, 40, 10]);
 							// brief success flash before closing the overlay
@@ -69,6 +76,10 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 
 		const start = async (): Promise<void> => {
 			try {
+				// Re-entry (camera flip, foreground return) must not leave the
+				// previous track alive: two live camera streams on one element
+				// keeps the LED on and can wedge the sensor.
+				stream?.getTracks().forEach(track => track.stop());
 				stream = await navigator.mediaDevices.getUserMedia({
 					video: {
 						facingMode: { ideal: facing },
@@ -118,9 +129,27 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 		};
 		void start();
 
+		// The camera is a device-wide resource: backgrounding the app must
+		// release it, otherwise the LED stays lit and another app cannot open
+		// it. Resuming re-acquires and restarts the decode loop.
+		const onVisibility = (): void => {
+			if (!alive) return;
+			if (document.hidden) {
+				cancelAnimationFrame(raf);
+				stream?.getTracks().forEach(track => track.stop());
+				stream = null;
+				return;
+			}
+			if (accepted) return;
+			lastDecode = 0;
+			void start();
+		};
+		document.addEventListener("visibilitychange", onVisibility);
+
 		return () => {
 			alive = false;
 			cancelAnimationFrame(raf);
+			document.removeEventListener("visibilitychange", onVisibility);
 			stream?.getTracks().forEach(track => track.stop());
 		};
 	}, [onResult, facing]);

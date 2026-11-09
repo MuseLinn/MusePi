@@ -31,6 +31,7 @@
 		"fix": "biome check --write --unsafe .",
 		"fmt": "biome format --write .",
 		"gen:models": "bun scripts/generate-models.ts",
+		"gen:models-dev-ref": "bun scripts/generate-models-dev-ref.ts",
 		"gen:cursor-proto": "protoc --plugin=protoc-gen-es=../../node_modules/.bin/protoc-gen-es --es_out=src/discovery/cursor-gen --es_opt=target=ts -I ../ai/src/providers/cursor/proto ../ai/src/providers/cursor/proto/agent.proto"
 	},
 	"dependencies": {

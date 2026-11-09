@@ -3,10 +3,11 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { t, writeArchivedSessions } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ScheduledTasksPage } from "../src/components/ScheduledTasksPage";
+import { ScheduledTasksPanel } from "../src/components/ScheduledTasksPanel";
 import type { SessionListNode } from "../src/components/SessionList";
 import { SessionSidebar } from "../src/components/SessionSidebar";
 import { MemorySection } from "../src/components/settings-sections/memory";
+import { clearTaskNav, publishTaskNav } from "../src/lib/scheduled-task-nav";
 
 /**
  * Workspace rows name the FOLDER; the full cwd stays on the row's title.
@@ -29,6 +30,7 @@ afterEach(async () => {
 	document.body.innerHTML = "";
 	window.localStorage.clear();
 	writeArchivedSessions([]);
+	clearTaskNav();
 });
 
 async function mount(ui: React.ReactNode): Promise<HTMLElement> {
@@ -94,38 +96,25 @@ describe("archived session rows", () => {
 	});
 });
 
-describe("scheduled task workspace columns", () => {
+describe("scheduled task left panel", () => {
 	it("groups Windows workspaces by folder name with the path on the header title", async () => {
-		const mk = (id: string, name: string, cwd: string) => ({
-			id,
-			name,
-			enabled: true,
-			schedule: { kind: "daily" as const, times: ["09:00"] },
-			prompt: `Prompt ${id}`,
-			cwd,
-			state: { createdAt: Date.now() },
+		// The list now lives in the rail's sidebar slot, fed by the page's
+		// cron.list projection through the task-nav bridge — not a column
+		// inside ScheduledTasksPage.
+		clearTaskNav();
+		publishTaskNav({
+			tasks: [
+				{ id: "a", name: "Alpha", enabled: true, cwd: "D:\\work\\alpha\\demo" },
+				{ id: "b", name: "Beta", enabled: true, cwd: "D:\\work\\beta\\demo" },
+				{ id: "c", name: "Gamma", enabled: true, cwd: "D:\\work\\alpha\\solo" },
+			],
+			selectedId: null,
+			view: "tasks",
+			busy: false,
 		});
-		const rpc = {
-			request: async <T,>(method: string): Promise<T> => {
-				if (method === "cron.list") {
-					return {
-						tasks: [
-							mk("a", "Alpha", "D:\\work\\alpha\\demo"),
-							mk("b", "Beta", "D:\\work\\beta\\demo"),
-							mk("c", "Gamma", "D:\\work\\alpha\\solo"),
-						],
-						runs: [],
-					} as T;
-				}
-				if (method === "cron.runs") return { runs: [] } as T;
-				return {} as T;
-			},
-		};
-		const container = await mount(
-			<ScheduledTasksPage rpc={rpc as never} onBack={() => {}} onOpenSession={() => {}} />,
-		);
+		const container = await mount(<ScheduledTasksPanel width={256} collapsed={false} />);
 
-		const heads = [...container.querySelectorAll<HTMLElement>(".gui-scheduled-ws-head > span[title]")];
+		const heads = [...container.querySelectorAll<HTMLElement>(".gui-side-panel-section-title > span[title]")];
 		// Group order follows the cwd sort (alpha/demo, alpha/solo, beta/demo).
 		expect(heads.map(head => head.textContent)).toEqual(["alpha/demo", "solo", "beta/demo"]);
 		expect(heads.map(head => head.getAttribute("title"))).toEqual([
@@ -140,6 +129,8 @@ describe("memory workspace selector", () => {
 	it("names each workspace by its encoded directory, not the raw key", async () => {
 		const rpc = {
 			request: async <T,>(method: string): Promise<T> => {
+				// WorkspaceMemory only renders for the local summary backend.
+				if (method === "memory.status") return { status: { backend: "local" } } as T;
 				if (method === "memory.workspace") {
 					return {
 						root: "/mem/D-Projects-demo",

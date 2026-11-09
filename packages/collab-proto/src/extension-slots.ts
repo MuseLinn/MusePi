@@ -86,6 +86,11 @@ export const EXTENSION_SLOT_DECLARATION = {
 		"settings.item.",
 		"settings.action.",
 		"chat.session-info.",
+		/** Second-tier sidebar panel: `sidebar.panel.<destination id>` (e.g.
+		 *  `scheduled`, `capability`). The host mounts the contribution whose
+		 *  id matches the active or hovered rail destination; destinations
+		 *  without one keep a one-column surface. */
+		"sidebar.panel.",
 	] as const,
 } as const;
 

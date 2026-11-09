@@ -22,11 +22,24 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { solveGraphLanes } from "../lib/git-graph-lanes";
-import { onGitPrefsChanged, readShowIgnored, writeShowIgnored } from "../lib/git-prefs";
+import {
+	type ChangesView,
+	onGitPrefsChanged,
+	readChangesView,
+	readShowIgnored,
+	writeChangesView,
+	writeShowIgnored,
+} from "../lib/git-prefs";
+import { consumeRequestedGitRoot, GIT_ROOT_EVENT } from "../lib/git-root";
+import { invalidateGitStatus, onGitStatusChanged, readGitStatusCached } from "../lib/git-status-cache";
 import { useChatHighlight } from "../lib/highlight";
+import { pathBaseName } from "../lib/project-label";
 import type { RpcClient } from "../lib/rpc";
+import { useGitWatch } from "../lib/use-git-watch";
+import { directoriesEqual } from "../lib/workspace-projects";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
+import { MenuPopup } from "./MenuPopup";
 import { type MonacoDiffContent, MonacoDiffEditor } from "./MonacoDiffEditor";
 
 /** Structured commit row from the daemon git.log RPC (parsed from
@@ -329,7 +342,20 @@ interface GitCommitIdentity {
  *  carry stage/unstage actions, and the header offers flat/tree view,
  *  gitignored display and a commit dialog (subject + bundled gitmoji
  *  picker + the settings-configured default identity). */
-function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
+function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessionId?: string | null }): ReactNode {
+	interface WorkspaceRootRow {
+		path: string;
+		primary: boolean;
+		exists: boolean;
+	}
+	const [roots, setRoots] = useState<WorkspaceRootRow[]>([{ path: cwd, primary: true, exists: true }]);
+	const [activeRoot, setActiveRoot] = useState(() => consumeRequestedGitRoot() ?? cwd);
+	const [rootMenu, setRootMenu] = useState(false);
+	const rootMenuAnchor = useRef<HTMLButtonElement | null>(null);
+	useGitWatch(
+		rpc,
+		roots.map(root => root.path),
+	);
 	const [status, setStatus] = useState<{
 		root: string;
 		branch: string | null;
@@ -338,6 +364,10 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 		untracked: { path: string; status: string }[];
 		ignored?: { path: string; status: string }[];
 		error?: string;
+		fileStats?: {
+			staged: Record<string, { added: number; removed: number; binary: boolean }>;
+			working: Record<string, { added: number; removed: number; binary: boolean }>;
+		};
 	} | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [openPath, setOpenPath] = useState<string | null>(null);
@@ -351,14 +381,67 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	const [diffLoading, setDiffLoading] = useState(false);
 	const diffRequestRef = useRef(0);
 	const highlight = useChatHighlight();
-	// openchamber GitSettings parity: flat/tree view, show-gitignored and
-	// gitmoji picker — localStorage keys shared with the settings Git tab.
-	const [view, setView] = useState<"flat" | "tree">(() =>
-		localStorage.getItem("musepi-gui-git-view") === "tree" ? "tree" : "flat",
-	);
+	// GitSettings parity: flat/tree view, show-gitignored and gitmoji picker —
+	// one shared pref module, and every surface follows the change event.
+	const [view, setView] = useState<ChangesView>(readChangesView);
 	const [showIgnored, setShowIgnored] = useState<boolean>(() => readShowIgnored());
-	// The Files pane and the Git tab write the same pref — follow it here too.
-	useEffect(() => onGitPrefsChanged(() => setShowIgnored(readShowIgnored())), []);
+	useEffect(
+		() =>
+			onGitPrefsChanged(() => {
+				setView(readChangesView());
+				setShowIgnored(readShowIgnored());
+			}),
+		[],
+	);
+
+	// Session roots: primary + additional working directories. A snapshot
+	// session has no live directory list, so it falls back to the primary.
+	useEffect(() => {
+		let cancelled = false;
+		const fallback: WorkspaceRootRow[] = [{ path: cwd, primary: true, exists: true }];
+		const apply = (rows: WorkspaceRootRow[]): void => {
+			if (cancelled) return;
+			const next = rows.length > 0 ? rows : fallback;
+			setRoots(next);
+			setActiveRoot(current => (next.some(row => row.path === current) ? current : (next[0]?.path ?? cwd)));
+		};
+		if (!sessionId) {
+			apply(fallback);
+			return () => {
+				cancelled = true;
+			};
+		}
+		void rpc
+			.request<{ directories?: WorkspaceRootRow[] }>("session.directories.list", { sessionId })
+			.then(res => apply(res?.directories ?? fallback))
+			.catch(() => apply(fallback));
+		return () => {
+			cancelled = true;
+		};
+	}, [rpc, sessionId, cwd]);
+
+	// Switching sessions always starts from that session's primary root. The
+	// initial mount is skipped so a one-shot root request from the session info
+	// card is not clobbered before the directory list arrives.
+	const previousCwd = useRef(cwd);
+	useEffect(() => {
+		if (previousCwd.current === cwd) return;
+		previousCwd.current = cwd;
+		setActiveRoot(cwd);
+	}, [cwd]);
+
+	// A click in the session info card's project-directory list lands here.
+	useEffect(() => {
+		const onRoot = (event: Event): void => {
+			const detail = (event as CustomEvent<unknown>).detail;
+			if (typeof detail === "string" && detail.length > 0) {
+				consumeRequestedGitRoot();
+				setActiveRoot(detail);
+			}
+		};
+		window.addEventListener(GIT_ROOT_EVENT, onRoot);
+		return () => window.removeEventListener(GIT_ROOT_EVENT, onRoot);
+	}, []);
 	const [gitmojiOn, setGitmojiOn] = useState<boolean>(() => localStorage.getItem("musepi-gui-gitmoji") !== "0");
 	// Git settings (Git tab) toggles this pref and dispatches
 	// omp-gitmoji-changed (same-window storage events don't fire) — keep
@@ -373,28 +456,58 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	const [committing, setCommitting] = useState(false);
 	const [commitError, setCommitError] = useState<string | null>(null);
 	const [treeOpen, setTreeOpen] = useState<Set<string>>(new Set());
-	const load = useCallback((): void => {
-		if (!rpc) return;
-		setLoading(true);
-		void rpc
-			.request<typeof status>("git.status", { ignored: showIgnored, cwd })
-			.then(res => {
-				setStatus(res ?? null);
-				setLoading(false);
-			})
-			.catch(err => {
-				setStatus({
-					root: "",
-					branch: null,
-					staged: [],
-					unstaged: [],
-					untracked: [],
-					error: err instanceof Error ? err.message : String(err),
+	useEffect(() => {
+		setOpenPath(null);
+		setOpenGroup(null);
+		setFileDiff(null);
+		setTreeOpen(new Set());
+	}, [activeRoot]);
+	const load = useCallback(
+		(force = false): void => {
+			if (!rpc) return;
+			setLoading(true);
+			void readGitStatusCached(rpc, activeRoot, { ignored: showIgnored, force })
+				.then(res => {
+					setStatus(
+						res
+							? {
+									root: res.root ?? "",
+									branch: res.branch ?? null,
+									staged: res.staged ?? [],
+									unstaged: res.unstaged ?? [],
+									untracked: res.untracked ?? [],
+									ignored: res.ignored,
+									error: res.error,
+									fileStats: res.fileStats,
+								}
+							: null,
+					);
+					setLoading(false);
+				})
+				.catch(err => {
+					setStatus({
+						root: "",
+						branch: null,
+						staged: [],
+						unstaged: [],
+						untracked: [],
+						error: err instanceof Error ? err.message : String(err),
+					});
+					setLoading(false);
 				});
-				setLoading(false);
-			});
-	}, [rpc, showIgnored, cwd]);
+		},
+		[rpc, showIgnored, activeRoot],
+	);
 	useEffect(load, [load]);
+	// Daemon git-dir push (HEAD/index/refs) or a local mutation: reload the
+	// active root without waiting for a timer.
+	useEffect(
+		() =>
+			onGitStatusChanged(root => {
+				if (!root || directoriesEqual(root, activeRoot)) void load(true);
+			}),
+		[activeRoot, load],
+	);
 	const openFile = (path: string, group: "staged" | "unstaged" | "untracked" | "ignored"): void => {
 		const request = ++diffRequestRef.current;
 		if (openPath === path && openGroup === group) {
@@ -409,7 +522,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 		setFileDiff(null);
 		setDiffLoading(true);
 		void rpc
-			.request<typeof fileDiff>("git.diff", { path, maxLines: 400, cwd, content: true })
+			.request<typeof fileDiff>("git.diff", { path, maxLines: 400, cwd: activeRoot, content: true })
 			.then(res => {
 				if (diffRequestRef.current !== request) return;
 				setFileDiff(res ?? { staged: "", unstaged: "" });
@@ -421,8 +534,9 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	};
 	const stagePaths = async (paths: string[], stage: boolean): Promise<void> => {
 		if (!rpc) return;
-		await rpc.request(stage ? "git.stage" : "git.unstage", { paths, cwd }).catch(() => {});
-		await load();
+		await rpc.request(stage ? "git.stage" : "git.unstage", { paths, cwd: activeRoot }).catch(() => {});
+		invalidateGitStatus(activeRoot);
+		await load(true);
 	};
 	const runCommit = async (): Promise<void> => {
 		if (!rpc || !commitMsg.trim()) return;
@@ -439,7 +553,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			const res = await rpc.request<{ ok?: boolean; error?: string }>("git.commit", {
 				message: commitMsg.trim(),
 				identity: identity ? { name: identity.name, email: identity.email } : undefined,
-				cwd,
+				cwd: activeRoot,
 			});
 			if (res?.error) {
 				setCommitError(res.error);
@@ -447,7 +561,8 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			}
 			setCommitOpen(false);
 			setCommitMsg("");
-			await load();
+			invalidateGitStatus(activeRoot);
+			await load(true);
 		} catch (err) {
 			setCommitError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -462,9 +577,13 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	const FileRow = ({
 		file,
 		group,
+		depth = 0,
+		stats,
 	}: {
 		file: { path: string; status: string };
 		group: "staged" | "unstaged" | "untracked" | "ignored";
+		depth?: number;
+		stats?: { added: number; removed: number; binary: boolean };
 	}): ReactNode => {
 		const open = openPath === file.path && openGroup === group;
 		const cls =
@@ -480,10 +599,17 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 				<button
 					type="button"
 					className={`gui-changes-row${open ? " gui-changes-row--open" : ""}`}
+					style={depth > 0 ? { paddingLeft: 8 + depth * 14 } : undefined}
 					onClick={() => openFile(file.path, group)}
 				>
 					<span className={`gui-changes-badge ${cls}`}>{statusBadge(file.status)}</span>
 					<span className="min-w-0 flex-1 truncate text-left">{file.path}</span>
+					{stats && !stats.binary && (stats.added > 0 || stats.removed > 0) && (
+						<span className="gui-changes-stats">
+							<span className="gui-diff-add">+{stats.added}</span>
+							<span className="gui-diff-del">−{stats.removed}</span>
+						</span>
+					)}
 					{group !== "ignored" &&
 						(group === "staged" ? (
 							<span
@@ -571,142 +697,229 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			</div>
 		);
 	};
-	/** openchamber changesTree parity: group rows by their first path
-	 *  segment; a collapsed directory hides its children. */
+	/** Changes tree: build the real directory hierarchy (not just the first
+	 *  path segment), collapse per full directory path, and keep file rows
+	 *  indented under their parent. Flat mode bypasses the tree entirely. */
+	const statsFor = (
+		file: { path: string },
+		group: "staged" | "unstaged" | "untracked" | "ignored",
+	): { added: number; removed: number; binary: boolean } | undefined =>
+		group === "staged"
+			? status?.fileStats?.staged[file.path]
+			: group === "unstaged"
+				? status?.fileStats?.working[file.path]
+				: undefined;
 	const groupRows = (
 		files: { path: string; status: string }[],
 		group: "staged" | "unstaged" | "untracked" | "ignored",
 	): ReactNode[] => {
-		if (view === "flat") return files.map(f => FileRow({ file: f, group }));
-		const dirs = new Map<string, { path: string; status: string }[]>();
-		const roots: { path: string; status: string }[] = [];
-		for (const f of files) {
-			const seg = f.path.split("/");
-			if (seg.length > 1) {
-				const list = dirs.get(seg[0]) ?? [];
-				list.push(f);
-				dirs.set(seg[0], list);
-			} else {
-				roots.push(f);
-			}
+		if (view === "flat") return files.map(f => FileRow({ file: f, group, stats: statsFor(f, group) }));
+		interface TreeDir {
+			dirs: Map<string, TreeDir>;
+			files: { path: string; status: string }[];
 		}
-		return [
-			...roots.map(f => FileRow({ file: f, group })),
-			...[...dirs.entries()].map(([dir, entries]) => {
-				const open = treeOpen.has(dir);
-				return (
-					<div key={dir}>
-						<button
-							type="button"
-							className="gui-changes-row gui-changes-row--dir"
-							onClick={() => {
-								const next = new Set(treeOpen);
-								if (open) next.delete(dir);
-								else next.add(dir);
-								setTreeOpen(next);
-							}}
-						>
-							<Icon name="folder" className="h-3.5 w-3.5 text-[var(--color-text-faint)]" />
-							<span className="min-w-0 flex-1 truncate text-left font-medium">{dir}/</span>
-							<span className="text-[11px] text-[var(--color-text-faint)]">{entries.length}</span>
-							<MorphIcon
-								icon={open ? ChevronDownIconData : ChevronRightIconData}
-								size={12}
-								spring="snappy"
-								reducedMotion="user"
-								className="h-3 w-3 flex-shrink-0 text-[var(--color-text-faint)]"
-							/>
-						</button>
-						{open && entries.map(f => FileRow({ file: f, group }))}
-					</div>
+		const root: TreeDir = { dirs: new Map(), files: [] };
+		for (const file of files) {
+			const segments = file.path.split("/").filter(Boolean);
+			let node = root;
+			for (const name of segments.slice(0, -1)) {
+				let child = node.dirs.get(name);
+				if (!child) {
+					child = { dirs: new Map(), files: [] };
+					node.dirs.set(name, child);
+				}
+				node = child;
+			}
+			node.files.push(file);
+		}
+		const countFiles = (node: TreeDir): number =>
+			node.files.length + [...node.dirs.values()].reduce((sum, child) => sum + countFiles(child), 0);
+		const renderNode = (node: TreeDir, prefix: string, depth: number): ReactNode[] => {
+			const rows: ReactNode[] = [];
+			for (const [name, child] of [...node.dirs.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+				const dirPath = prefix.length > 0 ? `${prefix}/${name}` : name;
+				const open = treeOpen.has(dirPath);
+				rows.push(
+					<button
+						key={`dir:${group}:${dirPath}`}
+						type="button"
+						className="gui-changes-row gui-changes-row--dir"
+						style={depth > 0 ? { paddingLeft: 8 + depth * 14 } : undefined}
+						onClick={() => {
+							const next = new Set(treeOpen);
+							if (open) next.delete(dirPath);
+							else next.add(dirPath);
+							setTreeOpen(next);
+						}}
+					>
+						<Icon name="folder" className="h-3.5 w-3.5 text-[var(--color-text-faint)]" />
+						<span className="min-w-0 flex-1 truncate text-left font-medium">{name}/</span>
+						<span className="text-[11px] text-[var(--color-text-faint)]">{countFiles(child)}</span>
+						<MorphIcon
+							icon={open ? ChevronDownIconData : ChevronRightIconData}
+							size={12}
+							spring="snappy"
+							reducedMotion="user"
+							className="h-3 w-3 flex-shrink-0 text-[var(--color-text-faint)]"
+						/>
+					</button>,
 				);
-			}),
-		];
+				if (open) rows.push(...renderNode(child, dirPath, depth + 1));
+			}
+			for (const file of [...node.files].sort((a, b) => a.path.localeCompare(b.path))) {
+				rows.push(FileRow({ file, group, depth, stats: statsFor(file, group) }));
+			}
+			return rows;
+		};
+		return renderNode(root, "", 0);
 	};
 
+	const total = (status?.staged.length ?? 0) + (status?.unstaged.length ?? 0) + (status?.untracked.length ?? 0);
+	const rootBar = (
+		<div className="gui-changes-rootbar">
+			<button
+				type="button"
+				ref={rootMenuAnchor}
+				className="gui-changes-root"
+				aria-haspopup="menu"
+				aria-expanded={rootMenu}
+				title={activeRoot}
+				onClick={() => setRootMenu(open => !open)}
+			>
+				<Icon name="folder" className="h-3.5 w-3.5 flex-none" />
+				<span className="min-w-0 max-w-[140px] truncate">{pathBaseName(activeRoot)}</span>
+				<MorphIcon
+					icon={ChevronDownIconData}
+					size={12}
+					spring="snappy"
+					reducedMotion="user"
+					className="h-3 w-3 flex-none text-[var(--color-text-faint)]"
+				/>
+			</button>
+			{status && !status.error && (
+				<span className="gui-changes-count">{t("general.changesFileCount", { count: total })}</span>
+			)}
+			<div className="ml-auto flex items-center gap-0.5">
+				<button
+					type="button"
+					className={`gui-pane-tool${view === "flat" ? " gui-pane-tool--active" : ""}`}
+					title={t("general.flatList")}
+					aria-label={t("general.flatList")}
+					onClick={() => {
+						setView("flat");
+						writeChangesView("flat");
+					}}
+				>
+					<Icon name="align-justify" className="h-3.5 w-3.5" />
+				</button>
+				<button
+					type="button"
+					className={`gui-pane-tool${view === "tree" ? " gui-pane-tool--active" : ""}`}
+					title={t("general.treeView")}
+					aria-label={t("general.treeView")}
+					onClick={() => {
+						setView("tree");
+						writeChangesView("tree");
+					}}
+				>
+					<Icon name="node-tree" className="h-3.5 w-3.5" />
+				</button>
+				<button
+					type="button"
+					className={`gui-pane-tool${showIgnored ? " gui-pane-tool--active" : ""}`}
+					title={t("general.showGitignored")}
+					aria-label={t("general.showGitignored")}
+					onClick={() => {
+						const next = !showIgnored;
+						setShowIgnored(next);
+						writeShowIgnored(next);
+					}}
+				>
+					<MorphIcon
+						icon={showIgnored ? EyeIconData : EyeOffIconData}
+						size={14}
+						spring="snappy"
+						reducedMotion="user"
+						className="h-3.5 w-3.5"
+					/>
+				</button>
+				<button
+					type="button"
+					className="gui-pane-tool"
+					title={t("settings.refresh")}
+					aria-label={t("settings.refresh")}
+					onClick={() => load(true)}
+				>
+					<Icon name="refresh" className="h-3.5 w-3.5" />
+				</button>
+				<button
+					type="button"
+					className={`gui-btn !h-6 !px-2 !py-0 !text-[11.5px]${(status?.staged.length ?? 0) === 0 ? " opacity-50" : ""}`}
+					disabled={(status?.staged.length ?? 0) === 0}
+					onClick={() => {
+						setCommitOpen(true);
+						setCommitError(null);
+					}}
+				>
+					<Icon name="git-commit" className="h-3 w-3" />
+					{t("general.commit")}
+				</button>
+			</div>
+			<MenuPopup
+				open={rootMenu}
+				className="gui-changes-rootmenu"
+				anchor={rootMenuAnchor.current}
+				onOpenChange={setRootMenu}
+			>
+				{roots.map(root => (
+					<button
+						key={root.path}
+						type="button"
+						className="gui-view-opt"
+						onClick={() => {
+							setRootMenu(false);
+							setActiveRoot(root.path);
+						}}
+					>
+						<Icon name={root.primary ? "folder" : "folder-add"} className="h-3.5 w-3.5" />
+						<span className="min-w-0 flex-1 truncate text-left">{pathBaseName(root.path)}</span>
+						{root.primary && (
+							<span className="text-[10px] text-[var(--color-text-faint)]">
+								{t("settings.primaryDirectory")}
+							</span>
+						)}
+						{root.path === activeRoot && (
+							<Icon name="check" className="h-3.5 w-3.5 flex-none text-[var(--color-accent)]" />
+						)}
+					</button>
+				))}
+			</MenuPopup>
+		</div>
+	);
+
 	if (loading) {
-		return <div className="px-2 py-5 text-[13px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>;
-	}
-	if (status?.error || !status?.root) {
 		return (
-			<div className="px-2 py-5 text-[13px] text-[var(--color-text-faint)]">
-				{status?.error ?? t("tools.notGitRepository")}
+			<div className="flex h-full min-h-0 flex-col">
+				{rootBar}
+				<div className="px-2 py-5 text-[13px] text-[var(--color-text-faint)]">{t("settings.loading2")}</div>
 			</div>
 		);
 	}
-	const total = status.staged.length + status.unstaged.length + status.untracked.length;
-	return (
-		<div className="flex h-full min-h-0 flex-col">
-			<div className="flex items-center gap-1 px-1 pb-1 pt-1">
-				<span className="gui-group-label px-2">{t("settings.workspaceChanges")}</span>
-				<div className="ml-auto flex items-center gap-0.5">
-					{/* openchamber GitSettings parity: flat/tree changes view */}
-					<button
-						type="button"
-						className={`gui-pane-tool${view === "flat" ? " gui-pane-tool--active" : ""}`}
-						title={t("general.flatList")}
-						aria-label={t("general.flatList")}
-						onClick={() => {
-							setView("flat");
-							localStorage.setItem("musepi-gui-git-view", "flat");
-						}}
-					>
-						<Icon name="align-justify" className="h-3.5 w-3.5" />
-					</button>
-					<button
-						type="button"
-						className={`gui-pane-tool${view === "tree" ? " gui-pane-tool--active" : ""}`}
-						title={t("general.treeView")}
-						aria-label={t("general.treeView")}
-						onClick={() => {
-							setView("tree");
-							localStorage.setItem("musepi-gui-git-view", "tree");
-						}}
-					>
-						<Icon name="node-tree" className="h-3.5 w-3.5" />
-					</button>
-					<button
-						type="button"
-						className={`gui-pane-tool${showIgnored ? " gui-pane-tool--active" : ""}`}
-						title={t("general.showGitignored")}
-						aria-label={t("general.showGitignored")}
-						onClick={() => {
-							const next = !showIgnored;
-							setShowIgnored(next);
-							writeShowIgnored(next);
-						}}
-					>
-						<MorphIcon
-							icon={showIgnored ? EyeIconData : EyeOffIconData}
-							size={14}
-							spring="snappy"
-							reducedMotion="user"
-							className="h-3.5 w-3.5"
-						/>
-					</button>
-					<button
-						type="button"
-						className="gui-pane-tool"
-						title={t("settings.refresh")}
-						aria-label={t("settings.refresh")}
-						onClick={load}
-					>
-						<Icon name="refresh" className="h-3.5 w-3.5" />
-					</button>
-					<button
-						type="button"
-						className={`gui-btn !h-6 !px-2 !py-0 !text-[11.5px]${status.staged.length === 0 ? " opacity-50" : ""}`}
-						disabled={status.staged.length === 0}
-						onClick={() => {
-							setCommitOpen(true);
-							setCommitError(null);
-						}}
-					>
-						<Icon name="git-commit" className="h-3 w-3" />
-						{t("general.commit")}
-					</button>
+	if (status?.error || !status?.root) {
+		return (
+			<div className="flex h-full min-h-0 flex-col">
+				{rootBar}
+				<div className="px-2 py-5 text-[13px] text-[var(--color-text-faint)]">
+					{status?.error === "not a git repository"
+						? t("general.notGitDirectory")
+						: (status?.error ?? t("tools.notGitRepository"))}
 				</div>
 			</div>
+		);
+	}
+	return (
+		<div className="flex h-full min-h-0 flex-col">
+			{rootBar}
 			{commitOpen && (
 				<div className="gui-commit-box mb-1 rounded-lg border border-[var(--border)] bg-[var(--color-surface-raised)] p-2">
 					<textarea
@@ -1061,7 +1274,16 @@ const GIT_PANE_TABS: Array<{ id: GitPaneTab; label: string }> = [
 	{ id: "commits", label: "commit history" },
 	{ id: "stash", label: "stashes" },
 ];
-export function GitPanel({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
+export function GitPanel({
+	rpc,
+	cwd,
+	sessionId,
+}: {
+	rpc: RpcClient;
+	cwd: string;
+	/** Live session id: the changes pane offers every working directory. */
+	sessionId?: string | null;
+}): ReactNode {
 	const [tab, setTab] = useState<GitPaneTab>("changes");
 	// 横向边缘羽化:文件行展开的内嵌 diff 块横向滚动时左右羽化(条件渲染
 	// 的容器由深扫描的 MutationObserver 增量补挂)。
@@ -1090,7 +1312,7 @@ export function GitPanel({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 				) : tab === "stash" ? (
 					<StashPane rpc={rpc} cwd={cwd} />
 				) : (
-					<DiffPane rpc={rpc} cwd={cwd} />
+					<DiffPane rpc={rpc} cwd={cwd} sessionId={sessionId} />
 				)}
 			</div>
 		</div>

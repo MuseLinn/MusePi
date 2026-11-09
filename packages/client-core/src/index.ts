@@ -116,6 +116,22 @@ export {
 	unregisterTranslationNamespace,
 } from "./i18n/index.js";
 export { useLocale } from "./i18n/use-locale.js";
+export {
+	ACTION_TOAST_TTL_MS,
+	type ActionToast,
+	type ActionToastInput,
+	type ActionToastKind,
+	dismissActionToast,
+	dismissActionToastSource,
+	getToasts,
+	MAX_ACTION_TOASTS,
+	pauseActionToast,
+	pushActionToast,
+	resumeActionToast,
+	subscribeActionToasts,
+	ttlFor,
+	WARNING_TOAST_TTL_MS,
+} from "./lib/action-toast";
 export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
 export { loadMarketplaceDetailPreference, saveMarketplaceDetailPreference } from "./lib/marketplace-preferences";

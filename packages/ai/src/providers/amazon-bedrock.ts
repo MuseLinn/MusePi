@@ -7,6 +7,7 @@
  * Bun's native `HTTPS_PROXY` support.
  */
 
+import { buildModel } from "@musepi/pi-catalog/build";
 import type { Effort } from "@musepi/pi-catalog/effort";
 import { mapEffortToAnthropicAdaptiveEffort, requireSupportedEffort } from "@musepi/pi-catalog/model-thinking";
 import { calculateCost } from "@musepi/pi-catalog/models";
@@ -42,6 +43,8 @@ import { AssistantMessageEventStream } from "../utils/event-stream";
 import type { RawHttpRequestDump } from "../utils/http-inspector";
 import { armPreResponseTimeout, getStreamFirstEventTimeoutMs } from "../utils/idle-iterator";
 import { toolWireSchema } from "../utils/schema/wire";
+import { convertAnthropicMessages } from "./anthropic";
+import { COMPACTION_BETA } from "./anthropic-wire";
 import { invalidateAwsCredentialCache, resolveAwsCredentials } from "./aws-credentials";
 import { decodeEventStream } from "./aws-eventstream";
 import { signRequest } from "./aws-sigv4";
@@ -89,6 +92,8 @@ export interface BedrockOptions extends StreamOptions {
 	 * we omit it for them.
 	 */
 	thinkingDisplay?: BedrockThinkingDisplay;
+	/** Ask the Bedrock Anthropic side request for one signed compaction summary. */
+	anthropicCompaction?: { instructions: string };
 }
 
 function resolveBearerToken(options: BedrockOptions): string | undefined {
@@ -294,11 +299,219 @@ interface MetadataEvent {
 	};
 }
 
+/**
+ * Anthropic on-demand compaction over Bedrock's `InvokeModelWithResponseStream`.
+ * Ordinary turns stay on Converse; this side request carries the Anthropic
+ * Messages payload (with `anthropic_version` and the compaction beta) and
+ * decodes the AWS eventstream's base64 Anthropic events.
+ */
+function streamBedrockAnthropicCompaction(
+	model: Model<"bedrock-converse-stream">,
+	context: Context,
+	options: BedrockOptions,
+): AssistantMessageEventStream {
+	const stream = new AssistantMessageEventStream();
+	const output: AssistantMessage = {
+		role: "assistant",
+		content: [],
+		api: "bedrock-converse-stream" as Api,
+		provider: model.provider,
+		model: model.id,
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "stop",
+		timestamp: Date.now(),
+	};
+	const startTime = performance.now();
+	let rawRequestDump: RawHttpRequestDump | undefined;
+	const region = resolveBedrockRegion(model.id, options);
+
+	(async () => {
+		try {
+			const encoderModel = buildModel({
+				id: model.id,
+				name: model.name,
+				api: "anthropic-messages",
+				provider: model.provider,
+				baseUrl: "https://bedrock-runtime.amazonaws.com",
+				reasoning: model.reasoning,
+				input: model.input,
+				cost: model.cost,
+				contextWindow: model.contextWindow,
+				maxTokens: model.maxTokens,
+			}) as Model<"anthropic-messages">;
+			const system = context.systemPrompt?.join("\n\n");
+			const payload = {
+				anthropic_version: "bedrock-2023-05-31",
+				anthropic_beta: [COMPACTION_BETA],
+				messages: convertAnthropicMessages(context.messages, encoderModel, false),
+				...(system ? { system } : {}),
+				max_tokens: options.maxTokens,
+				compaction: { type: "summarize", instructions: options.anthropicCompaction?.instructions },
+				stream: true,
+			};
+			const host = `bedrock-runtime.${region}.amazonaws.com`;
+			const urlPath = `/model/${encodeURIComponent(model.id)}/invoke-with-response-stream`;
+			const url = `https://${host}${urlPath}`;
+			rawRequestDump = {
+				provider: model.provider,
+				api: output.api,
+				model: model.id,
+				method: "POST",
+				url,
+				body: payload,
+			};
+			const body = new TextEncoder().encode(JSON.stringify(payload));
+			const baseHeaders: Record<string, string> = {
+				"content-type": "application/json",
+				accept: "application/vnd.amazon.eventstream",
+			};
+			const bearerToken = resolveBearerToken(options);
+			let requestHeaders: Record<string, string>;
+			if (bearerToken) {
+				requestHeaders = { ...baseHeaders, Authorization: `Bearer ${bearerToken}` };
+			} else {
+				const credentials = $flag("AWS_BEDROCK_SKIP_AUTH")
+					? { accessKeyId: "dummy-access-key", secretAccessKey: "dummy-secret-key" }
+					: await resolveAwsCredentials({
+							profile: options.profile,
+							region,
+							signal: options.signal,
+							fetch: options.fetch,
+						});
+				const signed = await signRequest({
+					method: "POST",
+					host,
+					path: urlPath,
+					body,
+					region,
+					service: "bedrock",
+					credentials,
+					headers: baseHeaders,
+				});
+				requestHeaders = { ...baseHeaders, ...signed };
+			}
+			const watchdog = armPreResponseTimeout(
+				options.signal,
+				options.streamFirstEventTimeoutMs ?? getStreamFirstEventTimeoutMs(),
+			);
+			let response: Response;
+			try {
+				response = await fetchWithRetry(url, {
+					method: "POST",
+					headers: requestHeaders,
+					body,
+					signal: watchdog.signal,
+					fetch: options.fetch,
+					timeout: false,
+				});
+			} finally {
+				watchdog.clear();
+			}
+			if (!response.ok) {
+				const errBody = await response.text().catch(() => "");
+				throw new AIError.BedrockApiError(
+					`Bedrock HTTP ${response.status}: ${errBody.slice(0, 1000)}`,
+					response.status,
+					{
+						headers: response.headers,
+					},
+				);
+			}
+			if (!response.body) throw new AIError.BedrockApiError("Bedrock response has no body", response.status);
+
+			stream.push({ type: "start", partial: output });
+			for await (const frame of decodeEventStream(response.body as ReadableStream<Uint8Array>)) {
+				const messageType = frame.headers[":message-type"];
+				if (messageType === "exception" || messageType === "error") {
+					const code = frame.headers[":exception-type"] ?? frame.headers[":error-code"] ?? "Exception";
+					const decoded = safeParsePayload(frame.payload);
+					const message =
+						decoded !== null && typeof decoded === "object" && "message" in decoded
+							? String((decoded as { message: unknown }).message)
+							: new TextDecoder().decode(frame.payload);
+					throw new AIError.BedrockApiError(`${code}: ${message}`, 400, { code });
+				}
+				if (messageType !== "event" || frame.headers[":event-type"] !== "chunk") continue;
+				const chunk = safeParsePayload(frame.payload);
+				if (chunk === null || typeof chunk !== "object" || !("bytes" in chunk)) continue;
+				const event = JSON.parse(
+					Buffer.from(String((chunk as { bytes: unknown }).bytes), "base64").toString("utf8"),
+				) as Record<string, unknown>;
+				if (event.type === "message_start" && event.message && typeof event.message === "object") {
+					const usage = (event.message as { usage?: Record<string, unknown> }).usage;
+					if (usage) {
+						output.usage.input = Number(usage.input_tokens ?? 0);
+						output.usage.cacheRead = Number(usage.cache_read_input_tokens ?? 0);
+						output.usage.cacheWrite = Number(usage.cache_creation_input_tokens ?? 0);
+					}
+					continue;
+				}
+				if (event.type === "content_block_start") {
+					const block = event.content_block as Record<string, unknown> | undefined;
+					if (block?.type === "compaction" && typeof block.content === "string" && block.content.length > 0) {
+						output.providerPayload = {
+							type: "anthropicCompaction",
+							provider: model.provider,
+							content: block.content,
+							...(typeof block.signature === "string" ? { signature: block.signature } : {}),
+							...(typeof block.encrypted_content === "string"
+								? { encryptedContent: block.encrypted_content }
+								: {}),
+							...(Array.isArray(block.tool_changes)
+								? {
+										toolChanges: block.tool_changes.filter(
+											item => item !== null && typeof item === "object",
+										) as Record<string, unknown>[],
+									}
+								: {}),
+						};
+						output.stopDetails = { type: "compaction" };
+					}
+					continue;
+				}
+				if (event.type === "message_delta") {
+					const usage = event.usage as Record<string, unknown> | undefined;
+					if (usage) output.usage.output = Number(usage.output_tokens ?? 0);
+					output.usage.totalTokens =
+						output.usage.input + output.usage.output + output.usage.cacheRead + output.usage.cacheWrite;
+					continue;
+				}
+				if (event.type === "message_stop") break;
+			}
+			output.stopReason = "stop";
+			output.usage.cost = calculateCost(encoderModel, output.usage);
+			output.duration = performance.now() - startTime;
+			stream.push({ type: "done", reason: output.stopReason, message: output });
+			stream.end();
+		} catch (error) {
+			const result = await AIError.finalize(error, { api: model.api, signal: options.signal, rawRequestDump });
+			output.stopReason = result.stopReason;
+			output.errorStatus = result.status;
+			output.errorId = result.id;
+			output.errorMessage = result.message;
+			output.duration = performance.now() - startTime;
+			stream.push({ type: "error", reason: output.stopReason, error: output });
+			stream.end();
+		}
+	})();
+	return stream;
+}
+
 export const streamBedrock: StreamFunction<"bedrock-converse-stream"> = (
 	model: Model<"bedrock-converse-stream">,
 	context: Context,
 	options: BedrockOptions,
 ): AssistantMessageEventStream => {
+	if (options.anthropicCompaction && model.compat.supportsServerCompaction === true) {
+		return streamBedrockAnthropicCompaction(model, context, options);
+	}
 	const stream = new AssistantMessageEventStream();
 
 	(async () => {

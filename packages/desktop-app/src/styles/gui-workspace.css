@@ -358,6 +358,43 @@
 	border-radius: var(--radius-md);
 }
 
+/* ── Workspace-changes ROOT BAR (multi-root selector) ────────────────── */
+.gui-changes-rootbar {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 5px 6px;
+}
+
+.gui-changes-root {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	max-width: 180px;
+	padding: 3px 6px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.gui-changes-root:hover {
+	border-color: var(--border);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+.gui-changes-count {
+	font-size: 11px;
+	color: var(--color-text-faint);
+	white-space: nowrap;
+}
+
+.gui-changes-rootmenu {
+	min-width: 220px;
+}
+
 /* ── Workspace-changes TREE (openchamber ChangesPanel parity) ────────── */
 .gui-changes-row {
 	display: flex;
@@ -381,6 +418,15 @@
 
 .gui-changes-row--open {
 	background: color-mix(in oklab, var(--color-text) 9%, transparent);
+}
+
+.gui-changes-stats {
+	display: flex;
+	flex: none;
+	gap: 4px;
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.85;
 }
 
 .gui-changes-badge {
@@ -754,6 +800,23 @@
 	left: 30px;
 }
 
+/* Transparent bridge across the 6px gap to the tick column: without it the
+ * pointer leaves the rail while travelling into the panel, and the hide timer
+ * can close the list under the cursor. Pointer events only — no paint. */
+.gui-turn-panel::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 8px;
+}
+.gui-turn-rail[data-side="right"] .gui-turn-panel::before {
+	right: 100%;
+}
+.gui-turn-rail[data-side="left"] .gui-turn-panel::before {
+	left: 100%;
+}
+
 @keyframes gui-turn-panel-in {
 	from {
 		opacity: 0;
@@ -973,6 +1036,18 @@
 }
 .gui-settings-group-h:first-of-type {
 	margin-top: 0;
+}
+
+/* Global default working directories: a list editor, not a comma input. */
+.gui-settings-directories-desc {
+	margin: 0 0 4px;
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+.gui-settings-directories {
+	max-width: 640px;
+	padding: 2px 0 10px;
 }
 
 /* ── Skill manager (settings 技能 tab + sidebar entry) ─────────────────────
@@ -3563,12 +3638,15 @@
 	align-items: center;
 	gap: 2px;
 	flex: none;
-	border: 1px solid var(--border);
+	/* Same L1/L3 glass tokens as the info toggle and the progressive-blur
+	 * band: the switch is a lifted state on the card surface, not a dark
+	 * inset panel in `--color-bg`'s separate palette. */
+	border: 1px solid var(--glass-hairline);
 	border-radius: var(--radius-lg);
 	padding: 2px;
-	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
+	background: var(--glass-hover);
+	box-shadow: inset 0 1px 0 var(--glass-rim-hi);
 	backdrop-filter: blur(8px);
-	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
 }
 .gui-surface-mode-btn {
 	display: inline-flex;
@@ -4042,6 +4120,17 @@
 	font-weight: 600;
 	color: var(--color-text-muted);
 	padding: 4px 2px 6px;
+}
+/* The session-plugin group carries the preset filter on the title line, the
+ * same placement dsh uses; the select keeps the compact control height. */
+.gui-ext-group-title--row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+.gui-ext-preset-select {
+	flex-shrink: 0;
 }
 .gui-btn--sm {
 	padding: 3px 10px;
@@ -4764,41 +4853,12 @@
 	padding: 14px 20px 8px;
 }
 
-.gui-capability-page .gui-workspace-header-tabs {
-	padding-left: 0;
-}
+/* 2026-11-08: 技能 / 插件 / 插件市场 三个目的地入口已搬到 rail 的二级左栏
+ * (`sidebar.panel.capability`，复用 gui-side-panel.css)。页头不再渲染 tab 槽，
+ * 这里的 .gui-capability-tabs / .gui-capability-tab* 规则随之移除，避免留下一套
+ * 与全局二级面板规范冲突的第二种切换语言。 */
 
-.gui-capability-tabs {
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	padding: 0;
-}
-
-.gui-capability-tab {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	padding: 6px 12px;
-	border-radius: var(--radius-md) var(--radius-md) 0 0;
-	font-size: 12.5px;
-	color: var(--color-text-muted);
-	border-bottom: 2px solid transparent;
-	transition:
-		color 120ms var(--spring),
-		border-color 120ms var(--spring);
-}
-
-.gui-capability-tab:hover {
-	color: var(--color-text);
-}
-
-.gui-capability-tab--on {
-	color: var(--color-accent);
-	border-bottom-color: var(--color-accent);
-}
-
-/* 技能子分段条在页头（滚动体外）：左右与 tab 条对齐，底部分隔。 */
+/* 技能子分段条在滚动体外：左右与内容列对齐，底部分隔。 */
 .gui-capability-subtabs {
 	display: flex;
 	align-items: center;
@@ -4833,6 +4893,9 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	/* A full-bleed sticky row uses negative side margins; keep the padding box
+	 * as the clip so the bleed never turns into a horizontal scrollbar. */
+	overflow-x: hidden;
 	padding: 14px 20px 20px;
 }
 
@@ -4884,6 +4947,224 @@
 	border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
 	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
 	color: var(--color-accent);
+}
+
+/* ── Capability control language (2026-11-09) ──────────────────────────
+ * Skills (discover + installed), Plugins and Marketplace had three search
+ * fields and three action styles. One recipe now: 34px tall (the GuiSelect
+ * height), radius-lg, recessed glass fill + hairline + inset rim, accent
+ * focus. Search / select / action share it. The marketplace grid is a
+ * shared client-core component, so only this page re-skins it. */
+.gui-capability-page :is(.gui-skill-market-bar, .gui-ext-plugins-toolbar, .mp-grid-toolbar) {
+	position: sticky;
+	top: -14px;
+	z-index: 6;
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 8px;
+	flex-wrap: wrap;
+	/* The body has 20px side padding. Negative side margins + matching inner
+	 * padding let the sticky surface span the full card width; without them a
+	 * darker strip covered only the content column and left two uncovered
+	 * gutters. The fill is the page card's own glass (`--glass-card-bg`), not
+	 * `--color-surface`, so it reads as the same material rather than a mask. */
+	margin-inline: -20px;
+	padding: 12px 20px 10px;
+	/* Opaque card fill, not a translucent `--color-surface` wash: the band is
+	 * an internal part of the page card, so it must sample the same colour as
+	 * the surface it covers. */
+	background: var(--gui-card-surface);
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	border-bottom: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+
+/* The marketplace grid owned its own scroll; the page body is the single
+ * scroll surface so its toolbar can stick like the other two panes. */
+.gui-capability-page .mp-grid-shell {
+	overflow: visible;
+	padding: 0;
+	gap: 14px;
+}
+
+.gui-capability-page :is(.gui-skill-market-search, .gui-ext-plugins-search, .mp-search-field) {
+	flex: 1 1 220px;
+	min-width: 160px;
+	height: 34px;
+	padding: 0 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	box-shadow: inset 0 1px 0 var(--glass-rim-hi);
+	color: var(--color-text-faint);
+	transition:
+		border-color 120ms ease,
+		background 120ms ease,
+		box-shadow 120ms ease;
+}
+
+.gui-capability-page :is(.gui-skill-market-search, .gui-ext-plugins-search, .mp-search-field):focus-within {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	box-shadow:
+		inset 0 1px 0 var(--glass-rim-hi),
+		0 0 0 3px var(--ring);
+}
+
+.gui-capability-page :is(.gui-skill-market-search, .gui-ext-plugins-search, .mp-search-field) input {
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-capability-page :is(.gui-skill-market-search, .gui-ext-plugins-search, .mp-search-field) input::placeholder {
+	color: var(--color-text-faint);
+}
+
+.gui-capability-page :is(.gui-skill-market-search, .gui-ext-plugins-search, .mp-search-field) > svg {
+	flex: none;
+	opacity: 0.55;
+}
+
+/* The marketplace source-URL field is a standalone input; match the same
+ * surface without the wrapper. */
+.gui-capability-page .mp-source-input {
+	height: 34px;
+	padding: 0 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	box-shadow: inset 0 1px 0 var(--glass-rim-hi);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-capability-page .mp-source-input:focus-visible {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	box-shadow:
+		inset 0 1px 0 var(--glass-rim-hi),
+		0 0 0 3px var(--ring);
+}
+
+/* Same height/fill as the search field; the stock GuiSelect is 34px tall but
+ * carries an opaque raised fill. */
+.gui-capability-page .gui-select-trigger {
+	height: 34px;
+	min-width: 132px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	box-shadow: inset 0 1px 0 var(--glass-rim-hi);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-capability-page .gui-select-trigger:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+/* The skills "manage" toggle is part of the same row; keep its pressed state
+ * accent-tinted while the rest state matches the controls. */
+.gui-capability-page .gui-cap-manage {
+	height: 34px;
+	border-radius: var(--radius-lg);
+	border-color: var(--border);
+	background: transparent;
+	box-shadow: inset 0 1px 0 var(--glass-rim-hi);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-capability-page .gui-cap-manage--on {
+	border-color: color-mix(in oklab, var(--color-accent) 38%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+}
+
+/* Marketplace segments join the same segmented-control language as the
+ * skills sub-tabs: recessed glass track, accent-tinted active seat. */
+.gui-capability-page .mp-segments {
+	padding: 2px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	box-shadow: inset 0 1px 0 var(--glass-rim-hi);
+}
+
+.gui-capability-page .mp-segment {
+	font-size: var(--ui-font-size-sm);
+	border-radius: calc(var(--radius-lg) - 2px);
+}
+
+.gui-capability-page .mp-segment--active {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	box-shadow: inset 0 1px 0 var(--glass-rim-hi);
+}
+
+/* Actions: ghost by default, one accent-tinted primary per pane. Only the
+ * toolbar/source-form buttons get the 34px row height; card actions keep the
+ * compact `mp-btn` density. */
+.gui-capability-page :is(.gui-skill-market-add, .gui-cap-action),
+.gui-capability-page :is(.mp-grid-toolbar, .mp-source-add) .mp-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	height: 34px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: transparent;
+	box-shadow: inset 0 1px 0 var(--glass-rim-hi);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	cursor: pointer;
+	transition:
+		background 120ms ease,
+		color 120ms ease,
+		border-color 120ms ease;
+}
+
+.gui-capability-page :is(.gui-skill-market-add, .gui-cap-action):hover:not(:disabled),
+.gui-capability-page :is(.mp-grid-toolbar, .mp-source-add) .mp-btn:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+
+.gui-capability-page :is(.gui-skill-market-add, .gui-cap-action):disabled,
+.gui-capability-page :is(.mp-grid-toolbar, .mp-source-add) .mp-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.gui-capability-page :is(.gui-skill-market-add, .gui-cap-action--primary),
+.gui-capability-page :is(.mp-grid-toolbar, .mp-source-add) .mp-btn--accent {
+	border-color: color-mix(in oklab, var(--color-accent) 38%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-capability-page :is(.gui-skill-market-add, .gui-cap-action--primary):hover:not(:disabled),
+.gui-capability-page :is(.mp-grid-toolbar, .mp-source-add) .mp-btn--accent:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--color-accent) 20%, transparent);
+	color: var(--color-accent);
+}
+
+/* Filters follow the stretched search; the plugin count and actions stay in
+ * one right-hand group instead of being spread by space-between. */
+.gui-capability-page .gui-skill-market-add {
+	margin-left: 0;
+}
+
+.gui-capability-page .gui-ext-plugins-toolbar-count {
+	margin-left: auto;
 }
 
 /* ── 技能市场 · 发现 (设计稿 frame 01) ──

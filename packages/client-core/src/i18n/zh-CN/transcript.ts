@@ -25,6 +25,10 @@ export const transcript = {
 	"transcript.asyncJobShowLess": "收起输出",
 	// ── Transcript ────────────────────────────────────────────────────────────
 	"transcript.redacted": " · 已隐去",
+	"transcript.turnUsage": "本轮用量",
+	"transcript.usageProviderModel": "提供方 / 模型",
+	"transcript.usageUncachedInput": "未缓存输入",
+	"transcript.usageTotalTokens": "{tokens} tok",
 	"transcript.text": "（提供方已隐去）",
 	"transcript.enhancing": "增强中…",
 	"transcript.thinkingLevel": "思考强度",
@@ -129,6 +133,7 @@ export const transcript = {
 	"transcript.modelWithModel": "模型 → {model}",
 	"transcript.thinkingWithModel": "思考 → {model}",
 	"transcript.noActivityYet": "暂无活动",
+	"transcript.loadingSession": "正在载入会话…",
 	"transcript.showEarlierMessages": "显示更早消息",
 	"transcript.showPreCompactionHistory": "显示压缩前历史",
 	"transcript.showPreCompactionHistoryWithCount": "显示压缩前历史（{count} 条）",

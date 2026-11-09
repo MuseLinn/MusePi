@@ -80,6 +80,45 @@ const packageRoot = path.join(import.meta.dir, "..");
  */
 const DISCOVERY_ONLY_PROVIDERS = new Set(["ollama", "vllm", "lm-studio", "litellm"]);
 const RETIRED_PROVIDERS = new Set(["wafer-pass", "wandb"]);
+/**
+ * Account-scoped providers: a previous snapshot can contain another account's
+ * entitlements, so an unavailable live fetch must not resurrect those rows.
+ * Mirrors upstream `CREDENTIAL_SCOPED_PROVIDERS`.
+ */
+const CREDENTIAL_SCOPED_PROVIDERS = new Set(["devin", "sambanova"]);
+/**
+ * Providers whose authored seed is the complete documented fallback catalog:
+ * their previous-snapshot rows are never resurrected, so an id the host
+ * retired cannot return as a snapshot zombie. Mirrors upstream
+ * `STATIC_SEED_COMPLETE_PROVIDERS`.
+ */
+const STATIC_SEED_COMPLETE_PROVIDERS = new Set(["yolo-auto", "coralbricks"]);
+
+/** Bundle policy for an authored seed, mirroring upstream `rules/providers/<id>.kdl`. */
+type SeedBundlePolicy = "always" | "fallback" | "empty" | "never";
+const SEED_BUNDLE_POLICIES: Readonly<Record<string, SeedBundlePolicy>> = {
+	anthropic: "always",
+	openai: "always",
+	meta: "always",
+	stepfun: "always",
+	stepplan: "always",
+	"xai-oauth": "always",
+	agnes: "fallback",
+	"agnes-global": "fallback",
+	aiand: "fallback",
+	"alibaba-token-plan": "fallback",
+	"gmi-cloud": "fallback",
+	sakana: "fallback",
+};
+
+/** Whether one provider's authored seed ships, given its discovery outcome. */
+function bundlesSeed(provider: string, discoveryAuthoritative: boolean): boolean {
+	const policy = SEED_BUNDLE_POLICIES[provider] ?? "fallback";
+	if (policy === "always") return true;
+	if (policy === "fallback") return !discoveryAuthoritative;
+	if (policy === "never") return false;
+	return false;
+}
 
 async function resolveProviderApiKey(providerId: string, catalog: CatalogDiscoveryConfig): Promise<string | undefined> {
 	for (const envVar of catalog.envVars ?? []) {
@@ -598,19 +637,19 @@ async function generateModels() {
 	// Seed Sakana's documented Fugu models so the provider is usable when
 	// catalog generation has no live API key. If live `/v1/models` succeeds,
 	// Sakana is authoritative and stale seed IDs must stay out.
-	if (!authoritativeCatalogProviders.has("sakana")) {
+	if (bundlesSeed("sakana", authoritativeCatalogProviders.has("sakana"))) {
 		allModels.push(...SAKANA_FUGU_STATIC_MODELS);
 	}
 	// Seed ai&'s documented catalog so the provider is usable when generation
 	// has no AIAND_API_KEY. A live org-scoped `/v1/models` snapshot is
 	// authoritative and replaces the seed.
-	if (!authoritativeCatalogProviders.has("aiand")) {
+	if (bundlesSeed("aiand", authoritativeCatalogProviders.has("aiand"))) {
 		allModels.push(...AIAND_STATIC_MODELS);
 	}
 	// Seed the GMI Cloud default model so a fresh install (and a regen without a
 	// `GMI_API_KEY`) still resolves the descriptor's `defaultModel` synchronously
 	// at boot. If live `/v1/models` discovery succeeds, it is authoritative.
-	if (!authoritativeCatalogProviders.has("gmi-cloud")) {
+	if (bundlesSeed("gmi-cloud", authoritativeCatalogProviders.has("gmi-cloud"))) {
 		allModels.push(...GMI_CLOUD_STATIC_MODELS);
 	}
 	// Seed StepFun Step Plan's documented chat catalog (CN + global) so both
@@ -618,19 +657,19 @@ async function generateModels() {
 	// without live keys. The stepfun `/v1/models` response returns bare IDs, so
 	// the descriptors deliberately configure no catalogDiscovery and these
 	// annotated entries are the bundled spec source.
-	if (!authoritativeCatalogProviders.has("stepplan")) {
+	if (bundlesSeed("stepplan", authoritativeCatalogProviders.has("stepplan"))) {
 		allModels.push(...STEPFUN_STATIC_MODELS);
 	}
-	if (!authoritativeCatalogProviders.has("stepplan-global")) {
+	if (bundlesSeed("stepplan-global", authoritativeCatalogProviders.has("stepplan-global"))) {
 		allModels.push(...STEPFUN_GLOBAL_STATIC_MODELS);
 	}
 	// Seed Agnes AI's documented chat catalog (CN + global) for the same reason:
 	// the agnes `/v1/models` response returns bare IDs, so the annotated seeds
 	// are the bundled spec source and no catalogDiscovery is configured.
-	if (!authoritativeCatalogProviders.has("agnes")) {
+	if (bundlesSeed("agnes", authoritativeCatalogProviders.has("agnes"))) {
 		allModels.push(...AGNES_STATIC_MODELS);
 	}
-	if (!authoritativeCatalogProviders.has("agnes-global")) {
+	if (bundlesSeed("agnes-global", authoritativeCatalogProviders.has("agnes-global"))) {
 		allModels.push(...AGNES_GLOBAL_STATIC_MODELS);
 	}
 	// Seed the GitLab Duo Agent fallback model so a fresh install (no credentialed
@@ -698,6 +737,8 @@ async function generateModels() {
 				!fetchedKeys.has(`${model.provider}/${model.id}`) &&
 				!DISCOVERY_ONLY_PROVIDERS.has(model.provider) &&
 				!RETIRED_PROVIDERS.has(model.provider) &&
+				!CREDENTIAL_SCOPED_PROVIDERS.has(model.provider) &&
+				!STATIC_SEED_COMPLETE_PROVIDERS.has(model.provider) &&
 				!authoritativeCatalogProviders.has(model.provider) &&
 				!authoritativeSpecialDiscoveryProviders.has(model.provider) &&
 				!modelsDevSnapshotExcludedProviders.has(model.provider)

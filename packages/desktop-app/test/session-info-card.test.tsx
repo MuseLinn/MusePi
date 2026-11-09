@@ -14,6 +14,7 @@ import {
 	SessionInfoCard,
 	useSessionInfoCardVisibility,
 } from "../src/components/session-info-card";
+import { invalidateGitStatus } from "../src/lib/git-status-cache";
 import type { PanelTab } from "../src/lib/panel-tabs";
 import type { RpcClient } from "../src/lib/rpc";
 import { GuiSessionStore } from "../src/lib/session-store";
@@ -107,35 +108,83 @@ const CARD_PROPS = {
 
 afterEach(() => {
 	vi.restoreAllMocks();
+	invalidateGitStatus();
 	localStorage.clear();
 	document.head.querySelectorAll("style").forEach(node => node.remove());
 });
 
 describe("SessionInfoCard 数据契约", () => {
-	it("汇总 git.numstat 的 +/− 并显示会话模型 provider/id", async () => {
+	const primaryList = (path = "C:/workspace") => ({
+		directories: [{ path, primary: true, exists: true }],
+	});
+
+	it("主目录行显示分支、文件数与 +/−，并带主目录徽标", async () => {
 		const rpc = makeRpc({
 			"session.contextUsage": () => ({ tokens: 1, contextWindow: 10, percent: 10, model: "anthropic/claude-x" }),
-			"git.numstat": () => ({
-				files: [
-					{ path: "a.ts", added: 3, removed: 1, binary: false },
-					{ path: "b.ts", added: 2, removed: 4, binary: false },
-				],
+			"session.directories.list": () => primaryList(),
+			"git.status": () => ({
+				branch: "main",
+				added: 5,
+				deleted: 5,
+				staged: [{ path: "a.ts", status: "M" }],
+				unstaged: [{ path: "b.ts", status: "M" }],
+				untracked: [],
+				fileStats: {
+					staged: { "a.ts": { added: 3, removed: 1, binary: false } },
+					working: { "b.ts": { added: 2, removed: 4, binary: false } },
+				},
 			}),
 		});
 		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
 		expect(host.querySelector(".gui-session-info-model-value")?.textContent).toBe("anthropic/claude-x");
 		expect(host.querySelector(".gui-session-info-title")?.textContent).toBe(CARD_PROPS.title);
-		const changes = host.querySelector(".gui-session-info-changes")!;
-		expect(changes.getAttribute("data-state")).toBe("ready");
-		expect(changes.textContent).toContain("+5");
-		expect(changes.textContent).toContain("−5");
+		const block = host.querySelector(".gui-session-info-dir-block")!;
+		expect(block.getAttribute("data-state")).toBe("ready");
+		expect(block.querySelector(".gui-session-info-dir-badge")?.textContent).toBe(t("sessionInfo.primaryDirectory"));
+		expect(block.querySelector(".gui-session-info-dir-branch-name")?.textContent).toBe("main");
+		const nums = block.querySelector(".gui-session-info-dir-nums")?.textContent;
+		expect(nums).toContain("+5");
+		expect(nums).toContain("−5");
+		expect([...block.querySelectorAll(".gui-session-info-file-path")].map(node => node.textContent)).toEqual([
+			"a.ts",
+			"b.ts",
+		]);
+		await unmount();
+	});
+
+	it("附加目录与主目录用同一种可折叠行，只有主目录带徽标", async () => {
+		const rpc = makeRpc({
+			"session.contextUsage": () => ({ model: "openai/gpt" }),
+			"session.directories.list": () => ({
+				directories: [
+					{ path: "C:/workspace", primary: true, exists: true },
+					{ path: "C:/references", primary: false, exists: true },
+				],
+			}),
+			"git.status": params =>
+				params.cwd === "C:/references"
+					? { branch: "docs", added: 0, deleted: 0, staged: [], unstaged: [], untracked: [] }
+					: { branch: "main", added: 1, deleted: 0, staged: [], unstaged: [], untracked: [] },
+		});
+		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
+		const blocks = [...host.querySelectorAll<HTMLElement>(".gui-session-info-dir-block")];
+		expect(blocks).toHaveLength(2);
+		expect(blocks[0]!.querySelector(".gui-session-info-dir-badge")).not.toBeNull();
+		expect(blocks[1]!.querySelector(".gui-session-info-dir-badge")).toBeNull();
+		// The primary opens by default; an added root starts folded.
+		expect(blocks[0]!.querySelector(".gui-collapse")?.getAttribute("aria-hidden")).toBe("false");
+		expect(blocks[1]!.querySelector(".gui-collapse")?.getAttribute("aria-hidden")).toBe("true");
+		await act(async () => blocks[1]!.querySelector<HTMLButtonElement>(".gui-session-info-dir")!.click());
+		expect(blocks[1]!.querySelector(".gui-collapse")?.getAttribute("aria-hidden")).toBe("false");
+		expect(blocks[1]!.querySelector(".gui-session-info-dir-branch-name")?.textContent).toBe("docs");
 		await unmount();
 	});
 
 	it("当前分支有 PR 时显示编号与状态", async () => {
 		const rpc = makeRpc({
 			"session.contextUsage": () => ({ model: "openai/gpt" }),
-			"git.numstat": () => ({ files: [] }),
+			"session.directories.list": () => primaryList(),
+			"git.status": () => ({ branch: "main", staged: [], unstaged: [], untracked: [] }),
 			"github.prStatus": () => ({
 				pr: { number: 12, title: "Fix things", state: "OPEN", isDraft: false, url: "https://example.test/pr/12" },
 			}),
@@ -148,60 +197,63 @@ describe("SessionInfoCard 数据契约", () => {
 		await unmount();
 	});
 
-	it("非 git 目录降级为无变更而不是错误", async () => {
+	it("非 git 目录降级为状态文案而不是错误", async () => {
 		const rpc = makeRpc({
 			"session.contextUsage": () => ({ model: "openai/gpt" }),
-			"git.numstat": () => ({ error: "not a git repository" }),
+			"session.directories.list": () => primaryList(),
+			"git.status": () => ({ error: "not a git repository" }),
 		});
 		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
-		const changes = host.querySelector(".gui-session-info-changes")!;
-		expect(changes.getAttribute("data-state")).toBe("none");
-		expect(changes.textContent).toContain(t("general.sessionInfoNoChanges"));
-		expect(changes.textContent).not.toContain("not a git repository");
+		const block = host.querySelector(".gui-session-info-dir-block")!;
+		expect(block.getAttribute("data-state")).toBe("non-git");
+		expect(block.textContent).toContain(t("general.notGitDirectory"));
+		expect(block.textContent).not.toContain("not a git repository");
+		expect(block.querySelector(".gui-session-info-chev")).toBeNull();
 		await unmount();
 	});
 
-	it("git.numstat 拒绝时给出错误态，重试重新请求", async () => {
+	it("git.status 拒绝时给出错误态，重试重新请求", async () => {
 		const calls: RpcCall[] = [];
 		let attempts = 0;
 		const rpc = makeRpc(
 			{
 				"session.contextUsage": () => ({ model: "openai/gpt" }),
-				"git.numstat": () => {
+				"session.directories.list": () => primaryList(),
+				"git.status": () => {
 					attempts += 1;
 					if (attempts === 1) throw new Error("daemon offline");
-					return { files: [{ path: "a.ts", added: 1, removed: 0, binary: false }] };
+					return { branch: "main", added: 1, deleted: 0, staged: [], unstaged: [], untracked: [] };
 				},
 			},
 			calls,
 		);
 		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
-		const changes = host.querySelector(".gui-session-info-changes")!;
-		expect(changes.getAttribute("data-state")).toBe("error");
-		expect(changes.textContent).toContain("daemon offline");
+		const block = host.querySelector(".gui-session-info-dir-block")!;
+		expect(block.getAttribute("data-state")).toBe("error");
 		await act(async () => {
-			changes.querySelector<HTMLButtonElement>(".gui-session-info-retry")!.click();
+			block.querySelector<HTMLButtonElement>(".gui-session-info-dir-retry")!.click();
 		});
 		await flush();
-		expect(calls.filter(call => call.method === "git.numstat")).toHaveLength(2);
-		expect(host.querySelector(".gui-session-info-changes")?.getAttribute("data-state")).toBe("ready");
+		expect(calls.filter(call => call.method === "git.status")).toHaveLength(2);
+		expect(host.querySelector(".gui-session-info-dir-block")?.getAttribute("data-state")).toBe("ready");
 		await unmount();
 	});
 
 	it("请求未返回时显示加载态", async () => {
 		const rpc = makeRpc({
 			"session.contextUsage": () => new Promise(() => {}),
-			"git.numstat": () => new Promise(() => {}),
+			"session.directories.list": () => primaryList(),
+			"git.status": () => new Promise(() => {}),
 		});
 		const { host, unmount } = await mount(<SessionInfoCard {...CARD_PROPS} rpc={rpc} />);
-		expect(host.querySelector(".gui-session-info-changes")?.getAttribute("data-state")).toBe("loading");
+		expect(host.querySelector(".gui-session-info-changes")?.textContent).toContain(t("sessionInfo.loading"));
 		expect(host.querySelector(".gui-session-info-model")?.getAttribute("data-state")).toBe("loading");
 		await unmount();
 	});
 });
 
 describe("SessionInfoCard 标签与可打开表面", () => {
-	it("超过 6 条标签折叠为查看更多，点击后全部展开并切到该标签", async () => {
+	it("空间足够时直接列出全部标签，不再折叠为查看更多", async () => {
 		const tabs = Array.from({ length: 8 }, (_, index) => tab(index));
 		const opened: string[] = [];
 		const { host, unmount } = await mount(
@@ -213,12 +265,8 @@ describe("SessionInfoCard 标签与可打开表面", () => {
 				onSelectTab={id => opened.push(id)}
 			/>,
 		);
-		expect(host.querySelectorAll(".gui-session-info-item")).toHaveLength(6);
-		const more = host.querySelector<HTMLButtonElement>(".gui-session-info-tabs .gui-session-info-more")!;
-		expect(more.textContent).toContain(t("general.sessionInfoMore", { count: 2 }));
-		await act(async () => more.click());
 		expect(host.querySelectorAll(".gui-session-info-item")).toHaveLength(8);
-		expect(host.querySelector(".gui-session-info-tabs .gui-session-info-more")).toBeNull();
+		expect(host.querySelector(".gui-session-info-fold")).toBeNull();
 		expect(host.querySelectorAll('[aria-current="true"]')).toHaveLength(1);
 		await act(async () => {
 			host.querySelectorAll<HTMLButtonElement>(".gui-session-info-item")[3]!.click();
@@ -288,6 +336,16 @@ describe("SessionInfoCard 连接器与插件", () => {
 		expect(write?.params).toEqual({ sessionId: "session-1", servers: ["web"] });
 		const after = [...host.querySelectorAll<HTMLInputElement>(".gui-session-info-connectors input[type='checkbox']")];
 		expect(after.map(box => box.checked)).toEqual([false, true]);
+
+		// The card's connector section is a disclosure: folding hides the rows but
+		// keeps the header actions (manage / select all) reachable.
+		const toggle = host.querySelector<HTMLButtonElement>(".gui-connector-panel-toggle")!;
+		expect(toggle.getAttribute("aria-expanded")).toBe("true");
+		await act(async () => toggle.click());
+		expect(toggle.getAttribute("aria-expanded")).toBe("false");
+		expect(host.querySelectorAll(".gui-session-info-connectors .gui-connector-row")).toHaveLength(0);
+		await act(async () => toggle.click());
+		expect(host.querySelectorAll(".gui-session-info-connectors .gui-connector-row")).toHaveLength(2);
 
 		// One connector surface: the settings entry rides the panel header instead
 		// of a second "MCP servers" row under the list.

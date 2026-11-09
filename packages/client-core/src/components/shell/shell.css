@@ -1412,7 +1412,9 @@
 /* ---- banners ---- */
 .sh-banner {
 	position: fixed;
-	top: 8px;
+	/* Edge-to-edge shell: the WebView paints under the status bar, so a fixed
+	 * 8px top put this strip behind the clock and the notification icons. */
+	top: calc(8px + var(--safe-top, 0px));
 	left: 50%;
 	transform: translateX(-50%);
 	z-index: 50;
@@ -1522,7 +1524,9 @@
 	position: fixed;
 	right: 12px;
 	left: 12px;
-	bottom: 12px;
+	/* Clear of the gesture bar, and above the IME when the composer has focus —
+	 * a toast that lands under the keyboard is a toast nobody reads. */
+	bottom: calc(12px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
 	z-index: 60;
 	display: flex;
 	flex-direction: column;
@@ -3735,6 +3739,11 @@
 	display: flex;
 	align-items: flex-end;
 	justify-content: center;
+	/* The shell runs the WebView at full height (Keyboard resize: 'none'), so
+	 * the layout viewport never shrinks for the IME — the inset has to lift the
+	 * sheet itself. Without this the session search field (and the host form)
+	 * sat behind the keyboard. */
+	padding-bottom: var(--mp-keyboard-inset, 0px);
 	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
 	backdrop-filter: blur(6px);
 	-webkit-backdrop-filter: blur(6px);
@@ -3902,6 +3911,14 @@
 	font: inherit;
 	text-align: left;
 	cursor: pointer;
+	/* Swipe actions vs the list's own vertical scroll: without this the browser
+	 * claims the gesture as a scroll and cancels the pointer stream, so
+	 * swipe-to-rename/delete only worked when the drag started almost perfectly
+	 * horizontal. Vertical panning stays native. */
+	touch-action: pan-y;
+	/* Release settles back through this; the drag itself runs with
+	 * `transition: none` so the row tracks the finger exactly. */
+	transition: transform 260ms var(--spring-liquid);
 }
 
 .ss-item:hover {
@@ -5582,5 +5599,83 @@
 	.sh-composer-suggest .sh-suggest-chip {
 		flex: none;
 		min-height: 36px;
+	}
+}
+
+/* ---- transcript hydration skeleton ----
+ * Shown only while a session's snapshot is in flight (app.tsx TranscriptPane
+ * hydrating). Deliberately generic bars: the real content arrives as one
+ * snapshot, so a per-row shape would be a worse lie than a plain block. */
+.sh-skeleton {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 28px 4px 12px;
+}
+
+.sh-skeleton-row {
+	height: 12px;
+	border-radius: 6px;
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+	animation: sh-skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.sh-skeleton-row--lead {
+	width: 44%;
+	height: 10px;
+	opacity: 0.7;
+}
+
+.sh-skeleton-row--short {
+	width: 62%;
+}
+
+.sh-skeleton-row--block {
+	height: 52px;
+	width: 100%;
+	border-radius: var(--radius-lg);
+	animation-delay: 120ms;
+}
+
+.sh-skeleton-row:nth-child(2) {
+	animation-delay: 60ms;
+}
+
+.sh-skeleton-row:nth-child(4) {
+	animation-delay: 180ms;
+}
+
+.sh-skeleton-row:nth-child(5) {
+	animation-delay: 240ms;
+}
+
+/* Announced once to assistive tech; not drawn. */
+.sh-skeleton-status {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
+}
+
+@keyframes sh-skeleton-pulse {
+	0%,
+	100% {
+		opacity: 0.45;
+	}
+	50% {
+		opacity: 0.9;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sh-skeleton-row {
+		animation: none;
+		opacity: 0.6;
 	}
 }

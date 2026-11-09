@@ -14,7 +14,7 @@ import { navGroups } from "../src/components/SettingsNav";
 import { PromptProvider } from "../src/lib/prompt-dialog";
 import { apply } from "../src/plugins/session-manager/index";
 import SessionManagerPage from "../src/plugins/session-manager/page";
-import type { SessionListRow } from "../src/plugins/session-manager/types";
+import type { SessionListRow, SessionMessage } from "../src/plugins/session-manager/types";
 
 type RpcRequest = (method: string, params?: unknown) => Promise<unknown>;
 
@@ -39,8 +39,12 @@ afterAll(() => setLocale(previousLocale));
 
 interface Served {
 	sessions: SessionListRow[];
-	/** Newest-first match pages keyed by session id (`session.search`). */
-	prompts?: Record<string, Array<{ role: string; content: string }>>;
+	/** `session.lastPrompts` response (newest user message per session). */
+	prompts?: Record<string, string>;
+	/** Cross-session `session.search` matches. */
+	matches?: SessionMessage[];
+	/** `history.messages` rows per session. */
+	transcripts?: Record<string, SessionMessage[]>;
 	failDelete?: Set<string>;
 	failList?: boolean;
 }
@@ -60,9 +64,21 @@ function serve(options: Served): FakeRpc {
 			if (options.failList === true && listAttempts === 1) throw new Error("daemon unavailable");
 			return options.sessions;
 		}
+		if (method === "session.lastPrompts") {
+			return options.prompts ?? {};
+		}
 		if (method === "session.search") {
+			const query = (params as { query?: string }).query ?? "";
+			return {
+				matches: (options.matches ?? []).filter(
+					match => match.content.toLowerCase().includes(query.toLowerCase()) || query === "",
+				),
+				sessions: [],
+			};
+		}
+		if (method === "history.messages") {
 			const sessionId = (params as { sessionId?: string }).sessionId ?? "";
-			return { matches: options.prompts?.[sessionId] ?? [], sessions: [] };
+			return options.transcripts?.[sessionId] ?? [];
 		}
 		if (method === "session.delete") {
 			const sessionId = (params as { sessionId?: string }).sessionId ?? "";
@@ -75,7 +91,11 @@ function serve(options: Served): FakeRpc {
 	return { request, calls };
 }
 
-async function mount(rpc: FakeRpc, sessionId: string | null = null): Promise<HTMLElement> {
+async function mount(
+	rpc: FakeRpc,
+	sessionId: string | null = null,
+	onOpenSession?: (id: string) => void,
+): Promise<HTMLElement> {
 	const container = document.createElement("div");
 	document.body.appendChild(container);
 	const root = createRoot(container);
@@ -83,11 +103,11 @@ async function mount(rpc: FakeRpc, sessionId: string | null = null): Promise<HTM
 	await act(async () =>
 		root.render(
 			<PromptProvider>
-				<SessionManagerPage rpc={rpc as never} sessionId={sessionId} />
+				<SessionManagerPage rpc={rpc as never} sessionId={sessionId} onOpenSession={onOpenSession} />
 			</PromptProvider>,
 		),
 	);
-	await act(async () => Bun.sleep(30));
+	await act(async () => Bun.sleep(40));
 	return container;
 }
 
@@ -105,14 +125,6 @@ function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
 
 async function clickButton(button: HTMLButtonElement): Promise<void> {
 	await act(async () => button.click());
-}
-
-async function submitFilters(container: HTMLElement): Promise<void> {
-	const form = container.querySelector("form");
-	if (!form) throw new Error("filter form did not render");
-	await act(async () => {
-		form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-	});
 }
 
 async function chooseOption(container: HTMLElement, ariaLabel: string, value: string): Promise<void> {
@@ -139,6 +151,22 @@ async function typeInto(input: HTMLInputElement, value: string): Promise<void> {
 	});
 }
 
+function searchInput(container: HTMLElement): HTMLInputElement {
+	const input = container.querySelector<HTMLInputElement>(
+		`input[aria-label="${t("settings.sessionManager.searchPlaceholder")}"]`,
+	);
+	if (!input) throw new Error("search input did not render");
+	return input;
+}
+
+function sessionNameButton(container: HTMLElement, title: string): HTMLButtonElement {
+	const button = container.querySelector<HTMLButtonElement>(
+		`button[title="${t("settings.sessionManager.expandRow", { title })}"]`,
+	);
+	if (!button) throw new Error(`session row "${title}" did not render`);
+	return button;
+}
+
 async function confirmDialog(): Promise<void> {
 	await act(async () => Bun.sleep(90));
 	const confirmButton = document.querySelector<HTMLButtonElement>(".gui-dialog .gui-btn-primary");
@@ -159,6 +187,16 @@ function session(id: string, overrides: Partial<SessionListRow> = {}): SessionLi
 		messageCount: 4,
 		...overrides,
 	};
+}
+
+function message(
+	sessionId: string,
+	seq: number,
+	role: string,
+	content: string,
+	timestamp = Date.UTC(2026, 9, 20, 8, 0, seq),
+): SessionMessage {
+	return { sessionId, seq, role, model: null, content, timestamp };
 }
 
 describe("session-manager Cordis plugin", () => {
@@ -186,6 +224,9 @@ describe("session-manager Cordis plugin", () => {
 		const items = navGroups([{ slot: "settings.tab.sessions", label: "会话" }]).flatMap(group => group.items);
 		expect(items.some(item => item.id === "ext:settings.tab.sessions")).toBe(false);
 		expect(items.find(item => item.id === "sessions")?.label).toBe(t("general.sessions"));
+		// The retired 历史会话 page is gone from the 数据与统计 group: message
+		// browsing lives on the session page now.
+		expect(items.some(item => item.id === "history")).toBe(false);
 	});
 
 	it("renders project basenames, disambiguates duplicates, and paginates", async () => {
@@ -213,7 +254,7 @@ describe("session-manager Cordis plugin", () => {
 		expect(container.textContent).toContain(t("settings.sessionManager.pageInfo", { page: 2, pages: 2 }));
 	});
 
-	it("filters by status and last activity through 查询", async () => {
+	it("filters by status and last activity as soon as a filter changes", async () => {
 		const day = 86_400_000;
 		const now = Date.now();
 		const sessions = [
@@ -225,14 +266,12 @@ describe("session-manager Cordis plugin", () => {
 		expect(rowCount(container)).toBe(3);
 
 		await chooseOption(container, t("settings.sessionManager.status"), "running");
-		await submitFilters(container);
 		expect(rowCount(container)).toBe(1);
 		expect(container.textContent).toContain("Session running");
 		expect(container.textContent).not.toContain("Session done");
 
 		await chooseOption(container, t("settings.sessionManager.status"), "all");
 		await chooseOption(container, t("settings.sessionManager.updatedWithin"), "30");
-		await submitFilters(container);
 		expect(rowCount(container)).toBe(2);
 		expect(container.textContent).not.toContain("Session old");
 
@@ -249,34 +288,104 @@ describe("session-manager Cordis plugin", () => {
 				],
 			}),
 		);
-		const search = container.querySelector<HTMLInputElement>(
-			`input[aria-label="${t("settings.sessionManager.searchPlaceholder")}"]`,
-		);
-		if (!search) throw new Error("search input did not render");
-		await typeInto(search, "docs");
+		await typeInto(searchInput(container), "docs");
 		expect(rowCount(container)).toBe(1);
 		expect(container.textContent).toContain("Write docs");
-		await typeInto(search, "missing");
+		await typeInto(searchInput(container), "missing");
 		expect(rowCount(container)).toBe(0);
 		expect(container.textContent).toContain(t("settings.sessionManager.emptyFiltered"));
+		// The empty state is actionable: one click restores the list.
+		await clickButton(buttonByText(container, t("settings.sessionManager.reset")));
+		expect(rowCount(container)).toBe(2);
 	});
 
-	it("shows the newest user prompt from session.search", async () => {
+	it("shows the transcript verdict instead of a blanket 已完成", async () => {
+		const container = await mount(
+			serve({ sessions: [session("cut", { status: "interrupted" }), session("fine", { status: "complete" })] }),
+		);
+		const rows = [...container.querySelectorAll("tbody tr")].map(row => row.textContent ?? "");
+		expect(rows.some(cell => cell.includes(t("session status interrupted")))).toBe(true);
+		expect(rows.some(cell => cell.includes(t("session status complete")))).toBe(true);
+	});
+
+	it("reads one page of last prompts with one batched RPC", async () => {
 		const rpc = serve({
-			sessions: [session("s1")],
+			sessions: [session("s1"), session("s2")],
 			prompts: {
-				s1: [
-					{ role: "assistant", content: "Done: tests pass" },
-					{ role: "user", content: "  fix   the parser  " },
-				],
+				s1: "fix   the parser",
+				s2: JSON.stringify([{ type: "text", text: "write docs" }]),
 			},
 		});
 		const container = await mount(rpc);
 		expect(container.textContent).toContain("fix the parser");
-		const search = rpc.calls.find(call => call.method === "session.search");
-		// Newest-first, per-session: an empty query returns the tail of the
-		// transcript without reading the whole session.
-		expect(search?.params).toMatchObject({ query: "", sessionId: "s1" });
+		expect(container.textContent).toContain("write docs");
+		const batched = rpc.calls.filter(call => call.method === "session.lastPrompts");
+		expect(batched).toHaveLength(1);
+		expect(batched[0]?.params).toEqual({ sessionIds: ["s1", "s2"] });
+		// The old path scanned each transcript tail through session.search;
+		// nothing on this page should need it.
+		expect(rpc.calls.some(call => call.method === "session.search")).toBe(false);
+	});
+
+	it("finds sessions by message content and expands only the hits", async () => {
+		const rpc = serve({
+			sessions: [session("alpha", { title: "Fix parser" }), session("beta", { title: "Write docs" })],
+			matches: [message("beta", 7, "user", "the login flow is broken")],
+			transcripts: {
+				beta: [message("beta", 1, "user", "start here"), message("beta", 7, "user", "the login flow is broken")],
+			},
+		});
+		const container = await mount(rpc);
+		await typeInto(searchInput(container), "login");
+		await act(async () => Bun.sleep(400));
+
+		// The title does not contain the term; the message does.
+		expect(rowCount(container)).toBe(1);
+		expect(container.textContent).toContain("Write docs");
+		expect(container.textContent).toContain(t("settings.sessionManager.messageHits", { count: 1 }));
+
+		await clickButton(sessionNameButton(container, "Write docs"));
+		await act(async () => Bun.sleep(20));
+		expect(container.textContent).toContain("the login flow is broken");
+		// Hits are already in hand — the transcript is not read for them.
+		expect(rpc.calls.some(call => call.method === "history.messages")).toBe(false);
+
+		await clickButton(buttonByText(container, t("settings.sessionManager.allMessages")));
+		await act(async () => Bun.sleep(20));
+		expect(rpc.calls.find(call => call.method === "history.messages")?.params).toEqual({
+			sessionId: "beta",
+			limit: 200,
+			tail: true,
+		});
+		expect(container.textContent).toContain("start here");
+	});
+
+	it("expands a row into its transcript and can open the session", async () => {
+		let opened: string | null = null;
+		const rpc = serve({
+			sessions: [session("s1", { title: "Fix parser" })],
+			transcripts: { s1: [message("s1", 1, "user", "hello there"), message("s1", 2, "assistant", "on it")] },
+		});
+		const container = await mount(rpc, null, id => {
+			opened = id;
+		});
+		await clickButton(sessionNameButton(container, "Fix parser"));
+		await act(async () => Bun.sleep(20));
+
+		expect(rpc.calls.find(call => call.method === "history.messages")?.params).toEqual({
+			sessionId: "s1",
+			limit: 200,
+			tail: true,
+		});
+		expect(container.textContent).toContain("hello there");
+		expect(container.textContent).toContain("on it");
+
+		await clickButton(buttonByText(container, t("settings.sessionManager.openSession")));
+		expect(opened as string | null).toBe("s1");
+
+		// Collapsing closes the detail row.
+		await clickButton(sessionNameButton(container, "Fix parser"));
+		expect(container.textContent).not.toContain("hello there");
 	});
 
 	it("archives selected sessions only after the bulk confirmation", async () => {

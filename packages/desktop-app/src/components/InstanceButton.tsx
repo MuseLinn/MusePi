@@ -29,6 +29,8 @@ export function InstanceButton({
 	onReconnect,
 	onDisconnect,
 	onOpenWorkspace,
+	onOpenManager,
+	onOpenDisclaimer,
 	/** Rail variant: the destination column must keep the instance menu
 	 *  reachable when the sidebar is collapsed or a page destination owns
 	 *  the surface. Only the status dot shows; the full menu is unchanged. */
@@ -45,6 +47,8 @@ export function InstanceButton({
 	onReconnect(): void;
 	onDisconnect(): void;
 	onOpenWorkspace(cwd: string): void;
+	onOpenManager(open: () => void): void;
+	onOpenDisclaimer(): void;
 	compact?: boolean;
 }): ReactNode {
 	const btnRef = useRef<HTMLButtonElement | null>(null);
@@ -273,7 +277,7 @@ export function InstanceButton({
 					className="gui-view-opt"
 					onClick={() => {
 						setOpen(false);
-						setManagerOpen(true);
+						onOpenManager(() => setManagerOpen(true));
 					}}
 				>
 					<Icon name="settings-3" className="h-3.5 w-3.5" />
@@ -290,6 +294,17 @@ export function InstanceButton({
 				>
 					<Icon name="settings-3" className="h-3.5 w-3.5" />
 					<span>{t("settings.settings")}</span>
+				</button>
+				<button
+					type="button"
+					className="gui-view-opt"
+					onClick={() => {
+						setOpen(false);
+						onOpenDisclaimer();
+					}}
+				>
+					<Icon name="information" className="h-3.5 w-3.5" />
+					<span>{t("settings.viewRemoteDisclaimer")}</span>
 				</button>
 				<button
 					type="button"
@@ -327,6 +342,7 @@ export function InstanceButton({
 				onAddHost={onAddHost}
 				onRemoveHost={onRemoveHost}
 				onDisconnect={onDisconnect}
+				onOpenDisclaimer={onOpenDisclaimer}
 				onOpenWorkspace={cwd => {
 					setManagerOpen(false);
 					onOpenWorkspace(cwd);

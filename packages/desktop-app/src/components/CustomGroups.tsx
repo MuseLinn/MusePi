@@ -54,6 +54,8 @@ export function CustomGroups({
 	workingIds,
 	statuses,
 	manualTags,
+	emojis,
+	onRenameSession,
 	searchQuery,
 	retitlingId,
 }: {
@@ -89,6 +91,8 @@ export function CustomGroups({
 	statuses?: ReadonlyMap<string, SessionStatus>;
 	/** User-assigned color per session id (manual override of status). */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
+	emojis?: ReadonlyMap<string, string>;
+	onRenameSession?(id: string, title: string): void;
 	/** Active session-search query — forwarded so matched titles are marked. */
 	searchQuery?: string;
 	/** Session id whose title an AI rename is generating — forwarded so that
@@ -146,6 +150,8 @@ export function CustomGroups({
 					workingIds={workingIds}
 					statuses={statuses}
 					manualTags={manualTags}
+					emojis={emojis}
+					onRenameSession={onRenameSession}
 					searchQuery={searchQuery}
 					retitlingId={retitlingId}
 				/>
@@ -177,6 +183,8 @@ function GroupBlock({
 	workingIds,
 	statuses,
 	manualTags,
+	emojis,
+	onRenameSession,
 	searchQuery,
 	retitlingId,
 }: {
@@ -210,6 +218,8 @@ function GroupBlock({
 	statuses?: ReadonlyMap<string, SessionStatus>;
 	/** User-assigned color per session id (manual override of status). */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
+	emojis?: ReadonlyMap<string, string>;
+	onRenameSession?(id: string, title: string): void;
 	/** Active session-search query — forwarded so matched titles are marked. */
 	searchQuery?: string;
 	/** Session id whose title an AI rename is generating — forwarded so that
@@ -381,6 +391,8 @@ function GroupBlock({
 							workingIds={workingIds}
 							statuses={statuses}
 							manualTags={manualTags}
+							emojis={emojis}
+							onRenameSession={onRenameSession}
 							searchQuery={searchQuery}
 							sort="none"
 							retitlingId={retitlingId}

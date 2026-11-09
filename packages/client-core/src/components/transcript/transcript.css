@@ -55,13 +55,14 @@
 	grid-template-columns: 40px minmax(0, 1fr);
 	gap: 0 10px;
 	padding: var(--tr-row-pad, 6px) 0;
-	/* Standard off-screen skip (content-visibility): rows outside the
-	 * viewport skip layout/paint — long sessions scroll smoothly without
-	 * paying the compositor for every message. contain-intrinsic-size
-	 * (auto ≈ last rendered size) keeps the scrollbar stable; windowing
-	 * above still caps React mounts, so the two compose. */
-	content-visibility: auto;
-	contain-intrinsic-size: auto 60px;
+	/* NO `content-visibility: auto` here: rows change height asynchronously
+	 * (widget iframes report their height after mount, images decode, expand/
+	 * collapse morphs run). While Chromium skips such a row it sizes it from
+	 * `contain-intrinsic-size` (60px), so a 686px widget row measured 72px and
+	 * the virtualizer laid the transcript out against a collapsed row —
+	 * overlapping neighbours and leaving a blank tail. The virtualizer above
+	 * already unmounts off-screen rows; that is the windowing mechanism, and
+	 * a second containment layer must not disagree with it about height. */
 }
 
 .tr-gutter {
@@ -351,7 +352,58 @@ button.tr-display-context-source:hover {
 	color: var(--accent);
 }
 
-.tr-async-job-output {
+/* Output block: the shared collapse morph (`--h`, see useCollapseHeight)
+ * grows between the bounded preview and the natural height. */
+.tr-async-job-body {
+	height: var(--h, auto);
+	overflow: hidden;
+	transition: height 220ms var(--spring);
+}
+
+.tr-async-job-body--clamped {
+	height: auto;
+	max-height: 12em;
+	mask-image: linear-gradient(to bottom, black 72%, transparent);
+	-webkit-mask-image: linear-gradient(to bottom, black 72%, transparent);
+}
+
+.tr-async-job-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.tr-async-job-field {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.tr-async-job-key {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	color: var(--fg-faint);
+	opacity: 0.8;
+}
+
+.tr-async-job-text {
+	margin: 0;
+	max-width: 100%;
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	line-height: 1.55;
+	color: var(--fg-faint);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.tr-async-job-scalar {
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+
+.tr-async-job-json {
 	margin: 0;
 	max-width: 100%;
 	font-family: var(--font-mono);
@@ -360,13 +412,6 @@ button.tr-display-context-source:hover {
 	color: var(--fg-faint);
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
-}
-
-.tr-async-job-output--clamped {
-	max-height: 12em;
-	overflow: hidden;
-	mask-image: linear-gradient(to bottom, black 72%, transparent);
-	-webkit-mask-image: linear-gradient(to bottom, black 72%, transparent);
 }
 
 .tr-async-job-more {
@@ -1968,6 +2013,70 @@ button.tr-display-context-source:hover {
 	overflow-x: auto;
 }
 
+/* The same line as a button: the whole row is the popover target, so the
+ * affordance is the cursor and a hover shift rather than a new control. */
+.tr-usage-wrap {
+	position: relative;
+	display: block;
+}
+.tr-usage--button {
+	display: block;
+	width: 100%;
+	margin: 0;
+	border: 0;
+	border-top: 1px dashed var(--border);
+	background: none;
+	text-align: left;
+	cursor: pointer;
+	color: var(--fg-faint);
+}
+.tr-usage--button:hover {
+	color: var(--fg-muted);
+}
+.tr-usage--button:focus-visible {
+	outline: 1px solid var(--accent);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm, 4px);
+}
+.tr-usage-pop {
+	position: absolute;
+	left: 0;
+	bottom: calc(100% + 6px);
+	z-index: 40;
+	min-width: 248px;
+	max-width: 340px;
+	padding: 8px 10px;
+	border: 1px solid var(--glass-hairline, var(--border));
+	border-radius: var(--radius-lg, 10px);
+	background: var(--glass-card-bg, var(--color-surface));
+	box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.28));
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 17px;
+	color: var(--fg-muted);
+}
+.tr-usage-pop-total {
+	display: flex;
+	justify-content: space-between;
+	gap: 16px;
+	padding-bottom: 6px;
+	margin-bottom: 6px;
+	border-bottom: 1px solid var(--border);
+	color: var(--fg);
+	font-weight: 600;
+}
+.tr-usage-pop-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 16px;
+}
+.tr-usage-pop-label {
+	color: var(--fg-faint);
+}
+.tr-usage-pop-value {
+	color: var(--fg-muted);
+}
+
 /* Progressive per-sentence reveal: only sentences that MOUNT while the
  * thinking block is still streaming animate (tr-think-sentence--live —
  * applied by ThinkingBlock while the message is pending). Settled blocks
@@ -3122,10 +3231,19 @@ a.tr-tool-search-title:hover {
 	color: var(--color-text);
 }
 
-/* Three lines, then a fade instead of a hard clip; `展开全文` lifts it. */
-.tr-irc-body--clamped {
-	max-height: 4.6em;
+/* Collapse morph (`useCollapseHeight` writes --h): the body grows/shrinks
+ * between the three-line preview and its natural height. The clamp is the
+ * settled closed state, so `height:auto` there keeps a rewrapped preview
+ * honest instead of freezing a stale pixel height. */
+.tr-irc-body {
+	height: var(--h, auto);
 	overflow: hidden;
+	transition: height 220ms var(--spring);
+}
+
+.tr-irc-body--clamped {
+	height: auto;
+	max-height: 4.6em;
 	mask-image: linear-gradient(to bottom, black 60%, transparent);
 	-webkit-mask-image: linear-gradient(to bottom, black 60%, transparent);
 }
@@ -3350,6 +3468,22 @@ a.tr-tool-search-title:hover {
 	overflow: overlay;
 	display: flex;
 	justify-content: center;
+}
+
+/* 一镜到底 flight: the panel is scaled by WAAPI, so the content only has to be
+ * rasterized once — blurred — instead of re-laying out text and iframes at every
+ * intermediate size. The filter sits on the content layer while the transform
+ * animates the scrolling body, which keeps the two on separate compositor
+ * layers. */
+.tr-widget-fs[data-flying="true"] .tr-widget-fs-body {
+	will-change: transform;
+}
+.tr-widget-fs[data-flying="true"] .tr-widget-fs-body > .tv-widget {
+	filter: blur(9px);
+}
+.tr-widget-fs[data-flying="true"] .tr-widget-fs-body iframe,
+.tr-widget-fs[data-flying="true"] .tr-widget-fs-body button {
+	pointer-events: none;
 }
 
 .tr-widget-fs-body .tv-widget {

@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
 import { resolveActiveSection, type SectionId, type SectionRequest } from "../lib/settings-nav";
+import { type SettingSearchRow, settingSectionFor } from "../lib/settings-search";
 import {
 	SETTINGS_ACTION_SLOT_PREFIX,
 	SETTINGS_TAB_SLOT_PREFIX,
@@ -13,6 +14,7 @@ import {
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { HeightMorph } from "./HeightMorph";
 import { MigrationSection } from "./MigrationSection";
+import type { SchemaUi } from "./SchemaSettings";
 import { navGroups, SettingsNav } from "./SettingsNav";
 
 /** Entry points address a section by CAPABILITY, the nav addresses it by
@@ -120,6 +122,122 @@ export function SettingsView({
 	const activeSection = resolveActiveSection(section, navSectionIds);
 	// Fixed settings search: filters the nav by section label (live).
 	const [settingsQuery, setSettingsQuery] = useState("");
+	// Cross-page schema index for the search: one `settings.schema {all:true}`
+	// round trip supplies every row the pages can render, so a search can name
+	// a setting whose page is not open. Translation happens at render time.
+	const [settingRows, setSettingRows] = useState<SettingSearchRow[]>([]);
+	const [pendingSetting, setPendingSetting] = useState<{ key: string; nonce: number } | null>(null);
+	useEffect(() => {
+		if (!rpc) return;
+		let alive = true;
+		void rpc
+			.request<Record<string, { key: string; ui?: SchemaUi }[]>>("settings.schema", { all: true })
+			.then(res => {
+				if (!alive) return;
+				const rows: SettingSearchRow[] = [];
+				for (const [tab, items] of Object.entries(res ?? {})) {
+					for (const item of items ?? []) {
+						const ui = item.ui;
+						if (!ui || ui.hidden || ui.tuiOnly || !ui.label) continue;
+						const section = settingSectionFor(tab, ui.group);
+						if (!section) continue;
+						rows.push({
+							key: item.key,
+							section,
+							tab,
+							group: ui.group,
+							label: ui.label,
+							description: ui.description,
+						});
+					}
+				}
+				setSettingRows(rows);
+			})
+			.catch(() => {
+				// Search keeps the nav-only behaviour when the daemon is old or away.
+			});
+		return () => {
+			alive = false;
+		};
+	}, [rpc]);
+
+	// Jump from a search result: open the owning page, clear the query (so the
+	// page is not left filtered) and hand the row key to the scroll effect.
+	const jumpToSetting = useCallback((section: string, key: string): void => {
+		setSection(section as SectionRequest);
+		setSettingsQuery("");
+		setPendingSetting({ key, nonce: Date.now() });
+	}, []);
+	useEffect(() => {
+		if (!pendingSetting) return;
+		const nonce = pendingSetting.nonce;
+		const selector = `[data-setting-key="${pendingSetting.key}"]`;
+		let cancelled = false;
+		let attempts = 0;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const finish = (): void => {
+			setPendingSetting(current => (current?.nonce === nonce ? null : current));
+		};
+		const center = (): HTMLElement | null => {
+			const content = settingsContentRef.current;
+			const row = content?.querySelector<HTMLElement>(selector);
+			if (!content || !row) return null;
+			const offset = row.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
+			content.scrollTop = Math.max(0, offset - (content.clientHeight - row.offsetHeight) / 2);
+			return row;
+		};
+		const tick = (): void => {
+			if (cancelled) return;
+			const content = settingsContentRef.current;
+			const row = content?.querySelector<HTMLElement>(selector);
+			if (!content || !row) {
+				// The page's schema arrives over RPC; give it ~2s before giving up
+				// (a condition-hidden or page-excluded row never appears).
+				if (++attempts > 32) {
+					finish();
+					return;
+				}
+				timer = setTimeout(tick, 60);
+				return;
+			}
+			// Let the section transition (Reveal heights, 240ms) finish first:
+			// recentring while the layout grows lands the row off-screen.
+			timer = setTimeout(() => {
+				if (cancelled) return;
+				const target = center();
+				if (!target) {
+					finish();
+					return;
+				}
+				// One late correction absorbs any height that settled after the
+				// first jump; it is an instant assignment, so it cannot overshoot.
+				timer = setTimeout(() => {
+					if (!cancelled) center();
+				}, 320);
+				// Inline style, not a class: the page's own schema/values RPC
+				// re-renders the row shortly after it mounts, and a React
+				// className re-render would wipe an imperatively added class.
+				const reduced =
+					document.documentElement.classList.contains("gui-motion-off") ||
+					window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+				if (reduced) {
+					target.style.backgroundColor = "color-mix(in oklab, var(--color-accent) 12%, transparent)";
+				} else {
+					target.style.animation = "gui-settings-target 1.6s ease-out";
+				}
+				window.setTimeout(() => {
+					target.style.animation = "";
+					target.style.backgroundColor = "";
+				}, 1800);
+				finish();
+			}, 320);
+		};
+		timer = setTimeout(tick, 60);
+		return () => {
+			cancelled = true;
+			if (timer) clearTimeout(timer);
+		};
+	}, [pendingSetting, activeSection]);
 	// Settings search highlight: with an active query, imperatively mark the
 	// matching setting rows inside the content area (.gui-settings-field for
 	// hand-written sections, .gui-settings-row for schema-driven ones) and
@@ -348,6 +466,8 @@ export function SettingsView({
 							onBack={onBack}
 							query={settingsQuery}
 							onQueryChange={setSettingsQuery}
+							settingsRows={settingRows}
+							onSelectRow={jumpToSetting}
 						/>
 					);
 					return navSlot ? createPortal(nav, navSlot) : nav;
@@ -364,9 +484,7 @@ export function SettingsView({
 							morphKey={activeSection}
 							innerRef={settingsContentRef}
 							className={`gui-settings-content${
-								activeSection === "history" || activeSection === "model" || activeSection === "skills"
-									? " gui-settings-content--fill"
-									: ""
+								activeSection === "model" || activeSection === "skills" ? " gui-settings-content--fill" : ""
 							}`}
 						>
 							{activeSection === "general" && (
@@ -469,10 +587,10 @@ export function SettingsView({
 							{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
 							{activeSection === "commands" && <CommandsSection rpc={rpc} />}
 							{activeSection === "mcp" && <McpSection rpc={rpc} />}
+							{activeSection === "connectors" && <ConnectorsSection rpc={rpc} />}
 							{activeSection === "hooks" && <HooksSection rpc={rpc} />}
 							{activeSection === "browser" && <BrowserSection rpc={rpc} />}
 							{activeSection === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
-							{activeSection === "history" && <HistorySection rpc={rpc} onOpenSession={onOpenSession} />}
 							{activeSection === "usage" && <UsageSection rpc={rpc} />}
 						</HeightMorph>
 					</div>
@@ -488,11 +606,11 @@ import {
 	AppearanceSection,
 	BrowserSection,
 	CommandsSection,
+	ConnectorsSection,
 	ContextSection,
 	FilesLspSection,
 	GeneralSection,
 	GitSection,
-	HistorySection,
 	HooksSection,
 	IndexesSection,
 	InteractionSection,

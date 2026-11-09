@@ -1,5 +1,23 @@
+import {
+	closestCenter,
+	DndContext,
+	type DragEndEvent,
+	KeyboardSensor,
+	PointerSensor,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import {
+	arrayMove,
+	SortableContext,
+	sortableKeyboardCoordinates,
+	useSortable,
+	verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { t } from "@musepi/client-core";
-import { type ReactNode, useRef, useState } from "react";
+import { type ReactNode, useState } from "react";
+import { restrictToYAxis } from "../../lib/dnd-axis";
 import {
 	loadUserSuggestions,
 	resetSuggestions,
@@ -7,22 +25,24 @@ import {
 	type StoredSuggestion,
 	saveSuggestions,
 } from "../../lib/suggestions";
-import { usePointerDrag } from "../../lib/use-pointer-drag";
 import { Icon } from "../../vendor/oc-icons";
 
 /**
  * 预设提示词 (openchamber DraftPresetChips parity): manages the quick
- * prompts under the empty-state composer. Add / edit / remove, reorder by
- * POINTER DRAG (unified usePointerDrag primitive — no more ↑↓ buttons).
- * Built-in entries stay i18n-keyed (localized at render) until edited —
- * editing one converts it to a literal custom entry. Changes persist to
- * localStorage and broadcast live to the welcome composer.
+ * prompts under the empty-state composer.
+ *
+ * Rows reorder by the same drag gesture as the right-panel tabs (dnd-kit:
+ * grab the handle, the row lifts, slots open live; keyboard: focus the
+ * handle, Space to lift, ↑/↓ to move, Space to drop). Built-in entries stay
+ * i18n-keyed until edited — editing one converts it to a literal custom entry.
+ * Changes persist to localStorage and broadcast live to the welcome composer.
  */
 export function PromptsSection(): ReactNode {
 	const [items, setItems] = useState<StoredSuggestion[]>(() => loadUserSuggestions());
-	// Inline editor state: editing[index] (custom rows only) / adding (append).
+	// Inline editor state: editing[index] replaces that row; adding appends.
 	const [editing, setEditing] = useState<{ index: number; label: string; prompt: string } | null>(null);
 	const [adding, setAdding] = useState<{ label: string; prompt: string } | null>(null);
+	const busy = editing !== null || adding !== null;
 
 	const commit = (next: StoredSuggestion[]): void => {
 		setItems(next);
@@ -42,208 +62,220 @@ export function PromptsSection(): ReactNode {
 
 	const saveEdit = (): void => {
 		if (!editing) return;
-		const label = editing.label.trim();
-		const prompt = editing.prompt.trim();
-		if (!label || !prompt) return;
 		const next = [...items];
-		next[editing.index] = { label, prompt };
+		next[editing.index] = { label: editing.label.trim(), prompt: editing.prompt.trim() };
 		commit(next);
 		setEditing(null);
 	};
 
 	const saveAdd = (): void => {
 		if (!adding) return;
-		const label = adding.label.trim();
-		const prompt = adding.prompt.trim();
-		if (!label || !prompt) return;
-		commit([...items, { label, prompt }]);
+		commit([...items, { label: adding.label.trim(), prompt: adding.prompt.trim() }]);
 		setAdding(null);
 	};
 
-	// ── Pointer-drag reorder (usePointerDrag) ────────────────────────────
-	// Rows carry data-suggest-row; the hook's captured pointermove/up run
-	// outside the row, so the over-target is resolved from
-	// elementsFromPoint each move. The preview order re-renders live;
-	// the commit happens once on drop. Row pointerdown records the start
-	// index (buttons inside stop propagation so they never start a drag).
-	const dragRowRef = useRef(-1);
-	const [dragState, setDragState] = useState<{ item: StoredSuggestion; from: number; over: number } | null>(null);
-	const dragHandlers = usePointerDrag({
-		onDragStart: () => {
-			const from = dragRowRef.current;
-			if (from < 0 || from >= items.length) return;
-			setDragState({ item: items[from]!, from, over: from });
-		},
-		onDragMove: ({ x, y }) => {
-			if (!dragState) return;
-			const el = document
-				.elementsFromPoint(x, y)
-				.find(node => node instanceof HTMLElement && node.hasAttribute("data-suggest-row"));
-			const over = el instanceof HTMLElement ? Number(el.getAttribute("data-suggest-row")) : -1;
-			if (Number.isInteger(over) && over >= 0 && over < items.length && over !== dragState.over) {
-				setDragState(s => (s ? { ...s, over } : s));
-			}
-		},
-		onDragEnd: ({ dragged }) => {
-			const s = dragState;
-			setDragState(null);
-			if (dragged && s && s.from !== s.over) {
-				const next = [...items];
-				const [item] = next.splice(s.from, 1);
-				next.splice(s.over, 0, item!);
-				commit(next);
-			}
-		},
-	});
-	// Live preview order while dragging (stable commit happens on drop).
-	const displayed = (() => {
-		if (!dragState || dragState.from === dragState.over) return items;
-		const next = [...items];
-		const [item] = next.splice(dragState.from, 1);
-		next.splice(dragState.over, 0, item!);
-		return next;
-	})();
-	const activeDragItem = dragState?.item ?? null;
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+		useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+	);
+	const onDragEnd = (event: DragEndEvent): void => {
+		const from = Number(event.active.id);
+		const to = event.over ? Number(event.over.id) : Number.NaN;
+		if (!Number.isInteger(from) || !Number.isInteger(to) || from === to) return;
+		commit(arrayMove(items, from, to));
+	};
 
 	return (
 		<>
 			<div className="gui-settings-page-title">{t("settings.starterPrompts")}</div>
 			<p className="gui-settings-page-desc">{t("settings.starterPromptsHint")}</p>
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("settings.starterPrompts")}</div>
-				{items.length === 0 ? (
-					<div className="text-[13px] text-[var(--color-text-faint)]">{t("general.noPromptsYet")}</div>
-				) : (
-					displayed.map((s, i) => {
-						if (editing?.index === i) {
-							return (
-								<div key={i} className="gui-settings-row">
-									<input
-										className="gui-input min-w-0 flex-1"
-										value={editing.label}
-										placeholder={t("general.suggestionLabel")}
-										onChange={e => setEditing({ ...editing, label: e.target.value })}
-									/>
-									<input
-										className="gui-input min-w-0 flex-1"
-										value={editing.prompt}
-										placeholder={t("general.suggestionPrompt")}
-										onChange={e => setEditing({ ...editing, prompt: e.target.value })}
-									/>
-									<button
-										type="button"
-										className="gui-btn gui-btn-approve"
-										disabled={!editing.label.trim() || !editing.prompt.trim()}
-										onClick={saveEdit}
-									>
-										{t("general.save")}
-									</button>
-									<button type="button" className="gui-btn" onClick={() => setEditing(null)}>
-										{t("settings.cancel")}
-									</button>
-								</div>
-							);
-						}
-						const r = resolveSuggestion(s);
-						const dragging = s === activeDragItem;
-						return (
-							<div
-								key={i}
-								className={`gui-settings-row gui-suggest-drag-row${dragging ? " gui-suggest-drag-row--active" : ""}`}
-								data-suggest-row={i}
-								style={{ touchAction: "none" }}
-								onPointerDown={e => {
-									if (editing || adding) return;
-									dragRowRef.current = i;
-									dragHandlers.onPointerDown(e);
-								}}
-								onPointerMove={dragHandlers.onPointerMove}
-								onPointerUp={dragHandlers.onPointerUp}
-								onPointerCancel={dragHandlers.onPointerCancel}
-							>
-								<span className="gui-suggest-drag-grip" aria-hidden="true">
-									<Icon name="draggable" className="h-3.5 w-3.5" />
-								</span>
-								<div className="min-w-0 flex-1">
-									<div className="gui-settings-row-label">
-										{r.label}
-										{r.builtin && <span className="gui-suggest-badge">{t("general.builtin")}</span>}
-									</div>
-									<div className="truncate text-[12px] text-[var(--color-text-faint)]">{r.prompt}</div>
-								</div>
-								<button
-									type="button"
-									className="gui-btn gui-btn--icon"
-									title={t("settings.edit")}
-									aria-label={t("settings.edit")}
-									onPointerDown={e => e.stopPropagation()}
-									onClick={() => startEdit(i)}
-								>
-									<Icon name="pencil" className="h-3.5 w-3.5" />
-								</button>
-								<button
-									type="button"
-									className="gui-btn gui-btn--icon"
-									title={t("general.remove")}
-									aria-label={t("general.remove")}
-									onPointerDown={e => e.stopPropagation()}
-									onClick={() => remove(i)}
-								>
-									<Icon name="delete-bin" className="h-3.5 w-3.5" />
-								</button>
-							</div>
-						);
-					})
-				)}
-				{adding && (
-					<div className="gui-settings-row">
-						<input
-							className="gui-input min-w-0 flex-1"
-							value={adding.label}
-							placeholder={t("general.suggestionLabel")}
-							autoFocus
-							onChange={e => setAdding({ ...adding, label: e.target.value })}
-						/>
-						<input
-							className="gui-input min-w-0 flex-1"
-							value={adding.prompt}
-							placeholder={t("general.suggestionPrompt")}
-							onChange={e => setAdding({ ...adding, prompt: e.target.value })}
-						/>
-						<button
-							type="button"
-							className="gui-btn gui-btn-approve"
-							disabled={!adding.label.trim() || !adding.prompt.trim()}
-							onClick={saveAdd}
-						>
-							{t("general.save")}
-						</button>
-						<button type="button" className="gui-btn" onClick={() => setAdding(null)}>
-							{t("settings.cancel")}
-						</button>
-					</div>
-				)}
-				<div className="gui-suggest-manage-actions">
-					<button type="button" className="gui-btn" onClick={() => setAdding({ label: "", prompt: "" })}>
-						<Icon name="add-circle" className="h-3.5 w-3.5" />
-						<span>{t("general.addSuggestion")}</span>
-					</button>
+				<div className="gui-suggest-head">
 					<button
 						type="button"
-						className="gui-btn"
+						className="gui-link gui-suggest-reset"
 						onClick={() => {
 							resetSuggestions();
 							setItems(loadUserSuggestions());
 							setEditing(null);
 							setAdding(null);
-							setDragState(null);
 						}}
 					>
-						<Icon name="refresh" className="h-3.5 w-3.5" />
-						<span>{t("general.resetDefaults")}</span>
+						{t("general.resetDefaults")}
 					</button>
 				</div>
+				{items.length === 0 && !adding && <p className="gui-suggest-empty">{t("general.noPromptsYet")}</p>}
+				{items.length > 0 && (
+					<DndContext
+						sensors={sensors}
+						collisionDetection={closestCenter}
+						modifiers={[restrictToYAxis]}
+						onDragEnd={onDragEnd}
+					>
+						<SortableContext items={items.map((_, index) => index)} strategy={verticalListSortingStrategy}>
+							<div className="gui-suggest-list">
+								{items.map((item, index) =>
+									editing?.index === index ? (
+										<PromptEditor
+											key={`edit:${index}`}
+											value={editing}
+											onChange={next => setEditing({ index, ...next })}
+											onSave={saveEdit}
+											onCancel={() => setEditing(null)}
+										/>
+									) : (
+										<SortablePromptRow
+											key={`row:${index}`}
+											index={index}
+											item={item}
+											disabled={busy}
+											onEdit={() => startEdit(index)}
+											onRemove={() => remove(index)}
+										/>
+									),
+								)}
+							</div>
+						</SortableContext>
+					</DndContext>
+				)}
+				{adding && (
+					<PromptEditor
+						value={adding}
+						autoFocus
+						onChange={setAdding}
+						onSave={saveAdd}
+						onCancel={() => setAdding(null)}
+					/>
+				)}
+				<button
+					type="button"
+					className="gui-suggest-add"
+					disabled={adding !== null}
+					onClick={() => setAdding({ label: "", prompt: "" })}
+				>
+					<Icon name="add-circle" className="h-4 w-4" />
+					<span>{t("general.addSuggestion")}</span>
+				</button>
 			</div>
 		</>
+	);
+}
+
+/** One prompt row: handle, label + built-in tag, prompt preview, and actions
+ *  that appear on hover/focus so the list reads as prompts, not buttons. */
+function SortablePromptRow({
+	index,
+	item,
+	disabled,
+	onEdit,
+	onRemove,
+}: {
+	index: number;
+	item: StoredSuggestion;
+	disabled: boolean;
+	onEdit(): void;
+	onRemove(): void;
+}): ReactNode {
+	const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+		id: index,
+		disabled,
+	});
+	const resolved = resolveSuggestion(item);
+	return (
+		<div
+			ref={setNodeRef}
+			className={`gui-suggest-row${isDragging ? " gui-suggest-row--dragging" : ""}`}
+			style={transform ? { transform: CSS.Transform.toString(transform), transition } : undefined}
+		>
+			<button
+				type="button"
+				ref={setActivatorNodeRef}
+				className="gui-suggest-grip"
+				{...attributes}
+				{...listeners}
+				disabled={disabled}
+				title={t("settings.dragReorder")}
+				aria-label={t("settings.dragReorder")}
+			>
+				<Icon name="draggable" className="h-3.5 w-3.5" />
+			</button>
+			<div className="gui-suggest-row-body">
+				<div className="gui-suggest-row-title">
+					<span className="gui-suggest-row-label">{resolved.label}</span>
+					{resolved.builtin && <span className="gui-suggest-badge">{t("general.builtin")}</span>}
+				</div>
+				<div className="gui-suggest-row-prompt" title={resolved.prompt}>
+					{resolved.prompt}
+				</div>
+			</div>
+			<div className="gui-suggest-row-actions">
+				<button
+					type="button"
+					className="gui-suggest-action"
+					title={t("settings.edit")}
+					aria-label={t("settings.edit")}
+					disabled={disabled}
+					onClick={onEdit}
+				>
+					<Icon name="pencil" className="h-3.5 w-3.5" />
+				</button>
+				<button
+					type="button"
+					className="gui-suggest-action gui-suggest-action--danger"
+					title={t("general.remove")}
+					aria-label={t("general.remove")}
+					disabled={disabled}
+					onClick={onRemove}
+				>
+					<Icon name="delete-bin" className="h-3.5 w-3.5" />
+				</button>
+			</div>
+		</div>
+	);
+}
+
+/** Inline editor card: label on one line, the prompt in a textarea — a full
+ *  sentence does not fit the old single-line pair of inputs. */
+function PromptEditor({
+	value,
+	autoFocus = false,
+	onChange,
+	onSave,
+	onCancel,
+}: {
+	value: { label: string; prompt: string };
+	autoFocus?: boolean;
+	onChange(next: { label: string; prompt: string }): void;
+	onSave(): void;
+	onCancel(): void;
+}): ReactNode {
+	const ready = value.label.trim() !== "" && value.prompt.trim() !== "";
+	return (
+		<div className="gui-suggest-editor">
+			<input
+				className="gui-input"
+				value={value.label}
+				placeholder={t("general.suggestionLabel")}
+				aria-label={t("general.suggestionLabel")}
+				autoFocus={autoFocus}
+				onChange={event => onChange({ ...value, label: event.target.value })}
+			/>
+			<textarea
+				className="gui-input gui-suggest-editor-prompt"
+				rows={3}
+				value={value.prompt}
+				placeholder={t("general.suggestionPrompt")}
+				aria-label={t("general.suggestionPrompt")}
+				onChange={event => onChange({ ...value, prompt: event.target.value })}
+			/>
+			<div className="gui-suggest-editor-actions">
+				<button type="button" className="gui-btn" onClick={onCancel}>
+					{t("settings.cancel")}
+				</button>
+				<button type="button" className="gui-btn gui-btn-approve" disabled={!ready} onClick={onSave}>
+					{t("general.save")}
+				</button>
+			</div>
+		</div>
 	);
 }

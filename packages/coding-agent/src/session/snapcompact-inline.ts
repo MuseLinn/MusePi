@@ -24,6 +24,7 @@ import type {
 	UserMessage,
 	VideoContent,
 } from "@musepi/pi-ai";
+import { sendsImageInputOnWire } from "@musepi/pi-ai/providers/vision-guard";
 import * as snapcompact from "@musepi/snapcompact";
 import type { SnapcompactFrameSink } from "../blob-broker/service";
 import contextFramesNote from "../prompts/system/snapcompact-context-frames-note.md" with { type: "text" };
@@ -286,7 +287,7 @@ export function estimateInlineSavings(input: {
 	messages: readonly InlineMessageView[];
 }): SnapcompactSavingsEstimate {
 	const { options, model } = input;
-	if (!model?.input.includes("image")) {
+	if (!model || !sendsImageInputOnWire(model)) {
 		return { visionCapable: false, savedTokens: 0 };
 	}
 
@@ -428,7 +429,7 @@ export class SnapcompactInlineTransformer {
 	async transform(context: Context, model: Model): Promise<Context> {
 		// Vision gate: providers silently DROP images on text-only models —
 		// rendering would lose the content entirely.
-		if (!model.input.includes("image")) return context;
+		if (!sendsImageInputOnWire(model)) return context;
 
 		const shape = snapcompact.resolveShape(model, this.options.shape);
 		const tokenizer = new Tokenizer(model);

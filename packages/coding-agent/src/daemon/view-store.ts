@@ -597,17 +597,21 @@ export class ViewStore {
 		}));
 	}
 
-	/** All message rows for one session (history viewer), oldest first. */
-	messagesFor(sessionId: string, limit = 500): MessageHit[] {
+	/** All message rows for one session (session-management message detail).
+	 *  `tail` reads the newest `limit` rows and returns them in reading order —
+	 *  a preview wants the end of a long conversation, while the plain call
+	 *  keeps the oldest-first contract the find bar and history analysis use. */
+	messagesFor(sessionId: string, limit = 500, tail = false): MessageHit[] {
 		const rows = this.#db
 			.query(
 				`SELECT session_id, seq, role, model, content, timestamp
 				 FROM messages
 				 WHERE session_id = ?
-				 ORDER BY seq ASC
+				 ORDER BY seq ${tail ? "DESC" : "ASC"}
 				 LIMIT ?`,
 			)
 			.all(sessionId, limit) as MessageRow[];
+		if (tail) rows.reverse();
 		return rows.map(r => ({
 			sessionId: r.session_id,
 			seq: r.seq,
@@ -616,6 +620,31 @@ export class ViewStore {
 			content: r.content,
 			timestamp: r.timestamp,
 		}));
+	}
+
+	/** Newest user message text per session — the session table's prompt
+	 * column reads one page of rows in one query instead of scanning each
+	 * transcript tail through {@link search}. Sessions without a user row are
+	 * absent from the result. */
+	lastUserMessages(sessionIds: readonly string[]): Record<string, string> {
+		const ids = [...new Set(sessionIds.filter(id => typeof id === "string" && id.length > 0))].slice(0, 200);
+		if (ids.length === 0) return {};
+		const placeholders = ids.map(() => "?").join(", ");
+		const rows = this.#db
+			.query(
+				`SELECT m.session_id AS sessionId, m.content
+				 FROM messages m
+				 JOIN (
+					SELECT session_id, MAX(seq) AS seq
+					FROM messages
+					WHERE role = 'user' AND session_id IN (${placeholders})
+					GROUP BY session_id
+				 ) tail ON tail.session_id = m.session_id AND tail.seq = m.seq`,
+			)
+			.all(...ids) as Array<{ sessionId: string; content: string }>;
+		const prompts: Record<string, string> = {};
+		for (const row of rows) prompts[row.sessionId] = row.content;
+		return prompts;
 	}
 
 	/** Earliest user message text for a session — used as the display title

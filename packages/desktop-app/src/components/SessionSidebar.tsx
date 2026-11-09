@@ -12,6 +12,7 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
+import { isElectron, openPathInFileManager, pickDirectory } from "../lib/electron";
 import type { ModeLabelEntry } from "../lib/mode-label";
 import { pathBaseName, projectLabel, projectLabels } from "../lib/project-label";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
@@ -20,7 +21,6 @@ import type { RpcClient } from "../lib/rpc";
 import { shortcutLabel } from "../lib/shortcuts";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import {
-	addProjectDirectory,
 	addSessionDirectory,
 	createProject,
 	deleteProject,
@@ -29,12 +29,11 @@ import {
 	listSessionDirectories,
 	migrateLegacyProjects,
 	mirrorProjects,
-	removeProjectDirectory,
 	removeSessionDirectory,
-	renameProject,
-	setProjectPrimary,
+	updateProject,
+	type WorkspaceMutationResult,
 } from "../lib/workspace-projects";
-import { fileRootSelection, resolveWorkspaceRoot, rootSelectionKey } from "../lib/workspace-roots";
+import { fileRootSelection, isRemoteMirrorCwd, resolveWorkspaceRoot, rootSelectionKey } from "../lib/workspace-roots";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { type CustomGroup, CustomGroups } from "./CustomGroups";
@@ -42,6 +41,7 @@ import { DialogFrame } from "./DialogFrame";
 import { GroupedSessionList } from "./GroupedSessionList";
 import { InstanceButton } from "./InstanceButton";
 import { MenuPopup } from "./MenuPopup";
+import { ProjectDialog, type ProjectDialogTarget } from "./ProjectDialog";
 import { Reveal } from "./Reveal";
 import { SessionHoverCard } from "./SessionHoverCard";
 import {
@@ -55,6 +55,33 @@ import {
 } from "./SessionList";
 import { SessionSearchBar } from "./SessionSearchBar";
 import { filterSessionTree } from "./session-list-shared";
+
+const SESSION_EMOJI_PALETTE = [
+	"📁",
+	"🐛",
+	"✨",
+	"🧠",
+	"🚀",
+	"🔧",
+	"📝",
+	"🎨",
+	"⚡",
+	"🔍",
+	"🧪",
+	"📦",
+	"🌱",
+	"🔥",
+	"💡",
+	"🧩",
+	"🛠️",
+	"📊",
+	"🎯",
+	"🤖",
+	"📌",
+	"🗂️",
+	"🧭",
+	"🫧",
+] as const;
 
 /**
  * Left pane: menu (new/search/scheduled/skills), a group/
@@ -111,13 +138,15 @@ export function SessionSidebar({
 	selectedId,
 	onSelect,
 	onNewSession,
+	onNewSessionInProject,
 	onDisconnect,
 	onOpenConnect,
 	onOpenWorkspace,
 	onOpenSettings,
-	onPickFolder,
-	onCreateProject,
+	onAddProject,
 	onOpenCollab,
+	onOpenInstanceManager,
+	onOpenRemoteDisclaimer,
 	onOpenShortcuts,
 	onRenameSession,
 	onOpenSearch,
@@ -128,11 +157,13 @@ export function SessionSidebar({
 	onDeleteSession,
 	onExportSession,
 	onRetitleSession,
+	onReloadSession,
 	unread,
 	onToggleUnread,
 	onImportSessions,
 	modeCatalog,
 	showFooter = true,
+	gettingStarted,
 	rpc,
 	connected,
 	daemonUrl,
@@ -162,17 +193,18 @@ export function SessionSidebar({
 	selectedId: string | null;
 	onSelect(id: string): void;
 	onNewSession(): void;
+	/** Create a session rooted at one project row (hover "+"). */
+	onNewSessionInProject?(cwd: string): void;
 	onDisconnect(): void;
 	onOpenConnect(): void;
 	onOpenWorkspace(cwd: string): void;
 	onOpenSettings(): void;
-	/** 打开文件夹 — native directory picker (Electron dialog). */
-	onPickFolder?(): void;
-	/** Create a blank project — a dialog asks for a name
-	 *  + parent path and the app mkdirs + opens it (daemon fs.mkdir). */
-	onCreateProject?(): void;
+	/** 添加项目 — native directory picker, then the project dialog. */
+	onAddProject?(): void;
 	/** Open the collab remote-control dialog. */
 	onOpenCollab?(): void;
+	onOpenInstanceManager(open: () => void): void;
+	onOpenRemoteDisclaimer(): void;
 	/** Open the keyboard-shortcuts reference. */
 	onOpenShortcuts?(): void;
 	/** Persist a user-set session title (daemon session.rename). */
@@ -196,6 +228,8 @@ export function SessionSidebar({
 	 *  Resolves the outcome so the menu can toast the failure reason.
 	 *  Optional: without it the row menu omits the AI item. */
 	onRetitleSession?(sessionId: string): Promise<SessionRetitleResult>;
+	/** Reload a session from disk (daemon session.reload), then reopen it. */
+	onReloadSession?(sessionId: string): void;
 	/** Pane width in px (draggable resize). */
 	width?: number;
 	/** Unread session ids (single source: app-level unread set — pet
@@ -212,6 +246,10 @@ export function SessionSidebar({
 	 *  tier shell hosts those entries in the permanent rail, so app.tsx sets
 	 *  false; other hosts (and the sidebar contract tests) keep the default. */
 	showFooter?: boolean;
+	/** Bottom-of-panel getting-started checklist. The host owns the card and
+	 *  its actions; the sidebar only supplies the layout slot so the card
+	 *  folds and peeks together with the session list. */
+	gettingStarted?: ReactNode;
 	/** Mini chat: pop a session row out into the
 	 *  picture-in-picture mini chat window (Electron); non-Electron hosts
 	 *  should fall back to opening the session in place. */
@@ -335,6 +373,27 @@ export function SessionSidebar({
 		else next.set(id, tag);
 		persistManualTags(next);
 	};
+	const [sessionEmoji, setSessionEmojiMap] = useState<ReadonlyMap<string, string>>(() => {
+		try {
+			const raw = localStorage.getItem("musepi-gui-session-emoji");
+			return raw ? new Map(Object.entries(JSON.parse(raw) as Record<string, string>)) : new Map();
+		} catch {
+			return new Map();
+		}
+	});
+	const setSessionEmoji = (id: string, emoji: string | null): void => {
+		const next = new Map(sessionEmoji);
+		if (emoji === null || emoji.trim().length === 0) next.delete(id);
+		else next.set(id, emoji.trim().slice(0, 16));
+		setSessionEmojiMap(next);
+		try {
+			localStorage.setItem("musepi-gui-session-emoji", JSON.stringify(Object.fromEntries(next)));
+		} catch {
+			// storage unavailable
+		}
+	};
+	const [emojiTarget, setEmojiTarget] = useState<string | null>(null);
+	const [emojiDraft, setEmojiDraft] = useState("");
 	// Derived lifecycle status per session (complete/interrupted/aborted/
 	// error/pending) — TUI session-list parity, from session.list.
 	const statuses = useMemo(
@@ -355,15 +414,25 @@ export function SessionSidebar({
 			onRenameSession?.(id, next);
 		});
 	};
+	// The OS label follows the shell, not the UI language: Finder is macOS-only.
+	const openFolderLabel = (): string => {
+		const platform = (window as unknown as { electronAPI?: { platform?: string } }).electronAPI?.platform ?? "";
+		if (platform === "win32") return t("settings.openInExplorer");
+		if (platform === "darwin") return t("settings.openFinder");
+		return t("settings.openInFileManager");
+	};
+	const openFolder = (target: string): void => {
+		// The web build has no OS bridge; a failed toast there would blame the
+		// path for a missing shell feature.
+		if (!isElectron()) return;
+		void openPathInFileManager(target).then(ok => {
+			if (!ok) pushActionToast({ kind: "error", message: t("settings.openFolderFailed") });
+		});
+	};
 	const openInFinder = (id: string): void => {
 		const cwd = sessionMeta.get(id)?.cwd;
 		if (!cwd) return;
-		const api = (
-			window as unknown as {
-				electronAPI?: { revealPath?(p: string): Promise<void> };
-			}
-		).electronAPI;
-		if (api?.revealPath) void api.revealPath(cwd);
+		openFolder(cwd);
 	};
 	const [viewMenu, setViewMenu] = useState(false);
 	const viewMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
@@ -616,7 +685,7 @@ export function SessionSidebar({
 			cancelled = true;
 		};
 	}, [rpc, projectsRevision, sessionCwdKey]);
-	// Folders the app picks (打开文件夹 menu, ⌘O, welcome composer) create the
+	// Folders the app picks (添加项目 menu, ⌘O, welcome composer) create the
 	// registry row themselves and announce it — re-read instead of patching a
 	// local copy, so the daemon stays the only list.
 	useEffect(() => {
@@ -741,6 +810,8 @@ export function SessionSidebar({
 				workingIds={workingIds}
 				statuses={statuses}
 				manualTags={manualTags}
+				emojis={sessionEmoji}
+				onRenameSession={onRenameSession}
 				searchQuery={sessionQuery}
 				retitlingId={retitlingId}
 			/>
@@ -782,110 +853,70 @@ export function SessionSidebar({
 			});
 		});
 	};
-	const renameProjectByRoot = (root: string): void => {
-		const project = projectOf(root);
-		if (!rpc || !project) return;
-		void prompt({ title: t("settings.renameProject"), defaultValue: project.name }).then(name => {
-			const trimmed = name?.trim();
-			if (!trimmed || trimmed === project.name) return;
-			void runProjectMutation(async () => {
-				// An implicit row is a session-history backfill; renaming it is an
-				// explicit claim, so promote it to managed. `workspace.create`
-				// keeps the row id for an existing root.
-				if (project.kind === "implicit") await createProject(rpc, project.root, trimmed);
-				else await renameProject(rpc, project.id, trimmed);
-			}, t("settings.projectRenameFailed"));
-		});
-	};
 	const promoteProject = (root: string): void => {
 		const project = projectOf(root);
 		if (!rpc || !project) return;
-		void runProjectMutation(() => createProject(rpc, project.root, project.name), t("settings.projectPromoteFailed"));
+		void createProject(rpc, project.root, project.name)
+			.then(result => {
+				reloadProjects();
+				// Promotion is a claim to manage the project; open the editor so
+				// the next action (naming/source folders) is one click away.
+				setProjectDialog({
+					mode: "edit",
+					target: {
+						id: result.workspace.id,
+						root: result.workspace.root,
+						name: result.workspace.name,
+						additionalDirs: result.workspace.additionalDirs,
+					},
+				});
+			})
+			.catch(error => {
+				const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+				pushActionToast({ kind: "error", message: `${t("settings.projectPromoteFailed")}${detail}` });
+			});
 	};
-	// Working-directory manager (project context menu): the daemon row is the
-	// authority, so the dialog re-reads the project from the loaded list on
-	// every render and mutations reload it.
-	const [dirsProjectId, setDirsProjectId] = useState<string | null>(null);
-	const [dirsBusy, setDirsBusy] = useState(false);
-	const [dirsNotice, setDirsNotice] = useState<string | null>(null);
-	const dirsProject = dirsProjectId ? (projects.find(project => project.id === dirsProjectId) ?? null) : null;
-	const openProjectDirectories = (root: string): void => {
+	// One modal owns every project mutation (name + source folders). The
+	// daemon row stays the authority: the dialog is seeded from the loaded
+	// list, and a successful save re-reads it.
+	const [projectDialog, setProjectDialog] = useState<{
+		mode: "create" | "edit";
+		target: ProjectDialogTarget;
+	} | null>(null);
+	const openProjectEditor = (root: string): void => {
 		const project = projectOf(root);
 		if (!project) return;
-		setDirsNotice(null);
-		setDirsProjectId(project.id);
-	};
-	const closeProjectDirectories = (): void => {
-		setDirsProjectId(null);
-		setDirsNotice(null);
-		setDirsBusy(false);
-	};
-	const addDirectoryToProject = async (): Promise<void> => {
-		if (!rpc || !dirsProject) return;
-		const value = await prompt({
-			title: t("settings.addDirectoryPrompt"),
-			placeholder: t("settings.directoryPathPlaceholder"),
+		setProjectDialog({
+			mode: "edit",
+			target: {
+				id: project.id,
+				root: project.root,
+				name: project.name,
+				additionalDirs: project.additionalDirs,
+			},
 		});
-		const directory = value?.trim();
-		if (!directory) return;
-		setDirsBusy(true);
-		setDirsNotice(null);
-		try {
-			const result = await addProjectDirectory(rpc, dirsProject, directory);
-			const duplicate = result.duplicates[0];
-			if (duplicate) setDirsNotice(t("settings.directoryDuplicate", { path: duplicate.directory }));
-			reloadProjects();
-		} catch (error) {
-			const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
-			setDirsNotice(`${t("settings.addDirectoryFailed")}${detail}`);
-		} finally {
-			setDirsBusy(false);
-		}
 	};
-	const removeDirectoryFromProject = async (directory: string): Promise<void> => {
-		if (!rpc || !dirsProject) return;
-		setDirsBusy(true);
-		setDirsNotice(null);
-		try {
-			await removeProjectDirectory(rpc, dirsProject, directory);
+	const applyProjectResult = useCallback(
+		(result: WorkspaceMutationResult): void => {
+			const previousRoot = projectDialog?.target.root;
+			const workspace = result.workspace;
+			// Collapse/order state is keyed by root; move it with a primary swap
+			// so the block keeps its place instead of reopening elsewhere.
+			if (previousRoot && !directoriesEqual(previousRoot, workspace.root)) {
+				const remap = (root: string): string => (directoriesEqual(root, previousRoot) ? workspace.root : root);
+				setCollapsedProjects(prev => prev.map(remap));
+				setProjectOrder(prev => prev.map(remap));
+			}
 			reloadProjects();
-		} catch (error) {
-			const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
-			setDirsNotice(`${t("settings.removeDirectoryFailed")}${detail}`);
-		} finally {
-			setDirsBusy(false);
-		}
-	};
-	const makeDirectoryPrimary = async (directory: string): Promise<void> => {
-		if (!rpc || !dirsProject) return;
-		const previousRoot = dirsProject.root;
-		setDirsBusy(true);
-		setDirsNotice(null);
-		try {
-			const workspace = await setProjectPrimary(rpc, dirsProject.id, directory);
-			// Collapse/order state is keyed by root; move it with the swap so the
-			// block does not lose its place (or reopen) after promotion.
-			const remap = (root: string): string => (directoriesEqual(root, previousRoot) ? workspace.root : root);
-			setCollapsedProjects(prev => prev.map(remap));
-			setProjectOrder(prev => prev.map(remap));
-			reloadProjects();
-		} catch (error) {
-			const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
-			setDirsNotice(`${t("settings.setPrimaryFailed")}${detail}`);
-		} finally {
-			setDirsBusy(false);
-		}
-	};
+		},
+		[projectDialog?.target.root, reloadProjects],
+	);
 	// ── Session working directories (live session header) ──────────────
 	// The file pane offers these roots; the daemon validates and reports an
 	// already-present directory through `duplicate` instead of failing.
-	const addWorkingDirectory = async (sessionId: string): Promise<void> => {
+	const addWorkingDirectory = async (sessionId: string, remember = false): Promise<void> => {
 		if (!rpc) return;
-		const value = await prompt({
-			title: t("settings.addDirectoryPrompt"),
-			placeholder: t("settings.directoryPathPlaceholder"),
-		});
-		const directory = value?.trim();
+		const directory = (await pickDirectory())?.trim();
 		if (!directory) return;
 		try {
 			const result = await addSessionDirectory(rpc, sessionId, directory);
@@ -901,6 +932,29 @@ export function SessionSidebar({
 				kind: "success",
 				message: t("settings.directoryAdded", { path: result.directory ?? directory }),
 			});
+			if (!remember) return;
+			const cwd = sessionMeta.get(sessionId)?.cwd;
+			if (!cwd || isRemoteMirrorCwd(cwd)) return;
+			const project = projectOf(cwd);
+			try {
+				if (project?.kind === "managed") {
+					const next = [...project.additionalDirs];
+					if (!next.some(existing => directoriesEqual(existing, directory))) next.push(directory);
+					await updateProject(rpc, project.id, { additionalDirs: next });
+				} else {
+					// Implicit row (session-history backfill): creating the project
+					// promotes it and seeds the directory in one call.
+					await createProject(rpc, cwd, project?.name ?? pathBaseName(cwd), [directory]);
+				}
+				reloadProjects();
+				pushActionToast({
+					kind: "success",
+					message: t("settings.directoryRemembered", { path: directory }),
+				});
+			} catch (rememberError) {
+				const detail = rememberError instanceof Error && rememberError.message ? `: ${rememberError.message}` : "";
+				pushActionToast({ kind: "error", message: `${t("settings.rememberDirectoryFailed")}${detail}` });
+			}
 		} catch (error) {
 			const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
 			pushActionToast({ kind: "error", message: `${t("settings.addDirectoryFailed")}${detail}` });
@@ -1283,7 +1337,7 @@ export function SessionSidebar({
 							<>
 								{/* Add-project button lives above BOTH view modes (the
 								 * timeline default hid it before — the 项目 tab
-								 * always offers 打开文件夹 / 远程连接). */}
+								 * always offers 添加项目 / 远程连接). */}
 								<div className="relative">
 									<button
 										type="button"
@@ -1305,22 +1359,11 @@ export function SessionSidebar({
 											className="gui-view-opt"
 											onClick={() => {
 												setProjMenu(false);
-												onPickFolder?.();
-											}}
-										>
-											<Icon name="folder-open" className="h-3.5 w-3.5" />
-											<span>{t("settings.openFolder")}</span>
-										</button>
-										<button
-											type="button"
-											className="gui-view-opt"
-											onClick={() => {
-												setProjMenu(false);
-												onCreateProject?.();
+												onAddProject?.();
 											}}
 										>
 											<Icon name="folder-add" className="h-3.5 w-3.5" />
-											<span>{t("settings.newBlankProject")}</span>
+											<span>{t("settings.addProject")}</span>
 										</button>
 										<button
 											type="button"
@@ -1365,6 +1408,8 @@ export function SessionSidebar({
 													workingIds={workingIds}
 													statuses={statuses}
 													manualTags={manualTags}
+													emojis={sessionEmoji}
+													onRenameSession={onRenameSession}
 													searchQuery={sessionQuery}
 													retitlingId={retitlingId}
 												/>
@@ -1381,6 +1426,8 @@ export function SessionSidebar({
 											workingIds={workingIds}
 											statuses={statuses}
 											manualTags={manualTags}
+											emojis={sessionEmoji}
+											onRenameSession={onRenameSession}
 											searchQuery={sessionQuery}
 											retitlingId={retitlingId}
 										/>
@@ -1390,7 +1437,7 @@ export function SessionSidebar({
 										// Project blocks: registry rows from `workspace.list`,
 										// each a collapsible block. Sessions group by exact cwd;
 										// a project without sessions still shows (empty state)
-										// so a freshly picked 打开文件夹 appears immediately.
+										// so a freshly picked 添加项目 appears immediately.
 										const byCwd = new Map<string, SessionListNode[]>();
 										const noFolder: SessionListNode[] = [];
 										for (const n of regularNodes) {
@@ -1426,6 +1473,8 @@ export function SessionSidebar({
 															workingIds={workingIds}
 															statuses={statuses}
 															manualTags={manualTags}
+															emojis={sessionEmoji}
+															onRenameSession={onRenameSession}
 															searchQuery={sessionQuery}
 															retitlingId={retitlingId}
 														/>
@@ -1554,6 +1603,64 @@ export function SessionSidebar({
 																		className={`gui-project-chevron${isCollapsed ? " gui-project-chevron--closed" : ""}`}
 																	/>
 																</button>
+																<span className="gui-project-actions">
+																	{project?.kind === "implicit" ? (
+																		<button
+																			type="button"
+																			className="gui-project-action"
+																			title={t("settings.promoteProject")}
+																			aria-label={t("settings.promoteProject")}
+																			disabled={!rpc}
+																			onClick={e => {
+																				e.stopPropagation();
+																				promoteProject(path);
+																			}}
+																		>
+																			<Icon name="folder-add" className="h-3 w-3" />
+																		</button>
+																	) : (
+																		<button
+																			type="button"
+																			className="gui-project-action"
+																			title={t("projectDialog.editTitle")}
+																			aria-label={t("projectDialog.editTitle")}
+																			disabled={!rpc}
+																			onClick={e => {
+																				e.stopPropagation();
+																				openProjectEditor(path);
+																			}}
+																		>
+																			<Icon name="pencil" className="h-3 w-3" />
+																		</button>
+																	)}
+																	<button
+																		type="button"
+																		className="gui-project-action"
+																		title={t("tools.more")}
+																		aria-label={t("tools.more")}
+																		aria-haspopup="menu"
+																		onClick={e => {
+																			e.stopPropagation();
+																			const rect = e.currentTarget.getBoundingClientRect();
+																			setProjectCtx({ path, x: rect.left, y: rect.bottom + 4 });
+																		}}
+																	>
+																		<Icon name="more" className="h-3 w-3" />
+																	</button>
+																	<button
+																		type="button"
+																		className="gui-project-action gui-project-action--new"
+																		title={t("settings.newSession")}
+																		aria-label={t("settings.newSession")}
+																		disabled={!onNewSessionInProject}
+																		onClick={e => {
+																			e.stopPropagation();
+																			onNewSessionInProject?.(path);
+																		}}
+																	>
+																		<Icon name="add" className="h-3 w-3" />
+																	</button>
+																</span>
 															</div>
 															<ProjectCollapse collapsed={isCollapsed}>
 																{list.length === 0 ? (
@@ -1569,6 +1676,8 @@ export function SessionSidebar({
 																		workingIds={workingIds}
 																		statuses={statuses}
 																		manualTags={manualTags}
+																		emojis={sessionEmoji}
+																		onRenameSession={onRenameSession}
 																		searchQuery={sessionQuery}
 																		retitlingId={retitlingId}
 																	/>
@@ -1596,6 +1705,8 @@ export function SessionSidebar({
 															workingIds={workingIds}
 															statuses={statuses}
 															manualTags={manualTags}
+															emojis={sessionEmoji}
+															onRenameSession={onRenameSession}
 															searchQuery={sessionQuery}
 															retitlingId={retitlingId}
 														/>
@@ -1621,6 +1732,8 @@ export function SessionSidebar({
 											workingIds={workingIds}
 											statuses={statuses}
 											manualTags={manualTags}
+											emojis={sessionEmoji}
+											onRenameSession={onRenameSession}
 											searchQuery={sessionQuery}
 											retitlingId={retitlingId}
 										/>
@@ -1691,6 +1804,8 @@ export function SessionSidebar({
 									workingIds={workingIds}
 									statuses={statuses}
 									manualTags={manualTags}
+									emojis={sessionEmoji}
+									onRenameSession={onRenameSession}
 									searchQuery={sessionQuery}
 									retitlingId={retitlingId}
 								/>
@@ -1705,6 +1820,8 @@ export function SessionSidebar({
 									workingIds={workingIds}
 									statuses={statuses}
 									manualTags={manualTags}
+									emojis={sessionEmoji}
+									onRenameSession={onRenameSession}
 									searchQuery={sessionQuery}
 									retitlingId={retitlingId}
 								/>
@@ -1712,6 +1829,7 @@ export function SessionSidebar({
 						)}
 					</div>
 				</div>
+				{gettingStarted}
 				{/* User footer: instance info (connection state, latency, host
 				 * switcher) on the left; settings/session actions on the right.
 				 * `showFooter` lets a host move these entries into a permanent
@@ -1730,6 +1848,8 @@ export function SessionSidebar({
 							onReconnect={onReconnect}
 							onDisconnect={onDisconnect}
 							onOpenWorkspace={onOpenWorkspace}
+							onOpenManager={onOpenInstanceManager}
+							onOpenDisclaimer={onOpenRemoteDisclaimer}
 						/>
 						<div className="flex items-center gap-1.5">
 							<button
@@ -1781,6 +1901,21 @@ export function SessionSidebar({
 												? pinned.filter(x => x !== sessionCtx.id)
 												: [sessionCtx.id, ...pinned],
 										),
+								},
+								{
+									label: t("settings.setSessionEmoji"),
+									icon: "emotion-happy",
+									onSelect: () => {
+										setEmojiDraft(sessionEmoji.get(sessionCtx.id) ?? "");
+										setEmojiTarget(sessionCtx.id);
+										setSessionCtx(null);
+									},
+								},
+								{
+									label: t("general.reloadSession"),
+									icon: "refresh",
+									disabled: !onReloadSession,
+									onSelect: () => onReloadSession?.(sessionCtx.id),
 								},
 								{
 									label: t("settings.renameTask"),
@@ -1845,6 +1980,7 @@ export function SessionSidebar({
 										pushActionToast({
 											kind: "success",
 											message: t("general.sessionArchived"),
+											dedupeKey: `session:archive:${sessionCtx.id}`,
 											actionLabel: t("general.undo"),
 											onAction: () => unarchiveSession(sessionCtx.id),
 										});
@@ -1928,6 +2064,16 @@ export function SessionSidebar({
 											icon: "folder-add",
 											onSelect: () => void addWorkingDirectory(sessionCtx.id),
 										},
+										...(isRemoteMirrorCwd(cwd)
+											? []
+											: [
+													{
+														label: t("settings.addWorkingDirectoryRemember"),
+														description: t("settings.addWorkingDirectoryRememberHint"),
+														icon: "folder-add" as const,
+														onSelect: () => void addWorkingDirectory(sessionCtx.id, true),
+													},
+												]),
 										...sessionDirs
 											.filter(directory => !directory.primary)
 											.map(directory => ({
@@ -1948,7 +2094,7 @@ export function SessionSidebar({
 								},
 								{ divider: true },
 								{
-									label: t("settings.openFinder"),
+									label: openFolderLabel(),
 									icon: "folder-open",
 									disabled: !sessionMeta.get(sessionCtx.id)?.cwd,
 									onSelect: () => openInFinder(sessionCtx.id),
@@ -2038,16 +2184,9 @@ export function SessionSidebar({
 					if (!projectCtx) return [];
 					const project = projectOf(projectCtx.path);
 					const reveal = {
-						label: t("settings.openFinder"),
+						label: openFolderLabel(),
 						icon: "folder-open",
-						onSelect: () => {
-							const api = (
-								window as unknown as {
-									electronAPI?: { revealPath?(p: string): Promise<void> };
-								}
-							).electronAPI;
-							if (api?.revealPath) void api.revealPath(projectCtx.path);
-						},
+						onSelect: () => openFolder(projectCtx.path),
 					};
 					const copyPath = {
 						label: t("settings.copyPath"),
@@ -2075,19 +2214,13 @@ export function SessionSidebar({
 						copyPath,
 						{ divider: true },
 						{
-							label: t("settings.renameProject"),
-							icon: "pencil",
-							disabled: !rpc,
-							onSelect: () => renameProjectByRoot(projectCtx.path),
-						},
-						{
-							label: t("settings.manageDirectories"),
+							label: t("projectDialog.editTitle"),
 							description: t("settings.manageDirectoriesHint"),
-							icon: "folder",
+							icon: "pencil",
 							disabled: !rpc,
 							onSelect: () => {
 								setProjectCtx(null);
-								openProjectDirectories(projectCtx.path);
+								openProjectEditor(projectCtx.path);
 							},
 						},
 						{ divider: true },
@@ -2101,94 +2234,85 @@ export function SessionSidebar({
 					];
 				})()}
 			/>
-			{/* Working-directory manager: primary root plus the registry's
-			 * additional directories, all mutated through `workspace.*`. The
-			 * daemon reports an already-present directory through `duplicates`;
-			 * that hint wins over a silent no-op. */}
+			{/* Session emoji: a compact palette plus a free-text field so a
+			 * custom glyph is still possible. Stored locally like tags/pins. */}
 			<DialogFrame
-				open={dirsProject !== null}
-				onClose={closeProjectDirectories}
-				label={t("settings.manageDirectories")}
+				open={emojiTarget !== null}
+				onClose={() => setEmojiTarget(null)}
+				label={t("settings.sessionEmoji")}
+				className="gui-emoji-dialog"
 			>
-				{dirsProject && (
-					<div className="flex w-[min(420px,80vw)] flex-col gap-3 p-4">
-						<div>
-							<h3 className="m-0 text-[14px] font-medium">{dirsProject.name}</h3>
-							<p className="m-0 mt-1 text-[11px] text-[var(--color-text-faint)]">{dirsProject.root}</p>
-						</div>
-						<div className="flex flex-col gap-1">
-							<div className="gui-group-label pb-1">{t("settings.projectDirectories")}</div>
-							{(() => {
-								const rows = [dirsProject.root, ...dirsProject.additionalDirs];
-								return rows.map(directory => {
-									const primary = directory === dirsProject.root;
-									return (
-										<div
-											key={directory}
-											className="flex items-center gap-2 rounded-md px-2 py-1 text-[12px] hover:bg-[var(--color-hover)]"
-										>
-											<Icon name={primary ? "folder" : "folder-add"} className="h-3.5 w-3.5 flex-shrink-0" />
-											<span className="min-w-0 flex-1 truncate" title={directory}>
-												{directory}
-											</span>
-											{primary ? (
-												<span className="flex-shrink-0 text-[10px] text-[var(--color-text-faint)]">
-													{t("settings.primaryDirectory")}
-												</span>
-											) : (
-												<>
-													<button
-														type="button"
-														className="gui-pane-action w-auto flex-shrink-0 px-1.5 text-[11px]"
-														disabled={dirsBusy}
-														onClick={() => void makeDirectoryPrimary(directory)}
-													>
-														{t("settings.setAsPrimary")}
-													</button>
-													<button
-														type="button"
-														className="gui-pane-action w-auto flex-shrink-0 px-1.5 text-[11px]"
-														disabled={dirsBusy}
-														title={t("settings.removeDirectory")}
-														aria-label={t("settings.removeDirectory")}
-														onClick={() => void removeDirectoryFromProject(directory)}
-													>
-														<Icon name="delete-bin" className="h-3.5 w-3.5" />
-													</button>
-												</>
-											)}
-										</div>
-									);
-								});
-							})()}
-						</div>
-						{dirsProject.additionalDirs.length === 0 && (
-							<p className="m-0 text-[11px] text-[var(--color-text-faint)]">
-								{t("settings.projectDirectoriesEmpty")}
-							</p>
-						)}
-						{dirsNotice && (
-							<p className="m-0 text-[11px] text-[var(--color-danger)]" role="alert">
-								{dirsNotice}
-							</p>
-						)}
-						<div className="flex items-center justify-between gap-2">
+				<div className="flex flex-col gap-3">
+					<div className="gui-new-project-field">
+						<div className="gui-new-project-label">{t("settings.sessionEmoji")}</div>
+						<input
+							className="gui-input w-full"
+							value={emojiDraft}
+							maxLength={16}
+							autoFocus
+							placeholder="😀"
+							onChange={event => setEmojiDraft(event.target.value)}
+							onKeyDown={event => {
+								if (event.key === "Enter" && emojiTarget) {
+									setSessionEmoji(emojiTarget, emojiDraft);
+									setEmojiTarget(null);
+								}
+							}}
+						/>
+						<p className="m-0 text-[11px] text-[var(--color-text-faint)]">{t("settings.sessionEmojiHint")}</p>
+					</div>
+					<div className="gui-emoji-grid">
+						{SESSION_EMOJI_PALETTE.map(emoji => (
+							<button
+								key={emoji}
+								type="button"
+								className={`gui-emoji-chip${emojiDraft === emoji ? " gui-emoji-chip--active" : ""}`}
+								onClick={() => setEmojiDraft(emoji)}
+							>
+								{emoji}
+							</button>
+						))}
+					</div>
+					<div className="flex items-center justify-between gap-2">
+						<button
+							type="button"
+							className="gui-btn"
+							onClick={() => {
+								if (emojiTarget) setSessionEmoji(emojiTarget, null);
+								setEmojiTarget(null);
+							}}
+						>
+							{t("settings.clearEmoji")}
+						</button>
+						<div className="flex items-center gap-2">
+							<button type="button" className="gui-btn" onClick={() => setEmojiTarget(null)}>
+								{t("settings.cancel")}
+							</button>
 							<button
 								type="button"
-								className="gui-pane-action w-auto"
-								disabled={dirsBusy}
-								onClick={() => void addDirectoryToProject()}
+								className="gui-btn gui-btn-primary"
+								onClick={() => {
+									if (emojiTarget) setSessionEmoji(emojiTarget, emojiDraft);
+									setEmojiTarget(null);
+								}}
 							>
-								<Icon name="add-circle" className="h-3.5 w-3.5" />
-								<span>{t("settings.addDirectory")}</span>
-							</button>
-							<button type="button" className="gui-pane-action w-auto" onClick={closeProjectDirectories}>
-								{t("settings.close")}
+								{t("general.save")}
 							</button>
 						</div>
 					</div>
-				)}
+				</div>
 			</DialogFrame>
+			{/* One project modal for name + source folders. Create and edit share
+			 * the same body so the sidebar, project header and file pane cannot
+			 * drift into separate editing surfaces. */}
+			<ProjectDialog
+				open={projectDialog !== null}
+				mode={projectDialog?.mode ?? "edit"}
+				target={projectDialog?.target ?? null}
+				rpc={rpc ?? null}
+				onClose={() => setProjectDialog(null)}
+				onSaved={applyProjectResult}
+			/>
 			{/* Session hover card — one instance for the whole sidebar; rows
 			 *  report through the module bus (SessionHoverCard.tsx), the card
 			 *  portals to document.body so the sidebar's glass/transform

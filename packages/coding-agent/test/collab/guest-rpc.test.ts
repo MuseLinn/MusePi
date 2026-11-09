@@ -268,6 +268,17 @@ describe("collab guest rpc", () => {
 		expect(String(paused.error)).toMatch(/read-only/i);
 	});
 
+	it("ping answers without touching session or disk state", async () => {
+		const guest = await joinAsGuest(host.link, "rpc-test");
+		guestCleanups.push(() => guest.close());
+		// Liveness probe: the mobile shell pings every 15 s because the collab
+		// wire has no heartbeat frame. It must stay cheap and must never be a
+		// mutating method (a view-only link probes too).
+		const res = await guest.rpc("ping");
+		expect(res.ok).toBe(true);
+		expect(typeof (res.data as { pong?: number }).pong).toBe("number");
+	});
+
 	it("unknown method returns ok:false", async () => {
 		const guest = await joinAsGuest(host.link, "rpc-test");
 		guestCleanups.push(() => guest.close());

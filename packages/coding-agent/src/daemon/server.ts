@@ -57,6 +57,7 @@ import type {
 	TtsRewriteResponse,
 	AgentEvent as WireAgentEvent,
 	WireMessage,
+	WorkspaceDuplicateDirectory,
 } from "@musepi/pi-wire";
 import { deriveWindowStats } from "@musepi/pi-wire";
 import { messageKey } from "@musepi/sdk";
@@ -94,6 +95,8 @@ import { clearArtifactCache, createReportBundle, getArtifactCacheStats, getLogTe
 import { collectSystemInfo, formatSystemInfo } from "../debug/system-info";
 import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
 import { extensionEntriesNeedingReload } from "../extensibility/plugins/compat/legacy-pi-compat";
+import type { HmrService } from "../extensibility/plugins/hmr/service";
+import { getHostService } from "../extensibility/plugins/runtime/host-services";
 import { buildSkillPromptMessage, parseSkillInvocation } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
 import { copyLocalArtifacts, resolveLocalRoot, resolveLocalUrlToPath } from "../internal-urls/local-protocol";
@@ -142,8 +145,6 @@ import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import type { CordisDynamicPluginRuntime } from "./cordis-dynamic-plugins";
 import { writeProjectMirror } from "./creation";
-import type { HmrService } from "../extensibility/plugins/hmr/service";
-import { getHostService } from "../extensibility/plugins/runtime/host-services";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
 import { catchupPlan } from "./journal";
 
@@ -612,6 +613,7 @@ import {
 } from "./git-accounts";
 import { commentOnGithub, normalizeGithubReviewers, reviewOnGithub } from "./github-mutations";
 import { readGithubPrReviewComments } from "./github-pr-review";
+import { applyPluginChangeToSessions, type LiveApplySummary, type LiveApplyTarget } from "./live-plugin-apply";
 import { ApprovalService } from "./services/approval-service";
 import { ArchiveService } from "./services/archive-service";
 import {
@@ -627,6 +629,7 @@ import {
 import { BoardService } from "./services/board-service";
 import { BrowserService } from "./services/browser-service";
 import { BundleService } from "./services/bundle-service";
+import { ConnectorCatalogService } from "./services/connector-catalog-service";
 import { ConnectorService } from "./services/connector-service";
 import { CreationService } from "./services/creation-service";
 import { CredentialService } from "./services/credential-service";
@@ -635,6 +638,7 @@ import { EditorService } from "./services/editor-service";
 import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
+import { GitWatchService } from "./services/git-watch-service";
 import { MarketplaceService } from "./services/marketplace-service";
 import { McpOAuthService } from "./services/mcp-oauth-service";
 import { McpServersService } from "./services/mcp-servers-service";
@@ -647,10 +651,12 @@ import { TerminalService, type TerminalServiceDeps } from "./services/terminal-s
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
 import {
+	isSafeAdditionalDirectory,
 	resolveWorkspaceDirectories,
 	sessionHiddenByWorkspace,
 	WorkspaceRegistry,
 	WorkspaceService,
+	workspaceDirectoryExists,
 } from "./services/workspace-registry";
 import type { DaemonConnection, DaemonOptions, LiveSession, RpcRequest } from "./session-host";
 import {
@@ -765,6 +771,9 @@ export class DaemonServer {
 	}
 	/** L2 宿主服务注册表（P1 服务抽取）。服务的 case 委托入口见构造函数。 */
 	readonly #services = new HostServices();
+	/** Sessions with an in-flight reload; a second request is rejected instead of
+	 *  interleaving abort/switch/reminder work on the same AgentSession. */
+	readonly #reloadingSessions = new Set<string>();
 	/** cordis 组合内核（P2 首刀，ADR 0001）：注册表双跑——服务同源挂载进
 	 *  根 Context（provide + 检视 + 可回滚拆卸），路由分发权威仍在注册表；
 	 *  双跑期挂载不代调 start/stop（P1 代码是生命周期权威）。 */
@@ -801,6 +810,7 @@ export class DaemonServer {
 	 *  stale one would point the agent's browser at a dead port. */
 	dropGlobalEventTarget(connectionId: string): void {
 		this.#services.get<EventService>("events").dropTarget(connectionId);
+		this.#services.get<GitWatchService>("gitWatch").dropTarget(connectionId);
 		dropManagedBrowserBridge(connectionId);
 	}
 
@@ -865,7 +875,7 @@ export class DaemonServer {
 	#debugProfilers = new Map<number, ProfilerSession>();
 	#nextDebugProfilerId = 1;
 
-	constructor(host: DaemonSessionHost) {
+	constructor(host: DaemonSessionHost, options: { workspaceRegistry?: WorkspaceRegistry } = {}) {
 		host.setCollabToolProvider(() => this.#collabToolHandle());
 		host.setScheduledTaskProvider(sessionCwd => this.scheduledTaskHandle(sessionCwd));
 		host.setOnExtensionNotification((channel, message) => {
@@ -886,6 +896,11 @@ export class DaemonServer {
 				emitEvent: (conn, event) => this.#host.emitEvent(conn as DaemonConnection, event),
 				catchupFrom: (sessionId, afterSeq, conn) =>
 					this.#host.catchupFrom(sessionId, afterSeq, conn as DaemonConnection),
+			}),
+		);
+		this.#services.register(
+			new GitWatchService({
+				broadcast: payload => this.#services.get<EventService>("events").broadcast(payload),
 			}),
 		);
 		this.#services.register(new ViewStoreService(host.viewStore));
@@ -970,6 +985,7 @@ export class DaemonServer {
 				dynamicRuntime: () => this.#getDynamicPlugins(),
 				runtimeTargets: () => this.#services.get<BundleService>("bundles").runtimeTargets(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
+				applyLive: target => this.applyPluginEntriesLive(target),
 			}),
 		);
 		this.#services.register(
@@ -982,6 +998,9 @@ export class DaemonServer {
 				invalidatePluginCaches: () => this.#services.get<ExtensionService>("extensions").invalidatePluginCaches(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 				onInstallState: payload => this.#services.get<EventService>("events").broadcast(payload),
+				resolvePackagePaths: name => this.resolvePackageExtensionPaths(name),
+				applyLive: target => this.applyPluginEntriesLive(target),
+				onApplyState: payload => this.#services.get<EventService>("events").broadcast(payload),
 			}),
 		);
 		this.#services.register(
@@ -991,6 +1010,9 @@ export class DaemonServer {
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 				onInstallState: payload => this.#services.get<EventService>("events").broadcast(payload),
 				onInstallOutput: payload => this.#services.get<EventService>("events").broadcast(payload),
+				resolvePackagePaths: name => this.resolvePackageExtensionPaths(name),
+				applyLive: target => this.applyPluginEntriesLive(target),
+				onApplyState: payload => this.#services.get<EventService>("events").broadcast(payload),
 			}),
 		);
 		this.#services.register(
@@ -1008,6 +1030,18 @@ export class DaemonServer {
 				refreshExtensions: async () => {
 					this.#services.get<ExtensionService>("extensions").invalidateCaches();
 					void import("./extension-artifact-compiler").then(m => m.invalidateExtensionCaches());
+					// A composition change must recompose now, not wait for the next
+					// runtime read: re-run the reconciling host load so enabling a
+					// bundle actually mounts it and disabling it actually disposes its
+					// fiber. `loadAll` owns the diff (new rows load, absent rows unload,
+					// edited entries reload).
+					try {
+						await this.#services.get<ExtensionService>("extensions").getExtensionRuntimeLoad();
+					} catch (error) {
+						logger.warn("bundle composition reconcile failed", {
+							error: error instanceof Error ? error.message : String(error),
+						});
+					}
 					this.#services.get<EventService>("events").broadcastExtensionsChanged();
 					this.#services.get<EventService>("events").broadcastModelsChanged();
 					this.#reloadChangedSessionExtensions();
@@ -1041,6 +1075,16 @@ export class DaemonServer {
 				reloadConnectors: () => this.#host.reloadMcpConnectors(),
 			}),
 		);
+		// Catalog discovery and enablement: connecting an entry writes the
+		// connector state file, the connector-catalog provider turns it into an
+		// MCP server, and mcp.oauth.* performs the browser grant for it.
+		this.#services.register(
+			new ConnectorCatalogService({
+				cwd: () => this.#host.cwd(),
+				connectorsSnapshotForCwd: cwd => this.#host.connectorsSnapshotForCwd(cwd),
+				reloadConnectors: () => this.#host.reloadMcpConnectors(),
+			}),
+		);
 		this.#services.register(
 			new SessionService({
 				knownSessions: () => this.#host.knownSessions(),
@@ -1059,7 +1103,7 @@ export class DaemonServer {
 		);
 		this.#services.register(
 			new WorkspaceService({
-				registry: new WorkspaceRegistry(),
+				registry: options.workspaceRegistry ?? new WorkspaceRegistry(),
 				knownSessionCwds: async () => {
 					const rows = await this.#host.knownSessions();
 					return [
@@ -1552,6 +1596,78 @@ export class DaemonServer {
 		}
 	}
 
+	/**
+	 * Apply an entry-level plugin change (install, upgrade, enable, disable,
+	 * uninstall) to every open session.
+	 *
+	 * The session owns the timing: an idle one swaps immediately, a streaming
+	 * one parks the operation until its next idle boundary and reports
+	 * `deferred`. Callers surface that distinction instead of claiming a
+	 * change is live while a turn is still running.
+	 */
+	async applyPluginEntriesLive(target: LiveApplyTarget): Promise<LiveApplySummary> {
+		const allSessions = this.#host.allSessions;
+		if (typeof allSessions !== "function") return { sessions: 0, applied: 0, deferred: 0, errors: [] };
+		return applyPluginChangeToSessions(
+			[...allSessions.call(this.#host)].map(live => live.agentSession),
+			target,
+		);
+	}
+
+	/** The extension entry paths one installed package contributes. */
+	async resolvePackageExtensionPaths(name: string): Promise<string[]> {
+		const { getAllPlugins, resolvePluginExtensionPaths } = await import("../extensibility/plugins/runtime/loader");
+		const installed = await getAllPlugins(this.#host.cwd());
+		const plugin = installed.find(entry => entry.name === name);
+		return plugin ? resolvePluginExtensionPaths(plugin) : [];
+	}
+
+	/** Rediscover skills and rebuild the prompt after a session-scoped directory
+	 *  change; a streaming turn keeps the prompt it started with. */
+	#refreshSessionSkillCatalog(sessionId: string): void {
+		const live = this.#host.get(sessionId);
+		if (!live || isLiveSessionBusy(live)) return;
+		void live.agentSession.refreshSkills().catch(error => {
+			logger.warn("Failed to refresh the skill catalog after a directory change", {
+				sessionId,
+				error: String(error),
+			});
+		});
+	}
+
+	/**
+	 * Project-level directory edits made in another window apply to this
+	 * window's open sessions of the same project, so a folder added in the
+	 * project dialog is usable without a manual reload. Additive, like
+	 * `session.reload`: the session header cannot distinguish its own added
+	 * roots from project roots the registry no longer lists.
+	 */
+	async #applyProjectDirectories(project: { root: string; additionalDirs: readonly string[] }): Promise<void> {
+		if (project.additionalDirs.length === 0) return;
+		const root = path.resolve(project.root);
+		for (const live of this.#host.allSessions()) {
+			const manager = live.agentSession.sessionManager;
+			if (path.resolve(manager.getCwd()) !== root) continue;
+			// A streaming turn owns the prompt it started with; the next reload or
+			// session activation picks the directory up.
+			if (isLiveSessionBusy(live)) continue;
+			const current = manager.getAdditionalDirectories();
+			const merged = [...new Set([...current, ...project.additionalDirs])];
+			if (merged.length === current.length) continue;
+			try {
+				await manager.setAdditionalDirectories(merged);
+				// Rediscovery picks up the new root's project skills and rebuilds the
+				// prompt (the workspace-roots block reads the manager directly).
+				await live.agentSession.refreshSkills();
+			} catch (error) {
+				logger.warn("Failed to apply project directories to a live session", {
+					sessionId: live.sessionId,
+					error: String(error),
+				});
+			}
+		}
+	}
+
 	async #reloadSessionExtensions(live: LiveSession, entryPaths: string[]): Promise<void> {
 		for (const entryPath of entryPaths) {
 			const result = await live.agentSession.reloadExtension(entryPath);
@@ -1966,14 +2082,18 @@ export class DaemonServer {
 				return this.#services.get<WorkspaceService>("workspaces").listWorkspaces();
 			}
 			case "workspace.create": {
-				return this.#services
+				const result = await this.#services
 					.get<WorkspaceService>("workspaces")
 					.createWorkspace((params ?? {}) as Record<string, unknown>);
+				await this.#applyProjectDirectories(result.workspace);
+				return result;
 			}
 			case "workspace.update": {
-				return this.#services
+				const result = await this.#services
 					.get<WorkspaceService>("workspaces")
 					.updateWorkspace((params ?? {}) as Record<string, unknown>);
+				await this.#applyProjectDirectories(result.workspace);
+				return result;
 			}
 			case "workspace.delete": {
 				return this.#services
@@ -1992,14 +2112,24 @@ export class DaemonServer {
 			}
 			case "session.directories.add": {
 				// 重复目录不是错误：返回结构化 duplicate，GUI 就地提示。
-				return this.#services
+				const p = (params ?? {}) as { sessionId?: unknown };
+				const result = await this.#services
 					.get<WorkspaceService>("workspaces")
 					.addSessionDirectory((params ?? {}) as Record<string, unknown>);
+				if (result.added && typeof p.sessionId === "string") {
+					this.#refreshSessionSkillCatalog(p.sessionId);
+				}
+				return result;
 			}
 			case "session.directories.remove": {
-				return this.#services
+				const p = (params ?? {}) as { sessionId?: unknown };
+				const result = await this.#services
 					.get<WorkspaceService>("workspaces")
 					.removeSessionDirectory((params ?? {}) as Record<string, unknown>);
+				if (result.removed && typeof p.sessionId === "string") {
+					this.#refreshSessionSkillCatalog(p.sessionId);
+				}
+				return result;
 			}
 			case "session.create": {
 				// modeId(modelPattern/thinkingLevel/projectMetadata)透传
@@ -2023,19 +2153,47 @@ export class DaemonServer {
 				if (p.additionalDirectories !== undefined && !Array.isArray(p.additionalDirectories)) {
 					throw new Error("additionalDirectories must be an array.");
 				}
+				const cwd = path.resolve(p.cwd ?? this.#host.cwd());
 				const requestedDirs = p.additionalDirectories ?? [];
-				if (requestedDirs.length === 0) return this.#host.createSession(p);
-				const resolved = await resolveWorkspaceDirectories(path.resolve(p.cwd ?? this.#host.cwd()), requestedDirs);
+				// Caller-supplied roots are strict: a missing path is a request
+				// error. Project roots are defaults, so a directory the user moved
+				// away is skipped instead of blocking every new session.
+				const requested =
+					requestedDirs.length === 0 ? undefined : await resolveWorkspaceDirectories(cwd, requestedDirs);
+				const projectDirs = await this.#services.get<WorkspaceService>("workspaces").directoriesForRoot(cwd);
+				const existingProjectDirs: string[] = [];
+				for (const directory of projectDirs) {
+					if ((await workspaceDirectoryExists(directory)) && (await isSafeAdditionalDirectory(directory))) {
+						existingProjectDirs.push(directory);
+					}
+				}
+				const project: {
+					directories: string[];
+					duplicates: WorkspaceDuplicateDirectory[];
+				} =
+					existingProjectDirs.length === 0
+						? { directories: [], duplicates: [] }
+						: await resolveWorkspaceDirectories(cwd, existingProjectDirs);
+				if (requested === undefined && project.directories.length === 0) return this.#host.createSession(p);
 				const created = await this.#host.createSession(p);
 				const live = this.#host.get(created.sessionId);
 				if (!live) throw new Error(`Session not live after create: ${created.sessionId}`);
 				const manager = live.agentSession.sessionManager;
-				const merged = [...new Set([...manager.getAdditionalDirectories(), ...resolved.directories])];
+				const merged = [
+					...new Set([
+						...manager.getAdditionalDirectories(),
+						...project.directories,
+						...(requested?.directories ?? []),
+					]),
+				];
 				await manager.setAdditionalDirectories(merged);
+				// Skills are preloaded from the primary root; the added roots'
+				// project skills only enter the catalog through rediscovery.
+				await live.agentSession.refreshSkills();
 				return {
 					...created,
 					additionalDirectories: manager.getAdditionalDirectories(),
-					duplicates: resolved.duplicates,
+					duplicates: [...project.duplicates, ...(requested?.duplicates ?? [])],
 				};
 			}
 			case "subagents.live": {
@@ -2184,10 +2342,15 @@ export class DaemonServer {
 				return { agents };
 			}
 			case "history.messages": {
-				// One session's message rows (history viewer right pane) —
-				// straight from the materialized view-store, no session
-				// activation required.（实现归 ViewStoreService，行为不变）
+				// One session's message rows (session-management message
+				// detail) — straight from the materialized view-store, no
+				// session activation required.（实现归 ViewStoreService，行为不变）
 				return this.#services.get<ViewStoreService>("views").messages(params ?? {});
+			}
+			case "session.lastPrompts": {
+				// 一页会话的最后一条用户消息（会话表格 prompt 列）：一条 SQL
+				// 批量取回，替代逐行 session.search 扫尾。
+				return this.#services.get<ViewStoreService>("views").lastUserMessages(params ?? {});
 			}
 			case "connectors.list": {
 				// M4 P1: composer 连接器选择浮层数据面（服务器清单 + 真实
@@ -2220,6 +2383,36 @@ export class DaemonServer {
 			}
 			case "mcp.oauth.cancel": {
 				return this.#services.get<McpOAuthService>("mcpOAuth").cancel(params ?? {});
+			}
+			case "mcp.oauth.callback": {
+				return this.#services.get<McpOAuthService>("mcpOAuth").callback(params ?? {});
+			}
+			case "connectors.catalog.list": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").list(params ?? {});
+			}
+			case "connectors.catalog.detail": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").detail(params ?? {});
+			}
+			case "connectors.catalog.refresh": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").refresh();
+			}
+			case "connectors.connect": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").connect(params ?? {});
+			}
+			case "connectors.disconnect": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").disconnect(params ?? {});
+			}
+			case "connectors.setEnabled": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").setEnabled(params ?? {});
+			}
+			case "connectors.token.save": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").saveToken(params ?? {});
+			}
+			case "connectors.cli.status": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").cliStatus(params ?? {});
+			}
+			case "connectors.cli.cancel": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").cliCancel(params ?? {});
 			}
 			case "credentials.list": {
 				// M4 P1: 连接器配置的凭据引用清单（只有 meta，无密钥）。
@@ -3443,6 +3636,16 @@ export class DaemonServer {
 					.map(line => (base && head ? line.trim() : line.slice(3)));
 				return { files };
 			}
+			case "git.watch": {
+				return this.#services
+					.get<GitWatchService>("gitWatch")
+					.watch((params ?? {}) as Record<string, unknown>, conn);
+			}
+			case "git.unwatch": {
+				return this.#services
+					.get<GitWatchService>("gitWatch")
+					.unwatch((params ?? {}) as Record<string, unknown>, conn);
+			}
 			case "git.numstat": {
 				// Per-file added/removed counts. A panel renders "＋n −m" per file
 				// and computes its own bar widths, and asking it to count lines out
@@ -3573,12 +3776,13 @@ export class DaemonServer {
 						new Response(proc.stderr).text(),
 					]).then(([exitCode, stdout, stderr]) => ({ exitCode, stdout, stderr }));
 				};
-				const [root, branchRaw, aheadRaw, statusRaw, numstatRaw] = await Promise.all([
+				const [root, branchRaw, aheadRaw, statusRaw, stagedNumstatRaw, workingNumstatRaw] = await Promise.all([
 					run(["rev-parse", "--show-toplevel"]),
 					run(["branch", "--show-current"]),
 					run(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"]),
 					run(["status", "--porcelain=v1", ...(p.ignored ? ["--ignored"] : [])]),
-					p.numstat === true ? run(["diff", "HEAD", "--numstat"]) : Promise.resolve(null),
+					p.numstat === true ? run(["diff", "--cached", "--numstat"]) : Promise.resolve(null),
+					p.numstat === true ? run(["diff", "--numstat"]) : Promise.resolve(null),
 				]);
 				if (root.exitCode !== 0) return { error: "not a git repository" };
 				const staged: { path: string; status: string }[] = [];
@@ -3608,18 +3812,49 @@ export class DaemonServer {
 					ahead = a;
 					behind = b;
 				}
-				// numstat sums (binary files report "-" — skip them).
+				// Per-file line stats split by Git scope, matching the changes
+				// tree's staged/working groups. Binary files report "-" and carry
+				// no line count. The aggregate mirrors HEAD -> working tree, so a
+				// file edited in both scopes contributes to both maps.
+				interface FileStats {
+					added: number;
+					removed: number;
+					binary: boolean;
+				}
+				const parseNumstat = (raw: typeof stagedNumstatRaw): Record<string, FileStats> => {
+					const map: Record<string, FileStats> = {};
+					if (raw?.exitCode !== 0) return map;
+					for (const line of raw.stdout.split("\n")) {
+						const [addedRaw = "", removedRaw = "", rawFile = ""] = line.split("\t");
+						if (!rawFile) continue;
+						// Renames render as "old => new"; the status tree keys on
+						// the destination path.
+						const file = rawFile.includes(" => ")
+							? rawFile.slice(rawFile.lastIndexOf(" => ") + 4).trim()
+							: rawFile;
+						map[file] = {
+							added: addedRaw === "-" ? 0 : Number.parseInt(addedRaw, 10) || 0,
+							removed: removedRaw === "-" ? 0 : Number.parseInt(removedRaw, 10) || 0,
+							binary: addedRaw === "-" || removedRaw === "-",
+						};
+					}
+					return map;
+				};
 				let added: number | undefined;
 				let deleted: number | undefined;
-				if (numstatRaw && numstatRaw.exitCode === 0) {
-					added = 0;
-					deleted = 0;
-					for (const line of numstatRaw.stdout.split("\n")) {
-						const m = /^(\d+|-)\t(\d+|-)\t/.exec(line);
-						if (!m) continue;
-						added += m[1] === "-" ? 0 : Number.parseInt(m[1], 10);
-						deleted += m[2] === "-" ? 0 : Number.parseInt(m[2], 10);
+				let fileStats: { staged: Record<string, FileStats>; working: Record<string, FileStats> } | undefined;
+				if (p.numstat === true) {
+					const stagedStats = parseNumstat(stagedNumstatRaw);
+					const workingStats = parseNumstat(workingNumstatRaw);
+					fileStats = { staged: stagedStats, working: workingStats };
+					let totalAdded = 0;
+					let totalRemoved = 0;
+					for (const stats of [...Object.values(stagedStats), ...Object.values(workingStats)]) {
+						totalAdded += stats.added;
+						totalRemoved += stats.removed;
 					}
+					added = totalAdded;
+					deleted = totalRemoved;
 				}
 				return {
 					root: root.stdout.toString().trim(),
@@ -3632,6 +3867,7 @@ export class DaemonServer {
 					ignored: p.ignored ? ignored : undefined,
 					added,
 					deleted,
+					fileStats,
 				};
 			}
 			case "git.stage": {
@@ -6400,6 +6636,79 @@ export class DaemonServer {
 				}
 				return list;
 			}
+			case "session.reload": {
+				// Kimi /reload parity: reload config/plugins/skills, re-read the
+				// session file, and re-emit switch hooks. An active turn or a
+				// running compaction owns the file, so reload only when idle.
+				const p = (params ?? {}) as { sessionId?: unknown };
+				const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
+				if (!sessionId) throw new Error("sessionId required");
+				// Two concurrent reloads would interleave abort/replaceMessages on
+				// the same AgentSession and append two reminders.
+				if (this.#reloadingSessions.has(sessionId)) throw new Error("Session is already reloading.");
+				this.#reloadingSessions.add(sessionId);
+				try {
+					let live = this.#host.get(sessionId);
+					if (!live) {
+						// Kimi's reload resumes a closed session first. MusePi keeps
+						// history sessions cold, so activate on demand instead of
+						// failing a reload the user explicitly asked for.
+						await this.#host.subscribe(sessionId, conn);
+						live = this.#host.get(sessionId);
+					}
+					if (!live) throw new Error(`Session not live: ${sessionId}`);
+					if (isLiveSessionBusy(live)) {
+						throw new Error("Session is busy; finish the current turn before reloading.");
+					}
+					// Kimi's reload re-reads the project's directory set. MusePi's
+					// registry is daemon-side, so reconcile here before the prompt
+					// rebuild picks the set up. The merge is additive: directories a
+					// session added on its own are never dropped by a reload, because
+					// the session header cannot tell them apart from removed project
+					// entries.
+					const manager = live.agentSession.sessionManager;
+					const cwd = manager.getCwd();
+					const previousDirectories = manager.getAdditionalDirectories();
+					const addedDirectories: string[] = [];
+					try {
+						const projectDirs = await this.#services.get<WorkspaceService>("workspaces").directoriesForRoot(cwd);
+						const existingProjectDirs: string[] = [];
+						for (const directory of projectDirs) {
+							if ((await workspaceDirectoryExists(directory)) && (await isSafeAdditionalDirectory(directory))) {
+								existingProjectDirs.push(directory);
+							}
+						}
+						if (existingProjectDirs.length > 0) {
+							const resolved = await resolveWorkspaceDirectories(cwd, existingProjectDirs);
+							const merged = [...new Set([...previousDirectories, ...resolved.directories])];
+							if (merged.length !== previousDirectories.length) {
+								await manager.setAdditionalDirectories(merged);
+								addedDirectories.push(...merged.filter(directory => !previousDirectories.includes(directory)));
+							}
+						}
+					} catch (error) {
+						logger.warn("Failed to reconcile workspace directories on reload", {
+							sessionId,
+							error: String(error),
+						});
+					}
+					const result = await live.agentSession.reloadFromDisk({
+						added: addedDirectories,
+						removed: [],
+					});
+					// Kimi refreshes plugin session-start state in every other live
+					// session after a global plugin reload. Extensions are session-scoped
+					// here, so re-running their session_start is the honest analogue;
+					// busy sessions are skipped rather than interrupted.
+					for (const other of this.#host.allSessions()) {
+						if (other.sessionId === sessionId || isLiveSessionBusy(other)) continue;
+						void other.agentSession.refreshSessionStart().catch(() => {});
+					}
+					return { ok: true, ...result };
+				} finally {
+					this.#reloadingSessions.delete(sessionId);
+				}
+			}
 			case "session.rename": {
 				// TUI /rename parity: user-set session title (journal label).
 				const p = (params ?? {}) as { sessionId: string; title: string };
@@ -8348,7 +8657,7 @@ export class DaemonServer {
 				// setting with ui metadata on the requested tabs, so the GUI
 				// renders from the single source of truth instead of a
 				// hardcoded copy that drifts.
-				const p = (params ?? {}) as { tabs?: string[] };
+				const p = (params ?? {}) as { tabs?: string[]; all?: boolean };
 				const { getEnumValues, SETTINGS_SCHEMA, SETTING_TABS } = await import("../config/settings-schema");
 				// Extension-contributed settings (registerSetting, e.g. the
 				// swarm style extension's display.taskCardStyle) live in the
@@ -8361,8 +8670,16 @@ export class DaemonServer {
 				// 扩展设置走各自声明的 ui.tab(插入现有 tab,不设聚合 tab)。
 				const extTabs = new Set<string>();
 				for (const { setting } of extSettings.values()) extTabs.add(setting.ui.tab);
-				const requested = p.tabs && p.tabs.length > 0 ? p.tabs : ["memory", "files"];
-				const tabs = requested.filter(tab => (SETTING_TABS as readonly string[]).includes(tab) || extTabs.has(tab));
+				// `all` serves the GUI's cross-page settings search index in one
+				// round trip; per-tab requests stay the default for page loads.
+				const requested = p.all
+					? [...SETTING_TABS, ...extTabs]
+					: p.tabs && p.tabs.length > 0
+						? p.tabs
+						: ["memory", "files"];
+				const tabs = [...new Set(requested)].filter(
+					tab => (SETTING_TABS as readonly string[]).includes(tab) || extTabs.has(tab),
+				);
 				const out: Record<string, unknown[]> = {};
 				for (const tab of tabs) {
 					const items: unknown[] = [];

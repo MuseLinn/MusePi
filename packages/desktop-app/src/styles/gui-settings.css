@@ -22,6 +22,29 @@
 	background: transparent;
 }
 
+/* Search results for individual settings (above the page rows): the nav is
+ * the only search surface, so cross-page hits live here and jump to the page
+ * that renders the row. */
+.gui-settings-nav-matches {
+	margin-bottom: 4px;
+	padding-bottom: 4px;
+	border-bottom: 1px solid var(--border);
+}
+
+.gui-settings-nav--setting .gui-settings-nav-label {
+	font-weight: 500;
+}
+
+.gui-settings-search-pop-hint {
+	flex: none;
+	max-width: 40%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
 .gui-settings-nav {
 	display: flex;
 	align-items: center;
@@ -2832,6 +2855,117 @@
 	outline-offset: 2px;
 }
 
+.gui-dialog.gui-remote-disclaimer-dialog {
+	display: flex;
+	flex-direction: column;
+	width: min(600px, 90vw);
+	height: auto;
+	max-height: 80vh;
+	overflow: hidden;
+}
+
+.gui-remote-disclaimer-title {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.gui-remote-disclaimer-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: 18px 24px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.gui-remote-disclaimer-status {
+	display: inline-flex;
+	padding: 2px 8px;
+	border-radius: var(--radius-full);
+	background: color-mix(in oklab, var(--color-warning) 12%, transparent);
+	color: var(--color-warning);
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.gui-remote-disclaimer-status--accepted {
+	background: color-mix(in oklab, var(--color-ok) 12%, transparent);
+	color: var(--color-ok);
+}
+
+.gui-remote-disclaimer-intro {
+	margin: 14px 0 0;
+	font-size: 12.5px;
+	line-height: 1.65;
+	color: var(--color-text-muted);
+}
+
+.gui-remote-disclaimer-heading {
+	margin: 20px 0 10px;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.gui-remote-disclaimer-risks {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin: 0;
+	padding-left: 24px;
+	font-size: 12px;
+	line-height: 1.65;
+	color: var(--color-text-muted);
+}
+
+.gui-remote-disclaimer-risks li::marker {
+	color: var(--color-text);
+	font-weight: 600;
+}
+
+.gui-remote-disclaimer-details {
+	margin-top: 20px;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--color-surface-raised);
+}
+
+.gui-remote-disclaimer-details summary {
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.gui-remote-disclaimer-details .gui-remote-disclaimer-risks {
+	margin-top: 14px;
+}
+
+.gui-remote-disclaimer-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding: 14px 24px;
+	border-top: 1px solid var(--border);
+	background: var(--color-surface);
+}
+
+.gui-remote-disclaimer-link {
+	align-self: flex-start;
+	margin: 0 24px 12px;
+	padding: 4px 0;
+	border: 0;
+	background: transparent;
+	color: var(--color-text-faint);
+	font-size: 11px;
+	cursor: pointer;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
+.gui-remote-disclaimer-link:hover {
+	color: var(--color-text);
+}
+
 @media (max-width: 800px) {
 	.gui-collab-grid {
 		grid-template-columns: minmax(0, 1fr);
@@ -3399,9 +3533,52 @@
 	align-items: center;
 	gap: 8px;
 	width: 100%;
-	padding: 4px 6px 4px 8px;
+	padding: 4px 6px 4px 4px;
 	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+
+/* Drag handle + lifted row: the right-panel-tab gesture (dnd-kit). The handle
+ * is the only activator, so selecting text or pressing remove never starts a
+ * drag. */
+.gui-ordered-grip {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 22px;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: grab;
+	touch-action: none;
+	opacity: 0.7;
+	transition:
+		opacity 120ms ease,
+		background 120ms ease,
+		color 120ms ease;
+}
+
+.gui-ordered-item:hover .gui-ordered-grip,
+.gui-ordered-item--dragging .gui-ordered-grip {
+	opacity: 1;
+}
+
+.gui-ordered-grip:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-ordered-item--dragging {
+	z-index: 1;
+	background: var(--color-surface-raised);
+	box-shadow: 0 6px 18px color-mix(in oklab, var(--color-text) 18%, transparent);
+}
+
+.gui-ordered-item--dragging .gui-ordered-grip {
+	cursor: grabbing;
 }
 
 .gui-ordered-rank {
@@ -3423,13 +3600,6 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-
-.gui-ordered-actions {
-	display: flex;
-	flex: none;
-	align-items: center;
-	gap: 2px;
 }
 
 .gui-ordered-btn {
@@ -4663,6 +4833,16 @@ body.gui-resizing {
 	border-color: var(--color-accent-bd);
 }
 
+/* Unavailable entry (session-scoped surface before a session exists): the row
+ * stays visible to explain what the panel holds, but it is not a target. */
+.gui-panel-empty-item:disabled,
+.gui-panel-empty-item:disabled:hover {
+	background: transparent;
+	border-color: var(--border);
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
 .gui-panel-empty-icon {
 	display: inline-flex;
 	align-items: center;
@@ -5003,6 +5183,152 @@ body.gui-resizing {
 }
 .gui-settings-search {
 	margin: 4px 10px 6px;
+}
+
+/* ---- Session table (设置 → 会话) ----
+ * The settings column is capped at 840px, so the table shares that width with
+ * fixed columns instead of a min-width that clips the action cell. */
+.gui-session-table {
+	table-layout: fixed;
+}
+.gui-session-table th,
+.gui-session-table td {
+	overflow: hidden;
+}
+.gui-session-name {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	width: 100%;
+	min-width: 0;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--color-text);
+	text-align: left;
+	cursor: pointer;
+}
+.gui-session-name:hover .truncate {
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+.gui-session-current {
+	flex: none;
+	padding: 0 6px;
+	border-radius: 999px;
+	background: var(--color-surface-raised);
+	color: var(--color-text-faint);
+	font-size: 10px;
+}
+.gui-session-meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding-left: 16px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 10px;
+	color: var(--color-text-faint);
+}
+.gui-session-hits {
+	flex: none;
+	padding: 0 5px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-accent);
+}
+.gui-session-row--expanded > td {
+	border-bottom-color: transparent;
+}
+.gui-session-detail {
+	border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text-faint) 4%, transparent);
+	animation: gui-session-detail-in 160ms var(--spring, ease-out);
+}
+@keyframes gui-session-detail-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+.gui-session-detail-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px 4px;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+.gui-session-detail-title {
+	flex: none;
+	font-weight: 500;
+	color: var(--color-text);
+}
+.gui-session-detail-note {
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+}
+.gui-session-detail-open {
+	margin-left: auto;
+}
+.gui-session-detail-scroll {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 320px;
+	overflow-y: auto;
+	padding: 4px 10px 10px;
+}
+.gui-session-detail-scroll mark {
+	padding: 0 1px;
+	border-radius: 2px;
+	background: color-mix(in oklab, var(--color-accent) 30%, transparent);
+	color: inherit;
+}
+.gui-session-msg {
+	border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+	border-radius: var(--radius-md, 8px);
+	padding: 6px 8px;
+	background: var(--color-surface);
+}
+.gui-session-msg-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+}
+.gui-session-role {
+	flex: none;
+	padding: 0 6px;
+	border-radius: 999px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	background: color-mix(in oklab, var(--color-text-faint) 16%, transparent);
+	color: var(--color-text-muted);
+}
+.gui-session-role--user {
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	color: var(--color-accent);
+}
+.gui-session-msg-body {
+	margin-top: 4px;
+	font-size: 12.5px;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.gui-session-msg-more {
+	margin-top: 2px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--color-accent);
+	font-size: 11.5px;
+	cursor: pointer;
 }
 
 /* Alternate avatar presets (设置 → 常规 → Agent 头像): the hex glyph
@@ -5462,6 +5788,13 @@ body.gui-resizing {
 	margin-bottom: 8px;
 }
 
+/* Connector catalog rows stack the shared card face so examples and the docs
+   link expand under the row instead of opening a second surface. */
+.gui-connector-card {
+	flex-direction: column;
+	align-items: stretch;
+}
+
 /* ── Settings: 预设页分组卡片 + 「查看配置」只读视图 ─────────────────────
  * 样式契约(液态玻璃批次规范 gui-design.md §5s):
  *  - 分组标题/卡片本体零新视觉 token——卡片复用上方 .gui-agent-card(L1
@@ -5561,10 +5894,40 @@ body.gui-resizing {
 	gap: 6px 14px;
 }
 .gui-memory-backend {
-	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-	font-size: 13px;
+	font-size: 14px;
 	font-weight: 600;
 	color: var(--color-text);
+}
+.gui-memory-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-left: auto;
+}
+.gui-memory-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 8px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+.gui-memory-chip--on {
+	color: var(--color-text);
+	border-color: color-mix(in oklab, var(--color-accent) 35%, var(--border));
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+.gui-memory-chip-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: var(--color-text-faint);
+}
+.gui-memory-chip--on .gui-memory-chip-dot {
+	background: var(--color-accent);
 }
 .gui-memory-status-grid {
 	display: grid;
@@ -5603,8 +5966,12 @@ body.gui-resizing {
 .gui-memory-actions {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: 8px;
 	margin-top: 10px;
+}
+.gui-memory-clear {
+	margin-left: auto;
 }
 /* Scrollable markdown output (memory.view / stats / diagnose) — the
  * base .gui-ext-detail-code pre wraps but has no height cap; long
@@ -5630,11 +5997,18 @@ body.gui-resizing {
 	font-weight: 650;
 	color: var(--color-text-muted);
 }
+.gui-memory-workspace-card {
+	margin-top: 10px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
+}
 .gui-memory-workspace-bar {
 	display: flex;
 	align-items: center;
 	gap: 10px;
-	margin: 2px 0 10px;
+	margin: 0 0 10px;
 }
 .gui-memory-workspace-bar .gui-settings-select {
 	flex: 0 1 auto;
@@ -5670,6 +6044,8 @@ body.gui-resizing {
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
+	max-height: 260px;
+	overflow-y: auto;
 }
 .gui-memory-workspace-row {
 	display: flex;
@@ -7093,27 +7469,10 @@ body.gui-resizing {
 }
 
 
-/* Browser settings views and the managed-browser extensions popup. */
+/* Browser settings views and external-browser integration cards. */
 .gui-browser-settings-tabs {
 	max-width: 360px;
 	margin-bottom: 16px;
-}
-
-.gui-browser-extensions-popup {
-	width: min(420px, calc(100vw - 16px));
-	padding: 8px;
-	overflow-y: auto;
-}
-
-.gui-browser-extensions-popup-head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	min-height: 30px;
-	padding: 0 4px 6px 8px;
-	color: var(--color-text);
-	font-size: var(--ui-font-size-sm);
-	font-weight: 600;
 }
 
 .gui-browser-import-card {
@@ -7125,10 +7484,6 @@ body.gui-resizing {
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: var(--color-surface-raised);
-}
-
-.gui-browser-import-card--compact {
-	margin-bottom: 12px;
 }
 
 .gui-settings-section > .gui-browser-import-card {
@@ -7253,4 +7608,31 @@ body.gui-resizing {
 	.gui-settings-section .gui-browser-import-actions {
 		grid-column: 2;
 	}
+}
+
+
+.gui-browser-extensions-popup {
+	width: min(420px, calc(100vw - 16px));
+	padding: 8px;
+	overflow-y: auto;
+}
+
+.gui-browser-extensions-popup-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-height: 30px;
+	padding: 0 4px 6px 8px;
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+}
+
+.gui-browser-extension-permissions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 8px 0 12px;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
 }

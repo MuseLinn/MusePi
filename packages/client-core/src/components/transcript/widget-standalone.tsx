@@ -17,7 +17,7 @@ import { Check as CheckIconData, Code2 as Code2IconData, Copy as CopyIconData, E
 import { Download, ImageDown, Images, Maximize2, MoreHorizontal, X } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
 import { downloadBlob } from "../../lib/download";
@@ -25,6 +25,14 @@ import { InlineWidget } from "../../tool-render/tools/widget";
 import type { ToolRenderHost } from "../../tool-render/types";
 import { useWidgetRegistryVersion, widgetDef } from "../../widgets/registry";
 import { type WidgetSource, widgetSource } from "../../widgets/source";
+import {
+	computeMorph,
+	MORPH_EASING_IN,
+	MORPH_EASING_OUT,
+	MORPH_MS,
+	type MorphRect,
+	motionDisabled,
+} from "../image-morph";
 
 /** localStorage key for the standalone widget display. */
 export const WIDGET_STANDALONE_KEY = "musepi-gui-widget-standalone";
@@ -92,6 +100,7 @@ export function WidgetFullscreen({
 	payload,
 	host,
 	rasterizeCard,
+	originRect,
 	onClose,
 }: {
 	payload: WidgetPayload;
@@ -99,24 +108,89 @@ export function WidgetFullscreen({
 	/** The host's card capture, threaded so the fullscreen view keeps the same
 	 *  annotation entry the inline card has. */
 	rasterizeCard?: (element: HTMLElement) => Promise<Blob | null>;
+	/** The card's rect at request time: the overlay flies out of it and back
+	 *  into it (一镜到底), falling back to a plain mount when it is gone. */
+	originRect?(): MorphRect | null;
 	onClose(): void;
 }): ReactNode {
+	const bodyRef = useRef<HTMLDivElement | null>(null);
+	const closingRef = useRef(false);
+	// True while the panel is scaling between the card and the viewport. The
+	// content is blurred for that window: the flight then animates one composited
+	// transform instead of repainting text and iframes at every intermediate
+	// scale, which is what made the morph read as a stutter.
+	const [flying, setFlying] = useState(false);
+
+	// Open flight: the panel is already laid out at its final size, so fly it
+	// FROM the card's rect (FLIP). Layout effect, so the un-morphed panel never
+	// paints.
+	useLayoutEffect(() => {
+		const body = bodyRef.current;
+		const origin = originRect?.() ?? null;
+		if (!body || !origin || motionDisabled()) return;
+		const m = computeMorph(origin, body.getBoundingClientRect());
+		if (!m) return;
+		setFlying(true);
+		const anim = body.animate(
+			[
+				{
+					transform: `translate(${m.dx}px, ${m.dy}px) scale(${m.sx}, ${m.sy})`,
+					transformOrigin: "top left",
+				},
+				{ transform: "none", transformOrigin: "top left" },
+			],
+			{ duration: MORPH_MS, easing: MORPH_EASING_IN },
+		);
+		anim.onfinish = () => {
+			// A close started mid-flight owns the blur until the panel is gone.
+			if (!closingRef.current) setFlying(false);
+		};
+	}, [originRect]);
+
+	const requestClose = useCallback(() => {
+		if (closingRef.current) return;
+		const body = bodyRef.current;
+		const origin = originRect?.() ?? null;
+		if (!body || !origin || motionDisabled()) {
+			onClose();
+			return;
+		}
+		const m = computeMorph(origin, body.getBoundingClientRect());
+		if (!m) {
+			onClose();
+			return;
+		}
+		closingRef.current = true;
+		setFlying(true);
+		const anim = body.animate(
+			[
+				{ transform: "none", transformOrigin: "top left" },
+				{
+					transform: `translate(${m.dx}px, ${m.dy}px) scale(${m.sx}, ${m.sy})`,
+					transformOrigin: "top left",
+				},
+			],
+			{ duration: MORPH_MS, easing: MORPH_EASING_OUT, fill: "forwards" },
+		);
+		anim.onfinish = () => onClose();
+	}, [onClose, originRect]);
+
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") onClose();
+			if (e.key === "Escape") requestClose();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [onClose]);
+	}, [requestClose]);
 	return createPortal(
-		<div className="tr-widget-fs" role="dialog" aria-modal="true">
-			<button type="button" className="tr-widget-fs-x" aria-label={t("settings.close")} onClick={onClose}>
+		<div className="tr-widget-fs" role="dialog" aria-modal="true" data-flying={flying ? "true" : "false"}>
+			<button type="button" className="tr-widget-fs-x" aria-label={t("settings.close")} onClick={requestClose}>
 				<X size={16} />
 			</button>
 			<div className="tr-widget-fs-head">
 				<span className="tr-widget-fs-title">{payload.title ?? t("settings.widget")}</span>
 			</div>
-			<div className="tr-widget-fs-body">
+			<div className="tr-widget-fs-body" ref={bodyRef}>
 				<InlineWidget
 					type={payload.type}
 					data={payload.data}
@@ -387,6 +461,7 @@ export function WidgetCard({
 					payload={payload}
 					host={host}
 					rasterizeCard={host?.rasterizeCard}
+					originRect={() => cardRef.current?.getBoundingClientRect() ?? null}
 					onClose={() => setFullscreen(false)}
 				/>
 			)}

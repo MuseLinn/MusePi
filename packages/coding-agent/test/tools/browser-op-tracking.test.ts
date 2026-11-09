@@ -87,6 +87,22 @@ describe("browser screenshot activation", () => {
 			"The attached browser tab is not visible",
 		);
 	});
+
+	it("captures a composited managed guest without a visibility check or focus theft", async () => {
+		let activations = 0;
+		const page = {
+			bringToFront: async () => {
+				activations += 1;
+			},
+			evaluate: async () => {
+				throw new Error("managed guests do not need a visibility query");
+			},
+		};
+
+		await preparePageForScreenshot(page as ScreenshotPage, undefined, false, true);
+
+		expect(activations).toBe(0);
+	});
 });
 
 describe("browser operation activity", () => {

@@ -66,6 +66,14 @@ Compaction/context maintenance can run in six ways:
 5. **Mid-turn threshold maintenance**: before the next provider request when a tool-loop turn crosses the threshold and `compaction.midTurnEnabled !== false`.
 6. **Idle maintenance**: `runIdleCompaction()` can invoke the same auto-maintenance path with reason `"idle"`.
 
+### Per-model thresholds
+
+`compaction.modelThresholds` overrides the policy for one model, keyed by `provider/model-id` or a trailing `provider/…*` prefix (an exact key wins over the longest prefix). A token count is the base the percentage/reserve policy scales, `"f90000"` is an exact trigger, and `"80%"` replaces the threshold percentage. `compaction.modelThresholdsEnabled: false` ignores every entry. Maintenance, advisor maintenance, and the context gauge resolve through the active model, so a 200K/1M tier switch also switches the trigger.
+
+### Notes-backed context windows (experimental)
+
+`compaction.experimentalContextManagement` (off by default) replaces threshold summary compaction with a rollover when both `context_notes` and `new_context` are active. Inside the pre-threshold band the session queues a one-shot reminder to refresh the persistent notebook; the model writes it through `context_notes` and asks for a fresh window with `new_context`. Maintenance then commits a fixed `<context-window-rollover>` boundary instead of an LLM summary, and `buildSessionContext` injects the latest notebook ahead of the rebuilt window. The rollover runs `session_before_compact`, so an extension can cancel it or supply its own compaction result. The raw branch stays readable through `history://current/full`, which is only available while this setting is on. Without both tools, speculation and summary compaction behave as before.
+
 ### Compaction shape (visual)
 
 ```text
@@ -246,6 +254,7 @@ Remote summarization modes:
   - custom musepi summarizer endpoints receive `{ systemPrompt, prompt }` and must return JSON containing at least `{ summary }`.
   - OpenAI-compatible endpoints whose path ends in `/chat/completions` receive `{ model, messages, stream: false }`, where `messages` contains one system prompt and one user prompt. The summary is read from `choices[0].message.content`, which lets self-hosted servers such as llama.cpp and vLLM act as remote compactors without a separate summarizer shim.
 - For OpenAI/OpenAI Codex models, compaction first tries the provider-native `/responses/compact` endpoint when remote compaction is enabled. It preserves provider replacement history in `preserveData.openaiRemoteCompaction` and falls back to local summarization if that native request fails.
+- For first-party Anthropic models with `compat.supportsServerCompaction`, compaction sends one `compact-2026-09-04` on-demand request containing only the prefix to summarize. The returned signed `compaction` block is stored in `preserveData.anthropicCompaction` and replayed on later turns; a response without a signed block falls back to the configured method order. Bedrock Anthropic models run the same chain through an `InvokeModelWithResponseStream` side request while ordinary turns stay on Converse.
 
 ### Handoff generation
 

@@ -939,7 +939,6 @@ export function ModelSection({
 					>
 						<Icon name="loop-right-ai" className="h-3.5 w-3.5" />
 					</button>
-					<span className="gui-role-spacer" aria-hidden="true" />
 					{model && (
 						<button
 							type="button"

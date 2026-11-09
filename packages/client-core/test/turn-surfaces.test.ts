@@ -69,6 +69,70 @@ describe("collectTurnSources", () => {
 		expect(sources.pages).toEqual([{ url: "https://fallback.test", title: "", opens: 1, read: true }]);
 	});
 
+	test("structured read and open actions classify real pages", () => {
+		const sources = sourcesOf({
+			b1: {
+				details: {
+					action: "open",
+					url: "https://passed.test",
+					operations: [],
+				},
+			},
+			b2: {
+				details: {
+					action: "read",
+					url: "https://read.test",
+					pageText: { url: "https://read.test", title: "Structured page" },
+					operations: [operation({ id: 1, action: "evaluate", pageUrl: "https://read.test" })],
+				},
+			},
+		});
+		expect(sources.pages).toEqual([
+			{ url: "https://passed.test", title: "", opens: 1, read: false },
+			{ url: "https://read.test", title: "Structured page", opens: 1, read: true },
+		]);
+		expect(sources.readCount).toBe(1);
+		expect(sources.passedCount).toBe(1);
+	});
+
+	test("repeated opens plus a structured read stay one read page", () => {
+		const sources = sourcesOf({
+			b1: { details: { action: "open", url: "https://same.test", operations: [] } },
+			b2: { details: { action: "open", url: "https://same.test", operations: [] } },
+			b3: {
+				details: {
+					action: "read",
+					pageText: { url: "https://same.test", title: "Same page" },
+					operations: [],
+				},
+			},
+		});
+		expect(sources.pages).toEqual([{ url: "https://same.test", title: "Same page", opens: 2, read: true }]);
+		expect(sources.readCount).toBe(1);
+		expect(sources.passedCount).toBe(0);
+	});
+
+	test("screenshots, clicks and status do not invent visited pages", () => {
+		const sources = sourcesOf({
+			b1: {
+				details: {
+					action: "screenshot",
+					url: "https://shot.test",
+					operations: [operation({ id: 1, action: "screenshot", pageUrl: "https://shot.test" })],
+				},
+			},
+			b2: {
+				details: {
+					action: "run",
+					url: "https://click.test",
+					operations: [operation({ id: 2, action: "click", pageUrl: "https://click.test" })],
+				},
+			},
+			b3: { details: { action: "status", status: { available: true }, operations: [] } },
+		});
+		expect(sources).toEqual({ pages: [], readCount: 0, passedCount: 0 });
+	});
+
 	test("failed operations, failed calls and non-browser tools contribute nothing", () => {
 		const sources = sourcesOf(
 			{

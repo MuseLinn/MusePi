@@ -186,11 +186,13 @@
 }
 
 .gui-terminal-dock:not(.gui-terminal-dock--open) {
-	/* The JSX carries a tailwind `border-t`: at height 0 its 1px WIDTH still
-	 * took layout space — the "thin line" raising the main view's bottom edge
-	 * (user report). Zero the width, not just the color, and kill the shadow
-	 * smear a closed dock painted under the chat card. */
-	border-top-width: 0;
+	/* The JSX carries a tailwind `border-t` AND gui-glass.css (last sheet)
+	 * re-arms all four L1 edges. At height 0 even a 1px WIDTH still took
+	 * layout space — the "thin line" at the window bottom (user report).
+	 * Zero every edge/background/shadow here as a first line of defence;
+	 * gui-glass.css repeats it with the specificity needed to beat L1. */
+	border-width: 0;
+	background: none;
 	box-shadow: none;
 }
 
@@ -460,6 +462,34 @@
 .gui-right-rail-btn--active {
 	background: color-mix(in oklab, var(--color-accent) 20%, transparent);
 	color: var(--color-accent);
+}
+
+/* Collapse/expand toggle: same state matrix as the sidebar toggle — glyph
+ * morph on toggle, hover nudge toward the direction the panel moves, and the
+ * nudge flips once the panel is collapsed. */
+.gui-right-rail-collapse {
+	--panel-nudge: 2px;
+}
+.gui-right-rail-collapse[data-collapsed="true"] {
+	--panel-nudge: -2px;
+}
+.gui-right-rail-collapse svg {
+	transition: transform 180ms var(--spring-snappy, cubic-bezier(0.34, 1.56, 0.64, 1));
+}
+.gui-right-rail-collapse:hover svg,
+.gui-right-rail-collapse:focus-visible svg {
+	transform: translateX(var(--panel-nudge));
+}
+.gui-right-rail-collapse:active svg {
+	transform: translateX(var(--panel-nudge)) scale(0.92);
+}
+.gui-motion-off .gui-right-rail-collapse svg {
+	transition: none;
+}
+.gui-motion-off .gui-right-rail-collapse:hover svg,
+.gui-motion-off .gui-right-rail-collapse:focus-visible svg,
+.gui-motion-off .gui-right-rail-collapse:active svg {
+	transform: none;
 }
 
 /* Sortable wrapper (openchamber ContextPanelRail parity): the dragged icon
@@ -797,31 +827,44 @@ body.gui-resizing .gui-pane-resize-x::after {
 	pointer-events: auto;
 }
 
-/* ── Transcript edge fades: bands, not a scroller mask ────────────────
- * A mask-image on the scrolling container recomposited the whole
- * transcript on the GPU every frame it scrolled or grew. Each edge is
- * a band instead: a later sibling of the scroller, painted in the
- * card's surface color (the only thing behind the scroller), so rows
- * dissolve into the background instead of stopping dead at an edge.
- * The end band is always on: it spans the floating composer's measured
- * height (`--chat-composer-inset`, written onto the band itself by the
- * composer observer through the reader channel) plus a ramp, so rows
- * sliding under the glass thin out instead of being sliced by it.
- * While a live reply streams (`data-live-tail`) the band turns solid
- * over the composer zone — no ghost row bleeds through the glass.
- * The top band follows the scroller's scroll-shadow attribute, same
- * as the mask it replaces. */
+/* ── Progressive-blur edge bands (2026-11-08) ──────────────────────────
+ * The old bands painted an OPAQUE slab of `--gui-card-surface-fade`. That
+ * read as a hard color step against the chat head (which shows the card's
+ * glass composite + sheen + rim) and hid 24–32px of transcript outright.
+ *
+ * Now each band stacks THREE sibling backdrop layers: 2px across the whole
+ * band, 6px over the inner 62%, 14px over the inner 34%. Sibling
+ * backdrop-filters compose in paint order, so blur STRENGTH grows toward the
+ * edge — rows dissolve progressively instead of stopping at a color stop.
+ * The band itself carries a low-alpha tint of the SAME derived surface, which
+ * keeps blurred text legible and makes head + fade one continuous glass
+ * surface. These are bounded 28–40px regions, not a mask on the scroller, so
+ * scrolling never recomposites the whole transcript. The in-window rows are
+ * sampleable on every platform (unlike the OS window material, which is why
+ * pane-level backdrop-filter is disabled on win32/linux).
+ * The end band still tracks `--chat-composer-inset` from the reader channel
+ * and collapses its ramp while a live reply streams; the top band follows
+ * the scroller's scroll-shadow attribute. */
 .gui-chat-fade {
 	position: absolute;
 	inset-inline: 0;
 	z-index: 1;
 	pointer-events: none;
 }
+.gui-chat-fade-layer {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
 .gui-chat-fade--top {
 	display: none;
 	top: 0;
-	height: 24px;
-	background-image: linear-gradient(to bottom, var(--color-surface) 0, transparent 100%);
+	height: 28px;
+	background-image: linear-gradient(
+		to bottom,
+		color-mix(in oklab, var(--gui-card-surface-fade) 78%, transparent) 0,
+		transparent 100%
+	);
 }
 .gui-transcript[data-top-scroll="true"] ~ .gui-chat-fade--top {
 	display: block;
@@ -831,15 +874,73 @@ body.gui-resizing .gui-pane-resize-x::after {
 	bottom: 0;
 	height: calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + var(--chat-end-ramp));
 	background-image: linear-gradient(
-		to bottom,
-		transparent 0,
-		var(--color-surface) calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + var(--chat-end-ramp))
+		to top,
+		color-mix(in oklab, var(--gui-card-surface-fade) 88%, transparent) 0,
+		transparent 100%
 	);
 }
 .gui-chat-body[data-live-tail="true"] .gui-chat-fade--end {
 	--chat-end-ramp: 8px;
 	height: calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + 8px);
-	background-image: linear-gradient(to bottom, transparent 0, var(--color-surface) 8px);
+	/* Streaming: no ghost row may bleed through the floating composer. */
+	background-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		color-mix(in oklab, var(--gui-card-surface-fade) 92%, transparent) 8px
+	);
+}
+
+/* `to bottom` for the top band (blur grows upward toward the head),
+ * `to top` for the end band (blur grows downward toward the composer). */
+.gui-chat-fade--top .gui-chat-fade-layer--1 {
+	backdrop-filter: blur(var(--gui-blur-progressive-1));
+	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-1));
+	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+	mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+}
+.gui-chat-fade--top .gui-chat-fade-layer--2 {
+	backdrop-filter: blur(var(--gui-blur-progressive-2));
+	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-2));
+	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
+	mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
+}
+.gui-chat-fade--top .gui-chat-fade-layer--3 {
+	backdrop-filter: blur(var(--gui-blur-progressive-3));
+	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-3));
+	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 34%);
+	mask-image: linear-gradient(to bottom, #000 0%, transparent 34%);
+}
+.gui-chat-fade--end .gui-chat-fade-layer--1 {
+	backdrop-filter: blur(var(--gui-blur-progressive-1));
+	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-1));
+	-webkit-mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+	mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+}
+.gui-chat-fade--end .gui-chat-fade-layer--2 {
+	backdrop-filter: blur(var(--gui-blur-progressive-2));
+	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-2));
+	-webkit-mask-image: linear-gradient(to top, #000 0%, transparent 62%);
+	mask-image: linear-gradient(to top, #000 0%, transparent 62%);
+}
+.gui-chat-fade--end .gui-chat-fade-layer--3 {
+	backdrop-filter: blur(var(--gui-blur-progressive-3));
+	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-3));
+	-webkit-mask-image: linear-gradient(to top, #000 0%, transparent 34%);
+	mask-image: linear-gradient(to top, #000 0%, transparent 34%);
+}
+
+/* No backdrop-filter (older Chromium / disabled GPU): keep the coherent
+ * opaque ramp rather than showing unblurred rows under the composer. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+	.gui-chat-fade-layer {
+		display: none;
+	}
+	.gui-chat-fade--top {
+		background-image: linear-gradient(to bottom, var(--gui-card-surface-fade) 0, transparent 100%);
+	}
+	.gui-chat-fade--end {
+		background-image: linear-gradient(to bottom, transparent 0, var(--gui-card-surface-fade) 100%);
+	}
 }
 
 /* ── Focus mode: composer fills the surface (openchamber ⌘⇧E) ───────── */
@@ -1344,6 +1445,35 @@ body.gui-resizing .gui-pane-resize-x::after {
 .gui-sidebar-toggle:hover {
 	background: var(--color-hover);
 	color: var(--color-text);
+}
+
+/* Panel-toggle state matrix: the glyph morphs on toggle (MorphIcon), and hover
+ * nudges it toward the direction the panel will move — the nudge flips with the
+ * state, so hover-before and hover-after read differently, and the press adds a
+ * little scale. Reduced motion keeps the color change only. */
+.gui-sidebar-toggle {
+	--panel-nudge: -2px;
+}
+.gui-sidebar-toggle[data-collapsed="true"] {
+	--panel-nudge: 2px;
+}
+.gui-sidebar-toggle svg {
+	transition: transform 180ms var(--spring-snappy, cubic-bezier(0.34, 1.56, 0.64, 1));
+}
+.gui-sidebar-toggle:hover svg,
+.gui-sidebar-toggle:focus-visible svg {
+	transform: translateX(var(--panel-nudge));
+}
+.gui-sidebar-toggle:active svg {
+	transform: translateX(var(--panel-nudge)) scale(0.92);
+}
+.gui-motion-off .gui-sidebar-toggle svg {
+	transition: none;
+}
+.gui-motion-off .gui-sidebar-toggle:hover svg,
+.gui-motion-off .gui-sidebar-toggle:focus-visible svg,
+.gui-motion-off .gui-sidebar-toggle:active svg {
+	transform: none;
 }
 
 /* ── Per-session pause/resume (TUI /pause parity) ────────────────────── */
@@ -1891,18 +2021,28 @@ body.gui-resizing .gui-pane-resize-x::after {
 }
 
 .gui-session-tab:hover .gui-session-tab-controls,
-.gui-session-tab:focus-within .gui-session-tab-controls,
+.gui-session-tab:focus-visible .gui-session-tab-controls,
+.gui-session-tab:has(.gui-session-tab-ctl:focus-visible) .gui-session-tab-controls,
 .gui-session-tab-controls[data-open="true"] {
 	opacity: 1;
 	pointer-events: auto;
 }
 
-.gui-session-tab:focus-within .gui-session-tab-main {
+/* Pad the label only while the controls can actually cover it, using the same
+ * state set that reveals them. */
+.gui-session-tab:hover .gui-session-tab-main,
+.gui-session-tab:focus-visible .gui-session-tab-main,
+.gui-session-tab:has(.gui-session-tab-ctl:focus-visible) .gui-session-tab-main,
+.gui-session-tab:has(.gui-session-tab-controls[data-open="true"]) .gui-session-tab-main {
 	padding-right: 42px;
 }
 
 .gui-session-tab:hover .gui-session-tab-working,
 .gui-session-tab:hover .gui-session-tab-unread,
+.gui-session-tab:focus-visible .gui-session-tab-working,
+.gui-session-tab:focus-visible .gui-session-tab-unread,
+.gui-session-tab:has(.gui-session-tab-ctl:focus-visible) .gui-session-tab-working,
+.gui-session-tab:has(.gui-session-tab-ctl:focus-visible) .gui-session-tab-unread,
 .gui-session-tab:has(.gui-session-tab-controls[data-open="true"]) .gui-session-tab-working,
 .gui-session-tab:has(.gui-session-tab-controls[data-open="true"]) .gui-session-tab-unread {
 	opacity: 0;
@@ -2219,6 +2359,67 @@ body.gui-resizing .gui-pane-right {
 	display: flex;
 	align-items: center;
 	width: 100%;
+	position: relative;
+}
+
+/* Hover-only project actions (new session / edit / more). The strip is a
+ * sibling of the head button — never a child, because the head is a button.
+ * It overlays the count instead of widening the row, so a long project name
+ * keeps the same truncation budget whether or not the pointer is over it. */
+.gui-project-actions {
+	position: absolute;
+	right: 26px;
+	top: 50%;
+	transform: translateY(-50%);
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease;
+}
+/* Disclosure is pointer-hover, plus keyboard focus only when it is actually
+ * visible (`:focus-visible`). `:focus-within` was sticky: a mouse click on an
+ * action left focus inside the row, so the strip stayed open after the pointer
+ * left — and the count, hidden only on `:hover`, showed through it. The
+ * buttons stay in the tab order while transparent, so a keyboard user can
+ * reach them even though the strip is invisible; focusing one reveals the
+ * strip. */
+.gui-project-block:hover .gui-project-actions,
+.gui-project-block:has(.gui-project-head:focus-visible) .gui-project-actions,
+.gui-project-block:has(.gui-project-action:focus-visible) .gui-project-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+.gui-project-block:hover .gui-project-count,
+.gui-project-block:has(.gui-project-head:focus-visible) .gui-project-count,
+.gui-project-block:has(.gui-project-action:focus-visible) .gui-project-count {
+	opacity: 0;
+}
+.gui-project-action {
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	border: 0;
+	padding: 0;
+	background: transparent;
+	border-radius: 6px;
+	color: var(--color-text-faint);
+	transition: background 120ms ease, color 120ms ease;
+}
+.gui-project-action:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+.gui-project-action:disabled {
+	opacity: 0.4;
+	cursor: default;
+	background: transparent;
+	color: var(--color-text-faint);
+}
+.gui-project-action--new {
+	color: var(--color-accent);
 }
 
 .gui-project-head {
@@ -2254,6 +2455,7 @@ body.gui-resizing .gui-pane-right {
 	font-size: var(--ui-font-size-xs);
 	font-weight: 400;
 	color: var(--color-text-faint);
+	transition: opacity 120ms ease;
 }
 
 .gui-project-chevron {
@@ -2442,11 +2644,11 @@ body.gui-resizing .gui-pane-right {
 	max-width: var(--gui-settings-content-max, 840px);
 }
 
-/* History viewer fill mode (设置 → 数据与统计 → 历史会话): the page-level
- * scroll is disabled so .gui-ext-body's flex:1/min-height:0 gets a bounded
- * height — each pane's .gui-ext-list-scroll then scrolls internally and
- * both pane bottoms align with the tab bottom instead of scrolling away
- * with the whole page. */
+/* Fill mode for settings pages with internally scrolling panes (设置 →
+ * 模型与供应商 / 扩展与插件): the page-level scroll is disabled so
+ * .gui-ext-body's flex:1/min-height:0 gets a bounded height — each pane's
+ * .gui-ext-list-scroll then scrolls internally and both pane bottoms align
+ * with the tab bottom instead of scrolling away with the whole page. */
 .gui-settings-content--fill {
 	display: flex;
 	flex-direction: column;
@@ -2529,7 +2731,11 @@ body.gui-resizing .gui-pane-right {
 
 .gui-settings-content--fill .gui-model-rail-body {
 	min-height: 0;
+	/* Vertical list only: `overflow-y: auto` would otherwise compute
+	 * overflow-x to auto and turn any card/tooltip overflow into a
+	 * horizontal scrollbar under the role grid. */
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 /* Dot-matrix brand backdrop preview (设置 → 常规): a small live DotMatrixMark
@@ -2646,6 +2852,16 @@ body.gui-resizing .gui-pane-right {
 	min-width: 0;
 }
 
+.gui-settings-field-control .gui-btn {
+	/* A control-row button beside a settings select shares the select's
+	 * height and padding rhythm: the 24px small variant next to a 34px
+	 * select read as a broken row. */
+	flex: none;
+	height: 34px;
+	padding-top: 0;
+	padding-bottom: 0;
+}
+
 /* Fields whose control is a bare select (no .gui-settings-field-control
  * wrapper) still right-align like openchamber field rows. */
 .gui-settings-field > .gui-settings-select {
@@ -2693,9 +2909,307 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-settings-row--wide-control > .gui-settings-chips,
-.gui-settings-row--wide-control > .gui-ordered-editor {
+.gui-settings-row--wide-control > .gui-ordered-editor,
+.gui-settings-row--wide-control > .gui-list-editor {
 	flex: 0 0 100%;
 	min-width: 0;
+}
+
+/* Numeric setting with a declared preset ladder: one detent per preset, so
+ * the wheel and the pointer can only land on supported values. Index-spaced
+ * because preset values are frequently non-linear (1, 2.5, 5, 10, 20, 50…). */
+.gui-ladder {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 6px;
+	width: 210px;
+	max-width: 42vw;
+}
+
+.gui-ladder-value {
+	max-width: 100%;
+	padding: 0 7px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-xs);
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-muted);
+}
+
+.gui-ladder-track {
+	position: relative;
+	/* Inset by the thumb radius so the extreme detents stay inside the row
+	 * instead of hanging half a circle past its right edge. */
+	width: calc(100% - 14px);
+	margin: 0 7px;
+	height: 22px;
+	cursor: pointer;
+	touch-action: none;
+}
+
+.gui-ladder-track:focus-visible {
+	/* A 210px outline box reads as a second, unrelated frame around the rail;
+	 * the halo on the thumb marks the focused control without redrawing the
+	 * track's geometry. */
+	outline: none;
+}
+
+.gui-ladder-track:focus-visible .gui-ladder-thumb {
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 40%, transparent);
+}
+
+.gui-ladder-rail,
+.gui-ladder-fill {
+	position: absolute;
+	top: 50%;
+	left: 0;
+	height: 3px;
+	border-radius: 999px;
+	transform: translateY(-50%);
+}
+
+.gui-ladder-rail {
+	right: 0;
+	background: color-mix(in oklab, var(--color-text) 16%, transparent);
+}
+
+.gui-ladder-fill {
+	background: var(--color-accent);
+}
+
+.gui-ladder-tick {
+	position: absolute;
+	top: 50%;
+	width: 3px;
+	height: 3px;
+	border-radius: 999px;
+	transform: translate(-50%, -50%);
+	background: color-mix(in oklab, var(--color-text) 42%, transparent);
+}
+
+.gui-ladder-tick--on {
+	background: color-mix(in oklab, var(--color-accent) 70%, var(--color-text));
+}
+
+.gui-ladder-thumb {
+	position: absolute;
+	top: 50%;
+	width: 13px;
+	height: 13px;
+	border-radius: 999px;
+	transform: translate(-50%, -50%);
+	background: var(--color-surface-raised);
+	border: 1.5px solid var(--color-accent);
+	box-shadow: 0 1px 3px color-mix(in oklab, var(--color-text) 22%, transparent);
+	transition: left 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gui-ladder--disabled {
+	opacity: 0.45;
+}
+
+/* Free numeric setting: rolling counter. Drag or wheel to step, click the
+ * value (or type a digit) to edit. */
+.gui-rollnum {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 88px;
+	height: 28px;
+	padding: 0 9px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
+	color: var(--color-text);
+	cursor: ns-resize;
+	user-select: none;
+	touch-action: none;
+	transition: border-color 140ms ease, background 140ms ease;
+}
+
+.gui-rollnum:hover {
+	border-color: color-mix(in oklab, var(--color-text) 28%, transparent);
+}
+
+.gui-rollnum:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 1px;
+}
+
+.gui-rollnum--dragging {
+	border-color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 10%, var(--color-surface-raised));
+	cursor: grabbing;
+}
+
+.gui-rollnum--disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+}
+
+.gui-rollnum-digits {
+	display: inline-flex;
+	align-items: center;
+	font-size: 13px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+	line-height: 1em;
+}
+
+.gui-rollnum-digit {
+	position: relative;
+	display: block;
+	width: 0.64em;
+	height: 1em;
+	overflow: hidden;
+}
+
+.gui-rollnum-reel {
+	display: flex;
+	flex-direction: column;
+	transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.gui-rollnum-reel > span {
+	display: block;
+	height: 1em;
+	line-height: 1em;
+	text-align: center;
+}
+
+.gui-rollnum-static {
+	display: block;
+	height: 1em;
+	line-height: 1em;
+}
+
+.gui-rollnum-input {
+	width: 84px;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+/* Free-form arrays: one row per value (strings) or a JSON list (records).
+ * Never a comma-joined field — commas inside a value are part of the value. */
+.gui-list-editor {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	width: 100%;
+}
+
+.gui-list-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.gui-list-input {
+	flex: 1;
+	min-width: 0;
+	height: 28px;
+	padding: 0 9px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
+	color: var(--color-text);
+	font-size: 12.5px;
+}
+
+.gui-list-input:focus-visible {
+	outline: none;
+	border-color: var(--color-accent);
+}
+
+.gui-list-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex-shrink: 0;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-faint);
+	font-size: 11px;
+	cursor: pointer;
+	transition: color 120ms ease, background 120ms ease;
+}
+
+.gui-list-remove:hover {
+	color: var(--color-danger);
+	background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+}
+
+.gui-list-add {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	align-self: flex-start;
+	height: 26px;
+	padding: 0 9px;
+	border: 1px dashed color-mix(in oklab, var(--color-text) 24%, transparent);
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	transition: color 120ms ease, border-color 120ms ease;
+}
+
+.gui-list-add:hover {
+	color: var(--color-text);
+	border-color: color-mix(in oklab, var(--color-text) 40%, transparent);
+}
+
+.gui-list-json {
+	width: 100%;
+	min-height: 68px;
+	padding: 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
+	color: var(--color-text);
+	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+	font-size: 12px;
+	line-height: 1.5;
+	resize: vertical;
+}
+
+.gui-list-json:focus-visible {
+	outline: none;
+	border-color: var(--color-accent);
+}
+
+.gui-list-empty {
+	margin: 0;
+	font-size: 12px;
+	color: var(--color-text-faint);
+}
+
+.gui-list-invalid {
+	font-size: 11.5px;
+	color: var(--color-warning);
+}
+
+.gui-motion-off .gui-ladder-thumb,
+.gui-motion-off .gui-rollnum-reel {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-ladder-thumb,
+	.gui-rollnum-reel {
+		transition: none;
+	}
 }
 
 .gui-settings-row--disabled {
@@ -2988,6 +3502,9 @@ body.gui-resizing .gui-pane-right {
 
 .gui-model-rail-body {
 	min-width: 0;
+	/* Query container for the role grid: a container query cannot measure the
+	 * element that declares it, so the grid must ask its parent. */
+	container-type: inline-size;
 }
 
 /* "All models" / provider-detail views. */
@@ -3243,10 +3760,10 @@ body.gui-resizing .gui-pane-right {
  * toolbar row — so all cards in a row share one height regardless of
  * which toggles or fallback chains each has. */
 .gui-role-grid {
-	container-type: inline-size;
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 10px;
+	min-width: 0;
 }
 
 @container (max-width: 519px) {
@@ -3300,6 +3817,13 @@ body.gui-resizing .gui-pane-right {
  * height so the row never shows mismatched button sizes across cards
  * (a thinking select at 4px padding next to default-padding gui-btns
  * rendered visibly shorter). */
+.gui-role-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
 .gui-role-card > .gui-role-actions {
 	flex-wrap: nowrap;
 	align-items: center;
@@ -3309,16 +3833,33 @@ body.gui-resizing .gui-pane-right {
 .gui-role-card > .gui-role-actions > .gui-btn,
 .gui-role-card > .gui-role-actions > .gui-select-trigger.gui-role-thinking {
 	height: 26px;
+	/* .gui-btn's 32px floor would win over `height` and put the toolbar
+	 * back at mismatched heights. */
+	min-height: 0;
 	padding-top: 0;
 	padding-bottom: 0;
 }
 
-.gui-role-card > .gui-role-actions--pin {
-	margin-top: auto;
+/* The toolbar must stay on one line inside a ~250px card. The thinking
+ * select absorbs the free width and truncates; icon buttons keep a fixed
+ * 26px box so four controls and their gaps always fit. */
+.gui-role-card > .gui-role-actions > .gui-select-trigger.gui-role-thinking {
+	flex: 1 1 auto;
+	width: auto;
+	min-width: 0;
+	max-width: none;
 }
 
-.gui-role-card > .gui-role-actions > .gui-role-spacer {
-	flex: 1 1 auto;
+.gui-role-card > .gui-role-actions > .gui-btn {
+	flex: none;
+	min-width: 26px;
+	padding-left: 6px;
+	padding-right: 6px;
+	justify-content: center;
+}
+
+.gui-role-card > .gui-role-actions--pin {
+	margin-top: auto;
 }
 
 .gui-role-tag {
@@ -3565,9 +4106,43 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-settings-row-label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
 	font-size: var(--ui-font-size);
 	line-height: 1.3;
 	color: var(--color-text);
+}
+
+.gui-settings-row-label-text {
+	min-width: 0;
+}
+
+/* Modified-from-default affordance: the reset arrow only exists on rows whose
+ * stored value differs from the schema default, so it doubles as the
+ * "changed" marker the TUI shows. */
+.gui-settings-row-reset {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	margin-left: auto;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition:
+		color 120ms ease,
+		background 120ms ease;
+}
+
+.gui-settings-row-reset:hover {
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
 }
 
 .gui-settings-row-desc {
@@ -4581,39 +5156,220 @@ body.gui-resizing .gui-pane-right {
 	}
 }
 
-/* Settings 预设提示词: builtin tag + drag-reorder rows (usePointerDrag). */
-.gui-suggest-badge {
-	margin-left: 6px;
-	padding: 1px 6px;
-	border-radius: 999px;
-	font-size: 10px;
-	vertical-align: 1px;
-	color: var(--color-text-faint);
-	background: color-mix(in oklab, var(--color-text-faint) 16%, transparent);
-}
-
-.gui-suggest-manage-actions {
+/* Settings 快捷提示词: prompt rows with a drag handle (dnd-kit — the same
+ * gesture as the right-panel tabs) and actions that appear on hover/focus so
+ * the list reads as prompts rather than a toolbar grid. */
+.gui-suggest-head {
 	display: flex;
+	justify-content: flex-end;
+	margin-bottom: 6px;
+}
+
+.gui-suggest-reset {
+	font-size: 12px;
+}
+
+.gui-suggest-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.gui-suggest-row {
+	display: flex;
+	align-items: center;
 	gap: 8px;
-	margin-top: 10px;
+	padding: 6px 8px;
+	border-radius: var(--radius-lg);
+	transition: background 120ms ease;
 }
 
-.gui-suggest-drag-row {
-	cursor: grab;
+.gui-suggest-row:hover {
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
 }
 
-.gui-suggest-drag-row--active {
-	cursor: grabbing;
-	opacity: 0.55;
-	transform: scale(0.99);
-	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--color-border));
+.gui-suggest-row--dragging {
+	z-index: 1;
+	background: var(--color-surface-raised);
+	box-shadow: 0 6px 18px color-mix(in oklab, var(--color-text) 18%, transparent);
 }
 
-.gui-suggest-drag-grip {
+.gui-suggest-grip {
 	display: inline-flex;
 	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 22px;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
 	color: var(--color-text-faint);
 	cursor: grab;
+	touch-action: none;
+	opacity: 0.7;
+	transition:
+		opacity 120ms ease,
+		background 120ms ease,
+		color 120ms ease;
+}
+
+.gui-suggest-row:hover .gui-suggest-grip,
+.gui-suggest-row--dragging .gui-suggest-grip {
+	opacity: 1;
+}
+
+.gui-suggest-grip:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-suggest-row--dragging .gui-suggest-grip {
+	cursor: grabbing;
+}
+
+.gui-suggest-row-body {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.gui-suggest-row-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-suggest-row-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 13px;
+	line-height: 1.4;
+	color: var(--color-text);
+}
+
+.gui-suggest-row-prompt {
+	margin-top: 1px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--color-text-faint);
+}
+
+.gui-suggest-row-actions {
+	display: flex;
+	flex: none;
+	gap: 2px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease;
+}
+
+/* Same disclosure contract as the project row: pointer hover reveals, and a
+ * keyboard-focused action reveals it too. `:focus-within` would keep the strip
+ * open after a mouse click; the actions stay in the tab order while transparent
+ * so keyboard users can still reach them. */
+.gui-suggest-row:hover .gui-suggest-row-actions,
+.gui-suggest-row:has(.gui-suggest-action:focus-visible) .gui-suggest-row-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.gui-suggest-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: none;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition:
+		color 120ms ease,
+		background 120ms ease;
+}
+
+.gui-suggest-action:hover:not(:disabled) {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.gui-suggest-action--danger:hover:not(:disabled) {
+	color: var(--color-danger);
+	background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+}
+
+.gui-suggest-action:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.gui-suggest-editor {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface-raised) 45%, transparent);
+}
+
+.gui-suggest-editor-prompt {
+	min-height: 64px;
+	resize: vertical;
+	font-family: inherit;
+	line-height: 1.5;
+}
+
+.gui-suggest-editor-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+}
+
+.gui-suggest-add {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: 100%;
+	margin-top: 8px;
+	padding: 8px;
+	border: 1px dashed var(--border-strong);
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 12.5px;
+	font-family: inherit;
+	cursor: pointer;
+	transition:
+		color 120ms ease,
+		border-color 120ms ease;
+}
+
+.gui-suggest-add:hover:not(:disabled) {
+	color: var(--color-text);
+	border-color: var(--color-accent-bd);
+}
+
+.gui-suggest-add:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.gui-suggest-empty {
+	margin: 0;
+	padding: 14px;
+	border: 1px dashed var(--border);
+	border-radius: var(--radius-lg);
+	text-align: center;
+	font-size: 12.5px;
+	color: var(--color-text-faint);
 }
 
 /* Reverted-message dock (openchamber RevertedMessageDock parity): a floating
@@ -5690,10 +6446,15 @@ body.gui-resizing .gui-pane-right {
 	align-items: center;
 	gap: 6px;
 	flex: 0 0 auto;
-	padding: 8px 12px 0;
+	/* 8px → 6px: the progressive-blur band below no longer hides a full
+	 * 24px opaque strip, so those 2px go back to the transcript. */
+	padding: 6px 12px 2px;
 	/* Positioning context for the message-tree panel, which is mounted in
 	 * this row and must hang below it without covering the transcript head. */
 	position: relative;
+	/* Same derived card surface as the blur band's tint: the head is not a
+	 * separate colored strip, it is the top of the SAME glass card. */
+	background-image: linear-gradient(to bottom, var(--gui-card-surface-veil) 0%, transparent 100%);
 }
 .gui-chat-head-left {
 	display: flex;
@@ -5719,9 +6480,12 @@ body.gui-resizing .gui-pane-right {
 	justify-content: center;
 	width: 28px;
 	height: 28px;
-	border: 1px solid var(--border);
+	/* Glass-state tokens, not `--color-bg`: the old control painted a darker
+	 * inset slab in a different palette family than the head/fade surface. */
+	border: 1px solid var(--glass-hairline);
 	border-radius: var(--radius-lg);
-	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
+	background: var(--glass-hover);
+	box-shadow: inset 0 1px 0 var(--glass-rim-hi);
 	backdrop-filter: blur(8px);
 	-webkit-backdrop-filter: blur(8px);
 	color: var(--color-text-muted);
@@ -5965,6 +6729,156 @@ body.gui-resizing .gui-pane-right {
 	font-size: 11.5px;
 	color: var(--color-text-faint);
 }
+/* One row per additional project directory; the git readout stays on one
+ * line so a squeezed column never wraps a branch name into glyph stairs. */
+.gui-session-info-dir {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 3px 4px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text);
+	font-size: 11.5px;
+	text-align: left;
+	cursor: pointer;
+}
+.gui-session-info-dir:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+.gui-session-info-dir-name {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-session-info-dir-status {
+	flex: none;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	white-space: nowrap;
+}
+.gui-session-info-dir[data-state="non-git"] .gui-session-info-dir-status {
+	opacity: 0.75;
+}
+/* One directory block: the header row is the disclosure, the body carries the
+ * branch and the changed-file list. Primary and added roots share this shape;
+ * the badge is the only difference. */
+.gui-session-info-dir-block {
+	min-width: 0;
+}
+.gui-session-info-dir-badge {
+	flex: none;
+	padding: 0 5px;
+	border-radius: 999px;
+	font-size: 9.5px;
+	font-weight: 600;
+	line-height: 15px;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	white-space: nowrap;
+}
+.gui-session-info-chev-spacer {
+	width: 12px;
+	height: 12px;
+	flex: none;
+}
+.gui-session-info-dir-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 1px 4px 5px 22px;
+}
+.gui-session-info-dir-branch {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+.gui-session-info-dir-branch-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-session-info-dir-track {
+	flex: none;
+	font-size: 10px;
+	color: var(--color-text-faint);
+	font-variant-numeric: tabular-nums;
+}
+.gui-session-info-dir-files {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	min-width: 0;
+}
+.gui-session-info-file {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	width: 100%;
+	padding: 1px 2px;
+	border-radius: 5px;
+	font-size: 10.5px;
+	color: var(--color-text-muted);
+	text-align: left;
+	cursor: pointer;
+}
+.gui-session-info-file:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+.gui-session-info-file-status {
+	flex: none;
+	width: 13px;
+	font-size: 9.5px;
+	font-weight: 700;
+	text-align: center;
+	color: var(--color-text-faint);
+}
+.gui-session-info-file-status[data-status="A"],
+.gui-session-info-file-status[data-status="??"] {
+	color: var(--color-ok);
+}
+.gui-session-info-file-status[data-status="D"] {
+	color: var(--color-danger);
+}
+.gui-session-info-file-path {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	direction: rtl;
+	text-align: left;
+	unicode-bidi: plaintext;
+}
+.gui-session-info-dir-open,
+.gui-session-info-dir-retry {
+	align-self: flex-start;
+	padding: 2px 4px;
+	border-radius: 5px;
+	font-size: 10.5px;
+	color: var(--color-accent);
+	cursor: pointer;
+}
+.gui-session-info-dir-open:hover,
+.gui-session-info-dir-retry:hover {
+	text-decoration: underline;
+}
+.gui-session-info-dir-nums {
+	display: flex;
+	flex: none;
+	gap: 4px;
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+}
 .gui-session-info-nums {
 	display: flex;
 	align-items: baseline;
@@ -6116,6 +7030,33 @@ body.gui-resizing .gui-pane-right {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+/* "More (N)" trigger under a folded list or grid: a full-width text row that
+ * matches the items it reveals, so a count never has to fit an icon button. */
+.gui-session-info-fold {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	margin-top: 2px;
+	padding: 3px 6px;
+	border-radius: var(--radius-md);
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+	text-align: left;
+	white-space: nowrap;
+	cursor: pointer;
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-session-info-fold:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+.gui-session-info-fold:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: -2px;
+	color: var(--color-text);
 }
 
 /* ── Connectors: the composer picker, reused as a card section ─────────

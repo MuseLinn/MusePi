@@ -29,6 +29,12 @@ describe("segmentFitWidth — 等宽段的最宽下界", () => {
 		expect(segmentFitWidth([{ clientWidth: 52, label: { clientWidth: 36, scrollWidth: 36 } }])).toBe(52);
 	});
 
+	it("does not turn free space into a larger floor when the parent shrinks", () => {
+		expect(
+			segmentFitWidth([{ clientWidth: 156, chromeWidth: 16, label: { clientWidth: 36, scrollWidth: 36 } }]),
+		).toBe(52);
+	});
+
 	it("falls back to the segment box for icon-only segments", () => {
 		expect(segmentFitWidth([{ clientWidth: 30 }, { clientWidth: 30 }])).toBe(30);
 	});

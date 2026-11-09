@@ -609,6 +609,13 @@ export interface SimpleStreamOptions extends Omit<StreamOptions, "apiKey"> {
 	 * Useful when the UI hides thinking blocks anyway and the summary is wasted bandwidth.
 	 */
 	hideThinkingSummary?: boolean;
+	/** Request one Anthropic on-demand compaction instead of a normal turn. */
+	anthropicCompaction?: {
+		/** Replacement for the API's default compaction instructions. */
+		instructions: string;
+		/** Replayed file metadata due before this time ends the summarized request. */
+		filesDueBefore?: number;
+	};
 	/** OpenAI Responses/Codex `text.verbosity` response detail level. */
 	textVerbosity?: "low" | "medium" | "high";
 	/** Custom token budgets for thinking levels (token-based providers only) */
@@ -864,7 +871,17 @@ export interface OpenAIResponsesHistoryPayload {
 	items: Array<Record<string, unknown>>;
 }
 
-export type ProviderPayload = OpenAIResponsesHistoryPayload;
+/** A server-authored Anthropic compaction summary and its opaque replay state. */
+export interface AnthropicCompactionPayload {
+	type: "anthropicCompaction";
+	provider: string;
+	content: string;
+	signature?: string;
+	encryptedContent?: string;
+	toolChanges?: Record<string, unknown>[];
+}
+
+export type ProviderPayload = OpenAIResponsesHistoryPayload | AnthropicCompactionPayload;
 
 export interface UserMessage {
 	role: "user";

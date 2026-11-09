@@ -1,45 +1,48 @@
-# Browser extensions and profile-data UX design
+# External browser integrations and profile-data UX design
+
+> Superseded by [Managed-browser extensions design](2026-11-08-managed-browser-extensions-design.md). The managed toolbar now supports real extensions loaded into its own partition; external Relay and shared-Chromium integrations remain in Settings.
 
 ## Intent
 
-Make the managed browser's existing profile, extension, and real-Chrome capabilities discoverable without duplicating its tab interface or weakening Agent control. Adopt the useful interaction hierarchy evidenced by the installed ChatGPT package: an extensions toolbar entry, an explicit import card, grouped browser settings, and truthful data-type/status feedback.
+Make external-browser and profile capabilities discoverable without duplicating the managed tab interface, weakening Agent control, or presenting them as managed-browser extensions. Keep the useful interaction hierarchy found during reference analysis: explicit import feedback, grouped settings, and truthful data ownership.
 
 ## Goals
 
-- Add a pinned, optional extensions button to the managed-browser toolbar. Its non-modal popup exposes Chrome data import, the MusePi Browser Relay, shared-Chromium extensions, and a route into settings.
-- Split Settings → Browser into General, Extensions, and Data views using the shared segmented control.
-- Keep the Browser Relay and its real-Chrome workflow visible alongside the managed browser rather than replacing it.
+- Split Settings → Browser into General, External browser integrations, and Data using the shared segmented control.
+- Keep Browser Relay and shared-Chromium extension inventory in External browser integrations only. Do not render an extensions button in the managed toolbar.
 - State that the existing importer copies cookies and localStorage into the shared automation Chromium. Do not imply password import, managed-partition import, profile selection, or synchronization.
-- Preserve the existing right-panel tab projection, stable webview host, Agent/CDP bridge, and per-session tab ownership.
+- Preserve the right-panel tab projection, stable webview host, Agent/CDP bridge, and per-session tab ownership.
+- At ≤480px, move annotation, developer tools, and new-tab into More actions so the address field remains usable.
 
 ## Non-goals
 
-- A second tab strip, a new browser engine, or changes to guest lifecycle.
+- A managed extensions popup, a second tab strip, a new browser engine, or changes to guest lifecycle.
 - Password decryption, a password manager, Chrome extension installation into Electron, or managed-partition profile import.
 - A new floating-menu implementation, new dependencies, or unrelated settings redesign.
 
 ## Constraints
 
 - The shared automation Chromium and the managed Electron partition are different data stores. Every import/extensions surface must name the shared-Chromium destination.
-- Popups use `useFloatingMenu`; settings tabs use `Segmented`; browser preferences use the existing renderer-local preference/event pattern.
+- Browser Relay and shared-Chromium extensions are external integrations, not managed-browser extensions.
+- Settings tabs use `Segmented`; browser preferences use the existing renderer-local preference/event pattern.
 - New copy is bilingual. Existing user changes in shared documentation and i18n files remain intact.
 
 ## Approaches
 
-1. **Layered absorption (selected).** Reuse existing RPCs and host state, add shared import/extension components, and regroup settings. This delivers the interaction gains with small, testable changes.
-2. **Full browser-profile platform.** Build native password, extension, and managed-profile import support. This requires a separate security design and platform validation; the current UI work must not pretend it exists.
-3. **Screenshot-only replica.** Copy the toolbar and settings appearance without clarifying data ownership. Rejected because it would make the existing shared-Chromium import look like a managed-browser or password import.
+1. **External-integration settings (selected).** Reuse existing RPCs and host state, keep shared import/extension components in settings, and remove the managed-toolbar extensions entry and preference. This preserves capability discovery without misrepresenting ownership.
+2. **Managed extensions popup (rejected).** A toolbar popup makes external Relay and shared-Chromium data look like managed capabilities and offers no actual managed-extension support.
+3. **Full browser-profile platform.** Native password, extension, and managed-profile import require a separate security design and platform validation; the current UI must not pretend it exists.
 
 ## Design
 
-- `BrowserImportCard` owns import RPC state, dismissibility, progress, and inline success/error feedback. The toolbar card is dismissible and links to the full Data view; the settings card performs the same import directly.
-- `BrowserExtensionsPanel` owns Relay status/actions and shared-Chromium extension inventory. A compact variant serves the toolbar popup; the full variant serves Settings → Extensions.
-- A renderer-local browser-settings model owns the selected settings tab, toolbar visibility, full-URL preference, and change events. The toolbar and both settings consumers share it instead of introducing duplicate storage keys.
-- Settings → General retains engine, Agent, desktop-operation, and runtime-status controls. Settings → Extensions contains Relay, extension inventory, and toolbar visibility. Settings → Data contains import and clearing operations.
-- The toolbar popup remains closed until requested, is dismissed by outside click/Escape through the existing floating-menu primitive, and fits narrow panes with internal scrolling.
+- `BrowserImportCard` owns import RPC progress and inline success/error feedback in Settings → Data.
+- `BrowserExtensionsPanel` owns Relay status/actions and shared-Chromium extension inventory in Settings → External browser integrations.
+- A renderer-local browser-settings model owns the selected settings tab, full-URL preference, and change events. No extensions-toolbar preference exists.
+- Settings → General retains engine, Agent, desktop-operation, and runtime-status controls. Settings → Data contains import and clearing operations.
+- The managed overflow menu retains new-tab, annotation, and developer tools, allowing duplicate toolbar buttons to hide at narrow widths without losing those actions.
 
 ## Verification
 
-- Contract tests cover preference parsing/events, import success/failure, Relay actions, toolbar visibility, settings navigation, and menu behavior.
-- Run focused desktop/client-core checks and the desktop package check.
-- Exercise the real Electron UI: open/dismiss the extensions popup, hide/show its toolbar button, switch settings views, run mocked import/Relay actions, and confirm existing browser tabs and Agent controls still work. Report unverified native OS or real-Chrome behavior explicitly.
+- Contract tests prove the managed toolbar offers no external Relay or shared-Chromium extensions, settings views retain their existing controls, imports report real results, and preferences/events work.
+- Run focused desktop/client-core checks, root `check:tools`, and the desktop build.
+- Real Electron evidence distinguishes working settings/import behavior from any remaining native visual-verification limits. Do not claim password import or real-Chrome integration without a live probe.

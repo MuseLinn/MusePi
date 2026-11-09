@@ -157,7 +157,13 @@ export function petPaletteVars(accent: string, theme: "light" | "dark"): PetPale
  *  when absent → null so the caller keeps the CSS fallbacks). */
 export function resolvedAccent(root: HTMLElement): string | null {
 	try {
-		const v = getComputedStyle(root).getPropertyValue("--accent").trim();
+		// CSS var() substitution can leave empty comment tokens between
+		// oklch channels; chroma-js cannot parse those. Normalize before use.
+		const v = getComputedStyle(root)
+			.getPropertyValue("--accent")
+			.replace(/\/\*[\s\S]*?\*\//g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
 		return v || null;
 	} catch {
 		return null;

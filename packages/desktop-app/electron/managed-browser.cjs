@@ -38,6 +38,14 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { createHash } = require("node:crypto");
 const { projectActivity, settleActivity, startActivity, takeoverActivity } = require("./managed-browser-activity.cjs");
+const { ManagedBrowserRecordStore } = require("./managed-browser-records.cjs");
+const {
+	readExtensionManifest,
+	readExtensionRecords,
+	writeExtensionRecords,
+	loadPersistedExtensions,
+	listManagedExtensions,
+} = require("./managed-browser-extensions.cjs");
 
 const DEFAULT_PORT = Number(process.env.MUSEPI_MANAGED_BROWSER_PORT || 9230);
 const MAX_PORT_TRIES = 10;
@@ -650,10 +658,12 @@ class ManagedTab {
 		});
 		wc.on("did-navigate", (_e, targetUrl) => {
 			this.refreshState(targetUrl);
+			this.controller.recordHistory(this);
 			this.controller.notifyLifecycle(this);
 		});
 		wc.on("did-navigate-in-page", (_e, targetUrl) => {
 			this.refreshState(targetUrl);
+			this.controller.recordHistory(this);
 			this.controller.notifyLifecycle(this);
 		});
 		wc.on("page-title-updated", (_e, title) => {
@@ -668,11 +678,17 @@ class ManagedTab {
 		// initial load (attaching to a booting renderer wedges it — every
 		// command hangs until a navigation). whenDebuggerReady() bridges the
 		// remaining race for clients that attach mid-load.
-		wc.once("did-finish-load", () => this.ensureDebugger());
+		wc.once("did-finish-load", () => {
+			this.ensureDebugger();
+			this.controller.recordHistory(this);
+		});
 		// `did-attach` can reach main after a fast local page already
 		// finished loading — attach now instead of waiting for an event that
 		// will never fire again.
-		if (!wc.isLoading()) this.ensureDebugger();
+		if (!wc.isLoading()) {
+			this.ensureDebugger();
+			this.controller.recordHistory(this);
+		}
 		// Preferences must be in place before the first navigation resolves:
 		// UA is read by the document, zoom by the compositor.
 		this.controller.applyPreferences(this);
@@ -801,8 +817,9 @@ class ManagedTab {
 }
 
 class ManagedBrowserController {
-	constructor() {
+	constructor(options = {}) {
 		this.owner = null;
+		this.recordStore = options.recordStore ?? new ManagedBrowserRecordStore(options.recordsFile ?? path.join(app.getPath("userData"), "managed-browser-records.json"));
 		this.tabs = new Map();
 		this.activeTabId = null;
 		this.tabSeq = 0;
@@ -836,6 +853,8 @@ class ManagedBrowserController {
 		this.preferences = { ...DEFAULT_PREFERENCES, download: { ...DEFAULT_PREFERENCES.download } };
 		/** `will-download` listener armed once on the managed session. */
 		this.downloadsGuarded = false;
+		this.extensionRecordsFile = path.join(app.getPath("userData"), "managed-browser-extensions.json");
+		this.extensionLoadErrors = [];
 	}
 
 	// ── lifecycle ────────────────────────────────────────────────────────
@@ -884,6 +903,7 @@ class ManagedBrowserController {
 	async start(ownerWindow) {
 		this.setOwner(ownerWindow);
 		this.guardPartition();
+		await this.loadPersistedExtensions();
 		this.registerIpc();
 		// Re-entrant by design: a second boot in the same process (window
 		// recreation, a relaunch hook) must not re-register the IPC channels —
@@ -972,6 +992,28 @@ class ManagedBrowserController {
 				savePath = picked;
 			}
 			item.setSavePath(savePath);
+			const download = this.recordStore.beginDownload({
+				url: redactUrl(item.getURL()),
+				fileName,
+				savePath,
+				totalBytes: item.getTotalBytes(),
+				startedAt: Date.now(),
+			});
+			item.on("updated", (_event, state) => {
+				this.recordStore.updateDownload(download.id, {
+					status: state,
+					receivedBytes: item.getReceivedBytes(),
+					totalBytes: item.getTotalBytes(),
+				});
+			});
+			item.once("done", (_event, state) => {
+				this.recordStore.updateDownload(download.id, {
+					status: state,
+					receivedBytes: item.getReceivedBytes(),
+					totalBytes: item.getTotalBytes(),
+					endedAt: Date.now(),
+				});
+			});
 			// The cap is an agent guardrail: a user-started download is theirs.
 			if (agent) this.guardDownloadSize(item, prefs.maxBytes);
 		} catch (error) {
@@ -1108,6 +1150,20 @@ class ManagedBrowserController {
 		if (!tab) return null;
 		this.agentTabId = String(tab.id);
 		return tab;
+	}
+
+	activatePanel() {
+		this.panelVisible = true;
+		this.emitState({ agentActivity: true });
+		return { ok: true, panelVisible: true };
+	}
+
+	releaseAgentTab() {
+		const id = this.agentTabId;
+		if (id) takeoverActivity(this.ledger, id);
+		this.agentTabId = null;
+		this.emitState({});
+		return { ok: true };
 	}
 
 	async ensureTab(url = "about:blank", openedByAgent = false) {
@@ -1252,6 +1308,51 @@ class ManagedBrowserController {
 	}
 
 	// ── renderer-facing state ────────────────────────────────────────────
+
+	recordHistory(tab) {
+		const url = redactUrl(tab.url);
+		if (!url || INELIGIBLE_URL.test(url) || tab.lastHistoryUrl === url) return;
+		tab.lastHistoryUrl = url;
+		this.recordStore.recordHistory({ url, title: tab.title, visitedAt: Date.now() });
+	}
+
+	/** Agent-facing panel and tab facts. Page contents and credentials never
+	 *  cross this metadata-only boundary. */
+	agentState() {
+		const tabs = [...this.tabs.values()].filter((tab) => !INELIGIBLE_URL.test(tab.url));
+		const controlled = this.agentTabId ? tabs.find((tab) => String(tab.id) === this.agentTabId) : null;
+		const visible = this.activeTabId ? tabs.find((tab) => String(tab.id) === this.activeTabId) : null;
+		const current = controlled ?? visible ?? null;
+		return {
+			available: true,
+			panelVisible: this.panelVisible,
+			...(controlled ? { activeTabId: String(controlled.id) } : {}),
+			...(this.panelVisible && visible ? { visibleTabId: String(visible.id) } : {}),
+			...(current ? { url: redactUrl(current.url), title: current.title } : {}),
+			tabs: tabs.map((tab) => {
+				const wc = tab.wc && !tab.wc.isDestroyed() ? tab.wc : null;
+				const navigation = wc?.navigationHistory;
+				return {
+					id: String(tab.id),
+					title: tab.title,
+					url: redactUrl(tab.url),
+					controlled: String(tab.id) === this.agentTabId,
+					visible: this.panelVisible && String(tab.id) === this.activeTabId,
+					...(wc && typeof wc.isLoading === "function" ? { loading: wc.isLoading() } : {}),
+					...(navigation && typeof navigation.canGoBack === "function"
+						? { canGoBack: navigation.canGoBack() }
+						: wc && typeof wc.canGoBack === "function"
+							? { canGoBack: wc.canGoBack() }
+							: {}),
+					...(navigation && typeof navigation.canGoForward === "function"
+						? { canGoForward: navigation.canGoForward() }
+						: wc && typeof wc.canGoForward === "function"
+							? { canGoForward: wc.canGoForward() }
+							: {}),
+				};
+			}),
+		};
+	}
 
 	/** Projected state: the CDP port and per-tab activity. Tab metadata stays
 	 *  in the renderer — it owns the elements. */
@@ -1653,6 +1754,18 @@ class ManagedBrowserController {
 					});
 					return;
 				}
+				if (req.method === "GET" && (req.url === "/musepi/history" || req.url === "/musepi/history/")) {
+					this.writeJson(res, this.recordStore.history());
+					return;
+				}
+				if (req.method === "GET" && (req.url === "/musepi/downloads" || req.url === "/musepi/downloads/")) {
+					this.writeJson(res, this.recordStore.downloads());
+					return;
+				}
+				if (req.method === "GET" && (req.url === "/musepi/state" || req.url === "/musepi/state/")) {
+					this.writeJson(res, this.agentState());
+					return;
+				}
 				if (req.method === "GET" && (req.url === "/json" || req.url === "/json/list")) {
 					const pages = [...this.tabs.values()]
 						.filter((tab) => !INELIGIBLE_URL.test(tab.url))
@@ -1984,6 +2097,14 @@ class ManagedBrowserController {
 				this.reply(conn, msg, { targetId: pageTargetId(tab.id) });
 				return;
 			}
+			case "ManagedBrowser.activatePanel": {
+				this.reply(conn, msg, this.activatePanel());
+				return;
+			}
+			case "ManagedBrowser.releaseAgentTab": {
+				this.reply(conn, msg, this.releaseAgentTab());
+				return;
+			}
 			case "ManagedBrowser.findTabTarget": {
 				// Daemon-side contract (tab-supervisor requestManagedBrowserTarget
 				// with an explicit app.target): resolve an OPEN tab by url/title
@@ -2264,6 +2385,58 @@ class ManagedBrowserController {
 		} catch (error) {
 			return { ok: false, error: error instanceof Error ? error.message : String(error) };
 		}
+	}
+
+	async loadPersistedExtensions() {
+		try {
+			const ses = electronSession.fromPartition(PARTITION);
+			const result = await loadPersistedExtensions(ses, this.extensionRecordsFile);
+			this.extensionLoadErrors = result.errors;
+		} catch (error) {
+			this.extensionLoadErrors = [error instanceof Error ? error.message : String(error)];
+		}
+	}
+
+	listExtensions() {
+		const ses = electronSession.fromPartition(PARTITION);
+		return { extensions: listManagedExtensions(ses, this.extensionRecordsFile), errors: this.extensionLoadErrors };
+	}
+
+	async chooseExtension() {
+		this.pendingExtensionCandidate = null;
+		const options = { properties: ["openDirectory"] };
+		const owner = this.owner && !this.owner.isDestroyed() ? this.owner : null;
+		const picked = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+		if (!picked || picked.canceled || !picked.filePaths?.[0]) return { candidate: null };
+		const candidate = readExtensionManifest(picked.filePaths[0]);
+		this.pendingExtensionCandidate = candidate;
+		const existing = readExtensionRecords(this.extensionRecordsFile).find(record => record.path === candidate.path);
+		return { candidate: existing ? { ...candidate, id: existing.id, alreadyInstalled: true } : candidate };
+	}
+
+	async installExtension(input) {
+		if (input?.confirmed !== true) throw new Error("Extension permission confirmation is required");
+		const candidate = this.pendingExtensionCandidate;
+		if (!candidate) throw new Error("Choose and review an extension before installation");
+		const existing = readExtensionRecords(this.extensionRecordsFile).find(record => record.path === candidate.path);
+		if (existing) return { ok: true, alreadyInstalled: true, extension: { ...candidate, id: existing.id } };
+		const ses = electronSession.fromPartition(PARTITION);
+		const extension = await ses.loadExtension(candidate.path);
+		const record = { ...candidate, id: extension.id };
+		const records = [...readExtensionRecords(this.extensionRecordsFile).filter(item => item.id !== record.id && item.path !== record.path), record];
+		writeExtensionRecords(this.extensionRecordsFile, records);
+		this.extensionLoadErrors = [];
+		return { ok: true, extension: record };
+	}
+
+	async removeExtension(input) {
+		if (typeof input?.id !== "string" || !input.id) return { ok: false, error: "extension id is required" };
+		electronSession.fromPartition(PARTITION).removeExtension(input.id);
+		writeExtensionRecords(
+			this.extensionRecordsFile,
+			readExtensionRecords(this.extensionRecordsFile).filter(record => record.id !== input.id),
+		);
+		return { ok: true };
 	}
 
 	/**
@@ -2554,6 +2727,10 @@ class ManagedBrowserController {
 		ipcMain.handle("managed-browser:print", (_e, input) => this.printTab(input?.tabId));
 		ipcMain.handle("managed-browser:save-screenshot", (_e, input) => this.saveScreenshot(input?.tabId));
 		ipcMain.handle("managed-browser:show-downloads", () => this.showDownloads());
+		ipcMain.handle("managed-browser:extensions-list", () => this.listExtensions());
+		ipcMain.handle("managed-browser:extensions-choose", () => this.chooseExtension());
+		ipcMain.handle("managed-browser:extensions-install", (_e, input) => this.installExtension(input));
+		ipcMain.handle("managed-browser:extensions-remove", (_e, input) => this.removeExtension(input));
 		// Settings → 浏览器: default zoom / UA / search engine / download policy.
 		ipcMain.handle("managed-browser:set-preferences", (_e, input) => this.setPreferences(input));
 		// Page freeze/thaw for tab residency (CDP `Page.setWebLifecycleState`).

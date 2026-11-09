@@ -38,6 +38,13 @@ import { ThinkingLevel } from "../thinking";
 import { Tokenizer } from "../tokenizer";
 import type { AgentMessage } from "../types";
 import {
+	buildAnthropicCompactionInstructions,
+	getPreservedAnthropicCompactionData,
+	requestAnthropicNativeCompaction,
+	shouldUseAnthropicNativeCompaction,
+	withAnthropicCompactionPreserveData,
+} from "./anthropic";
+import {
 	buildCompactionV2Request,
 	getCompactionV2PreserveData,
 	requestCompactionV2Streaming,
@@ -169,6 +176,14 @@ export interface CompactionSettings {
 	strategy?: "context-full" | "handoff" | "shake" | "snapcompact" | "off";
 	thresholdPercent?: number;
 	thresholdTokens?: number;
+	/**
+	 * A model entry's token count standing in for the window: the percentage or
+	 * reserve policy below is computed against this base instead of the real
+	 * window. A fixed `thresholdTokens` still wins and is checked against the
+	 * real window. Set by per-model compaction limits; request and overflow
+	 * budgets keep the real window.
+	 */
+	baseWindowTokens?: number;
 	midTurnEnabled?: boolean;
 	/**
 	 * Tokens reserved below the context window for the next prompt + response.
@@ -374,6 +389,14 @@ export function resolveThresholdTokens(contextWindow: number, settings: Compacti
 	// configured reserves still define the usable prompt budget. Cap at
 	// contextWindow - 1 (matching the fixed-token clamp above) so the threshold
 	// never reaches the whole window even when the reserve resolves to 0.
+	//
+	// A model entry's token count stands in for the window for everything below:
+	// its percentage or reserve policy scales against the base, while a real
+	// window smaller than the base still caps it.
+	const baseWindowTokens = settings.baseWindowTokens;
+	if (typeof baseWindowTokens === "number" && Number.isFinite(baseWindowTokens) && baseWindowTokens > 0) {
+		contextWindow = Math.min(contextWindow, baseWindowTokens);
+	}
 	const thresholdPercent = settings.thresholdPercent;
 	if (typeof thresholdPercent !== "number" || !Number.isFinite(thresholdPercent) || thresholdPercent <= 0) {
 		return Math.max(
@@ -1273,6 +1296,12 @@ export function remotePreserveReusable(
 	activeModel: Model,
 	settings: CompactionSettings,
 ): boolean {
+	const anthropic = getPreservedAnthropicCompactionData(preserveData);
+	if (anthropic) {
+		if (settings.remoteEnabled === false) return false;
+		if (anthropic.provider !== activeModel.provider) return false;
+		return anthropic.signature !== undefined && shouldUseAnthropicNativeCompaction(activeModel);
+	}
 	const remote = getCompactionV2PreserveData(preserveData) ?? getPreservedOpenAiRemoteCompactionData(preserveData);
 	if (!remote) return true;
 	if (settings.remoteEnabled === false) return false;
@@ -1697,6 +1726,72 @@ export async function compact(
 		}
 	}
 
+	let nativeAnthropicSummary: string | undefined;
+	if (
+		!usedRemoteCompaction &&
+		settings.remoteEnabled !== false &&
+		!summaryOptions.remoteEndpoint &&
+		shouldUseAnthropicNativeCompaction(model)
+	) {
+		const prefix = [...messagesToSummarize, ...turnPrefixMessages];
+		if (prefix.length > 0) {
+			try {
+				const instructions = buildAnthropicCompactionInstructions(
+					summaryOptions.remoteInstructions ?? SUMMARIZATION_SYSTEM_PROMPT,
+					customInstructions,
+					options?.extraContext?.join("\n\n"),
+				);
+				const requestContext: Context = {
+					...(summaryOptions.remoteInstructions ? { systemPrompt: [summaryOptions.remoteInstructions] } : {}),
+					messages: (summaryOptions.convertToLlm ?? defaultConvertToLlm)(prefix),
+					...(summaryOptions.tools ? { tools: summaryOptions.tools } : {}),
+				};
+				const native = await withAuth(
+					apiKey,
+					key =>
+						requestAnthropicNativeCompaction(
+							model,
+							key,
+							{
+								context: requestContext,
+								instructions,
+								maxTokens: Math.min(model.maxTokens ?? reserveTokens, reserveTokens),
+								reasoning: resolveCompactionEffort(model, options?.thinkingLevel),
+							},
+							signal,
+							{
+								fetch: summaryOptions.fetch,
+								sessionId: summaryOptions.sessionId,
+								promptCacheKey: summaryOptions.promptCacheKey,
+								providerSessionState: summaryOptions.providerSessionState,
+								completeImpl: summaryOptions.completeImpl,
+								telemetry: summaryOptions.telemetry,
+							},
+						),
+					{ signal },
+				);
+				preserveData = withAnthropicCompactionPreserveData(previousPreserveData, {
+					provider: model.provider,
+					content: native.content,
+					signature: native.signature,
+					...(native.toolChanges ? { toolChanges: native.toolChanges } : {}),
+					model: native.model,
+					usedTokens: native.usage.input + native.usage.cacheRead + native.usage.cacheWrite,
+				});
+				usedRemoteCompaction = true;
+				nativeAnthropicSummary = native.content;
+			} catch (err) {
+				if (signal?.aborted) throw err;
+				nativeCompactionError = selectNativeCompactionError(nativeCompactionError, err);
+				logger.warn("Anthropic remote compaction failed", {
+					error: err instanceof Error ? err.message : String(err),
+					model: model.id,
+					provider: model.provider,
+				});
+			}
+		}
+	}
+
 	if (!usedRemoteCompaction && nativeCompactionError !== undefined && !summaryOptions.remoteEndpoint) {
 		throw new NativeCompactionError(nativeCompactionError);
 	}
@@ -1713,8 +1808,9 @@ export async function compact(
 		// locally then (see remotePreserveReusable).
 		const usedTokens = getCompactionV2PreserveData(preserveData)?.usedTokens ?? 0;
 		summary =
+			nativeAnthropicSummary ??
 			"Remote compaction preserved provider-native history for this session." +
-			(usedTokens > 0 ? ` Retained ${usedTokens} tokens in the provider replay payload.` : "");
+				(usedTokens > 0 ? ` Retained ${usedTokens} tokens in the provider replay payload.` : "");
 	} else if (isSplitTurn && turnPrefixMessages.length > 0) {
 		// Generate both summaries in parallel
 		const [historyResult, turnPrefixResult] = await Promise.all([

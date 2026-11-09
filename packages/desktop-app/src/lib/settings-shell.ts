@@ -17,6 +17,11 @@
  *   closed (after leave)   → identical to closed (keepers reveal, slot gone)
  *   page destination       → sidebar keeper hidden only (the page owns the
  *                            surface; the chat column keeps rendering it)
+ *   scheduled destination  → sidebar keeper VISIBLE: the task center owns a
+ *                            real left panel in that slot, not a page column
+ *                            (2026-11-08). Settings still takes the slot back.
+ *   capability destination → same: the capability center owns a second-tier
+ *                            panel in that slot (2026-11-08).
  */
 
 export interface SettingsShellState {
@@ -39,15 +44,24 @@ export function computeSettingsShellState(state: {
 	 *  owns the surface. Those pages carry their own header and back path, so
 	 *  the session panel folds away instead of sitting next to a surface it
 	 *  does not describe — the rail's 首页 destination brings it back. The
-	 *  sidebar stays mounted (display:none), so expanded groups survive. */
+	 *  sidebar stays mounted (display:none), so expanded groups survive.
+	 *  Scheduled and capability are the exceptions: each supplies its OWN
+	 *  second-tier panel in the same slot, so the keeper must stay visible
+	 *  while either is the destination. */
 	pageDestinationActive?: boolean;
+	/** Task center is the active destination (open or inside its swap frame). */
+	scheduledPanelActive?: boolean;
+	/** Capability center is the active destination (open or leaving frame). */
+	capabilityPanelActive?: boolean;
 }): SettingsShellState {
 	const settingsActive = state.settingsOpen || state.leavingSettings;
+	const secondTierPanelVisible =
+		!settingsActive && (state.scheduledPanelActive === true || state.capabilityPanelActive === true);
 	return {
 		settingsActive,
 		navSlotMounted: settingsActive,
 		navSlotLeaving: state.leavingSettings,
-		sideKeeperHidden: settingsActive || state.pageDestinationActive === true,
+		sideKeeperHidden: settingsActive || (state.pageDestinationActive === true && !secondTierPanelVisible),
 		chatColKeeperHidden: settingsActive,
 	};
 }

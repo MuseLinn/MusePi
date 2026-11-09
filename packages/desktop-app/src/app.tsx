@@ -8,13 +8,14 @@ import {
 } from "@musepi/client-core";
 import { createChatQuoteContext, createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
 import type { MessageDisplayContext, SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActionToastStack } from "./components/ActionToast";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import { AppRail, RAIL_WIDTH, type RailItem } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
+import { CapabilitySidePanel } from "./components/CapabilitySidePanel";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
 import type { CreationMessage } from "./components/CreationModeRow";
@@ -22,15 +23,19 @@ import { uploadAttachmentFiles } from "./components/composer/use-attachments";
 import { DialogFrame } from "./components/DialogFrame";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FloatingScrollbar } from "./components/FloatingScrollbar";
+import { GettingStartedCard, type GettingStartedStepId } from "./components/GettingStartedCard";
 import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
 import { GuiHeader } from "./components/GuiHeader";
 import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
 import { InstanceButton } from "./components/InstanceButton";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { PrBoardPage } from "./components/PrBoardPage";
+import { ProjectDialog, type ProjectDialogTarget } from "./components/ProjectDialog";
 import type { ReminderRow } from "./components/RemindersPanel";
 import { RemoteAccessDialog } from "./components/RemoteAccessDialog";
+import { RemoteAccessDisclaimerDialog } from "./components/RemoteAccessDisclaimerDialog";
 import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
+import { ScheduledTasksPanel } from "./components/ScheduledTasksPanel";
 import type { SessionListNode } from "./components/SessionList";
 import type { SessionRetitleResult } from "./components/SessionSidebar";
 import { SessionSidebar } from "./components/SessionSidebar";
@@ -62,8 +67,9 @@ import {
 	shouldRestartForMissingExtensions,
 	shouldRestartForMissingMethods,
 } from "./lib/daemon-version";
-import { openMiniChat, pickDirectory } from "./lib/electron";
+import { openMiniChat } from "./lib/electron";
 import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
+import { invalidateGitStatuses } from "./lib/git-status-cache";
 import { applyGlass, applyGlassMaterial } from "./lib/glass";
 import { ensureLiquidGlass } from "./lib/liquid-glass";
 import { watchManagedBrowserBridge } from "./lib/managed-browser-bridge";
@@ -72,8 +78,10 @@ import { installPanelMaximizeController } from "./lib/panel-maximize";
 import type { PetSessionCard } from "./lib/pet";
 import { activePet, moodFromState, petEnabled, petMode, petScale, stateFromSignals } from "./lib/pet";
 import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
+
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
-import { railPeekEligible } from "./lib/rail-peek";
+import { railPeekEligible, resolveSidebarPanel } from "./lib/rail-peek";
+import { grantRemoteAccessConsent, hasRemoteAccessConsent } from "./lib/remote-access-consent";
 import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./lib/remote-hosts";
 import { ExpectedDisconnects, RpcClient, type StreamEvent } from "./lib/rpc";
 import { captureSelectionContext, captureSelectionText } from "./lib/selection-capture";
@@ -111,13 +119,17 @@ import {
 	hostReactBindings,
 	hostReactDOMBindings,
 	hostReactDOMClientBindings,
+	SIDEBAR_PANEL_SLOT_PREFIX,
 	SlotComponentHost,
+	SlotComponentMount,
+	selectSidebarPanelComponent,
 	useSlotComponents,
+	useSlotComponentsByPrefix,
 } from "./lib/slot-host";
 import { readHiddenSurfaces, readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
-import { createProject } from "./lib/workspace-projects";
+import type { WorkspaceMutationResult } from "./lib/workspace-projects";
 import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
 import "./styles/gui-taskcenter.css";
@@ -716,23 +728,38 @@ function AppInner(): ReactNode {
 	// Panel collapse: side rail and context panel fold to thin
 	// strips with a reopen button.
 	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("musepi-gui-side") === "0");
-	/** Hover-peek: while the panel is docked closed, entering the rail slides
-	 *  the session list out as a floating surface. It never re-docks itself —
-	 *  only the titlebar toggle (or 首页) restores the docked width. */
-	const [railPeek, setRailPeek] = useState(false);
+	/** Hover-peek (2026-11-08): the rail reports the panel owned by the
+	 *  HOVERED destination. Hovering the rail's empty band or a destination
+	 *  without a panel floats nothing; 任务中心 peeks its own task list. It
+	 *  never re-docks itself — only the titlebar toggle restores the width. */
+	const [peekPanel, setPeekPanel] = useState<string | null>(null);
+	/** Separate from `peekPanel`: the pointer leaves the button BEFORE the
+	 *  panel id is cleared, so opacity/transform can play a real fade-out. */
+	const [peekHovered, setPeekHovered] = useState(false);
 	const peekTimerRef = useRef<number | null>(null);
-	const openPeek = useCallback((): void => {
+	const openPeek = useCallback((panelId: string): void => {
 		if (peekTimerRef.current !== null) {
 			clearTimeout(peekTimerRef.current);
 			peekTimerRef.current = null;
 		}
-		setRailPeek(true);
+		setPeekPanel(panelId);
+		setPeekHovered(true);
+	}, []);
+	/** Entering the floating panel must keep it open without replacing the
+	 *  panel id (the pointer leaves the tiny rail button first). */
+	const holdPeek = useCallback((): void => {
+		if (peekTimerRef.current !== null) {
+			clearTimeout(peekTimerRef.current);
+			peekTimerRef.current = null;
+		}
+		setPeekHovered(true);
 	}, []);
 	const closePeek = useCallback((): void => {
 		if (peekTimerRef.current !== null) clearTimeout(peekTimerRef.current);
-		// The pointer crosses a gap between rail and floating panel; a short
-		// grace period keeps the panel from flashing out mid-move.
-		peekTimerRef.current = window.setTimeout(() => setRailPeek(false), 140);
+		// Fade out immediately; keep the panel id for the 140ms exit so the
+		// pane stays mounted and its CSS transition can finish.
+		setPeekHovered(false);
+		peekTimerRef.current = window.setTimeout(() => setPeekPanel(null), 140);
 	}, []);
 	const [narrowSidebarOpen, setNarrowSidebarOpen] = useState(false);
 	const [sideWidth, setSideWidth] = useState<number>(() => Number(localStorage.getItem("musepi-gui-side-w") ?? 256));
@@ -784,15 +811,54 @@ function AppInner(): ReactNode {
 	});
 	const [connectOpen, setConnectOpen] = useState(false);
 	const [collabOpen, setCollabOpen] = useState(false);
+	const [remoteDisclaimerOpen, setRemoteDisclaimerOpen] = useState(false);
+	const [remoteAccessConsented, setRemoteAccessConsented] = useState(() => hasRemoteAccessConsent());
+	const pendingRemoteAction = useRef<(() => void) | null>(null);
+	const requestRemoteAccess = useCallback(
+		(openTarget: () => void) => {
+			if (remoteAccessConsented) {
+				openTarget();
+				return;
+			}
+			pendingRemoteAction.current = openTarget;
+			setRemoteDisclaimerOpen(true);
+		},
+		[remoteAccessConsented],
+	);
+	const viewRemoteDisclaimer = useCallback((): void => {
+		pendingRemoteAction.current = null;
+		setRemoteDisclaimerOpen(true);
+	}, []);
+	const closeRemoteDisclaimer = useCallback((): void => {
+		pendingRemoteAction.current = null;
+		setRemoteDisclaimerOpen(false);
+	}, []);
+	const agreeRemoteDisclaimer = useCallback((): void => {
+		grantRemoteAccessConsent();
+		setRemoteAccessConsented(true);
+		setRemoteDisclaimerOpen(false);
+		const openTarget = pendingRemoteAction.current;
+		pendingRemoteAction.current = null;
+		openTarget?.();
+	}, []);
 	const [importOpen, setImportOpen] = useState(false);
-	// 新建空白项目 dialog (name + parent path → daemon
-	// fs.mkdir → open the folder). Kept always-mounted so the DialogFrame
-	// plays its enter/exit animation.
-	const [newProjectOpen, setNewProjectOpen] = useState(false);
-	const [newProjectName, setNewProjectName] = useState("");
-	const [newProjectParent, setNewProjectParent] = useState<string | null>(null);
-	const [newProjectBusy, setNewProjectBusy] = useState(false);
-	const [newProjectError, setNewProjectError] = useState<string | null>(null);
+	// 添加项目 → create-mode project dialog. Registering only happens on
+	// save, so the user can add source folders before the project exists.
+	const [projectDialog, setProjectDialog] = useState<{
+		mode: "create";
+		target: ProjectDialogTarget;
+	} | null>(null);
+	const applyCreatedProject = useCallback((result: WorkspaceMutationResult): void => {
+		const root = result.workspace.root;
+		setProject(root);
+		try {
+			localStorage.setItem("musepi-gui-project", root);
+		} catch {
+			// Storage unavailable: the registry still owns the project.
+		}
+		window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: root }));
+		window.dispatchEvent(new CustomEvent("musepi-gui-projects-changed"));
+	}, []);
 	// Pending ask question (TUI ask parity): the agent asked mid-run and the
 	// daemon pushed an ask-request envelope — the AskCard answers it via
 	// session.askAnswer. Tagged with the OWNING session: asks raised in
@@ -804,48 +870,6 @@ function AppInner(): ReactNode {
 	// envelope reachable without rebuilding the callback.
 	const pendingAskRef = useRef<(AskRequest & { sessionId?: string }) | null>(null);
 	pendingAskRef.current = pendingAsk;
-	// mkdir the blank project under the chosen parent (daemon fs.mkdir is
-	// cwd-scoped, so the parent rides as cwd + the name as relative path),
-	// then open + surface it like 打开文件夹 does.
-	const createNewProject = async (): Promise<void> => {
-		const name = newProjectName.trim();
-		const parent = newProjectParent;
-		if (!name || !parent || !rpc || newProjectBusy) return;
-		setNewProjectBusy(true);
-		setNewProjectError(null);
-		try {
-			const res = (await rpc.request<{ ok?: boolean; error?: string }>("fs.mkdir", {
-				cwd: parent,
-				path: name,
-			})) as { ok?: boolean; error?: string };
-			if (res?.ok === false || res?.error) {
-				setNewProjectError(res?.error ?? t("settings.createProjectFailed"));
-				return;
-			}
-			const dir = `${parent.replace(/\/+$/, "")}/${name}`;
-			setProject(dir);
-			localStorage.setItem("musepi-gui-project", dir);
-			if (rpc) {
-				try {
-					await createProject(rpc, dir);
-				} catch (error) {
-					// The folder exists either way; only the registry row failed, so
-					// report it and still open the workspace.
-					const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
-					pushActionToast({ kind: "error", message: `${t("settings.createProjectFailed")}${detail}` });
-				}
-			}
-			window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
-			window.dispatchEvent(new CustomEvent("musepi-gui-projects-changed"));
-			setNewProjectOpen(false);
-			setNewProjectName("");
-			setNewProjectParent(null);
-		} catch {
-			setNewProjectError(t("settings.createProjectFailed"));
-		} finally {
-			setNewProjectBusy(false);
-		}
-	};
 	// daimon-canvas jump from chat: board id to open after the view swap.
 	const [boardJumpId, setBoardJumpId] = useState<string | null>(null);
 	/** 任务中心跳转目标任务 id（会话内 schedule_task 卡片 → 任务中心）。 */
@@ -856,6 +880,15 @@ function AppInner(): ReactNode {
 	const [capabilityOpen, setCapabilityOpen] = useState(false);
 	const capabilityComponents = useSlotComponents(rpc, CAPABILITY_CENTER_SLOT);
 	const capabilityAvailable = capabilityComponents.length > 0;
+	/** The task center's second-tier panel is Cordis-owned
+	 *  (`sidebar.panel.scheduled`). Before the registry is ready — or when the
+	 *  plugin is disabled / fails to compile — the host mounts the same built-in
+	 *  component so the destination never loses its left panel. */
+	const sidebarPanels = useSlotComponentsByPrefix(rpc, SIDEBAR_PANEL_SLOT_PREFIX);
+	const scheduledPanelContribution = selectSidebarPanelComponent(sidebarPanels, "scheduled");
+	/** The capability center owns the same slot with its own Cordis contribution
+	 *  (`sidebar.panel.capability`); the built-in panel is the offline fallback. */
+	const capabilityPanelContribution = selectSidebarPanelComponent(sidebarPanels, "capability");
 	const [prBoardOpen, setPrBoardOpen] = useState(false);
 	// Cron-run notifications: poll cron.list while the app is up; a run that
 	// finishes fires the standard completion/error notification + pet bubble,
@@ -1129,21 +1162,50 @@ function AppInner(): ReactNode {
 	// A page destination owns the surface (its own header and back path), so
 	// the session panel folds away instead of describing a surface it does not
 	// own. The rail's 首页 destination brings it back; nothing unmounts.
+	// Task center is the exception: its left panel is a REAL second-tier panel
+	// in the rail's sidebar slot (2026-11-08), not a column inside the page.
+	// Keeping it through the 150ms swap frame avoids a blank slot mid-jump.
+	const scheduledActive = scheduledOpen || leavingView === "scheduled";
+	// Capability center keeps its own second-tier panel through the 150ms swap
+	// frame too, so the sidebar slot never blanks out mid-jump (task center
+	// parity). The destination is plugin-gated, but the panel has a built-in
+	// fallback, so it does not depend on the registry being ready.
+	const capabilityActive = capabilityOpen || leavingView === "capability";
 	const pageDestinationActive = boardOpen || scheduledOpen || capabilityOpen || prBoardOpen;
-	const shell = computeSettingsShellState({ settingsOpen, leavingSettings, pageDestinationActive });
-	const settingsActive = shell.settingsActive;
-	// A floating panel is only meaningful while the docked one is closed and
-	// the destination actually HAS a left panel. Clearing the state here (not
-	// in the render branch after the early return) keeps the hook order stable.
-	const peekEligible = railPeekEligible({
-		sideCollapsed,
+	const shell = computeSettingsShellState({
+		settingsOpen,
+		leavingSettings,
 		pageDestinationActive,
-		settingsActive,
-		narrowSidebarOpen,
+		scheduledPanelActive: scheduledActive,
+		capabilityPanelActive: capabilityActive,
 	});
+	const settingsActive = shell.settingsActive;
+	/** Settings owns the nav slot while open; all three panes stay mounted
+	 *  underneath so their state survives the trip. */
+	const scheduledPanelVisible = scheduledActive && !settingsActive;
+	const capabilityPanelVisible = capabilityActive && !settingsActive;
+	/** A destination with a real second-tier panel keeps the fold control and
+	 *  the resize handle; board / PR still own a single-column surface. */
+	const secondTierPanelVisible = scheduledPanelVisible || capabilityPanelVisible;
+	// A floating panel is only meaningful while the docked one is closed.
+	// Clearing the state here (not in a render branch) keeps hook order stable.
+	const peekEligible = railPeekEligible({ sideCollapsed, settingsActive, narrowSidebarOpen });
 	useEffect(() => {
-		if (!peekEligible) setRailPeek(false);
+		if (!peekEligible) {
+			setPeekPanel(null);
+			setPeekHovered(false);
+		}
 	}, [peekEligible]);
+	/** `data-panel` is the single CSS authority for which mounted pane shows:
+	 *  docked destination, or the one panel whose rail button is hovered. */
+	const activePanelId = resolveSidebarPanel({
+		settingsActive,
+		sideCollapsed,
+		peekPanel,
+		scheduledActive,
+		capabilityActive,
+		pageDestinationActive,
+	});
 	// Cross-component navigation into a settings section (welcome composer
 	// 自定义补充 chip): open the pane on the requested section.
 	useEffect(() => {
@@ -1687,6 +1749,18 @@ function AppInner(): ReactNode {
 			// "instant refresh" is dead code. Fire-and-forget: a missing
 			// RPC on older daemons is non-fatal (polling still works).
 			client.request("events.subscribe", {}).catch(() => {});
+			// Git-dir push: HEAD/index/refs changed outside this window. Drop the
+			// affected cache entries and tell mounted surfaces to re-read — no
+			// per-directory timer.
+			client.addEventListener(event => {
+				if (event.kind !== "global-event") return;
+				const payload = event.payload as { type?: unknown; roots?: unknown } | undefined;
+				if (payload?.type !== "git.statusChanged") return;
+				const roots = Array.isArray(payload.roots)
+					? payload.roots.filter((root): root is string => typeof root === "string")
+					: [];
+				invalidateGitStatuses(roots);
+			});
 			localStorage.setItem("musepi-gui-url", targetUrl);
 			// Fetch the session list; errors (unknown method) are non-fatal on
 			// older daemons — surface but keep the connection.
@@ -1960,6 +2034,17 @@ function AppInner(): ReactNode {
 	useEffect(() => {
 		if (!window.electronAPI?.onPowerResume) return;
 		return window.electronAPI.onPowerResume(() => recoverFromDropRef.current());
+	}, []);
+
+	// Desktop custom-protocol OAuth callback (musepi://oauth/callback): the
+	// shell forwards the URL, the daemon validates state and finishes the flow.
+	useEffect(() => {
+		const onCallback = window.electronAPI?.onOAuthCallback;
+		if (!onCallback) return;
+		return onCallback(url => {
+			const client = rpcRef.current;
+			if (client) void client.request("mcp.oauth.callback", { url }).catch(() => {});
+		});
 	}, []);
 
 	const disconnect = useCallback((): void => {
@@ -2588,23 +2673,13 @@ function AppInner(): ReactNode {
 		[createSession],
 	);
 
-	/** Pick a folder and register it as the workspace/project. Sidebar projects
-	 *  tab contract: the daemon owns the registry, so registering is a
-	 *  `workspace.create` and the broadcast only asks the tab to re-read. */
-	const pickProjectFolder = useCallback((): void => {
-		void pickDirectory().then(async dir => {
-			if (!dir) return;
-			setProject(dir);
-			localStorage.setItem("musepi-gui-project", dir);
-			try {
-				const client = rpcRef.current;
-				if (client) await createProject(client, dir);
-			} catch (error) {
-				const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
-				pushActionToast({ kind: "error", message: `${t("settings.createProjectFailed")}${detail}` });
-			}
-			window.dispatchEvent(new CustomEvent("musepi-gui-project-added", { detail: dir }));
-			window.dispatchEvent(new CustomEvent("musepi-gui-projects-changed"));
+	/** Open the project dialog first; the primary folder is chosen inside it,
+	 *  like Kimi's create/edit project sheet. Registration happens on save, so
+	 *  a cancelled dialog leaves the registry untouched. */
+	const addProject = useCallback((): void => {
+		setProjectDialog({
+			mode: "create",
+			target: { root: "", name: "", additionalDirs: [] },
 		});
 	}, []);
 
@@ -2917,6 +2992,39 @@ function AppInner(): ReactNode {
 				.catch(() => {});
 		},
 		[refreshSessions],
+	);
+
+	/** Reload a session from disk (daemon session.reload), then re-open it so
+	 *  the transcript/history reflects the re-read file. */
+	const reloadSession = useCallback(
+		(sessionId: string): void => {
+			const client = rpcRef.current;
+			if (!client) return;
+			void client
+				.request("session.reload", { sessionId })
+				.then(async result => {
+					const errors = (result as { errors?: unknown } | undefined)?.errors;
+					const failures = Array.isArray(errors) ? errors.length : 0;
+					// The reload already succeeded; a failed re-open must not be
+					// reported as a failed reload (the open path owns its own banner).
+					await openSession(sessionId).catch(() => {});
+					await refreshSessions(client).catch(() => {});
+					pushActionToast(
+						failures > 0
+							? {
+									kind: "warning",
+									message: t("general.sessionReloadPartial", { count: failures }),
+								}
+							: { kind: "success", message: t("general.sessionReloaded") },
+					);
+				})
+				.catch(async error => {
+					await openSession(sessionId).catch(() => {});
+					const detail = error instanceof Error && error.message ? `: ${error.message}` : "";
+					pushActionToast({ kind: "error", message: `${t("general.sessionReloadFailed")}${detail}` });
+				});
+		},
+		[openSession, refreshSessions],
 	);
 
 	const decideApproval = useCallback(
@@ -3688,7 +3796,7 @@ function AppInner(): ReactNode {
 				window.dispatchEvent(new CustomEvent("musepi-gui-find-in-chat"));
 			} else if (mod && eventMatches(e, "open-folder")) {
 				e.preventDefault();
-				pickProjectFolder();
+				addProject();
 			} else if (mod && eventMatches(e, "toggle-sidebar")) {
 				e.preventDefault();
 				toggleSidebar();
@@ -3964,6 +4072,7 @@ function AppInner(): ReactNode {
 		pushActionToast({
 			kind: "success",
 			message: t("general.sessionArchived"),
+			dedupeKey: `session:archive:${id}`,
 			actionLabel: t("general.undo"),
 			onAction: () => unarchiveSession(id),
 		});
@@ -4018,6 +4127,7 @@ function AppInner(): ReactNode {
 							store,
 							rpc,
 							readOnly: selectedIsAdvisor,
+							mini: true,
 							onAddProvider: () => openSettings("providers"),
 							onOpenSettings: openSettings,
 							onSend: (text, images, deliverAs, displayContext, videos) =>
@@ -4044,10 +4154,8 @@ function AppInner(): ReactNode {
 							onProject: action => {
 								if (action === "remote") {
 									setConnectOpen(true);
-								} else if (action === "new") {
-									setNewProjectOpen(true);
-								} else if (action === "folder") {
-									pickProjectFolder();
+								} else if (action === "add") {
+									addProject();
 								} else if (action === "none") {
 									setProject(null);
 									localStorage.removeItem("musepi-gui-project");
@@ -4087,12 +4195,21 @@ function AppInner(): ReactNode {
 	 *  flat predicate over the mutually exclusive view flags is enough to name
 	 *  the current one. 新建 / 搜索 stay in the panel: they are actions, not
 	 *  destinations, and had been duplicated here. */
-	const peekOpen = peekEligible && railPeek;
+	const peekOpen = peekEligible && peekHovered && activePanelId !== null;
+	/** Getting-started rows open REAL entry points; the card records visited
+	 *  rows locally instead of probing daemon state (REA inference). */
+	const handleGettingStarted = (id: GettingStartedStepId): void => {
+		if (id === "appearance") openSettings();
+		else if (id === "provider") openSettings("providers");
+		else if (id === "import") setImportOpen(true);
+		else if (id === "task") viewSwapRef.current("scheduled");
+	};
 	const railDestinations: RailItem[] = [
 		{
 			id: "home",
 			label: "general.home",
 			icon: "home",
+			panelId: "home",
 			active: !pageDestinationActive && !settingsActive,
 			onSelect: () => {
 				closeSettings();
@@ -4103,6 +4220,7 @@ function AppInner(): ReactNode {
 			id: "scheduled",
 			label: "settings.scheduledTasks",
 			icon: "calendar-schedule",
+			panelId: "scheduled",
 			active: scheduledOpen,
 			/** A scheduled task just finished — the rail dot replaces the old
 			 *  sidebar glow row (that menu row now lives in the rail). */
@@ -4131,6 +4249,7 @@ function AppInner(): ReactNode {
 			id: "capability",
 			label: "tools.capabilityCenter",
 			icon: "star",
+			panelId: "capability",
 			active: capabilityOpen,
 			onSelect: () => {
 				setCapabilityTab("skills");
@@ -4164,6 +4283,8 @@ function AppInner(): ReactNode {
 				onReconnect={() => void boot()}
 				onDisconnect={disconnect}
 				onOpenWorkspace={handleOpenRemoteWorkspace}
+				onOpenManager={requestRemoteAccess}
+				onOpenDisclaimer={viewRemoteDisclaimer}
 			/>
 			<button
 				type="button"
@@ -4179,7 +4300,7 @@ function AppInner(): ReactNode {
 				className="gui-rail-btn"
 				title={t("settings.mobileRemoteControl")}
 				aria-label={t("settings.mobileRemoteControl")}
-				onClick={() => setCollabOpen(true)}
+				onClick={() => requestRemoteAccess(() => setCollabOpen(true))}
 			>
 				<Icon name="smartphone" className="gui-rail-icon" />
 			</button>
@@ -4222,10 +4343,10 @@ function AppInner(): ReactNode {
 						destinations={railDestinations}
 						settings={railSettings}
 						footerActions={railFooter}
-						panelAvailable={!pageDestinationActive && !settingsActive}
+						panelAvailable={(!pageDestinationActive || secondTierPanelVisible) && !settingsActive}
 						onTogglePanel={toggleSidebar}
-						onPointerEnter={peekEligible ? openPeek : undefined}
-						onPointerLeave={peekEligible ? closePeek : undefined}
+						onPeekPanel={peekEligible ? openPeek : undefined}
+						onPeekEnd={peekEligible ? closePeek : undefined}
 					/>
 					{/* The side resizer must not float while the settings shell
 					 * hides the sidebar — otherwise a stray handle line rides the
@@ -4262,8 +4383,14 @@ function AppInner(): ReactNode {
 						]
 							.filter(Boolean)
 							.join(" ")}
+						// One authority for which mounted pane is visible: the
+						// docked destination, or the panel owned by the hovered
+						// rail button. CSS never guesses from destination flags.
+						data-panel={activePanelId ?? undefined}
+						data-peek={peekEligible ? "true" : undefined}
 						data-peek-open={peekOpen ? "true" : undefined}
-						onPointerEnter={peekEligible ? openPeek : undefined}
+						style={{ "--gui-side-w": `${sideWidth}px` } as CSSProperties}
+						onPointerEnter={peekEligible ? holdPeek : undefined}
 						onPointerLeave={peekEligible ? closePeek : undefined}
 						onClickCapture={event => {
 							if (narrowSidebarOpen && event.target instanceof Element && event.target.closest("button")) {
@@ -4278,21 +4405,26 @@ function AppInner(): ReactNode {
 							rpc={rpc ?? undefined}
 							onSelect={selectSession}
 							onNewSession={startNewTask}
+							onNewSessionInProject={cwd => {
+								void createSession({ cwd });
+							}}
 							onDisconnect={disconnect}
 							onOpenConnect={() => setConnectOpen(true)}
 							onOpenWorkspace={handleOpenRemoteWorkspace}
 							onOpenSettings={openSettings}
-							onOpenCollab={() => setCollabOpen(true)}
+							onOpenCollab={() => requestRemoteAccess(() => setCollabOpen(true))}
+							onOpenInstanceManager={requestRemoteAccess}
+							onOpenRemoteDisclaimer={viewRemoteDisclaimer}
 							onOpenShortcuts={() => setShortcutsOpen(true)}
 							onRenameSession={renameSession}
+							onReloadSession={reloadSession}
 							onOpenSearch={() => setPaletteOpen(true)}
 							onOpenMiniChat={openMiniChatFor}
 							unread={unreadSessions}
 							onToggleUnread={toggleUnread}
-							onPickFolder={() => {
-								pickProjectFolder();
+							onAddProject={() => {
+								addProject();
 							}}
-							onCreateProject={() => setNewProjectOpen(true)}
 							onImportSessions={() => setImportOpen(true)}
 							modeCatalog={welcomeModes}
 							collapsed={peekOpen || narrowSidebarOpen ? false : sideCollapsed}
@@ -4309,7 +4441,38 @@ function AppInner(): ReactNode {
 							onAddHost={addHost}
 							onRemoveHost={removeHost}
 							showFooter={false}
+							gettingStarted={<GettingStartedCard onAction={handleGettingStarted} />}
 						/>
+						{/* Task center's left panel occupies the SAME slot as the
+						 * session list. Both stay mounted: `data-panel` swaps which
+						 * one is visible, so expanded session groups, the panel's
+						 * search text and the selected task survive destination
+						 * changes. A column inside ScheduledTasksPage disappears
+						 * on the empty state and sits right of the slot — the old
+						 * bug. The Cordis plugin owns the contribution; the same
+						 * built-in component is the offline / disabled fallback. */}
+						{scheduledPanelContribution ? (
+							<SlotComponentMount item={scheduledPanelContribution} rpc={rpc} />
+						) : (
+							<ScheduledTasksPanel
+								width={sideWidth}
+								collapsed={peekOpen || narrowSidebarOpen ? false : sideCollapsed}
+							/>
+						)}
+						{/* Capability center's three destinations moved OUT of the page
+						 * header into this slot (2026-11-08): rail → one panel → one
+						 * content column, the same two-tier geometry as 首页 / 任务中心.
+						 * All three panes stay mounted so search text, the selected tab
+						 * and expanded session groups survive destination changes and
+						 * hover-peek. Plugin contribution first, built-in fallback. */}
+						{capabilityPanelContribution ? (
+							<SlotComponentMount item={capabilityPanelContribution} rpc={rpc} />
+						) : (
+							<CapabilitySidePanel
+								width={sideWidth}
+								collapsed={peekOpen || narrowSidebarOpen ? false : sideCollapsed}
+							/>
+						)}
 					</div>
 					{settingsActive && (
 						/* Settings nav slot: the sidebar slot's stand-in while the
@@ -4338,8 +4501,14 @@ function AppInner(): ReactNode {
 							<GuiHeader
 								store={store}
 								rpc={rpc}
-								sideCollapsed={pageDestinationActive ? false : narrowSidebarOpen ? false : sideCollapsed}
-								panelAvailable={!pageDestinationActive}
+								sideCollapsed={
+									pageDestinationActive && !secondTierPanelVisible
+										? false
+										: narrowSidebarOpen
+											? false
+											: sideCollapsed
+								}
+								panelAvailable={!pageDestinationActive || secondTierPanelVisible}
 								onToggleSidebar={toggleSidebar}
 								paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
 								pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
@@ -4352,17 +4521,17 @@ function AppInner(): ReactNode {
 								terminalOpen={bottomTerminal}
 								onToggleTerminal={toggleTerminalDock}
 								project={project}
-								// Reuse pickProjectFolder: a bare pickDirectory here updated
+								// Reuse addProject: a bare pickDirectory here updated
 								// musepi-gui-project (welcome chip) but never announced the
 								// workspace, so the sidebar 项目 tab stayed empty — the two
 								// surfaces disagreed on what "added" means.
-								onOpenFolder={pickProjectFolder}
+								onAddProject={addProject}
 								sessions={recentSessions}
 								onSelectSession={id => void openSession(id)}
 								onRenameSession={renameSession}
 								sessionLabel={activeSessionLabel}
 								remote={activeSessionRemote}
-								onOpenCollab={() => setCollabOpen(true)}
+								onOpenCollab={() => requestRemoteAccess(() => setCollabOpen(true))}
 								onDeleteSession={deleteSession}
 								tabs={sessionTabRows}
 								previewTabId={previewTabId}
@@ -4415,13 +4584,11 @@ function AppInner(): ReactNode {
 												onProject: action => {
 													if (action === "remote") {
 														setConnectOpen(true);
-													} else if (action === "new") {
-														setNewProjectOpen(true);
+													} else if (action === "add") {
+														addProject();
 													} else if (action === "none") {
 														setProject(null);
 														localStorage.removeItem("musepi-gui-project");
-													} else if (action === "folder") {
-														pickProjectFolder();
 													} else {
 														setProject(action);
 														localStorage.setItem("musepi-gui-project", action);
@@ -4650,6 +4817,14 @@ function AppInner(): ReactNode {
 				sessionTitle={activeSessionLabel}
 				open={collabOpen}
 				onClose={() => setCollabOpen(false)}
+				onOpenDisclaimer={viewRemoteDisclaimer}
+			/>
+			<RemoteAccessDisclaimerDialog
+				open={remoteDisclaimerOpen}
+				consented={remoteAccessConsented}
+				onAgree={agreeRemoteDisclaimer}
+				onDecline={closeRemoteDisclaimer}
+				onClose={closeRemoteDisclaimer}
 			/>
 			{/* Session import (sidebar projects tab entry) — import sessions
 			 * from other agents into MusePi. */}
@@ -4661,68 +4836,16 @@ function AppInner(): ReactNode {
 			>
 				<ImportSessionsSetup rpc={rpc} />
 			</DialogFrame>
-			{/* 新建空白项目 — name + parent path, mkdir via the
-			 * daemon (works outside any session cwd), then open + surface it. */}
-			<DialogFrame
-				open={newProjectOpen}
-				onClose={() => setNewProjectOpen(false)}
-				label={t("settings.newBlankProject")}
-				className="gui-new-project-dialog gui-dialog--confirm"
-			>
-				{" "}
-				<div className="flex flex-col gap-3">
-					<div className="gui-new-project-field">
-						<div className="gui-new-project-label">
-							{t("settings.projectName")} <span className="gui-new-project-req">*</span>
-						</div>
-						<input
-							className="gui-input w-full"
-							value={newProjectName}
-							placeholder={t("settings.projectNamePlaceholder")}
-							autoFocus
-							spellCheck={false}
-							onChange={e => setNewProjectName(e.target.value)}
-							onKeyDown={e => {
-								if (e.key === "Enter") void createNewProject();
-							}}
-						/>
-					</div>
-					<div className="gui-new-project-field">
-						<div className="gui-new-project-label">
-							{t("settings.projectParentPath")} <span className="gui-new-project-req">*</span>
-						</div>
-						<button
-							type="button"
-							className="gui-new-project-path"
-							onClick={() => {
-								void pickDirectory().then(dir => {
-									if (dir) setNewProjectParent(dir);
-								});
-							}}
-						>
-							<Icon name="folder" className="h-3.5 w-3.5 flex-none" />
-							<span className="min-w-0 flex-1 truncate">
-								{newProjectParent ?? t("settings.projectParentPlaceholder")}
-							</span>
-							<Icon name="arrow-right-s" className="h-3 w-3 flex-none opacity-60" />
-						</button>
-					</div>
-					{newProjectError && <div className="text-[12.5px] text-[var(--color-danger)]">{newProjectError}</div>}
-					<div className="mt-1 flex justify-end gap-2">
-						<button type="button" className="gui-btn" onClick={() => setNewProjectOpen(false)}>
-							{t("settings.cancel")}
-						</button>
-						<button
-							type="button"
-							className="gui-btn gui-btn-primary"
-							disabled={!newProjectName.trim() || !newProjectParent || newProjectBusy}
-							onClick={() => void createNewProject()}
-						>
-							{newProjectBusy ? t("settings.creating") : t("general.save")}
-						</button>
-					</div>
-				</div>
-			</DialogFrame>
+			{/* 添加项目 → name + primary + source folders. The registry entry
+			 *  is created on save, so cancelling leaves no empty project row. */}
+			<ProjectDialog
+				open={projectDialog !== null}
+				mode={projectDialog?.mode ?? "create"}
+				target={projectDialog?.target ?? null}
+				rpc={rpc}
+				onClose={() => setProjectDialog(null)}
+				onSaved={applyCreatedProject}
+			/>
 			{/* Ask card (TUI ask parity) renders inside ChatView as a floating
 			 * card above the composer —
 			 * see ChatView `ask`/`onAskAnswer` props. */}
@@ -4738,7 +4861,7 @@ function AppInner(): ReactNode {
 				sessions={recentSessions}
 				onNewSession={startNewTask}
 				onOpenWorkspace={() => {
-					pickProjectFolder();
+					addProject();
 				}}
 				onSettings={openSettings}
 				onToggleSidebar={toggleSidebar}

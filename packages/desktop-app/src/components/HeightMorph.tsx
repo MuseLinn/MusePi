@@ -36,6 +36,7 @@ export function HeightMorph({
 	className,
 	children,
 	innerRef,
+	fade = true,
 }: {
 	/** Value whose change triggers the morph (tab id, toggle state, …). */
 	morphKey: unknown;
@@ -44,6 +45,10 @@ export function HeightMorph({
 	/** Extra ref for the morph container (e.g. a scroll-shadow observer on
 	 *  a fixed-height scroll container that HeightMorph itself owns). */
 	innerRef?: React.Ref<HTMLDivElement>;
+	/** Restart the container fade on each morph. Turn off when the children
+	 *  carry their own enter/exit animation — a second container fade would
+	 *  blink the still-visible items (e.g. the chip row's blur-in stagger). */
+	fade?: boolean;
 }): ReactNode {
 	const ref = useRef<HTMLDivElement | null>(null);
 	const prevKey = useRef(morphKey);
@@ -54,10 +59,12 @@ export function HeightMorph({
 		const node = ref.current;
 		if (!node || prevKey.current === morphKey) return;
 		prevKey.current = morphKey;
-		// Restart the fade (the CSS animation ran once on mount).
-		node.style.animation = "none";
-		void node.offsetHeight;
-		node.style.animation = FADE_ANIM;
+		if (fade) {
+			// Restart the fade (the CSS animation ran once on mount).
+			node.style.animation = "none";
+			void node.offsetHeight;
+			node.style.animation = FADE_ANIM;
+		}
 		// Release anything an INTERRUPTED morph pinned BEFORE measuring:
 		// a stale inline height makes offsetHeight read the clip, not the
 		// content, so the run would "animate" to the very clip that is
@@ -105,10 +112,10 @@ export function HeightMorph({
 			node.style.transition = "";
 			node.style.overflow = "";
 		};
-	}, [morphKey]);
+	}, [morphKey, fade]);
 	return (
 		<div
-			className={`gui-morph-fade${className ? ` ${className}` : ""}`}
+			className={`${fade ? "gui-morph-fade" : ""}${className ? `${fade ? " " : ""}${className}` : ""}`}
 			ref={el => {
 				ref.current = el;
 				if (typeof innerRef === "function") innerRef(el);

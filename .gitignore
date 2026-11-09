@@ -177,3 +177,5 @@ packages/coding-agent/.agent-tmp/
 packages/desktop-app/.musepi/
 packages/mobile/android/.android-build/
 perler-showcase/
+.openbitfun/
+system-downloads/

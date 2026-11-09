@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { join, parse } from "node:path";
 import {
 	MAX_WORKSPACE_DIRECTORIES,
 	resolveWorkspaceDirectories,
@@ -246,6 +246,19 @@ describe("WorkspaceRegistry", () => {
 			{ path: "./nested", directory: join(projectRoot, "nested") },
 			{ path: projectRoot, directory: projectRoot },
 		]);
+	});
+
+	it("rejects the home directory and filesystem root as additional roots", async () => {
+		const root = tempRoot();
+		const projectRoot = join(root, "project");
+		mkdirSync(projectRoot);
+
+		await expect(resolveWorkspaceDirectories(projectRoot, [homedir()])).rejects.toMatchObject({
+			code: "WORKSPACE_DIRECTORY_UNSAFE",
+		});
+		await expect(resolveWorkspaceDirectories(projectRoot, [parse(projectRoot).root])).rejects.toMatchObject({
+			code: "WORKSPACE_DIRECTORY_UNSAFE",
+		});
 	});
 });
 

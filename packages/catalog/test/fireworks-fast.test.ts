@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { FIREWORKS_FAST_SUFFIX, isFireworksFastModelId, toFireworksBaseModelId } from "../src/fireworks-model-id";
+import { getBundledModel } from "../src/models";
 import { buildFireworksFastSeed } from "../src/provider-models/openai-compat";
 
 describe("fireworks fast id helpers", () => {
@@ -45,7 +46,8 @@ describe("buildFireworksFastSeed", () => {
 
 	it("inherits limits and modalities from the base model", () => {
 		const kimi = byId.get("kimi-k2.6-fast");
-		expect(kimi?.input).toEqual(["text", "image"]);
+		const base = getBundledModel<"openai-completions">("fireworks", "kimi-k2.6");
+		expect(kimi?.input).toEqual(base.input);
 		expect(kimi?.contextWindow).toBe(262144);
 		expect(kimi?.reasoning).toBe(true);
 		expect(byId.get("glm-5.1-fast")?.input).toEqual(["text"]);

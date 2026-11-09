@@ -26,6 +26,14 @@ export const ATTACHMENT_INLINE_MAX_BYTES = 8 * 1024 * 1024;
 /** Fallback when a daemon answers `begin` without a usable chunk size. */
 const DEFAULT_CHUNK_BYTES = 3 * 1024 * 1024;
 
+/**
+ * Per-request deadline. A phone's link can go silent mid-upload (Wi-Fi
+ * handoff, Doze); without a deadline the chip stays "uploading" forever and
+ * send stays disabled. Every chunk gets the same generous cap, so a slow but
+ * live link is never cut off — only a link that stopped answering is.
+ */
+const UPLOAD_RPC_TIMEOUT_MS = 120_000;
+
 /** `btoa` argument chunk: large enough to be fast, small enough to stay under
  *  engines' spread-argument limits. */
 const BASE64_STRING_CHUNK = 0x8000;
@@ -91,7 +99,11 @@ export async function uploadAttachment(rpc: AttachmentRpc, file: File): Promise<
 	const mimeType = file.type || "application/octet-stream";
 	if (file.size <= ATTACHMENT_INLINE_MAX_BYTES) {
 		const content = await readBlobBase64(file);
-		const result = await rpc.rpc<AttachmentPutResult | SoftError>("attachment.put", { name, mimeType, content });
+		const result = await rpc.rpc<AttachmentPutResult | SoftError>(
+			"attachment.put",
+			{ name, mimeType, content },
+			{ timeoutMs: UPLOAD_RPC_TIMEOUT_MS },
+		);
 		return expectUploadResult(result);
 	}
 	return uploadAttachmentInChunks(rpc, file, name, mimeType);
@@ -103,7 +115,11 @@ async function uploadAttachmentInChunks(
 	name: string,
 	mimeType: string,
 ): Promise<AttachmentPutResult> {
-	const begun = await rpc.rpc<BeginResult | SoftError>("attachment.begin", { name, mimeType, size: file.size });
+	const begun = await rpc.rpc<BeginResult | SoftError>(
+		"attachment.begin",
+		{ name, mimeType, size: file.size },
+		{ timeoutMs: UPLOAD_RPC_TIMEOUT_MS },
+	);
 	const beginError = softError(begun);
 	if (beginError) throw new Error(beginError);
 	const { uploadId, chunkSize: declaredChunkSize } = begun as BeginResult;
@@ -113,11 +129,19 @@ async function uploadAttachmentInChunks(
 		for (let index = 0; index * chunkSize < file.size; index++) {
 			const start = index * chunkSize;
 			const content = await readBlobBase64(file.slice(start, Math.min(start + chunkSize, file.size)));
-			const chunk = await rpc.rpc<ChunkResult | SoftError>("attachment.chunk", { uploadId, index, content });
+			const chunk = await rpc.rpc<ChunkResult | SoftError>(
+				"attachment.chunk",
+				{ uploadId, index, content },
+				{ timeoutMs: UPLOAD_RPC_TIMEOUT_MS },
+			);
 			const chunkError = softError(chunk);
 			if (chunkError) throw new Error(chunkError);
 		}
-		const committed = await rpc.rpc<AttachmentPutResult | SoftError>("attachment.commit", { uploadId });
+		const committed = await rpc.rpc<AttachmentPutResult | SoftError>(
+			"attachment.commit",
+			{ uploadId },
+			{ timeoutMs: UPLOAD_RPC_TIMEOUT_MS },
+		);
 		return expectUploadResult(committed);
 	} catch (error) {
 		// Best-effort cleanup: the daemon also expires uncommitted uploads.

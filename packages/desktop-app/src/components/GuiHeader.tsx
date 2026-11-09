@@ -2,8 +2,8 @@ import { t, unarchiveSession, archiveSession as writeArchivedSession } from "@mu
 import {
 	MessageSquare as MessageSquareIconData,
 	MessageSquareText as MessageSquareTextIconData,
-	PanelLeft as PanelLeftIconData,
-	PanelRight as PanelRightIconData,
+	PanelLeftClose as PanelLeftCloseIconData,
+	PanelLeftOpen as PanelLeftOpenIconData,
 	Pause as PauseIconData,
 	Play as PlayIconData,
 	Square as SquareIconData,
@@ -128,7 +128,7 @@ export function GuiHeader({
 	terminalOpen,
 	onToggleTerminal,
 	project,
-	onOpenFolder,
+	onAddProject,
 	sessions,
 	onSelectSession,
 	onRenameSession,
@@ -172,7 +172,7 @@ export function GuiHeader({
 	terminalOpen: boolean;
 	onToggleTerminal(): void;
 	project: string | null;
-	onOpenFolder(): void;
+	onAddProject(): void;
 	/** Recent sessions for the header switcher, newest first. */
 	sessions: { id: string; label: string; timestamp: number }[];
 	onSelectSession(id: string): void;
@@ -641,6 +641,7 @@ export function GuiHeader({
 		pushActionToast({
 			kind: "success",
 			message: t("general.sessionArchived"),
+			dedupeKey: `session:archive:${archivedId}`,
 			actionLabel: t("general.undo"),
 			onAction: () => unarchiveSession(archivedId),
 		});
@@ -763,12 +764,13 @@ export function GuiHeader({
 					<button
 						type="button"
 						className="gui-sidebar-toggle"
+						data-collapsed={sideCollapsed ? "true" : "false"}
 						title={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
 						aria-label={sideCollapsed ? t("transcript.openSidebar") : t("transcript.closeSidebar")}
 						onClick={onToggleSidebar}
 					>
 						<MorphIcon
-							icon={sideCollapsed ? PanelRightIconData : PanelLeftIconData}
+							icon={sideCollapsed ? PanelLeftOpenIconData : PanelLeftCloseIconData}
 							size={16}
 							spring="snappy"
 							reducedMotion="user"
@@ -1367,11 +1369,11 @@ export function GuiHeader({
 								className="gui-view-opt"
 								onClick={() => {
 									setOpenInOpen(false);
-									onOpenFolder();
+									onAddProject();
 								}}
 							>
-								<Icon name="folder-open" className="h-3.5 w-3.5" />
-								<span>{t("settings.openFolder")}</span>
+								<Icon name="folder-add" className="h-3.5 w-3.5" />
+								<span>{t("settings.addProject")}</span>
 							</button>
 						</MenuPopup>
 					</div>

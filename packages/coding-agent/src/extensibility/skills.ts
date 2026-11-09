@@ -1,5 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
+import * as path from "node:path";
 import { getProjectDir, prompt } from "@musepi/pi-utils";
 import {
 	isValidManagedSkillName,
@@ -121,6 +122,50 @@ export async function loadSkillsFromDir(options: LoadSkillsFromDirOptions): Prom
 export interface LoadSkillsOptions extends SkillsSettings {
 	/** Working directory for project-local skills. Default: getProjectDir() */
 	cwd?: string;
+}
+
+/**
+ * Merge per-root skill results: the primary root wins a name collision, and
+ * warnings are preserved from every root.
+ */
+export function mergeSkillResults(primary: LoadSkillsResult, extra: readonly LoadSkillsResult[]): LoadSkillsResult {
+	const seen = new Set<string>();
+	const skills: Skill[] = [];
+	for (const skill of [...primary.skills, ...extra.flatMap(result => result.skills)]) {
+		if (seen.has(skill.name)) continue;
+		seen.add(skill.name);
+		skills.push(skill);
+	}
+	return {
+		skills,
+		warnings: [...primary.warnings, ...extra.flatMap(result => result.warnings)],
+	};
+}
+
+/**
+ * Load skills for the primary root plus every additional project directory.
+ *
+ * The primary root wins a name collision: a project skill must not be shadowed
+ * by a same-named skill in a related directory. Additional roots contribute
+ * project-level skills only through their own discovery pass, so user-level
+ * skills are not duplicated by scanning each root.
+ */
+export async function loadSkillsWithRoots(
+	options: LoadSkillsOptions & { additionalDirectories?: readonly string[] } = {},
+): Promise<LoadSkillsResult> {
+	const { additionalDirectories = [], ...primaryOptions } = options;
+	const primary = await loadSkills(primaryOptions);
+	const primaryCwd = path.resolve(primaryOptions.cwd ?? getProjectDir());
+	const roots = additionalDirectories.filter(
+		directory => directory.length > 0 && path.resolve(directory) !== primaryCwd,
+	);
+	if (roots.length === 0) return primary;
+	const extra = await Promise.all(
+		roots.map(root =>
+			loadSkills({ ...primaryOptions, cwd: root }).catch((): LoadSkillsResult => ({ skills: [], warnings: [] })),
+		),
+	);
+	return mergeSkillResults(primary, extra);
 }
 
 /**

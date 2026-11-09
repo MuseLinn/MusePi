@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { spawn } from "node:child_process";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import * as net from "node:net";
 import * as path from "node:path";
 // daemon.cjs lives outside tsconfig include (electron/) and has no types.
 // Namespace import keeps this on ONE line so the directive attaches to the
@@ -49,11 +51,45 @@ function registryFileCount(): number {
 	}
 }
 
+const listeners: Array<{ kill(): void }> = [];
+
+/** A real listener on an OS-assigned port, so `kill()` has something to stop. */
+async function startListener(): Promise<{ port: number; child: { pid?: number } }> {
+	const port = await new Promise<number>((resolve, reject) => {
+		const srv = net.createServer();
+		srv.once("error", reject);
+		srv.listen(0, "127.0.0.1", () => {
+			const addr = srv.address();
+			const assigned = typeof addr === "object" && addr !== null ? addr.port : 0;
+			srv.close(() => (assigned > 0 ? resolve(assigned) : reject(new Error("no port"))));
+		});
+	});
+	const child = spawn(
+		process.execPath,
+		["-e", `require("node:net").createServer(x=>x.end()).listen(${port},"127.0.0.1")`],
+		{ stdio: "ignore", windowsHide: true },
+	);
+	listeners.push(child);
+	const deadline = Date.now() + 5000;
+	while (!(await daemon.portOpen(port))) {
+		if (Date.now() > deadline) throw new Error("listener never bound");
+		await Bun.sleep(100);
+	}
+	return { port, child };
+}
+
 beforeEach(() => {
 	rmSync(REGISTRY_DIR, { recursive: true, force: true });
 });
 
 afterEach(() => {
+	for (const child of listeners.splice(0)) {
+		try {
+			child.kill();
+		} catch {
+			/* already gone */
+		}
+	}
 	rmSync(REGISTRY_DIR, { recursive: true, force: true });
 });
 
@@ -127,6 +163,21 @@ describe("orphan reaper safety", () => {
 });
 
 describe("registry hygiene", () => {
+	it("stops a listening daemon and drops its record in one step", async () => {
+		// `kill()` is what restart/quit run; leaving the record behind made the
+		// next start believe an orphan still owned the port (measured: two
+		// entries for one GUI, one of them dead).
+		const { port, child } = await startListener();
+		const pid = child.pid as number;
+		registerManagedDaemon({ pid, ownerPid: LIVE_PID, port });
+		expect(readManagedDaemons()).toHaveLength(1);
+
+		await daemon.kill(port);
+
+		expect(await daemon.portOpen(port)).toBe(false);
+		expect(readManagedDaemons()).toHaveLength(0);
+	}, 30_000);
+
 	it("ignores a registry directory that does not exist", async () => {
 		rmSync(REGISTRY_DIR, { recursive: true, force: true });
 		expect(readManagedDaemons()).toEqual([]);

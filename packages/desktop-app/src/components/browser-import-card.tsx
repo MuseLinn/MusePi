@@ -4,28 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 
-const DISMISS_KEY = "musepi-gui-browser-import-dismissed";
-
-function readDismissed(): boolean {
-	try {
-		return window.localStorage.getItem(DISMISS_KEY) === "1";
-	} catch {
-		return false;
-	}
-}
-
-export function BrowserImportCard({
-	rpc,
-	compact = false,
-	dismissible = false,
-	onOpenData,
-}: {
-	rpc: RpcClient | null;
-	compact?: boolean;
-	dismissible?: boolean;
-	onOpenData?(): void;
-}): ReactNode {
-	const [dismissed, setDismissed] = useState(readDismissed);
+export function BrowserImportCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [importing, setImporting] = useState(false);
 	const [feedback, setFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
 	const alive = useRef(true);
@@ -35,8 +14,6 @@ export function BrowserImportCard({
 			alive.current = false;
 		};
 	}, []);
-
-	if (dismissed) return null;
 
 	const importData = async (): Promise<void> => {
 		if (!rpc || importing) return;
@@ -68,10 +45,7 @@ export function BrowserImportCard({
 	};
 
 	return (
-		<section
-			className={`gui-browser-import-card${compact ? " gui-browser-import-card--compact" : ""}`}
-			aria-label={t("tools.importChromeDataShared")}
-		>
+		<section className="gui-browser-import-card" aria-label={t("tools.importChromeDataShared")}>
 			<span className="gui-browser-import-logo" aria-hidden>
 				<Icon name="global" className="h-4 w-4" />
 			</span>
@@ -96,35 +70,6 @@ export function BrowserImportCard({
 				>
 					{importing ? t("tools.importing") : t("general.import")}
 				</button>
-				{onOpenData ? (
-					<button
-						type="button"
-						className="gui-browser-icon-btn"
-						title={t("tools.browserDataSettings")}
-						aria-label={t("tools.browserDataSettings")}
-						onClick={onOpenData}
-					>
-						<Icon name="settings-3" className="h-3.5 w-3.5" />
-					</button>
-				) : null}
-				{dismissible ? (
-					<button
-						type="button"
-						className="gui-browser-icon-btn"
-						title={t("tools.importChromeDataDismiss")}
-						aria-label={t("tools.importChromeDataDismiss")}
-						onClick={() => {
-							try {
-								window.localStorage.setItem(DISMISS_KEY, "1");
-							} catch {
-								// Dismissal still applies to this mounted view.
-							}
-							setDismissed(true);
-						}}
-					>
-						<Icon name="close" className="h-3.5 w-3.5" />
-					</button>
-				) : null}
 			</div>
 		</section>
 	);

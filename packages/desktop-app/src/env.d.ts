@@ -1,6 +1,19 @@
 declare module "*.css";
 declare module "*?url";
 
+interface ManagedExtensionCandidate {
+	path: string;
+	name: string;
+	version: string;
+	permissions: string[];
+	id?: string;
+	alreadyInstalled?: boolean;
+}
+
+interface ManagedExtensionInfo extends ManagedExtensionCandidate {
+	id: string;
+}
+
 /** Electron shell bridge (electron/preload.cjs → contextBridge). */
 interface Window {
 	electronAPI?: {
@@ -55,6 +68,15 @@ interface Window {
 		managedBrowserClearData(mode: "cookies" | "all"): Promise<{ ok: boolean; error?: string }>;
 		managedBrowserPrint(input: { tabId: string }): Promise<{ ok: boolean; error?: string }>;
 		managedBrowserShowDownloads(): Promise<{ ok: boolean; error?: string }>;
+		managedBrowserExtensionsList(): Promise<{ extensions: ManagedExtensionInfo[]; errors: string[] }>;
+		managedBrowserExtensionsChoose(): Promise<{ candidate: ManagedExtensionCandidate | null }>;
+		managedBrowserExtensionsInstall(input: { confirmed: boolean }): Promise<{
+			ok: boolean;
+			canceled?: boolean;
+			alreadyInstalled?: boolean;
+			extension?: ManagedExtensionCandidate;
+		}>;
+		managedBrowserExtensionsRemove(input: { id: string }): Promise<{ ok: boolean; error?: string }>;
 		managedBrowserSaveScreenshot(input: {
 			tabId: string;
 		}): Promise<{ ok: boolean; path?: string; canceled?: boolean; error?: string }>;
@@ -123,6 +145,8 @@ interface Window {
 		 *  on wake where renderer visibilitychange/online may not. The renderer
 		 *  uses it to recover the daemon connection proactively. */
 		onPowerResume(cb: () => void): () => void;
+		/** Desktop custom-protocol OAuth callback URL (musepi://oauth/callback). */
+		onOAuthCallback?(cb: (url: string) => void): () => void;
 	};
 }
 

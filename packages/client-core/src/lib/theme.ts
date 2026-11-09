@@ -9,8 +9,11 @@ export type ThemePreference = "system" | "light" | "dark";
 /** Accent axis — orthogonal to the scheme, like opencode's data-theme ×
  *  data-color-scheme split. Each preset carries its own light/dark pair and
  *  an accent foreground derived from the scheme (never a fixed color).
- *  "custom" applies a user-picked color with derived companions. */
-export type AccentPreference = "brand" | "mono" | "ocean" | "jade" | "custom";
+ *  "theme" (the fresh-install default) resolves the accent from the ACTIVE
+ *  `data-ui-theme` hue registry in tokens.css, so every color theme supplies
+ *  its own accent instead of inheriting one global brand gold; the explicit
+ *  presets and "custom" remain user overrides on top of it. */
+export type AccentPreference = "theme" | "brand" | "mono" | "ocean" | "jade" | "custom";
 
 const STORAGE_KEY = "omp-collab-theme";
 const ACCENT_STORAGE_KEY = "omp-collab-accent";
@@ -140,6 +143,10 @@ function applyUiTheme(): void {
 	if (typeof document === "undefined") return;
 	const id = unifiedMode ? unifiedThemeId : resolved === "light" ? lightThemeId : darkThemeId;
 	document.documentElement.dataset.uiTheme = id;
+	// A follow-theme accent is resolved from --theme-hue / --theme-l etc. on
+	// the ROOT element. Changing the color theme (or the scheme, via
+	// applyResolvedTheme) must re-materialize those inline tokens.
+	applyAccent();
 }
 
 function emitUiTheme(): void {
@@ -288,9 +295,21 @@ function emitThemeShake(): void {
 	window.dispatchEvent(new Event("musepi-theme-toggle-shake"));
 }
 
+/** CSS var() substitution inserts empty comment tokens between numeric
+ * channels (Chromium serializes an oklch with comments between L/C/H).
+ * That is valid CSS but chroma-js and canvas consumers cannot parse it.
+ * Follow-theme accents are written as concrete inline values, so this is a
+ * belt-and-braces guard for CSS-only reads (SSR / before module init). */
+function normalizeColorToken(value: string): string {
+	return value
+		.replace(/\/\*[\s\S]*?\*\//g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
 function readVar(name: string, fallback: string): string {
 	const root = document.documentElement;
-	const value = getComputedStyle(root).getPropertyValue(name).trim();
+	const value = normalizeColorToken(getComputedStyle(root).getPropertyValue(name));
 	return value || fallback;
 }
 
@@ -329,8 +348,23 @@ function predictBg(targetResolved: SystemTheme): string {
 function predictAccent(targetAccent: AccentPreference): string {
 	const root = document.documentElement;
 	const prev = root.dataset.accent;
+	// A follow-theme accent materializes its whole family as CONCRETE inline
+	// tokens (deriveThemeAccent -> --accent: oklch(...)). Inline declarations
+	// outrank every [data-accent] block in tokens.css, so flipping only the
+	// dataset while probing would read the CURRENT accent back: leaving
+	// `data-accent="theme"` then would predict the theme accent as the target
+	// color, the veil icon would keep its old color, and the theme->preset
+	// flip would show a color-less morph. Drop the overrides for the probe
+	// (same rationale as predictBg flipping both scheme attributes).
+	const inlinePrev = ACCENT_INLINE_VARS.map(
+		name => [name, root.style.getPropertyValue(name), root.style.getPropertyPriority(name)] as const,
+	);
+	for (const name of ACCENT_INLINE_VARS) root.style.removeProperty(name);
 	root.dataset.accent = targetAccent;
-	const value = getComputedStyle(root).getPropertyValue("--accent").trim();
+	const value = normalizeColorToken(getComputedStyle(root).getPropertyValue("--accent"));
+	for (const [name, inlineValue, priority] of inlinePrev) {
+		if (inlineValue) root.style.setProperty(name, inlineValue, priority);
+	}
 	restoreDataset("accent", prev);
 	return value || "#d9a441";
 }
@@ -478,9 +512,19 @@ export function useThemePreference(): {
 function readStoredAccent(): AccentPreference {
 	try {
 		const stored = globalThis.localStorage.getItem(ACCENT_STORAGE_KEY);
-		return stored === "mono" || stored === "ocean" || stored === "jade" || stored === "custom" ? stored : "brand";
+		// No stored preference → FOLLOW THE THEME. Existing installs keep the
+		// explicit preset they chose; a missing value used to mean "brand",
+		// which pinned every color theme to one global gold.
+		return stored === "theme" ||
+			stored === "brand" ||
+			stored === "mono" ||
+			stored === "ocean" ||
+			stored === "jade" ||
+			stored === "custom"
+			? stored
+			: "theme";
 	} catch {
-		return "brand";
+		return "theme";
 	}
 }
 
@@ -593,6 +637,37 @@ const ACCENT_INLINE_VARS = [
 	"--brand-mark-gradient",
 ] as const;
 
+/** Concrete --accent* values for `data-accent="theme"`.
+ *
+ * tokens.css defines the ladder with var() channels, which is fine for CSS
+ * but serializes with empty comment tokens when read back through
+ * getComputedStyle; chroma-js (pet palette, SketchPad) rejects that string.
+ * The numeric theme variables are plain literals, so build the same values
+ * here and write them inline — one clean token for CSS and JS alike. Re-read
+ * on every scheme/theme flip (applyUiTheme -> applyAccent) so hue and the
+ * light-scheme lightness stay in sync. */
+function deriveThemeAccent(root: HTMLElement): Record<string, string> {
+	const computed = getComputedStyle(root);
+	const number = (name: string, fallback: number): number => {
+		const parsed = Number.parseFloat(computed.getPropertyValue(name).trim());
+		return Number.isFinite(parsed) ? parsed : fallback;
+	};
+	const lightness = number("--theme-l", 0.7507);
+	const chroma = number("--theme-c", 0.1295);
+	const hue = number("--theme-hue", 79.85);
+	const hoverLightness = number("--theme-hover-l", 0.8307);
+	const inkLightness = number("--theme-fg-l", 0.26);
+	const base = `oklch(${lightness} ${chroma} ${hue})`;
+	return {
+		"--accent": base,
+		"--accent-fg": `oklch(${inkLightness} 0.05 ${hue})`,
+		"--accent-muted": `oklch(${lightness} ${chroma} ${hue} / 18%)`,
+		"--accent-hover": `oklch(${hoverLightness} ${chroma} ${hue})`,
+		"--accent-bd": `oklch(${lightness} ${chroma} ${hue} / 35%)`,
+		"--brand-mark-gradient": `linear-gradient(135deg, ${base} 0%, oklch(0.46 ${chroma} ${hue}) 100%)`,
+	};
+}
+
 let accent: AccentPreference = readStoredAccent();
 let customAccent: string = readStoredCustomAccent();
 const accentListeners = new Set<() => void>();
@@ -615,6 +690,13 @@ function applyAccent(): void {
 		// Drop inline overrides so the preset blocks in tokens.css win again.
 		for (const name of ACCENT_INLINE_VARS) {
 			root.style.removeProperty(name);
+		}
+		// Follow-theme needs a clean, fully resolved token for JS consumers.
+		// The CSS block is still the no-JS fallback (same values).
+		if (accent === "theme") {
+			for (const [name, value] of Object.entries(deriveThemeAccent(root))) {
+				root.style.setProperty(name, value);
+			}
 		}
 	}
 }
@@ -706,7 +788,7 @@ export function useAccentPreference(): {
 	const value = useSyncExternalStore(
 		subscribeAccent,
 		() => accent,
-		() => "brand" as AccentPreference,
+		() => "theme" as AccentPreference,
 	);
 	const custom = useSyncExternalStore(
 		subscribeAccent,
@@ -723,6 +805,7 @@ export function useAccentPreference(): {
 }
 
 export const ACCENT_PRESETS: ReadonlyArray<{ id: AccentPreference; label: string }> = [
+	{ id: "theme", label: "Follow theme" },
 	{ id: "brand", label: "Brand gold" },
 	{ id: "mono", label: "Mono" },
 	{ id: "ocean", label: "Ocean blue" },

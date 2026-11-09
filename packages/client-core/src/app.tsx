@@ -16,6 +16,7 @@ import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
 import { MobileSettings } from "./components/shell/MobileSettings";
 import { PullToRefresh } from "./components/shell/PullToRefresh";
 import { Toasts } from "./components/shell/Toasts";
+import { TranscriptSkeleton } from "./components/shell/TranscriptSkeleton";
 import { WelcomeHint } from "./components/shell/WelcomeHint";
 import { WorkspaceView } from "./components/shell/WorkspaceView";
 import { msgText, Transcript } from "./components/transcript/Transcript";
@@ -32,6 +33,7 @@ import {
 import { GuestClient } from "./lib/client";
 import { isCompatShell } from "./lib/compat-shell";
 import { CompatSlotHost } from "./lib/compat-slot-host";
+import { useConnectionHealth } from "./lib/connection-health";
 import { HostClient } from "./lib/host-client";
 import { loadResolvedHosts, rememberHost } from "./lib/hosts";
 import { enableNativeGlass } from "./lib/native-glass";
@@ -186,6 +188,14 @@ export function App(): ReactNode {
 		const creds = credsRef.current;
 		if (creds) connect(creds.link, creds.name);
 	}, [connect, connectHost]);
+
+	// Liveness (bitfun useConnectionHealth parity): a socket the OS tore down
+	// during suspension never fires `close`, so the shell would keep claiming
+	// "live" while every frame vanished — and the next prompt would land in a
+	// dead link with the composer stuck on "sending". Two missed probes run the
+	// same recovery as an ended session (full re-hello + snapshot), and every
+	// foreground return probes immediately.
+	useConnectionHealth(client, rejoin);
 
 	// Visual Viewport: adjust app height to fit screen space when mobile keyboard opens.
 	useEffect(() => {
@@ -362,6 +372,21 @@ function useMobileNotifications(client: SessionClient | null, link: string | nul
 			})();
 		}
 		let disposed = false;
+		/** Timestamp of the newest settled assistant reply in the transcript. */
+		const latestAssistantTs = (): number => {
+			const entries = client.getSnapshot().entries;
+			for (let i = entries.length - 1; i >= 0; i--) {
+				const e = entries[i];
+				if (e.type === "message" && e.message.role === "assistant") return e.message.timestamp;
+			}
+			return 0;
+		};
+		// Baseline: whatever is already in the transcript when we start
+		// listening has been on screen — only replies that land after this point
+		// are worth a notification. Starting from 0 (the old behaviour) meant the
+		// FIRST background state frame — a progress/agents update, not a message
+		// at all — re-announced the last old reply.
+		lastNotifiedRef.current = Math.max(lastNotifiedRef.current, latestAssistantTs());
 		const unsub = client.subscribe(() => {
 			if (disposed) return;
 			// Foreground: the transcript itself is the notification.
@@ -459,8 +484,10 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 	const activeTools = useGuestSelector(client, s => s.activeTools);
 	const working = useGuestSelector(client, s => s.working);
 	const roundDurations = useGuestSelector(client, s => s.roundDurations);
+	const phase = useGuestSelector(client, s => s.phase);
 
 	const focusedSessionId = useGuestSelector(client, s => s.focusedSessionId);
+	const workspace = useGuestSelector(client, s => s.workspace);
 	// Read-aloud wiring (design 「语音输出四帧」): the Transcript's onSpeak slot
 	// was always there — this is the shell side that was never connected. The
 	// controller is shared with the composer mini-player/barge-in via the
@@ -472,8 +499,14 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 		() => tts.getSnapshot().speakingId,
 	);
 	// Mobile empty state gets the time-aware greeting + rotating tip in place
-	// of the bare "no activity yet" line (gui WelcomeComposer parity).
-	const emptySlot = isMobileShell() ? <WelcomeHint /> : undefined;
+	// of the bare "no activity yet" line (gui WelcomeComposer parity). While a
+	// session is still hydrating the transcript is empty too, and the greeting
+	// would announce an existing conversation as brand new — the skeleton owns
+	// that window instead. The new-session draft is the one genuinely empty
+	// state: it keeps the greeting.
+	const draftSession = workspace !== null && focusedSessionId === null;
+	const hydrating = entries.length === 0 && stream === null && !draftSession && phase !== "live";
+	const emptySlot = isMobileShell() ? hydrating ? <TranscriptSkeleton /> : <WelcomeHint /> : undefined;
 	// Revert (撤回) is a session-tree operation: branchAt moves the leaf IN
 	// PLACE at the target node (TUI /tree parity) — the old leaf and its
 	// subtree stay reachable as a sibling branch, never truncated. For a user
@@ -818,7 +851,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 			{!inWorkspace && activePanel === null && (
 				<>
 					<CompatSlotHost slot="composer.dock" className="sh-compat-dock" />
-					<Composer client={client} />
+					<Composer client={client} draftScope={currentLink} />
 				</>
 			)}
 			{!inWorkspace && activePanel === null && <ApprovalCard client={client} />}
@@ -836,7 +869,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 				</>
 			)}
 			<Banners phase={phase} endedReason={endedReason} onRejoin={onRejoin} onNewLink={onLeave} />
-			<Toasts client={client} />
+			<Toasts />
 		</div>
 	);
 }

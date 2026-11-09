@@ -29,6 +29,7 @@ import {
 } from "@musepi/pi-wire";
 import type { TranslationKey } from "../i18n/index.js";
 import { t } from "../i18n/index.js";
+import { dismissActionToastSource, pushActionToast } from "./action-toast";
 
 export type ConnectionPhase = "connecting" | "waiting" | "live" | "workspace" | "reconnecting" | "ended";
 
@@ -42,13 +43,6 @@ export interface ActiveTool {
 	intent?: string;
 	partialResult?: unknown;
 	startedAt: number;
-}
-
-export interface Notice {
-	id: number;
-	level: "info" | "warning" | "error";
-	message: string;
-	at: number;
 }
 
 /** A tool call awaiting the authoritative host's approve/deny decision. */
@@ -131,11 +125,7 @@ export interface GuestSnapshot {
 	uiRequestPending: boolean;
 	/** Pending tool approval shared by the daemon host and writable guests. */
 	approvalRequest: ApprovalRequest | null;
-	/** Capped at 50, newest last. */
-	notices: readonly Notice[];
 }
-
-const MAX_NOTICES = 50;
 const TRANSCRIPT_TIMEOUT_MS = 10_000;
 /** Mirrors the TUI guest's WELCOME_TIMEOUT_MS: a host that never answers hello ends the join. */
 const WELCOME_TIMEOUT_MS = 30_000;
@@ -159,6 +149,8 @@ interface PendingTranscript {
 interface PendingRpc {
 	resolve: (data: unknown) => void;
 	reject: (err: Error) => void;
+	/** Deadline timer armed only when the caller passed `opts.timeoutMs`. */
+	timer?: Timer;
 }
 
 export class GuestClient {
@@ -178,7 +170,6 @@ export class GuestClient {
 	readonly #pendingRpcs = new Map<number, PendingRpc>();
 	#reqSeq = 0;
 	#rpcSeq = 0;
-	#noticeSeq = 0;
 	#everConnected = false;
 	#welcomed = false;
 	#welcomeTimer: Timer | null = null;
@@ -209,7 +200,6 @@ export class GuestClient {
 	#uiRequestQueue: CollabUiRequest[] = [];
 	#approvalRequest: ApprovalRequest | null = null;
 	#approvalQueue: ApprovalRequest[] = [];
-	#notices: readonly Notice[] = [];
 	#snapshot: GuestSnapshot;
 	/** Non-null while a window flush of listener notifications is pending. */
 	#flushTimer: Timer | null = null;
@@ -276,7 +266,10 @@ export class GuestClient {
 
 	async sendPrompt(text: string, images?: ImageContent[]): Promise<void> {
 		if (this.#workspace !== null && this.#focusedSessionId === null) {
-			const created = await this.rpc<{ sessionId: string }>("session.create", {});
+			// Bounded: on a half-open link the create would never answer and the
+			// composer would sit on "sending" forever. The liveness probe owns
+			// the actual reconnect; this only releases the UI.
+			const created = await this.rpc<{ sessionId: string }>("session.create", {}, { timeoutMs: 20_000 });
 			if (this.#focusedSessionId !== null) throw new Error("Session selection changed before the prompt was sent");
 			this.selectWorkspaceSession(created.sessionId);
 			await this.#waitForFocusedSession(created.sessionId);
@@ -408,16 +401,29 @@ export class GuestClient {
 	/**
 	 * Host RPC: board / cron / workspace / fs capabilities. Resolves with the
 	 * method's data payload; rejects with the host's error string when the
-	 * host answers `ok:false`. No timeout — the host always answers (mirrors
-	 * the fetch-transcript pending-map pattern without the polling fallback).
+	 * host answers `ok:false`.
+	 *
+	 * No timeout by default — the host answers every request. Callers on a
+	 * link that can go silent (mobile: Wi-Fi handoff, Doze, NAT expiry) pass
+	 * `opts.timeoutMs`; without it a request written into a half-open socket
+	 * never settles and the caller's pending UI (composer "sending", upload
+	 * chips) stays stuck forever.
 	 */
-	rpc<T>(method: string, params?: unknown, _opts?: { timeoutMs?: number }): Promise<T> {
+	rpc<T>(method: string, params?: unknown, opts?: { timeoutMs?: number }): Promise<T> {
 		const reqId = ++this.#rpcSeq;
 		const { promise, resolve, reject } = Promise.withResolvers<T>();
-		this.#pendingRpcs.set(reqId, {
+		const pending: PendingRpc = {
 			resolve: resolve as PendingRpc["resolve"],
 			reject,
-		});
+		};
+		const timeoutMs = opts?.timeoutMs;
+		if (timeoutMs !== undefined && timeoutMs > 0) {
+			pending.timer = setTimeout(() => {
+				if (!this.#pendingRpcs.delete(reqId)) return;
+				reject(new Error(t("sessions.rpcTimedOut", { method })));
+			}, timeoutMs);
+		}
+		this.#pendingRpcs.set(reqId, pending);
 		this.#socket.send({ t: "rpc-request", reqId, method, params });
 		return promise;
 	}
@@ -480,6 +486,7 @@ export class GuestClient {
 		}
 		this.#pendingTranscripts.clear();
 		for (const [, pending] of this.#pendingRpcs) {
+			if (pending.timer !== undefined) clearTimeout(pending.timer);
 			pending.reject(new Error(reason));
 		}
 		this.#pendingRpcs.clear();
@@ -667,6 +674,7 @@ export class GuestClient {
 				const pending = this.#pendingRpcs.get(frame.reqId);
 				if (pending) {
 					this.#pendingRpcs.delete(frame.reqId);
+					if (pending.timer !== undefined) clearTimeout(pending.timer);
 					if (frame.ok) pending.resolve(frame.data);
 					else pending.reject(new Error(frame.error ?? "rpc failed"));
 				}
@@ -814,27 +822,36 @@ export class GuestClient {
 						max: String(event.maxAttempts),
 						reason: event.errorMessage,
 					}),
+					"session:retry",
 				);
 				break;
 			case "auto_retry_end":
-				if (!event.success) this.#pushNotice("error", event.finalError ?? t("sessions.retryFailed"));
+				if (event.success) dismissActionToastSource("session:retry");
+				else this.#pushNotice("error", event.finalError ?? t("sessions.retryFailed"), "session:retry");
 				break;
 			case "auto_compaction_start":
 				this.#compacting = true;
-				this.#pushNotice("info", t("sessions.compactingContextWithReason", { reason: event.reason }));
+				this.#pushNotice(
+					"info",
+					t("sessions.compactingContextWithReason", { reason: event.reason }),
+					"session:compaction",
+				);
 				break;
 			case "auto_compaction_end":
 				this.#compacting = false;
-				if (!event.skipped) {
-					this.#pushNotice(
-						"info",
-						event.aborted
-							? t("sessions.compactionAborted")
-							: event.errorMessage
-								? t("sessions.compactionFailedWithReason", { reason: event.errorMessage })
-								: t("sessions.contextCompacted"),
-					);
+				if (event.skipped) {
+					dismissActionToastSource("session:compaction");
+					break;
 				}
+				this.#pushNotice(
+					"info",
+					event.aborted
+						? t("sessions.compactionAborted")
+						: event.errorMessage
+							? t("sessions.compactionFailedWithReason", { reason: event.errorMessage })
+							: t("sessions.contextCompacted"),
+					"session:compaction",
+				);
 				break;
 			default:
 				// turn_start/turn_end/thinking_level_changed/unknown — ignore
@@ -842,11 +859,8 @@ export class GuestClient {
 		}
 	}
 
-	#pushNotice(level: Notice["level"], message: string): void {
-		const notice: Notice = { id: ++this.#noticeSeq, level, message, at: Date.now() };
-		const next = [...this.#notices, notice];
-		if (next.length > MAX_NOTICES) next.splice(0, next.length - MAX_NOTICES);
-		this.#notices = next;
+	#pushNotice(level: "info" | "warning" | "error", message: string, dedupeKey?: string): void {
+		pushActionToast({ kind: level, message, dedupeKey });
 	}
 
 	#clearUiRequests(): void {
@@ -894,7 +908,6 @@ export class GuestClient {
 			uiRequest: this.#uiRequest,
 			uiRequestPending: this.#uiRequestPending,
 			approvalRequest: this.#approvalRequest,
-			notices: this.#notices,
 		};
 	}
 

@@ -966,6 +966,14 @@ export class CollabHost {
 	async #rpcDispatch(method: string, params: unknown): Promise<unknown> {
 		const p = (params ?? {}) as Record<string, unknown>;
 		switch (method) {
+			// Liveness probe. The collab wire has no heartbeat frame, and a phone
+			// whose TCP went silent (Wi-Fi handoff, Doze, NAT expiry) never sees
+			// a close event — the guest pings and treats any reply as proof that
+			// both directions still work. Mirrors the daemon's `system.ping`
+			// (same `pong` answer, same reason), and is deliberately the cheapest
+			// method here: no disk, no session state, no peer bookkeeping.
+			case "ping":
+				return { pong: Date.now() };
 			case "board.list":
 				return { boards: readBoards() };
 			case "board.save": {

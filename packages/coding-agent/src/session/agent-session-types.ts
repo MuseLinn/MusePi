@@ -205,6 +205,13 @@ export interface AgentSessionConfig {
 	 * hidden `prompt-context:<name>` custom messages at prompt assembly.
 	 */
 	collectPromptContexts?: () => PromptContextMessage[];
+	/**
+	 * Re-discover the context instruction files (AGENTS.md, CLAUDE.md, …) and
+	 * replace the snapshot the SDK holds for prompt rebuilds. Sessions created
+	 * with a preloaded `contextFiles` array (the daemon) would otherwise keep
+	 * serving the startup bytes; a reload calls this before rebuilding.
+	 */
+	reloadContextFiles?: () => Promise<void>;
 	/** Names whose current registry entry is the built-in implementation. */
 	builtInToolNames?: Iterable<string>;
 	/** MCP names whose initial registry entries came from the manager snapshot. */

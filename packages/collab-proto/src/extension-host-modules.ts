@@ -41,6 +41,13 @@ export const EXTENSION_HOST_MODULES = [
 	{ key: "voice", path: "lib/voice" },
 	{ key: "panel-maximize", path: "lib/panel-maximize" },
 	{ key: "suggestions", path: "lib/suggestions" },
+	/** Shared task-center nav store: a compiled sidebar panel must read the
+	 *  SAME snapshot the page publishes, not a bundled copy of the store. */
+	{ key: "task-nav", path: "lib/scheduled-task-nav" },
+	/** Shared capability-center nav store: the compiled app.capability page
+	 *  publishes the tab/counts and the compiled sidebar.panel.capability
+	 *  panel reads them; both must bind the ONE host instance. */
+	{ key: "capability-nav", path: "lib/capability-nav" },
 	{ key: "client-core", specifier: "@musepi/client-core" },
 	{ key: "i18n", specifier: "@musepi/client-core/src/i18n" },
 ] as const satisfies readonly ExtensionHostModuleDeclaration[];

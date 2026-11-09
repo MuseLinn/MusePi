@@ -87,6 +87,7 @@ import type { AgentSessionEvent } from "./agent-session-events";
 import type { ClientBridge } from "./client-bridge";
 import { resolveCompactionMethodOrder } from "./compaction-methods";
 import type { CustomMessage, CustomMessagePayload } from "./messages";
+import { resolveModelCompactionSettings } from "./model-compaction-threshold";
 import { isAdvisorCard, isTerminalTextAssistantAnswer } from "./queued-messages";
 import {
 	formatRetryFallbackSelector,
@@ -1368,12 +1369,15 @@ export class SessionAdvisors {
 		const agent = advisor.agent;
 		const incomingTokens = agent.tokenizer.countMessage(incoming);
 
-		const compactionSettings = this.#host.settings.getGroup("compaction");
+		const advisorModel = agent.state.model;
+		const compactionSettings = resolveModelCompactionSettings(
+			this.#host.settings.getGroup("compaction"),
+			advisorModel,
+		);
 		if (!compactionSettings.enabled || resolveCompactionMethodOrder(compactionSettings.methodOrder).length === 0) {
 			return false;
 		}
 
-		const advisorModel = agent.state.model;
 		const contextWindow = advisorModel.contextWindow ?? 0;
 		if (contextWindow <= 0) return false;
 

@@ -4285,10 +4285,14 @@ export interface MoonshotModelManagerConfig {
  * use the K2.x binary `thinking: { type }` block, so the wire path routes it
  * through OpenAI-style `reasoning_effort` (see `buildOpenAICompat`).
  */
-const MOONSHOT_KIMI_K3_COST = { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 0 } as const;
-const MOONSHOT_KIMI_K3_CONTEXT_WINDOW = 1_048_576;
-const MOONSHOT_KIMI_K3_MAX_TOKENS = 131_072;
-const MOONSHOT_KIMI_K3_THINKING: ThinkingConfig = { mode: "effort", efforts: [Effort.Max], requiresEffort: true };
+export const MOONSHOT_KIMI_K3_COST = { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 0 } as const;
+export const MOONSHOT_KIMI_K3_CONTEXT_WINDOW = 1_048_576;
+export const MOONSHOT_KIMI_K3_MAX_TOKENS = 131_072;
+export const MOONSHOT_KIMI_K3_THINKING: ThinkingConfig = {
+	mode: "effort",
+	efforts: [Effort.Max],
+	requiresEffort: true,
+};
 
 export function moonshotModelManagerOptions(
 	config?: MoonshotModelManagerConfig,
@@ -4312,16 +4316,19 @@ export function moonshotModelManagerOptions(
 			// `reasoning_effort: "max"` and does NOT use the K2.x `thinking` block,
 			// so its thinking config is the single-tier `max` scale — the wire path
 			// routes it through `reasoning_effort` (see `buildOpenAICompat`).
-			if (!reference && isKimiK3ModelId(id)) {
-				const isZeroCost = model.cost.input === 0 && model.cost.output === 0 && model.cost.cacheRead === 0;
+			// Kimi K3 carries official Moonshot metadata even when a models.dev or
+			// bundled reference exists: the reference has drifted (a billed
+			// cache-write rate and a context-sized output ceiling), while the
+			// pricing docs pin cache writes at zero and output at 131,072.
+			if (isKimiK3ModelId(id)) {
 				return {
 					...model,
 					reasoning: true,
 					input: ["text", "image"],
-					cost: isZeroCost ? { ...MOONSHOT_KIMI_K3_COST } : model.cost,
-					contextWindow: model.contextWindow ?? MOONSHOT_KIMI_K3_CONTEXT_WINDOW,
-					maxTokens: model.maxTokens ?? MOONSHOT_KIMI_K3_MAX_TOKENS,
-					thinking: model.thinking ?? { ...MOONSHOT_KIMI_K3_THINKING },
+					cost: { ...MOONSHOT_KIMI_K3_COST },
+					contextWindow: MOONSHOT_KIMI_K3_CONTEXT_WINDOW,
+					maxTokens: MOONSHOT_KIMI_K3_MAX_TOKENS,
+					thinking: { ...MOONSHOT_KIMI_K3_THINKING },
 				};
 			}
 			// Moonshot's K2.x family (K2.5, K2.6, kimi-k2-thinking, …) is reasoning-capable
@@ -6345,6 +6352,10 @@ const MODELS_DEV_PROVIDER_DESCRIPTORS_CORE: readonly ModelsDevProviderDescriptor
 	// --- NVIDIA ---
 	openAiCompletionsDescriptor("nvidia", "nvidia", "https://integrate.api.nvidia.com/v1", {
 		defaultContextWindow: 131072,
+		// NIM's Qwen rows are reasoning-capable even when the upstream catalog
+		// omits the flag; keep the host-specific `chat_template_kwargs` path armed.
+		transformModel: model =>
+			model.id.startsWith("qwen/") && !model.reasoning ? { ...model, reasoning: true } : model,
 	}),
 	// --- xAI ---
 	openAiResponsesDescriptor("xai", "xai", "https://api.x.ai/v1", {

@@ -50,6 +50,8 @@ Creator 快捷创建只发送用户的自然语言需求。预设 prompt 持有�
 
 - 事件处理：`ctx.on("session_start" | "tool_call" | "tool_result" | "message" | ...)`。每个 session-bound agent（主 agent 与每个子 agent）各拿一份独立 runner，`session_start` 携带 `{ agentId, source }`（`source` 为 `main` 或 `subagent`）；生命周期事件 `session_start`、`session_shutdown`、`session_before_*`、`tool_call`、`tool_result`、`context` 与 `input` 已迁到 runtime 的 Cordis 事件上下文：除 shutdown 用 `parallel`（并发、互不阻塞）外，其余都用 `serial`（顺序）。`tool_result` / `context` / `input` 的改写由派发侧累积：监听器只返回自己的 patch，后者能看到前者的修改。流式/通知事件（`message_*`、`tool_execution_*`、`turn_*`）用 `parallel` 并发派发，零监听时直接跳过；其余单次通知（`session_switch/branch/tree`、`agent_start/end`、`auto_compaction_*`、`auto_retry_*`、`todo_reminder` 等）用 `serial` 保持注册顺序。`user_bash` / `user_python`（首个非空结果即中断）与 `resources_discover`（按扩展路径累积）同样走 `serial`；`before_agent_start`（消息 + systemPrompt 累积）、`before_provider_request`（payload 逐次改写）、`after_provider_response`、`cache_warming_decision`（最后一个 action 生效）也已迁移，`credential_disabled` / `mcp_notification` 走单次通知通道。至此所有插件事件都由 Cordis 派发，旧的 `Extension.handlers` 表、`hasHandlers` 的 map 分支和 runner 里的手写兜底循环已删除——事件注册与派发只剩一份实现。`session.compacting` / `session_stop` 也走 `serial`：前者保留最后一个有效结果；后者在“要继续且带上下文”时立即中断并返回该结果，`event.signal` 由执行器合成到 handler 预算里。`ctx.on(event, handler, { prepend })` 对所有事件可用：已迁事件里它是 Cordis 的全局顺序，legacy 事件里它只在同一扩展内提前。`tool_result` 的改写由派发侧累积：监听器只返回自己的 patch，后者看到前者的修改（last-write-wins）。`tool_call` 保持 fail-closed：超时或抛错都返回 `block: true`，首个 block 立即中断；非 block 结果仍按“最后一个有效值”保留。`session_before_*` 保持旧契约——只有 `cancel: true` 中断链，其余结果记为“最后一个有效值”并继续；超时包装在监听器内部，错误仍走 runner 的 error 通道，`handler timed out after Nms` 文本不变。`on()` 返回的 disposer 只注销该监听（Cordis `ctx.on` 语义），插件卸载仍清空它注册的全部监听；`session_shutdown` 与该 runner 的定时器、文件回退一起清理；服务与内存后端 provider 归插件实例，只在卸载/重载时停止。会话级注册（`ctx.promptHost`、`ctx.session.on`、会话处理器里注册的 `ctx.effect`）必须放在 `session_start`，所以 `apply` 是实例 setup，`session_start` 才是会话 setup。
 - LLM 工具：`ctx.tools.register({ name, description, parameters, execute })`（进入工具注册表，权限链照常生效）
+- 会话日志写入：工具通过执行时的 `ctx.ensureSessionOnDisk()`、`ctx.appendCustomEntry(type, data)`、`ctx.flushSession()` 持久化自定义条目；写入前必须检查 `signal`，并自行处理 `sessionManager` 只读快照无法写入的情况。
+- 会话维护接入：`ctx.settings.get(key)` 读取当前会话设置；`ctx.isIdle()` 与可选的 `ctx.isSettled()` 构成空闲门禁，`ctx.hasDraftInput()`（仅终端宿主提供）报告编辑器是否有未提交草稿；`ctx.runIdleCompaction()` 触发压缩，`ctx.runEphemeralTurn()` 生成 recap，`ctx.getGoalModeState()` / `ctx.getTodoPhases()` 提供锚点，`ctx.recordRecap()` 落库、`ctx.showRecap()` 交给宿主展示。`musepi-idle-maintenance` 插件只用这些缝调度，计时器归插件，不归各宿主控制器。
 - 子智能体：`ctx.subagents.register({ name, description, systemPrompt, external })`；本地 Agent 必须提供非空 `systemPrompt`，外部 Agent 改为提供一次性 `external(context)` 执行器，并复用现有 task 进度、取消、超时、结果卡片和完整 Markdown 产物。子智能体类型本身已是 Cordis 插件能力；本地子智能体的多轮接续属于运行时生命周期（`hub send` / `agents.chat` / 冷恢复），不需要第二个 Agent 定义。共享任务板等团队协作应是独立 Cordis 插件，可参考 DSH 将团队服务、模型工具与 UI 拆包的做法，不要把任务所有权塞进子智能体注册。
 - 斜杠命令：`ctx.commands.register(...)`（TUI `/cmd` + GUI 命令面板）
 - 快捷键/flags、自定义消息渲染、会话/消息注入（`sendMessage` / `sendUserMessage` / `appendEntry`）
@@ -450,11 +452,12 @@ export default async function (pi: ExtensionAPI) {
 | `plugins.install.status` | — | `{ installs: PluginInstallView[] }` |
 | `plugins.install.cancel` | `{ installId }` | `{ status: "cancelled" \| "not-running" }` |
 | `plugins.install.output` | `{ installId }` | `{ lines: PluginInstallOutputLine[] }` |
-| `plugins.uninstall` | `{ name }` | `{ name }` |
+| `plugins.uninstall` | `{ name }` | `{ name, application?, applied?, deferred? }` |
 
 事件（daemon 广播，渲染端按 `installId` 对账）：
 - `plugins.install.state` — 状态迁移，载荷同 `PluginInstallView`；
-- `plugins.install.output` — 包管理器输出的每一块，带 `stream`。
+- `plugins.install.output` — 包管理器输出的每一块，带 `stream`；
+- `plugins.apply.state` — 装/卸/升级/启停对活跃会话的应用结果：`{ change, packageName, application: "applied" \| "pending", applied, deferred, errors }`。
 
 ### spec 分类
 
@@ -498,6 +501,14 @@ export default async function (pi: ExtensionAPI) {
 判定只读插件自己的 `package.json` 依赖与入口源码，**不加载插件代码** —— 「能不能加载」正是要避免先加载再观察的东西。缺失的运行包与缺席的槽位分别影响 `incompatible` 与 `partial`，因为前者加载不了、后者只是那部分不显示。
 
 报告随 `plugins.install.state` 的终态返回，渲染端据此提示，不必等到加载失败才发现装了个跑不起来的插件。
+
+### 已打开会话的即时生效
+
+安装、卸载、市场升级与 `plugins.setEnabled` 都写同一份插件清单，因此它们不再只对下一个会话生效：daemon 解析该包贡献的入口路径，逐条交给每个活跃会话（`daemon/live-plugin-apply.ts`）。会话未装载的入口走 load，已装载的走 reload，卸载/停用走 unload；unload 只移除没有其它扩展再注册的工具名，并重建 prompt。单条扩展模块的 `extensions.setEnabled` 也走同一通道，但只对 `plugin-module` / `extension-module` 条目生效——技能、工具、MCP 等行不是会话可装载的扩展入口。
+
+会话拥有时机：空闲会话立即换入，流式会话把操作挂到自己的待处理表，在该回合结束后的空闲边界执行并报 `deferred: true`。同一入口的连续请求折叠为最后一次，不同入口全部执行。单条入口失败只进错误列表，不影响其它入口或其它会话。
+
+结果经 `plugins.apply.state` 广播：`application` 为 `applied`（全部立即生效）或 `pending`（至少一个会话推迟）；`applied` / `deferred` 是入口操作计数，`errors` 逐条带会话与路径。没有任何会话需要改动且无错误时不广播 —— 「应用到 0 个会话」不是值得提示的事实。
 
 ### 安装源与回退链
 

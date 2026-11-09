@@ -6,6 +6,7 @@ export const sessions = {
 	"sessions.roomFull": "房间已满",
 	"sessions.badKeyCorruptedFrame": "密钥错误或帧已损坏",
 	"sessions.connectionLostWithCode": "连接断开（代码 {code}）",
+	"sessions.rpcTimedOut": "{method} 未在限期内得到响应，请检查网络后重试",
 	"sessions.timedOutWaitingHost": "等待宿主欢迎超时",
 	"sessions.timedOutWaitingHostSSession": "等待宿主会话快照超时",
 	"sessions.failedApplySessionSnapshotWithReason": "应用会话快照失败：{reason}",

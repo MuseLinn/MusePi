@@ -11,6 +11,7 @@ import { Plus as PlusIcon, X as XIcon } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type AtCompletionEntry, loadAtCompletionEntries } from "../lib/at-completion";
 import { currentLine, lastTokenIndex, tokenQuery } from "../lib/completion-trigger";
 import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
@@ -92,6 +93,7 @@ import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
+import { HeightMorph } from "./HeightMorph";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
 import { PetSprite, usePet } from "./PetSprite";
@@ -224,10 +226,10 @@ export function WelcomeComposer({
 	onAddProvider?(): void;
 	/** Current project (workspace folder), if any. */
 	project?: string | null;
-	/** 打开文件夹 / 远程连接 / 不在项目中 project actions. */
-	/** 打开文件夹 / 远程连接 / 不在项目中 project actions, or an already
+	/** 添加项目 / 远程连接 / 不在项目中 project actions. */
+	/** 添加项目 / 远程连接 / 不在项目中 project actions, or an already
 	 *  saved workspace path (picked from the saved-workspaces list). */
-	onProject?(action: "folder" | "remote" | "none" | string): void;
+	onProject?(action: "add" | "remote" | "none" | string): void;
 	/** Focus mode (⌘⇧E): the composer fills the surface. */
 	focused?: boolean;
 	onToggleFocus?(): void;
@@ -629,113 +631,38 @@ export function WelcomeComposer({
 		};
 	}, []);
 	const [showMore, setShowMore] = useState(false);
-	// Incremental expansion (增量展开): chips join one per stage and the
-	// container height follows each stage (dynamic stretch — no abrupt
-	// jump). revealCount runs COLLAPSED..suggestions.length+1; the +1 is
-	// the 自定义补充 chip, revealed last.
-	const [revealCount, setRevealCount] = useState(SUGGESTIONS_COLLAPSED_COUNT);
+	// One commit per expand/collapse, not a staged re-reveal. Each prior
+	// stage (one chip per 90ms) retargeted the height tween mid-flight, so the
+	// container stopped, restarted and settled repeatedly — read as jitter.
+	// Extras now mount together and keep their per-chip CSS stagger; the
+	// container morph runs once through HeightMorph.
 	const [collapsing, setCollapsing] = useState(false);
-	const revealTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const suggestRevealRef = useRef<HTMLDivElement | null>(null);
+	const collapseTimerRef = useRef<number | null>(null);
 	useEffect(
 		() => () => {
-			if (revealTimerRef.current) clearInterval(revealTimerRef.current);
+			if (collapseTimerRef.current) clearTimeout(collapseTimerRef.current);
 		},
 		[],
 	);
 	const expandSuggestions = (): void => {
 		if (showMore || collapsing) return;
 		setShowMore(true);
-		revealTimerRef.current = setInterval(() => {
-			setRevealCount(c => {
-				const next = c + 1;
-				// Stop WITHOUT advancing past the last chip: a final
-				// revealCount bump past length+1 renders one more frame
-				// whose delta<1 effect skips the settle timer, leaving the
-				// reveal height pinned (overflow:hidden + fixed px) — the
-				// collapse then computes scrollHeight = max(clientHeight,
-				// content) and never shrinks back.
-				if (next > suggestions.length + 1) {
-					if (revealTimerRef.current) clearInterval(revealTimerRef.current);
-					revealTimerRef.current = null;
-					return c;
-				}
-				return next;
-			});
-		}, 90);
 	};
 	const collapseSuggestions = (): void => {
 		if (!showMore || collapsing) return;
 		setCollapsing(true);
-		if (revealTimerRef.current) {
-			clearInterval(revealTimerRef.current);
-			revealTimerRef.current = null;
-		}
-		window.setTimeout(() => {
-			// Pin the CURRENT (expanded) height BEFORE the extra chips
-			// unmount: the setState below is batched to the end of this
-			// callback, so the pin is in place when they drop. The layout
-			// effect then eases from this pinned height to the collapsed
-			// natural height (no snap). Doing it the other way round — reset
-			// height first, then let the chips unmount — skipped the height
-			// transition entirely (delta < 1) and the container collapsed
-			// with a visible jump.
-			const node = suggestRevealRef.current;
-			if (node) {
-				node.style.transition = "none";
-				node.style.height = `${node.getBoundingClientRect().height}px`;
-				node.style.overflow = "hidden";
-				void node.offsetHeight;
-			}
+		// Let the extra chips fade out, then unmount them in one commit;
+		// HeightMorph eases the container from the expanded height to the
+		// collapsed height in that same commit.
+		collapseTimerRef.current = window.setTimeout(() => {
+			collapseTimerRef.current = null;
 			setCollapsing(false);
 			setShowMore(false);
-			setRevealCount(SUGGESTIONS_COLLAPSED_COUNT);
 		}, 150);
 	};
-	// Height follows each reveal stage: pin the current height, ease to the
-	// new natural height, settle back to auto (HeightMorph mechanism, but
-	// without its per-key fade restart — a full re-fade per 90ms stage
-	// would strobe).
-	useLayoutEffect(() => {
-		const node = suggestRevealRef.current;
-		if (!node) return;
-		const current = node.getBoundingClientRect().height;
-		// Measure the natural content height with any inline pin temporarily
-		// lifted. `scrollHeight` is floored at `clientHeight`, so a pinned
-		// container (collapse sets `height:<expanded>px` + overflow:hidden)
-		// would read back the pinned value — delta < 1 — and never ease
-		// down nor settle to auto, stranding the container at the expanded
-		// height. Lift → measure → restore, then run the height tween.
-		const prevHeight = node.style.height;
-		const prevOverflow = node.style.overflow;
-		node.style.height = "auto";
-		node.style.overflow = "visible";
-		const target = node.scrollHeight;
-		node.style.height = prevHeight;
-		node.style.overflow = prevOverflow;
-		const delta = Math.abs(target - current);
-		if (delta < 1) return;
-		node.style.transition = "none";
-		node.style.height = `${current}px`;
-		node.style.overflow = "hidden";
-		void node.offsetHeight;
-		const duration = Math.min(480, Math.max(240, Math.round(delta / 6)));
-		node.style.transition = `height ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-		node.style.height = `${target}px`;
-		const settle = window.setTimeout(() => {
-			node.style.height = "auto";
-			node.style.overflow = "";
-			node.style.transition = "";
-		}, duration + 30);
-		return () => window.clearTimeout(settle);
-	}, [showMore, revealCount, collapsing]);
-	// Chips shown: base 8 always; extras join as revealCount grows, and
-	// stay mounted during the collapse fade-out.
-	const extraShown = showMore || collapsing ? Math.max(0, revealCount - SUGGESTIONS_COLLAPSED_COUNT) : 0;
-	const visibleSuggestions =
-		showMore || collapsing
-			? suggestions.slice(0, SUGGESTIONS_COLLAPSED_COUNT + extraShown)
-			: suggestions.slice(0, SUGGESTIONS_COLLAPSED_COUNT);
+	// Chips shown: base 8 always; extras stay mounted during the collapse
+	// fade-out so the container only morphs once they are gone.
+	const visibleSuggestions = showMore || collapsing ? suggestions : suggestions.slice(0, SUGGESTIONS_COLLAPSED_COUNT);
 	const applySuggestion = (prompt: string): void => {
 		setText(prompt);
 		requestAnimationFrame(() => autosize(taRef.current));
@@ -786,9 +713,11 @@ export function WelcomeComposer({
 	const [slashAnchor, setSlashAnchor] = useState<number | null>(null);
 	const [atOpen, setAtOpen] = useState(false);
 	const [atQuery, setAtQuery] = useState("");
-	const [atEntries, setAtEntries] = useState<{ name: string; path: string; isDir: boolean; depth: number }[] | null>(
-		null,
-	);
+	const [atEntries, setAtEntries] = useState<AtCompletionEntry[] | null>(null);
+	// A project switch changes both the primary root and its remembered roots.
+	useEffect(() => {
+		setAtEntries(null);
+	}, [project]);
 	const [atIdx, setAtIdx] = useState(0);
 	const [atAnchor, setAtAnchor] = useState<number | null>(null);
 	const [hashOpen, setHashOpen] = useState(false);
@@ -848,7 +777,7 @@ export function WelcomeComposer({
 	// Saved workspaces (sidebar 项目 tab parity): every folder the app
 	// knows (musepi-gui-projects localStorage — seeded from session cwds and
 	// grown by folder picks), so the workspace picker lists them for
-	// one-tap switching instead of only offering 打开文件夹/远程连接.
+	// one-tap switching instead of only offering 添加项目/远程连接.
 	const [savedProjects, setSavedProjects] = useState<string[]>(() => {
 		try {
 			const raw = localStorage.getItem("musepi-gui-projects");
@@ -1024,17 +953,20 @@ export function WelcomeComposer({
 			setAtOpen(true);
 			setAtIdx(0);
 			if (!atEntries && rpc) {
-				void rpc
-					.request<{
-						entries: { name: string; path: string; isDir: boolean; size: number; mtime: number; depth: number }[];
-					}>("workspace.tree", { cwd: project ?? "", maxDepth: 2, perDirLimit: 60 })
-					.then(res => {
-						const entries = (res?.entries ?? [])
-							.filter(e => e.depth <= 2)
-							.map(e => ({ name: e.name, path: e.path, isDir: e.isDir, depth: e.depth }));
-						setAtEntries(entries);
-					})
-					.catch(() => setAtEntries([]));
+				void (async () => {
+					// The welcome composer has no session yet; use the selected
+					// project's remembered roots so @ still spans a multi-root
+					// project.
+					let extraRoots: string[] = [];
+					if (project) {
+						const list = await rpc
+							.request<{ workspaces?: Array<{ root: string; additionalDirs?: string[] }> }>("workspace.list", {})
+							.catch(() => null);
+						extraRoots = list?.workspaces?.find(row => row.root === project)?.additionalDirs ?? [];
+					}
+					const entries = await loadAtCompletionEntries({ rpc, cwd: project ?? undefined, extraRoots });
+					setAtEntries(entries.filter(entry => entry.depth <= 2));
+				})().catch(() => setAtEntries([]));
 			}
 		} else {
 			setAtOpen(false);
@@ -1684,22 +1616,11 @@ export function WelcomeComposer({
 											className="gui-view-opt"
 											onClick={() => {
 												setProjOpen(false);
-												onProject("folder");
-											}}
-										>
-											<Icon name="folder-open" className="h-3.5 w-3.5" />
-											<span>{t("settings.openFolder")}</span>
-										</button>
-										<button
-											type="button"
-											className="gui-view-opt"
-											onClick={() => {
-												setProjOpen(false);
-												onProject("new");
+												onProject("add");
 											}}
 										>
 											<Icon name="folder-add" className="h-3.5 w-3.5" />
-											<span>{t("settings.newBlankProject")}</span>
+											<span>{t("settings.addProject")}</span>
 										</button>
 										<button
 											type="button"
@@ -2157,14 +2078,15 @@ export function WelcomeComposer({
 											atFilter.length > 0 &&
 											atFilter.map((e, i) => (
 												<button
-													key={e.path}
+													key={e.insertPath ?? e.path}
 													type="button"
 													className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
-													onClick={() => insertCompletion("at", e.path)}
+													onClick={() => insertCompletion("at", e.insertPath ?? e.path)}
 												>
 													<span className="min-w-0 flex-1 truncate">
 														{e.isDir ? "📁 " : "📄 "}
 														{e.path}
+														{e.rootLabel ? ` · ${e.rootLabel}` : ""}
 													</span>
 												</button>
 											))}
@@ -2474,7 +2396,11 @@ export function WelcomeComposer({
 					</p>
 					{/* Suggestion chips: one tap
 					 * fills the composer; the user hits Enter to send. */}
-					<div className="gui-suggest-reveal mt-4" ref={suggestRevealRef}>
+					<HeightMorph
+						morphKey={`${showMore ? "open" : "closed"}:${suggestions.length}`}
+						className="gui-suggest-reveal mt-4"
+						fade={false}
+					>
 						<div className="gui-suggest">
 							{visibleSuggestions.map((s, i) => {
 								const r = resolveSuggestion(s);
@@ -2500,10 +2426,10 @@ export function WelcomeComposer({
 									</button>
 								);
 							})}
-							{showMore && revealCount > suggestions.length && (
+							{showMore && (
 								<button
 									type="button"
-									className="gui-suggest-chip gui-suggest-chip--manage gui-suggest-chip--expand"
+									className={`gui-suggest-chip gui-suggest-chip--manage${collapsing ? " gui-suggest-chip--leaving" : " gui-suggest-chip--expand"}`}
 									style={{ animationDelay: "60ms" }}
 									onClick={() =>
 										window.dispatchEvent(
@@ -2524,7 +2450,7 @@ export function WelcomeComposer({
 								<MorphIcon icon={showMore ? XIcon : PlusIcon} size={13} spring="snappy" />
 							</button>
 						</div>
-					</div>
+					</HeightMorph>
 					{/* Real-time reminders (kimi 实时提醒 parity): background-working
 					 * sessions (进行中) + completed-but-unread ones below the empty
 					 * composer; click opens the session, 一键已读 clears unread. */}

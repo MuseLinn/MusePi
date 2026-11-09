@@ -1,8 +1,9 @@
 /**
  * React binding for the panel-level tab model (lib/panel-tabs.ts). State is
- * per chat session (key convention: `musepi-gui-panel-tabs-${sessionId}`;
- * cwd is only the pre-session fallback), persisted to localStorage on every
- * change, and re-loaded when the key changes.
+ * per chat session (key convention: `musepi-gui-panel-tabs-${sessionId}`), or
+ * per pre-session directory (the selected project, else cwd) while the welcome
+ * scene owns the panel; persisted to localStorage on every change, and
+ * re-loaded when the key changes.
  *
  * All mutators are useCallback-stable: they sit in dependency arrays of
  * ChatView/ContextPanel callbacks and effects, so an unstable identity here

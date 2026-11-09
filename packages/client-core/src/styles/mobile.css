@@ -34,13 +34,20 @@
  * the gesture-bar inset + IME inset (shell.css .sh-composer) — the inner
  * floating card must not double-count it. */
 
-/* Tablets (≥768px CSS px): the agents rail becomes a persistent left column
- * beside the transcript instead of a full-screen overlay — desktop-shell
- * parity on wide screens, content stays readable at 100% width. The rail is
- * still toggleable (HeaderBar rail button); the backdrop disappears because
- * there is no overlay to dismiss.
- */
-@media (min-width: 768px) {
+/* Tablets and landscape foldables (≥840px CSS px): the agents rail becomes a
+ * persistent left column beside the transcript instead of a full-screen
+ * overlay — desktop-shell parity on wide screens, content stays readable at
+ * 100% width. The rail is still toggleable (HeaderBar rail button); the
+ * backdrop disappears because there is no overlay to dismiss.
+ *
+ * 840px is deliberately the same threshold as `shellLayoutForViewport`
+ * (lib/responsive-shell.ts): that hook decides "wide" — static column and
+ * auto-open — while shell.css already turns the rail into an overlay below
+ * 840px. A second, lower breakpoint here (it used to be 768px) produced a
+ * 72px band where the JS called the layout "medium" but the CSS had already
+ * made the rail a column, so opening it squeezed the transcript with no
+ * backdrop and no way to dismiss it by tapping outside. */
+@media (min-width: 840px) {
 	.sh-rail {
 		position: static;
 		width: 300px;

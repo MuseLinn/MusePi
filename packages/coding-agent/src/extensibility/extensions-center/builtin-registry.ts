@@ -84,6 +84,15 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		annotate: true,
 		raw: { name: "scheduled-panel", kind: "plugin-module" },
 	},
+	{
+		kind: "plugin-module",
+		name: "capability-panel",
+		displayName: "MusePi Capability Panel",
+		description:
+			"Capability-center second-tier sidebar panel: skills, plugins and marketplace navigation with counts.",
+		annotate: true,
+		raw: { name: "capability-panel", kind: "plugin-module" },
+	},
 ];
 
 /** Mark discovered rows as first-party without creating duplicate entries. */

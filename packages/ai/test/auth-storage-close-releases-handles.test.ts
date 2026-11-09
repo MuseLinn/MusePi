@@ -62,3 +62,14 @@ test("close() releases the connection after the lease/cache statements have run"
 
 	expect(() => expectExclusiveAccess(dbPath)).not.toThrow();
 });
+
+test("close() releases the connection after a credential update persisted its secret", async () => {
+	const dbPath = path.join(tempDir, "updated.db");
+	const store = await SqliteAuthCredentialStore.open(dbPath);
+	const [stored] = store.upsertAuthCredentialForProvider("anthropic", { type: "api_key", key: "sk-test" });
+	if (!stored) throw new Error("Expected the credential to be stored");
+	store.updateAuthCredential(stored.id, { type: "api_key", key: "sk-rotated" });
+	store.close();
+
+	expect(() => expectExclusiveAccess(dbPath)).not.toThrow();
+});

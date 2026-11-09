@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { WidgetHeadActionsSlot } from "../../widgets/chrome";
 import { WidgetErrorBoundary } from "../../widgets/error-boundary";
 import { useWidgetRegistryVersion, widgetDef } from "../../widgets/registry";
 import type { WidgetSource } from "../../widgets/source";
@@ -58,6 +59,7 @@ export function InlineWidget({
 }): ReactNode {
 	const [local, setLocal] = useState<Record<string, unknown>>(data);
 	const [answered, setAnswered] = useState(false);
+	const [headSlot, setHeadSlot] = useState<HTMLElement | null>(null);
 	// A face hands an answer to the conversation through sendPrompt; wrapping it
 	// here is the only signal the card has that the user chose something.
 	const submit = sendPrompt
@@ -93,35 +95,42 @@ export function InlineWidget({
 			<div className="tv-widget-head">
 				<span className="tv-widget-title">{title}</span>
 				<span className="tv-widget-tag">{type}</span>
-				{actions && <span className="tv-widget-actions">{actions}</span>}
+				<span className="tv-widget-actions">
+					{/* Faces portal their own head action here (the annotation entry),
+					 * so it sits with copy/menu/fullscreen instead of on its own row. */}
+					<span className="tv-widget-head-slot" ref={setHeadSlot} />
+					{actions}
+				</span>
 			</div>
-			<div className="tv-widget-body">
-				{codeView ? (
-					<pre className="tv-widget-code" data-lang={codeView.lang} aria-label={t("settings.widgetSource")}>
-						{codeView.text}
-					</pre>
-				) : (
-					<WidgetErrorBoundary>
-						<def.Component
-							data={local}
-							update={patch => setLocal(prev => ({ ...prev, ...patch }))}
-							sendPrompt={submit}
-							annotateCapture={
-								// Resolve the element at capture time, not render time: on the
-								// first paint `rootRef` is still empty, and gating on it made
-								// the entry appear only after some later re-render (or never,
-								// on a static widget).
-								rasterizeCard
-									? () => {
-											const element = rootRef.current;
-											return element ? rasterizeCard(element) : Promise.resolve(null);
-										}
-									: undefined
-							}
-						/>
-					</WidgetErrorBoundary>
-				)}
-			</div>
+			<WidgetHeadActionsSlot.Provider value={headSlot}>
+				<div className="tv-widget-body">
+					{codeView ? (
+						<pre className="tv-widget-code" data-lang={codeView.lang} aria-label={t("settings.widgetSource")}>
+							{codeView.text}
+						</pre>
+					) : (
+						<WidgetErrorBoundary>
+							<def.Component
+								data={local}
+								update={patch => setLocal(prev => ({ ...prev, ...patch }))}
+								sendPrompt={submit}
+								annotateCapture={
+									// Resolve the element at capture time, not render time: on the
+									// first paint `rootRef` is still empty, and gating on it made
+									// the entry appear only after some later re-render (or never,
+									// on a static widget).
+									rasterizeCard
+										? () => {
+												const element = rootRef.current;
+												return element ? rasterizeCard(element) : Promise.resolve(null);
+											}
+										: undefined
+								}
+							/>
+						</WidgetErrorBoundary>
+					)}
+				</div>
+			</WidgetHeadActionsSlot.Provider>
 			{ask && (
 				// A waiting page names its state under the page: the card is answered
 				// elsewhere (the answer becomes a user message), so without this the

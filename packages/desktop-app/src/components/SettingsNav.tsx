@@ -2,6 +2,7 @@ import { t, tLoose } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SectionId, SectionRequest } from "../lib/settings-nav";
+import { matchSettingRows, type SettingSearchRow } from "../lib/settings-search";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { MenuPopup } from "./MenuPopup";
@@ -108,7 +109,22 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 		"交互",
 		"interact",
 	],
-	sessions: ["会话", "session", "恢复", "resume", "归档", "archive", "历史", "history", "标题", "title"],
+	sessions: [
+		"会话",
+		"session",
+		"恢复",
+		"resume",
+		"归档",
+		"archive",
+		"历史",
+		"history",
+		"标题",
+		"title",
+		"消息",
+		"message",
+		"浏览",
+		"browse",
+	],
 	git: [
 		"git",
 		"仓库",
@@ -231,6 +247,7 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 	],
 	subagents: ["子代理", "subagent", "任务", "task", "并行", "parallel", "并发", "concurrency", "数量", "count"],
 	mcp: ["mcp", "服务", "server", "工具", "tool", "端点", "endpoint", "url"],
+	connectors: ["连接器", "connector", "市场", "market", "oauth", "授权", "远端", "remote", "mcp"],
 	commands: ["命令", "command", "slash", "斜杠", "自定义", "custom", "快捷", "quick"],
 	hooks: ["钩子", "hook", "事件", "event", "触发", "trigger", "toml", "脚本", "script"],
 	browser: [
@@ -259,7 +276,6 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 	],
 	suggestions: ["提示词", "suggestion", "预设", "preset", "快捷", "chip", "starter", "建议", "prompt"],
 	modes: ["预设", "模式", "mode", "preset", "profile", "角色", "role", "work", "design"],
-	history: ["历史", "history", "会话", "session", "时间", "time", "保留", "retention", "清理", "clean"],
 	indexes: ["索引", "index", "库", "代码库", "搜索", "search", "扫描", "scan", "cwd", "工作区"],
 	usage: ["统计", "usage", "用量", "成本", "cost", "token", "模型", "model", "月度", "monthly"],
 };
@@ -301,6 +317,7 @@ export function navGroups(
 				{ id: "skills", icon: "sparkling", label: t("tools.extensionsPlugins"), enabled: true },
 				{ id: "subagents", icon: "user", label: t("settings.tasksSubagents"), enabled: true },
 				{ id: "mcp", icon: "server", label: t("settings.mcpServers"), enabled: true },
+				{ id: "connectors", icon: "plug", label: t("settings.connectors"), enabled: true },
 				{ id: "commands", icon: "terminal-box", label: t("settings.commands"), enabled: true },
 				{ id: "hooks", icon: "node-tree", label: t("settings.hooks"), enabled: true },
 				{ id: "suggestions", icon: "chat-1", label: t("settings.starterPrompts"), enabled: true },
@@ -311,7 +328,6 @@ export function navGroups(
 		{
 			title: t("settings.dataStatistics"),
 			items: [
-				{ id: "history", icon: "history", label: t("settings.sessionHistory"), enabled: true },
 				{ id: "indexes", icon: "book", label: t("settings.indexLibrary"), enabled: true },
 				{ id: "usage", icon: "star", label: t("settings.usageStatistics"), enabled: true },
 				{ id: "migration", icon: "download", label: t("settings.dataMigration"), enabled: true },
@@ -395,6 +411,8 @@ export function SettingsNav({
 	onBack,
 	query,
 	onQueryChange,
+	settingsRows,
+	onSelectRow,
 }: {
 	extTabs: ReadonlyArray<{ slot: string; label?: string }>;
 	/** The section SettingsView currently renders — drives the highlight. */
@@ -404,8 +422,15 @@ export function SettingsNav({
 	/** Search box value; filters rows by label + section keywords. */
 	query: string;
 	onQueryChange(query: string): void;
+	/** Cross-page schema index: lets the search find a setting by its label
+	 *  and jump to the page that renders it. */
+	settingsRows?: readonly SettingSearchRow[];
+	onSelectRow?(section: string, key: string): void;
 }): ReactNode {
 	const groups = navGroups(extTabs);
+	const sectionLabels = new Map(groups.flatMap(group => group.items.map(item => [item.id, item.label] as const)));
+	const pageLabel = (section: string): string => sectionLabels.get(section) ?? section;
+	const settingMatches = matchSettingRows(settingsRows ?? [], query);
 	const collapsedNav = useCollapsedNav();
 	const [searchOpen, setSearchOpen] = useState(false);
 	const searchFabRef = useRef<HTMLButtonElement | null>(null);
@@ -543,6 +568,26 @@ export function SettingsNav({
 				</label>
 			)}
 			<div ref={navRef} className="gui-settings-nav-scroll" data-top-scroll="false" data-bottom-scroll="false">
+				{!collapsedNav && settingMatches.length > 0 && (
+					<div className="gui-settings-nav-matches">
+						<div className="gui-settings-nav-group">{t("settings.matchingSettings")}</div>
+						{settingMatches.map(row => (
+							<button
+								key={row.key}
+								type="button"
+								className="gui-settings-nav gui-settings-nav--setting"
+								title={`${pageLabel(row.section)}${row.group ? ` · ${tLoose(row.group)}` : ""}`}
+								onClick={() => {
+									onSelectRow?.(row.section, row.key);
+									onQueryChange("");
+								}}
+							>
+								<Icon name="settings-3" className="h-4 w-4 flex-none" />
+								<span className="gui-settings-nav-label truncate">{tLoose(row.label)}</span>
+							</button>
+						))}
+					</div>
+				)}
 				{filterNavGroups(groups, collapsedNav ? "" : query).map(group => (
 					<div key={group.title} className="mb-1">
 						<div className="gui-settings-nav-group">{group.title}</div>

@@ -6,9 +6,10 @@
 
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { type IrcPresentation, ircPresentation } from "../../lib/irc";
+import { useCollapseHeight } from "../../lib/use-collapse";
 import { readLiveCustomMessage } from "./transcript-content.js";
 
 export type { IrcKind, IrcPresentation } from "../../lib/irc";
@@ -31,6 +32,53 @@ export function ircPairKeyOf(entry: SessionEntry): string | null {
 	return [p.from ?? me, p.to ?? me].sort().join("\u0000");
 }
 
+/**
+ * Clamped IRC body with the shared collapse morph (`useCollapseHeight`): the
+ * clamp comes OFF when expanding so the body grows out of the preview height,
+ * and back ON once a collapse settles so it shrinks INTO the preview instead
+ * of snapping to three lines. The preview height is cached while the clamp is
+ * mounted — the hook measures after the class already flipped.
+ */
+function ClampedIrcBody({ children }: { children: ReactNode }): ReactNode {
+	const [expanded, setExpanded] = useState(false);
+	const [clamped, setClamped] = useState(true);
+	const bodyRef = useRef<HTMLDivElement | null>(null);
+	const previewHRef = useRef(0);
+	useEffect(() => {
+		if (clamped && bodyRef.current) previewHRef.current = bodyRef.current.clientHeight;
+	});
+	useCollapseHeight(expanded, bodyRef, {
+		closedHeight: () => previewHRef.current,
+		onSettled: open => {
+			if (!open) setClamped(true);
+		},
+	});
+	return (
+		<>
+			<div ref={bodyRef} className={`tr-irc-body${clamped ? " tr-irc-body--clamped" : ""}`}>
+				{children}
+			</div>
+			<button
+				type="button"
+				className="tr-irc-more"
+				aria-expanded={expanded}
+				onClick={() => {
+					if (expanded) {
+						// The clamp reapplies when the collapse settles.
+						setExpanded(false);
+					} else {
+						// Unclamp first so the morph starts from the preview.
+						setClamped(false);
+						setExpanded(true);
+					}
+				}}
+			>
+				{expanded ? t("transcript.ircShowLess") : t("transcript.ircShowMore")}
+			</button>
+		</>
+	);
+}
+
 export function IrcCard({
 	presentation,
 	continued = false,
@@ -40,10 +88,8 @@ export function IrcCard({
 	continued?: boolean;
 	children: ReactNode;
 }): ReactNode {
-	const [expanded, setExpanded] = useState(false);
 	const { kind, from, to, body, replyTo } = presentation;
 	const clampable = body.split("\n").filter(line => line.trim() !== "").length > IRC_CLAMP_LINES;
-	const clamped = clampable && !expanded;
 	const self = t("transcript.ircMe");
 	const route =
 		kind === "incoming" ? (
@@ -71,17 +117,7 @@ export function IrcCard({
 					{replyTo && <span className="tr-irc-tag">{t("transcript.ircReply")}</span>}
 				</div>
 			)}
-			<div className={`tr-irc-body${clamped ? " tr-irc-body--clamped" : ""}`}>{children}</div>
-			{clampable && (
-				<button
-					type="button"
-					className="tr-irc-more"
-					aria-expanded={expanded}
-					onClick={() => setExpanded(open => !open)}
-				>
-					{expanded ? t("transcript.ircShowLess") : t("transcript.ircShowMore")}
-				</button>
-			)}
+			{clampable ? <ClampedIrcBody>{children}</ClampedIrcBody> : <div className="tr-irc-body">{children}</div>}
 		</div>
 	);
 }

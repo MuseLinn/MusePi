@@ -8,6 +8,7 @@ export const sessions = {
 	"sessions.roomFull": "Room is full",
 	"sessions.badKeyCorruptedFrame": "Bad key or corrupted frame",
 	"sessions.connectionLostWithCode": "Connection lost (code {code})",
+	"sessions.rpcTimedOut": "{method} got no reply in time — check the network and try again",
 	"sessions.timedOutWaitingHost": "Timed out waiting for the host's welcome",
 	"sessions.timedOutWaitingHostSSession": "Timed out waiting for the host's session snapshot",
 	"sessions.failedApplySessionSnapshotWithReason": "Failed to apply session snapshot: {reason}",

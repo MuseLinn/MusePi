@@ -22,6 +22,7 @@ import { attachmentReferenceLine, composePromptWithAttachments, uploadAttachment
 import { useBackLayer } from "../../lib/back-stack";
 import { isMobileShell } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
+import { draftKey, readDraft, writeDraft } from "../../lib/drafts";
 import { haptic } from "../../lib/haptics";
 import type { PendingAttachment } from "../../lib/image";
 import { processImageFile, restoreImageAttachment, revokePreviews, toImageContent } from "../../lib/image";
@@ -57,6 +58,10 @@ const THINKING_KEY: Record<ThinkingLadder, Parameters<typeof t>[0]> = {
 
 export interface ComposerProps {
 	client: SessionClient;
+	/** Connection identity (the collab link or host address) — drafts are keyed
+	 *  by it so two computers never share a half-typed prompt. Absent on the
+	 *  compat shell, which has exactly one host. */
+	draftScope?: string;
 }
 
 /**
@@ -799,10 +804,19 @@ function AskEditor({ prefill, onSubmit }: AskEditorProps): ReactNode {
 	);
 }
 
-export function Composer({ client }: ComposerProps): ReactNode {
+export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode {
 	const layout = useShellLayout();
 	const [engaged, setEngaged] = useState(false);
-	const [text, setText] = useState("");
+	// Draft text belongs to ONE conversation: it loads from storage when the
+	// focused session changes and is written back as the user types (see
+	// lib/drafts). Component state alone leaked the draft into whichever
+	// session the user opened next and lost it on an Android process kill.
+	const focusedSessionId = useGuestSelector(client, s => s.focusedSessionId);
+	const activeDraftKey = draftKey(draftScope, focusedSessionId);
+	const [text, setText] = useState(() => readDraft(activeDraftKey));
+	const textRef = useRef(text);
+	textRef.current = text;
+	const draftKeyRef = useRef(activeDraftKey);
 	const [sending, setSending] = useState(false);
 	const [sendError, setSendError] = useState<string | null>(null);
 	const sendingRef = useRef(false);
@@ -839,6 +853,31 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	}, [pending]);
 	useEffect(() => () => revokePreviews(pendingRef.current), []);
 
+	// Session switch: flush the outgoing draft, drop its attachment chips,
+	// restore the incoming session's own draft. Attachment previews and daemon
+	// blob references were produced for the previous session's prompt — moving
+	// them across would attach a file the user never picked here.
+	useEffect(() => {
+		if (draftKeyRef.current === activeDraftKey) return;
+		writeDraft(draftKeyRef.current, textRef.current);
+		draftKeyRef.current = activeDraftKey;
+		revokePreviews(pendingRef.current);
+		pendingRef.current = [];
+		setPending([]);
+		setFiles([]);
+		setAttachOpen(false);
+		setSendError(null);
+		setText(readDraft(activeDraftKey));
+	}, [activeDraftKey]);
+
+	// Debounced persistence: one write per typing pause, plus a final flush on
+	// unmount (Android may freeze the page without another render).
+	useEffect(() => {
+		const timer = setTimeout(() => writeDraft(draftKeyRef.current, text), 400);
+		return () => clearTimeout(timer);
+	}, [text]);
+	useEffect(() => () => writeDraft(draftKeyRef.current, textRef.current), []);
+
 	// Field-level subscriptions: input state and turn liveness only — never
 	// re-rendered on transcript or notice frames.
 	const live = useGuestSelector(client, s => s.phase) === "live";
@@ -863,7 +902,21 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const [queueOpen, setQueueOpen] = useState(false);
 	// Empty-state draft suggestions: show only while the
 	// session is live, editable and has nothing to show yet.
-	const empty = useGuestSelector(client, s => s.entries.length === 0 && s.stream === null && !s.working);
+	// Empty-state draft suggestions: only a session that is live AND has nothing
+	// to show yet. The `live` part matters — while a session is hydrating (or a
+	// link is re-establishing) the transcript is also empty, and offering "try
+	// one of these" over a conversation that is about to appear is a lie.
+	const empty = useGuestSelector(
+		client,
+		s =>
+			s.entries.length === 0 &&
+			s.stream === null &&
+			!s.working &&
+			// "Live" or the new-session draft — both are genuinely empty and
+			// ready for input. A hydrating session is NOT: it is empty only
+			// because its snapshot has not landed yet.
+			(s.phase === "live" || (s.workspace !== null && s.focusedSessionId === null)),
+	);
 	const model = useGuestSelector(client, s => s.state?.model ?? null);
 	const thinking = useGuestSelector(client, s => s.state?.thinkingLevel ?? null);
 	const canPrompt = (live || draftSession) && !readOnly;
@@ -910,6 +963,10 @@ export function Composer({ client }: ComposerProps): ReactNode {
 		const trimmed = text.trim();
 		if (!canPrompt || sendingRef.current) return;
 		if (!trimmed && pending.length === 0 && files.length === 0) return;
+		// The first send from the draft screen creates and focuses a session
+		// while the request is in flight — the draft key changes underneath us,
+		// so remember the key the text actually belongs to and clear THAT one.
+		const sendKey = draftKeyRef.current;
 		if (files.some(f => f.status === "uploading")) {
 			setSendError(t("general.attachmentUploadPending"));
 			return;
@@ -929,6 +986,8 @@ export function Composer({ client }: ComposerProps): ReactNode {
 			setPending([]);
 			setFiles([]);
 			setText("");
+			writeDraft(sendKey, "");
+			writeDraft(draftKeyRef.current, "");
 			haptic(8);
 		} catch (error) {
 			setSendError(error instanceof Error ? error.message : String(error));

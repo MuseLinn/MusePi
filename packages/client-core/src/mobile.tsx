@@ -15,6 +15,7 @@ import {
 	setupDeepLinkHandler,
 	setupNotificationTapHandler,
 } from "./lib/capacitor";
+import { applyTextScale } from "./lib/text-scale";
 import { initTooltips } from "./lib/tooltips";
 
 // Capacitor keyboard bridge: with Keyboard resize 'none' the WebView keeps its
@@ -47,23 +48,21 @@ async function setupCapacitorKeyboardInset(): Promise<void> {
 	});
 }
 
-// VisualViewport fallback: shells without the Keyboard plugin (older compat
-// WebViews, plain browsers) still shrink the visual viewport when the IME
-// shows. Drive the same CSS variable from the vv delta; the plugin events
-// above take precedence when present.
-function setupVisualViewportKeyboardFallback(): void {
-	if (window.Capacitor?.plugins?.Keyboard) return;
-	const vv = window.visualViewport;
-	if (!vv) return;
-	const root = document.documentElement;
-	const update = (): void => {
-		const kb = Math.max(0, window.innerHeight - vv.height);
-		root.style.setProperty("--mp-keyboard-inset", kb > 60 ? `${kb}px` : "0px");
-	};
-	vv.addEventListener("resize", update);
-	vv.addEventListener("scroll", update);
-	update();
-}
+// Browser/PWA path: there is NO keyboard inset here, on purpose.
+//
+// The shell is sized from --viewport-height, which app.tsx keeps equal to
+// visualViewport.height on every surface. When an IME opens in a browser the
+// visual viewport shrinks, the shell shrinks with it, and the composer is
+// already clear of the keyboard. The previous fallback ALSO wrote
+// --mp-keyboard-inset from `innerHeight - vv.height`, so the composer was
+// lifted a second time by a full keyboard height and floated in the middle of
+// the screen. Worse, pinch-zoom shrinks the visual viewport without any
+// keyboard, which that delta read as one.
+//
+// The native shells are the opposite contract — Keyboard resize:'none' keeps
+// the WebView at full height, so there the inset (from the plugin events above
+// or ArkTS) is the only keyboard avoidance and the shell height does not
+// change. One mechanism per surface, never both.
 
 // Edge-to-edge: paint under the system bars and pick icon color for the
 // active theme. Capacitor's config handles this on fresh installs, but an
@@ -112,18 +111,32 @@ async function setupSafeAreaFallback(): Promise<void> {
 }
 
 void setupCapacitorKeyboardInset();
-setupVisualViewportKeyboardFallback();
 void setupSafeAreaFallback();
 void setupImmersiveSystemBars();
 void setupAndroidBackHandler();
 void setupDeepLinkHandler();
 void setupNotificationTapHandler();
+// Physical-density text correction (text only — geometry keeps its scale).
+void applyTextScale();
 
 /** Launch splash — an overlay above the live app, so connection and initial
- * state loading start immediately instead of waiting for the brand animation. */
-function BootSplash({ onDone }: { onDone: () => void }): React.JSX.Element {
+ * state loading start immediately instead of waiting for the brand animation.
+ *
+ * Reduced motion skips it entirely (the design-system contract: the cold-start
+ * reveal is decorative — "system reduced-motion skips it"), and it never holds
+ * the shell for its full duration once the app is interactive: a tap or the
+ * exit timer both release it, and the exit timer is short because the brand
+ * beat is 1.4 s of someone's life on every cold start. */
+function BootSplash({ onDone }: { onDone: () => void }): React.JSX.Element | null {
 	const [leaving, setLeaving] = useState(false);
+	// Read once per mount: a mid-launch preference change is not worth a
+	// re-render, and the reveal has already started by then.
+	const reduced = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 	useEffect(() => {
+		if (reduced) {
+			onDone();
+			return;
+		}
 		let exitTimer: ReturnType<typeof setTimeout> | undefined;
 		const timer = setTimeout(() => {
 			setLeaving(true);
@@ -133,7 +146,8 @@ function BootSplash({ onDone }: { onDone: () => void }): React.JSX.Element {
 			clearTimeout(timer);
 			if (exitTimer) clearTimeout(exitTimer);
 		};
-	}, [onDone]);
+	}, [onDone, reduced]);
+	if (reduced) return null;
 	return (
 		<div className={`sh-boot-splash${leaving ? " sh-boot-splash--leave" : ""}`} onClick={onDone} role="presentation">
 			<div className="sh-boot-splash-dots">

@@ -30,6 +30,7 @@ import { HookSelectorComponent, type HookSelectorSlider } from "../../modes/comp
 import { getAvailableThemesWithPaths, getThemeByName, setTheme, type Theme, theme } from "../../modes/theme/theme";
 import type { InteractiveModeContext, InteractiveSelectorDialogOptions } from "../../modes/types";
 import { normalizeCustomMessagePayload, USER_INTERRUPT_LABEL } from "../../session/messages";
+import { previewLine, TRUNCATE_LENGTHS } from "../../tools/render-utils";
 import { setExtensionTerminalTitle, setSessionTerminalTitle } from "../../utils/title-generator";
 
 const MAX_WIDGET_LINES = 10;
@@ -212,6 +213,23 @@ export class ExtensionUiController {
 			},
 			getContextUsage: () => this.ctx.session.getContextUsage(),
 			compact: instructionsOrOptions => this.#compactSession(instructionsOrOptions),
+			runIdleCompaction: () => this.ctx.session.runIdleCompaction(),
+			hasDraftInput: () => this.ctx.editor.getText().trim().length > 0,
+			runEphemeralTurn: options => this.ctx.session.runEphemeralTurn(options),
+			getGoalModeState: () => this.ctx.session.getGoalModeState(),
+			getTodoPhases: () => this.ctx.session.getTodoPhases(),
+			recordRecap: reply => {
+				this.ctx.sessionManager.recordRecap(reply);
+			},
+			showRecap: reply => {
+				const text = previewLine(reply, TRUNCATE_LENGTHS.RECAP);
+				if (text) this.ctx.showStatus(theme.fg("dim", theme.italic(`※ recap: ${text}`)), { dim: false });
+			},
+			isSettled: () =>
+				!this.ctx.session.isStreaming &&
+				!this.ctx.session.isCompacting &&
+				!this.ctx.session.hasPendingAsyncWork() &&
+				this.ctx.session.queuedMessageCount === 0,
 			getSystemPrompt: () => this.ctx.session.systemPrompt,
 		};
 		const commandActions: ExtensionCommandContextActions = {
@@ -447,6 +465,23 @@ export class ExtensionUiController {
 			},
 			getContextUsage: () => this.ctx.session.getContextUsage(),
 			compact: instructionsOrOptions => this.#compactSession(instructionsOrOptions),
+			runIdleCompaction: () => this.ctx.session.runIdleCompaction(),
+			hasDraftInput: () => this.ctx.editor.getText().trim().length > 0,
+			runEphemeralTurn: options => this.ctx.session.runEphemeralTurn(options),
+			getGoalModeState: () => this.ctx.session.getGoalModeState(),
+			getTodoPhases: () => this.ctx.session.getTodoPhases(),
+			recordRecap: reply => {
+				this.ctx.sessionManager.recordRecap(reply);
+			},
+			showRecap: reply => {
+				const text = previewLine(reply, TRUNCATE_LENGTHS.RECAP);
+				if (text) this.ctx.showStatus(theme.fg("dim", theme.italic(`※ recap: ${text}`)), { dim: false });
+			},
+			isSettled: () =>
+				!this.ctx.session.isStreaming &&
+				!this.ctx.session.isCompacting &&
+				!this.ctx.session.hasPendingAsyncWork() &&
+				this.ctx.session.queuedMessageCount === 0,
 			getSystemPrompt: () => this.ctx.session.systemPrompt,
 		};
 		const commandActions: ExtensionCommandContextActions = {

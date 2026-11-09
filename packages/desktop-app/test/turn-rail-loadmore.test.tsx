@@ -162,3 +162,114 @@ describe("TurnRail load-more control", () => {
 		expect(host.querySelector(".gui-turn-loadmore")).toBeNull();
 	});
 });
+
+/**
+ * Hover panel / jump interactions (openchamber PromptNavigatorRail parity).
+ *
+ * The panel is a child of the pointer-tracked tick strip for geometry, so its
+ * own pointer events must not reach the strip: otherwise moving over a panel
+ * row rewrites the highlighted turn and edge zones start the tick carousel
+ * under the reader. Re-entering the rail must also cancel a scheduled hide,
+ * and a jump must dismiss the panel instead of leaving it over the transcript.
+ */
+describe("TurnRail hover panel interactions", () => {
+	const pointer = (type: string, clientY: number): MouseEvent =>
+		new MouseEvent(type, { bubbles: true, clientY, cancelable: true });
+	// React synthesizes pointerenter/leave from pointerover/out.
+	const pointerOut = (): MouseEvent => new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body });
+	const pointerOver = (): MouseEvent => new MouseEvent("pointerover", { bubbles: true, relatedTarget: document.body });
+
+	async function openPanel(host: HTMLElement): Promise<void> {
+		const track = host.querySelector<HTMLElement>(".gui-turn-track")!;
+		await act(async () => {
+			track.dispatchEvent(pointer("pointermove", 18)); // second tick
+		});
+		await act(async () => {
+			await Promise.resolve();
+		});
+	}
+
+	test("moving over the panel does not steer the tick highlight", async () => {
+		const host = await render(dataSource({ turnCount: 6 }));
+		await openPanel(host);
+		const before = host.querySelector(".gui-turn-panel-row--hover")?.textContent;
+		expect(before).toBeTruthy();
+
+		const panel = host.querySelector<HTMLElement>(".gui-turn-panel")!;
+		await act(async () => {
+			panel.dispatchEvent(pointer("pointermove", 2)); // maps to the first tick
+		});
+		await act(async () => {
+			await Promise.resolve();
+		});
+
+		expect(host.querySelector(".gui-turn-panel-row--hover")?.textContent).toBe(before);
+	});
+
+	test("re-entering the rail cancels a scheduled hide", async () => {
+		const host = await render(dataSource({ turnCount: 4 }));
+		await openPanel(host);
+		const rail = host.querySelector<HTMLElement>(".gui-turn-rail")!;
+		await act(async () => {
+			rail.dispatchEvent(pointerOut());
+		});
+		await act(async () => {
+			rail.dispatchEvent(pointerOver());
+		});
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 220));
+		});
+		expect(host.querySelector(".gui-turn-panel")).not.toBeNull();
+	});
+
+	test("selecting a turn dismisses the panel until the pointer leaves the rail", async () => {
+		const jumps: string[] = [];
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		await act(async () => {
+			root.render(
+				createElement(TurnRail, {
+					rootRef: createRef<HTMLDivElement>(),
+					entryCount: 0,
+					turnsData: dataSource({ turnCount: 4 }),
+					onJumpToTurn: entryId => jumps.push(entryId),
+				}),
+			);
+		});
+		await act(async () => {
+			await Promise.resolve();
+		});
+		await openPanel(host);
+
+		const track = host.querySelector<HTMLElement>(".gui-turn-track")!;
+		await act(async () => {
+			track.dispatchEvent(pointer("pointerdown", 18));
+		});
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(jumps).toEqual(["e1"]);
+		expect(host.querySelector(".gui-turn-panel")).toBeNull();
+
+		// Still over the rail: motion must not reopen the list.
+		await act(async () => {
+			track.dispatchEvent(pointer("pointermove", 30));
+		});
+		await act(async () => {
+			await Promise.resolve();
+		});
+		expect(host.querySelector(".gui-turn-panel")).toBeNull();
+
+		// Leave and come back: browsing resumes.
+		const rail = host.querySelector<HTMLElement>(".gui-turn-rail")!;
+		await act(async () => {
+			rail.dispatchEvent(pointerOut());
+		});
+		await act(async () => {
+			rail.dispatchEvent(pointerOver());
+		});
+		await openPanel(host);
+		expect(host.querySelector(".gui-turn-panel")).not.toBeNull();
+	});
+});

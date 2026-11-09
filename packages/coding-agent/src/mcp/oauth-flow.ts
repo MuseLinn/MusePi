@@ -210,12 +210,16 @@ function resolveCallbackOptions(config: MCPOAuthConfig): OAuthCallbackFlowOption
 	// fallback remains safe for first-install DCR flows whose preferred port
 	// happens to be occupied.
 	const allowPortFallback = staticClientIdFromConfig(config) === undefined;
+	if (config.externalCallback === true && !redirectUri) {
+		throw new Error("externalCallback requires oauth.redirectUri (the desktop deep link)");
+	}
 	return {
 		preferredPort: resolveCallbackPort(config.callbackPort, redirectUri),
 		callbackPath: resolveCallbackPath(config.callbackPath, redirectUri),
 		callbackHostname: resolveCallbackHostname(redirectUri),
 		redirectUri,
 		allowPortFallback,
+		...(config.externalCallback === true ? { externalCallbackOnly: true } : {}),
 	};
 }
 
@@ -296,6 +300,8 @@ export interface MCPOAuthConfig {
 	redirectUri?: string;
 	/** Custom callback port (default: 3000) */
 	callbackPort?: number;
+	/** Wait for a deep-link callback instead of binding a loopback server. */
+	externalCallback?: boolean;
 	/** Custom callback path (default: /callback or redirectUri pathname) */
 	callbackPath?: string;
 	/** MCP resource URI for RFC 8707 resource indicators */

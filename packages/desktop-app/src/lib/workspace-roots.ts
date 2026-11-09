@@ -1,6 +1,15 @@
 import { directoriesEqual } from "./workspace-projects";
 
 /**
+ * Remote workspaces are mounted under `~/.musepi/remote/<host>/…`. Those
+ * mirrors belong to 远程连接, not the local project registry: remembering a
+ * directory there would create a bogus local project row.
+ */
+export function isRemoteMirrorCwd(cwd: string | null | undefined): boolean {
+	return typeof cwd === "string" && /(^|[\\/])\.musepi[\\/]remote[\\/]/.test(cwd);
+}
+
+/**
  * Selected file-panel root per session.
  *
  * A session can expose several working directories, and the files pane can

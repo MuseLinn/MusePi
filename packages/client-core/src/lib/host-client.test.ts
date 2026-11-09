@@ -8,6 +8,7 @@
  * client's onmessage handler (microtask-driven, no real network/timers).
  */
 import { afterEach, describe, expect, it } from "bun:test";
+import { dismissActionToast, getToasts } from "./action-toast";
 import type { GuestSnapshot } from "./client";
 import { HostClient } from "./host-client";
 
@@ -94,6 +95,7 @@ const previousWebSocket = globalThis.WebSocket;
 afterEach(() => {
 	FakeWebSocket.instances = [];
 	globalThis.WebSocket = previousWebSocket;
+	for (const toast of getToasts()) dismissActionToast(toast.id);
 });
 
 /** Resolve when the snapshot satisfies the predicate (checks now + on each
@@ -111,6 +113,15 @@ function onceSnapshot(client: HostClient, predicate: (snap: GuestSnapshot) => bo
 			}
 		});
 	});
+}
+
+/** Resolve when the shared toast store contains a message with this substring. */
+async function waitForStoreToast(message: string): Promise<void> {
+	for (let i = 0; i < 50; i++) {
+		if (getToasts().some(toast => toast.message.includes(message))) return;
+		await new Promise(resolve => setTimeout(resolve, 0));
+	}
+	throw new Error(`toast not published: ${message}`);
 }
 
 /** Drain the microtask queue (the answer RPCs are fire-and-forget `void`). */
@@ -256,8 +267,43 @@ describe("HostClient", () => {
 		ws.onmessage?.({
 			data: JSON.stringify({ kind: "recap", seq: 1, payload: { text: "You've been idle — recap", at: 1000 } }),
 		});
-		await onceSnapshot(client, s => s.notices.some(n => n.message.includes("recap")));
-		expect(client.getSnapshot().notices[0]?.level).toBe("info");
+		await waitForStoreToast("You've been idle — recap");
+		expect(getToasts().at(-1)).toMatchObject({ kind: "info" });
+		client.close();
+	});
+
+	it("keeps retry notices on one source key and clears them on success", async () => {
+		globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+		const client = new HostClient("ws://127.0.0.1:1234/");
+		client.connect();
+		const { ws } = connectToDaemon("ws://127.0.0.1:1234/", defaultHandler());
+		await onceSnapshot(client, s => s.phase === "live");
+
+		ws.onmessage?.({
+			data: JSON.stringify({
+				kind: "event",
+				seq: 1,
+				payload: { type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 100, errorMessage: "429" },
+			}),
+		});
+		ws.onmessage?.({
+			data: JSON.stringify({
+				kind: "event",
+				seq: 2,
+				payload: { type: "auto_retry_start", attempt: 2, maxAttempts: 3, delayMs: 100, errorMessage: "429" },
+			}),
+		});
+		expect(getToasts()).toHaveLength(1);
+		expect(getToasts()[0]?.message).toContain("2/3");
+
+		ws.onmessage?.({
+			data: JSON.stringify({
+				kind: "event",
+				seq: 3,
+				payload: { type: "auto_retry_end", success: true, attempt: 2 },
+			}),
+		});
+		expect(getToasts()).toHaveLength(0);
 		client.close();
 	});
 

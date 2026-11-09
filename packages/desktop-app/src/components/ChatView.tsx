@@ -22,7 +22,7 @@ import {
 	type MessageDisplayContext,
 } from "@musepi/client-core/src/messages/display-context";
 import type { ChatQuoteAnchor, OfficeQuoteAnchor, PdfQuoteAnchor, SessionEntry } from "@musepi/pi-wire";
-import { PanelRightClose, PanelRightOpen } from "lucide";
+import { Info as InfoIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -71,7 +71,12 @@ import {
 	useSlotComponents,
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
-import { COMPACTION_PANEL_SURFACE, compactionTabDescriptor, surfaceById } from "../lib/surfaces/registry";
+import {
+	COMPACTION_PANEL_SURFACE,
+	compactionTabDescriptor,
+	surfaceById,
+	surfaceRequiresSession,
+} from "../lib/surfaces/registry";
 import { setDockOpen } from "../lib/terminal-dock-state";
 import { type UsePanelTabsResult, usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
@@ -354,6 +359,7 @@ export function ChatView({
 	store,
 	rpc,
 	readOnly = false,
+	mini = false,
 	parentSession,
 	onOpenParentSession,
 	onOpenSession,
@@ -405,6 +411,9 @@ export function ChatView({
 	/** 顾问 transcript 只读态（session.tree 行的 advisor 标记传入）：
 	 *  转录照常浏览，输入区替换为只读说明条，禁止发送。 */
 	readOnly?: boolean;
+	/** 纯聊天表面（Electron mini 窗）：右侧 rail 与面板是工作区 chrome，
+	 *  mini 窗只保留 transcript + composer，两者都不渲染。 */
+	mini?: boolean;
 	/** 当前会话的父会话(fork 来源 / 子代理宿主)——非空时会话卡顶部行左缘
 	 * 渲染「父级」返回按钮。 */
 	parentSession?: { id: string; label: string | null } | null;
@@ -1041,7 +1050,10 @@ export function ChatView({
 	// instead of swapping the panel body. `activeView` is DERIVED from the
 	// active tab's surface so every existing setActiveView call site keeps its
 	// exact meaning — it now upserts a tab rather than mutating one variable.
-	const panelTabs = usePanelTabs(`musepi-gui-panel-tabs-${store?.sessionId ?? store?.cwd ?? ""}`);
+	// Welcome scene has no session, so its tab set is keyed by the selected
+	// project: workspace tabs (files / git / notes / browser) belong to the
+	// directory, not to the session that will be created from it.
+	const panelTabs = usePanelTabs(`musepi-gui-panel-tabs-${store?.sessionId ?? store?.cwd ?? project ?? ""}`);
 	const activePanelTab = panelTabs.tabs.find(t => t.id === panelTabs.activeId) ?? null;
 	const activeView = activePanelTab?.surface ?? null;
 	// Surfaces with open tabs — feeds the rail's has-content fallback so a
@@ -1099,6 +1111,11 @@ export function ChatView({
 			// null = "nothing selected"; the empty state owns that, the rail and
 			// the strip never navigate to it.
 			if (!view) return;
+			// Session-scoped surfaces read the session snapshot; opening one with
+			// no session paints a placeholder. The rail and empty state gate them,
+			// this guards the shortcut / request paths that land here directly.
+			const target = surfaceById(view);
+			if (target && surfaceRequiresSession(target) && !store?.sessionId) return;
 			if (view === "browser") {
 				openBrowserPanel();
 				return;
@@ -1106,7 +1123,7 @@ export function ChatView({
 			if (view === FILE_WORKSPACE_SURFACE && !selectPanelTabComponent(extTabsRef.current, view)) return;
 			panelTabs.open({ surface: view, label: tabLabelFor(view) });
 		},
-		[openBrowserPanel, panelTabs.open, tabLabelFor],
+		[openBrowserPanel, panelTabs.open, tabLabelFor, store?.sessionId],
 	);
 	const openCompaction = useCallback(
 		(entry: Extract<SessionEntry, { type: "compaction" }>): void => {
@@ -2706,876 +2723,917 @@ export function ChatView({
 				 * breath. The surface margin is the window gutter only. */
 				style={{ margin: "var(--gui-card-gutter)" }}
 			>
-				{/* Scene stack: both scenes mount during the 420ms overlap window,
-				 * each absolute-filling this wrapper (so they cross-fade/morph
-				 * full-surface). The wrapper itself is IN FLOW — the terminal
-				 * dock after it genuinely pushes the scenes up instead of the
-				 * dock becoming the only in-flow child and landing on top. */}
-				<div className="gui-scenes relative min-h-0 flex-1">
-					{showWelcome && (
-						<div
-							ref={welcomeSceneRef}
-							className={`gui-scene gui-scene-welcome relative min-h-0 flex-1${welcomeLeaving ? " gui-scene--leaving" : ""}`}
-						>
-							{/* Same rounded floating card as the chat scene and the
-							 * settings main view: the welcome scene used to sit
-							 * directly on the glass, so it read as "not a rounded
-							 * container" (user report 2026-09-16). */}
+				{/* One row owns the workspace width: the scene stack (welcome or
+				 * chat) beside the ALWAYS-present right column — dock seat, panel
+				 * shell and rail. The rail is a shell-level destination, not a
+				 * child of the chat scene, so the welcome screen keeps it
+				 * (OpenChamber layout parity) and the panel opens there onto its
+				 * empty-state page. `chatRowRef` measures this row for the
+				 * session-info dock threshold; the panel and rail are part of the
+				 * width it reports, exactly as they were when nested in the chat
+				 * scene. */}
+				<div ref={chatRowRef} className="flex min-h-0 flex-1">
+					{/* Scene stack: both scenes mount during the 420ms overlap window,
+					 * each absolute-filling this wrapper (so they cross-fade/morph
+					 * full-surface). The wrapper itself is IN FLOW — the terminal
+					 * dock after it genuinely pushes the scenes up instead of the
+					 * dock becoming the only in-flow child and landing on top. */}
+					<div className="gui-scenes relative min-h-0 min-w-0 flex-1">
+						{showWelcome && (
 							<div
-								ref={el => {
-									welcomeCardRef.current = el;
-								}}
-								className="gui-float-card gui-welcome-card flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]"
-								style={{ margin: "var(--gui-card-gutter)" }}
+								ref={welcomeSceneRef}
+								className={`gui-scene gui-scene-welcome relative min-h-0 flex-1${welcomeLeaving ? " gui-scene--leaving" : ""}`}
 							>
-								<WelcomeComposer
-									busy={busy}
-									rpc={rpc}
-									project={project}
-									onProject={onProject}
-									focused={focusMode}
-									onToggleFocus={onToggleFocus}
-									presetModelId={defaultModelId}
-									presetThinkingLevel={presetThinkingLevel}
-									onSubmit={(text, opts) => onSubmitNewSession(text, opts)}
-									reminders={reminders}
-									onSelectReminder={onSelectReminder}
-									onMarkAllRead={onMarkAllRead}
-									modes={modes}
-									modeId={modeId}
-									onModeChange={onModeChange}
-									designSubmit={onDesignSubmit}
-									onAddProvider={onAddProvider}
-									attachApiRef={attachApiRef}
-								/>
-							</div>
-						</div>
-					)}
-					{showChat && store && (
-						<div
-							ref={chatSceneRef}
-							className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}`}
-						>
-							<div ref={chatRowRef} className="flex min-h-0 flex-1">
-								{/* Session column: transcript + composer + dock — the
-								 * right panel sits BESIDE this column (same level), so
-								 * opening it pushes the composer left (main | ContextPanel). */}
+								{/* Same rounded floating card as the chat scene and the
+								 * settings main view: the welcome scene used to sit
+								 * directly on the glass, so it read as "not a rounded
+								 * container" (user report 2026-09-16). */}
 								<div
 									ref={el => {
-										chatColumnRef.current = el;
+										welcomeCardRef.current = el;
 									}}
-									className="gui-chat-column gui-float-card flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-surface)]"
+									className="gui-float-card gui-welcome-card flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]"
+									style={{ margin: "var(--gui-card-gutter)" }}
 								>
-									{/* Maximize anchor (docs §3.3.2): the floated panel and
-									 * its backdrop measure THIS column — the old target
-									 * (.gui-chat-surface) also contains the panel and the
-									 * rail, so maximizing swallowed the rail. */}
-									{/* Chat-card header row: the Chat|Canvas switch on the left,
-									 * the session-info toggle on the right. A real row rather
-									 * than an absolute overlay — an overlay sat on top of the
-									 * first transcript row (message corner, hover quote pill)
-									 * and stole its pointer. In focus mode the row keeps its
-									 * flow slot (visibility, like the body) so the composer
-									 * morph starts from the measured layout. */}
-									<div className={focusMode ? "gui-chat-head gui-chat-head--focused-hidden" : "gui-chat-head"}>
-										<div className="gui-chat-head-left">
-											{parentSession && store && (
-												<button
-													type="button"
-													className="gui-parent-back"
-													title={parentSession.label ?? t("general.backParent")}
-													onClick={() => onOpenParentSession?.(parentSession.id)}
-												>
-													<Icon name="arrow-go-back" className="h-3 w-3 flex-shrink-0" />
-													<span className="gui-parent-back-label">
-														{t("general.backParent")}
-														{parentSession.label ? ` · ${parentSession.label}` : ""}
-													</span>
-												</button>
-											)}
-											{/* Layer-3: Chat | Canvas 顶层切换(canvas = 会话树地图)。 */}
-											<div className="gui-surface-mode" role="tablist">
-												<button
-													type="button"
-													role="tab"
-													aria-selected={viewMode === "chat"}
-													className={`gui-surface-mode-btn${viewMode === "chat" ? " gui-surface-mode-btn--on" : ""}`}
-													onClick={() => setViewMode("chat")}
-												>
-													<Icon name="chat-history" className="h-3 w-3" />
-													{t("transcript.surfaceChat")}
-												</button>
-												<button
-													type="button"
-													role="tab"
-													aria-selected={viewMode === "canvas"}
-													className={`gui-surface-mode-btn${viewMode === "canvas" ? " gui-surface-mode-btn--on" : ""}`}
-													onClick={() => setViewMode("canvas")}
-												>
-													<Icon name="apps-2-ai" className="h-3 w-3" />
-													{t("transcript.surfaceCanvas")}
-												</button>
-											</div>
-										</div>
-										{/* Message-tree navigation sits in the header row, left of the
-										 * session-info toggle. The old absolute button floated over
-										 * the first transcript row and stole its hover/quote pill.
-										 * No onNavigateTo: a row click is a jump, not a leaf switch. */}
-										<MessageTreeButton
-											entries={snap?.entries ?? []}
-											onJump={entryId => requestJump({ entryId })}
-											onFork={(entry, text, includeTarget) =>
-												void forkFromMessage(entry.id, text, includeTarget)
-											}
-											onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
-											activePathIds={trustedPathIds}
-										/>
-										{onToggleSessionInfo && (
-											<button
-												type="button"
-												className="gui-chat-info-toggle"
-												aria-pressed={sessionInfoDock ? sessionInfoOpen : sessionInfoFloatOpen}
-												title={
-													sessionInfoFloatOpen || sessionInfoDockOpen
-														? t("general.sessionInfoHide")
-														: t("general.sessionInfoShow")
-												}
-												aria-label={
-													sessionInfoFloatOpen || sessionInfoDockOpen
-														? t("general.sessionInfoHide")
-														: t("general.sessionInfoShow")
-												}
-												onClick={() => {
-													if (!sessionInfoAutoFloat) {
-														onToggleSessionInfo();
-														return;
-													}
-													// Narrow row: the first click opens the float the auto
-													// rule suppressed; the next one closes it and records
-													// the preference.
-													if (sessionInfoFloatOpen) setSessionInfoFloatRequested(false);
-													else setSessionInfoFloatRequested(true);
-													if (sessionInfoOpen === sessionInfoFloatOpen) onToggleSessionInfo();
-												}}
-											>
-												<MorphIcon
-													icon={
-														sessionInfoFloatOpen || sessionInfoDockOpen ? PanelRightClose : PanelRightOpen
-													}
-													size={14}
-													spring="snappy"
-													reducedMotion="user"
-													aria-hidden
-												/>
-											</button>
-										)}
-									</div>
-									{/* Focus mode hides the whole transcript column (not just the
-									 * scroll container): the wrapper also carries flex:1, so
-									 * leaving it mounted would split the surface in half and
-									 * the composer could never fill it. */}
+									<WelcomeComposer
+										busy={busy}
+										rpc={rpc}
+										project={project}
+										onProject={onProject}
+										focused={focusMode}
+										onToggleFocus={onToggleFocus}
+										presetModelId={defaultModelId}
+										presetThinkingLevel={presetThinkingLevel}
+										onSubmit={(text, opts) => onSubmitNewSession(text, opts)}
+										reminders={reminders}
+										onSelectReminder={onSelectReminder}
+										onMarkAllRead={onMarkAllRead}
+										modes={modes}
+										modeId={modeId}
+										onModeChange={onModeChange}
+										designSubmit={onDesignSubmit}
+										onAddProvider={onAddProvider}
+										attachApiRef={attachApiRef}
+									/>
+								</div>
+							</div>
+						)}
+						{showChat && store && (
+							<div
+								ref={chatSceneRef}
+								className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}`}
+							>
+								<div className="flex min-h-0 flex-1">
+									{/* Session column: transcript + composer + dock. The
+									 * docked session-info seat is this scene's sibling; the
+									 * panel and rail live one level up, on the shared
+									 * workspace row, so they survive the welcome ⇄ chat
+									 * scene swap. */}
 									<div
-										ref={chatBodyRef}
-										className={
-											focusMode
-												? "gui-chat-body--focused-hidden"
-												: "gui-chat-body relative flex min-h-0 min-w-0 flex-1 flex-col"
-										}
-										/* A live reply the view follows: the end fade band turns
-										 * solid over the composer zone (`.gui-chat-fade--end`,
-										 * gui-chat.css) so no ghost row bleeds through the
-										 * glass while the newest line streams in. At rest the
-										 * band is a ramp and rows slide under the glass, which
-										 * is what makes it read as floating. */
-										data-live-tail={snap?.working ? "true" : undefined}
+										ref={el => {
+											chatColumnRef.current = el;
+										}}
+										className="gui-chat-column gui-float-card flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-surface)]"
 									>
-										{paused === true && (
-											<div className="gui-pause-banner" role="status" aria-live="polite">
-												<span className="gui-pause-banner-icon">
-													<Icon name="pause" className="h-3.5 w-3.5" />
-												</span>
-												<span className="gui-pause-banner-text">
-													{t("tools.paused")}
-													{pausedAt ? (
-														<span className="gui-pause-banner-timer" data-paused-at={pausedAt}>
-															{" "}
-															· {formatPauseElapsed(pausedAt)}
-														</span>
-													) : null}
-												</span>
-												{onResume && (
+										{/* Maximize anchor (docs §3.3.2): the floated panel and
+										 * its backdrop measure THIS column — the old target
+										 * (.gui-chat-surface) also contains the panel and the
+										 * rail, so maximizing swallowed the rail. */}
+										{/* Chat-card header row: the Chat|Canvas switch on the left,
+										 * the session-info toggle on the right. A real row rather
+										 * than an absolute overlay — an overlay sat on top of the
+										 * first transcript row (message corner, hover quote pill)
+										 * and stole its pointer. In focus mode the row keeps its
+										 * flow slot (visibility, like the body) so the composer
+										 * morph starts from the measured layout. */}
+										<div
+											className={focusMode ? "gui-chat-head gui-chat-head--focused-hidden" : "gui-chat-head"}
+										>
+											<div className="gui-chat-head-left">
+												{parentSession && store && (
 													<button
 														type="button"
-														className="gui-pause-banner-resume"
-														onClick={() => onResume()}
+														className="gui-parent-back"
+														title={parentSession.label ?? t("general.backParent")}
+														onClick={() => onOpenParentSession?.(parentSession.id)}
 													>
-														{t("tools.resume")}
+														<Icon name="arrow-go-back" className="h-3 w-3 flex-shrink-0" />
+														<span className="gui-parent-back-label">
+															{t("general.backParent")}
+															{parentSession.label ? ` · ${parentSession.label}` : ""}
+														</span>
 													</button>
 												)}
+												{/* Layer-3: Chat | Canvas 顶层切换(canvas = 会话树地图)。 */}
+												<div className="gui-surface-mode" role="tablist">
+													<button
+														type="button"
+														role="tab"
+														aria-selected={viewMode === "chat"}
+														className={`gui-surface-mode-btn${viewMode === "chat" ? " gui-surface-mode-btn--on" : ""}`}
+														onClick={() => setViewMode("chat")}
+													>
+														<Icon name="chat-history" className="h-3 w-3" />
+														{t("transcript.surfaceChat")}
+													</button>
+													<button
+														type="button"
+														role="tab"
+														aria-selected={viewMode === "canvas"}
+														className={`gui-surface-mode-btn${viewMode === "canvas" ? " gui-surface-mode-btn--on" : ""}`}
+														onClick={() => setViewMode("canvas")}
+													>
+														<Icon name="apps-2-ai" className="h-3 w-3" />
+														{t("transcript.surfaceCanvas")}
+													</button>
+												</div>
 											</div>
-										)}
-										{/* Scroll-shadow: a real
-										 * content fade via mask-image, applied only while the
-										 * transcript overflows (top/bottom data attrs). */}
-										<div className="gui-transcript-wrap relative min-h-0 min-w-0 flex-1">
-											{/* History-session cold-open skeleton (React-Bits style):
-											 * the daemon reactivates the session on demand — cover
-											 * the (stale) previous transcript while the RPC runs. */}
-											{sessionLoading === true && (
-												<div
-													className="gui-session-loading"
-													role="status"
-													aria-label={t("settings.loadingSession")}
+											{/* Message-tree navigation sits in the header row, left of the
+											 * session-info toggle. The old absolute button floated over
+											 * the first transcript row and stole its hover/quote pill.
+											 * No onNavigateTo: a row click is a jump, not a leaf switch. */}
+											<MessageTreeButton
+												entries={snap?.entries ?? []}
+												onJump={entryId => requestJump({ entryId })}
+												onFork={(entry, text, includeTarget) =>
+													void forkFromMessage(entry.id, text, includeTarget)
+												}
+												onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
+												activePathIds={trustedPathIds}
+											/>
+											{onToggleSessionInfo && (
+												<button
+													type="button"
+													className="gui-chat-info-toggle"
+													aria-pressed={sessionInfoDock ? sessionInfoOpen : sessionInfoFloatOpen}
+													title={
+														sessionInfoFloatOpen || sessionInfoDockOpen
+															? t("general.sessionInfoHide")
+															: t("general.sessionInfoShow")
+													}
+													aria-label={
+														sessionInfoFloatOpen || sessionInfoDockOpen
+															? t("general.sessionInfoHide")
+															: t("general.sessionInfoShow")
+													}
+													onClick={() => {
+														if (!sessionInfoAutoFloat) {
+															onToggleSessionInfo();
+															return;
+														}
+														// Narrow row: the first click opens the float the auto
+														// rule suppressed; the next one closes it and records
+														// the preference.
+														if (sessionInfoFloatOpen) setSessionInfoFloatRequested(false);
+														else setSessionInfoFloatRequested(true);
+														if (sessionInfoOpen === sessionInfoFloatOpen) onToggleSessionInfo();
+													}}
 												>
-													<div className="gui-loading-skeleton" aria-hidden>
-														<span className="gui-loading-bar" />
-														<span className="gui-loading-bar" style={{ width: "82%" }} />
-														<span className="gui-loading-bar" style={{ width: "58%" }} />
-													</div>
-													<div className="gui-loading-note">
-														<span className="gui-loading-orb" aria-hidden />
-														{t("settings.loadingSession")}
-														{/* Elapsed, once the wait is long enough to notice. A frozen
-														    skeleton reads as "it broke"; a live number reads as
-														    "it is working". */}
-														{(waitSeconds ?? 0) >= 2 ? (
-															<span className="gui-loading-elapsed">
-																{t("settings.waitingSWithSeconds", { seconds: String(waitSeconds) })}
+													<MorphIcon
+														icon={InfoIconData}
+														size={14}
+														spring="snappy"
+														reducedMotion="user"
+														aria-hidden
+													/>
+												</button>
+											)}
+										</div>
+										{/* Focus mode hides the whole transcript column (not just the
+										 * scroll container): the wrapper also carries flex:1, so
+										 * leaving it mounted would split the surface in half and
+										 * the composer could never fill it. */}
+										<div
+											ref={chatBodyRef}
+											className={
+												focusMode
+													? "gui-chat-body--focused-hidden"
+													: "gui-chat-body relative flex min-h-0 min-w-0 flex-1 flex-col"
+											}
+											/* A live reply the view follows: the end fade band turns
+											 * solid over the composer zone (`.gui-chat-fade--end`,
+											 * gui-chat.css) so no ghost row bleeds through the
+											 * glass while the newest line streams in. At rest the
+											 * band is a ramp and rows slide under the glass, which
+											 * is what makes it read as floating. */
+											data-live-tail={snap?.working ? "true" : undefined}
+										>
+											{paused === true && (
+												<div className="gui-pause-banner" role="status" aria-live="polite">
+													<span className="gui-pause-banner-icon">
+														<Icon name="pause" className="h-3.5 w-3.5" />
+													</span>
+													<span className="gui-pause-banner-text">
+														{t("tools.paused")}
+														{pausedAt ? (
+															<span className="gui-pause-banner-timer" data-paused-at={pausedAt}>
+																{" "}
+																· {formatPauseElapsed(pausedAt)}
 															</span>
 														) : null}
-													</div>
+													</span>
+													{onResume && (
+														<button
+															type="button"
+															className="gui-pause-banner-resume"
+															onClick={() => onResume()}
+														>
+															{t("tools.resume")}
+														</button>
+													)}
 												</div>
 											)}
-											{viewMode === "canvas" ? (
-												<TurnMapCanvas
-													entries={overviewEntries}
-													loading={snap?.historyLoading === true && overviewEntries.length === 0}
-													hasMore={store?.hasMore ?? false}
-													loadingOlder={snap?.historyLoading === true}
-													historyBlocked={store?.historyBlocked ?? false}
-													onLoadOlder={onLoadOlderStable}
-													roundDurations={snap?.roundDurations}
-													leafId={effectiveLeaf}
-													activePathIds={trustedPathIds}
-													onJumpToEntry={handleCanvasJumpToEntry}
-													onSwitchToBranch={handleCanvasSwitchToBranch}
-													onBranchTo={handleCanvasBranchTo}
-													onForkAt={handleCanvasForkAt}
-													composerInset={composerInset}
-												/>
-											) : (
-												<>
+											{/* Scroll-shadow: a real
+											 * content fade via mask-image, applied only while the
+											 * transcript overflows (top/bottom data attrs). */}
+											<div className="gui-transcript-wrap relative min-h-0 min-w-0 flex-1">
+												{/* History-session cold-open skeleton (React-Bits style):
+												 * the daemon reactivates the session on demand — cover
+												 * the (stale) previous transcript while the RPC runs. */}
+												{sessionLoading === true && (
 													<div
-														ref={transcriptScrollerRef}
-														className={`gui-transcript min-h-0 min-w-0 h-full overflow-y-auto px-5 py-4${sessionLoading === true ? "" : " gui-transcript--fadein"}`}
-														data-top-scroll="false"
-														data-bottom-scroll="false"
+														className="gui-session-loading"
+														role="status"
+														aria-label={t("settings.loadingSession")}
 													>
-														<CodeHighlightProvider highlight={chatHighlight}>
-															<Transcript
-																key={store?.sessionId ?? ""}
-																entries={visibleEntries}
-																sessionKey={store?.sessionId ?? ""}
-																registerComposerInsetReader={registerComposerInsetReader}
-																/* The branch bar lists siblings that are OFF the
-																 * active path, so it needs the full tree while the
-																 * transcript renders the path. */
-																branchEntries={snap?.entries ?? []}
-																/* No stream ghost: the view folds the assistant message into
-																 * entries at message_start, so the entry row IS the live
-																 * stream renderer (immutable upserts re-render it). */
-																stream={null}
-																streamDone={true}
-																jumpRequest={jumpRequest}
-																activeTools={snap?.activeTools ?? new Map()}
-																working={snap?.working ?? false}
-																roundDurations={snap?.roundDurations}
-																thinkingLevel={resolvedThinkingLevel ?? undefined}
-																host={host}
-																renderTranscriptNode={renderTranscriptNode}
-																onOpenCompaction={openCompaction}
-																/* Codex 编辑预览 parity: the lightbox edit button
-																 * opens the composer's sketch board with the image
-																 * as its base layer (event channel — the board
-																 * state lives inside the Composer). */
-																onEditImage={src => {
-																	window.dispatchEvent(
-																		new CustomEvent("musepi-gui-sketch-open", {
-																			detail: { dataUrl: src },
-																		}),
-																	);
-																}}
-																/* Chat settings: user message
-																 * markdown/plain + long-message collapse. */
-																userPlain={(() => {
-																	try {
-																		return (
-																			localStorage.getItem("musepi-gui-chat-usermsg") === "plain"
-																		);
-																	} catch {
-																		return false;
-																	}
-																})()}
-																collapseLongUserMessages={(() => {
-																	try {
-																		return (
-																			localStorage.getItem("musepi-gui-chat-collapseuser") !== "0"
-																		);
-																	} catch {
-																		return true;
-																	}
-																})()}
-																defaultRoundFoldExpanded={defaultRoundFoldExpanded}
-																toolCallSummary={toolCallSummary}
-																/* TUI display-settings parity: the daemon
-																 * settings drive the transcript (unflagged
-																 * from tuiOnly 2026-08-12). */
-																smoothStreaming={displaySettings["display.smoothStreaming"] !== false}
-																hideToolActivity={displaySettings["display.hideToolActivity"] === true}
-																showTokenUsage={displaySettings["display.showTokenUsage"] === true}
-																collapseCompacted={
-																	displaySettings["display.collapseCompacted"] === true
-																}
-																liveActivityRows={
-																	// The setting is a NAMED choice ('all' | '3' | '5' | '7' | '10'), so a
-																	// bare 0 can never be mistaken for 'show nothing'.
-																	activityRowsToNumber(displaySettings["display.liveActivityRows"])
-																}
-																taskCardStyle={
-																	displaySettings["display.taskCardStyle"] === "classic"
-																		? "classic"
-																		: "swarm"
-																}
-																colorBlind={displaySettings.colorBlindMode === true}
-																onQuote={(text, messageId) => appendQuote(text, messageId)}
-																onJumpToMessage={entryId => requestJump({ entryId })}
-																/* 撤回: move the leaf only — nothing is
-																 * backfilled into the composer (与「编辑并
-																 * 重发」互补)。 */
-																onRevert={id => void rewindFromUserMessage(id)}
-																/* 编辑并重发 (TUI navigateTree 选用户消息 parity):
-																 * branchAt 到该消息(leaf 落父节点,旧尾部成为
-																 * sibling branch)+ 原文回填 composer——发送即在
-																 * 该位置重答。 */
-																onEdit={(id, text) => void jumpBackToMessage(id, text)}
-																onFork={(id, text, includeTarget) =>
-																	void forkFromMessage(id, text, includeTarget)
-																}
-																onLoadOlder={onLoadOlderStable}
-																loadingOlder={loadingOlder}
-																historyBlocked={store.historyBlocked}
-																anchorCtlRef={anchorCtlRef}
-																onRetry={(id, _text) => void regenerateFromAssistant(id)}
-																onSpeak={(text, id) => {
-																	// TTS read-aloud via the daemon's local Kokoro worker;
-																	// 行级播放状态(朗读中 → 该行按钮高亮,点击停止)。
-																	if (stopSpeakRef.current) {
-																		stopSpeakRef.current();
-																		setSpeakingId(null);
-																		return;
-																	}
-																	// Manual read-aloud takes over the shared audio graph.
-																	autoSpeakerRef.current?.stop();
-																	autoSpeakerRef.current = null;
-																	autoSpeakerKeyRef.current = null;
-																	const entryId = id ?? null;
-																	stopSpeakRef.current = speak(
-																		text,
-																		rpc,
-																		{
-																			rate:
-																				typeof displaySettings["tts.rate"] === "number"
-																					? (displaySettings["tts.rate"] as number)
-																					: undefined,
-																		},
-																		activity => {
-																			if (activity.phase === "speaking") setSpeakingId(entryId);
-																			else if (
-																				activity.phase === "done" ||
-																				activity.phase === "stopped"
-																			) {
-																				stopSpeakRef.current = null;
-																				setSpeakingId(prev => (prev === entryId ? null : prev));
-																			} else if (activity.phase === "error") {
-																				stopSpeakRef.current = null;
-																				setSpeakingId(prev => (prev === entryId ? null : prev));
-																				dispatchNotification("error", {
-																					lastMessage: activity.message,
-																				});
-																			}
-																		},
-																	);
-																	setSpeakingId(entryId);
-																}}
-																speakingId={speakingId}
-																onStopSpeak={() => {
-																	stopSpeakRef.current?.();
-																	stopSpeakRef.current = null;
-																	setSpeakingId(null);
-																}}
-																onSaveImage={text => setSaveImageText(text)}
-																/* avatars replace the 宿主/代理 gutter labels. */
-																userGutter={showAvatars ? <UserAvatar rpc={rpc} cwd={store.cwd} /> : ""}
-																agentGutter={showAvatars ? <AgentAvatar state={orb} size={64} /> : ""}
-																/* Layer-1 branch topology: multi-child messages render a
-																 * switchable branch bar; off-path entries collapse. */
-																branchInfo={{
-																	childCount: new Map(
-																		[...branchChildren.entries()].map(([pid, kids]) => [
-																			pid,
-																			kids.length,
-																		]),
-																	),
-																	activePathIds,
-																	onSwitchBranch: switchBranch,
-																}}
-															/>
-														</CodeHighlightProvider>
-														{/* Tail spacer. The composer floats over this
-														 * scroller, so without a reserved band the last
-														 * row would sit under it. INSIDE the scroller on
-														 * purpose: only scroll content counts toward
-														 * scrollHeight — parked below the scroller (its
-														 * old spot) it never entered the pin math and the
-														 * last row hid under the composer. The height is a
-														 * CSS variable the composer's ResizeObserver writes
-														 * (see the --chat-composer-inset effect), so a
-														 * growing textarea or a queue row resizes the
-														 * footer without re-rendering the list. The band is
-														 * exactly the floating stack's height, because every
-														 * dock (approvals, asks, jump-back, session-tree nav)
-														 * is a child of the wrap. While the session works
-														 * the growth allowance is off: the working strip and
-														 * the live-end fade sit in the gap, so a composer
-														 * grown into it (a queued message, the working strip)
-														 * left the last line under the glass. The ask card
-														 * above the composer is absolutely anchored (not part
-														 * of the wrap), so its published clearance is added
-														 * on top. */}
+														<div className="gui-loading-skeleton" aria-hidden>
+															<span className="gui-loading-bar" />
+															<span className="gui-loading-bar" style={{ width: "82%" }} />
+															<span className="gui-loading-bar" style={{ width: "58%" }} />
+														</div>
+														<div className="gui-loading-note">
+															<span className="gui-loading-orb" aria-hidden />
+															{t("settings.loadingSession")}
+															{/* Elapsed, once the wait is long enough to notice. A frozen
+														    skeleton reads as "it broke"; a live number reads as
+														    "it is working". */}
+															{(waitSeconds ?? 0) >= 2 ? (
+																<span className="gui-loading-elapsed">
+																	{t("settings.waitingSWithSeconds", { seconds: String(waitSeconds) })}
+																</span>
+															) : null}
+														</div>
+													</div>
+												)}
+												{viewMode === "canvas" ? (
+													<TurnMapCanvas
+														entries={overviewEntries}
+														loading={snap?.historyLoading === true && overviewEntries.length === 0}
+														hasMore={store?.hasMore ?? false}
+														loadingOlder={snap?.historyLoading === true}
+														historyBlocked={store?.historyBlocked ?? false}
+														onLoadOlder={onLoadOlderStable}
+														roundDurations={snap?.roundDurations}
+														leafId={effectiveLeaf}
+														activePathIds={trustedPathIds}
+														onJumpToEntry={handleCanvasJumpToEntry}
+														onSwitchToBranch={handleCanvasSwitchToBranch}
+														onBranchTo={handleCanvasBranchTo}
+														onForkAt={handleCanvasForkAt}
+														composerInset={composerInset}
+													/>
+												) : (
+													<>
 														<div
-															className="gui-chat-tail-spacer flex-shrink-0"
-															ref={registerComposerInsetReader}
-															style={{
-																height: `calc(${
-																	(snap?.working ?? false)
-																		? `max(var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px), calc(var(--chat-composer-inset, 0px) + ${FLOATING_COMPOSER_GAP_PX}px))`
-																		: `var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px)`
-																} + var(--chat-floating-panel-clearance, 0px))`,
+															ref={transcriptScrollerRef}
+															className={`gui-transcript min-h-0 min-w-0 h-full overflow-y-auto px-5 py-4${sessionLoading === true ? "" : " gui-transcript--fadein"}`}
+															data-top-scroll="false"
+															data-bottom-scroll="false"
+														>
+															<CodeHighlightProvider highlight={chatHighlight}>
+																<Transcript
+																	key={store?.sessionId ?? ""}
+																	entries={visibleEntries}
+																	sessionKey={store?.sessionId ?? ""}
+																	registerComposerInsetReader={registerComposerInsetReader}
+																	/* The branch bar lists siblings that are OFF the
+																	 * active path, so it needs the full tree while the
+																	 * transcript renders the path. */
+																	branchEntries={snap?.entries ?? []}
+																	/* No stream ghost: the view folds the assistant message into
+																	 * entries at message_start, so the entry row IS the live
+																	 * stream renderer (immutable upserts re-render it). */
+																	stream={null}
+																	streamDone={true}
+																	jumpRequest={jumpRequest}
+																	activeTools={snap?.activeTools ?? new Map()}
+																	working={snap?.working ?? false}
+																	roundDurations={snap?.roundDurations}
+																	thinkingLevel={resolvedThinkingLevel ?? undefined}
+																	host={host}
+																	renderTranscriptNode={renderTranscriptNode}
+																	onOpenCompaction={openCompaction}
+																	/* Codex 编辑预览 parity: the lightbox edit button
+																	 * opens the composer's sketch board with the image
+																	 * as its base layer (event channel — the board
+																	 * state lives inside the Composer). */
+																	onEditImage={src => {
+																		window.dispatchEvent(
+																			new CustomEvent("musepi-gui-sketch-open", {
+																				detail: { dataUrl: src },
+																			}),
+																		);
+																	}}
+																	/* Chat settings: user message
+																	 * markdown/plain + long-message collapse. */
+																	userPlain={(() => {
+																		try {
+																			return (
+																				localStorage.getItem("musepi-gui-chat-usermsg") === "plain"
+																			);
+																		} catch {
+																			return false;
+																		}
+																	})()}
+																	collapseLongUserMessages={(() => {
+																		try {
+																			return (
+																				localStorage.getItem("musepi-gui-chat-collapseuser") !== "0"
+																			);
+																		} catch {
+																			return true;
+																		}
+																	})()}
+																	defaultRoundFoldExpanded={defaultRoundFoldExpanded}
+																	toolCallSummary={toolCallSummary}
+																	/* TUI display-settings parity: the daemon
+																	 * settings drive the transcript (unflagged
+																	 * from tuiOnly 2026-08-12). */
+																	smoothStreaming={
+																		displaySettings["display.smoothStreaming"] !== false
+																	}
+																	hideToolActivity={
+																		displaySettings["display.hideToolActivity"] === true
+																	}
+																	showTokenUsage={displaySettings["display.showTokenUsage"] === true}
+																	collapseCompacted={
+																		displaySettings["display.collapseCompacted"] === true
+																	}
+																	liveActivityRows={
+																		// The setting is a NAMED choice ('all' | '3' | '5' | '7' | '10'), so a
+																		// bare 0 can never be mistaken for 'show nothing'.
+																		activityRowsToNumber(displaySettings["display.liveActivityRows"])
+																	}
+																	taskCardStyle={
+																		displaySettings["display.taskCardStyle"] === "classic"
+																			? "classic"
+																			: "swarm"
+																	}
+																	colorBlind={displaySettings.colorBlindMode === true}
+																	onQuote={(text, messageId) => appendQuote(text, messageId)}
+																	onJumpToMessage={entryId => requestJump({ entryId })}
+																	/* 撤回: move the leaf only — nothing is
+																	 * backfilled into the composer (与「编辑并
+																	 * 重发」互补)。 */
+																	onRevert={id => void rewindFromUserMessage(id)}
+																	/* 编辑并重发 (TUI navigateTree 选用户消息 parity):
+																	 * branchAt 到该消息(leaf 落父节点,旧尾部成为
+																	 * sibling branch)+ 原文回填 composer——发送即在
+																	 * 该位置重答。 */
+																	onEdit={(id, text) => void jumpBackToMessage(id, text)}
+																	onFork={(id, text, includeTarget) =>
+																		void forkFromMessage(id, text, includeTarget)
+																	}
+																	onLoadOlder={onLoadOlderStable}
+																	loadingOlder={loadingOlder}
+																	historyBlocked={store.historyBlocked}
+																	anchorCtlRef={anchorCtlRef}
+																	onRetry={(id, _text) => void regenerateFromAssistant(id)}
+																	onSpeak={(text, id) => {
+																		// TTS read-aloud via the daemon's local Kokoro worker;
+																		// 行级播放状态(朗读中 → 该行按钮高亮,点击停止)。
+																		if (stopSpeakRef.current) {
+																			stopSpeakRef.current();
+																			setSpeakingId(null);
+																			return;
+																		}
+																		// Manual read-aloud takes over the shared audio graph.
+																		autoSpeakerRef.current?.stop();
+																		autoSpeakerRef.current = null;
+																		autoSpeakerKeyRef.current = null;
+																		const entryId = id ?? null;
+																		stopSpeakRef.current = speak(
+																			text,
+																			rpc,
+																			{
+																				rate:
+																					typeof displaySettings["tts.rate"] === "number"
+																						? (displaySettings["tts.rate"] as number)
+																						: undefined,
+																			},
+																			activity => {
+																				if (activity.phase === "speaking") setSpeakingId(entryId);
+																				else if (
+																					activity.phase === "done" ||
+																					activity.phase === "stopped"
+																				) {
+																					stopSpeakRef.current = null;
+																					setSpeakingId(prev => (prev === entryId ? null : prev));
+																				} else if (activity.phase === "error") {
+																					stopSpeakRef.current = null;
+																					setSpeakingId(prev => (prev === entryId ? null : prev));
+																					dispatchNotification("error", {
+																						lastMessage: activity.message,
+																					});
+																				}
+																			},
+																		);
+																		setSpeakingId(entryId);
+																	}}
+																	speakingId={speakingId}
+																	onStopSpeak={() => {
+																		stopSpeakRef.current?.();
+																		stopSpeakRef.current = null;
+																		setSpeakingId(null);
+																	}}
+																	onSaveImage={text => setSaveImageText(text)}
+																	/* avatars replace the 宿主/代理 gutter labels. */
+																	userGutter={
+																		showAvatars ? <UserAvatar rpc={rpc} cwd={store.cwd} /> : ""
+																	}
+																	agentGutter={
+																		showAvatars ? <AgentAvatar state={orb} size={64} /> : ""
+																	}
+																	/* Layer-1 branch topology: multi-child messages render a
+																	 * switchable branch bar; off-path entries collapse. */
+																	branchInfo={{
+																		childCount: new Map(
+																			[...branchChildren.entries()].map(([pid, kids]) => [
+																				pid,
+																				kids.length,
+																			]),
+																		),
+																		activePathIds,
+																		onSwitchBranch: switchBranch,
+																	}}
+																/>
+															</CodeHighlightProvider>
+															{/* Tail spacer. The composer floats over this
+															 * scroller, so without a reserved band the last
+															 * row would sit under it. INSIDE the scroller on
+															 * purpose: only scroll content counts toward
+															 * scrollHeight — parked below the scroller (its
+															 * old spot) it never entered the pin math and the
+															 * last row hid under the composer. The height is a
+															 * CSS variable the composer's ResizeObserver writes
+															 * (see the --chat-composer-inset effect), so a
+															 * growing textarea or a queue row resizes the
+															 * footer without re-rendering the list. The band is
+															 * exactly the floating stack's height, because every
+															 * dock (approvals, asks, jump-back, session-tree nav)
+															 * is a child of the wrap. While the session works
+															 * the growth allowance is off: the working strip and
+															 * the live-end fade sit in the gap, so a composer
+															 * grown into it (a queued message, the working strip)
+															 * left the last line under the glass. The ask card
+															 * above the composer is absolutely anchored (not part
+															 * of the wrap), so its published clearance is added
+															 * on top. */}
+															<div
+																className="gui-chat-tail-spacer flex-shrink-0"
+																ref={registerComposerInsetReader}
+																style={{
+																	height: `calc(${
+																		(snap?.working ?? false)
+																			? `max(var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px), calc(var(--chat-composer-inset, 0px) + ${FLOATING_COMPOSER_GAP_PX}px))`
+																			: `var(--chat-composer-tail-inset, ${FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX}px)`
+																	} + var(--chat-floating-panel-clearance, 0px))`,
+																}}
+																aria-hidden="true"
+															/>
+														</div>
+														{/* Jump-to-bottom: the shared client-core Transcript owns the
+														 * canonical .tr-back-bottom (M1.10 follow re-arm).
+														 * The old desktop-local JumpToBottomButton was a DUPLICATE of
+														 * it (user: 滚动到底部的按钮有俩) and has been removed. */}
+														{/* Message-tree navigation now lives in the chat head row
+														 * (left of the session-info toggle), so it no longer
+														 * overlays the transcript's first row. */}
+														{/* In-message text selection actions:
+														 * quote a snippet (not the whole message), quote it with a comment, copy,
+														 * start a new session from it, or append it to the workspace notes. */}
+														<SelectionToolbar
+															containerRef={transcriptRef}
+															onQuote={(text, _pdf, _office, comment, source) =>
+																appendQuote(text, source?.messageId, comment, source?.anchor)
+															}
+															onAsk={(text, x, y) =>
+																window.dispatchEvent(
+																	new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }),
+																)
+															}
+															onCopy={text => void navigator.clipboard.writeText(text)}
+															onNewSession={text => onSubmitNewSession(text)}
+															onAddNote={text => {
+																// v1.19 parity: each "add to notes" becomes its own
+																// note (notes.create), never appended to the blob.
+																const cwd = store.cwd;
+																void rpc
+																	.request("notes.create", { cwd, body: `> ${text}` })
+																	.then(() => {
+																		// The project-knowledge panel lists the same
+																		// daemon notes; tell it to reload instead of
+																		// waiting for a tab switch to re-mount it.
+																		window.dispatchEvent(new CustomEvent("musepi-notes-changed"));
+																	})
+																	.catch(() => {});
 															}}
+														/>
+														{/* Idle recap (TUI `※ recap:` status-line parity): the daemon
+														 * generates it after recap.idleSeconds of quiet; a rounded
+														 * floating card above the composer edge, foldable to one
+														 * line (click to expand/collapse), cleared by the next
+														 * wire activity or the dismiss button. */}
+														{snap?.recap && (
+															<div
+																className={`gui-recap-row${recapExpanded ? " gui-recap-row--expanded" : ""}`}
+																title={recapExpanded ? t("tools.collapse") : t("tools.expand")}
+																role="button"
+																onClick={() => setRecapExpanded(v => !v)}
+															>
+																<span className="gui-recap-prefix">※</span>
+																<span className="gui-recap-text">{snap.recap.text}</span>
+																<span className="gui-recap-time">{relTime(snap.recap.at)}</span>
+																<Icon
+																	name="arrow-down-s"
+																	className={`gui-recap-chevron${recapExpanded ? " gui-recap-chevron--open" : ""}`}
+																/>
+																<button
+																	type="button"
+																	className="gui-recap-dismiss"
+																	title={t("settings.dismiss")}
+																	aria-label={t("settings.dismiss")}
+																	onClick={e => {
+																		e.stopPropagation();
+																		store?.dismissRecap();
+																	}}
+																>
+																	<Icon name="close" className="h-3 w-3" />
+																</button>
+															</div>
+														)}
+														{/* Progressive-blur edge bands: THREE sibling backdrop
+														 * layers per edge (2/6/14px, each masked to a shorter
+														 * ramp) so blur strength grows toward the head/composer
+														 * instead of an opaque slab hiding the rows. A mask on
+														 * the scroller itself recomposited the whole transcript
+														 * every frame; these bounded bands do not. The end band
+														 * is still the composer-inset reader. */}
+														<div aria-hidden="true" className="gui-chat-fade gui-chat-fade--top">
+															{[1, 2, 3].map(step => (
+																<span
+																	key={step}
+																	className={`gui-chat-fade-layer gui-chat-fade-layer--${step}`}
+																/>
+															))}
+														</div>
+														<div
+															ref={registerComposerInsetReader}
+															aria-hidden="true"
+															className="gui-chat-fade gui-chat-fade--end"
+														>
+															{[1, 2, 3].map(step => (
+																<span
+																	key={step}
+																	className={`gui-chat-fade-layer gui-chat-fade-layer--${step}`}
+																/>
+															))}
+														</div>
+													</>
+												)}
+											</div>
+											{/* Turn-position rail: a marker per user message — hover previews
+											 * the prompt, click jumps to that turn. In canvas mode
+											 * the transcript scroller does not exist, so the rail
+											 * switches to the active-path source below and clicks
+											 * hand the node over to the map. */}
+											<TurnRail
+												rootRef={transcriptRef}
+												entryCount={snap?.entries.length ?? 0}
+												nodeTurns={viewMode === "canvas" ? canvasRail.turns : undefined}
+												activeTurnIndex={viewMode === "canvas" ? canvasRail.activeIdx : null}
+												onSelectNode={id => setCanvasFocus(prev => ({ id, nonce: (prev?.nonce ?? 0) + 1 }))}
+												turnsData={viewMode === "canvas" ? undefined : turnsData}
+												onJumpToTurn={entryId => requestJump({ entryId })}
+											/>
+										</div>
+										{/* ⌘F find bar: floats over the conversation's
+										 * top edge. It is a child of .gui-chat-body — the chat column's own
+										 * box, and therefore its offset parent. NOT .gui-transcript-wrap:
+										 * the pause banner sits in flow
+										 * above the wrap, so the two boxes differ, and an earlier revision
+										 * wrongly assumed the wrap was the ancestor. Absolutely positioned
+										 * on purpose: a bar in flow would re-measure every virtual row. */}
+										{findOpen && (
+											<ChatFind
+												hits={findHits}
+												index={findIndex}
+												query={findQuery}
+												searching={findSearching}
+												onQuery={setFindQuery}
+												onPrev={() => stepFind(-1)}
+												onNext={() => stepFind(1)}
+												onClose={closeFind}
+												onJumpTo={jumpToHit}
+											/>
+										)}
+										<div
+											ref={composerWrapRef}
+											className={
+												focusMode
+													? "gui-composer-wrap gui-composer-wrap--bottom-anchor flex min-h-0 flex-col px-5 pb-3"
+													: "gui-composer-wrap gui-composer-wrap--floating flex flex-col px-5 pb-1"
+											}
+										>
+											{/* Jump-back dock (TUI navigateTree parity, 2026-08-25):
+											 * a floating card above the input — shows the target of the
+											 * last 撤回 (non-destructive branchAt leaf move) with an
+											 * explicit undo (jump back to the leaf we came from; the
+											 * old tail stays on the tree as a sibling branch either
+											 * way). Lives OUTSIDE the transcript so it never scrolls
+											 * away; appears/disappears and expands with the shared
+											 * Reveal motion (fade + collapse). */}
+											<Reveal open={jumpBack !== null}>
+												<div className="gui-revert-dock" role="region" aria-label={t("general.jumpedBack")}>
+													<div
+														role="button"
+														tabIndex={0}
+														className="gui-revert-dock-head"
+														onClick={() => setJumpDockOpen(v => !v)}
+														onKeyDown={e => {
+															if (e.key === "Enter" || e.key === " ") {
+																e.preventDefault();
+																setJumpDockOpen(v => !v);
+															}
+														}}
+														aria-expanded={jumpDockOpen}
+													>
+														<Icon
+															name="arrow-go-back"
+															className="h-3.5 w-3.5 flex-shrink-0 text-[var(--color-warning)]"
+														/>
+														<span className="gui-revert-dock-title" title={jumpBack?.text}>
+															{jumpBack
+																? t("general.jumpedBack2") + (jumpBack.text ? `: ${jumpBack.text}` : "")
+																: t("general.jumpedBack")}
+														</span>
+														<button
+															type="button"
+															className="gui-pane-action !w-auto px-1.5"
+															title={t("general.undoJump")}
+															onClick={e => {
+																// The head is a click target for collapse/expand —
+																// don't toggle it when the undo button fires.
+																e.stopPropagation();
+																void undoJumpBack();
+															}}
+														>
+															<Icon name="arrow-go-forward" className="h-3 w-3" />
+														</button>
+														<button
+															type="button"
+															className="gui-pane-action !w-auto px-1.5"
+															title={t("settings.close")}
+															onClick={e => {
+																// #12: dismiss the dock but STAY at the reverted
+																// position — the sibling branch stays on the tree,
+																// reachable again via the breadcrumb or the row
+																// buttons. The undo button above keeps its role.
+																e.stopPropagation();
+																setJumpBack(null);
+																setJumpDockOpen(false);
+															}}
+														>
+															<Icon name="close" className="h-3 w-3" />
+														</button>
+														<Icon
+															name="arrow-down-s"
+															className={`gui-revert-dock-chevron${jumpDockOpen ? " gui-revert-dock-chevron--open" : ""}`}
 															aria-hidden="true"
 														/>
 													</div>
-													{/* Jump-to-bottom: the shared client-core Transcript owns the
-													 * canonical .tr-back-bottom (M1.10 follow re-arm).
-													 * The old desktop-local JumpToBottomButton was a DUPLICATE of
-													 * it (user: 滚动到底部的按钮有俩) and has been removed. */}
-													{/* Message-tree navigation now lives in the chat head row
-													 * (left of the session-info toggle), so it no longer
-													 * overlays the transcript's first row. */}
-													{/* In-message text selection actions:
-													 * quote a snippet (not the whole message), quote it with a comment, copy,
-													 * start a new session from it, or append it to the workspace notes. */}
-													<SelectionToolbar
-														containerRef={transcriptRef}
-														onQuote={(text, _pdf, _office, comment, source) =>
-															appendQuote(text, source?.messageId, comment, source?.anchor)
-														}
-														onAsk={(text, x, y) =>
-															window.dispatchEvent(
-																new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }),
-															)
-														}
-														onCopy={text => void navigator.clipboard.writeText(text)}
-														onNewSession={text => onSubmitNewSession(text)}
-														onAddNote={text => {
-															// v1.19 parity: each "add to notes" becomes its own
-															// note (notes.create), never appended to the blob.
-															const cwd = store.cwd;
-															void rpc
-																.request("notes.create", { cwd, body: `> ${text}` })
-																.then(() => {
-																	// The project-knowledge panel lists the same
-																	// daemon notes; tell it to reload instead of
-																	// waiting for a tab switch to re-mount it.
-																	window.dispatchEvent(new CustomEvent("musepi-notes-changed"));
-																})
-																.catch(() => {});
-														}}
-													/>
-													{/* Idle recap (TUI `※ recap:` status-line parity): the daemon
-													 * generates it after recap.idleSeconds of quiet; a rounded
-													 * floating card above the composer edge, foldable to one
-													 * line (click to expand/collapse), cleared by the next
-													 * wire activity or the dismiss button. */}
-													{snap?.recap && (
-														<div
-															className={`gui-recap-row${recapExpanded ? " gui-recap-row--expanded" : ""}`}
-															title={recapExpanded ? t("tools.collapse") : t("tools.expand")}
-															role="button"
-															onClick={() => setRecapExpanded(v => !v)}
-														>
-															<span className="gui-recap-prefix">※</span>
-															<span className="gui-recap-text">{snap.recap.text}</span>
-															<span className="gui-recap-time">{relTime(snap.recap.at)}</span>
-															<Icon
-																name="arrow-down-s"
-																className={`gui-recap-chevron${recapExpanded ? " gui-recap-chevron--open" : ""}`}
-															/>
-															<button
-																type="button"
-																className="gui-recap-dismiss"
-																title={t("settings.dismiss")}
-																aria-label={t("settings.dismiss")}
-																onClick={e => {
-																	e.stopPropagation();
-																	store?.dismissRecap();
-																}}
-															>
-																<Icon name="close" className="h-3 w-3" />
-															</button>
+
+													<Reveal open={jumpDockOpen}>
+														<div className="gui-revert-dock-body">
+															<div className="gui-revert-item">
+																<span className="gui-revert-item-text" title={jumpBack?.text}>
+																	{jumpBack?.text ?? ""}
+																</span>
+															</div>
+															<p className="gui-revert-hint">{t("general.jumpBackHint")}</p>
 														</div>
-													)}
-													{/* Edge fade bands: painted siblings of the scroller
-													 * (see .gui-chat-fade, gui-chat.css). A mask on the
-													 * scroller recomposited the whole transcript every
-													 * frame it scrolled; the end band is a composer-inset
-													 * reader — the observer writes the measured inset onto
-													 * it and rows dissolve into the surface as they slide
-													 * under the floating composer. */}
-													<div aria-hidden="true" className="gui-chat-fade gui-chat-fade--top" />
-													<div
-														ref={registerComposerInsetReader}
-														aria-hidden="true"
-														className="gui-chat-fade gui-chat-fade--end"
-													/>
-												</>
+													</Reveal>
+												</div>
+											</Reveal>
+											{/* Session-level failure dock: a round the runtime gave up on, or one
+											 *  that produced neither a reply nor an error. Docked above the composer
+											 *  rather than in the message flow, and cleared by the next send. */}
+											{!readOnly && (
+												<SessionErrorDock
+													entries={visibleEntries}
+													working={snap?.working ?? false}
+													verifyTranscript={verifyTranscript}
+												/>
+											)}
+											{snap?.approvals.map(a => (
+												<ApprovalCard
+													key={a.requestId}
+													requestId={a.requestId}
+													tool={a.tool}
+													prompt={a.prompt}
+													onDecide={onDecideApproval}
+												/>
+											))}
+											{ask && onAskAnswer && (
+												<div className="gui-ask-float" ref={askFloatRef}>
+													<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />
+												</div>
+											)}
+											{/* Layer-1 session-tree nav chrome: breadcrumb path + fork hint
+											 * above the composer (root > … > leaf, click any segment to jump). */}
+											{currentLeafKey !== null && (
+												<SessionTreeNav
+													segments={breadcrumb}
+													activeLeafIsHistorical={leafChildren.length > 0}
+													activeLeafLabel={labelOf({ id: effectiveLeaf ?? "" }, t("transcript.thisNode"))}
+													onJump={id => {
+														// /tree parity: 点击路径段 = 切换 leaf 到该节点
+														// (旧尾部保留为 sibling branch),非仅滚动。
+														switchToNode(id);
+													}}
+												/>
+											)}
+											{readOnly ? (
+												<div className="gui-readonly-bar" role="note">
+													<Icon name="sparkling" className="h-3.5 w-3.5" />
+													<span>{t("general.advisorTranscriptReadonly")}</span>
+												</div>
+											) : (
+												<Composer
+													working={snap?.working ?? false}
+													entries={snap?.entries ?? []}
+													petMood={moodFromState({
+														working: snap?.working ?? false,
+														streaming: snap?.streaming ?? false,
+														hasApprovals: (snap?.approvals.length ?? 0) > 0,
+													})}
+													petState={stateFromSignals({
+														working: snap?.working ?? false,
+														streaming: snap?.streaming ?? false,
+														approvals: snap?.approvals.length ?? 0,
+													})}
+													onSend={sendAndCloseJump}
+													onStop={() => void handleStop()}
+													rpc={rpc}
+													sessionId={store.sessionId}
+													cwd={store.cwd}
+													thinkingLevel={thinkingLevel}
+													thinkingConfigLevel={thinkingInfoAuto ? "auto" : thinkingLevel}
+													onSetThinking={setThinking}
+													onModelChange={onComposerModelChange}
+													onAddProvider={onAddProvider}
+													attachApiRef={attachApiRef}
+													thinkingCeiling={thinkingCeiling}
+													thinkingEfforts={thinkingEfforts}
+													presetModelId={presetModelId}
+													welcome={showWelcome}
+													quotes={quotes}
+													onQuotesChange={setQuotes}
+													pendingEdit={pendingEdit}
+													onEditConsumed={() => setPendingEdit(null)}
+													focused={focusMode}
+													onToggleFocus={onToggleFocus}
+													onBtw={q => setBtwQuestion(q)}
+													activeTask={
+														displaySettings["display.taskCardStyle"] === "classic"
+															? null
+															: ([...(snap?.activeTools?.values() ?? [])]
+																	.filter(t => t.toolName === "task")
+																	.at(-1) ?? null)
+													}
+													swarmHost={host}
+												/>
 											)}
 										</div>
-										{/* Turn-position rail: a marker per user message — hover previews
-										 * the prompt, click jumps to that turn. In canvas mode
-										 * the transcript scroller does not exist, so the rail
-										 * switches to the active-path source below and clicks
-										 * hand the node over to the map. */}
-										<TurnRail
-											rootRef={transcriptRef}
-											entryCount={snap?.entries.length ?? 0}
-											nodeTurns={viewMode === "canvas" ? canvasRail.turns : undefined}
-											activeTurnIndex={viewMode === "canvas" ? canvasRail.activeIdx : null}
-											onSelectNode={id => setCanvasFocus(prev => ({ id, nonce: (prev?.nonce ?? 0) + 1 }))}
-											turnsData={viewMode === "canvas" ? undefined : turnsData}
-											onJumpToTurn={entryId => requestJump({ entryId })}
-										/>
-									</div>
-									{/* ⌘F find bar: floats over the conversation's
-									 * top edge. It is a child of .gui-chat-body — the chat column's own
-									 * box, and therefore its offset parent. NOT .gui-transcript-wrap:
-									 * the pause banner sits in flow
-									 * above the wrap, so the two boxes differ, and an earlier revision
-									 * wrongly assumed the wrap was the ancestor. Absolutely positioned
-									 * on purpose: a bar in flow would re-measure every virtual row. */}
-									{findOpen && (
-										<ChatFind
-											hits={findHits}
-											index={findIndex}
-											query={findQuery}
-											searching={findSearching}
-											onQuery={setFindQuery}
-											onPrev={() => stepFind(-1)}
-											onNext={() => stepFind(1)}
-											onClose={closeFind}
-											onJumpTo={jumpToHit}
-										/>
-									)}
-									<div
-										ref={composerWrapRef}
-										className={
-											focusMode
-												? "gui-composer-wrap gui-composer-wrap--bottom-anchor flex min-h-0 flex-col px-5 pb-3"
-												: "gui-composer-wrap gui-composer-wrap--floating flex flex-col px-5 pb-1"
-										}
-									>
-										{/* Jump-back dock (TUI navigateTree parity, 2026-08-25):
-										 * a floating card above the input — shows the target of the
-										 * last 撤回 (non-destructive branchAt leaf move) with an
-										 * explicit undo (jump back to the leaf we came from; the
-										 * old tail stays on the tree as a sibling branch either
-										 * way). Lives OUTSIDE the transcript so it never scrolls
-										 * away; appears/disappears and expands with the shared
-										 * Reveal motion (fade + collapse). */}
-										<Reveal open={jumpBack !== null}>
-											<div className="gui-revert-dock" role="region" aria-label={t("general.jumpedBack")}>
-												<div
-													role="button"
-													tabIndex={0}
-													className="gui-revert-dock-head"
-													onClick={() => setJumpDockOpen(v => !v)}
-													onKeyDown={e => {
-														if (e.key === "Enter" || e.key === " ") {
-															e.preventDefault();
-															setJumpDockOpen(v => !v);
-														}
-													}}
-													aria-expanded={jumpDockOpen}
-												>
-													<Icon
-														name="arrow-go-back"
-														className="h-3.5 w-3.5 flex-shrink-0 text-[var(--color-warning)]"
-													/>
-													<span className="gui-revert-dock-title" title={jumpBack?.text}>
-														{jumpBack
-															? t("general.jumpedBack2") + (jumpBack.text ? `: ${jumpBack.text}` : "")
-															: t("general.jumpedBack")}
-													</span>
-													<button
-														type="button"
-														className="gui-pane-action !w-auto px-1.5"
-														title={t("general.undoJump")}
-														onClick={e => {
-															// The head is a click target for collapse/expand —
-															// don't toggle it when the undo button fires.
-															e.stopPropagation();
-															void undoJumpBack();
-														}}
-													>
-														<Icon name="arrow-go-forward" className="h-3 w-3" />
-													</button>
-													<button
-														type="button"
-														className="gui-pane-action !w-auto px-1.5"
-														title={t("settings.close")}
-														onClick={e => {
-															// #12: dismiss the dock but STAY at the reverted
-															// position — the sibling branch stays on the tree,
-															// reachable again via the breadcrumb or the row
-															// buttons. The undo button above keeps its role.
-															e.stopPropagation();
-															setJumpBack(null);
-															setJumpDockOpen(false);
-														}}
-													>
-														<Icon name="close" className="h-3 w-3" />
-													</button>
-													<Icon
-														name="arrow-down-s"
-														className={`gui-revert-dock-chevron${jumpDockOpen ? " gui-revert-dock-chevron--open" : ""}`}
-														aria-hidden="true"
-													/>
-												</div>
-
-												<Reveal open={jumpDockOpen}>
-													<div className="gui-revert-dock-body">
-														<div className="gui-revert-item">
-															<span className="gui-revert-item-text" title={jumpBack?.text}>
-																{jumpBack?.text ?? ""}
-															</span>
-														</div>
-														<p className="gui-revert-hint">{t("general.jumpBackHint")}</p>
-													</div>
-												</Reveal>
-											</div>
-										</Reveal>
-										{/* Session-level failure dock: a round the runtime gave up on, or one
-										 *  that produced neither a reply nor an error. Docked above the composer
-										 *  rather than in the message flow, and cleared by the next send. */}
-										{!readOnly && (
-											<SessionErrorDock
-												entries={visibleEntries}
-												working={snap?.working ?? false}
-												verifyTranscript={verifyTranscript}
-											/>
-										)}
-										{snap?.approvals.map(a => (
-											<ApprovalCard
-												key={a.requestId}
-												requestId={a.requestId}
-												tool={a.tool}
-												prompt={a.prompt}
-												onDecide={onDecideApproval}
-											/>
-										))}
-										{ask && onAskAnswer && (
-											<div className="gui-ask-float" ref={askFloatRef}>
-												<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />
-											</div>
-										)}
-										{/* Layer-1 session-tree nav chrome: breadcrumb path + fork hint
-										 * above the composer (root > … > leaf, click any segment to jump). */}
-										{currentLeafKey !== null && (
-											<SessionTreeNav
-												segments={breadcrumb}
-												activeLeafIsHistorical={leafChildren.length > 0}
-												activeLeafLabel={labelOf({ id: effectiveLeaf ?? "" }, t("transcript.thisNode"))}
-												onJump={id => {
-													// /tree parity: 点击路径段 = 切换 leaf 到该节点
-													// (旧尾部保留为 sibling branch),非仅滚动。
-													switchToNode(id);
-												}}
-											/>
-										)}
-										{readOnly ? (
-											<div className="gui-readonly-bar" role="note">
-												<Icon name="sparkling" className="h-3.5 w-3.5" />
-												<span>{t("general.advisorTranscriptReadonly")}</span>
-											</div>
-										) : (
-											<Composer
-												working={snap?.working ?? false}
-												entries={snap?.entries ?? []}
-												petMood={moodFromState({
-													working: snap?.working ?? false,
-													streaming: snap?.streaming ?? false,
-													hasApprovals: (snap?.approvals.length ?? 0) > 0,
-												})}
-												petState={stateFromSignals({
-													working: snap?.working ?? false,
-													streaming: snap?.streaming ?? false,
-													approvals: snap?.approvals.length ?? 0,
-												})}
-												onSend={sendAndCloseJump}
-												onStop={() => void handleStop()}
-												rpc={rpc}
-												sessionId={store.sessionId}
-												cwd={store.cwd}
-												thinkingLevel={thinkingLevel}
-												thinkingConfigLevel={thinkingInfoAuto ? "auto" : thinkingLevel}
-												onSetThinking={setThinking}
-												onModelChange={onComposerModelChange}
-												onAddProvider={onAddProvider}
-												attachApiRef={attachApiRef}
-												thinkingCeiling={thinkingCeiling}
-												thinkingEfforts={thinkingEfforts}
-												presetModelId={presetModelId}
-												welcome={showWelcome}
-												quotes={quotes}
-												onQuotesChange={setQuotes}
-												pendingEdit={pendingEdit}
-												onEditConsumed={() => setPendingEdit(null)}
-												focused={focusMode}
-												onToggleFocus={onToggleFocus}
-												onBtw={q => setBtwQuestion(q)}
-												activeTask={
-													displaySettings["display.taskCardStyle"] === "classic"
-														? null
-														: ([...(snap?.activeTools?.values() ?? [])]
-																.filter(t => t.toolName === "task")
-																.at(-1) ?? null)
-												}
-												swarmHost={host}
+										{/* Floating session info card — the manual reveal while the
+										 * right panel is open, or a narrow row's fallback for the dock.
+										 * INSIDE this column (never over the rail or the open panel)
+										 * and below the header row; z-index 3 keeps it under menus
+										 * and tooltips. Mounted through its exit window so closing
+										 * fades instead of blinking out. */}
+										{sessionInfoFloatPresence.mounted && (
+											<SessionInfoCard
+												{...sessionInfoCardProps}
+												mode="float"
+												closing={sessionInfoFloatPresence.closing}
 											/>
 										)}
 									</div>
-									{/* Floating session info card — the manual reveal while the
-									 * right panel is open, or a narrow row's fallback for the dock.
-									 * INSIDE this column (never over the rail or the open panel)
-									 * and below the header row; z-index 3 keeps it under menus
-									 * and tooltips. Mounted through its exit window so closing
-									 * fades instead of blinking out. */}
-									{sessionInfoFloatPresence.mounted && (
-										<SessionInfoCard
-											{...sessionInfoCardProps}
-											mode="float"
-											closing={sessionInfoFloatPresence.closing}
-										/>
+									{/* Docked session info column — the collapsed right panel's
+									 * stand-in. Its own flex column between the chat column and
+									 * the panel host, same card gutter as the panel, so it reads
+									 * as a third workspace card instead of an overlay. The
+									 * wrapper stays in the row (width 0 while closed) so opening
+									 * and closing push/pull the chat column on one spring. */}
+									{!focusMode && (
+										<div
+											className={`gui-session-info-seat${sessionInfoDockOpen ? "" : " gui-session-info-seat--closed"}`}
+											inert={sessionInfoDockOpen ? undefined : true}
+										>
+											{sessionInfoDockPresence.mounted && (
+												<SessionInfoCard {...sessionInfoCardProps} mode="dock" />
+											)}
+										</div>
 									)}
 								</div>
-								{/* Docked session info column — the collapsed right panel's
-								 * stand-in. Its own flex column between the chat column and
-								 * the panel host, same card gutter as the panel, so it reads
-								 * as a third workspace card instead of an overlay. The
-								 * wrapper stays in the row (width 0 while closed) so opening
-								 * and closing push/pull the chat column on one spring. */}
-								{!focusMode && (
-									<div
-										className={`gui-session-info-seat${sessionInfoDockOpen ? "" : " gui-session-info-seat--closed"}`}
-										inert={sessionInfoDockOpen ? undefined : true}
-									>
-										{sessionInfoDockPresence.mounted && (
-											<SessionInfoCard {...sessionInfoCardProps} mode="dock" />
-										)}
-									</div>
-								)}
-								{/* Right panel stays mounted so the width collapse animates;
-								 * `open` folds it to a 0px sliver instead of unmounting. */}
-								<SlotComponentHost
-									slot={PANEL_SHELL_SLOT}
-									rpc={rpc}
-									panelShell={{
-										snap,
-										rpc,
-										open: rightPanelOpen && !focusMode,
-										openRequest: openFileReq,
-										browserOpenRequest: openBrowserReq,
-										onBrowserTakeover: onStop,
-										onViewChange: setActiveView,
-										panelTabs,
-										onExpandPanel: onExpandRightPanel,
-										agentId: panelAgentId,
-										onAgentSelect: selectAgent,
-										onOpenSession,
-										onNewSession: text => onSubmitNewSession(text),
-										agentHost: host,
-										extTabs,
-										overviewEntries,
-										overviewLoading: snap?.historyLoading === true,
-										overviewError: store?.historyBlocked ?? false,
-										onLoadOlderHistory: onLoadOlderStable,
-										onJumpToEntry: entryId => requestJump({ entryId }),
-										leafId: effectiveLeaf,
-										activePathIds: trustedPathIds,
-										pathEntries: pathEntriesOrNull,
-										modeCatalog: modes,
-										planShowRequest,
-										onBranchTo: id => {
-											void branchTo(id, id).then(res => {
-												if (res?.editorText) setPendingEdit(res.editorText);
-											});
-										},
-										onSwitchTo: id => {
-											setPendingEdit(null);
-											void switchToNode(id, { backfillDraft: false });
-										},
-										onForkAt: id => {
-											const entry = snap?.entries.find(e => e.id === id);
-											const isUser = entry?.type === "message" && entry.message.role === "user";
-											void forkFromMessage(id, undefined, !isUser);
-										},
-									}}
-								/>
-								{/* Right-edge 44px icon rail: tool icons + panel fold toggle + extension
-								 * rail.right slot. Sibling of the panel at the surface's
-								 * right edge. */}
-								<RightRail
-									sessionId={store?.sessionId ?? null}
-									cwd={store?.cwd ?? ""}
-									rpc={rpc}
-									openSurfaces={openSurfaces}
-									rightPanelOpen={rightPanelOpen && !focusMode}
-									terminalOpen={terminalOpen}
-									onToggleTerminal={onToggleTerminal}
-									extTabs={extTabs}
-									onSelect={id => {
-										// Same view while open → collapse (Chrome side-panel
-										// semantics); otherwise select and expand.
-										if (id === activeView && rightPanelOpen && !focusMode) {
-											onToggleRightPanel?.();
-											return;
-										}
-										setActiveView(id);
-										if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
-									}}
-									onSelectNew={id => {
-										// M1.12: middle-click / ⌘-click means "another one of
-										// these" — a new instance, not a focus. The panel also
-										// has to be showing for a second instance to be
-										// reachable, so this expands rather than folds.
-										if (id === "browser") openBrowserPanel(true);
-										else panelTabs.open({ surface: id, label: tabLabelFor(id) }, { forceNew: true });
-										if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
-									}}
-									onToggleRightPanel={onToggleRightPanel}
-								/>
 							</div>
-						</div>
+						)}
+					</div>
+					{/* Right panel stays mounted so the width collapse animates;
+					 * `open` folds it to a 0px sliver instead of unmounting. The
+					 * mini window has no workspace chrome: no rail, no panel. */}
+					{!mini && (
+						<>
+							<SlotComponentHost
+								slot={PANEL_SHELL_SLOT}
+								rpc={rpc}
+								panelShell={{
+									snap,
+									rpc,
+									cwd: store?.cwd ?? project ?? "",
+									open: rightPanelOpen && !focusMode,
+									openRequest: openFileReq,
+									browserOpenRequest: openBrowserReq,
+									onBrowserTakeover: onStop,
+									onViewChange: setActiveView,
+									panelTabs,
+									onExpandPanel: onExpandRightPanel,
+									agentId: panelAgentId,
+									onAgentSelect: selectAgent,
+									onOpenSession,
+									onNewSession: text => onSubmitNewSession(text),
+									agentHost: host,
+									extTabs,
+									overviewEntries,
+									overviewLoading: snap?.historyLoading === true,
+									overviewError: store?.historyBlocked ?? false,
+									onLoadOlderHistory: onLoadOlderStable,
+									onJumpToEntry: entryId => requestJump({ entryId }),
+									leafId: effectiveLeaf,
+									activePathIds: trustedPathIds,
+									pathEntries: pathEntriesOrNull,
+									modeCatalog: modes,
+									planShowRequest,
+									onBranchTo: id => {
+										void branchTo(id, id).then(res => {
+											if (res?.editorText) setPendingEdit(res.editorText);
+										});
+									},
+									onSwitchTo: id => {
+										setPendingEdit(null);
+										void switchToNode(id, { backfillDraft: false });
+									},
+									onForkAt: id => {
+										const entry = snap?.entries.find(e => e.id === id);
+										const isUser = entry?.type === "message" && entry.message.role === "user";
+										void forkFromMessage(id, undefined, !isUser);
+									},
+								}}
+							/>
+							{/* Right-edge 44px icon rail: tool icons + panel fold toggle + extension
+							 * rail.right slot. Sibling of the panel at the surface's
+							 * right edge; present on the welcome scene too. */}
+							<RightRail
+								sessionId={store?.sessionId ?? null}
+								cwd={store?.cwd ?? project ?? ""}
+								rpc={rpc}
+								openSurfaces={openSurfaces}
+								rightPanelOpen={rightPanelOpen && !focusMode}
+								terminalOpen={terminalOpen}
+								onToggleTerminal={onToggleTerminal}
+								extTabs={extTabs}
+								onSelect={id => {
+									// Same view while open → collapse (Chrome side-panel
+									// semantics); otherwise select and expand.
+									if (id === activeView && rightPanelOpen && !focusMode) {
+										onToggleRightPanel?.();
+										return;
+									}
+									setActiveView(id);
+									if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+								}}
+								onSelectNew={id => {
+									// M1.12: middle-click / ⌘-click means "another one of
+									// these" — a new instance, not a focus. The panel also
+									// has to be showing for a second instance to be
+									// reachable, so this expands rather than folds.
+									if (id === "browser") openBrowserPanel(true);
+									else panelTabs.open({ surface: id, label: tabLabelFor(id) }, { forceNew: true });
+									if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+								}}
+								onToggleRightPanel={onToggleRightPanel}
+							/>
+						</>
 					)}
 				</div>
 				{btwQuestion !== null && !focusMode && (

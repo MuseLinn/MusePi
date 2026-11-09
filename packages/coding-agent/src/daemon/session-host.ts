@@ -28,7 +28,7 @@ import * as path from "node:path";
 import type { AgentEvent } from "@musepi/pi-agent-core";
 import { AgentPauseGate } from "@musepi/pi-agent-core";
 import { DesktopSession } from "@musepi/pi-natives";
-import { getAgentDir, getSessionsDir, logger, prompt, removeWithRetries } from "@musepi/pi-utils";
+import { getAgentDir, getSessionsDir, logger, removeWithRetries } from "@musepi/pi-utils";
 import { advisorNoteText, isTurnStartEntry, type SessionEntry, type WireMessage } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
@@ -44,8 +44,8 @@ import type { FileSlashCommand } from "../extensibility/slash-commands";
 import { FileIndexService } from "../file-index";
 import type { MCPManager } from "../mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "../mcp/startup-events";
+import { initializeExtensions } from "../modes/runtime-init";
 import { computeContextBreakdown } from "../modes/utils/context-usage";
-import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
 import type { AuthStorage } from "../session/auth-storage";
 import type { SessionInfo, SessionStatus } from "../session/session-listing";
 import { subagentParentIdOf } from "../session/session-listing";
@@ -55,7 +55,7 @@ import type { ConfiguredThinkingLevel } from "../thinking";
 import type { CollabToolHandle } from "../tools/collab";
 import { previewLine, TRUNCATE_LENGTHS } from "../tools/render-utils";
 import type { ScheduledTaskHandle } from "../tools/schedule-task";
-import { nextActionableTask, type TodoPhase } from "../tools/todo";
+import type { TodoPhase } from "../tools/todo";
 import { validateProjectMetadata, writeProjectMirror } from "./creation";
 import { createExtensionManagerTools } from "./extension-lifecycle-tools";
 import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
@@ -726,8 +726,6 @@ export const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
  *  (long idle gap) interleaves with other traffic instead of flooding. */
 const CATCHUP_PAGE_SIZE = 500;
 /** Idle-recap delay bounds (TUI event-controller parity). */
-const IDLE_RECAP_MIN_SECONDS = 1;
-const IDLE_RECAP_MAX_SECONDS = 3600;
 
 // ── JSON-RPC 2.0 ────────────────────────────────────────────────────────────
 
@@ -853,10 +851,6 @@ export interface LiveSession {
 	lastActivity: number;
 	/** Idle timer; cleared on close/dispose. */
 	idleTimer: ReturnType<typeof setTimeout> | null;
-	/** Idle-recap timer (TUI parity); cleared on close/dispose. */
-	recapTimer: Timer | null;
-	/** In-flight ephemeral recap turn; aborted on any activity. */
-	recapAbort: AbortController | null;
 	/** Un-sent composer draft (GUI reports via session.setDraft) — the
 	 *  daemon-side analogue of the TUI's editor-draft recap guard. */
 	editorDraft: boolean;
@@ -1582,6 +1576,12 @@ export class DaemonSessionHost {
 			await result.session.dispose?.();
 			throw new Error(`Unknown session: ${sessionId}`);
 		}
+		// Skill discovery is preloaded for the primary root. A resumed session
+		// restores its additional roots from the header, so rediscover once those
+		// roots are in the manager or their project skills would be missing.
+		if (manager.getAdditionalDirectories().length > 0) {
+			await result.session.refreshSkills();
+		}
 		return this.#adoptAgentSession(result.session, resumeCwd, result.setToolUIContext, null, pauseGate);
 	}
 
@@ -1786,8 +1786,6 @@ export class DaemonSessionHost {
 			runRecorder: new RunRecorder(sessionId),
 			lastActivity: Date.now(),
 			idleTimer: null,
-			recapTimer: null,
-			recapAbort: null,
 			editorDraft: false,
 			approvals,
 			clientRequests: new Map(),
@@ -1839,7 +1837,6 @@ export class DaemonSessionHost {
 			dispose: () => {
 				void live.ownerLock?.release();
 				live.ownerLock = null;
-				this.#cancelIdleRecap(live);
 				unsubscribeName();
 				unsubscribeProgress();
 				unsubscribeLifecycle();
@@ -1865,8 +1862,34 @@ export class DaemonSessionHost {
 				});
 			},
 		};
+		await initializeExtensions(agentSession, {
+			reportSendError: (action, error) => {
+				logger.warn("extension send failed", { action, error: String(error) });
+			},
+			reportRuntimeError: error => {
+				logger.warn("extension runtime error", {
+					extension: error.extensionPath,
+					error: String(error.error),
+				});
+			},
+			mode: "rpc",
+			uiContext: approvals.uiContext,
+			// `createAgentSession` already emitted `session_start` for this session.
+			emitSessionStart: false,
+			showRecap: reply => {
+				const text = previewLine(reply, TRUNCATE_LENGTHS.RECAP);
+				if (!text) return;
+				const payload = { text, at: Date.now() };
+				for (const send of live.subscribers.values()) {
+					try {
+						send({ kind: "recap", seq: 0, payload });
+					} catch {
+						// subscriber socket died; removed on close
+					}
+				}
+			},
+		});
 		// Subscribe-time hydration ledger: retain currently-executing tool
-		// calls so a GUI re-subscribe can restore the composer's running-tool
 		// visuals (the tool_execution_* envelopes are stream-only — a fresh
 		// client store would otherwise start blank until the next tool fires).
 		const trackActiveToolCall = (event: {
@@ -1983,22 +2006,7 @@ export class DaemonSessionHost {
 			) {
 				this.#noteActivity(sessionId);
 			}
-			// New activity cancels the idle recap (TUI parity: a fresh turn,
-			// user message or compaction supersedes it). Passive frames —
-			// streaming updates, tool progress, notices, retries — do NOT,
-			// or a post-agent_end notice would kill the recap we just armed.
-			if (
-				event.type === "agent_start" ||
-				event.type === "turn_start" ||
-				event.type === "message_start" ||
-				event.type === "tool_execution_start" ||
-				event.type === "auto_compaction_start"
-			) {
-				this.#cancelIdleRecap(live);
-			}
-			// A finished turn re-arms it for the next idle window.
 			if (event.type === "agent_end") {
-				this.#scheduleIdleRecap(live);
 				this.onAgentEnd?.(live, event);
 			}
 			// Live 消息树 seam(/tree 语义,2026-08-21):见 stampLiveMessageParentId。
@@ -2466,7 +2474,6 @@ export class DaemonSessionHost {
 		const live = this.#sessions.get(sessionId);
 		if (!live) return;
 		live.lastActivity = Date.now();
-		this.#cancelIdleRecap(live);
 		this.#rearmIdleTimer(sessionId, live);
 	}
 
@@ -2514,7 +2521,6 @@ export class DaemonSessionHost {
 		const live = this.#sessions.get(sessionId);
 		if (!live) return;
 		live.editorDraft = draft;
-		if (draft) this.#cancelIdleRecap(live);
 	}
 
 	/**
@@ -2539,95 +2545,6 @@ export class DaemonSessionHost {
 		// Policy lives in `idleDisposePlan` (pure, clock injected) — a working
 		// session is never reaped here (issue #16).
 		for (const id of idleDisposePlan(this.#sessions, now)) this.close(id);
-	}
-
-	/** Cancel the idle-recap timer and any in-flight recap turn. */
-	#cancelIdleRecap(live: LiveSession): void {
-		if (live.recapTimer) {
-			clearTimeout(live.recapTimer);
-			live.recapTimer = null;
-		}
-		if (live.recapAbort) {
-			live.recapAbort.abort();
-			live.recapAbort = null;
-		}
-	}
-
-	/**
-	 * Arm the idle recap after a finished turn (TUI event-controller parity):
-	 * wait `recap.idleSeconds` of quiet, then run an ephemeral LLM summary.
-	 */
-	#scheduleIdleRecap(live: LiveSession): void {
-		this.#cancelIdleRecap(live);
-		if (live.agentSession.isCompacting) return;
-		if (live.editorDraft) return;
-		const recap = this.#settings?.getGroup("recap");
-		if (!recap?.enabled) return;
-		const seconds = Math.max(IDLE_RECAP_MIN_SECONDS, Math.min(IDLE_RECAP_MAX_SECONDS, recap.idleSeconds));
-		live.recapTimer = setTimeout(() => {
-			live.recapTimer = null;
-			void this.#runIdleRecap(live);
-		}, seconds * 1000);
-		live.recapTimer.unref?.();
-	}
-
-	/**
-	 * Generate the idle recap with an ephemeral side-channel turn (same
-	 * pipeline as the TUI's recap-user.md prompt) and push it to subscribers
-	 * as a `recap` envelope. Abortable: any wire activity cancels it, and
-	 * idle conditions are re-checked before firing and after the reply lands
-	 * so a stale recap never paints over fresh work.
-	 */
-	async #runIdleRecap(live: LiveSession): Promise<void> {
-		if (!this.#idleRecapConditionsHold(live)) return;
-		if (!live.agentSession.model) return;
-		if (live.view.snapshot().entries.length === 0) return;
-
-		// TUI parity anchors: the live goal objective (falling back to the
-		// session title) and the first actionable todo task. AgentSession
-		// exposes the same controller state modesOf() reads for the GUI badges.
-		const modeSession = live.agentSession as unknown as ModeSessionLike;
-		const goal =
-			modeSession.getGoalModeState?.()?.goal?.objective?.trim() ||
-			live.agentSession.sessionManager.getSessionName()?.trim() ||
-			"";
-		const task = nextActionableTask(modeSession.getTodoPhases?.() ?? [])?.content ?? "";
-		// Follow the interface language (settings.locale): zh-CN recaps are
-		// written in Chinese, en-US in English.
-		const locale = this.#settings?.get("settings.locale") as string | undefined;
-		const language = locale === "zh-CN" ? "Chinese (简体中文)" : undefined;
-		const promptText = prompt.render(idleRecapPrompt, { goal, task, language });
-
-		const abort = new AbortController();
-		live.recapAbort = abort;
-		try {
-			const { replyText } = await live.agentSession.runEphemeralTurn({ promptText, signal: abort.signal });
-			if (live.recapAbort !== abort || abort.signal.aborted || !this.#idleRecapConditionsHold(live)) return;
-			const text = previewLine(replyText, TRUNCATE_LENGTHS.RECAP);
-			if (!text) return;
-			const seq = 0;
-			const payload = { text, at: Date.now() };
-			for (const send of live.subscribers.values()) {
-				try {
-					send({ kind: "recap", seq, payload });
-				} catch {
-					// subscriber socket died; removed on close
-				}
-			}
-		} catch {
-			// Recap is best-effort (same as the TUI's debug-level failure path).
-		} finally {
-			if (live.recapAbort === abort) live.recapAbort = null;
-		}
-	}
-
-	/** Idle gate shared by the recap timer fire and its post-reply re-check. */
-	#idleRecapConditionsHold(live: LiveSession): boolean {
-		if (!this.#sessions.has(live.sessionId)) return false;
-		if (live.agentSession.isStreaming) return false;
-		if (live.agentSession.isCompacting) return false;
-		if (live.editorDraft) return false;
-		return true;
 	}
 
 	async snapshot(sessionId: string): Promise<Static<typeof sessionSnapshot>> {

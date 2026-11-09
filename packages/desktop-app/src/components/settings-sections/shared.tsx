@@ -107,17 +107,3 @@ export interface McpItem {
 	state: "active" | "disabled" | "shadowed";
 	source: { provider: string; providerName: string; level: "user" | "project" | "native" };
 }
-
-/** One hit from daemon session.search (view-store materialized tables). */
-export interface SearchHit {
-	sessionId: string;
-	seq: number;
-	role: string;
-	model: string | null;
-	content: string;
-	timestamp: number;
-}
-export interface SearchResult {
-	matches: SearchHit[];
-	sessions: { sessionId: string; messageCount: number }[];
-}

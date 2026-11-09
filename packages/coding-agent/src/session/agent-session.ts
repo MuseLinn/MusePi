@@ -148,6 +148,7 @@ import { emitSessionShutdownEvent } from "../extensibility/extensions";
 import { ManagedTimers } from "../extensibility/extensions/managed-timers";
 import { ExtensionMcpRegistry } from "../extensibility/extensions/mcp-servers";
 import { createExtensionModelQuery } from "../extensibility/extensions/model-api";
+import { emitSessionStartEvent } from "../extensibility/extensions/runner";
 import {
 	ExtensionScheduler,
 	frameScheduledPrompt,
@@ -199,6 +200,7 @@ import {
 	obfuscateProviderContext,
 } from "../secrets/message-transform";
 import type { SecretObfuscator } from "../secrets/obfuscator";
+import { loadProjectContextFiles } from "../system-prompt";
 import {
 	AUTO_THINKING,
 	type ConfiguredThinkingLevel,
@@ -350,6 +352,7 @@ import {
 	queueChipText,
 	toRestoredQueuedMessage,
 } from "./queued-messages";
+import { buildReloadReminder, type ReloadSnapshot } from "./reload-reminder";
 import type { ServingModel } from "./retry-fallback-chains";
 import type { AdvisorStats, SessionAdvisors, SessionAdvisorsHost } from "./session-advisors";
 import type { BuildSessionContextOptions, SessionContext } from "./session-context";
@@ -598,6 +601,7 @@ export class AgentSession {
 	/** Prompt host teardown attached by the session creator; runs once in dispose. */
 	#promptHostClose: (() => void) | undefined;
 	#collectPromptContexts: (() => PromptContextMessage[]) | undefined;
+	#reloadContextFiles: (() => Promise<void>) | undefined;
 	#goalTurnCounter = 0;
 	#planReferenceSent = false;
 	#planReferencePath = "local://PLAN.md";
@@ -675,18 +679,16 @@ export class AgentSession {
 	// Extension system
 	#extensionRunner: ExtensionRunner | undefined = undefined;
 	/**
-	 * P5 HMR busy gate: when a session-level extension reload is requested
-	 * while the session is streaming, the target entry is parked here (single
-	 * slot, last-wins) and performed at the next idle `agent_end`. Avoids a
-	 * half-replaced tool surface mid-turn without queues or locks.
+	 * P5 HMR / P0 自举 busy gate: session-level extension load, reload and
+	 * unload requested while the session is streaming are parked here and
+	 * performed at the next idle `agent_end`. Keyed by resolved entry path so
+	 * one package installing several entries parks all of them (a single slot
+	 * would silently drop every entry but the last), and successive requests
+	 * for the same entry collapse to the newest op. Insertion order is the
+	 * application order. Avoids a half-replaced tool surface mid-turn without
+	 * locks.
 	 */
-	#extensionReloadPending: string | undefined = undefined;
-	/**
-	 * P0 自举:session-level extension load(extension_load 工具)busy gate —
-	 * same single-slot park as {@link #extensionReloadPending}, drained at the
-	 * next idle `agent_end`.
-	 */
-	#extensionLoadPending: string | undefined = undefined;
+	#pendingExtensionOps = new Map<string, { op: "load" | "reload" | "unload"; entryPath: string }>();
 	/**
 	 * Modes v2: session-level mode hot-switch, wired by the SDK session
 	 * factory (docs/archive/modes-plan.md §6.2). Undefined for sessions without a
@@ -788,6 +790,8 @@ export class AgentSession {
 	// Cursor exec, TUI listeners) is held back. Without this, a client that resumes
 	// on `agent_end` can fire its next `prompt` before #promptWithMessage's finally
 	#promptGeneration = 0;
+	/** Monotonic count of admitted prompts; guards work resumed across an in-flight wait. */
+	#promptSequence = 0;
 	#pendingAgentEndEmit: AgentSessionEvent | undefined;
 	#inFlightSettledCallbacks: Array<() => void | Promise<void>> = [];
 	#sessionStopContinuationCount = 0;
@@ -800,6 +804,15 @@ export class AgentSession {
 	#lastCompletedRewind: CompletedRewindState | undefined = undefined;
 	#rewoundToolResultIds = new Set<string>();
 	#lastSuccessfulYieldToolCallId: string | undefined = undefined;
+	/**
+	 * Speculation that was in flight when a handoff skipped this turn's
+	 * post-turn maintenance. If that turn then fails with a context overflow or
+	 * an output-length stop, awaiting it lets the recovery reuse a summary
+	 * already being written instead of discarding it and starting over.
+	 */
+	#skippedPostTurnSpeculationCompletion: Promise<void> | undefined = undefined;
+	/** One-shot notebook reminder queued near the rollover threshold. */
+	#experimentalContextNotesReminder: { prompt: string; generation: number } | undefined;
 	/**
 	 * Sticky across an in-flight prompt run: a successful `yield` makes the run
 	 * terminal for execution purposes, so any trailing empty/aborted assistant
@@ -1061,11 +1074,9 @@ export class AgentSession {
 		if (!pending) return;
 		this.#pendingAgentEndEmit = undefined;
 		this.#emit(pending);
-		// P5 HMR: this is the settle flush for a deferred agent_end (prompt
-		// count just hit 0) — perform a parked extension reload now.
-		this.#drainPendingExtensionReload();
-		// P0 自举: same settle boundary performs a parked extension load.
-		this.#drainPendingExtensionLoad();
+		// P5 HMR / P0 自举: this is the settle flush for a deferred agent_end
+		// (prompt count just hit 0) — perform parked extension ops now.
+		this.#drainPendingExtensionOps();
 		// Modes v2: same settle boundary applies a parked mode switch.
 		this.#drainPendingModeSwitch();
 	}
@@ -1219,6 +1230,7 @@ export class AgentSession {
 		this.#promptTemplates = config.promptTemplates ?? [];
 		this.#slashCommands = config.slashCommands ?? [];
 		this.#collectPromptContexts = config.collectPromptContexts;
+		this.#reloadContextFiles = config.reloadContextFiles;
 		this.#extensionRunner = config.extensionRunner;
 		this.#cacheWarmer = config.cacheWarmer;
 		if (config.cacheWarmer) {
@@ -1447,6 +1459,19 @@ export class AgentSession {
 			// Mid-run todo reconciliation — evaluated at injection time so a turn
 			// that flips a todo just before this poll suppresses the nudge.
 			thunks.push(() => this.#todo.takeMidRunNudge());
+			const reminder = this.#experimentalContextNotesReminder;
+			if (reminder) {
+				this.#experimentalContextNotesReminder = undefined;
+				if (reminder.generation === this.#promptGeneration) {
+					thunks.push(() => ({
+						role: "custom",
+						customType: "experimental-context-notes-reminder",
+						content: reminder.prompt,
+						display: false,
+						timestamp: Date.now(),
+					}));
+				}
+			}
 			return thunks;
 		});
 		this.#convertToLlm = config.convertToLlm ?? convertToLlm;
@@ -1762,6 +1787,22 @@ export class AgentSession {
 			setModelTemporary: (model, thinkingLevel, options) => this.setModelTemporary(model, thinkingLevel, options),
 			abort: options => this.abort(options),
 			abortHandoff: () => this.abortHandoff(),
+			hasExperimentalContextRolloverTools: () => {
+				const enabled = this.getEnabledToolNames();
+				return enabled.includes("context_notes") && enabled.includes("new_context");
+			},
+			takeExperimentalContextRolloverRequest: context => {
+				for (const toolResult of context?.toolResults ?? []) {
+					if (toolResult.isError || toolResult.toolName !== "new_context") continue;
+					const details = toolResult.details;
+					if (isRecord(details) && details.requested === true) return true;
+				}
+				return false;
+			},
+			queueExperimentalContextNotesReminder: prompt => {
+				if (this.#isDisposed) return;
+				this.#experimentalContextNotesReminder = { prompt, generation: this.#promptGeneration };
+			},
 		};
 		this.#maintenance = new SessionMaintenance(maintenanceHost);
 
@@ -2407,12 +2448,10 @@ export class AgentSession {
 		} finally {
 			resolve();
 		}
-		// P5 HMR: the agent loop is done (agent.state.isStreaming is false);
-		// a parked extension reload performs now unless a prompt is still in
+		// P5 HMR / P0 自举: the agent loop is done (agent.state.isStreaming is
+		// false); parked extension ops perform now unless a prompt is still in
 		// flight — that case drains at #flushPendingAgentEnd once idle.
-		this.#drainPendingExtensionReload();
-		// P0 自举: same settle boundary performs a parked extension load.
-		this.#drainPendingExtensionLoad();
+		this.#drainPendingExtensionOps();
 		// Modes v2: same idle boundary applies a parked mode switch.
 		this.#drainPendingModeSwitch();
 	};
@@ -2893,6 +2932,7 @@ export class AgentSession {
 				this.#ttsr.onAssistantMessageEnd(assistantMsg);
 				if (this.#handoff.isGeneratingHandoff) {
 					this.#maintenance.skipPostTurnMaintenanceAssistantTimestamp = assistantMsg.timestamp;
+					this.#skippedPostTurnSpeculationCompletion = this.#maintenance.speculationCompletion;
 				}
 				await this.#recovery.onAssistantSettledSuccessfully(assistantMsg);
 				// Broker deployments: report this request's burn so the broker can
@@ -3061,11 +3101,41 @@ export class AgentSession {
 			}
 
 			if (this.#maintenance.skipPostTurnMaintenanceAssistantTimestamp === msg.timestamp) {
+				const skippedSpeculationCompletion = this.#skippedPostTurnSpeculationCompletion;
 				this.#maintenance.skipPostTurnMaintenanceAssistantTimestamp = undefined;
+				this.#skippedPostTurnSpeculationCompletion = undefined;
 				this.#lastSuccessfulYieldToolCallId = undefined;
-				maintenanceRoute("skip-post-turn-maintenance");
-				await emitAgentEndNotification();
-				return;
+				const model = this.model;
+				const requiresSpeculativeRecovery =
+					model !== undefined &&
+					msg.provider === model.provider &&
+					msg.model === model.id &&
+					(msg.stopReason === "length" ||
+						(msg.stopReason === "error" && AIError.isContextOverflow(msg, model.contextWindow ?? 0)));
+				const speculationCompletion = requiresSpeculativeRecovery ? skippedSpeculationCompletion : undefined;
+				if (!speculationCompletion) {
+					maintenanceRoute("skip-post-turn-maintenance");
+					await emitAgentEndNotification();
+					return;
+				}
+				// The turn failed on size while its post-turn pass was skipped for
+				// handoff generation. Let the in-flight summary land so the resumed
+				// maintenance can splice it in instead of paying for another one.
+				const promptGeneration = this.#promptGeneration;
+				const promptSequence = this.#promptSequence;
+				maintenanceRoute("await-speculative-compaction");
+				await speculationCompletion;
+				if (
+					this.#isDisposed ||
+					this.#abortInProgress ||
+					this.#promptGeneration !== promptGeneration ||
+					this.#promptSequence !== promptSequence
+				) {
+					maintenanceRoute("skip-superseded-speculative-maintenance");
+					await emitAgentEndNotification();
+					return;
+				}
+				maintenanceRoute("resume-post-turn-maintenance");
 			}
 
 			const activeGoal = this.#goalModeState?.enabled === true && this.#goalModeState.goal.status === "active";
@@ -4416,6 +4486,7 @@ export class AgentSession {
 	/** Drop the in-memory conversation state after the terminal dispose flush. */
 	#releaseRetainedSessionMemory(): void {
 		this.agent.reset();
+		this.#experimentalContextNotesReminder = undefined;
 		this.agent.setAppendOnlyContext(undefined);
 		this.rawSseDebugBuffer.clear();
 		this.sessionManager.releaseRetainedEntries();
@@ -4498,6 +4569,7 @@ export class AgentSession {
 		// Drop the conversation: messages, queued steers/follow-ups, pending tool
 		// calls, and error state. agent.reset() keeps the model and system prompt.
 		this.agent.reset();
+		this.#experimentalContextNotesReminder = undefined;
 		this.#pendingNextTurnMessages = [];
 		this.#scheduledHiddenNextTurnGeneration = undefined;
 		// Reset the session_stop continuation chain: the queued continuation
@@ -4853,12 +4925,55 @@ export class AgentSession {
 	}
 
 	/**
+	 * Reload every currently loaded extension in this session.
+	 *
+	 * Busy sessions must be gated by the caller (the daemon reload RPC does
+	 * this): a mid-turn extension swap would remove tools the running turn may
+	 * still call. Failed entries keep their old instance, exactly like the
+	 * single-entry path.
+	 */
+	async reloadExtensions(): Promise<{ reloaded: number; removedTools: string[]; errors: string[] }> {
+		const runner = this.#extensionRunner;
+		if (!runner) return { reloaded: 0, removedTools: [], errors: [] };
+		if (this.isStreaming) return { reloaded: 0, removedTools: [], errors: [] };
+		const entryPaths = runner.getExtensionPaths();
+		const removedTools = new Set<string>();
+		const errors: string[] = [];
+		let reloaded = 0;
+		for (const entryPath of entryPaths) {
+			const result = await this.#performExtensionReload(entryPath);
+			for (const name of result.removedTools) removedTools.add(name);
+			if (result.errors.length === 0) reloaded += 1;
+			errors.push(...result.errors);
+		}
+		return { reloaded, removedTools: [...removedTools], errors };
+	}
+
+	/**
+	 * Re-run `session_start` handlers after a config/plugin reload.
+	 *
+	 * Emission itself rebuilds the session fiber, so it is skipped when no
+	 * `session_start` handler exists: opening a scope nothing registers into
+	 * would still dispose listeners the previous scope installed. Streaming is
+	 * refused for the same reason `reloadExtensions` refuses it — other live
+	 * sessions are refreshed best-effort and must not swap scopes mid-turn.
+	 */
+	async refreshSessionStart(): Promise<boolean> {
+		const runner = this.#extensionRunner;
+		if (!runner || this.isStreaming || !runner.hasHandlers("session_start")) return false;
+		return emitSessionStartEvent(runner, {
+			agentId: this.getAgentId(),
+			source: this.#agentKind === "sub" ? "subagent" : "main",
+		});
+	}
+
+	/**
 	 * Hot-reload one extension entry in this session (P5 HMR v2).
 	 *
-	 * Busy gate: while the session is streaming the reload is parked in a
-	 * single pending slot and performed at the next idle `agent_end` — the
-	 * caller still gets `{ deferred: true }` immediately so it can decide
-	 * when to surface the change. Idle sessions reload immediately.
+	 * Busy gate: while the session is streaming the reload is parked and
+	 * performed at the next idle `agent_end` — the caller still gets
+	 * `{ deferred: true }` immediately so it can decide when to surface the
+	 * change. Idle sessions reload immediately.
 	 *
 	 * On completion, tool names the replacement did NOT re-register are
 	 * dropped from the session tool registry (`removedTools` in the result);
@@ -4870,7 +4985,7 @@ export class AgentSession {
 		const runner = this.#extensionRunner;
 		if (!runner) return { removedTools: [], errors: [], deferred: false };
 		if (this.isStreaming) {
-			this.#extensionReloadPending = entryPath;
+			this.#parkExtensionOp(entryPath, "reload");
 			return { removedTools: [], errors: [], deferred: true };
 		}
 		return this.#performExtensionReload(entryPath);
@@ -4903,21 +5018,49 @@ export class AgentSession {
 	/**
 	 * Load one extension entry into this session at runtime (P0 自举 —
 	 * extension_load 工具后端). Same busy gate as {@link reloadExtension}:
-	 * streaming sessions park the load (single slot, last-wins) and perform
-	 * it at the next idle `agent_end`; the caller gets `{ deferred: true }`.
-	 * Already-loaded entries are a no-op. Tools/modes/prompt sections register
-	 * through the runner's registration listener (no manual re-fire needed).
+	 * streaming sessions park the load and perform it at the next idle
+	 * `agent_end`; the caller gets `{ deferred: true }`. Already-loaded entries
+	 * are a no-op. Tools/modes/prompt sections register through the runner's
+	 * registration listener (no manual re-fire needed).
 	 */
 	async loadExtension(entryPath: string): Promise<{ addedTools: string[]; errors: string[]; deferred: boolean }> {
 		const runner = this.#extensionRunner;
 		if (!runner) return { addedTools: [], errors: [], deferred: false };
 		const resolvedTarget = path.resolve(entryPath);
-		if (runner.isExtensionLoaded(resolvedTarget)) return { addedTools: [], errors: [], deferred: false };
+		if (runner.isExtensionLoaded(resolvedTarget)) {
+			// A parked unload for this entry was superseded by the load.
+			this.#pendingExtensionOps.delete(resolvedTarget);
+			return { addedTools: [], errors: [], deferred: false };
+		}
 		if (this.isStreaming) {
-			this.#extensionLoadPending = resolvedTarget;
+			this.#parkExtensionOp(resolvedTarget, "load");
 			return { addedTools: [], errors: [], deferred: true };
 		}
 		return this.#performExtensionLoad(resolvedTarget);
+	}
+
+	/**
+	 * Detach one extension entry from this session without reloading it.
+	 *
+	 * Same busy gate as the other extension ops: streaming sessions park the
+	 * unload and perform it at the next idle `agent_end`. Tools the entry
+	 * registered are dropped from the session registry unless another loaded
+	 * extension still registers the same name; prompt sections from the entry
+	 * are re-synced and the live base prompt is rebuilt.
+	 */
+	async unloadExtension(entryPath: string): Promise<{ removedTools: string[]; errors: string[]; deferred: boolean }> {
+		const runner = this.#extensionRunner;
+		if (!runner) return { removedTools: [], errors: [], deferred: false };
+		const resolvedTarget = path.resolve(entryPath);
+		if (!runner.isExtensionLoaded(resolvedTarget)) {
+			this.#pendingExtensionOps.delete(resolvedTarget);
+			return { removedTools: [], errors: [], deferred: false };
+		}
+		if (this.isStreaming) {
+			this.#parkExtensionOp(resolvedTarget, "unload");
+			return { removedTools: [], errors: [], deferred: true };
+		}
+		return this.#performExtensionUnload(resolvedTarget);
 	}
 
 	/** Runs a session-level extension load and prompt-section re-sync. */
@@ -4933,6 +5076,33 @@ export class AgentSession {
 		// the live session immediately instead of on the next prompt mutation.
 		await this.refreshBaseSystemPrompt();
 		return { addedTools, errors, deferred: false };
+	}
+
+	/** Runs a session-level extension unload and its registry cleanup. */
+	async #performExtensionUnload(
+		entryPath: string,
+	): Promise<{ removedTools: string[]; errors: string[]; deferred: boolean }> {
+		const runner = this.#extensionRunner;
+		if (!runner) return { removedTools: [], errors: [], deferred: false };
+		if (!runner.isExtensionLoaded(entryPath)) return { removedTools: [], errors: [], deferred: false };
+		try {
+			const removedTools = runner.removeExtension(entryPath);
+			this.#onExtensionPromptSectionsChanged?.([entryPath]);
+			// Names another loaded extension still registers stay in the session
+			// registry — the unloaded entry was not their only owner.
+			const staleTools = removedTools.filter(name => !runner.getRegisteredTool(name));
+			if (staleTools.length > 0) {
+				await this.#tools.removeExtensionTools(staleTools);
+			}
+			await this.refreshBaseSystemPrompt();
+			return { removedTools: staleTools, errors: [], deferred: false };
+		} catch (error) {
+			return {
+				removedTools: [],
+				errors: [error instanceof Error ? error.message : String(error)],
+				deferred: false,
+			};
+		}
 	}
 
 	/**
@@ -5001,35 +5171,45 @@ export class AgentSession {
 		return removed;
 	}
 
-	/**
-	 * Drain a parked extension reload at an idle boundary (P5 HMR). Invoked
-	 * from the agent_end event handler and the deferred agent_end flush; both
-	 * are the session's settle signals. Fire-and-forget with error logging —
-	 * the reload result never blocks event delivery.
-	 */
-	#drainPendingExtensionReload(): void {
-		const pending = this.#extensionReloadPending;
-		if (!pending || this.isStreaming || this.#isDisposed) return;
-		this.#extensionReloadPending = undefined;
-		void this.#performExtensionReload(pending).catch(error => {
-			logger.warn("Deferred extension reload failed", {
-				extensionPath: pending,
-				error: error instanceof Error ? error.message : String(error),
-			});
+	/** Park one extension op for the next idle boundary; the newest op per entry wins. */
+	#parkExtensionOp(entryPath: string, op: "load" | "reload" | "unload"): void {
+		const resolvedTarget = path.resolve(entryPath);
+		this.#pendingExtensionOps.delete(resolvedTarget);
+		// Load and unload act on the resolved identity (the runner compares resolved
+		// paths anyway); reload keeps the caller's string so its contract is the
+		// entry it was given.
+		this.#pendingExtensionOps.set(resolvedTarget, {
+			op,
+			entryPath: op === "reload" ? entryPath : resolvedTarget,
 		});
 	}
 
-	/** Drain a parked extension load at an idle boundary (P0 自举 busy gate). */
-	#drainPendingExtensionLoad(): void {
-		const pending = this.#extensionLoadPending;
-		if (!pending || this.isStreaming || this.#isDisposed) return;
-		this.#extensionLoadPending = undefined;
-		void this.#performExtensionLoad(pending).catch(error => {
-			logger.warn("Deferred extension load failed", {
-				extensionPath: pending,
-				error: error instanceof Error ? error.message : String(error),
-			});
-		});
+	/**
+	 * Drain parked extension ops at an idle boundary (P5 HMR / P0 自举).
+	 * Invoked from the agent_end event handler and the deferred agent_end
+	 * flush; both are the session's settle signals. Entries are applied in
+	 * registration order, one failure does not stop the rest, and the drain is
+	 * fire-and-forget: results never block event delivery.
+	 */
+	#drainPendingExtensionOps(): void {
+		if (this.isStreaming || this.#isDisposed || this.#pendingExtensionOps.size === 0) return;
+		const ops = [...this.#pendingExtensionOps.values()];
+		this.#pendingExtensionOps.clear();
+		void (async () => {
+			for (const { op, entryPath } of ops) {
+				try {
+					if (op === "load") await this.#performExtensionLoad(entryPath);
+					else if (op === "reload") await this.#performExtensionReload(entryPath);
+					else await this.#performExtensionUnload(entryPath);
+				} catch (error) {
+					logger.warn("Deferred extension operation failed", {
+						extensionPath: entryPath,
+						operation: op,
+						error: error instanceof Error ? error.message : String(error),
+					});
+				}
+			}
+		})();
 	}
 
 	/**
@@ -5047,9 +5227,7 @@ export class AgentSession {
 	}
 
 	/** dsh-shaped alias: select (or clear) the session's agent preset. */
-	async selectAgentPreset(
-		agentPreset: string | null,
-	): Promise<{ ok: boolean; error?: string; deferred?: boolean }> {
+	async selectAgentPreset(agentPreset: string | null): Promise<{ ok: boolean; error?: string; deferred?: boolean }> {
 		return this.setMode(agentPreset, { hot: true });
 	}
 
@@ -6035,6 +6213,7 @@ export class AgentSession {
 	 * the ACP agent) use this to know whether to expect an `agent_end` event.
 	 */
 	async prompt(text: string, options?: PromptOptions): Promise<boolean> {
+		this.#promptSequence++;
 		const expandPromptTemplates = options?.expandPromptTemplates ?? true;
 
 		// Handle extension commands first (execute immediately, even during streaming)
@@ -6584,6 +6763,7 @@ export class AgentSession {
 			hasUI: false,
 			cwd: this.sessionManager.getCwd(),
 			sessionManager: this.sessionManager,
+			settings: this.settings,
 			modelRegistry: this.#modelRegistry,
 			model: this.model ?? undefined,
 			models: createExtensionModelQuery(this.#modelRegistry, this.settings, () => this.model ?? undefined),
@@ -7813,6 +7993,7 @@ export class AgentSession {
 			await this.#advisors.drainAndDetachRecorders();
 			try {
 				this.agent.reset();
+				this.#experimentalContextNotesReminder = undefined;
 				if (options?.drop && previousSessionFile) {
 					try {
 						await this.sessionManager.dropSession(previousSessionFile);
@@ -8890,12 +9071,89 @@ export class AgentSession {
 	 * Reload the current session from disk.
 	 *
 	 * Intended for extension commands and headless modes to re-read the current session
-	 * file and re-emit session_switch hooks.
+	 * file and re-emit session_switch hooks. Returns `false` when a
+	 * `session_before_switch` handler cancelled the switch.
 	 */
-	async reload(): Promise<void> {
+	async reload(): Promise<boolean> {
 		const sessionFile = this.sessionFile;
-		if (!sessionFile) return;
-		await this.switchSession(sessionFile);
+		if (!sessionFile) return false;
+		return this.switchSession(sessionFile);
+	}
+
+	/**
+	 * Snapshot of the prompt inputs a reload can change, taken before and after
+	 * so the reminder reports only real on-disk differences. A failed context
+	 * read is `null`, not an empty set: an empty set would turn one read error
+	 * into a false "every file was deleted" report.
+	 */
+	async #captureReloadSnapshot(): Promise<ReloadSnapshot> {
+		let contextFiles: Map<string, string> | null = null;
+		try {
+			const files = await loadProjectContextFiles({
+				cwd: this.sessionManager.getCwd(),
+				disabledExtensions: this.settings.get("disabledExtensions"),
+			});
+			contextFiles = new Map(files.map(file => [file.path, file.content]));
+		} catch {
+			// Recovery is the reminder's job only when both reads succeeded.
+		}
+		return {
+			contextFiles,
+			skills: this.#tools.skills.filter(skill => !skill.hide).map(skill => `${skill.name}\t${skill.description}`),
+		};
+	}
+
+	/**
+	 * Full session reload (Kimi `/reload` parity): re-read config, refresh the
+	 * context instruction files, reload every loaded extension, switch the
+	 * session file from disk, rediscover skills, re-run `session_start`, and
+	 * remind the main agent about catalogs that actually changed.
+	 *
+	 * The daemon reconciles project workspace directories before calling this and
+	 * passes the observed delta, because the project registry lives in the daemon.
+	 *
+	 * The daemon gates this on an idle session; `reloadExtensions` also refuses
+	 * to swap tools mid-stream as a second guard. Subagent profiles are resolved
+	 * per task invocation in this runtime, so there is no cached catalog to
+	 * refresh here.
+	 */
+	async reloadFromDisk(
+		workspaceDirectories: { added: string[]; removed: string[] } = { added: [], removed: [] },
+	): Promise<{
+		extensions: number;
+		errors: string[];
+	}> {
+		const before = await this.#captureReloadSnapshot();
+		await this.settings.reloadFromDisk();
+		// The daemon preloads contextFiles at creation, so prompt rebuilds keep
+		// serving the startup bytes until this refreshes the SDK's snapshot.
+		await this.#reloadContextFiles?.();
+		const extensionResult = await this.reloadExtensions();
+		// Config and extensions are already refreshed at this point. A cancelled
+		// switch means the transcript was NOT re-read, so the caller must not be
+		// told the reload succeeded.
+		if (!(await this.reload())) {
+			throw new Error("Reload cancelled by a session_before_switch handler.");
+		}
+		await this.refreshSkills();
+		await this.refreshSessionStart();
+		const reminder =
+			this.#agentKind === "main"
+				? buildReloadReminder(
+						before,
+						await this.#captureReloadSnapshot(),
+						workspaceDirectories,
+						this.sessionManager.getCwd(),
+					)
+				: null;
+		if (reminder) {
+			await this.sendCustomMessage({
+				customType: "session-reload-reminder",
+				content: [{ type: "text", text: reminder }],
+				display: false,
+			});
+		}
+		return { extensions: extensionResult.reloaded, errors: extensionResult.errors };
 	}
 
 	/**

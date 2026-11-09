@@ -2,12 +2,14 @@ import * as clientCore from "@musepi/client-core";
 import * as clientCoreI18n from "@musepi/client-core/src/i18n";
 import { EXTENSION_HOST_MODULES, type ExtensionHostModuleKey } from "@musepi/collab-proto/extension-host-modules";
 import * as actionToast from "./action-toast";
+import * as capabilityNav from "./capability-nav";
 import * as fileWorkspace from "./file-workspace";
 import * as managedBrowserHost from "./managed-browser-host";
 import * as monacoLsp from "./monaco-lsp";
 import * as monacoRuntime from "./monaco-runtime";
 import * as panelMaximize from "./panel-maximize";
 import * as promptDialog from "./prompt-dialog";
+import * as scheduledTaskNav from "./scheduled-task-nav";
 import * as suggestions from "./suggestions";
 import * as tooltips from "./tooltips";
 import * as updateUx from "./update-ux";
@@ -41,6 +43,8 @@ const hostModules = {
 	voice: voice,
 	"panel-maximize": panelMaximize,
 	suggestions: suggestions,
+	"task-nav": scheduledTaskNav,
+	"capability-nav": capabilityNav,
 	"client-core": clientCore,
 	i18n: clientCoreI18n,
 } satisfies Omit<Record<ExtensionHostModuleKey, unknown>, "slot-host">;

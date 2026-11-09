@@ -7,6 +7,7 @@ import { formatNumber } from "@musepi/pi-utils";
 import type { Skill } from "../../extensibility/skills";
 import type { AgentSession } from "../../session/agent-session";
 import { resolveSpeculationMethod } from "../../session/compaction-methods";
+import { resolveModelCompactionSettings } from "../../session/model-compaction-threshold";
 import { estimateInlineSavings, type SnapcompactSavingsEstimate } from "../../session/snapcompact-inline";
 import { resolveSpeculationLeadTokens } from "../../session/speculation-lead";
 import type { Tool } from "../../tools";
@@ -67,7 +68,7 @@ export function computeCompactionBoundaries(
 	model?: Model | null,
 ): CompactionBoundaries | null {
 	if (!(contextWindow > 0)) return null;
-	const configured = settings.getGroup("compaction");
+	const configured = resolveModelCompactionSettings(settings.getGroup("compaction"), model);
 	const compactionSettings = configured as CompactionSettings;
 	if (!configured.enabled || compactionSettings.strategy === "off") return null;
 	const thresholdTokens = resolveThresholdTokens(contextWindow, compactionSettings);
@@ -317,7 +318,10 @@ export function computeContextBreakdown(
 
 	let autoCompactBufferTokens = 0;
 	if (contextWindow > 0) {
-		const compactionSettings = session.settings.getGroup("compaction") as CompactionSettings;
+		const compactionSettings = resolveModelCompactionSettings(
+			session.settings.getGroup("compaction"),
+			model,
+		) as CompactionSettings;
 		if (compactionSettings.enabled && compactionSettings.strategy !== "off") {
 			const threshold = resolveThresholdTokens(contextWindow, compactionSettings);
 			autoCompactBufferTokens = Math.max(0, contextWindow - threshold);

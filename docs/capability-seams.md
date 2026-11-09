@@ -28,13 +28,14 @@
 | Cordis 记忆设置页 | `packages/desktop-app/src/plugins/memory/index.ts`（`settings.tab.memory`） | 同文件头部；接管内置记忆设置页，插件缺失或编译失败时宿主回退 `MemorySection` |
 | Cordis 会话信息分区 | `packages/desktop-app/src/plugins/session-info-plugins/index.ts`（`chat.session-info.plugins`） | 同文件头部；卡片只透传只读读数，插件停用/编译失败时回退内置列表 |
 | Cordis 会话信息任意分区 | `packages/desktop-app/src/components/session-info-card.tsx`（`chat.session-info.<id>` 前缀自动挂载） | 同文件头部；按前缀渲染所有贡献，`chat.session-info.plugins` 保留内置回退，插件新增分区无需宿主改动 |
-| Cordis 二级左栏面板 | `packages/desktop-app/src/plugins/scheduled-panel/index.ts`（`sidebar.panel.scheduled`；前缀声明在 `packages/collab-proto/src/extension-slots.ts`） | 同文件头部；宿主按 `data-panel` 选面板，插件缺失/编译失败回退内置组件，`task-nav` 经宿主模块表共享；悬停预览按 rail 按钮的 `panelId` 派发 |
+| Cordis 二级左栏面板 | `packages/desktop-app/src/plugins/scheduled-panel/index.ts`（`sidebar.panel.scheduled`）、`packages/desktop-app/src/plugins/capability-panel/index.ts`（`sidebar.panel.capability`）；前缀声明在 `packages/collab-proto/src/extension-slots.ts` | 同文件头部；宿主按 `data-panel` 选面板，插件缺失/编译失败回退内置组件；`task-nav` 与 `capability-nav` 经宿主模块表共享（页面与面板是独立 React 子树）；悬停预览按 rail 按钮的 `panelId` 派发 |
 | 第一方子系统插件与 entry 组件 | `packages/coding-agent/src/bundled-plugins/*/package.json`、`packages/coding-agent/src/daemon/cordis-dynamic-plugins.ts`（`musepi.host` / `musepi.components` / `CordisDynamicPluginRuntime`） | 各包入口与运行时文件头部 |
 | 记忆后端 provider seam | `packages/coding-agent/src/memory-backend/providers.ts`（`MemoryBackendProvider` / `registerMemoryBackendProvider`） | 同文件头部；插件可替换内置后端或新增 id，`memory.backend` 枚举与设置选项由注册表合并，卸载即恢复。`memory.*` 是核心契约，路由只调用活动后端；`workspaceDir` 可选能力决定 `memory.workspace*` 是否可用 |
 | 热重载服务（`ctx.hmr`） | `packages/coding-agent/src/bundled-plugins/hmr/index.ts`（host 插件，`provide: ["hmr"]`）+ `extensibility/plugins/hmr/service.ts` | 同文件头部；服务对象经 `extensibility/plugins/runtime/host-services.ts` 发布，插件与宿主都从注册表读取；daemon 收到批次后失效扩展缓存并广播 `extensions.changed`，TUI 只失效发现缓存 |
 | 宿主级（host-half）内置插件 | `packages/coding-agent/src/bundled-plugins/loader.ts`（`ensureHostHalfPluginsLoaded`）、清单 `musepi.scope: "host"` | 同文件头部；daemon 开监听前、其它宿主首个会话前各装载一次，会话装载跳过；首个消费者为 `bundled-plugins/memory-sharpshooter` 注册后端 provider |
 | 第三方 Cordis 插件适配 | `packages/coding-agent/src/extensibility/plugins/compat/modern-web-guidance-adapter.ts`（`modern_web_guidance` / 同名虚拟技能） | 同文件头部；安装缓存适配见 `third-party-cordis.ts` |
 | 外部产品子智能体 | `packages/coding-agent/src/task/types.ts`（`task.external-subagent` / `AgentDefinition.external`）、`packages/coding-agent/src/task/external-executable-probe.ts`（`probeExecutable`） | 同文件 `ExternalSubagentUpdate` 前六字段声明；探针声明见探针文件头部 |
+| 连接器目录（catalog / state / runtime projection） | `packages/coding-agent/src/daemon/services/connector-catalog-service.ts`（`connectors.catalog.*` / `connect` / `disconnect` / `setEnabled`）＋ `packages/coding-agent/src/connectors/*` | 同文件头部；MCP provider 见 `discovery/connector-catalog.ts`，agent 工具见 `tools/connector-catalog.ts`，`docs/connectors.md` |
 
 存量声明按「触及时顺手补」推进，不做批量回填；新增能力无声明不得过评审。
 

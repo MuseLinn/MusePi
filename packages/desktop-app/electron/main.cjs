@@ -337,6 +337,26 @@ app.setAppUserModelId("com.musepi.gui");
 
 /** Cached window handle (single-window app). */
 let mainWindow = null;
+const { DEEP_LINK_PROTOCOL, createOAuthCallbackForwarder, findDeepLink } = require("./oauth-deep-link.cjs");
+const oauthCallbacks = createOAuthCallbackForwarder({
+	send: url => mainWindow.webContents.send("oauth:callback", url),
+	isReady: () => Boolean(mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoading()),
+	onReceived: () => console.info("[oauth] deep-link callback received"),
+});
+function deliverOAuthCallback(url) {
+	oauthCallbacks.deliver(url);
+}
+// Windows/Linux register the executable; macOS uses the bundle identifier. In
+// `electron .` dev mode the protocol must point at the app path explicitly.
+if (process.defaultApp && process.argv[1]) {
+	app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+} else {
+	app.setAsDefaultProtocolClient(DEEP_LINK_PROTOCOL);
+}
+{
+	const startupLink = findDeepLink(process.argv);
+	if (startupLink) oauthCallbacks.deliver(startupLink);
+}
 /** Debounce timer for main-window bounds persistence. */
 let mainBoundsTimer = null;
 /** Managed in-app browser (right-pane tool): WebContentsView + CDP bridge. */
@@ -2993,7 +3013,10 @@ async function createWindow() {
 	// never sit on content — the desktopWindow frame-overlay contract.
 	const loadLocal = () => mainWindow.loadFile(path.join(DIST_DIR, "index.html"));
 	mainWindow.webContents.once("dom-ready", () => markStartup("renderer.dom-ready"));
-	mainWindow.webContents.once("did-finish-load", () => markStartup("renderer.loaded"));
+	mainWindow.webContents.once("did-finish-load", () => {
+		markStartup("renderer.loaded");
+		oauthCallbacks.flush();
+	});
 	if (compatUrl) {
 		// Defense-in-depth: a listener can die between the liveness probe and
 		// loadURL (or serve a broken page) — never white-screen on it.

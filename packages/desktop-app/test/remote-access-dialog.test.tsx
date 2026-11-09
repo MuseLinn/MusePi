@@ -29,6 +29,7 @@ async function renderDialog(request: RpcClient["request"]): Promise<DialogHarnes
 				sessionTitle: "Demo",
 				open: true,
 				onClose: () => {},
+				onOpenDisclaimer: () => {},
 			}),
 		);
 	});

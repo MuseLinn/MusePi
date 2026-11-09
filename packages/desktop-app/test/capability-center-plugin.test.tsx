@@ -4,6 +4,7 @@ import { t } from "@musepi/client-core";
 import type { ExtensionAPI, ExtensionComponent } from "@musepi/pi-coding-agent/extensibility/extensions/types";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
+import { clearCapabilityNav, emitCapabilityNavAction, readCapabilityNav } from "../src/lib/capability-nav";
 import type { RpcClient } from "../src/lib/rpc";
 import {
 	hostReactBindings,
@@ -28,7 +29,8 @@ describe("capability-center Cordis plugin", () => {
 		expect(components).toEqual([expect.objectContaining({ slot: "app.capability", moduleUrl: "./page.tsx" })]);
 	});
 
-	it("forwards host page navigation into tab selection", async () => {
+	it("moves the three tabs out of the page header into the second-tier panel bridge", async () => {
+		clearCapabilityNav();
 		const host = document.createElement("div");
 		const root = createRoot(host);
 		let selected = "";
@@ -42,17 +44,35 @@ describe("capability-center Cordis plugin", () => {
 		await act(async () => {
 			root.render(createElement(CapabilityCenterPage, { rpc: null, page }));
 		});
-		const tabs = [...host.querySelectorAll<HTMLButtonElement>(".gui-capability-tab")];
-		expect(tabs).toHaveLength(3);
-		expect(tabs.map(node => node.textContent).join(" ")).not.toContain("组合");
-		expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
-		await act(async () => tabs[1]?.click());
+		// The page header owns the title/description/back path only — the three
+		// destinations now live in the rail's `sidebar.panel.capability` pane.
+		expect(host.querySelectorAll(".gui-capability-tab")).toHaveLength(0);
+		expect(host.querySelectorAll(".gui-capability-pane")).toHaveLength(5); // 3 tabs + 2 技能 sub-panes
+		expect(host.querySelectorAll(".gui-capability-pane--on")).toHaveLength(2); // skills + nested discover
+		expect(host.querySelectorAll(".gui-capability-body > .gui-capability-pane--on")).toHaveLength(1);
+		expect(readCapabilityNav().tab).toBe("skills");
+
+		// Panel → page: a row click and the full-width primary CTA both drive
+		// the host's controlled tab state.
+		await act(async () => emitCapabilityNavAction({ type: "select", tab: "plugins" }));
 		expect(selected).toBe("plugins");
+		await act(async () => emitCapabilityNavAction({ type: "add" }));
+		expect(selected).toBe("marketplace");
+
+		// Page → panel: a controlled tab change re-publishes one projection and
+		// switches exactly one pane on.
 		await act(async () => {
-			root.render(createElement(CapabilityCenterPage, { rpc: null, page: { ...page, tab: "plugins" } }));
+			root.render(createElement(CapabilityCenterPage, { rpc: null, page: { ...page, tab: "marketplace" } }));
 		});
-		expect(host.querySelectorAll(".gui-capability-tab")[1]?.getAttribute("aria-selected")).toBe("true");
+		expect(readCapabilityNav().tab).toBe("marketplace");
+		// Only ONE top-level pane is on; the 技能 sub-pane keeps its own
+		// independent discover/installed flag (it stays mounted).
+		expect(host.querySelectorAll(".gui-capability-body > .gui-capability-pane--on")).toHaveLength(1);
+		const topPanes = [...host.querySelectorAll(".gui-capability-body > .gui-capability-pane")];
+		expect(topPanes[2]?.classList.contains("gui-capability-pane--on")).toBe(true);
 		await act(async () => root.unmount());
+		// Unmount clears the projection so a later visit never flashes stale counts.
+		expect(readCapabilityNav()).toEqual({ tab: "skills", skillsCount: 0, pluginsCount: 0 });
 	});
 
 	it("passes page navigation props through the real slot mount", async () => {

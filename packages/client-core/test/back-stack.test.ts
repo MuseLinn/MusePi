@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { dispatchBack, registerBackLayer, resetBackLayers } from "../src/lib/back-stack";
+import {
+	backLayerDepth,
+	dispatchBack,
+	registerBackLayer,
+	resetBackLayers,
+	subscribeBackLayers,
+} from "../src/lib/back-stack";
 
 afterEach(() => {
 	resetBackLayers();
@@ -102,5 +108,56 @@ describe("back-stack dispatch", () => {
 		registerBackLayer(90, () => true);
 		resetBackLayers();
 		expect(dispatchBack()).toBe(false);
+	});
+});
+
+describe("back-stack depth mirror", () => {
+	// HarmonyOS `onBackPress()` must answer synchronously while runJavaScript is
+	// async, so the page mirrors this depth into the shell instead of asking.
+	it("counts registered layers", () => {
+		expect(backLayerDepth()).toBe(0);
+		const closeA = registerBackLayer(60, () => true);
+		const closeB = registerBackLayer(90, () => true);
+		expect(backLayerDepth()).toBe(2);
+		closeA();
+		expect(backLayerDepth()).toBe(1);
+		closeB();
+		expect(backLayerDepth()).toBe(0);
+	});
+
+	it("seeds the subscriber immediately with the current depth", () => {
+		registerBackLayer(60, () => true);
+		const seen: number[] = [];
+		const off = subscribeBackLayers(depth => seen.push(depth));
+		expect(seen).toEqual([1]);
+		off();
+	});
+
+	it("pushes every change, including unregister", () => {
+		const seen: number[] = [];
+		const off = subscribeBackLayers(depth => seen.push(depth));
+		const close = registerBackLayer(60, () => true);
+		close();
+		off();
+		expect(seen).toEqual([0, 1, 0]);
+	});
+
+	it("ignores an unregister that was already released", () => {
+		const seen: number[] = [];
+		const close = registerBackLayer(60, () => true);
+		const off = subscribeBackLayers(depth => seen.push(depth));
+		close();
+		close();
+		off();
+		expect(seen).toEqual([1, 0]);
+	});
+
+	it("resetBackLayers notifies the shell that nothing is left", () => {
+		registerBackLayer(60, () => true);
+		const seen: number[] = [];
+		const off = subscribeBackLayers(depth => seen.push(depth));
+		resetBackLayers();
+		off();
+		expect(seen).toEqual([1, 0]);
 	});
 });

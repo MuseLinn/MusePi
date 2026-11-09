@@ -28,6 +28,7 @@ import {
 	browserOperationGroups,
 	browserOperationsOf,
 } from "./browser-activity";
+import { browserStructuredOf, StructuredBrowserResult } from "./browser-structured";
 
 interface BrowserDetails {
 	action: string | null;
@@ -170,6 +171,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	const vpHeight = viewport ? num(viewport.height) : null;
 	const vpScale = viewport ? num(viewport.scale) : null;
 	const code = str(args.code);
+	const structured = browserStructuredOf(result);
 	const detailRecord = detailsRecord(result);
 	const directScreenshots =
 		detailRecord && Array.isArray(detailRecord.screenshots) ? detailRecord.screenshots.length : 0;
@@ -203,6 +205,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 					</Badge>
 				)}
 			</span>
+			<StructuredBrowserResult action={action} result={result} />
 			{details.operations.length > 0 && (
 				<>
 					<div className="tv-browser-run-summary">
@@ -341,7 +344,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 			)}
 			{action === "run" && code !== null && <CodeBlock code={code.replace(/\s+$/, "")} lang="javascript" />}
 			<ResultImages result={result} />
-			<ResultText result={result} maxLines={10} />
+			{!structured && <ResultText result={result} maxLines={10} />}
 		</>
 	);
 }

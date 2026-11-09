@@ -4,6 +4,7 @@
  * `generate-models.ts` — none of this ships in the runtime bundle.
  */
 import { buildCompat } from "../src/build";
+import { isKimiK3ModelId } from "../src/identity";
 import {
 	type AnthropicModel,
 	bareModelId,
@@ -22,6 +23,10 @@ import { isOllamaCloudOutputCapped, OLLAMA_CLOUD_MAX_OUTPUT_TOKENS } from "../sr
 import {
 	ALIBABA_TOKEN_PLAN_STATIC_MODELS,
 	applyXaiResponsesThinkingPolicy,
+	MOONSHOT_KIMI_K3_CONTEXT_WINDOW,
+	MOONSHOT_KIMI_K3_COST,
+	MOONSHOT_KIMI_K3_MAX_TOKENS,
+	MOONSHOT_KIMI_K3_THINKING,
 	OPENAI_GPT_56_LONG_CONTEXT_COSTS,
 	resolveWaferServerlessThinkingFormat,
 } from "../src/provider-models/openai-compat";
@@ -195,6 +200,29 @@ export function applyGeneratedModelPolicies(models: ModelSpec<Api>[]): void {
 	for (const model of models) {
 		applyGeneratedModelPolicy(model);
 		rebakeModelThinking(model);
+		applyCuratedProviderCorrections(model);
+	}
+}
+
+/**
+ * Provider facts that outrank a stale previous snapshot or an over-broad
+ * models.dev row. These run last so the bundled bundle matches the provider's
+ * official contract even when discovery had no credentials.
+ */
+function applyCuratedProviderCorrections(model: ModelSpec<Api>): void {
+	const id = model.id.toLowerCase();
+	if ((model.provider === "moonshot" || model.provider === "kimi-code") && isKimiK3ModelId(id)) {
+		model.reasoning = true;
+		model.input = ["text", "image"];
+		model.cost = { ...MOONSHOT_KIMI_K3_COST };
+		model.contextWindow = MOONSHOT_KIMI_K3_CONTEXT_WINDOW;
+		model.maxTokens = MOONSHOT_KIMI_K3_MAX_TOKENS;
+		model.thinking = { ...MOONSHOT_KIMI_K3_THINKING };
+	}
+	// NIM hosts Qwen models with vLLM `chat_template_kwargs`; models.dev has
+	// started omitting the reasoning flag for some ids, which would disarm it.
+	if (model.provider === "nvidia" && model.id.startsWith("qwen/")) {
+		model.reasoning = true;
 	}
 }
 

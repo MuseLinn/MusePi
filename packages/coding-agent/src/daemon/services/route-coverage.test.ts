@@ -11,6 +11,7 @@ import { AttachmentService } from "./attachment-service";
 import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
 import { BundleService } from "./bundle-service";
+import { ConnectorCatalogService } from "./connector-catalog-service";
 import { ConnectorService } from "./connector-service";
 import { CreationService } from "./creation-service";
 import { CredentialService } from "./credential-service";
@@ -19,6 +20,7 @@ import { EditorService } from "./editor-service";
 import { EventService } from "./event-service";
 import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
+import { GitWatchService } from "./git-watch-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { MarketplaceService } from "./marketplace-service";
 import { McpOAuthService } from "./mcp-oauth-service";
@@ -93,6 +95,8 @@ function buildRegistry(): HostServices {
 			ensureFileIndex: () => ({ search: () => [] }) as never,
 		}),
 	);
+	// GitWatchService: routes only (no roots watched in this test).
+	services.register(new GitWatchService({ broadcast: () => {} }));
 	// AttachmentService：只认领路由（本测试不存取附件），blob 目录用隔离 temp。
 	services.register(
 		new AttachmentService({
@@ -184,6 +188,14 @@ function buildRegistry(): HostServices {
 		new McpOAuthService({
 			cwd: () => "",
 			authStorage: async () => null,
+		}),
+	);
+	// ConnectorCatalogService：只认领路由（本测试不读目录），stub 掉宿主访问。
+	services.register(
+		new ConnectorCatalogService({
+			cwd: () => "",
+			connectorsSnapshotForCwd: async () => ({ servers: [] }),
+			reloadConnectors: async () => undefined,
 		}),
 	);
 	// CredentialService：凭据 store 指向隔离 temp 文件（本测试不触凭据面）。

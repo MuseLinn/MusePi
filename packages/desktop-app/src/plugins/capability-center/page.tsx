@@ -7,12 +7,19 @@ import { SkillMarketView } from "../../components/SkillMarketView";
 import { type PluginPackageEntry as PluginEntry, UnifiedPluginsView } from "../../components/UnifiedPluginsView";
 import { WorkspacePageHeader } from "../../components/WorkspacePageHeader";
 import { dismissActionToastSource, pushActionToast } from "../../lib/action-toast";
+import {
+	type CapabilityTab,
+	clearCapabilityNav,
+	publishCapabilityNav,
+	subscribeCapabilityNavAction,
+} from "../../lib/capability-nav";
 import { setPluginManagementEnabled } from "../../lib/plugin-management";
 import type { RpcClient } from "../../lib/rpc";
-import { Icon, type IconName } from "../../vendor/oc-icons";
 
-/** First-class Skills / Plugins / Marketplace page owned by the desktop Cordis plugin. */
-export type Tab = "skills" | "plugins" | "marketplace";
+/** First-class Skills / Plugins / Marketplace page owned by the desktop Cordis plugin.
+ *  The tab UNION lives in `lib/capability-nav` so the second-tier panel and
+ *  this page cannot drift; this alias keeps the page's public prop shape. */
+export type Tab = CapabilityTab;
 /** 技能 tab 的两个子分段 (设计稿 frame 01/02):发现 / 我安装的 N。 */
 type SkillPane = "discover" | "installed";
 
@@ -122,11 +129,23 @@ export function CapabilityCenterPage({
 	// No daemon-side plugin removal RPC (list/packages/setEnabled only) — the
 	// enable toggle is the management surface; removal happens on disk.
 
-	const tabs: { id: Tab; label: string; icon: IconName }[] = [
-		{ id: "skills", label: t("tools.skillsTab"), icon: "sparkling" },
-		{ id: "plugins", label: t("settings.plugins"), icon: "plug" },
-		{ id: "marketplace", label: t("guest.marketplace"), icon: "plug-2" },
-	];
+	// Two-tier shell (2026-11-08): the three destination tabs live in the
+	// rail's sidebar slot (`sidebar.panel.capability`), NOT in this page
+	// header. This page publishes ONE projection of its state and accepts
+	// actions from that panel — one tab source, one selected row, no second
+	// copy of the RPC data. The compiled plugin binds `capability-nav`
+	// through the host module table, so page and panel share one store.
+	useEffect(() => {
+		publishCapabilityNav({ tab, skillsCount: installedCount, pluginsCount: plugins.length });
+	}, [tab, installedCount, plugins.length]);
+	useEffect(
+		() =>
+			subscribeCapabilityNavAction(action => {
+				onTabChange(action.type === "add" ? "marketplace" : action.tab);
+			}),
+		[onTabChange],
+	);
+	useEffect(() => () => clearCapabilityNav(), []);
 
 	return (
 		<div className="gui-agents-center gui-capability-page">
@@ -135,26 +154,10 @@ export function CapabilityCenterPage({
 				title={t("tools.capabilityCenter")}
 				description={t("tools.capabilityCenterDesc")}
 				onBack={onBack}
-				tabs={
-					<div className="gui-capability-tabs" role="tablist">
-						{tabs.map(tb => (
-							<button
-								key={tb.id}
-								type="button"
-								role="tab"
-								aria-selected={tab === tb.id}
-								className={`gui-capability-tab${tab === tb.id ? " gui-capability-tab--on" : ""}`}
-								onClick={() => onTabChange(tb.id)}
-							>
-								<Icon name={tb.icon} className="h-3.5 w-3.5 shrink-0 opacity-70" />
-								{tb.label}
-							</button>
-						))}
-					</div>
-				}
 			/>
-			{/* 技能子分段条放在滚动体外：与主 tab 同处页头，各面板工具行才能
-			 * 以统一偏移吸顶（subtabs 若在滚动体内，吸顶偏移随面板层级而变）。 */}
+			{/* 技能子分段条放在滚动体外：主 tab 已移到二级左栏，这个二级分段
+			 * 仍属于内容列，各面板工具行才能以统一偏移吸顶（subtabs 若在滚动
+			 * 体内，吸顶偏移随面板层级而变）。 */}
 			{tab === "skills" && (
 				<div className="gui-capability-subtabs" role="tablist">
 					{(

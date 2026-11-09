@@ -5,9 +5,11 @@ import type { DaemonService } from "./types";
  * ViewStoreService — 物化视图查询面（L2 宿主服务，P1 抽取）。
  *
  * 能力缝声明（M2-2.4）：
- * - 输入：RPC `history.messages`（单会话消息行，历史查看器右栏）、
+ * - 输入：RPC `history.messages`（单会话消息行，会话管理页消息详情）、
+ *   `session.lastPrompts`（一页会话各自的最后一条用户消息）、
  *   `session.search`（跨会话消息搜索，按会话分组）；内部查询入口
- *   messagesFor / searchGrouped / firstUserMessage（tray.state 标题兜底）。
+ *   messagesFor / lastUserMessages / searchGrouped / firstUserMessage
+ *   （tray.state 标题兜底）。
  * - 输出：物化查询表（view-store SQLite）的行数据；不含任何会话生命周期
  *   语义，纯只读面（搜索/取行）。
  * - 生命周期：无自有状态——本服务不持有 ViewStore 实例。P1 期间实例仍由
@@ -25,6 +27,7 @@ export class ViewStoreService implements DaemonService {
 	readonly key = "views";
 	readonly routes = {
 		"history.messages": "messages",
+		"session.lastPrompts": "lastUserMessages",
 		"session.search": "search",
 	} as const;
 
@@ -34,12 +37,22 @@ export class ViewStoreService implements DaemonService {
 		this.#store = store;
 	}
 
-	/** RPC history.messages：单会话消息行（历史查看器右栏），直接出自
-	 *  物化视图库，无需激活会话。默认上限 500 与原 case 一致。 */
-	messages(params: { sessionId?: unknown; limit?: unknown }): ReturnType<ViewStore["messagesFor"]> {
-		const { sessionId, limit } = params ?? {};
+	/** RPC history.messages：单会话消息行（会话管理页消息详情），直接出自
+	 *  物化视图库，无需激活会话。默认上限 500 与原 case 一致；`tail` 取最近
+	 *  N 条（预览长会话的尾部），返回仍是阅读顺序。 */
+	messages(params: { sessionId?: unknown; limit?: unknown; tail?: unknown }): ReturnType<ViewStore["messagesFor"]> {
+		const { sessionId, limit, tail } = params ?? {};
 		if (typeof sessionId !== "string" || !sessionId) throw new Error("sessionId required");
-		return this.#store.messagesFor(sessionId, typeof limit === "number" ? limit : 500);
+		return this.#store.messagesFor(sessionId, typeof limit === "number" ? limit : 500, tail === true);
+	}
+
+	/** RPC session.lastPrompts：一页会话各自的最后一条用户消息，一条 SQL
+	 *  批量取回（会话表格「最后一条 prompt」列）。ids 上限 200 由 store 收敛。 */
+	lastUserMessages(params: { sessionIds?: unknown }): Record<string, string> {
+		const { sessionIds } = params ?? {};
+		return this.#store.lastUserMessages(
+			Array.isArray(sessionIds) ? sessionIds.filter(id => typeof id === "string") : [],
+		);
 	}
 
 	/** RPC session.search：跨会话消息搜索，matches 全量 + 按会话分组计数

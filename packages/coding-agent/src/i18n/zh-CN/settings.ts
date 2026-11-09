@@ -1991,6 +1991,11 @@ export const settings = {
 		"编辑引入 AST 解析错误时，在补丁中附加完整的前后源码",
 	"Apply confident macOS spelling corrections after completed words": "完成的词语自动套用 macOS 确信度高的拼写纠正",
 	"Async Compaction": "异步压缩",
+	"Apply compaction.modelThresholds entries to the model they name instead of the global threshold":
+		"让 compaction.modelThresholds 中针对具体模型的条目取代全局阈值生效",
+	"Model Compaction Limits": "模型压缩上限",
+	"Notes-backed context windows (experimental)": "笔记驱动的上下文窗口（实验性）",
+	"Per-Model Compaction Limits": "按模型压缩上限",
 	"Auto (bun-pty → node-pty fallback)": "自动（bun-pty，回退 node-pty）",
 	"Auto-Repair Syntax Errors": "自动修复语法错误",
 	"Auto-continue active goals in terminal/GUI sessions": "在终端/GUI 会话中自动继续进行中的目标",
@@ -2163,6 +2168,10 @@ export const settings = {
 	"Show macOS dictionary word completions as inline hints accepted with Tab":
 		"以行内提示显示 macOS 词典的补全，Tab 采纳",
 	"Single top rule with status docked onto it and below": "单条顶线，状态停靠在线上及线下",
+	"Keep persistent notes and searchable raw history across context windows":
+		"跨上下文窗口保留持久笔记与可搜索的原始历史",
+	"Per-model overrides keyed by `provider/model-id` (or a trailing `provider/…*` prefix): a token count is the base the policy scales, `f90000` is a fixed trigger, and `80%` replaces the threshold percentage":
+		'按 "provider/model-id"（或末尾带 * 的前缀）配置的按模型覆盖：令牌数是策略缩放的基准，"f90000" 是固定触发点，"80%" 替换阈值百分比',
 	"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed":
 		"上下文接近压缩阈值时后台先做投机摘要，越过阈值后把就绪结果拼接进来",
 	"Status line embedded in top border, compact 2-line prompt": "状态线内嵌顶边框，紧凑两行提示符",

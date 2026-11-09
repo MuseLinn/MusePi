@@ -6,6 +6,7 @@
  */
 
 import type { Skill } from "../extensibility/skills";
+import type { SessionEntry } from "../session/session-entries";
 import type { LocalProtocolOptions } from "./local-protocol";
 
 /**
@@ -91,6 +92,10 @@ export interface ResolveContext {
 	cwd?: string;
 	/** Settings of the calling session (used by `issue://`/`pr://` for cache TTLs). */
 	settings?: unknown;
+	/** Experimental notes-backed context windows: enables `history://current/full`. */
+	experimentalContextManagement?: boolean;
+	/** Live branch provider for `history://current/full`, bound to the calling session. */
+	getSessionBranch?: () => readonly SessionEntry[] | undefined;
 	/** Caller's abort signal. */
 	signal?: AbortSignal;
 	/**

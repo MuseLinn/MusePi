@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
+import * as path from "node:path";
 import { Agent } from "@musepi/pi-agent-core";
 import type { Model } from "@musepi/pi-ai";
 import { createMockModel } from "@musepi/pi-ai/providers/mock";
@@ -286,5 +287,106 @@ describe("AgentSession prompt-only extension lifecycle", () => {
 		composer.registry.registerSection({ name: "registry:extra", order: 10, text: "EXTRA" }, "ext:registry");
 		await s.setActiveToolsByName([]);
 		expect(s.systemPrompt).toEqual(["core", "EXTRA"]);
+	});
+});
+
+// The pending table is keyed by entry path: a package that contributes several
+// entries must park every one of them, and repeated requests for one entry
+// collapse to the newest operation. A single-slot park silently dropped all but
+// the last entry, which is why this is asserted separately from the reload gate.
+describe("AgentSession extension busy gate keeps every entry", () => {
+	let session: AgentSession | undefined;
+	const loaded = new Set<string>();
+	const calls: Array<{ op: string; entryPath: string }> = [];
+
+	afterEach(async () => {
+		if (session) {
+			await session.dispose();
+			session = undefined;
+		}
+		loaded.clear();
+		calls.length = 0;
+	});
+
+	function createSession(): { session: AgentSession; agent: Agent } {
+		const mock = createMockModel({ responses: [{ content: ["Done"] }] });
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: { model: createModel(), systemPrompt: ["initial-base"], tools: [], messages: [] },
+			convertToLlm,
+			streamFn: mock.stream,
+		});
+		const runner = {
+			isExtensionLoaded: (entryPath: string) => loaded.has(path.resolve(entryPath)),
+			loadExtension: async (entryPath: string) => {
+				loaded.add(path.resolve(entryPath));
+				calls.push({ op: "load", entryPath });
+				return { addedTools: [], errors: [] };
+			},
+			reloadExtension: async (entryPath: string) => {
+				calls.push({ op: "reload", entryPath });
+				return { removedTools: [], errors: [] };
+			},
+			removeExtension: (entryPath: string) => {
+				loaded.delete(path.resolve(entryPath));
+				calls.push({ op: "unload", entryPath });
+				return [];
+			},
+			getRegisteredTool: () => undefined,
+			getExtensionEntryMtimes: () => new Map(),
+			getExtensionPaths: () => [...loaded],
+			hasHandlers: () => false,
+			emit: async () => undefined,
+		} as unknown as ExtensionRunner;
+		session = new AgentSession({
+			agent,
+			sessionManager: SessionManager.inMemory(),
+			settings: Settings.isolated({ "compaction.enabled": false, "todo.enabled": false }),
+			modelRegistry: { getApiKey: async () => "test-key" } as never,
+			extensionRunner: runner,
+		});
+		return { session: session!, agent };
+	}
+
+	it("parks every entry of a multi-entry install and applies them in order", async () => {
+		const { session: s, agent } = createSession();
+		agent.state.isStreaming = true;
+		await s.loadExtension("/extensions/pkg/a.ts");
+		await s.loadExtension("/extensions/pkg/b.ts");
+		expect(calls).toHaveLength(0);
+
+		agent.state.isStreaming = false;
+		agent.emitExternalEvent({ type: "agent_end", messages: [] } as never);
+
+		await pollUntil(() => calls.length === 2);
+		expect(calls.map(call => [path.basename(call.entryPath), call.op])).toEqual([
+			["a.ts", "load"],
+			["b.ts", "load"],
+		]);
+	});
+
+	it("collapses a load then unload of the same entry to the newest operation", async () => {
+		const { session: s, agent } = createSession();
+		loaded.add(path.resolve("/extensions/pkg/a.ts"));
+		agent.state.isStreaming = true;
+
+		await s.reloadExtension("/extensions/pkg/a.ts");
+		await s.unloadExtension("/extensions/pkg/a.ts");
+		agent.state.isStreaming = false;
+		agent.emitExternalEvent({ type: "agent_end", messages: [] } as never);
+
+		await pollUntil(() => calls.length === 1);
+		expect(calls).toEqual([{ op: "unload", entryPath: path.resolve("/extensions/pkg/a.ts") }]);
+		expect(loaded.has(path.resolve("/extensions/pkg/a.ts"))).toBe(false);
+	});
+
+	it("unloads an idle entry and drops it from the loaded set", async () => {
+		const { session: s } = createSession();
+		loaded.add(path.resolve("/extensions/pkg/a.ts"));
+
+		const result = await s.unloadExtension("/extensions/pkg/a.ts");
+
+		expect(result).toEqual({ removedTools: [], errors: [], deferred: false });
+		expect(calls[0]?.op).toBe("unload");
 	});
 });

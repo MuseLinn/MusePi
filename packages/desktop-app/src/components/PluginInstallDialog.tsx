@@ -47,6 +47,15 @@ interface OutputLine {
 	text: string;
 }
 
+/** The daemon's live-apply outcome for the package this install produced. */
+interface ApplyState {
+	packageName?: string;
+	application?: "applied" | "pending";
+	applied?: number;
+	deferred?: number;
+	errors?: string[];
+}
+
 const MAX_OUTPUT_LINES = 400;
 
 /**
@@ -78,6 +87,7 @@ export function PluginInstallDialog({
 	// first early return, so adding a conditional return later cannot split the
 	// hook order across renders.
 	const [dragging, setDragging] = useState(false);
+	const [apply, setApply] = useState<ApplyState | null>(null);
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const logRef = useRef<HTMLDivElement | null>(null);
 
@@ -110,6 +120,26 @@ export function PluginInstallDialog({
 			unlistenOutput();
 		};
 	}, [rpc, activeId]);
+
+	// Live-apply outcome for the package just installed. The daemon resolves the
+	// package's entries and hands them to every open session; a streaming
+	// session parks them, and the person should see that as "after this turn"
+	// rather than as a silent delay. The listener is registered for the life of
+	// the dialog rather than for the installed name: the apply event can arrive
+	// in the same stream batch as `done`, before a name-keyed effect would have
+	// subscribed. Rendering filters by name, so another package never shows here.
+	useEffect(() => {
+		if (!rpc) return;
+		return rpc.addEventListener((event: StreamEvent) => {
+			const payload = event.payload as (ApplyState & { type?: string; change?: string }) | undefined;
+			if (payload?.type !== "plugins.apply.state" || payload.change !== "install") return;
+			setApply(payload);
+		});
+	}, [rpc]);
+
+	useEffect(() => {
+		if (view?.state !== "done") setApply(null);
+	}, [view?.state]);
 
 	// Keep the newest output in view; a person watching an install reads the tail.
 	useEffect(() => {
@@ -210,6 +240,7 @@ export function PluginInstallDialog({
 			if (trimmed === "" || !rpc) return;
 			setError(null);
 			setLines([]);
+			setApply(null);
 			setView({ installId: "", spec: trimmed, state: "inspecting" });
 			void rpc
 				.request<{ installId: string }>("plugins.install", { spec: trimmed })
@@ -244,6 +275,21 @@ export function PluginInstallDialog({
 	// Terminal states collapse to a summary line so the dialog does not keep the
 	// person staring at a frozen log after the run is decided.
 	const phase = view?.state ?? "idle";
+	// One line, most consequential fact only: a pending session outranks the
+	// count that already swapped, because it is the part still outstanding.
+	const applyErrors = apply?.errors?.length ?? 0;
+	const applyDeferred = apply?.deferred ?? 0;
+	const applyApplied = apply?.applied ?? 0;
+	const applyLine =
+		apply === null || view?.name === undefined || apply.packageName !== view.name
+			? null
+			: applyErrors > 0
+				? t("settings.pluginApplyErrors", { count: applyErrors })
+				: applyDeferred > 0
+					? t("settings.pluginApplyPending", { count: applyDeferred })
+					: applyApplied > 0
+						? t("settings.pluginApplyLive", { count: applyApplied })
+						: null;
 
 	return (
 		<DialogFrame open={open} onClose={onClose} label={t("settings.pluginInstallTitle")} className="gui-plugin-dialog">
@@ -320,6 +366,7 @@ export function PluginInstallDialog({
 							})}
 						</div>
 						<div className="gui-ext-plugins-desc">{view.capability.summary}</div>
+						{applyLine !== null && <div className="gui-ext-plugins-desc">{applyLine}</div>}
 					</div>
 				)}
 

@@ -20,6 +20,7 @@ import type { PluginManagementPackage } from "../../extensibility/plugins/profil
 import type { PluginRuntimeTarget } from "../../extensibility/plugins/runtime/mount";
 import type { ResolvedMode } from "../../presets/resolve";
 import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
+import type { LiveApplyTarget } from "../live-plugin-apply";
 import type { WebRouteRegistry } from "../web-routes";
 import type { DaemonService } from "./types";
 
@@ -90,6 +91,11 @@ export interface ExtensionServiceDeps {
 	runtimeTargets?(): Promise<readonly PluginRuntimeTarget[]>;
 	/** extensions.changed 广播（宿主接 EventService，lazy 调用无循环）。 */
 	onChanged(): void;
+	/**
+	 * Apply an entry-level plugin change to sessions that are already open
+	 * (package enable/disable). Absent → the change lands with the next session.
+	 */
+	applyLive?(target: LiveApplyTarget): Promise<{ errors: string[] }>;
 	/**
 	 * A namespace's declared config fields, when the caller can supply them
 	 * without a full extension scan (tests, or a host that already has the
@@ -650,6 +656,13 @@ export class ExtensionService implements DaemonService {
 				settings.set("disabledExtensions", disabled);
 				await settings.flush();
 			}
+			// One extension-module entry toggled: hand exactly that entry to open
+			// sessions. Non-module rows (skill/tool/mcp/theme) are not extension
+			// entries a session can mount, so they keep their next-session
+			// semantics rather than failing a load that was never valid.
+			if (entry && isModuleEntryKind(entry.kind)) {
+				await this.#deps.applyLive?.(p.enabled ? { add: [entry.path] } : { remove: [entry.path] });
+			}
 		}
 		this.#extensionsCache = null;
 		this.#runtimeLoadCache = null;
@@ -1001,14 +1014,22 @@ export class ExtensionService implements DaemonService {
 		// already gone must not block the package toggle.
 		await this.#cascadePluginComponents(p.name, Boolean(p.enabled));
 
+		// Resolve the package's entry paths once: the disable branch needs them
+		// to detach from live sessions, and the enable probe below loads the same
+		// list. A package the inventory cannot see has nothing to apply.
+		const { getAllPlugins, resolvePluginExtensionPaths } = await import("../../extensibility/plugins/runtime/loader");
+		const installed = await getAllPlugins(this.#deps.cwd());
+		const plugin = installed.find(x => x.name === p.name);
+		const entryPaths = plugin ? resolvePluginExtensionPaths(plugin) : [];
+
 		// Probe the real load outcome. Only an enable can newly fail (a
 		// disable cannot break a load that already succeeded), so the probe
 		// runs for enables; a disable reports without one.
-		if (!p.enabled) return { ok: true, enabled: false };
-		const { getAllPlugins, resolvePluginExtensionPaths } = await import("../../extensibility/plugins/runtime/loader");
+		if (!p.enabled) {
+			if (entryPaths.length > 0) await this.#deps.applyLive?.({ remove: entryPaths });
+			return { ok: true, enabled: false };
+		}
 		const { loadExtensions } = await import("../../extensibility/extensions/loader");
-		const installed = await getAllPlugins(this.#deps.cwd());
-		const plugin = installed.find(x => x.name === p.name);
 		const probe = { loaded: 0, errors: [] as Array<{ path: string; error: string }> };
 		if (plugin) {
 			const paths = resolvePluginExtensionPaths(plugin);
@@ -1020,10 +1041,14 @@ export class ExtensionService implements DaemonService {
 		} else {
 			probe.errors.push({ path: p.name, error: "plugin not found in installed inventory after enabling" });
 		}
+		// An enable is a real change for open sessions: entries the session
+		// never mounted are loaded, entries it already had are refreshed.
+		const apply = entryPaths.length > 0 ? await this.#deps.applyLive?.({ add: entryPaths }) : undefined;
 		const ok = probe.errors.length === 0 && probe.loaded > 0;
 		return {
 			ok,
 			enabled: Boolean(p.enabled),
+			...(apply && apply.errors.length > 0 ? { applyErrors: apply.errors } : {}),
 			...(ok
 				? {}
 				: { error: probe.errors.map(e => `${e.path}: ${e.error}`).join("; ") || "no loadable extension entries" }),

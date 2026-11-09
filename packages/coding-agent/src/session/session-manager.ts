@@ -2302,6 +2302,15 @@ export class SessionManager {
 	}
 
 	/**
+	 * Persist one idle recap as a hidden custom entry. The transcript builder
+	 * skips entries without a display payload and the model context only takes
+	 * `custom_message`, so a recap survives the session without entering either.
+	 */
+	recordRecap(reply: string): string {
+		return this.appendCustomEntry("recap", { reply, at: Date.now() });
+	}
+
+	/**
 	 * Rewrite the session file after in-place entry updates (e.g. pruning old tool
 	 * outputs). Use sparingly.
 	 */

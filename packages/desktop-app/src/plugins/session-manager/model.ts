@@ -1,4 +1,4 @@
-import type { SessionListRow } from "./types";
+import type { SessionLifecycle, SessionListRow } from "./types";
 
 /**
  * Pure view-model for the 会话管理 page: session.list rows + the local archive
@@ -11,11 +11,16 @@ import type { SessionListRow } from "./types";
 export type ArchivedTimes = ReadonlyMap<string, number>;
 
 /** 进行中 / 已完成 / 已归档 — the archive store wins over live activity. */
-export type SessionStatus = "running" | "completed" | "archived";
+type SessionStatus = "running" | "completed" | "archived";
+
+/** Why a finished conversation stopped — the wire shape's own union, named
+ *  for the view axis it drives (normal completion, cut-off turn, user abort,
+ *  error, or a read still in flight). */
+export type SessionOutcome = SessionLifecycle;
 
 export type StatusFilter = "all" | SessionStatus;
 
-export type SessionSortKey = "title" | "project" | "status" | "updatedAt" | "completedAt";
+export type SessionSortKey = "title" | "project" | "status" | "updatedAt";
 
 export interface SessionSort {
 	key: SessionSortKey;
@@ -39,6 +44,9 @@ export interface SessionView {
 	/** Basename label from projectLabels (widened only when ambiguous). */
 	project: string;
 	status: SessionStatus;
+	/** Why the session stopped; null while running or archived (archive time
+	 *  replaces it in the status column). */
+	outcome: SessionOutcome | null;
 	/** Last activity, ISO (falls back to the creation timestamp). */
 	updatedAt: string | null;
 	/** Completion/archive time; null while the session is still running. */
@@ -102,6 +110,7 @@ export function buildSessionViews(
 			cwd,
 			project: cwd === null ? "" : (labels.get(cwd) ?? cwd),
 			status,
+			outcome: status === "completed" ? (row.status ?? null) : null,
 			updatedAt,
 			completedAt,
 			archivedAt,
@@ -131,8 +140,20 @@ export function projectOptions(views: readonly SessionView[]): Array<{ value: st
 	return options;
 }
 
+/** Title / project / path / id match for the table's search box. Message-body
+ *  matches come from `session.search` and are unioned by the page. */
+export function matchesSessionText(view: SessionView, rawQuery: string): boolean {
+	const query = rawQuery.trim().toLowerCase();
+	if (query.length === 0) return true;
+	return (
+		view.title.toLowerCase().includes(query) ||
+		view.project.toLowerCase().includes(query) ||
+		(view.cwd?.toLowerCase().includes(query) ?? false) ||
+		view.id.toLowerCase().includes(query)
+	);
+}
+
 export function filterViews(views: readonly SessionView[], filters: SessionFilters, now: number): SessionView[] {
-	const query = filters.query.trim().toLowerCase();
 	const cutoff = filters.days > 0 ? now - filters.days * DAY_MS : null;
 	return views.filter(view => {
 		if (filters.project !== PROJECT_ALL && (view.cwd ?? PROJECT_NONE) !== filters.project) return false;
@@ -141,13 +162,7 @@ export function filterViews(views: readonly SessionView[], filters: SessionFilte
 			const last = parsed(view.updatedAt);
 			if (last === null || last < cutoff) return false;
 		}
-		if (query.length === 0) return true;
-		return (
-			view.title.toLowerCase().includes(query) ||
-			view.project.toLowerCase().includes(query) ||
-			(view.cwd?.toLowerCase().includes(query) ?? false) ||
-			view.id.toLowerCase().includes(query)
-		);
+		return matchesSessionText(view, filters.query);
 	});
 }
 
@@ -187,11 +202,8 @@ export function sortViews(views: readonly SessionView[], sort: SessionSort): Ses
 			case "updatedAt":
 				result = compareTime(a.updatedAt, b.updatedAt, sort.dir);
 				break;
-			case "completedAt":
-				result = compareTime(a.completedAt, b.completedAt, sort.dir);
-				break;
 		}
-		if (sort.dir === "desc" && sort.key !== "updatedAt" && sort.key !== "completedAt") result = -result;
+		if (sort.dir === "desc" && sort.key !== "updatedAt") result = -result;
 		return result || compareText(a.id, b.id);
 	});
 	return sorted;
@@ -235,17 +247,4 @@ export function formatSessionTime(value: string | null, now = new Date()): strin
 		hour: "2-digit",
 		minute: "2-digit",
 	});
-}
-
-/** Newest user message from a `session.search` page (newest first). */
-export function lastUserPrompt(
-	matches: readonly { role: string; content: string }[],
-	toText: (content: string) => string,
-): string | null {
-	for (const match of matches) {
-		if (match.role !== "user") continue;
-		const text = toText(match.content).replace(/\s+/g, " ").trim();
-		return text.length > 0 ? text : null;
-	}
-	return null;
 }

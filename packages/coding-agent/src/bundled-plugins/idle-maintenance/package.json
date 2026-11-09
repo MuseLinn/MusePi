@@ -1,0 +1,14 @@
+{
+	"name": "musepi-idle-maintenance",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Compact context and generate a recap after the session has been idle past the configured threshold.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "◷",
+		"label": "Idle Maintenance",
+		"description": "Compact context and generate a recap while the session sits idle.",
+		"extensions": ["./index.ts"]
+	}
+}

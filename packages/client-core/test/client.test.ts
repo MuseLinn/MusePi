@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
 import type {
 	AgentSnapshot,
@@ -11,8 +11,13 @@ import type {
 	SubagentProgressPayload,
 	WireMessage,
 } from "@musepi/pi-wire";
+import { dismissActionToast, getToasts } from "../src/lib/action-toast";
 import { GuestClient } from "../src/lib/client";
 import { CollabSocket } from "../src/lib/socket";
+
+afterEach(() => {
+	for (const toast of getToasts()) dismissActionToast(toast.id);
+});
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
 
@@ -310,23 +315,59 @@ describe("GuestClient frame apply", () => {
 		expect(snap.endedReason).toBe("host left");
 	});
 
-	it("error frames append notices", () => {
+	it("error frames raise an error toast", () => {
 		const client = liveClient();
 		client.applyFrameForTest({ t: "error", message: "boom" });
-		const notices = client.getSnapshot().notices;
+		const notices = getToasts();
 		expect(notices).toHaveLength(1);
-		expect(notices[0]).toMatchObject({ level: "error", message: "boom" });
+		expect(notices[0]).toMatchObject({ kind: "error", message: "boom" });
 	});
 
-	it("auto_retry_end failure surfaces an error notice", () => {
+	it("auto_retry_end failure surfaces an error toast", () => {
 		const client = liveClient();
 		client.applyFrameForTest({
 			t: "event",
 			event: { type: "auto_retry_end", success: false, attempt: 3, finalError: "x" },
 		});
-		const notices = client.getSnapshot().notices;
+		const notices = getToasts();
 		expect(notices).toHaveLength(1);
-		expect(notices[0]).toMatchObject({ level: "error", message: "x" });
+		expect(notices[0]).toMatchObject({ kind: "error", message: "x" });
+	});
+
+	it("keeps retry notices on one source key and clears them on success", () => {
+		const client = liveClient();
+		client.applyFrameForTest({
+			t: "event",
+			event: { type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 100, errorMessage: "429" },
+		});
+		client.applyFrameForTest({
+			t: "event",
+			event: { type: "auto_retry_start", attempt: 2, maxAttempts: 3, delayMs: 100, errorMessage: "429" },
+		});
+		expect(getToasts()).toHaveLength(1);
+		expect(getToasts()[0]?.message).toContain("2/3");
+
+		client.applyFrameForTest({ t: "event", event: { type: "auto_retry_end", success: true, attempt: 2 } });
+		expect(getToasts()).toHaveLength(0);
+	});
+
+	it("keeps compaction notices on one source key and clears a skipped run", () => {
+		const client = liveClient();
+		client.applyFrameForTest({
+			t: "event",
+			event: { type: "auto_compaction_start", reason: "threshold", action: "auto" },
+		});
+		client.applyFrameForTest({
+			t: "event",
+			event: { type: "auto_compaction_start", reason: "threshold", action: "auto" },
+		});
+		expect(getToasts()).toHaveLength(1);
+
+		client.applyFrameForTest({
+			t: "event",
+			event: { type: "auto_compaction_end", aborted: false, willRetry: false, skipped: true },
+		});
+		expect(getToasts()).toHaveLength(0);
 	});
 
 	it("a pre-welcome error (hello rejection, e.g. protocol mismatch) ends the session with the host's reason", () => {

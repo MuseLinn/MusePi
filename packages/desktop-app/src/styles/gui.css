@@ -20,3 +20,9 @@
 @import "./gui-board.css";
 @import "./gui-widgets.css";
 @import "./gui-misc.css";
+/* Loaded last: the sidebar-slot authority (`data-panel`) and the shared
+ * second-tier panel spec must win over earlier pane rules. */
+@import "./gui-side-panel.css";
+/* Very last: the global liquid-glass ladder overrides every card/floating
+ * surface's fill, hairline, rim and interaction state. */
+@import "./gui-glass.css";

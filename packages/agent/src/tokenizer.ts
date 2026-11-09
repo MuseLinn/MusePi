@@ -242,6 +242,7 @@ export class Tokenizer {
 				break;
 			}
 			case "hookMessage":
+			case "custom":
 			case "toolResult": {
 				if (typeof message.content === "string") {
 					fragments.push(message.content);

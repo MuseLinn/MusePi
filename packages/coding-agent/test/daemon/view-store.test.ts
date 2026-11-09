@@ -325,6 +325,63 @@ describe("ViewStore cross-session tables", () => {
 		expect(store.search("needle")).toHaveLength(1);
 	});
 
+	test("lastUserMessages batches one page of sessions and picks each newest user turn", () => {
+		const store = tempStore();
+		store.upsert(
+			"s1",
+			snapshot(
+				"s1",
+				[
+					{ role: "user", content: "first ask", timestamp: 1 },
+					{ role: "assistant", content: "answer", timestamp: 2 },
+					{ role: "user", content: "second ask", timestamp: 3 },
+				] as unknown as WireMessage[],
+				3,
+			),
+		);
+		// A session whose tail is assistant-only must not hide its last prompt.
+		store.upsert(
+			"s2",
+			snapshot(
+				"s2",
+				[
+					{ role: "user", content: "only ask", timestamp: 1 },
+					{ role: "assistant", content: "tail", timestamp: 2 },
+				] as unknown as WireMessage[],
+				2,
+			),
+		);
+		store.upsert(
+			"s3",
+			snapshot("s3", [{ role: "assistant", content: "no user turn", timestamp: 1 }] as unknown as WireMessage[], 1),
+		);
+
+		const prompts = store.lastUserMessages(["s1", "s2", "s3"]);
+		expect(prompts).toEqual({ s1: "second ask", s2: "only ask" });
+		// Unknown ids and duplicates stay harmless.
+		expect(store.lastUserMessages(["s1", "s1", "missing"])).toEqual({ s1: "second ask" });
+		expect(store.lastUserMessages([])).toEqual({});
+	});
+
+	test("messagesFor returns the tail in reading order when asked", () => {
+		const store = tempStore();
+		store.upsert(
+			"s1",
+			snapshot(
+				"s1",
+				[1, 2, 3, 4, 5].map(seq => ({
+					role: "user",
+					content: `turn ${seq}`,
+					timestamp: seq,
+				})) as unknown as WireMessage[],
+				5,
+			),
+		);
+		// seq is the projection's 0-based entry index.
+		expect(store.messagesFor("s1", 2).map(m => m.seq)).toEqual([0, 1]);
+		expect(store.messagesFor("s1", 2, true).map(m => m.seq)).toEqual([3, 4]);
+	});
+
 	test("load still serves the whole snapshot (recovery path unchanged)", () => {
 		const store = tempStore();
 		const snap = snapshot("s1", [{ role: "user", content: "keep", timestamp: 1 }], 1);

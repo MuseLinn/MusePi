@@ -104,7 +104,14 @@ import {
 	selectPanelTabComponent,
 } from "../lib/slot-host";
 import { surfaceGlyph } from "../lib/surface-glyphs";
-import { agentTabDescriptor, panelWidth, SURFACES, surfaceById, writePanelWidth } from "../lib/surfaces/registry";
+import {
+	agentTabDescriptor,
+	panelWidth,
+	SURFACES,
+	surfaceById,
+	surfaceRequiresSession,
+	writePanelWidth,
+} from "../lib/surfaces/registry";
 import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -201,7 +208,10 @@ export function ContextPanel({
 	overviewLoading,
 	overviewError,
 	onLoadOlderHistory,
+	cwd: cwdOverride,
 }: {
+	/** 无会话时的目录（欢迎页右栏）：会话内仍以 `snap.state.cwd` 为准。 */
+	cwd?: string;
 	/** Materialized snapshot, passed down from ChatView's own store
 	 *  subscription (a second useStore here double-subscribed the same
 	 *  store for four fields — every notify ran two listeners). */
@@ -285,7 +295,7 @@ export function ContextPanel({
 	 *  has loaded. Nonce-bumped by ChatView so a repeat re-opens. */
 	planShowRequest?: { directory: string; id: string; title: string; nonce: number } | null;
 }): ReactNode {
-	const cwd = snap?.state?.cwd ?? "";
+	const cwd = snap?.state?.cwd ?? cwdOverride ?? "";
 	const browserSessionId = snap?.sessionId ?? null;
 	const browserHost = useSyncExternalStore(subscribeBrowserHost, getBrowserHostState, getBrowserHostState);
 	const browserTabs = useMemo(
@@ -676,13 +686,18 @@ export function ContextPanel({
 	// measured onto --pane-max-* and re-measured on every surface resize: a
 	// window resize, sidebar toggle or rail drag keeps the panel flush instead
 	// of leaving it off the container's insets.
-	// Maximize geometry: measure the SESSION COLUMN (.gui-chat-column), not
-	// .gui-chat-surface — the surface card also contains this panel, the rail
-	// and the collapsed panel's session-info dock, so the old surface rect
-	// maximized the panel OVER the rail. The measured vars now position ONLY
-	// the panel: there is no scrim to drive (user 2026-09-16 — 最大化不要遮罩，
-	// 正常缩放卡片尺寸即可). The owner of the measurement is panel-maximize.ts;
-	// this effect re-runs it when the column resizes or the panel folds.
+	// Maximize geometry: measure the visible scene CARD (the session column, or
+	// the welcome card), not .gui-chat-surface — the surface also contains this
+	// panel, the rail and the collapsed panel's session-info dock, so the old
+	// surface rect maximized the panel OVER the rail. The measured vars now
+	// position ONLY the panel: there is no scrim to drive (user 2026-09-16 —
+	// 最大化不要遮罩，正常缩放卡片尺寸即可). The owner of the measurement is
+	// panel-maximize.ts; this effect re-runs it when the anchor resizes or the
+	// panel folds. The session id is a dependency because the welcome↔session
+	// swap replaces the anchor card WITHOUT resizing the surface — the old
+	// observer would then watch a detached card and paint the previous scene's
+	// box. Scene enter animations translate the card, so the final write waits
+	// for animationend instead of capturing the mid-flight rect.
 	useLayoutEffect(() => {
 		const panel = panelRef.current;
 		const column = panelMaximizeColumn(panel);
@@ -691,11 +706,14 @@ export function ContextPanel({
 		measure();
 		const observer = new ResizeObserver(measure);
 		observer.observe(column, { box: "border-box" });
+		const scene = column.closest<HTMLElement>(".gui-scene");
+		scene?.addEventListener("animationend", measure);
 		return () => {
+			scene?.removeEventListener("animationend", measure);
 			observer.disconnect();
 			clearPanelMaximizedGeometry(panel);
 		};
-	}, [maximized, open]);
+	}, [maximized, open, snap?.sessionId]);
 	const panelClass = `gui-pane-right gui-pane-right--inner${open ? "" : " gui-pane-right--inner--closed"}${maximized ? " gui-pane-right--maximized" : ""}${className ? ` ${className}` : ""}`;
 	// Header chrome title (nav unification): the rail owns navigation;
 	// the strip labels the active view. `view` is derived from the active
@@ -857,6 +875,12 @@ export function ContextPanel({
 			surface.availability === "always" &&
 			(surface.id !== FILE_WORKSPACE_SURFACE || fileWorkspaceComponent !== undefined),
 	);
+	// Session-scoped surfaces (context / trajectory / agents) stay listed while
+	// the welcome scene owns the panel — an entry that names what is there beats
+	// a silently shorter list — but they are not launchable without a session.
+	const sessionMissing = !snap?.sessionId;
+	const surfaceLaunchable = (surface: (typeof SURFACES)[number]): boolean =>
+		!surfaceRequiresSession(surface) || !sessionMissing;
 
 	// ── Split columns (dsh 0.2.0 two-column parity) ────────────────────
 	// One DndContext spans both column strips so a tab drags across
@@ -999,7 +1023,7 @@ export function ContextPanel({
 				<LegacyBrowserPane rpc={rpc} />
 			)
 		) : bodyView === "git" || bodyView === "diff" || bodyView === "pr" ? (
-			<GitPanel rpc={rpc} cwd={cwd} />
+			<GitPanel rpc={rpc} cwd={cwd} sessionId={snap?.sessionId ?? null} />
 		) : bodyView === "trajectory" ? (
 			/* Trajectory renders OUTSIDE the feather-scroll (browser/git
 			 * parity): its root is a flex-1 column with its own scroll list —
@@ -1413,6 +1437,7 @@ export function ContextPanel({
 					items={primarySurfaces.map(s => ({
 						label: t(s.label as TranslationKey),
 						icon: s.icon as IconName,
+						disabled: !surfaceLaunchable(s),
 						onSelect: () => {
 							if (s.id === "browser") {
 								openBrowserPanel({ column: addMenu.column, forceNew: true });
@@ -1671,15 +1696,22 @@ export function ContextPanel({
 							<div className="gui-pane-body-wrap">
 								{panelTabs.tabs.length === 0 ? (
 									/* Zero tabs → empty-state navigation page (Kimi "从这里开始"
-									 * parity): the rail's primary surfaces as launchable entries. */
+									 * parity): the rail's primary surfaces as launchable entries.
+									 * Session-scoped ones stay listed but disabled before a
+									 * session exists, with the reason as the hint. */
 									<PanelTabsEmptyState
 										heading={t("general.startHere")}
-										items={primarySurfaces.map(s => ({
-											id: s.id,
-											label: t(s.label as TranslationKey),
-											icon: <Icon name={s.icon as IconName} className="h-4 w-4" />,
-											onSelect: () => (s.id === "browser" ? openBrowserPanel() : onViewChange(s.id)),
-										}))}
+										items={primarySurfaces.map(s => {
+											const launchable = surfaceLaunchable(s);
+											return {
+												id: s.id,
+												label: t(s.label as TranslationKey),
+												icon: <Icon name={s.icon as IconName} className="h-4 w-4" />,
+												disabled: !launchable,
+												hint: launchable ? undefined : t("general.sessionRequired"),
+												onSelect: () => (s.id === "browser" ? openBrowserPanel() : onViewChange(s.id)),
+											};
+										})}
 									/>
 								) : (
 									renderPanelBody(view, activePanelTab)

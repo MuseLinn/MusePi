@@ -1,0 +1,134 @@
+/*
+ * Global liquid-glass spec (2026-11-08) — loaded last, one authority.
+ *
+ * Three layers, each with one fill / hairline / rim pair / shadow:
+ *   L1  cards      chat, sidebar, page, right panel, dock, session info,
+ *                   getting-started
+ *   L2  floating   menus, popovers, select lists
+ *   L3  states     hover / active / focus on every interactive row
+ *
+ * The tokens live in client-core/tokens.css. Since 2026-11-08 every fill
+ * and edge is DERIVED from the active theme's --bg-* / --fg, not from a
+ * fixed default-palette hue: a midnight-blue theme no longer paints warm
+ * brown cards while its session-info card and transcript fades stay blue.
+ * The same ladder adapts to all 18 color presets and both schemes.
+ *
+ * No new backdrop-filter here: on win32/linux the window supplies the
+ * material and Chromium has nothing to sample (gui-base.css already
+ * disables pane blur there). Tint + hairline + specular rim + lift work on
+ * every platform and keep text contrast stable.
+ */
+
+/* ── L1: cards ──────────────────────────────────────────────────────── */
+.gui-float-card,
+.gui-page-card,
+.gui-chat-column,
+.gui-pane-right--inner,
+.gui-right-rail,
+.gui-terminal-dock,
+.gui-side-keeper > .gui-pane-side,
+.gui-session-info,
+.gui-getting-started {
+	border: 1px solid var(--glass-hairline);
+	background-color: var(--glass-card-bg);
+	background-image: var(--glass-sheen);
+	box-shadow:
+		inset 0 1px 0 var(--glass-rim-hi),
+		inset 0 -1px 0 var(--glass-rim-lo),
+		var(--glass-card-shadow);
+}
+
+/* ── Closed terminal dock must paint NOTHING ───────────────────────────
+ * The dock stays mounted at inline `height: 0` so open/close can animate.
+ * The L1 shorthand above re-armed ALL FOUR 1px borders (the older fix in
+ * gui-chat.css only zeroed `border-top-width`, which covered the tailwind
+ * `border-t` but not bottom/left/right). With border-box sizing a 1px
+ * bottom edge cannot collapse to zero, so a colored hairline stayed at the
+ * bottom of the window. Zero every edge and drop the glass fill/shadow;
+ * specificity (0,2,0) beats the L1 list and this sheet loads last. */
+.gui-terminal-dock:not(.gui-terminal-dock--open) {
+	border-width: 0;
+	background: none;
+	box-shadow: none;
+}
+
+/* ── L2: floating layers ──────────────────────────────────────────────
+ * The shell already owns the frosted backdrop; this replaces only the
+ * near-black outline and the washed-out fill so the edge reads on both
+ * schemes. */
+.gui-menu-popup {
+	border: 1px solid var(--glass-hairline-strong);
+	background-color: var(--glass-float-bg);
+	box-shadow:
+		inset 0 1px 0 var(--glass-rim-hi),
+		inset 0 -1px 0 var(--glass-rim-lo),
+		var(--glass-float-shadow);
+}
+
+/* ── L3: interaction states ───────────────────────────────────────────
+ * The old hover used --color-surface-raised, which IS the card's own
+ * background: the highlighted menu row had the same value as its parent.
+ * A hover now lifts with a tinted fill plus a hairline, and keyboard focus
+ * gets the same treatment plus an accent ring. */
+.gui-context-item:hover,
+.gui-context-item:focus-visible,
+.gui-menu-item:hover,
+.gui-menu-item:focus-visible,
+.gui-side-panel-row:hover,
+.gui-side-panel-primary:hover:not(:disabled),
+.gui-getting-started-row:hover,
+.gui-getting-started-menu button:hover,
+.gui-getting-started-more:hover {
+	background: var(--glass-hover-strong);
+	box-shadow: inset 0 0 0 1px var(--glass-hairline);
+	color: var(--color-text);
+}
+
+.gui-context-item[data-active="true"],
+.gui-menu-item[data-active="true"],
+.gui-side-panel-row--active,
+.gui-side-panel-row--active:hover {
+	background: var(--glass-active);
+	box-shadow: inset 0 0 0 1px var(--glass-hairline-strong);
+}
+
+.gui-context-item:focus-visible,
+.gui-menu-item:focus-visible,
+.gui-side-panel-row:focus-visible,
+.gui-getting-started-row:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: -2px;
+}
+
+/* Dividers and secondary affordances follow the same hairline. */
+.gui-context-divider {
+	background: var(--glass-hairline);
+}
+
+.gui-getting-started-progress {
+	box-shadow: inset 0 0 0 1px var(--glass-hairline-strong);
+}
+
+/* The getting-started card is nested INSIDE an L1 card: one step down in
+ * elevation, so its fill is quieter and its rim thinner. */
+.gui-getting-started {
+	background-color: var(--glass-hover);
+	box-shadow:
+		inset 0 1px 0 var(--glass-rim-hi),
+		0 4px 14px oklch(0 0 0 / 22%);
+}
+
+@media (prefers-contrast: more) {
+	.gui-float-card,
+	.gui-page-card,
+	.gui-chat-column,
+	.gui-pane-right--inner,
+	.gui-right-rail,
+	.gui-terminal-dock,
+	.gui-side-keeper > .gui-pane-side,
+	.gui-session-info,
+	.gui-getting-started,
+	.gui-menu-popup {
+		border-color: var(--glass-hairline-strong);
+	}
+}

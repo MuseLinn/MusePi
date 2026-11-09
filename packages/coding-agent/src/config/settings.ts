@@ -33,7 +33,8 @@ import {
 } from "@musepi/pi-utils";
 import { withFileLock } from "@musepi/pi-utils/file-lock";
 import { JSONC, YAML } from "bun";
-import { invalidate as invalidateCapabilityFsCache } from "../capability/fs";
+import { invalidateCapabilityCache } from "../capability";
+import { clearCache as clearCapabilityFsCache, invalidate as invalidateCapabilityFsCache } from "../capability/fs";
 import { type Settings as SettingsCapabilityItem, settingsCapability } from "../capability/settings";
 import type { ModelRole } from "../config/model-roles";
 import { loadCapability } from "../discovery";
@@ -730,6 +731,39 @@ export class Settings {
 		}
 		this.#rebuildMerged();
 		this.#fireEffectiveSettingChanged("modelRoles", this.get("modelRoles"), prevModelRoles);
+		this.#fireAllHooks();
+	}
+
+	/**
+	 * Re-read the global and project settings from disk in place.
+	 *
+	 * Unlike {@link reloadForCwd}, this is not a no-op when the directory is
+	 * unchanged: it is the config half of a session reload. Pending local writes
+	 * are flushed first so a reload cannot discard an edit made moments earlier;
+	 * runtime overrides survive (they are not file state). Every holder keeps
+	 * the same Settings instance, so `settings.get()` observes the new values.
+	 */
+	async reloadFromDisk(): Promise<void> {
+		if (!this.#persist) return;
+		await this.flush();
+		// Project settings arrive through capability discovery. Two caches sit in
+		// front of the file bytes: the TTL cache of provider results, and the
+		// content/directory cache underneath it. Dropping only the first still
+		// re-serves the pre-reload bytes, so a reload clears both.
+		invalidateCapabilityCache();
+		clearCapabilityFsCache();
+		const [globalResult, projectResult] = await Promise.allSettled([
+			this.#loadGlobalSettings(),
+			this.#loadProjectSettings(),
+		]);
+		if (globalResult.status === "rejected") throw globalResult.reason;
+		if (projectResult.status === "rejected") throw projectResult.reason;
+		this.#project = projectResult.value;
+		this.#configOverlay = await this.#loadConfigOverlays();
+		this.#modified.clear();
+		this.#modifiedGlobalModelRoles.clear();
+		this.#modifiedProjectModelRoles.clear();
+		this.#rebuildMerged();
 		this.#fireAllHooks();
 	}
 

@@ -29,7 +29,6 @@ const NAV_IDS = new Set([
 	"suggestions",
 	"modes",
 	"browser",
-	"history",
 	"indexes",
 	"usage",
 	"migration",

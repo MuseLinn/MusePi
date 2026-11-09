@@ -4,16 +4,11 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { t } from "../../i18n/index.js";
+import type { AtCompletionEntry } from "../../lib/at-completion";
 import { Icon } from "../../vendor/oc-icons";
 import { type SlashEntry, SlashRow } from "../SlashRow";
 
-/** One "@" workspace-tree completion row (workspace.tree shape). */
-export interface AtCompletionEntry {
-	name: string;
-	path: string;
-	isDir: boolean;
-	depth: number;
-}
+export type { AtCompletionEntry } from "../../lib/at-completion";
 
 /** One "#" session reference completion row (session.list shape). */
 export interface HashCompletionEntry {
@@ -134,11 +129,11 @@ export function CompletionMenus({
 				<div className="gui-slash-menu" ref={menuRef}>
 					{atEntries.map((e, i) => (
 						<button
-							key={e.path}
+							key={e.insertPath ?? e.path}
 							type="button"
 							className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
 							onMouseDown={ev => ev.preventDefault()}
-							onClick={() => onPickAt(e.path)}
+							onClick={() => onPickAt(e.insertPath ?? e.path)}
 						>
 							<Icon
 								name={e.isDir ? "folder" : "file"}
@@ -148,7 +143,12 @@ export function CompletionMenus({
 								<span className="font-medium">{e.name}</span>
 								{e.isDir && <span className="ml-1 text-[12px] text-[var(--color-text-faint)]">/</span>}
 							</span>
-							<span className="max-w-[200px] truncate text-[12px] text-[var(--color-text-faint)]">{e.path}</span>
+							{e.rootLabel && (
+								<span className="max-w-[100px] shrink-0 truncate rounded bg-[var(--color-surface-sunken)] px-1 py-px text-[10px] text-[var(--color-text-faint)]">
+									{e.rootLabel}
+								</span>
+							)}
+							<span className="max-w-[180px] truncate text-[12px] text-[var(--color-text-faint)]">{e.path}</span>
 						</button>
 					))}
 				</div>

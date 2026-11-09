@@ -396,7 +396,7 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
-	background: var(--color-accent, #7aa2ff);
+	background: var(--color-accent);
 	color: #0b0d12;
 	font-weight: 600;
 	border: none;
@@ -409,7 +409,7 @@
 	transition: background 140ms ease-out;
 }
 .gui-scheduled-new:hover:not(:disabled) {
-	background: var(--color-accent-hover, #8bb3ff);
+	background: var(--color-accent-hover);
 }
 .gui-scheduled-new:disabled {
 	opacity: 0.5;
@@ -507,8 +507,8 @@
 	color: #e85a5a;
 }
 .gui-cron-status--run {
-	background: rgba(122, 162, 255, 0.18);
-	color: #7aa2ff;
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	color: var(--color-accent);
 }
 .gui-scheduled-item-last {
 	font-size: 11px;
@@ -560,7 +560,7 @@
 	transition: transform 0.15s ease;
 }
 .gui-cron-toggle input:checked + .gui-cron-toggle-track {
-	background: var(--color-accent, #7aa2ff);
+	background: var(--color-accent);
 }
 .gui-cron-toggle input:checked + .gui-cron-toggle-track::after {
 	transform: translateX(15px);
@@ -589,9 +589,9 @@
 	cursor: pointer;
 }
 .gui-cron-weekday--on {
-	border-color: var(--color-accent, #7aa2ff);
-	background: rgba(122, 162, 255, 0.16);
-	color: #7aa2ff;
+	border-color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-accent);
 }
 .gui-cron-expr {
 	font-family: var(--gui-font-mono, ui-monospace, monospace);
@@ -603,137 +603,19 @@
 	margin-top: 4px;
 }
 
-/* ── Scheduled tasks v2 (openchamber parity: workspaces + detail) ── */
+/* ── Scheduled tasks (two-tier shell: left panel in the rail's sidebar
+ *    slot, detail on the right). The page owns ONE column; the workspace
+ *    list is ScheduledTasksPanel, not a grid column that disappears on the
+ *    empty state (2026-11-08). ── */
 .gui-scheduled-body {
 	display: grid;
-	grid-template-columns: 260px minmax(0, 1fr);
+	grid-template-columns: minmax(0, 1fr);
 	gap: 12px;
 	flex: 1;
 	min-height: 0;
 }
-.gui-scheduled-ws {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	min-height: 0;
-	overflow-y: auto;
-	overflow-x: hidden;
-	/* A real destination panel (ChatGPT 定时任务 left panel parity): its own
-	 * surface + chrome, not a bare list of workspace cards. */
-	padding: 10px;
-	border: 1px solid rgba(128, 128, 128, 0.18);
-	border-radius: var(--radius-lg);
-	background: var(--color-surface);
-	box-shadow: var(--gui-card-shadow);
-}
-.gui-scheduled-panel-head {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	flex-shrink: 0;
-	padding-bottom: 8px;
-	border-bottom: 1px solid rgba(128, 128, 128, 0.16);
-}
-.gui-scheduled-panel-title {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	font-size: 13px;
-	font-weight: 600;
-}
-.gui-scheduled-panel-new {
-	width: 100%;
-	justify-content: center;
-}
-.gui-scheduled-panel-search {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	height: 28px;
-	padding: 0 8px;
-	border-radius: var(--radius-md);
-	background: rgba(128, 128, 128, 0.08);
-	color: var(--color-text-muted);
-}
-.gui-scheduled-panel-search input {
-	flex: 1;
-	min-width: 0;
-	border: 0;
-	outline: 0;
-	background: transparent;
-	color: inherit;
-	font: inherit;
-	font-size: 12px;
-}
-.gui-scheduled-panel-filter {
-	height: 28px;
-	padding: 0 8px;
-	border: 1px solid rgba(128, 128, 128, 0.18);
-	border-radius: var(--radius-md);
-	background: transparent;
-	color: inherit;
-	font: inherit;
-	font-size: 12px;
-}
-.gui-scheduled-panel-empty {
-	padding: 16px 8px;
-	text-align: center;
-	font-size: 12px;
-	opacity: 0.6;
-}
-.gui-scheduled-ws-block {
-	border: 1px solid rgba(128, 128, 128, 0.18);
-	border-radius: var(--radius-lg);
-	overflow: hidden;
-	background: rgba(128, 128, 128, 0.04);
-}
-.gui-scheduled-ws-head {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: calc(7px * var(--gui-density, 1)) calc(10px * var(--gui-density, 1));
-	font-weight: 600;
-	background: rgba(128, 128, 128, 0.08);
-}
-.gui-scheduled-ws-count {
-	font-size: 11px;
-	font-weight: 500;
-	opacity: 0.6;
-	background: rgba(128, 128, 128, 0.15);
-	border-radius: 999px;
-	padding: 0 7px;
-}
-.gui-scheduled-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	width: 100%;
-	padding: calc(8px * var(--gui-density, 1)) calc(10px * var(--gui-density, 1));
-	border: none;
-	border-top: 1px solid rgba(128, 128, 128, 0.1);
-	background: transparent;
-	color: inherit;
-	font-size: var(--ui-font-size-sm);
-	cursor: pointer;
-	text-align: left;
-}
-.gui-scheduled-row:hover {
-	background: rgba(128, 128, 128, 0.09);
-}
-.gui-scheduled-row--active {
-	background: rgba(122, 162, 255, 0.14);
-	color: #7aa2ff;
-}
-.gui-scheduled-row-dot {
-	width: 6px;
-	height: 6px;
-	border-radius: 50%;
-	background: rgba(128, 128, 128, 0.5);
-	flex-shrink: 0;
-}
-.gui-scheduled-row--active .gui-scheduled-row-dot {
-	background: #7aa2ff;
-}
+/* The sidebar panel's surface language lives in gui-side-panel.css — one
+ * spec shared by every destination and by plugin-contributed panels. */
 .gui-scheduled-detail {
 	min-width: 0;
 	display: flex;
@@ -857,16 +739,16 @@
 	margin-top: auto;
 }
 .gui-scheduled-run-now {
-	background: rgba(122, 162, 255, 0.18);
-	color: #7aa2ff;
-	border: 1px solid rgba(122, 162, 255, 0.35);
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	color: var(--color-accent);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 35%, transparent);
 	/* Accent-tinted hover (brighten the tint) — .gui-btn:hover would
 	 * override these overrides with surface-raised gray. */
 	transition: background 140ms ease-out, border-color 140ms ease-out;
 }
 .gui-scheduled-run-now:hover:not(:disabled) {
-	background: rgba(122, 162, 255, 0.3);
-	border-color: rgba(122, 162, 255, 0.55);
+	background: color-mix(in oklab, var(--color-accent) 30%, transparent);
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
 }
 .gui-scheduled-del {
 	background: rgba(232, 90, 90, 0.12);
@@ -927,7 +809,7 @@
 	cursor: pointer;
 }
 .gui-cron-enabled input {
-	accent-color: var(--color-accent, #7aa2ff);
+	accent-color: var(--color-accent);
 	width: 15px;
 	height: 15px;
 }
@@ -948,7 +830,7 @@
 	border-radius: var(--radius-md);
 	padding: 4px 9px;
 	font-size: 12.5px;
-	color: var(--color-accent, #7aa2ff);
+	color: var(--color-accent);
 	cursor: pointer;
 }
 .gui-cron-preview-list {
@@ -979,12 +861,12 @@
 	text-align: left;
 }
 .gui-cron-example:hover {
-	border-color: rgba(122, 162, 255, 0.5);
-	background: rgba(122, 162, 255, 0.08);
+	border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
 }
 .gui-cron-example code {
 	font-family: var(--gui-font-mono, ui-monospace, monospace);
-	color: var(--color-accent, #7aa2ff);
+	color: var(--color-accent);
 	flex-shrink: 0;
 }
 .gui-cron-example span {
@@ -1053,10 +935,10 @@
 	opacity: 0.3;
 }
 .gui-calendar-day--today {
-	border: 1px solid rgba(122, 162, 255, 0.5);
+	border: 1px solid color-mix(in oklab, var(--color-accent) 50%, transparent);
 }
 .gui-calendar-day--sel {
-	background: var(--color-accent, #7aa2ff);
+	background: var(--color-accent);
 	color: #0b0d12;
 	font-weight: 700;
 }
@@ -1145,7 +1027,7 @@
 	background: var(--color-surface-raised);
 }
 .gui-cwd-item--active {
-	background: rgba(122, 162, 255, 0.14);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 	color: var(--color-accent);
 }
 .gui-cwd-empty {
@@ -1208,11 +1090,11 @@
 }
 .gui-cron-delete-opt:hover {
 	border-color: var(--color-accent);
-	background: rgba(122, 162, 255, 0.06);
+	background: color-mix(in oklab, var(--color-accent) 6%, transparent);
 }
 .gui-cron-delete-opt input {
 	margin-top: 3px;
-	accent-color: var(--color-accent, #7aa2ff);
+	accent-color: var(--color-accent);
 }
 .gui-cron-delete-opt span {
 	display: flex;
@@ -4144,63 +4026,6 @@
 	border-color: var(--color-accent);
 }
 
-/* ---- History viewer (settings → 数据与统计 → 历史会话) ---- */
-.gui-history-item {
-	display: block;
-	width: 100%;
-	text-align: left;
-	padding: 7px 9px;
-	border-radius: var(--radius-sm);
-	transition: background 120ms ease;
-}
-.gui-history-item:hover {
-	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
-}
-.gui-history-item--active {
-	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-}
-.gui-history-msg {
-	padding: 8px 10px;
-	border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
-}
-.gui-history-msg:last-child {
-	border-bottom: none;
-}
-.gui-history-role {
-	padding: 1px 7px;
-	border-radius: 999px;
-	font-size: 10.5px;
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-}
-.gui-history-role--user {
-	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
-	color: var(--color-accent);
-}
-.gui-history-role--assistant {
-	background: color-mix(in oklab, var(--color-text-faint) 16%, transparent);
-	color: var(--color-text-muted);
-}
-
-/* Right-pane session swap (reactbits AnimatedContent concept, project
- * motion language): keyed on the selected session id, so switching
- * sessions remounts the content and replays a quick fade + 4px rise
- * (160ms fade standard + shared ease-out curve; no static transform is
- * animated so nothing can jump). */
-.gui-history-swap {
-	animation: gui-history-swap-in 180ms var(--spring);
-}
-@keyframes gui-history-swap-in {
-	from {
-		opacity: 0;
-		transform: translateY(4px);
-	}
-	to {
-		opacity: 1;
-		transform: none;
-	}
-}
-
 /* Destructive button (browser data clear-all, zcode 警示按钮 parity). */
 .gui-btn--danger {
 	border-color: color-mix(in oklab, #e5484d 55%, transparent);
@@ -4605,16 +4430,50 @@
 	color: var(--color-text);
 	font-size: var(--ui-font-size-sm);
 	pointer-events: auto;
+	max-height: 400px;
+	transition:
+		max-height 180ms ease,
+		opacity 180ms ease;
 	animation: gui-action-toast-in 200ms var(--spring-liquid, ease);
 }
 
-.gui-motion-off .gui-action-toast {
+/* Collapsed stack: only the newest toast stays legible; older rows shrink to
+ * a sliver and expand when the pointer or keyboard focus enters the stack. */
+.gui-action-toasts[data-expanded="false"] .gui-action-toast:not(.gui-action-toast--front):not(.gui-action-toast--closing) {
+	max-height: 10px;
+	overflow: hidden;
+	opacity: 0.55;
+	padding-top: 0;
+	padding-bottom: 0;
+	pointer-events: none;
+}
+
+/* Exit: the row stays mounted for the keyframe's 180 ms. */
+.gui-action-toast--closing {
+	pointer-events: none;
+	animation: gui-action-toast-out 180ms ease-in both;
+}
+
+@keyframes gui-action-toast-out {
+	to {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+}
+
+.gui-motion-off .gui-action-toast,
+.gui-motion-off .gui-action-toast--closing,
+.gui-motion-off .gui-toast-ring {
 	animation: none;
+	transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.gui-action-toast {
+	.gui-action-toast,
+	.gui-action-toast--closing,
+	.gui-toast-ring {
 		animation: none;
+		transition: none;
 	}
 }
 /* 状态色：图标与描边随 kind 微染，底色保持玻璃中性——浮窗不尖叫。 */
@@ -4673,6 +4532,56 @@
 }
 .gui-action-toast-btn:hover {
 	filter: brightness(1.08);
+}
+.gui-action-toast-cancel {
+	flex-shrink: 0;
+	padding: 3px 8px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+.gui-action-toast-cancel:hover {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+/* The close cross doubles as the countdown dial: the ring empties over the
+ * toast's remaining lifetime and freezes while hovered or focused. */
+.gui-action-toast .gui-action-toast-close {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+}
+.gui-action-toast .gui-toast-ring {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	color: var(--color-text-faint);
+	pointer-events: none;
+	transform: rotate(-90deg);
+	animation-name: gui-toast-ring;
+	animation-timing-function: linear;
+	animation-fill-mode: forwards;
+}
+.gui-toast-ring circle {
+	stroke-dasharray: 100;
+	stroke-dashoffset: 100;
+}
+.gui-action-toast[data-paused="true"] .gui-toast-ring {
+	animation-play-state: paused;
+}
+@keyframes gui-toast-ring {
+	to {
+		stroke-dashoffset: 0;
+	}
 }
 @keyframes gui-action-toast-in {
 	from {

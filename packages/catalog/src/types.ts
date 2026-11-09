@@ -430,6 +430,8 @@ export interface AnthropicCompat {
 	supportsEagerToolInputStreaming?: boolean;
 	/** Whether long prompt-cache retention (`ttl: "1h"`) is supported. Default: true for canonical Anthropic API. */
 	supportsLongCacheRetention?: boolean;
+	/** Whether the endpoint accepts Anthropic on-demand compaction (`compact-2026-09-04`). */
+	supportsServerCompaction?: boolean;
 	/**
 	 * Whether mid-conversation `role: "system"` messages are accepted in the
 	 * `messages` array (Claude Opus 4.8+ and Claude Fable/Mythos 5 on the
@@ -506,6 +508,8 @@ export interface AnthropicCompat {
  * deliberately not used to infer these request-shape capabilities.
  */
 export interface BedrockCompat {
+	/** Whether this endpoint accepts Anthropic on-demand compaction through a Bedrock side request. */
+	supportsServerCompaction?: boolean;
 	/** Whether this endpoint accepts no checkpoints, automatic caching, or explicit cachePoint blocks. */
 	promptCacheMode?: "none" | "automatic" | "explicit";
 	/** Whether explicit cachePoint blocks accept `ttl: "1h"`; omitted TTL means Bedrock's 5-minute default. */
@@ -531,6 +535,8 @@ export interface BedrockCompat {
 
 /** Fully-resolved Bedrock Converse prompt-cache capabilities, materialized once by `buildModel`. */
 export interface ResolvedBedrockCompat {
+	/** Whether Anthropic on-demand compaction is available through a Bedrock side request. */
+	supportsServerCompaction?: boolean;
 	promptCacheMode: NonNullable<BedrockCompat["promptCacheMode"]>;
 	supportsLongPromptCacheRetention: boolean;
 	promptCacheMinimumTokens: number;
@@ -750,7 +756,11 @@ export interface ResolvedOpenAIResponsesCompat extends ResolvedOpenAISharedCompa
 export type ResolvedOpenRouterCompat = ResolvedOpenAICompat & ResolvedOpenAIResponsesCompat;
 
 /** Fully-resolved anthropic-messages compat view (same contract as `ResolvedOpenAICompat`). */
-export type ResolvedAnthropicCompat = Required<Omit<AnthropicCompat, "streamIdleTimeoutMs">> & {
+export type ResolvedAnthropicCompat = Required<
+	Omit<AnthropicCompat, "streamIdleTimeoutMs" | "supportsServerCompaction">
+> & {
+	/** Whether the endpoint accepts Anthropic on-demand compaction. */
+	supportsServerCompaction?: boolean;
 	/**
 	 * Stream-watchdog idle-timeout fallback in ms for slow reasoning hosts; 0 disables the idle watchdog.
 	 * Undefined defers to `PI_STREAM_IDLE_TIMEOUT_MS`, then the legacy

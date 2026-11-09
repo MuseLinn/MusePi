@@ -3,7 +3,6 @@ export type BrowserSettingsTab = "general" | "extensions" | "data";
 export const BROWSER_PREFERENCES_CHANGED_EVENT = "musepi-browser-preferences-changed";
 
 const SETTINGS_TAB_KEY = "musepi-gui-browser-settings-tab";
-const EXTENSIONS_TOOLBAR_KEY = "musepi-gui-browser-extensions-toolbar";
 const SHOW_FULL_URL_KEY = "musepi-gui-browser-show-full-url";
 
 function read(key: string): string | null {
@@ -35,14 +34,6 @@ export function readBrowserSettingsTab(): BrowserSettingsTab {
 
 export function writeBrowserSettingsTab(tab: BrowserSettingsTab): void {
 	write(SETTINGS_TAB_KEY, tab, { key: "settingsTab", value: tab });
-}
-
-export function readBrowserExtensionsToolbarVisible(): boolean {
-	return readBoolean(EXTENSIONS_TOOLBAR_KEY, true);
-}
-
-export function writeBrowserExtensionsToolbarVisible(visible: boolean): void {
-	write(EXTENSIONS_TOOLBAR_KEY, visible ? "1" : "0", { key: "extensionsToolbar", value: visible });
 }
 
 export function readBrowserShowFullUrl(): boolean {

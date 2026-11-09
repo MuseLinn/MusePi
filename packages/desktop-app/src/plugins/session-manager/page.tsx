@@ -1,7 +1,7 @@
 import type { TranslationKey } from "@musepi/client-core";
 import { Segmented, t, useArchivedSessions } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hitText } from "../../components/settings-sections/shared";
 import { projectLabels } from "../../lib/project-label";
 import { useConfirm } from "../../lib/prompt-dialog";
@@ -22,50 +22,57 @@ import {
 	clampPage,
 	filterViews,
 	formatSessionTime,
-	lastUserPrompt,
+	matchesSessionText,
 	PROJECT_ALL,
 	PROJECT_NONE,
 	pageSlice,
 	pageTotal,
 	projectOptions,
 	type SessionFilters,
+	type SessionOutcome,
 	type SessionSort,
 	type SessionSortKey,
-	type SessionStatus,
 	type SessionView,
 	type StatusFilter,
 	sortViews,
 	toggleAll,
 } from "./model";
-import type { SessionListRow, SessionSearchResult } from "./types";
+import type { SessionLastPrompts, SessionListRow, SessionMessage, SessionSearchResult } from "./types";
 
 /**
  * Settings → 会话 (Cordis `settings.tab.sessions`): the session-management
- * page. Data comes from the existing daemon surface only —
- * `session.list` for rows, `session.search` for each visible row's newest
- * user prompt, `session.delete` for permanent removal — plus the shared
- * local archive store (archiving is a local list edit, exactly like the
- * sidebar). The retention settings below the table keep using
- * lib/session-cleanup so the app-shell's hourly cleanup and this page agree
- * on the same preferences.
+ * page, and the one place sessions are read. Data comes from the existing
+ * daemon surface — `session.list` for rows, `session.lastPrompts` for one
+ * page of prompt previews, `session.search` for cross-session message
+ * matches, `history.messages` for the expanded row's transcript,
+ * `session.delete` for permanent removal — plus the shared local archive
+ * store (archiving is a local list edit, exactly like the sidebar). The
+ * retention settings below the table keep using lib/session-cleanup so the
+ * app-shell's hourly cleanup and this page agree on the same preferences.
  */
 
-const STATUS_LABEL: Record<SessionStatus, TranslationKey> = {
-	running: "settings.inProgress",
-	completed: "settings.sessionManager.statusCompleted",
-	archived: "settings.archived",
+const STATUS_LABEL: Record<SessionOutcome, TranslationKey> = {
+	complete: "session status complete",
+	interrupted: "session status interrupted",
+	aborted: "session status aborted",
+	error: "session status error",
+	pending: "session status pending",
+	unknown: "session status unknown",
 };
 
-const STATUS_DOT: Record<SessionStatus, string> = {
-	running: "bg-[var(--color-accent)]",
-	completed: "bg-[var(--color-success)]",
-	archived: "bg-[var(--color-text-faint)]",
+const STATUS_DOT: Record<SessionOutcome, string> = {
+	complete: "bg-[var(--color-success)]",
+	interrupted: "bg-[var(--color-warning,var(--color-accent))]",
+	aborted: "bg-[var(--color-text-faint)]",
+	error: "bg-[var(--color-danger)]",
+	pending: "bg-[var(--color-accent)]",
+	unknown: "bg-[var(--color-text-faint)]",
 };
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: TranslationKey }> = [
 	{ value: "all", label: "settings.sessionManager.allStatuses" },
 	{ value: "running", label: "settings.inProgress" },
-	{ value: "completed", label: "settings.sessionManager.statusCompleted" },
+	{ value: "completed", label: "settings.sessionManager.statusFinished" },
 	{ value: "archived", label: "settings.archived" },
 ];
 
@@ -77,20 +84,86 @@ const DAY_OPTIONS: Array<{ value: number; label: TranslationKey }> = [
 	{ value: 90, label: "settings.sessionManager.last90Days" },
 ];
 
+const DETAIL_SCOPE_OPTIONS: Array<{ value: "matches" | "all"; label: TranslationKey }> = [
+	{ value: "matches", label: "settings.sessionManager.onlyMatches" },
+	{ value: "all", label: "settings.sessionManager.allMessages" },
+];
+
 const DEFAULT_SORT: SessionSort = { key: "updatedAt", dir: "desc" };
+const DEFAULT_FILTERS: SessionFilters = { project: PROJECT_ALL, status: "all", days: 0, query: "" };
 
-const DEFAULT_DRAFT = { project: PROJECT_ALL, status: "all" as StatusFilter, days: 0 };
-
-/** Prompt reads per page are bounded: three in flight, newest-first 50-row
- *  pages, one request per session per mount. */
-const PROMPT_CONCURRENCY = 3;
-const PROMPT_SCAN_LIMIT = 50;
+/** Cross-session message search needs a real term; one character matches
+ *  nearly everything and would stall the daemon's LIKE scan. */
+const MIN_SEARCH_CHARS = 2;
+const SEARCH_LIMIT = 200;
+/** Expanded transcripts render the most recent rows only — a 500-row
+ *  conversation is a wall of text, not a preview. */
+const TRANSCRIPT_LIMIT = 200;
+const CLAMP_CHARS = 1200;
 
 const MIN_DAYS = 1;
 const MAX_DAYS = 365;
 
 function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+/** Message bodies are flattened text already; collapse whitespace for the
+ *  prompt column and fall back to null for tool-only turns. */
+function promptText(raw: string | undefined): string | null {
+	if (raw === undefined) return null;
+	const text = hitText(raw).replace(/\s+/g, " ").trim();
+	return text.length > 0 ? text : null;
+}
+
+function bySeq(a: SessionMessage, b: SessionMessage): number {
+	return a.seq - b.seq;
+}
+
+/** Wrap the search term so a match inside a long message is visible at a
+ *  glance instead of buried below the fold. */
+function highlight(text: string, query: string): ReactNode {
+	const term = query.trim();
+	if (term.length === 0) return text;
+	const pattern = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+	const nodes: ReactNode[] = [];
+	let cursor = 0;
+	for (const match of text.matchAll(pattern)) {
+		const index = match.index ?? 0;
+		if (index > cursor) nodes.push(text.slice(cursor, index));
+		nodes.push(<mark key={`${index}:${match[0]}`}>{match[0]}</mark>);
+		cursor = index + match[0].length;
+	}
+	if (cursor < text.length) nodes.push(text.slice(cursor));
+	return nodes;
+}
+
+interface MessageRowProps {
+	message: SessionMessage;
+	query: string;
+	expanded: boolean;
+	onToggleExpanded(): void;
+}
+
+function MessageRow({ message, query, expanded, onToggleExpanded }: MessageRowProps): ReactNode {
+	const text = hitText(message.content).trim();
+	const long = text.length > CLAMP_CHARS;
+	const shown = long && !expanded ? `${text.slice(0, CLAMP_CHARS)}…` : text;
+	return (
+		<div className="gui-session-msg">
+			<div className="gui-session-msg-head">
+				<span className={`gui-session-role gui-session-role--${message.role}`}>{message.role}</span>
+				<span>{new Date(message.timestamp).toLocaleString()}</span>
+				{message.model && <span className="truncate font-mono">{message.model}</span>}
+			</div>
+			<div className="gui-session-msg-body">{highlight(shown, query)}</div>
+			{long && (
+				<button type="button" className="gui-session-msg-more" onClick={onToggleExpanded}>
+					{expanded ? t("settings.sessionManager.collapseMessage") : t("settings.sessionManager.expandMessage")}
+				</button>
+			)}
+		</div>
+	);
 }
 
 export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: SlotComponentProps): ReactNode {
@@ -143,21 +216,74 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 
 	const projects = useMemo(() => projectOptions(views), [views]);
 
-	const [draft, setDraft] = useState(DEFAULT_DRAFT);
-	const [filters, setFilters] = useState<SessionFilters>({ ...DEFAULT_DRAFT, query: "" });
+	const [filters, setFilters] = useState<SessionFilters>(DEFAULT_FILTERS);
 	const [query, setQuery] = useState("");
 	const [sort, setSort] = useState<SessionSort>(DEFAULT_SORT);
 	const [page, setPage] = useState(1);
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [busy, setBusy] = useState(false);
 	const [opError, setOpError] = useState<string | null>(null);
+	const [expandedId, setExpandedId] = useState<string | null>(null);
+	const [detailScope, setDetailScope] = useState<"matches" | "all">("matches");
+	const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
 
-	const filtered = useMemo(() => filterViews(views, { ...filters, query }, Date.now()), [views, filters, query]);
+	// ── cross-session message search ────────────────────────────────────
+	const [searchState, setSearchState] = useState<{ query: string; result: SessionSearchResult } | null>(null);
+	const [searching, setSearching] = useState(false);
+
+	useEffect(() => {
+		const term = query.trim();
+		if (term.length < MIN_SEARCH_CHARS) {
+			setSearchState(null);
+			setSearching(false);
+			return;
+		}
+		setSearching(true);
+		const timer = setTimeout(() => {
+			if (!rpc) {
+				setSearching(false);
+				return;
+			}
+			void rpc
+				.request<SessionSearchResult>("session.search", { query: term, limit: SEARCH_LIMIT })
+				.then(result => setSearchState({ query: term, result: result ?? { matches: [], sessions: [] } }))
+				.catch(() => setSearchState(null))
+				.finally(() => setSearching(false));
+		}, 300);
+		return () => clearTimeout(timer);
+	}, [query, rpc]);
+
+	// Hits for the CURRENT term only — a stale response must not keep rows
+	// that the new term no longer matches.
+	const hitsBySession = useMemo(() => {
+		const term = query.trim();
+		const map = new Map<string, SessionMessage[]>();
+		if (!searchState || searchState.query !== term) return map;
+		for (const match of searchState.result.matches) {
+			const list = map.get(match.sessionId) ?? [];
+			list.push(match);
+			map.set(match.sessionId, list);
+		}
+		return map;
+	}, [searchState, query]);
+
+	const term = query.trim();
+
+	/** Project/status/time filters always apply; the text term matches either
+	 *  the row's own text or any message inside the session. */
+	const filtered = useMemo(() => {
+		const now = Date.now();
+		const base = filterViews(views, { ...filters, query: "" }, now);
+		if (term.length === 0) return base;
+		return base.filter(view => matchesSessionText(view, term) || hitsBySession.has(view.id));
+	}, [views, filters, term, hitsBySession]);
+
 	const sorted = useMemo(() => sortViews(filtered, sort), [filtered, sort]);
 	const pages = pageTotal(sorted.length);
 	const currentPage = clampPage(page, sorted.length);
 	const visible = pageSlice(sorted, currentPage);
-	const visibleKey = visible.map(view => view.id).join(",");
+	const visibleIds = visible.map(view => view.id);
+	const visibleKey = visibleIds.join(",");
 
 	// Selection never outlives the filters that produced it: a row hidden by a
 	// new filter must not stay queued for a bulk action.
@@ -179,15 +305,11 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 	const selectedCount = selectedViews.length;
 	const selectionHasCurrent = sessionId != null && selected.has(sessionId);
 	const canDelete = (view: SessionView): boolean => sessionId == null || view.id !== sessionId;
-
-	const applyFilters = (): void => {
-		setFilters({ project: draft.project, status: draft.status, days: draft.days, query });
-		setPage(1);
-	};
+	const filtersActive =
+		filters.project !== PROJECT_ALL || filters.status !== "all" || filters.days !== 0 || term.length > 0;
 
 	const resetFilters = (): void => {
-		setDraft(DEFAULT_DRAFT);
-		setFilters({ ...DEFAULT_DRAFT, query: "" });
+		setFilters(DEFAULT_FILTERS);
 		setQuery("");
 		setPage(1);
 		setSelected(new Set());
@@ -197,47 +319,83 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 		setSort(previous =>
 			previous.key === key
 				? { key, dir: previous.dir === "asc" ? "desc" : "asc" }
-				: { key, dir: key === "updatedAt" || key === "completedAt" ? "desc" : "asc" },
+				: { key, dir: key === "updatedAt" ? "desc" : "asc" },
 		);
 		setPage(1);
 	};
 
-	// ── last prompt (visible rows only) ─────────────────────────────────
+	// ── last prompt per visible row (one batched read) ───────────────────
 	const promptsRef = useRef(new Map<string, string | null>());
-	const [, setPromptVersion] = useState(0);
+	const [, refreshPrompts] = useState(0);
 	useEffect(() => {
-		if (!rpc) return;
-		const pending = visible.filter(view => !promptsRef.current.has(view.id));
-		if (pending.length === 0) return;
+		if (!rpc || visibleIds.length === 0) return;
+		const missing = visibleIds.filter(id => !promptsRef.current.has(id));
+		if (missing.length === 0) return;
 		let alive = true;
-		const queue = [...pending];
-		const loadNext = async (): Promise<void> => {
-			while (alive) {
-				const next = queue.shift();
-				if (!next) return;
-				let text: string | null = null;
-				try {
-					// Newest-first page; the last user message in it is the session's
-					// latest prompt without reading the whole transcript.
-					const result = await rpc.request<SessionSearchResult>("session.search", {
-						query: "",
-						sessionId: next.id,
-						limit: PROMPT_SCAN_LIMIT,
-					});
-					text = lastUserPrompt(result?.matches ?? [], hitText);
-				} catch {
-					text = null;
-				}
-				promptsRef.current.set(next.id, text);
+		void rpc
+			.request<SessionLastPrompts>("session.lastPrompts", { sessionIds: missing })
+			.then(map => {
 				if (!alive) return;
-				setPromptVersion(version => version + 1);
-			}
-		};
-		void Promise.all(Array.from({ length: PROMPT_CONCURRENCY }, loadNext));
+				for (const id of missing) promptsRef.current.set(id, promptText(map?.[id]));
+			})
+			.catch(() => {
+				if (!alive) return;
+				for (const id of missing) promptsRef.current.set(id, null);
+			})
+			.finally(() => {
+				if (alive) refreshPrompts(version => version + 1);
+			});
 		return () => {
 			alive = false;
 		};
 	}, [rpc, visibleKey]);
+
+	// ── expanded transcript ──────────────────────────────────────────────
+	const transcriptsRef = useRef(new Map<string, SessionMessage[]>());
+	const [, refreshTranscript] = useState(0);
+	const detailHits = expandedId === null ? [] : (hitsBySession.get(expandedId) ?? []);
+	const showMatches = detailScope === "matches" && detailHits.length > 0;
+	const needsTranscript = expandedId !== null && !showMatches && !transcriptsRef.current.has(expandedId);
+
+	useEffect(() => {
+		if (!rpc || expandedId === null || !needsTranscript) return;
+		let alive = true;
+		void rpc
+			.request<SessionMessage[]>("history.messages", {
+				sessionId: expandedId,
+				limit: TRANSCRIPT_LIMIT,
+				tail: true,
+			})
+			.then(list => {
+				if (!alive) return;
+				transcriptsRef.current.set(expandedId, Array.isArray(list) ? list : []);
+			})
+			.catch(() => {
+				if (!alive) return;
+				transcriptsRef.current.set(expandedId, []);
+			})
+			.finally(() => {
+				if (alive) refreshTranscript(version => version + 1);
+			});
+		return () => {
+			alive = false;
+		};
+	}, [rpc, expandedId, needsTranscript]);
+
+	const toggleExpanded = (view: SessionView): void => {
+		setExpandedId(previous => (previous === view.id ? null : view.id));
+		setDetailScope("matches");
+		setExpandedMessages(new Set());
+	};
+
+	const toggleMessage = (key: string): void => {
+		setExpandedMessages(previous => {
+			const next = new Set(previous);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
+			return next;
+		});
+	};
 
 	// ── mutations ────────────────────────────────────────────────────────
 	const deleteViews = useCallback(
@@ -263,6 +421,7 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 					for (const id of removed) next.delete(id);
 					return next;
 				});
+				setExpandedId(previous => (previous !== null && removed.has(previous) ? null : previous));
 			}
 			if (failures.length > 0) {
 				const summary = t("settings.sessionManager.partialFailure", { count: failures.length });
@@ -388,16 +547,16 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 		const active = sort.key === key;
 		const ariaSort = active ? (sort.dir === "asc" ? "ascending" : "descending") : "none";
 		return (
-			<th scope="col" aria-sort={ariaSort} className="whitespace-nowrap px-2 py-2 font-medium">
+			<th scope="col" aria-sort={ariaSort} className="px-1.5 py-2 font-medium">
 				<button
 					type="button"
-					className={`inline-flex items-center gap-1 bg-transparent p-0 text-[11.5px] ${
+					className={`inline-flex max-w-full items-center gap-1 bg-transparent p-0 text-[11.5px] ${
 						active ? "text-[var(--color-text)]" : "text-[var(--color-text-muted)]"
 					}`}
 					onClick={() => changeSort(key)}
 					title={t("settings.sessionManager.sortBy", { column: label })}
 				>
-					{label}
+					<span className="truncate">{label}</span>
 					<span aria-hidden className="text-[10px] opacity-70">
 						{active ? (sort.dir === "asc" ? "↑" : "↓") : ""}
 					</span>
@@ -406,10 +565,98 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 		);
 	};
 
-	const headerIds = visible.map(view => view.id);
-	const allVisibleSelected = headerIds.length > 0 && headerIds.every(id => selected.has(id));
+	const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selected.has(id));
 	const hasArchiveTargets = selectedViews.some(view => view.status !== "archived");
 	const hasUnarchiveTargets = selectedViews.some(view => view.status === "archived");
+
+	const statusOf = (view: SessionView): { label: string; dot: string; title: string } => {
+		if (view.status === "archived") {
+			return {
+				label: t("settings.archived"),
+				dot: "bg-[var(--color-text-faint)]",
+				title: t("settings.sessionManager.archivedAt", {
+					time: formatSessionTime(view.completedAt),
+				}),
+			};
+		}
+		if (view.status === "running") {
+			return { label: t("settings.inProgress"), dot: STATUS_DOT.pending, title: t("settings.inProgress") };
+		}
+		const outcome = view.outcome ?? "complete";
+		return {
+			label: t(STATUS_LABEL[outcome]),
+			dot: STATUS_DOT[outcome],
+			title: t("settings.sessionManager.finishedAt", { time: formatSessionTime(view.completedAt) }),
+		};
+	};
+
+	const renderDetail = (view: SessionView): ReactNode => {
+		const hits = hitsBySession.get(view.id) ?? [];
+		const transcript = transcriptsRef.current.get(view.id);
+		const rowsToShow = showMatches ? [...detailHits].sort(bySeq) : (transcript ?? []);
+		const loading = !showMatches && transcript === undefined;
+		const truncated = !showMatches && (transcript?.length ?? 0) >= TRANSCRIPT_LIMIT;
+		return (
+			<td colSpan={7} className="p-0">
+				<div className="gui-session-detail">
+					<div className="gui-session-detail-head">
+						<span className="gui-session-detail-title">
+							{showMatches
+								? t("settings.sessionManager.messageHits", { count: hits.length })
+								: t("settings.sessionManager.messageCount", { count: view.messageCount })}
+						</span>
+						{loading && (
+							<span className="gui-session-detail-note">{t("settings.sessionManager.messagesLoading")}</span>
+						)}
+						{hits.length > 0 && (
+							<Segmented
+								ariaLabel={t("settings.sessionManager.onlyMatches")}
+								value={detailScope}
+								options={DETAIL_SCOPE_OPTIONS.map(option => ({ value: option.value, label: t(option.label) }))}
+								onChange={value => setDetailScope(value)}
+							/>
+						)}
+						{onOpenSession && (
+							<button
+								type="button"
+								className="gui-btn gui-btn--small gui-session-detail-open"
+								onClick={() => onOpenSession(view.id)}
+							>
+								{t("settings.sessionManager.openSession")}
+							</button>
+						)}
+					</div>
+					<div className="gui-session-detail-scroll">
+						{loading ? (
+							<div className="gui-session-detail-note">{t("settings.sessionManager.messagesLoading")}</div>
+						) : rowsToShow.length === 0 ? (
+							<div className="gui-session-detail-note">{t("settings.noMessages")}</div>
+						) : (
+							<>
+								{truncated && (
+									<div className="gui-session-detail-note">
+										{t("settings.sessionManager.messagesTruncated", { count: TRANSCRIPT_LIMIT })}
+									</div>
+								)}
+								{rowsToShow.map(message => {
+									const key = `${message.sessionId}:${message.seq}`;
+									return (
+										<MessageRow
+											key={key}
+											message={message}
+											query={showMatches ? term : ""}
+											expanded={expandedMessages.has(key)}
+											onToggleExpanded={() => toggleMessage(key)}
+										/>
+									);
+								})}
+							</>
+						)}
+					</div>
+				</div>
+			</td>
+		);
+	};
 
 	const renderBody = (): ReactNode => {
 		if (loadState === "error") {
@@ -442,47 +689,64 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 					<p className="m-0 text-[13px] font-medium">
 						{views.length === 0 ? t("settings.sessionManager.empty") : t("settings.sessionManager.emptyFiltered")}
 					</p>
-					<p className="m-0 mt-1 text-[12px] text-[var(--color-text-faint)]">
-						{t("settings.sessionManager.emptyHint")}
-					</p>
+					{views.length === 0 ? (
+						<p className="m-0 mt-1 text-[12px] text-[var(--color-text-faint)]">
+							{t("settings.sessionManager.emptyHint")}
+						</p>
+					) : (
+						<button type="button" className="gui-btn gui-btn--small mt-2" onClick={resetFilters}>
+							{t("settings.sessionManager.reset")}
+						</button>
+					)}
 				</div>
 			);
 		}
 		return (
-			<div className="overflow-x-auto">
-				<table className="w-full min-w-[760px] border-collapse text-left text-[12px]">
-					<thead className="sticky top-0 z-[1] border-b border-[var(--border)] bg-[var(--color-surface)]">
-						<tr>
-							<th scope="col" className="w-8 px-2 py-2">
-								<input
-									type="checkbox"
-									checked={allVisibleSelected}
-									onChange={() => setSelected(previous => toggleAll(previous, headerIds))}
-									aria-label={t("settings.sessionManager.selectAll")}
-								/>
-							</th>
-							{header("title", t("settings.sessionManager.sessionName"))}
-							{header("project", t("settings.sessionManager.project"))}
-							{header("status", t("settings.sessionManager.status"))}
-							<th scope="col" className="px-2 py-2 font-medium">
-								{t("settings.sessionManager.lastPrompt")}
-							</th>
-							{header("updatedAt", t("settings.sessionManager.lastUpdated"))}
-							{header("completedAt", t("settings.sessionManager.completedAt"))}
-							<th scope="col" className="whitespace-nowrap px-2 py-2 text-right font-medium">
-								{t("settings.sessionManager.actions")}
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						{visible.map(view => {
-							const prompt = promptsRef.current.get(view.id);
-							const promptText =
-								prompt === undefined ? t("settings.sessionManager.promptLoading") : (prompt ?? "—");
-							const current = !canDelete(view);
-							return (
-								<tr key={view.id} className="border-b border-[var(--border)] last:border-b-0">
-									<td className="px-2 py-1.5 align-middle">
+			<table className="gui-session-table w-full table-fixed border-collapse text-left text-[12px]">
+				<colgroup>
+					<col style={{ width: "4%" }} />
+					<col style={{ width: "30%" }} />
+					<col style={{ width: "15%" }} />
+					<col style={{ width: "11%" }} />
+					<col style={{ width: "19%" }} />
+					<col style={{ width: "10%" }} />
+					<col style={{ width: "11%" }} />
+				</colgroup>
+				<thead className="sticky top-0 z-[1] border-b border-[var(--border)] bg-[var(--color-surface)]">
+					<tr>
+						<th scope="col" className="px-1.5 py-2">
+							<input
+								type="checkbox"
+								checked={allVisibleSelected}
+								onChange={() => setSelected(previous => toggleAll(previous, visibleIds))}
+								aria-label={t("settings.sessionManager.selectAll")}
+							/>
+						</th>
+						{header("title", t("settings.sessionManager.sessionName"))}
+						{header("project", t("settings.sessionManager.project"))}
+						{header("status", t("settings.sessionManager.status"))}
+						<th scope="col" className="px-1.5 py-2 font-medium">
+							{t("settings.sessionManager.lastPrompt")}
+						</th>
+						{header("updatedAt", t("settings.sessionManager.lastUpdated"))}
+						<th scope="col" className="px-1.5 py-2 text-right font-medium">
+							{t("settings.sessionManager.actions")}
+						</th>
+					</tr>
+				</thead>
+				<tbody>
+					{visible.map(view => {
+						const prompt = promptsRef.current.get(view.id);
+						const promptLabel =
+							prompt === undefined ? t("settings.sessionManager.promptLoading") : (prompt ?? "—");
+						const current = !canDelete(view);
+						const expanded = expandedId === view.id;
+						const hits = hitsBySession.get(view.id)?.length ?? 0;
+						const status = statusOf(view);
+						return (
+							<Fragment key={view.id}>
+								<tr className={expanded ? "gui-session-row--expanded" : undefined}>
+									<td className="px-1.5 py-1.5 align-middle">
 										<input
 											type="checkbox"
 											checked={selected.has(view.id)}
@@ -492,57 +756,64 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 											})}
 										/>
 									</td>
-									<td className="max-w-[180px] px-2 py-1.5 align-middle">
-										<div className="flex items-center gap-1.5">
-											<span className="truncate font-medium" title={view.title}>
-												{view.title}
-											</span>
+									<td className="px-1.5 py-1.5 align-middle">
+										<button
+											type="button"
+											className="gui-session-name"
+											onClick={() => toggleExpanded(view)}
+											aria-expanded={expanded}
+											title={t("settings.sessionManager.expandRow", { title: view.title })}
+										>
+											<Icon
+												name="arrow-down-s"
+												className={`h-3 w-3 shrink-0 opacity-60${expanded ? "" : " -rotate-90"}`}
+											/>
+											<span className="truncate font-medium">{view.title}</span>
 											{current && (
-												<span className="shrink-0 rounded-full bg-[var(--color-surface-raised)] px-1.5 text-[10px] text-[var(--color-text-faint)]">
+												<span className="gui-session-current">
 													{t("settings.sessionManager.currentSession")}
 												</span>
 											)}
-										</div>
-										<div
-											className="truncate font-mono text-[10px] text-[var(--color-text-faint)]"
-											title={view.id}
-										>
-											{view.id}
+										</button>
+										<div className="gui-session-meta" title={view.id}>
+											<span className="truncate">{view.id}</span>
+											{hits > 0 && (
+												<span className="gui-session-hits">
+													{t("settings.sessionManager.messageHits", { count: hits })}
+												</span>
+											)}
 										</div>
 									</td>
 									<td
-										className="max-w-[120px] truncate px-2 py-1.5 align-middle text-[var(--color-text-muted)]"
+										className="truncate px-1.5 py-1.5 align-middle text-[var(--color-text-muted)]"
 										title={view.cwd ?? undefined}
 									>
 										{view.cwd === null ? t("settings.sessionManager.noProject") : view.project}
 									</td>
-									<td className="whitespace-nowrap px-2 py-1.5 align-middle">
-										<span className="inline-flex items-center gap-1.5">
-											<span aria-hidden className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[view.status]}`} />
-											{t(STATUS_LABEL[view.status])}
+									<td className="px-1.5 py-1.5 align-middle" title={status.title}>
+										<span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+											<span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${status.dot}`} />
+											<span className="truncate">{status.label}</span>
 										</span>
 									</td>
 									<td
-										className="max-w-[220px] truncate px-2 py-1.5 align-middle text-[var(--color-text-muted)]"
+										className="truncate px-1.5 py-1.5 align-middle text-[var(--color-text-muted)]"
 										title={prompt ?? undefined}
 									>
-										{promptText}
+										{promptLabel}
 									</td>
-									<td className="whitespace-nowrap px-2 py-1.5 align-middle tabular-nums">
+									<td className="whitespace-nowrap px-1.5 py-1.5 align-middle tabular-nums">
 										{formatSessionTime(view.updatedAt)}
 									</td>
-									<td className="whitespace-nowrap px-2 py-1.5 align-middle tabular-nums text-[var(--color-text-muted)]">
-										{formatSessionTime(view.completedAt)}
-									</td>
-									<td className="whitespace-nowrap px-2 py-1.5 text-right align-middle">
-										<div className="inline-flex items-center gap-0.5">
+									<td className="px-1.5 py-1.5 text-right align-middle">
+										<div className="inline-flex items-center">
 											{onOpenSession && (
 												<button
 													type="button"
-													className="gui-pane-action w-auto px-1.5"
+													className="gui-pane-action w-auto px-1"
 													disabled={busy || current}
-													title={t("settings.open")}
-													aria-label={t("settings.open")}
+													title={t("settings.sessionManager.openSession")}
+													aria-label={t("settings.sessionManager.openSession")}
 													onClick={() => onOpenSession(view.id)}
 												>
 													<Icon name="chat-history" className="h-3.5 w-3.5" />
@@ -551,7 +822,7 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 											{view.status === "archived" ? (
 												<button
 													type="button"
-													className="gui-pane-action w-auto px-1.5"
+													className="gui-pane-action w-auto px-1"
 													title={t("settings.unarchive")}
 													aria-label={t("settings.unarchive")}
 													onClick={() => unarchive(view.id)}
@@ -561,7 +832,7 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 											) : (
 												<button
 													type="button"
-													className="gui-pane-action w-auto px-1.5"
+													className="gui-pane-action w-auto px-1"
 													title={t("settings.archive")}
 													aria-label={t("settings.archive")}
 													onClick={() => archiveOne(view)}
@@ -571,7 +842,7 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 											)}
 											<button
 												type="button"
-												className="gui-pane-action w-auto px-1.5"
+												className="gui-pane-action w-auto px-1"
 												disabled={busy || current}
 												title={
 													current
@@ -586,11 +857,12 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 										</div>
 									</td>
 								</tr>
-							);
-						})}
-					</tbody>
-				</table>
-			</div>
+								{expanded && renderDetail(view)}
+							</Fragment>
+						);
+					})}
+				</tbody>
+			</table>
 		);
 	};
 
@@ -599,19 +871,16 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 			<h2 className="gui-settings-page-title">{t("settings.sessionManager.title")}</h2>
 			<p className="gui-settings-page-desc">{t("settings.sessionManager.description")}</p>
 
-			<form
-				className="mt-4 flex flex-wrap items-center gap-2"
-				onSubmit={event => {
-					event.preventDefault();
-					applyFilters();
-				}}
-			>
+			<div className="mt-4 flex flex-wrap items-center gap-2">
 				<select
 					className="gui-settings-select"
-					style={{ minWidth: 140 }}
-					value={draft.project}
+					style={{ minWidth: 120 }}
+					value={filters.project}
 					aria-label={t("settings.sessionManager.project")}
-					onChange={event => setDraft(previous => ({ ...previous, project: event.target.value }))}
+					onChange={event => {
+						setFilters(previous => ({ ...previous, project: event.target.value }));
+						setPage(1);
+					}}
 				>
 					<option value={PROJECT_ALL}>{t("settings.sessionManager.allProjects")}</option>
 					{projects.map(option => (
@@ -622,10 +891,13 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 				</select>
 				<select
 					className="gui-settings-select"
-					style={{ minWidth: 120 }}
-					value={draft.status}
+					style={{ minWidth: 100 }}
+					value={filters.status}
 					aria-label={t("settings.sessionManager.status")}
-					onChange={event => setDraft(previous => ({ ...previous, status: event.target.value as StatusFilter }))}
+					onChange={event => {
+						setFilters(previous => ({ ...previous, status: event.target.value as StatusFilter }));
+						setPage(1);
+					}}
 				>
 					{STATUS_OPTIONS.map(option => (
 						<option key={option.value} value={option.value}>
@@ -635,10 +907,13 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 				</select>
 				<select
 					className="gui-settings-select"
-					style={{ minWidth: 120 }}
-					value={draft.days}
+					style={{ minWidth: 100 }}
+					value={filters.days}
 					aria-label={t("settings.sessionManager.updatedWithin")}
-					onChange={event => setDraft(previous => ({ ...previous, days: Number(event.target.value) }))}
+					onChange={event => {
+						setFilters(previous => ({ ...previous, days: Number(event.target.value) }));
+						setPage(1);
+					}}
 				>
 					{DAY_OPTIONS.map(option => (
 						<option key={option.value} value={option.value}>
@@ -646,13 +921,7 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 						</option>
 					))}
 				</select>
-				<button type="submit" className="gui-btn gui-btn--small">
-					{t("settings.sessionManager.query")}
-				</button>
-				<button type="button" className="gui-btn gui-btn--small" onClick={resetFilters}>
-					{t("settings.sessionManager.reset")}
-				</button>
-				<label className="gui-settings-search flex-1" style={{ margin: 0, marginLeft: "auto", minWidth: 180 }}>
+				<label className="gui-settings-search min-w-[160px] flex-1" style={{ margin: 0 }}>
 					<Icon name="search" className="h-3.5 w-3.5 flex-none" />
 					<input
 						className="gui-input min-w-0 flex-1"
@@ -665,8 +934,27 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 						placeholder={t("settings.sessionManager.searchPlaceholder")}
 						aria-label={t("settings.sessionManager.searchPlaceholder")}
 					/>
+					{searching && <Icon name="loader-4" className="h-3.5 w-3.5 flex-none animate-spin opacity-60" />}
 				</label>
-			</form>
+				{filtersActive && (
+					<button type="button" className="gui-btn gui-btn--small" onClick={resetFilters}>
+						{t("settings.sessionManager.reset")}
+					</button>
+				)}
+				<button
+					type="button"
+					className="gui-pane-action w-auto px-1.5"
+					title={t("settings.sessionManager.refresh")}
+					aria-label={t("settings.sessionManager.refresh")}
+					onClick={() => {
+						promptsRef.current.clear();
+						transcriptsRef.current.clear();
+						setReloadToken(token => token + 1);
+					}}
+				>
+					<Icon name="refresh" className="h-3.5 w-3.5" />
+				</button>
+			</div>
 
 			{selectedCount > 0 && (
 				<div className="mt-3 flex flex-wrap items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--color-surface-raised)] px-3 py-1.5 text-[12px]">

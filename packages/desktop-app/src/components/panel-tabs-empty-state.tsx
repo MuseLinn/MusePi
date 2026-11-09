@@ -13,6 +13,9 @@ export interface PanelEmptyStateItem {
 	label: string;
 	hint?: string;
 	icon?: ReactNode;
+	/** 当前上下文不可开启（如无会话时的会话级表面）：保留入口作为说明，
+	 *  但不接受点击。 */
+	disabled?: boolean;
 	onSelect(): void;
 }
 
@@ -29,7 +32,12 @@ export function PanelTabsEmptyState({
 			<ul className="gui-panel-empty-list">
 				{items.map(item => (
 					<li key={item.id}>
-						<button type="button" className="gui-panel-empty-item" onClick={item.onSelect}>
+						<button
+							type="button"
+							className="gui-panel-empty-item"
+							disabled={item.disabled}
+							onClick={item.onSelect}
+						>
 							{item.icon ? <span className="gui-panel-empty-icon">{item.icon}</span> : null}
 							<span className="gui-panel-empty-text">
 								<span className="gui-panel-empty-label">{item.label}</span>

@@ -149,6 +149,18 @@ export type FallbackBlockParam = {
 	to: { model: string };
 };
 
+/** Anthropic on-demand compaction beta. */
+export const COMPACTION_BETA = "compact-2026-09-04";
+
+/** A server-authored summary block. Only the provider that wrote it may replay it. */
+export type CompactionBlockParam = {
+	type: "compaction";
+	content: string;
+	signature?: string;
+	encrypted_content?: string;
+	tool_changes?: Record<string, unknown>[];
+};
+
 export type ContentBlockParam =
 	| TextBlockParam
 	| ImageBlockParam
@@ -159,7 +171,8 @@ export type ContentBlockParam =
 	| ToolSearchToolResultBlockParam
 	| ThinkingBlockParam
 	| RedactedThinkingBlockParam
-	| FallbackBlockParam;
+	| FallbackBlockParam
+	| CompactionBlockParam;
 
 /**
  * A single conversation turn.
@@ -265,6 +278,8 @@ export type MessageCreateParams = {
 	speed?: "fast";
 	/** Claude Code context-management beta. */
 	context_management?: ContextManagement;
+	/** Anthropic on-demand compaction (`compact-2026-09-04` beta). */
+	compaction?: { type: "summarize"; instructions?: string };
 	/**
 	 * Server-side fallback beta chain — up to three fallback models the API
 	 * retries when a classifier blocks the primary. Required companion beta
@@ -285,7 +300,8 @@ export type StopReason =
 	| "pause_turn"
 	| "refusal"
 	| "sensitive"
-	| "model_context_window_exceeded";
+	| "model_context_window_exceeded"
+	| "compaction";
 
 export type CacheCreation = {
 	ephemeral_5m_input_tokens?: number | null;
@@ -345,7 +361,8 @@ export type ResponseContentBlock =
 	| ServerToolUseBlockParam
 	| WebSearchToolResultBlockParam
 	| ToolSearchToolResultBlockParam
-	| { type: "fallback"; from: { model: string }; to: { model: string } };
+	| { type: "fallback"; from: { model: string }; to: { model: string } }
+	| CompactionBlockParam;
 
 export type ContentBlockDelta =
 	| { type: "text_delta"; text: string }

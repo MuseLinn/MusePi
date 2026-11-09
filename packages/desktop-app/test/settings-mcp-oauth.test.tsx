@@ -253,4 +253,38 @@ describe("MCP settings", () => {
 		);
 		expect(host.textContent).not.toContain(t("settings.mcpOauthLoginWaiting"));
 	});
+
+	test("desktop login asks for the custom-scheme deep-link callback", async () => {
+		Object.defineProperty(window, "electronAPI", {
+			value: { openExternal: async () => true },
+			configurable: true,
+		});
+		try {
+			const fake = new FakeRpc();
+			fake.handlers.set("extensions.list", () => extensionsResponse());
+			fake.handlers.set("mcp.servers.list", () => serversResponse());
+			fake.handlers.set("mcp.oauth.start", () => ({
+				flowId: "flow-4",
+				authorizationUrl: "https://auth.example.com/authorize?state=st",
+			}));
+			fake.handlers.set("mcp.oauth.status", () => ({
+				flowId: "flow-4",
+				server: "oauth-server",
+				status: "pending",
+			}));
+			const host = await mount(fake);
+
+			const login = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+				button => button.textContent?.trim() === t("settings.login"),
+			)!;
+			await act(async () => login.click());
+			await flush();
+
+			expect(fake.calls("mcp.oauth.start")).toEqual([
+				{ name: "oauth-server", redirectUri: "musepi://oauth/callback" },
+			]);
+		} finally {
+			Reflect.deleteProperty(window, "electronAPI");
+		}
+	});
 });

@@ -170,7 +170,7 @@ function exposeHostReact(): void {
 
 /**
  * Renderer-side component slots: extensions
- * register components via `pi.registerComponent({ slot, moduleUrl })`, the
+ * register components via `ctx.slots.register({ slot, moduleUrl })`, the
  * daemon compiles them to self-contained ESM and serves the code through
  * `extensions.list`; this module dynamically imports (blob: URL) and mounts
  * the default export into the slot. Enable/disable takes effect within the
@@ -249,6 +249,16 @@ export const TRANSCRIPT_NODE_SLOT = slot("transcript.node");
 export const SESSION_INFO_SLOT_PREFIX = "chat.session-info.";
 /** 内置「插件」分区占用的席位(`session-info-plugins` 插件注册到这里)。 */
 export const SESSION_INFO_SLOT = `${SESSION_INFO_SLOT_PREFIX}plugins`;
+/**
+ * 二级左栏面板席位命名空间(`sidebar.panel.<destination id>`)。一个 rail
+ * 目的地最多挂载一个面板;宿主按当前目的地/悬停目的地取用,未注册的仍保留
+ * 内置回退。前缀值声明在 collab-proto 的单一权威表。
+ */
+export const SIDEBAR_PANEL_SLOT_PREFIX = "sidebar.panel.";
+/** 任务中心 destination 的面板席位。 */
+export const SCHEDULED_PANEL_SLOT = `${SIDEBAR_PANEL_SLOT_PREFIX}scheduled`;
+/** 能力中心 destination 的面板席位（技能 / 插件 / 插件市场二级左栏）。 */
+export const CAPABILITY_PANEL_SLOT = `${SIDEBAR_PANEL_SLOT_PREFIX}capability`;
 
 /** 一条插件读数(卡片从扩展注册表筛出的 plugin-module / extension-module)。 */
 export interface SessionInfoPluginRow {
@@ -799,6 +809,20 @@ export function selectTranscriptNodeComponents(components: readonly SlotComponen
 		.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
+/**
+ * Pick the second-tier sidebar panel contributed for one rail destination.
+ * A failed compile is treated as "no contribution" so the host keeps its
+ * built-in fallback instead of mounting an error card inside the sidebar.
+ */
+export function selectSidebarPanelComponent(
+	components: readonly SlotComponent[],
+	destination: string,
+): SlotComponent | undefined {
+	return components.find(
+		component => component.slot === `${SIDEBAR_PANEL_SLOT_PREFIX}${destination}` && !component.error,
+	);
+}
+
 /** Resolve one extension surface for the column being rendered. */
 export function selectPanelTabComponent(components: readonly SlotComponent[], view: string): SlotComponent | undefined {
 	return components.find(component => {
@@ -1212,6 +1236,9 @@ const slotHostBindings = {
 	TRANSCRIPT_NODE_SLOT,
 	SESSION_INFO_SLOT_PREFIX,
 	SESSION_INFO_SLOT,
+	SIDEBAR_PANEL_SLOT_PREFIX,
+	SCHEDULED_PANEL_SLOT,
+	CAPABILITY_PANEL_SLOT,
 	GUI_SLOT_HOSTS,
 	ConfigFormSlotMount,
 	resolveManagedBrowserPanelTab,
@@ -1219,6 +1246,7 @@ const slotHostBindings = {
 	SlotComponentMount,
 	selectLaunchablePanelTabs,
 	selectPanelTabComponent,
+	selectSidebarPanelComponent,
 	selectTranscriptNodeComponents,
 	useExtensionRegistry,
 	useExtensionToolViews,

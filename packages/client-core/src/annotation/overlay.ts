@@ -1023,5 +1023,5 @@ export const buildAnnotationOverlayScript = (
     var initialElement = elementFromPoint(ELEMENT_AT.x, ELEMENT_AT.y);
     if (initialElement) selectElement(initialElement);
   }
-});`;
+})`;
 };

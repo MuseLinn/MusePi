@@ -1,11 +1,12 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
 import { useExtensionRegistry } from "../../lib/slot-host";
 import type { McpItem } from "./shared";
+import { useMcpOAuth } from "./use-mcp-oauth";
 
 /** One row of daemon `mcp.servers.list` (headers/tokens never cross the wire). */
 interface ConfiguredMcpServer {
@@ -16,27 +17,6 @@ interface ConfiguredMcpServer {
 	auth?: "oauth" | "apikey";
 	enabled?: boolean;
 }
-
-interface OAuthFlowStatus {
-	flowId: string;
-	server: string;
-	status: "pending" | "success" | "error";
-	error?: string;
-	cancelled?: boolean;
-}
-
-/** Per-server login presentation; `starting` covers the start RPC itself. */
-type FlowState =
-	| { kind: "starting" }
-	| { kind: "waiting"; flowId: string; authorizationUrl: string }
-	| { kind: "success" }
-	| { kind: "error"; message: string };
-
-/** Matches the daemon flow's own 5-minute callback window. */
-const POLL_INTERVAL_MS = 1000;
-const FLOW_DEADLINE_MS = 5 * 60 * 1000;
-/** Consecutive status RPC failures before the wait is declared lost. */
-const POLL_FAILURE_LIMIT = 3;
 
 /** Settings → 智能体 → MCP 服务器.
  *
@@ -49,15 +29,13 @@ const POLL_FAILURE_LIMIT = 3;
  *
  * Token-auth servers keep their token in mcp.json: the row says so instead of
  * offering a field that would have nowhere to persist. The authorization URL
- * stays in component state (opened through the OS handler, never rendered),
- * so a secret-bearing URL does not leak into the settings DOM or logs. */
+ * lives in the shared OAuth hook and is opened through the OS handler, never
+ * rendered, so a secret-bearing URL does not leak into the settings DOM or
+ * logs. */
 export function McpSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const data = useExtensionRegistry(rpc);
 	const mcps = useMemo(() => (data?.extensions ?? []).filter(e => e.kind === "mcp"), [data]);
 	const [servers, setServers] = useState<ConfiguredMcpServer[] | null>(null);
-	const [flows, setFlows] = useState<Record<string, FlowState>>({});
-	const timers = useRef(new Map<string, ReturnType<typeof setInterval>>());
-	const pollFailures = useRef(new Map<string, number>());
 
 	const byName = useMemo(() => new Map(mcps.map(m => [m.name, m])), [mcps]);
 
@@ -77,125 +55,7 @@ export function McpSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		void loadServers();
 	}, [loadServers]);
 
-	const stopPolling = useCallback((name: string): void => {
-		const timer = timers.current.get(name);
-		if (timer) clearInterval(timer);
-		timers.current.delete(name);
-	}, []);
-
-	useEffect(
-		() => () => {
-			for (const timer of timers.current.values()) clearInterval(timer);
-			timers.current.clear();
-		},
-		[],
-	);
-
-	const poll = useCallback(
-		(name: string, flowId: string): void => {
-			stopPolling(name);
-			const deadline = Date.now() + FLOW_DEADLINE_MS;
-			const timer = setInterval(() => {
-				if (!rpc) {
-					stopPolling(name);
-					return;
-				}
-				if (Date.now() > deadline) {
-					stopPolling(name);
-					setFlows(f => ({ ...f, [name]: { kind: "error", message: t("settings.mcpOauthLoginTimeout") } }));
-					void rpc.request("mcp.oauth.cancel", { flowId }).catch(() => {});
-					return;
-				}
-				void rpc
-					.request<OAuthFlowStatus>("mcp.oauth.status", { flowId })
-					.then(status => {
-						if (status.status === "pending") return;
-						stopPolling(name);
-						if (status.status === "success") {
-							setFlows(f => ({ ...f, [name]: { kind: "success" } }));
-							// The stored grant changes the row's auth kind/state.
-							void loadServers();
-							return;
-						}
-						setFlows(f => ({
-							...f,
-							[name]: {
-								kind: "error",
-								message: status.cancelled
-									? t("settings.mcpLoginCancelled")
-									: t("settings.mcpOauthLoginFailed", { error: status.error ?? "" }),
-							},
-						}));
-					})
-					.catch(error => {
-						// One failed poll is not a failed login (the daemon may be
-						// mid-exchange or briefly reconnecting), but a status call that
-						// keeps failing — e.g. the daemon dropped the flow — must end the
-						// wait instead of leaving the row spinning for five minutes.
-						const failures = (pollFailures.current.get(name) ?? 0) + 1;
-						pollFailures.current.set(name, failures);
-						if (failures < POLL_FAILURE_LIMIT) return;
-						stopPolling(name);
-						setFlows(f => ({
-							...f,
-							[name]: {
-								kind: "error",
-								message: t("settings.mcpOauthLoginFailed", {
-									error: error instanceof Error ? error.message : String(error),
-								}),
-							},
-						}));
-					});
-			}, POLL_INTERVAL_MS);
-			timers.current.set(name, timer);
-		},
-		[loadServers, rpc, stopPolling],
-	);
-
-	const login = useCallback(
-		async (name: string): Promise<void> => {
-			if (!rpc) return;
-			tapFeedback();
-			pollFailures.current.delete(name);
-			setFlows(f => ({ ...f, [name]: { kind: "starting" } }));
-			try {
-				const started = await rpc.request<{ flowId: string; authorizationUrl: string }>("mcp.oauth.start", {
-					name,
-				});
-				setFlows(f => ({
-					...f,
-					[name]: { kind: "waiting", flowId: started.flowId, authorizationUrl: started.authorizationUrl },
-				}));
-				// Best-effort: the row keeps a "reopen" action for a missed launch.
-				void openExternalUrl(started.authorizationUrl).catch(() => {});
-				poll(name, started.flowId);
-			} catch (error) {
-				setFlows(f => ({
-					...f,
-					[name]: {
-						kind: "error",
-						message: t("settings.mcpOauthLoginFailed", {
-							error: error instanceof Error ? error.message : String(error),
-						}),
-					},
-				}));
-			}
-		},
-		[poll, rpc],
-	);
-
-	const cancelLogin = useCallback(
-		async (name: string, flowId: string): Promise<void> => {
-			stopPolling(name);
-			try {
-				await rpc?.request("mcp.oauth.cancel", { flowId });
-			} catch {
-				// Already settled on the daemon side.
-			}
-			setFlows(f => ({ ...f, [name]: { kind: "error", message: t("settings.mcpLoginCancelled") } }));
-		},
-		[stopPolling, rpc],
-	);
+	const { flows, login, cancel: cancelLogin } = useMcpOAuth(rpc, () => void loadServers());
 
 	const toggle = (e: McpItem, next: boolean): void => {
 		// daemon 广播 extensions.changed → 单例重拉,不本地乐观更新。

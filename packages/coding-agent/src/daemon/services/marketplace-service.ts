@@ -19,6 +19,7 @@ import {
 	type MarketplaceInstallStartParams,
 	type MarketplaceInstallView,
 } from "../../skills/marketplace-install-machine";
+import { applyPackageChange, type LiveApplySummary, type LiveApplyTarget } from "../live-plugin-apply";
 import type { DaemonService } from "./types";
 
 /**
@@ -121,6 +122,14 @@ export interface MarketplaceServiceDeps {
 	onChanged(): void;
 	/** marketplace 安装状态机事件广播（宿主接 EventService.broadcast）。 */
 	onInstallState(payload: Record<string, unknown>): void;
+	/**
+	 * Package-level live apply (marketplace install/remove/upgrade also write the
+	 * plugins registry, so an open session must see the change like it does for
+	 * `plugins.install`).
+	 */
+	resolvePackagePaths?(name: string): Promise<string[]>;
+	applyLive?(target: LiveApplyTarget): Promise<LiveApplySummary>;
+	onApplyState?(payload: Record<string, unknown>): void;
 	/** 测试缝：指向隔离 registry/cache 目录的 manager；生产不传，按宿主路径自建。 */
 	buildManager?(): Promise<MarketplaceManager>;
 }
@@ -132,6 +141,12 @@ export interface MarketplaceSourceSummary {
 	sourceUri: string;
 	addedAt: string;
 	updatedAt: string;
+}
+
+/** `name@marketplace` → `name`, preserving a scoped package prefix. */
+function packageNameOfPluginId(pluginId: string): string {
+	const at = pluginId.lastIndexOf("@");
+	return at > 0 ? pluginId.slice(0, at) : pluginId;
 }
 
 function toSourceSummary(entry: MarketplaceRegistryEntry): MarketplaceSourceSummary {
@@ -384,7 +399,14 @@ export class MarketplaceService implements DaemonService {
 		//  加载缓存并广播 extensions.changed，GUI 才会重拉 design.systems.list。
 		this.#deps.invalidateExtensionsCache();
 		this.#deps.onChanged();
-		return { ok: true, installed: true, scope: p.scope ?? "user" };
+		// Open sessions take the new entries now; a streaming one reports pending.
+		const application = await applyPackageChange(this.#deps, "install", p.name);
+		return {
+			ok: true,
+			installed: true,
+			scope: p.scope ?? "user",
+			...(application ? { application: application.deferred > 0 ? "pending" : "applied" } : {}),
+		};
 	}
 
 	/** RPC marketplace.remove：移除已装 marketplace 插件（GUI 商店 → Remove）。 */
@@ -396,6 +418,8 @@ export class MarketplaceService implements DaemonService {
 		if (!p.marketplace) throw new Error("marketplace.remove: marketplace required");
 		const { buildPluginId } = await import("../../extensibility/plugins/marketplace");
 		const manager = await this.#buildMarketplaceManager();
+		// Resolve entry paths while the registry still has the package.
+		const entryPaths = await this.#deps.resolvePackagePaths?.(p.name);
 		await manager.uninstallPlugin(buildPluginId(p.name, p.marketplace), p.scope);
 		this.#marketplaceCache = null;
 		this.#deps.invalidatePluginCaches();
@@ -403,7 +427,8 @@ export class MarketplaceService implements DaemonService {
 		//  广播 extensions.changed，重放时整源清除残留注册。
 		this.#deps.invalidateExtensionsCache();
 		this.#deps.onChanged();
-		return { ok: true };
+		const application = await applyPackageChange(this.#deps, "uninstall", p.name, entryPaths);
+		return { ok: true, ...(application ? { application: application.deferred > 0 ? "pending" : "applied" } : {}) };
 	}
 
 	/** RPC marketplace.updates：按 (pluginId, scope) 列出 catalog 版本高于
@@ -457,6 +482,10 @@ export class MarketplaceService implements DaemonService {
 		this.#deps.invalidatePluginCaches();
 		this.#deps.invalidateExtensionsCache();
 		this.#deps.onChanged();
+		// An upgrade replaces mounted modules in place; a session mid-turn parks it.
+		for (const update of upgraded) {
+			await applyPackageChange(this.#deps, "install", packageNameOfPluginId(update.pluginId));
+		}
 		return { ok: true, upgraded };
 	}
 

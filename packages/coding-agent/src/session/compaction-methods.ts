@@ -5,6 +5,7 @@ import {
 	shouldUseProviderNativeCompaction,
 } from "@musepi/pi-agent-core/compaction";
 import type { Model } from "@musepi/pi-ai";
+import { sendsImageInputOnWire } from "@musepi/pi-ai/providers/vision-guard";
 import type { CompactionSettings } from "../config/settings-schema";
 
 /** Choices presented by the ordered compaction-method setting. */
@@ -116,13 +117,14 @@ export function canUseRemoteCompaction(model: Model | null | undefined, settings
 export function resolveSpeculationMethod(
 	model: Model | null | undefined,
 	settings: CompactionSettings,
+	options: { skipRemote?: boolean } = {},
 ): "remote" | "handoff" | "soft" | undefined {
 	for (const candidate of resolveCompactionMethodOrder(settings.methodOrder)) {
 		const available =
 			candidate === "remote"
-				? canUseRemoteCompaction(model, resolveMethodSettings(settings, candidate))
+				? options.skipRemote !== true && canUseRemoteCompaction(model, resolveMethodSettings(settings, candidate))
 				: candidate === "snapcompact"
-					? model?.input?.includes("image") === true
+					? !!model && sendsImageInputOnWire(model)
 					: true;
 		if (!available) continue;
 		return candidate === "remote" || candidate === "handoff" || candidate === "soft" ? candidate : undefined;

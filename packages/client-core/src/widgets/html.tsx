@@ -3,8 +3,11 @@
 // browser bundle, where those fail to build.
 import { ensureReadableColor } from "@musepi/pi-utils/color";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils/widget-html-limit";
+import { Pencil as PencilIconData, X as XIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
 	ANNOTATION_TEARDOWN_SCRIPT,
 	type AnnotationOverlayLabels,
@@ -16,6 +19,7 @@ import {
 	resolveAnnotationOverlayTheme,
 } from "../annotation/index.js";
 import { t } from "../i18n/index.js";
+import { WidgetHeadActionsSlot } from "./chrome.js";
 import { PAGE_KIT_CSS } from "./page-kit.js";
 
 /**
@@ -342,10 +346,143 @@ document.documentElement.style.fontSize = ${JSON.stringify(`${baseFontPx}px`)};
 document.documentElement.style.setProperty("--page-rem", ${JSON.stringify(`${baseFontPx}px`)});
 window.musepiWidgetTokens = ${JSON.stringify(tokens)};
 window.DaimonCanvas = window.DaimonCanvas || { canvasId: ${JSON.stringify(canvasId)}, mountId: ${JSON.stringify(mountId)} };
+// Page height probe for the widget frame. The root
+// box is at least the frame's viewport, so its scrollHeight can never shrink
+// below it; prefer body content (which can shrink), grow the frame for
+// scrollers pinned to the bottom edge (the chat scrolls, not the card), and
+// give the page its own scrollbar only when the host caps the frame.
+var ompMeasure = { dirty: 1, positioned: [], scrollers: [], scrollerMemo: new WeakMap(), lastHeight: 0, lastOverflow: false, scheduled: 0 };
+function ompInsideClipper(el) {
+  for (var a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+    var o = getComputedStyle(a);
+    if (o.overflowX !== "visible" || o.overflowY !== "visible") return true;
+  }
+  return false;
+}
+function ompScan() {
+  ompMeasure.dirty = 0;
+  ompMeasure.positioned = [];
+  ompMeasure.scrollers = [];
+  var all = document.body ? document.body.getElementsByTagName("*") : [];
+  for (var i = 0; i < all.length && i < 5000; i++) {
+    var el = all[i];
+    var style = getComputedStyle(el);
+    var pos = style.position;
+    if ((pos === "absolute" || pos === "fixed") && !ompInsideClipper(el)) ompMeasure.positioned.push(el);
+    if (/^(?:scroll|auto)$/.test(style.overflowY)) ompMeasure.scrollers.push(el);
+  }
+}
+function ompBodyBoxHeight(d) {
+  var b = d.getBoundingClientRect();
+  return b.top + window.scrollY + (d.clientTop + d.scrollHeight) * (d.offsetHeight ? b.height / d.offsetHeight : 1);
+}
+function ompBodyContentHeight(d) {
+  var box = ompBodyBoxHeight(d);
+  // A stretched body (height:100%, a min-height shell) reports the viewport
+  // through scrollHeight. The in-flow children's extent is the real content
+  // bottom then, so a fitted card can shrink instead of holding a viewport of
+  // blank space. A page with an overflowing scroller keeps the box: its
+  // frame-bottom scroller needs the taller frame (one scrollbar, not two).
+  var extent = 0;
+  var count = 0;
+  for (var el = d.firstElementChild; el; el = el.nextElementSibling) {
+    var st = getComputedStyle(el);
+    if (st.display === "none" || st.position === "absolute" || st.position === "fixed") continue;
+    var r = el.getBoundingClientRect();
+    var bottom = r.bottom + window.scrollY;
+    if (bottom > extent) extent = bottom;
+    count++;
+  }
+  if (count === 0) return box;
+  extent += parseFloat(getComputedStyle(d).paddingBottom) || 0;
+  return extent > 0 ? Math.min(box, extent) : box;
+}
+function ompMeasureHeight() {
+  var r = document.documentElement;
+  var d = document.body;
+  if (ompMeasure.dirty) ompScan();
+  // Is any scroller (or the body) actually scrolling its own content? A page
+  // with one is a fill-the-frame page: do not shrink it to its children.
+  var scrollerOverflows = false;
+  for (var k = 0; k < ompMeasure.scrollers.length; k++) {
+    var scroller = ompMeasure.scrollers[k];
+    if (scroller.scrollHeight > scroller.clientHeight + 1) {
+      scrollerOverflows = true;
+      break;
+    }
+  }
+  if (!scrollerOverflows && d && /^(?:scroll|auto)$/.test(getComputedStyle(d).overflowY) && d.scrollHeight > d.clientHeight + 1) {
+    scrollerOverflows = true;
+  }
+  // Root content only when it overflows the viewport; a short page's root
+  // rect is floored at the viewport and would pin a tall frame forever.
+  var rootOverflows = r.scrollHeight > r.clientHeight + 1;
+  var v = rootOverflows ? r.scrollHeight : 0;
+  // Body content, unless the body itself scrolls/clips: then its scrollHeight
+  // is the scroller's size, not the content's.
+  if (d && !/^(?:hidden|clip|scroll|auto)$/.test(getComputedStyle(d).overflowY)) {
+    var bodyHeight = scrollerOverflows ? ompBodyBoxHeight(d) : ompBodyContentHeight(d);
+    // Overflowing root: the taller wins. Fitted root: the body's content is
+    // the authority and may shrink below the frame's viewport.
+    v = rootOverflows ? Math.max(v, bodyHeight) : bodyHeight;
+  }
+  if (v <= 0) v = r.getBoundingClientRect().height;
+  // Positioned popups that stick out past the card are part of its box.
+  for (var i = 0; i < ompMeasure.positioned.length; i++) {
+    var p = ompMeasure.positioned[i];
+    var pr = p.getBoundingClientRect();
+    if (!pr.width && !pr.height) continue;
+    var bottom = pr.bottom + window.scrollY;
+    if (bottom > v) v = bottom;
+  }
+  // A scroller sitting on the frame's bottom edge grows the frame instead of
+  // scrolling inside it: one scrollbar (the chat's), not two. Its grown
+  // request is remembered while its own height is unchanged, so growing the
+  // frame (which unpins it) cannot oscillate back to the short size.
+  for (var j = -1; j < ompMeasure.scrollers.length; j++) {
+    var s = j < 0 ? d : ompMeasure.scrollers[j];
+    if (!s || s.scrollHeight <= s.clientHeight + 1) continue;
+    if (j < 0 && !/^(?:scroll|auto)$/.test(getComputedStyle(s).overflowY)) continue;
+    var sr = s.getBoundingClientRect();
+    var pinned = sr.top <= 1 && Math.abs(sr.bottom - window.innerHeight) <= 1;
+    var memo = ompMeasure.scrollerMemo.get(s);
+    var grown;
+    if (memo && Math.abs(memo[0] - sr.height) < 0.5) {
+      grown = memo[1];
+    } else if (pinned) {
+      grown = window.innerHeight + s.scrollHeight - s.clientHeight;
+      ompMeasure.scrollerMemo.set(s, [sr.height, grown]);
+    } else {
+      continue;
+    }
+    if (grown > v) v = grown;
+  }
+  // The page scrollbar exists only when the host caps the frame (content
+  // taller than the card may occupy); a fitted card shows none.
+  var overflow = v > window.innerHeight + 1;
+  if (overflow !== ompMeasure.lastOverflow) {
+    ompMeasure.lastOverflow = overflow;
+    r.style.overflowY = overflow ? "auto" : "hidden";
+  }
+  return v;
+}
 function ompReportHeight() {
   try {
-    parent.postMessage({ type: "musepi-widget-resize", mountId: window.DaimonCanvas && window.DaimonCanvas.mountId, height: document.documentElement.scrollHeight }, "*");
+    var height = Math.ceil(ompMeasureHeight());
+    if (height === ompMeasure.lastHeight) return;
+    ompMeasure.lastHeight = height;
+    parent.postMessage({ type: "musepi-widget-resize", mountId: window.DaimonCanvas && window.DaimonCanvas.mountId, height: height }, "*");
   } catch (err) {}
+}
+function ompScheduleReport() {
+  if (ompMeasure.scheduled) return;
+  // Timers, not requestAnimationFrame: a backgrounded tab/webview pauses rAF,
+  // and a page that shrinks while hidden would keep its stale frame height
+  // until it is shown again.
+  ompMeasure.scheduled = setTimeout(function () {
+    ompMeasure.scheduled = 0;
+    ompReportHeight();
+  }, 16);
 }
 window.musepiSubmit = function (text, data) {
   // One answer per card: the host drops repeats, and this keeps the face
@@ -355,9 +492,33 @@ window.musepiSubmit = function (text, data) {
     parent.postMessage({ type: "musepi-widget-submit", text: String(text == null ? "" : text), data: data === undefined ? undefined : data }, "*");
   } catch (err) {}
 };
-window.addEventListener("load", ompReportHeight);
+window.addEventListener("load", function () { ompMeasure.dirty = 1; ompReportHeight(); });
 window.addEventListener("resize", ompReportHeight);
-new MutationObserver(ompReportHeight).observe(document.documentElement, { subtree: true, childList: true, attributes: true });
+if (window.ResizeObserver) {
+  var ompResizeObserver = new ResizeObserver(ompReportHeight);
+  ompResizeObserver.observe(document.documentElement);
+  document.addEventListener("DOMContentLoaded", function () {
+    if (document.body) ompResizeObserver.observe(document.body);
+  });
+}
+new MutationObserver(function (records) {
+  // Structural changes can add/remove scrollers (rescan); attribute changes
+  // matter only for size-relevant ones — a stretched body does not resize
+  // when its child shrinks, so ResizeObserver alone would miss it.
+  for (var i = 0; i < records.length; i++) {
+    if (records[i].type !== "attributes") {
+      ompMeasure.dirty = 1;
+      break;
+    }
+  }
+  ompScheduleReport();
+}).observe(document.documentElement, {
+  subtree: true,
+  childList: true,
+  characterData: true,
+  attributes: true,
+  attributeFilter: ["style", "class", "hidden"],
+});
 // A focused frame keeps every key, so the app's Cmd/Ctrl shortcuts die while
 // the page has focus. Pass on the chords the page left alone; clipboard,
 // select-all and undo stay the page's own.
@@ -372,8 +533,17 @@ function ompForwardKey(e, kind) {
 }
 window.addEventListener("keydown", function (e) { ompForwardKey(e, "down"); });
 window.addEventListener("keyup", function (e) { ompForwardKey(e, "up"); });
-// A page as tall as its frame never scrolls inside; hand the wheel back so it
-// scrolls the chat around the page instead of dying on the frame.
+// A page that fits its frame never scrolls inside; hand the wheel back so it
+// scrolls the chat around the page. A page the host had to cap keeps its own
+// scrollbar, and the wheel must scroll that page first — one scroller at a
+// time, matching the height probe above.
+function ompPageScrollable(deltaY) {
+  var sc = document.scrollingElement;
+  if (!sc || sc.scrollHeight <= sc.clientHeight + 1) return false;
+  var atTop = sc.scrollTop <= 0;
+  var atBottom = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 1;
+  return !((deltaY < 0 && atTop) || (deltaY > 0 && atBottom));
+}
 function ompCanScroll(node, deltaY) {
   while (node && node.nodeType === 1) {
     var style = getComputedStyle(node);
@@ -384,7 +554,7 @@ function ompCanScroll(node, deltaY) {
     }
     node = node.parentElement;
   }
-  return false;
+  return ompPageScrollable(deltaY);
 }
 window.addEventListener("wheel", function (e) {
   if (ompCanScroll(e.target, e.deltaY)) return;
@@ -444,21 +614,30 @@ window.addEventListener("message", function (e) {
       window.__musepiAnnotateRunning = false;
       try { parent.postMessage({ type: "musepi-widget-annotated", payload: payload }, "*"); } catch (err) {}
     };
+    var fail = function (reason) {
+      try { parent.postMessage({ type: "musepi-widget-annotation-failed", reason: String(reason || "unknown") }, "*"); } catch (err) {}
+      done(null);
+    };
     try {
-      // The overlay is a new Promise(...) expression: publish its value on a
-      // global from inside the injected script, then read it here.
-      musepiRunInline("window.__musepiAnnotationResult = (" + d.script + ");");
+      // The overlay is a complete expression *statement* (it ends with its own
+      // semicolon). Wrapping it in parentheses made a parse error, so the
+      // script never assigned and the host reported "overlay did not start".
+      // Trim the terminator before wrapping.
+      var source = String(d.script).trimEnd().replace(/;+$/, "");
+      musepiRunInline("window.__musepiAnnotationResult = (" + source + ");");
       var running = window.__musepiAnnotationResult;
       try { delete window.__musepiAnnotationResult; } catch (err) {}
       if (running && typeof running.then === "function") {
         // The host waits for this before calling the entry live: a script the
         // policy blocked never settles, and silence reads as a broken button.
         try { parent.postMessage({ type: "musepi-widget-annotation-started" }, "*"); } catch (err) {}
-        running.then(done, function () { done(null); });
+        running.then(done, function (reason) {
+          fail((reason && reason.message) || reason || "overlay rejected");
+        });
       } else {
-        done(null);
+        fail("overlay did not start");
       }
-    } catch (err) { done(null); }
+    } catch (err) { fail((err && err.message) || err); }
   }
   if (d && d.type === "musepi-widget-annotate-cancel" && typeof d.teardown === "string") {
     var wasRunning = window.__musepiAnnotateRunning;
@@ -578,6 +757,7 @@ export function HtmlCard({
 	 *  blindly left a dead button when the bridge could not start (a blocked
 	 *  script, a frame rebuilt mid-click). */
 	const annotationProbeRef = useRef<number | null>(null);
+	const [annotationError, setAnnotationError] = useState<string | null>(null);
 
 	const clearAnnotationProbe = (): void => {
 		if (annotationProbeRef.current !== null) {
@@ -589,30 +769,43 @@ export function HtmlCard({
 	const startCardAnnotation = (): void => {
 		const frame = frameRef.current;
 		if (!frame?.contentWindow || annotating) return;
-		const overlayTheme: AnnotationOverlayTheme = resolveAnnotationOverlayTheme(theme);
-		frame.contentWindow.postMessage(
-			{
-				type: "musepi-widget-annotate",
-				script: buildAnnotationOverlayScript(overlayTheme, annotationOverlayLabels()),
-			},
-			"*",
-		);
-		setAnnotating(true);
-		// Keys (Escape, the comment field) belong to the page once the overlay
-		// is up; without this they stay on the host document.
-		frame.focus();
+		setAnnotationError(null);
+		try {
+			const overlayTheme: AnnotationOverlayTheme = resolveAnnotationOverlayTheme(theme);
+			frame.contentWindow.postMessage(
+				{
+					type: "musepi-widget-annotate",
+					script: buildAnnotationOverlayScript(overlayTheme, annotationOverlayLabels()),
+				},
+				"*",
+			);
+			setAnnotating(true);
+			// Keys (Escape, the comment field) belong to the page once the overlay
+			// is up; without this they stay on the host document.
+			frame.focus();
+		} catch (err) {
+			// Building the overlay (theme tokens, labels) can fail on the host
+			// side before anything is posted; say so instead of a dead button.
+			setAnnotating(false);
+			const reason = err instanceof Error ? err.message : String(err);
+			console.warn("[musepi] annotation setup failed:", reason);
+			setAnnotationError(`${t("annotation.startFailed")} (${reason})`);
+			return;
+		}
 		clearAnnotationProbe();
 		annotationProbeRef.current = window.setTimeout(() => {
 			annotationProbeRef.current = null;
 			setAnnotating(false);
-			// Surfaced rather than silent: a blocked script is invisible from
-			// here, and "the button does nothing" is not a reportable bug.
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("annotation.startFailed") }));
+			// Surfaced in place rather than silently: a blocked script is
+			// invisible from here, and "the button does nothing" is not a
+			// reportable bug.
+			setAnnotationError(t("annotation.startFailed"));
 		}, ANNOTATION_START_TIMEOUT_MS);
 	};
 
 	const cancelCardAnnotation = (): void => {
 		clearAnnotationProbe();
+		setAnnotationError(null);
 		frameRef.current?.contentWindow?.postMessage(
 			{ type: "musepi-widget-annotate-cancel", teardown: ANNOTATION_TEARDOWN_SCRIPT },
 			"*",
@@ -657,9 +850,17 @@ export function HtmlCard({
 		if (!raw) return;
 		const onMsg = (e: MessageEvent): void => {
 			if (e.source !== (frameRef.current?.contentWindow ?? null)) return;
-			const annotated = e.data as { type?: string; payload?: unknown } | null;
+			const annotated = e.data as { type?: string; payload?: unknown; reason?: string } | null;
 			if (annotated?.type === "musepi-widget-annotation-started") {
 				clearAnnotationProbe();
+				return;
+			}
+			if (annotated?.type === "musepi-widget-annotation-failed") {
+				clearAnnotationProbe();
+				setAnnotating(false);
+				const reason = annotated.reason ?? "unknown";
+				console.warn("[musepi] annotation overlay failed:", reason);
+				setAnnotationError(`${t("annotation.startFailed")} (${reason})`);
 				return;
 			}
 			if (annotated?.type !== "musepi-widget-annotated") return;
@@ -764,25 +965,35 @@ export function HtmlCard({
 		return () => window.removeEventListener("message", onMsg);
 	}, [raw, sendPrompt]);
 
+	const headSlot = useContext(WidgetHeadActionsSlot);
 	if (!raw || oversize) {
 		return <div className="gui-widget-html-empty">html</div>;
 	}
+	// The annotation entry sits with the card's other head actions. A face
+	// outside a card (board canvas, export) has no slot and keeps its own row.
+	const annotateAction = annotateCapture ? (
+		<button
+			type="button"
+			className={`gui-widget-annotate-btn${annotating ? " gui-widget-annotate-btn--active" : ""}`}
+			title={annotating ? t("annotation.stop") : t("annotation.toggle")}
+			aria-label={annotating ? t("annotation.stop") : t("annotation.toggle")}
+			aria-pressed={annotating}
+			onClick={() => (annotating ? cancelCardAnnotation() : startCardAnnotation())}
+		>
+			<MorphIcon icon={annotating ? XIconData : PencilIconData} size={12} spring="snappy" />
+		</button>
+	) : null;
 	return (
 		<div className="gui-widget-html-wrap">
-			{annotateCapture && (
-				<div className="gui-widget-html-tools">
-					<button
-						type="button"
-						className={`gui-widget-annotate-btn${annotating ? " gui-widget-annotate-btn--active" : ""}`}
-						title={annotating ? t("annotation.stop") : t("annotation.toggle")}
-						aria-label={annotating ? t("annotation.stop") : t("annotation.toggle")}
-						aria-pressed={annotating}
-						onClick={() => (annotating ? cancelCardAnnotation() : startCardAnnotation())}
-					>
-						{annotating ? "✕" : "✎"}
-					</button>
-				</div>
-			)}
+			{annotateAction ? (
+				headSlot ? (
+					createPortal(annotateAction, headSlot)
+				) : (
+					// Board canvas / HTML export: no card head to portal into, so the
+					// entry keeps its own row above the page.
+					<div className="gui-widget-html-tools">{annotateAction}</div>
+				)
+			) : null}
 			<iframe
 				ref={frameRef}
 				className="gui-widget-html"
@@ -810,6 +1021,11 @@ export function HtmlCard({
 					...(interactive ? {} : { pointerEvents: "none" }),
 				}}
 			/>
+			{annotationError && (
+				<div className="gui-widget-html-error" role="status">
+					{annotationError}
+				</div>
+			)}
 		</div>
 	);
 }

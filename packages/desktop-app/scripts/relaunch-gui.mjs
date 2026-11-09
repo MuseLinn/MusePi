@@ -7,68 +7,19 @@
  * the stale one stays visible. Match only Electron binaries inside this repo
  * so unrelated apps (Kimi, etc.) are never touched.
  */
-import { execFileSync, spawn } from "node:child_process";
-import { resolve } from "node:path";
 import { requestGracefulQuit, waitForPidsExit } from "./graceful-quit.mjs";
-
-// Match only Electron binaries inside this repo so unrelated apps (Kimi,
-// etc.) are never touched. Per-platform layout: macOS runs from the .app
-// bundle, Windows/Linux from dist/electron(.exe).
-//
-// Anchor on THIS checkout's root: the previous pattern hard-coded the
-// upstream sibling directory name, so a renamed/copied fork (this one) matched
-// nothing and every relaunch stacked a second window on the stale build.
-const repoRoot = resolve(import.meta.dir, "..", "..", "..");
-const normalizePath = p => p.replace(/\//g, "\\").toLowerCase();
-const REPO_PREFIX = `${normalizePath(repoRoot)}\\`;
-const REPO_ELECTRON_TAIL =
-	/node_modules[\\/]\.bun[\\/]electron@[^\\/]+[\\/]node_modules[\\/]electron[\\/]dist[\\/](electron(\.exe)?|electron\.app[\\/]contents[\\/]macos[\\/]electron)$/;
-const isRepoElectronPath = p => {
-	const normalized = normalizePath(p);
-	return normalized.startsWith(REPO_PREFIX) && REPO_ELECTRON_TAIL.test(normalized);
-};
-
-function runningPids() {
-	const pids = [];
-	if (process.platform === "win32") {
-		// tasklist has no command line; PowerShell CIM is the supported
-		// route. Lines: "<pid>\t<executable path>".
-		const out = execFileSync(
-			"powershell",
-			[
-				"-NoProfile",
-				"-Command",
-				"Get-CimInstance Win32_Process -Filter \"Name='electron.exe'\" | Where-Object { $_.ExecutablePath } | ForEach-Object { \"$($_.ProcessId)`t$($_.ExecutablePath)\" }",
-			],
-			{ encoding: "utf8" },
-		);
-		for (const line of out.split(/\r?\n/)) {
-			const [pidStr, ...rest] = line.split("\t");
-			if (rest.length === 0 || !isRepoElectronPath(rest.join("\t"))) continue;
-			const pid = Number.parseInt(pidStr, 10);
-			if (Number.isFinite(pid)) pids.push(pid);
-		}
-		return pids;
-	}
-	const out = execFileSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" });
-	for (const line of out.split("\n")) {
-		if (!isRepoElectronPath(line)) continue;
-		const pid = Number.parseInt(line.trim().split(/\s+/)[0], 10);
-		if (Number.isFinite(pid)) pids.push(pid);
-	}
-	return pids;
-}
+import { repoElectronPids } from "./repo-electron.mjs";
 
 async function waitExit(pids, timeoutMs = 4000) {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
-		const alive = pids.filter((pid) => runningPids().includes(pid));
+		const alive = pids.filter((pid) => repoElectronPids().includes(pid));
 		if (alive.length === 0) return;
 		await new Promise((r) => setTimeout(r, 150));
 	}
 }
 
-const targets = runningPids();
+const targets = repoElectronPids();
 if (targets.length > 0) {
 	console.log(`relaunch: asking running GUI instance(s) ${targets.join(", ")} to quit…`);
 	// Graceful first: the helper routes through the single-instance lock so
@@ -77,9 +28,9 @@ if (targets.length > 0) {
 	// a few seconds; stragglers (or instances predating the handler) fall
 	// through to the force-kill sweep below.
 	requestGracefulQuit();
-	await waitForPidsExit(targets, runningPids, 9000);
+	await waitForPidsExit(targets, repoElectronPids, 9000);
 }
-const remaining = runningPids();
+const remaining = repoElectronPids();
 if (remaining.length > 0) {
 	console.log(`relaunch: stopping stale GUI instance(s) ${remaining.join(", ")}…`);
 	for (const pid of remaining) {
@@ -90,7 +41,7 @@ if (remaining.length > 0) {
 		}
 	}
 	await waitExit(remaining);
-	const still = runningPids();
+	const still = repoElectronPids();
 	for (const pid of still) {
 		try {
 			process.kill(pid, "SIGKILL");

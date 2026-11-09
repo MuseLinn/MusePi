@@ -2,6 +2,7 @@ import "./happy-dom-shim";
 import { afterAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { segmentFitWidth } from "../../client-core/src/components/shell/Segmented";
 
 const puppeteer = require("puppeteer-core");
 const { ensureChromiumExecutable } = require("../../coding-agent/src/tools/browser/launch");
@@ -51,8 +52,8 @@ type Geometry = {
 	segments: {
 		width: number;
 		clipped: boolean;
-		/** 段内宽(含 padding/图标/间距)与标签的可见宽、完整文字宽。 */
 		box: number;
+		chrome: number;
 		labelBox: number;
 		labelText: number;
 	}[];
@@ -65,12 +66,17 @@ async function geometry(html: string): Promise<Geometry> {
 		const root = document.querySelector(".gui-seg") as HTMLElement;
 		const segments = Array.from(document.querySelectorAll(".gui-seg-item")).map(item => {
 			const label = item.querySelector(".gui-seg-item-label") as HTMLElement | null;
+			const style = getComputedStyle(item);
+			const icon = label ? item.querySelector("svg") : null;
+			const chrome =
+				(Number.parseFloat(style.paddingLeft) || 0) +
+				(Number.parseFloat(style.paddingRight) || 0) +
+				(icon ? icon.getBoundingClientRect().width + (Number.parseFloat(style.columnGap) || 0) : 0);
 			return {
 				width: item.getBoundingClientRect().width,
-				// 标签自身才是被裁的那个盒子:item 的 scrollWidth 恒等于
-				// clientWidth(label 自己 overflow hidden,不会撑开父级)。
 				clipped: label ? label.scrollWidth > label.clientWidth + 1 : false,
 				box: item.clientWidth,
+				chrome,
 				labelBox: label?.clientWidth ?? 0,
 				labelText: label?.scrollWidth ?? 0,
 			};
@@ -84,12 +90,13 @@ async function geometry(html: string): Promise<Geometry> {
 	});
 }
 
-/** 与 `segmentFitWidth` 同一规则,但读的是浏览器真实布局 —— 用它算出
- *  下界再喂回 CSS,就是在断言「组件量出来的那个数确实够用」。 */
 function fitOf(geo: Geometry): number {
-	return Math.max(
-		...geo.segments.map(s => s.labelText + Math.max(0, s.box - s.labelBox)),
-		...geo.segments.map(s => s.box),
+	return segmentFitWidth(
+		geo.segments.map(s => ({
+			clientWidth: s.box,
+			chromeWidth: s.chrome,
+			label: { clientWidth: s.labelBox, scrollWidth: s.labelText },
+		})),
 	);
 }
 
@@ -115,6 +122,12 @@ describe("compact segmented control — equal segments, uncut labels", () => {
 		expect(Math.abs(geo.thumbWidth - first!.width)).toBeLessThan(1);
 		// 4px = 容器左右 padding(2px × 2),下界 = 段数 × 最宽段。
 		expect(geo.rootWidth).toBeGreaterThanOrEqual(2 * floor - 1);
+	});
+
+	it("does not retain stretched width when the parent shrinks", async () => {
+		const stretched = await geometry(control(["运行中", "全部"], "156px"));
+		expect(stretched.segments[0]!.box).toBeGreaterThan(52);
+		expect(fitOf(stretched)).toBe(stretched.segments[0]!.labelText + stretched.segments[0]!.chrome);
 	});
 
 	it("an English pair behaves the same (the floor is not CJK-specific)", async () => {

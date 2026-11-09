@@ -34,6 +34,12 @@ interface BackLayer {
 
 const layers: BackLayer[] = [];
 let nextId = 0;
+/** Notified after any registration change, with the new depth. */
+const depthListeners = new Set<(depth: number) => void>();
+
+function notifyDepth(): void {
+	for (const listener of depthListeners) listener(layers.length);
+}
 
 /**
  * Register a back-key handler. The handler is called when the Android back
@@ -47,9 +53,34 @@ let nextId = 0;
 export function registerBackLayer(priority: number, handler: BackHandler): () => void {
 	const layer: BackLayer = { id: nextId++, priority, handler };
 	layers.push(layer);
+	notifyDepth();
 	return () => {
 		const i = layers.indexOf(layer);
-		if (i >= 0) layers.splice(i, 1);
+		if (i >= 0) {
+			layers.splice(i, 1);
+			notifyDepth();
+		}
+	};
+}
+
+/**
+ * Depth of the layer stack right now.
+ *
+ * Native shells that cannot wait for an asynchronous round trip need this
+ * synchronously: HarmonyOS `onBackPress()` must answer "did the page consume
+ * it?" on the spot, while `runJavaScript()` is async. The page therefore
+ * mirrors this number into the shell through `harmonyNative.setBackDepth()`.
+ */
+export function backLayerDepth(): number {
+	return layers.length;
+}
+
+/** Subscribe to depth changes (fires once per register/unregister). */
+export function subscribeBackLayers(listener: (depth: number) => void): () => void {
+	depthListeners.add(listener);
+	listener(layers.length);
+	return () => {
+		depthListeners.delete(listener);
 	};
 }
 
@@ -67,6 +98,7 @@ export function dispatchBack(): boolean {
 export function resetBackLayers(): void {
 	layers.length = 0;
 	nextId = 0;
+	notifyDepth();
 }
 
 /**

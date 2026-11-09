@@ -99,7 +99,7 @@ async function renderHeader() {
 				terminalOpen={false}
 				onToggleTerminal={() => {}}
 				project={null}
-				onOpenFolder={() => {}}
+				onAddProject={() => {}}
 				sessions={[{ id: "recent", label: "Recent session", timestamp: Date.now() }]}
 				onSelectSession={id => selected.push(id)}
 				onRenameSession={() => {}}

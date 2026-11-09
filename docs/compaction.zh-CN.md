@@ -66,6 +66,14 @@
 5. **轮中阈值维护**：在下次 provider 请求前，若工具循环轮次越过了阈值且 `compaction.midTurnEnabled !== false` 则触发。
 6. **空闲维护**：`runIdleCompaction()` 可以同样的自动维护路径触发，reason 为 `"idle"`。
 
+### 按模型阈值
+
+`compaction.modelThresholds` 可为单个模型覆盖策略，键是 `provider/model-id` 或末尾带 `provider/…*` 的前缀（精确键优先于最长前缀）。令牌数是百分比/预留策略缩放的基准，`"f90000"` 是精确触发点，`"80%"` 替换阈值百分比。`compaction.modelThresholdsEnabled: false` 会忽略所有条目。维护、顾问维护与上下文刻度都按当前模型解析，所以 200K/1M 分档切换时触发点也会跟着切换。
+
+### 笔记式上下文窗口（实验性）
+
+`compaction.experimentalContextManagement`（默认关闭）在 `context_notes` 与 `new_context` 都可用时，用滚动窗口取代阈值摘要压缩。进入阈值前的带后，会话排入一次性的笔记本刷新提醒；模型通过 `context_notes` 写入，再用 `new_context` 请求新窗口。维护随后提交固定的 `<context-window-rollover>` 边界而不是 LLM 摘要，`buildSessionContext` 会把最新笔记本注入重建后的窗口。rollover 会运行 `session_before_compact`，扩展可以取消它或提供自己的压缩结果。原始分支仍可通过 `history://current/full` 读取，且该 URL 仅在此设置开启时可用。缺少任一工具时，投机压缩与摘要压缩保持原行为。
+
 ### 压缩形状（图示）
 
 ```text
@@ -245,6 +253,7 @@ LLM 看到的内容：
   - 自定义 musepi 摘要器端点接收 `{ systemPrompt, prompt }`，必须返回包含至少 `{ summary }` 的 JSON。
   - 路径以 `/chat/completions` 结尾的 OpenAI 兼容端点接收 `{ model, messages, stream: false }`，其中 `messages` 包含一个系统提示词和一个用户提示词。摘要从 `choices[0].message.content` 读取，这使得 llama.cpp 和 vLLM 等自托管服务器无需单独的摘要 shim 即可充当远程压缩器。
 - 对于 OpenAI/OpenAI Codex 模型，在启用远程压缩时，压缩首先尝试 provider 原生的 `/responses/compact` 端点。它在 `preserveData.openaiRemoteCompaction` 中保留 provider 替换历史，如果该原生请求失败则回退到本地摘要。
+- 对于 `compat.supportsServerCompaction` 为 true 的第一方 Anthropic 模型，压缩会发送一次 `compact-2026-09-04` on-demand 请求，只包含待摘要的前缀。返回的带签名 `compaction` 块存入 `preserveData.anthropicCompaction`，并在后续回合重放；没有签名块的响应会按配置的方法顺序回退。Bedrock 上的 Anthropic 模型通过 `InvokeModelWithResponseStream` 侧请求走同一条链，普通回合仍走 Converse。
 
 ### Handoff 生成
 

@@ -1312,6 +1312,7 @@ const THEME_OPTIONS = [
 ] as const;
 
 const ACCENT_OPTIONS = [
+	{ id: "theme", key: "settings.accentTheme" },
 	{ id: "brand", key: "settings.accentBrand" },
 	{ id: "mono", key: "settings.accentMono" },
 	{ id: "ocean", key: "settings.accentOcean" },
@@ -1319,8 +1320,8 @@ const ACCENT_OPTIONS = [
 	{ id: "custom", key: "settings.customAccent" },
 ] as const;
 
-/** Step 2 — appearance: theme (dark/light/system) + accent (brand/mono/
- *  ocean/jade + custom), applied live through guest-client's theme module so
+/** Step 2 — appearance: theme (dark/light/system) + accent (follow-theme /
+ *  brand/mono/ocean/jade + custom), applied live through guest-client's theme module so
  *  the data-theme × data-color-scheme × data-ui-theme × data-accent axes all
  *  stay in sync (same path as the settings toggle). The right-pane window
  *  preview recolors through the same CSS vars. */
@@ -1360,6 +1361,7 @@ function AppearanceSetup(): ReactNode {
 				<div className="gui-obo-appearance-options">
 					{ACCENT_OPTIONS.map(opt => {
 						const isCustom = opt.id === "custom";
+						const isTheme = opt.id === "theme";
 						return (
 							<button
 								type="button"
@@ -1381,6 +1383,10 @@ function AppearanceSetup(): ReactNode {
 							>
 								{isCustom ? (
 									<span className="gui-obo-accent-swatch" style={{ background: customAccent }} />
+								) : isTheme ? (
+									// The theme swatch must read the theme's own accent, not a
+									// data-accent-scoped literal (which would self-influence).
+									<span className="gui-obo-accent-swatch" style={{ background: "var(--theme-accent)" }} />
 								) : (
 									<span className="gui-obo-accent-swatch" data-accent={opt.id} />
 								)}

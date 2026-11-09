@@ -1,0 +1,12 @@
+{
+	"name": "musepi-scheduled-panel",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned second-tier sidebar panel for the task center.",
+	"type": "module",
+	"musepi": {
+		"icon": "▤",
+		"description": "Task list, search, status filter and workspace groups in the rail's sidebar slot.",
+		"extensions": ["./index.ts"]
+	}
+}

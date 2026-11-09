@@ -142,7 +142,7 @@ describe("Browser settings views", () => {
 			await Bun.sleep(0);
 		});
 		expect(host.textContent).toContain("Browser engine");
-		act(() => button("Extensions").click());
+		act(() => button("External browser integrations").click());
 		expect(host.textContent).toContain("MusePi Browser Relay extension");
 		expect(host.textContent).toContain("Shared Chromium");
 		expect(window.localStorage.getItem("musepi-gui-browser-settings-tab")).toBe("extensions");

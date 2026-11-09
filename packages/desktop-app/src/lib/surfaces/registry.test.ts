@@ -8,6 +8,8 @@ import {
 	SURFACE_WIDTH_KEY,
 	SURFACE_WIDTHS_KEY,
 	type SurfaceDescriptor,
+	surfaceById,
+	surfaceRequiresSession,
 	surfaceVisible,
 	writeHiddenSurfaces,
 	writePanelWidth,
@@ -127,6 +129,27 @@ describe("surfaceVisible", () => {
 		expect(surfaceVisible(s, { rpc: null, openSurfaces: new Set(["probe"]) })).toBe(true);
 		expect(surfaceVisible(s, { rpc: null, openSurfaces: new Set(["other"]) })).toBe(false);
 		expect(surfaceVisible(s, { rpc: null })).toBe(false);
+	});
+
+	it("hides session-scoped surfaces without a session", () => {
+		const s: SurfaceDescriptor = { ...hasContentSurface(), availability: "always", requiresSession: true };
+		expect(surfaceVisible(s, { rpc: null, sessionId: null })).toBe(false);
+		expect(surfaceVisible(s, { rpc: null })).toBe(false);
+		expect(surfaceVisible(s, { rpc: null, sessionId: "session-1" })).toBe(true);
+	});
+
+	it("keeps workspace surfaces visible without a session", () => {
+		const s: SurfaceDescriptor = { ...hasContentSurface(), availability: "always" };
+		expect(surfaceVisible(s, { rpc: null, sessionId: null })).toBe(true);
+	});
+
+	it("marks the session-reading built-ins and leaves workspace views alone", () => {
+		for (const id of ["context", "trajectory", "agents"]) {
+			expect(surfaceRequiresSession(surfaceById(id)!)).toBe(true);
+		}
+		for (const id of ["files", "git", "notes", "browser", "artifacts"]) {
+			expect(surfaceRequiresSession(surfaceById(id)!)).toBe(false);
+		}
 	});
 });
 

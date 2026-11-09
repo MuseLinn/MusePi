@@ -53,7 +53,7 @@ describe("command-code discovery", () => {
 		expect(v41).toBeDefined();
 		expect(v41?.input).toEqual(["text", "image"]);
 		expect(v41?.reasoning).toBe(true);
-		expect(v41?.contextWindow).toBe(1_000_000);
+		expect(v41?.contextWindow).toBe(1_048_576);
 	});
 
 	it("leaves ids models.dev declares text-only untouched", async () => {

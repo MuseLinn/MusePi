@@ -1,0 +1,586 @@
+/*
+ * Second-tier sidebar panel spec (2026-11-08).
+ *
+ * Rail (52px) → sidebar panel → content. Every destination's panel shares ONE
+ * surface language: a 36px draggable top band, one primary action, one
+ * compact search/filter row, flat named sections, and full-width hover rows.
+ * No nested card faces, no table borders, no per-row hairlines — those made
+ * the earlier task panel read as a card stacked inside another card.
+ *
+ * `data-panel` on `.gui-side-keeper` is the single authority for which
+ * mounted pane is visible (`home` | `scheduled` | `capability` | absent =
+ * none). All panes stay mounted: expanded session groups, search text,
+ * filters and selection survive destination changes and hover-peek. A pane
+ * that is not `home` carries its own slot class (`.gui-scheduled-slot` /
+ * `.gui-capability-slot`) so the home selector can exclude it.
+ */
+
+:root {
+	/* app.tsx overrides this inline from the persisted sidebar width. */
+	--gui-side-w: 256px;
+	--gui-header-h: 48px;
+	--gui-side-panel-inset: 10px;
+	--gui-side-panel-row-h: 32px;
+	--gui-side-panel-control-h: 30px;
+}
+
+/* ── One slot, three mounted panes, NO display switching ────────────────
+ * `data-panel` is the only authority (`home` / `scheduled` / `capability` /
+ * absent). Hiding with `display:none` made the fold instant: a display change
+ * cannot be transitioned. The inactive pane leaves the flow, animates to zero
+ * width, fades and becomes inert; visibility is delayed until the fold ends. */
+.gui-side-keeper {
+	position: relative;
+}
+
+.gui-side-keeper > .gui-pane-side {
+	/* A zero-width flex child still occupies a full-height row and would push
+	 * the active pane off-screen, so inactive panes are out of flow. */
+	position: absolute;
+	display: flex;
+	width: 0 !important;
+	min-width: 0;
+	height: 0;
+	margin: 0;
+	opacity: 0;
+	visibility: hidden;
+	pointer-events: none;
+	transition:
+		var(--gui-pane-transition),
+		opacity 160ms ease-out,
+		visibility 220ms;
+}
+
+.gui-side-keeper[data-panel="home"] > .gui-pane-side:not(.gui-scheduled-slot):not(.gui-capability-slot),
+.gui-side-keeper[data-panel="scheduled"] > .gui-scheduled-slot,
+.gui-side-keeper[data-panel="capability"] > .gui-capability-slot {
+	position: relative;
+	width: var(--gui-side-w) !important;
+	/* The content column puts a gutter on BOTH .gui-chat-surface and the card,
+	 * so its top/bottom sit 48px + 16px in. Mirroring that two-layer gutter
+	 * makes both cards report the same top/bottom/height. */
+	height: calc(100% - var(--gui-header-h) - var(--gui-card-gutter) * 4);
+	margin: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2) var(--gui-card-gutter)
+		calc(var(--gui-card-gutter) * 2);
+	opacity: 1;
+	visibility: visible;
+	pointer-events: auto;
+}
+
+/* ── Rounded card surface: same tokens as .gui-chat-column / .gui-page-card */
+.gui-side-keeper > .gui-pane-side {
+	border-radius: var(--radius-2xl);
+	box-shadow: var(--gui-card-shadow);
+	background: var(--color-surface);
+	overflow: hidden;
+}
+
+/* The drag band used to clear the frameless titlebar; the card now starts
+ * BELOW it, so only one gutter of clearance is needed. */
+.gui-side-keeper > .gui-pane-side .gui-pane-drag {
+	height: var(--gui-card-gutter);
+	min-height: var(--gui-card-gutter);
+}
+
+/* ── Hover-peek: the same card, floating instead of occupying width ─────
+ * Every pane keeps its geometry while folded; only the hovered one fades in.
+ * `data-peek-open` is NOT tied to `data-panel`, so leaving a rail button has
+ * a real 140ms fade-out before the host clears the panel id. */
+.gui-side-keeper--peek {
+	width: 0;
+	min-width: 0;
+}
+
+.gui-side-keeper[data-peek="true"] > .gui-pane-side {
+	/* The docked active-pane selector is more specific; these geometry
+	 * overrides must win or the floating card keeps its in-flow box. */
+	position: fixed !important;
+	top: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2);
+	bottom: calc(var(--gui-card-gutter) * 2);
+	left: calc(var(--gui-rail-w) + var(--gui-card-gutter));
+	z-index: 42;
+	height: auto !important;
+	margin: 0 !important;
+	width: var(--gui-side-w) !important;
+	min-width: 0;
+	visibility: visible;
+	opacity: 0;
+	transform: translateX(-8px);
+	pointer-events: none;
+	transition:
+		opacity 140ms ease-out,
+		transform 140ms var(--spring);
+}
+
+.gui-side-keeper[data-peek="true"][data-peek-open="true"][data-panel="home"]
+	> .gui-pane-side:not(.gui-scheduled-slot):not(.gui-capability-slot),
+.gui-side-keeper[data-peek="true"][data-peek-open="true"][data-panel="scheduled"] > .gui-scheduled-slot,
+.gui-side-keeper[data-peek="true"][data-peek-open="true"][data-panel="capability"] > .gui-capability-slot {
+	opacity: 1;
+	transform: translateX(0);
+	pointer-events: auto;
+}
+
+@media (max-width: 720px) {
+	/* Narrow windows already have a full drawer. */
+	.gui-side-keeper[data-peek="true"] > .gui-pane-side {
+		display: none;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-side-keeper[data-peek="true"] > .gui-pane-side,
+	.gui-side-keeper > .gui-pane-side {
+		transition: none;
+	}
+}
+
+/* SessionSidebar carries its own width prop; plugin-owned panels read the
+ * shared variable instead of taking geometry props through a slot mount. */
+.gui-scheduled-slot,
+.gui-capability-slot {
+	flex-shrink: 0;
+}
+
+.gui-side-panel {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+}
+
+/* ── Head: primary action, then one tools row. Fixed rhythm, no stacking
+ *    of four differently sized controls. ── */
+.gui-side-panel-head {
+	display: flex;
+	flex-direction: column;
+	gap: var(--gui-side-panel-inset);
+	flex-shrink: 0;
+	padding: 0 var(--gui-side-panel-inset) var(--gui-side-panel-inset);
+}
+
+.gui-side-panel-count {
+	flex-shrink: 0;
+	min-width: 20px;
+	padding: 0 6px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text-muted) 14%, transparent);
+	color: var(--color-text-muted);
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 18px;
+	text-align: center;
+}
+
+.gui-side-panel-primary {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: 100%;
+	height: var(--gui-side-panel-row-h);
+	border: 1px solid color-mix(in oklab, var(--color-text-muted) 16%, transparent);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-text-muted) 8%, transparent);
+	color: var(--color-text);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	transition: background 120ms ease-out;
+}
+
+.gui-side-panel-primary:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--color-text-muted) 16%, transparent);
+}
+
+.gui-side-panel-primary:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.gui-side-panel-tools {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-side-panel-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	height: var(--gui-side-panel-control-h);
+	padding: 0 8px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-text-muted) 9%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-side-panel-search:focus-within {
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 55%, transparent);
+}
+
+.gui-side-panel-search input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 12px;
+}
+
+.gui-side-panel-search input::placeholder {
+	color: var(--color-text-muted);
+}
+
+.gui-side-panel-filter {
+	width: 92px;
+	flex-shrink: 0;
+	height: var(--gui-side-panel-control-h);
+	padding: 0 6px;
+	border: 1px solid color-mix(in oklab, var(--color-text-muted) 16%, transparent);
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: 12px;
+}
+
+/* ── Body: flat sections, full-width rows, one accent for selection. ── */
+.gui-side-panel-scroll {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: 4px var(--gui-side-panel-inset) 12px;
+}
+
+.gui-side-panel-section {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.gui-side-panel-section-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding: 0 6px;
+	height: 26px;
+	color: var(--color-text-muted);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.03em;
+}
+
+.gui-side-panel-section-title > span {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-side-panel-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	height: var(--gui-side-panel-row-h);
+	padding: 0 8px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-side-panel-row:hover {
+	background: color-mix(in oklab, var(--color-text-muted) 11%, transparent);
+}
+
+.gui-side-panel-row--active,
+.gui-side-panel-row--active:hover {
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-side-panel-row-label {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-side-panel-row-dot {
+	width: 6px;
+	height: 6px;
+	flex-shrink: 0;
+	border-radius: 50%;
+	background: var(--color-text-muted);
+	opacity: 0.55;
+}
+
+.gui-side-panel-row--active .gui-side-panel-row-dot {
+	background: var(--color-accent);
+	opacity: 1;
+}
+
+.gui-side-panel-row-meta {
+	flex-shrink: 0;
+	opacity: 0.6;
+}
+
+/* ── Empty state: one compact hint at the top of the list region.
+ *    The content column owns the illustrated empty state; duplicating it
+ *    here produced two identical stacked cards. ── */
+.gui-side-panel-empty {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 6px;
+	color: var(--color-text-muted);
+	text-align: left;
+}
+
+.gui-side-panel-empty-title {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--color-text-muted);
+}
+
+.gui-side-panel-empty-desc {
+	font-size: 11px;
+	line-height: 1.5;
+}
+
+/* ── Getting-started card (bottom of the home sidebar, 2026-11-08) ────
+ * A compact, collapsible checklist card with a thin completion bar. It sits
+ * INSIDE the sidebar card, so it repeats the card's gutter and radius language
+ * at one step down rather than inventing a new surface. All state is
+ * renderer-local; no daemon round-trip. */
+.gui-getting-started {
+	position: relative;
+	flex-shrink: 0;
+	margin: 0 var(--gui-card-gutter) var(--gui-card-gutter);
+	padding: 10px;
+	border: 1px solid color-mix(in oklab, var(--color-text-muted) 14%, transparent);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-text-muted) 6%, transparent);
+}
+
+.gui-getting-started-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-getting-started-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--color-text);
+	cursor: pointer;
+	text-align: left;
+}
+
+.gui-getting-started-title {
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.gui-getting-started-chevron {
+	width: 7px;
+	height: 7px;
+	flex-shrink: 0;
+	border-right: 1.5px solid var(--color-text-muted);
+	border-bottom: 1.5px solid var(--color-text-muted);
+	transform: rotate(45deg) translateY(-2px);
+	transition: transform 180ms var(--spring);
+}
+
+.gui-getting-started-chevron[data-collapsed="true"] {
+	transform: rotate(-45deg);
+}
+
+.gui-getting-started-count {
+	flex-shrink: 0;
+	font-size: 10px;
+	color: var(--color-text-muted);
+}
+
+.gui-getting-started-overflow {
+	position: relative;
+	flex-shrink: 0;
+}
+
+.gui-getting-started-more {
+	width: 20px;
+	height: 20px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.gui-getting-started-more:hover {
+	background: color-mix(in oklab, var(--color-text-muted) 12%, transparent);
+}
+
+.gui-getting-started-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	right: 0;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	min-width: 132px;
+	padding: 4px;
+	border: 1px solid color-mix(in oklab, var(--color-text-muted) 18%, transparent);
+	border-radius: var(--radius-md);
+	background: var(--color-surface);
+	box-shadow: var(--gui-card-shadow);
+}
+
+.gui-getting-started-menu button {
+	padding: 6px 8px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-getting-started-menu button:hover {
+	background: color-mix(in oklab, var(--color-text-muted) 12%, transparent);
+}
+
+.gui-getting-started-progress {
+	height: 3px;
+	margin-top: 8px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text-muted) 16%, transparent);
+	overflow: hidden;
+}
+
+.gui-getting-started-progress > span {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--color-accent);
+	transition: width 220ms var(--spring);
+}
+
+.gui-getting-started-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 200px;
+	margin: 8px 0 0;
+	padding: 0;
+	list-style: none;
+	opacity: 1;
+	overflow: hidden;
+	transition:
+		max-height 200ms var(--spring),
+		opacity 160ms ease-out,
+		margin-top 200ms var(--spring);
+}
+
+.gui-getting-started-list[data-collapsed="true"] {
+	max-height: 0;
+	margin-top: 0;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.gui-getting-started-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	height: 30px;
+	padding: 0 4px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-getting-started-row:hover {
+	background: color-mix(in oklab, var(--color-text-muted) 10%, transparent);
+}
+
+.gui-getting-started-row--done .gui-getting-started-row-label {
+	color: var(--color-text-muted);
+}
+
+.gui-getting-started-check {
+	display: grid;
+	place-items: center;
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	border: 1.5px solid var(--color-text-muted);
+	border-radius: 50%;
+	color: var(--color-surface);
+}
+
+.gui-getting-started-row--done .gui-getting-started-check {
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+}
+
+.gui-getting-started-row-label {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-getting-started-row-glyph {
+	flex-shrink: 0;
+	opacity: 0.35;
+}
+
+.gui-getting-started-row--done .gui-getting-started-row-glyph {
+	opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-getting-started-progress > span,
+	.gui-getting-started-list,
+	.gui-getting-started-chevron {
+		transition: none;
+	}
+}

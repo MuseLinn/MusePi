@@ -185,6 +185,10 @@ export interface AssistantMessage {
 	role: "assistant";
 	content: AssistantContent[];
 	model: string;
+	/** Provider id the turn was sent through (`provider/id` identity partner).
+	 *  Optional because historical entries predate the field; the per-turn usage
+	 *  popover shows it when present and falls back to the model alone. */
+	provider?: string;
 	usage: WireUsage;
 	stopReason: StopReason;
 	errorMessage?: string;

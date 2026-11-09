@@ -1,5 +1,6 @@
 import { isDashscopeCompatibleModeUrl, modelMatchesHost } from "@musepi/pi-catalog/hosts";
 import { isDeepseekModelIdOrName, isQwenModelId } from "@musepi/pi-catalog/identity";
+import { $env } from "@musepi/pi-utils";
 
 import type { ImageContent, Model, TextContent, VideoContent } from "../types";
 
@@ -130,4 +131,23 @@ export function isOpenAICompletionsVisionSupported(model: Model<"openai-completi
 	if (isDashscopeCompatibleModeTextOnlyQwen(model)) return false;
 	if (isTextOnlyDeepSeek(model)) return false;
 	return true;
+}
+
+/**
+ * Whether the transport that will carry `model` sends image content on the
+ * wire. The `pi-native` transport forwards the original context to the
+ * gateway, which resolves its own model server-side, so the declared input
+ * applies. OpenAI Chat Completions (and OpenRouter's chat fallback) runs the
+ * text-only guards above; every other API ships the modalities the model
+ * declares.
+ */
+export function sendsImageInputOnWire(model: Model): boolean {
+	if (model.transport === "pi-native") return model.input.includes("image");
+	if (model.api === "openai-completions") {
+		return isOpenAICompletionsVisionSupported(model as Model<"openai-completions">);
+	}
+	if (model.api === "openrouter" && $env.PI_OPENROUTER_RESPONSES === "0") {
+		return isOpenAICompletionsVisionSupported(model as Model<"openai-completions">);
+	}
+	return model.input.includes("image");
 }

@@ -252,6 +252,8 @@ export function ConnectorChip({
 
 /** The picker's body: one row per server, plus the two out-of-band choices. */
 export function ConnectorPanel({
+	collapsible = false,
+	defaultOpen = true,
 	snapshot,
 	loadFailed,
 	onToggleServer,
@@ -260,6 +262,11 @@ export function ConnectorPanel({
 	onUseAll,
 	onManage,
 }: {
+	/** Render the header as a disclosure (session-info card) instead of a
+	 *  static title (composer popup). */
+	collapsible?: boolean;
+	/** Initial disclosure state; the card opens it, callers may start folded. */
+	defaultOpen?: boolean;
 	snapshot: ConnectorSnapshot | null;
 	loadFailed: boolean;
 	onToggleServer(name: string): void;
@@ -272,6 +279,7 @@ export function ConnectorPanel({
 	 *  selection actions. Hosts that cannot open settings omit it. */
 	onManage?: () => void;
 }): ReactNode {
+	const [open, setOpen] = useState(defaultOpen);
 	if (loadFailed && snapshot === null) {
 		return <div className="gui-connector-panel gui-connector-panel--empty">{t("tools.connectorsLoadFailed")}</div>;
 	}
@@ -286,13 +294,32 @@ export function ConnectorPanel({
 	/** Checked rows plus the ones to add, in the panel's own order. */
 	const checkedNames = () => snapshot.servers.filter(server => isChecked(snapshot, server.name)).map(s => s.name);
 
+	const title = (
+		<span className="gui-connector-panel-title">
+			{t("tools.connectorsPanelTitle")}
+			<span className="gui-connector-panel-count">{snapshot.servers.length}</span>
+		</span>
+	);
+
 	return (
 		<div className="gui-connector-panel" role="group" aria-label={t("tools.connectorsPanelTitle")}>
 			<div className="gui-connector-panel-head">
-				<span className="gui-connector-panel-title">
-					{t("tools.connectorsPanelTitle")}
-					<span className="gui-connector-panel-count">{snapshot.servers.length}</span>
-				</span>
+				{collapsible ? (
+					<button
+						type="button"
+						className="gui-connector-panel-toggle"
+						aria-expanded={open}
+						onClick={() => setOpen(value => !value)}
+					>
+						<Icon
+							name="arrow-down-s"
+							className={`gui-connector-chev${open ? "" : " gui-connector-chev--closed"}`}
+						/>
+						{title}
+					</button>
+				) : (
+					title
+				)}
 				<span className="gui-connector-panel-links">
 					{onManage && (
 						<button type="button" className="gui-connector-link" onClick={onManage}>
@@ -313,28 +340,30 @@ export function ConnectorPanel({
 					)}
 				</span>
 			</div>
-			<ul className="gui-connector-list">
-				{snapshot.servers.map(server => (
-					<li key={server.name}>
-						<label className="gui-connector-row">
-							<input
-								type="checkbox"
-								checked={isChecked(snapshot, server.name)}
-								onChange={() => onToggleServer(server.name)}
-							/>
-							<span className="gui-connector-row-name">{server.name}</span>
-							<span className="gui-connector-row-meta">
-								{server.transport}
-								<span
-									className={`gui-connector-dot gui-connector-dot--${server.status}`}
-									title={t(CONNECTOR_STATUS_KEY[server.status] ?? server.status)}
-									aria-label={t(CONNECTOR_STATUS_KEY[server.status] ?? server.status)}
+			{open ? (
+				<ul className="gui-connector-list">
+					{snapshot.servers.map(server => (
+						<li key={server.name}>
+							<label className="gui-connector-row">
+								<input
+									type="checkbox"
+									checked={isChecked(snapshot, server.name)}
+									onChange={() => onToggleServer(server.name)}
 								/>
-							</span>
-						</label>
-					</li>
-				))}
-			</ul>
+								<span className="gui-connector-row-name">{server.name}</span>
+								<span className="gui-connector-row-meta">
+									{server.transport}
+									<span
+										className={`gui-connector-dot gui-connector-dot--${server.status}`}
+										title={t(CONNECTOR_STATUS_KEY[server.status] ?? server.status)}
+										aria-label={t(CONNECTOR_STATUS_KEY[server.status] ?? server.status)}
+									/>
+								</span>
+							</label>
+						</li>
+					))}
+				</ul>
+			) : null}
 		</div>
 	);
 }

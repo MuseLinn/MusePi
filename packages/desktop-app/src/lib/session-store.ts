@@ -21,9 +21,11 @@ import {
 	type SubagentProgressPayload,
 } from "@musepi/pi-wire";
 import { MaterializedView } from "@musepi/sdk";
+import { dismissActionToastSource, pushActionToast } from "./action-toast";
 import { type FetchHistoryPage, loadAlignedHistoryBatch } from "./history-batch";
 import { dispatchNotification, documentUnfocused, type FocusReport, type NotifyContext } from "./notify";
 import type { StreamEvent } from "./rpc";
+import { sessionNoticeForEvent } from "./session-notice";
 import { sfxFor } from "./sfx";
 
 /** Pet bubble kinds (伙伴): one per notification event, mapped 1:1 by the
@@ -1264,6 +1266,17 @@ export class GuiSessionStore {
 				}
 				const leafId = lm.leafId;
 				this.#hooks.onLeafMoved?.(typeof leafId === "string" ? leafId : null);
+				break;
+			}
+			case "notice":
+			case "auto_retry_start":
+			case "auto_retry_end":
+			case "auto_compaction_start":
+			case "auto_compaction_end": {
+				const action = sessionNoticeForEvent(ev);
+				if (!action) break;
+				if ("dismiss" in action) dismissActionToastSource(action.dismiss);
+				else pushActionToast(action.toast);
 				break;
 			}
 			default:

@@ -324,6 +324,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("app-power-resume", listener);
 		return () => ipcRenderer.removeListener("app-power-resume", listener);
 	},
+	/** Desktop custom-protocol OAuth callback (deep link). */
+	onOAuthCallback: (cb) => {
+		const listener = (_e, url) => cb(url);
+		ipcRenderer.on("oauth:callback", listener);
+		return () => ipcRenderer.removeListener("oauth:callback", listener);
+	},
 	/** Import a Petdex zip (dialog + unpack); null when cancelled. */
 	importPetdex: () => ipcRenderer.invoke("pet-import"),
 	/** Import a Codex hatch-pet sprite directory (dialog + pet.json); null when cancelled. */
@@ -352,6 +358,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	managedBrowserPrint: (input) => ipcRenderer.invoke("managed-browser:print", input),
 	/** Reveal the configured managed-browser download folder in the OS. */
 	managedBrowserShowDownloads: () => ipcRenderer.invoke("managed-browser:show-downloads"),
+	managedBrowserExtensionsList: () => ipcRenderer.invoke("managed-browser:extensions-list"),
+	managedBrowserExtensionsChoose: () => ipcRenderer.invoke("managed-browser:extensions-choose"),
+	managedBrowserExtensionsInstall: (input) => ipcRenderer.invoke("managed-browser:extensions-install", input),
+	managedBrowserExtensionsRemove: (input) => ipcRenderer.invoke("managed-browser:extensions-remove", input),
 	/** Capture and save a PNG without navigating the renderer to a data URL. */
 	managedBrowserSaveScreenshot: (input) => ipcRenderer.invoke("managed-browser:save-screenshot", input),
 	/** Interrupt the agent's in-flight operation on a tab (optional tabId). */

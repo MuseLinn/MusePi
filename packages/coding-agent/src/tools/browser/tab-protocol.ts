@@ -35,6 +35,21 @@ export interface ScreenshotResult {
 	height: number;
 }
 
+export interface BrowserDialogInfo {
+	dialogId: string;
+	tabId: string;
+	kind: "alert" | "confirm" | "prompt" | "beforeunload";
+	message: string;
+	defaultValue?: string;
+	ageMs: number;
+}
+
+export interface BrowserHandledDialog extends Omit<BrowserDialogInfo, "ageMs"> {
+	outcome: "accepted" | "dismissed" | "cancelled";
+	answerer: "agent" | "user" | "auto";
+	text?: string;
+}
+
 export type BrowserOperationAction =
 	| "goto"
 	| "observe"
@@ -133,6 +148,7 @@ export type WorkerInbound =
 	| { type: "init"; payload: WorkerInitPayload }
 	| { type: "run"; id: string; name: string; code: string; timeoutMs: number; session: SessionSnapshot }
 	| { type: "abort"; id: string; expectedCleanup?: boolean }
+	| { type: "stop-loading" }
 	| { type: "tool-reply"; id: string; reply: ToolReply }
 	| { type: "close" };
 
@@ -148,6 +164,8 @@ export interface RunResultOk {
 	returnValue: unknown;
 	screenshots: ScreenshotResult[];
 	operations?: BrowserOperation[];
+	pendingDialogs?: BrowserDialogInfo[];
+	handledDialogs?: BrowserHandledDialog[];
 }
 
 export interface RunErrorPayload {
@@ -167,6 +185,7 @@ export type WorkerOutbound =
 	| { type: "result"; id: string; ok: true; payload: RunResultOk }
 	| { type: "result"; id: string; ok: false; error: RunErrorPayload }
 	| { type: "activity"; id: string; operations: BrowserOperation[] }
+	| { type: "dialog"; pending?: BrowserDialogInfo; handled?: BrowserHandledDialog }
 	| { type: "tool-call"; id: string; runId: string; name: string; args: unknown }
 	| { type: "log"; level: "debug" | "warn" | "error"; msg: string; meta?: Record<string, unknown> }
 	| { type: "closed" };

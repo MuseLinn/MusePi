@@ -127,7 +127,7 @@ import {
 	loadSessionPluginsCached,
 } from "./extensibility/plugins/runtime/session-loader";
 import {
-	loadSkills as loadSkillsInternal,
+	loadSkillsWithRoots as loadSkillsWithRootsInternal,
 	type Skill,
 	type SkillWarning,
 	setActiveSkills,
@@ -958,12 +958,14 @@ export async function discoverSkills(
 	cwd?: string,
 	_agentDir?: string,
 	settings?: SkillsSettings,
+	additionalDirectories: readonly string[] = [],
 ): Promise<{ skills: Skill[]; warnings: SkillWarning[] }> {
 	// First-party file skills remain inside their Cordis packages; only user-authored
 	// skills are scanned from <agentDir>/skills by the native provider.
-	return await loadSkillsInternal({
+	return await loadSkillsWithRootsInternal({
 		...settings,
 		cwd: cwd ?? getProjectDir(),
+		additionalDirectories,
 	});
 }
 
@@ -1753,12 +1755,20 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	slashCommandsPromise.catch(() => {});
 	const skillsSettings = settings.getGroup("skills");
 	const disabledExtensionIds = settings.get("disabledExtensions") ?? [];
+	const configuredDirs = options.additionalDirectories ?? settings.get("workspace.additionalDirectories");
 	const discoveredSkillsPromise =
 		options.skills === undefined
-			? logger.time("discoverSkills", discoverSkills, cwd, agentDir, {
-					...skillsSettings,
-					disabledExtensions: disabledExtensionIds,
-				})
+			? logger.time(
+					"discoverSkills",
+					discoverSkills,
+					cwd,
+					agentDir,
+					{
+						...skillsSettings,
+						disabledExtensions: disabledExtensionIds,
+					},
+					configuredDirs,
+				)
 			: undefined;
 	discoveredSkillsPromise?.catch(() => {});
 
@@ -1770,9 +1780,6 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		logger.time("sessionManager", () =>
 			SessionManager.create(cwd, SessionManager.getDefaultSessionDir(cwd, agentDir)),
 		);
-	const configuredDirs = options.additionalDirectories
-		? options.additionalDirectories
-		: settings.get("workspace.additionalDirectories");
 	if (configuredDirs.length > 0) {
 		// Merge with any roots restored from the session header (resume/fork), not replace.
 		const existing = sessionManager.getAdditionalDirectories();

@@ -25,6 +25,7 @@ Never edit `src/models.json` by hand — it is produced from upstream sources (s
 
 ```sh
 bun run gen:models
+bun run gen:models-dev-ref   # offline fallback table for ids outside the bundle
 ```
 
 To change an entry, fix the source: resolver overrides in `provider-models/openai-compat.ts`, provider entries in `provider-models/descriptors.ts`, generator fixups in `scripts/generate-models.ts`, or thinking policies in `model-thinking.ts`.

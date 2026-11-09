@@ -1,9 +1,31 @@
+import {
+	closestCenter,
+	DndContext,
+	type DragEndEvent,
+	KeyboardSensor,
+	PointerSensor,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import {
+	arrayMove,
+	SortableContext,
+	sortableKeyboardCoordinates,
+	useSortable,
+	verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { setLocale, type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useState } from "react";
-import { moveOrderedOption, sortOrderedOptions } from "../lib/ordered-options";
+import { restrictToYAxis } from "../lib/dnd-axis";
+import { sortOrderedOptions } from "../lib/ordered-options";
 import { dispatchSettingsChanged } from "../lib/settings-events";
+import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
 import { Reveal } from "./Reveal";
+import { LadderSlider } from "./settings-controls/LadderSlider";
+import { RollingNumber } from "./settings-controls/RollingNumber";
+import { JsonListEditor, TextListEditor } from "./settings-controls/ValueLists";
 
 /**
  * UI metadata for one setting, as returned by the daemon's
@@ -26,6 +48,13 @@ export interface SchemaUi {
 	options?: readonly { value: string; label: string; description?: string }[] | "runtime";
 	secret?: boolean;
 	ordered?: boolean;
+	/** Element shape for free-form arrays (UiArray.item): `"record"` needs a
+	 *  JSON list; strings get a row list. */
+	item?: "string" | "record";
+	/** Free-number affordance hints (UiNumber.min/max/step). */
+	min?: number;
+	max?: number;
+	step?: number;
 }
 
 export interface SchemaItem {
@@ -74,6 +103,38 @@ export function isSettingShown(
 	// Unknown names stay visible (parity-safe), but a page that knows the
 	// answer — e.g. the voice tab's plugin state — must win over that default.
 	return evaluate ? evaluate(values) : true;
+}
+
+function sameSettingValue(a: unknown, b: unknown): boolean {
+	if (Object.is(a, b)) return true;
+	if (Array.isArray(a) && Array.isArray(b)) {
+		return a.length === b.length && a.every((entry, index) => sameSettingValue(entry, b[index]));
+	}
+	if (a && b && typeof a === "object" && typeof b === "object") {
+		const keysA = Object.keys(a);
+		const keysB = Object.keys(b);
+		return (
+			keysA.length === keysB.length &&
+			keysA.every(key => sameSettingValue((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
+		);
+	}
+	return false;
+}
+
+/** True when the stored value differs from the schema default — drives the
+ *  row's reset affordance. A setting without a declared default has nothing to
+ *  reset to. */
+export function isSettingChanged(item: Pick<SchemaItem, "default">, value: unknown): boolean {
+	if (item.default === undefined) return false;
+	return !sameSettingValue(value, item.default);
+}
+
+/** Copy container defaults before writing them back: the schema object is
+ *  shared with every render and must not become the live settings state. */
+function defaultForReset(value: unknown): unknown {
+	if (Array.isArray(value)) return [...value];
+	if (value && typeof value === "object") return { ...(value as Record<string, unknown>) };
+	return value;
 }
 
 /**
@@ -148,6 +209,78 @@ function resolveChoices(item: SchemaItem, current: readonly string[]): SchemaCho
 }
 
 /**
+ * The control a schema row gets. Kept as a pure function so the mapping can be
+ * asserted without mounting the panel.
+ *
+ * The vocabulary follows the setting's semantics, not its storage type: a
+ * numeric setting with a declared preset ladder is a bounded choice (detent
+ * slider), an unbounded one is a stepper (rolling counter), and a free-form
+ * array is a list — never a comma-joined text field, which corrupts values
+ * that contain commas (bash patterns, prompt text).
+ */
+export type SettingsControl =
+	| "toggle"
+	| "select"
+	| "ladder"
+	| "number"
+	| "chips"
+	| "ordered"
+	| "list"
+	| "json-list"
+	| "record"
+	| "text";
+
+export function settingsControl(item: SchemaItem): SettingsControl {
+	if (item.type === "boolean") return "toggle";
+	if (item.type === "enum") {
+		const declared = Array.isArray(item.ui?.options) && item.ui.options.length > 0;
+		const runtime = item.ui?.options === "runtime" || (item.runtimeOptions?.length ?? 0) > 0;
+		// An enum with neither is synthesized by the daemon; if it still
+		// arrives bare there is nothing to choose from, so keep the old
+		// free-text fallback instead of rendering an empty menu.
+		return declared || runtime ? "select" : "text";
+	}
+	if (item.type === "number") {
+		return Array.isArray(item.ui?.options) && item.ui.options.length > 0 ? "ladder" : "number";
+	}
+	if (item.type === "array") {
+		if (Array.isArray(item.ui?.options) && item.ui.options.length > 0) {
+			return item.ui.ordered === true ? "ordered" : "chips";
+		}
+		return item.ui?.item === "record" ? "json-list" : "list";
+	}
+	if (item.type === "record") return "record";
+	return "text";
+}
+
+/** Declared numeric presets in ladder order (already translated). */
+function numericLadder(item: SchemaItem): { value: number; label: string; description?: string }[] {
+	const declared = Array.isArray(item.ui?.options) ? item.ui.options : [];
+	const fallback = typeof item.default === "number" ? item.default : Number.NaN;
+	return declared.flatMap(option => {
+		const literal = Number(option.value);
+		// TUI submenus spell the "use the default" stop as `default`; the
+		// stored value is the setting's numeric sentinel (-1 for the
+		// compaction thresholds). Keep that stop on the ladder permanently:
+		// dropping it made the default reachable only while it happened to be
+		// the current value.
+		const value = Number.isFinite(literal) ? literal : option.value === "default" ? fallback : Number.NaN;
+		if (!Number.isFinite(value)) return [];
+		// A label equal to its value ("0.7") is a literal, not a translation
+		// key: the i18n fallback strips everything before the first dot and
+		// would render "7".
+		const labelIsLiteral = option.label === option.value;
+		return [
+			{
+				value,
+				label: labelIsLiteral ? option.label : t(option.label as TranslationKey),
+				description: option.description ? t(option.description as TranslationKey) : undefined,
+			},
+		];
+	});
+}
+
+/**
  * Declared-membership array editor (TUI MultiSelectSubmenu parity): one
  * pressed chip per choice, click flips membership.
  *
@@ -208,10 +341,11 @@ function ArrayChipsEditor({
 
 /**
  * Ordered fallback editor (`ui.ordered`, TUI ordered-multiselect parity):
- * stored position IS the priority, so it renders as a numbered list — rows
- * read top-to-bottom, ↑/↓ move one step, ✕ removes. Inline chips cannot hold
- * this: five long method names with per-chip arrows claim the whole row and
- * squeeze the label column to one character per line.
+ * stored position IS the priority, so it renders as a numbered list. Rows
+ * reorder by drag — the right-panel-tab gesture (dnd-kit: grab the handle, the
+ * row lifts, slots open live). Keyboard: focus the handle, Space to lift,
+ * ↑/↓ to move, Space to drop. Inline chips cannot hold this: five long method
+ * names would squeeze the label column to one character per line.
  */
 function OrderedListEditor({
 	item,
@@ -227,57 +361,57 @@ function OrderedListEditor({
 	const active = ranked.filter(o => current.includes(o.value));
 	const inactive = ranked.filter(o => !current.includes(o.value));
 	const addViaSelect = ranked.length > 8;
+
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+		useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+	);
+	const onDragEnd = (event: DragEndEvent): void => {
+		const from = String(event.active.id);
+		const to = event.over ? String(event.over.id) : null;
+		if (!to || from === to) return;
+		const fromIndex = active.findIndex(option => option.value === from);
+		const toIndex = active.findIndex(option => option.value === to);
+		if (fromIndex < 0 || toIndex < 0) return;
+		// The stored array IS the priority: commit the moved order as-is.
+		commit(
+			item.key,
+			arrayMove(
+				active.map(option => option.value),
+				fromIndex,
+				toIndex,
+			),
+		);
+	};
+
 	return (
 		<span className="gui-ordered-editor">
 			{active.length > 0 && (
-				<ol className="gui-ordered-list">
-					{active.map((opt, index) => (
-						<li key={opt.value} className="gui-ordered-item">
-							<span className="gui-ordered-rank" aria-hidden="true">
-								{index + 1}
-							</span>
-							<span className="gui-ordered-name" title={opt.description}>
-								{opt.label}
-							</span>
-							<span className="gui-ordered-actions">
-								<button
-									type="button"
-									className="gui-ordered-btn"
-									aria-label={t("settings.moveEarlier")}
-									title={t("settings.moveEarlier")}
-									disabled={index === 0}
-									onClick={() => commit(item.key, moveOrderedOption(current, opt.value, -1))}
-								>
-									↑
-								</button>
-								<button
-									type="button"
-									className="gui-ordered-btn"
-									aria-label={t("settings.moveLater")}
-									title={t("settings.moveLater")}
-									disabled={index === active.length - 1}
-									onClick={() => commit(item.key, moveOrderedOption(current, opt.value, 1))}
-								>
-									↓
-								</button>
-								<button
-									type="button"
-									className="gui-ordered-btn gui-ordered-btn--remove"
-									aria-label={t("settings.removeOption")}
-									title={t("settings.removeOption")}
-									onClick={() =>
+				<DndContext
+					sensors={sensors}
+					collisionDetection={closestCenter}
+					modifiers={[restrictToYAxis]}
+					onDragEnd={onDragEnd}
+				>
+					<SortableContext items={active.map(option => option.value)} strategy={verticalListSortingStrategy}>
+						<ol className="gui-ordered-list">
+							{active.map((option, index) => (
+								<SortableOrderedRow
+									key={option.value}
+									option={option}
+									rank={index + 1}
+									removeLabel={t("settings.removeOption")}
+									onRemove={() =>
 										commit(
 											item.key,
-											current.filter(v => v !== opt.value),
+											current.filter(v => v !== option.value),
 										)
 									}
-								>
-									✕
-								</button>
-							</span>
-						</li>
-					))}
-				</ol>
+								/>
+							))}
+						</ol>
+					</SortableContext>
+				</DndContext>
 			)}
 			{inactive.length > 0 &&
 				(addViaSelect ? (
@@ -313,12 +447,69 @@ function OrderedListEditor({
 	);
 }
 
+/** One priority row: the handle is the only drag activator, so clicking or
+ *  selecting the row never starts a gesture. */
+function SortableOrderedRow({
+	option,
+	rank,
+	removeLabel,
+	onRemove,
+}: {
+	option: { value: string; label: string; description?: string };
+	rank: number;
+	removeLabel: string;
+	onRemove(): void;
+}): ReactNode {
+	const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+		id: option.value,
+	});
+	return (
+		<li
+			ref={setNodeRef}
+			className={`gui-ordered-item${isDragging ? " gui-ordered-item--dragging" : ""}`}
+			style={transform ? { transform: CSS.Transform.toString(transform), transition } : undefined}
+		>
+			<button
+				type="button"
+				ref={setActivatorNodeRef}
+				className="gui-ordered-grip"
+				{...attributes}
+				{...listeners}
+				aria-label={t("settings.dragReorder")}
+				title={t("settings.dragReorder")}
+			>
+				<Icon name="draggable" className="h-3.5 w-3.5" />
+			</button>
+			<span className="gui-ordered-rank" aria-hidden="true">
+				{rank}
+			</span>
+			<span className="gui-ordered-name" title={option.description}>
+				{option.label}
+			</span>
+			<button
+				type="button"
+				className="gui-ordered-btn gui-ordered-btn--remove"
+				aria-label={removeLabel}
+				title={removeLabel}
+				onClick={onRemove}
+			>
+				✕
+			</button>
+		</li>
+	);
+}
+
 /**
  * Generic settings renderer driven by daemon schema metadata.
- * Boolean → toggle, enum → select, string → input (credentials render
- * masked and keep the stored value unless replaced), number → input.
- * Labels/descriptions resolve through the app locale (t()), falling
- * back to the schema's English text when untranslated.
+ *
+ * The control follows the setting's semantics (see {@link settingsControl}):
+ * boolean → toggle, enum → select (two choices slide as a segmented
+ * control), numeric preset ladder → detent slider, free number → rolling
+ * counter, declared-membership array → chips/priority list, free-form array →
+ * value list (strings) or JSON list (records), string → input (credentials
+ * render masked and keep the stored value unless replaced). Labels and
+ * descriptions resolve through the app locale (t()), falling back to the
+ * schema's English text when untranslated.
  *
  * Rows marked `ui.tuiOnly` (terminal-only effect) render after the
  * GUI-effective rows in a muted block with an explanatory note and a
@@ -393,6 +584,9 @@ export function SchemaSettings({
 								const label = item.ui?.label ?? item.key;
 								const desc = item.ui?.description;
 								const credential = isCredential(item);
+								// Credentials never echo back (values[key] is undefined), so a
+								// default comparison would flag every stored key as changed.
+								const changed = !credential && isSettingChanged(item, value);
 								// Must use the same evaluator as `visible` above: a
 								// per-tab conditions override has to reach BOTH the
 								// group collapse and the individual row, or a
@@ -403,23 +597,32 @@ export function SchemaSettings({
 								// IS the control — hide the standard one.
 								const extra = renderExtra?.(item.key, value, commit);
 								const hasExtra = extra !== undefined && extra !== null;
-								// Chip/priority editors are content-sized and can be wider
-								// than half the row; give them their own line so the
-								// label column keeps a readable width.
-								const wideControl =
-									!hasExtra &&
-									item.type === "array" &&
-									Array.isArray(item.ui?.options) &&
-									item.ui.options.length > 0;
+								const control = settingsControl(item);
+								// Every array editor (chips, priority list, value list, JSON
+								// list) is content-sized and wider than the control column;
+								// it takes its own line so the label keeps a readable width.
+								const wideControl = !hasExtra && item.type === "array";
 								return (
 									<Reveal key={item.key} open={rowShown}>
 										<div
+											data-setting-key={item.key}
 											className={`gui-settings-row${tui ? " gui-settings-row--tui" : ""}${wideControl ? " gui-settings-row--wide-control" : ""}`}
 										>
 											<div className="min-w-0 flex-1">
 												<div className="gui-settings-row-label">
-													{t(label as TranslationKey)}
+													<span className="gui-settings-row-label-text">{t(label as TranslationKey)}</span>
 													{tui && <span className="gui-settings-tui-badge">{t("settings.tuiOnly")}</span>}
+													{changed && (
+														<button
+															type="button"
+															className="gui-settings-row-reset"
+															title={t("settings.resetToDefault")}
+															aria-label={t("settings.resetToDefault")}
+															onClick={() => commit(item.key, defaultForReset(item.default))}
+														>
+															<Icon name="restart" className="h-3.5 w-3.5" />
+														</button>
+													)}
 												</div>
 												{desc && (
 													<div className="text-[12.5px] leading-relaxed text-[var(--color-text-muted)]">
@@ -428,7 +631,7 @@ export function SchemaSettings({
 												)}
 											</div>
 											{!hasExtra ? (
-												item.type === "boolean" ? (
+												control === "toggle" ? (
 													<button
 														type="button"
 														role="switch"
@@ -438,7 +641,7 @@ export function SchemaSettings({
 													>
 														<span className="gui-toggle-knob" />
 													</button>
-												) : item.type === "enum" && Array.isArray(item.ui?.options) ? (
+												) : control === "select" && Array.isArray(item.ui?.options) ? (
 													<GuiSelect
 														className="gui-settings-select !w-auto max-w-[240px]"
 														value={typeof value === "string" ? value : ""}
@@ -482,39 +685,45 @@ export function SchemaSettings({
 															title={t("settings.optionsComeTuiRuntime")}
 														/>
 													)
-												) : item.type === "number" ? (
-													<input
-														type="number"
-														className="gui-settings-select !w-auto max-w-[120px]"
-														value={typeof value === "number" ? value : 0}
-														onChange={e => commit(item.key, Number(e.target.value))}
+												) : control === "ladder" ? (
+													<LadderSlider
+														steps={numericLadder(item)}
+														value={typeof value === "number" && Number.isFinite(value) ? value : 0}
+														onChange={next => commit(item.key, next)}
+														ariaLabel={t(label as TranslationKey)}
 													/>
-												) : item.type === "array" &&
-													Array.isArray(item.ui?.options) &&
-													item.ui.options.length > 0 ? (
-													item.ui.ordered === true ? (
-														<OrderedListEditor item={item} value={value} commit={commit} />
-													) : (
-														<ArrayChipsEditor item={item} value={value} commit={commit} />
-													)
-												) : item.type === "array" ? (
-													<input
-														type="text"
-														className="gui-settings-select !w-auto max-w-[240px]"
-														placeholder={t("settings.commaSeparatedValues")}
-														defaultValue={Array.isArray(value) ? value.join(", ") : ""}
-														key={`${item.key}:${Array.isArray(value) ? value.join(",") : ""}`}
-														onBlur={e =>
-															commit(
-																item.key,
-																e.target.value
-																	.split(",")
-																	.map(s => s.trim())
-																	.filter(Boolean),
-															)
-														}
+												) : control === "number" ? (
+													<RollingNumber
+														value={typeof value === "number" && Number.isFinite(value) ? value : 0}
+														onChange={next => commit(item.key, next)}
+														min={item.ui?.min ?? 0}
+														max={item.ui?.max}
+														step={item.ui?.step}
+														ariaLabel={t(label as TranslationKey)}
 													/>
-												) : item.type === "record" ? (
+												) : control === "ordered" ? (
+													<OrderedListEditor item={item} value={value} commit={commit} />
+												) : control === "chips" ? (
+													<ArrayChipsEditor item={item} value={value} commit={commit} />
+												) : control === "json-list" ? (
+													<JsonListEditor
+														value={value}
+														onChange={next => commit(item.key, next)}
+														invalidLabel={t("settings.invalidJsonArray")}
+														emptyHint={t("settings.listEmpty")}
+														ariaLabel={t(label as TranslationKey)}
+													/>
+												) : control === "list" ? (
+													<TextListEditor
+														values={selectedValues(value)}
+														onChange={next => commit(item.key, next)}
+														placeholder={t("settings.valuePlaceholder")}
+														emptyHint={t("settings.listEmpty")}
+														addLabel={t("settings.addValue")}
+														removeLabel={t("settings.removeValue")}
+														ariaLabel={t(label as TranslationKey)}
+													/>
+												) : control === "record" ? (
 													<RecordInput item={item} value={value} onChange={commit} />
 												) : (
 													<input

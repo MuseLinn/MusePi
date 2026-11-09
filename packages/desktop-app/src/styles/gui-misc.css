@@ -613,12 +613,8 @@
 	}
 }
 
-/* New blank project dialog (kimiwork parity): the path picker renders as
- * a folder button; the label's red asterisk keeps the required mark. */
-.gui-new-project-dialog {
-	min-width: 360px;
-}
-
+/* Project dialog fields (kimiwork parity): the primary-folder picker renders
+ * as a folder button; the label's red asterisk keeps the required mark. */
 .gui-new-project-path {
 	display: flex;
 	align-items: center;
@@ -655,6 +651,188 @@
 }
 
 .gui-new-project-req {
+	color: var(--color-danger);
+}
+
+/* Project dialog: one modal for create/edit, with the registry's primary
+ * root fixed and the additional source folders editable in place. */
+.gui-project-dialog {
+	width: min(560px, 92vw);
+	height: auto;
+	max-height: min(82vh, 720px);
+	padding: 22px 24px;
+	border-radius: var(--radius-xl);
+}
+
+.gui-project-dialog-body {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.gui-project-dialog-heading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-project-dialog-count {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 5px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text-muted);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+
+.gui-project-dialog-hint {
+	margin: 0;
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--color-text-faint);
+}
+
+.gui-project-dialog-error {
+	margin: 0;
+	font-size: 12px;
+	color: var(--color-danger);
+}
+
+.gui-project-dialog-footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 2px;
+}
+
+.gui-directory-editor {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+
+.gui-directory-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 38px;
+	padding: 5px 8px;
+	border-radius: var(--radius-md);
+}
+
+.gui-directory-row:hover {
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+
+.gui-directory-row--missing {
+	background: color-mix(in oklab, var(--color-danger) 8%, transparent);
+}
+
+.gui-directory-row-icon {
+	width: 14px;
+	height: 14px;
+	flex: none;
+	color: var(--color-text-muted);
+}
+
+.gui-directory-row--missing .gui-directory-row-icon {
+	color: var(--color-danger);
+}
+
+.gui-directory-row-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+	flex: 1;
+}
+
+.gui-directory-row-name,
+.gui-directory-row-path {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-directory-row-name {
+	font-size: 12px;
+	color: var(--color-text);
+}
+
+.gui-directory-row-path {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-directory-row-pill {
+	flex: none;
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	font-size: 10px;
+}
+
+.gui-directory-row-status {
+	flex: none;
+	font-size: 10px;
+	color: var(--color-danger);
+}
+
+.gui-directory-row-actions {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	flex: none;
+}
+
+.gui-directory-row-remove {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+}
+
+.gui-directory-row-remove:hover:not(:disabled) {
+	color: var(--color-danger);
+	background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+}
+
+.gui-directory-row-remove:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.gui-directory-editor-footer {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding-top: 3px;
+}
+
+.gui-directory-limit,
+.gui-directory-empty {
+	margin: 0;
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-directory-notice {
+	margin: 0;
+	font-size: 11px;
 	color: var(--color-danger);
 }
 

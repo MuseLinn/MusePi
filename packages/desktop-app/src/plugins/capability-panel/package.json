@@ -1,0 +1,12 @@
+{
+	"name": "musepi-capability-panel",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned second-tier sidebar panel for the capability center.",
+	"type": "module",
+	"musepi": {
+		"icon": "✦",
+		"description": "Skills / plugins / marketplace navigation in the rail's sidebar slot.",
+		"extensions": ["./index.ts"]
+	}
+}

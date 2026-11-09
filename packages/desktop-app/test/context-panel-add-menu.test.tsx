@@ -656,3 +656,18 @@ describe("ContextPanel 子代理会话标签页", () => {
 		expect(opened).toEqual(["child-9"]);
 	});
 });
+
+describe("ContextPanel welcome scene", () => {
+	it("空态页保留会话级表面但禁用，工作区表面可开启", () => {
+		mountPanel({ sessionId: "" });
+		const items = [...document.querySelectorAll<HTMLButtonElement>(".gui-panel-empty-item")];
+		expect(items.length).toBeGreaterThan(0);
+
+		const disabled = items.filter(item => item.disabled);
+		expect(disabled).toHaveLength(3);
+		for (const item of disabled) expect(item.textContent).toContain(t("general.sessionRequired"));
+
+		const files = items.find(item => item.textContent?.includes(t("files")));
+		expect(files?.disabled).toBe(false);
+	});
+});

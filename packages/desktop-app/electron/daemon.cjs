@@ -631,6 +631,12 @@ async function kill(port) {
 	if (!(await portOpen(port))) return;
 	const pid = await listenerPid(port);
 	if (pid === null) return;
+	// A terminated daemon must leave no registry record behind: a stale file
+	// makes a later start believe an orphan still owns the port. Only reached
+	// on the paths where the listener actually exited.
+	const settled = () => {
+		unregisterManagedDaemon(pid);
+	};
 
 	// `requestGracefulShutdown` speaks to `<SOCKET_DIR>/daemon.sock`, which is
 	// the daemon THIS shell knows about. If `port` is not that daemon's port
@@ -646,7 +652,7 @@ async function kill(port) {
 		const acked = await requestGracefulShutdown();
 		const coopDeadline = Date.now() + (acked ? GRACEFUL_SHUTDOWN_TIMEOUT_MS : 0);
 		while (Date.now() < coopDeadline) {
-			if (!(await portOpen(port))) return;
+			if (!(await portOpen(port))) return settled();
 			await new Promise(r => setTimeout(r, 100));
 		}
 	}
@@ -671,7 +677,7 @@ async function kill(port) {
 			// fall through to the snapshot/signal ladder
 		}
 		// /F /T is synchronous and forceful; if the port is free we are done.
-		if (await waitForPortClosed(port, 2000)) return;
+		if (await waitForPortClosed(port, 2000)) return settled();
 	}
 
 	// 3. Signal the root. On POSIX this is the ordinary graceful path; on
@@ -689,7 +695,7 @@ async function kill(port) {
 		if (!(await portOpen(port))) {
 			// Root exited; reclaim anything it left behind, from the snapshot.
 			forceKillPids(tree, pid);
-			return;
+			return settled();
 		}
 		await new Promise(r => setTimeout(r, 100));
 	}
@@ -702,7 +708,7 @@ async function kill(port) {
 	console.error("[daemon] SIGKILL tree", pid);
 	const killDeadline = Date.now() + 2000;
 	while (Date.now() < killDeadline) {
-		if (!(await portOpen(port))) return;
+		if (!(await portOpen(port))) return settled();
 		await new Promise(r => setTimeout(r, 100));
 	}
 	throw new Error(`daemon on :${port} did not exit after SIGTERM + SIGKILL`);
@@ -875,12 +881,22 @@ async function reapOrphanedDaemons() {
 			} else if (Number.isInteger(entry.ownerPid) && !pidAlive(entry.ownerPid)) {
 				console.error(`[daemon] reaping orphaned daemon ${entry.pid} (owner ${entry.ownerPid} gone)`);
 				try {
-					process.kill(entry.pid, "SIGTERM");
-				} catch {
-					// already exiting
+					// Same escalation ladder as quit/restart, not a bare SIGTERM:
+					// on Windows SIGTERM terminates only the root, so a child
+					// holding the inherited listening socket keeps the port bound.
+					// The replacement daemon then exits with EADDRINUSE and the GUI
+					// hangs on startup while the dead root is already gone.
+					await kill(entry.port);
+					reaped += 1;
+					drop = true;
+				} catch (err) {
+					// The port never freed: keep the record so a later start can
+					// retry instead of forgetting a daemon that still holds it.
+					console.error(
+						`[daemon] orphaned daemon ${entry.pid} survived the kill ladder:`,
+						err && err.message ? err.message : err,
+					);
 				}
-				reaped += 1;
-				drop = true;
 			}
 		} catch (err) {
 			console.error(`[daemon] reap check failed for ${entry.pid}:`, err && err.message ? err.message : err);

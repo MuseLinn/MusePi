@@ -7,6 +7,7 @@ import type { RpcClient } from "../lib/rpc";
 import { type ExtensionItem, useExtensionRegistry } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { ConfigFormRenderer } from "./ConfigFormRenderer";
+import { GuiSelect } from "./GuiSelect";
 import { PluginDetailDialog } from "./PluginDetailDialog";
 import { kindGlyph, PluginIcon } from "./PluginIcon";
 import { PluginInstallDialog } from "./PluginInstallDialog";
@@ -605,6 +606,24 @@ export function UnifiedPluginsView({
 	);
 	const detailItem = detailId ? (modules.find(e => e.id === detailId) ?? null) : null;
 
+	// Session/global split: a builtin entry a preset composes per session is a
+	// session plugin; everything else is always on. The preset name (not id) is
+	// what the daemon records in enabledInPresets.
+	const presets = data?.presets ?? [];
+	const [presetLabel, setPresetLabel] = useState<string>("");
+	const sessionPlugins = useMemo(
+		() => official.filter(e => e.presetOnly === true || (e.enabledInPresets?.length ?? 0) > 0),
+		[official],
+	);
+	const globalPlugins = useMemo(() => official.filter(e => !sessionPlugins.includes(e)), [official, sessionPlugins]);
+	const visibleSessionPlugins = useMemo(
+		() =>
+			presetLabel === ""
+				? sessionPlugins
+				: sessionPlugins.filter(e => e.enabledInPresets?.includes(presetLabel) === true),
+		[sessionPlugins, presetLabel],
+	);
+
 	// 一个插件包 + 它目录下的扩展模块是同一个插件的两条链路 —— 包是列表的
 	// 唯一条目，模块收进包详情弹层的「包含的组件」。模块路径在包目录下即归
 	// 该包（module path = <pkg>/index.ts）。未归属任何已安装包的用户级模块
@@ -684,12 +703,16 @@ export function UnifiedPluginsView({
 					{officialLabel} {official.length} · {t("tools.extPluginsInstalled")}{" "}
 					{filteredPackages.length + standaloneModules.length}
 				</span>
-				<button type="button" className="gui-btn gui-btn--sm" onClick={onOpenMarketplace}>
+				<button
+					type="button"
+					className="gui-btn gui-btn--sm gui-cap-action gui-cap-action--primary"
+					onClick={onOpenMarketplace}
+				>
 					<Icon name="add" className="h-3.5 w-3.5" />
 					{t("tools.extAddPlugin")}
 				</button>
 				{/* 市场只收录已发布的包；自建插件、压缩包与本机目录从这里进。 */}
-				<button type="button" className="gui-btn gui-btn--sm" onClick={() => setInstallOpen(true)}>
+				<button type="button" className="gui-btn gui-btn--sm gui-cap-action" onClick={() => setInstallOpen(true)}>
 					<Icon name="download" className="h-3.5 w-3.5" />
 					{t("settings.pluginInstallTitle")}
 				</button>
@@ -704,13 +727,53 @@ export function UnifiedPluginsView({
 				standaloneModules.length === 0 && <div className="gui-ext-plugins-error">{t("tools.noMatches")}</div>}
 			{variant === "cards" ? (
 				<div className="gui-ext-list-scroll">
-					{official.length > 0 && (
+					{sessionPlugins.length > 0 && (
+						<div className="gui-ext-group">
+							<div className="gui-ext-group-title gui-ext-group-title--row">
+								<span>
+									{t("tools.extPluginsSession")} · {visibleSessionPlugins.length}
+								</span>
+								{presets.length > 1 && (
+									<GuiSelect
+										value={presetLabel}
+										onChange={setPresetLabel}
+										ariaLabel={t("tools.extPluginsSession")}
+										options={[
+											{ value: "", label: t("tools.extPresetsAll") },
+											...presets.map(preset => ({ value: preset.label, label: preset.label })),
+										]}
+										className="gui-ext-preset-select"
+									/>
+								)}
+							</div>
+							<div className="gui-ext-plugins-scope">{t("tools.extPluginsSessionHint")}</div>
+							{visibleSessionPlugins.length > 0 ? (
+								<div className="gui-plugin-cards">
+									{visibleSessionPlugins.map(e => (
+										<ModuleCard
+											key={e.id}
+											e={e}
+											rpc={rpc}
+											busy={busyId !== null}
+											detail
+											onOpen={item => setDetailId(item.id)}
+											onToggle={toggleModule}
+										/>
+									))}
+								</div>
+							) : (
+								<div className="gui-ext-plugins-scope">{t("tools.noMatches")}</div>
+							)}
+						</div>
+					)}
+					{globalPlugins.length > 0 && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{officialLabel} · {official.length}
+								{t("tools.extPluginsGlobal")} · {globalPlugins.length}
 							</div>
+							<div className="gui-ext-plugins-scope">{t("tools.extPluginsGlobalHint")}</div>
 							<div className="gui-plugin-cards">
-								{official.map(e => (
+								{globalPlugins.map(e => (
 									<ModuleCard
 										key={e.id}
 										e={e}

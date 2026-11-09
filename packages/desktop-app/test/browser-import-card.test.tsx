@@ -13,7 +13,6 @@ function rpcWith(request: (method: string, params: unknown) => unknown): RpcClie
 }
 
 beforeEach(() => {
-	window.localStorage.removeItem("musepi-gui-browser-import-dismissed");
 	host = document.createElement("div");
 	document.body.appendChild(host);
 	root = createRoot(host);
@@ -22,7 +21,6 @@ beforeEach(() => {
 afterEach(() => {
 	act(() => root.unmount());
 	host.remove();
-	window.localStorage.removeItem("musepi-gui-browser-import-dismissed");
 	vi.restoreAllMocks();
 });
 
@@ -70,21 +68,5 @@ describe("BrowserImportCard", () => {
 			await Bun.sleep(0);
 		});
 		expect(host.querySelector('[role="alert"]')?.textContent).toBe("Profile locked");
-	});
-
-	it("remembers dismissal and offers the data-settings route", async () => {
-		const onOpenData = vi.fn();
-		const rpc = rpcWith(() => ({ ok: true }));
-		act(() => root.render(<BrowserImportCard rpc={rpc} dismissible onOpenData={onOpenData} />));
-		act(() => host.querySelector<HTMLButtonElement>('[aria-label="Browser data settings"]')!.click());
-		expect(onOpenData).toHaveBeenCalledTimes(1);
-		act(() => host.querySelector<HTMLButtonElement>('[aria-label="Dismiss Chrome import"]')!.click());
-		expect(window.localStorage.getItem("musepi-gui-browser-import-dismissed")).toBe("1");
-		expect(host.textContent).not.toContain("Import Chrome data");
-
-		act(() => root.unmount());
-		root = createRoot(host);
-		act(() => root.render(<BrowserImportCard rpc={rpc} dismissible onOpenData={onOpenData} />));
-		expect(host.textContent).not.toContain("Import Chrome data");
 	});
 });

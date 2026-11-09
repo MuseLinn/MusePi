@@ -1,12 +1,13 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { type AtCompletionEntry, loadAtCompletionEntries } from "../../lib/at-completion";
 import { currentLine, tokenQuery } from "../../lib/completion-trigger";
 import type { RpcClient } from "../../lib/rpc";
 import { rankSlashEntries } from "../../lib/slash-rank";
 import { autosize } from "../composer-autosize";
 import type { SessionListNode } from "../SessionList";
 import type { SlashEntry } from "../SlashRow";
-import type { AtCompletionEntry, HashCompletionEntry } from "./completion-menus";
+import type { HashCompletionEntry } from "./completion-menus";
 
 /** Composer-intercepted slash commands (open GUI panels or fire GUI-owned
  *  RPCs instead of hitting the agent) — they win ties in the / completion
@@ -40,10 +41,13 @@ const GUI_PANEL_INTERCEPTS: ReadonlySet<string> = new Set([
 export function useCompletion({
 	rpc,
 	cwd,
+	sessionId,
 	setText,
 }: {
 	rpc: RpcClient | null;
 	cwd?: string;
+	/** Live session id — "@" spans every working directory of the session. */
+	sessionId?: string | null;
 	setText(value: string): void;
 }): {
 	taRef: { current: HTMLTextAreaElement | null };
@@ -102,6 +106,13 @@ export function useCompletion({
 	const [atAnchor, setAtAnchor] = useState<number | null>(null);
 	const [atEntries, setAtEntries] = useState<AtCompletionEntry[] | null>(null);
 	const [atIdx, setAtIdx] = useState(0);
+	// A session switch invalidates the merged root scan; the generation guard
+	// drops a scan that resolves after the switch.
+	const atRequestRef = useRef(0);
+	useEffect(() => {
+		atRequestRef.current += 1;
+		setAtEntries(null);
+	}, [sessionId, cwd]);
 	// "#" completion (insert a session reference): lists session.list, with
 	// titles resolved from session.tree labels (fallback: cwd basename).
 	const [hashOpen, setHashOpen] = useState(false);
@@ -217,21 +228,14 @@ export function useCompletion({
 			setAtOpen(true);
 			setAtIdx(0);
 			if (!atEntries && rpc) {
-				void rpc
-					.request<{
-						entries: { name: string; path: string; isDir: boolean; size: number; mtime: number; depth: number }[];
-					}>("workspace.tree", { cwd: cwd ?? "", maxDepth: 3, perDirLimit: 100 })
-					.then(res =>
-						setAtEntries(
-							(res.entries ?? []).map(e => ({
-								name: e.name,
-								path: e.path,
-								isDir: e.isDir,
-								depth: e.depth,
-							})),
-						),
-					)
-					.catch(() => setAtEntries([]));
+				const request = ++atRequestRef.current;
+				void loadAtCompletionEntries({ rpc, cwd, sessionId })
+					.then(entries => {
+						if (atRequestRef.current === request) setAtEntries(entries);
+					})
+					.catch(() => {
+						if (atRequestRef.current === request) setAtEntries([]);
+					});
 			}
 		} else {
 			setAtOpen(false);

@@ -77,6 +77,7 @@ import type { EditToolDetails } from "../../edit";
 import type { PythonResult } from "../../eval/py/executor";
 import type { BashResult } from "../../exec/bash-executor";
 import type { ExecOptions, ExecResult } from "../../exec/exec";
+import type { GoalModeState } from "../../goals/state";
 import type * as PiCodingAgent from "../../index";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
 import type { MCPServerConfig } from "../../mcp/types";
@@ -105,6 +106,7 @@ import type {
 } from "../../tools";
 import type { ApprovalMode } from "../../tools/approval";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
+import type { TodoPhase } from "../../tools/todo";
 import type { EventBus } from "../../utils/event-bus";
 import type { HmrChange } from "../plugins/hmr/service";
 import type {
@@ -522,6 +524,30 @@ export interface ExtensionContext {
 	cwd: string;
 	/** Session manager (read-only) */
 	sessionManager: ReadonlySessionManager;
+	/** Session settings, for components that gate themselves. */
+	settings: { get(key: string): unknown };
+	/** Run the idle-maintenance compaction pass for this session. */
+	runIdleCompaction?: () => Promise<void>;
+	/** Whether the host's composer holds unsubmitted text (terminal hosts only). */
+	hasDraftInput?: () => boolean;
+	/** Run one ephemeral side-channel turn over the current conversation. */
+	runEphemeralTurn?: (options: { promptText: string; signal?: AbortSignal }) => Promise<{ replyText: string }>;
+	/** Live goal state, when the host runs goal mode. */
+	getGoalModeState?: () => GoalModeState | undefined;
+	/** Live todo phases, used as recap anchors. */
+	getTodoPhases?: () => TodoPhase[];
+	/** Persist an idle recap outside the transcript and model context. */
+	recordRecap?: (reply: string) => void;
+	/** Present an idle recap; formatting and truncation belong to the host. */
+	showRecap?: (reply: string) => void;
+	/** True when no turn, compaction, queued message, or background delivery is pending. */
+	isSettled?: () => boolean;
+	/** Append one durable custom entry to the session journal. */
+	appendCustomEntry?: (customType: string, data?: unknown) => string;
+	/** Materialize the journal before writing so the entry has a file to land in. */
+	ensureSessionOnDisk?: () => Promise<void>;
+	/** Flush the journal after a durable write. */
+	flushSession?: () => Promise<void>;
 	/** Model registry for API key resolution */
 	modelRegistry: ModelRegistry;
 	/** Calling session's `local://` root mapping for external tool bridges. */
@@ -2627,6 +2653,14 @@ export interface ExtensionContextActions {
 	shutdown: () => void;
 	getContextUsage: () => ContextUsage | undefined;
 	compact: (instructionsOrOptions?: string | CompactOptions) => Promise<void>;
+	runIdleCompaction?: () => Promise<void>;
+	hasDraftInput?: () => boolean;
+	runEphemeralTurn?: (options: { promptText: string; signal?: AbortSignal }) => Promise<{ replyText: string }>;
+	getGoalModeState?: () => GoalModeState | undefined;
+	getTodoPhases?: () => TodoPhase[];
+	recordRecap?: (reply: string) => void;
+	showRecap?: (reply: string) => void;
+	isSettled?: () => boolean;
 	getSystemPrompt: () => string[];
 }
 

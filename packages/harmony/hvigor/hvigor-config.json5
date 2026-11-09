@@ -1,8 +1,13 @@
 {
-	"modelVersion": "5.0.0",
+	"modelVersion": "6.0.0",
 	"dependencies": {},
 	"execution": {},
 	"logging": {},
 	"debugging": {},
-	"nodeOptions": {}
+	// The shell packages a ~32 MB web bundle into rawfile; the default daemon
+	// heap is not enough for resource packing and fails with
+	// "00306056 Specification Limit Violation".
+	"nodeOptions": {
+		"maxOldSpaceSize": 8192
+	}
 }

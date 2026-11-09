@@ -3,7 +3,7 @@ import {
 	buildSessionViews,
 	clampPage,
 	filterViews,
-	lastUserPrompt,
+	matchesSessionText,
 	PROJECT_ALL,
 	PROJECT_NONE,
 	pageSlice,
@@ -41,7 +41,7 @@ describe("session-manager view model", () => {
 			[
 				row("archived", { working: true }),
 				row("running", { working: true }),
-				row("done"),
+				row("done", { status: "interrupted" }),
 				row("sub", { subagent: true }),
 				row("adv", { advisor: true }),
 			],
@@ -57,6 +57,11 @@ describe("session-manager view model", () => {
 		expect(byId.get("archived")?.completedAt).toBe(new Date(NOW - DAY).toISOString());
 		expect(byId.get("running")?.status).toBe("running");
 		expect(byId.get("running")?.completedAt).toBeNull();
+		expect(byId.get("running")?.outcome).toBeNull();
+		// The transcript tail's verdict survives for finished sessions only, so
+		// the table can say 已中断 instead of a blanket 已完成.
+		expect(byId.get("done")?.outcome).toBe("interrupted");
+		expect(byId.get("archived")?.outcome).toBeNull();
 		expect(byId.get("done")?.completedAt).toBe("2026-11-04T08:00:00.000Z");
 		// A unique project shows its basename; identity stays the full path.
 		expect(byId.get("done")?.project).toBe("alpha");
@@ -126,19 +131,19 @@ describe("session-manager view model", () => {
 		expect([...toggleAll(all, ["a", "b"])]).toEqual([]);
 	});
 
-	it("reads the newest user message from a newest-first page", () => {
-		const toText = (content: string): string => content;
-		expect(
-			lastUserPrompt(
-				[
-					{ role: "assistant", content: "done" },
-					{ role: "user", content: "  second\n prompt " },
-					{ role: "user", content: "first prompt" },
-				],
-				toText,
-			),
-		).toBe("second prompt");
-		expect(lastUserPrompt([{ role: "assistant", content: "done" }], toText)).toBeNull();
-		expect(lastUserPrompt([{ role: "user", content: "   " }], toText)).toBeNull();
+	it("matches a session's own text and leaves message hits to the caller", () => {
+		const views = buildSessionViews(
+			[row("s1", { title: "Fix parser", cwd: "D:/work/alpha" })],
+			new Map(),
+			new Map([["D:/work/alpha", "alpha"]]),
+		);
+		const view = views[0]!;
+		expect(matchesSessionText(view, "parser")).toBe(true);
+		expect(matchesSessionText(view, "ALPHA")).toBe(true);
+		expect(matchesSessionText(view, "s1")).toBe(true);
+		expect(matchesSessionText(view, "   ")).toBe(true);
+		// A message inside the session is invisible to the row text — the page
+		// unions those ids from session.search.
+		expect(matchesSessionText(view, "login flow")).toBe(false);
 	});
 });

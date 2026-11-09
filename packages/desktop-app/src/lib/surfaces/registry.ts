@@ -47,6 +47,9 @@ export interface SurfaceDescriptor {
 	group: SurfaceGroup;
 	/** has-content：仅在“有内容”时出现在 rail（如无 diff/PR 时隐藏） */
 	availability: SurfaceAvailability;
+	/** 依赖会话：无 sessionId 时不可开启。rail 隐藏它；面板空态页把它渲染成
+	 *  禁用项（保留“这里有什么”的信息，而不是假装不存在）。 */
+	requiresSession?: boolean;
 	/** 面板默认宽度占比（0..1），起步宽由它决定 */
 	defaultWidthFraction: number;
 	/** 可选：是否有一个对应“是否有内容”的判定 */
@@ -96,6 +99,7 @@ export const SURFACES: SurfaceDescriptor[] = [
 		icon: "donut-chart",
 		group: "primary",
 		availability: "always",
+		requiresSession: true,
 		defaultWidthFraction: 0.5,
 	},
 	{
@@ -125,6 +129,7 @@ export const SURFACES: SurfaceDescriptor[] = [
 		icon: "list-unordered",
 		group: "primary",
 		availability: "always",
+		requiresSession: true,
 		defaultWidthFraction: 0.5,
 	},
 	// Workbench tool panes.
@@ -170,6 +175,7 @@ export const SURFACES: SurfaceDescriptor[] = [
 		icon: "ai-agent",
 		group: "primary",
 		availability: "always",
+		requiresSession: true,
 		defaultWidthFraction: 0.5,
 	},
 	// Subagent session detail (agents-hub drill-down): one tab per agent, so
@@ -190,9 +196,16 @@ export function surfaceById(id: string | null): SurfaceDescriptor | undefined {
 	return id ? byId.get(id) : undefined;
 }
 
+/** 会话级表面（context / trajectory / agents）在没有 sessionId 时不能开启：
+ *  它们读的都是会话状态，打开只会得到一屏占位。 */
+export function surfaceRequiresSession(s: SurfaceDescriptor): boolean {
+	return s.requiresSession === true;
+}
+
 /** 对于 has-content surface：有判定函数用它；否则退到"有打开的 tab 即可见"
- * —— 用户正在用的面板不因状态变化消失。 */
+ * —— 用户正在用的面板不因状态变化消失。会话级表面还要求当前有会话。 */
 export function surfaceVisible(s: SurfaceDescriptor, ctx: SurfaceProps): boolean {
+	if (surfaceRequiresSession(s) && !ctx.sessionId) return false;
 	if (s.availability === "always") return true;
 	if (s.hasContent) return s.hasContent(ctx);
 	return ctx.openSurfaces?.has(s.id) ?? false;

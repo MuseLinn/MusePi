@@ -69,6 +69,11 @@ interface MountOptions {
 	activeId?: string;
 	/** A collapsed-panel session-info column docked beside the session. */
 	sessionInfoDock?: boolean;
+	/** Welcome scene: the visible card is `.gui-welcome-card`, and there is no
+	 *  session column to measure unless `leavingColumn` keeps one mounted. */
+	welcome?: boolean;
+	/** The previous scene's session column, still mounted through the crossfade. */
+	leavingColumn?: boolean;
 }
 
 function mountPanel(options: MountOptions = {}): {
@@ -93,8 +98,22 @@ function mountPanel(options: MountOptions = {}): {
 	const transcript = document.createElement("div");
 	transcript.className = "gui-transcript-wrap";
 	column.append(transcript);
+	if (options.welcome) {
+		const card = document.createElement("div");
+		card.className = "gui-welcome-card";
+		card.getBoundingClientRect = () => rect(96, 72, 1100, 640);
+		surface.append(card);
+		if (options.leavingColumn) {
+			const scene = document.createElement("div");
+			scene.className = "gui-scene gui-scene--leaving";
+			scene.append(column);
+			surface.append(scene);
+		}
+	} else {
+		surface.append(column);
+	}
 	const host = document.createElement("div");
-	surface.append(column, host);
+	surface.append(host);
 	document.body.appendChild(surface);
 	hosts.push(surface);
 	const root = createRoot(host);
@@ -411,5 +430,23 @@ describe("ContextPanel maximize/restore", () => {
 		click("maximize");
 		expect(styleValues.get("--pane-max-left")).toBe("272px");
 		expect(styleValues.get("--pane-max-width")).toBe("1244px");
+	});
+
+	it("measures the welcome card when the welcome scene owns the surface", () => {
+		const { panel, styleValues } = mountPanel({ welcome: true });
+		click("maximize");
+		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(true);
+		expect(styleValues.get("--pane-max-left")).toBe("96px");
+		expect(styleValues.get("--pane-max-top")).toBe("72px");
+		expect(styleValues.get("--pane-max-width")).toBe("1100px");
+		expect(styleValues.get("--pane-max-height")).toBe("640px");
+	});
+
+	it("ignores the outgoing scene's column during the crossfade", () => {
+		const { panel, styleValues } = mountPanel({ welcome: true, leavingColumn: true });
+		click("maximize");
+		expect(panel.classList.contains("gui-pane-right--maximized")).toBe(true);
+		expect(styleValues.get("--pane-max-left")).toBe("96px");
+		expect(styleValues.get("--pane-max-width")).toBe("1100px");
 	});
 });

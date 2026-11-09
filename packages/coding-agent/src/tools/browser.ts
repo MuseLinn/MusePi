@@ -1,14 +1,19 @@
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
-import { prompt, untilAborted } from "@musepi/pi-utils";
+import { prompt, Snowflake, untilAborted } from "@musepi/pi-utils";
 import { isCapabilityActive } from "../extensibility/capability-activation";
 import browserDescription from "../prompts/tools/browser.md" with { type: "text" };
 import type { ToolSession } from "../sdk";
 import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
 import { resolveCmuxKind } from "./browser/cmux/rpc";
+import { BROWSER_DEVICE_PROFILES, type BrowserDeviceConfiguration, deviceActionCode } from "./browser/devices";
 import { managedBrowserBridgeUrl, managedBrowserEnabled } from "./browser/managed-bridge";
+import { type BrowserNavigationResult, navigationActionCode } from "./browser/navigation";
+import { type PageTextSnapshot, pageTextCode } from "./browser/page-text";
 import { assertSafeBrowserDestination } from "./browser/policy";
 import {
 	acquireBrowser,
@@ -19,16 +24,48 @@ import {
 	releaseBrowser,
 } from "./browser/registry";
 import { resolveRelayKind } from "./browser/relay/kind";
-import type { BrowserOperation, Observation, ScreenshotResult } from "./browser/tab-protocol";
+import { type BrowserVisualInteraction, type SnapshotAction, snapshotActionCode } from "./browser/snapshot-actions";
+import {
+	type BrowserElementsPage,
+	type BrowserVisualSnapshot,
+	createElementSnapshot,
+	createVisualSnapshot,
+	paginateElementSnapshot,
+	readElementSnapshot,
+	readVisualSnapshot,
+} from "./browser/snapshots";
+import {
+	type BrowserDownloadRecord,
+	type BrowserHistoryRecord,
+	type BrowserStatus,
+	browserStatusFromTabs,
+	readManagedBrowserRecords,
+	readManagedBrowserStatus,
+} from "./browser/state";
+import type {
+	BrowserDialogInfo,
+	BrowserHandledDialog,
+	BrowserOperation,
+	Observation,
+	RunResultOk,
+	ScreenshotResult,
+} from "./browser/tab-protocol";
 import {
 	type AcquireTabResult,
 	acquireTab,
+	activateManagedPanel,
+	activateTabTarget,
 	dropHeadlessTabs,
 	getTab,
+	listTabs,
 	releaseAllTabs,
+	releaseManagedAgent,
 	releaseTab,
 	runInTab,
+	stopTabLoading,
 } from "./browser/tab-supervisor";
+import { type BrowserVisualCrop, resolveVisualCrop } from "./browser/visual-crop";
+import { type BrowserWaitResult, pageWaitCode } from "./browser/wait";
 import type { OutputMeta } from "./output-meta";
 import { resolveToCwd } from "./path-utils";
 import { ToolAbortError, ToolError, throwIfAborted } from "./tool-errors";
@@ -57,9 +94,23 @@ const appSchema = type({
 });
 
 const browserSchema = type({
-	action: type("'open' | 'close' | 'run'").describe("operation"),
+	action: type(
+		"'open' | 'close' | 'run' | 'status' | 'read' | 'screenshot' | 'elements' | 'visual' | 'visual_crop' | 'click' | 'click_if_interactive' | 'visual_type' | 'fill' | 'type' | 'press' | 'hover' | 'scroll' | 'drag' | 'drag_path' | 'select_option' | 'set_checked' | 'scroll_into_view' | 'dialog' | 'dialog_respond' | 'activate' | 'activate_panel' | 'switch' | 'release' | 'device_profiles' | 'set_device' | 'history' | 'downloads' | 'navigate' | 'search' | 'back' | 'forward' | 'reload' | 'stop' | 'wait_load' | 'wait_for'",
+	).describe("operation"),
 	"name?": type("string").describe("tab id (default 'main')"),
 	"url?": type("string").describe("url to open"),
+	"query?": type("string").describe("search text for the configured search engine"),
+	"state?": type("'committed' | 'dom_ready' | 'complete'").describe("document load state for wait_load"),
+	"condition?": {
+		kind: "'element' | 'text' | 'url'",
+		"locator?": { role: "string", "name?": "string", "exact?": "boolean" },
+		"state?": "'visible' | 'hidden' | 'enabled' | 'present' | 'absent'",
+		"text?": "string",
+		"match?": "'exact' | 'contains' | 'prefix'",
+		"value?": "string",
+	},
+	"timeoutMs?": type("number").describe("page condition timeout, up to 30000 ms"),
+	"stableForMs?": type("number").describe("required condition stability, 0-5000 ms"),
 	"app?": appSchema,
 	"viewport?": {
 		width: "number",
@@ -70,7 +121,53 @@ const browserSchema = type({
 		"navigation wait condition",
 	),
 	"dialogs?": type("'accept' | 'dismiss'").describe("auto-handle dialogs"),
+	"accept?": type("boolean").describe("accept or dismiss the pending dialog"),
 	"code?": type("string").describe("js body to run in tab"),
+	"scope?": type("'viewport' | 'document' | 'element'").describe(
+		"rendered text or element scope (default 'viewport')",
+	),
+	"maxChars?": type("number").describe("read/element output budget, 2048-24000 characters"),
+	"cursor?": type("string").describe("nextCursor from the previous read or element snapshot"),
+	"limit?": type("number").describe("maximum elements per snapshot page (1-500, default 100)"),
+	"role?": type("string").describe("filter elements by exact accessibility role"),
+	"filterText?": type("string").describe("filter elements by name or value substring"),
+	"snapshotId?": type("string").describe("snapshot id returned by elements or visual"),
+	"ref?": type("string").describe("element ref from the same elements snapshot"),
+	"x?": type("number").describe("x coordinate in returned screenshot pixels"),
+	"y?": type("number").describe("y coordinate in returned screenshot pixels"),
+	"radius?": type("number").describe("nearby interactive-candidate radius, 8-128 pixels"),
+	"deltaX?": type("number").describe("horizontal scroll delta in screenshot pixels"),
+	"deltaY?": type("number").describe("vertical scroll delta in screenshot pixels"),
+	"from?": { x: "number", y: "number" },
+	"to?": { x: "number", y: "number" },
+	"points?": type({ x: "number", y: "number" }, "[]").describe("ordered visual drag-path points"),
+	"button?": type("'left' | 'right' | 'middle'").describe("pointer button for visual drag_path"),
+	"durationMs?": type("number").describe("total visual drag-path movement time"),
+	"modifiers?": type("'Alt' | 'Control' | 'Meta' | 'Shift'", "[]").describe("keys held during drag_path"),
+	"text?": type("string").describe("text to enter"),
+	"key?": type("string").describe("key or chord such as Enter or ControlOrMeta+A"),
+	"value?": type("string").describe("option value for select_option"),
+	"checked?": type("boolean").describe("checked state for set_checked"),
+	"replace?": type("boolean").describe("replace existing text instead of appending"),
+	"selector?": type("string").describe("optional element selector for screenshot"),
+	"fullPage?": type("boolean").describe("capture the full page instead of the viewport"),
+	"region?": {
+		x: "number",
+		y: "number",
+		width: "number",
+		height: "number",
+	},
+	"device?": {
+		enabled: "boolean",
+		"orientation?": type("'portrait' | 'landscape'"),
+		"profileId?": type(
+			"'iphone-se' | 'iphone-12-pro' | 'iphone-14-pro' | 'iphone-14-pro-max' | 'pixel-7' | 'galaxy-s20-ultra' | 'ipad-mini' | 'ipad-pro-13' | 'iphone-duo-outer' | 'iphone-duo-inner' | 'iphone-16' | 'iphone-16-pro' | 'iphone-16-pro-max' | 'pixel-8' | 'pixel-9' | 'desktop-1280' | 'desktop-1440' | 'desktop-1920' | 'responsive'",
+		),
+		"scaleMode?": type("'fit' | 'fixed'"),
+		"scale?": "number",
+		"width?": "number",
+		"height?": "number",
+	},
 	"timeout?": type("number").describe("timeout in seconds"),
 	"all?": type("boolean").describe("close every tab"),
 	"kill?": type("boolean").describe("also kill spawned-app browsers"),
@@ -78,6 +175,14 @@ const browserSchema = type({
 
 /** Input schema for the browser tool. */
 export type BrowserParams = typeof browserSchema.infer;
+
+export interface BrowserActionReceipt {
+	action: string;
+	status: "completed" | "failed";
+	target?: string;
+	url?: string;
+	error?: string;
+}
 
 /** Details describing a browser tool execution result (for renderers + transcript). */
 export interface BrowserToolDetails {
@@ -89,6 +194,29 @@ export interface BrowserToolDetails {
 	observation?: Observation;
 	screenshots?: ScreenshotResult[];
 	operations?: BrowserOperation[];
+	status?: BrowserStatus;
+	pageText?: PageTextSnapshot;
+	pageScreenshot?: ScreenshotResult & { capturedAt: string };
+	elementsSnapshot?: BrowserElementsPage;
+	visualSnapshot?: BrowserVisualSnapshot;
+	visualCrop?: BrowserVisualCrop;
+	deviceProfiles?: typeof BROWSER_DEVICE_PROFILES;
+	deviceConfiguration?: BrowserDeviceConfiguration;
+	history?: BrowserHistoryRecord[];
+	downloads?: BrowserDownloadRecord[];
+	navigation?: BrowserNavigationResult;
+	waitResult?: BrowserWaitResult;
+	visualInteraction?: BrowserVisualInteraction;
+	actionReceipt?: BrowserActionReceipt;
+	pendingDialogs?: BrowserDialogInfo[];
+	handledDialogs?: BrowserHandledDialog[];
+	control?: {
+		action: "activate" | "activate_panel" | "switch" | "release";
+		activeTabId?: string;
+		visibleTabId?: string;
+		panelVisible?: boolean;
+		released?: boolean;
+	};
 	result?: string;
 	meta?: OutputMeta;
 }
@@ -224,8 +352,120 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 
 	readonly examples: readonly ToolExample<typeof browserSchema.infer>[] = [
 		{
+			caption: "Inspect browser and tab state",
+			call: { action: "status" },
+		},
+		{
 			caption: "Open a tab",
 			call: { action: "open", name: "docs", url: "https://example.com" },
+		},
+		{
+			caption: "Wait for visible text with observable evidence",
+			call: {
+				action: "wait_for",
+				name: "docs",
+				condition: { kind: "text", text: "Done", match: "contains", state: "present" },
+				timeoutMs: 10000,
+				stableForMs: 250,
+			},
+		},
+		{
+			caption: "Read rendered page text",
+			call: { action: "read", name: "docs", scope: "viewport", maxChars: 12000 },
+		},
+		{
+			caption: "Snapshot interactive elements",
+			call: { action: "elements", name: "docs", scope: "viewport", limit: 100 },
+		},
+		{
+			caption: "Click an element ref from that snapshot",
+			call: { action: "click", name: "docs", snapshotId: "elements-1", ref: "e5" },
+		},
+		{
+			caption: "Capture a visual coordinate snapshot",
+			call: { action: "visual", name: "docs" },
+		},
+		{
+			caption: "Click a point in that visual snapshot",
+			call: { action: "click", name: "docs", snapshotId: "visual-1", x: 120, y: 240 },
+		},
+		{
+			caption: "Inspect a visual point without clicking nearby candidates",
+			call: { action: "click_if_interactive", name: "docs", snapshotId: "visual-1", x: 120, y: 240, radius: 48 },
+		},
+		{
+			caption: "Replace text at a visual input",
+			call: {
+				action: "visual_type",
+				name: "docs",
+				snapshotId: "visual-1",
+				x: 120,
+				y: 240,
+				text: "hello",
+				replace: true,
+			},
+		},
+		{
+			caption: "Read one element subtree",
+			call: { action: "read", name: "docs", scope: "element", snapshotId: "elements-1", ref: "e5" },
+		},
+		{
+			caption: "Reveal the managed panel without switching tabs",
+			call: { action: "activate_panel", name: "docs" },
+		},
+		{
+			caption: "Crop the original visual snapshot",
+			call: {
+				action: "visual_crop",
+				name: "docs",
+				snapshotId: "visual-1",
+				region: { x: 100, y: 80, width: 320, height: 240 },
+			},
+		},
+		{
+			caption: "Draw a continuous path",
+			call: {
+				action: "drag_path",
+				name: "docs",
+				snapshotId: "visual-1",
+				points: [
+					{ x: 120, y: 240 },
+					{ x: 180, y: 200 },
+					{ x: 240, y: 240 },
+				],
+				durationMs: 400,
+			},
+		},
+		{
+			caption: "Apply a responsive mobile viewport",
+			call: {
+				action: "set_device",
+				name: "docs",
+				device: {
+					enabled: true,
+					profileId: "responsive",
+					orientation: "portrait",
+					scaleMode: "fit",
+					width: 390,
+					height: 844,
+				},
+			},
+		},
+		{
+			caption: "Inspect retained download progress",
+			call: { action: "downloads" },
+		},
+		{
+			caption: "Answer the pending browser prompt",
+			call: { action: "dialog_respond", name: "docs", accept: true, text: "MusePi Agent" },
+		},
+		{
+			caption: "Reveal a managed tab",
+			call: { action: "switch", name: "docs" },
+		},
+		{
+			caption: "Release control without closing the page",
+			call: { action: "release", name: "docs" },
 		},
 		{
 			caption: "Read structured page data in the opened tab",
@@ -252,12 +492,8 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 			},
 		},
 		{
-			caption: "Capture a screenshot and return its saved path",
-			call: {
-				action: "run",
-				name: "docs",
-				code: "return await tab.screenshot();",
-			},
+			caption: "Capture a screenshot with metadata",
+			call: { action: "screenshot", name: "docs", fullPage: false },
 		},
 		{
 			caption: "Attach to an existing Electron app",
@@ -336,7 +572,10 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 			const timeoutSeconds = clampTimeout("browser", params.timeout, this.session.settings.get("tools.maxTimeout"));
 			const timeoutMs = timeoutSeconds * 1000;
 			const name = params.name ?? DEFAULT_TAB_NAME;
-			const details: BrowserToolDetails = { action: params.action, name };
+			const details: BrowserToolDetails = {
+				action: params.action,
+				...(params.action === "status" ? {} : { name }),
+			};
 
 			switch (params.action) {
 				case "open":
@@ -345,6 +584,62 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 					return await this.#close(name, params, details, timeoutMs, signal);
 				case "run":
 					return await this.#run(name, params, details, timeoutMs, signal, _onUpdate);
+				case "status":
+					return await this.#status(details, timeoutMs, signal);
+				case "read":
+					return await this.#read(name, params, details, timeoutMs, signal, _onUpdate);
+				case "screenshot":
+					return await this.#screenshot(name, params, details, timeoutMs, signal, _onUpdate);
+				case "elements":
+					return await this.#elements(name, params, details, timeoutMs, signal, _onUpdate);
+				case "visual":
+					return await this.#visual(name, params, details, timeoutMs, signal, _onUpdate);
+				case "visual_crop":
+					return await this.#visualCrop(name, params, details, timeoutMs, signal, _onUpdate);
+				case "click":
+				case "click_if_interactive":
+				case "visual_type":
+				case "fill":
+				case "type":
+				case "press":
+				case "hover":
+				case "scroll":
+				case "drag":
+				case "drag_path":
+				case "select_option":
+				case "set_checked":
+				case "scroll_into_view":
+					return await this.#snapshotAction(name, params, details, timeoutMs, signal, _onUpdate);
+				case "dialog":
+					return await this.#dialog(name, params, details, timeoutMs, signal, _onUpdate);
+				case "dialog_respond":
+					return await this.#dialogRespond(name, params, details, timeoutMs, signal, _onUpdate);
+				case "activate":
+					return await this.#activate(name, params, details, timeoutMs, signal);
+				case "activate_panel":
+					return await this.#activatePanel(name, details);
+				case "switch":
+					return await this.#switch(name, params, details, timeoutMs, signal);
+				case "release":
+					return await this.#release(name, details);
+				case "device_profiles":
+					return await this.#deviceProfiles(details);
+				case "set_device":
+					return await this.#setDevice(name, params, details, timeoutMs, signal, _onUpdate);
+				case "history":
+					return await this.#records("history", details, timeoutMs, signal);
+				case "downloads":
+					return await this.#records("downloads", details, timeoutMs, signal);
+				case "navigate":
+				case "search":
+				case "back":
+				case "forward":
+				case "reload":
+				case "stop":
+				case "wait_load":
+					return await this.#navigation(name, params, details, timeoutMs, signal, _onUpdate);
+				case "wait_for":
+					return await this.#waitFor(name, params, details, timeoutMs, signal, _onUpdate);
 				default:
 					throw new ToolError(`Unsupported action: ${(params as BrowserParams).action}`);
 			}
@@ -481,6 +776,478 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 		return toolResult(details).text(details.result).done();
 	}
 
+	async #status(
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal?: AbortSignal,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		const managedUrl = managedBrowserEnabled(this.session.settings)
+			? resolveManagedBrowserUrl(this.session)
+			: undefined;
+		const timeoutSignal = AbortSignal.timeout(timeoutMs);
+		const requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+		const status = managedUrl
+			? await readManagedBrowserStatus(managedUrl, requestSignal)
+			: browserStatusFromTabs(listTabs());
+		details.status = status;
+		details.pendingDialogs = listTabs().flatMap(tab => (tab.pendingDialog ? [tab.pendingDialog] : []));
+		details.browser = managedUrl ? "connected" : listTabs()[0]?.browser.kind.kind;
+		details.url = status.url;
+		details.result = JSON.stringify(status, null, 2);
+		return toolResult(details).text(details.result).done();
+	}
+
+	async #read(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		if (params.scope === "element") {
+			if (!params.snapshotId) throw new ToolError("Element page text requires snapshotId");
+			if (!params.ref) throw new ToolError("Element page text requires ref");
+			const snapshot = readElementSnapshot(name, params.snapshotId);
+			if (!snapshot.elements.some(element => `e${element.id}` === params.ref)) {
+				throw new ToolError(`Element ref ${params.ref} is not present in snapshot ${params.snapshotId}`);
+			}
+		}
+		const code = pageTextCode({
+			scope: params.scope,
+			maxChars: params.maxChars,
+			cursor: params.cursor,
+			snapshotId: params.snapshotId,
+			ref: params.ref,
+		});
+		return await this.#run(name, { ...params, action: "run", code }, details, timeoutMs, signal, onUpdate, run => {
+			if (typeof run.returnValue !== "object" || run.returnValue === null) {
+				throw new ToolError("Browser read returned an invalid page-text result");
+			}
+			details.pageText = run.returnValue as PageTextSnapshot;
+		});
+	}
+
+	async #navigation(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		if (params.action === "stop") {
+			const tab = getTab(name);
+			if (!tab) throw new ToolError(`Tab ${JSON.stringify(name)} is not alive`);
+			await stopTabLoading(name);
+			details.navigation = { action: "stop", url: tab.info.url, title: tab.info.title ?? "" };
+			details.result = JSON.stringify(details.navigation, null, 2);
+			return toolResult(details).text(details.result).done();
+		}
+		if (params.action === "navigate" && params.url && this.session.settings.get("browser.policy.restrictToPublic")) {
+			await assertSafeBrowserDestination(params.url);
+		}
+		const code = navigationActionCode(
+			params as Parameters<typeof navigationActionCode>[0],
+			this.session.settings.get("browser.searchEngine"),
+		);
+		return await this.#run(name, { ...params, action: "run", code }, details, timeoutMs, signal, onUpdate, run => {
+			if (typeof run.returnValue !== "object" || run.returnValue === null) {
+				throw new ToolError("Browser navigation returned an invalid result");
+			}
+			details.navigation = run.returnValue as BrowserNavigationResult;
+		});
+	}
+
+	async #waitFor(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		if (!params.condition) throw new ToolError("wait_for requires condition");
+		const code = pageWaitCode(
+			params.condition as Parameters<typeof pageWaitCode>[0],
+			params.timeoutMs,
+			params.stableForMs,
+		);
+		const result = await this.#run(
+			name,
+			{ ...params, action: "run", code },
+			details,
+			timeoutMs,
+			signal,
+			onUpdate,
+			run => {
+				if (typeof run.returnValue !== "object" || run.returnValue === null) {
+					throw new ToolError("Browser wait returned an invalid result");
+				}
+				details.waitResult = run.returnValue as BrowserWaitResult;
+			},
+		);
+		if (details.waitResult?.outcome === "timeout") result.isError = true;
+		return result;
+	}
+
+	async #records(
+		kind: "history" | "downloads",
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal?: AbortSignal,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		const managedUrl = managedBrowserEnabled(this.session.settings)
+			? resolveManagedBrowserUrl(this.session)
+			: undefined;
+		if (!managedUrl) throw new ToolError(`Browser ${kind} requires the managed Electron browser profile`);
+		const timeoutSignal = AbortSignal.timeout(timeoutMs);
+		const requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
+		const records = await readManagedBrowserRecords(managedUrl, kind, requestSignal);
+		if (kind === "history") details.history = records as BrowserHistoryRecord[];
+		else details.downloads = records as BrowserDownloadRecord[];
+		details.browser = "connected";
+		details.result = JSON.stringify(records, null, 2);
+		return toolResult(details).text(details.result).done();
+	}
+
+	async #deviceProfiles(details: BrowserToolDetails): Promise<AgentToolResult<BrowserToolDetails>> {
+		details.deviceProfiles = BROWSER_DEVICE_PROFILES;
+		details.result = JSON.stringify(BROWSER_DEVICE_PROFILES, null, 2);
+		return toolResult(details).text(details.result).done();
+	}
+
+	async #setDevice(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		if (!params.device) throw new ToolError("set_device requires device");
+		const code = deviceActionCode(params.device);
+		return await this.#run(name, { ...params, action: "run", code }, details, timeoutMs, signal, onUpdate, run => {
+			if (typeof run.returnValue !== "object" || run.returnValue === null) {
+				throw new ToolError("Device configuration returned an invalid result");
+			}
+			details.deviceConfiguration = run.returnValue as BrowserDeviceConfiguration;
+		});
+	}
+
+	async #dialog(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		return await this.#run(
+			name,
+			{ ...params, action: "run", code: "return await tab.dialog();" },
+			details,
+			timeoutMs,
+			signal,
+			onUpdate,
+			undefined,
+			() => ({ pendingDialogs: details.pendingDialogs ?? [], handledDialogs: details.handledDialogs ?? [] }),
+		);
+	}
+
+	async #dialogRespond(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		if (typeof params.accept !== "boolean")
+			throw new ToolError("dialog_respond requires accept:true or accept:false");
+		const code = `return await tab.respondDialog(${params.accept}, ${JSON.stringify(params.text)});`;
+		return await this.#run(
+			name,
+			{ ...params, action: "run", code },
+			details,
+			timeoutMs,
+			signal,
+			onUpdate,
+			undefined,
+			() => ({ pendingDialogs: details.pendingDialogs ?? [], handledDialogs: details.handledDialogs ?? [] }),
+		);
+	}
+
+	async #activate(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		let tab = getTab(name);
+		if (!tab && params.app?.target) {
+			const opened = await this.#open(name, params, details, timeoutMs, signal);
+			if (opened.isError) return opened;
+			tab = getTab(name);
+		}
+		if (!tab) throw new ToolError(`Tab ${JSON.stringify(name)} is not alive. Open or adopt it first.`);
+		details.control = { action: "activate", activeTabId: tab.targetId };
+		details.url = tab.info.url;
+		details.result = JSON.stringify(details.control, null, 2);
+		return toolResult(details).text(details.result).done();
+	}
+
+	async #activatePanel(name: string, details: BrowserToolDetails): Promise<AgentToolResult<BrowserToolDetails>> {
+		const tab = getTab(name);
+		if (!tab) throw new ToolError(`Tab ${JSON.stringify(name)} is not alive. Open or adopt it first.`);
+		await activateManagedPanel(tab);
+		details.control = { action: "activate_panel", panelVisible: true };
+		details.url = tab.info.url;
+		details.result = JSON.stringify(details.control, null, 2);
+		return toolResult(details).text(details.result).done();
+	}
+
+	async #switch(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		const activated = await this.#activate(name, params, details, timeoutMs, signal);
+		if (activated.isError) return activated;
+		const targetId = await activateTabTarget(name);
+		details.control = { action: "switch", activeTabId: targetId, visibleTabId: targetId };
+		details.result = JSON.stringify(details.control, null, 2);
+		return toolResult(details).text(details.result).done();
+	}
+
+	async #release(name: string, details: BrowserToolDetails): Promise<AgentToolResult<BrowserToolDetails>> {
+		const tab = getTab(name);
+		if (!tab) throw new ToolError(`Tab ${JSON.stringify(name)} is not alive`);
+		const targetId = tab.targetId;
+		const released = await releaseManagedAgent(name);
+		if (!released) throw new ToolError(`Tab ${JSON.stringify(name)} could not be released`);
+		details.control = { action: "release", activeTabId: targetId, released: true };
+		details.url = tab.info.url;
+		details.result = JSON.stringify(details.control, null, 2);
+		return toolResult(details).text(details.result).done();
+	}
+
+	async #screenshot(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		const options = { selector: params.selector, fullPage: params.fullPage };
+		const code = `return await tab.screenshot(${JSON.stringify(options)});`;
+		return await this.#run(name, { ...params, action: "run", code }, details, timeoutMs, signal, onUpdate, run => {
+			const screenshot = run.screenshots.at(-1);
+			if (!screenshot) throw new ToolError("Browser screenshot returned no capture metadata");
+			details.pageScreenshot = { ...screenshot, capturedAt: new Date().toISOString() };
+		});
+	}
+
+	async #elements(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		const scope = params.scope;
+		if (scope === "element") throw new ToolError('scope:"element" is only valid for read');
+		if (params.cursor !== undefined) {
+			if (!params.snapshotId) throw new ToolError("Element continuation requires snapshotId");
+			const page = paginateElementSnapshot(readElementSnapshot(name, params.snapshotId), {
+				scope,
+				limit: params.limit,
+				maxChars: params.maxChars,
+				cursor: params.cursor,
+				role: params.role,
+				text: params.filterText,
+			});
+			details.elementsSnapshot = page;
+			details.url = page.url;
+			details.result = JSON.stringify(page, null, 2);
+			return toolResult(details).text(details.result).done();
+		}
+		const options = { viewportOnly: (scope ?? "viewport") === "viewport" };
+		const code = `return await tab.observe(${JSON.stringify(options)});`;
+		return await this.#run(
+			name,
+			{ ...params, action: "run", code },
+			details,
+			timeoutMs,
+			signal,
+			onUpdate,
+			run => {
+				if (typeof run.returnValue !== "object" || run.returnValue === null) {
+					throw new ToolError("Browser elements returned an invalid observation");
+				}
+				const snapshot = createElementSnapshot(name, run.returnValue as Observation);
+				details.observation = snapshot;
+				details.elementsSnapshot = paginateElementSnapshot(snapshot, {
+					scope,
+					limit: params.limit,
+					maxChars: params.maxChars,
+					role: params.role,
+					text: params.filterText,
+				});
+				details.url = snapshot.url;
+			},
+			() => details.elementsSnapshot,
+		);
+	}
+
+	async #visual(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		const result = await this.#screenshot(name, params, details, timeoutMs, signal, onUpdate);
+		const image = details.pageScreenshot;
+		const tab = getTab(name);
+		if (image && tab) {
+			const snapshot = createVisualSnapshot(name, {
+				url: details.url ?? tab.info.url,
+				title: tab.info.title ?? "",
+				viewport: tab.info.viewport,
+				image,
+				capturedAt: image.capturedAt,
+			});
+			details.visualSnapshot = snapshot;
+			result.content.push({ type: "text", text: JSON.stringify(snapshot, null, 2) });
+		}
+		return result;
+	}
+
+	async #visualCrop(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		const snapshot = readVisualSnapshot(name, params.snapshotId ?? "");
+		const region = params.region;
+		if (!region) throw new ToolError("Visual crop requires region");
+		const buffer = await fs.readFile(snapshot.image.dest);
+		const metadata = await new Bun.Image(buffer).metadata();
+		const source = resolveVisualCrop(snapshot, region, metadata.width, metadata.height);
+		const dest = path.join(path.dirname(snapshot.image.dest), `crop-${Snowflake.next()}.png`);
+		const input = { data: buffer.toBase64(), mimeType: snapshot.image.mimeType, ...source };
+		const code = `return await tab.evaluate(async ({ data, mimeType, left, top, width, height }) => {
+			const image = new Image();
+			image.src = "data:" + mimeType + ";base64," + data;
+			await image.decode();
+			const canvas = document.createElement("canvas");
+			canvas.width = width;
+			canvas.height = height;
+			const context = canvas.getContext("2d");
+			if (!context) throw new Error("Canvas 2D is unavailable");
+			context.drawImage(image, left, top, width, height, 0, 0, width, height);
+			return { data: canvas.toDataURL("image/png").split(",")[1] };
+		}, ${JSON.stringify(input)});`;
+		let data: string | undefined;
+		const result = await this.#run(
+			name,
+			{ ...params, action: "run", code },
+			details,
+			timeoutMs,
+			signal,
+			onUpdate,
+			run => {
+				const value = run.returnValue;
+				if (typeof value !== "object" || value === null || !("data" in value) || typeof value.data !== "string") {
+					throw new ToolError("Visual crop returned no image data");
+				}
+				data = value.data;
+				details.visualCrop = {
+					sourceSnapshotId: snapshot.snapshotId,
+					region: { ...region },
+					image: {
+						dest,
+						mimeType: "image/png",
+						bytes: Buffer.from(data, "base64").length,
+						width: source.width,
+						height: source.height,
+					},
+					capturedAt: snapshot.capturedAt,
+				};
+			},
+			() => details.visualCrop,
+		);
+		if (details.visualCrop && data) {
+			await Bun.write(dest, Buffer.from(data, "base64"));
+			result.content.push({ type: "image", data, mimeType: "image/png" });
+		}
+		return result;
+	}
+
+	async #snapshotAction(
+		name: string,
+		params: BrowserParams,
+		details: BrowserToolDetails,
+		timeoutMs: number,
+		signal: AbortSignal | undefined,
+		onUpdate: AgentToolUpdateCallback<BrowserToolDetails> | undefined,
+	): Promise<AgentToolResult<BrowserToolDetails>> {
+		const action = params.action as SnapshotAction;
+		const target =
+			params.ref ?? (params.x !== undefined && params.y !== undefined ? `${params.x},${params.y}` : undefined);
+		try {
+			const elements = params.ref ? readElementSnapshot(name, params.snapshotId ?? "") : undefined;
+			const needsVisual =
+				!params.ref &&
+				(action === "scroll" ||
+					action === "drag" ||
+					action === "drag_path" ||
+					action === "click" ||
+					action === "click_if_interactive" ||
+					action === "visual_type" ||
+					action === "hover" ||
+					(action === "press" && params.x !== undefined));
+			const visual = needsVisual ? readVisualSnapshot(name, params.snapshotId ?? "") : undefined;
+			const code = snapshotActionCode({ ...params, action }, elements, visual);
+			const result = await this.#run(
+				name,
+				{ ...params, action: "run", code },
+				details,
+				timeoutMs,
+				signal,
+				onUpdate,
+				run => {
+					if (action === "click_if_interactive")
+						details.visualInteraction = run.returnValue as BrowserVisualInteraction;
+				},
+			);
+			details.actionReceipt = {
+				action,
+				status: result.isError === true ? "failed" : "completed",
+				...(target ? { target } : {}),
+				...(details.url ? { url: details.url } : {}),
+				...(result.isError === true ? { error: details.result ?? "Browser action failed" } : {}),
+			};
+			return result;
+		} catch (error) {
+			if (error instanceof ToolAbortError || (error instanceof Error && error.name === "AbortError")) throw error;
+			const message = error instanceof Error ? error.message : String(error);
+			details.actionReceipt = { action, status: "failed", ...(target ? { target } : {}), error: message };
+			details.result = message;
+			return toolResult(details).text(message).error().done();
+		}
+	}
+
 	async #run(
 		name: string,
 		params: BrowserParams,
@@ -488,6 +1255,8 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 		timeoutMs: number,
 		signal?: AbortSignal,
 		onUpdate?: AgentToolUpdateCallback<BrowserToolDetails>,
+		onResult?: (run: RunResultOk) => void,
+		transformReturn?: (value: unknown) => unknown,
 	): Promise<AgentToolResult<BrowserToolDetails>> {
 		if (!params.code?.trim()) {
 			throw new ToolError("Missing required parameter 'code' for action 'run'.");
@@ -525,10 +1294,14 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 		details.url = getTab(name)?.info.url ?? details.url;
 		details.operations = operations;
 		if (screenshots.length) details.screenshots = screenshots;
+		if (run.pendingDialogs) details.pendingDialogs = run.pendingDialogs;
+		if (run.handledDialogs) details.handledDialogs = run.handledDialogs;
+		onResult?.(run);
 
 		const content = [...displays];
-		if (returnValue !== undefined) {
-			content.push({ type: "text", text: stringifyReturnValue(returnValue) });
+		const outputValue = transformReturn ? transformReturn(returnValue) : returnValue;
+		if (outputValue !== undefined) {
+			content.push({ type: "text", text: stringifyReturnValue(outputValue) });
 		}
 		if (!content.length) {
 			content.push({ type: "text", text: `Ran code on tab ${JSON.stringify(name)}` });

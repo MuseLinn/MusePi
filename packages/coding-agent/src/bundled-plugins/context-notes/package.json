@@ -1,0 +1,14 @@
+{
+	"name": "musepi-context-notes",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Experimental notes-backed context windows: persistent notebook and new_context rollover tools.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "▤",
+		"label": "Context Notes",
+		"description": "Keep a persistent notebook and roll the session into a fresh context window.",
+		"extensions": ["./index.ts"]
+	}
+}

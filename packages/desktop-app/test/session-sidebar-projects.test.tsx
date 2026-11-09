@@ -22,6 +22,7 @@ afterEach(async () => {
 	mounted.clear();
 	document.body.innerHTML = "";
 	window.localStorage.clear();
+	delete (window as unknown as { electronAPI?: unknown }).electronAPI;
 	for (const toast of [...getToasts()]) dismissActionToast(toast.id);
 });
 
@@ -47,6 +48,7 @@ function project(root: string, name: string, kind: ProjectRow["kind"] = "managed
 function sidebar(
 	options: { nodes: SessionListNode[]; sessionMeta: Map<string, { cwd?: string }> },
 	rpc: { request<T = unknown>(method: string, params?: unknown): Promise<T> },
+	extra: { onNewSessionInProject?(cwd: string): void } = {},
 ): React.ReactNode {
 	return (
 		<SessionSidebar
@@ -56,6 +58,7 @@ function sidebar(
 			rpc={rpc as never}
 			onSelect={() => {}}
 			onNewSession={() => {}}
+			onNewSessionInProject={extra.onNewSessionInProject}
 			onDisconnect={() => {}}
 			onOpenConnect={() => {}}
 			onOpenSettings={() => {}}
@@ -203,6 +206,10 @@ describe("session sidebar project registry", () => {
 	});
 
 	it("reports a duplicate directory from the session working-directory menu", async () => {
+		// The menu now uses the native picker; happy-dom has no Electron shell.
+		(window as unknown as { electronAPI?: unknown }).electronAPI = {
+			openDirectory: async () => "/work/shared",
+		};
 		const calls: Array<{ method: string; params: unknown }> = [];
 		const rpc = {
 			async request<T>(method: string, params?: unknown): Promise<T> {
@@ -248,26 +255,7 @@ describe("session sidebar project registry", () => {
 		);
 		expect(addItem).toBeDefined();
 		await act(async () => addItem?.click());
-		await flush(3);
-
-		const input = document.querySelector<HTMLInputElement>(".gui-dialog input");
-		expect(input).not.toBeNull();
-		await act(async () => {
-			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-			setter?.call(input, "/work/shared");
-			const propsKey = Object.keys(input!).find(key => key.startsWith("__reactProps$"));
-			const props = input![propsKey as keyof HTMLInputElement] as unknown as {
-				onChange(event: { target: HTMLInputElement }): void;
-			};
-			props.onChange({ target: input! });
-			await Bun.sleep(0);
-		});
-		await flush(2);
-		expect(input?.value).toBe("/work/shared");
-		const confirm = document.querySelector<HTMLButtonElement>(".gui-dialog .gui-btn-primary");
-		await act(async () => confirm?.click());
-		// The provider settles 180ms after OK (its exit animation).
-		await flush(25);
+		await flush(6);
 
 		expect(calls).toContainEqual({
 			method: "session.directories.add",
@@ -278,7 +266,7 @@ describe("session sidebar project registry", () => {
 		expect(getToasts().some(toast => toast.kind === "error" && toast.message.includes("/work/shared"))).toBe(true);
 	});
 
-	it("renames and deletes a managed project through workspace RPC", async () => {
+	it("edits and deletes a managed project through workspace RPC", async () => {
 		window.localStorage.setItem("musepi-gui-sidebar-tab", "projects");
 		const calls: Array<{ method: string; params: unknown }> = [];
 		const rpc = {
@@ -321,17 +309,17 @@ describe("session sidebar project registry", () => {
 		};
 
 		await openProjectMenu();
-		const renameItem = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(item =>
-			item.textContent?.includes(t("settings.renameProject")),
+		const editItem = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(item =>
+			item.textContent?.includes(t("projectDialog.editTitle")),
 		);
-		expect(renameItem).toBeDefined();
-		await act(async () => renameItem?.click());
+		expect(editItem).toBeDefined();
+		await act(async () => editItem?.click());
 		await flush(3);
 		await typePrompt("alpha-renamed");
 		await confirmDialog();
 		expect(calls).toContainEqual({
 			method: "workspace.update",
-			params: { id: "id-/work/alpha", name: "alpha-renamed" },
+			params: { id: "id-/work/alpha", name: "alpha-renamed", additionalDirs: [] },
 		});
 
 		await openProjectMenu();
@@ -343,5 +331,57 @@ describe("session sidebar project registry", () => {
 		await flush(3);
 		await confirmDialog();
 		expect(calls).toContainEqual({ method: "workspace.delete", params: { id: "id-/work/alpha" } });
+	});
+
+	it("hover actions create a session in that project and open the folder with the OS label", async () => {
+		window.localStorage.setItem("musepi-gui-sidebar-tab", "projects");
+		const revealed: string[] = [];
+		const created: string[] = [];
+		(window as unknown as { electronAPI?: unknown }).electronAPI = {
+			platform: "win32",
+			openPath: async (path: string) => {
+				revealed.push(path);
+				return { ok: true };
+			},
+		};
+		const rpc = {
+			async request<T>(method: string): Promise<T> {
+				switch (method) {
+					case "workspace.list":
+						return { workspaces: [project("/work/alpha", "alpha")] } as T;
+					case "fs.stat":
+						return { exists: true, isDirectory: true } as T;
+					case "session.directories.list":
+						return { directories: [] } as T;
+					default:
+						throw new Error(`unexpected RPC: ${method}`);
+				}
+			},
+		};
+		const { container } = await mount(
+			sidebar(
+				{
+					nodes: [node("s1", "Session one", "/work/alpha")],
+					sessionMeta: new Map([["s1", { cwd: "/work/alpha" }]]),
+				},
+				rpc,
+				{ onNewSessionInProject: cwd => created.push(cwd) },
+			),
+		);
+
+		const actions = [...container.querySelectorAll<HTMLButtonElement>(".gui-project-action")];
+		expect(actions).toHaveLength(3);
+		await act(async () => actions[2]!.click());
+		expect(created).toEqual(["/work/alpha"]);
+
+		await act(async () => actions[1]!.click());
+		await flush();
+		const revealItem = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(item =>
+			item.textContent?.includes(t("settings.openInExplorer")),
+		);
+		expect(revealItem).toBeDefined();
+		await act(async () => revealItem?.click());
+		await flush();
+		expect(revealed).toEqual(["/work/alpha"]);
 	});
 });

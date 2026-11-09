@@ -2,11 +2,12 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { Agent, type AgentMessage } from "@musepi/pi-agent-core";
 import * as compactionModule from "@musepi/pi-agent-core/compaction";
 import type { AssistantMessage, Model, UserMessage } from "@musepi/pi-ai";
+import * as AIError from "@musepi/pi-ai/error";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
-import type { CompactionMethod } from "@musepi/pi-coding-agent/session/compaction-methods";
+import { type CompactionMethod, resolveSpeculationMethod } from "@musepi/pi-coding-agent/session/compaction-methods";
 import { SessionMaintenance, type SessionMaintenanceHost } from "@musepi/pi-coding-agent/session/session-maintenance";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import * as snapcompactModule from "@musepi/snapcompact";
@@ -58,7 +59,19 @@ describe("async speculative compaction", () => {
 	let maintenanceSettings: Settings;
 
 	function createMaintenance(
-		options: { asyncEnabled?: boolean; methodOrder?: CompactionMethod[] } = {},
+		options: {
+			asyncEnabled?: boolean;
+			methodOrder?: CompactionMethod[];
+			remoteEndpoint?: string;
+			thresholdPercent?: number;
+			modelThresholds?: Record<string, number | string | null>;
+			modelThresholdsEnabled?: boolean;
+			experimentalContextManagement?: boolean;
+			rolloverTools?: boolean;
+			queueNotesReminder?: (prompt: string) => void;
+			extensionRunner?: SessionMaintenanceHost["extensionRunner"];
+			generateHandoffDocument?: SessionMaintenanceHost["generateHandoffDocument"];
+		} = {},
 	): SessionMaintenance {
 		const agent = new Agent({
 			initialState: { model, systemPrompt: ["Test"], tools: [], messages: [] },
@@ -67,9 +80,17 @@ describe("async speculative compaction", () => {
 			"compaction.enabled": true,
 			"compaction.asyncEnabled": options.asyncEnabled ?? true,
 			"compaction.methodOrder": options.methodOrder ?? ["soft"],
-			"compaction.thresholdPercent": 50,
+			"compaction.thresholdPercent": options.thresholdPercent ?? 50,
 			"compaction.keepRecentTokens": 1,
 			"compaction.autoContinue": false,
+			...(options.remoteEndpoint === undefined ? {} : { "compaction.remoteEndpoint": options.remoteEndpoint }),
+			...(options.modelThresholds === undefined ? {} : { "compaction.modelThresholds": options.modelThresholds }),
+			...(options.modelThresholdsEnabled === undefined
+				? {}
+				: { "compaction.modelThresholdsEnabled": options.modelThresholdsEnabled }),
+			...(options.experimentalContextManagement === undefined
+				? {}
+				: { "compaction.experimentalContextManagement": options.experimentalContextManagement }),
 		});
 		maintenanceSettings = settings;
 		const host = {
@@ -77,7 +98,7 @@ describe("async speculative compaction", () => {
 			sessionManager,
 			settings,
 			modelRegistry,
-			extensionRunner: undefined,
+			extensionRunner: options.extensionRunner,
 			sideStreamFn: async () => {
 				throw new Error("The compact seam should be used instead of the side stream");
 			},
@@ -124,7 +145,7 @@ describe("async speculative compaction", () => {
 			getContextUsage: () => undefined,
 			shake: async () => ({ modified: false, tokensRemoved: 0 }),
 			dropImages: async () => ({ removed: 0 }),
-			generateHandoffDocument: async () => undefined,
+			generateHandoffDocument: options.generateHandoffDocument ?? (async () => undefined),
 			removeAssistantMessageFromActiveContext: () => {},
 			dropPersistedAssistantTurn: async () => undefined,
 			runRecoveryCompactionWithRollback: async () => ({ deferredHandoff: false, continuationScheduled: false }),
@@ -132,6 +153,9 @@ describe("async speculative compaction", () => {
 			setModelTemporary: async () => {},
 			abort: async () => {},
 			abortHandoff: () => {},
+			hasExperimentalContextRolloverTools: () => options.rolloverTools ?? false,
+			takeExperimentalContextRolloverRequest: () => false,
+			queueExperimentalContextNotesReminder: (prompt: string) => options.queueNotesReminder?.(prompt),
 		} as unknown as SessionMaintenanceHost;
 		return new SessionMaintenance(host);
 	}
@@ -336,5 +360,423 @@ describe("async speculative compaction", () => {
 		maintenance = createMaintenance({ methodOrder: ["snapcompact", "soft"] });
 		expect(maintenance.deferThresholdCompactionToSpeculation(THRESHOLD + 1, CONTEXT_WINDOW)).toBe(false);
 		expect(maintenance.speculationState).toBe("idle");
+	});
+
+	it("discards an armed summary when the branch outgrew it past the recovery band", async () => {
+		let invocation = 0;
+		const compactSpy = vi.spyOn(compactionModule, "compact").mockImplementation(async preparation => ({
+			summary: `summary ${++invocation}`,
+			firstKeptEntryId: preparation.firstKeptEntryId,
+			tokensBefore: preparation.tokensBefore,
+			details: {},
+		}));
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		await waitForState("armed");
+
+		// A jump past the threshold leaves a tail the armed summary never covered.
+		// Splicing it would land above the recovery band, so the real pass must
+		// summarize a fresher cut instead of reusing the stale result.
+		sessionManager.appendMessage(userMessage("later context ".repeat(20_000)));
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, {
+			triggerContextTokens: THRESHOLD + 5_000,
+		});
+
+		const entry = sessionManager.getEntries().findLast(item => item.type === "compaction");
+		expect(entry?.type === "compaction" ? entry.summary : undefined).toBe("summary 2");
+		expect(compactSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it("falls back without re-sending a native speculation that failed for good", async () => {
+		const compactSpy = vi
+			.spyOn(compactionModule, "compact")
+			.mockRejectedValue(
+				new compactionModule.NativeCompactionError(
+					Object.assign(new Error("Anthropic compaction response carried no compaction block"), { status: 400 }),
+				),
+			);
+		const snapSpy = vi.spyOn(snapcompactModule, "compact").mockImplementation(async preparation => ({
+			summary: "snapcompact archive",
+			firstKeptEntryId: preparation.firstKeptEntryId,
+			tokensBefore: preparation.tokensBefore,
+		}));
+		maintenance = createMaintenance({
+			methodOrder: ["remote", "snapcompact"],
+			remoteEndpoint: "https://example.invalid/compact",
+		});
+
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		await maintenance.speculationCompletion;
+		expect(compactSpy).toHaveBeenCalledTimes(1);
+
+		// Later boundaries neither re-send it nor hold the threshold pass for it.
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START + 500, CONTEXT_WINDOW);
+		expect(maintenance.speculationState).toBe("idle");
+		expect(maintenance.deferThresholdCompactionToSpeculation(THRESHOLD + 1_000, CONTEXT_WINDOW)).toBe(false);
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, {
+			triggerContextTokens: THRESHOLD + 1_000,
+		});
+		const entry = sessionManager.getEntries().findLast(item => item.type === "compaction");
+		expect(entry?.type === "compaction" ? entry.method : undefined).toBe("snapcompact");
+		expect(snapSpy).toHaveBeenCalledTimes(1);
+		expect(compactSpy).toHaveBeenCalledTimes(1);
+
+		// The committed compaction starts a new cycle with a fresh native attempt.
+		appendSummarizableConversation();
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		expect(maintenance.speculationState).toBe("running");
+		await maintenance.speculationCompletion;
+		expect(compactSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it("speculates the next configured method after a native speculation failed for good", async () => {
+		const compactSpy = vi
+			.spyOn(compactionModule, "compact")
+			.mockRejectedValueOnce(
+				new compactionModule.NativeCompactionError(
+					Object.assign(new Error("Anthropic compaction response carried no compaction block"), { status: 400 }),
+				),
+			)
+			.mockImplementation(async preparation => ({
+				summary: "soft summary",
+				firstKeptEntryId: preparation.firstKeptEntryId,
+				tokensBefore: preparation.tokensBefore,
+				details: {},
+			}));
+		maintenance = createMaintenance({
+			methodOrder: ["remote", "soft"],
+			remoteEndpoint: "https://example.invalid/compact",
+		});
+
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		await maintenance.speculationCompletion;
+		expect(compactSpy).toHaveBeenCalledTimes(1);
+
+		// The failed native method is skipped; soft still runs in the background
+		// instead of on the blocking threshold pass.
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START + 500, CONTEXT_WINDOW);
+		expect(maintenance.speculationState).toBe("running");
+		expect(maintenance.deferThresholdCompactionToSpeculation(THRESHOLD + 1_000, CONTEXT_WINDOW)).toBe(true);
+		await waitForState("armed");
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, {
+			triggerContextTokens: THRESHOLD + 1_000,
+		});
+		const entry = sessionManager.getEntries().findLast(item => item.type === "compaction");
+		expect(entry?.type === "compaction" ? entry.method : undefined).toBe("soft");
+		expect(entry?.type === "compaction" ? entry.summary : undefined).toBe("soft summary");
+	});
+
+	it("keeps speculating natively after a failure a retry can clear", async () => {
+		const compactSpy = vi
+			.spyOn(compactionModule, "compact")
+			.mockRejectedValue(
+				new compactionModule.NativeCompactionError(
+					new AIError.ProviderHttpError("compaction failed: overloaded", 529),
+				),
+			);
+		maintenance = createMaintenance({
+			methodOrder: ["remote"],
+			remoteEndpoint: "https://example.invalid/compact",
+		});
+
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		await maintenance.speculationCompletion;
+		expect(compactSpy).toHaveBeenCalledTimes(1);
+
+		// A transient provider failure is retriable, so the next boundary retries.
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START + 500, CONTEXT_WINDOW);
+		expect(maintenance.speculationState).toBe("running");
+		await maintenance.speculationCompletion;
+		expect(compactSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it("gives a new session a fresh native speculation", async () => {
+		const compactSpy = vi
+			.spyOn(compactionModule, "compact")
+			.mockRejectedValue(
+				new compactionModule.NativeCompactionError(
+					Object.assign(new Error("Anthropic compaction response carried no compaction block"), { status: 400 }),
+				),
+			);
+		maintenance = createMaintenance({
+			methodOrder: ["remote"],
+			remoteEndpoint: "https://example.invalid/compact",
+		});
+
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		await maintenance.speculationCompletion;
+		expect(compactSpy).toHaveBeenCalledTimes(1);
+
+		await sessionManager.newSession();
+		appendSummarizableConversation();
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		expect(maintenance.speculationState).toBe("running");
+		await maintenance.speculationCompletion;
+		expect(compactSpy).toHaveBeenCalledTimes(2);
+	});
+
+	it("discards an armed summary when a pending prompt exhausts recovery headroom", async () => {
+		let invocation = 0;
+		const compactSpy = vi.spyOn(compactionModule, "compact").mockImplementation(async preparation => ({
+			summary: `summary ${++invocation}`,
+			firstKeptEntryId: preparation.firstKeptEntryId,
+			tokensBefore: preparation.tokensBefore,
+			details: {},
+		}));
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		await waitForState("armed");
+		sessionManager.appendMessage(userMessage("post-snapshot request"));
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, {
+			triggerContextTokens: THRESHOLD + 45_000,
+			pendingContextTokens: 45_000,
+		});
+
+		expect(compactSpy).toHaveBeenCalledTimes(2);
+		const entry = sessionManager.getEntries().findLast(item => item.type === "compaction");
+		expect(entry?.type === "compaction" ? entry.summary : undefined).toBe("summary 2");
+	});
+
+	it("discards an armed handoff summary when post-snapshot branch growth prevents recovery headroom", async () => {
+		let handoffInvocation = 0;
+		const generateHandoffDocument = vi.fn(async () => ({
+			document: `handoff plan ${++handoffInvocation}`,
+		}));
+		maintenance = createMaintenance({
+			methodOrder: ["handoff"],
+			generateHandoffDocument:
+				generateHandoffDocument as unknown as SessionMaintenanceHost["generateHandoffDocument"],
+		});
+
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		await waitForState("armed");
+		expect(generateHandoffDocument).toHaveBeenCalledTimes(1);
+
+		// A massive turn committed after the snapshot blows past the recovery band.
+		sessionManager.appendMessage(assistantMessage("large-tail-token ".repeat(45_000), model));
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, {
+			triggerContextTokens: THRESHOLD + 40_000,
+		});
+
+		expect(generateHandoffDocument).toHaveBeenCalledTimes(2);
+		const entry = sessionManager.getEntries().findLast(item => item.type === "compaction");
+		expect(entry?.type === "compaction" ? entry.summary : undefined).toContain("handoff plan 2");
+	});
+
+	it("retains and claims an armed handoff summary when post-snapshot growth fits comfortably", async () => {
+		let handoffInvocation = 0;
+		const generateHandoffDocument = vi.fn(async () => ({
+			document: `handoff plan ${++handoffInvocation}`,
+		}));
+		maintenance = createMaintenance({
+			methodOrder: ["handoff"],
+			generateHandoffDocument:
+				generateHandoffDocument as unknown as SessionMaintenanceHost["generateHandoffDocument"],
+		});
+
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		await waitForState("armed");
+		expect(generateHandoffDocument).toHaveBeenCalledTimes(1);
+
+		// A modest assistant turn committed after the snapshot leaf.
+		sessionManager.appendMessage(assistantMessage("brief acknowledgment", model));
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, { triggerContextTokens: THRESHOLD });
+
+		// The armed handoff summary is claimed without paying for another generation.
+		expect(generateHandoffDocument).toHaveBeenCalledTimes(1);
+		const entry = sessionManager.getEntries().findLast(item => item.type === "compaction");
+		expect(entry?.type === "compaction" ? entry.summary : undefined).toContain("handoff plan 1");
+	});
+
+	it("discards an armed summary when a persisted custom message prevents recovery headroom", async () => {
+		let invocation = 0;
+		const compactSpy = vi.spyOn(compactionModule, "compact").mockImplementation(async preparation => ({
+			summary: `summary ${++invocation}`,
+			firstKeptEntryId: preparation.firstKeptEntryId,
+			tokensBefore: preparation.tokensBefore,
+			details: {},
+		}));
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+		await waitForState("armed");
+
+		// Custom messages participate in the rebuilt model context, so a large one
+		// must invalidate the stale projection just like an assistant turn.
+		sessionManager.appendCustomMessageEntry(
+			"skill-prompt",
+			"large-custom-token ".repeat(45_000),
+			true,
+			undefined,
+			"user",
+		);
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, {
+			triggerContextTokens: THRESHOLD + 40_000,
+		});
+
+		expect(compactSpy).toHaveBeenCalledTimes(2);
+		const entry = sessionManager.getEntries().findLast(item => item.type === "compaction");
+		expect(entry?.type === "compaction" ? entry.summary : undefined).toBe("summary 2");
+	});
+
+	it("applies a per-model threshold base to the speculation band", async () => {
+		const compactSpy = vi.spyOn(compactionModule, "compact").mockImplementation(async preparation => ({
+			summary: "model summary",
+			firstKeptEntryId: preparation.firstKeptEntryId,
+			tokensBefore: preparation.tokensBefore,
+			details: {},
+		}));
+		// A 40K base at 50% compacts at 20K, so the band starts at 11,808 even
+		// though the real window is 100K and the global threshold is 50K.
+		maintenance = createMaintenance({
+			modelThresholds: { [`${model.provider}/${model.id}`]: 40_000 },
+		});
+
+		maintenance.maybeStartSpeculativeCompaction(11_000, CONTEXT_WINDOW);
+		expect(maintenance.speculationState).toBe("idle");
+		expect(compactSpy).not.toHaveBeenCalled();
+
+		maintenance.maybeStartSpeculativeCompaction(11_808, CONTEXT_WINDOW);
+		expect(maintenance.speculationState).toBe("running");
+		await waitForState("armed");
+		expect(compactSpy).toHaveBeenCalledTimes(1);
+	});
+
+	it("ignores per-model thresholds when the override setting is disabled", () => {
+		const compactSpy = vi.spyOn(compactionModule, "compact");
+		maintenance = createMaintenance({
+			modelThresholds: { [`${model.provider}/${model.id}`]: 40_000 },
+			modelThresholdsEnabled: false,
+		});
+
+		maintenance.maybeStartSpeculativeCompaction(11_808, CONTEXT_WINDOW);
+
+		expect(maintenance.speculationState).toBe("idle");
+		expect(compactSpy).not.toHaveBeenCalled();
+	});
+
+	it("queues the notebook reminder in the pre-threshold band instead of speculating", () => {
+		const reminder = vi.fn();
+		const compactSpy = vi.spyOn(compactionModule, "compact");
+		maintenance = createMaintenance({
+			experimentalContextManagement: true,
+			rolloverTools: true,
+			queueNotesReminder: reminder,
+		});
+
+		maintenance.maybeStartSpeculativeCompaction(SPECULATION_BAND_START, CONTEXT_WINDOW);
+
+		expect(reminder).toHaveBeenCalledTimes(1);
+		expect(reminder.mock.calls[0]?.[0]).toContain("<context-window-reminder>");
+		expect(maintenance.speculationState).toBe("idle");
+		expect(compactSpy).not.toHaveBeenCalled();
+	});
+
+	it("commits a notes-backed rollover instead of an LLM summary", async () => {
+		const compactSpy = vi.spyOn(compactionModule, "compact");
+		maintenance = createMaintenance({ experimentalContextManagement: true, rolloverTools: true });
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, {
+			triggerContextTokens: THRESHOLD + 1_000,
+		});
+
+		expect(compactSpy).not.toHaveBeenCalled();
+		const entry = sessionManager.getEntries().findLast(item => item.type === "compaction");
+		expect(entry?.type === "compaction" ? entry.summary : undefined).toContain("<context-window-rollover>");
+		expect(entry?.type === "compaction" ? (entry.details as { kind?: string } | undefined)?.kind : undefined).toBe(
+			"experimental-context-rollover",
+		);
+	});
+
+	it("falls back to summary compaction when the rollover tools are unavailable", async () => {
+		const compactSpy = vi.spyOn(compactionModule, "compact").mockImplementation(async preparation => ({
+			summary: "soft summary",
+			firstKeptEntryId: preparation.firstKeptEntryId,
+			tokensBefore: preparation.tokensBefore,
+			details: {},
+		}));
+		maintenance = createMaintenance({ experimentalContextManagement: true, rolloverTools: false });
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, {
+			triggerContextTokens: THRESHOLD + 1_000,
+		});
+
+		expect(compactSpy).toHaveBeenCalledTimes(1);
+		const entry = sessionManager.getEntries().findLast(item => item.type === "compaction");
+		expect(entry?.type === "compaction" ? entry.summary : undefined).toBe("soft summary");
+	});
+
+	it("lets session_before_compact replace the rollover boundary", async () => {
+		const emit = vi.fn(
+			async (event: { type?: string; preparation?: { firstKeptEntryId: string; tokensBefore: number } }) => {
+				if (event.type !== "session_before_compact" || !event.preparation) return undefined;
+				return {
+					compaction: {
+						summary: "hook rollover",
+						firstKeptEntryId: event.preparation.firstKeptEntryId,
+						tokensBefore: event.preparation.tokensBefore,
+						details: { from: "hook" },
+					},
+				};
+			},
+		);
+		maintenance = createMaintenance({
+			experimentalContextManagement: true,
+			rolloverTools: true,
+			extensionRunner: { hasHandlers: () => true, emit } as unknown as SessionMaintenanceHost["extensionRunner"],
+		});
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, {
+			triggerContextTokens: THRESHOLD + 1_000,
+		});
+
+		const entry = sessionManager.getEntries().findLast(item => item.type === "compaction");
+		expect(entry?.type === "compaction" ? entry.summary : undefined).toBe("hook rollover");
+		expect(entry?.type === "compaction" ? entry.fromExtension : undefined).toBe(true);
+		expect(entry?.type === "compaction" ? (entry.details as { kind?: string } | undefined)?.kind : undefined).toBe(
+			"experimental-context-rollover",
+		);
+	});
+
+	it("honours a cancelled session_before_compact rollover", async () => {
+		const emit = vi.fn(async (event: { type?: string }) =>
+			event.type === "session_before_compact" ? { cancel: true } : undefined,
+		);
+		maintenance = createMaintenance({
+			experimentalContextManagement: true,
+			rolloverTools: true,
+			extensionRunner: { hasHandlers: () => true, emit } as unknown as SessionMaintenanceHost["extensionRunner"],
+		});
+
+		await maintenance.runAutoCompaction("threshold", false, false, false, {
+			triggerContextTokens: THRESHOLD + 1_000,
+		});
+
+		expect(sessionManager.getEntries().findLast(item => item.type === "compaction")).toBeUndefined();
+		expect(events).toContain("auto_compaction_end");
+	});
+});
+
+describe("resolveSpeculationMethod", () => {
+	it("speculates past snapcompact when the model's wire strips image input", () => {
+		const settings = Settings.isolated({ "compaction.methodOrder": ["snapcompact", "soft"] }).getGroup("compaction");
+		const bundled = getBundledModel("anthropic", "claude-sonnet-4-5");
+		if (!bundled) throw new Error("Expected built-in model");
+		const visionModel = { ...bundled, contextWindow: CONTEXT_WINDOW };
+		// Declared vision: snapcompact leads and is local, so nothing is speculated.
+		expect(resolveSpeculationMethod(visionModel, settings)).toBeUndefined();
+		// Same declared input, but the Chat Completions wire drops images for
+		// DeepSeek, so snapcompact cannot run and soft is speculated instead.
+		const textOnlyWire = {
+			...visionModel,
+			provider: "deepseek",
+			id: "deepseek-chat",
+			api: "openai-completions",
+			input: ["text", "image"],
+		} as Model;
+		expect(resolveSpeculationMethod(textOnlyWire, settings)).toBe("soft");
 	});
 });

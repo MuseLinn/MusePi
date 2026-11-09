@@ -203,6 +203,29 @@ describe("daemon git read RPCs", () => {
 		expect(result.unstagedContent).toEqual({ original: "", modified: "new\r\nfile\r\n" });
 	});
 
+	test("git.status reports per-file stats by scope", async () => {
+		const repo = await tmpRepo();
+		commit(repo, "base", { "a.txt": "one\n" });
+		// Unstaged edit: HEAD -> index is empty, index -> working has the line.
+		fs.writeFileSync(path.join(repo, "a.txt"), "one\ntwo\n");
+		// Staged addition: HEAD -> index has the line, index -> working is empty.
+		fs.writeFileSync(path.join(repo, "b.txt"), "new\n");
+		const add = Bun.spawnSync({
+			cmd: ["git", "add", "b.txt"],
+			cwd: repo,
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		if (add.exitCode !== 0) throw new Error(add.stderr.toString());
+
+		type Stats = { added: number; removed: number; binary: boolean };
+		const result = await call<{
+			fileStats?: { staged: Record<string, Stats>; working: Record<string, Stats> };
+		}>(repo, "git.status", { numstat: true });
+		expect(result.fileStats?.working["a.txt"]).toMatchObject({ added: 1, removed: 0, binary: false });
+		expect(result.fileStats?.staged["b.txt"]).toMatchObject({ added: 1, removed: 0, binary: false });
+	});
+
 	test("git.diff content cannot read a path outside the repository", async () => {
 		const repo = await tmpRepo();
 		commit(repo, "base", { "a.txt": "one\n" });

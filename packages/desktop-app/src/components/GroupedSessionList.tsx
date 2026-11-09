@@ -37,8 +37,10 @@ function GroupedSessionListInner({
 	workingIds,
 	statuses,
 	manualTags,
+	emojis,
 	searchQuery,
 	retitlingId,
+	onRenameSession,
 }: {
 	nodes: SessionListNode[];
 	selectedId: string | null;
@@ -54,8 +56,10 @@ function GroupedSessionListInner({
 	statuses?: ReadonlyMap<string, SessionStatus>;
 	/** User-assigned color per session id (manual override of status). */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
+	emojis?: ReadonlyMap<string, string>;
 	/** Active session-search query — forwarded so matched titles are marked. */
 	searchQuery?: string;
+	onRenameSession?(id: string, title: string): void;
 }): ReactNode {
 	// t() reads the locale store non-reactively — subscribe so a language
 	// switch re-buckets the date-group labels through the memo below.
@@ -105,6 +109,8 @@ function GroupedSessionListInner({
 						workingIds={workingIds}
 						statuses={statuses}
 						manualTags={manualTags}
+						emojis={emojis}
+						onRenameSession={onRenameSession}
 						searchQuery={searchQuery}
 						retitlingId={retitlingId}
 					/>

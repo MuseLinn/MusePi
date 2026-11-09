@@ -113,7 +113,7 @@ async function renderHeader(entries: SessionEntry[]): Promise<Rendered> {
 				terminalOpen={false}
 				onToggleTerminal={() => {}}
 				project="D:/work"
-				onOpenFolder={() => {}}
+				onAddProject={() => {}}
 				sessions={[]}
 				onSelectSession={() => {}}
 				onRenameSession={() => {}}

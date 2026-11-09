@@ -52,4 +52,9 @@
     <!-- QR connect: the scanner (getUserMedia + jsQR, no plugin) needs the
          camera; the WebView requests runtime consent on first scan. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Haptics: the design spec's feedback table (§5.2 — connect, send, stop,
+         error) runs through navigator.vibrate() in the WebView, which the
+         platform silently drops without this. It is a normal permission: no
+         runtime prompt, no user-visible consent. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

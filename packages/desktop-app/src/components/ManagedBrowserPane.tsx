@@ -26,11 +26,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import { type AnnotationHost, cancelAnnotationSession, runAnnotationSession } from "../lib/annotation-session";
 import { formatAddressDisplayParts } from "../lib/browser-address";
 import { browserMenuModel } from "../lib/browser-menu-model";
-import {
-	BROWSER_PREFERENCES_CHANGED_EVENT,
-	readBrowserExtensionsToolbarVisible,
-	readBrowserShowFullUrl,
-} from "../lib/browser-preferences";
+import { BROWSER_PREFERENCES_CHANGED_EVENT, readBrowserShowFullUrl } from "../lib/browser-preferences";
 import {
 	beginViewportDrag,
 	cancelViewportDragOnBlank,
@@ -84,10 +80,9 @@ import {
 	readBrowserDeviceToolbarVisibility,
 	setBrowserDeviceToolbarVisibility,
 } from "./browser-device-toolbar";
-import { BrowserExtensionsPanel } from "./browser-extensions-panel";
-import { BrowserImportCard } from "./browser-import-card";
 import { BrowserUploadDialog } from "./browser-upload-dialog";
 import { ContextMenu } from "./ContextMenu";
+import { ManagedBrowserExtensions } from "./managed-browser-extensions";
 
 // ── URL helpers (open-design DesignBrowserPanel parity) ───────────────
 
@@ -290,12 +285,10 @@ export function ManagedBrowserPane({
 	const [history, setHistory] = useState<BrowserHistoryEntry[]>(() => loadHistory());
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [extensionsOpen, setExtensionsOpen] = useState(false);
-	const [extensionsToolbarVisible, setExtensionsToolbarVisible] = useState(readBrowserExtensionsToolbarVisible);
 	const [showFullUrl, setShowFullUrl] = useState(readBrowserShowFullUrl);
 	useEffect(() => {
 		const onPreferences = (event: Event): void => {
 			const detail = (event as CustomEvent<{ key?: string }>).detail;
-			if (detail?.key === "extensionsToolbar") setExtensionsToolbarVisible(readBrowserExtensionsToolbarVisible());
 			if (detail?.key === "showFullUrl") setShowFullUrl(readBrowserShowFullUrl());
 		};
 		window.addEventListener(BROWSER_PREFERENCES_CHANGED_EVENT, onPreferences);
@@ -1132,53 +1125,40 @@ export function ManagedBrowserPane({
 					</button>
 				</div>
 				<div className="gui-browser-actions">
-					{extensionsToolbarVisible ? (
-						<div ref={extensionsAnchorRef} className="gui-browser-action-item">
-							<button
-								type="button"
-								className={`gui-browser-icon-btn${extensionsOpen ? " gui-browser-icon-btn--active" : ""}`}
-								aria-label={t("tools.extensions")}
-								title={t("tools.extensions")}
-								aria-haspopup="dialog"
-								aria-expanded={extensionsOpen}
-								onClick={() => {
-									setExtensionsOpen(open => !open);
-									setMenuOpen(false);
-									setSuggestionsOpen(false);
-								}}
-							>
-								<Icon name="apps-2-ai" className="h-4 w-4" />
-							</button>
-							{renderExtensionsMenu(
-								<div role="dialog" aria-modal="false" aria-label={t("tools.extensions")}>
-									<div className="gui-browser-extensions-popup-head">
-										<span>{t("tools.extensions")}</span>
-										<button
-											type="button"
-											className="gui-browser-icon-btn"
-											aria-label={t("settings.close")}
-											title={t("settings.close")}
-											onClick={() => setExtensionsOpen(false)}
-										>
-											<Icon name="close" className="h-3.5 w-3.5" />
-										</button>
-									</div>
-									<BrowserImportCard
-										rpc={rpc}
-										compact
-										dismissible
-										onOpenData={() => {
-											setExtensionsOpen(false);
-											window.dispatchEvent(
-												new CustomEvent("musepi-gui-open-settings-section", { detail: "browser:data" }),
-											);
-										}}
-									/>
-									<BrowserExtensionsPanel rpc={rpc} compact />
-								</div>,
-							)}
-						</div>
-					) : null}
+					<div ref={extensionsAnchorRef} className="gui-browser-action-item">
+						<button
+							type="button"
+							className={`gui-browser-icon-btn${extensionsOpen ? " gui-browser-icon-btn--active" : ""}`}
+							aria-label={t("tools.extensions")}
+							title={t("tools.extensions")}
+							aria-haspopup="dialog"
+							aria-expanded={extensionsOpen}
+							onClick={() => {
+								setExtensionsOpen(open => !open);
+								setMenuOpen(false);
+								setSuggestionsOpen(false);
+							}}
+						>
+							<Icon name="apps-2-ai" className="h-4 w-4" />
+						</button>
+						{renderExtensionsMenu(
+							<div role="dialog" aria-modal="false" aria-label={t("tools.extensions")}>
+								<div className="gui-browser-extensions-popup-head">
+									<span>{t("tools.extensions")}</span>
+									<button
+										type="button"
+										className="gui-browser-icon-btn"
+										aria-label={t("settings.close")}
+										title={t("settings.close")}
+										onClick={() => setExtensionsOpen(false)}
+									>
+										<Icon name="close" className="h-3.5 w-3.5" />
+									</button>
+								</div>
+								<ManagedBrowserExtensions />
+							</div>,
+						)}
+					</div>
 					<div ref={actionsAnchorRef} className="gui-browser-action-item">
 						<button
 							type="button"

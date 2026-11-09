@@ -22,12 +22,12 @@ import {
 	type SubagentLifecyclePayload,
 	type SubagentProgressPayload,
 } from "@musepi/pi-wire";
+import { dismissActionToastSource, pushActionToast } from "./action-toast.js";
 import type {
 	ActiveTool,
 	ApprovalRequest,
 	ConnectionPhase,
 	GuestSnapshot,
-	Notice,
 	SessionClient,
 	TranscriptResult,
 } from "./client.js";
@@ -79,7 +79,6 @@ export class HostClient implements SessionClient {
 	/** auto_compaction in flight — see GuestSnapshot.compacting (design doc §B). */
 	#compacting = false;
 	#roundDurations = new Map<number, number>();
-	#notices: Notice[] = [];
 	#uiRequest: CollabUiRequest | null = null;
 	#approvalRequest: ApprovalRequest | null = null;
 	/** Daemon `askRequestId` (string) keyed by the CollabUiRequest `reqId` the
@@ -145,7 +144,6 @@ export class HostClient implements SessionClient {
 			uiRequest: this.#uiRequest,
 			uiRequestPending: false,
 			approvalRequest: this.#approvalRequest,
-			notices: this.#notices,
 		};
 	}
 
@@ -581,13 +579,19 @@ export class HostClient implements SessionClient {
 				const maxAttempts = event.maxAttempts;
 				const errorMessage = event.errorMessage;
 				if (typeof attempt === "number" && typeof maxAttempts === "number" && typeof errorMessage === "string") {
-					this.#pushNotice("info", `retry ${attempt}/${maxAttempts}: ${errorMessage}`);
+					this.#pushNotice("info", `retry ${attempt}/${maxAttempts}: ${errorMessage}`, "session:retry");
 				}
 				break;
 			}
 			case "auto_retry_end": {
 				if (event.success === false) {
-					this.#pushNotice("error", typeof event.finalError === "string" ? event.finalError : "retry failed");
+					this.#pushNotice(
+						"error",
+						typeof event.finalError === "string" ? event.finalError : "retry failed",
+						"session:retry",
+					);
+				} else {
+					dismissActionToastSource("session:retry");
 				}
 				break;
 			}
@@ -595,22 +599,25 @@ export class HostClient implements SessionClient {
 				this.#compacting = true;
 				const reason = event.reason;
 				if (typeof reason === "string") {
-					this.#pushNotice("info", `compacting context (${reason})`);
+					this.#pushNotice("info", `compacting context (${reason})`, "session:compaction");
 				}
 				break;
 			}
 			case "auto_compaction_end": {
 				this.#compacting = false;
-				if (event.skipped !== true) {
-					this.#pushNotice(
-						"info",
-						event.aborted === true
-							? "compaction aborted"
-							: typeof event.errorMessage === "string"
-								? `compaction failed: ${event.errorMessage}`
-								: "context compacted",
-					);
+				if (event.skipped === true) {
+					dismissActionToastSource("session:compaction");
+					break;
 				}
+				this.#pushNotice(
+					"info",
+					event.aborted === true
+						? "compaction aborted"
+						: typeof event.errorMessage === "string"
+							? `compaction failed: ${event.errorMessage}`
+							: "context compacted",
+					"session:compaction",
+				);
 				break;
 			}
 			default:
@@ -620,9 +627,8 @@ export class HostClient implements SessionClient {
 		}
 	}
 
-	#pushNotice(level: Notice["level"], message: string): void {
-		const notice: Notice = { id: this.#notices.length, level, message, at: Date.now() };
-		this.#notices = [...this.#notices, notice].slice(-50);
+	#pushNotice(level: "info" | "warning" | "error", message: string, dedupeKey?: string): void {
+		pushActionToast({ kind: level, message, dedupeKey });
 	}
 
 	#onClose(reason: string): void {

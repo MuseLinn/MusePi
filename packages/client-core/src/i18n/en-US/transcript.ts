@@ -25,6 +25,10 @@ export const transcript = {
 	"transcript.asyncJobShowLess": "Collapse output",
 	// ── Transcript ────────────────────────────────────────────────────────────
 	"transcript.redacted": " · redacted",
+	"transcript.turnUsage": "Usage this turn",
+	"transcript.usageProviderModel": "Provider / Model",
+	"transcript.usageUncachedInput": "Uncached input",
+	"transcript.usageTotalTokens": "{tokens} tok",
 	"transcript.text": "(Redacted by provider)",
 	"transcript.enhancing": "Enhancing…",
 	"transcript.thinkingLevel": "Thinking level",
@@ -131,6 +135,7 @@ export const transcript = {
 	"transcript.modelWithModel": "model → {model}",
 	"transcript.thinkingWithModel": "thinking → {model}",
 	"transcript.noActivityYet": "No activity yet",
+	"transcript.loadingSession": "Loading session…",
 	"transcript.showEarlierMessages": "Show earlier messages",
 	"transcript.showPreCompactionHistory": "Show pre-compaction history",
 	"transcript.showPreCompactionHistoryWithCount": "Show pre-compaction history ({count})",

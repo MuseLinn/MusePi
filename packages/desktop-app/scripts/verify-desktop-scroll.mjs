@@ -30,6 +30,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
+import { repoElectronPids } from "./repo-electron.mjs";
 
 // Per-run ports: a prior crashed run can leave a ZOMBIE listener behind
 // (socket inherited by a dead pid — netstat still shows LISTENING, connect()
@@ -69,33 +70,8 @@ const fatal = msg => {
 
 /** The previous run may have died before its finally reaped children; a
  *  leftover repo Electron (or its log-handle) makes the fresh-state rm
- *  EBUSY. Restrict the sweep to Electron binaries inside THIS repo's
- *  node_modules (same matcher as dev-desktop.mjs) so unrelated apps
- *  (Kimi, the installed MusePi) are never touched. */
-const REPO_ELECTRON =
-	/harness-engineering[\\/]musepi-omp[\\/]node_modules[\\/]\.bun[\\/]electron@[^\\/]+[\\/]node_modules[\\/]electron[\\/]dist[\\/](?:Electron\.app\/Contents\/MacOS\/Electron|electron(?:\.exe)?)/;
-function repoElectronPids() {
-	const pids = [];
-	if (process.platform !== "win32") return pids;
-	try {
-		const out = spawnSync(
-			"powershell",
-			[
-				"-NoProfile",
-				"-Command",
-				"Get-CimInstance Win32_Process -Filter \"Name='electron.exe'\" | Where-Object { $_.ExecutablePath } | ForEach-Object { \"$($_.ProcessId)`t$($_.ExecutablePath)\" }",
-			],
-			{ encoding: "utf8" },
-		).stdout;
-		for (const line of out.split(/\r?\n/)) {
-			const [pidStr, ...rest] = line.split("\t");
-			if (rest.length === 0 || !REPO_ELECTRON.test(rest.join("\t"))) continue;
-			const pid = Number.parseInt(pidStr, 10);
-			if (Number.isFinite(pid)) pids.push(pid);
-		}
-	} catch {}
-	return pids;
-}
+ *  EBUSY. Restrict the sweep to Electron binaries inside THIS repo so
+ *  unrelated apps (Kimi, the installed MusePi) are never touched. */
 /** Hard-kill a pid tree. bun's process.kill(SIGKILL) does NOT terminate
  *  arbitrary Windows pids (observed: the 9224 Electron survived it);
  *  taskkill /F /T is the reliable hammer. */

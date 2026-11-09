@@ -30,6 +30,10 @@ export interface InitializeExtensionsOptions {
 	markAgentInvokingMessage?: () => void;
 	/** Optional lifecycle hook for extension-originated sends whose success/failure determines turn ownership. */
 	trackAgentInvokingMessage?: (task: Promise<unknown>) => void;
+	/** Present a generated idle recap; formatting and truncation belong to the host. */
+	showRecap?: (reply: string) => void;
+	/** Emit `session_start` after wiring. Defaults to true. */
+	emitSessionStart?: boolean;
 }
 
 /**
@@ -50,6 +54,8 @@ export async function initializeExtensions(session: AgentSession, options: Initi
 		uiContext,
 		markAgentInvokingMessage,
 		trackAgentInvokingMessage,
+		showRecap,
+		emitSessionStart = true,
 	} = options;
 	const shutdown = onShutdown ?? (() => {});
 
@@ -110,6 +116,19 @@ export async function initializeExtensions(session: AgentSession, options: Initi
 			getContextUsage: () => session.getContextUsage(),
 			getSystemPrompt: () => session.systemPrompt,
 			compact: instructionsOrOptions => runExtensionCompact(session, instructionsOrOptions),
+			runIdleCompaction: () => session.runIdleCompaction(),
+			runEphemeralTurn: options => session.runEphemeralTurn(options),
+			getGoalModeState: () => session.getGoalModeState(),
+			getTodoPhases: () => session.getTodoPhases(),
+			recordRecap: reply => {
+				session.sessionManager.recordRecap(reply);
+			},
+			showRecap,
+			isSettled: () =>
+				!session.isStreaming &&
+				!session.isCompacting &&
+				!session.hasPendingAsyncWork() &&
+				session.queuedMessageCount === 0,
 		},
 		// ExtensionCommandContextActions — commands invokable via prompt("/command")
 		{
@@ -144,5 +163,7 @@ export async function initializeExtensions(session: AgentSession, options: Initi
 	);
 
 	runner.onError(reportRuntimeError);
-	await runner.emit({ type: "session_start", agentId: session.getAgentId(), source: "main" });
+	if (emitSessionStart) {
+		await runner.emit({ type: "session_start", agentId: session.getAgentId(), source: "main" });
+	}
 }

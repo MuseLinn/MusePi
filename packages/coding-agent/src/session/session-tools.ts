@@ -11,7 +11,7 @@ import { CustomToolAdapter } from "../extensibility/custom-tools/wrapper";
 import { EXTENSION_META_TOOL_NAMES } from "../extensibility/extension-meta-tools";
 import type { ExtensionRunner, SourceInfo, ToolInfo } from "../extensibility/extensions";
 import { ExtensionToolWrapper } from "../extensibility/extensions/wrapper";
-import { loadSkills, type Skill, type SkillWarning, setActiveSkills } from "../extensibility/skills";
+import { loadSkillsWithRoots, type Skill, type SkillWarning, setActiveSkills } from "../extensibility/skills";
 import { type LocalProtocolOptions, XD_URL_PREFIX } from "../internal-urls";
 import { deduplicateMCPToolsByName } from "../mcp/tool-bridge";
 import { resolveMemoryBackend } from "../memory-backend/resolve";
@@ -1117,9 +1117,10 @@ export class SessionTools {
 		resetCapabilities();
 		if (this.#skillsReloadable) {
 			const skillsSettings = this.#host.settings.getGroup("skills");
-			const discovered = await loadSkills({
+			const discovered = await loadSkillsWithRoots({
 				...skillsSettings,
 				cwd: this.#host.sessionManager.getCwd(),
+				additionalDirectories: this.#host.sessionManager.getAdditionalDirectories(),
 				disabledExtensions: this.#host.settings.get("disabledExtensions") ?? [],
 			});
 			this.#skills = discovered.skills;

@@ -16,6 +16,8 @@ export type SegmentedOption<T extends string> = {
 export type SegmentBox = {
 	/** Inner width the segment currently has. */
 	clientWidth: number;
+	/** Padding, icon, and gap without the flex free space. */
+	chromeWidth?: number;
 	/** The label span, when the segment has one. */
 	label?: { clientWidth: number; scrollWidth: number };
 };
@@ -25,16 +27,15 @@ export type SegmentBox = {
  * width, so the longest label sets all of them — and CSS cannot read "widest"
  * from siblings (a `flex: 1 1 0` container splits the SUM of the labels, so
  * 「运行中」+「全部」 gives each segment half of 60px and clips the long one).
- * A clipped label reports the full text width through `scrollWidth`, which is
- * exactly the number CSS needs: text + the segment's own chrome (padding +
- * icon + gap, recovered as `clientWidth - label.clientWidth`). Pure so the rule
- * is testable without layout.
+ * A clipped label reports the full text width through `scrollWidth`. The
+ * segment's padding, icon, and gap complete the required width; flex free
+ * space must not feed back into this floor when the parent later shrinks.
  */
 export function segmentFitWidth(items: readonly SegmentBox[]): number {
 	let widest = 0;
 	for (const item of items) {
 		const need = item.label
-			? item.label.scrollWidth + Math.max(0, item.clientWidth - item.label.clientWidth)
+			? item.label.scrollWidth + (item.chromeWidth ?? Math.max(0, item.clientWidth - item.label.clientWidth))
 			: item.clientWidth;
 		widest = Math.max(widest, need);
 	}
@@ -127,8 +128,15 @@ export function Segmented<T extends string>({
 			const boxes: SegmentBox[] = [];
 			for (const item of root.querySelectorAll<HTMLElement>(".gui-seg-item")) {
 				const label = item.querySelector<HTMLElement>(".gui-seg-item-label");
+				const style = getComputedStyle(item);
+				const icon = label ? item.querySelector("svg") : null;
+				const chromeWidth =
+					(Number.parseFloat(style.paddingLeft) || 0) +
+					(Number.parseFloat(style.paddingRight) || 0) +
+					(icon ? icon.getBoundingClientRect().width + (Number.parseFloat(style.columnGap) || 0) : 0);
 				boxes.push({
 					clientWidth: item.clientWidth,
+					chromeWidth,
 					...(label ? { label: { clientWidth: label.clientWidth, scrollWidth: label.scrollWidth } } : {}),
 				});
 			}

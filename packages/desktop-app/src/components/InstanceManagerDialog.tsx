@@ -23,6 +23,7 @@ export function InstanceManagerDialog({
 	onRemoveHost,
 	onDisconnect,
 	onOpenWorkspace,
+	onOpenDisclaimer,
 }: {
 	open: boolean;
 	onClose(): void;
@@ -35,6 +36,7 @@ export function InstanceManagerDialog({
 	onRemoveHost(id: string): void;
 	onDisconnect(): void;
 	onOpenWorkspace(cwd: string): void;
+	onOpenDisclaimer(): void;
 }): ReactNode {
 	const [tab, setTab] = useState<"instances" | "remote">("instances");
 	const [draft, setDraft] = useState({ label: "", url: "", token: "" });
@@ -246,6 +248,9 @@ export function InstanceManagerDialog({
 					onOpenWorkspace={onOpenWorkspace}
 				/>
 			)}
+			<button type="button" className="gui-remote-disclaimer-link" onClick={onOpenDisclaimer}>
+				{t("settings.viewRemoteDisclaimer")}
+			</button>
 		</DialogFrame>
 	);
 }

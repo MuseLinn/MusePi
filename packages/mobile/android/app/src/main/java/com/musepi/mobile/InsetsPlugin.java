@@ -36,4 +36,32 @@ public class InsetsPlugin extends Plugin {
 		}
 		call.resolve(ret);
 	}
+
+	/**
+	 * Physical display metrics for text-scale normalisation.
+	 *
+	 * A CSS px in the WebView is one dp, and one dp is a fixed fraction of an
+	 * inch only on the density the design was tuned on. A 460 ppi phone and a
+	 * 415 ppi tablet therefore render the same 15px at visibly different
+	 * physical sizes. The web layer turns `xdpi / density` into a factor
+	 * relative to the reference logical density, clamped, and applies it to
+	 * text only — this method is the only place those two numbers exist.
+	 */
+	@PluginMethod
+	public void getDisplayMetrics(PluginCall call) {
+		JSObject ret = new JSObject();
+		try {
+			android.util.DisplayMetrics metrics = getActivity().getResources().getDisplayMetrics();
+			ret.put("xdpi", metrics.xdpi);
+			ret.put("ydpi", metrics.ydpi);
+			ret.put("density", metrics.density);
+			ret.put("densityDpi", metrics.densityDpi);
+		} catch (Exception e) {
+			ret.put("xdpi", 0);
+			ret.put("ydpi", 0);
+			ret.put("density", 0);
+			ret.put("densityDpi", 0);
+		}
+		call.resolve(ret);
+	}
 }

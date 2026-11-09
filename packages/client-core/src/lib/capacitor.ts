@@ -18,7 +18,7 @@
  * `isMobileShell()` returns true for either shell.
  */
 
-import { dispatchBack } from "./back-stack";
+import { dispatchBack, subscribeBackLayers } from "./back-stack";
 
 declare global {
 	interface Window {
@@ -65,6 +65,14 @@ declare global {
 			setBadgeCount: (count: number) => void;
 			clearBadge: () => void;
 			consumeDeepLink: () => string;
+			/**
+			 * Mirror of the page's back-layer depth. `onBackPress()` in ArkTS is
+			 * synchronous and cannot await `runJavaScript`, so the page pushes the
+			 * number on every register/unregister change and the shell decides
+			 * from it whether back belongs to the app (a sheet/panel/rail is open)
+			 * or to the system. Optional: older shells simply never call it.
+			 */
+			setBackDepth?: (depth: number) => void;
 		};
 	}
 }
@@ -85,17 +93,47 @@ export function isMobileShell(): boolean {
 }
 
 /**
+ * Current soft-keyboard height in CSS px, as tracked by the shell bridges
+ * (`mobile.tsx` writes `--mp-keyboard-inset` from the Keyboard plugin, the
+ * visualViewport fallback, or ArkTS). Returns 0 when no IME is up.
+ */
+export function keyboardInsetPx(): number {
+	if (typeof document === "undefined") return 0;
+	const raw = document.documentElement.style.getPropertyValue("--mp-keyboard-inset");
+	const px = Number.parseFloat(raw);
+	return Number.isFinite(px) && px > 0 ? px : 0;
+}
+
+/**
+ * Close the soft keyboard if one is up. Returns true when a keyboard was
+ * dismissed, so the caller can consume the interaction.
+ */
+export function dismissKeyboardIfOpen(): boolean {
+	if (keyboardInsetPx() <= 0) return false;
+	const focused = document.activeElement;
+	if (focused instanceof HTMLElement) focused.blur();
+	return true;
+}
+
+/**
  * Wire the Android hardware back key to the app's layer stack.
  *
  * Capacitor's default back behavior pops WebView history and eventually
  * finishes the activity — which would exit the app with the agents rail,
- * a panel, or the agent drawer still open. Instead: dispatch through the
- * shared layer stack (`dispatchBack` in ./back-stack); if a layer consumed
- * the press, stop here. Otherwise pop hash history (deep-link entries)
- * first, then exit.
+ * a panel, or the agent drawer still open. Instead: dismiss an open keyboard,
+ * then dispatch through the shared layer stack (`dispatchBack` in
+ * ./back-stack); if a layer consumed the press, stop here. Otherwise pop hash
+ * history (deep-link entries) first, then exit.
+ *
+ * The keyboard step is not optional: Android's own back gesture hides the IME
+ * before anything else, but Capacitor intercepts the key at the Activity, so
+ * without it "back to put the keyboard away" closed a sheet — or, on the
+ * draft screen where no layer is active and WebView history is empty,
+ * quit the app with the keyboard still up.
  *
  * Desktop web never calls this — browsers keep their own history semantics.
- * HarmonyOS shell: back is handled in ArkTS onBackPress -> accessStep().
+ * HarmonyOS shell: back is handled in ArkTS onBackPress -> accessStep(); the
+ * ArkTS side must do the same IME check.
  */
 export async function setupAndroidBackHandler(): Promise<void> {
 	if (!isNativeShell()) return;
@@ -104,6 +142,9 @@ export async function setupAndroidBackHandler(): Promise<void> {
 	// part of the guest-client dependency tree's runtime surface).
 	const { App } = await import("@capacitor/app");
 	void App.addListener("backButton", ({ canGoBack }) => {
+		// IME first (Android convention): one press hides the keyboard, the
+		// next one acts on the layer stack.
+		if (dismissKeyboardIfOpen()) return;
 		// Layer-stack dispatch: every modal (agent drawer, sessions sheet,
 		// server switcher, rail, panel, QR scanner) registered its own close
 		// handler; the topmost consumes the press first. Only when no layer
@@ -209,6 +250,21 @@ export async function setupDeepLinkHandler(): Promise<void> {
 				el.scrollIntoView({ block: "center", behavior: "smooth" });
 			}
 		};
+		// Back-key entry point. The ArkTS page cannot await `runJavaScript`, so
+		// it only calls in here when its mirrored depth says a layer is open;
+		// this closes exactly one layer (back-stack semantics), the same
+		// `dispatchBack()` the Capacitor `backButton` listener uses.
+		(window as unknown as Record<string, unknown>).__harmonyBack = (): boolean => dispatchBack();
+		// Keep the shell's copy of the depth current. HarmonyOS `onBackPress()`
+		// consults it synchronously (see the interface note above); the first
+		// call also seeds the shell on boot.
+		subscribeBackLayers(depth => {
+			try {
+				window.harmonyNative?.setBackDepth?.(depth);
+			} catch {
+				// bridge not ready yet — the next change (or boot) re-syncs
+			}
+		});
 	}
 }
 

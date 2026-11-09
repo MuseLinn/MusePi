@@ -83,6 +83,9 @@ import { SchemaTabSection } from "./schema";
 import { NumberStepper } from "./shared";
 
 const ACCENT_SWATCH: Record<string, string> = {
+	// The "follow theme" swatch paints the ACTIVE theme's own accent, so the
+	// control shows what it does rather than a fixed color chip.
+	theme: "var(--theme-accent)",
 	brand: "#d9a441",
 	mono: "#8a8a93",
 	ocean: "#38bdf8",
@@ -91,6 +94,7 @@ const ACCENT_SWATCH: Record<string, string> = {
 
 /** Accent preset → localized name (swatch tooltip/aria). */
 const ACCENT_NAMES: Record<string, TranslationKey> = {
+	theme: "settings.accentTheme",
 	brand: "settings.accentBrand",
 	mono: "settings.accentMono",
 	ocean: "settings.accentOcean",
@@ -347,7 +351,7 @@ export function AppearanceSection({
 									style={{ background: color }}
 									aria-label={t(ACCENT_NAMES[id] ?? "settings.accentBrand")}
 									title={t(ACCENT_NAMES[id] ?? "settings.accentBrand")}
-									onClick={() => setAccent(id as "brand" | "mono" | "ocean" | "jade")}
+									onClick={() => setAccent(id as "theme" | "brand" | "mono" | "ocean" | "jade")}
 								/>
 							))}
 							<button
@@ -367,6 +371,7 @@ export function AppearanceSection({
 								}}
 							/>
 						</div>
+						<div className="gui-settings-field-hint">{t("settings.accentThemeHint")}</div>
 						{renderAccentPicker(
 							<ColorPickerPanel
 								value={pickerPreview ?? customAccent}
@@ -498,10 +503,10 @@ export function AppearanceSection({
 								{ value: "builtin-pacman", label: t("settings.pacman") },
 							]}
 						/>
-						<div className="flex items-center gap-2 mt-2">
+						<div className="flex items-center gap-2">
 							<button
 								type="button"
-								className="gui-btn gui-btn--small"
+								className="gui-btn"
 								disabled={importingSkin}
 								onClick={() => {
 									const bridge = (

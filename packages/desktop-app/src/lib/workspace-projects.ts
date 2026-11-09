@@ -84,12 +84,34 @@ export async function listProjects(rpc: WorkspaceRpc): Promise<WorkspaceProject[
 }
 
 /** Register (or promote) a project. The daemon merges an existing root. */
-export function createProject(rpc: WorkspaceRpc, root: string, name?: string): Promise<WorkspaceMutationResult> {
-	return rpc.request<WorkspaceMutationResult>("workspace.create", name === undefined ? { root } : { root, name });
+export function createProject(
+	rpc: WorkspaceRpc,
+	root: string,
+	name?: string,
+	additionalDirs?: readonly string[],
+): Promise<WorkspaceMutationResult> {
+	return rpc.request<WorkspaceMutationResult>("workspace.create", {
+		root,
+		...(name === undefined ? {} : { name }),
+		...(additionalDirs === undefined ? {} : { additionalDirs: [...additionalDirs] }),
+	});
 }
 
 export function renameProject(rpc: WorkspaceRpc, id: string, name: string): Promise<WorkspaceMutationResult> {
 	return rpc.request<WorkspaceMutationResult>("workspace.update", { id, name });
+}
+
+/** Rename and/or replace the whole additional-directory set in one call. */
+export function updateProject(
+	rpc: WorkspaceRpc,
+	id: string,
+	patch: { name?: string; additionalDirs?: readonly string[] },
+): Promise<WorkspaceMutationResult> {
+	return rpc.request<WorkspaceMutationResult>("workspace.update", {
+		id,
+		...(patch.name === undefined ? {} : { name: patch.name }),
+		...(patch.additionalDirs === undefined ? {} : { additionalDirs: [...patch.additionalDirs] }),
+	});
 }
 
 /** Unregister a project; on-disk content is untouched. */

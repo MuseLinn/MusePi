@@ -14,8 +14,9 @@
  * 2. A leftover vite from a previous run holds :5173. `vite --strictPort`
  *    exits, but the old port-open probe treated ANY listener as success and
  *    spawned Electron against the STALE dev server — fixes never loaded.
- *    The probe now verifies the listener is OUR vite (it dies with it);
- *    a foreign occupant is a hard error telling the user to free the port.
+ *    The probe now waits for the previous run's vite to exit and reaps it by
+ *    PID when a killed run left it behind; only this repo's vite is ever
+ *    reaped, so a foreign occupant stays a hard error.
  *
  * Dev data isolation (dsh-desktop parity, 2026-09-15): the dev GUI runs with
  * its OWN daemon data root (PI_CONFIG_DIR), daemon socket dir
@@ -25,11 +26,12 @@
  * sessions/settings. An explicit PI_CONFIG_DIR etc. from the caller wins;
  * MUSEPI_GUI_DEV_SHARED_DATA=1 opts out entirely.
  */
-import { execFileSync, spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { requestGracefulQuit, waitForPidsExit } from "./graceful-quit.mjs";
+import { repoElectronPids } from "./repo-electron.mjs";
 
 const VITE_PORT = 5173;
 const argv = process.argv.slice(2);
@@ -50,39 +52,58 @@ async function waitPort(port, timeoutMs) {
 	return false;
 }
 
-// Match only Electron binaries inside this repo so unrelated apps (Kimi,
-// etc.) are never touched — the same matcher relaunch-gui.mjs uses.
-const REPO_ELECTRON =
-	/harness-engineering[\\/]musepi-omp[\\/]node_modules[\\/]\.bun[\\/]electron@[^\\/]+[\\/]node_modules[\\/]electron[\\/]dist[\\/](?:Electron\.app\/Contents\/MacOS\/Electron|electron(?:\.exe)?)/;
-
-function repoElectronPids() {
-	const pids = [];
-	if (process.platform === "win32") {
-		const out = execFileSync(
-			"powershell",
-			[
-				"-NoProfile",
-				"-Command",
-				"Get-CimInstance Win32_Process -Filter \"Name='electron.exe'\" | Where-Object { $_.ExecutablePath } | ForEach-Object { \"$($_.ProcessId)`t$($_.ExecutablePath)\" }",
-			],
-			{ encoding: "utf8" },
-		);
-		for (const line of out.split(/\r?\n/)) {
-			const [pidStr, ...rest] = line.split("\t");
-			if (rest.length === 0 || !REPO_ELECTRON.test(rest.join("\t"))) continue;
-			const pid = Number.parseInt(pidStr, 10);
-			if (Number.isFinite(pid)) pids.push(pid);
-		}
-		return pids;
+async function waitPortClosed(port, timeoutMs) {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (!(await portOpen(port))) return true;
+		await new Promise((r) => setTimeout(r, 200));
 	}
-	const out = execFileSync("ps", ["-axo", "pid=,command="], { encoding: "utf8" });
-	for (const line of out.split("\n")) {
-		if (!REPO_ELECTRON.test(line)) continue;
-		const pid = Number.parseInt(line.trim().split(/\s+/)[0], 10);
-		if (Number.isFinite(pid)) pids.push(pid);
-	}
-	return pids;
+	return false;
 }
+
+/** PID and command line of the process listening on `port`. */
+function portListener(port) {
+	if (process.platform === "win32") {
+		const script =
+			"$c = Get-NetTCPConnection -LocalPort " +
+			port +
+			' -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -gt 0 } | Select-Object -First 1; if ($c) { $p = Get-CimInstance Win32_Process -Filter "ProcessId=$($c.OwningProcess)"; if ($p) { "$($p.ProcessId)`t$($p.CommandLine)" } }';
+		// lsof/PowerShell exit non-zero when nothing listens; read stdout anyway.
+		const out = spawnSync("powershell", ["-NoProfile", "-Command", script], { encoding: "utf8" }).stdout ?? "";
+		const [pidStr, ...rest] = out.trim().split("\t");
+		const pid = Number.parseInt(pidStr ?? "", 10);
+		if (!Number.isFinite(pid)) return undefined;
+		return { pid, command: rest.join("\t") };
+	}
+	const pidStr = spawnSync("lsof", ["-tiTCP:" + port, "-sTCP:LISTEN"], { encoding: "utf8" }).stdout ?? "";
+	const pid = Number.parseInt(pidStr.trim().split("\n")[0] ?? "", 10);
+	if (!Number.isFinite(pid)) return undefined;
+	const command = spawnSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" }).stdout ?? "";
+	return { pid, command };
+}
+
+const REPO_VITE_ENTRY = path
+	.join(path.resolve(import.meta.dir, ".."), "node_modules", "vite", "bin", "vite.js")
+	.replace(/\\/g, "/")
+	.toLowerCase();
+
+/** A run that was killed outright leaves its vite behind and `--strictPort`
+ *  then blocks the next start. Reap it only when the listener is THIS repo's
+ *  vite; any other occupant keeps the loud failure below. */
+async function reapStaleVite() {
+	const listener = portListener(VITE_PORT);
+	if (!listener || !listener.command.replace(/\\/g, "/").toLowerCase().includes(REPO_VITE_ENTRY)) return false;
+	console.log(`dev-desktop: stopping leftover vite (pid ${listener.pid}) from a previous run…`);
+	try {
+		process.kill(listener.pid, "SIGKILL");
+	} catch {
+		return false;
+	}
+	return waitPortClosed(VITE_PORT, 8000);
+}
+
+// Match only Electron binaries inside this repo so unrelated apps (Kimi,
+// etc.) are never touched — shared with relaunch-gui.mjs.
 
 /** Stop stale repo Electron instances (single-instance lock would otherwise
  *  make the new process quit and refocus the frozen old window). Graceful
@@ -136,8 +157,11 @@ const electronBin =
 
 await sweepStaleElectron();
 
-// A pre-existing :5173 listener must fail the run LOUDLY. The old probe
-// accepted any listener and pointed Electron at a stale dev server.
+// A pre-existing :5173 listener must fail the run LOUDLY, except for this
+// repo's own leftover vite: the previous run's vite exits a few seconds after
+// its Electron is swept, and a hard-killed run leaves it behind entirely.
+if (await portOpen(VITE_PORT)) await waitPortClosed(VITE_PORT, 10_000);
+if (await portOpen(VITE_PORT)) await reapStaleVite();
 if (await portOpen(VITE_PORT)) {
 	console.error(
 		`dev-desktop: port ${VITE_PORT} is already in use by another process.\n` +

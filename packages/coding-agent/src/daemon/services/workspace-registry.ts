@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Stats } from "node:fs";
 import * as fs from "node:fs/promises";
+import { homedir } from "node:os";
 import * as path from "node:path";
 import { getConfigRootDir, isEnoent, logger } from "@musepi/pi-utils";
 import type { SessionDirectoryInfo, WorkspaceDuplicateDirectory, WorkspaceProject } from "@musepi/pi-wire";
@@ -42,7 +43,8 @@ export type WorkspaceDirectoryErrorCode =
 	| "WORKSPACE_DIRECTORY_NOT_FOUND"
 	| "WORKSPACE_DIRECTORY_NOT_A_DIRECTORY"
 	| "WORKSPACE_DIRECTORY_LIMIT"
-	| "WORKSPACE_DIRECTORY_NOT_IN_WORKSPACE";
+	| "WORKSPACE_DIRECTORY_NOT_IN_WORKSPACE"
+	| "WORKSPACE_DIRECTORY_UNSAFE";
 
 /** Typed directory validation failure; `code` lets callers map the RPC error. */
 export class WorkspaceDirectoryError extends Error {
@@ -135,6 +137,43 @@ async function requireDirectory(directory: string): Promise<void> {
 	}
 }
 
+function comparisonKey(directory: string): string {
+	const resolved = path.resolve(directory);
+	return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+/**
+ * Additional roots must not be the user's home or a filesystem root: the
+ * agent gains read/write reach into them, and one mistaken pick would expose
+ * every unrelated project (and every dotfile) at once. The primary root is
+ * exempt — opening a home directory as a project stays a deliberate choice.
+ * Symlinks are resolved first so `~/link-to-home` cannot bypass the check.
+ */
+async function requireSafeAdditionalDirectory(directory: string): Promise<void> {
+	const real = await fs.realpath(directory).catch(() => directory);
+	const forbidden = comparisonKey(real);
+	const home = comparisonKey(homedir());
+	const root = comparisonKey(path.parse(real).root);
+	if (forbidden === home || forbidden === root) {
+		throw new WorkspaceDirectoryError(
+			"WORKSPACE_DIRECTORY_UNSAFE",
+			`Directory cannot be an additional workspace root: ${directory}`,
+			directory,
+		);
+	}
+}
+
+/** Non-throwing probe for inherited project roots: a stale unsafe entry must
+ *  not block every new session. */
+export async function isSafeAdditionalDirectory(directory: string): Promise<boolean> {
+	try {
+		await requireSafeAdditionalDirectory(directory);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
 export async function workspaceDirectoryExists(directory: string): Promise<boolean> {
 	try {
 		return (await fs.stat(directory)).isDirectory();
@@ -170,6 +209,7 @@ export async function resolveWorkspaceDirectories(
 			continue;
 		}
 		await requireDirectory(resolved);
+		await requireSafeAdditionalDirectory(resolved);
 		seen.add(resolved);
 		directories.push(resolved);
 	}
@@ -323,6 +363,25 @@ export class WorkspaceRegistry {
 	async deletedRootTimes(): Promise<Readonly<Record<string, number>>> {
 		const file = await this.#read();
 		return { ...file.deletedRootTimes };
+	}
+
+	/**
+	 * Additional directories registered for the project rooted at `root`.
+	 *
+	 * New sessions inherit this set. Read-only: unlike {@link list} it never
+	 * backfills implicit rows or prunes stale ones, because a session create
+	 * must not mutate the project catalog.
+	 */
+	async directoriesForRoot(root: string): Promise<string[]> {
+		let normalized: string;
+		try {
+			normalized = normalizeWorkspaceDirectory(root);
+		} catch {
+			return [];
+		}
+		const file = await this.#read();
+		const project = file.projects.find(row => row.root === normalized);
+		return project ? [...project.additionalDirs] : [];
 	}
 
 	/**
@@ -607,6 +666,11 @@ export class WorkspaceService implements DaemonService {
 		return { workspaces: await this.#deps.registry.list(cwds) };
 	}
 
+	/** Project directories a new session rooted at `root` inherits. */
+	async directoriesForRoot(root: string): Promise<string[]> {
+		return this.#deps.registry.directoriesForRoot(root);
+	}
+
 	/** Removed-workspace evidence for the session-list filter. */
 	async deletedWorkspaces(): Promise<DeletedWorkspaces> {
 		const [roots, deletedAt] = await Promise.all([
@@ -697,6 +761,7 @@ export class WorkspaceService implements DaemonService {
 			);
 		}
 		await requireDirectory(resolved);
+		await requireSafeAdditionalDirectory(resolved);
 		const added = await handle.add(resolved);
 		const next = handle.list();
 		return {

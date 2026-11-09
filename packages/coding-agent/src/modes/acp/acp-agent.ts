@@ -2390,6 +2390,18 @@ export class AcpAgent implements Agent {
 				getContextUsage: () => record.session.getContextUsage(),
 				getSystemPrompt: () => record.session.systemPrompt,
 				compact: instructionsOrOptions => runExtensionCompact(record.session, instructionsOrOptions),
+				runIdleCompaction: () => record.session.runIdleCompaction(),
+				runEphemeralTurn: options => record.session.runEphemeralTurn(options),
+				getGoalModeState: () => record.session.getGoalModeState(),
+				getTodoPhases: () => record.session.getTodoPhases(),
+				recordRecap: reply => {
+					record.session.sessionManager.recordRecap(reply);
+				},
+				isSettled: () =>
+					!record.session.isStreaming &&
+					!record.session.isCompacting &&
+					!record.session.hasPendingAsyncWork() &&
+					record.session.queuedMessageCount === 0,
 			},
 			{
 				getContextUsage: () => record.session.getContextUsage(),

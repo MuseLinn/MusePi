@@ -1,7 +1,8 @@
 import { ACCENT_PRESETS, type AccentPreference, useAccentPreference } from "@musepi/client-core";
-import { CircleDot, Moon, Palette, Waves } from "lucide-react";
+import { CircleDot, Moon, Palette, Sparkles, Waves } from "lucide-react";
 
 const PRESET_ICON: Partial<Record<AccentPreference, typeof Palette>> = {
+	theme: Sparkles,
 	brand: Palette,
 	mono: CircleDot,
 	ocean: Waves,
@@ -10,9 +11,10 @@ const PRESET_ICON: Partial<Record<AccentPreference, typeof Palette>> = {
 
 /**
  * Accent-axis toggle — orthogonal to the light/dark scheme, mirroring
- * opencode's theme × data-color-scheme split. Cycles the accent presets
- * (brand pink / mono / ocean blue / jade green); each preset's foreground is
- * derived from the active scheme, never a fixed color (kimi #2083). The
+ * opencode's theme × data-color-scheme split. Cycles follow-theme / brand
+ * gold / mono / ocean blue / jade green; the follow-theme stop resolves the
+ * accent from the ACTIVE color theme's hue registry. Each preset's foreground
+ * is derived from the active scheme, never a fixed color (kimi #2083). The
  * custom color is managed from the settings panel, not this cycle.
  */
 export function AccentToggle() {

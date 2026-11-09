@@ -585,6 +585,40 @@ describe("async-job-result settlement card", () => {
 		expect(html).not.toContain("hidden output");
 	});
 
+	it("formats a JSON output into fields and decodes escaped newlines", () => {
+		const output = JSON.stringify(
+			{
+				notes: "第 1 轮：带制氧机。\n第 2 轮：沙暴怎么办？\n第 3 轮：能量从哪来？",
+				reportSentToMain: true,
+			},
+			null,
+			2,
+		);
+		const entry = jobEntry({
+			content: envelope(output),
+			details: { jobId: "Alice", status: "completed", label: "Alice" },
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-async-job-field");
+		expect(html).toContain("notes");
+		expect(html).toContain("reportSentToMain");
+		expect(html).toContain("第 1 轮");
+		// Parsed: the value carries real line breaks, not the JSON escape.
+		expect(html).not.toContain("第 1 轮：带制氧机。\\n第 2 轮");
+		// The envelope and the raw JSON braces never render.
+		expect(html).not.toContain('{"notes"');
+	});
+
+	it("falls back to plain text when the output is not JSON", () => {
+		const entry = jobEntry({
+			content: envelope("plain failure text"),
+			details: { jobId: "Alice", status: "completed", label: "Alice" },
+		});
+		const html = renderTranscript({ entries: [entry], working: false });
+		expect(html).toContain("tr-async-job-text");
+		expect(html).toContain("plain failure text");
+	});
+
 	it("clamps a long output and offers expansion", () => {
 		const output = Array.from({ length: 14 }, (_, i) => `行 ${i + 1}：job output`).join("\n");
 		const entry = jobEntry({
@@ -592,7 +626,7 @@ describe("async-job-result settlement card", () => {
 			details: { jobId: "Alice", status: "completed", label: "Alice" },
 		});
 		const html = renderTranscript({ entries: [entry], working: false });
-		expect(html).toContain("tr-async-job-output--clamped");
+		expect(html).toContain("tr-async-job-body--clamped");
 		expect(html).toContain("tr-async-job-more");
 	});
 });

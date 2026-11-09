@@ -3640,6 +3640,34 @@ button.gui-stats-pill {
 	font-weight: 600;
 }
 
+/* Disclosure title (session-info card): the same label, but pressed rather
+ * than stated. The composer popup keeps the static title. */
+.gui-connector-panel-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	border: 0;
+	padding: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+.gui-connector-panel-toggle:hover .gui-connector-panel-title {
+	color: var(--color-text);
+}
+.gui-connector-chev {
+	width: 12px;
+	height: 12px;
+	flex: none;
+	color: var(--color-text-faint);
+	transition: transform 140ms ease;
+}
+.gui-connector-chev--closed {
+	transform: rotate(-90deg);
+}
+
 /* Server count as a quiet figure beside the title — the rows themselves
  * carry the names; the header only needs to say how many there are. */
 .gui-connector-panel-count {

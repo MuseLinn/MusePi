@@ -274,55 +274,9 @@
 	}
 }
 
-/* ── Hover-peek (docked panel closed) ─────────────────────────────────
- * ChatGPT's floating left panel is `fixed bottom-0 left-0 z-42`, starts at
- * the titlebar's bottom edge, and slides in from x:-8 as a rounded elevated
- * surface. We reuse the SAME mounted SessionSidebar: no second instance, no
- * re-mount, no layout width. The rail owns the hover state; the keeper only
- * supplies the surface. Selector also beats `.gui-pane-side--immersive`
- * (loaded later from gui-chat.css) without !important. */
-.gui-side-keeper--peek {
-	width: 0;
-	min-width: 0;
-}
-
-.gui-side-keeper--peek > .gui-pane-side.gui-pane-side--immersive {
-	position: fixed;
-	left: calc(var(--gui-rail-w) + 8px);
-	top: 48px;
-	bottom: 8px;
-	z-index: 42;
-	border-radius: var(--radius-2xl);
-	box-shadow: var(--gui-card-shadow);
-	background: var(--color-surface);
-	opacity: 0;
-	transform: translateX(-8px);
-	pointer-events: none;
-	transition:
-		opacity 140ms ease-out,
-		transform 140ms var(--spring);
-}
-
-.gui-side-keeper--peek[data-peek-open="true"] > .gui-pane-side.gui-pane-side--immersive {
-	opacity: 1;
-	transform: translateX(0);
-	pointer-events: auto;
-}
-
-@media (max-width: 720px) {
-	/* Narrow windows already have a full drawer; a second floating panel
-	 * would stack two surfaces over the same content. */
-	.gui-side-keeper--peek > .gui-pane-side.gui-pane-side--immersive {
-		display: none;
-	}
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.gui-side-keeper--peek > .gui-pane-side.gui-pane-side--immersive {
-		transition: none;
-	}
-}
-
+/* Hover-peek geometry and its fade/slide transitions live in
+ * gui-side-panel.css (loaded last): the floating pane is the SAME rounded
+ * card as the docked one, so the slot has one geometry authority. */
 
 /* ── Layout chrome (side/top switch) ────────────────────────────────── */
 
@@ -539,10 +493,62 @@
 	text-overflow: ellipsis;
 }
 
+.gui-session-emoji {
+	flex: none;
+	margin-left: 2px;
+	font-size: 12px;
+	line-height: 1;
+}
+
+.gui-session-title-input {
+	padding: 0;
+	border: 0;
+	border-bottom: 1px solid var(--color-accent);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	outline: none;
+}
+
 .gui-session-time {
 	flex-shrink: 0;
 	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
+}
+
+.gui-emoji-dialog {
+	width: min(420px, 92vw);
+	height: auto;
+	padding: 20px 22px;
+	border-radius: var(--radius-xl);
+}
+
+.gui-emoji-grid {
+	display: grid;
+	grid-template-columns: repeat(8, 1fr);
+	gap: 4px;
+}
+
+.gui-emoji-chip {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	aspect-ratio: 1;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	background: transparent;
+	font-size: 18px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.gui-emoji-chip:hover {
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+}
+
+.gui-emoji-chip--active {
+	border-color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 }
 
 /* ── Session hover card (WorkBuddy 悬浮弹窗 parity + 我们的 mode 行) ──
@@ -703,6 +709,19 @@
 	outline: 1px solid color-mix(in oklab, var(--color-accent) 24%, transparent);
 	outline-offset: 2px;
 	border-radius: var(--radius-lg);
+}
+
+/* Cross-page search result: the row the user jumped to pulses once, then
+ * returns to its normal surface so the highlight never lingers. Applied as an
+ * inline animation (see SettingsView) so a schema re-render cannot drop it. */
+@keyframes gui-settings-target {
+	0%,
+	35% {
+		background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	}
+	100% {
+		background: transparent;
+	}
 }
 
 /* ── Details pane (right column, 300px) ────────────────────────────── */

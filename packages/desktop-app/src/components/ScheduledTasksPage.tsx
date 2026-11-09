@@ -4,6 +4,8 @@ import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { orderedWeekdayKeys, WEEKDAY_KEYS, weekStartIndex } from "../lib/appearance";
 import { pathBaseName, projectLabels } from "../lib/project-label";
+import { clearTaskNav, publishTaskNav, subscribeTaskNavAction } from "../lib/scheduled-task-nav";
+import type { TaskCenterView } from "../lib/scheduled-task-types";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { GuiSelect } from "./GuiSelect";
@@ -176,16 +178,11 @@ export function ScheduledTasksPage({
 	 *  agent just created instead of the top of the list. */
 	initialTaskId?: string | null;
 }): ReactNode {
-	const [view, setView] = useState<"calendar" | "board" | "tasks">("tasks");
+	const [view, setView] = useState<TaskCenterView>("tasks");
 	const [tasks, setTasks] = useState<CronTask[]>([]);
 	const [runs, setRuns] = useState<CronRun[]>([]);
 	const [draft, setDraft] = useState<CronTask | null>(null);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
-	/** Left-panel controls (ChatGPT 定时任务 panel parity): the 260px column
-	 *  is not just a workspace list — it owns search + status filtering + the
-	 *  new-task action, so the destination can be worked without the header. */
-	const [query, setQuery] = useState("");
-	const [statusFilter, setStatusFilter] = useState<"all" | "enabled" | "paused" | "failed">("all");
 	const [deleteTarget, setDeleteTarget] = useState<CronTask | null>(null);
 	const [busy, setBusy] = useState(false);
 	const aliveRef = useRef(true);
@@ -276,36 +273,8 @@ export function ScheduledTasksPage({
 		return [...ids];
 	};
 
-	// Workspace grouping (openchamber: folders per project; ~ for home). The
-	// panel's search + status filter narrow the SAME task list the detail pane
-	// reads, so selecting a row never asks the daemon for a second copy.
-	const visibleTasks = useMemo(() => {
-		const q = query.trim().toLowerCase();
-		return tasks.filter(task => {
-			if (q && !task.name.toLowerCase().includes(q) && !(task.cwd ?? "").toLowerCase().includes(q)) return false;
-			if (statusFilter === "enabled" && !task.enabled) return false;
-			if (statusFilter === "paused" && task.enabled) return false;
-			if (statusFilter === "failed" && task.state?.lastStatus !== "error") return false;
-			return true;
-		});
-	}, [tasks, query, statusFilter]);
-	const groups = useMemo(() => {
-		const byCwd = new Map<string, CronTask[]>();
-		for (const task of visibleTasks) {
-			const key = task.cwd?.trim() || "~";
-			const list = byCwd.get(key) ?? [];
-			list.push(task);
-			byCwd.set(key, list);
-		}
-		return [...byCwd.entries()]
-			.sort(([a], [b]) => (a === "~" ? -1 : b === "~" ? 1 : a.localeCompare(b)))
-			.map(([cwd, list]) => ({ cwd, tasks: list.sort((a, b) => a.name.localeCompare(b.name)) }));
-	}, [visibleTasks]);
-	// Workspace headers name the folder (full path on the header's title); two
-	// workspaces sharing a basename widen to their parent.
-	const workspaceLabels = useMemo(() => projectLabels(groups.map(group => group.cwd)), [groups]);
-	/** One new-task draft for both the page header and the left panel. */
-	const openNew = (): void => {
+	/** One new-task draft for the empty state and the left panel. */
+	const openNew = useCallback((): void => {
 		setDraft({
 			id: "",
 			name: "",
@@ -316,7 +285,38 @@ export function ScheduledTasksPage({
 			thinkingLevel: "default",
 			state: { createdAt: Date.now() },
 		});
-	};
+	}, []);
+
+	// Two-tier shell: the destination's left panel lives in the app's sidebar
+	// slot, not inside this page. Publish one projection of the page state and
+	// accept actions from that panel — one cron.list source, one selection.
+	useEffect(() => {
+		publishTaskNav({
+			tasks: tasks.map(task => ({
+				id: task.id,
+				name: task.name,
+				enabled: task.enabled,
+				cwd: task.cwd,
+				lastStatus: task.state?.lastStatus,
+			})),
+			selectedId,
+			view,
+			busy,
+		});
+	}, [tasks, selectedId, view, busy]);
+	useEffect(
+		() =>
+			subscribeTaskNavAction(action => {
+				if (action.type === "select") {
+					setSelectedId(action.id);
+					setView("tasks");
+				} else if (action.type === "new") openNew();
+				else if (action.type === "view") setView(action.view);
+				else if (action.type === "refresh") refresh();
+			}),
+		[openNew, refresh],
+	);
+	useEffect(() => () => clearTaskNav(), []);
 
 	const save = (task: CronTask): void => {
 		if (!rpc) return;
@@ -419,21 +419,15 @@ export function ScheduledTasksPage({
 					</div>
 				}
 				actions={
-					<>
-						<button type="button" className="gui-btn gui-scheduled-new" onClick={openNew}>
-							<Icon name="add" className="h-4 w-4" />
-							<span>{t("settings.scheduledNew")}</span>
-						</button>
-						<button
-							type="button"
-							className="gui-btn"
-							onClick={refresh}
-							title={t("settings.boardRefresh")}
-							aria-label={t("settings.boardRefresh")}
-						>
-							<Icon name="refresh" className="h-4 w-4 oc-icon-spin" />
-						</button>
-					</>
+					<button
+						type="button"
+						className="gui-btn"
+						onClick={refresh}
+						title={t("settings.boardRefresh")}
+						aria-label={t("settings.boardRefresh")}
+					>
+						<Icon name="refresh" className="h-4 w-4 oc-icon-spin" />
+					</button>
 				}
 			/>
 
@@ -465,95 +459,13 @@ export function ScheduledTasksPage({
 					<div className="gui-scheduled-empty-icon">⏰</div>
 					<div className="gui-scheduled-empty-title">{t("settings.scheduledEmptyTitle")}</div>
 					<div className="gui-scheduled-empty-desc">{t("settings.scheduledEmptyDesc")}</div>
-					<button
-						type="button"
-						className="gui-btn gui-scheduled-new"
-						onClick={() =>
-							setDraft({
-								id: "",
-								name: "",
-								enabled: true,
-								schedule: { kind: "daily", times: ["09:00"] },
-								prompt: "",
-								cwd: "",
-								thinkingLevel: "default",
-								state: { createdAt: Date.now() },
-							})
-						}
-					>
+					<button type="button" className="gui-btn gui-scheduled-new" onClick={openNew}>
 						<Icon name="add" className="h-4 w-4" />
 						<span>{t("settings.scheduledNew")}</span>
 					</button>
 				</div>
 			) : (
 				<div className="gui-scheduled-body">
-					{/* Workspace columns (openchamber parity). The left column is
-					 * the destination's own panel: title + count, new task,
-					 * search and status filter, then the workspace-grouped list. */}
-					<div className="gui-scheduled-ws">
-						<div className="gui-scheduled-panel-head">
-							<div className="gui-scheduled-panel-title">
-								<span className="min-w-0 flex-1 truncate">{t("settings.scheduledTasks")}</span>
-								<span className="gui-scheduled-ws-count">{visibleTasks.length}</span>
-							</div>
-							<button type="button" className="gui-btn gui-scheduled-panel-new" onClick={openNew}>
-								<Icon name="add" className="h-3.5 w-3.5" />
-								<span>{t("settings.scheduledNew")}</span>
-							</button>
-							<label className="gui-scheduled-panel-search">
-								<Icon name="search" className="h-3.5 w-3.5 shrink-0" />
-								<input
-									value={query}
-									onChange={event => setQuery(event.target.value)}
-									placeholder={t("settings.search")}
-									aria-label={t("settings.search")}
-								/>
-							</label>
-							<select
-								className="gui-scheduled-panel-filter"
-								value={statusFilter}
-								onChange={event =>
-									setStatusFilter(event.target.value as "all" | "enabled" | "paused" | "failed")
-								}
-								aria-label={t("settings.scheduledFilterStatus")}
-							>
-								<option value="all">{t("settings.scheduledFilterAll")}</option>
-								<option value="enabled">{t("settings.scheduledEnabled")}</option>
-								<option value="paused">{t("settings.scheduledFilterPaused")}</option>
-								<option value="failed">{t("settings.scheduledFilterFailed")}</option>
-							</select>
-						</div>
-						{groups.length === 0 && (
-							<div className="gui-scheduled-panel-empty">
-								{tasks.length === 0 ? t("settings.scheduledEmptyTitle") : t("settings.scheduledNoMatches")}
-							</div>
-						)}
-						{groups.map(group => (
-							<div key={group.cwd} className="gui-scheduled-ws-block">
-								<div className="gui-scheduled-ws-head">
-									<Icon name="folder-3" className="h-3.5 w-3.5" />
-									<span className="min-w-0 flex-1 truncate" title={group.cwd}>
-										{workspaceLabels.get(group.cwd) ?? group.cwd}
-									</span>
-									<span className="gui-scheduled-ws-count">{group.tasks.length}</span>
-								</div>
-								{group.tasks.map(task => (
-									<button
-										key={task.id}
-										type="button"
-										className={`gui-scheduled-row${selected?.id === task.id ? " gui-scheduled-row--active" : ""}`}
-										onClick={() => setSelectedId(task.id)}
-									>
-										<span className="gui-scheduled-row-dot" />
-										<span className="min-w-0 flex-1 truncate">
-											{task.name || t("settings.scheduledUntitled")}
-										</span>
-										{!task.enabled && <Icon name="pause" className="h-3 w-3 shrink-0 opacity-50" />}
-									</button>
-								))}
-							</div>
-						))}
-					</div>
 					{/* Detail panel (openchamber parity) */}
 					<div className="gui-scheduled-detail">
 						{selected ? (

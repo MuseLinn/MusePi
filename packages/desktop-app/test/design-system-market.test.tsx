@@ -154,9 +154,12 @@ describe("M3.7d 能力中心落地 tab", () => {
 			);
 		});
 		await settle();
-		const tabs = [...document.body.querySelectorAll<HTMLButtonElement>(".gui-capability-tab")];
-		const marketTab = tabs.find(b => b.textContent === t("guest.marketplace"))!;
-		expect(marketTab.getAttribute("aria-selected")).toBe("true");
+		// 2026-11-08: 三个目的地入口搬到二级左栏，页头不再渲染第二个 tab 行；
+		// 选中态归左栏面板，内容页只负责把受控 tab 对应的 pane 打开。
+		expect(document.body.querySelectorAll(".gui-capability-tab")).toHaveLength(0);
+		const topPanes = [...host.querySelectorAll(".gui-capability-body > .gui-capability-pane")];
+		expect(topPanes[2]?.classList.contains("gui-capability-pane--on")).toBe(true);
+		expect(host.querySelectorAll(".gui-capability-body > .gui-capability-pane--on")).toHaveLength(1);
 		// 市场网格挂载 = 数据源走 marketplace.list（发现面即能力中心的安装通路）。
 		expect(calls).toContain("marketplace.list");
 		await unmount(root);

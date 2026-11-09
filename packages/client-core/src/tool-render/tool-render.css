@@ -283,6 +283,154 @@
 	background: color-mix(in oklch, var(--tv-fg) 6%, transparent);
 }
 
+.tv-browser-structured {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 9px 10px;
+	border: 1px solid color-mix(in oklch, var(--tv-fg) 8%, transparent);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklch, var(--tv-fg) 3%, transparent);
+}
+
+.tv-browser-structured-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--tv-fg);
+	font-size: 11px;
+	font-weight: 550;
+}
+
+.tv-browser-structured-head > svg {
+	color: var(--tv-faint);
+}
+
+.tv-browser-structured-title {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--tv-muted);
+	font-weight: 400;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tv-browser-state-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 4px 16px;
+}
+
+.tv-browser-state-row {
+	display: grid;
+	grid-template-columns: minmax(84px, auto) minmax(0, 1fr);
+	gap: 8px;
+	font-size: 10.5px;
+	line-height: 1.5;
+}
+
+.tv-browser-state-label {
+	color: var(--tv-faint);
+}
+
+.tv-browser-state-value {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	color: var(--tv-fg);
+}
+
+.tv-browser-mono {
+	font-family: var(--tv-mono);
+}
+
+.tv-browser-state-tabs {
+	min-width: 0;
+	overflow-x: auto;
+}
+
+.tv-browser-state-tabs-title {
+	margin-bottom: 4px;
+	color: var(--tv-muted);
+	font-size: 11px;
+	font-weight: 500;
+}
+
+.tv-browser-state-table {
+	width: 100%;
+	min-width: 560px;
+	border-collapse: collapse;
+	font-size: 10px;
+	text-align: left;
+}
+
+.tv-browser-state-table th {
+	padding: 3px 6px;
+	color: var(--tv-faint);
+	font-weight: 400;
+}
+
+.tv-browser-state-table td {
+	max-width: 220px;
+	overflow: hidden;
+	padding: 4px 6px;
+	border-top: 1px solid color-mix(in oklch, var(--tv-fg) 7%, transparent);
+	color: var(--tv-muted);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tv-browser-text-content {
+	max-height: 320px;
+	margin: 0;
+	overflow: auto;
+	padding: 8px;
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklch, var(--tv-fg) 4%, transparent);
+	color: var(--tv-muted);
+	font-family: var(--tv-font);
+	font-size: 11px;
+	line-height: 1.6;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.tv-browser-raw {
+	color: var(--tv-faint);
+	font-size: 10px;
+}
+
+.tv-browser-raw summary {
+	width: fit-content;
+	cursor: pointer;
+}
+
+.tv-browser-raw pre {
+	max-height: 220px;
+	overflow: auto;
+	margin: 6px 0 0;
+	font-family: var(--tv-mono);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+	.tv-browser-state-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+.tv-browser-elements-table {
+	min-width: 480px;
+}
+
+.tv-browser-receipt--failed {
+	border-color: color-mix(in oklch, var(--tv-err) 28%, transparent);
+}
+
+.tv-browser-receipt--failed .tv-browser-state-row:last-child .tv-browser-state-value {
+	color: var(--tv-err);
+}
+
 .tv-browser-pages {
 	display: flex;
 	flex-direction: column;
@@ -1156,33 +1304,83 @@
 /* The annotation entry gets a row of its own above the frame: floating it
  * over the page's top-right corner covers the page's own controls there. The
  * row keeps its height whether or not the button is showing, so hovering
- * never moves the page. */
+ * never moves the page; the button itself is a ghost icon (no fill, no
+ * border) so it does not read as a second toolbar next to the card head. */
 .tv-widget--page .gui-widget-html-tools {
 	display: flex;
 	justify-content: flex-end;
 	align-items: center;
-	min-height: 28px;
-	padding: 4px 8px 0;
+	gap: 2px;
+	min-height: 24px;
+	padding: 2px 6px 0;
 }
 .tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn {
 	position: static;
-	opacity: 0.55;
+	width: 22px;
+	height: 22px;
+	background: none;
+	border: 0;
+	box-shadow: none;
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	opacity: 0;
+	color: var(--tv-muted);
+	transition: opacity 120ms ease-out, color 120ms ease-out;
 }
-.tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn:hover,
+.tv-widget--page:hover .gui-widget-html-tools .gui-widget-annotate-btn,
 .tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn:focus-visible,
 .tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn--active {
 	opacity: 1;
 }
-/* Touch screens have no hover: the entry stays fully visible instead of
- * being unreachable in a desktop file's hover-only rule. */
+.tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn:hover {
+	color: var(--tv-fg);
+}
+/* Touch screens have no hover: the entry stays visible instead of being
+ * unreachable behind a desktop hover rule. */
 @media (hover: none) {
 	.tv-widget--page .gui-widget-html-tools .gui-widget-annotate-btn {
-		opacity: 1;
+		opacity: 0.7;
 	}
+}
+/* A failed annotation says why under the page: the overlay runs inside the
+ * sandbox, so a silent no-op was the only signal this side ever had. */
+.tv-widget--page .gui-widget-html-error {
+	padding: 6px 10px;
+	border-top: 1px solid var(--tv-border);
+	font-size: 11.5px;
+	color: var(--tv-err);
 }
 .tv-widget--page .gui-widget-html {
 	border-radius: 0;
 	background: var(--color-bg, transparent);
+}
+
+/* A face's head action (the annotation entry) rides in the card's own action
+ * cluster: same size and weight as copy/menu/fullscreen, no pill of its own.
+ * Three classes so the desktop glass skin (one class + wrap hover) cannot win
+ * on hover. */
+.tv-widget-head .tv-widget-actions .gui-widget-annotate-btn {
+	position: static;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: none;
+	box-shadow: none;
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	color: var(--tv-muted);
+	opacity: 1;
+}
+.tv-widget-head .tv-widget-actions .gui-widget-annotate-btn:hover,
+.tv-widget-head .tv-widget-actions .gui-widget-annotate-btn:focus-visible,
+.tv-widget-head .tv-widget-actions .gui-widget-annotate-btn--active {
+	color: var(--tv-accent, var(--tv-fg));
 }
 
 /* Waiting-page status: a page that asks the user to choose answers into the

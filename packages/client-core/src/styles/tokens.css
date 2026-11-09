@@ -7,16 +7,32 @@
 	color-scheme: dark;
 
 	/* surfaces — neutral warm-dark ramp (openchamber/zcode-style; the brand
-	 * hue survives only in the accent, not in surface tints) */
-	--bg: oklch(0.155 0.008 60);
+	 * hue survives only in the accent, not in surface tints). The 2026-11-08
+	 * depth pass widens the base→card gap (0.145→0.19) so the rounded cards
+	 * read as lifted surfaces instead of a flat brown sheet. */
+	--bg: oklch(0.145 0.007 60);
 	--bg-raised: oklch(0.19 0.01 60);
-	--bg-inset: oklch(0.125 0.007 60);
-	--bg-overlay: oklch(0.23 0.012 60);
+	--bg-inset: oklch(0.115 0.006 60);
+	--bg-overlay: oklch(0.228 0.011 60);
 
 	/* text */
 	--fg: oklch(0.93 0.008 60);
 	--fg-muted: oklch(0.72 0.01 60);
-	--fg-faint: oklch(0.64 0.01 60);
+	--fg-faint: oklch(0.66 0.01 60);
+
+	/* ── Theme-native accent ladder (2026-11-08) ────────────────────────
+	 * Every `data-ui-theme` preset supplies its own HUE below. The scheme
+	 * supplies lightness/chroma/ink; `data-accent="theme"` then resolves the
+	 * whole --accent family from these numbers. A theme is therefore a FULL
+	 * palette (surfaces + accent), not just a surface tint over one global
+	 * gold. Explicit accent presets (brand/mono/ocean/jade/custom) remain as
+	 * user overrides on top of it. */
+	--theme-hue: 79.85; /* default preset = brand gold */
+	--theme-l: 0.7507;
+	--theme-c: 0.1295;
+	--theme-hover-l: 0.8307;
+	--theme-fg-l: 0.26;
+	--theme-accent: oklch(var(--theme-l) var(--theme-c) var(--theme-hue));
 
 	/* one accent: brand gold. These oklch numbers ARE #d9a441 (the π brand
 	 * gold) — the same gold the TUI theme (theme/defaults/musepi.json), the
@@ -41,8 +57,8 @@
 	--err: oklch(0.66 0.19 25);
 
 	/* hairlines */
-	--border: oklch(1 0 0 / 9%);
-	--border-strong: oklch(1 0 0 / 13%);
+	--border: oklch(1 0 0 / 11%);
+	--border-strong: oklch(1 0 0 / 16%);
 	/* focus ring: brand cyan (#5ad8e6) — distinct from the accent */
 	--ring: oklch(0.817 0.112 205 / 70%);
 
@@ -222,10 +238,68 @@
 	/* overshoot spring — the liquid motion curve (menu/pane/press) */
 	--spring-liquid: cubic-bezier(0.34, 1.56, 0.64, 1);
 
+	/* ── Global liquid-glass ladder (2026-11-08) ─────────────────────────
+	 * L1 cards / L2 floating layers / L3 interaction states. These are
+	 * CONTRAST tokens, not decoration: the dark scheme used to paint card
+	 * borders from an almost-black outline and hover rows from the card's own
+	 * surface color, so neither an edge nor a hovered menu item was visible.
+	 * Each layer owns one fill, one hairline, one rim pair and one shadow.
+	 *
+	 * THEME-DERIVED (2026-11-08): every fill and every edge is mixed from the
+	 * ACTIVE theme's `--bg-*` / `--fg`, never from a literal hue. The old
+	 * L1 fill was `oklch(0.205 0.012 60)` — the DEFAULT warm palette — so
+	 * picking 午夜蓝 (hue 265) left the sidebar/ChatView/rail warm-brown
+	 * while the session-info card and the transcript fades followed the blue
+	 * theme surface. One screen, two palettes. Deriving the ladder fixes all
+	 * presets and both schemes at once, and `--gui-card-surface-fade` gives
+	 * the fade bands the card's exact composite color. */
+	--gui-card-surface: color-mix(in oklab, var(--bg-raised) 88%, var(--bg-overlay));
+	--gui-card-surface-fade: color-mix(in oklab, var(--gui-card-surface) 96%, var(--bg));
+	--glass-card-bg: color-mix(in oklab, var(--gui-card-surface) 96%, transparent);
+	--glass-float-bg: color-mix(
+		in oklab,
+		color-mix(in oklab, var(--bg-overlay) 88%, var(--gui-card-surface)) 96%,
+		transparent
+	);
+	--glass-hairline: color-mix(in srgb, var(--fg) 18%, transparent);
+	--glass-hairline-strong: color-mix(in srgb, var(--fg) 30%, transparent);
+	--glass-rim-hi: color-mix(in srgb, var(--fg) 26%, transparent);
+	--glass-rim-lo: oklch(0 0 0 / 22%);
+	--glass-hover: color-mix(in srgb, var(--fg) 10%, transparent);
+	--glass-hover-strong: color-mix(in srgb, var(--fg) 18%, transparent);
+	--glass-active: color-mix(in oklab, var(--color-accent) 22%, transparent);
+	--glass-card-shadow:
+		0 1px 2px oklch(0 0 0 / 34%),
+		0 10px 28px oklch(0 0 0 / 32%);
+	--glass-float-shadow:
+		0 2px 6px oklch(0 0 0 / 38%),
+		0 18px 48px oklch(0 0 0 / 48%);
+
+	/* ── Progressive-blur edge ladder (2026-11-08) ───────────────────────
+	 * Three stacked backdrop layers with growing radii. Each layer is masked
+	 * to a shorter ramp than the one below it, so blur STRENGTH (not only
+	 * opacity) grows toward the edge. The bands sample in-window transcript
+	 * rows, which exist on every platform — unlike the OS window material,
+	 * which is why pane-level backdrop-filter is disabled on win32/linux.
+	 * `--gui-card-surface-veil` is the SAME derived composite surface as the
+	 * card, at reduced alpha: it keeps blurred text readable without painting
+	 * an opaque slab that would clash with the chat head. */
+	--gui-blur-progressive-1: 2px;
+	--gui-blur-progressive-2: 6px;
+	--gui-blur-progressive-3: 14px;
+	--gui-card-surface-veil: color-mix(in oklab, var(--gui-card-surface-fade) 72%, transparent);
+
 	/* type ladder — base follows the GUI's --gui-font-scale (set on the
 	 * document root by the desktop settings stepper); plain web/guest pages
-	 * fall back to 15px (openchamber text parity) */
-	--ui-font-size: var(--gui-font-scale, 15px);
+	 * fall back to 15px (openchamber text parity).
+	 *
+	 * --mp-text-scale is the mobile shell's physical-density correction
+	 * (lib/text-scale.ts): the same 15px is a different number of millimetres
+	 * on a 460 ppi phone and a 415 ppi tablet. It multiplies TEXT only —
+	 * spacing, radii and control geometry stay on their own scale, which is the
+	 * rule the design-system contract states ("text_scale … applies to text
+	 * only"). 1 on every non-native surface. */
+	--ui-font-size: calc(var(--gui-font-scale, 15px) * var(--mp-text-scale, 1));
 	--ui-font-size-sm: calc(var(--ui-font-size) - 1px);
 	--ui-font-size-xs: calc(var(--ui-font-size) - 2px);
 	--ui-font-size-lg: calc(var(--ui-font-size) + 1px);
@@ -281,7 +355,13 @@
 
 	--fg: oklch(0.26 0.03 60);
 	--fg-muted: oklch(0.46 0.03 60);
-	--fg-faint: oklch(0.52 0.025 60);
+	--fg-faint: oklch(0.5 0.025 60);
+
+	/* Theme-native accent on a light scheme: darker accent, near-white ink. */
+	--theme-l: 0.62;
+	--theme-c: 0.115;
+	--theme-hover-l: 0.55;
+	--theme-fg-l: 0.99;
 
 	--accent: oklch(0.62 0.115 79.85);
 	--accent-fg: oklch(0.99 0.01 80);
@@ -293,8 +373,8 @@
 	--warn: oklch(0.6 0.13 85);
 	--err: oklch(0.55 0.19 25);
 
-	--border: oklch(0 0 0 / 10%);
-	--border-strong: oklch(0 0 0 / 15%);
+	--border: oklch(0 0 0 / 12%);
+	--border-strong: oklch(0 0 0 / 18%);
 	--ring: oklch(0.58 0.13 230 / 70%);
 
 	--shadow-overlay: 0 12px 32px oklch(0 0 0 / 14%), 0 2px 8px oklch(0 0 0 / 10%);
@@ -318,6 +398,19 @@
 		0 24px 60px oklch(0.3 0.02 60 / 18%),
 		inset 0 1px 0 oklch(1 0 0 / 92%),
 		inset 0 -1px 0 oklch(0.4 0.02 60 / 10%);
+
+	/* The L1 ladder (fills, hairlines, rim-hi, hover) is DERIVED in :root
+	 * from --fg / --bg-*, so on a light scheme it automatically becomes a
+	 * neutral dark hairline and a darkening hover. Only the neutral shadow,
+	 * bottom echo and accent-active strength still need a light value. */
+	--glass-rim-lo: oklch(0 0 0 / 10%);
+	--glass-active: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	--glass-card-shadow:
+		0 1px 2px oklch(0.3 0 0 / 10%),
+		0 10px 28px oklch(0.3 0 0 / 12%);
+	--glass-float-shadow:
+		0 2px 6px oklch(0.3 0 0 / 12%),
+		0 18px 48px oklch(0.3 0 0 / 18%);
 }
 
 /* mono accent, explicit light scheme */
@@ -353,6 +446,25 @@
 	--brand-mark-gradient: linear-gradient(135deg, oklch(0.52 0.12 160) 0%, oklch(0.4 0.1 160) 100%);
 }
 
+/* ── Follow-theme accent (2026-11-08) ──────────────────────────────────
+ * `data-accent="theme"` is the DEFAULT on a fresh install: the active
+ * `data-ui-theme` supplies `var(--theme-hue)`, the scheme supplies the
+ * lightness/ink, and the whole accent family resolves from those numbers.
+ * It sits AFTER the light-scheme blocks so an explicit scheme still wins
+ * over the :root gold. Explicit presets and a custom hex still override it. */
+[data-accent="theme"] {
+	--accent: var(--theme-accent);
+	--accent-fg: oklch(var(--theme-fg-l) 0.05 var(--theme-hue));
+	--accent-muted: oklch(var(--theme-l) var(--theme-c) var(--theme-hue) / 18%);
+	--accent-hover: oklch(var(--theme-hover-l) var(--theme-c) var(--theme-hue));
+	--accent-bd: oklch(var(--theme-l) var(--theme-c) var(--theme-hue) / 35%);
+	--brand-mark-gradient: linear-gradient(
+		135deg,
+		var(--theme-accent) 0%,
+		oklch(0.46 var(--theme-c) var(--theme-hue)) 100%
+	);
+}
+
 /* Light theme — system fallback when no explicit preference is stored. */
 @media (prefers-color-scheme: light) {
 	:root:not([data-theme]):not([data-color-scheme]) {
@@ -365,7 +477,12 @@
 
 		--fg: oklch(0.26 0.03 60);
 		--fg-muted: oklch(0.46 0.03 60);
-		--fg-faint: oklch(0.52 0.025 60);
+		--fg-faint: oklch(0.5 0.025 60);
+
+		--theme-l: 0.62;
+		--theme-c: 0.115;
+		--theme-hover-l: 0.55;
+		--theme-fg-l: 0.99;
 
 		--accent: oklch(0.62 0.115 79.85);
 		--accent-fg: oklch(0.99 0.01 80);
@@ -431,6 +548,22 @@
 		--accent-hover: oklch(0.46 0.12 160);
 		--accent-bd: oklch(0.52 0.12 160 / 30%);
 		--brand-mark-gradient: linear-gradient(135deg, oklch(0.52 0.12 160) 0%, oklch(0.4 0.1 160) 100%);
+	}
+
+	/* Follow-theme accent, system-light fallback. The `:root:not(...)`
+	 * selector above is more specific than the plain [data-accent="theme"]
+	 * rule, so repeat the family here with matching specificity. */
+	:root:not([data-theme]):not([data-color-scheme])[data-accent="theme"] {
+		--accent: var(--theme-accent);
+		--accent-fg: oklch(var(--theme-fg-l) 0.05 var(--theme-hue));
+		--accent-muted: oklch(var(--theme-l) var(--theme-c) var(--theme-hue) / 18%);
+		--accent-hover: oklch(var(--theme-hover-l) var(--theme-c) var(--theme-hue));
+		--accent-bd: oklch(var(--theme-l) var(--theme-c) var(--theme-hue) / 35%);
+		--brand-mark-gradient: linear-gradient(
+			135deg,
+			var(--theme-accent) 0%,
+			oklch(0.46 var(--theme-c) var(--theme-hue)) 100%
+		);
 	}
 }
 
@@ -852,6 +985,32 @@
 	--border: oklch(0.3339 0.0014 17.2);
 	--border-strong: oklch(0.2435 0.0000 89.9);
 }
+
+/* ── Theme-native accent hue registry (2026-11-08) ────────────────────
+ * One row per `UiThemeId`. This is the accent a theme "provides": it is the
+ * theme's signature hue (not necessarily its surface hue — Nord's surfaces
+ * are blue-grey but its accent is frost blue, Gruvbox's is amber). Placed
+ * AFTER every `[data-theme][data-ui-theme]` block so the hue wins on <html>,
+ * where `--accent` resolves the var() chain for `data-accent="theme"`.
+ * Graphite is intentionally near-neutral: its accent is a warm silver. */
+[data-ui-theme="default"] { --theme-hue: 79.85; }
+[data-ui-theme="warm"] { --theme-hue: 70; }
+[data-ui-theme="cool"] { --theme-hue: 245; }
+[data-ui-theme="midnight"] { --theme-hue: 265; }
+[data-ui-theme="graphite"] { --theme-hue: 90; --theme-c: 0.022; }
+[data-ui-theme="anthro"] { --theme-hue: 55; }
+[data-ui-theme="openchamber"] { --theme-hue: 85; }
+[data-ui-theme="catppuccin"] { --theme-hue: 320; }
+[data-ui-theme="nord"] { --theme-hue: 250; }
+[data-ui-theme="tokyonight"] { --theme-hue: 265; }
+[data-ui-theme="aura"] { --theme-hue: 300; }
+[data-ui-theme="ayu"] { --theme-hue: 70; }
+[data-ui-theme="dracula"] { --theme-hue: 330; }
+[data-ui-theme="gruvbox"] { --theme-hue: 80; }
+[data-ui-theme="kanagawa"] { --theme-hue: 30; }
+[data-ui-theme="monokai"] { --theme-hue: 350; }
+[data-ui-theme="solarized"] { --theme-hue: 210; }
+[data-ui-theme="vesper"] { --theme-hue: 45; }
 
 /* Motion springs (motion.dev linear() curves — damped-spring physics).
  * Mirrors gui/src/styles/gui.css :root so guest-client components carry the

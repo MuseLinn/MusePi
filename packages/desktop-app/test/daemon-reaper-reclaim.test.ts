@@ -15,9 +15,10 @@ import { PORT_FILE, pidAlive, REGISTRY_DIR, readManagedDaemons, reapOrphanedDaem
  * wrong thing). Together they pin both halves of the contract.
  *
  * A REAL child process stands in for the daemon — never `process.pid`: the reap
- * path sends SIGTERM, and a stand-in that shares the test runner's pid would
- * kill the runner. The child holds the port, so the identity check (listener
- * pid === recorded pid, ws.port === recorded port) is satisfied for real.
+ * path kills what listens on the recorded port, and a stand-in that shares the
+ * test runner's pid would kill the runner. The child holds the port, so the
+ * identity check (listener pid === recorded pid, ws.port === recorded port) is
+ * satisfied for real.
  */
 
 /**

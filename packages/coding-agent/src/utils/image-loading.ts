@@ -275,11 +275,13 @@ export async function normalizeModelContextMessages(messages: Message[], model: 
 	let output: Message[] | undefined;
 	for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
 		const message = messages[messageIndex]!;
-		const hasNativePayload = message.role === "user" || message.role === "developer";
-		const normalizedProviderPayload = hasNativePayload
-			? await normalizeNativeResponsesHistoryPayload(message.providerPayload)
-			: undefined;
-		const providerPayloadChanged = hasNativePayload && normalizedProviderPayload !== message.providerPayload;
+		const nativePayload =
+			message.role === "user" || message.role === "developer" ? message.providerPayload : undefined;
+		const normalizedProviderPayload =
+			nativePayload?.type === "openaiResponsesHistory"
+				? await normalizeNativeResponsesHistoryPayload(nativePayload)
+				: nativePayload;
+		const providerPayloadChanged = normalizedProviderPayload !== nativePayload;
 		let content: Array<(typeof message.content)[number]> | undefined;
 		if (typeof message.content !== "string") {
 			for (let partIndex = 0; partIndex < message.content.length; partIndex++) {

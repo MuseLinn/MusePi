@@ -42,11 +42,11 @@ export type SectionId =
 	| "subagents"
 	| "commands"
 	| "mcp"
+	| "connectors"
 	| "hooks"
 	| "indexes"
 	| "usage"
 	| "migration"
-	| "history"
 	| "browser"
 	| "suggestions"
 	| "modes";

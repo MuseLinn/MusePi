@@ -163,9 +163,9 @@ describe("umans provider catalog", () => {
 	});
 
 	it("bundles Umans GLM via-handoff models as text-only", () => {
-		const model = bundledModels.umans?.["umans-glm-5.2"];
-		expect(model, "umans-glm-5.2 should be bundled").toBeDefined();
-		expect(model.input, "umans-glm-5.2 input should be text-only").toEqual(["text"]);
+		const model = bundledModels.umans?.["umans-glm-5.3"];
+		expect(model, "umans-glm-5.3 should be bundled").toBeDefined();
+		expect(model.input, "umans-glm-5.3 input should be text-only").toEqual(["text"]);
 	});
 
 	it("drops stale cached GLM rows that predate the via-handoff static correction", async () => {
@@ -283,8 +283,8 @@ describe("umans provider catalog", () => {
 			baseUrl: "https://api.code.umans.ai",
 			reasoning: true,
 			input: ["text", "image"],
-			contextWindow: 262_144,
-			maxTokens: 32_768,
+			contextWindow: 1_048_576,
+			maxTokens: 393_215,
 			compat: { escapeBuiltinToolNames: true },
 		});
 	});
@@ -293,40 +293,35 @@ describe("umans provider catalog", () => {
 		const models = bundledModels.umans;
 
 		expect(models?.["umans-coder"].cost).toEqual({ input: 0.95, output: 4, cacheRead: 0.19, cacheWrite: 0 });
-		expect(models?.["umans-kimi-k2.7"].cost).toEqual({
-			input: 0.95,
-			output: 4,
-			cacheRead: 0.19,
-			cacheWrite: 0,
-		});
-		expect(models?.["umans-glm-5.2"].cost).toEqual({ input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 0 });
+		expect(models?.["umans-kimi-k3.1-pro"].cost).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+		expect(models?.["umans-glm-5.3"].cost).toEqual({ input: 1.4, output: 4.4, cacheRead: 0.26, cacheWrite: 0 });
 		expect(models?.["umans-flash"].cost).toEqual({ input: 0.15, output: 1, cacheRead: 0.05, cacheWrite: 0 });
-		expect(models?.["umans-qwen3.6-35b-a3b"].cost).toEqual({
+		expect(models?.["umans-deepseek-v4.1-flash"].cost).toEqual({
 			input: 0.15,
-			output: 1,
-			cacheRead: 0.05,
+			output: 0.6,
+			cacheRead: 0.028,
 			cacheWrite: 0,
 		});
 	});
 
 	it("bundles Umans mandatory reasoning metadata", () => {
-		const model = bundledModels.umans?.["umans-kimi-k2.7"];
+		const model = bundledModels.umans?.["umans-glm-5.3"];
 
 		expect(model).toBeDefined();
-		expect(model.maxTokens).toBe(32_768);
+		expect(model.maxTokens).toBe(131_071);
 		expect(model.compat?.escapeBuiltinToolNames).toBe(true);
 		expect(model.thinking).toMatchObject({
 			requiresEffort: true,
 		});
 	});
 
-	it("bundles Umans GLM 5.2 with the wire-exact high/max ladder", () => {
-		const model = bundledModels.umans?.["umans-glm-5.2"];
+	it("bundles Umans GLM 5.3 with the wire-exact effort ladder", () => {
+		const model = bundledModels.umans?.["umans-glm-5.3"];
 
 		expect(model).toBeDefined();
 		expect(model.thinking).toMatchObject({
 			mode: "anthropic-budget-effort",
-			efforts: ["high", "max"],
+			efforts: ["low", "high", "max"],
 		});
 		expect("effortMap" in model.thinking).toBe(false);
 	});

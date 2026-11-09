@@ -1,6 +1,6 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode } from "react";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
 import { clearSessionHover, reportSessionHover } from "./SessionHoverCard";
@@ -392,6 +392,8 @@ const EMPTY_IDS: ReadonlySet<string> = new Set();
 const SessionRow = memo(function SessionRow({
 	id,
 	label,
+	editableLabel,
+	emoji,
 	parentLabel,
 	timestamp,
 	updatedAt,
@@ -413,9 +415,13 @@ const SessionRow = memo(function SessionRow({
 	onToggleCollapse,
 	onSelect,
 	onContextMenu,
+	onRename,
 }: {
 	id: string;
 	label: string;
+	/** Raw label used when entering inline rename (empty for untitled). */
+	editableLabel: string;
+	emoji?: string;
 	/** Fork source label, or null when the session is not a fork. */
 	parentLabel: string | null;
 	timestamp: string;
@@ -447,9 +453,33 @@ const SessionRow = memo(function SessionRow({
 	onToggleCollapse?(id: string): void;
 	onSelect(id: string): void;
 	onContextMenu?(sessionId: string, x: number, y: number): void;
+	/** Double-click title inline rename. Absent keeps the title read-only. */
+	onRename?(id: string, title: string): void;
 }): ReactNode {
 	const fill = status ? STATUS_COLOR[status] : undefined;
 	const itemRef = useRef<HTMLLIElement | null>(null);
+	const [editingTitle, setEditingTitle] = useState(false);
+	const [titleDraft, setTitleDraft] = useState("");
+	const cancelTitleEdit = useRef(false);
+	const titleCommitted = useRef(false);
+	const commitTitle = (): void => {
+		if (titleCommitted.current) return;
+		titleCommitted.current = true;
+		setEditingTitle(false);
+		if (cancelTitleEdit.current) {
+			cancelTitleEdit.current = false;
+			return;
+		}
+		const next = titleDraft.trim();
+		if (next.length > 0 && next !== editableLabel) onRename?.(id, next);
+	};
+	const beginTitleEdit = (): void => {
+		if (!onRename) return;
+		cancelTitleEdit.current = false;
+		titleCommitted.current = false;
+		setTitleDraft(editableLabel);
+		setEditingTitle(true);
+	};
 	// 子树折叠的高度补间（use-collapse.ts 同一规范的行级版）：收起把行高锁
 	// 到当前值再补到 0px，展开反方向；结束时清掉内联样式回归自然布局。用
 	// useLayoutEffect 避免新挂载的展开行在首帧以全高闪现再塌缩。
@@ -553,9 +583,48 @@ const SessionRow = memo(function SessionRow({
 					title={status ? t(SESSION_STATUS_KEY[status] ?? status) : undefined}
 				/>
 				{treeGuides(indent, continuations)}
-				<span className="gui-session-title">
-					{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
-				</span>
+				{emoji && (
+					<span className="gui-session-emoji" aria-hidden="true">
+						{emoji}
+					</span>
+				)}
+				{editingTitle ? (
+					<input
+						className="gui-session-title gui-session-title-input"
+						value={titleDraft}
+						autoFocus
+						aria-label={t("settings.renameTask")}
+						placeholder={t("transcript.untitledSession")}
+						onClick={event => event.stopPropagation()}
+						onDoubleClick={event => event.stopPropagation()}
+						onDragStart={event => event.stopPropagation()}
+						onChange={event => setTitleDraft(event.target.value)}
+						onBlur={commitTitle}
+						onKeyDown={event => {
+							if (event.key === "Enter") {
+								event.preventDefault();
+								commitTitle();
+							} else if (event.key === "Escape") {
+								event.preventDefault();
+								cancelTitleEdit.current = true;
+								setEditingTitle(false);
+							}
+						}}
+					/>
+				) : (
+					<span
+						className="gui-session-title"
+						title={onRename ? t("settings.renameTask") : undefined}
+						onDoubleClick={event => {
+							if (!onRename) return;
+							event.preventDefault();
+							event.stopPropagation();
+							beginTitleEdit();
+						}}
+					>
+						{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
+					</span>
+				)}
 				{retitling && (
 					<span
 						className="gui-tree-working"
@@ -645,9 +714,11 @@ function SessionListComponent({
 	workingIds,
 	statuses,
 	manualTags,
+	emojis,
 	searchQuery = "",
 	sort = "statusTime",
 	retitlingId = null,
+	onRenameSession,
 }: {
 	nodes: SessionListNode[];
 	selectedId: string | null;
@@ -672,6 +743,10 @@ function SessionListComponent({
 	/** User-assigned status TAG per session id (ContextMenu #完成/#中断/
 	 *  #错误…) — persisted locally, wins over the derived status. */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
+	/** Per-session title emoji (ContextMenu 设置 Emoji…), persisted locally. */
+	emojis?: ReadonlyMap<string, string>;
+	/** Inline title rename from a double-clicked row. */
+	onRenameSession?(id: string, title: string): void;
 	/** Row order: "statusTime" (default) sorts by last-activity, newest
 	 *  first (working/unread are visual row markers only — they must not
 	 *  reorder rows under the cursor, see note above); "none" preserves the
@@ -774,6 +849,8 @@ function SessionListComponent({
 						key={node.entry.id}
 						id={node.entry.id}
 						label={advisorUntitled ? t("general.advisorSession") : rawLabel || t("transcript.untitledSession")}
+						editableLabel={rawLabel}
+						emoji={emojis?.get(node.entry.id)}
 						parentLabel={parent ? (parent.entry.label ?? t("transcript.untitledSession")) : null}
 						timestamp={node.entry.timestamp}
 						updatedAt={node.entry.updatedAt}
@@ -795,6 +872,7 @@ function SessionListComponent({
 						onToggleCollapse={toggleSubtreeCollapse}
 						onSelect={onSelect}
 						onContextMenu={onContextMenu}
+						onRename={onRenameSession}
 					/>
 				);
 			})}

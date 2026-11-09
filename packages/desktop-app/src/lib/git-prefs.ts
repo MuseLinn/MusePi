@@ -11,6 +11,10 @@
 
 const SHOW_IGNORED_KEY = "musepi-gui-git-show-ignored";
 const SHOW_HIDDEN_KEY = "musepi-gui-filepane-show-hidden";
+const CHANGES_VIEW_KEY = "musepi-gui-git-view";
+
+/** How the changes panel lists files: a flat list or a nested tree. */
+export type ChangesView = "flat" | "tree";
 
 /** Fired after any git pref changes; live consumers re-read on it. */
 export const GIT_PREFS_EVENT = "omp-git-prefs-changed";
@@ -22,6 +26,29 @@ export const GIT_PREFS_EVENT = "omp-git-prefs-changed";
  * the ones they just touched. Only an explicit "0" (the user turned it off)
  * disables it, so the previous default does not resurrect itself.
  */
+/**
+ * Changes panel layout. Defaults to the flat list, the same default the
+ * settings segmented control shows; the settings row and the panel read and
+ * write this one key and broadcast `GIT_PREFS_EVENT`, so changing either
+ * surface updates the other without a remount.
+ */
+export function readChangesView(): ChangesView {
+	try {
+		return localStorage.getItem(CHANGES_VIEW_KEY) === "tree" ? "tree" : "flat";
+	} catch {
+		return "flat";
+	}
+}
+
+export function writeChangesView(value: ChangesView): void {
+	try {
+		localStorage.setItem(CHANGES_VIEW_KEY, value);
+	} catch {
+		// storage unavailable — the in-memory state still drives this render
+	}
+	window.dispatchEvent(new CustomEvent(GIT_PREFS_EVENT));
+}
+
 export function readShowIgnored(): boolean {
 	try {
 		return localStorage.getItem(SHOW_IGNORED_KEY) !== "0";

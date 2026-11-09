@@ -19,6 +19,7 @@ import {
 	releaseBrowser,
 } from "./registry";
 import type {
+	BrowserDialogInfo,
 	BrowserOperation,
 	ReadyInfo,
 	RunErrorPayload,
@@ -70,6 +71,7 @@ interface TabSessionBase<TBrowser extends BrowserHandle = BrowserHandle> {
 	state: "alive" | "dead";
 	info: ReadyInfo;
 	pending: Map<string, PendingRun>;
+	pendingDialog?: BrowserDialogInfo;
 	dialogPolicy?: DialogPolicy;
 	kindTag: BrowserKindTag;
 	/**
@@ -260,6 +262,84 @@ async function waitForTabCleanup<T>(
 
 export function getTab(name: string): TabSession | undefined {
 	return tabs.get(name);
+}
+
+/** Live supervised tabs for read-only status projection. */
+export function listTabs(): readonly TabSession[] {
+	return [...tabs.values()];
+}
+
+/** Reveal a supervised target in its owning browser without changing tab ownership. */
+export async function activateTabTarget(name: string): Promise<string> {
+	const tab = tabs.get(name);
+	if (!tab || tab.state === "dead") throw new ToolError(`Tab ${JSON.stringify(name)} is not alive`);
+	if (tab.backend === "cmux") return tab.targetId;
+	const session = await tab.browser.browser.target().createCDPSession();
+	try {
+		const raw = session as unknown as { send(method: string, params: object): Promise<unknown> };
+		await raw.send("Target.activateTarget", { targetId: tab.targetId });
+		return tab.targetId;
+	} finally {
+		await session.detach().catch(() => undefined);
+	}
+}
+
+/** Stop a target's current navigation without entering its potentially blocked run queue. */
+export async function stopTabLoading(name: string): Promise<string> {
+	const tab = tabs.get(name);
+	if (!tab || tab.state === "dead") throw new ToolError(`Tab ${JSON.stringify(name)} is not alive`);
+	if (tab.backend === "cmux") throw new ToolError("stop is not supported for cmux tabs");
+	tab.worker.send({ type: "stop-loading" });
+	return tab.targetId;
+}
+
+/** Detach Agent control while preserving the page and its managed target. */
+export async function detachTab(name: string): Promise<boolean> {
+	const tab = tabs.get(name);
+	if (!tab) return false;
+	tab.state = "dead";
+	const closeError = postmortem.markExpectedCleanupError(new ToolError(`Tab ${JSON.stringify(name)} was released`));
+	for (const [id, pending] of tab.pending) {
+		if (tab.backend === "worker") {
+			try {
+				tab.worker.send({ type: "abort", id, expectedCleanup: true });
+			} catch {}
+		}
+		for (const ctrl of pending.toolCalls.values()) ctrl.abort(closeError);
+		pending.closeAc?.abort(closeError);
+		pending.reject(closeError);
+	}
+	tab.pending.clear();
+	try {
+		if (tab.backend === "worker") await tab.worker.terminate().catch(() => undefined);
+		await releaseBrowser(tab.browser, { kill: false, resource: `tab ${JSON.stringify(name)}` });
+	} finally {
+		tabs.delete(name);
+	}
+	return true;
+}
+
+/** Reveal the managed panel without selecting or creating a target. */
+export async function activateManagedPanel(tab: TabSession): Promise<void> {
+	if (tab.state === "dead") throw new ToolError(`Tab ${JSON.stringify(tab.name)} is not alive`);
+	if (tab.backend !== "worker" || tab.browser.kind.kind !== "connected" || tab.browser.kind.gui !== true) {
+		throw new ToolError("activate_panel requires a managed Electron browser tab");
+	}
+	await withManagedSession(tab.browser, async raw => {
+		await raw.send("ManagedBrowser.activatePanel");
+	});
+}
+
+/** Clear managed Agent ownership before detaching the named tab. */
+export async function releaseManagedAgent(name: string): Promise<boolean> {
+	const tab = tabs.get(name);
+	if (!tab) return false;
+	if (tab.backend === "worker" && tab.browser.kind.kind === "connected" && tab.browser.kind.gui === true) {
+		await withManagedSession(tab.browser, raw => raw.send("ManagedBrowser.releaseAgentTab")).catch(error => {
+			if (!isUnknownCdpMethodError(error, "ManagedBrowser.releaseAgentTab")) throw error;
+		});
+	}
+	return await detachTab(name);
 }
 
 export function acquireTab(name: string, browser: BrowserHandle, opts: AcquireTabOptions): Promise<AcquireTabResult> {
@@ -1103,6 +1183,11 @@ function handleTabMessage(tab: WorkerTabSession, msg: WorkerOutbound): void {
 	}
 	if (msg.type === "activity") {
 		tab.pending.get(msg.id)?.onOperations?.(msg.operations);
+		return;
+	}
+	if (msg.type === "dialog") {
+		if (msg.pending) tab.pendingDialog = msg.pending;
+		if (msg.handled) tab.pendingDialog = undefined;
 		return;
 	}
 	if (msg.type === "ready") {

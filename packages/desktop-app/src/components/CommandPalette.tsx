@@ -204,7 +204,7 @@ export function CommandPalette({
 		},
 		{
 			icon: "folder-open",
-			label: t("general.openWorkspace"),
+			label: t("settings.addProject"),
 			hint: "⌘O",
 			fn: onOpenWorkspace,
 		},

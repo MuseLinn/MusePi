@@ -9,11 +9,12 @@ import { flushSync } from "react-dom";
  * surfaces that still render the sprite `#oc-fullscreen` glyph go through the
  * same path instead of growing a second toggle.
  *
- * Geometry: the maximized box is the SESSION column (`.gui-chat-column`) inside
- * `.gui-chat-surface`. The surface also contains this panel and the rail, and
- * the collapsed panel's session-info dock rides beside the session, so the
- * column is selected by content — never by being "the first column in the
- * surface".
+ * Geometry: the maximized box is the visible scene CARD inside
+ * `.gui-chat-surface` — the session column (`.gui-chat-column`) with a session
+ * open, the welcome card (`.gui-welcome-card`) on the welcome scene. The
+ * surface also contains this panel and the rail, and the collapsed panel's
+ * session-info dock rides beside the session, so the card is selected by
+ * content — never by being "the first column in the surface".
  */
 
 const MAXIMIZED_CLASS = "gui-pane-right--maximized";
@@ -41,21 +42,37 @@ export function setPanelMaximized(next: boolean): void {
 	for (const listener of listeners) listener();
 }
 
-/** The session column a panel maximizes over; null when no surface/column exists. */
+/** The scene card a panel maximizes over: the session column with a session
+ *  open, the welcome card on the welcome scene (that scene has no
+ *  `.gui-chat-column`, and returning null there left the panel painted with
+ *  the previous session's measured box). */
 export function panelMaximizeColumn(panel: HTMLElement | null): HTMLElement | null {
 	if (!panel) return null;
 	const surface = panel.closest<HTMLElement>(".gui-chat-surface");
 	if (!surface) return null;
-	const columns = [...surface.querySelectorAll<HTMLElement>(".gui-chat-column")].filter(
-		column => !panel.contains(column),
-	);
-	return columns.find(column => column.querySelector(".gui-transcript-wrap")) ?? columns[0] ?? null;
+	// The outgoing scene stays mounted through the crossfade; its card still
+	// has a box, so it must not win over the incoming one.
+	const usable = (element: HTMLElement): boolean => {
+		if (panel.contains(element) || element.closest(".gui-scene--leaving") !== null) return false;
+		const rect = element.getBoundingClientRect();
+		return rect.width > 0 && rect.height > 0;
+	};
+	const columns = [...surface.querySelectorAll<HTMLElement>(".gui-chat-column")].filter(usable);
+	const chatColumn = columns.find(column => column.querySelector(".gui-transcript-wrap")) ?? columns[0];
+	if (chatColumn) return chatColumn;
+	return [...surface.querySelectorAll<HTMLElement>(".gui-welcome-card")].find(usable) ?? null;
 }
 
-/** Write the session column's box onto --pane-max-*; the panel's CSS paints it. */
+/** Write the scene card's box onto --pane-max-*; the panel's CSS paints it. */
 export function measurePanelMaximizedGeometry(panel: HTMLElement): void {
-	const rect = panelMaximizeColumn(panel)?.getBoundingClientRect();
-	if (!rect) return;
+	const target = panelMaximizeColumn(panel);
+	// No card to anchor to: drop the vars so the CSS cannot keep painting a
+	// stale box from the scene that just went away.
+	if (!target) {
+		clearPanelMaximizedGeometry(panel);
+		return;
+	}
+	const rect = target.getBoundingClientRect();
 	panel.style.setProperty("--pane-max-left", `${rect.left}px`);
 	panel.style.setProperty("--pane-max-top", `${rect.top}px`);
 	panel.style.setProperty("--pane-max-width", `${rect.width}px`);

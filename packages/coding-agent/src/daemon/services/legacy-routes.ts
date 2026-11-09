@@ -198,6 +198,7 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"session.queuedReorder",
 	"session.queuedSend",
 	"session.regenerateAt",
+	"session.reload",
 	"session.removeRole",
 	"session.rename",
 	"session.resetContext",

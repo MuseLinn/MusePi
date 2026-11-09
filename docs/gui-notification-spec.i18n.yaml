@@ -1,0 +1,5 @@
+# Consistency record for gui-notification-spec.md / gui-notification-spec.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/gui-notification-spec
+gui-notification-spec.md: 766ef09f3a865d82e371855e2d210afe960f7df2
+gui-notification-spec.zh-CN.md: d82a297642780156c33c1eb730c02384aa8e2d1c

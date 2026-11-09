@@ -78,6 +78,8 @@ import {
 	type ToolInputSchema as AnthropicToolInputSchema,
 	type Tool as AnthropicWireTool,
 	type Usage as AnthropicWireUsage,
+	COMPACTION_BETA,
+	type CompactionBlockParam,
 	type ContentBlockParam,
 	type FallbackParam,
 	isAnthropicServerToolHistoryBlock,
@@ -1090,6 +1092,8 @@ export interface AnthropicOptions extends StreamOptions {
 	 * Ignored for older models.
 	 */
 	effort?: AnthropicEffort;
+	/** Ask the API for one signed compaction summary instead of a normal turn. */
+	anthropicCompaction?: { instructions: string; filesDueBefore?: number };
 	/**
 	 * Optional reasoning level fallback for direct Anthropic provider usage.
 	 * Converted to adaptive effort when effort is not explicitly provided.
@@ -1872,6 +1876,9 @@ const streamAnthropicOnce = (
 				if (options?.taskBudget && !extraBetas.includes(taskBudgetBeta)) {
 					extraBetas.push(taskBudgetBeta);
 				}
+				if (options?.anthropicCompaction && !extraBetas.includes(COMPACTION_BETA)) {
+					extraBetas.push(COMPACTION_BETA);
+				}
 				// `output_config.effort` ships on thinking-on requests, explicit
 				// thinking-off adaptive pins, and forced-tool adaptive pins. The beta
 				// must accompany the field even when direct streamAnthropic callers omit
@@ -2310,6 +2317,24 @@ const streamAnthropicOnce = (
 								// pricing decisions downstream (final usage.iterations may
 								// arrive before/after) see the right model.
 								output.model = fallback.to.model;
+								continue;
+							}
+							if (event.content_block.type === "compaction") {
+								const block = event.content_block as CompactionBlockParam;
+								if (typeof block.content === "string" && block.content.length > 0) {
+									output.providerPayload = {
+										type: "anthropicCompaction",
+										provider: model.provider,
+										content: block.content,
+										...(typeof block.signature === "string" ? { signature: block.signature } : {}),
+										...(typeof block.encrypted_content === "string"
+											? { encryptedContent: block.encrypted_content }
+											: {}),
+										...(block.tool_changes ? { toolChanges: block.tool_changes } : {}),
+									};
+									output.stopDetails = { type: "compaction" };
+								}
+								openBlocks.set(event.index, { contentIndex: -1, kind: "ignored" });
 								continue;
 							}
 							if (event.content_block.type === "text") {
@@ -3113,7 +3138,12 @@ function applyCacheControlToLastBlock(blocks: ContentBlockParam[], cacheControl:
 		// Anthropic rejects cache_control on generated reasoning and fallback
 		// boundary blocks. Preserve the requested trailing boundary on every
 		// ordinary content block, including tool use and tool results.
-		if (block.type === "thinking" || block.type === "redacted_thinking" || block.type === "fallback") {
+		if (
+			block.type === "thinking" ||
+			block.type === "redacted_thinking" ||
+			block.type === "fallback" ||
+			block.type === "compaction"
+		) {
 			continue;
 		}
 		if ("cache_control" in block && block.cache_control != null) return false;
@@ -3345,6 +3375,9 @@ function buildParams(
 		? { edits: [{ type: "clear_thinking_20251015" as const, keep: "all" as const }] }
 		: undefined;
 
+	// On-demand compaction sends only the prefix to summarize and asks the API
+	// for one signed summary block instead of a normal assistant turn.
+	const compactionRequest = options?.anthropicCompaction;
 	// Pre-compute output_config. Skip `effort` on Vertex rawPredict: it requires
 	// the `effort-2025-11-24` beta, which that adapter can only accept in the body
 	// (`anthropic_beta`), never as the `anthropic-beta` HTTP header this path sets
@@ -3373,6 +3406,12 @@ function buildParams(
 		max_tokens: Math.min(maxOutputTokens, options?.maxTokens ?? modelMaxTokens),
 		...(thinking && { thinking }),
 		...(contextManagement && { context_management: contextManagement }),
+		...(compactionRequest && {
+			compaction: {
+				type: "summarize" as const,
+				...(compactionRequest.instructions ? { instructions: compactionRequest.instructions } : {}),
+			},
+		}),
 		...(outputConfig && { output_config: outputConfig }),
 		...(fallbacks?.length ? { fallbacks } : {}),
 		stream: true,
@@ -3553,6 +3592,22 @@ export function convertAnthropicMessages(
 		const msg = transformedMessages[i];
 
 		if (msg.role === "user" || msg.role === "developer") {
+			const payload = msg.providerPayload;
+			if (payload?.type === "anthropicCompaction" && payload.provider === model.provider && payload.signature) {
+				params.push({
+					role: "user",
+					content: [
+						{
+							type: "compaction",
+							content: payload.content,
+							signature: payload.signature,
+							...(payload.encryptedContent ? { encrypted_content: payload.encryptedContent } : {}),
+							...(payload.toolChanges ? { tool_changes: payload.toolChanges } : {}),
+						},
+					],
+				});
+				continue;
+			}
 			if (!msg.content) continue;
 
 			let content: string | ContentBlockParam[];
@@ -4304,6 +4359,8 @@ function mapStopReason(reason: string): StopReason {
 		// Sonnet 4.5+); the streamed content is valid, just truncated.
 		case "model_context_window_exceeded":
 			return "length";
+		case "compaction":
+			return "stop";
 		case "tool_use":
 			return "toolUse";
 		case "refusal":

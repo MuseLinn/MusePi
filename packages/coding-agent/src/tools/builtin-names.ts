@@ -21,6 +21,7 @@ export const BUILTIN_TOOL_NAMES = [
 	"hub",
 	"todo",
 	"knowledge",
+	"connector_catalog",
 	"web_search",
 	"write",
 	"memory_edit",

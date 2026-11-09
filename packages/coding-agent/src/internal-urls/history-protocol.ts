@@ -18,10 +18,11 @@
  */
 import type { AgentRef } from "../registry/agent-registry";
 import { AgentRegistry } from "../registry/agent-registry";
+import type { SessionEntry } from "../session/session-entries";
 import { formatSessionHistoryMarkdown } from "../session/session-history-format";
 import { loadSessionMessagesReadOnly } from "../session/session-loader";
 import { sessionFilesFromDisk } from "./registry-helpers";
-import type { InternalResource, InternalUrl, ProtocolHandler, UrlCompletion } from "./types";
+import type { InternalResource, InternalUrl, ProtocolHandler, ResolveContext, UrlCompletion } from "./types";
 
 /** Humanize a last-activity timestamp as `Ns/Nm/Nh/Nd ago`. */
 function formatAgo(timestamp: number): string {
@@ -33,6 +34,119 @@ function formatAgo(timestamp: number): string {
 	const hours = Math.floor(mins / 60);
 	if (hours < 24) return `${hours}h ago`;
 	return `${Math.floor(hours / 24)}d ago`;
+}
+
+/** True for `history://current/<path>`; throws unless the route is exactly `current/full`. */
+function isCurrentFullRoute(url: InternalUrl): boolean {
+	const agentId = url.rawHost || url.hostname;
+	if (agentId.toLowerCase() !== "current" || !url.pathname || url.pathname === "/") return false;
+	if (url.pathname !== "/full" || url.search || url.hash) {
+		throw new Error("Invalid history://current route; use exactly history://current/full (selectors may follow it)");
+	}
+	return true;
+}
+
+function jsonFence(value: string): string {
+	return `\`\`\`json\n${value}\n\`\`\``;
+}
+
+function contentText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	const parts: string[] = [];
+	for (const block of content) {
+		if (block === null || typeof block !== "object") continue;
+		const typed = block as { type?: unknown; text?: unknown };
+		if (typed.type === "text" && typeof typed.text === "string") parts.push(typed.text);
+		else if (typed.type === "image") parts.push("[image]");
+	}
+	return parts.join("\n");
+}
+
+function renderRawMessage(message: { role: string } & Record<string, unknown>): string {
+	const lines: string[] = [];
+	switch (message.role) {
+		case "user": {
+			lines.push("### user", contentText(message.content));
+			return lines.join("\n");
+		}
+		case "assistant": {
+			lines.push("### assistant");
+			const content = Array.isArray(message.content) ? message.content : [];
+			for (const block of content) {
+				if (block === null || typeof block !== "object") continue;
+				const typed = block as Record<string, unknown>;
+				if (typed.type === "text" && typeof typed.text === "string") lines.push(typed.text);
+				else if (typed.type === "thinking" && typeof typed.thinking === "string")
+					lines.push(`[thinking] ${typed.thinking}`);
+				else if (typed.type === "toolCall")
+					lines.push(`[tool call] ${String(typed.name)}(${JSON.stringify(typed.arguments)})`);
+			}
+			return lines.join("\n");
+		}
+		case "toolResult":
+			lines.push(
+				`### tool result: ${String(message.toolName)} (${String(message.toolCallId)})${message.isError ? " [error]" : ""}`,
+				contentText(message.content),
+			);
+			return lines.join("\n");
+		case "custom":
+		case "hookMessage":
+			lines.push(`### ${message.role} (${String(message.customType)})`, contentText(message.content));
+			return lines.join("\n");
+		case "branchSummary":
+			lines.push(`### branch summary (from ${String(message.fromId)})`, String(message.summary));
+			return lines.join("\n");
+		case "compactionSummary":
+			lines.push(`### compaction summary (${String(message.tokensBefore)} tokens before)`, String(message.summary));
+			return lines.join("\n");
+		default:
+			return jsonFence(JSON.stringify(message, null, 2) ?? "null");
+	}
+}
+
+/**
+ * Render every persisted entry on the caller's live branch without the
+ * compaction filters that shape model context. Each block begins with the
+ * durable session-entry id, making references unambiguous across compactions
+ * and branch rewinds.
+ */
+export function formatCurrentBranchFullHistory(entries: readonly SessionEntry[]): string {
+	const lines = [
+		"# Current branch — full history",
+		"",
+		"Source: caller-bound live session branch. Context-window boundaries are retained below; this view never uses a registry or on-disk fallback.",
+		"",
+	];
+	for (const entry of entries) {
+		lines.push(
+			`## Entry ${entry.id} · ${entry.type}`,
+			"",
+			`Parent: ${entry.parentId ?? "root"}`,
+			`Timestamp: ${entry.timestamp}`,
+			"",
+		);
+		if (entry.type === "message") {
+			lines.push(renderRawMessage(entry.message as unknown as { role: string } & Record<string, unknown>));
+		} else if (entry.type === "compaction") {
+			lines.push(
+				"> Context window boundary: compaction",
+				"",
+				`First kept entry: ${entry.firstKeptEntryId}`,
+				`Tokens before: ${entry.tokensBefore}`,
+				"",
+				entry.summary,
+			);
+		} else if (entry.type === "reset_boundary") {
+			lines.push("> Context window boundary: reset");
+		} else if (entry.type === "branch_summary") {
+			lines.push(`From entry: ${entry.fromId}`, "", entry.summary);
+		} else {
+			lines.push(jsonFence(JSON.stringify(entry, null, 2) ?? "null"));
+		}
+		lines.push("");
+	}
+	return `${lines.join("\n").trim()}\n`;
 }
 
 /** One row of the history index — either a registered ref or a disk-only transcript. */
@@ -55,7 +169,26 @@ export class HistoryProtocolHandler implements ProtocolHandler {
 	readonly scheme = "history";
 	readonly immutable = false;
 
-	async resolve(url: InternalUrl): Promise<InternalResource> {
+	#resolveCurrentFull(url: InternalUrl, context: ResolveContext | undefined): InternalResource {
+		if (!context?.experimentalContextManagement) {
+			throw new Error(
+				"history://current/full is available only when compaction.experimentalContextManagement is enabled",
+			);
+		}
+		const branch = context.getSessionBranch?.();
+		if (!branch) throw new Error("history://current/full requires a bound live session branch");
+		const content = formatCurrentBranchFullHistory(branch);
+		return {
+			url: url.href,
+			content,
+			contentType: "text/markdown",
+			size: Buffer.byteLength(content, "utf-8"),
+			notes: ["Source: caller-bound live session branch (full, uncompacted)"],
+		};
+	}
+
+	async resolve(url: InternalUrl, context?: ResolveContext): Promise<InternalResource> {
+		if (isCurrentFullRoute(url)) return this.#resolveCurrentFull(url, context);
 		const agentId = url.rawHost || url.hostname;
 		const registry = AgentRegistry.global();
 		// Advisor transcripts are observability-only — surfaced in the Agent Hub, never

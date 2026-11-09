@@ -80,6 +80,12 @@ export interface OAuthCallbackFlowOptions {
 	allowPortFallback?: boolean;
 	/** Skip the local callback server entirely; the user pastes the code or redirect URL back. */
 	manualInputOnly?: boolean;
+	/**
+	 * Skip the local callback server and wait for a deep link delivered from
+	 * outside the process (desktop custom protocol). `redirectUri` is required
+	 * and is advertised verbatim to the authorization server.
+	 */
+	externalCallbackOnly?: boolean;
 }
 
 /**
@@ -93,6 +99,9 @@ export abstract class OAuthCallbackFlow {
 	redirectUri?: string;
 	allowPortFallback: boolean;
 	#manualInputOnly: boolean;
+	#externalCallbackOnly: boolean;
+	#expectedState?: string;
+	#pendingExternalCallback?: string;
 	#callbackResolve?: (result: CallbackResult) => void;
 	#callbackReject?: (error: Error) => void;
 	/**
@@ -116,6 +125,7 @@ export abstract class OAuthCallbackFlow {
 			this.callbackHostname = DEFAULT_HOSTNAME;
 			this.allowPortFallback = true;
 			this.#manualInputOnly = false;
+			this.#externalCallbackOnly = false;
 			return;
 		}
 
@@ -125,6 +135,12 @@ export abstract class OAuthCallbackFlow {
 		this.redirectUri = preferredPortOrOptions.redirectUri;
 		this.allowPortFallback = preferredPortOrOptions.allowPortFallback ?? true;
 		this.#manualInputOnly = preferredPortOrOptions.manualInputOnly ?? false;
+		this.#externalCallbackOnly = preferredPortOrOptions.externalCallbackOnly ?? false;
+		if (this.#externalCallbackOnly && !this.redirectUri) {
+			throw new AIError.ConfigurationError(
+				"externalCallbackOnly requires oauth.redirectUri (the desktop deep link)",
+			);
+		}
 	}
 
 	/**
@@ -173,9 +189,10 @@ export abstract class OAuthCallbackFlow {
 		// Start callback server first to get actual redirect URI. Manual-only
 		// flows never bind a server — the advertised redirect URI is fixed and
 		// the user pastes the code/redirect URL back instead.
-		const { server, redirectUri, launchUrl } = this.#manualInputOnly
-			? { server: undefined, redirectUri: this.#buildRedirectUri(), launchUrl: undefined }
-			: await this.#startCallbackServer(state);
+		const { server, redirectUri, launchUrl } =
+			this.#manualInputOnly || this.#externalCallbackOnly
+				? { server: undefined, redirectUri: this.#buildRedirectUri(), launchUrl: undefined }
+				: await this.#startCallbackServer(state);
 
 		try {
 			this.#throwIfCancelled();
@@ -207,6 +224,49 @@ export abstract class OAuthCallbackFlow {
 			this.#pendingAuthUrl = undefined;
 			server?.stop();
 		}
+	}
+
+	/**
+	 * Deliver a callback from outside the process (a desktop custom-protocol
+	 * deep link). Returns false when the input is not a callback URL or the
+	 * state does not match the active flow; the flow keeps waiting in that case.
+	 */
+	submitCallbackUrl(input: string): boolean {
+		let parsed: URL;
+		try {
+			parsed = new URL(input);
+		} catch {
+			return false;
+		}
+		if (!parsed.searchParams.get("code") && !parsed.searchParams.get("error")) return false;
+		if (!this.#callbackResolve) {
+			this.#pendingExternalCallback = input;
+			return true;
+		}
+		return this.#acceptExternalCallback(input);
+	}
+
+	#acceptExternalCallback(input: string): boolean {
+		let parsed: URL;
+		try {
+			parsed = new URL(input);
+		} catch {
+			return false;
+		}
+		const state = parsed.searchParams.get("state") ?? "";
+		const code = parsed.searchParams.get("code");
+		const error = parsed.searchParams.get("error");
+		const errorDescription = parsed.searchParams.get("error_description") || error;
+		if (this.#expectedState && state !== this.#expectedState) return false;
+		if (error) {
+			this.#expectedState = undefined;
+			this.#callbackReject?.(new Error(`Authorization failed: ${errorDescription}`));
+			return true;
+		}
+		if (!code) return false;
+		this.#expectedState = undefined;
+		this.#callbackResolve?.({ code, state });
+		return true;
 	}
 
 	#buildRedirectUri(): string {
@@ -460,10 +520,15 @@ export abstract class OAuthCallbackFlow {
 		const callback = Promise.withResolvers<CallbackResult>();
 		this.#callbackResolve = callback.resolve;
 		this.#callbackReject = callback.reject;
+		this.#expectedState = expectedState;
+		const pendingCallback = this.#pendingExternalCallback;
+		this.#pendingExternalCallback = undefined;
+		if (pendingCallback) this.#acceptExternalCallback(pendingCallback);
 
 		signal.addEventListener("abort", () => {
 			this.#callbackResolve = undefined;
 			this.#callbackReject = undefined;
+			this.#expectedState = undefined;
 			callback.reject(new AIError.LoginCancelledError(`OAuth callback cancelled: ${signal.reason}`));
 		});
 		const callbackPromise = callback.promise;

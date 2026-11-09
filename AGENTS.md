@@ -34,6 +34,7 @@ This file is the always-loaded hot path: execution boundaries, repository routin
 | --- | --- |
 | TypeScript, Bun, shared helpers, logging, TUI output | `.agents/rules/code-quality.md` |
 | Packages, generated catalog, workers, capability seams | `.agents/rules/architecture.md` |
+| Connector catalog, remote MCP onboarding, OAuth reuse | `docs/connectors.md` |
 | Tests, smoke runs, session/daemon isolation, verification | `.agents/rules/testing.md` |
 | CI workflows, test sharding, runtime versions, flaky/async tests | `.agents/skills/musepi-ci-test-reliability/SKILL.md` |
 | Documentation, bilingual pairs, package READMEs, agent-facing docs | `.agents/rules/documentation.md` |
@@ -48,7 +49,10 @@ The nearest package README and local code/test precedent supply local convention
 ## Always-on constraints
 
 - Model identity is `provider/id`, never a bare id. Session model selection stays session-scoped; role effort choices use the selected model's supported ladder, including `auto` when supported.
+- Agent-facing capabilities are designed with the model contract and UI together: review tool schema/description, static prompt guidance, structured results, user rendering, and behavior tests in the same change; if no prompt change is needed, record why.
 - Reuse central utilities before adding a helper. Git/jj process execution goes through `packages/coding-agent/src/utils/git.ts` or `jj.ts`.
+- Converge on evidence: the same interaction or helper appearing in a second place is a signal, and a third is a defect. Before a fourth copy, extract a named primitive and record its contract in the owning doc; do not build a generic abstraction with fewer than two real consumers. For hover-revealed controls, the contract is hover plus `:focus-visible` (never `:focus-within`) with sibling readouts switching in the same state set — see `docs/gui-design.md`.
+- The connector catalog accepts remote `http`/`sse` endpoints, local `stdio` commands, and managed CLI packages; stdio/CLI mount only after per-fingerprint user approval, CLI installs stay in the isolated prefix, enabling a connector is user state, never model state, the agent-facing catalog tool stays read-only, and Token values never leave the encrypted connector secret store.
 - Never edit `packages/catalog/src/models.json` directly; change its generator/resolver and regenerate.
 - Keep secrets and production user data out of source, tests, logs, and generated artifacts. Tests and smoke runs must never write the production session store or share the production daemon directory.
 - For GUI work, hierarchy, restraint, and polish are part of correctness. Avoid unnecessary secondary labels and descriptions; let layout, spacing, typography, and grouping communicate structure. Keep essential guidance and accessible names, remove redundant copy and chrome, and verify the composed interface rather than accepting a functionally complete but cluttered or awkward result.
