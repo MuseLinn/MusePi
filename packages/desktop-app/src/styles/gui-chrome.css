@@ -535,7 +535,7 @@
 	justify-content: center;
 	aspect-ratio: 1;
 	border: 1px solid transparent;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	font-size: 18px;
 	line-height: 1;

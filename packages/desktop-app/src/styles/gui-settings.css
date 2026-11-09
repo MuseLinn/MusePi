@@ -5284,13 +5284,13 @@ body.gui-resizing {
 }
 .gui-session-detail-scroll mark {
 	padding: 0 1px;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	background: color-mix(in oklab, var(--color-accent) 30%, transparent);
 	color: inherit;
 }
 .gui-session-msg {
 	border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
-	border-radius: var(--radius-md, 8px);
+	border-radius: var(--radius-md);
 	padding: 6px 8px;
 	background: var(--color-surface);
 }

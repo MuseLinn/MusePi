@@ -5098,7 +5098,7 @@
 
 .gui-capability-page .mp-segment {
 	font-size: var(--ui-font-size-sm);
-	border-radius: calc(var(--radius-lg) - 2px);
+	border-radius: var(--radius-md);
 }
 
 .gui-capability-page .mp-segment--active {

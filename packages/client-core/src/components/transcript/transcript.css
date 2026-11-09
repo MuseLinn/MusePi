@@ -2036,7 +2036,7 @@ button.tr-display-context-source:hover {
 .tr-usage--button:focus-visible {
 	outline: 1px solid var(--accent);
 	outline-offset: 2px;
-	border-radius: var(--radius-sm, 4px);
+	border-radius: var(--radius-sm);
 }
 .tr-usage-pop {
 	position: absolute;
@@ -2047,7 +2047,7 @@ button.tr-display-context-source:hover {
 	max-width: 340px;
 	padding: 8px 10px;
 	border: 1px solid var(--glass-hairline, var(--border));
-	border-radius: var(--radius-lg, 10px);
+	border-radius: var(--radius-lg);
 	background: var(--glass-card-bg, var(--color-surface));
 	box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.28));
 	font-family: var(--font-mono);

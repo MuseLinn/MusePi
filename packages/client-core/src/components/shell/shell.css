@@ -5615,7 +5615,7 @@
 
 .sh-skeleton-row {
 	height: 12px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--fg) 8%, transparent);
 	animation: sh-skeleton-pulse 1.5s ease-in-out infinite;
 }
