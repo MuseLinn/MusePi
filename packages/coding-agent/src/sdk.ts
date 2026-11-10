@@ -5079,13 +5079,15 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				await session.dispose();
 				if (hasRegistered) unregisterUnlessParked();
 			} else {
-				if (hasRegistered) unregisterUnlessParked();
+				// Reclaim the singleton first: registry teardown is best-effort and a
+				// throw there must not strand a manager no session owns.
 				if (asyncJobManager) {
 					if (AsyncJobManager.instance() === asyncJobManager) {
 						AsyncJobManager.setInstance(undefined);
 					}
 					await asyncJobManager.dispose({ timeoutMs: 3_000 });
 				}
+				if (hasRegistered) unregisterUnlessParked();
 				await releaseComputerSessionsForOwner(evalKernelOwnerId);
 				await disposeKernelSessionsByOwner(evalKernelOwnerId);
 				await disposeRubyKernelSessionsByOwner(evalKernelOwnerId);
@@ -5097,6 +5099,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			logger.warn("Failed to clean up createAgentSession resources after startup error", {
 				error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
 			});
+		}
+		// A failed startup must never leave a process-global manager that no live
+		// session owns: the next top-level session would then skip creating one
+		// (the instance() guard) and route its jobs into a dead owner.
+		if (asyncJobManager && AsyncJobManager.instance() === asyncJobManager) {
+			AsyncJobManager.setInstance(undefined);
 		}
 		throw error;
 	}

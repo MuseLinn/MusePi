@@ -164,7 +164,13 @@ describe("agnesVideoGenTool", () => {
 		expect(text).toContain("URL: https://platform-outputs.example/videos/agnes-video-v2.0/video_1.mp4");
 		expect(text).toContain("Status: completed");
 		expect(deliveredText).toBe(text);
-		expect(deliveredDetails).toEqual({ async: { state: "completed", jobId: "job-1", type: "agnes-video" } });
+		expect(deliveredDetails).toEqual({
+			async: { state: "completed", jobId: "job-1", type: "agnes-video" },
+			status: "completed",
+			videoUrl: "https://platform-outputs.example/videos/agnes-video-v2.0/video_1.mp4",
+			size: "1088x832",
+			durationSeconds: 3.4,
+		});
 		// create + status poll
 		expect(requestUrls).toHaveLength(2);
 		expect(requestUrls[1]).toContain("/agnesapi?video_id=video_1");

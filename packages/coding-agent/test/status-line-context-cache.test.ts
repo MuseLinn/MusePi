@@ -55,8 +55,10 @@ function makeSession(opts: {
 		systemPrompt: ["You are a helpful assistant."],
 		agent: { state: { tools: [] } },
 		skills: [],
-		model: { id: "test-model", contextWindow },
-		state: { messages: opts.messages, model: { contextWindow } },
+		// Capability fields the speculation resolver reads; a bare `{ id }`
+		// makes `sendsImageInputOnWire` throw and drops the gauge markers.
+		model: { id: "test-model", contextWindow, input: [] },
+		state: { messages: opts.messages, model: { id: "test-model", contextWindow, input: [] } },
 		sessionManager: {
 			getUsageStatistics: () => ({
 				input: 0,

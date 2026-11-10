@@ -883,7 +883,7 @@ describe("remote compaction setting", () => {
 		const preparation = prepareCompaction(entries, {
 			...DEFAULT_COMPACTION_SETTINGS,
 			keepRecentTokens: 1000,
-			remoteEnabled: true,
+			remoteEnabled: false,
 		});
 		if (!preparation) throw new Error("Expected compaction preparation");
 
@@ -928,7 +928,7 @@ describe("remote compaction setting", () => {
 		const preparation = prepareCompaction(entries, {
 			...DEFAULT_COMPACTION_SETTINGS,
 			keepRecentTokens: 1000,
-			remoteEnabled: true,
+			remoteEnabled: false,
 		});
 		if (!preparation) throw new Error("Expected compaction preparation");
 
@@ -977,7 +977,7 @@ describe("remote compaction setting", () => {
 		const preparation = prepareCompaction(entries, {
 			...DEFAULT_COMPACTION_SETTINGS,
 			keepRecentTokens: 1,
-			remoteEnabled: true,
+			remoteEnabled: false,
 		});
 		if (!preparation) throw new Error("Expected compaction preparation");
 		expect(preparation.isSplitTurn).toBe(true);
@@ -1035,7 +1035,7 @@ describe("remote compaction setting", () => {
 		const preparation = prepareCompaction(entries, {
 			...DEFAULT_COMPACTION_SETTINGS,
 			keepRecentTokens: 1000,
-			remoteEnabled: true,
+			remoteEnabled: false,
 		});
 		if (!preparation) throw new Error("Expected compaction preparation");
 

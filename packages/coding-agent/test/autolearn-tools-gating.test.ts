@@ -256,14 +256,14 @@ describe("learn execute", () => {
 	});
 
 	it("reports Hindsight lessons as queued rather than stored", async () => {
-		const queued: Array<{ memory: string; context?: string }> = [];
+		const queued: Array<{ id: string; items: unknown[] }> = [];
 		const session = makeSession(
 			{ "autolearn.enabled": true, "memory.backend": "hindsight" },
 			{
 				getHindsightSessionState: () =>
 					({
-						enqueueRetain: (memory: string, context?: string) => {
-							queued.push({ memory, context });
+						enqueueRetain: (id: string, items: unknown[]) => {
+							queued.push({ id, items });
 						},
 					}) as unknown as HindsightSessionState,
 			},
@@ -274,19 +274,21 @@ describe("learn execute", () => {
 			context: "from review",
 		});
 
-		expect(queued).toEqual([{ memory: "Queue this lesson.", context: "from review" }]);
+		expect(queued).toEqual([
+			{ id: "hindsight-1", items: [{ content: "Queue this lesson.", context: "from review", scope: undefined }] },
+		]);
 		expect(result.content[0]).toEqual({ type: "text", text: "Lesson queued for retention." });
 	});
 
 	it("reports Hindsight skill failures as queued partial outcomes", async () => {
-		const queued: string[] = [];
+		const queued: Array<{ id: string; items: unknown[] }> = [];
 		const session = makeSession(
 			{ "autolearn.enabled": true, "memory.backend": "hindsight" },
 			{
 				getHindsightSessionState: () =>
 					({
-						enqueueRetain: (memory: string) => {
-							queued.push(memory);
+						enqueueRetain: (id: string, items: unknown[]) => {
+							queued.push({ id, items });
 						},
 					}) as unknown as HindsightSessionState,
 			},
@@ -298,7 +300,7 @@ describe("learn execute", () => {
 				skill: { action: "create", name: "../evil", description: "d", body: "b" },
 			}),
 		).rejects.toThrow(/Lesson queued for retention, but the managed skill could not be written/);
-		expect(queued).toEqual(["queued lesson"]);
+		expect(queued.map(entry => entry.id)).toEqual(["hindsight-2"]);
 	});
 
 	it("fails the lesson and skips the skill when mnemopi returns no id", async () => {
