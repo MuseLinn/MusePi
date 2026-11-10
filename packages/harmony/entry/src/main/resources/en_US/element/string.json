@@ -63,6 +63,30 @@
     {
       "name": "action_connect",
       "value": "Connect"
+    },
+    {
+      "name": "sessions_title",
+      "value": "Sessions"
+    },
+    {
+      "name": "sessions_search",
+      "value": "Search sessions…"
+    },
+    {
+      "name": "sessions_new",
+      "value": "New session"
+    },
+    {
+      "name": "sessions_hosts",
+      "value": "Computers"
+    },
+    {
+      "name": "sessions_settings",
+      "value": "Settings"
+    },
+    {
+      "name": "sessions_empty",
+      "value": "No matching sessions"
     }
   ]
 }

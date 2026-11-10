@@ -288,7 +288,11 @@ Settings（独立全屏页）
 ### 6.1 键盘（Keyboard）
 
 - 配置：`resize: "none"` + `resizeOnFullScreen: true` + `autoBackdropColor: "dom"`（capacitor.config.ts）；
-- 事件：`keyboardWillShow/Hide` → `--mp-keyboard-inset`（mobile.tsx `setupCapacitorKeyboardInset`）；
+- 事件：`keyboardWillShow/Hide` → `setKeyboardInset()`（两个壳共用的唯一写入点：Capacitor 在
+  mobile.tsx，ArkTS 在 `__harmonyKeyboard`）；它写 `--mp-keyboard-inset` 并切 `sh-ime-open`；
+- `sh-ime-open`：键盘占住底部时 tab bar 在 IME 后面，不能再为它留 `--sh-tabbar-space`，否则
+  composer 与键盘之间出现一条死区；该状态类把 `.sh-app`/`.sh-connect`/`.sh-composer` 的底距
+  收敛到键盘 inset 本身（safe-bottom 随之失效，那部分屏幕已被键盘占据）；
 - 兜底：无插件壳（浏览器/旧 WebView）→ `visualViewport` 差值（>60px 才生效，`setupVisualViewportKeyboardFallback`）；
 - 消费方：`.sh-composer` padding-bottom、`.sh-connect` padding（IME 顶起输入框 + connect 内
   `scrollIntoView({ block: "center" })` 提升聚焦输入）；
@@ -334,6 +338,28 @@ Settings（独立全屏页）
 - 浏览器：hash 深链（`window.location.hash = link`，加载时自动连接，已有）；
 - 原生：✅ —— `musepi://` scheme + 冷启动 intent stash（openchamber `deepLinks.ts` 模式），
   用于通知点击跳回对应会话。
+
+### 6.7 鸿蒙壳（ArkTS，《packages/harmony》）
+
+- **渲染模式**：固定 `RenderMode.SYNC_RENDER`。异步面（surface，独立送显）在本机 API 26 镜像上
+  首屏不送显、切原生 Tabs 后还会再丢一次；同步渲染随系统画布送显，代价是不走 DSS 合成。
+  同步渲染下 Web 保留 `expandSafeArea`，页面自己铺满系统条（`--safe-*` 由桥接回写），
+  窗口背景色因此不必去凑页面配色——异步面 + 该属性会整页不显示，所以两者不能并存。
+- **半模态**：`SheetOptions.systemMaterial`（API 26+）给原生沉浸光感，`ImmersiveStyle.THICK` +
+  `backgroundColor: Color.Transparent`；低版本回落实色背板。ArkUI 的键盘避让对
+  `SheetSize.FIT_CONTENT` 面板无效（平移只抬聚焦输入框、压缩会裁掉内容），所以表单输入框用
+  `enterKeyType` + `onSubmit` 在软键盘「完成」上直接提交，不要求用户先收键盘再点按钮。
+- **会话切换器（原生）**：标题按钮在有会话时直接调 `openSessionsSheet(payload)`，ArkTS 用系统
+  `bindSheet`（`SheetSize.MEDIUM` + 沉浸光感）+ `Search` + `List` 渲染；行内文案（标题、短路径、
+  消息数、相对时间）由页面算好，原生只回传一个意图 `pick|new|hosts|settings|closed`，
+  会话列表变化时页面用 `setSessions` 刷新行。滚动、搜索、行高、点击反馈和材质因此全部是系统实现，
+  而数据与导航仍归页面——原生不复制会话状态，也不做 i18n。
+- **原生化边界（同样适用于 Android/网页）**：系统 chrome（底部页签、半模态、列表、搜索、权限、
+  通知、状态栏）用原生；内容流（transcript、composer、Markdown、工具卡）留在 Web。
+  跨端共享的是所有权这条线——**页面拥有数据与导航，原生只拥有呈现与手势**；桥接只传渲染所需
+  的已本地化字符串和回传意图，不传快照、不让原生持有业务状态。
+- **调试**：debug 构建开 `setWebDebuggingAccess`，`hdc fport` 后按 CDP 读 DOM/console；
+  release 不开。
 
 ## 7. 无障碍
 

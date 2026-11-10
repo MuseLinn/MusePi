@@ -5,6 +5,7 @@ import { abilityAccessCtrl, ConfigurationConstant, Permissions } from '@kit.Abil
 import { BusinessError } from '@kit.BasicServicesKit';
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { liveViewManager } from '@kit.LiveViewKit';
+import BuildProfile from 'BuildProfile';
 
 /**
  * MusePi WebView shell — loads the client-core mobile bundle from rawfile and
@@ -39,6 +40,28 @@ import { liveViewManager } from '@kit.LiveViewKit';
  * MusePi would register; an unapproved value just resolves to "disabled".
  */
 const MUSEPI_LIVE_VIEW_EVENT: string = 'MUSEPI_AGENT_SESSION';
+
+/**
+ * One row of the native session sheet. Every string arrives already localized
+ * by the page (title, shortened path, message count, relative time), so the
+ * sheet renders text and reports the chosen id — it owns no session state and
+ * no translations.
+ */
+interface HarmonySessionRow {
+	id: string;
+	title: string;
+	cwd: string;
+	meta: string;
+	when: string;
+	current: boolean;
+	working: boolean;
+}
+
+/** Payload of `openSessionsSheet` / `setSessions`. */
+interface HarmonySessionPayload {
+	current: string;
+	sessions: HarmonySessionRow[];
+}
 
 @Entry
 @Component
@@ -84,11 +107,21 @@ struct Index {
 	@State pairHost: string = '';
 	@State linkUrl: string = '';
 	@State linkName: string = '';
+	/** Native session switcher: rows fed by the page, one intent sent back. */
+	@State sessionSheetOpen: boolean = false;
+	@State sessionRows: HarmonySessionRow[] = [];
+	@State sessionQuery: string = '';
 	private tabsController: TabsController = new TabsController();
 	/** True while the page itself is moving the bar, so onChange is not echoed back. */
 	private tabFromPage: boolean = false;
 
 	aboutToAppear(): void {
+		// Debug builds expose the WebView to the Chrome DevTools Protocol so an
+		// attached inspector can read the DOM and console that ArkUI's layout
+		// dump cannot show. Release builds keep the surface closed.
+		if (BuildProfile.DEBUG) {
+			webview.WebviewController.setWebDebuggingAccess(true);
+		}
 		webview.WebviewController.initializeWebEngine();
 		const ctx = this.getUIContext().getHostContext();
 		if (!ctx) {
@@ -497,6 +530,25 @@ struct Index {
 		});
 	}
 
+	/**
+	 * Immersive material for the connect sheet. Dialogs sit above content and
+	 * take the thick end of the ladder (the guide's recommendation for popups),
+	 * so the form stays legible while the page shows through. No `interactive`
+	 * press deformation: a sheet is dragged and tapped, not pressed as a
+	 * surface, and the light effect would read on the backdrop rather than on a
+	 * control. Undefined below API 26 keeps the opaque sheet background.
+	 */
+	private sheetMaterial(): uiMaterial.ImmersiveMaterial | undefined {
+		if (this.apiLevel < 26) {
+			return undefined;
+		}
+		return new uiMaterial.ImmersiveMaterial({
+			style: uiMaterial.ImmersiveStyle.THICK,
+			interactive: false,
+			applyShadow: true,
+		});
+	}
+
 	/** Page → native: open the pair-code sheet. */
 	openPairSheet(): void {
 		this.pairCode = '';
@@ -509,6 +561,182 @@ struct Index {
 	openLinkSheet(): void {
 		this.sheetKind = 'link';
 		this.sheetVisible = true;
+	}
+
+	/** Page → native: open the session switcher with its rows. */
+	openSessionsSheet(payload: string): void {
+		const parsed = this.parseSessions(payload);
+		if (parsed === undefined) {
+			return;
+		}
+		this.sessionRows = parsed.sessions;
+		this.sessionQuery = '';
+		this.sessionSheetOpen = true;
+	}
+
+	/** Page → native: refresh the rows of an open switcher. */
+	setSessions(payload: string): void {
+		if (!this.sessionSheetOpen) {
+			return;
+		}
+		const parsed = this.parseSessions(payload);
+		if (parsed === undefined) {
+			return;
+		}
+		this.sessionRows = parsed.sessions;
+	}
+
+	private parseSessions(payload: string): HarmonySessionPayload | undefined {
+		try {
+			const parsed: HarmonySessionPayload = JSON.parse(payload) as HarmonySessionPayload;
+			if (parsed === null || parsed.sessions === undefined) {
+				return undefined;
+			}
+			return parsed;
+		} catch (e) {
+			console.warn(`[musepi] session payload rejected (${payload.length} bytes)`);
+			return undefined;
+		}
+	}
+
+	private filteredSessions(): HarmonySessionRow[] {
+		const query = this.sessionQuery.trim().toLowerCase();
+		if (query === '') {
+			return this.sessionRows;
+		}
+		return this.sessionRows.filter((row: HarmonySessionRow): boolean =>
+			row.title.toLowerCase().includes(query) || row.cwd.toLowerCase().includes(query));
+	}
+
+	private sessionAction(type: string, id: string): void {
+		this.sessionSheetOpen = false;
+		this.pushSessionAction(type, id);
+	}
+
+	/** Native → page: one intent, never a row snapshot. */
+	private pushSessionAction(type: string, id: string): void {
+		const safeType = type.replace(/[^a-z]/g, '');
+		const safeId = id.replace(/["\\]/g, '');
+		this.controller
+			.runJavaScript(`window.__musepiSessionAction && window.__musepiSessionAction("${safeType}", "${safeId}")`)
+			.catch((e: BusinessError) => {
+				console.warn(`[musepi] session action failed: ${JSON.stringify(e)}`);
+			});
+	}
+
+	@Builder
+	sessionsSheetBody() {
+		Column({ space: 10 }) {
+			Search({ value: this.sessionQuery, placeholder: $r('app.string.sessions_search') })
+				.width('100%')
+				.height(44)
+				.backgroundColor('#0D000000')
+				.onChange((value: string) => {
+					this.sessionQuery = value;
+				})
+			if (this.filteredSessions().length === 0) {
+				Text($r('app.string.sessions_empty'))
+					.fontSize(14)
+					.fontColor('#8A8A8A')
+					.width('100%')
+					.textAlign(TextAlign.Center)
+					.padding({ top: 32, bottom: 32 })
+				Blank()
+			} else {
+				List({ space: 0 }) {
+					ForEach(this.filteredSessions(), (row: HarmonySessionRow) => {
+						ListItem() {
+							Row({ space: 12 }) {
+								Circle({ width: 8, height: 8 })
+									.fill(row.current ? this.tabSelectedColor() : '#B4B4B4')
+								Column({ space: 2 }) {
+									Text(row.title)
+										.fontSize(16)
+										.fontWeight(FontWeight.Medium)
+										.maxLines(1)
+										.textOverflow({ overflow: TextOverflow.Ellipsis })
+									if (row.cwd !== '') {
+										Text(row.cwd)
+											.fontSize(12)
+											.fontColor('#8A8A8A')
+											.maxLines(1)
+											.textOverflow({ overflow: TextOverflow.Ellipsis })
+									}
+								}
+								.alignItems(HorizontalAlign.Start)
+								.layoutWeight(1)
+								Column({ space: 2 }) {
+									Text(row.meta)
+										.fontSize(12)
+										.fontColor('#8A8A8A')
+									if (row.when !== '') {
+										Text(row.when)
+											.fontSize(12)
+											.fontColor('#8A8A8A')
+									}
+								}
+								.alignItems(HorizontalAlign.End)
+								if (row.current) {
+									Text('✓')
+										.fontSize(14)
+										.fontColor(this.tabSelectedColor())
+								}
+							}
+							.width('100%')
+							.height(64)
+							.padding({ left: 4, right: 4 })
+							.alignItems(VerticalAlign.Center)
+						}
+						.onClick(() => {
+							this.sessionAction('pick', row.id);
+						})
+					}, (row: HarmonySessionRow) => `${row.id}|${row.current}|${row.meta}|${row.when}|${row.title}`)
+				}
+				.width('100%')
+				.layoutWeight(1)
+				.divider({ strokeWidth: 0.5, color: '#14000000' })
+				.scrollBar(BarState.Off)
+			}
+			Row({ space: 8 }) {
+				Button($r('app.string.sessions_new'))
+					.layoutWeight(1)
+					.height(48)
+					.type(ButtonType.Normal)
+					.borderRadius(12)
+					.fontSize(14)
+					.backgroundColor('#0D000000')
+					.fontColor(this.themeDark ? '#F5F5F5' : '#1F1F1F')
+					.onClick(() => {
+						this.sessionAction('new', '');
+					})
+				Button($r('app.string.sessions_hosts'))
+					.layoutWeight(1)
+					.height(48)
+					.type(ButtonType.Normal)
+					.borderRadius(12)
+					.fontSize(14)
+					.backgroundColor('#0D000000')
+					.fontColor(this.themeDark ? '#F5F5F5' : '#1F1F1F')
+					.onClick(() => {
+						this.sessionAction('hosts', '');
+					})
+				Button($r('app.string.sessions_settings'))
+					.layoutWeight(1)
+					.height(48)
+					.type(ButtonType.Normal)
+					.borderRadius(12)
+					.fontSize(14)
+					.backgroundColor('#0D000000')
+					.fontColor(this.themeDark ? '#F5F5F5' : '#1F1F1F')
+					.onClick(() => {
+						this.sessionAction('settings', '');
+					})
+			}
+			.width('100%')
+		}
+		.width('100%')
+		.height('100%')
+		.padding({ left: 16, right: 16, top: 4, bottom: 20 })
 	}
 
 	private submitPairSheet(): void {
@@ -551,11 +779,16 @@ struct Index {
 					.type(InputType.Number)
 					.maxLength(6)
 					.height(52)
+					.enterKeyType(EnterKeyType.Next)
 					.onChange((v: string) => {
 						this.pairCode = v;
 					})
 				TextInput({ placeholder: $r('app.string.sheet_host_hint'), text: this.pairHost })
 					.height(52)
+					.enterKeyType(EnterKeyType.Done)
+					.onSubmit(() => {
+						this.submitPairSheet();
+					})
 					.onChange((v: string) => {
 						this.pairHost = v;
 					})
@@ -578,12 +811,17 @@ struct Index {
 			} else {
 				TextInput({ placeholder: $r('app.string.sheet_link_hint'), text: this.linkUrl })
 					.height(52)
+					.enterKeyType(EnterKeyType.Next)
 					.onChange((v: string) => {
 						this.linkUrl = v;
 					})
 				TextInput({ placeholder: $r('app.string.sheet_name_hint'), text: this.linkName })
 					.height(52)
 					.maxLength(32)
+					.enterKeyType(EnterKeyType.Done)
+					.onSubmit(() => {
+						this.submitLinkSheet();
+					})
 					.onChange((v: string) => {
 						this.linkName = v;
 					})
@@ -647,6 +885,13 @@ struct Index {
 				Web({
 				src: `${this.origin}/index.html`,
 				controller: this.controller,
+				// Async (surface) rendering draws nothing on this ArkWeb build —
+				// the DOM is live and CDP screenshots it, but the surface stops
+				// reaching the window (first paint, and again after the native
+				// tab switch). Sync rendering follows the system canvas and
+				// presents every frame. The page is one full-screen WebView, so
+				// the DSS-merge cost of sync is the acceptable side of that trade.
+				renderMode: RenderMode.SYNC_RENDER,
 			})
 				.width('100%')
 				.height('100%')
@@ -659,11 +904,12 @@ struct Index {
 				// because client-core ships its own full light/dark palettes.
 				.darkMode(WebDarkMode.Auto)
 				.forceDarkAccess(false)
-				// Extend the drawing area into the status-bar / gesture-bar
-				// avoid regions so the window background never shows through
-				// as a contrasting strip (窗口沉浸式 / expandSafeArea).
+				// Sync render follows the system canvas, so the page can own the
+				// system strips: expanding into them keeps one continuous surface
+				// and stops the window colour from showing as a band when the app
+				// theme (not the OS) decides what "dark" looks like.
 				.expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
-				.backgroundColor('#00000000')
+				.backgroundColor(this.themeDark ? '#0B0E14' : '#FAF7FC')
 				.overScrollMode(OverScrollMode.NEVER)
 				.verticalScrollBarAccess(false)
 				// This is an app surface, not a web page: pinch / double-tap
@@ -697,13 +943,15 @@ struct Index {
 						setTabBarMaterial: (style: number): void => this.setTabBarMaterial(style),
 						openPairSheet: (): void => this.openPairSheet(),
 						openLinkSheet: (): void => this.openLinkSheet(),
+						openSessionsSheet: (payload: string): void => this.openSessionsSheet(payload),
+						setSessions: (payload: string): void => this.setSessions(payload),
 						setLiveView: (active: boolean, title: string, detail: string): void => this.syncLiveView(active, title, detail),
 					},
 					name: 'harmonyNative',
 					methodList: ['getSystemBars', 'getColorMode', 'setThemeColor', 'getBadge', 'setBadgeCount',
 						'clearBadge', 'consumeDeepLink', 'setBackDepth', 'setActiveTab',
 						'setTabBarVisible', 'openCameraSettings', 'getCameraDiagnostics', 'setTabBarMaterial',
-						'openPairSheet', 'openLinkSheet', 'setLiveView'],
+						'openPairSheet', 'openLinkSheet', 'openSessionsSheet', 'setSessions', 'setLiveView'],
 					controller: this.controller,
 				})
 				.onPermissionRequest((event) => {
@@ -761,6 +1009,24 @@ struct Index {
 			}
 			.width('100%')
 			.height('100%')
+			// Session switcher: a native system sheet over the content, with its
+			// own scroll, search and typography. Attached here rather than to the
+			// Stack because that node already carries the connect sheet — ArkUI
+			// allows one bindSheet per component.
+			.bindSheet($$this.sessionSheetOpen, this.sessionsSheetBody(), {
+				preferType: SheetType.BOTTOM,
+				height: SheetSize.MEDIUM,
+				title: { title: $r('app.string.sessions_title') },
+				dragBar: true,
+				showClose: true,
+				maskColor: '#66000000',
+				backgroundColor: this.apiLevel >= 26 ? Color.Transparent : (this.themeDark ? '#1C1A20' : '#FFFFFF'),
+				systemMaterial: this.sheetMaterial(),
+				onDisappear: () => {
+					this.sessionSheetOpen = false;
+					this.pushSessionAction('closed', '');
+				},
+			})
 
 			// Bottom bar: a real Tabs (barPosition End) so HarmonyOS 7 applies
 			// its immersive light-sense material. A plain Row would only read as
@@ -813,6 +1079,12 @@ struct Index {
 			// Bottom sheet, not a centred dialog: the form is a continuation of
 			// the guide, and rising from the edge keeps the page in context.
 			preferType: SheetType.BOTTOM,
+			// Content height, and the IME submit path below is what keeps the
+			// action reachable: ArkUI's translator lifts only the focused field
+			// into view and none of its resize/scroll modes survive a panel whose
+			// height follows its content (compressing it collapsed the builder).
+			// Pressing Done on the last field submits instead of hunting for a
+			// button that the keyboard is covering.
 			height: SheetSize.FIT_CONTENT,
 			title: {
 				title: this.sheetKind === 'pair' ? $r('app.string.sheet_pair_title') : $r('app.string.sheet_link_title'),
@@ -820,7 +1092,11 @@ struct Index {
 			dragBar: true,
 			showClose: true,
 			maskColor: '#66000000',
-			backgroundColor: this.themeDark ? '#1C1A20' : '#FFFFFF',
+			// The sheet background must be left to the material: setting an
+			// opaque colour overrides it, and some materials paint nothing of
+			// their own without a transparent backing (docs, example 10).
+			backgroundColor: this.apiLevel >= 26 ? Color.Transparent : (this.themeDark ? '#1C1A20' : '#FFFFFF'),
+			systemMaterial: this.sheetMaterial(),
 			onDisappear: () => {
 				this.sheetVisible = false;
 			},

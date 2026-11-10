@@ -6075,6 +6075,26 @@
 	border-top: 0.5px solid color-mix(in oklab, var(--fg) 8%, transparent);
 }
 
+/* Keyboard up: on both native shells the tab bar sits behind the IME, so its
+ * reserved strip would leave a dead gap between the composer and the keys.
+ * Only the keyboard inset itself stays reserved, and the gesture-bar inset
+ * goes with it — that part of the screen is keyboard now. */
+.sh-ime-open.sh-has-tabbar .sh-app {
+	padding-bottom: 0;
+}
+
+.sh-ime-open.sh-has-tabbar .sh-connect {
+	padding-bottom: calc(16px + var(--mp-keyboard-inset, 0px));
+}
+
+.sh-ime-open .sh-composer {
+	padding-bottom: calc(12px + var(--mp-keyboard-inset, 0px));
+}
+
+.sh-harmony.sh-has-tabbar.sh-ime-open .sh-composer {
+	padding-bottom: var(--mp-keyboard-inset, 0px);
+}
+
 /* Short landscape: keep the same native bar geometry, only tighten the
  * composer's own top rhythm so the transcript does not lose more height. */
 @media (min-width: 840px) and (max-height: 720px) {

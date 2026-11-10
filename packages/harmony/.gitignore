@@ -16,3 +16,6 @@ signature/
 *.cer
 *.p7b
 *.csr
+
+# `devecocli check arkts` incremental state
+.cache/

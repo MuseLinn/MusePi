@@ -13,13 +13,14 @@ import {
 	SquarePen,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { type TranslationKey, t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
-import { isMobileShell } from "../../lib/capacitor";
+import { SESSION_ACTION_EVENT, isHarmonyShell, isMobileShell } from "../../lib/capacitor";
+import type { SessionActionDetail } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
-import { fmtPercent, shortenPath } from "../../lib/format";
+import { fmtPercent, formatWhen, shortenPath } from "../../lib/format";
 import { useShellLayout } from "../../lib/responsive-shell";
 import { sessionTitleMorphId, useMorphTarget } from "../../lib/scene-morph";
 import { useGuestSelector } from "../../lib/use-guest";
@@ -56,14 +57,34 @@ export interface HeaderBarProps {
 	onNewSession(): void;
 }
 
-const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: TranslationKey }> = [
-	{ panel: "board", icon: <LayoutDashboard size={14} />, title: "settings.board" },
+const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: TranslationKey }> = [	{ panel: "board", icon: <LayoutDashboard size={14} />, title: "settings.board" },
 	{ panel: "scheduled", icon: <CalendarClock size={14} />, title: "settings.scheduledTasks" },
 	{ panel: "files", icon: <FolderGit2 size={14} />, title: "tools.workspace" },
 	{ panel: "marketplace", icon: <Package size={14} />, title: "guest.marketplace" },
 	{ panel: "workbench", icon: <PanelRight size={14} />, title: "settings.workbench" },
 	{ panel: "voice", icon: <AudioLines size={14} />, title: "settings.voice" },
 ];
+
+/**
+ * Payload for the native session sheet. The page owns the list and every
+ * string, so the ArkTS sheet only renders rows and reports the chosen id —
+ * it needs no session state and no i18n of its own. Times and counts are
+ * pre-formatted here for the same reason.
+ */
+function nativeSessionPayload(sessions: readonly WorkspaceSessionInfo[], currentId: string | null): string {
+	return JSON.stringify({
+		current: currentId ?? "",
+		sessions: sessions.map(session => ({
+			id: session.id,
+			title: session.title ?? t("transcript.untitledSession"),
+			cwd: session.cwd ? shortenPath(session.cwd) : "",
+			meta: t("transcript.messagesWithCount", { count: String(session.messageCount) }),
+			when: formatWhen(session.updatedAt),
+			current: session.id === currentId,
+			working: session.working === true,
+		})),
+	});
+}
 
 /**
  * Settings is not a content panel, but it has to be reachable from every shell
@@ -148,6 +169,30 @@ export function HeaderBar({
 	// native shells, including when the workspace has no sessions yet.
 	const canSwitch = activePanel !== "settings" && sessions != null && (mobile || narrow || sessions.length > 0);
 	const [sheetOpen, setSheetOpen] = useState(false);
+	// HarmonyOS draws the switcher natively (system sheet + List): the page
+	// feeds it rows and receives the chosen id back. Other shells keep the web
+	// sheet, so the native path is opt-in on the bridge being present.
+	const nativeSessions = isHarmonyShell() && typeof window.harmonyNative?.openSessionsSheet === "function";
+	const [nativeSheetOpen, setNativeSheetOpen] = useState(false);
+
+	useEffect(() => {
+		if (!nativeSessions || !nativeSheetOpen || sessions == null) return;
+		window.harmonyNative?.setSessions?.(nativeSessionPayload(sessions, focusedSessionId));
+	}, [nativeSessions, nativeSheetOpen, sessions, focusedSessionId]);
+
+	useEffect(() => {
+		if (!nativeSessions) return;
+		const onAction = (event: Event): void => {
+			const detail = (event as CustomEvent<SessionActionDetail>).detail;
+			setNativeSheetOpen(false);
+			if (detail.type === "pick") onSelectSession(detail.id);
+			else if (detail.type === "new") onNewSession();
+			else if (detail.type === "settings") onSelectPanel("settings");
+			else if (detail.type === "hosts") setHostManagerOpen(true);
+		};
+		window.addEventListener(SESSION_ACTION_EVENT, onAction);
+		return () => window.removeEventListener(SESSION_ACTION_EVENT, onAction);
+	}, [nativeSessions, onSelectSession, onNewSession, onSelectPanel]);
 	const [hostManagerOpen, setHostManagerOpen] = useState(false);
 	const [panelMenuOpen, setPanelMenuOpen] = useState(false);
 	// Android back key closes the collapsed panels menu before the layers
@@ -195,8 +240,17 @@ export function HeaderBar({
 						type="button"
 						ref={titleBtnMorphRef}
 						data-morph-id={titleMorphId ?? undefined}
-						className={`sh-title sh-title-btn${sheetOpen ? " sh-title--open" : ""}`}
-						onClick={() => setSheetOpen(open => !open)}
+						className={`sh-title sh-title-btn${sheetOpen || nativeSheetOpen ? " sh-title--open" : ""}`}
+						onClick={() => {
+							if (nativeSessions && sessions != null) {
+								window.harmonyNative?.openSessionsSheet?.(
+									nativeSessionPayload(sessions, focusedSessionId),
+								);
+								setNativeSheetOpen(true);
+								return;
+							}
+							setSheetOpen(open => !open);
+						}}
 						title={t("general.sessions")}
 					>
 						{title}

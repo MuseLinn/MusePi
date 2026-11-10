@@ -93,6 +93,14 @@ declare global {
 			/** Native半模态 sheet for the remote-link form. */
 			openLinkSheet?: () => void;
 			/**
+			 * Native session switcher. The page owns the list and its localized
+			 * text; the sheet only renders and reports the chosen row, so the
+			 * native list never needs i18n or session state of its own.
+			 */
+			openSessionsSheet?: (payload: string) => void;
+			/** Refresh the rows of an open session sheet (session list changed). */
+			setSessions?: (payload: string) => void;
+			/**
 			 * HarmonyOS Live View（实况窗）capsule: `active` mirrors the agent's
 			 * working state. No-ops when the Live View entitlement is closed, so
 			 * callers never need to probe for support.
@@ -127,6 +135,20 @@ export function keyboardInsetPx(): number {
 	const raw = document.documentElement.style.getPropertyValue("--mp-keyboard-inset");
 	const px = Number.parseFloat(raw);
 	return Number.isFinite(px) && px > 0 ? px : 0;
+}
+
+/**
+ * Publish a keyboard inset from a native shell bridge. Writes the CSS
+ * variable the composer and header consume, and the `sh-ime-open` class the
+ * bottom strip keys off — with the keyboard up the tab bar sits behind the
+ * IME, so its reserved strip would leave a dead gap above the keys.
+ */
+export function setKeyboardInset(px: number): void {
+	if (typeof document === "undefined") return;
+	const height = Number.isFinite(px) && px > 0 ? px : 0;
+	const root = document.documentElement;
+	root.style.setProperty("--mp-keyboard-inset", `${height}px`);
+	root.classList.toggle("sh-ime-open", height > 0);
 }
 
 /**
@@ -189,6 +211,20 @@ export async function setupAndroidBackHandler(): Promise<void> {
  * bypassing the connect screen.
  */
 export const DEEP_LINK_EVENT = "musepi:deep-link";
+
+/**
+ * Result of a native session sheet gesture, delivered by the ArkTS shell:
+ * `pick` (with the chosen id), `new`, `settings`, `hosts`, or `closed` when
+ * the sheet was dismissed. The header owns the list, so the sheet only ever
+ * reports an intent back.
+ */
+export const SESSION_ACTION_EVENT = "musepi:session-action";
+
+/** Detail carried by `SESSION_ACTION_EVENT`. */
+export interface SessionActionDetail {
+	type: "pick" | "new" | "settings" | "hosts" | "closed";
+	id: string;
+}
 
 /**
  * Deep link that arrived before the app's event listener mounted (cold start:
@@ -283,8 +319,7 @@ export async function setupDeepLinkHandler(): Promise<void> {
 		};
 		// Also register the keyboard callback from ArkTS.
 		(window as unknown as Record<string, unknown>).__harmonyKeyboard = (height: number): void => {
-			const root = document.documentElement;
-			root.style.setProperty("--mp-keyboard-inset", `${height}px`);
+			setKeyboardInset(height);
 			const el = document.activeElement;
 			if (el instanceof HTMLElement && el.closest(".sh-connect")) {
 				el.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -295,6 +330,15 @@ export async function setupDeepLinkHandler(): Promise<void> {
 		// this closes exactly one layer (back-stack semantics), the same
 		// `dispatchBack()` the Capacitor `backButton` listener uses.
 		(window as unknown as Record<string, unknown>).__harmonyBack = (): boolean => dispatchBack();
+		// Native session sheet gestures. The sheet renders localized strings the
+		// page handed it, so the reply is just the intent plus the chosen id.
+		(window as unknown as Record<string, unknown>).__musepiSessionAction = (type: string, id: string): void => {
+			const detail: SessionActionDetail = {
+				type: type === "pick" || type === "new" || type === "settings" || type === "hosts" ? type : "closed",
+				id: id,
+			};
+			window.dispatchEvent(new CustomEvent(SESSION_ACTION_EVENT, { detail: detail }));
+		};
 		// Keep the shell's copy of the depth current. HarmonyOS `onBackPress()`
 		// consults it synchronously (see the interface note above); the first
 		// call also seeds the shell on boot.

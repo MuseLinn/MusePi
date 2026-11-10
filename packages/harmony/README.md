@@ -48,11 +48,33 @@ HarmonyOS 工具链，二者其一即可：
 - ✅ 签名：`devecocli signature generate --type debug` 生成材料（存在 `~/.ohos/config/`，不入库），
   构建产出 `entry-default-signed.hap`。签名配置是**本机绑定**的，所以 `build-profile.json5`
   里的 `signingConfigs` 保持为空——自己出签名包前跑一次上面那条命令即可（材料会复用）。
-- ⛔ 真机/模拟器未验证：`devecocli device list` 无设备；模拟器要求固件开启虚拟化
-  （本机 `VirtualizationFirmwareEnabled = False`），所以没下载镜像。
-  接一台开了 USB 调试的鸿蒙手机后：`devecocli run` 直接装机启动。
-- 注意：本机命令行工具链调用要清掉代理环境变量（`HTTP_PROXY`/`HTTPS_PROXY`），
+- ✅ 模拟器（2026-11-11，API 26 / HarmonyOS 7.0.0，phone 镜像）：构建 → 签名 → 安装 → 启动 →
+  connect → 会话主链路通过；`devecocli device app install <绝对路径> --device <serial>` 用绝对
+  Windows 路径，相对路径会报 `install file path invalid`。
+- ⛔ 真机未安装：`devecocli device list` 能看到已连接的手机，但本仓库没有往用户设备上装包；
+  需要时用 `devecocli run --device <serial>` 自行确认。
+- 代理注意：本机命令行工具链调用要清掉代理环境变量（`HTTP_PROXY`/`HTTPS_PROXY`），
   否则 `devecocli` 的登录与云接口会报 `Invalid proxy authorization`。
+
+### 模拟器验证记录（2026-11-11）
+
+- **首屏空白根因**：ArkWeb 异步渲染（surface，独立送显）叠加 Web 组件的 `expandSafeArea`
+  时整页不送显——DOM 完整、CDP 能截到页面、窗口只剩背景色。去掉 `expandSafeArea`
+  即可恢复，但切到原生 Tabs 后异步面又会丢帧，因此固定为 `RenderMode.SYNC_RENDER`；
+  同步渲染下重新保留 `expandSafeArea`，由页面自己铺满系统条。代价是不走 DSS 合成，
+  这个壳只有一个全屏 Web 组件，取舍可接受。
+- **调试通道**：debug 构建在 `aboutToAppear` 里开 `setWebDebuggingAccess`，可用
+  `hdc fport tcp:9222 localabstract:webview_devtools_remote_<pid>` 接 CDP 读 DOM/console。
+  release 构建不开。
+- **半模态**：`SheetOptions.systemMaterial`（API 26+）给出原生沉浸光感，`THICK` +
+  `backgroundColor: Color.Transparent`；低于 API 26 回落实色背景。ArkUI 的键盘避让
+  （`TRANSLATE_AND_SCROLL` / `RESIZE_ONLY`）对 `FIT_CONTENT` 面板不可用：前者只把聚焦输入框
+  抬出键盘、按钮留在键盘后，后者把内容压缩掉。因此输入框用 `enterKeyType` + `onSubmit`
+  在软键盘「完成」上直接提交，用户不必先收键盘再点按钮。
+- `devecocli check arkts` 在删除遗留的 `bridge/HarmonyNative.ets`（无引用，且调用早已移除的
+  `getPendingDeepLink`）之后零 error。
+- 会话切换器（原生）：`bindSheet` + `Search` + `List` 在模拟器上验证——两行会话、搜索过滤
+  （输入 `board` 只剩 Board cleanup）、点行切会话、footer 的「设置」跳转都通过。
 
 ### 工程结构
 
@@ -66,10 +88,16 @@ HarmonyOS 工具链，二者其一即可：
 
 页面侧 `window.harmonyNative`（javaScriptProxy，同步 JSON 字符串返回）：
 `getSystemBars` / `getBadge` / `setBadgeCount` / `clearBadge` / `consumeDeepLink` /
-`setBackDepth`。
+`setBackDepth` / `openPairSheet` / `openLinkSheet` / `openSessionsSheet` / `setSessions`。
 
 原生推送（runJavaScript）：`window.__harmonyDeepLink(uri)`（暖启动深链）、
-`window.__harmonyKeyboard(vp)`（IME 高度）、`window.__harmonyBack()`（消费一次返回）。
+`window.__harmonyKeyboard(vp)`（IME 高度）、`window.__harmonyBack()`（消费一次返回）、
+`window.__musepiSessionAction(type, id)`（会话切换器的意图回传）。
+
+会话切换器：页面把已本地化的行（标题／短路径／消息数／相对时间）打包成 JSON 调
+`openSessionsSheet`，原生用系统 `bindSheet` + `Search` + `List` 渲染，点选后只回传
+`pick|new|hosts|settings|closed` 与 id；列表变化时页面用 `setSessions` 刷新。会话数据与导航
+仍归页面，原生不持有业务状态。
 
 返回键：`Index.onBackPress()` 先收键盘（`imeHeightPx > 0`），再交给页面层栈
 （`backDepth > 0` → `__harmonyBack()`），都没有则交回系统（应用退后台）。页面通过

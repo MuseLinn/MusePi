@@ -55,6 +55,7 @@ export function fmtPercent(p: number | null | undefined): string {
  *  Input: epoch ms. Locale-aware via the session i18n keys (distinct from
  *  relTime's second-granularity set). */
 export function formatWhen(ts: number): string {
+	if (!Number.isFinite(ts)) return "";
 	const delta = Date.now() - ts;
 	if (delta < 60_000) return t("transcript.justNow");
 	const minutes = Math.floor(delta / 60_000);

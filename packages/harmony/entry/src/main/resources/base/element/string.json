@@ -17,6 +17,12 @@
 		{ "name": "sheet_link_hint", "value": "粘贴远程访问链接" },
 		{ "name": "sheet_name_hint", "value": "这台设备的名称" },
 		{ "name": "action_pair", "value": "配对" },
-		{ "name": "action_connect", "value": "连接" }
+		{ "name": "action_connect", "value": "连接" },
+		{ "name": "sessions_title", "value": "会话" },
+		{ "name": "sessions_search", "value": "搜索会话…" },
+		{ "name": "sessions_new", "value": "新会话" },
+		{ "name": "sessions_hosts", "value": "管理电脑" },
+		{ "name": "sessions_settings", "value": "设置" },
+		{ "name": "sessions_empty", "value": "没有匹配的会话" }
 	]
 }

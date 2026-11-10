@@ -15,6 +15,7 @@ import {
 	setupAndroidBackHandler,
 	setupDeepLinkHandler,
 	setupNotificationTapHandler,
+	setKeyboardInset,
 } from "./lib/capacitor";
 import { applyTextScale } from "./lib/text-scale";
 import { initTooltips } from "./lib/tooltips";
@@ -33,10 +34,9 @@ async function setupCapacitorKeyboardInset(): Promise<void> {
 	// on window.Capacitor.Plugins when imported; `window.Capacitor.plugins`
 	// (lowercase) is never populated on real Android WebViews.
 	const { Keyboard } = await import("@capacitor/keyboard");
-	const root = document.documentElement;
 	await Keyboard.removeAllListeners();
 	Keyboard.addListener("keyboardWillShow", (info: { keyboardHeight: number }) => {
-		root.style.setProperty("--mp-keyboard-inset", `${info.keyboardHeight}px`);
+		setKeyboardInset(info.keyboardHeight);
 		// Lift the focused input above the IME inside the connect guide
 		// (the guide is a scroll container — scrollIntoView scrolls it).
 		const el = document.activeElement;
@@ -45,7 +45,7 @@ async function setupCapacitorKeyboardInset(): Promise<void> {
 		}
 	});
 	Keyboard.addListener("keyboardWillHide", () => {
-		root.style.setProperty("--mp-keyboard-inset", "0px");
+		setKeyboardInset(0);
 	});
 }
 

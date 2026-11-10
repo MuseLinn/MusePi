@@ -23,6 +23,7 @@
  * static child there — the scroller is this ancestor). */
 .gui-transcript {
 	overflow-anchor: none;
+	overflow-x: clip;
 }
 
 .tr-empty {
@@ -826,9 +827,15 @@ button.tr-display-context-source:hover {
 
 /* ---- thinking ---- */
 
+.tr-think {
+	min-width: 0;
+	max-width: 100%;
+}
+
 .tr-think-head {
 	display: inline-flex;
 	min-width: 0;
+	max-width: 100%;
 	align-items: center;
 	gap: 4px;
 	padding: 0;
@@ -881,7 +888,7 @@ button.tr-display-context-source:hover {
 	font-style: normal;
 	font-weight: 400;
 	color: var(--fg-faint);
-	max-width: 60ch;
+	max-width: min(60ch, 100%);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -4575,6 +4582,7 @@ a.tr-tool-search-title:hover {
 	.tr-code-copy,
 	.tv-widget-fs-btn,
 	.tr-table-menu button {
+		min-width: 44px;
 		min-height: 44px;
 		padding: 6px 12px;
 		font-size: 12.5px;
