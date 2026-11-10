@@ -222,7 +222,7 @@ export const RAIL_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[2]; // "rail
 export const SETTINGS_ITEM_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[3]; // "settings.item."
 /** 单行偏好槽。 */
 export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4]; // "settings.action."
-/** 内置外观页的行/分区座位（dsh `settings.general.item` 同构命名）。 */
+/** 内置外观页的行/分区座位。 */
 export const SETTINGS_APPEARANCE_ITEM_SLOT = slot("settings.appearance.item");
 /** Composer 座位槽（见 EXTENSION_SLOT_DECLARATION 的席位表）。 */
 export const COMPOSER_DOCK_SLOT = slot("composer.dock");

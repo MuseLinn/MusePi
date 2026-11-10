@@ -1867,7 +1867,9 @@ export class SessionMaintenance {
 			return;
 		}
 
-		if (!(await this.#host.persistTurnMessagesForMidRunCompaction(context))) return;
+		if (!(await this.#host.persistTurnMessagesForMidRunCompaction(context))) {
+			return;
+		}
 		if (this.#midTurnCompactionDeadEnds.has(activeMessages)) {
 			// A prior boundary already ran the dead-end rescue and could not reduce
 			// this turn. Re-running the rescue and re-emitting its warning on every

@@ -349,6 +349,33 @@ export function extensionHostOwner(extensionPath: string): string {
 	return `ext:${getExtensionNameFromPath(extensionPath)}`;
 }
 
+/**
+ * Bind one cleanup to a Cordis fiber.
+ *
+ * Cordis settles a fiber teardown asynchronously, so a disposer that only calls
+ * `fiber.effect`'s handle can still run the cleanup when a plugin unloads right
+ * after `off()`. The wrapper marks the cleanup cancelled synchronously; the
+ * fiber dispose then sees the flag and skips it.
+ */
+function bindFiberEffect(context: Context, cleanup: () => void | Promise<void>, label?: string): () => void {
+	let active = true;
+	const dispose = context.effect(
+		() => () => {
+			if (!active) return;
+			return cleanup();
+		},
+		label,
+	);
+	return () => {
+		active = false;
+		try {
+			void Promise.resolve(dispose()).catch(() => {});
+		} catch {
+			// A failed teardown must not throw out of a plugin's own disposer.
+		}
+	};
+}
+
 class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly logger = logger;
 	readonly typebox = TypeBox;
@@ -531,8 +558,8 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		// `apply` belongs to the extension's fiber, one registered inside a
 		// session handler belongs to the session's fiber. No third ledger.
 		const scope = currentSessionScope();
-		if (scope) return scope.context.effect(() => cleanup) as unknown as () => void;
-		if (this.ownContext) return this.ownContext.effect(() => cleanup) as unknown as () => void;
+		if (scope) return bindFiberEffect(scope.context as unknown as Context, cleanup, label);
+		if (this.ownContext) return bindFiberEffect(this.ownContext, cleanup, label);
 		return registerEffect(this.extension, cleanup, label);
 	}
 

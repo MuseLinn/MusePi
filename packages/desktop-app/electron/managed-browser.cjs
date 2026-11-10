@@ -819,7 +819,10 @@ class ManagedTab {
 class ManagedBrowserController {
 	constructor(options = {}) {
 		this.owner = null;
-		this.recordStore = options.recordStore ?? new ManagedBrowserRecordStore(options.recordsFile ?? path.join(app.getPath("userData"), "managed-browser-records.json"));
+		/** Created on first use: constructing the controller must not need
+		 *  Electron's `app`, so unit tests can drive tab lookup directly. */
+		this.recordsOptions = options;
+		this.records = options.recordStore ?? null;
 		this.tabs = new Map();
 		this.activeTabId = null;
 		this.tabSeq = 0;
@@ -853,8 +856,27 @@ class ManagedBrowserController {
 		this.preferences = { ...DEFAULT_PREFERENCES, download: { ...DEFAULT_PREFERENCES.download } };
 		/** `will-download` listener armed once on the managed session. */
 		this.downloadsGuarded = false;
-		this.extensionRecordsFile = path.join(app.getPath("userData"), "managed-browser-extensions.json");
+		this.persistedExtensionRecordsFile = null;
 		this.extensionLoadErrors = [];
+	}
+
+	/** Record store, created on first use (see the constructor note). */
+	get recordStore() {
+		if (this.records === null) {
+			const options = this.recordsOptions;
+			this.records = new ManagedBrowserRecordStore(
+				options.recordsFile ?? path.join(app.getPath("userData"), "managed-browser-records.json"),
+			);
+		}
+		return this.records;
+	}
+
+	/** Persisted-extension index path, resolved on first use for the same reason. */
+	get extensionRecordsFile() {
+		if (this.persistedExtensionRecordsFile === null) {
+			this.persistedExtensionRecordsFile = path.join(app.getPath("userData"), "managed-browser-extensions.json");
+		}
+		return this.persistedExtensionRecordsFile;
 	}
 
 	// ── lifecycle ────────────────────────────────────────────────────────

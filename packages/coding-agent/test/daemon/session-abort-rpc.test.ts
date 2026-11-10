@@ -19,6 +19,9 @@ describe("session.abort RPC", () => {
 			cwd: () => "/tmp",
 			get: () => ({
 				sessionId: "s1",
+				// The daemon stops goal continuation before aborting; a live
+				// session always carries the controller, so the stub must too.
+				goalController: { stopForHostAbort: () => {} },
 				agentSession: {
 					abort: async (options?: { reason?: string }) => {
 						seen = options?.reason;

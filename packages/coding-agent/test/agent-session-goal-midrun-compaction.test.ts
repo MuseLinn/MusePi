@@ -557,12 +557,15 @@ describe("AgentSession mid-run threshold compaction", () => {
 	});
 
 	it("does not compact mid-run during active goal mode when disabled", async () => {
-		const { session } = await createHarness({ "compaction.midTurnEnabled": false });
+		const { session, observedContexts } = await createHarness({ "compaction.midTurnEnabled": false });
 		session.setGoalModeState(activeGoalState());
-		const compactSpy = mockCompaction("SHOULD-NOT-RUN");
+		mockCompaction("SHOULD-NOT-RUN");
 
 		await session.prompt("work on the release");
 
-		expect(compactSpy).not.toHaveBeenCalled();
+		// `midTurnEnabled` gates the between-provider-call pass only; the post-turn
+		// threshold pass is a different gate. Assert the next request stayed
+		// un-compacted instead of counting every `compact` call in the run.
+		expect(observedContexts[1].join("\n")).not.toContain("SHOULD-NOT-RUN");
 	});
 });

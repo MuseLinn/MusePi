@@ -68,9 +68,8 @@ export const EXTENSION_SLOT_DECLARATION = {
 		"panel.right": { kind: "list" },
 		"rail.right": { kind: "list" },
 		"settings.extensions": { kind: "list" },
-		/** Row/section seats inside built-in settings pages. dsh names these
-		 *  `settings.<page>.item` (e.g. `settings.general.item`); a plugin picks
-		 *  the page(s) it contributes to. */
+		/** Row/section seat inside a built-in settings page. A plugin picks the
+		 *  page(s) it contributes to; the component receives its `slot`. */
 		"settings.appearance.item": { kind: "list" },
 		// 输入区(见上表)。list 组在前、single 组在后。
 		"composer.dock": { kind: "list" },

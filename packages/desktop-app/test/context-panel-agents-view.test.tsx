@@ -1,7 +1,8 @@
-import "./dom-shim";
+import "./happy-dom-shim"; // MUST be first: component modules define DOM classes at evaluation time.
 import { describe, expect, it } from "bun:test";
 import type { AgentSnapshot } from "@musepi/pi-wire";
-import { renderToStaticMarkup } from "react-dom/server";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { ContextPanel } from "../src/components/ContextPanel";
 import type { RpcClient } from "../src/lib/rpc";
 import type { GuiSessionState } from "../src/lib/session-store";
@@ -38,11 +39,16 @@ const agentsPanelTabs: UsePanelTabsResult = {
 	setDirty: () => {},
 };
 
-// 右面板 agents 视图 SSR 冒烟:swarm 子 agent 的详情层必须渲染在面板内部(不是独立
+// 右面板 agents 视图的挂载契约:swarm 子 agent 的详情层必须渲染在面板内部(不是独立
 // 浮层),且关着也保持挂载 —— 进出动效由 .gui-agent-dock--open 驱动,条件挂载会
-// 让关闭没有过渡。
+// 让关闭没有过渡。客户端渲染而非 renderToString:面板常驻的拖拽盾牌是 portal,
+// 服务端渲染器不支持。
 
-const rpc = { request: async () => null } as unknown as RpcClient;
+const rpc = {
+	request: async () => null,
+	// Client rendering runs effects: plugin surfaces subscribe to broadcasts.
+	addEventListener: () => () => {},
+} as unknown as RpcClient;
 
 function snapshot(agents: readonly AgentSnapshot[]): GuiSessionState {
 	return {
@@ -74,16 +80,25 @@ const scout: AgentSnapshot = {
 };
 
 function render(agents: readonly AgentSnapshot[], agentId: string | null): string {
-	return renderToStaticMarkup(
-		<ContextPanel
-			snap={snapshot(agents)}
-			rpc={rpc}
-			onViewChange={() => {}}
-			panelTabs={agentsPanelTabs}
-			agentId={agentId}
-			onAgentSelect={() => {}}
-		/>,
-	);
+	const host = document.createElement("div");
+	document.body.appendChild(host);
+	const root = createRoot(host);
+	act(() => {
+		root.render(
+			<ContextPanel
+				snap={snapshot(agents)}
+				rpc={rpc}
+				onViewChange={() => {}}
+				panelTabs={agentsPanelTabs}
+				agentId={agentId}
+				onAgentSelect={() => {}}
+			/>,
+		);
+	});
+	const html = host.innerHTML;
+	act(() => root.unmount());
+	host.remove();
+	return html;
 }
 
 describe("ContextPanel agents 视图", () => {

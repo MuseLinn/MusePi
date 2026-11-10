@@ -1,8 +1,9 @@
-import "./dom-shim";
+import "./happy-dom-shim"; // MUST be first: component modules define DOM classes at evaluation time.
 import { describe, expect, it } from "bun:test";
 import { setLocale, t } from "@musepi/client-core";
 import type { SessionEntry } from "@musepi/pi-wire";
-import { renderToStaticMarkup } from "react-dom/server";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { ContextPanel } from "../src/components/ContextPanel";
 import type { RpcClient } from "../src/lib/rpc";
 import type { GuiSessionState } from "../src/lib/session-store";
@@ -86,16 +87,25 @@ function snapshot(entries: readonly SessionEntry[], sessionId: string | null = "
 }
 
 function render(entries: readonly SessionEntry[], sessionId: string | null = "s1"): string {
-	return renderToStaticMarkup(
-		<ContextPanel
-			snap={snapshot(entries, sessionId)}
-			rpc={rpc}
-			onViewChange={() => {}}
-			panelTabs={contextPanelTabs}
-			agentId={null}
-			onAgentSelect={() => {}}
-		/>,
-	);
+	const host = document.createElement("div");
+	document.body.appendChild(host);
+	const root = createRoot(host);
+	act(() => {
+		root.render(
+			<ContextPanel
+				snap={snapshot(entries, sessionId)}
+				rpc={rpc}
+				onViewChange={() => {}}
+				panelTabs={contextPanelTabs}
+				agentId={null}
+				onAgentSelect={() => {}}
+			/>,
+		);
+	});
+	const html = host.innerHTML;
+	act(() => root.unmount());
+	host.remove();
+	return html;
 }
 
 describe("ContextPanel context 视图", () => {

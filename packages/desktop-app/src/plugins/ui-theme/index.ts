@@ -29,9 +29,8 @@ export function apply(ctx: UiThemePluginApi): void {
 	// The rail is a window-level fixed layer; its component portals to body.
 	ctx.slots.register({ slot: "app.overlay", moduleUrl: "./rail.tsx", label: "滚动进度轨" });
 	// The skin picker/import/always-visible section sits in the built-in
-	// Appearance page (dsh's theme bundle owns its Appearance row). A plugin may
-	// also register `settings.item.<id>` for the extension center, or both and
-	// branch on the injected `slot` prop.
+	// Appearance page. A plugin may also register `settings.item.<id>` for the
+	// extension center, or both and branch on the injected `slot` prop.
 	ctx.slots.register({
 		slot: "settings.appearance.item",
 		moduleUrl: "./settings.tsx",

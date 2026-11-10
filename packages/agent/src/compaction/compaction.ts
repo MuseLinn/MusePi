@@ -429,6 +429,16 @@ function estimateEntriesTokens(
 }
 
 /**
+ * Synthetic context injected ahead of a turn (`plan-mode-context`,
+ * `goal-mode-context`, `vibe-mode-context`, eager todo/task preludes). The
+ * prompt rebuilds it, so compaction may summarize it away instead of keeping
+ * the whole branch to preserve it.
+ */
+function isInjectedContextEntry(entry: SessionEntry | undefined): boolean {
+	return entry?.type === "custom_message";
+}
+
+/**
  * Find valid cut points: indices of user, assistant, custom, or bashExecution messages.
  * Never cut at tool results (they must follow their tool call).
  * When we cut at an assistant message with tool calls, its tool results follow it
@@ -537,11 +547,15 @@ export function findCutPoint(
 	let cutIndex = cutPoints[0]; // Default: keep from first message (not header)
 
 	for (let i = endIndex - 1; i >= startIndex; i--) {
-		const entry = entries[i];
-		if (entry.type !== "message") continue;
+		// Count every entry that carries a message (including `custom_message` and
+		// `branch_summary`) so the walk and `estimateEntriesTokens` measure the
+		// same history: a goal prelude or a compaction summary at the head is part
+		// of the kept context and must move the cut point like any other message.
+		const message = getMessageFromEntry(entries[i]);
+		if (!message) continue;
 
 		// Estimate this message's size
-		const messageTokens = tokenizer.countMessage(entry.message);
+		const messageTokens = tokenizer.countMessage(message);
 		accumulatedTokens += messageTokens;
 
 		// Check if we've exceeded the budget
@@ -570,6 +584,17 @@ export function findCutPoint(
 		}
 		// Include this non-message entry (bash, settings change, etc.)
 		cutIndex--;
+	}
+
+	// A synthetic context prelude (plan / goal / vibe mode) is rebuilt for every
+	// prompt. Keeping from it would keep the whole branch and summarize nothing,
+	// so the prelude would silently disable mid-run compaction. Cut at the next
+	// turn boundary instead: the stale prelude joins the summary and the prompt
+	// injects a fresh one.
+	if (cutIndex === startIndex && isInjectedContextEntry(entries[cutIndex])) {
+		const laterCuts = cutPoints.filter(point => point > startIndex);
+		const nextCut = laterCuts[1] ?? laterCuts[0];
+		if (nextCut !== undefined) cutIndex = nextCut;
 	}
 
 	// Determine if this is a split turn

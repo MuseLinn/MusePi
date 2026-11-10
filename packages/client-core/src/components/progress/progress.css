@@ -17,7 +17,7 @@
 	block-size: 4px;
 	min-inline-size: 0;
 	overflow: hidden;
-	border-radius: var(--radius-xs, 4px);
+	border-radius: var(--radius-xs);
 	background: var(--progress-track);
 }
 

@@ -492,7 +492,7 @@ export function FloatingScrollbar(): ReactNode {
 			rail.vScale = vScroll ? (vTrack - vLen) / vRange : 0;
 			rail.hScale = hScroll ? (hTrack - hLen) / hRange : 0;
 			// RTL scrollLeft runs 0 → -hRange from the right edge; adding the
-			// range measures it from the left like LTR (openchamber parity).
+			// range measures it from the left edge, same as LTR.
 			const rtl = el.closest('[dir="rtl"]') !== null || window.getComputedStyle(el).direction === "rtl";
 			rail.hOrigin = hScroll && rtl ? hRange : 0;
 			rail.vOverflow = vScroll;
@@ -755,8 +755,8 @@ export function FloatingScrollbar(): ReactNode {
 		/**
 		 * Hover discovery for containers that have never scrolled. Binds happen
 		 * on scroll, so a fresh pane had no affordance until the user guessed it
-		 * could scroll; openchamber reveals on hover, and this is the same
-		 * contract for the global pool. Hover may only take a FREE slot: it must
+		 * could scroll; hovering reveals it, so the pool needs no prior scroll to
+		 * advertise overflow. Hover may only take a FREE slot: it must
 		 * never evict the rail of a container the user is actually scrolling.
 		 */
 		let discoverFrame = 0;

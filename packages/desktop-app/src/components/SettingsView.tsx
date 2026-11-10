@@ -111,7 +111,7 @@ export function SettingsView({
 	);
 	// 单行偏好槽:settings.action.<id> 组件。
 	const actionItems = useSlotComponentsByPrefix(rpc, SETTINGS_ACTION_SLOT_PREFIX);
-	// 内置外观页的行/分区座位（dsh `settings.general.item` 同构命名）：
+	// 内置外观页的行/分区座位：插件注册 `settings.appearance.item` 即进入该页。
 	// 插件注册 `settings.appearance.item` 即出现在外观页；也可另挂
 	// `settings.item.<extId>`，同一组件用注入的 `slot` 渲染不同内容。
 	const appearanceItems = useSlotComponents(rpc, SETTINGS_APPEARANCE_ITEM_SLOT);
