@@ -107,7 +107,7 @@ describe("connector runtime projection", () => {
 		expect(projectConnectorServers([stdioConnector], state({ stdio: true }))).toEqual([]);
 
 		const stdioServer = stdioConnector.server;
-		if (!stdioServer || stdioServer.type !== "stdio") throw new Error("fixture must be stdio");
+		if (stdioServer?.type !== "stdio") throw new Error("fixture must be stdio");
 		const fingerprint = connectorCommandFingerprint(stdioServer);
 		const approved: ConnectorStateFile = {
 			version: 1,

@@ -20,7 +20,11 @@ async function codexPluginIcon(cachePath: string): Promise<string | undefined> {
 
 export async function adaptThirdPartyCordisPlugin(cachePath: string): Promise<void> {
 	const manifestPath = path.join(cachePath, "package.json");
-	const manifest = (await Bun.file(manifestPath).json()) as Record<string, unknown>;
+	// Config-only marketplace plugins ship their metadata in the marketplace
+	// catalog and have no `package.json` in the cache at all. Nothing to adapt.
+	const manifestFile = Bun.file(manifestPath);
+	if (!(await manifestFile.exists())) return;
+	const manifest = (await manifestFile.json()) as Record<string, unknown>;
 	const icon = await codexPluginIcon(cachePath);
 	if (manifest.name === "superpowers") {
 		manifest.musepi = {

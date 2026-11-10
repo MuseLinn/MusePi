@@ -148,6 +148,7 @@ interface ModelSnapshot {
 		promptCacheMinimumTokens: number;
 		promptCacheMaximumCheckpoints: number;
 		streamIdleTimeoutMs?: number;
+		supportsServerCompaction?: boolean;
 	};
 }
 

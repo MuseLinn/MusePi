@@ -341,10 +341,12 @@ function normalizeAddressBarUrl(input) {
  *  cannot address a file. Throws on a malformed URL. */
 function localPreviewFilePath(url) {
 	let decoded = decodeURIComponent(new URL(url).pathname);
-	// Windows drive paths arrive as `/D:/...`; strip the URL separator so
-	// `path.normalize` + `pathToFileURL` resolve the real file instead of
-	// producing `file:///D:/D:/...`.
-	if (/^\/[A-Za-z]:\//.test(decoded)) decoded = decoded.slice(1);
+	// Windows drive paths arrive as `/D:/...`; on Windows strip the URL
+	// separator so `path.normalize` + `pathToFileURL` resolve the real file
+	// instead of producing `file:///D:/D:/...`. On POSIX the leading slash is
+	// the filesystem root, so keep it: stripping there turns an absolute path
+	// into `D:/...`, which `path.isAbsolute` rejects and the round-trip breaks.
+	if (process.platform === "win32" && /^\/[A-Za-z]:\//.test(decoded)) decoded = decoded.slice(1);
 	const filePath = path.normalize(decoded);
 	if (!path.isAbsolute(filePath) || path.basename(filePath) === "") return null;
 	return filePath;
