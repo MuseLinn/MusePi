@@ -36,6 +36,8 @@ describe("issue #1020 - ctx.shutdown() in interactive mode", () => {
 			shutdownRequested: false,
 			session: {
 				extensionRunner: fakeExtensionRunner,
+				// `session_start` carries the session's agent id.
+				getAgentId: () => "main",
 				// other session fields are only touched lazily by other actions; we
 				// only invoke `shutdown`, so leave them out.
 			},
@@ -73,6 +75,7 @@ describe("issue #1020 - ctx.shutdown() in interactive mode", () => {
 			shutdownRequested: false,
 			session: {
 				extensionRunner: fakeExtensionRunner,
+				getAgentId: () => "main",
 			},
 			setToolUIContext: () => {},
 			syncComposerShape: () => {},

@@ -90,6 +90,8 @@ function createHarness(): Harness {
 
 	const sessionMock = {
 		isStreaming: false,
+		// `session_start` carries the session's agent id.
+		getAgentId: () => "main",
 		extensionRunner: fakeRunner,
 		/**
 		 * Mirror `AgentSession.sendCustomMessage` non-streaming
