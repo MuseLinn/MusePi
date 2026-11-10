@@ -3,6 +3,8 @@ import { display, uiMaterial, window } from '@kit.ArkUI';
 import { notificationManager } from '@kit.NotificationKit';
 import { abilityAccessCtrl, ConfigurationConstant, Permissions } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { deviceInfo } from '@kit.BasicServicesKit';
+import { liveViewManager } from '@kit.LiveViewKit';
 
 /**
  * MusePi WebView shell — loads the client-core mobile bundle from rawfile and
@@ -31,6 +33,13 @@ import { BusinessError } from '@kit.BasicServicesKit';
  * Back key: `onBackPress()` below runs IME-first, then the page's layer
  * stack (`window.__harmonyBack()`), then falls through to the system.
  */
+/**
+ * Live View scenario id. HarmonyOS only renders a Live View whose `event`
+ * matches a scenario approved in AppGallery Connect, so this is a placeholder
+ * MusePi would register; an unapproved value just resolves to "disabled".
+ */
+const MUSEPI_LIVE_VIEW_EVENT: string = 'MUSEPI_AGENT_SESSION';
+
 @Entry
 @Component
 struct Index {
@@ -45,6 +54,12 @@ struct Index {
 	/** Soft-keyboard height in px (0 = no IME), published by EntryAbility. */
 	@StorageLink('imeHeightPx') @Watch('onImeChanged') imeHeightPx: number = 0;
 	private badgeCount: number = 0;
+	/** API level of the running device — gates symbols newer than the floor. */
+	private readonly apiLevel: number = deviceInfo.sdkApiVersion;
+	/** HarmonyOS Live View（实况窗）session capsule. */
+	private liveViewId: number = 20261110;
+	private liveViewRunning: boolean = false;
+	private liveViewStarted: boolean = false;
 	/** Layer depth mirrored from the page (`harmonyNative.setBackDepth`). */
 	private backDepth: number = 0;
 	/** Main window, used for the system-bar style after a theme flip. */
@@ -323,6 +338,65 @@ struct Index {
 		this.setBadgeCount(0);
 	}
 
+	/**
+	 * Live View（实况窗）— the status-bar capsule that keeps a running agent
+	 * session visible while the app is in the background.
+	 *
+	 * Two gates, both silent:
+	 *  1. `liveViewManager.isLiveViewEnabled()` — false until the app's Live View
+	 *     entitlement is opened in AppGallery Connect and the user allows it.
+	 *  2. The `event` value must be a scenario the review approved; the constant
+	 *     below is the placeholder MusePi would register.
+	 * When either gate is closed every call resolves to a no-op, so the shell
+	 * behaves exactly as it does without Live View.
+	 */
+	private syncLiveView(active: boolean, title: string, detail: string): void {
+		if (active === this.liveViewRunning) {
+			if (active) {
+				this.pushLiveView(title, detail, false);
+			}
+			return;
+		}
+		this.liveViewRunning = active;
+		this.pushLiveView(title, detail, !active);
+	}
+
+	private pushLiveView(title: string, detail: string, stop: boolean): void {
+		const view: liveViewManager.LiveView = {
+			id: this.liveViewId,
+			event: MUSEPI_LIVE_VIEW_EVENT,
+			liveViewData: {
+				primary: {
+					title: title,
+					content: [{ text: detail }],
+					// KeepTime 0: dismissal is immediate once the turn ends.
+					keepTime: 0,
+				},
+			},
+		};
+		liveViewManager.isLiveViewEnabled()
+			.then((enabled: boolean) => {
+				if (!enabled) {
+					return;
+				}
+				if (stop) {
+					return liveViewManager.stopLiveView(view);
+				}
+				return this.liveViewStarted
+					? liveViewManager.updateLiveView(view)
+					: liveViewManager.startLiveView(view);
+			})
+			.then(() => {
+				if (!stop) {
+					this.liveViewStarted = true;
+				}
+			})
+			.catch((e: BusinessError) => {
+				// Missing entitlement / unsupported device — expected, not an error.
+				console.warn(`[musepi] live view skipped: ${JSON.stringify(e)}`);
+			});
+	}
+
 	private consumeDeepLink(): string {
 		const uri = AppStorage.get<string>('pendingDeepLink') ?? '';
 		if (uri !== '') {
@@ -397,7 +471,13 @@ struct Index {
 	 * deformation, `lightEffect` is the light that follows the finger; both are
 	 * the reason this bar must stay a native TabBar.
 	 */
-	private currentMaterial(): uiMaterial.ImmersiveMaterial {
+	private currentMaterial(): uiMaterial.ImmersiveMaterial | undefined {
+		// ImmersiveMaterial shipped in API 26 while the install floor stays at
+		// API 12: touching the symbol on an older device would abort the bar.
+		// Undefined keeps `barFloatingStyle` on its plain material.
+		if (this.apiLevel < 26) {
+			return undefined;
+		}
 		const styles: uiMaterial.ImmersiveStyle[] = [
 			uiMaterial.ImmersiveStyle.REGULAR,
 			uiMaterial.ImmersiveStyle.THICK,
@@ -608,12 +688,13 @@ struct Index {
 						setTabBarMaterial: (style: number): void => this.setTabBarMaterial(style),
 						openPairSheet: (): void => this.openPairSheet(),
 						openLinkSheet: (): void => this.openLinkSheet(),
+						setLiveView: (active: boolean, title: string, detail: string): void => this.syncLiveView(active, title, detail),
 					},
 					name: 'harmonyNative',
 					methodList: ['getSystemBars', 'getColorMode', 'setThemeColor', 'getBadge', 'setBadgeCount',
 						'clearBadge', 'consumeDeepLink', 'setBackDepth', 'setActiveTab',
 						'setTabBarVisible', 'openCameraSettings', 'getCameraDiagnostics', 'setTabBarMaterial',
-						'openPairSheet', 'openLinkSheet'],
+						'openPairSheet', 'openLinkSheet', 'setLiveView'],
 					controller: this.controller,
 				})
 				.onPermissionRequest((event) => {

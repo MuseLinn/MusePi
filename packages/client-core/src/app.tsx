@@ -776,6 +776,23 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 	const workspace = useGuestSelector(client, s => s.workspace);
 	const focusedSessionId = useGuestSelector(client, s => s.focusedSessionId);
 	const readOnly = useGuestSelector(client, s => s.readOnly);
+	const working = useGuestSelector(client, s => s.working);
+
+	// HarmonyOS Live View（实况窗）: a running turn stays visible in the status
+	// bar / notification centre while the app is backgrounded. The native side
+	// no-ops without the AGC entitlement, so this costs nothing on other shells.
+	useEffect(() => {
+		if (!isHarmonyShell()) return;
+		try {
+			window.harmonyNative?.setLiveView?.(
+				working,
+				header?.title?.trim() || t("shell.musepiCollab"),
+				working ? t("agents.agentStatusRunning") : "",
+			);
+		} catch {
+			// bridge missing — nothing to mirror
+		}
+	}, [working, header]);
 
 	const subCount = agents.filter(a => a.kind === "sub").length;
 	const agentIds = useMemo(() => new Set(agents.map(a => a.id)), [agents]);

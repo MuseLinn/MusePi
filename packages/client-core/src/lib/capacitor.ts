@@ -92,6 +92,12 @@ declare global {
 			openPairSheet?: () => void;
 			/** Native半模态 sheet for the remote-link form. */
 			openLinkSheet?: () => void;
+			/**
+			 * HarmonyOS Live View（实况窗）capsule: `active` mirrors the agent's
+			 * working state. No-ops when the Live View entitlement is closed, so
+			 * callers never need to probe for support.
+			 */
+			setLiveView?: (active: boolean, title: string, detail: string) => void;
 		};
 	}
 }
