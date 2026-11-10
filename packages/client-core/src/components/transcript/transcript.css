@@ -4555,6 +4555,18 @@ a.tr-tool-search-title:hover {
 	font-size: 11.5px;
 }
 
+/* Short landscape mobile shells (e.g. 672×459): the zero-height sticky quote
+ * reference is pinned at top:8px with no flow height, so on a short viewport
+ * it lands on top of the message body instead of above it. Giving it flow
+ * height would break the virtualizer's measurements, so the floating
+ * reference is suppressed here — the quote itself stays in the transcript.
+ * Desktop / tall viewports keep the pin. */
+@media (max-height: 540px) {
+	.sh-has-tabbar .tr-sticky-user-slot {
+		display: none;
+	}
+}
+
 /* Coarse pointers: message / table / widget actions were sized for a mouse
  * (17–24px rows). Give them a real tap target without changing the visual
  * density on fine pointers. */

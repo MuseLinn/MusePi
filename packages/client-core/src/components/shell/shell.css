@@ -219,6 +219,19 @@
 	-webkit-backdrop-filter: none;
 }
 
+/* A wide unfolded phone is still a touch device. The desktop web packs the
+ * session metadata (cwd / model / thinking / context gauge / avatars) into
+ * the header; at 939vp it all survives the width breakpoint and crowds the
+ * title into "r... ~__ Claude Haiku 4.5 medium 27%". Mobile shells keep the
+ * title + connection dot only — the model picker and context live in the
+ * composer, and the rest belongs to the grouped panel menu. */
+.sh-has-tabbar .sh-header .sh-cwd,
+.sh-has-tabbar .sh-header .sh-chip-meta,
+.sh-has-tabbar .sh-header .sh-gauge,
+.sh-has-tabbar .sh-header .sh-avatars {
+	display: none;
+}
+
 .sh-main {
 	display: flex;
 	min-height: 0;
@@ -493,6 +506,21 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
+}
+
+/* Grouped panel menu: intent clusters separated by a hairline instead of a
+ * flat run of equal-weight rows. No section labels — the spacing carries it. */
+.sh-panel-menu-group {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.sh-panel-menu-group--sep {
+	margin-top: 6px;
+	padding-top: 6px;
+	border-top: 0.5px solid var(--border);
+	border-top-color: color-mix(in oklab, var(--fg) 10%, transparent);
 }
 
 /* Panel menu items are buttons (the switcher popover styles expect divs). */
@@ -2403,6 +2431,27 @@
 	animation: sh-connect-in 160ms var(--spring) both;
 }
 
+/* The panel menu is portalled to <body>, so the shared .sh-switcher-pop
+ * `position:absolute` resolves against the initial containing block (viewport
+ * height), not the header button. Pin it under the header explicitly — this
+ * is the branch wide touch shells (unfolded foldables) now take. The short /
+ * narrow block below re-anchors it as a bottom sheet. */
+.sh-switcher-pop.sh-panel-menu-pop {
+	position: fixed;
+	top: calc(12px + var(--safe-top, 0px) + 56px);
+	right: 16px;
+	bottom: auto;
+	left: auto;
+	width: min(320px, calc(100vw - 32px));
+	max-height: calc(100dvh - 100px);
+	overflow-y: auto;
+}
+
+.sh-has-tabbar .sh-panel-menu-item {
+	min-height: 48px;
+	padding: 10px 12px;
+}
+
 .sh-switcher-title {
 	font-size: 11px;
 	font-weight: 600;
@@ -2774,13 +2823,14 @@
 		height: 6px;
 		box-shadow: 0 0 0 2px var(--bg);
 	}
-	.sh-panel-menu-pop {
+	.sh-switcher-pop.sh-panel-menu-pop {
 		position: fixed;
 		top: auto;
 		right: 12px;
 		bottom: calc(12px + var(--safe-bottom, 0px));
 		left: 12px;
 		width: auto;
+		max-height: min(70dvh, 560px);
 		padding: 12px;
 		border-radius: var(--radius-2xl);
 	}
@@ -5997,6 +6047,46 @@
 
 .sh-has-tabbar .sh-app {
 	padding-bottom: var(--sh-tabbar-space);
+}
+
+/* HarmonyOS: the native Tabs bar FLOATS over the web view (barOverlap +
+ * barHeight 56 + barBottomMargin 26). Two mistakes left ~47vp of bare page
+ * background between the input card and the bar:
+ *   1. the whole .sh-app reserved a flat 96px strip, so the composer card
+ *      hovered in the middle of the screen;
+ *   2. --safe-bottom was added on top, but the native bar's 26vp bottom
+ *      margin already clears the gesture area — double-counting it.
+ * Now the composer owns the entire bottom strip: a solid dock down to the
+ * screen edge with the native immersive bar floating on it, and the reserve
+ * is applied exactly once. Connect / settings / panels keep their own
+ * --sh-tabbar-space handling. */
+.sh-harmony.sh-has-tabbar .sh-app {
+	padding-bottom: 0;
+}
+
+.sh-harmony.sh-has-tabbar .sh-composer {
+	/* Reuse the platform-calibrated reserve instead of a guessed vp figure.
+	 * The composer's own 12px padding and --safe-bottom are deliberately NOT
+	 * added again: the native bar's bottom margin already owns the gesture
+	 * inset, and the Web side has no second bar to clear. The keyboard inset
+	 * is the only extra that still belongs here. */
+	padding-bottom: calc(var(--sh-tabbar-space, 96px) + var(--mp-keyboard-inset, 0px));
+	background: var(--bg);
+	border-top: 0.5px solid color-mix(in oklab, var(--fg) 8%, transparent);
+}
+
+/* Short landscape: keep the same native bar geometry, only tighten the
+ * composer's own top rhythm so the transcript does not lose more height. */
+@media (min-width: 840px) and (max-height: 720px) {
+	.sh-harmony.sh-has-tabbar .sh-composer {
+		padding-top: 8px;
+	}
+}
+
+@media (max-height: 540px) {
+	.sh-harmony.sh-has-tabbar .sh-composer {
+		padding-top: 6px;
+	}
 }
 
 .sh-has-tabbar .sh-panel {

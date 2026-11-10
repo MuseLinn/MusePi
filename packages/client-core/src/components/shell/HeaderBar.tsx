@@ -80,8 +80,15 @@ const SETTINGS_ENTRY: { panel: GuestPanel; icon: ReactNode; title: TranslationKe
 	title: "settings.settings",
 };
 
-/** Narrow menu = content panels + settings: on a phone it is the only door. */
-const PANEL_MENU_BUTTONS = [...PANEL_BUTTONS, SETTINGS_ENTRY];
+/** Narrow menu = content panels + settings: on a phone it is the only door.
+ * Grouped by intent (session context / extensions / preferences) so the
+ * mobile menu reads as a small navigation surface, not a flat icon dump. The
+ * separators carry the grouping — no redundant section labels. */
+const PANEL_MENU_GROUPS: ReadonlyArray<ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: TranslationKey }>> = [
+	[PANEL_BUTTONS[0]!, PANEL_BUTTONS[1]!, PANEL_BUTTONS[2]!, PANEL_BUTTONS[4]!],
+	[PANEL_BUTTONS[3]!, PANEL_BUTTONS[5]!],
+	[SETTINGS_ENTRY],
+];
 
 export function HeaderBar({
 	client,
@@ -103,6 +110,10 @@ export function HeaderBar({
 	const mobile = isMobileShell();
 	const layout = useShellLayout();
 	const narrow = layout !== "wide";
+	// A wide unfolded phone is still a phone: 939vp of width does not turn a
+	// touch shell into a desktop. Mobile shells always use the grouped panel
+	// menu; only the remote browser keeps the flat wide toolbar.
+	const compactNav = narrow || mobile;
 	const header = useGuestSelector(client, s => s.header);
 	const state = useGuestSelector(client, s => s.state);
 	const phase = useGuestSelector(client, s => s.phase);
@@ -239,7 +250,7 @@ export function HeaderBar({
 					</span>
 				)}
 				<span className={`sh-dot sh-dot-${phase}`} title={phase} />
-				{narrow ? (
+				{compactNav ? (
 					<span className="sh-header-nav">
 						<button
 							type="button"
@@ -259,21 +270,32 @@ export function HeaderBar({
 										aria-label={t("general.panels")}
 									>
 										<div className="sh-switcher-title">{t("general.panels")}</div>
-										{PANEL_MENU_BUTTONS.map(({ panel, icon, title }) => (
-											<button
-												key={panel}
-												type="button"
-												role="menuitem"
+										{PANEL_MENU_GROUPS.map((group, groupIndex) => (
+											<div
+												key={groupIndex}
 												className={
-													activePanel === panel
-														? "sh-switcher-item sh-panel-menu-item sh-switcher-item--cur"
-														: "sh-switcher-item sh-panel-menu-item"
+													groupIndex > 0
+														? "sh-panel-menu-group sh-panel-menu-group--sep"
+														: "sh-panel-menu-group"
 												}
-												onClick={() => togglePanel(panel)}
 											>
-												{icon}
-												<span>{t(title)}</span>
-											</button>
+												{group.map(({ panel, icon, title }) => (
+													<button
+														key={panel}
+														type="button"
+														role="menuitem"
+														className={
+															activePanel === panel
+																? "sh-switcher-item sh-panel-menu-item sh-switcher-item--cur"
+																: "sh-switcher-item sh-panel-menu-item"
+														}
+														onClick={() => togglePanel(panel)}
+													>
+														{icon}
+														<span>{t(title)}</span>
+													</button>
+												))}
+											</div>
 										))}
 									</div>
 								</>,
