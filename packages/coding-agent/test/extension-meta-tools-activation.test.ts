@@ -82,6 +82,9 @@ describe("tools.extensionMetaTools initial activation", () => {
 			...baseOptions(tempDir),
 			customTools: [metaRingTools[0]],
 		});
+		// Host sections register in `session_start`; the prompt assembled during
+		// creation predates them.
+		await session.refreshBaseSystemPrompt();
 		try {
 			const name = metaRingTools[0].name;
 			expect(session.getAllToolNames()).toContain(name);

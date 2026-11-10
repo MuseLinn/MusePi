@@ -147,6 +147,9 @@ describe("createAgentSession defaultInactive tool activation", () => {
 			...baseOptions(tempDir),
 			extensions: [toolActivationExtension],
 		});
+		// Extension tools register in `session_start`; the prompt assembled during
+		// creation predates them.
+		await session.refreshBaseSystemPrompt();
 
 		try {
 			expect(session.getAllToolNames()).toEqual(
@@ -1274,9 +1277,9 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		try {
 			const originalSetPresentation = session.setActiveToolPresentation.bind(session);
 			vi.spyOn(session, "setActiveToolPresentation")
-				.mockImplementationOnce((_toolNames, _mountedToolNames, _forcePromptRefresh, signal) =>
-					untilAborted(signal, Promise.withResolvers<void>().promise),
-				)
+				.mockImplementationOnce((_toolNames, _mountedToolNames, _forcePromptRefresh, signal) => {
+					return untilAborted(signal, Promise.withResolvers<void>().promise);
+				})
 				.mockImplementation(originalSetPresentation);
 			const runner = session.extensionRunner;
 			if (!runner) throw new Error("expected extension runner");
@@ -2083,6 +2086,8 @@ describe("createAgentSession defaultInactive tool activation", () => {
 			toolNames: ["read"],
 			restrictToolNames: true,
 		});
+		// Host sections register in `session_start`; rebuild both prompts.
+		await Promise.all([normal.refreshBaseSystemPrompt(), restricted.refreshBaseSystemPrompt()]);
 
 		try {
 			expect(normal.systemPrompt.join("\n")).toContain("xd://report_issue");

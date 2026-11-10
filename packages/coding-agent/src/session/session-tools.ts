@@ -496,7 +496,11 @@ export class SessionTools {
 			return this.#toolRegistryMutationScope.run(true, mutation);
 		});
 		const operation = untilAborted(signal, serialized);
-		this.#toolRegistryMutationTail = serialized.then(
+		// Release the queue on the ABORTABLE operation, not the underlying one: a
+		// mutation whose signal fired may never settle (a stalled extension
+		// activation), and queueing later mutations — including dispose's — behind
+		// it would hang the session forever.
+		this.#toolRegistryMutationTail = operation.then(
 			() => undefined,
 			() => undefined,
 		);

@@ -99,7 +99,6 @@ import { EXTENSION_META_TOOL_NAMES } from "./extensibility/extension-meta-tools"
 import {
 	discoverAndLoadExtensions,
 	discoverExtensionPaths,
-	EXTENSION_HANDLER_TIMEOUT_MS,
 	type ExtensionContext,
 	type ExtensionFactory,
 	type ExtensionModeDefinition,
@@ -114,6 +113,7 @@ import {
 	type ToolDefinition,
 	wrapRegisteredTools,
 } from "./extensibility/extensions";
+import { defaultExtensionHandlerTimeoutMs } from "./extensibility/extensions/handler-timeout";
 import { listHostExtensionModes } from "./extensibility/extensions/host-modes";
 // Class import off the barrel: the extensions index deliberately omits it, so
 // the preload path takes it from the owning module like `session-loader` does.
@@ -4606,7 +4606,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		const scheduleToolRegistration = (registered: RegisteredTool, signal?: AbortSignal): Promise<void> => {
 			const scheduled = scheduledToolRegistrations.get(registered);
 			if (scheduled) return scheduled;
-			const activationSignal = signal ?? AbortSignal.timeout(EXTENSION_HANDLER_TIMEOUT_MS);
+			const activationSignal = signal ?? AbortSignal.timeout(defaultExtensionHandlerTimeoutMs());
 
 			const [wrapped] = wrapRegisteredTools([registered], extensionRunner);
 			if (!wrapped) return Promise.resolve();
@@ -5060,8 +5060,6 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// Session-scoped prompt contributions register in `session_start`; the
 		// base prompt assembled during construction predates them, so rebuild it
 		// once so the live session starts with every host section.
-		await session.refreshBaseSystemPrompt();
-
 		return {
 			session,
 			extensionsResult,

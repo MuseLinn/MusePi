@@ -32,6 +32,8 @@ function createMockSession(
 		state: { messages: [] },
 		agent: { state: { systemPrompt: ["test"] } },
 		model: undefined,
+		// `session_start` carries the session's agent id.
+		getAgentId: () => "subagent-mock",
 		extensionRunner: undefined,
 		sessionManager: { appendSessionInit: () => {} },
 		getActiveToolNames: () => ["read", "yield"],

@@ -1710,10 +1710,12 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 		return `${label}: ${displayPath} (${formatBytes(ref.size)}). Use ${ref.href}:N-M to page, ${ref.href}:raw:N-M for verbatim chunks, and the ${ref.noun} file path for search/copy workflows.`;
 	}
 
-	#formatRawReadBlockedNotice(ref: { size: number; href: string }): string {
+	#formatRawReadBlockedNotice(ref: { size: number; href: string; path: string }): string {
 		return `Unbounded raw read blocked for ${ref.href} (${formatBytes(
 			ref.size,
-		)}). Reading the whole resource verbatim can exhaust memory. Use ${ref.href}:raw:1-3000 for bounded verbatim chunks, ${ref.href}:1-3000 for numbered exploration, and the backing file path for search/copy workflows.`;
+		)}). Reading the whole resource verbatim can exhaust memory. Use ${ref.href}:raw:1-3000 for bounded verbatim chunks, ${ref.href}:1-3000 for numbered exploration, and the backing file ${shortenPath(
+			ref.path,
+		)} for search/copy workflows.`;
 	}
 
 	async #readTextResourceFile(
