@@ -338,12 +338,17 @@ export function App(): ReactNode {
 	useEffect(() => {
 		const root = document.documentElement;
 		root.classList.toggle("sh-has-tabbar", showTabBar);
+		// ArkWeb does not composite backdrop-filter over scrolling content, so
+		// the glass header would show crisp half-clipped bubbles through it.
+		// Mark the shell so CSS can swap glass for a solid bar on HarmonyOS.
+		root.classList.toggle("sh-harmony", isHarmonyShell());
 		// HarmonyOS floats a NATIVE bar (96vp including its bottom margin) over
 		// the web view; Android / PWA float the web pill (76px). Neither owns
 		// layout, so every full-height surface reserves this through CSS.
 		root.style.setProperty("--sh-tabbar-space", isHarmonyShell() ? "96px" : "76px");
 		return () => {
 			root.classList.remove("sh-has-tabbar");
+			root.classList.remove("sh-harmony");
 			root.style.removeProperty("--sh-tabbar-space");
 		};
 	}, [showTabBar]);

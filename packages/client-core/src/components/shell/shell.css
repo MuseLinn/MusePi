@@ -209,6 +209,16 @@
 	background: color-mix(in oklab, var(--bg) 45%, transparent);
 }
 
+/* ArkWeb (HarmonyOS) does not apply backdrop-filter to content scrolling
+ * underneath the bar: the 58%-tint header stays see-through and a clipped
+ * message bubble shows as a sharp line under the title. A solid bar matches
+ * the platform's own navigation bars and keeps the transcript legible. */
+.sh-harmony .sh-header {
+	background: var(--bg);
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+}
+
 .sh-main {
 	display: flex;
 	min-height: 0;

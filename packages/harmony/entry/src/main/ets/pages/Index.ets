@@ -671,6 +671,15 @@ struct Index {
 				// The viewport meta alone is not enough on ArkWeb — the engine
 				// gesture must be disabled here too (管理网页缩放 / zoomAccess).
 				.zoomAccess(false)
+				// The page is served from the private https origin (see the CORS
+				// note above), so every LAN collab link — always ws:// — is a
+				// mixed-content request and ArkWeb blocks it outright:
+				// "An insecure WebSocket connection may not be initiated from a
+				// page loaded over HTTPS". The content is our own rawfile bundle
+				// and the socket target is the user's own computer on the LAN,
+				// so loose mode is the intended trade (Android's equivalent is
+				// MIXED_CONTENT_ALWAYS_ALLOW).
+				.mixedMode(MixedMode.All)
 				.javaScriptProxy({
 					object: {
 						getSystemBars: (): string => this.systemBars(),
