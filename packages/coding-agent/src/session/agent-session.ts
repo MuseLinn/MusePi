@@ -5031,6 +5031,10 @@ export class AgentSession {
 		if (staleTools.length > 0) {
 			await this.#tools.removeExtensionTools(staleTools);
 		}
+		// The replacement instance registers session-scoped prompt contributions
+		// in `session_start`, which already fired for the old one: re-emit so the
+		// new handler run lands (idempotent by owner/name) before the rebuild.
+		await this.refreshSessionStart();
 		// Prompt-only extensions have no tool delta to trigger a rebuild, so
 		// refresh the live base prompt explicitly after the composer re-sync.
 		await this.refreshBaseSystemPrompt();
@@ -5094,6 +5098,9 @@ export class AgentSession {
 		if (runner.isExtensionLoaded(entryPath)) return { addedTools: [], errors: [], deferred: false };
 		const { addedTools, errors } = await runner.loadExtension(entryPath, this.sessionManager.getCwd());
 		this.#onExtensionPromptSectionsChanged?.([entryPath]);
+		// The new instance registers session-scoped prompt contributions in
+		// `session_start`; re-emit so they land without waiting for a reload.
+		await this.refreshSessionStart();
 		// A prompt-only extension adds no tools; rebuild so its sections reach
 		// the live session immediately instead of on the next prompt mutation.
 		await this.refreshBaseSystemPrompt();

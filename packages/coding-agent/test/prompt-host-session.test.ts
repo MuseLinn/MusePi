@@ -67,6 +67,9 @@ async function createHostSession(
 ): Promise<AgentSession> {
 	const { session } = await createAgentSession({ ...baseSessionOptions(), ...options });
 	sessions.push(session);
+	// Host contributions register in `session_start`; the base prompt assembled
+	// during creation predates them, so rebuild it once before assertions.
+	await session.refreshBaseSystemPrompt();
 	return session;
 }
 
@@ -76,15 +79,17 @@ describe("prompt host session assembly (main agent)", () => {
 		const session = await createHostSession({
 			extensions: [
 				pi => {
-					if (!pi.promptHost) return;
-					sawHost = true;
-					pi.promptHost.registerTool({
-						tool: "read",
-						text: context => `HOST-READ[wire=${context.wireName}]`,
-					});
-					pi.promptHost.registerTool({
-						tool: "lsp",
-						text: () => "HOST-LSP-SHOULD-NOT-RENDER",
+					pi.on("session_start", () => {
+						if (!pi.promptHost) return;
+						sawHost = true;
+						pi.promptHost.registerTool({
+							tool: "read",
+							text: context => `HOST-READ[wire=${context.wireName}]`,
+						});
+						pi.promptHost.registerTool({
+							tool: "lsp",
+							text: () => "HOST-LSP-SHOULD-NOT-RENDER",
+						});
 					});
 				},
 			],
@@ -100,7 +105,9 @@ describe("prompt host session assembly (main agent)", () => {
 		const session = await createHostSession({
 			extensions: [
 				pi => {
-					pi.promptHost?.registerTool({ tool: "grep", text: () => "HOST-GREP-SECTION" });
+					pi.on("session_start", () => {
+						pi.promptHost?.registerTool({ tool: "grep", text: () => "HOST-GREP-SECTION" });
+					});
 				},
 			],
 		});
@@ -114,8 +121,10 @@ describe("prompt host session assembly (main agent)", () => {
 		const session = await createHostSession({
 			extensions: [
 				pi => {
-					pi.promptHost?.registerSection({ name: "host:injection", order: 25, text: "HOST-INJECTION" });
-					pi.promptHost?.registerSection({ name: "host:tail", order: 350, text: "HOST-TAIL" });
+					pi.on("session_start", () => {
+						pi.promptHost?.registerSection({ name: "host:injection", order: 25, text: "HOST-INJECTION" });
+						pi.promptHost?.registerSection({ name: "host:tail", order: 350, text: "HOST-TAIL" });
+					});
 				},
 			],
 		});
@@ -131,11 +140,13 @@ describe("prompt host session assembly (main agent)", () => {
 		const session = await createHostSession({
 			extensions: [
 				pi => {
-					pi.promptHost?.registerSection({
-						name: "host:refs",
-						order: 25,
-						text: context =>
-							`HOST-REFS[${String((context as { toolRefs?: Record<string, string> }).toolRefs?.read)}]`,
+					pi.on("session_start", () => {
+						pi.promptHost?.registerSection({
+							name: "host:refs",
+							order: 25,
+							text: context =>
+								`HOST-REFS[${String((context as { toolRefs?: Record<string, string> }).toolRefs?.read)}]`,
+						});
 					});
 				},
 			],
@@ -156,7 +167,9 @@ describe("prompt host reaches the subagent-shaped prompt branch", () => {
 		const session = await createHostSession({
 			extensions: [
 				pi => {
-					pi.promptHost?.registerTool({ tool: "read", text: () => "HOST-SUB-READ" });
+					pi.on("session_start", () => {
+						pi.promptHost?.registerTool({ tool: "read", text: () => "HOST-SUB-READ" });
+					});
 				},
 			],
 			// Subagents (task executor) pass a function; the host merge must land
@@ -172,8 +185,10 @@ describe("complete prompt conflicts", () => {
 		const session = await createHostSession({
 			extensions: [
 				pi => {
-					pi.promptHost?.registerSection({ name: "host-complete", order: 0, text: "HOST", complete: true });
 					pi.registerPrompt({ name: "composer-ordinary", order: 0, text: "COMPOSER" });
+					pi.on("session_start", () => {
+						pi.promptHost?.registerSection({ name: "host-complete", order: 0, text: "HOST", complete: true });
+					});
 				},
 			],
 		});
@@ -195,7 +210,9 @@ describe("complete prompt conflicts", () => {
 				modeId: "complete",
 				extensions: [
 					pi => {
-						pi.promptHost?.registerSection({ name: "host-complete", order: 0, text: "HOST", complete: true });
+						pi.on("session_start", () => {
+							pi.promptHost?.registerSection({ name: "host-complete", order: 0, text: "HOST", complete: true });
+						});
 					},
 				],
 			}),
@@ -345,7 +362,8 @@ describe("prompt host extension lifecycle", () => {
 		const source = (text: string): string => `
 export const name = "hmr-host-ext";
 export function apply(pi) {
-	if (pi.promptHost) {
+	pi.on("session_start", () => {
+		if (!pi.promptHost) return;
 		pi.promptHost.removeByOwner("hmr-host-ext-owner");
 		pi.promptHost.registerSection({
 			name: "hmr-host-section",
@@ -353,7 +371,7 @@ export function apply(pi) {
 			text: ${JSON.stringify(text)},
 			owner: "hmr-host-ext-owner",
 		});
-	}
+	});
 }
 `;
 		fs.writeFileSync(entry, source("HMR-HOST-V1"), "utf8");
@@ -379,7 +397,8 @@ export function apply(pi) {
 			`
 export const name = "host-toggle-ext";
 export function apply(pi) {
-	if (pi.promptHost) {
+	pi.on("session_start", () => {
+		if (!pi.promptHost) return;
 		pi.promptHost.removeByOwner("host-toggle-owner");
 		pi.promptHost.registerSection({
 			name: "host-toggle-section",
@@ -387,7 +406,7 @@ export function apply(pi) {
 			text: "HOST-TOGGLE-SECTION",
 			owner: "host-toggle-owner",
 		});
-	}
+	});
 }
 `,
 			"utf8",
@@ -432,10 +451,12 @@ describe("prompt host ledger for runtime-loaded extensions", () => {
 		return `
 export const name = "runtime-ledger-ext";
 export function apply(pi) {
-	pi.promptHost?.registerSection({
-		name: "runtime-ledger-section",
-		order: 25,
-		text: ${JSON.stringify(text)},
+	pi.on("session_start", () => {
+		pi.promptHost?.registerSection({
+			name: "runtime-ledger-section",
+			order: 25,
+			text: ${JSON.stringify(text)},
+		});
 	});
 }
 `;
@@ -446,7 +467,7 @@ export function apply(pi) {
 		const entry = tempDir.join("runtime-ledger-ext.ts");
 		fs.writeFileSync(entry, runtimeLedgerExtSource("RUNTIME-LEDGER-SECTION"), "utf8");
 
-		const { session, extensionsResult, promptHost } = await createAgentSession(baseSessionOptions());
+		const { session, promptHost } = await createAgentSession(baseSessionOptions());
 		sessions.push(session);
 		if (!promptHost) throw new Error("session prompt host missing");
 
@@ -454,11 +475,11 @@ export function apply(pi) {
 		expect(load.errors).toEqual([]);
 		expect(session.systemPrompt.join("\n")).toContain("RUNTIME-LEDGER-SECTION");
 
-		// The factory's records must live in the SESSION runtime so the
-		// disable/enable lifecycle can replay them without re-running the
-		// factory (same pattern the initial loader establishes).
+		// The factory's records live on the runner's SESSION scope — the same map
+		// sdk.ts replays from on disable/enable — so a runtime load does not land
+		// them on the shared runtime where another session could see them.
 		const owner = extensionHostOwner(entry);
-		const ledger = extensionsResult.runtime.promptHostLedgers.get(owner);
+		const ledger = session.extensionRunner?.getSessionPromptHostLedgers()?.get(owner);
 		expect(ledger).toBeDefined();
 
 		// Disable direction (sdk.ts removeExtensionHostSections).

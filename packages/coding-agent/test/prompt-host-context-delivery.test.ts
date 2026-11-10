@@ -305,10 +305,12 @@ describe("SDK wires collectPromptContexts through createAgentSession", () => {
 				...baseOptions(tempDir, authStorage, modelRegistry),
 				extensions: [
 					pi => {
-						pi.promptHost?.registerContext({
-							name: "sdk-ctx",
-							text: context =>
-								`SDK-CTX-V${contextVersion}[${String((context as { toolRefs?: Record<string, string> }).toolRefs?.read)}]`,
+						pi.on("session_start", () => {
+							pi.promptHost?.registerContext({
+								name: "sdk-ctx",
+								text: context =>
+									`SDK-CTX-V${contextVersion}[${String((context as { toolRefs?: Record<string, string> }).toolRefs?.read)}]`,
+							});
 						});
 					},
 				],
@@ -350,7 +352,9 @@ describe("SDK wires collectPromptContexts through createAgentSession", () => {
 				...baseOptions(tempDir, authStorage, modelRegistry),
 				extensions: [
 					pi => {
-						pi.promptHost?.registerContext({ name: "sdk-req", text: "SDK-REQ", required: true });
+						pi.on("session_start", () => {
+							pi.promptHost?.registerContext({ name: "sdk-req", text: "SDK-REQ", required: true });
+						});
 					},
 				],
 			});

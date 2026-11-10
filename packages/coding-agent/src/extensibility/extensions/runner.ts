@@ -1473,8 +1473,12 @@ export class ExtensionRunner {
 		if (this.extensions.some(ext => path.resolve(ext.resolvedPath) === resolvedTarget)) {
 			return { addedTools: [], errors: [] };
 		}
+		// Bind into the session runtime: a runtime-loaded extension's
+		// `session_start` registrations must dispatch on the same event bus and
+		// see the open session scope, exactly like the initial load.
 		const loadResult = await loadExtensions([resolvedTarget], cwd ?? this.cwd, undefined, {
 			promptHost: this.runtime.promptHost,
+			runtime: this.runtime,
 		});
 		const extension = loadResult.extensions[0];
 		if (!extension) {
