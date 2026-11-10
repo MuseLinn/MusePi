@@ -136,6 +136,6 @@ describe("built-in preset plugin composition", () => {
 			{ name: "musepi-product-skills" },
 		]);
 		expect(BUILTIN_MODE_TEMPLATES.chat?.plugins).toEqual([{ name: "musepi-preset-chat" }]);
-		expect(BUILTIN_TEMPLATE_REVISION).toBe(10);
+		expect(BUILTIN_TEMPLATE_REVISION).toBe(11);
 	});
 });

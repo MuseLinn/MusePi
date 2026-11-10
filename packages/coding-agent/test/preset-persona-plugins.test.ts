@@ -112,7 +112,7 @@ describe("preset composition owns selection, packages own persona text", () => {
 		}
 		// A resolve over the real definition must not resurrect the old text.
 		expect(resolveMode("design", modeId => BUILTIN_MODE_TEMPLATES[modeId]).prompt).toEqual([]);
-		expect(BUILTIN_TEMPLATE_REVISION).toBe(10);
+		expect(BUILTIN_TEMPLATE_REVISION).toBe(11);
 	});
 
 	it("keeps each persona's text in its own package Markdown", () => {

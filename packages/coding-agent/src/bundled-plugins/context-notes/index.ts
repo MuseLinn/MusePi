@@ -43,7 +43,7 @@ export function apply(pi: ExtensionAPI): void {
 		};
 	});
 
-	pi.registerTool({
+	pi.tools.register({
 		name: "context_notes",
 		label: "Context Notes",
 		description: contextNotesDescription,
@@ -108,7 +108,7 @@ export function apply(pi: ExtensionAPI): void {
 		};
 	});
 
-	pi.registerTool({
+	pi.tools.register({
 		name: "new_context",
 		label: "New Context",
 		description: newContextDescription,

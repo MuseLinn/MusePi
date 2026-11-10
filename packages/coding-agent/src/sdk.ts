@@ -5057,6 +5057,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// the handler simply never ran, so a plugin had no way to reach the
 		// context until a turn happened to fire a tool event.
 		await emitSessionStartEvent(extensionRunner, { agentId: session.getAgentId(), source: "main" });
+		// Session-scoped prompt contributions register in `session_start`; the
+		// base prompt assembled during construction predates them, so rebuild it
+		// once so the live session starts with every host section.
+		await session.refreshBaseSystemPrompt();
 
 		return {
 			session,

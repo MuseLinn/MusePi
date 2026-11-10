@@ -395,6 +395,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 				"reflect",
 				"learn",
 				"manage_skill",
+				"connector_catalog",
 			],
 		},
 	},
@@ -415,7 +416,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 };
 
 /** 内置模板修订号:内置模板内容变更后递增(见 ensureModeTemplates 的升级规则)。 */
-export const BUILTIN_TEMPLATE_REVISION = 10;
+export const BUILTIN_TEMPLATE_REVISION = 11;
 
 /**
  * 历史修订的形状 —— 升级比对链。ensureModeTemplates 只在"文件内容仍等于
