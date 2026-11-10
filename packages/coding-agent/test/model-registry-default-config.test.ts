@@ -63,6 +63,8 @@ describe("ModelRegistry default custom models config", () => {
 			// Reasoning-tier Bedrock stream-stall watchdog widening applies to
 			// overrides too (model compat generation).
 			streamIdleTimeoutMs: 900000,
+			// Server-side compaction is part of the generated Bedrock compat.
+			supportsServerCompaction: true,
 		});
 	});
 
