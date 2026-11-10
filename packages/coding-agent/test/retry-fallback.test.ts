@@ -105,11 +105,10 @@ describe("retry fallback selector resolution", () => {
 
 	it("inherits the default chain only for roles without an explicit chain", () => {
 		const defaultChain = ["openai/gpt-4o-mini"];
-		const expanded = expandDefaultRetryFallbackChains({ default: defaultChain, slow: ["google/gemini-3.1-flash-lite"] }, [
-			"default",
-			"task",
-			"slow",
-		]);
+		const expanded = expandDefaultRetryFallbackChains(
+			{ default: defaultChain, slow: ["google/gemini-3.1-flash-lite"] },
+			["default", "task", "slow"],
+		);
 		expect(expanded.task).toBe(defaultChain);
 		expect(expanded.slow).toEqual(["google/gemini-3.1-flash-lite"]);
 	});
