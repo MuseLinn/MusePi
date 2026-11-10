@@ -437,7 +437,7 @@ export function ImageLightbox({
 			aria-modal="true"
 			aria-label={t("settings.previewImage")}
 			ref={dialogRef}
-			onMouseDown={isClosing || morphClosing ? undefined : onClose}
+			onPointerDown={isClosing || morphClosing ? undefined : onClose}
 		>
 			{/* Backdrop plate: the dimmed/blurred floor is NOT a shared element,
 			 * so it fades independently of the morphing image (M1.10 §3.3) —
@@ -447,7 +447,7 @@ export function ImageLightbox({
 			{/* Download + close as one group (ZCode preview parity), inset
 			    from the corner so the pair clears the window chrome and reads
 			    as a row rather than a lone floating X. */}
-			<div className="tr-img-lb-actions" onMouseDown={e => e.stopPropagation()}>
+			<div className="tr-img-lb-actions" onPointerDown={e => e.stopPropagation()}>
 				{onEdit && (
 					<button
 						type="button"
@@ -481,7 +481,7 @@ export function ImageLightbox({
 				</button>
 			</div>
 			{onAnnotate && (
-				<div className="tr-img-lb-tools" onMouseDown={e => e.stopPropagation()}>
+				<div className="tr-img-lb-tools" onPointerDown={e => e.stopPropagation()}>
 					{annotateMode ? (
 						<>
 							<span className="tr-img-lb-annotate-hint">{t("settings.clickImagePlacePin")}</span>
@@ -510,7 +510,7 @@ export function ImageLightbox({
 						type="button"
 						className="tr-img-lb-nav tr-img-lb-nav--prev"
 						aria-label={t("settings.previousImage")}
-						onMouseDown={e => e.stopPropagation()}
+						onPointerDown={e => e.stopPropagation()}
 						onClick={prev}
 					>
 						<ChevronLeft size={22} />
@@ -519,7 +519,7 @@ export function ImageLightbox({
 						type="button"
 						className="tr-img-lb-nav tr-img-lb-nav--next"
 						aria-label={t("settings.nextImage")}
-						onMouseDown={e => e.stopPropagation()}
+						onPointerDown={e => e.stopPropagation()}
 						onClick={next}
 					>
 						<ChevronRight size={22} />
@@ -530,8 +530,10 @@ export function ImageLightbox({
 				ref={stageRef}
 				className="tr-img-lb-stage"
 				style={{ cursor }}
-				onMouseDown={e => e.stopPropagation()}
-				onPointerDown={onPointerDown}
+				onPointerDown={e => {
+					e.stopPropagation();
+					onPointerDown(e);
+				}}
 				onPointerMove={onPointerMove}
 				onPointerUp={endDrag}
 				onPointerCancel={endDrag}
@@ -562,7 +564,7 @@ export function ImageLightbox({
 								className="tr-img-lb-pin"
 								style={{ left: `${p.x}%`, top: `${p.y}%` }}
 								aria-label={t("settings.annotationWithIndex", { index: String(p.index) })}
-								onMouseDown={e => e.stopPropagation()}
+								onPointerDown={e => e.stopPropagation()}
 								onClick={e => {
 									e.stopPropagation();
 									if (editing === p.index) {
@@ -577,7 +579,7 @@ export function ImageLightbox({
 							</button>
 						))}
 						{editing !== null && (
-							<div className="tr-img-lb-note" onMouseDown={e => e.stopPropagation()}>
+							<div className="tr-img-lb-note" onPointerDown={e => e.stopPropagation()}>
 								<input
 									className="tr-img-lb-note-input"
 									value={noteDraft}

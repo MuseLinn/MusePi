@@ -1,3 +1,5 @@
+import type { AgentMessage } from "@musepi/pi-agent-core";
+
 /**
  * Model-visible tool evidence fingerprints for Goal-mode continuations.
  *
@@ -27,9 +29,9 @@ export interface ToolEvidence {
 	/** Tool name as the model sees it (e.g. "todo", "read"). */
 	toolName: string;
 	/** Tool arguments, already ser/deser-able (the raw event payload). */
-	args: unknown;
+	args?: unknown;
 	/** The tool's result payload. */
-	result: unknown;
+	result?: unknown;
 	/** Whether the call surfaced as an error to the model. */
 	isError?: boolean;
 }
@@ -118,4 +120,28 @@ export function fingerprintToolEvidence(evidence: readonly ToolEvidence[]): stri
 export function shouldSuppressContinuation(currentFingerprint: string, previousFingerprint: string | null): boolean {
 	if (currentFingerprint === "") return true;
 	return previousFingerprint !== null && currentFingerprint === previousFingerprint;
+}
+
+/**
+ * Fingerprint the model-visible tool evidence in one completed turn.
+ *
+ * Hosts without a TUI tool-event stream (the daemon) read the same evidence
+ * from `agent_end.messages`: assistant tool calls plus their tool results.
+ * Calls whose result has not landed yet still contribute their arguments, so
+ * a turn that only dispatched a tool is not mistaken for an empty turn.
+ */
+export function continuationActivityFromMessages(messages: readonly AgentMessage[]): string {
+	const evidence: ToolEvidence[] = [];
+	for (const message of messages) {
+		if (message.role === "assistant") {
+			for (const block of message.content) {
+				if (block.type === "toolCall") {
+					evidence.push({ toolName: block.name, args: block.arguments });
+				}
+			}
+		} else if (message.role === "toolResult") {
+			evidence.push({ toolName: message.toolName, result: message.content, isError: message.isError });
+		}
+	}
+	return fingerprintToolEvidence(evidence);
 }

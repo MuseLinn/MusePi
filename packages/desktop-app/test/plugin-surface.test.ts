@@ -1,5 +1,11 @@
+import "./happy-dom-shim";
 import { describe, expect, it } from "bun:test";
-import { officialPluginsFor, pluginSurface } from "../src/components/UnifiedPluginsView";
+import {
+	manageablePluginCount,
+	officialPluginsFor,
+	type PluginPackageEntry,
+	pluginSurface,
+} from "../src/components/UnifiedPluginsView";
 import type { ExtensionItem } from "../src/lib/slot-host";
 
 function builtin(overrides: Partial<ExtensionItem> & Pick<ExtensionItem, "id" | "name">): ExtensionItem {
@@ -53,5 +59,31 @@ describe("plugin surface layering", () => {
 			"tool-cards",
 			"preset-chat",
 		]);
+	});
+
+	it("counts what the pane can show, without double-counting packaged modules", () => {
+		const pkg = {
+			name: "foo",
+			version: "1.0.0",
+			path: "/plugins/foo",
+			scope: "user",
+			enabled: true,
+			description: null,
+			icon: null,
+			tools: 0,
+			commands: 0,
+			handlers: 0,
+		} satisfies PluginPackageEntry;
+		const packagedModule = {
+			...builtin({ id: "foo-index", name: "foo" }),
+			builtin: false,
+			path: "/plugins/foo/index.ts",
+			source: { provider: "musepi-plugins", providerName: "Plugins", level: "user" as const },
+		};
+		const modules = [manageable, configurable, readonlyPack, presetPersona, installed, packagedModule];
+
+		// official manage (2) + package (1) + standalone user module (1);
+		// the module inside the package belongs to its package row.
+		expect(manageablePluginCount(modules, [pkg], "list")).toBe(4);
 	});
 });

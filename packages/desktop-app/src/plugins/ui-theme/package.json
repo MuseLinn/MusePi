@@ -1,0 +1,12 @@
+{
+	"name": "musepi-ui-theme",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Renderer-side theme bundle: the floating scroll progress rail, its skin catalog and the rail's appearance card.",
+	"type": "module",
+	"musepi": {
+		"icon": "🎨",
+		"description": "主题 bundle：滚动进度轨的横向/纵向轨道、皮肤目录与外观设置卡。",
+		"extensions": ["./index.ts"]
+	}
+}

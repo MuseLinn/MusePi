@@ -10,6 +10,12 @@ export const shell = {
 	"shell.pasteCollabLinkAny": "Paste a MusePi remote access link",
 	"shell.wsHostPortR": "For tunnels, relays, or advanced network setups",
 
+	// ── Bottom tab bar (mobile shells) ────────────────────────────────────────
+	"shell.tabNavigation": "Main navigation",
+	"shell.tabConnect": "Connect",
+	"shell.tabChat": "Chat",
+	"shell.tabSettings": "Settings",
+
 	// ── Header bar ────────────────────────────────────────────────────────────
 	"shell.readOnly": "Read-only",
 	"shell.readOnlyLinkWatching": "Read-only link — watching only",

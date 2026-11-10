@@ -33,6 +33,22 @@ export { MarketplaceCard } from "./components/marketplace/MarketplaceCard";
 export { MarketplaceGrid } from "./components/marketplace/MarketplaceGrid";
 export type { MarketplaceCardAction, MarketplaceCardEntry } from "./components/marketplace/types";
 export { hasDesignSystemContent, resolveCardIcon } from "./components/marketplace/types";
+export {
+	ProgressMeter,
+	type ProgressMeterProps,
+	type ProgressSegment,
+	ProgressSegments,
+	type ProgressTone,
+} from "./components/progress/ProgressMeter";
+/** One progress language for every GUI surface: floored determinate fills,
+ *  capped running fractions, multi-phase segments and a themed track. */
+export {
+	capRunningFraction,
+	clampFraction,
+	clampProgress,
+	fractionPercent,
+	UNFINISHED_PROGRESS_CAP,
+} from "./components/progress/progress";
 /** reactbits-parity brand chrome (zero-dependency, shared GUI ↔ guest): the
  *  blur-in wordmark reveal, shiny text sweep, cursor spotlight card and the
  *  interactive dot-matrix brand mark. The desktop app imports these from

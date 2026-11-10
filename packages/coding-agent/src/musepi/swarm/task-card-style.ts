@@ -29,6 +29,9 @@ import type { Theme, ThemeColor } from "../../modes/theme/theme";
 
 const FRAME_INTERVAL_MS = 250;
 const TASK_WIDGET_KEY = "task-swarm";
+/** A running member stops here until it actually settles. Same rule as the
+ *  GUI's `agentProgressFraction` (client-core) — both surfaces must agree. */
+const UNFINISHED_PROGRESS_CAP = 0.85;
 /** setInterval id — the legacy swarm-core package is removed; keep the
  *  alias local so this extension stays dependency-free. */
 type SwarmTimerId = number;
@@ -81,18 +84,21 @@ function fmtTokens(value: number): string {
 // packages/core/swarm/{helpers,types}.ts — kimi-code parity)
 // ============================================================
 
-/** Progress of a member: done/failed/aborted → full; running grows on tool
- *  calls via a soft asymptote (the daemon streams no estimated total, so a
+/** Progress of a member. Only `done` reads full; running grows on tool calls
+ *  via a soft asymptote capped short of the end, and failed/aborted keep the
+ *  work they actually did (the daemon streams no estimated total, so a
  *  known-looking fraction would be fake — a growing bar reads honest). */
 function computeProgress(m: TaskMemberView): number {
-	if (m.status === "done" || m.status === "failed" || m.status === "aborted") return 1;
+	if (m.status === "done") return 1;
 	if (m.status === "pending" || m.toolCalls <= 0) return 0;
-	return Math.min(1, m.toolCalls / (m.toolCalls + 2));
+	const worked = Math.min(1, m.toolCalls / (m.toolCalls + 2));
+	if (m.status === "failed" || m.status === "aborted") return worked;
+	return Math.min(UNFINISHED_PROGRESS_CAP, worked);
 }
 
-/** Renders a braille progress bar for `progress` in [0, 1], with the same
- *  smooth completed-fill animation kimi-code uses (0 → 100% over
- *  COMPLETE_FILL_MS once the member settles). */
+/** Renders a braille progress bar for `progress` in [0, 1]. A completed
+ *  member fills the remaining cells over COMPLETE_FILL_MS; a failed or
+ *  aborted one stops where its work stopped. */
 function accumulatedBrailleBar(
 	progress: number,
 	width: number,
@@ -103,12 +109,13 @@ function accumulatedBrailleBar(
 	const innerWidth = Math.max(1, width);
 	const dotsPerCell = BRAILLE_LEVELS.length;
 	let displayProgress = progress;
-	if ((status === "done" || status === "failed" || status === "aborted") && completedAtMs !== undefined) {
+	if (status === "done" && completedAtMs !== undefined) {
 		const elapsed = Math.max(0, nowMs - completedAtMs);
 		displayProgress = Math.min(1, progress + (1 - progress) * Math.min(1, elapsed / COMPLETE_FILL_MS));
 	}
 	displayProgress = Math.max(0, Math.min(1, displayProgress));
-	const totalDots = Math.round(displayProgress * innerWidth * dotsPerCell);
+	// Floor: rounding filled the last cell while the member was still running.
+	const totalDots = Math.floor(displayProgress * innerWidth * dotsPerCell);
 	const cells: string[] = [];
 	for (let i = 0; i < innerWidth; i++) {
 		const cellStart = i * dotsPerCell;
@@ -277,7 +284,8 @@ class TaskCardWidgetController {
 			// late `tool_execution_update` hit the `frameTimer === null`
 			// resurrect path in `update()`.
 			if (m.status === "running" || m.status === "pending") return true;
-			if ((m.status === "done" || m.status === "failed" || m.status === "aborted") && this.completedAt.has(m.id)) {
+			// Only success animates to full; failed/aborted stop at their work.
+			if (m.status === "done" && this.completedAt.has(m.id)) {
 				const at = this.completedAt.get(m.id) ?? 0;
 				if (nowMs - at < COMPLETE_FILL_MS) return true;
 			}

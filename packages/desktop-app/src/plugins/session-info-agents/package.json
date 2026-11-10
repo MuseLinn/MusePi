@@ -1,0 +1,12 @@
+{
+	"name": "musepi-session-info-agents",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned session info card section: live subagent progress and the ended roster.",
+	"type": "module",
+	"musepi": {
+		"icon": "◉",
+		"description": "会话信息卡里的「子代理」分区：运行中进度条与已结束列表。",
+		"extensions": ["./index.ts"]
+	}
+}

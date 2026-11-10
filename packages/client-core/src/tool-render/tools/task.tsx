@@ -7,6 +7,8 @@
  *  hover card, not inline under the tool call. */
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { ProgressSegments, type ProgressTone } from "../../components/progress/ProgressMeter";
+import { capRunningFraction, clampFraction } from "../../components/progress/progress";
 import { t } from "../../i18n/index.js";
 import { punkAvatarUri } from "../../lib/punk-gen.js";
 import { AgentLink, Badge, Note, Output, ResultText, Row } from "../parts";
@@ -89,17 +91,23 @@ function progressPhase(p: Record<string, unknown>): "ok" | "run" | "err" {
 }
 
 /**
- * Progress fraction for one live member's bar. The daemon streams no
- * estimated total, so the bar grows on tool calls via a soft asymptote
- * instead of inventing a percentage — the TUI task card uses the same rule
+ * Progress fraction for one member's bar. The daemon streams no estimated
+ * total, so the bar grows on tool calls via a soft asymptote instead of
+ * inventing a percentage — the TUI task card uses the same rule
  * (coding-agent `computeProgress`), and both surfaces must read the same.
+ *
+ * Only a completed member reads full. A running one is capped short of the
+ * end (a 60-tool agent must not look finished), and a failed or aborted
+ * member keeps the work it actually did instead of claiming 100%.
  */
 export function agentProgressFraction(p: { status?: unknown; toolCount?: unknown }): number {
 	const status = typeof p.status === "string" ? p.status : "running";
-	if (status === "completed" || status === "failed" || status === "aborted") return 1;
 	const toolCount = typeof p.toolCount === "number" ? p.toolCount : 0;
+	const worked = toolCount > 0 ? clampFraction(toolCount / (toolCount + 2)) : 0;
+	if (status === "completed") return 1;
+	if (status === "failed" || status === "aborted") return worked;
 	if (status === "pending" || toolCount <= 0) return 0;
-	return Math.min(1, toolCount / (toolCount + 2));
+	return capRunningFraction(worked, false);
 }
 
 /**
@@ -276,15 +284,15 @@ function SwarmOverview({
 	onToggle(): void;
 }): ReactNode {
 	if (counts.total === 0) return null;
-	const segments: { phase: SwarmPhase; count: number; cls: string }[] = [];
-	const push = (phase: SwarmPhase, count: number, cls: string): void => {
-		if (count > 0) segments.push({ phase, count, cls });
+	const segments: { phase: SwarmPhase; count: number; cls: string; tone: ProgressTone }[] = [];
+	const push = (phase: SwarmPhase, count: number, cls: string, tone: ProgressTone): void => {
+		if (count > 0) segments.push({ phase, count, cls, tone });
 	};
-	push("tools.done", counts.done, "s-ok");
-	push("tools.mergeFailed", counts.mergeFailed, "s-warn");
-	push("tools.running", counts.running, "s-run");
-	push("tools.failed", counts.failed, "s-fail");
-	push("tools.aborted", counts.aborted, "s-abort");
+	push("tools.done", counts.done, "s-ok", "ok");
+	push("tools.mergeFailed", counts.mergeFailed, "s-warn", "warn");
+	push("tools.running", counts.running, "s-run", "accent");
+	push("tools.failed", counts.failed, "s-fail", "err");
+	push("tools.aborted", counts.aborted, "s-abort", "err");
 	const doneTotal = counts.done + counts.mergeFailed + counts.failed + counts.aborted;
 	return (
 		<div className="tv-swarm-overview">
@@ -315,22 +323,21 @@ function SwarmOverview({
 					<span className={`tv-swarm-chev-icon${open ? " tv-swarm-chev-icon--open" : ""}`} aria-hidden="true" />
 				</button>
 			</div>
+			{/* One-phase swarms keep the bar too: the running phase is the common
+			 *  case, and hiding the bar there reads as "no progress at all". */}
+			<ProgressSegments
+				className="tv-swarm-seg"
+				segments={segments.map(segment => ({ value: segment.count, tone: segment.tone }))}
+			/>
 			{segments.length > 1 && (
-				<>
-					<div className="tv-swarm-seg" aria-hidden="true">
-						{segments.map(s => (
-							<span key={s.phase} className={`tv-swarm-seg-part ${s.cls}`} style={{ flexGrow: s.count }} />
-						))}
-					</div>
-					<div className="tv-swarm-legend">
-						{segments.map(s => (
-							<span key={s.phase} className="tv-swarm-legend-item">
-								<span className={`tv-swarm-dot ${s.cls}`} aria-hidden="true" />
-								{t(s.phase)} {s.count}
-							</span>
-						))}
-					</div>
-				</>
+				<div className="tv-swarm-legend">
+					{segments.map(s => (
+						<span key={s.phase} className="tv-swarm-legend-item">
+							<span className={`tv-swarm-dot ${s.cls}`} aria-hidden="true" />
+							{t(s.phase)} {s.count}
+						</span>
+					))}
+				</div>
 			)}
 		</div>
 	);
@@ -344,7 +351,9 @@ const SWARM_MATRIX_DOTS = 16;
 const SWARM_MATRIX_COLS = 8;
 
 function SwarmMatrix({ fraction, phase }: { fraction: number; phase: "ok" | "warn" | "err" | "run" }): ReactNode {
-	const filled = Math.round(Math.min(1, Math.max(0, fraction)) * SWARM_MATRIX_DOTS);
+	// Floor, not round: a running member at 15.6/16 cells must still show a
+	// gap. Rounding filled the last cell and the matrix read as finished.
+	const filled = Math.floor(clampFraction(fraction) * SWARM_MATRIX_DOTS);
 	return (
 		<span
 			className={`tv-swarm-matrix tv-swarm-matrix--${phase}`}
@@ -367,7 +376,8 @@ function SwarmMatrix({ fraction, phase }: { fraction: number; phase: "ok" | "war
 
 /** Card foot status line, kimiwork semantics: a plain-language state on the
  *  left ("正在工作" / done / failed / "N 个工具") with the dot matrix on the
- *  right. */
+ *  right. Without a true fraction the matrix is omitted — status text alone
+ *  carries the outcome. */
 function SwarmFoot({
 	phase,
 	fraction,
@@ -375,23 +385,23 @@ function SwarmFoot({
 	children,
 }: {
 	phase: "ok" | "warn" | "err" | "run";
-	fraction: number;
+	fraction?: number;
 	status: string;
 	children?: ReactNode;
 }): ReactNode {
 	return (
 		<div className="tv-swarm-foot">
 			<span className={`tv-swarm-status tv-swarm-status--${phase}`}>{status}</span>
-			<SwarmMatrix fraction={fraction} phase={phase} />
+			{fraction !== undefined && <SwarmMatrix fraction={fraction} phase={phase} />}
 			{children}
 		</div>
 	);
 }
 
-/** Phase → matrix fill fraction, mirroring the old bar semantics
- *  (full on ok, partial on warn/err). */
-function resultFraction(phase: "ok" | "warn" | "err"): number {
-	return phase === "ok" ? 1 : phase === "warn" ? 0.66 : 0.34;
+/** Settled results carry no tool total, so only success has an honest fill;
+ *  a failed or aborted row shows its phase without inventing work it did. */
+function resultFraction(phase: "ok" | "warn" | "err"): number | undefined {
+	return phase === "ok" ? 1 : undefined;
 }
 
 /** Final snapshot for one agent: phase dot + status row, with the output

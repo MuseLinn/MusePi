@@ -41,6 +41,10 @@ export const EXTENSION_HOST_MODULES = [
 	{ key: "voice", path: "lib/voice" },
 	{ key: "panel-maximize", path: "lib/panel-maximize" },
 	{ key: "suggestions", path: "lib/suggestions" },
+	/** Shared scrollbar-skin registry: the overlay may run inside a compiled
+	 *  plugin bundle, and it must read the SAME contributed/imported catalog
+	 *  the appearance picker writes. */
+	{ key: "scrollbar-skins", path: "plugins/ui-theme/skins" },
 	/** Shared task-center nav store: a compiled sidebar panel must read the
 	 *  SAME snapshot the page publishes, not a bundled copy of the store. */
 	{ key: "task-nav", path: "lib/scheduled-task-nav" },
@@ -73,29 +77,46 @@ function normalize(request: string): string {
 }
 
 /**
+ * Collapse `.` / `..` segments in an app-relative path (no Node `path` here:
+ * this module is shared with the renderer bundle).
+ */
+function collapseSegments(value: string): string {
+	const out: string[] = [];
+	for (const segment of value.split("/")) {
+		if (segment === "" || segment === ".") continue;
+		if (segment === "..") out.pop();
+		else out.push(segment);
+	}
+	return out.join("/");
+}
+
+/**
  * Resolve an import request to a host module key.
  *
  * Relative requests match by path suffix because a plugin may sit at any
  * directory depth (`../lib/x`, `../../lib/x`). A sibling import from another
  * module inside `lib` (`./x`) is the same module identity, so it resolves to
- * the `lib/x` entry when the importer lives under a `lib` directory. Bare
- * requests match exactly. Returns undefined when the import stays bundled.
+ * the `lib/x` entry when the importer lives under a `lib` directory; any other
+ * sibling import resolves against the importer's directory so a bundle can
+ * own a shared module in its own folder (`ui-theme/rail.tsx` → `./skins`).
+ * Bare requests match exactly. Returns undefined when the import stays bundled.
  */
 export function matchExtensionHostModule(request: string, importer?: string): ExtensionHostModuleKey | undefined {
 	const normalized = normalize(request);
+	const normalizedImporter = importer === undefined ? undefined : normalize(importer);
 	// A relative `../i18n` is only the shared module when the importer lives
 	// inside client-core: another package's `../i18n` is a different module
 	// and must keep its own copy.
-	if (
-		normalized.endsWith(CLIENT_CORE_I18N_SUFFIX) &&
-		importer !== undefined &&
-		normalize(importer).includes(CLIENT_CORE_SRC_SEGMENT)
-	) {
+	if (normalized.endsWith(CLIENT_CORE_I18N_SUFFIX) && normalizedImporter?.includes(CLIENT_CORE_SRC_SEGMENT)) {
 		return CLIENT_CORE_I18N_KEY;
 	}
 	const candidates = [normalized];
-	if (normalized.startsWith("./") && importer !== undefined && normalize(importer).includes("/lib/")) {
+	if (normalized.startsWith("./") && normalizedImporter?.includes("/lib/")) {
 		candidates.push(`lib/${normalized.slice(2)}`);
+	}
+	if (normalized.startsWith(".") && normalizedImporter !== undefined) {
+		const dir = normalizedImporter.slice(0, normalizedImporter.lastIndexOf("/"));
+		if (dir.length > 0) candidates.push(collapseSegments(`${dir}/${normalized}`));
 	}
 	for (const entry of EXTENSION_HOST_MODULES) {
 		if ("specifier" in entry && entry.specifier !== undefined) {

@@ -1,6 +1,7 @@
 import jsQR from "jsqr";
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { isHarmonyShell } from "../../lib/capacitor";
 import { haptic } from "../../lib/haptics";
 
 export interface QrScannerProps {
@@ -24,6 +25,27 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 	const [found, setFound] = useState(false);
 	const [facing, setFacing] = useState<"environment" | "user">("environment");
 	const [hasMultiCam, setHasMultiCam] = useState(false);
+	/** Camera permission was refused — HarmonyOS will not re-prompt by itself. */
+	const [permissionDenied, setPermissionDenied] = useState(false);
+
+	// Full-screen camera overlay. On HarmonyOS the native bar floats ABOVE the
+	// web view, so it would sit on the viewfinder and its light material would
+	// glow through the black mask. Hide it for the scanner's lifetime.
+	useEffect(() => {
+		if (!isHarmonyShell()) return;
+		try {
+			window.harmonyNative?.setTabBarVisible?.(false);
+		} catch {
+			// bridge missing — nothing to hide
+		}
+		return () => {
+			try {
+				window.harmonyNative?.setTabBarVisible?.(true);
+			} catch {
+				// bridge missing
+			}
+		};
+	}, []);
 
 	useEffect(() => {
 		let alive = true;
@@ -76,6 +98,13 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 
 		const start = async (): Promise<void> => {
 			try {
+				// Secure-context guard: getUserMedia is undefined on opaque or
+				// non-https origins. Distinguishing this from a permission denial
+				// is the difference between "grant camera" and "fix the origin".
+				if (!navigator.mediaDevices?.getUserMedia) {
+					if (alive) setError(`${t("settings.cameraUnavailableUsePair")} · no mediaDevices (insecure context?)`);
+					return;
+				}
 				// Re-entry (camera flip, foreground return) must not leave the
 				// previous track alive: two live camera streams on one element
 				// keeps the LED on and can wedge the sensor.
@@ -123,8 +152,15 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 					})
 					.catch(() => {});
 				raf = requestAnimationFrame(tick);
-			} catch {
-				if (alive) setError(t("settings.cameraUnavailableUsePair"));
+			} catch (err) {
+				if (alive) {
+					// Keep the user-facing copy clean; the browser's reason is only
+					// needed to decide whether to offer the permission shortcut.
+					setError(t("settings.cameraUnavailableUsePair"));
+					if (err instanceof Error && err.name === "NotAllowedError") {
+						setPermissionDenied(true);
+					}
+				}
 			}
 		};
 		void start();
@@ -197,9 +233,17 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 			</header>
 
 			<footer className="qr-bottom">
-				<button type="button" className="qr-torch" onClick={() => void toggleTorch()} aria-pressed={torch}>
-					{torch ? "💡" : "🔦"} <span>{t("settings.torch")}</span>
-				</button>
+				{isHarmonyShell() && permissionDenied ? (
+					// Denied once → HarmonyOS stops showing the dialog. Give the
+					// user a way back into the system permission page.
+					<button type="button" className="qr-grant" onClick={() => window.harmonyNative?.openCameraSettings?.()}>
+						{t("settings.grantCameraAccess")}
+					</button>
+				) : (
+					<button type="button" className="qr-torch" onClick={() => void toggleTorch()} aria-pressed={torch}>
+						{torch ? "💡" : "🔦"} <span>{t("settings.torch")}</span>
+					</button>
+				)}
 				{hasMultiCam && (
 					<button type="button" className="qr-flip" onClick={flipCamera} aria-label={t("settings.switchCamera")}>
 						🔄 <span>{t("settings.switchCamera")}</span>

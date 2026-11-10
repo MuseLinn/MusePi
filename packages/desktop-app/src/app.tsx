@@ -22,7 +22,6 @@ import type { CreationMessage } from "./components/CreationModeRow";
 import { uploadAttachmentFiles } from "./components/composer/use-attachments";
 import { DialogFrame } from "./components/DialogFrame";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { FloatingScrollbar } from "./components/FloatingScrollbar";
 import { GettingStartedCard, type GettingStartedStepId } from "./components/GettingStartedCard";
 import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
 import { GuiHeader } from "./components/GuiHeader";
@@ -78,7 +77,6 @@ import { installPanelMaximizeController } from "./lib/panel-maximize";
 import type { PetSessionCard } from "./lib/pet";
 import { activePet, moodFromState, petEnabled, petMode, petScale, stateFromSignals } from "./lib/pet";
 import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
-
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
 import { railPeekEligible, resolveSidebarPanel } from "./lib/rail-peek";
 import { grantRemoteAccessConsent, hasRemoteAccessConsent } from "./lib/remote-access-consent";
@@ -113,6 +111,7 @@ import { computeSettingsShellState } from "./lib/settings-shell";
 import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
 import {
+	APP_OVERLAY_SLOT,
 	BROWSER_HOST_SLOT,
 	CAPABILITY_CENTER_SLOT,
 	CHAT_VIEW_SLOT,
@@ -130,6 +129,7 @@ import { readHiddenSurfaces, readSurfaceOrder, surfaceById } from "./lib/surface
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
 import type { WorkspaceMutationResult } from "./lib/workspace-projects";
+import { FloatingScrollbar } from "./plugins/ui-theme/rail";
 import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
 import "./styles/gui-taskcenter.css";
@@ -4916,9 +4916,11 @@ function AppInner(): ReactNode {
 			{/* Update L-dialog layer: 待重启确认卡 + 失败决策卡 (design
 			 * §3.2 — 分层共存 on top of the toast, not a replacement). */}
 			<UpdateDialog />
-			{/* Floating pac-man scroll indicator (fixed overlay — system
-			 * scrollbars are hidden; see FloatingScrollbar.tsx). */}
-			<FloatingScrollbar />
+			{/* Floating scroll rail (fixed overlay — system scrollbars are hidden;
+			 * see plugins/ui-theme/rail.tsx). The whole overlay is one replaceable
+			 * seat: a Cordis plugin can own a different rail, and the built-in
+			 * one stays as the fallback when none is mounted. */}
+			<SlotComponentHost rpc={rpc} slot={APP_OVERLAY_SLOT} fallback={<FloatingScrollbar />} />
 		</div>
 	);
 }

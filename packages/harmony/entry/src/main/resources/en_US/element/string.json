@@ -19,6 +19,50 @@
     {
       "name": "perm_mic_reason",
       "value": "Voice input in agent chat"
+    },
+    {
+      "name": "tab_connect",
+      "value": "Connect"
+    },
+    {
+      "name": "tab_chat",
+      "value": "Chat"
+    },
+    {
+      "name": "tab_settings",
+      "value": "Settings"
+    },
+    {
+      "name": "sheet_pair_title",
+      "value": "Use pair code"
+    },
+    {
+      "name": "sheet_link_title",
+      "value": "Use remote access link"
+    },
+    {
+      "name": "sheet_pair_hint",
+      "value": "6-digit pair code"
+    },
+    {
+      "name": "sheet_host_hint",
+      "value": "Computer address (e.g. 192.168.1.5)"
+    },
+    {
+      "name": "sheet_link_hint",
+      "value": "Paste the remote access link"
+    },
+    {
+      "name": "sheet_name_hint",
+      "value": "This device's name"
+    },
+    {
+      "name": "action_pair",
+      "value": "Pair"
+    },
+    {
+      "name": "action_connect",
+      "value": "Connect"
     }
   ]
 }

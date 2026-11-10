@@ -79,7 +79,7 @@ interface HmrEventBus {
 class WatchedHmrService implements HmrService {
 	readonly roots: readonly string[];
 	readonly #debounceMs: number;
-	readonly #ignored: readonly string[];
+	readonly #ignored: ReadonlyArray<string | RegExp>;
 	/** The Cordis event service for `hmr/*`. A bare Context is its own event
 	 *  bus; listeners are owned by the disposers we keep. */
 	readonly #bus = new Context() as unknown as HmrEventBus;
@@ -91,7 +91,7 @@ class WatchedHmrService implements HmrService {
 	#queue: Promise<unknown> = Promise.resolve();
 	#graph: HmrGraphQueries | null = null;
 
-	constructor(roots: readonly string[], debounceMs: number, ignored: readonly string[] = []) {
+	constructor(roots: readonly string[], debounceMs: number, ignored: ReadonlyArray<string | RegExp> = []) {
 		this.roots = roots;
 		this.#debounceMs = debounceMs;
 		this.#ignored = ignored;
@@ -224,7 +224,7 @@ class WatchedHmrService implements HmrService {
 export function createHmrService(
 	roots: readonly string[],
 	debounceMs = 100,
-	ignored: readonly string[] = [],
+	ignored: ReadonlyArray<string | RegExp> = [],
 ): HmrService {
 	const service = new WatchedHmrService(roots, debounceMs, ignored);
 	service.start();

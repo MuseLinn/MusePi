@@ -1486,7 +1486,7 @@ export const settings = {
 	"settings.whatSpeakAll.desc":
 		"朗读内容：all = 助手消息 + 思考内容；assistant = 仅消息；yield = 仅回合结束时的最终消息",
 	"settings.rewriteAssistantOutput.desc":
-		"在合成前使用 tiny/smol 模型将助手输出重写为自然的口语化散文（描述代码，去除链接和 markdown）。失败时回退到机械清理",
+		"在合成前使用 tiny/smol 模型将助手输出重写为自然口语（描述代码，去除链接和 markdown）。失败时回退到机械清理",
 	"settings.kokoroVoiceUsedSpeaking": "朗读助手输出时使用的 Kokoro 语音",
 	"settings.sessionTitleModel.info":
 		"会话标题模型：默认为在线（/models 中的 TINY 角色，否则为 @smol），或本地设备端模型",
@@ -1773,7 +1773,7 @@ export const settings = {
 	"settings.shake": "抖动",
 	"settings.snapcompact": "快照压缩",
 	"settings.always2": "始终",
-	"settings.proseOnly": "仅散文",
+	"settings.proseOnly": "仅文字",
 	"settings.toolOnly": "仅工具",
 	"settings.never2": "从不",
 	"settings.ai": "AI",
@@ -1999,6 +1999,8 @@ export const settings = {
 	"Auto (bun-pty → node-pty fallback)": "自动（bun-pty，回退 node-pty）",
 	"Auto-Repair Syntax Errors": "自动修复语法错误",
 	"Auto-continue active goals in terminal/GUI sessions": "在终端/GUI 会话中自动继续进行中的目标",
+	"Auto-continue active goals in the background daemon / desktop GUI":
+		"在后台守护进程/桌面 GUI 中自动继续进行中的目标",
 	"Autocorrect (macOS)": "自动纠错（macOS）",
 	Borderless: "无边框",
 	"Bun pty (native, lowest latency)": "Bun pty（原生，延迟最低）",
@@ -2054,6 +2056,7 @@ export const settings = {
 	"Image URL SSH Target": "图片 URL SSH 目标",
 	"Image Upload Command": "图片上传命令",
 	"Interactive sessions": "交互会话",
+	"Daemon sessions": "守护进程会话",
 	Mechanical: "机械",
 	"Node pty (bridge process, more portable)": "Node pty（桥接进程，兼容性更好）",
 	Percentage: "百分比",
@@ -3158,6 +3161,8 @@ export const settings = {
 	"Rule names to ignore entirely (applies to bundled defaults and your own rules)":
 		"Rule names to ignore entirely (applies to bundled defaults and your own rules)",
 	"Run modes where active goals may auto-continue between turns": "运行模式，其中活跃目标可能在轮次间自动继续",
+	"Run modes where active goals may auto-continue between turns (interactive, daemon)":
+		"运行模式，其中活跃目标可能在轮次间自动继续（交互会话、守护进程）",
 	"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)":
 		"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)",
 	"Running Turn Detail": "运行中回合显示多少",
@@ -3489,7 +3494,7 @@ export const settings = {
 	"macOS clonefile reflink (APFS)": "macOS clonefile 重链接（APFS）",
 	max: "最大",
 	never: "从不",
-	"prose-only": "仅散文",
+	"prose-only": "仅文字",
 	"tool-only": "仅工具",
 	"xAI Grok Voice": "xAI Grok 语音",
 	"xd:// Inline Devices": "xd:// 内联设备",

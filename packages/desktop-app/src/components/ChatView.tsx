@@ -66,6 +66,7 @@ import {
 	selectPanelTabComponent,
 	selectTranscriptNodeComponents,
 	TRANSCRIPT_NODE_SLOT,
+	useExtensionScrollbarSkins,
 	useExtensionToolViews,
 	useExtensionWidgets,
 	useSlotComponents,
@@ -536,6 +537,9 @@ export function ChatView({
 	// Widget types contributed by plugins (registerWidget): compile the card
 	// renderer and register it beside the built-in widget types.
 	useExtensionWidgets(rpc);
+	// Scrollbar skins contributed by theme bundles (registerScrollbarSkin):
+	// publish them into the shared skin registry the floating rail reads.
+	useExtensionScrollbarSkins(rpc);
 	// Presentation switches (widget/board) must apply without a restart: after
 	// any settings write, ask the daemon to drop tools that are now disabled.
 	useEffect(() => {

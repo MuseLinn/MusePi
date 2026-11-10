@@ -28,7 +28,7 @@
  * rows are readouts too — they open the trajectory surface instead of
  * duplicating its timeline.
  */
-import { type TranslationKey, t } from "@musepi/client-core";
+import { fractionPercent, ProgressMeter, type TranslationKey, t } from "@musepi/client-core";
 import { fmtCost, fmtDuration } from "@musepi/client-core/src/lib/format";
 import { agentProgressFraction } from "@musepi/client-core/src/tool-render/tools/task";
 import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
@@ -49,6 +49,7 @@ import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { SessionInfoPluginRow, SessionInfoSlotData } from "../lib/slot-host";
 import {
+	SESSION_INFO_AGENTS_SLOT,
 	SESSION_INFO_SLOT,
 	SESSION_INFO_SLOT_PREFIX,
 	SlotComponentHost,
@@ -576,10 +577,10 @@ export function SessionInfoCard({
 		[extensionRegistry],
 	);
 	const extraSections = useSlotComponentsByPrefix(rpc, SESSION_INFO_SLOT_PREFIX).filter(
-		item => item.slot !== SESSION_INFO_SLOT,
+		item => item.slot !== SESSION_INFO_SLOT && item.slot !== SESSION_INFO_AGENTS_SLOT,
 	);
 
-	const sessionInfo = useMemo<SessionInfoSlotData>(() => {
+	const sessionInfoPlugins = useMemo(() => {
 		const rows: SessionInfoPluginRow[] = pluginEntries.map(entry => ({
 			id: entry.id,
 			label: entry.displayName || entry.name || entry.id,
@@ -608,7 +609,7 @@ export function SessionInfoCard({
 	// Elapsed seconds per agent id, measured from first sighting in this mount
 	// (the wire payload carries no start timestamp).
 	const firstSeenRef = useRef<Map<string, number>>(new Map());
-	const [, setTick] = useState(0);
+	const [tick, setTick] = useState(0);
 	useEffect(() => {
 		if (!progress || liveAgents.length === 0) return;
 		const now = Date.now();
@@ -624,6 +625,42 @@ export function SessionInfoCard({
 		const seconds = Math.max(0, Math.floor((Date.now() - start) / 1000));
 		return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 	}, []);
+
+	// Read-only projection for the section seats: the host owns the fraction,
+	// the elapsed clock and the trajectory callback, so a plugin section and
+	// the built-in fallback render the same agent the same way. `tick` is a
+	// dependency because the elapsed strings are time-based, not props.
+	const sessionInfo = useMemo<SessionInfoSlotData>(() => {
+		const rows = [
+			...liveAgents.map(([id, entry]) => ({
+				id,
+				agent: entry.agent,
+				task: entry.task,
+				percent: fractionPercent(agentProgressFraction(entry.progress)),
+				blocked: isAwaitingApproval(entry),
+				elapsed: elapsed(id),
+				durationMs: entry.progress.durationMs,
+				cost: entry.progress.cost,
+				ended: false,
+			})),
+			...endedAgents.map(([id, entry]) => ({
+				id,
+				agent: entry.agent,
+				task: entry.task,
+				percent: fractionPercent(agentProgressFraction(entry.progress)),
+				blocked: false,
+				elapsed: elapsed(id),
+				durationMs: entry.progress.durationMs,
+				cost: entry.progress.cost,
+				ended: true,
+			})),
+		];
+		return {
+			...sessionInfoPlugins,
+			agents: rows,
+			openTrajectory: () => onOpenSurface?.("trajectory"),
+		};
+	}, [sessionInfoPlugins, liveAgents, endedAgents, elapsed, tick, onOpenSurface]);
 
 	// ── Todo board progress ────────────────────────────────────────────────
 	const todo = useMemo(() => latestTodo(entries), [entries]);
@@ -1012,94 +1049,111 @@ export function SessionInfoCard({
 			) : null}
 
 			{liveAgents.length > 0 || endedAgents.length > 0 ? (
-				<InfoSection
-					title={t("general.agents")}
-					trailing={
-						liveAgents.length > 0 ? (
-							<span className="gui-session-info-count gui-session-info-count--live">{liveAgents.length}</span>
-						) : undefined
-					}
-				>
-					<div className="gui-session-info-agents">
-						{liveAgents.map(([id, entry]) => {
-							// Same fraction the TUI task card and the guest swarm card use,
-							// so a row reads the same progress everywhere.
-							const pct = Math.round(agentProgressFraction(entry.progress) * 100);
-							const blocked = isAwaitingApproval(entry);
-							return (
-								<button
-									key={id}
-									type="button"
-									className={`gui-session-info-agent${blocked ? " gui-session-info-agent--blocked" : ""}`}
-									title={entry.task}
-									onClick={() => onOpenSurface?.("trajectory")}
-								>
-									<Icon
-										name={blocked ? "alert" : "loader-4"}
-										className={`gui-session-info-row-icon${blocked ? "" : " gui-session-info-spin"}`}
-									/>
-									<span className="gui-session-info-item-label">
-										{entry.agent}
-										{entry.task ? ` · ${entry.task}` : ""}
+				<SlotComponentHost
+					rpc={rpc}
+					slot={SESSION_INFO_AGENTS_SLOT}
+					sessionInfo={sessionInfo}
+					fallback={
+						<InfoSection
+							title={t("general.agents")}
+							trailing={
+								liveAgents.length > 0 ? (
+									<span className="gui-session-info-count gui-session-info-count--live">
+										{liveAgents.length}
 									</span>
-									{blocked ? (
-										// A parked agent has no progress to plot; the state text
-										// takes the track's place instead of freezing it.
-										<span className="gui-session-info-agent-state">{t("sessionInfo.awaitingApproval")}</span>
-									) : (
-										<span className="gui-session-info-bar" aria-hidden="true">
-											<span className="tv-swarm-bar-fill" style={{ width: `${pct}%` }} />
-										</span>
-									)}
-									<span className="gui-session-info-elapsed">{elapsed(id)}</span>
-									{entry.progress.cost > 0 ? (
-										<span className="gui-session-info-elapsed">{fmtCost(entry.progress.cost)}</span>
-									) : null}
-								</button>
-							);
-						})}
-						{endedAgents.length > 0 ? (
-							<button
-								type="button"
-								className="gui-session-info-agent gui-session-info-agent--ended"
-								aria-expanded={endedOpen}
-								onClick={() => setEndedOpen(value => !value)}
-							>
-								<Icon
-									name="arrow-down-s"
-									className={`gui-session-info-chev${endedOpen ? "" : " gui-session-info-chev--closed"}`}
-								/>
-								<span className="gui-session-info-item-label">{t("general.ended")}</span>
-								<span className="gui-session-info-count">{endedAgents.length}</span>
-							</button>
-						) : null}
-						<Reveal open={endedOpen}>
-							<ul className="gui-session-info-list">
-								{endedAgents.map(([id, entry]) => (
-									<li key={id}>
+								) : undefined
+							}
+						>
+							<div className="gui-session-info-agents">
+								{liveAgents.map(([id, entry]) => {
+									// Same fraction the TUI task card and the guest swarm card use,
+									// so a row reads the same progress everywhere. Floored, capped
+									// while running: the track never claims the agent is done.
+									const pct = fractionPercent(agentProgressFraction(entry.progress));
+									const blocked = isAwaitingApproval(entry);
+									return (
 										<button
+											key={id}
 											type="button"
-											className="gui-session-info-agent gui-session-info-agent--ended"
+											className={`gui-session-info-agent${blocked ? " gui-session-info-agent--blocked" : ""}`}
 											title={entry.task}
 											onClick={() => onOpenSurface?.("trajectory")}
 										>
-											<Icon name="check" className="gui-session-info-row-icon" />
-											<span className="gui-session-info-item-label">{entry.agent}</span>
-											<span className="gui-session-info-elapsed">
-												{entry.progress.durationMs > 0
-													? fmtDuration(entry.progress.durationMs)
-													: elapsed(id)}
+											<Icon
+												name={blocked ? "alert" : "loader-4"}
+												className={`gui-session-info-row-icon${blocked ? "" : " gui-session-info-spin"}`}
+											/>
+											<span className="gui-session-info-item-label">
+												{entry.agent}
+												{entry.task ? ` · ${entry.task}` : ""}
 											</span>
+											{blocked ? (
+												// A parked agent has no progress to plot; the state text
+												// takes the track's place instead of freezing it.
+												<span className="gui-session-info-agent-state">
+													{t("sessionInfo.awaitingApproval")}
+												</span>
+											) : (
+												<ProgressMeter
+													className="gui-session-info-bar"
+													value={pct}
+													label={entry.agent}
+													valueText={`${pct}%`}
+												/>
+											)}
+											<span className="gui-session-info-elapsed">{elapsed(id)}</span>
 											{entry.progress.cost > 0 ? (
 												<span className="gui-session-info-elapsed">{fmtCost(entry.progress.cost)}</span>
 											) : null}
 										</button>
-									</li>
-								))}
-							</ul>
-						</Reveal>
-					</div>
-				</InfoSection>
+									);
+								})}
+								{endedAgents.length > 0 ? (
+									<button
+										type="button"
+										className="gui-session-info-agent gui-session-info-agent--ended"
+										aria-expanded={endedOpen}
+										onClick={() => setEndedOpen(value => !value)}
+									>
+										<Icon
+											name="arrow-down-s"
+											className={`gui-session-info-chev${endedOpen ? "" : " gui-session-info-chev--closed"}`}
+										/>
+										<span className="gui-session-info-item-label">{t("general.ended")}</span>
+										<span className="gui-session-info-count">{endedAgents.length}</span>
+									</button>
+								) : null}
+								<Reveal open={endedOpen}>
+									<ul className="gui-session-info-list">
+										{endedAgents.map(([id, entry]) => (
+											<li key={id}>
+												<button
+													type="button"
+													className="gui-session-info-agent gui-session-info-agent--ended"
+													title={entry.task}
+													onClick={() => onOpenSurface?.("trajectory")}
+												>
+													<Icon name="check" className="gui-session-info-row-icon" />
+													<span className="gui-session-info-item-label">{entry.agent}</span>
+													<span className="gui-session-info-elapsed">
+														{entry.progress.durationMs > 0
+															? fmtDuration(entry.progress.durationMs)
+															: elapsed(id)}
+													</span>
+													{entry.progress.cost > 0 ? (
+														<span className="gui-session-info-elapsed">
+															{fmtCost(entry.progress.cost)}
+														</span>
+													) : null}
+												</button>
+											</li>
+										))}
+									</ul>
+								</Reveal>
+							</div>
+						</InfoSection>
+					}
+				/>
 			) : null}
 
 			{showTodo && todo ? (

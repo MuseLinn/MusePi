@@ -1386,6 +1386,9 @@ export interface PluginContextNamespaces {
 	readonly subagents: { register: ExtensionAPI["registerSubagent"] };
 	readonly magicKeywords: { register: ExtensionAPI["registerMagicKeyword"] };
 	readonly memory: { registerBackendProvider: ExtensionAPI["registerMemoryBackendProvider"] };
+	/** Floating-rail skins (registerScrollbarSkin): a theme bundle owns the
+	 *  catalog without shipping renderer code. */
+	readonly skins: { register: ExtensionAPI["registerScrollbarSkin"] };
 	/**
 	 * The live session's registration scope (dsh's agent-scoped context).
 	 *
@@ -1980,6 +1983,12 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	 *  renderers for a segment id. Dropped on unload so a re-added extension
 	 *  re-registers it. */
 	registerStatusBarSegment(id: string, options: { label: string; order?: number; renderKey?: string }): void;
+	/** Contribute a floating-rail skin (the horizontal/vertical scroll progress
+	 *  overlay). Skins are data, not renderer code: the GUI merges contributed
+	 *  ids over the built-in catalog, so a theme bundle can own the rail's look
+	 *  without shipping a component. Dropped on unload so a re-added extension
+	 *  re-registers it. */
+	registerScrollbarSkin(skin: ExtensionScrollbarSkin): void;
 
 	// Effect ledger (every tracked plugin; dsh's `ctx.effect`)
 	// =========================================================================
@@ -2522,6 +2531,29 @@ export interface ExtensionStatusBarSegment {
 	renderKey?: string;
 }
 
+/** One scrollbar skin contributed by an extension (registerScrollbarSkin).
+ *  The rail is data-driven, so a theme bundle owns its skins without shipping
+ *  renderer code: the daemon validates the shape, `extensions.list` carries it,
+ *  and the GUI merges contributed ids over the built-in catalog. */
+export interface ExtensionScrollbarSkin {
+	/** Registry id; a contributed id replaces the built-in with the same id. */
+	id: string;
+	/** Picker label (plugin-owned plain text, not a host i18n key). */
+	displayName: string;
+	/** Rail geometry: jelly capsule or bead rail. */
+	base: "gummy" | "pacman";
+	/** Theme-bound CSS colours (a raw colour, `var(...)` or `color-mix(...)`). */
+	colors: {
+		accent: string;
+		track: string;
+		eaten: string;
+	};
+	/** Rail/capsule width in px (clamped to 6–24). */
+	size: number;
+	/** Optional data-URL glyph replacing the built-in Pac-man. */
+	pacGlyph?: string | null;
+}
+
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 
 export type SendMessageHandler = <T = unknown>(
@@ -2864,6 +2896,9 @@ export interface Extension {
 	/** Status-bar segments contributed by the extension (registerStatusBarSegment),
 	 *  rendered after the built-ins by `order`; dropped on unload. */
 	statusBarSegments: ExtensionStatusBarSegment[];
+	/** Scrollbar skins contributed by the extension (registerScrollbarSkin),
+	 *  merged over the built-in catalog by id; dropped on unload. */
+	scrollbarSkins: ExtensionScrollbarSkin[];
 }
 
 /** One setting contributed by an extension via registerSetting. Mirrors the

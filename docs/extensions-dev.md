@@ -175,6 +175,7 @@ export default function (pi: ExtensionAPI): void {
 **槽位清单**(daemon `assertKnownComponentSlot` 校验,未知槽名注册会抛错;单一权威见 `packages/collab-proto/src/extension-slots.ts`):
 - `panel.tab.<id>` — 右面板动态 tab。默认提供 rail 启动入口；声明 `availability: "on-demand"` 时不进入 rail、空状态或新建菜单，只由会话内容或工具结果中的 `details.panelTab` 描述符打开。描述符使用 `surface: "ext:panel.tab.<id>"`，可携带 `target`、`dedupeKey` 和 `label`；失败工具结果不会打开标签。`panel.tab.files` 是保留特例：它映射到持久化 surface `files`，不进入通用扩展 launcher，也不接受 `ext:panel.tab.files` 作为第二个 surface。
 - `panel.shell` — full right-panel shell (single). The `panel` plugin owns tabs, split layout, and maximize presentation; `app.chat` does not bundle it.
+- `app.overlay` — root-level fixed overlay (single): owns the floating horizontal/vertical scroll rail and portals itself to `document.body`. The host keeps the built-in `<FloatingScrollbar/>` as the fallback when no contribution is mounted.
 - `browser.host` — persistent managed-browser guest host (single), mounted at the app root independently of `panel.tab.browser`. Both artifacts bind the same `window.MusePiManagedBrowserHost` store instead of bundling separate copies.
 - `settings.tab.<id>` — 设置页左侧导航项:扩展声明一个设置页即出现在设置导航,内容区挂载组件。
 - `sidebar.panel.<destination id>` — 二级左栏面板(2026-11-08):宿主按 rail 目的地 id 取唯一贡献,挂进 `.gui-side-keeper`,由 `data-panel` 决定显隐;几何读 keeper 上的 `--gui-side-w`,不接宿主专用 props。编译插件通过宿主模块表共享 `lib/scheduled-task-nav`(`task-nav`),否则会拿到另一份快照 store。插件停用或编译失败时宿主回退内置面板,目的地仍可用。
@@ -183,6 +184,7 @@ export default function (pi: ExtensionAPI): void {
 - `panel.right` / `settings.extensions` — 旧保留槽(仍可用)。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载,见下):注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染,并注入 `settingsScope` 读写代理。
 - `settings.item.<extId>` — 扩展设置卡片(2026-08-17;2026-08-20 起展示于**扩展中心底部**,随插件 inventory):按扩展 id 派发一张卡片,组件经 `settingsScope` prop 读写设置键(见下)。
 - `settings.action.<id>` — 单行偏好槽(2026-08-20):组件挂到设置页"通用"分区末尾,功能插件贡献单行偏好(语言/外观/Enter 行为),无需整 tab 或整卡。
+- `settings.appearance.item` — 内置外观页的行/分区座位(2026-11-10,list 语义;dsh `settings.general.item` 同构命名):贡献渲染在外观页内容之后。插件**自己选择座位**:只放内置页、只放扩展中心(`settings.item.<extId>`)、或两处都注册;组件收到注入的 `slot`,可为不同座位渲染不同内容。`ui-theme` 用该座位把滚动条设置放回外观页（dsh 的 theme bundle 同构）。
 
 **设置面板宿主**(2026-10-10):注册到 `settings.extensions` 的组件由**扩展控制中心**
 底部的「扩展设置」分区承载 —— 与 `settings.item.<extId>` 卡片同框,按 `extensionId`
@@ -336,6 +338,32 @@ pi.registerWidget({
 - **运行时校验**：`widget` / `board` 调用时把 `ctx.getRegisteredWidgets()` 合并进类型表；`board.save` / `widget.schema` 这类无工具上下文的 RPC 读 daemon 进程索引（`registerWidget` 写入）。插件类型因此能真正通过校验，而不只是出现在扩展清单里。
 - **与 registerToolView 的区别**：后者按工具名替换整条工具渲染；本项按卡片类型新增/替换一个 widget 渲染器。
 - **参考实现**：`packages/coding-agent/src/bundled-plugins/visuals/`（`metric` / `clock` 试点，`widget-compile.test.ts` 端到端校验编译产物）。
+
+## 9.2 主题 bundle：滚动进度轨皮肤（registerScrollbarSkin）
+
+主题 bundle 可以贡献横向/纵向浮动滚动轨的皮肤。皮肤是**数据**，不携带渲染器模块——轨道由宿主绘制，插件只声明外观：
+
+```ts
+pi.registerScrollbarSkin({
+	id: "builtin-snake",              // 与内置同 id 即覆盖
+	displayName: "Snake",
+	base: "gummy",                    // "gummy" 胶囊 / "pacman" 豆轨
+	colors: {
+		accent: "var(--color-accent)",  // 跟随主题变量
+		track: "color-mix(in oklab, var(--color-text-faint) 30%, transparent)",
+		eaten: "transparent",
+	},
+	size: 10,                         // 6–24px
+});
+```
+
+- **校验**：loader 要求 `id`/`displayName`/`base`/三个颜色/数值 `size`；颜色值若含 `url()`、`image-set()`、`expression()` 直接抛错（这些值会写入 CSS 自定义属性，不能成为网络/执行面）；`pacGlyph` 只接受 `data:` URL。
+- **数据流**：daemon 装载 → `collectScrollbarSkins` → `extensions.list.scrollbarSkins` → 桌面 `useExtensionScrollbarSkins`（ChatView）→ `scrollbar-skins` 宿主模块 → 浮动轨与外观选择器读同一份目录。
+- **优先级**：contributed → imported（用户导入的 zip）→ built-in，按 `id` 去重，插件可覆盖内置皮肤。插件停用后 contributed 清空，内置目录仍在，轨不会失去皮肤。
+- **内置目录归 `ui-theme` 渲染端 bundle 所有**：`packages/desktop-app/src/plugins/ui-theme/` 内的 `skins.ts` 定义 snake / gummy-rainbow / pacman，`rail.tsx` 渲染、`rail.css` 提供样式、`settings.tsx` 提供外观卡；`index.ts` 注册 `app.overlay` + `settings.item.ui-theme`。宿主保留同构兜底，供 bundle 停用、编译失败或 guest/mobile 宿主使用。
+- **daemon 主题插件仍可贡献皮肤**：`registerScrollbarSkin` 是给 daemon 侧主题包的稳定缝；内置目录不再由 `builtin-themes` 注册，避免两个所有者。
+- **编译插件共享注册表**：`scrollbar-skins` 在 `EXTENSION_HOST_MODULES` 中（路径 `plugins/ui-theme/skins`），编译后的 `app.overlay` 覆盖层读取的是宿主实例，而不是打包副本（见 §19）。
+- **参考实现**：`packages/desktop-app/src/plugins/ui-theme/`（`rail.tsx` / `rail.css` / `skins.ts` / `settings.tsx` / `index.ts`）。
 
 ## 10. 扩展 transcript 节点渲染(transcript.node seat, DSH 粒度, 2026-08-27)
 
@@ -819,6 +847,7 @@ const hostModules = {
 | `voice` | `lib/voice.ts` | Active TTS/dictation sessions, playback context, and stop/resume handles: audio state and cancellation must not diverge across bundles |
 | `panel-maximize` | `lib/panel-maximize.ts` | Maximized flag, subscribers, and animation registry: the host and every plugin observe one panel-maximize state |
 | `suggestions` | `lib/suggestions.ts` | Suggestion contributors, storage, and subscriptions: user-curated suggestions stay the same across the host and plugins |
+| `scrollbar-skins` | `plugins/ui-theme/skins.ts` | Contributed/imported/built-in skin catalog: the `ui-theme` settings card writes it and a compiled `app.overlay` rail reads the same list |
 | `client-core` | `@musepi/client-core` (bare) | The whole client-core namespace: its React contexts and module-level state |
 | `i18n` | `@musepi/client-core/src/i18n` (bare) | Locale registry behind `t` / `setLocale` |
 

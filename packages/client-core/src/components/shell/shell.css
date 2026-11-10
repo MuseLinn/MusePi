@@ -1634,11 +1634,17 @@
 /* ---- connect screen ---- */
 .sh-connect {
 	height: 100%;
-	min-height: 100dvh;
+	/* The shell is sized from --viewport-height (the Web component's real
+	 * layout height). min-height:100dvh used a DIFFERENT viewport here and
+	 * grew the row by a few px on immersive windows, so a fully visible
+	 * connect screen still scrolled. Clamp to the parent instead. */
+	min-height: 0;
+	max-height: 100%;
 	display: grid;
 	place-items: start center;
 	overflow-y: auto;
 	overflow-y: overlay;
+	overscroll-behavior: contain;
 	/* GUI pane-glow parity + MusePi dot-matrix brand texture behind the
 	 * glass card: two accent washes and a faint adaptive dot grid. */
 	background:
@@ -1723,8 +1729,25 @@
 .sh-connect-preferences {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 2px;
 	flex: none;
+	/* One quiet pill holds all three preferences. Before this, each control
+	 * painted its own white chip on the light card and the row read as a
+	 * cluster of floating buttons. */
+	padding: 2px 5px;
+	border: 0.5px solid var(--glass-border);
+	border-radius: 999px;
+	background: var(--glass-bg);
+}
+
+.sh-connect-preferences .gui-seg {
+	background: transparent;
+	min-width: 0;
+}
+
+.sh-connect-preferences .gui-seg-thumb {
+	background: color-mix(in oklab, var(--fg) 12%, transparent);
+	box-shadow: none;
 }
 
 .sh-lockup {
@@ -1739,16 +1762,14 @@
 }
 
 .sh-lockup-mark {
-	width: 22px;
-	height: 22px;
+	/* Brand S5 orb mark — a self-contained SVG (icon + background in one
+	 * asset). The old rule painted a gradient tile while the pi glyph sat in
+	 * a sibling span, so the "icon background" and the glyph never lined up. */
+	width: 28px;
+	height: 28px;
 	flex: none;
-	background: var(--brand-mark-gradient);
-	border-radius: var(--radius-md);
-	box-shadow: inset 0 1px 0 color-mix(in oklab, #fff 25%, transparent);
-}
-
-.sh-lockup-pi {
-	color: var(--accent);
+	border-radius: 8px;
+	object-fit: contain;
 }
 
 .sh-connect-sub {
@@ -1994,6 +2015,26 @@
 	flex: 1 1 100%;
 }
 
+/* Wide cards have room for the whole pair form on one line — the full-width
+ * submit is a narrow-screen affordance, not a rule. */
+@media (min-width: 600px) {
+	.sh-connect-pair-row {
+		display: grid;
+		grid-template-columns: 112px minmax(0, 1fr) auto;
+	}
+	.sh-connect-pair-row .sh-input:first-child,
+	.sh-connect-pair-row .sh-input:nth-child(2) {
+		width: auto;
+		min-width: 0;
+		flex: none;
+	}
+	.sh-connect-pair-row .sh-btn-primary {
+		flex: none;
+		min-width: 96px;
+		padding-inline: 18px;
+	}
+}
+
 .sh-connect-skip {
 	margin-top: 14px;
 	padding: 6px;
@@ -2117,10 +2158,10 @@
 	min-height: 44px;
 }
 .sh-connect-preferences .sh-theme-toggle {
-	width: 44px;
-	height: 44px;
-	background: var(--glass-bg);
-	border-color: var(--glass-border);
+	width: 36px;
+	height: 36px;
+	background: transparent;
+	border-color: transparent;
 }
 .sh-connect-hero {
 	display: flex;
@@ -2228,7 +2269,7 @@
 	gap: 8px;
 }
 .sh-connect-method {
-	min-height: 68px;
+	min-height: 56px;
 	padding: 12px 14px;
 	background: color-mix(in oklab, var(--bg-raised) 52%, transparent);
 	border-color: var(--glass-border);
@@ -2276,10 +2317,16 @@
 	}
 	.sh-connect-card {
 		max-width: 480px;
-		max-height: none;
-		gap: 18px;
+		/* Never let the card outgrow the viewport: `max-height:none` +
+		 * `overflow:visible` here made the OUTER .sh-connect scroll even when
+		 * everything was visible — the folded Pura X Max (459x672) hits this
+		 * breakpoint, while the unfolded layout tested earlier did not. */
+		max-height: 100%;
+		gap: 10px;
 		padding: 0;
-		overflow: visible;
+		overflow-y: auto;
+		overflow-y: overlay;
+		overscroll-behavior: contain;
 		background: transparent;
 		border: 0;
 		box-shadow: none;
@@ -2287,10 +2334,10 @@
 		-webkit-backdrop-filter: none;
 	}
 	.sh-connect-head {
-		min-height: 44px;
+		min-height: 48px;
 	}
 	.sh-connect-hero {
-		padding: 22px 0 6px;
+		padding: 10px 0 2px;
 	}
 	.sh-connect-hero h1 {
 		max-width: 340px;
@@ -2299,19 +2346,19 @@
 	.sh-connect-hero p {
 		max-width: 340px;
 	}
+	/* The dot-matrix brand wash was sized for the tall card. After trimming
+	 * the connect copy the card is ~320px, so a 190px wash sat straight on the
+	 * headline and fought it. The lockup already carries the brand, and the
+	 * screen has a CSS dot grid — drop the canvas here. */
 	.sh-connect-matrix {
-		top: 44px;
-		right: -20px;
-		left: -20px;
-		height: 190px;
-		opacity: 0.34;
+		display: none;
 	}
 	.sh-connect-method {
-		min-height: 66px;
+		min-height: 56px;
 	}
 	.sh-connect-skip {
 		align-self: center;
-		min-height: 44px;
+		min-height: 48px;
 		margin-top: 0;
 	}
 }
@@ -2834,16 +2881,42 @@
 }
 
 /* Touch target floor is input-based, not width-based: tablets and landscape
- * phones need the same 44px controls as narrow phones. */
+ * phones need the same larger controls as narrow phones.
+ * HarmonyOS @cross-device-app-dev/touch-target-size requires ≥40vp and
+ * recommends 48vp × 48vp — 44px was the iOS floor, so go to 48 here. */
 @media (pointer: coarse) {
+	.sh-btn,
 	.sh-btn-icon,
-	.sh-header .sh-host-chip {
-		min-width: 44px;
-		min-height: 44px;
+	.sh-theme-toggle,
+	.sh-header .sh-host-chip,
+	.sh-ws-action-btn,
+	.sh-ws-create,
+	.ss-search,
+	.ss-search-clear,
+	.sh-toast-close,
+	.sh-connect-skip {
+		min-height: 48px;
+	}
+	/* Icon-only controls need both axes; text buttons keep their own width. */
+	.sh-btn-icon,
+	.sh-theme-toggle,
+	.sh-ws-action-btn,
+	.ss-search-clear,
+	.sh-toast-close {
+		min-width: 48px;
+	}
+	.gui-seg--icon .gui-seg-item {
+		min-width: 48px;
+		min-height: 48px;
+	}
+	/* Every segmented control is a primary choice on phones — the label
+	 * variants were 22–25px tall. */
+	.gui-seg-item {
+		min-height: 48px;
 	}
 	.sh-composer-inner :is(.sh-composer-actions, .sh-composer-leading, .sh-composer-end) .sh-btn {
-		min-width: 44px;
-		min-height: 44px;
+		min-width: 48px;
+		min-height: 48px;
 	}
 	.sh-composer-inner .sh-btn-send-work {
 		min-width: 0;
@@ -2851,8 +2924,14 @@
 	.sh-mt-capsule,
 	.sh-mt-seg,
 	.sh-panel-menu-item,
-	.sh-attach-option {
-		min-height: 44px;
+	.sh-attach-option,
+	.sh-connect-recent-item {
+		min-height: 48px;
+	}
+	/* iOS zooms the page when a focused field computes below 16px. */
+	.sh-input,
+	.sh-composer-input {
+		font-size: 16px;
 	}
 	.sh-attach-chips {
 		padding-top: 18px;
@@ -2861,8 +2940,8 @@
 	.sh-attach-remove {
 		top: -18px;
 		right: -18px;
-		width: 44px;
-		height: 44px;
+		width: 48px;
+		height: 48px;
 		border: 0;
 		background: transparent;
 	}
@@ -2877,6 +2956,11 @@
 	}
 	.sh-attach-remove svg {
 		position: relative;
+	}
+	/* Keep the connect-screen preference pill internally level: the segmented
+	 * items otherwise stay 28px beside the 48px icon buttons. */
+	.sh-connect-preferences .gui-seg-item {
+		min-height: 40px;
 	}
 }
 
@@ -4327,6 +4411,26 @@
 	transform: scale(0.96);
 }
 
+/* Recovery CTA when the camera permission was denied: the overlay is the only
+ * surface the user is looking at, so the way back must be in it. */
+.qr-grant {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 44px;
+	padding: 10px 22px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--color-accent);
+	color: var(--accent-fg);
+	font-size: 15px;
+	font-weight: 600;
+}
+
+.qr-grant:active {
+	transform: scale(0.97);
+}
+
 .qr-torch[aria-pressed="true"] {
 	background: color-mix(in oklab, var(--color-accent) 40%, oklch(0 0 0 / 40%));
 	border-color: var(--color-accent);
@@ -4494,6 +4598,10 @@
 
 /* ---- Connect card brand backdrop (DotMatrixMark absorbed from gui) ---- */
 .sh-connect-matrix {
+	/* Retired: the 132px wash sat on the headline at every width once the
+	 * connect copy was trimmed, and it read as noise rather than brand. The
+	 * lockup carries the identity; the screen keeps its CSS dot grid. */
+	display: none;
 	position: absolute;
 	top: 0;
 	left: 0;
@@ -5474,14 +5582,15 @@
 }
 
 .sh-mobile-settings-head {
-	margin-bottom: 24px;
+	margin: 0 0 16px;
 }
 
 .sh-mobile-settings-head h2 {
-	margin: 0 0 8px;
-	font-size: var(--ui-font-size-xl);
-	font-weight: 650;
-	letter-spacing: -0.02em;
+	/* HarmonyOS settings title: large, left aligned, no subtitle. */
+	margin: 0;
+	font-size: 26px;
+	font-weight: 600;
+	letter-spacing: -0.01em;
 }
 
 .sh-mobile-settings-head p,
@@ -5493,31 +5602,44 @@
 }
 
 .sh-mobile-settings-section {
-	margin-bottom: 16px;
-	padding: 16px;
-	border: 1px solid var(--glass-border);
-	border-radius: var(--radius-xl);
-	background: var(--glass-sheen), var(--glass-bg);
-	box-shadow: inset 0 1px 0 var(--glass-edge-hi);
+	margin: 0 0 22px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
 }
 
 .sh-mobile-settings-section > h3 {
-	margin: 0 0 12px;
+	margin: 0 0 8px 2px;
 	color: var(--fg-muted);
-	font-size: var(--ui-font-size-sm);
-	font-weight: 600;
+	font-size: 13px;
+	font-weight: 400;
+}
+
+/* One rounded surface per group (system settings list language): the group
+ * owns the card, the rows own only the hairline separators. The old shape put
+ * a bordered card around every section AND a 16px inset on it, which read as a
+ * web card rather than a HarmonyOS list. */
+.sh-setting-group {
+	overflow: hidden;
+	border: 0.5px solid var(--glass-border);
+	border-radius: var(--radius-xl);
+	background: var(--glass-bg);
+	box-shadow: inset 0 1px 0 var(--glass-edge-hi);
 }
 
 .sh-mobile-setting-row {
 	display: flex;
-	min-height: 52px;
+	min-height: 56px;
 	align-items: center;
 	justify-content: space-between;
 	gap: 16px;
-	border-bottom: 1px solid var(--border);
+	padding: 0 14px;
+	font-size: 16px;
+	border-bottom: 0.5px solid var(--border);
 }
 
-.sh-mobile-setting-row:last-child {
+.sh-setting-group > .sh-mobile-setting-row:last-child {
 	border-bottom: 0;
 }
 
@@ -5526,7 +5648,17 @@
 	flex-direction: column;
 	justify-content: center;
 	gap: 8px;
-	padding: 10px 0;
+	padding: 12px 14px;
+}
+
+/* Secondary line under a settings label (why the stops are ordered that way). */
+.sh-setting-hint {
+	display: block;
+	margin-top: 2px;
+	color: var(--fg-faint);
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 1.4;
 }
 
 .sh-mobile-font-size {
@@ -5678,4 +5810,211 @@
 		animation: none;
 		opacity: 0.6;
 	}
+}
+
+/* ── Wide / unfolded foldables (HarmonyOS width breakpoint lg ≥ 840vp) ──────
+ * Official breakpoints: sm [320,600), md [600,840), lg [840,1440). Pura X Max
+ * expanded is 939 × 664 vp → width lg, height sm (short landscape). The
+ * responsive spec asks for a repeated/split layout at lg, a compact vertical
+ * rhythm on short windows, and a side gutter taken from the real safe-area
+ * insets (wide foldables have larger rounded corners / cutouts).
+ * Refs: devecocli docs — 响应式布局, 阔折叠_阔直板应用开发, 窗口沉浸式. */
+@media (min-width: 840px) {
+	.sh-connect {
+		padding-left: calc(24px + var(--safe-left, 0px));
+		padding-right: calc(24px + var(--safe-right, 0px));
+	}
+	/* Extra specificity beats mobile.css's tablet max-width:480px rule,
+	 * which otherwise caps the card on a 939vp-wide unfolded screen. */
+	.sh-connect .sh-connect-card {
+		/* Unfolded (939vp wide) has room for all three methods in one row and a
+		 * wider card, so the page stops being a phone column with side gutters. */
+		max-width: 860px;
+	}
+	/* The card is centred in the window instead of pinned to the top edge. */
+	.sh-connect {
+		place-items: center;
+	}
+	/* Three connection methods side by side; an expanded one takes the row. */
+	.sh-connect .sh-connect-methods {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		align-items: start;
+		gap: 10px;
+	}
+	/* Three methods fill the row; only an expanded one spans it. */
+	.sh-connect-methods > .sh-connect-method--open {
+		grid-column: 1 / -1;
+	}
+	/* Content never sits under the rounded corners / side cutout. */
+	.sh-header {
+		padding-left: calc(20px + var(--safe-left, 0px));
+		padding-right: calc(20px + var(--safe-right, 0px));
+	}
+	.sh-composer {
+		padding-left: calc(20px + var(--safe-left, 0px));
+		padding-right: calc(20px + var(--safe-right, 0px));
+	}
+}
+
+/* Short landscape windows (height breakpoint sm): recover vertical space
+ * instead of pushing the connect card into a scroll. */
+@media (min-width: 840px) and (max-height: 720px) {
+	.sh-connect {
+		padding-top: calc(10px + var(--safe-top, 0px));
+		padding-bottom: calc(10px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
+	}
+	.sh-connect-card {
+		gap: 12px;
+		padding: 18px 24px;
+	}
+	.sh-connect-hero {
+		gap: 4px;
+		padding: 6px 0 0;
+	}
+	.sh-connect-hero h1 {
+		font-size: clamp(26px, 3.2vw, 32px);
+	}
+	.sh-connect-matrix {
+		height: 96px;
+	}
+	.sh-header {
+		padding-top: calc(8px + var(--safe-top, 0px));
+		padding-bottom: 8px;
+	}
+	.sh-composer {
+		padding-top: 8px;
+		padding-bottom: calc(8px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
+	}
+}
+
+/* ---- mobile bottom tab bar -------------------------------------------------
+ * Floating pill — same geometry as HarmonyOS HDS floating bottom tabs
+ * (barOverlap + barFloatingStyle). It is fixed, so every full-height surface
+ * reserves --sh-tabbar-space; otherwise the composer, connect card and the
+ * settings scroll would all sit underneath the pill. */
+:root {
+	--sh-tabbar-space: 76px;
+}
+
+.sh-tabbar {
+	position: fixed;
+	left: 50%;
+	bottom: calc(10px + var(--safe-bottom, 0px));
+	transform: translateX(-50%);
+	z-index: 60;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 6px;
+	border: 0.5px solid var(--glass-border, var(--border));
+	border-top-color: color-mix(in oklab, var(--fg) 18%, transparent);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--bg-raised) 82%, transparent);
+	backdrop-filter: blur(28px) saturate(170%);
+	-webkit-backdrop-filter: blur(28px) saturate(170%);
+	box-shadow:
+		0 18px 40px oklch(0 0 0 / 34%),
+		inset 0 1px 0 color-mix(in oklab, var(--fg) 12%, transparent);
+}
+
+.sh-tabbar-item {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	min-width: 72px;
+	min-height: 48px;
+	padding: 4px 10px;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.2;
+	transition: background 160ms var(--spring), color 160ms var(--spring), transform 160ms var(--spring);
+}
+
+.sh-tabbar-item:active {
+	transform: scale(0.94);
+}
+
+.sh-tabbar-item--active {
+	background: var(--color-accent);
+	color: var(--accent-fg);
+}
+
+.sh-tabbar-item:disabled {
+	opacity: 0.38;
+}
+
+.sh-has-tabbar .sh-connect {
+	padding-bottom: calc(
+		16px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px) + var(--sh-tabbar-space)
+	);
+}
+
+.sh-has-tabbar .sh-app {
+	padding-bottom: var(--sh-tabbar-space);
+}
+
+.sh-has-tabbar .sh-panel {
+	padding-bottom: calc(var(--sh-tabbar-space) + 8px);
+}
+
+.sh-tab-page {
+	height: var(--viewport-height, 100%);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	padding: calc(20px + var(--safe-top, 0px)) 16px
+		calc(20px + var(--safe-bottom, 0px) + var(--sh-tabbar-space));
+	background: var(--bg);
+}
+
+/* Chat destination while offline: an empty state that keeps the tab bar
+ * honest (no bounce, no icon/label split). */
+.sh-tab-page--empty {
+	display: grid;
+	place-items: center;
+}
+
+.sh-not-connected {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+	max-width: 320px;
+	text-align: center;
+}
+
+.sh-not-connected p {
+	margin: 0;
+	color: var(--fg-muted);
+	font-size: 15px;
+	line-height: 1.6;
+}
+
+/* Destination swap: a short rise + fade so Connect ↔ Settings reads as a
+ * scene change instead of a hard repaint. The transform ends at `none`, so it
+ * never becomes a containing block for the fixed overlays that mount later. */
+.sh-tab-scene {
+	height: var(--viewport-height, 100%);
+	animation: sh-tab-scene-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sh-tab-scene-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px) scale(0.995);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.sh-tab-page .sh-mobile-settings {
+	max-width: 480px;
+	margin: 0 auto;
 }

@@ -5797,6 +5797,9 @@ export class DaemonServer {
 				const p = (params ?? {}) as { sessionId: string };
 				const live = this.#host.get(p.sessionId) ?? (await this.#host.activate(p.sessionId).catch(() => null));
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				// Stop goal continuation before aborting: the aborted run's own
+				// agent_end must not schedule another goal turn.
+				live.goalController.stopForHostAbort();
 				// Canonical label (not a "user interrupt" literal): abort() matches
 				// it exactly, so only this form sets the UserInterrupt flag — which
 				// is what suppresses advisor auto-resume and renders the transcript's

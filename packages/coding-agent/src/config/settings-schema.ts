@@ -5443,17 +5443,22 @@ export const SETTINGS_SCHEMA = {
 			tab: "tasks",
 			group: "Modes",
 			label: "Goal Continuation Modes",
-			description: "Run modes where active goals may auto-continue between turns",
+			description: "Run modes where active goals may auto-continue between turns (interactive, daemon)",
 			// Declared membership (TUI MultiSelectSubmenu parity): without it the
 			// key is config-file-only in the TUI and renders as a free-form comma
-			// input in the GUI. "interactive" is the only mode the runtime
-			// consults today (interactive-mode #scheduleGoalContinuation);
-			// unchecking it disables goal auto-continuation.
+			// input in the GUI. `interactive` drives the terminal/GUI editor loop;
+			// `daemon` drives the background session host used by the desktop app
+			// and unattended runs. Unchecking both disables auto-continuation.
 			options: [
 				{
 					value: "interactive",
 					label: "Interactive sessions",
 					description: "Auto-continue active goals in terminal/GUI sessions",
+				},
+				{
+					value: "daemon",
+					label: "Daemon sessions",
+					description: "Auto-continue active goals in the background daemon / desktop GUI",
 				},
 			],
 		},

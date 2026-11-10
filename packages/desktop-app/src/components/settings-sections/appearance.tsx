@@ -53,17 +53,6 @@ import {
 import { applyGlassMaterial } from "../../lib/glass";
 import { nativeHighlight } from "../../lib/highlight";
 import type { RpcClient } from "../../lib/rpc";
-import {
-	readAlwaysShowScrollbar,
-	readImportedSkins,
-	readScrollbarStyle,
-	SCROLLBAR_STYLE_CHANGED_EVENT,
-	SCROLLBAR_STYLE_KEY,
-	type ScrollbarSkin,
-	saveAlwaysShowScrollbar,
-	saveImportedSkin,
-	validateImportedSkin,
-} from "../../lib/scrollbar-skins";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
@@ -229,11 +218,6 @@ export function AppearanceSection({
 	const [turnRailStyle, setTurnRailStyle] = useState<TurnRailStyle>(
 		() => (localStorage.getItem(TURN_RAIL_STYLE_KEY) as TurnRailStyle) ?? "burger",
 	);
-	const [scrollbarStyle, setScrollbarStyle] = useState<string>(() => readScrollbarStyle());
-	const [importedSkins, setImportedSkins] = useState<ScrollbarSkin[]>(() => readImportedSkins());
-	const [alwaysShowScrollbars, setAlwaysShowScrollbars] = useState<boolean>(() => readAlwaysShowScrollbar());
-	const [skinError, setSkinError] = useState(false);
-	const [importingSkin, setImportingSkin] = useState(false);
 	const [glassEnabled, setGlassEnabled] = useState<boolean>(
 		() => localStorage.getItem("musepi-gui-glass-enabled") !== "0",
 	);
@@ -482,89 +466,6 @@ export function AppearanceSection({
 							]}
 						/>
 					</div>
-				</div>
-				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("settings.scrollbarStyle")}</div>
-					<div className="gui-settings-field-hint">{t("settings.scrollbarStyleHint")}</div>
-					<div className="gui-settings-field-control">
-						<GuiSelect
-							className="gui-settings-select"
-							value={scrollbarStyle}
-							onChange={nv => {
-								const v = nv as string;
-								setScrollbarStyle(v);
-								setPref(SCROLLBAR_STYLE_KEY, v);
-								window.dispatchEvent(new Event(SCROLLBAR_STYLE_CHANGED_EVENT));
-							}}
-							options={[
-								...importedSkins.map(s => ({ value: s.id, label: s.displayName })),
-								{ value: "builtin-snake", label: t("settings.snake") },
-								{ value: "builtin-gummy-rainbow", label: t("settings.gummyRainbow") },
-								{ value: "builtin-pacman", label: t("settings.pacman") },
-							]}
-						/>
-						<div className="flex items-center gap-2">
-							<button
-								type="button"
-								className="gui-btn"
-								disabled={importingSkin}
-								onClick={() => {
-									const bridge = (
-										window as unknown as {
-											electronAPI?: { importScrollbarSkin?(): Promise<unknown> };
-										}
-									).electronAPI;
-									if (!bridge?.importScrollbarSkin) return;
-									setImportingSkin(true);
-									setSkinError(false);
-									void bridge
-										.importScrollbarSkin()
-										.then(raw => {
-											if (!raw) return; // cancelled
-											const skin = validateImportedSkin(raw);
-											if (!skin) {
-												setSkinError(true);
-												return;
-											}
-											saveImportedSkin(skin);
-											setImportedSkins(readImportedSkins());
-											setScrollbarStyle(skin.id);
-											setPref(SCROLLBAR_STYLE_KEY, skin.id);
-											window.dispatchEvent(new Event(SCROLLBAR_STYLE_CHANGED_EVENT));
-										})
-										.catch(() => setSkinError(true))
-										.finally(() => setImportingSkin(false));
-								}}
-							>
-								{importingSkin ? "…" : t("settings.importScrollbarSkin")}
-							</button>
-							{skinError && (
-								<span className="text-xs" style={{ color: "var(--color-danger, #ff5c5c)" }}>
-									{t("settings.invalidScrollbarSkin")}
-								</span>
-							)}
-						</div>
-					</div>
-				</div>
-				<div className="gui-settings-row">
-					<div className="flex-1">
-						<div className="gui-settings-row-label">{t("settings.alwaysShowScrollbars")}</div>
-						<div className="gui-settings-row-desc">{t("settings.alwaysShowScrollbarsDesc")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={alwaysShowScrollbars}
-						className={`gui-toggle${alwaysShowScrollbars ? " gui-toggle--on" : ""}`}
-						aria-label={t("settings.alwaysShowScrollbars")}
-						onClick={() => {
-							const next = !alwaysShowScrollbars;
-							setAlwaysShowScrollbars(next);
-							saveAlwaysShowScrollbar(next);
-						}}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
 				</div>
 				<div className="gui-settings-row">
 					<div>

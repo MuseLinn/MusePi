@@ -782,6 +782,8 @@ export class AgentSession {
 	readonly #streamingEditGuard: StreamingEditGuard;
 	readonly #loopGuards: LoopGuards;
 	#promptInFlightCount = 0;
+	/** Transcript replacement in progress (new/switch): continuation must wait. */
+	#sessionTransitionDepth = 0;
 	#abortInProgress = false;
 	// Wire-level agent_end emission deferred until #promptInFlightCount drops to 0.
 	// Internal extension hooks and post-emit work (auto-retry, auto-compaction, todo
@@ -860,6 +862,16 @@ export class AgentSession {
 		} catch (error) {
 			logger.warn("Failed to release macOS power assertion", { error: String(error) });
 		}
+	}
+
+	#beginSessionTransition(): () => void {
+		this.#sessionTransitionDepth++;
+		let ended = false;
+		return () => {
+			if (ended) return;
+			ended = true;
+			this.#sessionTransitionDepth = Math.max(0, this.#sessionTransitionDepth - 1);
+		};
 	}
 
 	#beginInFlight(): void {
@@ -4180,6 +4192,16 @@ export class AgentSession {
 	 *  MCP discovery task in sdk.ts) must not touch the session past this point. */
 	get isDisposed(): boolean {
 		return this.#isDisposed;
+	}
+
+	/** True while a submission has been admitted but its run has not settled. */
+	get hasAdmittedSubmission(): boolean {
+		return this.#promptInFlightCount > 0;
+	}
+
+	/** True while a session identity or transcript transition is still applying or rolling back. */
+	get isSessionTransitioning(): boolean {
+		return this.#sessionTransitionDepth > 0;
 	}
 
 	markMovedFromEmptySessionFile(sessionFile: string): void {
@@ -7988,6 +8010,7 @@ export class AgentSession {
 		await this.#bash.flushPending();
 		const bashTransition = this.#bash.beginSessionTransition({ persistDetached: options?.drop !== true });
 		let sessionTransitioned = false;
+		const endSessionTransition = this.#beginSessionTransition();
 		try {
 			advisorRecordersDetached = true;
 			await this.#advisors.drainAndDetachRecorders();
@@ -8060,6 +8083,7 @@ export class AgentSession {
 
 			return true;
 		} finally {
+			endSessionTransition();
 			if (advisorRecordersDetached) {
 				if (sessionTransitioned) this.#advisors.resetSessionState();
 				else this.#advisors.reattachRecorderFeeds();
@@ -9239,6 +9263,7 @@ export class AgentSession {
 		this.#usagePreflightReadyForNextModelCall = false;
 		this.#usagePreflightReadyModel = undefined;
 
+		const endSessionTransition = this.#beginSessionTransition();
 		try {
 			if (switchingToDifferentSession) {
 				// Stop and settle in-flight advisors while the old-session feeds can
@@ -9454,6 +9479,8 @@ export class AgentSession {
 			}
 			this.#bash.finishSessionTransition(bashTransition, false);
 			throw error;
+		} finally {
+			endSessionTransition();
 		}
 	}
 

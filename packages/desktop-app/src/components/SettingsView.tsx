@@ -7,8 +7,10 @@ import { resolveActiveSection, type SectionId, type SectionRequest } from "../li
 import { type SettingSearchRow, settingSectionFor } from "../lib/settings-search";
 import {
 	SETTINGS_ACTION_SLOT_PREFIX,
+	SETTINGS_APPEARANCE_ITEM_SLOT,
 	SETTINGS_TAB_SLOT_PREFIX,
 	SlotComponentMount,
+	useSlotComponents,
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -109,6 +111,10 @@ export function SettingsView({
 	);
 	// 单行偏好槽:settings.action.<id> 组件。
 	const actionItems = useSlotComponentsByPrefix(rpc, SETTINGS_ACTION_SLOT_PREFIX);
+	// 内置外观页的行/分区座位（dsh `settings.general.item` 同构命名）：
+	// 插件注册 `settings.appearance.item` 即出现在外观页；也可另挂
+	// `settings.item.<extId>`，同一组件用注入的 `slot` 渲染不同内容。
+	const appearanceItems = useSlotComponents(rpc, SETTINGS_APPEARANCE_ITEM_SLOT);
 	// Nav groups are the single source of truth for "which section ids exist":
 	// resolved ONCE per render (the nav below AND the id validation read it) so
 	// a section can never be active without a nav row — and every nav row is
@@ -506,15 +512,25 @@ export function SettingsView({
 								</>
 							)}
 							{activeSection === "appearance" && (
-								<AppearanceSection
-									rpc={rpc}
-									showAvatars={showAvatars}
-									onToggleAvatars={() => {
-										const next = !showAvatars;
-										localStorage.setItem("musepi-gui-avatars", next ? "1" : "0");
-										setShowAvatars(next);
-									}}
-								/>
+								<>
+									<AppearanceSection
+										rpc={rpc}
+										showAvatars={showAvatars}
+										onToggleAvatars={() => {
+											const next = !showAvatars;
+											localStorage.setItem("musepi-gui-avatars", next ? "1" : "0");
+											setShowAvatars(next);
+										}}
+									/>
+									{appearanceItems.map(item => (
+										<SlotComponentMount
+											key={`${item.slot}:${item.extensionId}`}
+											item={item}
+											rpc={rpc}
+											sessionId={sessionId}
+										/>
+									))}
+								</>
 							)}
 							{activeSection === "model" && (
 								<ModelSection

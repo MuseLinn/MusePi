@@ -354,6 +354,16 @@ export class MarketplaceService implements DaemonService {
 				userRegistry: { version: 2, plugins: userPlugins },
 				projectRegistry: { version: 2, plugins: projectPlugins },
 			});
+			// A catalog that ships no `icon` still has one on disk: the plugin's
+			// own `.codex-plugin/plugin.json` logo, which is exactly what the
+			// detail dialog renders. Without this the card fell back to a generic
+			// glyph and the icon only appeared after opening 详情.
+			const icons = await manager.listCatalogIcons();
+			if (icons.size > 0) {
+				for (const entry of entries) {
+					if (!entry.icon) entry.icon = icons.get(`${entry.name}@${entry.marketplace}`);
+				}
+			}
 			this.#marketplaceCache = { at: Date.now(), entries };
 		}
 		return { entries: this.#marketplaceCache.entries };

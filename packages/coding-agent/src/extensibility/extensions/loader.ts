@@ -76,6 +76,7 @@ import type {
 	ExtensionNotificationMessage,
 	ExtensionPromptSection,
 	ExtensionRpcHandler,
+	ExtensionScrollbarSkin,
 	ExtensionService,
 	ExtensionSetting,
 	ExtensionSkillDeclaration,
@@ -378,6 +379,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly subagents: ExtensionAPI["subagents"];
 	readonly magicKeywords: ExtensionAPI["magicKeywords"];
 	readonly memory: ExtensionAPI["memory"];
+	readonly skins: ExtensionAPI["skins"];
 	readonly hmr: ExtensionAPI["hmr"];
 
 	constructor(
@@ -415,6 +417,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		this.subagents = { register: this.registerSubagent.bind(this) };
 		this.magicKeywords = { register: this.registerMagicKeyword.bind(this) };
 		this.memory = { registerBackendProvider: this.registerMemoryBackendProvider.bind(this) };
+		this.skins = { register: this.registerScrollbarSkin.bind(this) };
 		// `ctx.hmr` is process-level, not per-extension: the host starts one
 		// watcher and every plugin subscribes to the same batches. A plugin's
 		// disposer is its own; hosts that start no watcher report enabled=false
@@ -1106,6 +1109,42 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		});
 	}
 
+	registerScrollbarSkin(skin: ExtensionScrollbarSkin): void {
+		if (!skin || typeof skin.id !== "string" || skin.id.length === 0) {
+			throw new TypeError("registerScrollbarSkin: id is required");
+		}
+		if (typeof skin.displayName !== "string" || skin.displayName.trim().length === 0) {
+			throw new TypeError(`registerScrollbarSkin: displayName required for "${skin.id}"`);
+		}
+		if (skin.base !== "gummy" && skin.base !== "pacman") {
+			throw new TypeError(`registerScrollbarSkin: base must be "gummy" or "pacman" ("${skin.id}")`);
+		}
+		const color = (key: "accent" | "track" | "eaten"): string => {
+			const value = skin.colors?.[key];
+			if (typeof value !== "string" || value.length === 0) {
+				throw new TypeError(`registerScrollbarSkin: colors.${key} required for "${skin.id}"`);
+			}
+			// Skin colours land in CSS custom properties: a value that can fetch
+			// is a network/execution surface, not a colour.
+			if (/url\s*\(|image[-\w]*\s*\(|expression\s*\(/i.test(value)) {
+				throw new TypeError(`registerScrollbarSkin: colors.${key} may not fetch ("${skin.id}")`);
+			}
+			return value;
+		};
+		if (typeof skin.size !== "number" || !Number.isFinite(skin.size)) {
+			throw new TypeError(`registerScrollbarSkin: numeric size required for "${skin.id}"`);
+		}
+		const pacGlyph = typeof skin.pacGlyph === "string" && skin.pacGlyph.startsWith("data:") ? skin.pacGlyph : null;
+		this.extension.scrollbarSkins.push({
+			id: skin.id,
+			displayName: skin.displayName,
+			base: skin.base,
+			colors: { accent: color("accent"), track: color("track"), eaten: color("eaten") },
+			size: Math.min(24, Math.max(6, Math.round(skin.size))),
+			...(pacGlyph ? { pacGlyph } : {}),
+		});
+	}
+
 	getFlag(name: string): boolean | string | undefined {
 		if (!this.extension.flags.has(name)) return undefined;
 		return this.runtime.flagValues.get(name);
@@ -1244,6 +1283,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		mediaProviders: [],
 		designSystems: [],
 		statusBarSegments: [],
+		scrollbarSkins: [],
 	};
 }
 

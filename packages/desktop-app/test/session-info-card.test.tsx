@@ -502,8 +502,13 @@ describe("SessionInfoCard 子代理与待办", () => {
 		expect(agents).not.toBeNull();
 		expect(agents.textContent).toContain("explorer");
 		expect(agents.textContent).toContain("审查文件");
-		// The bar carries the shared progress fraction (2 tools → 2/4).
-		expect(agents.querySelector<HTMLElement>(".gui-session-info-bar .tv-swarm-bar-fill")?.style.width).toBe("50%");
+		// The bar carries the shared progress fraction (2 tools → 2/4) and
+		// announces the same value it paints.
+		const bar = agents.querySelector<HTMLElement>(".gui-session-info-bar")!;
+		expect(bar.getAttribute("role")).toBe("progressbar");
+		expect(bar.getAttribute("aria-valuenow")).toBe("50");
+		expect(bar.getAttribute("aria-label")).toBe("explorer");
+		expect(bar.style.getPropertyValue("--progress-value")).toBe("0.5");
 		expect(agents.textContent).toContain(t("general.ended"));
 		expect(agents.textContent).toContain("1");
 		// Ended rows mount behind the disclosure, not inline.

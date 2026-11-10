@@ -5859,29 +5859,10 @@ body.gui-resizing .gui-pane-right {
 }
 
 
-/* ── Content-boundary feather for the sidebar session list + settings ──
- * Same recipe as the transcript: data attrs are maintained by the shared
- * useScrollShadow hook; the mask engages only while the content actually
- * overflows and is scrolled away from the edge. Softer bands than the
- * transcript (denser rows / nav items). */
-.gui-sessions-list[data-top-scroll="true"][data-bottom-scroll="true"] {
-	mask-image: linear-gradient(
-		to bottom,
-		transparent 0,
-		#000 14px,
-		#000 calc(100% - 16px),
-		transparent 100%
-	);
-}
-
-.gui-sessions-list[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
-	mask-image: linear-gradient(to bottom, transparent 0, #000 14px);
-}
-
-.gui-sessions-list[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
-	mask-image: linear-gradient(to top, transparent 0, #000 16px);
-}
-
+/* ── Content-boundary feather for settings ──
+ * The sidebar session list moved to progressive blur (`.gui-scroll-frame` +
+ * `ScrollEdgeBlur`); these settings surfaces still feather with a mask until
+ * they get the same band treatment. */
 .gui-settings-nav-scroll[data-top-scroll="true"][data-bottom-scroll="true"] {
 	mask-image: linear-gradient(
 		to bottom,
@@ -7202,16 +7183,12 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text-faint);
 	font-variant-numeric: tabular-nums;
 }
-/* Per-agent progress: the track is this row's layout, the fill stays the
- * shared `.tv-swarm-bar-fill` language so phase colors live in one place. */
+/* Per-agent progress: geometry only. The track, fill, tone and motion come
+ * from the shared `.musepi-progress` primitive so this row cannot drift from
+ * the other progress surfaces. */
 .gui-session-info-bar {
-	--tv-accent: var(--color-accent);
 	width: 46px;
-	height: 4px;
 	flex: none;
-	border-radius: var(--radius-xs);
-	overflow: hidden;
-	background: color-mix(in oklab, var(--color-text) 10%, transparent);
 }
 .gui-session-info-spin {
 	animation: gui-loading-pulse 1.1s ease-in-out infinite;

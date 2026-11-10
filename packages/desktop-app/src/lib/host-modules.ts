@@ -1,6 +1,7 @@
 import * as clientCore from "@musepi/client-core";
 import * as clientCoreI18n from "@musepi/client-core/src/i18n";
 import { EXTENSION_HOST_MODULES, type ExtensionHostModuleKey } from "@musepi/collab-proto/extension-host-modules";
+import * as scrollbarSkins from "../plugins/ui-theme/skins";
 import * as actionToast from "./action-toast";
 import * as capabilityNav from "./capability-nav";
 import * as fileWorkspace from "./file-workspace";
@@ -43,6 +44,7 @@ const hostModules = {
 	voice: voice,
 	"panel-maximize": panelMaximize,
 	suggestions: suggestions,
+	"scrollbar-skins": scrollbarSkins,
 	"task-nav": scheduledTaskNav,
 	"capability-nav": capabilityNav,
 	"client-core": clientCore,

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { useLocale } from "../../i18n/use-locale.js";
 import { useBackLayer } from "../../lib/back-stack";
-import { isNativeShell } from "../../lib/capacitor";
+import { isHarmonyShell, isMobileShell } from "../../lib/capacitor";
 import { haptic } from "../../lib/haptics";
 import { loadResolvedHosts, type ResolvedHost, removeHost } from "../../lib/hosts";
 import { secureGet, secureSet } from "../../lib/secure-store";
@@ -14,7 +14,6 @@ import { BlurText } from "./BlurText";
 import { DotMatrixMark } from "./DotMatrixMark";
 import { LanguageToggle } from "./LanguageToggle";
 import { QrScanner } from "./QrScanner";
-import { ShinyText } from "./ShinyText";
 import { ThemeToggle } from "./ThemeToggle";
 
 export interface ConnectScreenProps {
@@ -188,16 +187,73 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		setRecent(await loadResolvedHosts());
 	};
 
+	const runPair = useCallback(
+		async (rawCode: string, rawHost: string): Promise<void> => {
+			const code = rawCode.trim();
+			const host = rawHost.trim();
+			if (!code || !host) {
+				setLocalError(t("settings.enterPairCodeComputer"));
+				return;
+			}
+			setPairBusy(true);
+			setLocalError(null);
+			try {
+				const webLink = await resolvePairCodeOnLan(code, host);
+				localStorage.setItem(PAIR_HOST_KEY, host);
+				void secureSet(PAIR_HOST_KEY, host);
+				connect(webLink, name.trim() || t("settings.myPhone"));
+			} catch (err) {
+				setLocalError(err instanceof Error ? err.message : String(err));
+				haptic([20, 60, 20]);
+			} finally {
+				setPairBusy(false);
+			}
+		},
+		[connect, name],
+	);
+
+	const runLink = useCallback(
+		(rawLink: string, rawName: string): void => {
+			const trimmed = rawLink.trim();
+			if (!trimmed) {
+				setLocalError(t("shell.pasteJoinLinkFirst"));
+				return;
+			}
+			setLocalError(null);
+			connect(trimmed, rawName.trim() || t("settings.myPhone"));
+		},
+		[connect],
+	);
+
+	const resolvePair = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
+		e.preventDefault();
+		await runPair(pairCode, pairHost);
+	};
+
 	const submit = (e: FormEvent<HTMLFormElement>): void => {
 		e.preventDefault();
-		const trimmed = link.trim();
-		if (!trimmed) {
-			setLocalError(t("shell.pasteJoinLinkFirst"));
-			return;
-		}
-		setLocalError(null);
-		connect(trimmed, name.trim() || t("settings.myPhone"));
+		runLink(link, name);
 	};
+
+	// HarmonyOS renders the form as a native sheet; it pushes the values back
+	// here. The handlers stay in a ref so the bridge registers once and still
+	// closes over the latest connect/name.
+	const sheetHandlers = useRef({ runPair, runLink });
+	sheetHandlers.current = { runPair, runLink };
+	useEffect(() => {
+		if (!isHarmonyShell()) return;
+		const w = window as unknown as Record<string, unknown>;
+		w.__musepiPair = (code: string, host: string): void => {
+			void sheetHandlers.current.runPair(code, host);
+		};
+		w.__musepiConnectLink = (url: string, deviceName: string): void => {
+			sheetHandlers.current.runLink(url, deviceName);
+		};
+		return () => {
+			delete w.__musepiPair;
+			delete w.__musepiConnectLink;
+		};
+	}, []);
 
 	const skip = (): void => {
 		try {
@@ -246,31 +302,11 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		setScanning(false);
 	};
 
-	const resolvePair = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
-		e.preventDefault();
-		const code = pairCode.trim();
-		const host = pairHost.trim();
-		if (!code || !host) {
-			setLocalError(t("settings.enterPairCodeComputer"));
-			return;
-		}
-		setPairBusy(true);
-		setLocalError(null);
-		try {
-			const webLink = await resolvePairCodeOnLan(code, host);
-			localStorage.setItem(PAIR_HOST_KEY, host);
-			void secureSet(PAIR_HOST_KEY, host);
-			connect(webLink, name.trim() || t("settings.myPhone"));
-		} catch (err) {
-			setLocalError(err instanceof Error ? err.message : String(err));
-			haptic([20, 60, 20]);
-		} finally {
-			setPairBusy(false);
-		}
-	};
-
 	const shown = localError ?? error;
-	const native = isNativeShell();
+	// QR scanning needs a camera-bearing native WebView. Both Capacitor
+	// (Android) and the HarmonyOS ArkWeb shell qualify — the latter grants
+	// getUserMedia through Web.onPermissionRequest + the CAMERA user grant.
+	const native = isMobileShell();
 
 	const savedComputers = (
 		<SavedComputers
@@ -282,8 +318,10 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	const brand = (
 		<div className="sh-connect-head">
 			<div className="sh-lockup">
-				<span className="sh-lockup-mark" aria-hidden="true" />
-				<span className="sh-lockup-pi">π</span>
+				{/* Brand S5 orb mark. The retired pi glyph used to be a separate
+				 * span sitting OUTSIDE the gradient tile, which showed the old
+				 * identity and read as a misaligned icon/background pair. */}
+				<img className="sh-lockup-mark" src="./public/favicon.svg" alt="" aria-hidden="true" />
 				<BlurText text={t("shell.musepiCollab")} />
 			</div>
 			<div className="sh-connect-preferences">
@@ -303,11 +341,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					</div>
 					{brand}
 					<div className="sh-connect-hero sh-connect-hero--compact">
-						<span className="sh-connect-eyebrow">
-							<ShinyText text={t("shell.liveAgentSession.info")} speed={3.4} spread={120} />
-						</span>
 						<h1>{t("settings.connectComputer")}</h1>
-						<p>{t("settings.notConnectedYetConnect")}</p>
 					</div>
 					{savedComputers}
 					<button type="button" className="sh-btn sh-btn-primary sh-connect-submit" onClick={returnToGuide}>
@@ -326,11 +360,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 				</div>
 				{brand}
 				<section className="sh-connect-hero">
-					<span className="sh-connect-eyebrow">
-						<ShinyText text={t("shell.liveAgentSession.info")} speed={3.4} spread={120} />
-					</span>
 					<h1>{t("settings.mobileConnectTitle")}</h1>
-					<p>{t("settings.mobileConnectBody")}</p>
 				</section>
 				{offline && (
 					<div className="sh-connect-offline" role="status">
@@ -339,10 +369,6 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 				)}
 				{savedComputers}
 				<section className="sh-connect-methods" aria-label={t("settings.newConnection")}>
-					<div className="sh-connect-section-head">
-						<span className="sh-field-label">{t("settings.newConnection")}</span>
-					</div>
-
 					{native && (
 						<button
 							type="button"
@@ -355,7 +381,6 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 							</span>
 							<span className="sh-connect-method-body">
 								<span className="sh-connect-method-title">{t("settings.scanQrCode")}</span>
-								<span className="sh-connect-method-desc">{t("settings.scanDesktopShareQr")}</span>
 							</span>
 							<ArrowUpRight className="sh-connect-method-chev" size={17} aria-hidden="true" />
 						</button>
@@ -370,14 +395,17 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 							type="button"
 							className="sh-connect-method"
 							aria-expanded={openMethod === "pair"}
-							onClick={() => setOpenMethod(openMethod === "pair" ? null : "pair")}
+							onClick={() =>
+								isHarmonyShell()
+									? window.harmonyNative?.openPairSheet?.()
+									: setOpenMethod(openMethod === "pair" ? null : "pair")
+							}
 						>
 							<span className="sh-connect-method-ico" aria-hidden="true">
 								<KeyRound size={18} />
 							</span>
 							<span className="sh-connect-method-body">
 								<span className="sh-connect-method-title">{t("settings.pairCode")}</span>
-								<span className="sh-connect-method-desc">{t("settings.enter6DigitCode")}</span>
 							</span>
 							<ChevronRight className="sh-connect-method-chev" size={17} aria-hidden="true" />
 						</button>
@@ -438,14 +466,17 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 							type="button"
 							className="sh-connect-method"
 							aria-expanded={openMethod === "link"}
-							onClick={() => setOpenMethod(openMethod === "link" ? null : "link")}
+							onClick={() =>
+								isHarmonyShell()
+									? window.harmonyNative?.openLinkSheet?.()
+									: setOpenMethod(openMethod === "link" ? null : "link")
+							}
 						>
 							<span className="sh-connect-method-ico" aria-hidden="true">
 								<Link2 size={18} />
 							</span>
 							<span className="sh-connect-method-body">
 								<span className="sh-connect-method-title">{t("settings.pasteJoinLink")}</span>
-								<span className="sh-connect-method-desc">{t("shell.wsHostPortR")}</span>
 							</span>
 							<ChevronRight className="sh-connect-method-chev" size={17} aria-hidden="true" />
 						</button>

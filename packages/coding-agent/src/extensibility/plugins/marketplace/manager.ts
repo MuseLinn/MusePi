@@ -11,6 +11,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { isEnoent, logger, pathIsWithin } from "@musepi/pi-utils";
+import { codexPluginIcon } from "../compat/codex-plugin-icon";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../compat/compatibility-store";
 import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../compat/plugin-compatibility";
 import { adaptThirdPartyCordisPlugin } from "../compat/third-party-cordis";
@@ -431,6 +432,35 @@ export class MarketplaceManager {
 		} finally {
 			if (tempCloneRoot) await fs.rm(tempCloneRoot, { recursive: true, force: true }).catch(() => {});
 		}
+	}
+
+	/**
+	 * Icons for catalog entries that declare none: the plugin's own
+	 * `.codex-plugin/plugin.json` logo — the same file the detail dialog shows.
+	 * Only catalog-relative sources that already live inside the marketplace
+	 * clone are resolved; a remote plugin source is never cloned just to paint
+	 * a list card. Keyed by `name@marketplace`.
+	 */
+	async listCatalogIcons(): Promise<Map<string, string>> {
+		const icons = new Map<string, string>();
+		const reg = await this.#readMarketplacesRegistry();
+		for (const entry of reg.marketplaces) {
+			let catalog: MarketplaceCatalog;
+			try {
+				catalog = await this.#readCatalog(entry);
+			} catch {
+				continue;
+			}
+			const root = this.#resolveMarketplaceRoot(entry);
+			for (const plugin of catalog.plugins) {
+				if (plugin.icon || typeof plugin.source !== "string") continue;
+				const dir = path.resolve(root, plugin.source);
+				if (!pathIsWithin(root, dir)) continue;
+				const icon = await codexPluginIcon(dir);
+				if (icon) icons.set(buildPluginId(plugin.name, entry.name), icon);
+			}
+		}
+		return icons;
 	}
 
 	async #preparePluginSource(name: string, marketplace: string) {

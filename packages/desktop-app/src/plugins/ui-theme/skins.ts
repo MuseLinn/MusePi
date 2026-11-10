@@ -1,5 +1,9 @@
 /**
- * Scrollbar skin registry (FloatingScrollbar styling, petdex-style pluggable).
+ * Scrollbar skin registry — owned by the `ui-theme` Cordis bundle.
+ *
+ * `rail.tsx` is the only renderer; this module is the shared catalog it reads
+ * (and the host publishes it as `MusePiHostModules["scrollbar-skins"]` so a
+ * compiled bundle and the host settings card share one instance).
  *
  * Two built-in bases:
  *  - `gummy`  — a jelly capsule thumb (height = visible ratio) that
@@ -106,9 +110,16 @@ export function validateImportedSkin(raw: unknown): ScrollbarSkin | null {
 	if (typeof r.displayName !== "string" || !r.displayName) return null;
 	if (r.base !== "gummy" && r.base !== "pacman") return null;
 	const colors = (typeof r.colors === "object" && r.colors !== null ? r.colors : {}) as Record<string, unknown>;
-	const accent = typeof colors.accent === "string" && colors.accent ? colors.accent : BUILTIN_PACMAN.colors.accent;
-	const track = typeof colors.track === "string" && colors.track ? colors.track : BUILTIN_SNAKE.colors.track;
-	const eaten = typeof colors.eaten === "string" && colors.eaten ? colors.eaten : BUILTIN_PACMAN.colors.eaten;
+	// Colour values land in CSS custom properties, so a value that can fetch
+	// (url(), image()) is a network/execution surface, not a colour. Refuse it
+	// and fall back instead of injecting whatever the zip contains.
+	const color = (value: unknown, fallback: string): string =>
+		typeof value === "string" && value && !/url\s*\(|image[-\w]*\s*\(|expression\s*\(/i.test(value)
+			? value
+			: fallback;
+	const accent = color(colors.accent, BUILTIN_PACMAN.colors.accent);
+	const track = color(colors.track, BUILTIN_SNAKE.colors.track);
+	const eaten = color(colors.eaten, BUILTIN_PACMAN.colors.eaten);
 	const size =
 		typeof r.size === "number" && Number.isFinite(r.size) ? Math.min(24, Math.max(6, Math.round(r.size))) : 12;
 	const pacGlyph = typeof r.pacGlyph === "string" && r.pacGlyph.startsWith("data:") ? r.pacGlyph : null;
@@ -135,8 +146,33 @@ export function readImportedSkins(): ScrollbarSkin[] {
 	}
 }
 
+/**
+ * Skins contributed by Cordis plugins (`registerScrollbarSkin`). The host
+ * publishes this module as `window.MusePiHostModules["scrollbar-skins"]`, so a
+ * compiled overlay bundle and the host settings picker read the SAME list
+ * instead of each owning a copy.
+ */
+let contributedSkins: ScrollbarSkin[] = [];
+
+/** Replace the contributed catalog; a changed list notifies the rail/picker. */
+export function setContributedScrollbarSkins(skins: readonly ScrollbarSkin[]): void {
+	const next = skins.map(skin => ({ ...skin }));
+	if (JSON.stringify(next) === JSON.stringify(contributedSkins)) return;
+	contributedSkins = next;
+	window.dispatchEvent(new Event(SCROLLBAR_SKINS_CHANGED_EVENT));
+}
+
+/** Contributed → imported → built-in, first id wins (a plugin may override a
+ *  built-in skin). */
 export function getScrollbarSkins(): ScrollbarSkin[] {
-	return [...readImportedSkins(), ...BUILTIN_SCROLLBAR_SKINS];
+	const seen = new Set<string>();
+	const out: ScrollbarSkin[] = [];
+	for (const skin of [...contributedSkins, ...readImportedSkins(), ...BUILTIN_SCROLLBAR_SKINS]) {
+		if (seen.has(skin.id)) continue;
+		seen.add(skin.id);
+		out.push(skin);
+	}
+	return out;
 }
 
 /** Resolve a skin by id, falling back to the built-in snake. */

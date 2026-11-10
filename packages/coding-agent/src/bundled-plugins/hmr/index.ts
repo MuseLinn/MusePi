@@ -6,6 +6,7 @@
  */
 import * as fsSync from "node:fs";
 import * as path from "node:path";
+import { getPluginsDir } from "@musepi/pi-utils";
 import type { ExtensionAPI } from "../../extensibility/extensions/types";
 import { resolveExtensionWatchRoots } from "../../extensibility/plugins/hmr/roots";
 import { createHmrService, type HmrService } from "../../extensibility/plugins/hmr/service";
@@ -13,6 +14,20 @@ import { createHmrService, type HmrService } from "../../extensibility/plugins/h
 export const name = "musepi-hmr";
 export const inject = [] as const;
 export const provide = ["hmr"] as const;
+
+/** `<pluginsDir>/cache` holds the generated marketplace clones and the
+ *  version-keyed install copies. Watching it buys nothing, and on Windows it
+ *  actively breaks installs: chokidar attaches a watch to every new staging
+ *  directory inside the cache, and Windows cannot rename a directory that has
+ *  an open handle — `marketplace.install` then fails with EPERM after copying
+ *  the plugin. */
+function installCacheIgnore(): RegExp {
+	// chokidar matches `ignored` against slash-normalized paths, so build the
+	// pattern in that form and accept either separator afterwards.
+	const cacheDir = path.join(getPluginsDir(), "cache").replace(/\\/g, "/");
+	const escaped = cacheDir.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return new RegExp(`^${escaped}(?:[/\\\\]|$)`, process.platform === "win32" ? "i" : "");
+}
 
 /** Normalize a list-typed config value (array, or comma-separated string). */
 function list(value: unknown): string[] {
@@ -45,7 +60,7 @@ export async function apply(ctx: ExtensionAPI, config?: Record<string, unknown>)
 	});
 	const debounce = config?.debounce;
 	const debounceMs = typeof debounce === "number" ? debounce : 120;
-	const service = createHmrService(roots, debounceMs, list(config?.ignored));
+	const service = createHmrService(roots, debounceMs, [...list(config?.ignored), installCacheIgnore()]);
 	ctx.effect(() => service.dispose(), "hmr:watcher");
 	return { hmr: service };
 }

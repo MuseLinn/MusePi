@@ -10,6 +10,7 @@ import "./styles/overlay-fallback.css";
 import "./i18n";
 import {
 	getSystemBarInsets,
+	isHarmonyShell,
 	isNativeShell,
 	setupAndroidBackHandler,
 	setupDeepLinkHandler,
@@ -64,55 +65,113 @@ async function setupCapacitorKeyboardInset(): Promise<void> {
 // or ArkTS) is the only keyboard avoidance and the shell height does not
 // change. One mechanism per surface, never both.
 
-// Edge-to-edge: paint under the system bars and pick icon color for the
-// active theme. Capacitor's config handles this on fresh installs, but an
-// explicit boot call is what actually applies it on every Android version /
-// ROM (and fixes the pre-first-paint flash on stale themes).
-async function setupImmersiveSystemBars(): Promise<void> {
-	try {
-		const { StatusBar, Style } = await import("@capacitor/status-bar");
-		await StatusBar.setOverlaysWebView({ overlay: true });
-		await StatusBar.setBackgroundColor({ color: "#00000000" });
-		const syncStyle = async (): Promise<void> => {
-			// Style.Dark = light text (dark backgrounds), Style.Light = dark text.
-			const dark = document.documentElement.dataset.theme === "dark";
-			await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
-		};
-		await syncStyle();
-		// ThemeToggle updates the root dataset after boot. Keep the native icons
-		// readable when the scheme changes without re-entering the application.
-		new MutationObserver(() => void syncStyle().catch(() => {})).observe(document.documentElement, {
-			attributes: true,
-			attributeFilter: ["data-theme"],
-		});
-	} catch {
-		// Browser / desktop web — no native bars to paint under.
-	}
+// Edge-to-edge: paint under the system bars and keep their icons readable.
+//
+// Android: the StatusBar plugin owns the bars. HarmonyOS: the ArkTS window
+// owns them, so the page only pushes its resolved scheme through
+// harmonyNative.setThemeColor(dark) — EntryAbility makes the bars transparent
+// and picks the content colour from it. Both paths re-sync on every scheme
+// flip, including follow-system changes delivered over the native bridge.
+function setupImmersiveSystemBars(): void {
+	const root = document.documentElement;
+	const syncNative = (): void => {
+		const dark = root.dataset.theme !== "light";
+		if (isHarmonyShell()) {
+			try {
+				window.harmonyNative?.setThemeColor?.(dark);
+			} catch {
+				// bridge not injected yet — the delayed pass below retries
+			}
+		} else if (isNativeShell()) {
+			void (async () => {
+				try {
+					const { StatusBar, Style } = await import("@capacitor/status-bar");
+					await StatusBar.setOverlaysWebView({ overlay: true });
+					await StatusBar.setBackgroundColor({ color: "#00000000" });
+					// Style.Dark = light text (dark backgrounds), Style.Light = dark text.
+					await StatusBar.setStyle({ style: dark ? Style.Dark : Style.Light });
+				} catch {
+					// Browser / desktop web — no native bars to paint under.
+				}
+			})();
+		}
+	};
+	syncNative();
+	// javaScriptProxy may land a tick after the module graph executes.
+	window.setTimeout(syncNative, 60);
+	new MutationObserver(syncNative).observe(root, {
+		attributes: true,
+		attributeFilter: ["data-theme", "data-color-scheme"],
+	});
 }
 
-// Android WebView (and HarmonyOS WebView) never surface real system-bar
-// insets via env(safe-area-inset-*) — the value is always 0. The shared
-// getSystemBarInsets() function probes the active shell (Capacitor or
-// harmonyNative) and returns the true bar heights; a fixed allowance covers
-// shells where the native plugin may not be reachable.
+/**
+ * Safe-area insets.
+ *
+ * ArkWeb implements the W3C `env(safe-area-inset-*)` variables when the shell
+ * enables immersive layout with `viewport-fit=cover`; the engine continuously
+ * recomputes them from the overlap between the Web component and the system
+ * avoid areas, so they already account for fold state, rotation, cutouts and
+ * free windows. Prefer them. Only when the engine reports 0 do we fall back to
+ * the native bridge's `getSystemBars()` (Capacitor WebViews do not expose
+ * env()). Never hard-code status-bar/gesture-bar heights: Pura X View and the
+ * Pura X Max inner screen have larger top avoid areas than a phone.
+ */
+type EnvInsets = { top: number; bottom: number; left: number; right: number };
+
+function readEnvInsets(): EnvInsets {
+	if (typeof document === "undefined" || !document.body) {
+		return { top: 0, bottom: 0, left: 0, right: 0 };
+	}
+	const probe = document.createElement("div");
+	probe.style.cssText =
+		"position:absolute;visibility:hidden;pointer-events:none;" +
+		"padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);" +
+		"padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px);";
+	document.body.appendChild(probe);
+	const cs = getComputedStyle(probe);
+	const num = (value: string): number => Number.parseFloat(value) || 0;
+	const result = {
+		top: num(cs.paddingTop),
+		bottom: num(cs.paddingBottom),
+		left: num(cs.paddingLeft),
+		right: num(cs.paddingRight),
+	};
+	probe.remove();
+	return result;
+}
+
 async function setupSafeAreaFallback(): Promise<void> {
 	const css = document.documentElement;
-	// Conservative defaults: 48px top (covers cutout/punch-hole status bars),
-	// 24px bottom (gesture nav). Real values from the plugin override these.
-	css.style.setProperty("--safe-top", "48px");
-	css.style.setProperty("--safe-bottom", "24px");
+	const apply = (native?: { top: number; bottom: number }): void => {
+		const env = readEnvInsets();
+		css.style.setProperty("--safe-top", `${env.top || native?.top || 0}px`);
+		css.style.setProperty("--safe-bottom", `${env.bottom || native?.bottom || 0}px`);
+		css.style.setProperty("--safe-left", `${env.left}px`);
+		css.style.setProperty("--safe-right", `${env.right}px`);
+	};
+	apply();
 	try {
 		const insets = await getSystemBarInsets();
-		if (insets && insets.top > 0) css.style.setProperty("--safe-top", `${insets.top}px`);
-		if (insets && insets.bottom > 0) css.style.setProperty("--safe-bottom", `${insets.bottom}px`);
+		apply(insets);
 	} catch {
-		// plugin absent — fixed allowance stands
+		// plugin absent — env() or zero stands
 	}
+	// Fold / rotate / free-window changes move the avoid areas; the HarmonyOS
+	// bridge answers synchronously from AppStorage, so re-reading is cheap.
+	const resync = (): void => {
+		apply();
+		void getSystemBarInsets()
+			.then(apply)
+			.catch(() => {});
+	};
+	window.addEventListener("resize", resync);
+	window.addEventListener("orientationchange", resync);
 }
 
 void setupCapacitorKeyboardInset();
 void setupSafeAreaFallback();
-void setupImmersiveSystemBars();
+setupImmersiveSystemBars();
 void setupAndroidBackHandler();
 void setupDeepLinkHandler();
 void setupNotificationTapHandler();

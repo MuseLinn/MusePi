@@ -60,11 +60,18 @@ export const EXTENSION_SLOT_DECLARATION = {
 	exact: {
 		"app.chat": { kind: "single" },
 		"app.capability": { kind: "single" },
+		/** Root-level overlay (floating scroll rail): one contributor owns the
+		 *  whole window layer; the host keeps a built-in fallback. */
+		"app.overlay": { kind: "single" },
 		"panel.shell": { kind: "single" },
 		"browser.host": { kind: "single" },
 		"panel.right": { kind: "list" },
 		"rail.right": { kind: "list" },
 		"settings.extensions": { kind: "list" },
+		/** Row/section seats inside built-in settings pages. dsh names these
+		 *  `settings.<page>.item` (e.g. `settings.general.item`); a plugin picks
+		 *  the page(s) it contributes to. */
+		"settings.appearance.item": { kind: "list" },
 		// 输入区(见上表)。list 组在前、single 组在后。
 		"composer.dock": { kind: "list" },
 		"composer.overlay": { kind: "list" },

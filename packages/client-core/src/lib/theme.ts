@@ -20,6 +20,25 @@ const ACCENT_STORAGE_KEY = "omp-collab-accent";
 const CUSTOM_ACCENT_STORAGE_KEY = "omp-collab-accent-custom";
 const DARK_SCHEME_QUERY = "(prefers-color-scheme: dark)";
 
+/**
+ * Authoritative system scheme reported by a native shell. ArkWeb only tracks
+ * the OS while `.darkMode(WebDarkMode.Auto)` is set, and Capacitor WebViews
+ * sometimes freeze `prefers-color-scheme` at their boot value. When a native
+ * shell pushes its colour mode, use it instead of the media query so
+ * "follow system" really follows the system. `null` = no native report.
+ */
+let nativeColorMode: SystemTheme | null = null;
+
+/** Update the native system scheme. Only affects the "system" preference. */
+export function setNativeColorMode(mode: SystemTheme | null): void {
+	if (nativeColorMode === mode) return;
+	nativeColorMode = mode;
+	if (preference === "system") {
+		applyResolvedTheme();
+		emit();
+	}
+}
+
 function readStoredPreference(): ThemePreference {
 	try {
 		const stored = globalThis.localStorage.getItem(STORAGE_KEY);
@@ -31,6 +50,7 @@ function readStoredPreference(): ThemePreference {
 }
 
 function getSystemTheme(): SystemTheme {
+	if (nativeColorMode !== null) return nativeColorMode;
 	if (typeof window === "undefined") return "dark";
 	return window.matchMedia(DARK_SCHEME_QUERY).matches ? "dark" : "light";
 }

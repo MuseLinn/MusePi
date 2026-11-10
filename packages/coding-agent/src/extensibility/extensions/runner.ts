@@ -69,6 +69,7 @@ import type {
 	ExtensionNotificationChannel,
 	ExtensionNotificationMessage,
 	ExtensionRuntime,
+	ExtensionScrollbarSkin,
 	ExtensionSessionScope,
 	ExtensionShortcut,
 	ExtensionStatusBarSegment,
@@ -1189,6 +1190,12 @@ export class ExtensionRunner {
 			for (const widget of ext.widgets) widgets.push(widget);
 		}
 		return widgets;
+	}
+
+	/** Scrollbar skins declared by loaded extensions (registerScrollbarSkin),
+	 *  in load order; the GUI merges them over its built-in catalog by id. */
+	getAllScrollbarSkins(): ExtensionScrollbarSkin[] {
+		return this.extensions.flatMap(ext => ext.scrollbarSkins);
 	}
 
 	/** Get the effective registered tool for a name using normal last-extension-wins precedence. */

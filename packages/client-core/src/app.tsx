@@ -14,6 +14,7 @@ import { Composer } from "./components/shell/Composer";
 import { ConnectScreen } from "./components/shell/ConnectScreen";
 import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
 import { MobileSettings } from "./components/shell/MobileSettings";
+import { type MobileTab, MobileTabBar } from "./components/shell/MobileTabBar";
 import { PullToRefresh } from "./components/shell/PullToRefresh";
 import { Toasts } from "./components/shell/Toasts";
 import { TranscriptSkeleton } from "./components/shell/TranscriptSkeleton";
@@ -27,6 +28,7 @@ import {
 	consumePendingDeepLink,
 	DEEP_LINK_EVENT,
 	incrementBadge,
+	isHarmonyShell,
 	isMobileShell,
 	isNativeShell,
 } from "./lib/capacitor";
@@ -197,23 +199,32 @@ export function App(): ReactNode {
 	// foreground return probes immediately.
 	useConnectionHealth(client, rejoin);
 
-	// Visual Viewport: adjust app height to fit screen space when mobile keyboard opens.
+	// Shell height. Native WebViews keep a fixed layout viewport (Capacitor
+	// Keyboard resize:'none', ArkWeb full-window Web component), so
+	// documentElement.clientHeight is the real available height there.
+	// visualViewport.height can disagree by a few px once the window is
+	// immersive (it counts the system strips the component does not own),
+	// which made the connect screen scroll slightly even though every element
+	// was visible. Browser/PWA keeps the visual-viewport contract instead:
+	// there the layout viewport does not shrink when the IME opens, so
+	// vv.height remains the only correct number.
 	useEffect(() => {
 		const vv = window.visualViewport;
-		if (!vv) return;
-
-		const updateHeight = () => {
-			document.documentElement.style.setProperty("--viewport-height", `${vv.height}px`);
+		const root = document.documentElement;
+		const updateHeight = (): void => {
+			const height = isMobileShell() ? root.clientHeight : (vv?.height ?? root.clientHeight);
+			root.style.setProperty("--viewport-height", `${height}px`);
 			window.scrollTo(0, 0);
 		};
 
 		updateHeight();
-		vv.addEventListener("resize", updateHeight);
-		vv.addEventListener("scroll", updateHeight);
-
+		window.addEventListener("resize", updateHeight);
+		vv?.addEventListener("resize", updateHeight);
+		vv?.addEventListener("scroll", updateHeight);
 		return () => {
-			vv.removeEventListener("resize", updateHeight);
-			vv.removeEventListener("scroll", updateHeight);
+			window.removeEventListener("resize", updateHeight);
+			vv?.removeEventListener("resize", updateHeight);
+			vv?.removeEventListener("scroll", updateHeight);
 		};
 	}, []);
 
@@ -318,24 +329,122 @@ export function App(): ReactNode {
 
 	useMobileNotifications(client, credsRef.current?.link ?? null);
 
+	// The bottom tab bar belongs to App, not Session: the connect screen had
+	// no settings destination at all before, and a tab bar that disappears on
+	// disconnect reads as a broken app rather than a two-state layout.
+	const [mobileTab, setMobileTab] = useState<MobileTab>("connect");
+	const showTabBar = isMobileShell();
+
+	useEffect(() => {
+		const root = document.documentElement;
+		root.classList.toggle("sh-has-tabbar", showTabBar);
+		// HarmonyOS floats a NATIVE bar (96vp including its bottom margin) over
+		// the web view; Android / PWA float the web pill (76px). Neither owns
+		// layout, so every full-height surface reserves this through CSS.
+		root.style.setProperty("--sh-tabbar-space", isHarmonyShell() ? "96px" : "76px");
+		return () => {
+			root.classList.remove("sh-has-tabbar");
+			root.style.removeProperty("--sh-tabbar-space");
+		};
+	}, [showTabBar]);
+
+	useEffect(() => {
+		if (client) setMobileTab(prev => (prev === "connect" ? "chat" : prev));
+		else setMobileTab(prev => (prev === "chat" ? "connect" : prev));
+	}, [client]);
+
+	// Mirror every tab change — including the connect / disconnect switches
+	// above, which do not come from a tap — into the HarmonyOS native bar.
+	useEffect(() => {
+		if (!isHarmonyShell()) return;
+		const index = mobileTab === "connect" ? 0 : mobileTab === "chat" ? 1 : 2;
+		try {
+			window.harmonyNative?.setActiveTab?.(index);
+		} catch {
+			// bridge missing — nothing to mirror
+		}
+	}, [mobileTab, client]);
+
+	const selectTab = useCallback(
+		(tab: MobileTab): void => {
+			setMobileTab(tab);
+			if (isHarmonyShell()) {
+				// Keep the native Tabs bar in sync. ArkTS marks this as
+				// page-originated so its onChange never echoes back.
+				const index = tab === "connect" ? 0 : tab === "chat" ? 1 : 2;
+				try {
+					window.harmonyNative?.setActiveTab?.(index);
+				} catch {
+					// bridge missing — nothing to mirror
+				}
+			}
+			// On a live session, "Connect" means going back to the connect
+			// screen (the same explicit leave MobileSettings offers).
+			if (tab === "connect" && clientRef.current !== null) leave();
+		},
+		[leave],
+	);
+
+	// HarmonyOS native bar → page. The page stays the source of truth for
+	// connect/session state: a tap in the native bar only requests a
+	// destination, and the page decides what that renders.
+	useEffect(() => {
+		const handler = (name: string): void => {
+			if (name === "connect" || name === "chat" || name === "settings") selectTab(name);
+		};
+		(window as unknown as Record<string, unknown>).__musepiTab = handler;
+		return () => {
+			delete (window as unknown as Record<string, unknown>).__musepiTab;
+		};
+	}, [selectTab]);
+
 	if (!client) {
 		return (
-			<ConnectScreen
-				defaultName={storedName()}
-				defaultLink={hashLink() ?? undefined}
-				error={connectError}
-				onConnect={connect}
-			/>
+			<>
+				{/* key on the destination so every tab switch replays the enter
+				 * beat — without it the two screens swapped instantly. */}
+				<div className="sh-tab-scene" key={mobileTab}>
+					{mobileTab === "settings" ? (
+						<div className="sh-tab-page">
+							<MobileSettings />
+						</div>
+					) : mobileTab === "chat" ? (
+						/* Chat while offline: a real destination with an empty state,
+						 * not a bounce back. Bouncing made the native bar's icon and
+						 * label disagree for a frame. */
+						<div className="sh-tab-page sh-tab-page--empty">
+							<div className="sh-not-connected">
+								<p>{t("settings.notConnectedYetConnect")}</p>
+								<button type="button" className="sh-btn sh-btn-primary" onClick={() => selectTab("connect")}>
+									{t("settings.connectComputer")}
+								</button>
+							</div>
+						</div>
+					) : (
+						<ConnectScreen
+							defaultName={storedName()}
+							defaultLink={hashLink() ?? undefined}
+							error={connectError}
+							onConnect={connect}
+						/>
+					)}
+				</div>
+				{showTabBar && <MobileTabBar active={mobileTab} chatAvailable={false} onChange={selectTab} />}
+			</>
 		);
 	}
 	return (
-		<Session
-			client={client}
-			onLeave={leave}
-			onRejoin={rejoin}
-			currentLink={credsRef.current?.link ?? ""}
-			onSwitchTo={connect}
-		/>
+		<>
+			<Session
+				client={client}
+				onLeave={leave}
+				onRejoin={rejoin}
+				currentLink={credsRef.current?.link ?? ""}
+				onSwitchTo={connect}
+				mobileTab={mobileTab}
+			/>
+			{showTabBar && <MobileTabBar active={mobileTab} chatAvailable onChange={selectTab} />}
+		</>
 	);
 }
 
@@ -470,6 +579,8 @@ interface SessionProps {
 	/** Current connection link (switcher highlight). */
 	currentLink: string;
 	onSwitchTo(link: string, name: string): void;
+	/** Selected bottom tab, owned by App so it survives connect/disconnect. */
+	mobileTab: MobileTab;
 }
 
 /**
@@ -636,11 +747,22 @@ function AgentsRail({
 	);
 }
 
-function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: SessionProps): ReactNode {
+function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab }: SessionProps): ReactNode {
 	const layout = useShellLayout();
 	const [railOpen, setRailOpen] = useState(false);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
-	const [activePanel, setActivePanel] = useState<GuestPanel | null>(null);
+	const [activePanel, setActivePanel] = useState<GuestPanel | null>(mobileTab === "settings" ? "settings" : null);
+
+	// Mirror the App-owned tab into the session's panel stack. HeaderBar panel
+	// switches stay local — the tab bar represents the two destinations, not
+	// every transient panel (board / files / voice …).
+	useEffect(() => {
+		setActivePanel(current => {
+			if (mobileTab === "settings") return "settings";
+			if (mobileTab === "chat") return null;
+			return current;
+		});
+	}, [mobileTab]);
 	const autoOpenedRef = useRef(false);
 	const refreshTranscript = useCallback(() => onRejoin(), [onRejoin]);
 

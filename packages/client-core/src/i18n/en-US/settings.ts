@@ -1625,6 +1625,13 @@ export const settings = {
 	"settings.connectComputer": "Connect to a computer",
 	"settings.scanFailedUsePair": "Scan failed — use the pair code instead",
 	"settings.cameraUnavailableUsePair": "Camera unavailable — use the pair code instead",
+	"settings.grantCameraAccess": "Grant camera access in Settings",
+	"settings.tabBarMaterial": "Tab bar material",
+	"settings.materialHint": "Richest on the left, lightest on the right",
+	"settings.materialBalanced": "Balanced",
+	"settings.materialRegular": "Rich",
+	"settings.materialThin": "Light",
+	"settings.materialUltraThin": "Ultra light",
 	"settings.alignQrCodeFrame": "Align the QR code in the frame",
 	"settings.torch": "Torch",
 	"settings.switchCamera": "Switch camera",
@@ -3572,6 +3579,8 @@ export const settings = {
 	"Auto (bun-pty → node-pty fallback)": "Auto (bun-pty → node-pty fallback)",
 	"Auto-Repair Syntax Errors": "Auto-Repair Syntax Errors",
 	"Auto-continue active goals in terminal/GUI sessions": "Auto-continue active goals in terminal/GUI sessions",
+	"Auto-continue active goals in the background daemon / desktop GUI":
+		"Auto-continue active goals in the background daemon / desktop GUI",
 	"Autocorrect (macOS)": "Autocorrect (macOS)",
 	Bash: "Bash",
 	Board: "Board",
@@ -3652,6 +3661,7 @@ export const settings = {
 	Interaction: "Interaction",
 	Voice: "Voice",
 	"Interactive sessions": "Interactive sessions",
+	"Daemon sessions": "Daemon sessions",
 	Jina: "Jina",
 	Kimi: "Kimi",
 	Lynx: "Lynx",
@@ -4818,6 +4828,8 @@ export const settings = {
 		"Rule names to ignore entirely (applies to bundled defaults and your own rules)",
 	"Run modes where active goals may auto-continue between turns":
 		"Run modes where active goals may auto-continue between turns",
+	"Run modes where active goals may auto-continue between turns (interactive, daemon)":
+		"Run modes where active goals may auto-continue between turns (interactive, daemon)",
 	"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)":
 		"Run the secret obfuscator over /share snapshots before upload (uses the secrets.* config)",
 	"Running Turn Detail": "Running Turn Detail",

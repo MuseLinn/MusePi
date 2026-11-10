@@ -138,3 +138,16 @@
 .tr-attach-preview-error {
 	color: var(--color-danger);
 }
+
+/* Coarse pointers: the preview close / action chips were 20–24px. */
+@media (pointer: coarse) {
+	.tr-attach-preview-close {
+		min-width: 44px;
+		min-height: 44px;
+	}
+	.tr-attach-preview-action {
+		min-height: 44px;
+		padding: 8px 14px;
+		font-size: 12.5px;
+	}
+}

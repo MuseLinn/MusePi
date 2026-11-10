@@ -204,7 +204,7 @@ function AttachmentPreview({
 					onClose();
 				}
 			}}
-			onMouseDown={event => {
+			onPointerDown={event => {
 				if (event.target === event.currentTarget) onClose();
 			}}
 		>

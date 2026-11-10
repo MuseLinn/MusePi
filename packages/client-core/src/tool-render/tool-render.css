@@ -16,7 +16,8 @@
 	background: var(--tv-inset, var(--surface, transparent));
 }
 
-.tv-card {
+.tv-card,
+.tv-swarm-card {
 	--tv-fg: var(--fg, var(--text, oklch(0.92 0.01 307)));
 	--tv-muted: var(--fg-muted, var(--muted, oklch(0.71 0.016 307)));
 	--tv-faint: var(--fg-faint, var(--dim, oklch(0.53 0.018 307)));
@@ -30,14 +31,17 @@
 	--tv-ring: var(--ring, oklch(0.817 0.112 205 / 70%));
 	--tv-mono: var(--font-mono, ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace);
 
-	border: 1px solid var(--tv-border);
-	border-radius: var(--radius-md);
 	font-family: var(--tv-mono);
 	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
 	color: var(--tv-fg);
 	isolation: isolate;
 	overflow: hidden;
+}
+
+.tv-card {
+	border: 1px solid var(--tv-border);
+	border-radius: var(--radius-md);
 }
 
 .tv-card--error {
@@ -1617,31 +1621,6 @@
 	overflow: hidden;
 }
 
-.tv-swarm-seg-part {
-	min-width: 2px;
-	flex: 0 0 auto;
-}
-
-.tv-swarm-seg-part.s-ok {
-	background: var(--tv-ok);
-}
-
-.tv-swarm-seg-part.s-run {
-	background: var(--tv-accent);
-}
-
-.tv-swarm-seg-part.s-warn {
-	background: var(--tv-warn);
-}
-
-.tv-swarm-seg-part.s-fail {
-	background: var(--tv-err);
-}
-
-.tv-swarm-seg-part.s-abort {
-	background: color-mix(in srgb, var(--tv-err) 55%, transparent);
-}
-
 .tv-swarm-legend {
 	display: flex;
 	flex-wrap: wrap;
@@ -1754,23 +1733,23 @@
 }
 
 .tv-swarm-avatar--ok {
-	background: color-mix(in oklab, var(--tv-ok, #4caf7d) 18%, transparent);
-	color: var(--tv-ok, #4caf7d);
+	background: color-mix(in oklab, var(--tv-ok) 18%, transparent);
+	color: var(--tv-ok);
 }
 
 .tv-swarm-avatar--run {
-	background: color-mix(in oklab, var(--tv-accent, #6b9dff) 18%, transparent);
-	color: var(--tv-accent, #6b9dff);
+	background: color-mix(in oklab, var(--tv-accent) 18%, transparent);
+	color: var(--tv-accent);
 }
 
 .tv-swarm-avatar--warn {
-	background: color-mix(in oklab, #e8b23a 18%, transparent);
-	color: #e8b23a;
+	background: color-mix(in oklab, var(--tv-warn) 18%, transparent);
+	color: var(--tv-warn);
 }
 
 .tv-swarm-avatar--err {
-	background: color-mix(in oklab, #e5484d 18%, transparent);
-	color: #e5484d;
+	background: color-mix(in oklab, var(--tv-err) 18%, transparent);
+	color: var(--tv-err);
 }
 
 .tv-swarm-member-main {
@@ -1821,19 +1800,19 @@
 }
 
 .tv-swarm-status--ok {
-	color: var(--tv-ok, #4caf7d);
+	color: var(--tv-ok);
 }
 
 .tv-swarm-status--warn {
-	color: #e8b23a;
+	color: var(--tv-warn);
 }
 
 .tv-swarm-status--err {
-	color: var(--tv-err, #e5484d);
+	color: var(--tv-err);
 }
 
 .tv-swarm-status--run {
-	color: var(--tv-accent, #6b9dff);
+	color: var(--tv-accent);
 }
 
 /* Dot-matrix progress (kimiwork brand language): 2 × 8 cells, filled to
@@ -1854,19 +1833,19 @@
 }
 
 .tv-swarm-matrix--ok .tv-swarm-matrix-dot--on {
-	background: var(--tv-ok, #4caf7d);
+	background: var(--tv-ok);
 }
 
 .tv-swarm-matrix--warn .tv-swarm-matrix-dot--on {
-	background: #e8b23a;
+	background: var(--tv-warn);
 }
 
 .tv-swarm-matrix--err .tv-swarm-matrix-dot--on {
-	background: var(--tv-err, #e5484d);
+	background: var(--tv-err);
 }
 
 .tv-swarm-matrix--run .tv-swarm-matrix-dot--on {
-	background: var(--tv-accent, #6b9dff);
+	background: var(--tv-accent);
 }
 
 .tv-swarm-matrix-dot--tip {
@@ -1881,6 +1860,20 @@
 	50% {
 		opacity: 0.25;
 	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tv-swarm-matrix-dot--tip,
+	.tv-swarm-dot.run,
+	.tv-swarm-dot.s-run {
+		animation: none;
+	}
+}
+
+.gui-motion-off .tv-swarm-matrix-dot--tip,
+.gui-motion-off .tv-swarm-dot.run,
+.gui-motion-off .tv-swarm-dot.s-run {
+	animation: none;
 }
 
 /* Overview fold chevron (kimiwork ⌄ parity): right-aligned in the line. */

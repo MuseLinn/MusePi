@@ -2,8 +2,8 @@ import "./happy-dom-shim";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { FloatingScrollbar } from "../src/components/FloatingScrollbar";
-import { readAlwaysShowScrollbar, saveAlwaysShowScrollbar } from "../src/lib/scrollbar-skins";
+import { FloatingScrollbar, MAX_RAILS } from "../src/plugins/ui-theme/rail";
+import { readAlwaysShowScrollbar, saveAlwaysShowScrollbar } from "../src/plugins/ui-theme/skins";
 
 /**
  * FloatingScrollbar 的外部可观察契约。
@@ -275,12 +275,12 @@ describe("FloatingScrollbar 挂载与轨道池", () => {
 		expect(host.querySelectorAll(".gui-float-scrollbar[data-visible]").length).toBe(1);
 
 		// More containers than the pool holds, so eviction must happen.
-		for (let i = 0; i < 8; i += 1) {
+		for (let i = 0; i < MAX_RAILS + 3; i += 1) {
 			userScroll(mountScroller());
 			await flushFrames();
 		}
 
-		expect(host.querySelectorAll(".gui-float-scrollbar[data-visible]").length).toBeLessThanOrEqual(6);
+		expect(host.querySelectorAll(".gui-float-scrollbar[data-visible]").length).toBeLessThanOrEqual(MAX_RAILS);
 		// Each slot watches at most its own container plus that container's
 		// direct children — never a stale container from an earlier binding.
 		for (const observer of TestResizeObserver.instances) {
@@ -624,6 +624,53 @@ describe("FloatingScrollbar 水平轴", () => {
 		expect(moved).toMatch(/^translate3d\((\d+)px, 0(px)?, 0(px)?\)$/);
 		expect(Number.parseInt(moved.match(/translate3d\((\d+)px/)![1], 10)).toBeGreaterThan(0);
 		expect(horizontalThumb(rail()).style.left).toBe("");
+	});
+
+	test("RTL 容器的横向拇指从右缘起算，负 scrollLeft 向左推进", async () => {
+		scrollWidth = 800;
+		const el = mountScroller();
+		el.setAttribute("dir", "rtl");
+		userScroll(el);
+		await flushFrames();
+
+		const offsetOf = (): number => {
+			const match = horizontalThumb(rail()).style.transform.match(/translate3d\((-?\d+)px/);
+			return match ? Number.parseInt(match[1], 10) : Number.NaN;
+		};
+
+		// RTL rest is the right edge: scrollLeft is 0 there, and the thumb sits
+		// at the far end of the track instead of the left one.
+		const rest = offsetOf();
+		expect(rest).toBeGreaterThan(0);
+
+		scrollLeft = -700;
+		el.dispatchEvent(new window.Event("scroll"));
+		await flushFrames();
+		expect(offsetOf()).toBeLessThan(rest);
+	});
+
+	test("悬停可滚动容器即出现轨，无需先滚动", async () => {
+		const el = mountScroller();
+		el.dispatchEvent(new window.PointerEvent("pointerover", { bubbles: true }));
+		await flushFrames();
+
+		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).not.toBeNull();
+	});
+
+	test("输入框里的空格不唤醒轨，方向键只唤醒最近的滚动容器", async () => {
+		const el = mountScroller();
+		const input = document.createElement("input");
+		el.appendChild(input);
+
+		input.dispatchEvent(new window.KeyboardEvent("keydown", { key: " ", bubbles: true }));
+		el.dispatchEvent(new window.Event("scroll"));
+		await flushFrames();
+		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).toBeNull();
+
+		el.dispatchEvent(new window.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+		el.dispatchEvent(new window.Event("scroll"));
+		await flushFrames();
+		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).not.toBeNull();
 	});
 
 	test("被裁剪的溢出不算溢出：只横向可滚的 tab 条不长出纵向拇指", async () => {

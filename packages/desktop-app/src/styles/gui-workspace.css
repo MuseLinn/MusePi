@@ -4914,20 +4914,50 @@
 	border-bottom: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent);
 }
 
-/* 能力中心滚动体上缘有 14px 内边距：吸顶行向上探入其中，粘住时不留缝。 */
-.gui-capability-body .gui-skill-market-bar,
-.gui-capability-body .gui-ext-plugins-toolbar {
-	top: -14px;
+/* 滚动体 + 遮罩层的外壳：遮罩层必须在滚动体之外，才能采样到滚动内容。 */
+.gui-capability-scroll {
+	position: relative;
+	display: flex;
+	flex: 1;
+	min-height: 0;
 }
 
 .gui-capability-body {
+	--cap-body-pad: 14px;
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	/* A full-bleed sticky row uses negative side margins; keep the padding box
-	 * as the clip so the bleed never turns into a horizontal scrollbar. */
+	/* Negative side margins were once used for a full-bleed band; the tool row
+	 * is now an inset glass card. Keep the padding box as the clip so a wide
+	 * child can never turn into a horizontal scrollbar. */
 	overflow-x: hidden;
-	padding: 14px 20px 20px;
+	padding: var(--cap-body-pad) 20px 20px;
+}
+
+/* 吸顶行的包含块是 pane（从内容边开始），无法自动盖住滚动体的上缘内边距；
+ * 卡片向上探入这段距离，上缘模糊带再按同一变量对齐到卡片下缘。 */
+.gui-capability-body :is(.gui-skill-market-bar, .gui-ext-plugins-toolbar, .mp-grid-toolbar) {
+	top: calc(-1 * var(--cap-body-pad));
+}
+
+/* Capability scroll edges use the shared `.gui-edge-blur` primitive
+ * (gui-base.css); this page only decides WHERE the top band starts: just below
+ * the measured tool row, so content dissolves under the glass card. */
+.gui-capability-scroll {
+	position: relative;
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
+.gui-capability-scroll[data-edge-top] .gui-edge-blur--top {
+	display: block;
+	top: var(--cap-toolbar-h, 56px);
+}
+
+.gui-capability-scroll[data-edge-end] .gui-edge-blur--end {
+	display: block;
+	bottom: 0;
 }
 
 /* Tab 面板常驻挂载、display 切换：切 tab 不丢滚动位置/输入态/已拉数据；
@@ -4980,35 +5010,37 @@
 	color: var(--color-accent);
 }
 
-/* ── Capability control language (2026-11-09) ──────────────────────────
+/* ── Capability control language (2026-11-10) ──────────────────────────
  * Skills (discover + installed), Plugins and Marketplace had three search
  * fields and three action styles. One recipe now: 34px tall (the GuiSelect
  * height), radius-lg, recessed glass fill + hairline + inset rim, accent
  * focus. Search / select / action share it. The marketplace grid is a
- * shared client-core component, so only this page re-skins it. */
+ * shared client-core component, so only this page re-skins it.
+ *
+ * The tool row is a floating glass card, not a full-bleed band. It carries
+ * the shared `.gui-liquid-glass` surface (one project-wide refraction/blur
+ * pipeline) instead of a hand-rolled backdrop-filter: the composable
+ * warp layer is the only implementation that actually samples the list
+ * scrolling beneath a sticky element. */
 .gui-capability-page :is(.gui-skill-market-bar, .gui-ext-plugins-toolbar, .mp-grid-toolbar) {
 	position: sticky;
-	top: -14px;
+	top: calc(-1 * var(--cap-body-pad, 0px));
 	z-index: 6;
 	display: flex;
 	align-items: center;
 	justify-content: flex-start;
 	gap: 8px;
 	flex-wrap: wrap;
-	/* The body has 20px side padding. Negative side margins + matching inner
-	 * padding let the sticky surface span the full card width; without them a
-	 * darker strip covered only the content column and left two uncovered
-	 * gutters. The fill is the page card's own glass (`--glass-card-bg`), not
-	 * `--color-surface`, so it reads as the same material rather than a mask. */
-	margin-inline: -20px;
-	padding: 12px 20px 10px;
-	/* Opaque card fill, not a translucent `--color-surface` wash: the band is
-	 * an internal part of the page card, so it must sample the same colour as
-	 * the surface it covers. */
-	background: var(--gui-card-surface);
-	backdrop-filter: none;
-	-webkit-backdrop-filter: none;
-	border-bottom: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent);
+	padding: 10px 12px;
+	border: 1px solid var(--glass-hairline-strong);
+	border-radius: var(--radius-xl);
+	background: color-mix(in oklab, var(--gui-card-surface) 64%, transparent);
+	background-image: var(--glass-sheen);
+	--gui-liquid-glass-blur: 20px;
+	box-shadow:
+		inset 0 1px 0 var(--glass-rim-hi),
+		inset 0 -1px 0 var(--glass-rim-lo),
+		0 10px 30px color-mix(in srgb, #000 18%, transparent);
 }
 
 /* The marketplace grid owned its own scroll; the page body is the single
@@ -5040,7 +5072,7 @@
 	background: color-mix(in oklab, var(--color-text) 6%, transparent);
 	box-shadow:
 		inset 0 1px 0 var(--glass-rim-hi),
-		0 0 0 3px var(--ring);
+		0 0 0 3px color-mix(in oklab, var(--color-accent) 22%, transparent);
 }
 
 .gui-capability-page :is(.gui-skill-market-search, .gui-ext-plugins-search, .mp-search-field) input {
@@ -5080,7 +5112,7 @@
 	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
 	box-shadow:
 		inset 0 1px 0 var(--glass-rim-hi),
-		0 0 0 3px var(--ring);
+		0 0 0 3px color-mix(in oklab, var(--color-accent) 22%, transparent);
 }
 
 /* Same height/fill as the search field; the stock GuiSelect is 34px tall but

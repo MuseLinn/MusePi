@@ -1,8 +1,22 @@
 {
 	"string": [
+		{ "name": "app_name", "value": "MusePi" },
+		{ "name": "app_name_desc", "value": "MusePi 移动客户端" },
 		{ "name": "module_desc", "value": "MusePi WebView shell" },
 		{ "name": "ability_desc", "value": "MusePi collaborator client" },
 		{ "name": "perm_internet_reason", "value": "连接同一网络下电脑上的 MusePi 会话" },
-		{ "name": "perm_camera_reason", "value": "扫描桌面端分享的连接二维码" }
+		{ "name": "perm_camera_reason", "value": "扫描桌面端分享的连接二维码" },
+		{ "name": "perm_mic_reason", "value": "智能体会话中的语音输入" },
+		{ "name": "tab_connect", "value": "连接" },
+		{ "name": "tab_chat", "value": "会话" },
+		{ "name": "tab_settings", "value": "设置" },
+		{ "name": "sheet_pair_title", "value": "使用配对码" },
+		{ "name": "sheet_link_title", "value": "使用远程访问链接" },
+		{ "name": "sheet_pair_hint", "value": "6 位配对码" },
+		{ "name": "sheet_host_hint", "value": "电脑地址（如 192.168.1.5）" },
+		{ "name": "sheet_link_hint", "value": "粘贴远程访问链接" },
+		{ "name": "sheet_name_hint", "value": "这台设备的名称" },
+		{ "name": "action_pair", "value": "配对" },
+		{ "name": "action_connect", "value": "连接" }
 	]
 }

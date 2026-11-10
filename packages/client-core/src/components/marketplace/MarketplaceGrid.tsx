@@ -293,7 +293,7 @@ export function MarketplaceGrid({
 
 	return (
 		<div ref={shellRef} className="mp-grid-shell" aria-busy={showLoading ? "true" : "false"}>
-			<header className="mp-grid-toolbar">
+			<header className="mp-grid-toolbar gui-liquid-glass">
 				{showCatalogControls && (
 					<label className="mp-search-field">
 						<Search size={14} strokeWidth={2} aria-hidden="true" />

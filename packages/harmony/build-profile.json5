@@ -6,6 +6,10 @@
 				"name": "default",
 				"signingConfig": "default",
 				"compatibleSdkVersion": "5.0.0(12)",
+				// Immersive light-sense (沉浸光感, uiMaterial) needs API 26+.
+				// The install floor stays at API 12, so older HarmonyOS
+				// devices keep working — the bar falls back to a plain one.
+				"targetSdkVersion": "26.0.0",
 				"runtimeOS": "HarmonyOS",
 				"buildOption": {
 					"strictMode": {

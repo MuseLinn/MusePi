@@ -64,6 +64,7 @@ import * as ReactDOM from "react-dom";
 import * as ReactDOMClient from "react-dom/client";
 import type { ChatViewProps } from "../components/ChatView";
 import type { ContextPanel } from "../components/ContextPanel";
+import { setContributedScrollbarSkins } from "../plugins/ui-theme/skins";
 import { FILE_WORKSPACE_SLOT, FILE_WORKSPACE_SURFACE, type FileWorkspaceHost } from "./file-workspace";
 import { exposeHostModules, registerHostModule } from "./host-modules";
 import {
@@ -203,6 +204,8 @@ export const SETTINGS_EXTENSION_SLOT = slot("settings.extensions");
 export const CHAT_VIEW_SLOT = slot("app.chat");
 /** Full capability-center page slot. */
 export const CAPABILITY_CENTER_SLOT = slot("app.capability");
+/** Root-level overlay layer (floating scroll rail); host keeps a fallback. */
+export const APP_OVERLAY_SLOT = slot("app.overlay");
 /** Full right-panel shell, independently replaceable from app.chat. */
 export const PANEL_SHELL_SLOT = slot("panel.shell");
 /** Always-mounted managed browser guest host. */
@@ -219,6 +222,8 @@ export const RAIL_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[2]; // "rail
 export const SETTINGS_ITEM_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[3]; // "settings.item."
 /** 单行偏好槽。 */
 export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4]; // "settings.action."
+/** 内置外观页的行/分区座位（dsh `settings.general.item` 同构命名）。 */
+export const SETTINGS_APPEARANCE_ITEM_SLOT = slot("settings.appearance.item");
 /** Composer 座位槽（见 EXTENSION_SLOT_DECLARATION 的席位表）。 */
 export const COMPOSER_DOCK_SLOT = slot("composer.dock");
 export const COMPOSER_LEFT_SLOT = slot("composer.left");
@@ -249,6 +254,8 @@ export const TRANSCRIPT_NODE_SLOT = slot("transcript.node");
 export const SESSION_INFO_SLOT_PREFIX = "chat.session-info.";
 /** 内置「插件」分区占用的席位(`session-info-plugins` 插件注册到这里)。 */
 export const SESSION_INFO_SLOT = `${SESSION_INFO_SLOT_PREFIX}plugins`;
+/** 子代理进度分区(`session-info-agents` 插件注册到这里)。 */
+export const SESSION_INFO_AGENTS_SLOT = `${SESSION_INFO_SLOT_PREFIX}agents`;
 /**
  * 二级左栏面板席位命名空间(`sidebar.panel.<destination id>`)。一个 rail
  * 目的地最多挂载一个面板;宿主按当前目的地/悬停目的地取用,未注册的仍保留
@@ -268,11 +275,31 @@ export interface SessionInfoPluginRow {
 	active: boolean;
 }
 
+/** One live or finished subagent, already reduced to display facts. The host
+ *  owns the projection (fraction, elapsed, cost) so a section plugin and the
+ *  built-in fallback cannot read the same agent differently. */
+export interface SessionInfoAgentRow {
+	readonly id: string;
+	readonly agent: string;
+	readonly task: string;
+	/** 0–100, floored and capped by the shared progress rule. */
+	readonly percent: number;
+	readonly blocked: boolean;
+	readonly elapsed: string;
+	readonly durationMs: number;
+	readonly cost: number;
+	readonly ended: boolean;
+}
+
 /** `chat.session-info.*` 分区收到的只读数据。 */
 export interface SessionInfoSlotData {
 	/** 运行中条目数。 */
 	readonly runningPlugins: number;
 	readonly pluginEntries: readonly SessionInfoPluginRow[];
+	/** Live rows first, then ended rows, in the card's wire order. */
+	readonly agents?: readonly SessionInfoAgentRow[];
+	/** Open the trajectory surface for an agent row. */
+	readonly openTrajectory?: () => void;
 }
 
 /** 桌面端实际挂载的槽位(与 daemon 声明对比,诊断未挂载槽位)。
@@ -366,6 +393,19 @@ export interface StatusBarSegmentItem {
 	extensionPath: string;
 }
 
+/** One scrollbar skin from extensions.list (registerScrollbarSkin — the
+ *  floating rail merges it over the built-in catalog by id). */
+export interface ScrollbarSkinItem {
+	id: string;
+	displayName: string;
+	base: "gummy" | "pacman";
+	colors: { accent: string; track: string; eaten: string };
+	size: number;
+	pacGlyph?: string | null;
+	/** Extension entry path that contributed it (identity). */
+	extensionPath: string;
+}
+
 /** One normalized capability entry in extensions.list (10 kinds, TUI
  *  /extensions parity). Type home here so consumers (ExtensionsCenter,
  *  settings-sections) share one shape. */
@@ -447,6 +487,9 @@ export interface ExtensionRegistryData {
 	/** Status-bar segments contributed by active extensions
 	 *  (registerStatusBarSegment), rendered after the built-ins by `order`. */
 	statusBarSegments: StatusBarSegmentItem[];
+	/** Scrollbar skins contributed by active extensions (registerScrollbarSkin),
+	 *  merged over the built-in catalog by id (old daemons omit the field). */
+	scrollbarSkins?: ScrollbarSkinItem[];
 	/** Slot contract from the daemon (collab-proto single authority). */
 	slots: { exact: readonly string[]; prefixes: readonly string[] };
 	/** dsh「会话插件」面:完整组合的预设清单(旧 daemon 无该字段)。 */
@@ -1206,6 +1249,26 @@ export function useExtensionWidgets(rpc: RpcClient | null): void {
 }
 
 /**
+ * Scrollbar skins from extensions.list (registerScrollbarSkin): publish the
+ * contributed catalog into the shared `scrollbar-skins` host module, so the
+ * floating overlay (which may run inside a compiled bundle) and the appearance
+ * picker read one list. Empty data clears the contributed set, leaving the
+ * imported + built-in skins.
+ */
+export function useExtensionScrollbarSkins(rpc: RpcClient | null): void {
+	const data = useExtensionRegistry(rpc);
+	const skins = data?.scrollbarSkins ?? [];
+	useEffect(() => {
+		setContributedScrollbarSkins(
+			skins.map(({ extensionPath: _extensionPath, pacGlyph, ...skin }) => ({
+				...skin,
+				pacGlyph: pacGlyph ?? null,
+			})),
+		);
+	}, [skins]);
+}
+
+/**
  * The slot surface a compiled plugin binds to.
  *
  * Every seat constant, selector and mount component a plugin may import lives
@@ -1218,6 +1281,7 @@ const slotHostBindings = {
 	SETTINGS_EXTENSION_SLOT,
 	CHAT_VIEW_SLOT,
 	CAPABILITY_CENTER_SLOT,
+	APP_OVERLAY_SLOT,
 	PANEL_SHELL_SLOT,
 	BROWSER_HOST_SLOT,
 	RIGHT_PANEL_SLOT,
@@ -1227,6 +1291,7 @@ const slotHostBindings = {
 	RAIL_SLOT_PREFIX,
 	SETTINGS_ITEM_SLOT_PREFIX,
 	SETTINGS_ACTION_SLOT_PREFIX,
+	SETTINGS_APPEARANCE_ITEM_SLOT,
 	COMPOSER_DOCK_SLOT,
 	COMPOSER_LEFT_SLOT,
 	COMPOSER_RIGHT_SLOT,
@@ -1255,6 +1320,7 @@ const slotHostBindings = {
 	selectTranscriptNodeComponents,
 	useExtensionRegistry,
 	useExtensionToolViews,
+	useExtensionScrollbarSkins,
 	useExtensionWidgets,
 	useSlotComponents,
 	useSlotComponentsByPrefix,

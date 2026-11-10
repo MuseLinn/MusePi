@@ -8,6 +8,12 @@ export const shell = {
 	"shell.pasteCollabLinkAny": "粘贴 MusePi 远程访问链接",
 	"shell.wsHostPortR": "适用于隧道、中继或高级网络配置",
 
+	// ── 底部页签（移动端壳） ──────────────────────────────────────────────────
+	"shell.tabNavigation": "主导航",
+	"shell.tabConnect": "连接",
+	"shell.tabChat": "会话",
+	"shell.tabSettings": "设置",
+
 	// ── Header bar ────────────────────────────────────────────────────────────
 	"shell.readOnly": "只读",
 	"shell.readOnlyLinkWatching": "只读链接 — 仅观看",

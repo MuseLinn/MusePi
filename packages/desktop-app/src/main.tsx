@@ -9,6 +9,7 @@ import "@musepi/client-core/src/components/agents/agents.css";
 import "@musepi/client-core/src/tool-render/tool-render.css";
 import "@musepi/client-core/src/styles/fonts.css";
 import "./styles/gui.css";
+import "./plugins/ui-theme/rail.css";
 import "./styles/gui-taskcenter.css";
 import "@musepi/client-core/src/styles/overlay-fallback.css";
 import "./styles/tailwind.out.css";

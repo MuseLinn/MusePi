@@ -389,6 +389,7 @@ const LEDGERED_VERBS = new Set([
 	"registerService",
 	"registerThemeToken",
 	"registerStatusBarSegment",
+	"registerScrollbarSkin",
 	"registerProvider",
 	"registerMediaProvider",
 	"registerDesignSystem",
@@ -560,6 +561,13 @@ function undoRegistration(verb: string, api: ExtensionAPI, extension: Extension,
 			return () => {
 				const index = extension.statusBarSegments.findIndex(entry => entry.id === id);
 				if (index >= 0) extension.statusBarSegments.splice(index, 1);
+			};
+		}
+		case "registerScrollbarSkin": {
+			const [skin] = args as [{ id: string }];
+			return () => {
+				const index = extension.scrollbarSkins.findIndex(entry => entry.id === skin.id);
+				if (index >= 0) extension.scrollbarSkins.splice(index, 1);
 			};
 		}
 		case "registerProvider": {

@@ -430,7 +430,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	return (
 		<div className="gui-skill-market">
 			{/* 工具行 (设计稿 01):搜索 → 全部来源下拉 → 热门优先下拉 → + 添加技能 */}
-			<div className="gui-skill-market-bar">
+			<div className="gui-skill-market-bar gui-liquid-glass">
 				<label className="gui-skill-market-search">
 					<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-60" />
 					<input

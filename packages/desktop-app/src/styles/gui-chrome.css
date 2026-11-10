@@ -151,6 +151,10 @@
 	gap: 4px;
 	padding: 0 0 8px;
 	min-height: 0;
+	/* The icon rail is a fixed column, not a scroll surface: clip its own
+	 * content (a bottom tooltip/overflow used to add 26px to the page scroll
+	 * height, so focusing the settings gear scrolled the whole UI up). */
+	overflow: clip;
 	/* Transparent over the workspace glass layer (.gui-main): the rail reads
 	 * as the left edge of the same material as the panel beside it. */
 	background: transparent;

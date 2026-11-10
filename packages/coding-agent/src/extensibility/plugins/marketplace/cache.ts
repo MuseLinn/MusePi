@@ -55,6 +55,25 @@ export function getCachedPluginPath(
 }
 
 /**
+ * Windows refuses to rename a directory while another process holds a handle
+ * on it — indexers, antivirus scans and a file watcher that raced the copy all
+ * surface as EPERM/EBUSY. Those locks are short-lived, so retry with backoff
+ * before treating the cache write as failed.
+ */
+async function renameWithRetry(from: string, to: string): Promise<void> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			await fs.rename(from, to);
+			return;
+		} catch (err) {
+			const code = (err as NodeJS.ErrnoException).code;
+			if (attempt >= 4 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw err;
+			await new Promise(resolve => setTimeout(resolve, 80 * 2 ** attempt));
+		}
+	}
+}
+
+/**
  * Copy `sourcePath` into the cache, returning the absolute cache path.
  *
  * Idempotent: if the target already exists it is removed before copying,
@@ -78,7 +97,7 @@ export async function cachePlugin(
 	try {
 		await fs.cp(sourcePath, stagingPath, { recursive: true });
 		await fs.rm(targetPath, { recursive: true, force: true });
-		await fs.rename(stagingPath, targetPath);
+		await renameWithRetry(stagingPath, targetPath);
 	} catch (err) {
 		// Clean up staging dir on any failure; leave existing targetPath intact
 		await fs.rm(stagingPath, { recursive: true, force: true }).catch(() => {});

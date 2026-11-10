@@ -254,7 +254,7 @@ function WidgetCardMenu({
 		if (!at) return;
 		anchor();
 		const close = (): void => setAt(null);
-		const onDown = (event: MouseEvent): void => {
+		const onDown = (event: PointerEvent): void => {
 			const inside = event
 				.composedPath()
 				.some(n => n instanceof HTMLElement && (n === btnRef.current || n === menuRef.current));
@@ -263,12 +263,12 @@ function WidgetCardMenu({
 		const onKey = (event: KeyboardEvent): void => {
 			if (event.key === "Escape") close();
 		};
-		document.addEventListener("mousedown", onDown, true);
+		document.addEventListener("pointerdown", onDown, true);
 		document.addEventListener("keydown", onKey);
 		document.addEventListener("scroll", anchor, true);
 		window.addEventListener("resize", anchor);
 		return () => {
-			document.removeEventListener("mousedown", onDown, true);
+			document.removeEventListener("pointerdown", onDown, true);
 			document.removeEventListener("keydown", onKey);
 			document.removeEventListener("scroll", anchor, true);
 			window.removeEventListener("resize", anchor);

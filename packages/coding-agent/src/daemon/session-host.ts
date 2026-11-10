@@ -42,6 +42,7 @@ import type { CustomTool } from "../extensibility/custom-tools/types";
 import type { Skill } from "../extensibility/skills";
 import type { FileSlashCommand } from "../extensibility/slash-commands";
 import { FileIndexService } from "../file-index";
+import { GoalContinuationController } from "../goals/continuation-controller";
 import type { MCPManager } from "../mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "../mcp/startup-events";
 import { initializeExtensions } from "../modes/runtime-init";
@@ -503,10 +504,14 @@ export const MAX_LIVE_SESSIONS = 8;
 export function isLiveSessionBusy(live: {
 	agentSession?: { isStreaming?: boolean; isCompacting?: boolean } | null;
 	activeToolCalls?: { size: number };
+	goalController?: { continuationPending: boolean };
 }): boolean {
 	if (live.agentSession?.isStreaming === true) return true;
 	if (live.agentSession?.isCompacting === true) return true;
 	if ((live.activeToolCalls?.size ?? 0) > 0) return true;
+	// A decided-but-not-yet-admitted goal continuation is work: disposing now
+	// would drop the turn the controller is about to submit.
+	if (live.goalController?.continuationPending === true) return true;
 	return false;
 }
 
@@ -514,6 +519,7 @@ export function isLiveSessionBusy(live: {
 export interface IdleCandidate {
 	agentSession?: { isStreaming?: boolean; isCompacting?: boolean } | null;
 	activeToolCalls?: { size: number };
+	goalController?: { continuationPending: boolean };
 	lastActivity: number;
 }
 
@@ -815,6 +821,8 @@ export function assistantReplyText(message: unknown): string {
 export interface LiveSession {
 	sessionId: string;
 	agentSession: AgentSession;
+	/** Goal auto-continuation for this session (daemon-owned, UI-independent). */
+	goalController: GoalContinuationController;
 	/** Session workspace root — also the key for this session's cwd-scoped
 	 *  MCP manager (project MCP config discovery). */
 	cwd: string;
@@ -1762,10 +1770,12 @@ export class DaemonSessionHost {
 				}
 			}, 100);
 		};
+		const goalController = new GoalContinuationController(agentSession, () => this.#noteActivity(sessionId));
 		const live: LiveSession = {
 			sessionId,
 			cwd,
 			agentSession,
+			goalController,
 			extensionSettings: new Map(),
 			autoTitle: true,
 			// 预设 id:SDK 头优先(热切换 setMode 的落盘值),缺失时回落到
@@ -1837,6 +1847,7 @@ export class DaemonSessionHost {
 			dispose: () => {
 				void live.ownerLock?.release();
 				live.ownerLock = null;
+				live.goalController.stopForHostAbort();
 				unsubscribeName();
 				unsubscribeProgress();
 				unsubscribeLifecycle();
@@ -1990,6 +2001,10 @@ export class DaemonSessionHost {
 		};
 		const unsubscribeName = agentSession.sessionManager.onSessionNameChanged(onSessionNameChanged);
 		agentSession.subscribe(event => {
+			// Goal continuation sees every session event, including the ones the
+			// wire guard drops. It must run before journal/stream handling so the
+			// continuation is admitted before settlement is evaluated.
+			goalController.observe(event);
 			// Only wire-compatible events cross the daemon boundary — the
 			// journal, the live stream and the SDK contract share one format.
 			if (!isWireAgentEvent(event)) return;
@@ -2070,6 +2085,17 @@ export class DaemonSessionHost {
 			}
 		});
 		this.#sessions.set(sessionId, live);
+		// Reattach a goal journaled in the resumed transcript. Without this a
+		// daemon/GUI session loses the active goal on reactivation and the
+		// continuation controller has nothing to drive.
+		try {
+			await live.goalController.reconcile();
+		} catch (error) {
+			logger.warn("goal reattach failed on adopt", {
+				sessionId,
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
 		// M4 P1: rehydrate the per-session connector allowlist BEFORE any MCP
 		// tools land — the filter must own the first refresh. null/absent =
 		// unconfigured (legacy all-on semantics, nothing to do); an array

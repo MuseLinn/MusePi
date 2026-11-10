@@ -576,9 +576,13 @@ export class ExtensionService implements DaemonService {
 		// Renderer-side slot components (ui-slots analogue): compiled
 		// from active extension-module entries, cached 10s with the
 		// extension scan. The GUI mounts them by slot id.
-		const { collectSlotComponents, collectToolViews, collectStatusBarSegments, collectWidgetViews } = await import(
-			"../extension-artifact-compiler"
-		);
+		const {
+			collectSlotComponents,
+			collectToolViews,
+			collectStatusBarSegments,
+			collectWidgetViews,
+			collectScrollbarSkins,
+		} = await import("../extension-artifact-compiler");
 		const components = await collectSlotComponents(
 			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 			this.#deps.cwd(),
@@ -602,6 +606,12 @@ export class ExtensionService implements DaemonService {
 			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 			this.#deps.cwd(),
 		);
+		// Scrollbar skins (registerScrollbarSkin): the floating rail merges these
+		// over its built-in catalog by id, so a theme bundle owns the look.
+		const scrollbarSkins = await collectScrollbarSkins(
+			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
+			this.#deps.cwd(),
+		);
 		return {
 			extensions: extensions.map(({ raw: _raw, ...rest }) => rest),
 			tabs,
@@ -610,6 +620,7 @@ export class ExtensionService implements DaemonService {
 			toolViews,
 			widgets,
 			statusBarSegments,
+			scrollbarSkins,
 			// Desktop-shell config: enabled/mode/
 			// webUrl read by the compat page + GUI shell.
 			shell: shellCfg,

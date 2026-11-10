@@ -790,7 +790,7 @@ export function UnifiedPluginsView({
 	return (
 		<div className="gui-ext-plugins" data-variant={variant}>
 			{/* dsh 面板顶栏：搜索 + 计数 + 「+ 添加插件」 */}
-			<div className="gui-ext-plugins-toolbar">
+			<div className="gui-ext-plugins-toolbar gui-liquid-glass">
 				<label className="gui-ext-plugins-search">
 					<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-50" />
 					<input

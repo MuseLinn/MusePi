@@ -1,5 +1,7 @@
 import type { CSSProperties, MutableRefObject, ReactNode, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { PacMan } from "../../vendor/pac-man";
 import {
 	getScrollbarSkin,
 	readAlwaysShowScrollbar,
@@ -8,12 +10,15 @@ import {
 	SCROLLBAR_SKINS_CHANGED_EVENT,
 	SCROLLBAR_STYLE_CHANGED_EVENT,
 	type ScrollbarSkin,
-} from "../lib/scrollbar-skins";
-import { PacMan } from "../vendor/pac-man";
+} from "./skins";
 
-/** Rail pool size. Beyond this the coldest slot is recycled rather than
- *  dropping the newest scroll signal. */
-const MAX_RAILS = 6;
+/**
+ * Rail pool size. This is a safety valve, not a layout budget: every visible
+ * scroll container keeps its rail, and 24 slots is far above any simultaneous
+ * set of panes the shell can show. The coldest slot is recycled only beyond it.
+ * Exported for the pool contract test.
+ */
+export const MAX_RAILS = 24;
 /** Horizontal track inset from each edge, so it clears the vertical thumb. */
 const H_EDGE_INSET = 4;
 /** Vertical track inset from the container's right edge. */
@@ -34,7 +39,27 @@ const GUMMY_RELEASE = "transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1)";
 
 /** Keys that scroll a container. Without them a keyboard-only scroll is
  *  indistinguishable from our own programmatic `scrollTop` writes. */
-const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Spacebar"]);
+const SCROLL_KEYS = new Set([
+	"ArrowUp",
+	"ArrowDown",
+	"ArrowLeft",
+	"ArrowRight",
+	"PageUp",
+	"PageDown",
+	"Home",
+	"End",
+	" ",
+	"Spacebar",
+]);
+
+/** OS or app-level "no motion": `gui-motion-off` lives on `<html>` (the
+ *  appearance setting), the media query covers the OS preference. */
+function stillMotion(): boolean {
+	return (
+		document.documentElement.classList.contains("gui-motion-off") ||
+		window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+	);
+}
 
 type Axis = "v" | "h";
 
@@ -75,6 +100,9 @@ interface Rail {
 	hRange: number;
 	vScale: number;
 	hScale: number;
+	/** LTR adds nothing; RTL adds the scroll range so a negative scrollLeft
+	 *  (Chromium's RTL origin) still maps the thumb from the right edge. */
+	hOrigin: number;
 	vOverflow: boolean;
 	hOverflow: boolean;
 	/** A scroll landed since the last position pass — the hot path's only trigger. */
@@ -264,6 +292,9 @@ export function FloatingScrollbar(): ReactNode {
 	const [skinId, setSkinId] = useState<string>(() => readScrollbarStyle());
 	const [alwaysShow, setAlwaysShow] = useState<boolean>(() => readAlwaysShowScrollbar());
 	const alwaysRef = useRef(alwaysShow);
+	// Re-render when the motion budget changes so the Pac-man stops chewing
+	// immediately; the JS spring/squash paths read `stillMotion()` live.
+	const [still, setStill] = useState<boolean>(stillMotion);
 
 	// Skin picker / importer and the always-visible toggle notify; a light
 	// re-render picks up the new values. Scrolling itself never re-renders.
@@ -277,6 +308,19 @@ export function FloatingScrollbar(): ReactNode {
 			window.removeEventListener(SCROLLBAR_STYLE_CHANGED_EVENT, onSkin);
 			window.removeEventListener(SCROLLBAR_SKINS_CHANGED_EVENT, onSkin);
 			window.removeEventListener(SCROLLBAR_ALWAYS_CHANGED_EVENT, onAlways);
+		};
+	}, []);
+
+	useEffect(() => {
+		const sync = (): void => setStill(stillMotion());
+		const query = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+		query?.addEventListener?.("change", sync);
+		// The appearance setting flips a class on <html>.
+		const observer = new MutationObserver(sync);
+		observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+		return () => {
+			query?.removeEventListener?.("change", sync);
+			observer.disconnect();
 		};
 	}, []);
 
@@ -307,6 +351,7 @@ export function FloatingScrollbar(): ReactNode {
 				hRange: 0,
 				vScale: 0,
 				hScale: 0,
+				hOrigin: 0,
 				vOverflow: false,
 				hOverflow: false,
 				dirty: false,
@@ -352,6 +397,7 @@ export function FloatingScrollbar(): ReactNode {
 			rail.hRange = 0;
 			rail.vScale = 0;
 			rail.hScale = 0;
+			rail.hOrigin = 0;
 			rail.vOverflow = false;
 			rail.hOverflow = false;
 			rail.drag = null;
@@ -445,6 +491,10 @@ export function FloatingScrollbar(): ReactNode {
 			rail.hRange = hRange;
 			rail.vScale = vScroll ? (vTrack - vLen) / vRange : 0;
 			rail.hScale = hScroll ? (hTrack - hLen) / hRange : 0;
+			// RTL scrollLeft runs 0 → -hRange from the right edge; adding the
+			// range measures it from the left like LTR (openchamber parity).
+			const rtl = el.closest('[dir="rtl"]') !== null || window.getComputedStyle(el).direction === "rtl";
+			rail.hOrigin = hScroll && rtl ? hRange : 0;
 			rail.vOverflow = vScroll;
 			rail.hOverflow = hScroll;
 			return true;
@@ -471,6 +521,8 @@ export function FloatingScrollbar(): ReactNode {
 				rail.releaseArmed = false;
 				rail.vertical.style.transition = "none";
 			}
+			// Reduced motion keeps the thumb glued to the offset: no squash.
+			const still = stillMotion();
 			if (rail.vOverflow) {
 				// Sub-pixel, never rounded. A thumb travelling 68px over a 400px
 				// range moves 0.17px per scroll pixel; rounding turned that into a
@@ -479,7 +531,9 @@ export function FloatingScrollbar(): ReactNode {
 				const offset = el.scrollTop * rail.vScale;
 				if (skinRef.current.base === "gummy") {
 					// Squashed while the position is moving.
-					rail.vertical.style.transform = `translate3d(0, ${offset}px, 0) scaleY(1.06)`;
+					rail.vertical.style.transform = still
+						? `translate3d(0, ${offset}px, 0)`
+						: `translate3d(0, ${offset}px, 0) scaleY(1.06)`;
 				} else {
 					// One progress scalar drives both the glyph and the eaten
 					// run, so the eaten beads always end where the glyph starts.
@@ -491,7 +545,7 @@ export function FloatingScrollbar(): ReactNode {
 				}
 			}
 			if (rail.hOverflow) {
-				rail.horizontal.style.transform = `translate3d(${el.scrollLeft * rail.hScale}px, 0, 0)`;
+				rail.horizontal.style.transform = `translate3d(${(rail.hOrigin + el.scrollLeft) * rail.hScale}px, 0, 0)`;
 			}
 		};
 
@@ -543,6 +597,12 @@ export function FloatingScrollbar(): ReactNode {
 				// Never spring while the thumb is under the pointer: the release
 				// animation would lag the drag instead of following it.
 				if (rail.drag) return;
+				if (stillMotion()) {
+					// Reduced motion: land exactly where the offset is, no spring.
+					rail.vertical.style.transition = "none";
+					rail.vertical.style.transform = `translate3d(0, ${Math.round(el.scrollTop * rail.vScale)}px, 0)`;
+					return;
+				}
 				// Arm the spring and drop the stretch in one animated step. The
 				// flag tells `position` to disarm it before the next real move.
 				rail.releaseArmed = true;
@@ -620,6 +680,15 @@ export function FloatingScrollbar(): ReactNode {
 		const rebind = (rail: Rail): void => {
 			const s = slots[rail.slot];
 			if (!s) return;
+			const replaced = (s.root ?? rail.root) !== rail.root || (s.vertical ?? rail.vertical) !== rail.vertical;
+			if (replaced) {
+				// A skin base switch makes React replace the slot subtree, and the
+				// thumb that held pointer capture is gone with it: its pointerup
+				// can never fire. A stale drag snapshot would pinned this rail
+				// forever (`retire` and `armIdle` both skip a dragging rail).
+				rail.drag = null;
+				rail.releaseArmed = false;
+			}
 			rail.root = s.root ?? rail.root;
 			rail.vertical = s.vertical ?? rail.vertical;
 			rail.horizontal = s.horizontal ?? rail.horizontal;
@@ -684,6 +753,44 @@ export function FloatingScrollbar(): ReactNode {
 		};
 
 		/**
+		 * Hover discovery for containers that have never scrolled. Binds happen
+		 * on scroll, so a fresh pane had no affordance until the user guessed it
+		 * could scroll; openchamber reveals on hover, and this is the same
+		 * contract for the global pool. Hover may only take a FREE slot: it must
+		 * never evict the rail of a container the user is actually scrolling.
+		 */
+		let discoverFrame = 0;
+		let discoverAt: Element | null = null;
+		const discoverNearest = (from: Element): void => {
+			let node: Element | null = from;
+			while (node && node !== document.body && node !== document.documentElement) {
+				if (node instanceof HTMLElement) {
+					if (node.closest('[data-gui-scrollbar="off"]')) return;
+					if (!rails.has(node) && overflows(node)) {
+						const rail = bind(node);
+						if (rail) indicate(node, rail);
+						return;
+					}
+				}
+				node = node.parentElement;
+			}
+		};
+		const onHoverDiscover = (event: Event): void => {
+			if (free.length === 0) return;
+			const target = event.target;
+			if (!(target instanceof Element)) return;
+			if (target.closest(".gui-float-scrollbar")) return;
+			discoverAt = target;
+			if (discoverFrame) return;
+			discoverFrame = window.requestAnimationFrame(() => {
+				discoverFrame = 0;
+				const from = discoverAt;
+				discoverAt = null;
+				if (from?.isConnected) discoverNearest(from);
+			});
+		};
+
+		/**
 		 * Coalesce the app's scroll signals into one animation frame. The frame
 		 * re-reads the pool rather than capturing a target, so every container
 		 * scrolled in the frame is serviced and the newest one always wins —
@@ -729,13 +836,48 @@ export function FloatingScrollbar(): ReactNode {
 			lastIntentAt = now;
 			for (const rail of rails.values()) rail.intentAt = now;
 		};
-		const onKeyIntent = (e: KeyboardEvent): void => {
-			if (SCROLL_KEYS.has(e.key)) markIntent();
+		const onKeyIntent = (event: KeyboardEvent): void => {
+			if (!SCROLL_KEYS.has(event.key)) return;
+			const target = event.target;
+			if (!(target instanceof Element)) {
+				// A document-level key is not typed into a field; the browser
+				// scrolls the focused element, so the follow-up scroll counts.
+				markIntent();
+				return;
+			}
+			// Typing a space in a field must not arm a rail elsewhere.
+			if (
+				target.closest(
+					'input, textarea, select, [contenteditable=""], [contenteditable="true"], [contenteditable="plaintext-only"]',
+				)
+			) {
+				return;
+			}
+			// Mark only the container this key will scroll: its nearest
+			// overflowing ancestor. A window-wide mark flashed rails in panes
+			// the user was not touching.
+			let node: Element | null = target;
+			while (node && node !== document.body && node !== document.documentElement) {
+				if (node instanceof HTMLElement && overflows(node)) {
+					const now = performance.now();
+					lastIntentAt = now;
+					const rail = rails.get(node);
+					if (rail) rail.intentAt = now;
+					return;
+				}
+				node = node.parentElement;
+			}
 		};
 
 		const onScroll = (e: Event): void => {
 			const t = e.target;
-			if (!(t instanceof HTMLElement) || t === document.documentElement) return;
+			// Document-level scrolling moves every container without resizing it;
+			// the fixed rails must re-read their viewport rects.
+			if (t === document || t === document.documentElement || t === document.body) {
+				for (const rail of rails.values()) requestMeasure(rail);
+				return;
+			}
+			if (!(t instanceof HTMLElement)) return;
 			// Narrow navigation rails opt out: the global skin would cover the
 			// icons with a bead column, and their overflow is handled by the
 			// rail's own fold/feather rules instead.
@@ -809,6 +951,21 @@ export function FloatingScrollbar(): ReactNode {
 			for (const rail of rails.values()) requestMeasure(rail);
 		};
 
+		/**
+		 * A rail is fixed to viewport coordinates, but a panel slide, HeightMorph
+		 * or maximize animates an ANCESTOR. The container's border box never
+		 * changes, so neither ResizeObserver nor MutationObserver fires and the
+		 * rail keeps the coordinates it had before the motion. Re-measure only
+		 * the rails whose target sits under the animated element.
+		 */
+		const onLayoutMotion = (event: Event): void => {
+			const node = event.target;
+			if (!(node instanceof Element)) return;
+			for (const [target, rail] of rails.entries()) {
+				if (node === target || node.contains(target)) requestMeasure(rail);
+			}
+		};
+
 		// Liveness sweep: an idle ghost has no pending event to wake it, so a
 		// container that unmounted after the fade would hang over unrelated UI
 		// forever (user: 会话列表的滚动条在进入设置后仍在).
@@ -848,7 +1005,7 @@ export function FloatingScrollbar(): ReactNode {
 				// pointer delta is treated as an absolute offset, so a 1px drag
 				// up slams the container to the top and a 1px drag down slams it
 				// to the bottom — the thumb stops tracking the pointer entirely.
-				grabOffset: isVertical ? target.scrollTop * rail.vScale : target.scrollLeft * rail.hScale,
+				grabOffset: isVertical ? target.scrollTop * rail.vScale : (rail.hOrigin + target.scrollLeft) * rail.hScale,
 			};
 			rail.root.dataset.visible = "1";
 			delete rail.root.dataset.idle;
@@ -867,9 +1024,8 @@ export function FloatingScrollbar(): ReactNode {
 				if (scale <= 0 || travel <= 0) return;
 				const pointer = isVertical ? ev.clientY : ev.clientX;
 				const offset = Math.min(travel, Math.max(0, rail.drag.grabOffset + (pointer - rail.drag.pointerStart)));
-				const scroll = offset / scale;
-				if (isVertical) target.scrollTop = scroll;
-				else target.scrollLeft = scroll;
+				if (isVertical) target.scrollTop = offset / scale;
+				else target.scrollLeft = offset / scale - rail.hOrigin;
 			};
 			const onUp = (ev: PointerEvent): void => {
 				thumb.removeEventListener("pointermove", onMove);
@@ -893,7 +1049,11 @@ export function FloatingScrollbar(): ReactNode {
 		window.addEventListener("keydown", onKeyIntent, { capture: true });
 		window.addEventListener("resize", onWindowResize);
 		window.addEventListener("pointerover", onThumbOver, { capture: true, passive: true });
+		window.addEventListener("pointerover", onHoverDiscover, { capture: true, passive: true });
 		window.addEventListener("pointerout", onThumbOut, { capture: true, passive: true });
+		for (const type of ["transitionrun", "transitionend", "transitioncancel", "animationend"] as const) {
+			window.addEventListener(type, onLayoutMotion, { capture: true, passive: true });
+		}
 
 		return () => {
 			engineRef.current = null;
@@ -905,11 +1065,22 @@ export function FloatingScrollbar(): ReactNode {
 			window.removeEventListener("keydown", onKeyIntent, { capture: true } as EventListenerOptions);
 			window.removeEventListener("resize", onWindowResize);
 			window.removeEventListener("pointerover", onThumbOver, { capture: true } as EventListenerOptions);
+			window.removeEventListener("pointerover", onHoverDiscover, { capture: true } as EventListenerOptions);
 			window.removeEventListener("pointerout", onThumbOut, { capture: true } as EventListenerOptions);
+			for (const type of ["transitionrun", "transitionend", "transitioncancel", "animationend"] as const) {
+				window.removeEventListener(type, onLayoutMotion, { capture: true } as EventListenerOptions);
+			}
+			if (discoverFrame) window.cancelAnimationFrame(discoverFrame);
+			discoverFrame = 0;
 			window.clearInterval(probe);
 			if (frameRef.current) window.cancelAnimationFrame(frameRef.current);
 			frameRef.current = 0;
-			for (const [target, rail] of Array.from(rails.entries())) retire(target, rail);
+			for (const [target, rail] of Array.from(rails.entries())) {
+				// `retire` protects a live drag; at teardown there is no pointer
+				// left to release it, so clear it before the last sweep.
+				rail.drag = null;
+				retire(target, rail);
+			}
 		};
 	}, []);
 
@@ -966,7 +1137,7 @@ export function FloatingScrollbar(): ReactNode {
 	return (
 		<>
 			{Array.from({ length: slotCount }, (_, slot) => (
-				<RailSlot key={slot} slot={slot} refs={slotsRef} skin={skin} dragRef={dragRef} />
+				<RailSlot key={slot} slot={slot} refs={slotsRef} skin={skin} dragRef={dragRef} still={still} />
 			))}
 		</>
 	);
@@ -980,11 +1151,14 @@ function RailSlot({
 	refs,
 	skin,
 	dragRef,
+	still,
 }: {
 	slot: number;
 	refs: MutableRefObject<RailSlotRefs[]>;
 	skin: ScrollbarSkin;
 	dragRef: MutableRefObject<((slot: number, axis: Axis, e: ReactPointerEvent<HTMLDivElement>) => void) | null>;
+	/** Motion budget off: the Pac-man glyph freezes (no chomp). */
+	still: boolean;
 }): ReactNode {
 	const entry = refs.current[slot];
 	return (
@@ -1045,7 +1219,7 @@ function RailSlot({
 						{skin.pacGlyph ? (
 							<img src={skin.pacGlyph} alt="" width={skin.size} height={skin.size} />
 						) : (
-							<PacMan size={skin.size} side="down" animating />
+							<PacMan size={skin.size} side="down" animating={!still} />
 						)}
 					</div>
 					<div
@@ -1059,4 +1233,13 @@ function RailSlot({
 			)}
 		</div>
 	);
+}
+
+/**
+ * `app.overlay` entry: the rail is a window-level fixed layer, so the bundle
+ * portals it to `document.body` instead of inheriting a panel's containing
+ * block. The host renders {@link FloatingScrollbar} directly as its fallback.
+ */
+export default function UiThemeOverlay(): ReactNode {
+	return createPortal(<FloatingScrollbar />, document.body);
 }

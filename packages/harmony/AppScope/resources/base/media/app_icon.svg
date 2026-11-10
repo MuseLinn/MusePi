@@ -1,4 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
-  <rect width="96" height="96" rx="20" fill="#0b1220"/>
-  <text x="48" y="60" font-family="Georgia, serif" font-size="42" fill="#7c6cf0" text-anchor="middle">π</text>
+  <!-- MusePi launcher icon — brand S5 (2026-10-03). The launcher reads the
+       AppScope copy, so this must match entry/base/media/app_icon.svg; the old
+       pi glyph here is why the home-screen icon never changed after the rebrand. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#242128"/>
+      <stop offset="1" stop-color="#1b191f"/>
+    </linearGradient>
+    <radialGradient id="shell" cx="0.34" cy="0.26" r="0.92">
+      <stop offset="0" stop-color="oklch(89.07% 0.0798 79.84)"/>
+      <stop offset="0.5" stop-color="oklch(65% 0.105 79.84)"/>
+      <stop offset="1" stop-color="oklch(33% 0.08 79.84)"/>
+    </radialGradient>
+  </defs>
+  <rect x="3" y="3" width="90" height="90" rx="24" fill="url(#bg)"/>
+  <circle cx="48" cy="49" r="28" fill="url(#shell)"/>
+  <ellipse cx="39" cy="39" rx="7.5" ry="3.4" transform="rotate(-22 39 39)" fill="#ffffff" opacity="0.5"/>
+  <ellipse cx="28" cy="45" rx="1.8" ry="1" transform="rotate(-22 28 45)" fill="#ffffff" opacity="0.35"/>
+  <ellipse cx="42" cy="49" rx="3" ry="4.2" fill="#f4f6f9"/>
+  <ellipse cx="54" cy="49" rx="3" ry="4.2" fill="#f4f6f9"/>
+  <path d="M 42.7 58.7 Q 48 63.2 53.3 58.7" fill="none" stroke="#f4f6f9" stroke-width="2.4" stroke-linecap="round"/>
 </svg>

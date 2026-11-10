@@ -40,6 +40,10 @@ describe("isLiveSessionBusy", () => {
 		expect(isLiveSessionBusy(idle(TIMEOUT * 2))).toBe(false);
 		expect(isLiveSessionBusy(idle(TIMEOUT * 2, { activeToolCalls: { size: 0 } }))).toBe(false);
 	});
+
+	test("a session with a pending goal continuation is busy", () => {
+		expect(isLiveSessionBusy(idle(TIMEOUT * 2, { goalController: { continuationPending: true } }))).toBe(true);
+	});
 });
 
 describe("idleDisposePlan", () => {
@@ -60,6 +64,11 @@ describe("idleDisposePlan", () => {
 
 	test("a streaming session is never closed by the timeout", () => {
 		const plan = idleDisposePlan([["a", idle(TIMEOUT * 4, { agentSession: { isStreaming: true } })]], NOW);
+		expect(plan).toEqual([]);
+	});
+
+	test("a session with a pending goal continuation is never closed", () => {
+		const plan = idleDisposePlan([["a", idle(TIMEOUT * 4, { goalController: { continuationPending: true } })]], NOW);
 		expect(plan).toEqual([]);
 	});
 

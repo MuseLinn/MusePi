@@ -19,6 +19,7 @@
  */
 
 import { dispatchBack, subscribeBackLayers } from "./back-stack";
+import { setNativeColorMode } from "./theme";
 
 declare global {
 	interface Window {
@@ -61,6 +62,10 @@ declare global {
 		 */
 		harmonyNative?: {
 			getSystemBars: () => string;
+			/** System colour mode reported by ArkTS (`"dark"` / `"light"`). */
+			getColorMode?: () => string;
+			/** Push the page's resolved scheme to the native window/bars. */
+			setThemeColor?: (dark: boolean) => void;
 			getBadge: () => string;
 			setBadgeCount: (count: number) => void;
 			clearBadge: () => void;
@@ -73,6 +78,20 @@ declare global {
 			 * or to the system. Optional: older shells simply never call it.
 			 */
 			setBackDepth?: (depth: number) => void;
+			/** Mirrors the page's bottom-tab destination in the native Tabs bar. */
+			setActiveTab?: (index: number) => void;
+			/** Hide the native bar under a full-screen overlay (QR scanner). */
+			setTabBarVisible?: (visible: boolean) => void;
+			/** System permission page for the camera (denied-once recovery). */
+			openCameraSettings?: () => void;
+			/** `{origin, auth}` of the last camera request — bring-up diagnostics. */
+			getCameraDiagnostics?: () => string;
+			/** Bar material thickness: 0 regular / 1 thin / 2 ultra-thin. */
+			setTabBarMaterial?: (style: number) => void;
+			/** Native半模态 sheet for the pair-code form. */
+			openPairSheet?: () => void;
+			/** Native半模态 sheet for the remote-link form. */
+			openLinkSheet?: () => void;
 		};
 	}
 }
@@ -213,6 +232,21 @@ export async function setupDeepLinkHandler(): Promise<void> {
 	}
 
 	if (isHarmonyShell()) {
+		// HarmonyOS reports the authoritative system colour mode through the
+		// bridge. `prefers-color-scheme` inside ArkWeb only tracks the OS once
+		// the shell sets `.darkMode(WebDarkMode.Auto)`; native wins when both
+		// exist, and the follow-system preference stays correct even while the
+		// web engine is still warming up.
+		try {
+			const mode = window.harmonyNative?.getColorMode?.();
+			if (mode === "dark" || mode === "light") setNativeColorMode(mode);
+		} catch {
+			// older shell without the colour-mode method — matchMedia stands in
+		}
+		(window as unknown as Record<string, unknown>).__harmonyColorMode = (raw: string): void => {
+			if (raw === "dark" || raw === "light") setNativeColorMode(raw);
+		};
+
 		// Cold start: drain the pending want URI stored by EntryAbility.
 		try {
 			const raw = window.harmonyNative!.consumeDeepLink();
@@ -299,7 +333,9 @@ export async function getSystemBarInsets(): Promise<{ top: number; bottom: numbe
 		try {
 			const raw = window.harmonyNative!.getSystemBars();
 			const parsed = JSON.parse(raw) as { top: number; bottom: number };
-			if (parsed != null && parsed.top > 0) return parsed;
+			// A zero top inset is legitimate (no status bar / free window), but
+			// the bottom one may still be non-zero — do not discard the pair.
+			if (parsed != null && (parsed.top > 0 || parsed.bottom > 0)) return parsed;
 		} catch {
 			// plugin absent — fall through to Capacitor
 		}

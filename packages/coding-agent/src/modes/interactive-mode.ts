@@ -81,7 +81,7 @@ import type { CompactOptions } from "../extensibility/extensions/types";
 import type { Skill } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
 import { fingerprintToolEvidence, shouldSuppressContinuation, type ToolEvidence } from "../goals/continuation-evidence";
-import type { Goal, GoalModeState } from "../goals/state";
+import { type GoalModeState, goalFromModeData } from "../goals/state";
 import { t } from "../i18n/index.js";
 import { copyLocalArtifacts, resolveLocalUrlToPath } from "../internal-urls";
 import { LSP_STARTUP_EVENT_CHANNEL, type LspStartupEvent } from "../lsp/startup-events";
@@ -2414,33 +2414,6 @@ export class InteractiveMode implements InteractiveModeContext {
 		return state;
 	}
 
-	#goalFromModeData(modeData: SessionContext["modeData"]): Goal | undefined {
-		const goal = modeData?.goal;
-		if (!goal || typeof goal !== "object") return undefined;
-		const value = goal as Record<string, unknown>;
-		if (
-			typeof value.id !== "string" ||
-			typeof value.objective !== "string" ||
-			typeof value.status !== "string" ||
-			typeof value.tokensUsed !== "number" ||
-			typeof value.timeUsedSeconds !== "number" ||
-			typeof value.createdAt !== "number" ||
-			typeof value.updatedAt !== "number"
-		) {
-			return undefined;
-		}
-		return {
-			id: value.id,
-			objective: value.objective,
-			status: value.status as Goal["status"],
-			tokenBudget: typeof value.tokenBudget === "number" ? value.tokenBudget : undefined,
-			tokensUsed: value.tokensUsed,
-			timeUsedSeconds: value.timeUsedSeconds,
-			createdAt: value.createdAt,
-			updatedAt: value.updatedAt,
-		};
-	}
-
 	async #handleGoalSessionEvent(event: AgentSessionEvent): Promise<void> {
 		if (event.type === "agent_start") {
 			this.#goalTurnEvidence = [];
@@ -2686,7 +2659,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			return;
 		}
 		if (sessionContext.mode === "goal" || sessionContext.mode === "goal_paused") {
-			const goal = this.#goalFromModeData(sessionContext.modeData);
+			const goal = goalFromModeData(sessionContext.modeData);
 			if (!goal) {
 				this.sessionManager.appendModeChange("none");
 				return;

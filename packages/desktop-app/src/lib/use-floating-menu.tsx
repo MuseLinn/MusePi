@@ -28,6 +28,18 @@ export function getFloatingMenuOpen(): boolean {
 	return floatingMenuOpen;
 }
 
+/** Nearest ancestor that can actually scroll vertically — the container a
+ *  wheel gesture belongs to when the popup itself cannot consume it. */
+function nearestScrollable(start: HTMLElement | null): HTMLElement | null {
+	let el = start?.parentElement ?? null;
+	while (el) {
+		const { overflowY } = getComputedStyle(el);
+		if (/(auto|scroll|overlay)/.test(overflowY) && el.scrollHeight > el.clientHeight + 1) return el;
+		el = el.parentElement;
+	}
+	return null;
+}
+
 /**
  * Fixed-position floating menu anchored to a button (openchamber/radix
  * semantics): rendered through a portal into document.body so no ancestor's
@@ -352,17 +364,24 @@ export function useFloatingMenu(
 				onWheel={event => {
 					const el = menuRef.current;
 					if (!el) return;
-					// A popover that cannot consume the wheel must not trap it:
-					// close so the next gesture reaches the chat/page beneath.
+					// The popup owns the wheel while it still has room to scroll
+					// in this direction.
 					const canScroll = el.scrollHeight > el.clientHeight + 1;
 					const atTop = el.scrollTop <= 0;
 					const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
 					if (canScroll && !((event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottom))) return;
-					// Not scrollable in this direction: close, and move the chat
-					// under the same gesture so the wheel never feels swallowed.
-					onOpenChange?.(false);
-					const chat = document.querySelector<HTMLElement>(".gui-transcript");
-					chat?.scrollBy({ top: event.deltaY });
+					// At an edge — or too short to scroll at all — the gesture
+					// belongs to the surface the menu is attached to. Closing here
+					// dropped the menu whenever the pointer happened to rest over a
+					// short list while the wheel moved the page; an open menu is
+					// already re-positioned with its anchor by the scroll listener.
+					const target =
+						nearestScrollable(anchorOption instanceof HTMLElement ? anchorOption : anchorRef.current) ??
+						document.querySelector<HTMLElement>(".gui-transcript") ??
+						(document.scrollingElement as HTMLElement | null);
+					if (!target) return;
+					const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? target.clientHeight : 1;
+					target.scrollBy({ top: event.deltaY * scale });
 				}}
 				style={{
 					// Inline position wins over the menu-specific classes

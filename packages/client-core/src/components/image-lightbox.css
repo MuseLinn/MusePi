@@ -342,3 +342,17 @@
 		animation: none;
 	}
 }
+
+/* Coarse pointers: the close / prev / next controls are 32–40px, below the
+ * 48vp HarmonyOS recommendation and hard to hit one-handed. */
+@media (pointer: coarse) {
+	.tr-img-lb-x,
+	.tr-img-lb-nav {
+		min-width: 48px;
+		min-height: 48px;
+	}
+	.tr-img-lb-tool {
+		min-height: 44px;
+		padding: 8px 14px;
+	}
+}

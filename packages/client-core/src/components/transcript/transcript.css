@@ -1721,8 +1721,37 @@ button.tr-display-context-source:hover {
 }
 
 .tr-table-menu-wrap:hover .tr-table-menu,
+.tr-table-menu-wrap:focus-within .tr-table-menu,
 .tr-table-menu:hover {
 	display: flex;
+}
+
+/* Touch has no hover: inline the menu under the toolbar instead of hiding it
+ * behind a hover-only popover — the old rule made export / widen-table
+ * completely unreachable on phones and tablets. */
+@media (hover: none) {
+	.tr-table-menu-wrap .tr-table-menu {
+		position: static;
+		display: flex;
+		flex-direction: row;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 4px;
+		min-width: 0;
+		margin-top: 4px;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		box-shadow: none;
+	}
+	.tr-table-menu button {
+		min-height: 44px;
+		padding: 6px 10px;
+		border: 1px solid var(--border);
+		border-radius: var(--radius-sm);
+		background: var(--bg-raised);
+		font-size: 12.5px;
+	}
 }
 
 .tr-table-menu button {
@@ -2205,6 +2234,17 @@ button.tr-display-context-source:hover {
 	opacity: 1;
 	transform: translateY(0);
 	pointer-events: auto;
+}
+
+/* Touch devices have no hover to reveal the quote action — and the base rule
+ * also disables pointer events, so the action was completely unreachable on
+ * phones. Match the .tr-actions contract: always visible, always tappable. */
+@media (hover: none) {
+	.tr-quote {
+		opacity: 1;
+		transform: none;
+		pointer-events: auto;
+	}
 }
 
 .tr-quote:hover {
@@ -4513,4 +4553,22 @@ a.tr-tool-search-title:hover {
 	gap: 6px;
 	color: var(--fg-faint);
 	font-size: 11.5px;
+}
+
+/* Coarse pointers: message / table / widget actions were sized for a mouse
+ * (17–24px rows). Give them a real tap target without changing the visual
+ * density on fine pointers. */
+@media (pointer: coarse) {
+	.tr-action,
+	.tr-code-copy,
+	.tv-widget-fs-btn,
+	.tr-table-menu button {
+		min-height: 44px;
+		padding: 6px 12px;
+		font-size: 12.5px;
+	}
+	.tr-quote {
+		min-height: 44px;
+		padding: 6px 12px;
+	}
 }

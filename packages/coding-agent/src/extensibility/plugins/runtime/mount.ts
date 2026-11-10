@@ -243,6 +243,7 @@ function createPluginExtension(entryPath: string, resolvedPath: string): Extensi
 		mediaProviders: [],
 		designSystems: [],
 		statusBarSegments: [],
+		scrollbarSkins: [],
 	};
 }
 

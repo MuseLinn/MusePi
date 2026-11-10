@@ -25,9 +25,12 @@
 	}
 }
 
-/* Tap targets: 44px floor for the method cards. */
+/* Tap targets — HarmonyOS @cross-device-app-dev/touch-target-size requires
+ * a ≥40vp hot zone and recommends 48vp×48vp (44px was the iOS HIG floor).
+ * shell.css gives the method cards 68px on the full connect layout; this
+ * keeps the compact fallback above the platform minimum too. */
 .sh-connect-method {
-	min-height: 44px;
+	min-height: 48px;
 }
 
 /* Main session view: the composer strip's own padding-bottom already adds

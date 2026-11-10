@@ -298,7 +298,7 @@ html.gui-glass-adaptive {
  * `auto` — the floating (zero-layout-width) scrollbar is gone. System
  * scrollbars are therefore hidden everywhere so no container ever
  * squeezes or shifts when its content becomes scrollable; the fixed
- * overlay in FloatingScrollbar.tsx (skin-driven: gummy capsule or
+ * overlay in plugins/ui-theme/rail.tsx (skin-driven: gummy capsule or
  * pac-man bead rail) draws the progress indicator in its place. Every
  * window imports gui.css, so this is the single source of truth.
  * `!important` is load-bearing: container rules that set
@@ -564,5 +564,136 @@ html.gui-glass-adaptive {
 		animation-duration: 0.01ms !important;
 		animation-iteration-count: 1 !important;
 		transition-duration: 0.01ms !important;
+	}
+}
+
+/* ── Progressive-blur scroll edges (2026-11-10) ──────────────────────────
+ * ONE recipe for reading surfaces that used to feather content with a mask
+ * gradient. Bands are siblings of the scroller, never inside it: Chromium
+ * does not sample scrolled content for a backdrop-filter placed in the
+ * scroll container, so an in-scroller band would paint only its tint.
+ *
+ *   <div class="gui-scroll-frame">
+ *     <div data-top-scroll data-bottom-scroll>…</div>
+ *     <ScrollEdgeBlur edge="top" /> <ScrollEdgeBlur edge="end" />
+ *   </div>
+ *
+ * Visibility reads the scroller's own scroll state, so nothing has to stay in
+ * sync twice. Frames that already own edge flags (capability center) override
+ * only `display` and `top`.
+ *
+ * Three stacked backdrop layers (6 / 14 / 22px) are masked to shrinking ramps
+ * so blur STRENGTH grows toward the edge instead of stopping at a colour stop;
+ * the low-alpha surface tint keeps the blurred result readable. */
+.gui-scroll-frame {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.gui-edge-blur {
+	--edge-blur-size: 44px;
+	position: absolute;
+	inset-inline: 0;
+	height: var(--edge-blur-size);
+	z-index: 5;
+	display: none;
+	pointer-events: none;
+}
+
+.gui-scroll-frame:has(> [data-top-scroll="true"]) .gui-edge-blur--top {
+	display: block;
+	top: var(--edge-blur-top, 0px);
+}
+
+.gui-scroll-frame:has(> [data-bottom-scroll="true"]) .gui-edge-blur--end {
+	display: block;
+	bottom: 0;
+}
+
+.gui-edge-blur-tint,
+.gui-edge-blur-layer {
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: var(--edge-blur-size);
+	pointer-events: none;
+}
+
+.gui-edge-blur--top .gui-edge-blur-tint,
+.gui-edge-blur--top .gui-edge-blur-layer {
+	top: 0;
+}
+
+.gui-edge-blur--end .gui-edge-blur-tint,
+.gui-edge-blur--end .gui-edge-blur-layer {
+	bottom: 0;
+}
+
+.gui-edge-blur--top .gui-edge-blur-tint {
+	background-image: linear-gradient(
+		to bottom,
+		color-mix(in oklab, var(--gui-card-surface-fade) 58%, transparent) 0,
+		transparent 100%
+	);
+}
+
+.gui-edge-blur--end .gui-edge-blur-tint {
+	background-image: linear-gradient(
+		to top,
+		color-mix(in oklab, var(--gui-card-surface-fade) 70%, transparent) 0,
+		transparent 100%
+	);
+}
+
+.gui-edge-blur-layer--1 {
+	backdrop-filter: blur(var(--gui-blur-progressive-2));
+	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-2));
+}
+
+.gui-edge-blur--top .gui-edge-blur-layer--1 {
+	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+	mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+}
+
+.gui-edge-blur--end .gui-edge-blur-layer--1 {
+	-webkit-mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+	mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+}
+
+.gui-edge-blur-layer--2 {
+	backdrop-filter: blur(var(--gui-blur-progressive-3));
+	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-3));
+}
+
+.gui-edge-blur--top .gui-edge-blur-layer--2 {
+	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
+	mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
+}
+
+.gui-edge-blur--end .gui-edge-blur-layer--2 {
+	-webkit-mask-image: linear-gradient(to top, #000 0%, transparent 62%);
+	mask-image: linear-gradient(to top, #000 0%, transparent 62%);
+}
+
+.gui-edge-blur-layer--3 {
+	backdrop-filter: blur(calc(var(--gui-blur-progressive-3) * 1.6));
+	-webkit-backdrop-filter: blur(calc(var(--gui-blur-progressive-3) * 1.6));
+}
+
+.gui-edge-blur--top .gui-edge-blur-layer--3 {
+	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 34%);
+	mask-image: linear-gradient(to bottom, #000 0%, transparent 34%);
+}
+
+.gui-edge-blur--end .gui-edge-blur-layer--3 {
+	-webkit-mask-image: linear-gradient(to top, #000 0%, transparent 34%);
+	mask-image: linear-gradient(to top, #000 0%, transparent 34%);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+	.gui-edge-blur-layer {
+		display: none;
 	}
 }

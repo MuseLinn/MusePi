@@ -117,6 +117,20 @@ export interface StatusBarSegmentItem {
 	/** Extension entry path that contributed it (identity). */
 	extensionPath: string;
 }
+/** One scrollbar skin contributed by an active extension
+ *  (registerScrollbarSkin), in the extensions.list wire shape. The GUI merges
+ *  it over its built-in catalog by id; `extensionPath` is the identity used to
+ *  drop it when the plugin unloads. */
+export interface ScrollbarSkinItem {
+	id: string;
+	displayName: string;
+	base: "gummy" | "pacman";
+	colors: { accent: string; track: string; eaten: string };
+	size: number;
+	pacGlyph?: string | null;
+	/** Extension entry path that contributed it (identity). */
+	extensionPath: string;
+}
 
 /** Raw-extension load cache: entry path → loaded extension (factory runs once
  *  per cache window).
@@ -593,6 +607,48 @@ export async function collectStatusBarSegments(
 				});
 			} catch (err) {
 				console.warn(`extension status-bar segment skipped (${seg?.id ?? "<unknown>"}):`, err);
+			}
+		}
+	}
+	return out;
+}
+
+/**
+ * Collect scrollbar skins declared by active extension-module entries
+ * (registerScrollbarSkin), for extensions.list `scrollbarSkins`. Shares the
+ * load-once cache; a malformed skin is skipped so one bad theme bundle cannot
+ * take the rail down with it.
+ */
+export async function collectScrollbarSkins(
+	extensions: ReadonlyArray<{ kind: string; state: string; path: string }>,
+	cwd: string,
+): Promise<ScrollbarSkinItem[]> {
+	const out: ScrollbarSkinItem[] = [];
+	for (const entry of extensions) {
+		if (
+			(entry.kind !== LEGACY_EXTENSION_MODULE_KIND && entry.kind !== PLUGIN_MODULE_KIND) ||
+			entry.state !== "active"
+		)
+			continue;
+		const extension = await loadExtensionOnce(entry.path, cwd);
+		if (!extension) continue;
+		for (const skin of extension.scrollbarSkins ?? []) {
+			try {
+				if (!skin || typeof skin.id !== "string" || skin.id.length === 0) continue;
+				if (typeof skin.displayName !== "string" || skin.displayName.length === 0) continue;
+				if (skin.base !== "gummy" && skin.base !== "pacman") continue;
+				if (!skin.colors || typeof skin.colors.accent !== "string") continue;
+				out.push({
+					id: skin.id,
+					displayName: skin.displayName,
+					base: skin.base,
+					colors: skin.colors,
+					size: skin.size,
+					...(skin.pacGlyph ? { pacGlyph: skin.pacGlyph } : {}),
+					extensionPath: entry.path,
+				});
+			} catch (err) {
+				console.warn(`extension scrollbar skin skipped (${skin?.id ?? "<unknown>"}):`, err);
 			}
 		}
 	}

@@ -102,9 +102,14 @@ export function AppRail({
 		onTogglePanel();
 	};
 	return (
-		<nav className="gui-rail" aria-label={t("general.appRail")} onDoubleClick={onBackgroundDoubleClick}>
+		<nav
+			className="gui-rail"
+			aria-label={t("general.appRail")}
+			data-gui-scrollbar="off"
+			onDoubleClick={onBackgroundDoubleClick}
+		>
 			<div className="gui-rail-top" aria-hidden="true" />
-			<div className="gui-rail-scroll">
+			<div className="gui-rail-scroll" data-gui-scrollbar="off">
 				{destinations.map(item => (
 					<RailButton key={item.id} item={item} onPeekPanel={onPeekPanel} onPeekEnd={onPeekEnd} />
 				))}
