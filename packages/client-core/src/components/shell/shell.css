@@ -5888,6 +5888,36 @@
 	}
 }
 
+/* Rotated phones are the tightest window the connect screen has to survive:
+ * Pura X Max folded is 459×672, so landscape is 672×459 — the card fits, but
+ * with only a few px to spare, and the HarmonyOS build adds a third method.
+ * Compress the vertical rhythm here instead of letting the last card clip. */
+@media (max-height: 540px) and (max-width: 839px) {
+	.sh-connect {
+		padding-top: calc(6px + var(--safe-top, 0px));
+		padding-bottom: calc(6px + var(--safe-bottom, 0px) + var(--sh-tabbar-space, 0px));
+	}
+	.sh-connect-card {
+		gap: 10px;
+		padding: 12px 16px;
+	}
+	.sh-connect-head {
+		min-height: 0;
+		margin-bottom: 2px;
+	}
+	.sh-connect-hero {
+		gap: 2px;
+		padding: 2px 0 0;
+	}
+	.sh-connect-hero h1 {
+		font-size: 20px;
+	}
+	.sh-connect-method {
+		min-height: 52px;
+		padding: 8px 12px;
+	}
+}
+
 /* ---- mobile bottom tab bar -------------------------------------------------
  * Floating pill — same geometry as HarmonyOS HDS floating bottom tabs
  * (barOverlap + barFloatingStyle). It is fixed, so every full-height surface
