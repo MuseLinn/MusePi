@@ -769,6 +769,11 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 		});
 	}, [mobileTab]);
 	const autoOpenedRef = useRef(false);
+	/** Whether the currently open rail came from the wide-layout auto-reveal
+	 * rather than a user action. Only the auto-revealed one is retracted when
+	 * rotation or folding narrows the window: on compact/medium the rail turns
+	 * into an overlay whose backdrop covers the transcript. */
+	const railAutoOwnedRef = useRef(false);
 	const refreshTranscript = useCallback(() => onRejoin(), [onRejoin]);
 
 	// Low-frequency fields only. The shell never subscribes to the message
@@ -825,10 +830,23 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 
 	// Wide screens can reveal the first subagent without covering the transcript.
 	// Compact and medium rails are overlays, so only an explicit action opens them.
+	// Retract the auto-revealed rail when the window narrows (rotation, folding or
+	// a desktop resize): leaving it open swaps the split column for a backdrop
+	// that hides the transcript and clips messages at the overlay's edge.
 	useEffect(() => {
-		if (layout === "wide" && subCount > 0 && !autoOpenedRef.current) {
-			autoOpenedRef.current = true;
-			setRailOpen(true);
+		if (layout === "wide") {
+			if (subCount > 0 && !autoOpenedRef.current) {
+				autoOpenedRef.current = true;
+				railAutoOwnedRef.current = true;
+				setRailOpen(true);
+			}
+			return;
+		}
+		if (railAutoOwnedRef.current) {
+			railAutoOwnedRef.current = false;
+			// Re-arm so returning to a wide layout reveals the rail again.
+			autoOpenedRef.current = false;
+			setRailOpen(false);
 		}
 	}, [layout, subCount]);
 
@@ -924,7 +942,12 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 			<HeaderBar
 				client={client}
 				railOpen={railOpen}
-				onToggleRail={() => setRailOpen(open => !open)}
+				onToggleRail={() => {
+					// The user owns the rail from here on; a later resize must not
+					// close it behind their back.
+					railAutoOwnedRef.current = false;
+					setRailOpen(open => !open);
+				}}
 				onLeave={onLeave}
 				onBack={focusedSessionId !== null && workspace !== null ? backToWorkspace : undefined}
 				activePanel={activePanel}
@@ -985,7 +1008,13 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 				)}
 				{railOpen && !inWorkspace && activePanel === null && (
 					<>
-						<div className="sh-rail-backdrop" onClick={() => setRailOpen(false)} />
+						<div
+							className="sh-rail-backdrop"
+							onClick={() => {
+								railAutoOwnedRef.current = false;
+								setRailOpen(false);
+							}}
+						/>
 						<aside className="sh-rail">
 							<AgentsRail client={client} selectedId={selectedId} onSelect={setSelectedId} />
 						</aside>
