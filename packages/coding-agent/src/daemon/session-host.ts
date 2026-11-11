@@ -2126,7 +2126,15 @@ export class DaemonSessionHost {
 		// Claim process-level ownership only for a LIVE session. Snapshot-only
 		// history reads (session.resume on an idle session) never reach here.
 		try {
-			live.ownerLock = await acquireSessionOwnerLock(sessionId, SESSION_LOCKS_DIR);
+			live.ownerLock = await acquireSessionOwnerLock(sessionId, SESSION_LOCKS_DIR, {
+				// Losing the file to another process means this LiveSession is no
+				// longer the single writer. Dispose it here instead of letting it
+				// keep appending to a journal someone else now owns.
+				onLost: () => {
+					logger.warn("session ownership lost; disposing the live session", { sessionId });
+					live.dispose();
+				},
+			});
 		} catch (error) {
 			live.dispose();
 			throw error;
@@ -2821,12 +2829,14 @@ export class DaemonSessionHost {
 	): Promise<{ ok: true } | { resyncRequired: true; compactedThrough: number }> {
 		const live = this.#sessions.get(sessionId);
 		const checkpointSeq = await this.checkpointSeq(sessionId);
-		// Prefer the live journal: a fresh instance would miss appends whose
-		// writes are still queued in the live instance's chain (readAll only
-		// flushes its own instance).
+		// Plan against what is durable, not against the last seq the live
+		// instance *assigned*. A queued write is flushed first so it counts; a
+		// write that was dropped (EBADF during a rewrite) lowers the tail, and
+		// the cursor above it then degrades to resync instead of replaying a
+		// silent hole.
 		const journal = live?.journal ?? null;
 		const plan = journal
-			? catchupPlan(afterSeq, checkpointSeq, journal.tailSeq)
+			? catchupPlan(afterSeq, checkpointSeq, await journal.durableTailSeq())
 			: catchupPlan(afterSeq, checkpointSeq, await AppendJournal.readTailSeq(journalFilePath(sessionId)));
 		if (plan.resyncRequired) return plan;
 		if (!journal) {

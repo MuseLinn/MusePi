@@ -39,6 +39,10 @@ export interface AcquireSessionOwnerOptions {
 	takeover?: boolean;
 	/** Daemon instance id written into the holder for diagnostics. */
 	instanceId?: string;
+	/** Heartbeat period; defaults to `HEARTBEAT_MS`. */
+	heartbeatMs?: number;
+	/** Called once when this process loses the file to another holder. */
+	onLost?: () => void;
 }
 
 export class SessionOwnedError extends Error {
@@ -66,6 +70,11 @@ interface HeldLock {
 	owner: SessionOwner;
 	refs: number;
 	timer: ReturnType<typeof setInterval> | null;
+	/** Set once the heartbeat finds a different token in the file. */
+	lost: boolean;
+	/** Called when ownership is lost, so the live session disposes instead of
+	 *  appending to a journal another process now owns. */
+	onLost: (() => void) | null;
 }
 
 /** In-process refcount: two LiveSession instances for the same id (or two
@@ -173,33 +182,53 @@ export async function acquireSessionOwnerLock(
 			} finally {
 				await handle.close();
 			}
-			const lock: HeldLock = { owner, refs: 1, timer: null };
+			// A preemptor that read the previous content before this create can
+			// still rename the fresh file out from under us. Verify the token is
+			// ours before claiming; a mismatch means another process won.
+			const claimed = await readOwner(file);
+			if (claimed !== null && claimed.token !== owner.token) throw new SessionOwnedError(claimed);
+			if (claimed === null) continue;
+			const lock: HeldLock = { owner, refs: 1, timer: null, lost: false, onLost: options.onLost ?? null };
 			lock.timer = setInterval(() => {
 				void (async () => {
 					const current = await readOwner(file);
 					if (current?.token !== owner.token) {
 						if (lock.timer) clearInterval(lock.timer);
 						lock.timer = null;
+						lock.lost = true;
 						held.delete(file);
+						const lost = lock.onLost;
+						lock.onLost = null;
+						lost?.();
 						return;
 					}
 					owner.heartbeatAt = Date.now();
 					await writeOwner(file, owner).catch(() => {});
 				})();
-			}, HEARTBEAT_MS);
+			}, options.heartbeatMs ?? HEARTBEAT_MS);
 			lock.timer.unref?.();
 			held.set(file, lock);
 			return handleFor(file, lock);
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+			// Clearing the path has to be atomic. Two preemptors that both read the
+			// same stale owner used to unlink and then create, so both could end up
+			// holding the session — a split brain writing one journal. rename moves
+			// exactly one file: the loser gets ENOENT, re-enters the create attempt
+			// and finds the winner's fresh owner, so it backs off.
+			const clearStale = async (): Promise<void> => {
+				const aside = `${file}.stale.${owner.token}`;
+				await fs.rename(file, aside).catch(() => {});
+				await fs.unlink(aside).catch(() => {});
+			};
 			const current = await readOwner(file);
 			if (!current) {
 				// Unreadable/corrupt holder: treat as stale.
-				await fs.unlink(file).catch(() => {});
+				await clearStale();
 				continue;
 			}
 			if (options.takeover === true || isStale(current, options.staleMs ?? DEFAULT_STALE_MS)) {
-				await fs.unlink(file).catch(() => {});
+				await clearStale();
 				continue;
 			}
 			throw new SessionOwnedError(current);
