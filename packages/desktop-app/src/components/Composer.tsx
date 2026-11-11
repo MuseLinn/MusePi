@@ -447,7 +447,7 @@ export function Composer({
 		insertHash,
 	} = useCompletion({ rpc, cwd, sessionId, setText });
 	useDraftPersistence({ sessionId, rpc, text, setText, attachments, setAttachments });
-	const { history, historyIndex, draftBackupRef, setHistoryIndex, pushHistory } = useInputHistory(cwd);
+	const { historyIndex, browseHistory, setHistoryIndex, pushHistory } = useInputHistory(cwd);
 	const spellcheckEnabled = (): boolean => {
 		try {
 			return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
@@ -1686,38 +1686,22 @@ export function Composer({
 		// the start (or the box is empty); ArrowDown walks back toward the
 		// present, restoring the in-progress draft at the end. The menus above
 		// return early, so Arrow keys there never reach the history ring.
-		if (e.key === "ArrowUp") {
+		if (e.key === "ArrowUp" || e.key === "ArrowDown") {
 			const ta = taRef.current;
-			const atStart = !ta || (ta.selectionStart === 0 && ta.selectionEnd === 0) || text.length === 0;
-			if (historyIndex === null) {
-				if (atStart && history.length > 0) {
-					if (text !== "") draftBackupRef.current = text;
-					setHistoryIndex(0);
-					setText(history[0] ?? "");
+			// ArrowUp only STARTS browsing from the start of the box; once
+			// browsing, further ArrowUps keep walking older regardless of caret.
+			const canStart = !ta || (ta.selectionStart === 0 && ta.selectionEnd === 0) || text.length === 0;
+			if (historyIndex !== null || (e.key === "ArrowUp" && canStart)) {
+				// The hook snapshots the draft (empty included) on the first step
+				// and hands it back when ArrowDown walks past the newest entry.
+				const next = browseHistory(e.key === "ArrowUp" ? "older" : "newer", text);
+				if (next !== null) {
+					setText(next);
 					e.preventDefault();
 					requestAnimationFrame(() => autosize(taRef.current));
 					return;
 				}
-			} else if (historyIndex < history.length - 1) {
-				setHistoryIndex(historyIndex + 1);
-				setText(history[historyIndex + 1] ?? "");
-				e.preventDefault();
-				requestAnimationFrame(() => autosize(taRef.current));
-				return;
 			}
-		} else if (e.key === "ArrowDown" && historyIndex !== null) {
-			if (historyIndex === 0) {
-				setHistoryIndex(null);
-				setText(draftBackupRef.current);
-				e.preventDefault();
-				requestAnimationFrame(() => autosize(taRef.current));
-				return;
-			}
-			setHistoryIndex(historyIndex - 1);
-			setText(history[historyIndex - 1] ?? "");
-			e.preventDefault();
-			requestAnimationFrame(() => autosize(taRef.current));
-			return;
 		}
 		// Cmd/Ctrl+Enter: send with the OPPOSITE busy behavior
 		// of the configured plain-Enter mode.

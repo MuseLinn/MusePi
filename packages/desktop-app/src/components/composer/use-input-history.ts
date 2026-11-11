@@ -14,13 +14,40 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  *    draft the user was typing when they started browsing.
  *  - Any genuine keystroke that edits the box exits browsing.
  *
- * The hook owns the history array + the browsing index; the caller decides
- * WHEN to navigate (it knows the caret position and menu-open state) and
- * calls the returned helpers.
+ * The stored array is oldest → newest (append order); the browse index counts
+ * from the newest end, so 0 is the most recent entry. {@link navigateHistory}
+ * owns that mapping and {@link useInputHistory}'s `browseHistory` owns the
+ * draft snapshot, so the composer only decides WHEN a key browses.
  */
 
 const HISTORY_KEY_PREFIX = "musepi-gui-input-history";
 const MAX_ENTRIES = 100;
+
+export type HistoryDirection = "older" | "newer";
+
+/**
+ * One browse step over an oldest → newest ring. Returns the next cursor and
+ * the text to show, or null when the cursor cannot move (empty history, ArrowUp
+ * past the oldest entry, ArrowDown while not browsing) — the caller then leaves
+ * the key to the editor. Reaching newer-than-newest returns index null and the
+ * saved draft.
+ */
+export function navigateHistory(
+	history: readonly string[],
+	index: number | null,
+	direction: HistoryDirection,
+	draft: string,
+): { index: number | null; text: string } | null {
+	const at = (cursor: number): string => history[history.length - 1 - cursor] ?? "";
+	if (direction === "older") {
+		if (index === null) return history.length > 0 ? { index: 0, text: at(0) } : null;
+		if (index >= history.length - 1) return null;
+		return { index: index + 1, text: at(index + 1) };
+	}
+	if (index === null) return null;
+	if (index === 0) return { index: null, text: draft };
+	return { index: index - 1, text: at(index - 1) };
+}
 
 function storageKey(cwd?: string): string {
 	// cwd is the session workspace root; a stable prefix keeps the key
@@ -47,14 +74,19 @@ function save(key: string, value: string[]): void {
 }
 
 export function useInputHistory(cwd?: string): {
-	/** Browsable ring, oldest → newest. */
+	/** Browsable ring, oldest → newest (feed it to {@link navigateHistory}). */
 	history: string[];
 	/** Current browse index (null = not browsing). 0 = most recent. */
 	historyIndex: number | null;
-	/** In-progress draft saved when browsing starts, restored at the end. */
-	draftBackupRef: React.MutableRefObject<string>;
+	/**
+	 * Step the browse cursor and return the text the box should show, or null
+	 * when the key should stay with the editor. `text` is the box's current
+	 * content: the first step snapshots it — empty included — as the draft that
+	 * walking back past the newest entry restores.
+	 */
+	browseHistory(direction: HistoryDirection, text: string): string | null;
 	setHistoryIndex(index: number | null): void;
-	/** Record a submitted prompt (dedupes a consecutive repeat). */
+	/** Record a submitted prompt (a repeat moves back to the newest slot). */
 	pushHistory(prompt: string): void;
 } {
 	const key = useMemo(() => storageKey(cwd), [cwd]);
@@ -68,15 +100,30 @@ export function useInputHistory(cwd?: string): {
 	useEffect(() => {
 		setHistory(load(key));
 		setHistoryIndex(null);
+		draftBackupRef.current = "";
 	}, [key]);
+
+	const browseHistory = useCallback(
+		(direction: HistoryDirection, text: string): string | null => {
+			const step = navigateHistory(history, historyIndex, direction, draftBackupRef.current);
+			if (!step) return null;
+			if (historyIndex === null) draftBackupRef.current = text;
+			setHistoryIndex(step.index);
+			return step.text;
+		},
+		[history, historyIndex],
+	);
 
 	const pushHistory = useCallback(
 		(prompt: string): void => {
 			const trimmed = prompt.trim();
 			if (!trimmed) return;
 			setHistory(prev => {
-				const next = prev[prev.length - 1] === trimmed ? prev : [...prev, trimmed];
-				const capped = next.slice(-MAX_ENTRIES);
+				// One slot per distinct prompt (TUI history table parity): a
+				// re-submitted prompt — including one recalled from the middle of
+				// the ring — moves to the newest slot instead of repeating.
+				const kept = prev.filter(entry => entry !== trimmed);
+				const capped = [...kept, trimmed].slice(-MAX_ENTRIES);
 				save(key, capped);
 				return capped;
 			});
@@ -86,5 +133,5 @@ export function useInputHistory(cwd?: string): {
 		[key],
 	);
 
-	return { history, historyIndex, draftBackupRef, setHistoryIndex, pushHistory };
+	return { history, historyIndex, browseHistory, setHistoryIndex, pushHistory };
 }
