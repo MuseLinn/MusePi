@@ -5472,9 +5472,12 @@ export class AgentSession {
 		return this.#memory.applyMemoryBackend();
 	}
 
-	/** Rebuilds the stable base prompt for the current tools and model. */
-	refreshBaseSystemPrompt(): Promise<void> {
-		return this.#tools.refreshBaseSystemPrompt();
+	/** Rebuilds the stable base prompt for the current tools and model.
+	 *
+	 *  `preserveToolSignature` is for the startup assembly after `session_start`;
+	 *  see `SessionTools.refreshBaseSystemPrompt`. */
+	refreshBaseSystemPrompt(options?: { preserveToolSignature?: boolean }): Promise<void> {
+		return this.#tools.refreshBaseSystemPrompt(options);
 	}
 
 	#buildSystemPromptForAgentStart(promptText: string, signal?: AbortSignal) {

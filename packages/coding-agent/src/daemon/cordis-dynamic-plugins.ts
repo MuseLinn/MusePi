@@ -1405,6 +1405,19 @@ export class CordisDynamicPluginRuntime {
 	/** 拆卸整个动态插件组（幂等）；宿主 Context 其余装配不受影响。 */
 	async dispose(): Promise<void> {
 		if (!this.#group) return;
+		// Unload each record first: the group fiber only drops listener/effect
+		// registrations, while process-wide facts a plugin registered (memory
+		// backend providers, provided services) are reclaimed by
+		// `disposePluginPrimitives`. Disposing the group alone would leave them
+		// live for the next runtime in this process, whose mount then fails with
+		// "already registered".
+		for (const record of [...this.#records.values()]) {
+			try {
+				await this.#unloadRecord(record);
+			} catch (err) {
+				logger.warn("CordisDynamicPluginRuntime: unload during dispose failed", { err });
+			}
+		}
 		try {
 			await this.#group.dispose();
 		} catch (err) {

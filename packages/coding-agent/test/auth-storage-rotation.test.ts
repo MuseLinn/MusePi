@@ -8,7 +8,7 @@ import type { OAuthCredentials, OAuthProviderId } from "@musepi/pi-ai/oauth/type
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
-import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
+import { removeWithRetries, Snowflake } from "@musepi/pi-utils";
 import { createApiKeyResolver } from "../src/config/api-key-resolver";
 
 describe("AuthStorage account rotation", () => {
@@ -106,12 +106,14 @@ describe("AuthStorage account rotation", () => {
 		});
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
 		vi.restoreAllMocks();
 		oauth.unregisterOAuthProviders(stickyInvalidationSource);
 		authStorage.close();
 		if (tempDir && fs.existsSync(tempDir)) {
-			removeSyncWithRetries(tempDir);
+			// Async removal: a re-opened store releases its SQLite handle on a
+			// later event-loop turn, which a synchronous retry loop starves.
+			await removeWithRetries(tempDir);
 		}
 	});
 

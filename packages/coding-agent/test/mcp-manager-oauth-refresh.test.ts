@@ -369,6 +369,12 @@ describe("MCPManager shared SQLite OAuth refresh", () => {
 			} finally {
 				resolvePendingControlledSleeps(sleeps);
 				tokenServer.stop(true);
+				// The controlled `Bun.sleep` must not outlive this test body: the
+				// shared-store teardown removes its temp dir through
+				// `removeWithRetries`, whose Windows retry delay is a real sleep —
+				// a still-mocked one never resolves and the test hangs instead of
+				// failing on the (transient) SQLite file lock.
+				vi.restoreAllMocks();
 			}
 		});
 	});

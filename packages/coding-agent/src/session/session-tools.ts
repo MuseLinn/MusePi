@@ -491,7 +491,8 @@ export class SessionTools {
 	/** Serializes every registry and presentation mutation for this session. */
 	runToolRegistryMutation<T>(mutation: () => Promise<T>, signal?: AbortSignal): Promise<T> {
 		if (this.#toolRegistryMutationScope.getStore()) return untilAborted(signal, mutation);
-		const serialized = this.#toolRegistryMutationTail.then(() => {
+		const predecessor = this.#toolRegistryMutationTail;
+		const serialized = predecessor.then(() => {
 			signal?.throwIfAborted();
 			return this.#toolRegistryMutationScope.run(true, mutation);
 		});
@@ -500,10 +501,23 @@ export class SessionTools {
 		// mutation whose signal fired may never settle (a stalled extension
 		// activation), and queueing later mutations — including dispose's — behind
 		// it would hang the session forever.
-		this.#toolRegistryMutationTail = operation.then(
-			() => undefined,
-			() => undefined,
-		);
+		//
+		// Chaining through `predecessor` covers the other abort case: a mutation
+		// aborted while still QUEUED never ran, so the next one waits for the
+		// predecessor that still holds the lock instead of starting beside it.
+		// Once a mutation has started its predecessor has settled, so the extra
+		// hop is a no-op there.
+		this.#toolRegistryMutationTail = operation
+			.then(
+				() => undefined,
+				() => undefined,
+			)
+			.then(() =>
+				predecessor.then(
+					() => undefined,
+					() => undefined,
+				),
+			);
 		return operation;
 	}
 
@@ -1438,12 +1452,17 @@ export class SessionTools {
 		});
 	}
 
-	/** Rebuilds the stable base prompt for the current tools and model. */
-	refreshBaseSystemPrompt(): Promise<void> {
-		return this.runToolRegistryMutation(() => this.#refreshBaseSystemPrompt());
+	/** Rebuilds the stable base prompt for the current tools and model.
+	 *
+	 *  `preserveToolSignature` marks the startup assembly `createAgentSession`
+	 *  runs right after `session_start`: the tool slate has not been applied
+	 *  through {@link applyActiveToolsByName} yet, so recording a signature here
+	 *  would suppress the rebuild that a later activation relies on. */
+	refreshBaseSystemPrompt(options?: { preserveToolSignature?: boolean }): Promise<void> {
+		return this.runToolRegistryMutation(() => this.#refreshBaseSystemPrompt(options));
 	}
 
-	async #refreshBaseSystemPrompt(): Promise<void> {
+	async #refreshBaseSystemPrompt(options?: { preserveToolSignature?: boolean }): Promise<void> {
 		if (this.#host.isDisposed() || !this.#rebuildSystemPrompt) return;
 		const activeToolNames = this.getActiveToolNames();
 		this.#setActiveToolNames?.(activeToolNames);
@@ -1454,13 +1473,19 @@ export class SessionTools {
 		this.#basePromptXdevNames = new Set(built.xdevCatalogNames);
 		this.#host.clearMemoryPromotionSnapshot();
 		if (
-			previousBaseSystemPrompt.length !== this.#baseSystemPrompt.length ||
-			previousBaseSystemPrompt.some((part, index) => part !== this.#baseSystemPrompt[index])
+			this.#lastAppliedToolSignature !== undefined &&
+			(previousBaseSystemPrompt.length !== this.#baseSystemPrompt.length ||
+				previousBaseSystemPrompt.some((part, index) => part !== this.#baseSystemPrompt[index]))
 		) {
+			// Only a change AFTER the startup assembly invalidates the parent's
+			// cached prefix a fork inherited; the startup refresh itself runs
+			// before the first request and mirrors the same host sections the
+			// parent's live prompt carried.
 			this.#host.clearInheritedProviderPromptCacheKey();
 		}
 		this.#applyAgentSystemPrompt(this.#baseSystemPrompt);
 		this.#promptModelKey = this.#currentPromptModelKey();
+		if (options?.preserveToolSignature) return;
 		// Refresh the cached signature so a subsequent `applyActiveToolsByName` with
 		// the same tool set does not re-rebuild on top of the explicit refresh we
 		// just performed (and conversely, a different set forces a fresh rebuild).

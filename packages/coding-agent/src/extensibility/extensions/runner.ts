@@ -2195,9 +2195,14 @@ export class ExtensionRunner {
 	 * events `domain/name`, e.g. `agent-preset/selected`). Delivery follows the
 	 * session carrier, so preset-scoped listeners see it and unrelated sessions
 	 * on a shared bus do not.
+	 *
+	 * The context travels with the payload: listeners registered through `pi.on`
+	 * receive the same `(event, ctx)` arguments as lifecycle events, and the
+	 * loader's handler wrapper builds its scoped context from that second
+	 * argument.
 	 */
 	async emitHostEvent(name: string, payload: unknown): Promise<void> {
-		await this.#serial(name, payload);
+		await this.#serial(name, payload, this.createContext());
 	}
 
 	async emit<TEvent extends RunnerEmitEvent>(event: TEvent): Promise<RunnerEmitResult<TEvent>> {

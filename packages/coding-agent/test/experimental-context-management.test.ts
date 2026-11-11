@@ -52,7 +52,7 @@ describe("experimental context notes", () => {
 		const handlers = new Map<string, any>();
 		const pi = {
 			arktype: type,
-			registerTool: (definition: any) => tools.set(definition.name, definition),
+			tools: { register: (definition: any) => tools.set(definition.name, definition) },
 			on: (event: string, handler: any) => handlers.set(event, handler),
 		} as any;
 		applyContextNotes(pi);
