@@ -72,7 +72,7 @@ function codeLangLabel(lang: string): string {
 		ini: "INI",
 		dockerfile: "Dockerfile",
 	};
-	if (key === "") return "Plain Text";
+	if (key === "") return t("settings.plainText");
 	return known[key] ?? key;
 }
 

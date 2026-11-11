@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Markdown } from "../src/components/transcript/Markdown";
+import { t } from "../src/i18n/index.js";
 
 function renderMarkdown(text: string): string {
 	return renderToStaticMarkup(<Markdown text={text} />);
@@ -140,9 +141,9 @@ describe("Transcript LaTeX math", () => {
 		expect(html).not.toMatch(/tr-code-copy[^>]*>[^<]*复制/);
 	});
 
-	it("falls back to Plain Text for an unlabelled fence", () => {
+	it("falls back to the localized plain-text label for an unlabelled fence", () => {
 		const html = renderMarkdown("```\nplain\n```");
-		expect(html).toContain('<span class="tr-code-lang">Plain Text</span>');
+		expect(html).toContain(`<span class="tr-code-lang">${t("settings.plainText")}</span>`);
 	});
 });
 
