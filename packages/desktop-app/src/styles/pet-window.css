@@ -332,11 +332,20 @@
 	max-height: 96px;
 }
 
+/* The collapsed card carries the "还有 N 条" count INSIDE its own box. It used
+ * to hang 9px above the card, where a transparent window clipped it the moment
+ * the stack animated past the top edge; the extra top padding keeps the title
+ * clear of the badge. */
+.pet-bubble--stacked {
+	padding-top: 22px;
+}
+
 .pet-bubble__more {
 	position: absolute;
 	z-index: 4;
-	top: -9px;
-	left: 52px;
+	top: 4px;
+	left: 50%;
+	transform: translateX(-50%);
 	padding: 1px 8px;
 	border: 1px solid var(--glass-border);
 	border-radius: 999px;
