@@ -1879,6 +1879,10 @@ export async function discoverExtensionPaths(
 			providers: ["native", "musepi-extensions"],
 		});
 		for (const ext of discovered.items) {
+			// Host-scope packages (`musepi.scope: "host"`) mount once per host
+			// process; executing their entry per session would register the same
+			// process-wide fact again (the memory backend registry refuses it).
+			if (ext.hostScope) continue;
 			// Through `addPaths`, not `addPath`: the capability does not filter by
 			// the user's disable list, so adding directly here started a disabled
 			// extension anyway (the row showed disabled while it kept loading).

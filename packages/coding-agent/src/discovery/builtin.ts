@@ -495,11 +495,13 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		extPath: string,
 		level: ExtensionModule["level"],
 		track: ExtensionModule["track"] = LEGACY_EXTENSION_MODULE_KIND,
+		hostScope = false,
 	): ExtensionModule => ({
 		name: getExtensionNameFromPath(extPath),
 		path: extPath,
 		level,
 		track,
+		...(hostScope ? { hostScope: true } : {}),
 		_source: createSourceMeta(MUSEPI_EXTENSIONS_PROVIDER_ID, extPath, level),
 	});
 
@@ -610,11 +612,16 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	// through the same module loader as any plugin — a bundled unit is a package
 	// the distribution ships, not a separate kind of thing.
 	try {
+		const hostScopePaths = new Set(
+			(await discoverBundledPluginPaths({ scope: "host" })).map(entry => path.resolve(entry)),
+		);
 		for (const extPath of await discoverBundledPluginPaths({ scope: "all" })) {
 			// `native`, not `user`: the distribution ships these. Listing them as the
 			// user's own makes the removal affordance lie — there is nothing for the
 			// user to remove.
-			items.push(createExtensionModule(extPath, "native", PLUGIN_MODULE_KIND));
+			items.push(
+				createExtensionModule(extPath, "native", PLUGIN_MODULE_KIND, hostScopePaths.has(path.resolve(extPath))),
+			);
 		}
 	} catch (error) {
 		// Fail-soft for the same reason: a malformed bundled package must not
