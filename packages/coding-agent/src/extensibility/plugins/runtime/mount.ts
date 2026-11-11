@@ -51,7 +51,15 @@ import {
 	type ServiceRegistry,
 	toFactory,
 } from "./cordis-entry";
-import { registerEffect, stateDelete, stateGet, stateHas, stateKeys, stateSet } from "./cordis-primitives";
+import {
+	disposePluginPrimitives,
+	registerEffect,
+	stateDelete,
+	stateGet,
+	stateHas,
+	stateKeys,
+	stateSet,
+} from "./cordis-primitives";
 
 /** One runtime mount request. A composition row keeps its own identity and
  * config even when another row resolves to the same entry file. Plain string
@@ -393,6 +401,17 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 		recordHostExtensionModes([extension]);
 		return { ok: true, extension, module, entry, config: values, published };
 	} catch (err) {
+		// A plugin that throws mid-apply may already have registered primitives,
+		// and their cleanups live in the effect ledger. Dropping the ledger
+		// entries alone would strand them: a memory backend provider registered
+		// before the throw stays registered, so the rollback remount fails with
+		// "already registered" and the host is left without its process-wide
+		// registrations. Run the effects while the extension still owns them.
+		try {
+			await disposePluginPrimitives(extension);
+		} catch (cleanupError) {
+			console.warn("[plugin] cleanup after a failed apply failed:", cleanupError);
+		}
 		// A structured error thrown from inside the ledger (a command-name
 		// collision, a manifest rejection) already carries the right code.
 		// Wrapping it as a generic failure would bury the attribution — the
