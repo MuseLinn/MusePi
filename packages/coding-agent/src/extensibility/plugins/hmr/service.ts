@@ -25,6 +25,21 @@ export interface HmrChange {
 export type HmrListener = (change: HmrChange) => void | Promise<void>;
 
 /**
+ * A change that cannot be applied in place and needs the host to restart.
+ * The HMR service does not restart anything itself: it reports the
+ * requirement to the host, which owns the process lifecycle (the daemon's
+ * supervisor, the desktop shell, or a TUI that asks the user to relaunch).
+ */
+export interface HmrRestartRequirement {
+	/** The file that could not be replaced, when a single file caused it. */
+	readonly file?: string;
+	/** The plugin whose change could not be applied, when there is one. */
+	readonly entry?: string;
+	/** Human-readable cause, used in logs and host notices. */
+	readonly reason: string;
+}
+
+/**
  * Event names follow dsh: `hmr/change` reports a file batch, `hmr/reload`
  * reports that a reload pass has started for that batch. They are dispatched
  * through a real Cordis event service (the mechanism dsh uses: one registry,
@@ -54,6 +69,17 @@ export interface HmrService {
 	on(event: HmrEventName, listener: HmrListener, options?: { prepend?: boolean }): () => void;
 	/** Alias for `on("hmr/change", …)`, the pre-event-name surface. */
 	onChange(listener: HmrListener): () => void;
+	/**
+	 * Ask the host to restart because a change cannot be applied in place.
+	 * A host that can restart subscribes to {@link onRestartRequired}; one
+	 * that cannot still gets the log line and can surface
+	 * {@link restartRequired} in its UI.
+	 */
+	requestRestart(requirement: HmrRestartRequirement): void;
+	/** The outstanding request, or null when nothing needs a restart. */
+	readonly restartRequired: HmrRestartRequirement | null;
+	/** Subscribe to restart requests. Returns a disposer. */
+	onRestartRequired(listener: (requirement: HmrRestartRequirement) => void): () => void;
 	/** Run the current listeners as if the watched files had changed. */
 	reload(): Promise<void>;
 	/** Serialize a transaction against reload batches (dsh `runExclusive`):
@@ -90,6 +116,8 @@ class WatchedHmrService implements HmrService {
 	#disposed = false;
 	#queue: Promise<unknown> = Promise.resolve();
 	#graph: HmrGraphQueries | null = null;
+	#restartRequired: HmrRestartRequirement | null = null;
+	readonly #restartListeners = new Set<(requirement: HmrRestartRequirement) => void>();
 
 	constructor(roots: readonly string[], debounceMs: number, ignored: ReadonlyArray<string | RegExp> = []) {
 		this.roots = roots;
@@ -123,6 +151,35 @@ class WatchedHmrService implements HmrService {
 
 	onChange(listener: HmrListener): () => void {
 		return this.on("hmr/change", listener);
+	}
+
+	get restartRequired(): HmrRestartRequirement | null {
+		return this.#restartRequired;
+	}
+
+	requestRestart(requirement: HmrRestartRequirement): void {
+		if (this.#disposed) return;
+		this.#restartRequired = requirement;
+		logger.warn("host restart required", {
+			reason: requirement.reason,
+			file: requirement.file,
+			entry: requirement.entry,
+		});
+		for (const listener of [...this.#restartListeners]) {
+			try {
+				listener(requirement);
+			} catch (error) {
+				logger.warn("hmr restart listener failed", { error: String(error) });
+			}
+		}
+	}
+
+	onRestartRequired(listener: (requirement: HmrRestartRequirement) => void): () => void {
+		if (this.#disposed) return () => {};
+		this.#restartListeners.add(listener);
+		return () => {
+			this.#restartListeners.delete(listener);
+		};
 	}
 
 	async reload(): Promise<void> {
@@ -186,6 +243,7 @@ class WatchedHmrService implements HmrService {
 			this.#timer = null;
 		}
 		for (const dispose of this.#disposers.splice(0)) dispose();
+		this.#restartListeners.clear();
 		this.#pending.clear();
 		const watcher = this.#watcher;
 		this.#watcher = null;

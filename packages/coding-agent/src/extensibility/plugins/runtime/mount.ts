@@ -332,13 +332,19 @@ export async function mountPlugin(ctx: MountContext): Promise<MountResult> {
 		}
 	}
 
-	// Read the declared config ONLY for an entry that declares one. A bare legacy
-	// factory has none, so it skips the read entirely — no extra I/O on its mount
-	// path, and no way for an unreadable config store to break a plugin that never
-	// asked for one. Both declared shapes are read: `Config` on the object form and
-	// `static Config` on the class form.
+	// Read the declared config only for an entry that can receive one: an
+	// exported `Config` (object or class form), or a cordis object entry whose
+	// `apply` declares a second parameter. First-party packages keep their
+	// schema in the manifest (`musepi.config`), which only matters to an entry
+	// that reads the argument; an `apply(ctx)` uses `pi.config.get()` and must
+	// not pay for a manifest read it cannot use. A bare legacy factory always
+	// skips the read.
 	const declaresConfig = (entry as { Config?: unknown } | null)?.Config !== undefined;
-	const values = declaresConfig ? (await ctx.readConfig(ctx.entryPath).catch(() => ({ values: {} }))).values : {};
+	const acceptsConfigArgument = isCordisPluginEntry(entry) && entry.apply.length >= 2;
+	const values =
+		declaresConfig || acceptsConfigArgument
+			? (await ctx.readConfig(ctx.entryPath).catch(() => ({ values: {} }))).values
+			: {};
 	const extension = createPluginExtension(ctx.entryPath, ctx.entryPath);
 
 	try {

@@ -79,17 +79,13 @@ import {
 	providedServices,
 	type ServiceRegistry,
 } from "../extensibility/plugins/runtime/cordis-entry";
+import { FIBER_STATE_FAILED, fiberStateName } from "../extensibility/plugins/runtime/fiber-state";
 import type { PluginRuntimeTarget } from "../extensibility/plugins/runtime/mount";
 import { EventBus } from "../utils/event-bus";
 import type { DaemonHostContext } from "./host-context";
 import { forgetRegisteredWidget } from "./registered-widgets";
 
 export { DynamicExtensionLoadError } from "../extensibility/extensions/dynamic-extension-error";
-
-/** fiber.state 数值镜像（cordis FiberState 是 const enum，跨模块不可 import；
- *  镜像必须与 vendor/cordis 的枚举序一致：PENDING..UNLOADING = 0..5）。 */
-const FIBER_STATE_FAILED = 3;
-const FIBER_STATE_NAMES = ["PENDING", "LOADING", "ACTIVE", "FAILED", "DISPOSED", "UNLOADING"] as const;
 
 /** 文件输入向上查找清单 package.json 的最大目录层级
  *  （与 plugin-manifest.ts 的 MAX_MANIFEST_DEPTH 同口径）。 */
@@ -1380,7 +1376,7 @@ export class CordisDynamicPluginRuntime {
 			name: record.name,
 			status: record.status,
 			version: record.version,
-			fiberState: record.fiber ? (FIBER_STATE_NAMES[record.fiber.state] ?? String(record.fiber.state)) : undefined,
+			fiberState: record.fiber ? fiberStateName(record.fiber.state) : undefined,
 			effectLabels:
 				record.fiber && record.fiber.state !== FIBER_STATE_FAILED
 					? record.fiber.getEffects().map(effect => effect.label)
@@ -1390,9 +1386,7 @@ export class CordisDynamicPluginRuntime {
 			components: [...record.components.values()].map(component => ({
 				id: component.id,
 				status: component.status,
-				fiberState: component.fiber
-					? (FIBER_STATE_NAMES[component.fiber.state] ?? String(component.fiber.state))
-					: undefined,
+				fiberState: component.fiber ? fiberStateName(component.fiber.state) : undefined,
 				effectLabels:
 					component.fiber && component.fiber.state !== FIBER_STATE_FAILED
 						? component.fiber.getEffects().map(effect => effect.label)

@@ -3,7 +3,7 @@
  * service contract itself and the `ctx.hmr` resolution that reads it back.
  */
 import { afterEach, describe, expect, it } from "bun:test";
-import { createHmrService } from "../src/extensibility/plugins/hmr/service";
+import { createHmrService, type HmrRestartRequirement } from "../src/extensibility/plugins/hmr/service";
 import { clearHostServices, provideHostService } from "../src/extensibility/plugins/runtime/host-services";
 
 afterEach(() => {
@@ -41,6 +41,25 @@ describe("hmr service", () => {
 
 		await service.reload();
 		expect(second).toBe(1);
+		await service.dispose();
+	});
+
+	it("hands a restart request to the host and keeps it outstanding", async () => {
+		const service = createHmrService([], 0);
+		const seen: HmrRestartRequirement[] = [];
+		const dispose = service.onRestartRequired(requirement => {
+			seen.push(requirement);
+		});
+
+		const requirement = { file: "/project/src/host.ts", reason: "host module changed" };
+		service.requestRestart(requirement);
+
+		expect(seen).toEqual([requirement]);
+		expect(service.restartRequired).toEqual(requirement);
+
+		dispose();
+		service.requestRestart({ reason: "another change" });
+		expect(seen).toHaveLength(1);
 		await service.dispose();
 	});
 

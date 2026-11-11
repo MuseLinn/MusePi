@@ -60,6 +60,7 @@ import { ExtensionRunner } from "./extensibility/extensions/runner";
 import type { ExtensionUIContext } from "./extensibility/extensions/types";
 import type { HmrService } from "./extensibility/plugins/hmr/service";
 import { scheduleMarketplaceAutoUpdate } from "./extensibility/plugins/management/marketplace-auto-update";
+import { reloadHostPlugins } from "./extensibility/plugins/runtime/host-runtime";
 import { getHostService } from "./extensibility/plugins/runtime/host-services";
 import { setLocale } from "./i18n/index.js";
 import { registerDaemonProjectPresence } from "./launch/presence";
@@ -467,10 +468,14 @@ async function startTuiHmr(cwd: string): Promise<void> {
 	await ensureHostHalfPluginsLoaded(cwd);
 	const service = getHostService<HmrService>("hmr");
 	if (!service?.enabled) return;
-	service.onChange(() => {
+	service.onChange(async change => {
 		clearPluginRootsAndCaches();
 		resetCapabilities();
 		void import("./daemon/extension-artifact-compiler").then(module => module.invalidateExtensionCaches());
+		// Host packages are process-level; re-apply the ones whose own files
+		// changed. `hmr` itself is skipped inside the runtime (it delivers this
+		// batch), so the subscription stays valid across other reloads.
+		await reloadHostPlugins(change.trigger === "manual" ? undefined : change.paths);
 	});
 }
 

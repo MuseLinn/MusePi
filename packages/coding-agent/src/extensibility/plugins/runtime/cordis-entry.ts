@@ -31,7 +31,9 @@ export interface CordisPluginEntry {
 	readonly inject?: readonly string[];
 	/** Service names this plugin provides to others. */
 	readonly provide?: readonly string[];
-	/** Declarative config schema. Presence makes `apply` receive the config. */
+	/** Declarative config schema. Presence makes `apply` receive the config;
+	 *  a cordis object entry also receives the manifest-declared fields, so a
+	 *  package can keep its schema in `musepi.config` instead. */
 	readonly Config?: unknown;
 	/**
 	 * The entry body. May RETURN the objects its `provide` names refer to,

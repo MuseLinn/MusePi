@@ -43,14 +43,6 @@ export interface ExtensionModule {
 	 * command source); this is the same vocabulary on the daemon side.
 	 */
 	level: "user" | "project" | "native";
-	/**
-	 * Set for a distribution-shipped package whose manifest declares
-	 * `musepi.scope: "host"`. Such an entry mounts once per host process; a
-	 * session load must not execute it again, because its registrations are
-	 * process-wide (memory backend providers, services). Listing surfaces still
-	 * include it.
-	 */
-	hostScope?: boolean;
 	/** Source metadata */
 	_source: SourceMeta;
 }

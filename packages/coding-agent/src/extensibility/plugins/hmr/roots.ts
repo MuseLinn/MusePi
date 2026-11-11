@@ -11,7 +11,7 @@ import { resolveActiveProjectRegistryPath } from "../../../discovery/helpers";
  * `extension-` 是历史命名,不代表只服务一条轨道。
  *
  * 这些根**必须与发现/加载实际读取的根一致** —— 否则 watcher 盯的是没人加载的
- * 目录,而唯一的症状是"我改了插件但什么都没发生"。四个来源:
+ * 目录,而唯一的症状是"我改了插件但什么都没发生"。五个来源:
  *
  *   - `<agentDir>/extensions`:用户级扩展模块;
  *   - `<cwd>/<configDir>/extensions`:项目级扩展模块;
@@ -24,7 +24,9 @@ import { resolveActiveProjectRegistryPath } from "../../../discovery/helpers";
  *     不到家目录为止),与安装/卸载/列表/discovery/doctor 共用同一判定 —— 这里
  *     必须复用它而不是自己再写一遍向上查找,否则两边会漂:旧代码硬编码
  *     `cwd/.musepi/extensions`,既不含 anchor 之上的项目插件根,也不含
- *     `getPluginsDir()`。
+ *     `getPluginsDir()`;
+ *   - `scope: "host"` 内置包的包目录:它们由进程级宿主运行时挂载并可原地替换,
+ *     但源码树与分发树都不在上面四个根下。
  *
  * 项目根需要逐级 `stat`,所以本函数是 async;调用方在 daemon 启动时 await 一次。
  *
@@ -38,5 +40,20 @@ export async function resolveExtensionWatchRoots(cwd: string, home?: string): Pr
 	];
 	const registry = await resolveActiveProjectRegistryPath(cwd);
 	if (registry) roots.push(path.dirname(registry));
+	// Host-scope bundled packages are mounted once per process and can be
+	// replaced in place, but only if their package directories are watched:
+	// the mounted copy may be the source tree (development) or the staged
+	// distribution tree, and neither sits under the extension/plugin roots.
+	// Loaded dynamically so this shared root resolver does not pull discovery
+	// into the HMR service's module graph at startup.
+	try {
+		const { discoverBundledPluginPaths } = await import("../../../discovery/builtin");
+		for (const entry of await discoverBundledPluginPaths({ scope: "host" })) {
+			roots.push(path.dirname(entry));
+		}
+	} catch {
+		// Discovery is fail-soft here: without host roots the watcher still
+		// covers user/project plugins.
+	}
 	return [...new Set(roots)];
 }

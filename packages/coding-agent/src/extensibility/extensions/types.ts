@@ -108,7 +108,7 @@ import type { ApprovalMode } from "../../tools/approval";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
 import type { TodoPhase } from "../../tools/todo";
 import type { EventBus } from "../../utils/event-bus";
-import type { HmrChange } from "../plugins/hmr/service";
+import type { HmrChange, HmrRestartRequirement } from "../plugins/hmr/service";
 import type {
 	AgentEndEvent,
 	AgentStartEvent,
@@ -1420,6 +1420,12 @@ export interface HmrSurface {
 	): () => void;
 	/** Alias for `on("hmr/change", …)`. */
 	onChange(listener: (change: HmrChange) => void | Promise<void>): () => void;
+	/** Ask the host to restart for a change that cannot be applied in place. */
+	requestRestart(requirement: HmrRestartRequirement): void;
+	/** The outstanding restart request, if any. */
+	readonly restartRequired: HmrRestartRequirement | null;
+	/** Subscribe to host restart requests. Returns a disposer. */
+	onRestartRequired(listener: (requirement: HmrRestartRequirement) => void): () => void;
 	/** Run the current listeners as if the watched files had just changed. */
 	reload(): Promise<void>;
 	/** Serialize work against reload batches (dsh `runExclusive`). */
@@ -2878,8 +2884,14 @@ export interface Extension {
 	eventListenerDisposers?: Array<() => void>;
 	/** The extension's own Cordis fiber (dsh: a plugin is a fiber). `pi.on`
 	 *  registers inside it, so disposal — reload, unload, rollback — is one
-	 *  `fiber.dispose()` instead of a second ownership mechanism. */
-	fiber?: { dispose(): Promise<void> };
+	 *  `fiber.dispose()` instead of a second ownership mechanism. `state` and
+	 *  `getEffects` are live reads for diagnostics (extension center, host
+	 *  runtime inspection); disposal stays the only mutation. */
+	fiber?: {
+		dispose(): Promise<void>;
+		readonly state?: number;
+		getEffects?(): ReadonlyArray<{ label: string }>;
+	};
 	/** Services were started for this instance. They belong to the instance
 	 *  (not the session), so a shared instance starts them once. */
 	servicesStarted?: boolean;

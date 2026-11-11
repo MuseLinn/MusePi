@@ -18,6 +18,7 @@ import {
 } from "../capability/extension-module";
 import { readDirEntries, readFile } from "../capability/fs";
 import { type Hook, hookCapability } from "../capability/hook";
+import { hostPluginCapability } from "../capability/host-plugin";
 import { type Instruction, instructionCapability } from "../capability/instruction";
 import { type MCPServer, mcpCapability } from "../capability/mcp";
 import { type Prompt, promptCapability } from "../capability/prompt";
@@ -469,6 +470,29 @@ registerProvider<Prompt>(promptCapability.id, {
 	load: loadPrompts,
 });
 
+/**
+ * One module-list row.
+ *
+ * `track` records which loader loaded the entry — the cordis plugin track
+ * (`plugin-module`) or the legacy extension track (`extension-module`).
+ * The management face uses it to show which system a row belongs to
+ * without following the path; the enable/disable key is shared by both
+ * tracks (moduleEntryId) and is NOT affected.
+ */
+function createExtensionModule(
+	extPath: string,
+	level: ExtensionModule["level"],
+	track: ExtensionModule["track"] = LEGACY_EXTENSION_MODULE_KIND,
+): ExtensionModule {
+	return {
+		name: getExtensionNameFromPath(extPath),
+		path: extPath,
+		level,
+		track,
+		_source: createSourceMeta(MUSEPI_EXTENSIONS_PROVIDER_ID, extPath, level),
+	};
+}
+
 // Extension Modules
 async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<ExtensionModule>> {
 	const items: ExtensionModule[] = [];
@@ -481,29 +505,6 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 		}
 		return path.resolve(ctx.cwd, expanded);
 	};
-
-	/**
-	 * One module-list row.
-	 *
-	 * `track` records which loader loaded the entry — the cordis plugin track
-	 * (`plugin-module`) or the legacy extension track (`extension-module`).
-	 * The management face uses it to show which system a row belongs to
-	 * without following the path; the enable/disable key is shared by both
-	 * tracks (moduleEntryId) and is NOT affected.
-	 */
-	const createExtensionModule = (
-		extPath: string,
-		level: ExtensionModule["level"],
-		track: ExtensionModule["track"] = LEGACY_EXTENSION_MODULE_KIND,
-		hostScope = false,
-	): ExtensionModule => ({
-		name: getExtensionNameFromPath(extPath),
-		path: extPath,
-		level,
-		track,
-		...(hostScope ? { hostScope: true } : {}),
-		_source: createSourceMeta(MUSEPI_EXTENSIONS_PROVIDER_ID, extPath, level),
-	});
 
 	const configDirs = await getConfigDirs(ctx);
 
@@ -611,17 +612,17 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	// with a package.json declaring `musepi.extensions` is one package. They run
 	// through the same module loader as any plugin — a bundled unit is a package
 	// the distribution ships, not a separate kind of thing.
+	//
+	// The default (session) scope: host-scope packages are mounted once per
+	// process by the cordis host runtime and belong to the `host-plugins`
+	// capability instead. Listing them here would put them back into the
+	// session loader's candidate list.
 	try {
-		const hostScopePaths = new Set(
-			(await discoverBundledPluginPaths({ scope: "host" })).map(entry => path.resolve(entry)),
-		);
-		for (const extPath of await discoverBundledPluginPaths({ scope: "all" })) {
+		for (const extPath of await discoverBundledPluginPaths()) {
 			// `native`, not `user`: the distribution ships these. Listing them as the
 			// user's own makes the removal affordance lie — there is nothing for the
 			// user to remove.
-			items.push(
-				createExtensionModule(extPath, "native", PLUGIN_MODULE_KIND, hostScopePaths.has(path.resolve(extPath))),
-			);
+			items.push(createExtensionModule(extPath, "native", PLUGIN_MODULE_KIND));
 		}
 	} catch (error) {
 		// Fail-soft for the same reason: a malformed bundled package must not
@@ -630,6 +631,25 @@ async function loadExtensionModules(ctx: LoadContext): Promise<LoadResult<Extens
 	}
 
 	return { items, warnings };
+}
+
+/**
+ * Host-scope bundled packages, for the listing surfaces only.
+ *
+ * The runtime that mounts them is `host-runtime.ts`; this provider exists so
+ * the extension center can show what ships without pretending those rows are
+ * session extension modules.
+ */
+async function loadHostPlugins(): Promise<LoadResult<ExtensionModule>> {
+	const items: ExtensionModule[] = [];
+	try {
+		for (const extPath of await discoverBundledPluginPaths({ scope: "host" })) {
+			items.push(createExtensionModule(extPath, "native", PLUGIN_MODULE_KIND));
+		}
+	} catch (error) {
+		return { items, warnings: [`Failed to discover host plugin packages: ${String(error)}`] };
+	}
+	return { items, warnings: [] };
 }
 
 /** One package under a bundled plugin root, read from its manifest. */
@@ -766,6 +786,14 @@ registerProvider<ExtensionModule>(extensionModuleCapability.id, {
 	description: MUSEPI_EXTENSIONS_DESCRIPTION,
 	priority: PRIORITY,
 	load: loadExtensionModules,
+});
+
+registerProvider<ExtensionModule>(hostPluginCapability.id, {
+	id: MUSEPI_EXTENSIONS_PROVIDER_ID,
+	displayName: "MusePi Host Plugins",
+	description: "Distribution-shipped plugins mounted once per host process",
+	priority: PRIORITY,
+	load: loadHostPlugins,
 });
 
 // Extensions

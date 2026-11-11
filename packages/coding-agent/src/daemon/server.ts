@@ -95,7 +95,7 @@ import { clearArtifactCache, createReportBundle, getArtifactCacheStats, getLogTe
 import { collectSystemInfo, formatSystemInfo } from "../debug/system-info";
 import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
 import { extensionEntriesNeedingReload } from "../extensibility/plugins/compat/legacy-pi-compat";
-import type { HmrService } from "../extensibility/plugins/hmr/service";
+import type { HmrChange, HmrService } from "../extensibility/plugins/hmr/service";
 import { getHostService } from "../extensibility/plugins/runtime/host-services";
 import { buildSkillPromptMessage, parseSkillInvocation } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
@@ -1478,8 +1478,8 @@ export class DaemonServer {
 			// Reload work joins the same queue installs/config writes use, so a
 			// batch is never half-applied. `getLinked`/`getOuterStack` answer from
 			// the loader's module graph.
-			this.#hmrUnsubscribe = service.onChange(() => {
-				void service.runExclusive(() => this.#applyExtensionReload());
+			this.#hmrUnsubscribe = service.onChange(change => {
+				void service.runExclusive(() => this.#applyExtensionReload(change));
 			});
 			const dynamic = await this.#getDynamicPlugins();
 			service.attachGraph(dynamic.moduleGraph);
@@ -1490,7 +1490,7 @@ export class DaemonServer {
 
 	/** Apply one HMR batch. The service already coalesces file events, so this
 	 *  runs once per batch and only inside its `runExclusive` queue. */
-	#applyExtensionReload(): void {
+	async #applyExtensionReload(change: HmrChange): Promise<void> {
 		this.#services.get<ExtensionService>("extensions").invalidateCaches();
 		// 扩展声明的技能经 MarketplaceService.getSkills 合并:扩展源变更
 		// 时一并失效,否则虚拟技能列表最多滞后 10s TTL。
@@ -1520,6 +1520,16 @@ export class DaemonServer {
 			.get<ExtensionService>("extensions")
 			.getExtensionRuntimeLoad()
 			.catch(err => logger.warn("host-level plugin reconcile after a watched change failed", { err }));
+		// Host-scope packages are process-level and replaceable in place:
+		// dispose the old fiber — which unregisters providers and unpublishes
+		// services — then apply the fresh entry. A manual reload re-applies
+		// every host package.
+		try {
+			const { reloadHostPlugins } = await import("../extensibility/plugins/runtime/host-runtime");
+			await reloadHostPlugins(change.trigger === "manual" ? undefined : change.paths);
+		} catch (error) {
+			logger.warn("host plugin reload after a watched change failed", { error: String(error) });
+		}
 	}
 
 	/** 预设目录(决策 #5):env MUSEPI_MODES_DIR 可覆盖(隔离测试),默认 <home>/.musepi/modes。 */
