@@ -43,21 +43,24 @@ describe("progressive-blur edge bands", () => {
 		expect(css).toContain("--gui-card-surface-veil:");
 	});
 
-	test("both edges stack three masked layers with shrinking ramps", () => {
+	test("both edges grade three blur layers behind one band mask", () => {
 		const css = read(CHAT);
 		const block = css.slice(css.indexOf("/* ── Progressive-blur edge bands"), css.indexOf("/* ── Focus mode"));
 		expect(block, "progressive-blur block missing").not.toBe("");
 		for (const edge of ["top", "end"]) {
+			const band = rule(block, `.gui-chat-fade--${edge} {`);
+			expect(band, `${edge} band missing`).not.toBeNull();
+			expect(band).toContain("mask-image: linear-gradient(");
+			expect(band).toContain(edge === "top" ? "to bottom" : "to top");
 			for (const step of [1, 2, 3]) {
 				const body = rule(block, `.gui-chat-fade--${edge} .gui-chat-fade-layer--${step}`);
 				expect(body, `${edge} layer ${step} missing`).not.toBeNull();
 				expect(body).toContain(`blur(var(--gui-blur-progressive-${step}))`);
-				expect(body).toContain("mask-image: linear-gradient(");
-				expect(body).toContain(edge === "top" ? "to bottom" : "to top");
+				// The mask lives on the band: masking a backdrop-filter element
+				// makes Chromium skip the sampling and paint only its tint.
+				expect(body).not.toContain("mask-image");
 			}
 		}
-		expect(block).toContain("transparent 62%");
-		expect(block).toContain("transparent 34%");
 		expect(block).toContain("@supports not");
 		expect(block).toContain("var(--gui-card-surface-fade)");
 		expect(block, "no raw theme surface in the blur bands").not.toContain("var(--color-surface)");
@@ -70,12 +73,17 @@ describe("progressive-blur edge bands", () => {
 		expect(tsx).not.toContain("maskImage");
 	});
 
-	test("head and controls share the derived card surface, not --color-bg", () => {
+	test("the chat head floats over the transcript without its own surface", () => {
 		const chat = read(CHAT);
 		const head = rule(chat, ".gui-chat-head {");
 		expect(head, ".gui-chat-head rule missing").not.toBeNull();
-		expect(head).toContain("var(--gui-card-surface-veil)");
+		// Immersive head: no background of its own, hit-transparent so the row
+		// under it stays selectable; the transcript's top fade is the surface.
+		expect(head).toContain("background: none;");
+		expect(head).toContain("position: absolute;");
+		expect(head).toContain("pointer-events: none;");
 		expect(head).toContain("padding: 6px 12px 2px;");
+		expect(head).not.toContain("var(--color-bg)");
 		const toggle = rule(chat, ".gui-chat-info-toggle {");
 		expect(toggle).toContain("var(--glass-hover)");
 		expect(toggle).toContain("var(--glass-hairline)");
