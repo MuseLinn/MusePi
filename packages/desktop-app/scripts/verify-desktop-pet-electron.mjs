@@ -31,6 +31,10 @@ const child = spawn(electronPath, [".", "--no-sandbox"], {
 		// Electron allocates an available port and publishes it in DevToolsActivePort.
 		MUSEPI_CDP_PORT: "0",
 		MUSEPI_GUI_USER_DATA: userDataDir,
+		// The daemon's config root is separate from Electron's user data: without
+		// this the smoke's app-visible sessions come from the developer's real
+		// ~/.musepi, so the scripted onboarding never matches its fixture.
+		PI_CONFIG_DIR: path.join(userDataDir, "musepi"),
 	},
 	stdio: ["ignore", "pipe", "pipe"],
 });
