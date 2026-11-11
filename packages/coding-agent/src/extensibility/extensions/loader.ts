@@ -148,6 +148,8 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	 * must drop the keyword from all of them at once.
 	 */
 	pendingMagicKeywordRegistrations: RegisteredMagicKeyword[] = [];
+	/** The runner's error channel for migrated lifecycle listeners. */
+	eventErrorSink?: (error: { extensionPath: string; event: string; error: string }) => void;
 
 	/**
 	 * Bound one lifecycle listener by its per-event budget. A session's
@@ -719,6 +721,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 					callArgs[1] as ExtensionContext,
 					this.extension,
 					timeoutMs,
+					() => undefined,
 				);
 				if (event === "context") {
 					const state = args[2] as { messages: unknown[] };

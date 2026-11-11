@@ -25,10 +25,6 @@ export function unregisterSideSessionStore(sessionId: string): void {
 	stores.delete(sessionId);
 }
 
-export function getSideSessionStore(sessionId: string): GuiSessionStore | undefined {
-	return stores.get(sessionId);
-}
-
 /** Raw side-session envelopes (currently asks) for the view's own UI state. */
 export function subscribeSideSessionEvents(sessionId: string, listener: (event: StreamEvent) => void): () => void {
 	let listeners = eventListeners.get(sessionId);
