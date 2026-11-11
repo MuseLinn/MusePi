@@ -5853,7 +5853,9 @@
 /* 顶栏:玻璃容器,标题 + 时间轴 + 搜索 + 批量折叠/方向切换。 */
 .tm-topbar {
 	position: absolute;
-	top: 10px;
+	/* The chat head floats over the whole card (absolute, hit-transparent), so
+	 * the map's own chrome clears its band instead of sharing it. */
+	top: 46px;
 	left: 64px;
 	right: 12px;
 	z-index: 6;
