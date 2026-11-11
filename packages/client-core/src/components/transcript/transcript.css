@@ -1315,13 +1315,19 @@ button.tr-display-context-source:hover {
 	align-items: center;
 	gap: 8px;
 	justify-content: space-between;
-	min-height: 30px;
-	padding: 2px 4px 2px 10px;
+	min-height: 32px;
+	padding: 3px 6px 3px 10px;
 	border-bottom: 1px solid var(--border);
 	background: var(--bg);
 }
 
 .tr-code-lang {
+	/* One line, truncating before it can collide with the actions on a narrow
+	 * block; the actions keep their intrinsic width. */
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 	font-family: var(--font-mono);
 	font-size: 11px;
 	letter-spacing: 0.04em;
@@ -1333,8 +1339,9 @@ button.tr-display-context-source:hover {
  * pointer press must not summon them). Touch devices keep them visible. */
 .tr-code-actions {
 	display: flex;
+	flex: none;
 	align-items: center;
-	gap: 2px;
+	gap: 4px;
 	opacity: 0;
 	transition: opacity 120ms ease-out;
 }
@@ -4626,6 +4633,7 @@ a.tr-tool-search-title:hover {
 @media (pointer: coarse) {
 	.tr-action,
 	.tr-code-copy,
+	.tr-code-btn,
 	.tv-widget-fs-btn,
 	.tr-table-menu button {
 		min-width: 44px;
