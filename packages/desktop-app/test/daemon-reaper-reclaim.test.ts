@@ -1,4 +1,4 @@
-import { afterAll, afterEach, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { type ChildProcess, spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import * as net from "node:net";
@@ -113,6 +113,14 @@ const DEAD_OWNER = 0x7ffffff0;
 const LIVE_PID = process.pid;
 
 describe("orphan reaper reclaim", () => {
+	// The registry directory is shared across the whole suite, so a record left
+	// behind by an earlier run (or a sibling test file in the same process)
+	// made the "reaped, so the registry is empty" assertion depend on ordering.
+	beforeEach(() => {
+		rmSync(REGISTRY_DIR, { recursive: true, force: true });
+		rmSync(PORT_FILE, { force: true });
+	});
+
 	it("terminates a daemon we spawned whose owning shell is gone", async () => {
 		const port = await freePort();
 		const daemon = await startFakeDaemon(port);
