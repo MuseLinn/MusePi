@@ -136,6 +136,102 @@ describe("pet bubble action layout", () => {
 			expect(button.right).toBeLessThanOrEqual(card.right);
 		}
 	});
+
+	it("reserves the revealed action row so hover cannot reflow the message", async () => {
+		// A wrapping notification message is the case that used to grow the card:
+		// the collapsed row's width decided the text column, so hovering squeezed
+		// the copy into an extra line and the bottom-anchored window clipped it.
+		const measure = () =>
+			page.evaluate(() => {
+				const card = document.querySelector<HTMLElement>(".pet-bubble")!;
+				const text = document.querySelector<HTMLElement>(".pet-bubble__text")!;
+				const actions = document.querySelector<HTMLElement>(".pet-bubble__actions")!;
+				return {
+					cardHeight: card.getBoundingClientRect().height,
+					cardWidth: card.getBoundingClientRect().width,
+					textWidth: text.getBoundingClientRect().width,
+					textTop: text.getBoundingClientRect().top,
+					actionsWidth: actions.getBoundingClientRect().width,
+					buttonLeft: actions.querySelector<HTMLElement>(".pet-bubble__action")!.getBoundingClientRect().left,
+					buttons: Array.from(actions.querySelectorAll<HTMLElement>(".pet-bubble__action"), button => ({
+						width: button.getBoundingClientRect().width,
+						x: button.getBoundingClientRect().x,
+					})),
+					gap: Number.parseFloat(getComputedStyle(actions).columnGap) || 0,
+				};
+			});
+		await page.evaluate(() => {
+			const card = document.querySelector<HTMLElement>(".pet-bubble")!;
+			card.dataset.actions = "4";
+			document.querySelector(".pet-bubble__text")!.textContent =
+				"这是一段较长的事件气泡正文，用来确认悬停后文本列被压缩会不会多折行并改变卡片高度。";
+			document.querySelector<HTMLElement>(".pet-bubble__actions")!.innerHTML = Array.from(
+				{ length: 4 },
+				(_, index) => `<button class="pet-bubble__action">${index + 1}</button>`,
+			).join("");
+		});
+		const rest = await measure();
+		await page.hover(".pet-bubble");
+		await waitForReveal();
+		const hover = await measure();
+		expect(hover.cardHeight).toBeCloseTo(rest.cardHeight, 1);
+		expect(hover.cardWidth).toBeCloseTo(rest.cardWidth, 1);
+		expect(hover.textWidth).toBeCloseTo(rest.textWidth, 1);
+		expect(hover.textTop).toBeCloseTo(rest.textTop, 1);
+		// The reserved track must be exactly the revealed row (the design's own
+		// button widths and gaps): a wider or narrower slot would still reflow.
+		const rowWidth = hover.buttons.reduce((total, button) => total + button.width, 0);
+		expect(hover.actionsWidth).toBeCloseTo(rowWidth + hover.gap * (hover.buttons.length - 1), 1);
+		expect(hover.buttonLeft).toBeCloseTo(rest.buttonLeft, 1);
+		expect(hover.buttons.map(button => button.x)).toEqual(rest.buttons.map(button => button.x));
+	});
+});
+
+describe("pet bubble reply row", () => {
+	it("grows the card with the reply row instead of overlaying it", async () => {
+		const measured = await page.evaluate(() => {
+			const card = document.querySelector<HTMLElement>(".pet-bubble")!;
+			const before = card.getBoundingClientRect().height;
+			const row = document.createElement("div");
+			row.className = "pet-bubble__reply-wrap";
+			const inner = document.createElement("div");
+			inner.style.height = "40px";
+			row.append(inner);
+			card.append(row);
+			const after = card.getBoundingClientRect().height;
+			const style = getComputedStyle(row);
+			return {
+				before,
+				after,
+				gridColumn: `${style.gridColumnStart} / ${style.gridColumnEnd}`,
+				position: style.position,
+				rowWidth: row.getBoundingClientRect().width,
+				cardWidth: card.getBoundingClientRect().width,
+			};
+		});
+		// The row is a full-width, in-flow grid row: the card (and the native
+		// window sized to it) follows the row's animated height.
+		expect(measured.gridColumn).toBe("1 / -1");
+		expect(measured.position).toBe("static");
+		expect(measured.rowWidth).toBeGreaterThan(0);
+		expect(measured.after - measured.before).toBeGreaterThanOrEqual(40);
+	});
+
+	it("does not animate the reply pill independently of the row", async () => {
+		const animation = await page.evaluate(() => {
+			const card = document.querySelector<HTMLElement>(".pet-bubble")!;
+			const pill = document.createElement("div");
+			pill.className = "pet-bubble__reply";
+			pill.innerHTML = '<input class="pet-bubble__reply-input" /><button class="pet-bubble__reply-send"></button>';
+			card.append(pill);
+			const style = getComputedStyle(pill);
+			return { animationName: style.animationName, display: style.display };
+		});
+		// The row's height is owned by the reveal wrapper; a second entrance
+		// animation on the pill would play every time the row reopens.
+		expect(animation.animationName).toBe("none");
+		expect(animation.display).toBe("flex");
+	});
 });
 
 describe("pet bubble kind styling", () => {

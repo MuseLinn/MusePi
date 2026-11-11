@@ -724,7 +724,8 @@ try {
 			process.platform !== "win32" ||
 				(horizontalActionSamples.length > 0 &&
 					horizontalActionSamples.every(sample => Math.abs(sample.gap - 8) <= 1) &&
-					horizontalActionSamples.every(sample => Math.abs(sample.width - horizontalActionSamples[0].width) <= 1)),
+					horizontalActionSamples.every(sample => Math.abs(sample.width - horizontalActionSamples[0].width) <= 1) &&
+					horizontalActionSamples.every(sample => Math.abs(sample.height - horizontalActionSamples[0].height) <= 1)),
 			horizontalActionSamples,
 		);
 		await bubblesPage.hover(".pet-bubble--session");
@@ -736,12 +737,19 @@ try {
 
 		await bubblesPage.click(".pet-bubble--session .pet-bubble__action--open + .pet-bubble__action");
 		await sleep(200);
-		const reply = await bubblesPage.evaluate(() => ({
-			input: Boolean(document.querySelector(".pet-bubble__reply-input")),
-			expanded: Boolean(document.querySelector(".pet-bubbles--expanded")),
-		}));
+		// The reply row is mounted while closed so its height can animate; the
+		// click must OPEN the row (zero → content height), not merely leave it
+		// in the DOM.
+		const reply = await bubblesPage.evaluate(() => {
+			const row = document.querySelector(".pet-bubble__reply-wrap--open");
+			return {
+				openRow: Boolean(row),
+				rowHeight: row ? row.getBoundingClientRect().height : 0,
+				expanded: Boolean(document.querySelector(".pet-bubbles--expanded")),
+			};
+		});
 		const opensAfterReply = await mainPage.evaluate(`//!world=main\nwindow.__petPhase2.opens`);
-		check("real reply action neither collapses nor opens the card", reply.input && reply.expanded && opensAfterReply.length === 0, { ...reply, opensAfterReply });
+		check("real reply action neither collapses nor opens the card", reply.openRow && reply.rowHeight > 0 && reply.expanded && opensAfterReply.length === 0, { ...reply, opensAfterReply });
 		const materials = await bubblesPage.evaluate(() =>
 			[".pet-bubbles__clear", ".pet-bubble__reply"].map(selector => {
 				const element = document.querySelector(selector);

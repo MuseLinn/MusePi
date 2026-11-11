@@ -39,6 +39,7 @@ import { setLocale, t } from "@musepi/client-core";
 import { ArrowUp, ArrowUpRight, Check, MessageSquare, Square, X } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type CSSProperties, isValidElement, type ReactNode, useEffect, useRef, useState } from "react";
+import { Reveal } from "./components/Reveal";
 import { type PetActivity, type PetBubbleTheme, type PetSessionCard, petBubbleTheme } from "./lib/pet";
 import { useScrollShadow } from "./lib/use-scroll-shadow";
 
@@ -162,6 +163,12 @@ export function PetBubbles(): ReactNode {
 	const [replyFor, setReplyFor] = useState<string | null>(null);
 	const [replyText, setReplyText] = useState("");
 	const [sending, setSending] = useState(false);
+	// Reply rows stay mounted so their height can animate; autoFocus would
+	// claim every mounted row, so focus follows the row that just opened.
+	useEffect(() => {
+		if (!replyFor) return;
+		document.querySelector<HTMLInputElement>(".pet-bubble__reply-wrap--open .pet-bubble__reply-input")?.focus();
+	}, [replyFor]);
 	const bridge = (window as unknown as { electronAPI?: PetBubblesBridge }).electronAPI;
 
 	// pet:activity — session cards, bubbles, approvals, theme/locale push.
@@ -393,10 +400,25 @@ export function PetBubbles(): ReactNode {
 	// Measure only the stack. The pet-side control lives in another window.
 	// Layout boxes avoid feeding entrance transforms back into window size.
 	// The morph effect reuses this report every frame and after unlocking.
+	// The stack first appears after an activity push, so every instance is
+	// observed the moment it is found: a layout-only change (hover, reply row
+	// height) must still reach the native window or the card overflows the
+	// transparent window's top edge.
 	useEffect(() => {
 		if (!bridge?.setBubblesContentSize) return;
 		const MEASURED = ".pet-bubbles";
+		const observed = new Set<HTMLElement>();
+		const awaitingEnd = new Set<HTMLElement>();
+		let observer: ResizeObserver | null = null;
+		const observe = (): void => {
+			for (const el of document.querySelectorAll<HTMLElement>(MEASURED)) {
+				if (observed.has(el)) continue;
+				observed.add(el);
+				observer?.observe(el);
+			}
+		};
 		const report = (): void => {
+			observe();
 			const bodyStyle = getComputedStyle(document.body);
 			let w = 0;
 			let h = parseFloat(bodyStyle.paddingTop) + parseFloat(bodyStyle.paddingBottom);
@@ -408,13 +430,23 @@ export function PetBubbles(): ReactNode {
 				w = Math.max(w, animating ? el.offsetWidth : r.width);
 				h +=
 					(animating ? el.offsetHeight : r.height) + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
-				el.addEventListener("animationend", report, { once: true });
+				if (animating && !awaitingEnd.has(el)) {
+					awaitingEnd.add(el);
+					el.addEventListener(
+						"animationend",
+						() => {
+							awaitingEnd.delete(el);
+							report();
+						},
+						{ once: true },
+					);
+				}
 			}
 			void bridge.setBubblesContentSize?.({ width: Math.ceil(w), height: Math.ceil(h) });
 		};
 		reportContentSizeRef.current = report;
-		const ro = new ResizeObserver(report);
-		for (const el of document.querySelectorAll<HTMLElement>(MEASURED)) ro.observe(el);
+		observer = new ResizeObserver(() => report());
+		observe();
 		report();
 		const timer = window.setTimeout(report, 300);
 		const mo = new MutationObserver(report);
@@ -422,7 +454,7 @@ export function PetBubbles(): ReactNode {
 		if (root) mo.observe(root, { childList: true, subtree: true, characterData: true });
 		return () => {
 			if (reportContentSizeRef.current === report) reportContentSizeRef.current = null;
-			ro.disconnect();
+			observer?.disconnect();
 			mo.disconnect();
 			window.clearTimeout(timer);
 		};
@@ -438,10 +470,23 @@ export function PetBubbles(): ReactNode {
 
 	// Include overhanging dismiss buttons and the clear-all capsule. Re-report
 	// after transitions so their delayed hover reveal never remains click-through.
+	// Cards and the stack mount after the first activity push, so observe each
+	// instance when it is first seen instead of only at mount.
 	useEffect(() => {
 		if (!bridge?.setBubblesHitbox) return;
 		const INTERACTIVE = ".pet-bubble, .pet-bubble__dismiss, .pet-bubbles__head, .pet-bubbles__clear";
+		const observed = new Set<HTMLElement>();
+		const awaitingEnd = new Set<HTMLElement>();
+		let observer: ResizeObserver | null = null;
+		const observe = (): void => {
+			for (const el of document.querySelectorAll<HTMLElement>(`${INTERACTIVE}, .pet-bubbles`)) {
+				if (observed.has(el)) continue;
+				observed.add(el);
+				observer?.observe(el);
+			}
+		};
 		const report = (): void => {
+			observe();
 			let left = Infinity;
 			let top = Infinity;
 			let right = -Infinity;
@@ -453,8 +498,15 @@ export function PetBubbles(): ReactNode {
 				top = Math.min(top, r.top);
 				right = Math.max(right, r.right);
 				bottom = Math.max(bottom, r.bottom);
-				el.addEventListener("animationend", report, { once: true });
-				el.addEventListener("transitionend", report, { once: true });
+				if (!awaitingEnd.has(el)) {
+					awaitingEnd.add(el);
+					const settle = (): void => {
+						awaitingEnd.delete(el);
+						report();
+					};
+					el.addEventListener("animationend", settle, { once: true });
+					el.addEventListener("transitionend", settle, { once: true });
+				}
 			}
 			void bridge.setBubblesHitbox?.(
 				left === Infinity
@@ -467,15 +519,15 @@ export function PetBubbles(): ReactNode {
 						},
 			);
 		};
+		observer = new ResizeObserver(() => report());
+		observe();
 		report();
 		const timer = window.setTimeout(report, 300);
-		const ro = new ResizeObserver(report);
 		const mo = new MutationObserver(report);
 		const root = document.getElementById("root");
 		if (root) mo.observe(root, { childList: true, subtree: true, characterData: true });
-		for (const el of document.querySelectorAll<HTMLElement>(".pet-bubbles")) ro.observe(el);
 		return () => {
-			ro.disconnect();
+			observer?.disconnect();
 			mo.disconnect();
 			window.clearTimeout(timer);
 		};
@@ -634,38 +686,45 @@ export function PetBubbles(): ReactNode {
 		});
 	};
 
-	const renderReplyRow = (sessionId: string): ReactNode => (
-		<div
-			className="pet-bubble__reply"
-			// Clicking into the input must not trigger the card's own click.
-			onClick={e => e.stopPropagation()}
-		>
-			<input
-				className="pet-bubble__reply-input"
-				placeholder={t("settings.petReplyPlaceholder")}
-				value={replyText}
-				autoFocus
-				onChange={e => setReplyText(e.target.value)}
-				onKeyDown={e => {
-					if (e.key === "Enter") sendReply(sessionId);
-					if (e.key === "Escape") {
-						setReplyFor(null);
-						setReplyText("");
-					}
-				}}
-			/>
-			<button
-				type="button"
-				className="pet-bubble__reply-send"
-				aria-label={t("settings.send2")}
-				title={t("settings.send2")}
-				onClick={() => sendReply(sessionId)}
-				disabled={!replyText.trim() || sending}
-			>
-				<MorphIcon icon={ArrowUp} size={13} />
-			</button>
-		</div>
-	);
+	/** The row stays mounted and collapses to zero height (Reveal): the card
+	 *  grows/shrinks with its height instead of jumping when it mounts, and a
+	 *  closed row is inert, so its input is never a tab stop. */
+	const renderReplyRow = (replyKey: string, sessionId: string): ReactNode => {
+		const open = replyFor === replyKey;
+		return (
+			<Reveal open={open} className={`pet-bubble__reply-wrap${open ? " pet-bubble__reply-wrap--open" : ""}`}>
+				<div
+					className="pet-bubble__reply"
+					// Clicking into the input must not trigger the card's own click.
+					onClick={e => e.stopPropagation()}
+				>
+					<input
+						className="pet-bubble__reply-input"
+						placeholder={t("settings.petReplyPlaceholder")}
+						value={replyText}
+						onChange={e => setReplyText(e.target.value)}
+						onKeyDown={e => {
+							if (e.key === "Enter") sendReply(sessionId);
+							if (e.key === "Escape") {
+								setReplyFor(null);
+								setReplyText("");
+							}
+						}}
+					/>
+					<button
+						type="button"
+						className="pet-bubble__reply-send"
+						aria-label={t("settings.send2")}
+						title={t("settings.send2")}
+						onClick={() => sendReply(sessionId)}
+						disabled={!replyText.trim() || sending}
+					>
+						<MorphIcon icon={ArrowUp} size={13} />
+					</button>
+				</div>
+			</Reveal>
+		);
+	};
 
 	const clearAll = (): void => {
 		// Clear only the visible activity cards. This never marks conversations
@@ -699,6 +758,7 @@ export function PetBubbles(): ReactNode {
 				<div
 					key={replyKey}
 					className={`pet-bubble pet-bubble--session pet-bubble--${c.phase}${unread ? " pet-bubble--unread" : ""}`}
+					data-actions={3}
 					onClick={() => runAction(() => openCard(c))}
 				>
 					<button
@@ -780,7 +840,7 @@ export function PetBubbles(): ReactNode {
 							</button>
 						)}
 					</div>
-					{replyFor === replyKey && renderReplyRow(c.sessionId)}
+					{renderReplyRow(replyKey, c.sessionId)}
 				</div>
 			);
 		}),
@@ -790,6 +850,7 @@ export function PetBubbles(): ReactNode {
 				<div
 					key={replyKey}
 					className={`pet-bubble pet-bubble--${b.kind}`}
+					data-actions={2 + (b.sessionId ? 1 : 0) + (b.requestId ? 1 : 0)}
 					onClick={() =>
 						runAction(() => {
 							if (b.sessionId) void bridge?.petOpenSession?.(b.sessionId);
@@ -870,7 +931,7 @@ export function PetBubbles(): ReactNode {
 							</button>
 						)}
 					</div>
-					{replyFor === replyKey && b.sessionId && renderReplyRow(b.sessionId)}
+					{b.sessionId && renderReplyRow(replyKey, b.sessionId)}
 				</div>
 			);
 		}),

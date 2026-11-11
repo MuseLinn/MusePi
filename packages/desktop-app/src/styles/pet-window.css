@@ -294,8 +294,14 @@
 .pet-bubble {
 	position: relative;
 	z-index: 2;
+	/* Quick-action geometry. The second column RESERVES this slot even while the
+	 * row is collapsed to zero width, so revealing the actions cannot narrow the
+	 * text column: re-wrapped message lines used to grow the card on hover, and
+	 * the bottom-anchored transparent window clipped the extra height. */
+	--pet-action-size: 24px;
+	--pet-action-gap: 4px;
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
+	grid-template-columns: minmax(0, 1fr) var(--pet-bubble-actions-slot, 0px);
 	align-items: center;
 	width: 100%;
 	max-width: 320px;
@@ -322,6 +328,20 @@
 .pet-bubble:focus-within {
 	background: var(--glass-sheen),
 		color-mix(in oklab, var(--pet-package-bubble-bg, var(--glass-bg-strong)) 97%, var(--color-text) 3%);
+}
+
+/* How many quick actions the card renders — the card reserves exactly that
+ * many hit targets, so the collapsed → revealed width switch is invisible. */
+.pet-bubble[data-actions="2"] {
+	--pet-bubble-actions-slot: calc(2 * var(--pet-action-size) + var(--pet-action-gap));
+}
+
+.pet-bubble[data-actions="3"] {
+	--pet-bubble-actions-slot: calc(3 * var(--pet-action-size) + 2 * var(--pet-action-gap));
+}
+
+.pet-bubble[data-actions="4"] {
+	--pet-bubble-actions-slot: calc(4 * var(--pet-action-size) + 3 * var(--pet-action-gap));
 }
 
 /* Collapsed stack card — same fixed width as the expanded list (the
@@ -490,24 +510,28 @@
 	grid-column: 2;
 	grid-row: 1 / span 3;
 	align-self: center;
+	/* The row sits in a column that is already reserved at its revealed width,
+	 * so it is pinned to the track's end: the collapsed zero-width clip box and
+	 * the revealed row keep the same right edge and the buttons never move. */
+	justify-self: end;
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	/* Collapsed, the row is a zero-width clip box inside the `auto` track. Its
+	/* Collapsed, the row is a zero-width clip box inside the reserved track. Its
 	 * 24px buttons still lay themselves out, so they must be flushed to the
-	 * inline end: a centred row split its overflow around the 0px track and put
+	 * inline end: a centred row split its overflow around the 0px box and put
 	 * half of it past the card's right edge and outside the window. Revealed,
-	 * the track is exactly the row, so the buttons keep the same positions. */
+	 * the box is exactly the row, so the buttons keep the same positions. */
 	justify-content: flex-end;
-	gap: 4px;
-	/* The action column is content-sized: let the text column absorb the
-	 * squeeze instead of shrinking the 24px buttons. */
+	gap: var(--pet-action-gap);
+	/* The reserved column is sized by the slot variable; let the text column
+	 * absorb any residual squeeze instead of shrinking the 24px buttons. */
 	min-width: 0;
 	width: 0;
 	overflow: hidden;
 	opacity: 0;
 	/* Width switches instantly: an animated 0 → max-content lays the buttons
-	 * out inside a still-narrow track and paints them past the window edge for
+	 * out inside a still-narrow box and paints them past the window edge for
 	 * the whole transition. Only the fade is animated. */
 	transition: opacity 140ms var(--spring-snappy, ease);
 	pointer-events: none;
@@ -523,9 +547,9 @@
 .pet-bubble__action {
 	/* Never shrink below the designed hit target — the row overflows on a
 	 * narrow pet window if flex is allowed to squeeze it. */
-	flex: 0 0 24px;
-	width: 24px;
-	height: 24px;
+	flex: 0 0 var(--pet-action-size);
+	width: var(--pet-action-size);
+	height: var(--pet-action-size);
 	padding: 0;
 	display: grid;
 	place-items: center;
@@ -576,20 +600,32 @@
 	color: var(--color-danger);
 }
 
-.pet-bubble__reply {
+/* The inline reply row is a permanent grid row of the card, collapsed to zero
+ * height and inert while closed (components/Reveal drives the height). The card
+ * — and therefore the native window — grows with the row instead of jumping
+ * when it mounts. */
+.pet-bubble__reply-wrap {
 	grid-column: 1 / -1;
+}
+
+.pet-bubble__reply {
 	display: flex;
 	align-items: center;
 	gap: 6px;
 	margin-top: 6px;
 	padding: 4px 4px 4px 10px;
+	/* Clips the universal icon-button tooltip (gui-board.css draws
+	 * `::after: attr(title)` below the send button). The bubble window is only a
+	 * few px taller than this row, so the tooltip can never be read here — but
+	 * its box still inflated scrollHeight, and the reveal animation targets
+	 * scrollHeight: the row expanded ~24px too far and snapped back. */
+	overflow: hidden;
 	border: 1px solid var(--glass-border);
 	border-radius: 999px;
 	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg) 60%, var(--pet-panel-bg));
 	box-shadow:
 		inset 0 1px 0 var(--glass-edge-hi),
 		inset 0 -1px 0 var(--glass-edge-lo);
-	animation: pet-bubble-pop 220ms var(--spring-liquid) both;
 }
 
 .pet-bubble__reply-input {
@@ -902,7 +938,7 @@ html.bubbles-root .pet-bubbles {
 .gui-motion-off .pet-bubble__dismiss,
 .gui-motion-off .pet-bubble__actions,
 .gui-motion-off .pet-bubble__action,
-.gui-motion-off .pet-bubble__reply {
+.gui-motion-off .pet-bubble__reply-wrap {
 	animation: none !important;
 	transition: none !important;
 }
@@ -913,7 +949,7 @@ html.bubbles-root .pet-bubbles {
 	.pet-bubble__dismiss,
 	.pet-bubble__actions,
 	.pet-bubble__action,
-	.pet-bubble__reply {
+	.pet-bubble__reply-wrap {
 		animation: none !important;
 		transition: none !important;
 	}
