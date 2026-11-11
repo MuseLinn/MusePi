@@ -195,12 +195,24 @@ describe("private desktop overlays", () => {
 				method === "changelog.startup" ? { reward: { id: "reward-1", amount: 25 } } : { latest: null },
 		} as unknown as RpcClient;
 		mount(<AnnouncementOverlay rpc={rpc} />);
-		await act(async () => Bun.sleep(20));
+		// The card mounts after an async changelog read, then moves focus. A fixed
+		// short sleep made this assertion depend on scheduler luck under the
+		// parallel suite; poll for the same state instead.
+		await act(async () => {
+			for (let i = 0; i < 100 && !document.querySelector(".gui-reward-skybtn--replay"); i += 1) {
+				await Bun.sleep(10);
+			}
+		});
 		const card = document.querySelector<HTMLElement>(".gui-reward-card");
 		if (!card) throw new Error("reward did not open");
 		const replay = card.querySelector<HTMLElement>(".gui-reward-skybtn--replay");
 		const secondary = card.querySelector<HTMLElement>(".gui-reward-secondary");
 		if (!replay || !secondary) throw new Error("reward actions did not render");
+		await act(async () => {
+			for (let i = 0; i < 100 && document.activeElement !== replay; i += 1) {
+				await Bun.sleep(10);
+			}
+		});
 
 		expect(document.activeElement === replay).toBe(true);
 		expect(card.getAttribute("role")).toBe("dialog");
