@@ -1,3 +1,4 @@
+import "./dom-shim"; // MUST be first: @musepi/client-core defines HTMLElement subclasses at module evaluation.
 import { describe, expect, it } from "bun:test";
 import { setLocale } from "@musepi/client-core";
 import { matchSettingRows, type SettingSearchRow, settingSectionFor } from "../src/lib/settings-search";

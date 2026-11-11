@@ -43,7 +43,8 @@ async function readActions(): Promise<{
 	width: number;
 	clientWidth: number;
 	scrollWidth: number;
-	buttons: Array<{ x: number; y: number; right: number }>;
+	gap: number;
+	buttons: Array<{ x: number; y: number; right: number; width: number }>;
 	right: number;
 }> {
 	return page.evaluate(() => {
@@ -57,9 +58,10 @@ async function readActions(): Promise<{
 			width: rect.width,
 			clientWidth: actions.clientWidth,
 			scrollWidth: actions.scrollWidth,
+			gap: Number.parseFloat(style.columnGap) || 0,
 			buttons: Array.from(actions.querySelectorAll<HTMLElement>(".pet-bubble__action"), button => {
 				const bounds = button.getBoundingClientRect();
-				return { x: bounds.x, y: bounds.y, right: bounds.right };
+				return { x: bounds.x, y: bounds.y, right: bounds.right, width: bounds.width };
 			}),
 			right: rect.right,
 		};
@@ -70,7 +72,12 @@ function expectFourVisibleButtons(actions: Awaited<ReturnType<typeof readActions
 	expect(actions.direction).toBe("row");
 	expect(actions.opacity).toBe("1");
 	expect(actions.pointerEvents).toBe("auto");
-	expect(actions.width).toBeGreaterThanOrEqual(108);
+	// The row must fit its controls at their own widths plus the gaps between
+	// them. The design owns button size and gap, so the minimum is derived from
+	// the measured controls rather than pinned to one particular pair of values.
+	const contentWidth =
+		actions.buttons.reduce((total, button) => total + button.width, 0) + actions.gap * (actions.buttons.length - 1);
+	expect(actions.width).toBeGreaterThanOrEqual(contentWidth - 0.5);
 	expect(actions.scrollWidth).toBeLessThanOrEqual(actions.clientWidth);
 	expect(new Set(actions.buttons.map(button => button.y)).size).toBe(1);
 	for (const [index, button] of actions.buttons.entries()) {

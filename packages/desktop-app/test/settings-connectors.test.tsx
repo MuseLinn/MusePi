@@ -5,6 +5,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ConnectorsSection } from "../src/components/settings-sections/connectors";
 import type { RpcClient, StreamEvent } from "../src/lib/rpc";
+import { externalUrlsOpened } from "./happy-dom-shim";
 
 /**
  * Settings → 连接器: catalog rows and the connect/OAuth hand-off.
@@ -203,6 +204,7 @@ describe("connector settings", () => {
 
 		expect(fake.calls("connectors.connect")).toEqual([{ id: "alpha" }]);
 		expect(fake.calls("mcp.oauth.start")).toEqual([{ name: "connector:alpha" }]);
+		expect(externalUrlsOpened()).toContain("https://auth.example/authorize");
 
 		await Bun.sleep(1100);
 		await flush(4);

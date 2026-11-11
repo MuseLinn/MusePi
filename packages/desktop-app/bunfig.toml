@@ -1,0 +1,5 @@
+[test]
+# Must be the first thing a test run evaluates: react-dom caches its DOM
+# feature detection at import time, so the DOM has to exist before the first
+# test file's module graph loads. See test/happy-dom-preload.ts.
+preload = ["./test/happy-dom-preload.ts"]

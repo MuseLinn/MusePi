@@ -43,7 +43,7 @@ function Probe({ onSettle }: { onSettle(result: Result): void }): ReactNode {
 	);
 }
 
-async function mountProbe(results: Result[], extra?: ReactNode): Promise<Root> {
+async function mountProbe(results: Result[], extra?: ReactNode, settledAt?: number[]): Promise<Root> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
@@ -52,7 +52,12 @@ async function mountProbe(results: Result[], extra?: ReactNode): Promise<Root> {
 		root.render(
 			<PromptProvider>
 				{extra}
-				<Probe onSettle={result => results.push(result)} />
+				<Probe
+					onSettle={result => {
+						results.push(result);
+						settledAt?.push(performance.now());
+					}}
+				/>
 			</PromptProvider>,
 		),
 	);
@@ -101,16 +106,22 @@ afterEach(async () => {
 describe("Promise prompt and confirm", () => {
 	test("a normal confirm handles Enter and resolves only after the 180ms exit", async () => {
 		const results: Result[] = [];
-		await mountProbe(results);
+		const settledAt: number[] = [];
+		await mountProbe(results, undefined, settledAt);
 		await openDialog("normal");
 
+		const pressedAt = performance.now();
 		await press("Enter");
 		expect(results).toEqual([]);
-		await act(async () => Bun.sleep(140));
-		expect(results).toEqual([]);
-		await act(async () => Bun.sleep(100));
+		// Still closing, not settled: the promise waits for the exit animation.
+		expect(document.querySelector(".gui-dialog")).not.toBeNull();
+		await settleExit();
 
 		expect(results).toEqual(["normal:true"]);
+		// The promise must not settle before the 180ms exit finishes. Sampling
+		// the state mid-exit races the runner's clock, so assert the elapsed time
+		// to the settle instead.
+		expect(settledAt[0]! - pressedAt).toBeGreaterThanOrEqual(180);
 		expect(document.querySelector(".gui-dialog")).toBeNull();
 	});
 

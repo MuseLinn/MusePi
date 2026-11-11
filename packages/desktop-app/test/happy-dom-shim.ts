@@ -13,6 +13,25 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
+// Outside Electron `openExternalUrl()` falls back to `window.open()`, and
+// happy-dom's implementation navigates its virtual browser — it fetches the
+// URL, so an OAuth hand-off to a fixture address (`https://auth.example/…`)
+// turns into a real DNS lookup and an unhandled NetworkError between tests.
+// Record the hand-off instead of leaving the page.
+const openedExternalUrls: string[] = [];
+Object.defineProperty(window, "open", {
+	configurable: true,
+	writable: true,
+	value: (url?: string | URL) => {
+		if (url !== undefined) openedExternalUrls.push(String(url));
+		return null;
+	},
+});
+/** URLs handed to `window.open()` by `openExternalUrl()` in this process. */
+export function externalUrlsOpened(): readonly string[] {
+	return openedExternalUrls;
+}
+
 // Monaco's WebKit clipboard workaround rejects its previous deferred write on
 // every click. happy-dom exposes the clipboard surface without implementing
 // that browser lifecycle, so disable it and use Monaco's fallback path instead.
