@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import { coerceServiceTierByFamily, type ProviderPayload, type ServiceTierByFamily } from "@musepi/pi-ai";
 import * as snapcompact from "@musepi/snapcompact";
+import { collectPendingToolCalls } from "./exit-diagnostics";
 import {
 	createBranchSummaryMessage,
 	createCompactionSummaryMessage,
@@ -551,9 +552,53 @@ export function buildSessionContext(
 		for (const message of messages) {
 			if (message.role === "toolResult") pairedToolResultIds.add(message.toolCallId);
 		}
+		// A call that actually started and has no result on this path was cut off
+		// by a process that exited mid-execution, not by a branch boundary: its
+		// effect may already have happened. Deleting it tells the model the call
+		// never ran, so it re-issues the same write/bash against a world that has
+		// already changed. Those calls get an explicit unknown outcome instead.
+		// Calls that never started (the result lives on a sibling branch, or
+		// dispatch never happened) stay stripped — replaying those re-injects a
+		// batch the user deliberately left behind.
+		const startedUnfinished = new Set<string>();
+		for (const pending of collectPendingToolCalls(path)) {
+			if (pending.startedAt !== undefined && pending.toolCallId !== undefined) {
+				startedUnfinished.add(pending.toolCallId);
+			}
+		}
 		for (let i = messages.length - 1; i >= 0; i--) {
 			const message = messages[i];
 			if (message.role !== "assistant") continue;
+			const orphaned: { id: string; name: string }[] = [];
+			for (const block of message.content) {
+				if (block.type === "toolCall" && !pairedToolResultIds.has(block.id)) {
+					orphaned.push({ id: block.id, name: block.name });
+				}
+			}
+			if (orphaned.length === 0) continue;
+			const interrupted = orphaned.filter(call => startedUnfinished.has(call.id));
+			if (interrupted.length > 0) {
+				messages.splice(
+					i + 1,
+					0,
+					...interrupted.map(
+						(call): AgentMessage => ({
+							role: "toolResult",
+							toolCallId: call.id,
+							toolName: call.name,
+							content: [
+								{
+									type: "text",
+									text: "Interrupted before this call recorded a result. It may already have run — verify the current state before retrying.",
+								},
+							],
+							isError: true,
+							timestamp: typeof message.timestamp === "number" ? message.timestamp : Date.now(),
+						}),
+					),
+				);
+				for (const call of interrupted) pairedToolResultIds.add(call.id);
+			}
 			let strippedToolCalls = 0;
 			for (const block of message.content) {
 				if (block.type === "toolCall" && !pairedToolResultIds.has(block.id)) strippedToolCalls++;
