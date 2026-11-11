@@ -485,7 +485,12 @@
 	flex-direction: row;
 	align-items: center;
 	justify-content: center;
-	gap: 4px;
+	gap: 2px;
+	/* Expanded controls must stay inside the bubble: on a narrow pet window the
+	 * three 24px buttons plus gaps used to spill past the window edge by a
+	 * subpixel, which the smoke's inside-the-window check caught. */
+	max-width: 100%;
+	flex-wrap: wrap;
 	width: 0;
 	overflow: hidden;
 	opacity: 0;
