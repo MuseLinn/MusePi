@@ -3,19 +3,22 @@ import type { ReactNode } from "react";
 /**
  * Progressive-blur scroll edge (one band).
  *
- * The bands must live OUTSIDE the scroller: Chromium does not sample scrolled
- * content for a `backdrop-filter` inside the scroll container, so an in-scroller
- * band paints only its tint. Put them in a `.gui-scroll-frame` next to the
- * scroller; the frame's `:has()` rules read the scroller's own
- * `data-top-scroll` / `data-bottom-scroll` (useScrollShadow) and show the band
- * only while content is actually hidden on that side.
+ * Render it as a SIBLING of the scroller inside a `.gui-scroll-frame`: the
+ * frame's `:has()` rules read the scroller's own `data-top-scroll` /
+ * `data-bottom-scroll` (useScrollShadow) and reveal the band. A band inside
+ * the scroller would align to its padding edge and stop at the content box,
+ * which leaves a sharp strip and a vertical seam on padded panes — the ramp
+ * mask belongs on the band, never on a `backdrop-filter` layer.
  *
- * Frames that drive their own edge state (the capability center) keep their own
- * `[data-edge-*]` display rules — the band itself is the same recipe.
+ * `overlay` is for a page that owns its edge flags and positions the band
+ * itself (capability center, whose top band starts below the tool row).
  */
-export function ScrollEdgeBlur({ edge }: { edge: "top" | "end" }): ReactNode {
+export function ScrollEdgeBlur({ edge, overlay }: { edge: "top" | "end"; overlay?: boolean }): ReactNode {
 	return (
-		<div className={`gui-edge-blur gui-edge-blur--${edge}`} aria-hidden="true">
+		<div
+			className={`gui-edge-blur gui-edge-blur--${edge}${overlay ? " gui-edge-blur--overlay" : ""}`}
+			aria-hidden="true"
+		>
 			<span className="gui-edge-blur-tint" />
 			<span className="gui-edge-blur-layer gui-edge-blur-layer--1" />
 			<span className="gui-edge-blur-layer gui-edge-blur-layer--2" />

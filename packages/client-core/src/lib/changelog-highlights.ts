@@ -77,6 +77,36 @@ function extractHighlight(line: string): { title: string; description: string } 
 	return { title, description: firstSentence(rest) };
 }
 
+/**
+ * Reduce the changelog to the active locale's half.
+ *
+ * Entries are a Chinese bullet followed by an indented `  - EN:` line. A
+ * Chinese UI must not see the EN child, and an English UI should read the EN
+ * body rather than the Chinese one. For English the EN line is promoted to
+ * the bullet and keeps the bold title (feature names are often proper nouns);
+ * an entry without an EN child keeps its Chinese line so an older release
+ * never loses rows. Runs BEFORE `parseChangelogHighlights`, so highlight
+ * cards and the full-log markdown share one projection.
+ */
+export function localizeChangelogMarkdown(markdown: string, locale: string): string {
+	const english = !locale.toLowerCase().startsWith("zh");
+	if (!english) return markdown.replace(/^[ \t]+- EN:.*(?:\r?\n|$)/gm, "");
+	const lines = markdown.split(/\r?\n/);
+	const out: string[] = [];
+	for (let index = 0; index < lines.length; index += 1) {
+		const line = lines[index] ?? "";
+		const child = lines[index + 1]?.match(/^[ \t]+- EN:\s?(.*)$/);
+		if (line.startsWith("- ") && child) {
+			const title = line.match(/^-\s+(\*\*[^*]+\*\*)/)?.[1];
+			out.push(title ? `- ${title}：${child[1]?.trim() ?? ""}` : `- ${child[1]?.trim() ?? ""}`);
+			index += 1;
+			continue;
+		}
+		out.push(line);
+	}
+	return out.join("\n");
+}
+
 /** Parse startup changelog markdown into per-version highlight sections.
  *  `[Unreleased]` sections are skipped; empty input or input without any
  *  version section yields [] (the caller falls back to the raw rendering).

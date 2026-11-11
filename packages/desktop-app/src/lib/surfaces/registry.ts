@@ -20,6 +20,7 @@ export type SurfaceId =
 	| "notes"
 	| "browser"
 	| "agent"
+	| "session"
 	| (string & {}); // 扩展槽注入（panel.tab.* / rail.*）
 
 export interface SurfaceProps {
@@ -185,6 +186,18 @@ export const SURFACES: SurfaceDescriptor[] = [
 		id: "agent",
 		label: "agents.subagentTab",
 		icon: "ai-agent",
+		group: "tertiary",
+		availability: "always",
+		defaultWidthFraction: 0.5,
+	},
+	// A normal session shown beside the active chat. Unlike `agent`, the
+	// target is an ordinary session id and the body is the full steerable
+	// session view (transcript + composer + approval/ask dock). Tertiary:
+	// opened from the session list, never from the rail.
+	{
+		id: "session",
+		label: "general.sideSession",
+		icon: "layout-right",
 		group: "tertiary",
 		availability: "always",
 		defaultWidthFraction: 0.5,

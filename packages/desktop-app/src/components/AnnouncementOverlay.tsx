@@ -1,8 +1,9 @@
-import { getLocaleSnapshot, isTopModal, Markdown, t, useModalFocus } from "@musepi/client-core";
+import { getLocaleSnapshot, isTopModal, Markdown, t, useLocale, useModalFocus } from "@musepi/client-core";
 import {
 	type ChangelogHighlight,
 	type ChangelogHighlightKind,
 	type ChangelogVersion,
+	localizeChangelogMarkdown,
 	parseChangelogHighlights,
 } from "@musepi/client-core/src/lib/changelog-highlights";
 import { ChevronDown as ChevronDownIconData, ChevronRight as ChevronRightIconData } from "lucide";
@@ -16,6 +17,7 @@ import { onboardingPending } from "../lib/onboarding";
 import { activePet } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
+import { FadeScroll } from "./FadeScroll";
 import { PetSprite, usePetDecor } from "./PetSprite";
 import { Reveal } from "./Reveal";
 import { RewardOverlay, type RewardPayload } from "./RewardOverlay";
@@ -203,6 +205,7 @@ function withTimeout<T>(p: Promise<T | null>, ms: number): Promise<T | null> {
 }
 
 export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	const locale = useLocale();
 	const [open, setOpen] = useState(false);
 	const [markdown, setMarkdown] = useState<string | null>(null);
 	const [reward, setReward] = useState<RewardPayload | null>(null);
@@ -379,7 +382,8 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	if (reward) return <RewardOverlay payload={reward} onClose={requestClose} />;
 	if (!markdown) return null;
 
-	const versions = parseChangelogHighlights(markdown);
+	const localized = localizeChangelogMarkdown(markdown, locale);
+	const versions = parseChangelogHighlights(localized);
 	const current = versions[0];
 	// Parse fell through (no version sections) → keep the original raw
 	// markdown rendering; never a blank card.
@@ -418,9 +422,9 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 							</span>
 						)}
 					</div>
-					<div className="gui-announcement-body">
-						<Markdown text={markdown} />
-					</div>
+					<FadeScroll className="gui-announcement-body">
+						<Markdown text={localized} />
+					</FadeScroll>
 					<div className="gui-onboarding-actions">
 						<button className="gui-btn gui-btn-primary" type="button" onClick={requestClose}>
 							{t("settings.gotIt")}
@@ -486,7 +490,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 						</div>
 					</div>
 				</div>
-				<div className="gui-announcement-body">
+				<FadeScroll className="gui-announcement-body">
 					{current.highlights.map(highlight => (
 						<HighlightCard key={highlight.title} highlight={highlight} />
 					))}
@@ -514,7 +518,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 					)}
 					{fullLogMounted && (
 						<Reveal open={showFullLog}>
-							<Markdown text={markdown} />
+							<Markdown text={localized} />
 						</Reveal>
 					)}
 					{older.length > 0 && (
@@ -532,7 +536,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 							))}
 						</div>
 					)}
-				</div>
+				</FadeScroll>
 				<div className="gui-onboarding-actions">
 					<button className="gui-btn" type="button" onClick={() => void openExternalUrl(RELEASES_PAGE)}>
 						<ExternalLink size={14} aria-hidden />

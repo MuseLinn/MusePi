@@ -147,6 +147,14 @@ function daemonEnv() {
 	return override ? { PI_CONFIG_DIR: override.root } : {};
 }
 
+/** Same default the renderer resolves from `electronAPI.daemonPort`
+ *  (app.tsx DEFAULT_PORT). The pre-spawn below must target that port or the
+ *  renderer would spawn a second daemon elsewhere. */
+const PREWARM_DAEMON_PORT = (() => {
+	const value = Number(process.env.MUSEPI_GUI_DAEMON_PORT);
+	return Number.isInteger(value) && value > 0 && value <= 65535 ? value : 8300;
+})();
+
 // Explicit GPU acceleration (Electron defaults to on; force the flag so the
 // heavy frosted-glass compositing — 24px backdrop blurs, menu overlays —
 // stays GPU-backed). OMP_SOFTWARE_GL=1 opts out for remote/virtualized
@@ -4136,6 +4144,15 @@ app.whenReady().then(async () => {
 		}
 	}
 	markStartup("app.ready");
+	// Warm the daemon while the window loads. On a cold start the daemon spawn
+	// is the long pole (Electron + renderer boot finish long before it binds),
+	// so starting it here runs that wait in parallel. `start()` adopts a live
+	// listener, joins a start already in flight, and never kills a foreign
+	// daemon; the renderer's later `daemon-start` joins this same promise.
+	void (async () => {
+		await reapOrphanedDaemons().catch(() => {});
+		await start(PREWARM_DAEMON_PORT, daemonEnv());
+	})().catch(() => {});
 	// The dist/ build is regenerated frequently in dev — never serve stale
 	// file:// resources (the old Tauri webview cached them and confused us).
 	// DEV-ONLY: a packaged launch has immutable content-hashed asset names,

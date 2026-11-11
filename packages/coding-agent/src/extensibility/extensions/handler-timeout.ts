@@ -21,6 +21,21 @@ export function normalizeHandlerTimeout(timeoutMs: number): number {
 }
 
 /**
+ * Budget signal for work a handler started but did not await (detached tool
+ * registrations). `AbortSignal.timeout` would report the platform's generic
+ * reason; carrying the handler wording makes the resulting `tool_registration`
+ * error name the actual budget, like the executor's own timeout does.
+ */
+export function handlerTimeoutSignal(timeoutMs: number): AbortSignal {
+	const controller = new AbortController();
+	const timer = setTimeout(() => {
+		controller.abort(new DOMException(`Handler timed out after ${timeoutMs}ms`, "TimeoutError"));
+	}, timeoutMs);
+	timer.unref?.();
+	return controller.signal;
+}
+
+/**
  * Dedicated cap for `session_shutdown` handlers. The generic 30s budget is
  * appropriate for events extensions can observe (e.g. `session_start`,
  * `before_provider_request`), but `session_shutdown` is fire-and-forget

@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { HIGHLIGHTS_PER_VERSION, parseChangelogHighlights } from "../src/lib/changelog-highlights";
+import {
+	HIGHLIGHTS_PER_VERSION,
+	localizeChangelogMarkdown,
+	parseChangelogHighlights,
+} from "../src/lib/changelog-highlights";
 
 const FIXTURE = `# MusePi Changelog
 
@@ -117,5 +121,34 @@ describe("parseChangelogHighlights", () => {
 			"## [Unreleased]\n\n- 条目\n\n## [0.1.0] - 2026-01-01\n\n### Added\n\n- **亮点**：描述。",
 		);
 		expect(versions.map(v => v.version)).toEqual(["0.1.0"]);
+	});
+});
+
+describe("localizeChangelogMarkdown", () => {
+	test("Chinese keeps the main bullet and drops every EN child", () => {
+		const localized = localizeChangelogMarkdown(FIXTURE, "zh-CN");
+		expect(localized).toContain("素材策略行 + 媒体 provider 内联");
+		expect(localized).not.toContain("EN:");
+		expect(localized).not.toContain("asset-policy row");
+		expect(localized).toContain("修复条目 2。");
+	});
+
+	test("English promotes the EN body under the same bold title and drops the Chinese body", () => {
+		const localized = localizeChangelogMarkdown(FIXTURE, "en-US");
+		expect(localized).toContain("- **素材策略行 + 媒体 provider 内联（M3 3.7c）**：asset-policy row");
+		expect(localized).not.toContain("欢迎页新增素材单选");
+		expect(localized).toContain("Fix entry 1.");
+		// A bullet without an EN child keeps its Chinese line (older releases).
+		expect(localized).toContain("修复条目 2。");
+	});
+
+	test("English highlights still parse from the promoted bullets", () => {
+		const versions = parseChangelogHighlights(localizeChangelogMarkdown(FIXTURE, "en-US"));
+		expect(versions[0]?.highlights[0]).toEqual({
+			kind: "added",
+			title: "素材策略行 + 媒体 provider 内联（M3 3.7c）",
+			description:
+				"asset-policy row + inline media provider (M3 3.7c): a new single-select on the welcome page. The value lands with the send.",
+		});
 	});
 });

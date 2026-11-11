@@ -149,6 +149,48 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	 */
 	pendingMagicKeywordRegistrations: RegisteredMagicKeyword[] = [];
 
+	/**
+	 * Bound one lifecycle listener by its per-event budget. A session's
+	 * `ExtensionRunner` replaces this with its registration-scope executor, so a
+	 * handler's budget also aborts the tool activations it started; runtimes
+	 * loaded without a runner keep the plain timeout.
+	 */
+	handlerExecutor: NonNullable<IExtensionRuntime["handlerExecutor"]> = async (
+		handler,
+		event,
+		ctx,
+		extension,
+		timeoutMs,
+	) => {
+		let timer: Timer | undefined;
+		const timeout = new Promise<never>((_resolve, reject) => {
+			timer = setTimeout(() => reject(new Error(`handler timed out after ${timeoutMs}ms`)), timeoutMs);
+			timer.unref?.();
+		});
+		try {
+			return await Promise.race([handler(event as never, ctx), timeout]);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (message.startsWith("handler timed out")) {
+				logger.warn("Extension handler timed out", {
+					extensionPath: extension.path,
+					event: event.type,
+					timeoutMs,
+				});
+			}
+			const report = this.eventErrorSink;
+			if (report) report({ extensionPath: extension.path, event: event.type, error: message });
+			else
+				logger.warn("extension lifecycle listener failed", {
+					path: extension.path,
+					event: event.type,
+					error: message,
+				});
+		} finally {
+			if (timer) clearTimeout(timer);
+		}
+	};
+
 	registerProvider(name: string, config: ProviderConfig, sourceId: string): void {
 		this.pendingProviderRegistrations.push({ name, config, sourceId });
 	}
@@ -648,39 +690,36 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 			// Read the budget at dispatch time: tests and hosts change it after
 			// the plugin has loaded.
 			const timeoutMs = handlerTimeoutForEvent(event);
-			let timer: Timer | undefined;
-			const timeout = new Promise<never>((_resolve, reject) => {
-				timer = setTimeout(() => reject(new Error(`handler timed out after ${timeoutMs}ms`)), timeoutMs);
-				timer.unref?.();
-			});
-			const work = (async () => {
-				// `context` / `input` handlers receive an event built from the
-				// dispatch-scoped state, so each listener sees the previous
-				// listener's rewrite (the accumulated value lives in args[2]).
-				let callArgs = args;
-				if (event === "context") {
-					const state = args[2] as { messages: unknown[] };
-					callArgs = [{ type: "context", messages: state.messages }, args[1]] as unknown[];
-				} else if (event === "input") {
-					const state = args[2] as { text: string; images: unknown; source: string };
-					callArgs = [
-						{ type: "input", text: state.text, images: state.images, source: state.source },
-						args[1],
-					] as unknown[];
-				} else if (event === "before_agent_start") {
-					const state = args[2] as { systemPrompt: string[] };
-					callArgs = [{ ...(args[0] as object), systemPrompt: state.systemPrompt }, args[1]] as unknown[];
-				} else if (event === "before_provider_request") {
-					const state = args[2] as { payload: unknown };
-					callArgs = [{ type: "before_provider_request", payload: state.payload }, args[1]] as unknown[];
-				}
-				const result = await handler(...callArgs);
-				const pending = this.runtime.awaitPendingRegistrations?.();
-				if (pending) await pending;
-				return result;
-			})();
+			// `context` / `input` handlers receive an event built from the
+			// dispatch-scoped state, so each listener sees the previous
+			// listener's rewrite (the accumulated value lives in args[2]).
+			let callArgs = args;
+			if (event === "context") {
+				const state = args[2] as { messages: unknown[] };
+				callArgs = [{ type: "context", messages: state.messages }, args[1]] as unknown[];
+			} else if (event === "input") {
+				const state = args[2] as { text: string; images: unknown; source: string };
+				callArgs = [
+					{ type: "input", text: state.text, images: state.images, source: state.source },
+					args[1],
+				] as unknown[];
+			} else if (event === "before_agent_start") {
+				const state = args[2] as { systemPrompt: string[] };
+				callArgs = [{ ...(args[0] as object), systemPrompt: state.systemPrompt }, args[1]] as unknown[];
+			} else if (event === "before_provider_request") {
+				const state = args[2] as { payload: unknown };
+				callArgs = [{ type: "before_provider_request", payload: state.payload }, args[1]] as unknown[];
+			}
 			try {
-				const result = await Promise.race([work, timeout]);
+				const execute = this.runtime.handlerExecutor;
+				if (!execute) return undefined;
+				const result = await execute(
+					handler as (event: unknown, ctx: ExtensionContext) => unknown,
+					(callArgs[0] ?? { type: event }) as { type: string },
+					callArgs[1] as ExtensionContext,
+					this.extension,
+					timeoutMs,
+				);
 				if (event === "context") {
 					const state = args[2] as { messages: unknown[] };
 					const patch = result as { messages?: unknown[] } | undefined;
@@ -781,8 +820,6 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 						event,
 						error: message,
 					});
-			} finally {
-				if (timer) clearTimeout(timer);
 			}
 		};
 		const off = bus.on(event, wrapped, options);

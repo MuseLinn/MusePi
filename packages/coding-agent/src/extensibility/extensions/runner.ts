@@ -110,11 +110,7 @@ interface BeforeAgentStartCombinedResult {
 
 export type ExtensionErrorListener = (error: ExtensionError) => void;
 
-import {
-	defaultExtensionHandlerTimeoutMs,
-	EXTENSION_HANDLER_TIMEOUT_MS,
-	normalizeHandlerTimeout,
-} from "./handler-timeout";
+import { defaultExtensionHandlerTimeoutMs, handlerTimeoutSignal, normalizeHandlerTimeout } from "./handler-timeout";
 
 export {
 	EXTENSION_HANDLER_TIMEOUT_MS,
@@ -1438,8 +1434,11 @@ export class ExtensionRunner {
 			if (!tool) return;
 			try {
 				const scope = this.#toolRegistrationScope.getStore();
+				// A detached registration has already left its handler scope, but it
+				// still runs on the live default budget — the same one `sdk.ts` would
+				// apply when no signal is supplied.
 				const registrationSignal =
-					scope && !scope.closed ? scope.signal : AbortSignal.timeout(EXTENSION_HANDLER_TIMEOUT_MS);
+					scope && !scope.closed ? scope.signal : handlerTimeoutSignal(defaultExtensionHandlerTimeoutMs());
 				const pending = listener(tool, registrationSignal);
 				if (pending) trackRegistration(pending);
 			} catch (error) {

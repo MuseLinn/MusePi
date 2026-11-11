@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AskPopover → 侧边会话 · 交互原型</title>
+<style>
+/* ── MusePi tokens（对齐 packages/client-core/src/styles/tokens.css）── */
+:root {
+  --bg: oklch(0.155 0.008 60);
+  --bg-raised: oklch(0.19 0.01 60);
+  --bg-inset: oklch(0.125 0.007 60);
+  --bg-overlay: oklch(0.23 0.012 60);
+  --fg: oklch(0.93 0.008 60);
+  --fg-muted: oklch(0.72 0.01 60);
+  --fg-faint: oklch(0.55 0.01 60);
+  --accent: oklch(0.7507 0.1295 79.85);
+  --accent-fg: oklch(0.26 0.06 80);
+  --accent-muted: oklch(0.7507 0.1295 79.85 / 18%);
+  --accent-bd: oklch(0.7507 0.1295 79.85 / 35%);
+  --ok: oklch(0.76 0.14 150);
+  --warn: oklch(0.79 0.14 85);
+  --err: oklch(0.66 0.19 25);
+  --ring: oklch(0.817 0.112 205 / 70%);
+  --border: oklch(1 0 0 / 9%);
+  --border-strong: oklch(1 0 0 / 13%);
+  --radius-md: 6px; --radius-lg: 8px; --radius-xl: 12px; --radius-2xl: 16px;
+  --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --spring: linear(0, 0.0126 3.23%, 0.0458 6.45%, 0.0935 9.68%, 0.1511 12.90%, 0.2147 16.13%, 0.2812 19.35%, 0.3483 22.58%, 0.4143 25.81%, 0.4778 29.03%, 0.5379 32.26%, 0.5941 35.48%, 0.6460 38.71%, 0.6933 41.94%, 0.7362 45.16%, 0.7747 48.39%, 0.8089 51.61%, 0.8392 54.84%, 0.8657 58.06%, 0.8888 61.29%, 0.9088 64.52%, 0.9260 67.74%, 0.9407 70.97%, 0.9531 74.19%, 0.9635 77.42%, 0.9722 80.65%, 0.9794 83.87%, 0.9853 90.32%, 0.9900 93.55%, 0.9968 96.77%, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-ui);
+  background:
+    radial-gradient(1100px 680px at 12% -10%, oklch(0.30 0.05 75 / 42%), transparent 60%),
+    radial-gradient(900px 600px at 92% 112%, oklch(0.28 0.06 250 / 28%), transparent 60%),
+    var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+  font-size: 13px;
+}
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+.ic { width: 15px; height: 15px; flex-shrink: 0; }
+svg.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* ── 原型页顶栏 ─────────────────────────────── */
+.proto-bar {
+  height: 52px; display: flex; align-items: center; gap: 12px;
+  padding: 0 18px; border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg-overlay) 55%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  position: relative; z-index: 100;
+}
+.proto-bar .mark {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: linear-gradient(135deg, #d9a441 0%, #b8862f 50%, #966400 100%);
+  box-shadow: 0 2px 10px oklch(0.7507 0.1295 79.85 / 40%);
+}
+.proto-bar h1 { font-size: 13px; font-weight: 600; letter-spacing: 0.01em; }
+.proto-bar .sub { color: var(--fg-faint); font-size: 11px; margin-top: 1px; }
+.mode-switch {
+  margin-left: auto; display: flex; gap: 2px; padding: 3px;
+  background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-xl);
+}
+.mode-switch button {
+  border: 0; background: transparent; color: var(--fg-muted);
+  font-size: 11.5px; padding: 5px 11px; border-radius: 9px;
+  white-space: nowrap; transition: all 0.25s var(--spring);
+}
+.mode-switch button.on {
+  background: var(--accent-muted); color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-bd);
+}
+.proto-note {
+  height: 30px; display: flex; align-items: center; gap: 8px;
+  padding: 0 18px; border-bottom: 1px solid var(--border);
+  font-size: 10.5px; color: var(--fg-faint);
+  background: color-mix(in oklab, var(--bg) 55%, transparent);
+}
+.proto-note b { color: var(--fg-muted); font-weight: 500; }
+.proto-note .dot { color: var(--border-strong); }
+
+/* ── 应用壳 ─────────────────────────────────── */
+.stage { height: calc(100% - 82px); display: flex; }
+.app { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.app-header {
+  height: 38px; display: flex; align-items: center; gap: 9px;
+  padding: 0 14px; border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 35%, transparent);
+}
+.traffic { display: flex; gap: 6px; }
+.traffic i { width: 10px; height: 10px; border-radius: 50%; display: block; }
+.traffic i:nth-child(1) { background: oklch(0.66 0.19 25); }
+.traffic i:nth-child(2) { background: oklch(0.79 0.14 85); }
+.traffic i:nth-child(3) { background: oklch(0.76 0.14 150); }
+.project-chip {
+  display: flex; align-items: center; gap: 7px; padding: 4px 11px;
+  background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-xl);
+  font-size: 11px; color: var(--fg-muted); font-family: var(--font-mono);
+}
+.project-chip b { color: var(--fg); font-weight: 500; }
+.project-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.app-header .spacer { flex: 1; }
+.hdr-btn {
+  border: 1px solid var(--border); background: transparent; color: var(--fg-muted);
+  font-size: 11px; padding: 4px 9px; border-radius: var(--radius-lg);
+  transition: all 0.2s;
+}
+.hdr-btn:hover { color: var(--fg); border-color: var(--border-strong); }
+.app-body { flex: 1; display: flex; min-height: 0; }
+
+/* ── 左 rail ────────────────────────────────── */
+.rail {
+  width: 52px; border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 8px 0; background: color-mix(in oklab, var(--bg) 55%, transparent);
+}
+.rail-btn {
+  width: 34px; height: 34px; border-radius: 10px; border: 1px solid transparent;
+  background: transparent; color: var(--fg-faint);
+  display: flex; align-items: center; justify-content: center;
+  transition: color 0.2s, background 0.25s var(--spring);
+}
+.rail-btn:hover { color: var(--fg); background: var(--bg-overlay); }
+.rail-btn.on { color: var(--accent); background: var(--accent-muted); border-color: var(--accent-bd); }
+.rail-spacer { flex: 1; }
+.rail-divider { width: 22px; height: 1px; background: var(--border); margin: 3px 0; }
+
+/* ── 会话栏 ─────────────────────────────────── */
+.sessions {
+  width: 252px; border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; min-height: 0;
+  background: color-mix(in oklab, var(--bg) 55%, transparent);
+}
+.sessions-head { height: 44px; display: flex; align-items: center; gap: 6px; padding: 0 10px; }
+.sessions-title { font-size: 12px; font-weight: 600; letter-spacing: 0.01em; }
+.new-btn {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid var(--border); background: var(--bg-inset); color: var(--fg-muted);
+  font-size: 10.5px; padding: 3px 7px; border-radius: 7px;
+}
+.new-btn:hover { color: var(--accent); border-color: var(--accent-bd); background: var(--accent-muted); }
+.sess-icon { width: 26px; height: 26px; border-radius: 7px; border: 0; background: transparent; color: var(--fg-faint); display: flex; align-items: center; justify-content: center; }
+.sess-icon:hover { background: var(--bg-overlay); color: var(--fg); }
+.sessions-scroll { flex: 1; overflow: hidden; padding: 0 8px 8px; }
+.group-label { font-size: 9.5px; letter-spacing: 0.09em; color: var(--fg-faint); padding: 9px 8px 5px; }
+.sess {
+  border-radius: 10px; padding: 7px 8px; cursor: pointer;
+  border: 1px solid transparent; transition: background 0.18s, border-color 0.18s;
+}
+.sess:hover { background: var(--bg-overlay); }
+.sess.on { background: var(--accent-muted); border-color: var(--accent-bd); }
+.sess-row { display: flex; align-items: center; gap: 6px; }
+.sess-fold { width: 13px; color: var(--fg-faint); display: flex; align-items: center; justify-content: center; }
+.sess-title { flex: 1; min-width: 0; font-size: 12px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sess.on .sess-title { color: var(--fg); font-weight: 600; }
+.sess-time { font-size: 9.5px; color: var(--fg-faint); flex-shrink: 0; }
+.sess-sub {
+  margin: 2px 0 0 19px; font-size: 10px; color: var(--fg-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.side-session { display: none; }
+body.mode-promoted .side-session { display: block; }
+.side-session .sess-fold { color: var(--accent); }
+.sess.flash, .ptab.flash { animation: flash 0.9s var(--spring); }
+@keyframes flash { 0% { background: var(--accent-muted); } 100% { background: transparent; } }
+.customize { border-top: 1px solid var(--border); padding: 7px 8px 9px; }
+.customize .cap { font-size: 9.5px; letter-spacing: 0.09em; color: var(--fg-faint); padding: 4px 8px 5px; }
+.cust-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border-radius: 8px; font-size: 11px; color: var(--fg-muted); cursor: pointer;
+}
+.cust-row:hover { background: var(--bg-overlay); color: var(--fg); }
+.cust-row .count { margin-left: auto; font-size: 9.5px; color: var(--fg-faint); }
+
+/* ── 中间聊天 ───────────────────────────────── */
+.chat {
+  flex: 1; display: flex; flex-direction: column; min-width: 0;
+  position: relative; background: color-mix(in oklab, var(--bg-overlay) 30%, transparent);
+}
+.chat-head {
+  height: 44px; display: flex; align-items: center; gap: 8px;
+  padding: 0 14px; border-bottom: 1px solid var(--border);
+}
+.chat-title { font-size: 12px; font-weight: 600; }
+.chat-sub { font-size: 10px; color: var(--fg-faint); font-family: var(--font-mono); }
+.chat-head .spacer { flex: 1; }
+.chat-scroll {
+  flex: 1; min-height: 0; overflow: hidden;
+  padding: 18px 22px 6px; display: flex; flex-direction: column; gap: 13px;
+}
+.msg { display: flex; gap: 9px; max-width: 90%; }
+.msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.avatar {
+  width: 25px; height: 25px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #d9a441, #966400);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--accent-fg); font-weight: 700;
+}
+.msg.user .avatar { background: var(--bg-overlay); color: var(--fg-muted); border: 1px solid var(--border-strong); }
+.bubble {
+  padding: 8px 11px; border-radius: 11px; font-size: 12px; line-height: 1.62;
+  background: color-mix(in oklab, var(--bg-raised) 75%, transparent);
+  border: 1px solid var(--border);
+}
+.msg.user .bubble { background: var(--accent-muted); border-color: var(--accent-bd); }
+.bubble p + p { margin-top: 5px; }
+.bubble ol { margin: 6px 0 0; padding-left: 17px; }
+.bubble li { margin: 3px 0; }
+.inline-code {
+  font-family: var(--font-mono); font-size: 10.5px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 4px; padding: 1px 4px;
+}
+.code-block {
+  margin-top: 7px; background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 9px; font-family: var(--font-mono);
+  font-size: 10px; line-height: 1.7; color: var(--fg-muted);
+  white-space: pre; overflow: hidden;
+}
+.sel {
+  background: oklch(0.7507 0.1295 79.85 / 22%);
+  border-bottom: 1px solid var(--accent-bd);
+  border-radius: 3px; padding: 0 2px; cursor: pointer;
+  transition: background 0.15s;
+}
+.sel:hover { background: oklch(0.7507 0.1295 79.85 / 38%); }
+.sel-hint { font-size: 9px; color: var(--fg-faint); margin-left: 5px; font-family: var(--font-mono); }
+.approval {
+  margin-top: 2px; border: 1px solid var(--border-strong);
+  border-radius: 12px; background: color-mix(in oklab, var(--bg-raised) 70%, transparent);
+  padding: 9px 11px;
+}
+.approval-head { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--fg-muted); }
+.approval-head .warn { color: var(--warn); }
+.approval-code {
+  margin-top: 7px; font-family: var(--font-mono); font-size: 9.5px;
+  color: var(--fg-muted); background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 8px; white-space: pre; overflow: hidden;
+}
+.approval-actions { display: flex; gap: 6px; margin-top: 8px; }
+.btn {
+  border: 1px solid var(--border); background: transparent; color: var(--fg-muted);
+  font-size: 10.5px; padding: 4px 9px; border-radius: 7px;
+  transition: all 0.2s; white-space: nowrap; display: inline-flex; align-items: center; gap: 5px;
+}
+.btn:hover { color: var(--fg); border-color: var(--border-strong); background: var(--bg-overlay); }
+.btn.primary { background: linear-gradient(135deg, #d9a441, #b8862f); color: var(--accent-fg); border: 0; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.gold { background: var(--accent-muted); border-color: var(--accent-bd); color: var(--accent); }
+.btn.ghost { border-color: transparent; }
+.btn.sm { font-size: 10px; padding: 3px 8px; }
+.composer {
+  margin: 0 22px 14px; border-radius: var(--radius-2xl);
+  background: color-mix(in oklab, var(--bg-raised) 72%, transparent);
+  border: 1px solid var(--border-strong);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: 0 12px 32px oklch(0 0 0 / 35%);
+  padding: 9px 11px; display: flex; flex-direction: column; gap: 7px;
+}
+.composer .ph { color: var(--fg-faint); font-size: 11.5px; padding: 2px 2px 8px; }
+.composer .row { display: flex; align-items: center; gap: 6px; }
+.capsule {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px;
+  border-radius: 9px; font-size: 10px; white-space: nowrap;
+  background: var(--bg-inset); border: 1px solid var(--border); color: var(--fg-muted);
+}
+.capsule.gold { background: var(--accent-muted); border-color: var(--accent-bd); color: var(--accent); }
+.composer .spacer { flex: 1; }
+.send-btn {
+  width: 27px; height: 27px; border-radius: 50%; border: 0;
+  background: linear-gradient(135deg, #d9a441, #b8862f); color: var(--accent-fg);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px oklch(0.7507 0.1295 79.85 / 30%);
+}
+
+/* ── 右侧面板 ───────────────────────────────── */
+.panel {
+  width: 392px; border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; min-height: 0;
+  background: color-mix(in oklab, var(--bg) 45%, transparent);
+}
+.tabstrip {
+  height: 40px; display: flex; align-items: flex-end; gap: 2px;
+  padding: 0 8px; border-bottom: 1px solid var(--border); overflow: hidden;
+}
+.ptab {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px;
+  font-size: 10.5px; color: var(--fg-muted); cursor: pointer; white-space: nowrap;
+  border-radius: 8px 8px 0 0; border: 1px solid transparent; border-bottom: 0;
+  position: relative; background: transparent;
+}
+.ptab:hover { color: var(--fg); background: var(--bg-overlay); }
+.ptab.on {
+  color: var(--fg); background: color-mix(in oklab, var(--bg-raised) 85%, transparent);
+  border-color: var(--border);
+}
+.ptab.on::after {
+  content: ""; position: absolute; left: 8px; right: 8px; bottom: 0;
+  height: 2px; background: var(--accent); border-radius: 2px 2px 0 0;
+}
+.ptab .x {
+  width: 14px; height: 14px; border-radius: 50%; border: 0; background: transparent;
+  color: var(--fg-faint); font-size: 10px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.ptab .x:hover { background: oklch(0.66 0.19 25 / 30%); color: var(--err); }
+.side-tab { display: none; }
+body.mode-promoted .side-tab { display: inline-flex; }
+body.mode-promoted .ptab.default-tab { color: var(--fg-muted); background: transparent; border-color: transparent; }
+body.mode-promoted .ptab.default-tab::after { display: none; }
+.panel-body { flex: 1; min-height: 0; display: flex; }
+.pane { flex: 1; min-height: 0; overflow: hidden; }
+.pane-default { display: flex; flex-direction: column; padding: 12px; gap: 10px; }
+body.mode-promoted .pane-default { display: none; }
+.pane-cap { font-size: 9.5px; letter-spacing: 0.09em; color: var(--fg-faint); display: flex; align-items: center; gap: 6px; }
+.pane-cap .tag { font-family: var(--font-mono); color: var(--accent); background: var(--accent-muted); border-radius: 4px; padding: 1px 5px; letter-spacing: 0; }
+.note-card {
+  background: var(--bg-inset); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px; color: var(--fg-muted);
+  font-size: 11px; line-height: 1.65;
+}
+.note-card b { color: var(--fg); font-weight: 600; }
+.tree { font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-muted); line-height: 1.95; }
+.tree .dir { color: var(--fg); font-weight: 500; }
+.tree .fi { padding-left: 14px; display: block; }
+.tree .fi:hover { color: var(--accent); }
+.pane-side { display: none; flex-direction: column; min-height: 0; }
+body.mode-promoted .pane-side { display: flex; }
+.side-head { padding: 11px 13px 9px; border-bottom: 1px solid var(--border); }
+.side-title-row { display: flex; align-items: center; gap: 7px; }
+.side-mark {
+  width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+  background: var(--accent-muted); border: 1px solid var(--accent-bd); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.side-title {
+  flex: 1; min-width: 0; font-size: 11.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.side-chips { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+.chip {
+  font-size: 9px; padding: 1px 5px; border-radius: 4px;
+  border: 1px solid var(--border); color: var(--fg-faint); white-space: nowrap;
+}
+.chip.gold { background: var(--accent-muted); border-color: var(--accent-bd); color: var(--accent); }
+.chip.ok { color: var(--ok); border-color: oklch(0.76 0.14 150 / 35%); background: oklch(0.76 0.14 150 / 10%); }
+.backlink {
+  margin: 9px 13px 0; display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; border-radius: 7px;
+  background: var(--bg-inset); border: 1px solid var(--border);
+  font-size: 9.5px; color: var(--fg-faint);
+}
+.backlink .txt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.backlink button { border: 0; background: transparent; color: var(--accent); font-size: 9.5px; padding: 1px 2px; }
+.stats {
+  display: flex; gap: 13px; padding: 8px 13px;
+  border-bottom: 1px solid var(--border);
+  font-size: 8.5px; color: var(--fg-faint); letter-spacing: 0.04em;
+}
+.stats b { display: block; margin-top: 1px; font-size: 10.5px; color: var(--fg-muted); font-weight: 500; letter-spacing: 0; }
+.side-scroll {
+  flex: 1; min-height: 0; overflow: hidden;
+  padding: 11px 13px; display: flex; flex-direction: column; gap: 10px;
+}
+.side-msg { display: flex; flex-direction: column; gap: 5px; }
+.side-user { align-self: stretch; max-width: 100%; }
+.quote {
+  border-left: 2px solid var(--accent-bd); background: var(--bg-inset);
+  border-radius: 0 7px 7px 0; padding: 6px 8px;
+  font-family: var(--font-mono); font-size: 9.5px; color: var(--fg-muted);
+  white-space: pre; overflow: hidden; max-width: 100%;
+}
+.side-q {
+  align-self: flex-end; max-width: 92%;
+  margin-top: 4px; background: var(--accent-muted); border: 1px solid var(--accent-bd);
+  border-radius: 9px 9px 3px 9px; padding: 6px 9px;
+  font-size: 10.5px; line-height: 1.5;
+}
+.side-answer { font-size: 11px; line-height: 1.7; color: var(--fg-muted); }
+.side-answer b { color: var(--fg); font-weight: 600; }
+.side-answer ol { padding-left: 16px; margin: 5px 0 0; }
+.side-answer li { margin: 3px 0; }
+.side-composer {
+  margin: 0 13px 11px; border: 1px solid var(--border); border-radius: 9px;
+  padding: 6px 8px; display: flex; align-items: center; gap: 7px;
+  background: var(--bg-inset);
+}
+.side-composer input { flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg); font-size: 10.5px; }
+.side-composer input::placeholder { color: var(--fg-faint); }
+.side-composer .send-btn { width: 22px; height: 22px; }
+.side-foot {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 13px 10px; font-size: 9px; color: var(--fg-faint);
+}
+.side-foot .spacer { flex: 1; }
+
+/* ── 选区快捷提问弹窗 ───────────────────────── */
+.ask-pop {
+  position: absolute; left: 34px; top: 358px; width: 428px;
+  max-height: calc(100% - 390px);
+  display: none; flex-direction: column; overflow: hidden;
+  border-radius: var(--radius-2xl); border: 1px solid var(--border-strong);
+  background: color-mix(in oklab, var(--bg-overlay) 92%, transparent);
+  backdrop-filter: blur(28px) saturate(180%);
+  box-shadow: 0 24px 60px oklch(0 0 0 / 55%), 0 0 0 1px oklch(1 0 0 / 4%);
+  z-index: 60; animation: popIn 0.25s var(--spring);
+}
+body.mode-ask .ask-pop, body.mode-thread .ask-pop, body.mode-model .ask-pop { display: flex; }
+body.mode-promoted .ask-pop { display: none; }
+@keyframes popIn { from { opacity: 0; transform: translateY(6px) scale(0.985); } }
+.ask-head {
+  display: flex; align-items: center; gap: 7px;
+  padding: 9px 11px; border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.ask-head .spark { color: var(--accent); display: flex; }
+.ask-title { font-size: 11px; font-weight: 600; }
+.ask-head .spacer { flex: 1; }
+.model-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 7px; border-radius: 7px;
+  border: 1px solid var(--border); background: var(--bg-inset);
+  color: var(--fg-muted); font-size: 9.5px; white-space: nowrap;
+  transition: all 0.18s;
+}
+.model-chip:hover { color: var(--fg); border-color: var(--accent-bd); background: var(--accent-muted); }
+.model-chip .ic { width: 12px; height: 12px; }
+.ask-close {
+  width: 22px; height: 22px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--fg-faint);
+  display: flex; align-items: center; justify-content: center;
+}
+.ask-close:hover { background: var(--bg-overlay); color: var(--fg); }
+.ask-body { padding: 9px 11px; overflow: auto; display: flex; flex-direction: column; gap: 9px; }
+.ask-quote {
+  border-radius: 8px; background: var(--bg-inset); border: 1px solid var(--border);
+  padding: 6px 8px;
+}
+.ask-quote .q-code { font-family: var(--font-mono); font-size: 9.5px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ask-quote .q-src { margin-top: 3px; font-size: 8.5px; color: var(--fg-faint); }
+.turn { display: flex; flex-direction: column; gap: 6px; }
+.turn + .turn { margin-top: 1px; }
+.q-bubble {
+  align-self: flex-end; max-width: 88%;
+  background: var(--accent-muted); border: 1px solid var(--accent-bd);
+  padding: 6px 9px; border-radius: 9px 9px 3px 9px;
+  font-size: 10.5px; line-height: 1.55;
+}
+.a-bubble { font-size: 10.5px; line-height: 1.65; color: var(--fg-muted); padding: 0 1px; }
+.a-bubble p + p { margin-top: 4px; }
+.turn-2 { display: none; }
+body.mode-thread .turn-2 { display: flex; }
+.stream-cursor {
+  display: inline-block; width: 5px; height: 11px; background: var(--accent);
+  margin-left: 2px; vertical-align: -1px; animation: blink 1s steps(2) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+.ask-foot { border-top: 1px solid var(--border); padding: 7px 11px 9px; display: flex; flex-direction: column; gap: 7px; }
+.ask-input {
+  display: flex; align-items: center; gap: 7px;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 5px 7px; background: var(--bg-inset);
+}
+.ask-input input { flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg); font-size: 10.5px; }
+.ask-input input::placeholder { color: var(--fg-faint); }
+.ask-input .send-btn { width: 22px; height: 22px; }
+.ask-actions { display: flex; align-items: center; gap: 6px; }
+.ask-actions .hint { font-size: 8.5px; color: var(--fg-faint); margin-right: auto; white-space: nowrap; }
+
+/* 模型下拉 */
+.model-menu {
+  display: none; position: absolute; top: 40px; right: 9px; width: 268px;
+  z-index: 80; padding: 5px; border-radius: var(--radius-xl);
+  border: 1px solid var(--border-strong);
+  background: color-mix(in oklab, var(--bg-overlay) 94%, transparent);
+  backdrop-filter: blur(28px) saturate(180%);
+  box-shadow: 0 18px 46px oklch(0 0 0 / 55%);
+}
+body.mode-model .model-menu { display: flex; flex-direction: column; animation: menuIn 0.2s var(--spring); }
+@keyframes menuIn { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+.model-menu .mh { font-size: 8.5px; letter-spacing: 0.09em; color: var(--fg-faint); padding: 5px 8px 4px; }
+.model-item {
+  display: flex; align-items: center; gap: 7px; padding: 6px 8px;
+  border-radius: 7px; font-size: 10.5px; color: var(--fg-muted); text-align: left;
+  border: 0; background: transparent; width: 100%;
+}
+.model-item:hover { background: var(--accent-muted); color: var(--fg); }
+.model-item .mi-main { flex: 1; min-width: 0; }
+.model-item small { display: block; font-size: 8.5px; color: var(--fg-faint); margin-top: 1px; }
+.model-item .check { color: var(--accent); font-size: 11px; }
+.model-item .auto-badge {
+  font-size: 8px; padding: 0 4px; border-radius: 4px;
+  background: var(--accent-muted); color: var(--accent); border: 1px solid var(--accent-bd);
+}
+.model-note { padding: 5px 8px 4px; margin-top: 3px; border-top: 1px solid var(--border); font-size: 8.5px; color: var(--fg-faint); line-height: 1.5; }
+
+/* Toast */
+.toast {
+  position: fixed; right: 22px; bottom: 22px; z-index: 200;
+  padding: 8px 11px; border-radius: 9px;
+  background: var(--bg-overlay); border: 1px solid var(--border-strong);
+  box-shadow: 0 14px 36px oklch(0 0 0 / 50%);
+  font-size: 10.5px; color: var(--fg);
+  opacity: 0; transform: translateY(8px); pointer-events: none;
+  transition: opacity 0.2s, transform 0.25s var(--spring);
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body class="mode-ask">
+
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 16 16"><path d="M2.5 7.5 8 2.5l5.5 5V13a1 1 0 0 1-1 1h-3v-4H6.5v4h-3a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-tasks" viewBox="0 0 16 16"><path d="M3 4.5h2M3 8h2M3 11.5h2M7 4.5h6M7 8h6M7 11.5h6"/></symbol>
+  <symbol id="i-board" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></symbol>
+  <symbol id="i-pr" viewBox="0 0 16 16"><circle cx="4" cy="3.5" r="1.5"/><circle cx="4" cy="12.5" r="1.5"/><circle cx="12" cy="6.5" r="1.5"/><path d="M4 5v6M12 8v1.5A2.5 2.5 0 0 1 9.5 12H5.5"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 16 16"><path d="M8 1.8c.4 3.2 1.5 4.4 4.7 4.8-3.2.4-4.3 1.6-4.7 4.8-.4-3.2-1.5-4.4-4.7-4.8C6.5 6.2 7.6 5 8 1.8Z"/><path d="M12.4 10.2c.2 1.2.6 1.7 1.8 1.9-1.2.2-1.6.7-1.8 1.9-.2-1.2-.6-1.7-1.8-1.9 1.2-.2 1.6-.7 1.8-1.9Z"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.4"/><path d="M8 1.8v1.4M8 12.8v1.4M1.8 8h1.4M12.8 8h1.4M3.6 3.6l1 1M11.4 11.4l1 1M12.4 3.6l-1 1M4.6 11.4l-1 1"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><path d="m10.3 10.3 3 3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 16 16"><path d="m5 6.5 3 3 3-3"/></symbol>
+  <symbol id="i-chevron-r" viewBox="0 0 16 16"><path d="m6.5 5 3 3-3 3"/></symbol>
+  <symbol id="i-send" viewBox="0 0 16 16"><path d="M8 13V3M4.5 6.5 8 3l3.5 3.5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 16 16"><path d="m4.5 4.5 7 7M11.5 4.5l-7 7"/></symbol>
+  <symbol id="i-side" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M9.5 3v10"/></symbol>
+  <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.5 4H4.5A1.5 1.5 0 0 0 3 5.5v6A1.5 1.5 0 0 0 4.5 13h6a1.5 1.5 0 0 0 1.5-1.5v-2"/><path d="M8.5 3H13v4.5M12.5 3.5 7.5 8.5"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 16 16"><circle cx="4" cy="3.5" r="1.5"/><circle cx="4" cy="12.5" r="1.5"/><circle cx="12" cy="6.5" r="1.5"/><path d="M4 5v6M12 8v1.5A2.5 2.5 0 0 1 9.5 12H5.5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 16 16"><path d="m3.5 8.5 3 3 6-7"/></symbol>
+  <symbol id="i-model" viewBox="0 0 16 16"><rect x="3.5" y="3.5" width="9" height="9" rx="2"/><path d="M6.5 1.8v1.7M9.5 1.8v1.7M6.5 12.5v1.7M9.5 12.5v1.7M1.8 6.5h1.7M1.8 9.5h1.7M12.5 6.5h1.7M12.5 9.5h1.7"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="12.5" cy="8" r="1"/></symbol>
+</svg>
+
+<header class="proto-bar">
+  <span class="mark"></span>
+  <div>
+    <h1>AskPopover → 侧边会话</h1>
+    <div class="sub">交互原型 · MusePi GUI · 2026-11</div>
+  </div>
+  <div class="mode-switch" role="tablist" aria-label="原型状态">
+    <button data-mode="ask" class="on">① 快捷提问</button>
+    <button data-mode="thread">② 追问 + 流式</button>
+    <button data-mode="model">③ 模型选择</button>
+    <button data-mode="promoted">④ 变为侧边会话</button>
+  </div>
+</header>
+<div class="proto-note">
+  <b>原型说明</b>
+  <span class="dot">·</span>
+  <span>模型只在本次提问生效</span>
+  <span class="dot">·</span>
+  <span>追问保留在同一弹窗</span>
+  <span class="dot">·</span>
+  <span>一个动作：变为独立会话并在右侧打开</span>
+  <span class="dot">·</span>
+  <span>点击正文里的高亮代码可重新打开弹窗</span>
+</div>
+
+<div class="stage">
+  <div class="app">
+    <div class="app-header">
+      <div class="traffic"><i></i><i></i><i></i></div>
+      <div class="project-chip"><span class="dot"></span><b>MusePi</b> / gui-prototype</div>
+      <div class="spacer"></div>
+      <button class="hdr-btn">分享</button>
+      <button class="hdr-btn">⌘K</button>
+    </div>
+
+    <div class="app-body">
+      <aside class="rail" aria-label="主导航">
+        <button class="rail-btn on" title="首页"><svg class="ic"><use href="#i-home"/></svg></button>
+        <button class="rail-btn" title="任务中心"><svg class="ic"><use href="#i-tasks"/></svg></button>
+        <button class="rail-btn" title="看板"><svg class="ic"><use href="#i-board"/></svg></button>
+        <button class="rail-btn" title="问题与拉取请求"><svg class="ic"><use href="#i-pr"/></svg></button>
+        <button class="rail-btn" title="能力中心"><svg class="ic"><use href="#i-sparkle"/></svg></button>
+        <div class="rail-spacer"></div>
+        <div class="rail-divider"></div>
+        <button class="rail-btn" title="设置"><svg class="ic"><use href="#i-settings"/></svg></button>
+      </aside>
+
+      <aside class="sessions" aria-label="会话列表">
+        <div class="sessions-head">
+          <span class="sessions-title">会话</span>
+          <button class="new-btn"><svg class="ic" style="width:11px;height:11px"><use href="#i-plus"/></svg>新</button>
+          <button class="sess-icon" title="搜索"><svg class="ic" style="width:14px;height:14px"><use href="#i-search"/></svg></button>
+          <button class="sess-icon" title="更多"><svg class="ic" style="width:14px;height:14px"><use href="#i-more"/></svg></button>
+        </div>
+        <div class="sessions-scroll">
+          <div class="group-label">今天</div>
+          <div class="sess on">
+            <div class="sess-row">
+              <span class="sess-fold"><svg class="ic" style="width:11px;height:11px"><use href="#i-chevron"/></svg></span>
+              <span class="sess-title">自我介绍与 agent 区别</span>
+              <span class="sess-time">现在</span>
+            </div>
+            <div class="sess-sub">检查 Copilot 扩展目录…</div>
+          </div>
+          <div class="sess side-session" id="sideSessionRow">
+            <div class="sess-row">
+              <span class="sess-fold"><svg class="ic" style="width:12px;height:12px"><use href="#i-sparkle"/></svg></span>
+              <span class="sess-title">解释 · Get-ChildItem</span>
+              <span class="sess-time">刚刚</span>
+            </div>
+            <div class="sess-sub">来自 自我介绍与 agent 区别</div>
+          </div>
+          <div class="sess">
+            <div class="sess-row">
+              <span class="sess-fold"></span>
+              <span class="sess-title">MusePi GUI 原型讨论</span>
+              <span class="sess-time">12 分钟前</span>
+            </div>
+            <div class="sess-sub">三栏布局与右侧面板</div>
+          </div>
+          <div class="sess">
+            <div class="sess-row">
+              <span class="sess-fold"></span>
+              <span class="sess-title">Release 0.5.2 回归</span>
+              <span class="sess-time">昨天</span>
+            </div>
+            <div class="sess-sub">修复 daemon 重连的竞态</div>
+          </div>
+        </div>
+        <div class="customize">
+          <div class="cap">自定义</div>
+          <div class="cust-row"><svg class="ic" style="width:13px;height:13px"><use href="#i-sparkle"/></svg><span>技能</span><span class="count">23</span></div>
+          <div class="cust-row"><svg class="ic" style="width:13px;height:13px"><use href="#i-model"/></svg><span>MCP 服务器</span><span class="count">1</span></div>
+          <div class="cust-row"><svg class="ic" style="width:13px;height:13px"><use href="#i-tasks"/></svg><span>工具</span><span class="count">44</span></div>
+        </div>
+      </aside>
+
+      <main class="chat">
+        <div class="chat-head">
+          <span class="chat-title">自我介绍与 agent 区别</span>
+          <span class="chat-sub">· 3 轮</span>
+          <div class="spacer"></div>
+          <button class="sess-icon" title="会话信息"><svg class="ic" style="width:14px;height:14px"><use href="#i-more"/></svg></button>
+        </div>
+
+        <div class="chat-scroll">
+          <div class="msg user">
+            <div class="avatar">你</div>
+            <div class="bubble">
+              <p>帮我看看这条 PowerShell 命令是干嘛的，会不会改我的文件？</p>
+              <div class="code-block">$home = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME '.copilot' }
+$ext = Join-Path $home 'extensions'
+Write-Output "EXTENSIONS=$ext"
+Get-ChildItem -Force $ext</div>
+            </div>
+          </div>
+
+          <div class="msg assistant" id="sourceMsg">
+            <div class="avatar">M</div>
+            <div class="bubble">
+              <p>这条命令只读，不会修改文件。它依次做了四件事：</p>
+              <ol>
+                <li>读取 <span class="inline-code">COPILOT_HOME</span>，没有就用 <span class="inline-code">~/.copilot</span>。</li>
+                <li>拼出 <span class="inline-code">extensions</span> 目录。</li>
+                <li>打印目录路径。</li>
+                <li>用 <span class="sel" id="selection" title="点击询问选中内容">Get-ChildItem -Force $ext</span><span class="sel-hint">⌘⇧L 询问</span> 列出目录内容（包括隐藏项）。</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="approval">
+            <div class="approval-head">
+              <svg class="ic warn" style="width:13px;height:13px"><use href="#i-tasks"/></svg>
+              <span>Run in terminal · 检查 Copilot 扩展目录</span>
+            </div>
+            <div class="approval-code">Get-ChildItem -Force $ext</div>
+            <div class="approval-actions">
+              <button class="btn gold sm">允许一次</button>
+              <button class="btn sm">跳过</button>
+              <button class="btn sm" id="explainApproval">解释</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="composer">
+          <div class="ph">在此会话中提出后续问题或开启新话题…</div>
+          <div class="row">
+            <span class="capsule"><svg class="ic" style="width:11px;height:11px"><use href="#i-plus"/></svg></span>
+            <span class="capsule">Agent</span>
+            <span class="capsule">交互式</span>
+            <span class="capsule gold">Assisted permissions</span>
+            <span class="spacer"></span>
+            <span class="capsule">Sonnet 4.5</span>
+            <button class="send-btn"><svg class="ic" style="width:13px;height:13px"><use href="#i-send"/></svg></button>
+          </div>
+        </div>
+
+        <!-- 选区快捷提问弹窗 -->
+        <div class="ask-pop" id="askPop" role="dialog" aria-label="询问选中内容">
+          <div class="ask-head">
+            <span class="spark"><svg class="ic" style="width:14px;height:14px"><use href="#i-sparkle"/></svg></span>
+            <span class="ask-title">询问选中内容</span>
+            <span class="spacer"></span>
+            <button class="model-chip" id="modelChip" title="选择本次提问使用的模型">
+              <svg class="ic"><use href="#i-model"/></svg>
+              <span id="modelChipLabel">Sonnet 4.5</span>
+              <svg class="ic" style="width:10px;height:10px"><use href="#i-chevron"/></svg>
+            </button>
+            <button class="ask-close" id="closeAsk" aria-label="关闭"><svg class="ic"><use href="#i-close"/></svg></button>
+
+            <!-- 模型下拉 -->
+            <div class="model-menu" id="modelMenu">
+              <div class="mh">本次提问使用</div>
+              <button class="model-item" data-model="Sonnet 4.5" data-sub="跟随会话模型">
+                <span class="mi-main">跟随会话模型<small>当前 Sonnet 4.5</small></span>
+                <span class="check">✓</span>
+              </button>
+              <button class="model-item" data-model="Sonnet 4.5" data-sub="Anthropic">
+                <span class="mi-main">Claude Sonnet 4.5<small>Anthropic · 推荐</small></span>
+              </button>
+              <button class="model-item" data-model="GPT-5.2" data-sub="OpenAI">
+                <span class="mi-main">GPT-5.2<small>OpenAI</small></span>
+              </button>
+              <button class="model-item" data-model="Kimi K2" data-sub="Moonshot">
+                <span class="mi-main">Kimi K2<small>Moonshot</small></span>
+              </button>
+              <button class="model-item" data-model="自动" data-sub="支持时按任务路由">
+                <span class="mi-main">自动<small>支持时按任务路由</small></span>
+                <span class="auto-badge">auto</span>
+              </button>
+              <div class="model-note">只影响这次提问，不改会话模型。侧信道设置仍然作为默认值。</div>
+            </div>
+          </div>
+
+          <div class="ask-body">
+            <div class="ask-quote">
+              <div class="q-code">Get-ChildItem -Force $ext</div>
+              <div class="q-src">来自「自我介绍与 agent 区别」· 助手回复 · 第 3 轮</div>
+            </div>
+
+            <div class="turn">
+              <div class="q-bubble">这段在做什么？会改文件吗？</div>
+              <div class="a-bubble">
+                <p>不会改文件。它只列出 <span class="inline-code">$ext</span> 目录的内容；<span class="inline-code">-Force</span> 让隐藏项也显示出来。</p>
+                <p>真正决定目录位置的是上面两行 <span class="inline-code">COPILOT_HOME</span> 和 <span class="inline-code">Join-Path</span>。</p>
+              </div>
+            </div>
+
+            <div class="turn turn-2">
+              <div class="q-bubble">那 -Force 和 -Recurse 有什么区别？</div>
+              <div class="a-bubble">
+                <p><span class="inline-code">-Force</span> 只影响隐藏/系统项，不会进入子目录；<span class="inline-code">-Recurse</span> 才会递归展开。</p>
+                <p>所以这条命令只看一层，不会扫整个扩展树<span class="stream-cursor"></span></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="ask-foot">
+            <div class="ask-input">
+              <input id="askInput" placeholder="继续追问…（Enter 发送）" aria-label="继续追问">
+              <button class="send-btn" id="askSend" aria-label="发送"><svg class="ic" style="width:12px;height:12px"><use href="#i-send"/></svg></button>
+            </div>
+            <div class="ask-actions">
+              <span class="hint">Enter 发送 · Esc 关闭</span>
+              <button class="btn primary sm" id="openSide" title="把这个问答变成独立会话，在右侧打开">
+                <svg class="ic" style="width:11px;height:11px"><use href="#i-side"/></svg>在侧边打开
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <aside class="panel" aria-label="右侧面板">
+        <div class="tabstrip">
+          <div class="ptab default-tab on">上下文</div>
+          <div class="ptab default-tab">文件</div>
+          <div class="ptab default-tab">轨迹</div>
+          <div class="ptab side-tab" id="sideTab">
+            <svg class="ic" style="width:11px;height:11px;color:var(--accent)"><use href="#i-sparkle"/></svg>
+            解释 · Get-ChildItem…
+            <span class="x" title="关闭">×</span>
+          </div>
+        </div>
+
+        <div class="panel-body">
+          <div class="pane pane-default">
+            <div class="pane-cap"><span class="tag">CTX</span> 当前会话</div>
+            <div class="note-card">
+              <b>3 个工具调用</b> · 2 次读取 · 1 次终端<br>
+              上下文占用 <b>18%</b>，还可以继续追问。
+            </div>
+            <div class="pane-cap" style="margin-top:4px"><span class="tag">FILES</span> 最近打开</div>
+            <div class="tree">
+              <span class="dir">src/</span>
+              <span class="fi">daemon/session-host.ts</span>
+              <span class="fi">session/agent-session.ts</span>
+              <span class="fi">components/AskPopover.tsx</span>
+              <span class="fi">components/SubagentPanel.tsx</span>
+            </div>
+          </div>
+
+          <div class="pane pane-side">
+            <div class="side-head">
+              <div class="side-title-row">
+                <span class="side-mark"><svg class="ic" style="width:12px;height:12px"><use href="#i-sparkle"/></svg></span>
+                <span class="side-title">解释 · Get-ChildItem -Force $ext</span>
+                <button class="sess-icon" title="更多"><svg class="ic" style="width:13px;height:13px"><use href="#i-more"/></svg></button>
+                <button class="sess-icon" title="关闭"><svg class="ic" style="width:13px;height:13px"><use href="#i-close"/></svg></button>
+              </div>
+              <div class="side-chips">
+                <span class="chip gold">独立会话</span>
+                <span class="chip">Sonnet 4.5</span>
+                <span class="chip ok">已完成</span>
+                <span class="chip">右侧面板</span>
+              </div>
+            </div>
+
+            <div class="backlink">
+              <svg class="ic" style="width:11px;height:11px"><use href="#i-link"/></svg>
+              <span class="txt">来自「自我介绍与 agent 区别」· 第 3 轮</span>
+              <button id="openSource">打开来源</button>
+            </div>
+
+            <div class="stats">
+              <span>TOKENS<b>12.4k</b></span>
+              <span>CTX<b>6%</b></span>
+              <span>COST<b>$0.02</b></span>
+              <span>TOOLS<b>0</b></span>
+              <span>DURATION<b>8.2s</b></span>
+            </div>
+
+            <div class="side-scroll">
+              <div class="side-msg side-user">
+                <div class="quote">Get-ChildItem -Force $ext</div>
+                <div class="side-q">这段在做什么？会改文件吗？</div>
+              </div>
+              <div class="side-msg">
+                <div class="side-answer">
+                  <p><b>不会改文件。</b>它只读取目录内容，不写入、不删除、不移动。</p>
+                  <ol>
+                    <li><span class="inline-code">-Force</span> 让隐藏项和系统项也出现在结果里。</li>
+                    <li>没有 <span class="inline-code">-Recurse</span>，所以只看 <span class="inline-code">$ext</span> 这一层。</li>
+                    <li>输出是 <span class="inline-code">FileInfo</span> / <span class="inline-code">DirectoryInfo</span> 对象，不是纯文本。</li>
+                  </ol>
+                  <p style="margin-top:5px">如果只想确认目录是否存在，用 <span class="inline-code">Test-Path $ext</span> 更直接。</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="side-composer">
+              <input placeholder="继续追问这个会话…" aria-label="继续追问会话">
+              <button class="send-btn" aria-label="发送"><svg class="ic" style="width:11px;height:11px"><use href="#i-send"/></svg></button>
+            </div>
+            <div class="side-foot">
+              <span>独立会话 · 已在右侧打开</span>
+              <span class="spacer"></span>
+              <button class="btn ghost sm" id="promoteMain">在主区域打开</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const body = document.body;
+const modes = ['ask', 'thread', 'model', 'promoted'];
+const modeButtons = [...document.querySelectorAll('.mode-switch button')];
+
+function setMode(mode) {
+  body.classList.remove(...modes.map(m => 'mode-' + m), 'ask-closed');
+  body.classList.add('mode-' + mode);
+  modeButtons.forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+}
+
+function toast(message) {
+  const el = document.getElementById('toast');
+  el.textContent = message;
+  el.classList.add('show');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => el.classList.remove('show'), 2300);
+}
+
+function flash(el) {
+  if (!el) return;
+  el.classList.remove('flash');
+  void el.offsetWidth;
+  el.classList.add('flash');
+  setTimeout(() => el.classList.remove('flash'), 950);
+}
+
+modeButtons.forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+document.getElementById('selection').addEventListener('click', () => setMode('ask'));
+
+document.getElementById('closeAsk').addEventListener('click', () => {
+  body.classList.add('ask-closed');
+});
+
+document.getElementById('explainApproval').addEventListener('click', () => {
+  setMode('promoted');
+  toast('已从审批卡打开解释会话');
+  flash(document.getElementById('sideTab'));
+  flash(document.getElementById('sideSessionRow'));
+});
+
+document.getElementById('openSide').addEventListener('click', () => {
+  setMode('promoted');
+  toast('已变为独立会话 · 在右侧打开');
+  flash(document.getElementById('sideTab'));
+  flash(document.getElementById('sideSessionRow'));
+});
+
+document.getElementById('promoteMain').addEventListener('click', () => {
+  toast('原型：把这个会话切到主区域打开');
+});
+
+document.getElementById('openSource').addEventListener('click', () => {
+  setMode('ask');
+  flash(document.getElementById('sourceMsg'));
+});
+
+document.getElementById('askSend').addEventListener('click', () => {
+  const input = document.getElementById('askInput');
+  if (!input.value.trim()) {
+    toast('原型：输入问题后可发送');
+    return;
+  }
+  toast('原型：追问会留在同一弹窗，并携带上面的 Q/A');
+  input.value = '';
+});
+
+document.getElementById('askInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('askSend').click();
+  }
+});
+
+document.getElementById('modelChip').addEventListener('click', () => {
+  if (body.classList.contains('mode-model')) setMode('ask');
+  else setMode('model');
+});
+
+document.querySelectorAll('.model-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const label = item.dataset.model === '自动' ? '自动' : item.dataset.model;
+    document.getElementById('modelChipLabel').textContent = label;
+    setMode('ask');
+    toast(item.dataset.sub === '跟随会话模型'
+      ? '已恢复跟随会话模型'
+      : `本次提问使用 ${label}（不改会话模型）`);
+  });
+});
+
+window.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (body.classList.contains('mode-model')) setMode('ask');
+  else if (body.classList.contains('mode-thread')) setMode('ask');
+  else if (body.classList.contains('mode-ask')) body.classList.add('ask-closed');
+});
+</script>
+</body>
+</html>

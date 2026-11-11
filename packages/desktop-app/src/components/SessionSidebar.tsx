@@ -549,16 +549,20 @@ export function SessionSidebar({
 	const [retitlingId, setRetitlingId] = useState<string | null>(null);
 	// Row display title for the export filename/header: node label wins,
 	// then the entry label, then the raw id.
-	const sessionLabelOf = (id: string): string => {
-		const walk = (ns: SessionListNode[]): string | null => {
+	const sessionNodeOf = (id: string): SessionListNode | null => {
+		const walk = (ns: SessionListNode[]): SessionListNode | null => {
 			for (const n of ns) {
-				if (n.entry.id === id) return n.label ?? n.entry.label ?? id;
+				if (n.entry.id === id) return n;
 				const child = walk(n.children ?? []);
 				if (child) return child;
 			}
 			return null;
 		};
-		return walk(nodes) ?? id;
+		return walk(nodes);
+	};
+	const sessionLabelOf = (id: string): string => {
+		const node = sessionNodeOf(id);
+		return node?.label ?? node?.entry.label ?? id;
 	};
 	const [groupCtx, setGroupCtx] = useState<{
 		index: number;
@@ -1973,6 +1977,33 @@ export function SessionSidebar({
 											},
 										]
 									: []),
+								{
+									// Open this session beside the active chat. The
+									// chat surface owns the panel tabs, so the row
+									// hands the request over as a window event — the
+									// same bridge pattern as the selection ask.
+									label: t("general.openToSide"),
+									icon: "layout-right",
+									onSelect: () => {
+										const id = sessionCtx.id;
+										const node = sessionNodeOf(id);
+										const advisor = node?.entry.advisor === true;
+										const rawEntryLabel = node?.entry.label ?? "";
+										window.dispatchEvent(
+											new CustomEvent("musepi-gui-open-session-side", {
+												detail: {
+													sessionId: id,
+													label:
+														advisor && !rawEntryLabel.trim()
+															? t("general.advisorSession")
+															: sessionLabelOf(id),
+													readOnly: advisor,
+												},
+											}),
+										);
+										setSessionCtx(null);
+									},
+								},
 								{
 									// Right-click: any session row (parent or
 									// subagent) can be popped out into the mini chat

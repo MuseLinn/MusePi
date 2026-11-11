@@ -2312,8 +2312,14 @@
 	background: transparent;
 }
 .gui-ext-plugins[data-variant="list"] .gui-plugin-card {
-	padding-left: 4px;
-	padding-right: 4px;
+	margin-inline: 4px;
+	padding-left: 8px;
+	padding-right: 8px;
+	border-radius: var(--radius-lg);
+}
+/* Round highlight only: a full-width separator under it would cut the corners. */
+.gui-ext-plugins[data-variant="list"] .gui-plugin-card + .gui-plugin-card {
+	border-top: 0;
 }
 /* Settings keeps the full inventory as a multi-card grid: each entry owns its
  * surface, while the capability center stays a compact management list. */

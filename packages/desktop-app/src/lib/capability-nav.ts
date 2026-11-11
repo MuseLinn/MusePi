@@ -33,6 +33,13 @@ const EMPTY: CapabilityNavSnapshot = { tab: "skills", skillsCount: 0, pluginsCou
 let snapshot: CapabilityNavSnapshot = EMPTY;
 const stateListeners = new Set<() => void>();
 const actionListeners = new Set<(action: CapabilityNavAction) => void>();
+/**
+ * An action emitted while the page is not mounted. Hover-peek renders the
+ * panel beside a different destination, and the destination swap mounts the
+ * page ~150ms later; retaining the last action lets the row click that
+ * committed the swap still land on the tab it named. Last write wins.
+ */
+let pendingAction: CapabilityNavAction | null = null;
 
 export function publishCapabilityNav(next: CapabilityNavSnapshot): void {
 	snapshot = next;
@@ -49,11 +56,21 @@ export function subscribeCapabilityNav(listener: () => void): () => void {
 }
 
 export function emitCapabilityNavAction(action: CapabilityNavAction): void {
+	if (actionListeners.size === 0) {
+		pendingAction = action;
+		return;
+	}
+	pendingAction = null;
 	for (const listener of actionListeners) listener(action);
 }
 
 export function subscribeCapabilityNavAction(listener: (action: CapabilityNavAction) => void): () => void {
 	actionListeners.add(listener);
+	const pending = pendingAction;
+	if (pending) {
+		pendingAction = null;
+		listener(pending);
+	}
 	return () => actionListeners.delete(listener);
 }
 

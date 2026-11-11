@@ -441,6 +441,21 @@
 	.gui-voice-wave {
 		display: none;
 	}
+
+	/* Narrow composer: the approval pill keeps its shield (tap target and
+	 * state colour) but drops the text label, and the two toolbar groups
+	 * tighten instead of colliding. */
+	.gui-approval-btn span {
+		display: none;
+	}
+
+	.gui-composer-row {
+		gap: 4px;
+	}
+
+	.gui-composer-right {
+		gap: 2px;
+	}
 }
 
 @container (max-width: 340px) {
@@ -1454,6 +1469,13 @@ button.gui-stats-pill {
 	display: flex;
 	justify-content: center;
 	margin: 6px 10px 0;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+}
+.gui-composer-below-dock > * {
+	min-width: 0;
+	max-width: 100%;
 }
 
 .gui-spin {
@@ -1584,6 +1606,42 @@ button.gui-stats-pill {
 .gui-splash button,
 .gui-splash a {
 	-webkit-app-region: no-drag;
+}
+
+/* Boot hand-off layer: the shell mounts as soon as the daemon answers and
+ * animates in underneath, while the splash fades out over it for one beat
+ * (SPLASH_HANDOFF_MS = 300). Previously the shell waited for the hold and
+ * swapped in on a hard cut, which read as "no animation". The layer is inert,
+ * so the first click never lands on it. */
+.gui-splash-handoff {
+	position: fixed;
+	inset: 0;
+	z-index: 260;
+	display: flex;
+	pointer-events: none;
+	/* The splash body is a window-drag region; the hand-off layer must not
+	 * steal a drag from the shell now living underneath it. */
+	-webkit-app-region: no-drag;
+	animation: gui-splash-handoff-out 300ms ease-out forwards;
+}
+
+@keyframes gui-splash-handoff-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-splash-handoff {
+		animation-duration: 1ms;
+	}
+}
+
+.gui-motion-off .gui-splash-handoff {
+	animation-duration: 1ms;
 }
 
 .gui-splash-inner {

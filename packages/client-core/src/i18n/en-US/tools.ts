@@ -1029,9 +1029,9 @@ export const tools = {
 	"tools.computerPermissionsLaterHint": "You can manage these later in Settings → Tools → Computer Permissions",
 	// ── Artifacts panel (design-preset product contract viewer) ─────────
 	"tools.artifacts": "Artifacts",
-	"tools.surfaceDescriptionArtifacts": "Preview products the design mode declared via artifact.manifest.json",
+	"tools.surfaceDescriptionArtifacts": "Preview artifacts created in design mode",
 	"tools.artifactsEmpty": "No artifacts yet",
-	"tools.artifactsEmptyHint": "Design-mode products carrying an artifact.manifest.json sidecar show up here",
+	"tools.artifactsEmptyHint": "Artifacts created in design mode appear here",
 	"tools.artifactManifestInvalid": "invalid",
 	"tools.artifactBadgeHint": "Workspace artifact — kind: {kind}",
 	"tools.artifactExportsHint": "Workspace artifact — export formats: {exports}",

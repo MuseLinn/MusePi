@@ -1110,6 +1110,30 @@ export function ChatView({
 		(forceNew = false): void => openChatViewBrowserPanel(panelTabs, store?.sessionId ?? null, forceNew),
 		[panelTabs, store?.sessionId],
 	);
+	// Session-list "Open to the Side": the row cannot reach the chat surface's
+	// panel-tab state, so it posts an address and this surface owns the tab.
+	// The same session is one tab (dedupeKey = session id); opening the active
+	// session is a no-op — it is already the main chat.
+	useEffect(() => {
+		const onOpenSide = (event: Event): void => {
+			const detail = (event as CustomEvent<{ sessionId?: unknown; label?: unknown; readOnly?: unknown }>).detail;
+			const sessionId = typeof detail?.sessionId === "string" ? detail.sessionId : null;
+			if (!sessionId || sessionId === store?.sessionId) return;
+			const label =
+				typeof detail?.label === "string" && detail.label.trim() ? detail.label : t("general.sideSession");
+			panelTabs.open({
+				surface: "session",
+				target: sessionId,
+				dedupeKey: sessionId,
+				label,
+				readOnly: detail?.readOnly === true,
+			});
+			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+		};
+		window.addEventListener("musepi-gui-open-session-side", onOpenSide);
+		return () => window.removeEventListener("musepi-gui-open-session-side", onOpenSide);
+	}, [panelTabs.open, store?.sessionId, rightPanelOpen, focusMode, onExpandRightPanel]);
+
 	const setActiveView = useCallback(
 		(view: string | null): void => {
 			// null = "nothing selected"; the empty state owns that, the rail and

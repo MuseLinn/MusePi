@@ -24,11 +24,11 @@ export type Tab = CapabilityTab;
 /** 技能 tab 的两个子分段 (设计稿 frame 01/02):发现 / 我安装的 N。 */
 type SkillPane = "discover" | "installed";
 
-/** The page body is the scroll surface; the tool row is sticky at its top.
- *  The scroll edges use the shared `ScrollEdgeBlur` primitive — its bands must
- *  live OUTSIDE the scroller (Chromium does not sample scrolled content for a
- *  backdrop-filter inside the scroll container), so the body sits in
- *  `.gui-capability-scroll` together with the two bands. */
+/** The page body is the single scroll surface. Its tool row (search / count /
+ *  add) is an opaque sticky bar at the top: the list scrolls behind it, so the
+ *  search never leaves with the content and no blur band has to guess at the
+ *  bar's height. Only the bottom edge needs the shared `ScrollEdgeBlur`
+ *  overlay band. */
 export function CapabilityCenterPage({
 	rpc,
 	page: { onBack, tab, onTabChange },
@@ -57,48 +57,22 @@ export function CapabilityCenterPage({
 	// （官方 manage 层 + 插件包 + 未归属模块），不再用 plugins.packages 的
 	// 安装包数量冒充——那个值在没有市场安装时是 0，与页面内容不符。
 	const [pluginCount, setPluginCount] = useState(0);
-	// Scroll-edge state for the progressive blur bands: the top band only
-	// appears once content has moved under the sticky tool row, and the end
-	// band disappears at the bottom so it never fades the pagination.
+	// The sticky tool row is opaque and owns the top edge, so only the end band
+	// needs a scroll state (it must not fade the pagination at the bottom).
 	const bodyRef = useRef<HTMLDivElement | null>(null);
-	const scrollRef = useRef<HTMLDivElement | null>(null);
-	const [edges, setEdges] = useState({ top: false, end: false });
+	const [atEnd, setAtEnd] = useState(false);
 	useEffect(() => {
 		const body = bodyRef.current;
 		if (!body) return;
 		const update = (): void => {
-			const top = body.scrollTop > 4;
 			const end = body.scrollTop + body.clientHeight < body.scrollHeight - 4;
-			setEdges(prev => (prev.top === top && prev.end === end ? prev : { top, end }));
-		};
-		// The tool row's height is not constant (controls wrap on narrow rows),
-		// so the top band pins to the measured height instead of a hard 56px.
-		const syncToolbarHeight = (): void => {
-			const bars = body.querySelectorAll<HTMLElement>(
-				".gui-skill-market-bar, .gui-ext-plugins-toolbar, .mp-grid-toolbar",
-			);
-			let height = 0;
-			for (const bar of bars) {
-				const measured = bar.getBoundingClientRect().height;
-				if (measured > 0) height = measured;
-			}
-			if (height > 0) scrollRef.current?.style.setProperty("--cap-toolbar-h", `${Math.ceil(height)}px`);
+			setAtEnd(prev => (prev === end ? prev : end));
 		};
 		update();
-		syncToolbarHeight();
 		body.addEventListener("scroll", update, { passive: true });
-		const observer =
-			typeof ResizeObserver === "function"
-				? new ResizeObserver(() => {
-						update();
-						syncToolbarHeight();
-					})
-				: null;
+		const observer = typeof ResizeObserver === "function" ? new ResizeObserver(update) : null;
 		observer?.observe(body);
 		for (const child of body.children) observer?.observe(child);
-		for (const bar of body.querySelectorAll(".gui-skill-market-bar, .gui-ext-plugins-toolbar, .mp-grid-toolbar")) {
-			observer?.observe(bar);
-		}
 		return () => {
 			body.removeEventListener("scroll", update);
 			observer?.disconnect();
@@ -239,12 +213,7 @@ export function CapabilityCenterPage({
 			{/* 遮罩必须留在滚动体「外面」：Chromium 不会为滚动容器内部绝对定位
 			 * 的 backdrop-filter 采样滚动内容，放里面只剩渐变遮罩、没有真模糊
 			 * （与会话记录的边缘带同一结构）。 */}
-			<div
-				className="gui-capability-scroll"
-				ref={scrollRef}
-				data-edge-top={edges.top ? "" : undefined}
-				data-edge-end={edges.end ? "" : undefined}
-			>
+			<div className="gui-capability-scroll" data-edge-end={atEnd ? "" : undefined}>
 				<div className="gui-capability-body" ref={bodyRef}>
 					{/* 三个面板常驻挂载、display 切换（gui-capability-pane）：切 tab
 					 * 不丢各面板的滚动位置/输入态/已拉取数据，切入面板有淡入上浮动效
@@ -276,8 +245,7 @@ export function CapabilityCenterPage({
 						<MarketplaceView rpc={rpc} />
 					</div>
 				</div>
-				<ScrollEdgeBlur edge="top" />
-				<ScrollEdgeBlur edge="end" />
+				<ScrollEdgeBlur edge="end" overlay />
 			</div>
 		</div>
 	);

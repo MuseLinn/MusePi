@@ -799,51 +799,48 @@
 	pointer-events: none;
 }
 
-/* The branch this row hangs off: a hair stronger line + the blossom dot
- * (sakura pink, works on both schemes; brightens with the row). */
+/* The branch this row hangs off: a hair stronger line, no ornament. The
+ * thread is a quiet guide — the row's own project dot / status square is the
+ * marker that carries meaning. */
 .gui-tree-guide--branch {
 	width: 2px;
 	background: color-mix(in oklab, var(--color-border) 88%, var(--color-text-faint) 12%);
 }
 
-/* Last child: close the branch with an L-shaped foot (⌊) at the row's
- * bottom edge instead of letting the line run into the next row. The dot
- * stays centered on the vertical line; only the foot is added. */
-.gui-tree-guide--last::before {
-	content: "";
-	position: absolute;
-	left: 0;
-	bottom: 0;
-	width: 8px;
-	height: 2px;
-	border-radius: 0 999px 999px 0;
-	background: inherit;
+/* Last child: let the thread dissolve into the row instead of closing with a
+ * hard L foot. The old ⌊ stub met the row's status square and read as stray
+ * punctuation; a 12px fade ends the branch without drawing furniture. */
+.gui-tree-guide--last {
+	-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 12px), transparent 100%);
+	mask-image: linear-gradient(to bottom, #000 calc(100% - 12px), transparent 100%);
 }
 
+.gui-tree-guide--last::before {
+	content: none;
+}
+
+/* Branch dot: a 4px neutral pip centred on the thread. The sakura-pink glow
+ * was a second accent competing with the row's project colour and the pin /
+ * emoji markers; the thread now only brightens with the row. */
 .gui-tree-guide--branch::after {
 	content: "";
 	position: absolute;
 	left: 50%;
 	top: 50%;
-	height: 5px;
-	width: 5px;
+	height: 4px;
+	width: 4px;
 	transform: translate(-50%, -50%);
 	border-radius: 999px;
-	background: #f2a2bb;
-	box-shadow:
-		0 0 0 2px color-mix(in oklab, #f2a2bb 22%, transparent),
-		0 0 6px color-mix(in oklab, #f2a2bb 55%, transparent);
-	transition:
-		transform 140ms ease-out,
-		box-shadow 140ms ease-out;
+	background: color-mix(in oklab, var(--color-text-faint) 72%, transparent);
+	transition: background 140ms ease-out;
 }
 
-.gui-session-row:hover .gui-tree-guide--branch::after,
+.gui-session-row:hover .gui-tree-guide--branch::after {
+	background: color-mix(in oklab, var(--color-text) 55%, transparent);
+}
+
 .gui-session-row-active .gui-tree-guide--branch::after {
-	transform: translate(-50%, -50%) scale(1.25);
-	box-shadow:
-		0 0 0 2px color-mix(in oklab, #f2a2bb 30%, transparent),
-		0 0 8px color-mix(in oklab, #f2a2bb 75%, transparent);
+	background: var(--color-accent);
 }
 
 /* 折叠 chevron(openchamber 文件夹层级 parity):父行左侧 14px 占位,箭头

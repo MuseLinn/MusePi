@@ -4,12 +4,14 @@
 
 .mpstats-row {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: center;
 	gap: 6px;
 	box-sizing: border-box;
 	min-height: 32px;
-	padding: 4px 20px 2px;
+	max-width: 100%;
+	padding: 4px 10px 2px;
 	line-height: 1.4;
 	color: var(--color-text-muted);
 }

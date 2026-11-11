@@ -859,12 +859,18 @@ body.gui-resizing .gui-pane-resize-x::after {
 .gui-chat-fade--top {
 	display: none;
 	top: 0;
-	height: 28px;
+	height: 56px;
+	/* The band fades as one composited surface: the ramp mask lives HERE, not
+	 * on the blur layers (masking a backdrop-filter element makes Chromium
+	 * skip the sampling, leaving a tint-only slab). A lighter tint lets the
+	 * first row stay readable through the blur. */
 	background-image: linear-gradient(
 		to bottom,
-		color-mix(in oklab, var(--gui-card-surface-fade) 78%, transparent) 0,
+		color-mix(in oklab, var(--gui-card-surface-fade) 52%, transparent) 0,
 		transparent 100%
 	);
+	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
+	mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
 }
 .gui-transcript[data-top-scroll="true"] ~ .gui-chat-fade--top {
 	display: block;
@@ -875,9 +881,11 @@ body.gui-resizing .gui-pane-resize-x::after {
 	height: calc(var(--chat-composer-inset, 32px) + var(--chat-floating-panel-clearance, 0px) + var(--chat-end-ramp));
 	background-image: linear-gradient(
 		to top,
-		color-mix(in oklab, var(--gui-card-surface-fade) 88%, transparent) 0,
+		color-mix(in oklab, var(--gui-card-surface-fade) 70%, transparent) 0,
 		transparent 100%
 	);
+	-webkit-mask-image: linear-gradient(to top, #000 0%, transparent 100%);
+	mask-image: linear-gradient(to top, #000 0%, transparent 100%);
 }
 .gui-chat-body[data-live-tail="true"] .gui-chat-fade--end {
 	--chat-end-ramp: 8px;
@@ -890,43 +898,32 @@ body.gui-resizing .gui-pane-resize-x::after {
 	);
 }
 
-/* `to bottom` for the top band (blur grows upward toward the head),
+/* Blur layers are unmasked; the band's own mask grades them (see above).
+ * `to bottom` for the top band (blur grows upward toward the head),
  * `to top` for the end band (blur grows downward toward the composer). */
 .gui-chat-fade--top .gui-chat-fade-layer--1 {
 	backdrop-filter: blur(var(--gui-blur-progressive-1));
 	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-1));
-	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
-	mask-image: linear-gradient(to bottom, #000 0%, transparent 100%);
 }
 .gui-chat-fade--top .gui-chat-fade-layer--2 {
 	backdrop-filter: blur(var(--gui-blur-progressive-2));
 	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-2));
-	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
-	mask-image: linear-gradient(to bottom, #000 0%, transparent 62%);
 }
 .gui-chat-fade--top .gui-chat-fade-layer--3 {
 	backdrop-filter: blur(var(--gui-blur-progressive-3));
 	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-3));
-	-webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 34%);
-	mask-image: linear-gradient(to bottom, #000 0%, transparent 34%);
 }
 .gui-chat-fade--end .gui-chat-fade-layer--1 {
 	backdrop-filter: blur(var(--gui-blur-progressive-1));
 	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-1));
-	-webkit-mask-image: linear-gradient(to top, #000 0%, transparent 100%);
-	mask-image: linear-gradient(to top, #000 0%, transparent 100%);
 }
 .gui-chat-fade--end .gui-chat-fade-layer--2 {
 	backdrop-filter: blur(var(--gui-blur-progressive-2));
 	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-2));
-	-webkit-mask-image: linear-gradient(to top, #000 0%, transparent 62%);
-	mask-image: linear-gradient(to top, #000 0%, transparent 62%);
 }
 .gui-chat-fade--end .gui-chat-fade-layer--3 {
 	backdrop-filter: blur(var(--gui-blur-progressive-3));
 	-webkit-backdrop-filter: blur(var(--gui-blur-progressive-3));
-	-webkit-mask-image: linear-gradient(to top, #000 0%, transparent 34%);
-	mask-image: linear-gradient(to top, #000 0%, transparent 34%);
 }
 
 /* No backdrop-filter (older Chromium / disabled GPU): keep the coherent
@@ -5751,6 +5748,13 @@ body.gui-resizing .gui-pane-right {
 	position: relative;
 }
 
+/* The chat head floats over this scroller (absolute in `.gui-chat-column`);
+ * reserve its footprint inside the scroll content only, so the first row
+ * starts below the controls while scrolled rows pass underneath them. */
+.gui-chat-column .gui-transcript {
+	padding-top: 52px;
+}
+
 /* ⌘F find bar (openchamber parity): a floating field over the conversation's
  * top edge. Offset parent is .gui-chat-body (see above).
  *
@@ -5859,10 +5863,13 @@ body.gui-resizing .gui-pane-right {
 }
 
 
-/* ── Content-boundary feather for settings ──
- * The sidebar session list moved to progressive blur (`.gui-scroll-frame` +
- * `ScrollEdgeBlur`); these settings surfaces still feather with a mask until
- * they get the same band treatment. */
+/* ── 设置页纵向羽化 ──────────────────────────────────────────────
+ * SettingsNav / SettingsView scroll bodies feather with a mask, not a
+ * backdrop-filter band: the band's blur is a visible rectangle over the
+ * scroller (its absolute layers stop at the content box, so the padding
+ * gutters stay sharp) and its stepped edges read as a seam against the blank
+ * sidebar. A mask fades the content itself across the full scrollport and
+ * stays soft at every scroll position. */
 .gui-settings-nav-scroll[data-top-scroll="true"][data-bottom-scroll="true"] {
 	mask-image: linear-gradient(
 		to bottom,
@@ -5919,7 +5926,6 @@ body.gui-resizing .gui-pane-right {
 .gui-fade-scroll[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
 	mask-image: linear-gradient(to top, transparent 0, #000 24px);
 }
-
 /* ── 横向内容边界羽化(2026-09-27:全局滚动容器羽化通用化)───────────
  * 与纵向同配方(useScrollShadow 的 data-left/right-scroll 属性),覆盖
  * 桌面端全部横向滚动容器:模型/扩展中心/多实例 tab 条、主题代码预览、
@@ -6427,15 +6433,23 @@ body.gui-resizing .gui-pane-right {
 	align-items: center;
 	gap: 6px;
 	flex: 0 0 auto;
-	/* 8px → 6px: the progressive-blur band below no longer hides a full
-	 * 24px opaque strip, so those 2px go back to the transcript. */
 	padding: 6px 12px 2px;
-	/* Positioning context for the message-tree panel, which is mounted in
-	 * this row and must hang below it without covering the transcript head. */
-	position: relative;
-	/* Same derived card surface as the blur band's tint: the head is not a
-	 * separate colored strip, it is the top of the SAME glass card. */
-	background-image: linear-gradient(to bottom, var(--gui-card-surface-veil) 0%, transparent 100%);
+	/* Immersive: the controls float over the transcript instead of owning a
+	 * flow row above it. No background at all — the transcript's own top fade
+	 * and blur sit underneath, so head + content read as one surface. */
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 3;
+	/* Holds the message-tree popup's positioning context. The row itself is
+	 * hit-transparent so a message under it stays selectable/hoverable; the
+	 * controls re-enable their own pointer events. */
+	pointer-events: none;
+	background: none;
+}
+.gui-chat-head :is(button, .gui-surface-mode, .gui-mtree-panel) {
+	pointer-events: auto;
 }
 .gui-chat-head-left {
 	display: flex;
@@ -7242,4 +7256,103 @@ body.gui-resizing .gui-pane-right {
 	.gui-session-info-chev {
 		transition: none;
 	}
+}
+
+/* Side session surface (right panel): a normal session rendered beside the
+ * active chat. The header stays fixed; the transcript owns the scroll; the
+ * approval/ask dock sits above the composer so a side session remains
+ * steerable without duplicating the main chat's shell. */
+.gui-side-session {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	height: 100%;
+}
+.gui-side-session-head {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 9px 12px;
+	border-bottom: 1px solid var(--border);
+	flex-shrink: 0;
+}
+.gui-side-session-title {
+	flex: 1;
+	min-width: 0;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--fg);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-side-session-status {
+	font-size: 10px;
+	color: var(--fg-faint);
+	white-space: nowrap;
+}
+.gui-side-session-status--working { color: var(--ok); }
+.gui-side-session-count {
+	min-width: 17px;
+	height: 17px;
+	padding: 0 5px;
+	border-radius: var(--radius-full);
+	background: var(--accent-muted);
+	border: 1px solid var(--accent-bd);
+	color: var(--accent);
+	font-size: 9.5px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.gui-side-session-body {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: clip;
+	padding: 8px 12px;
+}
+/* The shared transcript ships a self-scrolling `.tr-root`; the side body is
+ * the scroller here (useScrollShadow + the two edge bands read its flags).
+ * Leaving the inner root scrollable would deaden those bands and nest a
+ * second scrollbar. */
+.gui-side-session-body .tr-root {
+	height: auto;
+	overflow: visible;
+}
+.gui-side-session-frame {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	overflow: hidden;
+}
+.gui-side-session-approvals {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 8px 12px 0;
+	flex-shrink: 0;
+	max-height: 46%;
+	overflow-y: auto;
+}
+.gui-side-session-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 100%;
+	padding: 24px;
+	text-align: center;
+	color: var(--fg-faint);
+	font-size: 12px;
+}
+.gui-side-session-error {
+	max-width: 100%;
+	font-size: 10.5px;
+	font-family: var(--font-mono);
+	color: var(--err);
+	overflow-wrap: anywhere;
 }

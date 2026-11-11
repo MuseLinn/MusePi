@@ -110,6 +110,7 @@ import {
 import { computeSettingsShellState } from "./lib/settings-shell";
 import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
+import { applySideSessionEvent } from "./lib/side-session-stores";
 import {
 	APP_OVERLAY_SLOT,
 	BROWSER_HOST_SLOT,
@@ -730,8 +731,9 @@ function AppInner(): ReactNode {
 	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("musepi-gui-side") === "0");
 	/** Hover-peek (2026-11-08): the rail reports the panel owned by the
 	 *  HOVERED destination. Hovering the rail's empty band or a destination
-	 *  without a panel floats nothing; 任务中心 peeks its own task list. It
-	 *  never re-docks itself — only the titlebar toggle restores the width. */
+	 *  without a panel floats nothing; 任务中心 peeks its own task list. The
+	 *  hover alone never re-docks the panel — a click on the destination (or on
+	 *  a row inside the floating pane) commits it and restores the width. */
 	const [peekPanel, setPeekPanel] = useState<string | null>(null);
 	/** Separate from `peekPanel`: the pointer leaves the button BEFORE the
 	 *  panel id is cleared, so opacity/transform can play a real fade-out. */
@@ -761,6 +763,43 @@ function AppInner(): ReactNode {
 		setPeekHovered(false);
 		peekTimerRef.current = window.setTimeout(() => setPeekPanel(null), 140);
 	}, []);
+	/** Geometry hold for the peek: the floating panel can be covered by
+	 *  page-level chrome on 任务中心 / 能力中心, so `pointerenter` on the keeper
+	 *  never fires for those destinations and the peek closed the moment the
+	 *  pointer left the rail button — visible but not reachable. While a peek
+	 *  is open, the pointer's position decides: anywhere in the left column
+	 *  (rail + panel) keeps it, moving out closes it. */
+	useEffect(() => {
+		if (peekPanel === null) return;
+		const onMove = (event: PointerEvent): void => {
+			const keeper = document.querySelector<HTMLElement>(".gui-side-keeper");
+			if (!keeper) return;
+			// The floating pane is `position: fixed`, so the keeper's own box is
+			// zero-width while peeking — take the union of the keeper and its
+			// pane boxes. The left bound is deliberately not tested: the rail
+			// sits left of the panel and crossing its 8px gutter must not close
+			// the peek before the pointer reaches the panel.
+			let right = Number.NEGATIVE_INFINITY;
+			let top = Number.POSITIVE_INFINITY;
+			let bottom = Number.NEGATIVE_INFINITY;
+			for (const box of [keeper, ...keeper.querySelectorAll<HTMLElement>(":scope > .gui-pane-side")]) {
+				const rect = box.getBoundingClientRect();
+				if (rect.width === 0 || rect.height === 0) continue;
+				right = Math.max(right, rect.right);
+				top = Math.min(top, rect.top);
+				bottom = Math.max(bottom, rect.bottom);
+			}
+			const inside =
+				Number.isFinite(right) &&
+				event.clientX <= right + 4 &&
+				event.clientY >= top - 4 &&
+				event.clientY <= bottom + 4;
+			if (inside) holdPeek();
+			else closePeek();
+		};
+		window.addEventListener("pointermove", onMove, { passive: true });
+		return () => window.removeEventListener("pointermove", onMove);
+	}, [peekPanel, holdPeek, closePeek]);
 	const [narrowSidebarOpen, setNarrowSidebarOpen] = useState(false);
 	const [sideWidth, setSideWidth] = useState<number>(() => Number(localStorage.getItem("musepi-gui-side-w") ?? 256));
 	const toggleSidebar = useCallback((): void => {
@@ -772,6 +811,14 @@ function AppInner(): ReactNode {
 			localStorage.setItem("musepi-gui-side", collapsed ? "1" : "0");
 			return !collapsed;
 		});
+	}, []);
+	/** Hover only previews a collapsed panel; clicking a destination owns the
+	 *  commit, so the destination arrives WITH the panel its interaction lives
+	 *  in instead of dropping the pane as soon as the pointer leaves the rail. */
+	const revealSidePanel = useCallback((): void => {
+		if (window.matchMedia("(max-width: 720px)").matches) return;
+		setSideCollapsed(false);
+		localStorage.setItem("musepi-gui-side", "1");
 	}, []);
 	useEffect(() => {
 		const query = window.matchMedia("(max-width: 720px)");
@@ -1613,6 +1660,12 @@ function AppInner(): ReactNode {
 			// Route subscription envelopes to the active session store; provider
 			// auth/prompt envelopes surface through the settings dialog instead.
 			client.onEvent = (event: StreamEvent) => {
+				// A session open beside the active chat owns its own store: route
+				// its envelopes there before the active-store cross-session guard
+				// drops them. Global/provider envelopes have no session owner.
+				if (event.kind !== "global-event" && !event.kind.startsWith("provider-") && applySideSessionEvent(event)) {
+					return;
+				}
 				// A settlement for a session whose store is not mounted yet (the
 				// snapshot was fetched, the card was rendered, the store is being
 				// created while another device answers) is deferred and applied
@@ -1983,7 +2036,10 @@ function AppInner(): ReactNode {
 				}
 			}
 		} finally {
-			const holdMs = 950;
+			// 650ms covers the splash's orb-in intro (620ms) without adding a
+			// second of wait on warm boots; the shell itself mounts immediately
+			// after and cross-fades under the splash (never a hard cut).
+			const holdMs = 650;
 			const elapsed = performance.now() - t0;
 			if (elapsed < holdMs) {
 				const { promise, resolve } = Promise.withResolvers<void>();
@@ -3882,10 +3938,10 @@ function AppInner(): ReactNode {
 	// Splash gates on `booting` ALONE — not `!rpc && booting`: rpc connects
 	// in ~150ms on a warm daemon and would unmount the splash mid-hold,
 	// defeating MIN_SPLASH_MS (2026-08-11).
-	if (booting || splashHold) {
+	if (booting) {
 		return (
 			<div className="gui-shell">
-				<StartupSplash phase={bootPhase} status={bootStatus} ready={!booting} />
+				<StartupSplash phase={bootPhase} status={bootStatus} ready={false} />
 			</div>
 		);
 	}
@@ -3935,6 +3991,14 @@ function AppInner(): ReactNode {
 						</form>
 					</details>
 				</div>
+				{/* Boot hand-off: the splash fades over whatever the boot settled
+				 * on, instead of the shell mounting only after the hold and
+				 * cutting in. */}
+				{splashHold && (
+					<div className="gui-splash-handoff" aria-hidden="true">
+						<StartupSplash ready />
+					</div>
+				)}
 			</div>
 		);
 	}
@@ -4228,6 +4292,7 @@ function AppInner(): ReactNode {
 			onSelect: () => {
 				closeSettings();
 				viewSwapRef.current("chat");
+				revealSidePanel();
 			},
 		},
 		{
@@ -4239,7 +4304,10 @@ function AppInner(): ReactNode {
 			/** A scheduled task just finished — the rail dot replaces the old
 			 *  sidebar glow row (that menu row now lives in the rail). */
 			unread: cronGlow,
-			onSelect: () => viewSwapRef.current("scheduled"),
+			onSelect: () => {
+				viewSwapRef.current("scheduled");
+				revealSidePanel();
+			},
 		},
 		{
 			id: "board",
@@ -4268,6 +4336,7 @@ function AppInner(): ReactNode {
 			onSelect: () => {
 				setCapabilityTab("skills");
 				viewSwapRef.current("capability");
+				revealSidePanel();
 			},
 		});
 	}
@@ -4410,6 +4479,17 @@ function AppInner(): ReactNode {
 							if (narrowSidebarOpen && event.target instanceof Element && event.target.closest("button")) {
 								setNarrowSidebarOpen(false);
 							}
+							// Using a hover-peeked pane IS the commit gesture: the
+							// floating pane belongs to a destination whose page is not
+							// mounted, so the row's nav action would reach no subscriber
+							// and the click would appear dead. Open that destination
+							// first (capture runs before the row handler; state batches
+							// until the event ends, so the click still lands correctly).
+							if (!peekOpen || activePanelId === null) return;
+							const peeked = railDestinations.find(item => item.panelId === activePanelId);
+							if (!peeked) return;
+							if (peeked.active) revealSidePanel();
+							else peeked.onSelect();
 						}}
 					>
 						<SessionSidebar
@@ -4921,6 +5001,13 @@ function AppInner(): ReactNode {
 			 * seat: a Cordis plugin can own a different rail, and the built-in
 			 * one stays as the fallback when none is mounted. */}
 			<SlotComponentHost rpc={rpc} slot={APP_OVERLAY_SLOT} fallback={<FloatingScrollbar />} />
+			{/* Boot hand-off: the shell is already mounted and animating in
+			 * underneath; the splash fades out over it for one short beat. */}
+			{splashHold && (
+				<div className="gui-splash-handoff" aria-hidden="true">
+					<StartupSplash ready />
+				</div>
+			)}
 		</div>
 	);
 }

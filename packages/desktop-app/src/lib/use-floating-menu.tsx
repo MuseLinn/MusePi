@@ -183,20 +183,6 @@ export function useFloatingMenu(
 			);
 			return;
 		}
-		// Flip up when the menu would overflow the viewport bottom (top +
-		// height > innerHeight) as well as when there is simply more room
-		// above — a tall menu near the bottom edge must not clip (Base-UI
-		// flip parity for the vertical axis).
-		const flipUpForBottomOverflow = r.bottom + gap + menuH > window.innerHeight - MENU_EDGE_PAD;
-		const roomAbove = r.top;
-		const roomBelow = window.innerHeight - r.bottom;
-		const up = flipUpForBottomOverflow || roomAbove > roomBelow;
-		// Height clamp: never extend past the window edge on the opening
-		// side (a tall attach menu anchored near the top opened upward and
-		// clipped at the viewport top). The wrapper scrolls (inline
-		// overflowY) when its content exceeds the clamp; the 0 floor keeps
-		// a negative value from disabling the clamp entirely.
-		const maxH = Math.max(0, up ? r.top - gap - MENU_EDGE_PAD : window.innerHeight - r.bottom - gap - MENU_EDGE_PAD);
 		// Align: right -> menu's right edge on anchor's right edge; left ->
 		// menu's left edge on anchor's left edge. Then CLAMP horizontally into
 		// the viewport — the previous anchor-only clamp (right: innerWidth -
@@ -207,6 +193,30 @@ export function useFloatingMenu(
 			Math.max(rawLeft, MENU_EDGE_PAD),
 			Math.max(MENU_EDGE_PAD, window.innerWidth - menuW - MENU_EDGE_PAD),
 		);
+		// Bottom edge: a menu that spans the composer's columns must stop above
+		// the composer card instead of running under it (the card paints its own
+		// surface, so the menu's last rows read as cut off). Menus that stay
+		// clear of the composer keep the plain viewport edge.
+		const composerRect = document.querySelector<HTMLElement>(".gui-composer-frame")?.getBoundingClientRect();
+		const spansComposer = composerRect !== undefined && left < composerRect.right && left + menuW > composerRect.left;
+		const bottomEdge =
+			spansComposer && composerRect !== undefined
+				? Math.min(window.innerHeight, composerRect.top) - MENU_EDGE_PAD
+				: window.innerHeight - MENU_EDGE_PAD;
+		// Flip up when the menu would overflow the bottom edge (top + height >
+		// edge) as well as when there is simply more room above — a tall menu
+		// near the bottom must not clip (Base-UI flip parity for the vertical
+		// axis).
+		const flipUpForBottomOverflow = r.bottom + gap + menuH > bottomEdge;
+		const roomAbove = r.top;
+		const roomBelow = bottomEdge - r.bottom;
+		const up = flipUpForBottomOverflow || roomAbove > roomBelow;
+		// Height clamp: never extend past the edge on the opening side (a tall
+		// attach menu anchored near the top opened upward and clipped at the
+		// viewport top). The wrapper scrolls (inline overflowY) when its content
+		// exceeds the clamp; the 0 floor keeps a negative value from disabling
+		// the clamp entirely.
+		const maxH = Math.max(0, up ? r.top - gap - MENU_EDGE_PAD : bottomEdge - r.bottom - gap);
 		const top = !up ? r.bottom + gap : undefined;
 		const bottom = up ? window.innerHeight - r.top + gap : undefined;
 		setPos(prev => {

@@ -37,6 +37,13 @@ const EMPTY: TaskNavSnapshot = { tasks: [], selectedId: null, view: "tasks", bus
 let snapshot: TaskNavSnapshot = EMPTY;
 const stateListeners = new Set<() => void>();
 const actionListeners = new Set<(action: TaskNavAction) => void>();
+/**
+ * An action emitted while the page is not mounted. Hover-peek renders the
+ * panel beside a different destination, and the destination swap mounts the
+ * page ~150ms later; retaining the last action lets the row click that
+ * committed the swap still open the task it named. Last write wins.
+ */
+let pendingAction: TaskNavAction | null = null;
 
 export function publishTaskNav(next: TaskNavSnapshot): void {
 	snapshot = next;
@@ -53,11 +60,21 @@ export function subscribeTaskNav(listener: () => void): () => void {
 }
 
 export function emitTaskNavAction(action: TaskNavAction): void {
+	if (actionListeners.size === 0) {
+		pendingAction = action;
+		return;
+	}
+	pendingAction = null;
 	for (const listener of actionListeners) listener(action);
 }
 
 export function subscribeTaskNavAction(listener: (action: TaskNavAction) => void): () => void {
 	actionListeners.add(listener);
+	const pending = pendingAction;
+	if (pending) {
+		pendingAction = null;
+		listener(pending);
+	}
 	return () => actionListeners.delete(listener);
 }
 

@@ -122,6 +122,7 @@ import { FadeScroll } from "./FadeScroll";
 import { GitPanel } from "./git-panel";
 import { NotesPane } from "./notes-pane";
 import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
+import { SideSessionView } from "./SideSessionView";
 import { SubagentPanel, SubagentSessionView } from "./SubagentPanel";
 import { SurfaceTabStripSortable } from "./surface-tabs";
 import { TrajectoryView } from "./TrajectoryView";
@@ -1024,6 +1025,31 @@ export function ContextPanel({
 			)
 		) : bodyView === "git" || bodyView === "diff" || bodyView === "pr" ? (
 			<GitPanel rpc={rpc} cwd={cwd} sessionId={snap?.sessionId ?? null} />
+		) : bodyView === "files" && cwd ? (
+			/* FilePane is a full-height flex column whose file list owns the
+			 * scroll. Wrapping it in the feather-scroll (padding + overflow-y)
+			 * made the 100%-height child overflow that padded box, so the tab
+			 * painted a second scrollbar beside the list's own. The wrapper
+			 * keeps the shared gutter but never scrolls. */
+			<div className="flex min-h-0 flex-1 flex-col px-2.5 pb-3 pt-1.5">
+				{fileWorkspaceComponent ? (
+					<SlotComponentMount
+						item={fileWorkspaceComponent}
+						rpc={rpc}
+						sessionId={snap?.sessionId}
+						cwd={cwd}
+						panelTab={bodyTab ?? undefined}
+						fileWorkspace={fileWorkspace}
+					/>
+				) : (
+					<div className="gui-pane-tab-empty">
+						<span className="gui-pane-tab-empty-icon">
+							<Icon name="folder" />
+						</span>
+						<p className="gui-pane-tab-empty-title">{t("tools.bundlePluginDisabled")}</p>
+					</div>
+				)}
+			</div>
 		) : bodyView === "trajectory" ? (
 			/* Trajectory renders OUTSIDE the feather-scroll (browser/git
 			 * parity): its root is a flex-1 column with its own scroll list —
@@ -1089,28 +1115,19 @@ export function ContextPanel({
 					</div>
 				);
 			})()
+		) : bodyView === "session" ? (
+			<SideSessionView
+				sessionId={bodyTab?.target ?? null}
+				label={bodyTab?.label ?? t("general.sideSession")}
+				readOnly={bodyTab?.readOnly === true}
+				rpc={rpc}
+				activeSessionId={snap?.sessionId ?? null}
+				onOpenSession={onOpenSession}
+			/>
 		) : (
 			<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
 				{bodyView === "notes" ? (
 					<NotesPane rpc={rpc} cwd={cwd} showPlanRequest={planShowRequest} />
-				) : bodyView === "files" && cwd ? (
-					fileWorkspaceComponent ? (
-						<SlotComponentMount
-							item={fileWorkspaceComponent}
-							rpc={rpc}
-							sessionId={snap?.sessionId}
-							cwd={cwd}
-							panelTab={bodyTab ?? undefined}
-							fileWorkspace={fileWorkspace}
-						/>
-					) : (
-						<div className="gui-pane-tab-empty">
-							<span className="gui-pane-tab-empty-icon">
-								<Icon name="folder" />
-							</span>
-							<p className="gui-pane-tab-empty-title">{t("tools.bundlePluginDisabled")}</p>
-						</div>
-					)
 				) : bodyView === "artifacts" ? (
 					/* Artifacts panel (设计板 W3): artifact.manifest.json
 					 * sidecars discovered by the daemon, each card opening
