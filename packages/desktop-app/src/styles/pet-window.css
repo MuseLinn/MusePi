@@ -493,9 +493,10 @@
 	width: 0;
 	overflow: hidden;
 	opacity: 0;
-	transition:
-		width 180ms var(--spring-liquid),
-		opacity 140ms var(--spring-snappy, ease);
+	/* Width must switch instantly: animating 0 → max-content lays the 24px
+	 * buttons out inside a still-narrow grid track, so the row paints past the
+	 * window edge for the whole 180ms. Only the fade is animated. */
+	transition: opacity 140ms var(--spring-snappy, ease);
 	pointer-events: none;
 }
 
