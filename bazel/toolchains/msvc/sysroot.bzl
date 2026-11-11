@@ -114,6 +114,9 @@ def _xwin_sysroot_impl(rctx):
     if ephemeral_cache:
         cache_dir = ".xwin-cache"
 
+    # Manifest 17 resolves to Win11SDK_10.0.26100, whose desktop x86_64 headers
+    # xwin 0.6.5 cannot find, so the splat aborts and every native addon job
+    # fails with it. Pin the 22H2 SDK that this xwin handles.
     result = rctx.execute(
         [
             rctx.path("xwin"),
@@ -124,9 +127,6 @@ def _xwin_sysroot_impl(rctx):
             "desktop",
             "--manifest-version",
             _XWIN_MANIFEST_VERSION,
-            // Manifest 17 resolves to Win11SDK_10.0.26100, whose desktop x86_64
-            // headers xwin 0.6.5 cannot find — the splat aborts and every native
-            // addon job fails with it. Pin the 22H2 SDK that this xwin handles.
             "--sdk-version",
             _WINSDK_VERSION,
             "--cache-dir",
