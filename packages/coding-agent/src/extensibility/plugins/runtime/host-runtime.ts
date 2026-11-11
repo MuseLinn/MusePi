@@ -16,11 +16,11 @@
  * process-wide one-shot, so a second caller (another host, a second session,
  * a retry after a successful mount) cannot re-run an entry.
  *
- * ## Reload (dsh parity)
+ * ## Reload
  *
- * dsh replaces a plugin's fibers when the plugin's own modules change and only
- * restarts the process when a change lands in the host's static graph. This
- * runtime does the same, with the package directory as the ownership boundary:
+ * A plugin's fibers are replaced when the plugin's own modules change, and the
+ * process restarts only when a change lands in the host's static graph. The
+ * package directory is the ownership boundary here:
  * {@link reloadHostPlugins} disposes an affected record (services unpublish →
  * fiber teardown → provider unregistration) and mounts a freshly imported
  * entry, restoring the previous module if the replacement fails. A change
@@ -145,7 +145,7 @@ function isWithin(file: string, dir: string): boolean {
 }
 
 /**
- * Hand a restart request to the host (dsh `loader.exit()`).
+ * Hand a restart request to the host.
  *
  * The process lifecycle belongs to the host: the daemon's supervisor, the
  * desktop shell, or a TUI that asks the user to relaunch. The HMR service is
@@ -263,12 +263,12 @@ export async function ensureHostPlugins(cwd: string): Promise<boolean> {
 }
 
 /**
- * Reload the host packages affected by a change batch (dsh parity).
+ * Reload the host packages affected by a change batch.
  *
  * `changedFiles` undefined = an explicit reload (every package); an empty array
  * = nothing changed. A package is affected when the changed path is inside its
  * package directory, its entry, or its manifest. A path outside every host
- * package is host code and is not replaced (dsh's externals → restart).
+ * package is host code and is not replaced; it requires a restart.
  *
  * Returns the names that were replaced. A failed replacement keeps the
  * previous module and re-applies it, so a syntax error never leaves the host
@@ -380,8 +380,8 @@ async function replaceRecord(
  * A host plugin's package directory is the only code this runtime owns. A
  * changed file outside every package (and outside the config store, which is
  * re-read on re-apply) is host code: replacing it in place would split the
- * module-level state the running host holds, so the host gets the same request
- * dsh forwards through `loader.exit()`.
+ * module-level state the running host holds, so the host receives a restart
+ * request instead.
  */
 function requestRestartForHostFiles(records: readonly HostPluginRecord[], changedFiles: readonly string[]): void {
 	const configStore = path.resolve(getPluginConfigPath());
@@ -418,7 +418,7 @@ function packageRootFor(dir: string): string {
  * The packages one batch affects: any file inside the package directory, the
  * entry, or the manifest.
  *
- * Files outside every host package are host modules (dsh's externals). They are
+ * Files outside every host package are host modules. They are
  * not plugin-owned — re-importing one would split module-level state that the
  * running host already holds — so they require a restart rather than a reload.
  * The manifest-config store is also outside a package, but it is the second
