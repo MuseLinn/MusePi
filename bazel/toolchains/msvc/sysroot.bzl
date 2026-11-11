@@ -27,6 +27,7 @@ newest version covering linux-musl + darwin hosts, which is why it is pinned.
 
 _XWIN_VERSION = "0.6.5"
 _XWIN_MANIFEST_VERSION = "17"
+_WINSDK_VERSION = "10.0.22621"
 
 # host key -> (release triple, sha256), from the published .sha256 assets.
 _XWIN_DISTS = {
@@ -123,6 +124,11 @@ def _xwin_sysroot_impl(rctx):
             "desktop",
             "--manifest-version",
             _XWIN_MANIFEST_VERSION,
+            // Manifest 17 resolves to Win11SDK_10.0.26100, whose desktop x86_64
+            // headers xwin 0.6.5 cannot find — the splat aborts and every native
+            // addon job fails with it. Pin the 22H2 SDK that this xwin handles.
+            "--sdk-version",
+            _WINSDK_VERSION,
             "--cache-dir",
             cache_dir,
             "splat",
