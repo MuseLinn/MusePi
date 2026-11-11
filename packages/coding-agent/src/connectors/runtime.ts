@@ -127,7 +127,7 @@ export function connectorToMCPServer(
 
 /** A local process is mountable only with the user's exact fingerprint approval. */
 export function isConnectorApproved(entry: ConnectorCatalogEntry, state: ConnectorStateFile): boolean {
-	if (!entry.server || entry.server.type !== "stdio") return true;
+	if (entry.server?.type !== "stdio") return true;
 	const approved = state.connectors[entry.id]?.approvedCommand;
 	return approved !== undefined && approved === connectorCommandFingerprint(entry.server);
 }

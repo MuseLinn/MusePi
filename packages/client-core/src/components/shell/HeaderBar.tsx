@@ -17,8 +17,8 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { type TranslationKey, t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
-import { SESSION_ACTION_EVENT, isHarmonyShell, isMobileShell } from "../../lib/capacitor";
 import type { SessionActionDetail } from "../../lib/capacitor";
+import { isHarmonyShell, isMobileShell, SESSION_ACTION_EVENT } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
 import { fmtPercent, formatWhen, shortenPath } from "../../lib/format";
 import { useShellLayout } from "../../lib/responsive-shell";
@@ -57,7 +57,8 @@ export interface HeaderBarProps {
 	onNewSession(): void;
 }
 
-const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: TranslationKey }> = [	{ panel: "board", icon: <LayoutDashboard size={14} />, title: "settings.board" },
+const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: TranslationKey }> = [
+	{ panel: "board", icon: <LayoutDashboard size={14} />, title: "settings.board" },
 	{ panel: "scheduled", icon: <CalendarClock size={14} />, title: "settings.scheduledTasks" },
 	{ panel: "files", icon: <FolderGit2 size={14} />, title: "tools.workspace" },
 	{ panel: "marketplace", icon: <Package size={14} />, title: "guest.marketplace" },
@@ -243,9 +244,7 @@ export function HeaderBar({
 						className={`sh-title sh-title-btn${sheetOpen || nativeSheetOpen ? " sh-title--open" : ""}`}
 						onClick={() => {
 							if (nativeSessions && sessions != null) {
-								window.harmonyNative?.openSessionsSheet?.(
-									nativeSessionPayload(sessions, focusedSessionId),
-								);
+								window.harmonyNative?.openSessionsSheet?.(nativeSessionPayload(sessions, focusedSessionId));
 								setNativeSheetOpen(true);
 								return;
 							}

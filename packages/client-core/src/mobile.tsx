@@ -12,10 +12,10 @@ import {
 	getSystemBarInsets,
 	isHarmonyShell,
 	isNativeShell,
+	setKeyboardInset,
 	setupAndroidBackHandler,
 	setupDeepLinkHandler,
 	setupNotificationTapHandler,
-	setKeyboardInset,
 } from "./lib/capacitor";
 import { applyTextScale } from "./lib/text-scale";
 import { initTooltips } from "./lib/tooltips";
