@@ -127,10 +127,15 @@ describe("Transcript LaTeX math", () => {
 	it("labels a fenced block with its language and icon-only actions", () => {
 		const html = renderMarkdown("```ts\nconst x = 1;\n```");
 		expect(html).toContain('<span class="tr-code-lang">TypeScript</span>');
-		expect(html).toContain('class="tr-code-btn tr-code-copy"');
-		expect(html).toContain('morph-icon class="tr-code-glyph" data-glyph="copy"');
+		expect(html).toContain('class="tr-code-btn tr-code-lines" aria-pressed="false"');
+		expect(html).toContain('data-glyph="lines"');
 		expect(html).toContain('class="tr-code-btn tr-code-wrap" aria-pressed="false"');
 		expect(html).toContain('data-glyph="wrap"');
+		expect(html).toContain('class="tr-code-btn tr-code-copy"');
+		expect(html).toContain('morph-icon class="tr-code-glyph" data-glyph="copy"');
+		// Reference order: line numbers, wrap, copy.
+		const order = ["tr-code-lines", "tr-code-wrap", "tr-code-copy"].map(name => html.indexOf(name));
+		expect(order).toEqual([...order].sort((a, b) => a - b));
 		// Icon-only: the old text label must not survive in the header.
 		expect(html).not.toMatch(/tr-code-copy[^>]*>[^<]*复制/);
 	});

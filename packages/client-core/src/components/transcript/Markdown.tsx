@@ -1,5 +1,10 @@
 import { Marked } from "@musepi/pi-utils/marked";
-import { Check as CheckGlyphData, Copy as CopyGlyphData, WrapText as WrapGlyphData } from "lucide";
+import {
+	Check as CheckGlyphData,
+	Copy as CopyGlyphData,
+	ListOrdered as LinesGlyphData,
+	WrapText as WrapGlyphData,
+} from "lucide";
 import type { IconInput } from "morphicons";
 import { defineMorphIcon } from "morphicons/element";
 
@@ -190,15 +195,20 @@ const md = new Marked({
 			// Header carries the language tag + a copy button (delegated in
 			// the component below); textContent of <code> stays the raw
 			// source even after tree-sitter spans replace the body.
+			const initialLines =
+				typeof document !== "undefined" && document.documentElement.classList.contains("gui-code-lines");
 			const head =
 				`<div class="tr-code-head">` +
 				`<span class="tr-code-lang">${escapeHtml(codeLangLabel(l))}</span>` +
 				`<span class="tr-code-actions">` +
-				`<button type="button" class="tr-code-btn tr-code-copy" data-copy-hash="${hash}" aria-label="${escapeHtml(t("settings.copy"))}" title="${escapeHtml(t("settings.copy"))}">` +
-				`<morph-icon class="tr-code-glyph" data-glyph="copy" size="14" stroke-width="1.8" aria-hidden="true"></morph-icon>` +
+				`<button type="button" class="tr-code-btn tr-code-lines" aria-pressed="${initialLines ? "true" : "false"}" aria-label="${escapeHtml(t("settings.lineNumbers"))}" title="${escapeHtml(t("settings.lineNumbers"))}">` +
+				`<morph-icon class="tr-code-glyph" data-glyph="lines" size="14" stroke-width="1.8" aria-hidden="true"></morph-icon>` +
 				`</button>` +
 				`<button type="button" class="tr-code-btn tr-code-wrap" aria-pressed="false" aria-label="${escapeHtml(t("settings.wrapLines"))}" title="${escapeHtml(t("settings.wrapLines"))}">` +
 				`<morph-icon class="tr-code-glyph" data-glyph="wrap" size="14" stroke-width="1.8" aria-hidden="true"></morph-icon>` +
+				`</button>` +
+				`<button type="button" class="tr-code-btn tr-code-copy" data-copy-hash="${hash}" aria-label="${escapeHtml(t("settings.copy"))}" title="${escapeHtml(t("settings.copy"))}">` +
+				`<morph-icon class="tr-code-glyph" data-glyph="copy" size="14" stroke-width="1.8" aria-hidden="true"></morph-icon>` +
 				`</button>` +
 				`</span>` +
 				`</div>`;
@@ -1025,6 +1035,18 @@ export const Markdown = memo(function Markdown({
 			);
 			return;
 		}
+		const linesBtn = target.closest<HTMLElement>(".tr-code-lines");
+		if (linesBtn) {
+			const block = linesBtn.closest<HTMLElement>(".tr-code");
+			if (!block) return;
+			const globalOn = document.documentElement.classList.contains("gui-code-lines");
+			const on =
+				block.classList.contains("tr-code--lines") || (globalOn && !block.classList.contains("tr-code--no-lines"));
+			block.classList.toggle("tr-code--lines", !on);
+			block.classList.toggle("tr-code--no-lines", on);
+			linesBtn.setAttribute("aria-pressed", on ? "false" : "true");
+			return;
+		}
 		const wrapBtn = target.closest<HTMLElement>(".tr-code-wrap");
 		if (wrapBtn) {
 			const block = wrapBtn.closest<HTMLElement>(".tr-code");
@@ -1201,7 +1223,8 @@ export const Markdown = memo(function Markdown({
 		if (!host) return;
 		defineMorphIcon();
 		for (const glyph of host.querySelectorAll<MorphIconElement>("morph-icon[data-glyph]")) {
-			const icon = glyph.dataset.glyph === "wrap" ? WrapGlyphData : CopyGlyphData;
+			const glyphName = glyph.dataset.glyph;
+			const icon = glyphName === "wrap" ? WrapGlyphData : glyphName === "lines" ? LinesGlyphData : CopyGlyphData;
 			const button = glyph.closest<HTMLElement>(".tr-code-btn");
 			const copied = button != null && copiedHash != null && button.dataset.copyHash === copiedHash;
 			glyph.set(copied ? CheckGlyphData : icon);

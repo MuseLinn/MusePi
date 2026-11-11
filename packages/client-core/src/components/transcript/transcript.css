@@ -1396,6 +1396,44 @@ button.tr-display-context-source:hover {
 	overflow-wrap: anywhere;
 }
 
+/* Per-block line numbers: the appearance switch seeds the initial state, and
+ * this header button overrides it for the block. Geometry mirrors the global
+ * desktop rule (2.2em gutter, counters, non-selectable numbers). */
+.tr-code--lines > pre > code {
+	display: grid;
+	counter-reset: tr-code-line;
+}
+
+.tr-code--lines > pre > code .tr-code-line {
+	display: grid;
+	grid-template-columns: 2.2em minmax(0, 1fr);
+	counter-increment: tr-code-line;
+}
+
+.tr-code--lines > pre > code .tr-code-line::before {
+	content: counter(tr-code-line);
+	color: var(--fg-faint);
+	text-align: right;
+	padding-right: 12px;
+	user-select: none;
+}
+
+/* Global switch on, this block opted out: neutralise the desktop rule. */
+.gui-code-lines .tr-md .tr-code--no-lines > pre > code {
+	display: block;
+	counter-reset: none;
+}
+
+.gui-code-lines .tr-md .tr-code--no-lines > pre > code .tr-code-line {
+	display: block;
+	grid-template-columns: none;
+	counter-increment: none;
+}
+
+.gui-code-lines .tr-md .tr-code--no-lines > pre > code .tr-code-line::before {
+	content: none;
+}
+
 @media (hover: none) {
 	.tr-code-actions {
 		opacity: 1;

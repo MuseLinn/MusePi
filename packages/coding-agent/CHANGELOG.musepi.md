@@ -6,8 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
-- **代码块头部改成语言标签 + 图标操作**：语言名人性化（`ts` → TypeScript，未标注 → Plain Text），右上角换成复制、换行两个图标按钮；悬停或键盘聚焦时浮现，触屏常显。复制按钮用 morphicons 在 Copy↔Check 之间形变确认，换行按钮切换 `pre-wrap` 且不改变代码块几何。
-  - EN: Code block headers now show a human-readable language label (ts → TypeScript, unlabelled → Plain Text) with copy and wrap icon buttons at the end. They appear on hover or keyboard focus and stay visible on touch; the copy button morphs Copy↔Check through morphicons, and the wrap button flips pre-wrap without changing the block's geometry.
+- **代码块头部改成语言标签 + 三个图标操作**：语言名人性化（`ts` → TypeScript，未标注 → Plain Text），右上角是显隐行号、自动换行、复制三个图标按钮；悬停或键盘聚焦时浮现，触屏常显。行号按钮按块覆盖外观设置里的「显示行号」，换行只切 `pre-wrap` 不改变几何，复制用 morphicons 在 Copy↔Check 之间形变确认。
+  - EN: Code block headers now show a human-readable language label (ts → TypeScript, unlabelled → Plain Text) with line-numbers, wrap and copy icon buttons at the end. They appear on hover or keyboard focus and stay visible on touch; the line-numbers button overrides the global appearance switch for that block, the wrap button flips pre-wrap without changing the block's geometry, and copy morphs Copy↔Check through morphicons.
 
 - **桌宠气泡的快捷按钮不再越出窗口**：卡片收起时动作行是零宽裁剪盒，里面的 24px 按钮仍参与排版，而居中把这 80px 溢出平摊到两侧，审批气泡的按钮因此排到 279–359，越过卡片右边界 332 和 344px 窗口。收起态改为贴 inline end，隐藏按钮落在卡片内；展开时第二轨正好等于行宽，按钮位置与 24px 宽度契约不变。
   - EN: Pet bubble quick actions no longer spill outside the window. Collapsed, the row is a zero-width clip box while its 24px buttons still lay themselves out, and centring that overflow split it on both sides, so approval bubbles placed their buttons at 279–359 — past the card's 332 edge and the 344px window. The collapsed row now flushes to the inline end, keeping the hidden buttons inside the card; when revealed, the second track equals the row width, so button positions and the 24px width contract are unchanged.
