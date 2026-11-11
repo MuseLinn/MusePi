@@ -1315,7 +1315,8 @@ button.tr-display-context-source:hover {
 	align-items: center;
 	gap: 8px;
 	justify-content: space-between;
-	padding: 4px 8px;
+	min-height: 30px;
+	padding: 2px 4px 2px 10px;
 	border-bottom: 1px solid var(--border);
 	background: var(--bg);
 }
@@ -1324,29 +1325,74 @@ button.tr-display-context-source:hover {
 	font-family: var(--font-mono);
 	font-size: 11px;
 	letter-spacing: 0.04em;
-	text-transform: uppercase;
 	color: var(--fg-faint);
 }
 
-.tr-code-copy {
-	border: 0;
-	border-radius: var(--radius-sm);
-	padding: 2px 8px;
-	background: transparent;
-	color: var(--fg-muted);
-	font-size: 11px;
-	font-family: inherit;
-	cursor: pointer;
-	transition: background 120ms ease-out, color 120ms ease-out;
+/* Actions stay out of the way until the block is engaged: hover, or keyboard
+ * focus inside the group (`:has(:focus-visible)`, never `:focus-within` — a
+ * pointer press must not summon them). Touch devices keep them visible. */
+.tr-code-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	opacity: 0;
+	transition: opacity 120ms ease-out;
 }
 
-.tr-code-copy:hover {
+.tr-code:hover .tr-code-actions,
+.tr-code-actions:has(.tr-code-btn:focus-visible) {
+	opacity: 1;
+}
+
+.tr-code-btn {
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--fg-muted);
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		color 120ms ease-out;
+}
+
+.tr-code-btn:hover {
 	background: var(--bg-raised);
 	color: var(--fg);
 }
 
-.tr-code-copy[data-copied] {
+.tr-code-btn:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 1px;
+}
+
+.tr-code-btn[data-copied] {
 	color: var(--ok);
+}
+
+.tr-code-btn[aria-pressed="true"] {
+	color: var(--accent);
+	background: var(--bg-raised);
+}
+
+.tr-code-glyph {
+	display: block;
+}
+
+/* Wrap toggle: flips white-space only, never the box geometry. */
+.tr-code--wrap > pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+@media (hover: none) {
+	.tr-code-actions {
+		opacity: 1;
+	}
 }
 
 .tr-code > pre {

@@ -123,6 +123,22 @@ describe("Transcript LaTeX math", () => {
 		expect(html).toContain('<span class="tr-math">');
 		expect(html).toContain('class="tr-math-copy tr-code-copy"');
 	});
+
+	it("labels a fenced block with its language and icon-only actions", () => {
+		const html = renderMarkdown("```ts\nconst x = 1;\n```");
+		expect(html).toContain('<span class="tr-code-lang">TypeScript</span>');
+		expect(html).toContain('class="tr-code-btn tr-code-copy"');
+		expect(html).toContain('morph-icon class="tr-code-glyph" data-glyph="copy"');
+		expect(html).toContain('class="tr-code-btn tr-code-wrap" aria-pressed="false"');
+		expect(html).toContain('data-glyph="wrap"');
+		// Icon-only: the old text label must not survive in the header.
+		expect(html).not.toMatch(/tr-code-copy[^>]*>[^<]*复制/);
+	});
+
+	it("falls back to Plain Text for an unlabelled fence", () => {
+		const html = renderMarkdown("```\nplain\n```");
+		expect(html).toContain('<span class="tr-code-lang">Plain Text</span>');
+	});
 });
 
 describe("Transcript mermaid", () => {

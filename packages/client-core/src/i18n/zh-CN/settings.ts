@@ -1133,6 +1133,7 @@ export const settings = {
 	"settings.ask": "提问",
 	"settings.askAnotherQuestion": "再问一个问题",
 	"settings.copy": "复制",
+	"settings.wrapLines": "自动换行",
 	"settings.copyCode": "复制代码",
 	"settings.close": "关闭",
 	"settings.newSessionSelection": "基于选择新建会话",

@@ -1,4 +1,14 @@
 import { Marked } from "@musepi/pi-utils/marked";
+import { Check as CheckGlyphData, Copy as CopyGlyphData, WrapText as WrapGlyphData } from "lucide";
+import type { IconInput } from "morphicons";
+import { defineMorphIcon } from "morphicons/element";
+
+/** The `<morph-icon>` custom element surface this module drives. */
+interface MorphIconElement extends HTMLElement {
+	set(icon: IconInput): void;
+	morphTo(icon: IconInput, spring?: string): void;
+}
+
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -20,6 +30,44 @@ import { mathExtensions } from "./math";
 import { ensureMermaidFallbackObserver, mermaidMode, renderMermaidHtml } from "./mermaid";
 import { graphemeSpans } from "./reveal";
 import { useStreamingReveal } from "./use-streaming-reveal";
+
+/** Human-readable label for a fenced code block header. */
+function codeLangLabel(lang: string): string {
+	const key = lang.trim().toLowerCase();
+	const known: Record<string, string> = {
+		ts: "TypeScript",
+		tsx: "TSX",
+		js: "JavaScript",
+		jsx: "JSX",
+		py: "Python",
+		rb: "Ruby",
+		rs: "Rust",
+		go: "Go",
+		sh: "Shell",
+		bash: "Shell",
+		zsh: "Shell",
+		json: "JSON",
+		yml: "YAML",
+		yaml: "YAML",
+		md: "Markdown",
+		sql: "SQL",
+		css: "CSS",
+		html: "HTML",
+		xml: "XML",
+		java: "Java",
+		kt: "Kotlin",
+		swift: "Swift",
+		c: "C",
+		cpp: "C++",
+		cs: "C#",
+		php: "PHP",
+		toml: "TOML",
+		ini: "INI",
+		dockerfile: "Dockerfile",
+	};
+	if (key === "") return "Plain Text";
+	return known[key] ?? key;
+}
 
 function unescapeHtml(raw: string): string {
 	const parseCodePoint = (value: number): string => {
@@ -144,8 +192,15 @@ const md = new Marked({
 			// source even after tree-sitter spans replace the body.
 			const head =
 				`<div class="tr-code-head">` +
-				`<span class="tr-code-lang">${lang ? escapeHtml(lang) : "text"}</span>` +
-				`<button type="button" class="tr-code-copy" data-copy-hash="${hash}">${t("settings.copy")}</button>` +
+				`<span class="tr-code-lang">${escapeHtml(codeLangLabel(l))}</span>` +
+				`<span class="tr-code-actions">` +
+				`<button type="button" class="tr-code-btn tr-code-copy" data-copy-hash="${hash}" aria-label="${escapeHtml(t("settings.copy"))}" title="${escapeHtml(t("settings.copy"))}">` +
+				`<morph-icon class="tr-code-glyph" data-glyph="copy" size="14" stroke-width="1.8" aria-hidden="true"></morph-icon>` +
+				`</button>` +
+				`<button type="button" class="tr-code-btn tr-code-wrap" aria-pressed="false" aria-label="${escapeHtml(t("settings.wrapLines"))}" title="${escapeHtml(t("settings.wrapLines"))}">` +
+				`<morph-icon class="tr-code-glyph" data-glyph="wrap" size="14" stroke-width="1.8" aria-hidden="true"></morph-icon>` +
+				`</button>` +
+				`</span>` +
 				`</div>`;
 			return `<div class="tr-code">${head}<pre><code${langAttr} data-hl-hash="${hash}">${lines}\n</code></pre></div>`;
 		},
@@ -970,6 +1025,14 @@ export const Markdown = memo(function Markdown({
 			);
 			return;
 		}
+		const wrapBtn = target.closest<HTMLElement>(".tr-code-wrap");
+		if (wrapBtn) {
+			const block = wrapBtn.closest<HTMLElement>(".tr-code");
+			if (!block) return;
+			const wrapped = block.classList.toggle("tr-code--wrap");
+			wrapBtn.setAttribute("aria-pressed", wrapped ? "true" : "false");
+			return;
+		}
 		const btn = target.closest<HTMLElement>(".tr-code-copy, .tr-math-copy");
 		if (!btn) return;
 		let text: string | undefined;
@@ -1125,15 +1188,39 @@ export const Markdown = memo(function Markdown({
 		ensureMermaidFallbackObserver();
 	}, []);
 
-	// The copy button swaps to a transient "settings.copied" label (same width).
-	const copiedLabel = t("settings.copied");
-	const body =
-		copiedHash == null
-			? render.html
-			: render.html.replace(
-					new RegExp(`((?:data-copy-hash|data-math-copy)="${copiedHash}"[^>]*)(>${t("settings.copy")}<)`, "g"),
-					`$1 data-copied>${copiedLabel}<`,
-				);
+	// The copy button's feedback is applied to the rendered DOM (attribute +
+	// morphicon), not by rewriting the markdown HTML — a string swap replaced
+	// the whole body and dropped the icon element with it.
+	const body = render.html;
+
+	// `morphicons` needs the element instance: plant the resting glyph after
+	// each HTML commit (streaming rebuilds the body), keeping the copy state
+	// the click handler already resolved.
+	useLayoutEffect(() => {
+		const host = rootRef.current;
+		if (!host) return;
+		defineMorphIcon();
+		for (const glyph of host.querySelectorAll<MorphIconElement>("morph-icon[data-glyph]")) {
+			const icon = glyph.dataset.glyph === "wrap" ? WrapGlyphData : CopyGlyphData;
+			const button = glyph.closest<HTMLElement>(".tr-code-btn");
+			const copied = button != null && copiedHash != null && button.dataset.copyHash === copiedHash;
+			glyph.set(copied ? CheckGlyphData : icon);
+		}
+	}, [render.html, copiedHash]);
+
+	useLayoutEffect(() => {
+		const host = rootRef.current;
+		if (!host) return;
+		for (const button of host.querySelectorAll<HTMLElement>(".tr-code-copy")) {
+			const copied = copiedHash != null && button.dataset.copyHash === copiedHash;
+			button.toggleAttribute("data-copied", copied);
+			button.setAttribute("aria-label", t(copied ? "settings.copied" : "settings.copy"));
+			button.setAttribute("title", t(copied ? "settings.copied" : "settings.copy"));
+			button
+				.querySelector<MorphIconElement>("morph-icon")
+				?.morphTo(copied ? CheckGlyphData : CopyGlyphData, "snappy");
+		}
+	}, [copiedHash]);
 
 	// 表格加宽 state → DOM: applied now and re-applied whenever React rewrites
 	// the markdown html (`body` goes through dangerouslySetInnerHTML, so a

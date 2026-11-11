@@ -1197,6 +1197,7 @@ export const settings = {
 	"settings.ask": "Ask",
 	"settings.askAnotherQuestion": "Ask another question",
 	"settings.copy": "Copy",
+	"settings.wrapLines": "Wrap lines",
 	"settings.copyCode": "Copy code",
 	"settings.close": "Close",
 	"settings.newSessionSelection": "New session from selection",
