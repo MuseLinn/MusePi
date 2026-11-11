@@ -384,6 +384,7 @@ export function WelcomeComposer({
 	// mode). A second tap disarms.
 	const [planArmed, setPlanArmed] = useState(false);
 	const [goalArmed, setGoalArmed] = useState(false);
+	const [guidedArmed, setGuidedArmed] = useState(false);
 	const attachId = useRef(0);
 	/** Attach chip clicked → open the same attach menu the paperclip opens
 	 *  (the frame owns no picker of its own; the menu does). */
@@ -1308,6 +1309,11 @@ export function WelcomeComposer({
 		// Armed modes apply to the session this first prompt creates; the
 		// armed chips reset either way (goal needs text to be an objective).
 		const applyGoal = goalArmed && trimmed.length > 0;
+		// Guided goal rides on this first prompt instead of firing the
+		// interview on the menu click: the user writes the objective, sends,
+		// and the interview starts from that message.
+		const applyGuided = guidedArmed && trimmed.length > 0;
+		setGuidedArmed(false);
 		setGoalArmed(false);
 		setPlanArmed(false);
 		const videos = attachmentVideoSelection(attachments);
@@ -1328,6 +1334,7 @@ export function WelcomeComposer({
 			videos: videos.parts,
 			planMode: planArmed,
 			goalMode: applyGoal,
+			guidedGoal: applyGuided,
 		});
 	};
 
@@ -1850,6 +1857,7 @@ export function WelcomeComposer({
 										}}
 										goalMode={goalArmed}
 										planMode={planArmed}
+										guidedMode={guidedArmed}
 										// Welcome toggles ARM the mode chip only — no popup
 										// dialog, no session creation (the input keeps its
 										// shape). The first sent message applies the mode
@@ -1857,36 +1865,17 @@ export function WelcomeComposer({
 										onToggleGoal={() => setGoalArmed(v => !v)}
 										onTogglePlan={() => setPlanArmed(v => !v)}
 										// Guided goal needs a live session (the interview runs
-										// in chat), so the welcome entry CREATES one via
-										// onSubmit(guidedGoal) — the daemon fires the hidden
-										// interview kickoff there and the draft rides along
-										// as the rough objective. The empty `() => {}` once
-										// made the menu row look dead.
+										// Guided goal is ARMED here, not started: the row used to create
+										// a session and fire the hidden interview kickoff immediately,
+										// which read as "click = a message I did not write". The user
+										// writes the objective and sends; that first prompt carries
+										// guidedGoal so the daemon opens the interview from it.
 										onGuidedGoal={() => {
-											const draft = text.trim();
-											if (busy) return;
-											setText("");
-											setQuotes([]);
-											requestAnimationFrame(() => autosize(taRef.current));
 											sfxFor("first");
+											setGuidedArmed(true);
 											setGoalArmed(false);
 											setPlanArmed(false);
-											void onSubmit(draft, {
-												thinkingLevel: thinking,
-												modelId: modelTouched.current ? modelId : effectiveModelId,
-												guidedGoal: true,
-												// Image chips ride along into the interview
-												// kickoff (TUI /guided-goal input.images
-												// parity); the daemon attaches them to the
-												// hidden synthetic kickoff.
-												images: attachments
-													.filter(a => a.kind !== "file" && a.dataUrl)
-													.map(a => ({
-														type: "image" as const,
-														data: a.dataUrl.split(",")[1] ?? "",
-														mimeType: a.mimeType,
-													})),
-											});
+											requestAnimationFrame(() => taRef.current?.focus());
 										}}
 										onPickImages={files => void addFiles(files)}
 										// Same entry set as the session composer: the empty
@@ -1982,6 +1971,17 @@ export function WelcomeComposer({
 										>
 											<Icon name="compass-3" className="h-3 w-3" />
 											<span>{t("tools.plan")}</span>
+										</button>
+									)}
+									{guidedArmed && (
+										<button
+											type="button"
+											className="gui-mode-chip gui-mode-chip--armed"
+											title={t("general.guidedGoalModeHint")}
+											onClick={() => setGuidedArmed(false)}
+										>
+											<Icon name="chat-1" className="h-3 w-3" />
+											<span>{t("general.guidedGoalMode")}</span>
 										</button>
 									)}
 								</>

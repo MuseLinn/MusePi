@@ -31,6 +31,7 @@ export function AttachMenu({
 	onReady,
 	goalMode,
 	planMode,
+	guidedMode = false,
 	planDisabled = false,
 	goalDisabled = false,
 	onToggleGoal,
@@ -47,6 +48,8 @@ export function AttachMenu({
 }: {
 	goalMode: boolean;
 	planMode: boolean;
+	/** Guided goal is armed for the next prompt (it applies on send). */
+	guidedMode?: boolean;
 	/** No active session (welcome state): plan/goal toggles are session
 	 *  state, so they render disabled with an explanatory tooltip. */
 	planDisabled?: boolean;
@@ -451,6 +454,9 @@ export function AttachMenu({
 						<span className="min-w-0 flex-1">
 							<span className="gui-attach-opt-title">{t("general.guidedGoalMode")}</span>
 							<span className="gui-attach-opt-hint">{t("general.guidedGoalModeHint")}</span>
+						</span>
+						<span className={`gui-attach-switch${guidedMode ? " gui-attach-switch--on" : ""}`} aria-hidden>
+							<span className="gui-attach-switch-knob" />
 						</span>
 					</button>
 					{/* M2-2.6 third segment: enabled plugins / workspace files.
