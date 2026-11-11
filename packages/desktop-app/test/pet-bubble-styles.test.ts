@@ -30,6 +30,9 @@ beforeEach(async () => {
 				</div>
 			</div>
 		</div>`);
+	// setContent replaces the DOM but leaves the pointer where the previous test
+	// left it, which would hover the new card; every test starts unhovered.
+	await page.mouse.move(0, 0);
 });
 
 afterAll(async () => {
@@ -86,20 +89,52 @@ function expectFourVisibleButtons(actions: Awaited<ReturnType<typeof readActions
 	}
 }
 
+/** The reveal fades over 140ms; assertions read the settled row, not a frame
+ *  of the transition (a freshly hovered card reports the starting opacity). */
+async function waitForReveal(): Promise<void> {
+	await page.waitForFunction(
+		() =>
+			(document.querySelector(".pet-bubble__actions")?.getAnimations() ?? []).every(
+				animation => animation.playState !== "running",
+			),
+		{ timeout: 2000 },
+	);
+}
+
 describe("pet bubble action layout", () => {
 	it("reveals all four actions in one horizontal row on hover", async () => {
 		await page.hover(".pet-bubble");
+		await waitForReveal();
 		expectFourVisibleButtons(await readActions());
 	});
 
 	it("reveals all four actions when keyboard focus enters the card", async () => {
 		await page.focus(".pet-bubble__action");
+		await waitForReveal();
 		expectFourVisibleButtons(await readActions());
 	});
 
 	it("keeps the persistent unread actions wide enough for their contents", async () => {
 		await page.evaluate(() => document.querySelector(".pet-bubble")!.classList.add("pet-bubble--unread"));
+		await waitForReveal();
 		expectFourVisibleButtons(await readActions());
+	});
+
+	it("keeps the collapsed row's controls inside the card", async () => {
+		const actions = await readActions();
+		const card = await page.evaluate(() => {
+			const bounds = document.querySelector(".pet-bubble")!.getBoundingClientRect();
+			return { left: bounds.left, right: bounds.right };
+		});
+		// Hidden, the row is a zero-width clip box; its controls still lay
+		// themselves out and must not spill past the card or the window.
+		expect(actions.width).toBe(0);
+		expect(actions.opacity).toBe("0");
+		expect(actions.buttons).toHaveLength(4);
+		for (const button of actions.buttons) {
+			expect(button.x).toBeGreaterThanOrEqual(card.left);
+			expect(button.right).toBeLessThanOrEqual(card.right);
+		}
 	});
 });
 

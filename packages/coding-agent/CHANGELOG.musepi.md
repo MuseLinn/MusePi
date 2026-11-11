@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **桌宠气泡的快捷按钮不再越出窗口**：卡片收起时动作行是零宽裁剪盒，里面的 24px 按钮仍参与排版，而居中把这 80px 溢出平摊到两侧，审批气泡的按钮因此排到 279–359，越过卡片右边界 332 和 344px 窗口。收起态改为贴 inline end，隐藏按钮落在卡片内；展开时第二轨正好等于行宽，按钮位置与 24px 宽度契约不变。
+  - EN: Pet bubble quick actions no longer spill outside the window. Collapsed, the row is a zero-width clip box while its 24px buttons still lay themselves out, and centring that overflow split it on both sides, so approval bubbles placed their buttons at 279–359 — past the card's 332 edge and the 344px window. The collapsed row now flushes to the inline end, keeping the hidden buttons inside the card; when revealed, the second track equals the row width, so button positions and the 24px width contract are unchanged.
+
 - **会话启动即带上宿主提示词区块，插件注册随卸载回收**：`createAgentSession` 在 `session_start` 之后重建一次基础提示词，内存指令、自动学习与 MCP 路由等宿主区块不再等到下一次提示词变更才出现；这次启动重建不写已应用工具签名，后续工具激活仍会各自重建，fork 的 prompt-cache 亲和性也保留。`agent-preset/selected` 现在连同会话上下文一起派发给 `pi.on` 监听器。动态插件运行时 `dispose()` 先逐个卸载插件再销毁分组，内存后端 provider 这类进程级注册不再泄漏到同一进程的下一个运行时（重启插件不再报 already registered）。
   - EN: A session's prompt now carries the host sections from startup, and plugin registrations are reclaimed on unload. `createAgentSession` rebuilds the base prompt once after `session_start`, so memory instructions, auto-learn guidance and MCP routes no longer wait for the next prompt mutation; that startup rebuild leaves the applied-tool signature unset, so later tool activations still rebuild on their own, and a fork keeps its inherited prompt-cache affinity. `agent-preset/selected` is dispatched to `pi.on` listeners together with the session context. The dynamic plugin runtime's `dispose()` unloads each plugin before tearing down the group, so process-wide registrations such as memory backend providers no longer leak into the next runtime in the same process (a reload no longer fails with "already registered").
 

@@ -484,18 +484,22 @@
 	display: flex;
 	flex-direction: row;
 	align-items: center;
-	justify-content: center;
+	/* Collapsed, the row is a zero-width clip box inside the `auto` track. Its
+	 * 24px buttons still lay themselves out, so they must be flushed to the
+	 * inline end: a centred row split its overflow around the 0px track and put
+	 * half of it past the card's right edge and outside the window. Revealed,
+	 * the track is exactly the row, so the buttons keep the same positions. */
+	justify-content: flex-end;
 	gap: 4px;
 	/* The action column is content-sized: let the text column absorb the
-	 * squeeze instead of shrinking the 24px buttons (a squeezed row measured
-	 * 15px per button and spilled past the window edge by 1.5px). */
+	 * squeeze instead of shrinking the 24px buttons. */
 	min-width: 0;
 	width: 0;
 	overflow: hidden;
 	opacity: 0;
-	/* Width must switch instantly: animating 0 → max-content lays the 24px
-	 * buttons out inside a still-narrow grid track, so the row paints past the
-	 * window edge for the whole 180ms. Only the fade is animated. */
+	/* Width switches instantly: an animated 0 → max-content lays the buttons
+	 * out inside a still-narrow track and paints them past the window edge for
+	 * the whole transition. Only the fade is animated. */
 	transition: opacity 140ms var(--spring-snappy, ease);
 	pointer-events: none;
 }
