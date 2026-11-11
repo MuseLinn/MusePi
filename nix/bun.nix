@@ -397,13 +397,13 @@
     url = "https://registry.npmjs.org/@codemirror/view/-/view-6.43.14.tgz";
     hash = "sha512-hC45YnmJNR1rz42OF57BLoQNFMV12/13drnvibDsR2quNDmldcb4WvYVV81hFQg56i9lcqQMEDqilhX2QDcGQQ==";
   };
-  "@deepseek-ai/cordis@4.0.4" = fetchurl {
-    url = "https://registry.npmjs.org/@deepseek-ai/cordis/-/cordis-4.0.4.tgz";
-    hash = "sha512-obgyxqWAmFn3Re8kvsuUnyW+ihrz6eJCnJO4fh1cQzDtmPYz/zzVeUkH9R94I0OwSVOocK67Kgakm04j/oQXzg==";
+  "@deepseek-ai/cordis@4.1.0" = fetchurl {
+    url = "https://registry.npmjs.org/@deepseek-ai/cordis/-/cordis-4.1.0.tgz";
+    hash = "sha512-CJrjNyBkKn1SfvBQUcgFYKFnLjS+uKrhdMsbHU60xabvi12d+xQ+IQSNlME5Z+B+4Zi6n4BDknKY94tEPeo47w==";
   };
-  "@deepseek-ai/cosmokit@1.8.5" = fetchurl {
-    url = "https://registry.npmjs.org/@deepseek-ai/cosmokit/-/cosmokit-1.8.5.tgz";
-    hash = "sha512-LXsrlem9z8dq4sLflj2yuCuYX7KqhdzF5hZly3eZyuTo8d6oDSOXuEgC5DbQWKW+lksm6zmOutQLsP/ma6wR6A==";
+  "@deepseek-ai/cosmokit@1.9.0" = fetchurl {
+    url = "https://registry.npmjs.org/@deepseek-ai/cosmokit/-/cosmokit-1.9.0.tgz";
+    hash = "sha512-5O1S53mZiJyZYcvxxD0Qv1EY7qFPSxbGyD8CbVK6gw7W9FvcXZj2YIX1ZkOqyQQ3Xt2rFkZDHJv0+V3Zmmp8CA==";
   };
   "@dnd-kit/accessibility@3.1.1" = fetchurl {
     url = "https://registry.npmjs.org/@dnd-kit/accessibility/-/accessibility-3.1.1.tgz";

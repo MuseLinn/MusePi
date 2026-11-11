@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-11-11
+
 - **桌宠气泡悬停不再跳高、回复框平滑展开**：气泡的快捷动作列改为常驻预留宽度，悬停只改变透明度——此前展开动作行会挤窄正文、把卡片撑高，而窗口尺寸没有跟随，多出的高度被透明窗口硬裁。尺寸测量现在也覆盖"首次活动推送后才出现"的气泡容器。内联回复行改为常驻 DOM + 状态驱动展开（沿用条件区块的 Reveal 规范，带焦点与 reduced-motion 处理），不再整块突现。
   - EN: Pet bubbles no longer jump in height on hover, and the inline reply row expands smoothly. The quick-action column always reserves its width and hover only changes opacity — revealing it used to squeeze the text column, grow the card, and overflow the transparent window whose height never followed. Size measurement now also covers the bubbles container that appears only after the first activity push. The reply row stays mounted and expands from state through the shared Reveal contract (focus and reduced-motion handled), instead of appearing as a sudden block.
 
