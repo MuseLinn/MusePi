@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-11-11
+
 - **崩溃或重启后不再丢会话记录**：压缩在日志尾部折叠时会把 journal 清成空文件，重新打开后序号从 1 重来，而重放会丢弃检查点序号及以下的所有记录——整段会话就此消失。现在序号从「文件尾」与「检查点」中较大者继续，且压缩不接受倒退的检查点；断线重连改用真正落盘的尾部判断，补不齐时明确要求整页重载，而不是少推一截。
   - EN: A crash or restart no longer loses session records. Compacting at the journal tail emptied the file, reopening renumbered from 1, and replay discards everything at or below the checkpoint seq — the session simply disappeared. Seqs now continue from the higher of the file tail and the checkpoint, compaction refuses a checkpoint that moves backwards, and catch-up decides from the durable tail so an incomplete range asks for a full resync instead of returning a short one.
 
