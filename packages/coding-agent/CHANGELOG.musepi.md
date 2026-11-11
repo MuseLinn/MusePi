@@ -6,6 +6,15 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **崩溃或重启后不再丢会话记录**：压缩在日志尾部折叠时会把 journal 清成空文件，重新打开后序号从 1 重来，而重放会丢弃检查点序号及以下的所有记录——整段会话就此消失。现在序号从「文件尾」与「检查点」中较大者继续，且压缩不接受倒退的检查点；断线重连改用真正落盘的尾部判断，补不齐时明确要求整页重载，而不是少推一截。
+  - EN: A crash or restart no longer loses session records. Compacting at the journal tail emptied the file, reopening renumbered from 1, and replay discards everything at or below the checkpoint seq — the session simply disappeared. Seqs now continue from the higher of the file tail and the checkpoint, compaction refuses a checkpoint that moves backwards, and catch-up decides from the durable tail so an incomplete range asks for a full resync instead of returning a short one.
+
+- **被打断的工具调用不再被当成没执行**：进程在工具执行中途退出时，恢复后该调用呈现为「结果未知、可能已执行」，模型不会把它当成从未发生而重复同一个写入或命令。只有从未开始的调用（结果落在另一条分支上）才会被移除。
+  - EN: A tool call interrupted mid-execution is no longer presented as never having run. Recovery shows it as an unknown outcome that may already have taken effect, so the model does not re-issue the same write or command as if the world were unchanged. Only calls that never started — their result sits on another branch — are still removed.
+
+- **插件热重载失败时不再让宿主插件整体缺席**：挂载中途抛错会先回收这次已经注册的服务与 memory 后端 provider，再回滚旧模块；此前残留的注册会让回滚撞上「already registered」，宿主插件从此缺失且没有重试路径。
+  - EN: A failed plugin hot reload no longer leaves the host without its plugins. A mount that throws mid-apply now releases the services and memory backend providers it already registered before the rollback remounts the previous module; the leftover registration used to make that rollback fail with "already registered", leaving the host plugins missing with no retry path.
+
 ## [0.7.3] - 2026-11-11
 
 - **桌宠气泡悬停不再跳高、回复框平滑展开**：气泡的快捷动作列改为常驻预留宽度，悬停只改变透明度——此前展开动作行会挤窄正文、把卡片撑高，而窗口尺寸没有跟随，多出的高度被透明窗口硬裁。尺寸测量现在也覆盖"首次活动推送后才出现"的气泡容器。内联回复行改为常驻 DOM + 状态驱动展开（沿用条件区块的 Reveal 规范，带焦点与 reduced-motion 处理），不再整块突现。
