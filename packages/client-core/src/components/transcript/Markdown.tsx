@@ -3,6 +3,8 @@ import {
 	Check as CheckGlyphData,
 	Copy as CopyGlyphData,
 	ListOrdered as LinesGlyphData,
+	AlignJustify as NoLinesGlyphData,
+	StretchHorizontal as NoWrapGlyphData,
 	WrapText as WrapGlyphData,
 } from "lucide";
 import type { IconInput } from "morphicons";
@@ -1045,6 +1047,9 @@ export const Markdown = memo(function Markdown({
 			block.classList.toggle("tr-code--lines", !on);
 			block.classList.toggle("tr-code--no-lines", on);
 			linesBtn.setAttribute("aria-pressed", on ? "false" : "true");
+			linesBtn
+				.querySelector<MorphIconElement>("morph-icon")
+				?.morphTo(on ? NoLinesGlyphData : LinesGlyphData, "snappy");
 			return;
 		}
 		const wrapBtn = target.closest<HTMLElement>(".tr-code-wrap");
@@ -1053,6 +1058,9 @@ export const Markdown = memo(function Markdown({
 			if (!block) return;
 			const wrapped = block.classList.toggle("tr-code--wrap");
 			wrapBtn.setAttribute("aria-pressed", wrapped ? "true" : "false");
+			wrapBtn
+				.querySelector<MorphIconElement>("morph-icon")
+				?.morphTo(wrapped ? WrapGlyphData : NoWrapGlyphData, "snappy");
 			return;
 		}
 		const btn = target.closest<HTMLElement>(".tr-code-copy, .tr-math-copy");
@@ -1222,12 +1230,22 @@ export const Markdown = memo(function Markdown({
 		const host = rootRef.current;
 		if (!host) return;
 		defineMorphIcon();
+		const globalLines = document.documentElement.classList.contains("gui-code-lines");
 		for (const glyph of host.querySelectorAll<MorphIconElement>("morph-icon[data-glyph]")) {
-			const glyphName = glyph.dataset.glyph;
-			const icon = glyphName === "wrap" ? WrapGlyphData : glyphName === "lines" ? LinesGlyphData : CopyGlyphData;
 			const button = glyph.closest<HTMLElement>(".tr-code-btn");
-			const copied = button != null && copiedHash != null && button.dataset.copyHash === copiedHash;
-			glyph.set(copied ? CheckGlyphData : icon);
+			const block = glyph.closest<HTMLElement>(".tr-code");
+			const glyphName = glyph.dataset.glyph;
+			if (glyphName === "wrap") {
+				glyph.set(block?.classList.contains("tr-code--wrap") ? WrapGlyphData : NoWrapGlyphData);
+			} else if (glyphName === "lines") {
+				const on =
+					block?.classList.contains("tr-code--lines") === true ||
+					(globalLines && block?.classList.contains("tr-code--no-lines") !== true);
+				glyph.set(on ? LinesGlyphData : NoLinesGlyphData);
+			} else {
+				const copied = button != null && copiedHash != null && button.dataset.copyHash === copiedHash;
+				glyph.set(copied ? CheckGlyphData : CopyGlyphData);
+			}
 		}
 	}, [render.html, copiedHash]);
 
