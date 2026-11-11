@@ -9,7 +9,7 @@
   "packages/client-core/src/components/panels/VoicePanel.tsx": 15,
   "packages/client-core/src/components/shell/Composer.tsx": 1,
   "packages/client-core/src/components/shell/LanguageToggle.tsx": 2,
-  "packages/client-core/src/components/transcript/Markdown.tsx": 2,
+  "packages/client-core/src/components/transcript/Markdown.tsx": 3,
   "packages/client-core/src/components/transcript/Transcript.tsx": 1,
   "packages/client-core/src/components/transcript/canvas-jump.tsx": 1,
   "packages/client-core/src/components/transcript/mermaid.ts": 1,
