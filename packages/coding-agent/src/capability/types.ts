@@ -156,6 +156,14 @@ export interface Capability<T> {
 	description: string;
 
 	/**
+	 * Internal discovery surface: still loadable and introspectable by ID, but
+	 * omitted from the capability list/settings UI. Used for surfaces that are
+	 * composition details of another feature (e.g. `host-plugins`) rather than
+	 * a user-selectable capability.
+	 */
+	hidden?: boolean;
+
+	/**
 	 * Extract a unique key from an item for deduplication.
 	 * Items with the same key: first one wins (highest priority provider).
 	 * Return undefined to never deduplicate (all items kept).

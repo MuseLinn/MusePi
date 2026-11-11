@@ -8,6 +8,7 @@
 import "../capability/context-file";
 import "../capability/extension";
 import "../capability/extension-module";
+import "../capability/host-plugin";
 import "../capability/hook";
 import "../capability/instruction";
 import "../capability/mcp";

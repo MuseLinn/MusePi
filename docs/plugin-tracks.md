@@ -3,7 +3,7 @@
 [English](plugin-tracks.md) | [中文](plugin-tracks.zh-CN.md)
 
 > 这份文档是插件体系的**命名与归属权威**。新增文件、改名、写注释前先查这里。
-> 状态：2026-10-19 首版（cordis 对齐改造第一批后）。
+> 状态：2026-10-19 首版（cordis 对齐改造第一批后）；2026-11-11 宿主级插件迁到进程级 cordis 运行时。
 
 ---
 
@@ -30,7 +30,7 @@ Track A 的 `apply` 收到同一个对象，既是 `pi`（平铺兼容面），�
 
 内置命令名（如 `/memory`）默认是保留名：第三方插件注册同名命令会被跳过并告警。宿主内置目录（`bundled-plugins/`、`desktop-plugins/`，以及仓库内的 `packages/*/src/plugins/`）中的插件可以接管保留名——内建实现退化为插件缺席时的回退，命令补全与分发优先使用插件实现。
 
-插件清单可以声明 `musepi.scope: "host"`：这类包由宿主进程在启动时装载一次（daemon 在开监听前、首个会话之前），会话装载会跳过它们。它适合注册进程级事实——记忆后端 provider、服务——因为 `memory.status` 这类 RPC 在没有会话时也要解析后端。普通插件（默认 `session`）仍按会话装载；`discoverBundledPluginPaths({ scope })` 的三个作用域（`session` / `host` / `all`）分别服务会话装载、宿主装载与扩展中心清单。其它宿主（TUI / ACP / SDK / print）在 `createAgentSession` 里同一处调用 `ensureHostHalfPluginsLoaded`，所以所有宿主在同一时机看到同一批进程级注册；每个进程只装载一次。
+插件清单可以声明 `musepi.scope: "host"`：这类包由**进程级 cordis 宿主运行时**（`extensibility/plugins/runtime/host-runtime.ts`）在宿主启动时经 `mountPlugin` 装载一次——daemon 在开监听前、其它宿主在首个会话之前。每个插件一条 fiber，`provide` 声明的对象发布到宿主服务注册表，卸载时 fiber 与 memory backend provider 等进程级注册一起回收。宿主包自己的入口/包内依赖/manifest 变化会在进程内替换（注销服务 → 拆 fiber → 重新 import + apply，失败回滚旧模块）；**包目录是归属边界**：包外的宿主模块不在热监视范围内，变更需要重启宿主；这类请求经 `ctx.hmr.requestRestart`（dsh `loader.exit()` 的对位）交给宿主，由宿主决定是否重启。提供 `hmr` 的包本身也不自我替换，因为 watcher 的订阅者不属于该 fiber，替换会静默断开它们，同样走重启请求。它适合注册进程级事实——记忆后端 provider、服务——因为 `memory.status` 这类 RPC 在没有会话时也要解析后端。宿主包只出现在 `host-plugins` 能力里，**不出现在 `extension-modules` 能力**，因此会话发现拿不到它们、不会重复执行入口；扩展中心经 `host-plugins` 列出这两类生命周期。普通插件（默认 `session`）仍按会话装载；`discoverBundledPluginPaths({ scope })` 的三个作用域（`session` / `host` / `all`）分别服务会话装载、宿主运行时与清单查询。其它宿主（TUI / ACP / SDK / print）在 `createAgentSession` 里同一处调用 `ensureHostHalfPluginsLoaded`，所以所有宿主在同一时机看到同一批进程级注册；每个进程只装载一次。
 
 RPC 与设置不走接管：`memory.*` 这类方法是核心契约，路由只调用活动后端的成员，替换实现走 `ctx.memory.registerBackendProvider`；设置键的所有者是读取它的包，核心记忆运行时读取 `memory.*`，因此这些键固定在核心 schema，`ctx.settings.register` 只追加扩展自己命名空间内的键，与核心键同名时在 `settings.schema` 合并阶段被忽略。这与 dsh 一致：Remote 方法由服务包拥有、插件通过 adapter 替换实现；每个包导出自己的 `Config`，不存在跨包替换同一键。
 
@@ -97,15 +97,22 @@ src/extensibility/
 
 ---
 
-## 3. HMR（一条变更判定，两个重载动作）
+## 3. HMR（一条变更判定，三个重载动作）
 
 ```
 文件变更 → chokidar watcher（500ms 防抖 + 120ms settle）
-  ├─ Track A  host-level reconcile → ProfileModuleGraph.plan()
+  ├─ Track A  user 插件 host-level reconcile → ProfileModuleGraph.plan()
   │             → accepted/declined 沿 importer 反向传播
   │             → #reloadRecords()：预导入受影响组合行
   │                 → 逆序 dispose 旧 fiber，再按行重新 apply
   │                 → 任一 apply 失败则恢复整批旧实例
+  ├─ Track A  宿主插件 runtime → reloadHostPlugins(paths)
+  │             → 包目录内任意文件 / 入口 / manifest 命中 → 注销服务、
+  │               拆 fiber、注销 provider，再 fresh import + apply
+  │             → 失败用保留的旧模块重新挂载（进程级注册不丢）
+  │             → 包外宿主模块：不热替换，经 ctx.hmr.requestRestart
+  │               把重启请求交给宿主
+  │             → 提供 hmr 的包：不自我替换，同样请求宿主重启
   └─ Track B  每个活跃会话 → agent-session
                 → runner.reloadExtension(path)      ← 同样 fresh: true
 ```
@@ -176,6 +183,11 @@ Windows 下 `fs.watch` 的 recursive 形式对**嵌套较深的文件**不投递
       `auth-hub.checkin` 两个只读服务对象（5 条发布契约测试）
 - [x] 修 `ProviderConfig` 缺 `label` / `resolveApiKey`：这两个字段此前只在宿主内部
       类型上，插件侧拿不到，导致渠道标签在 provider 层丢失
+- [x] **宿主级内置插件迁到进程级 cordis 运行时**（`runtime/host-runtime.ts`）：
+      `musepi-hmr` / `musepi-memory-sharpshooter` 每进程只 `apply` 一次；
+      宿主包从 `extension-modules` 能力移到 `host-plugins`，会话发现不再拿到它们，
+      202a5cdb6 的 `hostScope` 跳过标记随之下线；HMR 批次按源码图原地替换宿主包
+      （失败回滚旧模块），`hmr` 提供者与宿主静态模块只记「需要重启」
 
 ### 未完成（已知债，不阻塞）
 

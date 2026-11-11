@@ -13,6 +13,10 @@
  * double-fire notices. The flag is process-level, matching the registry's own
  * lifetime.
  *
+ * Host-scope packages (`musepi.scope: "host"`) are not mounted here: their
+ * `apply` registers process-wide facts, so they run on the cordis host runtime
+ * (`extensibility/plugins/runtime/host-runtime.ts`) once per process.
+ *
  * @module bundled-plugins/loader
  */
 
@@ -21,9 +25,9 @@ import { logger } from "@musepi/pi-utils";
 import { discoverBundledPluginPaths } from "../discovery/builtin";
 import { ExtensionRuntime, loadExtensionFromFactory } from "../extensibility/extensions/loader";
 import type { Extension } from "../extensibility/extensions/types";
-import { isCordisPluginEntry, resolvePluginEntry, toFactory } from "../extensibility/plugins/runtime/cordis-entry";
+import { resolvePluginEntry, toFactory } from "../extensibility/plugins/runtime/cordis-entry";
 import { disposePluginPrimitives } from "../extensibility/plugins/runtime/cordis-primitives";
-import { provideHostService } from "../extensibility/plugins/runtime/host-services";
+import { ensureHostPlugins, resetHostPlugins } from "../extensibility/plugins/runtime/host-runtime";
 import { registerMagicKeyword } from "../modes/magic-keyword-registry";
 import { EventBus } from "../utils/event-bus";
 
@@ -93,12 +97,10 @@ export interface BundledPluginLoader {
 /** Create an independently stateful loader. Concurrent callers share the same attempt. */
 export function createBundledPluginLoader(
 	discover: () => Promise<string[]> = discoverBundledPluginPaths,
-	options: { publishProvidedServices?: boolean } = {},
 ): BundledPluginLoader {
 	let loaded = false;
 	let inFlight: Promise<void> | undefined;
 	const mounted: Extension[] = [];
-	const serviceDisposers: Array<() => void> = [];
 	return {
 		ensure: async cwd => {
 			if (loaded) return false;
@@ -118,27 +120,16 @@ export function createBundledPluginLoader(
 							throw new Error(`bundled plugin exports nothing loadable: ${entry}`);
 						}
 						const runtime = new ExtensionRuntime();
-						const capture: { published?: unknown } = {};
 						const extension = await loadExtensionFromFactory(
 							toFactory(resolved) as never,
 							cwd,
 							eventBus,
 							runtime,
 							entry,
-							capture,
+							undefined,
 							await readDeclaredConfig(entry),
 						);
 						mounted.push(extension);
-						// Host-scope packages publish their `provide` objects into the
-						// process-wide registry (Cordis `apply` return contract).
-						if (options.publishProvidedServices && isCordisPluginEntry(resolved)) {
-							const payload = capture.published as Record<string, unknown> | undefined;
-							for (const name of resolved.provide ?? []) {
-								const service = payload?.[name];
-								if (service === undefined) continue;
-								serviceDisposers.push(provideHostService(name, service));
-							}
-						}
 						for (const keyword of runtime.pendingMagicKeywordRegistrations) {
 							registerMagicKeyword(keyword);
 						}
@@ -158,10 +149,9 @@ export function createBundledPluginLoader(
 			}
 		},
 		reset: () => {
-			for (const dispose of serviceDisposers.splice(0)) dispose();
 			for (const extension of mounted.splice(0)) {
 				for (const dispose of extension.memoryBackendProviders.splice(0)) dispose();
-				// The same ledger the cordis mount uses: a bundled host plugin's
+				// The same ledger the cordis mount uses: a bundled plugin's
 				// watcher/socket is reclaimed here instead of leaking until exit.
 				void disposePluginPrimitives(extension);
 			}
@@ -186,19 +176,16 @@ export function resetBundledPluginsLoaded(): void {
 /**
  * Host-scope packages (`musepi.scope: "host"`) mount once per host process,
  * before the first session. Their `apply` registers process-wide facts — a
- * memory backend provider, a service — that a session-less RPC must also see,
- * so mounting them per session would register the same thing once per session.
+ * memory backend provider, a service — that a session-less RPC must also see.
+ * They run on the cordis host runtime rather than this session loader: one
+ * `apply` per process is the registry's requirement, and a fiber per package
+ * is what reclaims those registrations when the host tears them down.
  */
-const hostPluginLoader = createBundledPluginLoader(() => discoverBundledPluginPaths({ scope: "host" }), {
-	publishProvidedServices: true,
-});
-
-/** Mount the host-scope bundled packages once. Returns false after the shared attempt completed. */
 export function ensureHostHalfPluginsLoaded(cwd: string): Promise<boolean> {
-	return hostPluginLoader.ensure(cwd);
+	return ensureHostPlugins(cwd);
 }
 
-/** Test helper: forget the process-wide host loader state so a test can load again. */
-export function resetHostHalfPluginsLoaded(): void {
-	hostPluginLoader.reset();
+/** Test helper: tear down the process-wide host runtime so a test can mount again. */
+export function resetHostHalfPluginsLoaded(): Promise<void> {
+	return resetHostPlugins();
 }

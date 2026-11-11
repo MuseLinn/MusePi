@@ -381,20 +381,30 @@ export class ExtensionService implements DaemonService {
 			| undefined;
 		try {
 			const dynamic = await this.#deps.dynamicRuntime?.();
-			inspectedByName = new Map(
-				(dynamic?.inspect() ?? []).map(i => [
-					i.name,
-					{
-						...(i.version ? { version: i.version } : {}),
-						...(i.compatibility ? { compatibility: i.compatibility } : {}),
-						fiberState: i.fiberState,
-						effectLabels: i.effectLabels,
-						components: new Map(
-							i.components.map(c => [c.id, { fiberState: c.fiberState, effectLabels: c.effectLabels }]),
-						),
-					},
-				]),
-			);
+			inspectedByName = new Map();
+			for (const i of dynamic?.inspect() ?? []) {
+				inspectedByName.set(i.name, {
+					...(i.version ? { version: i.version } : {}),
+					...(i.compatibility ? { compatibility: i.compatibility } : {}),
+					fiberState: i.fiberState,
+					effectLabels: i.effectLabels,
+					components: new Map(
+						i.components.map(c => [c.id, { fiberState: c.fiberState, effectLabels: c.effectLabels }]),
+					),
+				});
+			}
+			// Host-scope packages live on a process-level runtime, not the user
+			// plugin runtime, but they are rows in the same list: fold their live
+			// fiber state in so `runtime.fiberState`/`effects` does not silently
+			// stop at the tenancy boundary.
+			const { inspectHostPlugins } = await import("../../extensibility/plugins/runtime/host-runtime");
+			for (const i of inspectHostPlugins()) {
+				inspectedByName.set(i.name, {
+					fiberState: i.fiberState,
+					effectLabels: i.effectLabels,
+					components: new Map(),
+				});
+			}
 		} catch {
 			inspectedByName = undefined;
 		}

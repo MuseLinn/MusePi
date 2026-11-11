@@ -434,10 +434,14 @@ export function getCapability<T>(id: string): Capability<T> | undefined {
 }
 
 /**
- * List all registered capability IDs.
+ * List the user-facing capability IDs.
+ *
+ * A capability marked `hidden` is a composition detail of another surface
+ * (e.g. `host-plugins` feeding the extension center), not something a person
+ * picks in the capability UI. It stays loadable by ID.
  */
 export function listCapabilities(): string[] {
-	return Array.from(capabilities.keys());
+	return [...capabilities.values()].filter(capability => !capability.hidden).map(capability => capability.id);
 }
 
 /**

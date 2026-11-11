@@ -221,62 +221,77 @@ export async function loadAllExtensions(
 		logger.warn("Failed to load tools capability", { error: String(error) });
 	}
 
-	// Load extension modules
-	try {
-		const modules = await loadCapability<ExtensionModule>("extension-modules", loadOpts);
-		// MusePi 自有扩展 provider 是 "musepi-extensions"(discovery/builtin),
-		// gemini 等外部工具用 "native" —— 两者都必须进扩展中心与
-		// modes.list 的 extension-module 收集;其余 provider(gemini/
-		// opencode/claude/codex 的外部扩展)仍按各自 tab 呈现。
-		const nativeModules = modules.all.filter(
-			module => module._source.provider === "native" || module._source.provider === "musepi-extensions",
-		);
-		// A module whose manifest condition does not hold is not loaded, so it is
-		// not listed either. Listing it would be worse than omitting it: the row
-		// would offer a switch that changes nothing, because the loader skips the
-		// module on every start regardless of what the switch says.
-		const loadableModules = (
-			await Promise.all(
-				nativeModules.map(async module => ({ module, allowed: await enablementAllowsPath(module.path) })),
+	/**
+	 * Add one plugin capability's rows.
+	 *
+	 * `extension-modules` and `host-plugins` report the same row shape; the
+	 * loader that owns an entry supplies its `track`, which is also the row's
+	 * displayed kind. Keeping them separate capabilities is what stops a
+	 * listing surface from turning a process-scoped host package into a session
+	 * candidate.
+	 */
+	const addPluginModuleRows = async (capabilityId: string): Promise<void> => {
+		try {
+			const modules = await loadCapability<ExtensionModule>(capabilityId, loadOpts);
+			// MusePi 自有扩展 provider 是 "musepi-extensions"(discovery/builtin),
+			// gemini 等外部工具用 "native" —— 两者都必须进扩展中心与
+			// modes.list 的 extension-module 收集;其余 provider(gemini/
+			// opencode/claude/codex 的外部扩展)仍按各自 tab 呈现。
+			const nativeModules = modules.all.filter(
+				module => module._source.provider === "native" || module._source.provider === "musepi-extensions",
+			);
+			// A module whose manifest condition does not hold is not loaded, so it is
+			// not listed either. Listing it would be worse than omitting it: the row
+			// would offer a switch that changes nothing, because the loader skips the
+			// module on every start regardless of what the switch says.
+			const loadableModules = (
+				await Promise.all(
+					nativeModules.map(async module => ({ module, allowed: await enablementAllowsPath(module.path) })),
+				)
 			)
-		)
-			.filter(entry => {
-				if (entry.allowed) return true;
-				logger.debug("extension-module not listed: manifest condition does not hold", {
-					name: entry.module.name,
-					path: entry.module.path,
-				});
-				return false;
-			})
-			.map(entry => entry.module);
-		// 插件清单 config/resources(管理页):逐模块向上解析最近的
-		// package.json 的 omp/pi 字段,fail-soft 校验后挂到条目上;已落盘的
-		// 配置值同帧读出,经字段声明钳制后以 configValues 下发(表单初始值)。
-		const pluginMetaByPath = new Map<string, ExtensionPluginMeta | null>();
-		await Promise.all(
-			loadableModules.map(async module => {
-				pluginMetaByPath.set(module.path, await readExtensionPluginMeta(module.path));
-			}),
-		);
-		const configStore = await readPluginConfigStore();
-		addItems(loadableModules, "extension-module", {
-			// The kind reports the loader for display. Enablement and config use
-			// the same bare package name on both tracks.
-			kindOf: item => item.track,
-			entryIdOf: item => moduleEntryId(item.name),
-			isDisabledOf: item => isPluginDisabled(disabledExtensions, item.name),
-			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
-			getPluginMeta: item => pluginMetaByPath.get(item.path) ?? null,
-			getPluginConfigValues: item => {
-				const meta = pluginMetaByPath.get(item.path);
-				if (!meta || meta.fields.length === 0) return undefined;
-				const stored = configStore[moduleEntryId(item.name)];
-				return coerceConfigValues(meta.fields, stored);
-			},
-		});
-	} catch (error) {
-		logger.warn("Failed to load extension-modules capability", { error: String(error) });
-	}
+				.filter(entry => {
+					if (entry.allowed) return true;
+					logger.debug("plugin module not listed: manifest condition does not hold", {
+						name: entry.module.name,
+						path: entry.module.path,
+					});
+					return false;
+				})
+				.map(entry => entry.module);
+			// 插件清单 config/resources(管理页):逐模块向上解析最近的
+			// package.json 的 omp/pi 字段,fail-soft 校验后挂到条目上;已落盘的
+			// 配置值同帧读出,经字段声明钳制后以 configValues 下发(表单初始值)。
+			const pluginMetaByPath = new Map<string, ExtensionPluginMeta | null>();
+			await Promise.all(
+				loadableModules.map(async module => {
+					pluginMetaByPath.set(module.path, await readExtensionPluginMeta(module.path));
+				}),
+			);
+			const configStore = await readPluginConfigStore();
+			addItems(loadableModules, "extension-module", {
+				// The kind reports the loader for display. Enablement and config use
+				// the same bare package name on both tracks.
+				kindOf: item => item.track,
+				entryIdOf: item => moduleEntryId(item.name),
+				isDisabledOf: item => isPluginDisabled(disabledExtensions, item.name),
+				getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
+				getPluginMeta: item => pluginMetaByPath.get(item.path) ?? null,
+				getPluginConfigValues: item => {
+					const meta = pluginMetaByPath.get(item.path);
+					if (!meta || meta.fields.length === 0) return undefined;
+					const stored = configStore[moduleEntryId(item.name)];
+					return coerceConfigValues(meta.fields, stored);
+				},
+			});
+		} catch (error) {
+			logger.warn("Failed to load plugin module capability", { capabilityId, error: String(error) });
+		}
+	};
+
+	// Session modules and process-scoped host plugins are separate lists: a
+	// session loads the former, the host runtime mounts the latter once.
+	await addPluginModuleRows("extension-modules");
+	await addPluginModuleRows("host-plugins");
 
 	// 扩展声明的虚拟技能(registerSkill):
 	// 与文件技能同框展示为 skill 条目(provider "extension"),复用

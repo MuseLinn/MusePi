@@ -500,6 +500,11 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 			on: (event, listener, options?: { prepend?: boolean }) =>
 				getHostService<HmrService>("hmr")?.on(event, listener, options) ?? (() => {}),
 			onChange: listener => getHostService<HmrService>("hmr")?.onChange(listener) ?? (() => {}),
+			get restartRequired() {
+				return getHostService<HmrService>("hmr")?.restartRequired ?? null;
+			},
+			requestRestart: requirement => getHostService<HmrService>("hmr")?.requestRestart(requirement),
+			onRestartRequired: listener => getHostService<HmrService>("hmr")?.onRestartRequired(listener) ?? (() => {}),
 			reload: async () => {
 				await getHostService<HmrService>("hmr")?.reload();
 			},
@@ -1492,7 +1497,13 @@ export async function runFactoryInFiber(
 		await fiber.dispose().catch(() => {});
 		throw error;
 	}
-	extension.fiber = { dispose: () => fiber.dispose() };
+	extension.fiber = {
+		get state() {
+			return fiber.state;
+		},
+		getEffects: () => fiber.getEffects().map(effect => ({ label: effect.label })),
+		dispose: () => fiber.dispose(),
+	};
 	return published;
 }
 
@@ -1879,10 +1890,6 @@ export async function discoverExtensionPaths(
 			providers: ["native", "musepi-extensions"],
 		});
 		for (const ext of discovered.items) {
-			// Host-scope packages (`musepi.scope: "host"`) mount once per host
-			// process; executing their entry per session would register the same
-			// process-wide fact again (the memory backend registry refuses it).
-			if (ext.hostScope) continue;
 			// Through `addPaths`, not `addPath`: the capability does not filter by
 			// the user's disable list, so adding directly here started a disabled
 			// extension anyway (the row showed disabled while it kept loading).
