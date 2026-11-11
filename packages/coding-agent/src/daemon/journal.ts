@@ -174,7 +174,15 @@ export class AppendJournal {
 		// downstream consumer that treats seq as a watermark (catchup, client
 		// gap gate). Fresh/empty files read a 0 tail and keep the 1-based
 		// numbering.
-		this.#seq = await AppendJournal.readTailSeq(this.filePath);
+		//
+		// The checkpoint is the other half of the high-water mark: compacting at
+		// the tail leaves no keepable record and truncates the file to zero
+		// bytes, so the tail alone reads 0 while seqs up to the checkpoint are
+		// already spent. Replay drops every record at or below the checkpoint
+		// seq, so renumbering from that 0 would discard the whole journal.
+		const tail = await AppendJournal.readTailSeq(this.filePath);
+		const checkpoint = await AppendJournal.readCheckpoint(this.filePath);
+		this.#seq = Math.max(tail, checkpoint?.seq ?? 0);
 		this.#appendedSinceCompact = 0;
 	}
 
@@ -272,6 +280,20 @@ export class AppendJournal {
 	/** Wait for all queued appends to reach the OS. */
 	async flush(): Promise<void> {
 		await this.#pendingWrite;
+	}
+
+	/**
+	 * Tail seq that is actually readable back from disk.
+	 *
+	 * `tailSeq` is the last seq *assigned*; a write can still be queued, or have
+	 * been dropped outright (EBADF during a cross-instance rewrite), so the two
+	 * diverge. A catch-up decision has to use the durable one: answering "ok"
+	 * from an assigned tail turns a dropped record into a silent hole the
+	 * client can never detect.
+	 */
+	async durableTailSeq(): Promise<number> {
+		await this.flush();
+		return AppendJournal.readTailSeq(this.filePath);
 	}
 
 	/** Records with seq > afterSeq, in journal order — the session.catchup
@@ -577,7 +599,15 @@ export class AppendJournal {
 	 */
 	async compact(checkpointSeq: number, snapshot: unknown): Promise<void> {
 		await this.flush();
+		// Never fold a seq the journal has not reached: the snapshot would claim
+		// authority over records that still carry information.
+		if (!Number.isInteger(checkpointSeq) || checkpointSeq < 0 || checkpointSeq > this.#seq) return;
 		await withRewriteLock(this.filePath, async () => {
+			// Never move the checkpoint backwards either. A smaller seq re-exposes
+			// records the previous snapshot already folded away, and replaySource
+			// would then apply them on top of that snapshot.
+			const previous = await AppendJournal.readCheckpoint(this.filePath);
+			if (previous !== null && checkpointSeq < previous.seq) return;
 			const ckpt: JournalCheckpoint = { seq: checkpointSeq, ts: new Date().toISOString(), snapshot };
 			const tmpCkpt = `${this.checkpointPath()}.tmp`;
 			await fs.promises.writeFile(tmpCkpt, JSON.stringify(ckpt), "utf8");

@@ -481,3 +481,60 @@ describe("AppendJournal", () => {
 		await j.close();
 	});
 });
+
+test("a reopened journal continues above the checkpoint when compaction kept nothing", async () => {
+	const dir = tempDir();
+	const j = new AppendJournal(dir, "s1");
+	await j.open();
+	for (let i = 1; i <= 6; i++) j.append(event("thinking_level_changed", i));
+	// Compacting at the tail leaves no keepable record, so the journal file is
+	// truncated to zero bytes while the checkpoint stays authoritative at 6.
+	await j.compact(6, { folded: 6 });
+	await j.close();
+
+	const reopened = new AppendJournal(dir, "s1");
+	await reopened.open();
+	// Renumbering from 0 would hand out seqs the checkpoint already covers, and
+	// replaySource drops everything at or below the checkpoint seq.
+	expect(reopened.tailSeq).toBe(6);
+	expect(reopened.append(event("thinking_level_changed", 7))).toBe(7);
+	await reopened.flush();
+
+	const { checkpoint, events } = await reopened.replaySource();
+	expect(checkpoint?.seq).toBe(6);
+	expect(events).toHaveLength(1);
+	await reopened.close();
+});
+
+test("compact refuses a checkpoint that moves backwards", async () => {
+	const dir = tempDir();
+	const j = new AppendJournal(dir, "s1");
+	await j.open();
+	for (let i = 1; i <= 6; i++) j.append(event("thinking_level_changed", i));
+	await j.compact(6, { v: 1 });
+	await j.compact(4, { v: 0 });
+
+	const checkpoint = await AppendJournal.readCheckpoint(path.join(dir, "s1.journal.jsonl"));
+	expect(checkpoint?.seq).toBe(6);
+	await j.close();
+});
+
+test("durableTailSeq reports the disk tail, not the last seq assigned", async () => {
+	const dir = tempDir();
+	const j = new AppendJournal(dir, "s1");
+	await j.open();
+	j.append(event("thinking_level_changed", 1));
+	j.append(event("thinking_level_changed", 2));
+	await j.flush();
+	expect(await j.durableTailSeq()).toBe(2);
+
+	// Simulate an append whose write was dropped during a rewrite: seq 2 was
+	// assigned and broadcast, but never reached the file. The cursor above the
+	// durable tail is what catch-up must refuse to answer "ok" for.
+	const file = path.join(dir, "s1.journal.jsonl");
+	const text = fs.readFileSync(file, "utf8");
+	fs.writeFileSync(file, text.slice(0, text.lastIndexOf("\n", text.length - 2) + 1), "utf8");
+	expect(j.tailSeq).toBe(2);
+	expect(await j.durableTailSeq()).toBe(1);
+	await j.close();
+});
