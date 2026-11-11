@@ -156,15 +156,45 @@ export function findUiI18nViolations(file: string, sourceText: string): UiI18nVi
 		});
 	};
 
-	const collectExpression = (node: BabelNode | null | undefined, reason: string, naturalOnly = false): void => {
+	/**
+	 * Text nodes inside a markup string: everything outside `<...>`.
+	 *
+	 * A `: string` return that serializes HTML carries copy only in its text
+	 * nodes; the tag and attribute names are structure. Scanning the whole
+	 * serialization made every HTML builder permanent debt — the ratchet could
+	 * never reach zero for a shape that has no untranslated copy left.
+	 */
+	const markupTextNodes = (raw: string): string[] =>
+		raw
+			.replace(/<[^>]*>/g, "\n")
+			.split("\n")
+			.map(segment => segment.trim())
+			.filter(segment => segment.length > 0);
+
+	const collectExpression = (
+		node: BabelNode | null | undefined,
+		reason: string,
+		naturalOnly = false,
+		markup = false,
+	): void => {
 		if (node == null) return;
 		switch (node.type) {
 			case "StringLiteral":
+				if (markup) {
+					for (const segment of markupTextNodes(node.value)) report(node, segment, reason, naturalOnly);
+					return;
+				}
 				report(node, node.value, reason, naturalOnly);
 				return;
-			case "TemplateLiteral":
-				report(node, node.quasis.map(q => q.value.raw).join(""), reason, naturalOnly);
+			case "TemplateLiteral": {
+				const raw = node.quasis.map(q => q.value.raw).join("");
+				if (markup) {
+					for (const segment of markupTextNodes(raw)) report(node, segment, reason, naturalOnly);
+					return;
+				}
+				report(node, raw, reason, naturalOnly);
 				return;
+			}
 			case "CallExpression":
 			case "OptionalCallExpression":
 			case "NewExpression":
@@ -175,35 +205,35 @@ export function findUiI18nViolations(file: string, sourceText: string): UiI18nVi
 			case "TSTypeAssertion":
 			case "TypeCastExpression":
 			case "ParenthesizedExpression":
-				collectExpression(node.expression, reason, naturalOnly);
+				collectExpression(node.expression, reason, naturalOnly, markup);
 				return;
 			case "ConditionalExpression":
-				collectExpression(node.consequent, reason, naturalOnly);
-				collectExpression(node.alternate, reason, naturalOnly);
+				collectExpression(node.consequent, reason, naturalOnly, markup);
+				collectExpression(node.alternate, reason, naturalOnly, markup);
 				return;
 			case "LogicalExpression":
 				if (node.operator === "&&") {
-					collectExpression(node.right, reason, naturalOnly);
+					collectExpression(node.right, reason, naturalOnly, markup);
 				} else {
-					collectExpression(node.left, reason, naturalOnly);
-					collectExpression(node.right, reason, naturalOnly);
+					collectExpression(node.left, reason, naturalOnly, markup);
+					collectExpression(node.right, reason, naturalOnly, markup);
 				}
 				return;
 			case "BinaryExpression":
 				if (node.operator === "+") {
-					collectExpression(node.left, reason, naturalOnly);
-					collectExpression(node.right, reason, naturalOnly);
+					collectExpression(node.left, reason, naturalOnly, markup);
+					collectExpression(node.right, reason, naturalOnly, markup);
 				}
 				return;
 			case "ArrayExpression":
-				for (const element of node.elements) collectExpression(element, reason, naturalOnly);
+				for (const element of node.elements) collectExpression(element, reason, naturalOnly, markup);
 				return;
 			case "ObjectExpression":
 				for (const property of node.properties) {
 					if (property.type !== "ObjectProperty") continue;
 					const name = babelPropName(property.key);
 					const propertyOwnsCopy = name !== undefined && (COPY_NAME.test(name) || COPY_SUFFIX.test(name));
-					collectExpression(property.value as BabelNode, reason, naturalOnly || !propertyOwnsCopy);
+					collectExpression(property.value as BabelNode, reason, naturalOnly || !propertyOwnsCopy, markup);
 				}
 				return;
 			default:
@@ -301,7 +331,9 @@ export function findUiI18nViolations(file: string, sourceText: string): UiI18nVi
 				if (name !== undefined && (COPY_NAME.test(name) || COPY_SUFFIX.test(name))) {
 					collectExpression(node.argument, `${name} return value`);
 				} else if (isTsx && hasExplicitStringReturn(ancestors)) {
-					collectExpression(node.argument, "string return value", true);
+					// A `: string` return is often markup built by concatenation;
+					// only its text nodes can carry copy.
+					collectExpression(node.argument, "string return value", true, true);
 				}
 				break;
 			}
