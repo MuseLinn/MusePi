@@ -495,6 +495,36 @@ export function modeForPackage(pkg: Pick<PetdexPackage, "format">): PetMode {
 	return pkg.format === "svg" ? "vector" : "sprite";
 }
 
+/** A renderable descriptor from a `petActivity` push.
+ *
+ *  The union above is a compile-time contract, but a push crosses a window
+ *  boundary where nothing enforces it: an older or partial payload arrives as
+ *  `{ kind, id }` or as a package without its derived `mode`. `PetSprite`
+ *  dispatches on `mode` alone and its packaged branch dereferences `pkg`, so
+ *  one such push blanks the pet window (React drops the tree on the render
+ *  error). Rebuild `mode` from the payload's own shape; null means the push
+ *  cannot describe art and the receiver keeps its local reading. */
+export function descriptorFromPush(value: unknown): PetDescriptor | null {
+	if (typeof value !== "object" || value === null) return null;
+	const wire = value as { kind?: unknown; id?: unknown; pkg?: Partial<PetdexPackage> | null };
+	if (wire.kind === "builtin" && typeof wire.id === "string") {
+		return { mode: "vector", kind: "builtin", id: wire.id };
+	}
+	const pkg = wire.pkg;
+	if (
+		wire.kind === "petdex" &&
+		typeof pkg === "object" &&
+		pkg !== null &&
+		typeof pkg.id === "string" &&
+		typeof pkg.spritesheet === "string" &&
+		typeof pkg.width === "number" &&
+		typeof pkg.height === "number"
+	) {
+		return { mode: modeForPackage(pkg), kind: "petdex", pkg: pkg as PetdexPackage };
+	}
+	return null;
+}
+
 export interface PetAnimationDescriptor {
 	frameW: number;
 	frameH: number;

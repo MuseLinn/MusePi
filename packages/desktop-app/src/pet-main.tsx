@@ -42,6 +42,7 @@ import { createRoot } from "react-dom/client";
 import { type GazeVec, PetSprite, type PetSpriteAction, usePet, usePetDecor } from "./components/PetSprite";
 import { PET_ENTER_MS, PetTransition, type PetTransitionPhase } from "./components/PetTransition";
 import {
+	descriptorFromPush,
 	type PetActivity,
 	type PetDescriptor,
 	type PetInteraction,
@@ -235,7 +236,8 @@ function PetApp(): ReactNode {
 			// Active-pet override (petdex packages live in the main window's
 			// localStorage — unreachable from here; the descriptor arrives
 			// inline, spritesheet data URL and all).
-			if (payload.pet) setPushedPet(payload.pet);
+			const pushed = descriptorFromPush(payload.pet);
+			if (pushed) setPushedPet(pushed);
 			// Main-window scheme push (the reliable path — storage events
 			// don't fire cross-window under file://).
 			if (payload.theme === "light" || payload.theme === "dark") {

@@ -5,6 +5,7 @@ import {
 	BUILTIN_SVG_ID,
 	DEFAULT_PET_ID,
 	DEFAULT_SPRITE_PET_ID,
+	descriptorFromPush,
 	modeForPackage,
 	moodOfState,
 	type PetdexPackage,
@@ -122,6 +123,32 @@ describe("pet mode derivation", () => {
 		expect(petForId("custom-atlas").mode).toBe("sprite");
 		expect(modeForPackage(importedAtlas)).toBe("sprite");
 		expect(modeForPackage({})).toBe("sprite");
+	});
+});
+
+describe("pushed pet descriptor", () => {
+	it("restores the mode a partial push omits", () => {
+		expect(descriptorFromPush({ kind: "builtin", id: BUILTIN_SVG_ID })).toEqual({
+			mode: "vector",
+			kind: "builtin",
+			id: BUILTIN_SVG_ID,
+		});
+		expect(descriptorFromPush({ kind: "petdex", pkg: importedAtlas })).toEqual({
+			mode: "sprite",
+			kind: "petdex",
+			pkg: importedAtlas,
+		});
+		expect(descriptorFromPush({ kind: "petdex", pkg: importedSvg })).toMatchObject({
+			mode: "vector",
+			kind: "petdex",
+		});
+	});
+
+	it("drops a push that cannot describe art", () => {
+		expect(descriptorFromPush(null)).toBeNull();
+		expect(descriptorFromPush({ kind: "builtin" })).toBeNull();
+		expect(descriptorFromPush({ kind: "petdex" })).toBeNull();
+		expect(descriptorFromPush({ kind: "petdex", pkg: { id: "no-art" } })).toBeNull();
 	});
 });
 
