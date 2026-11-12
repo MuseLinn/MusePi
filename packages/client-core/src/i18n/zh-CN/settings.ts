@@ -3517,6 +3517,9 @@ export const settings = {
 	"Unexpected Stops": "意外中止",
 	Unicode: "Unicode 字符",
 	"Update Channel": "更新通道",
+	"Update channel followed by the desktop app, omp update and the startup update check":
+		"桌面端、omp update 与启动时更新检查共同遵循的更新通道",
+	Beta: "测试版",
 	"Web UI URL": "Web 界面地址",
 	Widgets: "组件",
 	"Word Autocomplete (macOS)": "词语自动补全（macOS）",

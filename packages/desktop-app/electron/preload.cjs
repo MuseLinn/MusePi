@@ -109,6 +109,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	haptic: (pattern) => ipcRenderer.invoke("haptic", pattern),
 	/** OTA: check for updates (electron-updater; null result = disabled). */
 	checkUpdates: () => ipcRenderer.invoke("updater-check"),
+	/** OTA: follow the stable or beta channel (mirror of `update.channel`). */
+	setUpdateChannel: channel => ipcRenderer.invoke("updater-set-channel", channel),
 	/** OTA: current updater state (idle/checking/preparing/downloading/downloaded/error). */
 	getUpdateState: () => ipcRenderer.invoke("updater-state"),
 	/** OTA: download the detected update (progress via onUpdateState). */

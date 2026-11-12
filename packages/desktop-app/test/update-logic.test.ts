@@ -7,6 +7,7 @@ import {
 	isNetworkError,
 	isNewerVersion,
 	nextPollDelayMs,
+	normalizeUpdateChannel,
 	releaseChannelForVersion,
 	releaseDownloadUrl,
 	UPDATE_POLL_BASE_MS,
@@ -134,13 +135,34 @@ describe("release channels", () => {
 			url: "https://github.com/MuseLinn/MusePi/releases/download/channel-beta",
 			channel: "beta",
 		});
-		expect(updateFeedForVersion("0.6.3")).toBeNull();
+		// Stable resolves to the packaged electron-builder feed, so runtime
+		// switching back from beta has an explicit feed to restore.
+		expect(updateFeedForVersion("0.6.3")).toEqual({
+			provider: "github",
+			owner: "MuseLinn",
+			repo: "MusePi",
+			channel: "latest",
+		});
 		expect(updateManifestUrlForVersion("0.6.4-beta.1")).toBe(
 			"https://github.com/MuseLinn/MusePi/releases/download/channel-beta/update-manifest.json",
 		);
 		expect(updateManifestUrlForVersion("0.6.3")).toBe(
 			"https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json",
 		);
+	});
+
+	test("a requested channel moves a stable build and never moves a beta build", () => {
+		expect(releaseChannelForVersion("0.6.3", "beta")).toBe("beta");
+		expect(updateFeedForVersion("0.6.3", "beta")?.url).toBe(
+			"https://github.com/MuseLinn/MusePi/releases/download/channel-beta",
+		);
+		expect(updateManifestUrlForVersion("0.6.3", "beta")).toContain("/channel-beta/");
+		// A beta build is already newer than the stable line: asking for stable
+		// must not point it at a feed that can only answer "no update".
+		expect(releaseChannelForVersion("0.6.4-beta.1", "stable")).toBe("beta");
+		expect(updateFeedForVersion("0.6.4-beta.1", "stable")?.channel).toBe("beta");
+		expect(normalizeUpdateChannel("canary")).toBe("stable");
+		expect(normalizeUpdateChannel(undefined)).toBe("stable");
 	});
 });
 

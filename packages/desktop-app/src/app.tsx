@@ -135,6 +135,7 @@ import {
 } from "./lib/slot-host";
 import { readHiddenSurfaces, readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
+import { syncUpdateChannel } from "./lib/update-channel";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
 import type { WorkspaceMutationResult } from "./lib/workspace-projects";
 import { FloatingScrollbar } from "./plugins/ui-theme/rail";
@@ -550,6 +551,9 @@ function AppInner(): ReactNode {
 	// before any early return — the booting splash early-returns and React
 	// hook order must not shift between renders (see 2026-08-12 crash note).
 	useMotionExtensions(rpc);
+	// The updater follows `update.channel`; the main process cannot read
+	// daemon settings, so the shell mirrors the value into it.
+	useEffect(() => (rpc ? syncUpdateChannel(rpc) : undefined), [rpc]);
 	useEffect(() => installPanelMaximizeController(), []);
 	// Error banner sound (effects prefs → error): play once per error.
 	const prevError = useRef<string | null>(null);

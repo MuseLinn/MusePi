@@ -2038,8 +2038,9 @@ export class DaemonServer {
 					return { latest: null };
 				}
 				const currentVersion = process.env.MUSEPI_VERSION ?? VERSION;
+				const channel = String(settings.get("update.channel") ?? "stable");
 				try {
-					const res = await fetch(updateManifestUrlForVersion(currentVersion), {
+					const res = await fetch(updateManifestUrlForVersion(currentVersion, channel), {
 						signal: AbortSignal.timeout(8_000),
 					});
 					if (!res.ok) return { latest: null, notes: null };

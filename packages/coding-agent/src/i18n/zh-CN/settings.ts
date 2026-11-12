@@ -2076,6 +2076,9 @@ export const settings = {
 	"Typo Detection (macOS)": "拼写检查（macOS）",
 	"Unexpected Stops": "意外中止",
 	"Update Channel": "更新通道",
+	"Update channel followed by the desktop app, omp update and the startup update check":
+		"桌面端、omp update 与启动时更新检查共同遵循的更新通道",
+	Beta: "测试版",
 	"Word Autocomplete (macOS)": "词语自动补全（macOS）",
 	"Agnes Video Generation": "Agnes 视频生成",
 	"Auto-read new replies": "自动朗读新回复",

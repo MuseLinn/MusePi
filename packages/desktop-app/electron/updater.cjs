@@ -43,6 +43,8 @@ if (!app) {
 		fetchManifestMeta: async () => null,
 		otaCapable: () => false,
 		detectSigning: () => "unknown",
+		setChannel: () => ({ channel: "stable" }),
+		channel: () => "stable",
 		log: (...args) => process.stderr.write(`[updater] ${args.join(" ")}\n`),
 		wireRenderer: () => {},
 		state: disabledState,
@@ -58,8 +60,10 @@ const {
 	classifyUpdateError,
 	isMissingUpdateFeedError,
 	isNewerVersion,
+	normalizeUpdateChannel,
+	releaseChannelForVersion,
 	releaseDownloadUrl,
-	updateFeedForVersion,
+	updateFeedForChannel,
 	updateManifestUrlForVersion,
 } = require("./update-logic.cjs");
 
@@ -129,7 +133,7 @@ const DEFAULT_STABLE_MANIFEST_URL =
 const RELEASES_PAGE = "https://github.com/MuseLinn/MusePi/releases/latest";
 
 function manifestUrl() {
-	const channelUrl = updateManifestUrlForVersion(app.getVersion());
+	const channelUrl = updateManifestUrlForVersion(app.getVersion(), requestedChannel);
 	try {
 		const pkg = require("../package.json");
 		const configured = pkg?.update?.manifestUrl;
@@ -264,9 +268,57 @@ function setTaskbarProgress(value) {
 
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = false;
-const updateFeed = updateFeedForVersion(app.getVersion());
-autoUpdater.allowPrerelease = updateFeed !== null;
-if (updateFeed) autoUpdater.setFeedURL(updateFeed);
+
+/**
+ * Requested update channel, persisted next to the other main-process
+ * preferences. The daemon owns the `update.channel` setting; the renderer
+ * pushes it here on load and on change, and the file keeps the last choice
+ * for the cold-start silent check, which runs before settings are reachable.
+ */
+const CHANNEL_FILE = nodePath.join(app.getPath("userData"), "update-channel.json");
+
+function readRequestedChannel() {
+	try {
+		const raw = JSON.parse(fs.readFileSync(CHANNEL_FILE, "utf8"));
+		return normalizeUpdateChannel(raw?.channel);
+	} catch {
+		return "stable";
+	}
+}
+
+let requestedChannel = readRequestedChannel();
+
+/** Channel the updater actually follows (a beta build never leaves beta). */
+function effectiveChannel() {
+	return releaseChannelForVersion(app.getVersion(), requestedChannel);
+}
+
+function applyChannelFeed() {
+	const channel = effectiveChannel();
+	autoUpdater.allowPrerelease = channel === "beta";
+	autoUpdater.setFeedURL(updateFeedForChannel(channel));
+	log(`update channel: ${channel}`);
+	return channel;
+}
+
+/**
+ * Switch the channel at runtime. Persists the request, repoints the feed and
+ * returns the channel now in effect — a beta build reports `beta` even for a
+ * `stable` request, so the caller can show what the updater will follow
+ * instead of echoing a preference that has no effect.
+ */
+function setChannel(value) {
+	requestedChannel = normalizeUpdateChannel(value);
+	try {
+		fs.mkdirSync(nodePath.dirname(CHANNEL_FILE), { recursive: true });
+		fs.writeFileSync(CHANNEL_FILE, JSON.stringify({ channel: requestedChannel }));
+	} catch (error) {
+		log("failed to persist update channel:", String(error));
+	}
+	return { channel: applyChannelFeed() };
+}
+
+applyChannelFeed();
 
 autoUpdater.on("checking-for-update", () => {
 	state.status = "checking";
@@ -614,6 +666,8 @@ module.exports = {
 	fetchManifestMeta,
 	otaCapable,
 	detectSigning,
+	setChannel,
+	channel: effectiveChannel,
 	log,
 	wireRenderer,
 	state,

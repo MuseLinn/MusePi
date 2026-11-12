@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { compareVersions, releaseChannelForVersion, updateManifestUrlForVersion } from "../src/version";
+import {
+	compareVersions,
+	releaseChannelForVersion,
+	resolveReleaseChannel,
+	updateManifestUrlForVersion,
+} from "../src/version";
 
 describe("compareVersions", () => {
 	it("trims whitespace and strips one leading v/V", () => {
@@ -86,5 +91,16 @@ describe("release channels", () => {
 		expect(updateManifestUrlForVersion("0.6.4-beta.1")).toBe(
 			"https://github.com/MuseLinn/MusePi/releases/download/channel-beta/update-manifest.json",
 		);
+	});
+
+	it("moves a stable build to the requested channel but never a beta build", () => {
+		expect(resolveReleaseChannel("0.6.3", "beta")).toBe("beta");
+		expect(updateManifestUrlForVersion("0.6.3", "beta")).toBe(
+			"https://github.com/MuseLinn/MusePi/releases/download/channel-beta/update-manifest.json",
+		);
+		// A beta build is newer than anything the stable feed can offer, so a
+		// stable request must not hide its own channel.
+		expect(resolveReleaseChannel("0.6.4-beta.1", "stable")).toBe("beta");
+		expect(resolveReleaseChannel("0.6.3", "canary")).toBe("stable");
 	});
 });

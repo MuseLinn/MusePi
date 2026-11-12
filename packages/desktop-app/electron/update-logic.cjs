@@ -104,9 +104,25 @@ function parseChannelVersion(version) {
 	return { core: match.slice(1, 4).map(Number), beta: match[4] === undefined ? null : Number(match[4]) };
 }
 
-function releaseChannelForVersion(version) {
+/** Channels a user can request from the update setting. */
+const UPDATE_CHANNELS = ["stable", "beta"];
+
+/** Anything else (typo, unset, future value) means the stable channel. */
+function normalizeUpdateChannel(value) {
+	return value === "beta" ? "beta" : "stable";
+}
+
+/**
+ * Effective channel for a build plus a user request.
+ *
+ * A beta build stays on beta: its version is newer than the stable line, so
+ * "downgrading" the feed would only ever report no update while hiding the
+ * newer beta it is already on. A stable build follows the request.
+ */
+function releaseChannelForVersion(version, requested) {
 	const parsed = parseChannelVersion(version);
-	return parsed && parsed.beta !== null ? "beta" : "stable";
+	if (parsed && parsed.beta !== null) return "beta";
+	return normalizeUpdateChannel(requested);
 }
 
 function isNewerVersion(latest, current) {
@@ -122,19 +138,40 @@ function isNewerVersion(latest, current) {
 	return a.beta > b.beta;
 }
 
-function updateFeedForVersion(version) {
-	if (releaseChannelForVersion(version) !== "beta") return null;
-	return {
-		provider: "generic",
-		url: "https://github.com/MuseLinn/MusePi/releases/download/channel-beta",
-		channel: "beta",
-	};
+/** Feed roots per channel: beta releases live in their own GitHub release
+ *  tag, the stable channel under the latest published release. */
+const CHANNEL_FEED_URLS = {
+	stable: "https://github.com/MuseLinn/MusePi/releases/latest/download",
+	beta: "https://github.com/MuseLinn/MusePi/releases/download/channel-beta",
+};
+
+/**
+ * electron-updater feed for one channel.
+ *
+ * Both channels resolve to an explicit feed so runtime switching is
+ * symmetric: the stable feed repeats the packaged electron-builder config
+ * (github provider, channel `latest`), and beta points at the `channel-beta`
+ * release tagged by the release workflow.
+ */
+const CHANNEL_FEEDS = {
+	stable: { provider: "github", owner: "MuseLinn", repo: "MusePi", channel: "latest" },
+	beta: { provider: "generic", url: CHANNEL_FEED_URLS.beta, channel: "beta" },
+};
+
+function updateFeedForChannel(channel) {
+	return CHANNEL_FEEDS[normalizeUpdateChannel(channel)];
 }
 
-function updateManifestUrlForVersion(version) {
-	return releaseChannelForVersion(version) === "beta"
-		? "https://github.com/MuseLinn/MusePi/releases/download/channel-beta/update-manifest.json"
-		: "https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json";
+function updateFeedForVersion(version, requested) {
+	return updateFeedForChannel(releaseChannelForVersion(version, requested));
+}
+
+function updateManifestUrlForChannel(channel) {
+	return `${CHANNEL_FEED_URLS[normalizeUpdateChannel(channel)]}/update-manifest.json`;
+}
+
+function updateManifestUrlForVersion(version, requested) {
+	return updateManifestUrlForChannel(releaseChannelForVersion(version, requested));
 }
 
 function releaseDownloadUrl(manifest, platform, arch, releasesPage) {
@@ -156,9 +193,13 @@ module.exports = {
 	isMissingUpdateFeedError,
 	classifyUpdateError,
 	nextPollDelayMs,
+	normalizeUpdateChannel,
+	UPDATE_CHANNELS,
 	releaseChannelForVersion,
 	releaseDownloadUrl,
 	isNewerVersion,
+	updateFeedForChannel,
 	updateFeedForVersion,
+	updateManifestUrlForChannel,
 	updateManifestUrlForVersion,
 };

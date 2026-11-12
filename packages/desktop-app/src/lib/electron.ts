@@ -4,6 +4,9 @@
  * app.tsx (boot chain); this is only the dialog.
  */
 
+/** Release channel the desktop updater follows (mirrors `update.channel`). */
+export type UpdateChannel = "stable" | "beta";
+
 export interface ElectronAPI {
 	/** Node platform of the desktop shell ("" outside Electron). */
 	platform?: string;
@@ -33,6 +36,8 @@ export interface ElectronAPI {
 	getAppVersion(): Promise<string>;
 	/** OTA check (electron-updater); null result = disabled. */
 	checkUpdates(): Promise<UpdateCheckResult | null>;
+	/** Mirror of the `update.channel` setting; resolves the channel in effect. */
+	setUpdateChannel?(channel: UpdateChannel): Promise<{ channel: UpdateChannel }>;
 	/** Current updater state (idle/checking/preparing/downloading/downloaded/error). */
 	getUpdateState(): Promise<UpdaterState | null>;
 	/** Download the detected update (progress via onUpdateState). */
@@ -364,6 +369,23 @@ export function checkAppUpdates(): Promise<UpdateCheckResult | null> {
 	if (!isElectron()) return Promise.resolve(null);
 	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
 	return electronAPI.checkUpdates();
+}
+
+/**
+ * Point the desktop updater at a release channel (mirror of the daemon-side
+ * `update.channel` setting). Resolves the channel actually in effect: a beta
+ * build stays on beta even when asked for stable, because its version is
+ * already newer than the stable line. Absent on older shells → no-op.
+ */
+export async function setUpdateChannel(channel: UpdateChannel): Promise<UpdateChannel> {
+	if (!isElectron()) return channel;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		const result = await electronAPI.setUpdateChannel?.(channel);
+		return result?.channel === "beta" ? "beta" : "stable";
+	} catch {
+		return channel;
+	}
 }
 
 /**

@@ -2375,20 +2375,17 @@ export const SETTINGS_SCHEMA = {
 	},
 	"update.channel": {
 		type: "enum",
-		values: ["stable", "canary"] as const,
+		values: ["stable", "beta"] as const,
 		default: "stable",
 		ui: {
 			tab: "interaction",
 			group: "Startup & Updates",
 			label: "Update Channel",
-			description: "Update channel used by omp update and the startup update check",
+			description: "Update channel followed by the desktop app, omp update and the startup update check",
 			options: [
 				{ value: "stable", label: "Stable" },
-				{ value: "canary", label: "Canary" },
+				{ value: "beta", label: "Beta" },
 			],
-			// The updater does not read this key yet (no channel-aware
-			// manifest) — hidden until multi-channel updates ship.
-			hidden: true,
 		},
 	},
 

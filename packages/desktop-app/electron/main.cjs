@@ -47,6 +47,7 @@ const {
 	fetchManifestNotes,
 	wireRenderer,
 	otaCapable,
+	setChannel: setUpdateChannel,
 	log: logUpdater,
 	state: updaterState,
 } = require("./updater.cjs");
@@ -3242,6 +3243,7 @@ ipcMain.handle("notification-show", (_event, { title, body }) => {
 // ── IPC: OTA update check (manifest-driven) ───────────────────────────────
 
 ipcMain.handle("updater-check", () => checkForUpdates());
+ipcMain.handle("updater-set-channel", (_event, channel) => setUpdateChannel(channel));
 ipcMain.handle("updater-state", () => ({ ...updaterState }));
 ipcMain.handle("updater-download", () => downloadUpdate());
 ipcMain.handle("updater-notes", () => fetchManifestNotes());

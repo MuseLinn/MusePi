@@ -3700,6 +3700,9 @@ export const settings = {
 	"Unexpected Stops": "Unexpected Stops",
 	Unicode: "Unicode",
 	"Update Channel": "Update Channel",
+	"Update channel followed by the desktop app, omp update and the startup update check":
+		"Update channel followed by the desktop app, omp update and the startup update check",
+	Beta: "Beta",
 	"Web UI URL": "Web UI URL",
 	Widgets: "Widgets",
 	"Word Autocomplete (macOS)": "Word Autocomplete (macOS)",

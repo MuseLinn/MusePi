@@ -7,8 +7,23 @@ export function releaseChannelForVersion(version: string): ReleaseChannel {
 	return NUMBERED_BETA_VERSION.test(version.trim()) ? "beta" : "stable";
 }
 
-export function updateManifestUrlForVersion(version: string): string {
-	return releaseChannelForVersion(version) === "beta"
+/**
+ * Channel a build actually follows for a requested channel.
+ *
+ * A beta build stays on beta: its version is already newer than the stable
+ * line, so following stable would only ever report "no update" while hiding
+ * the beta it is running. A stable build follows the request.
+ *
+ * `desktop-app/electron/update-logic.cjs` mirrors this rule for the packaged
+ * updater, which cannot import TS packages.
+ */
+export function resolveReleaseChannel(version: string, requested?: string): ReleaseChannel {
+	if (releaseChannelForVersion(version) === "beta") return "beta";
+	return requested === "beta" ? "beta" : "stable";
+}
+
+export function updateManifestUrlForVersion(version: string, requested?: string): string {
+	return resolveReleaseChannel(version, requested) === "beta"
 		? "https://github.com/MuseLinn/MusePi/releases/download/channel-beta/update-manifest.json"
 		: "https://github.com/MuseLinn/MusePi/releases/latest/download/update-manifest.json";
 }

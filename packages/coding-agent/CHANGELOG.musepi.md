@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **更新通道可切换（正式版 / 测试版）**：设置 → 交互 → Startup & Updates 里的「更新通道」不再是隐藏项，桌面端会真的跟随它。稳定版构建可以切到测试版通道接收 `channel-beta` 的预发布；测试版构建始终留在测试版——它的版本已经高于稳定线，跟稳定通道只会得到「无更新」。桌面 updater 在运行时重设 feed（两条通道都有显式 feed，切回来才对称），把选择落到 `<userData>/update-channel.json` 供下次冷启动的静默检查使用；`updates.check` 与发布说明同样按该通道取清单。
+  - EN: The update channel is now switchable (stable / beta). Update Channel under Settings → Interaction → Startup & Updates is no longer hidden, and the desktop app follows it. A stable build can opt into the beta channel and receive `channel-beta` prereleases; a beta build always stays on beta, because its version is already newer than the stable line and following stable would only ever report "no update". The desktop updater repoints its feed at runtime (both channels have an explicit feed, so switching back is symmetric) and persists the choice in `<userData>/update-channel.json` for the next cold-start check; `updates.check` and release notes resolve the same channel.
+
 - **后台完成卡改为用户侧锚定并可整卡折叠**：`async-job-result` 卡片与用户气泡同右缘，卡片头（状态、标签、时长、状态文字）是折叠锚点，输出与提示整体收起；卡片内部仍保留输出预览的展开。思考块流式显示「思考中」，结束后显示「思考过程 · 时长」或「思考完成」；思考块、活动/运行汇总与工具卡片统一使用左侧折叠字形，工具卡片的 chevron 从行尾移到行首。
   - EN: Background completion cards now anchor on the user side and fold as a whole. The `async-job-result` card shares the user bubble's right edge; its header (status, label, duration, status text) is the disclosure anchor while output and hints collapse beneath it, with the output preview's own expansion kept inside. Thinking blocks show "Thinking…" while streaming and "Thinking · duration" or "Thinking done" after settling; thinking blocks, activity/run summaries and tool cards now share one leading fold glyph, with the tool-card chevron moved from the trailing edge to the leading one.
 
