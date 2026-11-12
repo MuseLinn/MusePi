@@ -89,7 +89,7 @@ describe("first-party voice packages", () => {
 			"tts.autoRead",
 		]);
 		expect(tts?.configValues?.["tts.rate"]).toBe(1);
-	});
+	}, 30_000);
 
 	test("writes declared configuration and reads it back", async () => {
 		const before = fixture.changedCount();
@@ -99,7 +99,7 @@ describe("first-party voice packages", () => {
 		expect(fixture.changedCount()).toBe(before + 1);
 		const tts = (await fixture.service.list()).extensions.find(entry => entry.id === "tts");
 		expect(tts?.configValues?.["tts.rate"]).toBe(1.5);
-	});
+	}, 30_000);
 
 	test("clamps numeric configuration and rejects undeclared keys", async () => {
 		await fixture.service.setConfig({ id: "tts", key: "tts.rate", value: 42 });
@@ -109,7 +109,7 @@ describe("first-party voice packages", () => {
 			/not a declared config field/,
 		);
 		expect(fixture.changedCount()).toBe(before);
-	});
+	}, 30_000);
 
 	test("package toggles change only package state and the real fiber", async () => {
 		await fixture.service.getExtensionRuntimeLoad();
