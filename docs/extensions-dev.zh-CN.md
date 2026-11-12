@@ -42,7 +42,7 @@ Creator 快捷创建只发送用户的自然语言需求。预设 prompt 持有�
 
 桌面发布包必须随 daemon 一起暂存可独立加载的第一方插件产物。编译 daemon 后运行 `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>`。脚本将 `bundled-plugins` 与 `desktop-plugins` 编译到 `packages/desktop-app/vendor/daemon`，校验每个 `musepi.extensions` 与 `musepi.components` 声明的入口，并将组件样式保留在编译产物旁。普通及传递 JavaScript 依赖会打入组件产物，终端 PTY 桥接文件与原生运行时包则复制到暂存目录。Electron 解包该目录，再通过按平台分隔的 `MUSEPI_BUNDLED_PLUGIN_ROOTS` 变量把两个绝对根目录传给 daemon。开发环境仍保留源码树回退；发布包不得依赖源码树或开发依赖。
 
-行的 `config` 通过 `apply(ctx, config)` 的第二个参数（或导出的 `Config`）送达插件；`ctx.config` 是扩展自己的设置存储，不是行配置。预设行同时也是「按会话提供 MCP 服务器与文件技能」的组合单位。`musepi-mcp-client` 是 `presetOnly` 行包：每行声明一台服务器（`serverName`、`transport`、stdio 的 `command`/`args`/`env`/`cwd` 或 `url`/`headers`、`timeout`、`enabled`），在会话的 `session_start` 里通过 `registerMcpServer` 连接，随同一 runner 释放。`musepi-skill-filesystem` 在挂载时把 `roots` 下的技能（`<name>/SKILL.md` 或扁平 `<name>.md`，必须有 frontmatter）经 `registerSkill` 注册；发现是挂载时的快照而非监听，因为 preset generation 本身是可回收的。两个包都不做 ambient 装载，也没有全局配置面。命令钩子同样是行包：`musepi-hooks-claude-code` 与 `musepi-hooks-codex` 挂载外部 `hooks.json`（`configPath`），通过 `extensibility/hooks/command` 的共享引擎把五个命令钩子点映射到会话事件；两者只差 matcher 模式与 `${…}` 替换。
+行的 `config` 通过 `apply(ctx, config)` 的第二个参数（或导出的 `Config`）送达插件；`ctx.config` 是扩展自己的设置存储，不是行配置。预设行同时也是「按会话提供 MCP 服务器与文件技能」的组合单位。`musepi-mcp-client` 是 `presetOnly` 行包：每行声明一台服务器（`serverName`、`transport`、stdio 的 `command`/`args`/`env`/`cwd` 或 `url`/`headers`、`timeout`、`enabled`），在会话的 `session_start` 里通过 `registerMcpServer` 连接，随同一 runner 释放。`musepi-skill-filesystem` 在挂载时把 `roots` 下的技能（`<name>/SKILL.md` 或扁平 `<name>.md`，必须有 frontmatter）经 `registerSkill` 注册；发现是挂载时的快照而非监听，因为 preset generation 本身是可回收的。两个包都不做 ambient 装载，也没有全局配置面。命令钩子同样是行包：`musepi-hooks-claude-code` 与 `musepi-hooks-codex` 挂载外部 `hooks.json`（`configPath`），通过 `extensibility/hooks/command` 的共享引擎把五个命令钩子点映射到会话事件；两者只差 matcher 模式与 `${…}` 替换。目录型约定由第三个行包 `musepi-hooks-scripts` 承担：`roots` 下 `pre/<tool>` / `post/<tool>` 的脚本扫描成同一份配置（`pre` → PreToolUse，`post` → PostToolUse，文件名为工具名，`*`/`all` 表示全部），因此它与其他两个方言共用匹配、退出码、上下文与合并语义，而不是第二套协议。
 
 发现的 JavaScript／TypeScript hooks 使用生产扩展链：`discoverExtensionPaths()` → `hookCapability` → `loadExtensions()` → `ExtensionRunner`。旧 `HookRunner` 导出仅为公开 API 兼容及其直接消费者保留，不是第二条生产执行链。TUI 的设置与插件入口读取和桌面客户端相同的 schema、发现结果及 Cordis 启停状态，不引入独立安装器或插件状态存储。
 
@@ -591,7 +591,7 @@ musepi 的覆盖面**更广**；命令钩子已按下方说明补齐，其余不
 | CLAUDE.md / AGENTS.md | 指令文件 + `@import` 展开 | `discovery/claude.ts:128-149`、`discovery/at-imports.ts` |
 | skills | `~/.claude/skills/*/SKILL.md` | `discovery/claude.ts:539` |
 | slash commands | `~/.claude/commands/*.md` | `discovery/claude.ts:555` |
-| hooks | `.claude/hooks/pre/` 与 `post/` 目录 + preset 行 `musepi-hooks-claude-code` 的 `hooks.json`（command 型，5 个事件） | `discovery/claude.ts:563`、`bundled-plugins/hooks-claude-code/index.ts` |
+| hooks | `.claude/hooks/pre/` 与 `post/` 目录（`musepi-hooks-scripts` 行，真正执行）+ preset 行 `musepi-hooks-claude-code` 的 `hooks.json`（command 型，5 个事件） | `discovery/claude.ts:563`、`bundled-plugins/hooks-scripts/index.ts`、`bundled-plugins/hooks-claude-code/index.ts` |
 | 自定义工具 | `~/.claude/tools/` | `discovery/claude.ts:571` |
 | MCP | `.claude.json`、`.claude/mcp.json` | `discovery/claude.ts:523` |
 | marketplace | `.claude-plugin/marketplace.json` 目录清单 | `extensibility/plugins/marketplace/fetcher.ts:199` |

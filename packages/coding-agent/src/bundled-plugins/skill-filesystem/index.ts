@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { parseFrontmatter } from "@musepi/pi-utils";
 import type { ExtensionAPI, ExtensionSkillDeclaration } from "../../extensibility/extensions/types";
+import { stringArrayFromRow } from "../../extensibility/plugins/row-config";
 
 /**
  * File skills, scoped by a preset row.
@@ -34,22 +35,6 @@ export const provide = [] as const;
 function expandHome(value: string): string {
 	if (value === "~") return os.homedir();
 	return value.startsWith("~/") || value.startsWith("~\\") ? path.join(os.homedir(), value.slice(2)) : value;
-}
-
-/** Parse the row's `roots` field. Throws on malformed JSON; empty = no roots. */
-export function rootsFromConfig(value: unknown): string[] {
-	const raw = typeof value === "string" ? value.trim() : "";
-	if (raw === "") return [];
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(raw);
-	} catch (error) {
-		throw new Error(`roots is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
-	}
-	if (!Array.isArray(parsed) || parsed.some(entry => typeof entry !== "string" || entry.trim() === "")) {
-		throw new Error("roots must be a JSON array of non-empty strings");
-	}
-	return (parsed as string[]).map(entry => entry.trim());
 }
 
 /** One skill file's content, parsed into the registration shape. */
@@ -102,7 +87,7 @@ export async function scanSkillRoot(root: string): Promise<ExtensionSkillDeclara
 export async function apply(ctx: ExtensionAPI, rowConfig?: { roots?: unknown }): Promise<void> {
 	ctx.setLabel("文件技能");
 	const all = rowConfig ?? ((await ctx.config.getAll()) as { roots?: unknown });
-	const roots = rootsFromConfig(all.roots);
+	const roots = stringArrayFromRow(all.roots, "roots");
 	for (const raw of roots) {
 		const root = path.resolve(ctx.cwd, expandHome(raw));
 		for (const skill of await scanSkillRoot(root)) {

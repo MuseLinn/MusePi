@@ -2,14 +2,15 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { TempDir } from "@musepi/pi-utils";
-import { rootsFromConfig, scanSkillRoot, skillFromMarkdown } from "../src/bundled-plugins/skill-filesystem/index";
+import { scanSkillRoot, skillFromMarkdown } from "../src/bundled-plugins/skill-filesystem/index";
+import { stringArrayFromRow } from "../src/extensibility/plugins/row-config";
 
 describe("musepi-skill-filesystem", () => {
 	it("parses roots as a JSON array and treats an empty field as no roots", () => {
-		expect(rootsFromConfig("")).toEqual([]);
-		expect(rootsFromConfig('["a","~/pack"]')).toEqual(["a", "~/pack"]);
-		expect(() => rootsFromConfig("nope")).toThrow("roots is not valid JSON");
-		expect(() => rootsFromConfig('[""]')).toThrow("non-empty strings");
+		expect(stringArrayFromRow("", "roots")).toEqual([]);
+		expect(stringArrayFromRow('["a","~/pack"]', "roots")).toEqual(["a", "~/pack"]);
+		expect(() => stringArrayFromRow("nope", "roots")).toThrow("roots is not valid JSON");
+		expect(() => stringArrayFromRow('[""]', "roots")).toThrow("non-empty strings");
 	});
 
 	it("reads SKILL.md bundles and flat .md files, skipping skills without a description", async () => {

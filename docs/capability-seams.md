@@ -10,7 +10,7 @@
 | 内置工具 | `packages/coding-agent/src/tools/index.ts`（`BUILTIN_TOOLS` / `HIDDEN_TOOLS` / `isToolAllowed`） | 同文件头部 |
 | 斜杠命令 | `packages/coding-agent/src/slash-commands/builtin-registry.ts` | 同文件头部 |
 | hooks 引擎 | `packages/coding-agent/src/extensibility/hooks/types.ts`（`HookEvent` union） | 同文件头部 |
-| 命令钩子（Claude Code / Codex 方言） | `packages/coding-agent/src/extensibility/hooks/command/`（config/matcher/executor/codec/merge/engine/bridge）＋ `bundled-plugins/hooks-claude-code`、`bundled-plugins/hooks-codex` | `command/types.ts` 与 `command/bridge.ts` 文件头；共享引擎，方言只差 matcher 模式与 `${…}` 替换；两个包均为 `presetOnly` |
+| 命令钩子（Claude Code / Codex / 目录脚本） | `packages/coding-agent/src/extensibility/hooks/command/`（config/matcher/executor/codec/merge/engine/bridge）＋ `bundled-plugins/hooks-claude-code`、`bundled-plugins/hooks-codex`、`bundled-plugins/hooks-scripts` | `command/types.ts` 与 `command/bridge.ts` 文件头；共享引擎，方言只差 matcher 模式与 `${…}` 替换；三个包均为 `presetOnly` |
 | channels（IM 通道） | `packages/coding-agent/src/channels/types.ts`（`ChannelAdapter`） | 同文件头部 |
 | 扩展 API（register* 面） | `packages/coding-agent/src/extensibility/extensions/types.ts`（`ExtensionAPI`） | 同文件头部 + `docs/extensions-dev.md` |
 | 会话提示词宿主与注册表（section/context/variable/tool、scope/lane/owner/cacheScope） | `packages/coding-agent/src/prompts/host.ts`（`PromptHost`；存储 `store.ts`，兼容注册表 `registry.ts`，顺序 `orders.ts`）＋ 核心提示词包装载表 `packages/coding-agent/src/bundled-plugins/loader.ts`（`SESSION_PROMPT_PACKAGE_DIRS`） | `host.ts` / `store.ts` 文件头注释 + `docs/extensions-dev.md` §20 |

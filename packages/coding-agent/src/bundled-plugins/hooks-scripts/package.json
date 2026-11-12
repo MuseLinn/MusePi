@@ -1,0 +1,36 @@
+{
+	"name": "musepi-hooks-scripts",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "目录 Hook 脚本",
+		"description": "把 <root>/pre|post 下的命令钩子声明为预设组合里的一行：pre/<tool> 映射 PreToolUse，post/<tool> 映射 PostToolUse，文件名为工具名（* 表示全部）。",
+		"icon": "H",
+		"presetOnly": true,
+		"extensions": ["./index.ts"],
+		"config": [
+			{
+				"key": "roots",
+				"type": "string",
+				"label": "Hook 根目录（JSON 数组）",
+				"description": "每个根包含 pre/ 与 post/ 子目录；相对路径按会话工作目录解析。",
+				"default": ""
+			},
+			{
+				"key": "python",
+				"type": "path",
+				"label": "Python 可执行文件",
+				"description": "用于 .py 钩子；留空时不运行 Python 脚本。",
+				"default": ""
+			},
+			{
+				"key": "defaultTimeoutMs",
+				"type": "number",
+				"label": "默认超时（毫秒）",
+				"default": 600000
+			}
+		]
+	}
+}
