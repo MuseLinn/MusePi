@@ -23,6 +23,7 @@ import { FileService } from "./file-service";
 import { GitContextService } from "./git-context-service";
 import { GitWatchService } from "./git-watch-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
+import { LivenessService } from "./liveness-service";
 import { MarketplaceService } from "./marketplace-service";
 import { McpOAuthService } from "./mcp-oauth-service";
 import { McpServersService } from "./mcp-servers-service";
@@ -34,6 +35,7 @@ import { SessionService } from "./session-service";
 import { TerminalService } from "./terminal-service";
 import { UsageService } from "./usage-service";
 import { ViewStoreService } from "./view-store-service";
+import { VoiceService } from "./voice-service";
 import { WorkspaceRegistry, WorkspaceService } from "./workspace-registry";
 
 /** 路由覆盖快照（P1 服务抽取纪律）：server.ts 巨型 switch 的每个 case
@@ -77,6 +79,8 @@ function buildRegistry(): HostServices {
 			catchupFrom: async () => ({}),
 		}),
 	);
+	// LivenessService：无依赖，ping/system.ping 共用同一应答。
+	services.register(new LivenessService());
 	// ViewStore 只认领路由（本测试不触库），但构造真实实例成本极低，
 	// 用临时目录避免碰默认 journal 目录。
 	const store = new ViewStore(join(mkdtempSync(join(tmpdir(), "musepi-views-")), "views.db"));
@@ -140,6 +144,7 @@ function buildRegistry(): HostServices {
 	services.register(
 		new SessionService({
 			knownSessions: async () => [],
+			getSession: () => undefined,
 			snapshot: async () => ({}),
 			checkpointSeq: async () => 0,
 			setResumeLive: () => {},
@@ -148,6 +153,8 @@ function buildRegistry(): HostServices {
 			firstUserMessage: () => "",
 		}),
 	);
+	// VoiceService：只认领路由（本测试不触发语音引擎），广播桩吞掉分片事件。
+	services.register(new VoiceService({ broadcast: () => {} }));
 	// ExtensionService：stub 化宿主访问，仅参与路由表。
 	services.register(
 		new ExtensionService({

@@ -27,6 +27,7 @@ function row(overrides: Partial<SessionTreeRow> = {}): SessionTreeRow {
 function deps(overrides: Partial<SessionServiceDeps> = {}): SessionServiceDeps {
 	return {
 		knownSessions: async () => [],
+		getSession: () => undefined,
 		snapshot: async () => ({ entries: [] }),
 		checkpointSeq: async () => 0,
 		setResumeLive: () => {},

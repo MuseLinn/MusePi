@@ -246,7 +246,6 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"system.features",
 	"system.getAutostart",
 	"system.meta",
-	"system.ping",
 	"system.quitInspection",
 	"system.prewarmStart",
 	"system.prewarmStatus",

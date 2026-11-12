@@ -641,6 +641,7 @@ import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
 import { GitContextService } from "./services/git-context-service";
 import { GitWatchService } from "./services/git-watch-service";
+import { LivenessService } from "./services/liveness-service";
 import { MarketplaceService } from "./services/marketplace-service";
 import { McpOAuthService } from "./services/mcp-oauth-service";
 import { McpServersService } from "./services/mcp-servers-service";
@@ -652,6 +653,7 @@ import { SessionService } from "./services/session-service";
 import { TerminalService, type TerminalServiceDeps } from "./services/terminal-service";
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
+import { VoiceService } from "./services/voice-service";
 import {
 	isSafeAdditionalDirectory,
 	resolveWorkspaceDirectories,
@@ -905,6 +907,9 @@ export class DaemonServer {
 				broadcast: payload => this.#services.get<EventService>("events").broadcast(payload),
 			}),
 		);
+		// Liveness probe shared by every transport: `ping` is the guest client's
+		// single method name, `system.ping` the GUI keepalive.
+		this.#services.register(new LivenessService());
 		// Session-scoped git snapshot for review surfaces (base/fork point,
 		// divergence, changed files with kinds). Stateless and read-only.
 		this.#services.register(
@@ -1105,6 +1110,7 @@ export class DaemonServer {
 		this.#services.register(
 			new SessionService({
 				knownSessions: () => this.#host.knownSessions(),
+				getSession: sessionId => this.#host.get(sessionId),
 				snapshot: sessionId => this.#host.snapshot(sessionId),
 				checkpointSeq: sessionId => this.#host.checkpointSeq(sessionId),
 				setResumeLive: (conn, live) => {
@@ -1116,6 +1122,14 @@ export class DaemonServer {
 				cronSessionIds: () => this.#services.get<ScheduleService>("schedule").sessionIds(),
 				firstUserMessage: sessionId => this.#services.get<ViewStoreService>("views").firstUserMessage(sessionId),
 				deletedWorkspaces: () => this.#services.get<WorkspaceService>("workspaces").deletedWorkspaces(),
+			}),
+		);
+		// Speech frontend (speaker enrollment + streaming transcription): the
+		// engine singleton stays in voice/frontend/service; partial/segment
+		// results ride the same global event channel as every other broadcast.
+		this.#services.register(
+			new VoiceService({
+				broadcast: payload => this.#services.get<EventService>("events").broadcast(payload),
 			}),
 		);
 		this.#services.register(
@@ -1911,13 +1925,13 @@ export class DaemonServer {
 				// collab host answers `ping` the same way). Same purpose — a
 				// browser/WebView cannot send WS ping frames, so this RPC is how
 				// a socket the OS silently tore down gets noticed.
-				return { pong: Date.now() };
+				return this.#services.get<LivenessService>("liveness").ping();
 			}
 			case "system.ping": {
 				// Liveness probe for the GUI's app-level keepalive (browsers
 				// cannot send WS ping frames; the renderer pings this RPC to
 				// detect sockets Electron tears down on system sleep).
-				return { pong: Date.now() };
+				return this.#services.get<LivenessService>("liveness").ping();
 			}
 			case "system.quitInspection": {
 				// dsh's desktop `quit-inspection`: answer at quit time so a turn
@@ -6033,134 +6047,37 @@ export class DaemonServer {
 				return { ok: true, persisted: true };
 			}
 			case "voice.speakerStatus": {
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				return getVoiceFrontendService().status();
+				return this.#services.get<VoiceService>("voice").speakerStatus();
 			}
 			case "voice.speakerEnrollmentStart": {
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				return getVoiceFrontendService().enrollmentStart();
+				return this.#services.get<VoiceService>("voice").speakerEnrollmentStart();
 			}
 			case "voice.speakerEnrollmentAdd": {
-				const p = (params ?? {}) as { audio?: number[]; sampleRate?: number };
-				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required");
-				if (p.sampleRate !== undefined && p.sampleRate !== 16_000) throw new Error("sampleRate must be 16000");
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				return getVoiceFrontendService().enrollmentAdd({ audio: p.audio, sampleRate: 16_000 });
+				return this.#services.get<VoiceService>("voice").speakerEnrollmentAdd(params);
 			}
 			case "voice.speakerEnrollmentFinish": {
-				const p = (params ?? {}) as { audio?: number[]; sampleRate?: number };
-				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required");
-				if (p.sampleRate !== undefined && p.sampleRate !== 16_000) throw new Error("sampleRate must be 16000");
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				return getVoiceFrontendService().enrollmentFinish({ audio: p.audio, sampleRate: 16_000 });
+				return this.#services.get<VoiceService>("voice").speakerEnrollmentFinish(params);
 			}
 			case "voice.speakerEnrollmentCancel": {
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				getVoiceFrontendService().enrollmentCancel();
-				return { ok: true };
+				return this.#services.get<VoiceService>("voice").speakerEnrollmentCancel();
 			}
 			case "voice.speakerDelete": {
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				await getVoiceFrontendService().speakerDelete();
-				return { ok: true };
+				return this.#services.get<VoiceService>("voice").speakerDelete();
 			}
 			case "voice.frontendProcess": {
-				const p = (params ?? {}) as {
-					audio?: number[];
-					sampleRate?: number;
-					targetMs?: number;
-					speakerMode?: "off" | "prefer" | "strict";
-					enhanceAudio?: boolean;
-					enrollment?: number[][];
-					acceptThreshold?: number;
-					rejectThreshold?: number;
-				};
-				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required");
-				if (p.sampleRate !== undefined && p.sampleRate !== 16_000) throw new Error("sampleRate must be 16000");
-				if (p.speakerMode && !["off", "prefer", "strict"].includes(p.speakerMode))
-					throw new Error("invalid speakerMode");
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				return getVoiceFrontendService().process({
-					audio: Float32Array.from(p.audio),
-					sampleRate: 16_000,
-					targetMs: p.targetMs ?? (p.audio.length / 16_000) * 1000,
-					speakerMode: p.speakerMode ?? "off",
-					enhanceAudio: p.enhanceAudio ?? false,
-					enrollment: p.enrollment,
-					acceptThreshold: p.acceptThreshold,
-					rejectThreshold: p.rejectThreshold,
-				});
+				return this.#services.get<VoiceService>("voice").frontendProcess(params);
 			}
 			case "voice.frontendStreamStart": {
-				const p = (params ?? {}) as {
-					modelKey?: string;
-					language?: string;
-					speakerMode?: "off" | "prefer" | "strict";
-					enhanceAudio?: boolean;
-					enrollment?: number[][];
-					acceptThreshold?: number;
-					rejectThreshold?: number;
-				};
-				if (!p.modelKey) throw new Error("modelKey required");
-				const { isSttModelKey } = await import("../stt/models");
-				if (!isSttModelKey(p.modelKey)) throw new Error(`unknown speech model: ${p.modelKey}`);
-				if (p.speakerMode && !["off", "prefer", "strict"].includes(p.speakerMode))
-					throw new Error("invalid speakerMode");
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				const events = this.#services.get<EventService>("events");
-				const sessionId = await getVoiceFrontendService().streamStart(
-					{
-						modelKey: p.modelKey,
-						language: p.language,
-						speakerMode: p.speakerMode ?? "off",
-						enhanceAudio: p.enhanceAudio ?? false,
-						enrollment: p.enrollment,
-						acceptThreshold: p.acceptThreshold,
-						rejectThreshold: p.rejectThreshold,
-					},
-					{
-						onPartial: result => {
-							events.broadcast({
-								type: "voice.frontendPartial",
-								sessionId,
-								segmentId: result.segmentId,
-								text: result.text,
-								state: result.state,
-							});
-						},
-						onSegment: result => {
-							events.broadcast({
-								type: "voice.frontendSegment",
-								sessionId,
-								segmentId: result.segmentId,
-								text: result.text,
-								state: result.state,
-							});
-						},
-					},
-				);
-				return { sessionId };
+				return this.#services.get<VoiceService>("voice").frontendStreamStart(params);
 			}
 			case "voice.frontendStreamAudio": {
-				const p = (params ?? {}) as { sessionId?: string; audio?: number[] };
-				if (!p.sessionId) throw new Error("sessionId required");
-				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required");
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				getVoiceFrontendService().streamAudio(p.sessionId, Float32Array.from(p.audio));
-				return { ok: true };
+				return this.#services.get<VoiceService>("voice").frontendStreamAudio(params);
 			}
 			case "voice.frontendStreamStop": {
-				const p = (params ?? {}) as { sessionId?: string };
-				if (!p.sessionId) throw new Error("sessionId required");
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				return { results: await getVoiceFrontendService().streamStop(p.sessionId) };
+				return this.#services.get<VoiceService>("voice").frontendStreamStop(params);
 			}
 			case "voice.frontendStreamCancel": {
-				const p = (params ?? {}) as { sessionId?: string };
-				if (!p.sessionId) throw new Error("sessionId required");
-				const { getVoiceFrontendService } = await import("../voice/frontend/service");
-				getVoiceFrontendService().streamCancel(p.sessionId);
-				return { ok: true };
+				return this.#services.get<VoiceService>("voice").frontendStreamCancel(params);
 			}
 			case "stt.modelStatus": {
 				// GUI voice page: which speech models are already on disk, so
@@ -8593,12 +8510,7 @@ export class DaemonServer {
 				// Drop a mounted registered tool whose switch was just turned off
 				// (or whose name entered the denylist). Re-enabling still needs a
 				// new session: the tool was never created in this one.
-				const p = (params ?? {}) as { sessionId: string };
-				const live = this.#host.get(p.sessionId);
-				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const g = live.agentSession;
-				const removed = await g.syncRegisteredToolGates();
-				return { removed, active: g.getEnabledToolNames() };
+				return this.#services.get<SessionService>("session-tree").toolGates(params);
 			}
 			case "settings.set": {
 				// Write one global setting (GUI settings panel scope).

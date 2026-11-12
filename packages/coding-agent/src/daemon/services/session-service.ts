@@ -5,13 +5,16 @@ import { type DeletedWorkspaces, sessionHiddenByWorkspace } from "./workspace-re
  * SessionService — 会话树契约面（P2 首个 cordis 化 L2 服务，ADR 0001）。
  *
  * 能力缝声明（M2.4）：
- * - 名称+ns：session-tree（RPC 路由 `session.tree` / `session.resume`——
- *   客户端 tree 接口契约的归属，route-coverage 测试钉桩）。session.catchup
- *   仍归 EventService（journal 序语义载体，重复认领会被 routeTable 拒）。
+ * - 名称+ns：session-tree（RPC 路由 `session.tree` / `session.resume` /
+ *   `session.toolGates`——客户端 tree 接口契约的归属，route-coverage 测试
+ *   钉桩）。session.catchup 仍归 EventService（journal 序语义载体，重复认领
+ *   会被 routeTable 拒）。
  * - 输入：session.tree（跨会话树， OMP /tree  parity）、session.resume
- *  （快照 + 订阅附着前的 resumeLive 登记）。
+ *  （快照 + 订阅附着前的 resumeLive 登记）、session.toolGates（live 会话的
+ *  工具开关重算）。
  * - 输出：树节点（entry + children）；resume 返回 `{ stream, snapshot,
- *   compactedThrough }`；catchup 透传 EventService。
+ *   compactedThrough }`；toolGates 返回 `{ removed, active }`；catchup
+ *  透传 EventService。
  * - 生命周期：无进程内状态——全部委托宿主（knownSessions/snapshot/
  *  checkpointSeq）与既有 L2 服务（schedule/views/events）；start/stop 无
  *  副作用。
@@ -52,9 +55,19 @@ export interface ResumeLiveHandle {
 	subagentProgress?: Map<string, unknown>;
 }
 
+/** live 会话的工具开关面（session.toolGates 的结构子集）。 */
+export interface ToolGateSession {
+	readonly agentSession: {
+		syncRegisteredToolGates(): Promise<string[]>;
+		getEnabledToolNames(): string[];
+	};
+}
+
 export interface SessionServiceDeps {
 	/** 跨会话行（宿主 DaemonSessionHost.knownSessions）。 */
 	knownSessions(): Promise<readonly SessionTreeRow[]>;
+	/** live 会话本体（宿主 session-host.get；undefined = 会话不存在）。 */
+	getSession(sessionId: string): ToolGateSession | undefined;
 	/** resume 的快照（宿主 session-host.snapshot，调用方 tailSnapshot；
 	 *  结构面只要求 entries——tailSnapshot 的泛型约束）。 */
 	snapshot(sessionId: string): Promise<{ entries?: readonly unknown[] }>;
@@ -79,6 +92,7 @@ export class SessionService implements DaemonService {
 	readonly routes = {
 		"session.tree": "tree",
 		"session.resume": "resume",
+		"session.toolGates": "toolGates",
 	} as const;
 
 	readonly #deps: SessionServiceDeps;
@@ -191,5 +205,17 @@ export class SessionService implements DaemonService {
 			},
 			compactedThrough: compacted,
 		};
+	}
+
+	/** RPC session.toolGates：设置页工具开关即时生效——摘掉刚被关闭（或进入
+	 *  拒绝名单）的已挂载注册工具；重新启用仍需新会话（本会话从未创建它）。
+	 *  未知会话保持原错误文案 `Unknown session: <id>`。 */
+	async toolGates(params: unknown): Promise<{ removed: string[]; active: string[] }> {
+		const p = (params ?? {}) as { sessionId: string };
+		const live = this.#deps.getSession(p.sessionId);
+		if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+		const g = live.agentSession;
+		const removed = await g.syncRegisteredToolGates();
+		return { removed, active: g.getEnabledToolNames() };
 	}
 }

@@ -9,6 +9,7 @@ import { normalizeWorkspaceDirectory } from "../../src/session/session-workspace
 function service(rows: SessionTreeRow[], deleted: DeletedWorkspaces): SessionService {
 	return new SessionService({
 		knownSessions: async () => rows,
+		getSession: () => undefined,
 		snapshot: async () => ({}),
 		checkpointSeq: async () => 0,
 		setResumeLive: () => {},
