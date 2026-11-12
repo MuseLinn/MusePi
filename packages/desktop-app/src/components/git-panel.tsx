@@ -13,8 +13,6 @@ import {
 	ChevronDown as ChevronDownIconData,
 	ChevronRight as ChevronRightIconData,
 	CloudDownload as CloudDownloadIconData,
-	Eye as EyeIconData,
-	EyeOff as EyeOffIconData,
 	LoaderCircle as LoaderCircleIconData,
 	X as XIconData,
 } from "lucide";
@@ -22,16 +20,9 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { solveGraphLanes } from "../lib/git-graph-lanes";
-import {
-	type ChangesView,
-	onGitPrefsChanged,
-	readChangesView,
-	readShowIgnored,
-	writeChangesView,
-	writeShowIgnored,
-} from "../lib/git-prefs";
+import { type ChangesView, onGitPrefsChanged, readChangesView, writeChangesView } from "../lib/git-prefs";
 import { consumeRequestedGitRoot, GIT_ROOT_EVENT } from "../lib/git-root";
-import { invalidateGitStatus, onGitStatusChanged, readGitStatusCached } from "../lib/git-status-cache";
+import { invalidateGitStatus, onGitStatusChanged } from "../lib/git-status-cache";
 import { useChatHighlight } from "../lib/highlight";
 import { pathBaseName } from "../lib/project-label";
 import type { RpcClient } from "../lib/rpc";
@@ -41,6 +32,7 @@ import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
 import { MenuPopup } from "./MenuPopup";
 import { type MonacoDiffContent, MonacoDiffEditor } from "./MonacoDiffEditor";
+import { Reveal } from "./Reveal";
 
 /** Structured commit row from the daemon git.log RPC (parsed from
  *  `git log --all --topo-order` with \x1f fields). */
@@ -336,11 +328,85 @@ interface GitCommitIdentity {
 	email: string;
 }
 
-/** Workspace-changes view (right-pane diff tool): a staged/unstaged/
- *  untracked file tree (openchamber ChangesPanel parity) with per-file
- *  unified diffs, fed by the daemon git.status + git.diff RPCs. Rows
- *  carry stage/unstage actions, and the header offers flat/tree view,
- *  gitignored display and a commit dialog (subject + bundled gitmoji
+/** Change-kind buckets from the daemon git.context RPC, in display order. */
+type GitChangeKind = "code" | "test" | "docs" | "config" | "style" | "other";
+
+const CHANGE_KIND_ORDER: readonly GitChangeKind[] = ["code", "test", "docs", "config", "style", "other"];
+
+const CHANGE_KIND_LABEL: Record<GitChangeKind, TranslationKey> = {
+	code: "settings.changeKindCode",
+	test: "settings.changeKindTest",
+	docs: "settings.changeKindDocs",
+	config: "settings.changeKindConfig",
+	style: "settings.changeKindStyle",
+	other: "settings.changeKindOther",
+};
+
+/** One changed file from git.context: porcelain status, line counts and kind. */
+interface GitContextFile {
+	path: string;
+	status: string;
+	additions: number | null;
+	deletions: number | null;
+	kind: GitChangeKind;
+}
+
+/** Wire shape of the daemon git.context RPC (git/context.ts). */
+interface GitContextAvailable {
+	available: true;
+	root: string;
+	worktree: { linked: boolean; gitDir: string; commonDir: string; mainRoot: string };
+	head: { branch: string | null; detached: boolean; commit: string | null; shortCommit: string | null };
+	base: { ref: string; source: "param" | "default" | "local" | "remote"; forkPoint: string | null } | null;
+	upstream: { ahead: number; behind: number } | null;
+	files: GitContextFile[];
+	truncated: boolean;
+	timedOut: boolean;
+	limits: { maxFiles: number; timeoutMs: number };
+}
+
+interface GitContextUnavailable {
+	available: false;
+	cwd: string;
+	reason: "not-a-repository" | "timeout" | "git-error" | "invalid-base";
+	detail?: string;
+}
+
+type GitContextResult = GitContextAvailable | GitContextUnavailable;
+
+/** Porcelain `XY` pair: X is the index side, Y the worktree side. */
+function statusSides(status: string): { staged: boolean; unstaged: boolean } {
+	if (status === "??") return { staged: false, unstaged: true };
+	return { staged: (status[0] ?? " ") !== " ", unstaged: (status[1] ?? " ") !== " " };
+}
+
+/** Badge text for a porcelain pair: `"M "` → `M`, `"MM"` → `MM`, `"??"` → `?`. */
+function statusBadge(status: string): string {
+	if (status === "??") return "?";
+	const pair = status.replaceAll(" ", "");
+	return pair.length > 0 ? pair : "M";
+}
+
+/** `refs/heads/main` → `main`, so the header shows the name git users type. */
+function shortRefName(ref: string): string {
+	return ref.replace(/^refs\/heads\//, "").replace(/^refs\/remotes\//, "");
+}
+
+function sumLineStats(files: readonly GitContextFile[]): { additions: number; deletions: number } {
+	let additions = 0;
+	let deletions = 0;
+	for (const file of files) {
+		additions += file.additions ?? 0;
+		deletions += file.deletions ?? 0;
+	}
+	return { additions, deletions };
+}
+
+/** Workspace-changes view (right-pane review surface): one git.context
+ *  snapshot supplies the branch/worktree/base header and the changed files,
+ *  grouped by kind with per-group line totals; per-file unified diffs still
+ *  come from git.diff. Rows carry stage/unstage actions, and the header
+ *  offers flat/tree view and a commit dialog (subject + bundled gitmoji
  *  picker + the settings-configured default identity). */
 function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessionId?: string | null }): ReactNode {
 	interface WorkspaceRootRow {
@@ -356,22 +422,9 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 		rpc,
 		roots.map(root => root.path),
 	);
-	const [status, setStatus] = useState<{
-		root: string;
-		branch: string | null;
-		staged: { path: string; status: string }[];
-		unstaged: { path: string; status: string }[];
-		untracked: { path: string; status: string }[];
-		ignored?: { path: string; status: string }[];
-		error?: string;
-		fileStats?: {
-			staged: Record<string, { added: number; removed: number; binary: boolean }>;
-			working: Record<string, { added: number; removed: number; binary: boolean }>;
-		};
-	} | null>(null);
-	const [loading, setLoading] = useState(true);
+	const [context, setContext] = useState<GitContextResult | null>(null);
 	const [openPath, setOpenPath] = useState<string | null>(null);
-	const [openGroup, setOpenGroup] = useState<"staged" | "unstaged" | "untracked" | "ignored" | null>(null);
+	const [collapsedKinds, setCollapsedKinds] = useState<Set<GitChangeKind>>(new Set());
 	const [fileDiff, setFileDiff] = useState<{
 		staged: string;
 		unstaged: string;
@@ -380,16 +433,15 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 	} | null>(null);
 	const [diffLoading, setDiffLoading] = useState(false);
 	const diffRequestRef = useRef(0);
+	const contextRequestRef = useRef(0);
 	const highlight = useChatHighlight();
-	// GitSettings parity: flat/tree view, show-gitignored and gitmoji picker —
-	// one shared pref module, and every surface follows the change event.
+	// GitSettings parity: flat/tree view — one shared pref module, and every
+	// surface follows the change event.
 	const [view, setView] = useState<ChangesView>(readChangesView);
-	const [showIgnored, setShowIgnored] = useState<boolean>(() => readShowIgnored());
 	useEffect(
 		() =>
 			onGitPrefsChanged(() => {
 				setView(readChangesView());
-				setShowIgnored(readShowIgnored());
 			}),
 		[],
 	);
@@ -457,68 +509,50 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 	const [commitError, setCommitError] = useState<string | null>(null);
 	const [treeOpen, setTreeOpen] = useState<Set<string>>(new Set());
 	useEffect(() => {
+		setContext(null);
 		setOpenPath(null);
-		setOpenGroup(null);
 		setFileDiff(null);
 		setTreeOpen(new Set());
+		setCollapsedKinds(new Set());
 	}, [activeRoot]);
-	const load = useCallback(
-		(force = false): void => {
-			if (!rpc) return;
-			setLoading(true);
-			void readGitStatusCached(rpc, activeRoot, { ignored: showIgnored, force })
-				.then(res => {
-					setStatus(
-						res
-							? {
-									root: res.root ?? "",
-									branch: res.branch ?? null,
-									staged: res.staged ?? [],
-									unstaged: res.unstaged ?? [],
-									untracked: res.untracked ?? [],
-									ignored: res.ignored,
-									error: res.error,
-									fileStats: res.fileStats,
-								}
-							: null,
-					);
-					setLoading(false);
-				})
-				.catch(err => {
-					setStatus({
-						root: "",
-						branch: null,
-						staged: [],
-						unstaged: [],
-						untracked: [],
-						error: err instanceof Error ? err.message : String(err),
-					});
-					setLoading(false);
+	const load = useCallback((): void => {
+		if (!rpc) return;
+		const request = ++contextRequestRef.current;
+		void rpc
+			.request<GitContextResult>("git.context", { cwd: activeRoot })
+			.then(res => {
+				if (contextRequestRef.current !== request) return;
+				setContext(res ?? { available: false, cwd: activeRoot, reason: "git-error" });
+			})
+			.catch((err: unknown) => {
+				if (contextRequestRef.current !== request) return;
+				setContext({
+					available: false,
+					cwd: activeRoot,
+					reason: "git-error",
+					detail: err instanceof Error ? err.message : String(err),
 				});
-		},
-		[rpc, showIgnored, activeRoot],
-	);
+			});
+	}, [rpc, activeRoot]);
 	useEffect(load, [load]);
 	// Daemon git-dir push (HEAD/index/refs) or a local mutation: reload the
 	// active root without waiting for a timer.
 	useEffect(
 		() =>
 			onGitStatusChanged(root => {
-				if (!root || directoriesEqual(root, activeRoot)) void load(true);
+				if (!root || directoriesEqual(root, activeRoot)) load();
 			}),
 		[activeRoot, load],
 	);
-	const openFile = (path: string, group: "staged" | "unstaged" | "untracked" | "ignored"): void => {
+	const openFile = (path: string): void => {
 		const request = ++diffRequestRef.current;
-		if (openPath === path && openGroup === group) {
+		if (openPath === path) {
 			setOpenPath(null);
-			setOpenGroup(null);
 			setFileDiff(null);
 			setDiffLoading(false);
 			return;
 		}
 		setOpenPath(path);
-		setOpenGroup(group);
 		setFileDiff(null);
 		setDiffLoading(true);
 		void rpc
@@ -536,7 +570,6 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 		if (!rpc) return;
 		await rpc.request(stage ? "git.stage" : "git.unstage", { paths, cwd: activeRoot }).catch(() => {});
 		invalidateGitStatus(activeRoot);
-		await load(true);
 	};
 	const runCommit = async (): Promise<void> => {
 		if (!rpc || !commitMsg.trim()) return;
@@ -562,7 +595,6 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 			setCommitOpen(false);
 			setCommitMsg("");
 			invalidateGitStatus(activeRoot);
-			await load(true);
 		} catch (err) {
 			setCommitError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -570,72 +602,59 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 		}
 	};
 
-	const statusBadge = (code: string): string => {
-		const m: Record<string, string> = { M: "M", A: "A", D: "D", R: "R", C: "C", "??": "?", "!!": "!" };
-		return m[code] ?? code;
-	};
-	const FileRow = ({
-		file,
-		group,
-		depth = 0,
-		stats,
-	}: {
-		file: { path: string; status: string };
-		group: "staged" | "unstaged" | "untracked" | "ignored";
-		depth?: number;
-		stats?: { added: number; removed: number; binary: boolean };
-	}): ReactNode => {
-		const open = openPath === file.path && openGroup === group;
+	const FileRow = ({ file, depth = 0 }: { file: GitContextFile; depth?: number }): ReactNode => {
+		const open = openPath === file.path;
+		const sides = statusSides(file.status);
+		const badge = statusBadge(file.status);
 		const cls =
-			group === "staged"
-				? "gui-changes-badge--staged"
-				: group === "untracked"
-					? "gui-changes-badge--untracked"
-					: group === "ignored"
-						? "gui-changes-badge--ignored"
-						: "";
+			file.status === "??" ? "gui-changes-badge--untracked" : sides.staged ? "gui-changes-badge--staged" : "";
 		return (
 			<div key={file.path} className="gui-changes-row-wrap">
 				<button
 					type="button"
 					className={`gui-changes-row${open ? " gui-changes-row--open" : ""}`}
 					style={depth > 0 ? { paddingLeft: 8 + depth * 14 } : undefined}
-					onClick={() => openFile(file.path, group)}
+					onClick={() => openFile(file.path)}
 				>
-					<span className={`gui-changes-badge ${cls}`}>{statusBadge(file.status)}</span>
+					<span
+						className={`gui-changes-badge ${cls}`}
+						style={badge.length > 1 ? { width: "auto", minWidth: 16, paddingInline: 3 } : undefined}
+					>
+						{badge}
+					</span>
 					<span className="min-w-0 flex-1 truncate text-left">{file.path}</span>
-					{stats && !stats.binary && (stats.added > 0 || stats.removed > 0) && (
+					{file.additions !== null && file.deletions !== null && (file.additions > 0 || file.deletions > 0) && (
 						<span className="gui-changes-stats">
-							<span className="gui-diff-add">+{stats.added}</span>
-							<span className="gui-diff-del">−{stats.removed}</span>
+							<span className="gui-diff-add">+{file.additions}</span>
+							<span className="gui-diff-del">−{file.deletions}</span>
 						</span>
 					)}
-					{group !== "ignored" &&
-						(group === "staged" ? (
-							<span
-								className="gui-changes-act"
-								title={t("general.unstage")}
-								aria-label={t("general.unstage")}
-								onClick={e => {
-									e.stopPropagation();
-									void stagePaths([file.path], false);
-								}}
-							>
-								<Icon name="arrow-left-s" className="h-3.5 w-3.5" />
-							</span>
-						) : (
-							<span
-								className="gui-changes-act"
-								title={t("general.stage")}
-								aria-label={t("general.stage")}
-								onClick={e => {
-									e.stopPropagation();
-									void stagePaths([file.path], true);
-								}}
-							>
-								<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
-							</span>
-						))}
+					{sides.staged && (
+						<span
+							className="gui-changes-act"
+							title={t("general.unstage")}
+							aria-label={t("general.unstage")}
+							onClick={e => {
+								e.stopPropagation();
+								void stagePaths([file.path], false);
+							}}
+						>
+							<Icon name="arrow-left-s" className="h-3.5 w-3.5" />
+						</span>
+					)}
+					{sides.unstaged && (
+						<span
+							className="gui-changes-act"
+							title={t("general.stage")}
+							aria-label={t("general.stage")}
+							onClick={e => {
+								e.stopPropagation();
+								void stagePaths([file.path], true);
+							}}
+						>
+							<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
+						</span>
+					)}
 					<MorphIcon
 						icon={open ? ChevronDownIconData : ChevronRightIconData}
 						size={12}
@@ -699,24 +718,14 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 	};
 	/** Changes tree: build the real directory hierarchy (not just the first
 	 *  path segment), collapse per full directory path, and keep file rows
-	 *  indented under their parent. Flat mode bypasses the tree entirely. */
-	const statsFor = (
-		file: { path: string },
-		group: "staged" | "unstaged" | "untracked" | "ignored",
-	): { added: number; removed: number; binary: boolean } | undefined =>
-		group === "staged"
-			? status?.fileStats?.staged[file.path]
-			: group === "unstaged"
-				? status?.fileStats?.working[file.path]
-				: undefined;
-	const groupRows = (
-		files: { path: string; status: string }[],
-		group: "staged" | "unstaged" | "untracked" | "ignored",
-	): ReactNode[] => {
-		if (view === "flat") return files.map(f => FileRow({ file: f, group, stats: statsFor(f, group) }));
+	 *  indented under their parent. Flat mode bypasses the tree entirely.
+	 *  Directory keys carry the kind so two groups sharing a folder name
+	 *  collapse independently. */
+	const groupRows = (files: GitContextFile[], kind: GitChangeKind): ReactNode[] => {
+		if (view === "flat") return files.map(file => FileRow({ file }));
 		interface TreeDir {
 			dirs: Map<string, TreeDir>;
-			files: { path: string; status: string }[];
+			files: GitContextFile[];
 		}
 		const root: TreeDir = { dirs: new Map(), files: [] };
 		for (const file of files) {
@@ -738,17 +747,18 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 			const rows: ReactNode[] = [];
 			for (const [name, child] of [...node.dirs.entries()].sort(([a], [b]) => a.localeCompare(b))) {
 				const dirPath = prefix.length > 0 ? `${prefix}/${name}` : name;
-				const open = treeOpen.has(dirPath);
+				const treeKey = `${kind}:${dirPath}`;
+				const open = treeOpen.has(treeKey);
 				rows.push(
 					<button
-						key={`dir:${group}:${dirPath}`}
+						key={`dir:${treeKey}`}
 						type="button"
 						className="gui-changes-row gui-changes-row--dir"
 						style={depth > 0 ? { paddingLeft: 8 + depth * 14 } : undefined}
 						onClick={() => {
 							const next = new Set(treeOpen);
-							if (open) next.delete(dirPath);
-							else next.add(dirPath);
+							if (open) next.delete(treeKey);
+							else next.add(treeKey);
 							setTreeOpen(next);
 						}}
 					>
@@ -767,14 +777,25 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 				if (open) rows.push(...renderNode(child, dirPath, depth + 1));
 			}
 			for (const file of [...node.files].sort((a, b) => a.path.localeCompare(b.path))) {
-				rows.push(FileRow({ file, group, depth, stats: statsFor(file, group) }));
+				rows.push(FileRow({ file, depth }));
 			}
 			return rows;
 		};
 		return renderNode(root, "", 0);
 	};
 
-	const total = (status?.staged.length ?? 0) + (status?.unstaged.length ?? 0) + (status?.untracked.length ?? 0);
+	const available = context?.available === true ? context : null;
+	const total = available?.files.length ?? 0;
+	const stagedCount = available ? available.files.filter(file => statusSides(file.status).staged).length : 0;
+	const kindGroups = new Map<GitChangeKind, GitContextFile[]>();
+	for (const file of [...(available?.files ?? [])].sort((a, b) => a.path.localeCompare(b.path))) {
+		const bucket = kindGroups.get(file.kind);
+		if (bucket) bucket.push(file);
+		else kindGroups.set(file.kind, [file]);
+	}
+	const ahead = available?.upstream?.ahead ?? 0;
+	const behind = available?.upstream?.behind ?? 0;
+	const headLabel = available ? (available.head.branch ?? available.head.shortCommit ?? "") : "";
 	const rootBar = (
 		<div className="gui-changes-rootbar">
 			<button
@@ -796,9 +817,7 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 					className="h-3 w-3 flex-none text-[var(--color-text-faint)]"
 				/>
 			</button>
-			{status && !status.error && (
-				<span className="gui-changes-count">{t("general.changesFileCount", { count: total })}</span>
-			)}
+			{available && <span className="gui-changes-count">{t("general.changesFileCount", { count: total })}</span>}
 			<div className="ml-auto flex items-center gap-0.5">
 				<button
 					type="button"
@@ -826,36 +845,17 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 				</button>
 				<button
 					type="button"
-					className={`gui-pane-tool${showIgnored ? " gui-pane-tool--active" : ""}`}
-					title={t("general.showGitignored")}
-					aria-label={t("general.showGitignored")}
-					onClick={() => {
-						const next = !showIgnored;
-						setShowIgnored(next);
-						writeShowIgnored(next);
-					}}
-				>
-					<MorphIcon
-						icon={showIgnored ? EyeIconData : EyeOffIconData}
-						size={14}
-						spring="snappy"
-						reducedMotion="user"
-						className="h-3.5 w-3.5"
-					/>
-				</button>
-				<button
-					type="button"
 					className="gui-pane-tool"
 					title={t("settings.refresh")}
 					aria-label={t("settings.refresh")}
-					onClick={() => load(true)}
+					onClick={() => load()}
 				>
 					<Icon name="refresh" className="h-3.5 w-3.5" />
 				</button>
 				<button
 					type="button"
-					className={`gui-btn !h-6 !px-2 !py-0 !text-[11.5px]${(status?.staged.length ?? 0) === 0 ? " opacity-50" : ""}`}
-					disabled={(status?.staged.length ?? 0) === 0}
+					className={`gui-btn !h-6 !px-2 !py-0 !text-[11.5px]${stagedCount === 0 ? " opacity-50" : ""}`}
+					disabled={stagedCount === 0}
 					onClick={() => {
 						setCommitOpen(true);
 						setCommitError(null);
@@ -897,7 +897,7 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 		</div>
 	);
 
-	if (loading) {
+	if (context === null) {
 		return (
 			<div className="flex h-full min-h-0 flex-col">
 				{rootBar}
@@ -905,21 +905,98 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 			</div>
 		);
 	}
-	if (status?.error || !status?.root) {
+	if (!context.available) {
 		return (
 			<div className="flex h-full min-h-0 flex-col">
 				{rootBar}
-				<div className="px-2 py-5 text-[13px] text-[var(--color-text-faint)]">
-					{status?.error === "not a git repository"
-						? t("general.notGitDirectory")
-						: (status?.error ?? t("tools.notGitRepository"))}
+				<div className="mx-1 mt-1 flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] px-2 py-2">
+					<Icon name="error-warning" className="mt-px h-3.5 w-3.5 flex-none text-[var(--color-danger)]" />
+					<div className="min-w-0 flex-1">
+						<div className="text-[12px] text-[var(--color-text)]">
+							{context.reason === "not-a-repository"
+								? t("general.notGitDirectory")
+								: context.reason === "timeout"
+									? t("settings.gitContextTimedOut")
+									: context.reason === "invalid-base"
+										? t("settings.gitInvalidBase")
+										: t("settings.gitContextError")}
+						</div>
+						{context.detail && (
+							<div
+								className="mt-0.5 truncate font-mono text-[11px] text-[var(--color-text-faint)]"
+								title={context.detail}
+							>
+								{context.detail}
+							</div>
+						)}
+					</div>
+					<button type="button" className="gui-pane-action !w-auto flex-none px-2" onClick={() => load()}>
+						<Icon name="refresh" className="h-3.5 w-3.5" />
+						<span>{t("settings.retry")}</span>
+					</button>
 				</div>
 			</div>
 		);
 	}
+	const base = context.base;
+	const worktree = context.worktree;
+	const detached = context.head.detached;
+	const forkPoint = base?.forkPoint ? base.forkPoint.slice(0, 7) : null;
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			{rootBar}
+			<div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1.5 pb-1 text-[11px] text-[var(--color-text-faint)]">
+				{headLabel.length > 0 && (
+					<span
+						className="flex min-w-0 items-center gap-1"
+						title={detached ? t("settings.detachedHead") : headLabel}
+					>
+						<Icon name="git-branch" className="h-3.5 w-3.5 flex-none text-[var(--color-accent)]" />
+						<span
+							className={`min-w-0 truncate font-medium text-[var(--color-text)]${detached ? " font-mono" : ""}`}
+						>
+							{headLabel}
+						</span>
+					</span>
+				)}
+				{(ahead > 0 || behind > 0) && (
+					<span className="flex-none font-mono">
+						{ahead > 0 ? `↑${ahead} ` : ""}
+						{behind > 0 ? `↓${behind}` : ""}
+					</span>
+				)}
+				{base && (
+					<span className="flex min-w-0 items-center gap-1" title={t("settings.baseBranch")}>
+						<Icon name="git-fork" className="h-3.5 w-3.5 flex-none" />
+						<span className="truncate">{shortRefName(base.ref)}</span>
+						{forkPoint && <span className="flex-none font-mono">@{forkPoint}</span>}
+					</span>
+				)}
+				{worktree.linked && (
+					<span
+						className="flex-none rounded bg-[var(--color-surface-sunken)] px-1 py-px"
+						title={worktree.mainRoot}
+					>
+						{t("settings.linkedWorktree")}
+					</span>
+				)}
+				{context.truncated && (
+					<span
+						className="flex-none rounded bg-amber-500/15 px-1 py-px text-amber-700 dark:text-amber-400"
+						title={t("settings.gitContextTruncatedHint", { count: context.limits.maxFiles })}
+					>
+						{t("settings.gitContextTruncated")}
+					</span>
+				)}
+				{context.timedOut && (
+					<span
+						className="flex-none rounded bg-amber-500/15 px-1 py-px text-amber-700 dark:text-amber-400"
+						title={t("settings.gitContextTimedOutHint")}
+					>
+						{t("settings.gitContextTimedOut")}
+					</span>
+				)}
+			</div>
 			{commitOpen && (
 				<div className="gui-commit-box mb-1 rounded-lg border border-[var(--border)] bg-[var(--color-surface-raised)] p-2">
 					<textarea
@@ -952,7 +1029,7 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 					{commitError && <div className="mt-1.5 text-[12px] text-[var(--color-danger)]">{commitError}</div>}
 					<div className="mt-2 flex items-center justify-end gap-2">
 						<span className="mr-auto text-[11.5px] text-[var(--color-text-faint)]">
-							{t("general.stagedCount", { count: String(status.staged.length) })}
+							{t("general.stagedCount", { count: String(stagedCount) })}
 						</span>
 						<button type="button" className="gui-btn" onClick={() => setCommitOpen(false)}>
 							{t("settings.cancel")}
@@ -968,47 +1045,54 @@ function DiffPane({ rpc, cwd, sessionId }: { rpc: RpcClient; cwd: string; sessio
 					</div>
 				</div>
 			)}
-			{total === 0 && !showIgnored ? (
-				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("tools.noChanges")}</div>
-			) : (
-				<FadeScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
-					{status.staged.length > 0 && (
-						<>
-							<div className="gui-group-label px-2 pb-0.5 pt-1">
-								{t("general.staged")} · {status.staged.length}
+			<FadeScroll className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-1.5">
+				{total === 0 ? (
+					<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("tools.noChanges")}</div>
+				) : (
+					CHANGE_KIND_ORDER.map(kind => {
+						const files = kindGroups.get(kind);
+						if (!files || files.length === 0) return null;
+						const open = !collapsedKinds.has(kind);
+						const stats = sumLineStats(files);
+						return (
+							<div key={kind}>
+								<button
+									type="button"
+									className="gui-changes-row gui-changes-row--dir"
+									aria-expanded={open}
+									onClick={() =>
+										setCollapsedKinds(current => {
+											const next = new Set(current);
+											if (next.has(kind)) next.delete(kind);
+											else next.add(kind);
+											return next;
+										})
+									}
+								>
+									<span className="gui-group-label min-w-0 flex-1 truncate text-left">
+										{t(CHANGE_KIND_LABEL[kind])}
+									</span>
+									<span className="flex-none text-[11px] text-[var(--color-text-faint)]">{files.length}</span>
+									{(stats.additions > 0 || stats.deletions > 0) && (
+										<span className="gui-changes-stats">
+											{stats.additions > 0 && <span className="gui-diff-add">+{stats.additions}</span>}
+											{stats.deletions > 0 && <span className="gui-diff-del">−{stats.deletions}</span>}
+										</span>
+									)}
+									<MorphIcon
+										icon={open ? ChevronDownIconData : ChevronRightIconData}
+										size={12}
+										spring="snappy"
+										reducedMotion="user"
+										className="h-3 w-3 flex-shrink-0 text-[var(--color-text-faint)]"
+									/>
+								</button>
+								<Reveal open={open}>{groupRows(files, kind)}</Reveal>
 							</div>
-							{groupRows(status.staged, "staged")}
-						</>
-					)}
-					{status.unstaged.length > 0 && (
-						<>
-							<div className="gui-group-label px-2 pb-0.5 pt-2">
-								{t("general.unstaged")} · {status.unstaged.length}
-							</div>
-							{groupRows(status.unstaged, "unstaged")}
-						</>
-					)}
-					{status.untracked.length > 0 && (
-						<>
-							<div className="gui-group-label px-2 pb-0.5 pt-2">
-								{t("general.untracked")} · {status.untracked.length}
-							</div>
-							{groupRows(status.untracked, "untracked")}
-						</>
-					)}
-					{showIgnored && (status.ignored?.length ?? 0) > 0 && (
-						<>
-							<div className="gui-group-label px-2 pb-0.5 pt-2">
-								{t("general.ignored")} · {status.ignored?.length}
-							</div>
-							{groupRows(status.ignored ?? [], "ignored")}
-						</>
-					)}
-					{total === 0 && (status.ignored?.length ?? 0) === 0 && (
-						<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("tools.noChanges")}</div>
-					)}
-				</FadeScroll>
-			)}
+						);
+					})
+				)}
+			</FadeScroll>
 		</div>
 	);
 }
@@ -1164,31 +1248,19 @@ function StashPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 }
 
 /** Sync controls: fetch / pull(rebase) / push for the repo's current
- *  branch, with the upstream ahead/behind pill beside the actions and
- *  errors inline. Lives on the GitPanel sub-tab row so every git tab
- *  reaches it. */
+ *  branch, with errors inline. Lives on the GitPanel sub-tab row so every
+ *  git tab reaches it; ahead/behind is owned by the pane that displays it
+ *  (the changes header reads git.context, the history pane its own status). */
 function GitSyncControls({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
-	const [ahead, setAhead] = useState(0);
-	const [behind, setBehind] = useState(0);
 	const [busyAction, setBusyAction] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const refreshStatus = useCallback((): void => {
-		void rpc
-			?.request<{ ahead?: number; behind?: number }>("git.status", { cwd })
-			.then(res => {
-				setAhead(res?.ahead ?? 0);
-				setBehind(res?.behind ?? 0);
-			})
-			.catch(() => {});
-	}, [rpc, cwd]);
-	useEffect(refreshStatus, [refreshStatus]);
 	const run = async (method: "git.fetch" | "git.pull" | "git.push"): Promise<void> => {
 		if (!rpc || busyAction) return;
 		setBusyAction(method);
 		setError(null);
 		try {
 			const res = await rpc.request<{ ok?: boolean; error?: string }>(method, { cwd }).catch(() => null);
-			if (res?.ok) refreshStatus();
+			if (res?.ok) invalidateGitStatus(cwd);
 			else setError(res?.error ?? t("general.requestFailed"));
 		} finally {
 			setBusyAction(null);
@@ -1196,15 +1268,6 @@ function GitSyncControls({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 	};
 	return (
 		<div className="ml-auto flex items-center gap-0.5">
-			{(ahead > 0 || behind > 0) && (
-				<span
-					className="mr-1 flex-shrink-0 font-mono text-[10.5px] text-[var(--color-text-faint)]"
-					title={`↑${ahead} ↓${behind}`}
-				>
-					{ahead > 0 ? `↑${ahead} ` : ""}
-					{behind > 0 ? `↓${behind}` : ""}
-				</span>
-			)}
 			<button
 				type="button"
 				className="gui-pane-tool"
@@ -1265,7 +1328,7 @@ function GitSyncControls({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 /**
  * Single rail "git" surface (Phase 3 merge of the former git/diff/pr
  * surfaces): a view-local sub-tab bar — workspace changes / commit
- * history / pull requests — over the merged panes. The rail stays the
+ * history / stashes — over the merged panes. The rail stays the
  * single navigation axis; these tabs switch content *within* the surface.
  */
 type GitPaneTab = "changes" | "commits" | "stash";
