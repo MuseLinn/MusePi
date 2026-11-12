@@ -1455,6 +1455,18 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	notifyUser: {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "appearance",
+			group: "Display",
+			label: "Progress updates",
+			description:
+				"Let the agent post progress updates in the conversation while it works. Applies only to sessions created after the change — the tool set is fixed when a session starts",
+		},
+	},
+
 	"display.cacheMissMarker": {
 		type: "boolean",
 		default: false,

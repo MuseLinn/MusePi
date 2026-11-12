@@ -6595,6 +6595,7 @@ export class AgentSession {
 			const xdevMountNoticeIndex = messages.length;
 			messages.push(message);
 			// Inject any pending "nextTurn" messages as context alongside the user message
+			const pendingNextTurnSnapshot = [...this.#pendingNextTurnMessages];
 			for (const msg of this.#pendingNextTurnMessages) {
 				messages.push(msg);
 			}
@@ -6675,6 +6676,16 @@ export class AgentSession {
 				} else {
 					this.#tools.clearTurnSystemPromptOverride();
 					this.agent.setSystemPrompt(beforeAgentStartSystemPrompt);
+				}
+				// A hook refused the prompt before anything reached the agent. The
+				// user message was only appended to this local batch, so returning
+				// here sends nothing (and persists nothing); parked next-turn
+				// context goes back where it came from. Presentation of `reason`
+				// belongs to the refusing plugin (ctx.ui.notify).
+				if (result?.cancelled) {
+					this.#pendingNextTurnMessages = [...pendingNextTurnSnapshot, ...this.#pendingNextTurnMessages];
+					this.#tools.clearTurnSystemPromptOverride();
+					return false;
 				}
 			} else {
 				this.#tools.clearTurnSystemPromptOverride();
@@ -6973,6 +6984,10 @@ export class AgentSession {
 	 * Queue a steering message to interrupt the agent mid-run.
 	 */
 	async steer(text: string, images?: ImageContent[], displayContext?: MessageDisplayContext): Promise<void> {
+		// A queued turn needs something to deliver. Empty input used to land in
+		// the queue, where it rendered as a blank row and later opened an empty
+		// turn; there is no content for the user to edit or the model to read.
+		if (text.trim().length === 0 && (images?.length ?? 0) === 0) return;
 		if (text.startsWith("/")) {
 			this.#throwIfExtensionCommand(text);
 		}
@@ -6989,6 +7004,10 @@ export class AgentSession {
 	 * flipping advisor auto-resume.
 	 */
 	async followUp(text: string, images?: ImageContent[], options?: FollowUpOptions): Promise<void> {
+		// Same gate as steer(): text, images or videos must exist for this to be
+		// a deliverable message rather than an empty queue row.
+		const hasPayload = text.trim().length > 0 || (images?.length ?? 0) > 0 || (options?.videos?.length ?? 0) > 0;
+		if (!hasPayload) return;
 		if (text.startsWith("/")) {
 			this.#throwIfExtensionCommand(text);
 		}
@@ -7596,13 +7615,14 @@ export class AgentSession {
 
 	getQueuedMessageSnapshot(): QueuedMessageSnapshot {
 		const items = (queue: readonly AgentMessage[]) =>
-			queue.filter(isUserQueuedMessage).map(message => {
+			queue.filter(isUserQueuedMessage).flatMap(message => {
 				const restored = toRestoredQueuedMessage(message);
-				return {
-					id: this.#queuedMessageId(message),
-					text: restored.text,
-					imageCount: restored.images?.length ?? 0,
-				};
+				const imageCount = restored.images?.length ?? 0;
+				// A row with neither text nor images is not a message: showing it
+				// gave the queue chip a blank line, and the client could not tell
+				// it apart from a rendering failure.
+				if (restored.text.trim().length === 0 && imageCount === 0) return [];
+				return [{ id: this.#queuedMessageId(message), text: restored.text, imageCount }];
 			});
 		return {
 			paused: this.queuedMessagesPaused,

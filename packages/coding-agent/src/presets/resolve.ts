@@ -384,6 +384,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 				"task",
 				"hub",
 				"knowledge",
+				"notify_user",
 				"todo",
 				"web_search",
 				"write",

@@ -1289,6 +1289,18 @@ export interface BeforeAgentStartEventResult {
 	message?: CustomMessagePayload;
 	/** Replace the system prompt for this turn. If multiple extensions return this, they are chained. */
 	systemPrompt?: string[];
+	/**
+	 * Refuse this prompt before it is sent. Command hooks need the same gate as
+	 * a tool call: a `UserPromptSubmit` hook that exits 2 must stop the prompt and
+	 * show its reason, not merely inject context.
+	 *
+	 * The first `cancel: true` wins; later handlers still run (they may release
+	 * their own resources) but the prompt is not sent. `reason` is for the user —
+	 * it is not part of the model context.
+	 */
+	cancel?: boolean;
+	/** User-facing reason for a cancelled prompt. */
+	reason?: string;
 }
 
 export type {

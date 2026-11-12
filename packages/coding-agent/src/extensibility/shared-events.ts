@@ -351,6 +351,15 @@ export interface ToolResultEventResult {
 	details?: unknown;
 	/** Override isError flag */
 	isError?: boolean;
+	/**
+	 * Replace the result with a failure carrying `reason`. This is the
+	 * post-execution gate (`PostToolUse` exit 2): the tool already ran, so the
+	 * block cannot undo it — what it can do is make the model see why the
+	 * result is rejected instead of consuming it as success.
+	 */
+	block?: boolean;
+	/** User/model-facing reason for a blocked result. */
+	reason?: string;
 }
 
 /** Return type for `session_before_switch` handlers */

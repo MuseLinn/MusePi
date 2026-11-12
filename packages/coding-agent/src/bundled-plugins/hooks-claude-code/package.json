@@ -1,0 +1,44 @@
+{
+	"name": "musepi-hooks-claude-code",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "Claude Code Hooks",
+		"description": "把现有 Claude Code hooks.json 的 command 钩子桥到本会话：SessionStart / UserPromptSubmit / PreToolUse / PostToolUse / Stop。",
+		"icon": "H",
+		"presetOnly": true,
+		"extensions": ["./index.ts"],
+		"config": [
+			{
+				"key": "configPath",
+				"type": "path",
+				"label": "hooks.json 路径",
+				"description": "Claude Code 的 hooks.json，或含 hooks 键的 settings 文件；相对路径按会话工作目录解析。",
+				"default": ""
+			},
+			{
+				"key": "projectDir",
+				"type": "path",
+				"label": "项目目录",
+				"description": "替换 ${CLAUDE_PROJECT_DIR}；留空时使用会话工作目录。",
+				"default": ""
+			},
+			{
+				"key": "pluginRoot",
+				"type": "path",
+				"label": "插件根目录",
+				"description": "替换 ${CLAUDE_PLUGIN_ROOT}。",
+				"default": ""
+			},
+			{
+				"key": "defaultTimeoutMs",
+				"type": "number",
+				"label": "默认超时（毫秒）",
+				"description": "钩子未设置 timeout 时的预算。",
+				"default": 600000
+			}
+		]
+	}
+}

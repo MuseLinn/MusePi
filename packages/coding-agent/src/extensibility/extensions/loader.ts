@@ -756,13 +756,24 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 						messages: unknown[];
 						systemPrompt: string[];
 						systemPromptModified: boolean;
+						cancelled: boolean;
+						reason?: string;
 					};
-					const patch = result as { message?: unknown; systemPrompt?: string | string[] } | undefined;
+					const patch = result as
+						| { message?: unknown; systemPrompt?: string | string[]; cancel?: boolean; reason?: string }
+						| undefined;
 					if (patch?.message) state.messages.push(patch.message);
 					if (patch?.systemPrompt !== undefined) {
 						state.systemPrompt =
 							typeof patch.systemPrompt === "string" ? [patch.systemPrompt] : patch.systemPrompt;
 						state.systemPromptModified = true;
+					}
+					// First refusal wins. Later handlers still run so their own
+					// cleanup/fiber bookkeeping is not skipped, but they cannot
+					// turn the refusal back into a delivery.
+					if (patch?.cancel === true && !state.cancelled) {
+						state.cancelled = true;
+						if (typeof patch.reason === "string" && patch.reason.trim()) state.reason = patch.reason.trim();
 					}
 					return undefined;
 				}

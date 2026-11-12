@@ -106,6 +106,9 @@ import { type ExtensionUrlHost, ExtensionUrlRegistry, type UrlSchemeDefinition }
 interface BeforeAgentStartCombinedResult {
 	messages?: NonNullable<BeforeAgentStartEventResult["message"]>[];
 	systemPrompt?: string[];
+	/** A handler refused the prompt; `reason` is user-facing. */
+	cancelled?: boolean;
+	reason?: string;
 }
 
 export type ExtensionErrorListener = (error: ExtensionError) => void;
@@ -2388,13 +2391,28 @@ export class ExtensionRunner {
 		const bus = this.runtime.eventBus;
 		if (!bus || (this.runtime.eventHandlerCounts?.get("before_agent_start") ?? 0) === 0) return undefined;
 
-		const state = { messages: [] as unknown[], systemPrompt, systemPromptModified: false };
+		const state = {
+			messages: [] as unknown[],
+			systemPrompt,
+			systemPromptModified: false,
+			cancelled: false,
+			reason: undefined as string | undefined,
+		};
 		await this.#serial(
 			"before_agent_start",
 			{ type: "before_agent_start", prompt, images, systemPrompt },
 			this.createContext(),
 			state,
 		);
+		if (state.cancelled) {
+			return {
+				...(state.messages.length > 0
+					? { messages: state.messages as NonNullable<BeforeAgentStartEventResult["message"]>[] }
+					: {}),
+				cancelled: true,
+				...(state.reason ? { reason: state.reason } : {}),
+			};
+		}
 		if (state.messages.length === 0 && !state.systemPromptModified) return undefined;
 		return {
 			messages:

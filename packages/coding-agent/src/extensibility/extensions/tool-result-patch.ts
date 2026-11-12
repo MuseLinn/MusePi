@@ -9,6 +9,16 @@ import type { ToolResultEvent, ToolResultEventResult } from "./types";
 export function applyToolResultPatch(target: ToolResultEvent, patch: ToolResultEventResult | undefined): boolean {
 	if (!patch) return false;
 	let modified = false;
+	// A post-tool hook can reject the result it just observed. The execution is
+	// over, so the only honest effect is an error result that names the reason —
+	// the model must not consume the output as success.
+	if (patch.block === true) {
+		const reason = patch.reason?.trim() || "The tool result was rejected by a hook.";
+		target.content = [{ type: "text", text: reason }];
+		target.isError = true;
+		modified = true;
+		return modified;
+	}
 	if (patch.content !== undefined) {
 		target.content = patch.content;
 		modified = true;

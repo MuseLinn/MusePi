@@ -63,6 +63,7 @@ import { MemoryEditTool } from "./memory-edit";
 import { MemoryRecallTool } from "./memory-recall";
 import { MemoryReflectTool } from "./memory-reflect";
 import { MemoryRetainTool } from "./memory-retain";
+import { NotifyUserTool } from "./notify-user";
 import { wrapToolWithMetaNotice } from "./output-meta";
 import { ReadTool } from "./read";
 import type { PlanProposalHandler } from "./resolve";
@@ -462,6 +463,9 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	hub: s => new HubTool(s),
 	todo: s => new TodoTool(s),
 	knowledge: s => new KnowledgeTool(s),
+	// Session-creation gate: the prompt and tool schema are fixed once a
+	// session starts, so the toggle only applies to sessions created after it.
+	notify_user: s => (s.settings.get("notifyUser") ? new NotifyUserTool(s) : null),
 	connector_catalog: () => new ConnectorCatalogTool(),
 	web_search: s => new WebSearchTool(s),
 	write: s => new WriteTool(s),

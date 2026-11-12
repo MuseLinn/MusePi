@@ -31,6 +31,7 @@ import { lspRenderer } from "./tools/lsp";
 import { recallRenderer } from "./tools/memory-recall";
 import { reflectRenderer } from "./tools/memory-reflect";
 import { retainRenderer } from "./tools/memory-retain";
+import { notifyUserRenderer } from "./tools/notify-user";
 import { readRenderer } from "./tools/read";
 import { reportToolIssueRenderer } from "./tools/report-tool-issue";
 import { resolveRenderer } from "./tools/resolve";
@@ -90,6 +91,7 @@ const RENDERERS: Record<string, ToolRenderer> = {
 	select_tools: selectToolsRenderer,
 	task: taskRenderer,
 	knowledge: knowledgeRenderer,
+	notify_user: notifyUserRenderer,
 	todo: todoRenderer,
 	vibe_spawn: vibeRenderer,
 	vibe_send: vibeRenderer,
