@@ -1,0 +1,23 @@
+{
+	"name": "musepi-skill-filesystem",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "文件技能",
+		"description": "把一个或多个 skill 根目录声明为预设组合里的一行：目录 bundle（<name>/SKILL.md）与扁平 <name>.md 都会注册进本会话的技能目录。",
+		"icon": "S",
+		"presetOnly": true,
+		"extensions": ["./index.ts"],
+		"config": [
+			{
+				"key": "roots",
+				"type": "string",
+				"label": "技能根目录（JSON 数组）",
+				"description": "相对路径按会话工作目录解析，例如 [\"./skills\",\"~/.agents/skills/pack\"]",
+				"default": ""
+			}
+		]
+	}
+}

@@ -1,0 +1,85 @@
+{
+	"name": "musepi-mcp-client",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"musepi": {
+		"label": "MCP 服务器",
+		"description": "把一台 MCP 服务器声明为预设组合里的一行：stdio 或 HTTP/SSE，工具进入本会话的工具面，预设卸载时随 fiber 断开。",
+		"icon": "M",
+		"presetOnly": true,
+		"extensions": ["./index.ts"],
+		"config": [
+			{
+				"key": "serverName",
+				"type": "string",
+				"label": "服务器名称",
+				"description": "工具命名空间 mcp__<serverName>__<tool>；同一会话内唯一。",
+				"default": ""
+			},
+			{
+				"key": "transport",
+				"type": "select",
+				"label": "传输方式",
+				"default": "stdio",
+				"options": ["stdio", "http", "sse"]
+			},
+			{
+				"key": "command",
+				"type": "string",
+				"label": "stdio 命令",
+				"description": "仅 transport=stdio：可执行文件。",
+				"default": ""
+			},
+			{
+				"key": "args",
+				"type": "string",
+				"label": "stdio 参数（JSON 数组）",
+				"description": "例如 [\"-y\",\"@modelcontextprotocol/server-github\"]",
+				"default": ""
+			},
+			{
+				"key": "env",
+				"type": "string",
+				"label": "stdio 环境变量（JSON 对象）",
+				"description": "例如 {\"GITHUB_TOKEN\":\"...\"}；与进程环境合并。",
+				"default": ""
+			},
+			{
+				"key": "cwd",
+				"type": "path",
+				"label": "stdio 工作目录",
+				"description": "留空时使用会话工作目录。",
+				"default": ""
+			},
+			{
+				"key": "url",
+				"type": "string",
+				"label": "HTTP/SSE 地址",
+				"description": "仅 transport=http 或 sse。",
+				"default": ""
+			},
+			{
+				"key": "headers",
+				"type": "string",
+				"label": "HTTP 请求头（JSON 对象）",
+				"description": "例如 {\"Authorization\":\"Bearer ...\"}",
+				"default": ""
+			},
+			{
+				"key": "timeout",
+				"type": "number",
+				"label": "请求超时（毫秒）",
+				"default": 30000
+			},
+			{
+				"key": "enabled",
+				"type": "boolean",
+				"label": "启用",
+				"description": "关闭后保留该行但不连接。",
+				"default": true
+			}
+		]
+	}
+}
