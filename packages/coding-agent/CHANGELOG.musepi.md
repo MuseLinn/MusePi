@@ -6,6 +6,12 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **有副作用的工具先保存执行意图，再开始执行**：工具启动事件现在只记录一次，并在执行前 flush SDK transcript 与 daemon journal；新会话也会先保存 assistant 再写 marker。flush 失败会阻止工具运行并返回错误，只读工具可声明 `requiresDurableIntent: false` 跳过。该屏障面向进程崩溃恢复，不代表已完成 `fsync`。
+  - EN: Tools with possible side effects now record their intent before executing. A single start event is flushed to the SDK transcript and daemon journal, with the assistant persisted before its marker even in a new session. A flush failure prevents execution and returns an error, while demonstrably read-only tools can opt out with `requiresDurableIntent: false`. The barrier targets process-crash recovery and does not imply `fsync`.
+
+- **会话恢复不再静默跳过缺失事件，插件配置也不再误触发热重启**：journal 补推先校验游标到尾部完整连续，缺号时整页重载；owner 获取、心跳和释放在原生锁内串行，旧心跳不会覆盖新 owner；host 插件仅在自身有效配置变化时重载，HMR 不再因无关配置保存要求重启。
+  - EN: Session recovery no longer silently skips missing events, and plugin config saves no longer request spurious host restarts. Journal catch-up validates a complete contiguous range before replay, owner-file transitions are serialized with a native lock so stale heartbeats cannot overwrite a new owner, and host plugins reload only when their own effective config changes instead of every save selecting HMR.
+
 ## [0.7.4] - 2026-11-11
 
 - **崩溃或重启后不再丢会话记录**：压缩在日志尾部折叠时会把 journal 清成空文件，重新打开后序号从 1 重来，而重放会丢弃检查点序号及以下的所有记录——整段会话就此消失。现在序号从「文件尾」与「检查点」中较大者继续，且压缩不接受倒退的检查点；断线重连改用真正落盘的尾部判断，补不齐时明确要求整页重载，而不是少推一截。

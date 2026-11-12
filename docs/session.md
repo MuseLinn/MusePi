@@ -415,6 +415,12 @@ deletes the sidecar. The process-global pause (`daemon.pause`, TUI
 `/pause` parity) is intentionally in-memory only and does not survive a
 daemon restart. See `gui-implementation.md` §1c for the RPC contract.
 
+## Daemon replay and owner transitions
+
+- `session.catchup`, resume deltas, and `changes.ops` expose journal records only when they form a complete contiguous range from the cursor through the tail. A missing intermediate seq or a short replay requires resync; resume keeps its snapshot and skips the incomplete delta.
+- Owner acquisition, heartbeat, and release serialize each read/compare/write transition with the same OS-backed file lock. `onLost` runs after the critical section, so disposal can reacquire the lock. Explicit takeover remains supported, and a stale heartbeat cannot overwrite a newly claimed owner. This does not fence non-cooperating file writers or add `fsync` durability.
+- Before a tool with possible side effects executes, `beforeToolExecution` persists the assistant and exactly one start event, then flushes the SDK transcript and daemon journal. The assistant precedes its marker even in a new session; a flush failure prevents execution and becomes a tool error. Only demonstrably read-only tools set `requiresDurableIntent: false`; unknown tools keep the barrier. These flushes target process-crash recovery and do not add `fsync`.
+
 ## Persistence Guarantees and Failure Model
 
 ### Persist vs in-memory

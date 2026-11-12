@@ -904,9 +904,9 @@ After every cron mutation and run start/finish the daemon broadcasts `{ type: "c
 seq 单一权威 = daemon journal：journal 打开时从文件尾部恢复 `#seq`（daemon 重启不回绕）；kind:`"event"` 信封的广播 seq 就是 journal 记录 seq（append 返回值）；snapshot 的 `cursor` 由 server 层盖章为 journal 尾部（live 路径用内存 tail，history 路径在构建视图**前**读文件尾——并发 append 只会把记录推到盖章值之上，客户端走一次自愈 catchup，绝不会被打洞）。`MaterializedView` 内部不消费 cursor，纯 server 层处理。
 
 - **客户端水位闸**（desktop `GuiSessionStore`）：快照 `cursor` 为初始 watermark；`kind:"event"` 且 seq>0 的信封过闸——`seq ≤ watermark` 跳过（catchup 重叠/重放去重，不重放）；`seq == watermark+1` 应用并 **while 冲刷重排缓冲**（`#reorder` Map，严格按序）；`seq > watermark+1` 入缓冲并触发一次 `session.catchup {afterSeq: watermark}`（去重在途）。seq=0/非 event kind 不参与水位（approval/ask/progress/title/recap/pause 等非 journal 信封走独立计数空间，仅要求 wire 上是 number）。
-- **回落**：`session.catchup` 对 `afterSeq` 早于 compaction checkpoint（`{resyncRequired, compactedThrough}`）或**晚于** journal 尾部（客户端水位来自分叉 journal，推空会让它永远跳过真事件）都回 `resyncRequired`、不推送；客户端收到后或 10s 无进展（gap 定时器）→ 走 `openSession` 整快照重订阅。会话切换/重建（新 store）重置 watermark 与缓冲。
-- **新 RPC** `session.catchup`：复用 journal 读 + EventBatcher 分页（CATCHUP_PAGE_SIZE=500），事件走正常 push 通道，响应轻量（`{ok}` / `{resyncRequired}`）；入参校验 afterSeq 非负整数。历史会话激活后同样可用。
-- **测试契约**：journal 重启续 seq、torn 尾部恢复 tail、catchup 有序补推 + 折叠/超前回 resyncRequired、store 丢帧缓冲/按序冲刷/重叠不重放/resyncRequired 升级（`test/daemon/journal.test.ts`、`test/daemon/session-catchup-rpc.test.ts`、`desktop-app/test/session-store-gap.test.ts`）。
+- **回落**：`session.catchup` 对 `afterSeq` 早于 compaction checkpoint（`{resyncRequired, compactedThrough}`）、**晚于** journal 尾部（客户端水位来自分叉 journal，推空会让它永远跳过真事件），或记录不能从游标到尾部完整连续（中间缺号/短尾）都回 `resyncRequired`、不推送；客户端收到后或 10s 无进展（gap 定时器）→ 走 `openSession` 整快照重订阅。会话切换/重建（新 store）重置 watermark 与缓冲。
+- **新 RPC** `session.catchup`：复用 journal 读 + EventBatcher 分页（CATCHUP_PAGE_SIZE=500），事件走正常 push 通道，响应轻量（`{ok}` / `{resyncRequired}`）；入参校验 afterSeq 非负整数。历史会话激活后同样可用。resume 增量与 `changes.ops` 也在暴露前做同一连续性校验。
+- **测试契约**：journal 重启续 seq、torn 尾部恢复 tail、catchup 有序补推 + 折叠/超前/中间缺号/短尾回 resyncRequired、store 丢帧缓冲/按序冲刷/重叠不重放/resyncRequired 升级（`test/daemon/journal.test.ts`、`test/daemon/session-catchup-rpc.test.ts`、`desktop-app/test/session-store-gap.test.ts`）。
 - **已知边界**：guest/web shell 未接水位闸（断档仍走整快照替换）；TUI 不消费 daemon 推送 seq 不受影响；`session.resume` 的 `cursor`+`catchupIfNeeded` 旧链保留但 GUI 不传 cursor（catchup RPC 取代之）。
 ## 40. Shell batches A1/A2/B1/C — header tiers, browser chrome, panel-wiring verdict (2026-09-22, roadmap shell design)
 

@@ -598,6 +598,8 @@ export class AgentSession {
 	readonly #advisorLifecycle: CordisAdvisorLifecycle;
 	readonly #advisorTurnEndListeners = new Set<AdvisorPrimaryTurnEndListener>();
 	#advisorDispose: Promise<void> | undefined;
+	#flushDurableToolIntent: AgentSessionConfig["flushDurableToolIntent"];
+	#durableToolIntentIds = new Set<string>();
 	/** Prompt host teardown attached by the session creator; runs once in dispose. */
 	#promptHostClose: (() => void) | undefined;
 	#collectPromptContexts: (() => PromptContextMessage[]) | undefined;
@@ -1136,6 +1138,7 @@ export class AgentSession {
 		this.sessionManager = config.sessionManager;
 		this.settings = config.settings;
 		this.#modelRegistry = config.modelRegistry;
+		this.#flushDurableToolIntent = config.flushDurableToolIntent;
 		this.#codexResetCoordinator = config.codexResetCoordinator ?? defaultCodexAutoRedeemCoordinator;
 		const bashHost: BashRunnerHost = {
 			agent: this.agent,
@@ -1616,6 +1619,7 @@ export class AgentSession {
 		// time so a block/revision lands before concurrency resolution,
 		// tool_execution_start, and the wrapper's approval gate.
 		this.agent.beforeToolCall = (ctx, signal) => this.#beforeToolCall(ctx, signal);
+		this.agent.beforeToolExecution = ctx => this.#beforeToolExecution(ctx);
 		this.agent.providerSessionState = this.#providerSessionState;
 		this.#syncAgentSessionId();
 		this.#todo.syncFromBranch();
@@ -2825,11 +2829,13 @@ export class AgentSession {
 			});
 		}
 
-		if (event.type === "tool_execution_start") {
+		const durableToolIntentEmitted =
+			event.type === "tool_execution_start" && this.#durableToolIntentIds.delete(event.toolCallId);
+		if (event.type === "tool_execution_start" && !durableToolIntentEmitted) {
 			this.#recordToolExecutionStart(event);
 		}
 
-		if (event.type !== "agent_end") {
+		if (event.type !== "agent_end" && !durableToolIntentEmitted) {
 			try {
 				await this.#emitSessionEvent(displayEvent);
 			} catch (error) {
@@ -3609,6 +3615,36 @@ export class AgentSession {
 				continue;
 			}
 			break;
+		}
+	}
+
+	async #beforeToolExecution(ctx: BeforeToolCallContext): Promise<void> {
+		if (ctx.tool.requiresDurableIntent === false) return;
+		const event: Extract<AgentEvent, { type: "tool_execution_start" }> = {
+			type: "tool_execution_start",
+			toolCallId: ctx.toolCall.id,
+			toolName: ctx.toolCall.name,
+			args: ctx.args,
+			intent: ctx.toolCall.intent,
+		};
+		this.#durableToolIntentIds.add(ctx.toolCall.id);
+		let emissionStarted = false;
+		try {
+			this.#persistSessionMessageIfMissing(ctx.assistantMessage);
+			await this.sessionManager.ensureOnDisk();
+			this.#recordToolExecutionStart(event);
+			void this.#emitSessionEvent(event).catch(error => {
+				logger.warn("Failed to emit durable tool execution start", {
+					toolCallId: ctx.toolCall.id,
+					error: String(error),
+				});
+			});
+			emissionStarted = true;
+			await this.sessionManager.flush();
+			await this.#flushDurableToolIntent?.(event);
+		} catch (error) {
+			if (!emissionStarted) this.#durableToolIntentIds.delete(ctx.toolCall.id);
+			throw error;
 		}
 	}
 

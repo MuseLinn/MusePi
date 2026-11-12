@@ -353,6 +353,7 @@ export async function runSearchQuery(
  */
 export class WebSearchTool implements AgentTool<typeof webSearchSchema, SearchRenderDetails> {
 	readonly name = "web_search";
+	readonly requiresDurableIntent = false;
 	readonly approval = "read" as const;
 	readonly label = "Web Search";
 	readonly description: string;

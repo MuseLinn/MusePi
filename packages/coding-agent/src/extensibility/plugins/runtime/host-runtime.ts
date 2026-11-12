@@ -299,12 +299,15 @@ async function reloadHostPluginsNow(changedFiles?: readonly string[]): Promise<r
 	if (changedFiles !== undefined && changedFiles.length > 0) {
 		requestRestartForHostFiles(records, changedFiles);
 	}
-	const affected = selectAffected(records, changedFiles);
-	if (affected.length === 0) return [];
-
 	const readConfig = await defaultSessionConfigReader();
+	const affected = new Map(selectAffected(records, changedFiles).map(record => [record.entryPath, record]));
+	if (changedFiles?.some(file => path.resolve(file) === path.resolve(getPluginConfigPath()))) {
+		for (const record of await selectConfigAffected(records, readConfig)) affected.set(record.entryPath, record);
+	}
+	if (affected.size === 0) return [];
+
 	const reloaded: string[] = [];
-	for (const record of affected) {
+	for (const record of affected.values()) {
 		if (!record.reloadable) {
 			requestHostRestart({
 				entry: record.entryPath,
@@ -416,14 +419,8 @@ function packageRootFor(dir: string): string {
 
 /**
  * The packages one batch affects: any file inside the package directory, the
- * entry, or the manifest.
- *
- * Files outside every host package are host modules. They are
- * not plugin-owned — re-importing one would split module-level state that the
- * running host already holds — so they require a restart rather than a reload.
- * The manifest-config store is also outside a package, but it is the second
- * half of a package's declaration, and the store is process-cached and
- * write-through, so a saved value needs only a re-apply.
+ * entry, or the manifest. Config-store changes are filtered separately by
+ * effective value so an unrelated save cannot select a non-reloadable service.
  */
 function selectAffected(
 	records: readonly HostPluginRecord[],
@@ -432,7 +429,6 @@ function selectAffected(
 	if (changedFiles === undefined) return [...records];
 	if (changedFiles.length === 0) return [];
 	const changed = new Set(changedFiles.map(file => path.resolve(file)));
-	if (changed.has(path.resolve(getPluginConfigPath()))) return [...records];
 	return records.filter(record => {
 		if (changed.has(path.resolve(record.entryPath)) || changed.has(path.resolve(record.manifestPath))) {
 			return true;
@@ -442,6 +438,22 @@ function selectAffected(
 		}
 		return false;
 	});
+}
+
+async function selectConfigAffected(
+	records: readonly HostPluginRecord[],
+	readConfig: MountContext["readConfig"],
+): Promise<HostPluginRecord[]> {
+	const affected: HostPluginRecord[] = [];
+	for (const record of records) {
+		try {
+			const { values } = await readConfig(record.entryPath);
+			if (!Bun.deepEquals(values, record.mounted.config)) affected.push(record);
+		} catch {
+			affected.push(record);
+		}
+	}
+	return affected;
 }
 
 /** Live fiber diagnostics for the extension center, keyed like its rows. */

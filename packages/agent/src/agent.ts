@@ -309,6 +309,8 @@ export interface AgentOptions {
 	 * See {@link AgentLoopConfig.beforeToolCall} for full semantics.
 	 */
 	beforeToolCall?: AgentLoopConfig["beforeToolCall"];
+	/** Awaited before tool execution; used by hosts that require a durable intent barrier. */
+	beforeToolExecution?: AgentLoopConfig["beforeToolExecution"];
 
 	/**
 	 * Called after a tool finishes executing, before `tool_execution_end` and the tool-result
@@ -461,6 +463,8 @@ export class Agent {
 	 * Reassign at any time to swap the implementation (e.g. on extension reload).
 	 */
 	beforeToolCall?: AgentLoopConfig["beforeToolCall"];
+	/** Awaited before tool execution; used by hosts that require a durable intent barrier. */
+	beforeToolExecution?: AgentLoopConfig["beforeToolExecution"];
 	/**
 	 * Hook invoked after tool execution and before `tool_execution_end` / tool-result
 	 * message emission. Reassign at any time to swap the implementation.
@@ -526,6 +530,7 @@ export class Agent {
 		this.#onAssistantMessageEvent = opts.onAssistantMessageEvent;
 		this.#onHarmonyLeak = opts.onHarmonyLeak;
 		this.beforeToolCall = opts.beforeToolCall;
+		this.beforeToolExecution = opts.beforeToolExecution;
 		this.afterToolCall = opts.afterToolCall;
 		this.transformAssistantMessage = opts.transformAssistantMessage;
 		this.#telemetry = opts.telemetry;
@@ -1564,6 +1569,9 @@ export class Agent {
 			appendOnlyContext: this.#appendOnlyContext,
 			pauseGate: this.#pauseGate,
 			beforeToolCall: this.beforeToolCall ? (ctx, signal) => this.beforeToolCall?.(ctx, signal) : undefined,
+			beforeToolExecution: this.beforeToolExecution
+				? (ctx, signal) => this.beforeToolExecution?.(ctx, signal)
+				: undefined,
 			afterToolCall: this.afterToolCall ? (ctx, signal) => this.afterToolCall?.(ctx, signal) : undefined,
 			transformAssistantMessage: this.transformAssistantMessage
 				? (message, signal) => this.transformAssistantMessage?.(message, signal)

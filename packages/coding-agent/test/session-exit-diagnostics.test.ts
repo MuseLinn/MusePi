@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { Agent } from "@musepi/pi-agent-core";
+import { type } from "@musepi/musepi-type";
+import { Agent, type AgentTool } from "@musepi/pi-agent-core";
 import type { AssistantMessage } from "@musepi/pi-ai";
+import { createMockModel } from "@musepi/pi-ai/providers/mock";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { AppendJournal } from "@musepi/pi-coding-agent/daemon/journal";
+import { ExtensionToolWrapper } from "@musepi/pi-coding-agent/extensibility/extensions/wrapper";
+import { LspTool } from "@musepi/pi-coding-agent/lsp/tool";
 import { createSessionTeardown } from "@musepi/pi-coding-agent/modes/session-teardown";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
@@ -19,6 +24,8 @@ import {
 } from "@musepi/pi-coding-agent/session/exit-diagnostics";
 import { convertToLlm } from "@musepi/pi-coding-agent/session/messages";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { ReadTool } from "@musepi/pi-coding-agent/tools/read";
+import { SecurityScanTool } from "@musepi/pi-coding-agent/tools/security-scan";
 import { postmortem, TempDir } from "@musepi/pi-utils";
 
 const pendingAssistant: AssistantMessage = {
@@ -469,5 +476,176 @@ describe("session exit diagnostics", () => {
 		expect(createInterruptedTurnAbortMessage(normalExit.getBranch())).toBeUndefined();
 		expect(createInterruptedTurnAbortMessage(completedTurn.getBranch())).toBeUndefined();
 		expect(createInterruptedTurnAbortMessage(supersededExit.getBranch())).toBeUndefined();
+	});
+
+	describe("durable intent", () => {
+		async function runScenario(
+			options: {
+				readOnly?: boolean;
+				failFlush?: boolean;
+				proxied?: boolean;
+				args?: Record<string, unknown>;
+				createTool?: (dir: string, order: string[]) => AgentTool | Promise<AgentTool>;
+			} = {},
+		) {
+			tempDir = TempDir.createSync("@pi-durable-intent-");
+			authStorage = await AuthStorage.create(path.join(tempDir.path(), "auth.db"));
+			authStorage.setRuntimeApiKey("anthropic", "test-key");
+			const modelRegistry = new ModelRegistry(authStorage);
+			const model = getBundledModel("anthropic", "claude-sonnet-4-5");
+			if (!model) throw new Error("Expected built-in anthropic model to exist");
+			const order: string[] = [];
+			const definition = options.createTool
+				? await options.createTool(tempDir.path(), order)
+				: {
+						name: "probe",
+						label: "Probe",
+						description: "Probe durable intent",
+						parameters: type({}),
+						...(options.readOnly ? { requiresDurableIntent: false } : {}),
+						execute: async () => {
+							order.push("execute");
+							return { content: [{ type: "text" as const, text: "done" }] };
+						},
+					};
+			const tool = options.proxied
+				? new ExtensionToolWrapper(definition, {
+						consumeToolCallEmitted: () => true,
+						hasHandlers: () => false,
+					} as never)
+				: definition;
+			const mock = createMockModel({
+				responses: [
+					{ content: [{ type: "toolCall", id: "call-1", name: tool.name, arguments: options.args ?? {} }] },
+					{ content: ["done"] },
+				],
+			});
+			const agent = new Agent({
+				getApiKey: () => "test-key",
+				initialState: { model, systemPrompt: ["Test"], tools: [tool], messages: [] },
+				streamFn: (streamModel, context, streamOptions) => mock.stream(streamModel, context, streamOptions),
+			});
+			const sessionManager = SessionManager.create(tempDir.path(), tempDir.path());
+			const journal = new AppendJournal(tempDir.path(), "s1");
+			await journal.open();
+			try {
+				session = new AgentSession({
+					agent,
+					sessionManager,
+					settings: Settings.isolated({ "compaction.enabled": false }),
+					modelRegistry,
+					flushDurableToolIntent: async event => {
+						order.push("flush");
+						journal.append(event as never);
+						if (options.failFlush) throw new Error("flush failed");
+						await journal.flush();
+					},
+				});
+				session.subscribe(event => {
+					if (event.type === "tool_execution_start") order.push("start");
+				});
+				await session.prompt("run the probe");
+				await session.waitForIdle();
+				const toolResult = agent.state.messages.find(message => message.role === "toolResult");
+				return {
+					order,
+					startCount: order.filter(item => item === "start").length,
+					entries: sessionManager.getEntries(),
+					records: await journal.readAll(),
+					toolResult,
+				};
+			} finally {
+				await journal.close();
+			}
+		}
+
+		it("flushes subscriber intent before a synchronous side effect and emits start once", async () => {
+			const scenario = await runScenario();
+			expect(scenario.order).toEqual(["start", "flush", "execute"]);
+			expect(scenario.startCount).toBe(1);
+			expect(scenario.records.map(record => record.event.type)).toEqual(["tool_execution_start"]);
+			const assistantIndex = scenario.entries.findIndex(
+				entry => entry.type === "message" && entry.message.role === "assistant",
+			);
+			const markerIndex = scenario.entries.findIndex(
+				entry => entry.type === "custom" && entry.customType === TOOL_EXECUTION_START_CUSTOM_TYPE,
+			);
+			expect(assistantIndex).toBeGreaterThanOrEqual(0);
+			expect(markerIndex).toBeGreaterThan(assistantIndex);
+		});
+
+		it("lets an explicitly read-only tool skip the barrier", async () => {
+			const scenario = await runScenario({ readOnly: true });
+			expect(scenario.order).not.toContain("flush");
+			expect(scenario.order).toContain("execute");
+			expect(scenario.startCount).toBe(1);
+			expect(scenario.records).toEqual([]);
+		});
+
+		it("skips the barrier for a proxied built-in read-only tool", async () => {
+			const scenario = await runScenario({
+				proxied: true,
+				args: { path: "sample.txt" },
+				createTool: async (dir, order) => {
+					const tool = new ReadTool({
+						cwd: dir,
+						hasUI: false,
+						getSessionFile: () => null,
+						getSessionSpawns: () => "*",
+						enableLsp: false,
+						settings: Settings.isolated(),
+						getArtifactsDir: () => null,
+						getSessionId: () => null,
+						getPlanModeState: () => undefined,
+					} as never);
+					await Bun.write(path.join(dir, "sample.txt"), "sample");
+					const execute = tool.execute.bind(tool);
+					tool.execute = async (_toolCallId, params, signal, onUpdate, context) => {
+						order.push("execute");
+						return execute(_toolCallId, params, signal, onUpdate, context);
+					};
+					return tool as AgentTool;
+				},
+			});
+			expect(scenario.order).not.toContain("flush");
+			expect(scenario.order).toContain("execute");
+			expect(scenario.startCount).toBe(1);
+			expect(scenario.records).toEqual([]);
+		});
+
+		for (const { name, args, create } of [
+			{
+				name: "an LSP file rename",
+				args: { action: "rename_file", file: "old.ts", new_name: "new.ts" },
+				create: () => new LspTool({} as never),
+			},
+			{
+				name: "a cloud security scan",
+				args: { action: "cloud_start" },
+				create: () => new SecurityScanTool({} as never),
+			},
+		]) {
+			it(`keeps the durable barrier for ${name}`, async () => {
+				const scenario = await runScenario({
+					args,
+					createTool: (_dir, order) => {
+						const tool = create() as AgentTool;
+						tool.execute = async () => {
+							order.push("execute");
+							return { content: [{ type: "text", text: "done" }] };
+						};
+						return tool;
+					},
+				});
+				expect(scenario.order).toEqual(["start", "flush", "execute"]);
+			});
+		}
+
+		it("fails closed when the durable flush rejects", async () => {
+			const scenario = await runScenario({ failFlush: true });
+			expect(scenario.order).not.toContain("execute");
+			expect(scenario.toolResult).toMatchObject({ role: "toolResult", isError: true });
+			expect(JSON.stringify(scenario.toolResult)).toContain("flush failed");
+		});
 	});
 });

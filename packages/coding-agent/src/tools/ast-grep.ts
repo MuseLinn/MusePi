@@ -148,6 +148,7 @@ export interface AstGrepToolDetails {
 
 export class AstGrepTool implements AgentTool<typeof astGrepSchema, AstGrepToolDetails> {
 	readonly name = "ast_grep";
+	readonly requiresDurableIntent = false;
 	readonly approval = "read" as const;
 	readonly label = "AST Grep";
 	readonly summary = "Search code with AST patterns (structural grep)";

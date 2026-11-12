@@ -908,6 +908,7 @@ export interface GrepToolOptions {
 
 export class GrepTool implements AgentTool<typeof searchSchema, GrepToolDetails> {
 	readonly name = "grep";
+	readonly requiresDurableIntent = false;
 	readonly approval = (args: unknown): ToolTier => {
 		const a = args as { path?: string | string[]; paths?: string | string[] };
 		return toPathList(a.path ?? a.paths).some(pathTargetsSsh) ? "exec" : "read";

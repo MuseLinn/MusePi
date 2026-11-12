@@ -415,6 +415,12 @@ session 在休眠/重启后保持暂停。删除 session 同时也会删除 side
 进程级全局暂停（`daemon.pause`，与 TUI `/pause` 对等）刻意只在内存中保存，
 不会在 daemon 重启后存活。RPC 契约见 `gui-implementation.md` §1c。
 
+## Daemon 补推与 owner 过渡
+
+- `session.catchup`、resume 增量和 `changes.ops` 只有在 journal 记录从游标到尾部完整连续时才向外暴露。中间缺号或短读必须 resync；resume 保留已有快照并跳过不完整的增量。
+- owner 获取、心跳和释放使用同一把 OS 原生文件锁串行化每次读取、比较和写入。`onLost` 在临界区外执行，dispose 可以重新取锁。显式 takeover 仍然可用，旧 heartbeat 不会覆盖新 owner 的内容。这不约束绕过锁的文件写入，也不增加 `fsync` 持久化。
+- 有副作用的工具在执行前经 `beforeToolExecution` 持久化 assistant 和唯一一条 start 事件，然后 flush SDK transcript 与 daemon journal。即使在新会话中，assistant 也先于 marker；flush 失败会阻止执行并返回工具错误。只有可证明只读的工具声明 `requiresDurableIntent: false`，未知工具默认保留屏障。这些 flush 面向进程崩溃恢复，不增加 `fsync`。
+
 ## 持久化保证与失败模型
 
 ### 持久化 vs 内存

@@ -71,8 +71,8 @@ const TAIL_SCAN_CHUNK = 64 * 1024;
  * - afterSeq > tailSeq → resyncRequired: the watermark comes from a
  *   divergent journal; replaying nothing would strand it above every
  *   future seq (its gate would skip real events).
- * - otherwise the journal holds every record in (afterSeq, tail] and the
- *   caller replays them in order. */
+ * - otherwise the caller must also validate the records with
+ *   {@link catchupRecordsPlan} before replaying them. */
 export function catchupPlan(
 	afterSeq: number,
 	checkpointSeq: number,
@@ -80,6 +80,24 @@ export function catchupPlan(
 ): { resyncRequired: true; compactedThrough: number } | { resyncRequired: false } {
 	if (afterSeq < checkpointSeq) return { resyncRequired: true, compactedThrough: checkpointSeq };
 	if (afterSeq > tailSeq) return { resyncRequired: true, compactedThrough: checkpointSeq };
+	return { resyncRequired: false };
+}
+
+/** Require a complete, contiguous replay through the tail before exposing it. */
+export function catchupRecordsPlan(
+	afterSeq: number,
+	checkpointSeq: number,
+	tailSeq: number,
+	records: readonly JournalRecord[],
+): ReturnType<typeof catchupPlan> {
+	const plan = catchupPlan(afterSeq, checkpointSeq, tailSeq);
+	if (plan.resyncRequired) return plan;
+	let expected = afterSeq + 1;
+	for (const record of records) {
+		if (record.seq !== expected) return { resyncRequired: true, compactedThrough: checkpointSeq };
+		expected += 1;
+	}
+	if (expected !== tailSeq + 1) return { resyncRequired: true, compactedThrough: checkpointSeq };
 	return { resyncRequired: false };
 }
 

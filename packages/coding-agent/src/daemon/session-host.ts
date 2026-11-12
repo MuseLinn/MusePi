@@ -308,7 +308,7 @@ import {
 	type PendingApproval,
 } from "./approval-bridge";
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
-import { AppendJournal, catchupPlan } from "./journal";
+import { AppendJournal, catchupPlan, catchupRecordsPlan } from "./journal";
 import { acquireSessionOwnerLock, type SessionOwnerLock, sessionLocksDir } from "./session-owner-lock";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
 
@@ -842,6 +842,8 @@ export interface LiveSession {
 	 *  (approval/ask, agent progress, title, recap, pause) carry seq 0 and
 	 *  apply in arrival order; clients gate catchup only on kind:"event". */
 	journal: AppendJournal | null;
+	/** Journal seq assigned before an asynchronously fanned-out start reaches this host. */
+	durableToolIntentSeqs: WeakMap<object, number>;
 	view: MaterializedView;
 	subscribers: Map<string, (event: SessionStreamEvent) => void>;
 	/** Currently-executing tool calls (subscribe-time hydration of the GUI
@@ -1444,6 +1446,13 @@ export class DaemonSessionHost {
 				customTools: [...this.#extensionManagerTools(), ...this.#dynamicPluginTools()],
 				collabTool: this.#collabToolProvider?.(),
 				scheduledTasks: this.#scheduledTaskProvider?.(cwd) ?? undefined,
+				flushDurableToolIntent: async event => {
+					const wireEvent = toWireAgentEvent(event);
+					if (wireEvent && live.journal) {
+						live.durableToolIntentSeqs.set(event, live.journal.append(wireEvent));
+					}
+					await live.journal?.flush();
+				},
 				...(await desktopSessionPromptInputs(cwd)),
 				// M3 §3: designSystemId 随创建进 SDK——rebuildSystemPrompt 每次
 				// 重解析注册表注入设计体系简报（composer source=design-system）。
@@ -1573,6 +1582,13 @@ export class DaemonSessionHost {
 				customTools: [...this.#extensionManagerTools(), ...this.#dynamicPluginTools()],
 				collabTool: this.#collabToolProvider?.(),
 				scheduledTasks: this.#scheduledTaskProvider?.(resumeCwd) ?? undefined,
+				flushDurableToolIntent: async event => {
+					const wireEvent = toWireAgentEvent(event);
+					if (wireEvent && live.journal) {
+						live.durableToolIntentSeqs.set(event, live.journal.append(wireEvent));
+					}
+					await live.journal?.flush();
+				},
 				...(await desktopSessionPromptInputs(resumeCwd)),
 				...(projectMetadata ? { projectMetadata } : {}),
 				...(resumeModeId ? { modeId: resumeModeId } : {}),
@@ -1590,7 +1606,8 @@ export class DaemonSessionHost {
 		if (manager.getAdditionalDirectories().length > 0) {
 			await result.session.refreshSkills();
 		}
-		return this.#adoptAgentSession(result.session, resumeCwd, result.setToolUIContext, null, pauseGate);
+		const live = await this.#adoptAgentSession(result.session, resumeCwd, result.setToolUIContext, null, pauseGate);
+		return live;
 	}
 
 	/**
@@ -1786,6 +1803,7 @@ export class DaemonSessionHost {
 			// Non-journaled envelope kinds carry seq 0; the journal owns the
 			// kind:"event" seq space outright.
 			journal,
+			durableToolIntentSeqs: new WeakMap(),
 			view: viewFinal,
 			subscribers: new Map(),
 			activeToolCalls: new Map(),
@@ -2035,8 +2053,11 @@ export class DaemonSessionHost {
 			const wireEvent = toWireAgentEvent(event);
 			if (!wireEvent) return;
 			// Journal = single seq authority: broadcast seq == journal record
-			// seq (see publishWireEvent).
-			const seq = live.journal ? live.journal.append(wireEvent) : 0;
+			// seq (see publishWireEvent). A durable start was already appended;
+			// its delayed fan-out reuses that seq instead of duplicating the record.
+			const durableSeq = live.durableToolIntentSeqs.get(event);
+			live.durableToolIntentSeqs.delete(event);
+			const seq = durableSeq ?? (live.journal ? live.journal.append(wireEvent) : 0);
 			live.view.apply(wireEvent);
 			schedulePersist();
 			// Compact when the journal crosses a bound: fold the materialized
@@ -2793,7 +2814,10 @@ export class DaemonSessionHost {
 			// whole journal and filtering here cost every client a full parse of
 			// the session on every reconnect, growing with the session's age
 			// rather than with the gap it had missed.
-			for (const record of await journal.recordsAfter(cursor)) {
+			const records = await journal.recordsAfter(cursor);
+			const plan = catchupRecordsPlan(cursor, await this.checkpointSeq(sessionId), journal.tailSeq, records);
+			if (plan.resyncRequired) return;
+			for (const record of records) {
 				batcher.push({ kind: "event", seq: record.seq, payload: record.event, sessionId });
 				page += 1;
 				if (page % CATCHUP_PAGE_SIZE === 0) {
@@ -2860,9 +2884,11 @@ export class DaemonSessionHost {
 		afterSeq: number,
 		journal: AppendJournal,
 		conn: DaemonConnection,
-	): Promise<{ ok: true }> {
+	): Promise<{ ok: true } | { resyncRequired: true; compactedThrough: number }> {
 		const batcher = this.batcherFor(conn);
 		const records = await journal.recordsAfter(afterSeq);
+		const plan = catchupRecordsPlan(afterSeq, await this.checkpointSeq(sessionId), journal.tailSeq, records);
+		if (plan.resyncRequired) return plan;
 		for (let i = 0; i < records.length; i++) {
 			const record = records[i];
 			batcher.push({ kind: "event", seq: record.seq, payload: record.event, sessionId });

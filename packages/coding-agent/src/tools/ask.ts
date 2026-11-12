@@ -829,6 +829,7 @@ function backgroundQuestionLabel(questions: AskParams["questions"]): string {
  */
 export class AskTool implements AgentTool<typeof askSchema, AskToolDetails> {
 	readonly name = "ask";
+	readonly requiresDurableIntent = false;
 	readonly approval = "read" as const;
 	readonly label = "Ask";
 	readonly summary = "Ask the user a clarifying question";

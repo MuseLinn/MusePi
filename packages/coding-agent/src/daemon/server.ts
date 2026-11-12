@@ -146,7 +146,7 @@ import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.j
 import type { CordisDynamicPluginRuntime } from "./cordis-dynamic-plugins";
 import { writeProjectMirror } from "./creation";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
-import { catchupPlan } from "./journal";
+import { catchupPlan, catchupRecordsPlan } from "./journal";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -3741,6 +3741,15 @@ export class DaemonServer {
 					return { events: [], lastSeq: tailSeq, resyncRequired: true, compactedThrough: plan.compactedThrough };
 				}
 				const records = journal ? await journal.recordsAfter(afterSeq) : [];
+				const continuity = catchupRecordsPlan(afterSeq, checkpoint, tailSeq, records);
+				if (continuity.resyncRequired) {
+					return {
+						events: [],
+						lastSeq: tailSeq,
+						resyncRequired: true,
+						compactedThrough: continuity.compactedThrough,
+					};
+				}
 				const last = records[records.length - 1];
 				return {
 					events: records.map(record => record.event),

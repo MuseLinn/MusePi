@@ -17,6 +17,7 @@ import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { withFileLock } from "@musepi/pi-utils/file-lock";
 
 export interface SessionOwner {
 	token: string;
@@ -139,10 +140,12 @@ function handleFor(file: string, lock: HeldLock): SessionOwnerLock {
 			if (lock.refs > 0) return;
 			if (lock.timer) clearInterval(lock.timer);
 			held.delete(file);
-			const current = await readOwner(file);
-			if (current?.token === lock.owner.token) {
-				await fs.unlink(file).catch(() => {});
-			}
+			await withFileLock(file, async () => {
+				const current = await readOwner(file);
+				if (current?.token === lock.owner.token) {
+					await fs.unlink(file).catch(() => {});
+				}
+			});
 		},
 	};
 }
@@ -174,70 +177,66 @@ export async function acquireSessionOwnerLock(
 		heartbeatAt: Date.now(),
 	};
 
-	for (let attempt = 0; attempt < 2; attempt += 1) {
-		try {
-			const handle = await fs.open(file, "wx");
+	return withFileLock(file, async () => {
+		for (let attempt = 0; attempt < 2; attempt += 1) {
 			try {
-				await handle.writeFile(JSON.stringify(owner), "utf8");
-			} finally {
-				await handle.close();
-			}
-			// A preemptor that read the previous content before this create can
-			// still rename the fresh file out from under us. Verify the token is
-			// ours before claiming; a mismatch means another process won.
-			const claimed = await readOwner(file);
-			if (claimed !== null && claimed.token !== owner.token) throw new SessionOwnedError(claimed);
-			if (claimed === null) continue;
-			const lock: HeldLock = { owner, refs: 1, timer: null, lost: false, onLost: options.onLost ?? null };
-			lock.timer = setInterval(() => {
-				void (async () => {
-					const current = await readOwner(file);
-					if (current?.token !== owner.token) {
+				const handle = await fs.open(file, "wx");
+				try {
+					await handle.writeFile(JSON.stringify(owner), "utf8");
+				} finally {
+					await handle.close();
+				}
+				const claimed = await readOwner(file);
+				if (claimed !== null && claimed.token !== owner.token) throw new SessionOwnedError(claimed);
+				if (claimed === null) continue;
+				const lock: HeldLock = { owner, refs: 1, timer: null, lost: false, onLost: options.onLost ?? null };
+				lock.timer = setInterval(() => {
+					void (async () => {
+						const lost = await withFileLock(file, async () => {
+							const current = await readOwner(file);
+							if (current?.token !== owner.token) return true;
+							owner.heartbeatAt = Date.now();
+							await writeOwner(file, owner).catch(() => {});
+							return false;
+						}).catch(() => false);
+						if (!lost || lock.lost) return;
 						if (lock.timer) clearInterval(lock.timer);
 						lock.timer = null;
 						lock.lost = true;
 						held.delete(file);
-						const lost = lock.onLost;
+						const onLost = lock.onLost;
 						lock.onLost = null;
-						lost?.();
-						return;
-					}
-					owner.heartbeatAt = Date.now();
-					await writeOwner(file, owner).catch(() => {});
-				})();
-			}, options.heartbeatMs ?? HEARTBEAT_MS);
-			lock.timer.unref?.();
-			held.set(file, lock);
-			return handleFor(file, lock);
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-			// Clearing the path has to be atomic. Two preemptors that both read the
-			// same stale owner used to unlink and then create, so both could end up
-			// holding the session — a split brain writing one journal. rename moves
-			// exactly one file: the loser gets ENOENT, re-enters the create attempt
-			// and finds the winner's fresh owner, so it backs off.
-			const clearStale = async (): Promise<void> => {
-				const aside = `${file}.stale.${owner.token}`;
-				await fs.rename(file, aside).catch(() => {});
-				await fs.unlink(aside).catch(() => {});
-			};
-			const current = await readOwner(file);
-			if (!current) {
-				// Unreadable/corrupt holder: treat as stale.
-				await clearStale();
-				continue;
+						onLost?.();
+					})();
+				}, options.heartbeatMs ?? HEARTBEAT_MS);
+				lock.timer.unref?.();
+				held.set(file, lock);
+				return handleFor(file, lock);
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+				const clearStale = async (): Promise<void> => {
+					const aside = `${file}.stale.${owner.token}`;
+					await fs.rename(file, aside).catch(() => {});
+					await fs.unlink(aside).catch(() => {});
+				};
+				const current = await readOwner(file);
+				if (!current) {
+					// Unreadable/corrupt holder: treat as stale.
+					await clearStale();
+					continue;
+				}
+				if (options.takeover === true || isStale(current, options.staleMs ?? DEFAULT_STALE_MS)) {
+					await clearStale();
+					continue;
+				}
+				throw new SessionOwnedError(current);
 			}
-			if (options.takeover === true || isStale(current, options.staleMs ?? DEFAULT_STALE_MS)) {
-				await clearStale();
-				continue;
-			}
-			throw new SessionOwnedError(current);
 		}
-	}
 
-	const current = await readOwner(file);
-	if (current) throw new SessionOwnedError(current);
-	throw new Error(`Could not acquire session owner lock for ${sessionId}`);
+		const current = await readOwner(file);
+		if (current) throw new SessionOwnedError(current);
+		throw new Error(`Could not acquire session owner lock for ${sessionId}`);
+	});
 }
 
 /** Read the current owner without acquiring (diagnostics / takeover UI). */

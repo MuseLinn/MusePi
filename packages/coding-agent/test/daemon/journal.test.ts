@@ -8,7 +8,7 @@ import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentEvent } from "@musepi/pi-wire";
-import { AppendJournal, catchupPlan } from "../../src/daemon/journal";
+import { AppendJournal, catchupPlan, catchupRecordsPlan } from "../../src/daemon/journal";
 
 const dirs: string[] = [];
 
@@ -537,4 +537,12 @@ test("durableTailSeq reports the disk tail, not the last seq assigned", async ()
 	expect(j.tailSeq).toBe(2);
 	expect(await j.durableTailSeq()).toBe(1);
 	await j.close();
+});
+
+test("catchupRecordsPlan rejects missing records before replay", () => {
+	const records = (seqs: number[]) =>
+		seqs.map(seq => ({ seq, ts: "2026-01-01T00:00:00.000Z", event: event("thinking_level_changed", seq) }));
+	expect(catchupRecordsPlan(1, 0, 3, records([1, 3]))).toEqual({ resyncRequired: true, compactedThrough: 0 });
+	expect(catchupRecordsPlan(1, 0, 3, records([2, 3]))).toEqual({ resyncRequired: false });
+	expect(catchupRecordsPlan(0, 0, 1, [])).toEqual({ resyncRequired: true, compactedThrough: 0 });
 });

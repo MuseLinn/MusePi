@@ -115,6 +115,7 @@ interface NativePreparedTarget {
 
 export class GlobTool implements AgentTool<typeof findSchema, GlobToolDetails> {
 	readonly name = "glob";
+	readonly requiresDurableIntent = false;
 	readonly approval = "read" as const;
 	readonly loadMode = "essential";
 	readonly label = "Glob";

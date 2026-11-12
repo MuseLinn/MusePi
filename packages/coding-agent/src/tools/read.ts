@@ -438,6 +438,7 @@ function appendRepeatReadHint(session: ToolSession, path: string, result: AgentT
  */
 export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 	readonly name = "read";
+	readonly requiresDurableIntent = false;
 	readonly approval = (args: unknown): ToolTier => {
 		let readPath = "";
 		if (args && typeof args === "object" && "path" in args) readPath = String(args.path ?? "");
