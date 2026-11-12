@@ -10,6 +10,7 @@
 | 内置工具 | `packages/coding-agent/src/tools/index.ts`（`BUILTIN_TOOLS` / `HIDDEN_TOOLS` / `isToolAllowed`） | 同文件头部 |
 | 斜杠命令 | `packages/coding-agent/src/slash-commands/builtin-registry.ts` | 同文件头部 |
 | hooks 引擎 | `packages/coding-agent/src/extensibility/hooks/types.ts`（`HookEvent` union） | 同文件头部 |
+| 命令钩子（Claude Code / Codex 方言） | `packages/coding-agent/src/extensibility/hooks/command/`（config/matcher/executor/codec/merge/engine/bridge）＋ `bundled-plugins/hooks-claude-code`、`bundled-plugins/hooks-codex` | `command/types.ts` 与 `command/bridge.ts` 文件头；共享引擎，方言只差 matcher 模式与 `${…}` 替换；两个包均为 `presetOnly` |
 | channels（IM 通道） | `packages/coding-agent/src/channels/types.ts`（`ChannelAdapter`） | 同文件头部 |
 | 扩展 API（register* 面） | `packages/coding-agent/src/extensibility/extensions/types.ts`（`ExtensionAPI`） | 同文件头部 + `docs/extensions-dev.md` |
 | 会话提示词宿主与注册表（section/context/variable/tool、scope/lane/owner/cacheScope） | `packages/coding-agent/src/prompts/host.ts`（`PromptHost`；存储 `store.ts`，兼容注册表 `registry.ts`，顺序 `orders.ts`）＋ 核心提示词包装载表 `packages/coding-agent/src/bundled-plugins/loader.ts`（`SESSION_PROMPT_PACKAGE_DIRS`） | `host.ts` / `store.ts` 文件头注释 + `docs/extensions-dev.md` §20 |
@@ -19,6 +20,7 @@
 | 可视化插件（卡片 + 内联页面） | `packages/coding-agent/src/bundled-plugins/visuals/index.ts`（`widget` 工具 / 类型表） | 同文件头部 |
 | 看板插件 | `packages/coding-agent/src/bundled-plugins/board/index.ts`（`board` 工具 / 看板存储） | 同文件头部 |
 | Cordis preset 组合运行时 | `packages/coding-agent/src/extensibility/plugins/preset-runtime.ts`（`CordisPresetRuntime`） | 同文件头部 |
+| 预设自带 MCP 服务器 / 文件技能 | `packages/coding-agent/src/bundled-plugins/mcp-client/index.ts`（一行一服务器，`session_start` 内 `registerMcpServer`）、`packages/coding-agent/src/bundled-plugins/skill-filesystem/index.ts`（`roots` 快照 → `registerSkill`） | 各包入口头部；均为 `presetOnly`，随 preset generation 装载与回收 |
 | Cordis 会话页 | `packages/desktop-app/src/plugins/chat-view/index.ts`（`app.chat`） | 同文件头部 |
 | Cordis 能力中心 | `packages/desktop-app/src/plugins/capability-center/index.ts`（`app.capability`） | 同文件头部 |
 | Cordis 右栏壳 | `packages/desktop-app/src/plugins/panel/index.ts`（`panel.shell`） | 同文件头部；最大化由 `lib/panel-maximize.ts` 宿主控制器提交 |

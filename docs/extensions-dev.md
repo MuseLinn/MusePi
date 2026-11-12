@@ -48,6 +48,8 @@ musepi-omp 是 oh-my-pi 的 fork,扩展运行时同源,但 musepi 在**加载、
 
 An ordinary plugin package declares its entries, configuration, and resources in `package.json`'s `musepi` block and uses the runtime lock for enablement. The application profile selects bundles through `musepi.profile.bundles`, with row overrides in its `cordis.patch.yml`; Only `musepi.profile.bundles` is supported; DSH profile fields are ignored. Agent presets are declared as plugin rows inside that same composition and resolve in file > profile > extension order. Their new-session default lives in the profile's `agent-preset-registry.config.selectedDefault`; once a session starts, its preset is locked and its existing composition is retained. Component switches remain independent of the parent switch: a component selection is preserved while its parent is off, but the component is not active until both gates allow it.
 
+Preset rows are also the composition unit for per-session MCP servers and file skills. A row's `config` reaches its plugin as the second argument of `apply(ctx, config)` (or an exported `Config`); `ctx.config` is the per-extension settings store and is not the row config. `musepi-mcp-client` is a `presetOnly` row package: each row names one server (`serverName`, `transport`, stdio `command`/`args`/`env`/`cwd` or `url`/`headers`, `timeout`, `enabled`) and connects it inside the session's `session_start` through `registerMcpServer`, so the server is released by the same runner. `musepi-skill-filesystem` registers the skills under its `roots` (`<name>/SKILL.md` or flat `<name>.md`, frontmatter required) at mount through `registerSkill`; discovery is a snapshot of that mount, not a watcher, because a preset generation is disposable. Neither package loads ambiently, and neither has a global config surface. Command hooks follow the same row shape: `musepi-hooks-claude-code` and `musepi-hooks-codex` mount an external `hooks.json` (`configPath`) and map its five command-hook points onto session events through the shared engine in `extensibility/hooks/command`; they differ only in matcher mode and `${…}` substitution.
+
 The Plugins view manages packages and profile bundles at one card granularity. Ordinary package switches use the runtime lock; bundle switches update `musepi.profile.bundles`, and selected-but-unreadable bundles stay visible. Detailed layer and row composition remains available through `bundles.composition` without a separate Composition tab. Preset rows mount as real Cordis fibers in each session: `isolate` creates service-specific child realms, and switching modes disposes the old preset fibers before mounting the new composition. Plugin-owned skills are declared with `registerSkill` beside the plugin's other resources and disappear with that plugin; the Android emulator uses this lifecycle.
 
 Creator quick-create sends only the user's natural-language requirement. Its preset prompt owns the operational workflow: call `modes.save` with the complete new definition, then call `modes.validate` with the persisted id. `modes.save` performs structural, inheritance, and extension-existence checks before writing; `modes.validate` performs the mount check. A failed check must be repaired and repeated before completion is reported. Host UI instructions must not be appended to the user message.
@@ -589,7 +591,7 @@ export default async function (pi: ExtensionAPI) {
 
 对照 DSH 的 `hooks-claude-code` 核实过一次。DSH 的 Claude Code 兼容**只有一件事**:把 Claude Code `hooks.json` 的 command 型钩子桥到自己的扩展点,认 7 个事件(`SessionStart` / `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `Stop` / `SubagentStart` / `SubagentStop`),`configPath` 必填、无自动发现,且不读 `.claude-plugin/plugin.json`、marketplace、commands、agents、skills、`.mcp.json`。
 
-musepi 的覆盖面**更广**,不必为了"对齐 DSH"补 P3 —— 补了反而是改窄:
+musepi 的覆盖面**更广**;命令钩子已按下方说明补齐,其余不必为了"对齐 DSH"改窄:
 
 | 兼容面 | 实现 | 依据 |
 |---|---|---|
@@ -598,7 +600,7 @@ musepi 的覆盖面**更广**,不必为了"对齐 DSH"补 P3 —— 补了反而
 | CLAUDE.md / AGENTS.md | 指令文件 + `@import` 展开 | `discovery/claude.ts:128-149`、`discovery/at-imports.ts` |
 | skills | `~/.claude/skills/*/SKILL.md` | `discovery/claude.ts:539` |
 | slash commands | `~/.claude/commands/*.md` | `discovery/claude.ts:555` |
-| hooks | `.claude/hooks/pre/` 与 `post/` | `discovery/claude.ts:563` |
+| hooks | `.claude/hooks/pre/` 与 `post/` directories + the preset row `musepi-hooks-claude-code`'s `hooks.json` (command hooks, five events) | `discovery/claude.ts:563`, `bundled-plugins/hooks-claude-code/index.ts` |
 | 自定义工具 | `~/.claude/tools/` | `discovery/claude.ts:571` |
 | MCP | `.claude.json`、`.claude/mcp.json` | `discovery/claude.ts:523` |
 | marketplace | `.claude-plugin/marketplace.json` 目录清单 | `extensibility/plugins/marketplace/fetcher.ts:199` |
@@ -607,7 +609,7 @@ musepi 的覆盖面**更广**,不必为了"对齐 DSH"补 P3 —— 补了反而
 
 优先级是刻意排的:claude-plugins(70) < claude(80),所以用户自己在 `.claude/` 里的覆盖优先于 marketplace 装来的插件(`discovery/agent-plugins.ts:39-40`)。
 
-**与 DSH 的实质差异只有钩子的执行模型**:DSH 桥的是 Claude Code 的 shell 命令钩子(带 `hookSpecificOutput.hookEventName` 事件门控、`${CLAUDE_PLUGIN_ROOT}` 替换、exit 2 阻断),而 musepi 的 hooks 是 JS/TS 模块(`HookFactory`),命令钩子另走 `.claude/hooks/{pre,post}/` 的目录约定。若要补 command 型钩子,应作为 hooks 引擎的一种新来源接进现有 `HookEvent` 联合,而不是新建一套与 DSH 对齐的独立桥。
+**Command hooks now follow DSH's split; the remaining differences are scope and semantic subset.** The shared engine lives in `extensibility/hooks/command` (config / matcher / exec / codec / merge); the dialect plugins `musepi-hooks-claude-code` and `musepi-hooks-codex` own only `configPath`, matcher mode and `${…}` substitution. Both are `presetOnly` row packages mounted and released with the session, not process-level bridges. A `UserPromptSubmit` refusal uses `before_agent_start`'s `cancel` contract and stops the prompt before it is sent; `PostToolUse` rewrites the result into an error carrying the reason; `Stop` reuses `session_stop`'s continuation. `ask` has no hook-level approval integration yet, so it degrades to allow with a warning (the dsh-codex subset); `SubagentStart/Stop` are parsed and reported as skipped.
 
 ## 17a. 第三方 Cordis 插件适配
 

@@ -6,6 +6,42 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **后台完成卡改为用户侧锚定并可整卡折叠**：`async-job-result` 卡片与用户气泡同右缘，卡片头（状态、标签、时长、状态文字）是折叠锚点，输出与提示整体收起；卡片内部仍保留输出预览的展开。思考块流式显示「思考中」，结束后显示「思考过程 · 时长」或「思考完成」；思考块、活动/运行汇总与工具卡片统一使用左侧折叠字形，工具卡片的 chevron 从行尾移到行首。
+  - EN: Background completion cards now anchor on the user side and fold as a whole. The `async-job-result` card shares the user bubble's right edge; its header (status, label, duration, status text) is the disclosure anchor while output and hints collapse beneath it, with the output preview's own expansion kept inside. Thinking blocks show "Thinking…" while streaming and "Thinking · duration" or "Thinking done" after settling; thinking blocks, activity/run summaries and tool cards now share one leading fold glyph, with the tool-card chevron moved from the trailing edge to the leading one.
+
+- **运行中的后台任务现在有常驻 HUD，并能打开详情标签页**：会话有运行中 job 时，输入框上方显示卡片（命令、实时时长、取消、详情）与「后台 Bash · N」chip；收起只留 chip。桌面端详情打开右侧「后台任务」surface（运行/全部过滤、实时输出尾部、取消），web / Android / 鸿蒙共用同一组件并在原地展开详情 sheet。读数只来自 `session.jobs` / `session.jobOutput` / `session.jobsCancel`，1s 轮询且仅在页面可见时进行，没有运行中的 job 时不渲染也不轮询。
+  - EN: Running background jobs now have a persistent HUD and a detail tab. While a job runs, the composer shows a card (command, live duration, cancel, details) and a "Background Bash · N" chip that collapses to the chip alone. On desktop the detail opens the right-panel Background jobs surface (running/all filter, live output tail, cancel); web, Android and HarmonyOS share the same component and expand an inline detail sheet instead. The readings come only from `session.jobs` / `session.jobOutput` / `session.jobsCancel`, polled once a second while the page is visible; with no running job the component renders nothing and stops polling.
+
+- **命令钩子补齐阻断契约，并按方言拆成插件**：`before_agent_start` 新增 `cancel/reason`，被拒绝的提示词在发出与落库之前停止，文本交还输入框；`tool_result` 新增 `block/reason`，被拒绝的结果改写为带原因的错误而不是成功输出。共享引擎位于 `extensibility/hooks/command`，方言行包 `musepi-hooks-claude-code` / `musepi-hooks-codex` 各自读取 `configPath`，映射 SessionStart / UserPromptSubmit / PreToolUse / PostToolUse / Stop 五个钩子点。`ask` 暂降级为允许并告警，`SubagentStart/Stop` 标记为 skipped。
+  - EN: Command hooks gained their blocking contracts and were split into dialect plugins. `before_agent_start` now accepts `cancel`/`reason`, so a refused prompt stops before it is sent or persisted and the text returns to the composer; `tool_result` accepts `block`/`reason`, turning a rejected result into an error carrying the reason instead of a success. The shared engine lives in `extensibility/hooks/command`, with `musepi-hooks-claude-code` and `musepi-hooks-codex` as dialect row packages that each read a `configPath` and map SessionStart / UserPromptSubmit / PreToolUse / PostToolUse / Stop. `ask` degrades to allow with a warning, and `SubagentStart/Stop` are reported as skipped.
+
+- **预设可以自带 MCP 服务器与文件技能**：新增两个 `presetOnly` 行包。`musepi-mcp-client` 每行声明一台 MCP 服务器（stdio 或 HTTP/SSE），在会话的 `session_start` 里注册到该会话并在会话结束时释放；`musepi-skill-filesystem` 把行配置里的 `roots` 下的 `SKILL.md` / 扁平 `.md` 技能注册进本会话。两者都不做全局环境装载，切换预设即随 generation 回收，对齐 dsh 的 `mcp-client` 行与 `skill-filesystem` 插件模型。
+  - EN: Presets can now carry their own MCP servers and file skills. Two `presetOnly` row packages: `musepi-mcp-client` declares one MCP server per row (stdio or HTTP/SSE) and registers it on the session during `session_start`, releasing it when the session ends; `musepi-skill-filesystem` registers the `SKILL.md` bundles and flat `.md` skills under its `roots` row config into the session. Neither loads ambiently and neither has a global config surface — switching presets reclaims both with the preset generation, matching dsh's `mcp-client` row and `skill-filesystem` provider model.
+
+- **新增「进展更新」：agent 工作中可以在对话里发布阶段进展**：默认开启。新建会话会带上 `notify_user` 工具，模型可在多步任务中发布标题 + 正文的阶段更新；更新是独立的卡片，不随回合折叠消失，也不会被「读取了 N 个文件」的工具汇总吞掉。设置 → 外观 → 显示里的「进展更新」可关闭；开关在会话创建时生效，只影响之后新建的会话。
+  - EN: Agents can now post progress updates in the conversation, on by default. New sessions carry a `notify_user` tool for headline-plus-body updates during multi-step work; the update is its own card that survives the turn fold and is never swallowed by a tool-run summary. 进展更新 under Appearance → Display turns it off; the switch is read at session creation, so it applies to sessions created after it.
+
+- **空队列不再出现，也不再清不掉**：队列芯片此前按 daemon 的“待处理总数”计数，而这个总数还包括 parked 的顾问卡片与隐藏的下一轮提醒——它们不是行、也不受「清空队列」影响，于是留下一个 1 条却空白的队列。现在计数只来自可操作的行；没有文本也没有图片的排队消息既不显示也不再入队。
+  - EN: The queue chip no longer appears with nothing in it, and can always be cleared. It used to show the daemon's pending-work total, which also counted parked advisor cards and hidden next-turn notices — neither is a row nor affected by 清空队列, leaving a one-item chip with an empty panel. The chip now counts only actionable rows, and a queued message with neither text nor images is neither shown nor enqueued.
+
+- **粘贴图片时不再吞掉同时复制的文字**：剪贴板同时带文字和图片时（从 Word、聊天记录或网页复制），图片进入附件芯片的那条分支会 `preventDefault()`，默认的文字插入因此丢失。现在图片照常成为芯片，文字插回光标位置。
+  - EN: Pasting an image no longer discards the text copied alongside it. When the clipboard carries both text and an image (from Word, a chat log or a web page), the attachment branch called `preventDefault()` and the browser never inserted the text. The image still becomes a chip and the text is inserted at the caret.
+
+- **引用按钮引用的就是选中的那段文字**：消息行内的引用操作此前总是引用整条消息；现在若用户在该行内选中了一段文字，引用的就是选中的段落，没有选区时才回退到整条消息。
+  - EN: The quote action now quotes the passage the user highlighted. Previously it always quoted the whole message; with a non-empty selection inside the row it quotes that selection and only falls back to the whole message when nothing is selected.
+
+- **不再为 1–2px 舍入误差画出多余的滚动轨道**：自绘滚动条的“画轨”判定与“回收”判定改用同一个溢出下限，首见容器绑定前也先过该判定；轨道装饰按轴渲染，只有横向噪声的容器不再在右侧画出整列珠链。项目编辑弹窗的 body 也显式禁止横向滚动。
+  - EN: Rounding-only overflow no longer paints a scrollbar. The custom rail's draw and retire paths now share one overflow margin, the first bind checks it before allocating a slot, and decorations render per axis — a horizontally noised container no longer paints a vertical bead column. The project dialog body also stops being a horizontal scroll container.
+
+- **每轮只保留一个 agent 头像，滚动时钉在顶部**：后台任务卡片或工具汇总行夹在两条助手消息之间时，头像不再重新出现。头像归属改为按轮次派生——折叠轮由「活动」头或回复行持有，展开轮由首个渲染 agent 正文的行持有；该行滚出视口后，头像吸附在顶部提示胶囊旁，同为该轮提供归属。工具调用概述行之间的行距与外边距同步收紧。
+  - EN: A turn now keeps exactly one agent avatar, pinned to the top while its own row is scrolled away. A background-job card or tool-run summary between two assistant messages no longer redraws it: ownership is derived per turn — the 活动 header or collapsed reply on a folded turn, the first row that renders agent content on an expanded one — and once that row leaves the viewport the avatar docks beside the pinned prompt pill. Spacing between tool-run summary rows is tightened at the same time.
+
+- **聊天设置移除「输出风格」预设**：三套预设只改行距、段落间距与代码块密度，字号始终由「消息字号」决定，保留它等于把同一份排版拆成三个入口。现在固定为一套紧凑节奏，正文、段落、标题与代码块间距直接由 transcript 样式提供。
+  - EN: The chat settings no longer offer an output-style preset. The three presets only changed line height, paragraph spacing and code-block density while font sizes always came from the message font size setting, so keeping them split one typography decision across three controls. The transcript now ships one compact rhythm for body, paragraphs, headings and code blocks.
+
+- **会话信息卡连接器空态不再重复 MCP 描述**：空态只保留「连接器」标题与进入 MCP 服务器设置的操作，去掉与之同义的说明行。
+  - EN: The session info card's empty connector state no longer repeats an MCP description. It keeps the 连接器 heading and the action that opens the MCP server settings, dropping the line that restated the same thing.
+
 ## [0.7.4] - 2026-11-11
 
 - **崩溃或重启后不再丢会话记录**：压缩在日志尾部折叠时会把 journal 清成空文件，重新打开后序号从 1 重来，而重放会丢弃检查点序号及以下的所有记录——整段会话就此消失。现在序号从「文件尾」与「检查点」中较大者继续，且压缩不接受倒退的检查点；断线重连改用真正落盘的尾部判断，补不齐时明确要求整页重载，而不是少推一截。

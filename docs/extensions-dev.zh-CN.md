@@ -42,6 +42,8 @@ Creator 快捷创建只发送用户的自然语言需求。预设 prompt 持有�
 
 桌面发布包必须随 daemon 一起暂存可独立加载的第一方插件产物。编译 daemon 后运行 `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>`。脚本将 `bundled-plugins` 与 `desktop-plugins` 编译到 `packages/desktop-app/vendor/daemon`，校验每个 `musepi.extensions` 与 `musepi.components` 声明的入口，并将组件样式保留在编译产物旁。普通及传递 JavaScript 依赖会打入组件产物，终端 PTY 桥接文件与原生运行时包则复制到暂存目录。Electron 解包该目录，再通过按平台分隔的 `MUSEPI_BUNDLED_PLUGIN_ROOTS` 变量把两个绝对根目录传给 daemon。开发环境仍保留源码树回退；发布包不得依赖源码树或开发依赖。
 
+行的 `config` 通过 `apply(ctx, config)` 的第二个参数（或导出的 `Config`）送达插件；`ctx.config` 是扩展自己的设置存储，不是行配置。预设行同时也是「按会话提供 MCP 服务器与文件技能」的组合单位。`musepi-mcp-client` 是 `presetOnly` 行包：每行声明一台服务器（`serverName`、`transport`、stdio 的 `command`/`args`/`env`/`cwd` 或 `url`/`headers`、`timeout`、`enabled`），在会话的 `session_start` 里通过 `registerMcpServer` 连接，随同一 runner 释放。`musepi-skill-filesystem` 在挂载时把 `roots` 下的技能（`<name>/SKILL.md` 或扁平 `<name>.md`，必须有 frontmatter）经 `registerSkill` 注册；发现是挂载时的快照而非监听，因为 preset generation 本身是可回收的。两个包都不做 ambient 装载，也没有全局配置面。命令钩子同样是行包：`musepi-hooks-claude-code` 与 `musepi-hooks-codex` 挂载外部 `hooks.json`（`configPath`），通过 `extensibility/hooks/command` 的共享引擎把五个命令钩子点映射到会话事件；两者只差 matcher 模式与 `${…}` 替换。
+
 发现的 JavaScript／TypeScript hooks 使用生产扩展链：`discoverExtensionPaths()` → `hookCapability` → `loadExtensions()` → `ExtensionRunner`。旧 `HookRunner` 导出仅为公开 API 兼容及其直接消费者保留，不是第二条生产执行链。TUI 的设置与插件入口读取和桌面客户端相同的 schema、发现结果及 Cordis 启停状态，不引入独立安装器或插件状态存储。
 
 ## 2. 扩展能做什么（能力面）
@@ -580,7 +582,7 @@ export default async function (pi: ExtensionAPI) {
 
 对照 DSH 的 `hooks-claude-code` 核实过一次。DSH 的 Claude Code 兼容**只有一件事**：把 Claude Code `hooks.json` 的 command 型钩子桥到自己的扩展点，认 7 个事件（`SessionStart` / `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `Stop` / `SubagentStart` / `SubagentStop`），`configPath` 必填、无自动发现，且不读 `.claude-plugin/plugin.json`、marketplace、commands、agents、skills、`.mcp.json`。
 
-musepi 的覆盖面**更广**，不必为了“对齐 DSH”补 P3 —— 补了反而是改窄：
+musepi 的覆盖面**更广**；命令钩子已按下方说明补齐，其余不必为了“对齐 DSH”改窄：
 
 | 兼容面 | 实现 | 依据 |
 |---|---|---|
@@ -589,7 +591,7 @@ musepi 的覆盖面**更广**，不必为了“对齐 DSH”补 P3 —— 补了
 | CLAUDE.md / AGENTS.md | 指令文件 + `@import` 展开 | `discovery/claude.ts:128-149`、`discovery/at-imports.ts` |
 | skills | `~/.claude/skills/*/SKILL.md` | `discovery/claude.ts:539` |
 | slash commands | `~/.claude/commands/*.md` | `discovery/claude.ts:555` |
-| hooks | `.claude/hooks/pre/` 与 `post/` | `discovery/claude.ts:563` |
+| hooks | `.claude/hooks/pre/` 与 `post/` 目录 + preset 行 `musepi-hooks-claude-code` 的 `hooks.json`（command 型，5 个事件） | `discovery/claude.ts:563`、`bundled-plugins/hooks-claude-code/index.ts` |
 | 自定义工具 | `~/.claude/tools/` | `discovery/claude.ts:571` |
 | MCP | `.claude.json`、`.claude/mcp.json` | `discovery/claude.ts:523` |
 | marketplace | `.claude-plugin/marketplace.json` 目录清单 | `extensibility/plugins/marketplace/fetcher.ts:199` |
@@ -598,7 +600,7 @@ musepi 的覆盖面**更广**，不必为了“对齐 DSH”补 P3 —— 补了
 
 优先级是刻意排的：claude-plugins(70) < claude(80)，所以用户自己在 `.claude/` 里的覆盖优先于 marketplace 装来的插件（`discovery/agent-plugins.ts:39-40`）。
 
-**与 DSH 的实质差异只有钩子的执行模型**：DSH 桥的是 Claude Code 的 shell 命令钩子（带 `hookSpecificOutput.hookEventName` 事件门控、`${CLAUDE_PLUGIN_ROOT}` 替换、exit 2 阻断），而 musepi 的 hooks 是 JS/TS 模块（`HookFactory`），命令钩子另走 `.claude/hooks/{pre,post}/` 的目录约定。若要补 command 型钩子，应作为 hooks 引擎的一种新来源接进现有 `HookEvent` 联合，而不是新建一套与 DSH 对齐的独立桥。
+**命令钩子已按 DSH 的拆分对齐，差异只在作用域与语义子集**：共享引擎在 `extensibility/hooks/command`（config / matcher / exec / codec / merge），方言插件 `musepi-hooks-claude-code` 与 `musepi-hooks-codex` 只负责 `configPath`、matcher 模式与 `${…}` 替换。两者都是 `presetOnly` 行包，随会话挂载与释放，而不是进程级桥。`UserPromptSubmit` 的拒绝走 `before_agent_start` 的 `cancel` 契约，在消息发出前阻断；`PostToolUse` 的拒绝把结果改写为带原因的错误；`Stop` 复用 `session_stop` 的 continuation。`ask` 尚无钩子级审批接入，按 dsh-codex 的子集降级为允许并告警；`SubagentStart/Stop` 解析后标记为 skipped。
 
 ## 17a. 第三方 Cordis 插件适配
 
