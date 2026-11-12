@@ -1072,6 +1072,14 @@ export class DaemonServer {
 			new McpServersService({
 				userConfigPath: () => getMCPConfigPath("user", this.#host.cwd()),
 				reloadConnectors: () => this.#host.reloadMcpConnectors(),
+				// Probe by name resolves the session's workspace first (project
+				// config lives there), then falls back to the daemon cwd whose
+				// manager the connectors page already uses.
+				probeCwd: request =>
+					request.cwd ??
+					(request.sessionId ? this.#host.get(request.sessionId)?.cwd : undefined) ??
+					this.#host.cwd(),
+				probeManager: cwd => this.#host.mcpManagerForCwd(cwd),
 			}),
 		);
 		// Browser OAuth login for one configured http/sse server (settings → MCP
@@ -2394,7 +2402,9 @@ export class DaemonServer {
 				return this.#services.get<McpServersService>("mcpServers").remove(params ?? {});
 			}
 			case "mcp.servers.probe": {
-				// 安装前试连：真实握手后立即释放，不把服务器挂进任何会话。
+				// 安装前/安装后试连：表单字段直接连，只给 name 则解析已安装配置
+				// 并经 live manager 注入凭据；两种都只做一次真实握手后释放，
+				// 不把服务器挂进任何会话。
 				return this.#services.get<McpServersService>("mcpServers").probe(params ?? {});
 			}
 			case "mcp.oauth.start": {

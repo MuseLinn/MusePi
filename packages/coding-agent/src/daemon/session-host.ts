@@ -2358,6 +2358,15 @@ export class DaemonSessionHost {
 	}
 
 	/**
+	 * The live cwd-scoped MCP manager, if a session ever created one. A by-name
+	 * probe uses it to resolve stored credentials; absent means the probe must
+	 * report that credentials are unavailable rather than connect bare.
+	 */
+	mcpManagerForCwd(cwd: string): MCPManager | undefined {
+		return this.#mcpManagers.get(cwd);
+	}
+
+	/**
 	 * M4 P1 `connectors.list` 的空态半:某 cwd 的 MCP 服务器清单 + 真实健康态,
 	 * 不依赖 live 会话(空态输入框/欢迎页也要能看能选)。按需拉起该 cwd 的共享
 	 * manager(与 createSession 同一 #ensureMcpManager 路径,manager 每 cwd 只建

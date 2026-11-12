@@ -17,8 +17,12 @@
  * - Lifecycle: no cached state. Every call reads or writes the file through
  *   `mcp/config-writer`, whose per-file lock plus atomic rename serialize
  *   concurrent writers and keep unrelated entries intact. `probe` is the one
- *   live action: it performs a handshake on a not-yet-installed config and
- *   releases the transport, so it leaves no server mounted in any session.
+ *   live action: it performs a handshake on a config that never joins a
+ *   session and releases the transport, so it leaves no server mounted.
+ *   A probe may carry the form fields (`url`/`command`/…) or only `name`;
+ *   the by-name form resolves an installed connector, injects its stored
+ *   credentials through the live manager, and then hands it to the same
+ *   handshake. Neither form returns headers, tokens, or credential ids.
  * - Conflict: none with ConnectorService — that reads the live manager, this
  *   owns the user-scope file.
  */
@@ -39,12 +43,27 @@ export interface McpServerSummary {
 	enabled?: boolean;
 }
 
+/** Live manager slice a by-name probe needs: the preserved config plus the
+ *  same credential/OAuth injection a real connection performs. */
+export interface MCPProbeManager {
+	/** Config as discovered (pre-auth), or undefined for an unknown name. */
+	getServerConfig(name: string): MCPServerConfig | undefined;
+	/** Inject stored tokens/OAuth into a copy of the config. */
+	prepareConfig(config: MCPServerConfig): Promise<MCPServerConfig>;
+}
+
 export interface McpServersServiceDeps {
 	/** Absolute path of the user-scope config the service owns. */
 	userConfigPath(): string;
 	/** Reconcile live MCP managers after a write. Best-effort: an install
 	 *  still succeeded even if a running server could not be restarted. */
 	reloadConnectors?(): Promise<unknown>;
+	/** cwd a by-name probe is attributed to: explicit `cwd`, else the
+	 *  session's, else the daemon default. Undefined cannot resolve a manager. */
+	probeCwd?(request: { sessionId?: string; cwd?: string }): string | undefined;
+	/** Live cwd-scoped manager. Absent means no session ever created one for
+	 *  that workspace, so stored credentials cannot be resolved. */
+	probeManager?(cwd: string): MCPProbeManager | undefined;
 }
 
 /** Longest URL/command/argument accepted from a client; well above real use. */
@@ -214,11 +233,18 @@ export class McpServersService implements DaemonService {
 	/**
 	 * Test one connector config without mounting it.
 	 *
-	 * Accepts the same shape as {@link add} and rejects the same inputs, so a
-	 * probe can never bless a config the install would refuse. A real handshake
-	 * follows: tools/resources/prompts are read and the transport is released.
-	 * Failures come back as `ok: false` with the reason — never a throw — so the
-	 * surface can show "why" beside the form.
+	 * Two forms. With `url`/`command` it accepts the same shape as {@link add}
+	 * and rejects the same inputs, so a probe can never bless a config the
+	 * install would refuse. With only `name` it resolves an installed
+	 * connector: the user `mcp.json` entry first, then the live manager's
+	 * discovered config (catalog and project entries live only there), injects
+	 * stored credentials through `prepareConfig`, and connects with the result.
+	 * A missing manager is a stated failure — probing without credentials
+	 * would report a handshake error the configured connector does not have.
+	 *
+	 * A real handshake follows either way: tools/resources/prompts are read and
+	 * the transport is released. Failures come back as `ok: false` with the
+	 * reason — never a throw — so the surface can show "why" beside the row.
 	 */
 	async probe(params: {
 		name?: unknown;
@@ -227,7 +253,13 @@ export class McpServersService implements DaemonService {
 		args?: unknown;
 		headers?: unknown;
 		auth?: unknown;
+		cwd?: unknown;
+		sessionId?: unknown;
 	}): Promise<MCPProbeResult> {
+		const hasUrl = params?.url !== undefined && params.url !== null;
+		const hasCommand = params?.command !== undefined && params?.command !== null;
+		if (!hasUrl && !hasCommand) return this.#probeConfigured(params);
+
 		let built: { name: string; config: MCPServerConfig };
 		try {
 			built = this.#configFrom(params);
@@ -238,7 +270,48 @@ export class McpServersService implements DaemonService {
 		return probeServer(built.name, built.config);
 	}
 
-	/** Shared input contract of `add` and `probe`; the only place either validates. */
+	/** By-name probe: resolve the installed config, then delegate the live half. */
+	async #probeConfigured(params: { name?: unknown; cwd?: unknown; sessionId?: unknown }): Promise<MCPProbeResult> {
+		const name = typeof params?.name === "string" ? params.name.trim() : "";
+		const nameError = validateServerName(name);
+		if (nameError) return { name, ok: false, error: nameError };
+
+		let stored: MCPServerConfig | undefined;
+		try {
+			stored = (await this.#read()).mcpServers?.[name];
+		} catch (error) {
+			return { name, ok: false, error: error instanceof Error ? error.message : String(error) };
+		}
+
+		const cwd = this.#deps.probeCwd?.({
+			sessionId: typeof params.sessionId === "string" ? params.sessionId : undefined,
+			cwd: typeof params.cwd === "string" ? params.cwd : undefined,
+		});
+		const manager = cwd ? this.#deps.probeManager?.(cwd) : undefined;
+		const config = stored ?? manager?.getServerConfig(name);
+		if (!config) {
+			return {
+				name,
+				ok: false,
+				error: `MCP server "${name}" is not configured${cwd ? ` for ${cwd}` : ""}`,
+			};
+		}
+		if (!manager) {
+			return {
+				name,
+				ok: false,
+				error: `MCP credentials are unavailable: no live MCP manager for ${cwd ?? "this workspace"}. Open a session there before testing.`,
+			};
+		}
+		try {
+			return await probeServer(name, await manager.prepareConfig(config));
+		} catch (error) {
+			return { name, ok: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	}
+
+	/** Shared input contract of `add` and the form half of `probe`; the only
+	 *  place either validates a client-supplied config. */
 	#configFrom(params: {
 		name?: unknown;
 		url?: unknown;

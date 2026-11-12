@@ -21,8 +21,9 @@ import { externalUrlsOpened } from "./happy-dom-shim";
  *  5. Testing releases nothing into a session: it calls `mcp.servers.probe`
  *     (never `connectors.connect`), disables the button while the handshake
  *     runs, and reports the server name/tool count or the failure reason on
- *     the row. Only rows whose config the wire can rebuild exactly — URL,
- *     no stored credential — offer it.
+ *     the row. Every MCP row — stdio, token, and OAuth — is probed by name,
+ *     because the daemon resolves the installed config and injects its
+ *     credentials; managed CLI rows have no MCP server to probe.
  */
 
 setLocale("zh-CN");
@@ -401,7 +402,7 @@ describe("connector settings", () => {
 		expect(fake.calls("connectors.cli.status").length).toBeGreaterThan(0);
 	});
 
-	test("tests a connector with mcp.servers.probe and reports the server's tools", async () => {
+	test("tests a stdio connector by name and reports the server's tools", async () => {
 		const fake = new FakeRpc();
 		fake.handlers.set("connectors.catalog.list", () => catalogResponse());
 		let resolveProbe: ((value: unknown) => void) | null = null;
@@ -414,18 +415,20 @@ describe("connector settings", () => {
 		);
 
 		const host = await mount(fake);
-		const row = rowFor(host, "Beta Docs");
+		const row = rowFor(host, "Delta Stdio");
 		await act(async () => button(row, "测试连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(2);
 
-		expect(fake.calls("mcp.servers.probe")).toEqual([{ name: "connector:beta", url: "https://beta.example/mcp" }]);
+		// Only the server name crosses the wire: the daemon reads `command`/`args`
+		// from the installed config, so a stdio row is testable at all.
+		expect(fake.calls("mcp.servers.probe")).toEqual([{ name: "connector:delta" }]);
 		// The handshake can take seconds: the button is disabled and named for
 		// the pending state so a second click cannot start another probe.
-		expect(button(rowFor(host, "Beta Docs"), "测试中").disabled).toBe(true);
+		expect(button(rowFor(host, "Delta Stdio"), "测试中").disabled).toBe(true);
 
 		await act(async () => {
 			resolveProbe?.({
-				name: "connector:beta",
+				name: "connector:delta",
 				ok: true,
 				serverInfo: { name: "probe-fixture", version: "1.0.0" },
 				toolNames: ["echo"],
@@ -433,7 +436,7 @@ describe("connector settings", () => {
 		});
 		await flush(4);
 
-		expect(rowFor(host, "Beta Docs").textContent).toContain("probe-fixture · 1 个工具");
+		expect(rowFor(host, "Delta Stdio").textContent).toContain("probe-fixture · 1 个工具");
 		// A probe must never mount the server: connect/disconnect stay untouched.
 		expect(fake.calls("connectors.connect")).toEqual([]);
 		expect(fake.calls("connectors.disconnect")).toEqual([]);
@@ -443,21 +446,23 @@ describe("connector settings", () => {
 		const fake = new FakeRpc();
 		fake.handlers.set("connectors.catalog.list", () => catalogResponse());
 		fake.handlers.set("mcp.servers.probe", () => ({
-			name: "connector:beta",
+			name: "connector:gamma",
 			ok: false,
 			error: "HTTP 401 Unauthorized",
 		}));
 
 		const host = await mount(fake);
-		const row = rowFor(host, "Beta Docs");
+		const row = rowFor(host, "Gamma API");
 		await act(async () => button(row, "测试连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 
-		expect(rowFor(host, "Beta Docs").textContent).toContain("HTTP 401 Unauthorized");
+		expect(rowFor(host, "Gamma API").textContent).toContain("HTTP 401 Unauthorized");
+		// The token row is probed by name too — its header never rides the wire.
+		expect(fake.calls("mcp.servers.probe")).toEqual([{ name: "connector:gamma" }]);
 		expect(fake.calls("connectors.connect")).toEqual([]);
 	});
 
-	test("offers no probe where the wire cannot rebuild the connector config", async () => {
+	test("offers the by-name probe on stdio, token, and OAuth rows", async () => {
 		const fake = new FakeRpc();
 		fake.handlers.set("connectors.catalog.list", () => catalogResponse());
 		const host = await mount(fake);
@@ -468,10 +473,12 @@ describe("connector settings", () => {
 			);
 
 		expect(offersProbe("Beta Docs")).toBe(true);
-		// Token rows lose their header and stdio rows lose `args` on this wire;
-		// probing them would report a failure the configured connector lacks.
-		expect(offersProbe("Gamma API")).toBe(false);
-		expect(offersProbe("Delta Stdio")).toBe(false);
-		expect(offersProbe("Alpha Meetings")).toBe(false);
+		// The daemon resolves each installed config and injects its credentials,
+		// so stdio `args`, token headers, and OAuth grants no longer block testing.
+		expect(offersProbe("Delta Stdio")).toBe(true);
+		expect(offersProbe("Gamma API")).toBe(true);
+		expect(offersProbe("Alpha Meetings")).toBe(true);
+		// A managed CLI connector has no MCP server behind it.
+		expect(offersProbe("Echo CLI")).toBe(false);
 	});
 });

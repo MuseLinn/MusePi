@@ -76,13 +76,14 @@ interface ProbeOutcome {
 }
 
 /**
- * The config a probe can rebuild exactly from the catalog row. Rows without a
- * URL are skipped: the wire drops stdio `args` and token headers, so probing
- * them would report a failure the user's own config does not have.
+ * Server name a probe targets. The daemon resolves the installed config by
+ * name and injects stored credentials, so stdio, token, and OAuth rows all
+ * work — and the wire never carries `args`, headers, or a secret. Managed CLI
+ * rows have no MCP server behind them.
  */
-function probeUrl(connector: CatalogConnector): string | null {
-	if (connector.kind === "cli" || connector.authMode !== "none") return null;
-	return connector.server?.url ?? null;
+function probeName(connector: CatalogConnector): string | null {
+	if (connector.kind === "cli") return null;
+	return `connector:${connector.id}`;
 }
 
 function errorMessage(error: unknown): string {
@@ -192,19 +193,18 @@ export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 
 	/**
 	 * Handshake without mounting: `mcp.servers.probe` never joins a session, so
-	 * the result line can be shown before the user commits the connector.
+	 * the result line can be shown before the user commits the connector. The
+	 * daemon resolves the installed config by name and injects its stored
+	 * credentials, so the form carries no command, args, or header.
 	 */
 	const testConnection = useCallback(
 		async (connector: CatalogConnector): Promise<void> => {
-			const url = probeUrl(connector);
-			if (!rpc || !url) return;
+			const name = probeName(connector);
+			if (!rpc || !name) return;
 			tapFeedback();
 			setProbes(current => ({ ...current, [connector.id]: { pending: true } }));
 			try {
-				const result = await rpc.request<ProbeResult>("mcp.servers.probe", {
-					name: `connector:${connector.id}`,
-					url,
-				});
+				const result = await rpc.request<ProbeResult>("mcp.servers.probe", { name });
 				const text = result.ok
 					? t("{server} · {count} tools", {
 							server: result.serverInfo?.name ?? connector.name,
@@ -371,7 +371,7 @@ export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 					const isPending = pending === connector.id;
 					const isOpen = expanded === connector.id;
 					const probeState = probes[connector.id];
-					const probeable = probeUrl(connector) !== null;
+					const probeable = probeName(connector) !== null;
 					return (
 						<div key={connector.id} className="gui-agent-card gui-connector-card">
 							<div className="flex items-center gap-3">
