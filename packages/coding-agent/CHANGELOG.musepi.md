@@ -15,8 +15,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **Journal 短读不再破坏恢复尾部**：尾部与补推窗口现在循环读满或读到 EOF，并且只解析真实读取的字节，避免短读把未初始化内容或残缺记录当成恢复依据。
   - EN: Short journal reads no longer corrupt recovery tails. Tail and catch-up windows now read to completion or EOF and parse only initialized bytes, so unread or partial data cannot be mistaken for a valid recovery point.
 
-- **插件宿主生命周期串行且失败可见**：ensure/reload/reset 共用一条队列，异步 stop 会等待完成；重名服务不再覆盖原服务，冲突实例及其已发布服务都会清理；替换与回滚都失败时明确请求重启。restart 请求去重保留，确认后移除，dispose 清空。
-  - EN: Host plugin lifecycle operations are serialized and failures are visible. Ensure, reload, and reset share one queue and await asynchronous stops. Duplicate services no longer replace the incumbent, and rejected mounts plus any services they already published are cleaned up. If both replacement and rollback fail, the host is asked to restart. Restart requests are deduplicated, acknowledged individually, and cleared on disposal.
+- **插件宿主生命周期串行且失败可见**：ensure/reload/reset 共用一条队列，异步 stop 会等待完成；重名服务不再覆盖原服务，冲突实例及其已发布服务都会清理；替换失败保留旧实例且不重放 apply，注册恢复失败才明确请求重启。restart 请求去重保留，确认后移除，dispose 清空。
+  - EN: Host plugin lifecycle operations are serialized and failures are visible. Ensure, reload, and reset share one queue and await asynchronous stops. Duplicate services no longer replace the incumbent, and rejected mounts plus any services they already published are cleaned up. Failed replacements preserve the old instance without replaying apply; only registration restoration failure requests a restart. Restart requests are deduplicated, acknowledged individually, and cleared on disposal.
 
 - **只读 LSP 查询不再支付 durable flush 延迟**：`requiresDurableIntent` 现在支持按参数判定，LSP 的 hover、status 等只读 action 跳过屏障；raw/未知 action 与 rename 等写操作仍在执行前保存并 flush 执行意图。
   - EN: Read-only LSP queries no longer pay the durable flush latency. `requiresDurableIntent` now supports per-argument predicates, so read-only actions such as hover and status skip the barrier, while raw or unknown actions and mutations such as rename still persist and flush their intent before execution.

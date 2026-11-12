@@ -42,6 +42,32 @@ export function registerMemoryBackendProvider(provider: MemoryBackendProvider): 
 	};
 }
 
+export interface MemoryBackendProviderReplacement {
+	commit(): void;
+	dispose(): void;
+}
+
+/**
+ * Replace a provider while retaining the incumbent for a failed mount.
+ * `dispose` restores the incumbent before `commit`, and unloads the successor after it.
+ */
+export function replaceMemoryBackendProvider(provider: MemoryBackendProvider): MemoryBackendProviderReplacement {
+	const previous = providers.get(provider.id);
+	providers.set(provider.id, provider);
+	let committed = false;
+	return {
+		commit() {
+			committed = true;
+		},
+		dispose() {
+			if (providers.get(provider.id) !== provider) return;
+			if (committed) providers.delete(provider.id);
+			else if (previous) providers.set(provider.id, previous);
+			else providers.delete(provider.id);
+		},
+	};
+}
+
 export function findMemoryBackendProvider(id: MemoryBackendId): MemoryBackendProvider | undefined {
 	return providers.get(id);
 }

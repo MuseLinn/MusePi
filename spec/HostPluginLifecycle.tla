@@ -1,5 +1,5 @@
 ---- MODULE HostPluginLifecycle ----
-CONSTANTS HMR, Memory, SerializeLifecycle, SelectiveConfig, RejectServiceConflict, RestartOnRollbackFailure
+CONSTANTS HMR, Memory, SerializeLifecycle, SelectiveConfig, RejectServiceConflict, PreserveOnReplaceFailure
 VARIABLES mounted, services, spuriousRestart, duplicateMount, serviceConflict, rollbackLost, restartRequired
 
 Init ==
@@ -54,10 +54,18 @@ PublishNew(service) ==
   serviceConflict' = serviceConflict /\
   UNCHANGED <<mounted, spuriousRestart, duplicateMount, rollbackLost, restartRequired>>
 
-ReplaceFailure ==
+ReplaceFailurePreserved ==
+  PreserveOnReplaceFailure /\
+  mounted' = mounted /\
+  rollbackLost' = FALSE /\
+  restartRequired' = FALSE /\
+  UNCHANGED <<services, spuriousRestart, duplicateMount, serviceConflict>>
+
+ReplaceFailureLost ==
+  PreserveOnReplaceFailure = FALSE /\
   mounted' = {} /\
-  rollbackLost' = (RestartOnRollbackFailure = FALSE) /\
-  restartRequired' = RestartOnRollbackFailure /\
+  rollbackLost' = TRUE /\
+  restartRequired' = TRUE /\
   UNCHANGED <<services, spuriousRestart, duplicateMount, serviceConflict>>
 
 Next ==
@@ -70,7 +78,8 @@ Next ==
     \/ ConfigUnrelated(plugin)
     \/ PublishConflict(plugin)
     \/ PublishNew(plugin)
-    \/ ReplaceFailure
+    \/ ReplaceFailurePreserved
+    \/ ReplaceFailureLost
 
 Spec == Init /\ [][Next]_<<mounted, services, spuriousRestart, duplicateMount, serviceConflict, rollbackLost, restartRequired>>
 

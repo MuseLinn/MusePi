@@ -285,14 +285,19 @@ describe("host plugin mount contract", () => {
 		expect((globalThis as Record<string, unknown>).__musepiHostRejectedCleanups).toBe(1);
 	});
 
-	it("requires restart when replacement and rollback both fail", async () => {
+	it("keeps the previous instance without replaying apply when replacement fails", async () => {
 		await Bun.write(
 			hostEntry,
 			`export const name = "fixture-host";
 			export const inject = [];
 			export const provide = ["fixture"];
-			export function apply() {
+			export function apply(ctx) {
 				globalThis.${APPLY_COUNT} = (globalThis.${APPLY_COUNT} ?? 0) + 1;
+				ctx.memory.registerBackendProvider({
+					id: "fixture-host",
+					label: "Fixture Host",
+					create() { throw new Error("the fixture backend is never constructed"); },
+				});
 				if (globalThis.__musepiHostFailApply) throw new Error("intentional apply failure");
 				return { fixture: { version: globalThis.${APPLY_COUNT} } };
 			}`,
@@ -305,10 +310,13 @@ describe("host plugin mount contract", () => {
 		const reloaded = await reloadHostPlugins([hostEntry]);
 
 		expect(reloaded).toEqual([]);
-		expect(applyCount()).toBe(3);
-		expect(hmr.restartRequired).toMatchObject({ entry: hostEntry });
-		expect(getHostService("fixture")).toBeUndefined();
-		expect(inspectHostPlugins().find(entry => entry.name === "fixture-host")?.error).toContain("rollback");
+		expect(applyCount()).toBe(2);
+		expect(hmr.restartRequired).toBeNull();
+		expect(getHostService("fixture")).toMatchObject({ version: 1 });
+		expect(findMemoryBackendProvider("fixture-host" as never)).toMatchObject({ id: "fixture-host" });
+		expect(inspectHostPlugins().find(entry => entry.name === "fixture-host")?.error).toContain(
+			"intentional apply failure",
+		);
 	});
 });
 

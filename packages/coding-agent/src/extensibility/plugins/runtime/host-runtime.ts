@@ -41,12 +41,17 @@ import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
 import { discoverBundledPluginPaths } from "../../../discovery/builtin";
 import { getExtensionNameFromPath } from "../../../discovery/helpers";
+import {
+	type MemoryBackendProvider,
+	type MemoryBackendProviderReplacement,
+	replaceMemoryBackendProvider,
+} from "../../../memory-backend/providers";
 import { EventBus } from "../../../utils/event-bus";
 import { ExtensionRuntime } from "../../extensions/loader";
 import { getPluginConfigPath } from "../../extensions-center/plugin-config-store";
 import type { HmrRestartRequirement, HmrService } from "../hmr/service";
 import { HOST_SERVICES, providedServices, type ServiceRegistry } from "./cordis-entry";
-import { disposePluginPrimitives } from "./cordis-primitives";
+import { disposePluginPrimitives, registerEffect } from "./cordis-primitives";
 import { FIBER_STATE_FAILED, fiberStateName } from "./fiber-state";
 import { getHostService, hasHostService, provideHostService } from "./host-services";
 import { importPluginEntry, type MountContext, type MountedPlugin, mountPlugin } from "./mount";
@@ -61,16 +66,11 @@ interface HostPluginRecord {
 	readonly packageDir: string;
 	/** The host cwd the instance was applied with; a reload reuses it. */
 	readonly cwd: string;
-	/** The module namespace currently being applied. Retained for rollback. */
-	module: unknown;
 	mounted: MountedPlugin;
 	/** Services this instance published; unpublishing is the first reload step. */
 	serviceDisposers: Array<() => void>;
 	/** Whether the package can be replaced without restarting the host. */
 	reloadable: boolean;
-	/** True between the teardown and the replacement's success, so a rollback
-	 *  does not dispose the same fiber a second time. */
-	disposed?: boolean;
 	error?: string;
 }
 
@@ -188,7 +188,7 @@ function publishServices(record: HostPluginRecord): void {
 }
 
 /** Build the record for one successful mount. */
-function recordFor(entryPath: string, cwd: string, module: unknown, mounted: MountedPlugin): HostPluginRecord {
+function recordFor(entryPath: string, cwd: string, mounted: MountedPlugin): HostPluginRecord {
 	const manifestPath = manifestPathFor(entryPath);
 	const record: HostPluginRecord = {
 		name: getExtensionNameFromPath(entryPath),
@@ -196,7 +196,6 @@ function recordFor(entryPath: string, cwd: string, module: unknown, mounted: Mou
 		manifestPath,
 		packageDir: path.dirname(manifestPath),
 		cwd,
-		module,
 		mounted,
 		serviceDisposers: [],
 		// The watcher's own provider cannot replace itself: the batch is being
@@ -229,6 +228,8 @@ async function mountHostEntry(
 	cwd: string,
 	readConfig: MountContext["readConfig"],
 	module?: unknown,
+	replacements?: MemoryBackendProviderReplacement[],
+	beforePublish?: () => void,
 ): Promise<HostPluginRecord> {
 	const mounted = await mountPlugin({
 		entryPath,
@@ -238,10 +239,29 @@ async function mountHostEntry(
 		readConfig,
 		serviceRegistry: hostServiceRegistry(),
 		...(module === undefined ? {} : { module }),
+		...(replacements === undefined
+			? {}
+			: {
+					wrapApi: (api, extension) => {
+						const register = (provider: MemoryBackendProvider) => {
+							const replacement = replaceMemoryBackendProvider(provider);
+							replacements.push(replacement);
+							const dispose = () => replacement.dispose();
+							extension.memoryBackendProviders.push(dispose);
+							registerEffect(extension, dispose, `memory-backend:${provider.id}`);
+							return dispose;
+						};
+						return Object.assign(api, {
+							registerMemoryBackendProvider: register,
+							memory: { ...api.memory, registerBackendProvider: register },
+						});
+					},
+				}),
 	});
 	if (!mounted.ok) throw new Error(`${mounted.code}: ${mounted.message}`);
 	try {
-		return recordFor(entryPath, cwd, mounted.module, mounted);
+		beforePublish?.();
+		return recordFor(entryPath, cwd, mounted);
 	} catch (error) {
 		await disposePluginPrimitives(mounted.extension);
 		throw error;
@@ -330,7 +350,6 @@ async function reloadHostPluginsNow(changedFiles?: readonly string[]): Promise<r
 			record.error = String(error);
 			continue;
 		}
-		const previousModule = record.module;
 		try {
 			await replaceRecord(current, record, module, readConfig);
 			record.error = undefined;
@@ -338,14 +357,13 @@ async function reloadHostPluginsNow(changedFiles?: readonly string[]): Promise<r
 			logger.info("host plugin reloaded", { entry: record.entryPath });
 		} catch (error) {
 			record.error = String(error);
-			logger.warn("host plugin reload failed; restoring the previous instance", {
+			logger.warn("host plugin reload failed; keeping the previous instance", {
 				entry: record.entryPath,
 				error: String(error),
 			});
 			try {
-				await replaceRecord(current, record, previousModule, readConfig);
+				restoreRecordServices(record);
 			} catch (rollbackError) {
-				record.disposed = true;
 				record.error = `${record.error}; rollback failed: ${String(rollbackError)}`;
 				logger.error("host plugin rollback failed", {
 					entry: record.entryPath,
@@ -361,30 +379,54 @@ async function reloadHostPluginsNow(changedFiles?: readonly string[]): Promise<r
 	return reloaded;
 }
 
-/** Unmount a record's current instance, then apply `module` in its place. */
+/** Stage a replacement and dispose the old instance only after the new one mounts. */
 async function replaceRecord(
 	current: HostPluginRuntime,
 	record: HostPluginRecord,
 	module: unknown,
 	readConfig: MountContext["readConfig"],
 ): Promise<void> {
-	if (!record.disposed) {
-		for (const dispose of record.serviceDisposers.splice(0)) {
-			try {
-				dispose();
-			} catch (error) {
-				logger.warn("host plugin service unpublish failed", { entry: record.entryPath, error: String(error) });
-			}
+	const replacements: MemoryBackendProviderReplacement[] = [];
+	const previousMounted = record.mounted;
+	let committed = false;
+	try {
+		const replacement = await mountHostEntry(
+			current,
+			record.entryPath,
+			record.cwd,
+			readConfig,
+			module,
+			replacements,
+			() => {
+				for (const dispose of record.serviceDisposers.splice(0)) {
+					try {
+						dispose();
+					} catch (error) {
+						logger.warn("host plugin service unpublish failed", {
+							entry: record.entryPath,
+							error: String(error),
+						});
+					}
+				}
+			},
+		);
+		for (const providerReplacement of replacements) providerReplacement.commit();
+		committed = true;
+		record.mounted = replacement.mounted;
+		record.serviceDisposers.push(...replacement.serviceDisposers);
+		record.reloadable = replacement.reloadable;
+		await disposePluginPrimitives(previousMounted.extension);
+	} catch (error) {
+		if (!committed) {
+			for (const providerReplacement of replacements) providerReplacement.dispose();
+			if (record.serviceDisposers.length === 0) publishServices(record);
 		}
-		await disposePluginPrimitives(record.mounted.extension);
-		record.disposed = true;
+		throw error;
 	}
-	const replacement = await mountHostEntry(current, record.entryPath, record.cwd, readConfig, module);
-	record.module = replacement.module;
-	record.mounted = replacement.mounted;
-	record.serviceDisposers.push(...replacement.serviceDisposers);
-	record.reloadable = replacement.reloadable;
-	record.disposed = false;
+}
+
+function restoreRecordServices(record: HostPluginRecord): void {
+	if (record.serviceDisposers.length === 0) publishServices(record);
 }
 
 /**
@@ -505,7 +547,6 @@ export function resetHostPlugins(): Promise<void> {
 					logger.warn("host plugin service unpublish failed", { error: String(error) });
 				}
 			}
-			if (record.disposed) continue;
 			for (const dispose of record.mounted.extension.memoryBackendProviders.splice(0)) {
 				try {
 					dispose();

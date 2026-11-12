@@ -11,7 +11,7 @@ These four independent TLA+ models pin the recovery boundaries implemented in th
 | `IntentBeforeEffect.tla` | `IntentBeforeEffect_Safe.cfg` | `IntentBeforeEffect_SyncEffect.cfg` violates `EffectAfterDurable`. |
 | `HostPluginLifecycle.tla` | `HostPluginLifecycle_Safe.cfg` | `HostPluginLifecycle_Unsafe.cfg` permits duplicate mount, service conflicts, spurious restart, and rollback loss. |
 
-The safe configurations are small boundary models, not a full refinement proof. The host model now covers serialized ensure/reload/reset, service-conflict rejection, selective config reload, restart acknowledgement, and rollback-failure reporting; it does not claim atomic old-or-new replacement. The other safe configurations map to the native owner-transition lock, replay continuity validation, and durable intent barrier.
+The safe configurations are small boundary models, not a full refinement proof. The host model now covers serialized ensure/reload/reset, service-conflict rejection, selective config reload, restart acknowledgement, and preserving the previous instance on replacement failure and restarting only when registration restoration fails; it does not claim transactional external plugin side effects. The other safe configurations map to the native owner-transition lock, replay continuity validation, and durable intent barrier.
 
 ## Run
 
