@@ -18,6 +18,12 @@ let isolatedDir: string;
 
 beforeAll(async () => {
 	isolatedDir = await isolateAgentDirForTest("daemon-live-reads-");
+	// A host that injects `xd://` device tools (IDE/agent harness bridges) makes
+	// the daemon write a mount notice into every fresh session's journal. That
+	// notice is legitimate, but it would make "a fresh session has no records"
+	// false for reasons this suite does not test, so the fixture pins the
+	// ambient tool surface off instead of weakening the assertion.
+	await Bun.write(path.join(isolatedDir, "config.yml"), "tools:\n  xdev: false\n");
 }, 30_000);
 
 afterAll(async () => {
