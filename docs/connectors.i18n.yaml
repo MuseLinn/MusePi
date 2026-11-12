@@ -1,5 +1,5 @@
 # Consistency record for connectors.md / connectors.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/connectors
-connectors.md: 40e7408c7381889ebb702d7f5ab2112872a0cff2
-connectors.zh-CN.md: 3009f10589c0b1c618530b89e80db4d982f2ab6c
+connectors.md: 50e963ca5b0a2ae65db1daa84cb60e0a32e25560
+connectors.zh-CN.md: e23d8832a367b74a6c40cb2a3b5cdf5dc8fccdfc
