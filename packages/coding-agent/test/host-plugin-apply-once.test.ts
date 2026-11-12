@@ -14,12 +14,18 @@ import * as path from "node:path";
 import { getCapability, invalidateCapabilityCache, listCapabilities } from "../src/capability";
 import { discoverExtensionPaths } from "../src/extensibility/extensions/loader";
 import { loadAllExtensions } from "../src/extensibility/extensions-center/state-manager";
+import { createHmrService } from "../src/extensibility/plugins/hmr/service";
 import {
 	ensureHostPlugins,
 	inspectHostPlugins,
 	reloadHostPlugins,
 	resetHostPlugins,
 } from "../src/extensibility/plugins/runtime/host-runtime";
+import {
+	clearHostServices,
+	getHostService,
+	provideHostService,
+} from "../src/extensibility/plugins/runtime/host-services";
 import { findMemoryBackendProvider } from "../src/memory-backend/providers";
 
 const APPLY_COUNT = "__musepiHostPluginApplyCount";
@@ -95,11 +101,17 @@ describe("host plugin mount contract", () => {
 
 	afterEach(async () => {
 		await resetHostPlugins();
+		clearHostServices();
 		if (previousRoots === undefined) delete process.env.MUSEPI_BUNDLED_PLUGIN_ROOTS;
 		else process.env.MUSEPI_BUNDLED_PLUGIN_ROOTS = previousRoots;
 		delete (globalThis as Record<string, unknown>)[APPLY_COUNT];
 		delete (globalThis as Record<string, unknown>).__musepiHostPluginTone;
 		delete (globalThis as Record<string, unknown>).__musepiHostPluginHelper;
+		delete (globalThis as Record<string, unknown>).__musepiHostCleanupGate;
+		delete (globalThis as Record<string, unknown>).__musepiHostCleanupStarted;
+		delete (globalThis as Record<string, unknown>).__musepiHostRejectedCleanups;
+		delete (globalThis as Record<string, unknown>).__musepiHostApplied;
+		delete (globalThis as Record<string, unknown>).__musepiHostFailApply;
 		invalidateCapabilityCache();
 		await fs.rm(root, { recursive: true, force: true });
 	});
@@ -205,6 +217,95 @@ describe("host plugin mount contract", () => {
 		// A bundled session package is on the cordis track too; what separates the
 		// two rows is which capability listed them, not their kind.
 		expect(session).toMatchObject({ kind: "plugin-module", state: "active" });
+	});
+
+	it("waits for reset disposal before allowing a concurrent ensure", async () => {
+		await Bun.write(
+			hostEntry,
+			`export const name = "fixture-host";
+			export const inject = [];
+			export function apply(ctx) {
+				globalThis.${APPLY_COUNT} = (globalThis.${APPLY_COUNT} ?? 0) + 1;
+				ctx.effect(async () => {
+					globalThis.__musepiHostCleanupStarted?.();
+					await globalThis.__musepiHostCleanupGate;
+				});
+			}`,
+		);
+		const gate = Promise.withResolvers<void>();
+		const started = Promise.withResolvers<void>();
+		const globals = globalThis as Record<string, unknown>;
+		globals.__musepiHostCleanupGate = gate.promise;
+		globals.__musepiHostCleanupStarted = () => started.resolve();
+		await ensureHostPlugins(process.cwd());
+		const resetting = resetHostPlugins();
+		await started.promise;
+		let ensureSettled = false;
+		const ensuring = ensureHostPlugins(process.cwd()).then(value => {
+			ensureSettled = true;
+			return value;
+		});
+		try {
+			await Bun.sleep(20);
+			expect(ensureSettled).toBe(false);
+			expect(applyCount()).toBe(1);
+		} finally {
+			gate.resolve();
+			await resetting;
+			await ensuring;
+		}
+		expect(applyCount()).toBe(2);
+	});
+
+	it("rejects a conflicting service mount and cleans its effects", async () => {
+		const source = (name: string) => `export const name = "${name}";
+			export const inject = [];
+			export const provide = ["shared"];
+			export function apply(ctx) {
+				globalThis.__musepiHostApplied = [...(globalThis.__musepiHostApplied ?? []), "${name}"];
+				ctx.effect(() => {
+					globalThis.__musepiHostRejectedCleanups = (globalThis.__musepiHostRejectedCleanups ?? 0) + 1;
+				});
+				return { shared: { name: "${name}" } };
+			}`;
+		await Bun.write(hostEntry, source("fixture-a"));
+		await writePackage(
+			path.join(root, "bundled-plugins", "fixture-b"),
+			{ name: "fixture-b", musepi: { scope: "host", extensions: ["./index.ts"] } },
+			source("fixture-b"),
+		);
+
+		await ensureHostPlugins(process.cwd());
+
+		const applied = (globalThis as Record<string, unknown>).__musepiHostApplied as string[];
+		expect(getHostService<{ name: string }>("shared")).toMatchObject({ name: applied[0] });
+		expect((globalThis as Record<string, unknown>).__musepiHostRejectedCleanups).toBe(1);
+	});
+
+	it("requires restart when replacement and rollback both fail", async () => {
+		await Bun.write(
+			hostEntry,
+			`export const name = "fixture-host";
+			export const inject = [];
+			export const provide = ["fixture"];
+			export function apply() {
+				globalThis.${APPLY_COUNT} = (globalThis.${APPLY_COUNT} ?? 0) + 1;
+				if (globalThis.__musepiHostFailApply) throw new Error("intentional apply failure");
+				return { fixture: { version: globalThis.${APPLY_COUNT} } };
+			}`,
+		);
+		const hmr = createHmrService([], 0);
+		provideHostService("hmr", hmr);
+		await ensureHostPlugins(process.cwd());
+		(globalThis as Record<string, unknown>).__musepiHostFailApply = true;
+
+		const reloaded = await reloadHostPlugins([hostEntry]);
+
+		expect(reloaded).toEqual([]);
+		expect(applyCount()).toBe(3);
+		expect(hmr.restartRequired).toMatchObject({ entry: hostEntry });
+		expect(getHostService("fixture")).toBeUndefined();
+		expect(inspectHostPlugins().find(entry => entry.name === "fixture-host")?.error).toContain("rollback");
 	});
 });
 

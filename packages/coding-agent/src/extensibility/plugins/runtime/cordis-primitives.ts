@@ -191,9 +191,7 @@ export async function disposePluginPrimitives(extension: Extension): Promise<num
 		for (const service of extension.services ?? []) {
 			if (typeof service.stop !== "function") continue;
 			try {
-				const result = service.stop();
-				if (result instanceof Promise)
-					void result.catch(error => console.warn("[plugin] service stop failed:", error));
+				await service.stop();
 			} catch (error) {
 				console.warn("[plugin] service stop failed:", error);
 			}

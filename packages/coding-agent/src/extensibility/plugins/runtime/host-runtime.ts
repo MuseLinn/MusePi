@@ -76,7 +76,6 @@ interface HostPluginRecord {
 
 interface HostPluginRuntime {
 	loaded: boolean;
-	inFlight?: Promise<boolean>;
 	readonly records: Map<string, HostPluginRecord>;
 	readonly runtime: ExtensionRuntime;
 	readonly eventBus: EventBus;
@@ -97,6 +96,16 @@ export interface HostPluginInspection {
  * the attempt instead of each mounting the same package again.
  */
 let state: HostPluginRuntime | undefined;
+let lifecycleQueue: Promise<unknown> = Promise.resolve();
+
+function withLifecycle<T>(operation: () => Promise<T>): Promise<T> {
+	const run = lifecycleQueue.then(operation, operation);
+	lifecycleQueue = run.then(
+		() => undefined,
+		() => undefined,
+	);
+	return run;
+}
 
 function runtimeState(): HostPluginRuntime {
 	state ??= {
@@ -217,7 +226,12 @@ async function mountHostEntry(
 		...(module === undefined ? {} : { module }),
 	});
 	if (!mounted.ok) throw new Error(`${mounted.code}: ${mounted.message}`);
-	return recordFor(entryPath, cwd, mounted.module, mounted);
+	try {
+		return recordFor(entryPath, cwd, mounted.module, mounted);
+	} catch (error) {
+		await disposePluginPrimitives(mounted.extension);
+		throw error;
+	}
 }
 
 /**
@@ -229,14 +243,10 @@ async function mountHostEntry(
  * itself rejects the attempt and is retried by the next caller rather than
  * cached forever.
  */
-export async function ensureHostPlugins(cwd: string): Promise<boolean> {
-	const current = runtimeState();
-	if (current.loaded) return false;
-	if (current.inFlight) {
-		await current.inFlight;
-		return false;
-	}
-	const attempt = (async () => {
+export function ensureHostPlugins(cwd: string): Promise<boolean> {
+	return withLifecycle(async () => {
+		const current = runtimeState();
+		if (current.loaded) return false;
 		const [paths, readConfig] = await Promise.all([
 			discoverBundledPluginPaths({ scope: "host" }),
 			defaultSessionConfigReader(),
@@ -250,16 +260,8 @@ export async function ensureHostPlugins(cwd: string): Promise<boolean> {
 			}
 		}
 		current.loaded = true;
-		current.inFlight = undefined;
 		return true;
-	})();
-	current.inFlight = attempt;
-	try {
-		return await attempt;
-	} catch (error) {
-		if (current.inFlight === attempt) current.inFlight = undefined;
-		throw error;
-	}
+	});
 }
 
 /**
@@ -275,22 +277,10 @@ export async function ensureHostPlugins(cwd: string): Promise<boolean> {
  * without its process-wide registrations.
  */
 export function reloadHostPlugins(changedFiles?: readonly string[]): Promise<readonly string[]> {
-	// One replacement at a time: the daemon queues batches through the HMR
-	// service, but the TUI subscribes directly and a manual `ctx.hmr.reload()`
-	// can land while a watch batch is still applying. A second pass would
-	// otherwise dispose a fiber the first pass is still replacing.
-	const run = reloadQueue.then(
-		() => reloadHostPluginsNow(changedFiles),
-		() => reloadHostPluginsNow(changedFiles),
-	);
-	reloadQueue = run.then(
-		() => undefined,
-		() => undefined,
-	);
-	return run;
+	// Mount, replacement, and reset share one queue so old and new effects
+	// cannot overlap even when a reset races an ensure or another reload.
+	return withLifecycle(() => reloadHostPluginsNow(changedFiles));
 }
-
-let reloadQueue: Promise<unknown> = Promise.resolve();
 
 async function reloadHostPluginsNow(changedFiles?: readonly string[]): Promise<readonly string[]> {
 	const current = state;
@@ -341,9 +331,15 @@ async function reloadHostPluginsNow(changedFiles?: readonly string[]): Promise<r
 			try {
 				await replaceRecord(current, record, previousModule, readConfig);
 			} catch (rollbackError) {
+				record.disposed = true;
+				record.error = `${record.error}; rollback failed: ${String(rollbackError)}`;
 				logger.error("host plugin rollback failed", {
 					entry: record.entryPath,
 					error: String(rollbackError),
+				});
+				requestHostRestart({
+					entry: record.entryPath,
+					reason: "replacement and rollback both failed; the previous instance could not be restored",
 				});
 			}
 		}
@@ -482,27 +478,29 @@ export function inspectHostPlugins(): readonly HostPluginInspection[] {
  * reclaimed synchronously before the fiber teardown is awaited, so a caller
  * that resets and immediately re-ensures observes a clean registry.
  */
-export async function resetHostPlugins(): Promise<void> {
-	const current = state;
-	state = undefined;
-	if (!current) return;
-	for (const record of current.records.values()) {
-		for (const dispose of record.serviceDisposers.splice(0)) {
-			try {
-				dispose();
-			} catch (error) {
-				logger.warn("host plugin service unpublish failed", { error: String(error) });
+export function resetHostPlugins(): Promise<void> {
+	return withLifecycle(async () => {
+		const current = state;
+		state = undefined;
+		if (!current) return;
+		for (const record of current.records.values()) {
+			for (const dispose of record.serviceDisposers.splice(0)) {
+				try {
+					dispose();
+				} catch (error) {
+					logger.warn("host plugin service unpublish failed", { error: String(error) });
+				}
 			}
-		}
-		if (record.disposed) continue;
-		for (const dispose of record.mounted.extension.memoryBackendProviders.splice(0)) {
-			try {
-				dispose();
-			} catch (error) {
-				logger.warn("host plugin memory backend cleanup failed", { error: String(error) });
+			if (record.disposed) continue;
+			for (const dispose of record.mounted.extension.memoryBackendProviders.splice(0)) {
+				try {
+					dispose();
+				} catch (error) {
+					logger.warn("host plugin memory backend cleanup failed", { error: String(error) });
+				}
 			}
+			await disposePluginPrimitives(record.mounted.extension);
 		}
-		await disposePluginPrimitives(record.mounted.extension);
-	}
-	current.records.clear();
+		current.records.clear();
+	});
 }

@@ -76,8 +76,12 @@ export interface HmrService {
 	 * {@link restartRequired} in its UI.
 	 */
 	requestRestart(requirement: HmrRestartRequirement): void;
-	/** The outstanding request, or null when nothing needs a restart. */
+	/** Every outstanding restart request, oldest first. */
+	readonly restartRequirements: readonly HmrRestartRequirement[];
+	/** The oldest outstanding request, or null when nothing needs a restart. */
 	readonly restartRequired: HmrRestartRequirement | null;
+	/** Mark one request as handled without dropping any newer requirement. */
+	acknowledgeRestart(requirement: HmrRestartRequirement): void;
 	/** Subscribe to restart requests. Returns a disposer. */
 	onRestartRequired(listener: (requirement: HmrRestartRequirement) => void): () => void;
 	/** Run the current listeners as if the watched files had changed. */
@@ -116,7 +120,7 @@ class WatchedHmrService implements HmrService {
 	#disposed = false;
 	#queue: Promise<unknown> = Promise.resolve();
 	#graph: HmrGraphQueries | null = null;
-	#restartRequired: HmrRestartRequirement | null = null;
+	readonly #restartRequirements = new Map<string, HmrRestartRequirement>();
 	readonly #restartListeners = new Set<(requirement: HmrRestartRequirement) => void>();
 
 	constructor(roots: readonly string[], debounceMs: number, ignored: ReadonlyArray<string | RegExp> = []) {
@@ -154,12 +158,26 @@ class WatchedHmrService implements HmrService {
 	}
 
 	get restartRequired(): HmrRestartRequirement | null {
-		return this.#restartRequired;
+		return this.#restartRequirements.values().next().value ?? null;
+	}
+
+	get restartRequirements(): readonly HmrRestartRequirement[] {
+		return [...this.#restartRequirements.values()];
+	}
+
+	acknowledgeRestart(requirement: HmrRestartRequirement): void {
+		this.#restartRequirements.delete(this.#restartKey(requirement));
+	}
+
+	#restartKey(requirement: HmrRestartRequirement): string {
+		return JSON.stringify([requirement.file ?? null, requirement.entry ?? null, requirement.reason]);
 	}
 
 	requestRestart(requirement: HmrRestartRequirement): void {
 		if (this.#disposed) return;
-		this.#restartRequired = requirement;
+		const key = this.#restartKey(requirement);
+		if (this.#restartRequirements.has(key)) return;
+		this.#restartRequirements.set(key, requirement);
 		logger.warn("host restart required", {
 			reason: requirement.reason,
 			file: requirement.file,
@@ -244,6 +262,7 @@ class WatchedHmrService implements HmrService {
 		}
 		for (const dispose of this.#disposers.splice(0)) dispose();
 		this.#restartListeners.clear();
+		this.#restartRequirements.clear();
 		this.#pending.clear();
 		const watcher = this.#watcher;
 		this.#watcher = null;

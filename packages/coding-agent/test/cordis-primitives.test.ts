@@ -276,3 +276,20 @@ describe("plugin listener ledger", () => {
 		expect(ext.eventListenerDisposers).toHaveLength(1);
 	});
 });
+
+test("an async service stop is awaited before disposal completes", async () => {
+	const stopped = Promise.withResolvers<void>();
+	const ext = Object.assign(fakeExtension(), {
+		servicesStarted: true,
+		services: [{ stop: () => stopped.promise }],
+	});
+	let settled = false;
+	const disposing = disposePluginPrimitives(ext).then(() => {
+		settled = true;
+	});
+	await Bun.sleep(0);
+	expect(settled).toBe(false);
+	stopped.resolve();
+	await disposing;
+	expect(settled).toBe(true);
+});
