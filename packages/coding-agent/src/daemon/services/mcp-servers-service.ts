@@ -14,14 +14,17 @@
  * - Output: server summaries (name, transport, url/command, auth kind) and
  *   the applied name. `headers` are never returned: a token-typed connector
  *   keeps its token in this file, and the wire must not echo it back.
- * - Lifecycle: no start/stop, no cached state. Every call reads or writes the
- *   file through `mcp/config-writer`, whose per-file lock plus atomic rename
- *   serialize concurrent writers and keep unrelated entries intact.
+ * - Lifecycle: no cached state. Every call reads or writes the file through
+ *   `mcp/config-writer`, whose per-file lock plus atomic rename serialize
+ *   concurrent writers and keep unrelated entries intact. `probe` is the one
+ *   live action: it performs a handshake on a not-yet-installed config and
+ *   releases the transport, so it leaves no server mounted in any session.
  * - Conflict: none with ConnectorService — that reads the live manager, this
  *   owns the user-scope file.
  */
 
 import * as path from "node:path";
+import { type MCPProbeResult, probeServer } from "../../mcp/client";
 import { addMCPServer, readMCPConfigFile, removeMCPServer, validateServerName } from "../../mcp/config-writer";
 import type { MCPAuthConfig, MCPConfigFile, MCPServerConfig } from "../../mcp/types";
 import type { DaemonService } from "./types";
@@ -136,6 +139,7 @@ export class McpServersService implements DaemonService {
 		"mcp.servers.list": "list",
 		"mcp.servers.add": "add",
 		"mcp.servers.remove": "remove",
+		"mcp.servers.probe": "probe",
 	} as const;
 
 	readonly #deps: McpServersServiceDeps;
@@ -201,6 +205,48 @@ export class McpServersService implements DaemonService {
 		headers?: unknown;
 		auth?: unknown;
 	}): Promise<{ ok: true; name: string }> {
+		const { name, config } = this.#configFrom(params);
+		await addMCPServer(this.#configPath(), name, config);
+		await this.#reloadConnectors();
+		return { ok: true, name };
+	}
+
+	/**
+	 * Test one connector config without mounting it.
+	 *
+	 * Accepts the same shape as {@link add} and rejects the same inputs, so a
+	 * probe can never bless a config the install would refuse. A real handshake
+	 * follows: tools/resources/prompts are read and the transport is released.
+	 * Failures come back as `ok: false` with the reason — never a throw — so the
+	 * surface can show "why" beside the form.
+	 */
+	async probe(params: {
+		name?: unknown;
+		url?: unknown;
+		command?: unknown;
+		args?: unknown;
+		headers?: unknown;
+		auth?: unknown;
+	}): Promise<MCPProbeResult> {
+		let built: { name: string; config: MCPServerConfig };
+		try {
+			built = this.#configFrom(params);
+		} catch (error) {
+			const name = typeof params?.name === "string" ? params.name.trim() : "";
+			return { name, ok: false, error: error instanceof Error ? error.message : String(error) };
+		}
+		return probeServer(built.name, built.config);
+	}
+
+	/** Shared input contract of `add` and `probe`; the only place either validates. */
+	#configFrom(params: {
+		name?: unknown;
+		url?: unknown;
+		command?: unknown;
+		args?: unknown;
+		headers?: unknown;
+		auth?: unknown;
+	}): { name: string; config: MCPServerConfig } {
 		const name = typeof params?.name === "string" ? params.name.trim() : "";
 		const nameError = validateServerName(name);
 		if (nameError) throw new Error(nameError);
@@ -210,20 +256,15 @@ export class McpServersService implements DaemonService {
 		if (hasUrl === hasCommand) throw new Error('exactly one of "url" or "command" is required');
 
 		const common = { auth: validateAuth(params?.auth) };
-		let config: MCPServerConfig;
-		if (hasUrl) {
-			config = { type: "http", url: validateUrl(params.url), headers: validateHeaders(params?.headers), ...common };
-		} else {
-			config = {
-				type: "stdio",
-				command: validateCommand(params.command),
-				args: validateArgs(params?.args),
-				...common,
-			};
-		}
-		await addMCPServer(this.#configPath(), name, config);
-		await this.#reloadConnectors();
-		return { ok: true, name };
+		const config: MCPServerConfig = hasUrl
+			? { type: "http", url: validateUrl(params.url), headers: validateHeaders(params?.headers), ...common }
+			: {
+					type: "stdio",
+					command: validateCommand(params.command),
+					args: validateArgs(params?.args),
+					...common,
+				};
+		return { name, config };
 	}
 
 	/** Remove one user-scope connector by name; other entries stay untouched. */

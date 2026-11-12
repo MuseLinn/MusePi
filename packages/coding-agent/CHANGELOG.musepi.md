@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **连接器可以先试连再安装**：新增 `mcp.servers.probe`（`probeServer`）。它用与真实连接相同的 initialize 握手，按服务器声明读取 tools / resources / prompts，然后立即释放传输层——不进任何会话、不缓存、不触发工具刷新。失败以 `ok:false` + 原因返回而不是抛异常；非法配置（同时给 `command` 与 `url`）在任何进程启动前就被拒绝。`add` 与 `probe` 共用同一份输入校验，不存在"探测放行、安装拒绝"的分叉。
+  - EN: Connectors can be tested before they are installed. The new `mcp.servers.probe` (`probeServer`) performs the same initialize handshake as a real connection, reads the tools / resources / prompts the server declares, then releases the transport immediately — it joins no session, caches nothing and triggers no tool refresh. Failures come back as `ok:false` with the reason instead of throwing, and an invalid config (both `command` and `url`) is rejected before any process starts. `add` and `probe` share one input contract, so a probe can never bless a config the install would refuse.
+
 - **更新通道可切换（正式版 / 测试版）**：设置 → 交互 → Startup & Updates 里的「更新通道」不再是隐藏项，桌面端会真的跟随它。稳定版构建可以切到测试版通道接收 `channel-beta` 的预发布；测试版构建始终留在测试版——它的版本已经高于稳定线，跟稳定通道只会得到「无更新」。桌面 updater 在运行时重设 feed（两条通道都有显式 feed，切回来才对称），把选择落到 `<userData>/update-channel.json` 供下次冷启动的静默检查使用；`updates.check` 与发布说明同样按该通道取清单。
   - EN: The update channel is now switchable (stable / beta). Update Channel under Settings → Interaction → Startup & Updates is no longer hidden, and the desktop app follows it. A stable build can opt into the beta channel and receive `channel-beta` prereleases; a beta build always stays on beta, because its version is already newer than the stable line and following stable would only ever report "no update". The desktop updater repoints its feed at runtime (both channels have an explicit feed, so switching back is symmetric) and persists the choice in `<userData>/update-channel.json` for the next cold-start check; `updates.check` and release notes resolve the same channel.
 

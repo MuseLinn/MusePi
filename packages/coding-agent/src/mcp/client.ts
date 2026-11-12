@@ -6,6 +6,7 @@
 import * as path from "node:path";
 import * as url from "node:url";
 import { getProjectDir, logger, withTimeout } from "@musepi/pi-utils";
+import { validateServerConfig } from "./config";
 import { describeMCPTimeout, isMCPTimeoutEnabled, resolveMCPTimeoutMs } from "./timeout";
 import { createHttpTransport } from "./transports/http";
 import { createSseTransport } from "./transports/sse";
@@ -266,6 +267,60 @@ export async function callTool(
  */
 export async function disconnectServer(connection: MCPServerConnection): Promise<void> {
 	await connection.transport.close();
+}
+
+/** Outcome of a probe: one real handshake against a config that never joins the session. */
+export interface MCPProbeResult {
+	/** Server name the probe was requested under. */
+	name: string;
+	ok: boolean;
+	serverInfo?: MCPServerConnection["serverInfo"];
+	capabilities?: MCPServerCapabilities;
+	toolNames?: string[];
+	resourceCount?: number;
+	promptCount?: number;
+	/** Human-readable failure reason; the probe never throws. */
+	error?: string;
+}
+
+/**
+ * Test a server config without mounting it.
+ *
+ * Used by the connector surface to answer "will this work?" before the user
+ * commits a connector. It performs the same initialize handshake as a real
+ * connection, reads the capability-gated lists, and always releases the
+ * transport — nothing is cached, no tools reach the session, and failures are
+ * reported instead of thrown.
+ */
+export async function probeServer(
+	name: string,
+	config: MCPServerConfig,
+	options?: { signal?: AbortSignal },
+): Promise<MCPProbeResult> {
+	const problems = validateServerConfig(name, config);
+	if (problems.length > 0) return { name, ok: false, error: problems.join("; ") };
+	let connection: MCPServerConnection | undefined;
+	try {
+		connection = await connectToServer(name, config, { signal: options?.signal });
+		const tools = connection.capabilities.tools ? await listTools(connection, { signal: options?.signal }) : [];
+		const resources = connection.capabilities.resources
+			? await listResources(connection, { signal: options?.signal })
+			: [];
+		const prompts = connection.capabilities.prompts ? await listPrompts(connection, { signal: options?.signal }) : [];
+		return {
+			name,
+			ok: true,
+			serverInfo: connection.serverInfo,
+			capabilities: connection.capabilities,
+			toolNames: tools.map(tool => tool.name),
+			resourceCount: resources.length,
+			promptCount: prompts.length,
+		};
+	} catch (error) {
+		return { name, ok: false, error: error instanceof Error ? error.message : String(error) };
+	} finally {
+		if (connection) await disconnectServer(connection).catch(() => undefined);
+	}
 }
 
 /**

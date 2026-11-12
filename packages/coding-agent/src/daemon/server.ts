@@ -2385,6 +2385,10 @@ export class DaemonServer {
 			case "mcp.servers.remove": {
 				return this.#services.get<McpServersService>("mcpServers").remove(params ?? {});
 			}
+			case "mcp.servers.probe": {
+				// 安装前试连：真实握手后立即释放，不把服务器挂进任何会话。
+				return this.#services.get<McpServersService>("mcpServers").probe(params ?? {});
+			}
 			case "mcp.oauth.start": {
 				// 浏览器授权登录：返回 {flowId, authorizationUrl}，登录在后台完成。
 				// 实现归 McpOAuthService；授权 URL 只回给本连接，不入日志/广播。
