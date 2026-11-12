@@ -2181,7 +2181,6 @@ export const settings = {
 	"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed":
 		"上下文接近压缩阈值时后台先做投机摘要，越过阈值后把就绪结果拼接进来",
 	"Status line embedded in top border, compact 2-line prompt": "状态线内嵌顶边框，紧凑两行提示符",
-	"Update channel used by omp update and the startup update check": "musepi update 与启动时更新检查使用的更新通道",
 	"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window":
 		"对超过阈值加价的长上下文窗口使用premium档（如 GPT-5.6 1M 在 272K 以上输入按 2 倍计费）；关闭则限制在标准定价窗口",
 	"User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections":
