@@ -641,6 +641,35 @@ describe("session exit diagnostics", () => {
 			});
 		}
 
+		const lspScenario = (action: string) =>
+			runScenario({
+				proxied: true,
+				args: { action },
+				createTool: (_dir, order) => {
+					const tool = new LspTool({} as never) as AgentTool;
+					tool.execute = async () => {
+						order.push("execute");
+						return { content: [{ type: "text", text: "done" }] };
+					};
+					return tool;
+				},
+			});
+
+		for (const action of ["hover", "status"]) {
+			it(`lets read-only LSP action ${action} skip the barrier through its wrapper`, async () => {
+				const scenario = await lspScenario(action);
+				expect(scenario.order).not.toContain("flush");
+				expect(scenario.order).toContain("execute");
+				expect(scenario.startCount).toBe(1);
+				expect(scenario.records).toEqual([]);
+			});
+		}
+
+		it("keeps the durable barrier for raw LSP requests", async () => {
+			const scenario = await lspScenario("request");
+			expect(scenario.order).toEqual(["start", "flush", "execute"]);
+		});
+
 		it("fails closed when the durable flush rejects", async () => {
 			const scenario = await runScenario({ failFlush: true });
 			expect(scenario.order).not.toContain("execute");

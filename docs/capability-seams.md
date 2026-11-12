@@ -7,7 +7,7 @@
 | daemon L2 服务（RPC 面） | `packages/coding-agent/src/daemon/services/types.ts`（`DaemonService` 接口） | 各服务文件头注释（样板：`schedule-service.ts`） |
 | GUI 编辑器语言智能 | `packages/coding-agent/src/daemon/services/editor-service.ts`（`EditorService`；`editor.sync` / `editor.saved` / `editor.hover` / `editor.completion` / `editor.definition` / `editor.implementation` / `editor.typeDefinition` / `editor.references` / `editor.rename`） | 同文件头部 |
 | 设计体系注册表（M3 §3） | `packages/coding-agent/src/presets/design-systems.ts`（内置预设表 + 扩展注册表） | 同文件头部 |
-| 内置工具 | `packages/coding-agent/src/tools/index.ts`（`BUILTIN_TOOLS` / `HIDDEN_TOOLS` / `isToolAllowed`） | 同文件头部；有副作用的工具执行前 flush 唯一 start intent 与 daemon journal，只有只读工具声明 `requiresDurableIntent: false`，未知插件/MCP 工具默认需要屏障 |
+| 内置工具 | `packages/coding-agent/src/tools/index.ts`（`BUILTIN_TOOLS` / `HIDDEN_TOOLS` / `isToolAllowed`） | 同文件头部；有副作用的工具执行前 flush 唯一 start intent 与 daemon journal，只读工具可声明 `requiresDurableIntent: false` 或按参数豁免，未知插件/MCP 工具默认需要屏障；LSP 仅只读 action 豁免，raw/未知 action 与写操作保留 |
 | 斜杠命令 | `packages/coding-agent/src/slash-commands/builtin-registry.ts` | 同文件头部 |
 | hooks 引擎 | `packages/coding-agent/src/extensibility/hooks/types.ts`（`HookEvent` union） | 同文件头部 |
 | channels（IM 通道） | `packages/coding-agent/src/channels/types.ts`（`ChannelAdapter`） | 同文件头部 |

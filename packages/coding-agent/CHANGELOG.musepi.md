@@ -18,6 +18,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **插件宿主生命周期串行且失败可见**：ensure/reload/reset 共用一条队列，异步 stop 会等待完成；重名服务不再覆盖原服务，冲突实例会清理；替换与回滚都失败时明确请求重启。restart 请求去重保留，确认后移除，dispose 清空。
   - EN: Host plugin lifecycle operations are serialized and failures are visible. Ensure, reload, and reset share one queue and await asynchronous stops. Duplicate services no longer replace the incumbent and rejected mounts are cleaned up. If both replacement and rollback fail, the host is asked to restart. Restart requests are deduplicated, acknowledged individually, and cleared on disposal.
 
+- **只读 LSP 查询不再支付 durable flush 延迟**：`requiresDurableIntent` 现在支持按参数判定，LSP 的 hover、status 等只读 action 跳过屏障；raw/未知 action 与 rename 等写操作仍在执行前保存并 flush 执行意图。
+  - EN: Read-only LSP queries no longer pay the durable flush latency. `requiresDurableIntent` now supports per-argument predicates, so read-only actions such as hover and status skip the barrier, while raw or unknown actions and mutations such as rename still persist and flush their intent before execution.
+
 ## [0.7.4] - 2026-11-11
 
 - **崩溃或重启后不再丢会话记录**：压缩在日志尾部折叠时会把 journal 清成空文件，重新打开后序号从 1 重来，而重放会丢弃检查点序号及以下的所有记录——整段会话就此消失。现在序号从「文件尾」与「检查点」中较大者继续，且压缩不接受倒退的检查点；断线重连改用真正落盘的尾部判断，补不齐时明确要求整页重载，而不是少推一截。

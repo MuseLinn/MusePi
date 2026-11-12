@@ -861,8 +861,8 @@ export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any
 	 */
 	matcherEntries?: (args: unknown) => readonly { path: string; digest: string }[] | undefined;
 
-	/** Whether execution needs a durable start intent. Defaults to true; only read-only tools opt out. */
-	requiresDurableIntent?: boolean;
+	/** Whether execution needs a durable start intent. Defaults to true; a predicate may exempt read-only calls. */
+	requiresDurableIntent?: boolean | ((args: unknown) => boolean);
 	/** Capability tier declaration used by approval gates. Omitted means "exec". */
 	approval?: ToolApproval;
 

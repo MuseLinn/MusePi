@@ -3619,7 +3619,9 @@ export class AgentSession {
 	}
 
 	async #beforeToolExecution(ctx: BeforeToolCallContext): Promise<void> {
-		if (ctx.tool.requiresDurableIntent === false) return;
+		const declaration = ctx.tool.requiresDurableIntent;
+		const required = typeof declaration === "function" ? declaration(ctx.args) : declaration;
+		if (required === false) return;
 		const event: Extract<AgentEvent, { type: "tool_execution_start" }> = {
 			type: "tool_execution_start",
 			toolCallId: ctx.toolCall.id,
