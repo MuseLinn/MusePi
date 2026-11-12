@@ -1276,6 +1276,8 @@ export const settings = {
 	"settings.connectorsStatusDisconnected": "Not connected",
 	"settings.connectorsExamples": "Try it",
 	"settings.connectorsDocs": "View docs",
+	"Test connection": "Test connection",
+	"{server} · {count} tools": "{server} · {count} tools",
 	"settings.boardRemoveConfirm": "Delete board “{name}”?",
 	"settings.boardRemoveHint": "This board contains {count} widget(s); deletion cannot be undone.",
 	"settings.boardRefresh": "Refresh",

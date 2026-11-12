@@ -60,6 +60,31 @@ interface ConnectResult {
 	status: CatalogConnector["status"];
 }
 
+/** `mcp.servers.probe` verdict: a failed handshake is reported, never thrown. */
+interface ProbeResult {
+	name: string;
+	ok: boolean;
+	serverInfo?: { name?: string };
+	toolNames?: string[];
+	error?: string;
+}
+
+interface ProbeOutcome {
+	pending: boolean;
+	ok?: boolean;
+	text?: string;
+}
+
+/**
+ * The config a probe can rebuild exactly from the catalog row. Rows without a
+ * URL are skipped: the wire drops stdio `args` and token headers, so probing
+ * them would report a failure the user's own config does not have.
+ */
+function probeUrl(connector: CatalogConnector): string | null {
+	if (connector.kind === "cli" || connector.authMode !== "none") return null;
+	return connector.server?.url ?? null;
+}
+
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
@@ -86,6 +111,7 @@ export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 	const [cliFlow, setCliFlow] = useState<{ connectorId: string; flowId: string; url?: string; code?: string } | null>(
 		null,
 	);
+	const [probes, setProbes] = useState<Record<string, ProbeOutcome>>({});
 
 	const load = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
@@ -163,6 +189,38 @@ export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 			setError(t("settings.connectorsRefreshFailed", { error: errorMessage(refreshError) }));
 		}
 	}, [load, rpc]);
+
+	/**
+	 * Handshake without mounting: `mcp.servers.probe` never joins a session, so
+	 * the result line can be shown before the user commits the connector.
+	 */
+	const testConnection = useCallback(
+		async (connector: CatalogConnector): Promise<void> => {
+			const url = probeUrl(connector);
+			if (!rpc || !url) return;
+			tapFeedback();
+			setProbes(current => ({ ...current, [connector.id]: { pending: true } }));
+			try {
+				const result = await rpc.request<ProbeResult>("mcp.servers.probe", {
+					name: `connector:${connector.id}`,
+					url,
+				});
+				const text = result.ok
+					? t("{server} · {count} tools", {
+							server: result.serverInfo?.name ?? connector.name,
+							count: result.toolNames?.length ?? 0,
+						})
+					: (result.error ?? "");
+				setProbes(current => ({ ...current, [connector.id]: { pending: false, ok: result.ok, text } }));
+			} catch (probeError) {
+				setProbes(current => ({
+					...current,
+					[connector.id]: { pending: false, ok: false, text: errorMessage(probeError) },
+				}));
+			}
+		},
+		[rpc],
+	);
 
 	const connect = useCallback(
 		async (connector: CatalogConnector, approve = false): Promise<void> => {
@@ -312,6 +370,8 @@ export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 					const flow = flows[serverName];
 					const isPending = pending === connector.id;
 					const isOpen = expanded === connector.id;
+					const probeState = probes[connector.id];
+					const probeable = probeUrl(connector) !== null;
 					return (
 						<div key={connector.id} className="gui-agent-card gui-connector-card">
 							<div className="flex items-center gap-3">
@@ -360,6 +420,17 @@ export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 									{flow?.kind === "error" && (
 										<div className="text-[12px] text-[var(--color-danger)]">{flow.message}</div>
 									)}
+									{probeState?.text && (
+										<div
+											className={
+												probeState.ok
+													? "text-[12px] text-[var(--color-success)]"
+													: "text-[12px] text-[var(--color-danger)]"
+											}
+										>
+											{probeState.text}
+										</div>
+									)}
 								</div>
 								<div className="flex flex-shrink-0 items-center gap-1.5">
 									{tokenTarget === connector.id ||
@@ -381,24 +452,38 @@ export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 												{t("settings.cancel")}
 											</button>
 										</>
-									) : connector.enabled ? (
-										<button
-											type="button"
-											className="gui-btn"
-											disabled={isPending}
-											onClick={() => void disconnect(connector)}
-										>
-											{t("settings.connectorsDisconnect")}
-										</button>
 									) : (
-										<button
-											type="button"
-											className="gui-btn gui-btn-primary"
-											disabled={isPending}
-											onClick={() => void connect(connector)}
-										>
-											{t("settings.connectorsConnect")}
-										</button>
+										<>
+											{probeable && (
+												<button
+													type="button"
+													className="gui-btn"
+													disabled={probeState?.pending}
+													onClick={() => void testConnection(connector)}
+												>
+													{probeState?.pending ? t("settings.testing") : t("Test connection")}
+												</button>
+											)}
+											{connector.enabled ? (
+												<button
+													type="button"
+													className="gui-btn"
+													disabled={isPending}
+													onClick={() => void disconnect(connector)}
+												>
+													{t("settings.connectorsDisconnect")}
+												</button>
+											) : (
+												<button
+													type="button"
+													className="gui-btn gui-btn-primary"
+													disabled={isPending}
+													onClick={() => void connect(connector)}
+												>
+													{t("settings.connectorsConnect")}
+												</button>
+											)}
+										</>
 									)}
 								</div>
 							</div>

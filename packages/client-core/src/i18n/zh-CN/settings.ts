@@ -1209,6 +1209,8 @@ export const settings = {
 	"settings.connectorsStatusDisconnected": "未连接",
 	"settings.connectorsExamples": "试试这样用",
 	"settings.connectorsDocs": "查看文档",
+	"Test connection": "测试连接",
+	"{server} · {count} tools": "{server} · {count} 个工具",
 	"settings.boardRemoveConfirm": "删除看板「{name}」？",
 	"settings.boardRemoveHint": "该看板包含 {count} 个组件，删除后不可恢复。",
 	"settings.boardRefresh": "刷新",
