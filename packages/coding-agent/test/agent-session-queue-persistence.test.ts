@@ -82,6 +82,15 @@ describe("AgentSession persisted message queue", () => {
 		expect(session.getQueuedMessageSnapshot().followUp.map(item => item.id)).toEqual([queued[0]!.id]);
 	});
 
+	it("rejects a queued message with neither text nor images", async () => {
+		session = await createSession();
+		session.setQueuedMessagesPaused(true);
+		await session.followUp("   ");
+		await session.steer("");
+		expect(session.queuedMessageCount).toBe(0);
+		expect(session.getQueuedMessageSnapshot()).toEqual({ paused: true, steering: [], followUp: [] });
+	});
+
 	it("does not restore a message that was consumed before reopening", async () => {
 		session = await createSession();
 		session.setQueuedMessagesPaused(true);

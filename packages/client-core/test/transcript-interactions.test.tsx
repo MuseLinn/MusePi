@@ -444,3 +444,38 @@ describe("message quote action", () => {
 		await act(async () => root.unmount());
 	});
 });
+
+describe("background completion card", () => {
+	it("folds as a whole from its header while keeping the body mounted", async () => {
+		const entry = {
+			type: "custom_message" as const,
+			id: "job-1",
+			parentId: null,
+			timestamp: "2026-11-12T00:00:00Z",
+			customType: "async-job-result",
+			display: true,
+			content: 'Background task job "Alice" completed.',
+			details: {
+				jobId: "Alice",
+				status: "completed",
+				label: "Alice",
+				output: "line one\nline two",
+			},
+			attribution: "agent",
+		} as unknown as SessionEntry;
+		const { container, root } = await mount(transcriptEl([entry]));
+
+		expect(container.querySelector(".tr-row--job")).not.toBeNull();
+		const head = container.querySelector<HTMLButtonElement>(".tr-async-job-head");
+		expect(head?.getAttribute("aria-expanded")).toBe("true");
+		const body = container.querySelector<HTMLElement>(".tr-async-job-collapse");
+		expect(body).not.toBeNull();
+
+		await act(async () => head?.click());
+		expect(head?.getAttribute("aria-expanded")).toBe("false");
+		// The body stays mounted so the collapse can animate both ways.
+		expect(container.querySelector(".tr-async-job-collapse")).not.toBeNull();
+
+		await act(async () => root.unmount());
+	});
+});
