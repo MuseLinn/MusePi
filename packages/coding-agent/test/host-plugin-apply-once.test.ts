@@ -260,13 +260,13 @@ describe("host plugin mount contract", () => {
 	it("rejects a conflicting service mount and cleans its effects", async () => {
 		const source = (name: string) => `export const name = "${name}";
 			export const inject = [];
-			export const provide = ["shared"];
+			export const provide = ["${name}-extra", "shared"];
 			export function apply(ctx) {
 				globalThis.__musepiHostApplied = [...(globalThis.__musepiHostApplied ?? []), "${name}"];
 				ctx.effect(() => {
 					globalThis.__musepiHostRejectedCleanups = (globalThis.__musepiHostRejectedCleanups ?? 0) + 1;
 				});
-				return { shared: { name: "${name}" } };
+				return { ["${name}-extra"]: { name: "${name}-extra" }, shared: { name: "${name}" } };
 			}`;
 		await Bun.write(hostEntry, source("fixture-a"));
 		await writePackage(
@@ -278,7 +278,10 @@ describe("host plugin mount contract", () => {
 		await ensureHostPlugins(process.cwd());
 
 		const applied = (globalThis as Record<string, unknown>).__musepiHostApplied as string[];
+		expect(applied).toHaveLength(2);
 		expect(getHostService<{ name: string }>("shared")).toMatchObject({ name: applied[0] });
+		expect(getHostService(`${applied[0]}-extra`)).toMatchObject({ name: `${applied[0]}-extra` });
+		expect(getHostService(`${applied[1]}-extra`)).toBeUndefined();
 		expect((globalThis as Record<string, unknown>).__musepiHostRejectedCleanups).toBe(1);
 	});
 

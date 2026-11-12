@@ -204,8 +204,22 @@ function recordFor(entryPath: string, cwd: string, module: unknown, mounted: Mou
 		// the fiber (a host subscribes to the service object directly).
 		reloadable: !serviceNames(mounted).includes("hmr"),
 	};
-	publishServices(record);
-	return record;
+	try {
+		publishServices(record);
+		return record;
+	} catch (error) {
+		for (const dispose of record.serviceDisposers.splice(0)) {
+			try {
+				dispose();
+			} catch (disposeError) {
+				logger.warn("host plugin service unpublish failed", {
+					entry: record.entryPath,
+					error: String(disposeError),
+				});
+			}
+		}
+		throw error;
+	}
 }
 
 /** Mount one entry (shared by the first load and a reload). */
