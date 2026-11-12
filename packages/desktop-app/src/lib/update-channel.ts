@@ -1,4 +1,4 @@
-import { setUpdateChannel } from "./electron";
+import { setUpdateChannel, type UpdateChannel } from "./electron";
 import type { RpcClient } from "./rpc";
 import { onSettingsChanged } from "./settings-events";
 
@@ -8,16 +8,22 @@ import { onSettingsChanged } from "./settings-events";
  * The main process cannot read daemon settings — its cold-start silent check
  * runs before any daemon exists — so the renderer pushes the value on load
  * and after every settings commit, and the updater persists the last choice
- * for the next launch. Returns the unsubscribe function.
+ * for the next launch. `apply` is the shell bridge, injectable so a test can
+ * observe the mirror without installing a global `electronAPI`.
+ *
+ * Returns the unsubscribe function.
  */
-export function syncUpdateChannel(rpc: RpcClient): () => void {
+export function syncUpdateChannel(
+	rpc: RpcClient,
+	apply: (channel: UpdateChannel) => unknown = setUpdateChannel,
+): () => void {
 	let alive = true;
 	const push = (): void => {
 		void rpc
 			.request<Record<string, unknown> | null>("settings.get", { keys: ["update.channel"] })
 			.then(values => {
 				if (!alive) return;
-				void setUpdateChannel(values?.["update.channel"] === "beta" ? "beta" : "stable");
+				void apply(values?.["update.channel"] === "beta" ? "beta" : "stable");
 			})
 			.catch(() => {});
 	};
