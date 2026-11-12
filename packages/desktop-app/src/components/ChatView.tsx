@@ -28,6 +28,7 @@ import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
 import { browserPanelDescriptor } from "../lib/browser-panel-tabs";
+import { companionMoodFromSession, companionStateFromSignals, thinkingOrbStateFromSession } from "../lib/companion";
 import type { ComposerAttachApi } from "../lib/composer-attach";
 import { redirectKeyToComposer, redirectPasteToComposer } from "../lib/composer-input-redirect";
 import {
@@ -51,7 +52,6 @@ import { type JumpTarget, resolveJumpEntryId } from "../lib/jump-target";
 import { EMPTY_TRUSTED_WALK, filterVisibleEntries, walkLeafPath } from "../lib/leaf-walk";
 import { dispatchNotification } from "../lib/notify";
 import { toolPanelTabDescriptor } from "../lib/panel-tabs";
-import { moodFromState, orbFromSession, stateFromSignals } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import { rasterizeToBlob } from "../lib/rasterize";
 import type { RpcClient } from "../lib/rpc";
@@ -867,7 +867,7 @@ export function ChatView({
 	// into entries at message_start — no separate ghost is kept). Pending
 	// tool approvals pin `waiting` (the "paused for you" wave) — shared
 	// helper with the header so both avatars tell the same story.
-	const orb = orbFromSession(snap);
+	const orb = thinkingOrbStateFromSession(snap);
 	// Avatar display toggle lives in Settings → appearance (musepi-gui-avatars).
 	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
 	// Resizable terminal dock (drag the top edge).
@@ -3500,18 +3500,22 @@ export function ChatView({
 												<Composer
 													working={snap?.working ?? false}
 													entries={snap?.entries ?? []}
-													petMood={moodFromState({
+													companionMood={companionMoodFromSession({
 														working: snap?.working ?? false,
 														streaming: snap?.streaming ?? false,
 														hasApprovals: (snap?.approvals.length ?? 0) > 0,
 													})}
-													petState={stateFromSignals({
+													companionState={companionStateFromSignals({
 														working: snap?.working ?? false,
 														streaming: snap?.streaming ?? false,
 														approvals: snap?.approvals.length ?? 0,
 													})}
 													onSend={sendAndCloseJump}
 													onStop={() => void handleStop()}
+													onOpenBackgroundJobs={() => {
+														setActiveView("jobs");
+														if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+													}}
 													rpc={rpc}
 													sessionId={store.sessionId}
 													cwd={store.cwd}

@@ -1050,6 +1050,22 @@ export function ContextPanel({
 					</div>
 				)}
 			</div>
+		) : bodyView === "jobs" ? (
+			/* Background jobs (composer chip target): JobPane owns its own
+			 * polling and output tail; this wrapper only supplies the scroll
+			 * box the panel body expects. */
+			snap?.sessionId && rpc ? (
+				<div className="min-h-0 flex-1 overflow-y-auto">
+					<JobsPane rpc={rpc} sessionId={snap.sessionId} visible={open} />
+				</div>
+			) : (
+				<div className="gui-pane-tab-empty">
+					<span className="gui-pane-tab-empty-icon">
+						<Icon name="task" />
+					</span>
+					<p className="gui-pane-tab-empty-title">{t("general.sessionRequired")}</p>
+				</div>
+			)
 		) : bodyView === "trajectory" ? (
 			/* Trajectory renders OUTSIDE the feather-scroll (browser/git
 			 * parity): its root is a flex-1 column with its own scroll list —

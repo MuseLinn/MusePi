@@ -45,6 +45,7 @@ import {
 } from "../lib/welcome-greeting";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
+import { CompanionArt, useCompanionArt } from "./CompanionArt";
 import {
 	fmtQuotaDuration,
 	type UsageActiveAccountView,
@@ -76,6 +77,7 @@ import {
 	retargetMentionTokens,
 	spliceMentionToken,
 } from "./composer/mention-token";
+import { insertPastedPlainText } from "./composer/paste-text";
 import { QuoteCards } from "./composer/quote-cards";
 import { StartFromPicker } from "./composer/start-from-picker";
 import { TemplateRail } from "./composer/template-rail";
@@ -96,7 +98,6 @@ import { autosize } from "./composer-autosize";
 import { HeightMorph } from "./HeightMorph";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
-import { PetSprite, usePet } from "./PetSprite";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
 import { SketchPad } from "./SketchPad";
@@ -260,7 +261,7 @@ export function WelcomeComposer({
 	/** Chat drop-anchor handoff: the anchor stages OS files here. */
 	attachApiRef?: ComposerAttachRef;
 }): ReactNode {
-	const pet = usePet();
+	const pet = useCompanionArt();
 	const [text, setText] = useState("");
 	// Hour-of-day clock: re-renders only when the greeting bracket flips
 	// (早上好→下午好…), so the TextMorph greeting rolls over at the
@@ -1755,9 +1756,9 @@ export function WelcomeComposer({
 							pet={
 								pet.enabled && pet.mode === "input"
 									? ({ hovered, hopping }) => (
-											<PetSprite
+											<CompanionArt
 												mood={hopping ? "dragging" : hovered ? "hover" : "rest"}
-												pet={pet.pet}
+												art={pet.art}
 												size={34}
 												gloss={pet.decor.gloss}
 												accessory={pet.decor.accessory}
@@ -2177,6 +2178,7 @@ export function WelcomeComposer({
 											// Any pasted file becomes a chip (session-composer
 											// parity); plain text falls through to the
 											// textarea / long-paste gate.
+											const pastedText = e.clipboardData.getData("text");
 											const files = [...e.clipboardData.items]
 												.filter(i => i.kind === "file")
 												.map(i => i.getAsFile())
@@ -2184,9 +2186,11 @@ export function WelcomeComposer({
 											if (files.length > 0) {
 												e.preventDefault();
 												void addFiles(files);
+												// Mixed clipboard: the file became a chip, so keep
+												// the text half the default insertion lost.
+												insertPastedPlainText(taRef.current, pastedText);
 												return;
 											}
-											const pastedText = e.clipboardData.getData("text");
 											if (isLongPastedText(pastedText)) {
 												e.preventDefault();
 												requestLongPaste(pastedText);

@@ -53,6 +53,7 @@ export {
  *  blur-in wordmark reveal, shiny text sweep, cursor spotlight card and the
  *  interactive dot-matrix brand mark. The desktop app imports these from
  *  here instead of keeping local copies. */
+export { AsyncJobBar } from "./components/shell/AsyncJobBar";
 export { BlurText } from "./components/shell/BlurText";
 export { ConnectScreen, type ConnectScreenProps } from "./components/shell/ConnectScreen";
 export { DotMatrixMark } from "./components/shell/DotMatrixMark";
@@ -149,6 +150,14 @@ export {
 	ttlFor,
 	WARNING_TOAST_TTL_MS,
 } from "./lib/action-toast";
+export {
+	type AsyncJobItem,
+	type AsyncJobsSnapshot,
+	type JobsRpc,
+	jobStartMs,
+	jobTypeLabel,
+	useAsyncJobs,
+} from "./lib/async-jobs";
 export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
 export { loadMarketplaceDetailPreference, saveMarketplaceDetailPreference } from "./lib/marketplace-preferences";

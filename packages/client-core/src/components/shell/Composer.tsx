@@ -16,8 +16,9 @@ import {
 	X,
 } from "lucide-react";
 import type { ClipboardEvent, DragEvent, KeyboardEvent, ReactNode, RefObject } from "react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import type { JobsRpc } from "../../lib/async-jobs";
 import { attachmentReferenceLine, composePromptWithAttachments, uploadAttachment } from "../../lib/attachment-upload";
 import { useBackLayer } from "../../lib/back-stack";
 import { isMobileShell } from "../../lib/capacitor";
@@ -36,6 +37,7 @@ import { useGuestSelector } from "../../lib/use-guest";
 import type { VoiceCapture } from "../../lib/voice";
 import { startVoiceCapture, transcribeAudio } from "../../lib/voice";
 import { shouldShowChatLoading } from "../transcript/render-units";
+import { AsyncJobBar } from "./AsyncJobBar";
 import { ContextRing } from "./ContextRing";
 import { MatrixLoader } from "./MatrixLoader";
 import { MessageQueueSheet, useMessageQueue } from "./MessageQueueSheet";
@@ -899,6 +901,7 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 	const compacting = useGuestSelector(client, s => s.compacting);
 	const showWorking = shouldShowChatLoading({ working: busy, approvalPending, askPending, compacting });
 	const queue = useMessageQueue(client);
+	const jobsRpc = useMemo<JobsRpc>(() => ({ request: (method, params) => client.rpc(method, params) }), [client]);
 	const [queueOpen, setQueueOpen] = useState(false);
 	// Empty-state draft suggestions: show only while the
 	// session is live, editable and has nothing to show yet.
@@ -1267,6 +1270,7 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 				</div>
 			)}
 			{(ttsSnap.phase !== "idle" || ttsSnap.guide || ttsSnap.error !== null) && <TtsBar snap={ttsSnap} tts={tts} />}
+			<AsyncJobBar client={jobsRpc} sessionId={focusedSessionId} />
 			<div className="sh-composer-inner" data-layout={layout} data-expanded={expanded}>
 				<div className="sh-composer-editor">
 					{voice.kind === "guide" ? (

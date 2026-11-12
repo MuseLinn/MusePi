@@ -6168,3 +6168,218 @@
 	max-width: 480px;
 	margin: 0 auto;
 }
+
+/* ── Background-job HUD (AsyncJobBar) ─────────────────────────────────────
+ * The card is the readable form (command, live duration, cancel), the chip is
+ * the collapsed form. Both render only while a job runs; the caller stacks
+ * this above the composer so the input never scrolls the job out of reach. */
+.sh-jobbar {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 0 0 8px;
+}
+
+.sh-jobcard {
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: color-mix(in oklab, var(--bg-overlay, var(--bg-raised)) 92%, transparent);
+	padding: 10px 12px;
+	box-shadow: 0 8px 24px oklch(0 0 0 / 18%);
+}
+
+.sh-jobcard-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--fg);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.sh-jobcard-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sh-jobcard-collapse {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--fg-muted);
+	cursor: pointer;
+}
+
+.sh-jobcard-collapse:hover,
+.sh-jobcard-collapse:focus-visible {
+	background: var(--bg-raised);
+	color: var(--fg);
+}
+
+.sh-joblist {
+	list-style: none;
+	margin: 8px 0 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.sh-jobrow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	padding: 4px 2px;
+}
+
+.sh-jobdot {
+	flex: none;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--ok, #3fb950);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--ok, #3fb950) 18%, transparent);
+}
+
+.sh-jobdot[data-status="lost"] {
+	background: var(--err, #f85149);
+	box-shadow: none;
+}
+
+.sh-jobcmd {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	color: var(--fg);
+}
+
+.sh-jobtime {
+	flex: none;
+	color: var(--fg-faint);
+	font-family: var(--font-mono);
+	font-size: 11.5px;
+	font-variant-numeric: tabular-nums;
+}
+
+.sh-jobaction {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--fg-muted);
+	cursor: pointer;
+}
+
+.sh-jobaction:hover,
+.sh-jobaction:focus-visible {
+	background: var(--bg-raised);
+	color: var(--fg);
+}
+
+.sh-jobs-chip {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 10px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--bg-raised) 88%, transparent);
+	color: var(--fg-muted);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.sh-jobs-chip:hover,
+.sh-jobs-chip:focus-visible {
+	border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
+	color: var(--fg);
+}
+
+.sh-jobs-chip-count {
+	min-width: 16px;
+	padding: 0 5px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--accent) 22%, transparent);
+	color: var(--accent);
+	font-family: var(--font-mono);
+	font-size: 11px;
+	text-align: center;
+}
+
+/* Detail sheet (hosts without a panel tab): mobile/web only. */
+.sh-job-sheet-backdrop {
+	position: fixed;
+	inset: 0;
+	z-index: 3000;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	background: oklch(0 0 0 / 45%);
+}
+
+.sh-job-sheet {
+	width: min(720px, 100%);
+	max-height: 72vh;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 14px 16px 18px;
+	border-radius: 16px 16px 0 0;
+	background: var(--bg-raised);
+	border-top: 1px solid var(--border);
+}
+
+.sh-job-sheet-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-weight: 600;
+}
+
+.sh-job-sheet-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sh-job-sheet-meta {
+	display: flex;
+	gap: 12px;
+	color: var(--fg-faint);
+	font-size: 12px;
+}
+
+.sh-job-sheet-output {
+	margin: 0;
+	padding: 10px 12px;
+	border-radius: 10px;
+	background: var(--bg-inset, var(--bg));
+	border: 1px solid var(--border);
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--fg-muted);
+}

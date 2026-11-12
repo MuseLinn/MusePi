@@ -1,4 +1,5 @@
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
+import { AsyncJobBar } from "@musepi/client-core/src/components/shell/AsyncJobBar";
 import { normalizeQueueSnapshot, type QueueGroup, type QueueSnapshot } from "@musepi/client-core/src/lib/message-queue";
 import {
 	composeDisplayContextPrompt,
@@ -11,11 +12,11 @@ import type { SessionEntry } from "@musepi/pi-wire";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
+import type { CompanionMood, CompanionState } from "../lib/companion";
 import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
-import type { PetMood, PetState } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { onSettingsChanged } from "../lib/settings-events";
 import { sfxFor } from "../lib/sfx";
@@ -41,6 +42,7 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
 import type { SttSubmitTrigger } from "../lib/voice";
 import { AttachMenu } from "./AttachMenu";
 import { AutoresearchPanel } from "./AutoresearchPanel";
+import { CompanionArt, useCompanionArt } from "./CompanionArt";
 import { ContextRing, type SnapcompactSavingsView, type UsageQuotaView, type UsageSummaryView } from "./ContextRing";
 import {
 	EnhanceButton,
@@ -69,6 +71,7 @@ import {
 	spliceMentionToken,
 } from "./composer/mention-token";
 import { GoalChip, PlanChip } from "./composer/mode-chips";
+import { insertPastedPlainText } from "./composer/paste-text";
 import { PlanPanel } from "./composer/plan-panel";
 import { QueuePanel } from "./composer/queue-panel";
 import { QuoteCards } from "./composer/quote-cards";
@@ -110,7 +113,6 @@ import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize, MIN_ROWS } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
-import { PetSprite, usePet } from "./PetSprite";
 import { SketchPad } from "./SketchPad";
 import type { ThinkingLevel } from "./ThinkingSelector";
 
@@ -134,12 +136,12 @@ export interface ComposerProps {
 	working: boolean;
 	/** Agent companion mood (伙伴) — derived by ChatView from the session
 	 *  snapshot; the pet renders only when enabled + input mode. */
-	petMood?: PetMood;
-	/** The 31-state session reading (pet.ts PetState). Carried alongside
-	 *  `petMood` rather than replacing it: the mood still selects the
+	companionMood?: CompanionMood;
+	/** The 31-state session reading (companion.ts CompanionState). Carried alongside
+	 *  `companionMood` rather than replacing it: the mood still selects the
 	 *  spritesheet row and the CSS material class, the state selects the
 	 *  face, the body motion and the effects layer. */
-	petState?: PetState | null;
+	companionState?: CompanionState | null;
 	onSend(
 		text: string,
 		images?: { type: "image"; data: string; mimeType: string }[],
@@ -148,6 +150,8 @@ export interface ComposerProps {
 		videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
 	): void;
 	onStop(): void;
+	/** Open the right-panel background-jobs surface (host-owned tab). */
+	onOpenBackgroundJobs?(): void;
 	rpc: RpcClient;
 	sessionId: string;
 	/** Session workspace root — feeds "@" file/folder completion. */
@@ -235,10 +239,11 @@ async function enhancePrompt(prompt: string, rpc: RpcClient | null, sessionId: s
 
 export function Composer({
 	working,
-	petMood,
-	petState,
+	companionMood,
+	companionState,
 	onSend,
 	onStop,
+	onOpenBackgroundJobs,
 	rpc,
 	sessionId,
 	cwd,
@@ -263,7 +268,7 @@ export function Composer({
 	welcome,
 	attachApiRef,
 }: ComposerProps): ReactNode {
-	const pet = usePet();
+	const pet = useCompanionArt();
 	// composer 座位槽(dock / left / right):
 	// dock = 输入卡下方的整行(读数类内容,居中);left/right = 底部工具栏两端。
 	// list 语义 —— 扩展声明 composer.dock/left/right 槽位即注入组件。
@@ -1891,7 +1896,7 @@ export function Composer({
 								// `size` is only the fallback box — the docked footprint
 								// comes from `.gui-composer-pet`'s container clamp, so the
 								// face never falls below legibility and the pet never
-								// outgrows the input's edge. See PetSprite: the call site
+								// outgrows the input's edge. See CompanionArt: the call site
 								// must NOT size the builtin SVG, because an inline style
 								// outranks that clamp.
 								//
@@ -1899,19 +1904,19 @@ export function Composer({
 								// interaction set, never the same one twice in a row (see
 								// ComposerPetState.reaction). Hover stays a mood because
 								// it is ambient, not a reaction.
-								<PetSprite
-									mood={hovered ? "hover" : (petMood ?? "rest")}
+								<CompanionArt
+									mood={hovered ? "hover" : (companionMood ?? "rest")}
 									// The state is dropped while hovered: hover is a
 									// pointer state, and showing a session's thinking
 									// lights under a hover lift reads as two things
 									// happening at once.
-									state={hovered ? null : (petState ?? null)}
+									state={hovered ? null : (companionState ?? null)}
 									// The docked pet is clamped to 34–46px
 									// (.gui-composer-pet) — the bottom of the "full"
 									// tier, where every effect still resolves (the
 									// smallest ribbon is ~2.4px tall there).
 									tier="full"
-									pet={pet.pet}
+									art={pet.art}
 									size={30}
 									gloss={pet.decor.gloss}
 									accessory={pet.decor.accessory}
@@ -1981,6 +1986,10 @@ export function Composer({
 				// not inside the framed box).
 				aboveRow={
 					<div className="gui-composer-above">
+						{/* Background-job HUD (Kimi parity): the card stays reachable
+						 * above the input while a job runs; the chevron opens the
+						 * host-owned jobs tab for live output. */}
+						<AsyncJobBar client={rpc} sessionId={sessionId} onOpenDetails={() => onOpenBackgroundJobs?.()} />
 						{(modes && (todoTotal > 0 || (queued != null && queued.count > 0))) ||
 						composerLeftItems.length > 0 ||
 						activeTask ? (
@@ -2384,9 +2393,14 @@ export function Composer({
 							if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
 						}}
 						onPaste={e => {
-							onPaste(e);
-							if (e.defaultPrevented) return;
 							const pastedText = e.clipboardData.getData("text");
+							onPaste(e);
+							if (e.defaultPrevented) {
+								// The attachment branch consumed the paste; a clipboard
+								// carrying text AND an image must keep both.
+								insertPastedPlainText(taRef.current, pastedText);
+								return;
+							}
 							if (!isLongPastedText(pastedText)) {
 								largePasteGesture.invalidate();
 								return;

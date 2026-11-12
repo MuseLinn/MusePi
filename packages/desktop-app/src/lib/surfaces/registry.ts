@@ -14,6 +14,7 @@ export type SurfaceId =
 	| "files"
 	| "artifacts"
 	| "trajectory"
+	| "jobs"
 	| "git"
 	| "pr"
 	| "diff"
@@ -114,6 +115,19 @@ export const SURFACES: SurfaceDescriptor[] = [
 	},
 	// Artifacts panel (设计板 W3): discovered artifact.manifest.json sidecars
 	// in the workspace, with the entry-file viewer behind each card.
+	// Background async jobs (Kimi parity): the composer chip opens this tab;
+	// secondary so the rail keeps its primary icons while the surface stays
+	// discoverable in the overflow menu.
+	{
+		id: "jobs",
+		label: "general.backgroundJobs",
+		description: "surface description jobs",
+		icon: "task",
+		group: "secondary",
+		availability: "always",
+		requiresSession: true,
+		defaultWidthFraction: 0.5,
+	},
 	{
 		id: "artifacts",
 		label: "artifacts",
