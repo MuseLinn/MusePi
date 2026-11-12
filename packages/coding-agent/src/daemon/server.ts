@@ -43,6 +43,7 @@ import {
 	getSessionsDir,
 	logger,
 	prompt,
+	resolveReleaseChannel,
 	updateManifestUrlForVersion,
 	VERSION,
 } from "@musepi/pi-utils";
@@ -8444,6 +8445,16 @@ export class DaemonServer {
 						managedBrowserBridgeUrl() !== null
 					) {
 						out[key] = true;
+						continue;
+					}
+					// A beta build always follows the beta channel — its version is
+					// newer than the stable line, so a configured "stable" would be
+					// ignored by the updater. Echo what it actually follows.
+					if (key === "update.channel") {
+						out[key] = resolveReleaseChannel(
+							process.env.MUSEPI_VERSION ?? VERSION,
+							String(settings.get("update.channel") ?? "stable"),
+						);
 						continue;
 					}
 					out[key] = extKeys.has(key) ? settings.getRaw(key) : settings.get(key as Parameters<Settings["get"]>[0]);
