@@ -20,6 +20,7 @@ import { EditorService } from "./editor-service";
 import { EventService } from "./event-service";
 import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
+import { GitContextService } from "./git-context-service";
 import { GitWatchService } from "./git-watch-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { MarketplaceService } from "./marketplace-service";
@@ -97,6 +98,8 @@ function buildRegistry(): HostServices {
 	);
 	// GitWatchService: routes only (no roots watched in this test).
 	services.register(new GitWatchService({ broadcast: () => {} }));
+	// GitContextService: stateless read-only snapshot; only its route is claimed here.
+	services.register(new GitContextService({ cwd: () => tmpdir() }));
 	// AttachmentService：只认领路由（本测试不存取附件），blob 目录用隔离 temp。
 	services.register(
 		new AttachmentService({

@@ -1748,6 +1748,18 @@ export const log = {
 	},
 };
 
+/** Best common ancestor of two commits, or `null` when they share none. */
+export async function mergeBase(
+	cwd: string,
+	left: string,
+	right: string,
+	signal?: AbortSignal,
+): Promise<string | null> {
+	const result = await git(cwd, ["merge-base", left, right], { readOnly: true, signal });
+	if (result.exitCode !== 0) return null;
+	return result.stdout.trim() || null;
+}
+
 export const revList = {
 	/** Commits in `base..head`, oldest first. */
 	async range(cwd: string, base: string, head: string, signal?: AbortSignal): Promise<string[]> {
@@ -1758,6 +1770,29 @@ export const revList = {
 		return splitLines(
 			await runText(cwd, ["rev-list", `--max-count=${limit}`, ref, "--", file], { readOnly: true, signal }),
 		);
+	},
+	/**
+	 * Commit counts on each side of `left...right` (`--left-right --count`):
+	 * `ahead` counts commits reachable from `left` only, `behind` those reachable
+	 * from `right` only. `null` when either side does not resolve — an
+	 * unconfigured upstream is reported as absent, never as `0/0`.
+	 */
+	async aheadBehind(
+		cwd: string,
+		left: string,
+		right: string,
+		signal?: AbortSignal,
+	): Promise<{ ahead: number; behind: number } | null> {
+		const result = await git(cwd, ["rev-list", "--left-right", "--count", `${left}...${right}`], {
+			readOnly: true,
+			signal,
+		});
+		if (result.exitCode !== 0) return null;
+		const [aheadRaw, behindRaw] = result.stdout.trim().split(/\s+/);
+		const ahead = Number.parseInt(aheadRaw ?? "", 10);
+		const behind = Number.parseInt(behindRaw ?? "", 10);
+		if (!Number.isFinite(ahead) || !Number.isFinite(behind)) return null;
+		return { ahead, behind };
 	},
 };
 

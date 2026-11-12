@@ -639,6 +639,7 @@ import { EditorService } from "./services/editor-service";
 import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
+import { GitContextService } from "./services/git-context-service";
 import { GitWatchService } from "./services/git-watch-service";
 import { MarketplaceService } from "./services/marketplace-service";
 import { McpOAuthService } from "./services/mcp-oauth-service";
@@ -902,6 +903,13 @@ export class DaemonServer {
 		this.#services.register(
 			new GitWatchService({
 				broadcast: payload => this.#services.get<EventService>("events").broadcast(payload),
+			}),
+		);
+		// Session-scoped git snapshot for review surfaces (base/fork point,
+		// divergence, changed files with kinds). Stateless and read-only.
+		this.#services.register(
+			new GitContextService({
+				cwd: () => this.#host.cwd(),
 			}),
 		);
 		this.#services.register(new ViewStoreService(host.viewStore));
@@ -3885,6 +3893,15 @@ export class DaemonServer {
 					deleted,
 					fileStats,
 				};
+			}
+			case "git.context": {
+				// Normalized session git scene for review surfaces: repository and
+				// worktree identity, base branch + fork point, upstream divergence,
+				// and changed files with line counts and kinds. Delegation only —
+				// the computation lives in src/git/context.ts.
+				return this.#services
+					.get<GitContextService>("gitContext")
+					.context((params ?? {}) as Record<string, unknown>);
 			}
 			case "git.stage": {
 				// Stage paths into the index (changes panel + button).
