@@ -1196,7 +1196,6 @@ export function SessionInfoCard({
 			) : (
 				<section className="gui-session-info-connectors gui-session-info-connectors--empty flex flex-col gap-1">
 					<div className="gui-session-info-section-label">{t("tools.connectorsPanelTitle")}</div>
-					<p className="gui-session-info-note">{t("settings.mcpSettings")}</p>
 					<button
 						type="button"
 						className="gui-connector-link gui-session-info-manage-connectors self-start"

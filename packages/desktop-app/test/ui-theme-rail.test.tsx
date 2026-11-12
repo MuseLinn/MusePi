@@ -239,6 +239,49 @@ describe("FloatingScrollbar 挂载与轨道池", () => {
 		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).toBeNull();
 	});
 
+	test("1–2px 舍入噪声不画轨：measure 与探活同一阈值", async () => {
+		const el = mountScroller();
+		scrollHeight = clientHeight + 2;
+
+		userScroll(el);
+		await flushFrames();
+		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).toBeNull();
+
+		// The 600ms liveness probe must not disagree with the bind gate and
+		// retire a rail it just decided was legitimate (or vice versa).
+		await waitForProbe();
+		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).toBeNull();
+	});
+
+	test("真正超过噪声下限的溢出仍然画轨", async () => {
+		const el = mountScroller();
+		scrollHeight = clientHeight + 3;
+
+		userScroll(el);
+		await flushFrames();
+		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).not.toBeNull();
+	});
+
+	test("只有横向噪声时不出现任何轨", async () => {
+		const el = mountScroller();
+		scrollHeight = clientHeight;
+		scrollWidth = clientWidth + 2;
+
+		userScroll(el);
+		await flushFrames();
+		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).toBeNull();
+	});
+
+	test("轴级属性跟随真实滚动轴：仅竖向溢出时不暴露横向装饰", async () => {
+		const el = mountScroller();
+		userScroll(el);
+		await flushFrames();
+
+		const visible = rail();
+		expect(visible.dataset.vAxis).toBe("1");
+		expect(visible.dataset.hAxis).toBe("0");
+	});
+
 	test("容器脱离文档后轨被回收（不需要新滚动来唤醒它）", async () => {
 		const el = mountScroller();
 		userScroll(el);

@@ -37,6 +37,22 @@
 	visibility: hidden;
 	transition: opacity 240ms ease, visibility 240ms ease;
 }
+/* Axis-scoped chrome: rail.tsx writes data-v-axis / data-h-axis from the same
+ * measure that decides whether the axis can scroll. Without this, a container
+ * whose only range is a 1px horizontal rounding artifact still painted the
+ * vertical bead column and track down its right edge — a rail that can never
+ * move. */
+.gui-float-scrollbar[data-v-axis="0"] .gfs-track,
+.gui-float-scrollbar[data-v-axis="0"] .gfs-beads,
+.gui-float-scrollbar[data-v-axis="0"] .gfs-beads-eaten,
+.gui-float-scrollbar[data-v-axis="0"] .gfs-pac,
+.gui-float-scrollbar[data-v-axis="0"] .gfs-v {
+	display: none;
+}
+.gui-float-scrollbar[data-h-axis="0"] .gfs-h {
+	display: none;
+}
+
 .gui-float-scrollbar[data-visible] {
 	opacity: 1;
 	visibility: visible;

@@ -669,7 +669,10 @@
 	flex-direction: column;
 	gap: 14px;
 	min-height: 0;
-	overflow-y: auto;
+	/* `overflow-y: auto` alone computes overflow-x to `auto` as well, which made
+	 * this body a horizontal scroll container: one rounding pixel on the cross
+	 * axis raised a sideways rail in a dialog that has nothing to scroll. */
+	overflow: hidden auto;
 }
 
 .gui-project-dialog-heading {
@@ -1620,7 +1623,7 @@
 
 /* The mock composer's pet in the onboarding personalization step. It docks
  * the same way the real `.gui-composer-pet` does, so it needs the same kind
- * of box: the builtin SVG no longer carries an inline size (PetSprite), and
+ * of box: the builtin SVG no longer carries an inline size (CompanionArt), and
  * this is a fixed mock, not a live clamp — height leads at the authored
  * 16px so the ball matches what the step is illustrating. */
 .gui-obo-pers-pet > .gui-pet {
@@ -1630,7 +1633,7 @@
 }
 
 /* Desktop display mode: a separate companion scene, not an empty composer.
- * The live PetSprite and glass bubble use the same preferences and materials
+ * The live CompanionArt and glass bubble use the same preferences and materials
  * as the real desktop windows without pretending to be an OS screenshot. */
 .gui-obo-pers-desktop {
 	position: relative;

@@ -4072,32 +4072,6 @@
 	transform: translateX(-50%) translateY(0);
 }
 
-/* Output-style preview (settings → 聊天 → 聊天预览): the container is
- * scoped to [data-output-style] so the --tr-* variable overrides show
- * the exact transcript typography for the selected preset. */
-.gui-chat-preview-style {
-	margin-top: 6px;
-	padding: 12px 16px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-xl);
-	background: var(--color-surface-raised);
-	overflow: hidden;
-	/* Body text mirrors the transcript: --tr-font-size (消息字号), not the
-	 * shell font — the preview has no .tr-root ancestor to inherit it. */
-	font-size: var(--tr-font-size, 14px);
-}
-.gui-chat-preview-style .tr-md {
-	max-height: 260px;
-	overflow-y: auto;
-}
-.gui-chat-preview-desc {
-	margin-top: 1px;
-	margin-bottom: 6px;
-	font-size: 11.5px;
-	line-height: 1.4;
-	color: var(--color-text-faint);
-}
-
 /* Inline preview blocks (settings → 聊天): each preview sits directly
  * under the option it illustrates instead of a bottom-of-tab dump. */
 .gui-chat-preview-inline {
@@ -4107,8 +4081,8 @@
 	margin-top: 2px;
 }
 
-/* Typewriter demo (settings → 聊天 → 输出风格预览): looping reveal of
- * the sample paragraph under the selected preset's typography. The caret
+/* Typewriter demo (settings → 聊天 → 聊天预览): looping reveal of
+ * the sample paragraph in the transcript's typography. The caret
  * is solid while typing (live) and blinks once idle — mirroring the
  * transcript's streaming caret (tr-caret-blink is inlined with
  * guest-client's transcript.css). */

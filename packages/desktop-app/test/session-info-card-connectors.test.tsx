@@ -66,7 +66,11 @@ describe("SessionInfoCard connectors", () => {
 		const opened: Array<string | undefined> = [];
 		const container = await mount([], section => opened.push(section));
 
-		expect(container.textContent).toContain(t("settings.mcpSettings"));
+		// The empty state names the section and its action; restating the MCP
+		// description here duplicated the heading in other words.
+		expect(container.textContent).toContain(t("tools.connectorsPanelTitle"));
+		expect(container.textContent).toContain(t("settings.mcpServers"));
+		expect(container.textContent).not.toContain(t("settings.mcpSettings"));
 		const manage = container.querySelector<HTMLButtonElement>(".gui-session-info-manage-connectors");
 		expect(manage).not.toBeNull();
 

@@ -8757,14 +8757,17 @@ export class DaemonServer {
 				return out;
 			}
 			case "session.queued": {
-				// Stable row ids keep duplicate text unambiguous. `count` also
-				// includes displayable non-user work; it is not just the row total.
+				// Stable row ids keep duplicate text unambiguous. `count` is the
+				// ROW total: the chip's actions only address these rows, so a
+				// count that also included parked advisor cards / hidden next-turn
+				// notices described a queue the panel could neither show nor clear.
 				const p = (params ?? {}) as { sessionId: string };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const snapshot = live.agentSession.getQueuedMessageSnapshot();
 				return {
-					count: live.agentSession.queuedMessageCount,
-					...live.agentSession.getQueuedMessageSnapshot(),
+					count: snapshot.steering.length + snapshot.followUp.length,
+					...snapshot,
 				};
 			}
 			case "session.queuedPop": {

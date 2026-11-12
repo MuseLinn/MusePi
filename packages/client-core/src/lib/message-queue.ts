@@ -28,11 +28,12 @@ function readItems(value: unknown): QueuedMessageItem[] {
 			continue;
 		}
 		if (!isRecord(row) || typeof row.id !== "string" || typeof row.text !== "string") continue;
-		items.push({
-			id: row.id,
-			text: row.text,
-			imageCount: typeof row.imageCount === "number" && row.imageCount > 0 ? Math.floor(row.imageCount) : 0,
-		});
+		const imageCount = typeof row.imageCount === "number" && row.imageCount > 0 ? Math.floor(row.imageCount) : 0;
+		// An empty row has nothing to send, nothing to restore and nothing to
+		// show: surfacing it produced a queue chip whose panel was blank and
+		// whose rows could not be told apart from a rendering bug.
+		if (row.text.trim().length === 0 && imageCount === 0) continue;
+		items.push({ id: row.id, text: row.text, imageCount });
 	}
 	return items;
 }
@@ -43,10 +44,11 @@ export function normalizeQueueSnapshot(value: unknown): QueueSnapshot {
 	const steering = readItems(record.steering);
 	const followUp = readItems(record.followUp);
 	return {
-		count:
-			typeof record.count === "number" && record.count >= 0
-				? Math.floor(record.count)
-				: steering.length + followUp.length,
+		// Count the ROWS, not the daemon's pending-work total. The wire count
+		// also includes parked advisor cards and hidden next-turn notices,
+		// which are not rows and are not cleared by 清空队列 — trusting it left
+		// a "队列 1" chip above an empty panel that no action could dismiss.
+		count: steering.length + followUp.length,
 		paused: record.paused === true,
 		steering,
 		followUp,

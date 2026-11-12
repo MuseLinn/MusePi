@@ -203,6 +203,15 @@ function isGone(el: HTMLElement): boolean {
 const SCROLL_AXIS = new Set(["auto", "scroll", "overlay"]);
 
 /**
+ * Layout rounding leaves a pixel or two of apparent overflow on content that
+ * fits exactly (see composer-autosize.ts / composer-height-limit.ts). Below
+ * this margin a range cannot be scrolled to any meaningful offset, so it is
+ * not overflow — `measure` and `overflows` share THIS number or one of them
+ * paints a rail the other refuses to retire.
+ */
+const OVERFLOW_SLOP = 2;
+
+/**
  * Is this axis a scroll container? A box can be SHORTER than its content and
  * still not scroll: `overflow: hidden` clips. `scrollHeight` / `scrollWidth`
  * keep reporting the clipped overflow, so a geometry-only test invents a rail
@@ -219,8 +228,8 @@ function isScrollAxis(el: HTMLElement, axis: "y" | "x"): boolean {
 /** A container still overflows on at least one axis it can scroll. */
 function overflows(el: HTMLElement): boolean {
 	return (
-		(el.scrollHeight > el.clientHeight + 1 && isScrollAxis(el, "y")) ||
-		(el.scrollWidth > el.clientWidth + 1 && isScrollAxis(el, "x"))
+		(el.scrollHeight > el.clientHeight + OVERFLOW_SLOP && isScrollAxis(el, "y")) ||
+		(el.scrollWidth > el.clientWidth + OVERFLOW_SLOP && isScrollAxis(el, "x"))
 	);
 }
 
@@ -444,9 +453,10 @@ export function FloatingScrollbar(): ReactNode {
 			const vRange = el.scrollHeight - el.clientHeight;
 			const hRange = el.scrollWidth - el.clientWidth;
 			// Clipped overflow is not scrollable overflow: only a real scroll
-			// container's range may raise a thumb (see `isScrollAxis`).
-			const vScroll = vRange > 0 && isScrollAxis(el, "y");
-			const hScroll = hRange > 0 && isScrollAxis(el, "x");
+			// container's range may raise a thumb (see `isScrollAxis`), and the
+			// range has to clear the same rounding margin `overflows` uses.
+			const vScroll = vRange > OVERFLOW_SLOP && isScrollAxis(el, "y");
+			const hScroll = hRange > OVERFLOW_SLOP && isScrollAxis(el, "x");
 			if (!vScroll && !hScroll) return false;
 
 			const size = sizeRef.current;
@@ -471,7 +481,7 @@ export function FloatingScrollbar(): ReactNode {
 			// `vScale` keeps the value the rail was drawn with. Re-deriving it
 			// from a range that wobbled by a pixel or two is what made the thumb
 			// drift under a steady scroll.
-			const key = `${r.left},${r.top},${r.width},${r.height},${vRange},${hRange},${vLen},${hLen},${size},${skinRef.current.base}`;
+			const key = `${r.left},${r.top},${r.width},${r.height},${vRange},${hRange},${vLen},${hLen},${size},${skinRef.current.base},${vScroll ? 1 : 0},${hScroll ? 1 : 0}`;
 			if (rail.measureKey === key) return true;
 			const v = stackZ(el);
 			rail.measureKey = key;
@@ -481,6 +491,11 @@ export function FloatingScrollbar(): ReactNode {
 			rail.root.style.width = `${r.width}px`;
 			rail.root.style.height = `${r.height}px`;
 			rail.root.style.zIndex = String(v + 1);
+			// Axis-scoped chrome: a horizontal-only container must not paint the
+			// bead column / track parked at its right edge (rail.css keys the
+			// decorations off these attributes).
+			rail.root.dataset.vAxis = vScroll ? "1" : "0";
+			rail.root.dataset.hAxis = hScroll ? "1" : "0";
 			rail.vertical.style.height = `${Math.round(vLen)}px`;
 			rail.horizontal.style.width = `${Math.round(hLen)}px`;
 			rail.vLen = vLen;
@@ -899,6 +914,10 @@ export function FloatingScrollbar(): ReactNode {
 				// height — must not flash one. Always-visible changes how long a
 				// rail STAYS, never which containers get one.
 				if (performance.now() - lastIntentAt > INTENT_WINDOW_MS) return;
+				// Cold path, once per container: a scroll event also fires on a
+				// rounding-only range, so the bind itself has to agree with the
+				// liveness probe before it allocates a slot.
+				if (!overflows(t)) return;
 				const rail = bind(t);
 				if (!rail) return;
 				// The bind measures once: nothing about this box is known yet.
