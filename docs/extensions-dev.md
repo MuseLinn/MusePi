@@ -277,6 +277,28 @@ pi.registerSkill({
 
 **边界**:虚拟技能**不进 agent 的 loadSkills 自动装载**(那是文件扫描路径)——技能中心可见 + 可读,但不会作为上下文注入 agent;需要注入的扩展请写真实 SKILL.md 文件。
 
+## 8.1 Extension-contributed web search providers (registerSearchProvider, 2026-11-12)
+
+An extension can contribute one web search provider to the `web_search` chain. The provider joins the same registry the 18 built-ins use, so an extension provider behaves exactly like a built-in one — no second selection path.
+
+```ts
+const dispose = pi.registerSearchProvider({
+	id: "acme-search",              // never `auto`/`none`; conflicts throw
+	label: "Acme Search",
+	availability: () => Boolean(process.env.ACME_KEY),   // optional, cheap gate
+	async search(params) {          // params: query, limit, recency, signal, timeoutMs
+		const res = await fetch("https://api.acme.dev/search", { ... });
+		return { provider: "acme-search", sources: [{ title, url, snippet }] };
+	},
+});
+```
+
+**Selection order**: an explicit `provider:` wins; otherwise the user's `providers.webSearchOrder` (external ids allowed), then the built-in order, then registration order. `providers.webSearchExclude` applies everywhere; a `false` `availability` only skips the automatic chain, never an explicit choice.
+
+**Ownership**: registrations belong to the extension instance. Unload, hot reload and session shutdown release them through `unregisterSearchProvider` / the runner's release pass, and a re-registration by the same owner replaces the entry (reload-safe). Registering an id already owned by someone else throws instead of shadowing.
+
+**Boundary**: the registry is process-wide, so a provider registered by one live session is visible to the automatic chain of another live session in the same process. Per-session visibility is not implemented; use `availability` to gate on session-independent facts only.
+
 ## 9. 扩展注册魔术关键词(registerMagicKeyword,2026-10-11)
 
 扩展贡献一个**魔术关键词**:输入框里单独出现的词,提交时向模型追加一条隐藏提示。

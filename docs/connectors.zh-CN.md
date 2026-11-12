@@ -131,6 +131,7 @@ OAuth 授权仍落在 AuthStorage。MCP 客户端拥有的行（`mcp_oauth:` 与
 | `connectors.token.save` | 按 schema 校验 Token 表单值，合并进加密库，并要求所有必填字段。空值保留已存值。 |
 | `connectors.cli.status` | 为待授权流程运行 CLI `status` 命令；`success` 时启用连接器。 |
 | `connectors.cli.cancel` | 停止认证进程并忘记该流程。 |
+| `mcp.servers.probe` | 对尚未安装的连接器做一次握手后立即释放：`{ name, url?, command?, args?, headers?, auth? }` → `{ ok, serverInfo?, toolNames?, resourceCount?, promptCount?, error? }`。不进入任何会话、不缓存、不抛异常。 |
 
 `connect` 不启动 OAuth。当 `needsAuth` 为真时，客户端用返回的服务器名调用现有的 `mcp.oauth.start`；授权落在 auth storage，manager 随后重连。桌面端还会传 `redirectUri: musepi://oauth/callback`：Electron shell 注册 `musepi://`，把 URL 转给渲染器，渲染器再调 `mcp.oauth.callback`。state 与 PKCE 在 flow 内校验，因此其他应用唤起该协议也无法完成授权。当 `needsTokenConfig` 为真时，连接器不会被启用，客户端显示 Token 表单，经 `connectors.token.save` 保存后再次调用 `connect`。这样手写服务器与目录连接器共用一套 OAuth 实现和一套凭据存储。
 

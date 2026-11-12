@@ -267,6 +267,28 @@ pi.registerSkill({
 
 **边界**：虚拟技能**不进 agent 的 loadSkills 自动装载**（那是文件扫描路径）——技能中心可见 + 可读，但不会作为上下文注入 agent；需要注入的扩展请写真实 SKILL.md 文件。
 
+## 8.1 扩展贡献 Web 搜索 provider（registerSearchProvider，2026-11-12）
+
+扩展可以向 `web_search` 的候选链贡献一个搜索 provider。它进入与 18 个内置 provider 相同的注册表，所以行为完全一致——不存在第二条选择路径。
+
+```ts
+const dispose = pi.registerSearchProvider({
+	id: "acme-search",              // 不能是 `auto`/`none`；冲突会抛错
+	label: "Acme Search",
+	availability: () => Boolean(process.env.ACME_KEY),   // 可选，廉价门控
+	async search(params) {          // params: query、limit、recency、signal、timeoutMs
+		const res = await fetch("https://api.acme.dev/search", { ... });
+		return { provider: "acme-search", sources: [{ title, url, snippet }] };
+	},
+});
+```
+
+**选择顺序**：显式 `provider:` 最优先；否则走用户的 `providers.webSearchOrder`（允许写外部 id），再是内置顺序，最后是注册顺序。`providers.webSearchExclude` 对所有位置生效；`availability` 返回 `false` 只跳过自动链，不会阻止显式选择。
+
+**所有权**：注册归属扩展实例。卸载、热重载与会话关闭会经 `unregisterSearchProvider` / runner 的释放流程移除；同一 owner 重新注册是替换（对热重载安全）。注册他人已占用的 id 会抛错，而不是静默覆盖。
+
+**边界**：注册表是进程级的，因此某个存活会话注册的 provider 也会出现在同进程另一个存活会话的自动链里。按会话隔离尚未实现；`availability` 只应用于与会话无关的判断。
+
 ## 9. 扩展注册魔术关键词（registerMagicKeyword，2026-10-11）
 
 扩展贡献一个**魔术关键词**：输入框里单独出现的词，提交时向模型追加一条隐藏提示。

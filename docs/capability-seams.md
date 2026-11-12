@@ -41,6 +41,7 @@
 | 第三方 Cordis 插件适配 | `packages/coding-agent/src/extensibility/plugins/compat/modern-web-guidance-adapter.ts`（`modern_web_guidance` / 同名虚拟技能） | 同文件头部；安装缓存适配见 `third-party-cordis.ts` |
 | 外部产品子智能体 | `packages/coding-agent/src/task/types.ts`（`task.external-subagent` / `AgentDefinition.external`）、`packages/coding-agent/src/task/external-executable-probe.ts`（`probeExecutable`） | 同文件 `ExternalSubagentUpdate` 前六字段声明；探针声明见探针文件头部 |
 | 连接器目录（catalog / state / runtime projection） | `packages/coding-agent/src/daemon/services/connector-catalog-service.ts`（`connectors.catalog.*` / `connect` / `disconnect` / `setEnabled`）＋ `packages/coding-agent/src/connectors/*` | 同文件头部；MCP provider 见 `discovery/connector-catalog.ts`，agent 工具见 `tools/connector-catalog.ts`，`docs/connectors.md` |
+| Web 搜索 provider 注册表 | `packages/coding-agent/src/web/search/registry.ts`（`registerSearchProvider` / `unregisterSearchProvider` / 内置 18 项同表登记） | 同文件头部；候选链为「显式 → 用户 order → 内置顺序 → 注册顺序」，扩展注册随实例生命周期释放；`docs/extensions-dev.md` §8.1 |
 
 存量声明按「触及时顺手补」推进，不做批量回填；新增能力无声明不得过评审。
 
