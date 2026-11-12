@@ -2432,7 +2432,7 @@ export const settings = {
 	"settings.celebrateUnscheduledCodex.desc":
 		"Celebrate unscheduled Codex weekly usage resets and newly banked saved resets with a top-third fireworks overlay that remains until Escape",
 	"settings.checkEligibilityThen.info": "Check eligibility, then ask before spending the first saved reset.",
-	"settings.checkOmpUpdatesStartup": "Check for omp updates on startup",
+	"settings.checkOmpUpdatesStartup": "Check for MusePi updates on startup",
 	"settings.checkPluginUpdatesStartup": "Check for plugin updates on startup",
 	"settings.interaction.startupUpdates.checkUpdates": "Check for Updates",
 	"settings.checkStartupAutoInstall": "Check on startup and auto-install updates",
@@ -3700,8 +3700,8 @@ export const settings = {
 	"Unexpected Stops": "Unexpected Stops",
 	Unicode: "Unicode",
 	"Update Channel": "Update Channel",
-	"Update channel followed by the desktop app, omp update and the startup update check":
-		"Update channel followed by the desktop app, omp update and the startup update check",
+	"Update channel followed by the desktop app, musepi update and the startup update check":
+		"Update channel followed by the desktop app, musepi update and the startup update check",
 	Beta: "Beta",
 	"Web UI URL": "Web UI URL",
 	Widgets: "Widgets",
@@ -3828,7 +3828,7 @@ export const settings = {
 		"Status line embedded in top border, compact 2-line prompt",
 	TTSR: "TTSR",
 	"Update channel used by omp update and the startup update check":
-		"Update channel used by omp update and the startup update check",
+		"Update channel used by musepi update and the startup update check",
 	"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window":
 		"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window",
 	"User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections":
@@ -6666,7 +6666,7 @@ export const settings = {
 	"Balanced (Whisper small)": "Balanced (Whisper small)",
 	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.":
 		"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.",
-	"Check for omp updates on startup": "Check for omp updates on startup",
+	"Check for omp updates on startup": "Check for MusePi updates on startup",
 	"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)":
 		"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)",
 	"Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.":

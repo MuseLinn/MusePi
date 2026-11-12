@@ -2323,7 +2323,7 @@ export const settings = {
 	"settings.celebrateUnscheduledCodex.desc":
 		"在每周使用量重置和新存入的已保存重置时，以顶部三分之一烟花覆盖层庆祝，该层持续至按下 Escape",
 	"settings.checkEligibilityThen.info": "检查资格，然后在花费第一个已保存的重置前询问。",
-	"settings.checkOmpUpdatesStartup": "启动时检查 omp 更新",
+	"settings.checkOmpUpdatesStartup": "启动时检查 MusePi 更新",
 	"settings.checkPluginUpdatesStartup": "启动时检查插件更新",
 	"settings.interaction.startupUpdates.checkUpdates": "检查更新",
 	"settings.checkStartupAutoInstall": "启动时检查并自动安装更新",
@@ -3517,8 +3517,8 @@ export const settings = {
 	"Unexpected Stops": "意外中止",
 	Unicode: "Unicode 字符",
 	"Update Channel": "更新通道",
-	"Update channel followed by the desktop app, omp update and the startup update check":
-		"桌面端、omp update 与启动时更新检查共同遵循的更新通道",
+	"Update channel followed by the desktop app, musepi update and the startup update check":
+		"桌面端、musepi update 与启动时更新检查共同遵循的更新通道",
 	Beta: "测试版",
 	"Web UI URL": "Web 界面地址",
 	Widgets: "组件",
@@ -3621,7 +3621,7 @@ export const settings = {
 		"上下文接近压缩阈值时后台先做投机摘要，越过阈值后把就绪结果拼接进来",
 	"Status line embedded in top border, compact 2-line prompt": "状态线内嵌顶边框，紧凑两行提示符",
 	TTSR: "TTSR",
-	"Update channel used by omp update and the startup update check": "omp update 与启动时更新检查使用的更新通道",
+	"Update channel used by omp update and the startup update check": "musepi update 与启动时更新检查使用的更新通道",
 	"Use premium long-context windows on models that bill extra past a threshold (e.g. GPT-5.6 1M charges 2x input above 272K); off caps them at the standard-pricing window":
 		"对超过阈值加价的长上下文窗口使用premium档（如 GPT-5.6 1M 在 272K 以上输入按 2 倍计费）；关闭则限制在标准定价窗口",
 	"User-level system-prompt sections ({name, order, text}); applied to every session, overriding same-named preset sections":
@@ -6377,7 +6377,7 @@ export const settings = {
 	"Balanced (Whisper small)": "均衡（Whisper small）",
 	"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.":
 		"Base directory for agent-managed worktrees — task-isolation copies, `github` PR checkouts, and `omp worktree` cleanup all live here. Unset uses ~/.musepi/wt. Must be an absolute or ~-relative path; relative paths are ignored. The MusePi_WORKTREE_DIR env var overrides this.",
-	"Check for omp updates on startup": "启动时检查 omp 更新",
+	"Check for omp updates on startup": "启动时检查 MusePi 更新",
 	"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)":
 		"Choose in-place context-full maintenance, auto-handoff, surgical shake (drop heavy content), snapcompact (archive history as dense images), or disable auto maintenance (off)",
 	"Classifier for unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.":
