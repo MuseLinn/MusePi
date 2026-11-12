@@ -114,6 +114,23 @@ export function catchupRecordsPlan(
  *  journal scan. */
 const TAIL_SEQ_READ_BYTES = 64 * 1024;
 
+/** Read a complete window unless EOF intervenes, returning only initialized bytes. */
+async function readWindow(
+	handle: fs.promises.FileHandle,
+	buffer: Buffer,
+	offset: number,
+	length: number,
+	position: number,
+): Promise<number> {
+	let total = 0;
+	while (total < length) {
+		const { bytesRead } = await handle.read(buffer, offset + total, length - total, position + total);
+		if (bytesRead === 0) break;
+		total += bytesRead;
+	}
+	return total;
+}
+
 const rewriteLocks = new Map<string, Promise<void>>();
 function withRewriteLock(filePath: string, fn: () => Promise<void>): Promise<void> {
 	const prev = rewriteLocks.get(filePath) ?? Promise.resolve();
@@ -218,8 +235,8 @@ export class AppendJournal {
 			const { size } = await fd.stat();
 			const scan = async (from: number, length: number): Promise<number> => {
 				const buf = Buffer.alloc(length);
-				await fd.read(buf, 0, length, from);
-				const lines = buf.toString("utf8").split("\n");
+				const bytesRead = await readWindow(fd, buf, 0, length, from);
+				const lines = buf.subarray(0, bytesRead).toString("utf8").split("\n");
 				for (let i = lines.length - 1; i >= 0; i--) {
 					const line = lines[i].trim();
 					if (!line) continue;
@@ -461,8 +478,8 @@ export class AppendJournal {
 			for (;;) {
 				const want = completeEnd - from;
 				const buf = Buffer.allocUnsafe(want);
-				await handle.read(buf, 0, want, from);
-				const chunk = buf.toString("utf8");
+				const bytesRead = await readWindow(handle, buf, 0, want, from);
+				const chunk = buf.subarray(0, bytesRead).toString("utf8");
 				const lines = chunk.split("\n");
 				// Line 0 starts mid-record unless this window is the whole file,
 				// and a record whose head is missing cannot be recognised, so it
@@ -488,8 +505,8 @@ export class AppendJournal {
 			const start = found === -1 ? 0 : found;
 			const want = completeEnd - start;
 			const buf = Buffer.allocUnsafe(want);
-			await handle.read(buf, 0, want, start);
-			return { text: buf.toString("utf8"), startByte: start, bytesRead: want };
+			const bytesRead = await readWindow(handle, buf, 0, want, start);
+			return { text: buf.subarray(0, bytesRead).toString("utf8"), startByte: start, bytesRead };
 		} finally {
 			await handle.close();
 		}
@@ -511,8 +528,8 @@ export class AppendJournal {
 			const want = Math.min(TAIL_SCAN_CHUNK, end);
 			const start = end - want;
 			const buf = Buffer.allocUnsafe(want);
-			await handle.read(buf, 0, want, start);
-			const newline = buf.subarray(0, want).toString("utf8").lastIndexOf("\n");
+			const bytesRead = await readWindow(handle, buf, 0, want, start);
+			const newline = buf.subarray(0, bytesRead).toString("utf8").lastIndexOf("\n");
 			if (newline !== -1) return start + newline + 1;
 			end = start;
 		}
