@@ -187,16 +187,6 @@ export function AppearanceSection({
 		() => (localStorage.getItem("musepi-gui-motion") as "full" | "reduced" | "off") ?? "full",
 	);
 	const [inlineImages, setInlineImages] = useState<boolean>(() => localStorage.getItem("musepi-gui-images") !== "0");
-	// The output-style preset is chosen on the 聊天 page; this page previews it.
-	// Both read the same key, so the two sections cannot disagree about which
-	// typography the sample is showing.
-	const [outputStyle] = useState<string>(() => {
-		try {
-			return localStorage.getItem("musepi-gui-chat-output-style") ?? "muse";
-		} catch {
-			return "muse";
-		}
-	});
 	const [fontScale, setFontScale] = useState<number>(() =>
 		Number(localStorage.getItem("musepi-gui-font-scale") ?? 15),
 	);
@@ -544,7 +534,7 @@ export function AppearanceSection({
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("general.effectsPreview")}</div>
 				<div className="gui-settings-section-desc">{t("general.effectsPreviewDescription")}</div>
-				<MockConversationPreview showAvatars={showAvatars} outputStyle={outputStyle} streamingDemo />
+				<MockConversationPreview showAvatars={showAvatars} streamingDemo />
 			</div>
 			{/* ── 图片 — the GUI inline-images toggle + the daemon schema's
 			 * Images group (auto-resize / block images) in one place. ── */}

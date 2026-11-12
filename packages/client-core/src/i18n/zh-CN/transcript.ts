@@ -16,6 +16,9 @@ export const transcript = {
 	"transcript.ircShowMore": "展开全文",
 	"transcript.ircShowLess": "收起",
 	// ── 后台任务结算卡 ────────────────────────────────────────────────────────
+	"transcript.thinkingInProgress": "思考中",
+	"transcript.thinkingProcess": "思考过程",
+	"transcript.thinkingDone": "思考完成",
 	"transcript.asyncJobCompleted": "已完成",
 	"transcript.asyncJobFailed": "失败",
 	"transcript.asyncJobCancelled": "已取消",

@@ -56,6 +56,16 @@ import { UpdateToast } from "./components/UpdateToast";
 import { type ActionToastInput, pushActionToast } from "./lib/action-toast";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { writeBrowserSettingsTab } from "./lib/browser-preferences";
+import type { CompanionSessionCard } from "./lib/companion";
+import {
+	activeCompanionArt,
+	companionEnabled,
+	companionMoodFromSession,
+	companionPlacement,
+	companionScale,
+	companionStateFromSignals,
+} from "./lib/companion";
+import { applyCompanionPalette, resolvedAccent } from "./lib/companion-palette";
 import {
 	daemonMethodProbeParams,
 	isMissingDaemonExtensionError,
@@ -74,9 +84,6 @@ import { ensureLiquidGlass } from "./lib/liquid-glass";
 import { watchManagedBrowserBridge } from "./lib/managed-browser-bridge";
 import { dispatchNotification } from "./lib/notify";
 import { installPanelMaximizeController } from "./lib/panel-maximize";
-import type { PetSessionCard } from "./lib/pet";
-import { activePet, moodFromState, petEnabled, petMode, petScale, stateFromSignals } from "./lib/pet";
-import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
 import { railPeekEligible, resolveSidebarPanel } from "./lib/rail-peek";
 import { grantRemoteAccessConsent, hasRemoteAccessConsent } from "./lib/remote-access-consent";
@@ -86,11 +93,11 @@ import { captureSelectionContext, captureSelectionText } from "./lib/selection-c
 import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
 import { buildSessionMarkdown, markdownFileName } from "./lib/session-markdown";
 import {
+	type CompanionBubbleKind,
 	clearRoundDurations,
 	clearUnviewedCompletions,
-	dispatchPetActivity,
+	dispatchCompanionActivity,
 	GuiSessionStore,
-	type PetBubbleKind,
 } from "./lib/session-store";
 import {
 	adjacentTabId,
@@ -460,15 +467,9 @@ function AppInner(): ReactNode {
 			// 显示) since the chat tab merged into 外观 (2026-08-12). ChatView
 			// syncs the class from settings.get, so the old localStorage key
 			// must not re-apply a stale value at startup.
-			// Output style preset (settings → 聊天 → 输出风格): the same key
-			// the segmented picker writes, mirrored onto <html> at startup so
-			// the choice survives relaunches.
-			const outputStyle = localStorage.getItem("musepi-gui-chat-output-style");
-			document.documentElement.dataset.outputStyle =
-				outputStyle === "kimi" || outputStyle === "zcode" ? outputStyle : "default";
 			// 消息字号 (settings → 外观 → 消息字号): --tr-font-size drives the
-			// transcript body ladder (headings/code scale off it in
-			// transcript.css); output-style presets no longer set sizes.
+			// transcript body ladder. Rhythm (line height, row padding, paragraph
+			// gaps) is fixed in transcript.css — it is not a user preference.
 			const trFontSize = localStorage.getItem("musepi-gui-chat-font-size");
 			if (trFontSize) document.documentElement.style.setProperty("--tr-font-size", `${trFontSize}px`);
 			// Typing effect preset (settings → 聊天 → 逐字动效): NOT applied
@@ -504,11 +505,11 @@ function AppInner(): ReactNode {
 		const { electronAPI } = window as unknown as {
 			electronAPI?: { petActivity?(payload: unknown): Promise<unknown> };
 		};
-		// Themed pet palette (pet-palette.ts): derive the orb's shell/ring/
+		// Themed pet palette (companion-palette.ts): derive the orb's shell/ring/
 		// face colors from the resolved --accent at startup, on every scheme
 		// or accent-axis flip (the observer below), and push the accent to
 		// the pet window alongside the theme so the floating pet matches.
-		applyPetPalette(root);
+		applyCompanionPalette(root);
 		const push = (): void => {
 			applyGlassMaterial(localStorage.getItem("musepi-gui-glass-enabled") !== "0");
 			void electronAPI?.petActivity?.({
@@ -980,14 +981,14 @@ function AppInner(): ReactNode {
 							dispatchNotification("error", {
 								lastMessage: `${taskName}${run.error ? ` · ${run.error}` : ""}`,
 							});
-							dispatchPetActivity("error", `${taskName}${run.error ? ` · ${run.error}` : ""}`);
+							dispatchCompanionActivity("error", `${taskName}${run.error ? ` · ${run.error}` : ""}`);
 						} else {
 							dispatchNotification("completion", {
 								agentName: taskName,
 								modelName: t("settings.scheduledTasks"),
 								lastMessage: taskName,
 							});
-							dispatchPetActivity("completed", `${t("tools.scheduledTasksCompleted")}: ${taskName}`);
+							dispatchCompanionActivity("completed", `${t("tools.scheduledTasksCompleted")}: ${taskName}`);
 						}
 						// Glow the sidebar 定时任务 button for 20s.
 						setCronGlow(true);
@@ -1473,7 +1474,7 @@ function AppInner(): ReactNode {
 					electronAPI?: { petActivity?(p: unknown): Promise<unknown> };
 				}
 			).electronAPI;
-			if (petEnabled() && petMode() === "desktop") {
+			if (companionEnabled() && companionPlacement() === "desktop") {
 				void api?.petActivity?.({ dismissSessions: ids });
 			}
 		} catch {
@@ -2187,7 +2188,7 @@ function AppInner(): ReactNode {
 							electronAPI?: { petActivity?(p: unknown): Promise<unknown> };
 						}
 					).electronAPI;
-					if (petEnabled() && petMode() === "desktop") {
+					if (companionEnabled() && companionPlacement() === "desktop") {
 						void api?.petActivity?.({ dismissSessions: [sessionId] });
 					}
 				} catch {
@@ -2703,7 +2704,7 @@ function AppInner(): ReactNode {
 				return refs.length > 0 ? `${refs.join("\n")}\n\n${text}`.trim() : text;
 			} catch (err) {
 				const msg = `${t("composer.attachmentUploadFailed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`;
-				dispatchPetActivity("error", msg);
+				dispatchCompanionActivity("error", msg);
 				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: msg }));
 				return null;
 			}
@@ -2906,17 +2907,17 @@ function AppInner(): ReactNode {
 					.then(res => {
 						if (!res) return;
 						if (res.cancelled) {
-							dispatchPetActivity("error", t("composer.bashCommandCancelled"));
+							dispatchCompanionActivity("error", t("composer.bashCommandCancelled"));
 							return;
 						}
 						const summary = t("composer.bashExitedCodeWithCodeWithLines", {
 							code: res.exitCode === null ? "?" : String(res.exitCode),
 							lines: String(res.totalLines),
 						});
-						dispatchPetActivity(res.exitCode === 0 ? "completed" : "error", summary);
+						dispatchCompanionActivity(res.exitCode === 0 ? "completed" : "error", summary);
 						dispatchNotification("completion", { lastMessage: summary });
 					})
-					.catch(() => dispatchPetActivity("error", t("composer.bashCommandFailed")));
+					.catch(() => dispatchCompanionActivity("error", t("composer.bashCommandFailed")));
 				return;
 			}
 			if (guidedMatch) {
@@ -2935,7 +2936,7 @@ function AppInner(): ReactNode {
 						...(opts?.videos && opts.videos.length > 0 ? { videos: opts.videos } : {}),
 					});
 				} catch (err) {
-					dispatchPetActivity(
+					dispatchCompanionActivity(
 						"error",
 						`${t("general.guidedGoalFailed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
 					);
@@ -2959,12 +2960,12 @@ function AppInner(): ReactNode {
 									: res?.reason === "skill-not-found"
 										? t("composer.skillNotFound")
 										: t("composer.unknownSlashCommand");
-							dispatchPetActivity("error", msg);
+							dispatchCompanionActivity("error", msg);
 							return;
 						}
 						const out = (res.outputs ?? []).filter(Boolean).join("\n");
 						if (out) {
-							dispatchPetActivity("completed", out.slice(0, 200));
+							dispatchCompanionActivity("completed", out.slice(0, 200));
 							dispatchNotification("completion", {
 								lastMessage: out.slice(0, 140),
 							});
@@ -2992,7 +2993,7 @@ function AppInner(): ReactNode {
 						...(opts.videos && opts.videos.length > 0 ? { videos: opts.videos } : {}),
 					});
 				} catch (err) {
-					dispatchPetActivity(
+					dispatchCompanionActivity(
 						"error",
 						`${t("general.guidedGoalFailed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
 					);
@@ -3344,7 +3345,7 @@ function AppInner(): ReactNode {
 			activeToolName: string | null = null,
 			activeLastMessage: string | null = null,
 			liveWorking: boolean | null = null,
-		): PetSessionCard[] => {
+		): CompanionSessionCard[] => {
 			const findLabel = (nodes: SessionListNode[], id: string): string | null => {
 				for (const n of nodes) {
 					if (n.entry.id === id) return n.entry.label ?? n.label ?? null;
@@ -3353,7 +3354,7 @@ function AppInner(): ReactNode {
 				}
 				return null;
 			};
-			const cards: PetSessionCard[] = [];
+			const cards: CompanionSessionCard[] = [];
 			const unread = unreadSessionsRef.current;
 			const selected = selectedIdRef.current;
 			for (const [id, meta] of sessionMetaRef.current) {
@@ -3399,7 +3400,7 @@ function AppInner(): ReactNode {
 			return cards.slice(0, 6);
 		};
 		const pushState = (force = false): void => {
-			if (!petEnabled() || petMode() !== "desktop") return;
+			if (!companionEnabled() || companionPlacement() !== "desktop") return;
 			const snap = store?.getSnapshot();
 			if (!snap) return;
 			const now = Date.now();
@@ -3438,15 +3439,15 @@ function AppInner(): ReactNode {
 		};
 		petPushRef.current = () => pushState(true);
 		const pushMood = (): void => {
-			if (!petEnabled() || petMode() !== "desktop") return;
+			if (!companionEnabled() || companionPlacement() !== "desktop") return;
 			const snap = store?.getSnapshot();
 			if (!snap) return;
-			const mood = moodFromState({
+			const mood = companionMoodFromSession({
 				working: snap.working,
 				streaming: snap.streaming,
 				hasApprovals: snap.approvals.length > 0,
 			});
-			const state = stateFromSignals({
+			const state = companionStateFromSignals({
 				working: snap.working,
 				streaming: snap.streaming,
 				approvals: snap.approvals.length,
@@ -3454,7 +3455,7 @@ function AppInner(): ReactNode {
 			if (mood !== lastMood || state !== lastPetState) {
 				lastMood = mood;
 				lastPetState = state;
-				void electronAPI.petActivity?.({ mood, petState: state });
+				void electronAPI.petActivity?.({ mood, companionState: state });
 			}
 		};
 		let unsub: (() => void) | null = null;
@@ -3525,10 +3526,10 @@ function AppInner(): ReactNode {
 		};
 		attach();
 		const onBubble = (e: Event): void => {
-			if (!petEnabled() || petMode() !== "desktop") return;
+			if (!companionEnabled() || companionPlacement() !== "desktop") return;
 			const detail = (
 				e as CustomEvent<{
-					kind: PetBubbleKind;
+					kind: CompanionBubbleKind;
 					text: string;
 					requestId?: string;
 					sessionId?: string;
@@ -3570,7 +3571,7 @@ function AppInner(): ReactNode {
 			}
 		};
 		const onPetChanged = (): void => {
-			const want = petEnabled() && petMode() === "desktop";
+			const want = companionEnabled() && companionPlacement() === "desktop";
 			void electronAPI.setPetVisible?.(want);
 			if (!want) {
 				lastMood = null;
@@ -3580,11 +3581,11 @@ function AppInner(): ReactNode {
 				pushState(true);
 				// Size slider changes live in the pet window too (the pet
 				// window cannot hear localStorage writes from this window).
-				void electronAPI.petActivity?.({ scale: petScale() });
+				void electronAPI.petActivity?.({ scale: companionScale() });
 				// Nor the petdex registry — push the active pet descriptor
 				// (builtin id or full package) so imported theme packages
 				// render in the floating pet (2026-09-21 regression fix).
-				void electronAPI.petActivity?.({ pet: activePet() });
+				void electronAPI.petActivity?.({ pet: activeCompanionArt() });
 			}
 			syncRecentPoll();
 		};
@@ -3594,7 +3595,7 @@ function AppInner(): ReactNode {
 		// always-on 15s interval would wake the renderer even on machines
 		// that never enable the pet.
 		const pushRecent = (): void => {
-			if (!petEnabled() || petMode() !== "desktop") return;
+			if (!companionEnabled() || companionPlacement() !== "desktop") return;
 			const walk = (nodes: SessionListNode[]): { id: string; label: string; timestamp: number }[] => {
 				const rows: { id: string; label: string; timestamp: number }[] = [];
 				for (const n of nodes) {
@@ -3622,7 +3623,7 @@ function AppInner(): ReactNode {
 		};
 		let recentTimer: ReturnType<typeof setInterval> | null = null;
 		const syncRecentPoll = (): void => {
-			const want = petEnabled() && petMode() === "desktop";
+			const want = companionEnabled() && companionPlacement() === "desktop";
 			if (want && recentTimer === null) {
 				pushRecent();
 				recentTimer = setInterval(pushRecent, 15_000);
@@ -3671,7 +3672,7 @@ function AppInner(): ReactNode {
 			pushState(true);
 			// The pet window (re)loaded — its localStorage carries no petdex
 			// state: re-push the active pet descriptor alongside the rest.
-			void electronAPI.petActivity?.({ pet: activePet() });
+			void electronAPI.petActivity?.({ pet: activeCompanionArt() });
 		});
 		// Pet-panel commands: quick reply → the active session (same
 		// steer/followUp semantics as the composer); with no active session

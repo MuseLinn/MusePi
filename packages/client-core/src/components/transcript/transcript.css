@@ -15,7 +15,7 @@
 	padding: 12px 16px 24px;
 	font-family: var(--font-ui);
 	font-size: var(--tr-font-size, 14px);
-	line-height: var(--tr-line-height, 1.5);
+	line-height: var(--tr-line-height, 1.45);
 	color: var(--fg);
 }
 
@@ -55,7 +55,7 @@
 	 * old 72px+12px left margin pushed messages far from the avatar. */
 	grid-template-columns: 40px minmax(0, 1fr);
 	gap: 0 10px;
-	padding: var(--tr-row-pad, 6px) 0;
+	padding: var(--tr-row-pad, 4px) 0;
 	/* NO `content-visibility: auto` here: rows change height asynchronously
 	 * (widget iframes report their height after mount, images decode, expand/
 	 * collapse morphs run). While Chromium skips such a row it sizes it from
@@ -91,7 +91,7 @@
 }
 
 .tr-row--assistant .tr-body {
-	gap: 8px;
+	gap: 6px;
 }
 
 .tr-body > .tr-md {
@@ -879,21 +879,6 @@ button.tr-display-context-source:hover {
 	animation: none;
 }
 
-/* Settled first-line preview: the collapsed row names WHAT was reasoned
- *  about. */
-.tr-think-preview {
-	flex: 1 1 auto;
-	min-width: 0;
-	font-size: 12.5px;
-	font-style: normal;
-	font-weight: 400;
-	color: var(--fg-faint);
-	max-width: min(60ch, 100%);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 @keyframes tr-label-shine {
 	0%,
 	18% {
@@ -1178,7 +1163,7 @@ button.tr-display-context-source:hover {
  * possible, but still emergency-break long URLs or identifiers before they
  * overflow the transcript. */
 .tr-md {
-	line-height: var(--tr-md-lh, 1.55);
+	line-height: var(--tr-md-lh, 1.45);
 	overflow-wrap: break-word;
 	word-break: keep-all;
 }
@@ -1192,7 +1177,7 @@ button.tr-display-context-source:hover {
 }
 
 .tr-md p {
-	margin: var(--tr-para-gap, 6px) 0;
+	margin: var(--tr-para-gap, 4px) 0;
 }
 
 .tr-md p,
@@ -1206,7 +1191,7 @@ button.tr-display-context-source:hover {
 .tr-md h4,
 .tr-md h5,
 .tr-md h6 {
-	margin: var(--tr-heading-gap, 14px) 0 6px;
+	margin: var(--tr-heading-gap, 12px) 0 6px;
 	font-weight: 600;
 	line-height: 1.3;
 }
@@ -1303,7 +1288,7 @@ button.tr-display-context-source:hover {
 
 /* Fenced code blocks now carry a header (language tag + copy button). */
 .tr-code {
-	margin: var(--tr-code-gap, 8px) 0;
+	margin: var(--tr-code-gap, 6px) 0;
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
 	overflow: hidden;
@@ -2959,33 +2944,6 @@ a.tr-tool-search-title:hover {
 	}
 }
 
-/* ---- 输出风格预设 (output style presets) ----
- * Settings → 聊天 → 输出风格: the picker sets [data-output-style] on
- * <html> (applied at startup from localStorage). Each preset overrides
- * ONLY the --tr-* rhythm/spacing variables — font sizes (正文/标题/代码)
- * are driven by 消息字号 (--tr-font-size on <html>, set by the settings
- * stepper), so picking a style never changes reading size.
- *   default — the tuned MusePi rhythm (values above are the defaults)
- *   kimi    — compact, dense reading (tight rows, close paragraph gaps)
- *   zcode   — relaxed reading (airier paragraphs/headings) */
-[data-output-style="kimi"] {
-	--tr-line-height: 1.45;
-	--tr-row-pad: 4px;
-	--tr-md-lh: 1.45;
-	--tr-para-gap: 4px;
-	--tr-heading-gap: 12px;
-	--tr-code-gap: 6px;
-}
-
-[data-output-style="zcode"] {
-	--tr-line-height: 1.65;
-	--tr-row-pad: 8px;
-	--tr-md-lh: 1.65;
-	--tr-para-gap: 8px;
-	--tr-heading-gap: 16px;
-	--tr-code-gap: 10px;
-}
-
 /* 流式光标开关 (settings → 聊天 → 流式光标): OFF adds gui-chat-no-caret
  * on <html> and hides the blinking caret on the streaming block. */
 .gui-chat-no-caret .tr-md--streaming.gui-chat-effect-typewriter::after {
@@ -4051,8 +4009,8 @@ a.tr-tool-search-title:hover {
 	 * column (openchamber puts TurnActivity in the message body), so it inherits
 	 * the message alignment for free. */
 	width: 100%;
-	margin: 6px 0 2px;
-	padding: 5px 10px;
+	margin: 0;
+	padding: 4px 10px;
 	border: 1px solid var(--border, color-mix(in oklab, var(--fg) 12%, transparent));
 	border-radius: var(--radius-lg);
 	white-space: nowrap;
@@ -4196,6 +4154,31 @@ a.tr-tool-search-title:hover {
 	z-index: 4;
 	height: 0;
 	pointer-events: none;
+}
+
+/* Agent row of the pinned turn: the orb sits in the transcript's 40px gutter
+ * column, so the prompt pill beside it keeps the message body's left edge. */
+.tr-sticky-user-slot--agent {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+}
+
+.tr-sticky-agent {
+	flex: none;
+	display: flex;
+	justify-content: flex-end;
+	width: 40px;
+	padding-top: 8px;
+	pointer-events: none;
+}
+
+/* Narrow shells stack rows (gutter above the body), so the orb column has no
+ * body edge to align with; the pill keeps the full width it needs there. */
+@media (max-width: 640px) {
+	.tr-sticky-user-slot--agent .tr-sticky-agent {
+		display: none;
+	}
 }
 
 .tr-sticky-user {
@@ -4683,4 +4666,49 @@ a.tr-tool-search-title:hover {
 		min-height: 44px;
 		padding: 6px 12px;
 	}
+}
+
+/* Background completion card, user-side anchor: the card keeps the user
+ * bubble's right edge (the row's gutter column stays the shared 28px rail),
+ * and its body folds from the status line. */
+/* Right-anchored row with the user bubble's right edge (the 28px rail matches
+ * .tr-row--user), but its own kind: a background delivery is not a prompt and
+ * must not join .tr-row--user queries (TurnRail, attachment cards). */
+.tr-row--job {
+	grid-template-columns: 40px minmax(0, 1fr) 28px;
+}
+
+.tr-row--job .tr-body {
+	align-items: flex-end;
+}
+
+.tr-row--job .tr-async-job {
+	width: min(100%, 46rem);
+}
+
+.tr-async-job-head {
+	width: 100%;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.tr-async-job-chev {
+	flex: none;
+	margin-left: auto;
+	color: var(--fg-faint);
+	transition: transform 160ms var(--spring, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.tr-async-job-chev--open {
+	transform: rotate(90deg);
+}
+
+.tr-async-job-collapse {
+	width: 100%;
+	overflow: hidden;
 }

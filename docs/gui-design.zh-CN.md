@@ -167,21 +167,21 @@ lang: zh-CN
 
 ### 伙伴(Agent Companion,BitFun parity,2026-08-06)
 
-- **默认形象：内置球体品牌伙伴（2026-11-05）**：`DEFAULT_PET_ID = BUILTIN_SVG_ID`（`musepi-note-bot`），由 `PetSprite.tsx` 的内置分支绘制手绘球体——`.gui-pet-svg__shell` 加 `lib/pet-face.ts` 的表情层（眼动追踪、眨眼、31 态情绪）、`lib/pet-decor.ts` 的 `headphones` 配饰，以及 `pet-gesture` 按压/拖拽弹簧；这张脸的 `happy` 环也是应用与站点 Logo 的表情来源。设置与首次启动的列表以它开头，其后是全部 Petdex 精灵图预设；显式保存的选择优先，未知 id 回落到球体。`ThinkingOrb` 画布不是伙伴形象——它仍是智能体头像与顶栏活动指示器。
-- **两种绘制模式（2026-11-08）**：伙伴只有两个渲染器，且选择本身不保存模式。`PetMode = "vector" | "sprite"` 由解析出的 id 推导——`modeForPackage` 把 `format:"svg"` 映射到 vector、sheet/atlas 映射到 sprite，内置球体是 vector。设置页与首次启动先选模式，网格只显示该模式的形象；雪碧图导入只在 sprite 下出现，vector 列出内置球体与 SVG 导入。切换模式会恢复该模式上次的选择（`musepi-gui-pet-vector-id` / `musepi-gui-pet-sprite-id`），`musepi-gui-pet-id` 仍是唯一活动选择，所以模式出现之前存下的数据按推导归位，不需要迁移写入。
-- **预置**:10 个内置 Petdex 预置(`src/lib/pet.ts` 的 `BUILTIN_PETDEX`,sprite 在 `public/pets/`,768×936 = 8×9 网格,96×104 帧,来源 BitFun MIT)。设置页网格按「已导入 → 预设」分组;卡片 = rest 帧缩略图(`zoom: 0.66` 缩放,不裁 transform 动画)+ 名称 + 描述 2 行截断;选中卡 accent 边框 + 14px check(`gui-pet-card__check` 必须显式 width/height——Icon 组件无默认尺寸,漏写会渲染成 219px)。
+- **默认形象：内置球体品牌伙伴（2026-11-05）**：`DEFAULT_COMPANION_ART_ID = BUILTIN_VECTOR_ART_ID`（`musepi-note-bot`），由 `CompanionArt.tsx` 的内置分支绘制手绘球体——`.gui-pet-svg__shell` 加 `lib/companion-face.ts` 的表情层（眼动追踪、眨眼、31 态情绪）、`lib/companion-decor.ts` 的 `headphones` 配饰，以及 `pet-gesture` 按压/拖拽弹簧；这张脸的 `happy` 环也是应用与站点 Logo 的表情来源。设置与首次启动的列表以它开头，其后是全部 Petdex 精灵图预设；显式保存的选择优先，未知 id 回落到球体。`ThinkingOrb` 画布不是伙伴形象——它仍是智能体头像与顶栏活动指示器。
+- **两种绘制模式（2026-11-08）**：伙伴只有两个渲染器，且选择本身不保存模式。`CompanionArtFormat = "vector" | "sprite"` 由解析出的 id 推导——`artFormatForPackage` 把 `format:"svg"` 映射到 vector、sheet/atlas 映射到 sprite，内置球体是 vector。设置页与首次启动先选模式，网格只显示该模式的形象；雪碧图导入只在 sprite 下出现，vector 列出内置球体与 SVG 导入。切换模式会恢复该模式上次的选择（`musepi-gui-pet-vector-id` / `musepi-gui-pet-sprite-id`），`musepi-gui-pet-id` 仍是唯一活动选择，所以模式出现之前存下的数据按推导归位，不需要迁移写入。
+- **预置**:10 个内置 Petdex 预置(`src/lib/companion.ts` 的 `BUILTIN_SPRITE_PRESETS`,sprite 在 `public/pets/`,768×936 = 8×9 网格,96×104 帧,来源 BitFun MIT)。设置页网格按「已导入 → 预设」分组;卡片 = rest 帧缩略图(`zoom: 0.66` 缩放,不裁 transform 动画)+ 名称 + 描述 2 行截断;选中卡 accent 边框 + 14px check(`gui-pet-card__check` 必须显式 width/height——Icon 组件无默认尺寸,漏写会渲染成 219px)。
 - **形象选择**:`.gui-pet-trigger` 行显示当前伙伴缩略图 + 名称 + 箭头(展开翻转);预览缩略图用 `zoom: 0.55`。删除按钮只出现在导入卡,hover 显现,`stopPropagation` 防选中。
-- **渲染形态**(PetSprite.tsx + gui.css):`.gui-petdex-sprite` 必须 `image-rendering: pixelated`;帧循环 + 每 mood 一个 transform 动画(`PETDEX_MOOD_ANIM`:rest 2.4s+breathe、working 1.16s+work bob、hover 1.44s+lift、dragging 0.96s+wiggle),两者同时挂同一元素(不同属性不冲突);mood 行映射 rest=0/hover=1/dragging=2/error=5/waiting=6/working=7/analyzing=8。内置球体不使用 Petdex 的悬停/拖拽行和方向镜像：指针速度驱动独立的连续手势层，产生倾斜、拉伸、提起与阻尼落地；该层与会话动作、交互动效和眼动组合。
+- **渲染形态**(CompanionArt.tsx + gui.css):`.gui-petdex-sprite` 必须 `image-rendering: pixelated`;帧循环 + 每 mood 一个 transform 动画(`SPRITE_MOOD_ANIM`:rest 2.4s+breathe、working 1.16s+work bob、hover 1.44s+lift、dragging 0.96s+wiggle),两者同时挂同一元素(不同属性不冲突);mood 行映射 rest=0/hover=1/dragging=2/error=5/waiting=6/working=7/analyzing=8。内置球体不使用 Petdex 的悬停/拖拽行和方向镜像：指针速度驱动独立的连续手势层，产生倾斜、拉伸、提起与阻尼落地；该层与会话动作、交互动效和眼动组合。
 - **显式状态图集**：`format:"atlas"` 导入包声明帧几何和命名行，不再硬套旧版 8×9 网格。标准行是 `idle`、`running_left`、`running_right`、`working`、`waiting`、`failed`、`idle_random_1`、`idle_random_2`；额外命名行是双击桌面伙伴播放的一次性动作，不占用标准状态。拖拽直接选择对应方向的动画，不重复镜像；空闲动作播放完回到实时会话行；指针、睡眠和会话状态保持优先。包还可提供低饱和气泡配色，但只有三个六位 hex 齐全且前景／背景对比度至少 4.5:1 时才采用；错误／问题语义和默认玻璃几何仍由应用管理。
-- **尺寸归一化与大小调节**(2026-08-06):所有 Petdex 形象按 **rest 行内容高度统一渲染**(`PET_CONTENT_TARGET_H = 100`,k = 100/contentH)——导入包的帧尺寸各异(Doraemon 192×208 vs 内置 96×104),不归一化会 2 倍大小、阴影溢出画布。contentH 来源:内置走 `BUILTIN_PETDEX.contentH`(实测写死),导入包 import 时 `measurePetdex()` 测量,旧包由 `migratePetdexContent()`(usePet 挂载时)自动补测回写。**伙伴大小滑块**(设置 → 伙伴,`musepi-gui-pet-scale` 60–150%,默认 100)乘在归一化之上;桌面宠物窗口由主窗口桥 `pet-activity {scale}` 推送(跨窗口 localStorage 不可靠),输入框内宠物直接读 pref。
+- **尺寸归一化与大小调节**(2026-08-06):所有 Petdex 形象按 **rest 行内容高度统一渲染**(`PET_CONTENT_TARGET_H = 100`,k = 100/contentH)——导入包的帧尺寸各异(Doraemon 192×208 vs 内置 96×104),不归一化会 2 倍大小、阴影溢出画布。contentH 来源:内置走 `BUILTIN_SPRITE_PRESETS.contentH`(实测写死),导入包 import 时 `measurePetdex()` 测量,旧包由 `migratePetdexContent()`(useCompanionArt 挂载时)自动补测回写。**伙伴大小滑块**(设置 → 伙伴,`musepi-gui-pet-scale` 60–150%,默认 100)乘在归一化之上;桌面宠物窗口由主窗口桥 `pet-activity {scale}` 推送(跨窗口 localStorage 不可靠),输入框内宠物直接读 pref。
 - **窗口与阴影边界**：宠物窗口固定为 320×290（`PET_WINDOW_SIZE`），宠物锚定 `bottom: 52px`，并保留足够的投影空间。窗口包含 sprite 和唯一的气泡模式／数量控件。会话卡片位于独立、按内容定尺的 `bubbles.html` 窗口，底边与 sprite 保持 8px 间距，限制在当前工作区内，并随宠物移动。空气泡栈会隐藏该窗口。单击不再打开交互面板。
 - **气泡栈**：临时通知最多 5 条（`MAX_VISIBLE_BUBBLES`），非问题通知 8 秒后自动消失。卡片使用 20px 圆角、自绘玻璃材质和宽高双轴形变。三种模式为 `stacked`（优先卡片加「N more」标记）、`expanded`（完整列表）和 `hidden`（只保留桌宠旁的数量控件）。点击折叠卡片正文展开列表；点击展开卡片正文打开对应会话并保持列表展开，通知则打开主窗口。独立的 ↗ 按钮打开会话或主窗口。回复、打开、批准、拒绝、停止、关闭和清除操作不会触发卡片正文。桌宠旁的控件是唯一模式开关，按 `expanded → stacked → hidden → stacked` 循环。
 - **气泡通知生命周期**：真正的新完成／出错活动或可操作请求只置顶一次；重复快照保留当前优先项，也不会重新打开计数状态。关闭记忆按会话活动版本或请求 id 隔离：相同活动保持关闭，后续新回合可以重新出现。完成会话卡片的 ✓ 会在主窗口把该会话标记已读，并同步实时提醒、侧栏和桌宠角标。单卡 × 或清除全部只影响本地气泡，不会把会话标记已读，也不会替用户批准或拒绝请求。审批只能由用户显式决定。
 - **气泡材质与动效**：卡片、装饰背层、清除胶囊、快捷操作、回复框和计数表面复用共享 `--glass-*` 材质。收起态的近层与远层背卡不参与交互，布局尺寸与 320px 优先卡片一致。344px 外层气泡栈在两侧各保留 12px 阴影空间，保证窗口宽度稳定且控件不被裁切。宽高形变与入场使用 `--spring-liquid`，短促控件反馈使用 `--spring-snappy`。减少动态效果时立即显示完整文字，并跳过入场和尺寸形变动画。
 - **主会话可见性**：桌宠气泡、托盘会话项和欢迎页提醒只列主会话，不显示顾问会话与子会话。跳过辅助会话树节点时仍保留其主会话后代；审批收集仍覆盖辅助会话。
-- **引导页个性化使用真实桌宠预览**：矢量球体位于第一项，其后是内置 Petdex 预设和导入包。每个选项渲染真实的 `PetSprite`；光泽和配饰控制只适用于矢量球体。右侧预览跟随所选桌宠和装饰。输入框模式显示挂靠输入框的桌宠；桌面模式显示独立桌宠与玻璃气泡。
+- **引导页个性化使用真实桌宠预览**：矢量球体位于第一项，其后是内置 Petdex 预设和导入包。每个选项渲染真实的 `CompanionArt`；光泽和配饰控制只适用于矢量球体。右侧预览跟随所选桌宠和装饰。输入框模式显示挂靠输入框的桌宠；桌面模式显示独立桌宠与玻璃气泡。
 - **气泡快捷操作**：鼠标悬停或键盘焦点进入卡片时，操作按钮按横向单行显示。操作行按实际按钮数量确定宽度，包括未读卡片常驻的操作；气泡窗口仍保持固定宽度。
-- **气泡 kind 区分**：`bubble.kind`（`completed`／`error`／`question`／`subtask`，`lib/pet.ts`）通过 `--pet-kind` 设置大写 kind 标签（`.pet-bubble__kind`，zh/en i18n `pet bubble kind *`）的颜色。卡片不显示左侧强调色条纹，也不为其预留内边距。`error` 与 `question` 额外给边框上色（55% mix）；未知 kind 不生成标签，避免误导。
+- **气泡 kind 区分**：`bubble.kind`（`completed`／`error`／`question`／`subtask`，`lib/companion.ts`）通过 `--pet-kind` 设置大写 kind 标签（`.pet-bubble__kind`，zh/en i18n `pet bubble kind *`）的颜色。卡片不显示左侧强调色条纹，也不为其预留内边距。`error` 与 `question` 额外给边框上色（55% mix）；未知 kind 不生成标签，避免误导。
 - **桌宠常驻普通窗口之上,但给全屏让路(2026-09-19)**:桌宠是桌面伙伴,所以常驻置顶层——但「行为得体」由三条规范定义,且三条都用户可见。① **不能下沉**。置顶断言在可见期间每 5s 重施加一次,因为 Windows 会在边缘吸附与睡眠唤醒时降级该层级且永不恢复;层级用 `pop-up-menu`(高于任务栏级 UI),不是 `floating`。② **不能抢全屏**。当别的应用占满屏幕——游戏、视频、演示——桌宠在该应用退出前退出置顶层,退出后回来。这是「伙伴」与「骚扰」的分界,而且必须对**别人的**应用生效,不能只管自家窗口。桌面本身永远不算全屏:点壁纸、Alt-Tab 都不许把桌宠赶走。③ **必须能回来**。拔掉显示器、DPI 变化、笔记本睡眠唤醒,都不许把桌宠留在屏幕外、被不可见地 cloak、或尺寸错乱(看着被放大、且每睡一次就更大一圈,是用户报成「坏掉了」的那种失败)。以上任一情况之后,桌宠回到合理位置,但**若用户是特意把它停在一个可达处,就不得移动它**——DPI 事件不是给用户手放位置重新居中的许可。
 - **宠物手势与睡眠**：单击播放问候动画并将主窗口置前；双击随机播放一种交互，且不重复上一次选择。会话卡片提供回复、停止、确认和打开操作；审批卡片提供批准/拒绝操作，并在待审批期间保留全局 `Ctrl/Cmd+Shift+Y/N` 热键。连续 60 秒没有手势或任务活动后，sprite 调暗并漂浮「z z z」（`.pet-window__pet--sleeping`）；任何手势或 mood 变化都会唤醒。
 
@@ -364,8 +364,8 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 ## 5j. 桌宠眼动、pet 头像预设与主题跟随色板(2026-09-19)
 
 - **眼动跟随(gaze)**:builtin 球的眼睛现在跟着鼠标走——clawd-on-desk 同款能力,也是让球体丰富的状态设计真正值钱的那个交互。桌面桌宠由主进程**复用既有的 120ms 点击穿透轮询**顺带算好"光标相对窗口中心"的归一化向量(`pet:gaze`:420css-px 视距夹到 ±1,0.02 死区节流,零新增定时器)推给渲染进程;引擎以注意力缓动(220ms 渐入 / 380ms 渐出、120ms 滑动时间常数)把实时目标与自带的闲视漂移混合——"注意到你"但不抽搐,保留闲时性格;镜像态(挂靠左侧/拖拽翻面)在写入侧对 x 取反,视线永远对着真实光标。
-- **Agent 头像 pet 预设 + 状态绑定**:设置 → 常规 → Agent 头像新增"桌宠小球"预设(`avatar-presets.tsx` `PetAvatar`)——把桌面那只球放进头像槽,眼睛同样跟随光标。该预设**退出空闲效果轮播**:表情直接绑定会话状态(`ORB_TO_PET_MOOD`:composing→working,searching/solving/shaping→analyzing,listening→rest)。缺状态才是真正的病根——头部与聊天视图此前各自用一份重复的三元式派生 orb、都漏了待审批;`orbFromSession`(lib/pet.ts)成为单一来源,有工具审批待处理时头像钉在新增的第 7 态 `waiting`(wave 动画,钉住不轮播——"暂停等你"),桌面桌宠同步切 waiting 表情。
-- **主题跟随色板**:球体此前的石墨壳+品牌金配色只在默认金色主题下成立——ocean 蓝主题下金圈金眼配冷蓝球像三种凑在一起的颜色。现在壳/圈/眼/边缘光/眼辉的绘制全部从实时 `--accent` 派生:chroma.js 只负责解析 accent token,派生本身是纯 oklch 通道算术,值以 `oklch()` 字符串交付、由 Chromium 做色域映射(出 gamut 的亮 tint 保色相降色度)。`pet-palette.ts` 在启动时、data-theme/data-accent 切换时、以及桌宠窗口收到 `petActivity {theme, accent}` 推送时把 8 个变量(`--gui-pet-shell-a/b/c`、`--gui-pet-gold-a/b/c`、`--gui-pet-rim`、`--gui-pet-glow`)写上文档根。默认金色主题下与旧写死配色几乎重合(身份不变);mono 近中性 accent 经染色下限仍有色调。error 脸保留 `--color-danger`(球上唯一的红)。
+- **Agent 头像 pet 预设 + 状态绑定**:设置 → 常规 → Agent 头像新增"桌宠小球"预设(`avatar-presets.tsx` `CompanionAvatar`)——把桌面那只球放进头像槽,眼睛同样跟随光标。该预设**退出空闲效果轮播**:表情直接绑定会话状态(`THINKING_ORB_TO_SPRITE_MOOD`:composing→working,searching/solving/shaping→analyzing,listening→rest)。缺状态才是真正的病根——头部与聊天视图此前各自用一份重复的三元式派生 orb、都漏了待审批;`thinkingOrbStateFromSession`(lib/companion.ts)成为单一来源,有工具审批待处理时头像钉在新增的第 7 态 `waiting`(wave 动画,钉住不轮播——"暂停等你"),桌面桌宠同步切 waiting 表情。
+- **主题跟随色板**:球体此前的石墨壳+品牌金配色只在默认金色主题下成立——ocean 蓝主题下金圈金眼配冷蓝球像三种凑在一起的颜色。现在壳/圈/眼/边缘光/眼辉的绘制全部从实时 `--accent` 派生:chroma.js 只负责解析 accent token,派生本身是纯 oklch 通道算术,值以 `oklch()` 字符串交付、由 Chromium 做色域映射(出 gamut 的亮 tint 保色相降色度)。`companion-palette.ts` 在启动时、data-theme/data-accent 切换时、以及桌宠窗口收到 `petActivity {theme, accent}` 推送时把 8 个变量(`--gui-pet-shell-a/b/c`、`--gui-pet-gold-a/b/c`、`--gui-pet-rim`、`--gui-pet-glow`)写上文档根。默认金色主题下与旧写死配色几乎重合(身份不变);mono 近中性 accent 经染色下限仍有色调。error 脸保留 `--color-danger`(球上唯一的红)。
 
 ## 5k. 桌宠交互轴、白脸与 footer 液态玻璃胶囊(2026-09-20)
 
@@ -375,9 +375,9 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **审批胶囊色圈是共享 class 的 bug**:`.gui-approval` 同时被审批**卡片**(`ApprovalCard.tsx`,它画 `--color-warning-soft` 是正当的)和 footer 胶囊(`approval-mode-button.tsx`)使用。卡片那条规则给无边框胶囊底下画了一整个警告色胶囊。修法是加 `--pill` 修饰类清掉 padding/radius/background(`padding: 0; border-radius: 0; background: transparent`),而不是把共享类改透明。**教训:改共享 class 前先 grep 全部使用点。**
 - **停靠球尺寸**:`.gui-composer-pet` 的 clamp 从 `44px…60px` 收窄到 `34px…46px`。60px 时球比 composer 整行第一排还高,读起来像"粘在窗口上的一颗球";34–46 既在脸还能解析的区间内(眼胶囊 ≥4px、嘴描边 ≥0.75px),又明显从属于它所停靠的框。
 - **黑球有两个成因**:(1) SVG 壳渐变的写死 fallback 是冷板岩色(`#4a5768/#26303d/#0e141c`)、不是 accent 派生——色板生效前的每一帧都画黑球;现在回落到达尔文本就该产出的深色 accent 石墨(`#7d7159/#453a24/#1c1408`)。(2) `app.tsx` 只在 `MutationObserver` 上推送 accent 色板,而它**首次加载从不触发**——桌宠窗口在用户换主题前收不到任何 accent。该 effect 现在挂载时也会先推一次。
-- **脸在任何主题下都是白的**(`pet-palette.ts`):眼与嘴不再跟随 `--gui-pet-gold-a/b`。随主题变脸意味着 ocean 主题下蓝眼睛配蓝球,脸不再从壳上分离出来。白色守住了吉祥物唯一需要的可读性规则——**球上最亮的东西永远是脸**——主题则由圈来承载,一眼仍能看出配色。新增两个变量(`--gui-pet-face`、`--gui-pet-face-glow`),光晕是中性的所以永不染白脸。error 脸保留 `--color-danger`(唯一的那点红)。
+- **脸在任何主题下都是白的**(`companion-palette.ts`):眼与嘴不再跟随 `--gui-pet-gold-a/b`。随主题变脸意味着 ocean 主题下蓝眼睛配蓝球,脸不再从壳上分离出来。白色守住了吉祥物唯一需要的可读性规则——**球上最亮的东西永远是脸**——主题则由圈来承载,一眼仍能看出配色。新增两个变量(`--gui-pet-face`、`--gui-pet-face-glow`),光晕是中性的所以永不染白脸。error 脸保留 `--color-danger`(唯一的那点红)。
 - **眼动幅度**:`GAZE_TRAVEL` 从 13.2/8.4 提到 20.5/13.5(face 单位,眼睛环本身约 26 单位宽,±13 只像轻推不像注视),桌宠窗口的 `PET_GAZE_RANGE_CSS` 从 420 收到 260(视距过宽会把有效偏转带压缩进范围的头三分之一),头像预设的 `GAZE_RANGE_PX` 从 120 放宽到 150。
-- **新增:桌宠交互轴**(`pet-face.ts` / `pet-motion.ts`):`PetInteraction` 是**第二条轴**——`startled` / `delighted` / `curious` / `dozing` / `peek`——刻意不并进 `PetMood`。`PetMood` 是 store 写入的会话契约;一次戳弄绝不能被持久化、必须按自己的时钟释放、并且要回落到实时 agent 状态。所以反应是**叠在状态之上**的:引擎按解析出的方向取数据,而 svg 同时带两个 class,好让状态那层的纯 CSS 材质(error 的红眼、hover 的增亮辉光)在反应期间不被重置。`INTERACTION_MOTION` 是全系统唯一允许"闹"的身体运动(戳弄类反应带 `enter` 过冲),因为它们由用户手势触发、约一秒内结束。
+- **新增:桌宠交互轴**(`companion-face.ts` / `companion-motion.ts`):`CompanionInteraction` 是**第二条轴**——`startled` / `delighted` / `curious` / `dozing` / `peek`——刻意不并进 `CompanionMood`。`CompanionMood` 是 store 写入的会话契约;一次戳弄绝不能被持久化、必须按自己的时钟释放、并且要回落到实时 agent 状态。所以反应是**叠在状态之上**的:引擎按解析出的方向取数据,而 svg 同时带两个 class,好让状态那层的纯 CSS 材质(error 的红眼、hover 的增亮辉光)在反应期间不被重置。`COMPANION_INTERACTION_MOTION` 是全系统唯一允许"闹"的身体运动(戳弄类反应带 `enter` 过冲),因为它们由用户手势触发、约一秒内结束。
   - **composer 桌宠**:戳一下是 startled,900ms 内快速补一下变成 delighted——`ComposerPetState.pokes` 携带连击计数。hover 仍属状态(它是氛围不是反应);旧的拿 `dragging` 冒充戳弄已删除。
   - **桌面桌宠**:戳弄类反应保持 `POKE_HOLD_MS` 1400;新增两个闲时桥段——进入 60s 睡眠闩锁前 40s 开始 `dozing`(让入睡是渐睡而非硬切),以及每 12–26s 一次的 `peek`/`curious` "被抓包"桥段。反应会让位于实时手势与睡眠。
   - 测试:`test/pet-interaction.test.ts`(11 条)钉住这条轴的边界——数据成对完整、两轴名字不冲突、没有 mood 偷偷长出 `enter`、startled 不眨眼(惊到一半眨眼像在抛媚眼)、dozing 是全系统最慢的呼吸。
@@ -386,17 +386,17 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 
 本轮由三条用户反馈驱动:重启后输入框上的小球**仍然**过大(但换任何其他头像都正常)、吉祥物积累了一堆没人要的装饰、设置页的头像行只能切换、什么都区分不出来。
 
-- **输入框上的小球尺寸从来就不是 CSS 定的。** `PetSprite` 的内置分支在 `.gui-pet` 上写了 inline 的 `width: size * scale` / `height: size * scale * (VIEW_H / VIEW_W)`。**inline 样式优先级高于任何样式表规则**,所以 `.gui-composer-pet` 的容器 clamp(§5k 加的 `34px…46px`)**一直没生效**,小球按创作尺寸渲染——dock 在输入框上沿时就是"一个巨大的球卡在窗口上"。其他头像预设走的是 petdex 分支(`PetdexSprite` 自带帧几何)或手绘 `<svg>`,从不经过这条路径,这正是"换其他头像就正常"的原因。**教训:样式表规则看起来没生效时,先排查 inline 声明,再回头调规则。** 这个 clamp 是第三次修这个症状——前两次都在给一个被覆盖的 CSS 重新调参。
+- **输入框上的小球尺寸从来就不是 CSS 定的。** `CompanionArt` 的内置分支在 `.gui-pet` 上写了 inline 的 `width: size * scale` / `height: size * scale * (VIEW_H / VIEW_W)`。**inline 样式优先级高于任何样式表规则**,所以 `.gui-composer-pet` 的容器 clamp(§5k 加的 `34px…46px`)**一直没生效**,小球按创作尺寸渲染——dock 在输入框上沿时就是"一个巨大的球卡在窗口上"。其他头像预设走的是 petdex 分支(`SpriteSheetArt` 自带帧几何)或手绘 `<svg>`,从不经过这条路径,这正是"换其他头像就正常"的原因。**教训:样式表规则看起来没生效时,先排查 inline 声明,再回头调规则。** 这个 clamp 是第三次修这个症状——前两次都在给一个被覆盖的 CSS 重新调参。
 - **尺寸契约**(`gui-pet.css`):一个盒子,两种尺寸来源,而"关键的那个数"永远由宿主提供。
   - `width` 主导 → `.gui-composer-pet`(容器 clamp),高度由 `aspect-ratio`(`--gui-pet-ratio`,即 SVG 自身的 `VIEW_W / VIEW_H`)跟随。
   - `--gui-pet--h` 让高度主导 → `.gui-avatar-pet`(调用点传 `--gui-pet-size`:工具栏/顶栏 20、聊天 64)与 `.pet-window__pet`(`--gui-pet-window-scale`,即大小滑杆)。
   - `--gui-pet-fallback`(旧的 `size` prop,改为自定义属性透传)是宿主既不给宽也不给高时的兜底,保证形象永远不会塌成 0。**调用点绝不能再给 `.gui-pet` 写真实的 `width`。**
-  - `PetAvatar`(聊天头像)采用高度主导还有第二个原因:转录网格为助手头像预留了 **40px gutter**,一个多余的 inline 64px 会溢出布局给它留出的那一列。**定尺寸的槽位必须由槽位来决定尺寸。**
-- **装饰现在是配置,不再是默认**(`lib/pet-decor.ts`):
+  - `CompanionAvatar`(聊天头像)采用高度主导还有第二个原因:转录网格为助手头像预留了 **40px gutter**,一个多余的 inline 64px 会溢出布局给它留出的那一列。**定尺寸的槽位必须由槽位来决定尺寸。**
+- **装饰现在是配置,不再是默认**(`lib/companion-decor.ts`):
   - **整体删除**——地面系(`__thrust` 悬浮辉光、`__bounce` 底部反光、`__ground` 地面投影)与头顶信标(`__antenna-group` 及其 `gui-pet-antenna` / `gui-pet-beacon` / `gui-pet-halo` 三组 keyframes)。地面系描述的是一具**悬浮在地面之上**的身体,而伙伴 dock 在输入框边沿,那里根本没有地面:这些层会溢进缝隙,读作输入框下方的一条金色污渍。信标在任意 composer 尺寸下都细到不足一像素——一个孤立的金点。**不是默认关闭,是不再渲染。**
   - **保留,但做成可关闭开关**——`gloss`(`__gloss` + `__gloss-dot` + `__sweep`)。它是唯一在每个场景下都成立的装饰:它让一个扁平深色圆读作**被照亮的球**。关闭 → `.gui-pet-svg--flat` 只隐藏光影层;壳渐变、环绕轨道环、边缘轮廓光与白脸全部保留。
   - **留白收紧** `HEADROOM 40 / SIDE 26 / FLOOR 30` → `TOP 24 / SIDE 20 / BOTTOM 22`(约 1.28× → 约 1.04× 球径)。球在同样的盒子里变大,边缘也不再悬空。旧的 `margin-bottom` hack(为补偿"占位但被隐藏的天线"把 composer 盒子往上拉)随之删除。
-  - 存储是**标志记录**(`musepi-gui-pet-decor`),**逐键降级**——格式损坏或更新版本写入的键只降级自己,不会把整个形象清空(`test/pet-decor.test.ts`,12 条)。`PET_DECOR_FLAGS` 是设置 UI 的生成来源——**加一个配饰(音符、耳机…)只需一条标志 + 两个 i18n key**,不需要手写新行。写入广播 `omp-pet-changed`,而 `usePet` / `usePetDecor` 本就监听该事件,所以开关会同时落到 composer、聊天头像与悬浮桌宠。
+  - 存储是**标志记录**(`musepi-gui-pet-decor`),**逐键降级**——格式损坏或更新版本写入的键只降级自己,不会把整个形象清空(`test/companion-decor.test.ts`,12 条)。`COMPANION_DECOR_FLAGS` 是设置 UI 的生成来源——**加一个配饰(音符、耳机…)只需一条标志 + 两个 i18n key**,不需要手写新行。写入广播 `omp-pet-changed`,而 `useCompanionArt` / `useCompanionDecor` 本就监听该事件,所以开关会同时落到 composer、聊天头像与悬浮桌宠。
   - 作用域:装饰只存在于**内置矢量**形象上。导入的 petdex 精灵表是烘焙好的位图——该分组会明确说明并禁用开关,而不是静默无效。
 - **设置页的头像选择器能区分选项了**(`gui-settings.css`):`设置 → 常规` 的 Agent 头像行原本是五个无标签的 38px 图标按钮,身份藏在 `title` 悬浮提示里,选中态是一条发丝描边——"只能进行切换"。现在是 `.gui-avatar-grid` + `.gui-avatar-card`:**32px 实时预览台**(小到能judge 出差异的尺寸;固定 40×34 槽位,让宠物的宽盒子与方形图标共享基线)、预设**名称**、以及选中项的**勾选**。伙伴设置页新增对应的**外观细节**分组。两处都复用 `.gui-pet-card` 的卡片语言,让两个头像界面读作同一套系统。(`.gui-avatar-opt` 只留给引导流程的个性化步骤——git 设置里的用户头像来源已改用分段控件,见 §10。)
 - **滑杆对齐**:伙伴大小滑杆步进为 5%,而 `petScale()`/`setPetScale()` 存取并夹取整数百分比,导致存下的值与标签错位(`step=5` → 60/65/70…,却按 1% 的夹取范围读回)。改为 `step=1`。
@@ -405,9 +405,9 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 
 本轮由五条用户反馈驱动:头像小球变空白、桌面小球保持石墨色而非品牌金、面板裁切/遮挡角色、拖拽位置恢复偏移,以及——功能需求——配饰(音符/耳机)+ 用户 SVG 导入,参考 clawd on desk / blobstudio。
 
-- **配饰是 pick-one 联合类型,不是标志位**(`pet-decor.ts` 的 `PetAccessory = "none" | "note" | "headphones"`):§5l 预言"一条标志 + 两个 i18n key",但穿戴物**互斥**——分段控件(`.gui-pet-accessory-picker`)不会漂移成组合衣柜,clawd-on-desk 的教训("一个状态一套完整动画,不是换贴图")同样适用于穿搭。绘制为 **rig 组内的静态画**(脸部之后):随球缩放、免费骑在身体运动上;两者都按 rig 留白创作(音梁顶点 y≈−4 对 TOP 24;音符杆 r≈112 对壳 R≈114)所以不裁切——头顶漂浮的挂件会复刻已删除信标的"孤立金点"问题,所以音符是**贴在壳面上的贴花**。存储仍是逐键记录;`asAccessory` 把联合类型外的值降级为 `none`。
-- **用户 SVG 导入 = 单帧 petdex 包**(`PetdexPackage.format: "svg"`):渲染端文件选择(≤512KB、`<svg` 嗅探、带 viewBox 文本兜底的 Image 解码以对付无尺寸 SVG)存为 `format:"svg"`、`rows:[1]`、`contentH = height`——预设网格、触发器、composer 与桌面桌宠全部经**现有** PetdexSprite 路径渲染(`backgroundPosition` 钉在 `0 0`;行偏移会在 hover/拖行时把整张图移出盒子)。心情系统对单静态帧降级为 transform 行(bob/lift/wiggle),与缺行的精灵表一致。
-- **头像小球空白**——`.gui-pet-svg` **自身没有尺寸规则**(gui-pet.css 用 `.gui-pet svg` 后代选择器定尺寸);任何不套 `.gui-pet` 包装就渲染精灵的调用点会塌成 0。该规则升级为组件:`PetBox`(包装器 + 两个变量),包装器从导出的 `PET_BOX_RATIO` 发布 `--gui-pet-ratio`——样式表字面量只作水合兜底,重调 VIEW 不再静默失同步每个宿主。
+- **配饰是 pick-one 联合类型,不是标志位**(`companion-decor.ts` 的 `CompanionAccessory = "none" | "note" | "headphones"`):§5l 预言"一条标志 + 两个 i18n key",但穿戴物**互斥**——分段控件(`.gui-pet-accessory-picker`)不会漂移成组合衣柜,clawd-on-desk 的教训("一个状态一套完整动画,不是换贴图")同样适用于穿搭。绘制为 **rig 组内的静态画**(脸部之后):随球缩放、免费骑在身体运动上;两者都按 rig 留白创作(音梁顶点 y≈−4 对 TOP 24;音符杆 r≈112 对壳 R≈114)所以不裁切——头顶漂浮的挂件会复刻已删除信标的"孤立金点"问题,所以音符是**贴在壳面上的贴花**。存储仍是逐键记录;`asAccessory` 把联合类型外的值降级为 `none`。
+- **用户 SVG 导入 = 单帧 petdex 包**(`PetdexPackage.format: "svg"`):渲染端文件选择(≤512KB、`<svg` 嗅探、带 viewBox 文本兜底的 Image 解码以对付无尺寸 SVG)存为 `format:"svg"`、`rows:[1]`、`contentH = height`——预设网格、触发器、composer 与桌面桌宠全部经**现有** SpriteSheetArt 路径渲染(`backgroundPosition` 钉在 `0 0`;行偏移会在 hover/拖行时把整张图移出盒子)。心情系统对单静态帧降级为 transform 行(bob/lift/wiggle),与缺行的精灵表一致。
+- **头像小球空白**——`.gui-pet-svg` **自身没有尺寸规则**(gui-pet.css 用 `.gui-pet svg` 后代选择器定尺寸);任何不套 `.gui-pet` 包装就渲染精灵的调用点会塌成 0。该规则升级为组件:`CompanionArtBox`(包装器 + 两个变量),包装器从导出的 `PET_BOX_RATIO` 发布 `--gui-pet-ratio`——样式表字面量只作水合兜底,重调 VIEW 不再静默失同步每个宿主。
 - **石墨球**——桌宠窗口从不加载 `tokens.css`,根上不存在 `--accent`,`applyPetPalette` 落到硬编码暖石墨兜底("黑色带点黄")。从源头修:`pet-window.css :root` 携带品牌金 `--accent` 字面量(主窗口的主题推送仍会覆盖它)。教训:**推送管线需要在接收端有正确默认值**,而不只在发送端。
 - **历史面板裁切 + 遮挡**——已移除的窗内 `.pet-panel` 对自己上报的高度设置上限，形成窗口尺寸反馈循环；开关订阅在重注册时也可能执行旧 handler。当前契约没有窗内面板。独立的 `bubbles.html` 卡片上报未钳制的内容尺寸，由主进程把独立窗口限制在工作区内。
 - **历史拖拽位置偏移**——已移除的单窗口会随浮层改变高度，只恢复左上角位置会移动 sprite。当前桌宠窗口保持固定尺寸，气泡窗口跟随它，但不改变它的边界。`pet-drag-client` 从同一组光标/窗口锚点推导拖拽位置；持久化的 `{x,y,w,h,dock}` 在恢复前按显示器工作区校验。
@@ -437,7 +437,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 
 本轮由三条用户诉求驱动:「这个小球的定制放到常规Agent头像那里去?」「挂靠输入框时的小球稍微大一点?」「耳机稍微大一点?」。
 
-- **外观细节组住在预览旁边**:光泽开关 + 配饰选择器从伴侣页尾部搬到常规页 Agent 头像网格正下方。宠物头像卡就是活的 `BuiltinPetSprite`——拨动开关立刻在上方网格里读到反馈,而不是跑到另一个页面去看。组件自持状态(自己解析、订阅 `omp-pet-changed` 重解析),挂哪都成立;伴侣页保留形象选择/尺寸/导入。
+- **外观细节组住在预览旁边**:光泽开关 + 配饰选择器从伴侣页尾部搬到常规页 Agent 头像网格正下方。宠物头像卡就是活的 `BuiltinCompanionArt`——拨动开关立刻在上方网格里读到反馈,而不是跑到另一个页面去看。组件自持状态(自己解析、订阅 `omp-pet-changed` 重解析),挂哪都成立;伴侣页保留形象选择/尺寸/导入。
 - **挂靠球保留清晰的响应式盒子**：容器查询 clamp 为 48–64px；≤380px 的输入框保持 46px，即完整面部的下限，不进入 micro 变体。矢量球体填满盒子的 100%，不再停留在 fallback 尺寸，因此图形与可点击包装层同步缩放。宿主仍通过 `--gui-composer-pet-size` 覆盖尺寸，不在 JS 中指定像素几何。
 - **耳机作为整体绕球心缩放**(`HEADPHONE_SCALE` 1.08):耳罩、canopy 与轨是按一个刚体授权的,放大就是引擎每帧配件 transform 里的一次 scale——不是重新绘制。1.08 是所有极值都留在 rig padding 内的最大系数;尺寸与 gaze 倾斜搭乘同一属性,因为该属性归引擎所有。
 
@@ -464,6 +464,10 @@ turn
 **IRC 流量行（`irc:*`）**：每条消息一行，不并入工作段折叠。路由（`from → to`）由 `details` 组成，`content` 里的 `[IRC …]` 头与 incoming 的 `<irc>` 模板都不渲染；三种 kind 只差视觉权重——`relay`（旁观的双方流量）最轻，`incoming` 读作发给当前会话，`autoreply` 带 `auto` / `reply` 标签。同一对 agent 的连续消息共享一次路由头，正文超过 3 行截断并提供显式展开——一段往返问答不再逐条重复发言人。展开/收起复用共享 collapse morph：clamp 在开始展开时摘下、收起结束后再挂回，高度按 220ms `--spring` 过渡，不会瞬跳。
 
 **后台任务结算卡（`async-job-result`）**：L1 卡片（复用 `.tr-async-result` 外壳），头行是状态字形（✓ / ✕ / ⊘，按 completed / failed / cancelled 取色）+ agent 名 + `[type]` + 时长 + 状态文字 + 行数/体积；`<output>` 是 JSON 对象时按字段渲染（字符串值解码换行），其余按等宽正文；超过 8 行截断并淡出，展开/收起走同一 collapse morph；尾部 idle / `history://` 提示降为一行 faint 文本。卡片只表达"这个 job 结算了"，运行中的实时状态仍由右侧子代理面板承担，不在这里重复。
+
+**过程行的折叠锚点**：思考块、活动/运行汇总与工具卡片共用左侧折叠字形（`.tr-round-fold-icon` / 前置 `.tv-chev`）；思考块流式输出显示「思考中」，结束后显示「思考过程 · 时长」或「思考完成」。后台完成卡改为用户侧锚定（右对齐、与用户气泡同右缘），卡片头即折叠锚点，输出/payload 可整体收起。
+
+**运行中后台任务 HUD（`AsyncJobBar`）**：会话有运行中的 job 时，输入框上方出现一张卡片，逐行列出命令、状态点、实时时长、取消与详情入口；收起后只留「后台 Bash · N」chip。桌面端点详情打开右侧「后台任务」surface（`JobsPane`：运行/全部过滤、实时输出尾部、取消）；web / Android / 鸿蒙没有右侧面板宿主时，同一卡片就地展开详情 sheet。读数只来自 `session.jobs` / `session.jobOutput` / `session.jobsCancel`，1s 轮询且仅在文档可见时进行；没有运行中的 job 时组件不渲染，也不轮询。
 
 **设置开关（2026-09-26 补齐，Kimi Code 桌面端 parity，入口：外观 → 聊天设置）**：
 
@@ -931,7 +935,7 @@ Guest／移动端顶栏使用 `HostManager` 统一完成已保存电脑的切换
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。
-- **设计语言**:**点阵卡上的 IP 桌宠**——桌面桌宠的定帧(金球 + 白色头戴耳机,几何逐字抄自 `SplashOrb.tsx`,scale 2.0)居中带柔光,背景保留 23×23 淡点阵(fg 9% 透明度,`r=4.2`,间距 ~35.8px,球周 r=300 留白晕)。**无轨道环**:真实 PetSprite 的环(rx 104)整环画在不透明球体(r 114.27)之后,静止帧根本看不见环——品牌定帧不得凭空画环(2026-09-28 用户反馈)。卡背景 = 主题深色微渐变(`#242128 → #1b191f`)。替代点阵 π(2026-08-06):旧规"配色只用主题色、零强调色"为品牌 IP 有意打破——金球就是标识(对标 kimicode 式 IP 图标,小袁总 2026-09-28);点阵留作与 `DotMatrixMark` 的视觉脐带。
+- **设计语言**:**点阵卡上的 IP 桌宠**——桌面桌宠的定帧(金球 + 白色头戴耳机,几何逐字抄自 `SplashOrb.tsx`,scale 2.0)居中带柔光,背景保留 23×23 淡点阵(fg 9% 透明度,`r=4.2`,间距 ~35.8px,球周 r=300 留白晕)。**无轨道环**:真实 CompanionArt 的环(rx 104)整环画在不透明球体(r 114.27)之后,静止帧根本看不见环——品牌定帧不得凭空画环(2026-09-28 用户反馈)。卡背景 = 主题深色微渐变(`#242128 → #1b191f`)。替代点阵 π(2026-08-06):旧规"配色只用主题色、零强调色"为品牌 IP 有意打破——金球就是标识(对标 kimicode 式 IP 图标,小袁总 2026-09-28);点阵留作与 `DotMatrixMark` 的视觉脐带。
 - **卡中卡布局(2026-08-06 实测 kimi 对齐)**:不变——深色卡占 tile **80.5%(824/1024,四周对称 100px 透明边距)** + 卡角 superellipse n=5 圆角,与 Kimi 桌面 app 完全一致。**与邻位 app 视觉统一优先于 HIG 抽象规范**——kimi 实际就是卡中卡,我们要并排同大。
 - **同步副本**:`build/icon.png`(打包源 / win32 窗口图标,`ICON_PATH`)+ `build/icon-dock.png`(dev Dock setIcon);打包版 icns 同样带 80.5% 卡边距(不重打包则 bundle icns 手动同步)。~~`src/vendor/logo.png`~~ 已于 2026-09-28 删除——splash 不再内嵌栅格 logo(品牌标是 SplashOrb SVG)。
 - **改动流程**:改 `build/icon.svg`(参数见文件头注释:卡占比、superellipse n、网格间距/点径/透明度、留白晕、球 scale/圆心)→ Chromium headless 渲染 1024 PNG(`omitBackground` 保住 100px 透明边距)→ 复制到 icon.png + icon-dock.png → Pillow 生成 `icon.ico`(16–256)与 `icon.icns`(16–512 @1x/@2x;Windows 上 icns 跳过旧版 1024 档——macOS 会降采样,release bundle icns 打包时本就要重生成)→ **手动同步 bundle icns 后必须重签**(`codesign --force --deep --sign - release/mac-arm64/MusePi.app`——签名后改资源会失效,CSDN 4.3 坑)→ `bun run pack:dir` 重打包(dev 模式 Dock 图标走 `app.dock.setIcon(build/icon-dock.png)`,打包版用 bundle icns——**只换 png 不重打包,打包版 Dock 仍是旧图标**)。

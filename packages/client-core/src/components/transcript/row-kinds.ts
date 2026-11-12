@@ -57,6 +57,27 @@ export function hasTextBlock(content: unknown): boolean {
 	);
 }
 
+/** Tool that posts a user-visible progress update mid-turn. */
+export const PROGRESS_UPDATE_TOOL_NAME = "notify_user";
+
+/**
+ * A progress update is turn CONTENT, not process noise: the round fold keeps
+ * the carrier row visible, and tool runs break around it so it never collapses
+ * into a "读取了 N 个文件" summary. The assistant carrier owns the card; its
+ * toolResult row carries no body and folds with the rest.
+ */
+export function isProgressUpdateRow(entry: SessionEntry): boolean {
+	if (entry.type !== "message") return false;
+	const message = entry.message;
+	if (message.role === "assistant") {
+		return (
+			Array.isArray(message.content) &&
+			message.content.some(block => block?.type === "toolCall" && block.name === PROGRESS_UPDATE_TOOL_NAME)
+		);
+	}
+	return message.role === "toolResult" && message.toolName === PROGRESS_UPDATE_TOOL_NAME;
+}
+
 /** Deterministic row classification for one transcript entry. */
 export function classifyTranscriptRow(entry: SessionEntry): TranscriptRowKind {
 	if (entry.type === "message") {

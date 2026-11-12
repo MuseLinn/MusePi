@@ -243,3 +243,51 @@ describe("buildToolRuns (工具调用汇总, Kimi parity)", () => {
 		expect(run.browser?.residualFailures).toBe(0);
 	});
 });
+
+describe("notify_user progress updates", () => {
+	const progressCall = (id: string): SessionEntry =>
+		withId({
+			type: "message",
+			message: {
+				role: "assistant",
+				content: [{ type: "toolCall", id, name: "notify_user", arguments: { title: "t", message: "m" } }],
+				timestamp: 1,
+			},
+		});
+
+	test("the carrier survives a closed fold and is not counted as tool work", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1"),
+			toolResult("c1"),
+			progressCall("n1"),
+			toolResult("n1", "notify_user"),
+			assistantText("done"),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds).toHaveLength(1);
+		expect(folds[0]!.exempt).toContain(3);
+		expect(isInsideFold(folds, 3)).toBe(false);
+		expect(folds[0]!.toolCount).toBe(1);
+	});
+
+	test("a progress update breaks tool runs instead of joining a summary", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1"),
+			toolResult("c1"),
+			assistantToolCall("c2"),
+			toolResult("c2"),
+			progressCall("n1"),
+			toolResult("n1", "notify_user"),
+			assistantToolCall("c3"),
+			toolResult("c3"),
+			assistantToolCall("c4"),
+			toolResult("c4"),
+			assistantText("done"),
+		];
+		const runs = buildToolRuns(entries, false);
+		expect(runs.map(run => run.headIdx)).toEqual([1, 7]);
+		for (const run of runs) expect(run.idxs).not.toContain(5);
+	});
+});

@@ -105,29 +105,41 @@ function promptSummary(entry: SessionEntry): string {
 export interface StickyUserMessageProps {
 	candidate: StickyUserCandidate | null;
 	onJump(candidate: StickyUserCandidate): void;
+	/** The turn's agent orb, pinned once its own row scrolls out of the
+	 *  viewport top. Rendered in the transcript's 40px gutter column so the
+	 *  pill beside it still aligns with the message body. */
+	agent?: ReactNode;
 }
 
 /**
- * Glass pill for the pinned prompt. Rendered only when a candidate exists, so
- * scrolling back to the prompt or to the top removes the control (and its
- * space in the accessibility tree) entirely. No enter/exit animation: the pill
- * appears and disappears with the scroll position.
+ * Glass pill for the pinned prompt, plus the turn orb once the agent's own row
+ * has scrolled out. Rendered only when at least one of the two applies, so
+ * returning to the turn's head removes the control (and its space in the
+ * accessibility tree) entirely. No enter/exit animation: both appear and
+ * disappear with the scroll position.
  */
-export function StickyUserMessage({ candidate, onJump }: StickyUserMessageProps): ReactNode {
-	if (candidate === null) return null;
+export function StickyUserMessage({ candidate, onJump, agent }: StickyUserMessageProps): ReactNode {
+	if (candidate === null && agent === undefined) return null;
 	const action = t("settings.trajectoryJump");
 	return (
-		<div className="tr-sticky-user-slot">
-			<button
-				type="button"
-				className="tr-sticky-user"
-				onClick={() => onJump(candidate)}
-				aria-label={`${action} ${candidate.summary}`}
-				title={candidate.summary}
-			>
-				<span className="tr-sticky-user-mark" aria-hidden="true" />
-				<span className="tr-sticky-user-text">{candidate.summary}</span>
-			</button>
+		<div className={`tr-sticky-user-slot${agent === undefined ? "" : " tr-sticky-user-slot--agent"}`}>
+			{agent === undefined ? null : (
+				<span className="tr-sticky-agent" aria-hidden="true">
+					{agent}
+				</span>
+			)}
+			{candidate === null ? null : (
+				<button
+					type="button"
+					className="tr-sticky-user"
+					onClick={() => onJump(candidate)}
+					aria-label={`${action} ${candidate.summary}`}
+					title={candidate.summary}
+				>
+					<span className="tr-sticky-user-mark" aria-hidden="true" />
+					<span className="tr-sticky-user-text">{candidate.summary}</span>
+				</button>
+			)}
 		</div>
 	);
 }

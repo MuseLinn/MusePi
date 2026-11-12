@@ -19,6 +19,7 @@ import type { ComponentType, ReactNode } from "react";
 import { createElement, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
+import { fmtDuration } from "../../lib/format.js";
 import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse.js";
 import {
 	type DisplayContext,
@@ -53,6 +54,7 @@ export function ThinkingBlock({
 	text,
 	redacted,
 	streaming = false,
+	durationMs,
 }: {
 	text: string;
 	redacted?: boolean;
@@ -60,6 +62,8 @@ export function ThinkingBlock({
 	 *  during streaming play the fade-in once; settled blocks render plain
 	 *  (no animation, no replay on expand). */
 	streaming?: boolean;
+	/** Request duration for the settled label (`思考过程 · 12s`). */
+	durationMs?: number;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	// Auto-open while the model is thinking, auto-collapse ~1s after it
@@ -115,16 +119,25 @@ export function ThinkingBlock({
 	return (
 		<div className="tr-think">
 			<button type="button" className="tr-think-head" onClick={toggle}>
-				<ChevronRight size={11} className={`tr-chev${open ? " tr-chev--open" : ""}`} />
+				{/* The same boxed affordance every foldable process row uses: the
+				 *  glyph column is the anchor, so 思考过程 / 活动 / run summaries line
+				 *  up on one x instead of three different chevron sizes. */}
+				<span className="tr-round-fold-icon" aria-hidden>
+					<ChevronRight size={12} className={`tr-chev${open ? " tr-chev--open" : ""}`} />
+				</span>
 				<span
 					className={
 						redacted ? undefined : streaming ? "tr-think-label" : "tr-think-label tr-think-label--settled"
 					}
 				>
-					{t("settings.thinking2")}
+					{redacted
+						? t("transcript.redacted")
+						: streaming
+							? t("transcript.thinkingInProgress")
+							: durationMs !== undefined
+								? `${t("transcript.thinkingProcess")} · ${fmtDuration(durationMs)}`
+								: t("transcript.thinkingDone")}
 				</span>
-				{redacted ? t("transcript.redacted") : ""}
-				{previewLine && <span className="tr-think-preview">{previewLine}</span>}
 			</button>
 			<div
 				ref={bodyRef}
@@ -1255,7 +1268,7 @@ export function AssistantBody({
 					// Anonymous content blocks have no stable id — index is identity.
 					return (
 						<div key={`k${i}`} className="tr-think tr-think--pending" role="status">
-							<span className="tr-think-label">{t("settings.thinking2")}</span>
+							<span className="tr-think-label">{t("transcript.thinkingInProgress")}</span>
 							<span className="tr-think-dots" aria-hidden>
 								<i />
 								<i />
@@ -1265,7 +1278,14 @@ export function AssistantBody({
 					);
 				}
 				// Anonymous content blocks have no stable id — index is identity.
-				return <ThinkingBlock key={`k${i}`} text={block.thinking} streaming={pending} />;
+				return (
+					<ThinkingBlock
+						key={`k${i}`}
+						text={block.thinking}
+						streaming={pending}
+						durationMs={pending ? undefined : message.duration}
+					/>
+				);
 			}
 			case "redactedThinking":
 				if (textOnly) return null;

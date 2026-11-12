@@ -10,10 +10,11 @@
  */
 
 import type { AsyncJobResultView } from "@musepi/pi-wire";
+import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
-import { useCollapseHeight } from "../../lib/use-collapse";
+import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse";
 
 type Tone = "ok" | "err" | "warn" | "accent";
 
@@ -159,9 +160,21 @@ export function AsyncJobResultCard({ view }: { view: AsyncJobResultView }): Reac
 	const meta = [view.lines ? t("transcript.asyncJobLines", { count: String(view.lines) }) : undefined, view.size]
 		.filter(Boolean)
 		.join(" · ");
+	// Whole-card disclosure: the header line is the anchor, the body (output +
+	// hint) collapses under it. Reference clients keep the status line visible
+	// and fold the payload away — a completed background job routinely carries
+	// hundreds of lines the reader did not ask to see inline.
+	const [open, setOpen] = useState(true);
+	const bodyRef = useRef<HTMLDivElement | null>(null);
+	useCollapseHeight(open, bodyRef);
 	return (
 		<div className={`tr-async-result tr-async-job tr-async-job--${tone}`}>
-			<div className="tr-async-result-row">
+			<button
+				type="button"
+				className="tr-async-result-row tr-async-job-head"
+				aria-expanded={open}
+				onClick={() => setOpen(value => !value)}
+			>
 				<span className="tr-async-result-done" aria-hidden>
 					{glyphOf(tone)}
 				</span>
@@ -170,17 +183,24 @@ export function AsyncJobResultCard({ view }: { view: AsyncJobResultView }): Reac
 				{view.duration ? <span className="tr-async-result-dur">({view.duration})</span> : null}
 				<span className="tr-async-job-status">{statusLabel(view.status)}</span>
 				{meta ? <span className="tr-async-result-dur">{meta}</span> : null}
+				<ChevronRight
+					size={13}
+					className={`tr-async-job-chev${open ? " tr-async-job-chev--open" : ""}`}
+					aria-hidden
+				/>
+			</button>
+			<div ref={bodyRef} className="tr-async-job-collapse" style={collapseStyle(open)}>
+				{output ? (
+					clampable ? (
+						<CollapsibleJobOutput output={output} />
+					) : (
+						<div className="tr-async-job-body">
+							<JobOutputBody output={output} />
+						</div>
+					)
+				) : null}
+				{view.hint ? <div className="tr-async-job-hint">{view.hint.replace(/`/g, "")}</div> : null}
 			</div>
-			{output ? (
-				clampable ? (
-					<CollapsibleJobOutput output={output} />
-				) : (
-					<div className="tr-async-job-body">
-						<JobOutputBody output={output} />
-					</div>
-				)
-			) : null}
-			{view.hint ? <div className="tr-async-job-hint">{view.hint.replace(/`/g, "")}</div> : null}
 		</div>
 	);
 }

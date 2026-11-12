@@ -19,12 +19,6 @@ const DIFF_LAYOUT_SEGMENTS: SegmentedOption<"dynamic" | "inline" | "side-by-side
 	{ value: "side-by-side", label: t("settings.alwaysSideSide") },
 ];
 
-const OUTPUT_STYLE_SEGMENTS: SegmentedOption<"default" | "kimi" | "zcode">[] = [
-	{ value: "default", label: t("settings.outputStyleDefault") },
-	{ value: "kimi", label: t("settings.outputStyleKimi") },
-	{ value: "zcode", label: t("settings.outputStyleZcode") },
-];
-
 const TYPING_EFFECT_SEGMENTS: SegmentedOption<"typewriter" | "burst" | "shimmer" | "glitch" | "flip" | "ink">[] = [
 	{ value: "typewriter", label: t("settings.typingEffectTypewriter") },
 	{ value: "burst", label: t("settings.typingEffectBurst") },
@@ -225,14 +219,6 @@ export function ChatSection(): ReactNode {
 			return "inline";
 		}
 	});
-	const [outputStyle, setOutputStyle] = useState<"default" | "kimi" | "zcode">(() => {
-		try {
-			const v = localStorage.getItem("musepi-gui-chat-output-style");
-			return v === "kimi" || v === "zcode" ? v : "default";
-		} catch {
-			return "default";
-		}
-	});
 	// 消息字号 — transcript body ladder (--tr-font-size on <html>; headings
 	// and code scale off it in transcript.css). Independent of the interface
 	// font slider: shell chrome follows --gui-font-scale, chat text follows
@@ -378,27 +364,6 @@ export function ChatSection(): ReactNode {
 
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("tools.presentationStyle")}</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("settings.outputStyle")}</div>
-						<div className="gui-settings-row-desc">{t("settings.outputStyleDescription")}</div>
-					</div>
-					<Segmented
-						ariaLabel={t("settings.outputStyle")}
-						value={outputStyle}
-						options={OUTPUT_STYLE_SEGMENTS}
-						onChange={v => {
-							tapFeedback();
-							setOutputStyle(v);
-							try {
-								localStorage.setItem("musepi-gui-chat-output-style", v);
-							} catch {
-								// ignore
-							}
-							document.documentElement.dataset.outputStyle = v;
-						}}
-					/>
-				</div>
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("settings.typingEffect")}</div>

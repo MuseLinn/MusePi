@@ -174,8 +174,26 @@ describe("StickyUserMessage", () => {
 		expect(jumps).toEqual([candidate]);
 	});
 
-	test("renders nothing when there is no candidate", () => {
+	test("renders nothing when neither a prompt nor the agent orb is pinned", () => {
 		const host = render(<StickyUserMessage candidate={null} onJump={() => {}} />);
+		expect(host.querySelector(".tr-sticky-user")).toBeNull();
+		expect(host.querySelector(".tr-sticky-agent")).toBeNull();
+		expect(host.querySelector(".tr-sticky-user-slot")).toBeNull();
+	});
+
+	test("pins the turn orb beside the prompt pill", () => {
+		const candidate = { entry: user("u1", "hello"), index: 1, summary: "hello" };
+		const host = render(
+			<StickyUserMessage candidate={candidate} onJump={() => {}} agent={<span className="orb-fixture" />} />,
+		);
+		expect(host.querySelector(".tr-sticky-user-slot--agent")).not.toBeNull();
+		expect(host.querySelector(".tr-sticky-agent .orb-fixture")).not.toBeNull();
+		expect(host.querySelector(".tr-sticky-user")).not.toBeNull();
+	});
+
+	test("renders the orb alone when the prompt is still on screen", () => {
+		const host = render(<StickyUserMessage candidate={null} onJump={() => {}} agent={<span />} />);
+		expect(host.querySelector(".tr-sticky-agent")).not.toBeNull();
 		expect(host.querySelector(".tr-sticky-user")).toBeNull();
 	});
 });

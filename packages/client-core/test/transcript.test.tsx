@@ -3,6 +3,7 @@ import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
 import { renderToStaticMarkup } from "react-dom/server";
 import "./transcript-dom-shim";
 import { isBranchFormingEntry, msgText, Transcript } from "../src/components/transcript/Transcript";
+import { t } from "../src/i18n/index.js";
 import type { ActiveTool } from "../src/lib/client";
 
 const TOOL_CALL_ID = "call-running-tool";
@@ -88,6 +89,7 @@ function renderTranscript(props: {
 	showTokenUsage?: boolean;
 	collapseCompacted?: boolean;
 	colorBlind?: boolean;
+	defaultRoundFoldExpanded?: boolean;
 }): string {
 	return renderToStaticMarkup(
 		<Transcript
@@ -101,6 +103,7 @@ function renderTranscript(props: {
 			showTokenUsage={props.showTokenUsage}
 			collapseCompacted={props.collapseCompacted}
 			colorBlind={props.colorBlind}
+			defaultRoundFoldExpanded={props.defaultRoundFoldExpanded}
 		/>,
 	);
 }
@@ -539,6 +542,9 @@ describe("async-job-result settlement card", () => {
 		});
 		const html = renderTranscript({ entries: [entry], working: false });
 		expect(html).toContain("tr-async-job");
+		expect(html).toContain("tr-row--job");
+		expect(html).toContain("tr-async-job-head");
+		expect(html).toContain('aria-expanded="true"');
 		expect(html).not.toContain("tr-custom");
 		expect(html).not.toContain("<task-result");
 		expect(html).not.toContain("<meta");
@@ -679,6 +685,84 @@ describe("Transcript display-settings parity (TUI)", () => {
 		expect(html).toContain("reply 2"); // the answer always reads
 		// Hidden process rows stay mounted inside the animation slot.
 		expect(countElements(html, ".tr-fold-slot")).toBeGreaterThanOrEqual(1);
+	});
+
+	it("keeps one agent orb per turn when a tail row splits the agent rows", () => {
+		// The screenshot case: a settled background job lands between the tool
+		// run and the final reply. The orb belongs to the turn's first agent
+		// row; the tail seam must not re-trigger it.
+		const entries: SessionEntry[] = [
+			userEntry(1),
+			committedAssistantToolCall(),
+			{
+				type: "message",
+				id: "tool-result-1",
+				parentId: null,
+				timestamp: "2026-07-09T00:00:01Z",
+				message: {
+					role: "toolResult",
+					toolCallId: TOOL_CALL_ID,
+					toolName: TOOL_NAME,
+					content: [{ type: "text", text: "ok" }],
+					isError: false,
+					timestamp: 2,
+				},
+			} as unknown as SessionEntry,
+			{
+				type: "custom_message",
+				id: "job-1",
+				parentId: null,
+				timestamp: "2026-07-09T00:00:02Z",
+				customType: "async-job-result",
+				display: true,
+				content: 'Background task job "Alice" completed.',
+				details: { jobId: "Alice", status: "completed", label: "Alice" },
+				attribution: "agent",
+			} as unknown as SessionEntry,
+			assistantEntry({ timestamp: 4, text: "done" }),
+		];
+		const html = renderTranscript({ entries, working: true });
+		expect(countOccurrences(html, `>${t("settings.agent")}<`)).toBe(1);
+	});
+
+	it("draws one orb per turn, not per assistant message", () => {
+		const needle = `>${t("settings.agent")}<`;
+		const one = renderTranscript({
+			entries: [userEntry(1), assistantEntry({ timestamp: 2 })],
+			working: false,
+		});
+		expect(countOccurrences(one, needle)).toBe(1);
+		const two = renderTranscript({
+			entries: [userEntry(1), assistantEntry({ timestamp: 2 }), userEntry(3), assistantEntry({ timestamp: 4 })],
+			working: false,
+		});
+		expect(countOccurrences(two, needle)).toBe(2);
+	});
+
+	it("draws the 活动 header once when the turn opens on a tool row", () => {
+		const entries: SessionEntry[] = [
+			userEntry(1),
+			{
+				type: "message",
+				id: "tool-result-1",
+				parentId: null,
+				timestamp: "2026-07-09T00:00:01Z",
+				message: {
+					role: "toolResult",
+					toolCallId: TOOL_CALL_ID,
+					toolName: TOOL_NAME,
+					content: [{ type: "text", text: "ok" }],
+					isError: false,
+					timestamp: 2,
+				},
+			} as unknown as SessionEntry,
+			// The tool-call carrier counts as work, so the round folds; the
+			// standalone header still hangs on the turn's first row (the result).
+			committedAssistantToolCall(),
+			assistantEntry({ timestamp: 3, text: "done" }),
+		];
+		const html = renderTranscript({ entries, working: false, defaultRoundFoldExpanded: true });
+		expect(countElements(html, ".tr-round-fold")).toBe(1);
 	});
 
 	it("hideToolActivity drops toolCall cards and running tail tools", () => {

@@ -162,7 +162,8 @@
 	flex: none;
 	width: 7px;
 	height: 7px;
-	margin-left: 2px;
+	/* Leading anchor: it sits before the status dot, not after the argument. */
+	margin-left: 0;
 	border-right: 1.5px solid var(--tv-faint);
 	border-bottom: 1.5px solid var(--tv-faint);
 	transform: rotate(-45deg) translateY(-1px);
@@ -2022,4 +2023,14 @@
 	gap: 6px;
 	flex-wrap: wrap;
 	min-width: 0;
+}
+
+/* notify_user — a progress update reads as chat prose, not a log line. The
+ * model writes it with its own line breaks; nothing in it is markdown. */
+.tv-progress-update {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	line-height: 1.5;
+	color: var(--fg);
 }

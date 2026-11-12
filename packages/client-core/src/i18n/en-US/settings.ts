@@ -1931,12 +1931,6 @@ export const settings = {
 	"settings.messageFontSize": "Message font size",
 	"settings.messageFontSizeDescription":
 		"Adjust the font size of chat message text; headings and code scale with it. Independent of the interface font size.",
-	"settings.outputStyle": "Output style",
-	"settings.outputStyleDescription":
-		"Preset layout and pacing for replies (line height, paragraph spacing, code block density) — font sizes come from the message font size setting",
-	"settings.outputStyleDefault": "MusePi default",
-	"settings.outputStyleKimi": "Kimi compact",
-	"settings.outputStyleZcode": "ZCode reading",
 	"settings.typingEffect": "Streaming output effect",
 	"settings.typingEffectDescription":
 		"Visual effect while characters stream in: typewriter (characters fade in with a caret that disappears when done) / burst (rainbow burst that settles) / shimmer (gloss sweep) / glitch (glitchy characters settling) / 3D flip (characters flip in) / ink (ink blooms in)",
@@ -6413,11 +6407,9 @@ export const settings = {
 	"smooth streaming description": "smooth streaming description",
 	"message font size": "message font size",
 	"message font size description": "message font size description",
-	"output style": "output style",
-	"output style description": "output style description",
-	"output style default": "output style default",
-	"output style kimi": "output style kimi",
-	"output style zcode": "output style zcode",
+	"progress updates": "Progress updates",
+	"progress updates description":
+		"Let the agent post progress updates in the conversation while it works. Applies only to sessions created after the change.",
 	"typing effect": "typing effect",
 	"typing effect description": "typing effect description",
 	"typing effect typewriter": "typing effect typewriter",

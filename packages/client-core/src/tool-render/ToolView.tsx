@@ -181,6 +181,10 @@ export function ToolView(props: ToolViewProps): ReactNode {
 				}}
 				title={intent || undefined}
 			>
+				{/* One anchor for every foldable process row: the chevron leads,
+				 *  status/result dots follow. It used to trail the argument, so a
+				 *  tool card folded at the opposite edge from 思考过程 / 活动. */}
+				<span className="tv-chev" aria-hidden="true" />
 				{status === "run" ? (
 					<span className="tv-spin" aria-label={t("tools.running")} />
 				) : (
@@ -207,7 +211,6 @@ export function ToolView(props: ToolViewProps): ReactNode {
 						</span>
 					) : null}
 				</span>
-				<span className="tv-chev" aria-hidden="true" />
 			</button>
 			<div ref={bodyRef} className={`tv-body${open ? "" : " tv-body--closed"}`} style={collapseStyle(open)}>
 				{intent && <div className="tv-intent">{intent}</div>}

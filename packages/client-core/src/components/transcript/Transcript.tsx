@@ -394,6 +394,19 @@ export function BranchBar({
 	);
 }
 
+/** Text the user highlighted inside this row, when the selection is
+ *  non-empty and belongs to the row. The per-row quote action quotes that
+ *  passage; with no selection it falls back to the whole message. */
+function selectionTextWithin(root: HTMLElement | null): string | null {
+	if (!root || typeof window === "undefined") return null;
+	const selection = window.getSelection();
+	if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+	const range = selection.getRangeAt(0);
+	if (!root.contains(range.commonAncestorContainer)) return null;
+	const text = selection.toString().trim();
+	return text.length > 0 ? text : null;
+}
+
 function Row({
 	kind,
 	id,
@@ -414,7 +427,7 @@ function Row({
 	quoteText,
 	retryTarget,
 }: {
-	kind: "user" | "assistant" | "custom" | "marker" | "bash";
+	kind: "user" | "assistant" | "custom" | "job" | "marker" | "bash";
 	id?: string;
 	gutter: ReactNode;
 	title?: string;
@@ -649,7 +662,10 @@ function Row({
 							onClick={() => {
 								play("press");
 								hapticTap();
-								if (quoteText) onQuote(quoteText, id);
+								// Selection first: quoting the highlighted passage is
+								// what the gesture means when there is one.
+								const text = selectionTextWithin(bodyRef.current) ?? quoteText;
+								if (text) onQuote(text, id);
 							}}
 						>
 							<MessageSquare size={13} />
@@ -915,8 +931,11 @@ function renderCustomMessage({
 	}
 	if (customType === "async-job-result") {
 		if (!display) return null;
+		// A background completion is a message FROM the background to the
+		// reader: it anchors on the user side (right), like the prompt that
+		// started the work, instead of joining the agent's left column.
 		return (
-			<Row kind="custom" gutter="" title={timestamp}>
+			<Row kind="job" gutter="" title={timestamp}>
 				<AsyncJobResultCard view={asyncJobResultView(content, details)} />
 			</Row>
 		);
@@ -1728,6 +1747,67 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		}
 		return map;
 	}, [toolRuns]);
+	// One orb per agent turn: the row that carries the turn's avatar is the
+	// fold's header (expanded turn) or its reply (collapsed turn); otherwise
+	// the first row that actually mounts an agent body. Keying the owner off
+	// the turn — not the predecessor row — keeps a single orb when a tail row
+	// (async-job result, hook, run summary) sits between two assistant
+	// messages; the old prev-is-assistant test redrew the orb at every such
+	// seam (user: 一轮里头像出现很多次).
+	// Binary search over the sorted turn spans: called once per mounted row and
+	// once per sticky-orb frame, so it must not build an index-per-entry map on
+	// every streamed frame.
+	const turnStartOf = useCallback(
+		(idx: number): number | undefined => {
+			let low = 0;
+			let high = turnUnits.length - 1;
+			let found: number | undefined;
+			while (low <= high) {
+				const mid = (low + high) >> 1;
+				const unit = turnUnits[mid];
+				if (unit === undefined) break;
+				if (unit.startIdx <= idx) {
+					found = mid;
+					low = mid + 1;
+				} else {
+					high = mid - 1;
+				}
+			}
+			if (found === undefined) return undefined;
+			const unit = turnUnits[found];
+			return unit !== undefined && idx <= unit.endIdx ? unit.startIdx : undefined;
+		},
+		[turnUnits],
+	);
+	const orbAnchorByTurnStart = useMemo(() => {
+		const map = new Map<number, number | undefined>();
+		const runHeads = new Set(toolRuns.map(r => r.headIdx));
+		// One lookup per turn instead of a scan of every fold.
+		const foldByStart = new Map<number, RoundFold>();
+		for (const f of folds) foldByStart.set(f.startIdx, f);
+		for (const unit of turnUnits) {
+			const fold = foldByStart.get(unit.startIdx);
+			if (fold !== undefined) {
+				map.set(unit.startIdx, foldOpenOf(fold) ? fold.headerIdx : fold.finalIdx);
+				continue;
+			}
+			let anchor: number | undefined;
+			for (let i = unit.startIdx + 1; i <= unit.endIdx; i++) {
+				const entry = entries[i];
+				const mountsOrb =
+					runHeads.has(i) ||
+					(entry?.type === "message" &&
+						entry.message.role === "assistant" &&
+						!(entry.message.stopReason === "error" && !hasTextBlock(entry.message.content)));
+				if (mountsOrb) {
+					anchor = i;
+					break;
+				}
+			}
+			map.set(unit.startIdx, anchor);
+		}
+		return map;
+	}, [entries, foldOpenOf, folds, toolRuns, turnUnits]);
 
 	// Index set of rows collapsed inside a CLOSED fold — the virtualizer's
 	// estimate for these is ~0 (the fold slot collapses to height 0), which
@@ -1850,6 +1930,20 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		if (candidate !== null && folding && candidate.index < firstCompactionIdx) return null;
 		return candidate;
 	}, [entries, firstCompactionIdx, folding, virtualEnabled, scrollerEl, virtualItems]);
+	// Sticky orb: the turn occupying the viewport top has scrolled past the row
+	// that owns its avatar, so that avatar is pinned beside the prompt pill —
+	// the reader keeps one attribution for the whole turn instead of hunting
+	// the row it belongs to. A turn with no agent row yet (pre-stream) has
+	// nothing to pin; the composer's working line still names the agent.
+	const stickyAgent = useMemo(() => {
+		if (!virtualEnabled || scrollerEl === null) return false;
+		const range = visibleEntryRange(virtualItems, scrollerEl.scrollTop, scrollerEl.clientHeight);
+		if (range === null) return false;
+		const start = turnStartOf(Math.floor(range.first));
+		if (start === undefined) return false;
+		const anchor = orbAnchorByTurnStart.get(start);
+		return anchor !== undefined && anchor < range.first;
+	}, [orbAnchorByTurnStart, scrollerEl, turnStartOf, virtualEnabled, virtualItems]);
 
 	// Top sentinel (M1.11): entering the pane pages the next older chunk from
 	// session.history (daemon tail is 200; pages are 500 entries).
@@ -2271,20 +2365,21 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			);
 		}
 		const isAssistantMessage = entry.type === "message" && entry.message.role === "assistant";
-		// One avatar per agent turn: consecutive
-		// assistant/tool messages keep the gutter empty so the orb only
-		// renders on the first row of the turn. Virtualization may unmount
-		// the predecessor, so the old window accumulator became a direct
-		// lookup of the previous entry (equivalent — the old seeding code
-		// documented exactly this equivalence).
 		const before = entries[absIdx - 1];
 		// Consecutive IRC rows between the same two agents share one route
 		// header: a relayed back-and-forth otherwise repeats `a → b` on every
 		// line. The pair key is direction-free, so a reply continues the route.
 		const ircPair = ircPairKeyOf(entry);
 		const ircContinued = ircPair !== null && ircPair === (before ? ircPairKeyOf(before) : null);
+		// Orb ownership is TURN-scoped (orbAnchorByTurnStart): exactly one row
+		// per turn carries the avatar, whether that row is the fold header, the
+		// collapsed reply, or the first agent body of an unfolded turn. Rows
+		// before the first turn start keep the legacy neighbour rule.
+		const turnStartIdx = turnStartOf(absIdx);
+		const orbAnchor = turnStartIdx === undefined ? undefined : orbAnchorByTurnStart.get(turnStartIdx);
 		const prevIsAssistant =
 			before?.type === "message" && (before.message.role === "assistant" || before.message.role === "toolResult");
+		const rowOwnsOrb = turnStartIdx === undefined ? !(isAssistantMessage && prevIsAssistant) : orbAnchor === absIdx;
 		// M1 turn header: rendered above the turn-start row (the user
 		// prompt or an advisor note — shared isTurnStart semantics).
 		// The frozen round duration keys off the turn-START ts (shared
@@ -2311,14 +2406,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		);
 		const foldOpen = fold !== undefined && foldOpenOf(fold);
 		const foldClosed = fold !== undefined && !foldOpen;
-		// OPEN fold: the 活动 header row owns the turn's orb (it renders either
-		// on the header entry's own row or on the standalone header Row), so
-		// every span row after it must drop the gutter — including rows whose
-		// predecessor is a non-message entry (a custom "读取了 N 个文件" row
-		// between the header and the first thinking row used to re-trigger the
-		// avatar: two orbs on one expanded turn).
-		const spanAvatarOwnedByHeader =
-			fold !== undefined && foldOpen && absIdx > fold.headerIdx && absIdx <= fold.endIdx;
 		const isHeaderRow = fold !== undefined && absIdx === fold.headerIdx;
 		const isReplyRow = fold !== undefined && absIdx === fold.finalIdx;
 		// The usage row is the ROUND's: only the final reply carries it (every
@@ -2326,13 +2413,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// included — so a per-message gate drew a raw stat line under each
 		// tool row).
 		const usageHere = isAssistantMessage && (isReplyRow || absIdx === lastAssistantIdx);
-		// ONE predicate for "this row must not carry the orb". The EntryRow,
-		// the run-summary row and the live-trim row each render an
-		// assistant-gutter Row; the latter two used to pass the orb
-		// unconditionally, so an expanded turn showed an orb on the fold
-		// header AND on every run-summary row (user: 单回合轮次显示多个头像).
-		const avatarSuppressed =
-			isAssistantMessage && (prevIsAssistant || spanAvatarOwnedByHeader) && !(foldClosed && isReplyRow);
 		// Widget rows (successful widget toolCalls, see round-collapse
 		// exempt) stay mounted while the fold is closed: the standalone
 		// card is the turn's artifact, not process noise.
@@ -2426,7 +2506,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			<Row
 				key={`live-more-${entry.id}`}
 				kind="assistant"
-				gutter={avatarSuppressed ? "" : (agentGutter ?? t("settings.agent"))}
+				gutter={rowOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""}
 			>
 				<button
 					type="button"
@@ -2443,12 +2523,12 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				{liveMoreLine}
 				{headerStandalone ? (
 					// Inside the message column, so it aligns with the reply.
-					<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
+					<Row kind="assistant" gutter={rowOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""}>
 						{foldHeader}
 					</Row>
 				) : null}
 				{runSummaryHere ? (
-					<Row kind="assistant" gutter={avatarSuppressed ? "" : (agentGutter ?? t("settings.agent"))}>
+					<Row kind="assistant" gutter={rowOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""}>
 						{headerStandalone ? null : foldHeader}
 						<ToolRunLine run={run} open={runOpen} onToggle={() => toggleRun(run.key)} />
 					</Row>
@@ -2461,14 +2541,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						active={activeTools}
 						host={host}
 						userGutter={userGutter}
-						agentGutter={
-							// The reply of a COLLAPSED turn owns the orb: its predecessor is the
-							// hidden header row, so the usual "consecutive assistant rows drop the
-							// avatar" rule must not apply here. An OPEN fold's header owns the orb
-							// for the whole span instead (spanAvatarOwnedByHeader above). Same
-							// predicate gates the run-summary and live-trim rows (avatarSuppressed).
-							avatarSuppressed ? "" : agentGutter
-						}
+						agentGutter={rowOwnsOrb ? agentGutter : ""}
 						userPlain={userPlain}
 						collapseLongUserMessages={collapseLongUserMessages}
 						hideToolActivity={rowHideTools || rowTextOnly}
@@ -2506,12 +2579,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				)}
 			</Fragment>
 		) : null;
-		const headerStandaloneRow = headerStandalone ? (
-			// Inside the message column, so it aligns with the reply.
-			<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
-				{foldHeader}
-			</Row>
-		) : null;
 		// Summarized run tail rows stay collapsed even inside an OPEN fold —
 		// the run's own summary line owns their visibility now.
 		const slotClass = `tr-fold-slot${foldOpen && !isRunHidden ? " tr-fold-slot--open" : ""}`;
@@ -2521,10 +2588,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			// rows in and out).
 			<div className={slotClass}>{body}</div>
 		) : (
-			<Fragment key={entry.id}>
-				{headerStandaloneRow}
-				{body}
-			</Fragment>
+			// The standalone header already rides `body` for every row that is
+			// not a collapsed slot; mounting it here as well drew the 活动 header
+			// twice (and its orb with it) on expanded turns whose first content
+			// row is not an assistant message.
+			body
 		);
 
 		// Layer-1 branch bar: a message with MULTIPLE children gets
@@ -2557,16 +2625,26 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		return row;
 	};
 
+	// Tail rows (stream, pre-stream ticker, unpaired running tools) belong to
+	// the live turn. They keep the orb only when that turn has no committed
+	// row owning it yet — otherwise the running answer added a second orb at
+	// the bottom of a turn that already displayed one.
+	const tailOwnsOrb = orbAnchorByTurnStart.get(turnUnits.at(-1)?.startIdx ?? -1) === undefined;
+
 	return (
 		<div
 			ref={resolveScroller}
 			className={`tr-root${compact === true ? " tr-root--compact" : ""}`}
 			data-colorblind={colorBlind ? "true" : undefined}
 		>
-			{/* Pinned current-turn prompt. A zero-height sticky slot: it takes no
-			 *  flow space, so virtualization measurements and the scrollbar are
-			 *  untouched. */}
-			<StickyUserMessage candidate={stickyUser} onJump={jumpToStickyUser} />
+			{/* Pinned current-turn prompt + the turn's orb once its own row has
+			 *  scrolled out. A zero-height sticky slot: it takes no flow space,
+			 *  so virtualization measurements and the scrollbar are untouched. */}
+			<StickyUserMessage
+				candidate={stickyUser}
+				onJump={jumpToStickyUser}
+				agent={stickyAgent && agentGutter ? agentGutter : undefined}
+			/>
 			{entries.length === 0 &&
 				stream === null &&
 				!working &&
@@ -2636,14 +2714,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			 * where the reply will land — instead of hanging off the
 			 * previous round's message. */}
 			{working && stream === null && lastUserTs !== undefined && !lastAssistantInRound && (
-				<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
+				<Row kind="assistant" gutter={tailOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""}>
 					<div className="tr-ghost-working">
 						<WorkingLine start={lastUserTs} meta={modelLevelMeta(undefined, thinkingLevel)} />
 					</div>
 				</Row>
 			)}
 			{stream !== null && (
-				<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
+				<Row kind="assistant" gutter={tailOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""}>
 					<AssistantBody
 						message={stream}
 						results={results}
@@ -2668,7 +2746,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				</Row>
 			)}
 			{tailTools.length > 0 && !hideToolActivity && (
-				<Row kind="assistant" gutter={stream === null ? (agentGutter ?? t("settings.agent")) : ""}>
+				<Row kind="assistant" gutter={tailOwnsOrb && stream === null ? (agentGutter ?? t("settings.agent")) : ""}>
 					{tailTools.map(tool => (
 						<ToolCard
 							key={tool.toolCallId}

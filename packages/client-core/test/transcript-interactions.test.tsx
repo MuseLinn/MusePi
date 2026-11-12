@@ -4,6 +4,7 @@ import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { Transcript } from "../src/components/transcript/Transcript";
+import { t } from "../src/i18n/index.js";
 
 // The assertions below are INTERACTION-driven (wheel release, card toggle,
 // virtualized remount), which bun:test's default environment cannot do —
@@ -405,6 +406,41 @@ describe("compaction summary action", () => {
 		};
 		const { container, root } = await mount(transcriptEl([entry]));
 		expect(container.querySelector(".tr-divider")?.textContent).not.toContain("→");
+		await act(async () => root.unmount());
+	});
+});
+
+describe("message quote action", () => {
+	it("quotes the highlighted passage instead of the whole message", async () => {
+		const quoted: string[] = [];
+		const { container, root } = await mount(
+			transcriptEl([userEntry(1), assistantText(2, "alpha beta gamma")], {
+				onQuote: (text: string) => quoted.push(text),
+			}),
+		);
+		const body = container.querySelector<HTMLElement>(".tr-row--assistant .tr-body");
+		expect(body).not.toBeNull();
+
+		const walker = document.createTreeWalker(body!, NodeFilter.SHOW_TEXT);
+		let node: Node | null = walker.nextNode();
+		while (node !== null && !node.textContent?.includes("beta")) node = walker.nextNode();
+		expect(node).not.toBeNull();
+		const start = node!.textContent!.indexOf("beta");
+		const range = document.createRange();
+		range.setStart(node!, start);
+		range.setEnd(node!, start + "beta".length);
+		const selection = window.getSelection()!;
+		selection.removeAllRanges();
+		selection.addRange(range);
+
+		const quote = [...container.querySelectorAll<HTMLButtonElement>(".tr-row--assistant .tr-action")].find(
+			button => button.title === t("settings.quoteReply"),
+		);
+		expect(quote).not.toBeUndefined();
+		await act(async () => quote?.click());
+		expect(quoted).toEqual(["beta"]);
+
+		selection.removeAllRanges();
 		await act(async () => root.unmount());
 	});
 });

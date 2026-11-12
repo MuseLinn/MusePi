@@ -20,7 +20,7 @@ import {
 } from "../../tool-render/tools/browser-activity";
 import { diffStats } from "../../tool-render/tools/edit";
 import { isRecord } from "../../tool-render/util";
-import { classifyTranscriptRow } from "./row-kinds";
+import { classifyTranscriptRow, isProgressUpdateRow } from "./row-kinds";
 
 export { isTurnStartEntry as isTurnStart };
 
@@ -157,6 +157,13 @@ function countWorkInside(
 		}
 		if (e?.type !== "message") continue;
 		const m = e.message;
+		// A progress update is content the user is meant to keep reading after
+		// the turn folds: exempt its carrier row and keep it out of the tool
+		// count (the result row carries no body and folds with the rest).
+		if (isProgressUpdateRow(e)) {
+			if (m.role === "assistant" && !exempt.includes(i)) exempt.push(i);
+			continue;
+		}
 		if (m.role === "bashExecution") {
 			commandCount++;
 		} else if (m.role === "toolResult") {
@@ -488,7 +495,14 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 		idxs = [];
 	};
 	for (let i = 0; i < entries.length; i++) {
-		if (classifyTranscriptRow(entries[i]) === "work") idxs.push(i);
+		const entry = entries[i];
+		// Progress updates are turn content: a run must not swallow one into
+		// its aggregated line, and the row itself is not a summarizable action.
+		if (entry !== undefined && isProgressUpdateRow(entry)) {
+			flush();
+			continue;
+		}
+		if (classifyTranscriptRow(entry) === "work") idxs.push(i);
 		else flush();
 	}
 	flush();

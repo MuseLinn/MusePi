@@ -13,9 +13,6 @@
  *    slot the transcript's speak button uses)
  *  - a collapsed-round 活动 summary row (.tr-round-fold, the real fold
  *    classes) between the sample turns, in BOTH fold states
- *  - optional output-style scoping (`outputStyle`): the presets are --tr-*
- *    variable overrides keyed off [data-output-style], so wrapping the sample
- *    in that attribute previews the exact transcript typography
  *  - the composer card mock (.gui-effect-preview-composer, the frosted-glass
  *    look of the real input frame); voice overrides it with a live mic
  *
@@ -172,7 +169,6 @@ export function MockConversationPreview({
 	assistantActions,
 	extraMessages,
 	composer,
-	outputStyle,
 	streamingDemo = false,
 }: {
 	/** 显示头像 toggle — drives both gutters. */
@@ -189,12 +185,9 @@ export function MockConversationPreview({
 	composer?: ReactNode;
 	/** Draw the streaming motion demo under the sample (chat settings). */
 	streamingDemo?: boolean;
-	/** Output-style preset id — scopes the sample to that preset's --tr-*
-	 *  typography. Omitted by hosts that do not offer the setting. */
-	outputStyle?: string;
 }): ReactNode {
 	return (
-		<div className="gui-effect-preview" data-output-style={outputStyle}>
+		<div className="gui-effect-preview">
 			<MockUserRow markdown={userMarkdown ?? t("general.previewUserMessage")} showAvatar={showAvatars} />
 			<MockActivityFoldRow />
 			{/* Both fold states, so a styling change to either is visible here:
@@ -206,9 +199,8 @@ export function MockConversationPreview({
 				showAvatar={showAvatars}
 				actions={assistantActions}
 			/>
-			{/* The streaming motion demo lives with the sample it animates: the
-			 * output-style presets and the typing effect are both judged on this
-			 * text, so drawing them in one place keeps the two readings honest. */}
+			{/* The streaming motion demo lives with the sample it animates, so the
+			 * typing effect is judged on real transcript text. */}
 			{streamingDemo && (
 				<div className="gui-effect-preview-stream">
 					<div className="gui-chat-preview-label">{t("settings.typingEffect")}</div>
@@ -222,7 +214,7 @@ export function MockConversationPreview({
 }
 
 /**
- * Looping typewriter demo for the output-style preview — driven by the SAME
+ * Looping typewriter demo for the chat preview — driven by the SAME
  * reveal engine the transcript uses (proportional nextStep catch-up +
  * grapheme slicing), so the preview shows the real 逐字输出 motion: a token
  * burst drains over ~8 frames, a trickle advances 1 grapheme/frame. Follows
