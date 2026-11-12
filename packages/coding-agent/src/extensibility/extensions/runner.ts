@@ -27,6 +27,7 @@ import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
 import { type AgentDefinition, normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
+import { releaseSearchProviders as releaseSearchProvidersForOwner } from "../../web/search/registry";
 import { disposePluginPrimitives } from "../plugins/runtime/cordis-primitives";
 import { isSharedSessionExtension, retireSessionPluginGeneration } from "../plugins/runtime/session-loader";
 import type { BranchHandler, NavigateTreeHandler, NewSessionHandler } from "../session-handler-types";
@@ -508,6 +509,7 @@ export async function emitSessionShutdownEvent(extensionRunner: ExtensionRunner 
 		await extensionRunner.stopServices();
 		await extensionRunner.releaseMcpServers();
 		extensionRunner.releaseUrlSchemes();
+		extensionRunner.releaseSearchProviders();
 	}
 }
 
@@ -1263,6 +1265,7 @@ export class ExtensionRunner {
 		const extension = this.extensions[index]!;
 		const toolNames = [...extension.tools.keys()];
 		this.extensions.splice(index, 1);
+		if (!isSharedSessionExtension(extension)) releaseSearchProvidersForOwner(extension.path, extension);
 		this.#extensionEntryMtimes.delete(resolvedTarget);
 		if (isSharedSessionExtension(extension)) {
 			retireSessionPluginGeneration(extension);
@@ -1355,6 +1358,10 @@ export class ExtensionRunner {
 			replacement.toolRegistrationListeners = oldExt.toolRegistrationListeners;
 		}
 		this.extensions[index] = replacement;
+		// The replacement registered under the same owner with a new generation.
+		// Releasing the old record drops only ids it did not re-register; a shared
+		// generation is left for other sessions until it is disposed.
+		if (!isSharedSessionExtension(oldExt)) releaseSearchProvidersForOwner(oldExt.path, oldExt);
 		this.#recordExtensionEntryMtime(replacement.resolvedPath);
 		// Full teardown of the old instance before the replacement is live, so
 		// one emit cannot run both: effects, listeners, and state. A cached
@@ -1834,6 +1841,21 @@ export class ExtensionRunner {
 	 */
 	releaseUrlSchemes(): string[] {
 		return this.#urlSchemes.releaseAll();
+	}
+
+	/**
+	 * Release every web-search provider still owned by a loaded extension.
+	 * Called on session shutdown so a plugin's provider cannot outlive it.
+	 * Shared plugin generations outlive one session, so their registrations are
+	 * released when the generation itself is disposed instead.
+	 */
+	releaseSearchProviders(): string[] {
+		const released: string[] = [];
+		for (const extension of this.extensions) {
+			if (isSharedSessionExtension(extension)) continue;
+			released.push(...releaseSearchProvidersForOwner(extension.path, extension));
+		}
+		return released;
 	}
 
 	/** Direct registrations from an initialized extension context. */

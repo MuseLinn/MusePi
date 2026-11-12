@@ -108,6 +108,7 @@ import type { ApprovalMode } from "../../tools/approval";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
 import type { TodoPhase } from "../../tools/todo";
 import type { EventBus } from "../../utils/event-bus";
+import type { SearchProviderDescriptor } from "../../web/search/registry";
 import type { HmrChange, HmrRestartRequirement } from "../plugins/hmr/service";
 import type {
 	AgentEndEvent,
@@ -1710,6 +1711,22 @@ export interface ExtensionAPI extends PluginContextNamespaces {
 	registerSubagent(def: SubagentDefinition): { name: string };
 	/** Remove an agent registered by this extension. */
 	unregisterSubagent(name: string): boolean;
+	/**
+	 * Register a web-search provider for this session's `web_search` tool.
+	 *
+	 * The descriptor's `id` must be non-empty, must not use the `auto`/`none`
+	 * sentinels, and must not collide with a built-in or another party's
+	 * registration; a collision throws instead of overwriting. Re-registering
+	 * this extension's own id replaces it, so hot reload is safe. Registered
+	 * providers join the fallback chain after the built-in order, and a
+	 * per-request `provider: "<id>"` selects them explicitly. Unload with
+	 * {@link unregisterSearchProvider}; whatever is still owned is released when
+	 * the extension unloads (a shared plugin generation releases on disposal).
+	 */
+	registerSearchProvider(provider: SearchProviderDescriptor): { id: string };
+	/** Remove a provider registered through {@link registerSearchProvider}.
+	 * Resolves false for built-ins and for ids another party owns. */
+	unregisterSearchProvider(id: string): boolean;
 	/**
 	 * Register a fallback writer consulted when a native `write`/`edit` byte-write is
 	 * denied with a permission error (`EPERM`/`EACCES`/`EROFS`). Every other write

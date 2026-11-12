@@ -63,6 +63,11 @@ export const SEARCH_PROVIDER_OPTIONS = [
 		description: "China-hosted search API (博查); requires BOCHAAI_API_KEY",
 	},
 	{
+		value: "deepseek",
+		label: "DeepSeek",
+		description: "DeepSeek Search API; requires DEEPSEEK_API_KEY or a stored deepseek credential",
+	},
+	{
 		value: "startpage",
 		label: "Startpage",
 		description: "Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged",
@@ -135,6 +140,24 @@ export function isSearchProviderPreference(value: string): value is SearchProvid
 	return SEARCH_PROVIDER_PREFERENCES.includes(value as SearchProviderId | "auto");
 }
 
+declare const dynamicSearchProviderId: unique symbol;
+
+/**
+ * Provider id registered at runtime (extension or plugin) instead of shipped
+ * in {@link SEARCH_PROVIDER_OPTIONS}. Kept as a separate channel so the
+ * built-in `SearchProviderId` stays a closed union: only code that
+ * deliberately handles runtime providers mentions this type.
+ */
+export type DynamicSearchProviderId = string & { readonly [dynamicSearchProviderId]: true };
+
+/** Every id a provider instance can carry: a built-in or a runtime-registered one. */
+export type AnySearchProviderId = SearchProviderId | DynamicSearchProviderId;
+
+/** Widen a runtime id string into {@link DynamicSearchProviderId}. Registry membership is checked separately. */
+export function asDynamicSearchProviderId(id: string): DynamicSearchProviderId {
+	return id as DynamicSearchProviderId;
+}
+
 /** Source returned by search (all providers) */
 export interface SearchSource {
 	title: string;
@@ -166,7 +189,7 @@ export interface SearchUsage {
 
 /** Unified response across providers */
 export interface SearchResponse {
-	provider: SearchProviderId | "none";
+	provider: AnySearchProviderId | "none";
 	/** Synthesized answer text (LLM-mediated providers) */
 	answer?: string;
 	/** Search result sources */
@@ -190,7 +213,7 @@ export interface SearchResponse {
 /** Provider-specific error with optional HTTP status */
 export class SearchProviderError extends Error {
 	constructor(
-		public readonly provider: SearchProviderId,
+		public readonly provider: AnySearchProviderId,
 		message: string,
 		public readonly status?: number,
 	) {

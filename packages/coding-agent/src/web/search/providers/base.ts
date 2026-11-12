@@ -1,7 +1,7 @@
 import type { AuthStorage, FetchImpl } from "@musepi/pi-ai";
 import type { ModelRegistry } from "../../../config/model-registry";
 import type { StructuredQuery } from "../query";
-import type { SearchProviderId, SearchResponse } from "../types";
+import type { AnySearchProviderId, SearchResponse } from "../types";
 
 /**
  * Shared web search parameters passed to providers.
@@ -78,7 +78,7 @@ export interface SearchParams {
 
 /** Base class for web search providers. */
 export abstract class SearchProvider {
-	abstract readonly id: SearchProviderId;
+	abstract readonly id: AnySearchProviderId;
 	abstract readonly label: string;
 
 	/**

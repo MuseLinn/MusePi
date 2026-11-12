@@ -34,10 +34,10 @@ import {
 import { applyQueryConstraints, parseSearchQuery } from "./query";
 import { renderSearchCall, renderSearchResult, type SearchRenderDetails } from "./render";
 import {
+	type AnySearchProviderId,
 	DEFAULT_WEB_SEARCH_TIMEOUT_SECONDS,
 	MAX_WEB_SEARCH_TIMEOUT_SECONDS,
 	SearchProviderError,
-	type SearchProviderId,
 	type SearchResponse,
 } from "./types";
 
@@ -54,7 +54,7 @@ export const webSearchSchema = type({
 export type SearchToolParams = typeof webSearchSchema.infer;
 
 export interface SearchQueryParams extends SearchToolParams {
-	provider?: SearchProviderId | "auto";
+	provider?: AnySearchProviderId | "auto";
 }
 
 /** Truncate text for tool output */

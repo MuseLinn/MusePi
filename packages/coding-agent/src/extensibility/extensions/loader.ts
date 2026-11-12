@@ -42,6 +42,11 @@ import type { CustomMessagePayload } from "../../session/messages";
 import { normalizeSubagentDefinition, type SubagentDefinition } from "../../task/types";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
 import { EventBus } from "../../utils/event-bus";
+import {
+	registerSearchProvider as registerWebSearchProvider,
+	type SearchProviderDescriptor,
+	unregisterSearchProvider as unregisterWebSearchProvider,
+} from "../../web/search/registry";
 import { enablementAllowsPath } from "../enablement-manifest";
 import { readPluginConfigStore } from "../extensions-center/plugin-config-store";
 import * as TypeBox from "../legacy-typebox";
@@ -1028,6 +1033,18 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 
 	unregisterSubagent(name: string): boolean {
 		return this.extension.subagents.delete(name);
+	}
+
+	registerSearchProvider(provider: SearchProviderDescriptor): { id: string } {
+		const registered = registerWebSearchProvider(provider, {
+			owner: this.extension.path,
+			generation: this.extension,
+		});
+		return { id: registered.id };
+	}
+
+	unregisterSearchProvider(id: string): boolean {
+		return unregisterWebSearchProvider(id, { owner: this.extension.path });
 	}
 
 	registerMagicKeyword(keyword: ExtensionMagicKeyword): void {

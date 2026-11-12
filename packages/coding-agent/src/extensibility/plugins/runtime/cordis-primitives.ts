@@ -30,6 +30,7 @@
  * "the plugin's side effects".
  */
 
+import { releaseSearchProviders } from "../../../web/search/registry";
 import { removeHostExtensionModes } from "../../extensions/host-modes";
 import type { Extension } from "../../extensions/types";
 
@@ -206,6 +207,10 @@ export async function disposePluginPrimitives(extension: Extension): Promise<num
 			console.warn("[plugin] memory backend provider cleanup failed:", error);
 		}
 	}
+	// Web-search providers belong to the instance too; a cached generation is
+	// disposed only after its last session released, so this is also where a
+	// shared plugin's registrations finally go.
+	releaseSearchProviders(extension.path, extension);
 	return ran;
 }
 
