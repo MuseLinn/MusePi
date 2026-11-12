@@ -21,6 +21,8 @@ import { removeWithRetries } from "@musepi/pi-utils";
 // half reproduces it alone.
 
 const tempRoots: string[] = [];
+// A different byte length keeps reload detection independent of the filesystem timestamp tick.
+const RELOADED_LABEL = "version-two-longer";
 
 afterAll(async () => {
 	for (const dir of tempRoots) {
@@ -65,7 +67,11 @@ describe("extension source-graph change detection", () => {
 		expect(extensionEntriesNeedingReload([entry])).toEqual([]);
 
 		// The entry is never written again in this case — only its submodule is.
-		await fs.writeFile(path.join(dir, "panel.ts"), 'export const label = "v2";\n', "utf8");
+		await fs.writeFile(
+			path.join(dir, "panel.ts"),
+			`export const label = ${JSON.stringify(RELOADED_LABEL)};\n`,
+			"utf8",
+		);
 
 		expect(extensionEntriesNeedingReload([entry])).toEqual([entry]);
 
@@ -73,7 +79,7 @@ describe("extension source-graph change detection", () => {
 		// touch unnecessary rather than merely unreported. Reloads opt into a
 		// fresh module instance; the default shared load would serve the cache.
 		const after = (await loadLegacyPiModule(entry, { fresh: true })) as { seen: string };
-		expect(after.seen).toBe("v2");
+		expect(after.seen).toBe(RELOADED_LABEL);
 	});
 
 	it("stops reporting an entry once its graph has been reloaded", async () => {
@@ -81,7 +87,11 @@ describe("extension source-graph change detection", () => {
 		const entry = path.join(dir, "index.ts");
 		await loadLegacyPiModule(entry);
 
-		await fs.writeFile(path.join(dir, "panel.ts"), 'export const label = "v2";\n', "utf8");
+		await fs.writeFile(
+			path.join(dir, "panel.ts"),
+			`export const label = ${JSON.stringify(RELOADED_LABEL)};\n`,
+			"utf8",
+		);
 		expect(extensionEntriesNeedingReload([entry])).toEqual([entry]);
 
 		// The baseline moves with the load, so a reload loop cannot form.
