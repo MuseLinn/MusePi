@@ -33,39 +33,56 @@ function declaredEntries(manifest: PluginManifest, name: string): string[] {
 	return declared as string[];
 }
 
+/** Flatten the per-module reasons Bun buries inside an AggregateError. */
+function buildErrorDetail(error: unknown): string {
+	const nested = (error as { errors?: unknown[] }).errors;
+	if (Array.isArray(nested) && nested.length > 0) {
+		return nested.map(entry => (entry instanceof Error ? entry.message : String(entry))).join("; ");
+	}
+	return error instanceof Error ? error.message : String(error);
+}
+
 async function bundleEntry(source: string, destination: string): Promise<void> {
 	await fs.stat(source);
-	const result = await Bun.build({
-		entrypoints: [source],
-		target: "bun",
-		format: "esm",
-		// Plain JavaScript dependencies must travel with each staged plugin:
-		// the installed vendor directory has no repository node_modules above
-		// it. Only native/heavy runtimes stay external to the desktop package.
-		external: [
-			"@musepi/pi-natives",
-			"@huggingface/transformers",
-			"bun-pty",
-			"fastembed",
-			"node-pty",
-			"omp-legacy-pi-modules",
-			"onnxruntime-node",
-			"puppeteer-core",
-			"sherpa-onnx-node",
-		],
-		minify: true,
-		plugins: [
-			{
-				name: "musepi-first-party-host-modules",
-				setup(build) {
-					build.onResolve({ filter: /^\.\.\/\.\.\/modes\/(orchestrate|ultrathink|workflow)$/ }, args => ({
-						path: `@musepi/pi-coding-agent/modes/${args.path.split("/").at(-1)}`,
-						external: true,
-					}));
+	let result: Awaited<ReturnType<typeof Bun.build>>;
+	try {
+		result = await Bun.build({
+			entrypoints: [source],
+			target: "bun",
+			format: "esm",
+			// Plain JavaScript dependencies must travel with each staged plugin:
+			// the installed vendor directory has no repository node_modules above
+			// it. Only native/heavy runtimes stay external to the desktop package.
+			external: [
+				"@musepi/pi-natives",
+				"@huggingface/transformers",
+				"bun-pty",
+				"fastembed",
+				"node-pty",
+				"omp-legacy-pi-modules",
+				"onnxruntime-node",
+				"puppeteer-core",
+				"sherpa-onnx-node",
+			],
+			minify: true,
+			plugins: [
+				{
+					name: "musepi-first-party-host-modules",
+					setup(build) {
+						build.onResolve({ filter: /^\.\.\/\.\.\/modes\/(orchestrate|ultrathink|workflow)$/ }, args => ({
+							path: `@musepi/pi-coding-agent/modes/${args.path.split("/").at(-1)}`,
+							external: true,
+						}));
+					},
 				},
-			},
-		],
-	});
+			],
+		});
+	} catch (error) {
+		// Bun throws an AggregateError whose message is only "Bundle failed";
+		// the per-module reasons live in `errors`. Stage failures are what the
+		// desktop release dies on, so surface them instead of the wrapper text.
+		throw new Error(`Failed to bundle ${source}: ${buildErrorDetail(error)}`);
+	}
 	const output = result.outputs.find(candidate => candidate.kind === "entry-point");
 	if (!result.success || !output) {
 		throw new Error(`Failed to bundle ${source}: ${result.logs.map(log => log.message).join("; ")}`);
