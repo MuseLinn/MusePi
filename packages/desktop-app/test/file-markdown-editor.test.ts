@@ -1,6 +1,7 @@
 import "./happy-dom-shim";
 import { describe, expect, it } from "bun:test";
-import { hasYamlFrontMatter, markdownImagePath } from "../src/components/FileMarkdownEditor";
+import { markdownImagePath } from "../src/components/FileMarkdownEditor";
+import { readMarkdownFrontMatter } from "../src/lib/markdown-frontmatter";
 
 describe("Markdown visual editor image resolution", () => {
 	it("resolves relative images from the document directory on Windows and POSIX", () => {
@@ -19,14 +20,14 @@ describe("Markdown visual editor image resolution", () => {
 	});
 });
 
-describe("Markdown YAML Front Matter warning", () => {
+describe("Markdown YAML Front Matter detection", () => {
 	it("detects a complete front matter block, including CRLF and a BOM", () => {
-		expect(hasYamlFrontMatter("---\ntitle: Guide\n---\n# Body\n")).toBe(true);
-		expect(hasYamlFrontMatter("\uFEFF---\r\ntitle: Guide\r\n...\r\nBody")).toBe(true);
+		expect(readMarkdownFrontMatter("---\ntitle: Guide\n---\n# Body\n").raw).not.toBe("");
+		expect(readMarkdownFrontMatter("\uFEFF---\r\ntitle: Guide\r\n...\r\nBody").raw).not.toBe("");
 	});
 
 	it("does not mistake a horizontal rule or leading content for front matter", () => {
-		expect(hasYamlFrontMatter("---\n# Body\n")).toBe(false);
-		expect(hasYamlFrontMatter("# Body\n---\ntitle: Guide\n---\n")).toBe(false);
+		expect(readMarkdownFrontMatter("---\n# Body\n").raw).toBe("");
+		expect(readMarkdownFrontMatter("# Body\n---\ntitle: Guide\n---\n").raw).toBe("");
 	});
 });
