@@ -61,6 +61,14 @@
     url = "https://registry.npmjs.org/@anush008/tokenizers/-/tokenizers-0.0.0.tgz";
     hash = "sha512-IQD9wkVReKAhsEAbDjh/0KrBGTEXelqZLpOBRDaIRvlzZ9sjmUP+gKbpvzyJnei2JHQiE8JAgj7YcNloINbGBw==";
   };
+  "@aora-bot/engine@0.2.0" = fetchurl {
+    url = "https://registry.npmjs.org/@aora-bot/engine/-/engine-0.2.0.tgz";
+    hash = "sha512-YyFThF8C2al4MBuXWDaFs23IYerv286vZkhznWKdVYKoQxryFHapttVmmEXPcFsgPdorxJrD1hCqJ43yO/TaQA==";
+  };
+  "@aora-bot/react@0.2.0" = fetchurl {
+    url = "https://registry.npmjs.org/@aora-bot/react/-/react-0.2.0.tgz";
+    hash = "sha512-PofPEn+PvUF9ugpH1qCw6zDR3/JvNb2W4mZfH3FAebJXrrSaKYZsiS53ftfR1PUdd+yILgkTDnM2uELNK0wHzw==";
+  };
   "@aparajita/capacitor-secure-storage@8.0.1" = fetchurl {
     url = "https://registry.npmjs.org/@aparajita/capacitor-secure-storage/-/capacitor-secure-storage-8.0.1.tgz";
     hash = "sha512-NSYIQtH6TyBgL3myumQGcCE3iecq2PtGNFlGxl1fJKEU37Dv5DudzDlwg42cgbVxCm1ay72g4X7rTSAvKULsVg==";
