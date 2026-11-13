@@ -3848,3 +3848,40 @@ button.gui-stats-pill {
 .gui-connector-dot--disconnected {
 	background: var(--color-text-faint);
 }
+
+.gui-attach-file-open {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	border: 0;
+	background: transparent;
+	padding: 0;
+	color: inherit;
+	cursor: pointer;
+	min-width: 0;
+}
+.gui-attach-file-open:disabled {
+	cursor: default;
+}
+.gui-attach-file-open:not(:disabled):hover .gui-attach-file-name {
+	text-decoration: underline;
+}
+.gui-long-paste-editor {
+	display: block;
+	width: 100%;
+	resize: vertical;
+	box-sizing: border-box;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: var(--color-surface-sunken);
+	color: var(--color-text);
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+	padding: 10px 12px;
+	margin: 10px 0;
+}
+.gui-long-paste-btn--primary {
+	background: var(--color-accent);
+	color: var(--color-accent-fg);
+}

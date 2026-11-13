@@ -93,7 +93,7 @@ import {
 } from "./composer/use-attachments";
 import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
-import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
+import { attachPaste, isLongPastedText, saveEditedPaste, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
 import { HeightMorph } from "./HeightMorph";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
@@ -150,6 +150,9 @@ interface WelcomeAttachment {
 	name: string;
 	size: number;
 	file?: File;
+	/** Collapsed-paste marker and full text (click opens the editor). */
+	paste?: boolean;
+	editText?: string;
 	/** Board-drawn chip (SketchPad): clicking it reopens the canvas. */
 	sketch?: boolean;
 	/** Editable board content behind that chip (its strokes, not its pixels):
@@ -376,7 +379,14 @@ export function WelcomeComposer({
 		window.addEventListener("musepi-gui-quote-append", onQuoteAppend);
 		return () => window.removeEventListener("musepi-gui-quote-append", onQuoteAppend);
 	}, []);
-	const { pending: pendingPaste, requestPaste: requestLongPaste, dismiss: dismissLongPaste } = useLongTextPaste();
+	const { requestPaste } = useLongTextPaste(text => {
+		attachPaste({ text, addFiles, setAttachments });
+	});
+	const [editingPaste, setEditingPaste] = useState<{ id: number; text: string } | null>(null);
+	const onEditPaste = (id: number): void => {
+		const a = attachments.find(x => x.id === id);
+		if (a?.editText !== undefined) setEditingPaste({ id, text: a.editText });
+	};
 	const [attachments, setAttachments] = useState<WelcomeAttachment[]>([]);
 	// Armed plan/goal: one tap arms the mode chip —
 	// NO popup dialog and NO session creation, so the welcome input keeps
@@ -1753,6 +1763,7 @@ export function WelcomeComposer({
 							heroActive={beamOn}
 							chatInput
 							flipAnchor="welcome"
+							onEditTextAttachment={onEditPaste}
 							pet={
 								pet.enabled && pet.mode === "input"
 									? ({ hovered, hopping }) => (
@@ -2086,53 +2097,16 @@ export function WelcomeComposer({
 									</div>,
 								)}
 
-								{pendingPaste && (
+								{editingPaste && (
 									<LongPasteDialog
-										lineCount={pendingPaste.lineCount}
-										charCount={pendingPaste.charCount}
-										onAction={action => {
-											const ta = taRef.current;
-											if (!ta) {
-												dismissLongPaste();
-												return;
-											}
-											const start = ta.selectionStart ?? ta.value.length;
-											const end = ta.selectionEnd ?? ta.value.length;
-											if (action === "file") {
-												void (async () => {
-													try {
-														const name = `paste-${Date.now()}.md`;
-														await rpc.request("fs.write", {
-															cwd: project ?? "",
-															path: name,
-															content: pendingPaste.text,
-														});
-														const newText = ta.value.slice(0, start) + name + ta.value.slice(end);
-														setText(newText);
-														requestAnimationFrame(() =>
-															ta.setSelectionRange(start + name.length, start + name.length),
-														);
-													} catch {
-														const newText =
-															ta.value.slice(0, start) + pendingPaste.text + ta.value.slice(end);
-														setText(newText);
-													}
-												})();
-												dismissLongPaste();
-												return;
-											}
-											const insertion =
-												action === "code-block"
-													? `\`\`\`\n${pendingPaste.text}\n\`\`\``
-													: pendingPaste.text;
-											const newText = ta.value.slice(0, start) + insertion + ta.value.slice(end);
-											setText(newText);
-											requestAnimationFrame(() =>
-												ta.setSelectionRange(start + insertion.length, start + insertion.length),
-											);
-											dismissLongPaste();
+										lineCount={editingPaste.text.split(String.fromCharCode(10)).length}
+										charCount={editingPaste.text.length}
+										text={editingPaste.text}
+										onSave={text => {
+											saveEditedPaste({ id: editingPaste.id, text, attachments, setAttachments, rpc });
+											setEditingPaste(null);
 										}}
-										onDismiss={dismissLongPaste}
+										onDismiss={() => setEditingPaste(null)}
 									/>
 								)}
 								<div className="gui-ta-stack">
@@ -2193,7 +2167,7 @@ export function WelcomeComposer({
 											}
 											if (isLongPastedText(pastedText)) {
 												e.preventDefault();
-												requestLongPaste(pastedText);
+												requestPaste(pastedText);
 											}
 										}}
 										onDragOver={e => {

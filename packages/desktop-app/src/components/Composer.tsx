@@ -61,7 +61,7 @@ import { DesignStyleSelect } from "./composer/design-styles";
 import { GoalDetailCard } from "./composer/goal-detail-card";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { LargeTextPasteGesture } from "./composer/large-text-paste";
-import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
+import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
 import {
 	expandMentionTokens,
@@ -106,7 +106,7 @@ import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
-import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
+import { attachPaste, isLongPastedText, saveEditedPaste, useLongTextPaste } from "./composer/use-long-text-paste";
 import { useModes } from "./composer/use-modes";
 import { useSessionDesignSystem } from "./composer/use-session-design-system";
 import { useVoiceSetupGate } from "./composer/voice-setup";
@@ -410,7 +410,14 @@ export function Composer({
 		},
 		[sketch.editId, closeSketch, setAttachments, addFiles],
 	);
-	const { pending: pendingPaste, requestPaste: requestLongPaste, dismiss: dismissLongPaste } = useLongTextPaste();
+	const { requestPaste } = useLongTextPaste(text => {
+		attachPaste({ text, addFiles, setAttachments });
+	});
+	const [editingPaste, setEditingPaste] = useState<{ id: number; text: string } | null>(null);
+	const onEditPaste = (id: number): void => {
+		const a = attachments.find(x => x.id === id);
+		if (a?.editText !== undefined) setEditingPaste({ id, text: a.editText });
+	};
 	// The large-paste gesture: the first big paste lands inline, a second
 	// identical one inside the window turns it into an attachment. It lives for
 	// the composer's lifetime, and the pending long-paste dialog is the
@@ -1862,6 +1869,7 @@ export function Composer({
 			{compacting && <CompactionStatusLine onCancel={cancelCompaction} />}
 			<ComposerFrame
 				flipAnchor="session"
+				onEditTextAttachment={onEditPaste}
 				belowRow={
 					<>
 						{/* composer.dock 座位槽：输入卡下方、整行居中的一条——读数类
@@ -2280,46 +2288,16 @@ export function Composer({
 						}}
 					/>
 				)}
-				{pendingPaste && (
+				{editingPaste && (
 					<LongPasteDialog
-						lineCount={pendingPaste.lineCount}
-						charCount={pendingPaste.charCount}
-						onAction={(action: LongPasteAction) => {
-							const ta = taRef.current;
-							if (!ta) {
-								dismissLongPaste();
-								return;
-							}
-							const start = ta.selectionStart ?? ta.value.length;
-							const end = ta.selectionEnd ?? ta.value.length;
-							if (action === "file") {
-								// Unified attachment flow (composer file chips): the
-								// paste becomes a markdown FILE CHIP in the attachment
-								// row — send time uploads it through `attachment.put`
-								// and references the returned `blob://` address, same
-								// as any picked file. An upload failure surfaces inline
-								// instead of the old silent inline fallback.
-								const file = new File([pendingPaste.text], `paste-${Date.now()}.md`, {
-									type: "text/markdown",
-								});
-								void addFiles([file]);
-								dismissLongPaste();
-								return;
-							}
-							const insertion =
-								action === "code-block"
-									? `\`\`\`\n${pendingPaste.text}\n\`\`\``
-									: action === "attachment"
-										? `<attachment>\n${pendingPaste.text}\n</attachment>`
-										: pendingPaste.text;
-							const newText = ta.value.slice(0, start) + insertion + ta.value.slice(end);
-							setText(newText);
-							requestAnimationFrame(() =>
-								ta.setSelectionRange(start + insertion.length, start + insertion.length),
-							);
-							dismissLongPaste();
+						lineCount={editingPaste.text.split("\n").length}
+						charCount={editingPaste.text.length}
+						text={editingPaste.text}
+						onSave={text => {
+							saveEditedPaste({ id: editingPaste.id, text, attachments, setAttachments, rpc });
+							setEditingPaste(null);
 						}}
-						onDismiss={dismissLongPaste}
+						onDismiss={() => setEditingPaste(null)}
 					/>
 				)}
 				{quotes.length > 0 && (

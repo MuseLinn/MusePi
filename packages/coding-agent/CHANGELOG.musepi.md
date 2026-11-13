@@ -33,6 +33,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **终端标签拖拽排序与右侧停靠**：终端标签支持拖拽与 Alt+左右方向键重排，顺序按项目持久化；外观设置新增「终端位置」（底部/右侧），右侧停靠不重建终端，宽度可用左缘拖拽调整。
   - EN: Terminal tabs support drag and Alt+Left/Right reordering, persisted per project. Appearance gains a terminal position setting (bottom/right); the right-side dock keeps existing terminals alive and its width can be dragged from the left edge.
 
+- **长文本粘贴自动折叠为可编辑芯片**：超过 100 行或 4000 字符的粘贴现在折叠为「粘贴的文本 · N 行 / M 字符」附件芯片，点击查看并可编辑；编辑后重新上传。
+  - EN: Long pasted text now collapses into an editable attachment chip showing line and character counts. Click to view and edit; edits are re-uploaded on send.
+
 - **更换项目主目录会同步迁移会话**：`workspace.setPrimary` 现在把旧主目录下的会话文件与产物迁移到新主目录，并重载 live 会话配置；桌面端同步刷新项目列表与会话树。
   - EN: Changing the project primary directory now migrates session files and artifacts to the new root and reloads live sessions; the desktop refreshes the project list and session tree.
 

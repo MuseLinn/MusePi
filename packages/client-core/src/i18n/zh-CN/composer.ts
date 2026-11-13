@@ -54,6 +54,11 @@ export const composer = {
 	"composer.wrapAttachment": "包裹为附件",
 	"composer.wrapCodeBlock": "包裹为代码块",
 	"composer.attachFile": "附加为文件",
+	"composer.viewPastedText": "查看文本",
+	"composer.pastedTextTitle": "粘贴的文本",
+	"composer.pastedTextSave": "保存",
+	"composer.pastedTextDiscard": "放弃",
+	"composer.pastedTextDiscardMessage": "对这段粘贴文本的修改将会丢失。",
 
 	// ── Image attachments (collab prompt.images; design 「Session 附件流」) ──
 	// "add images" lives in the general domain already.

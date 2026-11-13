@@ -56,6 +56,11 @@ export const composer = {
 	"composer.wrapAttachment": "Wrap as attachment",
 	"composer.wrapCodeBlock": "Wrap as code block",
 	"composer.attachFile": "Attach as file",
+	"composer.viewPastedText": "View text",
+	"composer.pastedTextTitle": "Pasted text",
+	"composer.pastedTextSave": "Save",
+	"composer.pastedTextDiscard": "Discard",
+	"composer.pastedTextDiscardMessage": "Changes to this pasted text will be lost.",
 
 	// ── Image attachments (collab prompt.images; design 「Session 附件流」) ──
 	// "add images" lives in the general domain already.

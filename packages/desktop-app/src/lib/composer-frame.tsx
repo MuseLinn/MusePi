@@ -76,6 +76,9 @@ export interface ComposerFrameAttachment {
 	mimeType: string;
 	name: string;
 	size?: number;
+	/** Collapsed-paste marker and full text (click opens the editor). */
+	paste?: boolean;
+	editText?: string;
 	/** Send-time upload in flight → progress ring overlay (file chips). */
 	uploading?: boolean;
 	/** Board-drawn chip: click reopens the sketch canvas for editing. */
@@ -108,6 +111,7 @@ function SortableAttachmentChip({
 	onMention,
 	onEditSketch,
 	onPreview,
+	onEditText,
 }: {
 	a: ComposerFrameAttachment;
 	mentionLabel: string;
@@ -119,6 +123,8 @@ function SortableAttachmentChip({
 	onMention?(id: number): void;
 	onEditSketch(id: number): void;
 	onPreview(id: number, el: HTMLElement): void;
+	/** Collapsed-paste chip clicked: open its text editor. */
+	onEditText?(id: number): void;
 }): ReactNode {
 	const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({
 		id: a.id,
@@ -136,13 +142,21 @@ function SortableAttachmentChip({
 			title={isFile ? `${a.name}${attachSizeLabel(a.size) ? ` · ${attachSizeLabel(a.size)}` : ""}` : undefined}
 		>
 			{isFile ? (
-				<>
+				<button
+					type="button"
+					className="gui-attach-file-open"
+					disabled={a.editText === undefined}
+					title={a.editText !== undefined ? t("composer.viewPastedText") : undefined}
+					onClick={() => {
+						if (a.editText !== undefined) onEditText?.(a.id);
+					}}
+				>
 					<span className="gui-attach-file-icon">
 						<Icon name={fileIconFor(a.name)} className="h-5 w-5" />
 					</span>
 					<span className="gui-attach-file-name">{a.name}</span>
 					{a.uploading && <span className="gui-attach-ring" aria-hidden />}
-				</>
+				</button>
 			) : (
 				<img
 					src={a.dataUrl}
@@ -314,6 +328,7 @@ export function ComposerFrame({
 	onEditSketch,
 	onEditImage,
 	onMentionAttachment,
+	onEditTextAttachment,
 	onReorderAttachments,
 	onAddAttachment,
 	onAnnotated,
@@ -349,6 +364,8 @@ export function ComposerFrame({
 	 *  token for that attachment into the composer text at the caret. The
 	 *  host owns the textarea; the frame only owns the button. */
 	onMentionAttachment?(id: number): void;
+	/** Collapsed-paste chip clicked: open its text editor. */
+	onEditTextAttachment?(id: number): void;
 	/** Drag-reorder (Kimi desktop parity): chip `fromId` was dropped onto
 	 *  chip `toId`. The host applies the move to its attachments state —
 	 *  chip order is the send order (images ride the wire images channel in
@@ -514,6 +531,7 @@ export function ComposerFrame({
 											onMention={onMentionAttachment}
 											onEditSketch={onEditSketch}
 											onPreview={openPreview}
+											onEditText={onEditTextAttachment}
 										/>
 									);
 								});

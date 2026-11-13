@@ -29,6 +29,10 @@ export interface ComposerAttachment {
 	size: number;
 	/** Raw bytes for file chips (not persisted with the draft). */
 	file?: File;
+	/** Collapsed-paste marker: the chip opens the text editor on click. */
+	paste?: boolean;
+	/** Full text behind a collapsed-paste chip. */
+	editText?: string;
 	/** Upload started when the chip was staged, so send waits only for the tail
 	 *  of work that is usually finished. Memory-only, like `file`. A failure is
 	 *  recorded as `{ error }`; the send path retries by path then inline. */
@@ -175,7 +179,7 @@ type AttachmentUploadResult = AttachmentPutResult | { error: string } | null;
 /** Upload one file: by path when this machine can name it, inline otherwise.
  *  Throws only when the RPC itself fails; a daemon-side rejection comes back
  *  as `{ error }` so the caller can try the next channel. */
-async function uploadOneAttachment(rpc: RpcClient, file: File, name: string): Promise<AttachmentUploadResult> {
+export async function uploadOneAttachment(rpc: RpcClient, file: File, name: string): Promise<AttachmentUploadResult> {
 	const mimeType = file.type || "application/octet-stream";
 	// Same-machine fast path: the daemon reads the file itself, so the bytes
 	// never enter the RPC frame (a base64 body is capped at ~12 MiB by the
