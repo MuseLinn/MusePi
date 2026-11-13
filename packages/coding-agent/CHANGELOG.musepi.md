@@ -24,6 +24,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **聚焦时的通知行为更明确**：窗口聚焦时仍显示应用内 toast；「聚焦时也发送系统通知」只控制系统通知，不会关闭应用内提示。
   - EN: Focused-window behavior is explicit: the in-app toast still appears while the window is focused, and “System notifications while focused” only controls the OS notification, never the in-app toast.
 
+- **修复音效默认音量被当成 0**：从未设置过音量时现在按 100% 处理，开启音效或通知提示音即可听到；显式拖到 0 仍保持静音。
+  - EN: The default sound volume is no longer treated as 0. An unset volume now means 100%, so enabling sound effects or notification sounds is audible; an explicit 0 still stays muted.
+
 - **搜索 provider 可注册，并接入 DeepSeek 搜索**：新增 `web/search/registry.ts`，内置 18 个 provider 与插件注册共用同一张表；扩展通过 `ctx.registerSearchProvider` / `unregisterSearchProvider` 贡献 provider，随扩展实例卸载、热重载与会话关闭释放。候选链为「显式 `provider:` → 用户 order → 内置顺序 → 注册顺序」，`availability` 只影响自动链。新增 `deepseek` provider（`POST https://api.deepseek.com/v1/tools/search`，`DEEPSEEK_API_KEY` 或已存的 deepseek 凭据）。
   - EN: Web search providers are now registrable, and DeepSeek search is wired in. The new `web/search/registry.ts` is the single table the 18 built-ins and plugin registrations share; extensions contribute providers through `ctx.registerSearchProvider` / `unregisterSearchProvider`, released with the extension instance on unload, hot reload and session shutdown. The chain is explicit `provider:` → user order → built-in order → registration order, and `availability` gates only the automatic chain. A `deepseek` provider was added (`POST https://api.deepseek.com/v1/tools/search`, `DEEPSEEK_API_KEY` or a stored deepseek credential).
 

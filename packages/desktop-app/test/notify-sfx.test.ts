@@ -34,7 +34,17 @@ import {
 	setInAppToastEnabled,
 	setNotifySoundEnabled,
 } from "../src/lib/notify";
-import { ALL_SOUNDS, DEFAULT_SFX, SFX_EVENTS, setSoundFor, soundEnabled, soundFor, WIRED_SOUNDS } from "../src/lib/sfx";
+import {
+	ALL_SOUNDS,
+	DEFAULT_SFX,
+	SFX_EVENTS,
+	setSoundFor,
+	setVolumePref,
+	soundEnabled,
+	soundFor,
+	volumePref,
+	WIRED_SOUNDS,
+} from "../src/lib/sfx";
 
 /** Settings → 通知与音效 contract: every SFX event has a default choice that
  *  is persisted renderer-local and gateable by the master sound switch; every
@@ -79,6 +89,27 @@ describe("sfx (sound config contract)", () => {
 		localStorage.setItem("musepi-gui-sound", "0");
 		expect(soundEnabled()).toBe(false);
 		localStorage.removeItem("musepi-gui-sound");
+	});
+});
+
+describe("master volume", () => {
+	it("defaults to 100% when unset instead of treating null as 0", () => {
+		localStorage.removeItem("musepi-gui-volume");
+		expect(volumePref()).toBe(1);
+	});
+
+	it("keeps an explicit mute at 0", () => {
+		setVolumePref(0);
+		expect(volumePref()).toBe(0);
+		localStorage.removeItem("musepi-gui-volume");
+	});
+
+	it("falls back to 100% for malformed or out-of-range values", () => {
+		localStorage.setItem("musepi-gui-volume", "loud");
+		expect(volumePref()).toBe(1);
+		localStorage.setItem("musepi-gui-volume", "2");
+		expect(volumePref()).toBe(1);
+		localStorage.removeItem("musepi-gui-volume");
 	});
 });
 

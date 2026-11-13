@@ -131,8 +131,13 @@ const VOLUME_KEY = "musepi-gui-volume";
 /** The persisted master volume 0..1 (default 1). */
 export function volumePref(): number {
 	try {
-		const raw = Number(localStorage.getItem(VOLUME_KEY));
-		if (Number.isFinite(raw) && raw >= 0 && raw <= 1) return raw;
+		const stored = localStorage.getItem(VOLUME_KEY);
+		// `Number(null)` is 0 — treat an unset key as the 100% default instead
+		// of silently starting muted.
+		if (stored !== null) {
+			const raw = Number(stored);
+			if (Number.isFinite(raw) && raw >= 0 && raw <= 1) return raw;
+		}
 	} catch {
 		// storage unavailable — default
 	}
