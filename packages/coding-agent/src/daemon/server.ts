@@ -682,6 +682,7 @@ import {
 	tailSnapshot,
 } from "./session-host";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
+import { isSubagentTranscriptOf, transcriptAgentId } from "./subagent-transcripts";
 import { createTerminalCorePlugin } from "./terminal-core-plugin";
 import type { WebRouteRegistry } from "./web-routes";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
@@ -1348,6 +1349,25 @@ export class DaemonServer {
 	 *  by the client's sessionId guard, or mixed). WeakMap so a dropped
 	 *  connection never leaks its LiveSession reference. */
 	#resumeLiveByConn = new WeakMap<object, LiveSession>();
+
+	/** Session file for any session id: the live attachment first, then the
+	 *  TTL-cached disk scan (`knownSessions`). Child transcripts are addressed
+	 *  relative to their parent's file, so every subagent read starts here.
+	 *  Memoized because the transcript poll asks every 1.2s while it is open
+	 *  and a session's file does not move. */
+	#sessionFiles = new Map<string, { at: number; file: string | null }>();
+
+	async #sessionFileFor(sessionId: string): Promise<string | null> {
+		const live = this.#host.get(sessionId)?.agentSession.sessionFile;
+		if (live) return live;
+		const cached = this.#sessionFiles.get(sessionId);
+		if (cached && Date.now() - cached.at < 10_000) return cached.file;
+		const rows = await this.#host.knownSessions();
+		const file = rows.find(row => row.sessionId === sessionId)?.sessionFile ?? null;
+		if (this.#sessionFiles.size > 256) this.#sessionFiles.clear();
+		this.#sessionFiles.set(sessionId, { at: Date.now(), file });
+		return file;
+	}
 
 	/** Lazily start the LAN pair endpoint (pair.resolve only). Bound to
 	 *  0.0.0.0 so the mobile app can fetch the full collab link from a
@@ -2324,26 +2344,22 @@ export class DaemonServer {
 				// not bring the old workspace's history back — only sessions created
 				// after the removal show (sessionHiddenByWorkspace).
 				const deletedWorkspaces = await this.#services.get<WorkspaceService>("workspaces").deletedWorkspaces();
-				// 子代理计数(侧栏会话行展开):注册表 transcript 路径落在会话
-				// 产物目录(`<sessionFile 去 .jsonl>/`)下的非 advisor ref。
-				// 每条请求一次注册表快照,逐行前缀过滤。
-				const { AgentRegistry } = await import("../registry/agent-registry");
-				const subagentFiles = AgentRegistry.global()
-					.list()
-					.filter(ref => ref.kind !== "advisor" && typeof ref.sessionFile === "string")
-					.map(ref => ref.sessionFile as string);
 				const rows =
 					deletedWorkspaces.roots.size === 0 && Object.keys(deletedWorkspaces.deletedAt).length === 0
 						? await this.#host.knownSessions()
 						: (await this.#host.knownSessions()).filter(
 								r => !sessionHiddenByWorkspace(r.cwd, r.createdAt, deletedWorkspaces),
 							);
+				// 子代理数(侧栏会话行展开):来自磁盘名册的父子关系,而不是注册表
+				// ——一次性子代理跑完即 unregister,注册表口径会让历史会话的
+				// chevron 消失,子会话再也展不开。
+				const subagentCounts = new Map<string, number>();
+				for (const r of rows) {
+					if (r.subagent !== true || r.advisor === true || !r.parentId) continue;
+					subagentCounts.set(r.parentId, (subagentCounts.get(r.parentId) ?? 0) + 1);
+				}
 				return rows.map(r => {
 					const live = this.#host.get(r.sessionId);
-					const sessionFile = live?.agentSession.sessionFile ?? r.sessionFile ?? null;
-					const root = sessionFile?.endsWith(".jsonl")
-						? `${sessionFile.slice(0, -".jsonl".length)}${path.sep}`
-						: null;
 					const updatedAt = new Date(r.updatedAt).toISOString();
 					const presence = this.#services.get<SessionPresenceService>("sessionPresence").derive(live, {
 						sessionId: r.sessionId,
@@ -2358,6 +2374,9 @@ export class DaemonServer {
 						subagent: r.subagent === true,
 						/** 顾问 transcript 行:GUI 渲染顾问标记且保持只读。 */
 						advisor: r.advisor === true,
+						/** 是哪个子代理(`session_init.agent`):侧栏子行据此标注,
+						 *  行标题是实例 id,回答不了这个问题。 */
+						agentName: r.advisor === true ? undefined : r.agentName,
 						timestamp: new Date(r.createdAt).toISOString(),
 						updatedAt,
 						model: r.model ?? undefined,
@@ -2367,7 +2386,7 @@ export class DaemonServer {
 						modeId: r.modeId ?? undefined,
 						paused: presence.paused,
 						// 子代理数(不含 advisor):>0 时侧栏会话行出现展开 chevron。
-						agentCount: root === null ? 0 : subagentFiles.filter(f => f.startsWith(root)).length,
+						agentCount: subagentCounts.get(r.sessionId) ?? 0,
 						// Legacy projections kept for the sidebar/read-status lanes;
 						// `presence` is the structured contract new consumers use.
 						working: presence.working,
@@ -2393,41 +2412,50 @@ export class DaemonServer {
 					.get<SessionPresenceService>("sessionPresence")
 					.presence((params ?? {}) as { sessionId?: unknown });
 			case "session.agents": {
-				// 单个会话的子代理名册（侧边栏会话行展开）:
-				// 口径 = 注册表 transcript 路径落在本会话产物目录
-				// (`<sessionFile 去 .jsonl>/`) 下的非 advisor ref —— task /
-				// vibe / persisted-rehydrate 三条注册路径同目录约定。
-				// 主 agent 本身不算子代理;advisor 是只读观察 transcript,
-				// 不进可交互名册。非 live 会话经 listAllSessions 解析文件。
+				// 单个会话的子代理名册（agents hub / 侧边栏展开）:
+				// 口径 = 磁盘上落在本会话产物目录的 task transcript,而不是
+				// 注册表。一次性子代理跑完即 unregister,按注册表列会让名册在
+				// 「跑完之后」「daemon 重启之后」两种最常见时刻变空;被用户打开
+				// 成主会话的子会话还会以 `Main-*` ref 混进来(名册里显示成
+				// 主代理)。磁盘行才是事实,注册表只用来补充实时 status/activity。
 				const p = (params ?? {}) as { sessionId?: unknown };
 				const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
 				if (!sessionId) throw new Error("session.agents: missing sessionId");
-				let sessionFile = this.#host.get(sessionId)?.agentSession.sessionFile ?? null;
-				if (!sessionFile) {
-					const { listAllSessions } = await import("../session/session-listing");
-					const row = (await listAllSessions()).find(r => r.id === sessionId);
-					sessionFile = row?.path ?? null;
-				}
+				const sessionFile = await this.#sessionFileFor(sessionId);
 				if (!sessionFile?.endsWith(".jsonl")) return { agents: [] };
-				const root = `${sessionFile.slice(0, -".jsonl".length)}${path.sep}`;
+				const rows = (await this.#host.knownSessions()).filter(
+					row =>
+						row.subagent === true &&
+						row.advisor !== true &&
+						typeof row.sessionFile === "string" &&
+						(row.parentId === sessionId || isSubagentTranscriptOf(sessionFile, row.sessionFile)),
+				);
+				if (rows.length === 0) return { agents: [] };
 				const { AgentRegistry } = await import("../registry/agent-registry");
-				const agents = AgentRegistry.global()
-					.list()
-					.filter(
-						ref =>
-							ref.kind !== "advisor" && typeof ref.sessionFile === "string" && ref.sessionFile.startsWith(root),
-					)
-					.map(ref => ({
-						id: ref.id,
-						/** 子代理 transcript 的会话 id(文件名 `<subId>.jsonl` 约定):
-						 *  GUI 名册行点击直达子会话消息视图的打开目标。 */
-						sessionId: path.basename(ref.sessionFile as string, ".jsonl"),
-						displayName: ref.displayName,
-						kind: ref.kind,
-						status: ref.status,
-						activity: ref.activity ?? null,
-						lastActivity: ref.lastActivity,
-					}));
+				const registry = AgentRegistry.global();
+				const agents = rows.map(row => {
+					const file = row.sessionFile as string;
+					const id = transcriptAgentId(file);
+					const ref = registry.get(id);
+					// 三个 id 各有用途:agent id 寻址实时会话,子会话 id 打开
+					// 会话,agent 定义名(`session_init.agent`)回答“是哪个子代理”。
+					const agentName = ref?.history?.agent ?? row.agentName;
+					return {
+						id,
+						sessionId: row.sessionId,
+						displayName: agentName ?? ref?.displayName ?? row.title ?? id,
+						agentName: agentName ?? null,
+						kind: "sub" as const,
+						/** 注册表有 ref 时用实时状态;没有(一次性子代理已结束、
+						 *  daemon 重启)按 idle 呈现——磁盘行不可 revive,不能画成
+						 *  parked 让用户点一个必然失败的按钮。 */
+						status: ref?.status ?? ("idle" as const),
+						/** 名册第二行:实时 activity,否则子会话标题(即分配任务)。 */
+						activity: ref?.activity ?? row.title ?? null,
+						lastActivity: ref?.lastActivity ?? row.updatedAt,
+						hasSessionFile: true,
+					};
+				});
 				return { agents };
 			}
 			case "history.messages": {
@@ -6540,12 +6568,25 @@ export class DaemonServer {
 				// a byte cursor. Returns { text, newSize, error? } — the GUI
 				// trajectory panel polls with the returned cursor (terminal
 				// `error` stops polling; `null` on missing file).
+				//
+				// Resolution order is registry → parent product directory. The
+				// registry only holds a ref while the child is live; a finished
+				// one-shot subagent was unregistered, and its transcript still
+				// sits at `<parentBase>/<agentId>.jsonl`. `parentSessionId` is
+				// the panel's owning session, so the caller does not need to
+				// know the file path.
 				const { AgentRegistry } = await import("../registry/agent-registry");
-				const p = (params ?? {}) as { agentId?: unknown; fromByte?: unknown };
+				const { resolveSubagentTranscript } = await import("./subagent-transcripts");
+				const p = (params ?? {}) as { agentId?: unknown; parentSessionId?: unknown; fromByte?: unknown };
 				const agentId = typeof p.agentId === "string" ? p.agentId : "";
+				const parentSessionId = typeof p.parentSessionId === "string" ? p.parentSessionId : "";
 				const fromByte = typeof p.fromByte === "number" && Number.isFinite(p.fromByte) ? p.fromByte : 0;
 				if (!agentId) throw new Error("agents.transcript: missing agentId");
-				const file = AgentRegistry.global().get(agentId)?.sessionFile;
+				let file = AgentRegistry.global().get(agentId)?.sessionFile ?? null;
+				if (!file && parentSessionId) {
+					const parentFile = await this.#sessionFileFor(parentSessionId);
+					file = await resolveSubagentTranscript(parentFile, agentId);
+				}
 				if (!file) return { text: "", newSize: fromByte, error: "no transcript available" };
 				try {
 					const stat = await fs.promises.stat(file);

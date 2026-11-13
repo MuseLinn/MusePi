@@ -2908,6 +2908,9 @@ export class DaemonSessionHost {
 			/** 顾问 transcript 行(`__advisor[.<slug>].jsonl`):挂在父会话产物
 			 *  目录下的顾问内部记录,GUI 标记为顾问且只读。 */
 			advisor?: boolean;
+			/** 子代理 transcript 的 agent 定义名(`session_init.agent`,如
+			 *  `sonic`)。文件名是实例 id,这个名字才回答“是哪个子代理”。 */
+			agentName?: string;
 		})[]
 	> {
 		const live = new Map<string, number>();
@@ -2932,6 +2935,7 @@ export class DaemonSessionHost {
 				sessionFile?: string;
 				subagent?: boolean;
 				advisor?: boolean;
+				agentName?: string;
 			}
 		>(rows.map(r => [r.sessionId, r]));
 		for (const h of history.rows) {
@@ -2950,6 +2954,7 @@ export class DaemonSessionHost {
 				// 磁盘路径同理只在扫描行上:子代理计数/名册按产物目录前缀
 				// 过滤需要它(store 行由 live 会话在 server 侧覆盖)。
 				if (!existing.sessionFile) existing.sessionFile = h.path;
+				if (!existing.agentName && h.agentName) existing.agentName = h.agentName;
 				continue;
 			}
 			merged.set(h.id, {
@@ -2981,6 +2986,7 @@ export class DaemonSessionHost {
 				status: h.status,
 				// 磁盘 transcript 路径——子代理产物目录 = 去 .jsonl + sep。
 				sessionFile: h.path,
+				...(h.agentName ? { agentName: h.agentName } : undefined),
 			});
 		}
 		// 子代理 transcript(`<slug>/<parentFileBase>/<subId>.jsonl`)收编为层
@@ -3006,6 +3012,7 @@ export class DaemonSessionHost {
 				if (h.advisor === true) existing.advisor = true;
 				if (!existing.sessionFile) existing.sessionFile = h.path;
 				if (!existing.parentId) existing.parentId = derivedParent;
+				if (!existing.agentName && h.agentName && h.advisor !== true) existing.agentName = h.agentName;
 				continue;
 			}
 			merged.set(h.id, {
@@ -3027,6 +3034,7 @@ export class DaemonSessionHost {
 				// Advisor transcripts stay tagged through the merge so the
 				// list route can distinguish them from task subagents.
 				advisor: h.advisor === true,
+				...(h.agentName && h.advisor !== true ? { agentName: h.agentName } : undefined),
 			});
 		}
 		// Ghost-row reconciliation: view-store rows outlive their transcripts.

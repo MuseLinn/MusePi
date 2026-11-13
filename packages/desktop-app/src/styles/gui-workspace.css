@@ -2932,6 +2932,24 @@
 	opacity: 0.9;
 }
 
+/* Subagent definition badge (`sonic`): the row label is the child's instance
+ * title, so this is the only place the row says which subagent it belongs to.
+ * Faint chip, clipped before it can push the row's time out. */
+.gui-tree-agent {
+	flex-shrink: 0;
+	margin-left: 4px;
+	max-width: 84px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	padding: 1px 4px;
+	border-radius: 4px;
+	font-size: 10.5px;
+	line-height: 1.2;
+	color: var(--color-text-faint);
+	background: color-mix(in oklab, var(--color-text-faint) 12%, transparent);
+}
+
 /* Context-drawer stats (right panel): two compact stat tiles + action row. */
 .gui-ctx-stat {
 	display: flex;

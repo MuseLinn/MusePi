@@ -11,7 +11,6 @@ import {
 } from "@dnd-kit/core";
 import {
 	AgentsPanel,
-	relTime,
 	replaceTabs,
 	Segmented,
 	stripAnsi,
@@ -175,6 +174,99 @@ function BrowserPanelTabIcon({ favicon }: { favicon: string | null }): ReactNode
 }
 
 /**
+ * The owning session's subagent roster, read from the daemon's disk-backed
+ * scan (`session.agents`) every 5s while the pane is visible. Live progress
+ * rows come from the session store; this is the durable half — a finished
+ * one-shot subagent leaves the registry, but its transcript and child session
+ * stay on disk, so the roster must not be rebuilt from the registry alone.
+ */
+function useSubagentRoster(rpc: RpcClient, sessionId: string | null, enabled: boolean): readonly AgentSnapshot[] {
+	const [roster, setRoster] = useState<readonly AgentSnapshot[]>([]);
+	useEffect(() => {
+		if (!sessionId) {
+			setRoster([]);
+			return;
+		}
+		if (!enabled) return;
+		let alive = true;
+		const poll = (): void => {
+			void rpc
+				.request<{
+					agents: {
+						id: string;
+						sessionId: string;
+						displayName: string;
+						agentName?: string | null;
+						kind: string;
+						status: string;
+						activity?: string | null;
+						lastActivity?: number | null;
+						hasSessionFile?: boolean;
+					}[];
+				}>("session.agents", { sessionId })
+				.then(d => {
+					if (!alive) return;
+					setRoster(
+						(d.agents ?? []).map(row => ({
+							id: row.id,
+							displayName: row.displayName,
+							kind: "sub" as const,
+							parentId: sessionId,
+							status:
+								row.status === "running" ||
+								row.status === "idle" ||
+								row.status === "parked" ||
+								row.status === "aborted"
+									? row.status
+									: "idle",
+							hasSessionFile: row.hasSessionFile !== false,
+							createdAt: row.lastActivity ?? 0,
+							lastActivity: row.lastActivity ?? 0,
+							sessionId: row.sessionId,
+							...(row.activity ? { activity: row.activity } : undefined),
+						})),
+					);
+				})
+				.catch(() => {
+					/* fail-open: keep the rows already shown */
+				});
+		};
+		poll();
+		const timer = setInterval(poll, 5000);
+		return () => {
+			alive = false;
+			clearInterval(timer);
+		};
+	}, [rpc, sessionId, enabled]);
+	return roster;
+}
+
+/** Live rows first (status, progress, completion markers), enriched with the
+ *  durable roster's child session id / summary, then the roster rows the
+ *  store does not know about. One row per agent id. */
+function mergeSubagentRoster(
+	live: readonly AgentSnapshot[],
+	roster: readonly AgentSnapshot[],
+): readonly AgentSnapshot[] {
+	if (roster.length === 0) return live;
+	const persisted = new Map(roster.map(agent => [agent.id, agent]));
+	const merged = live.map(agent => {
+		const disk = persisted.get(agent.id);
+		if (!disk) return agent;
+		persisted.delete(agent.id);
+		return {
+			...agent,
+			sessionId: agent.sessionId ?? disk.sessionId,
+			activity: agent.activity ?? disk.activity,
+			hasSessionFile: agent.hasSessionFile || disk.hasSessionFile,
+		};
+	});
+	if (persisted.size === 0) return merged;
+	const rest = [...persisted.values()].sort((a, b) => b.lastActivity - a.lastActivity);
+	return [...merged, ...rest];
+}
+
+/**
  * Right pane — ZCode-style session tools: 上下文 / 文件 tabs plus a tool
  * rail (git graph, PRs, diff, notes, browser). The file tree and context
  * summary are live; the tool views are framed placeholders waiting on
@@ -299,6 +391,11 @@ export function ContextPanel({
 }): ReactNode {
 	const cwd = snap?.state?.cwd ?? cwdOverride ?? "";
 	const browserSessionId = snap?.sessionId ?? null;
+	const subagentRoster = useSubagentRoster(rpc, browserSessionId, open);
+	const rosterAgents = useMemo(
+		() => mergeSubagentRoster(snap?.agents ?? [], subagentRoster),
+		[snap?.agents, subagentRoster],
+	);
 	const browserHost = useSyncExternalStore(subscribeBrowserHost, getBrowserHostState, getBrowserHostState);
 	const browserTabs = useMemo(
 		() => browserTabsForSession(browserSessionId, browserHost),
@@ -397,7 +494,7 @@ export function ContextPanel({
 	// resolves against the live snapshot here. The agents-hub rows and the
 	// sub-session rows open the agent TAB instead (agentTabDescriptor) —
 	// the drawer is the transcript-driven secondary entry.
-	const agent = agentId !== null ? ((snap?.agents ?? []).find(a => a.id === agentId) ?? null) : null;
+	const agent = agentId !== null ? (rosterAgents.find(a => a.id === agentId) ?? null) : null;
 	const dockAgentId = agent?.id ?? null;
 	const agentProgress = dockAgentId !== null ? (snap?.progress.get(dockAgentId)?.progress ?? null) : null;
 	const dockOpen = agentId !== null;
@@ -1097,11 +1194,33 @@ export function ContextPanel({
 			 * path is a real state: point at the child session instead. */
 			(() => {
 				const agentKey = bodyTab?.dedupeKey ?? null;
-				const tabAgent = agentKey !== null ? ((snap?.agents ?? []).find(a => a.id === agentKey) ?? null) : null;
-				// The tab address is a child session id only when it differs from
-				// the agent id (a roster row has no session id to offer).
 				const tabTarget = bodyTab?.target ?? null;
+				// A live-progress row opens the tab without a child session id, so
+				// the address falls back to the agent id; the roster path supplies
+				// the real child session id.
 				const childSessionId = tabTarget !== null && tabTarget !== agentKey ? tabTarget : null;
+				// The roster is the source of truth; a tab can still outlive its
+				// row (daemon restarted, row not scanned yet), and the tab itself
+				// carries everything the transcript reader needs — agent id,
+				// label and child session id — so a missing row is a degraded
+				// header, not an empty tab.
+				const tabAgent =
+					agentKey === null
+						? null
+						: (rosterAgents.find(agent => agent.id === agentKey) ??
+							(bodyTab
+								? {
+										id: agentKey,
+										displayName: bodyTab.label,
+										kind: "sub" as const,
+										parentId: snap?.sessionId ?? undefined,
+										status: "idle" as const,
+										hasSessionFile: true,
+										createdAt: 0,
+										lastActivity: 0,
+										...(childSessionId ? { sessionId: childSessionId } : undefined),
+									}
+								: null));
 				if (tabAgent !== null) {
 					return (
 						<div className="flex min-h-0 flex-1 flex-col">
@@ -1110,7 +1229,8 @@ export function ContextPanel({
 								progress={snap?.progress.get(tabAgent.id)?.progress ?? null}
 								rpc={rpc}
 								host={agentHost}
-								sessionId={childSessionId}
+								sessionId={childSessionId ?? tabAgent.sessionId ?? null}
+								parentSessionId={snap?.sessionId ?? null}
 								onOpenSession={onOpenSession}
 								pollEnabled={open}
 							/>
@@ -1151,17 +1271,14 @@ export function ContextPanel({
 					 * the entry-file viewer (iframe/markdown/source). */
 					<ArtifactsPanel rpc={rpc} cwd={cwd} />
 				) : bodyView === "agents" ? (
-					/* Agents hub (TUI Agent Hub parity): the session's live
-					 * roster; a row opens that agent's session TAB beside this
-					 * view (agentTabDescriptor — the drawer stays the
-					 * transcript-driven secondary entry). Below it the
-					 * sub-session list (session.agents registry rows): a row
-					 * opens a child session as the main chat surface, and its
-					 * panel action opens the same agent tab with the child
-					 * session id as its address (openchamber mini-chat parity)
-					 * — live transcript + chat without leaving this session. */
+					/* Agents hub (TUI Agent Hub parity): ONE roster for the
+					 * session's subagents — live progress rows merged with the
+					 * daemon's disk-backed scan, so a finished or daemon-restart
+					 * child stays listed. A row opens that agent's session TAB
+					 * (agentTabDescriptor carries the child session id, which is
+					 * what the tab's "open session" action needs). */
 					<>
-						{(snap?.agents ?? []).length === 0 ? (
+						{rosterAgents.length === 0 ? (
 							<div className="gui-pane-tab-empty">
 								<span className="gui-pane-tab-empty-icon">
 									<Icon name="ai-agent" />
@@ -1170,7 +1287,7 @@ export function ContextPanel({
 							</div>
 						) : (
 							<AgentsPanel
-								agents={snap?.agents ?? []}
+								agents={rosterAgents}
 								progress={snap?.progress ?? new Map()}
 								lifecycle={snap?.lifecycle ?? new Map()}
 								selectedId={activeAgentTabKey ?? agentId}
@@ -1178,19 +1295,11 @@ export function ContextPanel({
 									<SubagentAvatar agent={agent} payload={payload} now={now} />
 								)}
 								onSelect={id => {
-									const picked = (snap?.agents ?? []).find(candidate => candidate.id === id);
-									if (picked) panelTabs.open(agentTabDescriptor(picked));
+									const picked = rosterAgents.find(candidate => candidate.id === id);
+									if (picked) panelTabs.open(agentTabDescriptor(picked, picked.sessionId));
 								}}
 							/>
 						)}
-						<SubSessionsSection
-							rpc={rpc}
-							sessionId={snap?.sessionId ?? ""}
-							onOpenSession={onOpenSession}
-							onDockAgent={(candidate, childSessionId) => {
-								panelTabs.open(agentTabDescriptor(candidate, childSessionId));
-							}}
-						/>
 						{snap?.sessionId ? (
 							<BackgroundJobsSection rpc={rpc} sessionId={snap.sessionId} visible={open} />
 						) : null}
@@ -1771,6 +1880,7 @@ export function ContextPanel({
 						rpc={rpc}
 						progress={agentProgress}
 						host={agentHost}
+						parentSessionId={snap?.sessionId ?? null}
 						onOpenSession={onOpenSession}
 						onClose={() => onAgentSelect(null)}
 					/>
@@ -1951,133 +2061,8 @@ function fmtJobTime(ts: number | string): string {
 	return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-/** Sub-session list (agents hub lower section, openchamber parity): the
- *  session's child transcripts as rows (status dot + name + last activity).
- *  Backed by the daemon's session.agents registry scan, so rows persist
- *  after an agent goes idle. Two open paths per row: the main area opens
- *  the child session as the main chat surface (same target as the
- *  sidebar's nested session rows); the panel action opens the agent's
- *  session TAB — live transcript + chat + lifecycle actions without
- *  leaving this session (openchamber mini-chat parity). Polls every 5s. */
-function SubSessionsSection({
-	rpc,
-	sessionId,
-	onOpenSession,
-	onDockAgent,
-}: {
-	rpc: RpcClient;
-	sessionId: string;
-	onOpenSession?(id: string): void;
-	/** Open/focus this row's agent session tab (child session id as address). */
-	onDockAgent?(agent: AgentSnapshot, childSessionId: string): void;
-}): ReactNode {
-	const [rows, setRows] = useState<
-		readonly {
-			id: string;
-			sessionId: string;
-			displayName: string;
-			kind: string;
-			status: string;
-			lastActivity?: number | null;
-		}[]
-	>([]);
-	useEffect(() => {
-		if (!sessionId) return;
-		let alive = true;
-		const poll = (): void => {
-			void rpc
-				.request<{
-					agents: {
-						id: string;
-						sessionId: string;
-						displayName: string;
-						kind: string;
-						status: string;
-						lastActivity?: number | null;
-					}[];
-				}>("session.agents", { sessionId })
-				.then(d => {
-					if (alive) setRows(d.agents ?? []);
-				})
-				.catch(() => {
-					/* fail-open: keep whatever rows we already have */
-				});
-		};
-		poll();
-		const timer = setInterval(poll, 5000);
-		return () => {
-			alive = false;
-			clearInterval(timer);
-		};
-	}, [rpc, sessionId]);
-
-	return (
-		<div className="px-1 pb-2 pt-1">
-			<div className="gui-group-label px-2 pb-1 pt-1">{t("general.subSessions")}</div>
-			{rows.length === 0 ? (
-				<p className="px-2 py-1 text-[12px] text-[var(--color-text-faint)]">—</p>
-			) : (
-				<div className="flex flex-col gap-0.5 px-2">
-					{rows.map(row => (
-						<div key={row.sessionId} className="gui-subsession-row">
-							<button
-								type="button"
-								className="gui-subsession-open"
-								title={`${row.displayName} · ${row.status}`}
-								aria-label={`${t("general.openSubagentSession")}: ${row.displayName}`}
-								onClick={() => onOpenSession?.(row.sessionId)}
-							>
-								<span className={`ag-dot ag-dot--${row.status}`} />
-								<span className="min-w-0 flex-1 truncate text-left text-[13px]">{row.displayName}</span>
-								{typeof row.lastActivity === "number" && (
-									<span className="flex-shrink-0 text-[11px] text-[var(--color-text-faint)]">
-										{relTime(row.lastActivity)}
-									</span>
-								)}
-							</button>
-							{onDockAgent ? (
-								<button
-									type="button"
-									className="gui-subsession-dock"
-									title={t("agents.previewSubagentPanel")}
-									aria-label={`${t("agents.previewSubagentPanel")}: ${row.displayName}`}
-									onClick={() =>
-										onDockAgent(
-											{
-												id: row.id,
-												displayName: row.displayName,
-												kind: row.kind === "main" ? "main" : "sub",
-												parentId: sessionId,
-												status:
-													row.status === "running" ||
-													row.status === "idle" ||
-													row.status === "parked" ||
-													row.status === "aborted"
-														? row.status
-														: "idle",
-												// The registry scan only lists
-												// refs that own a transcript file.
-												hasSessionFile: true,
-												createdAt: row.lastActivity ?? 0,
-												lastActivity: row.lastActivity ?? 0,
-											},
-											row.sessionId,
-										)
-									}
-								>
-									<Icon name="picture-in-picture-2" className="h-3.5 w-3.5" />
-								</button>
-							) : null}
-						</div>
-					))}
-				</div>
-			)}
-		</div>
-	);
-}
-
-/** Background jobs block (agents hub, below the sub-sessions list): the
- *  session's running and recent async jobs, folded by default. JobsPane polls
+/** Background jobs block (agents hub, below the roster): the session's
+ *  running and recent async jobs, folded by default. JobsPane polls
  *  `session.jobs` once a second, so the pane mounts only while the block is
  *  open — a folded block must not spend a poll. */
 function BackgroundJobsSection({

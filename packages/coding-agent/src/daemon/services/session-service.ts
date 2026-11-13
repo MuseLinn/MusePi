@@ -41,6 +41,8 @@ export interface SessionTreeRow {
 	subagent?: boolean;
 	/** 顾问 transcript 行（`__advisor[.<slug>].jsonl`）——GUI 渲染顾问标记且只读。 */
 	advisor?: boolean;
+	/** 子代理定义名（`session_init.agent`）——树行标注“是哪个子代理”。 */
+	agentName?: string;
 }
 
 /** live 会话最小结构面（tree 的 autoTitle 判定 + resumeLive 登记引用 +
@@ -127,6 +129,8 @@ export class SessionService implements DaemonService {
 					subagent?: boolean;
 					/** 顾问 transcript 行:GUI 渲染顾问标记且保持只读。 */
 					advisor?: boolean;
+					/** 是哪个子代理(`session_init.agent`)。 */
+					agentName?: string;
 					timestamp: string;
 					label?: string;
 					source?: string;
@@ -151,6 +155,8 @@ export class SessionService implements DaemonService {
 					subagent: r.subagent === true,
 					/** 顾问 transcript 行:GUI 渲染顾问标记且保持只读。 */
 					advisor: r.advisor === true,
+					/** 是哪个子代理(`session_init.agent`);行标题只是实例 id。 */
+					agentName: r.advisor === true ? undefined : r.agentName,
 					timestamp: new Date(r.createdAt).toISOString(),
 					updatedAt: new Date(r.updatedAt).toISOString(),
 					source: cronIds.has(r.sessionId) ? "cron" : undefined,

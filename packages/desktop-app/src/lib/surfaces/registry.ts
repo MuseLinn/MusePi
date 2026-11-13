@@ -74,8 +74,8 @@ export function compactionTabDescriptor(entryId: string, label: string): PanelTa
 
 /**
  * One subagent session tab. Identity is the AGENT id, not the address: a
- * roster row and the sub-session registry row for the same agent must land on
- * one tab, even though only the registry row knows the child session id.
+ * live-progress row and a disk-roster row for the same agent must land on one
+ * tab, even though only the roster knows the child session id.
  */
 export function agentTabDescriptor(
 	agent: Pick<AgentSnapshot, "id" | "displayName">,

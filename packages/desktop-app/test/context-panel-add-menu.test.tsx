@@ -640,15 +640,68 @@ describe("ContextPanel 子代理会话标签页", () => {
 		expect(fetchCall?.params).toMatchObject({ agentId: "a1", fromByte: 0 });
 	});
 
-	it("agent 不在快照时渲染空态，并可用标签页的 target 打开子会话", () => {
+	it("roster 行来自磁盘名册时也能打开标签页，并带上子会话 id 与子代理名", async () => {
+		const calls: AgentCall[] = [];
+		const rpc = {
+			request: async (method: string, params?: unknown): Promise<unknown> => {
+				calls.push({ method, params });
+				if (method === "session.agents") {
+					return {
+						agents: [
+							{
+								id: "ListExtensionDirs",
+								sessionId: "01a1d5bb-6329-776e-950f-e6ab1609964b",
+								displayName: "sonic",
+								agentName: "sonic",
+								kind: "sub",
+								status: "parked",
+								activity: "ListExtensionDirs",
+								lastActivity: 10,
+								hasSessionFile: true,
+							},
+						],
+					};
+				}
+				return null;
+			},
+			addEventListener: () => () => {},
+		} as unknown as RpcClient;
+		const { latest } = mountPanel({ agents: [], rpc });
+		await flush();
+		act(() => latest.current?.open({ surface: "agents", label: t("agents") }));
+		const row = panel().querySelector<HTMLButtonElement>(".ag-row");
+		expect(row).not.toBeNull();
+		// “是哪个子代理”是 agent 名；实例 id 是第二行（分配任务）。
+		expect(row?.textContent).toContain("sonic");
+		expect(row?.textContent).toContain("ListExtensionDirs");
+
+		click(row!);
+		const opened = latest.current?.tabs.find(tab => tab.surface === "agent");
+		expect(opened).toMatchObject({
+			dedupeKey: "ListExtensionDirs",
+			target: "01a1d5bb-6329-776e-950f-e6ab1609964b",
+			label: "sonic",
+		});
+	});
+
+	it("agent 不在名册时用标签页自带的 id 渲染转录视图，并可打开子会话", async () => {
+		const calls: AgentCall[] = [];
 		const opened: string[] = [];
 		mountPanel({
 			seedAgentTab: { id: "gone", displayName: "gone-agent", childSessionId: "child-9" },
+			rpc: agentRpc(calls),
 			onOpenSession: id => opened.push(id),
 		});
-		expect(panel().querySelector(".gui-pane-tab-empty-title")?.textContent).toBe(t("agents.subagentUnavailable"));
-		const openButton = [...panel().querySelectorAll<HTMLButtonElement>("button")].find(
-			button => button.textContent === t("general.openSubagentSession"),
+		await flush();
+		// 名册行消失（daemon 重启 / 子代理已结束）不再等于空白：
+		// 标签页自带 agent id + 子会话 id，转录视图照常渲染。
+		expect(panel().querySelector(".ag-drawer-body")).not.toBeNull();
+		expect(panel().textContent).toContain("gone-agent");
+		const fetchCall = calls.find(call => call.method === "agents.transcript");
+		expect(fetchCall?.params).toMatchObject({ agentId: "gone", fromByte: 0 });
+
+		const openButton = [...panel().querySelectorAll<HTMLButtonElement>("button[aria-label]")].find(
+			button => button.getAttribute("aria-label") === t("general.openSubagentSession"),
 		);
 		expect(openButton).toBeDefined();
 

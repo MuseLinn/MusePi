@@ -47,6 +47,9 @@ export interface SessionListEntry {
 	/** 顾问 transcript 行（`__advisor[.<slug>].jsonl`）——渲染顾问标记
 	 *  （区别于任务子代理），打开后转录只读。 */
 	advisor?: boolean;
+	/** 子代理定义名（`session_init.agent`，如 `sonic`）——行标签是实例
+	 *  名称，回答不了“这是哪个子代理”，行尾用它标注。 */
+	agentName?: string;
 }
 
 /** Session lifecycle status (TUI session-list parity). */
@@ -408,6 +411,7 @@ const SessionRow = memo(function SessionRow({
 	continuations,
 	searchQuery,
 	subagent,
+	agentName,
 	advisor,
 	childCount,
 	collapsed,
@@ -442,6 +446,8 @@ const SessionRow = memo(function SessionRow({
 	searchQuery: string;
 	/** 子代理会话行（父会话的子树行）——渲染子代理标记。 */
 	subagent: boolean;
+	/** 子代理定义名（`session_init.agent`）——行尾显示，回答“是哪个子代理”。 */
+	agentName?: string | null;
 	/** 顾问 transcript 行——渲染顾问标记（区别于任务子代理）。 */
 	advisor: boolean;
 	/** 直接子会话数（>0 = 父行,渲染折叠 chevron）。 */
@@ -666,12 +672,19 @@ const SessionRow = memo(function SessionRow({
 						<Icon name="git-branch" className="h-3 w-3" />
 					</span>
 				)}
+				{subagent && agentName ? (
+					<span className="gui-tree-agent" title={`${t("general.subagentSession")}: ${agentName}`}>
+						{agentName}
+					</span>
+				) : null}
 				{subagent && (
 					<span
 						className="gui-tree-fork"
 						role="img"
-						aria-label={t("general.subagentSession")}
-						title={t("general.subagentSession")}
+						aria-label={
+							agentName ? `${t("general.subagentSession")}: ${agentName}` : t("general.subagentSession")
+						}
+						title={agentName ? `${t("general.subagentSession")}: ${agentName}` : t("general.subagentSession")}
 					>
 						<Icon name="ai-agent-fill" className="h-3 w-3" />
 					</span>
@@ -865,6 +878,7 @@ function SessionListComponent({
 						continuations={continuations}
 						searchQuery={searchQuery}
 						subagent={node.entry.subagent === true}
+						agentName={node.entry.advisor === true ? null : node.entry.agentName}
 						advisor={node.entry.advisor === true}
 						childCount={childCounts.get(node.entry.id) ?? 0}
 						collapsed={collapsedIds.has(node.entry.id) || phases.get(node.entry.id) === "leaving"}

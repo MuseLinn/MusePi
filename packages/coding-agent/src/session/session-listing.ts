@@ -6,6 +6,7 @@ import { LRUCache } from "@musepi/pi-utils/lru";
 import { computeDefaultSessionDir } from "./session-paths";
 import { FileSessionStorage, type SessionStorage, type SessionStorageStat } from "./session-storage";
 import { parseTitleSlotFromContent } from "./session-title-slot";
+import { readSubagentAgentName } from "./subagent-agent-name";
 
 /**
  * Coarse lifecycle status of a session, derived from its last persisted message.
@@ -48,6 +49,10 @@ export interface SessionInfo {
 	 *  a hierarchical child for inspection, but tagged so surfaces render it as
 	 *  an advisor (not a task subagent) and keep it read-only. */
 	advisor?: boolean;
+	/** Agent definition the transcript was spawned with (`session_init.agent`,
+	 *  e.g. `sonic`). The transcript's file name is its instance id, so this is
+	 *  what identifies WHICH subagent a child row belongs to. */
+	agentName?: string;
 }
 
 export interface ResolvedSessionMatch {
@@ -435,12 +440,17 @@ async function scanSessionFile(
 		let firstMessage = "";
 		const allMessages: string[] = [];
 		let shortSummary: string | undefined;
+		let agentName: string | undefined;
 
 		for (let i = 1; i < entries.length; i++) {
-			const entry = entries[i] as { type?: string; message?: Message; shortSummary?: string };
+			const entry = entries[i] as { type?: string; message?: Message; shortSummary?: string; agent?: unknown };
 
 			if (entry.type === "compaction" && typeof entry.shortSummary === "string") {
 				shortSummary = entry.shortSummary;
+			}
+
+			if (entry.type === "session_init" && typeof entry.agent === "string" && entry.agent) {
+				agentName = entry.agent;
 			}
 
 			if (entry.type === "message" && entry.message) {
@@ -482,6 +492,7 @@ async function scanSessionFile(
 			firstMessage: firstMessage || "(no messages)",
 			allMessagesText: allMessages.length > 0 ? allMessages.join(" ") : firstMessage,
 			status: withStatus ? deriveSessionStatus(suffix) : undefined,
+			...(agentName ? { agentName } : undefined),
 		};
 		// The cache keeps its own shallow copy; hits also hand out copies, so
 		// callers can never mutate the shared cached object.
@@ -674,6 +685,7 @@ export async function listSubagentSessions(storage: SessionStorage = new FileSes
 		// record, not a runnable sub-session — tag them so the tree can
 		// badge them distinctly and block interactive sends.
 		const { isAdvisorTranscriptName } = await import("../advisor/transcript-recorder");
+		const named: SessionInfo[] = [];
 		for (const s of sessions) {
 			if (isAdvisorTranscriptName(path.basename(s.path))) {
 				s.advisor = true;
@@ -684,7 +696,17 @@ export async function listSubagentSessions(storage: SessionStorage = new FileSes
 			// id (`<subId>.jsonl`). Without it the session tree shows "untitled"
 			// for every historical subagent.
 			if (!s.title) s.title = subagentSessionLabel(s.path);
+			if (!s.agentName) named.push(s);
 		}
+		// `session_init` carries the whole system prompt, so `agent` sits past
+		// any prefix window; one bounded, path-cached read per child answers
+		// "which subagent" for the sidebar badge and the agents roster.
+		await Promise.all(
+			named.map(async s => {
+				const agentName = await readSubagentAgentName(s.path);
+				if (agentName) s.agentName = agentName;
+			}),
+		);
 		return sessions;
 	} catch {
 		return [];

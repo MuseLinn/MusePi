@@ -894,6 +894,13 @@ export interface AgentSnapshot {
 	hasSessionFile: boolean;
 	createdAt: number;
 	lastActivity: number;
+	/** Child session id (`session.list` row identity) — the id the GUI opens
+	 *  as a conversation. Absent while the child has never been scanned; the
+	 *  transcript still resolves from the agent id. */
+	sessionId?: string;
+	/** Last known activity gist (assignment summary for a persisted child);
+	 *  the roster's second line when no live progress frame exists. */
+	activity?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

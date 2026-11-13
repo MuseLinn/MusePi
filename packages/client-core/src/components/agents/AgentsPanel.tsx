@@ -41,7 +41,10 @@ function activityLine(
 	}
 	if (p?.lastIntent) return p.lastIntent;
 	if (lc) return lc.status;
-	return agent.status;
+	// Persisted roster rows carry the child session's own summary once no
+	// live frame is left; without it a restart-surviving row would only read
+	// "parked" and never say what the subagent was asked to do.
+	return agent.activity ?? agent.status;
 }
 
 function AgentRow(props: {

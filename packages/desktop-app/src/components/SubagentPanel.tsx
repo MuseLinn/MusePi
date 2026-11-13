@@ -49,6 +49,9 @@ export function SubagentSessionView(props: {
 	 *  upgrade action that opens the sub conversation as the main chat
 	 *  surface (openchamber mini-chat parity: embedded preview → full view). */
 	sessionId?: string | null;
+	/** Owning (parent) session: the daemon resolves the transcript from its
+	 *  product directory when the agent is no longer in the registry. */
+	parentSessionId?: string | null;
 	onOpenSession?(id: string): void;
 	/** Drawer hosts close first; a tab body has no close affordance. */
 	onClose?(): void;
@@ -56,7 +59,17 @@ export function SubagentSessionView(props: {
 	 *  stops the interval (closed drawer / folded panel). */
 	pollEnabled?: boolean;
 }): ReactNode {
-	const { agent, progress: p, rpc, host, sessionId, onOpenSession, onClose, pollEnabled = true } = props;
+	const {
+		agent,
+		progress: p,
+		rpc,
+		host,
+		sessionId,
+		parentSessionId,
+		onOpenSession,
+		onClose,
+		pollEnabled = true,
+	} = props;
 	const [entries, setEntries] = useState<readonly SessionEntry[]>([]);
 	const [fetchError, setFetchError] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");
@@ -100,6 +113,7 @@ export function SubagentSessionView(props: {
 			try {
 				const res = await rpc.request<{ text: string; newSize: number; error?: string }>("agents.transcript", {
 					agentId,
+					parentSessionId: parentSessionId ?? undefined,
 					fromByte: cursor,
 				});
 				if (disposed) return;
@@ -141,7 +155,7 @@ export function SubagentSessionView(props: {
 			disposed = true;
 			stopPolling();
 		};
-	}, [pollEnabled, agentId, hasSessionFile, rpc]);
+	}, [pollEnabled, agentId, hasSessionFile, rpc, parentSessionId]);
 
 	const sendChat = (): void => {
 		const text = draft.trim();
@@ -311,10 +325,11 @@ export function SubagentPanel(props: {
 	progress?: SubagentSessionProgress | null;
 	host?: TranscriptProps["host"];
 	sessionId?: string | null;
+	parentSessionId?: string | null;
 	onOpenSession?(id: string): void;
 	onClose(): void;
 }): ReactNode {
-	const { agent, open, rpc, progress: p, host, sessionId, onOpenSession, onClose } = props;
+	const { agent, open, rpc, progress: p, host, sessionId, parentSessionId, onOpenSession, onClose } = props;
 	// Written during render (not in an effect) so the snapshot is already
 	// retained in the commit that clears it.
 	const retained = useRef<{ agent: AgentSnapshot; progress: typeof p; sessionId: string | null | undefined } | null>(
@@ -347,6 +362,7 @@ export function SubagentPanel(props: {
 				rpc={rpc}
 				host={host}
 				sessionId={shownSessionId}
+				parentSessionId={parentSessionId}
 				onOpenSession={onOpenSession}
 				onClose={onClose}
 				pollEnabled={open}
