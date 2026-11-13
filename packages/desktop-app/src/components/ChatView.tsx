@@ -873,6 +873,36 @@ export function ChatView({
 	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
 	// Resizable terminal dock (drag the top edge).
 	const [dockHeight, setDockHeight] = useState(176);
+	// Dock side (bottom vs right). The TerminalPanel stays mounted across
+	// switches so switching sides does not recreate pties.
+	const [terminalPlacement, setTerminalPlacement] = useState<"bottom" | "right">(() =>
+		localStorage.getItem("musepi-gui-terminal-placement") === "right" ? "right" : "bottom",
+	);
+	const [rightWidth, setRightWidth] = useState(() =>
+		Math.min(720, Math.max(240, Number(localStorage.getItem("musepi-gui-terminal-right-width") ?? 360))),
+	);
+	useEffect(() => {
+		const onPlacement = (event: Event): void => {
+			const detail = (event as CustomEvent<"bottom" | "right">).detail;
+			if (detail === "right" || detail === "bottom") setTerminalPlacement(detail);
+		};
+		window.addEventListener("musepi-gui-terminal-placement-changed", onPlacement as EventListener);
+		return () => window.removeEventListener("musepi-gui-terminal-placement-changed", onPlacement as EventListener);
+	}, []);
+	const rightDockStartRef = useRef(rightWidth);
+	const rightDockResizeDrag = usePointerDrag({
+		onDragStart: () => {
+			terminalDockRef.current?.classList.add("gui-terminal-dock--resizing");
+			rightDockStartRef.current = rightWidth;
+		},
+		onDragMove: ({ dx }) => {
+			setRightWidth(Math.min(720, Math.max(240, rightDockStartRef.current - dx)));
+		},
+		onDragEnd: () => {
+			terminalDockRef.current?.classList.remove("gui-terminal-dock--resizing");
+			localStorage.setItem("musepi-gui-terminal-right-width", String(rightWidth));
+		},
+	});
 	// Terminal dock resize — unified usePointerDrag primitive (pointer
 	// capture + cancel; the old window-listener version leaked listeners
 	// when the pointer left the window and stuck mid-drag on cancel).
@@ -2782,7 +2812,11 @@ export function ChatView({
 										welcomeCardRef.current = el;
 									}}
 									className="gui-float-card gui-welcome-card flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]"
-									style={{ margin: "var(--gui-card-gutter)" }}
+									style={{
+										margin: "var(--gui-card-gutter)",
+										position: "relative",
+										paddingRight: terminalPlacement === "right" && terminalOpen ? rightWidth : 0,
+									}}
 								>
 									<WelcomeComposer
 										busy={busy}
@@ -3725,12 +3759,23 @@ export function ChatView({
 					ref={terminalDockRef}
 					className={`gui-terminal-dock relative flex flex-shrink-0 flex-col overflow-hidden border-t border-[var(--border)]${
 						terminalOpen ? " gui-terminal-dock--open" : ""
-					}`}
-					style={{ height: terminalOpen ? dockHeight : 0 }}
+					}${terminalPlacement === "right" ? " gui-terminal-dock--right" : ""}`}
+					style={{
+						height: terminalPlacement === "right" ? (terminalOpen ? "100%" : 0) : terminalOpen ? dockHeight : 0,
+						...(terminalPlacement === "right" ? { width: terminalOpen ? rightWidth : 0 } : {}),
+					}}
 				>
 					{/* Drag handle: the dock pushes the composer up and its
 					 * height is user-adjustable. */}
 					<div className="gui-dock-handle" {...dockResizeDrag} style={{ touchAction: "none" }} aria-hidden />
+					{terminalPlacement === "right" && (
+						<div
+							className="gui-terminal-right-handle"
+							{...rightDockResizeDrag}
+							style={{ touchAction: "none" }}
+							aria-hidden
+						/>
+					)}
 					{terminalPanelMounted && (
 						<TerminalPanel rpc={rpc} cwd={store?.cwd ?? project ?? ""} onAllClosed={onCloseTerminal} />
 					)}

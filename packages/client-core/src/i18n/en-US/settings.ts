@@ -813,6 +813,9 @@ export const settings = {
 	"settings.codeFontSize": "Code font size",
 	"settings.codeFontSizeDescription":
 		"Adjust the default font size for code in file previews and diff views (transcript code blocks follow the message font size).",
+	"settings.terminalPlacement": "Terminal position",
+	"settings.terminalPlacementBottom": "Bottom",
+	"settings.terminalPlacementRight": "Right side",
 	"settings.codePreview": "Code preview",
 	"settings.codePreviewDescription":
 		"Preview both light and dark code themes; the theme currently in use is marked “active”.",

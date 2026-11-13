@@ -66,7 +66,7 @@ gui-main (flex ROW)
 
 - **Localization**: language / time format / first day of week.
 - **UI settings**: UI theme (system/light/dark), light theme, dark theme (independent choices), UI font size, UI font family, conversation font (`--font-transcript`), spacing density (`--gui-density` unitless factor, 1=100%; calc multiplication must use numbers, not percentages), accent color (4 presets + custom), window transparency toggle + frosted glass opacity, background tint.
-- **Code settings**: light/dark code themes (GitHub/One/Solarized etc., orthogonal to the UI theme), show line numbers, wrap long lines, code font size, code font family, terminal font size, terminal font (`--font-terminal`).
+- **Code settings**: light/dark code themes (GitHub/One/Solarized etc., orthogonal to the UI theme), show line numbers, wrap long lines, code font size, code font family, terminal font size, terminal font (`--font-terminal`), terminal position (bottom/right; terminal tabs reorder by drag or Alt+arrow).
 - **Code preview**: two CodePreviewCard instances side by side; the currently active scheme carries an "active" badge.
 - **Effects**: avatar toggles, etc.
 

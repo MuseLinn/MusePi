@@ -213,6 +213,9 @@ export function AppearanceSection({
 	const [termFontFamily, setTermFontFamily] = useState<string>(
 		() => localStorage.getItem(TERMINAL_FONT_KEY) ?? DEFAULT_TERMINAL_FONT.id,
 	);
+	const [terminalPlacement, setTerminalPlacement] = useState<"bottom" | "right">(() =>
+		localStorage.getItem("musepi-gui-terminal-placement") === "right" ? "right" : "bottom",
+	);
 	const [transcriptFont, setTranscriptFont] = useState<string>(
 		() => localStorage.getItem(TRANSCRIPT_FONT_KEY) ?? DEFAULT_TRANSCRIPT_FONT.id,
 	);
@@ -832,6 +835,23 @@ export function AppearanceSection({
 							<Icon name="restart" className="h-3.5 w-3.5" />
 						</button>
 					</div>
+				</div>
+				<div className="gui-settings-field">
+					<div className="gui-settings-field-label">{t("settings.terminalPlacement")}</div>
+					<GuiSelect
+						className="gui-settings-select"
+						value={terminalPlacement}
+						onChange={nv => {
+							const v = nv as "bottom" | "right";
+							setTerminalPlacement(v);
+							setPref("musepi-gui-terminal-placement", v);
+							window.dispatchEvent(new CustomEvent("musepi-gui-terminal-placement-changed", { detail: v }));
+						}}
+						options={[
+							{ value: "bottom", label: t("settings.terminalPlacementBottom") },
+							{ value: "right", label: t("settings.terminalPlacementRight") },
+						]}
+					/>
 				</div>
 			</div>
 

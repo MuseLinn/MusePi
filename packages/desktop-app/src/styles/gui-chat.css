@@ -180,6 +180,30 @@
 		border-color 220ms ease-out;
 }
 
+/* Right-side dock: anchored to the surface's right edge instead of the
+ * bottom. The surface reserves the same width as padding so content never
+ * slides under it; the left edge is the resize handle. */
+.gui-terminal-dock--right {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 0;
+	border-top: 0;
+	border-left: 1px solid var(--border);
+	z-index: 4;
+}
+.gui-terminal-dock--right .gui-dock-handle {
+	display: none;
+}
+.gui-terminal-right-handle {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: -3px;
+	width: 6px;
+	cursor: col-resize;
+}
+
 /* While dragging the handle, the height must track the pointer 1:1. */
 .gui-terminal-dock--resizing {
 	transition: none !important;

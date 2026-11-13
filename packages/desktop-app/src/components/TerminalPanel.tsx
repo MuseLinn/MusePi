@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
 import { t, useSystemTheme } from "@musepi/client-core";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
+import { moveTabBefore } from "../lib/terminal-tab-order";
 import { Icon } from "../vendor/oc-icons";
 
 /**
@@ -357,6 +358,8 @@ export function TerminalPanel({
 		readRememberedCwds(cwd).map((dir, i) => ({ key: i, cwd: dir, label: baseName(dir) || "shell" })),
 	);
 	const [active, setActive] = useState(0);
+	const [dragKey, setDragKey] = useState<number | null>(null);
+	const [dropKey, setDropKey] = useState<number | null>(null);
 	const seq = useRef(tabs.length);
 	// Live tab count for the "last tab" check (state closures go stale on
 	// rapid successive closes — the ref never does).
@@ -416,11 +419,54 @@ export function TerminalPanel({
 						key={tab.key}
 						role="tab"
 						aria-selected={tab.key === active}
+						tabIndex={0}
+						draggable
 						className={`gui-terminal-tab group flex h-[26px] max-w-[180px] cursor-pointer items-center gap-1.5 rounded-full px-3 text-[12px]${
 							tab.key === active ? " gui-terminal-tab--active" : ""
+						}${dragKey === tab.key ? " gui-terminal-tab--dragging" : ""}${
+							dropKey === tab.key && dragKey !== tab.key ? " gui-terminal-tab--drop-target" : ""
 						}`}
 						title={tab.label}
 						onClick={() => setActive(tab.key)}
+						onDragStart={e => {
+							setDragKey(tab.key);
+							e.dataTransfer.setData("text/plain", String(tab.key));
+							e.dataTransfer.effectAllowed = "move";
+						}}
+						onDragEnd={() => {
+							setDragKey(null);
+							setDropKey(null);
+						}}
+						onDragOver={e => {
+							e.preventDefault();
+							e.dataTransfer.dropEffect = "move";
+							if (dropKey !== tab.key) setDropKey(tab.key);
+						}}
+						onDragLeave={() => {
+							if (dropKey === tab.key) setDropKey(null);
+						}}
+						onDrop={e => {
+							e.preventDefault();
+							const from = Number(e.dataTransfer.getData("text/plain"));
+							if (Number.isInteger(from)) setTabs(ts => moveTabBefore(ts, from, tab.key));
+							setDragKey(null);
+							setDropKey(null);
+						}}
+						onKeyDown={e => {
+							if (!e.altKey) return;
+							const idx = tabs.findIndex(t => t.key === tab.key);
+							if (idx < 0) return;
+							const target =
+								e.key === "ArrowLeft"
+									? tabs[idx - 1]?.key
+									: e.key === "ArrowRight"
+										? tabs[idx + 1]?.key
+										: undefined;
+							if (target === undefined) return;
+							e.preventDefault();
+							setTabs(ts => moveTabBefore(ts, tab.key, target));
+							setActive(tab.key);
+						}}
 						onAuxClick={e => {
 							// Middle-click closes the tab (openchamber sortable-tabs-strip parity).
 							if (e.button === 1) {
