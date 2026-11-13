@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 /**
- * Generate aggregated release notes from per-package CHANGELOG.md files.
+ * Generate aggregated release notes from the product `CHANGELOG.musepi.md`.
  *
  * Walks the version range `(latest-published-release, target]` so changelog
  * sections finalized under intervening *silent* tags (a `vX.Y.Z` tag that
@@ -32,7 +32,7 @@
 import { $, Glob } from "bun";
 import { compareVersions } from "../packages/utils/src/version";
 
-const changelogGlob = new Glob("packages/*/CHANGELOG.md");
+const changelogGlob = new Glob("packages/coding-agent/CHANGELOG.musepi.md");
 const REPO = process.env.OMP_REPO ?? process.env.GITHUB_REPOSITORY ?? "MuseLinn/MusePi";
 
 // Canonical ordering used by `fix-changelogs`; unknown categories sort

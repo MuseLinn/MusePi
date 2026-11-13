@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { getChangelogPath } from "../src/config";
 import { parseChangelog, parseChangelogVersion, selectStartupChangelog } from "../src/utils/changelog.js";
 
 const entry = (
@@ -9,14 +10,18 @@ const entry = (
 	return { major: parsed.major, minor: parsed.minor, patch: parsed.patch, content };
 };
 
-describe("changelog — MusePi notes first", () => {
-	test("parseChangelog prefers CHANGELOG.musepi.md over the upstream bundle", async () => {
-		// The repo ships packages/coding-agent/CHANGELOG.musepi.md, so the
-		// musepi-first path must surface its 0.4.x entry — not the upstream
-		// 17.x bundle.
-		const entries = await parseChangelog(undefined);
+describe("changelog — one source", () => {
+	test("parseChangelog reads the MusePi release notes with no upstream fallback", async () => {
+		// packages/coding-agent/CHANGELOG.musepi.md is the only changelog the
+		// product ships; the what's-new panel, `/changelog` and the release page
+		// all slice this file.
+		const entries = await parseChangelog(getChangelogPath());
 		const versions = entries.map(e => `${e.major}.${e.minor}.${e.patch}`);
 		expect(versions.some(v => v.startsWith("0.4."))).toBe(true);
+	});
+
+	test("getChangelogPath points at CHANGELOG.musepi.md", () => {
+		expect(getChangelogPath()).toEndWith("CHANGELOG.musepi.md");
 	});
 });
 

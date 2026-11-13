@@ -111,7 +111,7 @@
 		"scripts",
 		"examples",
 		"README.md",
-		"CHANGELOG.md"
+		"CHANGELOG.musepi.md"
 	],
 	"exports": {
 		".": {

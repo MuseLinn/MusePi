@@ -4,7 +4,7 @@ Load before editing release notes, versioning, publishing, or committing a user-
 
 ## Changelog ownership
 
-`packages/coding-agent/CHANGELOG.musepi.md` is the release source for the GUI what's-new panel, `/changelog`, OTA notes, and GitHub release body. `packages/coding-agent/CHANGELOG.md` is the compiled-in upstream fallback. Do not create per-package changelog files.
+`packages/coding-agent/CHANGELOG.musepi.md` is the only changelog and the release source for the GUI what's-new panel, `/changelog`, OTA notes, and GitHub release body. Do not create per-package changelog files.
 
 New entries go under `## [Unreleased]` in `Breaking Changes`, `Added`, `Changed`, `Fixed`, or `Removed`. Released sections are immutable. Release tooling normalizes section order and formatting.
 

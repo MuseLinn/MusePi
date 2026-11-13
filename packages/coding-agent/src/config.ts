@@ -40,7 +40,7 @@ export function walkUpForPackageDir(startDir: string): string | undefined {
 }
 
 /**
- * Get the base directory for resolving optional package assets (docs, examples, CHANGELOG.md).
+ * Get the base directory for resolving optional package assets (docs, examples, CHANGELOG.musepi.md).
  *
  * Honors the `PI_PACKAGE_DIR` override (useful for Nix/Guix store paths);
  * otherwise walks up from `import.meta.dir` looking for a `package.json`.
@@ -50,8 +50,8 @@ export function walkUpForPackageDir(startDir: string): string | undefined {
  *
  * Callers MUST treat `undefined` as "no package assets available" and skip the
  * lookup. NEVER fall back to the user's `cwd` here: that conflates the host
- * project with omp's own assets and was the source of issue #1423 (the host
- * project's `CHANGELOG.md` rendered as omp's startup changelog).
+ * project with the package's own assets and was the source of issue #1423 (the
+ * host project's `CHANGELOG.md` rendered as the startup changelog).
  */
 export function getPackageDir(): string | undefined {
 	const envDir = process.env.PI_PACKAGE_DIR;
@@ -62,23 +62,12 @@ export function getPackageDir(): string | undefined {
 }
 
 /**
- * Path to omp's own `CHANGELOG.md`, or `undefined` when the package directory
- * cannot be resolved (e.g. inside `bun --compile` binaries that don't bundle
- * package assets). Callers MUST skip changelog parsing when this is undefined;
- * see issue #1423.
+ * Path to MusePi's own `CHANGELOG.musepi.md` release notes, or `undefined`
+ * when the package directory cannot be resolved (e.g. inside `bun --compile`
+ * binaries that don't bundle package assets). Callers MUST skip changelog
+ * parsing when this is undefined; see issue #1423.
  */
 export function getChangelogPath(): string | undefined {
-	const packageDir = getPackageDir();
-	return packageDir ? path.resolve(packageDir, "CHANGELOG.md") : undefined;
-}
-
-/**
- * Path to MusePi's own `CHANGELOG.musepi.md` release notes, or `undefined`
- * when the package directory cannot be resolved. When this file exists the
- * changelog machinery prefers it over the upstream OMP `CHANGELOG.md` — the
- * what's-new panel must show MusePi's changes, not upstream's.
- */
-export function getMusepiChangelogPath(): string | undefined {
 	const packageDir = getPackageDir();
 	return packageDir ? path.resolve(packageDir, "CHANGELOG.musepi.md") : undefined;
 }

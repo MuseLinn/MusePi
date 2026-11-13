@@ -95,7 +95,6 @@
 		"scripts",
 		"public",
 		"index.html",
-		"README.md",
-		"CHANGELOG.md"
+		"README.md"
 	]
 }

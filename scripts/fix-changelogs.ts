@@ -3,7 +3,7 @@
 import * as path from "node:path";
 import { $, Glob } from "bun";
 
-const CHANGELOG_GLOB = "packages/{coding-agent,client-core}/CHANGELOG.md";
+const CHANGELOG_GLOB = "packages/coding-agent/CHANGELOG.musepi.md";
 const ORDERED_SECTION_TITLES = ["Breaking Changes", "Added", "Changed", "Fixed", "Removed"] as const;
 const CHANGELOG_BASELINE_REF = "refs/clog";
 const CHANGELOG_BASELINE_NAME = "clog";
@@ -819,7 +819,11 @@ export async function changelogPaths(repoRoot: string): Promise<string[]> {
 	const glob = new Glob(CHANGELOG_GLOB);
 	const paths: string[] = [];
 	for await (const changelogPath of glob.scan(repoRoot)) {
-		paths.push(path.isAbsolute(changelogPath) ? path.relative(repoRoot, changelogPath) : changelogPath);
+		// Git reports diff paths with forward slashes on every platform; the
+		// scan returns host separators, so normalize or every promotion lookup
+		// misses on Windows.
+		const relative = path.isAbsolute(changelogPath) ? path.relative(repoRoot, changelogPath) : changelogPath;
+		paths.push(relative.replaceAll("\\", "/"));
 	}
 	paths.sort();
 	return paths;

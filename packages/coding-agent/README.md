@@ -7,7 +7,7 @@ For installation, setup, provider configuration, model roles, slash commands, an
 - [Monorepo README (GitHub)](https://github.com/MuseLinn/MusePi#readme)
 
 Package-specific references:
-- [CHANGELOG](./CHANGELOG.md)
+- [CHANGELOG](./CHANGELOG.musepi.md)
 - [MCP configuration guide](../../docs/mcp-config.md)
 - [MCP runtime lifecycle](../../docs/mcp-runtime-lifecycle.md)
 - [MCP server/tool authoring](../../docs/mcp-server-tool-authoring.md)

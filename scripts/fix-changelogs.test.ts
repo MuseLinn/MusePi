@@ -293,7 +293,7 @@ describe("runChangelogFixer baseline pin", () => {
 					GIT_COMMITTER_EMAIL: "t@t",
 				});
 		try {
-			const changelogPath = path.join(repoRoot, "packages/foo/CHANGELOG.md");
+			const changelogPath = path.join(repoRoot, "packages/coding-agent/CHANGELOG.musepi.md");
 			await git("init", "-b", "main");
 			await Bun.write(changelogPath, RELEASED_ONLY);
 			await git("add", "-A");
@@ -311,7 +311,9 @@ describe("runChangelogFixer baseline pin", () => {
 			// section and is wrongly promoted back into [Unreleased].
 			const withoutPin = await runChangelogFixer({ repoRoot, write: false });
 			expect(withoutPin.since).toBe("v1.0.0");
-			const promoted = withoutPin.changedFiles.find(file => file.path === "packages/foo/CHANGELOG.md");
+			const promoted = withoutPin.changedFiles.find(
+				file => file.path === "packages/coding-agent/CHANGELOG.musepi.md",
+			);
 			expect(promoted?.promotedItems).toBe(1);
 
 			// Pin `clog` (a custom ref, not a tag — see resolveSince) to the recovery

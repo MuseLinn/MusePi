@@ -13,8 +13,7 @@
  *   - every `- ` bullet under a released version gets exactly one nested
  *     `  - EN: ...` child, directly beneath it;
  *   - the child must be the translation of the whole bullet (a multi-line
- *     Chinese bullet still gets a single EN child);
- *   - the upstream `CHANGELOG.md` files stay English-only and are not checked.
+ *     Chinese bullet still gets a single EN child).
  *
  * Exit 0 when compliant (or when there is nothing to check), exit 1 with a
  * per-bullet report otherwise.

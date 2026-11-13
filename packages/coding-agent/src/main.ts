@@ -1766,7 +1766,7 @@ export async function runRootCommand(
 		});
 
 		// Startup changelog is only consumed by interactive mode below; kick the
-		// CHANGELOG.md parse off now so it overlaps session creation instead of
+		// changelog parse off now so it overlaps session creation instead of
 		// serializing after it.
 		const startupChangelogPromise = isInteractive
 			? logger.time(
