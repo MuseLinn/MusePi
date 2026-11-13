@@ -74,7 +74,7 @@ gui-main (flex ROW)
 
 - **Delivery**: system notifications, a focused-window system-notification toggle (the in-app toast is independent), and a notification sound choice — the OS sound or the in-app cue, never both (in-app is the default, so an event sounds once); the test button exercises both channels.
 - **Notification events**: completion / subtask / error / question each get one row with the desktop-toast toggle, a sound picker and a preview; sounds show readable names and an explicit “None”.
-- **In-app notifications**: each event also lands in the bottom-right toast stack (toggleable), so it remains visible while focused when the system notification is suppressed.
+- **In-app notifications**: each event also lands in the bottom-right toast stack (toggleable), so it remains visible while focused when the system notification is suppressed; unfocused toasts stay until the window regains focus and then dismiss shortly after.
 - **Sound**: master switch, volume, quiet hours and haptics; interaction cues (send, approvals, stop, switch, tool, …) live in their own group.
 - **Defaults**: `tool` and `switch` start silent; completion→ready, question→arrival, approval→pulse, subtask→droplet, deny→press.
 

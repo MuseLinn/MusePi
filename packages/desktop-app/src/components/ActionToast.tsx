@@ -7,6 +7,7 @@ import {
 	getToasts,
 	pauseActionToast,
 	resumeActionToast,
+	setActionToastTtl,
 	subscribeActionToasts,
 	ttlFor,
 } from "../lib/action-toast";
@@ -165,6 +166,20 @@ export function ActionToastStack(): ReactNode {
 			for (const timer of timers) window.clearTimeout(timer);
 		};
 	}, [dismiss, paused, toasts]);
+
+	// A toast created while unfocused stays until the user returns, then gets
+	// a short dismissal window instead of expiring before it is ever seen.
+	useEffect(() => {
+		const onFocus = (): void => {
+			for (const toast of getToasts()) {
+				if (toast.dedupeKey?.startsWith("notify:") && toast.expiresAt === Number.POSITIVE_INFINITY) {
+					setActionToastTtl(toast.id, 8000);
+				}
+			}
+		};
+		window.addEventListener("focus", onFocus);
+		return () => window.removeEventListener("focus", onFocus);
+	}, [toasts]);
 
 	const frontId = toasts.at(-1)?.id;
 	const activeIds = new Set(toasts.map(toast => toast.id));

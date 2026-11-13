@@ -18,7 +18,7 @@ afterAll(async () => {
 	await GlobalRegistrator.register();
 });
 
-import { dismissActionToast, getToasts } from "../src/lib/action-toast";
+import { dismissActionToast, getToasts, pushActionToast, setActionToastTtl } from "../src/lib/action-toast";
 import {
 	buildNotification,
 	defaultTemplate,
@@ -176,6 +176,41 @@ describe("notify (notification config + dispatch contract)", () => {
 			localStorage.removeItem("musepi-gui-notify");
 			localStorage.removeItem("musepi-gui-notify-toast");
 		}
+	});
+
+	it("keeps an unfocused notification toast alive instead of expiring it", () => {
+		for (const toast of [...getToasts()]) dismissActionToast(toast.id);
+		localStorage.setItem("musepi-gui-notify", "1");
+		localStorage.setItem("musepi-gui-notify-toast", "1");
+		localStorage.removeItem("musepi-gui-notify-events");
+		const doc = document as unknown as { hasFocus?: () => boolean };
+		const original = Object.getOwnPropertyDescriptor(doc, "hasFocus");
+		Object.defineProperty(doc, "hasFocus", { configurable: true, value: () => false });
+		try {
+			dispatchNotification("completion", { lastMessage: "done" });
+			const toast = getToasts().find(item => item.dedupeKey === "notify:completion");
+			expect(toast?.expiresAt).toBe(Number.POSITIVE_INFINITY);
+		} finally {
+			if (original) Object.defineProperty(doc, "hasFocus", original);
+			else Reflect.deleteProperty(doc, "hasFocus");
+			for (const toast of [...getToasts()]) dismissActionToast(toast.id);
+			localStorage.removeItem("musepi-gui-notify");
+			localStorage.removeItem("musepi-gui-notify-toast");
+		}
+	});
+
+	it("gives a focused notification a finite dismissal window after focus returns", () => {
+		const id = pushActionToast({
+			kind: "success",
+			message: "done",
+			dedupeKey: "notify:completion",
+			ttlMs: Number.POSITIVE_INFINITY,
+		});
+		setActionToastTtl(id, 8000);
+		const toast = getToasts().find(item => item.id === id);
+		expect(toast?.expiresAt).toBeLessThan(Number.POSITIVE_INFINITY);
+		expect(toast?.expiresAt).toBeGreaterThan(Date.now());
+		dismissActionToast(id);
 	});
 
 	it("every notify event has a default template with title+message", () => {

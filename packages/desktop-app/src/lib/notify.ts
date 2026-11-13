@@ -302,12 +302,16 @@ function electronNotifier(): ElectronNotifier | undefined {
  *  cue and wants no second sound. */
 export function dispatchNotification(event: NotifyEvent, ctx: NotifyContext, options?: { silent?: boolean }): void {
 	const content = renderNotification(event, ctx);
+	const unfocused = documentUnfocused(ambientDocument());
 	if (notifyEnabled() && eventEnabled(event) && inAppToastEnabled()) {
 		pushActionToast({
 			kind: TOAST_KIND[event],
 			title: content.title,
 			message: content.body,
 			dedupeKey: `notify:${event}`,
+			// Unfocused notifications stay until the user returns to the window;
+			// focused ones follow the normal transient lifetime.
+			ttlMs: unfocused ? Number.POSITIVE_INFINITY : undefined,
 		});
 	}
 	const systemSound = notifySoundEnabled() && notifyEnabled() && soundEnabled() && !inQuietHours();

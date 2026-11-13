@@ -24,6 +24,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **聚焦时的通知行为更明确**：窗口聚焦时仍显示应用内 toast；「聚焦时也发送系统通知」只控制系统通知，不会关闭应用内提示。
   - EN: Focused-window behavior is explicit: the in-app toast still appears while the window is focused, and “System notifications while focused” only controls the OS notification, never the in-app toast.
 
+- **未聚焦时通知 toast 保留到回窗口**：未聚焦期间产生的通知 toast 不再 6 秒消失，而是保留到窗口重新聚焦，再进入短暂自动关闭；聚焦时仍按原 TTL。
+  - EN: Unfocused notification toasts no longer expire after six seconds. They stay until the window regains focus and then auto-dismiss shortly after, while focused toasts keep the normal lifetime.
+
 - **修复音效默认音量被当成 0**：从未设置过音量时现在按 100% 处理，开启音效或通知提示音即可听到；显式拖到 0 仍保持静音。
   - EN: The default sound volume is no longer treated as 0. An unset volume now means 100%, so enabling sound effects or notification sounds is audible; an explicit 0 still stays muted.
 

@@ -66,18 +66,23 @@ export function getToasts(): readonly ActionToast[] {
 	return toasts;
 }
 
-export type ActionToastInput = Omit<ActionToast, "id" | "expiresAt" | "kind"> & { kind?: ActionToastKind };
+export type ActionToastInput = Omit<ActionToast, "id" | "expiresAt" | "kind"> & {
+	kind?: ActionToastKind;
+	/** Override the kind-derived lifetime (Infinity keeps it until dismissed). */
+	ttlMs?: number;
+};
 
 /** Show a toast. Repeated sources replace their earlier content. */
 export function pushActionToast(toast: ActionToastInput): number {
 	const id = ++seq;
 	const kind = toast.kind ?? "info";
 	const dedupeKey = toast.dedupeKey ?? `message:${toast.message}`;
+	const { ttlMs, ...rest } = toast;
 	const next: ActionToast = {
-		...toast,
+		...rest,
 		kind,
 		id,
-		expiresAt: Date.now() + ttlFor(kind),
+		expiresAt: Date.now() + (ttlMs ?? ttlFor(kind)),
 	};
 	const retained = toasts.filter(previous => {
 		const previousKey = previous.dedupeKey ?? `message:${previous.message}`;
@@ -111,6 +116,13 @@ export function resumeActionToast(id: number): void {
 	if (remaining === undefined) return;
 	pausedRemaining.delete(id);
 	toasts = toasts.map(t => (t.id === id ? { ...t, expiresAt: Date.now() + remaining } : t));
+	emit();
+}
+
+/** Give a toast a new lifetime from now (e.g. when the window regains focus). */
+export function setActionToastTtl(id: number, ttlMs: number): void {
+	if (!toasts.some(t => t.id === id)) return;
+	toasts = toasts.map(t => (t.id === id ? { ...t, expiresAt: Date.now() + ttlMs } : t));
 	emit();
 }
 
