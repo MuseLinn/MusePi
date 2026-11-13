@@ -131,13 +131,13 @@ describe("SurfaceTabStrip markup", () => {
 		const html = renderToStaticMarkup(
 			<SurfaceTabStrip tabs={tabs} activeId="b" onActivate={() => {}} onClose={() => {}} onReorder={() => {}} />,
 		);
-		const action = html.indexOf("gui-surface-tab-action");
-		const dot = html.indexOf("gui-surface-tab-dirty");
-		const close = html.indexOf("gui-surface-tab-close");
-		expect(action).toBeGreaterThan(-1);
-		expect(dot).toBeGreaterThan(action);
-		expect(close).toBeGreaterThan(dot);
-		expect(html).toContain("gui-surface-tab--dirty");
+		// Scope to the dirty tab: a clean tab earlier in the strip also renders
+		// an action slot and a close button, so global indexOf() compares two
+		// different tabs and always sees the clean tab's close first.
+		const dirtyTab = html.slice(html.indexOf("gui-surface-tab--dirty"));
+		expect(dirtyTab).toMatch(
+			/gui-surface-tab-action"><span class="gui-surface-tab-dirty"[^>]*><\/span><span class="gui-surface-tab-close"/,
+		);
 	});
 
 	it("renders built-in, favicon, and browser fallback icons as decorative visuals", () => {

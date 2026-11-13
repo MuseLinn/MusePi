@@ -348,7 +348,7 @@ try {
 			window.electronAPI.petActivity({
 				theme: "dark",
 				mood: "rest",
-				petState: "idle",
+				companionState: "idle",
 				pet: { kind: "builtin", id: "musepi-note-bot" }
 			});
 		`);
@@ -384,6 +384,9 @@ try {
 		});
 		if (!geometry) throw new Error("Pet hit area was not found");
 		const petNativeBeforeDrag = process.platform === "win32" ? nativeWindowBounds()["MusePi Pet"] : null;
+		// The drag check proves the vector rig (state axis included) survives a
+		// drag, so require the `--idle` class the activity payload establishes.
+		await petPage.waitForFunction(() => Boolean(document.querySelector(".gui-pet-svg--idle")), { timeout: 4000 });
 		const moveDragOffset = async offset => {
 			if (petNativeBeforeDrag) {
 				positionNativeCursor(
@@ -455,7 +458,7 @@ try {
 			await mainPage.evaluate(`//!world=main
 				window.electronAPI.petActivity({
 					mood: "rest",
-					petState: "idle",
+					companionState: "idle",
 					pet: {
 						kind: "petdex",
 						pkg: {
@@ -505,7 +508,7 @@ try {
 			await mainPage.evaluate(`//!world=main
 				window.electronAPI.petActivity({
 					mood: "rest",
-					petState: "idle",
+					companionState: "idle",
 					pet: { kind: "builtin", id: "musepi-note-bot" }
 				});
 			`);
