@@ -34,7 +34,7 @@ Implications:
 - writes are idempotent at the content level,
 - blobs can outlive any individual session file.
 
-## Artifact boundary (session-local)
+### Artifact boundary (session-local)
 
 `ArtifactManager` derives artifact directory from session file path:
 

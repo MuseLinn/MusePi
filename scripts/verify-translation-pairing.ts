@@ -18,9 +18,15 @@
  *
  *   bun run verify-translation-pairing            # corpus-wide status report (never fails)
  *   bun run verify-translation-pairing --list     # same as above
+ *   bun run verify-translation-pairing --strict   # corpus-wide, fails on recorded-pair drift
  *   bun run verify-translation-pairing <stem...>  # strict check of named pairs (fails on violation)
  *   bun run verify-translation-pairing --write <stem...>   # record blob hashes for named pairs
  *   bun run verify-translation-pairing --write --all       # record every complete pair
+ *
+ * `--strict` is the CI gate: a pair that HAS a record but whose files moved
+ * away from it (`out-of-sync`), lost its language switcher, or has a Chinese
+ * side without an English one fails the run. Documents that never had a
+ * counterpart stay tolerated so translation can keep landing incrementally.
  *
  * A pair is named by any of its three files or its bare stem
  * (`docs/foo.md`, `docs/foo.zh-CN.md`, `docs/foo.i18n.yaml`, `docs/foo`).
@@ -187,6 +193,7 @@ function parseStemArg(raw: string): string {
 const args = process.argv.slice(2);
 const writeMode = args.includes("--write");
 const listMode = args.includes("--list");
+const strictMode = args.includes("--strict");
 
 const named = args.filter(a => !a.startsWith("--"));
 
@@ -237,6 +244,23 @@ if (named.length > 0) {
 	}
 	if (bad.length > 0) process.exit(1);
 	console.log(`✓ ${rows.length} named pair(s) consistent`);
+	process.exit(0);
+}
+
+// Corpus-wide strict mode (`--strict`): recorded pairs must still match their
+// files. Missing counterparts stay tolerated for the progressive rollout.
+if (strictMode) {
+	const drift = rows.filter(
+		r => r.status === "out-of-sync" || r.status === "missing-switcher" || r.status === "unpaired-zh",
+	);
+	for (const row of drift) {
+		console.error(`✗ ${row.stem}: ${row.detail}`);
+	}
+	console.log(
+		`\n${rows.length} in scope · ok=${counts.ok} · missing-pair=${counts["missing-pair"]} · drift=${drift.length}`,
+	);
+	if (drift.length > 0) process.exit(1);
+	console.log("✓ every recorded pair matches its files");
 	process.exit(0);
 }
 

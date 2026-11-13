@@ -143,6 +143,42 @@ jobs:
          - name: Build collab web
            run: bun run collab:web:build
 
+   # Static documentation gates plus the recovery protocol models. Both are
+   # independent of the native/build fan-out and cheap enough to run on every
+   # push and PR: the docs side guards bilingual pairs and changelog shape,
+   # while the TLA+ cases pin the lease, journal, intent and host-lifecycle
+   # boundaries. The runner needs a JDK and the pinned tools jar.
+   docs_spec:
+      name: Docs, changelog & TLA+ specs
+      runs-on: ubuntu-22.04
+      steps:
+         - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+         - uses: ./.github/actions/bun-install
+         - name: Documentation and changelog gates
+           run: |
+              bun run check:docs
+              bun run check:changelog-i18n
+              bun scripts/check-changelog-voice.ts
+              bun run verify-translation-pairing --strict
+         - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+           with:
+              distribution: temurin
+              java-version: "21"
+         - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5.0.2
+           with:
+              path: .kimi-tmp/tla
+              key: tla2tools-v1.7.4
+         - name: Fetch TLA+ tools
+           run: |
+              mkdir -p .kimi-tmp/tla
+              if [ ! -f .kimi-tmp/tla/tla2tools.jar ]; then
+                curl -fsSL -o .kimi-tmp/tla/tla2tools.jar \
+                  https://github.com/tlaplus/tlaplus/releases/download/v1.7.4/tla2tools.jar
+              fi
+              echo "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88  .kimi-tmp/tla/tla2tools.jar" | sha256sum -c -
+         - name: TLA+ model checks
+           run: bun run test:tla
+
    # Rust validation runs before merge as well as on main and release, using
    # the same hosted bazel cache as the x64 addon build.
    rust_validate:
@@ -615,8 +651,8 @@ jobs:
          needs.test_coding_agent_runtime.result == 'success' &&
          needs.test_coding_agent_native.result == 'success' &&
          needs.test_smoke.result == 'success' && needs.test_desktop_smoke.result == 'success' &&
-         needs.check.result == 'success' && needs.install_methods.result == 'success' }}
-      needs: [release_metadata, check, rust_validate, native_addons, test_workspace, test_coding_agent_singleton, test_ts_native, test_coding_agent_ui, test_coding_agent_runtime, test_coding_agent_native, test_smoke, test_desktop_smoke, install_methods]
+         needs.check.result == 'success' && needs.docs_spec.result == 'success' && needs.install_methods.result == 'success' }}
+      needs: [release_metadata, check, docs_spec, rust_validate, native_addons, test_workspace, test_coding_agent_singleton, test_ts_native, test_coding_agent_ui, test_coding_agent_runtime, test_coding_agent_native, test_smoke, test_desktop_smoke, install_methods]
       runs-on: ubuntu-22.04
       steps:
          - run: echo "release validation green"
