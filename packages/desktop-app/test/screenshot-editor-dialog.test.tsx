@@ -25,25 +25,34 @@ afterEach(() => {
 });
 
 describe("ScreenshotEditorDialog", () => {
-	test("exposes a named dialog and toolbar before an image loads", () => {
+	test("exposes a named surface and an annotation toolbar before an image loads", () => {
 		mount();
 
 		expect(document.querySelector('[role="dialog"]')?.getAttribute("aria-label")).toBe("Screenshot editor");
 		expect(document.querySelector('[role="toolbar"]')?.getAttribute("aria-label")).toBe("Screenshot tools");
-		expect(document.querySelectorAll('[role="toolbar"] button[tabindex="0"]')).toHaveLength(1);
+		expect(document.querySelectorAll('[role="toolbar"] [data-shot-roving][tabindex="0"]')).toHaveLength(1);
+	});
+
+	test("offers the drawing tools the board needs, including mosaic and eraser", () => {
+		mount();
+
+		const labels = Array.from(document.querySelectorAll('[role="toolbar"] button')).map(button =>
+			button.getAttribute("aria-label"),
+		);
+		for (const label of ["Crop", "Pen", "Arrow", "Rectangle", "Ellipse", "Text", "Mosaic", "Eraser", "Pick color"]) {
+			expect(labels).toContain(label);
+		}
 	});
 
 	test("keeps completion unavailable until image pixels are ready", () => {
 		mount();
 
-		const done = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-			button => button.textContent === "Done",
-		);
-		expect(done?.getAttribute("aria-disabled")).toBe("true");
+		const done = document.querySelector<HTMLButtonElement>(".gui-shot-done");
+		expect(done?.textContent).toBe("Done");
+		expect(done?.disabled).toBe(true);
 	});
 
-	test("moves toolbar focus with arrow keys when the native focusgroup marker is inert", () => {
-		Object.defineProperty(HTMLElement.prototype, "focusGroup", { configurable: true, value: {} });
+	test("moves toolbar focus with arrow keys", () => {
 		mount();
 		const first = document.querySelector<HTMLButtonElement>('[role="toolbar"] button');
 		if (!first) throw new Error("first toolbar button did not render");
@@ -52,7 +61,13 @@ describe("ScreenshotEditorDialog", () => {
 			first.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
 		});
 
-		expect(document.activeElement?.textContent).toBe("Arrow");
-		delete (HTMLElement.prototype as Partial<HTMLElement>).focusGroup;
+		expect(document.activeElement?.getAttribute("aria-label")).toBe("Pen");
+	});
+
+	test("exposes a HEX/RGBA format switch", () => {
+		mount();
+
+		const group = document.querySelector('[aria-label="Color format"]');
+		expect(group?.querySelectorAll("button").length).toBe(2);
 	});
 });

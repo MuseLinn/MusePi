@@ -3886,98 +3886,440 @@ button.gui-stats-pill {
 	color: var(--color-accent-fg);
 }
 
+/* ── System screenshot annotator ─────────────────────────────────────────
+ * Full-bleed capture surface: the shot is the page, so the chrome is a
+ * transparent header plus one floating glass pill — the same material family
+ * as the sketch board, without wrapping the image in a second card. */
 
-.gui-dialog.gui-dialog--screenshot {
-	width: min(1040px, 94vw);
-	min-height: min(58vh, 620px);
-	max-height: min(88vh, 880px);
-}
-
-.gui-shot-editor {
+.gui-shot-veil {
+	position: fixed;
+	inset: 0;
+	z-index: var(--z-modal);
 	display: flex;
 	flex-direction: column;
-	flex: 1;
-	min-height: 0;
-	gap: 12px;
+	background: color-mix(in oklab, var(--color-bg) 68%, transparent);
+	backdrop-filter: blur(10px) saturate(120%);
+	-webkit-backdrop-filter: blur(10px) saturate(120%);
+	transition: opacity 160ms ease;
+	animation: gui-shot-veil-in 160ms ease-out;
 }
 
-.gui-shot-toolbar,
-.gui-shot-tool-group,
-.gui-shot-loupe,
-.gui-shot-footer,
-.gui-shot-footer-actions {
+@keyframes gui-shot-veil-in {
+	from {
+		opacity: 0;
+	}
+}
+
+.gui-shot-veil--closing {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.gui-shot-head {
 	display: flex;
 	align-items: center;
-}
-
-.gui-shot-toolbar {
-	flex-wrap: wrap;
+	justify-content: space-between;
 	gap: 12px;
+	height: 52px;
+	flex-shrink: 0;
+	padding: 0 14px 0 10px;
 }
 
-.gui-shot-tool-group {
-	flex-wrap: wrap;
-	gap: 4px;
+.gui-shot-head-start,
+.gui-shot-head-end {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
 }
 
-.gui-shot-tool {
-	min-inline-size: 28px;
-	min-block-size: 28px;
-	padding: 4px 9px;
+.gui-shot-head-start {
+	gap: 10px;
+}
+
+.gui-shot-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	color: var(--color-text);
+	white-space: nowrap;
+}
+
+.gui-shot-meta,
+.gui-shot-zoom {
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+	white-space: nowrap;
+}
+
+.gui-shot-zoom {
+	padding: 2px 8px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+}
+
+.gui-shot-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	flex-shrink: 0;
 	border-radius: var(--radius-md);
 	color: var(--color-text-muted);
-	font-family: inherit;
-	font-size: var(--ui-font-size-sm);
-	line-height: 1.2;
-	cursor: pointer;
+	transition:
+		background 120ms var(--spring),
+		color 120ms var(--spring);
 }
 
-.gui-shot-tool:focus-visible {
-	outline: 2px solid var(--color-accent);
-	outline-offset: 2px;
+.gui-shot-icon:disabled {
+	opacity: 0.32;
+	pointer-events: none;
 }
 
-.gui-shot-tool[aria-pressed="true"] {
-	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+.gui-shot-segment {
+	display: flex;
+	align-items: center;
+	padding: 2px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.gui-shot-segment-item {
+	height: 22px;
+	padding: 0 8px;
+	border-radius: 999px;
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	letter-spacing: 0.04em;
+	color: var(--color-text-muted);
+}
+
+.gui-shot-segment-item--on {
+	background: color-mix(in oklab, var(--color-accent) 20%, transparent);
+	color: var(--color-accent);
 	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 28%, transparent);
-	color: var(--color-accent);
-}
-
-.gui-shot-tool[aria-disabled="true"] {
-	opacity: 0.45;
-	cursor: default;
-}
-
-.gui-shot-tool--primary {
-	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
-	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 32%, transparent);
-	color: var(--color-accent);
 }
 
 .gui-shot-stage {
 	display: grid;
 	place-items: center;
-	flex: 1 1 auto;
+	flex: 1;
 	min-height: 0;
-	overflow: auto;
-	padding: 8px;
-	border-radius: var(--radius-lg);
-	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	padding: 8px 32px 104px;
+}
+
+.gui-shot-frame {
+	position: relative;
+	flex: none;
 }
 
 .gui-shot-canvas {
-	max-width: 100%;
-	height: auto;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	box-shadow: var(--glass-shadow);
-	cursor: crosshair;
+	display: block;
+	border-radius: var(--radius-lg);
+	box-shadow:
+		0 24px 64px rgb(0 0 0 / 52%),
+		0 0 0 1px rgb(255 255 255 / 12%);
 	touch-action: none;
+	outline: none;
 }
 
 .gui-shot-canvas:focus-visible {
 	outline: 2px solid var(--color-accent);
-	outline-offset: 2px;
+	outline-offset: 3px;
+}
+
+.gui-shot-loading {
+	display: grid;
+	place-items: center;
+	min-height: 240px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-muted);
+}
+
+.gui-shot-crop-size {
+	position: absolute;
+	z-index: 2;
+	padding: 2px 7px;
+	border-radius: var(--radius-md);
+	background: rgb(12 13 16 / 82%);
+	color: #ffffff;
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	line-height: 1.5;
+	white-space: nowrap;
+	pointer-events: none;
+	backdrop-filter: blur(6px);
+}
+
+.gui-shot-text-input {
+	position: absolute;
+	z-index: 3;
+	margin: 0;
+	padding: 0 2px;
+	border: 1px dashed color-mix(in oklab, var(--color-accent) 70%, transparent);
+	border-radius: var(--radius-sm);
+	background: rgb(0 0 0 / 16%);
+	outline: none;
+	resize: none;
+	overflow: hidden;
+	line-height: 1.3;
+	field-sizing: content;
+	min-height: 1.4em;
+	caret-color: var(--color-accent);
+}
+
+/* The loupe follows the pointer, so it must never eat the click it is
+ * describing: it is decoration, and the eyedropper tool owns copying. */
+/* The loupe floats over the image, not over the app chrome, so it cannot use
+ * the theme glass: a light-theme glass over a white screenshot turns into a
+ * pale card with white text. Fixed ink-on-dark keeps it legible on any shot. */
+.gui-shot-loupe {
+	position: absolute;
+	z-index: 4;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 148px;
+	padding: 8px;
+	border-radius: var(--radius-xl);
+	border: 1px solid rgb(255 255 255 / 16%);
+	background: rgb(14 15 18 / 88%);
+	box-shadow: 0 12px 32px rgb(0 0 0 / 45%);
+	color: #ffffff;
+	pointer-events: none;
+	animation: gui-shot-loupe-in 120ms ease-out;
+}
+
+@keyframes gui-shot-loupe-in {
+	from {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+}
+
+.gui-shot-loupe canvas {
+	width: 132px;
+	height: 132px;
+	border-radius: var(--radius-lg);
+	image-rendering: pixelated;
+	box-shadow: inset 0 0 0 1px rgb(255 255 255 / 14%);
+}
+
+.gui-shot-loupe-readout {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-family: var(--font-mono);
+	font-size: 10.5px;
+	line-height: 1.3;
+}
+
+.gui-shot-hex {
+	color: #ffffff;
+	letter-spacing: 0.03em;
+}
+
+.gui-shot-coord,
+.gui-shot-loupe-hint {
+	color: rgb(255 255 255 / 62%);
+}
+
+.gui-shot-bar {
+	position: absolute;
+	left: 50%;
+	bottom: 20px;
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 2px;
+	width: max-content;
+	max-width: calc(100vw - 32px);
+	padding: 6px;
+	border-radius: var(--radius-xl);
+	border: 1px solid var(--glass-border);
+	background: var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
+	transform: translateX(-50%);
+	animation: gui-shot-bar-in 200ms var(--spring-liquid, var(--spring));
+}
+
+@keyframes gui-shot-bar-in {
+	from {
+		opacity: 0;
+		transform: translate(-50%, 10px) scale(0.98);
+	}
+}
+
+.gui-shot-tool {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	flex-shrink: 0;
+	border-radius: var(--radius-md);
+	color: var(--color-text-muted);
+	transition:
+		background 120ms var(--spring),
+		color 120ms var(--spring),
+		transform 120ms var(--spring-snappy, var(--spring));
+}
+
+.gui-shot-tool:active:not(:disabled) {
+	transform: scale(0.92);
+}
+
+.gui-shot-tool--on {
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 26%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-shot-tool:disabled {
+	opacity: 0.32;
+	pointer-events: none;
+}
+
+.gui-shot-sep {
+	width: 1px;
+	height: 18px;
+	flex-shrink: 0;
+	margin: 0 5px;
+	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+}
+
+.gui-shot-swatch {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	padding: 0 4px;
+}
+
+.gui-shot-color {
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	border: 1px solid var(--glass-border);
+	box-shadow:
+		inset 0 0 0 2px rgb(0 0 0 / 14%),
+		0 0 0 2px color-mix(in oklab, var(--color-bg) 40%, transparent);
+}
+
+.gui-shot-palette {
+	position: absolute;
+	left: 50%;
+	bottom: calc(100% + 12px);
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	width: 212px;
+	padding: 10px;
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--glass-border);
+	background: var(--glass-bg-strong);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
+	transform: translateX(-50%);
+	animation: gui-menu-in 130ms var(--spring-liquid, var(--spring));
+}
+
+.gui-shot-colors {
+	display: grid;
+	grid-template-columns: repeat(5, 1fr);
+	gap: 6px;
+}
+
+.gui-shot-color-swatch {
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	border: 1px solid rgb(0 0 0 / 18%);
+	transition: transform 120ms var(--spring-snappy, var(--spring));
+}
+
+.gui-shot-color-swatch:hover {
+	transform: scale(1.08);
+}
+
+.gui-shot-color-swatch--on {
+	box-shadow:
+		0 0 0 2px var(--color-surface),
+		0 0 0 4px var(--color-accent);
+}
+
+.gui-shot-weight {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 10.5px;
+	color: var(--color-text-muted);
+}
+
+.gui-shot-weight input {
+	flex: 1;
+	min-width: 0;
+	accent-color: var(--color-accent);
+}
+
+.gui-shot-weight-value {
+	font-family: var(--font-mono);
+	min-width: 28px;
+	text-align: right;
+}
+
+.gui-shot-spacer {
+	flex: 1;
+	min-width: 12px;
+}
+
+.gui-shot-cancel {
+	height: 30px;
+	padding: 0 10px;
+	border-radius: var(--radius-md);
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-muted);
+	transition:
+		background 120ms var(--spring),
+		color 120ms var(--spring);
+}
+
+.gui-shot-done {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: 30px;
+	padding: 0 12px 0 10px;
+	border-radius: 999px;
+	background: var(--color-accent);
+	color: var(--color-accent-fg);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	box-shadow: 0 4px 14px color-mix(in oklab, var(--color-accent) 32%, transparent);
+	transition:
+		filter 120ms var(--spring),
+		transform 120ms var(--spring-snappy, var(--spring));
+}
+
+.gui-shot-done:hover:not(:disabled) {
+	filter: brightness(1.06);
+}
+
+.gui-shot-done:active:not(:disabled) {
+	transform: scale(0.97);
+}
+
+.gui-shot-done:disabled {
+	opacity: 0.4;
+	pointer-events: none;
 }
 
 .gui-shot-status {
@@ -3991,50 +4333,57 @@ button.gui-stats-pill {
 	white-space: nowrap;
 }
 
-.gui-shot-loupe {
-	gap: 10px;
-	font-family: var(--font-mono);
-	font-size: var(--ui-font-size-xs);
-	color: var(--color-text-muted);
-}
-
-.gui-shot-loupe canvas {
-	width: 96px;
-	height: 96px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	image-rendering: pixelated;
-}
-
-.gui-shot-footer {
-	justify-content: space-between;
-	gap: 12px;
-	font-size: var(--ui-font-size-xs);
-	color: var(--color-text-muted);
-}
-
-.gui-shot-footer-actions {
-	flex-shrink: 0;
-	gap: 6px;
-}
-
-.gui-shot-loading {
-	display: grid;
-	place-items: center;
-	min-height: 240px;
-	color: var(--color-text-muted);
-}
-
 @media (hover: hover) {
-	.gui-shot-tool:hover:not([aria-disabled="true"]) {
-		background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	.gui-shot-icon:hover:not(:disabled),
+	.gui-shot-cancel:hover {
+		background: color-mix(in oklab, var(--color-text) 9%, transparent);
+		color: var(--color-text);
+	}
+
+	.gui-shot-tool:hover:not(:disabled) {
+		background: color-mix(in oklab, var(--color-text) 10%, transparent);
 		color: var(--color-text);
 	}
 }
 
+@media (max-width: 760px) {
+	.gui-shot-stage {
+		padding: 8px 12px 96px;
+	}
+
+	.gui-shot-bar {
+		bottom: 12px;
+		max-width: calc(100vw - 24px);
+	}
+
+	.gui-shot-meta,
+	.gui-shot-zoom {
+		display: none;
+	}
+}
+
 @media (pointer: coarse) {
-	.gui-shot-tool {
-		min-inline-size: 36px;
-		min-block-size: 36px;
+	.gui-shot-tool,
+	.gui-shot-icon {
+		width: 38px;
+		height: 38px;
+	}
+}
+
+.gui-motion-off .gui-shot-veil,
+.gui-motion-off .gui-shot-bar,
+.gui-motion-off .gui-shot-loupe,
+.gui-motion-off .gui-shot-palette {
+	animation: none;
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-shot-veil,
+	.gui-shot-bar,
+	.gui-shot-loupe,
+	.gui-shot-palette {
+		animation: none;
+		transition: none;
 	}
 }
