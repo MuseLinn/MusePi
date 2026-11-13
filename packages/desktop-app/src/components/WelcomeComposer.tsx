@@ -100,6 +100,7 @@ import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
+import { ScreenshotEditorDialog } from "./ScreenshotEditorDialog";
 import { SketchPad } from "./SketchPad";
 import { type SlashEntry, SlashRow } from "./SlashRow";
 import type { ThinkingLevel } from "./ThinkingSelector";
@@ -416,6 +417,7 @@ export function WelcomeComposer({
 		initial: null,
 		scene: null,
 	});
+	const [shotSrc, setShotSrc] = useState<string | null>(null);
 
 	// kimicode 截屏 parity ("+" 菜单 / ⇧⌘S): capture the primary display via
 	// the main process, then open the annotate board ON the shot — capture →
@@ -427,7 +429,7 @@ export function WelcomeComposer({
 		).electronAPI;
 		if (!api?.captureScreen) return;
 		void api.captureScreen().then(res => {
-			if (res.dataUrl) setSketch({ open: true, editId: null, initial: res.dataUrl, scene: null });
+			if (res.dataUrl) setShotSrc(res.dataUrl);
 		});
 	}, []);
 	useEffect(() => {
@@ -2427,6 +2429,15 @@ export function WelcomeComposer({
 					onDone={onSketchDone}
 				/>
 			)}
+			<ScreenshotEditorDialog
+				open={shotSrc !== null}
+				src={shotSrc}
+				onConfirm={dataUrl => {
+					setShotSrc(null);
+					void addFiles([dataUrlToFile(dataUrl, "screenshot.png")]);
+				}}
+				onCancel={() => setShotSrc(null)}
+			/>
 		</>
 	);
 }

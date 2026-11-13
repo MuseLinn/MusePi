@@ -36,6 +36,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **长文本粘贴自动折叠为可编辑芯片**：超过 100 行或 4000 字符的粘贴现在折叠为「粘贴的文本 · N 行 / M 字符」附件芯片，点击查看并可编辑；编辑后重新上传。
   - EN: Long pasted text now collapses into an editable attachment chip showing line and character counts. Click to view and edit; edits are re-uploaded on send.
 
+- **截图新增选区、放大镜与取色**：截图支持矩形选区、箭头与文字标注；放大镜显示局部像素、坐标与颜色，可切换 HEX/RGBA 并复制颜色值。裁剪导出保留原始分辨率并同步平移标注。
+  - EN: The screenshot editor adds region selection, a magnifier and a color picker, plus arrow and text annotations. The loupe shows local pixels, coordinates and color, with HEX/RGBA switching and copy-to-clipboard. Cropped exports keep the original resolution and translate annotations into the crop.
+
 - **更换项目主目录会同步迁移会话**：`workspace.setPrimary` 现在把旧主目录下的会话文件与产物迁移到新主目录，并重载 live 会话配置；桌面端同步刷新项目列表与会话树。
   - EN: Changing the project primary directory now migrates session files and artifacts to the new root and reloads live sessions; the desktop refreshes the project list and session tree.
 

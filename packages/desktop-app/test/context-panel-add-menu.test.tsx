@@ -329,7 +329,7 @@ describe("ContextPanel managed browser integration", () => {
 		);
 		expect(labels).toContain(t("tools.browserNewTabRight"));
 		expect(labels).toContain(t("tools.browserRenameTab"));
-		expect(labels).toContain(t("tools.browserMuteTab"));
+		expect(labels).toContain(t("tools.browserUnmuteTab"));
 		expect(menuItem(t("tools.browserCopyUrl")).disabled).toBe(true);
 		expect(menuItem(t("tools.browserRefresh")).disabled).toBe(true);
 		act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));

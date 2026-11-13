@@ -113,6 +113,7 @@ import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize, MIN_ROWS } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
+import { ScreenshotEditorDialog } from "./ScreenshotEditorDialog";
 import { SketchPad } from "./SketchPad";
 import type { ThinkingLevel } from "./ThinkingSelector";
 
@@ -346,6 +347,7 @@ export function Composer({
 		setSketch(prev => ({ open: false, editId: null, initial: null, scene: null }));
 	}, []);
 
+	const [shotSrc, setShotSrc] = useState<string | null>(null);
 	// 截屏 ("+" 菜单 / ⇧⌘S): grab the primary display through
 	// the main process, then open the annotate board ON the shot — the flow
 	// is capture → markup → chip, so a bare "paste my screen" never lands.
@@ -356,7 +358,7 @@ export function Composer({
 		).electronAPI;
 		if (!api?.captureScreen) return;
 		void api.captureScreen().then(res => {
-			if (res.dataUrl) setSketch({ open: true, editId: null, initial: res.dataUrl, scene: null });
+			if (res.dataUrl) setShotSrc(res.dataUrl);
 		});
 	}, []);
 	useEffect(() => {
@@ -2513,6 +2515,15 @@ export function Composer({
 					onDone={onSketchDone}
 				/>
 			)}
+			<ScreenshotEditorDialog
+				open={shotSrc !== null}
+				src={shotSrc}
+				onConfirm={dataUrl => {
+					setShotSrc(null);
+					void addFiles([dataUrlToFile(dataUrl, "screenshot.png")]);
+				}}
+				onCancel={() => setShotSrc(null)}
+			/>
 		</div>
 	);
 }

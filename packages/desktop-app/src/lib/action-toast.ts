@@ -17,6 +17,7 @@ export {
 	pauseActionToast,
 	pushActionToast,
 	resumeActionToast,
+	setActionToastTtl,
 	subscribeActionToasts,
 	ttlFor,
 } from "@musepi/client-core/src/lib/action-toast";

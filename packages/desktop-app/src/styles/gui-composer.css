@@ -3885,3 +3885,156 @@ button.gui-stats-pill {
 	background: var(--color-accent);
 	color: var(--color-accent-fg);
 }
+
+
+.gui-dialog.gui-dialog--screenshot {
+	width: min(1040px, 94vw);
+	min-height: min(58vh, 620px);
+	max-height: min(88vh, 880px);
+}
+
+.gui-shot-editor {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	gap: 12px;
+}
+
+.gui-shot-toolbar,
+.gui-shot-tool-group,
+.gui-shot-loupe,
+.gui-shot-footer,
+.gui-shot-footer-actions {
+	display: flex;
+	align-items: center;
+}
+
+.gui-shot-toolbar {
+	flex-wrap: wrap;
+	gap: 12px;
+}
+
+.gui-shot-tool-group {
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.gui-shot-tool {
+	min-inline-size: 28px;
+	min-block-size: 28px;
+	padding: 4px 9px;
+	border-radius: var(--radius-md);
+	color: var(--color-text-muted);
+	font-family: inherit;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.2;
+	cursor: pointer;
+}
+
+.gui-shot-tool:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
+.gui-shot-tool[aria-pressed="true"] {
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 28%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-shot-tool[aria-disabled="true"] {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.gui-shot-tool--primary {
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 32%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-shot-stage {
+	display: grid;
+	place-items: center;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding: 8px;
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+}
+
+.gui-shot-canvas {
+	max-width: 100%;
+	height: auto;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	box-shadow: var(--glass-shadow);
+	cursor: crosshair;
+	touch-action: none;
+}
+
+.gui-shot-canvas:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
+.gui-shot-status {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.gui-shot-loupe {
+	gap: 10px;
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-shot-loupe canvas {
+	width: 96px;
+	height: 96px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	image-rendering: pixelated;
+}
+
+.gui-shot-footer {
+	justify-content: space-between;
+	gap: 12px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-shot-footer-actions {
+	flex-shrink: 0;
+	gap: 6px;
+}
+
+.gui-shot-loading {
+	display: grid;
+	place-items: center;
+	min-height: 240px;
+	color: var(--color-text-muted);
+}
+
+@media (hover: hover) {
+	.gui-shot-tool:hover:not([aria-disabled="true"]) {
+		background: color-mix(in oklab, var(--color-text) 8%, transparent);
+		color: var(--color-text);
+	}
+}
+
+@media (pointer: coarse) {
+	.gui-shot-tool {
+		min-inline-size: 36px;
+		min-block-size: 36px;
+	}
+}
