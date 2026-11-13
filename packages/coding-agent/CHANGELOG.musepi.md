@@ -39,6 +39,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **截图编辑器重做为标注画板**：两个输入框的系统截图现在以全屏浮层打开——顶部显示原图尺寸、预览缩放、HEX/RGBA 与全选原图，截图独占舞台，底部一颗悬浮玻璃工具栏提供选区、画笔、箭头、矩形、椭圆、文字、马赛克、橡皮与取色，并带撤销/重做/清空和随工具出现的调色板与粗细滑杆。放大镜跟随光标显示像素网格、坐标与颜色，取色工具点击即按当前格式复制。裁剪会裁掉框外标注，导出始终保持原图像素；笔画尺寸按「屏幕像素 ÷ 预览缩放」存储，导出效果与预览一致。
   - EN: The screenshot editor is now a full-bleed annotation board. The header shows the original pixel size, preview zoom, HEX/RGBA and select-all; the shot owns the stage; one floating glass pill carries crop, pen, arrow, rectangle, ellipse, text, mosaic, eraser and eyedropper plus undo/redo/clear and a contextual palette with a stroke slider. The loupe follows the pointer with the pixel grid, coordinates and colour, and the eyedropper copies in the current format on click. Cropping clips annotations outside the frame, exports always stay at original resolution, and brush size is stored as screen pixels ÷ preview scale so the export matches the preview.
 
+- **菜单高亮与主视图圆角阴影统一**：项目、模式、分支与模型下拉的悬停高亮改用与右键菜单相同的玻璃 token，深浅主题下都清晰可辨；选中行增加强调色底。会话主视图不再被场景容器裁掉阴影，圆角外的阴影恢复自然过渡，四个角不再露出直角。
+  - EN: Dropdown highlights now use the same glass tokens as the context menu, so project, mode, branch and model menus are legible in both schemes, and active rows gain a tinted fill. The session view no longer shows shadow corners: the scene container keeps the card shadow's clip margin, restoring a natural fade outside the rounded corners.
+
 - **更换项目主目录会同步迁移会话**：`workspace.setPrimary` 现在把旧主目录下的会话文件与产物迁移到新主目录，并重载 live 会话配置；桌面端同步刷新项目列表与会话树。
   - EN: Changing the project primary directory now migrates session files and artifacts to the new root and reloads live sessions; the desktop refreshes the project list and session tree.
 

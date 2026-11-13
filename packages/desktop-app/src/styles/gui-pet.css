@@ -389,13 +389,6 @@
 	white-space:nowrap;
 	flex-shrink:0;
 }
-.gui-scenes>.gui-scene-welcome,
-.gui-scenes>.gui-scene-chat
-{
-	position:absolute;
-	overflow:hidden;
-	inset:0;
-}
 .gui-code-lines .tr-md pre code .tr-code-line:before
 {
 	content:counter(tr-code-line);

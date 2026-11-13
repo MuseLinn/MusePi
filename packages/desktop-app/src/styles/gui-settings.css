@@ -572,13 +572,19 @@
 	padding-left: 2px;
 }
 
-.gui-model-opt:hover {
-	background: var(--color-surface-raised);
+/* Same rule as the other dropdowns: the popup surface is the base colour,
+ * so the highlight must be the shared glass hover, not surface-raised. */
+.gui-model-opt:hover,
+.gui-model-opt:focus-visible {
+	background: var(--glass-hover-strong);
+	box-shadow: inset 0 0 0 1px var(--glass-hairline);
 	color: var(--color-text);
 }
 
 .gui-model-opt--active {
 	color: var(--color-accent);
+	background: var(--glass-active);
+	box-shadow: inset 0 0 0 1px var(--glass-hairline-strong);
 }
 
 /* While ↑↓ owns the highlight (data-kbd-nav on the list), row :hover's
@@ -792,13 +798,21 @@
 	text-align: left;
 }
 
-.gui-view-opt:hover {
-	background: var(--color-surface-raised);
+/* Menu rows inside a floating popup: the popup's own surface is the row's
+ * base, so --color-surface-raised painted a highlight that matched its
+ * parent. Use the shared glass interaction tokens — the same fill as the
+ * context menu — so every dropdown reads identically on light and dark. */
+.gui-view-opt:hover,
+.gui-view-opt:focus-visible {
+	background: var(--glass-hover-strong);
+	box-shadow: inset 0 0 0 1px var(--glass-hairline);
 	color: var(--color-text);
 }
 
 .gui-view-opt--active {
 	color: var(--color-accent);
+	background: var(--glass-active);
+	box-shadow: inset 0 0 0 1px var(--glass-hairline-strong);
 }
 
 .gui-view-opt--danger {
