@@ -3,14 +3,11 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import "../styles/gui-markdown-editor.css";
+import { readMarkdownFrontMatter } from "../lib/markdown-frontmatter";
 import { markdownHtmlView, markdownImagePath } from "./markdown-html";
 import { installMarkdownToolbarOverflow } from "./markdown-toolbar";
 
 export { markdownImagePath };
-
-export function hasYamlFrontMatter(markdown: string): boolean {
-	return /^\uFEFF?---[\t ]*\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[\t ]*(?:\r?\n|$)/.test(markdown);
-}
 
 /** Add stable accessible names to Crepe's icon-only controls. Its Vue toolbar
  * owns the DOM, so a MutationObserver reapplies names after state updates. */
@@ -138,6 +135,10 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 		const hostRef = useRef<HTMLDivElement | null>(null);
 		const crepeRef = useRef<Crepe | null>(null);
 		const valueRef = useRef(value);
+		/** Exact YAML block kept OUTSIDE Crepe's document: Crepe has no front
+		 *  matter node and would re-serialize it on save. Emissions prepend it
+		 *  back, so a visual edit never rewrites the block. */
+		const frontMatterRef = useRef("");
 		const initialMarkdownRef = useRef<string | null>(null);
 		const callbacksRef = useRef({ onChange, onSave, onError });
 		const [ready, setReady] = useState(false);
@@ -149,7 +150,7 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 			const latest = crepe.getMarkdown();
 			// Notifications can lag behind a real edit. Compare the document itself
 			// so immediate source switches keep edits and clean files keep raw text.
-			return latest === initialMarkdownRef.current ? valueRef.current : latest;
+			return latest === initialMarkdownRef.current ? valueRef.current : frontMatterRef.current + latest;
 		};
 		useImperativeHandle(ref, () => ({ getMarkdown: readMarkdown }), []);
 
@@ -163,13 +164,15 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 			setReady(false);
 			const host = hostRef.current;
 			if (!host) return;
+			const front = readMarkdownFrontMatter(valueRef.current);
+			frontMatterRef.current = front.raw;
 			const rejectUpload = (): Promise<string> => Promise.reject(new Error(t("markdownImageUploadUnsupported")));
 			void import("@milkdown/crepe")
 				.then(async ({ Crepe: CrepeEditor }) => {
 					if (cancelled) return;
 					const next = new CrepeEditor({
 						root: host,
-						defaultValue: valueRef.current,
+						defaultValue: front.body,
 						features: { [CrepeEditor.Feature.TopBar]: true },
 						featureConfigs: {
 							[CrepeEditor.Feature.TopBar]: {
@@ -203,7 +206,7 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 						listener.markdownUpdated((_ctx, markdown) => {
 							// Mount parsing must not turn serialization normalization into a
 							// dirty file. Only updates after a successful create are edits.
-							if (created && !cancelled) callbacksRef.current.onChange(markdown);
+							if (created && !cancelled) callbacksRef.current.onChange(frontMatterRef.current + markdown);
 						});
 					});
 					await next.create();
@@ -235,6 +238,7 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 				removeSelectionRelay?.();
 				crepeRef.current = null;
 				initialMarkdownRef.current = null;
+				frontMatterRef.current = "";
 				if (crepe) void crepe.destroy().catch(() => {});
 			};
 		}, [path, name]);
@@ -249,7 +253,7 @@ export const FileMarkdownEditor = forwardRef<FileMarkdownEditorHandle, FileMarkd
 					event.preventDefault();
 					event.stopPropagation();
 					const crepe = crepeRef.current;
-					if (crepe) callbacksRef.current.onSave(crepe.getMarkdown());
+					if (crepe) callbacksRef.current.onSave(frontMatterRef.current + crepe.getMarkdown());
 				}}
 			/>
 		);

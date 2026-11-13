@@ -248,3 +248,71 @@
 .gui-filepane-preview-md .tr-path {
 	cursor: pointer;
 }
+
+/* ── YAML front matter card ────────────────────────────────────────────
+ * One read-only card for the file preview and the visual Markdown editor.
+ * Values render as a two-column definition list; list values stack so
+ * `scope: [a, b]` reads as two rows, like the source did. */
+.gui-md-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0 0 10px;
+	padding: 9px 11px;
+	border: 1px solid var(--glass-hairline);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+}
+
+.gui-md-meta-head {
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	color: var(--color-text-faint);
+}
+
+.gui-md-meta-grid {
+	display: grid;
+	grid-template-columns: 84px minmax(0, 1fr);
+	column-gap: 12px;
+	row-gap: 5px;
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.45;
+}
+
+.gui-md-meta-grid dt {
+	color: var(--color-text-muted);
+	overflow-wrap: anywhere;
+}
+
+.gui-md-meta-grid dd {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	color: var(--color-text);
+	overflow-wrap: anywhere;
+}
+
+.gui-md-meta-grid dd span {
+	white-space: pre-wrap;
+}
+
+.gui-md-meta-raw {
+	margin: 0;
+	padding: 0;
+	background: none;
+	color: var(--color-text-muted);
+	font-family: var(--font-mono);
+	font-size: 11px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+}
+
+/* The editor's scroll container starts at the toolbar, so the card needs its
+ * own gutter; the preview already sits inside a padded column. */
+.gui-filepane-edit-layout > .gui-md-meta {
+	flex: 0 0 auto;
+	margin: 8px 10px 6px;
+}

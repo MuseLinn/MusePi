@@ -1214,7 +1214,7 @@ export const general = {
 	markdownDivider: "分割线",
 	markdownMoreActions: "更多操作",
 	markdownImageUploadUnsupported: "这里不支持上传图片，请插入图片路径或 URL。",
-	markdownFrontMatterWarning: "检测到 YAML Front Matter，可视化编辑可能改写原文",
+	markdownMetadata: "元数据",
 	pdfPageRange: "PDF 第 {start}-{end} 页",
 	"shortcut search placeholder": "搜索快捷键",
 	"shortcut capture hint": "按下新的组合键，Esc 取消",

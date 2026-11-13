@@ -1634,25 +1634,6 @@
 	min-height: 0;
 }
 
-.gui-filepane-markdown-warning {
-	display: flex;
-	flex: 0 0 auto;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 8px 12px;
-	border-bottom: 1px solid color-mix(in oklab, var(--color-warning) 35%, var(--border));
-	background: color-mix(in oklab, var(--color-warning) 8%, var(--color-bg));
-	color: var(--color-text);
-	font-size: 12px;
-	line-height: 1.5;
-}
-
-.gui-filepane-markdown-warning .gui-btn {
-	flex: 0 0 auto;
-	color: var(--color-accent);
-}
-
 .gui-filepane-markdown-editor {
 	flex: 1;
 	min-width: 0;

@@ -42,6 +42,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **菜单高亮与主视图圆角阴影统一**：项目、模式、分支与模型下拉的悬停高亮改用与右键菜单相同的玻璃 token，深浅主题下都清晰可辨；选中行增加强调色底。会话主视图不再被场景容器裁掉阴影，圆角外的阴影恢复自然过渡，四个角不再露出直角。
   - EN: Dropdown highlights now use the same glass tokens as the context menu, so project, mode, branch and model menus are legible in both schemes, and active rows gain a tinted fill. The session view no longer shows shadow corners: the scene container keeps the card shadow's clip margin, restoring a natural fade outside the rounded corners.
 
+- **Markdown 元数据以卡片呈现**：文件预览和 WYSIWYG 编辑会把文件头部的 YAML Front Matter 显示为只读「元数据」卡，正文只显示 Markdown 内容；可视化编辑时 YAML 原样保留、只编辑正文，修改元数据仍用源码模式。
+  - EN: Markdown front matter now renders as a read-only Metadata card in the file preview and in visual editing, with the body shown as normal Markdown. Visual editing preserves the YAML block verbatim and edits only the body; changing the metadata still uses source mode.
+
 - **更换项目主目录会同步迁移会话**：`workspace.setPrimary` 现在把旧主目录下的会话文件与产物迁移到新主目录，并重载 live 会话配置；桌面端同步刷新项目列表与会话树。
   - EN: Changing the project primary directory now migrates session files and artifacts to the new root and reloads live sessions; the desktop refreshes the project list and session tree.
 

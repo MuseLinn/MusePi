@@ -44,11 +44,7 @@ import * as XLSX from "xlsx";
 import { ContextMenu, type ContextMenuItem } from "../../components/ContextMenu";
 import { FileCodeEditor, type FileEditorSelection } from "../../components/FileCodeEditor";
 import { FileDirectoryMenu } from "../../components/FileDirectoryMenu";
-import {
-	FileMarkdownEditor,
-	type FileMarkdownEditorHandle,
-	hasYamlFrontMatter,
-} from "../../components/FileMarkdownEditor";
+import { FileMarkdownEditor, type FileMarkdownEditorHandle } from "../../components/FileMarkdownEditor";
 import { FileOfficePreview, type OfficeEditorSelection } from "../../components/FileOfficePreview";
 import { FileOpenWith } from "../../components/FileOpenWith";
 import { ImagePreview } from "../../components/FilePaneImagePreview";
@@ -80,6 +76,7 @@ import {
 import { useChatHighlight } from "../../lib/highlight";
 import { htmlPreviewRequiresBuild, inlineHtmlPreviewStyles, withHtmlPreviewBase } from "../../lib/html-preview";
 import { downloadMarkdownDocx } from "../../lib/markdown-docx";
+import { type MetadataEntry, parseMarkdownMetadata, readMarkdownFrontMatter } from "../../lib/markdown-frontmatter";
 import { type MonacoPeekBuffer, revealEditorLocation } from "../../lib/monaco-lsp";
 import { type OfficeDraft, parseOfficeDraft, serializeOfficeDraft, writeOfficeDraft } from "../../lib/office-documents";
 import { previewMappingFor } from "../../lib/preview-from-viewer";
@@ -90,6 +87,7 @@ import { captureSelectionContext } from "../../lib/selection-capture";
 import { directoriesEqual } from "../../lib/workspace-projects";
 import { Icon } from "../../vendor/oc-icons";
 import "../../styles/gui-file-workspace.css";
+import { MarkdownMetadata } from "./MarkdownMetadata";
 
 export type { WorkspaceEntry };
 export { filePreviewPathEquals, filePreviewWorkspacePath, resolveFilePreviewPath };
@@ -1063,13 +1061,25 @@ export function FilePane({
 	// Markdown first and relative media resolves against this file's directory
 	// rather than the workspace root.
 	const mdPreviewDir = useMemo(() => (preview ? parentDirectory(preview.path) : null), [preview?.path]);
-	const mdPreviewText = useMemo(
-		() =>
-			preview && extOf(preview.name) === "md" && preview.text !== undefined
-				? normalizeMarkdownHtml(preview.text)
-				: "",
-		[preview],
-	);
+	// A leading YAML block is a document header, not Markdown: split it before
+	// the renderer so `---`/`title:` never turn into rules and setext headings,
+	// and keep the exact source for the metadata card.
+	const mdPreviewDoc = useMemo(() => {
+		if (!preview || extOf(preview.name) !== "md" || preview.text === undefined) {
+			return { raw: "", entries: [] as MetadataEntry[], text: "" };
+		}
+		const front = readMarkdownFrontMatter(preview.text);
+		return {
+			raw: front.raw,
+			entries: parseMarkdownMetadata(front.raw),
+			text: normalizeMarkdownHtml(front.body),
+		};
+	}, [preview]);
+	const mdPreviewText = mdPreviewDoc.text;
+	// The visual editor keeps the YAML block outside Crepe, so the card above
+	// it reads from the current draft, not from the editor's document.
+	const editFront = useMemo(() => readMarkdownFrontMatter(edit?.text ?? ""), [edit?.text]);
+	const editEntries = useMemo(() => parseMarkdownMetadata(editFront.raw), [editFront.raw]);
 
 	// Local images are read through the desktop bridge, exactly like the
 	// transcript's, but resolved against the markdown file's own directory —
@@ -1941,30 +1951,17 @@ export function FilePane({
 								)}
 								{preview.text !== undefined && extOf(preview.name) === "md" && mdRender && !edit ? (
 									<div className="gui-filepane-preview-md" ref={mdPreviewRef}>
+										<MarkdownMetadata raw={mdPreviewDoc.raw} entries={mdPreviewDoc.entries} />
 										<Markdown text={mdPreviewText} basePath={mdPreviewDir ?? cwd} />
 									</div>
 								) : preview.text !== undefined && !edit ? (
 									<pre className="gui-filepane-preview-text">{preview.text}</pre>
 								) : null}
-								{edit && extOf(preview.name) === "md" && mdRender && hasYamlFrontMatter(edit.text) && (
-									<div className="gui-filepane-markdown-warning" role="note">
-										<span>{t("markdownFrontMatterWarning")}</span>
-										<button
-											type="button"
-											className="gui-btn gui-btn-sm"
-											onClick={() => {
-												const latest = markdownEditorRef.current?.getMarkdown();
-												if (latest != null) updateEditText(latest);
-												setMdRender(false);
-												setFileSelection(null);
-											}}
-										>
-											{t("settings.sourceCode")}
-										</button>
-									</div>
-								)}
 								{edit && (
 									<div className="gui-filepane-edit-layout">
+										{extOf(preview.name) === "md" && mdRender && editFront.raw ? (
+											<MarkdownMetadata raw={editFront.raw} entries={editEntries} />
+										) : null}
 										<FileEditor
 											rpc={rpc}
 											cwd={cwd}

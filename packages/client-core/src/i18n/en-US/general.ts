@@ -1235,7 +1235,7 @@ export const general = {
 	markdownDivider: "Divider",
 	markdownMoreActions: "More actions",
 	markdownImageUploadUnsupported: "Image upload is not available here. Insert an image path or URL instead.",
-	markdownFrontMatterWarning: "YAML Front Matter detected. Visual editing may rewrite the source.",
+	markdownMetadata: "Metadata",
 	pdfPageRange: "PDF {start}-{end}",
 	"shortcut search placeholder": "shortcut search placeholder",
 	"shortcut capture hint": "shortcut capture hint",
