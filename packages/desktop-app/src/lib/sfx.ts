@@ -32,19 +32,22 @@ export function sfx(name: SoundName): void {
 }
 
 /**
- * Activity → sound mapping (opencode-style per-category sounds). Every
- * wired activity is configurable in Settings → 通知与音效; the chosen sound
- * is stored renderer-local under `musepi-gui-sfx:<event>`, defaulting to
- * DEFAULT_SFX. `sfxFor` is what call sites use; `sfx(name)` stays for
- * one-off/preview plays.
+ * Activity → sound mapping. Every wired activity is configurable in
+ * Settings → 通知与音效; the chosen sound is stored renderer-local under
+ * `musepi-gui-sfx:<event>`, defaulting to DEFAULT_SFX. `none` is a real
+ * choice: noisy activities (tool results, session switches) start silent.
  */
+export type SfxChoice = SoundName | "none";
+
 export type SfxEvent =
 	| "send" // 发送消息
 	| "first" // 首次消息 / 提示增强
 	| "complete" // agent 回合完成（消息结束）
+	| "question" // 提问等待回答
 	| "approval" // 审批请求到达
 	| "approval-ok" // 审批通过
 	| "approval-deny" // 审批拒绝
+	| "subtask" // 子智能体完成
 	| "switch" // 切换会话
 	| "stop" // 停止当前回合
 	| "tool" // 工具结果到达
@@ -54,25 +57,29 @@ export const SFX_EVENTS: readonly SfxEvent[] = [
 	"send",
 	"first",
 	"complete",
+	"question",
 	"approval",
 	"approval-ok",
 	"approval-deny",
+	"subtask",
 	"switch",
 	"stop",
 	"tool",
 	"error",
 ];
 
-export const DEFAULT_SFX: Record<SfxEvent, SoundName> = {
+export const DEFAULT_SFX: Record<SfxEvent, SfxChoice> = {
 	send: "chime",
 	first: "sparkle",
 	complete: "ready",
-	approval: "chime",
+	question: "arrival",
+	approval: "pulse",
 	"approval-ok": "success",
-	"approval-deny": "error",
-	switch: "page",
+	"approval-deny": "press",
+	subtask: "droplet",
+	switch: "none",
 	stop: "release",
-	tool: "tick",
+	tool: "none",
 	error: "error",
 };
 
@@ -83,21 +90,21 @@ function prefKey(ev: SfxEvent): string {
 }
 
 /** The configured sound for an activity (falls back to the default when the
- *  stored name is missing or no longer in the palette). */
-export function soundFor(ev: SfxEvent): SoundName {
+ *  stored name is missing, `none`, or no longer in the palette). */
+export function soundFor(ev: SfxEvent): SfxChoice {
 	try {
 		const stored = localStorage.getItem(prefKey(ev));
-		if (stored && SOUND_SET.has(stored)) return stored as SoundName;
+		if (stored === "none" || (stored && SOUND_SET.has(stored))) return stored as SfxChoice;
 	} catch {
 		// storage unavailable — default
 	}
 	return DEFAULT_SFX[ev];
 }
 
-/** Persist an activity's sound choice. */
-export function setSoundFor(ev: SfxEvent, name: SoundName): void {
+/** Persist an activity's sound choice (`none` mutes that activity). */
+export function setSoundFor(ev: SfxEvent, choice: SfxChoice): void {
 	try {
-		localStorage.setItem(prefKey(ev), name);
+		localStorage.setItem(prefKey(ev), choice);
 	} catch {
 		// storage unavailable — session-only
 	}
@@ -108,8 +115,10 @@ export function setSoundFor(ev: SfxEvent, name: SoundName): void {
 export function sfxFor(ev: SfxEvent): void {
 	if (!soundEnabled()) return;
 	if (inQuietHours()) return;
+	const choice = soundFor(ev);
+	if (choice === "none") return;
 	try {
-		play(soundFor(ev));
+		play(choice);
 	} catch {
 		// audio context not ready — ignore
 	}
@@ -208,13 +217,28 @@ export function inQuietHours(): boolean {
 	return from <= to ? cur >= from && cur < to : cur >= from || cur < to;
 }
 
-/** The full cuelume palette (14 synthesized recipes) — surfaced with
- * preview buttons in Settings → 通知与音效. */
+/** The full cuelume palette (17 synthesized recipes). */
 export const ALL_SOUNDS: readonly SoundName[] = sounds;
 
-/** Names actually wired into the UI (sfxFor call sites). The remaining
- * recipes are palette-only until a trigger is added. */
-export const WIRED_SOUNDS: ReadonlySet<SoundName> = new Set(Object.values(DEFAULT_SFX));
+/** Sounds that have a default trigger; the picker offers only these so the
+ *  palette stays meaningful (no unwired gallery). */
+export const WIRED_SOUNDS: ReadonlySet<SoundName> = new Set(
+	Object.values(DEFAULT_SFX).filter((name): name is SoundName => name !== "none"),
+);
+
+/** Curated order for the per-event sound picker. */
+export const SELECTABLE_SOUNDS: readonly SoundName[] = [
+	"chime",
+	"sparkle",
+	"ready",
+	"arrival",
+	"pulse",
+	"success",
+	"press",
+	"droplet",
+	"release",
+	"error",
+];
 
 /** Settings preview — plays the recipe directly, deliberately bypassing the
  * master toggle so a muted user can still audition the palette. */

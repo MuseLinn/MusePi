@@ -2,7 +2,7 @@ import "./happy-dom-shim";
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { getHostState, restoreTabs } from "../src/lib/managed-browser-host";
+import { closeTab, getHostState, restoreTabs } from "../src/lib/managed-browser-host";
 import { EMPTY_PANEL_TAB_STATE, serializePanelTabs, upsertPanelTab } from "../src/lib/panel-tabs";
 import { type UsePanelTabsResult, usePanelTabs } from "../src/lib/use-panel-tabs";
 
@@ -22,6 +22,7 @@ const hosts: HTMLElement[] = [];
 afterEach(() => {
 	for (const root of roots.splice(0)) act(() => root.unmount());
 	for (const host of hosts.splice(0)) host.remove();
+	for (const tab of getHostState().tabs) closeTab(tab.id, { notifyMain: false });
 	vi.restoreAllMocks();
 	localStorage.clear();
 });

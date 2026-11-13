@@ -63,6 +63,13 @@ export const CODE_FONT_OPTIONS: FontOption[] = [
 export const DEFAULT_UI_FONT: FontOption = UI_FONT_OPTIONS[0]!;
 export const DEFAULT_CODE_FONT: FontOption = CODE_FONT_OPTIONS[0]!;
 
+/** Transcript and terminal faces reuse the existing option tables: the
+ *  interface list for message body text, the code list for the terminal. */
+export const TRANSCRIPT_FONT_OPTIONS: FontOption[] = UI_FONT_OPTIONS;
+export const TERMINAL_FONT_OPTIONS: FontOption[] = CODE_FONT_OPTIONS;
+export const DEFAULT_TRANSCRIPT_FONT: FontOption = TRANSCRIPT_FONT_OPTIONS[0]!;
+export const DEFAULT_TERMINAL_FONT: FontOption = TERMINAL_FONT_OPTIONS[0]!;
+
 /** localStorage keys for the appearance prefs. */
 export const UI_FONT_KEY = "musepi-gui-ui-font";
 export const MONO_FONT_KEY = "musepi-gui-mono-font";
@@ -70,6 +77,10 @@ export const DENSITY_KEY = "musepi-gui-density";
 export const TIME_FMT_KEY = "musepi-gui-timefmt";
 export const WEEK_START_KEY = "musepi-gui-weekstart";
 export const EDITOR_FONT_KEY = "musepi-gui-editor-font";
+/** Transcript body face — independent of the shell UI face. */
+export const TRANSCRIPT_FONT_KEY = "musepi-gui-transcript-font";
+/** Terminal face — independent of the code face. */
+export const TERMINAL_FONT_KEY = "musepi-gui-terminal-font-family";
 
 /**
  * Code block themes (ZCode-parity 代码设置): one pick per scheme, applied as
@@ -223,6 +234,16 @@ export function applyMonoFont(id: string | null, root: HTMLElement = document.do
 	root.style.setProperty("--font-mono", findFont(CODE_FONT_OPTIONS, id).stack);
 }
 
+/** Apply one font pick to the transcript body variable (--font-transcript). */
+export function applyTranscriptFont(id: string | null, root: HTMLElement = document.documentElement): void {
+	root.style.setProperty("--font-transcript", findFont(TRANSCRIPT_FONT_OPTIONS, id).stack);
+}
+
+/** Apply one font pick to the terminal variable (--font-terminal). */
+export function applyTerminalFont(id: string | null, root: HTMLElement = document.documentElement): void {
+	root.style.setProperty("--font-terminal", findFont(TERMINAL_FONT_OPTIONS, id).stack);
+}
+
 /** Apply the spacing density (50-200, % of default) as --gui-density.
  * Stored as a UNITLESS factor (1 = 100%): `calc(28px * var(--gui-density))`
  * is only valid when the var is a plain number — a percentage operand makes
@@ -237,6 +258,8 @@ export function applyAppearancePrefs(root: HTMLElement = document.documentElemen
 	try {
 		applyUiFont(localStorage.getItem(UI_FONT_KEY), root);
 		applyMonoFont(localStorage.getItem(MONO_FONT_KEY), root);
+		applyTranscriptFont(localStorage.getItem(TRANSCRIPT_FONT_KEY), root);
+		applyTerminalFont(localStorage.getItem(TERMINAL_FONT_KEY), root);
 		applyDensity(Number(localStorage.getItem(DENSITY_KEY) ?? 100), root);
 		applyCodeThemes(localStorage.getItem(CODE_THEME_LIGHT_KEY), localStorage.getItem(CODE_THEME_DARK_KEY), root);
 		applyCodeSize(Number(localStorage.getItem(EDITOR_FONT_KEY) ?? 13), root);

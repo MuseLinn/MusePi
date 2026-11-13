@@ -1,5 +1,16 @@
 import { describe, expect, it } from "bun:test";
-import { readTimeFormat, readWeekStart, resolveHour12, timeFormatOptions, weekStartIndex } from "./appearance";
+import {
+	applyTerminalFont,
+	applyTranscriptFont,
+	DEFAULT_TERMINAL_FONT,
+	DEFAULT_TRANSCRIPT_FONT,
+	readTimeFormat,
+	readWeekStart,
+	resolveHour12,
+	TERMINAL_FONT_OPTIONS,
+	timeFormatOptions,
+	weekStartIndex,
+} from "./appearance";
 
 /**
  * 设置 → 外观 → 时间格式 (TIME_FMT_KEY): the render layer must honor the
@@ -96,5 +107,31 @@ describe("readWeekStart / weekStartIndex", () => {
 		withStorage({ "musepi-gui-weekstart": "general.sunday" });
 		expect(readWeekStart()).toBe("sunday");
 		expect(weekStartIndex()).toBe(0);
+	});
+});
+
+/** Minimal CSS-variable target (bun has no DOM). */
+function styleRoot(): { props: Map<string, string>; root: HTMLElement } {
+	const props = new Map<string, string>();
+	return {
+		props,
+		root: { style: { setProperty: (key: string, value: string) => props.set(key, value) } } as unknown as HTMLElement,
+	};
+}
+
+describe("applyTranscriptFont / applyTerminalFont", () => {
+	it("writes the picked stack to its own variable", () => {
+		const { props, root } = styleRoot();
+		applyTranscriptFont(DEFAULT_TRANSCRIPT_FONT.id, root);
+		applyTerminalFont(TERMINAL_FONT_OPTIONS[1]?.id ?? null, root);
+
+		expect(props.get("--font-transcript")).toBe(DEFAULT_TRANSCRIPT_FONT.stack);
+		expect(props.get("--font-terminal")).toBe(TERMINAL_FONT_OPTIONS[1]?.stack);
+	});
+
+	it("falls back to the default option for an unknown id", () => {
+		const { props, root } = styleRoot();
+		applyTerminalFont("missing", root);
+		expect(props.get("--font-terminal")).toBe(DEFAULT_TERMINAL_FONT.stack);
 	});
 });

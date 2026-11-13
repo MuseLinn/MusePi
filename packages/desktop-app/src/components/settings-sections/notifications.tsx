@@ -1,46 +1,45 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import type { SoundName } from "cuelume";
-import { Play as PlayIconData, Square as SquareIconData } from "lucide";
-import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import {
 	defaultTemplate,
 	eventEnabled,
+	inAppToastEnabled,
 	loadNotifyTemplates,
 	NOTIFY_EVENTS,
 	type NotifyEvent,
 	type NotifyTemplates,
 	notifyEnabled,
+	notifySfxEvent,
+	notifySoundEnabled,
 	notifyWhileFocused,
 	saveEventPrefs,
 	saveNotifyTemplates,
 	sendTestNotification,
+	setInAppToastEnabled,
+	setNotifySoundEnabled,
 } from "../../lib/notify";
 import type { RpcClient } from "../../lib/rpc";
 import {
-	ALL_SOUNDS,
-	DEFAULT_SFX,
 	inQuietHours,
 	previewSound,
 	type QuietHours,
 	quietHoursPref,
+	SELECTABLE_SOUNDS,
 	SFX_EVENTS,
+	type SfxChoice,
 	type SfxEvent,
 	setQuietHoursPref,
 	setSoundFor,
 	setVolumePref,
 	soundFor,
 	volumePref,
-	WIRED_SOUNDS,
 } from "../../lib/sfx";
 import { Icon } from "../../vendor/oc-icons";
 import { GuiSelect } from "../GuiSelect";
 import { Reveal } from "../Reveal";
 
-/** One configurable activity row (opencode per-category sounds parity):
- *  activity name + trigger desc, a preview button for the current choice,
- *  and a palette select that persists under musepi-gui-sfx:<event>. */
 /** Sfx/notification event labels are keyed per event id; the ids come from
  *  SFX_EVENTS / NOTIFY_EVENTS, so both lookups are closed over that set. */
 const NOTIFY_EVENT_KEY: Record<string, TranslationKey> = {
@@ -50,13 +49,22 @@ const NOTIFY_EVENT_KEY: Record<string, TranslationKey> = {
 	question: "settings.notificationEventQuestion",
 };
 
+const NOTIFY_EVENT_DESC_KEY: Record<string, TranslationKey> = {
+	completion: "settings.notificationEventCompletionDesc",
+	subtask: "settings.notificationEventSubtaskDesc",
+	error: "settings.notificationEventErrorDesc",
+	question: "settings.notificationEventQuestionDesc",
+};
+
 const SFX_EVENT_KEY: Record<string, TranslationKey> = {
 	send: "settings.sfxEventSend",
 	first: "settings.sfxEventFirst",
 	complete: "settings.sfxEventComplete",
+	question: "settings.sfxEventQuestion",
 	approval: "settings.sfxEventApproval",
 	"approval-ok": "settings.sfxEventApprovalOk",
 	"approval-deny": "settings.sfxEventApprovalDeny",
+	subtask: "settings.sfxEventSubtask",
 	switch: "settings.sfxEventSwitch",
 	stop: "settings.sfxEventStop",
 	tool: "settings.sfxEventTool",
@@ -67,45 +75,123 @@ const SFX_EVENT_DESC_KEY: Record<string, TranslationKey> = {
 	send: "settings.sfxEventSendDesc",
 	first: "settings.sfxEventFirstDesc",
 	complete: "settings.sfxEventCompleteDesc",
+	question: "settings.sfxEventQuestionDesc",
 	approval: "settings.sfxEventApprovalDesc",
 	"approval-ok": "settings.sfxEventApprovalOkDesc",
 	"approval-deny": "settings.sfxEventApprovalDenyDesc",
+	subtask: "settings.sfxEventSubtaskDesc",
 	switch: "settings.sfxEventSwitchDesc",
 	stop: "settings.sfxEventStopDesc",
 	tool: "settings.sfxEventToolDesc",
 	error: "settings.sfxEventErrorDesc",
 };
 
-export function SoundEventRow({ ev }: { ev: SfxEvent }): ReactNode {
-	const [name, setName] = useState<SoundName>(() => soundFor(ev));
+/** Display names for the curated picker; ids stay the persisted value. */
+const SOUND_LABEL_KEY: Partial<Record<SoundName, TranslationKey>> = {
+	chime: "settings.soundChime",
+	sparkle: "settings.soundSparkle",
+	ready: "settings.soundReady",
+	arrival: "settings.soundArrival",
+	pulse: "settings.soundPulse",
+	success: "settings.soundSuccess",
+	press: "settings.soundPress",
+	droplet: "settings.soundDroplet",
+	release: "settings.soundRelease",
+	error: "settings.soundError",
+};
+
+function soundLabel(name: SoundName): string {
+	const key = SOUND_LABEL_KEY[name];
+	return key ? t(key) : name;
+}
+
+/** Events already covered by a notification row; the interaction group keeps
+ *  the remaining cues (send, approvals, stop, switch, tool, …). */
+const NOTIFICATION_SFX_EVENTS: ReadonlySet<SfxEvent> = new Set(["complete", "question", "subtask", "error"]);
+const INTERACTION_SFX_EVENTS: readonly SfxEvent[] = SFX_EVENTS.filter(ev => !NOTIFICATION_SFX_EVENTS.has(ev));
+
+/** One sound choice: preview + palette select (with an explicit "none"). */
+function SoundPicker({ ev }: { ev: SfxEvent }): ReactNode {
+	const [choice, setChoice] = useState<SfxChoice>(() => soundFor(ev));
 	return (
-		<div className="gui-sfx-event-row">
-			<div className="min-w-0 flex-1">
-				<div className="gui-settings-row-label">{t(SFX_EVENT_KEY[ev] ?? ev)}</div>
-				<div className="gui-settings-row-desc">
-					{t(SFX_EVENT_DESC_KEY[ev] ?? ev)} · {t("transcript.default")}: {DEFAULT_SFX[ev]}
-				</div>
-			</div>
+		<div className="gui-sfx-controls">
 			<button
 				type="button"
 				className="gui-sfx-preview"
-				onClick={() => previewSound(name)}
-				aria-label={`${t("companion.preview")} ${name}`}
-				title={`${t("companion.preview")} ${name}`}
+				disabled={choice === "none"}
+				onClick={() => {
+					if (choice !== "none") previewSound(choice);
+				}}
+				aria-label={t("companion.preview")}
+				title={t("companion.preview")}
 			>
 				<Icon name="play" className="h-3.5 w-3.5" />
 			</button>
 			<GuiSelect
 				className="gui-settings-select"
-				value={name}
+				value={choice}
 				onChange={v => {
-					const next = v as SoundName;
-					setName(next);
+					const next = v as SfxChoice;
+					setChoice(next);
 					setSoundFor(ev, next);
 				}}
 				ariaLabel={t(SFX_EVENT_KEY[ev] ?? ev)}
-				options={ALL_SOUNDS.map(s => ({ value: s, label: s }))}
+				options={[
+					{ value: "none", label: t("settings.soundNone") },
+					...SELECTABLE_SOUNDS.map(sound => ({ value: sound, label: soundLabel(sound) })),
+				]}
 			/>
+		</div>
+	);
+}
+
+/** Interaction cue row (send / approval / stop / switch / tool …). */
+export function SoundEventRow({ ev }: { ev: SfxEvent }): ReactNode {
+	return (
+		<div className="gui-sfx-event-row">
+			<div className="min-w-0 flex-1">
+				<div className="gui-settings-row-label">{t(SFX_EVENT_KEY[ev] ?? ev)}</div>
+				<div className="gui-settings-row-desc">{t(SFX_EVENT_DESC_KEY[ev] ?? ev)}</div>
+			</div>
+			<SoundPicker ev={ev} />
+		</div>
+	);
+}
+
+/** Notification event row: desktop toast toggle + its palette sound. */
+function NotifyEventRow({
+	ev,
+	enabled,
+	onToggle,
+	disabled = false,
+}: {
+	ev: NotifyEvent;
+	enabled: boolean;
+	onToggle(): void;
+	/** The master notification switch is off: the toast toggle is inert but
+	 *  the sound picker stays available (the in-app cue still plays). */
+	disabled?: boolean;
+}): ReactNode {
+	return (
+		<div className="gui-sfx-event-row">
+			<div className="min-w-0 flex-1">
+				<div className="gui-settings-row-label">{t(NOTIFY_EVENT_KEY[ev] ?? ev)}</div>
+				<div className="gui-settings-row-desc">{t(NOTIFY_EVENT_DESC_KEY[ev] ?? ev)}</div>
+			</div>
+			<div className="gui-sfx-controls">
+				<button
+					type="button"
+					role="switch"
+					aria-checked={enabled}
+					disabled={disabled}
+					className={`gui-toggle${enabled ? " gui-toggle--on" : ""}`}
+					onClick={onToggle}
+					aria-label={t(NOTIFY_EVENT_KEY[ev] ?? ev)}
+				>
+					<span className="gui-toggle-knob" />
+				</button>
+				<SoundPicker ev={notifySfxEvent(ev)} />
+			</div>
 		</div>
 	);
 }
@@ -121,19 +207,21 @@ const TEMPLATE_VARIABLES = [
 	"last_message",
 ] as const;
 
-/** Desktop notifications + sound — openchamber parity: a delivery switch
- * (master + focused mode), four event toggles (completion / subtask /
- * error / question), per-event title/message templates with {variable}
- * substitution, and the sound palette below. All prefs are renderer-local. */
+/** Desktop notifications + sound. Delivery switches, one row per event
+ *  (toast toggle + palette sound), optional templates, then interaction cues
+ *  and their shared volume/quiet-hours controls. */
 export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [notify, setNotify] = useState<boolean>(() => notifyEnabled());
 	const [focused, setFocused] = useState<boolean>(() => notifyWhileFocused());
+	const [notifySound, setNotifySound] = useState<boolean>(() => notifySoundEnabled());
+	const [inAppToast, setInAppToast] = useState<boolean>(() => inAppToastEnabled());
 	const [eventPrefs, setEventPrefs] = useState<Record<NotifyEvent, boolean>>(() => {
 		const out = {} as Record<NotifyEvent, boolean>;
 		for (const ev of NOTIFY_EVENTS) out[ev] = eventEnabled(ev);
 		return out;
 	});
 	const [templates, setTemplates] = useState<NotifyTemplates>(() => loadNotifyTemplates());
+	const [templatesOpen, setTemplatesOpen] = useState(false);
 	const [sound, setSound] = useState<boolean>(() => localStorage.getItem("musepi-gui-sound") !== "0");
 	const [hapticOn, setHapticOn] = useState<boolean>(() => localStorage.getItem("musepi-gui-haptic") !== "0");
 	// Master volume + quiet hours (免打扰): the in-window flag re-evaluates on
@@ -141,7 +229,6 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 	const [volume, setVolume] = useState<number>(() => volumePref());
 	const [quiet, setQuiet] = useState<QuietHours | null>(() => quietHoursPref());
 	const [inQuiet, setInQuiet] = useState<boolean>(() => inQuietHours());
-	const [auditionTimer, setAuditionTimer] = useState<number[] | null>(null);
 	useEffect(() => {
 		if (quiet === null) {
 			setInQuiet(false);
@@ -221,6 +308,46 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 					</div>
 					<div className="gui-settings-row">
 						<div>
+							<div className="gui-settings-row-label">{t("settings.notificationSound")}</div>
+							<div className="gui-settings-row-desc">{t("settings.notificationSoundDescription")}</div>
+						</div>
+						<button
+							type="button"
+							role="switch"
+							aria-checked={notifySound}
+							className={`gui-toggle${notifySound ? " gui-toggle--on" : ""}`}
+							onClick={() => {
+								const next = !notifySound;
+								setNotifySound(next);
+								setNotifySoundEnabled(next);
+							}}
+							aria-label={t("settings.notificationSound")}
+						>
+							<span className="gui-toggle-knob" />
+						</button>
+					</div>
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("settings.inAppNotifications")}</div>
+							<div className="gui-settings-row-desc">{t("settings.inAppNotificationsDescription")}</div>
+						</div>
+						<button
+							type="button"
+							role="switch"
+							aria-checked={inAppToast}
+							className={`gui-toggle${inAppToast ? " gui-toggle--on" : ""}`}
+							onClick={() => {
+								const next = !inAppToast;
+								setInAppToast(next);
+								setInAppToastEnabled(next);
+							}}
+							aria-label={t("settings.inAppNotifications")}
+						>
+							<span className="gui-toggle-knob" />
+						</button>
+					</div>
+					<div className="gui-settings-row">
+						<div>
 							<div className="gui-settings-row-label">{t("settings.sendTestNotification")}</div>
 							<div className="gui-settings-row-desc">{t("settings.sendTestNotificationDescription")}</div>
 						</div>
@@ -231,6 +358,10 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								setTestResult(null);
 								const result = await sendTestNotification();
 								setTestResult(result);
+								if (result.ok && !notifySound) {
+									const cue = soundFor("complete");
+									if (cue !== "none") previewSound(cue);
+								}
 							}}
 						>
 							<Icon name="notification-3" className="h-3.5 w-3.5" />
@@ -252,83 +383,88 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 					</div>
 				</Reveal>
 			</div>
-			<Reveal open={notify}>
-				<div className="gui-settings-section">
-					<div className="gui-settings-section-title">{t("settings.notificationEvents")}</div>
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("settings.notificationEvents")}</div>
+				<div className="gui-sfx-event-list">
 					{NOTIFY_EVENTS.map(ev => (
-						<div key={ev} className="gui-settings-row">
-							<div className="gui-settings-row-label">{t(NOTIFY_EVENT_KEY[ev] ?? ev)}</div>
-							<button
-								type="button"
-								role="switch"
-								aria-checked={eventPrefs[ev]}
-								className={`gui-toggle${eventPrefs[ev] ? " gui-toggle--on" : ""}`}
-								onClick={() => {
-									const next = { ...eventPrefs, [ev]: !eventPrefs[ev] };
-									setEventPrefs(next);
-									saveEventPrefs(next);
-								}}
-								aria-label={t(NOTIFY_EVENT_KEY[ev] ?? ev)}
-							>
-								<span className="gui-toggle-knob" />
-							</button>
-						</div>
+						<NotifyEventRow
+							key={ev}
+							ev={ev}
+							enabled={eventPrefs[ev]}
+							disabled={!notify}
+							onToggle={() => {
+								const next = { ...eventPrefs, [ev]: !eventPrefs[ev] };
+								setEventPrefs(next);
+								saveEventPrefs(next);
+							}}
+						/>
 					))}
 				</div>
+			</div>
+			<Reveal open={notify}>
 				<div className="gui-settings-section">
-					<div className="gui-settings-section-title">{t("settings.notificationTemplates")}</div>
-					<div className="gui-settings-row-desc">
-						{t("settings.templateVariables")}:{" "}
-						{TEMPLATE_VARIABLES.map(v => (
-							<code key={v} className="gui-tpl-var">{`{${v}}`}</code>
-						))}
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("settings.notificationTemplates")}</div>
+							<div className="gui-settings-row-desc">{t("settings.templateVariables")}</div>
+						</div>
+						<button type="button" className="gui-btn" onClick={() => setTemplatesOpen(open => !open)}>
+							{templatesOpen ? t("settings.hideNotificationTemplates") : t("settings.editNotificationTemplates")}
+						</button>
 					</div>
-					<div className="gui-notify-tpl-grid">
-						{NOTIFY_EVENTS.map(ev => (
-							<div key={ev} className="gui-notify-tpl-group">
-								<div className="gui-notify-tpl-name">{t(NOTIFY_EVENT_KEY[ev] ?? ev)}</div>
-								<div>
-									<label className="gui-notify-tpl-label" htmlFor={`omp-tpl-${ev}-title`}>
-										{t("settings.title")}
-									</label>
-									<input
-										id={`omp-tpl-${ev}-title`}
-										className="gui-input"
-										value={templates[ev].title}
-										placeholder={defaultTemplate(ev, "title")}
-										onChange={e => {
-											const next = { ...templates, [ev]: { ...templates[ev], title: e.target.value } };
-											setTemplates(next);
-											saveNotifyTemplates(next);
-										}}
-									/>
+					<Reveal open={templatesOpen}>
+						<div className="gui-settings-row-desc">
+							{TEMPLATE_VARIABLES.map(v => (
+								<code key={v} className="gui-tpl-var">{`{${v}}`}</code>
+							))}
+						</div>
+						<div className="gui-notify-tpl-grid">
+							{NOTIFY_EVENTS.map(ev => (
+								<div key={ev} className="gui-notify-tpl-group">
+									<div className="gui-notify-tpl-name">{t(NOTIFY_EVENT_KEY[ev] ?? ev)}</div>
+									<div>
+										<label className="gui-notify-tpl-label" htmlFor={`omp-tpl-${ev}-title`}>
+											{t("settings.title")}
+										</label>
+										<input
+											id={`omp-tpl-${ev}-title`}
+											className="gui-input"
+											value={templates[ev].title}
+											placeholder={defaultTemplate(ev, "title")}
+											onChange={e => {
+												const next = { ...templates, [ev]: { ...templates[ev], title: e.target.value } };
+												setTemplates(next);
+												saveNotifyTemplates(next);
+											}}
+										/>
+									</div>
+									<div>
+										<label className="gui-notify-tpl-label" htmlFor={`omp-tpl-${ev}-message`}>
+											{t("settings.message")}
+										</label>
+										<input
+											id={`omp-tpl-${ev}-message`}
+											className="gui-input"
+											value={templates[ev].message}
+											placeholder={defaultTemplate(ev, "message")}
+											onChange={e => {
+												const next = { ...templates, [ev]: { ...templates[ev], message: e.target.value } };
+												setTemplates(next);
+												saveNotifyTemplates(next);
+											}}
+										/>
+									</div>
 								</div>
-								<div>
-									<label className="gui-notify-tpl-label" htmlFor={`omp-tpl-${ev}-message`}>
-										{t("settings.message")}
-									</label>
-									<input
-										id={`omp-tpl-${ev}-message`}
-										className="gui-input"
-										value={templates[ev].message}
-										placeholder={defaultTemplate(ev, "message")}
-										onChange={e => {
-											const next = { ...templates, [ev]: { ...templates[ev], message: e.target.value } };
-											setTemplates(next);
-											saveNotifyTemplates(next);
-										}}
-									/>
-								</div>
-							</div>
-						))}
-					</div>
+							))}
+						</div>
+					</Reveal>
 				</div>
 			</Reveal>
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("settings.soundEffects")}</div>
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("settings.soundEffects")}</div>
+						<div className="gui-settings-row-label">{t("settings.enableSoundEffects")}</div>
 						<div className="gui-settings-row-desc">{t("settings.sendChimeToolClicks")}</div>
 					</div>
 					<button
@@ -341,7 +477,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 							setSound(next);
 							localStorage.setItem("musepi-gui-sound", next ? "1" : "0");
 						}}
-						aria-label={t("settings.soundEffects")}
+						aria-label={t("settings.enableSoundEffects")}
 					>
 						<span className="gui-toggle-knob" />
 					</button>
@@ -444,72 +580,14 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 						</button>
 					</div>
 					<div className="gui-settings-row-desc">{t("settings.sfxChoosePerActivity")}</div>
-					<Reveal open={sound}>
-						<div className="gui-sfx-event-list">
-							{SFX_EVENTS.map(ev => (
-								<SoundEventRow key={ev} ev={ev} />
-							))}
-						</div>
-					</Reveal>
-					{/* Audition the whole wired set in one go — a second click
-					 * stops the remaining sequence. */}
-					<div className="gui-settings-row">
-						<div>
-							<div className="gui-settings-row-label">{t("settings.auditionAllWiredSounds")}</div>
-							<div className="gui-settings-row-desc">{t("settings.auditionAllWiredSoundsDescription")}</div>
-						</div>
-						<button
-							type="button"
-							className="gui-btn"
-							onClick={() => {
-								if (auditionTimer !== null) {
-									for (const id of auditionTimer) clearTimeout(id);
-									setAuditionTimer(null);
-									return;
-								}
-								const names = [...WIRED_SOUNDS];
-								const ids = names.map((name, i) => window.setTimeout(() => previewSound(name), i * 450));
-								const stop = window.setTimeout(() => setAuditionTimer(null), names.length * 450 + 300);
-								setAuditionTimer([...ids, stop]);
-							}}
-						>
-							<MorphIcon
-								icon={auditionTimer !== null ? SquareIconData : PlayIconData}
-								size={14}
-								spring="snappy"
-								reducedMotion="user"
-								className="h-3.5 w-3.5"
-							/>
-							{auditionTimer !== null ? t("settings.stop") : t("settings.auditionAll")}
-						</button>
+					<div className="gui-settings-section-title">{t("settings.interactionSounds")}</div>
+					<div className="gui-settings-row-desc">{t("settings.interactionSoundsDescription")}</div>
+					<div className="gui-sfx-event-list">
+						{INTERACTION_SFX_EVENTS.map(ev => (
+							<SoundEventRow key={ev} ev={ev} />
+						))}
 					</div>
 				</Reveal>
-				{/* Palette reference: sounds WITHOUT a wired trigger only — the
-				 * wired ones are already expressed by the per-event rows above,
-				 * so the old full-grid duplicated them (user: 设计有点问题). */}
-				{(ALL_SOUNDS.filter(name => !WIRED_SOUNDS.has(name)).length > 0 && (
-					<div className="gui-settings-row-desc">{t("settings.unwiredPaletteReference")}</div>
-				)) ||
-					null}
-				<div className="gui-sound-grid">
-					{ALL_SOUNDS.filter(name => !WIRED_SOUNDS.has(name)).map(name => (
-						<div key={name} className="gui-sound-card gui-sound-card--idle">
-							<button
-								type="button"
-								className="gui-sound-preview"
-								onClick={() => previewSound(name)}
-								aria-label={`${t("companion.preview")} ${name}`}
-								title={`${t("companion.preview")} ${name}`}
-							>
-								<Icon name="play" className="h-3.5 w-3.5" />
-							</button>
-							<div className="min-w-0">
-								<div className="gui-sound-name">{name}</div>
-								<div className="gui-sound-usage">{t("companion.notWiredUiYet")}</div>
-							</div>
-						</div>
-					))}
-				</div>
 			</div>
 			{/* Idle recap (TUI 通知组 parity): daemon-side, persisted to
 			 * config.yml — the same recap.enabled / recap.idleSeconds keys

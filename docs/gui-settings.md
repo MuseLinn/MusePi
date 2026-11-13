@@ -65,10 +65,18 @@ gui-main (flex ROW)
 ## 5. Appearance Page Sections
 
 - **Localization**: language / time format / first day of week.
-- **UI settings**: UI theme (system/light/dark), light theme, dark theme (independent choices), UI font size, UI font family, spacing density (`--gui-density` unitless factor, 1=100%; calc multiplication must use numbers, not percentages), accent color (4 presets + custom), window transparency toggle + frosted glass opacity, background tint.
-- **Code settings**: light/dark code themes (GitHub/One/Solarized etc., orthogonal to the UI theme), show line numbers, wrap long lines, code font size, code font family, terminal font size.
+- **UI settings**: UI theme (system/light/dark), light theme, dark theme (independent choices), UI font size, UI font family, conversation font (`--font-transcript`), spacing density (`--gui-density` unitless factor, 1=100%; calc multiplication must use numbers, not percentages), accent color (4 presets + custom), window transparency toggle + frosted glass opacity, background tint.
+- **Code settings**: light/dark code themes (GitHub/One/Solarized etc., orthogonal to the UI theme), show line numbers, wrap long lines, code font size, code font family, terminal font size, terminal font (`--font-terminal`).
 - **Code preview**: two CodePreviewCard instances side by side; the currently active scheme carries an "active" badge.
 - **Effects**: avatar toggles, etc.
+
+## 5b. Notifications & Sound (reworked 2026-11-13)
+
+- **Delivery**: system notifications, notify-when-focused, and a notification sound choice — the OS sound or the in-app cue, never both (in-app is the default, so an event sounds once).
+- **Notification events**: completion / subtask / error / question each get one row with the desktop-toast toggle, a sound picker and a preview; sounds show readable names and an explicit “None”.
+- **In-app notifications**: each event also lands in the bottom-right toast stack (toggleable), so it remains visible while focused when the system notification is suppressed.
+- **Sound**: master switch, volume, quiet hours and haptics; interaction cues (send, approvals, stop, switch, tool, …) live in their own group.
+- **Defaults**: `tool` and `switch` start silent; completion→ready, question→arrival, approval→pulse, subtask→droplet, deny→press.
 
 ## 6. Code Highlighting (added 2026-08-04)
 

@@ -18,26 +18,40 @@ afterAll(async () => {
 	await GlobalRegistrator.register();
 });
 
+import { dismissActionToast, getToasts } from "../src/lib/action-toast";
 import {
 	buildNotification,
 	defaultTemplate,
+	dispatchNotification,
 	eventEnabled,
+	inAppToastEnabled,
 	NOTIFY_EVENTS,
 	notifyEnabled,
+	notifySfxEvent,
+	notifySoundEnabled,
+	renderNotification,
 	saveNotifyTemplates,
+	setInAppToastEnabled,
+	setNotifySoundEnabled,
 } from "../src/lib/notify";
 import { ALL_SOUNDS, DEFAULT_SFX, SFX_EVENTS, setSoundFor, soundEnabled, soundFor, WIRED_SOUNDS } from "../src/lib/sfx";
 
-/** Settings → 通知与音效 contract: every SFX event has a default sound that
+/** Settings → 通知与音效 contract: every SFX event has a default choice that
  *  is persisted renderer-local and gateable by the master sound switch; every
  *  notify event has a template and a dispatch that couples to a sound. */
 describe("sfx (sound config contract)", () => {
-	it("every SFX event has a default sound, all defaults are wired sounds", () => {
+	it("every SFX event has a default, and non-none defaults are wired sounds", () => {
 		expect(SFX_EVENTS.length).toBeGreaterThan(0);
 		for (const ev of SFX_EVENTS) {
-			expect(DEFAULT_SFX[ev], ev).toBeTruthy();
-			expect(WIRED_SOUNDS.has(DEFAULT_SFX[ev]), ev).toBe(true);
+			const def = DEFAULT_SFX[ev];
+			expect(def, ev).toBeTruthy();
+			if (def !== "none") expect(WIRED_SOUNDS.has(def), ev).toBe(true);
 		}
+	});
+
+	it("noisy activities start silent", () => {
+		expect(DEFAULT_SFX.tool).toBe("none");
+		expect(DEFAULT_SFX.switch).toBe("none");
 	});
 
 	it("soundFor falls back to the default when unset", () => {
@@ -53,6 +67,12 @@ describe("sfx (sound config contract)", () => {
 		localStorage.removeItem("musepi-gui-sfx:send");
 	});
 
+	it("persists an explicit none so an event can be muted", () => {
+		setSoundFor("send", "none");
+		expect(soundFor("send")).toBe("none");
+		localStorage.removeItem("musepi-gui-sfx:send");
+	});
+
 	it("soundEnabled gates on the master switch (localStorage musepi-gui-sound)", () => {
 		localStorage.setItem("musepi-gui-sound", "1");
 		expect(soundEnabled()).toBe(true);
@@ -63,6 +83,49 @@ describe("sfx (sound config contract)", () => {
 });
 
 describe("notify (notification config + dispatch contract)", () => {
+	it("notification sound defaults off and round-trips", () => {
+		localStorage.removeItem("musepi-gui-notify-sound");
+		expect(notifySoundEnabled()).toBe(false);
+		setNotifySoundEnabled(true);
+		expect(notifySoundEnabled()).toBe(true);
+		localStorage.removeItem("musepi-gui-notify-sound");
+	});
+
+	it("notification events map to distinct palette events", () => {
+		expect(notifySfxEvent("completion")).toBe("complete");
+		expect(notifySfxEvent("question")).toBe("question");
+		expect(notifySfxEvent("subtask")).toBe("subtask");
+		expect(notifySfxEvent("error")).toBe("error");
+	});
+
+	it("in-app toast notifications default on and round-trip", () => {
+		localStorage.removeItem("musepi-gui-notify-toast");
+		expect(inAppToastEnabled()).toBe(true);
+		setInAppToastEnabled(false);
+		expect(inAppToastEnabled()).toBe(false);
+		localStorage.removeItem("musepi-gui-notify-toast");
+	});
+
+	it("renderNotification renders content without the focus gate", () => {
+		const out = renderNotification("completion", { lastMessage: "done" });
+		expect(out.title).toBeTruthy();
+		expect(out.body).toBeTruthy();
+	});
+
+	it("dispatch mirrors the event into the in-app toast stack", () => {
+		for (const toast of [...getToasts()]) dismissActionToast(toast.id);
+		localStorage.setItem("musepi-gui-notify", "1");
+		localStorage.setItem("musepi-gui-notify-toast", "1");
+		localStorage.removeItem("musepi-gui-notify-events");
+		dispatchNotification("completion", { lastMessage: "done" });
+		const toast = getToasts().find(item => item.dedupeKey === "notify:completion");
+		expect(toast?.kind).toBe("success");
+		expect(toast?.message).toBeTruthy();
+		if (toast) dismissActionToast(toast.id);
+		localStorage.removeItem("musepi-gui-notify");
+		localStorage.removeItem("musepi-gui-notify-toast");
+	});
+
 	it("every notify event has a default template with title+message", () => {
 		for (const ev of NOTIFY_EVENTS) {
 			const tpl = defaultTemplate(ev, "title");

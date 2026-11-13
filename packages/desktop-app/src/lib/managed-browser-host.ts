@@ -370,7 +370,17 @@ export function attachElement(tabId: string, el: HostWebview | null): void {
 	wiredElements.add(el);
 	// `did-attach` is the moment the guest exists (`getWebContentsId()` becomes
 	// callable) — the CDP bridge cannot bind the webContents without that id.
-	const onAttach = (): void => reportGuestReady(tabId);
+	const onAttach = (): void => {
+		// Apply the tab's persisted mute state to the guest: a new tab starts
+		// muted, and a restored tab must not make sound before its first patch.
+		try {
+			const tab = state.tabs.find(candidate => candidate.id === tabId);
+			if (tab) elements.get(tabId)?.setAudioMuted(tab.muted);
+		} catch {
+			// guest not ready yet — dom-ready retries
+		}
+		reportGuestReady(tabId);
+	};
 	const onFavicon = (event: Event): void => {
 		const urls = (event as Event & { favicons?: string[] }).favicons;
 		if (Array.isArray(urls) && urls.length > 0) patchTab(tabId, { favicon: urls[0] ?? null });
@@ -522,6 +532,8 @@ export function createTab(
 		tabId?: string;
 		agent?: boolean;
 		sessionId?: string | null;
+		/** Initial mute state; new tabs default to muted. */
+		muted?: boolean;
 		/** Agent that asked main to create this tab; the panel badges it. */
 		agentId?: string | null;
 		agentName?: string | null;
@@ -536,7 +548,7 @@ export function createTab(
 		url: target,
 		title: target,
 		customTitle: null,
-		muted: false,
+		muted: options?.muted ?? true,
 		ownerSessionId,
 		agentId,
 		agentName: agentId ? (options?.agentName ?? agentId) : null,
@@ -1089,16 +1101,18 @@ export function restoreTabs(): void {
 									url: value.url,
 									sessionId: typeof value.sessionId === "string" ? value.sessionId : null,
 									customTitle: typeof value.customTitle === "string" ? value.customTitle : null,
-									muted: value.muted === true,
+									muted: typeof value.muted === "boolean" ? value.muted : undefined,
 								},
 							];
 						})
 					: [];
 		for (const entry of records.slice(0, 8)) {
-			void createTab(entry.url, { sessionId: entry.sessionId })
+			void createTab(entry.url, {
+				sessionId: entry.sessionId,
+				...(entry.muted === undefined ? {} : { muted: entry.muted }),
+			})
 				.then(id => {
 					if (entry.customTitle) renameTab(id, entry.customTitle);
-					if (entry.muted) setTabMuted(id, true);
 				})
 				.catch(() => {});
 		}

@@ -4389,12 +4389,13 @@
 	pointer-events: none;
 }
 .gui-action-toast {
+	position: relative;
 	display: flex;
 	align-items: flex-start;
 	gap: 10px;
 	width: max-content;
 	max-width: min(420px, calc(100vw - 32px));
-	padding: 9px 12px;
+	padding: 9px 12px 9px 14px;
 	border-radius: var(--radius-lg);
 	border: 1px solid var(--glass-border);
 	background: var(--glass-sheen), var(--glass-bg-strong);
@@ -4449,6 +4450,27 @@
 		animation: none;
 		transition: none;
 	}
+}
+/* Kind accent: a short colored rail keeps the glass neutral while making
+ * completion / question / error scannable at a glance. */
+.gui-action-toast::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 8px;
+	bottom: 8px;
+	width: 3px;
+	border-radius: 0 999px 999px 0;
+	background: color-mix(in oklab, var(--color-text-muted) 45%, transparent);
+}
+.gui-action-toast--success::before {
+	background: var(--color-success, #4ade80);
+}
+.gui-action-toast--error::before {
+	background: var(--color-danger, #f87171);
+}
+.gui-action-toast--warning::before {
+	background: var(--color-warning, #fbbf24);
 }
 /* 状态色：图标与描边随 kind 微染，底色保持玻璃中性——浮窗不尖叫。 */
 .gui-action-toast--success .gui-action-toast-icon {

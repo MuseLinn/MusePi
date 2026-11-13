@@ -13,6 +13,20 @@ import { applyOpenCodeSessionHeader, getOpenCodeSessionAffinity } from "./openai
 export type GoogleOptions = GoogleSharedStreamOptions;
 
 const DEFAULT_GENERATIVE_LANGUAGE_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const GENERATIVE_LANGUAGE_API_VERSION = "v1beta";
+/** `/v1`, `/v1beta`, `/v1beta1` — the segment the SDK appends itself. */
+const VERSION_SEGMENT = /\/v\d+(?:beta\d*)?$/i;
+
+/**
+ * Ensure a custom Generative Language base URL carries exactly one API
+ * version segment. Registries commonly publish `…/v1beta`, while a proxy
+ * may publish only its host; both must end up at `…/v1beta/models/…`.
+ */
+function normalizeGenerativeLanguageBase(baseUrl: string | undefined): string {
+	const trimmed = baseUrl?.trim().replace(/\/+$/, "") ?? "";
+	if (trimmed === "") return DEFAULT_GENERATIVE_LANGUAGE_BASE;
+	return VERSION_SEGMENT.test(trimmed) ? trimmed : `${trimmed}/${GENERATIVE_LANGUAGE_API_VERSION}`;
+}
 
 export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 	model: Model<"google-generative-ai">,
@@ -33,9 +47,9 @@ export const streamGoogle: StreamFunction<"google-generative-ai"> = (
 		api: "google-generative-ai",
 		prepare: (): GoogleGenAIRequestPlan => {
 			const params = buildGoogleGenerateContentParams(model, context, options ?? {});
-			// `model.baseUrl` already includes the API version segment when set (mirrors the
-			// `apiVersion: ""` reset that the SDK relied on for custom base URLs).
-			const base = model.baseUrl?.trim() || DEFAULT_GENERATIVE_LANGUAGE_BASE;
+			// Normalize the custom base so it carries exactly one API version
+			// segment; the request path appends `/models/...` itself.
+			const base = normalizeGenerativeLanguageBase(model.baseUrl);
 			const url = `${base}/models/${model.id}:streamGenerateContent?alt=sse`;
 			const headers: Record<string, string> = {
 				"x-goog-api-key": apiKey,

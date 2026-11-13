@@ -7664,3 +7664,8 @@ body.gui-resizing {
 	color: var(--color-text-muted);
 	font-size: var(--ui-font-size-xs);
 }
+
+.gui-toggle:disabled {
+	opacity: 0.4;
+	cursor: default;
+}

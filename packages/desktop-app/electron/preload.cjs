@@ -94,7 +94,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	captureScreen: () => ipcRenderer.invoke("screen-capture"),
 	/** System notification (main-process Notification — the renderer HTML5
 	 *  API does not surface on macOS). Resolves { ok } or { ok:false }. */
-	showNotification: (title, body) => ipcRenderer.invoke("notification-show", { title, body }),
+	showNotification: (title, body, options) =>
+		ipcRenderer.invoke("notification-show", { title, body, silent: options?.silent === true }),
 	/** Main-process delivery failure (macOS unsigned apps). { reason } */
 	onNotificationFailed: (cb) => {
 		const listener = (_e, detail) => cb(detail);

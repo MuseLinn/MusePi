@@ -1221,13 +1221,11 @@ export class GuiSessionStore {
 				const last = [...(t.messages ?? [])].reverse().find(m => m.role === "assistant");
 				const stopReason = last?.stopReason;
 				if (stopReason !== "aborted" && stopReason !== "error") {
-					sfxFor("complete");
 					// One desktop completion toast per finished run (issue
-					// #14). `silent` because the cue just played: the sound
-					// must survive the notification master switch being off.
-					dispatchNotification("completion", this.#notifyCtx({ lastMessage: assistantText(last) }), {
-						silent: true,
-					});
+					// #14). Dispatch owns the single audible cue: the system
+					// notification sound when enabled, otherwise the in-app
+					// palette sound (which still plays with notifications off).
+					dispatchNotification("completion", this.#notifyCtx({ lastMessage: assistantText(last) }));
 				}
 				// Freeze this run's total into the GUI-lifetime registry: the
 				// store is recreated on every session switch, so without this

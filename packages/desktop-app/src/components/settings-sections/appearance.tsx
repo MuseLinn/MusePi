@@ -25,6 +25,8 @@ import {
 	applyCodeThemes,
 	applyDensity,
 	applyMonoFont,
+	applyTerminalFont,
+	applyTranscriptFont,
 	applyUiFont,
 	CODE_FONT_OPTIONS,
 	CODE_LINES_KEY,
@@ -36,6 +38,8 @@ import {
 	DEFAULT_CODE_FONT,
 	DEFAULT_DARK_CODE_THEME,
 	DEFAULT_LIGHT_CODE_THEME,
+	DEFAULT_TERMINAL_FONT,
+	DEFAULT_TRANSCRIPT_FONT,
 	DEFAULT_UI_FONT,
 	DENSITY_KEY,
 	EDITOR_FONT_KEY,
@@ -43,8 +47,12 @@ import {
 	MONO_FONT_KEY,
 	readTimeFormat,
 	readWeekStart,
+	TERMINAL_FONT_KEY,
+	TERMINAL_FONT_OPTIONS,
 	TIME_FMT_KEY,
 	type TimeFormatPref,
+	TRANSCRIPT_FONT_KEY,
+	TRANSCRIPT_FONT_OPTIONS,
 	UI_FONT_KEY,
 	UI_FONT_OPTIONS,
 	WEEK_START_KEY,
@@ -202,6 +210,12 @@ export function AppearanceSection({
 	const [weekStart, setWeekStart] = useState<WeekStartPref>(() => readWeekStart() ?? "auto");
 	const [uiFont, setUiFont] = useState<string>(() => localStorage.getItem(UI_FONT_KEY) ?? DEFAULT_UI_FONT.id);
 	const [monoFont, setMonoFont] = useState<string>(() => localStorage.getItem(MONO_FONT_KEY) ?? DEFAULT_CODE_FONT.id);
+	const [termFontFamily, setTermFontFamily] = useState<string>(
+		() => localStorage.getItem(TERMINAL_FONT_KEY) ?? DEFAULT_TERMINAL_FONT.id,
+	);
+	const [transcriptFont, setTranscriptFont] = useState<string>(
+		() => localStorage.getItem(TRANSCRIPT_FONT_KEY) ?? DEFAULT_TRANSCRIPT_FONT.id,
+	);
 	const [turnRailSide, setTurnRailSide] = useState<TurnRailSide>(
 		() => (localStorage.getItem(TURN_RAIL_SIDE_KEY) as TurnRailSide) ?? "right",
 	);
@@ -395,6 +409,35 @@ export function AppearanceSection({
 								setUiFont(DEFAULT_UI_FONT.id);
 								setPref(UI_FONT_KEY, DEFAULT_UI_FONT.id);
 								applyUiFont(DEFAULT_UI_FONT.id);
+							}}
+						>
+							<Icon name="restart" className="h-3.5 w-3.5" />
+						</button>
+					</div>
+				</div>
+				<div className="gui-settings-field">
+					<div className="gui-settings-field-label">{t("general.transcriptFont")}</div>
+					<div className="gui-settings-field-control">
+						<GuiSelect
+							className="gui-settings-select"
+							value={transcriptFont}
+							onChange={nv => {
+								setTranscriptFont(nv);
+								setPref(TRANSCRIPT_FONT_KEY, nv);
+								applyTranscriptFont(nv);
+							}}
+							options={TRANSCRIPT_FONT_OPTIONS.map(o => ({ value: o.id, label: o.label }))}
+						/>
+						<button
+							type="button"
+							className="gui-settings-reset"
+							title={t("general.reset")}
+							aria-label={t("general.reset")}
+							disabled={transcriptFont === DEFAULT_TRANSCRIPT_FONT.id}
+							onClick={() => {
+								setTranscriptFont(DEFAULT_TRANSCRIPT_FONT.id);
+								setPref(TRANSCRIPT_FONT_KEY, DEFAULT_TRANSCRIPT_FONT.id);
+								applyTranscriptFont(DEFAULT_TRANSCRIPT_FONT.id);
 							}}
 						>
 							<Icon name="restart" className="h-3.5 w-3.5" />
@@ -760,6 +803,35 @@ export function AppearanceSection({
 							setPref("musepi-gui-terminal-font", v);
 						}}
 					/>
+				</div>
+				<div className="gui-settings-field">
+					<div className="gui-settings-field-label">{t("general.terminalFont")}</div>
+					<div className="gui-settings-field-control">
+						<GuiSelect
+							className="gui-settings-select"
+							value={termFontFamily}
+							onChange={nv => {
+								setTermFontFamily(nv);
+								setPref(TERMINAL_FONT_KEY, nv);
+								applyTerminalFont(nv);
+							}}
+							options={TERMINAL_FONT_OPTIONS.map(o => ({ value: o.id, label: o.label }))}
+						/>
+						<button
+							type="button"
+							className="gui-settings-reset"
+							title={t("general.reset")}
+							aria-label={t("general.reset")}
+							disabled={termFontFamily === DEFAULT_TERMINAL_FONT.id}
+							onClick={() => {
+								setTermFontFamily(DEFAULT_TERMINAL_FONT.id);
+								setPref(TERMINAL_FONT_KEY, DEFAULT_TERMINAL_FONT.id);
+								applyTerminalFont(DEFAULT_TERMINAL_FONT.id);
+							}}
+						>
+							<Icon name="restart" className="h-3.5 w-3.5" />
+						</button>
+					</div>
 				</div>
 			</div>
 

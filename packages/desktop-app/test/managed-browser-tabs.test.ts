@@ -1,5 +1,5 @@
 import "./happy-dom-shim";
-import { afterEach, describe, expect, test, vi } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import {
 	attachElement,
 	browserTabsForSession,
@@ -13,6 +13,12 @@ import {
 } from "../src/lib/managed-browser-host";
 
 const originalElectronAPI = window.electronAPI;
+
+beforeEach(() => {
+	// Other suites in the same process may have restored persisted tabs.
+	for (const tab of getHostState().tabs) closeTab(tab.id, { notifyMain: false });
+	setBrowserSession(null);
+});
 
 afterEach(() => {
 	for (const tab of getHostState().tabs) closeTab(tab.id, { notifyMain: false });
@@ -97,5 +103,32 @@ describe("managed browser tab state", () => {
 		setBrowserSession("session-a");
 		expect(getHostState().activeId).toBe("a-tab");
 		expect(getHostState().tabs.map(tab => tab.id)).toEqual(["a-tab", "b-tab"]);
+	});
+
+	test("new tabs start muted and apply the state when the guest attaches", () => {
+		open("browser-default-muted");
+		expect(getHostState().tabs.find(tab => tab.id === "browser-default-muted")?.muted).toBe(true);
+
+		const handlers = new Map<string, () => void>();
+		const setAudioMuted = vi.fn();
+		const element = {
+			addEventListener: (name: string, callback: () => void) => void handlers.set(name, callback),
+			removeEventListener() {},
+			getWebContentsId: () => 3,
+			getURL: () => "about:blank",
+			getTitle: () => "Blank",
+			canGoBack: () => false,
+			canGoForward: () => false,
+			isLoading: () => false,
+			setAudioMuted,
+		} as unknown as HostWebview;
+		attachElement("browser-default-muted", element);
+		handlers.get("dom-ready")?.();
+		expect(setAudioMuted).toHaveBeenCalledWith(true);
+	});
+
+	test("createTab honors an explicit unmuted option", () => {
+		void createTab("https://a.example", { tabId: "explicit-unmuted", muted: false }).catch(() => {});
+		expect(getHostState().tabs.find(tab => tab.id === "explicit-unmuted")?.muted).toBe(false);
 	});
 });

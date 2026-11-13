@@ -9,7 +9,8 @@
  * stream event that maps to a notification fires here.
  */
 
-import { sfxFor } from "./sfx";
+import { type ActionToastKind, pushActionToast } from "./action-toast";
+import { inQuietHours, type SfxEvent, sfxFor, soundEnabled } from "./sfx";
 
 const EVENTS = ["completion", "subtask", "error", "question"] as const;
 export type NotifyEvent = (typeof EVENTS)[number];
@@ -23,6 +24,8 @@ export type NotifyTemplates = Record<NotifyEvent, NotifyTemplate>;
 
 const NOTIFY_KEY = "musepi-gui-notify";
 const FOCUSED_KEY = "musepi-gui-notify-focused";
+const SOUND_KEY = "musepi-gui-notify-sound";
+const TOAST_KEY = "musepi-gui-notify-toast";
 const EVENTS_KEY = "musepi-gui-notify-events";
 const TEMPLATES_KEY = "musepi-gui-notify-templates";
 
@@ -69,6 +72,64 @@ export function notifyWhileFocused(): boolean {
 	} catch {
 		return false;
 	}
+}
+
+/** true = the OS plays the notification sound; false (default) = the in-app
+ *  palette cue plays instead, so an event is never heard twice. */
+export function notifySoundEnabled(): boolean {
+	try {
+		return localStorage.getItem(SOUND_KEY) === "1";
+	} catch {
+		return false;
+	}
+}
+
+export function setNotifySoundEnabled(enabled: boolean): void {
+	try {
+		localStorage.setItem(SOUND_KEY, enabled ? "1" : "0");
+	} catch {
+		// storage unavailable
+	}
+}
+
+/** In-app bottom-right toast, on by default. It mirrors a delivered
+ *  notification event even when the system notification is suppressed by
+ *  focus, so the result is still visible inside the window. */
+export function inAppToastEnabled(): boolean {
+	try {
+		return localStorage.getItem(TOAST_KEY) !== "0";
+	} catch {
+		return true;
+	}
+}
+
+export function setInAppToastEnabled(enabled: boolean): void {
+	try {
+		localStorage.setItem(TOAST_KEY, enabled ? "1" : "0");
+	} catch {
+		// storage unavailable
+	}
+}
+
+/** Toast tint per notification event. */
+const TOAST_KIND: Record<NotifyEvent, ActionToastKind> = {
+	completion: "success",
+	subtask: "success",
+	error: "error",
+	question: "warning",
+};
+
+/** Notification events reuse the shared sound palette. */
+const NOTIFY_SFX: Record<NotifyEvent, SfxEvent> = {
+	completion: "complete",
+	subtask: "subtask",
+	error: "error",
+	question: "question",
+};
+
+/** The palette event a desktop notification uses. */
+export function notifySfxEvent(event: NotifyEvent): SfxEvent {
+	return NOTIFY_SFX[event];
 }
 
 export function eventEnabled(event: NotifyEvent): boolean {
@@ -192,6 +253,14 @@ function ambientDocument(): FocusReport | undefined {
 	return document as unknown as FocusReport;
 }
 
+/** Render the title/body for an event without applying delivery gates. */
+export function renderNotification(event: NotifyEvent, ctx: NotifyContext): { title: string; body: string } {
+	const tpl = loadNotifyTemplates()[event];
+	const title = renderTemplate(tpl.title || defaultTemplate(event, "title"), ctx);
+	const body = renderTemplate(tpl.message || defaultTemplate(event, "message"), ctx);
+	return { title, body };
+}
+
 /** Build the title/body for an event, or null when gated out. */
 export function buildNotification(
 	event: NotifyEvent,
@@ -199,15 +268,16 @@ export function buildNotification(
 	doc?: FocusReport,
 ): { title: string; body: string } | null {
 	if (!shouldNotify(event, doc)) return null;
-	const tpl = loadNotifyTemplates()[event];
-	const title = renderTemplate(tpl.title || defaultTemplate(event, "title"), ctx);
-	const body = renderTemplate(tpl.message || defaultTemplate(event, "message"), ctx);
-	return { title, body };
+	return renderNotification(event, ctx);
 }
 
 /** Electron preload bridge (present inside the desktop shell). */
 interface ElectronNotifier {
-	showNotification?: (title: string, body: string) => Promise<{ ok?: boolean; reason?: string } | undefined>;
+	showNotification?: (
+		title: string,
+		body: string,
+		options?: { silent?: boolean },
+	) => Promise<{ ok?: boolean; reason?: string } | undefined>;
 	onNotificationFailed?: (cb: (detail: { title: string; body: string; reason: string }) => void) => () => void;
 }
 
@@ -220,27 +290,37 @@ function electronNotifier(): ElectronNotifier | undefined {
  *  Inside the desktop shell the renderer's HTML5 Notification API does not
  *  surface on macOS, so notifications route through the main process
  *  (preload → ipcMain). Plain browsers fall back to the Web API.
- *  A matching activity sound plays alongside (Settings → 通知与音效联动):
- *  completion→complete, error→error, question→approval, subtask→tool.
- *  Pass `{ silent: true }` when the caller already plays the cue — agent_end
- *  plays the completion sound itself so it survives the notification master
- *  switch being off, and must not double up with this one. */
+ *
+ *  The same content mirrors into the bottom-right in-app toast stack whenever
+ *  notifications for that event are enabled — including while the window is
+ *  focused, where the system notification is deliberately suppressed.
+ *
+ *  One sound per event: when the system notification sound is enabled the OS
+ *  plays it and the in-app cue stays silent; otherwise the mapped palette cue
+ *  plays (even when desktop notifications are off, so completion is still
+ *  audible). Pass `{ silent: true }` only when the caller already played a
+ *  cue and wants no second sound. */
 export function dispatchNotification(event: NotifyEvent, ctx: NotifyContext, options?: { silent?: boolean }): void {
-	// Notification–sound coupling: the same activity is heard and seen.
-	// Silent when the user disabled sounds (sfxFor gates on soundEnabled).
-	if (!options?.silent) {
-		if (event === "completion") sfxFor("complete");
-		else if (event === "error") sfxFor("error");
-		else if (event === "question") sfxFor("approval");
-		else if (event === "subtask") sfxFor("tool");
+	const content = renderNotification(event, ctx);
+	if (notifyEnabled() && eventEnabled(event) && inAppToastEnabled()) {
+		pushActionToast({
+			kind: TOAST_KIND[event],
+			title: content.title,
+			message: content.body,
+			dedupeKey: `notify:${event}`,
+		});
 	}
+	const systemSound = notifySoundEnabled() && notifyEnabled() && soundEnabled() && !inQuietHours();
+	const callerSilent = options?.silent === true;
+	if (!callerSilent && !systemSound) sfxFor(NOTIFY_SFX[event]);
+	const notificationSilent = callerSilent || !systemSound;
 	if (typeof window === "undefined") return;
-	const built = buildNotification(event, ctx);
+	const built = shouldNotify(event) ? content : null;
 	if (!built) return;
 	const notifier = electronNotifier();
 	if (notifier?.showNotification) {
 		void notifier
-			.showNotification(built.title, built.body)
+			.showNotification(built.title, built.body, { silent: notificationSilent })
 			.then(result => {
 				if (result?.ok === false) {
 					console.warn("[notify] notification disabled:", result.reason);
@@ -255,7 +335,7 @@ export function dispatchNotification(event: NotifyEvent, ctx: NotifyContext, opt
 	const Notifier = window.Notification;
 	if (Notifier?.permission !== "granted") return;
 	try {
-		new Notifier(built.title, { body: built.body, tag: `omp-${event}` });
+		new Notifier(built.title, { body: built.body, tag: `omp-${event}`, silent: notificationSilent });
 	} catch {
 		// permission revoked mid-flight
 	}
@@ -267,6 +347,7 @@ export function sendTestNotification(): Promise<{ ok: boolean; reason?: string }
 	if (typeof window === "undefined") return Promise.resolve({ ok: false, reason: "unsupported" });
 	const title = isZh() ? "测试通知" : "Test notification";
 	const body = isZh() ? "通知设置已生效" : "Notifications are working";
+	const silent = !notifySoundEnabled();
 	const notifier = electronNotifier();
 	if (notifier?.showNotification) {
 		const { promise, resolve } = Promise.withResolvers<{ ok: boolean; reason?: string }>();
@@ -283,7 +364,7 @@ export function sendTestNotification(): Promise<{ ok: boolean; reason?: string }
 			if (detail.title === title && detail.body === body) finish(false, detail.reason);
 		});
 		void notifier
-			.showNotification(title, body)
+			.showNotification(title, body, { silent })
 			.then((result: unknown) => {
 				const r = result as { ok?: boolean; reason?: string } | undefined;
 				if (r && r.ok === false) finish(false, r.reason ?? "unauthorized");
@@ -302,7 +383,7 @@ export function sendTestNotification(): Promise<{ ok: boolean; reason?: string }
 	return request.then(permission => {
 		if (permission !== "granted") return { ok: false, reason: permission };
 		try {
-			new Notifier(title, { body, tag: "omp-test" });
+			new Notifier(title, { body, tag: "omp-test", silent });
 			return { ok: true };
 		} catch (err) {
 			return { ok: false, reason: err instanceof Error ? err.message : String(err) };

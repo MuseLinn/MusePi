@@ -67,6 +67,10 @@
 	 * ships its own glyphs so rendering never depends on the host platform. */
 	--font-ui: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
 	--font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+	/* Transcript and terminal faces default to their parent faces; the
+	 * appearance settings override them independently. */
+	--font-transcript: var(--font-ui);
+	--font-terminal: var(--font-mono);
 
 	/* radii — 6-step ladder (design spec 2026-09-17, docs/gui-design.md §1b).
 	 * Concentric rule: childRadius = parentRadius − parentPadding

@@ -170,7 +170,7 @@ function TerminalTab({
 		const host = hostRef.current;
 		if (!host) return;
 		const term = new Terminal({
-			fontFamily: "var(--font-mono), Menlo, monospace",
+			fontFamily: "var(--font-terminal), Menlo, monospace",
 			// openchamber parity: terminal font size is user-configurable
 			// (settings → 外观), default 13px.
 			fontSize: Number(localStorage.getItem("musepi-gui-terminal-font") ?? 13),

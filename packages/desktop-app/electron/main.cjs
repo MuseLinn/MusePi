@@ -3201,10 +3201,10 @@ app.on("web-contents-created", (_event, contents) => {
 //    then works. (Verified 2026-08: ad-hoc signing + `open` launch still
 //    denied; scripteditor2/osascript delivery proves the DB path is fine.)
 const activeNotifications = new Set();
-ipcMain.handle("notification-show", (_event, { title, body }) => {
+ipcMain.handle("notification-show", (_event, { title, body, silent }) => {
 	if (!Notification.isSupported()) return { ok: false, reason: "unsupported" };
 	try {
-		const notification = new Notification({ title, body, silent: false });
+		const notification = new Notification({ title, body, silent: silent === true });
 		// macOS: losing the JS reference makes click events stop firing
 		// after ~1 min (openchamber main.mjs keeps the same Set for the
 		// same reason — https://blog.bloomca.me/2025/02/22/electron-mac-notifications).

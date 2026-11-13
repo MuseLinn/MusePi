@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
-import { type AtCompletionEntry, loadAtCompletionEntries } from "../../lib/at-completion";
+import { type AtCompletionEntry, loadAtCompletionEntries, rankAtCompletionEntries } from "../../lib/at-completion";
 import { currentLine, tokenQuery } from "../../lib/completion-trigger";
 import type { RpcClient } from "../../lib/rpc";
 import { rankSlashEntries } from "../../lib/slash-rank";
@@ -242,12 +242,14 @@ export function useCompletion({
 		}
 	};
 
-	const atFilter =
+	const atFilter = rankAtCompletionEntries(
 		atEntries?.filter(
 			e =>
 				e.name.toLowerCase().includes(atQuery.toLowerCase()) ||
 				e.path.toLowerCase().includes(atQuery.toLowerCase()),
-		) ?? [];
+		) ?? [],
+		atQuery,
+	);
 
 	const insertAt = (path: string): void => {
 		const ta = taRef.current;

@@ -6,6 +6,21 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **`@` 文件补全包含 gitignore 文件**：`@` 补全对每个根目录先按 `.gitignore` 过滤、再取一次完整树，只出现在完整树里的路径标记为 `ignored` 并排在后面；候选按精确、前缀、路径前缀、子串排序，同质量时未忽略文件优先，文件优先于目录。
+  - EN: `@` file completion now includes gitignored files. Each root is scanned twice — once honoring `.gitignore` and once unfiltered — and paths that only the unfiltered scan returns are marked `ignored` and appended. Candidates rank by exact, prefix, path-prefix and substring match; at equal quality non-ignored files come before ignored ones, and files before directories.
+
+- **外观设置新增对话字体与终端字体**：对话正文改用 `--font-transcript`，内置终端改用 `--font-terminal`，两者分别可选并持久化；默认仍继承界面字体与代码字体，启动时随其他外观偏好一起重放。
+  - EN: Appearance settings gain a conversation font and a terminal font. Transcript body text uses `--font-transcript` and the integrated terminal uses `--font-terminal`; both are independently selectable and persisted, defaulting to the UI and code faces and replayed with the other appearance preferences at startup.
+
+- **内置浏览器新标签默认静音**：新建与恢复的标签默认静音，并在访客 `dom-ready` 时应用该状态；仍可按标签单独取消静音。
+  - EN: New built-in browser tabs start muted. New and restored tabs carry the mute state and apply it when the guest becomes ready; per-tab unmute still works.
+
+- **Google Generative AI 自定义端点自动补齐 API 版本**：自定义 `base_url` 缺少版本段时补 `/v1beta`，已带版本段或尾部斜杠时归一化为单一段，避免 `/v1beta/v1beta` 或缺少版本的请求路径。
+  - EN: Custom Google Generative AI endpoints get their API version filled in. A `base_url` without a version segment gains `/v1beta`, while an existing version segment or trailing slash is normalized to a single segment, avoiding `/v1beta/v1beta` or version-less request paths.
+
+- **通知与音效重做**：通知事件改为一行同时管理桌面通知与提示音，音色显示可读名称并支持「无」；新增「通知提示音」开关，系统通知音与应用内音效二选一，修复完成、错误、提问、子任务可能同时响两次的问题。通知事件同时镜像到右下角应用内 toast（可关闭），聚焦时系统通知被抑制仍可见。`tool` 与 `switch` 默认静音，提问、审批、子任务改用独立音色；移除未接线音效墙与「试听全部」。
+  - EN: Notifications and sound were reworked. Each notification event now has one row for its desktop toast and alert sound, sounds show readable names with an explicit “None”, and a new notification-sound switch chooses between the OS sound and the in-app cue so completion, error, question and subtask can no longer sound twice. Each event also mirrors into the bottom-right in-app toast stack (toggleable), so it stays visible while focused even when the system notification is suppressed. `tool` and `switch` start silent, question/approval/subtask get distinct sounds, and the unwired-sound wall and “audition all” control are gone.
+
 - **搜索 provider 可注册，并接入 DeepSeek 搜索**：新增 `web/search/registry.ts`，内置 18 个 provider 与插件注册共用同一张表；扩展通过 `ctx.registerSearchProvider` / `unregisterSearchProvider` 贡献 provider，随扩展实例卸载、热重载与会话关闭释放。候选链为「显式 `provider:` → 用户 order → 内置顺序 → 注册顺序」，`availability` 只影响自动链。新增 `deepseek` provider（`POST https://api.deepseek.com/v1/tools/search`，`DEEPSEEK_API_KEY` 或已存的 deepseek 凭据）。
   - EN: Web search providers are now registrable, and DeepSeek search is wired in. The new `web/search/registry.ts` is the single table the 18 built-ins and plugin registrations share; extensions contribute providers through `ctx.registerSearchProvider` / `unregisterSearchProvider`, released with the extension instance on unload, hot reload and session shutdown. The chain is explicit `provider:` → user order → built-in order → registration order, and `availability` gates only the automatic chain. A `deepseek` provider was added (`POST https://api.deepseek.com/v1/tools/search`, `DEEPSEEK_API_KEY` or a stored deepseek credential).
 

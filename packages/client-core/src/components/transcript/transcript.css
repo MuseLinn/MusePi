@@ -13,7 +13,7 @@
 	 * single anchoring authority here. */
 	overflow-anchor: none;
 	padding: 12px 16px 24px;
-	font-family: var(--font-ui);
+	font-family: var(--font-transcript);
 	font-size: var(--tr-font-size, 14px);
 	line-height: var(--tr-line-height, 1.45);
 	color: var(--fg);
