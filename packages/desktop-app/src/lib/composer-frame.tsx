@@ -6,7 +6,7 @@ import { ImageLightbox, SpotlightCard, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BorderBeam } from "../vendor/border-beam";
 import { Icon, type IconName } from "../vendor/oc-icons";
-import { type PetInteraction, randomPetInteraction } from "./pet";
+import { type CompanionInteraction, randomCompanionInteraction } from "./companion";
 
 /**
  * Shared composer container (welcome + in-session parity): one frame shell
@@ -228,9 +228,9 @@ export interface ComposerPetState {
 	hopping: boolean;
 	/** The transient click reaction — a random pick from the FULL
 	 *  interaction set, never the same one twice in a row (see
-	 *  randomPetInteraction). Null once the hold expires; the caller
-	 *  passes it straight to PetSprite's `interaction`. */
-	reaction: PetInteraction | null;
+	 *  randomCompanionInteraction). Null once the hold expires; the caller
+	 *  passes it straight to CompanionArt's `interaction`. */
+	reaction: CompanionInteraction | null;
 }
 
 /** Box width under which the mouth stroke stops resolving (see gui-pet.css). */
@@ -249,8 +249,8 @@ function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState
 	// old two-face startle/delight escalation was the "limited reactions"
 	// complaint), never the same one twice in a row. Local + transient by
 	// contract — a reaction is a gesture, never session state.
-	const [reaction, setReaction] = useState<PetInteraction | null>(null);
-	const lastReaction = useRef<PetInteraction | null>(null);
+	const [reaction, setReaction] = useState<CompanionInteraction | null>(null);
+	const lastReaction = useRef<CompanionInteraction | null>(null);
 	const reactionTimer = useRef<number | null>(null);
 
 	useEffect(() => {
@@ -289,7 +289,7 @@ function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState
 				// `click` still fires, so the poke action is unaffected.
 				e.preventDefault();
 				setHopping(true);
-				const pick = randomPetInteraction(lastReaction.current);
+				const pick = randomCompanionInteraction(lastReaction.current);
 				lastReaction.current = pick;
 				setReaction(pick);
 				if (reactionTimer.current !== null) window.clearTimeout(reactionTimer.current);

@@ -46,13 +46,13 @@ import { Reveal } from "./Reveal";
 /** Exit animation duration (mirrors gui-obo-card-out below). */
 const ONBOARDING_EXIT_MS = 180;
 
-import { type PetDescriptor, petForId, petId } from "../lib/pet";
+import { type CompanionArtDescriptor, companionArtForId, companionArtId } from "../lib/companion";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
-import { PetSprite, usePetDecor } from "./PetSprite";
+import { CompanionArt, useCompanionDecor } from "./CompanionArt";
 
 const STEPS = [
 	{ icon: Languages, key: "settings.onboardingStep1" },
@@ -153,11 +153,11 @@ interface CredentialInfo {
  */
 function StepDemo({
 	step,
-	petMode,
+	companionPlacement,
 	sessionTabsEnabled,
 }: {
 	step: number;
-	petMode: "input" | "desktop";
+	companionPlacement: "input" | "desktop";
 	sessionTabsEnabled: boolean;
 }): ReactNode {
 	// Sidebar active row: steps 0-2 highlight their row, the rest use row 1.
@@ -180,7 +180,11 @@ function StepDemo({
 						))}
 					</div>
 					<div className="gui-obo-morph-content" key={`morph-${step}`}>
-						<DemoContent step={step} petMode={petMode} sessionTabsEnabled={sessionTabsEnabled} />
+						<DemoContent
+							step={step}
+							companionPlacement={companionPlacement}
+							sessionTabsEnabled={sessionTabsEnabled}
+						/>
 					</div>
 				</div>
 			</div>
@@ -188,25 +192,25 @@ function StepDemo({
 	);
 }
 
-type PreviewPet = PetDescriptor;
+type PreviewPet = CompanionArtDescriptor;
 
 function DemoContent({
 	step,
-	petMode,
+	companionPlacement,
 	sessionTabsEnabled,
 }: {
 	step: number;
-	petMode: "input" | "desktop";
+	companionPlacement: "input" | "desktop";
 	sessionTabsEnabled: boolean;
 }): ReactNode {
 	// Hooks MUST run before every early return (React hook rules — the step
 	// branches below bail out early). The pet state is only rendered at
 	// step 6, but loading it unconditionally is cheap and keeps the hook
 	// count stable across step changes.
-	const [pet, setPet] = useState<PreviewPet>(() => petForId(petId()));
-	const decor = usePetDecor();
+	const [pet, setPet] = useState<PreviewPet>(() => companionArtForId(companionArtId()));
+	const decor = useCompanionDecor();
 	useEffect(() => {
-		const on = (): void => setPet(petForId(petId()));
+		const on = (): void => setPet(companionArtForId(companionArtId()));
 		window.addEventListener("omp-pet-changed", on);
 		return () => window.removeEventListener("omp-pet-changed", on);
 	}, []);
@@ -327,7 +331,7 @@ function DemoContent({
 	// Step 6 — personalization: both display locations render the REAL
 	// selected pet and decoration. Desktop mode gets its own pet-and-bubble
 	// scene instead of leaving an empty composer where the pet used to be.
-	if (petMode === "desktop") {
+	if (companionPlacement === "desktop") {
 		return (
 			<div className="gui-obo-morph-fill gui-obo-pers-desktop" role="img" aria-label={t("settings.petModeDesktop")}>
 				<div className="gui-obo-pers-desktop-bubble" aria-hidden="true">
@@ -335,9 +339,9 @@ function DemoContent({
 					<span className="gui-obo-pers-desktop-status">{t("settings.petBubblesCount", { count: 1 })}</span>
 				</div>
 				<div className="gui-obo-pers-desktop-pet" aria-hidden="true">
-					<PetSprite
+					<CompanionArt
 						mood="rest"
-						pet={pet}
+						art={pet}
 						size={48}
 						scale={0.56}
 						frozen
@@ -368,7 +372,7 @@ function DemoContent({
 			<div className="gui-obo-pers-composer">
 				<div className="gui-obo-pers-input" />
 				<div className="gui-obo-pers-pet" aria-hidden="true">
-					<PetSprite mood="rest" pet={pet} size={16} frozen gloss={decor.gloss} accessory={decor.accessory} />
+					<CompanionArt mood="rest" art={pet} size={16} frozen gloss={decor.gloss} accessory={decor.accessory} />
 				</div>
 			</div>
 		</div>
@@ -1430,7 +1434,7 @@ export function OnboardingOverlay({
 	// Pet display mode shared by the personalize step's controls (left) and
 	// the chat preview (right): "desktop" hides the pet from the preview's
 	// composer — it lives in its own desktop window there.
-	const [persPetMode, setPersPetMode] = useState<"input" | "desktop">(() => {
+	const [persCompanionPlacement, setPersCompanionPlacement] = useState<"input" | "desktop">(() => {
 		try {
 			return localStorage.getItem("musepi-gui-pet-mode") === "desktop" ? "desktop" : "input";
 		} catch {
@@ -1640,7 +1644,11 @@ export function OnboardingOverlay({
 											/>
 										</button>
 										<Reveal open={branch === "personalize"}>
-											<PersonalizeSetup rpc={rpc} petMode={persPetMode} onPetModeChange={setPersPetMode} />
+											<PersonalizeSetup
+												rpc={rpc}
+												companionPlacement={persCompanionPlacement}
+												onPlacementChange={setPersCompanionPlacement}
+											/>
 										</Reveal>
 									</div>
 									{/* Design mode — the newest capability: tell people it exists and how
@@ -1754,7 +1762,7 @@ export function OnboardingOverlay({
 						 * step, and chat for done. Personalization switches to its live pet demo. */}
 						<StepDemo
 							step={branch === "personalize" && last ? 6 : (DEMO_STEP[step] ?? 0)}
-							petMode={persPetMode}
+							companionPlacement={persCompanionPlacement}
 							sessionTabsEnabled={sessionTabsEnabled}
 						/>
 					</div>

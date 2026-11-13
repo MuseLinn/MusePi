@@ -28,7 +28,7 @@
  *       greeting class (single click no longer opens a panel)
  *    4. old pet panel DOM is gone
  *
- * Usage (repo root): bun packages/desktop-app/scripts/verify-desktop-pet.mjs
+ * Usage (repo root): bun packages/desktop-app/scripts/verify-desktop-companion.mjs
  */
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";

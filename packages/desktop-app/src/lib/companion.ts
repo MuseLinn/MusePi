@@ -9,19 +9,23 @@
  *   - musepi-gui-petdex     JSON list of imported petdex packages
  *
  * A pet is drawn in one of two modes: `vector` (the builtin SVG companion
- * drawn in PetSprite.tsx, or a single-frame SVG package) or `sprite` (a
+ * drawn in CompanionArt.tsx, or a single-frame SVG package) or `sprite` (a
  * Petdex package — 8×9 frame grid or named-state atlas). The mode is derived
  * from the resolved descriptor, never stored as its own pref: the selected
  * id already implies it.
  */
 
+import type { SessionPresence } from "@musepi/pi-wire";
 import type { OrbState } from "../vendor/thinking-orbs";
+import { type AgentSignals, activityVerbForTool, DROWSY_AFTER_MS } from "./agent-signals";
 
-export type PetMood = "rest" | "working" | "waiting" | "analyzing" | "error";
+export { type AgentSignals, DROWSY_AFTER_MS } from "./agent-signals";
+
+export type CompanionMood = "rest" | "working" | "waiting" | "analyzing" | "error";
 /** Petdex-only moods — spritesheet rows 1/2 (hover/dragging) that the
  *  floating desktop pet switches to while the pointer is over it or while
  * it is being dragged. The builtin SVG has no such rows. */
-export type PetdexMood = PetMood | "hover" | "dragging";
+export type SpriteMood = CompanionMood | "hover" | "dragging";
 
 /**
  * The 31-state session vocabulary — the axis the BUILTIN pet renders.
@@ -56,11 +60,11 @@ export type PetdexMood = PetMood | "hover" | "dragging";
  * reaction, not as personality — that is the version a single-agent session
  * can actually justify.
  *
- * `PetMood` is NOT replaced: the petdex spritesheets have exactly 7 rows and
- * the CSS material classes are keyed on them. {@link STATE_MOOD} collapses
+ * `CompanionMood` is NOT replaced: the petdex spritesheets have exactly 7 rows and
+ * the CSS material classes are keyed on them. {@link COMPANION_STATE_TO_SPRITE_MOOD} collapses
  * any state onto that legacy axis, so every sheet host keeps working.
  */
-export const PET_STATES = [
+export const COMPANION_STATES = [
 	// A — the turn loop
 	"idle",
 	"listening",
@@ -99,13 +103,13 @@ export const PET_STATES = [
 	"dragging",
 	"drowsy",
 ] as const;
-export type PetState = (typeof PET_STATES)[number];
+export type CompanionState = (typeof COMPANION_STATES)[number];
 
 /** Collapse a 31-state reading onto the legacy 7-mood axis (spritesheet rows
  *  and the CSS material classes). Loud states win over quiet ones: every
  *  transfer and progress state is a flavour of working/analyzing, every
  *  emotion is a flavour of rest (a spritesheet has no "proud" row to play). */
-export const STATE_MOOD: Record<PetState, PetdexMood> = {
+export const COMPANION_STATE_TO_SPRITE_MOOD: Record<CompanionState, SpriteMood> = {
 	idle: "rest",
 	listening: "rest",
 	thinking: "analyzing",
@@ -141,18 +145,18 @@ export const STATE_MOOD: Record<PetState, PetdexMood> = {
 
 /** Legacy-mood lookup with a `rest` fallback — for callers holding a string
  *  that may be either axis (activity payloads, old persisted values). */
-export function moodOfState(state: string | null | undefined): PetdexMood {
-	return (state && STATE_MOOD[state as PetState]) || "rest";
+export function spriteMoodOfState(state: string | null | undefined): SpriteMood {
+	return (state && COMPANION_STATE_TO_SPRITE_MOOD[state as CompanionState]) || "rest";
 }
 /** Re-exported so callers wire reactions without reaching into pet-face
  *  (the data lives there; this barrel is what components import). */
-export type { PetInteraction } from "./pet-face";
-export { INTERACTION_HOLD_MS, PET_INTERACTIONS, randomPetInteraction } from "./pet-face";
-export type PetDisplayMode = "input" | "desktop";
+export type { CompanionInteraction } from "./companion-face";
+export { COMPANION_INTERACTIONS, INTERACTION_HOLD_MS, randomCompanionInteraction } from "./companion-face";
+export type CompanionPlacement = "input" | "desktop";
 
 /** How the companion is drawn. Derived from the selection's shape — see
- *  {@link modeForPackage} and {@link petForId}; never a stored pref. */
-export type PetMode = "vector" | "sprite";
+ *  {@link artFormatForPackage} and {@link companionArtForId}; never a stored pref. */
+export type CompanionArtFormat = "vector" | "sprite";
 
 /**
  * Authoritative session card pushed from the main window — one entry per
@@ -163,7 +167,7 @@ export type PetMode = "vector" | "sprite";
  * events never reach the main window's stream) notify exactly like the
  * active one.
  */
-export interface PetSessionCard {
+export interface CompanionSessionCard {
 	sessionId: string;
 	/** Stable revision of the activity represented by this card. Dismissal
 	 *  and notification memory reset when a new turn changes this value. */
@@ -177,6 +181,70 @@ export interface PetSessionCard {
 	/** Latest assistant text preview for finished sessions (may be absent
 	 *  for background sessions the main window never streamed). */
 	replyPreview?: string | null;
+	/** Per-session mood, used by the desktop pet's aggregate reading. The
+	 *  active session uses its full AgentSignals; background sessions only
+	 *  have the session.list facts, so they degrade to working/rest/error. */
+	mood?: CompanionMood;
+	/** Per-session built-in companion state. Optional for the same reason:
+	 *  background sessions do not stream their tool/streaming detail. */
+	companionState?: CompanionState;
+	/** Why this session wants the user, when it does. */
+	attention?: "approval" | "question";
+}
+
+const COMPANION_MOOD_PRIORITY: Record<CompanionMood, number> = {
+	waiting: 4,
+	analyzing: 3,
+	working: 2,
+	error: 1,
+	rest: 0,
+};
+
+// Mirrors COMPANION_MOOD_PRIORITY so the rich state and the sprite mood never
+// tell different stories: waiting > analyzing > working > error > rest.
+const COMPANION_STATE_PRIORITY: readonly CompanionState[] = [
+	"notifying",
+	"thinking",
+	"searching",
+	"writing",
+	"working",
+	"alerting",
+	"confused",
+	"curious",
+	"celebrate",
+	"idle",
+];
+
+/** Collapse a rich companion state onto the legacy mood axis used by the
+ *  floating pet's sprite/aggregate reading. */
+export function companionMoodOfState(state: CompanionState): CompanionMood {
+	const mood = COMPANION_STATE_TO_SPRITE_MOOD[state];
+	return mood === "hover" || mood === "dragging" ? "working" : mood;
+}
+
+/** The same priority BitFun's Agent companion uses: a session blocked on the
+ *  user outranks a thinking session, which outranks ordinary work. */
+export function aggregateCompanionMood(
+	cards: readonly CompanionSessionCard[],
+	fallback: CompanionMood = "rest",
+): CompanionMood {
+	let best = fallback;
+	for (const card of cards) {
+		if (card.mood && COMPANION_MOOD_PRIORITY[card.mood] > COMPANION_MOOD_PRIORITY[best]) best = card.mood;
+	}
+	return best;
+}
+
+/** Attention first, then live work, then the result/idle states. */
+export function aggregateCompanionState(
+	cards: readonly CompanionSessionCard[],
+	fallback: CompanionState = "idle",
+): CompanionState {
+	const states = new Set(cards.map(card => card.companionState).filter((state): state is CompanionState => !!state));
+	for (const state of COMPANION_STATE_PRIORITY) {
+		if (states.has(state)) return state;
+	}
+	return fallback;
 }
 
 /**
@@ -185,21 +253,21 @@ export interface PetSessionCard {
  * summary for the panel), approval (pending tool approval to answer),
  * scale (size slider). Each field is optional — pushes are partial.
  */
-export interface PetActivity {
+export interface CompanionActivity {
 	/** Authoritative session cards (working + unread finished) — the
 	 *  bubbles window renders these as the session-scoped stack, replacing
 	 *  per-event session bubbles. Pushed with state/recent pushes. */
-	sessions?: PetSessionCard[];
-	mood?: PetMood;
-	/** The 31-state reading (see PET_STATES). Pushed alongside `mood`: the
+	sessions?: CompanionSessionCard[];
+	mood?: CompanionMood;
+	/** The 31-state reading (see COMPANION_STATES). Pushed alongside `mood`: the
 	 *  mood still picks the spritesheet row, the state drives the builtin's
 	 *  face / motion / effects. Optional, so a pet window on an older build
 	 *  (or a partial push) keeps working off `mood` alone.
 	 *
-	 *  `petState`, not `state`: `state` is already the session's live task
+	 *  `companionState`, not `state`: `state` is already the session's live task
 	 *  summary (working / toolName / lastMessage…) and overloading one field
 	 *  with two shapes is how an IPC payload starts lying. */
-	petState?: PetState;
+	companionState?: CompanionState;
 	bubble?: {
 		kind: "completed" | "error" | "question" | "subtask";
 		text: string;
@@ -239,7 +307,7 @@ export interface PetActivity {
 	theme?: "light" | "dark";
 	/** Resolved --accent color (CSS value, e.g. oklch) of the main window —
 	 *  the pet window re-derives its themed shell/ring palette from it
-	 *  (pet-palette.ts). Pushed alongside `theme`. */
+	 *  (companion-palette.ts). Pushed alongside `theme`. */
 	accent?: string;
 	/** Active pet descriptor (builtin id or a full petdex package — the
 	 *  petdex registry lives in the main window's localStorage, which the
@@ -247,19 +315,19 @@ export interface PetActivity {
 	 *  the pet window re-requests state, so imported theme packages render
 	 *  in the floating pet too. Carries the derived `mode`, so the pet window
 	 *  does not re-resolve the package shape. */
-	pet?: PetDescriptor;
+	pet?: CompanionArtDescriptor;
 }
 
-export const PET_MOODS: readonly PetMood[] = ["rest", "working", "waiting", "analyzing", "error"];
+export const COMPANION_MOODS: readonly CompanionMood[] = ["rest", "working", "waiting", "analyzing", "error"];
 
-export const PET_DISPLAY_MODES: readonly PetDisplayMode[] = ["input", "desktop"];
+export const COMPANION_PLACEMENTS: readonly CompanionPlacement[] = ["input", "desktop"];
 
-export const BUILTIN_PET_ID = "musepi";
+export const BUILTIN_SPRITE_ART_ID = "musepi";
 
-/** Builtin vector note-bot id (PetSprite's hand-drawn SVG mascot). The
+/** Builtin vector note-bot id (CompanionArt's hand-drawn SVG mascot). The
  *  "musepi" id belongs to the AI-generated spritesheet preset below, so the
  *  vector companion carries its own id to stay selectable. */
-export const BUILTIN_SVG_ID = "musepi-note-bot";
+export const BUILTIN_VECTOR_ART_ID = "musepi-note-bot";
 
 /** Builtin spritesheet presets — the MusePi sheet (AI-designed smooth art,
  * 2026-09-16) first, then sheets vendored from BitFun (MIT, Copyright 2026
@@ -270,10 +338,10 @@ export const BUILTIN_SVG_ID = "musepi-note-bot";
  * vector-style art and must downscale bilinearly).
  *
  * The default companion is NOT in this list — it is the hand-drawn sphere
- * ({@link BUILTIN_SVG_ID}, drawn by PetSprite's builtin branch), which has
+ * ({@link BUILTIN_VECTOR_ART_ID}, drawn by CompanionArt's builtin branch), which has
  * no spritesheet.
  */
-export const BUILTIN_PETDEX: readonly {
+export const BUILTIN_SPRITE_PRESETS: readonly {
 	id: string;
 	displayName: string;
 	description: string;
@@ -395,12 +463,12 @@ export const BUILTIN_PETDEX: readonly {
 ];
 
 /** Petdex spritesheet frame grid (petdex.dev / Codux pet atlas convention). */
-export const PETDEX_COLUMNS = 8;
+export const SPRITE_COLUMNS = 8;
 const PETDEX_ROWS = 9;
 
 /** Spritesheet row per mood — same mapping BitFun/OpenPets use
  *  (rest=0, hover=1, dragging=2, error=5, waiting=6, working=7, analyzing=8). */
-const PETDEX_MOOD_ROW: Record<PetdexMood, number> = {
+const SPRITE_MOOD_ROW: Record<SpriteMood, number> = {
 	rest: 0,
 	hover: 1,
 	dragging: 2,
@@ -412,8 +480,8 @@ const PETDEX_MOOD_ROW: Record<PetdexMood, number> = {
 
 /** Per-mood animation timings: the frame cycle runs at a
  *  mood-dependent speed, paired with one transform animation (breathe /
- *  work bob / hover lift / drag wiggle). Keyed by mood, used by PetdexSprite. */
-export const PETDEX_MOOD_ANIM: Record<PetdexMood, { cycleMs: number; transform: string; transformMs: number }> = {
+ *  work bob / hover lift / drag wiggle). Keyed by mood, used by SpriteSheetArt. */
+export const SPRITE_MOOD_ANIM: Record<SpriteMood, { cycleMs: number; transform: string; transformMs: number }> = {
 	rest: { cycleMs: 2400, transform: "breathe", transformMs: 6400 },
 	hover: { cycleMs: 1440, transform: "hover", transformMs: 1900 },
 	dragging: { cycleMs: 960, transform: "dragging", transformMs: 480 },
@@ -429,30 +497,30 @@ export const PETDEX_MOOD_ANIM: Record<PetdexMood, { cycleMs: number; transform: 
  *  renders an EMPTY frame once per loop — the desktop pet visibly blanks
  *  every cycle (the "flicker"); the frame cycle must stop at the last
  *  valid column. Rows 3/4 map to no mood (kept 8 as a safe default). */
-const PETDEX_ROW_FRAMES_DEFAULT: readonly number[] = [6, 8, 8, 8, 8, 8, 6, 6, 6];
+const SPRITE_ROW_FRAMES_DEFAULT: readonly number[] = [6, 8, 8, 8, 8, 8, 6, 6, 6];
 
-export interface PetAtlasGeometry {
+export interface SpriteAtlasGeometry {
 	frameWidth: number;
 	frameHeight: number;
 	rows: number;
 	columns: number;
 }
 
-export interface PetAtlasState {
+export interface SpriteAtlasState {
 	row: number;
 	frames: number;
 	fps: number;
 	loop?: boolean;
 }
 
-export interface PetBubbleTheme {
+export interface SpriteBubbleTheme {
 	background: string;
 	foreground: string;
 	border: string;
 }
 
 /** Imported Petdex, explicit-state atlas, or a user-dropped single SVG. */
-export interface PetdexPackage {
+export interface SpritePackage {
 	id: string;
 	displayName: string;
 	/** Data URL of the spritesheet (kept in localStorage — small webps fit). */
@@ -465,11 +533,11 @@ export interface PetdexPackage {
 	format?: "sheet" | "atlas" | "svg";
 	/** Valid (non-blank) frames per legacy Petdex row, scanned at import. */
 	rows?: readonly number[];
-	atlas?: PetAtlasGeometry;
-	states?: Readonly<Record<string, PetAtlasState>>;
-	theme?: { bubble?: Partial<PetBubbleTheme> };
+	atlas?: SpriteAtlasGeometry;
+	states?: Readonly<Record<string, SpriteAtlasState>>;
+	theme?: { bubble?: Partial<SpriteBubbleTheme> };
 	/** Rest-row (row 0) opaque content height, scanned at import — the
-	 *  renderer normalizes every pet to PET_CONTENT_TARGET_H so imported
+	 *  renderer normalizes every pet to SPRITE_CONTENT_TARGET_H so imported
 	 *  sheets with larger frames (192×208 vs builtin 96×104) render the
 	 *  same visual size. Absent for old packages → no normalization. */
 	contentH?: number;
@@ -484,14 +552,14 @@ export interface PetdexPackage {
  *  `vector` is the builtin sphere or a single-frame SVG package; `sprite` is
  *  always a frame grid. Callers dispatch on `mode` — `format` stays package
  *  metadata and is not an alternative dispatch key. */
-export type PetDescriptor =
+export type CompanionArtDescriptor =
 	| { mode: "vector"; kind: "builtin"; id: string }
-	| { mode: "vector"; kind: "petdex"; pkg: PetdexPackage }
-	| { mode: "sprite"; kind: "petdex"; pkg: PetdexPackage };
+	| { mode: "vector"; kind: "petdex"; pkg: SpritePackage }
+	| { mode: "sprite"; kind: "petdex"; pkg: SpritePackage };
 
 /** The mode a package's shape implies. Single-frame SVG packages are vector
  *  art; every frame format (`sheet` default and `atlas`) plays rows. */
-export function modeForPackage(pkg: Pick<PetdexPackage, "format">): PetMode {
+export function artFormatForPackage(pkg: Pick<SpritePackage, "format">): CompanionArtFormat {
 	return pkg.format === "svg" ? "vector" : "sprite";
 }
 
@@ -499,14 +567,14 @@ export function modeForPackage(pkg: Pick<PetdexPackage, "format">): PetMode {
  *
  *  The union above is a compile-time contract, but a push crosses a window
  *  boundary where nothing enforces it: an older or partial payload arrives as
- *  `{ kind, id }` or as a package without its derived `mode`. `PetSprite`
+ *  `{ kind, id }` or as a package without its derived `mode`. `CompanionArt`
  *  dispatches on `mode` alone and its packaged branch dereferences `pkg`, so
  *  one such push blanks the pet window (React drops the tree on the render
  *  error). Rebuild `mode` from the payload's own shape; null means the push
  *  cannot describe art and the receiver keeps its local reading. */
-export function descriptorFromPush(value: unknown): PetDescriptor | null {
+export function companionArtFromPush(value: unknown): CompanionArtDescriptor | null {
 	if (typeof value !== "object" || value === null) return null;
-	const wire = value as { kind?: unknown; id?: unknown; pkg?: Partial<PetdexPackage> | null };
+	const wire = value as { kind?: unknown; id?: unknown; pkg?: Partial<SpritePackage> | null };
 	if (wire.kind === "builtin" && typeof wire.id === "string") {
 		return { mode: "vector", kind: "builtin", id: wire.id };
 	}
@@ -520,12 +588,12 @@ export function descriptorFromPush(value: unknown): PetDescriptor | null {
 		typeof pkg.width === "number" &&
 		typeof pkg.height === "number"
 	) {
-		return { mode: modeForPackage(pkg), kind: "petdex", pkg: pkg as PetdexPackage };
+		return { mode: artFormatForPackage(pkg), kind: "petdex", pkg: pkg as SpritePackage };
 	}
 	return null;
 }
 
-export interface PetAnimationDescriptor {
+export interface SpriteAnimationDescriptor {
 	frameW: number;
 	frameH: number;
 	columns: number;
@@ -536,7 +604,7 @@ export interface PetAnimationDescriptor {
 	loop: boolean;
 }
 
-export type PetAnimationSource = Pick<PetdexPackage, "width" | "height" | "format" | "rows" | "atlas" | "states">;
+export type SpriteAnimationSource = Pick<SpritePackage, "width" | "height" | "format" | "rows" | "atlas" | "states">;
 
 const ATLAS_STANDARD_STATES = new Set([
 	"idle",
@@ -551,12 +619,12 @@ const ATLAS_STANDARD_STATES = new Set([
 
 /** Convert either sheet contract into the renderer's single animation shape.
  *  An explicit atlas never falls through to the legacy nine-row scanner. */
-export function resolvePetAnimation(
-	source: PetAnimationSource,
-	mood: PetdexMood,
+export function resolveSpriteAnimation(
+	source: SpriteAnimationSource,
+	mood: SpriteMood,
 	action?: string | null,
 	direction: "left" | "right" = "left",
-): PetAnimationDescriptor {
+): SpriteAnimationDescriptor {
 	if (source.format === "svg") {
 		return {
 			frameW: source.width,
@@ -565,7 +633,7 @@ export function resolvePetAnimation(
 			rowCount: 1,
 			row: 0,
 			valid: 1,
-			cycleMs: PETDEX_MOOD_ANIM[mood].cycleMs,
+			cycleMs: SPRITE_MOOD_ANIM[mood].cycleMs,
 			loop: true,
 		};
 	}
@@ -595,25 +663,25 @@ export function resolvePetAnimation(
 			loop: state.loop ?? true,
 		};
 	}
-	const row = PETDEX_MOOD_ROW[mood];
+	const row = SPRITE_MOOD_ROW[mood];
 	return {
-		frameW: source.width / PETDEX_COLUMNS,
+		frameW: source.width / SPRITE_COLUMNS,
 		frameH: source.height / PETDEX_ROWS,
-		columns: PETDEX_COLUMNS,
+		columns: SPRITE_COLUMNS,
 		rowCount: PETDEX_ROWS,
 		row,
-		valid: Math.min(PETDEX_COLUMNS, Math.max(1, (source.rows ?? PETDEX_ROW_FRAMES_DEFAULT)[row] ?? PETDEX_COLUMNS)),
-		cycleMs: PETDEX_MOOD_ANIM[mood].cycleMs,
+		valid: Math.min(SPRITE_COLUMNS, Math.max(1, (source.rows ?? SPRITE_ROW_FRAMES_DEFAULT)[row] ?? SPRITE_COLUMNS)),
+		cycleMs: SPRITE_MOOD_ANIM[mood].cycleMs,
 		loop: true,
 	};
 }
 
-export function petAmbientActions(pkg: PetdexPackage): string[] {
+export function spriteAmbientActions(pkg: SpritePackage): string[] {
 	if (pkg.format !== "atlas" || !pkg.states) return [];
 	return ["idle_random_1", "idle_random_2"].filter(name => pkg.states![name]);
 }
 
-export function petCustomActions(pkg: PetdexPackage): string[] {
+export function spriteCustomActions(pkg: SpritePackage): string[] {
 	if (pkg.format !== "atlas" || !pkg.states) return [];
 	return Object.keys(pkg.states).filter(name => !ATLAS_STANDARD_STATES.has(name));
 }
@@ -626,7 +694,7 @@ function hexLuminance(hex: string): number {
 
 /** Package colors are optional. Invalid or unreadable colors leave the
  *  application's glass bubble and semantic status colors untouched. */
-export function petBubbleTheme(pkg: Pick<PetdexPackage, "theme">): PetBubbleTheme | null {
+export function spriteBubbleTheme(pkg: Pick<SpritePackage, "theme">): SpriteBubbleTheme | null {
 	const bubble = pkg.theme?.bubble;
 	if (!bubble) return null;
 	const { background, foreground, border } = bubble;
@@ -639,7 +707,7 @@ export function petBubbleTheme(pkg: Pick<PetdexPackage, "theme">): PetBubbleThem
 	return contrast >= 4.5 ? { background: background!, foreground: foreground!, border: border! } : null;
 }
 
-export function petEnabled(): boolean {
+export function companionEnabled(): boolean {
 	try {
 		return localStorage.getItem("musepi-gui-pet") !== "0";
 	} catch {
@@ -647,7 +715,7 @@ export function petEnabled(): boolean {
 	}
 }
 
-export function petMode(): PetDisplayMode {
+export function companionPlacement(): CompanionPlacement {
 	try {
 		return localStorage.getItem("musepi-gui-pet-mode") === "desktop" ? "desktop" : "input";
 	} catch {
@@ -658,35 +726,35 @@ export function petMode(): PetDisplayMode {
 /** Default active pet — the builtin spherical brand pet (the hand-drawn
  *  vector sphere with its face and headphones). Every spritesheet preset
  *  stays selectable; an explicit stored pick always wins. */
-export const DEFAULT_PET_ID = BUILTIN_SVG_ID;
+export const DEFAULT_COMPANION_ART_ID = BUILTIN_VECTOR_ART_ID;
 
 /** Sprite-mode default when that mode has no remembered pick. */
-export const DEFAULT_SPRITE_PET_ID = BUILTIN_PETDEX[0]!.id;
+export const DEFAULT_SPRITE_ART_ID = BUILTIN_SPRITE_PRESETS[0]!.id;
 
-function defaultPetIdForMode(mode: PetMode): string {
-	return mode === "vector" ? BUILTIN_SVG_ID : DEFAULT_SPRITE_PET_ID;
+function defaultPetIdForMode(mode: CompanionArtFormat): string {
+	return mode === "vector" ? BUILTIN_VECTOR_ART_ID : DEFAULT_SPRITE_ART_ID;
 }
 
 /** Last pick per mode. `musepi-gui-pet-id` stays the single active selection;
  *  these keys only keep the other side alive across a mode switch. A mode is
  *  never stored on its own — the id implies it. */
-const PET_ID_BY_MODE_KEY: Record<PetMode, string> = {
+const COMPANION_ART_ID_BY_FORMAT_KEY: Record<CompanionArtFormat, string> = {
 	vector: "musepi-gui-pet-vector-id",
 	sprite: "musepi-gui-pet-sprite-id",
 };
 
-export function petId(): string {
+export function companionArtId(): string {
 	try {
-		return localStorage.getItem("musepi-gui-pet-id") ?? DEFAULT_PET_ID;
+		return localStorage.getItem("musepi-gui-pet-id") ?? DEFAULT_COMPANION_ART_ID;
 	} catch {
-		return DEFAULT_PET_ID;
+		return DEFAULT_COMPANION_ART_ID;
 	}
 }
 
-export function setPetId(id: string): void {
+export function setCompanionArtId(id: string): void {
 	try {
 		localStorage.setItem("musepi-gui-pet-id", id);
-		localStorage.setItem(PET_ID_BY_MODE_KEY[petForId(id).mode], id);
+		localStorage.setItem(COMPANION_ART_ID_BY_FORMAT_KEY[companionArtForId(id).mode], id);
 	} catch {
 		// storage unavailable
 	}
@@ -694,41 +762,41 @@ export function setPetId(id: string): void {
 
 /** Mode an id resolves to, or null when the id no longer names anything (a
  *  stale pick left behind by a deleted package). */
-function modeOfKnownId(id: string): PetMode | null {
-	const pet = petForId(id);
+function modeOfKnownId(id: string): CompanionArtFormat | null {
+	const pet = companionArtForId(id);
 	const known = pet.kind === "builtin" ? pet.id === id : pet.pkg.id === id;
 	return known ? pet.mode : null;
 }
 
 /** Selection a mode would activate: its remembered pick, else the current
  *  pick when it already belongs there, else the mode's default. Stored ids
- *  from before modes existed resolve through the same {@link petForId}
+ *  from before modes existed resolve through the same {@link companionArtForId}
  *  derivation, so old data needs no migration write. */
-export function petIdForMode(mode: PetMode): string {
-	const remembered = readStoredPetId(PET_ID_BY_MODE_KEY[mode]);
+export function companionArtIdForFormat(mode: CompanionArtFormat): string {
+	const remembered = readStoredCompanionArtId(COMPANION_ART_ID_BY_FORMAT_KEY[mode]);
 	if (remembered && modeOfKnownId(remembered) === mode) return remembered;
-	const current = petId();
+	const current = companionArtId();
 	if (modeOfKnownId(current) === mode) return current;
 	return defaultPetIdForMode(mode);
 }
 
 /** Switch drawing mode, restoring that mode's last selection. The mode being
  *  left keeps its pick for the next switch back. */
-export function setPetMode(mode: PetMode): void {
-	const current = petId();
+export function setCompanionArtFormat(mode: CompanionArtFormat): void {
+	const current = companionArtId();
 	const currentMode = modeOfKnownId(current);
 	if (currentMode === mode) return;
 	if (currentMode) {
 		try {
-			localStorage.setItem(PET_ID_BY_MODE_KEY[currentMode], current);
+			localStorage.setItem(COMPANION_ART_ID_BY_FORMAT_KEY[currentMode], current);
 		} catch {
 			// storage unavailable
 		}
 	}
-	setPetId(petIdForMode(mode));
+	setCompanionArtId(companionArtIdForFormat(mode));
 }
 
-function readStoredPetId(key: string): string | null {
+function readStoredCompanionArtId(key: string): string | null {
 	try {
 		return localStorage.getItem(key);
 	} catch {
@@ -736,18 +804,18 @@ function readStoredPetId(key: string): string | null {
 	}
 }
 
-export function loadPetdex(): PetdexPackage[] {
+export function loadSpritePackages(): SpritePackage[] {
 	try {
 		const raw = localStorage.getItem("musepi-gui-petdex");
 		if (!raw) return [];
 		const parsed = JSON.parse(raw) as unknown;
 		return Array.isArray(parsed)
 			? parsed.filter(
-					(p): p is PetdexPackage =>
+					(p): p is SpritePackage =>
 						typeof p === "object" &&
 						p !== null &&
-						typeof (p as PetdexPackage).id === "string" &&
-						typeof (p as PetdexPackage).spritesheet === "string",
+						typeof (p as SpritePackage).id === "string" &&
+						typeof (p as SpritePackage).spritesheet === "string",
 				)
 			: [];
 	} catch {
@@ -755,7 +823,7 @@ export function loadPetdex(): PetdexPackage[] {
 	}
 }
 
-export function savePetdex(pets: PetdexPackage[]): void {
+export function saveSpritePackages(pets: SpritePackage[]): void {
 	try {
 		localStorage.setItem("musepi-gui-petdex", JSON.stringify(pets));
 	} catch {
@@ -765,12 +833,12 @@ export function savePetdex(pets: PetdexPackage[]): void {
 
 /** Resolve any pet id to a renderable descriptor with its drawing mode
  *  (preset grid previews, unknown ids → the builtin sphere fallback). */
-export function petForId(id: string): PetDescriptor {
-	// The vector sphere is rendered by PetSprite directly (no sheet).
-	if (id === BUILTIN_SVG_ID) return { mode: "vector", kind: "builtin", id: BUILTIN_SVG_ID };
-	const pkg = loadPetdex().find(p => p.id === id);
-	if (pkg) return { mode: modeForPackage(pkg), kind: "petdex", pkg };
-	const builtin = BUILTIN_PETDEX.find(p => p.id === id);
+export function companionArtForId(id: string): CompanionArtDescriptor {
+	// The vector sphere is rendered by CompanionArt directly (no sheet).
+	if (id === BUILTIN_VECTOR_ART_ID) return { mode: "vector", kind: "builtin", id: BUILTIN_VECTOR_ART_ID };
+	const pkg = loadSpritePackages().find(p => p.id === id);
+	if (pkg) return { mode: artFormatForPackage(pkg), kind: "petdex", pkg };
+	const builtin = BUILTIN_SPRITE_PRESETS.find(p => p.id === id);
 	if (builtin) {
 		return {
 			mode: "sprite",
@@ -781,92 +849,114 @@ export function petForId(id: string): PetDescriptor {
 				spritesheet: builtin.spritesheetPath,
 				width: builtin.width,
 				height: builtin.height,
-				rows: builtin.rows ?? PETDEX_ROW_FRAMES_DEFAULT,
+				rows: builtin.rows ?? SPRITE_ROW_FRAMES_DEFAULT,
 				contentH: builtin.contentH,
 				smooth: builtin.smooth,
 				importedAt: 0,
 			},
 		};
 	}
-	return { mode: "vector", kind: "builtin", id: DEFAULT_PET_ID };
+	return { mode: "vector", kind: "builtin", id: DEFAULT_COMPANION_ART_ID };
 }
 
 /** Resolve the active pet: imported petdex, builtin preset, or the builtin
  *  sphere fallback. */
-export function activePet(): PetDescriptor {
-	return petForId(petId());
+export function activeCompanionArt(): CompanionArtDescriptor {
+	return companionArtForId(companionArtId());
 }
 
 /** Map a session snapshot to the pet mood (ChatView passes these down). */
-export function moodFromState(opts: { working: boolean; streaming: boolean; hasApprovals: boolean }): PetMood {
+export function companionMoodFromSession(opts: {
+	working: boolean;
+	streaming: boolean;
+	hasApprovals: boolean;
+}): CompanionMood {
 	if (opts.hasApprovals) return "waiting";
 	if (opts.working) return opts.streaming ? "working" : "analyzing";
 	return "rest";
 }
 
 /**
- * Signals a session exposes for state resolution. Every field is optional and
- * the resolver is ordered, so a caller wires only what it has — the composer
- * knows about streaming, the pet window knows about unread counts, and both
- * get a coherent reading without sharing a store shape.
+ * Resolve the shared presence contract to ONE companion state — a strict
+ * priority chain, highest first. The order is the design: a failure outranks
+ * everything (an agent blocked on an error is not "working"), live work
+ * outranks notifications (what is happening now beats what happened
+ * elsewhere), and the result emotions sit near the end because they are gated
+ * on an actual result — never on nothing happening (see COMPANION_STATES).
+ *
+ * `phase`/`activity` win over the legacy boolean fields when both are present;
+ * callers that still send only `working/streaming/approvals` keep the original
+ * reading.
  */
-export interface PetSessionSignals {
-	/** The floating pet is being dragged (interaction beats everything). */
-	dragging?: boolean;
-	/** First paint / window spawn. */
-	spawning?: boolean;
-	/** The last tool call failed and the user has to act — glyph "!". */
-	toolFailed?: boolean;
-	/** The instruction was ambiguous and needs clarifying — glyph "?".
-	 *  Distinct from `toolFailed` on purpose: one needs a retry decision, the
-	 *  other needs a rewrite, and the pet must not signal them identically. */
-	ambiguous?: boolean;
-	/** The agent is running a tool (not emitting text). */
-	working?: boolean;
-	/** The agent is streaming text. */
-	streaming?: boolean;
-	/** Unread completions sitting in other sessions. */
-	unread?: number;
-	/** Pending tool approvals — the agent is blocked on the user. */
-	approvals?: number;
-	/** The agent asked a question / offered options and is waiting. */
-	awaitingInput?: boolean;
-	/** A request is on the wire, no response yet. */
-	sending?: boolean;
-	/** A response is landing, first token not arrived yet. */
-	receiving?: boolean;
-	/** Milliseconds since the last activity — drives `drowsy`. */
-	idleMs?: number;
-	/** A turn just finished successfully — drives the result emotions. */
-	justFinished?: boolean;
-}
-
-/** How long the session must be quiet before the pet starts dozing off. */
-export const DROWSY_AFTER_MS = 90_000;
-
-/**
- * Resolve session signals to ONE state — a strict priority chain, highest
- * first. The order is the design: a failure outranks everything (an agent
- * blocked on an error is not "working"), live work outranks notifications
- * (what is happening now beats what happened elsewhere), and the emotions sit
- * second-to-last because they are gated on an actual result — never on
- * nothing happening (see PET_STATES).
- */
-export function stateFromSignals(s: PetSessionSignals = {}): PetState {
-	if (s.dragging) return "dragging";
-	if (s.spawning) return "spawning";
-	if (s.toolFailed) return "alerting";
-	if (s.ambiguous) return "confused";
-	if (s.working) return s.streaming ? "writing" : "working";
+export function companionStateFromSignals(s: AgentSignals = {}): CompanionState {
+	if (s.dragging || s.interaction === "drag") return "dragging";
+	if (s.spawning || s.presence === "starting") return "spawning";
+	if (s.presence === "closing") return "powering-down";
+	if (s.toolFailed || s.outcome?.kind === "failure" || s.phase === "error") return "alerting";
+	if (s.ambiguous || s.interaction === "deny" || s.outcome?.kind === "refused") return "confused";
+	if (s.presence === "hidden") return "drowsy";
+	if (s.interaction === "bounce") return "bouncing";
+	if (s.interaction === "hum") return "humming";
 	// A pending approval is the loudest "you are needed" there is — the agent
 	// is not working, it is WAITING, and the badge is the whole message.
 	if ((s.approvals ?? 0) > 0 || (s.unread ?? 0) > 0) return "notifying";
-	if (s.awaitingInput) return "curious";
+	if ((s.questions ?? 0) > 0 || s.awaitingInput || s.phase === "awaiting-user") return "curious";
+	if (s.streaming || s.phase === "streaming") return "writing";
+	if (s.phase === "thinking") return "thinking";
+	if (s.working || s.phase === "tool") {
+		switch (s.activity) {
+			case "searching":
+			case "browsing":
+			case "reading":
+				return "searching";
+			case "writing":
+			case "coding":
+			case "generating":
+				return "writing";
+			case "sending":
+				return "sending";
+			case "waiting":
+				return "notifying";
+			default:
+				return "working";
+		}
+	}
 	if (s.sending) return "sending";
 	if (s.receiving) return "receiving";
+	if (s.goal?.enabled && s.goal.total > 0 && s.goal.done >= s.goal.total) return "proud";
+	if (s.phase === "done" || s.justFinished || s.outcome?.kind === "success") return "celebrate";
 	if ((s.idleMs ?? 0) >= DROWSY_AFTER_MS) return "drowsy";
-	if (s.justFinished) return "celebrate";
 	return "idle";
+}
+
+/** Project the daemon's public presence contract onto the built-in
+ *  companion's state vocabulary. Used for sessions the GUI does not stream. */
+export function companionStateFromPresence(presence: SessionPresence): CompanionState {
+	switch (presence.phase) {
+		case "awaiting-approval":
+			return "notifying";
+		case "awaiting-input":
+			return "curious";
+		case "error":
+			return "alerting";
+		case "paused":
+			return "idle";
+		case "compacting":
+			return "progress";
+		case "tool":
+			return presence.activeTool
+				? companionStateFromSignals({ phase: "tool", activity: activityVerbForTool(presence.activeTool) })
+				: "working";
+		case "streaming":
+			return "writing";
+		case "thinking":
+			return "thinking";
+		case "starting":
+		case "finalizing":
+			return "working";
+		default:
+			return presence.working ? "working" : "idle";
+	}
 }
 
 /** Map a session snapshot to the thinking-orb state — the single source the
@@ -875,7 +965,7 @@ export function stateFromSignals(s: PetSessionSignals = {}): PetState {
  *  so the avatar spun on while the agent was actually blocked on a tool
  *  approval). Pending approvals pin the `waiting` state (the "paused for
  *  you" wave). */
-export function orbFromSession(
+export function thinkingOrbStateFromSession(
 	snap: { working?: boolean; streaming?: boolean; approvals?: readonly unknown[] } | null | undefined,
 ): OrbState {
 	return orbFromFlags({
@@ -900,30 +990,33 @@ function orbFromFlags(signal: { working: boolean; streaming: boolean; hasApprova
 /** Normalized pet body height (px) at scale 1 — every pet renders its
  *  rest-row content at this height regardless of the sheet's frame size,
  *  so imported pets (192×208 frames) match the builtins (96×104). */
-export const PET_CONTENT_TARGET_H = 100;
+export const SPRITE_CONTENT_TARGET_H = 100;
 
 /** User-facing pet size slider range (percent) + storage key. */
-export const PET_SCALE_KEY = "musepi-gui-pet-scale";
-export const PET_SCALE_MIN = 60;
-export const PET_SCALE_MAX = 150;
+export const COMPANION_SCALE_KEY = "musepi-gui-pet-scale";
+export const COMPANION_SCALE_MIN = 60;
+export const COMPANION_SCALE_MAX = 150;
 
 /** Pet size multiplier from the settings slider (60–150%, default 100). */
-export function petScale(): number {
-	const raw = Number(localStorage.getItem(PET_SCALE_KEY));
+export function companionScale(): number {
+	const raw = Number(localStorage.getItem(COMPANION_SCALE_KEY));
 	if (!Number.isFinite(raw) || raw <= 0) return 1;
-	return Math.min(PET_SCALE_MAX, Math.max(PET_SCALE_MIN, raw)) / 100;
+	return Math.min(COMPANION_SCALE_MAX, Math.max(COMPANION_SCALE_MIN, raw)) / 100;
 }
 
-export function setPetScale(pct: number): void {
-	localStorage.setItem(PET_SCALE_KEY, String(Math.min(PET_SCALE_MAX, Math.max(PET_SCALE_MIN, Math.round(pct)))));
+export function setCompanionScale(pct: number): void {
+	localStorage.setItem(
+		COMPANION_SCALE_KEY,
+		String(Math.min(COMPANION_SCALE_MAX, Math.max(COMPANION_SCALE_MIN, Math.round(pct)))),
+	);
 }
 
 /** One-time migration for packages stored before the contentH scan existed:
  *  decode the spritesheet, measure the rest-row content height, persist,
  *  and notify so open windows re-render. Runs on mount of any window that
- *  uses usePet (main + pet). Idempotent — skips packages that have it. */
-export function migratePetdexContent(): void {
-	const pets = loadPetdex();
+ *  uses useCompanionArt (main + pet). Idempotent — skips packages that have it. */
+export function migrateSpritePackageContent(): void {
+	const pets = loadSpritePackages();
 	const stale = pets.filter(p => !p.contentH);
 	if (stale.length === 0) return;
 	let changed = false;
@@ -941,8 +1034,8 @@ export function migratePetdexContent(): void {
 						p.format === "svg"
 							? im.naturalHeight
 							: p.format === "atlas" && p.atlas
-								? measurePetAtlas(im, p.atlas).contentH
-								: measurePetdex(im).contentH;
+								? measureSpriteAtlas(im, p.atlas).contentH
+								: measureSpriteSheet(im).contentH;
 					if (contentH > 0) {
 						p.contentH = contentH;
 						changed = true;
@@ -953,7 +1046,7 @@ export function migratePetdexContent(): void {
 			}
 		}
 		if (changed) {
-			savePetdex(pets);
+			saveSpritePackages(pets);
 			window.dispatchEvent(new CustomEvent("omp-pet-changed"));
 		}
 	})();
@@ -1020,13 +1113,13 @@ function measureGrid(
 }
 
 /** Legacy Petdex packages derive frame counts from alpha. */
-export function measurePetdex(img: HTMLImageElement): { rows: number[]; contentH: number } {
-	return measureGrid(img, PETDEX_COLUMNS, PETDEX_ROWS, PETDEX_ROW_FRAMES_DEFAULT);
+export function measureSpriteSheet(img: HTMLImageElement): { rows: number[]; contentH: number } {
+	return measureGrid(img, SPRITE_COLUMNS, PETDEX_ROWS, SPRITE_ROW_FRAMES_DEFAULT);
 }
 
 /** Atlas packages use declared frames; only visual-size normalization needs
  *  an alpha measurement. */
-export function measurePetAtlas(img: HTMLImageElement, atlas: PetAtlasGeometry): { contentH: number } {
+export function measureSpriteAtlas(img: HTMLImageElement, atlas: SpriteAtlasGeometry): { contentH: number } {
 	const { contentH } = measureGrid(img, atlas.columns, atlas.rows, []);
 	return { contentH };
 }

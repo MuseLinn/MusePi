@@ -557,7 +557,7 @@ export function SettingsView({
 								<MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />
 							)}
 							{activeSection === "notifications" && <NotificationsSection rpc={rpc} />}
-							{activeSection === "pet" && <PetSection />}
+							{activeSection === "pet" && <CompanionSection />}
 							{activeSection === "sessions" &&
 								(extSessionsTab ? (
 									<SlotComponentMount
@@ -622,6 +622,7 @@ import {
 	AppearanceSection,
 	BrowserSection,
 	CommandsSection,
+	CompanionSection,
 	ConnectorsSection,
 	ContextSection,
 	FilesLspSection,
@@ -636,7 +637,6 @@ import {
 	ModelSection,
 	ModesSection,
 	NotificationsSection,
-	PetSection,
 	PromptsSection,
 	SessionsSection,
 	ShellSection,

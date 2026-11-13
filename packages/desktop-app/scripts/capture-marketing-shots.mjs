@@ -5,7 +5,7 @@
  * Why puppeteer + system Edge over CDP against Electron:
  *   Electron's own window cannot be CDP-screenshotted on Windows — a
  *   transparent, unfocused window never gets a compositor surface and
- *   Page.captureScreenshot hangs (see verify-desktop-pet.mjs:12-18, which
+ *   Page.captureScreenshot hangs (see verify-desktop-companion.mjs:12-18, which
  *   documents the same limitation for the pet window). The fix that project
  *   already uses is to render the BUILT renderer over file:// with a stub
  *   preload — that exercises the exact same renderer code the window runs.

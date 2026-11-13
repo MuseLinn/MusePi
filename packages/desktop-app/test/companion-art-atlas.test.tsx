@@ -1,15 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { PetdexSprite } from "../src/components/PetSprite";
+import { SpriteSheetArt } from "../src/components/CompanionArt";
 import {
-	type PetdexPackage,
-	petAmbientActions,
-	petBubbleTheme,
-	petCustomActions,
-	resolvePetAnimation,
-} from "../src/lib/pet";
+	resolveSpriteAnimation,
+	type SpritePackage,
+	spriteAmbientActions,
+	spriteBubbleTheme,
+	spriteCustomActions,
+} from "../src/lib/companion";
 
-const atlasPackage: PetdexPackage = {
+const atlasPackage: SpritePackage = {
 	id: "kimi-musepi",
 	displayName: "Kimi",
 	spritesheet: "data:image/png;base64,AA==",
@@ -34,7 +34,7 @@ const atlasPackage: PetdexPackage = {
 
 describe("atlas pet animation contract", () => {
 	it("uses the declared row geometry, frame count and fps instead of the Petdex 8×9 scan", () => {
-		expect(resolvePetAnimation(atlasPackage, "rest")).toMatchObject({
+		expect(resolveSpriteAnimation(atlasPackage, "rest")).toMatchObject({
 			frameW: 256,
 			frameH: 288,
 			columns: 8,
@@ -44,36 +44,36 @@ describe("atlas pet animation contract", () => {
 			cycleMs: 1000,
 			loop: true,
 		});
-		expect(resolvePetAnimation(atlasPackage, "working")).toMatchObject({ row: 3, valid: 4, cycleMs: 400 });
-		expect(resolvePetAnimation(atlasPackage, "waiting")).toMatchObject({ row: 4, valid: 6, cycleMs: 1000 });
-		expect(resolvePetAnimation(atlasPackage, "error")).toMatchObject({ row: 5 });
+		expect(resolveSpriteAnimation(atlasPackage, "working")).toMatchObject({ row: 3, valid: 4, cycleMs: 400 });
+		expect(resolveSpriteAnimation(atlasPackage, "waiting")).toMatchObject({ row: 4, valid: 6, cycleMs: 1000 });
+		expect(resolveSpriteAnimation(atlasPackage, "error")).toMatchObject({ row: 5 });
 	});
 
 	it("falls back without inventing missing hover or analyzing rows", () => {
-		expect(resolvePetAnimation(atlasPackage, "hover")).toMatchObject({ row: 0 });
-		expect(resolvePetAnimation(atlasPackage, "analyzing")).toMatchObject({ row: 3 });
+		expect(resolveSpriteAnimation(atlasPackage, "hover")).toMatchObject({ row: 0 });
+		expect(resolveSpriteAnimation(atlasPackage, "analyzing")).toMatchObject({ row: 3 });
 		expect(
-			resolvePetAnimation({ ...atlasPackage, states: { idle: atlasPackage.states!.idle! } }, "working"),
+			resolveSpriteAnimation({ ...atlasPackage, states: { idle: atlasPackage.states!.idle! } }, "working"),
 		).toMatchObject({
 			row: 0,
 		});
 	});
 
 	it("selects explicit running directions and package-owned one-shot actions", () => {
-		expect(resolvePetAnimation(atlasPackage, "dragging", null, "right")).toMatchObject({ row: 2 });
-		expect(resolvePetAnimation(atlasPackage, "dragging", null, "left")).toMatchObject({ row: 1 });
-		expect(resolvePetAnimation(atlasPackage, "rest", "celebrate")).toMatchObject({
+		expect(resolveSpriteAnimation(atlasPackage, "dragging", null, "right")).toMatchObject({ row: 2 });
+		expect(resolveSpriteAnimation(atlasPackage, "dragging", null, "left")).toMatchObject({ row: 1 });
+		expect(resolveSpriteAnimation(atlasPackage, "rest", "celebrate")).toMatchObject({
 			row: 8,
 			valid: 5,
 			loop: false,
 		});
-		expect(petAmbientActions(atlasPackage)).toEqual(["idle_random_1", "idle_random_2"]);
-		expect(petCustomActions(atlasPackage)).toEqual(["celebrate"]);
+		expect(spriteAmbientActions(atlasPackage)).toEqual(["idle_random_1", "idle_random_2"]);
+		expect(spriteCustomActions(atlasPackage)).toEqual(["celebrate"]);
 	});
 
 	it("renders a finite one-shot cycle so animationend can restore the live session state", () => {
 		const html = renderToStaticMarkup(
-			<PetdexSprite
+			<SpriteSheetArt
 				mood="rest"
 				src={atlasPackage.spritesheet}
 				width={atlasPackage.width}
@@ -91,7 +91,7 @@ describe("atlas pet animation contract", () => {
 	});
 
 	it("keeps legacy Petdex timing and geometry unchanged", () => {
-		const legacy: PetdexPackage = {
+		const legacy: SpritePackage = {
 			id: "legacy",
 			displayName: "Legacy",
 			spritesheet: "legacy.webp",
@@ -100,7 +100,7 @@ describe("atlas pet animation contract", () => {
 			rows: [6, 8, 8, 8, 8, 8, 6, 6, 6],
 			importedAt: 1,
 		};
-		expect(resolvePetAnimation(legacy, "rest")).toMatchObject({
+		expect(resolveSpriteAnimation(legacy, "rest")).toMatchObject({
 			frameW: 96,
 			frameH: 104,
 			columns: 8,
@@ -115,7 +115,7 @@ describe("atlas pet animation contract", () => {
 describe("package bubble theme", () => {
 	it("accepts a readable six-digit hex palette", () => {
 		expect(
-			petBubbleTheme({
+			spriteBubbleTheme({
 				...atlasPackage,
 				theme: { bubble: { background: "#5F6B62", foreground: "#FFFFFF", border: "#87928A" } },
 			}),
@@ -124,13 +124,13 @@ describe("package bubble theme", () => {
 
 	it("rejects insufficient contrast and malformed colors", () => {
 		expect(
-			petBubbleTheme({
+			spriteBubbleTheme({
 				...atlasPackage,
 				theme: { bubble: { background: "#FFFFFF", foreground: "#FFFF00", border: "#87928A" } },
 			}),
 		).toBeNull();
 		expect(
-			petBubbleTheme({
+			spriteBubbleTheme({
 				...atlasPackage,
 				theme: { bubble: { background: "red", foreground: "#FFFFFF", border: "#87928A" } },
 			}),

@@ -858,6 +858,32 @@ export interface SessionState {
 	pausedAt?: number | null;
 }
 
+/** One session's current presence, independent of whether the GUI streams it. */
+export type SessionPresencePhase =
+	| "idle"
+	| "starting"
+	| "thinking"
+	| "tool"
+	| "awaiting-approval"
+	| "awaiting-input"
+	| "streaming"
+	| "compacting"
+	| "finalizing"
+	| "error"
+	| "paused";
+
+export interface SessionPresence {
+	sessionId: string;
+	phase: SessionPresencePhase;
+	working: boolean;
+	live: boolean;
+	paused: boolean;
+	activeTool: string | null;
+	pendingApprovals: number;
+	pendingQuestions: number;
+	updatedAt: string;
+}
+
 export interface AgentSnapshot {
 	id: string;
 	displayName: string;

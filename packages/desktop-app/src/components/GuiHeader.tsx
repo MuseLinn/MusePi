@@ -12,6 +12,8 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
+import { agentSignalsFromSnapshot } from "../lib/agent-signals";
+import { thinkingOrbStateFromSession } from "../lib/companion";
 import {
 	copyToClipboard,
 	listOpenInApps,
@@ -22,7 +24,6 @@ import {
 	projectName,
 	shellPlatform,
 } from "../lib/electron";
-import { orbFromSession } from "../lib/pet";
 import {
 	type ProjectAction,
 	readProjectActions,
@@ -208,7 +209,7 @@ export function GuiHeader({
 		store ? store.subscribe.bind(store) : noopSubscribe,
 		store ? store.getSnapshot.bind(store) : () => null,
 	);
-	const orb = orbFromSession(snap);
+	const orb = thinkingOrbStateFromSession(snap);
 	const statusText = snap?.working
 		? snap.streaming
 			? t("settings.replying")
@@ -964,7 +965,14 @@ export function GuiHeader({
 							onClick={() => setSwitcherOpen(v => !v)}
 						>
 							<span className="gui-header-title-row">
-								{store && <AgentAvatar state={orb} size={20} />}
+								{store && (
+									<AgentAvatar
+										state={orb}
+										size={20}
+										signals={agentSignalsFromSnapshot(snap)}
+										seed={store?.sessionId}
+									/>
+								)}
 								<span
 									className="min-w-0 truncate text-[14px] font-medium text-[var(--color-text)]"
 									title={title}

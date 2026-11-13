@@ -2,14 +2,14 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import type { PetActivity, PetSessionCard } from "../src/lib/pet";
-import type { PetBubbles as PetBubblesComponent } from "../src/pet-bubbles";
+import type { CompanionBubbles as CompanionBubblesComponent } from "../src/companion-bubbles";
+import type { CompanionActivity, CompanionSessionCard } from "../src/lib/companion";
 import { defineGlobal } from "./define-global";
 
-type ActivityListener = (payload: PetActivity) => void;
+type ActivityListener = (payload: CompanionActivity) => void;
 
 const roots: Root[] = [];
-let PetBubbles: typeof PetBubblesComponent;
+let CompanionBubbles: typeof CompanionBubblesComponent;
 let ownsDomRegistration = false;
 
 beforeAll(async () => {
@@ -21,7 +21,7 @@ beforeAll(async () => {
 	if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 	ownsDomRegistration = !wasRegistered || !hasRealDom;
 	(globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
-	({ PetBubbles } = await import("../src/pet-bubbles"));
+	({ CompanionBubbles } = await import("../src/companion-bubbles"));
 });
 
 afterAll(async () => {
@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 function mountBubbles(): {
-	push(payload: PetActivity): void;
+	push(payload: CompanionActivity): void;
 	advance(): void;
 	opens: string[];
 	visibility: boolean[];
@@ -101,7 +101,7 @@ function mountBubbles(): {
 	document.body.appendChild(host);
 	const root = createRoot(host);
 	roots.push(root);
-	act(() => root.render(createElement(PetBubbles)));
+	act(() => root.render(createElement(CompanionBubbles)));
 	return {
 		push(payload) {
 			act(() => {
@@ -121,13 +121,13 @@ function mountBubbles(): {
 	};
 }
 
-const firstCard: PetSessionCard = {
+const firstCard: CompanionSessionCard = {
 	sessionId: "main-session",
 	title: "Main session",
 	phase: "done",
 	statusText: "Completed",
 };
-const secondCard: PetSessionCard = {
+const secondCard: CompanionSessionCard = {
 	sessionId: "background-session",
 	title: "Background session",
 	phase: "working",

@@ -148,6 +148,7 @@ import type { CordisDynamicPluginRuntime } from "./cordis-dynamic-plugins";
 import { writeProjectMirror } from "./creation";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
 import { catchupPlan } from "./journal";
+import { deriveSessionPresence } from "./session-presence";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -2303,6 +2304,12 @@ export class DaemonServer {
 					const root = sessionFile?.endsWith(".jsonl")
 						? `${sessionFile.slice(0, -".jsonl".length)}${path.sep}`
 						: null;
+					const updatedAt = new Date(r.updatedAt).toISOString();
+					const presence = deriveSessionPresence(live, {
+						sessionId: r.sessionId,
+						updatedAt,
+						status: r.status,
+					});
 					return {
 						id: r.sessionId,
 						parentId: r.parentId,
@@ -2312,24 +2319,20 @@ export class DaemonServer {
 						/** 顾问 transcript 行:GUI 渲染顾问标记且保持只读。 */
 						advisor: r.advisor === true,
 						timestamp: new Date(r.createdAt).toISOString(),
-						updatedAt: new Date(r.updatedAt).toISOString(),
+						updatedAt,
 						model: r.model ?? undefined,
 						messageCount: r.messageCount,
 						cwd: r.cwd || undefined,
 						// 会话预设 id（null = 未设预设）：侧栏悬浮卡的模式行。
 						modeId: r.modeId ?? undefined,
-						paused: live?.pauseGate.paused === true,
+						paused: presence.paused,
 						// 子代理数(不含 advisor):>0 时侧栏会话行出现展开 chevron。
 						agentCount: root === null ? 0 : subagentFiles.filter(f => f.startsWith(root)).length,
-						// Real-time status (kimi 实时提醒 parity): `working` = a
-						// live session with a running agent turn (the materialized
-						// view's streaming flag — driven by the same turn_start/
-						// turn_end wire events the GUI store consumes, so it
-						// agrees with the in-chat orb); `live` marks sessions
-						// currently held by the daemon (subscribed or streaming)
-						// so the GUI can tell a warm session from an idle snapshot.
-						working: live?.pauseGate.paused === true ? false : (live?.view.snapshot().state.isStreaming ?? false),
-						live: live !== undefined,
+						// Legacy projections kept for the sidebar/read-status lanes;
+						// `presence` is the structured contract new consumers use.
+						working: presence.working,
+						live: presence.live,
+						presence,
 						source: cronIds.has(r.sessionId) ? "cron" : undefined,
 						// Lifecycle status (TUI session-list parity): derived from
 						// the session file tail (complete/interrupted/aborted/
@@ -2343,6 +2346,19 @@ export class DaemonServer {
 								? this.#services.get<ViewStoreService>("views").firstUserMessage(r.sessionId)
 								: undefined),
 					};
+				});
+			}
+			case "session.presence": {
+				const p = (params ?? {}) as { sessionId?: unknown };
+				const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
+				if (!sessionId) return { error: "sessionId required" };
+				const live = this.#host.get(sessionId);
+				const row = (await this.#host.knownSessions()).find(r => r.sessionId === sessionId);
+				if (!live && !row) return { error: "session not found" };
+				return deriveSessionPresence(live, {
+					sessionId,
+					updatedAt: new Date(row?.updatedAt ?? Date.now()).toISOString(),
+					status: row?.status,
 				});
 			}
 			case "session.agents": {

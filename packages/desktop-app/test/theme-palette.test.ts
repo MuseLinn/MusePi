@@ -93,7 +93,7 @@ describe("every color theme supplies its own accent", () => {
 		expect(ts).toContain("applyUiTheme();");
 		const applyUi = rule(ts, "function applyUiTheme(): void {");
 		expect(applyUi, "theme flips must re-materialize the inline accent").toContain("applyAccent()");
-		const pet = read("packages/desktop-app/src/lib/pet-palette.ts");
+		const pet = read("packages/desktop-app/src/lib/companion-palette.ts");
 		expect(pet.toLowerCase()).toContain("normalize");
 		expect(pet).toContain("chroma-js cannot parse those");
 	});

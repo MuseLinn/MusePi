@@ -58,3 +58,7 @@ GUI 遵循自己的活体规范——每次 GUI 行为变更都要同步：
 - `docs/gui-design.md` —— 设计/交互标准（对话框、键盘、模型标识 `provider/id`、
   i18n、CSS-only 交互）
 - `docs/gui-implementation.md` —— daemon RPC 契约、踩坑、验证工作流
+
+## Powered by Aora Bot
+
+实验性的 Aora 头像 provider 基于 [Aora Bot](https://github.com/sam70361/aora-bot)（`@aora-bot/react`，随应用本地打包）。Aora Bot 及其角色设计适用 Aora Bot License 1.1，该许可要求此处署名；完整条款见 [Aora Bot 仓库](https://github.com/sam70361/aora-bot)。

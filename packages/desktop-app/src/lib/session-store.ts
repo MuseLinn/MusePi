@@ -30,7 +30,7 @@ import { sfxFor } from "./sfx";
 
 /** Pet bubble kinds (伙伴): one per notification event, mapped 1:1 by the
  *  main-window bridge to the floating pet window. */
-export type PetBubbleKind = "completed" | "subtask" | "error" | "question";
+export type CompanionBubbleKind = "completed" | "subtask" | "error" | "question";
 
 /**
  * Coalescing window for streaming renders (ms).
@@ -58,7 +58,12 @@ export function hasPendingSessionFlush(): boolean {
 /** Broadcast a pet bubble (window event — app.tsx forwards it to the pet
  *  window over Electron IPC; plain browsers ignore it). `requestId` rides
  *  along for question bubbles so the pet panel can answer approvals. */
-export function dispatchPetActivity(kind: PetBubbleKind, text: string, requestId?: string, sessionId?: string): void {
+export function dispatchCompanionActivity(
+	kind: CompanionBubbleKind,
+	text: string,
+	requestId?: string,
+	sessionId?: string,
+): void {
 	if (typeof window === "undefined") return;
 	window.dispatchEvent(new CustomEvent("omp-pet-activity", { detail: { kind, text, requestId, sessionId } }));
 }
@@ -993,7 +998,7 @@ export class GuiSessionStore {
 				"question",
 				this.#notifyCtx({ lastMessage: typeof p.tool === "string" ? p.tool : undefined }),
 			);
-			dispatchPetActivity("question", typeof p.tool === "string" ? p.tool : "", p.requestId);
+			dispatchCompanionActivity("question", typeof p.tool === "string" ? p.tool : "", p.requestId);
 			return true;
 		}
 		// Settlement broadcast: another device (or this one) answered. Clear
@@ -1026,7 +1031,7 @@ export class GuiSessionStore {
 					"subtask",
 					this.#notifyCtx({ agentName: p.agent, lastMessage: p.description ?? p.agent }),
 				);
-				dispatchPetActivity("subtask", p.description ?? p.agent);
+				dispatchCompanionActivity("subtask", p.description ?? p.agent);
 			}
 			this.#lifecycle.set(p.id, p);
 			// The lifecycle envelope carries the authoritative session file —
@@ -1133,7 +1138,7 @@ export class GuiSessionStore {
 						// agent_end. Completion is dispatched once at
 						// agent_end; the pet activity still trails the reply.
 						const text = assistantText(m);
-						dispatchPetActivity("completed", text, undefined, this.#sessionId);
+						dispatchCompanionActivity("completed", text, undefined, this.#sessionId);
 					}
 				}
 				break;

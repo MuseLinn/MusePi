@@ -61,3 +61,7 @@ behavior change:
   model identity `provider/id`, i18n, CSS-only interactions)
 - `docs/gui-implementation.md` — daemon RPC contracts, gotchas, verification
   workflow
+
+## Powered by Aora Bot
+
+The experimental Aora avatar provider is built on [Aora Bot](https://github.com/sam70361/aora-bot) (`@aora-bot/react`, bundled locally with the app). Aora Bot and its character designs are licensed under the Aora Bot License 1.1, which requires this attribution; the full terms are in the [Aora Bot repository](https://github.com/sam70361/aora-bot).

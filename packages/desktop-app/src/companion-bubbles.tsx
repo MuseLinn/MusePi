@@ -1,5 +1,5 @@
 /**
- * Pet bubbles (pet-bubbles.tsx) — the pet's activity/message cards.
+ * Companion bubbles (companion-bubbles.tsx) — the pet's activity/message cards.
  *
  * Window hosting history: dedicated bubble window (双窗口) → merged into
  * the pet window (single window, 2026-09-16) → SPLIT BACK OUT into
@@ -40,11 +40,16 @@ import { ArrowUp, ArrowUpRight, Check, MessageSquare, Square, X } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type CSSProperties, isValidElement, type ReactNode, useEffect, useRef, useState } from "react";
 import { Reveal } from "./components/Reveal";
-import { type PetActivity, type PetBubbleTheme, type PetSessionCard, petBubbleTheme } from "./lib/pet";
+import {
+	type CompanionActivity,
+	type CompanionSessionCard,
+	type SpriteBubbleTheme,
+	spriteBubbleTheme,
+} from "./lib/companion";
 import { useScrollShadow } from "./lib/use-scroll-shadow";
 
-interface PetBubblesBridge {
-	onPetActivity?(cb: (payload: PetActivity) => void): () => void;
+interface CompanionBubblesBridge {
+	onPetActivity?(cb: (payload: CompanionActivity) => void): () => void;
 	/** A global approval hotkey (Ctrl/Cmd+Shift+Y / N) decided a request —
 	 *  drop the bubble. */
 	onPetApprovalResolved?(cb: (payload: { requestId: string; approved: boolean }) => void): () => void;
@@ -104,7 +109,7 @@ interface Bubble {
 
 /** Remember dismissal per activity revision, not only per phase. A later turn
  *  must be able to surface the same session again. */
-function sessionActivityKey(card: PetSessionCard): string {
+function sessionActivityKey(card: CompanionSessionCard): string {
 	const revision = card.activityKey?.trim();
 	if (revision) return ["revision", card.sessionId, revision].join("\0");
 	return ["legacy", card.sessionId, card.title, card.phase, card.statusText, card.replyPreview ?? ""].join("\0");
@@ -130,16 +135,16 @@ function bubbleKindLabel(kind: string): string | null {
 	}
 }
 
-export function PetBubbles(): ReactNode {
+export function CompanionBubbles(): ReactNode {
 	// Transient + approval notifications (session-scoped completion/error
 	// pushes are superseded by the authoritative session cards).
 	const [bubbles, setBubbles] = useState<Bubble[]>([]);
 	// Authoritative session cards pushed by the main window (working +
 	// unread finished sessions).
-	const [cards, setCards] = useState<PetSessionCard[]>([]);
+	const [cards, setCards] = useState<CompanionSessionCard[]>([]);
 	// Optional package palette. Invalid or low-contrast values resolve to null,
 	// which leaves every package CSS variable unset and preserves the glass UI.
-	const [packageTheme, setPackageTheme] = useState<PetBubbleTheme | null>(null);
+	const [packageTheme, setPackageTheme] = useState<SpriteBubbleTheme | null>(null);
 	// iOS Notification-Center style collapse: stacked shows the top card +
 	// "N more" chip; expanded the full list; hidden only the count badge.
 	const [stackMode, setStackMode] = useState<StackMode>("stacked");
@@ -169,7 +174,7 @@ export function PetBubbles(): ReactNode {
 		if (!replyFor) return;
 		document.querySelector<HTMLInputElement>(".pet-bubble__reply-wrap--open .pet-bubble__reply-input")?.focus();
 	}, [replyFor]);
-	const bridge = (window as unknown as { electronAPI?: PetBubblesBridge }).electronAPI;
+	const bridge = (window as unknown as { electronAPI?: CompanionBubblesBridge }).electronAPI;
 
 	// pet:activity — session cards, bubbles, approvals, theme/locale push.
 	useEffect(() => {
@@ -181,7 +186,7 @@ export function PetBubbles(): ReactNode {
 		};
 		const off = bridge?.onPetActivity?.(payload => {
 			if (payload.pet) {
-				setPackageTheme(payload.pet.kind === "petdex" ? petBubbleTheme(payload.pet.pkg) : null);
+				setPackageTheme(payload.pet.kind === "petdex" ? spriteBubbleTheme(payload.pet.pkg) : null);
 			}
 			if (Array.isArray(payload.sessions)) {
 				const hidden = hiddenSessionsRef.current;
@@ -614,7 +619,7 @@ export function PetBubbles(): ReactNode {
 
 	/** × closes only this activity card. Read state remains owned by the
 	 *  main window; a later activity revision may surface the session again. */
-	const dismissCard = (c: PetSessionCard): void => {
+	const dismissCard = (c: CompanionSessionCard): void => {
 		hiddenSessionsRef.current.set(c.sessionId, sessionActivityKey(c));
 		setCards(prev => prev.filter(x => x.sessionId !== c.sessionId));
 		if (replyFor === `c:${c.sessionId}`) {
@@ -624,13 +629,13 @@ export function PetBubbles(): ReactNode {
 	};
 
 	/** ✓ acknowledges the session through the main window's shared unread state. */
-	const acknowledgeCard = (c: PetSessionCard): void => {
+	const acknowledgeCard = (c: CompanionSessionCard): void => {
 		void bridge?.petMarkRead?.(c.sessionId);
 		dismissCard(c);
 	};
 
 	/** ■ stop — abort the run and dismiss only the current activity card. */
-	const stopCard = (c: PetSessionCard): void => {
+	const stopCard = (c: CompanionSessionCard): void => {
 		void bridge?.petStopSession?.(c.sessionId);
 		hiddenSessionsRef.current.set(c.sessionId, sessionActivityKey(c));
 		setCards(prev => prev.filter(x => x.sessionId !== c.sessionId));
@@ -641,7 +646,7 @@ export function PetBubbles(): ReactNode {
 	};
 
 	/** Card body click → jump to that conversation in the main window. */
-	const openCard = (c: PetSessionCard): void => {
+	const openCard = (c: CompanionSessionCard): void => {
 		void bridge?.petOpenSession?.(c.sessionId);
 	};
 
@@ -759,6 +764,9 @@ export function PetBubbles(): ReactNode {
 					key={replyKey}
 					className={`pet-bubble pet-bubble--session pet-bubble--${c.phase}${unread ? " pet-bubble--unread" : ""}`}
 					data-actions={3}
+					data-mood={c.mood}
+					data-state={c.companionState}
+					data-attention={c.attention}
 					onClick={() => runAction(() => openCard(c))}
 				>
 					<button

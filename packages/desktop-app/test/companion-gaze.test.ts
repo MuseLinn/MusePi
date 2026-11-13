@@ -5,7 +5,7 @@ import {
 	GAZE_IDLE_MS,
 	nextBlinkDelay,
 	resolveGazeTarget,
-} from "../src/lib/pet-gaze";
+} from "../src/lib/companion-gaze";
 
 describe("pet gaze — pointer sampling", () => {
 	test("the centre dead zone removes jitter without reducing full deflection", () => {

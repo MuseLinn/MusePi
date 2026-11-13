@@ -50,9 +50,10 @@ function AgentRow(props: {
 	lifecycle: SubagentLifecyclePayload | undefined;
 	selected: boolean;
 	now: number;
+	avatar?: ReactNode;
 	onSelect(id: string | null): void;
 }): ReactNode {
-	const { agent, payload, lifecycle, selected, now, onSelect } = props;
+	const { agent, payload, lifecycle, selected, now, avatar, onSelect } = props;
 	const p = payload?.progress;
 	return (
 		<button
@@ -61,6 +62,7 @@ function AgentRow(props: {
 			onClick={() => onSelect(selected ? null : agent.id)}
 		>
 			<span className="ag-row-head">
+				{avatar ? <span className="ag-row-avatar">{avatar}</span> : null}
 				<span className={`ag-dot ag-dot--${agent.status}`} />
 				<span className="ag-row-name">{agent.displayName}</span>
 				<span className="ag-chip">{t(agent.kind === "main" ? "agents.main" : "agents.sub")}</span>
@@ -80,9 +82,12 @@ export function AgentsPanel(props: {
 	progress: ReadonlyMap<string, SubagentProgressPayload>;
 	lifecycle: ReadonlyMap<string, SubagentLifecyclePayload>;
 	selectedId: string | null;
+	/** Optional per-agent avatar renderer; hosts that own the character kit
+	 *  supply it, guests fall back to the status dot only. */
+	renderAvatar?: (agent: AgentSnapshot, payload: SubagentProgressPayload | undefined, now: number) => ReactNode;
 	onSelect(id: string | null): void;
 }): ReactNode {
-	const { agents, progress, lifecycle, selectedId, onSelect } = props;
+	const { agents, progress, lifecycle, selectedId, renderAvatar, onSelect } = props;
 	const now = useNow(1000);
 	// 纵向边缘羽化:agent 列表溢出时上下羽化。
 	const panelRef = useRef<HTMLDivElement | null>(null);
@@ -111,6 +116,7 @@ export function AgentsPanel(props: {
 					lifecycle={lifecycle.get(agent.id)}
 					selected={selectedId === agent.id}
 					now={now}
+					avatar={renderAvatar?.(agent, progress.get(agent.id), now)}
 					onSelect={onSelect}
 				/>
 			))}
@@ -122,6 +128,7 @@ export function AgentsPanel(props: {
 					lifecycle={lifecycle.get(agent.id)}
 					selected={selectedId === agent.id}
 					now={now}
+					avatar={renderAvatar?.(agent, progress.get(agent.id), now)}
 					onSelect={onSelect}
 				/>
 			))}

@@ -10,6 +10,7 @@ export { AppearanceSection, CodePreviewCard } from "./settings-sections/appearan
 export { BrowserSection } from "./settings-sections/browser";
 export { ChatSection, PrefSegmented, PrefToggle } from "./settings-sections/chat";
 export { CommandsSection } from "./settings-sections/commands";
+export { CompanionCard, CompanionMarket, CompanionMarketCard, CompanionSection } from "./settings-sections/companion";
 export { ConnectorsSection } from "./settings-sections/connectors";
 export { ContextSection } from "./settings-sections/context";
 export { FilesLspSection } from "./settings-sections/files";
@@ -24,7 +25,6 @@ export { MemorySection } from "./settings-sections/memory";
 export { ModelSection } from "./settings-sections/model";
 export { ModesSection } from "./settings-sections/modes";
 export { NotificationsSection, SoundEventRow } from "./settings-sections/notifications";
-export { PetCard, PetMarket, PetMarketCard, PetSection } from "./settings-sections/pet";
 export { SchemaTabSection } from "./settings-sections/schema";
 export { SessionsSection } from "./settings-sections/sessions";
 export { hitText, NumberStepper } from "./settings-sections/shared";

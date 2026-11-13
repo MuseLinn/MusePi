@@ -147,7 +147,7 @@
     "ci:test:coding-agent:native": "bun scripts/ci-test-ts.ts coding-agent-native",
     "ci:test:coding-agent:heavy": "bun scripts/ci-test-ts.ts coding-agent-heavy",
     "ci:test:smoke": "bun packages/coding-agent/src/cli.ts --version && bun packages/coding-agent/src/cli.ts --help && bun packages/coding-agent/src/cli.ts stats --help && bun packages/coding-agent/src/cli.ts --smoke-test",
-    "ci:test:desktop-smoke": "bun run --cwd packages/desktop-app build && bun scripts/dev-smoke.ts --no-auth -- bun run --cwd packages/desktop-app smoke:pet",
+    "ci:test:desktop-smoke": "bun run --cwd packages/desktop-app build && bun scripts/dev-smoke.ts --no-auth -- bun run --cwd packages/desktop-app smoke:companion",
     "ci:test:install-methods": "bash scripts/install-tests/run-ci.sh",
     "ci:release:build-binaries": "bun scripts/ci-release-build-binaries.ts",
     "ci:release:checksums": "bun scripts/ci-release-checksums.ts",

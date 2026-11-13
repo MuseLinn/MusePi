@@ -18,7 +18,7 @@
  *     main client window (2026-09-21: the old single-click panel popup was
  *     deleted — bubbles carry their own hover actions now)
  *   - a double-click plays a random interaction reaction (the full
- *     PET_INTERACTIONS set, dozing excluded — the old show/hide-main-
+ *     COMPANION_INTERACTIONS set, dozing excluded — the old show/hide-main-
  *     window shortcut is gone: the window is reached from the taskbar,
  *     and a pet is for petting)
  * - hover/dragging switch the petdex sprite to rows 1/2;
@@ -39,22 +39,32 @@ import {
 	useState,
 } from "react";
 import { createRoot } from "react-dom/client";
-import { type GazeVec, PetSprite, type PetSpriteAction, usePet, usePetDecor } from "./components/PetSprite";
-import { PET_ENTER_MS, PetTransition, type PetTransitionPhase } from "./components/PetTransition";
 import {
-	descriptorFromPush,
-	type PetActivity,
-	type PetDescriptor,
-	type PetInteraction,
-	type PetMood,
-	type PetState,
-	petAmbientActions,
-	petCustomActions,
-	petScale,
-	randomPetInteraction,
-} from "./lib/pet";
-import type { PetGestureInput } from "./lib/pet-gesture";
-import { applyPetPalette } from "./lib/pet-palette";
+	CompanionArt,
+	type CompanionArtAction,
+	type GazeVec,
+	useCompanionArt,
+	useCompanionDecor,
+} from "./components/CompanionArt";
+import {
+	COMPANION_ENTER_MS,
+	CompanionTransition,
+	type CompanionTransitionPhase,
+} from "./components/CompanionTransition";
+import {
+	type CompanionActivity,
+	type CompanionArtDescriptor,
+	type CompanionInteraction,
+	type CompanionMood,
+	type CompanionState,
+	companionArtFromPush,
+	companionScale,
+	randomCompanionInteraction,
+	spriteAmbientActions,
+	spriteCustomActions,
+} from "./lib/companion";
+import type { CompanionGestureInput } from "./lib/companion-gesture";
+import { applyCompanionPalette } from "./lib/companion-palette";
 import { initTooltips } from "./lib/tooltips";
 
 /** Horizontal travel (px) that must accumulate before the pet mirrors its
@@ -81,7 +91,7 @@ import "./styles/gui.css";
 import "@musepi/client-core/src/styles/overlay-fallback.css";
 
 interface PetBridge {
-	onPetActivity?(cb: (payload: PetActivity) => void): () => void;
+	onPetActivity?(cb: (payload: CompanionActivity) => void): () => void;
 	onPetHover?(cb: (hovering: boolean) => void): () => void;
 	/** Normalized gaze vector (cursor offset from the window centre, clamped
 	 *  to ±1) — eye-tracking target, pushed by the click-through poll. */
@@ -115,41 +125,41 @@ const DRAG_THRESHOLD_PX = 8;
 const DOUBLE_CLICK_MS = 300;
 
 function PetApp(): ReactNode {
-	const { enabled, pet: localPet } = usePet();
+	const { enabled, art: localArt } = useCompanionArt();
 	// The main window owns petdex state (its localStorage is unreachable from
 	// this window under file://) — it pushes the active pet descriptor on
 	// pet:activity; until the first push lands we render the local hook's
 	// reading (the same builtin default).
-	const [pushedPet, setPushedPet] = useState<PetDescriptor | null>(null);
-	const pet = pushedPet ?? localPet;
-	// Surface shading (pet-decor.ts) — the floating pet is the one renderer
+	const [pushedPet, setPushedPet] = useState<CompanionArtDescriptor | null>(null);
+	const pet = pushedPet ?? localArt;
+	// Surface shading (companion-decor.ts) — the floating pet is the one renderer
 	// that has NO settings page of its own, so it subscribes to the same
 	// broadcast the composer/avatar do rather than receiving a prop.
-	const decor = usePetDecor();
-	const [mood, setMood] = useState<PetMood>("rest");
+	const decor = useCompanionDecor();
+	const [mood, setMood] = useState<CompanionMood>("rest");
 	// The 31-state session reading pushed from the main window. Separate from
 	// `mood` for the same reason the two axes exist at all: the mood picks the
 	// spritesheet row, the state picks the face / motion / effects.
-	const [sessionState, setSessionState] = useState<PetState | null>(null);
+	const [sessionState, setSessionState] = useState<CompanionState | null>(null);
 	const [hovering, setHovering] = useState(false);
 	const [dragging, setDragging] = useState(false);
 	// Ambient idle choreography: while the pet sits calm at rest, briefly swap
 	// to a livelier idle row (thinking / lingering) so it has a life of its own
 	// instead of breathing in place forever (open-design `pet-overlay` parity).
-	const [ambientMood, setAmbientMood] = useState<PetMood | null>(null);
-	const [ambientAction, setAmbientAction] = useState<PetSpriteAction | null>(null);
-	const [customAction, setCustomAction] = useState<PetSpriteAction | null>(null);
+	const [ambientMood, setAmbientMood] = useState<CompanionMood | null>(null);
+	const [ambientAction, setAmbientAction] = useState<CompanionArtAction | null>(null);
+	const [customAction, setCustomAction] = useState<CompanionArtAction | null>(null);
 	const actionNonceRef = useRef(0);
 	const ambientCompletionRef = useRef<(() => void) | null>(null);
 	const lastCustomActionRef = useRef<string | null>(null);
 	// Transient user reaction (poke / notice / pre-sleep). Layered OVER the
-	// mood, never written to it — see pet-face.ts PET_INTERACTIONS.
-	const [interaction, setInteraction] = useState<PetInteraction | null>(null);
+	// mood, never written to it — see companion-face.ts COMPANION_INTERACTIONS.
+	const [interaction, setInteraction] = useState<CompanionInteraction | null>(null);
 	// Horizontal drag direction: the dragging row's frames are a fixed-
 	// direction walk cycle, so moving the other way must mirror them
 	// (BitFun doesn't — it reads as running backwards on rightward drags).
 	const [flip, setFlip] = useState(false);
-	const [sizeScale, setSizeScale] = useState<number>(() => petScale());
+	const [sizeScale, setSizeScale] = useState<number>(() => companionScale());
 	const [dockSide, setDockSide] = useState<"left" | "right" | null>(null);
 	// The single pet-side control mirrors the bubble window's three modes.
 	// It stays visible whenever items exist; only count mode shows a number.
@@ -166,7 +176,7 @@ function PetApp(): ReactNode {
 	const bumpRef = useRef<HTMLDivElement>(null);
 	// The builtin frame loop samples this input directly. Pointer events update
 	// only refs; Petdex continues to use its spritesheet rows and mirror state.
-	const gestureRef = useRef<PetGestureInput>({
+	const gestureRef = useRef<CompanionGestureInput>({
 		pressed: false,
 		dragging: false,
 		vx: 0,
@@ -195,7 +205,7 @@ function PetApp(): ReactNode {
 	const [pokes, setPokes] = useState(0);
 	const pokeTimerRef = useRef<number | null>(null);
 	const reactionTimerRef = useRef<number | null>(null);
-	const lastReactionRef = useRef<PetInteraction | null>(null);
+	const lastReactionRef = useRef<CompanionInteraction | null>(null);
 
 	// Drag state
 	const dragRef = useRef<{
@@ -229,14 +239,14 @@ function PetApp(): ReactNode {
 		if (!bridge?.onPetActivity) return;
 		return bridge.onPetActivity?.(payload => {
 			if (payload.mood) setMood(payload.mood);
-			if (payload.petState) setSessionState(payload.petState);
+			if (payload.companionState) setSessionState(payload.companionState);
 			if (typeof payload.scale === "number" && payload.scale > 0) setSizeScale(payload.scale);
 			if (payload.bubbles) setBubblesState(payload.bubbles);
 			if (typeof payload.locale === "string") setLocale(payload.locale);
 			// Active-pet override (petdex packages live in the main window's
 			// localStorage — unreachable from here; the descriptor arrives
 			// inline, spritesheet data URL and all).
-			const pushed = descriptorFromPush(payload.pet);
+			const pushed = companionArtFromPush(payload.pet);
 			if (pushed) setPushedPet(pushed);
 			// Main-window scheme push (the reliable path — storage events
 			// don't fire cross-window under file://).
@@ -245,14 +255,14 @@ function PetApp(): ReactNode {
 				document.documentElement.dataset.colorScheme = payload.theme;
 			}
 			// Themed accent: the pet's shell/ring/eye palette is derived from
-			// the main window's resolved --accent (pet-palette.ts), so the orb
+			// the main window's resolved --accent (companion-palette.ts), so the orb
 			// follows the active theme axis (brand/ocean/jade/mono) instead of
 			// a fixed brand gold. Inline the pushed value first — the pet
 			// window never sets data-accent itself.
 			if (typeof payload.accent === "string" && payload.accent) {
 				document.documentElement.style.setProperty("--accent", payload.accent);
 			}
-			if (payload.theme || payload.accent) applyPetPalette(document.documentElement);
+			if (payload.theme || payload.accent) applyCompanionPalette(document.documentElement);
 		});
 		// bridge is a window-level constant (preload) — subscribe once.
 	}, []);
@@ -297,7 +307,7 @@ function PetApp(): ReactNode {
 	// scale, so both directions stay instant.
 	// Mount is a show: start in the enter phase so the first painted frame is
 	// already the transition, never a full-size sphere that then jumps back.
-	const [transition, setTransition] = useState<PetTransitionPhase>("enter");
+	const [transition, setTransition] = useState<CompanionTransitionPhase>("enter");
 	const [showNonce, setShowNonce] = useState(0);
 	const enterTimerRef = useRef<number | null>(null);
 	useEffect(() => {
@@ -328,7 +338,7 @@ function PetApp(): ReactNode {
 		enterTimerRef.current = window.setTimeout(() => {
 			enterTimerRef.current = null;
 			setTransition("idle");
-		}, PET_ENTER_MS);
+		}, COMPANION_ENTER_MS);
 		return () => {
 			if (enterTimerRef.current !== null) {
 				window.clearTimeout(enterTimerRef.current);
@@ -357,8 +367,8 @@ function PetApp(): ReactNode {
 		const AMBIENT_REST_VARIANCE_MS = 9000;
 		const AMBIENT_INITIAL_DELAY_MIN_MS = 4000;
 		const AMBIENT_INITIAL_DELAY_VARIANCE_MS = 4000;
-		const AMBIENT_MOODS: PetMood[] = ["waiting", "analyzing"];
-		const packageActions = petAmbientActions(pet.pkg);
+		const AMBIENT_MOODS: CompanionMood[] = ["waiting", "analyzing"];
+		const packageActions = spriteAmbientActions(pet.pkg);
 		let playTimer: number | undefined;
 		let restTimer: number | undefined;
 
@@ -489,7 +499,7 @@ function PetApp(): ReactNode {
 			doc.dataset.theme = resolved;
 			doc.dataset.colorScheme = resolved;
 			doc.style.colorScheme = resolved;
-			applyPetPalette(doc);
+			applyCompanionPalette(doc);
 		};
 		applyScheme();
 		const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -798,7 +808,7 @@ function PetApp(): ReactNode {
 			if (clickTimerRef.current !== null) window.clearTimeout(clickTimerRef.current);
 			clickTimerRef.current = null;
 			lastClickRef.current = 0;
-			const packageActions = pet.kind === "petdex" && mood === "rest" ? petCustomActions(pet.pkg) : [];
+			const packageActions = pet.kind === "petdex" && mood === "rest" ? spriteCustomActions(pet.pkg) : [];
 			if (packageActions.length > 0) {
 				const candidates = packageActions.filter(name => name !== lastCustomActionRef.current);
 				const pool = candidates.length > 0 ? candidates : packageActions;
@@ -808,7 +818,7 @@ function PetApp(): ReactNode {
 				setCustomAction({ name, nonce: actionNonceRef.current });
 				setInteraction(null);
 			} else {
-				const pick = randomPetInteraction(lastReactionRef.current, ["dozing"]);
+				const pick = randomCompanionInteraction(lastReactionRef.current, ["dozing"]);
 				lastReactionRef.current = pick;
 				setInteraction(pick);
 			}
@@ -912,13 +922,13 @@ function PetApp(): ReactNode {
 						ref={squashRef}
 						className={`pet-window__pet-flip${mirrored ? " pet-window__pet-flip--mirror" : ""}`}
 					>
-						<PetSprite
+						<CompanionArt
 							mood={displayMood}
 							state={displayState}
 							// The desktop pet is the largest host (104px box) —
 							// every effect runs at full count here.
 							tier="full"
-							pet={pet}
+							art={pet}
 							/* The builtin SVG derives its own size from
 							 * `--gui-pet-window-scale` (pet-window.css); this
 							 * is the fallback box. The petdex sheets still need
@@ -944,7 +954,7 @@ function PetApp(): ReactNode {
 							}}
 						/>
 					</div>
-					<PetTransition phase={petTransition} />
+					<CompanionTransition phase={petTransition} />
 					{sleeping && (
 						// Sleep indicator (CSS-only): floats up from the
 						// sprite's head, aria-hidden — purely decorative.

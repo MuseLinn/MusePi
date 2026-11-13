@@ -1,6 +1,7 @@
 import { AgentsPanel, t } from "@musepi/client-core";
 import type { AgentSnapshot, SessionState, SubagentLifecyclePayload, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
+import { SubagentAvatar } from "./SubagentAvatar";
 
 /**
  * Right-hand details pane (prototype §3, 300px): session metadata card on
@@ -46,6 +47,7 @@ export function DetailsPanel({
 					progress={progress}
 					lifecycle={lifecycle}
 					selectedId={null}
+					renderAvatar={(agent, payload, now) => <SubagentAvatar agent={agent} payload={payload} now={now} />}
 					onSelect={() => {}}
 				/>
 			</section>

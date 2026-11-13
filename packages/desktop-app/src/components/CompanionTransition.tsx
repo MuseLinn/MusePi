@@ -10,13 +10,13 @@ import type { ReactNode } from "react";
 import { ThinkingOrb } from "../vendor/thinking-orbs";
 
 /** Enter: the sphere's settle and the particle convergence share one beat. */
-export const PET_ENTER_MS = 420;
+export const COMPANION_ENTER_MS = 420;
 /** Exit: the dissolve. The shell's hide delay is tuned to the same beat. */
-export const PET_EXIT_MS = 280;
+export const COMPANION_EXIT_MS = 280;
 
-export type PetTransitionPhase = "idle" | "enter" | "leave";
+export type CompanionTransitionPhase = "idle" | "enter" | "leave";
 
-export function PetTransition({ phase }: { phase: PetTransitionPhase }): ReactNode {
+export function CompanionTransition({ phase }: { phase: CompanionTransitionPhase }): ReactNode {
 	if (phase === "idle") return null;
 	return (
 		<div className="pet-window__transition" aria-hidden="true">

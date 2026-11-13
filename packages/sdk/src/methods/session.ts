@@ -12,6 +12,18 @@ import type { MethodEntry } from "../index";
 
 const sessionId = Type.String({ minLength: 1, description: "Session entry id" });
 
+const sessionPresenceSchema = Type.Object({
+	sessionId,
+	phase: Type.String(),
+	working: Type.Boolean(),
+	live: Type.Boolean(),
+	paused: Type.Boolean(),
+	activeTool: Type.Union([Type.String(), Type.Null()]),
+	pendingApprovals: Type.Integer({ minimum: 0 }),
+	pendingQuestions: Type.Integer({ minimum: 0 }),
+	updatedAt: Type.String(),
+});
+
 /** Create a new session in the daemon (lazy-loads the agent runtime). */
 export const sessionCreate = {
 	method: "session.create",
@@ -43,9 +55,20 @@ export const sessionList = {
 			model: Type.Optional(Type.String()),
 			messageCount: Type.Optional(Type.Integer({ minimum: 0 })),
 			cwd: Type.Optional(Type.String()),
+			/** Structured session presence; the same shape as `session.presence`. */
+			presence: Type.Optional(sessionPresenceSchema),
 		}),
 	),
 	impl: "SessionManager.getTree() / session/session-entries.ts",
+} satisfies MethodEntry;
+
+/** Current presence for one session, live or archived. */
+export const sessionPresence = {
+	method: "session.presence",
+	auth: "session",
+	params: Type.Object({ sessionId }),
+	result: sessionPresenceSchema,
+	impl: "deriveSessionPresence() (daemon runtime)",
 } satisfies MethodEntry;
 
 export const sessionSubscribe = {
@@ -232,6 +255,7 @@ export const sessionMethods: MethodEntry[] = [
 	sessionClose,
 	sessionSearch,
 	sessionList,
+	sessionPresence,
 	sessionSubscribe,
 	sessionCancel,
 	sessionResume,

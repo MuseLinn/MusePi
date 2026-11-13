@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import chroma from "chroma-js";
-import { applyPetPalette, petPaletteVars } from "../src/lib/pet-palette";
+import { applyCompanionPalette, companionPaletteVars } from "../src/lib/companion-palette";
 
 /** Channels of a WRITTEN oklch() var. The deliverable contract is the
  *  string the browser receives and gamut-maps (CSS Color 4): out-of-gamut
@@ -34,9 +34,9 @@ const OCEAN_DARK = "oklch(0.65 0.16 255)";
 /** Mono accent — near-neutral, the chroma-floor case. */
 const MONO_DARK = "oklch(0.72 0.005 0)";
 
-describe("petPaletteVars — derivation", () => {
+describe("companionPaletteVars — derivation", () => {
 	test("returns exactly the nine pet variables", () => {
-		const v = petPaletteVars(GOLD_DARK, "dark");
+		const v = companionPaletteVars(GOLD_DARK, "dark");
 		expect(Object.keys(v).sort()).toEqual(
 			[
 				"gui-pet-shell-a",
@@ -60,7 +60,7 @@ describe("petPaletteVars — derivation", () => {
 		// lightness and hue, chroma scaled to 0.8× (2026-09-21: full chroma
 		// read as 屎黄, not 高级品牌金) — with a lit crown above and a deep
 		// base below, hue preserved across the whole sphere.
-		const v = petPaletteVars(OCEAN_DARK, "dark");
+		const v = companionPaletteVars(OCEAN_DARK, "dark");
 		const a = accentChannels(OCEAN_DARK);
 		const shellB = oklchChannels(v["gui-pet-shell-b"]);
 		expect(shellB.l).toBeCloseTo(a.l, 2);
@@ -74,7 +74,7 @@ describe("petPaletteVars — derivation", () => {
 		expect(hueDist(shellC.h, a.h)).toBeLessThan(0.1);
 		// The desaturation scalar is hue-independent: every accent gets the
 		// same ×0.8 body, so themed accents stay legible.
-		expect(oklchChannels(petPaletteVars(GOLD_DARK, "dark")["gui-pet-shell-b"]).c).toBeCloseTo(
+		expect(oklchChannels(companionPaletteVars(GOLD_DARK, "dark")["gui-pet-shell-b"]).c).toBeCloseTo(
 			accentChannels(GOLD_DARK).c * 0.8,
 			2,
 		);
@@ -86,12 +86,12 @@ describe("petPaletteVars — derivation", () => {
 		// chroma falling monotonically alongside lightness — which is exactly
 		// how PLASTIC reads: the highlight is just a brighter copy of the same
 		// colour, so no surface material survives. Polished metal inverts it
-		// (see the derivation notes in pet-palette.ts): the specular washes
+		// (see the derivation notes in companion-palette.ts): the specular washes
 		// toward white, the body holds the chroma peak, the terminator keeps
 		// a deep residue instead of greying out. 2026-09-21 the ramp was
 		// tuned toward CHAMPAGNE gold (user: 「高级的品牌金色」): the body is
 		// LIFTED (+0.06) and desaturated (×0.85), the specular nearly white.
-		const v = petPaletteVars(GOLD_DARK, "dark");
+		const v = companionPaletteVars(GOLD_DARK, "dark");
 		const a = accentChannels(GOLD_DARK);
 		const goldA = oklchChannels(v["gui-pet-gold-a"]);
 		const goldB = oklchChannels(v["gui-pet-gold-b"]);
@@ -123,8 +123,8 @@ describe("petPaletteVars — derivation", () => {
 	});
 
 	test("shell ladder runs dark in dark mode, light in light mode", () => {
-		const dark = petPaletteVars(GOLD_DARK, "dark");
-		const light = petPaletteVars(GOLD_DARK, "light");
+		const dark = companionPaletteVars(GOLD_DARK, "dark");
+		const light = companionPaletteVars(GOLD_DARK, "light");
 		const l = (css: string): number => oklchChannels(css).l;
 		// Monotonic within each theme.
 		expect(l(dark["gui-pet-shell-a"])).toBeGreaterThan(l(dark["gui-pet-shell-b"]));
@@ -135,7 +135,7 @@ describe("petPaletteVars — derivation", () => {
 
 	test("brand gold lands near the original hardcoded golds (identity preserved)", () => {
 		// goldB = the accent itself (dark ≈ the old #d9a83f family).
-		const v = petPaletteVars(GOLD_DARK, "dark");
+		const v = companionPaletteVars(GOLD_DARK, "dark");
 		const goldB = accentChannels(v["gui-pet-gold-b"]);
 		const legacy = accentChannels("#d9a83f");
 		expect(Math.abs(goldB.l - legacy.l)).toBeLessThan(0.06);
@@ -143,7 +143,7 @@ describe("petPaletteVars — derivation", () => {
 	});
 
 	test("light theme lifts the ladder so the ball holds contrast on pale ground", () => {
-		const v = petPaletteVars(GOLD_LIGHT, "light");
+		const v = companionPaletteVars(GOLD_LIGHT, "light");
 		const goldC = oklchChannels(v["gui-pet-gold-c"]);
 		expect(goldC.l).toBeGreaterThanOrEqual(0.3);
 		// The light ball is BRIGHT (the accent reads against a pale
@@ -157,9 +157,9 @@ describe("petPaletteVars — derivation", () => {
 	});
 });
 
-describe("petPaletteVars — edge cases", () => {
+describe("companionPaletteVars — edge cases", () => {
 	test("near-neutral accent still tints (chroma floor)", () => {
-		const v = petPaletteVars(MONO_DARK, "dark");
+		const v = companionPaletteVars(MONO_DARK, "dark");
 		const GOLD_A = oklchChannels(v["gui-pet-gold-a"]);
 		// Floor C0=0.055 → the metal body peaks at ≈0.0468 while the specular
 		// sheds most of it (×0.4 ≈ 0.022) — still ~4× the raw 0.005, so the
@@ -169,9 +169,9 @@ describe("petPaletteVars — edge cases", () => {
 	});
 
 	test("glow carries its translucent alpha", () => {
-		const dark = petPaletteVars(GOLD_DARK, "dark");
+		const dark = companionPaletteVars(GOLD_DARK, "dark");
 		expect(chroma(dark["gui-pet-glow"]).alpha()).toBeCloseTo(0.8, 3);
-		const light = petPaletteVars(GOLD_DARK, "light");
+		const light = companionPaletteVars(GOLD_DARK, "light");
 		expect(chroma(light["gui-pet-glow"]).alpha()).toBeCloseTo(0.55, 3);
 	});
 
@@ -186,7 +186,7 @@ describe("petPaletteVars — edge cases", () => {
 		// so they carry neither `%` nor `deg`.
 		for (const accent of [GOLD_DARK, GOLD_LIGHT, OCEAN_DARK, MONO_DARK, "#d9a83f"]) {
 			for (const theme of ["dark", "light"] as const) {
-				const face = chroma(petPaletteVars(accent, theme)["gui-pet-face"]);
+				const face = chroma(companionPaletteVars(accent, theme)["gui-pet-face"]);
 				expect(face.get("oklch.l")).toBeGreaterThan(0.98);
 				// Effectively neutral: a hair of warmth is allowed (0.004),
 				// but never enough to read as a tint.
@@ -201,7 +201,7 @@ describe("petPaletteVars — edge cases", () => {
 		// lightness, but the face must still out-shine it, and the BODY the
 		// face is actually painted on must stay well below it.
 		for (const theme of ["dark", "light"] as const) {
-			const v = petPaletteVars(OCEAN_DARK, theme);
+			const v = companionPaletteVars(OCEAN_DARK, theme);
 			const face = chroma(v["gui-pet-face"]).get("oklch.l");
 			const shellA = oklchChannels(v["gui-pet-shell-a"]).l;
 			const shellB = oklchChannels(v["gui-pet-shell-b"]).l;
@@ -211,29 +211,29 @@ describe("petPaletteVars — edge cases", () => {
 	});
 
 	test("the face halo is neutral white (it must not tint the white face)", () => {
-		const dark = petPaletteVars(OCEAN_DARK, "dark");
+		const dark = companionPaletteVars(OCEAN_DARK, "dark");
 		const halo = chroma(dark["gui-pet-face-glow"]);
 		// chroma's oklch round-trip carries float noise (~4e-5), so assert
 		// "effectively neutral" rather than exactly 0.
 		expect(halo.get("oklch.c")).toBeLessThan(0.001);
 		// Light scheme needs a stronger halo — a white face on a pale shell
 		// separates by glow, not by value.
-		expect(halo.alpha()).toBeLessThan(chroma(petPaletteVars(OCEAN_DARK, "light")["gui-pet-face-glow"]).alpha());
+		expect(halo.alpha()).toBeLessThan(chroma(companionPaletteVars(OCEAN_DARK, "light")["gui-pet-face-glow"]).alpha());
 	});
 
 	test("throws on an unparseable accent (callers keep SVG fallbacks)", () => {
-		expect(() => petPaletteVars("not-a-color", "dark")).toThrow();
+		expect(() => companionPaletteVars("not-a-color", "dark")).toThrow();
 	});
 
 	test("accepts hex accents too (any format chroma parses)", () => {
-		const v = petPaletteVars("#d9a83f", "dark");
+		const v = companionPaletteVars("#d9a83f", "dark");
 		// Derivation keeps the accent hue exactly — the written oklch string
 		// carries it verbatim.
 		expect(hueDist(oklchChannels(v["gui-pet-gold-a"]).h, accentChannels("#d9a83f").h)).toBeLessThan(0.1);
 	});
 });
 
-describe("applyPetPalette — the write contract", () => {
+describe("applyCompanionPalette — the write contract", () => {
 	/** Minimal root stand-in: dataset + a capturing style.setProperty.
 	 *  resolvedAccent reads --accent through the global getComputedStyle,
 	 *  stubbed below for the duration of the test. */
@@ -251,7 +251,7 @@ describe("applyPetPalette — the write contract", () => {
 			getPropertyValue: (name: string) => (name === "--accent" ? accent : ""),
 		});
 		return {
-			root: root as unknown as Parameters<typeof applyPetPalette>[0],
+			root: root as unknown as Parameters<typeof applyCompanionPalette>[0],
 			written,
 			restore: () => {
 				if (prev === undefined) delete g.getComputedStyle;
@@ -263,7 +263,7 @@ describe("applyPetPalette — the write contract", () => {
 	test("writes SINGLE-prefixed --gui-pet-* names (regression: the double-prefixed write silently missed every SVG var() read)", () => {
 		const { root, written, restore } = fakeRoot(GOLD_DARK);
 		try {
-			expect(applyPetPalette(root)).toBe(true);
+			expect(applyCompanionPalette(root)).toBe(true);
 			// The SVG reads var(--gui-pet-shell-a) — that exact name must
 			// exist on the root, and the double-prefixed ghost must not.
 			expect(written.has("--gui-pet-shell-a")).toBe(true);
@@ -277,7 +277,7 @@ describe("applyPetPalette — the write contract", () => {
 	test("no-op (false, nothing written) when --accent cannot be resolved", () => {
 		const { root, written, restore } = fakeRoot("");
 		try {
-			expect(applyPetPalette(root)).toBe(false);
+			expect(applyCompanionPalette(root)).toBe(false);
 			expect(written.size).toBe(0);
 		} finally {
 			restore();

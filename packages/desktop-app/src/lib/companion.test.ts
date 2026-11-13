@@ -1,20 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import {
-	activePet,
-	BUILTIN_PETDEX,
-	BUILTIN_SVG_ID,
-	DEFAULT_PET_ID,
-	DEFAULT_SPRITE_PET_ID,
-	descriptorFromPush,
-	modeForPackage,
-	moodOfState,
-	type PetdexPackage,
-	petForId,
-	petId,
-	petIdForMode,
-	setPetId,
-	setPetMode,
-} from "./pet";
+	activeCompanionArt,
+	artFormatForPackage,
+	BUILTIN_SPRITE_PRESETS,
+	BUILTIN_VECTOR_ART_ID,
+	companionArtForId,
+	companionArtFromPush,
+	companionArtId,
+	companionArtIdForFormat,
+	DEFAULT_COMPANION_ART_ID,
+	DEFAULT_SPRITE_ART_ID,
+	type SpritePackage,
+	setCompanionArtFormat,
+	setCompanionArtId,
+	spriteMoodOfState,
+} from "./companion";
 
 const PETDEX_KEY = "musepi-gui-petdex";
 const PET_ID_KEY = "musepi-gui-pet-id";
@@ -50,11 +50,11 @@ afterEach(() => {
 	else Reflect.deleteProperty(globalThis, "localStorage");
 });
 
-function storePackages(...packages: PetdexPackage[]): void {
+function storePackages(...packages: SpritePackage[]): void {
 	storage.setItem(PETDEX_KEY, JSON.stringify(packages));
 }
 
-const importedSheet: PetdexPackage = {
+const importedSheet: SpritePackage = {
 	id: "custom-sheet",
 	displayName: "Custom sheet",
 	spritesheet: "data:image/webp;base64,AA",
@@ -63,7 +63,7 @@ const importedSheet: PetdexPackage = {
 	importedAt: 1,
 };
 
-const importedAtlas: PetdexPackage = {
+const importedAtlas: SpritePackage = {
 	...importedSheet,
 	id: "custom-atlas",
 	displayName: "Custom atlas",
@@ -72,7 +72,7 @@ const importedAtlas: PetdexPackage = {
 	states: { idle: { row: 0, frames: 2, fps: 8 } },
 };
 
-const importedSvg: PetdexPackage = {
+const importedSvg: SpritePackage = {
 	...importedSheet,
 	id: "custom-svg",
 	displayName: "Custom SVG",
@@ -83,140 +83,148 @@ const importedSvg: PetdexPackage = {
 
 describe("default companion", () => {
 	it("resolves to the builtin spherical brand pet", () => {
-		expect(DEFAULT_PET_ID).toBe(BUILTIN_SVG_ID);
-		expect(petForId(DEFAULT_PET_ID)).toEqual({ mode: "vector", kind: "builtin", id: BUILTIN_SVG_ID });
+		expect(DEFAULT_COMPANION_ART_ID).toBe(BUILTIN_VECTOR_ART_ID);
+		expect(companionArtForId(DEFAULT_COMPANION_ART_ID)).toEqual({
+			mode: "vector",
+			kind: "builtin",
+			id: BUILTIN_VECTOR_ART_ID,
+		});
 	});
 
 	it("falls back to the sphere for an unknown id", () => {
-		expect(petForId("no-such-pet")).toEqual({ mode: "vector", kind: "builtin", id: BUILTIN_SVG_ID });
+		expect(companionArtForId("no-such-pet")).toEqual({ mode: "vector", kind: "builtin", id: BUILTIN_VECTOR_ART_ID });
 	});
 
 	it("resolves every spritesheet preset", () => {
-		const ids = BUILTIN_PETDEX.map(p => p.id);
+		const ids = BUILTIN_SPRITE_PRESETS.map(p => p.id);
 		expect(ids).toContain("musepi");
 		expect(ids.length).toBeGreaterThanOrEqual(10);
 		for (const id of ids) {
-			const pet = petForId(id);
+			const pet = companionArtForId(id);
 			expect(pet.kind).toBe("petdex");
 			expect(pet.mode).toBe("sprite");
 			expect(pet.kind === "petdex" && pet.pkg.spritesheet).toMatch(/^\.\/pets\/.+\.webp$/);
 		}
-		const sheet = petForId("musepi");
+		const sheet = companionArtForId("musepi");
 		expect(sheet.kind === "petdex" && sheet.pkg.spritesheet).toBe("./pets/musepi.webp");
 	});
 
 	it("keeps the sphere addressable by its own id", () => {
-		expect(petForId(BUILTIN_SVG_ID)).toEqual({ mode: "vector", kind: "builtin", id: BUILTIN_SVG_ID });
+		expect(companionArtForId(BUILTIN_VECTOR_ART_ID)).toEqual({
+			mode: "vector",
+			kind: "builtin",
+			id: BUILTIN_VECTOR_ART_ID,
+		});
 	});
 });
 
 describe("pet mode derivation", () => {
 	it("classifies single-frame SVG packages as vector art", () => {
 		storePackages(importedSvg);
-		expect(petForId("custom-svg")).toMatchObject({ mode: "vector", kind: "petdex" });
-		expect(modeForPackage(importedSvg)).toBe("vector");
+		expect(companionArtForId("custom-svg")).toMatchObject({ mode: "vector", kind: "petdex" });
+		expect(artFormatForPackage(importedSvg)).toBe("vector");
 	});
 
 	it("classifies grid and atlas packages as sprite frames", () => {
 		storePackages(importedSheet, importedAtlas);
-		expect(petForId("custom-sheet").mode).toBe("sprite");
-		expect(petForId("custom-atlas").mode).toBe("sprite");
-		expect(modeForPackage(importedAtlas)).toBe("sprite");
-		expect(modeForPackage({})).toBe("sprite");
+		expect(companionArtForId("custom-sheet").mode).toBe("sprite");
+		expect(companionArtForId("custom-atlas").mode).toBe("sprite");
+		expect(artFormatForPackage(importedAtlas)).toBe("sprite");
+		expect(artFormatForPackage({})).toBe("sprite");
 	});
 });
 
 describe("pushed pet descriptor", () => {
 	it("restores the mode a partial push omits", () => {
-		expect(descriptorFromPush({ kind: "builtin", id: BUILTIN_SVG_ID })).toEqual({
+		expect(companionArtFromPush({ kind: "builtin", id: BUILTIN_VECTOR_ART_ID })).toEqual({
 			mode: "vector",
 			kind: "builtin",
-			id: BUILTIN_SVG_ID,
+			id: BUILTIN_VECTOR_ART_ID,
 		});
-		expect(descriptorFromPush({ kind: "petdex", pkg: importedAtlas })).toEqual({
+		expect(companionArtFromPush({ kind: "petdex", pkg: importedAtlas })).toEqual({
 			mode: "sprite",
 			kind: "petdex",
 			pkg: importedAtlas,
 		});
-		expect(descriptorFromPush({ kind: "petdex", pkg: importedSvg })).toMatchObject({
+		expect(companionArtFromPush({ kind: "petdex", pkg: importedSvg })).toMatchObject({
 			mode: "vector",
 			kind: "petdex",
 		});
 	});
 
 	it("drops a push that cannot describe art", () => {
-		expect(descriptorFromPush(null)).toBeNull();
-		expect(descriptorFromPush({ kind: "builtin" })).toBeNull();
-		expect(descriptorFromPush({ kind: "petdex" })).toBeNull();
-		expect(descriptorFromPush({ kind: "petdex", pkg: { id: "no-art" } })).toBeNull();
+		expect(companionArtFromPush(null)).toBeNull();
+		expect(companionArtFromPush({ kind: "builtin" })).toBeNull();
+		expect(companionArtFromPush({ kind: "petdex" })).toBeNull();
+		expect(companionArtFromPush({ kind: "petdex", pkg: { id: "no-art" } })).toBeNull();
 	});
 });
 
 describe("pet selection migration", () => {
 	it("keeps an id-only selection and infers its mode", () => {
 		storage.setItem(PET_ID_KEY, "boxcat");
-		expect(petId()).toBe("boxcat");
-		expect(activePet().mode).toBe("sprite");
-		expect(petIdForMode("sprite")).toBe("boxcat");
-		expect(petIdForMode("vector")).toBe(BUILTIN_SVG_ID);
+		expect(companionArtId()).toBe("boxcat");
+		expect(activeCompanionArt().mode).toBe("sprite");
+		expect(companionArtIdForFormat("sprite")).toBe("boxcat");
+		expect(companionArtIdForFormat("vector")).toBe(BUILTIN_VECTOR_ART_ID);
 	});
 
 	it("classifies an id-only SVG package as a vector pick", () => {
 		storePackages(importedSvg);
 		storage.setItem(PET_ID_KEY, "custom-svg");
-		expect(activePet().mode).toBe("vector");
-		expect(petIdForMode("vector")).toBe("custom-svg");
+		expect(activeCompanionArt().mode).toBe("vector");
+		expect(companionArtIdForFormat("vector")).toBe("custom-svg");
 	});
 });
 
 describe("per-mode selections", () => {
 	it("keeps the sprite pick while the vector pick is active", () => {
-		setPetId("boxcat");
-		setPetId(BUILTIN_SVG_ID);
-		expect(petId()).toBe(BUILTIN_SVG_ID);
-		expect(petIdForMode("sprite")).toBe("boxcat");
+		setCompanionArtId("boxcat");
+		setCompanionArtId(BUILTIN_VECTOR_ART_ID);
+		expect(companionArtId()).toBe(BUILTIN_VECTOR_ART_ID);
+		expect(companionArtIdForFormat("sprite")).toBe("boxcat");
 	});
 
 	it("switches modes without clearing either side", () => {
-		setPetId("boxcat");
-		setPetId(BUILTIN_SVG_ID);
+		setCompanionArtId("boxcat");
+		setCompanionArtId(BUILTIN_VECTOR_ART_ID);
 
-		setPetMode("sprite");
-		expect(petId()).toBe("boxcat");
-		expect(activePet().mode).toBe("sprite");
+		setCompanionArtFormat("sprite");
+		expect(companionArtId()).toBe("boxcat");
+		expect(activeCompanionArt().mode).toBe("sprite");
 
-		setPetMode("vector");
-		expect(petId()).toBe(BUILTIN_SVG_ID);
-		expect(petIdForMode("sprite")).toBe("boxcat");
+		setCompanionArtFormat("vector");
+		expect(companionArtId()).toBe(BUILTIN_VECTOR_ART_ID);
+		expect(companionArtIdForFormat("sprite")).toBe("boxcat");
 	});
 
 	it("remembers a legacy vector pick before the first mode switch", () => {
-		storage.setItem(PET_ID_KEY, BUILTIN_SVG_ID);
-		setPetMode("sprite");
-		expect(petId()).toBe(DEFAULT_SPRITE_PET_ID);
-		setPetMode("vector");
-		expect(petId()).toBe(BUILTIN_SVG_ID);
+		storage.setItem(PET_ID_KEY, BUILTIN_VECTOR_ART_ID);
+		setCompanionArtFormat("sprite");
+		expect(companionArtId()).toBe(DEFAULT_SPRITE_ART_ID);
+		setCompanionArtFormat("vector");
+		expect(companionArtId()).toBe(BUILTIN_VECTOR_ART_ID);
 	});
 
 	it("drops a stale cross-mode pick instead of activating it", () => {
 		storePackages(importedSvg);
 		storage.setItem("musepi-gui-pet-sprite-id", "custom-svg");
-		storage.setItem(PET_ID_KEY, BUILTIN_SVG_ID);
-		setPetMode("sprite");
-		expect(petId()).toBe(DEFAULT_SPRITE_PET_ID);
+		storage.setItem(PET_ID_KEY, BUILTIN_VECTOR_ART_ID);
+		setCompanionArtFormat("sprite");
+		expect(companionArtId()).toBe(DEFAULT_SPRITE_ART_ID);
 	});
 
 	it("does not restore a deleted package from its remembered slot", () => {
 		storage.setItem("musepi-gui-pet-vector-id", "svg-deleted");
-		expect(petIdForMode("vector")).toBe(BUILTIN_SVG_ID);
+		expect(companionArtIdForFormat("vector")).toBe(BUILTIN_VECTOR_ART_ID);
 	});
 });
 
-describe("moodOfState", () => {
+describe("spriteMoodOfState", () => {
 	it("still collapses the state axis for spritesheets", () => {
-		expect(moodOfState("working")).toBe("working");
-		expect(moodOfState("alerting")).toBe("error");
-		expect(moodOfState("dragging")).toBe("dragging");
-		expect(moodOfState(null)).toBe("rest");
+		expect(spriteMoodOfState("working")).toBe("working");
+		expect(spriteMoodOfState("alerting")).toBe("error");
+		expect(spriteMoodOfState("dragging")).toBe("dragging");
+		expect(spriteMoodOfState(null)).toBe("rest");
 	});
 });

@@ -123,6 +123,7 @@ import { GitPanel } from "./git-panel";
 import { NotesPane } from "./notes-pane";
 import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
 import { SideSessionView } from "./SideSessionView";
+import { SubagentAvatar } from "./SubagentAvatar";
 import { SubagentPanel, SubagentSessionView } from "./SubagentPanel";
 import { SurfaceTabStripSortable } from "./surface-tabs";
 import { TrajectoryView } from "./TrajectoryView";
@@ -1173,6 +1174,9 @@ export function ContextPanel({
 								progress={snap?.progress ?? new Map()}
 								lifecycle={snap?.lifecycle ?? new Map()}
 								selectedId={activeAgentTabKey ?? agentId}
+								renderAvatar={(agent, payload, now) => (
+									<SubagentAvatar agent={agent} payload={payload} now={now} />
+								)}
 								onSelect={id => {
 									const picked = (snap?.agents ?? []).find(candidate => candidate.id === id);
 									if (picked) panelTabs.open(agentTabDescriptor(picked));

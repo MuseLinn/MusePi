@@ -11,14 +11,14 @@ import { ExternalLink, Palette, Sparkles, Trash2, Wrench, X } from "lucide-react
 import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { activeCompanionArt } from "../lib/companion";
 import { changelogMatchesAppVersion } from "../lib/daemon-version";
 import { checkAppUpdates, getShellVersion, openExternalUrl } from "../lib/electron";
 import { onboardingPending } from "../lib/onboarding";
-import { activePet } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
+import { CompanionArt, useCompanionDecor } from "./CompanionArt";
 import { FadeScroll } from "./FadeScroll";
-import { PetSprite, usePetDecor } from "./PetSprite";
 import { Reveal } from "./Reveal";
 import { RewardOverlay, type RewardPayload } from "./RewardOverlay";
 
@@ -210,8 +210,8 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	const [markdown, setMarkdown] = useState<string | null>(null);
 	const [reward, setReward] = useState<RewardPayload | null>(null);
 	const [latest, setLatest] = useState<string | null>(null);
-	const [pet] = useState(() => activePet());
-	const decor = usePetDecor();
+	const [pet] = useState(() => activeCompanionArt());
+	const decor = useCompanionDecor();
 	// Structured-view UI state, reset on every open (the peek re-open may
 	// serve different markdown than the boot push).
 	const [showFullLog, setShowFullLog] = useState(false);
@@ -467,10 +467,10 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 				</div>
 				<div className="gui-announcement-title" style={{ gap: 14, padding: "16px 24px 12px" }}>
 					{!reducedMotion && (
-						<PetSprite
+						<CompanionArt
 							mood="rest"
 							state="celebrate"
-							pet={pet}
+							art={pet}
 							size={44}
 							accessory={decor.accessory}
 							gloss={decor.gloss}

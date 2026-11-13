@@ -1,12 +1,19 @@
 import { punkAvatarUri } from "@musepi/client-core";
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { type PetdexMood, type PetInteraction, type PetState, randomPetInteraction } from "../lib/pet";
-import type { PetEffectTier } from "../lib/pet-effects";
+import type { AgentSignals } from "../lib/agent-signals";
+import {
+	type CompanionInteraction,
+	type CompanionState,
+	randomCompanionInteraction,
+	type SpriteMood,
+} from "../lib/companion";
+import type { CompanionEffectTier } from "../lib/companion-effects";
 import { type OrbState, ThinkingOrb } from "../vendor/thinking-orbs";
-import { BuiltinPetSprite, type GazeVec, PetBox, usePetDecor } from "./PetSprite";
+import { AoraAvatar } from "./AoraAvatar";
+import { BuiltinCompanionArt, CompanionArtBox, type GazeVec, useCompanionDecor } from "./CompanionArt";
 
 /**
- * Agent-avatar presets (pet-style switcher): the chat avatar is a
+ * Agent-avatar presets (companion-style switcher): the chat avatar is a
  * thinking-orb by default, but users can swap in alternative SVG
  * definitions — each preset renders its own state-aware animation.
  * Selection persists as musepi-gui-avatar (localStorage) and broadcasts
@@ -26,6 +33,11 @@ export interface AvatarPresetDef {
 	id: string;
 	labelKey: string;
 	render(state: OrbState, size: number, seed?: string): ReactNode;
+	/** Presets that render from the shared `AgentSignals` contract (richer than
+	 *  OrbState) declare this. When the call site supplies signals, this wins
+	 *  over `render`; `render` stays the OrbState fallback for previews and
+	 *  legacy call sites. */
+	renderSignals?(signals: AgentSignals, size: number, seed?: string): ReactNode;
 }
 
 /** Hexagon glyph: slow ring rotation while working, gentle breathing
@@ -156,7 +168,7 @@ export function PunkAvatar({ size, seed }: { size: number; seed?: string }): Rea
  *  floating pet's state binding instead of the old random idle cycle:
  *  composing spins as working, searching/solving/shaping squint as
  *  analyzing, approvals pin the waiting face. */
-const ORB_TO_PET_MOOD: Record<OrbState, PetdexMood> = {
+const THINKING_ORB_TO_SPRITE_MOOD: Record<OrbState, SpriteMood> = {
 	listening: "rest",
 	working: "working",
 	searching: "analyzing",
@@ -177,7 +189,7 @@ const ORB_TO_PET_MOOD: Record<OrbState, PetdexMood> = {
  * so the avatar can finally tell "reading the codebase" from "reasoning about
  * it" and "writing the answer" from "running a tool".
  */
-const ORB_TO_PET_STATE: Record<OrbState, PetState> = {
+const THINKING_ORB_TO_COMPANION_STATE: Record<OrbState, CompanionState> = {
 	listening: "listening",
 	working: "working",
 	searching: "searching",
@@ -191,9 +203,9 @@ const ORB_TO_PET_STATE: Record<OrbState, PetState> = {
  * Effect tier by render size. The avatar ships at 20 / 32 / 64px and the
  * pet's own vocabulary does not survive all three: at 20px the eyes are a few
  * pixels and confetti ribbons are sub-pixel smears, so only the badge (a
- * colour and a position) is worth drawing. See pet-effects.tsx TIER_KEEP.
+ * colour and a position) is worth drawing. See companion-effects.tsx TIER_KEEP.
  */
-const tierForSize = (size: number): PetEffectTier => (size >= 64 ? "full" : size >= 32 ? "compact" : "micro");
+const tierForSize = (size: number): CompanionEffectTier => (size >= 64 ? "full" : size >= 32 ? "compact" : "micro");
 
 /** How long an avatar click reaction holds before the live mood shows
  *  through again. A touch longer than the desktop pet's hold
@@ -222,15 +234,15 @@ const AVATAR_REACTION_HOLD_MS = 1500;
  *  40px gutter column, so the 64px chat avatar would overflow the very
  *  column the layout reserved for it; the avatar slot is exactly the case
  *  where the stylesheet, not the call site, knows the right number. */
-function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNode {
+function CompanionAvatar({ state, size }: { state: OrbState; size: number }): ReactNode {
 	const boxRef = useRef<HTMLSpanElement | null>(null);
 	const gazeRef = useRef<GazeVec | null>(null);
 	// Live decoration prefs — the avatar must match the floating pet and
 	// the composer orb (gloss off / a wearable shows up here too).
-	const decor = usePetDecor();
+	const decor = useCompanionDecor();
 	// The transient click reaction (see the component doc above).
-	const [reaction, setReaction] = useState<PetInteraction | null>(null);
-	const lastReaction = useRef<PetInteraction | null>(null);
+	const [reaction, setReaction] = useState<CompanionInteraction | null>(null);
+	const lastReaction = useRef<CompanionInteraction | null>(null);
 	const reactionTimer = useRef<number | null>(null);
 	useEffect(
 		() => () => {
@@ -239,7 +251,7 @@ function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNod
 		[],
 	);
 	const poke = (): void => {
-		const pick = randomPetInteraction(lastReaction.current);
+		const pick = randomCompanionInteraction(lastReaction.current);
 		lastReaction.current = pick;
 		setReaction(pick);
 		if (reactionTimer.current !== null) window.clearTimeout(reactionTimer.current);
@@ -272,24 +284,38 @@ function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNod
 			role="img"
 			onClick={poke}
 		>
-			{/* PetBox, not a bare svg: `.gui-pet-svg` has no size rule of its own
+			{/* CompanionArtBox, not a bare svg: `.gui-pet-svg` has no size rule of its own
 			 * (gui-pet.css sizes `.gui-pet svg`, a descendant) — without the box
 			 * the avatar svg resolves to nothing and the slot renders empty
 			 * (2026-09-20 user: 「头像小球不显示了」). */}
-			<PetBox size={size}>
-				<BuiltinPetSprite
-					mood={ORB_TO_PET_MOOD[state]}
-					state={ORB_TO_PET_STATE[state]}
+			<CompanionArtBox size={size}>
+				<BuiltinCompanionArt
+					mood={THINKING_ORB_TO_SPRITE_MOOD[state]}
+					state={THINKING_ORB_TO_COMPANION_STATE[state]}
 					tier={tierForSize(size)}
 					gazeRef={gazeRef}
 					interaction={reaction}
 					gloss={decor.gloss}
 					accessory={decor.accessory}
 				/>
-			</PetBox>
+			</CompanionArtBox>
 		</span>
 	);
 }
+
+/** OrbState → the shared signals contract, for call sites that only have the
+ *  compact orb state (settings previews, older hosts). Aora renders from
+ *  `renderSignals` whenever real signals are present; this fallback keeps the
+ *  preset legible instead of faking states Aora cannot honestly receive. */
+const ORB_TO_SIGNALS: Record<OrbState, AgentSignals> = {
+	listening: { phase: "idle" },
+	working: { phase: "tool", activity: "working" },
+	searching: { phase: "tool", activity: "searching" },
+	solving: { phase: "thinking" },
+	composing: { phase: "streaming" },
+	shaping: { phase: "tool", activity: "generating" },
+	waiting: { approvals: 1 },
+};
 
 export const AVATAR_PRESETS: readonly AvatarPresetDef[] = [
 	{
@@ -300,11 +326,17 @@ export const AVATAR_PRESETS: readonly AvatarPresetDef[] = [
 	{
 		id: "pet",
 		labelKey: "avatar pet",
-		render: (state, size) => <PetAvatar state={state} size={size} />,
+		render: (state, size) => <CompanionAvatar state={state} size={size} />,
 	},
 	{ id: "hex", labelKey: "avatar hex", render: (state, size) => <HexAvatar state={state} size={size} /> },
 	{ id: "spark", labelKey: "avatar spark", render: (state, size) => <SparkAvatar state={state} size={size} /> },
 	{ id: "punk", labelKey: "avatar punk", render: (_state, size, seed) => <PunkAvatar size={size} seed={seed} /> },
+	{
+		id: "aora",
+		labelKey: "avatar aora",
+		render: (state, size, seed) => <AoraAvatar signals={ORB_TO_SIGNALS[state]} size={size} seed={seed} />,
+		renderSignals: (signals, size, seed) => <AoraAvatar signals={signals} size={size} seed={seed} />,
+	},
 ];
 
 export function avatarPreset(id: string): AvatarPresetDef {

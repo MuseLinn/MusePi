@@ -23,7 +23,7 @@
 		"desktop:rebuild": "bun run build && bun scripts/desktop-run.mjs",
 		"desktop:dev": "bun scripts/dev-desktop.mjs",
 		"desktop:run": "electron .",
-		"smoke:pet": "node scripts/verify-desktop-pet-electron.mjs",
+		"smoke:companion": "node scripts/verify-desktop-companion-electron.mjs",
 		"smoke:pdf": "node scripts/verify-pdf.mjs",
 		"check": "biome check . && bun run check:types",
 		"check:types": "tsgo -p tsconfig.json --noEmit",
@@ -156,6 +156,7 @@
 		}
 	},
 	"dependencies": {
+		"@aora-bot/react": "0.2.0",
 		"@codemirror/autocomplete": "^6.20.3",
 		"@codemirror/commands": "^6.11.0",
 		"@codemirror/language": "6.13.1",

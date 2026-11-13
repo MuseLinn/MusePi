@@ -27,6 +27,7 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
+import { agentSignalsFromSnapshot } from "../lib/agent-signals";
 import { browserPanelDescriptor } from "../lib/browser-panel-tabs";
 import { companionMoodFromSession, companionStateFromSignals, thinkingOrbStateFromSession } from "../lib/companion";
 import type { ComposerAttachApi } from "../lib/composer-attach";
@@ -3180,7 +3181,16 @@ export function ChatView({
 																		showAvatars ? <UserAvatar rpc={rpc} cwd={store.cwd} /> : ""
 																	}
 																	agentGutter={
-																		showAvatars ? <AgentAvatar state={orb} size={64} /> : ""
+																		showAvatars ? (
+																			<AgentAvatar
+																				state={orb}
+																				size={64}
+																				signals={agentSignalsFromSnapshot(snap)}
+																				seed={store.sessionId}
+																			/>
+																		) : (
+																			""
+																		)
 																	}
 																	/* Layer-1 branch topology: multi-child messages render a
 																	 * switchable branch bar; off-path entries collapse. */
@@ -3505,11 +3515,7 @@ export function ChatView({
 														streaming: snap?.streaming ?? false,
 														hasApprovals: (snap?.approvals.length ?? 0) > 0,
 													})}
-													companionState={companionStateFromSignals({
-														working: snap?.working ?? false,
-														streaming: snap?.streaming ?? false,
-														approvals: snap?.approvals.length ?? 0,
-													})}
+													companionState={companionStateFromSignals(agentSignalsFromSnapshot(snap))}
 													onSend={sendAndCloseJump}
 													onStop={() => void handleStop()}
 													onOpenBackgroundJobs={() => {

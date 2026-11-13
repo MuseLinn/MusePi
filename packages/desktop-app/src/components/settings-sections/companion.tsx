@@ -1,45 +1,45 @@
 import { Segmented, type SegmentedOption, SpotlightCard, type TranslationKey, t, tLoose } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import "../../i18n/pet-style";
+import "../../i18n/companion-style";
 import {
-	BUILTIN_PETDEX,
-	BUILTIN_SVG_ID,
-	loadPetdex,
-	measurePetAtlas,
-	measurePetdex,
-	modeForPackage,
-	PET_CONTENT_TARGET_H,
-	PET_SCALE_MAX,
-	PET_SCALE_MIN,
-	PETDEX_COLUMNS,
-	type PetAtlasGeometry,
-	type PetAtlasState,
-	type PetDisplayMode,
-	type PetdexPackage,
-	type PetMode,
-	petEnabled,
-	petForId,
-	petId,
-	petIdForMode,
-	petMode,
-	petScale,
-	savePetdex,
-	setPetId,
-	setPetMode,
-	setPetScale,
-} from "../../lib/pet";
-// The card previews (BuiltinPetSprite's gloss/accessory) still read the
-// decor record; the EDITING controls moved to general.tsx PetDecorSection.
-import { type PetDecor, petDecor } from "../../lib/pet-decor";
+	artFormatForPackage,
+	BUILTIN_SPRITE_PRESETS,
+	BUILTIN_VECTOR_ART_ID,
+	COMPANION_SCALE_MAX,
+	COMPANION_SCALE_MIN,
+	type CompanionArtFormat,
+	type CompanionPlacement,
+	companionArtForId,
+	companionArtId,
+	companionArtIdForFormat,
+	companionEnabled,
+	companionPlacement,
+	companionScale,
+	loadSpritePackages,
+	measureSpriteAtlas,
+	measureSpriteSheet,
+	SPRITE_COLUMNS,
+	SPRITE_CONTENT_TARGET_H,
+	type SpriteAtlasGeometry,
+	type SpriteAtlasState,
+	type SpritePackage,
+	saveSpritePackages,
+	setCompanionArtFormat,
+	setCompanionArtId,
+	setCompanionScale,
+} from "../../lib/companion";
+// The card previews (BuiltinCompanionArt's gloss/accessory) still read the
+// decor record; the EDITING controls moved to general.tsx CompanionDecorSection.
+import { type CompanionDecor, companionDecor } from "../../lib/companion-decor";
 import { Icon } from "../../vendor/oc-icons";
+import { BuiltinCompanionArt, SpriteSheetArt } from "../CompanionArt";
 import { GuiSelect } from "../GuiSelect";
-import { BuiltinPetSprite, PetdexSprite } from "../PetSprite";
 import { Reveal } from "../Reveal";
 
 /** Style picker: the mode gate that decides which creation paths the
  *  appearance section offers. */
-const PET_STYLE_SEGMENTS: SegmentedOption<PetMode>[] = [
+const COMPANION_STYLE_SEGMENTS: SegmentedOption<CompanionArtFormat>[] = [
 	{ value: "vector", label: tLoose("settings.petStyleVector") },
 	{ value: "sprite", label: tLoose("settings.petStyleSprite") },
 ];
@@ -49,18 +49,18 @@ const PET_STYLE_SEGMENTS: SegmentedOption<PetMode>[] = [
  * orb or spritesheet — then that style's presets and imports). Prefs are
  * renderer-local; the desktop pet window is driven through the Electron
  * bridge (pet-mode IPC). */
-interface PetGridEntry {
+interface CompanionGridEntry {
 	id: string;
 	name: string;
 	description: string;
-	mode: PetMode;
+	mode: CompanionArtFormat;
 	src: string;
 	width: number;
 	height: number;
 	format?: "sheet" | "atlas" | "svg";
 	rows?: readonly number[];
-	atlas?: PetAtlasGeometry;
-	states?: Readonly<Record<string, PetAtlasState>>;
+	atlas?: SpriteAtlasGeometry;
+	states?: Readonly<Record<string, SpriteAtlasState>>;
 	contentH?: number;
 	smooth?: boolean;
 	/** Code-owned renderer instead of a spritesheet — `src`/`width`/`height`
@@ -69,14 +69,14 @@ interface PetGridEntry {
 	source: "preset" | "user";
 }
 
-type ImportedPet = Omit<PetdexPackage, "width" | "height" | "rows" | "contentH" | "importedAt"> & {
+type ImportedSpritePackage = Omit<SpritePackage, "width" | "height" | "rows" | "contentH" | "importedAt"> & {
 	width?: number;
 	height?: number;
 	rows?: readonly number[];
 	contentH?: number;
 };
 
-function completePetPackage(raw: ImportedPet, img: HTMLImageElement): PetdexPackage | null {
+function completeSpritePackage(raw: ImportedSpritePackage, img: HTMLImageElement): SpritePackage | null {
 	const width = img.naturalWidth;
 	const height = img.naturalHeight;
 	if (!width || !height) return null;
@@ -95,11 +95,11 @@ function completePetPackage(raw: ImportedPet, img: HTMLImageElement): PetdexPack
 			description,
 			width,
 			height,
-			contentH: measurePetAtlas(img, raw.atlas).contentH,
+			contentH: measureSpriteAtlas(img, raw.atlas).contentH,
 			importedAt: Date.now(),
 		};
 	}
-	const { rows, contentH } = measurePetdex(img);
+	const { rows, contentH } = measureSpriteSheet(img);
 	return { ...raw, description, width, height, rows, contentH, importedAt: Date.now() };
 }
 
@@ -107,13 +107,13 @@ function completePetPackage(raw: ImportedPet, img: HTMLImageElement): PetdexPack
  *  thumbnail, name, truncated description; selected card gets the accent
  *  ring + check. Imported cards get a hover delete button (BitFun parity:
  *  the delete lives on the card, stopPropagation keeps it from selecting). */
-export function PetCard({
+export function CompanionCard({
 	entry,
 	selected,
 	onSelect,
 	onDelete,
 }: {
-	entry: PetGridEntry;
+	entry: CompanionGridEntry;
 	selected: boolean;
 	onSelect(): void;
 	onDelete?(): void;
@@ -137,9 +137,9 @@ export function PetCard({
 			>
 				<span className="gui-pet-card__thumb">
 					{entry.mode === "vector" && entry.renderer === "note" ? (
-						<BuiltinPetSprite mood="rest" />
+						<BuiltinCompanionArt mood="rest" />
 					) : (
-						<PetdexSprite
+						<SpriteSheetArt
 							mood="rest"
 							src={entry.src}
 							width={entry.width}
@@ -180,7 +180,7 @@ export function PetCard({
 }
 
 /** One pet from the petdex.dev search API (main-process trimmed shape). */
-interface PetdexCatalogEntry {
+interface SpriteCatalogEntry {
 	slug: string;
 	displayName: string;
 	description: string | null;
@@ -194,17 +194,17 @@ interface PetdexCatalogEntry {
 
 /** Compact preview target width for market cards: the 64px thumb with
  *  8px horizontal padding, so a fully-fitted sprite is exactly 56px wide. */
-const PET_MARKET_THUMB_PX = 56;
+const SPRITE_MARKET_THUMB_PX = 56;
 
 /** One search result in the embedded petdex market: animated preview
  *  (remote spritesheet measured like a local import) + install button. */
-export function PetMarketCard({
-	pet,
+export function CompanionMarketCard({
+	entry,
 	installed,
 	installing,
 	onInstall,
 }: {
-	pet: PetdexCatalogEntry;
+	entry: SpriteCatalogEntry;
 	installed: boolean;
 	installing: boolean;
 	onInstall(): void;
@@ -213,11 +213,11 @@ export function PetMarketCard({
 	useEffect(() => {
 		let alive = true;
 		const img = new Image();
-		img.src = pet.spritesheetPath;
+		img.src = entry.spritesheetPath;
 		img.onload = () => {
 			if (!alive) return;
 			try {
-				const { rows, contentH } = measurePetdex(img);
+				const { rows, contentH } = measureSpriteSheet(img);
 				setMeta({ width: img.naturalWidth, height: img.naturalHeight, rows, contentH });
 			} catch {
 				setMeta(null);
@@ -227,19 +227,19 @@ export function PetMarketCard({
 		return () => {
 			alive = false;
 		};
-	}, [pet.spritesheetPath]);
-	// PetdexSprite normalizes to a 100px-tall body; shrink it to fit the
+	}, [entry.spritesheetPath]);
+	// SpriteSheetArt normalizes to a 100px-tall body; shrink it to fit the
 	// compact market thumb (frame ratios differ per pack, so scale per pack).
 	const fit = meta
-		? PET_MARKET_THUMB_PX / ((meta.width / PETDEX_COLUMNS) * (PET_CONTENT_TARGET_H / meta.contentH))
+		? SPRITE_MARKET_THUMB_PX / ((meta.width / SPRITE_COLUMNS) * (SPRITE_CONTENT_TARGET_H / meta.contentH))
 		: 1;
 	return (
 		<div className="gui-pet-market-card">
 			<span className="gui-pet-market-card__thumb">
 				{meta ? (
-					<PetdexSprite
+					<SpriteSheetArt
 						mood="rest"
-						src={pet.spritesheetPath}
+						src={entry.spritesheetPath}
 						width={meta.width}
 						height={meta.height}
 						rows={meta.rows}
@@ -250,7 +250,7 @@ export function PetMarketCard({
 					<span className="gui-pet-market-card__loading" />
 				)}
 			</span>
-			<span className="gui-pet-market-card__name">{pet.displayName}</span>
+			<span className="gui-pet-market-card__name">{entry.displayName}</span>
 			{installed ? (
 				<span className="gui-pet-market-card__installed">
 					<Icon name="check" className="h-3 w-3" />
@@ -260,7 +260,7 @@ export function PetMarketCard({
 				<button
 					type="button"
 					className="gui-btn gui-btn--small"
-					disabled={installing || !pet.zipUrl}
+					disabled={installing || !entry.zipUrl}
 					onClick={onInstall}
 				>
 					{installing ? "…" : t("companion.petMarketInstall")}
@@ -273,15 +273,15 @@ export function PetMarketCard({
 /** Embedded petdex.dev market: debounced search (main-process IPC — the
  *  site sends no CORS headers), animated previews, one-click install
  *  (download zip → same unpack path as the local import). */
-export function PetMarket({
+export function CompanionMarket({
 	petdex,
 	onInstalled,
 }: {
-	petdex: PetdexPackage[];
-	onInstalled(pkg: PetdexPackage): void;
+	petdex: SpritePackage[];
+	onInstalled(pkg: SpritePackage): void;
 }): ReactNode {
 	const [query, setQuery] = useState("");
-	const [results, setResults] = useState<PetdexCatalogEntry[] | null>(null);
+	const [results, setResults] = useState<SpriteCatalogEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [installing, setInstalling] = useState<string | null>(null);
 	// Petdex catalog search in-flight flag (the search effect + status line
@@ -292,7 +292,7 @@ export function PetMarket({
 	const runSearch = useCallback(async (q: string): Promise<void> => {
 		const bridge = (
 			window as unknown as {
-				electronAPI?: { searchPetdex?(q: string): Promise<{ pets?: PetdexCatalogEntry[]; error?: string }> };
+				electronAPI?: { searchPetdex?(q: string): Promise<{ pets?: SpriteCatalogEntry[]; error?: string }> };
 			}
 		).electronAPI;
 		if (!bridge?.searchPetdex) return;
@@ -321,27 +321,27 @@ export function PetMarket({
 		const timer = setTimeout(() => void runSearch(query.trim()), query.trim() ? 350 : 0);
 		return () => clearTimeout(timer);
 	}, [query, runSearch]);
-	const install = async (pet: PetdexCatalogEntry): Promise<void> => {
+	const install = async (entry: SpriteCatalogEntry): Promise<void> => {
 		const bridge = (
 			window as unknown as {
 				electronAPI?: {
 					installPetdexUrl?(
 						zipUrl: string,
-					): Promise<(PetdexPackage & { width?: number; height?: number }) | { error: string } | null>;
+					): Promise<(SpritePackage & { width?: number; height?: number }) | { error: string } | null>;
 				};
 			}
 		).electronAPI;
-		if (!bridge?.installPetdexUrl || !pet.zipUrl) return;
-		setInstalling(pet.slug);
+		if (!bridge?.installPetdexUrl || !entry.zipUrl) return;
+		setInstalling(entry.slug);
 		try {
-			const raw = await bridge.installPetdexUrl(pet.zipUrl);
+			const raw = await bridge.installPetdexUrl(entry.zipUrl);
 			if (!raw) return;
 			if ("error" in raw) {
 				setError(raw.error);
 				return;
 			}
 			// Same measure path as the local import: the main process cannot
-			// decode image dimensions, and PetdexSprite needs the real frame
+			// decode image dimensions, and SpriteSheetArt needs the real frame
 			// size + per-row valid frame counts (empty padding columns).
 			const img = new Image();
 			img.src = raw.spritesheet;
@@ -349,7 +349,7 @@ export function PetMarket({
 			img.onload = () => resolveDecoded();
 			img.onerror = () => resolveDecoded();
 			await decoded;
-			const pkg = completePetPackage(raw, img);
+			const pkg = completeSpritePackage(raw, img);
 			if (!pkg) {
 				setError("invalid spritesheet geometry");
 				return;
@@ -384,9 +384,9 @@ export function PetMarket({
 			{results && results.length > 0 && (
 				<div className="gui-pet-market__grid">
 					{results.map(p => (
-						<PetMarketCard
+						<CompanionMarketCard
 							key={p.slug}
-							pet={p}
+							entry={p}
 							installed={petdex.some(x => x.id === p.slug)}
 							installing={installing === p.slug}
 							onInstall={() => void install(p)}
@@ -401,15 +401,15 @@ export function PetMarket({
 /** Appearance detail (球面光泽 / 配饰) moved to the GENERAL page's agent
  *  avatar area (2026-09-21, user: 「这个小球的定制放到常规Agent头像那里去」) —
  *  it now lives next to the avatar cards that preview the ball. See
- *  general.tsx PetDecorSection; this page keeps the pick + size + market
+ *  general.tsx CompanionDecorSection; this page keeps the pick + size + market
  *  concerns. */
-export function PetSection(): ReactNode {
-	const [enabled, setEnabled] = useState<boolean>(() => petEnabled());
-	const [mode, setMode] = useState<PetDisplayMode>(() => petMode());
-	const [selectedPetId, setSelectedPetId] = useState<string>(() => petId());
-	const [petdex, setPetdex] = useState<PetdexPackage[]>(() => loadPetdex());
-	const [sizeScale, setSizeScale] = useState<number>(() => petScale());
-	const [decor, setDecor] = useState<PetDecor>(() => petDecor());
+export function CompanionSection(): ReactNode {
+	const [enabled, setEnabled] = useState<boolean>(() => companionEnabled());
+	const [mode, setMode] = useState<CompanionPlacement>(() => companionPlacement());
+	const [selectedArtId, setSelectedPetId] = useState<string>(() => companionArtId());
+	const [petdex, setPetdex] = useState<SpritePackage[]>(() => loadSpritePackages());
+	const [sizeScale, setSizeScale] = useState<number>(() => companionScale());
+	const [decor, setDecor] = useState<CompanionDecor>(() => companionDecor());
 	const [dock, setDock] = useState<boolean>(() => localStorage.getItem("musepi-gui-pet-dock") === "1");
 	const [importing, setImporting] = useState(false);
 	const [importError, setImportError] = useState<string | null>(null);
@@ -423,15 +423,15 @@ export function PetSection(): ReactNode {
 	};
 	const pickPet = (id: string): void => {
 		setSelectedPetId(id);
-		setPetId(id);
+		setCompanionArtId(id);
 		commit();
 	};
 	// Derived from the resolved selection, not tracked separately: picking a
 	// pet of the other mode moves the style with it.
-	const style = petForId(selectedPetId).mode;
-	const pickStyle = (mode: PetMode): void => {
-		setPetMode(mode);
-		setSelectedPetId(petId());
+	const style = companionArtForId(selectedArtId).mode;
+	const pickStyle = (mode: CompanionArtFormat): void => {
+		setCompanionArtFormat(mode);
+		setSelectedPetId(companionArtId());
 		commit();
 	};
 	const importPetdex = async (): Promise<void> => {
@@ -439,7 +439,7 @@ export function PetSection(): ReactNode {
 			window as unknown as {
 				electronAPI?: {
 					importPetdex?(): Promise<
-						(PetdexPackage & { width?: number; height?: number }) | { error: string } | null
+						(SpritePackage & { width?: number; height?: number }) | { error: string } | null
 					>;
 				};
 			}
@@ -462,7 +462,7 @@ export function PetSection(): ReactNode {
 			window as unknown as {
 				electronAPI?: {
 					importCodexPet?(): Promise<
-						(PetdexPackage & { width?: number; height?: number }) | { error: string } | null
+						(SpritePackage & { width?: number; height?: number }) | { error: string } | null
 					>;
 				};
 			}
@@ -481,7 +481,7 @@ export function PetSection(): ReactNode {
 		}
 	};
 	const applyImportedPet = async (
-		raw: (PetdexPackage & { width?: number; height?: number }) | { error: string } | null,
+		raw: (SpritePackage & { width?: number; height?: number }) | { error: string } | null,
 	): Promise<void> => {
 		if (!raw) return;
 		if ("error" in raw) {
@@ -490,7 +490,7 @@ export function PetSection(): ReactNode {
 			return;
 		}
 		// The main process cannot decode image dimensions — measure the
-		// spritesheet here (PetdexSprite needs real frame size + the
+		// spritesheet here (SpriteSheetArt needs real frame size + the
 		// per-row valid frame counts to skip empty padding columns).
 		const img = new Image();
 		img.src = raw.spritesheet;
@@ -498,31 +498,31 @@ export function PetSection(): ReactNode {
 		img.onload = () => resolveDecoded();
 		img.onerror = () => resolveDecoded();
 		await decoded;
-		const pkg = completePetPackage(raw, img);
+		const pkg = completeSpritePackage(raw, img);
 		if (!pkg) {
 			console.error("[pet] invalid spritesheet geometry");
 			setImportError(t("settings.petImportFailed"));
 			return;
 		}
 		const next = [...petdex.filter(p => p.id !== pkg.id), pkg];
-		savePetdex(next);
+		saveSpritePackages(next);
 		setPetdex(next);
 		pickPet(pkg.id);
 		setExpanded(true);
 	};
 	const removePet = (id: string): void => {
 		const next = petdex.filter(p => p.id !== id);
-		savePetdex(next);
+		saveSpritePackages(next);
 		setPetdex(next);
-		if (selectedPetId === id) {
-			pickPet(petIdForMode(style));
+		if (selectedArtId === id) {
+			pickPet(companionArtIdForFormat(style));
 		}
 	};
 	// ── User SVG import (2026-09-20) ────────────────────────────────────
 	// A single vector file becomes a one-frame companion: stored as a
 	// petdex package with format "svg" (no 8×9 frame grid), so the grid,
 	// the trigger, the composer and the desktop pet all render it through
-	// the existing PetdexSprite path with the mood transform row intact.
+	// the existing SpriteSheetArt path with the mood transform row intact.
 	// Renderer-side on purpose — no main-process dialog hop; the file
 	// never leaves this window.
 	const svgInputRef = useRef<HTMLInputElement | null>(null);
@@ -578,7 +578,7 @@ export function PetSection(): ReactNode {
 				setImportError(t("settings.petImportFailed"));
 				return;
 			}
-			const pkg: PetdexPackage = {
+			const pkg: SpritePackage = {
 				id: `svg-${Date.now()}`,
 				displayName: file.name.replace(/\.svg$/i, "") || "SVG",
 				spritesheet: dataUrl,
@@ -591,7 +591,7 @@ export function PetSection(): ReactNode {
 				importedAt: Date.now(),
 			};
 			const next = [...petdex.filter(p => p.id !== pkg.id), pkg];
-			savePetdex(next);
+			saveSpritePackages(next);
 			setPetdex(next);
 			pickPet(pkg.id);
 			setExpanded(true);
@@ -607,8 +607,8 @@ export function PetSection(): ReactNode {
 	// pet.json text.
 	// The hand-drawn sphere leads the preset grid (it is the default), then
 	// the AI-generated sheet presets.
-	const builtinSvgEntry: PetGridEntry = {
-		id: BUILTIN_SVG_ID,
+	const builtinSvgEntry: CompanionGridEntry = {
+		id: BUILTIN_VECTOR_ART_ID,
 		name: t("settings.builtinPet"),
 		description: t("settings.builtinPetDescription"),
 		mode: "vector",
@@ -618,10 +618,10 @@ export function PetSection(): ReactNode {
 		renderer: "note",
 		source: "preset",
 	};
-	const presetEntries: PetGridEntry[] = [
+	const presetEntries: CompanionGridEntry[] = [
 		builtinSvgEntry,
-		...BUILTIN_PETDEX.map(
-			(p): PetGridEntry => ({
+		...BUILTIN_SPRITE_PRESETS.map(
+			(p): CompanionGridEntry => ({
 				id: p.id,
 				name: t(p.displayName as TranslationKey),
 				description: t(p.description as TranslationKey),
@@ -636,11 +636,11 @@ export function PetSection(): ReactNode {
 			}),
 		),
 	];
-	const userEntries: PetGridEntry[] = petdex.map(p => ({
+	const userEntries: CompanionGridEntry[] = petdex.map(p => ({
 		id: p.id,
 		name: p.displayName,
 		description: p.description ?? "",
-		mode: modeForPackage(p),
+		mode: artFormatForPackage(p),
 		src: p.spritesheet,
 		width: p.width,
 		height: p.height,
@@ -655,7 +655,7 @@ export function PetSection(): ReactNode {
 	const userEntriesForStyle = userEntries.filter(e => e.mode === style);
 	const presetEntriesForStyle = presetEntries.filter(e => e.mode === style);
 	const allEntries = [...userEntries, ...presetEntries];
-	const selectedEntry = allEntries.find(e => e.id === selectedPetId) ?? null;
+	const selectedEntry = allEntries.find(e => e.id === selectedArtId) ?? null;
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("settings.agentCompanion")}</h2>
@@ -692,15 +692,15 @@ export function PetSection(): ReactNode {
 							<div className="flex items-center gap-2">
 								<input
 									type="range"
-									min={PET_SCALE_MIN}
-									max={PET_SCALE_MAX}
+									min={COMPANION_SCALE_MIN}
+									max={COMPANION_SCALE_MAX}
 									step={5}
 									value={Math.round(sizeScale * 100)}
 									className="gui-range"
 									onChange={e => {
 										const v = Number(e.target.value);
 										setSizeScale(v / 100);
-										setPetScale(v);
+										setCompanionScale(v);
 										commit();
 									}}
 									aria-label={t("settings.petSize")}
@@ -719,7 +719,7 @@ export function PetSection(): ReactNode {
 								className="gui-input gui-pet-mode-select"
 								value={mode}
 								onChange={v => {
-									const next = v as PetDisplayMode;
+									const next = v as CompanionPlacement;
 									setMode(next);
 									setPref("musepi-gui-pet-mode", next);
 								}}
@@ -770,7 +770,7 @@ export function PetSection(): ReactNode {
 							<Segmented
 								ariaLabel={tLoose("settings.petStyle")}
 								value={style}
-								options={PET_STYLE_SEGMENTS}
+								options={COMPANION_STYLE_SEGMENTS}
 								onChange={mode => pickStyle(mode)}
 							/>
 						</div>
@@ -789,8 +789,8 @@ export function PetSection(): ReactNode {
 									aria-label={t("companion.petRefresh")}
 									title={t("companion.petRefresh")}
 									onClick={() => {
-										setPetdex(loadPetdex());
-										setSelectedPetId(petId());
+										setPetdex(loadSpritePackages());
+										setSelectedPetId(companionArtId());
 									}}
 								>
 									<Icon name="refresh" className="h-3.5 w-3.5" />
@@ -866,7 +866,7 @@ export function PetSection(): ReactNode {
 						>
 							<span className="gui-pet-trigger__thumb">
 								{selectedEntry && (selectedEntry.mode !== "vector" || selectedEntry.renderer !== "note") ? (
-									<PetdexSprite
+									<SpriteSheetArt
 										mood="rest"
 										src={selectedEntry.src}
 										width={selectedEntry.width}
@@ -879,7 +879,7 @@ export function PetSection(): ReactNode {
 										smooth={selectedEntry.smooth}
 									/>
 								) : (
-									<BuiltinPetSprite mood="rest" gloss={decor.gloss} accessory={decor.accessory} />
+									<BuiltinCompanionArt mood="rest" gloss={decor.gloss} accessory={decor.accessory} />
 								)}
 							</span>
 							<span className="gui-pet-trigger__name">{selectedEntry?.name ?? t("settings.builtinPet")}</span>
@@ -894,10 +894,10 @@ export function PetSection(): ReactNode {
 									<div className="gui-pet-group-label">{t("settings.petImported")}</div>
 								)}
 								{userEntriesForStyle.map(entry => (
-									<PetCard
+									<CompanionCard
 										key={entry.id}
 										entry={entry}
-										selected={entry.id === selectedPetId}
+										selected={entry.id === selectedArtId}
 										onSelect={() => pickPet(entry.id)}
 										onDelete={() => removePet(entry.id)}
 									/>
@@ -906,22 +906,22 @@ export function PetSection(): ReactNode {
 									<div className="gui-pet-group-label">{t("settings.petPresets")}</div>
 								)}
 								{presetEntriesForStyle.map(entry => (
-									<PetCard
+									<CompanionCard
 										key={entry.id}
 										entry={entry}
-										selected={entry.id === selectedPetId}
+										selected={entry.id === selectedArtId}
 										onSelect={() => pickPet(entry.id)}
 									/>
 								))}
 							</div>
 						</Reveal>
 						{style === "sprite" && (
-							<PetMarket
+							<CompanionMarket
 								petdex={petdex}
 								onInstalled={pkg => {
 									const next = [...petdex.filter(p => p.id !== pkg.id), pkg];
 									setPetdex(next);
-									savePetdex(next);
+									saveSpritePackages(next);
 									pickPet(pkg.id);
 								}}
 							/>

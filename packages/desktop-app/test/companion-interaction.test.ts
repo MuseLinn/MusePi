@@ -1,17 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
+	COMPANION_INTERACTIONS,
+	COMPANION_MOODS,
 	GAZE_TRAVEL,
 	INTERACTION_HOLD_MS,
 	interactionDirection,
 	moodDirection,
-	PET_INTERACTIONS,
-	PET_MOODS,
-} from "../src/lib/pet-face";
-import { INTERACTION_MOTION, MOOD_MOTION } from "../src/lib/pet-motion";
+} from "../src/lib/companion-face";
+import { COMPANION_INTERACTION_MOTION, COMPANION_MOOD_MOTION } from "../src/lib/companion-motion";
 
 /**
- * The pet speaks TWO axes: `PetMood` is the agent's state (a session
- * contract, written by the store), and `PetInteraction` is a user gesture
+ * The pet speaks TWO axes: `CompanionMood` is the agent's state (a session
+ * contract, written by the store), and `CompanionInteraction` is a user gesture
  * (transient, never stored). These tests pin the boundary between them,
  * because the failure mode of getting it wrong is silent — a reaction that
  * leaks into the session state, or a mood class lost during a reaction
@@ -22,15 +22,15 @@ describe("pet interaction axis — registered data", () => {
 	test("every interaction has both a face direction and a body motion", () => {
 		// A reaction defined in only one of the two tables would render as
 		// half a reaction: a face with a frozen body, or vice versa.
-		for (const it of PET_INTERACTIONS) {
+		for (const it of COMPANION_INTERACTIONS) {
 			expect(interactionDirection(it).eyes).toBeDefined();
-			expect(INTERACTION_MOTION[it]).toBeDefined();
+			expect(COMPANION_INTERACTION_MOTION[it]).toBeDefined();
 		}
 	});
 
 	test("the two axes do not share names (an override must be unambiguous)", () => {
-		const moods = new Set<string>(PET_MOODS);
-		for (const it of PET_INTERACTIONS) {
+		const moods = new Set<string>(COMPANION_MOODS);
+		for (const it of COMPANION_INTERACTIONS) {
 			expect(moods.has(it)).toBe(false);
 		}
 	});
@@ -79,7 +79,7 @@ describe("pet interaction axis — reactions are reactions, not moods", () => {
 	test("the strongest look bias stays within the gaze travel budget", () => {
 		// `look` is a FRACTION of GAZE_TRAVEL, so any |look| > 1 would push
 		// the eyes past the authored travel and out of the shell's lit band.
-		for (const it of PET_INTERACTIONS) {
+		for (const it of COMPANION_INTERACTIONS) {
 			expect(Math.abs(interactionDirection(it).look)).toBeLessThanOrEqual(1);
 		}
 		// Sanity: the travel the fractions multiply into is the tuned value.
@@ -93,36 +93,36 @@ describe("pet interaction axis — body motion", () => {
 		// type is one you turn off). Reactions fire on a user gesture and
 		// resolve in about a second, so they are the only entries allowed an
 		// overshoot entrance.
-		expect(INTERACTION_MOTION.startled?.enter).toBeDefined();
-		expect(INTERACTION_MOTION.delighted?.enter).toBeDefined();
-		expect(INTERACTION_MOTION.peek?.enter).toBeDefined();
+		expect(COMPANION_INTERACTION_MOTION.startled?.enter).toBeDefined();
+		expect(COMPANION_INTERACTION_MOTION.delighted?.enter).toBeDefined();
+		expect(COMPANION_INTERACTION_MOTION.peek?.enter).toBeDefined();
 		// The sustained idle-ish reactions must NOT pop — curious is a held
 		// lean and dozing is a wind-down, neither is an event.
-		expect(INTERACTION_MOTION.curious?.enter).toBeUndefined();
-		expect(INTERACTION_MOTION.dozing?.enter).toBeUndefined();
+		expect(COMPANION_INTERACTION_MOTION.curious?.enter).toBeUndefined();
+		expect(COMPANION_INTERACTION_MOTION.dozing?.enter).toBeUndefined();
 		// And no mood gained an entrance (the axis boundary again).
-		for (const m of PET_MOODS) {
-			expect(MOOD_MOTION[m]?.enter).toBeUndefined();
+		for (const m of COMPANION_MOODS) {
+			expect(COMPANION_MOOD_MOTION[m]?.enter).toBeUndefined();
 		}
 	});
 
 	test("delighted is a bounce, not a shake (no jitter)", () => {
 		// Startle is the nervous one; pleasure should look springy. Sharing
 		// the jitter between them would collapse the two reactions into one.
-		expect(INTERACTION_MOTION.startled?.jitter).toBeDefined();
-		expect(INTERACTION_MOTION.delighted?.jitter).toBeUndefined();
-		expect(INTERACTION_MOTION.delighted?.bob).toBeDefined();
+		expect(COMPANION_INTERACTION_MOTION.startled?.jitter).toBeDefined();
+		expect(COMPANION_INTERACTION_MOTION.delighted?.jitter).toBeUndefined();
+		expect(COMPANION_INTERACTION_MOTION.delighted?.bob).toBeDefined();
 	});
 
 	test("dozing is the slowest, deepest breath in the whole system", () => {
-		const dozing = INTERACTION_MOTION.dozing?.pulse;
+		const dozing = COMPANION_INTERACTION_MOTION.dozing?.pulse;
 		expect(dozing).toBeDefined();
 		const [amplitude, period] = dozing!;
 		// Deeper than rest's 0.018…
-		expect(amplitude).toBeGreaterThan(MOOD_MOTION.rest!.pulse![0]);
+		expect(amplitude).toBeGreaterThan(COMPANION_MOOD_MOTION.rest!.pulse![0]);
 		// …and slower than every mood.
-		for (const m of PET_MOODS) {
-			const pulse = MOOD_MOTION[m]?.pulse;
+		for (const m of COMPANION_MOODS) {
+			const pulse = COMPANION_MOOD_MOTION[m]?.pulse;
 			if (pulse) expect(period).toBeGreaterThan(pulse[1]);
 		}
 	});

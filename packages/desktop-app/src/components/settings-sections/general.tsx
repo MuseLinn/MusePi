@@ -3,6 +3,16 @@ import { ToolView } from "@musepi/client-core/src/tool-render/ToolView";
 import { taskRenderer } from "@musepi/client-core/src/tool-render/tools/task";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { activeCompanionArt, BUILTIN_VECTOR_ART_ID } from "../../lib/companion";
+import {
+	COMPANION_ACCESSORIES,
+	COMPANION_DECOR_FLAGS,
+	type CompanionAccessory,
+	type CompanionDecor,
+	companionDecor,
+	setCompanionAccessory,
+	setCompanionDecorFlag,
+} from "../../lib/companion-decor";
 import { projectRuntimeVersions } from "../../lib/daemon-version";
 import {
 	checkAppUpdates,
@@ -16,16 +26,6 @@ import {
 	shellPlatform,
 	type UpdateCheckResult,
 } from "../../lib/electron";
-import { activePet, BUILTIN_SVG_ID } from "../../lib/pet";
-import {
-	PET_ACCESSORIES,
-	PET_DECOR_FLAGS,
-	type PetAccessory,
-	type PetDecor,
-	petDecor,
-	setPetAccessory,
-	setPetDecorFlag,
-} from "../../lib/pet-decor";
 import type { RpcClient } from "../../lib/rpc";
 import { dispatchSettingsChanged } from "../../lib/settings-events";
 import { localizeUpdateNotes } from "../../lib/update-notes";
@@ -46,36 +46,36 @@ import { SchemaTabSection } from "./schema";
 /** Appearance detail (设置 → 常规, under the agent avatar grid). Moved here
  *  from the companion page (2026-09-21, user: 「这个小球的定制放到常规Agent
  *  头像那里去」): the customization belongs next to the avatar cards that
- *  PREVIEW the ball — the pet card is a live BuiltinPetSprite, so a gloss /
+ *  PREVIEW the ball — the pet card is a live BuiltinCompanionArt, so a gloss /
  *  accessory change reads back instantly in the grid above.
  *
  *  Self-contained on purpose: it resolves its own decor state and re-resolves
  *  on the shared `omp-pet-changed` broadcast (the companion page's pick,
  *  import and size sliders all fire it), so it works wherever it mounts.
- *  The decoration set lives in lib/pet-decor.ts as a flag record; mapping
- *  over PET_DECOR_FLAGS keeps "add an accessory" a one-line change there
+ *  The decoration set lives in lib/companion-decor.ts as a flag record; mapping
+ *  over COMPANION_DECOR_FLAGS keeps "add an accessory" a one-line change there
  *  plus two i18n keys — never a new hand-written row here.
  *
  *  Scoped to the builtin vector companion: an imported petdex spritesheet is
  *  a baked bitmap, so none of these layers exist to toggle. The rows say so
  *  instead of silently doing nothing. */
-function PetDecorSection(): ReactNode {
-	const [decor, setDecor] = useState<PetDecor>(() => petDecor());
+function CompanionDecorSection(): ReactNode {
+	const [decor, setDecor] = useState<CompanionDecor>(() => companionDecor());
 	// Decoration only exists on the builtin sphere — an imported spritesheet
 	// is a baked bitmap. Drives both the disabled state and the explainer
 	// copy.
-	const [activePetId, setActivePetId] = useState<string>(() => {
-		const pet = activePet();
+	const [activeArtId, setActivePetId] = useState<string>(() => {
+		const pet = activeCompanionArt();
 		return pet.kind === "builtin" ? pet.id : "";
 	});
-	const builtinSelected = activePetId === BUILTIN_SVG_ID;
+	const builtinSelected = activeArtId === BUILTIN_VECTOR_ART_ID;
 	const decorDescription = builtinSelected
 		? t("settings.petDecorDescription")
 		: t("settings.petDecorDescriptionImported");
 	useEffect(() => {
 		const refresh = (): void => {
-			setDecor(petDecor());
-			const pet = activePet();
+			setDecor(companionDecor());
+			const pet = activeCompanionArt();
 			setActivePetId(pet.kind === "builtin" ? pet.id : "");
 		};
 		window.addEventListener("omp-pet-changed", refresh);
@@ -89,7 +89,7 @@ function PetDecorSection(): ReactNode {
 		<div className="gui-settings-section">
 			<div className="gui-settings-section-title">{t("settings.petDecor")}</div>
 			<div className="gui-settings-section-desc">{decorDescription}</div>
-			{PET_DECOR_FLAGS.map(flag => (
+			{COMPANION_DECOR_FLAGS.map(flag => (
 				<div className="gui-settings-row" key={flag.key}>
 					<div>
 						<div className="gui-settings-row-label">{t(flag.labelKey as TranslationKey)}</div>
@@ -104,7 +104,7 @@ function PetDecorSection(): ReactNode {
 						title={builtinSelected ? undefined : decorDescription}
 						onClick={() => {
 							setDecor({ ...decor, [flag.key]: !decor[flag.key] });
-							setPetDecorFlag(flag.key, !decor[flag.key]);
+							setCompanionDecorFlag(flag.key, !decor[flag.key]);
 						}}
 						aria-label={t(flag.labelKey as TranslationKey)}
 					>
@@ -121,7 +121,7 @@ function PetDecorSection(): ReactNode {
 					<div className="gui-settings-row-desc">{t("settings.petAccessoryDescription")}</div>
 				</div>
 				<div className="gui-pet-accessory-picker" role="radiogroup" aria-label={t("settings.petAccessory")}>
-					{PET_ACCESSORIES.map((value: PetAccessory) => (
+					{COMPANION_ACCESSORIES.map((value: CompanionAccessory) => (
 						<button
 							key={value}
 							type="button"
@@ -132,7 +132,7 @@ function PetDecorSection(): ReactNode {
 							title={builtinSelected ? undefined : decorDescription}
 							onClick={() => {
 								setDecor({ ...decor, accessory: value });
-								setPetAccessory(value);
+								setCompanionAccessory(value);
 							}}
 						>
 							{t(`pet accessory ${value}` as TranslationKey)}
@@ -440,7 +440,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			 * and the selected one was a hairline ring (user: 「这个头像处只能
 			 * 进行切换」). Each card now carries a live preview at a size the
 			 * preset can actually be judged at, its name, and the selected
-			 * state. The pet card previews through BuiltinPetSprite directly:
+			 * state. The pet card previews through BuiltinCompanionArt directly:
 			 * an IMPERATIVE render() at 20px would be unreadable at card size
 			 * and would not react to the decor pref. */}
 			<div className="gui-avatar-grid" role="radiogroup" aria-label={t("settings.agentAvatarStyle")}>
@@ -470,7 +470,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			</div>
 			{/* The ball's own customization, next to the cards that preview it
 			 * (2026-09-21 move from the companion page). */}
-			<PetDecorSection />
+			<CompanionDecorSection />
 			{avatarId === "punk" && (
 				<div className="gui-settings-row">
 					<div>

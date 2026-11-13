@@ -2,51 +2,51 @@ import { type TranslationKey, t, tLoose } from "@musepi/client-core";
 import { CircleCheck as CircleCheckIconData, Circle as CircleIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useEffect, useState } from "react";
-import "../i18n/pet-style";
+import "../i18n/companion-style";
+import {
+	artFormatForPackage,
+	BUILTIN_SPRITE_PRESETS,
+	BUILTIN_VECTOR_ART_ID,
+	type CompanionArtFormat,
+	companionArtForId,
+	companionArtId,
+	loadSpritePackages,
+	type SpritePackage,
+	setCompanionArtFormat,
+	setCompanionArtId,
+} from "../lib/companion";
+import {
+	COMPANION_ACCESSORIES,
+	COMPANION_DECOR_FLAGS,
+	type CompanionAccessory,
+	type CompanionDecor,
+	companionDecor,
+	setCompanionAccessory,
+	setCompanionDecorFlag,
+} from "../lib/companion-decor";
 import { tapFeedback } from "../lib/haptic";
-import {
-	BUILTIN_PETDEX,
-	BUILTIN_SVG_ID,
-	loadPetdex,
-	modeForPackage,
-	type PetdexPackage,
-	type PetMode,
-	petForId,
-	petId,
-	setPetId,
-	setPetMode,
-} from "../lib/pet";
-import {
-	PET_ACCESSORIES,
-	PET_DECOR_FLAGS,
-	type PetAccessory,
-	type PetDecor,
-	petDecor,
-	setPetAccessory,
-	setPetDecorFlag,
-} from "../lib/pet-decor";
 import type { RpcClient } from "../lib/rpc";
 import { dispatchSettingsChanged } from "../lib/settings-events";
 import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";
-import { PetSprite } from "./PetSprite";
+import { CompanionArt } from "./CompanionArt";
 
 /** Onboarding personalization uses the same pet, decoration, avatar and
  * streaming preferences as Settings. Every pet card and the right-hand
- * desktop/composer preview render the selected PetSprite, including decor. */
+ * desktop/composer preview render the selected CompanionArt, including decor. */
 export function PersonalizeSetup({
 	rpc,
-	petMode,
-	onPetModeChange,
+	companionPlacement,
+	onPlacementChange,
 }: {
 	rpc: RpcClient | null;
-	petMode: "input" | "desktop";
-	onPetModeChange: (mode: "input" | "desktop") => void;
+	companionPlacement: "input" | "desktop";
+	onPlacementChange: (mode: "input" | "desktop") => void;
 }): ReactNode {
 	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
 	const [smooth, setSmooth] = useState(true);
-	const [selectedPet, setSelectedPet] = useState<string>(() => petId());
-	const [petdex] = useState<PetdexPackage[]>(() => loadPetdex());
-	const [decor, setDecor] = useState<PetDecor>(() => petDecor());
+	const [selectedPet, setSelectedPet] = useState<string>(() => companionArtId());
+	const [petdex] = useState<SpritePackage[]>(() => loadSpritePackages());
+	const [decor, setDecor] = useState<CompanionDecor>(() => companionDecor());
 
 	useEffect(() => {
 		if (!rpc) return;
@@ -85,18 +85,18 @@ export function PersonalizeSetup({
 	const pickPet = (id: string): void => {
 		tapFeedback();
 		setSelectedPet(id);
-		setPetId(id);
+		setCompanionArtId(id);
 		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
 	};
 
-	const petOptions: { id: string; displayName: string; description: string; mode: PetMode }[] = [
+	const companionOptions: { id: string; displayName: string; description: string; mode: CompanionArtFormat }[] = [
 		{
-			id: BUILTIN_SVG_ID,
+			id: BUILTIN_VECTOR_ART_ID,
 			displayName: t("settings.builtinPet"),
 			description: t("settings.builtinPetDescription"),
 			mode: "vector",
 		},
-		...BUILTIN_PETDEX.map(p => ({
+		...BUILTIN_SPRITE_PRESETS.map(p => ({
 			id: p.id,
 			displayName: t(p.displayName as TranslationKey),
 			description: t(p.description as TranslationKey),
@@ -106,26 +106,26 @@ export function PersonalizeSetup({
 			id: p.id,
 			displayName: p.displayName,
 			description: p.description ?? "",
-			mode: modeForPackage(p),
+			mode: artFormatForPackage(p),
 		})),
 	];
 	// The style follows the resolved selection: choosing a pet of the other
 	// mode moves the switch, and picking a style restores that mode's pick.
-	const style = petForId(selectedPet).mode;
-	const visiblePetOptions = petOptions.filter(p => p.mode === style);
+	const style = companionArtForId(selectedPet).mode;
+	const visibleCompanionOptions = companionOptions.filter(p => p.mode === style);
 	// Decoration layers only exist on the builtin sphere; an imported sheet is
 	// a baked bitmap.
-	const builtinSelected = petForId(selectedPet).kind === "builtin";
+	const builtinSelected = companionArtForId(selectedPet).kind === "builtin";
 
-	const pickStyle = (mode: PetMode): void => {
+	const pickStyle = (mode: CompanionArtFormat): void => {
 		tapFeedback();
-		setPetMode(mode);
-		setSelectedPet(petId());
+		setCompanionArtFormat(mode);
+		setSelectedPet(companionArtId());
 		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
 	};
 
-	const pickPetMode = (mode: "input" | "desktop"): void => {
-		onPetModeChange(mode);
+	const pickPlacement = (mode: "input" | "desktop"): void => {
+		onPlacementChange(mode);
 		try {
 			localStorage.setItem("musepi-gui-pet-mode", mode);
 		} catch {
@@ -141,17 +141,17 @@ export function PersonalizeSetup({
 				<div className="flex items-center gap-1.5">
 					<button
 						type="button"
-						className={`gui-obo-seg${petMode === "input" ? " gui-obo-seg--active" : ""}`}
-						aria-pressed={petMode === "input"}
-						onClick={() => pickPetMode("input")}
+						className={`gui-obo-seg${companionPlacement === "input" ? " gui-obo-seg--active" : ""}`}
+						aria-pressed={companionPlacement === "input"}
+						onClick={() => pickPlacement("input")}
 					>
 						{t("settings.petModeInput")}
 					</button>
 					<button
 						type="button"
-						className={`gui-obo-seg${petMode === "desktop" ? " gui-obo-seg--active" : ""}`}
-						aria-pressed={petMode === "desktop"}
-						onClick={() => pickPetMode("desktop")}
+						className={`gui-obo-seg${companionPlacement === "desktop" ? " gui-obo-seg--active" : ""}`}
+						aria-pressed={companionPlacement === "desktop"}
+						onClick={() => pickPlacement("desktop")}
 					>
 						{t("settings.petModeDesktop")}
 					</button>
@@ -215,7 +215,7 @@ export function PersonalizeSetup({
 			<div className="gui-obo-pers-section gui-obo-pers-section--stack">
 				<div className="gui-obo-pers-label">{t("tools.petAppearance")}</div>
 				<div className="gui-obo-pet-grid" role="radiogroup" aria-label={t("tools.petAppearance")}>
-					{visiblePetOptions.map((p, index) => {
+					{visibleCompanionOptions.map((p, index) => {
 						const selected = selectedPet === p.id;
 						return (
 							<button
@@ -231,14 +231,14 @@ export function PersonalizeSetup({
 								onKeyDown={e => {
 									let nextIndex: number | null = null;
 									if (e.key === "ArrowRight" || e.key === "ArrowDown")
-										nextIndex = (index + 1) % visiblePetOptions.length;
+										nextIndex = (index + 1) % visibleCompanionOptions.length;
 									if (e.key === "ArrowLeft" || e.key === "ArrowUp")
-										nextIndex = (index - 1 + visiblePetOptions.length) % visiblePetOptions.length;
+										nextIndex = (index - 1 + visibleCompanionOptions.length) % visibleCompanionOptions.length;
 									if (e.key === "Home") nextIndex = 0;
-									if (e.key === "End") nextIndex = visiblePetOptions.length - 1;
+									if (e.key === "End") nextIndex = visibleCompanionOptions.length - 1;
 									if (nextIndex === null) return;
 									e.preventDefault();
-									const next = visiblePetOptions[nextIndex];
+									const next = visibleCompanionOptions[nextIndex];
 									if (!next) return;
 									pickPet(next.id);
 									e.currentTarget.parentElement
@@ -248,9 +248,9 @@ export function PersonalizeSetup({
 								}}
 							>
 								<span className="gui-obo-pet-preview" aria-hidden="true">
-									<PetSprite
+									<CompanionArt
 										mood="rest"
-										pet={petForId(p.id)}
+										art={companionArtForId(p.id)}
 										size={40}
 										scale={0.48}
 										frozen
@@ -275,7 +275,7 @@ export function PersonalizeSetup({
 			</div>
 
 			<div className="gui-obo-pers-decor">
-				{PET_DECOR_FLAGS.map(flag => (
+				{COMPANION_DECOR_FLAGS.map(flag => (
 					<div className="gui-obo-pers-decor-row" key={flag.key}>
 						<span className="gui-obo-pers-label">{t(flag.labelKey as TranslationKey)}</span>
 						<button
@@ -287,7 +287,7 @@ export function PersonalizeSetup({
 							onClick={() => {
 								const value = !decor[flag.key];
 								setDecor({ ...decor, [flag.key]: value });
-								setPetDecorFlag(flag.key, value);
+								setCompanionDecorFlag(flag.key, value);
 							}}
 							aria-label={t(flag.labelKey as TranslationKey)}
 						>
@@ -298,7 +298,7 @@ export function PersonalizeSetup({
 				<div className="gui-obo-pers-decor-row">
 					<span className="gui-obo-pers-label">{t("settings.petAccessory")}</span>
 					<div className="gui-obo-pet-accessories" role="radiogroup" aria-label={t("settings.petAccessory")}>
-						{PET_ACCESSORIES.map((value: PetAccessory) => (
+						{COMPANION_ACCESSORIES.map((value: CompanionAccessory) => (
 							<button
 								key={value}
 								type="button"
@@ -308,7 +308,7 @@ export function PersonalizeSetup({
 								disabled={!builtinSelected}
 								onClick={() => {
 									setDecor({ ...decor, accessory: value });
-									setPetAccessory(value);
+									setCompanionAccessory(value);
 								}}
 							>
 								{t(`pet accessory ${value}` as TranslationKey)}

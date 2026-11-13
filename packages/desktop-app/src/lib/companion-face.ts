@@ -61,15 +61,15 @@ export const RING_POINTS = 48;
 export type Ring = Array<[number, number]>;
 export type Face = [Ring, Ring];
 
-/** The 7-mood axis the rest of the app speaks (PetdexMood). */
-export const PET_MOODS = ["rest", "hover", "dragging", "working", "waiting", "analyzing", "error"] as const;
-export type PetMood = (typeof PET_MOODS)[number];
+/** The 7-mood axis the rest of the app speaks (SpriteMood). */
+export const COMPANION_MOODS = ["rest", "hover", "dragging", "working", "waiting", "analyzing", "error"] as const;
+export type CompanionMood = (typeof COMPANION_MOODS)[number];
 
 /**
  * User-initiated reactions — a SECOND axis, deliberately not folded into
- * `PetMood`.
+ * `CompanionMood`.
  *
- * `PetMood` answers "what is the agent doing" (session store → composer →
+ * `CompanionMood` answers "what is the agent doing" (session store → composer →
  * desktop pet), so its seven values are a session contract. A poke is not a
  * session state: it must never be written to the store, must resolve on its
  * own clock, and must fall back to whatever the agent is actually doing. So
@@ -87,7 +87,7 @@ export type PetMood = (typeof PET_MOODS)[number];
  * already play (blobstudio-grade richness, user request). The desktop pet
  * keeps using the original five; the rest are avatar-side reactions, all
  * running through the same two tables below. */
-export const PET_INTERACTIONS = [
+export const COMPANION_INTERACTIONS = [
 	"startled",
 	"delighted",
 	"curious",
@@ -103,7 +103,7 @@ export const PET_INTERACTIONS = [
 	"suspicious",
 	"dizzy",
 ] as const;
-export type PetInteraction = (typeof PET_INTERACTIONS)[number];
+export type CompanionInteraction = (typeof COMPANION_INTERACTIONS)[number];
 
 export type EyeShape =
 	| "open"
@@ -236,7 +236,7 @@ export interface MoodDirection {
 	look: number;
 }
 
-const MOOD_DIRECTION: Record<PetMood, MoodDirection> = {
+const MOOD_DIRECTION: Record<CompanionMood, MoodDirection> = {
 	rest: { eyes: "open", drift: "happy", blinkMs: 5200, look: 0.18 },
 	hover: { eyes: "squint", drift: "happy", blinkMs: 3800, look: 0 },
 	dragging: { eyes: "wide", drift: "dizzy", blinkMs: 2400, look: -0.3 },
@@ -246,11 +246,12 @@ const MOOD_DIRECTION: Record<PetMood, MoodDirection> = {
 	error: { eyes: "cross", blinkMs: 0, look: 0 },
 };
 
-export const moodDirection = (mood: string): MoodDirection => MOOD_DIRECTION[mood as PetMood] ?? MOOD_DIRECTION.rest;
+export const moodDirection = (mood: string): MoodDirection =>
+	MOOD_DIRECTION[mood as CompanionMood] ?? MOOD_DIRECTION.rest;
 
 /**
  * How each of the 31 session states plays the eye vocabulary — the state
- * axis's face table (see pet.ts PET_STATES).
+ * axis's face table (see pet.ts COMPANION_STATES).
  *
  * This is NOT 25 more faces. The vocabulary is still the 12 eye shapes; what
  * changes per state is which shape it holds, what it drifts to, how often it
@@ -269,7 +270,7 @@ export const moodDirection = (mood: string): MoodDirection => MOOD_DIRECTION[moo
  * `thinking-dots` and `powering-down` wear `closed` because their content is
  * not a face at all — the effects layer replaces it (three dots / a collapse).
  */
-export const STATE_DIRECTION: Record<string, MoodDirection> = {
+export const COMPANION_STATE_DIRECTION: Record<string, MoodDirection> = {
 	// ── A. the turn loop
 	idle: { eyes: "open", drift: "happy", blinkMs: 5200, look: 0.18 },
 	listening: { eyes: "open", drift: "wide", blinkMs: 4200, look: 0.1 },
@@ -309,7 +310,8 @@ export const STATE_DIRECTION: Record<string, MoodDirection> = {
 	drowsy: { eyes: "half", drift: "bored", blinkMs: 9000, look: -0.3 },
 };
 
-export const stateDirection = (state: string): MoodDirection => STATE_DIRECTION[state] ?? MOOD_DIRECTION.rest;
+export const companionStateDirection = (state: string): MoodDirection =>
+	COMPANION_STATE_DIRECTION[state] ?? MOOD_DIRECTION.rest;
 
 /**
  * How long a state takes to ease over to its drift face — the "how often it
@@ -368,7 +370,7 @@ export const driftMsForState = (state: string): number => STATE_DRIFT_MS[state] 
  *              it is watching you sideways.
  *   dizzy       the woozy sway: dizzy rings rolling with the motion.
  */
-const INTERACTION_DIRECTION: Record<PetInteraction, MoodDirection> = {
+const INTERACTION_DIRECTION: Record<CompanionInteraction, MoodDirection> = {
 	startled: { eyes: "wide", blinkMs: 0, look: 0 },
 	delighted: { eyes: "happy", drift: "squint", blinkMs: 3000, look: 0.22 },
 	curious: { eyes: "half", drift: "open", blinkMs: 4600, look: 0.55 },
@@ -386,7 +388,7 @@ const INTERACTION_DIRECTION: Record<PetInteraction, MoodDirection> = {
 };
 
 export const interactionDirection = (it: string): MoodDirection =>
-	INTERACTION_DIRECTION[it as PetInteraction] ?? MOOD_DIRECTION.rest;
+	INTERACTION_DIRECTION[it as CompanionInteraction] ?? MOOD_DIRECTION.rest;
 
 /** How long a reaction holds before the pet falls back to its mood (ms).
  *  Not exported per-interaction as a map — the caller (which owns the
@@ -398,12 +400,12 @@ export const INTERACTION_HOLD_MS = 1100;
  *  composer pet and floating pet all share this). `last` is the caller's
  *  previous pick (null on mount); `exclude` removes states a poke should
  *  never play (the floating pet's `dozing` is scheduler-owned). */
-export function randomPetInteraction(
-	last: PetInteraction | null,
-	exclude: readonly PetInteraction[] = [],
-): PetInteraction {
-	const pool = PET_INTERACTIONS.filter(x => !exclude.includes(x));
-	const pick = pool[Math.floor(Math.random() * pool.length)] ?? PET_INTERACTIONS[0];
+export function randomCompanionInteraction(
+	last: CompanionInteraction | null,
+	exclude: readonly CompanionInteraction[] = [],
+): CompanionInteraction {
+	const pool = COMPANION_INTERACTIONS.filter(x => !exclude.includes(x));
+	const pick = pool[Math.floor(Math.random() * pool.length)] ?? COMPANION_INTERACTIONS[0];
 	return pick === last ? (pool[(pool.indexOf(pick) + 1) % pool.length] ?? pick) : pick;
 }
 

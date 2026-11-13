@@ -17,7 +17,7 @@
 
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { PetBubbles } from "./pet-bubbles";
+import { CompanionBubbles } from "./companion-bubbles";
 
 // Same style set as the pet window. The glass custom properties live in the
 // shared token and overlay-fallback sheets, not in gui.css itself; omitting
@@ -31,6 +31,6 @@ document.documentElement.classList.add("bubbles-root");
 
 createRoot(document.getElementById("root")!).render(
 	<StrictMode>
-		<PetBubbles />
+		<CompanionBubbles />
 	</StrictMode>,
 );

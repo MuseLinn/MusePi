@@ -20,7 +20,7 @@
  *    bundle's default was a green gradient); dots/pops/glyph all wear the
  *    body's own material, exactly as the bundle does.
  *  - the bundle drives one body group (bodyContent) for the dots shrink and
- *    the glyph step-aside; ours is the `bodyRef` group in PetSprite, which
+ *    the glyph step-aside; ours is the `bodyRef` group in CompanionArt, which
  *    additionally carries the orbit ring and the wearables, so they dissolve
  *    with the ball instead of hovering over a dot.
  *  - glyph markup is rendered as JSX with the mark from STATE_GLYPH instead
@@ -36,14 +36,14 @@
  * change; the frame clock only writes `transform` / `d` / `r` / `opacity`.
  *
  * ── Coordinates ──────────────────────────────────────────────────────────
- * Orb-local (the FACE_BOX square), matching pet-face.ts — which is also the
+ * Orb-local (the FACE_BOX square), matching companion-face.ts — which is also the
  * bundle's own face space (228.541, centre 114.2705). Every spec number below
  * therefore lands as-is, no rescale.
  */
 
 import { type ReactNode, type RefObject, useEffect, useId, useMemo, useRef } from "react";
-import { FACE_BOX } from "./pet-face";
-import { dashPoint } from "./pet-motion";
+import { FACE_BOX } from "./companion-face";
+import { dashPoint } from "./companion-motion";
 
 const ORB_C = FACE_BOX / 2;
 const TAU = Math.PI * 2;
@@ -91,13 +91,13 @@ const BODY_PAINT = "url(#gui-pet-grad-shell)";
 
 /* ------------------------------------------------------------------ kinds */
 
-export const PET_EFFECTS = ["trails", "dash", "dots", "confetti", "badge", "glyph", "pops"] as const;
-export type PetEffect = (typeof PET_EFFECTS)[number];
+export const COMPANION_EFFECTS = ["trails", "dash", "dots", "confetti", "badge", "glyph", "pops"] as const;
+export type CompanionEffect = (typeof COMPANION_EFFECTS)[number];
 
 /** Render-size tier. The pet appears at 20px (message avatar) through ~120px
  *  (desktop pet), and an effect that reads at one size is noise at the other
  *  — see TIER_KEEP. */
-export type PetEffectTier = "full" | "compact" | "micro";
+export type CompanionEffectTier = "full" | "compact" | "micro";
 
 /** Which rig layer an effect mounts in. `behind` draws UNDER the shell: the
  *  shell occludes whatever passes behind it, and that occlusion IS the depth
@@ -106,7 +106,7 @@ export type PetEffectTier = "full" | "compact" | "micro";
  *  belong on, which is what turns a flat decal into something orbiting a
  *  body. `dash` stays behind and is still visible because the body itself
  *  shrinks to a flying dot (pet-motion sending/receiving `dash` + `scale`). */
-export const EFFECT_LAYER: Record<PetEffect, "behind" | "front" | "both"> = {
+export const EFFECT_LAYER: Record<CompanionEffect, "behind" | "front" | "both"> = {
 	trails: "both",
 	dash: "behind",
 	dots: "front",
@@ -119,8 +119,8 @@ export const EFFECT_LAYER: Record<PetEffect, "behind" | "front" | "both"> = {
 /** What survives at each size. The rule is "shape beats detail": dots and a
  *  badge are still legible at 20px because they are a colour and a position,
  *  while confetti ribbons, dash tails and a glyph are sub-pixel smears. */
-const TIER_KEEP: Record<PetEffectTier, readonly PetEffect[]> = {
-	full: PET_EFFECTS,
+const TIER_KEEP: Record<CompanionEffectTier, readonly CompanionEffect[]> = {
+	full: COMPANION_EFFECTS,
 	compact: ["trails", "dots", "badge"],
 	micro: ["badge"],
 };
@@ -128,7 +128,7 @@ const TIER_KEEP: Record<PetEffectTier, readonly PetEffect[]> = {
 /** Body-motion strength per tier — the compact/micro pet must not fidget at
  *  full amplitude, or a 24px avatar visibly vibrates. Also scales every
  *  effect's travel the same way the bundle scales its own strength. */
-export const TIER_STRENGTH: Record<PetEffectTier, number> = { full: 1, compact: 0.6, micro: 0.35 };
+export const TIER_STRENGTH: Record<CompanionEffectTier, number> = { full: 1, compact: 0.6, micro: 0.35 };
 
 /* ---------------------------------------------------- specs (bundle table) */
 
@@ -241,7 +241,7 @@ const DOTS_SPEC: DotsSpec = { count: 3, period: 1150, radius: 17, gap: 50, split
  * state has no bundle counterpart of its own the nearest family member's
  * spec is reused and marked. States absent here play nothing.
  *
- * `STATE_EFFECTS` is DERIVED from this table, so the kind list and the
+ * `COMPANION_STATE_EFFECTS` is DERIVED from this table, so the kind list and the
  * params cannot drift apart.
  */
 const STATE_FX: Record<string, StateEffects> = {
@@ -290,16 +290,19 @@ const STATE_FX: Record<string, StateEffects> = {
  * glyph slot with two marks, because those two states demand OPPOSITE things
  * from the user.
  */
-export const STATE_EFFECTS: Record<string, readonly PetEffect[]> = Object.fromEntries(
-	Object.entries(STATE_FX).map(([s, fx]) => [s, Object.keys(fx) as PetEffect[]]),
+export const COMPANION_STATE_EFFECTS: Record<string, readonly CompanionEffect[]> = Object.fromEntries(
+	Object.entries(STATE_FX).map(([s, fx]) => [s, Object.keys(fx) as CompanionEffect[]]),
 );
 
 /** The mark a glyph state wears. */
 export const STATE_GLYPH: Record<string, "!" | "?"> = { alerting: "!", confused: "?" };
 
 /** Resolve the effects a state actually plays at a given tier. */
-export function effectsForState(state: string | null | undefined, tier: PetEffectTier): readonly PetEffect[] {
-	const all = (state && STATE_EFFECTS[state]) || [];
+export function effectsForState(
+	state: string | null | undefined,
+	tier: CompanionEffectTier,
+): readonly CompanionEffect[] {
+	const all = (state && COMPANION_STATE_EFFECTS[state]) || [];
 	if (tier === "full") return all;
 	return all.filter(e => TIER_KEEP[tier].includes(e));
 }
@@ -785,7 +788,7 @@ interface FrameCtx {
 	htmlBody: HTMLElement | null;
 }
 
-function updateEffect(kind: PetEffect, g: SVGGElement, fx: FrameCtx): void {
+function updateEffect(kind: CompanionEffect, g: SVGGElement, fx: FrameCtx): void {
 	switch (kind) {
 		case "trails":
 			if (fx.spec?.trails) drawTrailsSide(g, fx.side, fx.spec.trails, fx.elapsed, fx.strength, ORB_C, ORB_C, fx.uid);
@@ -813,7 +816,7 @@ function updateEffect(kind: PetEffect, g: SVGGElement, fx: FrameCtx): void {
 
 /** How many elements one kind's structure needs — the state-change key, so a
  *  count change rebuilds the pool. */
-function fxCount(kind: PetEffect, spec: StateEffects | undefined): number {
+function fxCount(kind: CompanionEffect, spec: StateEffects | undefined): number {
 	switch (kind) {
 		case "trails":
 			return (spec?.trails?.count ?? 0) * 2;
@@ -859,7 +862,7 @@ function EffectNode({
 	glyph,
 	uid,
 }: {
-	kind: PetEffect;
+	kind: CompanionEffect;
 	spec: StateEffects | undefined;
 	glyph: "!" | "?";
 	uid: string;
@@ -963,12 +966,12 @@ function EffectNode({
  *
  * `clockRef` is the mascot engine's per-entry clock; the dash tails must read
  * the same clock the body flight rides (pet-motion `dash`), or they detach
- * from the dot. `bodyRef` is the shared body unit (PetSprite): the dots
+ * from the dot. `bodyRef` is the shared body unit (CompanionArt): the dots
  * dissolve it and the glyph steps it aside. `htmlBodyRef` is the same body
  * contract for pets whose body is an HTML element (imported petdex sprites):
  * same dissolve/step-aside, written as CSS transform/opacity.
  */
-export function PetEffects({
+export function CompanionEffects({
 	state,
 	layer,
 	tier = "full",
@@ -976,11 +979,11 @@ export function PetEffects({
 	bodyRef,
 	htmlBodyRef,
 }: {
-	/** Session state (pet.ts PetState). Null/absent → no effects. */
+	/** Session state (companion.ts CompanionState). Null/absent → no effects. */
 	state?: string | null;
 	/** Which rig layer this mount point is. */
 	layer: "behind" | "front";
-	tier?: PetEffectTier;
+	tier?: CompanionEffectTier;
 	/** Shared per-entry clock (ms since the state was entered). */
 	clockRef?: RefObject<number>;
 	/** The body unit the dots dissolve and the glyph steps aside. */
@@ -1025,7 +1028,7 @@ export function PetEffects({
 			};
 			for (let i = 0; i < root.children.length; i++) {
 				const child = root.children[i] as SVGGElement;
-				const kind = child.dataset.effect as PetEffect | undefined;
+				const kind = child.dataset.effect as CompanionEffect | undefined;
 				if (kind) updateEffect(kind, child, ctx);
 			}
 			raf = requestAnimationFrame(tick);

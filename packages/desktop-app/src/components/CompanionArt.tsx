@@ -1,5 +1,5 @@
 /**
- * PetSprite — the agent companion (伙伴) renderer, BitFun parity.
+ * CompanionArt — the agent companion (伙伴) renderer, BitFun parity.
  *
  * Two sources:
  *  - builtin: a hand-drawn SVG MusePi mascot (note-bot) with per-mood
@@ -20,27 +20,28 @@ import {
 	useState,
 } from "react";
 import {
-	activePet,
-	migratePetdexContent,
-	moodOfState,
-	PET_CONTENT_TARGET_H,
-	PETDEX_MOOD_ANIM,
-	type PetAtlasGeometry,
-	type PetAtlasState,
-	type PetDescriptor,
-	type PetDisplayMode,
-	type PetdexMood,
-	type PetInteraction,
-	type PetState,
-	petEnabled,
-	petMode,
-	petScale,
-	resolvePetAnimation,
-} from "../lib/pet";
-import { type PetAccessory, type PetDecor, petDecor } from "../lib/pet-decor";
-import { effectsForState, PetEffects, type PetEffectTier, TIER_STRENGTH } from "../lib/pet-effects";
+	activeCompanionArt,
+	type CompanionArtDescriptor,
+	type CompanionInteraction,
+	type CompanionPlacement,
+	type CompanionState,
+	companionEnabled,
+	companionPlacement,
+	companionScale,
+	migrateSpritePackageContent,
+	resolveSpriteAnimation,
+	SPRITE_CONTENT_TARGET_H,
+	SPRITE_MOOD_ANIM,
+	type SpriteAtlasGeometry,
+	type SpriteAtlasState,
+	type SpriteMood,
+	spriteMoodOfState,
+} from "../lib/companion";
+import { type CompanionAccessory, type CompanionDecor, companionDecor } from "../lib/companion-decor";
+import { CompanionEffects, type CompanionEffectTier, effectsForState, TIER_STRENGTH } from "../lib/companion-effects";
 import {
 	applyYaw,
+	companionStateDirection,
 	DEFAULT_DRIFT_MS,
 	driftMsForState,
 	FACE_BOX,
@@ -56,41 +57,51 @@ import {
 	mouthSpecFor,
 	mouthStroke,
 	springStep,
-	stateDirection,
 	toPath,
-} from "../lib/pet-face";
-import { advanceGazeMotion, createGazeMotionState, type GazeVec, nextBlinkDelay } from "../lib/pet-gaze";
+} from "../lib/companion-face";
+import { advanceGazeMotion, createGazeMotionState, type GazeVec, nextBlinkDelay } from "../lib/companion-gaze";
 import {
-	advancePetGesture,
-	createPetGestureMotion,
-	type PetGestureInput,
-	petGestureTransform,
-} from "../lib/pet-gesture";
-import { gazeDrift, INTERACTION_MOTION, MOOD_MOTION, motionTransform, STATE_MOTION } from "../lib/pet-motion";
+	advanceCompanionGesture,
+	type CompanionGestureInput,
+	companionGestureTransform,
+	createCompanionGestureMotion,
+} from "../lib/companion-gesture";
+import {
+	COMPANION_INTERACTION_MOTION,
+	COMPANION_MOOD_MOTION,
+	COMPANION_STATE_MOTION,
+	gazeDrift,
+	motionTransform,
+} from "../lib/companion-motion";
 
-export type { GazeVec } from "../lib/pet-gaze";
+export type { GazeVec } from "../lib/companion-gaze";
 
 /** Live pet prefs: re-resolves when settings change (the settings page
  *  dispatches "omp-pet-changed" after saving; storage events cover other
  *  tabs/pet windows). */
-export function usePet(): {
+export function useCompanionArt(): {
 	enabled: boolean;
-	mode: PetDisplayMode;
-	pet: PetDescriptor;
-	decor: PetDecor;
+	mode: CompanionPlacement;
+	art: CompanionArtDescriptor;
+	decor: CompanionDecor;
 } {
 	const [state, setState] = useState(() => ({
-		enabled: petEnabled(),
-		mode: petMode(),
-		pet: activePet(),
-		decor: petDecor(),
+		enabled: companionEnabled(),
+		mode: companionPlacement(),
+		art: activeCompanionArt(),
+		decor: companionDecor(),
 	}));
 	useEffect(() => {
 		// Old imported packages lack the contentH scan — backfill once so
 		// their render size normalizes like builtins.
-		migratePetdexContent();
+		migrateSpritePackageContent();
 		const refresh = (): void =>
-			setState({ enabled: petEnabled(), mode: petMode(), pet: activePet(), decor: petDecor() });
+			setState({
+				enabled: companionEnabled(),
+				mode: companionPlacement(),
+				art: activeCompanionArt(),
+				decor: companionDecor(),
+			});
 		window.addEventListener("omp-pet-changed", refresh);
 		window.addEventListener("storage", refresh);
 		return () => {
@@ -104,10 +115,10 @@ export function usePet(): {
 /** Decoration sub-state for renderers that are NOT the settings page (chat
  *  avatar, desktop pet window): resolves once and follows the same events,
  *  so a settings toggle lands everywhere without threading props. */
-export function usePetDecor(): PetDecor {
-	const [decor, setDecor] = useState<PetDecor>(() => petDecor());
+export function useCompanionDecor(): CompanionDecor {
+	const [decor, setDecor] = useState<CompanionDecor>(() => companionDecor());
 	useEffect(() => {
-		const refresh = (): void => setDecor(petDecor());
+		const refresh = (): void => setDecor(companionDecor());
 		window.addEventListener("omp-pet-changed", refresh);
 		window.addEventListener("storage", refresh);
 		return () => {
@@ -175,19 +186,19 @@ const BLINK_UP_MS = 150;
  *  off the resolved direction, so switching to (or off) an interaction
  *  replays the morph and the one-shot entrance exactly like a mood change.
  *
- *  `state` is the 31-value session axis (pet.ts). When present it WINS over
+ *  `state` is the 31-value session axis (companion.ts). When present it WINS over
  *  `mood` for both the face and the body table — the seven moods are a
  *  spritesheet contract, not an expressive one. Absent, the engine behaves
  *  exactly as it did before (hosts migrate one call site at a time).
  *  `tier` is the render-size tier, which scales motion amplitude down so a
  *  24px avatar does not visibly vibrate. */
 function useMascotEngine(
-	mood: PetdexMood,
+	mood: SpriteMood,
 	gazeRef?: GazeRef,
-	interaction?: PetInteraction | null,
-	state?: PetState | null,
-	tier: PetEffectTier = "full",
-	gestureRef?: RefObject<PetGestureInput>,
+	interaction?: CompanionInteraction | null,
+	state?: CompanionState | null,
+	tier: CompanionEffectTier = "full",
+	gestureRef?: RefObject<CompanionGestureInput>,
 ): MascotRefs {
 	const eye0 = useRef<SVGPathElement | null>(null);
 	const eye1 = useRef<SVGPathElement | null>(null);
@@ -196,7 +207,7 @@ function useMascotEngine(
 	const gestureTransformRef = useRef<SVGGElement | null>(null);
 	const accessoryRef = useRef<SVGGElement | null>(null);
 	const gazeSmooth = useRef(createGazeMotionState());
-	const gestureSmooth = useRef(createPetGestureMotion());
+	const gestureSmooth = useRef(createCompanionGestureMotion());
 	// ── Cross-direction continuity (refs, NOT effect closure): every mood
 	// or interaction change re-runs the frame effect, and anything a switch
 	// must NOT reset outlives it in these.
@@ -220,7 +231,11 @@ function useMascotEngine(
 
 	// Static per-mood face data — decoded once per mood, never per frame.
 	const prepped = useMemo(() => {
-		const dir = interaction ? interactionDirection(interaction) : state ? stateDirection(state) : moodDirection(mood);
+		const dir = interaction
+			? interactionDirection(interaction)
+			: state
+				? companionStateDirection(state)
+				: moodDirection(mood);
 		const base = faceFor(dir.eyes);
 		return {
 			base,
@@ -233,10 +248,10 @@ function useMascotEngine(
 			driftMs: interaction || !state ? DEFAULT_DRIFT_MS : driftMsForState(state),
 			motion:
 				(interaction
-					? INTERACTION_MOTION[interaction]
+					? COMPANION_INTERACTION_MOTION[interaction]
 					: state
-						? (STATE_MOTION[state] ?? MOOD_MOTION[moodOfState(state)])
-						: MOOD_MOTION[mood]) ?? {},
+						? (COMPANION_STATE_MOTION[state] ?? COMPANION_MOOD_MOTION[spriteMoodOfState(state)])
+						: COMPANION_MOOD_MOTION[mood]) ?? {},
 			strength: TIER_STRENGTH[tier],
 		};
 	}, [mood, interaction, state, tier]);
@@ -281,7 +296,7 @@ function useMascotEngine(
 			const base = lerpFace(from, prepped.base, springStep(morphT));
 			// The drift face eases in on a slow sine once the morph has landed,
 			// so a long idle keeps making new faces without ever looking busy.
-			// The drift clock is per-state (pet-face.ts STATE_DRIFT_MS): busy
+			// The drift clock is per-state (companion-face.ts STATE_DRIFT_MS): busy
 			// states find a new resting pose faster than ambient ones.
 			const driftT = morphT >= 1 ? (Math.sin(elapsed / prepped.driftMs) * 0.5 + 0.5) * DRIFT_MAX : 0;
 			let rings = lerpFace(base, prepped.drift, driftT);
@@ -347,8 +362,8 @@ function useMascotEngine(
 			}
 			const gestureRig = gestureTransformRef.current;
 			if (gestureRig) {
-				const gesture = advancePetGesture(gestureSmooth.current, gestureRef?.current ?? null, dt, now);
-				gestureRig.setAttribute("transform", petGestureTransform(gesture, FACE_BOX));
+				const gesture = advanceCompanionGesture(gestureSmooth.current, gestureRef?.current ?? null, dt, now);
+				gestureRig.setAttribute("transform", companionGestureTransform(gesture, FACE_BOX));
 			}
 			// Wearables use the same slow head channel. Their local roll adds
 			// only the part not already inherited from the shell.
@@ -382,10 +397,10 @@ function mixSpec(a: number[], b: number[], t: number): number[] {
  * signature feature (the tilted gold orbit ring), one emissive face.
  *
  * This is an ENGINE, not an illustration. The face is authored as control
- * numbers in lib/pet-face.ts (two eye rings plus four mouth numbers per
+ * numbers in lib/companion-face.ts (two eye rings plus four mouth numbers per
  * shape) and rendered through a sphere projection with a spring morph, so it
  * eases between expressions instead of cutting. Body motion is a data table
- * (lib/pet-motion.ts) read by a frame clock, which is how a mood can bob AND
+ * (lib/companion-motion.ts) read by a frame clock, which is how a mood can bob AND
  * squash AND sway at once.
  *
  * Palette is deliberately two families — graphite shell and brand gold —
@@ -399,7 +414,7 @@ function mixSpec(a: number[], b: number[], t: number): number[] {
  *
  *  The rig used to reserve HEADROOM for the crown's beacon mast and a FLOOR
  *  for the hover-thrust / ground-shadow family. Both are gone (2026-09-20,
- *  pet-decor.ts): with them the padding was ~1.28× the ball and the ball
+ *  companion-decor.ts): with them the padding was ~1.28× the ball and the ball
  *  rendered at only ~77% of the box — which is exactly why an inline 30px
  *  box produced a ~23px ball that still read as oversized once the wrapper
  *  was sized by CSS. The box now hugs the art: SIDE still frames the ring
@@ -419,11 +434,11 @@ const VIEW_H = FACE_BOX + TOP + BOTTOM;
 
 /** The box ratio every host resolves against (`.gui-pet`'s
  *  `aspect-ratio: var(--gui-pet-ratio, …)`). Exported and written by
- *  PetSprite so the padding constants above stay the single source: the old
+ *  CompanionArt so the padding constants above stay the single source: the old
  *  literal 1.037 sat in two stylesheet rules and nothing ever wrote the
  *  variable, so retuning VIEW would have desynced the box silently — every
  *  host would keep reserving the OLD ratio and stretch the orb. */
-export const PET_BOX_RATIO = VIEW_W / VIEW_H;
+export const COMPANION_ART_BOX_RATIO = VIEW_W / VIEW_H;
 
 /** Sphere centre in orb-local coordinates — the engine's own SPHERE_C. The
  *  rig shifts this down by TOP and right by SIDE into the padded view. */
@@ -508,17 +523,17 @@ function Mascot({
 	gloss,
 	accessory = "none",
 }: {
-	mood: PetdexMood;
-	/** Session state (pet.ts PetState). Optional — without it the sprite
+	mood: SpriteMood;
+	/** Session state (companion.ts CompanionState). Optional — without it the sprite
 	 *  renders the legacy 7-mood behaviour with no effects. */
-	state?: PetState | null;
+	state?: CompanionState | null;
 	/** Render-size tier: which effects survive and how loud the body moves. */
-	tier?: PetEffectTier;
+	tier?: CompanionEffectTier;
 	gazeRef?: GazeRef;
-	gestureRef?: RefObject<PetGestureInput>;
-	interaction?: PetInteraction | null;
+	gestureRef?: RefObject<CompanionGestureInput>;
+	interaction?: CompanionInteraction | null;
 	gloss: boolean;
-	accessory?: PetAccessory;
+	accessory?: CompanionAccessory;
 }): ReactNode {
 	const refs = useMascotEngine(mood, gazeRef, interaction, state, tier, gestureRef);
 	// The shared body unit — ring, shell, gloss, face and wearables — that
@@ -549,7 +564,7 @@ function Mascot({
  *  loop passing around the body rather than a band stuck on its front.
  *
  *  Floor layers (thrust / bounce / ground) and the crown beacon used to live
- *  here unconditionally. They are gone — see pet-decor.ts. `gloss` is the
+ *  here unconditionally. They are gone — see companion-decor.ts. `gloss` is the
  *  surface-shading opt-out; `accessory` is the wearable pick (none / note /
  *  headphones), drawn inside the rig so it rides the body motion. */
 function Silhouette({
@@ -568,9 +583,9 @@ function Silhouette({
 	/** The shared body unit the effects layer drives (see Mascot). */
 	bodyRef: RefObject<SVGGElement | null>;
 	gloss: boolean;
-	accessory: PetAccessory;
-	state?: PetState | null;
-	tier?: PetEffectTier;
+	accessory: CompanionAccessory;
+	state?: CompanionState | null;
+	tier?: CompanionEffectTier;
 }): ReactNode {
 	// The face yields where an effect OWNS the read: during a dash flight
 	// the body IS a 21% comet head, and a morphing face on it is noise. The
@@ -585,7 +600,7 @@ function Silhouette({
 			<defs>
 				{/* Shell: the sphere IS the accent — lit crown, body, terminator.
 				 * The fallback trio is the brand-gold dark-theme derivation
-				 * (pet-palette.ts: L .87/.75/.41 at the accent hue, accent-level
+				 * (companion-palette.ts: L .87/.75/.41 at the accent hue, accent-level
 				 * chroma), so the pre-palette first paint is already the bright
 				 * warm orb. History is the lesson here: two hand-picked
 				 * graphite fallbacks shipped (#4a5768/#26303d/#0e141c then
@@ -596,7 +611,7 @@ function Silhouette({
 				 * THIRD time (「现在依然是黑色为底色」). A dark desaturated shell
 				 * is a black ball to the eye — the derivation now rides the
 				 * accent and the fallback must always be the derived value.
-				 * PetPaletteVars is the single source. */}
+				 * CompanionPaletteVars is the single source. */}
 				<radialGradient id="gui-pet-grad-shell" cx="0.34" cy="0.26" r="0.92">
 					<stop offset="0" stopColor="var(--gui-pet-shell-a, oklch(89.07% 0.0798 79.84deg))" />
 					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, oklch(75.07% 0.1036 79.84deg))" />
@@ -653,7 +668,7 @@ function Silhouette({
 				</linearGradient>
 				{/* Eye light: white with a hot core. A flat fill reads as paint;
 				 * a gradient reads as something emitting. The face is white in
-				 * every theme (pet-palette.ts `--gui-pet-face`): the ring is
+				 * every theme (companion-palette.ts `--gui-pet-face`): the ring is
 				 * what carries the accent, and keeping the face neutral means
 				 * the brightest thing on the orb is always readable, whatever
 				 * the accent hue does to the shell. */}
@@ -686,7 +701,7 @@ function Silhouette({
 					 * the old hardcoded three-dot CSS spinner (2026-09-20) —
 					 * three static lights on a spun circle could say "busy" and
 					 * nothing else, while the session has 31 things to say. */}
-					<PetEffects state={state} layer="behind" tier={tier} clockRef={entryClockRef} bodyRef={bodyRef} />
+					<CompanionEffects state={state} layer="behind" tier={tier} clockRef={entryClockRef} bodyRef={bodyRef} />
 				</g>
 				<g ref={gestureTransformRef} className="gui-pet-svg__gesture">
 					<g ref={shellRef} transform={`translate(${SIDE} ${TOP})`}>
@@ -710,7 +725,7 @@ function Silhouette({
 							<circle className="gui-pet-svg__shell" cx={ORB_C} cy={ORB_C} r={ORB_R} />
 							{/* Crown gloss + secondary catch-light + specular sweep:
 							 * cheap sphericity, and the one decoration that is correct
-							 * in every context (pet-decor.ts). Off → the shell reads as
+							 * in every context (companion-decor.ts). Off → the shell reads as
 							 * a flat silhouette, which is the quieter look some users
 							 * asked for. */}
 							{gloss && (
@@ -749,7 +764,7 @@ function Silhouette({
 								<path className="gui-pet-svg__eye" ref={eyeRefs[1]} />
 								<path className="gui-pet-svg__mouth" ref={mouthRef} />
 							</g>
-							{/* ── Wearable accessories (pet-decor.ts PetAccessory) ──
+							{/* ── Wearable accessories (companion-decor.ts CompanionAccessory) ──
 							 * Static art in orb-local coordinates: they scale with the
 							 * ball and ride the body motion for free. Both are authored
 							 * to stay inside the rig's TOP/SIDE padding — the note's
@@ -871,21 +886,21 @@ function Silhouette({
 					{/* ── Effects, FRONT layer (dots / confetti / pops / badge /
 					 * glyph) ── content, not weather: they replace or annotate
 					 * the face, so they paint over the whole body unit. */}
-					<PetEffects state={state} layer="front" tier={tier} clockRef={entryClockRef} bodyRef={bodyRef} />
+					<CompanionEffects state={state} layer="front" tier={tier} clockRef={entryClockRef} bodyRef={bodyRef} />
 				</g>
 			</g>
 		</g>
 	);
 }
 
-/** Builtin SVG pet (orb-bot v8) — natively speaks every PetdexMood,
+/** Builtin SVG pet (orb-bot v8) — natively speaks every SpriteMood,
  *  including the floating desktop pet's hover/dragging rows. `gazeRef`
  *  (optional) turns eye tracking on — see GazeVec. `interaction` overlays a
- *  transient user reaction (see pet-face.ts PET_INTERACTIONS). `gloss`
- *  toggles the shell's surface shading (pet-decor.ts) — the React prop so
+ *  transient user reaction (see companion-face.ts COMPANION_INTERACTIONS). `gloss`
+ *  toggles the shell's surface shading (companion-decor.ts) — the React prop so
  *  the settings preview can render a specific option without touching
- *  storage; renderers that just want the live pref pass `usePetDecor()`. */
-export function BuiltinPetSprite({
+ *  storage; renderers that just want the live pref pass `useCompanionDecor()`. */
+export function BuiltinCompanionArt({
 	mood,
 	state,
 	tier,
@@ -895,15 +910,15 @@ export function BuiltinPetSprite({
 	gloss = true,
 	accessory = "none",
 }: {
-	mood: PetdexMood;
+	mood: SpriteMood;
 	/** Session state — see Mascot. Omit for legacy 7-mood rendering. */
-	state?: PetState | null;
-	tier?: PetEffectTier;
+	state?: CompanionState | null;
+	tier?: CompanionEffectTier;
 	gazeRef?: GazeRef;
-	gestureRef?: RefObject<PetGestureInput>;
-	interaction?: PetInteraction | null;
+	gestureRef?: RefObject<CompanionGestureInput>;
+	interaction?: CompanionInteraction | null;
 	gloss?: boolean;
-	accessory?: PetAccessory;
+	accessory?: CompanionAccessory;
 }): ReactNode {
 	return (
 		<Mascot
@@ -920,19 +935,19 @@ export function BuiltinPetSprite({
 }
 
 /** The sizing box for a bare builtin SVG — `.gui-pet` plus the two variables
- *  that make it resolvable outside a `PetSprite`.
+ *  that make it resolvable outside a `CompanionArt`.
  *
  *  This exists because `.gui-pet-svg` (the svg root) has NO size rule of its
  *  own: gui-pet.css only sizes `.gui-pet svg`, a DESCENDANT selector. Any
- *  call site that rendered `<BuiltinPetSprite>` without the wrapper — the
+ *  call site that rendered `<BuiltinCompanionArt>` without the wrapper — the
  *  chat avatar did, and every avatar slot went blank (2026-09-20 user:
  *  「头像小球不显示了」) — handed the svg an unresolvable box. Wrapping is
  *  the contract, so it is a component instead of a rule to remember.
  *
- *  `size` is the fallback box only (see PetSprite); hosts that want a fixed
+ *  `size` is the fallback box only (see CompanionArt); hosts that want a fixed
  *  slot size their own wrapper through `--gui-pet-height` (`.gui-pet--h`
  *  hosts) or `--gui-pet-width`. */
-export function PetBox({
+export function CompanionArtBox({
 	size = 48,
 	className,
 	style,
@@ -949,7 +964,7 @@ export function PetBox({
 			style={
 				{
 					"--gui-pet-fallback": `${size}px`,
-					"--gui-pet-ratio": `${PET_BOX_RATIO}`,
+					"--gui-pet-ratio": `${COMPANION_ART_BOX_RATIO}`,
 					...style,
 				} as CSSProperties
 			}
@@ -959,12 +974,12 @@ export function PetBox({
 	);
 }
 
-/** The state-axis stage for imported sprites (PetdexSprite `state`).
+/** The state-axis stage for imported sprites (SpriteSheetArt `state`).
  *
  *  This is the blobstudio SHAPE contract absorbed: the source's motion and
  *  effects are deliberately shape-agnostic ("an uploaded logo behaves
  *  exactly like the built-in circle"), so an imported pet rides the SAME
- *  engine as the builtin — body motion (pet-motion STATE_MOTION) and the
+ *  engine as the builtin — body motion (pet-motion COMPANION_STATE_MOTION) and the
  *  effects layers (pet-effects) — with no per-shape code. Only the face
  *  tables do not apply: an arbitrary sheet has no eye/mouth rings to
  *  project onto.
@@ -975,7 +990,7 @@ export function PetBox({
  *  host size. The effects' `htmlBodyRef` points at the art wrapper, so the
  *  dots dissolve the sprite and the glyph steps it aside exactly as they
  *  dissolve the builtin ball. */
-function PetdexStateStage({
+function SpriteStateStage({
 	mood,
 	src,
 	state,
@@ -995,10 +1010,10 @@ function PetdexStateStage({
 	artW,
 	artH,
 }: {
-	mood: PetdexMood;
+	mood: SpriteMood;
 	src: string;
-	state: PetState;
-	tier: PetEffectTier;
+	state: CompanionState;
+	tier: CompanionEffectTier;
 	frozen: boolean;
 	smooth: boolean;
 	isSvg: boolean;
@@ -1024,7 +1039,7 @@ function PetdexStateStage({
 		let raf = 0;
 		let last = performance.now();
 		entryRef.current = 0;
-		const motion = STATE_MOTION[state] ?? {};
+		const motion = COMPANION_STATE_MOTION[state] ?? {};
 		const strength = TIER_STRENGTH[tier];
 		const tick = (now: number): void => {
 			const dt = Math.min(now - last, 64);
@@ -1085,7 +1100,7 @@ function PetdexStateStage({
 							<stop offset="1" stopColor="var(--gui-pet-shell-c, oklch(41.29% 0.0907 79.84deg))" />
 						</radialGradient>
 					</defs>
-					<PetEffects state={state} layer="behind" tier={tier} clockRef={entryRef} htmlBodyRef={bodyRef} />
+					<CompanionEffects state={state} layer="behind" tier={tier} clockRef={entryRef} htmlBodyRef={bodyRef} />
 				</svg>
 				<div ref={motionRef} style={{ position: "absolute", inset: 0 }}>
 					<div ref={bodyRef} style={{ position: "absolute", inset: 0 }}>
@@ -1098,21 +1113,21 @@ function PetdexStateStage({
 					</div>
 				</div>
 				<svg viewBox={`0 0 ${FACE_BOX} ${FACE_BOX}`} width={FACE_BOX} height={FACE_BOX} style={fxBox}>
-					<PetEffects state={state} layer="front" tier={tier} clockRef={entryRef} htmlBodyRef={bodyRef} />
+					<CompanionEffects state={state} layer="front" tier={tier} clockRef={entryRef} htmlBodyRef={bodyRef} />
 				</svg>
 			</div>
 		</div>
 	);
 }
 
-export interface PetSpriteAction {
+export interface CompanionArtAction {
 	name: string;
 	nonce: number;
 }
 
 /** Spritesheet pet with a shared descriptor for legacy Petdex grids,
  *  explicit-state atlases and single-frame SVG packages. */
-export function PetdexSprite({
+export function SpriteSheetArt({
 	mood,
 	src,
 	width,
@@ -1131,34 +1146,34 @@ export function PetdexSprite({
 	direction = "left",
 	onActionEnd,
 }: {
-	mood: PetdexMood;
+	mood: SpriteMood;
 	src: string;
 	width: number;
 	height: number;
 	format?: "sheet" | "atlas" | "svg";
 	rows?: readonly number[];
-	atlas?: PetAtlasGeometry;
-	states?: Readonly<Record<string, PetAtlasState>>;
+	atlas?: SpriteAtlasGeometry;
+	states?: Readonly<Record<string, SpriteAtlasState>>;
 	contentH?: number;
 	scale?: number;
 	frozen?: boolean;
 	smooth?: boolean;
-	state?: PetState | null;
-	tier?: PetEffectTier;
-	action?: PetSpriteAction | null;
+	state?: CompanionState | null;
+	tier?: CompanionEffectTier;
+	action?: CompanionArtAction | null;
 	direction?: "left" | "right";
 	onActionEnd?(): void;
 }): ReactNode {
-	const anim = PETDEX_MOOD_ANIM[mood];
+	const anim = SPRITE_MOOD_ANIM[mood];
 	const isSvg = format === "svg";
-	const descriptor = resolvePetAnimation(
+	const descriptor = resolveSpriteAnimation(
 		{ width, height, format, rows, atlas, states },
 		mood,
 		action?.name,
 		direction,
 	);
 	const { frameW, frameH, columns, rowCount, row, valid, cycleMs, loop } = descriptor;
-	const k = scale * (contentH && contentH > 0 ? PET_CONTENT_TARGET_H / contentH : 1);
+	const k = scale * (contentH && contentH > 0 ? SPRITE_CONTENT_TARGET_H / contentH : 1);
 	const animationKey = action ? `${action.name}:${action.nonce}` : undefined;
 	const onAnimationEnd = (event: ReactAnimationEvent<HTMLDivElement>): void => {
 		if (!loop && event.animationName === "gui-petdex-cycle") onActionEnd?.();
@@ -1167,7 +1182,7 @@ export function PetdexSprite({
 	if (state) {
 		const u = frameH > 0 ? (frameH * k) / FACE_BOX : 1;
 		return (
-			<PetdexStateStage
+			<SpriteStateStage
 				mood={mood}
 				src={src}
 				state={state}
@@ -1216,8 +1231,8 @@ export function PetdexSprite({
  *
  *  `vector` + builtin → the hand-drawn sphere engine below; every other
  *  resolved pet (sprite sheets, atlases, single-frame SVG packages) draws
- *  packaged art through `PetdexSprite`. The mode is the only dispatch key —
- *  `PetdexPackage.format` is read by the frame resolver, never by callers.
+ *  packaged art through `SpriteSheetArt`. The mode is the only dispatch key —
+ *  `SpritePackage.format` is read by the frame resolver, never by callers.
  *
  *  Sizing is deliberately NOT the same for the two paths:
  *
@@ -1238,11 +1253,11 @@ export function PetdexSprite({
  *
  *  `size` therefore only survives as the FALLBACK for a host that gives the
  *  box neither a width nor a height, so the mascot cannot collapse to 0. */
-export function PetSprite({
+export function CompanionArt({
 	mood,
 	state,
 	tier,
-	pet,
+	art,
 	size = 48,
 	scale,
 	frozen = false,
@@ -1255,16 +1270,16 @@ export function PetSprite({
 	direction = "left",
 	onActionEnd,
 }: {
-	mood: PetdexMood;
-	/** Session state (pet.ts PetState) — only when the host has moved to the
+	mood: SpriteMood;
+	/** Session state (companion.ts CompanionState) — only when the host has moved to the
 	 *  state axis. Builtin: drives the 31-value face/motion tables and the
 	 *  effects layer. Petdex: rides the same motion/effects engine
-	 *  (PetdexStateStage) — the imported-pet parity with the builtin; the
+	 *  (SpriteStateStage) — the imported-pet parity with the builtin; the
 	 *  face tables do not apply (no eye rings to project onto). */
-	state?: PetState | null;
+	state?: CompanionState | null;
 	/** Render-size tier — builtin and petdex state mode. Defaults to "full". */
-	tier?: PetEffectTier;
-	pet: PetDescriptor;
+	tier?: CompanionEffectTier;
+	art: CompanionArtDescriptor;
 	/** Fallback box (px) for the vector-builtin path when the host sizes the
 	 *  wrapper via CSS. Packaged art carries its own frame geometry. */
 	size?: number;
@@ -1276,33 +1291,35 @@ export function PetSprite({
 	 *  bitmaps, so their eyes cannot move. */
 	gazeRef?: GazeRef;
 	/** Vector-builtin only: pointer gesture input for the deformation rig. */
-	gestureRef?: RefObject<PetGestureInput>;
+	gestureRef?: RefObject<CompanionGestureInput>;
 	/** Vector-builtin only: transient user reaction layered over `mood`. A
 	 *  packaged pet keeps its own frame instead of remapping to a row it does
 	 *  not have. */
-	interaction?: PetInteraction | null;
-	/** Vector-builtin only surface shading (pet-decor.ts). Pass the live pref
-	 *  from usePet()/usePetDecor(); an explicit value previews an option in
+	interaction?: CompanionInteraction | null;
+	/** Vector-builtin only surface shading (companion-decor.ts). Pass the live pref
+	 *  from useCompanionArt()/useCompanionDecor(); an explicit value previews an option in
 	 *  settings. (Omitting does NOT read storage — there is no subscription
 	 *  in this subtree.) */
 	gloss?: boolean;
-	/** Vector-builtin only wearable (pet-decor.ts). Same contract as `gloss`. */
-	accessory?: PetAccessory;
+	/** Vector-builtin only wearable (companion-decor.ts). Same contract as `gloss`. */
+	accessory?: CompanionAccessory;
 	/** Packaged art only: one-shot atlas action, walk direction, its end. */
-	action?: PetSpriteAction | null;
+	action?: CompanionArtAction | null;
 	direction?: "left" | "right";
 	onActionEnd?(): void;
 }): ReactNode {
-	if (pet.mode === "vector" && pet.kind === "builtin") {
+	if (art.mode === "vector" && art.kind === "builtin") {
 		// The builtin orb speaks hover/dragging natively — no face mapping.
-		// The box publishes its own ratio (see PET_BOX_RATIO) so no stylesheet
+		// The box publishes its own ratio (see COMPANION_ART_BOX_RATIO) so no stylesheet
 		// has to hardcode a number that must track the VIEW constants.
 		return (
 			<div
 				className="gui-pet"
-				style={{ "--gui-pet-fallback": `${size}px`, "--gui-pet-ratio": `${PET_BOX_RATIO}` } as CSSProperties}
+				style={
+					{ "--gui-pet-fallback": `${size}px`, "--gui-pet-ratio": `${COMPANION_ART_BOX_RATIO}` } as CSSProperties
+				}
 			>
-				<BuiltinPetSprite
+				<BuiltinCompanionArt
 					mood={mood}
 					state={state}
 					tier={tier}
@@ -1319,19 +1336,19 @@ export function PetSprite({
 	// the frame descriptor (a single-frame SVG reports one frame). Sheets keep
 	// their own scale slider because their intrinsic size is the frame grid.
 	return (
-		<PetdexSprite
+		<SpriteSheetArt
 			mood={mood}
-			src={pet.pkg.spritesheet}
-			width={pet.pkg.width}
-			height={pet.pkg.height}
-			format={pet.pkg.format}
-			rows={pet.pkg.rows}
-			atlas={pet.pkg.atlas}
-			states={pet.pkg.states}
-			contentH={pet.pkg.contentH}
-			scale={scale ?? petScale()}
+			src={art.pkg.spritesheet}
+			width={art.pkg.width}
+			height={art.pkg.height}
+			format={art.pkg.format}
+			rows={art.pkg.rows}
+			atlas={art.pkg.atlas}
+			states={art.pkg.states}
+			contentH={art.pkg.contentH}
+			scale={scale ?? companionScale()}
 			frozen={frozen}
-			smooth={pet.pkg.smooth}
+			smooth={art.pkg.smooth}
 			state={state}
 			tier={tier}
 			action={action}

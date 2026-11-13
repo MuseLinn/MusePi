@@ -14,7 +14,7 @@
 :root {
 	/* Brand-gold first paint before the shared tokens load. */
 	--color-accent: oklch(0.7507 0.1295 79.85);
-	/* lib/pet-palette.ts reads this local fallback before the shared tokens
+	/* lib/companion-palette.ts reads this local fallback before the shared tokens
 	 * load; the main window later pushes the resolved theme accent. */
 	--accent: oklch(0.7507 0.1295 79.85);
 	/* Ink for on-accent fills. The send button was plain `#fff`, which read
@@ -116,7 +116,7 @@
 }
 
 /* The floating pet's builtin SVG sizes against this box (the pet window has
- * no composer clamp to inherit and no inline size any more — see PetSprite).
+ * no composer clamp to inherit and no inline size any more — see CompanionArt).
  * `--gui-pet-window-scale` is the size slider (0.6–1.5) written by
  * pet-main.tsx; 104px is the scale-1 authored body height, so the ball lands
  * at the same visual size the inline `size * scale` used to produce.
@@ -190,7 +190,7 @@
  * Exit: the sphere breaks apart (1 → 0.55) as the particles scatter out
  * and fade. The layer is pointer-events: none, so the pet is hit-testable
  * from the first frame and the reported hitbox never moves. Timings match
- * PetTransition.tsx and the shell's PET_HIDE_DELAY_MS. */
+ * CompanionTransition.tsx and the shell's PET_HIDE_DELAY_MS. */
 .pet-window__transition {
 	position: absolute;
 	inset: 0;

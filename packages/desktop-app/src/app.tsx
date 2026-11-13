@@ -7,7 +7,7 @@ import {
 	archiveSession as writeArchivedSession,
 } from "@musepi/client-core";
 import { createChatQuoteContext, createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
-import type { MessageDisplayContext, SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
+import type { MessageDisplayContext, SessionEntry, SessionPresence, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActionToastStack } from "./components/ActionToast";
@@ -54,15 +54,19 @@ import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { UpdateDialog } from "./components/UpdateDialog";
 import { UpdateToast } from "./components/UpdateToast";
 import { type ActionToastInput, pushActionToast } from "./lib/action-toast";
+import { type AgentSignalSource, agentSignalsFromSnapshot } from "./lib/agent-signals";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { writeBrowserSettingsTab } from "./lib/browser-preferences";
-import type { CompanionSessionCard } from "./lib/companion";
+import type { CompanionSessionCard, CompanionState } from "./lib/companion";
 import {
 	activeCompanionArt,
+	aggregateCompanionMood,
+	aggregateCompanionState,
 	companionEnabled,
-	companionMoodFromSession,
+	companionMoodOfState,
 	companionPlacement,
 	companionScale,
+	companionStateFromPresence,
 	companionStateFromSignals,
 } from "./lib/companion";
 import { applyCompanionPalette, resolvedAccent } from "./lib/companion-palette";
@@ -257,6 +261,22 @@ interface SessionMetaRow {
 	 *  but do not appear in ambient pet, welcome or tray projections. */
 	subagent?: boolean;
 	advisor?: boolean;
+	/** Structured presence from `session.list` / `session.presence`. */
+	presence?: SessionPresence;
+}
+
+function samePresence(a?: SessionPresence, b?: SessionPresence): boolean {
+	if (!a || !b) return a === b;
+	return (
+		a.phase === b.phase &&
+		a.working === b.working &&
+		a.live === b.live &&
+		a.paused === b.paused &&
+		a.activeTool === b.activeTool &&
+		a.pendingApprovals === b.pendingApprovals &&
+		a.pendingQuestions === b.pendingQuestions &&
+		a.updatedAt === b.updatedAt
+	);
 }
 
 /** Poll-row equality at field granularity: every field the poll lane writes
@@ -276,7 +296,8 @@ function pollRowEquals(old: SessionMetaRow, r: SessionMetaRow & { id: string }):
 		old.modeId === (r.modeId ?? old.modeId) &&
 		old.agentCount === (r.agentCount ?? 0) &&
 		old.subagent === (r.subagent === true) &&
-		old.advisor === (r.advisor === true)
+		old.advisor === (r.advisor === true) &&
+		samePresence(old.presence, r.presence)
 	);
 }
 
@@ -1541,6 +1562,7 @@ function AppInner(): ReactNode {
 									agentCount: r.agentCount ?? 0,
 									subagent: r.subagent === true,
 									advisor: r.advisor === true,
+									presence: r.presence,
 								},
 							]),
 						),
@@ -1592,6 +1614,7 @@ function AppInner(): ReactNode {
 								agentCount: r.agentCount ?? 0,
 								subagent: r.subagent === true,
 								advisor: r.advisor === true,
+								presence: r.presence ?? old?.presence,
 							});
 						}
 						return next ?? prev;
@@ -3349,6 +3372,7 @@ function AppInner(): ReactNode {
 			activeToolName: string | null = null,
 			activeLastMessage: string | null = null,
 			liveWorking: boolean | null = null,
+			activeSnap: AgentSignalSource | null = null,
 		): CompanionSessionCard[] => {
 			const findLabel = (nodes: SessionListNode[], id: string): string | null => {
 				for (const n of nodes) {
@@ -3361,6 +3385,14 @@ function AppInner(): ReactNode {
 			const cards: CompanionSessionCard[] = [];
 			const unread = unreadSessionsRef.current;
 			const selected = selectedIdRef.current;
+			// Only the selected session has the full store snapshot. Background
+			// sessions carry session.list facts, so their state degrades to
+			// working / celebrate / alerting instead of inventing tool detail.
+			const activeState: CompanionState | null = activeSnap
+				? companionStateFromSignals(agentSignalsFromSnapshot(activeSnap))
+				: null;
+			const activeAttention: "approval" | undefined =
+				activeSnap && (activeSnap.approvals?.length ?? 0) > 0 ? "approval" : undefined;
 			for (const [id, meta] of sessionMetaRef.current) {
 				if (meta.subagent || meta.advisor) continue;
 				const title = meta.title ?? findLabel(treeRef.current, id) ?? t("settings.petSessionUntitled");
@@ -3369,19 +3401,44 @@ function AppInner(): ReactNode {
 				const working = id === selected && liveWorking !== null ? liveWorking : meta.working;
 				if (working) {
 					const live = id === selected;
+					const presence = meta.presence;
+					const metaAttention: "approval" | "question" | undefined = presence?.pendingApprovals
+						? "approval"
+						: presence?.pendingQuestions
+							? "question"
+							: undefined;
+					const attention = live ? (activeAttention ?? metaAttention) : metaAttention;
+					const backgroundState: CompanionState = presence ? companionStateFromPresence(presence) : "working";
+					const state: CompanionState =
+						attention === "approval"
+							? "notifying"
+							: attention === "question"
+								? "curious"
+								: live && activeState
+									? activeState
+									: backgroundState;
 					const activityKey = `${meta.updatedAt ?? ""}:${meta.messageCount ?? 0}`;
 					cards.push({
 						sessionId: id,
 						activityKey,
 						title,
 						phase: "working",
-						statusText:
-							live && activeToolName
+						statusText: attention
+							? attention === "approval"
+								? t("settings.petSessionWaitingApproval")
+								: t("settings.petSessionNeedsInput")
+							: live && activeToolName
 								? t("settings.petSessionUsingTool", { tool: activeToolName })
-								: t("settings.petSessionWorking"),
+								: presence?.activeTool
+									? t("settings.petSessionUsingTool", { tool: presence.activeTool })
+									: t("settings.petSessionWorking"),
 						replyPreview: null,
+						mood: attention ? "waiting" : companionMoodOfState(state),
+						companionState: state,
+						attention,
 					});
 				} else if (unread.has(id)) {
+					const state: CompanionState = meta.status === "error" ? "alerting" : "celebrate";
 					cards.push({
 						sessionId: id,
 						activityKey: `${meta.updatedAt ?? ""}:${meta.messageCount ?? 0}`,
@@ -3389,6 +3446,8 @@ function AppInner(): ReactNode {
 						phase: meta.status === "error" ? "error" : "done",
 						statusText: meta.status === "error" ? t("settings.petSessionError") : t("settings.petSessionDone"),
 						replyPreview: id === selected ? activeLastMessage : null,
+						mood: companionMoodOfState(state),
+						companionState: state,
 					});
 				}
 			}
@@ -3433,7 +3492,7 @@ function AppInner(): ReactNode {
 					lastMessage,
 					sessionTitle: activeLabelRef.current,
 				},
-				sessions: buildSessionCards(toolName, lastMessage, snap.working),
+				sessions: buildSessionCards(toolName, lastMessage, snap.working, snap),
 				// The pet window cannot read this window's localStorage —
 				// carry the locale so its panel strings match the UI, and the
 				// resolved scheme so its chrome follows light/dark.
@@ -3446,16 +3505,12 @@ function AppInner(): ReactNode {
 			if (!companionEnabled() || companionPlacement() !== "desktop") return;
 			const snap = store?.getSnapshot();
 			if (!snap) return;
-			const mood = companionMoodFromSession({
-				working: snap.working,
-				streaming: snap.streaming,
-				hasApprovals: snap.approvals.length > 0,
-			});
-			const state = companionStateFromSignals({
-				working: snap.working,
-				streaming: snap.streaming,
-				approvals: snap.approvals.length,
-			});
+			const cards = buildSessionCards(null, null, snap.working, snap);
+			const activeState = companionStateFromSignals(
+				agentSignalsFromSnapshot(snap, { unread: unreadSessionsRef.current.size }),
+			);
+			const mood = aggregateCompanionMood(cards, companionMoodOfState(activeState));
+			const state = aggregateCompanionState(cards, activeState);
 			if (mood !== lastMood || state !== lastPetState) {
 				lastMood = mood;
 				lastPetState = state;
@@ -3622,7 +3677,7 @@ function AppInner(): ReactNode {
 			void electronAPI.petActivity?.({
 				recentSessions: rows,
 				unreadCount: unreadSessionsRef.current.size,
-				sessions: buildSessionCards(null, null, snap?.working ?? null),
+				sessions: buildSessionCards(null, null, snap?.working ?? null, snap),
 			});
 		};
 		let recentTimer: ReturnType<typeof setInterval> | null = null;

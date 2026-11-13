@@ -1,7 +1,7 @@
 /** Pointer input for the builtin orb. Velocities are CSS px/s; timestamps use
  * the renderer's performance.now() clock. The frame loop reads this object
  * through a ref so pointer events do not re-render React. */
-export interface PetGestureInput {
+export interface CompanionGestureInput {
 	pressed: boolean;
 	dragging: boolean;
 	vx: number;
@@ -12,7 +12,7 @@ export interface PetGestureInput {
 
 /** Smoothed gesture channels. They compose with, rather than replace, the
  * session's authored body motion. */
-export interface PetGestureMotion {
+export interface CompanionGestureMotion {
 	tilt: number;
 	stretch: number;
 	lift: number;
@@ -20,7 +20,7 @@ export interface PetGestureMotion {
 	squash: number;
 }
 
-export function createPetGestureMotion(): PetGestureMotion {
+export function createCompanionGestureMotion(): CompanionGestureMotion {
 	return { tilt: 0, stretch: 0, lift: 0, drop: 0, squash: 0 };
 }
 
@@ -34,12 +34,12 @@ const finite = (value: number): number => (Number.isFinite(value) ? value : 0);
  * sample stops contributing velocity after 120ms. Releasing produces a
  * damped landing impulse that starts at zero and ends at zero.
  */
-export function advancePetGesture(
-	state: PetGestureMotion,
-	input: PetGestureInput | null,
+export function advanceCompanionGesture(
+	state: CompanionGestureMotion,
+	input: CompanionGestureInput | null,
 	dt: number,
 	now: number,
-): PetGestureMotion {
+): CompanionGestureMotion {
 	const step = clamp(finite(dt), 0, 64);
 	const active = input?.dragging === true;
 	const recent = active && Number.isFinite(now - input.at) && now - input.at <= 120;
@@ -62,7 +62,7 @@ export function advancePetGesture(
 
 /** SVG transform for the current gesture. Scale pivots on the orb's ground
  * point so the landing squash does not make the body float. */
-export function petGestureTransform(motion: PetGestureMotion, box: number): string {
+export function companionGestureTransform(motion: CompanionGestureMotion, box: number): string {
 	const parts: string[] = [];
 	const dy = motion.lift + motion.drop;
 	if (Math.abs(dy) > 0.005) parts.push(`translate(0 ${dy.toFixed(2)})`);

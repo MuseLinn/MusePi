@@ -51,7 +51,7 @@ export const SETTLE_MS = 1400;
 /** The 7-mood axis the app speaks. Values are deliberately calm: this pet
  *  lives in a chat composer, and a mascot that bounces while you type is a
  *  mascot you turn off. Idle states breathe; only the loud states swing. */
-export const MOOD_MOTION: Record<string, BodyMotion> = {
+export const COMPANION_MOOD_MOTION: Record<string, BodyMotion> = {
 	rest: { pulse: [0.018, 4200] },
 	hover: { bob: [3.2, 1500], pulse: [0.012, 1500] },
 	waiting: { pulse: [0.02, 5400], tilt: 1.6 },
@@ -62,8 +62,8 @@ export const MOOD_MOTION: Record<string, BodyMotion> = {
 };
 
 /**
- * Body motion per SESSION STATE (pet.ts PetState) — 31 entries where the old
- * MOOD_MOTION had 7.
+ * Body motion per SESSION STATE (companion.ts CompanionState) — 31 entries where the old
+ * COMPANION_MOOD_MOTION had 7.
  *
  * The numbers that came from blobstudio / OpenMausBot are ported as measured
  * (`orbit` really is circle 6 over 3200ms at scale .72; `radar` really is a
@@ -86,10 +86,10 @@ export const MOOD_MOTION: Record<string, BodyMotion> = {
  *    there, which is the pet window's close animation. It is only reachable
  *    for as long as the state is held — switching away recomputes scale.
  *
- * MOOD_MOTION below stays as the legacy 7-mood fallback for hosts that have
+ * COMPANION_MOOD_MOTION below stays as the legacy 7-mood fallback for hosts that have
  * not moved to the state axis yet.
  */
-export const STATE_MOTION: Record<string, BodyMotion> = {
+export const COMPANION_STATE_MOTION: Record<string, BodyMotion> = {
 	// ── A. the turn loop
 	// Idle: the slow breath. Everything else is measured against this.
 	idle: { pulse: [0.018, 4200] },
@@ -131,7 +131,7 @@ export const STATE_MOTION: Record<string, BodyMotion> = {
 	alerting: { jitter: [1.1, 110], tilt: 2 },
 	// Dictating: transcribing has a rhythm, so a mid-tempo sway.
 	dictating: { sway: [3.2, 1400], pulse: [0.016, 1400] },
-	// ── E. emotion — all one-shot arrivals, all decaying (see PET_STATES).
+	// ── E. emotion — all one-shot arrivals, all decaying (see COMPANION_STATES).
 	excited: { enter: [1.06, 440], bob: [3, 480] },
 	happy: { bob: [2.6, 620], squash: 0.22 },
 	celebrate: { enter: [0.9, 560], bob: [3.6, 520], squash: 0.26 },
@@ -154,8 +154,8 @@ export const STATE_MOTION: Record<string, BodyMotion> = {
 };
 
 /**
- * Body motion for the user-initiated reactions (see pet-face.ts
- * PET_INTERACTIONS) — the same data contract as a mood, keyed on the second
+ * Body motion for the user-initiated reactions (see companion-face.ts
+ * COMPANION_INTERACTIONS) — the same data contract as a mood, keyed on the second
  * axis. These are the ONLY entries allowed to be loud: they fire on a user
  * gesture and resolve in about a second, so an overshoot entrance reads as
  * "it felt that" rather than as a fidget.
@@ -164,7 +164,7 @@ export const STATE_MOTION: Record<string, BodyMotion> = {
  * recoil-and-settle of something that just got poked, and it decays on its
  * own, so the gesture needs no exit animation in the caller.
  */
-export const INTERACTION_MOTION: Record<string, BodyMotion> = {
+export const COMPANION_INTERACTION_MOTION: Record<string, BodyMotion> = {
 	// The flinch: a quick pop outward, then a nervous shimmer as it settles.
 	startled: { enter: [1.14, 480], jitter: [0.9, 130], scale: 1.04 },
 	// The pleased wobble: a small bouncy double-take, no jitter (happy motion

@@ -21,11 +21,11 @@
  * sizes the svg only through this box. An svg rendered without the wrapper
  * (the chat avatar did exactly that) has no size rule reachable at all and
  * collapses to nothing; that was the blank-avatar bug (2026-09-20 user:
- * 「头像小球不显示了」). React call sites must go through `PetBox`, not
+ * 「头像小球不显示了」). React call sites must go through `CompanionArtBox`, not
  * render `BuiltinPetSprite` bare.
  *
- * `--gui-pet-ratio` is written by PetBox from the VIEW constants in
- * PetSprite.tsx (PET_BOX_RATIO). The literal below is only a pre-hydration
+ * `--gui-pet-ratio` is written by CompanionArtBox from the VIEW constants in
+ * CompanionArt.tsx (COMPANION_ART_BOX_RATIO). The literal below is only a pre-hydration
  * fallback — it used to be the ONLY value, twice, with nothing ever setting
  * the variable, so retuning the viewBox would have silently stretched every
  * host that kept reserving the old ratio. */
@@ -73,7 +73,7 @@
 	stroke-width: 1.6;
 }
 
-/* Eyes: the emissive face light — white in every theme (pet-palette.ts
+/* Eyes: the emissive face light — white in every theme (companion-palette.ts
  * `--gui-pet-face`). `--gui-pet-eye` lets the error/strained faces swap to
  * red without a second rule per mood. */
 .gui-pet-svg__eye {
@@ -116,7 +116,7 @@
 	stroke-width: 6.5;
 }
 
-/* ── Surface shading (optional — see lib/pet-decor.ts) ─────────────────
+/* ── Surface shading (optional — see lib/companion-decor.ts) ─────────────────
  * Crown gloss, catch-light and the drifting specular sweep. The one
  * decoration that is correct in every context: it is what makes a flat
  * dark circle read as a lit ball. `--flat` drops it for a quieter
@@ -190,7 +190,7 @@
  * Replaces the hardcoded three-dot orbit spinner: three static lights on a
  * CSS-spun circle could say "busy" and nothing else, while a session has 31
  * things to say (user: 「自己搞了个很一般的三个小轨道」). The seven effect
- * kinds now live in lib/pet-effects.tsx and are driven by the frame clock,
+ * kinds now live in lib/companion-effects.tsx and are driven by the frame clock,
  * so CSS has almost nothing left to declare — only that the layer is never
  * a hit target, and how the face yields to an effect that owns its content. */
 .gui-pet-svg__fx {
@@ -223,7 +223,7 @@
 }
 
 /* ── User-initiated reactions ────────────────────────────────────────────
- * The face + body data lives in pet-face.ts / pet-motion.ts; these rules are
+ * The face + body data lives in companion-face.ts / companion-motion.ts; these rules are
  * the MATERIAL half — how the orb's light answers the gesture. They are
  * additive to the mood classes above (both ride the same svg), so a reaction
  * on top of `working` keeps the working ring spin and still startles. */
@@ -277,7 +277,7 @@
 }
 
 /* Petdex spritesheet frame cycle (columns 0..7, row stays fixed).
- * The animation END is a per-instance CSS variable set by PetSprite
+ * The animation END is a per-instance CSS variable set by CompanionArt
  * (−(frameW × 7)px) because frame width varies per spritesheet.
  * Pixel-art atlases must stay crisp at any CSS scale (BitFun parity). */
 .gui-petdex-sprite {
@@ -447,7 +447,7 @@
  * ── Sizing is a legibility decision, not a taste one ─────────────────────
  * The face is authored inside a FACE_BOX square that *is* the ball, and the
  * SVG viewBox pads it by SIDE/TOP/BOTTOM. Since the decoration purge
- * (2026-09-20, pet-decor.ts) that padding is ~1.04× the ball rather than the
+ * (2026-09-20, companion-decor.ts) that padding is ~1.04× the ball rather than the
  * old ~1.28×, so the box is now very nearly the ball and these numbers read
  * almost directly. The binding constraint is unchanged: the eye capsule is
  * only ~25% of the ball, so a 34px box is the floor at which the mouth still
@@ -462,7 +462,7 @@
  * Hosts that need a specific size override `--gui-composer-pet-size`.
  *
  * ── Why the box and not the SVG ───────────────────────────────────────────
- * This rule is the ONLY thing that sizes the docked builtin pet. PetSprite
+ * This rule is the ONLY thing that sizes the docked builtin pet. CompanionArt
  * used to also write an inline width/height on `.gui-pet`, and an inline
  * style outranks every stylesheet rule — so this clamp never applied and the
  * pet rendered at the authoring scale instead (user: 「顶栏的小球怎么还是
@@ -545,7 +545,7 @@
  * half-resolved geometry, the micro variant sheds it and keeps the two eye
  * lights: the smallest thing that still reads as "a creature looking at
  * you". (The antenna mast this variant used to also shed is gone from the
- * art entirely — see pet-decor.ts.) */
+ * art entirely — see companion-decor.ts.) */
 .gui-composer-pet--micro .gui-pet-svg__mouth
 {
 	display:none;

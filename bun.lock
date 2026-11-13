@@ -173,6 +173,7 @@
       "name": "@musepi/desktop-app",
       "version": "0.7.4",
       "dependencies": {
+        "@aora-bot/react": "0.2.0",
         "@codemirror/autocomplete": "^6.20.3",
         "@codemirror/commands": "^6.11.0",
         "@codemirror/language": "6.13.1",
@@ -585,6 +586,10 @@
     "@anush008/tokenizers-linux-x64-gnu": ["@anush008/tokenizers-linux-x64-gnu@0.0.0", "", { "os": "linux", "cpu": "x64" }, "sha512-TLjByOPWUEq51L3EJkS+slyH57HKJ7lAz/aBtEt7TIPq4QsE2owOPGovByOLIq1x5Wgh9b+a4q2JasrEFSDDhg=="],
 
     "@anush008/tokenizers-win32-x64-msvc": ["@anush008/tokenizers-win32-x64-msvc@0.0.0", "", { "os": "win32", "cpu": "x64" }, "sha512-/5kP0G96+Cr6947F0ZetXnmL31YCaN15dbNbh2NHg7TXXRwfqk95+JtPP5Q7v4jbR2xxAmuseBqB4H/V7zKWuw=="],
+
+    "@aora-bot/engine": ["@aora-bot/engine@0.2.0", "", {}, "sha512-YyFThF8C2al4MBuXWDaFs23IYerv286vZkhznWKdVYKoQxryFHapttVmmEXPcFsgPdorxJrD1hCqJ43yO/TaQA=="],
+
+    "@aora-bot/react": ["@aora-bot/react@0.2.0", "", { "dependencies": { "@aora-bot/engine": "0.2.0" }, "peerDependencies": { "react": ">=19", "react-dom": ">=19" } }, "sha512-PofPEn+PvUF9ugpH1qCw6zDR3/JvNb2W4mZfH3FAebJXrrSaKYZsiS53ftfR1PUdd+yILgkTDnM2uELNK0wHzw=="],
 
     "@aparajita/capacitor-secure-storage": ["@aparajita/capacitor-secure-storage@8.0.1", "", { "dependencies": { "@capacitor/android": "^8.0.2", "@capacitor/app": "^8.0.0", "@capacitor/core": "^8.0.2", "@capacitor/ios": "^8.0.2", "@capacitor/keyboard": "^8.0.0" } }, "sha512-NSYIQtH6TyBgL3myumQGcCE3iecq2PtGNFlGxl1fJKEU37Dv5DudzDlwg42cgbVxCm1ay72g4X7rTSAvKULsVg=="],
 

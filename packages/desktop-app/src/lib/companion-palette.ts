@@ -63,7 +63,7 @@
 
 import chroma from "chroma-js";
 
-export interface PetPaletteVars {
+export interface CompanionPaletteVars {
 	"gui-pet-shell-a": string;
 	"gui-pet-shell-b": string;
 	"gui-pet-shell-c": string;
@@ -80,13 +80,13 @@ export interface PetPaletteVars {
 	"gui-pet-face-glow": string;
 }
 
-// The PetPaletteVars keys already carry the full "gui-pet-…" name — the
+// The CompanionPaletteVars keys already carry the full "gui-pet-…" name — the
 // prefix is ONLY the CSS custom-property marker. (Writing
 // "--gui-pet-" + "gui-pet-shell-a" produced "--gui-pet-gui-pet-shell-a",
 // so every themed palette silently missed the SVG's var(--gui-pet-shell-a)
 // reads and the orb never left its hardcoded fallbacks — live-verified
-// 2026-09-21 via verify-desktop-pet.mjs.)
-const PET_PALETTE_VAR_PREFIX = "--";
+// 2026-09-21 via verify-desktop-companion.mjs.)
+const COMPANION_PALETTE_VAR_PREFIX = "--";
 
 /** Serialize one palette color as an `oklch()` string (browser gamut-
  *  maps out-of-gamut values; see the pipeline notes above). */
@@ -101,7 +101,7 @@ function fmt(l: number, c: number, h: number, alpha?: number): string {
  * active scheme. Throws only when the accent is unparseable; callers
  * should fall back to the SVG's hardcoded defaults.
  */
-export function petPaletteVars(accent: string, theme: "light" | "dark"): PetPaletteVars {
+export function companionPaletteVars(accent: string, theme: "light" | "dark"): CompanionPaletteVars {
 	const a = chroma(accent.trim());
 	const h = a.get("oklch.h");
 	const l0 = a.get("oklch.l");
@@ -181,13 +181,13 @@ export function resolvedTheme(root: HTMLElement): "light" | "dark" {
  * SVG fallbacks) when the accent cannot be resolved. Returns true when
  * variables were written.
  */
-export function applyPetPalette(root: HTMLElement): boolean {
+export function applyCompanionPalette(root: HTMLElement): boolean {
 	const accent = resolvedAccent(root);
 	if (!accent) return false;
 	try {
-		const vars = petPaletteVars(accent, resolvedTheme(root));
+		const vars = companionPaletteVars(accent, resolvedTheme(root));
 		for (const [name, value] of Object.entries(vars)) {
-			root.style.setProperty(PET_PALETTE_VAR_PREFIX + name, value);
+			root.style.setProperty(COMPANION_PALETTE_VAR_PREFIX + name, value);
 		}
 		return true;
 	} catch (err) {

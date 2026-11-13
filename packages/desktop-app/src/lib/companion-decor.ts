@@ -20,7 +20,7 @@
  *     a plain silhouette for anyone who wants the quieter read.
  *
  * Storage is renderer-local (localStorage), same pattern as the pet's own
- * prefs in lib/pet.ts. Every window that renders the orb re-resolves on
+ * prefs in lib/companion.ts. Every window that renders the orb re-resolves on
  * `omp-pet-changed` / `storage`, so the settings toggle lands live in the
  * composer, the chat avatar and the floating desktop pet at once.
  *
@@ -29,56 +29,56 @@
  * docs/gui-design.md §5l for the shape/accessory split.
  */
 
-export const PET_DECOR_KEY = "musepi-gui-pet-decor";
+export const COMPANION_DECOR_KEY = "musepi-gui-pet-decor";
 
 /** Wearable accessories on the builtin orb (blobstudio's accessory slot,
  *  minimized: one pick, not a wardrobe). Drawn in orb-local coordinates by
  *  Silhouette — they scale with the ball and ride its body motion.
  *  - `note`       a gold eighth-note mark on the shell's upper right
  *  - `headphones` a band over the crown + a cup on each side */
-export type PetAccessory = "none" | "note" | "headphones";
+export type CompanionAccessory = "none" | "note" | "headphones";
 
-export const PET_ACCESSORIES: readonly PetAccessory[] = ["none", "note", "headphones"];
+export const COMPANION_ACCESSORIES: readonly CompanionAccessory[] = ["none", "note", "headphones"];
 
 /** The decoration set, resolved. Add new accessory flags here. */
-export interface PetDecor {
+export interface CompanionDecor {
 	/** Crown gloss + specular sweep on the shell. On by default — see the
 	 *  module note: this is the layer that makes the ball read as lit. */
 	gloss: boolean;
 	/** The wearable accessory. `none` = bare orb. */
-	accessory: PetAccessory;
+	accessory: CompanionAccessory;
 }
 
 /** Everything ON — the shape of a fresh install, and the resolve target
  *  for any key missing from storage. */
-export const PET_DECOR_DEFAULT: PetDecor = { gloss: true, accessory: "none" };
+export const COMPANION_DECOR_DEFAULT: CompanionDecor = { gloss: true, accessory: "none" };
 
-/** Mirror of PetDecor for the settings UI: one switch per flag, so the
+/** Mirror of CompanionDecor for the settings UI: one switch per flag, so the
  *  appearance section can map over it instead of hand-writing rows.
  *  `accessory` is excluded — it is a pick-one segmented control, not a
- *  boolean row (see PetDecorSection). */
-export const PET_DECOR_FLAGS: readonly {
-	key: Exclude<keyof PetDecor, "accessory">;
+ *  boolean row (see CompanionDecorSection). */
+export const COMPANION_DECOR_FLAGS: readonly {
+	key: Exclude<keyof CompanionDecor, "accessory">;
 	labelKey: string;
 	descKey: string;
 }[] = [{ key: "gloss", labelKey: "pet decor gloss", descKey: "pet decor gloss description" }];
 
 /** Narrow a stored value into the accessory union — an unknown string
  *  (older build, hand-edited storage) falls back to `none`. */
-function asAccessory(value: unknown): PetAccessory {
-	return typeof value === "string" && (PET_ACCESSORIES as readonly string[]).includes(value)
-		? (value as PetAccessory)
+function asAccessory(value: unknown): CompanionAccessory {
+	return typeof value === "string" && (COMPANION_ACCESSORIES as readonly string[]).includes(value)
+		? (value as CompanionAccessory)
 		: "none";
 }
 
 /** Resolve the stored decoration set. Unknown/garbled storage degrades to
  *  the defaults key-by-key rather than dropping the whole record — a
  *  malformed value must never blank the mascot. */
-export function petDecor(): PetDecor {
-	const out: PetDecor = { ...PET_DECOR_DEFAULT };
+export function companionDecor(): CompanionDecor {
+	const out: CompanionDecor = { ...COMPANION_DECOR_DEFAULT };
 	let raw: string | null = null;
 	try {
-		raw = localStorage.getItem(PET_DECOR_KEY);
+		raw = localStorage.getItem(COMPANION_DECOR_KEY);
 	} catch {
 		return out;
 	}
@@ -87,7 +87,7 @@ export function petDecor(): PetDecor {
 		const parsed: unknown = JSON.parse(raw);
 		if (!parsed || typeof parsed !== "object") return out;
 		const rec = parsed as Record<string, unknown>;
-		for (const key of Object.keys(PET_DECOR_DEFAULT) as (keyof PetDecor)[]) {
+		for (const key of Object.keys(COMPANION_DECOR_DEFAULT) as (keyof CompanionDecor)[]) {
 			const value = rec[key];
 			if (key === "accessory") {
 				out.accessory = asAccessory(value);
@@ -102,9 +102,9 @@ export function petDecor(): PetDecor {
 }
 
 /** Persist one flag and notify every mounted orb. */
-export function setPetDecorFlag(key: keyof PetDecor, value: boolean): void {
+export function setCompanionDecorFlag(key: keyof CompanionDecor, value: boolean): void {
 	try {
-		localStorage.setItem(PET_DECOR_KEY, JSON.stringify({ ...petDecor(), [key]: value }));
+		localStorage.setItem(COMPANION_DECOR_KEY, JSON.stringify({ ...companionDecor(), [key]: value }));
 	} catch {
 		// Storage unavailable — the toggle is a no-op this session.
 	}
@@ -112,9 +112,9 @@ export function setPetDecorFlag(key: keyof PetDecor, value: boolean): void {
 }
 
 /** Persist the accessory pick and notify every mounted orb. */
-export function setPetAccessory(value: PetAccessory): void {
+export function setCompanionAccessory(value: CompanionAccessory): void {
 	try {
-		localStorage.setItem(PET_DECOR_KEY, JSON.stringify({ ...petDecor(), accessory: value }));
+		localStorage.setItem(COMPANION_DECOR_KEY, JSON.stringify({ ...companionDecor(), accessory: value }));
 	} catch {
 		// Storage unavailable — the pick is a no-op this session.
 	}
