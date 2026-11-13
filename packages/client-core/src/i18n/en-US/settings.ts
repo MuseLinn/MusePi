@@ -1990,7 +1990,8 @@ export const settings = {
 	"settings.inAppNotificationsDescription":
 		"Show a lightweight toast in the bottom-right corner; it still appears while focused, when the system notification is suppressed",
 	"settings.sendTestNotification": "Send test notification",
-	"settings.sendTestNotificationDescription": "Immediately send a test notification",
+	"settings.sendTestNotificationDescription":
+		"Sends a system notification and a bottom-right in-app toast (per current settings)",
 	"settings.deliveryFailed": "Delivery failed",
 	"settings.idleRecap": "Idle recap",
 	"settings.interaction.notifications.idleRecap": "Idle Recap",

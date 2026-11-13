@@ -37,7 +37,14 @@ function restoreGlobals(): void {
 	defineGlobal("window", savedWindow);
 }
 
-import { buildNotification, type FocusReport, saveNotifyTemplates, shouldNotify } from "../src/lib/notify";
+import { dismissActionToast, getToasts } from "../src/lib/action-toast";
+import {
+	buildNotification,
+	type FocusReport,
+	saveNotifyTemplates,
+	sendTestNotification,
+	shouldNotify,
+} from "../src/lib/notify";
 import { GuiSessionStore } from "../src/lib/session-store";
 
 /**
@@ -152,5 +159,32 @@ describe("agent_end completion notification (issue #14 gap 2)", () => {
 		s.apply(agentEnd("stop") as never);
 		await settle();
 		expect(shown.length).toBe(0);
+	});
+});
+
+describe("test notification", () => {
+	beforeEach(() => {
+		installGlobals();
+		for (const toast of [...getToasts()]) dismissActionToast(toast.id);
+		localStorage.setItem("musepi-gui-notify-toast", "1");
+	});
+	afterEach(() => {
+		for (const toast of [...getToasts()]) dismissActionToast(toast.id);
+		localStorage.removeItem("musepi-gui-notify-toast");
+		restoreGlobals();
+	});
+
+	it("sends the system notification and the in-app toast", async () => {
+		const before = shown.length;
+		const result = await sendTestNotification();
+		expect(result.ok).toBe(true);
+		expect(shown.length).toBe(before + 1);
+		expect(getToasts().some(toast => toast.dedupeKey === "notify:test")).toBe(true);
+	});
+
+	it("skips the in-app toast when in-app notifications are off", async () => {
+		localStorage.setItem("musepi-gui-notify-toast", "0");
+		await sendTestNotification();
+		expect(getToasts().some(toast => toast.dedupeKey === "notify:test")).toBe(false);
 	});
 });

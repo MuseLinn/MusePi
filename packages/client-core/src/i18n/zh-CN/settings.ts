@@ -1897,7 +1897,7 @@ export const settings = {
 	"settings.inAppNotifications": "应用内通知",
 	"settings.inAppNotificationsDescription": "在窗口右下角显示轻量提示；聚焦时系统通知会被抑制，这里仍会显示",
 	"settings.sendTestNotification": "发送测试通知",
-	"settings.sendTestNotificationDescription": "立即发送一条测试通知",
+	"settings.sendTestNotificationDescription": "同时发送系统通知和右下角应用内 toast（按当前设置）",
 	"settings.deliveryFailed": "发送失败",
 	"settings.idleRecap": "空闲回顾",
 	"settings.interaction.notifications.idleRecap": "空闲回顾",

@@ -347,6 +347,16 @@ export function sendTestNotification(): Promise<{ ok: boolean; reason?: string }
 	if (typeof window === "undefined") return Promise.resolve({ ok: false, reason: "unsupported" });
 	const title = isZh() ? "测试通知" : "Test notification";
 	const body = isZh() ? "通知设置已生效" : "Notifications are working";
+	// The test exercises both surfaces the notification pipeline can use:
+	// the system notification below and the bottom-right in-app toast.
+	if (inAppToastEnabled()) {
+		pushActionToast({
+			kind: "info",
+			title,
+			message: body,
+			dedupeKey: "notify:test",
+		});
+	}
 	const silent = !notifySoundEnabled();
 	const notifier = electronNotifier();
 	if (notifier?.showNotification) {
