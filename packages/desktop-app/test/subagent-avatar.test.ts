@@ -1,3 +1,4 @@
+import "./dom-shim";
 import { describe, expect, test } from "bun:test";
 import type { AgentSnapshot, SubagentProgressPayload } from "@musepi/pi-wire";
 import { orbStateForSubagent, subagentSignals } from "../src/components/SubagentAvatar";
