@@ -1,5 +1,5 @@
 /**
- * Agent companion (伙伴) prefs + descriptors — BitFun "Agent 伙伴" parity.
+ * Agent companion (伙伴) preferences and descriptors.
  *
  * Three settings (all renderer-local, localStorage — same pattern as the
  * sound/motion prefs):
@@ -222,8 +222,8 @@ export function companionMoodOfState(state: CompanionState): CompanionMood {
 	return mood === "hover" || mood === "dragging" ? "working" : mood;
 }
 
-/** The same priority BitFun's Agent companion uses: a session blocked on the
- *  user outranks a thinking session, which outranks ordinary work. */
+/** A session blocked on the user outranks a thinking session, which
+ *  outranks ordinary work. */
 export function aggregateCompanionMood(
 	cards: readonly CompanionSessionCard[],
 	fallback: CompanionMood = "rest",
@@ -330,8 +330,8 @@ export const BUILTIN_SPRITE_ART_ID = "musepi";
 export const BUILTIN_VECTOR_ART_ID = "musepi-note-bot";
 
 /** Builtin spritesheet presets — the MusePi sheet (AI-designed smooth art,
- * 2026-09-16) first, then sheets vendored from BitFun (MIT, Copyright 2026
- * CWing) public/agent-companion-pets, downscaled to 768×936 (8×9 grid,
+ * 2026-09-16) first, then sheets vendored from an MIT-licensed companion-pet
+ * pack (Copyright 2026 CWing), downscaled to 768×936 (8×9 grid,
  * 96×104 frames). Ids/descriptions match the upstream pet.json metadata;
  * loaded by relative path from dist/pets/. `smooth` opts a sheet out of the
  * pixel-art `image-rendering: pixelated` treatment (musepi.webp is smooth
@@ -466,7 +466,7 @@ export const BUILTIN_SPRITE_PRESETS: readonly {
 export const SPRITE_COLUMNS = 8;
 const PETDEX_ROWS = 9;
 
-/** Spritesheet row per mood — same mapping BitFun/OpenPets use
+/** Spritesheet row per mood
  *  (rest=0, hover=1, dragging=2, error=5, waiting=6, working=7, analyzing=8). */
 const SPRITE_MOOD_ROW: Record<SpriteMood, number> = {
 	rest: 0,
@@ -491,7 +491,7 @@ export const SPRITE_MOOD_ANIM: Record<SpriteMood, { cycleMs: number; transform: 
 	error: { cycleMs: 1800, transform: "breathe", transformMs: 6000 },
 };
 
-/** Valid (non-blank) frames per spritesheet row. BitFun sheets draw calm
+/** Valid (non-blank) frames per spritesheet row. Vendored sheets draw calm
  *  rows (rest/waiting/working/analyzing) with 6 frames + 2 transparent
  *  padding columns, hover/dragging/error with all 8. Cycling the padding
  *  renders an EMPTY frame once per loop — the desktop pet visibly blanks

@@ -9,8 +9,8 @@ import { stringArrayFromRow } from "../../extensibility/plugins/row-config";
 /**
  * File skills, scoped by a preset row.
  *
- * dsh's `@deepseek-ai/dsh-skill-filesystem` is a provider plugin whose row
- * config lists skill roots. MusePi already discovers project/user skill roots
+ * A provider plugin's row config lists skill roots. MusePi already discovers
+ * project/user skill roots
  * globally; what it lacked was a way for a PRESET to bring its own roots — a
  * skill pack that travels with the preset instead of being installed for every
  * session. This plugin is that row: `roots` is the only input, and every skill
@@ -19,9 +19,8 @@ import { stringArrayFromRow } from "../../extensibility/plugins/row-config";
  *
  * Discovery is READ-ONLY and snapshot-at-mount, like every other preset row:
  * editing a file is picked up when the preset is next mounted (new session or
- * preset switch). Watch mode is deliberately absent — dsh's watcher belongs to
- * a host-level provider that lives for the process, while a preset generation
- * is disposable.
+ * preset switch). Watch mode is deliberately absent — a process-level watcher
+ * belongs to a host-level provider, while a preset generation is disposable.
  *
  * A skill without `description` is skipped with a warning rather than
  * registered half-formed: the model's directory needs the description to

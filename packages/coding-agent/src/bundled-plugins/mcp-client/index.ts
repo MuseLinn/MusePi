@@ -4,8 +4,8 @@ import type { MCPServerConfig } from "../../mcp/types";
 /**
  * One MCP server, declared by ONE preset row.
  *
- * dsh's `@deepseek-ai/dsh-mcp-client` is a plugin whose row config names a
- * server (`serverName`, transport, command/url). This is the same contract on
+ * A plugin's row config names a server (`serverName`, transport, command/url).
+ * This is the same contract on
  * MusePi's registration seam: the preset decides which servers belong to the
  * session, and Builtin-tool discovery is not widened globally. A preset-scoped
  * server therefore travels with the preset — switching presets disconnects it,

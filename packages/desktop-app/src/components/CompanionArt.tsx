@@ -1,10 +1,10 @@
 /**
- * CompanionArt — the agent companion (伙伴) renderer, BitFun parity.
+ * CompanionArt — the agent companion (伙伴) renderer.
  *
  * Two sources:
  *  - builtin: a hand-drawn SVG MusePi mascot (note-bot) with per-mood
  *    overlay layers — silhouette stays theme-stable, mood decals adapt
- *    (same layered architecture as BitFun's panda: static body + FaceLayers).
+ *    (layered architecture: static body + FaceLayers).
  *  - petdex: an imported Petdex spritesheet (8×9 frame grid) animated via
  *    CSS background-position; mood selects the row, columns cycle frames.
  */

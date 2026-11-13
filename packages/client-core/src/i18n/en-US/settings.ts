@@ -4922,6 +4922,9 @@ export const settings = {
 	"Shell Minimizer": "Shell Minimizer",
 	"Shell Minimizer Source Outline": "Shell Minimizer Source Outline",
 	Shimmer: "Shimmer",
+	"Progress updates": "Progress updates",
+	"Let the agent post progress updates in the conversation while it works. Applies only to sessions created after the change — the tool set is fixed when a session starts":
+		"Let the agent post progress updates in the conversation while it works. Applies only to sessions created after the change — the tool set is fixed when a session starts",
 	"Show Hardware Cursor": "Show Hardware Cursor",
 	"Show Hook Status": "Show Hook Status",
 	"Show Inline Images": "Show Inline Images",

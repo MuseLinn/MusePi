@@ -6182,7 +6182,7 @@
 
 .sh-jobcard {
 	border: 1px solid var(--border);
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--bg-overlay, var(--bg-raised)) 92%, transparent);
 	padding: 10px 12px;
 	box-shadow: 0 8px 24px oklch(0 0 0 / 18%);
@@ -6212,7 +6212,7 @@
 	width: 22px;
 	height: 22px;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--fg-muted);
 	cursor: pointer;
@@ -6281,7 +6281,7 @@
 	width: 22px;
 	height: 22px;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--fg-muted);
 	cursor: pointer;
@@ -6342,7 +6342,7 @@
 	flex-direction: column;
 	gap: 8px;
 	padding: 14px 16px 18px;
-	border-radius: 16px 16px 0 0;
+	border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
 	background: var(--bg-raised);
 	border-top: 1px solid var(--border);
 }
@@ -6372,7 +6372,7 @@
 .sh-job-sheet-output {
 	margin: 0;
 	padding: 10px 12px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: var(--bg-inset, var(--bg));
 	border: 1px solid var(--border);
 	overflow: auto;

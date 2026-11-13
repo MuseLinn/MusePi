@@ -5,8 +5,8 @@
  * `hooks.json` both describe an event → matcher group → command list. The
  * shared layer owns parsing, matching, execution, decoding and merging; a
  * dialect plugin owns only what actually differs (its event list, matcher mode,
- * payload fields and defaults). This is dsh's `hook-protocol` split without
- * importing its package: the contract stays inside MusePi's extension events.
+ * payload fields and defaults). This is the same dialect split without
+ * importing another package: the contract stays inside MusePi's extension events.
  *
  * A command hook is a shell line, never a plugin: its whole interface with the
  * harness is stdin (one JSON payload), environment, exit code and stdout.

@@ -3213,6 +3213,9 @@ export const settings = {
 	"Shell Minimizer": "Shell 精简器",
 	"Shell Minimizer Source Outline": "Shell 精简器源码大纲",
 	Shimmer: "闪烁动画",
+	"Progress updates": "进度更新",
+	"Let the agent post progress updates in the conversation while it works. Applies only to sessions created after the change — the tool set is fixed when a session starts":
+		"允许智能体在工作时向对话中发送进度更新。仅对修改后新建的会话生效——会话启动时工具集已固定",
 	"Show Hardware Cursor": "显示硬件光标",
 	"Show Hook Status": "显示钩子状态",
 	"Show Inline Images": "显示内联图片",

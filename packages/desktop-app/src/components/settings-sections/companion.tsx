@@ -44,7 +44,7 @@ const COMPANION_STYLE_SEGMENTS: SegmentedOption<CompanionArtFormat>[] = [
 	{ value: "sprite", label: tLoose("settings.petStyleSprite") },
 ];
 
-/** Agent companion (伙伴, BitFun parity): master switch + display mode
+/** Agent companion (伙伴): master switch + display mode
  * (input / floating desktop pet) + appearance (drawing style first — vector
  * orb or spritesheet — then that style's presets and imports). Prefs are
  * renderer-local; the desktop pet window is driven through the Electron
@@ -105,8 +105,8 @@ function completeSpritePackage(raw: ImportedSpritePackage, img: HTMLImageElement
 
 /** One selectable companion card in the appearance grid: rest-frame
  *  thumbnail, name, truncated description; selected card gets the accent
- *  ring + check. Imported cards get a hover delete button (BitFun parity:
- *  the delete lives on the card, stopPropagation keeps it from selecting). */
+ *  ring + check. Imported cards get a hover delete button (the delete lives
+ *  on the card; stopPropagation keeps it from selecting). */
 export function CompanionCard({
 	entry,
 	selected,
@@ -774,7 +774,7 @@ export function CompanionSection(): ReactNode {
 								onChange={mode => pickStyle(mode)}
 							/>
 						</div>
-						{/* Appearance (BitFun parity): header row with refresh +
+						{/* Appearance: header row with refresh +
 						 * import, a trigger showing the selected pet, and an
 						 * expandable preset grid grouped 预设 / 已导入. */}
 						<div className="gui-settings-row">
