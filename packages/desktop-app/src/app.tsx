@@ -1518,6 +1518,16 @@ function AppInner(): ReactNode {
 		});
 	}, []);
 
+		// Primary swap: session tree + metadata must follow the new root.
+	useEffect(() => {
+		if (!rpc) return;
+		const off = rpc.addEventListener(event => {
+			if ((event.payload as { type?: string } | undefined)?.type === "workspace.primaryChanged") {
+				void refreshSessions(rpc);
+			}
+		});
+		return () => off();
+	}, [rpc, refreshSessions]);
 	const refreshSessions = useCallback(
 		async (client: RpcClient): Promise<void> => {
 			// The two reads are independent: issuing them together saves one

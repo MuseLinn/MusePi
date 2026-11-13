@@ -475,6 +475,15 @@ export function SessionSidebar({
 	const [projectsError, setProjectsError] = useState<string | null>(null);
 	// Bumped after a mutation or a project-added broadcast to re-run the load.
 	const [projectsRevision, setProjectsRevision] = useState(0);
+		useEffect(() => {
+		if (!rpc) return;
+		const off = rpc.addEventListener(event => {
+			if ((event.payload as { type?: string } | undefined)?.type === "workspace.primaryChanged") {
+				reloadProjects();
+			}
+		});
+		return () => off();
+	}, [rpc, reloadProjects]);
 	const reloadProjects = useCallback((): void => setProjectsRevision(revision => revision + 1), []);
 	/** Visual order only (drag-to-reorder). Daemon rows the order does not name
 	 *  keep their `lastOpenedAt` order at the bottom. */
