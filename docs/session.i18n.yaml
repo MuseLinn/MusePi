@@ -1,5 +1,5 @@
 # Consistency record for session.md / session.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/session
-session.md: 034efe08826e0f051ae2ad533f5f3b110536947e
-session.zh-CN.md: fbe66fea536e10e78502825c06719b38dd51a427
+session.md: 8a7dc8e9a494e2dae22e2ad89a233dbe744b362e
+session.zh-CN.md: 4cf3d00aae02c538cb08a214db74982889414cc9

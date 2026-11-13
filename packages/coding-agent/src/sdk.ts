@@ -184,6 +184,7 @@ import {
 	type SecretObfuscator,
 } from "./secrets";
 import { AgentSession, type InitialRetryFallbackState, type PlanYolo, type Prewalk } from "./session/agent-session";
+import type { AgentSessionConfig } from "./session/agent-session-types";
 import { discoverAuthStorage as discoverAuthStorageFromConfig } from "./session/auth-broker-config";
 import type { AuthStorage } from "./session/auth-storage";
 import { CacheWarmer } from "./session/cache-warmer";
@@ -471,6 +472,8 @@ export interface CreateAgentSessionOptions {
 	 * executors) so they never issue paid warm requests of their own.
 	 */
 	cacheWarming?: boolean;
+	/** Append and flush the host journal before a side-effecting tool executes. */
+	flushDurableToolIntent?: AgentSessionConfig["flushDurableToolIntent"];
 	/** Force read-only plan mode at start, auto-approve on the model's first resolve call, then switch to execute. */
 	planYolo?: PlanYolo;
 
@@ -4462,6 +4465,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			advisorSharedInstructions: discoveredAdvisors.sharedInstructions,
 			advisorConfigs: discoveredAdvisors.advisors,
 			pauseGate: options.pauseGate,
+			flushDurableToolIntent: options.flushDurableToolIntent,
 			agent,
 			pruneToolDescriptions: inlineToolDescriptors,
 			thinkingLevel: autoThinking ? AUTO_THINKING : effectiveThinkingLevel,

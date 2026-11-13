@@ -71,8 +71,8 @@ const TAIL_SCAN_CHUNK = 64 * 1024;
  * - afterSeq > tailSeq → resyncRequired: the watermark comes from a
  *   divergent journal; replaying nothing would strand it above every
  *   future seq (its gate would skip real events).
- * - otherwise the journal holds every record in (afterSeq, tail] and the
- *   caller replays them in order. */
+ * - otherwise the caller must also validate the records with
+ *   {@link catchupRecordsPlan} before replaying them. */
 export function catchupPlan(
 	afterSeq: number,
 	checkpointSeq: number,
@@ -80,6 +80,24 @@ export function catchupPlan(
 ): { resyncRequired: true; compactedThrough: number } | { resyncRequired: false } {
 	if (afterSeq < checkpointSeq) return { resyncRequired: true, compactedThrough: checkpointSeq };
 	if (afterSeq > tailSeq) return { resyncRequired: true, compactedThrough: checkpointSeq };
+	return { resyncRequired: false };
+}
+
+/** Require a complete, contiguous replay through the tail before exposing it. */
+export function catchupRecordsPlan(
+	afterSeq: number,
+	checkpointSeq: number,
+	tailSeq: number,
+	records: readonly JournalRecord[],
+): ReturnType<typeof catchupPlan> {
+	const plan = catchupPlan(afterSeq, checkpointSeq, tailSeq);
+	if (plan.resyncRequired) return plan;
+	let expected = afterSeq + 1;
+	for (const record of records) {
+		if (record.seq !== expected) return { resyncRequired: true, compactedThrough: checkpointSeq };
+		expected += 1;
+	}
+	if (expected !== tailSeq + 1) return { resyncRequired: true, compactedThrough: checkpointSeq };
 	return { resyncRequired: false };
 }
 
@@ -95,6 +113,23 @@ export function catchupPlan(
  *  records while keeping session.history-style watermark stamps off the full
  *  journal scan. */
 const TAIL_SEQ_READ_BYTES = 64 * 1024;
+
+/** Read a complete window unless EOF intervenes, returning only initialized bytes. */
+async function readWindow(
+	handle: fs.promises.FileHandle,
+	buffer: Buffer,
+	offset: number,
+	length: number,
+	position: number,
+): Promise<number> {
+	let total = 0;
+	while (total < length) {
+		const { bytesRead } = await handle.read(buffer, offset + total, length - total, position + total);
+		if (bytesRead === 0) break;
+		total += bytesRead;
+	}
+	return total;
+}
 
 const rewriteLocks = new Map<string, Promise<void>>();
 function withRewriteLock(filePath: string, fn: () => Promise<void>): Promise<void> {
@@ -200,8 +235,8 @@ export class AppendJournal {
 			const { size } = await fd.stat();
 			const scan = async (from: number, length: number): Promise<number> => {
 				const buf = Buffer.alloc(length);
-				await fd.read(buf, 0, length, from);
-				const lines = buf.toString("utf8").split("\n");
+				const bytesRead = await readWindow(fd, buf, 0, length, from);
+				const lines = buf.subarray(0, bytesRead).toString("utf8").split("\n");
 				for (let i = lines.length - 1; i >= 0; i--) {
 					const line = lines[i].trim();
 					if (!line) continue;
@@ -443,8 +478,8 @@ export class AppendJournal {
 			for (;;) {
 				const want = completeEnd - from;
 				const buf = Buffer.allocUnsafe(want);
-				await handle.read(buf, 0, want, from);
-				const chunk = buf.toString("utf8");
+				const bytesRead = await readWindow(handle, buf, 0, want, from);
+				const chunk = buf.subarray(0, bytesRead).toString("utf8");
 				const lines = chunk.split("\n");
 				// Line 0 starts mid-record unless this window is the whole file,
 				// and a record whose head is missing cannot be recognised, so it
@@ -470,8 +505,8 @@ export class AppendJournal {
 			const start = found === -1 ? 0 : found;
 			const want = completeEnd - start;
 			const buf = Buffer.allocUnsafe(want);
-			await handle.read(buf, 0, want, start);
-			return { text: buf.toString("utf8"), startByte: start, bytesRead: want };
+			const bytesRead = await readWindow(handle, buf, 0, want, start);
+			return { text: buf.subarray(0, bytesRead).toString("utf8"), startByte: start, bytesRead };
 		} finally {
 			await handle.close();
 		}
@@ -493,8 +528,8 @@ export class AppendJournal {
 			const want = Math.min(TAIL_SCAN_CHUNK, end);
 			const start = end - want;
 			const buf = Buffer.allocUnsafe(want);
-			await handle.read(buf, 0, want, start);
-			const newline = buf.subarray(0, want).toString("utf8").lastIndexOf("\n");
+			const bytesRead = await readWindow(handle, buf, 0, want, start);
+			const newline = buf.subarray(0, bytesRead).toString("utf8").lastIndexOf("\n");
 			if (newline !== -1) return start + newline + 1;
 			end = start;
 		}

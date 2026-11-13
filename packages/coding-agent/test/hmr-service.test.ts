@@ -4,7 +4,11 @@
  */
 import { afterEach, describe, expect, it } from "bun:test";
 import { createHmrService, type HmrRestartRequirement } from "../src/extensibility/plugins/hmr/service";
-import { clearHostServices, provideHostService } from "../src/extensibility/plugins/runtime/host-services";
+import {
+	clearHostServices,
+	getHostService,
+	provideHostService,
+} from "../src/extensibility/plugins/runtime/host-services";
 
 afterEach(() => {
 	clearHostServices();
@@ -218,5 +222,37 @@ describe("ctx.hmr", () => {
 		);
 		expect(enabled).toBe(false);
 		expect(typeof off).toBe("function");
+	});
+});
+
+describe("restart request ownership", () => {
+	it("retains distinct requests until acknowledged and clears them on dispose", async () => {
+		const service = createHmrService([], 0);
+		const first = { file: "/project/a.ts", reason: "first" };
+		const second = { file: "/project/b.ts", reason: "second" };
+		service.requestRestart(first);
+		service.requestRestart(second);
+		service.requestRestart(first);
+		expect(service.restartRequirements).toEqual([first, second]);
+		expect(service.restartRequired).toEqual(first);
+
+		service.acknowledgeRestart(first);
+		expect(service.restartRequirements).toEqual([second]);
+		expect(service.restartRequired).toEqual(second);
+
+		await service.dispose();
+		expect(service.restartRequirements).toEqual([]);
+		expect(service.restartRequired).toBeNull();
+	});
+});
+
+describe("host service registry", () => {
+	it("rejects a duplicate name without replacing the incumbent", () => {
+		const incumbent = { owner: "incumbent" };
+		const rejected = { owner: "rejected" };
+		const dispose = provideHostService("shared", incumbent);
+		expect(() => provideHostService("shared", rejected)).toThrow("already provided");
+		expect(getHostService("shared")).toBe(incumbent);
+		dispose();
 	});
 });

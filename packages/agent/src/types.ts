@@ -520,6 +520,8 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 		context: BeforeToolCallContext,
 		signal?: AbortSignal,
 	) => Promise<BeforeToolCallResult | undefined> | BeforeToolCallResult | undefined;
+	/** Awaited after `tool_execution_start` and before `tool.execute`; throwing prevents execution. */
+	beforeToolExecution?: (context: BeforeToolCallContext, signal?: AbortSignal) => Promise<void> | void;
 	/**
 	 * Called after a turn ends and before the loop polls steering/asides for the
 	 * next iteration. `context` carries the just-finished turn; `context.willContinue`
@@ -859,6 +861,8 @@ export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any
 	 */
 	matcherEntries?: (args: unknown) => readonly { path: string; digest: string }[] | undefined;
 
+	/** Whether execution needs a durable start intent. Defaults to true; a predicate may exempt read-only calls. */
+	requiresDurableIntent?: boolean | ((args: unknown) => boolean);
 	/** Capability tier declaration used by approval gates. Omitted means "exec". */
 	approval?: ToolApproval;
 

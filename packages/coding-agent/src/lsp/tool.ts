@@ -105,6 +105,11 @@ import { runWorkspaceDiagnostics } from "./workspace-diagnostics";
 
 const MAX_RENAME_PAIRS = 1000;
 
+function lspAction(args: unknown): string {
+	const rawAction = (args as Partial<LspParams>).action;
+	return typeof rawAction === "string" ? rawAction.toLowerCase() : "";
+}
+
 interface FileRenamePair {
 	oldUri: string;
 	newUri: string;
@@ -150,10 +155,9 @@ async function enumerateRenamePairs(
  */
 export class LspTool implements AgentTool<typeof lspSchema, LspToolDetails, Theme> {
 	readonly name = "lsp";
+	readonly requiresDurableIntent = (args: unknown): boolean => !LSP_READONLY_ACTIONS.has(lspAction(args));
 	readonly approval = (args: unknown): ToolApprovalDecision => {
-		const rawAction = (args as Partial<LspParams>).action;
-		const action = typeof rawAction === "string" ? rawAction.toLowerCase() : "";
-		return LSP_READONLY_ACTIONS.has(action) ? "read" : "write";
+		return LSP_READONLY_ACTIONS.has(lspAction(args)) ? "read" : "write";
 	};
 	readonly formatApprovalDetails = (args: unknown): string[] => {
 		const params = args as Partial<LspParams>;

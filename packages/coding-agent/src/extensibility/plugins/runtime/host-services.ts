@@ -13,6 +13,7 @@ const services = new Map<string, unknown>();
 
 /** Publish one host service. Returns a disposer that removes it if unchanged. */
 export function provideHostService(name: string, service: unknown): () => void {
+	if (services.has(name)) throw new Error(`Host service "${name}" is already provided`);
 	services.set(name, service);
 	return () => {
 		if (services.get(name) === service) services.delete(name);

@@ -82,6 +82,7 @@ function describeItem(item: { id: string; title?: string; text?: string; done?: 
 
 export class KnowledgeTool implements AgentTool<typeof knowledgeSchema, KnowledgeToolDetails> {
 	readonly name = "knowledge";
+	readonly requiresDurableIntent = false;
 	readonly label = "Knowledge";
 	readonly strict = true;
 	readonly approval = "read" as const;

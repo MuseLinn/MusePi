@@ -1,5 +1,6 @@
 import type {
 	Agent,
+	AgentEvent,
 	AgentMessage,
 	AgentTool,
 	AgentToolContext,
@@ -244,6 +245,8 @@ export interface AgentSessionConfig {
 	onSseEvent?: SimpleStreamOptions["onSseEvent"];
 	/** Per-session raw SSE diagnostic buffer. */
 	rawSseDebugBuffer?: RawSseDebugBuffer;
+	/** Append and flush the host's durable intent independently of subscriber completion. */
+	flushDurableToolIntent?: (event: Extract<AgentEvent, { type: "tool_execution_start" }>) => Promise<void>;
 	/** Current session message-to-LLM conversion pipeline. */
 	convertToLlm?: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
 	/** System prompt builder that can consider tool availability. */

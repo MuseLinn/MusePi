@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, spyOn } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -8,13 +8,16 @@ import { getBundledModel } from "@musepi/pi-catalog/models";
 import { resetBundledPluginsLoaded } from "@musepi/pi-coding-agent/bundled-plugins/loader";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
-import { type DaemonConnection, DaemonServer, type DaemonSessionHost } from "@musepi/pi-coding-agent/daemon/server";
+import { AppendJournal } from "@musepi/pi-coding-agent/daemon/journal";
+import { type DaemonConnection, DaemonServer, DaemonSessionHost } from "@musepi/pi-coding-agent/daemon/server";
 import { resetMagicKeywordRegistry } from "@musepi/pi-coding-agent/modes/magic-keyword-registry";
 import { AgentSession } from "@musepi/pi-coding-agent/session/agent-session";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
+import { WriteTool } from "@musepi/pi-coding-agent/tools/write";
 import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 import type { DisplayContext } from "@musepi/pi-wire";
+import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
 
 const quote: DisplayContext = { kind: "chat-quote", messageId: "assistant-1", quote: "quoted", comment: "note" };
 const annotation: DisplayContext = {
@@ -173,5 +176,108 @@ describe("daemon session.send displayContext forwarding", () => {
 			{ deliverAs: "steer", displayContext: annotation },
 			{ deliverAs: "followUp", displayContext: annotation },
 		]);
+	});
+});
+
+describe("daemon durable intent", () => {
+	it("flushes the adopted live journal before execute on create and reactivate", async () => {
+		const chunks = [
+			{ tool: "call-1", finish: "tool_calls" },
+			{ finish: "tool_calls" },
+			{ text: "first done", finish: "stop" },
+			{ tool: "call-2", finish: "tool_calls" },
+			{ finish: "tool_calls" },
+			{ text: "second done", finish: "stop" },
+		].map((part, index) => ({
+			id: `chatcmpl-${index}`,
+			object: "chat.completion.chunk",
+			created: 0,
+			model: "agnes-3.0-flash",
+			choices: [
+				{
+					index: 0,
+					delta: part.tool
+						? {
+								tool_calls: [
+									{
+										index: 0,
+										id: part.tool,
+										type: "function",
+										function: { name: "write", arguments: JSON.stringify({ path: "out.txt", content: "x" }) },
+									},
+								],
+							}
+						: part.text
+							? { content: part.text }
+							: {},
+					finish_reason: part.tool ? null : part.finish,
+				},
+			],
+		}));
+		let request = 0;
+		const fetchMock = Object.assign(
+			async (_input: string | URL | Request, init?: RequestInit) => {
+				const body = typeof init?.body === "string" ? init.body : "";
+				const chunk = body.includes('"write"') ? chunks[request++] : chunks[2];
+				if (!chunk) throw new Error("unexpected model request");
+				return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, {
+					status: 200,
+					headers: { "content-type": "text/event-stream" },
+				});
+			},
+			{ preconnect: () => {} },
+		);
+		const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(fetchMock);
+		const order: string[] = [];
+		const originalExecute = WriteTool.prototype.execute;
+		const executeSpy = spyOn(WriteTool.prototype, "execute").mockImplementation(async function (
+			this: WriteTool,
+			...args: Parameters<WriteTool["execute"]>
+		) {
+			order.push("execute");
+			return originalExecute.apply(this, args);
+		});
+		const host = new DaemonSessionHost();
+		const originalFlush = AppendJournal.prototype.flush;
+		const flushSpy = spyOn(AppendJournal.prototype, "flush").mockImplementation(async function (this: AppendJournal) {
+			order.push("flush");
+			return originalFlush.call(this);
+		});
+		const dir = await isolateAgentDirForTest("daemon-durable-intent-");
+		cleanups.push(async () => {
+			await host.dispose();
+			flushSpy.mockRestore();
+			executeSpy.mockRestore();
+			fetchSpy.mockRestore();
+			await restoreAgentDirForTest(dir);
+		});
+
+		await Bun.write(
+			path.join(dir, "models.yml"),
+			`providers:\n  mock:\n    baseUrl: http://127.0.0.1\n    apiKey: test-key\n    api: openai-completions\n    models:\n      - id: mock-model\n        name: Mock Model\n        reasoning: false\n        input: [text]\n        supportsTools: true\n        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }\n        contextWindow: 128000\n        maxTokens: 4096\n`,
+		);
+		const { sessionId } = await host.createSession({
+			cwd: dir,
+			modelPattern: "mock/mock-model",
+		});
+		const live = host.get(sessionId);
+		if (!live) throw new Error("expected a live session");
+		live.autoTitle = false;
+		order.length = 0;
+		await live.agentSession.prompt("first");
+		await live.agentSession.waitForIdle();
+		expect(order).toEqual(["flush", "execute"]);
+
+		await live.dispose();
+		const resumed = await host.activate(sessionId);
+		resumed.autoTitle = false;
+		order.length = 0;
+		await resumed.agentSession.prompt("second");
+		await resumed.agentSession.waitForIdle();
+		expect(order).toEqual(["flush", "execute"]);
+		const starts = (await resumed.journal!.readAll()).flatMap(record =>
+			record.event.type === "tool_execution_start" ? [record.event.toolCallId] : [],
+		);
+		expect(starts).toEqual(["call-1", "call-2"]);
 	});
 });

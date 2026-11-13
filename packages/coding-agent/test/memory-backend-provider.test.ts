@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { Settings } from "../src/config/settings";
 import { getEnumValues } from "../src/config/settings-schema";
 import { getMemoryRoot } from "../src/memories";
-import { findMemoryBackendProvider, registerMemoryBackendProvider } from "../src/memory-backend/providers";
+import {
+	findMemoryBackendProvider,
+	registerMemoryBackendProvider,
+	replaceMemoryBackendProvider,
+} from "../src/memory-backend/providers";
 import { resolveMemoryBackend } from "../src/memory-backend/resolve";
 import type { MemoryBackend } from "../src/memory-backend/types";
 
@@ -99,5 +103,34 @@ describe("memory backend providers", () => {
 		expect(() => registerMemoryBackendProvider({ id: "mnemopi", create: () => fakeBackend("mnemopi") })).toThrow(
 			/already registered/,
 		);
+	});
+});
+
+describe("memory backend provider replacement", () => {
+	it("restores the incumbent when a replacement is abandoned", () => {
+		const incumbent = { id: "pluginbank", label: "incumbent", create: () => fakeBackend("pluginbank" as never) };
+		disposers.push(registerMemoryBackendProvider(incumbent));
+		const successor = { id: "pluginbank", label: "successor", create: () => fakeBackend("pluginbank" as never) };
+		const replacement = replaceMemoryBackendProvider(successor);
+		disposers.push(replacement.dispose);
+		expect(findMemoryBackendProvider("pluginbank" as never)).toBe(successor);
+
+		replacement.dispose();
+
+		expect(findMemoryBackendProvider("pluginbank" as never)).toBe(incumbent);
+	});
+
+	it("keeps the successor on commit and unloads it on dispose", () => {
+		disposers.push(
+			registerMemoryBackendProvider({ id: "pluginbank", create: () => fakeBackend("pluginbank" as never) }),
+		);
+		const successor = { id: "pluginbank", label: "successor", create: () => fakeBackend("pluginbank" as never) };
+		const replacement = replaceMemoryBackendProvider(successor);
+		disposers.push(replacement.dispose);
+
+		replacement.commit();
+		replacement.dispose();
+
+		expect(findMemoryBackendProvider("pluginbank" as never)).toBeUndefined();
 	});
 });

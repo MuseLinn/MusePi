@@ -2313,6 +2313,7 @@ async function executeToolCalls(
 		transformToolCallArguments,
 		resolveFallbackTool,
 		afterToolCall,
+		beforeToolExecution,
 	} = config;
 	// Freeze gate for this run (config's per-scope gate, else the global one).
 	const pauseGate = config.pauseGate ?? agentPauseGate;
@@ -2600,6 +2601,12 @@ async function executeToolCalls(
 							providerMetadata: toolCall.providerMetadata,
 						})
 					: undefined;
+				if (beforeToolExecution) {
+					await beforeToolExecution(
+						{ assistantMessage, toolCall, tool, args: executionArgs, context: currentContext },
+						record.signal,
+					);
+				}
 				executionStarted = true;
 				const rawResult = await tool.execute(
 					toolCall.id,

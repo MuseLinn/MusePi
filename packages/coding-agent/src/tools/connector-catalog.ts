@@ -55,6 +55,7 @@ function filter(entries: readonly ConnectorCatalogEntry[], query: string): Conne
 
 export class ConnectorCatalogTool implements AgentTool<typeof connectorCatalogSchema, ConnectorCatalogToolDetails> {
 	readonly name = "connector_catalog";
+	readonly requiresDurableIntent = false;
 	readonly label = "Connector Catalog";
 	readonly strict = true;
 	readonly approval = "read" as const;

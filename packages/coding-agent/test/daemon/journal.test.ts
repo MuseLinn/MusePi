@@ -8,7 +8,7 @@ import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentEvent } from "@musepi/pi-wire";
-import { AppendJournal, catchupPlan } from "../../src/daemon/journal";
+import { AppendJournal, catchupPlan, catchupRecordsPlan } from "../../src/daemon/journal";
 
 const dirs: string[] = [];
 
@@ -537,4 +537,49 @@ test("durableTailSeq reports the disk tail, not the last seq assigned", async ()
 	expect(j.tailSeq).toBe(2);
 	expect(await j.durableTailSeq()).toBe(1);
 	await j.close();
+});
+
+test("catchupRecordsPlan rejects missing records before replay", () => {
+	const records = (seqs: number[]) =>
+		seqs.map(seq => ({ seq, ts: "2026-01-01T00:00:00.000Z", event: event("thinking_level_changed", seq) }));
+	expect(catchupRecordsPlan(1, 0, 3, records([1, 3]))).toEqual({ resyncRequired: true, compactedThrough: 0 });
+	expect(catchupRecordsPlan(1, 0, 3, records([2, 3]))).toEqual({ resyncRequired: false });
+	expect(catchupRecordsPlan(0, 0, 1, [])).toEqual({ resyncRequired: true, compactedThrough: 0 });
+});
+
+test("reads complete records through short filesystem reads", async () => {
+	const dir = tempDir();
+	const journal = new AppendJournal(dir, "s1");
+	await journal.open();
+	for (let seq = 1; seq <= 3; seq++) journal.append(event("thinking_level_changed", seq));
+	await journal.flush();
+	const handle = await fsp.open(journal.filePath, "r");
+	const fileHandlePrototype = Object.getPrototypeOf(handle) as fsp.FileHandle;
+	await handle.close();
+	const originalRead = fileHandlePrototype.read as (
+		this: fsp.FileHandle,
+		buffer: Buffer,
+		offset: number,
+		length: number,
+		position: number,
+	) => Promise<{ bytesRead: number; buffer: Buffer }>;
+	const readSpy = spyOn(fileHandlePrototype, "read").mockImplementation(async function (
+		this: fsp.FileHandle,
+		buffer: Buffer,
+		offset: number,
+		length: number,
+		position: number,
+	) {
+		const result = await originalRead.call(this, buffer, offset, Math.min(length, 7), position);
+		buffer.fill(0xa5, offset + result.bytesRead);
+		return result;
+	} as never);
+	try {
+		expect(await AppendJournal.readTailSeq(journal.filePath)).toBe(3);
+		expect((await journal.recordsAfter(0)).map(record => record.seq)).toEqual([1, 2, 3]);
+		expect(readSpy).toHaveBeenCalled();
+	} finally {
+		readSpy.mockRestore();
+		await journal.close();
+	}
 });

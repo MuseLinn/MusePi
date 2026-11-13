@@ -113,6 +113,20 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 - **会话信息卡连接器空态不再重复 MCP 描述**：空态只保留「连接器」标题与进入 MCP 服务器设置的操作，去掉与之同义的说明行。
   - EN: The session info card's empty connector state no longer repeats an MCP description. It keeps the 连接器 heading and the action that opens the MCP server settings, dropping the line that restated the same thing.
+- **有副作用的工具先保存执行意图，再开始执行**：工具启动事件现在只记录一次，并在执行前 flush SDK transcript 与 daemon journal；新会话也会先保存 assistant 再写 marker。flush 失败会阻止工具运行并返回错误，只读工具可声明 `requiresDurableIntent: false` 跳过。该屏障面向进程崩溃恢复，不代表已完成 `fsync`。
+  - EN: Tools with possible side effects now record their intent before executing. A single start event is flushed to the SDK transcript and daemon journal, with the assistant persisted before its marker even in a new session. A flush failure prevents execution and returns an error, while demonstrably read-only tools can opt out with `requiresDurableIntent: false`. The barrier targets process-crash recovery and does not imply `fsync`.
+
+- **会话恢复不再静默跳过缺失事件，插件配置也不再误触发热重启**：journal 补推先校验游标到尾部完整连续，缺号时整页重载；owner 获取、心跳和释放在原生锁内串行，旧心跳不会覆盖新 owner；host 插件仅在自身有效配置变化时重载，HMR 不再因无关配置保存要求重启。
+  - EN: Session recovery no longer silently skips missing events, and plugin config saves no longer request spurious host restarts. Journal catch-up validates a complete contiguous range before replay, owner-file transitions are serialized with a native lock so stale heartbeats cannot overwrite a new owner, and host plugins reload only when their own effective config changes instead of every save selecting HMR.
+
+- **Journal 短读不再破坏恢复尾部**：尾部与补推窗口现在循环读满或读到 EOF，并且只解析真实读取的字节，避免短读把未初始化内容或残缺记录当成恢复依据。
+  - EN: Short journal reads no longer corrupt recovery tails. Tail and catch-up windows now read to completion or EOF and parse only initialized bytes, so unread or partial data cannot be mistaken for a valid recovery point.
+
+- **插件宿主生命周期串行且失败可见**：ensure/reload/reset 共用一条队列，异步 stop 会等待完成；重名服务不再覆盖原服务，冲突实例及其已发布服务都会清理；替换失败保留旧实例且不重放 apply，注册恢复失败才明确请求重启。restart 请求去重保留，确认后移除，dispose 清空。
+  - EN: Host plugin lifecycle operations are serialized and failures are visible. Ensure, reload, and reset share one queue and await asynchronous stops. Duplicate services no longer replace the incumbent, and rejected mounts plus any services they already published are cleaned up. Failed replacements preserve the old instance without replaying apply; only registration restoration failure requests a restart. Restart requests are deduplicated, acknowledged individually, and cleared on disposal.
+
+- **只读 LSP 查询不再支付 durable flush 延迟**：`requiresDurableIntent` 现在支持按参数判定，LSP 的 hover、status 等只读 action 跳过屏障；raw/未知 action 与 rename 等写操作仍在执行前保存并 flush 执行意图。
+  - EN: Read-only LSP queries no longer pay the durable flush latency. `requiresDurableIntent` now supports per-argument predicates, so read-only actions such as hover and status skip the barrier, while raw or unknown actions and mutations such as rename still persist and flush their intent before execution.
 
 ## [0.7.4] - 2026-11-11
 

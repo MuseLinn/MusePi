@@ -4,7 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentEvent } from "@musepi/pi-wire";
 import { AppendJournal } from "../../src/daemon/journal";
-import { type DaemonConnection, DaemonServer, DaemonSessionHost } from "../../src/daemon/server";
+import { type DaemonConnection, DaemonServer, DaemonSessionHost, JOURNAL_DIR } from "../../src/daemon/server";
 
 /**
  * session.catchup RPC contract (roadmap M1.4 gap fill), split by layer:
@@ -42,8 +42,15 @@ function captureConn(): { conn: DaemonConnection; frames: () => { seq: number; p
 		conn,
 		frames: () =>
 			sent.flatMap(m => {
-				const frame = m as { kind?: string; events?: { seq: number; payload: unknown }[] };
-				return frame?.kind === "batch" && Array.isArray(frame.events) ? frame.events : [];
+				const frame = m as {
+					kind?: string;
+					seq?: number;
+					payload?: unknown;
+					events?: { seq: number; payload: unknown }[];
+				};
+				if (frame?.kind === "batch" && Array.isArray(frame.events)) return frame.events;
+				if (frame?.kind === "event") return [{ seq: frame.seq ?? 0, payload: frame.payload }];
+				return [];
 			}),
 	};
 }
@@ -143,5 +150,53 @@ describe("session.catchup replay (real host, temp journal)", () => {
 		const result = await host.replayCatchup(SESSION, 3, j, conn);
 		expect(result).toEqual({ ok: true });
 		expect(frames()).toEqual([]);
+	});
+
+	test("a missing intermediate seq requires resync before any replay", async () => {
+		const dir = tempDir();
+		const j = new AppendJournal(dir, SESSION);
+		await j.open();
+		for (let i = 1; i <= 3; i++) j.append(event(i));
+		await j.flush();
+		const records = await j.readAll();
+		fs.writeFileSync(
+			j.filePath,
+			`${records
+				.map(record => JSON.stringify(record))
+				.filter((_, index) => index !== 1)
+				.join("\n")}\n`,
+		);
+		await j.close();
+
+		const { conn, frames } = captureConn();
+		const result = await host.replayCatchup(SESSION, 1, j, conn);
+		expect(result).toEqual({ resyncRequired: true, compactedThrough: 0 });
+		expect(frames()).toEqual([]);
+	});
+
+	test("resume catch-up does not replay an incomplete delta after its snapshot", async () => {
+		const j = new AppendJournal(JOURNAL_DIR, SESSION);
+		await j.open();
+		try {
+			for (let i = 1; i <= 3; i++) j.append(event(i));
+			await j.flush();
+			const records = await j.readAll();
+			fs.writeFileSync(
+				j.filePath,
+				`${records
+					.map(record => JSON.stringify(record))
+					.filter((_, index) => index !== 1)
+					.join("\n")}\n`,
+			);
+			await j.close();
+
+			const { conn, frames } = captureConn();
+			await host.catchup(SESSION, 1, conn);
+			expect(frames()).toEqual([]);
+		} finally {
+			await j.close();
+			fs.rmSync(j.filePath, { force: true });
+			fs.rmSync(j.checkpointPath(), { force: true });
+		}
 	});
 });
