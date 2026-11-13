@@ -6,6 +6,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+- **子代理会话与转录在跑完后保持可见**：右侧「子代理」名册改由会话产物目录的磁盘记录派生，注册表只补充实时状态，因此一次性子代理跑完、daemon 重启或重新进入会话后仍然列出；每行同时显示子代理定义名（如 `sonic`）与任务摘要，点击打开其实时转录，标签页也能直达对应子会话。侧栏的子会话行标注所属子代理，历史会话的展开入口不再消失。
+  - EN: Subagent sessions and transcripts stay visible after the run ends. The right-pane roster now derives from the session's on-disk product directory, with the registry only contributing live status, so finished one-shot subagents, daemon restarts and reopened conversations still list them. Each row shows the subagent definition name (e.g. `sonic`) alongside its assignment, opens its live transcript, and its tab can jump to the child conversation; sidebar child rows are badged with the owning subagent and history sessions keep their expand affordance.
+
 - **`@` 文件补全包含 gitignore 文件**：`@` 补全对每个根目录先按 `.gitignore` 过滤、再取一次完整树，只出现在完整树里的路径标记为 `ignored` 并排在后面；候选按精确、前缀、路径前缀、子串排序，同质量时未忽略文件优先，文件优先于目录。
   - EN: `@` file completion now includes gitignored files. Each root is scanned twice — once honoring `.gitignore` and once unfiltered — and paths that only the unfiltered scan returns are marked `ignored` and appended. Candidates rank by exact, prefix, path-prefix and substring match; at equal quality non-ignored files come before ignored ones, and files before directories.
 
@@ -44,6 +47,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 - **Markdown 元数据以卡片呈现**：文件预览和 WYSIWYG 编辑会把文件头部的 YAML Front Matter 显示为只读「元数据」卡，正文只显示 Markdown 内容；可视化编辑时 YAML 原样保留、只编辑正文，修改元数据仍用源码模式。
   - EN: Markdown front matter now renders as a read-only Metadata card in the file preview and in visual editing, with the body shown as normal Markdown. Visual editing preserves the YAML block verbatim and edits only the body; changing the metadata still uses source mode.
+
+- **未保存标签的提示更像 VS Code**：有未保存修改的标签用圆点占据关闭按钮的位置，悬停标签时才换成 ×；激活的脏标签也不会同时出现圆点和关闭按钮。
+  - EN: Dirty tabs now behave like VS Code: the unsaved dot occupies the close button's slot and hovering the tab swaps in the ×, so an active dirty tab never shows both marks at once.
 
 - **更换项目主目录会同步迁移会话**：`workspace.setPrimary` 现在把旧主目录下的会话文件与产物迁移到新主目录，并重载 live 会话配置；桌面端同步刷新项目列表与会话树。
   - EN: Changing the project primary directory now migrates session files and artifacts to the new root and reloads live sessions; the desktop refreshes the project list and session tree.

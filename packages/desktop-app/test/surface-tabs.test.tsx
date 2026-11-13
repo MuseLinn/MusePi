@@ -127,6 +127,19 @@ describe("SurfaceTabStrip markup", () => {
 		expect(html.match(/gui-surface-tab-dirty/g)?.length).toBe(1);
 	});
 
+	it("keeps the dirty dot inside the close slot so they swap on hover", () => {
+		const html = renderToStaticMarkup(
+			<SurfaceTabStrip tabs={tabs} activeId="b" onActivate={() => {}} onClose={() => {}} onReorder={() => {}} />,
+		);
+		const action = html.indexOf("gui-surface-tab-action");
+		const dot = html.indexOf("gui-surface-tab-dirty");
+		const close = html.indexOf("gui-surface-tab-close");
+		expect(action).toBeGreaterThan(-1);
+		expect(dot).toBeGreaterThan(action);
+		expect(close).toBeGreaterThan(dot);
+		expect(html).toContain("gui-surface-tab--dirty");
+	});
+
 	it("renders built-in, favicon, and browser fallback icons as decorative visuals", () => {
 		const html = renderToStaticMarkup(
 			<SurfaceTabStrip

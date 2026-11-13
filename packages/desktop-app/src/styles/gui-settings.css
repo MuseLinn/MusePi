@@ -4784,12 +4784,27 @@ body.gui-resizing {
 	font-style: italic;
 }
 
-.gui-surface-tab-dirty {
+/* Dot and × share one 18px slot: the dot is a dirty tab's default, and the
+ * × takes over on tab hover so the two never render side by side. */
+.gui-surface-tab-action {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	flex: none;
+	width: 18px;
+	height: 18px;
+}
+
+.gui-surface-tab-dirty {
+	position: absolute;
+	inset: 0;
+	margin: auto;
 	width: 7px;
 	height: 7px;
 	border-radius: 50%;
 	background: var(--color-accent);
+	transition: opacity 120ms ease-out;
 }
 
 .gui-surface-tab-close {
@@ -4807,6 +4822,19 @@ body.gui-resizing {
 .gui-surface-tab:hover .gui-surface-tab-close,
 .gui-surface-tab--active .gui-surface-tab-close {
 	opacity: 0.65;
+}
+
+/* A dirty tab shows the dot even while active; hovering the tab swaps in ×. */
+.gui-surface-tab--dirty .gui-surface-tab-close {
+	opacity: 0;
+}
+
+.gui-surface-tab--dirty:hover .gui-surface-tab-close {
+	opacity: 0.65;
+}
+
+.gui-surface-tab--dirty:hover .gui-surface-tab-dirty {
+	opacity: 0;
 }
 
 .gui-surface-tab-close:hover {

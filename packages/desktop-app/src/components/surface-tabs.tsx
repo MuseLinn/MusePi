@@ -403,7 +403,7 @@ function SurfaceTabButton({
 			role="tab"
 			aria-selected={active}
 			tabIndex={active ? 0 : -1}
-			className={`gui-surface-tab${active ? " gui-surface-tab--active" : ""}${tab.preview ? " gui-surface-tab--preview" : ""}${isDragging ? " gui-surface-tab--dragging" : ""}${entering ? " gui-surface-tab--entering" : ""}`}
+			className={`gui-surface-tab${active ? " gui-surface-tab--active" : ""}${tab.preview ? " gui-surface-tab--preview" : ""}${tab.dirty ? " gui-surface-tab--dirty" : ""}${isDragging ? " gui-surface-tab--dragging" : ""}${entering ? " gui-surface-tab--entering" : ""}`}
 			data-motion={entering ? "entering" : undefined}
 			style={{ transform: CSS.Transform.toString(transform), transition }}
 			onClick={() => onActivate(tab.id)}
@@ -442,18 +442,24 @@ function SurfaceTabButton({
 					<span className="sr-only">{t("general.agentRunning")}</span>
 				</span>
 			) : null}
-			{tab.dirty ? <span className="gui-surface-tab-dirty" aria-label={tab.title} /> : null}
-			<span
-				className="gui-surface-tab-close"
-				role="button"
-				aria-label={`${closeLabel} ${tab.title}`}
-				onClick={e => {
-					// Without this the click activates the tab before closing it.
-					e.stopPropagation();
-					onClose(tab.id);
-				}}
-			>
-				×
+			{/* One 18px slot owns both affordances: the unsaved dot sits in the
+			 *  close button's place, and hovering the tab swaps it back to ×
+			 *  (VS Code's change-indicator behavior). Rendering both at once
+			 *  made a dirty active tab read as "dot AND close". */}
+			<span className="gui-surface-tab-action">
+				{tab.dirty ? <span className="gui-surface-tab-dirty" aria-hidden="true" /> : null}
+				<span
+					className="gui-surface-tab-close"
+					role="button"
+					aria-label={`${closeLabel} ${tab.title}`}
+					onClick={e => {
+						// Without this the click activates the tab before closing it.
+						e.stopPropagation();
+						onClose(tab.id);
+					}}
+				>
+					×
+				</span>
 			</span>
 		</button>
 	);
