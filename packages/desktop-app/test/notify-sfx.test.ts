@@ -126,6 +126,27 @@ describe("notify (notification config + dispatch contract)", () => {
 		localStorage.removeItem("musepi-gui-notify-toast");
 	});
 
+	it("shows the in-app toast while focused even though the system notification is gated", () => {
+		for (const toast of [...getToasts()]) dismissActionToast(toast.id);
+		localStorage.setItem("musepi-gui-notify", "1");
+		localStorage.setItem("musepi-gui-notify-toast", "1");
+		localStorage.removeItem("musepi-gui-notify-focused");
+		localStorage.removeItem("musepi-gui-notify-events");
+		const doc = document as unknown as { hasFocus?: () => boolean };
+		const original = Object.getOwnPropertyDescriptor(doc, "hasFocus");
+		Object.defineProperty(doc, "hasFocus", { configurable: true, value: () => true });
+		try {
+			dispatchNotification("completion", { lastMessage: "done" });
+			expect(getToasts().some(item => item.dedupeKey === "notify:completion")).toBe(true);
+		} finally {
+			if (original) Object.defineProperty(doc, "hasFocus", original);
+			else Reflect.deleteProperty(doc, "hasFocus");
+			for (const toast of [...getToasts()]) dismissActionToast(toast.id);
+			localStorage.removeItem("musepi-gui-notify");
+			localStorage.removeItem("musepi-gui-notify-toast");
+		}
+	});
+
 	it("every notify event has a default template with title+message", () => {
 		for (const ev of NOTIFY_EVENTS) {
 			const tpl = defaultTemplate(ev, "title");

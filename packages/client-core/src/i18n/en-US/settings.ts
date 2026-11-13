@@ -1980,9 +1980,9 @@ export const settings = {
 	"settings.notificationDelivery": "Notifications",
 	"settings.enableNotifications": "Enable notifications",
 	"settings.enableNotificationsDescription": "Show system notifications once focus leaves the window",
-	"settings.notifyFocused": "Notify when focused",
+	"settings.notifyFocused": "System notifications while focused",
 	"settings.notifyFocusedDescription":
-		"Also notify while the window holds focus (default: notify once focus leaves the window)",
+		"When off, a focused window gets no system notification; the in-app toast still follows the In-app notifications switch",
 	"settings.notificationSound": "Notification sound",
 	"settings.notificationSoundDescription":
 		"Use the system notification sound; when off, the in-app cue plays instead so each event sounds once",
