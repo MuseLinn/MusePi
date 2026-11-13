@@ -148,7 +148,6 @@ import type { CordisDynamicPluginRuntime } from "./cordis-dynamic-plugins";
 import { writeProjectMirror } from "./creation";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
 import { catchupPlan } from "./journal";
-import { deriveSessionPresence } from "./session-presence";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -650,6 +649,7 @@ import { PluginInstallService } from "./services/plugin-install-service";
 import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
 import { ScheduleService } from "./services/schedule-service";
+import { SessionPresenceService } from "./services/session-presence-service";
 import { SessionService } from "./services/session-service";
 import { TerminalService, type TerminalServiceDeps } from "./services/terminal-service";
 import { UsageService } from "./services/usage-service";
@@ -1125,6 +1125,9 @@ export class DaemonServer {
 				deletedWorkspaces: () => this.#services.get<WorkspaceService>("workspaces").deletedWorkspaces(),
 			}),
 		);
+		// Public per-session presence; mounted on the cordis host as
+		// `ctx.sessionPresence` and claimed as the `session.presence` route.
+		this.#services.register(new SessionPresenceService(this.#host));
 		// Speech frontend (speaker enrollment + streaming transcription): the
 		// engine singleton stays in voice/frontend/service; partial/segment
 		// results ride the same global event channel as every other broadcast.
@@ -2305,7 +2308,7 @@ export class DaemonServer {
 						? `${sessionFile.slice(0, -".jsonl".length)}${path.sep}`
 						: null;
 					const updatedAt = new Date(r.updatedAt).toISOString();
-					const presence = deriveSessionPresence(live, {
+					const presence = this.#services.get<SessionPresenceService>("sessionPresence").derive(live, {
 						sessionId: r.sessionId,
 						updatedAt,
 						status: r.status,
@@ -2348,19 +2351,10 @@ export class DaemonServer {
 					};
 				});
 			}
-			case "session.presence": {
-				const p = (params ?? {}) as { sessionId?: unknown };
-				const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
-				if (!sessionId) return { error: "sessionId required" };
-				const live = this.#host.get(sessionId);
-				const row = (await this.#host.knownSessions()).find(r => r.sessionId === sessionId);
-				if (!live && !row) return { error: "session not found" };
-				return deriveSessionPresence(live, {
-					sessionId,
-					updatedAt: new Date(row?.updatedAt ?? Date.now()).toISOString(),
-					status: row?.status,
-				});
-			}
+			case "session.presence":
+				return this.#services
+					.get<SessionPresenceService>("sessionPresence")
+					.presence((params ?? {}) as { sessionId?: unknown });
 			case "session.agents": {
 				// 单个会话的子代理名册（侧边栏会话行展开）:
 				// 口径 = 注册表 transcript 路径落在本会话产物目录

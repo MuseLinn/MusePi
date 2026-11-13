@@ -54,6 +54,7 @@ lang: zh-CN
 悬浮伙伴代表整个应用，而不只是当前选中的会话。`CompanionSessionCard` 在原有 `phase`/`statusText`/`replyPreview` 之外，新增 `mood`、`companionState`、`attention`。
 
 - `packages/wire` 的 `SessionPresence` 是公开的会话状态契约。`deriveSessionPresence`（`daemon/session-presence.ts`）是 live runtime + 持久化行的唯一投影；`session.list` 行携带它，`session.presence { sessionId }` 直接返回一个。phase 词表为 `idle / starting / thinking / tool / awaiting-approval / awaiting-input / streaming / compacting / finalizing / error / paused`。
+- `SessionPresenceService` 是 L2 服务（`sessionPresence`），注册进 `HostServices`，由 `DaemonHostContext` 挂成 Cordis 插件（`ctx.sessionPresence`）；它认领 `session.presence` 路由，并向 `session.list` 暴露 `derive()`。这与 dsh 的 `ctx.approval` / `ctx.userQuestions` 服务缝一致：能力是 host 侧 Cordis 服务，不是 renderer 局部 helper。
 - 当前会话从完整 store 快照经 `agentSignalsFromSnapshot` → `companionStateFromSignals` 派生，因此卡片可以显示 `notifying`/`searching`/`writing`，并带 `attention: "approval"`。
 - 后台会话使用 `session.list.presence`：attention → `notifying`/`curious`，有活动工具 → `searching`/`writing`/`working`，未读完成 → `celebrate`，错误 → `alerting`；不虚构流式细节。
 - 子代理行通过 `AgentsPanel` 的可选 `renderAvatar(agent, payload, now)` 获得独立头像。桌面端提供 `SubagentAvatar`，把 `subagentSignals` 投影进 `AgentAvatar`，`seed = agent.id`；guest client 不传，保留状态点。

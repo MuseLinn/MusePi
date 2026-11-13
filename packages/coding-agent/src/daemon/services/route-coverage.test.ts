@@ -31,6 +31,7 @@ import { PluginInstallService } from "./plugin-install-service";
 import { HostServices } from "./registry";
 import { RemoteService } from "./remote-service";
 import { ScheduleService } from "./schedule-service";
+import { SessionPresenceService } from "./session-presence-service";
 import { SessionService } from "./session-service";
 import { TerminalService } from "./terminal-service";
 import { UsageService } from "./usage-service";
@@ -153,6 +154,8 @@ function buildRegistry(): HostServices {
 			firstUserMessage: () => "",
 		}),
 	);
+	// SessionPresenceService：只认领 session.presence，宿主访问桩化。
+	services.register(new SessionPresenceService({ get: () => undefined, knownSessions: async () => [] }));
 	// VoiceService：只认领路由（本测试不触发语音引擎），广播桩吞掉分片事件。
 	services.register(new VoiceService({ broadcast: () => {} }));
 	// ExtensionService：stub 化宿主访问，仅参与路由表。
