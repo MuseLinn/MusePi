@@ -1713,6 +1713,27 @@ export class DaemonServer {
 		}
 	}
 
+	/** Live sessions also follow a primary swap: move their header/artifacts,
+	 *  then reload config/dirs from the new root (Kimi's primary-follow fix). */
+	async #migrateLiveSessions(previousRoot: string, nextRoot: string): Promise<void> {
+		const previous = path.resolve(previousRoot);
+		const next = path.resolve(nextRoot);
+		for (const live of this.#host.allSessions()) {
+			const manager = live.agentSession.sessionManager;
+			if (path.resolve(manager.getCwd()) !== previous) continue;
+			if (isLiveSessionBusy(live)) continue;
+			try {
+				await manager.moveTo(next);
+				await live.agentSession.reloadFromDisk({ added: [], removed: [] });
+			} catch (error) {
+				logger.warn("workspace primary: failed to migrate live session", {
+					sessionId: live.sessionId,
+					error: String(error),
+				});
+			}
+		}
+	}
+
 	async #reloadSessionExtensions(live: LiveSession, entryPaths: string[]): Promise<void> {
 		for (const entryPath of entryPaths) {
 			const result = await live.agentSession.reloadExtension(entryPath);
@@ -2147,9 +2168,25 @@ export class DaemonServer {
 					.deleteWorkspace((params ?? {}) as Record<string, unknown>);
 			}
 			case "workspace.setPrimary": {
-				return this.#services
-					.get<WorkspaceService>("workspaces")
-					.setPrimary((params ?? {}) as Record<string, unknown>);
+				const p = (params ?? {}) as { id?: unknown; path?: unknown };
+				const id = typeof p.id === "string" ? p.id : "";
+				const directory = typeof p.path === "string" ? p.path : "";
+				if (!id || !directory) throw new Error("id/path required");
+				const before = (await this.#services.get<WorkspaceService>("workspaces").listWorkspaces()).workspaces.find(
+					workspace => workspace.id === id,
+				);
+				const previousRoot = before?.root;
+				const result = await this.#services.get<WorkspaceService>("workspaces").setPrimary({ id, path: directory });
+				if (previousRoot && previousRoot !== result.workspace.root) {
+					void this.#migrateLiveSessions(previousRoot, result.workspace.root);
+					this.#services.get<EventService>("events").broadcast({
+						type: "workspace.primaryChanged",
+						previousRoot,
+						nextRoot: result.workspace.root,
+						workspaceId: result.workspace.id,
+					});
+				}
+				return result;
 			}
 			case "session.directories.list": {
 				return this.#services

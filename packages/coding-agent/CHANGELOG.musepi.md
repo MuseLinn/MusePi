@@ -30,6 +30,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **终端标签拖拽排序与右侧停靠**：终端标签支持拖拽与 Alt+左右方向键重排，顺序按项目持久化；外观设置新增「终端位置」（底部/右侧），右侧停靠不重建终端，宽度可用左缘拖拽调整。
   - EN: Terminal tabs support drag and Alt+Left/Right reordering, persisted per project. Appearance gains a terminal position setting (bottom/right); the right-side dock keeps existing terminals alive and its width can be dragged from the left edge.
 
+- **更换项目主目录会同步迁移会话**：`workspace.setPrimary` 现在把旧主目录下的会话文件与产物迁移到新主目录，并重载 live 会话配置；桌面端同步刷新项目列表与会话树。
+  - EN: Changing the project primary directory now migrates session files and artifacts to the new root and reloads live sessions; the desktop refreshes the project list and session tree.
+
 - **实验性 Aora 头像 provider**：新增 `AoraAvatar`，作为会话头像的角色渲染器；它把同一份 `AgentSignals` 经 `aoraStateFromSignals(signals, "avatar")` 投影成 44 态中适合头像槽的紧凑子集，内置头像预置保持不变。`@aora-bot/react`（含 `@aora-bot/engine`）随桌面端本地打包，运行时不请求 CDN 或头像 API，离线可用；上游署名见 `packages/desktop-app/README.md`。
   - EN: An experimental Aora avatar provider. `AoraAvatar` is a character renderer for the session avatar: it projects the same `AgentSignals` through `aoraStateFromSignals(signals, "avatar")` into the compact subset of Aora's 44 states that fits the avatar slot, leaving the built-in avatar presets unchanged. `@aora-bot/react` (with `@aora-bot/engine`) is bundled locally with the desktop app, so nothing is requested from a CDN or avatar API at runtime and the avatar works offline; the upstream credit is in `packages/desktop-app/README.md`.
 

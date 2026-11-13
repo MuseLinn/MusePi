@@ -564,8 +564,36 @@ export class WorkspaceRegistry {
 			};
 			file.projects = file.projects.map(project => (project.id === id ? workspace : project));
 			await this.#write(file);
+			await this.#migratePersistedSessions(existing.root, target);
 			return workspace;
 		});
+	}
+
+	/** Follow a primary swap for sessions already on disk: their header cwd and
+	 *  artifacts move with the new root instead of resuming into the old one. */
+	async #migratePersistedSessions(previousRoot: string, nextRoot: string): Promise<void> {
+		const previous = path.resolve(previousRoot);
+		const next = path.resolve(nextRoot);
+		if (previous === next) return;
+		const { listAllSessions } = await import("../../session/session-listing");
+		const { SessionManager } = await import("../../session/session-manager");
+		const infos = await listAllSessions();
+		let migrated = 0;
+		for (const info of infos) {
+			if (migrated >= 100) break;
+			if (!info.cwd || path.resolve(info.cwd) !== previous) continue;
+			try {
+				const manager = await SessionManager.open(info.path, undefined, undefined, { suppressBreadcrumb: true });
+				await manager.moveTo(next);
+				await manager.close();
+				migrated += 1;
+			} catch (error) {
+				logger.warn("workspace primary: failed to migrate persisted session", {
+					path: info.path,
+					error: String(error),
+				});
+			}
+		}
 	}
 
 	async #runExclusive<T>(operation: () => Promise<T>): Promise<T> {
