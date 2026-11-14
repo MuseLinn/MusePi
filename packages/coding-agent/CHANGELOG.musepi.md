@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **应用清单改用原生实现（Windows）**：`desktop.apps()` 优先走 `pi-natives` 的原生应用目录（开始菜单 + 进程状态），返回运行中状态与 pid；`desktop.launch()` 也交给原生 `ShellExecuteEx`，沿用系统对快捷方式的处理。旧 addon 与其他平台回退到文件系统目录。
+  - EN: The app catalogue is native on Windows: `desktop.apps()` reads the Start Menu through `pi-natives` and reports running state with pid, and `desktop.launch()` delegates to native `ShellExecuteEx` so shortcut handling stays the platform's. Older addons and other platforms keep the filesystem catalogue.
+
 - **「新功能」面板恢复版本变更计数与旧版本内容**：面板改为统计每个版本的全部顶层条目，扁平写法（没有 `###` 分类小节）的加粗条目也能生成亮点卡；英文界面提升 EN 正文时保留加粗标题，不再出现「0 项变更」和空白卡片。
   - EN: The what's-new panel shows version change counts and older release notes again. It counts every top-level bullet per version, lets flat bold bullets (no `###` category heading) become highlight cards, and keeps the bold title when promoting the EN body, so no version reads "0 changes" with an empty card.
 

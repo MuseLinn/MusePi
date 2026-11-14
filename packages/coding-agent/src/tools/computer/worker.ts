@@ -38,11 +38,23 @@ import type {
 	ToolReply,
 } from "./protocol";
 
+/** One application the native catalogue reports. */
+interface NativeApplication {
+	id: string;
+	name: string;
+	path: string;
+	running: boolean;
+	pid?: number;
+}
+
 /** Native desktop operations consumed by the script runtime. */
 export interface NativeDesktopSession {
 	readonly capabilities: DesktopCapabilities;
 	listDisplays(): Promise<DesktopDisplay[]>;
 	listWindows(): Promise<DesktopWindow[]>;
+	/** Native application catalogue; absent on addons built before it. */
+	listApplications?(query?: { query?: string; runningOnly?: boolean }): Promise<NativeApplication[]>;
+	openApplication?(target: string, options?: { activate?: boolean }): Promise<NativeApplication>;
 	capture(
 		target: string,
 		caps?: { maxWidth?: number; maxHeight?: number } | null,
@@ -911,6 +923,23 @@ export class ComputerWorkerCore {
 			apps: async (filter?: { name?: string }): Promise<DesktopApp[]> => {
 				const { signal } = getContext();
 				throwIfAborted(signal);
+				const name = filter?.name?.trim().toLowerCase();
+				// Native catalogue first: it owns the platform's own app list and its
+				// running state. Older addons and other platforms fall back to the
+				// filesystem catalogue below.
+				if (session.listApplications) {
+					const native = await nativeCall(signal, () =>
+						session.listApplications!(name && name.length > 0 ? { query: name } : {}),
+					);
+					return native.map(app => ({
+						id: app.id,
+						name: app.name,
+						path: app.path,
+						kind: "shortcut" as const,
+						running: app.running,
+						...(app.pid !== undefined ? { pid: app.pid } : {}),
+					}));
+				}
 				const installed = await hostInstalledApps();
 				throwIfAborted(signal);
 				// Running state comes from the windows the OS reports, not from a
@@ -926,12 +955,15 @@ export class ComputerWorkerCore {
 					// Catalogue still answers without window attribution.
 				}
 				const apps = annotateRunning(installed, running);
-				const name = filter?.name?.trim().toLowerCase();
 				return name ? apps.filter(app => app.name.toLowerCase().includes(name)) : apps;
 			},
 			launch: async (target: string, options?: { args?: string[] }): Promise<{ pid?: number; path: string }> => {
 				const context = getContext();
 				guardRun(context, "desktop.launch");
+				if (session.openApplication) {
+					const opened = await nativeCall(context.signal, () => session.openApplication!(target));
+					return { ...(opened.pid !== undefined ? { pid: opened.pid } : {}), path: opened.path };
+				}
 				const app = resolveApp(await hostInstalledApps(), target);
 				const [command, ...rest] = launchCommand(process.platform, app.id);
 				const child = Bun.spawn([command!, ...rest, ...(options?.args ?? [])], {

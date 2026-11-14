@@ -34,6 +34,8 @@ export declare class DesktopSession {
   get capabilities(): DesktopCapabilities
   listDisplays(): Promise<Array<DesktopDisplay>>
   listWindows(): Promise<Array<DesktopWindow>>
+  listApplications(query?: ApplicationQuery | undefined | null): Promise<Array<Application>>
+  openApplication(target: string, options?: ApplicationOpenOptions | undefined | null): Promise<Application>
   capture(target: string, caps?: CaptureCaps | undefined | null): Promise<DesktopCapture>
   click(target: string, x: number, y: number, opts?: PointerOptions | undefined | null): Promise<undefined>
   moveMouse(target: string, x: number, y: number, opts?: PointerOptions | undefined | null): Promise<undefined>
@@ -280,6 +282,36 @@ export declare function __ompInstallTokioRuntime(): void
  * `package.json#version`).
  */
 export declare function __piNativesV0_7_5(): void
+
+/** One launch target the platform advertises. */
+export interface Application {
+  /** Absolute path (shortcut, bundle or desktop entry). */
+  id: string
+  /** Human-facing name. */
+  name: string
+  /**
+   * Same value as `id`, kept so callers can treat identity and location
+   * uniformly with windows.
+   */
+  path: string
+  /** A window of this application exists right now. */
+  running: boolean
+  /** Owning process of that window, when the platform exposes it. */
+  pid?: number
+}
+
+export interface ApplicationOpenOptions {
+  /**
+   * Bring the application forward. Defaults to false: the app opens behind
+   * whatever the user is doing.
+   */
+  activate?: boolean
+}
+
+export interface ApplicationQuery {
+  query?: string
+  runningOnly?: boolean
+}
 
 /**
  * Apply ast-grep rewrite rules to matching files; honors `dryRun` and returns

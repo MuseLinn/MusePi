@@ -1,3 +1,4 @@
+mod applications;
 mod ax;
 mod backend;
 mod error;
@@ -20,6 +21,7 @@ use std::{
 	time::Duration,
 };
 
+use applications::{Application, ApplicationOpenOptions, ApplicationQuery};
 use ax::{AxRegistry, register_node};
 use backend::{Backend, DeliveryMode, MouseButton, PointerEvent};
 use error::{CoreResult, DesktopError};
@@ -766,6 +768,27 @@ impl DesktopSession {
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
 			.map_err(Into::into)
+		}))
+	}
+
+	#[napi]
+	pub fn list_applications(
+		&self,
+		query: Option<ApplicationQuery>,
+	) -> Result<task::Promise<Vec<Application>>> {
+		Ok(task::blocking("desktop.listApplications", (), move |_| {
+			applications::list(query.unwrap_or_default()).map_err(Into::into)
+		}))
+	}
+
+	#[napi]
+	pub fn open_application(
+		&self,
+		target: String,
+		options: Option<ApplicationOpenOptions>,
+	) -> Result<task::Promise<Application>> {
+		Ok(task::blocking("desktop.openApplication", (), move |_| {
+			applications::open(&target, options.unwrap_or_default()).map_err(Into::into)
 		}))
 	}
 

@@ -77,8 +77,18 @@ const axNode: AxNode = {
 	height: 10,
 };
 
+interface FakeApplication {
+	id: string;
+	name: string;
+	path: string;
+	running: boolean;
+	pid?: number;
+}
+
 class FakeNativeSession implements NativeDesktopSession {
 	readonly capabilities = capabilities;
+	listApplications?: (query?: { query?: string; runningOnly?: boolean }) => Promise<FakeApplication[]>;
+	openApplication?: (target: string, options?: { activate?: boolean }) => Promise<FakeApplication>;
 	clickCount = 0;
 	closeCount = 0;
 	sourceWidth = 64;
@@ -553,5 +563,50 @@ describe("computer supervisor recovery", () => {
 		expect(result.returnValue).toBe("fresh");
 		expect(workers).toBe(2);
 		await supervisor.close();
+	});
+});
+
+describe("native application catalogue", () => {
+	const notion = {
+		id: "C:Start MenuNotion.lnk",
+		name: "Notion",
+		path: "C:Start MenuNotion.lnk",
+		running: true,
+		pid: 4242,
+	};
+
+	it("prefers the addon's inventory and maps it onto the desktop shape", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		const asked: Array<{ query?: string | null } | undefined> = [];
+		session.listApplications = async query => {
+			asked.push(query);
+			return [notion];
+		};
+		new ComputerWorkerCore(transport, () => session);
+
+		const result = await runWorker(transport, "apps", "return await desktop.apps({ name: 'not' });");
+		expect(result.ok).toBe(true);
+		const apps = result.ok ? (result.payload.returnValue as unknown[]) : [];
+		expect(apps).toEqual([
+			{ id: notion.id, name: "Notion", path: notion.path, kind: "shortcut", running: true, pid: 4242 },
+		]);
+		expect(asked).toEqual([{ query: "not" }]);
+	});
+
+	it("launches through the addon so the platform owns the handler", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		let target: string | undefined;
+		session.openApplication = async value => {
+			target = value;
+			return notion;
+		};
+		new ComputerWorkerCore(transport, () => session);
+
+		const result = await runWorker(transport, "launch", "return await desktop.launch('Notion');");
+		expect(result.ok).toBe(true);
+		expect(result.ok ? result.payload.returnValue : null).toEqual({ pid: 4242, path: notion.path });
+		expect(target).toBe("Notion");
 	});
 });
