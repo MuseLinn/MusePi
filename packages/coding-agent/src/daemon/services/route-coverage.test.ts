@@ -30,6 +30,7 @@ import { LivenessService } from "./liveness-service";
 import { MarketplaceService } from "./marketplace-service";
 import { McpOAuthService } from "./mcp-oauth-service";
 import { McpServersService } from "./mcp-servers-service";
+import { ModelsService } from "./models-service";
 import { PluginInstallService } from "./plugin-install-service";
 import { ProvidersService } from "./providers-service";
 import { HostServices } from "./registry";
@@ -165,6 +166,14 @@ function buildRegistry(): HostServices {
 	services.register(new GitService({ cwd: () => "" }));
 	// GitHubService：只认领路由（本测试不调用 gh），cwd 桩化。
 	services.register(new GitHubService({ cwd: () => "" }));
+	// ModelsService：只认领路由（本测试不读写 models.yml），宿主访问桩化。
+	services.register(
+		new ModelsService({
+			get: () => undefined,
+			ensureRegistry: async () => null,
+			broadcastModelsChanged: () => {},
+		}),
+	);
 	// ProvidersService：登录流程桩化（本测试不发起 OAuth），只认领路由。
 	services.register(
 		new ProvidersService({
