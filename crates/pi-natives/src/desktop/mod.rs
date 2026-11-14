@@ -9,6 +9,17 @@ mod lease;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+// Menu label matching is shared vocabulary, but only the windows backend has a
+// native menu route today: on linux/macos every helper here is uncalled, so the
+// dead-code and redundant-pub(crate) lints would fire on -Dwarnings.
+#[cfg_attr(
+	not(any(target_os = "windows", test)),
+	allow(
+		dead_code,
+		clippy::redundant_pub_crate,
+		reason = "consumed by the windows menu backend and by this module's tests"
+	)
+)]
 mod menus;
 mod types;
 #[cfg(any(target_os = "windows", test))]
