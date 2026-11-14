@@ -17,6 +17,8 @@ on:
       branches: [main]
       paths:
          - "packages/**"
+         - "apps/**"
+         - "tools/**"
          - "crates/**"
          - "scripts/**"
          - "bazel/**"

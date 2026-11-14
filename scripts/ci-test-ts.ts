@@ -106,7 +106,7 @@ const nativeAndIntegrationPackages = ["packages/natives", "packages/client-core"
 
 // Packages the CI buckets deliberately skip but a local full run should still
 // cover. mnemopi's embedding suites need a ~270MB fastembed model absent from CI
-// runners (so it flakes/times out there). (Upstream also lists python/robomp/web
+// runners (so it flakes/times out there). (Upstream also lists tools/python/robomp/web
 // here; musepi does not sync that directory, so it would ENOENT on spawn.)
 const localOnlyWorkspacePackages = ["packages/mnemopi"];
 

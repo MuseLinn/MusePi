@@ -62,11 +62,11 @@ changes/
 
 # Generated, regenerated in-image.
 packages/ai/test/.temp-images/
-python/omp-rpc/src/omp_rpc.egg-info/
-python/robomp/data/
-python/robomp/.cache/
-python/robomp/src/robomp/static/
-python/robomp/web/dist/
+tools/python/omp-rpc/src/omp_rpc.egg-info/
+tools/python/robomp/data/
+tools/python/robomp/.cache/
+tools/python/robomp/src/robomp/static/
+tools/python/robomp/web/dist/
 
 # Scratch files the repo creates ad-hoc.
 syntax.jsonl
@@ -78,5 +78,5 @@ pi-*.html
 **/.venv/
 
 # Secrets. Should never be in an image regardless. Depth-agnostic: a bare
-# `.env` misses nested ones such as `python/robomp/.env`.
+# `.env` misses nested ones such as `tools/python/robomp/.env`.
 **/.env

@@ -63,11 +63,11 @@ packages/natives/native/.build/
 # (Also drops the ~760 MB of dev addons a working checkout accumulates.)
 **/*.node
 packages/ai/test/.temp-images/
-python/omp-rpc/src/omp_rpc.egg-info/
-python/robomp/data/
-python/robomp/.cache/
-python/robomp/src/robomp/static/
-python/robomp/web/dist/
+tools/python/omp-rpc/src/omp_rpc.egg-info/
+tools/python/robomp/data/
+tools/python/robomp/.cache/
+tools/python/robomp/src/robomp/static/
+tools/python/robomp/web/dist/
 
 # Scratch files the repo creates ad-hoc.
 syntax.jsonl
@@ -79,5 +79,5 @@ pi-*.html
 **/.venv/
 
 # Secrets. Should never be in the image regardless. Depth-agnostic: a bare
-# `.env` misses `python/robomp/.env`, which `COPY . /pi/` would bake in.
+# `.env` misses `tools/python/robomp/.env`, which `COPY . /pi/` would bake in.
 **/.env

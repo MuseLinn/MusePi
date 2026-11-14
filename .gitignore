@@ -71,20 +71,20 @@ pi-*.html
 packages/natives/npm/
 packages/coding-agent/src/utils/mupdf-wasm.wasm
 /runs/
-python/omp-rpc/src/omp_rpc.egg-info/
+tools/python/omp-rpc/src/omp_rpc.egg-info/
 # parallel-agent worktrees
 .wt/
 CPU*.md
 packages/coding-agent/binaries/
 
 # robomp runtime state
-python/robomp/data/
-python/robomp/.cache/
-python/robomp/src/robomp/static/
-python/robomp/web/dist/
-python/robomp/web/verify-out/
+tools/python/robomp/data/
+tools/python/robomp/.cache/
+tools/python/robomp/src/robomp/static/
+tools/python/robomp/web/dist/
+tools/python/robomp/web/verify-out/
 /verify-out/
-python/robomp/.env
+tools/python/robomp/.env
 
 # Local, machine-specific boot perf baseline (see packages/coding-agent/scripts/bench-guard.ts)
 packages/coding-agent/bench/boot-baseline.json

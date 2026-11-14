@@ -70,7 +70,7 @@ COPY --parents \
     Cargo.toml Cargo.lock rust-toolchain.toml \
     packages/*/package.json \
     packages/tsconfig.workspace.json \
-    python/robomp/web/package.json \
+    tools/python/robomp/web/package.json \
     crates/*/Cargo.toml \
     /pi/
 
@@ -105,7 +105,7 @@ RUN apt-get update \
 RUN pip install --upgrade pip build
 
 WORKDIR /src
-COPY python/omp-rpc /src
+COPY tools/python/omp-rpc /src
 RUN python -m build --wheel --outdir /out
 
 ############################
@@ -189,7 +189,7 @@ COPY --parents \
     tsconfig.base.json tsconfig.json \
     packages/*/package.json \
     packages/tsconfig.workspace.json \
-    python/robomp/web/package.json \
+    tools/python/robomp/web/package.json \
     /pi/
 
 RUN bun install --frozen-lockfile --ignore-scripts
