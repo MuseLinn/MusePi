@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { setLocale } from "../src/i18n";
 import {
 	browserCallStats,
 	browserOperationGroups,
+	browserOperationStatus,
 	browserOperationsOf,
+	browserStepChanges,
 } from "../src/tool-render/tools/browser-activity";
 
 describe("browserOperationsOf", () => {
@@ -104,5 +107,61 @@ describe("browser call summary and page grouping", () => {
 			{ url: "https://a.test", title: "A", count: 2 },
 			{ url: "https://b.test", title: "B", count: 1 },
 		]);
+	});
+});
+
+describe("browserStepChanges", () => {
+	const step = (stateBefore: unknown, stateAfter: unknown) => {
+		const [parsed] = browserOperationsOf({
+			operations: [{ id: "run:1", action: "click", status: "completed", startedAt: 1, stateBefore, stateAfter }],
+		});
+		if (!parsed) throw new Error("operation did not parse");
+		return parsed;
+	};
+
+	test("reports title, url, scroll and loading changes in display order", () => {
+		const changes = browserStepChanges(
+			step(
+				{ url: "https://a.test/form", title: "Form", scrollY: 0, loading: true },
+				{ url: "https://a.test/done", title: "Done", scrollY: 640, loading: false },
+			),
+		);
+		expect(changes).toEqual([
+			{ key: "pageTitle", before: "Form", after: "Done" },
+			{ key: "url", before: "https://a.test/form", after: "https://a.test/done" },
+			{ key: "scrollY", before: 0, after: 640 },
+			{ key: "loading", before: true, after: false },
+		]);
+	});
+
+	test("returns an empty list when the page stood still", () => {
+		const state = { url: "https://a.test/form", title: "Form", scrollY: 0, loading: false };
+		expect(browserStepChanges(step(state, { ...state }))).toEqual([]);
+	});
+
+	test("stays silent when one side was never sampled", () => {
+		expect(browserStepChanges(step(undefined, { url: "https://a.test" }))).toBeNull();
+		expect(browserStepChanges(step({ url: "https://a.test" }, undefined))).toBeNull();
+	});
+
+	test("drops the title when either side is empty", () => {
+		expect(
+			browserStepChanges(step({ url: "https://a.test", title: "Form" }, { url: "https://a.test", title: "" })),
+		).toEqual([]);
+	});
+});
+
+describe("browserOperationStatus", () => {
+	test("carries the action verb through running, done and failed", () => {
+		setLocale("zh-CN");
+		expect(browserOperationStatus({ action: "click", status: "running" })).toBe("正在点击");
+		expect(browserOperationStatus({ action: "click", status: "completed" })).toBe("已点击");
+		expect(browserOperationStatus({ action: "click", status: "failed" })).toBe("点击失败");
+		expect(browserOperationStatus({ action: "fill", status: "completed" })).toBe("已填写");
+	});
+
+	test("keeps cancellation generic", () => {
+		setLocale("en-US");
+		expect(browserOperationStatus({ action: "click", status: "canceled" })).toBe("Canceled");
 	});
 });

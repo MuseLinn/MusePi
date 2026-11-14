@@ -192,3 +192,27 @@ describe("structured browser cards", () => {
 		expect(html).toContain("Raw data");
 	});
 });
+
+describe("other browser fields", () => {
+	it("keeps fields the cards did not render, folded", () => {
+		const html = render("read", {
+			pageText: { url: "https://a.test/", blocks: [{ text: "hello" }] },
+			futureField: "from a newer daemon",
+			flags: { retried: 2 },
+		});
+		expect(html).toContain("Other fields");
+		expect(html).toContain("futureField");
+		expect(html).toContain("from a newer daemon");
+		expect(html).toContain("flags");
+	});
+
+	it("does not repeat consumed fields or media payloads", () => {
+		const html = render("read", {
+			pageText: { url: "https://a.test/", blocks: [{ text: "hello" }] },
+			operations: [{ id: "run:1", action: "click" }],
+			observation: { elements: [] },
+			screenshots: [{ target: "data:image/png;base64,AAAA" }],
+		});
+		expect(html).not.toContain("<summary>Other fields</summary>");
+	});
+});

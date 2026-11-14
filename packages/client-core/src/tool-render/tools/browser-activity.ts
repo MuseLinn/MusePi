@@ -16,6 +16,14 @@ export type BrowserOperationAction =
 	| "upload"
 	| "wait";
 
+/** Page identity sampled on one side of an action. */
+export interface BrowserPageState {
+	url: string;
+	title?: string;
+	scrollY?: number;
+	loading?: boolean;
+}
+
 export interface BrowserOperation {
 	id: string;
 	action: BrowserOperationAction;
@@ -33,6 +41,8 @@ export interface BrowserOperation {
 	pageTitle?: string;
 	pageUrl?: string;
 	thumbnail?: string;
+	stateBefore?: BrowserPageState;
+	stateAfter?: BrowserPageState;
 }
 
 export interface BrowserActivityCall {
@@ -86,6 +96,20 @@ function numberOrUndefined(value: unknown): number | undefined {
 	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function pageStateOf(value: unknown): BrowserPageState | undefined {
+	if (!isRecord(value)) return undefined;
+	const url = stringOrUndefined(value.url);
+	if (url === undefined) return undefined;
+	const title = stringOrUndefined(value.title);
+	const scrollY = numberOrUndefined(value.scrollY);
+	return {
+		url,
+		...(title !== undefined ? { title } : {}),
+		...(scrollY !== undefined ? { scrollY } : {}),
+		...(typeof value.loading === "boolean" ? { loading: value.loading } : {}),
+	};
+}
+
 export function browserOperationsOf(details: unknown): BrowserOperation[] {
 	if (!isRecord(details) || !Array.isArray(details.operations)) return [];
 	return details.operations.flatMap(value => {
@@ -120,9 +144,56 @@ export function browserOperationsOf(details: unknown): BrowserOperation[] {
 				...(typeof value.thumbnail === "string" && value.thumbnail.startsWith("data:image/")
 					? { thumbnail: value.thumbnail }
 					: {}),
+				...(pageStateOf(value.stateBefore) !== undefined ? { stateBefore: pageStateOf(value.stateBefore) } : {}),
+				...(pageStateOf(value.stateAfter) !== undefined ? { stateAfter: pageStateOf(value.stateAfter) } : {}),
 			},
 		];
 	});
+}
+
+/** One field a step changed, in display order. */
+export interface BrowserStepChange {
+	key: "pageTitle" | "url" | "scrollY" | "loading";
+	before: string | number | boolean;
+	after: string | number | boolean;
+}
+
+/** A step's lifecycle in the reader's words: the action verb carries the
+ *  status, so "点击" reads as 正在点击 / 已点击 / 点击失败 instead of a generic
+ *  "completed". */
+export function browserOperationStatus(operation: Pick<BrowserOperation, "action" | "status">): string {
+	const action = browserActionLabel(operation.action);
+	switch (operation.status) {
+		case "running":
+			return t("tools.browserOperationRunning", { action });
+		case "failed":
+			return t("tools.browserOperationFailed", { action });
+		case "canceled":
+			return t("tools.canceled");
+		default:
+			return t("tools.browserOperationDone", { action });
+	}
+}
+
+/** Fields this step changed; an empty list means the page stood still.
+ *  `null` when the step has no comparable pair (still running, or a sampling
+ *  miss), so the card can stay silent instead of claiming "no change". */
+export function browserStepChanges(operation: BrowserOperation): BrowserStepChange[] | null {
+	const before = operation.stateBefore;
+	const after = operation.stateAfter;
+	if (!before || !after) return null;
+	const changes: BrowserStepChange[] = [];
+	if (before.title && after.title && before.title !== after.title) {
+		changes.push({ key: "pageTitle", before: before.title, after: after.title });
+	}
+	if (before.url !== after.url) changes.push({ key: "url", before: before.url, after: after.url });
+	if (before.scrollY !== undefined && after.scrollY !== undefined && before.scrollY !== after.scrollY) {
+		changes.push({ key: "scrollY", before: before.scrollY, after: after.scrollY });
+	}
+	if (before.loading !== undefined && after.loading !== undefined && before.loading !== after.loading) {
+		changes.push({ key: "loading", before: before.loading, after: after.loading });
+	}
+	return changes;
 }
 
 /** One browser call's headline numbers (card summary + tests). */

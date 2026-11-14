@@ -702,3 +702,80 @@ export function StructuredBrowserResult({
 	if (details.actionReceipt) return <ReceiptCard receipt={details.actionReceipt} raw={details.result} />;
 	return null;
 }
+
+/** Detail keys the cards above already consume (or that would flood the fold
+ *  with media/base64). Everything else is still shown, so a field added by a
+ *  newer daemon never becomes invisible just because this file predates it. */
+const CONSUMED_DETAIL_KEYS = new Set([
+	"action",
+	"name",
+	"url",
+	"browser",
+	"viewport",
+	"status",
+	"pageText",
+	"pageScreenshot",
+	"elementsSnapshot",
+	"visualSnapshot",
+	"visualCrop",
+	"deviceProfiles",
+	"deviceConfiguration",
+	"history",
+	"downloads",
+	"navigation",
+	"waitResult",
+	"visualInteraction",
+	"actionReceipt",
+	"pendingDialogs",
+	"handledDialogs",
+	"control",
+	"screenshots",
+	"operations",
+	"observation",
+	"meta",
+	"code",
+	"readOnly",
+	"result",
+]);
+
+function restValue(value: unknown): string | null {
+	if (value === null) return t("tools.browserUnknown");
+	if (typeof value === "boolean") return value ? t("tools.browserYes") : t("tools.browserNo");
+	if (typeof value === "number") return Number.isFinite(value) ? String(value) : null;
+	if (typeof value === "string") return value.length > 120 ? `${value.slice(0, 117)}…` : value;
+	if (Array.isArray(value) || typeof value === "object") {
+		try {
+			const text = JSON.stringify(value);
+			return text.length <= 160 ? text : null;
+		} catch {
+			return null;
+		}
+	}
+	return null;
+}
+
+/** Fields this card set did not render. Folded, and empty renders nothing. */
+export function OtherBrowserFields({ result }: { result: ToolRenderProps["result"] }): ReactNode {
+	const details = detailsRecord(result);
+	if (!details) return null;
+	const rows: Array<[string, string]> = [];
+	for (const [key, value] of Object.entries(details)) {
+		if (CONSUMED_DETAIL_KEYS.has(key)) continue;
+		const text = restValue(value);
+		if (text !== null && text.length > 0) rows.push([key, text]);
+	}
+	if (rows.length === 0) return null;
+	return (
+		<details className="tv-browser-rest">
+			<summary>{t("tools.browserOtherFields")}</summary>
+			<dl>
+				{rows.map(([key, value]) => (
+					<div key={key}>
+						<dt>{key}</dt>
+						<dd>{value}</dd>
+					</div>
+				))}
+			</dl>
+		</details>
+	);
+}

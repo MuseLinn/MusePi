@@ -26,9 +26,12 @@ import {
 	browserActionLabel,
 	browserCallStats,
 	browserOperationGroups,
+	browserOperationStatus,
 	browserOperationsOf,
+	browserStepChanges,
 } from "./browser-activity";
-import { browserStructuredOf, StructuredBrowserResult } from "./browser-structured";
+import { StepChanges, StepReceipt } from "./browser-step-changes";
+import { browserStructuredOf, OtherBrowserFields, StructuredBrowserResult } from "./browser-structured";
 
 interface BrowserDetails {
 	action: string | null;
@@ -80,13 +83,6 @@ function describeBrowser(app: AppArg | null, details: BrowserDetails): string | 
 	return details.browser;
 }
 
-function operationStatus(operation: BrowserOperation): string {
-	if (operation.status === "running") return t("tools.dispatched");
-	if (operation.status === "failed") return t("tools.failed");
-	if (operation.status === "canceled") return t("tools.canceled");
-	return t("tools.completed");
-}
-
 const STEP_ICONS: Record<BrowserOperation["action"], LucideIcon> = {
 	goto: Globe,
 	observe: Eye,
@@ -119,8 +115,9 @@ function pageLabel(url: string, title: string): string {
 	return t("transcript.browserPageFallback");
 }
 
-/** Jump to the managed browser's agent tab (ChatView opens the panel). */
-function openBrowser(url: string | undefined): void {
+/** Jump to the managed browser's agent tab (ChatView opens the panel). */ function openBrowser(
+	url: string | undefined,
+): void {
 	if (!url || typeof window === "undefined") return;
 	window.dispatchEvent(new CustomEvent("musepi-open-url", { detail: { url } }));
 	// After the panel mounts, point it at the agent tab these steps ran in.
@@ -206,6 +203,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				)}
 			</span>
 			<StructuredBrowserResult action={action} result={result} />
+			<OtherBrowserFields result={result} />
 			{details.operations.length > 0 && (
 				<>
 					<div className="tv-browser-run-summary">
@@ -258,7 +256,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 										/>
 									)}
 								</div>
-								{group.operations.map(operation => {
+								{group.operations.map((operation, index) => {
 									const StepIcon = STEP_ICONS[operation.action] ?? Globe;
 									const open = openIds.has(operation.id);
 									const elapsed = formatDuration(
@@ -318,7 +316,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 											</button>
 											{open && (
 												<div className="tv-browser-step-detail">
-													<span>{operationStatus(operation)}</span>
+													<span>{browserOperationStatus(operation)}</span>
 													{operation.pageTitle && <span>{operation.pageTitle}</span>}
 													{operation.pageUrl && (
 														<button
@@ -332,6 +330,8 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 													{operation.error && (
 														<div className="tv-browser-step-error">{operation.error}</div>
 													)}
+													<StepReceipt thumbnail={group.operations[index - 1]?.thumbnail} />
+													<StepChanges changes={browserStepChanges(operation)} />
 												</div>
 											)}
 										</div>
