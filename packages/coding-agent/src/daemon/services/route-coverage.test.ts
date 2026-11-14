@@ -31,6 +31,7 @@ import { LivenessService } from "./liveness-service";
 import { MarketplaceService } from "./marketplace-service";
 import { McpOAuthService } from "./mcp-oauth-service";
 import { McpServersService } from "./mcp-servers-service";
+import { MemoryService } from "./memory-service";
 import { ModelsService } from "./models-service";
 import { PluginInstallService } from "./plugin-install-service";
 import { PresetsService } from "./presets-service";
@@ -168,6 +169,14 @@ function buildRegistry(): HostServices {
 	services.register(new GitService({ cwd: () => "" }));
 	// GitHubService：只认领路由（本测试不调用 gh），cwd 桩化。
 	services.register(new GitHubService({ cwd: () => "" }));
+	// MemoryService：只认领路由（本测试不解析记忆后端），宿主访问桩化。
+	services.register(
+		new MemoryService({
+			cwd: () => "",
+			settings: () => null,
+			allSessions: () => [][Symbol.iterator](),
+		}),
+	);
 	// KnowledgeService：只认领路由（本测试不读写笔记/计划/待办），cwd 桩化。
 	services.register(new KnowledgeService({ cwd: () => "" }));
 	// PresetsService：预设目录与扩展面桩化（本测试不读写预设文件）。
