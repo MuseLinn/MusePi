@@ -14,11 +14,11 @@ import type { IconName } from "../vendor/oc-icons/icons";
  * The rail is deliberately dumb: it takes prepared destinations and renders
  * them. Selection state lives in `app.tsx`, so the rail can never disagree
  * with the surface it drives.
+ *
+ * Its width lives only in CSS (`--gui-rail-w`, `gui-chrome.css`): every
+ * offset that depends on it — the sidebar splitter, the narrow-mode drawer —
+ * reads that variable, so there is no second copy to drift.
  */
-
-/** Must match `.gui-rail { width }` in `gui-chrome.css` — the side resize
- *  handle and the narrow-mode drawer offset are computed from it. */
-export const RAIL_WIDTH = 52;
 
 export interface RailItem {
 	id: string;
