@@ -45,7 +45,7 @@ interface NativeMenuItem {
 	path: string[];
 	enabled: boolean;
 	checked: boolean;
-	has_submenu: boolean;
+	hasSubmenu: boolean;
 	shortcut?: string;
 }
 

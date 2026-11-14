@@ -82,7 +82,7 @@ interface FakeMenuItem {
 	path: string[];
 	enabled: boolean;
 	checked: boolean;
-	has_submenu: boolean;
+	hasSubmenu: boolean;
 	shortcut?: string;
 }
 
@@ -863,7 +863,7 @@ describe("native window menus", () => {
 					path: [...path, "Open…"],
 					enabled: true,
 					checked: false,
-					has_submenu: false,
+					hasSubmenu: false,
 					shortcut: "Ctrl+O",
 				},
 			];
@@ -885,7 +885,7 @@ describe("native window menus", () => {
 				path: ["File", "Open…"],
 				enabled: true,
 				checked: false,
-				has_submenu: false,
+				hasSubmenu: false,
 				shortcut: "Ctrl+O",
 			},
 		]);

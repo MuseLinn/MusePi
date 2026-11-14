@@ -45,6 +45,17 @@ const sequence = encodeSixel(pngBytes, widthPx, heightPx);
 ```bash
 # Build native addon from workspace root (requires Rust)
 bun run build
+```
+
+Windows hosts also need `cmake` on `PATH`: `audiopus_sys` builds its vendored
+Opus with CMake, and the Windows host has no Bazel addon path. `pip install
+cmake` is enough; without it the build stops at `audiopus_sys`.
+
+The win32 build links the MSVC CRT statically (`+crt-static` plus `/MT` for C
+dependencies), so flipping that configuration requires deleting
+`target/x86_64-pc-windows-msvc/local` first — cargo does not track
+`CFLAGS`/`CXXFLAGS`, and stale `/MD` objects fail the final link with
+unresolved C runtime symbols.
 
 # Type check
 bun run check

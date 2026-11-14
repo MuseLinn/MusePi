@@ -34,6 +34,8 @@ export declare class DesktopSession {
   get capabilities(): DesktopCapabilities
   listDisplays(): Promise<Array<DesktopDisplay>>
   listWindows(): Promise<Array<DesktopWindow>>
+  menuItems(window: string, path: Array<string>): Promise<Array<DesktopMenuItem>>
+  menuSelect(window: string, path: Array<string>): Promise<undefined>
   listApplications(query?: ApplicationQuery | undefined | null): Promise<Array<Application>>
   openApplication(target: string, options?: ApplicationOpenOptions | undefined | null): Promise<Application>
   capture(target: string, caps?: CaptureCaps | undefined | null): Promise<DesktopCapture>
@@ -723,6 +725,19 @@ export interface DesktopDisplay {
   pixelWidth: number
   pixelHeight: number
   isPrimary: boolean
+}
+
+/**
+ * One immediate child of a native application menu. Paths contain the actual
+ * native labels, including ellipses; selection accepts normalized labels.
+ */
+export interface DesktopMenuItem {
+  title: string
+  path: Array<string>
+  enabled: boolean
+  checked: boolean
+  hasSubmenu: boolean
+  shortcut?: string
 }
 
 export interface DesktopPoint {
