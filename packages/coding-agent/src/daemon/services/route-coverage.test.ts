@@ -42,6 +42,7 @@ import { ScheduleService } from "./schedule-service";
 import { SessionPresenceService } from "./session-presence-service";
 import { SessionService } from "./session-service";
 import { SettingsService } from "./settings-service";
+import { SpeechService } from "./speech-service";
 import { TerminalService } from "./terminal-service";
 import { UsageService } from "./usage-service";
 import { ViewStoreService } from "./view-store-service";
@@ -169,6 +170,8 @@ function buildRegistry(): HostServices {
 	services.register(new GitService({ cwd: () => "" }));
 	// GitHubService：只认领路由（本测试不调用 gh），cwd 桩化。
 	services.register(new GitHubService({ cwd: () => "" }));
+	// SpeechService：只认领路由（本测试不下载/合成语音），宿主访问桩化。
+	services.register(new SpeechService({ get: () => undefined, broadcast: () => {} }));
 	// MemoryService：只认领路由（本测试不解析记忆后端），宿主访问桩化。
 	services.register(
 		new MemoryService({
