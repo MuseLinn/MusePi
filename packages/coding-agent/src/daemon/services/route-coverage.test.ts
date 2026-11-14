@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { ExtensionRuntime } from "../../extensibility/extensions/loader";
 import { BlobStore } from "../../session/blob-store";
 import { ViewStore } from "../view-store";
+import { AgentsService } from "./agents-service";
 import { ApprovalService } from "./approval-service";
 import { ArchiveService } from "./archive-service";
 import { AttachmentService } from "./attachment-service";
@@ -21,7 +22,9 @@ import { EventService } from "./event-service";
 import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
 import { GitContextService } from "./git-context-service";
+import { GitService } from "./git-service";
 import { GitWatchService } from "./git-watch-service";
+import { GitHubService } from "./github-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { LivenessService } from "./liveness-service";
 import { MarketplaceService } from "./marketplace-service";
@@ -33,6 +36,7 @@ import { RemoteService } from "./remote-service";
 import { ScheduleService } from "./schedule-service";
 import { SessionPresenceService } from "./session-presence-service";
 import { SessionService } from "./session-service";
+import { SettingsService } from "./settings-service";
 import { TerminalService } from "./terminal-service";
 import { UsageService } from "./usage-service";
 import { ViewStoreService } from "./view-store-service";
@@ -153,6 +157,21 @@ function buildRegistry(): HostServices {
 			cronSessionIds: () => new Set(),
 			firstUserMessage: () => "",
 		}),
+	);
+	// AgentsService：宿主会话访问桩化，仅参与路由表。
+	services.register(new AgentsService({ get: () => undefined, knownSessions: async () => [] }));
+	// GitService：cwd 与 watch 桩化（本测试不跑任何 git 命令）。
+	services.register(new GitService({ cwd: () => "" }));
+	// GitHubService：只认领路由（本测试不调用 gh），cwd 桩化。
+	services.register(new GitHubService({ cwd: () => "" }));
+	// SettingsService：宿主设置面桩化（本测试只校验路由归属）。
+	services.register(
+		new SettingsService({
+			cwd: () => "",
+			ensureRegistry: async () => null,
+			extensionSettings: () => null,
+			settings: () => null,
+		} as never),
 	);
 	// SessionPresenceService：只认领 session.presence，宿主访问桩化。
 	services.register(new SessionPresenceService({ get: () => undefined, knownSessions: async () => [] }));

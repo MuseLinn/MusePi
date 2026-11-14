@@ -2,13 +2,12 @@
  * GitService — the right-panel git surface as an L2 daemon service.
  *
  * Seam:
- * - Input: `git.*` routes (log, status, diff, branches, identity, stage,
- *   commit, push, pull, stash, checkout, worktrees, watch/unwatch) plus the
- *   session working directory and the HMR-style directory watcher.
+ * - Input: `git.*` read/write routes (log, status, diff, branches, identity,
+ *   stage, commit, push, pull, stash, checkout, worktrees) plus the session
+ *   working directory. Watch pairs belong to GitWatchService.
  * - Output: panel-shaped read models and write acks; git's own stderr for
  *   failures, so a missing repository renders as a state, not a dialog.
- * - Lifecycle: stateless; the runner module owns process guards and the watch
- *   pairs are released by `git.unwatch` / connection close.
+ * - Lifecycle: stateless; the runner module owns the process guards.
  */
 
 import * as fs from "node:fs";
@@ -20,8 +19,6 @@ import {
 	worktree as gitWorktrees,
 } from "../../utils/git";
 import { runGit, runGitRead, runGitWrite } from "../git-runner";
-import type { DaemonConnection } from "../session-host";
-import type { GitWatchService } from "./git-watch-service";
 import type { DaemonService } from "./types";
 
 export class GitService implements DaemonService {
@@ -31,8 +28,6 @@ export class GitService implements DaemonService {
 		"git.diff": "diff",
 		"git.show": "show",
 		"git.changedFiles": "changedFiles",
-		"git.watch": "watch",
-		"git.unwatch": "unwatch",
 		"git.numstat": "numstat",
 		"git.discard": "discard",
 		"git.revert": "revert",
@@ -53,14 +48,10 @@ export class GitService implements DaemonService {
 		"git.worktrees": "worktrees",
 	} as const;
 
-	constructor(private readonly deps: { cwd: () => string; watch: Pick<GitWatchService, "watch" | "unwatch"> }) {}
+	constructor(private readonly deps: { cwd: () => string }) {}
 
 	private cwd(): string {
 		return this.deps.cwd();
-	}
-
-	private get gitWatch(): Pick<GitWatchService, "watch" | "unwatch"> {
-		return this.deps.watch;
 	}
 
 	async log(params: unknown): Promise<unknown> {
@@ -319,14 +310,6 @@ export class GitService implements DaemonService {
 			// the first characters of the filename.
 			.map(line => (base && head ? line.trim() : line.slice(3)));
 		return { files };
-	}
-
-	async watch(params: unknown, conn: DaemonConnection): Promise<unknown> {
-		return this.gitWatch.watch((params ?? {}) as Record<string, unknown>, conn);
-	}
-
-	async unwatch(params: unknown, conn: DaemonConnection): Promise<unknown> {
-		return this.gitWatch.unwatch((params ?? {}) as Record<string, unknown>, conn);
 	}
 
 	async numstat(params: unknown): Promise<unknown> {
