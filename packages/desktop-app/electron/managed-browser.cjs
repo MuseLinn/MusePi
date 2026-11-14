@@ -38,6 +38,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { createHash } = require("node:crypto");
 const { projectActivity, settleActivity, startActivity, takeoverActivity } = require("./managed-browser-activity.cjs");
+const { AGENT_MARK_MS, agentMarkFor } = require("./agent-marks.cjs");
 const { ManagedBrowserRecordStore } = require("./managed-browser-records.cjs");
 const {
 	readExtensionManifest,
@@ -575,11 +576,6 @@ function chromeMajorVersion() {
 /** Where an agent action lands, when it is worth flashing. Press only: the
  *  matching release carries the same point, and a hover probe would flash
  *  constantly. */
-function agentHighlightPoint(method, params) {
-	if (method !== "Input.dispatchMouseEvent" || params?.type !== "mousePressed") return null;
-	if (typeof params.x !== "number" || typeof params.y !== "number") return null;
-	return { x: params.x, y: params.y };
-}
 
 /**
  * One managed tab: metadata + the renderer-owned `<webview>` guest it binds
@@ -1384,6 +1380,7 @@ class ManagedBrowserController {
 		return {
 			port: this.server ? this.port : null,
 			...projectActivity(this.ledger, this.activeTabId),
+			agentMark: this.agentMark ?? null,
 		};
 	}
 
@@ -2280,8 +2277,11 @@ class ManagedBrowserController {
 			this.recordActivity(tab, activityAction, tab.url, "dispatched", activityKey);
 			this.emitState(this.panelVisible ? {} : { agentActivity: true });
 		}
-		const highlightPoint = agentHighlightPoint(msg.method, msg.params);
-		if (highlightPoint) this.flashAgentTarget(tab, highlightPoint);
+		const mark = agentMarkFor(msg.method, msg.params);
+		if (mark) {
+			this.flashAgentTarget(tab, mark);
+			this.publishAgentMark(tab, mark);
+		}
 		try {
 			const result = (await wc.debugger.sendCommand(msg.method, msg.params)) ?? {};
 			// Detach (e.g. a stopOp tab close) resolves pending commands instead
@@ -2605,6 +2605,22 @@ class ManagedBrowserController {
 			}
 		}
 		return { ok: true };
+	}
+
+	/**
+	 * Publish the point an agent action touched so the renderer can pulse it.
+	 * The mark expires on its own; a newer action replaces it instead of
+	 * stacking a trail of stale rings.
+	 */
+	publishAgentMark(tab, mark) {
+		this.agentMark = { tabId: String(tab.id), x: mark.x, y: mark.y, kind: mark.kind, at: Date.now() };
+		clearTimeout(this.markTimer);
+		this.markTimer = setTimeout(() => {
+			this.markTimer = null;
+			this.agentMark = null;
+			this.emitState({});
+		}, AGENT_MARK_MS);
+		this.emitState({});
 	}
 
 	/**

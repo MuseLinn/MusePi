@@ -110,6 +110,61 @@
 				white-space: nowrap;
 				box-shadow: 0 4px 14px oklch(0 0 0 / 0.3);
 			}
+			/* Virtual agent pointer: shows where the agent's synthetic input
+			 * is aimed. Drawn here, never by moving the OS cursor — the
+			 * overlay window is click-through, so the user keeps their own
+			 * pointer and focus while the agent works. */
+			.agent-cursor {
+				position: fixed;
+				left: 0;
+				top: 0;
+				width: 0;
+				height: 0;
+				opacity: 0;
+				pointer-events: none;
+				z-index: 12;
+				transition: transform 140ms ease-out, opacity 220ms ease;
+			}
+			.agent-cursor.is-live {
+				opacity: 1;
+			}
+			.agent-cursor::before {
+				content: "";
+				position: absolute;
+				left: -2px;
+				top: -2px;
+				width: 18px;
+				height: 22px;
+				background: oklch(0.62 0.16 162);
+				clip-path: polygon(0 0, 0 100%, 26% 76%, 44% 100%, 62% 92%, 44% 68%, 100% 62%);
+				filter: drop-shadow(0 1px 2px oklch(0 0 0 / 0.45)) drop-shadow(0 0 10px oklch(0.62 0.16 162 / 0.55));
+			}
+			.agent-cursor::after {
+				content: "";
+				position: absolute;
+				left: -9px;
+				top: -9px;
+				width: 18px;
+				height: 18px;
+				border: 1px solid oklch(0.62 0.16 162 / 0.5);
+				border-radius: 50%;
+			}
+			.agent-cursor[data-press="true"]::after {
+				animation: ring-pulse 420ms ease-out;
+			}
+			.agent-cursor-label {
+				position: absolute;
+				left: 20px;
+				top: 16px;
+				padding: 3px 8px;
+				border: 1px solid oklch(0.62 0.16 162 / 0.6);
+				border-radius: 999px;
+				background: oklch(0.3 0.05 162 / 0.92);
+				color: #fff;
+				font: 500 11px/1 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+				white-space: nowrap;
+				box-shadow: 0 4px 14px oklch(0 0 0 / 0.3);
+			}
 			/* Action point pulse (best-effort click coordinates). */
 			.target-ring {
 				position: fixed;
@@ -178,6 +233,29 @@
 			// The sandboxed preload bridge can land after this classic
 			// script runs — poll until it appears (the overlay window lives
 			// as long as the glow is active, so this terminates with it).
+			// One persistent pointer element, reused across events. Hidden after
+			// a short idle so a finished run leaves no artifact behind.
+			const cursor = document.createElement("div");
+			cursor.className = "agent-cursor";
+			const cursorLabel = document.createElement("span");
+			cursorLabel.className = "agent-cursor-label";
+			cursor.appendChild(cursorLabel);
+			document.body.appendChild(cursor);
+			let cursorHideTimer = 0;
+			function followAgentCursor(ev) {
+				if (!ev.point) return;
+				cursor.style.transform = `translate(${ev.point.x}px, ${ev.point.y}px)`;
+				cursorLabel.textContent = KIND_LABELS[ev.kind] ?? ev.kind;
+				cursor.dataset.press = String(ev.kind === "click" || ev.kind === "doubleClick");
+				cursor.classList.add("is-live");
+				if (cursor.dataset.press === "true") {
+					cursor.removeAttribute("data-press");
+					void cursor.offsetWidth;
+					cursor.dataset.press = "true";
+				}
+				clearTimeout(cursorHideTimer);
+				cursorHideTimer = setTimeout(() => cursor.classList.remove("is-live"), 2600);
+			}
 			(function boot() {
 				const bridge = window.glowBridge;
 				if (!bridge) {
@@ -205,6 +283,9 @@
 						document.body.appendChild(border);
 						setTimeout(() => border.remove(), 1900);
 					}
+					// Virtual pointer: follow the action point so a watcher can
+					// see where the agent aims without the OS cursor moving.
+					followAgentCursor(ev);
 					if (ev.point) {
 						const ring = document.createElement("div");
 						ring.className = "target-ring";

@@ -23,6 +23,7 @@ import { Eye as EyeIconData, EyeOff as EyeOffIconData, RefreshCw as RefreshCwIco
 import { MorphIcon } from "morphicons/react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useAgentTabControl } from "../lib/agent-tab-control";
 import { type AnnotationHost, cancelAnnotationSession, runAnnotationSession } from "../lib/annotation-session";
 import { formatAddressDisplayParts } from "../lib/browser-address";
 import { browserMenuModel } from "../lib/browser-menu-model";
@@ -71,6 +72,7 @@ import type { RpcClient } from "../lib/rpc";
 import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-nav";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
+import { BrowserAgentMark } from "./browser-agent-mark";
 import { BrowserControlOverlay } from "./browser-control-overlay";
 import {
 	BROWSER_VIEWPORTS,
@@ -333,6 +335,7 @@ export function ManagedBrowserPane({
 	const slotRef = useRef<HTMLDivElement | null>(null);
 	const contentRef = useRef<HTMLDivElement | null>(null);
 	const [controlRect, setControlRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+	const [pageOrigin, setPageOrigin] = useState<{ x: number; y: number } | null>(null);
 	const [findOpen, setFindOpen] = useState(false);
 	const [findQuery, setFindQuery] = useState("");
 	const [deviceToolbarVisible, setDeviceToolbarVisible] = useState(readBrowserDeviceToolbarVisibility);
@@ -612,6 +615,11 @@ export function ManagedBrowserPane({
 		const report = (): void => {
 			const avail = el.getBoundingClientRect();
 			const scrollport = contentRef.current?.getBoundingClientRect() ?? avail;
+			setPageOrigin(previous =>
+				previous && Math.abs(previous.x - avail.x) < 1 && Math.abs(previous.y - avail.y) < 1
+					? previous
+					: { x: avail.x, y: avail.y },
+			);
 			const nextControlRect = {
 				x: scrollport.x + 5,
 				y: scrollport.y + 5,
@@ -949,16 +957,16 @@ export function ManagedBrowserPane({
 	}, [addressValue, suggestionsOpen]);
 
 	const activeTabLoading = Boolean(activeTab?.loading);
-	// Agent occupancy (§3.2.5): only when the dispatched op targets the tab
-	// on screen — background-tab work paints the ledger, not this chrome.
-	const activityInSession =
-		host.activity?.status === "dispatched" && sessionTabs.some(tab => tab.id === host.activity?.tabId);
-	const agentBusy = activityInSession && host.activity?.tabId === host.activeId && !isBlank;
-	const agentOutOfView = activityInSession && host.activity?.tabId !== host.activeId;
+	// Agent occupancy (§3.2.5): tab-level control survives gaps between tool
+	// calls; a single in-flight operation would make the pill blink out.
+	const knownTabIds = useMemo(() => sessionTabs.map(tab => tab.id), [sessionTabs]);
+	const { control: agentControl, release: releaseAgentControl } = useAgentTabControl(host.activity, knownTabIds);
+	const agentBusy = agentControl !== null && agentControl.tabId === host.activeId && !isBlank;
 	const handleTakeover = useCallback(async (): Promise<void> => {
-		await takeoverAgentOp(host.activity?.tabId);
+		await takeoverAgentOp(agentControl?.tabId);
+		releaseAgentControl();
 		onTakeover?.();
-	}, [host.activity?.tabId, onTakeover]);
+	}, [agentControl?.tabId, releaseAgentControl, onTakeover]);
 	return (
 		<div className="gui-browser-pane relative flex min-h-0 flex-1 flex-col">
 			{/* Chrome bar: nav / address omnibox / zoom / actions (§3.2.4 IA:
@@ -1480,13 +1488,18 @@ export function ManagedBrowserPane({
 				style={{ overflow: pageOverflow.x || pageOverflow.y ? "auto" : "hidden" }}
 			>
 				<div ref={slotRef} className="gui-browser-slot" aria-label={t("tools.managedBrowser")} />
-				{(agentBusy || agentOutOfView) && (
+				<BrowserAgentMark
+					mark={host.agentMark && host.agentMark.tabId === host.activeId ? host.agentMark : null}
+					origin={pageOrigin}
+					page={pageBox ? { left: pageBox.left, scale: pageBox.scale } : null}
+				/>
+				{agentControl && (
 					<BrowserControlOverlay
-						activity={host.activity}
+						activity={agentControl.activity}
+						since={agentControl.since}
+						visible
 						inView={agentBusy}
-						onReveal={() => {
-							if (host.activity) selectTab(host.activity.tabId);
-						}}
+						onReveal={() => selectTab(agentControl.tabId)}
 						onTakeover={handleTakeover}
 						frameRect={controlRect ?? undefined}
 					/>

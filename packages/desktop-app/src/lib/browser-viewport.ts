@@ -107,3 +107,18 @@ export function viewportOverflow(
 		y: layoutHeight * scale > availableHeight,
 	};
 }
+
+/** Map a page-viewport point (CSS px, as the agent dispatched it) to screen
+ *  coordinates: the page sits at the slot origin, offset by the preset's
+ *  centering and scaled by its fit factor. */
+export function mapPagePoint(
+	point: { x: number; y: number },
+	screenOrigin: { x: number; y: number },
+	page: { left: number; scale: number } | null,
+): { x: number; y: number } {
+	const scale = page?.scale ?? 1;
+	return {
+		x: screenOrigin.x + (page?.left ?? 0) + point.x * scale,
+		y: screenOrigin.y + point.y * scale,
+	};
+}

@@ -2279,6 +2279,12 @@ function setComputerGlow(on) {
 			});
 			w.setAlwaysOnTop(true, "screen-saver");
 			w.setIgnoreMouseEvents(true, { forward: true });
+			// Keep the overlay out of every screen capture. The agent screenshots
+			// the desktop with the same OS path a recorder uses, so an
+			// unprotected overlay would paint frames, labels and the virtual
+			// cursor into the model's own observations. Windows maps this to
+			// WDA_EXCLUDEFROMCAPTURE, macOS to NSWindowSharingNone.
+			w.setContentProtection(true);
 			w.loadFile(path.join(__dirname, "glow.html"));
 			w.showInactive();
 			glowWindows.add(w);

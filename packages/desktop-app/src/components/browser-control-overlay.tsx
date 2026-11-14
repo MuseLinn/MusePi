@@ -27,6 +27,8 @@ export function BrowserControlOverlay({
 	now,
 	frameRect,
 	inView = true,
+	since,
+	visible,
 }: {
 	activity: BrowserControlActivity | null;
 	onTakeover(): void | Promise<void>;
@@ -34,8 +36,14 @@ export function BrowserControlOverlay({
 	now?: number;
 	frameRect?: { x: number; y: number; width: number; height: number };
 	inView?: boolean;
+	/** Start of the agent's hold on this tab; keeps the counter continuous
+	 *  across steps instead of restarting on every operation. */
+	since?: number;
+	/** Whether the agent still holds the tab. Defaults to "the operation is
+	 *  running", which makes the card vanish between tool calls. */
+	visible?: boolean;
 }): ReactNode {
-	const active = activity?.status === "dispatched";
+	const active = visible ?? activity?.status === "dispatched";
 	const [displayActivity, setDisplayActivity] = useState(activity);
 	const [closing, setClosing] = useState(false);
 	const [pending, setPending] = useState(false);
@@ -65,7 +73,8 @@ export function BrowserControlOverlay({
 	}, [active, now]);
 
 	if (!displayActivity) return null;
-	const elapsed = Math.max(0, Math.floor((clock - displayActivity.at) / 1000));
+	const startedAt = since ?? displayActivity.at;
+	const elapsed = Math.max(0, Math.floor((clock - startedAt) / 1000));
 	const minutes = Math.floor(elapsed / 60);
 	const seconds = elapsed % 60;
 	const time = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
@@ -106,9 +115,11 @@ export function BrowserControlOverlay({
 					<span className="gui-browser-control-title" role="status" aria-live="polite">
 						{pending
 							? t("tools.controlPaused")
-							: inView
-								? t("tools.agentOperating")
-								: t("tools.controlOutOfView")}
+							: !inView
+								? t("tools.controlOutOfView")
+								: displayActivity.status === "dispatched"
+									? t("tools.agentOperating")
+									: t("tools.agentHolding")}
 						{agentName && (
 							<span
 								data-browser-agent={agentName}

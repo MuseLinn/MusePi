@@ -10,6 +10,9 @@ import { GuiSelect } from "./GuiSelect";
 
 export const BROWSER_VIEWPORTS = [
 	{ key: "tools.browserViewportFit", width: null, height: null, device: "fit" },
+	// Free-form emulated viewport: no device identity, just a layout size the
+	// dashed frame's right/bottom handles can drag.
+	{ key: "tools.browserViewportCustom", width: 1024, height: 768, device: "custom" },
 	// Legacy persisted presets stay selectable after the catalog expansion.
 	{ key: "tools.browserViewportPhone", width: 393, height: 852, device: "phone" },
 	{ key: "tools.browserViewportTablet", width: 768, height: 1024, device: "tablet" },
@@ -38,8 +41,11 @@ export type BrowserPageBackground = "auto" | "light" | "dark";
 
 const SCALES = [0.25, 0.4, 0.5, 0.67, 0.75, 0.9, 1, 1.25, 1.5, 2] as const;
 
-function presetIcon(device: "fit" | "phone" | "tablet" | "desktop") {
-	return device === "phone" ? Smartphone : device === "tablet" ? Tablet : device === "desktop" ? Monitor : Maximize2;
+function presetIcon(device: "fit" | "custom" | "phone" | "tablet" | "desktop") {
+	if (device === "phone") return Smartphone;
+	if (device === "tablet") return Tablet;
+	if (device === "desktop") return Monitor;
+	return device === "custom" ? SlidersHorizontal : Maximize2;
 }
 
 const BACKGROUNDS = ["auto", "light", "dark"] as const;

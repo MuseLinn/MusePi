@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { fitViewport } from "../src/lib/browser-viewport";
+import { fitViewport, mapPagePoint } from "../src/lib/browser-viewport";
 
 /**
  * Preset fitting contract: a phone/tablet/desktop preset must keep its LAYOUT
@@ -22,5 +22,18 @@ describe("fitViewport", () => {
 
 	it("falls back to 1 when the available width is unknown", () => {
 		expect(fitViewport(768, 0).scale).toBe(1);
+	});
+});
+
+describe("mapPagePoint", () => {
+	it("maps CSS pixels through the slot origin in plain mode", () => {
+		expect(mapPagePoint({ x: 100, y: 40 }, { x: 20, y: 10 }, null)).toEqual({ x: 120, y: 50 });
+	});
+
+	it("applies the preset centering and fit scale", () => {
+		expect(mapPagePoint({ x: 100, y: 40 }, { x: 20, y: 10 }, { left: 30, scale: 0.5 })).toEqual({
+			x: 100,
+			y: 30,
+		});
 	});
 });

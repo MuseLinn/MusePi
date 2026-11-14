@@ -181,9 +181,20 @@ interface ManagedBrowserActivity {
 
 /** Everything main still owns about the panel: the CDP port, the running agent
  *  operation, and whether that operation should surface the panel. */
+interface ManagedBrowserMark {
+	tabId: string;
+	/** CSS pixels in the page viewport, as dispatched to CDP. */
+	x: number;
+	y: number;
+	kind: "click" | "scroll";
+	at: number;
+}
+
 interface ManagedBrowserState {
 	port: number | null;
 	activity: ManagedBrowserActivity | null;
 	busyTabIds: string[];
 	agentActivity?: boolean;
+	/** Newest agent action point; expires on the main-process timer. */
+	agentMark?: ManagedBrowserMark | null;
 }

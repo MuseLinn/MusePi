@@ -7002,6 +7002,47 @@ body.gui-resizing {
 	background: transparent;
 }
 
+/* Agent action mark: a ring pulse at the CSS point the agent dispatched.
+ * Portalled to the body (viewport coordinates) because the guest webview
+ * paints above the pane's DOM. Pointer-events stay off: this observes the
+ * agent, it never intercepts the user. */
+.gui-browser-agent-mark {
+	position: fixed;
+	z-index: 7;
+	width: 0;
+	height: 0;
+	pointer-events: none;
+}
+
+.gui-browser-agent-mark::before {
+	content: "";
+	position: absolute;
+	left: -11px;
+	top: -11px;
+	width: 22px;
+	height: 22px;
+	border: 2px solid var(--color-accent);
+	border-radius: 50%;
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 22%, transparent);
+	animation: gui-browser-agent-mark 780ms ease-out both;
+}
+
+.gui-browser-agent-mark[data-kind="scroll"]::before {
+	border-style: dashed;
+	animation-duration: 900ms;
+}
+
+@keyframes gui-browser-agent-mark {
+	from {
+		opacity: 0.95;
+		transform: scale(0.45);
+	}
+	to {
+		opacity: 0;
+		transform: scale(1.7);
+	}
+}
+
 .gui-browser-control-frame {
 	position: absolute;
 	inset: 5px;

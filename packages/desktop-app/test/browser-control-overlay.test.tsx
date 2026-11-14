@@ -72,6 +72,30 @@ describe("BrowserControlOverlay", () => {
 		expect(host.querySelector("[data-browser-control]")).toBeNull();
 	});
 
+	it("keeps the elapsed counter continuous from the start of the hold", () => {
+		act(() =>
+			root.render(<BrowserControlOverlay activity={running} since={1_000} now={9_000} onTakeover={() => {}} />),
+		);
+		expect(document.querySelector("[data-elapsed='8']")).not.toBeNull();
+	});
+
+	it("stays visible for a settled activity while the agent still holds the tab", async () => {
+		act(() =>
+			root.render(
+				<BrowserControlOverlay
+					activity={{ ...running, status: "completed" }}
+					visible
+					now={5_000}
+					onTakeover={() => {}}
+				/>,
+			),
+		);
+		expect(document.querySelector("[data-browser-control='running']")).not.toBeNull();
+		expect(document.body.textContent).toContain(t("tools.agentHolding"));
+		await act(async () => Bun.sleep(220));
+		expect(document.querySelector("[data-browser-control='running']")).not.toBeNull();
+	});
+
 	it("reveals the background agent tab instead of drawing a frame over the current page", () => {
 		let revealed = 0;
 		act(() =>
