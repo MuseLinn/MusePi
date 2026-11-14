@@ -615,6 +615,7 @@ import {
 import { commentOnGithub, normalizeGithubReviewers, reviewOnGithub } from "./github-mutations";
 import { readGithubPrReviewComments } from "./github-pr-review";
 import { applyPluginChangeToSessions, type LiveApplySummary, type LiveApplyTarget } from "./live-plugin-apply";
+import { AgentsService } from "./services/agents-service";
 import { ApprovalService } from "./services/approval-service";
 import { ArchiveService } from "./services/archive-service";
 import {
@@ -682,7 +683,6 @@ import {
 	tailSnapshot,
 } from "./session-host";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
-import { isSubagentTranscriptOf, transcriptAgentId } from "./subagent-transcripts";
 import { createTerminalCorePlugin } from "./terminal-core-plugin";
 import type { WebRouteRegistry } from "./web-routes";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
@@ -1129,6 +1129,9 @@ export class DaemonServer {
 		// Public per-session presence; mounted on the cordis host as
 		// `ctx.sessionPresence` and claimed as the `session.presence` route.
 		this.#services.register(new SessionPresenceService(this.#host));
+		// Agent control surface (roster, live progress, transcript, lifecycle
+		// actions); mounted as `ctx.agents` on the cordis host.
+		this.#services.register(new AgentsService(this.#host));
 		// Speech frontend (speaker enrollment + streaming transcription): the
 		// engine singleton stays in voice/frontend/service; partial/segment
 		// results ride the same global event channel as every other broadcast.
@@ -1349,25 +1352,6 @@ export class DaemonServer {
 	 *  by the client's sessionId guard, or mixed). WeakMap so a dropped
 	 *  connection never leaks its LiveSession reference. */
 	#resumeLiveByConn = new WeakMap<object, LiveSession>();
-
-	/** Session file for any session id: the live attachment first, then the
-	 *  TTL-cached disk scan (`knownSessions`). Child transcripts are addressed
-	 *  relative to their parent's file, so every subagent read starts here.
-	 *  Memoized because the transcript poll asks every 1.2s while it is open
-	 *  and a session's file does not move. */
-	#sessionFiles = new Map<string, { at: number; file: string | null }>();
-
-	async #sessionFileFor(sessionId: string): Promise<string | null> {
-		const live = this.#host.get(sessionId)?.agentSession.sessionFile;
-		if (live) return live;
-		const cached = this.#sessionFiles.get(sessionId);
-		if (cached && Date.now() - cached.at < 10_000) return cached.file;
-		const rows = await this.#host.knownSessions();
-		const file = rows.find(row => row.sessionId === sessionId)?.sessionFile ?? null;
-		if (this.#sessionFiles.size > 256) this.#sessionFiles.clear();
-		this.#sessionFiles.set(sessionId, { at: Date.now(), file });
-		return file;
-	}
 
 	/** Lazily start the LAN pair endpoint (pair.resolve only). Bound to
 	 *  0.0.0.0 so the mobile app can fetch the full collab link from a
@@ -2300,23 +2284,10 @@ export class DaemonServer {
 				};
 			}
 			case "subagents.live": {
-				// What is running under a session right now, straight from the
-				// progress map the subscription path already keeps.
-				//
-				// A snapshot, not a subscription: a lens that polls between its own
-				// refreshes gets its answer from the same map a re-subscribing
-				// client hydrates from, so the poll and the push cannot disagree
-				// about what is live.
-				//
-				// An unattached session answers with an empty list, which is true
-				// rather than misleading: nothing runs under a session that is not
-				// running.
-				const p = (params ?? {}) as { sessionId?: unknown };
-				const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
-				if (!sessionId) return { error: "sessionId required" };
-				const live = this.#host.get(sessionId);
-				if (!live) return { agents: [] };
-				return { agents: [...live.subagentProgress.values()] };
+				// Live subagent progress for one session. A snapshot, not a
+				// subscription, so a polling lens and a re-subscribing client
+				// read the same map. Implementation in AgentsService.
+				return this.#services.get<AgentsService>("agents").live((params ?? {}) as { sessionId?: unknown });
 			}
 			case "workflows.list": {
 				// Orchestration runs for one session, newest first.
@@ -2412,51 +2383,9 @@ export class DaemonServer {
 					.get<SessionPresenceService>("sessionPresence")
 					.presence((params ?? {}) as { sessionId?: unknown });
 			case "session.agents": {
-				// 单个会话的子代理名册（agents hub / 侧边栏展开）:
-				// 口径 = 磁盘上落在本会话产物目录的 task transcript,而不是
-				// 注册表。一次性子代理跑完即 unregister,按注册表列会让名册在
-				// 「跑完之后」「daemon 重启之后」两种最常见时刻变空;被用户打开
-				// 成主会话的子会话还会以 `Main-*` ref 混进来(名册里显示成
-				// 主代理)。磁盘行才是事实,注册表只用来补充实时 status/activity。
-				const p = (params ?? {}) as { sessionId?: unknown };
-				const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
-				if (!sessionId) throw new Error("session.agents: missing sessionId");
-				const sessionFile = await this.#sessionFileFor(sessionId);
-				if (!sessionFile?.endsWith(".jsonl")) return { agents: [] };
-				const rows = (await this.#host.knownSessions()).filter(
-					row =>
-						row.subagent === true &&
-						row.advisor !== true &&
-						typeof row.sessionFile === "string" &&
-						(row.parentId === sessionId || isSubagentTranscriptOf(sessionFile, row.sessionFile)),
-				);
-				if (rows.length === 0) return { agents: [] };
-				const { AgentRegistry } = await import("../registry/agent-registry");
-				const registry = AgentRegistry.global();
-				const agents = rows.map(row => {
-					const file = row.sessionFile as string;
-					const id = transcriptAgentId(file);
-					const ref = registry.get(id);
-					// 三个 id 各有用途:agent id 寻址实时会话,子会话 id 打开
-					// 会话,agent 定义名(`session_init.agent`)回答“是哪个子代理”。
-					const agentName = ref?.history?.agent ?? row.agentName;
-					return {
-						id,
-						sessionId: row.sessionId,
-						displayName: agentName ?? ref?.displayName ?? row.title ?? id,
-						agentName: agentName ?? null,
-						kind: "sub" as const,
-						/** 注册表有 ref 时用实时状态;没有(一次性子代理已结束、
-						 *  daemon 重启)按 idle 呈现——磁盘行不可 revive,不能画成
-						 *  parked 让用户点一个必然失败的按钮。 */
-						status: ref?.status ?? ("idle" as const),
-						/** 名册第二行:实时 activity,否则子会话标题(即分配任务)。 */
-						activity: ref?.activity ?? row.title ?? null,
-						lastActivity: ref?.lastActivity ?? row.updatedAt,
-						hasSessionFile: true,
-					};
-				});
-				return { agents };
+				// 单个会话的子代理名册（agents hub / 侧边栏展开）。口径与三个
+				// id 的用途见 AgentsService.roster；实现归该服务。
+				return this.#services.get<AgentsService>("agents").roster((params ?? {}) as { sessionId?: unknown });
 			}
 			case "history.messages": {
 				// One session's message rows (session-management message
@@ -6497,137 +6426,33 @@ export class DaemonServer {
 				return this.#services.get<TerminalService>("terminal").close((params ?? {}) as { id: string });
 			}
 			case "agents.list": {
-				// Agent Control Center data (TUI /agents parity): the live
-				// AgentRegistry roster, trimmed to display-safe fields.
-				const { AgentRegistry } = await import("../registry/agent-registry");
-				const refs = AgentRegistry.global().list();
-				return {
-					agents: refs.map(ref => ({
-						id: ref.id,
-						displayName: ref.displayName,
-						kind: ref.kind,
-						parentId: ref.parentId ?? null,
-						status: ref.status,
-						activity: ref.activity ?? null,
-					})),
-				};
+				return this.#services.get<AgentsService>("agents").list();
 			}
 			case "agents.kill": {
-				// Desktop parity with the TUI Agent Hub's x key / collab
-				// agent-cmd kill: abort the live session (if any) and release
-				// the registry ref as a tombstone so it reads "aborted".
-				const { AgentRegistry } = await import("../registry/agent-registry");
-				const { AgentLifecycleManager } = await import("../registry/agent-lifecycle");
-				const id =
-					typeof (params as { agentId?: unknown })?.agentId === "string"
-						? (params as { agentId: string }).agentId
-						: "";
-				if (!id) throw new Error("agents.kill: missing agentId");
-				const ref = AgentRegistry.global().get(id);
-				if (!ref) return { ok: false, error: `agent ${id} not found` };
-				if (ref.status === "running" && ref.session) {
-					await ref.session.abort({ reason: USER_INTERRUPT_LABEL });
-				}
-				await AgentLifecycleManager.global().release(id, ref, { tombstone: true });
-				return { ok: true };
+				return this.#services.get<AgentsService>("agents").kill((params ?? {}) as { agentId?: unknown });
 			}
 			case "agents.detach": {
-				// Move a foreground subagent run to the background without
-				// restarting it: the task tool adopts the running promise into a
-				// `task` job, so the current turn stops waiting and the result
-				// arrives through the normal async delivery channel.
-				const { requestAgentDetach } = await import("../task/detach-registry");
-				const id =
-					typeof (params as { agentId?: unknown })?.agentId === "string"
-						? (params as { agentId: string }).agentId
-						: "";
-				if (!id) throw new Error("agents.detach: missing agentId");
-				return await requestAgentDetach(id);
+				return this.#services.get<AgentsService>("agents").detach((params ?? {}) as { agentId?: unknown });
 			}
 			case "agents.revive": {
-				// Desktop parity with the TUI Agent Hub's r key: bring a
-				// parked subagent back to a live session (idempotent when
-				// already running).
-				const { AgentLifecycleManager } = await import("../registry/agent-lifecycle");
-				const id =
-					typeof (params as { agentId?: unknown })?.agentId === "string"
-						? (params as { agentId: string }).agentId
-						: "";
-				if (!id) throw new Error("agents.revive: missing agentId");
-				const session = await AgentLifecycleManager.global().ensureLive(id);
-				return { ok: true, sessionId: session.sessionId };
+				return this.#services.get<AgentsService>("agents").revive((params ?? {}) as { agentId?: unknown });
 			}
 			case "agents.chat": {
-				// Desktop parity with the collab host's agent-cmd chat: revive
-				// if parked, steer if mid-turn (same semantics as the hub's
-				// submitChatMessage).
-				const { AgentLifecycleManager } = await import("../registry/agent-lifecycle");
-				const p = (params ?? {}) as { agentId?: unknown; text?: unknown };
-				const id = typeof p.agentId === "string" ? p.agentId : "";
-				const text = typeof p.text === "string" ? p.text.trim() : "";
-				if (!id) throw new Error("agents.chat: missing agentId");
-				if (!text) throw new Error("agents.chat: empty message");
-				const session = await AgentLifecycleManager.global().ensureLive(id);
-				await session.prompt(text, { streamingBehavior: "steer" });
-				return { ok: true, sessionId: session.sessionId };
+				return this.#services.get<AgentsService>("agents").chat(
+					(params ?? {}) as {
+						agentId?: unknown;
+						text?: unknown;
+					},
+				);
 			}
 			case "agents.transcript": {
-				// Desktop parity with the collab host's fetch-transcript frame:
-				// incremental read of a subagent's persisted session file, from
-				// a byte cursor. Returns { text, newSize, error? } — the GUI
-				// trajectory panel polls with the returned cursor (terminal
-				// `error` stops polling; `null` on missing file).
-				//
-				// Resolution order is registry → parent product directory. The
-				// registry only holds a ref while the child is live; a finished
-				// one-shot subagent was unregistered, and its transcript still
-				// sits at `<parentBase>/<agentId>.jsonl`. `parentSessionId` is
-				// the panel's owning session, so the caller does not need to
-				// know the file path.
-				const { AgentRegistry } = await import("../registry/agent-registry");
-				const { resolveSubagentTranscript } = await import("./subagent-transcripts");
-				const p = (params ?? {}) as { agentId?: unknown; parentSessionId?: unknown; fromByte?: unknown };
-				const agentId = typeof p.agentId === "string" ? p.agentId : "";
-				const parentSessionId = typeof p.parentSessionId === "string" ? p.parentSessionId : "";
-				const fromByte = typeof p.fromByte === "number" && Number.isFinite(p.fromByte) ? p.fromByte : 0;
-				if (!agentId) throw new Error("agents.transcript: missing agentId");
-				let file = AgentRegistry.global().get(agentId)?.sessionFile ?? null;
-				if (!file && parentSessionId) {
-					const parentFile = await this.#sessionFileFor(parentSessionId);
-					file = await resolveSubagentTranscript(parentFile, agentId);
-				}
-				if (!file) return { text: "", newSize: fromByte, error: "no transcript available" };
-				try {
-					const stat = await fs.promises.stat(file);
-					if (stat.size <= fromByte) return { text: "", newSize: stat.size };
-					const want = Math.min(stat.size - fromByte, 4 * 1024 * 1024);
-					const handle = await fs.promises.open(file, "r");
-					let bytesRead: number;
-					const buf = Buffer.allocUnsafe(want);
-					try {
-						({ bytesRead } = await handle.read(buf, 0, want, fromByte));
-					} finally {
-						await handle.close();
-					}
-					let slice = buf.subarray(0, bytesRead);
-					const reachedEof = fromByte + bytesRead >= stat.size;
-					if (!reachedEof) {
-						// Trim to the last complete JSONL line so no line or
-						// UTF-8 char is split mid-read.
-						const lastNewline = slice.lastIndexOf(0x0a);
-						if (lastNewline < 0) {
-							return {
-								text: "",
-								newSize: fromByte,
-								error: `transcript entry exceeds transcript fetch cap (${4 * 1024 * 1024} bytes)`,
-							};
-						}
-						slice = slice.subarray(0, lastNewline + 1);
-					}
-					return { text: slice.toString("utf-8"), newSize: reachedEof ? stat.size : fromByte + slice.byteLength };
-				} catch (err) {
-					return { text: "", newSize: fromByte, error: String(err) };
-				}
+				return this.#services.get<AgentsService>("agents").transcript(
+					(params ?? {}) as {
+						agentId?: unknown;
+						parentSessionId?: unknown;
+						fromByte?: unknown;
+					},
+				);
 			}
 			case "commands.list": {
 				// Slash-command catalog for the GUI composer's / completion
