@@ -55,6 +55,7 @@ import type {
 	BrowserDialogInfo,
 	BrowserHandledDialog,
 	BrowserOperationAction,
+	BrowserPageState,
 	Observation,
 	ObservationEntry,
 	ReadyInfo,
@@ -357,6 +358,11 @@ export function toActionableHandle(
 		/** Managed-browser gate: an enriched handle's uploadFile must ask the
 		 *  user too, not just `tab.uploadFile`. */
 		upload?: (handle: ActionableHandle, files: string[]) => Promise<unknown>;
+		/** Page identity probe; handle-level actions settle their own operation,
+		 *  so they sample the step's before/after pair here. */
+		samplePageState?: () => Promise<BrowserPageState | undefined>;
+		/** Run-scoped set so the result waits (bounded) for these probes. */
+		pendingState?: Set<Promise<void>>;
 	},
 ): ActionableHandle {
 	const enriched = handle as ActionableHandle;
@@ -386,11 +392,18 @@ export function toActionableHandle(
 }
 
 async function trackHandleOperation<T>(
-	activity: { tracker: BrowserOperationTracker; target: string; signal?: AbortSignal },
+	activity: {
+		tracker: BrowserOperationTracker;
+		target: string;
+		signal?: AbortSignal;
+		samplePageState?: () => Promise<BrowserPageState | undefined>;
+		pendingState?: Set<Promise<void>>;
+	},
 	action: "click" | "fill",
 	fn: () => Promise<T>,
 ): Promise<T> {
 	const id = activity.tracker.start(action, { target: activity.target });
+	const before = activity.samplePageState?.();
 	try {
 		const result = await fn();
 		activity.tracker.complete(id);
@@ -399,6 +412,17 @@ async function trackHandleOperation<T>(
 		if (activity.signal?.aborted || error instanceof ToolAbortError) activity.tracker.cancel(id);
 		else activity.tracker.fail(id, error);
 		throw error;
+	} finally {
+		if (before) {
+			const capture = (async () => {
+				const after = await activity.samplePageState?.();
+				if (after) activity.tracker.state(id, "after", after);
+				const pre = await before;
+				if (pre) activity.tracker.state(id, "before", pre);
+			})();
+			activity.pendingState?.add(capture);
+			void capture.finally(() => activity.pendingState?.delete(capture));
+		}
 	}
 }
 
@@ -770,6 +794,9 @@ interface ActiveRun {
 	inflight: Map<number, InflightOp>;
 	opCounter: number;
 	operations: BrowserOperationTracker;
+	/** Step-state probes still in flight; awaited (bounded) before the run
+	 *  result is sent so the card receives both sides of every step. */
+	pendingState: Set<Promise<void>>;
 	dialogWaiters: Set<(value: typeof DIALOG_OPEN) => void>;
 }
 
@@ -1562,6 +1589,7 @@ export class WorkerCore {
 			inflight: new Map(),
 			opCounter: 0,
 			dialogWaiters: new Set(),
+			pendingState: new Set(),
 			operations: new BrowserOperationTracker(msg.id, operations => {
 				this.#transport.send({ type: "activity", id: msg.id, operations });
 			}),
@@ -1667,6 +1695,11 @@ export class WorkerCore {
 			failure = this.#foldFloatingRejections(active, failure);
 			active.operations.cancelPending();
 			if (this.#active?.id === msg.id) this.#active = null;
+		}
+		// Step-state probes are cheap but fire-and-forget; give them a bounded
+		// settle window so the result carries the full before/after pair.
+		if (active.pendingState.size > 0) {
+			await Promise.race([Promise.allSettled([...active.pendingState]), Bun.sleep(400)]);
 		}
 		if (failure) {
 			this.#transport.send({
@@ -1795,6 +1828,47 @@ export class WorkerCore {
 		}
 	}
 
+	/** Page identity for the step diff. Both probes are capped and started
+	 *  around the action, so they never add latency to it. */
+	async #pageState(): Promise<BrowserPageState | undefined> {
+		try {
+			const page = this.#requirePage();
+			const url = redactBrowserUrl(page.url());
+			const title = await Promise.race([page.title().catch(() => ""), Bun.sleep(200).then(() => "")]);
+			const probe = (await Promise.race([
+				page.evaluate(() => {
+					const win = globalThis as unknown as {
+						scrollY: number;
+						document: { readyState: string };
+					};
+					return { scrollY: Math.round(win.scrollY), ready: win.document.readyState };
+				}),
+				Bun.sleep(200).then(() => null),
+			]).catch(() => null)) as { scrollY?: number; ready?: string } | null;
+			return {
+				url,
+				...(title ? { title: title.slice(0, 120) } : {}),
+				...(probe?.scrollY !== undefined ? { scrollY: probe.scrollY } : {}),
+				...(probe?.ready !== undefined ? { loading: probe.ready !== "complete" } : {}),
+			};
+		} catch {
+			return undefined;
+		}
+	}
+
+	/** Record both sides once the action settled; `before` was started first so
+	 *  it observes the pre-action page even when the action itself is instant. */
+	async #captureOperationStates(
+		active: ActiveRun,
+		id: string,
+		before: Promise<BrowserPageState | undefined>,
+	): Promise<void> {
+		const after = await this.#pageState();
+		if (after) active.operations.state(id, "after", after);
+		const pre = await before;
+		if (pre) active.operations.state(id, "before", pre);
+	}
+
 	/** Small post-action snapshot for the managed pane's operation feed. The
 	 *  tracker caps a run at 24 thumbnails; non-GUI backends skip entirely. */
 	async #captureOperationThumbnail(active: ActiveRun, id: string): Promise<void> {
@@ -1834,6 +1908,9 @@ export class WorkerCore {
 		const opId = active.opCounter++;
 		const activity = browserOperationForLabel(label, opts?.selector);
 		const activityId = activity ? active.operations.start(activity.action, { target: activity.target }) : null;
+		// Sampled before the action runs so the step can report what changed; both
+		// probes are capped and never delay the action.
+		const stateBefore = activityId ? this.#pageState() : undefined;
 		if (activityId) void this.#describeOperation(active, activityId, opts?.selector ?? null);
 		active.inflight.set(opId, { label, startedAt: Date.now() });
 		const capped = Number.isFinite(perOpTimeoutMs) && perOpTimeoutMs > 0;
@@ -1871,6 +1948,11 @@ export class WorkerCore {
 			if (activityId) {
 				active.operations.complete(activityId, operationResultDetails(result));
 				void this.#captureOperationPage(active, activityId);
+				if (stateBefore) {
+					const capture = this.#captureOperationStates(active, activityId, stateBefore);
+					active.pendingState.add(capture);
+					void capture.finally(() => active.pendingState.delete(capture));
+				}
 				if (activity && THUMBNAIL_ACTIONS.has(activity.action)) {
 					void this.#captureOperationThumbnail(active, activityId);
 				}
@@ -1978,6 +2060,7 @@ export class WorkerCore {
 		 *  confirmation gate and operation ledger as `tab.uploadFile`. */
 		const uploadHandle = async (handle: ActionableHandle, files: string[]): Promise<void> => {
 			const opId = active.operations.start("upload", { target: "file input" });
+			const stateBefore = this.#pageState();
 			const opSignal = AbortSignal.any([signal, AbortSignal.timeout(uploadOpMs)]);
 			try {
 				const result = await this.#uploadHandleFiles(handle, files, opSignal, session);
@@ -1986,6 +2069,10 @@ export class WorkerCore {
 				if (signal.aborted) active.operations.cancel(opId);
 				else active.operations.fail(opId, error);
 				throw error;
+			} finally {
+				const capture = this.#captureOperationStates(active, opId, stateBefore);
+				active.pendingState.add(capture);
+				void capture.finally(() => active.pendingState.delete(capture));
 			}
 		};
 		const op = <T>(
@@ -1994,6 +2081,14 @@ export class WorkerCore {
 			fn: (sig: AbortSignal) => Promise<T>,
 			selectorOpts?: { selector?: string; zeroMatchAfterMs?: number },
 		): Promise<T> => markHandled(this.#runOp(active, label, signal, perOpMs, fn, selectorOpts));
+		const activityFor = (target: string) => ({
+			tracker: active.operations,
+			signal,
+			target,
+			upload: uploadHandle,
+			samplePageState: () => this.#pageState(),
+			pendingState: active.pendingState,
+		});
 		return {
 			name,
 			page,
@@ -2156,12 +2251,7 @@ export class WorkerCore {
 					`tab.waitFor(${JSON.stringify(selector)})`,
 					w,
 					async sig =>
-						toActionableHandle(await this.#resolveActionHandle(selector, w, sig), {
-							tracker: active.operations,
-							signal,
-							target: selector,
-							upload: uploadHandle,
-						}),
+						toActionableHandle(await this.#resolveActionHandle(selector, w, sig), activityFor(selector)),
 					{ selector, zeroMatchAfterMs: opts?.timeout === undefined ? ZERO_MATCH_FAIL_FAST_MS : undefined },
 				);
 			},
@@ -2172,12 +2262,7 @@ export class WorkerCore {
 					w,
 					async sig => {
 						if (parseAriaRefSelector(selector) !== null)
-							return toActionableHandle(await this.#resolveAriaRef(selector), {
-								tracker: active.operations,
-								signal,
-								target: selector,
-								upload: uploadHandle,
-							});
+							return toActionableHandle(await this.#resolveAriaRef(selector), activityFor(selector));
 						const handle = (await untilAborted(sig, () =>
 							page.waitForSelector(normalizeSelector(selector), {
 								timeout: w,
@@ -2186,14 +2271,7 @@ export class WorkerCore {
 								signal: sig,
 							}),
 						)) as ElementHandle | null;
-						return handle
-							? toActionableHandle(handle, {
-									tracker: active.operations,
-									signal,
-									target: selector,
-									upload: uploadHandle,
-								})
-							: null;
+						return handle ? toActionableHandle(handle, activityFor(selector)) : null;
 					},
 					{
 						selector,
@@ -2267,20 +2345,10 @@ export class WorkerCore {
 				const w = waitMs(opts?.timeout);
 				return op("tab.waitForResponse()", w, sig => this.#waitForResponse(pattern, w, sig));
 			},
-			id: async id =>
-				toActionableHandle(await this.#resolveCachedHandle(id), {
-					tracker: active.operations,
-					signal,
-					target: String(id),
-					upload: uploadHandle,
-				}),
-			ref: async id =>
-				toActionableHandle(await this.#resolveAriaRef(id), {
-					tracker: active.operations,
-					signal,
-					target: id,
-					upload: uploadHandle,
-				}),
+			// One activity shape for handle-level actions, so every entry point
+			// samples the step's before/after page state the same way.
+			id: async id => toActionableHandle(await this.#resolveCachedHandle(id), activityFor(String(id))),
+			ref: async id => toActionableHandle(await this.#resolveAriaRef(id), activityFor(id)),
 		};
 	}
 

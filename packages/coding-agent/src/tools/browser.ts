@@ -95,7 +95,7 @@ const appSchema = type({
 
 const browserSchema = type({
 	action: type(
-		"'open' | 'close' | 'run' | 'status' | 'read' | 'screenshot' | 'elements' | 'visual' | 'visual_crop' | 'click' | 'click_if_interactive' | 'visual_type' | 'fill' | 'type' | 'press' | 'hover' | 'scroll' | 'drag' | 'drag_path' | 'select_option' | 'set_checked' | 'scroll_into_view' | 'dialog' | 'dialog_respond' | 'activate' | 'activate_panel' | 'switch' | 'release' | 'device_profiles' | 'set_device' | 'history' | 'downloads' | 'navigate' | 'search' | 'back' | 'forward' | 'reload' | 'stop' | 'wait_load' | 'wait_for'",
+		"'open' | 'close' | 'run' | 'status' | 'read' | 'screenshot' | 'elements' | 'visual' | 'visual_crop' | 'click' | 'double_click' | 'right_click' | 'click_if_interactive' | 'visual_type' | 'fill' | 'type' | 'press' | 'hover' | 'scroll' | 'drag' | 'drag_path' | 'select_option' | 'set_checked' | 'scroll_into_view' | 'dialog' | 'dialog_respond' | 'activate' | 'activate_panel' | 'switch' | 'release' | 'device_profiles' | 'set_device' | 'history' | 'downloads' | 'navigate' | 'search' | 'back' | 'forward' | 'reload' | 'stop' | 'wait_load' | 'wait_for'",
 	).describe("operation"),
 	"name?": type("string").describe("tab id (default 'main')"),
 	"url?": type("string").describe("url to open"),
@@ -382,6 +382,14 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 			call: { action: "click", name: "docs", snapshotId: "elements-1", ref: "e5" },
 		},
 		{
+			caption: "Double-click an element ref",
+			call: { action: "double_click", name: "docs", snapshotId: "elements-1", ref: "e5" },
+		},
+		{
+			caption: "Open the context menu on an element ref",
+			call: { action: "right_click", name: "docs", snapshotId: "elements-1", ref: "e5" },
+		},
+		{
 			caption: "Capture a visual coordinate snapshot",
 			call: { action: "visual", name: "docs" },
 		},
@@ -597,6 +605,8 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 				case "visual_crop":
 					return await this.#visualCrop(name, params, details, timeoutMs, signal, _onUpdate);
 				case "click":
+				case "double_click":
+				case "right_click":
 				case "click_if_interactive":
 				case "visual_type":
 				case "fill":
@@ -1213,6 +1223,8 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 					action === "drag" ||
 					action === "drag_path" ||
 					action === "click" ||
+					action === "double_click" ||
+					action === "right_click" ||
 					action === "click_if_interactive" ||
 					action === "visual_type" ||
 					action === "hover" ||

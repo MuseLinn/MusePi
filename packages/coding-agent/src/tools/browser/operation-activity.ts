@@ -1,4 +1,4 @@
-import type { BrowserOperation, BrowserOperationAction } from "./tab-protocol";
+import type { BrowserOperation, BrowserOperationAction, BrowserPageState } from "./tab-protocol";
 
 interface OperationStartDetails {
 	target?: string;
@@ -99,6 +99,16 @@ export class BrowserOperationTracker {
 		if (!operation) return;
 		operation.pageUrl = pageUrl;
 		if (pageTitle) operation.pageTitle = pageTitle.slice(0, 120);
+		this.#emit();
+	}
+
+	/** Attach the page identity sampled on one side of the action; the pair is
+	 *  what the step's change section diffs. */
+	state(id: string, phase: "before" | "after", state: BrowserPageState): void {
+		const operation = this.#operations.find(item => item.id === id);
+		if (!operation) return;
+		if (phase === "before") operation.stateBefore = state;
+		else operation.stateAfter = state;
 		this.#emit();
 	}
 

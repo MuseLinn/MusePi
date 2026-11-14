@@ -3,6 +3,8 @@ import { type BrowserElementsSnapshot, type BrowserVisualSnapshot, visualPointTo
 
 export type SnapshotAction =
 	| "click"
+	| "double_click"
+	| "right_click"
 	| "click_if_interactive"
 	| "visual_type"
 	| "fill"
@@ -106,6 +108,19 @@ export function snapshotActionCode(
 			const snapshot = visualSnapshot(visual, params);
 			const target = point(snapshot, params.x, params.y);
 			body = `await page.mouse.click(${target.x},${target.y});`;
+			break;
+		}
+		case "double_click":
+		case "right_click": {
+			const options = params.action === "double_click" ? "{ count: 2 }" : '{ button: "right" }';
+			if (params.ref) {
+				const id = observationId(elements, params);
+				body = `const handle = await tab.id(${id}); await handle.click(${options});`;
+				break;
+			}
+			const snapshot = visualSnapshot(visual, params);
+			const target = point(snapshot, params.x, params.y);
+			body = `await page.mouse.click(${target.x},${target.y}, ${options});`;
 			break;
 		}
 		case "click_if_interactive": {

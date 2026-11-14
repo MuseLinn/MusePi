@@ -152,6 +152,37 @@ describe("snapshot action code", () => {
 		expect(code).toContain("page.mouse.click(550,375");
 	});
 
+	it("compiles double-click and right-click for refs and visual points", () => {
+		const snapshot = createElementSnapshot("docs", observation);
+		expect(
+			snapshotActionCode({ action: "double_click", snapshotId: snapshot.snapshotId, ref: "e7" }, snapshot),
+		).toContain("handle.click({ count: 2 })");
+		expect(
+			snapshotActionCode({ action: "right_click", snapshotId: snapshot.snapshotId, ref: "e7" }, snapshot),
+		).toContain('handle.click({ button: "right" })');
+		const visual = createVisualSnapshot("docs", {
+			url: observation.url,
+			title: observation.title,
+			viewport: observation.viewport,
+			image: { dest: "shot.png", mimeType: "image/png", bytes: 100, width: 1024, height: 696 },
+			capturedAt: "2026-11-08T00:00:00.000Z",
+		});
+		expect(
+			snapshotActionCode(
+				{ action: "double_click", snapshotId: visual.snapshotId, x: 512, y: 348 },
+				undefined,
+				visual,
+			),
+		).toContain("page.mouse.click(550,375, { count: 2 })");
+		expect(
+			snapshotActionCode(
+				{ action: "right_click", snapshotId: visual.snapshotId, x: 512, y: 348 },
+				undefined,
+				visual,
+			),
+		).toContain('page.mouse.click(550,375, { button: "right" })');
+	});
+
 	it("compiles safe interactive candidates and visual typing", () => {
 		const snapshot = createVisualSnapshot("docs", {
 			url: observation.url,

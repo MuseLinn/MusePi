@@ -145,6 +145,28 @@ describe("browser operation activity", () => {
 		expect(redactBrowserUrl("https://user:password@example.com/private")).toBe("https://example.com/private");
 	});
 
+	it("keeps both sides of a step so the card can diff them", () => {
+		const tracker = new BrowserOperationTracker("run-states");
+		const click = tracker.start("click", { target: "#go" });
+		tracker.complete(click);
+		tracker.state(click, "before", { url: "https://a.test/form", title: "Form", scrollY: 0, loading: false });
+		tracker.state(click, "after", { url: "https://a.test/done", title: "Done", scrollY: 120, loading: true });
+
+		const [operation] = tracker.snapshot();
+		expect(operation?.stateBefore).toEqual({
+			url: "https://a.test/form",
+			title: "Form",
+			scrollY: 0,
+			loading: false,
+		});
+		expect(operation?.stateAfter).toEqual({
+			url: "https://a.test/done",
+			title: "Done",
+			scrollY: 120,
+			loading: true,
+		});
+	});
+
 	it("settles every running operation when a run ends", () => {
 		const tracker = new BrowserOperationTracker("run-end");
 		const completed = tracker.start("observe");

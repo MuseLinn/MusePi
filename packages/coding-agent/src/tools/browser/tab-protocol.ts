@@ -50,6 +50,15 @@ export interface BrowserHandledDialog extends Omit<BrowserDialogInfo, "ageMs"> {
 	text?: string;
 }
 
+/** Page identity captured around one operation so a step can show what it
+ *  changed instead of restating the whole page state. */
+export interface BrowserPageState {
+	url: string;
+	title?: string;
+	scrollY?: number;
+	loading?: boolean;
+}
+
 export type BrowserOperationAction =
 	| "goto"
 	| "observe"
@@ -87,6 +96,11 @@ export interface BrowserOperation {
 	pageUrl?: string;
 	/** Small JPEG data URL of the page right after the action (managed GUI only). */
 	thumbnail?: string;
+	/** Page identity just before the action, when sampling won the race. */
+	stateBefore?: BrowserPageState;
+	/** Page identity just after the action; together with `stateBefore` this is
+	 *  what the step changed. */
+	stateAfter?: BrowserPageState;
 }
 
 export interface SessionSnapshot {
