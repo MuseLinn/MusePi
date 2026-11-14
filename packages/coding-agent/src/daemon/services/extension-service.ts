@@ -190,6 +190,14 @@ export class ExtensionService implements DaemonService {
 	 *  Invalidated by the mutation RPCs below. */
 	#extensionsCache: { at: number; extensions: Extension[] } | null = null;
 
+	/** In-flight loads. The TTL caches only hold FINISHED results, so a burst
+	 *  of RPCs during startup (session list + extensions.list + presets) each
+	 *  started its own factory-evaluating load — eight applies of the same
+	 *  bundled plugin in twenty seconds, and duplicate registrations racing
+	 *  each other. Concurrent callers now share one load. */
+	#extensionsInflight?: Promise<unknown[]>;
+	#runtimeLoadInflight?: Promise<{ extensions: unknown[]; errors: unknown[] }>;
+
 	/** TTL cache of the host-level extension runtime load (session-less
 	 *  RPCs like design.systems.list consume queued registrations —
 	 *  pendingDesignSystemRegistrations — without a session boot; M3 §3.7d).
@@ -227,7 +235,12 @@ export class ExtensionService implements DaemonService {
 	}
 
 	async getExtensions(): Promise<Extension[]> {
-		if (!this.#extensionsCache || Date.now() - this.#extensionsCache.at > 10_000) {
+		if (this.#extensionsCache && Date.now() - this.#extensionsCache.at <= 10_000) {
+			return this.#extensionsCache.extensions;
+		}
+		// Single flight: the load evaluates every extension factory, and a
+		// startup burst would otherwise start one per caller.
+		this.#extensionsInflight ??= (async () => {
 			const { loadAllExtensions } = await import("../../extensibility/extensions-center/state-manager");
 			let settings = this.#deps.settings();
 			if (!settings) {
@@ -238,13 +251,15 @@ export class ExtensionService implements DaemonService {
 			// omp 生态智能兼容:显式启用集(默认空的隐藏设置键)优先于优先级去重。
 			// getRaw:forceEnabledExtensions 不在 schema(隐藏设置键),走原始读取。
 			const forceIds = (settings?.getRaw("forceEnabledExtensions") ?? []) as string[];
-			this.#extensionsCache = {
-				at: Date.now(),
-				extensions: await loadAllExtensions(this.#deps.cwd(), disabledIds, forceIds),
-			};
-			// Routes follow the list: a reload/install/uninstall moves them with it.
+			return await loadAllExtensions(this.#deps.cwd(), disabledIds, forceIds);
+		})();
+		try {
+			const extensions = (await this.#extensionsInflight) as Extension[];
+			this.#extensionsCache = { at: Date.now(), extensions };
+			return extensions;
+		} finally {
+			this.#extensionsInflight = undefined;
 		}
-		return this.#extensionsCache.extensions;
 	}
 
 	/**
@@ -300,7 +315,12 @@ export class ExtensionService implements DaemonService {
 	 * fiber，登记 = 效果账本，卸载反向回收）；未注入（测试）回退 loadExtensions。
 	 */
 	async getExtensionRuntimeLoad(): Promise<LoadExtensionsResult> {
-		if (!this.#runtimeLoadCache || Date.now() - this.#runtimeLoadCache.at > 10_000) {
+		if (this.#runtimeLoadCache && Date.now() - this.#runtimeLoadCache.at <= 10_000) {
+			return this.#runtimeLoadCache.result;
+		}
+		// Single flight, same reason as getExtensions: this path APPLIES every
+		// extension, so two callers racing it register the same plugin twice.
+		this.#runtimeLoadInflight ??= (async () => {
 			const { discoverExtensionPaths } = await import("../../extensibility/extensions");
 			let settings = this.#deps.settings();
 			if (!settings) {
@@ -322,19 +342,25 @@ export class ExtensionService implements DaemonService {
 			// 清单组件禁用面：disabledExtensionComponents 复合键
 			// `<plugin>/<component>` 黑名单,reconcile 装载时跳过命中组件。
 			const disabledComponents = new Set((settings?.get("disabledExtensionComponents") ?? []) as string[]);
-			this.#runtimeLoadCache = {
-				at: Date.now(),
-				result: dynamic
-					? await dynamic.loadAll([...discoveredPaths, ...runtimeTargets], cwd, disabledComponents)
-					: await (await import("../../extensibility/extensions/loader")).loadExtensions(paths, cwd),
+			return (dynamic
+				? await dynamic.loadAll([...discoveredPaths, ...runtimeTargets], cwd, disabledComponents)
+				: await (await import("../../extensibility/extensions/loader")).loadExtensions(paths, cwd)) as unknown as {
+				extensions: unknown[];
+				errors: unknown[];
 			};
+		})();
+		try {
+			const result = (await this.#runtimeLoadInflight) as LoadExtensionsResult;
+			this.#runtimeLoadCache = { at: Date.now(), result };
 			// Routes belong to the RUNTIME load, not to the list rows: `webRoutes`
 			// lives on the Extension the loader executed (the same object that
 			// holds `rpcs`), while `getExtensions()` returns the center's
 			// inventory rows — a different shape with no routes on it.
-			this.#reconcileWebRoutes(this.#runtimeLoadCache.result.extensions);
+			this.#reconcileWebRoutes(result.extensions);
+			return result;
+		} finally {
+			this.#runtimeLoadInflight = undefined;
 		}
-		return this.#runtimeLoadCache.result;
 	}
 
 	/** RPC extensions.list：扩展控制中心统一数据源（TUI /extensions parity）。

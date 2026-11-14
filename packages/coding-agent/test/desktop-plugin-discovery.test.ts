@@ -20,7 +20,9 @@ describe("desktop plugin discovery", () => {
 
 	it("keeps the chat view's manifest entry resolvable", async () => {
 		const entries = await discoverBundledPluginPaths({ scope: "all" });
-		const chatView = entries.find(entry => /[\\/]apps[\\/]desktop[\\/]src[\\/]plugins[\\/]chat-view[\\/]/.test(entry));
+		const chatView = entries.find(entry =>
+			/[\\/]apps[\\/]desktop[\\/]src[\\/]plugins[\\/]chat-view[\\/]/.test(entry),
+		);
 		expect(chatView).toBeDefined();
 		expect(await Bun.file(chatView!).exists()).toBe(true);
 	});
