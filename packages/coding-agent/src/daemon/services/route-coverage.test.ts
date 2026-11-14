@@ -25,6 +25,7 @@ import { GitContextService } from "./git-context-service";
 import { GitService } from "./git-service";
 import { GitWatchService } from "./git-watch-service";
 import { GitHubService } from "./github-service";
+import { KnowledgeService } from "./knowledge-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { LivenessService } from "./liveness-service";
 import { MarketplaceService } from "./marketplace-service";
@@ -167,6 +168,8 @@ function buildRegistry(): HostServices {
 	services.register(new GitService({ cwd: () => "" }));
 	// GitHubService：只认领路由（本测试不调用 gh），cwd 桩化。
 	services.register(new GitHubService({ cwd: () => "" }));
+	// KnowledgeService：只认领路由（本测试不读写笔记/计划/待办），cwd 桩化。
+	services.register(new KnowledgeService({ cwd: () => "" }));
 	// PresetsService：预设目录与扩展面桩化（本测试不读写预设文件）。
 	services.register(
 		new PresetsService({

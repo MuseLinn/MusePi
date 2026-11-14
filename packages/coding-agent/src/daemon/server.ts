@@ -136,11 +136,6 @@ import { writeProjectMirror } from "./creation";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
 import { catchupPlan, catchupRecordsPlan } from "./journal";
 
-/** Stable per-project notes filename (cwd hash). */
-async function hashProjectPath(cwd: string): Promise<string> {
-	return createHash("sha1").update(cwd).digest("hex").slice(0, 16);
-}
-
 /**
  * TUI parity for daemon sessions: merge project/global SYSTEM.md and
  * APPEND_SYSTEM.md into the session prompt inputs (the CLI's
@@ -316,16 +311,6 @@ function extractSnapshotText(content: unknown): string {
 export { snapshotFromJsonl } from "./jsonl-snapshot";
 
 import { ModelsConfigFile } from "../config/models-config";
-import {
-	createTodo,
-	deleteTodo,
-	importLegacyTodos,
-	type KnowledgeTodo,
-	listTodos,
-	projectSlug,
-	replaceTodos,
-	updateTodo,
-} from "../knowledge/store";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
 import { dropManagedBrowserBridge } from "../tools/browser/managed-bridge";
 import { isFileIndexBackendEnabled } from "../tools/file-backend";
@@ -361,6 +346,7 @@ import { GitContextService } from "./services/git-context-service";
 import { GitService } from "./services/git-service";
 import { GitWatchService } from "./services/git-watch-service";
 import { GitHubService } from "./services/github-service";
+import { KnowledgeService } from "./services/knowledge-service";
 import { LivenessService } from "./services/liveness-service";
 import { MarketplaceService } from "./services/marketplace-service";
 import { McpOAuthService } from "./services/mcp-oauth-service";
@@ -860,6 +846,8 @@ export class DaemonServer {
 		this.#services.register(new GitService({ cwd: () => this.#host.cwd() }));
 		// GitHub PR/issue center, gh auth, and host accounts.
 		this.#services.register(new GitHubService(this.#host));
+		// Project notes/plans/todos (right-panel knowledge), stored under the agent dir.
+		this.#services.register(new KnowledgeService(this.#host));
 		// Agent presets: modes editor surface + agentPresets parity routes.
 		this.#services.register(
 			new PresetsService({
@@ -6435,246 +6423,60 @@ export class DaemonServer {
 				return { moved };
 			}
 			case "notes.list": {
-				// Project notes (right-panel 项目知识):
-				// one markdown file per note under agentDir/notes/<cwdHash>/,
-				// never touching the user's project. The legacy single-blob
-				// note (<slug>.md) migrates into the per-project dir on first
-				// list, then the old file is removed.
-				const p = (params ?? {}) as { cwd?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				const slug = await hashProjectPath(cwd);
-				const dir = path.join(getAgentDir(), "notes", slug);
-				// Legacy migration: old single-note file → first note.
-				const legacy = path.join(getAgentDir(), "notes", `${slug}.md`);
-				try {
-					const legacyText = await fs.promises.readFile(legacy, "utf8");
-					if (legacyText.trim()) {
-						await fs.promises.mkdir(dir, { recursive: true });
-						const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-						await fs.promises.writeFile(path.join(dir, `${stamp}-note.md`), legacyText, "utf8");
-					}
-					await fs.promises.rm(legacy, { force: true });
-				} catch {
-					// no legacy file
-				}
-				let files: string[] = [];
-				try {
-					files = (await fs.promises.readdir(dir)).filter(f => f.endsWith(".md"));
-				} catch {
-					// no notes yet
-				}
-				const notes = [];
-				for (const f of files.sort()) {
-					const id = f.slice(0, -3);
-					let createdAt = f.slice(0, 15);
-					let updatedAt = createdAt;
-					try {
-						const st = await fs.promises.stat(path.join(dir, f));
-						updatedAt = st.mtime.toISOString().replace(/[:.]/g, "-").slice(0, 19);
-						if (createdAt.length < 14) createdAt = st.mtime.toISOString().slice(0, 10);
-					} catch {
-						// keep filename date
-					}
-					const body = await fs.promises.readFile(path.join(dir, f), "utf8");
-					notes.push({ id, body, createdAt, updatedAt });
-				}
-				return { notes: notes.reverse() };
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").notes(params ?? {});
 			}
 			case "notes.create": {
-				// Create one note. A blank body is a rejected write, not a
-				// delete.
-				const p = (params ?? {}) as { cwd?: string; body?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				const body = (p.body ?? "").trim();
-				if (!body) return { error: "blank note body" };
-				const slug = await hashProjectPath(cwd);
-				const dir = path.join(getAgentDir(), "notes", slug);
-				await fs.promises.mkdir(dir, { recursive: true });
-				const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-				const id = `${stamp}-note`;
-				await fs.promises.writeFile(path.join(dir, `${id}.md`), body, "utf8");
-				return { id, createdAt: stamp };
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").noteCreate(params ?? {});
 			}
 			case "notes.update": {
-				const p = (params ?? {}) as { cwd?: string; id?: string; body?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				if (!p.id || /[^a-zA-Z0-9-]/.test(p.id)) return { error: "invalid note id" };
-				const body = p.body ?? "";
-				if (!body.trim()) return { error: "blank note body" };
-				const slug = await hashProjectPath(cwd);
-				const file = path.join(getAgentDir(), "notes", slug, `${p.id}.md`);
-				try {
-					await fs.promises.writeFile(file, body, "utf8");
-					return { ok: true };
-				} catch {
-					return { error: "note not found" };
-				}
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").noteUpdate(params ?? {});
 			}
 			case "notes.delete": {
-				const p = (params ?? {}) as { cwd?: string; id?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				if (!p.id || /[^a-zA-Z0-9-]/.test(p.id)) return { error: "invalid note id" };
-				const slug = await hashProjectPath(cwd);
-				try {
-					await fs.promises.unlink(path.join(getAgentDir(), "notes", slug, `${p.id}.md`));
-					return { ok: true };
-				} catch {
-					return { error: "note not found" };
-				}
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").noteDelete(params ?? {});
 			}
 			case "todos.list": {
-				// Project todos (right-panel 项目知识 → 待办). They used to live in
-				// the GUI's localStorage, which meant the AGENT could not read
-				// them at all and a session with no window (a scheduled task, a
-				// dispatched subagent) had nothing to read. The `knowledge` tool
-				// and this RPC share one store.
-				const p = (params ?? {}) as { cwd?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				return { todos: await listTodos(projectSlug(cwd)) };
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").todos(params ?? {});
 			}
 			case "todos.create": {
-				const p = (params ?? {}) as { cwd?: string; text?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				try {
-					return { ok: true, todo: await createTodo(projectSlug(cwd), p.text ?? "") };
-				} catch (err) {
-					return { error: err instanceof Error ? err.message : String(err) };
-				}
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").todoCreate(params ?? {});
 			}
 			case "todos.update": {
-				const p = (params ?? {}) as { cwd?: string; id?: string; text?: string; done?: boolean };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				if (!p.id) return { error: "invalid todo id" };
-				try {
-					const todo = await updateTodo(projectSlug(cwd), p.id, { text: p.text, done: p.done });
-					return todo ? { ok: true, todo } : { error: "todo not found" };
-				} catch (err) {
-					return { error: err instanceof Error ? err.message : String(err) };
-				}
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").todoUpdate(params ?? {});
 			}
 			case "todos.delete": {
-				const p = (params ?? {}) as { cwd?: string; id?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				if (!p.id) return { error: "invalid todo id" };
-				return (await deleteTodo(projectSlug(cwd), p.id)) ? { ok: true } : { error: "todo not found" };
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").todoDelete(params ?? {});
 			}
 			case "todos.replace": {
-				// The panel's list is order-sensitive (new items land before the
-				// first completed one, completing moves an item to the end), so it
-				// writes the whole list rather than per-item deltas.
-				const p = (params ?? {}) as { cwd?: string; todos?: Array<Partial<KnowledgeTodo>> };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				const todos = (p.todos ?? []).map(t => ({
-					id: String(t.id ?? ""),
-					text: String(t.text ?? ""),
-					done: t.done === true,
-					createdAt: Number.isFinite(Number(t.createdAt)) ? Number(t.createdAt) : Date.now(),
-				}));
-				try {
-					return { ok: true, todos: await replaceTodos(projectSlug(cwd), todos) };
-				} catch (err) {
-					return { error: err instanceof Error ? err.message : String(err) };
-				}
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").todoReplace(params ?? {});
 			}
 			case "todos.importLegacy": {
-				// One-shot adoption of the GUI's old localStorage todos. Kept as a
-				// separate RPC (not folded into create) so the migration is
-				// idempotent and the panel only drops its keys after it succeeds —
-				// a failed migration must leave the old data recoverable.
-				const p = (params ?? {}) as {
-					cwd?: string;
-					todos?: Array<{ id?: unknown; text?: unknown; done?: unknown; createdAt?: unknown }>;
-				};
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				try {
-					return { ok: true, ...(await importLegacyTodos(projectSlug(cwd), p.todos ?? [])) };
-				} catch (err) {
-					return { error: err instanceof Error ? err.message : String(err) };
-				}
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").todoImportLegacy(params ?? {});
 			}
 			case "plans.list": {
-				// Saved plan files (right-panel 计划): one
-				// markdown file per plan under agentDir/plans/<cwdHash>/, never
-				// touching the user's project. Title = first `# heading` or the
-				// slug; createdAt = filename `<ts>-<slug>.md` or file mtime.
-				const p = (params ?? {}) as { cwd?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				const slug = await hashProjectPath(cwd);
-				const dir = path.join(getAgentDir(), "plans", slug);
-				let files: string[] = [];
-				try {
-					files = (await fs.promises.readdir(dir)).filter(f => f.endsWith(".md"));
-				} catch {
-					// no plans yet
-				}
-				const plans = [];
-				for (const f of files.sort()) {
-					const id = f.slice(0, -3);
-					let title = id.split("-").slice(1).join("-") || id;
-					let createdAt = f.slice(0, 15);
-					try {
-						const head = await fs.promises.readFile(path.join(dir, f), "utf8");
-						const heading = /^#\s+(.+)$/m.exec(head);
-						if (heading) title = heading[1]!.trim();
-					} catch {
-						// keep fallback title
-					}
-					try {
-						const st = await fs.promises.stat(path.join(dir, f));
-						if (createdAt.length < 14) createdAt = st.mtime.toISOString().slice(0, 10);
-					} catch {
-						// keep filename date
-					}
-					plans.push({ id, title, createdAt });
-				}
-				return { plans: plans.reverse() };
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").plans(params ?? {});
 			}
 			case "plans.get": {
-				const p = (params ?? {}) as { cwd?: string; id?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				const slug = await hashProjectPath(cwd);
-				if (!p.id || /[^a-zA-Z0-9-]/.test(p.id)) return { error: "invalid plan id" };
-				try {
-					const body = await fs.promises.readFile(path.join(getAgentDir(), "plans", slug, `${p.id}.md`), "utf8");
-					return { title: (/^#\s+(.+)$/m.exec(body)?.[1] ?? p.id).trim(), body };
-				} catch {
-					return { error: "plan not found" };
-				}
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").plan(params ?? {});
 			}
 			case "plans.save": {
-				// Save (or overwrite, when id is given) a plan file.
-				const p = (params ?? {}) as { cwd?: string; id?: string; title?: string; body?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				const slug = await hashProjectPath(cwd);
-				const dir = path.join(getAgentDir(), "plans", slug);
-				await fs.promises.mkdir(dir, { recursive: true });
-				const title = (p.title ?? "").trim() || "untitled plan";
-				const body = `${`# ${title}\n\n${p.body ?? ""}`.trim()}\n`;
-				const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-				const id =
-					p.id && !/[^a-zA-Z0-9-]/.test(p.id)
-						? p.id
-						: `${stamp}-${
-								title
-									.toLowerCase()
-									.replace(/[^a-z0-9]+/g, "-")
-									.replace(/^-+|-+$/g, "")
-									.slice(0, 48) || "plan"
-							}`;
-				await fs.promises.writeFile(path.join(dir, `${id}.md`), body, "utf8");
-				return { id, title, createdAt: stamp };
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").planSave(params ?? {});
 			}
 			case "plans.delete": {
-				const p = (params ?? {}) as { cwd?: string; id?: string };
-				const cwd = p.cwd?.trim() || this.#host.cwd();
-				const slug = await hashProjectPath(cwd);
-				if (!p.id || /[^a-zA-Z0-9-]/.test(p.id)) return { error: "invalid plan id" };
-				try {
-					await fs.promises.unlink(path.join(getAgentDir(), "plans", slug, `${p.id}.md`));
-					return { ok: true };
-				} catch {
-					return { error: "plan not found" };
-				}
+				// 实现归 KnowledgeService（项目笔记/计划/待办语义不变）。
+				return this.#services.get<KnowledgeService>("knowledge").planDelete(params ?? {});
 			}
 			case "models.listAvailable": {
 				// 实现归 ModelsService（models.* 面语义不变）。
