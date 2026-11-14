@@ -31,6 +31,7 @@ import { MarketplaceService } from "./marketplace-service";
 import { McpOAuthService } from "./mcp-oauth-service";
 import { McpServersService } from "./mcp-servers-service";
 import { PluginInstallService } from "./plugin-install-service";
+import { ProvidersService } from "./providers-service";
 import { HostServices } from "./registry";
 import { RemoteService } from "./remote-service";
 import { ScheduleService } from "./schedule-service";
@@ -164,6 +165,15 @@ function buildRegistry(): HostServices {
 	services.register(new GitService({ cwd: () => "" }));
 	// GitHubService：只认领路由（本测试不调用 gh），cwd 桩化。
 	services.register(new GitHubService({ cwd: () => "" }));
+	// ProvidersService：登录流程桩化（本测试不发起 OAuth），只认领路由。
+	services.register(
+		new ProvidersService({
+			ensureRegistry: async () => null,
+			emitEvent: () => {},
+			nextEventSeq: () => 0,
+			broadcastModelsChanged: () => {},
+		}),
+	);
 	// SettingsService：宿主设置面桩化（本测试只校验路由归属）。
 	services.register(
 		new SettingsService({
