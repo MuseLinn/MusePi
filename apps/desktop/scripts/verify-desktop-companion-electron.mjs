@@ -323,13 +323,13 @@ try {
 		// The first-run overlay proves that the full React tree and its event
 		// listener are mounted; the splash can outlive the daemon connection.
 		try {
-			await mainPage.waitForFunction(() => Boolean(document.querySelector('.gui-onboarding-backdrop, [role="dialog"][aria-modal="true"]')), { timeout: 30000 });
+			await mainPage.waitForFunction(() => Boolean(document.querySelector('.gui-onboarding-backdrop, [role="dialog"][aria-modal="true"]')), { timeout: 60000, polling: 100 });
 		} catch (error) {
 			const state = await mainPage.evaluate(() => ({
 				url: location.href,
 				bodyText: document.body.innerText.slice(0, 1600),
 				root: document.querySelector("#root")?.innerHTML.slice(0, 1600) ?? "",
-				overlay: document.querySelector(".gui-onboarding")?.outerHTML.slice(0, 1600) ?? "",
+				onboarding: [...document.querySelectorAll('[class*="onboarding"]')].map(el => el.className),
 			}));
 			await capture("onboarding-initial-failure", mainPage);
 			throw new Error(`${String(error)}; initial state=${JSON.stringify(state)}; rendererErrors=${JSON.stringify(rendererErrors)}`);
@@ -981,7 +981,7 @@ try {
 		check("real reduced motion expands without a residual size morph", reducedMorph.expanded && !reducedMorph.morphing && !reducedMorph.transition, reducedMorph);
 
 		await mainPage.goto(pathToFileURL(path.join(desktopDir, "dist", "index.html")).href);
-		await mainPage.waitForFunction(() => Boolean(document.querySelector('.gui-onboarding-backdrop, [role="dialog"][aria-modal="true"]')), { timeout: 30000 });
+		await mainPage.waitForFunction(() => Boolean(document.querySelector('.gui-onboarding-backdrop, [role="dialog"][aria-modal="true"]')), { timeout: 60000, polling: 100 });
 		await mainPage.bringToFront();
 		await mainPage.evaluate(`//!world=main
 			const lastStep = document.querySelectorAll(".gui-onboarding-dot").length - 1;

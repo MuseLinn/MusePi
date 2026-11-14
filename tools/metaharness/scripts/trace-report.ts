@@ -37,7 +37,7 @@ const DEFAULT_SYNTH = "openrouter/openai/gpt-oss-120b";
 const DEFAULT_BASE = "http://localhost:4700";
 
 // --------------------------------------------------------------------------
-// Trace API types (mirror packages/metaharness/src/store.ts normalization)
+// Trace API types (mirror tools/metaharness/src/store.ts normalization)
 
 interface TraceAssistantEntry {
 	kind: "assistant";

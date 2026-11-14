@@ -146,8 +146,8 @@ describe("desktop daemon staging", () => {
 		const options = await fixture();
 		const brokenEntry = path.join(
 			options.repoRoot,
-			"packages",
-			"desktop-app",
+			"apps",
+			"desktop",
 			"src",
 			"plugins",
 			"desktop-plugin",

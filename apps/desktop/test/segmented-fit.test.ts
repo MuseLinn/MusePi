@@ -22,7 +22,10 @@ const { ensureChromiumExecutable } = require("../../../packages/coding-agent/src
  * client-core/test/segmented-fit.test.ts 的 `segmentFitWidth` 覆盖。
  */
 
-const CSS = fs.readFileSync(path.resolve(import.meta.dir, "../../../packages/client-core/src/styles/tokens.css"), "utf8");
+const CSS = fs.readFileSync(
+	path.resolve(import.meta.dir, "../../../packages/client-core/src/styles/tokens.css"),
+	"utf8",
+);
 
 function control(labels: readonly string[], segMin: string | null): string {
 	const items = labels

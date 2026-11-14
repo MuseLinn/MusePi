@@ -25,6 +25,10 @@ This file is the always-loaded hot path: execution boundaries, repository routin
 | `packages/tui` | Terminal UI and differential rendering |
 | `packages/wire`, `packages/collab-proto` | Persisted/wire and GUI/daemon contracts |
 | `packages/utils`, `packages/natives`, `crates/pi-natives` | Shared utilities and native operations |
+| `apps/mobile`, `apps/harmony` | Capacitor mobile app and HarmonyOS WebView shell |
+| `tools/metaharness`, `tools/typescript-edit-benchmark` | Developer tooling and benchmarks; never shipped |
+
+Layout: `apps/` holds deployable surfaces, `packages/` holds reusable libraries, `tools/` holds developer tooling. Package names stay `@musepi/*` wherever a package lives, so a directory move never changes an import.
 
 “Agent” in a question about product behavior means `packages/coding-agent`, not the assistant currently answering.
 

@@ -10,7 +10,7 @@
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/MuseLinn/MusePi.git",
-		"directory": "packages/metaharness"
+		"directory": "tools/metaharness"
 	},
 	"bin": {
 		"metaharness": "src/server.ts"

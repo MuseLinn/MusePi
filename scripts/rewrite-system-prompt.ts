@@ -55,7 +55,7 @@ const PROMPT_GLOBS = [
 	"packages/coding-agent/src/discovery/builtin-rules/*.md",
 	"packages/agent/src/compaction/prompts/*.md",
 	"packages/ai/src/prompts/*.md",
-	"packages/typescript-edit-benchmark/src/prompts/*.md",
+	"tools/typescript-edit-benchmark/src/prompts/*.md",
 	"packages/hashline/src/prompt.md",
 ];
 

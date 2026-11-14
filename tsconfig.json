@@ -7,6 +7,9 @@
 			"path": "./apps/tsconfig.workspace.json"
 		},
 		{
+			"path": "./tools/tsconfig.workspace.json"
+		},
+		{
 			"path": "./tsconfig.tools.json"
 		}
 	]

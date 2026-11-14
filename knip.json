@@ -19,7 +19,7 @@
       ],
       "project": ["src/**", "test/**", "electron/**"]
     },
-    "packages/metaharness": {
+    "tools/metaharness": {
       "entry": [
         "src/server.ts",
         "src/web/app.tsx",
@@ -39,7 +39,7 @@
       "entry": ["capacitor.config.ts", "scripts/*.mjs"],
       "project": ["capacitor.config.ts", "scripts/**", "src/**"]
     },
-    "packages/typescript-edit-benchmark": {
+    "tools/typescript-edit-benchmark": {
       "entry": ["src/*.ts"],
       "project": ["src/**"]
     },

@@ -1273,7 +1273,7 @@
   "@musepi/pi-ai" = copyPathToStore ../packages/ai;
   "@musepi/pi-catalog" = copyPathToStore ../packages/catalog;
   "@musepi/pi-coding-agent" = copyPathToStore ../packages/coding-agent;
-  "@musepi/pi-metaharness" = copyPathToStore ../packages/metaharness;
+  "@musepi/pi-metaharness" = copyPathToStore ../tools/metaharness;
   "@musepi/pi-mnemopi" = copyPathToStore ../packages/mnemopi;
   "@musepi/pi-natives" = copyPathToStore ../packages/natives;
   "@musepi/pi-tool-select" = copyPathToStore ../packages/tool-select;
@@ -1282,7 +1282,7 @@
   "@musepi/pi-wire" = copyPathToStore ../packages/wire;
   "@musepi/sdk" = copyPathToStore ../packages/sdk;
   "@musepi/snapcompact" = copyPathToStore ../packages/snapcompact;
-  "@musepi/typescript-edit-benchmark" = copyPathToStore ../packages/typescript-edit-benchmark;
+  "@musepi/typescript-edit-benchmark" = copyPathToStore ../tools/typescript-edit-benchmark;
   "@napi-rs/cli@3.7.2" = fetchurl {
     url = "https://registry.npmjs.org/@napi-rs/cli/-/cli-3.7.2.tgz";
     hash = "sha512-shDW0Td/XZQpP04Yy+OsMt1ILMKGGkoLcy1zVAsSAK0fLfWm0Upgkmfs/NOV2ZhMQwkgpR3ZEdyHmTwgrUDQuA==";

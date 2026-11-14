@@ -10,7 +10,7 @@
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/MuseLinn/MusePi.git",
-		"directory": "packages/typescript-edit-benchmark"
+		"directory": "tools/typescript-edit-benchmark"
 	},
 	"exports": {
 		"./*": {

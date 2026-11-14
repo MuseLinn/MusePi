@@ -154,7 +154,7 @@ async function stagePlugin(sourceDir: string, destinationDir: string): Promise<v
 /** Copy the exact runtime layout consumed by MUSEPI_BUNDLED_PLUGIN_ROOTS. */
 export async function stageDaemon(options: StageDaemonOptions): Promise<void> {
 	const codingAgentRoot = path.join(options.repoRoot, "packages", "coding-agent");
-	const packageRoot = path.join(options.repoRoot, "packages", "desktop-app");
+	const packageRoot = path.join(options.repoRoot, "apps", "desktop");
 	const pluginTrees = [
 		{
 			source: path.join(codingAgentRoot, "src", "bundled-plugins"),
@@ -198,9 +198,7 @@ async function main(): Promise<void> {
 	await stageDaemon({
 		binaryPath: path.resolve(process.argv[binaryFlag + 1]),
 		repoRoot,
-		outputDir: outputDir
-			? path.resolve(outputDir)
-			: path.join(repoRoot, "packages", "desktop-app", "vendor", "daemon"),
+		outputDir: outputDir ? path.resolve(outputDir) : path.join(repoRoot, "apps", "desktop", "vendor", "daemon"),
 	});
 	process.stdout.write("Staged daemon with bundled-plugins and desktop-plugins\n");
 }

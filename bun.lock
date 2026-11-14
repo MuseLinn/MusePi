@@ -265,7 +265,7 @@
         "@types/bun": "catalog:",
       },
     },
-    "packages/metaharness": {
+    "tools/metaharness": {
       "name": "@musepi/pi-metaharness",
       "version": "0.4.4",
       "bin": {
@@ -430,7 +430,7 @@
         "ghostty-web": "catalog:",
       },
     },
-    "packages/typescript-edit-benchmark": {
+    "tools/typescript-edit-benchmark": {
       "name": "@musepi/typescript-edit-benchmark",
       "version": "0.4.4",
       "dependencies": {
@@ -1169,7 +1169,7 @@
 
     "@musepi/pi-coding-agent": ["@musepi/pi-coding-agent@workspace:packages/coding-agent"],
 
-    "@musepi/pi-metaharness": ["@musepi/pi-metaharness@workspace:packages/metaharness"],
+    "@musepi/pi-metaharness": ["@musepi/pi-metaharness@workspace:tools/metaharness"],
 
     "@musepi/pi-mnemopi": ["@musepi/pi-mnemopi@workspace:packages/mnemopi"],
 
@@ -1187,7 +1187,7 @@
 
     "@musepi/snapcompact": ["@musepi/snapcompact@workspace:packages/snapcompact"],
 
-    "@musepi/typescript-edit-benchmark": ["@musepi/typescript-edit-benchmark@workspace:packages/typescript-edit-benchmark"],
+    "@musepi/typescript-edit-benchmark": ["@musepi/typescript-edit-benchmark@workspace:tools/typescript-edit-benchmark"],
 
     "@napi-rs/cli": ["@napi-rs/cli@3.7.2", "", { "dependencies": { "@inquirer/prompts": "^8.5.2", "@napi-rs/cross-toolchain": "^1.0.3", "@napi-rs/wasm-tools": "^1.0.1", "@octokit/rest": "^22.0.1", "clipanion": "^4.0.0-rc.4", "colorette": "^2.0.20", "emnapi": "^1.11.1", "es-toolkit": "^1.47.0", "js-yaml": "^4.2.0", "obug": "^2.1.2", "semver": "^7.8.2", "typanion": "^3.14.0" }, "peerDependencies": { "@emnapi/runtime": "^1.7.1" }, "optionalPeers": ["@emnapi/runtime"], "bin": { "napi": "dist/cli.js", "napi-raw": "cli.mjs" } }, "sha512-shDW0Td/XZQpP04Yy+OsMt1ILMKGGkoLcy1zVAsSAK0fLfWm0Upgkmfs/NOV2ZhMQwkgpR3ZEdyHmTwgrUDQuA=="],
 

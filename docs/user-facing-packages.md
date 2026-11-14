@@ -33,9 +33,9 @@ Sources: [`packages/omptype/README.md`](../packages/omptype/README.html), [`pack
 - Runtime behavior: schema calls return the validated value or `type.errors`; `.assert()` returns the value or throws; `.allows()` performs a boolean check.
 - Limits: this is an intentionally focused compatibility surface rather than a complete implementation of every ArkType, TypeBox, or Zod API.
 
-### `packages/typescript-edit-benchmark` — TypeScript edit benchmark
+### `tools/typescript-edit-benchmark` — TypeScript edit benchmark
 
-Sources: [`packages/typescript-edit-benchmark/package.json`](../packages/typescript-edit-benchmark/package.json), [`packages/typescript-edit-benchmark/src/index.ts`](../packages/typescript-edit-benchmark/src/index.ts), [`packages/typescript-edit-benchmark/src/runner.ts`](../packages/typescript-edit-benchmark/src/runner.ts), [`packages/typescript-edit-benchmark/src/tasks.ts`](../packages/typescript-edit-benchmark/src/tasks.ts), [`packages/typescript-edit-benchmark/src/report.ts`](../packages/typescript-edit-benchmark/src/report.ts).
+Sources: [`tools/typescript-edit-benchmark/package.json`](../tools/typescript-edit-benchmark/package.json), [`tools/typescript-edit-benchmark/src/index.ts`](../tools/typescript-edit-benchmark/src/index.ts), [`tools/typescript-edit-benchmark/src/runner.ts`](../tools/typescript-edit-benchmark/src/runner.ts), [`tools/typescript-edit-benchmark/src/tasks.ts`](../tools/typescript-edit-benchmark/src/tasks.ts), [`tools/typescript-edit-benchmark/src/report.ts`](../tools/typescript-edit-benchmark/src/report.ts).
 
 There is no package README at this path today; the manifest and CLI entrypoint help are the cited package-local sources.
 

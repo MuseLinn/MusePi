@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { chromium } from "playwright";
 
 const REPO = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
-const BUILD = join(REPO, "packages", "desktop-app", "build");
+const BUILD = join(REPO, "apps", "desktop", "build");
 
 const argv = process.argv.slice(2);
 const outIdx = argv.indexOf("--out");

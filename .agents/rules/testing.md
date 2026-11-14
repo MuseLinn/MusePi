@@ -6,6 +6,7 @@ Load before changing behavior, tests, smoke infrastructure, or delivery verifica
 
 Tests and smoke runs must never write `~/.musepi/agent/sessions/` or share `%TEMP%/musepi-daemon` with production.
 
+- Placement: a unit test that exercises one module with local fixtures sits next to that module (`src/**/*.test.ts(x)`); suites that compose several modules, drive the GUI, or need shared helpers live in `<package>/test/`. Do not create a third location.
 - Real session-storage suites use `test/helpers/isolate-agent-dir.ts`: `isolateAgentDirForTest` in `beforeAll`, `restoreAgentDirForTest` in `afterAll`, with a 30-second hook timeout on Windows. Suites passing an explicit isolated session directory for every write are exempt.
 - A temporary cwd only changes the session slug; it does not isolate the session root.
 - Manual desktop, daemon, or real-model smoke runs go through `bun scripts/dev-smoke.ts -- <command>`.
