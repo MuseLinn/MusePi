@@ -4809,6 +4809,23 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"computer.backgroundFallback": {
+		type: "enum",
+		values: ["takeover", "refuse"] as const,
+		default: "takeover",
+		ui: {
+			tab: "tools",
+			group: "Computer",
+			label: "Computer Input Fallback",
+			description:
+				"What happens when a target window cannot take background input: takeover lets the agent bring it forward for that action, refuse keeps the agent in the background and fails the action instead",
+			options: [
+				{ value: "takeover", label: "Takeover" },
+				{ value: "refuse", label: "Refuse" },
+			],
+		},
+	},
+
 	"computer.glow": {
 		type: "boolean",
 		default: true,

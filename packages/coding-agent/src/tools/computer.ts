@@ -156,6 +156,7 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 				: configuredMaxHeight,
 			display: this.session.settings.get("computer.display") ?? "all",
 			readOnly: !!params.read_only,
+			backgroundFallback: this.session.settings.get("computer.backgroundFallback") ?? "takeover",
 		};
 		const run = await this.#controller.run(
 			params.code,

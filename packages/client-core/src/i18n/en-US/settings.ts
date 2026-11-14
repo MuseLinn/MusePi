@@ -4170,6 +4170,11 @@ export const settings = {
 	"Composite all displays or select a native display id": "Composite all displays or select a native display id",
 	"Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent":
 		"Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent",
+	"Computer Input Fallback": "Computer Input Fallback",
+	"What happens when a target window cannot take background input: takeover lets the agent bring it forward for that action, refuse keeps the agent in the background and fails the action instead":
+		"What happens when a target window cannot take background input: takeover lets the agent bring it forward for that action, refuse keeps the agent in the background and fails the action instead",
+	Takeover: "Takeover",
+	Refuse: "Refuse",
 	"Computer Display": "Computer Display",
 	"Computer Screenshot Height": "Computer Screenshot Height",
 	"Computer Screenshot Width": "Computer Screenshot Width",

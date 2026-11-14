@@ -197,6 +197,7 @@ const snapshot = (readOnly = false): ComputerSessionSnapshot => ({
 	captureMaxWidth: 1280,
 	captureMaxHeight: 896,
 	display: "all",
+	backgroundFallback: "takeover",
 	readOnly,
 });
 

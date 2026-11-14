@@ -12,6 +12,9 @@ export interface ComputerSessionSnapshot {
 	captureMaxHeight: number;
 	display: string;
 	readOnly: boolean;
+	/** `computer.backgroundFallback`: may an action take the user's focus when
+	 *  a window refuses background input, or must it fail instead? */
+	backgroundFallback: "takeover" | "refuse";
 }
 
 /** Reply envelope for a session tool invoked by desktop JavaScript. */

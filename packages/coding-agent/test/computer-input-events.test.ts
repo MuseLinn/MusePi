@@ -100,6 +100,7 @@ function makeHarness(code: string) {
 				captureMaxWidth: 1280,
 				captureMaxHeight: 960,
 				display: "all",
+				backgroundFallback: "takeover",
 				readOnly: false,
 			},
 		};
@@ -190,6 +191,7 @@ test("read_only runs emit no input events", async () => {
 			captureMaxWidth: 1280,
 			captureMaxHeight: 960,
 			display: "all",
+			backgroundFallback: "takeover",
 			readOnly: true,
 		},
 	});

@@ -4,6 +4,45 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **计算机使用新增「保持后台」策略**：设置 `computer.backgroundFallback`（默认 takeover）为 refuse 时，`delivery: "foreground"`、`raise()`、元素 `focus()` 会在发送前被拒绝并说明后台替代路径；目标窗口返回 `BackgroundUnavailable` 后也不再允许前台重试。
+  - EN: Computer use gains a keep-in-background policy: with `computer.backgroundFallback` set to refuse (takeover is the default), `delivery: "foreground"`, `raise()` and element `focus()` fail before anything is sent and name the background route instead, and a `BackgroundUnavailable` result can no longer be retried in the foreground.
+
+- **内置浏览器显示 Agent 操作痕迹**：托管面板把 Agent 通过 CDP 派发的点击与滚动落点显示为一个短暂的脉冲环（滚动用虚线环），不向页面注入任何代码；落点按预设的居中与缩放换算到屏幕坐标，新动作替换旧痕迹而不是叠加。
+  - EN: The managed browser panel now shows where the agent acted: clicks and wheel events dispatched over CDP pulse a short ring at the page point (dashed for scroll), with no code injected into the page. Points are mapped through the preset's centering and fit scale, and a newer action replaces the previous mark instead of stacking.
+
+- **自定义网页尺寸与拖拽调节柄**：设备预设新增「自定义尺寸」，选中后页面按 1024×768 模拟布局，虚线框的右/下调节柄可拖动改变宽高（宽度下限 320、上限 7680）。
+  - EN: Device presets gain a "Custom size" entry: the page lays out at 1024×768 and the dashed frame's right/bottom handles drag its width and height (320–7680 wide).
+
+- **计算机使用显示虚拟 Agent 光标**：桌面操作叠加层新增一个不抢占系统鼠标的虚拟指针，跟随 Agent 的点击/滚动/输入落点并显示动作标签，空闲 2.6 秒后淡出；真实光标与焦点始终留在用户手里。
+  - EN: Computer use draws a virtual agent cursor that never takes the system pointer: it follows the action point with the action label, fades out after 2.6 seconds idle, and leaves the real cursor and focus with the user.
+
+- **计算机使用可发现并启动应用**：`desktop.apps({name?})` 枚举平台的应用目录（Windows 开始菜单快捷方式、macOS `.app`、Linux `.desktop`），`desktop.launch(nameOrPath)` 经系统处理器打开并返回 pid；同名多候选时列出候选并报错而不是猜测，启动按变更类操作审批，`read_only` 下被拒绝。
+  - EN: The computer surface can find and launch apps: `desktop.apps({name?})` lists the platform catalogue (Start Menu shortcuts on Windows, `.app` bundles on macOS, `.desktop` entries on Linux) and `desktop.launch(nameOrPath)` opens one through the OS handler and returns its pid. Ambiguous names list their candidates instead of guessing, launching is treated as a mutation for approval, and `read_only` runs refuse it.
+
+- **浏览器结果保留未渲染字段**：卡片下方新增折叠的「其他字段」，列出卡片没有消费的结果字段（布尔本地化、对象截断），媒体与已渲染字段（截图、操作步骤、观察树）不重复出现；没有剩余字段时不显示。
+  - EN: Browser results keep fields the cards do not render: a folded "Other fields" list shows leftover result keys (localized booleans, truncated objects), skips media and already-rendered fields, and disappears when nothing is left.
+
+- **浏览器步骤显示「操作前」画面**：步骤展开时复用上一步的操作后缩略图作为“操作前”画面——同一批像素，不额外截图；首步或没有缩略图的后端不显示。
+  - EN: Expanded browser steps now show a "Before" thumbnail taken from the previous step's post-action capture — the same pixels, no extra screenshot. The first step in a run, or a backend that captures no thumbnails, simply omits it.
+
+- **折叠关闭不再推动阅读位置**：视口上方的活动折叠关闭时，改为在布局阶段瞬时收起并同步补偿滚动位置，不再先播放 220ms 动画再回滚；判定基准也从窗口顶边改为转录滚动容器顶边，避开粘性工具栏。
+  - EN: Closing an activity fold above the viewport now collapses instantly in the layout phase and compensates the scroll position in the same frame instead of animating for 220 ms and snapping back afterwards. The pin decision measures the transcript scroller's top rather than the window's, so sticky chrome no longer hides a fold that is already out of sight.
+
+- **右侧浏览器面板的接管状态按标签页持续**：Agent 操作期间浮层不再在两次工具调用之间消失，计时从接管开始连续累计；单步结束后面板改为显示「Agent 已接管此标签页」并保留「我来接管」，直到你接管、标签页关闭或 90 秒无操作。
+  - EN: The right-panel takeover state now lives at the tab level. The control card stays up between tool calls with a continuous elapsed timer, switches to "Agent holds this tab" once a step settles, and only goes away on takeover, tab close, or 90 seconds without activity.
+
+- **后台任务卡对齐任务类型与状态**：任务类型改为本地化名称（命令 / 子代理 / 提问 / 视频），展开卡片可见「全部任务」并列出已结束任务及状态（运行中 / 已完成 / 失败 / 已取消 / 已丢失）；输出详情在被截断时明确标注，不再只显示技术状态字符串。
+  - EN: The background-task HUD now names task types in the active locale (Command / Subagent / Question / Video), offers an "All tasks" list of finished jobs with their status (Running / Completed / Failed / Canceled / Lost), and marks truncated output in the detail sheet instead of showing a raw status string.
+
+- **浏览器步骤状态按动作表达**：步骤展开后不再统一显示「已完成 / 失败」，而是用动作本身说明状态（正在进行点击时显示「正在点击」，成功后显示「已点击」，失败显示「点击失败」；取消仍显示「已取消」）。
+  - EN: Browser steps describe their state with the action itself instead of a generic "completed/failed": "Click in progress" while running, "Click finished" on success and "Click failed" on error, while cancellation stays "Canceled".
+
+- **浏览器支持双击与右键**：`browser` 工具新增 `double_click` 与 `right_click`，元素引用与视觉坐标两种目标都可用，右键用于打开网页上下文菜单。
+  - EN: The browser tool gains `double_click` and `right_click` for both element refs and visual coordinates; right-click opens the page context menu.
+
+- **浏览器步骤显示页面前后变化**：每次浏览器操作在动作前后各采样一次页面状态（网址、标题、滚动位置、加载状态），卡片在步骤展开区显示「这一步之后的变化」，没有差异时明确显示「页面状态没有变化」；采样失败或步骤仍在运行时保持沉默，不误报无变化。
+  - EN: Each browser step now samples the page before and after it runs (URL, title, scroll position and loading state). The card lists what changed under "Changed by this step", or says "The page state did not change" when nothing moved; a missing sample or a still-running step stays silent instead of claiming no change.
+
 ## [0.7.5] - 2026-11-13
 
 - **子代理会话与转录在跑完后保持可见**：右侧「子代理」名册改由会话产物目录的磁盘记录派生，注册表只补充实时状态，因此一次性子代理跑完、daemon 重启或重新进入会话后仍然列出；每行同时显示子代理定义名（如 `sonic`）与任务摘要，点击打开其实时转录，标签页也能直达对应子会话。侧栏的子会话行标注所属子代理，历史会话的展开入口不再消失。

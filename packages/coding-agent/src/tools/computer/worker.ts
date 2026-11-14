@@ -27,6 +27,7 @@ import {
 	waitForRun,
 } from "../run-scope";
 import { ToolAbortError, ToolError, throwIfAborted } from "../tool-errors";
+import { type DesktopApp, hostInstalledApps, launchCommand, resolveApp } from "./apps";
 import type {
 	ComputerInputEvent,
 	ComputerScreenshot,
@@ -152,6 +153,64 @@ async function nativeCall<T>(signal: AbortSignal, call: () => Promise<T>): Promi
 	} catch (error) {
 		if (error instanceof ToolAbortError) throw error;
 		throw nativeError(error);
+	}
+}
+
+const BACKGROUND_UNAVAILABLE = "BackgroundUnavailable: ";
+const BACKGROUND_ROUTE = "Window input and screenshots reach a covered window, so no foreground call is needed.";
+
+/**
+ * `computer.backgroundFallback: "refuse"` keeps the agent in the background:
+ * a call that would take the user's focus or pointer fails before anything is
+ * sent, and a native background refusal is not retried in the foreground.
+ * `effect` names what the call would do; `route` names the background way to
+ * the same end.
+ */
+export function foregroundRefusal(
+	context: Pick<ComputerRunContext, "snapshot">,
+	call: string,
+	effect: string,
+	route: string,
+	target?: string,
+): string | null {
+	if (context.snapshot.backgroundFallback !== "refuse") return null;
+	const to = target === undefined ? "" : ` to ${target}`;
+	return `${BACKGROUND_UNAVAILABLE}${call} would ${effect}, and the user's computer.backgroundFallback setting is "refuse", which keeps the agent in the background; nothing was sent${to}. ${route}`;
+}
+
+function refuseForeground(
+	context: ComputerRunContext,
+	call: string,
+	effect: string,
+	route: string,
+	target?: string,
+): void {
+	const refusal = foregroundRefusal(context, call, effect, route, target);
+	if (refusal !== null) throw new ToolError(refusal);
+}
+
+/** Window input that honours the fallback policy for both directions: a
+ *  foreground request under `refuse`, and a native refusal under `refuse`. */
+async function sendWindowInput<T>(
+	context: ComputerRunContext,
+	call: string,
+	effect: string,
+	send: () => Promise<T>,
+	options?: { delivery?: string },
+	target?: string,
+): Promise<T> {
+	if (options?.delivery === "foreground") {
+		refuseForeground(context, `${call} with delivery:"foreground"`, effect, BACKGROUND_ROUTE, target);
+	}
+	try {
+		return await send();
+	} catch (error) {
+		if (context.snapshot.backgroundFallback !== "refuse") throw error;
+		const message = error instanceof Error ? error.message : String(error);
+		if (!message.startsWith(BACKGROUND_UNAVAILABLE)) throw error;
+		throw new ToolError(
+			`${message}; the user's computer.backgroundFallback setting is "refuse", which keeps the agent in the background, so no foreground retry is allowed`,
+		);
 	}
 }
 
@@ -325,6 +384,13 @@ class El {
 		const context = this.#getContext();
 		guardRun(context, "focus");
 		await this.#emit("focus");
+		refuseForeground(
+			context,
+			"focus",
+			"move the user's keyboard focus",
+			"Use setValue or an element click, which do not depend on focus.",
+			this.ref,
+		);
 		await nativeCall(context.signal, () => this.#session.axFocus(this.ref));
 	}
 
@@ -397,15 +463,30 @@ class Win {
 		const context = this.#getContext();
 		guardRun(context, "click");
 		this.#emit("click", this.#screenPoint(x, y));
-		await nativeCall(context.signal, () => this.#session.click(this.id, x, y, pointerOptions(options)));
+		await sendWindowInput(
+			context,
+			"click",
+			"drive the user's pointer",
+			() => nativeCall(context.signal, () => this.#session.click(this.id, x, y, pointerOptions(options))),
+			options,
+			this.id,
+		);
 	}
 
 	async doubleClick(x: number, y: number, options?: Omit<ClickOptions, "count">): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "doubleClick");
 		this.#emit("doubleClick", this.#screenPoint(x, y));
-		await nativeCall(context.signal, () =>
-			this.#session.click(this.id, x, y, pointerOptions({ ...options, count: 2 })),
+		await sendWindowInput(
+			context,
+			"doubleClick",
+			"drive the user's pointer",
+			() =>
+				nativeCall(context.signal, () =>
+					this.#session.click(this.id, x, y, pointerOptions({ ...options, count: 2 })),
+				),
+			options,
+			this.id,
 		);
 	}
 
@@ -413,19 +494,34 @@ class Win {
 		const context = this.#getContext();
 		guardRun(context, "move");
 		this.#emit("move", this.#screenPoint(x, y));
-		await nativeCall(context.signal, () => this.#session.moveMouse(this.id, x, y));
+		await sendWindowInput(
+			context,
+			"move",
+			"drive the user's pointer",
+			() => nativeCall(context.signal, () => this.#session.moveMouse(this.id, x, y)),
+			undefined,
+			this.id,
+		);
 	}
 
 	async drag(points: Array<[number, number]>, options?: DragOptions): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "drag");
 		this.#emit("drag");
-		await nativeCall(context.signal, () =>
-			this.#session.drag(
-				this.id,
-				points.map(([x, y]) => ({ x, y })),
-				pointerOptions(options),
-			),
+		await sendWindowInput(
+			context,
+			"drag",
+			"drive the user's pointer",
+			() =>
+				nativeCall(context.signal, () =>
+					this.#session.drag(
+						this.id,
+						points.map(([x, y]) => ({ x, y })),
+						pointerOptions(options),
+					),
+				),
+			options,
+			this.id,
 		);
 	}
 
@@ -433,8 +529,16 @@ class Win {
 		const context = this.#getContext();
 		guardRun(context, "scroll");
 		this.#emit("scroll", this.#screenPoint(x, y));
-		await nativeCall(context.signal, () =>
-			this.#session.scroll(this.id, x, y, options.dx ?? 0, options.dy ?? 0, pointerOptions(options)),
+		await sendWindowInput(
+			context,
+			"scroll",
+			"drive the user's pointer",
+			() =>
+				nativeCall(context.signal, () =>
+					this.#session.scroll(this.id, x, y, options.dx ?? 0, options.dy ?? 0, pointerOptions(options)),
+				),
+			options,
+			this.id,
 		);
 	}
 
@@ -442,15 +546,30 @@ class Win {
 		const context = this.#getContext();
 		guardRun(context, "type");
 		this.#emit("type");
-		await nativeCall(context.signal, () => this.#session.typeText(this.id, text, pointerOptions(options)));
+		await sendWindowInput(
+			context,
+			"type",
+			"take the user's keyboard",
+			() => nativeCall(context.signal, () => this.#session.typeText(this.id, text, pointerOptions(options))),
+			options,
+			this.id,
+		);
 	}
 
 	async press(chord: string | string[], options?: DeliveryOptions): Promise<void> {
 		const context = this.#getContext();
 		guardRun(context, "press");
 		this.#emit("press");
-		await nativeCall(context.signal, () =>
-			this.#session.keyChord(this.id, chordKeys(chord), pointerOptions(options)),
+		await sendWindowInput(
+			context,
+			"press",
+			"take the user's keyboard",
+			() =>
+				nativeCall(context.signal, () =>
+					this.#session.keyChord(this.id, chordKeys(chord), pointerOptions(options)),
+				),
+			options,
+			this.id,
 		);
 	}
 
@@ -458,6 +577,13 @@ class Win {
 		const context = this.#getContext();
 		guardRun(context, "raise");
 		this.#emit("raise");
+		refuseForeground(
+			context,
+			"raise",
+			"bring the window to the front and take the user's keyboard",
+			"Window input and screenshots reach a covered window, so no raise is needed.",
+			this.id,
+		);
 		await nativeCall(context.signal, () => this.#session.raiseWindow(this.id));
 	}
 
@@ -781,6 +907,27 @@ export class ComputerWorkerCore {
 				const { signal } = getContext();
 				const node = await nativeCall(signal, () => session.axFocused());
 				return node ? el(node) : null;
+			},
+			apps: async (filter?: { name?: string }): Promise<DesktopApp[]> => {
+				const { signal } = getContext();
+				throwIfAborted(signal);
+				const apps = await hostInstalledApps();
+				throwIfAborted(signal);
+				const name = filter?.name?.trim().toLowerCase();
+				return name ? apps.filter(app => app.name.toLowerCase().includes(name)) : apps;
+			},
+			launch: async (target: string, options?: { args?: string[] }): Promise<{ pid?: number; path: string }> => {
+				const context = getContext();
+				guardRun(context, "desktop.launch");
+				const app = resolveApp(await hostInstalledApps(), target);
+				const [command, ...rest] = launchCommand(process.platform, app.id);
+				const child = Bun.spawn([command!, ...rest, ...(options?.args ?? [])], {
+					detached: true,
+					stdio: ["ignore", "ignore", "ignore"],
+				});
+				child.unref();
+				throwIfAborted(context.signal);
+				return { pid: child.pid, path: app.id };
 			},
 			clipboard: {
 				read: async (): Promise<string> => {

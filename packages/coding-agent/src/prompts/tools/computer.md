@@ -4,6 +4,7 @@ Host desktop control via JS: windows, screenshots, native input, OS accessibilit
 
 `code`: top-level await; persistent session; window handles, screenshot frames, AX refs survive calls. In scope: `desktop`, `wait(msOrFn, {timeout?, interval?})`, `assert(cond, msg?)`, `display`/`print`/`read`/`write`/`tool.*`.
 
+- `desktop.apps({name?})` → installed launch targets `[{name, id, kind}]` from the platform catalogue (Start Menu shortcuts, `.app` bundles, `.desktop` entries); `desktop.launch(nameOrPath)` opens one through the OS handler and returns its pid. Launch is a mutation: it needs `read_only: false` and user authorization for anything consequential.
 - `desktop.windows({app?, title?})` → `[{id, app, title, pid, x, y, width, height, focused}]`; `desktop.window(idOrFilter)` → Win; ambiguous → throws listing candidates. Also `desktop.focusedWindow()`, `desktop.displays()`, `desktop.capabilities()`.
 - Win: `.screenshot({silent?})`, `.click(x, y, {button?, count?, modifiers?, delivery?})`, `.doubleClick(x, y)`, `.move(x, y)`, `.drag([[x,y],…], {modifiers?, delivery?})`, `.scroll(x, y, {dx?, dy?, delivery?})`, `.type(text, {delivery?})`, `.press("cmd+shift+p", {delivery?})`, `.raise()`, `.ax({all?, maxDepth?})`, `.find({role?, title?, value?, limit?})` → all matches, `await .ref("e5")` → live element; expired → `StaleRef`.
 - `desktop.screenshot()/click()/…`: same input surface, all-displays composite.
@@ -25,6 +26,8 @@ Host desktop control via JS: windows, screenshots, native input, OS accessibilit
 
 ## Rules
 
+- Protected surfaces: never send input to terminal windows the OS protects (Command Prompt, PowerShell, Windows Terminal) and never use Windows/Meta/Super chords. The platform rejects or misroutes them; do not retry through another target or another delivery mode.
+- `type(text)` overwrites the system clipboard and leaves the text there. If the user's clipboard matters, read it first (`desktop.clipboard.read()`) and restore it afterwards.
 - PREFER AX over pixels: `win.ax()` → `el.press()`/`el.click()`/`el.setValue()`. Element actions need NO screenshot.
 - Pointer `x,y`: pixels in MOST RECENT screenshot of SAME target (window or desktop); no target screenshot → coordinate input throws. AX (`.bounds()`, `elementAt`): global desktop coords. Spaces differ; both auto-converted; NEVER mix.
 - Each window `.ax()` starts a ref generation. Current/previous snapshot refs valid; older → `StaleRef`: re-snapshot, don't guess.
@@ -33,6 +36,7 @@ Host desktop control via JS: windows, screenshots, native input, OS accessibilit
 {{#if managedBrowser}}- **Embedded browser pages are invisible here**: the host app's built-in browser renders inside its window, so its pages never appear in `desktop.windows()` and cannot be clicked or screenshotted from this surface. Use the `browser` tool to see and drive them.{{/if}}
 - Wayland: per-window native input and `.raise()` unavailable; use AX, or desktop input after focusing target yourself.
 - `read_only: true`: pure inspection; input/mutation throw; lighter approval.
+- `computer.backgroundFallback: "refuse"` keeps the agent in the background: `delivery: "foreground"`, `raise()`, and element `focus()` fail before anything is sent, and a `BackgroundUnavailable` result is final — solve it with AX actions or ask the user, never by retrying in the foreground.
 - Screenshots auto-display and save full-res to temp path; loops: `{silent: true}`.
 
 <critical>

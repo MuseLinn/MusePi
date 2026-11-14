@@ -2063,6 +2063,7 @@ export const settings = {
 	Pi: "Pi",
 	Preserve: "保留原样",
 	"Public Internet Only": "仅限公共互联网",
+	Refuse: "拒绝",
 	Rebuild: "重绘",
 	"Record Parse Regressions": "记录解析回归",
 	"Rounded Box (Default)": "圆角框（默认）",
@@ -2481,6 +2482,9 @@ export const settings = {
 	"Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent":
 		"Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent",
 	"Computer Display": "计算机显示器",
+	"Computer Input Fallback": "计算机输入回退",
+	"What happens when a target window cannot take background input: takeover lets the agent bring it forward for that action, refuse keeps the agent in the background and fails the action instead":
+		"目标窗口无法接收后台输入时的处理方式：takeover 允许代理为该次操作把窗口切到前台，refuse 保持后台并让该次操作失败",
 	"Computer Screenshot Height": "计算机截图高度",
 	"Computer Screenshot Width": "计算机截图宽度",
 	"Confirm interactively": "交互式确认",
@@ -3321,6 +3325,7 @@ export const settings = {
 	"Switch the task tool to its batch shape: one call carries { context, tasks[] } — one subagent per item, with an optional per-item agent (defaulting to the session spawn-policy agent), per-item isolation, and a required shared context prepended to every assignment. With async.enabled=true, each spawn runs as an independent background agent with the normal idle/parked lifecycle; otherwise the call blocks for merged results. Disable to restore the flat single-spawn schema.":
 		"Switch the task tool to its batch shape: one call carries { context, tasks[] } — one subagent per item, with an optional per-item agent (defaulting to the session spawn-policy agent), per-item isolation, and a required shared context prepended to every assignment. With async.enabled=true, each spawn runs as an independent background agent with the normal idle/parked lifecycle; otherwise the call blocks for merged results. Disable to restore the flat single-spawn schema.",
 	"Symbol Preset": "符号预设",
+	Takeover: "接管",
 	TTSR: "TTSR",
 	"TTSR Context Mode": "TTSR 上下文模式",
 	"TTSR Interrupt Mode": "TTSR 中断模式",

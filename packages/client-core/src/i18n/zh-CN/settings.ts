@@ -3039,8 +3039,10 @@ export const settings = {
 	"Outputs larger than this limit bypass the minimizer unchanged": "超过此限制的输出绕过精简器并保持原样",
 	Pause: "暂停",
 	"Per call": "每次调用",
+	Refuse: "拒绝",
 	Replace: "替换",
 	Session: "会话",
+	Takeover: "接管",
 	Tree: "消息树",
 	"Use Legacy Minimizer Filters": "使用旧版精简过滤器",
 	"Fall back to the conservative legacy routing and filter behavior": "回退到保守的旧版路由和过滤器行为",
@@ -3948,6 +3950,9 @@ export const settings = {
 	"Compress verbose shell output (git, npm, cargo, etc.) before returning it to the agent":
 		"把冗长的 shell 输出（git、npm、cargo 等）压缩后返回给代理",
 	"Computer Display": "计算机显示器",
+	"Computer Input Fallback": "计算机输入回退",
+	"What happens when a target window cannot take background input: takeover lets the agent bring it forward for that action, refuse keeps the agent in the background and fails the action instead":
+		"目标窗口无法接收后台输入时的处理方式：takeover 允许代理为该次操作把窗口切到前台，refuse 保持后台并让该次操作失败",
 	"Computer Screenshot Height": "计算机截图高度",
 	"Computer Screenshot Width": "计算机截图宽度",
 	"Confirm interactively": "交互式确认",
