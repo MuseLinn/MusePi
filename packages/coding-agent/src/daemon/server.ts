@@ -43,7 +43,6 @@ import {
 	getSessionsDir,
 	logger,
 	prompt,
-	resolveReleaseChannel,
 	updateManifestUrlForVersion,
 	VERSION,
 } from "@musepi/pi-utils";
@@ -84,8 +83,7 @@ import { LocalShareManager } from "../collab/local-share";
 import { PairCodes } from "../collab/pair-codes";
 import { findConfigFile } from "../config";
 import { resolveProviderModelReference } from "../config/model-resolver";
-import { isSensitiveSettingPath, type Settings } from "../config/settings";
-import type { SettingPath } from "../config/settings-schema";
+import type { Settings } from "../config/settings";
 // TUI /debug selector parity (desktop adaptation): the same pure helpers the
 // TUI debug menu uses, exposed as debug.* RPCs so the GUI can render its own
 // diagnostics panel. Only TUI-free modules are imported here (report-bundle,
@@ -482,7 +480,7 @@ import {
 } from "../knowledge/store";
 import type { StoredAuthCredential } from "../session/auth-storage";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
-import { dropManagedBrowserBridge, managedBrowserBridgeUrl } from "../tools/browser/managed-bridge";
+import { dropManagedBrowserBridge } from "../tools/browser/managed-bridge";
 import { isFileIndexBackendEnabled } from "../tools/file-backend";
 import { openPath } from "../utils/open";
 import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";

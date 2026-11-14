@@ -7,6 +7,7 @@ pub mod delivery;
 mod input;
 #[cfg(target_os = "windows")]
 mod lease;
+#[cfg(target_os = "windows")]
 mod menus;
 #[cfg(target_os = "windows")]
 mod overlay;

@@ -11,14 +11,16 @@ import { foldCloseNeedsPin, markFoldPinned } from "./scroll-anchor";
  * however much process was above it. The transcript scroller also disables the
  * browser's scroll anchoring (it virtualizes), so nothing else compensates.
  *
- * The pin happens in a layout effect, before paint: the slot's transition is
- * muted for the closed frame, the collapsed height is forced, the header's
- * viewport offset is restored, and the transition is re-armed on the next
- * frame. The reader never sees the intermediate position.
+ * The pin happens in a layout effect, before paint: the collapsing slots'
+ * transitions are muted for the closed frame, their collapsed height is forced,
+ * the header's viewport offset is restored, and the transitions are re-armed on
+ * the next frame. The reader never sees the intermediate position.
  *
- * The anchor is the fold header itself, which stays put: holding ITS viewport
- * offset holds everything under it. The slot is the fold's height-carrying
- * sibling, found from the header, so a caller attaches one ref and nothing else.
+ * The anchor is the fold header, which rides the reply once the fold is closed:
+ * holding ITS viewport offset holds the reply, and everything under it. The
+ * height the fold gives back lives in the closed turn's `.tr-fold-slot`s, which
+ * are siblings of the reply row rather than of the header — so they are found
+ * from the scroller, not from the header's subtree.
  *
  * Attach the returned ref to the fold header element.
  */
@@ -32,30 +34,39 @@ export function useHoldAnchor(open: boolean): RefObject<HTMLButtonElement | null
 		if (wasOpen === false || open === true) return;
 		const header = headerRef.current;
 		if (!header) return;
-		const slot = header.parentElement?.querySelector<HTMLElement>(":scope > .tr-fold-slot") ?? null;
 		const scroller = header.closest<HTMLElement>("[data-transcript-scroller]");
-		if (!slot || !scroller) return;
-		if (!foldCloseNeedsPin(slot.getBoundingClientRect().top, scroller.getBoundingClientRect().top)) return;
+		if (!scroller) return;
+		// The slots giving height back. A `--open` slot belongs to a run the
+		// reader just expanded: it is growing, and muting it would snap it.
+		const slots = Array.from(scroller.querySelectorAll<HTMLElement>(".tr-fold-slot:not(.tr-fold-slot--open)"));
+		if (slots.length === 0) return;
+		const scrollerTop = scroller.getBoundingClientRect().top;
+		// A fold the reader can still see collapsing is the animation they
+		// expect; only a fold that ends above the visible top gets pinned.
+		const foldBottom = Math.max(...slots.map(slot => slot.getBoundingClientRect().bottom));
+		if (!foldCloseNeedsPin(foldBottom, scrollerTop)) return;
 
 		const before = header.getBoundingClientRect().top;
-		// Mute the height transition for this frame so the closed height is the
-		// one measured below; without this the delta is near zero and the rows
-		// slide during the animation.
-		const previousTransition = slot.style.transition;
-		slot.style.transition = "none";
-		// Force style/layout so the collapsed height is what we measure.
-		void slot.offsetHeight;
+		const muted = slots.map(slot => slot.style.transition);
+		for (const slot of slots) slot.style.transition = "none";
+		// Force style/layout so the collapsed height is the one measured below;
+		// without this the delta is near zero and the rows slide during the
+		// animation.
+		void scroller.offsetHeight;
 		const delta = header.getBoundingClientRect().top - before;
 		if (delta !== 0) {
 			markFoldPinned(scroller);
 			scroller.scrollTop += delta;
 		}
-		const frame = window.requestAnimationFrame(() => {
-			slot.style.transition = previousTransition;
-		});
+		const rearm = (): void => {
+			slots.forEach((slot, i) => {
+				slot.style.transition = muted[i] ?? "";
+			});
+		};
+		const frame = window.requestAnimationFrame(rearm);
 		return () => {
 			window.cancelAnimationFrame(frame);
-			slot.style.transition = previousTransition;
+			rearm();
 		};
 	}, [open]);
 	return headerRef;

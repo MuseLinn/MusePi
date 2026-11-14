@@ -33,27 +33,43 @@ afterAll(() => {
  * animate normally, which is the second half of the contract.
  */
 
-const FOLD_WAIT_MS = 300;
 /** Height the fold collapses by, i.e. how far the anchor would drift. */
 const FOLD_H = 400;
+/** Where the reader was scrolled to, so the correction is a visible delta. */
+const READER_SCROLL = 1000;
 /**
- * Where the header sits relative to the viewport. Two values per test: BEFORE
- * the close (fold open, taller layout) and AFTER (fold closed, everything under
- * it moved up by FOLD_H) — that drift is exactly what the hook cancels.
+ * Where the header sits relative to the viewport. Two values per test: while
+ * the slot's height transition is armed (fold open, taller layout) and once it
+ * is muted (fold collapsed, everything under it moved up by FOLD_H) — that
+ * drift is exactly what the hook cancels.
  */
 let headerTop = -50;
-let headerTopAfterClose = -50;
+let headerTopAfterClose = -50 - FOLD_H;
 
 const roots: Array<ReturnType<typeof createRoot>> = [];
+
+function box(top: number, height: number): DOMRect {
+	return {
+		top,
+		bottom: top + height,
+		height,
+		left: 0,
+		right: 0,
+		width: 0,
+		x: 0,
+		y: top,
+		toJSON: () => ({}),
+	} as DOMRect;
+}
 
 /**
  * The hook under test, wired to a header inside a fold. The fold is built once
  * per mount (not per render) so React re-renders move the SAME element — that
  * is what makes the open→close transition observable.
  *
- * Structure mirrors the transcript: the scroller holds the header button and
- * the fold's height-carrying slot as siblings, which is the relationship the
- * hook's lookup depends on.
+ * Structure mirrors the transcript: the scroller owns both the fold header and
+ * the height-carrying slot the closed turn renders, and `open` drives the
+ * slot's `--open` class exactly like the real fold does.
  */
 function FoldHarness({ open }: { open: boolean }): ReactNode {
 	const ref = useHoldAnchor(open);
@@ -61,7 +77,7 @@ function FoldHarness({ open }: { open: boolean }): ReactNode {
 		"div",
 		{ "data-transcript-scroller": "" },
 		createElement("button", { ref, type: "button", className: "tr-round-fold" }),
-		createElement("div", { className: "tr-fold-slot" }),
+		createElement("div", { className: `tr-fold-slot${open ? " tr-fold-slot--open" : ""}` }),
 	);
 }
 
@@ -77,36 +93,30 @@ function mountFold(open: boolean): { header: HTMLButtonElement; scroller: HTMLEl
 	const slot = scroller?.querySelector<HTMLElement>(".tr-fold-slot");
 	if (!scroller || !header || !slot) throw new Error("harness did not render the fold");
 	// happy-dom lays nothing out, so give the three elements the boxes the
-	// contract is about. The header's box changes once the fold is closed:
-	// the slot above it collapses, so the header (and everything under it)
-	// moves up by FOLD_H.
+	// contract is about. The fold's height lives in the slot, ABOVE the header
+	// the hook anchors on, and closing it moves the header (and the reply it
+	// rides once closed) up by FOLD_H.
+	//
+	// The closed geometry is reported once the hook mutes the slot's transition,
+	// which is how a browser behaves: until that inline style lands, the
+	// transition still reports the open height, and the hook's forced layout
+	// reads the collapsed one. Keying the mock off the style is what lets a
+	// layout-effect pin observe any drift at all.
+	const collapsed = (): boolean => slot.style.transition === "none";
 	Object.defineProperty(header, "getBoundingClientRect", {
 		configurable: true,
-		value: () => ({ top: headerTop, bottom: headerTop + 20, height: 20 }) as DOMRect,
+		value: () => box(collapsed() ? headerTopAfterClose : headerTop, 20),
 	});
 	Object.defineProperty(slot, "getBoundingClientRect", {
 		configurable: true,
-		value: () => ({ top: headerTop - FOLD_H, bottom: headerTop, height: FOLD_H }) as DOMRect,
+		value: () => (collapsed() ? box(headerTopAfterClose - FOLD_H, 0) : box(headerTop - FOLD_H, FOLD_H)),
 	});
-	Object.defineProperty(scroller, "scrollTop", { configurable: true, writable: true, value: 0 });
+	Object.defineProperty(scroller, "getBoundingClientRect", {
+		configurable: true,
+		value: () => box(0, 800),
+	});
+	Object.defineProperty(scroller, "scrollTop", { configurable: true, writable: true, value: READER_SCROLL });
 	return { header, scroller };
-}
-
-/**
- * Apply the post-close geometry: the fold's height is gone, so the header and
- * everything below it sit FOLD_H higher — the drift the hook must cancel.
- */
-function applyClosedGeometry(header: HTMLButtonElement, scroller: HTMLElement): void {
-	const slot = scroller.querySelector<HTMLElement>(".tr-fold-slot");
-	if (!slot) throw new Error("fold slot vanished");
-	Object.defineProperty(header, "getBoundingClientRect", {
-		configurable: true,
-		value: () => ({ top: headerTopAfterClose, bottom: headerTopAfterClose + 20, height: 20 }) as DOMRect,
-	});
-	Object.defineProperty(slot, "getBoundingClientRect", {
-		configurable: true,
-		value: () => ({ top: 0, bottom: 0, height: 0 }) as DOMRect,
-	});
 }
 
 function rerender(open: boolean): void {
@@ -121,54 +131,41 @@ afterEach(() => {
 	}
 	document.body.innerHTML = "";
 	headerTop = -50;
-	headerTopAfterClose = -50;
+	headerTopAfterClose = -50 - FOLD_H;
 });
 
 describe("holdAnchor", () => {
-	test("closing a fold above the reader pins the content below it", async () => {
-		const { header, scroller } = mountFold(true);
-		// The fold is entirely above the viewport, so closing it would push the
+	test("closing a fold above the reader pins the content below it", () => {
+		const { scroller } = mountFold(true);
+		// The fold ends above the visible top, so closing it would push the
 		// reply the reader is on up by FOLD_H.
 		headerTop = -50;
-		headerTopAfterClose = -50 + FOLD_H;
+		headerTopAfterClose = headerTop - FOLD_H;
 
 		rerender(false);
-		// The layout after the fold's height transition: the header drifted up.
-		applyClosedGeometry(header, scroller);
-		// The hook's timer waits out the fold's height transition before
-		// correcting, so a mid-animation height is not measured.
-		await new Promise(r => setTimeout(r, FOLD_WAIT_MS));
 
 		// The scroll position was corrected by the amount the fold shrank, so
 		// the reader stays on the same content.
-		expect(scroller.scrollTop).toBe(FOLD_H);
+		expect(scroller.scrollTop).toBe(READER_SCROLL - FOLD_H);
 	});
 
-	test("a fold still in view animates instead of snapping", async () => {
-		const { header, scroller } = mountFold(true);
+	test("a fold still in view animates instead of snapping", () => {
+		const { scroller } = mountFold(true);
 		// The fold overlaps the viewport: the reader can SEE it collapse, which
 		// is the animation they expect — correcting would feel like a jump.
 		headerTop = 20;
-		headerTopAfterClose = 20 + FOLD_H;
-		// The slot's top is what the hook tests; keep it in view.
-		Object.defineProperty(scroller.querySelector(".tr-fold-slot")!, "getBoundingClientRect", {
-			configurable: true,
-			value: () => ({ top: 0, bottom: FOLD_H, height: FOLD_H }) as DOMRect,
-		});
+		headerTopAfterClose = headerTop - FOLD_H;
 
 		rerender(false);
-		applyClosedGeometry(header, scroller);
-		await new Promise(r => setTimeout(r, FOLD_WAIT_MS));
 
-		expect(scroller.scrollTop).toBe(0);
+		expect(scroller.scrollTop).toBe(READER_SCROLL);
 	});
 
-	test("opening never moves the reader, whatever its position", async () => {
+	test("opening never moves the reader, whatever its position", () => {
 		const { scroller } = mountFold(false);
 
 		rerender(true);
-		await new Promise(r => setTimeout(r, FOLD_WAIT_MS));
 
-		expect(scroller.scrollTop).toBe(0);
+		expect(scroller.scrollTop).toBe(READER_SCROLL);
 	});
 });

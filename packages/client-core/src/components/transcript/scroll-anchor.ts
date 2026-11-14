@@ -169,12 +169,13 @@ export function initialFollowing(): boolean {
 /**
  * Close-fold pinning: a fold that ends above the scroller's visible top must
  * collapse instantly, because animating it drags every row under the reader
- * by the fold's height. Comparing against the SCROLLER top (not the viewport)
- * matters: the transcript can sit under sticky chrome, and a fold inside that
- * band is already out of sight.
+ * by the fold's height. `foldBottom` is the closing fold's BOTTOM edge, so a
+ * fold straddling the visible top still animates. Comparing against the
+ * SCROLLER top (not the viewport) matters: the transcript can sit under
+ * sticky chrome, and a fold inside that band is already out of sight.
  */
-export function foldCloseNeedsPin(slotTop: number, scrollerTop: number): boolean {
-	return slotTop < scrollerTop;
+export function foldCloseNeedsPin(foldBottom: number, scrollerTop: number): boolean {
+	return foldBottom < scrollerTop;
 }
 
 /** How long the virtualizer must not add its own compensation after a fold pin.
