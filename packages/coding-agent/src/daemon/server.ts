@@ -22,11 +22,9 @@ import * as path from "node:path";
 import { getDashboardStats } from "@musepi/musepi-stats";
 import type { AgentEvent } from "@musepi/pi-agent-core";
 import { AgentBusyError, agentPauseGate } from "@musepi/pi-agent-core";
-import { effectiveReserveTokens, resolveThresholdTokens } from "@musepi/pi-agent-core/compaction";
 import { resolveUsedFraction } from "@musepi/pi-ai";
 import { getOAuthProviders } from "@musepi/pi-ai/oauth";
 import { resolveModelCapabilities } from "@musepi/pi-catalog/identity";
-import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { getBundledProviders } from "@musepi/pi-catalog/models";
 import { DesktopSession, getWorkProfile } from "@musepi/pi-natives";
 import {
@@ -49,7 +47,6 @@ import type {
 	WireMessage,
 	WorkspaceDuplicateDirectory,
 } from "@musepi/pi-wire";
-import { deriveWindowStats } from "@musepi/pi-wire";
 import { messageKey } from "@musepi/sdk";
 import { YAML } from "bun";
 import { JobLedger } from "../async/job-ledger";
@@ -89,7 +86,6 @@ import { getHostService } from "../extensibility/plugins/runtime/host-services";
 import { buildSkillPromptMessage, parseSkillInvocation } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
 import { copyLocalArtifacts, resolveLocalRoot, resolveLocalUrlToPath } from "../internal-urls/local-protocol";
-import { cacheHitRate } from "../modes/utils/cache-hit";
 import { resolveApprovedPlan, resolvePlanTitle } from "../plan-mode/approved-plan";
 import { listPlanFiles, readPlanFile, writePlanFile } from "../plan-mode/plan-files";
 import { getDesignSystem } from "../presets/design-systems";
@@ -354,6 +350,7 @@ import { ProvidersService } from "./services/providers-service";
 import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
 import { ScheduleService } from "./services/schedule-service";
+import { SessionInspectionService } from "./services/session-inspection-service";
 import { SessionPresenceService } from "./services/session-presence-service";
 import { SessionService } from "./services/session-service";
 import { SettingsService } from "./services/settings-service";
@@ -376,7 +373,6 @@ import {
 	buildDaemonTurnIndex,
 	DaemonSessionHost,
 	DEFAULT_SOCKET,
-	estimateSnapcompactSavings,
 	extractEntryText,
 	isLiveSessionBusy,
 	JOURNAL_DIR,
@@ -836,6 +832,8 @@ export class DaemonServer {
 		this.#services.register(new GitService({ cwd: () => this.#host.cwd() }));
 		// GitHub PR/issue center, gh auth, and host accounts.
 		this.#services.register(new GitHubService(this.#host));
+		// Read-only live-session state: context usage and thinking controls.
+		this.#services.register(new SessionInspectionService(this.#host));
 		// Speech: local STT/TTS model downloads, transcription, synthesis.
 		this.#services.register(
 			new SpeechService({
@@ -4843,29 +4841,8 @@ export class DaemonServer {
 				};
 			}
 			case "session.thinkingInfo": {
-				// Per-model thinking ceiling (TUI parity: some models cap the
-				// effort ladder). Powers the GUI selector's disabled levels.
-				const p = (params ?? {}) as { sessionId: string };
-				const live = this.#host.get(p.sessionId);
-				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				// AgentSession exposes the live controls on its model bus. The
-				// current model rides along so the settings card can label the
-				// live session's model without a separate snapshot round-trip.
-				const model = live.agentSession.model;
-				return {
-					ceiling: live.agentSession.thinkingLevelCeiling,
-					level: live.agentSession.thinkingLevel,
-					auto: live.agentSession.isAutoThinking,
-					// The level auto RESOLVED to for the current turn (undefined
-					// until the daemon classifies; TUI status-line parity — the
-					// GUI chip shows "auto" pending, then the concrete effort).
-					resolved: live.agentSession.autoResolvedThinkingLevel(),
-					// The current model's exact effort ladder (TUI parity: the
-					// selector offers off/auto + getSupportedEfforts(model), not
-					// a fixed seven-rung ladder).
-					efforts: model ? getSupportedEfforts(model as never).map(e => String(e)) : [],
-					model: model ? { id: model.id, name: model.name, provider: model.provider } : null,
-				};
+				// 实现归 SessionInspectionService（只读会话状态语义不变）。
+				return this.#services.get<SessionInspectionService>("session-inspection").thinkingInfo(params ?? {});
 			}
 			case "autoresearch.status": {
 				// Desktop adaptation of the TUI autoresearch extension: the
@@ -5054,100 +5031,8 @@ export class DaemonServer {
 				return { path: tmpPath, chars: rendered.length };
 			}
 			case "session.contextUsage": {
-				// Live context-window usage (TUI status-line parity): the
-				// stats tracker's estimate feeds the composer's usage ring.
-				// The snapcompact field carries the TUI /context savings
-				// estimate when the experimental settings are enabled.
-				const p = (params ?? {}) as { sessionId: string };
-				const live = this.#host.get(p.sessionId);
-				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const stats = live.agentSession.getSessionStats();
-				const usage = stats.contextUsage ?? null;
-				if (!usage) return usage;
-				// Visible-window timing fold for the composer stats row
-				// (性能与用量 activity pill). The fold answers "what is in
-				// the log now"; token figures stay on the durable projection
-				// above, so paging/compaction never moves them.
-				const windowStats = deriveWindowStats(live.agentSession.sessionManager.getEntries());
-				const snapcompact = estimateSnapcompactSavings(live.agentSession);
-				// Full category breakdown (TUI /context panel parity) for the
-				// GUI's native /context dialog — the ring only needs the
-				// aggregate, but the breakdown is already computed server-side.
-				const breakdown =
-					live.agentSession.getContextBreakdown({ contextWindow: usage.contextWindow }) ?? undefined;
-				const m = live.agentSession.model;
-				// Provider-qualified reference ("provider/id"): the model selector
-				// highlights by exact row, so a bare id would match the FIRST
-				// same-id model (opencode-go vs b-ai deepseek-v4-flash-vision-exp)
-				// and the check would light the wrong provider's row.
-				const modelRef = m ? (m.provider ? `${m.provider}/${m.id}` : m.id) : undefined;
-				// Autocompact buffer + free tokens (TUI /context panel parity):
-				// the buffer is the reserve the compaction strategy keeps below
-				// the threshold; free is what's left after used + buffer.
-				const cw = usage.contextWindow;
-				const used = breakdown?.usedTokens ?? usage.tokens;
-				let autoCompactBufferTokens = 0;
-				let freeTokens = 0;
-				// Effective compaction threshold in force (issue #42): when
-				// the user configured a custom soft cap (e.g.
-				// compaction.thresholdTokens: 300_000), every frontend usage
-				// display can use it as the ring/status denominator instead
-				// of the physical context window.
-				let thresholdTokens: number | null = null;
-				if (cw > 0) {
-					const comp = live.agentSession.settings.getGroup("compaction") as
-						| { enabled?: boolean; strategy?: string }
-						| undefined;
-					if (comp?.enabled && comp.strategy !== "off") {
-						const threshold = resolveThresholdTokens(cw, comp as Parameters<typeof resolveThresholdTokens>[1]);
-						thresholdTokens = threshold > 0 ? threshold : null;
-						autoCompactBufferTokens = Math.max(0, cw - threshold);
-					} else if (comp?.enabled) {
-						autoCompactBufferTokens = effectiveReserveTokens(
-							cw,
-							comp as Parameters<typeof effectiveReserveTokens>[1],
-						);
-					}
-					autoCompactBufferTokens = Math.min(autoCompactBufferTokens, Math.max(0, cw - used));
-					freeTokens = Math.max(0, cw - used - autoCompactBufferTokens);
-				}
-				// Session token/cost summary + prompt-cache hit rate (issue #8,
-				// TUI `cache_hit` segment parity). The GUI has no other source
-				// for either: the context ring is window-percentage only, and
-				// settings → agent stats is easy to miss. Hit rate is computed
-				// here with the TUI's own helper so the two cannot disagree.
-				const tokenStats = live.agentSession.sessionManager?.getUsageStatistics?.() ?? null;
-				const hitRate = cacheHitRate(tokenStats);
-				const tokenSummary =
-					tokenStats || hitRate !== null
-						? {
-								input: tokenStats?.input ?? 0,
-								output: tokenStats?.output ?? 0,
-								cacheRead: tokenStats?.cacheRead ?? 0,
-								cacheWrite: tokenStats?.cacheWrite ?? 0,
-								totalTokens: tokenStats?.totalTokens ?? 0,
-								cost: tokenStats?.cost ?? 0,
-								cacheHitRate: hitRate,
-							}
-						: null;
-				return snapcompact ||
-					breakdown ||
-					modelRef ||
-					autoCompactBufferTokens > 0 ||
-					tokenSummary ||
-					thresholdTokens !== null
-					? {
-							...usage,
-							...(modelRef ? { model: modelRef } : {}),
-							...(snapcompact ? { snapcompact } : {}),
-							...(breakdown ? { breakdown } : {}),
-							...(tokenSummary ? { usage: tokenSummary } : {}),
-							...(thresholdTokens !== null ? { thresholdTokens } : {}),
-							autoCompactBufferTokens,
-							freeTokens,
-							windowStats,
-						}
-					: { ...usage, windowStats };
+				// 实现归 SessionInspectionService（只读会话状态语义不变）。
+				return this.#services.get<SessionInspectionService>("session-inspection").contextUsage(params ?? {});
 			}
 			case "session.modes": {
 				// Goal / plan mode + todo progress (TUI /goal /plan parity):
