@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { getChangelogPath } from "../src/config";
-import { parseChangelog, parseChangelogVersion, selectStartupChangelog } from "../src/utils/changelog.js";
+import {
+	parseChangelog,
+	parseChangelogVersion,
+	renderChangelogEntries,
+	selectStartupChangelog,
+} from "../src/utils/changelog.js";
 
 const entry = (
 	v: string,
@@ -22,6 +27,33 @@ describe("changelog — one source", () => {
 
 	test("getChangelogPath points at CHANGELOG.musepi.md", () => {
 		expect(getChangelogPath()).toEndWith("CHANGELOG.musepi.md");
+	});
+});
+
+describe("renderChangelogEntries — locale projection", () => {
+	const flat = (): Parameters<typeof selectStartupChangelog>[0][number] => ({
+		major: 0,
+		minor: 7,
+		patch: 5,
+		content: `## [0.7.5] - 2026-11-13
+
+- **子代理会话保持可见**：名册改由磁盘记录派生。
+  - EN: Subagent sessions stay visible. The roster now derives from disk.`,
+	});
+
+	test("English keeps the bold title when it promotes the EN child", () => {
+		// The what's-new card turns a bold span into its heading; dropping it
+		// here left every English highlight without a title (and therefore
+		// without a card) — the panel showed "0 changes" for every version.
+		const rendered = renderChangelogEntries([flat()], { locale: "en-US", oldestFirst: false });
+		expect(rendered.markdown).toContain("- **子代理会话保持可见**：Subagent sessions stay visible.");
+		expect(rendered.markdown).not.toContain("EN:");
+	});
+
+	test("Chinese keeps the main bullet and drops the EN child", () => {
+		const rendered = renderChangelogEntries([flat()], { locale: "zh-CN", oldestFirst: false });
+		expect(rendered.markdown).toContain("- **子代理会话保持可见**：名册改由磁盘记录派生。");
+		expect(rendered.markdown).not.toContain("Subagent sessions stay visible");
 	});
 });
 

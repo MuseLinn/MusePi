@@ -33,7 +33,7 @@ const FIXTURE = `# MusePi Changelog
 
 ### Breaking Changes
 
-- **破坏性变更亮点**：不在四类小节里，不算亮点也不计数。
+- **破坏性变更亮点**：不在四类小节里，只计入总数，不进入分类计数。
 
 ## [0.4.9] - 2026-09-01
 
@@ -79,9 +79,12 @@ describe("parseChangelogHighlights", () => {
 
 	test("counts are per-kind, over all bullets (bold or not) in the four known sections", () => {
 		const [current, older] = parseChangelogHighlights(FIXTURE);
-		// Added has 5 bullets, Fixed 2, Breaking Changes is not counted.
+		// Added has 5 bullets, Fixed 2; Breaking Changes is outside the four
+		// categories but still a change the panel must count.
 		expect(current.counts).toEqual({ added: 5, fixed: 2, changed: 0, removed: 0 });
+		expect(current.count).toBe(8);
 		expect(older.counts).toEqual({ added: 0, fixed: 0, changed: 1, removed: 1 });
+		expect(older.count).toBe(2);
 	});
 
 	test('date comes from the `## [x.y.z] - date` heading; a heading without a date yields ""', () => {
@@ -121,6 +124,54 @@ describe("parseChangelogHighlights", () => {
 			"## [Unreleased]\n\n- 条目\n\n## [0.1.0] - 2026-01-01\n\n### Added\n\n- **亮点**：描述。",
 		);
 		expect(versions.map(v => v.version)).toEqual(["0.1.0"]);
+	});
+});
+
+describe("flat release notes (this repository's shape)", () => {
+	const FLAT = `## [0.7.5] - 2026-11-13
+
+- **子代理会话与转录在跑完后保持可见**：右侧名册改由磁盘记录派生。
+  - EN: Subagent sessions stay visible after the run.
+- **外观设置新增对话字体与终端字体**：两者分别可选并持久化。
+  - EN: Appearance gains a conversation font and a terminal font.
+- **内置浏览器新标签默认静音**：仍可按标签单独取消静音。
+- **普通条目**：第四条。
+- 没有加粗的条目：计入总数，不是亮点。
+`;
+
+	test("a section without ### headings counts every bullet and highlights the first three bold ones", () => {
+		const [version] = parseChangelogHighlights(FLAT);
+		expect(version.version).toBe("0.7.5");
+		expect(version.count).toBe(5);
+		expect(version.counts).toEqual({ added: 0, fixed: 0, changed: 0, removed: 0 });
+		expect(version.highlights.map(h => h.title)).toEqual([
+			"子代理会话与转录在跑完后保持可见",
+			"外观设置新增对话字体与终端字体",
+			"内置浏览器新标签默认静音",
+		]);
+		expect(version.highlights.every(h => h.kind === "note")).toBe(true);
+	});
+
+	test("flat bullets before a category heading stay notes; categorized ones keep their kind", () => {
+		const versions = parseChangelogHighlights(`## [1.0.0]
+
+- **未分类**：说明。
+
+### Fixed
+
+- **修复项**：说明。`);
+		expect(versions[0]?.highlights.map(h => h.kind)).toEqual(["note", "fixed"]);
+		expect(versions[0]?.count).toBe(2);
+	});
+
+	test("the shipped CHANGELOG.musepi.md parses with entries and highlights", async () => {
+		const path = new URL("../../../packages/coding-agent/CHANGELOG.musepi.md", import.meta.url);
+		const markdown = localizeChangelogMarkdown(await Bun.file(path).text(), "zh-CN");
+		const [current] = parseChangelogHighlights(markdown);
+		expect(current).toBeDefined();
+		expect(current?.count).toBeGreaterThan(0);
+		expect(current?.highlights.length).toBeGreaterThan(0);
+		expect(current?.highlights[0]?.kind).toBe("note");
 	});
 });
 

@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **「新功能」面板恢复版本变更计数与旧版本内容**：面板改为统计每个版本的全部顶层条目，扁平写法（没有 `###` 分类小节）的加粗条目也能生成亮点卡；英文界面提升 EN 正文时保留加粗标题，不再出现「0 项变更」和空白卡片。
+  - EN: The what's-new panel shows version change counts and older release notes again. It counts every top-level bullet per version, lets flat bold bullets (no `###` category heading) become highlight cards, and keeps the bold title when promoting the EN body, so no version reads "0 changes" with an empty card.
+
 - **计算机使用新增「保持后台」策略**：设置 `computer.backgroundFallback`（默认 takeover）为 refuse 时，`delivery: "foreground"`、`raise()`、元素 `focus()` 会在发送前被拒绝并说明后台替代路径；目标窗口返回 `BackgroundUnavailable` 后也不再允许前台重试。
   - EN: Computer use gains a keep-in-background policy: with `computer.backgroundFallback` set to refuse (takeover is the default), `delivery: "foreground"`, `raise()` and element `focus()` fail before anything is sent and name the background route instead, and a `BackgroundUnavailable` result can no longer be retried in the foreground.
 

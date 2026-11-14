@@ -9,10 +9,11 @@
  * React, no imports.
  */
 
-/** The four categorized sections that produce counts and highlight kinds.
- *  Entries under any other heading (e.g. "Breaking Changes") are neither
- *  counted nor highlighted. */
-export type ChangelogHighlightKind = "added" | "fixed" | "changed" | "removed";
+/** Highlight kinds. The four categorized sections map to their heading; a
+ *  bullet that sits directly under the version heading (this changelog's
+ *  usual shape) is a `note` — it is a user-visible change but not one the
+ *  author filed under a category. */
+export type ChangelogHighlightKind = "added" | "fixed" | "changed" | "removed" | "note";
 
 export interface ChangelogHighlight {
 	kind: ChangelogHighlightKind;
@@ -36,7 +37,11 @@ export interface ChangelogVersion {
 	/** Date from the `## [x.y.z] - date` heading ("" when it carries none). */
 	date: string;
 	highlights: ChangelogHighlight[];
+	/** Per-category subtotals; all zero for a flat section. */
 	counts: ChangelogVersionCounts;
+	/** Every top-level bullet in the section, categorized or flat — the
+	 *  number the panel's count badges show. */
+	count: number;
 	/** Raw markdown of this section (heading included) — the full-log
 	 *  fallback and the per-version expandable rows render this verbatim. */
 	markdown: string;
@@ -45,7 +50,10 @@ export interface ChangelogVersion {
 /** Highlights kept per version (the what's-new card shows ≤3). */
 export const HIGHLIGHTS_PER_VERSION = 3;
 
-const KIND_BY_HEADING: Record<string, ChangelogHighlightKind> = {
+/** A category heading never yields the neutral `note` kind. */
+type ChangelogCategory = Exclude<ChangelogHighlightKind, "note">;
+
+const KIND_BY_HEADING: Record<string, ChangelogCategory> = {
 	added: "added",
 	fixed: "fixed",
 	changed: "changed",
@@ -110,7 +118,12 @@ export function localizeChangelogMarkdown(markdown: string, locale: string): str
 /** Parse startup changelog markdown into per-version highlight sections.
  *  `[Unreleased]` sections are skipped; empty input or input without any
  *  version section yields [] (the caller falls back to the raw rendering).
- *  Document order is preserved — the array head is the current version. */
+ *  Document order is preserved — the array head is the current version.
+ *
+ *  Both shapes count: entries filed under `### Added/Fixed/Changed/Removed`
+ *  (upstream-style) and the flat bold-bullet list this repository writes
+ *  directly under the version heading. Flat entries get the neutral `note`
+ *  kind so they still become highlight cards instead of disappearing. */
 export function parseChangelogHighlights(markdown: string): ChangelogVersion[] {
 	if (markdown.trim() === "") return [];
 	const versions: ChangelogVersion[] = [];
@@ -120,8 +133,9 @@ export function parseChangelogHighlights(markdown: string): ChangelogVersion[] {
 		lines: string[];
 		highlights: ChangelogHighlight[];
 		counts: ChangelogVersionCounts;
+		count: number;
 	} | null = null;
-	let kind: ChangelogHighlightKind | null = null;
+	let kind: ChangelogCategory | null = null;
 
 	const push = (): void => {
 		if (!current) return;
@@ -130,6 +144,7 @@ export function parseChangelogHighlights(markdown: string): ChangelogVersion[] {
 			date: current.date,
 			highlights: current.highlights,
 			counts: current.counts,
+			count: current.count,
 			markdown: current.lines.join("\n").trim(),
 		});
 		current = null;
@@ -148,6 +163,7 @@ export function parseChangelogHighlights(markdown: string): ChangelogVersion[] {
 				lines: [line],
 				highlights: [],
 				counts: { added: 0, fixed: 0, changed: 0, removed: 0 },
+				count: 0,
 			};
 			continue;
 		}
@@ -162,11 +178,11 @@ export function parseChangelogHighlights(markdown: string): ChangelogVersion[] {
 		// Top-level bullets only — the indented `  - EN:` child lines never
 		// match, so they can be neither counted nor highlighted.
 		if (!line.startsWith("- ")) continue;
-		const body = line.slice(2);
+		current.count += 1;
 		if (kind) current.counts[kind] += 1;
-		if (!kind || current.highlights.length >= HIGHLIGHTS_PER_VERSION) continue;
-		const parsed = extractHighlight(body);
-		if (parsed) current.highlights.push({ kind, ...parsed });
+		if (current.highlights.length >= HIGHLIGHTS_PER_VERSION) continue;
+		const parsed = extractHighlight(line.slice(2));
+		if (parsed) current.highlights.push({ kind: kind ?? "note", ...parsed });
 	}
 	push();
 	return versions;

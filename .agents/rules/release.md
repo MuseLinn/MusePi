@@ -6,7 +6,7 @@ Load before editing release notes, versioning, publishing, or committing a user-
 
 `packages/coding-agent/CHANGELOG.musepi.md` is the only changelog and the release source for the GUI what's-new panel, `/changelog`, OTA notes, and GitHub release body. Do not create per-package changelog files.
 
-New entries go under `## [Unreleased]` in `Breaking Changes`, `Added`, `Changed`, `Fixed`, or `Removed`. Released sections are immutable. Release tooling normalizes section order and formatting.
+New entries go under `## [Unreleased]` as flat `- **title**：body` bullets; `### Added`-style category headings are optional. The what's-new panel counts every top-level bullet in a version and turns the first three bold bullets into highlight cards, so the bold title is the card heading and must stay meaningful on its own. Released sections are immutable. Release tooling normalizes section order and formatting.
 
 Every Chinese bullet has exactly one indented `- EN:` child containing the complete English translation on one line. Do not use a trailing language section. Run `bun run check:changelog-i18n` before release.
 

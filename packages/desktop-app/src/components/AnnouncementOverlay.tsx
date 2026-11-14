@@ -7,7 +7,7 @@ import {
 	parseChangelogHighlights,
 } from "@musepi/client-core/src/lib/changelog-highlights";
 import { ChevronDown as ChevronDownIconData, ChevronRight as ChevronRightIconData } from "lucide";
-import { ExternalLink, Palette, Sparkles, Trash2, Wrench, X } from "lucide-react";
+import { ExternalLink, Info, Palette, Sparkles, Trash2, Wrench, X } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
@@ -37,12 +37,14 @@ interface StartupChangelog {
 	reward?: RewardPayload | null;
 }
 
-/** Kind → icon for the highlight cards (Added✨/Fixed🔧/Changed🎨/Removed🗑). */
+/** Kind → icon for the highlight cards (Added✨/Fixed🔧/Changed🎨/Removed🗑);
+ *  a flat bullet that carries no category heading reads as a note. */
 const KIND_ICONS: Record<ChangelogHighlightKind, typeof Sparkles> = {
 	added: Sparkles,
 	fixed: Wrench,
 	changed: Palette,
 	removed: Trash2,
+	note: Info,
 };
 
 /* ── Inline styles for the structured highlight cards ─────────────────────
@@ -136,7 +138,7 @@ function OlderVersionRow({
 	expanded: boolean;
 	onToggle(): void;
 }): ReactNode {
-	const total = entry.counts.added + entry.counts.fixed + entry.counts.changed + entry.counts.removed;
+	const total = entry.count;
 	// The markdown mounts on first expand (lazy render) but stays mounted
 	// afterwards so the collapse can animate back to zero height instead of
 	// popping out (the shared Reveal contract).
@@ -436,7 +438,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	}
 
 	const older = versions.slice(1);
-	const currentTotal = current.counts.added + current.counts.fixed + current.counts.changed + current.counts.removed;
+	const currentTotal = current.count;
 	const remaining = Math.max(0, currentTotal - current.highlights.length);
 
 	return (

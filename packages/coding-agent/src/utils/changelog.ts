@@ -278,7 +278,11 @@ function localizeChangelogContent(content: string, locale: ChangelogLocale): str
 				j++;
 			}
 			if (enLine) {
-				out.push(`- ${enLine}`);
+				// Keep the bold title when promoting: it is the highlight
+				// card's heading and the only part of the bullet the GUI can
+				// turn into a title after the Chinese body is dropped.
+				const title = line.match(/^-\s+(\*\*[^*]+\*\*)/)?.[1];
+				out.push(title ? `- ${title}：${enLine}` : `- ${enLine}`);
 				i = j;
 				continue;
 			}
