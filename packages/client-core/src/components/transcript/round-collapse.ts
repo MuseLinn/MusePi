@@ -21,6 +21,7 @@ import {
 import { diffStats } from "../../tool-render/tools/edit";
 import { isRecord } from "../../tool-render/util";
 import { classifyTranscriptRow, isProgressUpdateRow } from "./row-kinds";
+import { isArtifactTool, resultPicturesOf } from "./tool-media";
 
 export { isTurnStartEntry as isTurnStart };
 
@@ -62,9 +63,12 @@ export interface RoundFold {
 	/** Fold-preview text: last non-empty working snippet, else "completed". */
 	preview: string;
 	/** Absolute indexes of entries that must stay visible even while the
-	 *  fold is closed: (a) assistant messages carrying SUCCESSFUL widget tool
-	 *  calls — the widget card IS the turn's artifact; (b) tail
-	 *  and hook rows (design doc §C) — turn accompaniment, not process. */
+	 *  fold is closed: (a) assistant messages carrying SUCCESSFUL artifact
+	 *  tool calls (widget/board/schedule_task — the card IS the turn's
+	 *  artifact); (b) assistant messages whose tool call produced a picture
+	 *  (generated image or a hoisted result image — media is output, not
+	 *  process); (c) tail and hook rows (design doc §C) — turn
+	 *  accompaniment, not process. */
 	exempt: number[];
 }
 
@@ -132,8 +136,9 @@ function countWorkInside(
 	exploreCount: number;
 	changes: { filesChanged: number; added: number; removed: number };
 	preview: string;
-	/** Assistant-message indexes whose widget calls produced a successful
-	 *  result — those rows stay visible while the fold is closed. */
+	/** Assistant-message indexes whose successful tool call produced
+	 *  artifact OR picture content — those rows stay visible while the fold
+	 *  is closed. */
 	exempt: number[];
 } {
 	let toolCount = 0;
@@ -142,7 +147,9 @@ function countWorkInside(
 	let preview = "";
 	const changeState = { files: new Set<string>(), added: 0, removed: 0 };
 	const exempt: number[] = [];
-	const widgetCalls = new Map<string, number>();
+	/** toolCallId → the assistant row carrying the call (its result arrives on
+	 *  a later row, so the owner is only knowable then). */
+	const callOwners = new Map<string, number>();
 	for (let i = start; i <= end; i++) {
 		const e = entries[i];
 		// Design doc §C: tail rows (retry_failure / async-result) and hook
@@ -169,19 +176,26 @@ function countWorkInside(
 		} else if (m.role === "toolResult") {
 			if (DIFF_TOOLS.has(m.toolName)) foldChanges(m, changeState);
 			if (EXPLORE_TOOLS.has(m.toolName)) exploreCount++;
-			// A settled successful widget result promotes its assistant row
-			// (the one carrying the matching toolCall block) out of the fold —
-			// the standalone card is the deliverable, not process noise.
-			if (m.toolName === "widget" && m.isError !== true) {
-				const owner = widgetCalls.get((m as { toolCallId?: string }).toolCallId ?? "");
-				if (owner !== undefined && !exempt.includes(owner)) exempt.push(owner);
+			// A settled SUCCESSFUL call that produced the turn's artifact or a
+			// picture promotes its assistant row out of the fold — the card and
+			// the picture are the deliverable, not process noise. The picture
+			// read is the tool card's own (tool-media), so a card that renders
+			// media inline is never hidden behind this fold.
+			const owner = callOwners.get((m as { toolCallId?: string }).toolCallId ?? "");
+			if (
+				owner !== undefined &&
+				m.isError !== true &&
+				(isArtifactTool(m.toolName) || resultPicturesOf(m).length > 0) &&
+				!exempt.includes(owner)
+			) {
+				exempt.push(owner);
 			}
 			if (!preview) preview = toolResultSnippet(m);
 		} else if (m.role === "assistant") {
 			for (const block of m.content) {
 				if (block.type === "toolCall") {
 					toolCount++;
-					if (block.name === "widget") widgetCalls.set(block.id, i);
+					callOwners.set(block.id, i);
 				}
 			}
 		}
@@ -367,8 +381,8 @@ function pushFold(
 /** True when the entry at `idx` belongs inside a fold's foldable span. */
 export function isInsideFold(folds: readonly RoundFold[], idx: number): boolean {
 	// The reply row is never hidden (see finalIdx): expanding a fold must not
-	// swallow the answer the turn produced. Widget rows (see exempt) stay
-	// visible too — the widget card IS the artifact.
+	// swallow the answer the turn produced. Exempt rows (artifact cards,
+	// pictures, tail/hook accompaniment) stay visible too — see `exempt`.
 	// endIdx is INCLUSIVE (it is the turn's last row).
 	return folds.some(f => idx > f.startIdx && idx <= f.endIdx && idx !== f.finalIdx && !f.exempt.includes(idx));
 }

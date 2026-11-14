@@ -703,7 +703,8 @@ interface EntryRowProps {
 	 *  the row's gutter, so a collapsed turn shows orb + 活动 + answer on ONE line
 	 *  instead of the orb floating on a blank row of its own. */
 	foldHeader?: ReactNode;
-	/** Collapsed 活动 fold: render this row's TEXT blocks only (see AssistantBody). */
+	/** Collapsed 活动 fold: render this row's TEXT blocks plus the media a tool
+	 *  call produced (see AssistantBody). */
 	textOnly?: boolean;
 	showTokenUsage?: boolean;
 	/** The usage row renders on the round's FINAL reply only (the wire stamps
@@ -2414,9 +2415,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// included — so a per-message gate drew a raw stat line under each
 		// tool row).
 		const usageHere = isAssistantMessage && (isReplyRow || absIdx === lastAssistantIdx);
-		// Widget rows (successful widget toolCalls, see round-collapse
-		// exempt) stay mounted while the fold is closed: the standalone
-		// card is the turn's artifact, not process noise.
+		// Exempt rows (artifact cards, produced pictures, tail/hook rows — see
+		// round-collapse `exempt`) stay mounted while the fold is closed: they
+		// are the turn's output, not its process noise.
 		const isExemptRow = fold?.exempt.includes(absIdx) === true;
 		const inHiddenSpan = fold !== undefined && !isHeaderRow && !isReplyRow && !isExemptRow;
 		// ── 工具调用汇总 (Kimi parity) ────────────────────────────────────
@@ -2545,7 +2546,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						agentGutter={rowOwnsOrb ? agentGutter : ""}
 						userPlain={userPlain}
 						collapseLongUserMessages={collapseLongUserMessages}
-						hideToolActivity={rowHideTools || rowTextOnly}
+						hideToolActivity={rowHideTools}
 						textOnly={rowTextOnly}
 						showTokenUsage={showTokenUsage}
 						usageHere={usageHere}

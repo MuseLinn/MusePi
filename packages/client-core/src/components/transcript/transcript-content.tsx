@@ -40,6 +40,7 @@ import { requestQuoteReveal } from "./quote-highlight";
 import type { RoundFold, ToolRunSummary } from "./round-collapse";
 import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
+import { resultPicturesOf } from "./tool-media";
 import type { TurnFileChange } from "./turn-files.js";
 import { TurnFilesCard } from "./turn-files-card.js";
 import type { TurnSources } from "./turn-sources.js";
@@ -1220,9 +1221,10 @@ export function AssistantBody({
 	host?: ToolRenderHost;
 	/** display.hideToolActivity parity: drop toolCall cards. */
 	hideToolActivity?: boolean;
-	/** Collapsed 活动 fold's reply row: render TEXT blocks only. The turn's
-	 *  process (thinking + tool calls) folds into the activity row, so the
-	 *  closed turn reads as "活动 … " + the answer, openchamber's model. */
+	/** Collapsed 活动 fold's reply row: render TEXT blocks (plus the media a
+	 *  tool call produced). The turn's process (thinking + tool cards) folds
+	 *  into the activity row, so the closed turn reads as "活动 … " + the
+	 *  answer, openchamber's model. */
 	textOnly?: boolean;
 	/** display.showTokenUsage parity: gate the per-turn usage row. */
 	showTokenUsage?: boolean;
@@ -1300,12 +1302,31 @@ export function AssistantBody({
 					/>
 				);
 			case "toolCall": {
-				// Caller-decided: Transcript passes `hideToolActivity && !foldOpen`
-				// per row, so an EXPANDED 活动 row always shows its process while
-				// the setting still hides it everywhere else (including the live
-				// round). Suppressing the row outright — the old behaviour — left
-				// the process unreachable whenever the round produced no fold.
-				if (hideToolActivity || textOnly) return null;
+				// Caller-decided: Transcript passes `hideToolActivity` per row, so
+				// an EXPANDED 活动 row always shows its process while the setting
+				// still hides it everywhere else (including the live round).
+				// Suppressing the row outright — the old behaviour — left the
+				// process unreachable whenever the round produced no fold.
+				if (textOnly) {
+					// A closed 活动 fold reads as the answer: thinking and tool
+					// cards are process. A picture the call produced is output, so
+					// the reply keeps its media row without the card body
+					// (tool-media is the same read the fold's exemption uses).
+					const produced = results.get(block.id);
+					if (hideToolActivity || resultPicturesOf(produced).length === 0) return null;
+					return (
+						<ToolCard
+							key={block.id}
+							toolCallId={block.id}
+							name={block.name}
+							args={block.arguments}
+							result={produced}
+							mediaOnly
+							onPreviewImage={onPreviewImage}
+						/>
+					);
+				}
+				if (hideToolActivity) return null;
 				const act = active.get(block.id);
 				const result = results.get(block.id);
 				const args = act?.args ?? block.arguments;

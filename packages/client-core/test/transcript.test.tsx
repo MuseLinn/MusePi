@@ -80,6 +80,49 @@ function userEntry(timestamp: number): SessionEntry {
 	};
 }
 
+const PICTURE_DATA = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+/** One turn that generated a picture: prompt → generate_image call → result →
+ *  reply. `generate_image` keeps the bytes in `details.images` (no content
+ *  image block), the shape the production tool emits. With
+ *  `replyCarriesCall` the generating call rides the FINAL text message — the
+ *  fold's text-only reply path — instead of a process row before it. */
+function imageGenTurn({ replyCarriesCall }: { replyCarriesCall: boolean }): SessionEntry[] {
+	const call = { type: "toolCall", id: "gen-1", name: "generate_image", arguments: { subject: "a lake" } };
+	const result = {
+		type: "message",
+		id: "gen-result",
+		parentId: null,
+		timestamp: "2026-07-09T00:00:01Z",
+		message: {
+			role: "toolResult",
+			toolCallId: "gen-1",
+			toolName: "generate_image",
+			content: [{ type: "text", text: "Generated 1 image(s):" }],
+			details: { provider: "agnes", images: [{ data: PICTURE_DATA, mimeType: "image/png" }] },
+			isError: false,
+			timestamp: 2,
+		},
+	} as unknown as SessionEntry;
+	const assistant = (id: string, timestamp: number, content: unknown[], stopReason: string): SessionEntry =>
+		({
+			type: "message",
+			id,
+			parentId: null,
+			timestamp: "2026-07-09T00:00:01Z",
+			message: { role: "assistant", content, model: "test/model", usage: assistantUsage(), stopReason, timestamp },
+		}) as unknown as SessionEntry;
+	if (replyCarriesCall) {
+		return [userEntry(1), assistant("reply", 2, [{ type: "text", text: "here it is" }, call], "stop"), result];
+	}
+	return [
+		userEntry(1),
+		assistant("work", 2, [call], "toolUse"),
+		result,
+		assistantEntry({ timestamp: 3, text: "here it is" }),
+	];
+}
+
 function renderTranscript(props: {
 	entries?: readonly SessionEntry[];
 	activeTools?: ReadonlyMap<string, ActiveTool>;
@@ -685,6 +728,26 @@ describe("Transcript display-settings parity (TUI)", () => {
 		expect(html).toContain("reply 2"); // the answer always reads
 		// Hidden process rows stay mounted inside the animation slot.
 		expect(countElements(html, ".tr-fold-slot")).toBeGreaterThanOrEqual(1);
+	});
+
+	it("keeps a produced picture visible when the turn is folded", () => {
+		// generate_image carries the bytes in `details.images` (out of model
+		// context), so the picture has no content block to hoist. The closed
+		// turn must not hide it behind the fold's zero-height slot.
+		const html = renderTranscript({ entries: imageGenTurn({ replyCarriesCall: false }), working: false });
+		expect(countElements(html, ".tr-round-fold")).toBe(1); // the round folded
+		expect(html).toContain(PICTURE_DATA);
+		expect(countElements(html, ".tr-fold-slot img")).toBe(0);
+	});
+
+	it("keeps a picture that the reply itself produced (text-only reply is not text-only about media)", () => {
+		// The reply owns the generating call, so the fold's text-only reply
+		// would drop the block outright — the picture must survive without
+		// expanding the fold.
+		const html = renderTranscript({ entries: imageGenTurn({ replyCarriesCall: true }), working: false });
+		expect(countElements(html, ".tr-round-fold")).toBe(1);
+		expect(html).toContain(PICTURE_DATA);
+		expect(countElements(html, ".tr-fold-slot img")).toBe(0);
 	});
 
 	it("keeps one agent orb per turn when a tail row splits the agent rows", () => {

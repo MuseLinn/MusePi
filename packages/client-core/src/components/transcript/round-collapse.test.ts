@@ -102,6 +102,88 @@ describe("buildRoundFolds tail/hook exemption (design doc §C)", () => {
 	});
 });
 
+describe("buildRoundFolds output exemption (artifact cards and produced pictures)", () => {
+	/** A tool result carrying `details` (image generators keep the picture in
+	 *  `details.images`, out of model context). */
+	const richResult = (toolCallId: string, toolName: string, extra: { details?: unknown; isError?: boolean } = {}) =>
+		withId({
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolCallId,
+				toolName,
+				content: [{ type: "text", text: "out" }],
+				isError: extra.isError ?? false,
+				...(extra.details !== undefined ? { details: extra.details } : {}),
+				timestamp: 1,
+			},
+		});
+
+	const imageDetails = { provider: "agnes", images: [{ data: "Zm9v", mimeType: "image/png" }] };
+
+	test("an artifact card (board) keeps its row visible while the fold is closed", () => {
+		const entries = [userMsg(), assistantToolCall("c1", "board"), richResult("c1", "board"), assistantText("done")];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]!.exempt).toContain(1);
+		expect(isInsideFold(folds, 1)).toBe(false);
+	});
+
+	test("a generated picture keeps the row that produced it visible", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1", "generate_image"),
+			richResult("c1", "generate_image", { details: imageDetails }),
+			assistantText("here it is"),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]!.exempt).toContain(1);
+		expect(isInsideFold(folds, 1)).toBe(false);
+	});
+
+	test("a content image block keeps its row visible too (read image / inspect_image)", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1", "read"),
+			withId({
+				type: "message",
+				message: {
+					role: "toolResult",
+					toolCallId: "c1",
+					toolName: "read",
+					content: [
+						{ type: "text", text: "Read image file [image/png]" },
+						{ type: "image", data: "Zm9v", mimeType: "image/png" },
+					],
+					isError: false,
+					timestamp: 1,
+				},
+			}),
+			assistantText("done"),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(isInsideFold(folds, 1)).toBe(false);
+	});
+
+	test("an ERRORED generating call still folds (nothing was produced)", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1", "generate_image"),
+			richResult("c1", "generate_image", { details: imageDetails, isError: true }),
+			assistantText("failed"),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]!.exempt).not.toContain(1);
+		expect(isInsideFold(folds, 1)).toBe(true);
+	});
+
+	test("a plain text result still folds (the exemption is not every tool row)", () => {
+		const entries = [userMsg(), assistantToolCall("c1"), toolResult("c1"), assistantText("done")];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]!.exempt).not.toContain(1);
+		expect(isInsideFold(folds, 1)).toBe(true);
+	});
+});
+
 const bash = (): SessionEntry =>
 	withId({
 		type: "message",

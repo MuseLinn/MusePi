@@ -5,26 +5,33 @@ import { t } from "../../i18n/index.js";
 import { messageText } from "../../lib/format";
 import { ToolView } from "../../tool-render/ToolView";
 import type { ToolRenderHost, ToolResultImage } from "../../tool-render/types";
-import { computerShotsOf, detailsRecord, resultImagesOf } from "../../tool-render/util";
+import { detailsRecord } from "../../tool-render/util";
 import { ImageCardStack } from "./image-card-stack";
+import { isArtifactTool, resultPicturesOf, toolShotsOf } from "./tool-media";
 import { toolKind } from "./toolcard-shared";
 import { WidgetCard, widgetPayloadFromResult, widgetStandaloneEnabled } from "./widget-standalone";
 
-/** Hoist a tool result's image blocks out of the foldable card: the card
- *  keeps the text/log content (its ZCode summary), while the media renders
- *  inline in the message flow. Returns the extracted images (for the inline
- *  stack) plus a copy of the result with those image blocks removed so the
- *  card body never re-renders them. Artifact cards keep their media inside. */
+/** Hoist a tool result's pictures out of the foldable card: the card keeps the
+ *  text/log content (its ZCode summary), while the media renders inline in the
+ *  message flow. Both channels are hoisted — content image blocks and
+ *  `details.images` (image generators, see tool-media) — and stripped from the
+ *  card result so the body never re-renders them. Artifact cards keep their
+ *  media inside. */
 export function hoistToolMedia(
 	result: ToolResultMessage | undefined,
 	keepMediaInside: boolean,
 ): { images: ToolResultImage[]; cardResult: ToolResultMessage | undefined } {
 	if (!result || keepMediaInside) return { images: [], cardResult: result };
-	const images = resultImagesOf(result);
+	const images = resultPicturesOf(result);
 	if (images.length === 0) return { images: [], cardResult: result };
+	const details = detailsRecord(result);
 	return {
 		images,
-		cardResult: { ...result, content: result.content.filter(block => block.type !== "image") },
+		cardResult: {
+			...result,
+			content: result.content.filter(block => block.type !== "image"),
+			...(details !== null && Array.isArray(details.images) ? { details: { ...details, images: [] } } : {}),
+		},
 	};
 }
 
@@ -43,22 +50,18 @@ export interface ToolCardProps {
 	/** Open the transcript-level full-size image preview (lightbox) at this
 	 *  tool's inline media; images are hoisted out of the folded card. */
 	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	/** Optional: the turn's picture only. A closed turn's reply renders text,
+	 *  but keeps its media row (the card body stays out) — see
+	 *  round-collapse's media exemption. */
+	mediaOnly?: boolean;
 }
 
 /** Widget cards render expanded by default (GUI setting
  *  musepi-gui-widget-expanded, written by the appearance chat PrefToggle as
  *  "1"/"0": unset or "1" → expanded, "0" → collapsed; default on — the card
- *  IS the visualization). Board cards render the board itself — same
- *  artifact semantics. Both are turn *artifacts*, so they never
- *  auto-collapse when the turn completes (process tools fold away, the
- *  artifact stays). */
-function isArtifactCard(name: string): boolean {
-	// `schedule_task` joins them (issue #11): the card is the deliverable the
-	// user asked for (a structured task summary + the jump to the task
-	// center), not process noise to fold away when the turn ends.
-	return name === "widget" || name === "board" || name === "schedule_task" || name === "notify_user";
-}
-
+ *  IS the visualization). Artifact cards (`tool-media.isArtifactTool`) never
+ *  auto-collapse when the turn completes: process tools fold away, the
+ *  artifact stays. */
 function widgetDefaultOpen(): boolean {
 	try {
 		return localStorage.getItem("musepi-gui-widget-expanded") !== "0";
@@ -74,7 +77,7 @@ function widgetDefaultOpen(): boolean {
  *  it in the message flow (craft-agents message-image parity) so the user
  *  never has to expand a folded card to see the picture. */
 export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode {
-	const { name, intent, args, result, running, partialResult, host, taskCardStyle, onPreviewImage } = props;
+	const { name, intent, args, result, running, partialResult, host, taskCardStyle, mediaOnly, onPreviewImage } = props;
 	const partial =
 		running && !result ? (typeof partialResult === "string" ? partialResult : messageText(partialResult)) : "";
 	const structuredPartial =
@@ -101,15 +104,15 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	// inline (standalone display off).
 	const artifactDefaultOpen = name === "widget" ? widgetDefaultOpen() : true;
 	// Artifact cards own their visualization (widget/board) — leave their
-	// media inside. For every other tool, strip image blocks out of the
-	// card content so the fold never re-hides them, and render them inline.
-	const isArtifact = isArtifactCard(name);
+	// media inside. For every other tool, strip pictures out of the card
+	// content so the fold never re-hides them, and render them inline.
+	const isArtifact = isArtifactTool(name);
 	const { images, cardResult } = hoistToolMedia(effectiveResult, isArtifact);
 	// Computer screenshots live in `details.screenshots` (not content
-	// blocks), so the generic image-block hoist misses them — pull them out
-	// here too, and blank them from the card result (with a screenshotCount
-	// fallback for the summary badge) so the folded body never duplicates.
-	const shotSrcs = !isArtifact && name === "computer" ? computerShotsOf(effectiveResult) : [];
+	// blocks), so the picture hoist misses them — pull them out here too, and
+	// blank them from the card result (with a screenshotCount fallback for the
+	// summary badge) so the folded body never duplicates.
+	const shotSrcs = isArtifact ? [] : toolShotsOf(name, effectiveResult);
 	let mediaResult = cardResult;
 	if (shotSrcs.length > 0 && mediaResult) {
 		const details = detailsRecord(mediaResult);
@@ -122,6 +125,13 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 		})),
 		...shotSrcs.map((src, i) => ({ src, alt: t("tools.computerScreenshotWithCount", { count: String(i + 1) }) })),
 	];
+	// A closed turn's reply keeps its picture without the card (AssistantBody
+	// passes this when the text-only reply is a media row).
+	if (mediaOnly) {
+		return mediaItems.length > 0 ? (
+			<ImageCardStack items={mediaItems} onOpen={idx => onPreviewImage?.(mediaItems, idx)} />
+		) : null;
+	}
 	return (
 		<>
 			<ToolView

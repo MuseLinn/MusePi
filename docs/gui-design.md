@@ -489,7 +489,7 @@ turn
 └── hookInvocations    hook 行（mono 细条 + 左边线）—— 永不进折叠
 ```
 
-**折叠边界规则**：① 段划分 = 原始输入 + 每条 accepted guide 各一段（ZCode `workSegments` 语义），段内保持 CLI row 全序；② 历史轮一律折叠，当前轮工作段默认展开随流式追加；③ 聚合状态取段内最差（任一 err → err；否则 running；否则 ✓），耗时为段内工具耗时之和；④ 折叠的是"工作过程"不是"信息"——latestAssistantTextRow / tail rows / hook 行 / 用户气泡一律不参与折叠；⑤ 展开/收起 `--spring-liquid` 0.25s，chevron 旋转同步。与既有 pre-compaction 折叠（`collapseCompacted`，按时间切）独立共存。
+**折叠边界规则**：① 段划分 = 原始输入 + 每条 accepted guide 各一段（ZCode `workSegments` 语义），段内保持 CLI row 全序；② 历史轮一律折叠，当前轮工作段默认展开随流式追加；③ 聚合状态取段内最差（任一 err → err；否则 running；否则 ✓），耗时为段内工具耗时之和；④ 折叠的是"工作过程"不是"信息"——latestAssistantTextRow / tail rows / hook 行 / 用户气泡，以及产出物（`widget` / `board` / `schedule_task` 卡片，工具产出的图片——内容 image 块与 `generate_image` 的 `details.images` 同一条路径）所在行一律不参与折叠，折叠关闭态与回言行只收起卡片外壳；⑤ 展开/收起 `--spring-liquid` 0.25s，chevron 旋转同步。与既有 pre-compaction 折叠（`collapseCompacted`，按时间切）独立共存。
 
 **IRC 流量行（`irc:*`）**：每条消息一行，不并入工作段折叠。路由（`from → to`）由 `details` 组成，`content` 里的 `[IRC …]` 头与 incoming 的 `<irc>` 模板都不渲染；三种 kind 只差视觉权重——`relay`（旁观的双方流量）最轻，`incoming` 读作发给当前会话，`autoreply` 带 `auto` / `reply` 标签。同一对 agent 的连续消息共享一次路由头，正文超过 3 行截断并提供显式展开——一段往返问答不再逐条重复发言人。展开/收起复用共享 collapse morph：clamp 在开始展开时摘下、收起结束后再挂回，高度按 220ms `--spring` 过渡，不会瞬跳。
 

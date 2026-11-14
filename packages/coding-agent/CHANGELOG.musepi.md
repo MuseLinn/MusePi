@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **折叠的回合保留产出图片与看板卡**：消息自动折叠或工具汇总收起一轮时，工具产出的图片（含 `generate_image` 存在 `details.images` 里的成图）、`widget` / `board` / `schedule_task` 卡片所在行不再随工作段消失；折叠关闭态与回答行都只收起卡片外壳，不收起图片本身，卡片里的图片也统一提到卡片外渲染（`read` 图片与生成图同一条路径）。
+  - EN: A folded turn keeps the pictures it produced and its board cards. Auto-fold or the tool-call summary no longer swallows the row that holds images (including `generate_image`'s bytes in `details.images`) or a `widget` / `board` / `schedule_task` card; the closed turn and its reply fold the card chrome but not the picture, and pictures render outside the card body on one path for read and generated images alike.
+
 - **计算机使用支持 Windows 原生菜单**：`win.menu(path?)` 读取窗口附加的原生菜单层级，`win.menuSelect(path)` 按标签选择叶子命令。标签匹配精确大小写不敏感优先、再忽略尾部省略号，歧义、禁用项与子菜单一律报错；命令按菜单样式用 `WM_COMMAND` / `WM_MENUCOMMAND` 投递，投递前重新解析整条路径以防菜单变化，跨完整性（UIPI）目标明确拒绝。自绘菜单的应用改走 UI Automation（菜单栏 → 菜单项，按 provider 的命令模式调用），只有 provider 未暴露的菜单才明确报不可用并指向 AX 的 `menuitem` 角色。
   - EN: Computer use gains Windows native menus: `win.menu(path?)` reads the window's attached menu levels and `win.menuSelect(path)` chooses a leaf command by label. Matching is case-insensitive first and ellipsis-normalized second; ambiguous labels, disabled items and submenus are errors. Commands dispatch through `WM_COMMAND` / `WM_MENUCOMMAND` per the menu's style, the whole path is re-resolved immediately before dispatch, and a higher-integrity target is refused under UIPI. Windows that draw their own menus are read through UI Automation (menu bar → items, invoked with the provider's command pattern); only a menu the provider does not expose is refused and points at AX `menuitem` roles.
 
