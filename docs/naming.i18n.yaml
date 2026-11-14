@@ -1,5 +1,5 @@
 # Consistency record for naming.md / naming.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/naming
-naming.md: 35d177c58eca5b6ddcc040117ad525f63a7c6768
-naming.zh-CN.md: ead44fac5cca0dd374717b6afe5aff504154dfad
+naming.md: 6775271da4f1433601bfdc4d6acf3097e91a47f0
+naming.zh-CN.md: 3f1d3ebaea490a8b871a70d2346b1c02f81c0ca4

@@ -1,5 +1,5 @@
 # Regenerate MusePi Android (Capacitor) brand assets from the orb master in
-# packages/desktop-app/build/.
+# apps/desktop/build/.
 #
 # Brand constants and the raster loaders are imported from
 # scripts/regen-brand-icons.py (single source of truth — the geometry lives in

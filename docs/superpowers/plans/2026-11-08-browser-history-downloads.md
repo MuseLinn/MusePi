@@ -31,8 +31,8 @@
 ### Task 1: Persistent record store
 
 **Files:**
-- Create: `packages/desktop-app/electron/managed-browser-records.cjs`
-- Create: `packages/desktop-app/test/managed-browser-records.test.cjs`
+- Create: `apps/desktop/electron/managed-browser-records.cjs`
+- Create: `apps/desktop/test/managed-browser-records.test.cjs`
 
 **Interfaces:**
 - Produces `ManagedBrowserRecordStore` with `recordHistory`, `beginDownload`, `updateDownload`, `history()`, `downloads()`.
@@ -44,9 +44,9 @@
 ### Task 2: Navigation/download lifecycle and loopback
 
 **Files:**
-- Modify: `packages/desktop-app/electron/managed-browser.cjs`
-- Modify: `packages/desktop-app/test/managed-browser-menu-ipc.test.cjs`
-- Create: `packages/desktop-app/test/managed-browser-records-ipc.test.cjs`
+- Modify: `apps/desktop/electron/managed-browser.cjs`
+- Modify: `apps/desktop/test/managed-browser-menu-ipc.test.cjs`
+- Create: `apps/desktop/test/managed-browser-records-ipc.test.cjs`
 
 **Interfaces:**
 - Controller serves `/musepi/history` and `/musepi/downloads` from the store, while recording actual lifecycle events.

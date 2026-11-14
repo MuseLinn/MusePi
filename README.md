@@ -109,10 +109,10 @@ flowchart LR
 
 | Area | Responsibility |
 | --- | --- |
-| `packages/desktop-app` | Electron shell, desktop renderer, official GUI plugins, installer and updater |
+| `apps/desktop` | Electron shell, desktop renderer, official GUI plugins, installer and updater |
 | `packages/client-core` | Shared React components, transcript, widgets, i18n, and collab web UI |
 | `packages/coding-agent` | CLI, daemon, sessions, tools, bundled Cordis plugins, and extension runtime |
-| `packages/mobile`, `packages/harmony` | Android and HarmonyOS shells |
+| `apps/mobile`, `apps/harmony` | Android and HarmonyOS shells |
 | `packages/collab-proto`, `packages/wire`, `packages/sdk` | Transport, persisted contracts, and client SDK |
 | `packages/agent`, `packages/ai`, `packages/catalog` | Agent loop, provider client, and model catalog |
 | `packages/tui` | Terminal UI |
@@ -138,7 +138,7 @@ Useful entry points:
 ```sh
 bun run musepi
 bun --cwd=packages/coding-agent src/cli.ts serve --port 8300
-bun run --cwd=packages/desktop-app desktop
+bun run --cwd=apps/desktop desktop
 ```
 
 Do not edit `packages/catalog/src/models.json` directly; update its generator and regenerate. Tests and smoke runs must use isolated configuration and daemon directories. See `AGENTS.md` and `.agents/rules/` for engineering and verification rules.

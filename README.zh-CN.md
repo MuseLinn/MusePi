@@ -109,10 +109,10 @@ flowchart LR
 
 | 区域 | 职责 |
 | --- | --- |
-| `packages/desktop-app` | Electron 壳、桌面渲染端、官方 GUI 插件、安装器与更新器 |
+| `apps/desktop` | Electron 壳、桌面渲染端、官方 GUI 插件、安装器与更新器 |
 | `packages/client-core` | 共享 React 组件、转录、widget、i18n 和协作 Web UI |
 | `packages/coding-agent` | CLI、daemon、会话、工具、内置 Cordis 插件和扩展运行时 |
-| `packages/mobile`、`packages/harmony` | Android 与 HarmonyOS 壳 |
+| `apps/mobile`、`apps/harmony` | Android 与 HarmonyOS 壳 |
 | `packages/collab-proto`、`packages/wire`、`packages/sdk` | 传输、持久化契约和客户端 SDK |
 | `packages/agent`、`packages/ai`、`packages/catalog` | 智能体循环、供应商客户端和模型目录 |
 | `packages/tui` | 终端界面 |
@@ -138,7 +138,7 @@ bun run lint             # Biome 与 Rust lint
 ```sh
 bun run musepi
 bun --cwd=packages/coding-agent src/cli.ts serve --port 8300
-bun run --cwd=packages/desktop-app desktop
+bun run --cwd=apps/desktop desktop
 ```
 
 不要直接编辑 `packages/catalog/src/models.json`；应修改生成器并重新生成。测试与冒烟运行必须使用隔离的配置和 daemon 目录。工程与验证规则见 `AGENTS.md` 和 `.agents/rules/`。

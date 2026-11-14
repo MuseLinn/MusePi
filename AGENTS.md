@@ -21,7 +21,7 @@ This file is the always-loaded hot path: execution boundaries, repository routin
 | `packages/ai` | Provider-neutral LLM streaming client |
 | `packages/catalog` | Model catalog, provider descriptors, model identity and thinking policies |
 | `packages/client-core` | Shared GUI rendering and client state |
-| `packages/desktop-app` | Electron shell and desktop GUI |
+| `apps/desktop` | Electron shell and desktop GUI |
 | `packages/tui` | Terminal UI and differential rendering |
 | `packages/wire`, `packages/collab-proto` | Persisted/wire and GUI/daemon contracts |
 | `packages/utils`, `packages/natives`, `crates/pi-natives` | Shared utilities and native operations |

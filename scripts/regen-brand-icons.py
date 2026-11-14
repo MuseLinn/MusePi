@@ -1,5 +1,5 @@
 # Regenerate MusePi brand icon assets from the orb master in
-# packages/desktop-app/build/.
+# apps/desktop/build/.
 #
 # The SVG set there is the ONLY geometry source (icon.svg plus its size
 # variants); this script never draws the mark itself. It shells out to

@@ -5,7 +5,7 @@ status: living
 summary: MusePi 应用内通知栈的 API、存活时长、位置、堆叠交互与可访问性规范。
 scope:
   - packages/client-core
-  - packages/desktop-app
+  - apps/desktop
 lang: zh-CN
 ---
 
@@ -13,7 +13,7 @@ lang: zh-CN
 
 [English](gui-notification-spec.md) | 中文
 
-状态：现行契约。实现位于 `packages/client-core/src/lib/action-toast.ts`（store）、`packages/desktop-app/src/components/ActionToast.tsx`（桌面视图）与 `packages/client-core/src/components/shell/Toasts.tsx`（guest/mobile 视图）。
+状态：现行契约。实现位于 `packages/client-core/src/lib/action-toast.ts`（store）、`apps/desktop/src/components/ActionToast.tsx`（桌面视图）与 `packages/client-core/src/components/shell/Toasts.tsx`（guest/mobile 视图）。
 
 ## 1. 这个表面负责什么
 
@@ -22,7 +22,7 @@ lang: zh-CN
 它不负责：
 
 - OTA 更新卡（`UpdateToast` / `UpdateDialog`）——与桌面右下角共用锚点列，但状态独立；
-- 系统通知（`packages/desktop-app/src/lib/notify.ts`，设置 → 通知与音效）；
+- 系统通知（`apps/desktop/src/lib/notify.ts`，设置 → 通知与音效）；
 - 常驻通知中心或历史记录。通知离开后即消失。
 
 ## 2. API
@@ -60,7 +60,7 @@ kind 只决定前置图标与染色，玻璃底色保持中性：
 - **直接调用**——任意面板调用 `pushActionToast`；两个 shell 共用同一个 store。
 - **`musepi-gui-toast`**——`window` 上的 `CustomEvent`。`detail` 可以是字符串，或 `ActionToastInput` 形状的对象；缺省 `kind` 为 `error`，保留旧错误横幅的语义。
 - **扩展**——编译插件把 `lib/action-toast` 绑定到 `window.MusePiHostModules["action-toast"]`，插件与宿主共享同一份列表。
-- **daemon 会话事件**——桌面会话 store 经 `packages/desktop-app/src/lib/session-notice.ts` 映射：
+- **daemon 会话事件**——桌面会话 store 经 `apps/desktop/src/lib/session-notice.ts` 映射：
 
 | 事件 | 结果 |
 | --- | --- |

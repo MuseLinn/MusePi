@@ -4,7 +4,7 @@ title: GUI 设计与交互契约
 status: living
 summary: 桌面端与共享客户端 UI 的视觉、交互、动效和液态玻璃规范。
 scope:
-  - packages/desktop-app
+  - apps/desktop
   - packages/client-core
 lang: zh-CN
 ---
@@ -12,7 +12,7 @@ lang: zh-CN
 # MusePi GUI 设计规范
 
 [English](gui-design.md) | 中文
-> 状态:**活文档**(2026-08-06 建立)——规定 `packages/desktop-app` / `packages/client-core` 的**设计风格与交互标准**(长什么样、怎么动、怎么组织)。与实现同步,实现文件为准。
+> 状态:**活文档**(2026-08-06 建立)——规定 `apps/desktop` / `packages/client-core` 的**设计风格与交互标准**(长什么样、怎么动、怎么组织)。与实现同步,实现文件为准。
 >
 > 实现契约、daemon RPC 形状、踩坑记录与验证方法见 **`docs/gui-implementation.md`**(2026-08-06 从本文件拆出)。早期线稿/架构稿(gui-prototype / gui-architecture / gui-migration)已删除——实现早已交付,以本文档与 gui-implementation 为准。
 >
@@ -144,7 +144,7 @@ lang: zh-CN
 - **分段控件 = 单一滑块(2026-09-21)**:所有多选一都渲染共享的 `Segmented`(`packages/client-core/src/components/shell/Segmented.tsx`,样式在 `guest-client/src/styles/tokens.css` § Segmented control)——不要再新写 `.gui-segmented`/`.gui-seg-btn` 一行,也不要让每个按钮各自换背景(N 次重绘 + 硬跳;滑块只是一次合成的 transform)。几何契约:段为 `flex: 1 1 0` 且**没有 gap**,所以滑块宽恰为 `calc((100% - 4px) / var(--seg-count))`,并以自身宽度步进 `translateX(calc(var(--seg-index) * 100%))`;React 只写 `--seg-count`/`--seg-index`,其余几何归 CSS。手感规则:悬停**预览**落点(`thumbIndex = hoverIndex ?? activeIndex`),点击只是落定;transition 在挂载后一帧才 arm(`gui-seg--armed`),否则每个控件都会从第 0 格滑进来;重复点击的抖动动画用独立 `translate` 属性,绝不用 `transform`——`transform` 存着段位移,动画它会让滑块弹回第 0 格;`gui-motion-off`(设置 动效 → 关闭)与 `prefers-reduced-motion` 都会去掉滑动。变体:默认(拉伸到 `max-width: 260px`)、`gui-seg--compact`(贴合内容——弹层、预览条)、`gui-seg--icon`(纯图标,顶栏主题开关)。键盘:roving tabindex + ←/→/Home/End。标签永不被裁:等宽段共享同一个宽度,所以组件量出最宽标签及其 padding、图标和间距（不计入拉伸产生的空闲空间），把内容所需宽度写进 `--seg-min`,CSS 用它把控件下界定成 `var(--seg-count) × var(--seg-min)`(`min-width` 压过 260px 上限)。否则 `flex: 1 1 0` 的自动宽容器分的是各标签宽度**之和**——右栏任务面板的「运行中」+「全部」正是这样被裁的。两选项的 `GuiSelect` 会自动渲染成它,二值设置无需额外处理。不适用:多选 chip 行(一个滑块表达不了 N 个选中);变宽 tab 条不用共享的等宽控件,而是自己的实测滑块——SessionSidebar 的分组/项目胶囊按标签定宽、按当前 pill 实测滑块位置,并用一份隐藏的标签副本判断整行是否还放得下文字,放不下时整条胶囊 morph 成纯图标 pill(tooltip + `aria-label`)。
 - **TUI 设置同步(2026-08-11,合并进既有 tab)**:TUI 设置面板 10 个 tab 的 **336 项配置全部并入桌面设置**,不设独立"TUI 设置"页——**有对应 tab 就合并,没有就新增 tab,需要更名的更名**:外观(并入,原生主题卡 + schema 30 项)/模型设置(并入,角色模型 + schema 44 项)/任务与子智能体(原"子智能体"更名,并入 tasks 28 项)/新增 交互(41)·上下文(27)·Shell(16)·工具(60)·供应商(36);文件与 LSP、记忆 保持独立 schema section。全部 **schema 驱动**(daemon `settings.schema` RPC,与 TUI 同源)。控件按设置语义选择(`SchemaSettings.tsx` 的 `settingsControl`):boolean→toggle / enum→select(无 options 的 enum 由 daemon 合成;两项时渲染共享分段控件)/ string→input(凭据掩码保留)/ **带 `ui.options` 的 number→刻度阶梯**(每个预设一个档位,滚轮/拖动/方向键只能落在受支持的值上;当前档位标签常驻,存储值不在预设中时单独成档)/ **自由 number→滚动数字**(数字以滚轮列滚动、滚轮/方向键步进、拖动改值、点击键入;遵循 `ui.min/max/step`,否则每超过四位数字进一档——4 位端口步长 1、6 位超时步长 100)/ **声明式数组成员→胶囊/优先级列表**（优先级行用与右侧面板标签相同的 dnd-kit 拖拽：仅把手起拖、行抬起、落点实时让位；键盘聚焦把手后空格抓取 + ↑↓ 移动） / **自由数组→字符串逐行编辑,`ui.item: "record"` 用 JSON 列表;绝不逗号拼接**(逗号属于值本身:`bash.patterns` 正则、`prompt.sections` 文本)/ record→紧凑 JSON 输入(非法 JSON 内联报错,不提交);改动 `settings.set` 乐观写入、失败回滚。搜索框通过一次 `settings.schema {all:true}` 索引所有 schema 行：匹配的设置项列在页面导航之上，点击后打开所属页并把 `[data-setting-key]` 居中、闪一次高亮。存储值偏离 schema 默认值的行在标签行显示重置箭头（与 TUI 的 `changed` 对齐）；凭据行与无默认值行不显示。条件门控 CONDITIONS 与 TUI settings-defs 对齐(11 个;`hasImageProtocol` 在桌面恒真)。**i18n 全量中文**:从 coding-agent i18n 移植 966 条翻译进 guest-client zh-CN(标签/描述/选项/分组;模型/供应商/音色等专有名词保持原文,与 TUI 一致);未覆盖项回退英文。行为抽查:textVerbosity low≈150 字 vs high≈250 字(GUI→daemon→会话行为链路生效)。**重复定义审计修复(2026-08-11)**:①语言单源——`settings.locale`(config.yml)为唯一源:boot 经 `settings.get` 同步渲染器 locale(daemon 对未配置的 `settings.locale`/`defaultThinkingLevel` 不回填 schema 默认值,防止未配置时把中文 UI 强制切英文),常规语言 select 与交互 tab「界面语言」行均双写 RPC + localStorage 镜像;NAV_GROUPS 改渲染期求值(原模块级常量冻结首语言);②思考层级——删除 `musepi-gui-default-thinking` localStorage 镜像,WelcomeComposer 预选改为 boot 快照:`modelRoles.default` 的 `:level` 后缀优先(off→关闭思考),否则回退已配置的 `defaultThinkingLevel`(auto 允许),未配置保持 medium;boot 同时剥离后缀给模型预选;③`options:"runtime"` 的 schema 行(theme.light/dark)GUI 渲染为只读输入(防键入非法主题 id 写坏 config.yml),提示「选项由 TUI 运行时提供」。**导航去重合**:「智能体」更名「运行中智能体」(实时 roster,agents.list 2s 轮询)与「任务与子智能体」(tasks schema 配置)明确区分——两者内容本不重叠,命名消除混淆。**设置页 roster 全面移除(2026-08-11)**:「运行中智能体」设置 tab 与「任务与子智能体」内嵌 roster 均删除——live roster 由会话右栏 ContextPanel 的 AgentsPanel 承载(session stream 驱动的实时 HUD:主/子行、状态、活动、相对时间、进度/生命周期,比 agents.list 轮询更丰富);设置页回归纯配置语义。swarm GUI 盘点(对比 kimi-code apps/kimi-web):kimi 有转录内联 SwarmTool 卡片(成员手风琴+阶段点+概览条+done/total)、AgentDetailPanel 详情面板(暂停原因/流式输出/进度组)、ChatDock+TasksPane 底部 dock;我们现有右栏 AgentsPanel HUD + task/yield 工具卡片渲染 agent results,无转录内联 swarm 卡片、无详情面板。**task 工具卡升级为 SwarmTool 级(2026-08-11)**:头部 done/total chip(聚合失败红显)、body 顶部阶段概览(分段条 done/merge-failed/running/failed/aborted 五段 + legend)、成员行首阶段色点(running 脉冲)、每成员手风琴(点击 chevron 展开完整输出/错误/patch;已结束成员默认折叠,有详情才渲染 chevron);数据全部来自既有 TaskToolDetails.results/progress,无新数据管道。SSR 6 测试 + CDP 实测(2/2、3/3 chip、ok/run dots、chevron 展开 alpha 输出)。后续打磨:无内容的任务清单行(只有 #N 无 description)不再渲染空行;live/settle 时 AgentProgress 高级字段(retryState/extractedToolData/inflightTaskDetails)尚未消费。
 
-**桌面子代理操作(2026-08-11, TUI Agent Hub 对等)**:daemon 新增 RPC `agents.kill`(abort + release tombstone→aborted)/`agents.revive`(ensureLive)/`agents.chat`(ensureLive + prompt steer,与 collab host 的 agent-cmd 同构,server.ts agents.list 旁)。GUI 右栏 ContextPanel 的 AgentsPanel 选中行后渲染 AgentControls 操作条(packages/desktop-app/src/components/AgentControls.tsx):running→停止、parked/aborted→复活、chat 输入框(Enter 发送),错误小字展示。collab guest 走 agent-cmd 帧,桌面走 RPC——两条路语义一致。SDK events.ts 的 agent-progress payload 注释修正为 SubagentProgressPayload 包装(daemon 实际发送形状)。RPC 实测:kill idle→{ok}+ref aborted、kill/revive 错误路径、chat→ensureLive+steer 生效;running 态 kill 时序窗口未抓到(step-3.7-flash 子代理完成过快),abort 路径与 collab host 同构。**i18n 补全**:schema 全部 UI 字符串覆盖 100% 可译项——标签/描述/选项标签/选项描述全量中文(新增 ~240 条手译,复用 coding-agent zh 78 条),仅剩专有名词(模型/供应商/音色/硬件/API key 名/数值)保持英文与 TUI 一致;zh-CN.ts 经 biome --write 全量格式化。
+**桌面子代理操作(2026-08-11, TUI Agent Hub 对等)**:daemon 新增 RPC `agents.kill`(abort + release tombstone→aborted)/`agents.revive`(ensureLive)/`agents.chat`(ensureLive + prompt steer,与 collab host 的 agent-cmd 同构,server.ts agents.list 旁)。GUI 右栏 ContextPanel 的 AgentsPanel 选中行后渲染 AgentControls 操作条(apps/desktop/src/components/AgentControls.tsx):running→停止、parked/aborted→复活、chat 输入框(Enter 发送),错误小字展示。collab guest 走 agent-cmd 帧,桌面走 RPC——两条路语义一致。SDK events.ts 的 agent-progress payload 注释修正为 SubagentProgressPayload 包装(daemon 实际发送形状)。RPC 实测:kill idle→{ok}+ref aborted、kill/revive 错误路径、chat→ensureLive+steer 生效;running 态 kill 时序窗口未抓到(step-3.7-flash 子代理完成过快),abort 路径与 collab host 同构。**i18n 补全**:schema 全部 UI 字符串覆盖 100% 可译项——标签/描述/选项标签/选项描述全量中文(新增 ~240 条手译,复用 coding-agent zh 78 条),仅剩专有名词(模型/供应商/音色/硬件/API key 名/数值)保持英文与 TUI 一致;zh-CN.ts 经 biome --write 全量格式化。
 - **设置键名**:一律 `musepi-gui-*`(如 `musepi-gui-chat-usermsg`、`musepi-gui-statusbar-indicator`);类开关类偏好(如 `gui-chat-hide-time`)在 documentElement 上切换,样式写在 gui.css 的偏好区。
 - **设置 → 检查更新(2026-08-22)**:行内展示「当前版本 / 状态(检查中·已是最新·发现新版本)」+ 手动检查按钮;发现新版时在 desc 下方展开**更新说明摘要 + 明确的「前往下载」按钮**(不自动 window.open 弹浏览器)。启动自动检查(主进程 12s 后)推送的更新提示是**右下角 toast**(`UpdateToast`):版本(当前 → 最新)+ 说明 + 「前往下载」/「跳过此版本」(按版本 localStorage 记忆,bitfun parity)。**两条说明链路独立**:toast 读 `update-manifest.json.notes`(OTA 渠道),「新功能」弹窗读 `CHANGELOG.musepi.md`,发版都要填。manifest 只有一份中英混排字符串,toast/弹窗/设置里的更新行按当前界面语言用与「新功能」相同的 `- EN:` 规则选一种语言。实现细节见 `gui-implementation.md §17`。
 - **预览模式**:配置项带实时预览(效果预览/聊天预览)——复用**真实渲染组件** + 示例内容,选项状态驱动;不要造静态假预览。
@@ -188,7 +188,7 @@ lang: zh-CN
 ## 5. i18n 与音效
 
 - **i18n**:文案 key 即英文回退,zh 翻译按域拆在 `guest-client/src/i18n/zh-CN/<domain>.ts`(en 侧 `en-US/` 编译级 parity,详见 §i18n 契约与 `docs/i18n.md`);`t()` 调用点渲染(模块级 const 不随语言切换)。数字/时间格式化显式传 locale,禁依赖浏览器默认。
-- **音效(2026-08-07 活动化改造)**:cuelume(Web Audio 合成,14 个 recipe);统一经 `packages/desktop-app/src/lib/sfx.ts`:
+- **音效(2026-08-07 活动化改造)**:cuelume(Web Audio 合成,14 个 recipe);统一经 `apps/desktop/src/lib/sfx.ts`:
   - **活动分类配置**(opencode per-category sounds parity):10 个活动(`SFX_EVENTS`)——发送消息/首次消息/消息完成(agent_end,stopReason 非 aborted/error 才响)/审批请求/审批通过/审批拒绝/切换会话/停止回合/工具结果/错误;每类可换音色(`soundFor`/`setSoundFor`,持久化 `musepi-gui-sfx:<event>`,无效值回退 `DEFAULT_SFX`)。
   - **调用点用 `sfxFor(event)`**(app/Composer/WelcomeComposer/ApprovalCard/session-store),不再直接 `sfx(name)`(保留给一次性/预览);总开关 `musepi-gui-sound` gating 全部。
   - **消息完成挂 agent_end 而非 turn_end**(2026-08-07 修正):turn_end 每轮模型调用都触发(多工具任务连响),且中止时与 stop 音叠加——agent_end 每 run 一次。
@@ -286,7 +286,7 @@ lang: zh-CN
 
 openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、会话标签页、起始提示词 chips、排队消息 chips、会话文件夹/项目排序、TodosSection、移动端项目/会话)统一用 `@dnd-kit`。需要排序的拖拽我们对齐同库:
 
-- **依赖**:`@dnd-kit/core@6` + `@dnd-kit/sortable@10` + `@dnd-kit/utilities@3`(`@dnd-kit/modifiers@9` 按需),装在 `packages/desktop-app`。
+- **依赖**:`@dnd-kit/core@6` + `@dnd-kit/sortable@10` + `@dnd-kit/utilities@3`(`@dnd-kit/modifiers@9` 按需),装在 `apps/desktop`。
 - **传感器约定**:可见排序用 `PointerSensor` + `activationConstraint: { distance: 8 }`(移动 ≥8px 才启动拖拽,避免误触点击);整行 header 拖拽用 `MouseSensor` distance 8;需键盘排序时加 `KeyboardSensor` + `sortableKeyboardCoordinates`。
 - **结构**:`DndContext`(sensors + `closestCenter` + `onDragEnd`)包 `SortableContext`(`verticalListSortingStrategy` / `rectSortingStrategy`);行用 `useSortable` + `CSS.Transform.toString(transform)`;拖拽手柄是独立 `<button>`(带 `attributes`/`listeners`),不是整行可拖——行内有按钮/输入框时整行拖会劫持点击。**例外**:纯图标按钮(右栏 rail icon)自身不含嵌套控件,可直接当 activator,8px 阈值已保证点击不被劫持。
 - **完成态**:onDragEnd 里 `arrayMove` 后**整表回写**存储(localStorage 或 RPC),不允许只改本地可视顺序与后端不一致。
@@ -654,8 +654,8 @@ turn
 ### 数据契约（决策③——零新 RPC）
 
 - **token 数字读 daemon 持久投影**：`session.contextUsage` 已返回 `usage { input, output, cacheRead, cacheWrite, totalTokens, cost, cacheHitRate }`（TUI `cache_hit` 同款，daemon 侧计算）。Composer 已为 ContextRing 轮询该 RPC——统计行消费同一份 state。总量 = input + cacheRead + cacheWrite + output（计费输入三桶 + 输出）。分页/压缩永不改写这些数字。同会话 RPC 失败或返回 null 时保留最后有效读数；切换会话立即清空，等待新会话响应。
-- **时间/轮/步数字走可见窗口 fold**（`deriveWindowStats`，`packages/desktop-app/src/lib/derive-window-stats.ts`）：daemon 没有逐轮计时投影，fold 回答「屏幕上有什么」，字段名刻意与 dsh `WindowStats` 同形，便于日后整体替换。
-- **Fold 口径（契约测试守在 `packages/desktop-app/test/derive-window-stats.test.ts`）**：
+- **时间/轮/步数字走可见窗口 fold**（`deriveWindowStats`，`apps/desktop/src/lib/derive-window-stats.ts`）：daemon 没有逐轮计时投影，fold 回答「屏幕上有什么」，字段名刻意与 dsh `WindowStats` 同形，便于日后整体替换。
+- **Fold 口径（契约测试守在 `apps/desktop/test/derive-window-stats.test.ts`）**：
   - `turns` = 窗口内非 synthetic 用户消息数；`steps` = **已 settled** 的 assistant 消息数（有 `stopReason`——流式中的条目还不算一步）。
   - `llmMs` = 已 settled 步的 `AssistantMessage.duration` 之和；`ttftMs`/`ttftSteps` = 记录了 ttft 的步的和/计数。
   - `decodeMs` = 兼有 duration 与 ttft 的步的 `max(0, duration − ttft)` 之和；`decodeTokens` = 这些步的 `usage.output` 之和；展示速度 = `decodeTokens / (decodeMs / 1000)`。
@@ -805,11 +805,11 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 - **刷新行为**：重新加载时沿用上一份数据继续渲染、后台重取；骨架行（`.gui-skeleton-row`）
   只在首次加载且无任何缓存时出现——刷新绝不把面板清空。
 - **daemon RPC**（`packages/coding-agent/src/daemon/server.ts`）：共享助手 `runGh(cwd, args, timeoutMs)`（token 注入 + 默认 15s 超时；`exitCode === null` 表示 gh 未安装）。`github.prStatus`（当前分支 PR；无 PR 返回 `{pr: null}` 而非报错）、`github.issues`（打开/已关闭/全部，支持 `--label`/`--author`）、`github.prCreate`（标题必填；正文缺省用标题；可选 `--draft`；30s 超时；PR URL 用正则从 stdout 解析）、`git.push`（报无上游时以 `-u origin HEAD` 重试）。
-- **纯函数助手**（`packages/desktop-app/src/lib/pr-status.ts`）：`rollupCheckState`（FAILURE/TIMED_OUT/ACTION_REQUIRED/CANCELLED/STARTUP_FAILURE → 失败；SUCCESS/SKIPPED/NEUTRAL → 通过；畸形/缺省 → 进行中/null）；`prVisualState`（{isDraft, state} → draft/open/merged/closed 徽章档）；`branchToTitle`（分支名 → Title Case，含 `/` 的分隔符都转空格）。`test/pr-status.test.ts` 覆盖。
+- **纯函数助手**（`apps/desktop/src/lib/pr-status.ts`）：`rollupCheckState`（FAILURE/TIMED_OUT/ACTION_REQUIRED/CANCELLED/STARTUP_FAILURE → 失败；SUCCESS/SKIPPED/NEUTRAL → 通过；畸形/缺省 → 进行中/null）；`prVisualState`（{isDraft, state} → draft/open/merged/closed 徽章档）；`branchToTitle`（分支名 → Title Case，含 `/` 的分隔符都转空格）。`test/pr-status.test.ts` 覆盖。
 
 ## 5ab. 顶栏减法：按钮归位与实例入口迁移（2026-10-21）
 
-顶栏右上角只留工作状态与运行控制。本轮减法：**「终端」挪进会话右缘 RightRail 底部组**（与面板折叠钮相邻，dsh 同款位置；`RightRail` 新增 `terminalOpen`/`onToggleTerminal` prop，app.tsx 把 `toggleTerminalDock` 改喂 ChatView）；**「board」「切换面板」按钮移除**——board 入口仍在侧栏菜单，右侧面板折叠由 RightRail 底部钮兜底。**实例信息（本地/远程守护进程、版本、延迟、浏览器桥诊断）迁出顶栏**，落成自包含组件 `packages/desktop-app/src/components/InstanceButton.tsx`（状态全自管：meta 轮询、hosts 表单、browserHost 外部 store；props 只有连接事实与增删改回调），挂**侧栏 footer 左侧**（`justify-between`，右侧仍为设置/协作/断开组）；GuiHeader 卸下 `connected/daemonUrl/onReconnect/hosts/onSwitchHost/onAddHost/onRemoveHost` 七个 prop。header 的开发服务器按钮与项目动作仍保留 `terminalOpen/onToggleTerminal`（运行命令要先开 dock）。EN 版 §5t 右侧功能簇条目已同步。
+顶栏右上角只留工作状态与运行控制。本轮减法：**「终端」挪进会话右缘 RightRail 底部组**（与面板折叠钮相邻，dsh 同款位置；`RightRail` 新增 `terminalOpen`/`onToggleTerminal` prop，app.tsx 把 `toggleTerminalDock` 改喂 ChatView）；**「board」「切换面板」按钮移除**——board 入口仍在侧栏菜单，右侧面板折叠由 RightRail 底部钮兜底。**实例信息（本地/远程守护进程、版本、延迟、浏览器桥诊断）迁出顶栏**，落成自包含组件 `apps/desktop/src/components/InstanceButton.tsx`（状态全自管：meta 轮询、hosts 表单、browserHost 外部 store；props 只有连接事实与增删改回调），挂**侧栏 footer 左侧**（`justify-between`，右侧仍为设置/协作/断开组）；GuiHeader 卸下 `connected/daemonUrl/onReconnect/hosts/onSwitchHost/onAddHost/onRemoveHost` 七个 prop。header 的开发服务器按钮与项目动作仍保留 `terminalOpen/onToggleTerminal`（运行命令要先开 dock）。EN 版 §5t 右侧功能簇条目已同步。
 - **子页签持久化**：`musepi-gui-prcenter-tab` 存储键；PR 草稿勾选记在 `musepi-gui-pr-draft`。
 - **i18n**（general 域）：`pr board`、`open pull requests`、`issues`、`state open/closed/all`、`no open issues`、`no pr for branch`、`pr no checks`、`pr checks passing/failing/pending`、`pr mergeable`、`pr has conflicts`、`pr review approved/changes/required`、`pr title placeholder`、`pr base branch`、`pr description`、`create as draft`、`push and create`、`pr ahead count`、`pr search placeholder`、`pr open link`。
 - **CSS**（`gui-workspace.css`）：`gui-pr-card`、`gui-pr-meta`、`gui-pr-check(--success/--failure/--pending)` + `gui-pr-check-dot`、`gui-pr-merge--ok/--conflict`、`gui-pr-review`、`gui-pr-actions`、`gui-pr-create*` 表单族、`gui-issue-label`、`gui-prboard-title/body`、`gui-pr-search-row` + 复用 `gui-ext-plugins-search` 胶囊、`gui-skeleton-row`（首载骨架，与 `gui-cap-diag-skeleton` 同配方）；徽章档复用 `gui-changes-badge` + `gui-pr-badge--{open,draft,merged,closed}`。圆角只用 token（`--radius-xl/lg`，胶囊 999px）。
@@ -938,7 +938,7 @@ Guest／移动端顶栏使用 `HostManager` 统一完成已保存电脑的切换
 
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
-- **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。
+- **源文件**:`apps/desktop/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。
 - **设计语言**:**点阵卡上的 IP 桌宠**——桌面桌宠的定帧(金球 + 白色头戴耳机,几何逐字抄自 `SplashOrb.tsx`,scale 2.0)居中带柔光,背景保留 23×23 淡点阵(fg 9% 透明度,`r=4.2`,间距 ~35.8px,球周 r=300 留白晕)。**无轨道环**:真实 CompanionArt 的环(rx 104)整环画在不透明球体(r 114.27)之后,静止帧根本看不见环——品牌定帧不得凭空画环(2026-09-28 用户反馈)。卡背景 = 主题深色微渐变(`#242128 → #1b191f`)。替代点阵 π(2026-08-06):旧规"配色只用主题色、零强调色"为品牌 IP 有意打破——金球就是标识(对标 kimicode 式 IP 图标,小袁总 2026-09-28);点阵留作与 `DotMatrixMark` 的视觉脐带。
 - **卡中卡布局(2026-08-06 实测 kimi 对齐)**:不变——深色卡占 tile **80.5%(824/1024,四周对称 100px 透明边距)** + 卡角 superellipse n=5 圆角,与 Kimi 桌面 app 完全一致。**与邻位 app 视觉统一优先于 HIG 抽象规范**——kimi 实际就是卡中卡,我们要并排同大。
 - **同步副本**:`build/icon.png`(打包源 / win32 窗口图标,`ICON_PATH`)+ `build/icon-dock.png`(dev Dock setIcon);打包版 icns 同样带 80.5% 卡边距(不重打包则 bundle icns 手动同步)。~~`src/vendor/logo.png`~~ 已于 2026-09-28 删除——splash 不再内嵌栅格 logo(品牌标是 SplashOrb SVG)。

@@ -96,7 +96,7 @@ describe("CI runtime and delivery contracts", () => {
 		});
 		expect(result.stderr.toString()).toBe("");
 		expect(result.exitCode).toBe(0);
-		expect(result.stdout.toString()).toContain("==> packages/desktop-app");
+		expect(result.stdout.toString()).toContain("==> apps/desktop");
 	});
 
 	it("gates releases on the real Electron desktop smoke job", () => {

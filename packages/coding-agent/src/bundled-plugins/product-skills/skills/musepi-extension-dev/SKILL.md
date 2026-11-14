@@ -45,7 +45,7 @@ export async function apply(ctx: ExtensionAPI, config?: Record<string, unknown>)
 - `apply` 第二参是清单 `musepi.config` 的钳制后取值；`ctx.cwd` 是装载根。
 - 需要跨插件服务：入口 `provide: ["foo"]`，`apply` 返回 `{ foo: service }`；消费者 `inject: ["foo"]` 后用 `ctx.service("foo")`。
 - **host 作用域**：`musepi.scope: "host"` 的包由宿主进程启动时装载一次（daemon 开监听前 / 首个会话前），会话装载跳过。放进程级注册（后端 provider、全局服务），不要放会话工具。
-- 写进 `src/bundled-plugins/<name>/` 或 `packages/desktop-app/src/plugins/<name>/` 时，入口形状由 `test/first-party-plugin-conformance.test.ts` 与 `packages/desktop-app/test/plugin-conformance.test.ts` 强制校验。
+- 写进 `src/bundled-plugins/<name>/` 或 `apps/desktop/src/plugins/<name>/` 时，入口形状由 `test/first-party-plugin-conformance.test.ts` 与 `apps/desktop/test/plugin-conformance.test.ts` 强制校验。
 
 **Track B 兼容路径**：老的 `export default function (pi) { pi.registerTool(...) }` 仍能加载，但只用于既有扩展；新插件不要这么写。两轨边界见 `docs/plugin-tracks.md`。
 

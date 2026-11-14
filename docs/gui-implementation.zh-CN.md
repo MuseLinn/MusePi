@@ -4,7 +4,7 @@ title: GUI 实现契约
 status: living
 summary: 桌面端与共享客户端 UI 的 daemon RPC、Electron IPC、生命周期和验证契约。
 scope:
-  - packages/desktop-app
+  - apps/desktop
   - packages/client-core
   - packages/coding-agent/src/daemon
 lang: zh-CN
@@ -13,7 +13,7 @@ lang: zh-CN
 # MusePi GUI 实现笔记(契约与坑)
 [English](gui-implementation.md) | 中文
 
-> 状态:**活文档**(2026-08-06 建立,从 `gui-design.md` 拆出)——`packages/desktop-app` / `packages/client-core` 实现的**事实记录**:daemon RPC 契约、IPC 形状、算法语义、踩坑与验证方法。与实现同步,实现文件为准。
+> 状态:**活文档**(2026-08-06 建立,从 `gui-design.md` 拆出)——`apps/desktop` / `packages/client-core` 实现的**事实记录**:daemon RPC 契约、IPC 形状、算法语义、踩坑与验证方法。与实现同步,实现文件为准。
 >
 > 设计风格规范(布局/token/动效/组件模式)见 **`docs/gui-design.md`**。
 
@@ -45,9 +45,9 @@ lang: zh-CN
 
 `AoraAvatar` 是 `AgentAvatar` 槽位的实验性 provider；内置预置仍是默认。
 
-- `@aora-bot/react` 0.2.0（会带入 `@aora-bot/engine`）装在 `packages/desktop-app`，与其他依赖一样本地打包。运行时不加载 CDN 脚本，也不调用头像 API 或托管角色服务，所以在桌面壳内离线也能渲染。
+- `@aora-bot/react` 0.2.0（会带入 `@aora-bot/engine`）装在 `apps/desktop`，与其他依赖一样本地打包。运行时不加载 CDN 脚本，也不调用头像 API 或托管角色服务，所以在桌面壳内离线也能渲染。
 - 它是 renderer，不是第二个状态源：消费 `AgentSignals`，用 `aoraStateFromSignals(signals, "avatar")` 投影。`avatar` surface 就是 §0 里的紧凑子集，只对 `assistant` 或 `workbench` 有意义的状态会在进入槽位前收敛。不要把别的 renderer 的状态枚举交给这个 provider。
-- 上游署名在 `packages/desktop-app/README.md`（“Powered by Aora Bot”），这是 Aora Bot License 1.1 的要求；升级依赖时保留它。
+- 上游署名在 `apps/desktop/README.md`（“Powered by Aora Bot”），这是 Aora Bot License 1.1 的要求；升级依赖时保留它。
 
 ## 0c. 多会话伙伴活动
 
@@ -96,7 +96,7 @@ TUI `recap.enabled`/`recap.idleSeconds`(schema tab `interaction`、group Notific
 
 触发:Electron 在系统睡眠时断开 renderer↔daemon 的 WebSocket(electron#19993,localhost 同受);唤醒后必须重连。恢复链三层:
 
-- **renderer keepalive**(`packages/desktop-app/src/lib/rpc.ts`):请求 15s 超时(`REQUEST_TIMEOUT_MS`)防永挂;每 20s 发 `system.ping`(`KEEPALIVE_INTERVAL_MS`),45s(`KEEPALIVE_DEAD_MS`)无任何响应 → `ws.close()` 强制触发重连(浏览器 WS 无 ping 能力,这是标准替代)。
+- **renderer keepalive**(`apps/desktop/src/lib/rpc.ts`):请求 15s 超时(`REQUEST_TIMEOUT_MS`)防永挂;每 20s 发 `system.ping`(`KEEPALIVE_INTERVAL_MS`),45s(`KEEPALIVE_DEAD_MS`)无任何响应 → `ws.close()` 强制触发重连(浏览器 WS 无 ping 能力,这是标准替代)。
 - **干净恢复路径**(`app.tsx`):`onStatus("closed")` → `recoverFromDrop` = close 旧 client(停退避重试)→ `setBooting(true)` 显示 splash → `boot()` 全新重连(probe/spawn/events.subscribe/pauseStatus/settings 全量初始化)——与「重新连接」按钮同一路径(ce1c9284d 已验证;原自动原地 restore 会冻结 renderer)。`recoveringRef` 防重入。
 - **主动唤醒**:`electron/main.cjs` `powerMonitor.on("resume")`(app ready 后注册,electron#32576)→ 各窗口 `app-power-resume` → renderer 收到即触发恢复(visibilitychange/online 在 macOS 唤醒不保证触发)。
 - **兜底**:App 级 `ErrorBoundary`(components/ErrorBoundary.tsx)渲染崩溃显示「重新连接」页,不再无边界静默卸载根树(冻结特征:CPU 空闲、console 活、点击死)。
@@ -235,7 +235,7 @@ daemon RPC:
 - **动画中的尺寸报告**：内容尺寸报告对正在播放 CSS 动画的元素使用 `offsetWidth/offsetHeight`（布局盒，不含 transform）。`getBoundingClientRect` 包含动画值，若用它上报，窗口会在 `animationend` 后再次跳变。通过 `el.getAnimations().some(a => a.playState === "running")` 检测动画。堆叠↔展开尺寸形变期间，同一上报函数还会逐动画帧运行，并在清除 inline 尺寸锁定后立即补报一次。`layoutBubblesWindow()` 因此在整个过渡中持续重钉原生窗口底边，而不是等待观察器或延迟上报，使 sprite 上方的 8px 间距在最终内容尺寸到达前也保持稳定。
 - **mount effect dead code**(2026-08-11,biome noUnreachable 报出):`return bridge?.onPetActivity?.(...)` 提前 return 吞掉后续 `requestPetState`——订阅 teardown 用 `const off = ...; void sideEffect(); return off` 模式。
 
-- **win32 桌宠原生集成(koffi FFI,2026-09-19,修「桌宠漂移 / 下沉 / 变大」)**:`electron/win32-native.cjs` 是**全失败放行(fail-open)**的原生模块(koffi → `user32` / `dwmapi`),暴露 Electron 拿不到的三个探测:**① 前台全屏**(`GetForegroundWindow` + `GetWindowRect` + `MonitorFromWindow` + `GetMonitorInfoW` + `GetWindowLongW` + `GetClassNameW`)——`BrowserWindow.isFullScreen()` 只报**自家窗口**,全屏游戏对它不可见,于是 topmost 看门狗每 5s 把 z 序从游戏头上抢回来;**② 每显示器 DPI**(`GetDpiForWindow`)——权威因子,取代 display-matching 猜测;**③ DWM cloak**(`DwmGetWindowAttribute(DWMWA_CLOAKED)` / `DwmSetWindowAttribute(DWMWA_CLOAK)`)。五处根因,逐项实测:① **`setPosition` 无读数回校**——win32 的 `SetWindowPos` 按显示器把 DIP→物理像素并取整,窗口管理器还可能在边缘吸附/夹取;该修正从未回写到拖拽锚点,于是误差每帧都从陈旧假设重新推导并累积(本机 `GetDpiForWindow` = **144,即 150% 缩放**——正是这种取整最大化的配置)。修法:`setPetBounds()` 成为**唯一**位置写入点——先读实时 rect,有差异才写,且用 `setBounds`(不是 `setPosition`)让宽高随写一起走。② **无显示器拓扑监听**——`display-removed` / `display-added`(立即)与 `display-metrics-changed`(**400ms 去抖**——DPI/RDP 事件成串到达,逐事件夹取会让桌宠整段过渡期抖动)→ `reconcilePetWindow()`,只有 rect 的**中心点**离开所有工作区时才动位置。③ **`powerMonitor` resume 只重连 daemon**——唤醒时的 DPI 通量正是把尺寸棘轮放大的元凶(clawd #408,"越睡越大"),故 resume 现在延后一个去抖节拍按 `PET_WINDOW_SIZE` 校正尺寸。④ **`setAlwaysOnTop` 只设一次**——被边缘吸附与睡眠唤醒降级后永久失效;改为 `"pop-up-menu"`(高于任务栏级 UI)并由 **5s 看门狗**重断言,外加拖拽/挂靠跑到 `isNearWorkAreaEdge()`(容差 2)时立即重断言。⑤ **cloak 自愈**——被 cloak 的窗口不可见,而所有 JS 可见信号全是绿的;只恢复 `APP`(自身造成)的 cloak:从不碰 `SHELL`(常是用户在别的虚拟桌面,且没有 `IVirtualDesktopManager` 时两者无法区分),失败按指数退避。**两处值得留存的判断**:(a) **必须排除桌面/Shell 窗口类**(`progman`、`workerw`、`xamlexplorerhostislandwindow`、`windows.ui.core.corewindow`),否则「点桌面」会被判成全屏、桌宠乱隐藏;(b)`MAXIMIZED ≠ FULLSCREEN`——有任务栏时 `rcWork != rcMonitor` 几何即可分辨,但**无任务栏显示器上 `rcWork == rcMonitor`,geometry 彻底失效**,只能靠 style 位(`WS_MAXIMIZE && WS_CAPTION` = 最大化普通窗口)。`GetWindowRect` 返回的是**含 DWM 不可见边框**的物理像素(实测 `-8,-8`),故比较一律用容差、绝不用相等。**验证**:13/13 条 `classifyFullscreen` 断言(含反向输入——返回常量的桩必须失败),以及一次真实 Electron 探针确认 `dpiForWindow` = 144 = Electron 自己的 `scaleFactor`、cloak = 0,且关键的是——三个探测在**窗口已销毁时全部失败放行而非抛错**(看门狗是按定时器轮询它们的)。**打包陷阱(不得回归)**:koffi 的原生二进制放在**独立的按平台分包**里(`@koromix/koffi-<platform>-<arch>`),加载方式是朴素的 `require("@koromix/koffi-win32-x64")` → `win32_x64/koffi.node`。必须同时满足两个条件,否则模块**只在打包产物里**静默降级成 stub——开发态照样能用,这正是它危险的地方:① 平台分包必须是**声明过的**依赖;已写进 `optionalDependencies`(六个桌面目标),这样它才会真正被链接到 `packages/desktop-app/node_modules/@koromix/`。此前它只在 bun store 里而**从未被链接**(`bun install` 报的 `EEXIST … failed to symlink` 警告),koffi 只是靠往上走进 store 目录结构才找到它——纯属开发态巧合;② electron-builder 的 `files` 是**白名单**,故 `node_modules/koffi/**/*` 与 `node_modules/@koromix/**/*` 显式列入,并在 `asarUnpack` 里重复一遍(原生 `.node` 必须与加载器同处)。验证方式是插桩 `Module._resolveFilename` 后真实加载 koffi,不要靠推断——并确认 `koffi.version` 有返回。
+- **win32 桌宠原生集成(koffi FFI,2026-09-19,修「桌宠漂移 / 下沉 / 变大」)**:`electron/win32-native.cjs` 是**全失败放行(fail-open)**的原生模块(koffi → `user32` / `dwmapi`),暴露 Electron 拿不到的三个探测:**① 前台全屏**(`GetForegroundWindow` + `GetWindowRect` + `MonitorFromWindow` + `GetMonitorInfoW` + `GetWindowLongW` + `GetClassNameW`)——`BrowserWindow.isFullScreen()` 只报**自家窗口**,全屏游戏对它不可见,于是 topmost 看门狗每 5s 把 z 序从游戏头上抢回来;**② 每显示器 DPI**(`GetDpiForWindow`)——权威因子,取代 display-matching 猜测;**③ DWM cloak**(`DwmGetWindowAttribute(DWMWA_CLOAKED)` / `DwmSetWindowAttribute(DWMWA_CLOAK)`)。五处根因,逐项实测:① **`setPosition` 无读数回校**——win32 的 `SetWindowPos` 按显示器把 DIP→物理像素并取整,窗口管理器还可能在边缘吸附/夹取;该修正从未回写到拖拽锚点,于是误差每帧都从陈旧假设重新推导并累积(本机 `GetDpiForWindow` = **144,即 150% 缩放**——正是这种取整最大化的配置)。修法:`setPetBounds()` 成为**唯一**位置写入点——先读实时 rect,有差异才写,且用 `setBounds`(不是 `setPosition`)让宽高随写一起走。② **无显示器拓扑监听**——`display-removed` / `display-added`(立即)与 `display-metrics-changed`(**400ms 去抖**——DPI/RDP 事件成串到达,逐事件夹取会让桌宠整段过渡期抖动)→ `reconcilePetWindow()`,只有 rect 的**中心点**离开所有工作区时才动位置。③ **`powerMonitor` resume 只重连 daemon**——唤醒时的 DPI 通量正是把尺寸棘轮放大的元凶(clawd #408,"越睡越大"),故 resume 现在延后一个去抖节拍按 `PET_WINDOW_SIZE` 校正尺寸。④ **`setAlwaysOnTop` 只设一次**——被边缘吸附与睡眠唤醒降级后永久失效;改为 `"pop-up-menu"`(高于任务栏级 UI)并由 **5s 看门狗**重断言,外加拖拽/挂靠跑到 `isNearWorkAreaEdge()`(容差 2)时立即重断言。⑤ **cloak 自愈**——被 cloak 的窗口不可见,而所有 JS 可见信号全是绿的;只恢复 `APP`(自身造成)的 cloak:从不碰 `SHELL`(常是用户在别的虚拟桌面,且没有 `IVirtualDesktopManager` 时两者无法区分),失败按指数退避。**两处值得留存的判断**:(a) **必须排除桌面/Shell 窗口类**(`progman`、`workerw`、`xamlexplorerhostislandwindow`、`windows.ui.core.corewindow`),否则「点桌面」会被判成全屏、桌宠乱隐藏;(b)`MAXIMIZED ≠ FULLSCREEN`——有任务栏时 `rcWork != rcMonitor` 几何即可分辨,但**无任务栏显示器上 `rcWork == rcMonitor`,geometry 彻底失效**,只能靠 style 位(`WS_MAXIMIZE && WS_CAPTION` = 最大化普通窗口)。`GetWindowRect` 返回的是**含 DWM 不可见边框**的物理像素(实测 `-8,-8`),故比较一律用容差、绝不用相等。**验证**:13/13 条 `classifyFullscreen` 断言(含反向输入——返回常量的桩必须失败),以及一次真实 Electron 探针确认 `dpiForWindow` = 144 = Electron 自己的 `scaleFactor`、cloak = 0,且关键的是——三个探测在**窗口已销毁时全部失败放行而非抛错**(看门狗是按定时器轮询它们的)。**打包陷阱(不得回归)**:koffi 的原生二进制放在**独立的按平台分包**里(`@koromix/koffi-<platform>-<arch>`),加载方式是朴素的 `require("@koromix/koffi-win32-x64")` → `win32_x64/koffi.node`。必须同时满足两个条件,否则模块**只在打包产物里**静默降级成 stub——开发态照样能用,这正是它危险的地方:① 平台分包必须是**声明过的**依赖;已写进 `optionalDependencies`(六个桌面目标),这样它才会真正被链接到 `apps/desktop/node_modules/@koromix/`。此前它只在 bun store 里而**从未被链接**(`bun install` 报的 `EEXIST … failed to symlink` 警告),koffi 只是靠往上走进 store 目录结构才找到它——纯属开发态巧合;② electron-builder 的 `files` 是**白名单**,故 `node_modules/koffi/**/*` 与 `node_modules/@koromix/**/*` 显式列入,并在 `asarUnpack` 里重复一遍(原生 `.node` 必须与加载器同处)。验证方式是插桩 `Module._resolveFilename` 后真实加载 koffi,不要靠推断——并确认 `koffi.version` 有返回。
 
 - **内置球体指针手势**：`pet-main.tsx` 将按下/拖拽状态、CSS 像素速度和 `performance.now()` 时间戳写入 `gestureRef`；高频 pointermove 不进入 React state。`useMascotEngine` 每帧采样该 ref。`companion-gesture.ts` 以指数趋近计算带符号的倾斜（±11°）、拉伸和提起目标，丢弃超过 120ms 的速度样本，把帧间隔限制为 64ms，并在释放后产生阻尼落地冲量。`companionGestureTransform()` 写入独立的 `.gui-pet-svg__gesture` 组，绕身体中心旋转、绕地面点缩放。该组与会话 motion、交互动效和眼动复合。只有 Petdex 使用悬停/拖拽行、`flip`、挂靠镜像和外层交互 squash；内置球体不使用 `scaleX(-1)`，也不叠加第二层 squash。
 - **眼动跟随(gaze,2026-09-19)**:`pet:gaze` 搭载 main.cjs 里既有的 120ms `updatePetClickThrough` 轮询——光标相对窗口中心,按 `PET_GAZE_RANGE_CSS = 420` css px 归一化到 ±1、夹紧到单位圆、`PET_GAZE_EPSILON = 0.02` 死区节流(光标不动就零 IPC)。渲染链:`preload.onPetGaze` → pet-main 写入一个 `GazeVec` ref(**绝不走 React state**——IPC 流不允许触发重渲染;引擎在 `useMascotEngine(mood, gazeRef)` 里逐帧读 ref)。pet-main 与头像的指针处理器都用渲染端的 `performance.now()` 为样本写入时间戳。`companion-gaze.ts` 处理 0.06 中心死区,并将 3000ms 未更新的样本转为回中目标,但不释放注意力,避免闲视漂移立刻再次拉走眼睛。仅 Petdex 在**写入侧**做镜像补偿：`gazeMirrorRef` 同步 `flip || dockSide === "left"` 并对 x 取反，抵消 CSS `scaleX(-1)` 刚体，使视线对着真实光标。内置球体从不镜像，直接接收原始向量。引擎混合常数(CompanionArt.tsx):渐入 220ms / 渐出 380ms / 眼球滑动 τ 120ms / 头部滑动 τ 240ms;不传 ref 会释放注意力并回到原生闲视漂移。各状态的 `blinkMs` 增加 ±28% 抖动;为零时仍严格禁止眨眼。主窗口的头像预设直接监听 `window.pointermove`——每个挂载的 `CompanionAvatar` 一个监听器,120px 视距,写各自的 ref。Petdex 精灵图忽略 gaze(位图帧,眼睛动不了)。
@@ -255,7 +255,7 @@ daemon RPC:
 2. **calc 长度×百分比**(`calc(28px * 100%)`)→ 非法,静默回退 0。
 3. **transform 动画 keyframes 替换静态 transform**(`translate(-50%,-50%)` + scale 关键帧)→ 动画期间锚点丢失跳位;纯 opacity 或把完整 transform 写进关键帧。
 4. **backdrop-filter 首帧闪烁** → 两阶段挂载(先 opacity 0 上屏,下一帧加动画类)。
-5. **挂载即动画会杀死磨砂**(2026-08-06 实测,与 4 同根):带 `transform: scale` 的 `gui-menu-in` 若在**挂载帧直接播放**(ContextMenu/Pop 旧实现),Chromium 真实屏幕合成器**跳过 backdrop 采样,且动画结束后不重采样**——菜单永久渲染成普通半透明(背后文字直接透出,无磨砂);`useFloatingMenu` 的两阶段(挂载帧无动画类,下一帧 rAF 加 `--entered`)不受影响。**CDP 截图(offscreen 合成)仍显示模糊,是最大误导源**——曾据此误判"transparent 窗口 blur 全失效"(electron#30412 是长期未解决的独立问题,但本 GUI 的菜单 blur 一直可修),错误地用 95% scrim 覆盖全部浮层(用户立刻发现"全都不是磨砂了",已回退)。修复:ContextMenu/Pop 两阶段进入(`--pending`/`--entered` 类),Pop 调用方类移除自带 animation。**验证浮层磨砂必须真实屏幕截图(screencapture -l 窗口 ID),CDP 截图/计算样式不算数。** **全浮层统一(2026-08-11)**:共享 hook `useTwoPhaseEnter(active)`(packages/desktop-app/src/lib/use-two-phase-enter.ts,两 rAF 后返回 `--entered` 后缀,close 时重置)——接入此前越轨的 5 处:Board 放大/小组件任务/引导遮罩/⌘K 命令面板(改常驻挂载+退出动画)/选区工具条(补入场退场);base `opacity:0` + `--entered` 使 motion-off 自然瞬现。这些点此前是**挂载帧直接播 `gui-fade-in`(纯 opacity,无 scale)**——属本条风险类的轻度变体,未在真实屏幕实测失效,但契约上违反两阶段,统一后消除差异。
+5. **挂载即动画会杀死磨砂**(2026-08-06 实测,与 4 同根):带 `transform: scale` 的 `gui-menu-in` 若在**挂载帧直接播放**(ContextMenu/Pop 旧实现),Chromium 真实屏幕合成器**跳过 backdrop 采样,且动画结束后不重采样**——菜单永久渲染成普通半透明(背后文字直接透出,无磨砂);`useFloatingMenu` 的两阶段(挂载帧无动画类,下一帧 rAF 加 `--entered`)不受影响。**CDP 截图(offscreen 合成)仍显示模糊,是最大误导源**——曾据此误判"transparent 窗口 blur 全失效"(electron#30412 是长期未解决的独立问题,但本 GUI 的菜单 blur 一直可修),错误地用 95% scrim 覆盖全部浮层(用户立刻发现"全都不是磨砂了",已回退)。修复:ContextMenu/Pop 两阶段进入(`--pending`/`--entered` 类),Pop 调用方类移除自带 animation。**验证浮层磨砂必须真实屏幕截图(screencapture -l 窗口 ID),CDP 截图/计算样式不算数。** **全浮层统一(2026-08-11)**:共享 hook `useTwoPhaseEnter(active)`(apps/desktop/src/lib/use-two-phase-enter.ts,两 rAF 后返回 `--entered` 后缀,close 时重置)——接入此前越轨的 5 处:Board 放大/小组件任务/引导遮罩/⌘K 命令面板(改常驻挂载+退出动画)/选区工具条(补入场退场);base `opacity:0` + `--entered` 使 motion-off 自然瞬现。这些点此前是**挂载帧直接播 `gui-fade-in`(纯 opacity,无 scale)**——属本条风险类的轻度变体,未在真实屏幕实测失效,但契约上违反两阶段,统一后消除差异。
 5. **flex 子项缺 `min-width:0`** → 内容撑破/尺寸不一致;flex 子项 `margin-inline:auto` 会击败 stretch。
 6. **popup/浮层被祖先 overflow/transform 裁剪** → portal 到 body。
 7. **rAF 节流闩锁未在帧回调内释放** → 后续事件被吞。
@@ -272,7 +272,7 @@ daemon RPC:
 - **材质归属**：tooltip、toast、alert/approval 与 drawer/sheet 容器使用 L2（`--glass-bg-strong` + `--glass-border` + `--glass-sheen` + `--glass-shadow`）；modal、palette 与 confirmation 卡使用更高层级的 L3，token 集合相同。阴影 token 同时拥有上下内缘，包括底缘；不得再叠加第二套 rim 或阴影。`ConfirmDialog` 使用 `ss-card--confirm`，避免与 SessionsSheet 的 L2 角色混用。`ApprovalCard` 使用语义文字/动作色，不使用固定深色底。
 - **回退归属**：`client-core/src/styles/overlay-fallback.css` 集中定义 `prefers-reduced-transparency`、不支持 `backdrop-filter` 与 `[data-platform="win32"]` 的浮层规则。所有使用共享浮层样式的入口都在组件样式之后导入它，确保回退在真实 desktop 级联中胜出，不被后续卡片/scrim 声明夺回。桌面 `initTooltips` 在安装桌面 tooltip 行为之前先写入 `shellPlatform()` 的 `data-platform`，因此 main、pin、pet 窗口都能匹配 Windows 规则。pet 在 `pet-window.css` / `gui.css` 后加载 tokens 与回退，并设置 `data-transparent-window`，使页面豁免 Windows/Linux 不透明工作区背板，同时不影响 tooltip/overlay 规则；只有这些浮层表面转为不透明。这些路径关闭背景采样，使用不透明 `--color-surface-raised` 底，同时保留共享边框、sheen 和阴影；scrim 使用不透明 `--color-bg`。已由 `::before` 承载 sheen 的卡片只用不透明背景，sheen 只画一层。桌面浮层正常路径仍使用 `--gui-glass-blur` / `--gui-glass-saturate`。任何规则都不得给常驻 transcript 或 composer 新增 blur。
 - **动效**：此浮层族的入场和出场都同时受 `.gui-motion-off` 与 `prefers-reduced-motion` 禁用；关闭定时器仍可负责卸载，但不得留下 1ms 动画或中间视觉帧。tooltip 显隐 transition 和 SketchPad 关闭 transition 同样包含在内，不只检查 CSS keyframes。
-- **共享栈**：`useModalFocus` 记录 opener 并压入每个活跃 dialog；`isTopModal` 门控 Tab 与 Escape。仅栈顶锁焦或响应 Escape，底层保持打开。关闭栈顶后归还可连接的 opener；关闭底层或组件卸载不得从剩余栈顶抢焦点。消费者包括 `DialogFrame`、Promise prompt/confirm、client-core `ConfirmDialog`、`AgentDrawer`、`SessionsSheet`、`TaskModal`、能力抽屉、Board 放大卡、SketchPad、Onboarding/Announcement 与 ImageLightbox。RewardOverlay 自己注册共享栈并提供 dialog ARIA；AnnouncementOverlay 仅在非 reward 分支激活卡片 hook，因此 reward 切换到 Markdown 后仍会入栈。SessionsSheet 将 backdrop portal 到 `document.body`，带滤镜的 header 不得成为其 fixed 定位包含块。`CommandPalette` 保留自己的输入框焦点、方向键导航和 Escape 处理，不因名称含 palette 就隐式加入共享栈。它在开关过程中保持挂载，`open` 可能先于可见 DOM 出现，因此焦点陷阱必须由 `open && visible` 激活，不能只看 `open`；Tab 不得离开可见面板，Escape 后焦点返回触发按钮。`packages/desktop-app/scripts/verify-shell-accessibility.mjs` 在隔离 Electron 中验证这一时序和 640px 覆盖式抽屉。
+- **共享栈**：`useModalFocus` 记录 opener 并压入每个活跃 dialog；`isTopModal` 门控 Tab 与 Escape。仅栈顶锁焦或响应 Escape，底层保持打开。关闭栈顶后归还可连接的 opener；关闭底层或组件卸载不得从剩余栈顶抢焦点。消费者包括 `DialogFrame`、Promise prompt/confirm、client-core `ConfirmDialog`、`AgentDrawer`、`SessionsSheet`、`TaskModal`、能力抽屉、Board 放大卡、SketchPad、Onboarding/Announcement 与 ImageLightbox。RewardOverlay 自己注册共享栈并提供 dialog ARIA；AnnouncementOverlay 仅在非 reward 分支激活卡片 hook，因此 reward 切换到 Markdown 后仍会入栈。SessionsSheet 将 backdrop portal 到 `document.body`，带滤镜的 header 不得成为其 fixed 定位包含块。`CommandPalette` 保留自己的输入框焦点、方向键导航和 Escape 处理，不因名称含 palette 就隐式加入共享栈。它在开关过程中保持挂载，`open` 可能先于可见 DOM 出现，因此焦点陷阱必须由 `open && visible` 激活，不能只看 `open`；Tab 不得离开可见面板，Escape 后焦点返回触发按钮。`apps/desktop/scripts/verify-shell-accessibility.mjs` 在隔离 Electron 中验证这一时序和 640px 覆盖式抽屉。
 - **确认键**：普通确认允许 Enter。Promise confirm 与 client-core `ConfirmDialog` 在 `destructive: true` 时都抑制 Enter；Promise 版本初始聚焦 Cancel，显式激活确认按钮仍可执行。只有确认框位于共享栈顶时 Escape 才取消。Promise prompt/confirm 在 180ms 出场后 settle；请求被替换或宿主卸载时也会 settle，不留下悬挂 Promise。
 - **临时表面**：桌面 tooltip 初始化保留既有 `aria-describedby` token，以触发元素的矩形做 flip/shift 定位，不再使用指针坐标。悬停与焦点共用 150ms 打开延迟；触屏静止长按 500ms 打开，移动取消，释放关闭。可见提示在滚动/缩放时跟随锚点；指针移到提示内容上时保持打开，离开锚点与内容后才关闭。`RailTooltip` 还在捕获阶段监听滚轮移动并重新定位，窗口失焦或定位时发现锚点断开便关闭。Escape 取消等待中或可见的提示并认领按键，不移动焦点。提示本身不可聚焦。两类 tooltip 共用 L2 材质并保持既有 z-index 层级；Electron 拖拽区显式把提示控件标记为 `no-drag`。toast 在悬停或焦点内暂停，恢复时续算剩余时长；错误持续显示并 assertive 播报，其他级别使用 polite status 播报。
 - **面板空态与标签动效**：右侧零标签时，`.gui-panel-empty` 通过现有 flex 高度链让限宽自适应卡片 grid 垂直居中。`useTabMotion` 为 surface 与托管浏览器标签统一展示层 entering/closing：恢复不重播，打开 130ms、关闭 140ms；关闭中重开会取消退场，卸载会清理全部定时器。closing 项 inert、对辅助技术隐藏，并退出 roving tabindex 与 dnd items。业务标签仍立即关闭；浏览器 ref detach、guest-gone 和 main dispose 顺序绝不等动画。motion-off 与 reduced-motion 同时取消两类动画。
@@ -354,11 +354,11 @@ daemon RPC:
 
 ### 8d. 营销预览 demo（2026-11-05）
 
-站点落地页的交互预览跑的是真实桌面渲染器，只把对端换成夹具 daemon，而不是另做一套假 UI。`packages/desktop-app/scripts/build-web-demo.mjs` 从 `dist/` 组装 `web/app/`（外壳 chunk 与样式表，字体裁剪到外壳实际绘制的字面），再用 daemon 自己的编译器把 `app.chat`、`panel.tab.files`、`panel.shell` 三个插槽组件编译进 `web/app/plugins/`。`web/demo-src/` 提供假 daemon：`transport.js` 用页面内 JSON-RPC mock 替换 `window.WebSocket`，夹具模块应答启动、会话、文件与 git 的 RPC，`push()` 发出脚本化回合所流经的订阅信封。
+站点落地页的交互预览跑的是真实桌面渲染器，只把对端换成夹具 daemon，而不是另做一套假 UI。`apps/desktop/scripts/build-web-demo.mjs` 从 `dist/` 组装 `web/app/`（外壳 chunk 与样式表，字体裁剪到外壳实际绘制的字面），再用 daemon 自己的编译器把 `app.chat`、`panel.tab.files`、`panel.shell` 三个插槽组件编译进 `web/app/plugins/`。`web/demo-src/` 提供假 daemon：`transport.js` 用页面内 JSON-RPC mock 替换 `window.WebSocket`，夹具模块应答启动、会话、文件与 git 的 RPC，`push()` 发出脚本化回合所流经的订阅信封。
 
 - **socket 目标刻意指向死端口**：`demo-boot.js` 在渲染器 bundle 之前把 `musepi-gui-url` 固定为 `ws://127.0.0.1:9/demo`。夹具传输层安装失败时，demo 只能停在连接页，绝不能落到本机 8300 的 daemon 上。改夹具时不要把这个 URL 改成活的。
 - **夹具形状是录制的，不是编的**：`web/demo-src/fixtures/` 里的 RPC 应答照隔离 daemon 的真实形状（会话 tree/list/resume 快照、工作区树、`fs.readBytes`、git 状态），渲染器解析的就是生产环境那一套。演示值全部虚构，不含真实路径或人名。
-- **验证**（`packages/desktop-app/scripts/verify-web-demo.mjs`）：在系统分配的本地端口上服务 `web/app/`，用无头 Edge 启动，断言真实外壳（侧栏导航 + 状态栏）、欢迎输入框、某个演示会话的 transcript、零个发往 8300 的请求，以及 socket 目标不可达时零个真实 WebSocket 连接。每项打印一行 PASS/FAIL，失败以非零码退出，并把 `welcome.png` / `session.png` 写到 `.tmp/verify-web-demo/`。先跑 `packages/desktop-app` 里的 `bun run build:web-demo`；产物缺失时脚本以 2 退出。
+- **验证**（`apps/desktop/scripts/verify-web-demo.mjs`）：在系统分配的本地端口上服务 `web/app/`，用无头 Edge 启动，断言真实外壳（侧栏导航 + 状态栏）、欢迎输入框、某个演示会话的 transcript、零个发往 8300 的请求，以及 socket 目标不可达时零个真实 WebSocket 连接。每项打印一行 PASS/FAIL，失败以非零码退出，并把 `welcome.png` / `session.png` 写到 `.tmp/verify-web-demo/`。先跑 `apps/desktop` 里的 `bun run build:web-demo`；产物缺失时脚本以 2 退出。
 
 ## 9. 平台适配(2026-08-11)
 
@@ -432,7 +432,7 @@ daemon RPC:
 - 渲染 key 用 `provider` → React 重复 key 警告(托盘历史 bug);
 - 每凭据一个折叠区块 → 视觉上堆叠重复块(/usage 面板历史 bug)。
 
-**合并算法**(`packages/desktop-app/src/components/composer/usage-panel.tsx` `UsageProviderSection`,托盘 `tray-menu-main.tsx` `buildUsageRows` 同款):
+**合并算法**(`apps/desktop/src/components/composer/usage-panel.tsx` `UsageProviderSection`,托盘 `tray-menu-main.tsx` `buildUsageRows` 同款):
 - 按 `provider` 分组 → 一个折叠区;按 `label|windowId` 分窗口 → 每个窗口一行;
 - **列序是 provider 级固定序**:跨窗口平均用量降序、同分按标签 —— **禁止每窗口独立 worst-first 排序**(凭证会"左右乱窜",用户感知为错位)。列上限 4(`.slice(0, 4)`);
 - 最右侧 `合计` 列:该窗口各凭据分数的**均值**(TUI 聚合语义),带分隔线;provider 排序 least-pressure 升序(TUI parity);
@@ -446,7 +446,7 @@ daemon RPC:
 
 ## 13. slash 补全排序(2026-08-16)
 
-`packages/desktop-app/src/lib/slash-rank.ts` `rankSlashEntries(entries, query, guiNative)`(会话 Composer `use-completion.ts` + WelcomeComposer 共用):
+`apps/desktop/src/lib/slash-rank.ts` `rankSlashEntries(entries, query, guiNative)`(会话 Composer `use-completion.ts` + WelcomeComposer 共用):
 - 排序 tier:name 全等 > 名前缀 > 名子串 > 描述子串;层内 **GUI 原生命令优先**(usage/context —— composer 拦截开面板的命令,同层压过 `clear`/`compaction` 等 daemon 命令);
 - 空 query 保持目录序(裸 `/` 列表不重排);非匹配项沉底保序(skill: 查询的幸存者不被丢弃);
 - 纯函数 + 单测 `lib/slash-rank.test.ts`(tier/GUI 决胜/稳定序/沉底)。
@@ -487,7 +487,7 @@ daemon RPC:
 
 ### 验证
 
-`packages/desktop-app/test/trajectory.test.ts` 10 用例(tsMs 提取 / turn 时序 / roundDurations Map+数组形态 / 未命中不闭合 / 范围判定 / usage·duration·ttft 提取);`tsgo -p tsconfig.json --noEmit` 全绿;`bun run build:bundle` 通过。CDP/截图验证按 §8 工作流。
+`apps/desktop/test/trajectory.test.ts` 10 用例(tsMs 提取 / turn 时序 / roundDurations Map+数组形态 / 未命中不闭合 / 范围判定 / usage·duration·ttft 提取);`tsgo -p tsconfig.json --noEmit` 全绿;`bun run build:bundle` 通过。CDP/截图验证按 §8 工作流。
 
 ## 15. 消息树数据 seam(/tree 语义,2026-08-21)
 
@@ -497,11 +497,11 @@ daemon RPC:
 - **已落地(向前兼容)**:
   - `wire/src/index.ts`:User/Developer/Assistant/ToolResult 四角色 message 加可选 `parentId?: string | null`(live 事件暂缺)。
   - `MaterializedView.#upsertMessage`:`parentId: message.parentId ?? null`(带即保留,缺即 null)。
-  - `packages/desktop-app/src/lib/message-tree.ts`:`buildMessageTree(entries)` / `flattenMessageTree`——从 entry 的 id/parentId 建分支树(孤儿作根、自环安全、兄弟保序);历史快照立即可用,测试 6 用例。
+  - `apps/desktop/src/lib/message-tree.ts`:`buildMessageTree(entries)` / `flattenMessageTree`——从 entry 的 id/parentId 建分支树(孤儿作根、自环安全、兄弟保序);历史快照立即可用,测试 6 用例。
 - **live 消息树的剩余 seam**:daemon 发射端在 message 事件上打标(`agentSession.sessionManager.leafEntry()?.parentId` 于转发点 server.ts `agentSession.subscribe` 处)——落实后 GUI 轨迹面板即可加「时间线/分支树」切换(复用 `buildMessageTree`)。TUI `/trace` 方案见 `docs/archive/tui-trace-plan.md`。
 - **2026-09-24 更新**:`buildMessageTree` 唯一的画布消费方(`SessionTreeCanvas`)已下线——会话地图收敛为单一轮级视图(§24)。数据 seam 保留:TrajectoryView 的分支树模式仍从 `buildMessageTree` 渲染,live `parentId` 打标依旧是 live 分支视图的前置条件。
 
-- **2026-11-07 打标只连到消息祖先,投影层补回卡片链**:`stampLiveMessageParentId` 把新消息挂到「最近的 MESSAGE 祖先」上(该函数还要服务 model_change/thinking_level_change 这类没有 messageKey 的叶子),于是顾问卡与它之后的助手回复成为**同父兄弟**——卡片一拿到回复就掉出活跃路径(转录里闪过即消失),地图把它读成上一轮的「重答」分支,画布比轮数标签多一格(实机回归,会话 01a1a5a1)。修复放在投影层而非打标层:`MaterializedView` 在日志序相邻 + 同父 + `display` 可见三条同时成立时,把新消息重新挂到那张卡片上(`#attachToSplicedCard`),user 消息永不重挂(撤回后旧分支的建议不能复活);卡片自身被 `message_end` 重投影时保留已解析的父链。`packages/desktop-app/test/advisor-live-chain.test.ts` 把「投影 → 活跃路径 → 轨迹 → 地图」整条链路串起来,并保留一份未修复形态的对照,断言它会复现消失与假分支。仍待处理的同类缺口:`DaemonServer.#leafMoveSnapshot` 的活跃路径只收 message 行,树操作(撤回/切分支)后卡片仍可能从 pinned 路径里掉出去。
+- **2026-11-07 打标只连到消息祖先,投影层补回卡片链**:`stampLiveMessageParentId` 把新消息挂到「最近的 MESSAGE 祖先」上(该函数还要服务 model_change/thinking_level_change 这类没有 messageKey 的叶子),于是顾问卡与它之后的助手回复成为**同父兄弟**——卡片一拿到回复就掉出活跃路径(转录里闪过即消失),地图把它读成上一轮的「重答」分支,画布比轮数标签多一格(实机回归,会话 01a1a5a1)。修复放在投影层而非打标层:`MaterializedView` 在日志序相邻 + 同父 + `display` 可见三条同时成立时,把新消息重新挂到那张卡片上(`#attachToSplicedCard`),user 消息永不重挂(撤回后旧分支的建议不能复活);卡片自身被 `message_end` 重投影时保留已解析的父链。`apps/desktop/test/advisor-live-chain.test.ts` 把「投影 → 活跃路径 → 轨迹 → 地图」整条链路串起来,并保留一份未修复形态的对照,断言它会复现消失与假分支。仍待处理的同类缺口:`DaemonServer.#leafMoveSnapshot` 的活跃路径只收 message 行,树操作(撤回/切分支)后卡片仍可能从 pinned 路径里掉出去。
 
 ## 16. 转录自定义消息渲染 + 流式 markdown 契约(2026-08-22)
 
@@ -548,20 +548,20 @@ daemon RPC:
 
 ### 三合一发送/停止按钮：run 级 working（turn 级边界陷阱）
 
-`SendOrStopButton`（`packages/desktop-app/src/components/composer/action-buttons.tsx`）idle 显示发送箭头，working 态变胶囊 + 点阵 bloom + 两标签（「工作中」/「停止」，hover 互换）。**关键陷阱**：
+`SendOrStopButton`（`apps/desktop/src/components/composer/action-buttons.tsx`）idle 显示发送箭头，working 态变胶囊 + 点阵 bloom + 两标签（「工作中」/「停止」，hover 互换）。**关键陷阱**：
 
 - **`turn_end` 是每工具批次发一次，不是 run 结束**（`agent-loop.ts` `pushTurnEnd` 每个 tool batch 一次；`types.ts`: "a turn is one assistant response + any tool calls/results"）。若用 `turn_end` 清 working，**轮间 provider 准备期按钮会闪回发送箭头**（用户报告 2026-08-22）。
-- **正确定界**（`packages/desktop-app/src/lib/session-store.ts`）：`agent_start`/`turn_start`/user `message_start` → `#working = true`；`turn_end` **只清 `#streaming`**；`agent_end` 才清 `#working` + `#streaming`；daemon `{kind:"state", payload:{isStreaming}}` 帧做权威纠正（中止无 turn_end 时兜底）。
+- **正确定界**（`apps/desktop/src/lib/session-store.ts`）：`agent_start`/`turn_start`/user `message_start` → `#working = true`；`turn_end` **只清 `#streaming`**；`agent_end` 才清 `#working` + `#streaming`；daemon `{kind:"state", payload:{isStreaming}}` 帧做权威纠正（中止无 turn_end 时兜底）。
 - **`#buildSnapshot` 的 OR 陷阱**：旧代码 `working: this.#working || snap.state.isStreaming`——view 的 turn 级 `isStreaming` 在无 turn_end 的中止路径会卡 `true`，把已复位的标志 OR 回去，stop 胶囊永不熄灭。**已改为 store 单一事实源** `working: this.#working`，构造时用 resume snapshot `state.isStreaming` 播种（中途加入正在工作的会话也正确显示）。
-- **测试**：`packages/desktop-app/test/session-store.test.ts` 覆盖「run 级边界不闪回 + agent_end 才熄灭 + state 帧兜底」。改按钮/指示器语义先看该文件的 switch 与 `#buildSnapshot`。
+- **测试**：`apps/desktop/test/session-store.test.ts` 覆盖「run 级边界不闪回 + agent_end 才熄灭 + state 帧兜底」。改按钮/指示器语义先看该文件的 switch 与 `#buildSnapshot`。
 
 ### 更新提示 toast（bitfun DailyAppUpdateGate parity）
 
 - 主进程 `main.cjs` 启动后 12s 静默检查，`checkForUpdates()` 得 `newer` 则 `webContents.send("update-available", result)`。
-- 渲染端 `UpdateToast.tsx`（`packages/desktop-app/src/components/UpdateToast.tsx`）订阅 `onUpdateAvailable`（preload 暴露），右下角卡片：版本（v当前 → v最新）+ notes + 「下载更新」/「跳过此版本」。**notes 走 `updater-notes` IPC**（主进程拉 manifest，成功后缓存）——不再依赖 daemon RPC——daemon 未连上或 `startup.checkUpdate` 关闭时预览照常可用；notes 超 200 字符出「展开」toggle。
+- 渲染端 `UpdateToast.tsx`（`apps/desktop/src/components/UpdateToast.tsx`）订阅 `onUpdateAvailable`（preload 暴露），右下角卡片：版本（v当前 → v最新）+ notes + 「下载更新」/「跳过此版本」。**notes 走 `updater-notes` IPC**（主进程拉 manifest，成功后缓存）——不再依赖 daemon RPC——daemon 未连上或 `startup.checkUpdate` 关闭时预览照常可用；notes 超 200 字符出「展开」toggle。
 - **下载状态**（updater-state 推送）：`preparing` 由 `updater-download` 同步置位（不确定态进度条——覆盖点击 → 首字节之间 electron-updater 尚未发 `download-progress` 的空窗；重入保护让双击安全），`downloading` 显示百分比 + 已传/总量 MB + `bytesPerSecond`，`downloaded` 显示完成行 + 立即重启。被关掉的 toast 会在 `preparing`/`downloaded` 推送时**复活**——`autoInstallOnAppQuit=false` 下立即重启是唯一安装路径，必须始终可达（设置页的应用内「下载更新」按钮同样依赖该复活）。关闭播 180ms 退出动画（close-timer + `--closing` 类，prompt-dialog parity）；下载失败提供重试 + 「前往下载」。
 - **「跳过此版本」按版本记忆**（`localStorage["musepi-update-skip-version"]`，bitfun 同款）——同一版本不再打扰；**更新说明与「新功能」弹窗是两条独立链路**：toast 读 `update-manifest.json` 的 `notes`（纯字符串——`{zh,en}` 形状留给未来拆分 manifest；daemon `updates.check` 两种都透传），弹窗读 `CHANGELOG.musepi.md`。两条链路靠构造保持同步：`gui-release.yml` 用 `sectionMatch`（首个 `## [x.y.z]` 块）从最新一节切出 manifest 的 `notes`，所以发版只写那一节即可。
-- 桥接统一走 `packages/desktop-app/src/lib/electron.ts` 的 `ElectronAPI.checkUpdates/onUpdateAvailable/getUpdateNotes` + `UpdateCheckResult` 类型（不在组件里内联 window 断言）。
+- 桥接统一走 `apps/desktop/src/lib/electron.ts` 的 `ElectronAPI.checkUpdates/onUpdateAvailable/getUpdateNotes` + `UpdateCheckResult` 类型（不在组件里内联 window 断言）。
 - **按平台回退与最终产物完整性**：更新清单的 `downloads` 以 `<平台>-<架构>` 为键；旧 `url` 仅保留作 macOS ARM64 兼容路径，其他目标缺失时回退版本发布页。发布任务合并 Windows feed 前，`gui-release-channel.ts` 对每个最终二次包装 exe 重算 SHA-512 与字节大小，并同步 x64 顶层默认值；资产缺失直接让发布失败，不再上传过期元数据。
 
 ### 发布产物与 CLI 关系（2026-08-23 实测确认）
@@ -635,11 +635,11 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 ## 19. GUI 吸收轮（2026-08-29）：git 图谱 / 浮动状态卡 / 奖励弹窗 / 最大化层级
 
-- **`git.log` 结构化契约（对旧形状是破坏性变更）**：默认返回 `{ commits: [{ hash, shortHash, author, timestamp(ms), refs: [{kind: "head"|"local"|"remote"|"tag", name}], parents: string[], subject }], hasMore }` —— 由 `git log --all --topo-order --pretty=format:%H%x1f%h%x1f%an%x1f%at%x1f%D%x1f%P%x1f%s%x1e` 解析（`limit` 默认 100，多取一条得 `hasMore`；`skip` 翻页）。远端 ref 以 `git remote` 名单分类（本地 `feature/x` 不会误判为 `origin/...`）。参数 `{ cwd?, limit?, skip?, graph? }`；`graph: true` 保留旧 ASCII 字符串（GUI 已不再使用）。**异步 spawn + 10s kill 守卫**——不再用 spawnSync（曾冻结整个 daemon 事件循环，同 git.status 教训）。GUI：`ContextPanel` 的 `GitLogPane` 经车道求解器 `packages/desktop-app/src/lib/git-graph-lanes.ts`（`solveGraphLanes`，纯函数 + `packages/desktop-app/test/git-graph-lanes.test.ts`）渲染 ZCode 风格表格：first parent 保道、其余 parent 开道/并入、滞留列以 `kind: "join"` 汇入节点。加载更多 = 累积 commits 整表重算，跨页车道连续。行点击复制完整 hash（1.2s「已复制」反馈）。
+- **`git.log` 结构化契约（对旧形状是破坏性变更）**：默认返回 `{ commits: [{ hash, shortHash, author, timestamp(ms), refs: [{kind: "head"|"local"|"remote"|"tag", name}], parents: string[], subject }], hasMore }` —— 由 `git log --all --topo-order --pretty=format:%H%x1f%h%x1f%an%x1f%at%x1f%D%x1f%P%x1f%s%x1e` 解析（`limit` 默认 100，多取一条得 `hasMore`；`skip` 翻页）。远端 ref 以 `git remote` 名单分类（本地 `feature/x` 不会误判为 `origin/...`）。参数 `{ cwd?, limit?, skip?, graph? }`；`graph: true` 保留旧 ASCII 字符串（GUI 已不再使用）。**异步 spawn + 10s kill 守卫**——不再用 spawnSync（曾冻结整个 daemon 事件循环，同 git.status 教训）。GUI：`ContextPanel` 的 `GitLogPane` 经车道求解器 `apps/desktop/src/lib/git-graph-lanes.ts`（`solveGraphLanes`，纯函数 + `apps/desktop/test/git-graph-lanes.test.ts`）渲染 ZCode 风格表格：first parent 保道、其余 parent 开道/并入、滞留列以 `kind: "join"` 汇入节点。加载更多 = 累积 commits 整表重算，跨页车道连续。行点击复制完整 hash（1.2s「已复制」反馈）。
 - **`git.status` `numstat` 参数**：`{ numstat: true }` 额外返回 `git diff HEAD --numstat` 的增删行合计（二进制 "-" 行跳过）——浮动状态卡的 +N/−M 徽章消费。
 - **会话信息分区**：旧的浮动状态卡已移除。Git 改动、连接器、运行中插件、子代理与待办进度都是同一张会话信息卡里的分区（右栏收起时停靠、展开时浮卡）；子代理行同时显示 `AgentProgress.cost` 与结束后的实际 `durationMs`，运行中已用时仍按本挂载首次 sighting 计时（wire 载荷无起始时间戳），待办进度扫描最新 `todo` toolResult 的 `details.phases`。两个座位都做进出场：停靠座的外层常驻 flex 行并折叠到 0 宽（`.gui-session-info-seat`），卡片本身经 `useExitPresence` 保留到出场结束；若改为条件挂载卡片，整行会在一帧内重排，transcript 瞬跳 288px。对话/地图切换与信息卡开关放在会话卡顶部行（`.gui-chat-head`），不再绝对定位压在 transcript 上——浮层会盖住首行悬浮的引用胶囊并吞掉它的点击。
-- **Transcript `jumpRequest` prop**（`{ timestamp, nonce }`）：消息树/轨迹/画布/分支条跳转的唯一入口。先扩展尾部窗口（目标索引 − 20 行上下文）与压缩折叠（`setCompactedOpen`）直到目标行挂载，再 scrollIntoView + `tr-flash-highlight`（定义在 transcript.css，宿主无关）。旧的 `packages/desktop-app/src/lib/transcript-jump.ts`（行未挂载时回退 scrollTop 0）已删除——调用方传 `requestJump(ts)`，nonce 由 ChatView 持有。
-- **奖励弹窗**（`packages/desktop-app/src/components/RewardOverlay.tsx`）：`changelog.startup` 返回 `reward` 时由 AnnouncementOverlay 挂载（读可选 `<agentDir>/reward.json`：`{ id, amount` 必填，brand/label/subtitle/expires/success/primaryUrl/secondary 可选`}`）。只弹一次语义走既有公告流（force peek 可重开）。动效分层——tilt 包裹层（指针写 `--tilt-x/--tilt-y`）、idle 漂浮、一次性入场——同一 `transform` 永远只有一个动画源；数额用 CountUp 滚动；打开时 `sfxFor("complete")`；`gui-motion-off`/reduced-motion 全部降级。新增 i18n 域 `reward.ts`（zh+en，两侧 index.ts 查重守卫同步注册）。**新功能日志按语言裁剪**：`localizeChangelogMarkdown` 在 `parseChangelogHighlights` 之前运行，亮点卡与完整日志共用同一份投影——中文界面去掉所有缩进的 `- EN:` 子行，英文界面把 EN 正文提升为同一加粗标题下的内容（没有 EN 的旧条目保留中文行）。日志体走 `FadeScroll`，上下边缘柔和淡出而不是硬切一条线。
+- **Transcript `jumpRequest` prop**（`{ timestamp, nonce }`）：消息树/轨迹/画布/分支条跳转的唯一入口。先扩展尾部窗口（目标索引 − 20 行上下文）与压缩折叠（`setCompactedOpen`）直到目标行挂载，再 scrollIntoView + `tr-flash-highlight`（定义在 transcript.css，宿主无关）。旧的 `apps/desktop/src/lib/transcript-jump.ts`（行未挂载时回退 scrollTop 0）已删除——调用方传 `requestJump(ts)`，nonce 由 ChatView 持有。
+- **奖励弹窗**（`apps/desktop/src/components/RewardOverlay.tsx`）：`changelog.startup` 返回 `reward` 时由 AnnouncementOverlay 挂载（读可选 `<agentDir>/reward.json`：`{ id, amount` 必填，brand/label/subtitle/expires/success/primaryUrl/secondary 可选`}`）。只弹一次语义走既有公告流（force peek 可重开）。动效分层——tilt 包裹层（指针写 `--tilt-x/--tilt-y`）、idle 漂浮、一次性入场——同一 `transform` 永远只有一个动画源；数额用 CountUp 滚动；打开时 `sfxFor("complete")`；`gui-motion-off`/reduced-motion 全部降级。新增 i18n 域 `reward.ts`（zh+en，两侧 index.ts 查重守卫同步注册）。**新功能日志按语言裁剪**：`localizeChangelogMarkdown` 在 `parseChangelogHighlights` 之前运行，亮点卡与完整日志共用同一份投影——中文界面去掉所有缩进的 `- EN:` 子行，英文界面把 EN 正文提升为同一加粗标题下的内容（没有 EN 的旧条目保留中文行）。日志体走 `FadeScroll`，上下边缘柔和淡出而不是硬切一条线。
 - **最大化层级（用户：前后内容重叠）**：三处修复——(1) `.gui-pane-maximize-backdrop` 遮罩（fixed、top 48px、z-840、点击还原）垫在 z-850 面板下；(2) `.gui-float-scrollbar` z 100000 → 30（fixed 元素此前画在最大化面板之上；层级降为转写局部）；(3) 最大化期间抑制 agent 浏览自动切视图（`onManagedBrowserState` → `onViewChange("browser")`，经 `maximizedRef` 镜像）。**坑**：fixed 定位元素进根层叠上下文——任何高于浮动面板的 z-index 都会穿透；新增浮层前先 grep 审计 `z-index`。
 - **原生视图的布局/遮挡机制已整体删除**(随 2026-09-12 的 `<webview>` 迁移,见 §23):slot 投影、重投影信号(scroll/focus/visibilitychange)、几何遮挡判定(`lib/overlay-block.ts`)、页面加载 epoch/revision 水位线、4px 手柄让位——它们存在的唯一理由都是「页面是恒定画在 DOM 之上的原生视图」。dev 主进程仍带 `--remote-debugging-port=9224`(与管理浏览器自己的 CDP 桥 9230 是两个不同服务)。
 - **扩展中心加载失败相位**（dsh PluginInventory 对齐）：`stateLabel` 以 `loadError` 优先（「加载失败」），列表行（主树 + 搜索结果）显示红点（`gui-ext-dot--error`）+ `gui-ext-item-tag--err` 徽章——坏扩展不必点进详情即可见。
@@ -648,7 +648,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 - **会话列表点击重排修复**:`SessionList` 的 `statusTime` 排序曾以 `working(+2)/unread(+1)` 为主键——但两个标志都会因点击行而翻转(打开清未读、离开掉 working),行在光标下每次切换都上下跳动。现排序纯按最后活跃时间(`sessionSortKey` 降序 + 稳定 id 决胜);working/未读保留为纯视觉行标记(脉动点、加粗)。分组(`GroupedSessionList` 日期桶)本就按最后活跃。
 - **分组/项目 tab 动效**:胶囊新增滑动 thumb(`.gui-tab-thumb`,`data-tab` 驱动 `translateX(calc(100% + 2px))`,200ms spring——两个 pill 固定宽,几何确定无需测量),胶囊内激活 pill 自身填充转透明(类的基础 `--active` 填充保留给其他使用方)。列表容器按视图 key(`archived | groups | projects`)重挂载并 160ms 淡入(`.gui-tab-pane-in`)。
-- **切换错峰动画收紧**:错峰 reveal(guest-client `transcript.css`,`data-switched` 标记来自 ChatView)存在两份冲突阶梯——packages/desktop-app/src/styles/gui-pet.css 以不同延迟复制了 guest-client 规则,胜负取决于打包顺序。已删重复(transcript.css 单一来源),时长 300→240ms、尾延迟 210→120ms(最后一行 ~360ms 就绪,原 ~510ms),并补 motion-off/reduced-motion 全关。
+- **切换错峰动画收紧**:错峰 reveal(guest-client `transcript.css`,`data-switched` 标记来自 ChatView)存在两份冲突阶梯——apps/desktop/src/styles/gui-pet.css 以不同延迟复制了 guest-client 规则,胜负取决于打包顺序。已删重复(transcript.css 单一来源),时长 300→240ms、尾延迟 210→120ms(最后一行 ~360ms 就绪,原 ~510ms),并补 motion-off/reduced-motion 全关。
 - **骨架屏闪烁阈值 150→250ms**:快速本地切换期间旧会话内容保持可见(加载期间不卸载),只有真正慢的打开(历史会话重激活)才出骨架。
 - **发送路径审计(无需改动)**:composer 立即清空文本(`onSend` 即发即忘),store 按约 10 Hz 合批流事件突发(见 §50)并折叠连续 `message_update`,快照尾部截断 200 条(`tailSnapshot`),`session.send` 的侧栏刷新挂在发送 ack。感知延迟在 daemon 侧,不在 GUI。
 - **dsh 上游扫描(用户已 pull)**:新提交为 code-mode→PTC 改名、Connection 自持 RPC 传输(移除 ApiProxy)与 session-export 下载路由——结构性清理,本轮对 musepi GUI 无可吸收项;此前吸收的缝(Notifier 帧脏合并、插件清单)未变。
@@ -664,7 +664,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 1. **electron-builder `KeepShortcuts` 保留机制**——首次安装向 `HKCU\Software\<APP_GUID>` 写入 `KeepShortcuts=true`(GUID = appId 的 UUID v5,`multiUser.nsh` 的 `INSTALL_REGISTRY_KEY`)。后续安装时 `installSection.nsh` 读它:带 `KeepShortcuts=true` 且 exe 存在 → 走**保留分支**(仅在新旧路径不同时改名;`oldLink == newLink` 时**不重建**)。用户/清理工具删掉的桌面快捷方式,任何后续更新都不会重建。
 2. **`createDesktopShortcut:"always"` 对更新无效**:它只定义 `RECREATE_DESKTOP_SHORTCUT`(NsisTarget.js),该分支被 `${ifNot} ${isUpdated}` 门控——electron-updater 以 `--updated` 参数拉起安装器(NsisUpdater.js 参数 `["--updated","/S",...]`),所以更新永远跳过桌面重建,即便设了 "always"。
 
-**修复**(open-design custom-NSIS parity):`packages/desktop-app/release/ensure-shortcuts.nsh` 定义 `customInstall` 宏——`installSection.nsh` 在文件安装完成后调用它(`!ifmacrodef customInstall`)。它**无条件** `CreateShortCut` 桌面 + 开始菜单快捷方式(绕过 `keepShortcuts`/`isUpdated` 门控)并通知壳。经 `packages/desktop-app/package.json` 的 `nsis.include` 接线。
+**修复**(open-design custom-NSIS parity):`apps/desktop/release/ensure-shortcuts.nsh` 定义 `customInstall` 宏——`installSection.nsh` 在文件安装完成后调用它(`!ifmacrodef customInstall`)。它**无条件** `CreateShortCut` 桌面 + 开始菜单快捷方式(绕过 `keepShortcuts`/`isUpdated` 门控)并通知壳。经 `apps/desktop/package.json` 的 `nsis.include` 接线。
 
 **验证**(真实安装器,0.4.7):
 - 全新安装 → 桌面(本机桌面被重定向到 `D:\Desktop`;用 `[Environment]::GetFolderPath('Desktop')` 查,不是 `%USERPROFILE%\Desktop`)+ 开始菜单快捷方式均创建。
@@ -673,7 +673,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 ## 21. 任务中心加固（2026-09-03）：cron 契约、时区语义、运行历史
 
-任务中心页（`packages/desktop-app/src/components/ScheduledTasksPage.tsx` + `TaskCenterViews.tsx`）是 daemon cron 存储（`~/.musepi/crons.json` + `crons.runs.json`；调度器在 `coding-agent/src/daemon/server.ts`，合并/校验/下次运行在 `daemon/crons.ts`）的唯一 GUI 客户端。
+任务中心页（`apps/desktop/src/components/ScheduledTasksPage.tsx` + `TaskCenterViews.tsx`）是 daemon cron 存储（`~/.musepi/crons.json` + `crons.runs.json`；调度器在 `coding-agent/src/daemon/server.ts`，合并/校验/下次运行在 `daemon/crons.ts`）的唯一 GUI 客户端。
 
 ### 两级壳层接线（2026-11-08）
 
@@ -723,7 +723,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 - 编辑器时区下拉曾默认 `Asia/Shanghai`，而 daemon **完全忽略该字段**（next-run 全按本机时间算）——静默错位。草稿现在默认空选项「主机时区」，显式时区会显示在调度标签里。
 - 看板视图的暂停/恢复曾调用不存在的 `cron.update` 并用 `.catch(() => {})` 吞掉拒绝——无信号的死 UI；daemon 只有 `cron.toggle`/`cron.upsert`。`rpc.request` 的方法名是不检查的字符串：接新调用方时务必 grep daemon 的 handler switch。
-- 日历周起始是共享逻辑：页面日历（`TaskCalendarView`）与编辑器 `CalendarPicker` 都用 `packages/desktop-app/src/lib/appearance.ts` 的 `weekStartIndex()`/`orderedWeekdayKeys()`；星期文案来自 `scheduled sun..sat` 词表——禁止硬编码周日开头或 `["日","一",…]`。
+- 日历周起始是共享逻辑：页面日历（`TaskCalendarView`）与编辑器 `CalendarPicker` 都用 `apps/desktop/src/lib/appearance.ts` 的 `weekStartIndex()`/`orderedWeekdayKeys()`；星期文案来自 `scheduled sun..sat` 词表——禁止硬编码周日开头或 `["日","一",…]`。
 
 ## 22. 底部终端面板 + 浏览器地址栏打磨（2026-09-12）
 
@@ -815,7 +815,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **系统滚动条仍全局隐藏**（`gui-base.css`）—— 那是产品模型。轨池上限现在是 24 条的安全阀（远高于任何同时布局），并有悬停发现：可溢出容器可在**空槽**上直接绑定，未滚动过的窗格不会在用户猜到它能滚之前毫无提示；悬停绝不抢占用户正在滚动的轨。左侧图标栏重新标记 `data-gui-scrollbar="off"` 并裁剪自身溢出：导航列不会再长出轨，它向页面泄漏的 26px 也不会再把界面向上滚。
 - **设置行标签规范下沉到 CSS;索引库开关补 knob;使用统计热力图流式自适应**(同轮,用户指出):① `.gui-settings-row > div:first-child { flex: 1 1 0%; min-width: 0 }`(gui-chat.css,嵌套规则)—— 行是 `flex-wrap: wrap`,裸标签 `<div>` 按描述的 max-content 计宽,长中文文案一溢出就把开关挤到下一行(浏览器与 Computer Use 各行);需要特例的行仍可用显式 flex 工具类覆盖。② 索引库两个开关与此前 MCP/信息状态条是同一个缺 `.gui-toggle-knob` 的问题(已补)。③ 使用统计热力图原为固定 11px 网格(~690px),宽面板大片留白 —— 现为居中的 `max-w-[920px]` 图,53 个周列分享剩余宽度(`flex-1`,上限 15px),单元格 `aspect-square w-full` 跟随列宽,月份/星期标签镜像列几何(星期行 `1fr` 拉伸),任意宽度下都对齐。
 
-- **动效预算、视口漂移与主题 bundle（2026-11-10）**（`packages/desktop-app/src/plugins/ui-theme/`、`app.tsx`）：
+- **动效预算、视口漂移与主题 bundle（2026-11-10）**（`apps/desktop/src/plugins/ui-theme/`、`app.tsx`）：
   - 轨道现在同时尊重 `prefers-reduced-motion` 和应用的 `gui-motion-off` 类（`stillMotion()`）：橡皮糖胶囊不再挤压/回弹，吃豆人停止咀嚼，透明度淡入淡出也一并关闭。旧规则只给轨根设 `animation: none`，而根节点根本没有动画——真实动效来自 JS 与字形本身。
   - 轨道用 `position: fixed` 跟随视口坐标，但面板滑动、`HeightMorph`、最大化动画的是**祖先**：容器盒尺寸不变，`ResizeObserver`/`MutationObserver` 都不会触发，轨会停在动画前的坐标。现在 `transitionrun`/`transitionend`/`transitioncancel`/`animationend` 只重测动画元素之下的轨，文档级滚动则重测所有轨。
   - `rebind` 发现槽位 DOM 被替换（皮肤基座切换）以及卸载回收前会清空拖拽快照。持有指针捕获的拇指随子树一起被移除，`pointerup` 永远不会触发；陈旧的 `drag` 会让 `retire` 与 `armIdle` 永久跳过该轨。
@@ -863,7 +863,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 ## 34. 输入与窗口陷阱：输入法合成态、任务栏缩略图、听写、回退横幅（2026-09-17）
 
-- **输入框的合成状态标志必须能自愈**（`packages/desktop-app/src/components/Composer.tsx` 的 `composingRef`）：合成期间 `onKeyDown` 对任何按键都提前返回，该标志在 `compositionend` 释放——但合成被**中断**时这个事件根本不会触发（切窗、取消候选、Esc、渲染进程重载）。于是标志永久为真：之后再按 Enter 全都石沉大海，而鼠标点「发送」绕开键盘路径照常可用，只有重启能恢复（用户报的「挂后台一会儿 Enter 就失效」）。现在三层兜底：失焦/获得焦点即清零（失焦必然终止合成）、`compositionupdate` 负责续期、而一个既不是 `keyCode 229`（Chromium 对合成中按键的标记）又不在 `isComposing` 的按键判定标志过期并清零。Enter 不参与最后这条规则，因为 WebKit 会在 `compositionend` **之后**补发 keyCode 13 的确认 Enter。
+- **输入框的合成状态标志必须能自愈**（`apps/desktop/src/components/Composer.tsx` 的 `composingRef`）：合成期间 `onKeyDown` 对任何按键都提前返回，该标志在 `compositionend` 释放——但合成被**中断**时这个事件根本不会触发（切窗、取消候选、Esc、渲染进程重载）。于是标志永久为真：之后再按 Enter 全都石沉大海，而鼠标点「发送」绕开键盘路径照常可用，只有重启能恢复（用户报的「挂后台一会儿 Enter 就失效」）。现在三层兜底：失焦/获得焦点即清零（失焦必然终止合成）、`compositionupdate` 负责续期、而一个既不是 `keyCode 229`（Chromium 对合成中按键的标记）又不在 `isComposing` 的按键判定标志过期并清零。Enter 不参与最后这条规则，因为 WebKit 会在 `compositionend` **之后**补发 keyCode 13 的确认 Enter。
 - **未闭合项——中文输入开头吞字**：尚无复现，未定案。已排除：受控值滞后（无 `useDeferredValue`/防抖，`onChange` 里 `value={text}` 同步更新）、草稿回填（`use-draft-persistence.ts` 的还原只以 `sessionId` 为键）、全局按键监听（app.tsx 只处理 ⌘/Ctrl 组合）、按住空格讲话（不存在该功能）。要想钉死，需要提供：用的是哪款输入法（微软拼音/搜狗等）、是否只在**冷启动后的首次**合成出现、丢的是**拼音字母**（从未上屏）还是**已上屏的汉字**。
 - **Windows 任务栏缩略图全白**（`electron/main.cjs` 的 BrowserWindow）：不设 `backgroundColor` 时 DWM 窗口初始表面是白色，Aero peek 画的就是这层初始表面而非页面内容；现设为 `#1e1c1a`，与应用的深色背景一致。（#6）
 - **听写返回空 PCM——「要点两次」**（`lib/voice.ts` 的 `recordPcm`）：它一开始录音就 resolve，调用方拿到的只是最初几毫秒缓冲的内容（通常是空的），设置里的 `vadEndMs` 也从未生效。现在 VAD 静音、时长上限、手动停止三条路径统一汇入一个 `finish()`：组装完整 PCM、断开音频图、关闭麦克风后才 resolve；在 `getUserMedia` 尚未返回时就取消的场景由 `onaudioprocess` 内部关流，麦克风指示灯必定熄灭。（#9）
@@ -889,7 +889,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **有 `initialScene` 时抑制整图导入**（导入 effect 的条件是 `src && !initialScene`）：否则会把 chip 自己的 PNG（含导出时烤进去的主题底色）叠在活笔画之上。
 - **scene 经 `strokesRef` 镜像读取，不读渲染闭包**（`finish`）：快照发生在 `closeTextEditor()` 之后约 80ms，刚提交的文字标签还没进到那一帧的 `strokes`——那样会出现「PNG 上有字、存下来的 scene 里没有字」。
 - **场景持久化是刻意的尽力而为**：`attachmentDraftPayload` 仅当 `sketch && !sceneHasImage(scene)` 且整体载荷在 1.5MB 预算内时才带 scene；超预算或场景内含导入图片（会再带一份全尺寸 base64）时只丢 scene、保住 chip——否则一次配额错误会把整份草稿一起丢掉。无 scene 的 chip（恢复的草稿、改动前数据、lightbox 里来的普通图片）回落到旧的整图重开路径，不会退化成「打不开画板」。
-- **`parseSketchScene` 是存量数据的闸门**：版本未知、步长不对（钢笔笔画被截成非 3 的倍数＝最后一点丢了压力值）、坐标非有限，都只丢**那一条**笔画，其余整板保留。NaN 一旦进入 Konva 会让节点整块空白，所以序列化也绝不写出非有限坐标。单测：`packages/desktop-app/test/sketch-scene.test.ts`（各步长往返、量化、垃圾拒绝、等比缩放、压力透传）。
+- **`parseSketchScene` 是存量数据的闸门**：版本未知、步长不对（钢笔笔画被截成非 3 的倍数＝最后一点丢了压力值）、坐标非有限，都只丢**那一条**笔画，其余整板保留。NaN 一旦进入 Konva 会让节点整块空白，所以序列化也绝不写出非有限坐标。单测：`apps/desktop/test/sketch-scene.test.ts`（各步长往返、量化、垃圾拒绝、等比缩放、压力透传）。
 
 ## 37. 文字标签是一个盒子而非锚点：随文本自动增高，且与图形一样可缩放（2026-09-20）
 
@@ -1047,7 +1047,7 @@ useMemo，声明在读取它的搜索 effect **之前** —— biome 的 `noInva
 ### 45.6 验证
 
 `bun run check:ts`（biome + i18n dup-key + client-UI i18n 门控 + tsgo）、`bun test
-packages/desktop-app/test`（694）、`bun test packages/coding-agent/test/daemon`（328）。
+apps/desktop/test`（694）、`bun test packages/coding-agent/test/daemon`（328）。
 新增契约测试：会话作用域搜索（跨会话泄漏）、action-toast 的替换/堆叠/id 隔离。
 ⌘F 需要实机手动过一遍 —— 该查找栏由只存在于桌面壳里的窗口级快捷键驱动。
 
@@ -1132,7 +1132,7 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
 **契约**：`isPathInside` 比较 `path.relative(resolve(parent), resolve(child))` 并拒绝 `..`
 与绝对路径结果 —— 直接回答「是否在目录内」，而不是假定两侧拼写出同一个分隔符；同时它
 会拒绝只共享前缀的同级目录（`demo` 下的 `demo-extra`）。用例钉在
-`packages/desktop-app/test/plugin-path-scope.test.ts`。
+`apps/desktop/test/plugin-path-scope.test.ts`。
 
 **设置界面**：`settings.item.<extId>` 卡片与精确槽位 `settings.extensions`（插件自带管理
 面板如账号池注册处）的组件，都由 `ExtensionsCenter` 按扩展分组渲染，并带上
@@ -1154,14 +1154,14 @@ FLIP 位移（`ChatView.morphFrame`）期间，这份重绘叠加在位移自身
   调用方每批只 commit 一次。只承载**其它会话** subagent 流量的帧返回 `false`，
   因此完全不产生渲染。`approval-request` / `recap` 仍同步生效——用户正卡在弹窗上，
   不能让他等合批窗口。
-- **订阅方按切片选取。** `useStoreSelector`（packages/desktop-app/src/lib/use-store.ts）
+- **订阅方按切片选取。** `useStoreSelector`（apps/desktop/src/lib/use-store.ts）
   在新选取值相等时保留旧引用，于是「快照对象换了」本身不再触发重渲染。`GuiHeader`
   只订阅 `{working, streaming, approvals, cwd, titleCandidate}`——它此前每次对话流
   刷新都整块重渲染，而实际只读两个布尔。
 - **轮询只发布真变化。** `session.contextUsage`（3 秒）与 `session.list`（5 秒，原本
   已按 key 去重）在 `setState` 前比较；空闲会话此前每个 tick 都重渲染一次状态栏。
 
-**验证**：`packages/desktop-app/test/session-store-batching.test.ts`（每批一次 emit、
+**验证**：`apps/desktop/test/session-store-batching.test.ts`（每批一次 emit、
 外来帧零次）、`test/use-store-selector.test.tsx`（无关字段不重渲染、选中字段重渲染）。
 
 ## 51. HTML 卡片答案回读（2026-10-18）
@@ -1215,12 +1215,12 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 
 `session.create` 保留自己的 120s 上限——它是 GUI 发起的最慢的一件事。
 
-**等待可见。** `withSlowHint`（packages/desktop-app/src/lib/rpc-slow-hint.ts）
+**等待可见。** `withSlowHint`（apps/desktop/src/lib/rpc-slow-hint.ts）
 设 2.5s 阈值，之后每秒 tick 一次并带回已用时间。它不改变请求结果，且请求一
 落定就清掉 interval（不留漏跑的 ticker）。冷启动骨架把它渲染成
 「正在加载会话… 已等待 N 秒」，用等宽数字，数字跳动不移布局。
 
-**验证**：`packages/desktop-app/test/rpc-slow-hint.test.ts`——快请求不 tick；
+**验证**：`apps/desktop/test/rpc-slow-hint.test.ts`——快请求不 tick；
 慢请求 tick 且 elapsed 递增；失败仍以自身错误拒绝（提示是附加的，不是替代）；
 请求结束后没有 ticker 存活；秒数助手按展示取整。
 
@@ -1253,7 +1253,7 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 
 最近会话 `MenuPopup` 由非 tab 标题和标签带外的紧凑按钮共享，因此 tab 模式保留新建与最近会话导航，且不改变标签标题盒。标签测试在 `afterAll` 恢复入口 locale，只移除自身 hosts。隔离 seed 在切换前记录 `preSeedLocale`，收尾恢复该精确值，最终文件分别验证英文与非英文入口。
 
-**验证**：`SESSION_TAB_TEST_ENTRY_LOCALE=zh-CN bun test packages/desktop-app/test/session-tabs-strip-00-isolation-seed.test.ts packages/desktop-app/test/session-tabs.test.ts packages/desktop-app/test/session-tabs-strip.test.tsx packages/desktop-app/test/session-tabs-strip.test.tsx-after.test.ts packages/desktop-app/test/session-tabs-strip.test.tsx-after.test.ts-locale.test.ts packages/desktop-app/test/session-markdown.test.ts` 覆盖迁移、持久化、尺寸、固定手势、每个按 ID 动作、tab 模式导航与跨文件隔离；将入口改为 `en-US` 验证另一方向。`bun --cwd=packages/desktop-app run check` 覆盖 Biome 与类型。
+**验证**：`SESSION_TAB_TEST_ENTRY_LOCALE=zh-CN bun test apps/desktop/test/session-tabs-strip-00-isolation-seed.test.ts apps/desktop/test/session-tabs.test.ts apps/desktop/test/session-tabs-strip.test.tsx apps/desktop/test/session-tabs-strip.test.tsx-after.test.ts apps/desktop/test/session-tabs-strip.test.tsx-after.test.ts-locale.test.ts apps/desktop/test/session-markdown.test.ts` 覆盖迁移、持久化、尺寸、固定手势、每个按 ID 动作、tab 模式导航与跨文件隔离；将入口改为 `en-US` 验证另一方向。`bun --cwd=apps/desktop run check` 覆盖 Biome 与类型。
 
 ## 56. 历史新鲜度与有限轮次索引分页
 

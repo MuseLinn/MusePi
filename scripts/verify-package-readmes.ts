@@ -9,7 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const PACKAGES_DIR = path.resolve("packages");
+const WORKSPACE_ROOTS = ["packages", "apps", "tools"] as const;
 
 // Pre-existing packages that already had README.md but no zh-CN twin at the
 // time this gate was introduced.  They must stay on this list until someone
@@ -38,41 +38,46 @@ const missingReadme: string[] = [];
 const missingZh: string[] = [];
 const grandfathered: string[] = [];
 
-for (const entry of fs.readdirSync(PACKAGES_DIR, { withFileTypes: true })) {
-	if (!entry.isDirectory()) continue;
-	const pkgDir = path.join(PACKAGES_DIR, entry.name);
-	const pkgJson = path.join(pkgDir, "package.json");
-	if (!fs.existsSync(pkgJson)) continue;
+for (const workspaceRoot of WORKSPACE_ROOTS) {
+	const rootDir = path.resolve(workspaceRoot);
+	if (!fs.existsSync(rootDir)) continue;
+	for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
+		if (!entry.isDirectory()) continue;
+		const pkgDir = path.join(rootDir, entry.name);
+		const pkgJson = path.join(pkgDir, "package.json");
+		if (!fs.existsSync(pkgJson)) continue;
+		const relative = `${workspaceRoot}/${entry.name}`;
 
-	const readme = path.join(pkgDir, "README.md");
-	if (!fs.existsSync(readme)) {
-		missingReadme.push(entry.name);
-		failures++;
-		continue;
-	}
-
-	const zh = path.join(pkgDir, "README.zh-CN.md");
-	if (!fs.existsSync(zh)) {
-		if (GRANDFATHERED.has(entry.name)) {
-			grandfathered.push(entry.name);
-		} else {
-			missingZh.push(entry.name);
+		const readme = path.join(pkgDir, "README.md");
+		if (!fs.existsSync(readme)) {
+			missingReadme.push(relative);
 			failures++;
+			continue;
+		}
+
+		const zh = path.join(pkgDir, "README.zh-CN.md");
+		if (!fs.existsSync(zh)) {
+			if (GRANDFATHERED.has(entry.name)) {
+				grandfathered.push(relative);
+			} else {
+				missingZh.push(relative);
+				failures++;
+			}
 		}
 	}
 }
 
 if (missingReadme.length) {
 	console.error("❌ Missing README.md:");
-	for (const name of missingReadme) console.error(`   packages/${name}/README.md`);
+	for (const name of missingReadme) console.error(`   ${name}/README.md`);
 }
 if (missingZh.length) {
 	console.error("❌ Missing README.zh-CN.md (not grandfathered):");
-	for (const name of missingZh) console.error(`   packages/${name}/README.zh-CN.md`);
+	for (const name of missingZh) console.error(`   ${name}/README.zh-CN.md`);
 }
 if (grandfathered.length) {
 	console.log("ℹ️  Grandfathered single-language READMEs (debt register):");
-	for (const name of grandfathered) console.log(`   packages/${name}/README.md`);
+	for (const name of grandfathered) console.log(`   ${name}/README.md`);
 }
 if (!failures) {
 	console.log(`✅ README gate passed (${grandfathered.length} grandfathered packages pending zh-CN translation)`);

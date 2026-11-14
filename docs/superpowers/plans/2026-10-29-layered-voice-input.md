@@ -135,16 +135,16 @@ Expected: PASS.
 ### Task 4: Desktop Streaming Dictation and Enrollment UI
 
 **Files:**
-- Modify: `packages/desktop-app/src/lib/voice.ts`
-- Modify: `packages/desktop-app/src/components/composer/use-dictation.ts`
-- Modify: `packages/desktop-app/src/components/composer/action-buttons.tsx`
-- Modify: `packages/desktop-app/src/styles/gui-composer.css`
-- Create: `packages/desktop-app/src/components/composer/speaker-enrollment.tsx`
-- Modify: `packages/desktop-app/src/components/settings-sections/voice.tsx`
-- Modify: `packages/desktop-app/src/i18n/voice.ts`
-- Create: `packages/desktop-app/test/speaker-enrollment.test.tsx`
-- Create: `packages/desktop-app/test/voice-streaming-dictation.test.ts`
-- Modify: `packages/desktop-app/src/lib/voice.test.ts`
+- Modify: `apps/desktop/src/lib/voice.ts`
+- Modify: `apps/desktop/src/components/composer/use-dictation.ts`
+- Modify: `apps/desktop/src/components/composer/action-buttons.tsx`
+- Modify: `apps/desktop/src/styles/gui-composer.css`
+- Create: `apps/desktop/src/components/composer/speaker-enrollment.tsx`
+- Modify: `apps/desktop/src/components/settings-sections/voice.tsx`
+- Modify: `apps/desktop/src/i18n/voice.ts`
+- Create: `apps/desktop/test/speaker-enrollment.test.tsx`
+- Create: `apps/desktop/test/voice-streaming-dictation.test.ts`
+- Modify: `apps/desktop/src/lib/voice.test.ts`
 
 **Interfaces:**
 - Consumes: all Task 3 RPCs, stream events, and `GateState`.
@@ -158,7 +158,7 @@ Cover partial preview not committing text, final segment insertion, `prefer` dra
 
 - [ ] **Step 2: Run tests and confirm failure**
 
-Run: `bun test packages/desktop-app/test/voice-streaming-dictation.test.ts packages/desktop-app/test/speaker-enrollment.test.tsx packages/desktop-app/src/lib/voice.test.ts`
+Run: `bun test apps/desktop/test/voice-streaming-dictation.test.ts apps/desktop/test/speaker-enrollment.test.tsx apps/desktop/src/lib/voice.test.ts`
 Expected: FAIL because streaming dictation and the wizard do not exist.
 
 - [ ] **Step 3: Implement streaming RPC wiring, volatile preview, and reactive motion**
@@ -167,7 +167,7 @@ Feed PCM chunks to the front-end stream while recording. Show `partial` only as 
 
 - [ ] **Step 4: Run desktop tests, checks, and real UI verification**
 
-Run: `bun test packages/desktop-app/test/voice-streaming-dictation.test.ts packages/desktop-app/test/speaker-enrollment.test.tsx packages/desktop-app/src/lib/voice.test.ts && bun run --cwd=packages/desktop-app check`
+Run: `bun test apps/desktop/test/voice-streaming-dictation.test.ts apps/desktop/test/speaker-enrollment.test.tsx apps/desktop/src/lib/voice.test.ts && bun run --cwd=apps/desktop check`
 Expected: PASS. Verify in Electron: live partial text, final insertion, error retry, completion, stable layout, reduced motion, and Escape cleanup.
 
 ### Task 5: TUI Streaming Integration
@@ -231,5 +231,5 @@ Document the layered pipeline, opt-in modes, local-only embeddings, enrollment m
 
 - [ ] **Step 4: Run final verification**
 
-Run: `bun test packages/coding-agent/test/voice-*.test.ts packages/coding-agent/test/stt-*.test.ts packages/desktop-app/test/speaker-enrollment.test.tsx packages/desktop-app/src/lib/voice.test.ts && bun run --cwd=packages/coding-agent check && bun run --cwd=packages/desktop-app check && bun run check:docs`
+Run: `bun test packages/coding-agent/test/voice-*.test.ts packages/coding-agent/test/stt-*.test.ts apps/desktop/test/speaker-enrollment.test.tsx apps/desktop/src/lib/voice.test.ts && bun run --cwd=packages/coding-agent check && bun run --cwd=apps/desktop check && bun run check:docs`
 Expected: PASS. Then run the full coding-agent suite and classify any unrelated or environment failures separately.

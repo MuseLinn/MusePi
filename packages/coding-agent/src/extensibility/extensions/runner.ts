@@ -135,7 +135,7 @@ function isHostOwnedExtension(ext: Extension): boolean {
 	return (
 		normalized.includes("/bundled-plugins/") ||
 		normalized.includes("/desktop-plugins/") ||
-		normalized.includes("/packages/desktop-app/src/plugins/")
+		normalized.includes("/apps/desktop/src/plugins/")
 	);
 }
 

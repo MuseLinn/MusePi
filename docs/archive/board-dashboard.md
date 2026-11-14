@@ -45,7 +45,7 @@ English | [中文](board-dashboard.zh-CN.md)
 ## 3. 架构
 
 ```
-┌─ GUI (packages/desktop-app, Electron) ──────────────────────────────┐
+┌─ GUI (apps/desktop, Electron) ──────────────────────────────┐
 │  BoardPage (React)                                          │
 │   ├─ 看板网格（拖放/缩放：dnd-kit 或手写 pointer 状态机）       │
 │   ├─ 组件卡 = <WidgetShell> + WidgetRegistry 组件</WidgetShell>│
@@ -178,7 +178,7 @@ widget 组件的视觉/排版/交互约束见 **`docs/archive/widget-design-syst
 - bitfun：`src/web-ui/src/scenes/miniapps/`（MiniAppRunner、useMiniAppBridge、MiniAppCustomizePanel）、
   `src/web-ui/src/tools/bitfun-canvas/`（CanvasRuntimeApp、runtime/sdk/*）
 - kimi work：产品截图（ui-references/，2026-08-07）
-- musepi：`packages/desktop-app/electron/main.cjs`（miniWindow 先例）、daemon RPC 注册表
+- musepi：`apps/desktop/electron/main.cjs`（miniWindow 先例）、daemon RPC 注册表
   （`packages/coding-agent/src/daemon/server.ts`）
 
 ## 7. builtin bundle 定位（2026-08-08 定）

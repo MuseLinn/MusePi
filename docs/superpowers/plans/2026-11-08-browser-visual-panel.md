@@ -50,9 +50,9 @@
 - Modify: `packages/coding-agent/src/tools/browser/page-text.ts`
 - Modify: `packages/coding-agent/src/tools/browser.ts`
 - Modify: `packages/coding-agent/src/tools/browser/tab-supervisor.ts`
-- Modify: `packages/desktop-app/electron/managed-browser.cjs`
+- Modify: `apps/desktop/electron/managed-browser.cjs`
 - Create: `packages/coding-agent/test/tools/browser-element-text-panel.test.ts`
-- Modify: `packages/desktop-app/test/managed-browser-menu-ipc.test.cjs`
+- Modify: `apps/desktop/test/managed-browser-menu-ipc.test.cjs`
 - Modify: `packages/client-core/test/browser-structured-card.test.tsx`
 
 **Interfaces:**

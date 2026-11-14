@@ -1,6 +1,6 @@
 // Rasterise the brand marks for scripts/regen-*.py.
 //
-// The SVGs in packages/desktop-app/build/ are the single geometry source; this
+// The SVGs in apps/desktop/build/ are the single geometry source; this
 // script only turns them into rasters at the exact pixel sizes the Python
 // side needs. The SVG markup is INLINED into the page rather than referenced
 // with <img src="file://…">: a page created from about:blank has an opaque

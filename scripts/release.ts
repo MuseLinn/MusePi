@@ -14,10 +14,10 @@ import { runChangelogFixer } from "./fix-changelogs";
 import { generateNixBunDeps, resolveNixBunDepsGenerator } from "./gen-nix-bun";
 
 const changelogGlob = new Glob("packages/coding-agent/CHANGELOG.musepi.md");
-const packageJsonGlob = new Glob("packages/*/package.json");
+const packageJsonGlob = new Glob("{packages,apps,tools}/*/package.json");
 const cargoTomlGlob = new Glob("crates/*/Cargo.toml");
 /** Android app manifest — versionName/versionCode live here, hardcoded (see 3c). */
-const gradlePath = "packages/mobile/android/app/build.gradle";
+const gradlePath = "apps/mobile/android/app/build.gradle";
 /**
  * Returns a normalized stable or numbered-beta version. Other prerelease
  * channels are rejected so they cannot enter the stable or beta feeds.
@@ -353,7 +353,7 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	}
 	console.log(`  sentinel: ${sentinelName}\n`);
 
-	// 3c. Sync the Android app version. packages/mobile/android/app/build.gradle
+	// 3c. Sync the Android app version. apps/mobile/android/app/build.gradle
 	// hardcodes versionCode/versionName — nothing else writes it, so every
 	// release used to ship an APK whose versionName lagged the main version
 	// (0.4.20's APK still said 0.4.4; 0.4.21's said 0.4.20). The release script

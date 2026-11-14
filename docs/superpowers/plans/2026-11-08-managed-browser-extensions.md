@@ -30,10 +30,10 @@
 ### Task 1: Managed-session extension records and IPC
 
 **Files:**
-- Create: `packages/desktop-app/electron/managed-browser-extensions.cjs`
-- Create: `packages/desktop-app/test/managed-browser-extensions.test.cjs`
-- Modify: `packages/desktop-app/electron/managed-browser.cjs`
-- Modify: `packages/desktop-app/test/managed-browser-menu-ipc.test.cjs`
+- Create: `apps/desktop/electron/managed-browser-extensions.cjs`
+- Create: `apps/desktop/test/managed-browser-extensions.test.cjs`
+- Modify: `apps/desktop/electron/managed-browser.cjs`
+- Modify: `apps/desktop/test/managed-browser-menu-ipc.test.cjs`
 
 **Interfaces:**
 - Produces: `readExtensionManifest(dir)`, `readExtensionRecords(file)`, `writeExtensionRecords(file, records)`, `loadPersistedExtensions(session, file)`, `listManagedExtensions(session, file)`.
@@ -47,13 +47,13 @@
 ### Task 2: Typed bridge and managed Extensions popup
 
 **Files:**
-- Modify: `packages/desktop-app/electron/preload.cjs`
-- Modify: `packages/desktop-app/src/env.d.ts`
-- Create: `packages/desktop-app/src/components/managed-browser-extensions.tsx`
-- Create: `packages/desktop-app/test/managed-browser-extensions.test.tsx`
-- Modify: `packages/desktop-app/src/components/ManagedBrowserPane.tsx`
-- Modify: `packages/desktop-app/test/managed-browser-pane-menu.test.tsx`
-- Modify: `packages/desktop-app/src/styles/gui-settings.css`
+- Modify: `apps/desktop/electron/preload.cjs`
+- Modify: `apps/desktop/src/env.d.ts`
+- Create: `apps/desktop/src/components/managed-browser-extensions.tsx`
+- Create: `apps/desktop/test/managed-browser-extensions.test.tsx`
+- Modify: `apps/desktop/src/components/ManagedBrowserPane.tsx`
+- Modify: `apps/desktop/test/managed-browser-pane-menu.test.tsx`
+- Modify: `apps/desktop/src/styles/gui-settings.css`
 
 **Interfaces:**
 - Consumes: Task 1 IPC and actual loaded-extension records.

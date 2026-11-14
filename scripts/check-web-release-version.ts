@@ -23,16 +23,16 @@ import * as path from "node:path";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const INDEX_HTML = path.join(REPO_ROOT, "web", "index.html");
-const DESKTOP_PKG = path.join(REPO_ROOT, "packages", "desktop-app", "package.json");
+const DESKTOP_PKG = path.join(REPO_ROOT, "apps", "desktop", "package.json");
 
 if (!fs.existsSync(INDEX_HTML) || !fs.existsSync(DESKTOP_PKG)) {
-	console.error("[web-version] missing web/index.html or packages/desktop-app/package.json");
+	console.error("[web-version] missing web/index.html or apps/desktop/package.json");
 	process.exit(2);
 }
 
 const desktopVersion = (JSON.parse(fs.readFileSync(DESKTOP_PKG, "utf8")) as { version?: string }).version;
 if (!desktopVersion) {
-	console.error("[web-version] packages/desktop-app/package.json has no version");
+	console.error("[web-version] apps/desktop/package.json has no version");
 	process.exit(2);
 }
 
@@ -54,7 +54,7 @@ if (stale.length > 0) {
 		`[web-version] web/index.html advertises ${stale.join(", ")} but the release is ${expected}.\n` +
 			"  The runtime refresh only replaces these when the GitHub API answers, so a stale\n" +
 			"  fallback is what visitors see when it does not. Update the placeholders to\n" +
-			`  ${expected} (packages/desktop-app/package.json is the source of truth).`,
+			`  ${expected} (apps/desktop/package.json is the source of truth).`,
 	);
 	process.exit(1);
 }

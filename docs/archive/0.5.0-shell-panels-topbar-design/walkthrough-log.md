@@ -1,6 +1,6 @@
 # 0.5.0 壳层批次实机走查记录（A1/A2/B1/C + 桌宠角标）
 
-日期：2026-09-22 · 方式：CDP（MUSEPI_CDP_PORT）驱动真实 Electron 实例 + DOM 断言 + 截图 · 脚本：`packages/desktop-app/scripts/verify-shell-batches.ts`
+日期：2026-09-22 · 方式：CDP（MUSEPI_CDP_PORT）驱动真实 Electron 实例 + DOM 断言 + 截图 · 脚本：`apps/desktop/scripts/verify-shell-batches.ts`
 
 ## 结论：全部批次通过（2 个真 bug 已修，1 个脚本问题已修）
 

@@ -4,7 +4,7 @@ title: Cordis 插件管理与更新修复设计
 status: draft
 summary: 修复桌面更新元数据与平台链接，并对齐内置组件、profile/bundle 和 Agent preset 的管理语义。
 scope:
-  - packages/desktop-app
+  - apps/desktop
   - packages/coding-agent/src/daemon
   - packages/coding-agent/src/extensibility/plugins
   - scripts
@@ -91,7 +91,7 @@ lang: zh-CN
 ## 7. 验证
 
 - 先新增并运行失败测试，再实现：更新平台 URL、最终安装器重算、profile 写入、bundle 选择回读、读取无副作用、组件父级停用展示。
-- 运行 `packages/desktop-app`、`packages/coding-agent` 的相关契约测试和各自 `check`。
+- 运行 `apps/desktop`、`packages/coding-agent` 的相关契约测试和各自 `check`。
 - 运行发布脚本相关测试、文档与 changelog 检查。
 - 用真实组合 fixture 验证 bundle 启停改变组合行，普通插件启停不写 profile。
 - 最终确认未修改生产 profile；测试仅使用临时 home。

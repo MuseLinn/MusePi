@@ -1,5 +1,5 @@
 # Consistency record for extensions-dev.md / extensions-dev.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/extensions-dev
-extensions-dev.md: 9e753a9a524731321501454db42178317925fcc1
-extensions-dev.zh-CN.md: ce40ca9940a1ce00e801647dabf79c18c6cc5677
+extensions-dev.md: 83ef86130a5a8f2c19eae1d9eec33dba22489d24
+extensions-dev.zh-CN.md: 1c16c85ecddfdf2c629105868a854e0708aebec6

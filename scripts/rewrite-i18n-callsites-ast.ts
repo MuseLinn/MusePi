@@ -50,7 +50,7 @@ const TRANSLATE_FNS = new Set(["t", "tLoose", "builtinText"]);
 /** Root directories paired with the package their calls resolve against. */
 const ROOTS: Array<{ dir: string; pkg: string }> = [
 	{ dir: "packages/client-core/src", pkg: "client-core" },
-	{ dir: "packages/desktop-app/src", pkg: "client-core" },
+	{ dir: "apps/desktop/src", pkg: "client-core" },
 	{ dir: "packages/coding-agent/src", pkg: "coding-agent" },
 ];
 

@@ -4,18 +4,18 @@ title: 移动端设计规范
 status: living
 summary: Capacitor 移动壳与共享客户端移动入口的信息架构、交互、视觉和原生集成契约。
 scope:
-  - packages/mobile
+  - apps/mobile
   - packages/client-core
 lang: zh-CN
 ---
 
 # MusePi 移动端设计规范（Mobile Companion）
 
-> **状态（2026-08-31 核对）**：壳已构建（`packages/mobile` Capacitor Android + guest-client 移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在）。2026-08-31 完成移动端交互专项核对并修复 6 项缺陷（见 §12）：返回键层栈完整化（back-stack 统一调度）、SessionsSheet 常挂载退场动画、ask 多选 pending 语义、连接成功后才记录/写 hash、≤520px 面板折叠。
+> **状态（2026-08-31 核对）**：壳已构建（`apps/mobile` Capacitor Android + guest-client 移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在）。2026-08-31 完成移动端交互专项核对并修复 6 项缺陷（见 §12）：返回键层栈完整化（back-stack 统一调度）、SessionsSheet 常挂载退场动画、ask 多选 pending 语义、连接成功后才记录/写 hash、≤520px 面板折叠。
 >
-> 2026-08-24 定稿。范围：`packages/mobile`（Capacitor Android 壳）+ `packages/client-core` 的
+> 2026-08-24 定稿。范围：`apps/mobile`（Capacitor Android 壳）+ `packages/client-core` 的
 > `mobile.html` / `mobile.tsx` / `mobile.css` 移动入口。桌面 web（`index.html`）与本规范无关。
-> 参考：openchamber `packages/mobile`（HANDOFF.md + `apps/MobileApp.tsx`）、musepi GUI 设计语言
+> 参考：openchamber `apps/mobile`（HANDOFF.md + `apps/MobileApp.tsx`）、musepi GUI 设计语言
 > （`docs/gui-design.md`）、高星移动端设计惯例（Linear / Obsidian / Arc / Material3 / iOS HIG）。
 > 结构：产品定位 → 信息架构 → 屏幕规格 → 组件与交互 → 视觉与动效 → 原生集成 → 无障碍 → 性能 → 验收 → 路线图。
 
@@ -339,7 +339,7 @@ Settings（独立全屏页）
 - 原生：✅ —— `musepi://` scheme + 冷启动 intent stash（openchamber `deepLinks.ts` 模式），
   用于通知点击跳回对应会话。
 
-### 6.7 鸿蒙壳（ArkTS，《packages/harmony》）
+### 6.7 鸿蒙壳（ArkTS，《apps/harmony》）
 
 - **渲染模式**：固定 `RenderMode.SYNC_RENDER`。异步面（surface，独立送显）在本机 API 26 镜像上
   首屏不送显、切原生 Tabs 后还会再丢一次；同步渲染随系统画布送显，代价是不走 DSS 合成。
@@ -558,7 +558,7 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 ### 11.7 HarmonyOS WebView 壳（2026-08-25）
 
-用户诉"卓易通没沉浸"，本质是抵触兼容层。方案：`packages/harmony/` 用 ArkTS `Web` 组件加载现有 guest-client 移动 bundle，一等地壳（非兼容层），沉浸/相机/权限全部原生。
+用户诉"卓易通没沉浸"，本质是抵触兼容层。方案：`apps/harmony/` 用 ArkTS `Web` 组件加载现有 guest-client 移动 bundle，一等地壳（非兼容层），沉浸/相机/权限全部原生。
 
 **桥接设计**：`capacitor.ts` 扩为单一桥路由器——`isMobileShell()` 同时识别 Capacitor 与 `window.harmonyNative`（ArkTS javaScriptProxy）。同一 dist 双壳通用，`mobile.tsx` 零改动（仅 insets 提取为共享 `getSystemBarInsets()`）。JavaProxy 方法同步返回 JSON 字符串。
 
@@ -566,7 +566,7 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 **深链**：`module.json5` ability skills → uris 注册 `musepi://connect?link=`；EntryAbility onCreate 存冷启动 URI、onNewWant 推热启动。
 
-**构建**：guest-client `bun run build`（产出 index.html=桌面 / mobile.html=移动壳）→ `node scripts/copy-web-assets.js` 把 **mobile.html** 重命名为 rawfile/index.html（桌面入口弃用）→ DevEco Studio 打开 packages/harmony 运行。rawfile gitignored。
+**构建**：guest-client `bun run build`（产出 index.html=桌面 / mobile.html=移动壳）→ `node scripts/copy-web-assets.js` 把 **mobile.html** 重命名为 rawfile/index.html（桌面入口弃用）→ DevEco Studio 打开 apps/harmony 运行。rawfile gitignored。
 
 **取舍**：凭证回退 localStorage（未接 `@ohos.security.asset`，P3）；通知/语音/原生图标均为 P3。若用户要真原生体验，connect+会话列表 ArkTS 重写是后续独立工程。
 
@@ -602,7 +602,7 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - 协议栈端到端（E2E 加密、workspace-select、快照水合、prompt/steer、entry 推送）在真实 host 语义下确认
 
 **HarmonyOS 壳（2352d2ea0c）**：
-- `packages/harmony/` DevEco 工程（API 12 / 5.0.0）：EntryAbility（musepi:// 深链冷/暖启动）+ Index.ets（Web 组件 + `harmonyNative` javaScriptProxy）
+- `apps/harmony/` DevEco 工程（API 12 / 5.0.0）：EntryAbility（musepi:// 深链冷/暖启动）+ Index.ets（Web 组件 + `harmonyNative` javaScriptProxy）
 - 桥面与 JS 侧 capacitor.ts 的类型/路由完全对齐（getSystemBars via getWindowAvoidArea px→vp、badge、consumeDeepLink、__harmonyKeyboard/__harmonyDeepLink 推送）
 - `@StorageLink + @Watch` 标准模式做暖启动深链推送；module.json5 注册 INTERNET/CAMERA + musepi:// skill（phone+tablet）
 - `scripts/copy-web-assets.js`：guest-client dist → rawfile（mobile.html 提升为 index.html）；rawfile gitignored

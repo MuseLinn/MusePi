@@ -1,7 +1,7 @@
 # 弹窗与浮层规格
 
 > 状态：2026-10-25 更新，为 `docs/gui-design.md` §5e / §5u 的执行细则。规范正文，不是变更记录。
-> 适用范围：`packages/desktop-app/src/components/` 与 `packages/client-core/src/components/` 下所有 Dialog / Panel / Popover / Sheet / Menu / Modal / Overlay 组件。
+> 适用范围：`apps/desktop/src/components/` 与 `packages/client-core/src/components/` 下所有 Dialog / Panel / Popover / Sheet / Menu / Modal / Overlay 组件。
 
 本文件规定尺寸、滚动、焦点与键盘契约；六类浮层的选择与材质见 `docs/gui-design.md` §5u。
 
@@ -102,7 +102,7 @@
 - [ ] 内容量 > 组内间距
 - [ ] 只有栈顶处理 Escape 与 Tab，关闭后归还可连接的 opener；危险确认不允许 Enter 提交
 - [ ] L2/L3 材质取自六类选择表，motion-off/reduced-motion 同时关闭入场和出场
-- [ ] `bun run --cwd=packages/desktop-app check` 与该包的测试通过
+- [ ] `bun run --cwd=apps/desktop check` 与该包的测试通过
 
 ---
 

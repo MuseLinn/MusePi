@@ -5,7 +5,7 @@ status: living
 summary: Structured quote contexts, session subtree collapse, and per-role/fallback thinking-level contracts.
 scope:
   - packages/client-core/src/messages
-  - packages/desktop-app/src/components
+  - apps/desktop/src/components
   - packages/coding-agent/src/session
 ---
 

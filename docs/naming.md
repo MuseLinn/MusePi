@@ -6,7 +6,7 @@ summary: Naming boundaries for architecture, packages, and user-facing product l
 scope:
   - packages/client-core/src/i18n
   - packages/coding-agent/src/i18n
-  - packages/desktop-app/src
+  - apps/desktop/src
 ---
 
 # Naming Convention

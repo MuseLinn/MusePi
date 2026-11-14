@@ -98,7 +98,7 @@ describe("checkRadiusTokens", () => {
 				else if (name.endsWith(".css") && !name.endsWith(".out.css")) files.push([p, fs.readFileSync(p, "utf8")]);
 			}
 		};
-		for (const root of ["packages/desktop-app/src", "packages/client-core/src"]) walk(root);
+		for (const root of ["apps/desktop/src", "packages/client-core/src"]) walk(root);
 		const result = checkRadiusTokens(files);
 		expect(result.violations).toEqual([]);
 		expect(result.undefinedRefs).toEqual([]);

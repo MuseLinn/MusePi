@@ -10,7 +10,7 @@ import { findUiI18nViolations } from "./verify-client-ui-i18n";
  * single non-CJK glyphs (the "v" version prefix is a symbol, not copy).
  */
 
-const FILE = "packages/desktop-app/src/components/probe.tsx";
+const FILE = "apps/desktop/src/components/probe.tsx";
 
 function probe(source: string) {
 	return findUiI18nViolations(FILE, source);

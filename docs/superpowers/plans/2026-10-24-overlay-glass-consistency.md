@@ -33,7 +33,7 @@
 **Files:**
 - Create: `packages/client-core/src/lib/modal-focus.ts`
 - Modify: `packages/client-core/src/index.ts`
-- Modify: `packages/desktop-app/src/lib/use-focus-trap.ts`
+- Modify: `apps/desktop/src/lib/use-focus-trap.ts`
 - Test: `packages/client-core/test/modal-focus.test.tsx`
 
 **Interfaces:**
@@ -48,11 +48,11 @@
 ### Task 2: DialogFrame 与 Promise confirm
 
 **Files:**
-- Modify: `packages/desktop-app/src/components/DialogFrame.tsx`
-- Modify: `packages/desktop-app/src/lib/prompt-dialog.tsx`
+- Modify: `apps/desktop/src/components/DialogFrame.tsx`
+- Modify: `apps/desktop/src/lib/prompt-dialog.tsx`
 - Modify: 删除会话/项目等 `useConfirm` 调用点
-- Test: `packages/desktop-app/test/dialog-frame.test.tsx`
-- Test: `packages/desktop-app/test/prompt-dialog.test.tsx`
+- Test: `apps/desktop/test/dialog-frame.test.tsx`
+- Test: `apps/desktop/test/prompt-dialog.test.tsx`
 
 **Interfaces:**
 - Consumes: Task 1 的 `useModalFocus` / `isTopModal`。
@@ -62,7 +62,7 @@
 - [ ] 运行上述两个测试，确认出现对应失败。
 - [ ] DialogFrame 接入共享焦点；prompt/confirm 使用同一焦点和顶层栈规则，保留 180ms 退场后 resolve。
 - [ ] 永久删除调用显式传 `destructive: true`，普通确认保持 Enter 行为。
-- [ ] 重跑测试和 `bun run --cwd=packages/desktop-app check:types`。
+- [ ] 重跑测试和 `bun run --cwd=apps/desktop check:types`。
 
 ### Task 3: 私有 modal、drawer 与原生确认迁移
 
@@ -88,14 +88,14 @@
 ### Task 4: Toast 与 tooltip 行为
 
 **Files:**
-- Modify: `packages/desktop-app/src/lib/action-toast.ts`
-- Modify: `packages/desktop-app/src/components/ActionToast.tsx`
-- Modify: `packages/desktop-app/src/lib/tooltips.ts`
-- Modify: `packages/desktop-app/src/components/RailTooltip.tsx`
+- Modify: `apps/desktop/src/lib/action-toast.ts`
+- Modify: `apps/desktop/src/components/ActionToast.tsx`
+- Modify: `apps/desktop/src/lib/tooltips.ts`
+- Modify: `apps/desktop/src/components/RailTooltip.tsx`
 - Modify: `packages/client-core/src/components/shell/Toasts.tsx`
 - Modify: client-core 入口与 BrowserGuiHint 挂载/样式
-- Test: `packages/desktop-app/test/action-toast.test.ts`
-- Test: `packages/desktop-app/test/tooltips.test.ts`
+- Test: `apps/desktop/test/action-toast.test.ts`
+- Test: `apps/desktop/test/tooltips.test.ts`
 - Test: `packages/client-core/test/toasts.test.tsx`
 
 **Interfaces:**
@@ -131,7 +131,7 @@
 - Modify: 仅修复验证发现的问题。
 
 - [ ] 运行 `bun run --cwd=packages/client-core check` 与 `bun run --cwd=packages/client-core test`。
-- [ ] 运行 `bun run --cwd=packages/desktop-app check`、`bun test packages/desktop-app/test`、`bun run --cwd=packages/desktop-app build`。
+- [ ] 运行 `bun run --cwd=apps/desktop check`、`bun test apps/desktop/test`、`bun run --cwd=apps/desktop build`。
 - [ ] 通过 `bun scripts/dev-smoke.ts -- <command>` 启动隔离环境，验证 modal、嵌套确认、toast、tooltip、drawer、sheet 的鼠标与键盘完整流程。
 - [ ] 检查深色/浅色、窄屏、reduced-motion 的真实窗口截图；Windows 验证无 blur 补偿，无法本机验证的 macOS 原生模糊明确标注。
 - [ ] 汇总改动、测试证据和未验证平台限制；不提交 commit。

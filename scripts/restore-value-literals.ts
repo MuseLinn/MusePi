@@ -64,7 +64,7 @@ function collectFiles(): string[] {
 		if (m) {
 			const rel = m[1]!.trim();
 			files.add(path.resolve(rel));
-			if (!fs.existsSync(path.resolve(rel))) files.add(path.resolve("packages/desktop-app", rel));
+			if (!fs.existsSync(path.resolve(rel))) files.add(path.resolve("apps/desktop", rel));
 		}
 	}
 	return [...files];

@@ -4,7 +4,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const ROOTS = ["packages/desktop-app/src", "packages/client-core/src"];
+const ROOTS = ["apps/desktop/src", "packages/client-core/src"];
 const TOKENS_FILE = "packages/client-core/src/styles/tokens.css";
 
 export interface CssTokenProblem {

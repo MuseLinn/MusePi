@@ -5,7 +5,7 @@ status: draft
 summary: 使用 MusePi 自有 profile 命名，默认启用 Computer Use，并让 bundle 中的 Agent preset 声明进入会话预设解析链。
 scope:
   - packages/coding-agent/src
-  - packages/desktop-app/src
+  - apps/desktop/src
   - packages/client-core/src
   - docs
 lang: zh-CN

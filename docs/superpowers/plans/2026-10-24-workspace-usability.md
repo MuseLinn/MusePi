@@ -35,8 +35,8 @@
 - Modify: `packages/coding-agent/src/daemon/server.ts`
 - Modify: `packages/coding-agent/src/daemon/services/legacy-routes.ts`
 - Create: `packages/coding-agent/test/daemon/github-comments.test.ts`
-- Modify: `packages/desktop-app/src/components/pr-center.tsx`
-- Modify: `packages/desktop-app/test/pr-search.test.ts`
+- Modify: `apps/desktop/src/components/pr-center.tsx`
+- Modify: `apps/desktop/test/pr-search.test.ts`
 
 **Interfaces:**
 - Produces RPC `github.issueComment { cwd, number, body }` and `github.prComment { cwd, number, body }` → `{ ok: true } | { error: string }`.
@@ -52,11 +52,11 @@
 ### Task 2: Issue/PR master-detail reading and commenting
 
 **Files:**
-- Modify: `packages/desktop-app/src/components/pr-center.tsx`
-- Modify: `packages/desktop-app/src/styles/gui-workspace.css`
+- Modify: `apps/desktop/src/components/pr-center.tsx`
+- Modify: `apps/desktop/src/styles/gui-workspace.css`
 - Modify: `packages/client-core/src/i18n/zh-CN/general.ts`
 - Modify: `packages/client-core/src/i18n/en-US/general.ts`
-- Create: `packages/desktop-app/test/pr-center.test.tsx`
+- Create: `apps/desktop/test/pr-center.test.tsx`
 
 **Interfaces:**
 - Consumes Task 1 RPCs and `isOpenState`.
@@ -72,12 +72,12 @@
 ### Task 3: Shared first-class page header
 
 **Files:**
-- Create: `packages/desktop-app/src/components/WorkspacePageHeader.tsx`
-- Modify: `packages/desktop-app/src/components/PrBoardPage.tsx`
-- Modify: `packages/desktop-app/src/components/ScheduledTasksPage.tsx`
-- Modify: `packages/desktop-app/src/components/BoardPage.tsx`
-- Modify: `packages/desktop-app/src/components/CapabilityCenterPage.tsx`
-- Modify: `packages/desktop-app/src/styles/gui-workspace.css` (or the existing owning stylesheet after inspection)
+- Create: `apps/desktop/src/components/WorkspacePageHeader.tsx`
+- Modify: `apps/desktop/src/components/PrBoardPage.tsx`
+- Modify: `apps/desktop/src/components/ScheduledTasksPage.tsx`
+- Modify: `apps/desktop/src/components/BoardPage.tsx`
+- Modify: `apps/desktop/src/components/CapabilityCenterPage.tsx`
+- Modify: `apps/desktop/src/styles/gui-workspace.css` (or the existing owning stylesheet after inspection)
 
 **Interfaces:**
 - Produces `WorkspacePageHeader({ icon, title, description?, onBack?, backLabel?, meta?, actions?, tabs? }): ReactNode`; `title` accepts `ReactNode` for editable board titles.
@@ -90,9 +90,9 @@
 ### Task 4: Task calendar/board selection becomes visible
 
 **Files:**
-- Modify: `packages/desktop-app/src/components/ScheduledTasksPage.tsx`
-- Modify: `packages/desktop-app/src/components/TaskCenterViews.tsx`
-- Create: `packages/desktop-app/test/task-center-views.test.tsx`
+- Modify: `apps/desktop/src/components/ScheduledTasksPage.tsx`
+- Modify: `apps/desktop/src/components/TaskCenterViews.tsx`
+- Create: `apps/desktop/test/task-center-views.test.tsx`
 - Modify both settings i18n domain files if new copy is needed.
 
 **Interfaces:**
@@ -107,9 +107,9 @@
 ### Task 5: Collapsed settings search portal
 
 **Files:**
-- Modify: `packages/desktop-app/src/components/SettingsNav.tsx`
-- Modify: `packages/desktop-app/src/styles/gui-settings.css`
-- Modify: `packages/desktop-app/test/settings-shell.test.tsx`
+- Modify: `apps/desktop/src/components/SettingsNav.tsx`
+- Modify: `apps/desktop/src/styles/gui-settings.css`
+- Modify: `apps/desktop/test/settings-shell.test.tsx`
 
 **Interfaces:**
 - Consumes existing `MenuPopup({ open, portal, anchor, onOpenChange })`.
@@ -135,8 +135,8 @@
 
 **Files:** verification outputs only under an isolated temp/smoke directory.
 
-- [ ] Run focused desktop and coding-agent suites, then `bun --cwd=packages/desktop-app run check`, `bun --cwd=packages/client-core run check`, `bun --cwd=packages/coding-agent run check`, and root `bun run check:tools`.
-- [ ] Run `bun --cwd=packages/desktop-app run build` and fix failures on the deliverable.
+- [ ] Run focused desktop and coding-agent suites, then `bun --cwd=apps/desktop run check`, `bun --cwd=packages/client-core run check`, `bun --cwd=packages/coding-agent run check`, and root `bun run check:tools`.
+- [ ] Run `bun --cwd=apps/desktop run build` and fix failures on the deliverable.
 - [ ] Launch through `bun scripts/dev-smoke.ts -- <command>` with isolated agent/daemon dirs and fake gh fixtures; do not write real issues, PRs, comments, sessions, or production daemon state.
 - [ ] Exercise first-item preview, selection races, Markdown, comment success/failure, all four headers, multi-task calendar, board selection, and ≤900px settings search. Capture screenshots and keyboard/focus results.
 - [ ] Report exact passing commands and any genuinely unverified live path; do not substitute compilation for GUI acceptance.

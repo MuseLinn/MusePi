@@ -5,7 +5,7 @@ status: living
 summary: 结构化引用上下文、子会话折叠和角色/回退模型思考等级契约。
 scope:
   - packages/client-core/src/messages
-  - packages/desktop-app/src/components
+  - apps/desktop/src/components
   - packages/coding-agent/src/session
 lang: zh-CN
 ---

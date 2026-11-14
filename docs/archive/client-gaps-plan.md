@@ -1,7 +1,7 @@
 # 客户端（GUI）差距计划：对照 openchamber 的 UI/UX + 对照 musepi TUI 的功能
 
 > **工作文档，不是长期规格**：逐项落地/关闭后整体删除，不要翻译 `.zh-CN.md`（临时文档不配对，见 `docs/i18n/README.md`）。
-> 来源：两轮只读审计（openchamber `C:\Users\unive\projects\harness-engineering\openchamber` ↔ `packages/desktop-app`/`packages/client-core`；musepi TUI `packages/coding-agent/src/modes` ↔ 同）。**标 ✅ 的结论我已亲自 grep/sed 复核**，其余为审计结论（附锚点，落地前请顺手核对）。
+> 来源：两轮只读审计（openchamber `C:\Users\unive\projects\harness-engineering\openchamber` ↔ `apps/desktop`/`packages/client-core`；musepi TUI `packages/coding-agent/src/modes` ↔ 同）。**标 ✅ 的结论我已亲自 grep/sed 复核**，其余为审计结论（附锚点，落地前请顺手核对）。
 > 日期：2026-09-15。
 
 ## 0. 结论摘要（先做什么）
@@ -20,8 +20,8 @@
 
 ### P0-1 ✅ 托盘「始终允许」是假按钮
 
-- ✅ 发送端：`packages/desktop-app/src/tray-menu-main.tsx:214` 发 `remember: true`
-- ✅ 接收端：`packages/desktop-app/electron/main.cjs` 的 `case "respond-approval"`（≈`:1013-1021`）只读 `action.approved` / `action.id` / `action.sessionId`，**`remember` 从未被读取** → 行为等同「允许一次」。`electron/tray.cjs:229-251` 的「始终允许」同样只是标签。
+- ✅ 发送端：`apps/desktop/src/tray-menu-main.tsx:214` 发 `remember: true`
+- ✅ 接收端：`apps/desktop/electron/main.cjs` 的 `case "respond-approval"`（≈`:1013-1021`）只读 `action.approved` / `action.id` / `action.sessionId`，**`remember` 从未被读取** → 行为等同「允许一次」。`electron/tray.cjs:229-251` 的「始终允许」同样只是标签。
 - 修法（二选一，需产品定夺）：
   - **A（推荐）**：让 `remember` 真正生效 —— 经 `settings.set` 写 `tools.approval[tool] = "allow"`（schema 在 `config/settings-schema.ts:4092-4102`，`settings.set` handler 在 `daemon/server.ts:8453-8512`，注意 `:8475-8481` 要求键在 schema 内且 `hasUi`）。
   - **B（若暂不做持久化）**：把按钮改名为「允许一次」，删掉 `remember`，别留假承诺。
@@ -130,7 +130,7 @@
 | 12 | **多会话标签条**（同窗口并列，可拖拽/未读/右键） | `layout/SessionTabsStrip.tsx`、`stores/useSessionTabsStore` | absent | M–L |
 | 次 | 归档浏览页、计划文件可编辑、命令面板「文件」tab、用户 snippets、magic prompt 模板编辑、右栏 surface 显隐对话框、Git 身份编辑器、目录浏览对话框、帮助/关于对话框 | `views/ArchiveView.tsx:22`、`views/PlanView.tsx`、`ui/CommandPalette.tsx`、`sections/snippets/*`、`sections/magic-prompts/*`、`layout/ContextRailSurfacesDialog.tsx:22`、`sections/git-identities/GitIdentityEditorDialog.tsx`、`session/DirectoryExplorerDialog.tsx`、`ui/HelpDialog.tsx` | 见 `components/CommandPalette.tsx:26-30`、`composer/plan-panel.tsx:21-25` 的自述注释；右栏已有排序+宽度但**无显隐配置**（上轮用户跳过了该项） | S–M |
 
-**明确不要照抄**（一句话理由）：VS Code 扩展宿主布局（架构不通）；auth/SessionAuthGate（面向 opencode server 的 Cookie 鉴权）；`packages/mobile/*` 与 Capacitor 插件（musepi 有自有 mobile）；Linear 集成（musepi 走 `gh`）；GitHub 设备码 OAuth（musepi 委托 `gh` 凭据模型）；`ui/*` 原语与 ThemeProvider（Tailwind/Base-UI 会分叉视觉语言，且绕过 `AGENTS.md` 钉死的 `DialogFrame`/`MenuPopup` 键盘语义）；shiki Worker 高亮（musepi 用 tree-sitter natives）；multirun 的**实现**（依赖其 store/opencode 形状，只抄交互）；opencode 二进制更新链路；`MemoryDebugPanel`（绑其 memory store 形状）；多 runtime 切换器与各家窗口装饰；drawio 图编辑器（新引入能力，进 backlog 别混本轮）。
+**明确不要照抄**（一句话理由）：VS Code 扩展宿主布局（架构不通）；auth/SessionAuthGate（面向 opencode server 的 Cookie 鉴权）；`apps/mobile/*` 与 Capacitor 插件（musepi 有自有 mobile）；Linear 集成（musepi 走 `gh`）；GitHub 设备码 OAuth（musepi 委托 `gh` 凭据模型）；`ui/*` 原语与 ThemeProvider（Tailwind/Base-UI 会分叉视觉语言，且绕过 `AGENTS.md` 钉死的 `DialogFrame`/`MenuPopup` 键盘语义）；shiki Worker 高亮（musepi 用 tree-sitter natives）；multirun 的**实现**（依赖其 store/opencode 形状，只抄交互）；opencode 二进制更新链路；`MemoryDebugPanel`（绑其 memory store 形状）；多 runtime 切换器与各家窗口装饰；drawio 图编辑器（新引入能力，进 backlog 别混本轮）。
 
 ---
 
@@ -160,7 +160,7 @@
 
 ## 5. 纪律（照旧）
 
-- 门禁：项目自带 biome 二进制（`node node_modules/@biomejs/biome/bin/biome check --write <files>`）、`bun run check:ts` 全 workspace exit 0、对应包测试。基线：`packages/desktop-app` 201 pass/0 fail；`packages/coding-agent` 有 **48 个 pre-existing 失败**（TTSR/transcript），与 GUI 无关，别去"修"。
+- 门禁：项目自带 biome 二进制（`node node_modules/@biomejs/biome/bin/biome check --write <files>`）、`bun run check:ts` 全 workspace exit 0、对应包测试。基线：`apps/desktop` 201 pass/0 fail；`packages/coding-agent` 有 **48 个 pre-existing 失败**（TTSR/transcript），与 GUI 无关，别去"修"。
 - GUI 硬规则（`AGENTS.md`）：模态必须独占键盘（`DialogFrame` 捕获 Escape / 移动焦点 / 恢复焦点）、`DialogFrame` 常挂载由 `open` 驱动（条件挂载会杀掉退场动画）、小内容对话框用 `gui-dialog--confirm` 紧凑样式、所有 hook 必须在任何 early return 之前、模型身份恒为 `provider/id`。
 - i18n：按域拆 `packages/client-core/src/i18n/{zh-CN,en-US}/<域>.ts`，en 必须 `as const satisfies Record<ZhKey, string>`。
 - 本文档落地/关闭后**整体删除**（不要翻译、不要长期挂着）。

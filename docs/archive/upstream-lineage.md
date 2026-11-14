@@ -71,7 +71,7 @@
 
 - 14 个 workspace 包 version 17.3.0→**17.3.4**(agent/ai/catalog/coding-agent/hashline/mnemopi/natives/omptype/snapcompact/stats/swarm-extension/tui/utils/wire);root catalog 13 条同步;sdk 的 @musepi/pi-wire 依赖同步
 - **@musepi/pi-natives 哨兵 17.3.0→17.3.4**:crates/pi-natives/src/lib.rs js_name + packages/natives/native/index.js + index.d.ts;win32 addon 本机重建(bazel-natives.ts host → 本地 napi build);darwin/linux 需对应主机/交叉构建
-- **MusePi 应用 0.4.0→0.4.1**:src/musepi.ts MUSEPI_VERSION + src/musepi/branding/index.ts productVersion + packages/desktop-app/package.json + gui/update-manifest.json;TUI 标注 `0.4.1 (OMP 17.3.4)`(cli.ts/main.ts displayVersion 自动拼接),GUI system.meta 派生显示
+- **MusePi 应用 0.4.0→0.4.1**:src/musepi.ts MUSEPI_VERSION + src/musepi/branding/index.ts productVersion + apps/desktop/package.json + gui/update-manifest.json;TUI 标注 `0.4.1 (OMP 17.3.4)`(cli.ts/main.ts displayVersion 自动拼接),GUI system.meta 派生显示
 - bun.lock:workspace 版本 + catalog + sdk 依赖替换(注意:全量 sed 会误伤第三方包——`lint-staged@17.3.0` 被改成 17.3.4 后 npm 404,已还原;只应替换 @musepi 与 workspace version 行);`bun install --frozen-lockfile` 通过(748 installs 无变化)
 
 ### 测试清理与平台适配(2026-08-15)

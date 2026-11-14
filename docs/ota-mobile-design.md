@@ -1,6 +1,6 @@
 # 安卓 OTA 更新方案(@capgo Web-layer OTA)
 
-> 面向 `packages/mobile`(Capacitor 8 壳,web 代码在 guest-client,v0.4.4,Android versionCode 2 / versionName 0.4.4)。
+> 面向 `apps/mobile`(Capacitor 8 壳,web 代码在 guest-client,v0.4.4,Android versionCode 2 / versionName 0.4.4)。
 > 2026-08-26 调研(见 `/tmp/android-ota-research.md`)后立项。桌面端 OTA 见 `docs/archive/ota-update-design.md`(electron-updater),本文件仅覆盖移动端。
 
 - **状态**: 方案文档(待实现)
@@ -24,7 +24,7 @@
 ### 安装(待实现步骤)
 
 ```bash
-cd packages/mobile
+cd apps/mobile
 npm install @capgo/capacitor-updater
 npx cap sync
 ```
@@ -45,7 +45,7 @@ const config: CapacitorConfig = {
 ### 上传/托管
 
 - 自托管:构建 web bundle → 上传静态站(或 GitHub release asset)→ `npx @capgo/cli@latest bundle upload --external <url>` 只登记下载链接(规避 api.capgo.app)。
-- 版本公告:`packages/desktop-app/update-manifest.json` 维持 `{ version, url, notes: { zh, en } }`;移动端启动时读取用于 changelog 展示(不驱动更新)。
+- 版本公告:`apps/desktop/update-manifest.json` 维持 `{ version, url, notes: { zh, en } }`;移动端启动时读取用于 changelog 展示(不驱动更新)。
 
 ## 3. 更新流程(热插拔可管理)
 
@@ -65,7 +65,7 @@ const config: CapacitorConfig = {
 
 ## 5. 实现清单
 
-- [ ] `packages/mobile` 安装 @capgo/capacitor-updater + cap sync
+- [ ] `apps/mobile` 安装 @capgo/capacitor-updater + cap sync
 - [ ] capacitor.config 配 autoUpdate off
 - [ ] 打包脚本输出可上传的 bundle(web assets)+ 文档命令(上传自托管)
 - [ ] 移动端启动检查 + "检查更新"入口(若存在设置界面)(GAP:移动端当前无应用内设置 UI,先在启动时静默 check + 系统通知/横幅提示)

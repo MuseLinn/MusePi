@@ -6,9 +6,9 @@
     "**/*.{test,spec}.{ts,tsx}",
     "**/*.bench.ts"
   ],
-  "project": ["scripts/**", "packages/**", "*.{ts,js,mjs,cjs}"],
+  "project": ["scripts/**", "packages/**", "apps/**", "tools/**", "*.{ts,js,mjs,cjs}"],
   "workspaces": {
-    "packages/desktop-app": {
+    "apps/desktop": {
       "entry": [
         "src/main.tsx",
         "electron/main.cjs",
@@ -31,11 +31,11 @@
     "packages/musepi-git": {
       "entry": ["src/index.ts"]
     },
-    "packages/harmony": {
+    "apps/harmony": {
       "entry": ["hvigorfile.ts", "scripts/*.js"],
       "project": ["hvigorfile.ts", "scripts/**", "src/**"]
     },
-    "packages/mobile": {
+    "apps/mobile": {
       "entry": ["capacitor.config.ts", "scripts/*.mjs"],
       "project": ["capacitor.config.ts", "scripts/**", "src/**"]
     },

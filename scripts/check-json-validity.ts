@@ -29,7 +29,12 @@ interface Manifest {
  * `{a,b}` alternation here, and the root manifest plus the workspace ones are
  * the only two shapes that ship.
  */
-const MANIFEST_GLOBS = ["package.json", "packages/*/package.json"] as const;
+const MANIFEST_GLOBS = [
+	"package.json",
+	"packages/*/package.json",
+	"apps/*/package.json",
+	"tools/*/package.json",
+] as const;
 
 async function collectManifests(root: string): Promise<string[]> {
 	const found: string[] = [];

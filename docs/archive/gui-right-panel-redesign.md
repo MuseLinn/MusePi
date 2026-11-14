@@ -10,7 +10,7 @@
 
 ## 0. 实现状态（2026-08-25 核对）
 
-> 核对方法：逐项 vs `packages/desktop-app/src/`。
+> 核对方法：逐项 vs `apps/desktop/src/`。
 
 - **Phase 1 核心改造 — ◐**：registry `group` 字段 ✅（`surfaces/registry.ts:27-57`）；Rail 分组+溢出折叠 ✅（`RightRail.tsx:96-261`，但保持 44px 纯图标、secondary 不折叠，作者偏好）；宽度 260–1200 ✅（超出规格，`ContextPanel.tsx:229-244`）+ maximize。**TabBar 第二 tab 条 ❌ — 已架构否决**（`ContextPanel.tsx:283-284`、`RightRail.tsx:42-44`："rail is the single navigation axis — no second tab row"）；多实例 tab ◐ **（2026-09-15）**：通用组件已落地 ✅（`components/surface-tabs.tsx`：`SurfaceTabStrip` / `useSurfaceTabs` / `SurfaceTabPanels` + `test/surface-tabs.test.tsx` 17 用例），**files surface 已接入**（`FilePane.tsx`：树节点点击注册 tab、激活跟随已加载预览、关闭跟随邻居、按 cwd 持久化 `musepi-gui-file-tabs-{cwd}`）；其余 surface 接入时必须走「surface 内实例 tab」形态（见 §3.3 边界修订），不得做成面板头部的全局导航条。
 - **Phase 2 体验优化 — ◐**：⌘E 面板开关 ✅、⌘⇧E=focus mode ✅（语义与文档不同，属设计漂移）；关闭动画 ✅（220ms 宽度折叠，非 proma overlay）。snap points ✅（`ContextPanel.tsx:247` `SNAP_POINTS=[300,480,800]`，释放吸附，0a51f37788）、上下文 gating ❌、Mod+1..9 ✅（2026-09-07：⌘1..8 按 rail 可见顺序直达 surface，`app.tsx` 快捷键 + `ChatView.panelSelectRequest` nonce 通道，折叠时自动展开）、pop-out ❌。
@@ -186,7 +186,7 @@ settings、sessions、mcp、roles、computer、updates、search、board、friend
 | surface 内实例 tab 条 | 同一 surface 的多个实例（WorkBuddy 文档 tab / openchamber file tabs） | surface 组件内部 | ✅ 组件已落地并接入 files surface（`FilePane.tsx`）；notes/browser 待接入 |
 | 视图内子 tab（Changes/Commits/PR） | 单实例内的视图切换 | `git-panel.tsx` `gui-pane-subtabs` | ✅ 已落地（既有先例） |
 
-落地组件（`packages/desktop-app/src/components/surface-tabs.tsx`）：
+落地组件（`apps/desktop/src/components/surface-tabs.tsx`）：
 
 - `SurfaceTabStrip`：水平可拖拽排序 + 关闭（含中键关闭）+ dirty 标记 + 溢出滚动 + 激活 tab 自动 `scrollIntoView`；roving tabindex + `role="tablist"/"tab"`，左右方向键切换（键盘拖拽走 dnd-kit KeyboardSensor）
 - `useSurfaceTabs(storageKey)`：状态 + `localStorage` 持久化（key 约定 `musepi-gui-<surface>-tabs-{cwd}`，对齐终端 tabs 惯例）；序列化**只存标签不存内容**，带 `v1` schema 版本，未知版本/未知 id 丢弃而非误恢复
@@ -213,9 +213,9 @@ settings、sessions、mcp、roles、computer、updates、search、board、friend
 
 已落地（本轮，零接线）：
 
-- `packages/desktop-app/src/lib/panel-tabs.ts`：纯逻辑库——`panelTabId` / `upsertPanelTab`（含占位替换、reveal 语义、按 surface 配额淘汰）/ `closePanelTab(s)`（右邻优先）/ `serialize/restorePanelTabs`（v1，id 在恢复时重派生，dedupeKey 随行保留）
-- `packages/desktop-app/src/components/panel-tabs-empty-state.tsx`：空态导航页（props 驱动，无 i18n/registry 耦合）
-- `packages/desktop-app/test/panel-tabs.test.ts`：17 用例
+- `apps/desktop/src/lib/panel-tabs.ts`：纯逻辑库——`panelTabId` / `upsertPanelTab`（含占位替换、reveal 语义、按 surface 配额淘汰）/ `closePanelTab(s)`（右邻优先）/ `serialize/restorePanelTabs`（v1，id 在恢复时重派生，dedupeKey 随行保留）
+- `apps/desktop/src/components/panel-tabs-empty-state.tsx`：空态导航页（props 驱动，无 i18n/registry 耦合）
+- `apps/desktop/test/panel-tabs.test.ts`：17 用例
 
 **接线状态（2026-09-15，已落地核心）**：
 

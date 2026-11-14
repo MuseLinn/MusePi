@@ -53,8 +53,8 @@
 - Modify: `packages/coding-agent/src/prompts/tools/browser.md`
 - Modify: `packages/coding-agent/test/tools/browser-schema.test.ts`
 - Create: `packages/coding-agent/test/tools/browser-structured-actions.test.ts`
-- Modify: `packages/desktop-app/electron/managed-browser.cjs`
-- Modify: `packages/desktop-app/test/managed-browser-menu-ipc.test.cjs`
+- Modify: `apps/desktop/electron/managed-browser.cjs`
+- Modify: `apps/desktop/test/managed-browser-menu-ipc.test.cjs`
 
 **Interfaces:**
 - `BrowserToolDetails` gains `status?: BrowserStatus`, `pageText?: PageTextSnapshot`, and `pageScreenshot?: ScreenshotResult & { capturedAt: string }`.

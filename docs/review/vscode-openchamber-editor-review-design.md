@@ -163,8 +163,8 @@ IME 输入期间不得用外部值覆盖正在组合的文档。
 
 实施时使用正式 `monaco-editor` 包，不复制 VS Code `src/vs`。
 
-`packages/desktop-app/vite.config.ts` 负责 editor worker 与启用语言 worker 的开发环境解析。
-生产入口是 `packages/desktop-app/package.json` 的 `build:bundle`（Bun build），不是 Vite。
+`apps/desktop/vite.config.ts` 负责 editor worker 与启用语言 worker 的开发环境解析。
+生产入口是 `apps/desktop/package.json` 的 `build:bundle`（Bun build），不是 Vite。
 因此实施必须分别接通并验证两条 worker／asset 路径，不能用开发环境成功代替 Electron 生产验证。
 
 按需加载编辑器。Monaco 初始化或 worker 失败时：
@@ -429,18 +429,18 @@ User instruction
 
 | 文件 | 改动 |
 |---|---|
-| `packages/desktop-app/src/components/FileCodeEditor.tsx` | 新增 Monaco 包装、选区、view state 和降级 |
-| `packages/desktop-app/src/components/FilePane.tsx` | 仅替换代码编辑表面，保留 buffer 合约 |
-| `packages/desktop-app/src/lib/monaco-lsp.ts` | Monaco ↔ RPC ↔ LSP 类型转换 |
-| `packages/desktop-app/vite.config.ts` | worker 开发解析；生产构建同步验证 |
-| `packages/desktop-app/package.json` / lockfile | 固定 Monaco 依赖 |
+| `apps/desktop/src/components/FileCodeEditor.tsx` | 新增 Monaco 包装、选区、view state 和降级 |
+| `apps/desktop/src/components/FilePane.tsx` | 仅替换代码编辑表面，保留 buffer 合约 |
+| `apps/desktop/src/lib/monaco-lsp.ts` | Monaco ↔ RPC ↔ LSP 类型转换 |
+| `apps/desktop/vite.config.ts` | worker 开发解析；生产构建同步验证 |
+| `apps/desktop/package.json` / lockfile | 固定 Monaco 依赖 |
 | `packages/coding-agent/src/daemon/services/editor-service.ts` | 新增 L2 RPC 与诊断事件 |
 | `packages/coding-agent/src/daemon/server.ts` | 只注册服务，保留其他未提交改动 |
 | `packages/coding-agent/src/lsp/client.ts` | completion capability、诊断订阅 |
 | `packages/coding-agent/src/lsp/types.ts` | 本阶段协议类型 |
 | `packages/collab-proto/src/` | GUI LSP DTO 与事件类型 |
 | `packages/client-core/src/i18n/{en-US,zh-CN}/settings.ts` | 编辑器与 LSP 状态文案 |
-| `packages/desktop-app/src/styles/gui-chrome.css` | 编辑器、诊断和降级样式 |
+| `apps/desktop/src/styles/gui-chrome.css` | 编辑器、诊断和降级样式 |
 
 ### 6.2 第二阶段
 
@@ -449,15 +449,15 @@ User instruction
 | `packages/coding-agent/src/daemon/services/github-review-service.ts` | GraphQL 读取、回复、解决、归属校验 |
 | `packages/coding-agent/src/daemon/server.ts` | 注册 GitHubReviewService |
 | `packages/collab-proto/src/` | ReviewThread DTO |
-| `packages/desktop-app/src/lib/review-thread-store.ts` | 活动 PR scope、快照、竞态与失效 |
-| `packages/desktop-app/src/components/pr-center.tsx` | 线程列表、动作和错误展示 |
-| `packages/desktop-app/src/components/review/ReviewThreadCard.tsx` | 共享线程卡片与回复状态 |
-| `packages/desktop-app/src/components/FileCodeEditor.tsx` | 可定位线程的 zone / decoration |
+| `apps/desktop/src/lib/review-thread-store.ts` | 活动 PR scope、快照、竞态与失效 |
+| `apps/desktop/src/components/pr-center.tsx` | 线程列表、动作和错误展示 |
+| `apps/desktop/src/components/review/ReviewThreadCard.tsx` | 共享线程卡片与回复状态 |
+| `apps/desktop/src/components/FileCodeEditor.tsx` | 可定位线程的 zone / decoration |
 | `packages/wire/src/index.ts` | `pr-review` DisplayContext |
 | `packages/client-core/src/messages/display-context.ts` | 构造、校验、prompt、去重文本 |
 | `packages/client-core/src/components/transcript/transcript-content.tsx` | PR 来源卡片 |
-| `packages/desktop-app/src/components/composer/quote-cards.tsx` | Composer 内 PR 上下文卡片 |
-| `packages/desktop-app/src/components/{ChatView,WelcomeComposer}.tsx` | 必要时补齐组合上下文接入 |
+| `apps/desktop/src/components/composer/quote-cards.tsx` | Composer 内 PR 上下文卡片 |
+| `apps/desktop/src/components/{ChatView,WelcomeComposer}.tsx` | 必要时补齐组合上下文接入 |
 | `packages/client-core/src/i18n/{en-US,zh-CN}/settings.ts` | 线程与动作文案 |
 
 实施行为落地时，还必须同步 owning GUI 双语文档及

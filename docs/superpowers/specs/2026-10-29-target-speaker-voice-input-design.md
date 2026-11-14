@@ -6,8 +6,8 @@ summary: 为 MusePi 设计低延迟的声纹录入、目标说话人提取、语
 scope:
   - packages/coding-agent/src/stt
   - packages/coding-agent/src/live
-  - packages/desktop-app/src/lib/voice.ts
-  - packages/desktop-app/src/components/settings-sections/voice.tsx
+  - apps/desktop/src/lib/voice.ts
+  - apps/desktop/src/components/settings-sections/voice.tsx
 lang: zh-CN
 ---
 
@@ -70,7 +70,7 @@ lang: zh-CN
 
 ## 4. 现有约束与归属
 
-- 桌面端目前录制完整 PCM 后调用 `stt.transcribe`，能量 VAD 位于 `packages/desktop-app/src/lib/voice.ts`。
+- 桌面端目前录制完整 PCM 后调用 `stt.transcribe`，能量 VAD 位于 `apps/desktop/src/lib/voice.ts`。
 - TUI 通过 `STTController` 向 STT worker 持续送入 16 kHz 单声道 PCM，`StreamEndpointer` 负责能量分段。
 - STT worker 已封装模型下载、运行时安装、取消和推理串行化；sherpa-onnx 运行时类型目前只声明 ASR 与 TTS。
 - 公共 ASR 输入契约保持 16 kHz 单声道，但回声消除和增强可以按各自模型要求处理 48 kHz 音频，再重采样到 16 kHz。

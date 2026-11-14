@@ -44,7 +44,7 @@ A plugin declares its skill during `apply` through `registerSkill`. Markdown and
 
 ### Capability center
 
-Declare `app.capability` as a single slot. A desktop Cordis plugin registers the existing capability-center page implementation from `packages/desktop-app/src/plugins/capability-center`, so its imports stay within the GUI package. `app.tsx` mounts the slot and retains only the selected tab and navigation callbacks. The Plugins tab consumes the unified package/bundle feed; Skills and Marketplace remain panes of the same plugin-owned page.
+Declare `app.capability` as a single slot. A desktop Cordis plugin registers the existing capability-center page implementation from `apps/desktop/src/plugins/capability-center`, so its imports stay within the GUI package. `app.tsx` mounts the slot and retains only the selected tab and navigation callbacks. The Plugins tab consumes the unified package/bundle feed; Skills and Marketplace remain panes of the same plugin-owned page.
 
 ## Verification
 

@@ -1263,10 +1263,10 @@
   };
   "@musepi/client-core" = copyPathToStore ../packages/client-core;
   "@musepi/collab-proto" = copyPathToStore ../packages/collab-proto;
-  "@musepi/desktop-app" = copyPathToStore ../packages/desktop-app;
-  "@musepi/harmony" = copyPathToStore ../packages/harmony;
+  "@musepi/desktop-app" = copyPathToStore ../apps/desktop;
+  "@musepi/harmony" = copyPathToStore ../apps/harmony;
   "@musepi/hashline" = copyPathToStore ../packages/hashline;
-  "@musepi/mobile" = copyPathToStore ../packages/mobile;
+  "@musepi/mobile" = copyPathToStore ../apps/mobile;
   "@musepi/musepi-stats" = copyPathToStore ../packages/stats;
   "@musepi/musepi-type" = copyPathToStore ../packages/musepi-type;
   "@musepi/pi-agent-core" = copyPathToStore ../packages/agent;

@@ -1,6 +1,6 @@
 # Desktop 实机验证 ·  harness 笔记（2026-09-21）
 
-脚本：`packages/desktop-app/scripts/verify-desktop-scroll.mjs`
+脚本：`apps/desktop/scripts/verify-desktop-scroll.mjs`
 （fake provider → 隔离 daemon → dist 版 Electron → CDP 驱动 → 断言 + 截图）
 
 ## 断言（M1 桌面侧契约）

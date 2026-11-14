@@ -32,10 +32,10 @@
 ### Task 1: Platform-Aware Manual Download URLs
 
 **Files:**
-- Modify: `packages/desktop-app/electron/update-logic.cjs`
-- Modify: `packages/desktop-app/electron/updater.cjs`
+- Modify: `apps/desktop/electron/update-logic.cjs`
+- Modify: `apps/desktop/electron/updater.cjs`
 - Modify: `.github/workflows/gui-release.yml`
-- Test: `packages/desktop-app/test/update-logic.test.ts`
+- Test: `apps/desktop/test/update-logic.test.ts`
 
 **Interfaces:**
 - Produces: `releaseDownloadUrl(manifest, platform, arch, releasesPage): string`, reading `manifest.downloads["<platform>-<arch>"]`; legacy `manifest.url` is valid only for `darwin/arm64`, otherwise use `releasesPage`.
@@ -47,7 +47,7 @@ Add cases proving win32/x64 selects `MusePi-0.6.4-setup.exe`, win32/arm64 select
 
 - [ ] **Step 2: Run the tests and confirm the intended failure**
 
-Run: `bun test packages/desktop-app/test/update-logic.test.ts`
+Run: `bun test apps/desktop/test/update-logic.test.ts`
 Expected: FAIL because `releaseDownloadUrl` is not exported.
 
 - [ ] **Step 3: Implement selection and manifest parsing**
@@ -56,7 +56,7 @@ Add the pure helper in `update-logic.cjs`. In `updater.cjs`, validate `downloads
 
 - [ ] **Step 4: Verify**
 
-Run: `bun test packages/desktop-app/test/update-logic.test.ts`
+Run: `bun test apps/desktop/test/update-logic.test.ts`
 Expected: PASS.
 
 ### Task 2: Hash Final Windows Installers During Release Merge
@@ -123,11 +123,11 @@ Expected: PASS.
 **Files:**
 - Modify: `packages/coding-agent/src/daemon/services/bundle-service.ts`
 - Modify: `packages/coding-agent/src/daemon/server.ts`
-- Modify: `packages/desktop-app/src/components/BundleView.tsx`
+- Modify: `apps/desktop/src/components/BundleView.tsx`
 - Modify: `packages/client-core/src/i18n/zh-CN/tools.ts`
 - Modify: `packages/client-core/src/i18n/en-US/tools.ts`
 - Test: `packages/coding-agent/src/daemon/services/bundle-service.test.ts`
-- Test: `packages/desktop-app/test/bundle-view.test.tsx`
+- Test: `apps/desktop/test/bundle-view.test.tsx`
 
 **Interfaces:**
 - Consumes: Task 3 catalog and `writeProfileBundles`.
@@ -140,7 +140,7 @@ Service: enabling appends once, disabling removes all occurrences, a non-bundle 
 
 - [ ] **Step 2: Run the tests and confirm the intended failure**
 
-Run: `bun test packages/coding-agent/src/daemon/services/bundle-service.test.ts packages/desktop-app/test/bundle-view.test.tsx`
+Run: `bun test packages/coding-agent/src/daemon/services/bundle-service.test.ts apps/desktop/test/bundle-view.test.tsx`
 Expected: FAIL because the RPC and bundle selectors do not exist.
 
 - [ ] **Step 3: Implement serialized selection writes and UI**
@@ -155,12 +155,12 @@ Expected: PASS.
 ### Task 5: Component Effective State and Preset Boundary
 
 **Files:**
-- Modify: `packages/desktop-app/src/components/PluginDetailDialog.tsx`
+- Modify: `apps/desktop/src/components/PluginDetailDialog.tsx`
 - Modify: `packages/client-core/src/i18n/zh-CN/tools.ts`
 - Modify: `packages/client-core/src/i18n/en-US/tools.ts`
 - Modify: `packages/client-core/src/i18n/zh-CN/settings.ts`
 - Modify: `packages/client-core/src/i18n/en-US/settings.ts`
-- Test: `packages/desktop-app/test/plugin-detail-dialog.test.tsx`
+- Test: `apps/desktop/test/plugin-detail-dialog.test.tsx`
 
 **Interfaces:**
 - Keeps `PluginComponentDesc.enabled` as the component’s own blacklist configuration.
@@ -172,7 +172,7 @@ Render an inactive `computer:computer` parent with `components:[{ id:"computer",
 
 - [ ] **Step 2: Run the tests and confirm the intended failure**
 
-Run: `bun test packages/desktop-app/test/plugin-detail-dialog.test.tsx`
+Run: `bun test apps/desktop/test/plugin-detail-dialog.test.tsx`
 Expected: FAIL because the current child is green and enabled while its parent is disabled.
 
 - [ ] **Step 3: Implement effective-state rendering and copy**
@@ -181,7 +181,7 @@ Compute state per row without mutating component data or the denylist. Explain t
 
 - [ ] **Step 4: Verify**
 
-Run: `bun test packages/desktop-app/test/plugin-detail-dialog.test.tsx packages/desktop-app/test/bundle-view.test.tsx`
+Run: `bun test apps/desktop/test/plugin-detail-dialog.test.tsx apps/desktop/test/bundle-view.test.tsx`
 Expected: PASS.
 
 ### Task 6: Documentation and End-to-End Verification
@@ -201,9 +201,9 @@ Document the three ownership models, component configuration versus effective st
 
 - [ ] **Step 2: Run focused package and release checks**
 
-Run: `bun --cwd=packages/desktop-app run check`
+Run: `bun --cwd=apps/desktop run check`
 Run: `bun --cwd=packages/coding-agent run check` (or the package’s documented check script if named differently)
-Run: `bun test packages/desktop-app/test/update-logic.test.ts packages/desktop-app/test/bundle-view.test.tsx packages/desktop-app/test/plugin-detail-dialog.test.tsx packages/coding-agent/src/extensibility/plugins/profile/profile-composition.test.ts packages/coding-agent/src/daemon/services/bundle-service.test.ts scripts/gui-release-channel.test.ts`
+Run: `bun test apps/desktop/test/update-logic.test.ts apps/desktop/test/bundle-view.test.tsx apps/desktop/test/plugin-detail-dialog.test.tsx packages/coding-agent/src/extensibility/plugins/profile/profile-composition.test.ts packages/coding-agent/src/daemon/services/bundle-service.test.ts scripts/gui-release-channel.test.ts`
 Expected: all PASS; classify any pre-existing failure with a baseline rerun instead of hiding it.
 
 - [ ] **Step 3: Run documentation/changelog checks and inspect the final tree**

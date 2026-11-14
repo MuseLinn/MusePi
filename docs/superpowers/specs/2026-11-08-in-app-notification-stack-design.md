@@ -16,7 +16,7 @@ Absorb the useful parts of the openchamber/Sonner interaction without adding a d
 
 ## Non-goals
 
-- OS/desktop notifications (`packages/desktop-app/src/lib/notify.ts`) and their settings. They stay a separate delivery channel.
+- OS/desktop notifications (`apps/desktop/src/lib/notify.ts`) and their settings. They stay a separate delivery channel.
 - Redesigning the OTA `UpdateToast` or its dialog layer.
 - A persistent notification center, history, or unread list.
 - Swipe-to-dismiss, RTL mirroring, or the mobile banner layout. The app has no RTL locale and the desktop pointer is not a swipe surface.
@@ -63,7 +63,7 @@ interface ActionToast {
 
 The existing semantics move unchanged: repeated sources replace their earlier content, `dismissActionToastSource(key)` clears one recovered source, errors persist and are evicted last, `pauseActionToast` / `resumeActionToast` freeze the remainder. `MAX_ACTION_TOASTS` stays 3. `ttlFor(kind)` replaces the single 6 s constant so the desktop and guest shells share one table.
 
-`packages/desktop-app/src/lib/action-toast.ts` becomes a pure re-export of the client-core module. Every current import path, the host-module table entry, and `host-modules.test.ts` keep working; the store instance is now the same one the guest shell uses.
+`apps/desktop/src/lib/action-toast.ts` becomes a pure re-export of the client-core module. Every current import path, the host-module table entry, and `host-modules.test.ts` keep working; the store instance is now the same one the guest shell uses.
 
 ### Desktop stack
 
@@ -108,8 +108,8 @@ The mapping lives in a pure `src/lib/session-notice.ts` helper returning an `Act
 
 ### Verification
 
-- Store and view contracts: `bun test packages/client-core/test/action-toast.test.ts packages/client-core/test/toasts.test.tsx packages/desktop-app/test/action-toast.test.ts packages/desktop-app/test/session-store.test.ts packages/desktop-app/test/host-modules.test.ts`.
-- Type and lint gates: `bun --cwd=packages/client-core run check` and `bun --cwd=packages/desktop-app run check`.
+- Store and view contracts: `bun test packages/client-core/test/action-toast.test.ts packages/client-core/test/toasts.test.tsx apps/desktop/test/action-toast.test.ts apps/desktop/test/session-store.test.ts apps/desktop/test/host-modules.test.ts`.
+- Type and lint gates: `bun --cwd=packages/client-core run check` and `bun --cwd=apps/desktop run check`.
 - Repository gates touching the change: `bun check:docs`, `bun check:changelog-i18n`, `bun check:css-structure`, `bun check:glass-backdrop`.
 - Manual desktop pass: session notice / failed retry appears in the corner stack; hovering expands a 3-toast stack; close plays the exit and the ring freezes on hover; a cancel action runs before dismissal; guest web shell still shows the bottom strip.
 

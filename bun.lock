@@ -169,7 +169,7 @@
         "@musepi/pi-wire": "workspace:*",
       },
     },
-    "packages/desktop-app": {
+    "apps/desktop": {
       "name": "@musepi/desktop-app",
       "version": "0.7.5",
       "dependencies": {
@@ -250,7 +250,7 @@
         "@koromix/koffi-win32-x64": "3.3.1",
       },
     },
-    "packages/harmony": {
+    "apps/harmony": {
       "name": "@musepi/harmony",
       "version": "1.0.0",
     },
@@ -317,7 +317,7 @@
         "onnxruntime-node",
       ],
     },
-    "packages/mobile": {
+    "apps/mobile": {
       "name": "@musepi/mobile",
       "version": "0.7.5",
       "dependencies": {
@@ -1149,13 +1149,13 @@
 
     "@musepi/collab-proto": ["@musepi/collab-proto@workspace:packages/collab-proto"],
 
-    "@musepi/desktop-app": ["@musepi/desktop-app@workspace:packages/desktop-app"],
+    "@musepi/desktop-app": ["@musepi/desktop-app@workspace:apps/desktop"],
 
-    "@musepi/harmony": ["@musepi/harmony@workspace:packages/harmony"],
+    "@musepi/harmony": ["@musepi/harmony@workspace:apps/harmony"],
 
     "@musepi/hashline": ["@musepi/hashline@workspace:packages/hashline"],
 
-    "@musepi/mobile": ["@musepi/mobile@workspace:packages/mobile"],
+    "@musepi/mobile": ["@musepi/mobile@workspace:apps/mobile"],
 
     "@musepi/musepi-stats": ["@musepi/musepi-stats@workspace:packages/stats"],
 

@@ -93,17 +93,21 @@ if (!hasCatalog(root)) {
 	process.exit(0);
 }
 
-const packagesDir = path.join(REPO_ROOT, "packages");
+/** Workspace roots declared by the bun workspaces globs (`packages/*`, `apps/*`, `tools/*`). */
+const WORKSPACE_ROOTS = ["packages", "apps", "tools"] as const;
 const refs = new Map<string, CatalogRef>();
-for (const entry of fs.existsSync(packagesDir) ? fs.readdirSync(packagesDir, { withFileTypes: true }) : []) {
-	if (!entry.isDirectory()) continue;
-	const relative = `packages/${entry.name}/package.json`;
-	const manifest = readJson(path.join(packagesDir, entry.name, "package.json"));
-	if (manifest === null) continue;
-	for (const name of catalogRefsIn(manifest)) {
-		const existing = refs.get(name);
-		if (existing) existing.manifests.push(relative);
-		else refs.set(name, { name, manifests: [relative] });
+for (const workspaceRoot of WORKSPACE_ROOTS) {
+	const rootDir = path.join(REPO_ROOT, workspaceRoot);
+	for (const entry of fs.existsSync(rootDir) ? fs.readdirSync(rootDir, { withFileTypes: true }) : []) {
+		if (!entry.isDirectory()) continue;
+		const relative = `${workspaceRoot}/${entry.name}/package.json`;
+		const manifest = readJson(path.join(rootDir, entry.name, "package.json"));
+		if (manifest === null) continue;
+		for (const name of catalogRefsIn(manifest)) {
+			const existing = refs.get(name);
+			if (existing) existing.manifests.push(relative);
+			else refs.set(name, { name, manifests: [relative] });
+		}
 	}
 }
 

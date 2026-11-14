@@ -361,7 +361,7 @@ export function findUiI18nViolations(file: string, sourceText: string): UiI18nVi
 
 function sourceFiles(): string[] {
 	return [
-		...globSync("packages/desktop-app/src/**/*.{ts,tsx}", { cwd: root }),
+		...globSync("apps/desktop/src/**/*.{ts,tsx}", { cwd: root }),
 		...globSync("packages/client-core/src/**/*.{ts,tsx}", { cwd: root }),
 	]
 		.map(file => file.replaceAll("\\", "/"))

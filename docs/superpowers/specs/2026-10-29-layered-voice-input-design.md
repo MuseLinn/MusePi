@@ -6,8 +6,8 @@ summary: 以 VAD、降噪、轻量声纹复核和保守提交实现低延迟机�
 scope:
   - packages/coding-agent/src/voice
   - packages/coding-agent/src/stt
-  - packages/desktop-app/src/lib/voice.ts
-  - packages/desktop-app/src/components/settings-sections/voice.tsx
+  - apps/desktop/src/lib/voice.ts
+  - apps/desktop/src/components/settings-sections/voice.tsx
 lang: zh-CN
 ---
 

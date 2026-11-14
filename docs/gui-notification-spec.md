@@ -5,14 +5,14 @@ status: living
 summary: API, lifetime, placement, stack interaction, and accessibility for MusePi's in-app notification stack.
 scope:
   - packages/client-core
-  - packages/desktop-app
+  - apps/desktop
 ---
 
 # In-app notification spec
 
 English | [中文](gui-notification-spec.zh-CN.md)
 
-Status: current contract. Implementation lives in `packages/client-core/src/lib/action-toast.ts` (store), `packages/desktop-app/src/components/ActionToast.tsx` (desktop view), and `packages/client-core/src/components/shell/Toasts.tsx` (guest/mobile view).
+Status: current contract. Implementation lives in `packages/client-core/src/lib/action-toast.ts` (store), `apps/desktop/src/components/ActionToast.tsx` (desktop view), and `packages/client-core/src/components/shell/Toasts.tsx` (guest/mobile view).
 
 ## 1. What this surface owns
 
@@ -21,7 +21,7 @@ The in-app notification stack is the single home for transient, app-initiated fe
 It is not:
 
 - the OTA update card (`UpdateToast` / `UpdateDialog`), which shares the desktop corner but keeps its own state;
-- an OS notification (`packages/desktop-app/src/lib/notify.ts`, Settings → 通知与音效);
+- an OS notification (`apps/desktop/src/lib/notify.ts`, Settings → 通知与音效);
 - a persistent notification center or history. When a toast leaves, it is gone.
 
 ## 2. API
@@ -59,7 +59,7 @@ Capacity is 3. A fourth toast evicts the oldest non-error first; persistent erro
 - **Direct import** — any pane calls `pushActionToast`; both shells re-export the same store.
 - **`musepi-gui-toast`** — a `CustomEvent` on `window`. `detail` is either a string or an `ActionToastInput`-shaped object. Missing `kind` defaults to `error`, preserving the old error-banner semantics for callers that only pass a message.
 - **Extensions** — compiled plugins bind `lib/action-toast` to `window.MusePiHostModules["action-toast"]`, so a plugin and the host share one list.
-- **Daemon session events** — the desktop session store maps events through `packages/desktop-app/src/lib/session-notice.ts`:
+- **Daemon session events** — the desktop session store maps events through `apps/desktop/src/lib/session-notice.ts`:
 
 | Event | Result |
 | --- | --- |

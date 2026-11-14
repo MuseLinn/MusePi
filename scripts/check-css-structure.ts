@@ -108,7 +108,9 @@ async function main(): Promise<void> {
 	// expected and must not hide the new stylesheet from the gate. Restrict the
 	// scan to first-party source roots; reference checkouts can contain minified
 	// or otherwise non-conforming third-party CSS that this gate does not own.
-	const listed = await $`git ls-files --cached --others --exclude-standard -- packages web`.quiet().nothrow();
+	const listed = await $`git ls-files --cached --others --exclude-standard -- packages apps tools web`
+		.quiet()
+		.nothrow();
 	if (listed.exitCode !== 0) throw new Error("git ls-files for product CSS failed");
 	const candidates = listed
 		.text()

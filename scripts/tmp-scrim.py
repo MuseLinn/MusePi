@@ -1,6 +1,6 @@
 import io
 
-p = "packages/desktop-app/src/components/ContextPanel.tsx"
+p = "apps/desktop/src/components/ContextPanel.tsx"
 s = io.open(p, encoding="utf-8").read()
 T = "\t"
 

@@ -137,7 +137,12 @@ function rewriteFile(file: string): { content: string; changes: Change[]; skippe
 
 // Collect every .ts/.tsx file living under a package `test/` or `tests/` dir.
 const files = new Set<string>();
-for (const pattern of ["packages/*/test/**/*.{ts,tsx}", "packages/*/tests/**/*.{ts,tsx}"]) {
+for (const pattern of [
+	"packages/*/test/**/*.{ts,tsx}",
+	"packages/*/tests/**/*.{ts,tsx}",
+	"apps/*/test/**/*.{ts,tsx}",
+	"tools/*/test/**/*.{ts,tsx}",
+]) {
 	for (const f of new Glob(pattern).scanSync({ cwd: ROOT, absolute: true })) files.add(f);
 }
 

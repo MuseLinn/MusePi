@@ -30,8 +30,8 @@
 ### Task 1: 共享标签展示生命周期
 
 **Files:**
-- Create: `packages/desktop-app/src/lib/use-tab-motion.ts`
-- Test: `packages/desktop-app/test/tab-motion.test.tsx`
+- Create: `apps/desktop/src/lib/use-tab-motion.ts`
+- Test: `apps/desktop/test/tab-motion.test.tsx`
 
 **Interfaces:**
 - Produces: `useTabMotion<T extends { id: string }>(tabs: readonly T[]): { tabs: readonly T[]; enteringIds: ReadonlySet<string>; closingIds: ReadonlySet<string> }`。
@@ -44,10 +44,10 @@
 ### Task 2: Surface 与浏览器标签接入
 
 **Files:**
-- Modify: `packages/desktop-app/src/components/surface-tabs.tsx`
-- Modify: `packages/desktop-app/src/components/ManagedBrowserPane.tsx`
-- Modify: `packages/desktop-app/src/styles/gui-settings.css`
-- Test: `packages/desktop-app/test/surface-tabs.test.tsx`
+- Modify: `apps/desktop/src/components/surface-tabs.tsx`
+- Modify: `apps/desktop/src/components/ManagedBrowserPane.tsx`
+- Modify: `apps/desktop/src/styles/gui-settings.css`
+- Test: `apps/desktop/test/surface-tabs.test.tsx`
 - Test: managed browser 现有相关测试
 
 **Interfaces:**
@@ -61,10 +61,10 @@
 ### Task 3: PR 工具区与右侧空态
 
 **Files:**
-- Modify: `packages/desktop-app/src/components/pr-center.tsx`
-- Modify: `packages/desktop-app/src/styles/gui-workspace.css`
-- Modify: `packages/desktop-app/src/styles/gui-settings.css`
-- Test: `packages/desktop-app/test/pr-center.test.tsx`
+- Modify: `apps/desktop/src/components/pr-center.tsx`
+- Modify: `apps/desktop/src/styles/gui-workspace.css`
+- Modify: `apps/desktop/src/styles/gui-settings.css`
+- Test: `apps/desktop/test/pr-center.test.tsx`
 
 **Interfaces:**
 - Produces: `.gui-pr-toolbar` 搜索+subtabs 组合；`.gui-panel-empty-list` 自适应卡片 grid。

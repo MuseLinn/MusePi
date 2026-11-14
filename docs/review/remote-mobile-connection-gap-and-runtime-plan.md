@@ -193,16 +193,16 @@ MusePi 目前只覆盖第三行的一半：能生成 ts.net URL，但没有把�
 
 | 优先级 | 缺口 | 证据 | 影响 |
 | --- | --- | --- | --- |
-| P0 | 远程工作区没有「远程」语义：wire 无 remote 字段，无徽标、无门控、断开不清理会话 | `packages/wire/src/index.ts` 仅注释出现 remote；`packages/desktop-app/src/app.tsx:2471` 只传 `cwd`；`packages/coding-agent/src/daemon/remote.ts:183` 只 unmount | 用户不知道自己在远端；断开后会话指向空目录 |
+| P0 | 远程工作区没有「远程」语义：wire 无 remote 字段，无徽标、无门控、断开不清理会话 | `packages/wire/src/index.ts` 仅注释出现 remote；`apps/desktop/src/app.tsx:2471` 只传 `cwd`；`packages/coding-agent/src/daemon/remote.ts:183` 只 unmount | 用户不知道自己在远端；断开后会话指向空目录 |
 | P0 | SSH 首次信任无校验：`BatchMode=yes` + `StrictHostKeyChecking=accept-new`，无指纹确认 UI | `packages/coding-agent/src/ssh/connection-manager.ts:106` | 首连可被中间人；也无法输入口令/agent |
 | P0 | sshfs 挂载远端 `/`，无路径白名单；`mountRemote` 无超时；`isMounted` 在 Windows 用「目录非空」推断 | `packages/coding-agent/src/daemon/remote.ts:121`；`packages/coding-agent/src/ssh/sshfs-mount.ts:101,125` | 完整 bash 工具可写远端任意路径；半通网络 UI 卡死；空根/残留文件误判 |
-| P0 | daemon 远程 token 拼在 WS URL 查询串并落 localStorage；无设备级撤销、无轮换、无 TLS | `packages/desktop-app/src/lib/remote-hosts.ts:58`；`packages/coding-agent/src/daemon/ws-transport.ts:151` | 反代/日志可见；只能换 token 重启 |
+| P0 | daemon 远程 token 拼在 WS URL 查询串并落 localStorage；无设备级撤销、无轮换、无 TLS | `apps/desktop/src/lib/remote-hosts.ts:58`；`packages/coding-agent/src/daemon/ws-transport.ts:151` | 反代/日志可见；只能换 token 重启 |
 | P0 | 6 位配对码 10⁶ 空间、无尝试次数限制 | `packages/coding-agent/src/collab/pair-codes.ts:28-52` | 同一 LAN 内可枚举/抢注，拿到即完整写权限 |
 | P1 | 没有统一连接描述符：隧道/SSH/daemon/collab 各有一套 URL 与认证形态 | 四个子系统无共享类型 | 新增传输要改四处；移动端无法复用 |
 | P1 | tunnel 只有 quick 模式，无 named tunnel / Access / 运行期健康检查 / 原子替换 | `packages/coding-agent/src/collab/tunnel.ts:66-79`；`local-share.ts:176-210` | 链接不稳定；无法长期使用；切换有断档 |
 | P1 | tailscale 只做 `serve` 且失败静默降级，无 `funnel`、无审批 UI | `packages/coding-agent/src/collab/tailscale-serve.ts:58-105` | 公网场景不可用；用户不知道为何降级 |
 | P1 | 桌面 GUI 不能作为 collab guest 加入；仅 client-core/TUI 有 guest | — | 桌面↔桌面共享缺失 |
-| P2 | Docker 连接方式仍是禁用占位 | `packages/desktop-app/src/components/ConnectDialog.tsx:267` | — |
+| P2 | Docker 连接方式仍是禁用占位 | `apps/desktop/src/components/ConnectDialog.tsx:267` | — |
 | P2 | Windows WinFsp 端到端未验证 | `docs/remote-workspace.md` 自述 | 平台风险 |
 
 ---
@@ -231,16 +231,16 @@ MusePi 目前只覆盖第三行的一半：能生成 ts.net URL，但没有把�
 | P0 | 没有中继兜底：离开 LAN 且桌面没开隧道就连不上 | `packages/client-core/src/lib/hosts.ts:68-83` 只按 host 名分 lan/relay，实际 `relay` 仍是桌面地址 | 产品核心场景缺失 |
 | P0 | 房间密钥即全部权限：无宿主身份证明、无设备撤销、无逐消息授权 | `packages/collab-proto/src/link.ts:253-257`；`packages/coding-agent/src/collab/host.ts:455` | 旧链接在停止共享前始终可连；无法踢单台设备 |
 | P0 | 非安全上下文明文降级：http LAN 下 `crypto.subtle` 缺失即 `plaintext` | `packages/collab-proto/src/socket.ts:92-94`；`packages/client-core/src/app.tsx:107` | 同 Wi-Fi 抓包可读帧内容 |
-| P0 | 无后台保活：manifest 无 `<service>`、无 `FOREGROUND_SERVICE` | `packages/mobile/android/app/src/main/AndroidManifest.xml:1-55` | 长任务/审批在切后台后失联 |
+| P0 | 无后台保活：manifest 无 `<service>`、无 `FOREGROUND_SERVICE` | `apps/mobile/android/app/src/main/AndroidManifest.xml:1-55` | 长任务/审批在切后台后失联 |
 | P0 | 无推送：只有本地通知；桌面离线时手机收不到审批/完成 | `docs/mobile-design.md:314-320` | 异步协作断裂 |
 | P1 | 没有候选集/竞速：只有单地址，切换网络要重连甚至重配 | 对比 openchamber `mobileConnections.ts:963-1113` | LAN↔蜂窝体验差 |
 | P1 | 没有 direct daemon 模式：`serve --remote-token` 已存在，但移动端只走 collab | `packages/coding-agent/src/commands/serve.ts:40-42`；`packages/client-core/src/app.tsx:234` 的 `/__daemon.json` 只在本机服务时可用 | 少一条低延迟路径 |
 | P1 | 没有 host 身份校验：拿到房间密钥即可连，无法确认「是那台电脑」 | `link.ts` 无 host 公钥字段 | 与 openchamber 的 hostEncPubJwk 差距 |
-| P1 | OTA 全未实现 | `docs/ota-mobile-design.md:66-73` 全未勾选；`packages/mobile/package.json` 无 Capgo | 每次发版必须重装 APK |
+| P1 | OTA 全未实现 | `docs/ota-mobile-design.md:66-73` 全未勾选；`apps/mobile/package.json` 无 Capgo | 每次发版必须重装 APK |
 | P1 | 语音不可用：collab RPC 白名单无 `stt.*`/`tts.*`，daemon 事件 inert | `packages/coding-agent/src/collab/host.ts:960-1010`；`packages/client-core/src/lib/client.ts:414-433` | 移动端语音输入/朗读缺失 |
-| P2 | Harmony 壳断链：脚本仍指向 `packages/guest-client/dist`，包已改名 `client-core` | `packages/harmony/scripts/copy-web-assets.js:16`；`packages/` 下无 `guest-client` | 鸿蒙壳可能无法出包 |
-| P2 | Harmony `HarmonyNative.ets` 死代码，与 `Index.ets` 内联代理漂移 | `packages/harmony/entry/src/main/ets/pages/Index.ets:110-121` | 维护风险 |
-| P2 | Android 全局明文 + 信任 user CA + `allowMixedContent` | `packages/mobile/capacitor.config.ts:7-32`、`AndroidManifest.xml:10` | 安全边界完全靠上层 URL 匹配 |
+| P2 | Harmony 壳断链：脚本仍指向 `packages/guest-client/dist`，包已改名 `client-core` | `apps/harmony/scripts/copy-web-assets.js:16`；`packages/` 下无 `guest-client` | 鸿蒙壳可能无法出包 |
+| P2 | Harmony `HarmonyNative.ets` 死代码，与 `Index.ets` 内联代理漂移 | `apps/harmony/entry/src/main/ets/pages/Index.ets:110-121` | 维护风险 |
+| P2 | Android 全局明文 + 信任 user CA + `allowMixedContent` | `apps/mobile/capacitor.config.ts:7-32`、`AndroidManifest.xml:10` | 安全边界完全靠上层 URL 匹配 |
 | P2 | 无 foreground service 计划、无真机复验记录 | `docs/mobile-design.md:301,413,514` | 平台风险 |
 
 ---
@@ -342,7 +342,7 @@ interface ConnectionDescriptor {
 **硬决策门：`targetSdk`**
 
 - Android 10+ 对 `targetSdk ≥ 29` 的应用禁止执行 app 私有目录中的文件（W^X）。dsh-go 用 `targetSdk 28` 换取 guest `exec`（`app/android/app/build.gradle.kts:79-92`）。
-- MusePi 当前 `targetSdk 36`（`packages/mobile/android/variables.gradle:4`）。保持 36 时，proot 自身可以从 `nativeLibraryDir` 执行，但它从 rootfs 里 `execve` guest 程序会被拒绝。
+- MusePi 当前 `targetSdk 36`（`apps/mobile/android/variables.gradle:4`）。保持 36 时，proot 自身可以从 `nativeLibraryDir` 执行，但它从 rootfs 里 `execve` guest 程序会被拒绝。
 - 可选破法（都需 spike 验证）：
   1. 接受 `targetSdk 28`（dsh-go 路线，最稳）。
   2. 把 Bun 与必要工具放进 `nativeLibraryDir`，rootfs 只提供库与数据；proot 把 guest 路径 bind 到 nativeLibraryDir。可行但工具链覆盖不全。
@@ -367,7 +367,7 @@ client-core（TS，WebView）
 
 建议新增文件（对齐 dsh-go 的分层）：
 
-- `packages/mobile/android/app/src/main/java/com/musepi/mobile/runtime/RuntimeInstaller.kt`
+- `apps/mobile/android/app/src/main/java/com/musepi/mobile/runtime/RuntimeInstaller.kt`
 - `.../RuntimeProcess.kt`
 - `.../RuntimeService.kt`
 - `.../RuntimeController.kt`
@@ -537,7 +537,7 @@ libproot.so --kill-on-exit --link2symlink --sysvipc -0 \
 - `packages/ui/src/lib/relay/handshake.ts:107-158` — 客户端 E2EE 握手
 - `packages/ui/src/apps/mobileConnections.ts:963-1113` — 候选集竞速
 - `packages/electron/ssh-manager.mjs:1470-1580` — SSH 13 阶段状态机
-- `packages/mobile/README.md:72-118` — Cloudflare Access 操作手册
+- `apps/mobile/README.md:72-118` — Cloudflare Access 操作手册
 
 **dsh-go**
 
@@ -555,11 +555,11 @@ libproot.so --kill-on-exit --link2symlink --sysvipc -0 \
 - `packages/coding-agent/src/collab/pair-codes.ts:28-52` — 配对码
 - `packages/coding-agent/src/daemon/remote.ts:121,183` — sshfs 挂载 `/` 与只卸载
 - `packages/coding-agent/src/ssh/connection-manager.ts:106` — accept-new
-- `packages/desktop-app/src/lib/remote-hosts.ts:58` — token 进 URL
+- `apps/desktop/src/lib/remote-hosts.ts:58` — token 进 URL
 - `packages/client-core/src/app.tsx:234` — `/__daemon.json` 直连路径
 - `packages/collab-proto/src/link.ts:253-257` — 32/48 B 密钥
 - `packages/collab-proto/src/socket.ts:92-94` — 明文降级
-- `packages/mobile/android/variables.gradle:4` — targetSdk 36
+- `apps/mobile/android/variables.gradle:4` — targetSdk 36
 - `bazel/triples/BUILD.bazel:44-96` — 无 Android triple
 
 ## 附录 B：未确认清单

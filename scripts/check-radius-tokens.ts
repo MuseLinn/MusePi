@@ -26,7 +26,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const ROOTS = ["packages/desktop-app/src", "packages/client-core/src"];
+const ROOTS = ["apps/desktop/src", "packages/client-core/src"];
 const TOKENS_FILE = "packages/client-core/src/styles/tokens.css";
 const LADDER = ["--radius-xs", "--radius-sm", "--radius-md", "--radius-lg", "--radius-xl", "--radius-2xl"] as const;
 

@@ -4,7 +4,7 @@
 
 **Goal:** One in-app notification store shared by the desktop and guest/mobile shells, with openchamber-style stack interaction on desktop and session-level daemon notices wired into it.
 
-**Architecture:** Move the action-toast store from `packages/desktop-app` into `packages/client-core` and re-export it from the desktop module so the extension host-module identity stays fixed. Both shells subscribe to that store with their existing presentation (desktop corner glass stack, guest bottom strip). The desktop session store maps `notice` / retry / compaction events through a pure helper into the same store.
+**Architecture:** Move the action-toast store from `apps/desktop` into `packages/client-core` and re-export it from the desktop module so the extension host-module identity stays fixed. Both shells subscribe to that store with their existing presentation (desktop corner glass stack, guest bottom strip). The desktop session store maps `notice` / retry / compaction events through a pure helper into the same store.
 
 **Tech Stack:** TypeScript, React 19, Bun test, happy-dom, Biome/tsgo, existing glass CSS tokens.
 
@@ -35,9 +35,9 @@
 **Files:**
 - Create: `packages/client-core/src/lib/action-toast.ts`
 - Modify: `packages/client-core/src/index.ts`
-- Modify: `packages/desktop-app/src/lib/action-toast.ts`
+- Modify: `apps/desktop/src/lib/action-toast.ts`
 - Create: `packages/client-core/test/action-toast.test.ts`
-- Modify: `packages/desktop-app/test/action-toast.test.ts` (store imports only; view tests stay)
+- Modify: `apps/desktop/test/action-toast.test.ts` (store imports only; view tests stay)
 
 **Interfaces:**
 - Produces: `ActionToastKind`, `ActionToast` (with `cancelLabel?`, `onCancel?`), `ActionToastInput`, `ACTION_TOAST_TTL_MS`, `WARNING_TOAST_TTL_MS`, `MAX_ACTION_TOASTS`, `ttlFor(kind): number`, `getToasts()`, `pushActionToast(input): number`, `pauseActionToast(id)`, `resumeActionToast(id)`, `dismissActionToast(id)`, `dismissActionToastSource(dedupeKey)`, `subscribeActionToasts(listener)`.
@@ -135,7 +135,7 @@ Expected: FAIL — cannot resolve `../src/lib/action-toast`.
 
 - [ ] **Step 3: Create the shared store**
 
-Move `packages/desktop-app/src/lib/action-toast.ts` to `packages/client-core/src/lib/action-toast.ts` unchanged, then:
+Move `apps/desktop/src/lib/action-toast.ts` to `packages/client-core/src/lib/action-toast.ts` unchanged, then:
 
 - Add `export const WARNING_TOAST_TTL_MS = 8000;` and keep `ACTION_TOAST_TTL_MS = 6000`.
 - Add `cancelLabel?: string` and `onCancel?(): void` to `ActionToast`.
@@ -165,26 +165,26 @@ export {
 } from "./lib/action-toast";
 ```
 
-Replace `packages/desktop-app/src/lib/action-toast.ts` with explicit re-exports of the same names from `@musepi/client-core` (no local state, no duplicated JSDoc). Keep the file so `lib/action-toast` path resolution in `EXTENSION_HOST_MODULES` and every existing import still resolves.
+Replace `apps/desktop/src/lib/action-toast.ts` with explicit re-exports of the same names from `@musepi/client-core` (no local state, no duplicated JSDoc). Keep the file so `lib/action-toast` path resolution in `EXTENSION_HOST_MODULES` and every existing import still resolves.
 
 - [ ] **Step 5: Point the desktop tests at the shared store**
 
-In `packages/desktop-app/test/action-toast.test.ts`, change the store import to `@musepi/client-core`; keep `ActionToastStack` from `../src/components/ActionToast`. Delete the moved store assertions from this file, keeping only the view tests.
+In `apps/desktop/test/action-toast.test.ts`, change the store import to `@musepi/client-core`; keep `ActionToastStack` from `../src/components/ActionToast`. Delete the moved store assertions from this file, keeping only the view tests.
 
 - [ ] **Step 6: Run both test files**
 
-Run: `bun test packages/client-core/test/action-toast.test.ts packages/desktop-app/test/action-toast.test.ts`
+Run: `bun test packages/client-core/test/action-toast.test.ts apps/desktop/test/action-toast.test.ts`
 Expected: PASS.
 
 - [ ] **Step 7: Type-check both packages**
 
-Run: `bun --cwd=packages/client-core run check:types` and `bun --cwd=packages/desktop-app run check:types`
+Run: `bun --cwd=packages/client-core run check:types` and `bun --cwd=apps/desktop run check:types`
 Expected: PASS.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/client-core/src/lib/action-toast.ts packages/client-core/src/index.ts packages/client-core/test/action-toast.test.ts packages/desktop-app/src/lib/action-toast.ts packages/desktop-app/test/action-toast.test.ts
+git add packages/client-core/src/lib/action-toast.ts packages/client-core/src/index.ts packages/client-core/test/action-toast.test.ts apps/desktop/src/lib/action-toast.ts apps/desktop/test/action-toast.test.ts
 git commit -m "refactor: share the in-app toast store through client-core"
 ```
 
@@ -361,10 +361,10 @@ git commit -m "feat: route session notices through the shared toast store"
 ### Task 3: Map desktop session events into the stack
 
 **Files:**
-- Create: `packages/desktop-app/src/lib/session-notice.ts`
-- Create: `packages/desktop-app/test/session-notice.test.ts`
-- Modify: `packages/desktop-app/src/lib/session-store.ts` (agent-event switch before `default`)
-- Modify: `packages/desktop-app/test/session-store.test.ts`
+- Create: `apps/desktop/src/lib/session-notice.ts`
+- Create: `apps/desktop/test/session-notice.test.ts`
+- Modify: `apps/desktop/src/lib/session-store.ts` (agent-event switch before `default`)
+- Modify: `apps/desktop/test/session-store.test.ts`
 
 **Interfaces:**
 - Consumes: `ActionToastInput` from Task 1; `t` from `@musepi/client-core`.
@@ -384,7 +384,7 @@ export function sessionNoticeForEvent(event: SessionNoticeEvent): SessionNoticeA
 
 - [ ] **Step 1: Write the failing mapping test**
 
-Create `packages/desktop-app/test/session-notice.test.ts` with cases:
+Create `apps/desktop/test/session-notice.test.ts` with cases:
 
 ```ts
 expect(sessionNoticeForEvent({ type: "notice", level: "warning", message: "daemon says", source: "update" }))
@@ -411,21 +411,21 @@ expect(sessionNoticeForEvent({ type: "auto_compaction_end", aborted: false }))
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `bun test packages/desktop-app/test/session-notice.test.ts`
+Run: `bun test apps/desktop/test/session-notice.test.ts`
 Expected: FAIL — module missing.
 
 - [ ] **Step 3: Implement the pure helper**
 
-Create `packages/desktop-app/src/lib/session-notice.ts` with the union and switch above. Import `t` from `@musepi/client-core` and `type ActionToastInput` from `./action-toast`.
+Create `apps/desktop/src/lib/session-notice.ts` with the union and switch above. Import `t` from `@musepi/client-core` and `type ActionToastInput` from `./action-toast`.
 
 - [ ] **Step 4: Run the helper test**
 
-Run: `bun test packages/desktop-app/test/session-notice.test.ts`
+Run: `bun test apps/desktop/test/session-notice.test.ts`
 Expected: PASS.
 
 - [ ] **Step 5: Write the failing store-wiring test**
 
-Add to `packages/desktop-app/test/session-store.test.ts`:
+Add to `apps/desktop/test/session-store.test.ts`:
 
 ```ts
 it("routes a notice event into the toast stack", async () => {
@@ -440,12 +440,12 @@ Import `dismissActionToast, getToasts` from `@musepi/client-core`; drain in `aft
 
 - [ ] **Step 6: Run it to verify it fails**
 
-Run: `bun test packages/desktop-app/test/session-store.test.ts`
+Run: `bun test apps/desktop/test/session-store.test.ts`
 Expected: FAIL — no toast appears.
 
 - [ ] **Step 7: Wire the switch**
 
-In `packages/desktop-app/src/lib/session-store.ts`, import `dismissActionToastSource, pushActionToast` from `./action-toast` and `sessionNoticeForEvent` from `./session-notice`. Before `default`, add:
+In `apps/desktop/src/lib/session-store.ts`, import `dismissActionToastSource, pushActionToast` from `./action-toast` and `sessionNoticeForEvent` from `./session-notice`. Before `default`, add:
 
 ```ts
 case "notice":
@@ -463,13 +463,13 @@ case "auto_compaction_end": {
 
 - [ ] **Step 8: Run the desktop tests**
 
-Run: `bun test packages/desktop-app/test/session-notice.test.ts packages/desktop-app/test/session-store.test.ts`
+Run: `bun test apps/desktop/test/session-notice.test.ts apps/desktop/test/session-store.test.ts`
 Expected: PASS.
 
 - [ ] **Step 9: Commit**
 
 ```bash
-git add packages/desktop-app/src/lib/session-notice.ts packages/desktop-app/test/session-notice.test.ts packages/desktop-app/src/lib/session-store.ts packages/desktop-app/test/session-store.test.ts
+git add apps/desktop/src/lib/session-notice.ts apps/desktop/test/session-notice.test.ts apps/desktop/src/lib/session-store.ts apps/desktop/test/session-store.test.ts
 git commit -m "feat: surface retry and compaction notices in the desktop toast stack"
 ```
 
@@ -478,9 +478,9 @@ git commit -m "feat: surface retry and compaction notices in the desktop toast s
 ### Task 4: Desktop stack interaction — collapse, exit, ring, cancel
 
 **Files:**
-- Modify: `packages/desktop-app/src/components/ActionToast.tsx`
-- Modify: `packages/desktop-app/src/styles/gui-widgets.css:4445-4568`
-- Modify: `packages/desktop-app/test/action-toast.test.ts`
+- Modify: `apps/desktop/src/components/ActionToast.tsx`
+- Modify: `apps/desktop/src/styles/gui-widgets.css:4445-4568`
+- Modify: `apps/desktop/test/action-toast.test.ts`
 
 **Interfaces:**
 - Consumes: all Task 1 store exports, including `cancelLabel` / `onCancel` and `ttlFor`.
@@ -488,7 +488,7 @@ git commit -m "feat: surface retry and compaction notices in the desktop toast s
 
 - [ ] **Step 1: Write the failing view tests**
 
-Add to `packages/desktop-app/test/action-toast.test.ts`:
+Add to `apps/desktop/test/action-toast.test.ts`:
 
 ```tsx
 test("a collapsed stack expands on hover and focus", () => {
@@ -542,7 +542,7 @@ test("errors carry no countdown ring and pause freezes it", () => {
 
 - [ ] **Step 2: Run them to verify they fail**
 
-Run: `bun test packages/desktop-app/test/action-toast.test.ts`
+Run: `bun test apps/desktop/test/action-toast.test.ts`
 Expected: FAIL — no `data-expanded`, no closing class, no cancel button, no ring.
 
 - [ ] **Step 3: Implement the view**
@@ -567,18 +567,18 @@ In `gui-widgets.css`:
 
 - [ ] **Step 5: Run the view tests**
 
-Run: `bun test packages/desktop-app/test/action-toast.test.ts`
+Run: `bun test apps/desktop/test/action-toast.test.ts`
 Expected: PASS.
 
 - [ ] **Step 6: Run the package checks**
 
-Run: `bun --cwd=packages/desktop-app run check`
+Run: `bun --cwd=apps/desktop run check`
 Expected: PASS.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/desktop-app/src/components/ActionToast.tsx packages/desktop-app/src/styles/gui-widgets.css packages/desktop-app/test/action-toast.test.ts
+git add apps/desktop/src/components/ActionToast.tsx apps/desktop/src/styles/gui-widgets.css apps/desktop/test/action-toast.test.ts
 git commit -m "feat: add stacked expand, exit, countdown, and cancel to desktop toasts"
 ```
 
@@ -642,14 +642,14 @@ git commit -m "docs: publish the in-app notification spec"
 Run:
 
 ```bash
-bun test packages/client-core/test/action-toast.test.ts packages/client-core/test/toasts.test.tsx packages/client-core/src/lib/host-client.test.ts packages/desktop-app/test/action-toast.test.ts packages/desktop-app/test/session-notice.test.ts packages/desktop-app/test/session-store.test.ts packages/desktop-app/test/host-modules.test.ts
+bun test packages/client-core/test/action-toast.test.ts packages/client-core/test/toasts.test.tsx packages/client-core/src/lib/host-client.test.ts apps/desktop/test/action-toast.test.ts apps/desktop/test/session-notice.test.ts apps/desktop/test/session-store.test.ts apps/desktop/test/host-modules.test.ts
 ```
 
 Expected: PASS.
 
 - [ ] **Step 2: Run package checks**
 
-Run: `bun --cwd=packages/client-core run check` and `bun --cwd=packages/desktop-app run check`.
+Run: `bun --cwd=packages/client-core run check` and `bun --cwd=apps/desktop run check`.
 Expected: PASS.
 
 - [ ] **Step 3: Run repository gates touched by the change**
@@ -659,4 +659,4 @@ Expected: PASS.
 
 - [ ] **Step 4: Desktop manual pass**
 
-Build the renderer (`bun --cwd=packages/desktop-app run build`) and launch it. Verify: a failed retry appears as a persistent error in the corner; hovering a three-toast stack expands it; the close ring freezes on hover; closing plays the 180 ms exit; a cancel action resolves before dismissal; the guest web shell still shows the bottom strip.
+Build the renderer (`bun --cwd=apps/desktop run build`) and launch it. Verify: a failed retry appears as a persistent error in the corner; hovering a three-toast stack expands it; the close ring freezes on hover; closing plays the 180 ms exit; a cancel action resolves before dismissal; the guest web shell still shows the bottom strip.

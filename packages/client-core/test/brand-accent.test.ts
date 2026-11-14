@@ -43,7 +43,7 @@ const stripComments = (src: string): string =>
 
 describe("brand gold is the accent in every palette that hardcodes it", () => {
 	test("the onboarding accent swatch paints gold, not emerald", () => {
-		const css = read("packages/desktop-app/src/styles/gui-misc.css");
+		const css = read("apps/desktop/src/styles/gui-misc.css");
 		const brand = /\.gui-obo-accent-swatch\[data-accent="brand"\]\s*\{[^}]*\}/.exec(css);
 		expect(brand, "brand swatch rule disappeared").not.toBeNull();
 		const body = brand![0];
@@ -73,7 +73,7 @@ describe("brand gold is the accent in every palette that hardcodes it", () => {
 		// the floating pet window and never loads tokens.css, so it carries
 		// its own literal — which stayed the pre-rebrand emerald and painted
 		// the working dot / send button / dock glow green.
-		const css = stripComments(read("packages/desktop-app/src/styles/pet-window.css"));
+		const css = stripComments(read("apps/desktop/src/styles/pet-window.css"));
 		expect(css).toContain("--color-accent: oklch(0.7507 0.1295 79.85)");
 		expect(css).not.toContain(EMERALD_OKLCH);
 		// On-accent ink must exist and be the dark one — `#fff` on gold is 1.9:1.
@@ -85,8 +85,8 @@ describe("brand gold is the accent in every palette that hardcodes it", () => {
 		// color tags) — this only forbids it where it is bound to an
 		// *accent* token, which is exactly the straggler shape.
 		const suspects = [
-			"packages/desktop-app/src/styles/pet-window.css",
-			"packages/desktop-app/src/styles/gui-misc.css",
+			"apps/desktop/src/styles/pet-window.css",
+			"apps/desktop/src/styles/gui-misc.css",
 			"packages/client-core/src/styles/tokens.css",
 			"packages/stats/src/client/styles.css",
 			"packages/coding-agent/src/export/html/web-palette.ts",
@@ -112,7 +112,7 @@ describe("accent swatches never self-influence through `--accent`", () => {
 	 * card's own text color) is the only paint that cannot self-influence.
 	 */
 	test("the base swatch rule uses currentColor, not var(--accent)", () => {
-		const css = read("packages/desktop-app/src/styles/gui-misc.css");
+		const css = read("apps/desktop/src/styles/gui-misc.css");
 		const base = /\.gui-obo-accent-swatch\s*\{[^}]*\}/.exec(css);
 		expect(base, "base swatch rule disappeared").not.toBeNull();
 		expect(base![0]).toContain("background: currentColor");
@@ -123,7 +123,7 @@ describe("accent swatches never self-influence through `--accent`", () => {
 	});
 
 	test("every preset swatch keyed by data-accent is a literal, never var(--accent)", () => {
-		const css = read("packages/desktop-app/src/styles/gui-misc.css");
+		const css = read("apps/desktop/src/styles/gui-misc.css");
 		const rules = css.match(/\.gui-obo-accent-swatch\[data-accent="[^"]+"\]\s*\{[^}]*\}/g) ?? [];
 		expect(rules.length).toBeGreaterThanOrEqual(4); // mono / ocean / jade / brand
 		for (const rule of rules) {

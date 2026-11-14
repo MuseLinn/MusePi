@@ -162,7 +162,7 @@ Base URL 三级覆盖：环境变量 → 远端 `import.json` 的 `cloud_namespa
 ### 5.2 上传与下载都不存在协议面
 
 - 图片以 base64 内联进 `session.send.images`，只有 `{type,data,mimeType}`，**没有 url 形态**（`daemon/server.ts:4540`）；视频反而允许 `url`。
-- 其他文件由 GUI 用 `fs.write(encoding:"base64")` 写进 cwd（`packages/desktop-app/src/components/composer/use-attachments.ts:12,195`），prompt 里只多一行 `[Attachment] attachments/x.pdf`。
+- 其他文件由 GUI 用 `fs.write(encoding:"base64")` 写进 cwd（`apps/desktop/src/components/composer/use-attachments.ts:12,195`），prompt 里只多一行 `[Attachment] attachments/x.pdf`。
 - 下载就是 `fs.readBytes`，8 MiB / 32 MiB 帽（`daemon/services/file-service.ts:129`）。
 
 也就是说：**附件是「借文件系统走私」，不是一等协议对象**。这带来三个后果——没有进度、没有断点续传、没有跨设备。
@@ -351,6 +351,6 @@ comma 的会话权威是 DB + S3 段式日志，客户端只是投影；MusePi �
 - `packages/coding-agent/src/session/artifacts.ts:93` — 溢出落盘
 - `packages/coding-agent/src/daemon/journal.ts:37,76,163` — seq 与 checkpoint
 - `packages/coding-agent/src/daemon/services/file-service.ts:114,129` — 读写边界
-- `packages/desktop-app/src/components/composer/use-attachments.ts:12,195` — base64 走私
+- `apps/desktop/src/components/composer/use-attachments.ts:12,195` — base64 走私
 - `packages/coding-agent/src/blob-broker/publication.ts:16` — 单对象发布
 - `packages/coding-agent/src/cli/gc-cli.ts:325` — 本机引用计数 GC

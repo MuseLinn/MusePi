@@ -32,7 +32,7 @@ async function fixture(): Promise<{ repoRoot: string; outputDir: string; binaryP
 	);
 	for (const [root, name] of [
 		["packages/coding-agent/src/bundled-plugins", "daemon-plugin"],
-		["packages/desktop-app/src/plugins", "desktop-plugin"],
+		["apps/desktop/src/plugins", "desktop-plugin"],
 	] as const) {
 		const pluginDir = path.join(repoRoot, root, name);
 		await Bun.write(

@@ -122,7 +122,7 @@ const sidebarGroups = session({
 					type: "toolCall",
 					id: "call-read-grouped",
 					name: "read",
-					arguments: { path: "packages/desktop-app/src/components/GroupedSessionList.tsx", limit: 40 },
+					arguments: { path: "apps/desktop/src/components/GroupedSessionList.tsx", limit: 40 },
 					intent: "读取现有的分组列表",
 				},
 			],
@@ -151,7 +151,7 @@ const sidebarGroups = session({
 					id: "call-edit-groups",
 					name: "edit",
 					arguments: {
-						path: "packages/desktop-app/src/components/GroupedSessionList.tsx",
+						path: "apps/desktop/src/components/GroupedSessionList.tsx",
 						old: "const g = dateGroup(n.entry.timestamp)",
 						new: "const g = dateGroup(n.entry.updatedAt ?? n.entry.timestamp)",
 					},
@@ -167,7 +167,7 @@ const sidebarGroups = session({
 			now - 31 * MIN + 3_000,
 			"call-edit-groups",
 			"edit",
-			"--- a/packages/desktop-app/src/components/GroupedSessionList.tsx\n+++ b/packages/desktop-app/src/components/GroupedSessionList.tsx\n@@ -67,3 +67,3 @@\n-\t\t\tconst g = dateGroup(n.entry.timestamp) || \"earlier\";\n+\t\t\tconst g = dateGroup(n.entry.updatedAt ?? n.entry.timestamp) || \"earlier\";",
+			"--- a/apps/desktop/src/components/GroupedSessionList.tsx\n+++ b/apps/desktop/src/components/GroupedSessionList.tsx\n@@ -67,3 +67,3 @@\n-\t\t\tconst g = dateGroup(n.entry.timestamp) || \"earlier\";\n+\t\t\tconst g = dateGroup(n.entry.updatedAt ?? n.entry.timestamp) || \"earlier\";",
 		),
 		assistant(
 			"g6",

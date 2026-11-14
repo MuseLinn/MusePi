@@ -19,7 +19,7 @@ GUI 里原本**没有插件安装入口**（`PluginManager` 只在 CLI 可用）
 | `packages/coding-agent/src/extensibility/plugins/plugin-install-machine.ts` | 安装状态机：inspecting→installing→done\|failed\|cancelled，可取消 |
 | `packages/coding-agent/src/extensibility/plugins/capability-report.ts` | 装完静态判定能否加载：runnable / partial / incompatible |
 | `packages/coding-agent/src/daemon/services/plugin-install-service.ts` | daemon L2 服务，5 个 RPC |
-| `packages/desktop-app/src/components/PluginInstallDialog.tsx` | GUI 安装对话框（含拖放区） |
+| `apps/desktop/src/components/PluginInstallDialog.tsx` | GUI 安装对话框（含拖放区） |
 | `…/plugins/spec-classifier.test.ts` | 12 例 |
 | `…/plugins/plugin-install-machine.test.ts` | 6 例 |
 | `…/plugins/capability-report.test.ts` | 5 例 |
@@ -31,8 +31,8 @@ GUI 里原本**没有插件安装入口**（`PluginManager` 只在 CLI 可用）
 | `…/plugins/types.ts` | `InstallOptions` 加 `onOutput` / `signal`；新增 `InstallOutputChunk`、`InstallAbortedError` |
 | `…/daemon/server.ts` | 注册 `PluginInstallService`；switch 加 5 个 case（1930 行附近） |
 | `…/daemon/services/route-coverage.test.ts` | 登记新服务（该测试要求每个 RPC case 都被某服务认领） |
-| `packages/desktop-app/electron/preload.cjs` | 暴露 `getDroppedFilePath`（用 `webUtils`，Electron 32+ 已移除 `File.path`） |
-| `packages/desktop-app/src/env.d.ts` | 补 `getDroppedFilePath` 类型 |
+| `apps/desktop/electron/preload.cjs` | 暴露 `getDroppedFilePath`（用 `webUtils`，Electron 32+ 已移除 `File.path`） |
+| `apps/desktop/src/env.d.ts` | 补 `getDroppedFilePath` 类型 |
 | `…/desktop-app/src/components/UnifiedPluginsView.tsx` | 工具栏加「安装插件」按钮；加 `onPackagesRefreshed` prop |
 | `…/desktop-app/src/styles/gui-settings.css` | 新增 `gui-plugin-log` / `gui-plugin-drop` / `gui-plugin-dialog-actions` |
 | `packages/client-core/src/i18n/{zh-CN,en-US}/settings.ts` | 13 个新 key（两侧配对，硬约束） |

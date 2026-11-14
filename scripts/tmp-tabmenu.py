@@ -1,7 +1,7 @@
 import io
 
 # 1) surface-tabs.tsx: onTabContextMenu prop
-p = "packages/desktop-app/src/components/surface-tabs.tsx"
+p = "apps/desktop/src/components/surface-tabs.tsx"
 s = io.open(p, encoding="utf-8").read()
 T = "\t"
 

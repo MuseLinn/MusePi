@@ -40,7 +40,7 @@ musepi-omp 是 oh-my-pi 的 fork，扩展运行时同源，但 musepi 在**加�
 
 Creator 快捷创建只发送用户的自然语言需求。预设 prompt 持有操作流程：用 `modes.save` 提交完整的新定义，再按已落盘 id 调用 `modes.validate`。`modes.save` 在写盘前检查结构、继承和扩展存在性，`modes.validate` 执行挂载自检。任何检查失败都必须修正并重试，不能提前报告完成。宿主界面操作说明不得拼到用户消息后。
 
-桌面发布包必须随 daemon 一起暂存可独立加载的第一方插件产物。编译 daemon 后运行 `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>`。脚本将 `bundled-plugins` 与 `desktop-plugins` 编译到 `packages/desktop-app/vendor/daemon`，校验每个 `musepi.extensions` 与 `musepi.components` 声明的入口，并将组件样式保留在编译产物旁。普通及传递 JavaScript 依赖会打入组件产物，终端 PTY 桥接文件与原生运行时包则复制到暂存目录。Electron 解包该目录，再通过按平台分隔的 `MUSEPI_BUNDLED_PLUGIN_ROOTS` 变量把两个绝对根目录传给 daemon。开发环境仍保留源码树回退；发布包不得依赖源码树或开发依赖。
+桌面发布包必须随 daemon 一起暂存可独立加载的第一方插件产物。编译 daemon 后运行 `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>`。脚本将 `bundled-plugins` 与 `desktop-plugins` 编译到 `apps/desktop/vendor/daemon`，校验每个 `musepi.extensions` 与 `musepi.components` 声明的入口，并将组件样式保留在编译产物旁。普通及传递 JavaScript 依赖会打入组件产物，终端 PTY 桥接文件与原生运行时包则复制到暂存目录。Electron 解包该目录，再通过按平台分隔的 `MUSEPI_BUNDLED_PLUGIN_ROOTS` 变量把两个绝对根目录传给 daemon。开发环境仍保留源码树回退；发布包不得依赖源码树或开发依赖。
 
 行的 `config` 通过 `apply(ctx, config)` 的第二个参数（或导出的 `Config`）送达插件；`ctx.config` 是扩展自己的设置存储，不是行配置。预设行同时也是「按会话提供 MCP 服务器与文件技能」的组合单位。`musepi-mcp-client` 是 `presetOnly` 行包：每行声明一台服务器（`serverName`、`transport`、stdio 的 `command`/`args`/`env`/`cwd` 或 `url`/`headers`、`timeout`、`enabled`），在会话的 `session_start` 里通过 `registerMcpServer` 连接，随同一 runner 释放。`musepi-skill-filesystem` 在挂载时把 `roots` 下的技能（`<name>/SKILL.md` 或扁平 `<name>.md`，必须有 frontmatter）经 `registerSkill` 注册；发现是挂载时的快照而非监听，因为 preset generation 本身是可回收的。两个包都不做 ambient 装载，也没有全局配置面。命令钩子同样是行包：`musepi-hooks-claude-code` 与 `musepi-hooks-codex` 挂载外部 `hooks.json`（`configPath`），通过 `extensibility/hooks/command` 的共享引擎把五个命令钩子点映射到会话事件；两者只差 matcher 模式与 `${…}` 替换。目录型约定由第三个行包 `musepi-hooks-scripts` 承担：`roots` 下 `pre/<tool>` / `post/<tool>` 的脚本扫描成同一份配置（`pre` → PreToolUse，`post` → PostToolUse，文件名为工具名，`*`/`all` 表示全部），因此它与其他两个方言共用匹配、退出码、上下文与合并语义，而不是第二套协议。
 
@@ -210,7 +210,7 @@ extLegacyPiLoadTag），onLoad 钩子把它盖到每个相对 import 上，整�
 - **忙会话门控**：会话 streaming（`isStreaming`）时重载挂起到单槽 pending，`agent_end`（含延迟 agent_end flush）空闲时补做；不引入队列/锁。
 - **MCP 不随扩展关闭**：MCP 连接由配置层启动、`MCPManager` 按 cwd 多会话共享，`SourceMeta` 是配置来源非扩展来源 —— 扩展重载不触碰 MCP server 生命周期；扩展自行管理自有连接。
 
-**参考实现**：`examples/extension-component/`（示例）、`packages/coding-agent/src/daemon/extension-components.ts`（编译/聚合）、`packages/desktop-app/src/lib/slot-components.tsx`（渲染）、`ExtensionRunner.reloadExtension` + `AgentSession.reloadExtension`（v2 会话级重载）。
+**参考实现**：`examples/extension-component/`（示例）、`packages/coding-agent/src/daemon/extension-components.ts`（编译/聚合）、`apps/desktop/src/lib/slot-components.tsx`（渲染）、`ExtensionRunner.reloadExtension` + `AgentSession.reloadExtension`（v2 会话级重载）。
 
 ## 7. 扩展 daemon RPC（registerRpc，2026-08-20）
 
@@ -330,7 +330,7 @@ pi.registerToolView("my_tool", { moduleUrl: "./views/my-tool.tsx", label: "My To
 
 **分派**：daemon 编译 → `extensions.list.toolViews` → GUI `useExtensionToolViews`（ChatView 挂载）blob-import 并注册进 guest-client tool-render 外部表 → `ToolView` 按名分派。编译失败的 view 携带 `error`，回退内置/generic 渲染器，不破坏 transcript。
 
-**参考实现**：`packages/client-core/src/tool-render/registry.ts`（`registerExternalToolRenderers`）、`packages/desktop-app/src/lib/slot-host.tsx`（`useExtensionToolViews`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectToolViews`）。
+**参考实现**：`packages/client-core/src/tool-render/registry.ts`（`registerExternalToolRenderers`）、`apps/desktop/src/lib/slot-host.tsx`（`useExtensionToolViews`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectToolViews`）。
 
 ## 10.1 扩展 widget 类型（registerWidget）
 
@@ -375,10 +375,10 @@ pi.registerScrollbarSkin({
 - **校验**：loader 要求 `id`/`displayName`/`base`/三个颜色/数值 `size`；颜色值若含 `url()`、`image-set()`、`expression()` 直接抛错（这些值会写入 CSS 自定义属性，不能成为网络/执行面）；`pacGlyph` 只接受 `data:` URL。
 - **数据流**：daemon 装载 → `collectScrollbarSkins` → `extensions.list.scrollbarSkins` → 桌面 `useExtensionScrollbarSkins`（ChatView）→ `scrollbar-skins` 宿主模块 → 浮动轨与外观选择器读同一份目录。
 - **优先级**：contributed → imported（用户导入的 zip）→ built-in，按 `id` 去重，插件可覆盖内置皮肤。插件停用后 contributed 清空，内置目录仍在，轨不会失去皮肤。
-- **内置目录归 `ui-theme` 渲染端 bundle 所有**：`packages/desktop-app/src/plugins/ui-theme/` 内的 `skins.ts` 定义 snake / gummy-rainbow / pacman，`rail.tsx` 渲染、`rail.css` 提供样式、`settings.tsx` 提供外观卡；`index.ts` 注册 `app.overlay` + `settings.item.ui-theme`。宿主保留同构兜底，供 bundle 停用、编译失败或 guest/mobile 宿主使用。
+- **内置目录归 `ui-theme` 渲染端 bundle 所有**：`apps/desktop/src/plugins/ui-theme/` 内的 `skins.ts` 定义 snake / gummy-rainbow / pacman，`rail.tsx` 渲染、`rail.css` 提供样式、`settings.tsx` 提供外观卡；`index.ts` 注册 `app.overlay` + `settings.item.ui-theme`。宿主保留同构兜底，供 bundle 停用、编译失败或 guest/mobile 宿主使用。
 - **daemon 主题插件仍可贡献皮肤**：`registerScrollbarSkin` 是给 daemon 侧主题包的稳定缝；内置目录不再由 `builtin-themes` 注册，避免两个所有者。
 - **编译插件共享注册表**：`scrollbar-skins` 在 `EXTENSION_HOST_MODULES` 中（路径 `plugins/ui-theme/skins`），编译后的 `app.overlay` 覆盖层读取的是宿主实例，而不是打包副本（见 §19）。
-- **参考实现**：`packages/desktop-app/src/plugins/ui-theme/`（`rail.tsx` / `rail.css` / `skins.ts` / `settings.tsx` / `index.ts`）。
+- **参考实现**：`apps/desktop/src/plugins/ui-theme/`（`rail.tsx` / `rail.css` / `skins.ts` / `settings.tsx` / `index.ts`）。
 
 ## 11. 扩展 transcript 节点渲染（transcript.node seat，DSH 粒度，2026-08-27）
 
@@ -405,7 +405,7 @@ pi.registerComponent({
 
 **防置换**：扩展声明的 kind 只影响该 kind 条目的渲染；内建类型（message/compaction/branch_summary/model_change 等）仍由宿主持有，扩展只能经 `children` 基座增强声明的 kind。与 DSH 一致——官方 sidebar/conversation 的 owner 始终是宿主，插件贡献到 seat，不覆写核心。
 
-**参考实现**：`packages/client-core/src/components/transcript/Transcript.tsx`（`transcriptNodeKind`/`renderTranscriptNode`）、`packages/desktop-app/src/lib/slot-host.tsx`（`selectTranscriptNodeComponents`/`SlotComponentMount`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectSlotComponents` 透传 `entryKinds`）。
+**参考实现**：`packages/client-core/src/components/transcript/Transcript.tsx`（`transcriptNodeKind`/`renderTranscriptNode`）、`apps/desktop/src/lib/slot-host.tsx`（`selectTranscriptNodeComponents`/`SlotComponentMount`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectSlotComponents` 透传 `entryKinds`）。
 
 ## 12. 桌面壳与 Shell 模式（desktop-shell, dsh-desktop parity, 2026-08-28）
 
@@ -801,7 +801,7 @@ daemon 侧 artifact compiler（`packages/coding-agent/src/daemon/extension-artif
 
 ### 渲染端
 
-`packages/desktop-app/src/lib/host-modules.ts` 是 key 到实例的唯一绑定处：
+`apps/desktop/src/lib/host-modules.ts` 是 key 到实例的唯一绑定处：
 
 ```ts
 const hostModules = {
@@ -851,15 +851,15 @@ client-core 包内以 `../i18n/index.js` 等相对形式引用 i18n 时，同样
 只有 **身份必须共享** 时才加条目；没有跨模块状态的 helper 继续打包。
 
 1. 在 `EXTENSION_HOST_MODULES` 加 `{ key, path }` 或 `{ key, specifier }`。
-2. 在 `packages/desktop-app/src/lib/host-modules.ts` 引入该模块，并按同一 key 映射；两边不一致时 `satisfies` 约束会报类型错误。
+2. 在 `apps/desktop/src/lib/host-modules.ts` 引入该模块，并按同一 key 映射；两边不一致时 `satisfies` 约束会报类型错误。
 3. 扩充编译器测试，证明该 import 解析到 `window.MusePiHostModules[key]` 且 bundle 内没有本地标记；扩充运行时测试，证明该 key 已发布且绑定了实例。
 4. 更新本文档与 changelog。
 
 每个条目都是宿主 ABI：删除或改名会让已编译的 bundle 在导入时抛错，而不是退回副本。
 
-`packages/desktop-app/test/host-module-state-guard.test.ts` 负责完整性：`src/lib` 下任何包含 `createContext(...)` 调用的模块都必须有契约路径，已知状态模块还必须同时有路径与已发布实例。新增 React context 模块在登记前会让该测试失败。
+`apps/desktop/test/host-module-state-guard.test.ts` 负责完整性：`src/lib` 下任何包含 `createContext(...)` 调用的模块都必须有契约路径，已知状态模块还必须同时有路径与已发布实例。新增 React context 模块在登记前会让该测试失败。
 
-**回归锚点**：`packages/collab-proto/test/extension-host-modules.test.ts`、`packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`、`packages/desktop-app/test/host-modules.test.ts`、`packages/desktop-app/test/host-module-state-guard.test.ts`。
+**回归锚点**：`packages/collab-proto/test/extension-host-modules.test.ts`、`packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`、`apps/desktop/test/host-modules.test.ts`、`apps/desktop/test/host-module-state-guard.test.ts`。
 
 ## 20. 提示词区块：注册表、composer 与来源生命周期（2026-11-03）
 

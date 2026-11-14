@@ -45,7 +45,7 @@ const RULES: PeerRule[] = [
 	{
 		subject: "react-konva",
 		peer: "react",
-		workspace: "packages/desktop-app",
+		workspace: "apps/desktop",
 		why: "react-konva throws 'requires React 19.3 or later' at module-eval, which kills the whole renderer bundle before React mounts (blank window).",
 	},
 ];

@@ -54,7 +54,7 @@ The Plugins view manages packages and profile bundles at one card granularity. O
 
 Creator quick-create sends only the user's natural-language requirement. Its preset prompt owns the operational workflow: call `modes.save` with the complete new definition, then call `modes.validate` with the persisted id. `modes.save` performs structural, inheritance, and extension-existence checks before writing; `modes.validate` performs the mount check. A failed check must be repaired and repeated before completion is reported. Host UI instructions must not be appended to the user message.
 
-Desktop releases must stage self-contained first-party plugin bundles with the daemon. Run `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>` after compiling it. The script compiles and validates `bundled-plugins` and `desktop-plugins` under `packages/desktop-app/vendor/daemon`, including every entry declared by `musepi.extensions` and `musepi.components`; component styles remain beside the compiled component. Direct and transitive JavaScript dependencies are bundled, while the terminal PTY bridge and its native runtime packages are copied into the staged layout. Electron unpacks this directory and passes both absolute roots to the daemon through the platform-delimited `MUSEPI_BUNDLED_PLUGIN_ROOTS` variable. Development discovery retains its source-tree fallbacks; a release must not depend on source trees or development dependencies.
+Desktop releases must stage self-contained first-party plugin bundles with the daemon. Run `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>` after compiling it. The script compiles and validates `bundled-plugins` and `desktop-plugins` under `apps/desktop/vendor/daemon`, including every entry declared by `musepi.extensions` and `musepi.components`; component styles remain beside the compiled component. Direct and transitive JavaScript dependencies are bundled, while the terminal PTY bridge and its native runtime packages are copied into the staged layout. Electron unpacks this directory and passes both absolute roots to the daemon through the platform-delimited `MUSEPI_BUNDLED_PLUGIN_ROOTS` variable. Development discovery retains its source-tree fallbacks; a release must not depend on source trees or development dependencies.
 
 Discovered JavaScript and TypeScript hooks use the production extension chain: `discoverExtensionPaths()` → `hookCapability` → `loadExtensions()` → `ExtensionRunner`. The legacy `HookRunner` exports remain for public API compatibility and their direct consumers; they are not a second production execution path. TUI settings and plugin entries read the same schema, discovery results, and Cordis enablement state as the desktop client. The TUI does not introduce a separate installer or plugin-state store.
 
@@ -220,7 +220,7 @@ export default function (pi: ExtensionAPI): void {
 - **忙会话门控**:会话 streaming(`isStreaming`)时重载挂起到单槽 pending,`agent_end`(含延迟 agent_end flush)空闲时补做;不引入队列/锁。
 - **MCP 不随扩展关闭**:MCP 连接由配置层启动、`MCPManager` 按 cwd 多会话共享,`SourceMeta` 是配置来源非扩展来源 —— 扩展重载不触碰 MCP server 生命周期;扩展自行管理自有连接。
 
-**参考实现**:`examples/extension-component/`(示例)、`packages/coding-agent/src/daemon/extension-components.ts`(编译/聚合)、`packages/desktop-app/src/lib/slot-components.tsx`(渲染)、`ExtensionRunner.reloadExtension` + `AgentSession.reloadExtension`(v2 会话级重载)。
+**参考实现**:`examples/extension-component/`(示例)、`packages/coding-agent/src/daemon/extension-components.ts`(编译/聚合)、`apps/desktop/src/lib/slot-components.tsx`(渲染)、`ExtensionRunner.reloadExtension` + `AgentSession.reloadExtension`(v2 会话级重载)。
 
 ## 7. 扩展 daemon RPC(registerRpc,2026-08-20)
 
@@ -339,7 +339,7 @@ pi.registerToolView("my_tool", { moduleUrl: "./views/my-tool.tsx", label: "My To
 
 **分派**:daemon 编译 → `extensions.list.toolViews` → GUI `useExtensionToolViews`(ChatView 挂载)blob-import 并注册进 guest-client tool-render 外部表 → `ToolView` 按名分派。编译失败的 view 携带 `error`,回退内置/generic 渲染器,不破坏 transcript。
 
-**参考实现**:`packages/client-core/src/tool-render/registry.ts`(`registerExternalToolRenderers`)、`packages/desktop-app/src/lib/slot-host.tsx`(`useExtensionToolViews`)、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`(`collectToolViews`)。
+**参考实现**:`packages/client-core/src/tool-render/registry.ts`(`registerExternalToolRenderers`)、`apps/desktop/src/lib/slot-host.tsx`(`useExtensionToolViews`)、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`(`collectToolViews`)。
 
 ## 9.1 扩展 widget 类型（registerWidget）
 
@@ -384,10 +384,10 @@ pi.registerScrollbarSkin({
 - **校验**：loader 要求 `id`/`displayName`/`base`/三个颜色/数值 `size`；颜色值若含 `url()`、`image-set()`、`expression()` 直接抛错（这些值会写入 CSS 自定义属性，不能成为网络/执行面）；`pacGlyph` 只接受 `data:` URL。
 - **数据流**：daemon 装载 → `collectScrollbarSkins` → `extensions.list.scrollbarSkins` → 桌面 `useExtensionScrollbarSkins`（ChatView）→ `scrollbar-skins` 宿主模块 → 浮动轨与外观选择器读同一份目录。
 - **优先级**：contributed → imported（用户导入的 zip）→ built-in，按 `id` 去重，插件可覆盖内置皮肤。插件停用后 contributed 清空，内置目录仍在，轨不会失去皮肤。
-- **内置目录归 `ui-theme` 渲染端 bundle 所有**：`packages/desktop-app/src/plugins/ui-theme/` 内的 `skins.ts` 定义 snake / gummy-rainbow / pacman，`rail.tsx` 渲染、`rail.css` 提供样式、`settings.tsx` 提供外观卡；`index.ts` 注册 `app.overlay` + `settings.item.ui-theme`。宿主保留同构兜底，供 bundle 停用、编译失败或 guest/mobile 宿主使用。
+- **内置目录归 `ui-theme` 渲染端 bundle 所有**：`apps/desktop/src/plugins/ui-theme/` 内的 `skins.ts` 定义 snake / gummy-rainbow / pacman，`rail.tsx` 渲染、`rail.css` 提供样式、`settings.tsx` 提供外观卡；`index.ts` 注册 `app.overlay` + `settings.item.ui-theme`。宿主保留同构兜底，供 bundle 停用、编译失败或 guest/mobile 宿主使用。
 - **daemon 主题插件仍可贡献皮肤**：`registerScrollbarSkin` 是给 daemon 侧主题包的稳定缝；内置目录不再由 `builtin-themes` 注册，避免两个所有者。
 - **编译插件共享注册表**：`scrollbar-skins` 在 `EXTENSION_HOST_MODULES` 中（路径 `plugins/ui-theme/skins`），编译后的 `app.overlay` 覆盖层读取的是宿主实例，而不是打包副本（见 §19）。
-- **参考实现**：`packages/desktop-app/src/plugins/ui-theme/`（`rail.tsx` / `rail.css` / `skins.ts` / `settings.tsx` / `index.ts`）。
+- **参考实现**：`apps/desktop/src/plugins/ui-theme/`（`rail.tsx` / `rail.css` / `skins.ts` / `settings.tsx` / `index.ts`）。
 
 ## 10. 扩展 transcript 节点渲染(transcript.node seat, DSH 粒度, 2026-08-27)
 
@@ -414,7 +414,7 @@ pi.registerComponent({
 
 **防置换**: 扩展声明的 kind 只影响该 kind 条目的渲染; 内建类型(message/compaction/branch_summary/model_change 等)仍由宿主持有, 扩展只能经 `children` 基座增强声明的 kind。与 DSH 一致 —— 官方 sidebar/conversation 的 owner 始终是宿主, 插件贡献到 seat, 不覆写核心。
 
-**参考实现**: `packages/client-core/src/components/transcript/Transcript.tsx`(`transcriptNodeKind`/`renderTranscriptNode`)、`packages/desktop-app/src/lib/slot-host.tsx`(`selectTranscriptNodeComponents`/`SlotComponentMount`)、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`(`collectSlotComponents` 透传 `entryKinds`)。
+**参考实现**: `packages/client-core/src/components/transcript/Transcript.tsx`(`transcriptNodeKind`/`renderTranscriptNode`)、`apps/desktop/src/lib/slot-host.tsx`(`selectTranscriptNodeComponents`/`SlotComponentMount`)、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`(`collectSlotComponents` 透传 `entryKinds`)。
 
 ## 11. 桌面壳与 Shell 模式(desktop-shell, dsh-desktop parity, 2026-08-28)
 
@@ -840,7 +840,7 @@ The daemon artifact compiler (`packages/coding-agent/src/daemon/extension-artifa
 
 ### Renderer
 
-`packages/desktop-app/src/lib/host-modules.ts` is the one place that binds keys to instances:
+`apps/desktop/src/lib/host-modules.ts` is the one place that binds keys to instances:
 
 ```ts
 const hostModules = {
@@ -890,15 +890,15 @@ Relative references to i18n from inside the client-core package (`../i18n/index.
 Add an entry only when **identity must be shared**. A helper without cross-module state stays bundled.
 
 1. Add `{ key, path }` or `{ key, specifier }` to `EXTENSION_HOST_MODULES`.
-2. Import the module in `packages/desktop-app/src/lib/host-modules.ts` and map it under the same key; the `satisfies` constraint fails until both sides agree.
+2. Import the module in `apps/desktop/src/lib/host-modules.ts` and map it under the same key; the `satisfies` constraint fails until both sides agree.
 3. Extend the compiler test to prove the import resolves to `window.MusePiHostModules[key]` and the bundled marker is absent, and the runtime test to prove the key is published with a bound instance.
 4. Update this document and the changelog.
 
 Every entry is host ABI: removing or renaming a key breaks already-compiled bundles, which throw at import rather than falling back to a copy.
 
-`packages/desktop-app/test/host-module-state-guard.test.ts` enforces completeness: every `src/lib` module with a `createContext(...)` call must have a contract path, and each known state-bearing module must have a path and a published instance. A new React context module fails the suite until it is registered.
+`apps/desktop/test/host-module-state-guard.test.ts` enforces completeness: every `src/lib` module with a `createContext(...)` call must have a contract path, and each known state-bearing module must have a path and a published instance. A new React context module fails the suite until it is registered.
 
-**Anchors**: `packages/collab-proto/test/extension-host-modules.test.ts`, `packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`, `packages/desktop-app/test/host-modules.test.ts`, `packages/desktop-app/test/host-module-state-guard.test.ts`.
+**Anchors**: `packages/collab-proto/test/extension-host-modules.test.ts`, `packages/coding-agent/src/daemon/extension-artifact-compiler.test.ts`, `apps/desktop/test/host-modules.test.ts`, `apps/desktop/test/host-module-state-guard.test.ts`.
 
 ## 20. Prompt sections: registry, composer, source lifecycle (2026-11-03)
 

@@ -10,7 +10,7 @@ import _traverse from "@babel/traverse";
 
 const traverse = _traverse as unknown as typeof import("@babel/traverse").default;
 const apply = process.argv.includes("--apply");
-const file = path.resolve("packages/desktop-app/src/components/WelcomeComposer.tsx");
+const file = path.resolve("apps/desktop/src/components/WelcomeComposer.tsx");
 
 const raw = JSON.parse(fs.readFileSync(path.resolve("scripts/i18n-key-migration.json"), "utf8"));
 const cc: Record<string, string> = raw["client-core"] ?? {};

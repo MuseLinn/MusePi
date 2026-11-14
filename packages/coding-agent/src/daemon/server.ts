@@ -9993,7 +9993,7 @@ const AUTOSTART_RUN_KEY = "Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\R
 function resolveDaemonBinary(): string {
 	// Packaged: look for the daemon binary relative to this script's
 	// location. The server is at <root>/packages/coding-agent/src/daemon/.
-	// The packaged binary is at <root>/packages/desktop-app/vendor/daemon/musepi.exe
+	// The packaged binary is at <root>/apps/desktop/vendor/daemon/musepi.exe
 	// (or the asar-unpacked equivalent).
 	const candidates = [
 		path.join(__dirname, "..", "..", "..", "..", "..", "vendor", "daemon", "musepi.exe"),

@@ -229,8 +229,8 @@
 
 - GUI/渲染端：`packages/client-core/src/i18n/index.ts:140`（`registerTranslations`），导出 `packages/client-core/src/index.ts:96`；GUI 宽松查键 `tLoose` 在 `packages/client-core/src/i18n/index.ts:129`，导出 `packages/client-core/src/index.ts:102`
 - TUI/CLI 端：`packages/coding-agent/src/i18n/index.ts:64`（同名不同实现，`TranslationMap` 类型）
-- 内置代码也在用这个 seam（自证是公共面）：`packages/desktop-app/src/i18n/voice.ts:95,101`、`packages/desktop-app/src/i18n/preview.ts:21,27`
-- 注释明确「the same runtime seam plugins use」：`packages/desktop-app/src/i18n/voice.ts:5`
+- 内置代码也在用这个 seam（自证是公共面）：`apps/desktop/src/i18n/voice.ts:95,101`、`apps/desktop/src/i18n/preview.ts:21,27`
+- 注释明确「the same runtime seam plugins use」：`apps/desktop/src/i18n/voice.ts:5`
 
 ### 3.7 `registerRpc` 的运行时限制
 
@@ -373,9 +373,9 @@
 
 ### 5.5 GUI 安装面
 
-- 对话框 `packages/desktop-app/src/components/PluginInstallDialog.tsx:60`（含拖放区 `:175-…`）
-- 挂在工具栏 — `packages/desktop-app/src/components/UnifiedPluginsView.tsx:582`
-- 拖入取路径走 preload `webUtils.getPathForFile` — `PluginInstallDialog.tsx:144`，preload 暴露 `getDroppedFilePath`（类型 `packages/desktop-app/src/env.d.ts:15`）
+- 对话框 `apps/desktop/src/components/PluginInstallDialog.tsx:60`（含拖放区 `:175-…`）
+- 挂在工具栏 — `apps/desktop/src/components/UnifiedPluginsView.tsx:582`
+- 拖入取路径走 preload `webUtils.getPathForFile` — `PluginInstallDialog.tsx:144`，preload 暴露 `getDroppedFilePath`（类型 `apps/desktop/src/env.d.ts:15`）
 - 渲染端重载后**重认领**在途安装 — `PluginInstallDialog.tsx:119-157`
 
 ### 5.6 CLI 侧 — `musepi plugin <verb>` 全部存在
@@ -577,8 +577,8 @@ plugins.list / plugins.packages / plugins.setEnabled
 
 ### 8.2 `ConfigFormRenderer`
 
-`packages/desktop-app/src/components/ConfigFormRenderer.tsx:18`（dsh 式插件配置表单，头注释 `:8`）。
-- 接入点：`packages/desktop-app/src/components/UnifiedPluginsView.tsx:155`
+`apps/desktop/src/components/ConfigFormRenderer.tsx:18`（dsh 式插件配置表单，头注释 `:8`）。
+- 接入点：`apps/desktop/src/components/UnifiedPluginsView.tsx:155`
 - 写入走 `extensions.setConfig` RPC，失败回滚该键并显示错误 — `UnifiedPluginsView.tsx:112`, `129`
 
 ### 8.3 配置存储位置

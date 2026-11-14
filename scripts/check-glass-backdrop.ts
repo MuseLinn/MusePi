@@ -29,7 +29,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
-const STYLESHEETS = ["packages/desktop-app/src/styles/gui-base.css"];
+const STYLESHEETS = ["apps/desktop/src/styles/gui-base.css"];
 const PLATFORMS = ["win32", "linux"];
 
 /** Specificity as [id, class-ish, type-ish], compared component-wise. */

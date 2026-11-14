@@ -37,7 +37,7 @@
 - Test: `packages/coding-agent/test/sdk-computer-tool-toggle.test.ts`
 - Test: `packages/coding-agent/src/extensibility/plugins/profile/profile-composition.test.ts`
 - Test: `packages/coding-agent/src/daemon/services/bundle-service.test.ts`
-- Test: `packages/desktop-app/test/bundle-view.test.tsx`
+- Test: `apps/desktop/test/bundle-view.test.tsx`
 
 **Interfaces:**
 - `computer.enabled` defaults to true.
@@ -49,7 +49,7 @@ Assert Computer Use is present by default and can be disabled/re-enabled. Assert
 
 - [ ] **Step 2: Run and confirm RED**
 
-Run: `bun test packages/coding-agent/test/sdk-computer-tool-toggle.test.ts packages/coding-agent/src/extensibility/plugins/profile/profile-composition.test.ts packages/coding-agent/src/daemon/services/bundle-service.test.ts packages/desktop-app/test/bundle-view.test.tsx`
+Run: `bun test packages/coding-agent/test/sdk-computer-tool-toggle.test.ts packages/coding-agent/src/extensibility/plugins/profile/profile-composition.test.ts packages/coding-agent/src/daemon/services/bundle-service.test.ts apps/desktop/test/bundle-view.test.tsx`
 Expected: FAIL on the old false default and DSH-first behavior.
 
 - [ ] **Step 3: Implement**

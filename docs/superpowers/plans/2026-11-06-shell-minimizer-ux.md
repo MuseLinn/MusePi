@@ -82,10 +82,10 @@
 ### Task 3: Shell statistics and advanced settings UI
 
 **Files:**
-- Create: `packages/desktop-app/src/components/settings-sections/shell-minimizer-stats.tsx`
-- Create: `packages/desktop-app/test/shell-minimizer-settings.test.tsx`
-- Modify: `packages/desktop-app/src/components/settings-sections/shell.tsx`
-- Modify: `packages/desktop-app/src/styles/gui-chat.css`
+- Create: `apps/desktop/src/components/settings-sections/shell-minimizer-stats.tsx`
+- Create: `apps/desktop/test/shell-minimizer-settings.test.tsx`
+- Modify: `apps/desktop/src/components/settings-sections/shell.tsx`
+- Modify: `apps/desktop/src/styles/gui-chat.css`
 - Modify: `packages/coding-agent/src/config/settings-schema.ts`
 - Modify: `packages/client-core/src/i18n/zh-CN/settings.ts`
 - Modify: `packages/client-core/src/i18n/en-US/settings.ts`
@@ -98,7 +98,7 @@
   Render `ShellSection` with canned schema/settings/stats. Assert saved bytes, weighted percent, per-filter row, native progress, refresh RPC, advanced keys, and stale-response suppression after unmount.
 
 - [ ] **Step 2: Run component test to verify RED**
-  Run `bun test packages/desktop-app/test/shell-minimizer-settings.test.tsx`; expect missing stats UI/schema failures.
+  Run `bun test apps/desktop/test/shell-minimizer-settings.test.tsx`; expect missing stats UI/schema failures.
 
 - [ ] **Step 3: Implement settings and stats card**
   Add Bash Advanced UI metadata, bilingual labels/descriptions, and a responsive stats section using existing settings cards and native `<progress>`.
@@ -109,15 +109,15 @@
 ### Task 4: Bash card metadata and raw preview
 
 **Files:**
-- Create: `packages/desktop-app/src/components/SessionArtifactPreviewDialog.tsx`
-- Create: `packages/desktop-app/test/session-artifact-preview-dialog.test.tsx`
+- Create: `apps/desktop/src/components/SessionArtifactPreviewDialog.tsx`
+- Create: `apps/desktop/test/session-artifact-preview-dialog.test.tsx`
 - Create: `packages/client-core/test/bash-renderer-minimization.test.tsx`
 - Modify: `packages/client-core/src/tool-render/types.ts`
 - Modify: `packages/client-core/src/tool-render/tools/bash.tsx`
 - Modify: `packages/client-core/src/i18n/zh-CN/tools.ts`
 - Modify: `packages/client-core/src/i18n/en-US/tools.ts`
-- Modify: `packages/desktop-app/src/components/ChatView.tsx`
-- Modify: `packages/desktop-app/src/styles/gui-chrome.css`
+- Modify: `apps/desktop/src/components/ChatView.tsx`
+- Modify: `apps/desktop/src/styles/gui-chrome.css`
 
 **Interfaces:**
 - `ToolRenderHost.openArtifact?(id: string): void`.
@@ -149,7 +149,7 @@
   Describe byte statistics, raw-artifact preview, advanced settings, RPC bounds, and unchanged PTY behavior. Explain that `[raw output: artifact://…]` retrieves exact output; do not imply command rewriting.
 
 - [ ] **Step 2: Run focused and package checks**
-  Run all new/affected tests, `bun run --cwd=packages/coding-agent check`, `bun run --cwd=packages/client-core check`, `bun run --cwd=packages/desktop-app check`, docs/i18n checks, and regenerate tool views if required. Record any pre-existing failures separately.
+  Run all new/affected tests, `bun run --cwd=packages/coding-agent check`, `bun run --cwd=packages/client-core check`, `bun run --cwd=apps/desktop check`, docs/i18n checks, and regenerate tool views if required. Record any pre-existing failures separately.
 
 - [ ] **Step 3: Exercise the real desktop scenario**
   Use isolated development storage. Run a command that actually minimizes, verify its details and journal record, open raw output from the card, verify the 8 MiB/error behavior, and refresh Settings → Shell to see the new totals. Verify keyboard close/focus return.

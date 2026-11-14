@@ -46,8 +46,8 @@
 **Files:**
 - Modify: `packages/coding-agent/src/tools/browser/tab-supervisor.ts`
 - Modify: `packages/coding-agent/src/tools/browser.ts`
-- Modify: `packages/desktop-app/electron/managed-browser.cjs`
-- Modify: `packages/desktop-app/test/managed-browser-menu-ipc.test.cjs`
+- Modify: `apps/desktop/electron/managed-browser.cjs`
+- Modify: `apps/desktop/test/managed-browser-menu-ipc.test.cjs`
 - Create: `packages/coding-agent/test/tools/browser-control.test.ts`
 
 **Interfaces:**

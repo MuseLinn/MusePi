@@ -51,7 +51,7 @@ for (const [pkg, table] of Object.entries(raw)) {
  */
 const ROOTS: Array<{ dir: string; pkg: string }> = [
 	{ dir: "packages/client-core/src", pkg: "client-core" },
-	{ dir: "packages/desktop-app/src", pkg: "client-core" },
+	{ dir: "apps/desktop/src", pkg: "client-core" },
 	{ dir: "packages/coding-agent/src", pkg: "coding-agent" },
 ];
 

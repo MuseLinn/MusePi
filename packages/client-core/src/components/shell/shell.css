@@ -4508,7 +4508,7 @@
 /* ---- Visual components absorbed from gui client (reactbits parity) ---- */
 /* DotMatrixMark / ShinyText / BlurText / SpotlightCard — see
  * guest-client/src/components/shell/*.tsx. CSS copied from
- * packages/desktop-app/src/styles/gui-board.css; --gui-motion-blur is
+ * apps/desktop/src/styles/gui-board.css; --gui-motion-blur is
  * guest-client-agnostic via fallback (gui tokens are not loaded here). */
 
 .gui-blur-char {

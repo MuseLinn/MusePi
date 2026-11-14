@@ -32,9 +32,9 @@
 ### Task 1: Browser/panel state contracts
 
 **Files:**
-- Create: `packages/desktop-app/src/lib/browser-panel-tabs.ts`
-- Modify: `packages/desktop-app/src/lib/panel-tabs.ts`
-- Test: `packages/desktop-app/test/browser-panel-tabs.test.ts`, `packages/desktop-app/test/panel-tabs.test.ts`
+- Create: `apps/desktop/src/lib/browser-panel-tabs.ts`
+- Modify: `apps/desktop/src/lib/panel-tabs.ts`
+- Test: `apps/desktop/test/browser-panel-tabs.test.ts`, `apps/desktop/test/panel-tabs.test.ts`
 
 **Interfaces:**
 - Consumes: `ManagedTab`, `PanelTab`, `PanelTabState`, `PanelTabDescriptor`.
@@ -49,9 +49,9 @@
 ### Task 2: Dynamic tooltips and surface-tab visuals
 
 **Files:**
-- Modify: `packages/desktop-app/src/lib/tooltips.ts`, `packages/desktop-app/src/lib/panel-maximize.ts`
-- Modify: `packages/desktop-app/src/components/surface-tabs.tsx`, `packages/desktop-app/src/styles/gui-chat.css`
-- Test: `packages/desktop-app/test/tooltips.test.ts`, `packages/desktop-app/test/context-panel-maximize.test.tsx`, `packages/desktop-app/test/surface-tabs.test.tsx`
+- Modify: `apps/desktop/src/lib/tooltips.ts`, `apps/desktop/src/lib/panel-maximize.ts`
+- Modify: `apps/desktop/src/components/surface-tabs.tsx`, `apps/desktop/src/styles/gui-chat.css`
+- Test: `apps/desktop/test/tooltips.test.ts`, `apps/desktop/test/context-panel-maximize.test.tsx`, `apps/desktop/test/surface-tabs.test.tsx`
 
 **Interfaces:**
 - Produces: `SurfaceTab.icon?: ReactNode`, `SurfaceTab.agentActive?: boolean`; decorative visuals use `alt=""`/`aria-hidden`.
@@ -65,9 +65,9 @@
 ### Task 3: ContextPanel/ChatView browser projection
 
 **Files:**
-- Modify: `packages/desktop-app/src/components/ContextPanel.tsx`, `packages/desktop-app/src/components/ChatView.tsx`
-- Modify: `packages/desktop-app/src/lib/surfaces/registry.ts`, `packages/desktop-app/src/lib/slot-host.tsx`, `packages/desktop-app/src/plugins/browser-ui/page.tsx`
-- Test: `packages/desktop-app/test/context-panel-add-menu.test.tsx`, `packages/desktop-app/test/panel-tab-selector.test.ts`, `packages/desktop-app/test/extension-react-host.test.tsx`
+- Modify: `apps/desktop/src/components/ContextPanel.tsx`, `apps/desktop/src/components/ChatView.tsx`
+- Modify: `apps/desktop/src/lib/surfaces/registry.ts`, `apps/desktop/src/lib/slot-host.tsx`, `apps/desktop/src/plugins/browser-ui/page.tsx`
+- Test: `apps/desktop/test/context-panel-add-menu.test.tsx`, `apps/desktop/test/panel-tab-selector.test.ts`, `apps/desktop/test/extension-react-host.test.tsx`
 
 **Interfaces:**
 - Consumes: Tasks 1–2 projection and tab visuals; existing `createTab/selectTab/closeTab`, `subscribeHost/getHostState`.
@@ -82,11 +82,11 @@
 ### Task 4: Browser menu and blank-page action model
 
 **Files:**
-- Create: `packages/desktop-app/src/lib/browser-menu-model.ts`
-- Modify: `packages/desktop-app/src/components/ManagedBrowserPane.tsx`, `packages/desktop-app/src/lib/managed-browser-host.ts`
-- Modify: `packages/desktop-app/electron/managed-browser.cjs`, `packages/desktop-app/electron/preload.cjs`, `packages/desktop-app/src/env.d.ts`, `packages/desktop-app/src/app.tsx`
+- Create: `apps/desktop/src/lib/browser-menu-model.ts`
+- Modify: `apps/desktop/src/components/ManagedBrowserPane.tsx`, `apps/desktop/src/lib/managed-browser-host.ts`
+- Modify: `apps/desktop/electron/managed-browser.cjs`, `apps/desktop/electron/preload.cjs`, `apps/desktop/src/env.d.ts`, `apps/desktop/src/app.tsx`
 - Modify: `packages/client-core/src/i18n/zh-CN/tools.ts`, `packages/client-core/src/i18n/en-US/tools.ts`
-- Test: `packages/desktop-app/test/browser-menu-model.test.ts`, focused managed-browser IPC/host tests
+- Test: `apps/desktop/test/browser-menu-model.test.ts`, focused managed-browser IPC/host tests
 
 **Interfaces:**
 - Produces: a pure menu availability model with `hasPage` derived from a nonblank active managed tab; page actions are find, print, zoom, device toolbar, focus, screenshot, copy/open/refresh; global actions are downloads, history, clear data, settings.
@@ -100,9 +100,9 @@
 ### Task 5: Device-toolbar interaction and disabled semantics
 
 **Files:**
-- Modify: `packages/desktop-app/src/components/browser-device-toolbar.tsx`, `packages/desktop-app/src/styles/gui-browser-toolbar.css`
+- Modify: `apps/desktop/src/components/browser-device-toolbar.tsx`, `apps/desktop/src/styles/gui-browser-toolbar.css`
 - Modify: `packages/client-core/src/components/shell/Segmented.tsx`, shared control styles only if required
-- Test: `packages/desktop-app/test/browser-device-toolbar.test.tsx`, existing segmented-control tests
+- Test: `apps/desktop/test/browser-device-toolbar.test.tsx`, existing segmented-control tests
 
 **Interfaces:**
 - Produces: `BrowserDeviceToolbar.disabled?: boolean` and `Segmented.disabled?: boolean`; disabled controls expose native disabled/ARIA state and cannot activate by pointer or keyboard.

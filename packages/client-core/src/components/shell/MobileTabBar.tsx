@@ -22,7 +22,7 @@ export function MobileTabBar({
 	const itemClass = (id: MobileTab): string => `sh-tabbar-item${active === id ? " sh-tabbar-item--active" : ""}`;
 
 	// HarmonyOS draws the bar natively (ArkUI Tabs + the system immersive
-	// light-sense material, see packages/harmony Index.ets). Painting a second,
+	// light-sense material, see apps/harmony Index.ets). Painting a second,
 	// web-styled bar there would double the navigation and swap a real system
 	// material for a CSS imitation. Android / mobile PWA keep this one.
 	if (isHarmonyShell()) return null;

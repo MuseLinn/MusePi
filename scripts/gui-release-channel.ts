@@ -137,7 +137,7 @@ async function main(): Promise<void> {
 		return;
 	}
 	if (command === "verify-published") {
-		const expectedVersion = args[0] ?? (await readManifestVersion("packages/desktop-app/package.json"));
+		const expectedVersion = args[0] ?? (await readManifestVersion("apps/desktop/package.json"));
 		for (let attempt = 1; attempt <= 5; attempt++) {
 			try {
 				await verifyPublishedManifest(expectedVersion);

@@ -60,7 +60,7 @@
 - 存储与语义：`packages/coding-agent/src/daemon/crons.ts` — `cronStoragePath()` `:77-81`（`~/.musepi/crons.json`）、运行历史 `:99-113`（`crons.runs.json`，上限 100）、`CronSchedule.idleWindow` `:27-34`、`computeNextRun` `:341-347`、`constrainToIdleWindow` `:458-497`（支持跨午夜 22:00–08:00，按任务时区解释）。
 - 调度循环：`daemon/server.ts:2735-2738`（构造时 `loadCronTasks()` + 30s 扫描）、`#cronScan` `:2825-2834`、`#cronRun` `:2952-3023`（新建会话跑 prompt，按 `stopReason` 判成败）、广播 `crons.changed` `:3243-3250`。
 - RPC：`daemon/server.ts:4865-4950` — `cron.list` / `cron.upsert` / `cron.runs` / `cron.nextRuns` / `cron.delete` / `cron.toggle` / `cron.runNow`。
-- GUI 任务中心：`packages/desktop-app/src/components/ScheduledTasksPage.tsx`（`refresh` `:189-199`、30s 轮询 + `crons.changed` `:201-220`、保存 `cron.upsert` `:274-289`、日历/看板/列表三 tab `:348-371`、编辑器 `CronEditor` `:830-1210`、闲时窗口字段 `:1070-1118`）。
+- GUI 任务中心：`apps/desktop/src/components/ScheduledTasksPage.tsx`（`refresh` `:189-199`、30s 轮询 + `crons.changed` `:201-220`、保存 `cron.upsert` `:274-289`、日历/看板/列表三 tab `:348-371`、编辑器 `CronEditor` `:830-1210`、闲时窗口字段 `:1070-1118`）。
 
 **三个缺口**：
 
@@ -74,7 +74,7 @@
 
 1. 新增工具（建议名 `schedule_task`，放 `packages/coding-agent/src/tools/`，薄封装 `cron.upsert`）：入参 `name` / `prompt` / `schedule`（含 `idleWindow`）/ `cwd` / `model` / `thinkingLevel`；返回 `{ taskId, nextRunAt }`。同时加进 `tools/builtin-names.ts` 的 `BUILTIN_TOOL_NAMES`。
 2. 卡片：`packages/client-core/src/tool-render/tools/schedule-task.tsx`（显示名称、调度摘要、闲时窗口、下一次运行、"编辑"按钮），在 `registry.ts:42-97` 注册；若要"常驻不折叠"，加进 `components/transcript/ToolCard.tsx:53-55` 的 `isArtifactCard()`（现有 `widget`/`board`）。
-3. 跳转：卡片按钮派发 `window` 事件（照抄 `components/transcript/canvas-jump.tsx:44-67` 的 `omp-open-board` 模式）；宿主监听加在 `packages/desktop-app/src/app.tsx:576-585` 旁 → `viewSwapRef.current("scheduled")`；`ScheduledTasksPage` 增 `initialTaskId?: string` props，打开时定位到该任务的编辑器。
+3. 跳转：卡片按钮派发 `window` 事件（照抄 `components/transcript/canvas-jump.tsx:44-67` 的 `omp-open-board` 模式）；宿主监听加在 `apps/desktop/src/app.tsx:576-585` 旁 → `viewSwapRef.current("scheduled")`；`ScheduledTasksPage` 增 `initialTaskId?: string` props，打开时定位到该任务的编辑器。
 4. i18n：卡片文案进 `packages/client-core/src/i18n/{zh-CN,en-US}/<域>.ts`（按域拆分；en 必须 `as const satisfies Record<ZhKey, string>`）。
 
 **验收**
@@ -97,7 +97,7 @@
 
 **现状（已核实）**
 
-- 触发：`packages/desktop-app/src/components/composer/use-completion.ts:164-191` ——
+- 触发：`apps/desktop/src/components/composer/use-completion.ts:164-191` ——
   `const line = value.slice(value.lastIndexOf("\n") + 1); if (line.startsWith("@") && line.length >= 1) { setAtQuery(line.length > 1 ? line.slice(1) : ""); … }`
   ⇒ **要求"当前行以 @ 开头"**。`中文@`、`。@`、`见(@` 一律不触发。
 - 第二份同款实现（欢迎页）：`WelcomeComposer.tsx:751-759`。
@@ -130,7 +130,7 @@
 
 **现状（已核实）**
 
-- desktop：`packages/desktop-app/src/components/AskCard.tsx` —— **单行 `<input>` 且 Enter 立即提交**：`:357`（input 模式，`:364-366` Enter 提交）、`:380`（select 的 Other）、`:540`（dialog 的 Other）、`:572`（note，Enter 关闭 `:579-581`）。提交 `app.tsx:1887-1898` → `session.askAnswer { sessionId, requestId, answer }`（`answer: string | AskDialogAnswer | null`，`AskCard.tsx:53`）。
+- desktop：`apps/desktop/src/components/AskCard.tsx` —— **单行 `<input>` 且 Enter 立即提交**：`:357`（input 模式，`:364-366` Enter 提交）、`:380`（select 的 Other）、`:540`（dialog 的 Other）、`:572`（note，Enter 关闭 `:579-581`）。提交 `app.tsx:1887-1898` → `session.askAnswer { sessionId, requestId, answer }`（`answer: string | AskDialogAnswer | null`，`AskCard.tsx:53`）。
 - guest：`guest-client/src/components/shell/Composer.tsx` 的 `AskEditor` **已经是 `<textarea rows=1>`** 自动增高 + Enter 提交（非 shift、含 IME 守卫）：`:87-113`、`:80`、`shouldSubmitOnEnter` `:34-37`。
 - 两份是**各自独立实现**（无共享组件）。
 
@@ -150,7 +150,7 @@
 
 **现状（已核实）**
 
-- 组件：`packages/desktop-app/src/components/AttachMenu.tsx`（`add` 图标打开 `:47-57`；挂载 `Composer.tsx:1606-1631`；token 插入 `Composer.tsx:1621-1630` 用 `setRangeText`）。
+- 组件：`apps/desktop/src/components/AttachMenu.tsx`（`add` 图标打开 `:47-57`；挂载 `Composer.tsx:1606-1631`；token 插入 `Composer.tsx:1621-1630` 用 `setRangeText`）。
 - **现有 9 项**（按渲染顺序）：add images `:60-70`（隐藏 file input `:200-211`）/ insert command `:71-82` / mention file `:83-94` / insert session `:95-106` / insert ultrathink `:108-120` / insert workflowz `:121-133` / plan mode `:135-156` / goal mode `:157-178` / guided goal mode `:179-199`。分隔线在 `:107`、`:134`。
 - 能力盘点（要什么 → 已有/要新）：
   - **附件 = 已有**（`composer/use-attachments.ts`，含粘贴/拖拽 `:81-98`、图片附件）。
@@ -325,7 +325,7 @@
 
 ## 工作纪律（改本文涉及的功能时遵守）
 
-- 门禁：项目自带 biome 二进制（`node node_modules/@biomejs/biome/bin/biome check --write <files>`）、`bun run check:ts` 全 workspace exit 0、对应包测试。既有基线：`packages/desktop-app` 201 pass/0 fail；`packages/coding-agent` 有 **48 个 pre-existing 失败**（TTSR/transcript 渲染），与 GUI 改动无关，**不要去"修"**。
+- 门禁：项目自带 biome 二进制（`node node_modules/@biomejs/biome/bin/biome check --write <files>`）、`bun run check:ts` 全 workspace exit 0、对应包测试。既有基线：`apps/desktop` 201 pass/0 fail；`packages/coding-agent` 有 **48 个 pre-existing 失败**（TTSR/transcript 渲染），与 GUI 改动无关，**不要去"修"**。
 - i18n：按域拆 `packages/client-core/src/i18n/{zh-CN,en-US}/<域>.ts`，en 必须 `as const satisfies Record<ZhKey, string>`，禁止塞回单文件（`AGENTS.md`）。
 - 长文本渲染、模型身份、模态键盘等 GUI 硬规则见 `AGENTS.md` 的 "GUI Development Rules" 与 `docs/gui-design.md` / `docs/gui-implementation.md`。
 - 本文档吸收完成后**整体删除**（不要翻译、不要长期挂着）。

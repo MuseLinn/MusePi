@@ -30,7 +30,7 @@ daemon journal：`%TEMP%/musepi-daemon/journal/<sessionId>.journal.jsonl`；持�
 
 ## 投影验证
 
-临时脚本：`.workbuddy/tmp/verify-advisor-projection.ts`（只读，import 修复后的 `packages/sdk/src/materialized-view.ts`、`packages/desktop-app/src/lib/leaf-walk.ts`、`packages/desktop-app/src/components/trajectory-data.ts`，全量重放 4 个会话 journal）。
+临时脚本：`.workbuddy/tmp/verify-advisor-projection.ts`（只读，import 修复后的 `packages/sdk/src/materialized-view.ts`、`apps/desktop/src/lib/leaf-walk.ts`、`apps/desktop/src/components/trajectory-data.ts`，全量重放 4 个会话 journal）。
 
 结果（ALL CHECKS PASSED）：
 

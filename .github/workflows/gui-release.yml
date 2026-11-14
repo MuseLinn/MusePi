@@ -32,21 +32,21 @@ jobs:
                     native_targets: darwin-arm64,
                     builder: mac,
                     artifact_ext: dmg,
-                    artifact_glob: "packages/desktop-app/release/*.dmg",
+                    artifact_glob: "apps/desktop/release/*.dmg",
                  }
                - {
                     os: ubuntu-22.04,
                     target_id: linux-x64,
                     native_targets: linux-x64-baseline,
                     builder: linux,
-                    artifact_glob: "packages/desktop-app/release/*",
+                    artifact_glob: "apps/desktop/release/*",
                  }
                - {
                     os: ubuntu-24.04-arm,
                     target_id: linux-arm64,
                     native_targets: linux-arm64,
                     builder: linux,
-                    artifact_glob: "packages/desktop-app/release/*",
+                    artifact_glob: "apps/desktop/release/*",
                  }
                - {
                     os: windows-2022,
@@ -54,7 +54,7 @@ jobs:
                     native_targets: win32-x64-modern,
                     builder: win,
                     artifact_ext: exe,
-                    artifact_glob: "packages/desktop-app/release/*.exe",
+                    artifact_glob: "apps/desktop/release/*.exe",
                  }
                - {
                     os: windows-11-arm,
@@ -62,7 +62,7 @@ jobs:
                     native_targets: win32-arm64,
                     builder: win,
                     artifact_ext: exe,
-                    artifact_glob: "packages/desktop-app/release/*arm64*.exe",
+                    artifact_glob: "apps/desktop/release/*arm64*.exe",
                     arch_flag: "--arm64",
                  }
       runs-on: ${{ matrix.os }}
@@ -111,10 +111,10 @@ jobs:
            if: matrix.builder == 'mac' || matrix.builder == 'linux' || matrix.builder == 'win'
            run: |
               bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary packages/coding-agent/dist/musepi${{ matrix.builder == 'win' && '.exe' || '' }}
-              chmod +x packages/desktop-app/vendor/daemon/musepi${{ matrix.builder == 'win' && '.exe' || '' }}
+              chmod +x apps/desktop/vendor/daemon/musepi${{ matrix.builder == 'win' && '.exe' || '' }}
 
          - name: Build GUI renderer
-           working-directory: packages/desktop-app
+           working-directory: apps/desktop
            run: bun run build
 
          # Windows installer UI host (WebView2 shell).
@@ -133,7 +133,7 @@ jobs:
          # win32-arm64 builds on windows-11-arm and needs an ARM64 host binary.
          - name: Build Windows installer host (WebView2)
            if: matrix.builder == 'win'
-           working-directory: packages/desktop-app
+           working-directory: apps/desktop
            shell: bash
            run: |
              set -euo pipefail
@@ -145,7 +145,7 @@ jobs:
              bun scripts/build-installer-host.mjs --arch "$ARCH" --smoke
 
          - name: Package (electron-builder)
-           working-directory: packages/desktop-app
+           working-directory: apps/desktop
            # Beta tags (v*-beta*) build the "beta" publish channel: electron-builder
            # then writes beta.yml / beta-mac.yml / beta-linux*.yml and embeds
            # channel=beta into the installed app's app-update.yml, so beta installs
@@ -165,7 +165,7 @@ jobs:
 
          - name: Rename channel feed per arch
            if: matrix.builder == 'win'
-           working-directory: packages/desktop-app/release
+           working-directory: apps/desktop/release
            shell: bash
            run: |
               set -euo pipefail
@@ -182,12 +182,12 @@ jobs:
            with:
               name: musepi-${{ matrix.target_id }}
               path: |
-                packages/desktop-app/release/*.${{ matrix.artifact_ext }}
-                packages/desktop-app/release/*.AppImage
-                packages/desktop-app/release/*.deb
-                packages/desktop-app/release/*.yml
-                !packages/desktop-app/release/builder-debug.yml
-                packages/desktop-app/release/*.zip
+                apps/desktop/release/*.${{ matrix.artifact_ext }}
+                apps/desktop/release/*.AppImage
+                apps/desktop/release/*.deb
+                apps/desktop/release/*.yml
+                !apps/desktop/release/builder-debug.yml
+                apps/desktop/release/*.zip
               if-no-files-found: error
 
    package_mobile:
@@ -224,21 +224,21 @@ jobs:
            run: bun install --frozen-lockfile
 
          - name: Build mobile web assets
-           working-directory: packages/mobile
+           working-directory: apps/mobile
            run: bun run build
 
          - name: Sync Capacitor android project
-           working-directory: packages/mobile
+           working-directory: apps/mobile
            run: bunx cap sync android
 
          - name: Build debug APK
-           working-directory: packages/mobile
+           working-directory: apps/mobile
            run: |
               chmod +x ./android/gradlew
               ./android/gradlew -p android assembleDebug --no-daemon
 
          - name: Rename APK to the release asset name
-           working-directory: packages/mobile/android/app/build/outputs/apk/debug
+           working-directory: apps/mobile/android/app/build/outputs/apk/debug
            # The publish job downloads artifacts with merge-multiple, so the file
            # name here IS the release asset name. gradle always emits
            # `app-debug.apk`, which shipped an unlabelled asset whose version only
@@ -254,7 +254,7 @@ jobs:
            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
            with:
               name: musepi-mobile
-              path: packages/mobile/android/app/build/outputs/apk/debug/MusePi-*-app-debug.apk
+              path: apps/mobile/android/app/build/outputs/apk/debug/MusePi-*-app-debug.apk
               if-no-files-found: error
 
    publish:
@@ -302,7 +302,7 @@ jobs:
               fi
               node --input-type=module <<'EOF'
               import fs from "node:fs";
-              const pkg = JSON.parse(fs.readFileSync("packages/desktop-app/package.json", "utf8"));
+              const pkg = JSON.parse(fs.readFileSync("apps/desktop/package.json", "utf8"));
               const releaseTag = process.env.RELEASE_TAG;
               const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
               const sectionMatch = changelog.split(/^## \[/m).slice(1).find(s => /^\d+\.\d+\.\d+/.test(s));
@@ -320,13 +320,13 @@ jobs:
                 },
                 notes,
               };
-              fs.writeFileSync("packages/desktop-app/update-manifest.json", JSON.stringify(manifest, null, "\t") + "\n");
+              fs.writeFileSync("apps/desktop/update-manifest.json", JSON.stringify(manifest, null, "\t") + "\n");
               console.log("update-manifest:", manifest.version, manifest.url);
               EOF
-              cp packages/desktop-app/update-manifest.json dist/update-manifest.json
+              cp apps/desktop/update-manifest.json dist/update-manifest.json
               node --input-type=module <<'EOF'
               import fs from "node:fs";
-              const pkg = JSON.parse(fs.readFileSync("packages/desktop-app/package.json", "utf8"));
+              const pkg = JSON.parse(fs.readFileSync("apps/desktop/package.json", "utf8"));
               const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
               const sectionMatch = changelog.split(/^## \[/m).slice(1).find(s => /^\d+\.\d+\.\d+/.test(s));
               const notes = sectionMatch ? `## [${sectionMatch}`.trim() : "";

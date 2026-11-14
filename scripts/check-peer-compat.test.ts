@@ -47,8 +47,8 @@ describe("satisfiesCaret", () => {
 describe("checkRules — the blank-renderer regression (#e5ba4de17)", () => {
 	test("flags react-konva newer than the pinned react", () => {
 		const root = makeTree({
-			"packages/desktop-app/node_modules/react-konva/package.json": "19.3.0",
-			"packages/desktop-app/node_modules/react/package.json": "19.2.7",
+			"apps/desktop/node_modules/react-konva/package.json": "19.3.0",
+			"apps/desktop/node_modules/react/package.json": "19.2.7",
 		});
 		const violations = checkRules(root);
 		expect(violations).toHaveLength(1);
@@ -58,8 +58,8 @@ describe("checkRules — the blank-renderer regression (#e5ba4de17)", () => {
 
 	test("passes once react-konva is pinned to the matching line", () => {
 		const root = makeTree({
-			"packages/desktop-app/node_modules/react-konva/package.json": "19.2.7",
-			"packages/desktop-app/node_modules/react/package.json": "19.2.7",
+			"apps/desktop/node_modules/react-konva/package.json": "19.2.7",
+			"apps/desktop/node_modules/react/package.json": "19.2.7",
 		});
 		expect(checkRules(root)).toHaveLength(0);
 	});
@@ -68,7 +68,7 @@ describe("checkRules — the blank-renderer regression (#e5ba4de17)", () => {
 		// A partial install (or a checkout without desktop-app deps) must not
 		// produce a false positive.
 		const root = makeTree({
-			"packages/desktop-app/node_modules/react/package.json": "19.2.7",
+			"apps/desktop/node_modules/react/package.json": "19.2.7",
 		});
 		expect(checkRules(root)).toHaveLength(0);
 	});

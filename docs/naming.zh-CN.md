@@ -6,7 +6,7 @@ summary: 架构、包目录与用户可见产品文案的命名边界。
 scope:
   - packages/client-core/src/i18n
   - packages/coding-agent/src/i18n
-  - packages/desktop-app/src
+  - apps/desktop/src
 lang: zh-CN
 ---
 

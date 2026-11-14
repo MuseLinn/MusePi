@@ -33,13 +33,13 @@
 - Create: `packages/coding-agent/src/extensibility/plugins/profile/plugin-management.ts`
 - Create: `packages/coding-agent/src/extensibility/plugins/profile/plugin-management.test.ts`
 - Modify: `packages/coding-agent/src/daemon/services/extension-service.ts`
-- Create: `packages/desktop-app/src/lib/plugin-management.ts`
-- Modify: `packages/desktop-app/src/components/UnifiedPluginsView.tsx`
-- Modify: `packages/desktop-app/src/components/CapabilityCenterPage.tsx`
-- Modify: `packages/desktop-app/src/components/ExtensionsCenter.tsx`
-- Modify: `packages/desktop-app/src/app.tsx`
-- Delete: `packages/desktop-app/src/components/BundleView.tsx`
-- Modify: `packages/desktop-app/test/bundle-view.test.tsx`
+- Create: `apps/desktop/src/lib/plugin-management.ts`
+- Modify: `apps/desktop/src/components/UnifiedPluginsView.tsx`
+- Modify: `apps/desktop/src/components/CapabilityCenterPage.tsx`
+- Modify: `apps/desktop/src/components/ExtensionsCenter.tsx`
+- Modify: `apps/desktop/src/app.tsx`
+- Delete: `apps/desktop/src/components/BundleView.tsx`
+- Modify: `apps/desktop/test/bundle-view.test.tsx`
 
 **Interfaces:**
 - Produces: `listPluginManagementPackages(cwd, home): Promise<PluginManagementPackage[]>`; each row has `management: "package" | "bundle"`, `enabled`, and optional `readable`.
@@ -48,7 +48,7 @@
 - [ ] **Step 1: Write failing inventory and toggle-routing tests**
   Cover ordinary packages, selected/unselected bundles, a selected missing bundle, and the two RPC methods. The missing bundle must have `management: "bundle"`, `enabled: true`, `readable: false`.
 - [ ] **Step 2: Run the tests and verify RED**
-  Run `bun test packages/coding-agent/src/extensibility/plugins/profile/plugin-management.test.ts packages/desktop-app/test/bundle-view.test.tsx`; expect the new management helper to be absent.
+  Run `bun test packages/coding-agent/src/extensibility/plugins/profile/plugin-management.test.ts apps/desktop/test/bundle-view.test.tsx`; expect the new management helper to be absent.
 - [ ] **Step 3: Implement the shared inventory and UI toggle helper**
   Merge `getAllPlugins()` with `readProfileComposition()`/`listInstalledBundles()`, then route `plugins.packages` through it. Keep the detailed composition RPC unchanged. Update both plugin-list parents to use the shared toggle helper.
 - [ ] **Step 4: Remove the Composition tab**
@@ -107,14 +107,14 @@
 
 **Files:**
 - Modify: `packages/collab-proto/src/extension-slots.ts`
-- Modify: `packages/desktop-app/src/lib/slot-host.tsx`
-- Create: `packages/desktop-app/src/plugins/capability-center/package.json`
-- Create: `packages/desktop-app/src/plugins/capability-center/index.ts`
-- Create: `packages/desktop-app/src/plugins/capability-center/page.tsx`
-- Modify: `packages/desktop-app/src/components/CapabilityCenterPage.tsx`
-- Modify: `packages/desktop-app/src/app.tsx`
+- Modify: `apps/desktop/src/lib/slot-host.tsx`
+- Create: `apps/desktop/src/plugins/capability-center/package.json`
+- Create: `apps/desktop/src/plugins/capability-center/index.ts`
+- Create: `apps/desktop/src/plugins/capability-center/page.tsx`
+- Modify: `apps/desktop/src/components/CapabilityCenterPage.tsx`
+- Modify: `apps/desktop/src/app.tsx`
 - Modify: `packages/coding-agent/src/extensibility/extensions-center/builtin-registry.ts`
-- Create: `packages/desktop-app/test/capability-center-plugin.test.tsx`
+- Create: `apps/desktop/test/capability-center-plugin.test.tsx`
 
 **Interfaces:**
 - Produces: `app.capability` single slot and `CAPABILITY_CENTER_SLOT` host constant.
@@ -142,6 +142,6 @@
 - [ ] **Step 2: Run focused and package checks**
   Run all new/affected tests, coding-agent `check`, desktop `check:types`, scoped Biome, docs/changelog checks, and translation pairing only for edited pairs.
 - [ ] **Step 3: Run isolated desktop smoke**
-  Use `bun scripts/dev-smoke.ts -- bun --cwd=packages/desktop-app run desktop:run --remote-debugging-port=9223`; verify the Cordis capability page, unified Plugins view, no Composition tab, and Android skill/UI lifecycle. Restore GUI preferences and stop the smoke.
+  Use `bun scripts/dev-smoke.ts -- bun --cwd=apps/desktop run desktop:run --remote-debugging-port=9223`; verify the Cordis capability page, unified Plugins view, no Composition tab, and Android skill/UI lifecycle. Restore GUI preferences and stop the smoke.
 - [ ] **Step 4: Report verification boundaries**
   Record any pre-existing failures separately. If no model credentials are available, do not claim real-model preset selection or Agent-driven UI verification.
