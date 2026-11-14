@@ -1979,31 +1979,73 @@ function AppInner(): ReactNode {
 					).electronAPI;
 					if (rpc && api?.restartDaemon) {
 						const meta = api.getAppVersion
-							? await rpc
-									.request<{ version?: string; musepiVersion?: string | null }>("system.meta")
-									.catch(() => null)
+							? await Promise.race([
+									rpc
+										.request<{ version?: string; musepiVersion?: string | null }>("system.meta")
+										.catch(() => null),
+									new Promise<null>(resolve => setTimeout(() => resolve(null), 4_000)),
+								])
 							: null;
 						const appVersion = api.getAppVersion ? await api.getAppVersion().catch(() => null) : null;
 						let stale = shouldRestartDaemon(meta, appVersion);
 						if (!stale && !capabilityRestarted.has(u)) {
-							const answered: string[] = [];
-							for (const method of REQUIRED_DAEMON_METHODS) {
-								const ok = await rpc
-									.request(method, daemonMethodProbeParams(method))
-									.then(() => true)
-									.catch(err => !isMissingDaemonMethodError(err));
-								if (ok) answered.push(method);
+							// Bounded probes: the gate runs before the window is
+							// usable, so a daemon that answers slowly (or not at
+							// all) must not hold it open. A timeout reads as
+							// "present" — restart is reserved for an explicit
+							// "unknown method"/"unknown extension" answer, which
+							// is the only proof the daemon predates this GUI.
+							const CAPABILITY_PROBE_TIMEOUT_MS = 4_000;
+							const bounded = <T,>(p: Promise<T>): Promise<T | "timeout"> =>
+								Promise.race([
+									p,
+									new Promise<"timeout">(resolve =>
+										setTimeout(() => resolve("timeout"), CAPABILITY_PROBE_TIMEOUT_MS),
+									),
+								]);
+							const methodAnswers = await Promise.all(
+								REQUIRED_DAEMON_METHODS.map(async method => {
+									const outcome = await bounded(
+										rpc
+											.request(method, daemonMethodProbeParams(method))
+											.then(() => "answered" as const)
+											.catch(err =>
+												isMissingDaemonMethodError(err) ? ("missing" as const) : ("answered" as const),
+											),
+									);
+									return { method, outcome };
+								}),
+							);
+							const answered = methodAnswers
+								.filter(entry => entry.outcome !== "missing")
+								.map(entry => entry.method);
+							const slowProbes = methodAnswers.filter(entry => entry.outcome === "timeout");
+							if (slowProbes.length > 0) {
+								console.log(
+									"[gui] capability probes timed out",
+									slowProbes.map(entry => entry.method).join(","),
+								);
 							}
 							stale = shouldRestartForMissingMethods(answered);
 							if (!stale) {
-								const answeredExtensions: string[] = [];
-								for (const id of REQUIRED_DAEMON_EXTENSIONS) {
-									const ok = await rpc
-										.request("extensions.raw", { id })
-										.then(() => true)
-										.catch(err => !isMissingDaemonExtensionError(err));
-									if (ok) answeredExtensions.push(id);
-								}
+								const extensionAnswers = await Promise.all(
+									REQUIRED_DAEMON_EXTENSIONS.map(async id => {
+										const outcome = await bounded(
+											rpc
+												.request("extensions.raw", { id })
+												.then(() => "answered" as const)
+												.catch(err =>
+													isMissingDaemonExtensionError(err)
+														? ("missing" as const)
+														: ("answered" as const),
+												),
+										);
+										return { id, outcome };
+									}),
+								);
+								const answeredExtensions = extensionAnswers
+									.filter(entry => entry.outcome !== "missing")
+									.map(entry => entry.id);
 								stale = shouldRestartForMissingExtensions(answeredExtensions);
 							}
 						}
@@ -2629,7 +2671,14 @@ function AppInner(): ReactNode {
 			projectMetadata?: Record<string, unknown>;
 		}): Promise<string | null> => {
 			const client = rpcRef.current;
-			if (!client) return null;
+			if (!client) {
+				// No live client (boot gate stalled / socket dropped): the old
+				// silent `return null` made every click do nothing with no
+				// explanation. Surface it and recover through the boot path.
+				setError("连接已断开，正在重连…");
+				recoverFromDropRef.current();
+				return null;
+			}
 			// Swap to the chat surface up front: the create RPC can take
 			// seconds, so the user must not sit on the welcome/board view
 			// while it runs. Idempotent when already on chat (clears any
