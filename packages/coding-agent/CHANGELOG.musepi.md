@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **计算机使用支持 Windows 原生菜单**：`win.menu(path?)` 读取窗口附加的原生菜单层级，`win.menuSelect(path)` 按标签选择叶子命令。标签匹配精确大小写不敏感优先、再忽略尾部省略号，歧义、禁用项与子菜单一律报错；命令按菜单样式用 `WM_COMMAND` / `WM_MENUCOMMAND` 投递，投递前重新解析整条路径以防菜单变化，跨完整性（UIPI）目标明确拒绝。自绘菜单的应用明确报不可用，并指向 AX 的 `menuitem` 角色。
+  - EN: Computer use gains Windows native menus: `win.menu(path?)` reads the window's attached menu levels and `win.menuSelect(path)` chooses a leaf command by label. Matching is case-insensitive first and ellipsis-normalized second; ambiguous labels, disabled items and submenus are errors. Commands dispatch through `WM_COMMAND` / `WM_MENUCOMMAND` per the menu's style, the whole path is re-resolved immediately before dispatch, and a higher-integrity target is refused under UIPI. Apps that draw their own menus refuse explicitly and point at AX `menuitem` roles instead.
+
 - **应用清单补齐筛选与前台启动**：`desktop.apps` 新增 `runningOnly`（只看已有进程的应用），`desktop.launch` 新增 `activate`（切到前台并接管键盘；在 `computer.backgroundFallback: "refuse"` 下按策略拒绝，并提示改用后台启动）。
   - EN: The app catalogue gains `runningOnly` on `desktop.apps` (only apps with a live process) and `activate` on `desktop.launch` (bring the app forward and take the keyboard; the keep-in-background policy refuses it and names the background route).
 

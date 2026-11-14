@@ -77,6 +77,15 @@ const axNode: AxNode = {
 	height: 10,
 };
 
+interface FakeMenuItem {
+	title: string;
+	path: string[];
+	enabled: boolean;
+	checked: boolean;
+	has_submenu: boolean;
+	shortcut?: string;
+}
+
 interface FakeApplication {
 	id: string;
 	name: string;
@@ -89,6 +98,8 @@ class FakeNativeSession implements NativeDesktopSession {
 	readonly capabilities = capabilities;
 	listApplications?: (query?: { query?: string; runningOnly?: boolean }) => Promise<FakeApplication[]>;
 	openApplication?: (target: string, options?: { activate?: boolean }) => Promise<FakeApplication>;
+	menuItems?: (window: string, path: string[]) => Promise<FakeMenuItem[]>;
+	menuSelect?: (window: string, path: string[]) => Promise<void>;
 	clickCount = 0;
 	closeCount = 0;
 	sourceWidth = 64;
@@ -835,5 +846,71 @@ describe("application catalogue filters", () => {
 		)) as Extract<ComputerWorkerOutbound, { type: "result" }>;
 		expect(openResult.ok).toBe(true);
 		expect(openResult.ok ? openResult.payload.returnValue : null).toEqual({ path: "C:aNotion.lnk", pid: 9 });
+	});
+});
+
+describe("native window menus", () => {
+	it("lists a level and selects a command through the addon", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		const listed: string[][] = [];
+		const selected: string[][] = [];
+		session.menuItems = async (_window, path) => {
+			listed.push(path);
+			return [
+				{
+					title: "Open…",
+					path: [...path, "Open…"],
+					enabled: true,
+					checked: false,
+					has_submenu: false,
+					shortcut: "Ctrl+O",
+				},
+			];
+		};
+		session.menuSelect = async (_window, path) => {
+			selected.push(path);
+		};
+		new ComputerWorkerCore(transport, () => session);
+
+		const listedResult = await runWorker(
+			transport,
+			"menu-list",
+			"return await (await desktop.window('42')).menu(['File']);",
+		);
+		expect(listedResult.ok).toBe(true);
+		expect(listedResult.ok ? listedResult.payload.returnValue : null).toEqual([
+			{
+				title: "Open…",
+				path: ["File", "Open…"],
+				enabled: true,
+				checked: false,
+				has_submenu: false,
+				shortcut: "Ctrl+O",
+			},
+		]);
+		expect(listed).toEqual([["File"]]);
+
+		const selectResult = await runWorker(
+			transport,
+			"menu-select",
+			"return await (await desktop.window('42')).menuSelect(['File', 'Open']);",
+		);
+		expect(selectResult.ok).toBe(true);
+		expect(selected).toEqual([["File", "Open"]]);
+	});
+
+	it("refuses a menu command in a read-only run", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		session.menuSelect = async () => {};
+		new ComputerWorkerCore(transport, () => session);
+		const result = await runWorker(
+			transport,
+			"menu-readonly",
+			"return await (await desktop.window('42')).menuSelect(['File', 'Open']);",
+			true,
+		);
+		expect(result.ok).toBe(false);
 	});
 });

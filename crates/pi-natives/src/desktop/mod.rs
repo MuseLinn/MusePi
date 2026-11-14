@@ -9,6 +9,7 @@ mod lease;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+mod menus;
 mod types;
 #[cfg(any(target_os = "windows", test))]
 mod win32;
@@ -27,6 +28,7 @@ use backend::{Backend, DeliveryMode, MouseButton, PointerEvent};
 use error::{CoreResult, DesktopError};
 use frame::{FrameGeometry, apply_capture_caps, encode_png};
 use keys::{parse_keys, parse_modifiers};
+pub use menus::DesktopMenuItem;
 use napi::{Result, bindgen_prelude::Uint8Array};
 use napi_derive::napi;
 use parking_lot::Mutex;
@@ -41,6 +43,7 @@ enum Response {
 	Capabilities(DesktopCapabilities),
 	Displays(Vec<DesktopDisplay>),
 	Windows(Vec<DesktopWindow>),
+	MenuItems(Vec<DesktopMenuItem>),
 	Capture(DesktopCapture),
 	Unit,
 	Snapshot(AxSnapshot),
@@ -110,6 +113,16 @@ enum Request {
 	RaiseWindow {
 		id:    String,
 		reply: Reply,
+	},
+	MenuItems {
+		window: String,
+		path:   Vec<String>,
+		reply:  Reply,
+	},
+	MenuSelect {
+		window: String,
+		path:   Vec<String>,
+		reply:  Reply,
 	},
 	AxSnapshot {
 		target:  Target,
@@ -184,6 +197,8 @@ impl Request {
 			| Self::TypeText { reply, .. }
 			| Self::KeyChord { reply, .. }
 			| Self::RaiseWindow { reply, .. }
+			| Self::MenuItems { reply, .. }
+			| Self::MenuSelect { reply, .. }
 			| Self::AxSnapshot { reply, .. }
 			| Self::AxQuery { reply, .. }
 			| Self::AxElementAt { reply, .. }
@@ -301,6 +316,25 @@ impl Worker {
 			},
 			Request::ListDisplays { .. } => Ok(Response::Displays(self.backend()?.displays()?)),
 			Request::ListWindows { .. } => Ok(Response::Windows(self.backend()?.windows()?)),
+			Request::MenuItems { window, path, .. } => {
+				let backend = self.backend()?;
+				let target = backend
+					.windows()?
+					.into_iter()
+					.find(|candidate| candidate.id == *window)
+					.ok_or_else(|| DesktopError::window_not_found(format!("window {window} is gone")))?;
+				Ok(Response::MenuItems(backend.menu_items(&target, path)?))
+			},
+			Request::MenuSelect { window, path, .. } => {
+				let backend = self.backend()?;
+				let target = backend
+					.windows()?
+					.into_iter()
+					.find(|candidate| candidate.id == *window)
+					.ok_or_else(|| DesktopError::window_not_found(format!("window {window} is gone")))?;
+				backend.menu_select(&target, path)?;
+				Ok(Response::Unit)
+			},
 			Request::Capture { target, caps, .. } => {
 				let (image, mut geometry) = self.backend()?.capture(target, caps)?;
 				let source_width = image.width();
@@ -765,6 +799,34 @@ impl DesktopSession {
 		Ok(task::blocking("desktop.listWindows", (), move |_| {
 			match c.call(|reply| Request::ListWindows { reply })? {
 				Response::Windows(v) => Ok(v),
+				_ => Err(DesktopError::internal("unexpected response")),
+			}
+			.map_err(Into::into)
+		}))
+	}
+
+	#[napi]
+	pub fn menu_items(
+		&self,
+		window: String,
+		path: Vec<String>,
+	) -> Result<task::Promise<Vec<DesktopMenuItem>>> {
+		let c = Arc::clone(&self.core);
+		Ok(task::blocking("desktop.menuItems", (), move |_| {
+			match c.call(|reply| Request::MenuItems { window, path, reply })? {
+				Response::MenuItems(v) => Ok(v),
+				_ => Err(DesktopError::internal("unexpected response")),
+			}
+			.map_err(Into::into)
+		}))
+	}
+
+	#[napi]
+	pub fn menu_select(&self, window: String, path: Vec<String>) -> Result<task::Promise<()>> {
+		let c = Arc::clone(&self.core);
+		Ok(task::blocking("desktop.menuSelect", (), move |_| {
+			match c.call(|reply| Request::MenuSelect { window, path, reply })? {
+				Response::Unit => Ok(()),
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
 			.map_err(Into::into)

@@ -39,6 +39,16 @@ import type {
 	ToolReply,
 } from "./protocol";
 
+/** One immediate child of a window's native menu. */
+interface NativeMenuItem {
+	title: string;
+	path: string[];
+	enabled: boolean;
+	checked: boolean;
+	has_submenu: boolean;
+	shortcut?: string;
+}
+
 /** One application the native catalogue reports. */
 interface NativeApplication {
 	id: string;
@@ -55,6 +65,9 @@ export interface NativeDesktopSession {
 	listWindows(): Promise<DesktopWindow[]>;
 	/** Native application catalogue; absent on addons built before it. */
 	listApplications?(query?: { query?: string; runningOnly?: boolean }): Promise<NativeApplication[]>;
+	/** Native menu level; absent on addons built before menus. */
+	menuItems?(window: string, path: string[]): Promise<NativeMenuItem[]>;
+	menuSelect?(window: string, path: string[]): Promise<void>;
 	openApplication?(target: string, options?: { activate?: boolean }): Promise<NativeApplication>;
 	capture(
 		target: string,
@@ -600,6 +613,28 @@ class Win {
 			this.id,
 		);
 		await nativeCall(context.signal, () => this.#session.raiseWindow(this.id));
+	}
+
+	/** Immediate children of the window's native menu (top level when `path`
+	 *  is empty). Windows that draw their own menus refuse explicitly. */
+	async menu(path: string[] = []): Promise<NativeMenuItem[]> {
+		const { signal } = this.#getContext();
+		if (!this.#session.menuItems) {
+			throw new ToolError("This native addon has no menu support; read AX menuitem roles instead.");
+		}
+		return await nativeCall(signal, () => this.#session.menuItems!(this.id, path));
+	}
+
+	/** Choose one leaf command by label path. Matching is strict: exact
+	 *  case-insensitive first, ellipsis-normalized second, never a guess. */
+	async menuSelect(path: string[]): Promise<void> {
+		const context = this.#getContext();
+		guardRun(context, "menuSelect");
+		this.#emit("perform");
+		if (!this.#session.menuSelect) {
+			throw new ToolError("This native addon has no menu support; read AX menuitem roles instead.");
+		}
+		await nativeCall(context.signal, () => this.#session.menuSelect!(this.id, path));
 	}
 
 	async ax(options?: AxOptions): Promise<string> {

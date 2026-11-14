@@ -5,6 +5,7 @@ use super::{
 	error::{CoreResult, DesktopError},
 	frame::FrameGeometry,
 	keys::KeyName,
+	menus::DesktopMenuItem,
 	types::{CaptureCaps, DesktopCapabilities, DesktopDisplay, DesktopWindow, Target},
 };
 
@@ -124,6 +125,20 @@ pub trait Backend: Send {
 	fn capabilities(&mut self) -> DesktopCapabilities;
 	fn displays(&mut self) -> CoreResult<Vec<DesktopDisplay>>;
 	fn windows(&mut self) -> CoreResult<Vec<DesktopWindow>>;
+	/// Immediate children of one menu level, or the window's top level when
+	/// `path` is empty. Backends without a menu route refuse explicitly.
+	fn menu_items(
+		&mut self,
+		_window: &DesktopWindow,
+		_path: &[String],
+	) -> CoreResult<Vec<DesktopMenuItem>> {
+		Err(DesktopError::ax_unsupported())
+	}
+	/// Choose one leaf command by label path. Backends without a menu route
+	/// refuse explicitly.
+	fn menu_select(&mut self, _window: &DesktopWindow, _path: &[String]) -> CoreResult<()> {
+		Err(DesktopError::ax_unsupported())
+	}
 	fn capture(
 		&mut self,
 		target: &Target,

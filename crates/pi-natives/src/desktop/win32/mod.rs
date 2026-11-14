@@ -7,6 +7,7 @@ pub mod delivery;
 mod input;
 #[cfg(target_os = "windows")]
 mod lease;
+mod menus;
 #[cfg(target_os = "windows")]
 mod overlay;
 
@@ -108,6 +109,18 @@ impl Backend for Win32Backend {
 
 	fn windows(&mut self) -> CoreResult<Vec<DesktopWindow>> {
 		capture::windows()
+	}
+
+	fn menu_items(
+		&mut self,
+		window: &DesktopWindow,
+		path: &[String],
+	) -> CoreResult<Vec<super::menus::DesktopMenuItem>> {
+		menus::items(window, path)
+	}
+
+	fn menu_select(&mut self, window: &DesktopWindow, path: &[String]) -> CoreResult<()> {
+		menus::select(window, path)
 	}
 
 	fn capture(
