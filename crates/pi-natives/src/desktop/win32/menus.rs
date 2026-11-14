@@ -10,8 +10,15 @@ use std::{
 	ptr::{null_mut, with_exposed_provenance_mut},
 };
 
+use uiautomation::{
+	UIAutomation, UIElement, UITreeWalker,
+	patterns::{
+		UIExpandCollapsePattern, UIInvokePattern, UILegacyIAccessiblePattern, UITogglePattern,
+	},
+	types::{ControlType, ExpandCollapseState, Handle, ToggleState},
+};
 use windows_sys::Win32::{
-	Foundation::{CloseHandle, HANDLE},
+	Foundation::{CloseHandle, E_POINTER, HANDLE},
 	Security::{
 		GetSidSubAuthority, GetSidSubAuthorityCount, GetTokenInformation, TOKEN_MANDATORY_LABEL,
 		TOKEN_QUERY, TokenIntegrityLevel,
@@ -39,9 +46,19 @@ use super::super::{
 
 const MAX_ITEMS: usize = 512;
 const MAX_LABEL_UNITS: usize = 4096;
+const MAX_UIA_NODES: usize = 8192;
+const MAX_UIA_DEPTH: usize = 8;
+// MSAA state flags, also returned by UIA's LegacyIAccessible pattern.
+const STATE_UNAVAILABLE: u32 = 0x1;
+const STATE_CHECKED: u32 = 0x10;
+const STATE_HASPOPUP: u32 = 0x4000_0000;
 
 fn failed(message: impl Into<String>) -> DesktopError {
 	DesktopError::ax_failed(message)
+}
+
+fn uia_error(error: impl std::fmt::Display) -> DesktopError {
+	failed(format!("UI Automation menu query failed: {error}"))
 }
 
 fn unexposed_menu() -> DesktopError {
@@ -98,6 +115,17 @@ impl Target {
 		// SAFETY: IsWindowEnabled validates the handle.
 		if unsafe { IsWindowEnabled(self.hwnd) } == 0 {
 			return Err(failed("the menu target is disabled; target its active dialog instead"));
+		}
+		Ok(())
+	}
+
+	/// Re-checks that the window still has no attached menu, so a menu that
+	/// appeared mid-read cannot be commanded through the stale UIA route.
+	fn still_unattached(&self) -> CoreResult<()> {
+		self.check()?;
+		// SAFETY: GetMenu validates the window handle.
+		if !unsafe { GetMenu(self.hwnd) }.is_null() {
+			return Err(failed("the window gained a native menu; no command was dispatched"));
 		}
 		Ok(())
 	}
@@ -392,7 +420,20 @@ pub(crate) fn items(window: &DesktopWindow, path: &[String]) -> CoreResult<Vec<D
 	// SAFETY: target.check established a live top-level HWND.
 	let menu = unsafe { GetMenu(target.hwnd) };
 	if menu.is_null() {
-		return Err(unexposed_menu());
+		let mut session = UiaMenus::new(&target)?;
+		let parent = session.resolve(path)?;
+		if let Some(item) = &parent.item {
+			require_enabled(item)?;
+			if !item.has_submenu {
+				return Err(failed("the requested menu path is a leaf command, not a submenu"));
+			}
+		}
+		let level = session.level(&parent.element, &parent.path)?;
+		if level.items.is_empty() {
+			return Err(unexposed_menu());
+		}
+		target.check()?;
+		return Ok(level.items);
 	}
 	let level = if path.is_empty() {
 		native_level(menu, &[])?
@@ -414,7 +455,7 @@ pub(crate) fn select(window: &DesktopWindow, path: &[String]) -> CoreResult<()> 
 	// SAFETY: target.check established a live top-level HWND.
 	let menu = unsafe { GetMenu(target.hwnd) };
 	if menu.is_null() {
-		return Err(unexposed_menu());
+		return UiaMenus::new(&target)?.select(path);
 	}
 	native_select(&target, menu, path)
 }
@@ -439,5 +480,299 @@ mod tests {
 		assert_eq!(native_message(7, 3, 0).unwrap(), (WM_COMMAND, 7));
 		assert_eq!(native_message(0x1_0000, 3, 0).is_err(), true);
 		assert_eq!(native_message(7, 3, MNS_NOTIFYBYPOS).unwrap(), (WM_MENUCOMMAND, 3));
+	}
+}
+
+struct UiaLevel {
+	items:    Vec<DesktopMenuItem>,
+	elements: Vec<UIElement>,
+}
+
+struct UiaNode {
+	element: UIElement,
+	item:    Option<DesktopMenuItem>,
+	path:    Vec<String>,
+}
+
+/// Menu levels read and commanded through UI Automation, for windows that draw
+/// their own menus (most modern apps). COM is initialized by
+/// `UIAutomation::new` on this thread and released when the session drops.
+struct UiaMenus<'a> {
+	target:     &'a Target,
+	automation: UIAutomation,
+	walker:     UITreeWalker,
+	remaining:  usize,
+}
+
+impl<'a> UiaMenus<'a> {
+	fn new(target: &'a Target) -> CoreResult<Self> {
+		let automation = UIAutomation::new().map_err(uia_error)?;
+		let walker = automation.get_control_view_walker().map_err(uia_error)?;
+		Ok(Self { target, automation, walker, remaining: MAX_UIA_NODES })
+	}
+
+	/// Refuses an element that the provider places in another window: a menu
+	/// command must belong to the exact target, not a sibling or popup host.
+	fn owns(&self, element: &UIElement) -> CoreResult<()> {
+		self.target.check()?;
+		// The traversal starts from the target's own root element, so that is the
+		// ownership anchor. A provider that reports a native window handle must
+		// still root to the target; Chromium and other HWND-less providers report
+		// none, and rejecting those would refuse every menu of a browser window.
+		if let Ok(handle) = element.get_native_window_handle() {
+			let raw: isize = handle.into();
+			if raw != 0 {
+				let hwnd: windows_sys::Win32::Foundation::HWND =
+					with_exposed_provenance_mut(raw as usize);
+				let owned = hwnd == self.target.hwnd || root(hwnd) == self.target.hwnd;
+				if !owned {
+					return Err(failed("cannot establish exact HWND ownership of the UIA menu element"));
+				}
+			}
+		}
+		Ok(())
+	}
+
+	fn children(&mut self, element: &UIElement) -> CoreResult<Vec<UIElement>> {
+		let mut result = Vec::new();
+		let mut next = self.walker.get_first_child(element);
+		loop {
+			let child = match next {
+				Ok(child) => child,
+				// UIA represents the end of a walker sequence with a null COM
+				// interface. Depending on the crate version that surfaces as a
+				// failed HRESULT or as this crate's ERR_NONE (0) with the last OS
+				// message; both mean "no more siblings".
+				Err(error) if error.code() == E_POINTER || error.code() == 0 => break,
+				Err(error) => return Err(uia_error(error)),
+			};
+			if self.remaining == 0 || result.len() == MAX_ITEMS {
+				return Err(failed("UIA menu discovery exceeded its bounded node limit"));
+			}
+			self.remaining -= 1;
+			next = self.walker.get_next_sibling(&child);
+			result.push(child);
+		}
+		Ok(result)
+	}
+
+	fn menu_bar(&mut self) -> CoreResult<UIElement> {
+		let handle = Handle::from(self.target.hwnd as isize);
+		let root_element = self
+			.automation
+			.element_from_handle(handle)
+			.map_err(uia_error)?;
+		self.owns(&root_element)?;
+		let mut pending = vec![(root_element, 0)];
+		let mut found = None;
+		while let Some((element, depth)) = pending.pop() {
+			for child in self.children(&element)? {
+				match child.get_control_type().map_err(uia_error)? {
+					ControlType::MenuBar => {
+						self.owns(&child)?;
+						if found.is_some() {
+							return Err(failed(
+								"the exact window exposes multiple UIA menu bars; refusing ambiguity",
+							));
+						}
+						found = Some(child);
+					},
+					ControlType::Pane | ControlType::Group | ControlType::Custom => {
+						if depth == MAX_UIA_DEPTH {
+							return Err(failed("UIA menu-bar discovery exceeded its bounded depth limit"));
+						}
+						self.owns(&child)?;
+						pending.push((child, depth + 1));
+					},
+					_ => {},
+				}
+			}
+		}
+		found.ok_or_else(unexposed_menu)
+	}
+
+	/// Only menu containers and their immediate menu items form a path. In
+	/// particular, matching a document button or arbitrary descendant's text
+	/// cannot substitute for traversing the menu bar.
+	fn menu_children(
+		&mut self,
+		parent: &UIElement,
+		depth: usize,
+		output: &mut Vec<UIElement>,
+	) -> CoreResult<()> {
+		if depth > MAX_UIA_DEPTH {
+			return Err(failed("UIA submenu nesting exceeds its bounded depth limit"));
+		}
+		self.owns(parent)?;
+		for child in self.children(parent)? {
+			match child.get_control_type().map_err(uia_error)? {
+				ControlType::MenuItem => {
+					self.owns(&child)?;
+					if output.len() == MAX_ITEMS {
+						return Err(failed("UIA menu exceeds its bounded item limit"));
+					}
+					output.push(child);
+				},
+				ControlType::Menu => self.menu_children(&child, depth + 1, output)?,
+				_ => {},
+			}
+		}
+		Ok(())
+	}
+
+	fn describe(&mut self, element: &UIElement, path: &[String]) -> CoreResult<DesktopMenuItem> {
+		self.owns(element)?;
+		let title = element.get_name().map_err(uia_error)?;
+		if title.len() > MAX_LABEL_UNITS * 4 {
+			return Err(failed("UIA menu label exceeds the bounded text limit"));
+		}
+		let legacy = element.get_pattern::<UILegacyIAccessiblePattern>().ok();
+		let state = legacy
+			.as_ref()
+			.map(|pattern| pattern.get_state().map_err(uia_error))
+			.transpose()?
+			.unwrap_or(0);
+		let expandable = element
+			.get_pattern::<UIExpandCollapsePattern>()
+			.ok()
+			.map(|pattern| pattern.get_state().map_err(uia_error))
+			.transpose()?
+			.is_some_and(|state| state != ExpandCollapseState::LeafNode);
+		let checked = if let Ok(pattern) = element.get_pattern::<UITogglePattern>() {
+			pattern.get_toggle_state().map_err(uia_error)? == ToggleState::On
+		} else {
+			state & STATE_CHECKED != 0
+		};
+		let mut has_submenu = expandable || state & STATE_HASPOPUP != 0;
+		if !has_submenu {
+			for child in self.children(element)? {
+				if matches!(
+					child.get_control_type().map_err(uia_error)?,
+					ControlType::Menu | ControlType::MenuItem
+				) {
+					has_submenu = true;
+					break;
+				}
+			}
+		}
+		let shortcut = element.get_accelerator_key().map_err(uia_error)?;
+		let mut item_path = path.to_vec();
+		item_path.push(title.clone());
+		Ok(DesktopMenuItem {
+			title,
+			path: item_path,
+			enabled: element.is_enabled().map_err(uia_error)? && state & STATE_UNAVAILABLE == 0,
+			checked,
+			has_submenu,
+			shortcut: (!shortcut.trim().is_empty()).then_some(shortcut),
+		})
+	}
+
+	fn level(&mut self, parent: &UIElement, path: &[String]) -> CoreResult<UiaLevel> {
+		let mut elements = Vec::new();
+		self.menu_children(parent, 0, &mut elements)?;
+		let mut items = Vec::with_capacity(elements.len());
+		for element in &elements {
+			items.push(self.describe(element, path)?);
+		}
+		Ok(UiaLevel { items, elements })
+	}
+
+	fn resolve(&mut self, path: &[String]) -> CoreResult<UiaNode> {
+		let mut node = UiaNode { element: self.menu_bar()?, item: None, path: Vec::new() };
+		for (depth, label) in path.iter().enumerate() {
+			let mut level = self.level(&node.element, &node.path)?;
+			if level.items.is_empty() {
+				return Err(unexposed_menu());
+			}
+			let index = match_index(&level.items, label)?;
+			let item = level.items.swap_remove(index);
+			require_enabled(&item)?;
+			if depth + 1 < path.len() && !item.has_submenu {
+				return Err(failed(format!("menu item '{}' has no submenu", item.title)));
+			}
+			node = UiaNode {
+				element: level.elements.swap_remove(index),
+				path:    item.path.clone(),
+				item:    Some(item),
+			};
+		}
+		Ok(node)
+	}
+
+	fn select(&mut self, path: &[String]) -> CoreResult<()> {
+		let original = self.resolve(path)?;
+		let original_item = original
+			.item
+			.as_ref()
+			.ok_or_else(|| failed("a menu command path is required"))?;
+		require_command(original_item)?;
+		let current = self.resolve(path)?;
+		let item = current
+			.item
+			.as_ref()
+			.ok_or_else(|| failed("a menu command path is required"))?;
+		require_command(item)?;
+		if original.path != current.path
+			|| !self
+				.automation
+				.compare_elements(&original.element, &current.element)
+				.map_err(uia_error)?
+		{
+			return Err(failed("UIA menu changed; no command was dispatched"));
+		}
+		let command = if let Ok(pattern) = current.element.get_pattern::<UIInvokePattern>() {
+			UiaCommand::Invoke(pattern)
+		} else if let Ok(pattern) = current.element.get_pattern::<UILegacyIAccessiblePattern>() {
+			if pattern
+				.get_default_action()
+				.map_err(uia_error)?
+				.trim()
+				.is_empty()
+			{
+				return Err(failed("UIA menu command has no invokable default action"));
+			}
+			UiaCommand::Legacy(pattern)
+		} else if let Ok(pattern) = current.element.get_pattern::<UITogglePattern>() {
+			UiaCommand::Toggle(pattern)
+		} else {
+			return Err(failed("UIA menu command has no supported command pattern"));
+		};
+		// Repeat ownership, menu attachment, leaf and enabled checks after
+		// querying patterns. Never use SelectionItem: it may only highlight.
+		let fresh = self.describe(&current.element, &current.path[..current.path.len() - 1])?;
+		require_command(&fresh)?;
+		if fresh.path != current.path {
+			return Err(failed("UIA menu command changed; no command was dispatched"));
+		}
+		self.owns(&current.element)?;
+		self.target.still_unattached()?;
+		if let Some(reason) = uipi_block(self.target.hwnd) {
+			return Err(DesktopError::permission_denied(format!(
+				"cannot invoke a UIA menu command: {reason}"
+			)));
+		}
+		command.run().map_err(|error| {
+			failed(format!(
+				"UIA menu command failed and may already have taken effect; do not replay \
+				 automatically: {error}"
+			))
+		})
+	}
+}
+
+enum UiaCommand {
+	Invoke(UIInvokePattern),
+	Legacy(UILegacyIAccessiblePattern),
+	Toggle(UITogglePattern),
+}
+
+impl UiaCommand {
+	fn run(self) -> Result<(), uiautomation::Error> {
+		match self {
+			Self::Invoke(pattern) => pattern.invoke(),
+			Self::Legacy(pattern) => pattern.do_default_action(),
+			Self::Toggle(pattern) => pattern.toggle(),
+		}
 	}
 }
