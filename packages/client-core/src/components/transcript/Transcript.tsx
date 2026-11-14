@@ -41,6 +41,7 @@ import {
 	createShouldAdjustForItemSizeChange,
 	initialFollowing,
 	isAtBottom,
+	isFoldPinning,
 	reconcileFollowingForContentAnchor,
 	resolveFollowingAfterScroll,
 	shouldShowBackToBottom,
@@ -1857,7 +1858,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// them).
 	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = createShouldAdjustForItemSizeChange({
 		isFollowing: () => followingRef.current,
-		isSuppressed: () => Date.now() < sizeAdjustSuppressUntilRef.current,
+		isSuppressed: () => Date.now() < sizeAdjustSuppressUntilRef.current || isFoldPinning(scrollerRef.current),
 		getScrollTop: () => scrollerRef.current?.scrollTop ?? 0,
 	});
 	// First measurement must land inside the mount commit, not in the next

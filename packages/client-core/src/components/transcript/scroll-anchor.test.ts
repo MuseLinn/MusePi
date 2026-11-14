@@ -4,8 +4,12 @@ import {
 	BOTTOM_ANCHOR_EPSILON_PX,
 	createShouldAdjustForItemSizeChange,
 	distanceToBottom,
+	FOLD_PIN_SUPPRESS_MS,
+	foldCloseNeedsPin,
 	initialFollowing,
 	isAtBottom,
+	isFoldPinning,
+	markFoldPinned,
 	reconcileFollowingForContentAnchor,
 	resolveFollowingAfterScroll,
 	shouldAdjustVirtualizerForItemSizeChange,
@@ -262,5 +266,37 @@ describe("createShouldAdjustForItemSizeChange", () => {
 		suppressed.current = false;
 		scrollTop = 300;
 		expect(gate({ end: 400 })).toBe(false);
+	});
+});
+
+describe("foldCloseNeedsPin", () => {
+	test("pins only when the closing fold sits above the visible top", () => {
+		expect(foldCloseNeedsPin(-120, 0)).toBe(true);
+		expect(foldCloseNeedsPin(-1, 0)).toBe(true);
+		expect(foldCloseNeedsPin(0, 0)).toBe(false);
+		expect(foldCloseNeedsPin(40, 0)).toBe(false);
+	});
+
+	test("compares against the scroller top, not the viewport", () => {
+		// Sticky chrome occupies the top 64px: a fold ending above it is already
+		// out of sight even though its viewport coordinate is positive.
+		expect(foldCloseNeedsPin(20, 64)).toBe(true);
+		expect(foldCloseNeedsPin(80, 64)).toBe(false);
+	});
+});
+
+describe("fold pin suppression", () => {
+	const scroller = () => ({ dataset: {} }) as unknown as HTMLElement;
+
+	test("suppresses virtualizer compensation briefly after a pin", () => {
+		const el = scroller();
+		markFoldPinned(el, 1_000);
+		expect(isFoldPinning(el, 1_100)).toBe(true);
+		expect(isFoldPinning(el, 1_000 + FOLD_PIN_SUPPRESS_MS)).toBe(false);
+	});
+
+	test("is inert without a scroller or a recorded pin", () => {
+		expect(isFoldPinning(null, 1_000)).toBe(false);
+		expect(isFoldPinning(scroller(), 1_000)).toBe(false);
 	});
 });

@@ -167,6 +167,34 @@ export function initialFollowing(): boolean {
 }
 
 /**
+ * Close-fold pinning: a fold that ends above the scroller's visible top must
+ * collapse instantly, because animating it drags every row under the reader
+ * by the fold's height. Comparing against the SCROLLER top (not the viewport)
+ * matters: the transcript can sit under sticky chrome, and a fold inside that
+ * band is already out of sight.
+ */
+export function foldCloseNeedsPin(slotTop: number, scrollerTop: number): boolean {
+	return slotTop < scrollerTop;
+}
+
+/** How long the virtualizer must not add its own compensation after a fold pin.
+ *  The pin already moved scrollTop; a second adjustment for the same collapse
+ *  would shift the reading position twice. */
+export const FOLD_PIN_SUPPRESS_MS = 160;
+
+/** Marks the scroller as fold-pinned for {@link isFoldPinning}. The transcript
+ *  and the fold header are separate components without a shared parent state,
+ *  so the scroller element carries the signal. */
+export function markFoldPinned(scroller: HTMLElement, now: number = Date.now()): void {
+	scroller.dataset.foldPin = String(now);
+}
+
+export function isFoldPinning(scroller: HTMLElement | null | undefined, now: number = Date.now()): boolean {
+	const at = Number(scroller?.dataset.foldPin ?? 0);
+	return Number.isFinite(at) && at > 0 && now - at < FOLD_PIN_SUPPRESS_MS;
+}
+
+/**
  * Virtualizer measure-compensation gate (ZCode `timelineScrollAnchor`
  * parity). Decides whether a measured size change of ONE item may be
  * compensated by writing the height delta back into scrollTop.
