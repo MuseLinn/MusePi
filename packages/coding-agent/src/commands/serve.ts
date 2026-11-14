@@ -24,6 +24,9 @@ export default class Serve extends Command {
 			description:
 				"Enable remote connections: bind the WS to all interfaces and require this bearer token (Authorization: Bearer, or ?token= for browsers). NEVER share this token.",
 		}),
+		"parent-pid": Flags.integer({
+			description: "Exit once this pid is gone and no work is running (the desktop shell's lease).",
+		}),
 	};
 
 	async run(): Promise<void> {
@@ -40,7 +43,21 @@ export default class Serve extends Command {
 		if (remoteToken !== undefined && remoteToken.length < 16) {
 			throw new Error("--remote-token must be at least 16 characters");
 		}
-		const { socketPath, wsPort: boundWsPort, webUrl, close } = await startDaemon({ wsPort, webPort, remoteToken });
+		const parentPid = flags["parent-pid"];
+		if (parentPid !== undefined && parentPid <= 0) {
+			throw new Error(`Invalid --parent-pid: ${parentPid}`);
+		}
+		const {
+			socketPath,
+			wsPort: boundWsPort,
+			webUrl,
+			close,
+		} = await startDaemon({
+			wsPort,
+			webPort,
+			remoteToken,
+			parentPid,
+		});
 		process.stdout.write(`musepi daemon listening on ${socketPath}\n`);
 		if (boundWsPort) {
 			process.stdout.write(

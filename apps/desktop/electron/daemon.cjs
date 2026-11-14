@@ -199,7 +199,13 @@ function daemonCommand(port) {
 	for (const candidate of candidates) {
 		if (typeof candidate === "object") {
 			// Dev checkout — the cli.ts existence was already verified in the scan.
-			return { program: bunExecutable(), args: [candidate.bunCli, "serve", "--port", String(port), ...webArgs] };
+			// `--parent-pid` is the daemon's lease: it exits by itself once this
+			// GUI process is gone and nothing is running, which covers the exits
+			// that never reach before-quit (forced kill, crashed shell).
+			return {
+				program: bunExecutable(),
+				args: [candidate.bunCli, "serve", "--port", String(port), "--parent-pid", String(process.pid), ...webArgs],
+			};
 		}
 		if (candidate.length === 0 || !fs.existsSync(candidate)) continue;
 		// A bun package shim on Windows is a tiny launcher .exe paired with a
@@ -211,7 +217,10 @@ function daemonCommand(port) {
 			const bunxScript = candidate.replace(/\.exe$/i, ".bunx");
 			if (!fs.existsSync(bunxScript)) continue;
 		}
-		return { program: candidate, args: ["serve", "--port", String(port), ...webArgs] };
+		return {
+			program: candidate,
+			args: ["serve", "--port", String(port), "--parent-pid", String(process.pid), ...webArgs],
+		};
 	}
 	throw new Error("neither `musepi` nor the repo checkout is available");
 }

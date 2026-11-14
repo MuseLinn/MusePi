@@ -4,6 +4,21 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **会话头像每回合只在回合顶出现一次**：头像锚点恒为该回合的第一行（折叠时也是折叠头），不再随折叠开关在回合底部与顶部之间跳动；滚动时由吸顶条接管，判定改为「拥有头像的那一行是否真的在画」，被折成零高度的行也会正确回退到吸顶，不再出现个别回合完全没有头像。吸顶条改用与卡片同色的渐隐遮罩，提示条改为实心底，正文不再透过玻璃与头像叠在一起。
+  - EN: One avatar per turn, always at the turn's head. The orb anchor is the turn's first row (the fold header in both fold states) instead of jumping between the reply and the header, and the pinned copy takes over when the owning row is no longer painting — including rows folded to zero height, which used to leave some turns with no avatar at all. The pinned row fades content out with the card's own colour and the prompt pill is opaque, so body text no longer reads through it.
+
+- **深色主题文字可读性下限**：15 个深色预设的次要文字与辅助文字加上亮度下限（`--fg-muted` 0.70、`--fg-faint` 0.60），色相与彩度仍是预设本身；此前 dracula / ayu / solarized 等的说明行与时间戳只有约 1.8:1，斜杠菜单的副标题基本看不清。
+  - EN: Dark presets get a readability floor for secondary and faint text (`--fg-muted` 0.70, `--fg-faint` 0.60) while keeping each preset's hue and chroma. Dracula, ayu and solarized shipped faint text at roughly 1.8:1, which made the slash menu's descriptions and every timestamp nearly unreadable.
+
+- **卡片与空会话改为纯色**：侧栏、会话、页卡等一级卡片不再叠一层对角高光渐变，空会话面板的两个强调色径向渐变也去掉了，只剩描边、内高光与投影承担层次；装饰性渐变换成插件自由发挥。
+  - EN: Cards and the empty-session pane are flat colour now: primary cards drop the diagonal specular sheen and the empty pane drops its two accent radial washes, leaving the hairline, rim and lift to carry elevation. Decorative gradients belong to plugins.
+
+- **侧栏分隔柄落在两栏之间并可抓握**：分隔柄改用 `--gui-rail-w + --gui-side-w + gutter` 定位在侧栏卡片与会话卡片之间的缝隙中心（此前按状态宽度计算，落在侧栏卡片内侧约 19px），悬停与拖动时显示竖向握柄；侧栏与会话的双层外边距合成一层，两卡间距从 16px 收到 8px。
+  - EN: The sidebar splitter sits on the seam between the two cards and shows a grip on hover or drag. It is positioned from `--gui-rail-w + --gui-side-w + gutter` instead of the state width (which landed it ~19px inside the sidebar card), and the doubled outer margin collapses to one gutter, taking the gap between the cards from 16px to 8px.
+
+- **daemon 随宿主退出（父进程租约）**：桌面端派生的 daemon 带上宿主 pid，宿主消失且没有运行中的回合、排队消息、后台任务或定时任务时自行退出；此前只有正常退出的 `before-quit` 会清理，强制结束宿主会留下一个占着端口的守护进程。终端手动 `musepi serve` 不带租约，不受影响。
+  - EN: A desktop-spawned daemon now carries its host pid and exits by itself once the host is gone and nothing is running (no live turn, queued message, background job or armed schedule). Only a graceful `before-quit` used to clean up, so a killed host left a daemon holding the port. A terminal `musepi serve` passes no lease and is unaffected.
+
 - **折叠的回合保留产出图片与看板卡**：消息自动折叠或工具汇总收起一轮时，工具产出的图片（含 `generate_image` 存在 `details.images` 里的成图）、`widget` / `board` / `schedule_task` 卡片所在行不再随工作段消失；折叠关闭态与回答行都只收起卡片外壳，不收起图片本身，卡片里的图片也统一提到卡片外渲染（`read` 图片与生成图同一条路径）。
   - EN: A folded turn keeps the pictures it produced and its board cards. Auto-fold or the tool-call summary no longer swallows the row that holds images (including `generate_image`'s bytes in `details.images`) or a `widget` / `board` / `schedule_task` card; the closed turn and its reply fold the card chrome but not the picture, and pictures render outside the card body on one path for read and generated images alike.
 

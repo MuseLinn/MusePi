@@ -623,7 +623,14 @@
  *    orthogonal to the accent (`data-accent`) — openchamber/opencode-style
  *    separate light/dark theme picks. "default" = the base scheme palette.
  *    Selectors carry the scheme so a light preset can never leak into the
- *    dark scheme (and vice versa). ── */
+ *    dark scheme (and vice versa).
+ *
+ *    Dark presets carry a comment/meta grey lifted to a readability floor:
+ *    below `--fg-muted: 0.70` / `--fg-faint: 0.60` those tokens fall under
+ *    ~3:1 on their own background — the slash menu's description lines and
+ *    every timestamp became unreadable in dracula/ayu/solarized. Hue and
+ *    chroma stay the preset's; only the lightness floor is shared. Light
+ *    presets are left as ported (their faint grey sits on a bright ground). ── */
 
 /* Light presets */
 [data-theme="light"][data-ui-theme="warm"] {
@@ -658,7 +665,7 @@
 	--bg-overlay: oklch(0.24 0.021 265);
 	--fg: oklch(0.92 0.014 265);
 	--fg-muted: oklch(0.7 0.014 265);
-	--fg-faint: oklch(0.53 0.013 265);
+	--fg-faint: oklch(0.6 0.013 265);
 	--border: oklch(1 0 0 / 10%);
 	--border-strong: oklch(1 0 0 / 14%);
 }
@@ -670,7 +677,7 @@
 	--bg-overlay: oklch(0.232 0.007 90);
 	--fg: oklch(0.93 0.006 90);
 	--fg-muted: oklch(0.72 0.008 90);
-	--fg-faint: oklch(0.55 0.008 90);
+	--fg-faint: oklch(0.6 0.008 90);
 	--border: oklch(1 0 0 / 9%);
 	--border-strong: oklch(1 0 0 / 13%);
 }
@@ -696,8 +703,8 @@
 	--bg-inset: oklch(0.1658 0.004 48.5);
 	--bg-overlay: oklch(0.1238 0.0023 17.5);
 	--fg: oklch(0.8236 0.0158 90.3);
-	--fg-muted: oklch(0.6372 0.0154 88.7);
-	--fg-faint: oklch(0.4215 0.0091 80.7);
+	--fg-muted: oklch(0.7 0.0154 88.7);
+	--fg-faint: oklch(0.6 0.0091 80.7);
 	--border: oklch(0.2572 0.0015 17.3);
 	--border-strong: oklch(0.4251 0.0042 67.7);
 }
@@ -720,8 +727,8 @@
 	--bg-inset: oklch(0.229 0.027 284.1);
 	--bg-overlay: oklch(0.3507 0.0259 285);
 	--fg: oklch(0.8787 0.0426 272.3);
-	--fg-muted: oklch(0.6948 0.0315 272.9);
-	--fg-faint: oklch(0.4828 0.0307 278.1);
+	--fg-muted: oklch(0.7 0.0315 272.9);
+	--fg-faint: oklch(0.6 0.0307 278.1);
 	--border: oklch(0.331 0.0421 289.6);
 	--border-strong: oklch(0.3503 0.0534 287.7);
 }
@@ -744,8 +751,8 @@
 	--bg-inset: oklch(0.2308 0.0185 266.2);
 	--bg-overlay: oklch(0.3674 0.0201 266);
 	--fg: oklch(0.933 0.0104 261.8);
-	--fg-muted: oklch(0.6056 0.0195 264.4);
-	--fg-faint: oklch(0.4422 0.0207 267.6);
+	--fg-muted: oklch(0.7 0.0195 264.4);
+	--fg-faint: oklch(0.6 0.0207 267.6);
 	--border: oklch(0.3602 0.0219 267.4);
 	--border-strong: oklch(0.3683 0.0308 267.4);
 }
@@ -768,8 +775,8 @@
 	--bg-inset: oklch(0.1714 0.0167 278.9);
 	--bg-overlay: oklch(0.2958 0.0202 277);
 	--fg: oklch(0.8456 0.0611 274.8);
-	--fg-muted: oklch(0.6593 0.0529 274.8);
-	--fg-faint: oklch(0.4364 0.0366 276.7);
+	--fg-muted: oklch(0.7 0.0529 274.8);
+	--fg-faint: oklch(0.6 0.0366 276.7);
 	--border: oklch(0.3123 0.0359 279.7);
 	--border-strong: oklch(0.3012 0.0418 277.9);
 }
@@ -793,7 +800,7 @@
 	--bg-overlay: oklch(0.23 0.0038 106.7);
 	--fg: oklch(0.9791 0.0041 91.4);
 	--fg-muted: oklch(0.7205 0.0071 106.6);
-	--fg-faint: oklch(0.509 0.0062 106.6);
+	--fg-faint: oklch(0.6 0.0062 106.6);
 	--border: oklch(1 0 0 / 0.08);
 	--border-strong: oklch(1 0 0 / 0.14);
 }
@@ -816,8 +823,8 @@
 	--bg-inset: oklch(0.1862 0.0122 292.8);
 	--bg-overlay: oklch(0.3170 0.0124 292.2);
 	--fg: oklch(0.9444 0.0029 308.4);
-	--fg-muted: oklch(0.6137 0.0097 17.4);
-	--fg-faint: oklch(0.4187 0.0082 340.7);
+	--fg-muted: oklch(0.7 0.0097 17.4);
+	--fg-faint: oklch(0.6 0.0082 340.7);
 	--border: oklch(0.2872 0.0218 288.8);
 	--border-strong: oklch(0.3916 0.0424 295.4);
 }
@@ -840,8 +847,8 @@
 	--bg-inset: oklch(0.1798 0.0104 248.4);
 	--bg-overlay: oklch(0.3112 0.0106 254.0);
 	--fg: oklch(0.8870 0.0093 258.3);
-	--fg-muted: oklch(0.5899 0.0148 251.6);
-	--fg-faint: oklch(0.4025 0.0142 252.2);
+	--fg-muted: oklch(0.7 0.0148 251.6);
+	--fg-faint: oklch(0.6 0.0142 252.2);
 	--border: oklch(0.2917 0.0084 255.6);
 	--border-strong: oklch(0.3525 0.0264 255.1);
 }
@@ -864,8 +871,8 @@
 	--bg-inset: oklch(0.1901 0.0183 279.6);
 	--bg-overlay: oklch(0.3198 0.0160 280.4);
 	--fg: oklch(0.9775 0.0079 106.5);
-	--fg-muted: oklch(0.6022 0.0455 281.9);
-	--fg-faint: oklch(0.4153 0.0334 280.4);
+	--fg-muted: oklch(0.7 0.0455 281.9);
+	--fg-faint: oklch(0.6 0.0334 280.4);
 	--border: oklch(0.2892 0.0219 281.2);
 	--border-strong: oklch(0.3231 0.0321 279.5);
 }
@@ -888,8 +895,8 @@
 	--bg-inset: oklch(0.2603 0.0000 89.9);
 	--bg-overlay: oklch(0.3746 0.0085 97.6);
 	--fg: oklch(0.8941 0.0566 89.2);
-	--fg-muted: oklch(0.6226 0.0287 76.6);
-	--fg-faint: oklch(0.4563 0.0149 75.2);
+	--fg-muted: oklch(0.7 0.0287 76.6);
+	--fg-faint: oklch(0.6 0.0149 75.2);
 	--border: oklch(0.3724 0.0107 56.0);
 	--border-strong: oklch(0.4441 0.0154 63.6);
 }
@@ -912,8 +919,8 @@
 	--bg-inset: oklch(0.2301 0.0154 285.1);
 	--bg-overlay: oklch(0.2122 0.0137 285.2);
 	--fg: oklch(0.8755 0.0391 99.1);
-	--fg-muted: oklch(0.6349 0.0088 106.6);
-	--fg-faint: oklch(0.4499 0.0016 286.3);
+	--fg-muted: oklch(0.7 0.0088 106.6);
+	--fg-faint: oklch(0.6 0.0016 286.3);
 	--border: oklch(0.3279 0.0282 284.7);
 	--border-strong: oklch(0.4558 0.0405 284.7);
 }
@@ -936,8 +943,8 @@
 	--bg-inset: oklch(0.2354 0.0148 113.3);
 	--bg-overlay: oklch(0.3660 0.0084 106.8);
 	--fg: oklch(0.9775 0.0079 106.5);
-	--fg-muted: oklch(0.6623 0.0044 106.5);
-	--fg-faint: oklch(0.4722 0.0080 115.9);
+	--fg-muted: oklch(0.7 0.0044 106.5);
+	--fg-faint: oklch(0.6 0.0080 115.9);
 	--border: oklch(0.3238 0.0221 111.2);
 	--border-strong: oklch(0.3433 0.0218 111.1);
 }
@@ -960,8 +967,8 @@
 	--bg-inset: oklch(0.2043 0.0360 214.3);
 	--bg-overlay: oklch(0.3261 0.0317 208.6);
 	--fg: oklch(0.6979 0.0159 196.8);
-	--fg-muted: oklch(0.5550 0.0063 211.0);
-	--fg-faint: oklch(0.3924 0.0225 213.7);
+	--fg-muted: oklch(0.7 0.0063 211.0);
+	--fg-faint: oklch(0.6 0.0225 213.7);
 	--border: oklch(0.3319 0.0323 218.3);
 	--border-strong: oklch(0.3468 0.0355 222.0);
 }
@@ -984,8 +991,8 @@
 	--bg-inset: oklch(0.1867 0.0000 89.9);
 	--bg-overlay: oklch(0.3171 0.0000 89.9);
 	--fg: oklch(0.9242 0.0033 17.2);
-	--fg-muted: oklch(0.6133 0.0000 89.9);
-	--fg-faint: oklch(0.4165 0.0000 89.9);
+	--fg-muted: oklch(0.7 0.0000 89.9);
+	--fg-faint: oklch(0.6 0.0000 89.9);
 	--border: oklch(0.3339 0.0014 17.2);
 	--border-strong: oklch(0.2435 0.0000 89.9);
 }

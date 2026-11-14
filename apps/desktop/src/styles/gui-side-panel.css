@@ -60,8 +60,11 @@
 	 * so its top/bottom sit 48px + 16px in. Mirroring that two-layer gutter
 	 * makes both cards report the same top/bottom/height. */
 	height: calc(100% - var(--gui-header-h) - var(--gui-card-gutter) * 4);
-	margin: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2) var(--gui-card-gutter)
-		calc(var(--gui-card-gutter) * 2);
+	/* One gutter between the sidebar card and the chat card: both sides used
+	 * to contribute a full --gui-card-gutter, so the seam read as wasted
+	 * width. The chat surface keeps its half, the pane drops its own. */
+	margin: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2) 0 calc(var(--gui-card-gutter) * 2)
+		var(--gui-card-gutter);
 	opacity: 1;
 	visibility: visible;
 	pointer-events: auto;

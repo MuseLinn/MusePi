@@ -1790,7 +1790,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		for (const unit of turnUnits) {
 			const fold = foldByStart.get(unit.startIdx);
 			if (fold !== undefined) {
-				map.set(unit.startIdx, foldOpenOf(fold) ? fold.headerIdx : fold.finalIdx);
+				// Always the fold header: it is the turn's head row in BOTH fold
+				// states. Anchoring the reply while the fold was closed put the
+				// avatar at the turn's bottom and made the pinned avatar appear
+				// for some turns and not others.
+				map.set(unit.startIdx, fold.headerIdx);
 				continue;
 			}
 			let anchor: number | undefined;
@@ -1809,7 +1813,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			map.set(unit.startIdx, anchor);
 		}
 		return map;
-	}, [entries, foldOpenOf, folds, toolRuns, turnUnits]);
+	}, [entries, folds, toolRuns, turnUnits]);
 
 	// Index set of rows collapsed inside a CLOSED fold — the virtualizer's
 	// estimate for these is ~0 (the fold slot collapses to height 0), which
@@ -1932,11 +1936,12 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		if (candidate !== null && folding && candidate.index < firstCompactionIdx) return null;
 		return candidate;
 	}, [entries, firstCompactionIdx, folding, virtualEnabled, scrollerEl, virtualItems]);
-	// Sticky orb: the turn occupying the viewport top has scrolled past the row
-	// that owns its avatar, so that avatar is pinned beside the prompt pill —
-	// the reader keeps one attribution for the whole turn instead of hunting
-	// the row it belongs to. A turn with no agent row yet (pre-stream) has
-	// nothing to pin; the composer's working line still names the agent.
+	// Sticky orb: one avatar per turn, pinned once the row that owns it is no
+	// longer painting (scrolled above the viewport, or mounted as a zero-height
+	// slot inside a closed fold). Judging "not painting" from the mounted row's
+	// own extent — not from `anchor < first` — is what keeps every turn's avatar
+	// accounted for: a folded owner row used to render nothing while its index
+	// still sat inside the visible range, so those turns showed no avatar at all.
 	const stickyAgent = useMemo(() => {
 		if (!virtualEnabled || scrollerEl === null) return false;
 		const range = visibleEntryRange(virtualItems, scrollerEl.scrollTop, scrollerEl.clientHeight);
@@ -1944,7 +1949,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const start = turnStartOf(Math.floor(range.first));
 		if (start === undefined) return false;
 		const anchor = orbAnchorByTurnStart.get(start);
-		return anchor !== undefined && anchor < range.first;
+		if (anchor === undefined) return false;
+		const mounted = virtualItems.find(item => item.index === anchor);
+		return mounted === undefined || mounted.end - mounted.start <= 4;
 	}, [orbAnchorByTurnStart, scrollerEl, turnStartOf, virtualEnabled, virtualItems]);
 
 	// Top sentinel (M1.11): entering the pane pages the next older chunk from

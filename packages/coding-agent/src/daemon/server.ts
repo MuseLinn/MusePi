@@ -6203,7 +6203,7 @@ function rendererDistDir(): string {
 }
 
 export async function startDaemon(
-	options: DaemonOptions = {},
+	options: DaemonOptions & { parentPid?: number } = {},
 ): Promise<{ socketPath: string; wsPort?: number; webUrl?: string; close: () => Promise<void> }> {
 	// Windows: every Bun.spawn child (git/gh/shell/powershell) opens a new
 	// console window unless windowsHide is set. Patch the globals once so no
@@ -6454,6 +6454,40 @@ export async function startDaemon(
 		await close();
 		(options.onShutdownComplete ?? (() => process.exit(0)))();
 	});
+
+	// Parent lease. A GUI that spawns the daemon owns its lifetime; a normal
+	// quit already tears it down through `system.shutdown`. This covers the
+	// exits that never run the GUI's JS at all — a forced process kill, a
+	// crashed renderer taking the shell with it — which used to leave a
+	// detached daemon listening on the port until the next launch reaped it.
+	//
+	// Idle-only on purpose: running turns, queued messages, async jobs and
+	// armed schedules mean the daemon is still doing work the user asked for,
+	// so it keeps going (the orphan reaper still collects it at next start).
+	// A terminal `musepi serve` passes no parent pid and is never affected.
+	if (options.parentPid !== undefined) {
+		const parentPid = options.parentPid;
+		const lease = setInterval(() => {
+			try {
+				process.kill(parentPid, 0);
+				return;
+			} catch {
+				// parent is gone — fall through to the idle check
+			}
+			const live = [...host.allSessions()];
+			const busy = live.some(
+				session =>
+					isLiveSessionBusy(session) ||
+					session.agentSession.queuedMessageCount > 0 ||
+					session.agentSession.extensionRunner?.hasArmedSchedules() === true,
+			);
+			if (busy || (AsyncJobManager.instance()?.runningCount() ?? 0) > 0) return;
+			clearInterval(lease);
+			logger.info("daemon: parent GUI exited and nothing is running — shutting down");
+			void close().finally(() => process.exit(0));
+		}, 5_000);
+		lease.unref?.();
+	}
 
 	return {
 		socketPath,

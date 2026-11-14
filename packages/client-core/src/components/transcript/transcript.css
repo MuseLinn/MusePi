@@ -4156,6 +4156,31 @@ a.tr-tool-search-title:hover {
 	pointer-events: none;
 }
 
+/* Content scrolling under the pinned row fades out instead of running
+ * through the pill: a band of the transcript ground sits behind the pill and
+ * the orb (both paint above it). The band takes no flow height, so the
+ * virtualizer's measurements are untouched. */
+.tr-sticky-user-slot::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: -8px;
+	height: 60px;
+	z-index: 0;
+	background: linear-gradient(
+		to bottom,
+		var(--gui-card-surface-fade, var(--color-surface)) 62%,
+		transparent 100%
+	);
+	pointer-events: none;
+}
+
+.tr-sticky-user-slot > * {
+	position: relative;
+	z-index: 1;
+}
+
 /* Agent row of the pinned turn: the orb sits in the transcript's 40px gutter
  * column, so the prompt pill beside it keeps the message body's left edge. */
 .tr-sticky-user-slot--agent {
@@ -4188,13 +4213,14 @@ a.tr-tool-search-title:hover {
 	max-width: min(100%, 42rem);
 	margin: 0;
 	padding: 5px 12px;
-	border: 1px solid var(--glass-border, var(--border));
+	border: 1px solid var(--border);
 	border-radius: 999px;
-	background: var(--glass-bg-strong, oklch(1 0 0 / 11%));
-	backdrop-filter: blur(12px) saturate(1.4);
-	-webkit-backdrop-filter: blur(12px) saturate(1.4);
-	box-shadow: var(--glass-shadow, 0 6px 20px oklch(0 0 0 / 25%));
-	color: var(--color-text, var(--fg));
+	/* Opaque ground: the translucent glass fill let the body text underneath
+	 * read straight through the pill, which looked like the avatar floating
+	 * over the message. */
+	background: var(--color-surface);
+	box-shadow: 0 4px 14px oklch(0 0 0 / 18%);
+	color: var(--color-text);
 	font-family: var(--font-ui);
 	font-size: 12.5px;
 	line-height: 1.3;
@@ -4209,8 +4235,8 @@ a.tr-tool-search-title:hover {
  * the pinned edge while the reader is scrolling. */
 .tr-sticky-user:hover,
 .tr-sticky-user:focus-visible {
-	border-color: color-mix(in oklab, var(--accent) 45%, var(--glass-border, var(--border)));
-	background: color-mix(in oklab, var(--accent) 10%, var(--glass-bg-strong, oklch(1 0 0 / 11%)));
+	border-color: color-mix(in oklab, var(--accent) 45%, var(--border));
+	background: color-mix(in oklab, var(--accent) 10%, var(--color-surface));
 }
 
 .tr-sticky-user:focus-visible {

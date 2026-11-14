@@ -19,7 +19,12 @@
  * every platform and keep text contrast stable.
  */
 
-/* ── L1: cards ──────────────────────────────────────────────────────── */
+/* ── L1: cards ────────────────────────────────────────────────────────
+ * Solid fill: the specular sheen that used to sit on top of every card read
+ * as a colour gradient in dark presets (a white 14% wash over a near-black
+ * surface), so cards now paint one flat surface and keep only the hairline,
+ * rim and lift that carry the elevation. Decoration belongs to a plugin, not
+ * to the base shell. */
 .gui-float-card,
 .gui-page-card,
 .gui-chat-column,
@@ -31,7 +36,6 @@
 .gui-getting-started {
 	border: 1px solid var(--glass-hairline);
 	background-color: var(--glass-card-bg);
-	background-image: var(--glass-sheen);
 	box-shadow:
 		inset 0 1px 0 var(--glass-rim-hi),
 		inset 0 -1px 0 var(--glass-rim-lo),

@@ -4501,7 +4501,7 @@ function AppInner(): ReactNode {
 	);
 
 	return (
-		<div className="gui-shell">
+		<div className="gui-shell" style={{ "--gui-side-w": `${sideWidth}px` } as CSSProperties}>
 			{error && (
 				<div className="gui-error gui-error-toast" role="alert">
 					<span className="gui-error-toast-text">{error}</span>
@@ -4547,12 +4547,15 @@ function AppInner(): ReactNode {
 					{!sideCollapsed && !shell.sideKeeperHidden && (
 						<div
 							className="gui-resize-x gui-resize-x--side"
-							style={{ left: RAIL_WIDTH + sideWidth - 3 }}
+							role="separator"
+							aria-orientation="vertical"
 							onMouseDown={e => {
 								e.preventDefault();
 								startResize(e.clientX, sideWidth, 180, 420);
 							}}
-						/>
+						>
+							<span className="gui-resize-grip" aria-hidden="true" />
+						</div>
 					)}
 					{narrowSidebarOpen && (
 						<button

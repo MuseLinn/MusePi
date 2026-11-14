@@ -4231,7 +4231,34 @@
 	cursor: col-resize;
 }
 
+/* Sidebar/chat splitter. Its centre is the seam between the two cards: the
+ * sidebar card's right edge plus half of the shared --gui-card-gutter
+ * (the chat surface contributes the other half). Anchoring to the same
+ * variables the panes lay themselves out with keeps the handle on the seam
+ * when --gui-side-w changes; a pixel offset from the state width landed the
+ * handle ~19px inside the sidebar card. */
+.gui-resize-x--side {
+	left: calc(var(--gui-rail-w) + var(--gui-side-w) + var(--gui-card-gutter) * 1.5 - 5px);
+	width: 10px;
+}
 
+.gui-resize-grip {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 3px;
+	height: 28px;
+	margin: -14px 0 0 -1.5px;
+	border-radius: 999px;
+	background: transparent;
+	transition: background 120ms ease-out;
+}
+
+.gui-resize-x--side:hover .gui-resize-grip,
+.gui-resize-x--side:focus-visible .gui-resize-grip,
+body.gui-resizing .gui-resize-x--side .gui-resize-grip {
+	background: var(--color-accent-bd);
+}
 
 .gui-resize-x::after {
 	content: "";
@@ -4244,7 +4271,11 @@
 	transition: background 120ms ease-out;
 }
 
-.gui-resize-x:hover::after {
+.gui-resize-x--side::after {
+	display: none;
+}
+
+.gui-resize-x:not(.gui-resize-x--side):hover::after {
 	background: var(--color-accent-bd);
 }
 

@@ -1968,11 +1968,11 @@ button.gui-stats-pill {
 
 /* Center-pane ambient glow — gives the frosted side panes something to
  * refract (ZCode-style depth instead of flat black). */
+/* The empty-session pane is one flat surface. Two accent radial gradients
+ * used to wash the top and the bottom-right corner, which read as a colour
+ * gradient behind the composer rather than as a placeholder ground. */
 .gui-pane-glow {
-	background:
-		radial-gradient(120% 90% at 50% 0%, color-mix(in oklab, var(--color-accent) 7%, transparent) 0%, transparent 55%),
-		radial-gradient(80% 60% at 85% 100%, color-mix(in oklab, var(--color-accent) 5%, transparent) 0%, transparent 50%),
-		var(--color-bg);
+	background: var(--color-bg);
 }
 
 /* ── ZCode-style sidebar (immersive, rounded containers, no hairlines) ── */
