@@ -4181,30 +4181,9 @@ a.tr-tool-search-title:hover {
 	z-index: 1;
 }
 
-/* Agent row of the pinned turn: the orb sits in the transcript's 40px gutter
- * column, so the prompt pill beside it keeps the message body's left edge. */
-.tr-sticky-user-slot--agent {
-	display: flex;
-	align-items: flex-start;
-	gap: 10px;
-}
-
-.tr-sticky-agent {
-	flex: none;
-	display: flex;
-	justify-content: flex-end;
-	width: 40px;
-	padding-top: 8px;
-	pointer-events: none;
-}
-
-/* Narrow shells stack rows (gutter above the body), so the orb column has no
- * body edge to align with; the pill keeps the full width it needs there. */
-@media (max-width: 640px) {
-	.tr-sticky-user-slot--agent .tr-sticky-agent {
-		display: none;
-	}
-}
+/* The pill is the only pinned element. An earlier version also pinned the
+ * turn's avatar beside it, which read as a second avatar floating over the
+ * message body; scrolling now carries the turn's own avatar away with it. */
 
 .tr-sticky-user {
 	display: inline-flex;

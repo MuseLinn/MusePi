@@ -174,26 +174,19 @@ describe("StickyUserMessage", () => {
 		expect(jumps).toEqual([candidate]);
 	});
 
-	test("renders nothing when neither a prompt nor the agent orb is pinned", () => {
+	test("renders nothing when no prompt is pinned", () => {
 		const host = render(<StickyUserMessage candidate={null} onJump={() => {}} />);
 		expect(host.querySelector(".tr-sticky-user")).toBeNull();
-		expect(host.querySelector(".tr-sticky-agent")).toBeNull();
 		expect(host.querySelector(".tr-sticky-user-slot")).toBeNull();
 	});
 
-	test("pins the turn orb beside the prompt pill", () => {
+	test("never duplicates the turn avatar — the pill is the only pinned element", () => {
 		const candidate = { entry: user("u1", "hello"), index: 1, summary: "hello" };
-		const host = render(
-			<StickyUserMessage candidate={candidate} onJump={() => {}} agent={<span className="orb-fixture" />} />,
-		);
-		expect(host.querySelector(".tr-sticky-user-slot--agent")).not.toBeNull();
-		expect(host.querySelector(".tr-sticky-agent .orb-fixture")).not.toBeNull();
+		const host = render(<StickyUserMessage candidate={candidate} onJump={() => {}} />);
 		expect(host.querySelector(".tr-sticky-user")).not.toBeNull();
-	});
-
-	test("renders the orb alone when the prompt is still on screen", () => {
-		const host = render(<StickyUserMessage candidate={null} onJump={() => {}} agent={<span />} />);
-		expect(host.querySelector(".tr-sticky-agent")).not.toBeNull();
-		expect(host.querySelector(".tr-sticky-user")).toBeNull();
+		// Failure mode if regressed: the row's avatar and a pinned copy were both
+		// on screen, which read as a second orb floating over the message.
+		expect(host.querySelector(".tr-sticky-agent")).toBeNull();
+		expect(host.querySelector(".tr-sticky-user-slot--agent")).toBeNull();
 	});
 });

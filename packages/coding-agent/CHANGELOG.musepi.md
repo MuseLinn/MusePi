@@ -4,8 +4,8 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
-- **会话头像每回合只在回合顶出现一次**：头像锚点恒为该回合的第一行（折叠时也是折叠头），不再随折叠开关在回合底部与顶部之间跳动；滚动时由吸顶条接管，判定改为「拥有头像的那一行是否真的在画」，被折成零高度的行也会正确回退到吸顶，不再出现个别回合完全没有头像。吸顶条改用与卡片同色的渐隐遮罩，提示条改为实心底，正文不再透过玻璃与头像叠在一起。
-  - EN: One avatar per turn, always at the turn's head. The orb anchor is the turn's first row (the fold header in both fold states) instead of jumping between the reply and the header, and the pinned copy takes over when the owning row is no longer painting — including rows folded to zero height, which used to leave some turns with no avatar at all. The pinned row fades content out with the card's own colour and the prompt pill is opaque, so body text no longer reads through it.
+- **会话头像每回合只在回合顶出现一次**：头像锚点恒为该回合的第一行（折叠时也是折叠头），不再随折叠开关在回合底部与顶部之间跳动，也不再吸顶复制——头像随它所属的回合一起滚走，不会在正文上方再浮一个。提示条仍是唯一吸顶元素，改用实心底与卡片同色的渐隐遮罩，正文不再透过玻璃与它叠在一起。
+  - EN: One avatar per turn, always at the turn's head. The orb anchor is the turn's first row (the fold header in both fold states) instead of jumping between the reply and the header, and the avatar is no longer duplicated in a pinned copy — it scrolls away with its own turn. The prompt pill stays the only pinned element, now opaque over a card-coloured scrim so body text no longer reads through it.
 
 - **深色主题文字可读性下限**：15 个深色预设的次要文字与辅助文字加上亮度下限（`--fg-muted` 0.70、`--fg-faint` 0.60），色相与彩度仍是预设本身；此前 dracula / ayu / solarized 等的说明行与时间戳只有约 1.8:1，斜杠菜单的副标题基本看不清。
   - EN: Dark presets get a readability floor for secondary and faint text (`--fg-muted` 0.70, `--fg-faint` 0.60) while keeping each preset's hue and chroma. Dracula, ayu and solarized shipped faint text at roughly 1.8:1, which made the slash menu's descriptions and every timestamp nearly unreadable.

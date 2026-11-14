@@ -1936,23 +1936,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		if (candidate !== null && folding && candidate.index < firstCompactionIdx) return null;
 		return candidate;
 	}, [entries, firstCompactionIdx, folding, virtualEnabled, scrollerEl, virtualItems]);
-	// Sticky orb: one avatar per turn, pinned once the row that owns it is no
-	// longer painting (scrolled above the viewport, or mounted as a zero-height
-	// slot inside a closed fold). Judging "not painting" from the mounted row's
-	// own extent — not from `anchor < first` — is what keeps every turn's avatar
-	// accounted for: a folded owner row used to render nothing while its index
-	// still sat inside the visible range, so those turns showed no avatar at all.
-	const stickyAgent = useMemo(() => {
-		if (!virtualEnabled || scrollerEl === null) return false;
-		const range = visibleEntryRange(virtualItems, scrollerEl.scrollTop, scrollerEl.clientHeight);
-		if (range === null) return false;
-		const start = turnStartOf(Math.floor(range.first));
-		if (start === undefined) return false;
-		const anchor = orbAnchorByTurnStart.get(start);
-		if (anchor === undefined) return false;
-		const mounted = virtualItems.find(item => item.index === anchor);
-		return mounted === undefined || mounted.end - mounted.start <= 4;
-	}, [orbAnchorByTurnStart, scrollerEl, turnStartOf, virtualEnabled, virtualItems]);
 
 	// Top sentinel (M1.11): entering the pane pages the next older chunk from
 	// session.history (daemon tail is 200; pages are 500 entries).
@@ -2646,14 +2629,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			className={`tr-root${compact === true ? " tr-root--compact" : ""}`}
 			data-colorblind={colorBlind ? "true" : undefined}
 		>
-			{/* Pinned current-turn prompt + the turn's orb once its own row has
-			 *  scrolled out. A zero-height sticky slot: it takes no flow space,
-			 *  so virtualization measurements and the scrollbar are untouched. */}
-			<StickyUserMessage
-				candidate={stickyUser}
-				onJump={jumpToStickyUser}
-				agent={stickyAgent && agentGutter ? agentGutter : undefined}
-			/>
+			{/* Pinned current-turn prompt. A zero-height sticky slot: it takes no
+			 *  flow space, so virtualization measurements and the scrollbar are
+			 *  untouched. The turn's avatar stays with its own row. */}
+			<StickyUserMessage candidate={stickyUser} onJump={jumpToStickyUser} />
 			{entries.length === 0 &&
 				stream === null &&
 				!working &&
