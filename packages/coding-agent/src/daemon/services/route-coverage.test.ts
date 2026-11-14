@@ -32,6 +32,7 @@ import { McpOAuthService } from "./mcp-oauth-service";
 import { McpServersService } from "./mcp-servers-service";
 import { ModelsService } from "./models-service";
 import { PluginInstallService } from "./plugin-install-service";
+import { PresetsService } from "./presets-service";
 import { ProvidersService } from "./providers-service";
 import { HostServices } from "./registry";
 import { RemoteService } from "./remote-service";
@@ -166,6 +167,17 @@ function buildRegistry(): HostServices {
 	services.register(new GitService({ cwd: () => "" }));
 	// GitHubService：只认领路由（本测试不调用 gh），cwd 桩化。
 	services.register(new GitHubService({ cwd: () => "" }));
+	// PresetsService：预设目录与扩展面桩化（本测试不读写预设文件）。
+	services.register(
+		new PresetsService({
+			cwd: () => "",
+			get: () => undefined,
+			persistHeaderPatch: () => false,
+			modesDir: () => "",
+			knownExtensions: async () => [],
+			broadcastModesChanged: () => {},
+		}),
+	);
 	// ModelsService：只认领路由（本测试不读写 models.yml），宿主访问桩化。
 	services.register(
 		new ModelsService({
