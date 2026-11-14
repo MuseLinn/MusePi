@@ -128,7 +128,7 @@ Rejected as over-compressed — `timeout 30 log+port both`: loses the unit, lose
 
 ## Running it as a command
 
-`omp compress <file>` drives exactly this loop with two tools and nothing else.
+`musepi compress <file>` drives exactly this loop with two tools and nothing else.
 
 Its session is isolated on purpose, because the input is itself a prompt: the default system prompt is *replaced* (not appended to), and skill, rule, `AGENTS.md`, prompt-template, and slash-command discovery are all passed empty — every one of those defaults to ON when omitted, and each would inject instruction-shaped project text into a job whose only legitimate input is the document. Audited on a live session: one system-prompt part, tools `rewrite, approve`, no `AGENTS.md` or rule content present.
 

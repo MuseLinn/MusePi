@@ -220,7 +220,7 @@ export default function (pi: ExtensionAPI): void {
 - **忙会话门控**:会话 streaming(`isStreaming`)时重载挂起到单槽 pending,`agent_end`(含延迟 agent_end flush)空闲时补做;不引入队列/锁。
 - **MCP 不随扩展关闭**:MCP 连接由配置层启动、`MCPManager` 按 cwd 多会话共享,`SourceMeta` 是配置来源非扩展来源 —— 扩展重载不触碰 MCP server 生命周期;扩展自行管理自有连接。
 
-**参考实现**:`examples/extension-component/`(示例)、`packages/coding-agent/src/daemon/extension-components.ts`(编译/聚合)、`apps/desktop/src/lib/slot-components.tsx`(渲染)、`ExtensionRunner.reloadExtension` + `AgentSession.reloadExtension`(v2 会话级重载)。
+**参考实现**:`examples/extension-component/`(示例)、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`(编译/聚合)、`apps/desktop/src/lib/slot-host.tsx`(渲染)、`ExtensionRunner.reloadExtension` + `AgentSession.reloadExtension`(v2 会话级重载)。
 
 ## 7. 扩展 daemon RPC(registerRpc,2026-08-20)
 
@@ -522,7 +522,7 @@ export default async function (pi: ExtensionAPI) {
 
 ### spec 分类
 
-`parseInstallSpec`(单一权威,`extensibility/plugins/spec-classifier.ts`)把 spec 分四类,安装按类走不同分支:
+`parseInstallSpec`(单一权威,`extensibility/plugins/management/spec-classifier.ts`)把 spec 分四类,安装按类走不同分支:
 
 | 类别 | 例子 | 包名来源 |
 |---|---|---|
@@ -553,7 +553,7 @@ export default async function (pi: ExtensionAPI) {
 
 ### 能力报告(装上 ≠ 能跑)
 
-`describePluginCapability`(`extensibility/plugins/capability-report.ts`)在安装完成后静态判定该插件能否在本底座加载,三档:
+`describePluginCapability`(`extensibility/plugins/management/capability-report.ts`)在安装完成后静态判定该插件能否在本底座加载,三档:
 
 - `runnable` — 声明的依赖都能满足,入口文件都在。
 - `partial` — 能加载,但有组件注册的槽位本底座没有挂载点(例如指向 `panel.tab.*` 之外的槽),那部分界面不会出现。
@@ -579,7 +579,7 @@ export default async function (pi: ExtensionAPI) {
 
 三个设置键(`pluginRegistryMode` / `pluginRegistryUrl` / `pluginRegistryFallbacks`,均不带点号——点号键会被 Settings 当嵌套路径解析)决定安装问哪个源。默认模式先问官方源,遇到「换源可能有救」的失败再试公开镜像。
 
-换源与否由 `attributeFailure`(`extensibility/plugins/registry-fallback.ts`)判定,而非「失败就重试」:包管理器报的是哪一类失败、该失败是否点名了 spec 自己的主机(host 失败换 registry 无意义)、纯 registry spec 的失败永远可换。链在每次重试前先还原本轮开始时捕获的文件,否则失败尝试留下的半写状态会成为下一次尝试的起点。
+换源与否由 `attributeFailure`(`extensibility/plugins/profile/registry-fallback.ts`)判定,而非「失败就重试」:包管理器报的是哪一类失败、该失败是否点名了 spec 自己的主机(host 失败换 registry 无意义)、纯 registry spec 的失败永远可换。链在每次重试前先还原本轮开始时捕获的文件,否则失败尝试留下的半写状态会成为下一次尝试的起点。
 
 **不测延迟、不做粘性回退**,理由与 DSH 的差异见 `docs/handoff-plugin-install.md` §4。
 
@@ -591,7 +591,7 @@ export default async function (pi: ExtensionAPI) {
 
 | 能力 | DSH | musepi | 依据 |
 |---|---|---|---|
-| 本地未发布插件 | `plugin add .`,相对路径锚定到调用目录;装完按 manifest 的 `dsh.bundle.patch` 自动 reconcile 进 `profile.bundles` | `PluginManager.link(path)` 建符号链接;`PluginManager.install` 支持 path/tarball 形态 | `deepseek-harness/apps/cli/reference/README.md:81`、`extensibility/plugins/manager.ts:917` |
+| 本地未发布插件 | `plugin add .`,相对路径锚定到调用目录;装完按 manifest 的 `dsh.bundle.patch` 自动 reconcile 进 `profile.bundles` | `PluginManager.link(path)` 建符号链接;`PluginManager.install` 支持 path/tarball 形态 | `deepseek-harness/apps/cli/reference/README.md:81`、`extensibility/plugins/management/manager.ts:917` |
 | 装完即生效 | 否——须进 Loader 树 | 是——`getAllPluginExtensionPaths` 运行时发现 | `extensibility/extensions/loader.ts:1012-1015` |
 | 按行开关 | `setPluginEnabled` 写 patch 的 `disabled` 覆写 | `extensions.setComponentEnabled`,粒度 `<plugin>/<component>` | `daemon/services/extension-service.ts:601` |
 | 整包启停 | 同上(行级) | `plugins.setEnabled` → `settings.disabledExtensions` | `daemon/server.ts:1928` |

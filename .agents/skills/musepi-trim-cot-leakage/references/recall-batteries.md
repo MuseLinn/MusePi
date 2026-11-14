@@ -6,7 +6,7 @@
 
 ## 调用规则
 
-- 加 `--hidden --glob '!.git/**'`，让 `.omp/`、`.agents/`、`.claude/` 也被搜；
+- 加 `--hidden --glob '!.git/**'`，让 `.musepi/`、`.agents/`、`.claude/` 也被搜；
   ripgrep 默认跳过点目录，而最大的漏检风险就在这些目录里。
 - 排除项放最后，避免后面的 include 重新引入：`--glob '!vendor/**' --glob
   '!node_modules/**' --glob '!*.snap' --glob '!packages/*/node_modules/**'`

@@ -1,7 +1,7 @@
 # 安卓 OTA 更新方案(@capgo Web-layer OTA)
 
-> 面向 `apps/mobile`(Capacitor 8 壳,web 代码在 guest-client,v0.4.4,Android versionCode 2 / versionName 0.4.4)。
-> 2026-08-26 调研(见 `/tmp/android-ota-research.md`)后立项。桌面端 OTA 见 `docs/archive/ota-update-design.md`(electron-updater),本文件仅覆盖移动端。
+> 面向 `apps/mobile`（Capacitor 8 壳，web 代码在 `packages/client-core`，Android `versionCode 40` / `versionName 0.7.5`）。
+> 2026-08-26 调研后立项。桌面端 OTA 见 `docs/archive/ota-update-design.md`（electron-updater），本文件仅覆盖移动端。
 
 - **状态**: 方案文档(待实现)
 - **日期**: 2026-08-26

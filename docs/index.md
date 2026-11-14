@@ -52,7 +52,7 @@ Installer defaults to the prebuilt release binary (`musepi-<os>-<arch>` + `SHA25
 
 - [custom-tools.md](custom-tools.html) · [tools/](tools/) (built-in tool docs) · [toolconv/](toolconv/) (tool-schema conversion notes) · [marketplace.md](marketplace.html)
 - [bash-tool-runtime.md](bash-tool-runtime.html) · [python-repl.md](python-repl.html) · [resolve-tool-runtime.md](resolve-tool-runtime.html) · [notebook-tool-runtime.md](notebook-tool-runtime.html)
-- [computer-use.md](computer-use.html) · [lsp-config.md](lsp-config.html) · [mcp-config.md](mcp-config.html) · [mcp-protocol-transports.html](mcp-protocol-transports.html) · [mcp-runtime-lifecycle.html](mcp-runtime-lifecycle.html) · [mcp-server-tool-authoring.html](mcp-server-tool-authoring.html)
+- [computer-use.md](computer-use.html) · [lsp-config.md](lsp-config.html) · [mcp-config.md](mcp-config.html) · [mcp-protocol-transports.md](mcp-protocol-transports.html) · [mcp-runtime-lifecycle.md](mcp-runtime-lifecycle.html) · [mcp-server-tool-authoring.md](mcp-server-tool-authoring.html)
 
 ## Hooks & Extensions
 

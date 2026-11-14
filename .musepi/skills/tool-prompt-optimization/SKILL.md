@@ -12,7 +12,7 @@ Prompt/schema overlap: content reconstructible from `(name, JSON schema, blank o
 `scripts/probe.ts`: `@musepi/pi-ai` `completeSimple`; production-matching model/auth/provider behavior.
 
 ```bash
-bun .omp/skills/tool-prompt-optimization/scripts/probe.ts \
+bun .musepi/skills/tool-prompt-optimization/scripts/probe.ts \
   --schema <file|json> --template <file|text> --name <tool_name>
 ```
 
@@ -26,7 +26,7 @@ bun .omp/skills/tool-prompt-optimization/scripts/probe.ts \
 `scripts/probe-builtin.ts` instantiates the live tool; gets exact `toolWireSchema`, `tool.description`, and derived outline:
 
 ```bash
-bun .omp/skills/tool-prompt-optimization/scripts/probe-builtin.ts --tool <name> [--no-summary] [--show]
+bun .musepi/skills/tool-prompt-optimization/scripts/probe-builtin.ts --tool <name> [--no-summary] [--show]
 ```
 
 - `--show`: resolved schema, derived outline, real prompt; exits without API calls. Inspect before spending tokens.
@@ -105,6 +105,14 @@ If a detail cannot change agent behavior, it does NOT belong. Each sentence MUST
 4. **Agent-owned failure shapes:** input-fixable stale anchors, missing payload prefix, fabricated hash; omit silently recovered failures.
 5. **Anti-patterns:** real-failure WRONG/RIGHT pairs for retry-causing mistakes, never imagined ones.
 6. **`<critical>` recap:** 3–6 load-bearing lines for agents skipping body.
+
+Tool prompts rely on examples more than agent prompts:
+
+- Mechanical syntax: one correct example beats three grammar paragraphs.
+- A model anchors output format on the latest example: canonical shape last.
+- Adjacent WRONG/RIGHT eliminates a retry class.
+
+Examples MUST be runnable, not pseudo-code. JSON tool → JSON example; custom grammar → real anchors, payload prefixes, line numbers.
 
 ### Exclude
 

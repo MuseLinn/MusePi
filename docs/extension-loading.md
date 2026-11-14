@@ -201,7 +201,7 @@ Implication: if the same module path is both auto-discovered and explicitly conf
 
 ## Module import and factory contract
 
-Each candidate path is loaded via `loadLegacyPiModule()` (`src/extensibility/plugins/legacy-pi-compat.ts`):
+Each candidate path is loaded via `loadLegacyPiModule()` (`src/extensibility/plugins/compat/legacy-pi-compat.ts`):
 
 - the entry's realpath is resolved, then dynamically imported with an `?mtime` cache-buster so edited source reloads
 - a scoped Bun `onLoad` hook rewrites legacy pi-package specifiers (`@mariozechner/*`, `@earendil-works/*`) and bare `@sinclair/typebox` onto the host-bundled copies before evaluation

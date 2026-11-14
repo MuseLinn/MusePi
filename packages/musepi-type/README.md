@@ -1,7 +1,5 @@
 # @musepi/musepi-type
 
-> Source directory keeps its historical name `packages/omptype`; the package is published as `@musepi/musepi-type`.
-
 Fast, ArkType-compatible schema validation for JavaScript and TypeScript.
 Schemas start with a small interpreter and lazily compile after repeated use,
 keeping construction cheap without giving up hot-path validation speed.

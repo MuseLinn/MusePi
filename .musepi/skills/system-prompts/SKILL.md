@@ -140,43 +140,4 @@ Live-system-prompt patterns:
 
 ## Tool Prompt Authoring
 
-Tool prompts teach when to use the tool, input shape, and agent-owned failures — not API docs. Engine internals, recovery heuristics, fallback chains, performance tuning: code.
-
-### Surface, not machinery
-
-Agents choose tools from prose: state WHEN/WHY; NEVER internal HOW.
-
-- `read.md`: enumerate every covered source — file/dir/archive/sqlite/PDF/URL — so agent avoids `cat`/`curl`/`tar`; omit chunker, binary sniffer, cache layer.
-- `lsp.md`: "You MUST use `lsp` whenever a language server is available — safer than text-based alternatives." Omit LSP wire protocol, server lifecycle, capability negotiation.
-- `ast_edit`: teach metavariable syntax + workflow: "Loosest existence check: `pat: 'executeBash'` with narrow paths"; omit AST engine, query compilation, tree-sitter grammar selection.
-- `hashline.md` (this repo): teach **patch grammar** — anchors, ops, payloads, ranges — and successful **edit shapes**. NEVER expose `tryRecoverHashlineWithCache`, fuzz factor, bigram tables, `findUniqueSuffixMatch`, `untilAborted`, `formatGroupedFiles`; agent sees only "the tool resolved your typo" or "the anchor was stale, re-read".
-
-Behavior-invariant detail: exclude. Every sentence MUST shift an agent decision.
-
-### Good tool-prompt anatomy
-
-1. **One-line purpose** — agent-vocabulary problem; e.g. “compact, line-anchored edit format”, not “wraps libfoo with X”.
-2. **Input grammar / surface** — operators, parameters, selectors; verbatim emitted syntax.
-3. **Worked examples** — 3–8 common shapes; each explains itself, no duplicate narration.
-4. **Agent-owned failure shapes** — input-fixable stale anchors, missing payload prefix, fabricated hash; skip silently recovered failures.
-5. **Anti-patterns** — real-failure WRONG/RIGHT pairs that cost retries; not imagined failures.
-6. **`<critical>` recap** — 3–6 load-bearing lines, for body-skipping agents.
-
-### Exclude
-
-- Implementation file/function names; module layout.
-- Recovery, retry, normalization, caching, fuzz matching.
-- Performance (`O(n)`) unless strategy-changing.
-- Telemetry, logging, debug flags, unsettable env vars.
-- Version history, deprecated parameters, “previously this worked differently”.
-- Cross-tool plumbing (`this calls \`read\` under the hood`) unless coordination required.
-
-### Examples drive the contract
-
-Tool prompts rely on examples more than agent prompts:
-
-- Mechanical syntax: one correct example beats three grammar paragraphs.
-- Model anchors output format on latest example: canonical shape last.
-- Adjacent WRONG/RIGHT eliminates a retry class.
-
-Examples MUST be runnable, not pseudo-code. JSON tool → JSON example; custom grammar → real anchors, payload prefixes, line numbers.
+Tool prompts teach when to use the tool, input shape, and agent-owned failures — not API docs. Anatomy, surface-not-machinery, exclusions, and the runnable-examples rules are owned by `tool-prompt-optimization`; this skill supplies the register they are written in: tags, RFC 2119 keywords, density, voice, positioning.

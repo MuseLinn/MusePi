@@ -6,8 +6,8 @@ This document describes how `musepi plugin` npm/git/link and marketplace operati
 
 There are two plugin-management implementations in the codebase:
 
-1. **Active path used by CLI commands**: `PluginManager` (`src/extensibility/plugins/manager.ts`)
-2. **Legacy helper module**: installer functions (`src/extensibility/plugins/installer.ts`)
+1. **Active path used by CLI commands**: `PluginManager` (`src/extensibility/plugins/management/manager.ts`)
+2. **Legacy helper module**: installer functions (`src/extensibility/plugins/management/installer.ts`)
 
 `musepi plugin` npm/git/link actions go through `PluginManager`; marketplace actions go through `MarketplaceManager`. `install` classifies each target (`classifyInstallTarget` in `cli/classify-install-target.ts`): `name@marketplace` routes to the marketplace manager, an existing local directory routes to `PluginManager.link()`, and archive paths, git specs, and npm specs route to `PluginManager.install()`. In particular, an absolute `.tgz` path is an install target, not a directory link.
 
@@ -285,10 +285,10 @@ Operationally, `doctor --fix` can repair some drift (`bun install`, orphaned con
 
 - [`src/commands/plugin.ts`](../packages/coding-agent/src/commands/plugin.ts) — CLI command declaration and flag mapping
 - [`src/cli/plugin-cli.ts`](../packages/coding-agent/src/cli/plugin-cli.ts) — action dispatch, user-facing command handlers
-- [`src/extensibility/plugins/manager.ts`](../packages/coding-agent/src/extensibility/plugins/manager.ts) — active install/remove/list/link/state/doctor implementation
-- [`src/extensibility/plugins/installer.ts`](../packages/coding-agent/src/extensibility/plugins/installer.ts) — legacy installer helpers and additional link safety checks
-- [`src/extensibility/plugins/loader.ts`](../packages/coding-agent/src/extensibility/plugins/loader.ts) — enabled-plugin discovery and tool/hook/command path resolution
-- [`src/extensibility/plugins/parser.ts`](../packages/coding-agent/src/extensibility/plugins/parser.ts) — install spec and package-name parsing helpers
-- [`src/extensibility/plugins/types.ts`](../packages/coding-agent/src/extensibility/plugins/types.ts) — manifest/runtime/override type contracts
+- [`src/extensibility/plugins/management/manager.ts`](../packages/coding-agent/src/extensibility/plugins/management/manager.ts) — active install/remove/list/link/state/doctor implementation
+- [`src/extensibility/plugins/management/installer.ts`](../packages/coding-agent/src/extensibility/plugins/management/installer.ts) — legacy installer helpers and additional link safety checks
+- [`src/extensibility/plugins/runtime/loader.ts`](../packages/coding-agent/src/extensibility/plugins/runtime/loader.ts) — enabled-plugin discovery and tool/hook/command path resolution
+- [`src/extensibility/plugins/shared/parser.ts`](../packages/coding-agent/src/extensibility/plugins/shared/parser.ts) — install spec and package-name parsing helpers
+- [`src/extensibility/plugins/runtime/types.ts`](../packages/coding-agent/src/extensibility/plugins/runtime/types.ts) — manifest/runtime/override type contracts
 - [`src/extensibility/custom-tools/loader.ts`](../packages/coding-agent/src/extensibility/custom-tools/loader.ts) — runtime wiring for plugin-provided tool modules
 - [`src/extensibility/extensions/loader.ts`](../packages/coding-agent/src/extensibility/extensions/loader.ts) — runtime wiring for plugin-provided extension modules

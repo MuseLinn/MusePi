@@ -13,7 +13,7 @@
 
 插件就是一个普通 npm 包，安装到 `~/.musepi/plugins/node_modules/<name>`：
 
-- 插件根目录与 manifest 路径：`packages/coding-agent/src/extensibility/plugins/manager.ts:229-230`（`getPluginsDir()` + `getPluginsNodeModules()` 建目录）
+- 插件根目录与 manifest 路径：`packages/coding-agent/src/extensibility/plugins/management/manager.ts:229-230`（`getPluginsDir()` + `getPluginsNodeModules()` 建目录）
 - 宿主自身也是一个 npm 包：`plugins/package.json` 名为 `musepi-plugins`、private — `manager.ts:239-250`
 - 运行时配置锁文件 `musepi-plugins.lock.json`：`manager.ts:191`（`getPluginsLockfile()`）
 - bun lockfile `~/.musepi/plugins/bun.lock`：`manager.ts:514`
@@ -27,9 +27,9 @@
   ```
   const manifest = pkg.musepi ?? pkg.omp ?? pkg.pi;
   ```
-- 插件侧读清单：`packages/coding-agent/src/extensibility/plugins/loader.ts:308`（同形态）
+- 插件侧读清单：`packages/coding-agent/src/extensibility/plugins/runtime/loader.ts:308`（同形态）
 - 插件清单 config/resources/components 解析：`packages/coding-agent/src/extensibility/extensions/plugin-manifest.ts:70-77`
-- 能力报告侧：`packages/coding-agent/src/extensibility/plugins/capability-report.ts:111`（`[musepi, omp, pi]` 顺序遍历）
+- 能力报告侧：`packages/coding-agent/src/extensibility/plugins/management/capability-report.ts:111`（`[musepi, omp, pi]` 顺序遍历）
 - `installer.ts:84,133` 也读 `pkg.musepi || pkg.omp || pkg.pi`
 
 `musepi` 块声明的字段（权威类型在 wire 包）：
@@ -41,7 +41,7 @@
 | `resources` | `packages/wire/src/plugin-config.ts:33-38`（`PluginResources`） | `disk`/`memory`/`setupMinutes`/`models` 资源卡 |
 | `components` | `packages/wire/src/plugin-config.ts:47-52`（`PluginComponentDecl`） | 「包含的组件」子单元声明，带 `entry` 的是独立装载单元 |
 
-`PluginManifest` 另有 `tools` / `hooks` / `commands` / `features` / `version` — `packages/coding-agent/src/extensibility/plugins/types.ts`（由 `manager.ts:31` 导入）。
+`PluginManifest` 另有 `tools` / `hooks` / `commands` / `features` / `version` — `packages/coding-agent/src/extensibility/plugins/runtime/types.ts`（由 `manager.ts:31` 导入）。
 
 ### 1.3 入口文件形态
 
@@ -280,7 +280,7 @@
 - watcher 回调的 filename 在 Windows 递归 watch 下不可靠 → **改用逐文件 mtime 比对决定谁要重载** — `server.ts:1042-1044` 注释
 
 **源码图 mtime 快照**（v2，子模块改动也热生效）：
-- 图走查 `collectExtensionModules` — `extensibility/plugins/legacy-pi-compat.ts:2079`（另见 `2294`、`2573`）
+- 图走查 `collectExtensionModules` — `extensibility/plugins/compat/legacy-pi-compat.ts:2079`（另见 `2294`、`2573`）
 - 变更判定 `extensionEntriesNeedingReload` — `legacy-pi-compat.ts:1903-1932`。无快照的入口**一律报为 changed**（`legacy-pi-compat.ts:1908-1911`，宁可多一次重读也不漏真编辑）；mtime 比较用 `!==` 而非 `>`（`legacy-pi-compat.ts:1922-1925`）
 - cache-bust tag 单调递增 `nextLegacyPiLoadTag` — `legacy-pi-compat.ts:2039`，用于给相对 import 加 `?mtime=`（`legacy-pi-compat.ts:2679`）
 
@@ -323,7 +323,7 @@
 
 ### 5.1 `PluginManager` 能力全集
 
-`packages/coding-agent/src/extensibility/plugins/manager.ts:178-1155`。类 `PluginManager` 于 `manager.ts:178`。
+`packages/coding-agent/src/extensibility/plugins/management/manager.ts:178-1155`。类 `PluginManager` 于 `manager.ts:178`。
 
 | 能力 | 行号 |
 |---|---|
@@ -343,7 +343,7 @@
 
 ### 5.2 spec 分类（刚新增的安装面）
 
-`packages/coding-agent/src/extensibility/plugins/spec-classifier.ts`：
+`packages/coding-agent/src/extensibility/plugins/management/spec-classifier.ts`：
 - 四类：`registry` / `git` / `tarball` / `path` — `spec-classifier.ts:27`，联合类型 `spec-classifier.ts:29-46`
 - 非法 spec 抛 `InvalidInstallSpecError` — `spec-classifier.ts:49-57`
 - git shorthand host 表 — `spec-classifier.ts:64-72`
@@ -353,7 +353,7 @@
 
 ### 5.3 安装状态机（刚新增）
 
-`packages/coding-agent/src/extensibility/plugins/plugin-install-machine.ts`：
+`packages/coding-agent/src/extensibility/plugins/management/plugin-install-machine.ts`：
 - 状态集 `inspecting`/`installing`/`done`/`failed`/`cancelled` — `plugin-install-machine.ts:46`
 - 失败分类 `spec`/`scripts`/`install`/`unknown` — `plugin-install-machine.ts:58`
 - 终态记录保留 20 条 — `plugin-install-machine.ts:115`
@@ -435,7 +435,7 @@ plugins.list / plugins.packages / plugins.setEnabled
 
 ### 6.1 `capability-report.ts` 判据
 
-`packages/coding-agent/src/extensibility/plugins/capability-report.ts`：
+`packages/coding-agent/src/extensibility/plugins/management/capability-report.ts`：
 
 - 三档 verdict — `capability-report.ts:34`：`runnable` / `partial` / `incompatible`
 - 报告结构 — `capability-report.ts:44-50`：`verdict` / `missing` / `unhostedSlots` / `summary`
@@ -456,7 +456,7 @@ plugins.list / plugins.packages / plugins.setEnabled
 
 ### 6.2 兼容性预检（另一条独立通道：semver peer 判定）
 
-`packages/coding-agent/src/extensibility/plugins/plugin-compatibility.ts`：
+`packages/coding-agent/src/extensibility/plugins/compat/plugin-compatibility.ts`：
 - 头部文档把与 DSH 的差异逐条写明 — `plugin-compatibility.ts:7-26`
 - 参与判定的 peer 前缀 `@musepi/`（单版本线，全部对照宿主运行时版本）— `plugin-compatibility.ts:35`, 注释 `:8-10`
 - workspace 协议 — `plugin-compatibility.ts:38`
@@ -534,7 +534,7 @@ plugins.list / plugins.packages / plugins.setEnabled
 
 ### 7.2 安装失败的回滚（`#rollbackFailedInstall`）
 
-`packages/coding-agent/src/extensibility/plugins/manager.ts:383-414`。**覆盖 3 类文件**：
+`packages/coding-agent/src/extensibility/plugins/management/manager.ts:383-414`。**覆盖 3 类文件**：
 
 | # | 覆盖物 | 行号 | 语义 |
 |---|---|---|---|
@@ -560,7 +560,7 @@ plugins.list / plugins.packages / plugins.setEnabled
 ### 8.1 两套并存的配置面
 
 **① 旧 `PluginSettingSchema`（PluginManager 侧，TUI 用）**
-- 类型定义：`packages/coding-agent/src/extensibility/plugins/types.ts:93`（`StringSetting | NumberSetting | BooleanSetting | EnumSetting`）
+- 类型定义：`packages/coding-agent/src/extensibility/plugins/runtime/types.ts:93`（`StringSetting | NumberSetting | BooleanSetting | EnumSetting`）
 - 容器：`types.ts:48`（`settings?: Record<string, PluginSettingSchema>`）
 - 校验函数 `validateSetting`：`manager.ts:1169-1203`
 - 解析函数 `parseSettingValue`：`manager.ts:1208-1218`

@@ -51,7 +51,7 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 
 - [custom-tools.md](custom-tools.html) · [tools/](tools/)（内置工具文档）· [toolconv/](toolconv/)（工具 schema 转换说明）· [marketplace.md](marketplace.html)
 - [bash-tool-runtime.md](bash-tool-runtime.html) · [python-repl.md](python-repl.html) · [resolve-tool-runtime.md](resolve-tool-runtime.html) · [notebook-tool-runtime.md](notebook-tool-runtime.html)
-- [computer-use.md](computer-use.html) · [lsp-config.md](lsp-config.html) · [mcp-config.md](mcp-config.html) · [mcp-protocol-transports.html](mcp-protocol-transports.html) · [mcp-runtime-lifecycle.html](mcp-runtime-lifecycle.html) · [mcp-server-tool-authoring.html](mcp-server-tool-authoring.html)
+- [computer-use.md](computer-use.html) · [lsp-config.md](lsp-config.html) · [mcp-config.md](mcp-config.html) · [mcp-protocol-transports.md](mcp-protocol-transports.html) · [mcp-runtime-lifecycle.md](mcp-runtime-lifecycle.html) · [mcp-server-tool-authoring.md](mcp-server-tool-authoring.html)
 
 ## Hooks 与扩展
 

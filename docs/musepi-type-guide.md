@@ -1,7 +1,7 @@
 # musepi-type Guide (schema authoring in this repo)
 
 Internal schemas use **`@musepi/musepi-type`** — an ArkType-compatible validator
-with a lazy JIT runtime (`packages/omptype` — source directory keeps its historical name). Author types with
+with a lazy JIT runtime (`packages/musepi-type`; the internal builder API keeps its historical `omptype` name). Author types with
 `import { type } from "@musepi/musepi-type"`.
 
 

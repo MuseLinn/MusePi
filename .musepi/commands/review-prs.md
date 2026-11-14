@@ -41,7 +41,7 @@ Ambiguous: `worthy`; human decides on a real branch.
 
 ```bash
 gh_PR=<NUMBER>
-# pr_checkout creates ~/.omp/wt/<encoded-repo>/pr-<N>/ and configures push remote
+# pr_checkout creates ~/.musepi/wt/<PR>-<repo-hash>/ and configures push remote
 ```
 
 MUST use `github pr_checkout`, not raw `gh pr checkout`: it creates a dedicated worktree wired for later `pr_push`.
@@ -51,7 +51,7 @@ MUST use `github pr_checkout`, not raw `gh pr checkout`: it creates a dedicated 
 Before any worktree build/test, from the worktree symlink main-checkout outputs to avoid `bun check` / `cargo build` / native-loader recompilation:
 
 ```bash
-MAIN="<absolute path to main worktree, e.g. ~/Projects/pi>"
+MAIN="<absolute path to main worktree, e.g. ~/Projects/MusePi>"
 WT="$(pwd)"
 
 # Rust target dir + JS deps (root-level in this monorepo)
@@ -103,7 +103,7 @@ Return:
 ```
 PR #<N>  <title>
 Decision: worthy | slop | superseded
-Worktree: ~/.omp/wt/.../pr-<N>   (or: not checked out)
+Worktree: ~/.musepi/wt/.../pr-<N>   (or: not checked out)
 Rebase:   clean | conflicts (resolved | aborted: <reason>)
 Fixes:    <commit shas + one-liners>   (or: none needed)
 Blockers: <anything the human must decide>

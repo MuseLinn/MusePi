@@ -11,7 +11,7 @@ lang: zh-CN
 
 # MusePi 移动端设计规范（Mobile Companion）
 
-> **状态（2026-08-31 核对）**：壳已构建（`apps/mobile` Capacitor Android + guest-client 移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在）。2026-08-31 完成移动端交互专项核对并修复 6 项缺陷（见 §12）：返回键层栈完整化（back-stack 统一调度）、SessionsSheet 常挂载退场动画、ask 多选 pending 语义、连接成功后才记录/写 hash、≤520px 面板折叠。
+> **状态（2026-08-31 核对）**：壳已构建（`apps/mobile` Capacitor Android + guest-client（现 `packages/client-core`）移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在）。2026-08-31 完成移动端交互专项核对并修复 6 项缺陷（见 §12）：返回键层栈完整化（back-stack 统一调度）、SessionsSheet 常挂载退场动画、ask 多选 pending 语义、连接成功后才记录/写 hash、≤520px 面板折叠。
 >
 > 2026-08-24 定稿。范围：`apps/mobile`（Capacitor Android 壳）+ `packages/client-core` 的
 > `mobile.html` / `mobile.tsx` / `mobile.css` 移动入口。桌面 web（`index.html`）与本规范无关。
@@ -464,8 +464,8 @@ connect / workspace / session / 面板 / rail / drawer / toasts / banners 全链
 
 验证工具（保留，供回归）：
 
-- `scripts/collab-host-stub.ts`（guest-client）—— 固定 key 的 collab host 桩（E2E 密封），8s 后
-  推送后台通知触发消息；配合 `scripts/local-relay.ts` 使用。
+- `packages/client-core/scripts/collab-host-stub.ts`（guest-client）—— 固定 key 的 collab host 桩（E2E 密封），8s 后
+  推送后台通知触发消息；配合 `packages/client-core/scripts/local-relay.ts` 使用。
 - 驱动方式：`adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>` → CDP 直接操作
   WebView DOM（uiautomator 无法读 WebView 内容）。
 
@@ -566,7 +566,7 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 **深链**：`module.json5` ability skills → uris 注册 `musepi://connect?link=`；EntryAbility onCreate 存冷启动 URI、onNewWant 推热启动。
 
-**构建**：guest-client `bun run build`（产出 index.html=桌面 / mobile.html=移动壳）→ `node scripts/copy-web-assets.js` 把 **mobile.html** 重命名为 rawfile/index.html（桌面入口弃用）→ DevEco Studio 打开 apps/harmony 运行。rawfile gitignored。
+**构建**：guest-client `bun run build`（产出 index.html=桌面 / mobile.html=移动壳）→ `node apps/harmony/scripts/copy-web-assets.js` 把 **mobile.html** 重命名为 rawfile/index.html（桌面入口弃用）→ DevEco Studio 打开 apps/harmony 运行。rawfile gitignored。
 
 **取舍**：凭证回退 localStorage（未接 `@ohos.security.asset`，P3）；通知/语音/原生图标均为 P3。若用户要真原生体验，connect+会话列表 ArkTS 重写是后续独立工程。
 
@@ -605,8 +605,8 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - `apps/harmony/` DevEco 工程（API 12 / 5.0.0）：EntryAbility（musepi:// 深链冷/暖启动）+ Index.ets（Web 组件 + `harmonyNative` javaScriptProxy）
 - 桥面与 JS 侧 capacitor.ts 的类型/路由完全对齐（getSystemBars via getWindowAvoidArea px→vp、badge、consumeDeepLink、__harmonyKeyboard/__harmonyDeepLink 推送）
 - `@StorageLink + @Watch` 标准模式做暖启动深链推送；module.json5 注册 INTERNET/CAMERA + musepi:// skill（phone+tablet）
-- `scripts/copy-web-assets.js`：guest-client dist → rawfile（mobile.html 提升为 index.html）；rawfile gitignored
-- 构建路径：`client-core` build → `copy-web-assets` → `scripts/build-hap.mjs`（官方 `devecocli` headless 出包）。
+- `apps/harmony/scripts/copy-web-assets.js`：guest-client dist → rawfile（mobile.html 提升为 index.html）；rawfile gitignored
+- 构建路径：`client-core` build → `copy-web-assets` → `apps/harmony/scripts/build-hap.mjs`（官方 `devecocli` headless 出包）。
   **编译通过**（CLT 26.0.0.865 / SDK API 26 / hvigor 6.26.9，ArkTS 零 error 零 warn）；
   **签名通过**（`devecocli signature generate --type debug` → `entry-default-signed.hap`，
   签名材料在 `~/.ohos/config/`，签名配置是机器绑定的所以没有入库）。

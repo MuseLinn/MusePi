@@ -23,9 +23,9 @@ Sources: [`packages/stats/README.md`](../packages/stats/README.html), [`packages
 - Outputs: dashboard metrics and API endpoints including `/api/stats`, `/api/stats/models`, `/api/stats/folders`, `/api/stats/timeseries`, and `/api/sync`.
 - Side effects/limits: syncs session files before output; long-running dashboard stops on `Ctrl+C` and closes the stats database.
 
-### `packages/omptype` — schema validation library (package `@musepi/musepi-type`)
+### `packages/musepi-type` — schema validation library (package `@musepi/musepi-type`)
 
-Sources: [`packages/omptype/README.md`](../packages/omptype/README.html), [`packages/omptype/package.json`](../packages/omptype/package.json), and the repository [musepi-type authoring guide](./musepi-type-guide.html).
+Sources: [`packages/musepi-type/README.md`](../packages/musepi-type/README.html), [`packages/musepi-type/package.json`](../packages/musepi-type/package.json), and the repository [musepi-type authoring guide](./musepi-type-guide.html).
 
 - Package: public `@musepi/musepi-type`; install with `bun add @musepi/musepi-type`; requires Bun 1.4.4 or newer.
 - Feature: callable ArkType-compatible schemas with cheap interpreted startup, lazy hot-path compilation, validation errors, defaults and morphs, and JSON Schema emission.
@@ -35,15 +35,15 @@ Sources: [`packages/omptype/README.md`](../packages/omptype/README.html), [`pack
 
 ### `tools/typescript-edit-benchmark` — TypeScript edit benchmark
 
-Sources: [`tools/typescript-edit-benchmark/package.json`](../tools/typescript-edit-benchmark/package.json), [`tools/typescript-edit-benchmark/src/index.ts`](../tools/typescript-edit-benchmark/src/index.ts), [`tools/typescript-edit-benchmark/src/runner.ts`](../tools/typescript-edit-benchmark/src/runner.ts), [`tools/typescript-edit-benchmark/src/tasks.ts`](../tools/typescript-edit-benchmark/src/tasks.ts), [`tools/typescript-edit-benchmark/src/report.ts`](../tools/typescript-edit-benchmark/src/report.ts).
+Sources: [`tools/typescript-edit-benchmark/package.json`](../tools/typescript-edit-benchmark/package.json), [`tools/typescript-edit-benchmark/README.md`](../tools/typescript-edit-benchmark/README.html), [`tools/typescript-edit-benchmark/src/generate.ts`](../tools/typescript-edit-benchmark/src/generate.ts), [`tools/typescript-edit-benchmark/src/verify.ts`](../tools/typescript-edit-benchmark/src/verify.ts).
 
-There is no package README at this path today; the manifest and CLI entrypoint help are the cited package-local sources.
-
-- Package: private `@musepi/typescript-edit-benchmark`; bin: `typescript-edit-benchmark`.
-- Feature: benchmark suite for evaluating coding-agent edit success on TypeScript source-code mutation fixtures.
-- CLI: `bun run bench:edit [options]` in source help; package scripts also expose `bun run src/index.ts` through `start`.
-- Key inputs: provider/model, thinking level, runs per task, timeout, task concurrency, task IDs, max tasks, fixture directory or `.tar.gz`, edit variant/fuzzy settings, guided mode, retry/turn limits, output path, report format, fixture validation, and required tool-call flags.
+- Package: private `@musepi/typescript-edit-benchmark`; not published and not shipped.
+- Feature: fixture corpus for evaluating coding-agent edit success on TypeScript source-code mutations, plus the generator that rebuilds it and the verifier that scores a run.
+- Contents: `fixtures.tar.gz` is the fixture corpus; `all_models_results.json` records results across models.
+- Fixture generation: `bun run generate` (script) wraps `tools/typescript-edit-benchmark/src/generate.ts`; its options are `--typescript-dir`, `--output`, `--count-scale`, `--seed`, `--categories`, `--difficulty`, `--min-score`, and `--dry-run`.
+- Verification: `tools/typescript-edit-benchmark/src/verify.ts` compares produced files against expected fixtures by byte-for-byte equality.
+- Running trials: option parsing, model/thinking selection, concurrency, and dashboards belong to `tools/metaharness`, whose adapters launch this benchmark and normalize its progress and scores.
 - Fixtures: each task directory contains `prompt.md`, `input/`, `expected/`, and `metadata.json`; bundled distribution can use `fixtures.tar.gz`.
-- Outputs: markdown or JSON benchmark reports under `runs/` by default, with live progress and optional conversation dumps.
-- Side effects/limits: creates the repository `runs/` directory, extracts fixture archives to temp space, and runs agent sessions against copied fixtures; `--check-fixtures` validates fixture structure and exits.
+- Reports: the metaharness edit adapter writes `runs/<model>_<variant>_<ts>.md` by default and takes `--format markdown|json`, so report generation and live progress belong to `tools/metaharness/adapters/edit`.
+- Side effects/limits of a trial: it creates the repository `runs/` directory, extracts fixture archives to temp space, and runs agent sessions against copied fixtures; `--check-fixtures` validates fixture structure and exits.
 

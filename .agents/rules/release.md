@@ -12,7 +12,7 @@ Every Chinese bullet has exactly one indented `- EN:` child containing the compl
 
 Titles describe the user-visible result, not the development process. The first three bold titles in document order become what's-new cards, so put user-facing changes before internal maintenance. Do not include reference-repository provenance, parity language, roadmap codes, cut numbers, review narration, or internal decision history. Mechanism, rationale, rollout, and compatibility details may follow in the body.
 
-Internal issue attribution uses `([#123](https://github.com/can1357/oh-my-pi/issues/123))`; external contributions use the corresponding PR and author link.
+Internal issue attribution uses `([#123](https://github.com/MuseLinn/MusePi/issues/123))`; external contributions use the corresponding PR and author link.
 
 ## Commands and release
 

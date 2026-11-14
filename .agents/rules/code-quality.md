@@ -47,7 +47,7 @@ Use namespace imports for `node:fs`, `node:path`, and `node:os`. Async-only code
 
 ## Logging
 
-Code reachable from TUI, RPC, SDK, workers, or background runtimes uses `logger` from `@musepi/pi-utils`, never `console.log/error/warn`. Logs rotate under `~/.omp/logs/`.
+Code reachable from TUI, RPC, SDK, workers, or background runtimes uses `logger` from `@musepi/pi-utils`, never `console.log/error/warn`. Logs rotate under `~/.musepi/logs/`.
 
 A standalone CLI command that exits without entering the TUI may write intentional user-facing output to console/process streams. Structured stdout must remain protocol-clean; shared modules need `logger` or an injected output sink.
 

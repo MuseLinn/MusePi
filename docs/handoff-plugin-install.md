@@ -15,9 +15,9 @@ GUI 里原本**没有插件安装入口**（`PluginManager` 只在 CLI 可用）
 ### 新增（8）
 | 文件 | 作用 |
 |---|---|
-| `packages/coding-agent/src/extensibility/plugins/spec-classifier.ts` | spec 四档分类：registry / git / tarball / path |
-| `packages/coding-agent/src/extensibility/plugins/plugin-install-machine.ts` | 安装状态机：inspecting→installing→done\|failed\|cancelled，可取消 |
-| `packages/coding-agent/src/extensibility/plugins/capability-report.ts` | 装完静态判定能否加载：runnable / partial / incompatible |
+| `packages/coding-agent/src/extensibility/plugins/management/spec-classifier.ts` | spec 四档分类：registry / git / tarball / path |
+| `packages/coding-agent/src/extensibility/plugins/management/plugin-install-machine.ts` | 安装状态机：inspecting→installing→done\|failed\|cancelled，可取消 |
+| `packages/coding-agent/src/extensibility/plugins/management/capability-report.ts` | 装完静态判定能否加载：runnable / partial / incompatible |
 | `packages/coding-agent/src/daemon/services/plugin-install-service.ts` | daemon L2 服务，5 个 RPC |
 | `apps/desktop/src/components/PluginInstallDialog.tsx` | GUI 安装对话框（含拖放区） |
 | `…/plugins/spec-classifier.test.ts` | 12 例 |
@@ -149,7 +149,7 @@ bunx biome check --write packages/ docs/
 ## 6. 需要注意的坑
 
 - **`PluginManager.install` 的回滚语义**：任何退出路径（失败 / spec 非法 / 取消）都会走 `#rollbackFailedInstall` 恢复 manifest + lockfile + 被替换的包目录，**随后重跑一次包管理器把 node_modules 拉回与还原后文件一致**（有 lock 用 `--frozen-lockfile`，无 lock 用 `--no-save`）——包管理器写的是整棵树，只还原单个包目录会让别的插件的传递依赖停在半换状态。取消判定看的是 `options.signal.aborted` 而非抛出的错误——kill 进程必留非零码，否则取消会被误报成失败。
-- **manifest 块的读取只有一处权威**：`readPluginBlock`（`extensibility/plugins/manifest-block.ts`），`musepi` 优先、`omp`/`pi` 兼容。新增读取点必须用它——`PluginManager` 曾只读后两个字段，导致只声明 `musepi` 的插件在 `doctor()` 里被报成"非插件"。
+- **manifest 块的读取只有一处权威**：`readPluginBlock`（`extensibility/plugins/profile/manifest-block.ts`），`musepi` 优先、`omp`/`pi` 兼容。新增读取点必须用它——`PluginManager` 曾只读后两个字段，导致只声明 `musepi` 的插件在 `doctor()` 里被报成"非插件"。
 - **`capability-report.ts` 读磁盘 package.json**，不读 `InstalledPlugin.manifest`（后者是安装器解析出的块，可能为空）。这个坑有测试兜底。
 - **能力报告的槽位集合引用 `collab-proto` 的 `EXTENSION_SLOT_DECLARATION`**，不要复制一份——复制品曾与权威一致，直到新增槽位时静默失配。
 - **i18n 双语是硬约束**：en 侧 `satisfies Record<SettingsKey, string>`，zh 加 key 不加 en 会编译失败，反之亦然。

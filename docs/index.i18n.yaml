@@ -1,5 +1,5 @@
 # Consistency record for index.md / index.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/index
-index.md: d6a7438aaad447d6197ea703746a944659b15f38
-index.zh-CN.md: e72007ef38c6012691d33fa4ce8344f474ef2569
+index.md: f363d9656ab3959eed2f9c3640d6f9ed063490e7
+index.zh-CN.md: 2708d82bdd1e47079c3aac475909dbab971e4c8f

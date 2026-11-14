@@ -10,17 +10,13 @@ Classify/label newly opened GitHub issues missing labels.
 
 ### 1. Fetch
 
-Parse `$ARGUMENTS` for `--days` (default `7`).
+Parse `$ARGUMENTS` for `--days` (default `7`) into `DAYS`.
 
 ```bash
 # Build cutoff date (UTC) for "new" issues
-CUTOFF_DATE="$(python - <<'PY'
-from datetime import datetime, timedelta, timezone
-print((datetime.now(timezone.utc) - timedelta(days=7)).strftime('%Y-%m-%d'))
-PY
- )"
+CUTOFF_DATE="$(python3 -c 'import sys, datetime; print((datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=int(sys.argv[1]))).strftime("%Y-%m-%d"))' "$DAYS")"
 
-# Fetch only newly created open issues (default 7-day window)
+# Fetch only newly created open issues within the window
 gh issue list --state open --search "created:>=${CUTOFF_DATE}" --json number,title,body,labels,comments,createdAt --limit 50
 ```
 
