@@ -74,12 +74,15 @@ pub(crate) fn match_index(items: &[DesktopMenuItem], label: &str) -> CoreResult<
 }
 
 pub(crate) fn require_enabled(item: &DesktopMenuItem) -> CoreResult<()> {
-	item.enabled.ok_or_else(|| {
-		DesktopError::ax_failed(format!(
+	// `bool::ok_or_else` is still unstable in the rustc rules_rust pins for
+	// bazel, so spell the branch out.
+	if !item.enabled {
+		return Err(DesktopError::ax_failed(format!(
 			"menu item '{}' is disabled; no command was dispatched",
 			item.path.join(" > ")
-		))
-	})
+		)));
+	}
+	Ok(())
 }
 
 pub(crate) fn require_command(item: &DesktopMenuItem) -> CoreResult<()> {
