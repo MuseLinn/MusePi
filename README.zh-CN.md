@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="banner.png" width="1280" alt="MusePi — 桌面优先的 AI 编程助手">
+  <img src="assets/readme-banner.png" width="1280" alt="MusePi — 桌面优先的 AI 编程助手">
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 
 ---
 
-MusePi 集编程智能体、Electron 工作台、终端界面和远程客户端于一体。桌面端提供可编辑文件工作区、代码审阅工具、受管浏览器、桌宠，以及管理第一方和第三方 Cordis 插件的能力中心。MusePi 独立发版；参考项目与上游沿革记录在 [UPSTREAM.md](UPSTREAM.md)。
+MusePi 集编程智能体、Electron 工作台、终端界面和远程客户端于一体。桌面端提供可编辑文件工作区、代码审阅工具、受管浏览器、桌宠，以及管理第一方和第三方 Cordis 插件的能力中心。MusePi 独立发版；参考项目与上游沿革记录在 [docs/archive/upstream-lineage.md](docs/archive/upstream-lineage.md)。
 
 ## 安装
 
@@ -155,4 +155,4 @@ Windows 安装器先在 WebView2 向导中收集语言与安装选项，检查 M
 
 - [`docs/`](docs/)：产品与实现文档，按要求维护中英双语配对。
 - [`packages/coding-agent/CHANGELOG.musepi.md`](packages/coding-agent/CHANGELOG.musepi.md)：发布说明。
-- [`UPSTREAM.md`](UPSTREAM.md)：上游沿革与参考吸收历史。
+- [`docs/archive/upstream-lineage.md`](docs/archive/upstream-lineage.md)：上游沿革与参考吸收历史。

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="banner.png" width="1280" alt="MusePi — desktop-first AI coding agent">
+  <img src="assets/readme-banner.png" width="1280" alt="MusePi — desktop-first AI coding agent">
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 
 ---
 
-MusePi combines a coding agent, an Electron workbench, a terminal UI, and remote clients. The desktop app includes an editable file workspace, review tools, a managed browser, a desktop pet, and a capability center for first-party and third-party Cordis plugins. MusePi is independently versioned; reference projects and upstream lineage are recorded in [UPSTREAM.md](UPSTREAM.md).
+MusePi combines a coding agent, an Electron workbench, a terminal UI, and remote clients. The desktop app includes an editable file workspace, review tools, a managed browser, a desktop pet, and a capability center for first-party and third-party Cordis plugins. MusePi is independently versioned; reference projects and upstream lineage are recorded in [docs/archive/upstream-lineage.md](docs/archive/upstream-lineage.md).
 
 ## Install
 
@@ -155,4 +155,4 @@ Run the release workflow only for an explicit release request. Version and chang
 
 - [`docs/`](docs/): product and implementation documentation, with bilingual pairs where required.
 - [`packages/coding-agent/CHANGELOG.musepi.md`](packages/coding-agent/CHANGELOG.musepi.md): release notes.
-- [`UPSTREAM.md`](UPSTREAM.md): upstream lineage and reference-absorption history.
+- [`docs/archive/upstream-lineage.md`](docs/archive/upstream-lineage.md): upstream lineage and reference-absorption history.
