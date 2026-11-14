@@ -916,18 +916,29 @@ export class DaemonServer {
 		// 落定 promise 挂在实例上，由 startDaemon 在开任何传输前 settle。
 		// 直接 new DaemonServer 的测试不经传输，不 settle 也不受影响。
 		this.#hostServicesMounted = mountRegistryServices(this.#hostContext, this.#services.values(), {
-			// 收编第二刀：schedule 的生命周期权威交给 cordis effect 账本——
-			// start 即 apply（从盘加载任务 + 起 30s 扫描器），stop 即 disposer。
-			// 它是第一个真正带 effect 的服务，此前靠 server.ts 里那次手写 start()
-			// ——手写调用既不会被 dispose 回收（daemon 重启即漏一个定时器），
-			// 也拿不到「启动失败 = 启动失败」的归因。其余服务仍由 P1 掌管。
-			//
-			// pluginInstall / marketplace 同理：两条安装路径都 spawn
-			// `bun install` 并写同一个 plugins/package.json，若关闭时不回收，
-			// 子进程会脱离 daemon 继续写，而它自己捕获的那份快照回滚就再也
-			// 等不到了。disposer 会 await stop()，所以关闭路径等到回滚与
-			// 半成品清理都落定才继续。
-			lifecycleByKey: { schedule: "cordis", pluginInstall: "cordis", marketplace: "cordis" },
+			// A service with process state opts into cordis lifecycle: apply calls
+			// start(), disposing the host context calls stop(). The reasons differ
+			// per service but the failure mode is the same — state that outlives
+			// the context that created it:
+			//   schedule      — 30s scanner + tasks loaded from disk;
+			//   pluginInstall / marketplace — both spawn `bun install` against the
+			//     same plugins/package.json, and the disposer awaits the rollback
+			//     before shutdown continues;
+			//   attachments   — uncommitted upload chunks on disk;
+			//   gitWatch      — directory watchers and their refcounts;
+			//   mcpOAuth      — in-flight OAuth flows;
+			//   views         — the open view store.
+			// Stateless services stay "external": there is nothing to own, and the
+			// P1 registry keeps constructing them.
+			lifecycleByKey: {
+				schedule: "cordis",
+				pluginInstall: "cordis",
+				marketplace: "cordis",
+				attachments: "cordis",
+				gitWatch: "cordis",
+				mcpOAuth: "cordis",
+				views: "cordis",
+			},
 		});
 		// 无人 settle 时（测试直构）不得变成 unhandledRejection；真 await 见 settleHostServices。
 		void this.#hostServicesMounted.catch(() => {});
