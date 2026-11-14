@@ -201,7 +201,7 @@ class MemoryTransport implements ComputerWorkerTransport {
 	}
 }
 
-const snapshot = (readOnly = false): ComputerSessionSnapshot => ({
+const snapshot = (readOnly = false, extra: Partial<ComputerSessionSnapshot> = {}): ComputerSessionSnapshot => ({
 	cwd: import.meta.dir,
 	sessionId: crypto.randomUUID(),
 	captureMaxWidth: 1280,
@@ -209,6 +209,7 @@ const snapshot = (readOnly = false): ComputerSessionSnapshot => ({
 	display: "all",
 	backgroundFallback: "takeover",
 	readOnly,
+	...extra,
 });
 
 async function runWorker(
@@ -608,5 +609,185 @@ describe("native application catalogue", () => {
 		expect(result.ok).toBe(true);
 		expect(result.ok ? result.payload.returnValue : null).toEqual({ pid: 4242, path: notion.path });
 		expect(target).toBe("Notion");
+	});
+});
+
+describe("application catalogue provider seam", () => {
+	it("routes desktop.apps through the host provider named by the run", async () => {
+		const transport = new MemoryTransport();
+		new ComputerWorkerCore(transport, () => new FakeNativeSession());
+		transport.inbound({
+			type: "run",
+			id: "prov-list",
+			code: "return await desktop.apps({ name: 'notion' });",
+			timeoutMs: 2_000,
+			session: snapshot(false, { applicationProvider: "test-catalogue" }),
+		});
+		const call = await transport.waitFor(message => message.type === "provider-call");
+		if (call.type !== "provider-call") throw new Error("expected a provider call");
+		expect(call.provider).toBe("applications");
+		expect(call.method).toBe("list");
+		expect(call.args).toEqual({ query: "notion" });
+
+		transport.inbound({
+			type: "provider-reply",
+			id: call.id,
+			reply: {
+				ok: true,
+				value: [
+					{ id: "C:aNotion.lnk", name: "Notion", path: "C:aNotion.lnk", kind: "native", running: true, pid: 7 },
+				],
+			},
+		});
+		const result = (await transport.waitFor(
+			message => message.type === "result" && message.id === "prov-list",
+		)) as Extract<ComputerWorkerOutbound, { type: "result" }>;
+		expect(result.ok).toBe(true);
+		expect(result.ok ? result.payload.returnValue : null).toEqual([
+			{ id: "C:aNotion.lnk", name: "Notion", path: "C:aNotion.lnk", kind: "native", running: true, pid: 7 },
+		]);
+	});
+
+	it("surfaces a provider failure instead of falling back silently", async () => {
+		const transport = new MemoryTransport();
+		new ComputerWorkerCore(transport, () => new FakeNativeSession());
+		transport.inbound({
+			type: "run",
+			id: "prov-fail",
+			code: "return await desktop.apps();",
+			timeoutMs: 2_000,
+			session: snapshot(false, { applicationProvider: "test-catalogue" }),
+		});
+		const call = await transport.waitFor(message => message.type === "provider-call");
+		if (call.type !== "provider-call") throw new Error("expected a provider call");
+		transport.inbound({
+			type: "provider-reply",
+			id: call.id,
+			reply: {
+				ok: false,
+				error: { name: "ToolError", message: "catalogue offline", isToolError: true, isAbort: false },
+			},
+		});
+		const result = (await transport.waitFor(
+			message => message.type === "result" && message.id === "prov-fail",
+		)) as Extract<ComputerWorkerOutbound, { type: "result" }>;
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.message).toContain("catalogue offline");
+	});
+
+	it("uses the built-in catalogue when the run names no provider", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		let nativeAsked = false;
+		session.listApplications = async () => {
+			nativeAsked = true;
+			return [];
+		};
+		new ComputerWorkerCore(transport, () => session);
+		const result = await runWorker(transport, "builtin", "return await desktop.apps();");
+		expect(result.ok).toBe(true);
+		expect(nativeAsked).toBe(true);
+	});
+});
+
+class ProviderCallWorker implements ComputerWorkerHandle {
+	#handlers = new Set<(message: ComputerWorkerOutbound) => void>();
+	#runId = "";
+
+	send(message: ComputerWorkerInbound): void {
+		if (message.type === "run") {
+			this.#runId = message.id;
+			queueMicrotask(() =>
+				this.#emit({
+					type: "provider-call",
+					id: "provider-call-1",
+					provider: "applications",
+					method: "list",
+					args: { query: "x" },
+				}),
+			);
+			return;
+		}
+		if (message.type === "provider-reply") {
+			queueMicrotask(() =>
+				this.#emit({
+					type: "result",
+					id: this.#runId,
+					ok: true,
+					payload: { displays: [], returnValue: { reply: message.reply }, screenshots: [] },
+				}),
+			);
+			return;
+		}
+		if (message.type === "close") queueMicrotask(() => this.#emit({ type: "closed" }));
+	}
+	onMessage(handler: (message: ComputerWorkerOutbound) => void): () => void {
+		this.#handlers.add(handler);
+		queueMicrotask(() => this.#emit({ type: "ready" }));
+		return () => this.#handlers.delete(handler);
+	}
+	onError(_handler: (error: Error) => void): () => void {
+		return () => {};
+	}
+	async terminate(): Promise<void> {}
+	#emit(message: ComputerWorkerOutbound): void {
+		for (const handler of this.#handlers) handler(message);
+	}
+}
+
+describe("supervisor application provider dispatch", () => {
+	it("answers the worker with the registered provider's result", async () => {
+		const { ApplicationProviderRegistry } = await import("../../src/tools/computer/app-provider");
+		const registry = new ApplicationProviderRegistry();
+		const calls: unknown[] = [];
+		registry.register({
+			name: "test-catalogue",
+			async list(args) {
+				calls.push(args);
+				return [{ id: "/a/x.lnk", name: "X", path: "/a/x.lnk", kind: "native" }];
+			},
+			async open() {
+				return { path: "/a/x.lnk" };
+			},
+		});
+		const supervisor = new ComputerSupervisor(
+			toolSession(),
+			() => new ProviderCallWorker(),
+			{ startMs: 200, closeMs: 200 },
+			async () => {
+				throw new Error("tool bridge unused");
+			},
+			registry,
+		);
+
+		const result = await supervisor.run(
+			"await desktop.apps()",
+			1_000,
+			snapshot(false, { applicationProvider: "test-catalogue" }),
+		);
+		expect(calls).toEqual([{ query: "x" }]);
+		expect(result.returnValue).toMatchObject({
+			reply: { ok: true, value: [{ id: "/a/x.lnk", name: "X", path: "/a/x.lnk", kind: "native" }] },
+		});
+		await supervisor.close();
+	});
+
+	it("refuses the call when no provider is registered", async () => {
+		const { ApplicationProviderRegistry } = await import("../../src/tools/computer/app-provider");
+		const supervisor = new ComputerSupervisor(
+			toolSession(),
+			() => new ProviderCallWorker(),
+			{ startMs: 200, closeMs: 200 },
+			async () => {
+				throw new Error("tool bridge unused");
+			},
+			new ApplicationProviderRegistry(),
+		);
+
+		const result = await supervisor.run("await desktop.apps()", 1_000, snapshot());
+		expect(result.returnValue).toMatchObject({
+			reply: { ok: false, error: { message: "No application catalogue provider is registered" } },
+		});
+		await supervisor.close();
 	});
 });

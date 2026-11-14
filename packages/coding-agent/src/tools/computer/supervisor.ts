@@ -5,6 +5,7 @@ import { Snowflake } from "@musepi/pi-utils/snowflake";
 import { workerHostEntry } from "@musepi/pi-utils/worker-host";
 import type { ToolSession } from "../index";
 import { ToolAbortError, ToolError } from "../tool-errors";
+import { type ApplicationProviderRegistry, applicationProviders as applicationProviderRegistry } from "./app-provider";
 import {
 	COMPUTER_WORKER_ARG,
 	type ComputerInputEvent,
@@ -141,6 +142,7 @@ export class ComputerSupervisor implements ComputerController {
 	readonly #session: ToolSession;
 	readonly #createWorker: ComputerWorkerFactory;
 	readonly #callSessionTool: ComputerSessionToolCaller;
+	readonly #applicationProviders: ApplicationProviderRegistry;
 	readonly #timeouts: ComputerSupervisorTimeouts;
 	#worker?: ComputerWorkerHandle;
 	#startPromise?: Promise<void>;
@@ -160,11 +162,13 @@ export class ComputerSupervisor implements ComputerController {
 		callSessionTool: ComputerSessionToolCaller = async () => {
 			throw new ToolError("Computer session tool bridge is unavailable");
 		},
+		applicationProviders?: ApplicationProviderRegistry,
 	) {
 		this.#session = session;
 		this.#createWorker = createWorker;
 		this.#timeouts = timeouts;
 		this.#callSessionTool = callSessionTool;
+		this.#applicationProviders = applicationProviders ?? applicationProviderRegistry;
 	}
 
 	async capabilities(): Promise<DesktopCapabilities | undefined> {
@@ -253,9 +257,48 @@ export class ComputerSupervisor implements ComputerController {
 			void this.#dispatchToolCall(message);
 			return;
 		}
+		if (message.type === "provider-call") {
+			void this.#dispatchProviderCall(message);
+			return;
+		}
 		if (message.type === "input") {
 			const pending = this.#pending.get(message.runId);
 			pending?.onInput?.(message.event);
+		}
+	}
+
+	/** Answers one capability-seam call from the worker. The provider is read at
+	 *  call time, so a registration that lands mid-run is honoured or refused
+	 *  consistently instead of being pinned to the run's start. */
+	async #dispatchProviderCall(message: Extract<ComputerWorkerOutbound, { type: "provider-call" }>): Promise<void> {
+		const provider = this.#applicationProviders.provider;
+		if (!provider || message.provider !== "applications") {
+			this.#safeSend({
+				type: "provider-reply",
+				id: message.id,
+				reply: {
+					ok: false,
+					error: {
+						name: "ToolError",
+						message:
+							provider === null
+								? "No application catalogue provider is registered"
+								: `Unknown provider ${JSON.stringify(message.provider)}`,
+						isToolError: true,
+						isAbort: false,
+					},
+				},
+			});
+			return;
+		}
+		try {
+			const value =
+				message.method === "list"
+					? await provider.list((message.args ?? {}) as { query?: string; runningOnly?: boolean })
+					: await provider.open(((message.args ?? {}) as { target: string }).target);
+			this.#safeSend({ type: "provider-reply", id: message.id, reply: { ok: true, value } });
+		} catch (error) {
+			this.#safeSend({ type: "provider-reply", id: message.id, reply: { ok: false, error: toErrorPayload(error) } });
 		}
 	}
 

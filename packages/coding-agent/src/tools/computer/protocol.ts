@@ -15,6 +15,9 @@ export interface ComputerSessionSnapshot {
 	/** `computer.backgroundFallback`: may an action take the user's focus when
 	 *  a window refuses background input, or must it fail instead? */
 	backgroundFallback: "takeover" | "refuse";
+	/** Host-registered application catalogue provider, when one replaced the
+	 *  worker's built-in source for this run. */
+	applicationProvider?: string | null;
 }
 
 /** Reply envelope for a session tool invoked by desktop JavaScript. */
@@ -26,6 +29,7 @@ export type ComputerWorkerInbound =
 	| { type: "run"; id: string; code: string; timeoutMs: number; session: ComputerSessionSnapshot }
 	| { type: "abort"; id: string }
 	| { type: "tool-reply"; id: string; reply: ToolReply }
+	| { type: "provider-reply"; id: string; reply: ToolReply }
 	| { type: "close" };
 
 /** Successful computer run output returned to the tool supervisor. */
@@ -95,6 +99,14 @@ export type ComputerWorkerOutbound =
 	| { type: "result"; id: string; ok: true; payload: ComputerRunOk }
 	| { type: "result"; id: string; ok: false; error: RunErrorPayload }
 	| { type: "tool-call"; id: string; runId: string; name: string; args: unknown }
+	| {
+			type: "provider-call";
+			id: string;
+			/** Capability seam the call belongs to. */
+			provider: "applications";
+			method: "list" | "open";
+			args: unknown;
+	  }
 	| { type: "input"; id: string; runId: string; event: ComputerInputEvent }
 	| { type: "closed" };
 

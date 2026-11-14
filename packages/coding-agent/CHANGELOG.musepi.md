@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **应用目录支持宿主替换（能力缝）**：新增 `ApplicationProvider` 能力缝与具名独占注册表，宿主可替换 `desktop.apps()` / `desktop.launch()` 的来源；worker 通过 `provider-call` / `provider-reply` 桥回调宿主，`ComputerSessionSnapshot.applicationProvider` 声明本次运行由谁回答，disposer 释放后回退内置原生（Windows）或文件系统目录。
+  - EN: The application catalogue gains a host-replaceable capability seam: `ApplicationProvider` with an exclusive named registry can answer `desktop.apps()` / `desktop.launch()`. The worker calls the host over `provider-call` / `provider-reply`, each run names its provider in `ComputerSessionSnapshot.applicationProvider`, and releasing the registration falls back to the built-in native (Windows) or filesystem catalogue.
+
 - **应用清单改用原生实现（Windows）**：`desktop.apps()` 优先走 `pi-natives` 的原生应用目录（开始菜单 + 进程状态），返回运行中状态与 pid；`desktop.launch()` 也交给原生 `ShellExecuteEx`，沿用系统对快捷方式的处理。旧 addon 与其他平台回退到文件系统目录。
   - EN: The app catalogue is native on Windows: `desktop.apps()` reads the Start Menu through `pi-natives` and reports running state with pid, and `desktop.launch()` delegates to native `ShellExecuteEx` so shortcut handling stays the platform's. Older addons and other platforms keep the filesystem catalogue.
 

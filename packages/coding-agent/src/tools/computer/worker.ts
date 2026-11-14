@@ -27,6 +27,7 @@ import {
 	waitForRun,
 } from "../run-scope";
 import { ToolAbortError, ToolError, throwIfAborted } from "../tool-errors";
+import type { ApplicationEntry } from "./app-provider";
 import { annotateRunning, type DesktopApp, hostInstalledApps, launchCommand, resolveApp } from "./apps";
 import type {
 	ComputerInputEvent,
@@ -105,6 +106,8 @@ interface ActiveRun {
 	ac: AbortController;
 	signal: AbortSignal;
 	pendingTools: Map<string, PendingTool>;
+	/** Host provider calls in flight, keyed by call id. */
+	pendingProviders: Map<string, PendingTool>;
 }
 
 interface ComputerRunContext {
@@ -632,12 +635,45 @@ export class ComputerWorkerCore {
 	 */
 	readonly #runContexts = new AsyncLocalStorage<ComputerRunContext>();
 	#closed = false;
+	/** Monotonic id source for capability-seam calls. */
+	#providerSeq = 0;
 
 	constructor(transport: ComputerWorkerTransport, createSession: NativeDesktopSessionFactory = createDesktopSession) {
 		this.#transport = transport;
 		this.#createSession = createSession;
 		this.#unsubscribe = transport.onMessage(message => this.handle(message));
 		this.#transport.send({ type: "ready" });
+	}
+
+	/**
+	 * Ask the host's registered provider for one answer. The reply is JSON-shaped
+	 * data, never a live object: the provider lives on another thread.
+	 */
+	#callHostProvider(active: ActiveRun, method: "list" | "open", args: unknown): Promise<unknown> {
+		const id = `provider-${active.id}-${++this.#providerSeq}`;
+		const pending = Promise.withResolvers<unknown>();
+		const signal = active.signal;
+		const onAbort = (): void => {
+			active.pendingProviders.delete(id);
+			pending.reject(new ToolAbortError());
+		};
+		if (signal.aborted) {
+			onAbort();
+			return pending.promise;
+		}
+		signal.addEventListener("abort", onAbort, { once: true });
+		active.pendingProviders.set(id, {
+			resolve: value => {
+				signal.removeEventListener("abort", onAbort);
+				pending.resolve(value);
+			},
+			reject: error => {
+				signal.removeEventListener("abort", onAbort);
+				pending.reject(error);
+			},
+		});
+		this.#transport.send({ type: "provider-call", id, provider: "applications", method, args });
+		return pending.promise;
 	}
 
 	/** Routes one supervisor command into the persistent worker state. */
@@ -655,6 +691,14 @@ export class ComputerWorkerCore {
 			case "tool-reply":
 				this.#deliverToolReply(message.id, message.reply);
 				return;
+			case "provider-reply": {
+				const pending = this.#active?.pendingProviders.get(message.id);
+				if (!pending) return;
+				this.#active?.pendingProviders.delete(message.id);
+				if (message.reply.ok) pending.resolve(message.reply.value);
+				else pending.reject(replyError(message.reply.error));
+				return;
+			}
 			case "close":
 				void this.#close();
 		}
@@ -699,7 +743,13 @@ export class ComputerWorkerCore {
 		const ac = new AbortController();
 		const runAc = new AbortController();
 		const signal = AbortSignal.any([timeoutSignal, ac.signal, runAc.signal]);
-		const active: ActiveRun = { id: message.id, ac, signal, pendingTools: new Map() };
+		const active: ActiveRun = {
+			id: message.id,
+			ac,
+			signal,
+			pendingTools: new Map(),
+			pendingProviders: new Map(),
+		};
 		this.#active = active;
 		const output = new RunOutput();
 		const screenshots: ComputerScreenshot[] = [];
@@ -759,6 +809,8 @@ export class ComputerWorkerCore {
 					: abortError;
 				for (const pending of active.pendingTools.values()) pending.reject(toolAbort);
 				active.pendingTools.clear();
+				for (const pending of active.pendingProviders.values()) pending.reject(toolAbort);
+				active.pendingProviders.clear();
 			};
 			if (signal.aborted) onCancel();
 			else signal.addEventListener("abort", onCancel, { once: true });
@@ -921,9 +973,33 @@ export class ComputerWorkerCore {
 				return node ? el(node) : null;
 			},
 			apps: async (filter?: { name?: string }): Promise<DesktopApp[]> => {
-				const { signal } = getContext();
+				const context = getContext();
+				const { signal } = context;
 				throwIfAborted(signal);
 				const name = filter?.name?.trim().toLowerCase();
+				// A host-registered provider owns the catalogue for this run; the
+				// worker's built-in source only answers when nobody claimed the slot.
+				if (context.snapshot.applicationProvider && this.#active) {
+					const entries = await this.#callHostProvider(
+						this.#active,
+						"list",
+						name && name.length > 0 ? { query: name } : {},
+					);
+					if (!Array.isArray(entries)) {
+						throw new ToolError("Application provider returned a non-list result");
+					}
+					return entries.map(entry => {
+						const app = entry as ApplicationEntry;
+						return {
+							id: String(app.id),
+							name: String(app.name),
+							path: String(app.path),
+							kind: app.kind,
+							...(app.running !== undefined ? { running: app.running } : {}),
+							...(app.pid !== undefined ? { pid: app.pid } : {}),
+						} satisfies DesktopApp;
+					});
+				}
 				// Native catalogue first: it owns the platform's own app list and its
 				// running state. Older addons and other platforms fall back to the
 				// filesystem catalogue below.
@@ -960,6 +1036,16 @@ export class ComputerWorkerCore {
 			launch: async (target: string, options?: { args?: string[] }): Promise<{ pid?: number; path: string }> => {
 				const context = getContext();
 				guardRun(context, "desktop.launch");
+				if (context.snapshot.applicationProvider && this.#active) {
+					const opened = (await this.#callHostProvider(this.#active, "open", { target })) as {
+						pid?: number;
+						path?: unknown;
+					};
+					if (typeof opened?.path !== "string") {
+						throw new ToolError("Application provider returned no launch path");
+					}
+					return { ...(opened.pid !== undefined ? { pid: opened.pid } : {}), path: opened.path };
+				}
 				if (session.openApplication) {
 					const opened = await nativeCall(context.signal, () => session.openApplication!(target));
 					return { ...(opened.pid !== undefined ? { pid: opened.pid } : {}), path: opened.path };

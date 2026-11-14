@@ -11,7 +11,7 @@ import {
 	resolveApp,
 } from "../../src/tools/computer/apps";
 
-const app = (name: string, id = `/apps/${name}`): DesktopApp => ({ name, id, kind: "shortcut" });
+const app = (name: string, id = `/apps/${name}`): DesktopApp => ({ name, id, path: id, kind: "shortcut" });
 
 describe("installed app discovery", () => {
 	it("reads Start Menu shortcuts and names them without the extension", async () => {

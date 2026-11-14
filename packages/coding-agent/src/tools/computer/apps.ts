@@ -21,7 +21,10 @@ export interface DesktopApp {
 	name: string;
 	/** Absolute path (shortcut, bundle or desktop entry). */
 	id: string;
-	kind: "shortcut" | "bundle" | "desktop-entry";
+	/** Where it launches from; equals `id` for the filesystem catalogue. */
+	path: string;
+	/** Where the entry comes from; `native` marks a host-provided catalogue. */
+	kind: "shortcut" | "bundle" | "desktop-entry" | "native";
 	/** Set when a window of this application is on screen. */
 	running?: boolean;
 	/** Owning process of that window, when the platform exposes it. */
@@ -62,7 +65,7 @@ async function walkShortcuts(root: string, depth = 0): Promise<DesktopApp[]> {
 			continue;
 		}
 		if (!/\.(lnk|exe)$/i.test(entry.name)) continue;
-		found.push({ name: entry.name.replace(/\.(lnk|exe)$/i, ""), id: full, kind: "shortcut" });
+		found.push({ name: entry.name.replace(/\.(lnk|exe)$/i, ""), id: full, path: full, kind: "shortcut" });
 	}
 	return found;
 }
@@ -79,11 +82,8 @@ async function macApps(roots: AppRoots): Promise<DesktopApp[]> {
 		}
 		for (const entry of entries) {
 			if (!entry.isDirectory() || !entry.name.endsWith(".app")) continue;
-			found.push({
-				name: entry.name.slice(0, -".app".length),
-				id: path.join(dir, entry.name),
-				kind: "bundle",
-			});
+			const id = path.join(dir, entry.name);
+			found.push({ name: entry.name.slice(0, -".app".length), id, path: id, kind: "bundle" });
 		}
 	}
 	return found;
@@ -121,7 +121,7 @@ async function linuxApps(roots: AppRoots): Promise<DesktopApp[]> {
 			} catch {
 				name = null;
 			}
-			found.push({ name: name ?? entry.name.replace(/\.desktop$/, ""), id, kind: "desktop-entry" });
+			found.push({ name: name ?? entry.name.replace(/\.desktop$/, ""), id, path: id, kind: "desktop-entry" });
 		}
 	}
 	return found;

@@ -15,6 +15,7 @@ import computerDescription from "../prompts/tools/computer.md" with { type: "tex
 import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
 import { managedBrowserEnabled } from "./browser/managed-bridge";
+import { applicationProviders } from "./computer/app-provider";
 import type { ComputerInputEvent, ComputerScreenshot, ComputerSessionSnapshot } from "./computer/protocol";
 import { type ComputerController, ComputerSupervisor, registerComputerController } from "./computer/supervisor";
 import type { ToolSession } from "./index";
@@ -157,6 +158,7 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 			display: this.session.settings.get("computer.display") ?? "all",
 			readOnly: !!params.read_only,
 			backgroundFallback: this.session.settings.get("computer.backgroundFallback") ?? "takeover",
+			applicationProvider: applicationProviders.providerName,
 		};
 		const run = await this.#controller.run(
 			params.code,
