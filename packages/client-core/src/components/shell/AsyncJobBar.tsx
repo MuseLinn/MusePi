@@ -16,6 +16,40 @@ import { fmtDuration } from "../../lib/format";
  * The component renders nothing while no job runs — an idle session has no
  * background HUD, and the poll stops with the component.
  */
+/** Wire type → reader-facing name. Kept local to the HUD: `jobTypeLabel`
+ *  stays the technical fallback other surfaces rely on. */
+function typeName(type: string): string {
+	switch (type) {
+		case "bash":
+			return t("general.backgroundJobsTypeBash");
+		case "task":
+			return t("general.backgroundJobsTypeTask");
+		case "question":
+			return t("general.backgroundJobsTypeQuestion");
+		case "agnes-video":
+			return t("general.backgroundJobsTypeVideo");
+		default:
+			return jobTypeLabel(type);
+	}
+}
+
+function statusName(status: string): string {
+	switch (status) {
+		case "running":
+			return t("general.backgroundJobsStatusRunning");
+		case "completed":
+			return t("general.backgroundJobsStatusCompleted");
+		case "failed":
+			return t("general.backgroundJobsStatusFailed");
+		case "cancelled":
+			return t("general.backgroundJobsStatusCancelled");
+		case "lost":
+			return t("general.backgroundJobsStatusLost");
+		default:
+			return status;
+	}
+}
+
 export function AsyncJobBar({
 	client,
 	sessionId,
@@ -28,11 +62,13 @@ export function AsyncJobBar({
 	onOpenDetails?(job: AsyncJobItem): void;
 	className?: string;
 }): ReactNode {
-	const { running, cancel, loadOutput } = useAsyncJobs(client, sessionId);
+	const { running, snapshot, cancel, loadOutput } = useAsyncJobs(client, sessionId);
 	const [collapsed, setCollapsed] = useState(false);
+	const [showAll, setShowAll] = useState(false);
 	const [selected, setSelected] = useState<AsyncJobItem | null>(null);
 	const [output, setOutput] = useState<string>("");
 	const [outputLoading, setOutputLoading] = useState(false);
+	const [outputTruncated, setOutputTruncated] = useState(false);
 	const [now, setNow] = useState(() => Date.now());
 
 	useEffect(() => {
@@ -49,10 +85,12 @@ export function AsyncJobBar({
 				if (!alive) return;
 				setOutputLoading(false);
 				if (result?.output !== undefined) setOutput(result.output);
+				setOutputTruncated(result?.truncated === true);
 			});
 		};
 		setOutput("");
 		setOutputLoading(true);
+		setOutputTruncated(false);
 		read();
 		const timer = window.setInterval(read, 1000);
 		return () => {
@@ -62,7 +100,7 @@ export function AsyncJobBar({
 	}, [selected, client, sessionId, loadOutput]);
 
 	if (running.length === 0) return null;
-	const primaryType = jobTypeLabel(running[0]?.type ?? "bash");
+	const primaryType = typeName(running[0]?.type ?? "bash");
 
 	return (
 		<div className={`sh-jobbar${className ? ` ${className}` : ""}`}>
@@ -115,6 +153,42 @@ export function AsyncJobBar({
 							</li>
 						))}
 					</ul>
+					{snapshot !== null && snapshot.recent.length > 0 && (
+						<>
+							<button
+								type="button"
+								className="sh-jobcard-all"
+								aria-expanded={showAll}
+								onClick={() => setShowAll(value => !value)}
+							>
+								<ChevronRight size={12} aria-hidden />
+								<span>{t("general.backgroundJobsAll")}</span>
+								<span className="sh-jobcount">{snapshot.recent.length}</span>
+							</button>
+							{showAll && (
+								<ul className="sh-joblist sh-joblist--recent">
+									{snapshot.recent.map(job => (
+										<li key={job.id} className="sh-jobrow">
+											<span className="sh-jobdot" data-status={job.status} aria-hidden />
+											<span className="sh-jobcmd" title={job.label}>
+												{job.label || job.id}
+											</span>
+											<span className="sh-jobtime">{statusName(job.status)}</span>
+											<button
+												type="button"
+												className="sh-jobaction"
+												title={t("general.backgroundJobsDetails")}
+												aria-label={t("general.backgroundJobsDetails")}
+												onClick={() => (onOpenDetails ? onOpenDetails(job) : setSelected(job))}
+											>
+												<ChevronRight size={14} />
+											</button>
+										</li>
+									))}
+								</ul>
+							)}
+						</>
+					)}
 				</div>
 			)}
 			<button
@@ -153,11 +227,12 @@ export function AsyncJobBar({
 							</button>
 						</div>
 						<div className="sh-job-sheet-meta">
-							<span>{selected.status}</span>
+							<span>{statusName(selected.status)}</span>
 							<span>{fmtDuration(now - jobStartMs(selected))}</span>
 							{selected.outputBytes !== undefined && (
 								<span>{t("general.backgroundJobsOutputBytes", { count: String(selected.outputBytes) })}</span>
 							)}
+							{outputTruncated && <span>{t("general.backgroundJobsTruncated")}</span>}
 						</div>
 						<pre className="sh-job-sheet-output">
 							{outputLoading && output === ""

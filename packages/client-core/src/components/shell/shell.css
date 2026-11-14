@@ -6233,6 +6233,63 @@
 	gap: 2px;
 }
 
+.sh-jobcard-all {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	width: 100%;
+	margin-top: 6px;
+	padding: 3px 2px;
+	border: 0;
+	background: transparent;
+	color: var(--fg-muted);
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.sh-jobcard-all:hover,
+.sh-jobcard-all:focus-visible {
+	color: var(--fg);
+}
+
+.sh-jobcard-all svg {
+	transition: transform 120ms ease;
+}
+
+.sh-jobcard-all[aria-expanded="true"] svg {
+	transform: rotate(90deg);
+}
+
+.sh-jobcount {
+	margin-left: auto;
+	color: var(--fg-faint);
+	font-family: var(--font-mono);
+}
+
+.sh-joblist--recent .sh-jobcmd {
+	color: var(--fg-muted);
+	font-family: var(--font-ui);
+}
+
+.sh-joblist--recent .sh-jobtime {
+	color: var(--fg-faint);
+}
+
+.sh-jobdot[data-status="completed"] {
+	background: var(--fg-faint);
+	box-shadow: none;
+}
+
+.sh-jobdot[data-status="failed"] {
+	background: var(--err, #f85149);
+	box-shadow: none;
+}
+
+.sh-jobdot[data-status="cancelled"] {
+	background: var(--fg-faint);
+	box-shadow: none;
+}
+
 .sh-jobrow {
 	display: flex;
 	align-items: center;
