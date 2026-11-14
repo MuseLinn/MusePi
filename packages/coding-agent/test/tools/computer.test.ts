@@ -791,3 +791,49 @@ describe("supervisor application provider dispatch", () => {
 		await supervisor.close();
 	});
 });
+
+describe("application catalogue filters", () => {
+	it("forwards runningOnly and activate to the catalogue seam", async () => {
+		const transport = new MemoryTransport();
+		new ComputerWorkerCore(transport, () => new FakeNativeSession());
+		transport.inbound({
+			type: "run",
+			id: "prov-filter",
+			code: "return await desktop.apps({ runningOnly: true });",
+			timeoutMs: 2_000,
+			session: snapshot(false, { applicationProvider: "test-catalogue" }),
+		});
+		const listCall = await transport.waitFor(message => message.type === "provider-call");
+		if (listCall.type !== "provider-call") throw new Error("expected a provider call");
+		expect(listCall.args).toEqual({ runningOnly: true });
+		transport.inbound({ type: "provider-reply", id: listCall.id, reply: { ok: true, value: [] } });
+		const listResult = (await transport.waitFor(
+			message => message.type === "result" && message.id === "prov-filter",
+		)) as Extract<ComputerWorkerOutbound, { type: "result" }>;
+		expect(listResult.ok).toBe(true);
+
+		transport.inbound({
+			type: "run",
+			id: "prov-open",
+			code: "return await desktop.launch('Notion', { activate: true });",
+			timeoutMs: 2_000,
+			session: snapshot(false, { applicationProvider: "test-catalogue" }),
+		});
+		const openCall = await transport.waitFor(
+			message => message.type === "provider-call" && message.method === "open",
+		);
+		if (openCall.type !== "provider-call") throw new Error("expected a provider call");
+		expect(openCall.method).toBe("open");
+		expect(openCall.args).toEqual({ target: "Notion", activate: true });
+		transport.inbound({
+			type: "provider-reply",
+			id: openCall.id,
+			reply: { ok: true, value: { path: "C:aNotion.lnk", pid: 9 } },
+		});
+		const openResult = (await transport.waitFor(
+			message => message.type === "result" && message.id === "prov-open",
+		)) as Extract<ComputerWorkerOutbound, { type: "result" }>;
+		expect(openResult.ok).toBe(true);
+		expect(openResult.ok ? openResult.payload.returnValue : null).toEqual({ path: "C:aNotion.lnk", pid: 9 });
+	});
+});

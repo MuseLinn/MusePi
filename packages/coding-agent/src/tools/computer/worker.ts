@@ -972,19 +972,19 @@ export class ComputerWorkerCore {
 				const node = await nativeCall(signal, () => session.axFocused());
 				return node ? el(node) : null;
 			},
-			apps: async (filter?: { name?: string }): Promise<DesktopApp[]> => {
+			apps: async (filter?: { name?: string; runningOnly?: boolean }): Promise<DesktopApp[]> => {
 				const context = getContext();
 				const { signal } = context;
 				throwIfAborted(signal);
 				const name = filter?.name?.trim().toLowerCase();
+				const runningOnly = filter?.runningOnly === true;
 				// A host-registered provider owns the catalogue for this run; the
 				// worker's built-in source only answers when nobody claimed the slot.
 				if (context.snapshot.applicationProvider && this.#active) {
-					const entries = await this.#callHostProvider(
-						this.#active,
-						"list",
-						name && name.length > 0 ? { query: name } : {},
-					);
+					const entries = await this.#callHostProvider(this.#active, "list", {
+						...(name && name.length > 0 ? { query: name } : {}),
+						...(runningOnly ? { runningOnly } : {}),
+					});
 					if (!Array.isArray(entries)) {
 						throw new ToolError("Application provider returned a non-list result");
 					}
@@ -1030,14 +1030,31 @@ export class ComputerWorkerCore {
 				} catch {
 					// Catalogue still answers without window attribution.
 				}
-				const apps = annotateRunning(installed, running);
-				return name ? apps.filter(app => app.name.toLowerCase().includes(name)) : apps;
+				const annotated = annotateRunning(installed, running);
+				const named = name ? annotated.filter(app => app.name.toLowerCase().includes(name)) : annotated;
+				return runningOnly ? named.filter(app => app.running === true) : named;
 			},
-			launch: async (target: string, options?: { args?: string[] }): Promise<{ pid?: number; path: string }> => {
+			launch: async (
+				target: string,
+				options?: { args?: string[]; activate?: boolean },
+			): Promise<{ pid?: number; path: string }> => {
 				const context = getContext();
 				guardRun(context, "desktop.launch");
+				const activate = options?.activate === true;
+				if (activate) {
+					refuseForeground(
+						context,
+						"desktop.launch with activate: true",
+						"bring the application to the front and take the user's keyboard",
+						"Launch without activate to open behind the user.",
+						target,
+					);
+				}
 				if (context.snapshot.applicationProvider && this.#active) {
-					const opened = (await this.#callHostProvider(this.#active, "open", { target })) as {
+					const opened = (await this.#callHostProvider(this.#active, "open", {
+						target,
+						...(activate ? { activate } : {}),
+					})) as {
 						pid?: number;
 						path?: unknown;
 					};
@@ -1047,7 +1064,9 @@ export class ComputerWorkerCore {
 					return { ...(opened.pid !== undefined ? { pid: opened.pid } : {}), path: opened.path };
 				}
 				if (session.openApplication) {
-					const opened = await nativeCall(context.signal, () => session.openApplication!(target));
+					const opened = await nativeCall(context.signal, () =>
+						session.openApplication!(target, activate ? { activate } : undefined),
+					);
 					return { ...(opened.pid !== undefined ? { pid: opened.pid } : {}), path: opened.path };
 				}
 				const app = resolveApp(await hostInstalledApps(), target);
