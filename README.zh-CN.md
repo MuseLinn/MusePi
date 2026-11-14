@@ -111,13 +111,14 @@ flowchart LR
 | --- | --- |
 | `apps/desktop` | Electron 壳、桌面渲染端、官方 GUI 插件、安装器与更新器 |
 | `packages/client-core` | 共享 React 组件、转录、widget、i18n 和协作 Web UI |
-| `packages/coding-agent` | CLI、daemon、会话、工具、内置 Cordis 插件和扩展运行时 |
+| `packages/coding-agent` | CLI、daemon（单一 RPC 分发器上的 L2 宿主服务）、会话、工具、内置 Cordis 插件和扩展运行时 |
 | `apps/mobile`、`apps/harmony` | Android 与 HarmonyOS 壳 |
 | `packages/collab-proto`、`packages/wire`、`packages/sdk` | 传输、持久化契约和客户端 SDK |
 | `packages/agent`、`packages/ai`、`packages/catalog` | 智能体循环、供应商客户端和模型目录 |
 | `packages/tui` | 终端界面 |
 | `packages/utils`、`packages/natives`、`crates/` | 共享工具与原生实现 |
-| 其他包 | Hashline 编辑、压缩、记忆、工具选择、统计和测试工具 |
+| `tools/` | 基准与测试工具工作区（metaharness、TypeScript 编辑基准） |
+| 其他包 | Hashline 编辑、压缩、记忆、工具选择和统计 |
 
 契约与扩展边界见 [`docs/capability-seams.md`](docs/capability-seams.md)、[`docs/extensions-dev.md`](docs/extensions-dev.md)、[`docs/gui-design.md`](docs/gui-design.md) 和 [`docs/gui-implementation.md`](docs/gui-implementation.md)。
 

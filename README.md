@@ -111,13 +111,14 @@ flowchart LR
 | --- | --- |
 | `apps/desktop` | Electron shell, desktop renderer, official GUI plugins, installer and updater |
 | `packages/client-core` | Shared React components, transcript, widgets, i18n, and collab web UI |
-| `packages/coding-agent` | CLI, daemon, sessions, tools, bundled Cordis plugins, and extension runtime |
+| `packages/coding-agent` | CLI, daemon (L2 host services over one RPC dispatcher), sessions, tools, bundled Cordis plugins, and extension runtime |
 | `apps/mobile`, `apps/harmony` | Android and HarmonyOS shells |
 | `packages/collab-proto`, `packages/wire`, `packages/sdk` | Transport, persisted contracts, and client SDK |
 | `packages/agent`, `packages/ai`, `packages/catalog` | Agent loop, provider client, and model catalog |
 | `packages/tui` | Terminal UI |
 | `packages/utils`, `packages/natives`, `crates/` | Shared utilities and native implementations |
-| Other packages | Hashline edits, compaction, memory, tool selection, statistics, and test harnesses |
+| `tools/` | Benchmark and harness workspaces (metaharness, TypeScript edit benchmark) |
+| Other packages | Hashline edits, compaction, memory, tool selection, and statistics |
 
 Contracts and extension boundaries: [`docs/capability-seams.md`](docs/capability-seams.md), [`docs/extensions-dev.md`](docs/extensions-dev.md), [`docs/gui-design.md`](docs/gui-design.md), and [`docs/gui-implementation.md`](docs/gui-implementation.md).
 
