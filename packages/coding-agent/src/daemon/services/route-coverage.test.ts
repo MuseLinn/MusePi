@@ -17,6 +17,7 @@ import { ConnectorService } from "./connector-service";
 import { CreationService } from "./creation-service";
 import { CredentialService } from "./credential-service";
 import { DesignSystemsService } from "./design-systems-service";
+import { DiagnosticsService } from "./diagnostics-service";
 import { EditorService } from "./editor-service";
 import { EventService } from "./event-service";
 import { ExtensionService } from "./extension-service";
@@ -93,6 +94,13 @@ function buildRegistry(): HostServices {
 	);
 	// LivenessService：无依赖，ping/system.ping 共用同一应答。
 	services.register(new LivenessService());
+	// DiagnosticsService：只认领 system.services，快照源在本测试里不触盘。
+	services.register(
+		new DiagnosticsService({
+			inspect: () => ({ keys: [], registrySize: 0, lifecycles: {} }),
+			services: () => [],
+		}),
+	);
 	// ViewStore 只认领路由（本测试不触库），但构造真实实例成本极低，
 	// 用临时目录避免碰默认 journal 目录。
 	const store = new ViewStore(join(mkdtempSync(join(tmpdir(), "musepi-views-")), "views.db"));

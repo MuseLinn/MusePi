@@ -10,12 +10,12 @@ import type { DaemonService } from "./services/types";
  *   同源实例，本文件是唯一 cordis 适配点——ADR 边界 2）。
  * - 输出：cordis 根 Context 上的服务提供（`ctx.<key>` 可解析）、检视面
  *   （registry size / 挂载键清单）、orderly shutdown 通路（fiber.dispose）。
- * - 生命周期：**逐服务声明**（`MountRegistryOptions.lifecycleByKey`）。未列入的
- *   服务 start/stop 权威仍在 P1 代码，挂载时代调——strangler-fig 的可回滚承诺
- *   由此成立（Context 拆掉即回 P1 形态）。列入 `"cordis"` 的服务由 apply 代调
- *   start、disposer 反向回收 stop：语义从"手写纪律"升级为"框架保证"，且
- *   disposer 一定跑得到（手写调用没有这个对称面）。当前唯一列入者是 schedule
- *   （收编第二刀）；其余服务逐个翻。
+ * - 生命周期：**默认 cordis，逐服务可退出**（`MountRegistryOptions.lifecycleByKey`）。
+ *   默认由 apply 代调 start、disposer 反向回收 stop——语义从"手写纪律"升级为
+ *   "框架保证"；`"external"` 留给必须自己掌管启停的嵌入宿主与测试替身。
+ *   全部 L2 服务都已翻牌（其中 schedule / pluginInstall / marketplace /
+ *   attachments / gitWatch / mcpOAuth / views 有真实 start/stop，其余当前
+ *   无启停钩子——翻牌对它们是零行为差异，只在将来长出 stop 时自动获得对称面）。
  * - 启停：随 daemon 进程创建/消亡；`dispose()` 在 daemon close 路径调用。
  *   冲突：路由唯一归属仍由 HostServices.routeTable 强制，cordis 不参与
  *   路由分发（垫片期注册表是 dispatch 权威）。
@@ -36,12 +36,16 @@ export interface MountOptions {
 export class DaemonHostContext {
 	readonly #root = new Context();
 	readonly #fibers = new Map<string, Fiber & PromiseLike<Fiber>>();
+	/** Lifecycle authority per mounted key, recorded at mount time so the
+	 *  inspect surface can say who owns start/stop without re-deriving it. */
+	readonly #lifecycles = new Map<string, "external" | "cordis">();
 
 	/** Mount one L2 service as a Cordis plugin. */
 	mount(service: DaemonService, opts?: MountOptions): Fiber & PromiseLike<Fiber> {
 		const key = service.key;
 		if (this.#fibers.has(key)) throw new Error(`DaemonHostContext: duplicate service key "${key}"`);
 		const lifecycle = opts?.lifecycle ?? "external";
+		this.#lifecycles.set(key, lifecycle);
 		const fiber = this.plugin({
 			name: `daemon-service:${key}`,
 			apply: ctx => {
@@ -67,8 +71,12 @@ export class DaemonHostContext {
 		return this.#root.get(key, false) as T | undefined;
 	}
 
-	inspect(): { keys: string[]; registrySize: number } {
-		return { keys: [...this.#fibers.keys()], registrySize: this.#root.registry.size };
+	inspect(): { keys: string[]; registrySize: number; lifecycles: Record<string, "external" | "cordis"> } {
+		return {
+			keys: [...this.#fibers.keys()],
+			registrySize: this.#root.registry.size,
+			lifecycles: Object.fromEntries(this.#lifecycles),
+		};
 	}
 
 	async dispose(): Promise<void> {
@@ -78,14 +86,14 @@ export class DaemonHostContext {
 			logger.warn("DaemonHostContext: dispose non-fatal", { err });
 		}
 		this.#fibers.clear();
+		this.#lifecycles.clear();
 	}
 }
 
 /** mountRegistryServices 的挂载期选项。 */
 export interface MountRegistryOptions {
-	/** 按服务键指定生命周期权威，缺省即全部 "external"（P2 双跑默认）。
-	 *  翻成 "cordis" 的服务由 apply 代调 start、disposer 代调 stop——收编刀口
-	 *  按服务逐个推进，未翻的仍由 P1 代码掌管生命周期。 */
+	/** 按服务键覆盖生命周期权威。缺省 "cordis"（框架代管 start/stop）；
+	 *  "external" 表示该服务自己掌管启停（嵌入宿主/测试替身）。 */
 	lifecycleByKey?: Readonly<Record<string, "external" | "cordis">>;
 }
 
@@ -119,10 +127,15 @@ export async function mountRegistryServices(
 ): Promise<(Fiber & PromiseLike<Fiber>)[]> {
 	const mounted: { key: string; fiber: Fiber & PromiseLike<Fiber> }[] = [];
 	for (const service of services) {
-		const lifecycle = options?.lifecycleByKey?.[service.key];
+		// Cordis is the default authority: the framework calls start() on mount
+		// and stop() on dispose in reverse order, so a service that grows either
+		// hook cannot ship with a hand-wired cleanup that nobody calls. Services
+		// that must keep their own lifecycle (an embedded host, a test double)
+		// opt out with "external".
+		const lifecycle = options?.lifecycleByKey?.[service.key] ?? "cordis";
 		mounted.push({
 			key: service.key,
-			fiber: hostContext.mount(service, lifecycle ? { lifecycle } : undefined),
+			fiber: hostContext.mount(service, { lifecycle }),
 		});
 	}
 	for (const { key, fiber } of mounted) {

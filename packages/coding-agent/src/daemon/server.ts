@@ -329,6 +329,7 @@ import { ConnectorService } from "./services/connector-service";
 import { CreationService } from "./services/creation-service";
 import { CredentialService } from "./services/credential-service";
 import { DesignSystemsService } from "./services/design-systems-service";
+import { DiagnosticsService } from "./services/diagnostics-service";
 import { EditorService } from "./services/editor-service";
 import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
@@ -911,35 +912,25 @@ export class DaemonServer {
 				storePath: path.join(getAgentDir(), "credentials.json"),
 			}),
 		);
+		// 服务检视面（与 dsh 的 inspect catalog 同构）：已挂载服务、它们的
+		// 生命周期权威、各自认领的路由。数据直接从 cordis Context 与注册表
+		// 取，所以不会和真实挂载面漂移——静态生成的清单会。
+		this.#services.register(
+			new DiagnosticsService({
+				inspect: () => this.#hostContext.inspect(),
+				services: () => [...this.#services.values()],
+			}),
+		);
 		// P2 启动编排（ADR 0001 / spike 报告「启动失败传播」）：L2 服务挂载改为
 		// 有序 await，挂载失败即中止 daemon 启动——缺席服务的症状若推迟到某个
 		// RPC 命中它才出现，归因就落在派发层而非服务本身。构造器是同步的，
 		// 落定 promise 挂在实例上，由 startDaemon 在开任何传输前 settle。
 		// 直接 new DaemonServer 的测试不经传输，不 settle 也不受影响。
 		this.#hostServicesMounted = mountRegistryServices(this.#hostContext, this.#services.values(), {
-			// A service with process state opts into cordis lifecycle: apply calls
-			// start(), disposing the host context calls stop(). The reasons differ
-			// per service but the failure mode is the same — state that outlives
-			// the context that created it:
-			//   schedule      — 30s scanner + tasks loaded from disk;
-			//   pluginInstall / marketplace — both spawn `bun install` against the
-			//     same plugins/package.json, and the disposer awaits the rollback
-			//     before shutdown continues;
-			//   attachments   — uncommitted upload chunks on disk;
-			//   gitWatch      — directory watchers and their refcounts;
-			//   mcpOAuth      — in-flight OAuth flows;
-			//   views         — the open view store.
-			// Stateless services stay "external": there is nothing to own, and the
-			// P1 registry keeps constructing them.
-			lifecycleByKey: {
-				schedule: "cordis",
-				pluginInstall: "cordis",
-				marketplace: "cordis",
-				attachments: "cordis",
-				gitWatch: "cordis",
-				mcpOAuth: "cordis",
-				views: "cordis",
-			},
+			// 生命周期默认 cordis：apply 代调 start，disposing 宿主代调 stop。
+			// 当前真正实现启停钩子的是 schedule / pluginInstall / marketplace /
+			// attachments / gitWatch / mcpOAuth / views，其余服务没有钩子，翻牌
+			// 对它们是零行为差异——只是将来长出 stop 时自动获得对称回收。
 		});
 		// 无人 settle 时（测试直构）不得变成 unhandledRejection；真 await 见 settleHostServices。
 		void this.#hostServicesMounted.catch(() => {});
@@ -1707,6 +1698,13 @@ export class DaemonServer {
 					});
 				}, 0);
 				return { ok: true, busy };
+			}
+			case "system.services": {
+				// Inspect catalog (dsh parity): which L2 services actually mounted,
+				// who owns their start/stop, and the RPC each one answers. Read from
+				// the cordis context and the registry, so it cannot drift from what is
+				// really running — /debug and the model see one set of facts.
+				return this.#services.get<DiagnosticsService>("diagnostics").list();
 			}
 			case "system.meta": {
 				// Derived, never hardcoded: MUSEPI_VERSION is baked by the

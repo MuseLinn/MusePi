@@ -28,3 +28,5 @@ cordis（MIT，npm `@deepseek-ai/cordis` 锁 4.0.4，不整包 vendor）作为 d
 
 - P2 起 daemon 宿主层逐步 cordis 化；每服务一刀独立提交。
 - 新增宿主侧能力默认按 cordis 插件形态声明（`static inject` + `apply` + disposer）。
+- 生命周期权威已收敛为默认值：`mountRegistryServices` 不再逐服务列名单，缺省即 `"cordis"`（apply 代调 start、dispose 代调 stop），`"external"` 留给自管启停的嵌入宿主与测试替身。当前真正实现启停钩子的是 7 个服务（schedule / pluginInstall / marketplace / attachments / gitWatch / mcpOAuth / views），其余没有钩子——默认 cordis 对它们是零行为差异，将来长出 stop 时自动获得对称回收，不会再有「手写 cleanup 没人调」的形态。
+- 检视面已就位：`system.services`（`DiagnosticsService`）从 cordis Context 与注册表同源读取，返回已挂载服务、每个服务的生命周期权威与认领路由。与 dsh 的 inspect catalog 同构，但选择**运行时**而非生成物——注册表才是路由归属与挂载事实的权威，静态清单会漂移。

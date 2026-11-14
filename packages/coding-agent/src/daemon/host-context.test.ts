@@ -174,15 +174,16 @@ describe("启动期挂载编排（P2 首刀，ADR 0001）", () => {
 		await host.dispose();
 	});
 
-	it("lifecycleByKey leaves unlisted services on the P1 lifecycle authority", async () => {
+	it("mountRegistryServices defaults every service to the cordis ledger and honours an external opt-out", async () => {
 		const log: string[] = [];
 		const host = new DaemonHostContext();
-		await mountRegistryServices(host, [makeService("ledger", log), makeService("p1", log)], {
-			lifecycleByKey: { ledger: "cordis" },
+		await mountRegistryServices(host, [makeService("ledger", log), makeService("embedded", log)], {
+			lifecycleByKey: { embedded: "external" },
 		});
-		// Failure mode if regressed: flipping one service onto the cordis ledger
-		// silently takes over start/stop for every service — double-run side
-		// effects against the P1 call sites that still own them.
+		// The default moved with the batch flip: an unlisted service is framework
+		// owned, so a service that grows stop() cannot ship without its cleanup
+		// running. A service that owns its own lifecycle must say so explicitly —
+		// otherwise the disposer calls stop() against a host that will call it too.
 		expect(log).toEqual(["ledger.start"]);
 		await host.dispose();
 		expect(log).toEqual(["ledger.start", "ledger.stop"]);
