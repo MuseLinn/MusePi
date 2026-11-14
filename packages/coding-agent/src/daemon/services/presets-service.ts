@@ -2,9 +2,10 @@
  * PresetsService — agent presets (modes) as an L2 daemon service.
  *
  * Seam:
- * - Input: `modes.*` (settings editor) and `agentPresets.*` (dsh parity)
- *   routes, the modes directory, the session/header store for per-session
- *   selection, and the extension registry that contributes preset sources.
+ * - Input: `modes.*` (settings editor) and `agentPresets.*` (declarative
+ *   preset surface) routes, the modes directory, the session/header store for
+ *   per-session selection, and the extension registry that contributes preset
+ *   sources.
  * - Output: summary rows, one preset's full document, validation verdicts, and
  *   save/delete/select acks. Every write broadcasts `modes-changed`.
  * - Lifecycle: stateless. Presets are files under the modes directory plus
@@ -288,10 +289,9 @@ export class PresetsService implements DaemonService {
 	}
 
 	async agentPresets(params: unknown): Promise<unknown> {
-		// dsh's `agentPresets.list`: every declarative preset source — file
-		// presets, profile presets, and modes contributed by extensions (the
-		// host registry is populated by mounts and by the daemon preload).
-		// File presets win an id collision.
+		// Every declarative preset source — file presets, profile presets, and
+		// modes contributed by extensions (the host registry is populated by
+		// mounts and by the daemon preload). File presets win an id collision.
 		const { listModeIds, loadModeFile, ensureModeTemplates } = await import("../../presets/resolve");
 		const { readDefaultPresetId, collectProfilePresetDefinitions } = await import(
 			"../../extensibility/plugins/profile/profile-presets"
@@ -350,9 +350,9 @@ export class PresetsService implements DaemonService {
 	}
 
 	async agentPreset(params: unknown): Promise<unknown> {
-		// dsh's `agentPresets.read`: the preset's document. File presets return
-		// their YAML bytes; profile and extension presets are serialized here
-		// (dynamic prompt text is shown as a placeholder, never as code).
+		// The preset's document. File presets return their YAML bytes; profile
+		// and extension presets are serialized here (dynamic prompt text is
+		// shown as a placeholder, never as code).
 		const { loadModeFile, modeFilePath, ensureModeTemplates } = await import("../../presets/resolve");
 		const { collectProfilePresetDefinitions } = await import("../../extensibility/plugins/profile/profile-presets");
 		const { listHostExtensionModes } = await import("../../extensibility/extensions/host-modes");
@@ -382,8 +382,8 @@ export class PresetsService implements DaemonService {
 	}
 
 	async selectAgentPreset(params: unknown): Promise<unknown> {
-		// dsh's `agentPresets.select`: switch the session's preset and persist
-		// it in the session header (stored as `modeId`, read back as agentPreset).
+		// Switch the session's preset and persist it in the session header
+		// (stored as `modeId`, read back as agentPreset).
 		const p = (params ?? {}) as { sessionId?: string; agentPreset?: string | null };
 		if (typeof p.sessionId !== "string" || p.sessionId === "") throw new Error("sessionId is required");
 		const id = p.agentPreset ?? null;
