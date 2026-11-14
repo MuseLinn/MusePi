@@ -492,6 +492,9 @@ export interface ExtensionRegistryData {
 	scrollbarSkins?: ScrollbarSkinItem[];
 	/** Slot contract from the daemon (collab-proto single authority). */
 	slots: { exact: readonly string[]; prefixes: readonly string[] };
+	/** Identity of the compiled contribution set (daemon-side). The poll
+	 *  fetches the light form and full-fetches only when this changes. */
+	version?: string;
 	/** dsh「会话插件」面:完整组合的预设清单(旧 daemon 无该字段)。 */
 	presets?: {
 		id: string;
@@ -744,6 +747,7 @@ export interface SlotComponentProps {
 
 interface RegistryStoreState {
 	data: ExtensionRegistryData | null;
+	version: string | null;
 	timer: Timer | null;
 	refs: number;
 	unlisten?: () => void;
@@ -755,14 +759,13 @@ const POLL_MS = 10_000;
 
 function startRegistryStore(rpc: RpcClient, notify: () => void): void {
 	const st = registryStores.get(rpc)!;
-	const load = (): void => {
-		if (document.visibilityState === "hidden") return;
+	/** Full fetch: carries the compiled slot/view payloads (tens of MB). */
+	const loadFull = (): void => {
 		void rpc
 			.request<ExtensionRegistryData | null>("extensions.list", {})
 			.then(res => {
 				if (!res) return;
-				// Reference compare: daemon returns a fresh object per call;
-				// consumers filter subsets with useMemo, which converges.
+				st.version = res.version ?? null;
 				if (res !== st.data) {
 					st.data = res;
 					notify();
@@ -772,13 +775,35 @@ function startRegistryStore(rpc: RpcClient, notify: () => void): void {
 				// 轮询失败保留上次数据(瞬时断连不闪空)
 			});
 	};
-	load();
+	/** Poll: light rows only. The compiled payload is the expensive half and
+	 *  only changes with the contribution set, so a matching `version` keeps
+	 *  the last full payload in place. */
+	const load = (): void => {
+		if (document.visibilityState === "hidden") return;
+		void rpc
+			.request<ExtensionRegistryData | null>("extensions.list", { components: false })
+			.then(res => {
+				if (!res) return;
+				if (!st.data || st.version === null || res.version !== st.version) {
+					loadFull();
+					return;
+				}
+				// Merge the fresh light rows over the full payload: slot consumers
+				// keep their compiled components, the list keeps its state.
+				st.data = { ...st.data, ...res, components: st.data.components };
+				notify();
+			})
+			.catch(() => {
+				// 轮询失败保留上次数据(瞬时断连不闪空)
+			});
+	};
+	loadFull();
 	st.timer = setInterval(load, POLL_MS);
 	st.unlisten = rpc.addEventListener(event => {
 		const payload = event.payload as { type?: string } | undefined;
 		// HMR + mutation RPCs:daemon 清缓存后广播 extensions.changed,
 		// 立即重拉 —— 不等下一个轮询周期。
-		if (payload?.type === "extensions.changed") load();
+		if (payload?.type === "extensions.changed") loadFull();
 	});
 }
 
@@ -789,7 +814,7 @@ export function useExtensionRegistry(rpc: RpcClient | null): ExtensionRegistryDa
 		if (!rpc) return;
 		let st = registryStores.get(rpc);
 		if (!st) {
-			st = { data: null, timer: null, refs: 0 };
+			st = { data: null, version: null, timer: null, refs: 0 };
 			registryStores.set(rpc, st);
 		}
 		st.refs += 1;
@@ -802,6 +827,7 @@ export function useExtensionRegistry(rpc: RpcClient | null): ExtensionRegistryDa
 				clearInterval(st!.timer ?? undefined);
 				st!.unlisten?.();
 				st!.data = null;
+				st!.version = null;
 			}
 		};
 	}, [rpc]);

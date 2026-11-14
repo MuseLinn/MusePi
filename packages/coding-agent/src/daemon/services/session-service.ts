@@ -80,6 +80,11 @@ export interface SessionServiceDeps {
 	setResumeLive(conn: object, live: ResumeLiveHandle | null): void;
 	/** 会话 id 的 live 引用（宿主 session-host.get；resume 的 stream 判定）。 */
 	resolveLive?(sessionId: string): ResumeLiveHandle | undefined;
+	/** 打开历史会话时按需激活（宿主 session-host.activate）。resume 是客户端
+	 *  打开会话的唯一入口，随后的 live 状态 RPC（thinkingInfo/contextUsage/
+	 *  pauseStatus）都以激活为前提；不激活则打开即有快照、无 live，聊天面
+	 *  只能显示空壳。失败（转录缺失的孤儿行）保持快照可用，live 为 null。 */
+	activateLive?(sessionId: string): Promise<ResumeLiveHandle>;
 	/** cron 会话 id 集合（ScheduleService.sessionIds——树节点 source 标注）。 */
 	cronSessionIds(): Set<string>;
 	/** 标题兜底（ViewStoreService.firstUserMessage——autoTitle 会话）。 */
@@ -198,7 +203,10 @@ export class SessionService implements DaemonService {
 		compactedThrough: boolean;
 	}> {
 		const snapshot = await this.#deps.snapshot(params.sessionId);
-		const live = this.#deps.resolveLive?.(params.sessionId) ?? null;
+		let live = this.#deps.resolveLive?.(params.sessionId) ?? null;
+		if (!live && this.#deps.activateLive) {
+			live = await this.#deps.activateLive(params.sessionId).catch(() => null);
+		}
 		this.#deps.setResumeLive(conn, live);
 		const checkpointSeq = await this.#deps.checkpointSeq(params.sessionId);
 		const compacted = typeof params.cursor === "number" && checkpointSeq > params.cursor;

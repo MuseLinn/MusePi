@@ -816,6 +816,7 @@ export class DaemonServer {
 					else this.#resumeLiveByConn.delete(conn);
 				},
 				resolveLive: sessionId => this.#host.get(sessionId),
+				activateLive: sessionId => this.#host.activate(sessionId),
 				cronSessionIds: () => this.#services.get<ScheduleService>("schedule").sessionIds(),
 				firstUserMessage: sessionId => this.#services.get<ViewStoreService>("views").firstUserMessage(sessionId),
 				deletedWorkspaces: () => this.#services.get<WorkspaceService>("workspaces").deletedWorkspaces(),
@@ -2648,7 +2649,9 @@ export class DaemonServer {
 			}
 			case "extensions.list": {
 				// 实现归 ExtensionService（扩展/插件控制面语义不变）。
-				return this.#services.get<ExtensionService>("extensions").list();
+				// 轻量轮询参数必须透传：`components:false` 省掉编译产物，
+				// 否则每 10s 一次的轮询会推几十 MB。
+				return this.#services.get<ExtensionService>("extensions").list(params);
 			}
 			case "extensions.raw": {
 				return this.#services.get<ExtensionService>("extensions").raw(params ?? {});

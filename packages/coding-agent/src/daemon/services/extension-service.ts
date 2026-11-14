@@ -135,6 +135,19 @@ export interface PresetCompositionView {
 	readonly rows: PresetCompositionRowView[];
 }
 
+/** Identity of the compiled contribution set. Cheap: the extensions' own
+ *  identity/state plus the disabled-component denylist decide which slot
+ *  components compile, so the client can poll a light response and only
+ *  full-fetch when this changes. */
+function componentVersionOf(extensions: readonly { id: string; state?: string; path: string }[]): string {
+	let h = 0;
+	for (const e of extensions) {
+		const s = `${e.id}:${e.state ?? ""}:${e.path};`;
+		for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+	}
+	return `${extensions.length}:${(h >>> 0).toString(16)}`;
+}
+
 export class ExtensionService implements DaemonService {
 	/** Disposers for the web routes we mounted; a reconcile drops them first. */
 	#mountedWebRoutes: Array<() => void> = [];
@@ -324,8 +337,15 @@ export class ExtensionService implements DaemonService {
 		return this.#runtimeLoadCache.result;
 	}
 
-	/** RPC extensions.list：扩展控制中心统一数据源（TUI /extensions parity）。 */
-	async list() {
+	/** RPC extensions.list：扩展控制中心统一数据源（TUI /extensions parity）。
+	 *
+	 *  `components: false` omits the compiled slot/view payloads (compiled JS +
+	 *  CSS per contribution, tens of MB once the desktop plugins are
+	 *  discovered). The GUI polls this route every 10s; shipping the payload on
+	 *  every poll blocks the renderer on a 40 MB JSON parse. The light form
+	 *  still carries `version`, so a caller can full-fetch only when the
+	 *  contribution set actually changed. */
+	async list(params?: unknown) {
 		// 扩展控制中心统一数据源 (TUI /extensions parity): all 10
 		// capability kinds normalized to one Extension shape with
 		// three states (active/disabled/shadowed). raw is heavy and
@@ -622,10 +642,21 @@ export class ExtensionService implements DaemonService {
 			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 			this.#deps.cwd(),
 		);
+		const lightOnly = (params as { components?: unknown } | undefined)?.components === false;
+		const version = componentVersionOf(extensions);
+		if (lightOnly) {
+			return {
+				extensions: extensions.map(({ raw: _raw, ...rest }) => rest),
+				tabs,
+				providers,
+				version,
+			};
+		}
 		return {
 			extensions: extensions.map(({ raw: _raw, ...rest }) => rest),
 			tabs,
 			providers,
+			version,
 			components,
 			toolViews,
 			widgets,

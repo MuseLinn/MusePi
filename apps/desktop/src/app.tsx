@@ -2476,6 +2476,7 @@ function AppInner(): ReactNode {
 				// every click (the 5s poll would catch it eventually; this is
 				// immediate).
 				void refreshSessions(client);
+				console.error("[open] failed", err);
 				setError(fmtError("session.open", err));
 			}
 		},

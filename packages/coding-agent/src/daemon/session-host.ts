@@ -3071,14 +3071,17 @@ export class DaemonSessionHost {
 		// are skipped: a pre-first-persist session has no file yet by design.
 		const ghostIds: string[] = [];
 		const sessionsRoot = getSessionsDir();
-		const { peekDefaultSessionDir } = await import("../session/session-paths");
 		for (const [id, row] of merged) {
 			if (live.has(id)) continue;
-			if (row.sessionFile) {
-				if (!fs.existsSync(row.sessionFile)) ghostIds.push(id);
+			// No recorded transcript path and no live session: activation
+			// resolves a session FILE, so this row can never be opened. A
+			// workspace directory that still exists is not evidence of a
+			// usable session — it is shared with the workspace's real ones.
+			if (!row.sessionFile) {
+				ghostIds.push(id);
 				continue;
 			}
-			if (!fs.existsSync(peekDefaultSessionDir(row.cwd, sessionsRoot))) ghostIds.push(id);
+			if (!fs.existsSync(row.sessionFile)) ghostIds.push(id);
 		}
 		for (const id of ghostIds) {
 			merged.delete(id);

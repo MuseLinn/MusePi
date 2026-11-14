@@ -690,6 +690,12 @@ async function readBundledPluginPackages(): Promise<BundledPluginPackage[]> {
 			? packagedRoots
 			: [
 					path.resolve(import.meta.dir, "..", "bundled-plugins"),
+					// Desktop plugins (chat-view, capability center, panels, rail)
+					// live in the apps/ workspace; the daemon discovers them here so
+					// session-less RPCs and the GUI's slot host see them. Keep the
+					// pre-move location as a fallback for older checkouts — an absent
+					// root reads as empty.
+					path.resolve(import.meta.dir, "../../../../apps/desktop/src/plugins"),
 					path.resolve(import.meta.dir, "../../../desktop-app/src/plugins"),
 					path.resolve(process.cwd(), "bundled-plugins"),
 				];
