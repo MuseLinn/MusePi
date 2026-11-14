@@ -27,7 +27,7 @@ import {
 	waitForRun,
 } from "../run-scope";
 import { ToolAbortError, ToolError, throwIfAborted } from "../tool-errors";
-import { type DesktopApp, hostInstalledApps, launchCommand, resolveApp } from "./apps";
+import { annotateRunning, type DesktopApp, hostInstalledApps, launchCommand, resolveApp } from "./apps";
 import type {
 	ComputerInputEvent,
 	ComputerScreenshot,
@@ -911,8 +911,21 @@ export class ComputerWorkerCore {
 			apps: async (filter?: { name?: string }): Promise<DesktopApp[]> => {
 				const { signal } = getContext();
 				throwIfAborted(signal);
-				const apps = await hostInstalledApps();
+				const installed = await hostInstalledApps();
 				throwIfAborted(signal);
+				// Running state comes from the windows the OS reports, not from a
+				// process scan: an app with no window is not something the agent can
+				// drive yet.
+				let running: Array<{ app: string; pid?: number }> = [];
+				try {
+					running = (await nativeCall(signal, () => session.listWindows())).map(window => ({
+						app: window.app,
+						...(window.pid !== undefined ? { pid: window.pid } : {}),
+					}));
+				} catch {
+					// Catalogue still answers without window attribution.
+				}
+				const apps = annotateRunning(installed, running);
 				const name = filter?.name?.trim().toLowerCase();
 				return name ? apps.filter(app => app.name.toLowerCase().includes(name)) : apps;
 			},

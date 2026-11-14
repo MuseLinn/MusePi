@@ -22,6 +22,10 @@ export interface DesktopApp {
 	/** Absolute path (shortcut, bundle or desktop entry). */
 	id: string;
 	kind: "shortcut" | "bundle" | "desktop-entry";
+	/** Set when a window of this application is on screen. */
+	running?: boolean;
+	/** Owning process of that window, when the platform exposes it. */
+	pid?: number;
 }
 
 export interface AppRoots {
@@ -179,4 +183,32 @@ export function launchCommand(platform: NodeJS.Platform, target: string): string
 	if (platform === "win32") return ["cmd.exe", "/c", "start", "", target];
 	if (platform === "darwin") return ["open", target];
 	return ["xdg-open", target];
+}
+
+/** A window the desktop session can see, reduced to what app matching needs. */
+export interface RunningWindow {
+	app: string;
+	pid?: number;
+}
+
+const normalizeApp = (value: string): string => value.toLowerCase().replace(/[\s._-]+/g, "");
+
+/**
+ * Mark catalogue entries whose application currently has a window. Window
+ * ownership comes from the OS, so this is observed state, not a guess from a
+ * process list; an app that runs without a window stays `running: false`.
+ */
+export function annotateRunning(apps: readonly DesktopApp[], windows: readonly RunningWindow[]): DesktopApp[] {
+	// `null` records "running, pid unknown"; `has` separates that from absent.
+	const byApp = new Map<string, number | null>();
+	for (const window of windows) {
+		const key = normalizeApp(window.app);
+		if (key.length > 0 && !byApp.has(key)) byApp.set(key, window.pid ?? null);
+	}
+	return apps.map(app => {
+		const key = normalizeApp(app.name);
+		if (!byApp.has(key)) return app;
+		const pid = byApp.get(key) ?? undefined;
+		return { ...app, running: true, ...(pid !== undefined ? { pid } : {}) };
+	});
 }

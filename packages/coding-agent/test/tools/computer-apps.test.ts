@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+	annotateRunning,
 	type DesktopApp,
 	desktopEntryName,
 	launchCommand,
@@ -76,4 +77,24 @@ describe("launch target resolution", () => {
 afterAll(async () => {
 	// Temp roots are small; leaving them to the OS keeps the test free of
 	// ordering assumptions about which case created what.
+});
+
+describe("running-state annotation", () => {
+	it("marks an app whose window is on screen and carries its pid", () => {
+		const apps = [app("Visual Studio Code", "/a/code.lnk"), app("Notion", "/a/notion.lnk")];
+		const marked = annotateRunning(apps, [{ app: "Visual Studio Code", pid: 4242 }]);
+		expect(marked[0]).toMatchObject({ name: "Visual Studio Code", running: true, pid: 4242 });
+		expect(marked[1]?.running).toBeUndefined();
+	});
+
+	it("folds punctuation and case so window names still match", () => {
+		const marked = annotateRunning([app("7-Zip File Manager")], [{ app: "7-Zip File Manager" }]);
+		expect(marked[0]?.running).toBe(true);
+		expect(marked[0]?.pid).toBeUndefined();
+	});
+
+	it("ignores windows with no usable app name", () => {
+		const marked = annotateRunning([app("Notion")], [{ app: "" }, { app: "  " }]);
+		expect(marked[0]?.running).toBeUndefined();
+	});
 });
