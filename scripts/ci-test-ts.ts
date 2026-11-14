@@ -106,8 +106,7 @@ const nativeAndIntegrationPackages = ["packages/natives", "packages/client-core"
 
 // Packages the CI buckets deliberately skip but a local full run should still
 // cover. mnemopi's embedding suites need a ~270MB fastembed model absent from CI
-// runners (so it flakes/times out there). (Upstream also lists tools/python/robomp/web
-// here; musepi does not sync that directory, so it would ENOENT on spawn.)
+// runners (so it flakes/times out there).
 const localOnlyWorkspacePackages = ["packages/mnemopi"];
 
 // Repo-level script tests. CI's `workspace` bucket only runs the merge gates:
@@ -396,7 +395,7 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 			];
 		// `local-ts` is the full local TypeScript run that root `bun run test:ts`
 		// drives: every package the old `--workspaces` fan-out covered (the CI
-		// `all` set PLUS mnemopi and robomp-web, which CI omits), routed through
+		// `all` set PLUS mnemopi, which CI omits), routed through
 		// this one quiet runner so the whole suite shares one progress stream and
 		// one failure report. Repo script tests remain available via `test:scripts`.
 		case "local-ts":
