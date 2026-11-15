@@ -12,7 +12,6 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
-import { thinkingOrbStateFromSession } from "../lib/companion";
 import {
 	copyToClipboard,
 	listOpenInApps,

@@ -405,9 +405,6 @@ export function ChatView({
 	ask,
 	onAskAnswer,
 	sessionTitle,
-	/** Sessions with unread updates (the rail/session list badge). The avatar
-	 *  reads it as "something new for you", like the desktop pet does. */
-	unread = 0,
 	sessionInfoOpen = false,
 	onToggleSessionInfo,
 }: {
@@ -523,9 +520,6 @@ export function ChatView({
 	 *  via onAskAnswer (session.askAnswer). */
 	ask?: AskRequest | null;
 	onAskAnswer?(answer: AskAnswer): void;
-	/** Sessions with unread updates (rail/session-list badge). The avatar reads it
-	 *  as "something new for you", the same fact the desktop pet consumes. */
-	unread?: number;
 	/** Session title shown in the floating session info card (app.tsx owns the
 	 *  session label; the card is the collapsed right panel's stand-in). */
 	sessionTitle?: string | null;
@@ -927,14 +921,9 @@ export function ChatView({
 		() =>
 			agentSignalsFromSnapshot(snap, {
 				now: nowMs,
-				unread,
-				// The ask card is the only question surface this shell owns; a
-				// pending one means the turn is waiting on the reader.
-				questions: ask === null ? 0 : 1,
-				awaitingInput: ask !== null,
 				...(turnOutcome ? { outcome: turnOutcome, justFinished: true } : {}),
 			}),
-		[ask, snap, nowMs, turnOutcome, unread],
+		[snap, nowMs, turnOutcome],
 	);
 	// Avatar display toggle lives in Settings → appearance (musepi-gui-avatars).
 	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";

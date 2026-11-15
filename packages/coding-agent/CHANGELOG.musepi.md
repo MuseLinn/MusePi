@@ -4,9 +4,6 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
-- **顶栏标题不再显示小头像**：多标签页之后，顶栏用标签承担会话标识；标题行的小头像只会让标题在切换会话时左右跳动。头像仍保留在转录 gutter（每回合一个）与会话卡等位置，并且现在会读取未读数与待回答问题。
-  - EN: The header title no longer carries the small avatar: with tabs, the header names sessions through them, and the avatar column only made the title jump on every switch. Avatars stay in the transcript gutter (one per turn) and the session card, and now read the unread count and pending questions.
-
 - **Agent 头像恢复眼动与交互，并接上工作状态**：Aora 头像在 ≥32px 的槽位让眼睛跟随鼠标、悬停时眼睛放大聚拢；点击头像会触发一次惊讶反应（1.5s 后回到真实心情）。主会话头像现在能收到回合结果（成功庆祝、失败告警）与空闲阶梯（30s 无聊 / 90s 困倦 / 5min 入睡），多个子代理并行时显示为工作中而不是空闲。
   - EN: The agent avatar tracks the pointer again from 32px slots up, enlarges its eyes on hover, and answers a click with a surprised reaction that resolves back to the live mood after 1.5s. The main chat avatar now receives the turn outcome (celebration on success, alert on failure) and the idle ladder (bored at 30s, drowsy at 90s, asleep at 5 minutes); several subagents in flight read as working instead of idle.
 
