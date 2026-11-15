@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **计算机使用支持按住按键**：`win.holdKeys` / `desktop.holdKeys` 按住指定按键 50–10000ms 后逆序释放，用于修饰键与长按快捷键；时长越界在发送前拒绝，`read_only` 与 `computer.backgroundFallback: "refuse"` 下的前台投递同样被拒，后台投递遇到工具箱拒收时与普通按键一致。
+  - EN: Computer use can hold keys: `win.holdKeys` / `desktop.holdKeys` press keys for 50–10000 ms and release them in reverse order, covering modifier holds and press-and-hold shortcuts. An out-of-range duration fails before anything is sent, `read_only` refuses the call, a foreground delivery is refused under `computer.backgroundFallback: "refuse"`, and a background refusal follows the same rules as ordinary key input.
+
 - **UI 块可以提问，成品卡下线**：`ui` 块新增 `Choice` / `Input` / `Button`，一张装着按钮的 `Card` 按标题归并成**一个**决定；答案收在块内（补充说明 + 发送），一次交回**一条**用户消息，已答的块转为只读记录，流式重绘与虚拟列表回收都不会丢选择。同时 `widget` 工具不再输出结构化卡片——数据与结构一律走块，工具只剩「一页 HTML」这一面（版式稿、必须像成品的界面、需要用户补条件的拍板），卡片类型表 `WIDGET_TYPES` 保留给看板与 `widget.schema`。
   - EN: UI blocks can ask, and the canned cards are gone. `Choice` / `Input` / `Button` join the catalog; a `Card` of buttons is ONE decision named by its title; the block collects its answers with a note and sends them as a single user message; an answered block reads as a record, and neither a streaming redraw nor a virtualization round trip loses a choice. The `widget` tool no longer emits structured cards — data and structure go to blocks, leaving the tool one surface: a self-contained HTML page for mockups, layouts that must look finished, and choices that need the user's conditions. The card type table `WIDGET_TYPES` stays for the board and `widget.schema`.
 

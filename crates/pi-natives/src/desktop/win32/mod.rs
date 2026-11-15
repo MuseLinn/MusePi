@@ -132,6 +132,19 @@ impl Backend for Win32Backend {
 		capture::capture(&self.display, target)
 	}
 
+	fn hold_keys(
+		&mut self,
+		target: &Target,
+		keys: &[KeyName],
+		duration: std::time::Duration,
+		mode: DeliveryMode,
+	) -> CoreResult<()> {
+		self.begin_input(target, mode)?;
+		let result = input::hold_keys(&mut self.global_input, target, keys, duration, mode);
+		self.end_input();
+		result
+	}
+
 	fn pointer(
 		&mut self,
 		target: &Target,

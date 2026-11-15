@@ -616,6 +616,41 @@ mod background {
 		result
 	}
 
+	pub(super) fn hold_keys(
+		id: &str,
+		keys: &[KeyName],
+		duration: std::time::Duration,
+	) -> CoreResult<()> {
+		let hwnd = hwnd(id)?;
+		let kind = if keys.len() > 1 || keys.iter().any(|key| key.is_modifier()) {
+			EventKind::KeyCombo
+		} else {
+			EventKind::Keystroke
+		};
+		ensure_delivery(id, hwnd, kind)?;
+		let mut emitter = KeyEmitter { hwnd, alt_depth: 0 };
+		let mut held = Vec::with_capacity(keys.len());
+		for &key in keys {
+			if let Err(error) = emitter.key(key, true) {
+				for held_key in held.into_iter().rev() {
+					let _ = emitter.key(held_key, false);
+				}
+				return Err(error);
+			}
+			held.push(key);
+		}
+		std::thread::sleep(duration);
+		let mut result = Ok(());
+		for key in held.into_iter().rev() {
+			if let Err(error) = emitter.key(key, false)
+				&& result.is_ok()
+			{
+				result = Err(error);
+			}
+		}
+		result
+	}
+
 	pub(super) fn type_text(id: &str, text: &str) -> CoreResult<()> {
 		let hwnd = hwnd(id)?;
 		ensure_delivery(id, hwnd, EventKind::TextInput)?;
@@ -884,6 +919,48 @@ mod foreground {
 		result
 	}
 
+	pub(super) fn hold_keys(
+		id: &str,
+		keys: &[KeyName],
+		duration: std::time::Duration,
+	) -> CoreResult<()> {
+		let _guard = ForegroundGuard::activate(id)?;
+		let mut virtual_keys = Vec::with_capacity(keys.len().saturating_mul(2));
+		for &key in keys {
+			let (vk, implicit) = background::virtual_key(key)?;
+			if implicit & 1 != 0 {
+				virtual_keys.push(background::virtual_key(KeyName::Shift)?.0);
+			}
+			if implicit & 2 != 0 {
+				virtual_keys.push(background::virtual_key(KeyName::Ctrl)?.0);
+			}
+			if implicit & 4 != 0 {
+				virtual_keys.push(background::virtual_key(KeyName::Alt)?.0);
+			}
+			virtual_keys.push(vk);
+		}
+		let mut held = Vec::with_capacity(virtual_keys.len());
+		for vk in virtual_keys {
+			if let Err(error) = send(key_event(vk, 0, 0)) {
+				for held_vk in held.into_iter().rev() {
+					let _ = send(key_event(held_vk, 0, KEYEVENTF_KEYUP));
+				}
+				return Err(error);
+			}
+			held.push(vk);
+		}
+		std::thread::sleep(duration);
+		let mut result = Ok(());
+		for vk in held.into_iter().rev() {
+			if let Err(error) = send(key_event(vk, 0, KEYEVENTF_KEYUP))
+				&& result.is_ok()
+			{
+				result = Err(error);
+			}
+		}
+		result
+	}
+
 	pub(super) fn type_text(id: &str, text: &str) -> CoreResult<()> {
 		let _guard = ForegroundGuard::activate(id)?;
 		for character in text.chars() {
@@ -896,6 +973,33 @@ mod foreground {
 		}
 		Ok(())
 	}
+}
+
+fn global_hold_keys(
+	input: &mut Enigo,
+	keys: &[KeyName],
+	duration: std::time::Duration,
+) -> CoreResult<()> {
+	let mut held: Vec<KeyName> = Vec::with_capacity(keys.len());
+	for &key in keys {
+		if let Err(error) = input.key(key.to_enigo(), Direction::Press) {
+			for held_key in held.into_iter().rev() {
+				let _ = input.key(held_key.to_enigo(), Direction::Release);
+			}
+			return Err(enigo_error(error));
+		}
+		held.push(key);
+	}
+	std::thread::sleep(duration);
+	let mut result = Ok(());
+	for key in held.into_iter().rev() {
+		if let Err(error) = input.key(key.to_enigo(), Direction::Release)
+			&& result.is_ok()
+		{
+			result = Err(enigo_error(error));
+		}
+	}
+	result
 }
 
 pub(super) fn pointer(
@@ -937,6 +1041,25 @@ pub(super) fn key_chord(
 		Target::Desktop => global_key_chord(global, keys),
 		Target::Window(id) if mode == DeliveryMode::Background => background::key_chord(id, keys),
 		Target::Window(id) => foreground::key_chord(id, keys),
+	}
+}
+
+pub(super) fn hold_keys(
+	global: &mut Enigo,
+	target: &Target,
+	keys: &[KeyName],
+	duration: std::time::Duration,
+	mode: DeliveryMode,
+) -> CoreResult<()> {
+	if keys.is_empty() {
+		return Err(DesktopError::input_failed("key chord is empty"));
+	}
+	match target {
+		Target::Desktop => global_hold_keys(global, keys, duration),
+		Target::Window(id) if mode == DeliveryMode::Background => {
+			background::hold_keys(id, keys, duration)
+		},
+		Target::Window(id) => foreground::hold_keys(id, keys, duration),
 	}
 }
 

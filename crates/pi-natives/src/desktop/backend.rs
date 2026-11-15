@@ -154,6 +154,17 @@ pub trait Backend: Send {
 	fn type_text(&mut self, target: &Target, text: &str, mode: DeliveryMode) -> CoreResult<()>;
 	fn key_chord(&mut self, target: &Target, keys: &[KeyName], mode: DeliveryMode)
 	-> CoreResult<()>;
+	/// Hold `keys` down for `duration`, then release them in reverse order.
+	/// Backends without a hold route refuse explicitly.
+	fn hold_keys(
+		&mut self,
+		_target: &Target,
+		_keys: &[KeyName],
+		_duration: std::time::Duration,
+		_mode: DeliveryMode,
+	) -> CoreResult<()> {
+		Err(DesktopError::input_failed("holding keys is unavailable on this backend"))
+	}
 	fn raise_window(&mut self, id: &str) -> CoreResult<()>;
 	fn ax(&mut self) -> Option<&mut dyn AxBackend>;
 }

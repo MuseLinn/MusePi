@@ -121,6 +121,13 @@ enum Request {
 		mode:   DeliveryMode,
 		reply:  Reply,
 	},
+	HoldKeys {
+		target:   Target,
+		keys:     Vec<keys::KeyName>,
+		duration: Duration,
+		mode:     DeliveryMode,
+		reply:    Reply,
+	},
 	RaiseWindow {
 		id:    String,
 		reply: Reply,
@@ -207,6 +214,7 @@ impl Request {
 			| Self::Scroll { reply, .. }
 			| Self::TypeText { reply, .. }
 			| Self::KeyChord { reply, .. }
+			| Self::HoldKeys { reply, .. }
 			| Self::RaiseWindow { reply, .. }
 			| Self::MenuItems { reply, .. }
 			| Self::MenuSelect { reply, .. }
@@ -455,6 +463,10 @@ impl Worker {
 				self.backend()?.key_chord(target, keys, *mode)?;
 				Ok(Response::Unit)
 			},
+			Request::HoldKeys { target, keys, duration, mode, .. } => {
+				self.backend()?.hold_keys(target, keys, *duration, *mode)?;
+				Ok(Response::Unit)
+			},
 			Request::RaiseWindow { id, .. } => {
 				self.backend()?.raise_window(id)?;
 				Ok(Response::Unit)
@@ -692,7 +704,7 @@ impl SessionCore {
 		let selector = self.selector.clone();
 		let caps = Arc::clone(&self.capabilities);
 		let join = thread::Builder::new()
-			.name("omp-desktop-session".into())
+			.name("musepi-desktop-session".into())
 			.spawn(move || {
 				let mut worker = Worker::new(selector, caps);
 				while let Ok(request) = rx.recv() {
@@ -993,6 +1005,32 @@ impl DesktopSession {
 		Ok(self.unit("desktop.keyChord", move |reply| Request::KeyChord {
 			target: Target::parse(&target),
 			keys,
+			mode,
+			reply,
+		}))
+	}
+
+	#[napi]
+	pub fn hold_keys(
+		&self,
+		target: String,
+		keys: Vec<String>,
+		duration_ms: u32,
+		opts: Option<PointerOptions>,
+	) -> Result<task::Promise<()>> {
+		if !(50..=10_000).contains(&duration_ms) {
+			return Err(napi::Error::from(DesktopError::invalid_target(
+				"hold duration must be between 50 and 10000 ms",
+			)));
+		}
+		let keys = parse_keys(&keys).map_err(napi::Error::from)?;
+		let mode = ParsedPointerOptions::parse(opts)
+			.map_err(napi::Error::from)?
+			.mode;
+		Ok(self.unit("desktop.holdKeys", move |reply| Request::HoldKeys {
+			target: Target::parse(&target),
+			keys,
+			duration: Duration::from_millis(u64::from(duration_ms)),
 			mode,
 			reply,
 		}))

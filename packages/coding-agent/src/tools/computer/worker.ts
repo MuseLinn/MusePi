@@ -67,6 +67,8 @@ export interface NativeDesktopSession {
 	listApplications?(query?: { query?: string; runningOnly?: boolean }): Promise<NativeApplication[]>;
 	/** Native menu level; absent on addons built before menus. */
 	menuItems?(window: string, path: string[]): Promise<NativeMenuItem[]>;
+	/** Hold keys down for a bounded duration; absent on older addons. */
+	holdKeys?(target: string, keys: string[], durationMs: number, opts?: PointerOptions | null): Promise<void>;
 	menuSelect?(window: string, path: string[]): Promise<void>;
 	openApplication?(target: string, options?: { activate?: boolean }): Promise<NativeApplication>;
 	capture(
@@ -289,7 +291,7 @@ async function captureScreenshot(
 			maxHeight: context.snapshot.captureMaxHeight,
 		}),
 	);
-	const destination = path.join(os.tmpdir(), `omp-computer-${Snowflake.next()}.png`);
+	const destination = path.join(os.tmpdir(), `musepi-computer-${Snowflake.next()}.png`);
 	await Bun.write(destination, frame.data);
 	// Remember the frame the model saw — click coords are pixels in this
 	// exact frame (scaled or not), scaled onto the window bounds later.
@@ -595,6 +597,34 @@ class Win {
 			() =>
 				nativeCall(context.signal, () =>
 					this.#session.keyChord(this.id, chordKeys(chord), pointerOptions(options)),
+				),
+			options,
+			this.id,
+		);
+	}
+
+	/** Hold keys down for `durationMs`, then release them in reverse order.
+	 *  Bounded so a hold can never strand the user's keyboard. */
+	async holdKeys(chord: string | string[], options: DeliveryOptions & { durationMs?: number } = {}): Promise<void> {
+		const context = this.#getContext();
+		guardRun(context, "holdKeys");
+		if (!this.#session.holdKeys) {
+			throw new ToolError("This native addon has no hold support; use press or drag instead.");
+		}
+		const keys = chordKeys(chord);
+		if (keys.length === 0) throw new ToolError("holdKeys requires at least one key");
+		const durationMs = options.durationMs ?? 500;
+		if (!Number.isInteger(durationMs) || durationMs < 50 || durationMs > 10_000) {
+			throw new ToolError("holdKeys durationMs must be an integer between 50 and 10000");
+		}
+		this.#emit("press");
+		await sendWindowInput(
+			context,
+			"holdKeys",
+			"hold the user's keyboard",
+			() =>
+				nativeCall(context.signal, () =>
+					this.#session.holdKeys!(this.id, keys, durationMs, pointerOptions(options)),
 				),
 			options,
 			this.id,
@@ -997,6 +1027,7 @@ export class ComputerWorkerCore {
 			scroll: desktopTarget.scroll.bind(desktopTarget),
 			type: desktopTarget.type.bind(desktopTarget),
 			press: desktopTarget.press.bind(desktopTarget),
+			holdKeys: desktopTarget.holdKeys.bind(desktopTarget),
 			elementAt: async (x: number, y: number): Promise<El | null> => {
 				const { signal } = getContext();
 				const node = await nativeCall(signal, () => session.axElementAt("desktop", x, y));

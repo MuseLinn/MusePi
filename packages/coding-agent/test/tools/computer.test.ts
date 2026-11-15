@@ -100,6 +100,7 @@ class FakeNativeSession implements NativeDesktopSession {
 	openApplication?: (target: string, options?: { activate?: boolean }) => Promise<FakeApplication>;
 	menuItems?: (window: string, path: string[]) => Promise<FakeMenuItem[]>;
 	menuSelect?: (window: string, path: string[]) => Promise<void>;
+	holdKeys?: (target: string, keys: string[], durationMs: number, opts?: PointerOptions | null) => Promise<void>;
 	clickCount = 0;
 	closeCount = 0;
 	sourceWidth = 64;
@@ -300,11 +301,11 @@ describe("computer worker round trips", () => {
 		const texts = result.payload.displays.filter(block => block.type === "text");
 		const images = result.payload.displays.filter(block => block.type === "image");
 		expect(texts).toHaveLength(1);
-		expect(texts[0]?.text).toMatch(/^screenshot desktop 64×32 → .*omp-computer-.*\.png$/);
+		expect(texts[0]?.text).toMatch(/^screenshot desktop 64×32 → .*musepi-computer-.*\.png$/);
 		expect(images).toEqual([{ type: "image", data: "iVBORw==", mimeType: "image/png" }]);
 		expect(result.payload.screenshots).toHaveLength(1);
 		expect(result.payload.screenshots[0]).toMatchObject({ width: 64, height: 32, target: "desktop" });
-		expect(result.payload.screenshots[0]?.path).toMatch(/omp-computer-.*\.png$/);
+		expect(result.payload.screenshots[0]?.path).toMatch(/musepi-computer-.*\.png$/);
 	});
 
 	it("reports source dimensions when a screenshot is scaled", async () => {
@@ -320,7 +321,9 @@ describe("computer worker round trips", () => {
 		expect(result.payload.displays[0]).toEqual(
 			expect.objectContaining({
 				type: "text",
-				text: expect.stringMatching(/^screenshot desktop 64×32 \(scaled from 128×64\) → .*omp-computer-.*\.png$/),
+				text: expect.stringMatching(
+					/^screenshot desktop 64×32 \(scaled from 128×64\) → .*musepi-computer-.*\.png$/,
+				),
 			}),
 		);
 		expect(result.payload.screenshots[0]).toMatchObject({
@@ -909,6 +912,58 @@ describe("native window menus", () => {
 			transport,
 			"menu-readonly",
 			"return await (await desktop.window('42')).menuSelect(['File', 'Open']);",
+			true,
+		);
+		expect(result.ok).toBe(false);
+	});
+});
+
+describe("held keys", () => {
+	it("holds a chord through the addon and reports its duration", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		const calls: Array<{ target: string; keys: string[]; durationMs: number }> = [];
+		session.holdKeys = async (target, keys, durationMs) => {
+			calls.push({ target, keys, durationMs });
+		};
+		new ComputerWorkerCore(transport, () => session);
+
+		const result = await runWorker(
+			transport,
+			"hold",
+			"return await (await desktop.window('42')).holdKeys('Shift', { durationMs: 200 });",
+		);
+		expect(result.ok).toBe(true);
+		expect(calls).toEqual([{ target: "42", keys: ["Shift"], durationMs: 200 }]);
+	});
+
+	it("rejects an out-of-range duration before sending anything", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		let called = false;
+		session.holdKeys = async () => {
+			called = true;
+		};
+		new ComputerWorkerCore(transport, () => session);
+
+		const result = await runWorker(
+			transport,
+			"hold-bad",
+			"return await (await desktop.window('42')).holdKeys('Shift', { durationMs: 20000 });",
+		);
+		expect(result.ok).toBe(false);
+		expect(called).toBe(false);
+	});
+
+	it("refuses a hold in a read-only run", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		session.holdKeys = async () => {};
+		new ComputerWorkerCore(transport, () => session);
+		const result = await runWorker(
+			transport,
+			"hold-readonly",
+			"return await (await desktop.window('42')).holdKeys('Shift', { durationMs: 100 });",
 			true,
 		);
 		expect(result.ok).toBe(false);
