@@ -1839,7 +1839,8 @@ export const settings = {
 	"settings.sessionTabsDescription":
 		"在窗口顶栏以标签页形式展示最近打开的多路会话，可拖动排序，关闭标签不影响会话本身",
 	"settings.toolCallSummary": "工具调用汇总",
-	"settings.toolCallSummaryDescription": "连续的工具调用自动汇总为一行摘要；卡片、图片与可视化产物不会被汇总收起。点击摘要行可展开完整过程。",
+	"settings.toolCallSummaryDescription":
+		"连续的工具调用自动汇总为一行摘要；卡片、图片与可视化产物不会被汇总收起。点击摘要行可展开完整过程。",
 	"settings.stickyPrompt": "吸顶当前提问",
 	"settings.stickyPromptDescription": "滚动到回合中部时，把本回合的提问固定在顶部一行，点击可跳回原消息。",
 	"settings.collapseLongUserMessagesDescription": "超长消息默认收起为两行，点击展开",

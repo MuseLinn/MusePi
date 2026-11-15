@@ -12,7 +12,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActionToastStack } from "./components/ActionToast";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
-import { AppRail, RAIL_WIDTH, type RailItem } from "./components/AppRail";
+import { AppRail, type RailItem } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
 import { CapabilitySidePanel } from "./components/CapabilitySidePanel";
