@@ -1309,3 +1309,82 @@ describe("branch bar topology (history rekey regression)", () => {
 		).toBe(false);
 	});
 });
+
+describe("round fold header contract", () => {
+	it("mirrors its open state on aria-expanded and carries no revert action", () => {
+		const entries: SessionEntry[] = [
+			userEntry(1),
+			committedAssistantToolCall(),
+			{
+				type: "message",
+				id: "r2",
+				parentId: null,
+				timestamp: "2",
+				message: {
+					role: "toolResult",
+					toolCallId: "call-1",
+					toolName: "read",
+					content: [{ type: "text", text: "ok" }],
+					isError: false,
+					timestamp: 2,
+				},
+			} as unknown as SessionEntry,
+			assistantEntry({ timestamp: 3, text: "reply" }),
+		];
+		const html = renderTranscript({ entries, working: false });
+		// The header is the toggle: assistive tech needs its state, and the
+		// revert affordance belongs to the user row, not to this summary.
+		expect(html).toContain('aria-expanded="false"');
+		expect(html).not.toContain("tr-round-fold-undo");
+	});
+
+	it("reports web research and subagent counts as their own segments", () => {
+		const entries: SessionEntry[] = [
+			userEntry(1),
+			committedAssistantToolCall(),
+			{
+				type: "message",
+				id: "r2",
+				parentId: null,
+				timestamp: "2",
+				message: {
+					role: "toolResult",
+					toolCallId: "call-1",
+					toolName: "fetch",
+					content: [{ type: "text", text: "page" }],
+					isError: false,
+					timestamp: 2,
+				},
+			} as unknown as SessionEntry,
+			{
+				type: "message",
+				id: "a2",
+				parentId: null,
+				timestamp: "2",
+				message: {
+					role: "assistant",
+					content: [{ type: "toolCall", id: "t1", name: "task", arguments: {} }],
+					timestamp: 2,
+				},
+			} as unknown as SessionEntry,
+			{
+				type: "message",
+				id: "r3",
+				parentId: null,
+				timestamp: "3",
+				message: {
+					role: "toolResult",
+					toolCallId: "t1",
+					toolName: "task",
+					content: [{ type: "text", text: "done" }],
+					isError: false,
+					timestamp: 3,
+				},
+			} as unknown as SessionEntry,
+			assistantEntry({ timestamp: 4, text: "reply" }),
+		];
+		const html = renderTranscript({ entries, working: false });
+		expect(html).toContain("web lookup");
+		expect(html).toContain("subagent");
+	});
+});

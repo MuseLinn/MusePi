@@ -1,9 +1,20 @@
 import type { TranscriptKey } from "../zh-CN/transcript.js";
 
 export const transcript = {
+	"transcript.uiBlockTotal": "Total {value}",
+	"transcript.uiBlockNote": "Add a note (optional)",
+	"transcript.uiBlockSend": "Send choice",
+	"transcript.uiBlockAnswerHeader": "Chosen on screen:",
+	"transcript.uiBlockAnswerNote": "Note",
+	"transcript.uiBlockEmpty": "This block has nothing to show.",
+	"transcript.uiBlockPartial": "This block could not draw {count} part(s):",
+	"transcript.uiBlockLine": "Line {line}: {reason}",
+	"transcript.uiBlockSource": "Source",
 	"transcript.roundToolsWithCount": "{count} tools",
 	"transcript.exploredCodebase": "explored the codebase",
 	"transcript.roundCommandsWithCount": "{count} commands",
+	"transcript.roundWebWithCount": "{count} web lookups",
+	"transcript.roundSubagentsWithCount": "{count} subagents",
 	"transcript.roundChangedWithCount": "{count} files changed",
 	"transcript.roundCompleted": "Completed",
 	// ── 工具调用汇总（连续工具调用的类别聚合摘要行）─────────────────────────

@@ -14,7 +14,7 @@ import type {
 	ToolResultMessage,
 	VideoContent,
 } from "@musepi/pi-wire";
-import { ChevronRight, Undo2 } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { createElement, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -834,7 +834,6 @@ export function RoundFoldHeader({
 	open,
 	startTs,
 	onToggle,
-	onRevert,
 }: {
 	fold: RoundFold;
 	open: boolean;
@@ -842,9 +841,6 @@ export function RoundFoldHeader({
 	 *  靠这个 data 锚点把折叠轮纳入当前轮高亮(isTurnStart 同口径)。 */
 	startTs?: string;
 	onToggle(): void;
-	/** Revert anchor (messageId, text) — the round's user message id and
-	 *  text, mirroring the per-message revert affordance. */
-	onRevert?(messageId: string, text: string): void;
 }): ReactNode {
 	const changed = fold.filesChanged > 0;
 	// Keep the reader still when this fold closes above them. Without it the
@@ -865,9 +861,17 @@ export function RoundFoldHeader({
 		);
 	}
 	if (fold.exploreCount > 0) segments.push(<span key="explore">{t("transcript.exploredCodebase")}</span>);
+	if (fold.webCount > 0) {
+		segments.push(<span key="web">{t("transcript.roundWebWithCount", { count: String(fold.webCount) })}</span>);
+	}
 	if (fold.commandCount > 0) {
 		segments.push(
 			<span key="cmds">{t("transcript.roundCommandsWithCount", { count: String(fold.commandCount) })}</span>,
+		);
+	}
+	if (fold.subagentCount > 0) {
+		segments.push(
+			<span key="agents">{t("transcript.roundSubagentsWithCount", { count: String(fold.subagentCount) })}</span>,
 		);
 	}
 	if (segments.length === 0 && fold.toolCount > 0) {
@@ -879,6 +883,7 @@ export function RoundFoldHeader({
 			type="button"
 			className={`tr-round-fold${open ? " tr-round-fold--open" : ""}`}
 			data-turn-start-ts={startTs}
+			aria-expanded={open}
 			onClick={onToggle}
 		>
 			{/* Boxed glyph (openchamber's TurnActivity header): the box carries the
@@ -897,30 +902,9 @@ export function RoundFoldHeader({
 					{seg}
 				</Fragment>
 			))}
-			{/* No raw preview: openchamber's row is label + summary segments only.
-			 * Printing the last tool snippet here turned the one-line activity row
-			 * into a multi-line block of command output. */}
-			{changed && onRevert && fold.userId && (
-				<span
-					role="button"
-					tabIndex={0}
-					className="tr-round-fold-undo"
-					title={t("general.revertMessage")}
-					aria-label={t("general.revertMessage")}
-					onClick={e => {
-						e.stopPropagation();
-						onRevert(fold.userId!, "");
-					}}
-					onKeyDown={e => {
-						if (e.key !== "Enter" && e.key !== " ") return;
-						e.stopPropagation();
-						e.preventDefault();
-						onRevert(fold.userId!, "");
-					}}
-				>
-					<Undo2 size={12} />
-				</span>
-			)}
+			{/* No raw preview and no revert action: the row is the turn's summary
+			 *  and its toggle. Revert belongs to the message it reverts (the user
+			 *  row's own affordance), not to a collapsed-process header. */}
 		</button>
 	);
 }

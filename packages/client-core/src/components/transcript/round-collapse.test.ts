@@ -449,3 +449,30 @@ describe("buildToolRuns subagent boundary (Kimi Code client parity)", () => {
 		}
 	});
 });
+
+describe("buildRoundFolds web and subagent segments", () => {
+	test("web research counts apart from codebase exploration", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1", "read"),
+			toolResult("c1", "read"),
+			assistantToolCall("c2", "fetch"),
+			toolResult("c2", "fetch"),
+			assistantText("done"),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]?.exploreCount).toBe(1);
+		expect(folds[0]?.webCount).toBe(1);
+	});
+
+	test("subagent results are counted on the fold header", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("t1", "task"),
+			toolResult("t1", "task"),
+			assistantText("done"),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds[0]?.subagentCount).toBe(1);
+	});
+});

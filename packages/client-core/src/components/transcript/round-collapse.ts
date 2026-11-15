@@ -78,9 +78,16 @@ export interface RoundFold {
 	toolCount: number;
 	/** Bash-command count inside the foldable span (bashExecution rows). */
 	commandCount: number;
-	/** Read/search/browse tool calls inside the span (openchamber's
-	 *  探索了代码库 segment): read/grep/glob/fetch/web-search/inspect. */
+	/** Non-web read/search tool results inside the span (openchamber's
+	 *  探索了代码库 segment): read/grep/glob/ast-grep/inspect-image. */
 	exploreCount: number;
+	/** Web research results inside the span (openchamber's 调研 segment):
+	 *  fetch / web-search. Counted apart from explore so the header can say
+	 *  "explored the codebase · researched the web" instead of merging them. */
+	webCount: number;
+	/** Subagent (`task`) results inside the span — the Kimi client reports
+	 *  "used N subagents" rather than folding them into a tool count. */
+	subagentCount: number;
 	/** File-change aggregate inside the span (ZCode 更改 chip parity): files
 	 *  touched by edit/apply_patch tool results + summed diff lines. Zero
 	 *  when the round edited nothing — the header omits the chip then. */
@@ -124,6 +131,10 @@ const DIFF_TOOLS = new Set(["edit", "apply_patch"]);
  *  running commands or editing). */
 const EXPLORE_TOOLS = new Set(["read", "grep", "glob", "ast-grep", "fetch", "web-search", "inspect-image"]);
 
+/** Web research tools — counted as their own segment, not as codebase
+ *  exploration (openchamber's "researched" clause). */
+const WEB_TOOLS = new Set(["fetch", "web-search"]);
+
 /** Aggregate file-change stats from one edit/apply_patch toolResult's
  *  details — `details.diff` + `details.path` for single-file results,
  *  `details.perFileResults[]` for multi-file ones. Error results and
@@ -165,6 +176,8 @@ function countWorkInside(
 	toolCount: number;
 	commandCount: number;
 	exploreCount: number;
+	webCount: number;
+	subagentCount: number;
 	changes: { filesChanged: number; added: number; removed: number };
 	preview: string;
 	/** Assistant-message indexes whose successful tool call produced
@@ -175,6 +188,8 @@ function countWorkInside(
 	let toolCount = 0;
 	let commandCount = 0;
 	let exploreCount = 0;
+	let webCount = 0;
+	let subagentCount = 0;
 	let preview = "";
 	const changeState = { files: new Set<string>(), added: 0, removed: 0 };
 	const exempt: number[] = [];
@@ -207,7 +222,9 @@ function countWorkInside(
 			commandCount++;
 		} else if (m.role === "toolResult") {
 			if (DIFF_TOOLS.has(m.toolName)) foldChanges(m, changeState);
-			if (EXPLORE_TOOLS.has(m.toolName)) exploreCount++;
+			if (m.toolName === "task") subagentCount++;
+			else if (WEB_TOOLS.has(m.toolName)) webCount++;
+			else if (EXPLORE_TOOLS.has(m.toolName)) exploreCount++;
 			if (!preview) preview = toolResultSnippet(m);
 		} else if (m.role === "assistant") {
 			for (const block of m.content) {
@@ -219,6 +236,8 @@ function countWorkInside(
 		toolCount,
 		commandCount,
 		exploreCount,
+		webCount,
+		subagentCount,
 		changes: { filesChanged: changeState.files.size, added: changeState.added, removed: changeState.removed },
 		preview,
 		exempt,
@@ -324,6 +343,8 @@ export interface FoldSpan {
 	toolCount: number;
 	commandCount: number;
 	exploreCount: number;
+	webCount: number;
+	subagentCount: number;
 	filesChanged: number;
 	added: number;
 	removed: number;
@@ -348,7 +369,7 @@ export function foldSpan(
 	if (replyIdx <= startIdx) return null; // no reply → no anchor for the header
 	// Work is counted over the WHOLE turn (process rows may sit after the
 	// reply — that ordering used to count as "no activity" and produced no row).
-	const { toolCount, commandCount, exploreCount, changes, preview, exempt } = countWorkInside(
+	const { toolCount, commandCount, exploreCount, webCount, subagentCount, changes, preview, exempt } = countWorkInside(
 		entries,
 		startIdx + 1,
 		endIdx + 1,
@@ -359,6 +380,8 @@ export function foldSpan(
 		toolCount,
 		commandCount,
 		exploreCount,
+		webCount,
+		subagentCount,
 		filesChanged: changes.filesChanged,
 		added: changes.added,
 		removed: changes.removed,
@@ -384,6 +407,8 @@ function pushFold(
 		toolCount: span.toolCount,
 		commandCount: span.commandCount,
 		exploreCount: span.exploreCount,
+		webCount: span.webCount,
+		subagentCount: span.subagentCount,
 		filesChanged: span.filesChanged,
 		added: span.added,
 		removed: span.removed,

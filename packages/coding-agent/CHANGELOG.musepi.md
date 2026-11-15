@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **活动头补齐摘要与可达性**：回合折叠头现在按「更改 N 文件 +a/−d · 探索了代码库 · 调研 ×N · 命令 ×N · 子代理 ×N」汇总（联网调研与子代理不再并进工具数），并带 `aria-expanded`；摘要头上的回退按钮已移除（回退属于消息行自己的操作），收起态的隐藏行对读屏与键盘为 `inert`。
+  - EN: The activity header reports the turn's work as "N files changed +a/−d · explored the codebase · N web lookups · N commands · N subagents" — web research and subagents no longer collapse into a generic tool count — and mirrors its state with aria-expanded. The revert button is gone from the summary header (revert belongs to the message row), and rows hidden inside a closed fold are inert for keyboard and screen readers.
+
 - **折叠改为统一的轨道动画**：思考块、活动折叠与工具汇总共用一个折叠 primitive——展开时先挂载内容、下一帧再打开轨道，收起时轨道落到零后再卸载；动画对象是 grid 轨道（`0fr ↔ 1fr`），不再依赖 JS 量高或 `height: auto` 插值。关闭态对读屏与键盘为 `inert`，`prefers-reduced-motion` 下直接切换。
   - EN: Folds animate on one shared track. Thinking, the activity fold and the tool summary now mount content first and open the track on the next frame, then collapse to zero before unmounting; the animated property is the grid track (0fr ↔ 1fr) rather than a JS-measured height or a height:auto interpolation. A closed region is inert for keyboard and screen readers, and prefers-reduced-motion switches instantly.
 

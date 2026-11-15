@@ -1,7 +1,18 @@
 export const transcript = {
+	"transcript.uiBlockTotal": "合计 {value}",
+	"transcript.uiBlockNote": "补充说明（可选）",
+	"transcript.uiBlockSend": "发送选择",
+	"transcript.uiBlockAnswerHeader": "界面选择：",
+	"transcript.uiBlockAnswerNote": "补充说明",
+	"transcript.uiBlockEmpty": "这块界面没有可显示的内容。",
+	"transcript.uiBlockPartial": "这块界面有 {count} 处没能画出：",
+	"transcript.uiBlockLine": "第 {line} 行：{reason}",
+	"transcript.uiBlockSource": "源码",
 	"transcript.roundToolsWithCount": "工具 ×{count}",
 	"transcript.exploredCodebase": "探索了代码库",
 	"transcript.roundCommandsWithCount": "命令 ×{count}",
+	"transcript.roundWebWithCount": "调研 ×{count}",
+	"transcript.roundSubagentsWithCount": "子代理 ×{count}",
 	"transcript.roundChangedWithCount": "更改 {count} 文件",
 	"transcript.roundCompleted": "已完成",
 	// ── 工具调用汇总（连续工具调用的类别聚合摘要行）─────────────────────────

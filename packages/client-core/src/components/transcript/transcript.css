@@ -4092,26 +4092,6 @@ a.tr-tool-search-title:hover {
 	font-family: var(--font-mono, ui-monospace, monospace);
 	font-size: 10.5px;
 }
-.tr-round-fold-undo {
-	flex-shrink: 0;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
-	margin: -3px -4px -3px 0;
-	border-radius: var(--radius-md);
-	color: var(--text-faint, var(--fg-faint));
-	cursor: pointer;
-	transition: background 140ms ease, color 140ms ease;
-}
-.tr-round-fold-undo:hover {
-	background: color-mix(in oklab, var(--accent, #d9a441) 16%, transparent);
-	color: var(--accent, #d9a441);
-}
-.tr-round-fold-undo:focus-visible {
-	outline: 1px solid color-mix(in oklab, var(--accent, #d9a441) 55%, transparent);
-}
 .gui-motion-off .tr-round-fold-chevron {
 	transition: none;
 }

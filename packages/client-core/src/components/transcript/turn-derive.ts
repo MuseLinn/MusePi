@@ -134,6 +134,8 @@ export function deriveTurns(
 				toolCount: f.toolCount,
 				commandCount: f.commandCount,
 				exploreCount: f.exploreCount,
+				webCount: f.webCount,
+				subagentCount: f.subagentCount,
 				filesChanged: f.filesChanged,
 				added: f.added,
 				removed: f.removed,

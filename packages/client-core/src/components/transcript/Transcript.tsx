@@ -2480,7 +2480,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					fold={fold}
 					open={foldOpenOf(fold)}
 					onToggle={() => toggleFold(foldKeyOf(fold))}
-					onRevert={onRevert}
 					startTs={entries[fold.startIdx]?.timestamp}
 				/>
 			) : null;
@@ -2593,12 +2592,17 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		) : null;
 		// Summarized run tail rows stay collapsed even inside an OPEN fold —
 		// the run's own summary line owns their visibility now.
-		const slotClass = `tr-fold-slot${foldOpen && !isRunHidden ? " tr-fold-slot--open" : ""}`;
+		const slotOpen = foldOpen && !isRunHidden;
+		const slotClass = `tr-fold-slot${slotOpen ? " tr-fold-slot--open" : ""}`;
 		const row = collapsible ? (
 			// Hidden span rows stay MOUNTED inside the slot and collapse to
 			// height 0, so folding animates both ways (returning null popped
-			// rows in and out).
-			<div className={slotClass}>{body}</div>
+			// rows in and out). A closed slot is inert: its content is clipped
+			// visually but would otherwise stay in the tab order and the
+			// accessibility tree.
+			<div className={slotClass} inert={!slotOpen} aria-hidden={slotOpen ? undefined : true}>
+				{body}
+			</div>
 		) : (
 			// The standalone header already rides `body` for every row that is
 			// not a collapsed slot; mounting it here as well drew the 活动 header
