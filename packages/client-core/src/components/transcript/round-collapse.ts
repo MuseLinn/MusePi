@@ -25,6 +25,37 @@ import { isArtifactTool, resultPicturesOf } from "./tool-media";
 
 export { isTurnStartEntry as isTurnStart };
 
+/** Rows whose tool output is turn OUTPUT, not process: an artifact card
+ *  (`widget` / `board` / `schedule_task` / `notify_user`) or a successful
+ *  result carrying pictures. The assistant row carrying the call is the row
+ *  that renders the card, so that is the row to keep.
+ *
+ *  One interpretation serves both collapses: the round fold exempts these rows
+ *  from the hidden span, and the tool-call summary refuses to summarize a run
+ *  containing one. A second copy of "is this a deliverable" is exactly how a
+ *  closed summary hid a card the fold would have kept. */
+export function artifactRowSet(entries: readonly SessionEntry[]): Set<number> {
+	const owners = new Map<string, number>();
+	const rows = new Set<number>();
+	entries.forEach((entry, index) => {
+		if (entry.type !== "message" || entry.message.role !== "assistant") return;
+		for (const block of entry.message.content) {
+			if (block.type !== "toolCall") continue;
+			owners.set(block.id, index);
+			if (isArtifactTool(block.name)) rows.add(index);
+		}
+	});
+	entries.forEach((entry, index) => {
+		if (entry.type !== "message" || entry.message.role !== "toolResult") return;
+		const message = entry.message;
+		if (message.isError === true) return;
+		const owner = owners.get((message as { toolCallId?: string }).toolCallId ?? "");
+		if (owner === undefined) return;
+		if (isArtifactTool(message.toolName) || resultPicturesOf(message).length > 0) rows.add(owner);
+	});
+	return rows;
+}
+
 /** One completed round's fold descriptor. */
 export interface RoundFold {
 	/** Absolute entry index of the round's user message. */
@@ -147,11 +178,12 @@ function countWorkInside(
 	let preview = "";
 	const changeState = { files: new Set<string>(), added: 0, removed: 0 };
 	const exempt: number[] = [];
-	/** toolCallId → the assistant row carrying the call (its result arrives on
-	 *  a later row, so the owner is only knowable then). */
-	const callOwners = new Map<string, number>();
+	const artifactRows = artifactRowSet(entries);
 	for (let i = start; i <= end; i++) {
 		const e = entries[i];
+		// A row whose card is the turn's deliverable never folds, whatever its
+		// position in the span (see artifactRowSet).
+		if (artifactRows.has(i) && !exempt.includes(i)) exempt.push(i);
 		// Design doc §C: tail rows (retry_failure / async-result) and hook
 		// rows are turn accompaniment, not working process — they stay
 		// visible even while the fold is closed. Non-message entries are
@@ -176,27 +208,10 @@ function countWorkInside(
 		} else if (m.role === "toolResult") {
 			if (DIFF_TOOLS.has(m.toolName)) foldChanges(m, changeState);
 			if (EXPLORE_TOOLS.has(m.toolName)) exploreCount++;
-			// A settled SUCCESSFUL call that produced the turn's artifact or a
-			// picture promotes its assistant row out of the fold — the card and
-			// the picture are the deliverable, not process noise. The picture
-			// read is the tool card's own (tool-media), so a card that renders
-			// media inline is never hidden behind this fold.
-			const owner = callOwners.get((m as { toolCallId?: string }).toolCallId ?? "");
-			if (
-				owner !== undefined &&
-				m.isError !== true &&
-				(isArtifactTool(m.toolName) || resultPicturesOf(m).length > 0) &&
-				!exempt.includes(owner)
-			) {
-				exempt.push(owner);
-			}
 			if (!preview) preview = toolResultSnippet(m);
 		} else if (m.role === "assistant") {
 			for (const block of m.content) {
-				if (block.type === "toolCall") {
-					toolCount++;
-					callOwners.set(block.id, i);
-				}
+				if (block.type === "toolCall") toolCount++;
 			}
 		}
 	}

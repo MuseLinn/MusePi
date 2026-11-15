@@ -34,7 +34,13 @@ import { IrcCard, ircPairKeyOf } from "./irc-message";
 import { collectQuoteMarks } from "./quote-anchor";
 import { QuoteHighlightLayer } from "./quote-highlight";
 import { roundTimerKeyByRow } from "./render-units";
-import { buildToolRuns, planLiveActivityTrim, type RoundFold, type ToolRunSummary } from "./round-collapse";
+import {
+	artifactRowSet,
+	buildToolRuns,
+	planLiveActivityTrim,
+	type RoundFold,
+	type ToolRunSummary,
+} from "./round-collapse";
 import { classifyTranscriptRow, hasTextBlock } from "./row-kinds";
 import {
 	anchorActionAfterContentChange,
@@ -1749,6 +1755,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		}
 		return map;
 	}, [toolRuns]);
+	// Rows whose card IS turn output (widget / board / schedule / progress, and
+	// any successful tool result carrying pictures). A tool-call summary must not
+	// collapse over one of these: the run is only "process noise" when nothing in
+	// it is a deliverable. The round fold computes the same set per fold
+	// (`RoundFold.exempt`); runs that sit OUTSIDE a fold (live turn, turn without
+	// a frozen duration) had no such guard, so a collapsed 工具×N line swallowed
+	// the visual card the turn had just rendered.
+	const artifactRows = useMemo(() => artifactRowSet(entries), [entries]);
 	// One orb per agent turn: the row that carries the turn's avatar is the
 	// fold's header (expanded turn) or its reply (collapsed turn); otherwise
 	// the first row that actually mounts an agent body. Keying the owner off
@@ -1790,10 +1804,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		for (const unit of turnUnits) {
 			const fold = foldByStart.get(unit.startIdx);
 			if (fold !== undefined) {
-				// Always the fold header: it is the turn's head row in BOTH fold
-				// states. Anchoring the reply while the fold was closed put the
-				// avatar at the turn's bottom and made the pinned avatar appear
-				// for some turns and not others.
+				// The 活动 header keeps its own row in BOTH fold states (a closed
+				// fold renders the header alone there), so the orb always rides the
+				// turn's head row and never moves when the fold toggles.
 				map.set(unit.startIdx, fold.headerIdx);
 				continue;
 			}
@@ -2419,7 +2432,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// process), a run row is fold-exempt (widget/tail/hook rows are
 		// artifacts, not noise) — the whole run renders 现状 then.
 		const run = runByRowIdx.get(absIdx);
-		const runBlocked = run !== undefined && fold !== undefined && run.idxs.some(i => fold.exempt.includes(i));
+		const runBlocked = run?.idxs.some(i => artifactRows.has(i) || (fold?.exempt.includes(i) ?? false)) ?? false;
 		const runActive = run !== undefined && !runBlocked && !foldClosed;
 		const isRunHead = runActive && run.headIdx === absIdx;
 		const runOpen = runActive && runsExpanded.has(run.key);
@@ -2432,13 +2445,19 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// Collapsed turn = 活动 row + the answer: the reply row renders its
 		// TEXT only (thinking/tool parts fold into the activity row).
 		const rowTextOnly = foldClosed && isReplyRow;
-		// A closed fold shows ONLY the header + the reply (+ exempt widget
-		// rows): every other row of the turn loses its body, and the header
-		// row (when it is not the reply) disappears entirely — its header
-		// rides the reply row instead.
-		const hideRowContent = foldClosed && !isReplyRow && !isExemptRow;
-		const hoistHeaderHere = foldClosed && isReplyRow;
-		const renderHeaderHere = (isHeaderRow && !foldClosed) || hoistHeaderHere;
+		// A closed fold shows the 活动 header row + the reply (+ exempt widget
+		// rows): every other row of the turn loses its body. The header keeps its
+		// OWN row in both states — hoisting it onto the reply made the turn's
+		// first row render nothing, which is why the avatar vanished on collapse
+		// and why expanding jumped (the header moved rows instead of the content
+		// growing).
+		const hideRowContent = foldClosed && !isReplyRow && !isExemptRow && !isHeaderRow;
+		// The header renders ALONE on its row only when that row is nothing but
+		// process detail: a reply or an exempt artifact row keeps its body, so a
+		// header that coincides with the answer (or with the card it produced)
+		// cannot swallow it.
+		const headerOnlyRow = foldClosed && isHeaderRow && !isReplyRow && !isExemptRow;
+		const renderHeaderHere = isHeaderRow;
 		// Per-round work timer: the live tail row ticks from the
 		// round start (last user message); completed rounds show
 		// their frozen total under the final message. The frozen
@@ -2451,9 +2470,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const roundDuration =
 			(roundTimerKey !== undefined ? roundDurations?.get(roundTimerKey) : undefined) ??
 			(isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined);
-		// Closed: the header rides the REPLY row (hoisted into its content column) so
-		// orb + 活动 + answer share one line, while the turn's own first row renders
-		// nothing — no pixel-less row, no floating avatar.
+		// The 活动 header is rendered on the row it belongs to (the turn's first
+		// content row) in both fold states. EntryRow mounts no Row for a
+		// toolResult / custom header row, so this loop mounts it.
 		const foldHeader =
 			renderHeaderHere && fold !== undefined ? (
 				<RoundFoldHeader
@@ -2468,8 +2487,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// A header row is the turn's first content row, which is frequently a
 		// toolResult / custom row — EntryRow mounts no Row for those, so the
 		// header has to be mounted by this loop instead (it vanished entirely
-		// when it could only ride an assistant body).
-		const headerStandalone = foldHeader !== null && !isAssistantMessage;
+		// when it could only ride an assistant body). A closed fold renders the
+		// header alone on that row: its body is process detail the fold owns.
+		const headerStandalone = foldHeader !== null && (!isAssistantMessage || headerOnlyRow);
 		// 隐藏工具活动 hides the process EXCEPT (a) behind an expanded
 		// 活动 row — asking to expand it outranks the setting — and
 		// (b) during the live round, where the activity is the point.
@@ -2525,7 +2545,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						<ToolRunLine run={run} open={runOpen} onToggle={() => toggleRun(run.key)} />
 					</Row>
 				) : null}
-				{hideRowContent && !collapsible ? null : runSummaryHere && !runOpen ? null : (
+				{headerOnlyRow || (hideRowContent && !collapsible) ? null : runSummaryHere && !runOpen ? null : (
 					<EntryRow
 						entry={entry}
 						foldHeader={isAssistantMessage && !runSummaryHere ? (foldHeader ?? undefined) : undefined}
@@ -2600,7 +2620,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		}));
 		// 锚点行折进零高度槽(折叠段隐藏跨距 / 汇总尾行)时分叉条随之隐藏:
 		// 它留在原像素位置不动,折叠动画期间看起来就是"位置变来变去"。
-		const anchorCollapsed = hideRowContent || (collapsible && (!foldOpen || isRunHidden));
+		const anchorCollapsed = hideRowContent || headerOnlyRow || (collapsible && (!foldOpen || isRunHidden));
 		if (branchInfo && !anchorCollapsed && kids.length > 1 && entry.type === "message") {
 			return (
 				<div key={entry.id} className="tr-branch-wrap">

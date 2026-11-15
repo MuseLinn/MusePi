@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionEntry } from "@musepi/pi-wire";
-import { buildRoundFolds, buildToolRuns, isInsideFold } from "./round-collapse";
+import { artifactRowSet, buildRoundFolds, buildToolRuns, isInsideFold } from "./round-collapse";
 
 /** Minimal EntryBase fields shared by every SessionEntry. */
 const base = { parentId: null, timestamp: "0" };
@@ -371,5 +371,56 @@ describe("notify_user progress updates", () => {
 		const runs = buildToolRuns(entries, false);
 		expect(runs.map(run => run.headIdx)).toEqual([1, 7]);
 		for (const run of runs) expect(run.idxs).not.toContain(5);
+	});
+});
+
+describe("artifactRowSet (one deliverable predicate for both collapses)", () => {
+	test("marks the row that carries an artifact tool call, result or not", () => {
+		// The card renders on the CALL row, so the predicate must not wait for a
+		// matching result row: a widget whose result lands in a custom entry (or
+		// whose card streams in before the result) still counts as output.
+		const entries = [userMsg(), assistantToolCall("w1", "widget"), assistantText("card above")];
+		expect([...artifactRowSet(entries)]).toEqual([1]);
+	});
+
+	test("marks a row whose successful result produced a picture", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1", "generate_image"),
+			withId({
+				type: "message",
+				message: {
+					role: "toolResult",
+					toolCallId: "c1",
+					toolName: "generate_image",
+					content: [{ type: "text", text: "ok" }],
+					details: { images: [{ data: "Zm9v", mimeType: "image/png" }] },
+					isError: false,
+					timestamp: 1,
+				},
+			}),
+		];
+		expect([...artifactRowSet(entries)]).toEqual([1]);
+	});
+
+	test("leaves process rows and errored artifacts out", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1", "read"),
+			toolResult("c1", "read"),
+			assistantToolCall("w1", "widget"),
+			withId({
+				type: "message",
+				message: {
+					role: "toolResult",
+					toolCallId: "w1",
+					toolName: "widget",
+					content: [{ type: "text", text: "bad spec" }],
+					isError: true,
+					timestamp: 1,
+				},
+			}),
+		];
+		expect(artifactRowSet(entries).has(1)).toBe(false);
 	});
 });

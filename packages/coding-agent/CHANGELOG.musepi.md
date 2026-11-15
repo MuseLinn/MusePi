@@ -7,6 +7,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 - **会话头像每回合只在回合顶出现一次**：头像锚点恒为该回合的第一行（折叠时也是折叠头），不再随折叠开关在回合底部与顶部之间跳动，也不再吸顶复制——头像随它所属的回合一起滚走，不会在正文上方再浮一个。提示条仍是唯一吸顶元素，改用实心底与卡片同色的渐隐遮罩，正文不再透过玻璃与它叠在一起。
   - EN: One avatar per turn, always at the turn's head. The orb anchor is the turn's first row (the fold header in both fold states) instead of jumping between the reply and the header, and the avatar is no longer duplicated in a pinned copy — it scrolls away with its own turn. The prompt pill stays the only pinned element, now opaque over a card-coloured scrim so body text no longer reads through it.
 
+- **回合折叠不再吞掉可视化内容**：工具产出的卡片（`widget` / `board` / `schedule_task` / 进度更新）与带图片的结果，现在对「回合折叠」和「工具调用汇总」用同一套判定——汇总不会再把含交付物的工具段收成一行，卡片在折叠态也保持可见。折叠态的 `活动` 头保留自己那一行，不再搬到回答行上，展开/收起因此只剩内容高度在动，头像也始终跟着回合头。
+  - EN: A folded turn no longer swallows its visual output. Cards (`widget` / `board` / `schedule_task` / progress updates) and results carrying pictures now share ONE deliverable predicate across the round fold and the tool-call summary: a summary no longer collapses over a run that produced a card, and the card stays visible in the closed state. The 活动 header keeps its own row instead of being hoisted onto the reply, so expanding and closing only grows or shrinks content — and the avatar always stays on the turn's head row.
+
 - **深色主题文字可读性下限**：15 个深色预设的次要文字与辅助文字加上亮度下限（`--fg-muted` 0.70、`--fg-faint` 0.60），色相与彩度仍是预设本身；此前 dracula / ayu / solarized 等的说明行与时间戳只有约 1.8:1，斜杠菜单的副标题基本看不清。
   - EN: Dark presets get a readability floor for secondary and faint text (`--fg-muted` 0.70, `--fg-faint` 0.60) while keeping each preset's hue and chroma. Dracula, ayu and solarized shipped faint text at roughly 1.8:1, which made the slash menu's descriptions and every timestamp nearly unreadable.
 
