@@ -63,3 +63,44 @@ describe("injected mark layer", () => {
 		}
 	});
 });
+
+describe("agent drag traces", () => {
+	const { AGENT_MARK_SCRIPT, agentDragStep, agentPathCall } = require("../electron/agent-marks.cjs");
+
+	it("classifies press, held move and release", () => {
+		expect(agentDragStep("Input.dispatchMouseEvent", { type: "mousePressed", x: 1, y: 2 })).toEqual({
+			phase: "start",
+			x: 1,
+			y: 2,
+		});
+		expect(agentDragStep("Input.dispatchMouseEvent", { type: "mouseMoved", buttons: 1, x: 3, y: 4 })).toEqual({
+			phase: "move",
+			x: 3,
+			y: 4,
+		});
+		expect(agentDragStep("Input.dispatchMouseEvent", { type: "mouseMoved", buttons: 0, x: 3, y: 4 })).toBeNull();
+		expect(agentDragStep("Input.dispatchMouseEvent", { type: "mouseReleased", x: 5, y: 6 })).toEqual({
+			phase: "end",
+			x: 5,
+			y: 6,
+		});
+		expect(agentDragStep("Input.dispatchKeyEvent", { type: "keyDown" })).toBeNull();
+	});
+
+	it("encodes rounded points and paints a polyline once installed", async () => {
+		expect(agentPathCall([{ x: 10.4, y: 20.6 }, { x: 30, y: 40 }])).toBe(
+			"window.__musepiAgentPaths && window.__musepiAgentPaths([[10,21],[30,40]]);",
+		);
+		const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+		if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+		try {
+			new Function(AGENT_MARK_SCRIPT)();
+			window.__musepiAgentPaths([[10, 10], [60, 50]]);
+			const svg = document.querySelector("#musepi-agent-marks svg");
+			expect(svg).not.toBeNull();
+			expect(svg.querySelector("polyline").getAttribute("points")).toBe("10,10 60,50");
+		} finally {
+			await GlobalRegistrator.unregister();
+		}
+	});
+});

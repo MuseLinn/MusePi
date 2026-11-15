@@ -38,7 +38,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { createHash } = require("node:crypto");
 const { projectActivity, settleActivity, startActivity, takeoverActivity } = require("./managed-browser-activity.cjs");
-const { AGENT_MARK_SCRIPT, agentMarkCall, agentMarkFor } = require("./agent-marks.cjs");
+const { AGENT_MARK_SCRIPT, agentDragStep, agentMarkCall, agentMarkFor, agentPathCall } = require("./agent-marks.cjs");
 const { ManagedBrowserRecordStore } = require("./managed-browser-records.cjs");
 const {
 	readExtensionManifest,
@@ -614,6 +614,8 @@ class ManagedTab {
 		this.frozen = false;
 		/** Pending agent-highlight auto-hide. */
 		this.highlightTimer = null;
+		/** Points of the drag in progress (agent pointer only, never page data). */
+		this.dragPath = null;
 	}
 
 	/**
@@ -656,6 +658,7 @@ class ManagedTab {
 			this.controller.notifyLifecycle(this);
 		});
 		wc.on("did-navigate", (_e, targetUrl) => {
+			this.dragPath = null;
 			this.refreshState(targetUrl);
 			this.controller.recordHistory(this);
 			this.controller.notifyLifecycle(this);
@@ -2281,6 +2284,8 @@ class ManagedBrowserController {
 		}
 		const mark = agentMarkFor(msg.method, msg.params);
 		if (mark) this.flashAgentTarget(tab, mark);
+		const drag = agentDragStep(msg.method, msg.params);
+		if (drag) this.trackAgentDrag(tab, drag);
 		try {
 			const result = (await wc.debugger.sendCommand(msg.method, msg.params)) ?? {};
 			// Detach (e.g. a stopOp tab close) resolves pending commands instead
@@ -2606,11 +2611,36 @@ class ManagedBrowserController {
 		return { ok: true };
 	}
 
+	/** Collect one drag from the agent's own pointer events. Press starts it,
+	 *  moves extend it (bounded), release draws it once — no page inspection. */
+	trackAgentDrag(tab, step) {
+		if (step.phase === "start") {
+			tab.dragPath = [{ x: step.x, y: step.y }];
+			return;
+		}
+		if (!Array.isArray(tab.dragPath)) return;
+		if (step.phase === "move") {
+			if (tab.dragPath.length < 256) tab.dragPath.push({ x: step.x, y: step.y });
+			return;
+		}
+		tab.dragPath.push({ x: step.x, y: step.y });
+		const points = tab.dragPath;
+		tab.dragPath = null;
+		if (points.length >= 3) this.injectAgentPath(tab, points);
+	}
+
 	/** Reinject the mark layer after a document loads; idempotent per page. */
 	installAgentMarks() {
 		const wc = this.wc;
 		if (!wc || wc.isDestroyed()) return;
 		void wc.executeJavaScript(AGENT_MARK_SCRIPT, true).catch(() => {});
+	}
+
+	/** Draw one completed drag path inside the page. */
+	injectAgentPath(tab, points) {
+		const wc = tab.wc;
+		if (!wc || wc.isDestroyed()) return;
+		void wc.executeJavaScript(agentPathCall(points), true).catch(() => {});
 	}
 
 	/** Pulse the action point inside the page, where it paints above the guest. */
