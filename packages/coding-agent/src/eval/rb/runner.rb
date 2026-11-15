@@ -129,7 +129,7 @@ def __omp_emit_status(op, data = {})
   __omp_emit_display({ "application/x-omp-status" => status }, "display")
 end
 
-OMP_IMAGE_MIMES = %w[image/png image/jpeg].freeze
+MUSEPI_IMAGE_MIMES = %w[image/png image/jpeg].freeze
 
 # True when `str` already looks like base64 text (ASCII, base64 alphabet, length
 # a multiple of 4). Raw image blobs (PNG/JPEG bytes) contain high bytes, so they
@@ -171,7 +171,7 @@ def __omp_normalize_bundle(hash)
   hash.each do |key, val|
     k = key.to_s
     bundle[k] =
-      if OMP_IMAGE_MIMES.include?(k)
+      if MUSEPI_IMAGE_MIMES.include?(k)
         __omp_image_payload(val)
       elsif val.is_a?(String)
         __omp_scrub(val)
@@ -412,7 +412,7 @@ end
 # Per-request runtime (cwd + managed env) + auto-result suppression
 # ---------------------------------------------------------------------------
 
-OMP_MANAGED_ENV_KEYS = %w[
+MUSEPI_MANAGED_ENV_KEYS = %w[
   PI_SESSION_FILE
   PI_ARTIFACTS_DIR
   PI_TOOL_BRIDGE_URL
@@ -430,7 +430,7 @@ def __omp_apply_request_runtime(req)
   end
   env = req["env"]
   if env.is_a?(Hash)
-    OMP_MANAGED_ENV_KEYS.each do |key|
+    MUSEPI_MANAGED_ENV_KEYS.each do |key|
       next unless env.key?(key)
       value = env[key]
       if value.is_a?(String)
@@ -445,7 +445,7 @@ end
 # Last value-bearing AST node types we should NOT auto-display (statements /
 # definitions, mirroring IPython's "only display a trailing expression"). Falls
 # back to displaying any non-nil value when the AST is unavailable.
-OMP_NON_DISPLAY_NODES = %i[
+MUSEPI_NON_DISPLAY_NODES = %i[
   LASGN IASGN GASGN CVASGN DASGN OP_ASGN OP_CDECL CDECL MASGN CASGN
   DEFN DEFS CLASS MODULE SCLASS ALIAS UNDEF
 ].freeze
@@ -473,7 +473,7 @@ def __omp_should_display_result?(src)
     end
   last = __omp_ast_last(node)
   return true if last.nil?
-  !OMP_NON_DISPLAY_NODES.include?(last.type)
+  !MUSEPI_NON_DISPLAY_NODES.include?(last.type)
 end
 
 # ---------------------------------------------------------------------------
