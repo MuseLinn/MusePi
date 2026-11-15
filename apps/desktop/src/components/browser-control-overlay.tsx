@@ -130,7 +130,10 @@ export function BrowserControlOverlay({
 							</span>
 						)}
 					</span>
-					<span className="gui-browser-control-summary">{displayActivity.summary}</span>
+					<span className="gui-browser-control-summary" title={displayActivity.summary}>
+						{displayActivity.domain ? `${displayActivity.domain} · ` : ""}
+						{displayActivity.summary}
+					</span>
 				</span>
 				<span className="gui-browser-control-time" data-elapsed={elapsed} aria-hidden="true">
 					{t("tools.agentControlElapsed", { time })}

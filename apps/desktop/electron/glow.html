@@ -57,6 +57,24 @@
 				box-shadow: 0 6px 24px oklch(0.62 0.16 162 / 0.4), 0 0 0 4px oklch(0.62 0.16 162 / 0.12);
 				animation: badge-in 220ms ease-out both;
 			}
+			.badge-copy {
+				display: flex;
+				flex-direction: column;
+				gap: 3px;
+				min-width: 0;
+				line-height: 1.2;
+			}
+			.badge-detail {
+				max-width: 320px;
+				overflow: hidden;
+				color: oklch(0.88 0.03 162);
+				font: 500 11px/1 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.badge-detail:empty {
+				display: none;
+			}
 			@keyframes badge-in {
 				from {
 					opacity: 0;
@@ -202,7 +220,13 @@
 		</style>
 	</head>
 	<body>
-		<div class="badge"><span class="dot"></span><span id="label">AI 正在操作桌面</span></div>
+		<div class="badge">
+			<span class="dot"></span>
+			<span class="badge-copy">
+				<span id="label">AI 正在操作桌面</span>
+				<span id="detail" class="badge-detail"></span>
+			</span>
+		</div>
 		<script>
 			// The overlay is a plain window (no guest-client bundle): carry the
 			// main window's locale for the badge text. Theme is baked into
@@ -217,7 +241,27 @@
 			// Computer-input target highlighting. Coordinates arrive already
 			// rebased to this window's viewport (main process distributes by
 			// display and subtracts the window origin).
-			const KIND_LABELS = {
+			let english = false;
+			try {
+				english = (localStorage.getItem("omp.collab.locale") || "zh-CN").startsWith("en");
+			} catch {
+				/* isolated page */
+			}
+			const KIND_LABELS = english
+				? {
+						click: "Click",
+						doubleClick: "Double click",
+						move: "Move",
+						drag: "Drag",
+						scroll: "Scroll",
+						type: "Type",
+						press: "Key",
+						raise: "Bring forward",
+						setValue: "Set value",
+						perform: "Action",
+						focus: "Focus",
+					}
+				: {
 				click: "点击",
 				doubleClick: "双击",
 				move: "移动",
@@ -256,6 +300,18 @@
 				clearTimeout(cursorHideTimer);
 				cursorHideTimer = setTimeout(() => cursor.classList.remove("is-live"), 2600);
 			}
+			const detail = document.getElementById("detail");
+			let detailTimer = 0;
+			function showDetail(ev, kind) {
+				const where = ev.title || ev.app || "";
+				const text = where ? kind + " · " + where : kind;
+				detail.textContent = text.length > 42 ? text.slice(0, 41) + "…" : text;
+				clearTimeout(detailTimer);
+				detailTimer = setTimeout(() => {
+					detail.textContent = "";
+				}, 3000);
+			}
+
 			(function boot() {
 				const bridge = window.glowBridge;
 				if (!bridge) {
@@ -264,6 +320,7 @@
 				}
 				bridge.onTarget(ev => {
 					const kind = KIND_LABELS[ev.kind] ?? ev.kind;
+					showDetail(ev, kind);
 					if (ev.rect && ev.rect.width > 0 && ev.rect.height > 0) {
 						const border = document.createElement("div");
 						border.className = "target";

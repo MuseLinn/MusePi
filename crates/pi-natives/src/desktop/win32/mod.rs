@@ -20,7 +20,7 @@ use image::RgbaImage;
 #[cfg(target_os = "windows")]
 use self::ax::Win32Ax;
 #[cfg(target_os = "windows")]
-use super::backend::{AxBackend, Backend, DeliveryMode, PointerEvent};
+use super::backend::{AxBackend, Backend, DeliveryMode, MouseButton, PointerEvent};
 #[cfg(target_os = "windows")]
 use super::error::CoreResult;
 #[cfg(target_os = "windows")]
@@ -130,6 +130,22 @@ impl Backend for Win32Backend {
 		_caps: &CaptureCaps,
 	) -> CoreResult<(RgbaImage, FrameGeometry)> {
 		capture::capture(&self.display, target)
+	}
+
+	fn hold_pointer(
+		&mut self,
+		target: &Target,
+		x: f64,
+		y: f64,
+		button: MouseButton,
+		duration: std::time::Duration,
+		mode: DeliveryMode,
+	) -> CoreResult<()> {
+		self.begin_input(target, mode)?;
+		let result =
+			input::hold_pointer(&mut self.global_input, target, x, y, button, duration, mode);
+		self.end_input();
+		result
 	}
 
 	fn hold_keys(

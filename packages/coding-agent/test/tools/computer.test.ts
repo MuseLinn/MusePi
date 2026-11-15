@@ -101,6 +101,13 @@ class FakeNativeSession implements NativeDesktopSession {
 	menuItems?: (window: string, path: string[]) => Promise<FakeMenuItem[]>;
 	menuSelect?: (window: string, path: string[]) => Promise<void>;
 	holdKeys?: (target: string, keys: string[], durationMs: number, opts?: PointerOptions | null) => Promise<void>;
+	holdPointer?: (
+		target: string,
+		x: number,
+		y: number,
+		durationMs: number,
+		opts?: PointerOptions | null,
+	) => Promise<void>;
 	clickCount = 0;
 	closeCount = 0;
 	sourceWidth = 64;
@@ -967,5 +974,42 @@ describe("held keys", () => {
 			true,
 		);
 		expect(result.ok).toBe(false);
+	});
+});
+
+describe("held pointer", () => {
+	it("presses and holds at a screenshot point", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		const calls: Array<{ x: number; y: number; durationMs: number; button?: string }> = [];
+		session.holdPointer = async (_target, x, y, durationMs, opts) => {
+			calls.push({ x, y, durationMs, ...(opts?.button ? { button: opts.button } : {}) });
+		};
+		new ComputerWorkerCore(transport, () => session);
+
+		const result = await runWorker(
+			transport,
+			"hold-pointer",
+			"return await (await desktop.window('42')).holdPointer(10, 20, { durationMs: 150, button: 'right' });",
+		);
+		expect(result.ok).toBe(true);
+		expect(calls).toEqual([{ x: 10, y: 20, durationMs: 150, button: "right" }]);
+	});
+
+	it("refuses an out-of-range hold before sending anything", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		let called = false;
+		session.holdPointer = async () => {
+			called = true;
+		};
+		new ComputerWorkerCore(transport, () => session);
+		const result = await runWorker(
+			transport,
+			"hold-pointer-bad",
+			"return await (await desktop.window('42')).holdPointer(1, 2, { durationMs: 5 });",
+		);
+		expect(result.ok).toBe(false);
+		expect(called).toBe(false);
 	});
 });

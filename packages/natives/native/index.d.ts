@@ -45,6 +45,7 @@ export declare class DesktopSession {
   scroll(target: string, x: number, y: number, dx: number, dy: number, opts?: PointerOptions | undefined | null): Promise<undefined>
   typeText(target: string, text: string, opts?: PointerOptions | undefined | null): Promise<undefined>
   keyChord(target: string, keys: Array<string>, opts?: PointerOptions | undefined | null): Promise<undefined>
+  holdPointer(target: string, x: number, y: number, durationMs: number, opts?: PointerOptions | undefined | null): Promise<undefined>
   holdKeys(target: string, keys: Array<string>, durationMs: number, opts?: PointerOptions | undefined | null): Promise<undefined>
   raiseWindow(windowId: string): Promise<undefined>
   axSnapshot(target: string, opts?: AxSnapshotOptions | undefined | null): Promise<AxSnapshot>

@@ -69,6 +69,8 @@ export interface NativeDesktopSession {
 	menuItems?(window: string, path: string[]): Promise<NativeMenuItem[]>;
 	/** Hold keys down for a bounded duration; absent on older addons. */
 	holdKeys?(target: string, keys: string[], durationMs: number, opts?: PointerOptions | null): Promise<void>;
+	/** Press and hold a mouse button at a point; absent on older addons. */
+	holdPointer?(target: string, x: number, y: number, durationMs: number, opts?: PointerOptions | null): Promise<void>;
 	menuSelect?(window: string, path: string[]): Promise<void>;
 	openApplication?(target: string, options?: { activate?: boolean }): Promise<NativeApplication>;
 	capture(
@@ -603,6 +605,31 @@ class Win {
 		);
 	}
 
+	/** Press `button` at a screenshot point for `durationMs`, then release it. */
+	async holdPointer(x: number, y: number, options: ClickOptions & { durationMs?: number } = {}): Promise<void> {
+		const context = this.#getContext();
+		guardRun(context, "holdPointer");
+		if (!this.#session.holdPointer) {
+			throw new ToolError("This native addon has no pointer-hold support; use drag instead.");
+		}
+		const durationMs = options.durationMs ?? 500;
+		if (!Number.isInteger(durationMs) || durationMs < 50 || durationMs > 10_000) {
+			throw new ToolError("holdPointer durationMs must be an integer between 50 and 10000");
+		}
+		this.#emit("click", this.#screenPoint(x, y));
+		await sendWindowInput(
+			context,
+			"holdPointer",
+			"hold the user's pointer button",
+			() =>
+				nativeCall(context.signal, () =>
+					this.#session.holdPointer!(this.id, x, y, durationMs, pointerOptions(options)),
+				),
+			options,
+			this.id,
+		);
+	}
+
 	/** Hold keys down for `durationMs`, then release them in reverse order.
 	 *  Bounded so a hold can never strand the user's keyboard. */
 	async holdKeys(chord: string | string[], options: DeliveryOptions & { durationMs?: number } = {}): Promise<void> {
@@ -1028,6 +1055,7 @@ export class ComputerWorkerCore {
 			type: desktopTarget.type.bind(desktopTarget),
 			press: desktopTarget.press.bind(desktopTarget),
 			holdKeys: desktopTarget.holdKeys.bind(desktopTarget),
+			holdPointer: desktopTarget.holdPointer.bind(desktopTarget),
 			elementAt: async (x: number, y: number): Promise<El | null> => {
 				const { signal } = getContext();
 				const node = await nativeCall(signal, () => session.axElementAt("desktop", x, y));

@@ -128,6 +128,15 @@ enum Request {
 		mode:     DeliveryMode,
 		reply:    Reply,
 	},
+	HoldPointer {
+		target:   Target,
+		x:        f64,
+		y:        f64,
+		button:   MouseButton,
+		duration: Duration,
+		mode:     DeliveryMode,
+		reply:    Reply,
+	},
 	RaiseWindow {
 		id:    String,
 		reply: Reply,
@@ -215,6 +224,7 @@ impl Request {
 			| Self::TypeText { reply, .. }
 			| Self::KeyChord { reply, .. }
 			| Self::HoldKeys { reply, .. }
+			| Self::HoldPointer { reply, .. }
 			| Self::RaiseWindow { reply, .. }
 			| Self::MenuItems { reply, .. }
 			| Self::MenuSelect { reply, .. }
@@ -465,6 +475,15 @@ impl Worker {
 			},
 			Request::HoldKeys { target, keys, duration, mode, .. } => {
 				self.backend()?.hold_keys(target, keys, *duration, *mode)?;
+				Ok(Response::Unit)
+			},
+			Request::HoldPointer { target, x, y, button, duration, mode, .. } => {
+				// Same coordinate contract as click: pixels of the latest capture of
+				// this target, mapped to the screen frame the backend receives.
+				let (x, y, _) = self.map_point(target, *x, *y)?;
+				self
+					.backend()?
+					.hold_pointer(target, x, y, *button, *duration, *mode)?;
 				Ok(Response::Unit)
 			},
 			Request::RaiseWindow { id, .. } => {
@@ -1006,6 +1025,32 @@ impl DesktopSession {
 			target: Target::parse(&target),
 			keys,
 			mode,
+			reply,
+		}))
+	}
+
+	#[napi]
+	pub fn hold_pointer(
+		&self,
+		target: String,
+		x: f64,
+		y: f64,
+		duration_ms: u32,
+		opts: Option<PointerOptions>,
+	) -> Result<task::Promise<()>> {
+		if !(50..=10_000).contains(&duration_ms) {
+			return Err(napi::Error::from(DesktopError::invalid_target(
+				"hold duration must be between 50 and 10000 ms",
+			)));
+		}
+		let parsed = ParsedPointerOptions::parse(opts).map_err(napi::Error::from)?;
+		Ok(self.unit("desktop.holdPointer", move |reply| Request::HoldPointer {
+			target: Target::parse(&target),
+			x,
+			y,
+			button: parsed.button,
+			duration: Duration::from_millis(u64::from(duration_ms)),
+			mode: parsed.mode,
 			reply,
 		}))
 	}

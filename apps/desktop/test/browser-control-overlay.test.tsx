@@ -178,3 +178,13 @@ describe("BrowserControlOverlay", () => {
 		expect(document.querySelector("[data-browser-agent]")?.getAttribute("data-browser-agent")).toBe("Writer");
 	});
 });
+
+describe("BrowserControlOverlay context", () => {
+	it("shows the page domain next to the operation summary", () => {
+		act(() => root.render(<BrowserControlOverlay activity={running} now={2_000} onTakeover={() => {}} />));
+		const summary = document.querySelector(".gui-browser-control-summary");
+		expect(summary?.textContent).toContain("example.com");
+		expect(summary?.textContent).toContain("点击元素");
+		expect(summary?.getAttribute("title")).toBe("点击元素");
+	});
+});

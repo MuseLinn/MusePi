@@ -154,6 +154,20 @@ pub trait Backend: Send {
 	fn type_text(&mut self, target: &Target, text: &str, mode: DeliveryMode) -> CoreResult<()>;
 	fn key_chord(&mut self, target: &Target, keys: &[KeyName], mode: DeliveryMode)
 	-> CoreResult<()>;
+	/// Press `button` at `(x, y)` for `duration`, then release it. Backends
+	/// without a hold route refuse explicitly.
+	fn hold_pointer(
+		&mut self,
+		_target: &Target,
+		_x: f64,
+		_y: f64,
+		_button: MouseButton,
+		_duration: std::time::Duration,
+		_mode: DeliveryMode,
+	) -> CoreResult<()> {
+		Err(DesktopError::input_failed("holding the pointer is unavailable on this backend"))
+	}
+
 	/// Hold `keys` down for `duration`, then release them in reverse order.
 	/// Backends without a hold route refuse explicitly.
 	fn hold_keys(

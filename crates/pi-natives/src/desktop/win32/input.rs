@@ -411,6 +411,23 @@ mod background {
 		}
 	}
 
+	pub(super) fn hold_pointer(
+		id: &str,
+		x: f64,
+		y: f64,
+		button: MouseButton,
+		duration: std::time::Duration,
+	) -> CoreResult<()> {
+		let hwnd = hwnd(id)?;
+		ensure_delivery(id, hwnd, EventKind::MouseClick)?;
+		let point = client_point(hwnd, x, y)?;
+		let (down, up, _, button_flag) = mouse_messages(button);
+		post(hwnd, WM_MOUSEMOVE, 0, point)?;
+		post(hwnd, down, button_flag, point)?;
+		std::thread::sleep(duration);
+		post(hwnd, up, 0, point)
+	}
+
 	pub(super) fn virtual_key(key: KeyName) -> CoreResult<(u16, u8)> {
 		let value = match key {
 			KeyName::Ctrl => (VK_CONTROL, 0),
@@ -777,6 +794,33 @@ mod foreground {
 		}
 	}
 
+	pub(super) fn hold_pointer(
+		id: &str,
+		x: f64,
+		y: f64,
+		button: MouseButton,
+		duration: std::time::Duration,
+	) -> CoreResult<()> {
+		let _guard = ForegroundGuard::activate(id)?;
+		let _cursor = CursorGuard::capture();
+		move_to(x, y)?;
+		settle(InputTiming::CLICK.move_settle_ms);
+		let (down, up) = button_flags(button);
+		send(mouse_event(down, 0))?;
+		// A hold is bounded by the caller, so a physical Escape is the only
+		// early exit; the button is released either way.
+		let aborted = escape_pressed();
+		if !aborted {
+			std::thread::sleep(duration);
+		}
+		let released = send(mouse_event(up, 0));
+		settle(InputTiming::CLICK.after_ms);
+		if aborted {
+			return Err(DesktopError::cancelled("pointer hold aborted by physical Escape"));
+		}
+		released
+	}
+
 	pub(super) fn pointer(id: &str, event: PointerEvent) -> CoreResult<()> {
 		let _guard = ForegroundGuard::activate(id)?;
 		let _cursor = CursorGuard::capture();
@@ -1041,6 +1085,43 @@ pub(super) fn key_chord(
 		Target::Desktop => global_key_chord(global, keys),
 		Target::Window(id) if mode == DeliveryMode::Background => background::key_chord(id, keys),
 		Target::Window(id) => foreground::key_chord(id, keys),
+	}
+}
+
+fn global_hold_pointer(
+	input: &mut Enigo,
+	x: f64,
+	y: f64,
+	button: MouseButton,
+	duration: std::time::Duration,
+) -> CoreResult<()> {
+	input
+		.move_mouse(x as i32, y as i32, Coordinate::Abs)
+		.map_err(enigo_error)?;
+	input
+		.button(button_to_enigo(button), Direction::Press)
+		.map_err(enigo_error)?;
+	std::thread::sleep(duration);
+	input
+		.button(button_to_enigo(button), Direction::Release)
+		.map_err(enigo_error)
+}
+
+pub(super) fn hold_pointer(
+	global: &mut Enigo,
+	target: &Target,
+	x: f64,
+	y: f64,
+	button: MouseButton,
+	duration: std::time::Duration,
+	mode: DeliveryMode,
+) -> CoreResult<()> {
+	match target {
+		Target::Desktop => global_hold_pointer(global, x, y, button, duration),
+		Target::Window(id) if mode == DeliveryMode::Background => {
+			background::hold_pointer(id, x, y, button, duration)
+		},
+		Target::Window(id) => foreground::hold_pointer(id, x, y, button, duration),
 	}
 }
 
