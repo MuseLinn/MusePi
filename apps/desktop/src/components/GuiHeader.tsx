@@ -12,7 +12,6 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
-import { agentSignalsFromSnapshot } from "../lib/agent-signals";
 import { thinkingOrbStateFromSession } from "../lib/companion";
 import {
 	copyToClipboard,
@@ -90,7 +89,6 @@ function sessionMarkdownLabels(): MarkdownLabels {
 	};
 }
 
-import { AgentAvatar } from "./AgentAvatar";
 import { MenuPopup } from "./MenuPopup";
 import { ProjectActionsDialog } from "./ProjectActionsDialog";
 
@@ -209,7 +207,6 @@ export function GuiHeader({
 		store ? store.subscribe.bind(store) : noopSubscribe,
 		store ? store.getSnapshot.bind(store) : () => null,
 	);
-	const orb = thinkingOrbStateFromSession(snap);
 	const statusText = snap?.working
 		? snap.streaming
 			? t("settings.replying")
@@ -965,14 +962,9 @@ export function GuiHeader({
 							onClick={() => setSwitcherOpen(v => !v)}
 						>
 							<span className="gui-header-title-row">
-								{store && (
-									<AgentAvatar
-										state={orb}
-										size={20}
-										signals={agentSignalsFromSnapshot(snap)}
-										seed={store?.sessionId}
-									/>
-								)}
+								{/* No avatar here: the header names the session, and with tabs the
+								 *  avatar column shifted the title on every session switch. The
+								 *  transcript gutter owns the agent's face (one per turn). */}
 								<span
 									className="min-w-0 truncate text-[14px] font-medium text-[var(--color-text)]"
 									title={title}
