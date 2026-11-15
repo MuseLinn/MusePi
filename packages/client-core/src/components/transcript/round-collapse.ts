@@ -510,6 +510,12 @@ function browserCallsOf(entries: readonly SessionEntry[], idxs: readonly number[
 
 export function buildToolRuns(entries: readonly SessionEntry[], working: boolean): ToolRunSummary[] {
 	const runs: ToolRunSummary[] = [];
+	// A row whose card is the turn's deliverable (widget / board / schedule /
+	// progress, and results carrying pictures) is never part of a run: the run
+	// is "process", the card is output. Keeping it out of `idxs` is what makes
+	// the summary structurally unable to swallow it — the old guard lived in the
+	// renderer (`runBlocked`) and only knew about rows a fold happened to exempt.
+	const artifactRows = artifactRowSet(entries);
 	let idxs: number[] = [];
 	const flush = (): void => {
 		if (idxs.length > 0 && !(working && idxs[idxs.length - 1] === entries.length - 1)) {
@@ -564,6 +570,10 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 			flush();
 			continue;
 		}
+		if (artifactRows.has(i) || isArtifactResultRow(entry)) {
+			flush();
+			continue;
+		}
 		if (classifyTranscriptRow(entry) === "work") idxs.push(i);
 		else flush();
 	}
@@ -578,6 +588,14 @@ function isSubagentRow(entry: SessionEntry | undefined): boolean {
 	if (message.role === "toolResult") return message.toolName === "task";
 	if (message.role !== "assistant") return false;
 	return message.content.some(block => block.type === "toolCall" && block.name === "task");
+}
+
+/** The result half of an artifact call. `artifactRowSet` marks the CALL row
+ *  (that is where the card renders), so the matching result is the boundary
+ *  that would otherwise open the next run with a row that draws nothing. */
+function isArtifactResultRow(entry: SessionEntry | undefined): boolean {
+	if (entry === undefined || entry.type !== "message" || entry.message.role !== "toolResult") return false;
+	return isArtifactTool(entry.message.toolName);
 }
 
 /** Default: a running turn keeps every row visible. */

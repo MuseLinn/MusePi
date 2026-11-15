@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **交付物不再进入工具段折叠，开合不再与滚动补偿互抢**：`widget` / `board` / `schedule_task` 与带图结果的调用行、结果行现在直接作为工具调用段的边界，段汇总在结构上无法吞掉卡片（删除了汇总时的二次判断）；折叠/工具段切换期间暂停虚拟列表的逐帧滚动补偿，动画结束后补一次测量。
+  - EN: Deliverables stay out of tool-run folds, and toggling no longer fights scroll compensation. The call and result rows of `widget` / `board` / `schedule_task` and picture results are run boundaries, so a summary cannot swallow a card by construction (the renderer-side second guess is gone), and the virtualizer's per-frame scroll compensation pauses for the track transition before measuring once at the end.
+
 - **活动头补齐摘要与可达性**：回合折叠头现在按「更改 N 文件 +a/−d · 探索了代码库 · 调研 ×N · 命令 ×N · 子代理 ×N」汇总（联网调研与子代理不再并进工具数），并带 `aria-expanded`；摘要头上的回退按钮已移除（回退属于消息行自己的操作），收起态的隐藏行对读屏与键盘为 `inert`。
   - EN: The activity header reports the turn's work as "N files changed +a/−d · explored the codebase · N web lookups · N commands · N subagents" — web research and subagents no longer collapse into a generic tool count — and mirrors its state with aria-expanded. The revert button is gone from the summary header (revert belongs to the message row), and rows hidden inside a closed fold are inert for keyboard and screen readers.
 

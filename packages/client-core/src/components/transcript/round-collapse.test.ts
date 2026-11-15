@@ -466,13 +466,33 @@ describe("buildRoundFolds web and subagent segments", () => {
 	});
 
 	test("subagent results are counted on the fold header", () => {
-		const entries = [
-			userMsg(),
-			assistantToolCall("t1", "task"),
-			toolResult("t1", "task"),
-			assistantText("done"),
-		];
+		const entries = [userMsg(), assistantToolCall("t1", "task"), toolResult("t1", "task"), assistantText("done")];
 		const folds = buildRoundFolds(entries, false);
 		expect(folds[0]?.subagentCount).toBe(1);
+	});
+});
+
+describe("buildToolRuns artifact boundary (deliverables are not process)", () => {
+	test("a widget call/result ends the run instead of joining it", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("r1", "read"),
+			toolResult("r1", "read"),
+			assistantToolCall("g1", "grep"),
+			toolResult("g1", "grep"),
+			assistantToolCall("w1", "widget"),
+			toolResult("w1", "widget"),
+			assistantToolCall("r2", "read"),
+			toolResult("r2", "read"),
+			assistantToolCall("g2", "grep"),
+			toolResult("g2", "grep"),
+			assistantText("done"),
+		];
+		const runs = buildToolRuns(entries, false);
+		expect(runs.map(run => run.headIdx)).toEqual([1, 7]);
+		for (const run of runs) {
+			expect(run.idxs).not.toContain(5);
+			expect(run.idxs).not.toContain(6);
+		}
 	});
 });

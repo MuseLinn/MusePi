@@ -126,3 +126,11 @@ Me(f, D => {
 ## 7. P0 验收时确认的一点
 
 - 打开回合折叠后，span 内会出现若干**空** `.tr-fold-slot`（`childElementCount: 0`）。核查后确认不是缺陷：这些行是 `toolResult` 行，卡片渲染在配对的那条 assistant 行上（该行是折叠头，展开时正常显示工具卡），结果行本身没有独立内容。`FoldRegion` 的轨道本身工作正常（思考块实测 1521px → 1821px 过渡）。P1 重写行模型时，结果行应显式归并到配对行，而不是留一个空槽。
+
+## 8. 实施进度与偏差（P2/P4）
+
+- **P2 完成（结构层）**：`buildToolRuns` 现在把 `artifactRowSet` 标记的调用行与 artifact 结果行都当作 run 边界——交付物根本不进 `idxs`，因此 `runBlocked` 里对 artifact 的判断删除（只保留 fold 的 tail/hook 豁免）。这与 Kimi 的行模型（task/notify/单步不进 run）同构，比"汇总时再检查"更可靠。
+- **P4 完成（补偿窗口）**：折叠/工具段切换时把虚拟列表的 `shouldAdjustScrollPositionOnItemSizeChange` 关闭 260ms（复用 prepend 的 `sizeAdjustSuppressUntilRef`），窗口结束后调用一次 `virtualizer.measure()`。动画期间不再逐帧写 `scrollTop`。
+- **P4 偏差（保留 off-screen 瞬收）**：`useHoldAnchor` 里"折叠发生在视口上方时临时 mute transition 再钉一次"的做法**保留**。理由：折叠在视口外时用户看不到动画，瞬收 + 一次 scrollTop 钉住比 220ms 的补偿窗口更稳；若移除 mute，锚点 delta 在首帧近似为 0，反而失去作用。也就是说：可视区内的折叠走动画 + 补偿窗口，视口外的折叠直接落位。
+- **P1 残留（未做）**：`buildTimeline` 单一构建源（`buildRoundFolds` 与 `turn-derive` 仍各拼一次 `RoundFold`，本轮加字段时两处都要改，正是证据）；`toolResult` 行显式归并到配对行（当前空槽无害）。
+- **本轮运行时验证受阻**：并行会话的测试进程占用了共享的 daemon 端口与 Electron 单实例锁（日志：`Lock file can not be created! Error code: 32`、`timed out waiting for daemon to bind`）。P2/P4 的证据止于单测、类型检查与 biome；动画窗口与滚动稳定性的真机复验需要在共享端口/配置目录空闲时补做（可用 `MUSEPI_GUI_DAEMON_PORT` + `MUSEPI_DAEMON_DIR` 隔离）。

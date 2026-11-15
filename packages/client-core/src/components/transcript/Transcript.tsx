@@ -34,13 +34,7 @@ import { IrcCard, ircPairKeyOf } from "./irc-message";
 import { collectQuoteMarks } from "./quote-anchor";
 import { QuoteHighlightLayer } from "./quote-highlight";
 import { roundTimerKeyByRow } from "./render-units";
-import {
-	artifactRowSet,
-	buildToolRuns,
-	planLiveActivityTrim,
-	type RoundFold,
-	type ToolRunSummary,
-} from "./round-collapse";
+import { buildToolRuns, planLiveActivityTrim, type RoundFold, type ToolRunSummary } from "./round-collapse";
 import { classifyTranscriptRow, hasTextBlock } from "./row-kinds";
 import {
 	anchorActionAfterContentChange,
@@ -144,6 +138,10 @@ const JUMP_TOP_INSET = 12;
  *  lands well inside it, and a settle margin covers a slow frame. */
 const PREPEND_ADJUST_SUPPRESS_MS = 150;
 
+/** One fold/run track transition. Compensation stays off for this window so
+ *  the virtualizer cannot write scrollTop against the animating track every
+ *  frame; the settle measure runs just after it. */
+const FOLD_TRANSITION_MS = 260;
 /** Scroll the entry row carrying `title=<timestamp>` into view and flash it
  *  (jump feedback for the request path and the post-expansion path; the
  *  caller releases bottom-follow before invoking).
@@ -1503,8 +1501,23 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// CLOSED ones — so a settings flip re-reads existing rounds without
 	// migration.
 	const [roundFoldOpen, setRoundFoldOpen] = useState<ReadonlySet<string>>(() => readFoldDeviations(sessionKey ?? ""));
+	/** Epoch-ms until which virtualizer measure compensation stays off
+	 *  (prepend anchor-restore window). 0 = inactive. */
+	const sizeAdjustSuppressUntilRef = useRef(0);
+	/** Stop the virtualizer's per-frame scroll compensation while a fold or run
+	 *  track animates, then measure once. Without this the track's height change
+	 *  and the compensation fight each frame (the reason useHoldAnchor has to mute
+	 *  transitions before closing). */
+	const markFoldTransition = useCallback((): void => {
+		sizeAdjustSuppressUntilRef.current = Math.max(
+			sizeAdjustSuppressUntilRef.current,
+			Date.now() + FOLD_TRANSITION_MS,
+		);
+		window.setTimeout(() => virtualizerMeasureRef.current?.(), FOLD_TRANSITION_MS + 40);
+	}, []);
 	const toggleFold = useCallback(
 		(key: string): void => {
+			markFoldTransition();
 			setRoundFoldOpen(prev => {
 				const next = new Set(prev);
 				if (next.has(key)) next.delete(key);
@@ -1597,9 +1610,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// — otherwise newly mounted rows above the viewport compensate AND the
 	// restore re-anchors, shifting the landing twice.
 	const prevHeadIdRef = useRef(entries[0]?.id);
-	/** Epoch-ms until which virtualizer measure compensation stays off
-	 *  (prepend anchor-restore window). 0 = inactive. */
-	const sizeAdjustSuppressUntilRef = useRef(0);
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
 	/** Session-open grace window (epoch ms): scroll events and content-change
 	 *  reconciles inside it cannot release `following` (see the sessionKey
@@ -1732,6 +1742,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// renders its full row sequence plus the summary line (click re-folds).
 	const [runsExpanded, setRunsExpanded] = useState<ReadonlySet<string>>(() => new Set());
 	const toggleRun = useCallback((key: string): void => {
+		markFoldTransition();
 		setRunsExpanded(prev => {
 			const next = new Set(prev);
 			if (next.has(key)) next.delete(key);
@@ -1755,14 +1766,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		}
 		return map;
 	}, [toolRuns]);
-	// Rows whose card IS turn output (widget / board / schedule / progress, and
-	// any successful tool result carrying pictures). A tool-call summary must not
-	// collapse over one of these: the run is only "process noise" when nothing in
-	// it is a deliverable. The round fold computes the same set per fold
-	// (`RoundFold.exempt`); runs that sit OUTSIDE a fold (live turn, turn without
-	// a frozen duration) had no such guard, so a collapsed 工具×N line swallowed
-	// the visual card the turn had just rendered.
-	const artifactRows = useMemo(() => artifactRowSet(entries), [entries]);
 	// One orb per agent turn: the row that carries the turn's avatar is the
 	// fold's header (expanded turn) or its reply (collapsed turn); otherwise
 	// the first row that actually mounts an agent body. Keying the owner off
@@ -1854,6 +1857,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// The scroll host resolves in the ref callback below (desktop scrolls an
 	// outer .gui-transcript, the web shell scrolls .tr-root itself).
 	const [scrollerEl, setScrollerEl] = useState<HTMLElement | null>(null);
+	const virtualizerMeasureRef = useRef<(() => void) | null>(null);
 	const virtualizer = useVirtualizer({
 		count: entries.length,
 		getScrollElement: () => scrollerEl,
@@ -1874,6 +1878,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// restore window → the caller's key-based anchor restore owns anchoring;
 	// partially-visible items are never compensated (the user is looking at
 	// them).
+	// Latest measure handle for the fold-transition settle (assigned during
+	// render on purpose: a ref callback here would re-subscribe the virtualizer).
+	virtualizerMeasureRef.current = () => virtualizer.measure();
 	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = createShouldAdjustForItemSizeChange({
 		isFollowing: () => followingRef.current,
 		isSuppressed: () => Date.now() < sizeAdjustSuppressUntilRef.current || isFoldPinning(scrollerRef.current),
@@ -2432,7 +2439,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// process), a run row is fold-exempt (widget/tail/hook rows are
 		// artifacts, not noise) — the whole run renders 现状 then.
 		const run = runByRowIdx.get(absIdx);
-		const runBlocked = run?.idxs.some(i => artifactRows.has(i) || (fold?.exempt.includes(i) ?? false)) ?? false;
+		const runBlocked = run?.idxs.some(i => fold?.exempt.includes(i) ?? false) ?? false;
 		const runActive = run !== undefined && !runBlocked && !foldClosed;
 		const isRunHead = runActive && run.headIdx === absIdx;
 		const runOpen = runActive && runsExpanded.has(run.key);
