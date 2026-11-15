@@ -644,7 +644,7 @@ let worktreesDirOverride: string | undefined;
  * Relocate the base directory for agent-managed worktrees (PR checkouts, task
  * isolation, and `omp worktree` cleanup all read the same base). Driven by the
  * `worktree.base` setting in coding-agent; pass `undefined`/empty to clear and
- * fall back to `OMP_WORKTREE_DIR` or the `~/.musepi/wt` default.
+ * fall back to `MUSEPI_WORKTREE_DIR` or the `~/.musepi/wt` default.
  *
  * `~` is expanded and a relative path is rejected (see {@link resolveWorktreeBase}).
  * Returns the absolute path that took effect, or `undefined` if the input was
@@ -658,18 +658,14 @@ export function setWorktreesDir(dir: string | undefined): string | undefined {
 
 /**
  * Get the agent-managed worktrees directory. Resolution order: the
- * `MUSEPI_WORKTREE_DIR` env var (falling back to the legacy `OMP_WORKTREE_DIR`),
+ * `MUSEPI_WORKTREE_DIR` env var (falling back to the legacy `MUSEPI_WORKTREE_DIR`),
  * then the {@link setWorktreesDir} override (the `worktree.base` setting), then
  * the `~/.musepi/wt` default. The env var and the override are both
  * `~`-expanded and must be absolute; a relative value is ignored and resolution
  * falls through.
  */
 export function getWorktreesDir(): string {
-	return (
-		resolveWorktreeBase(process.env.MUSEPI_WORKTREE_DIR ?? process.env.OMP_WORKTREE_DIR) ??
-		worktreesDirOverride ??
-		dirs.rootSubdir("wt", "data")
-	);
+	return resolveWorktreeBase(process.env.MUSEPI_WORKTREE_DIR) ?? worktreesDirOverride ?? dirs.rootSubdir("wt", "data");
 }
 
 /** Get the SSH control socket directory (~/.musepi/ssh-control). */
@@ -736,22 +732,22 @@ export function getGpuCachePath(): string {
 
 /**
  * Get the GitHub view cache database path (~/.musepi/cache/github-cache.db).
- * Honors the `OMP_GITHUB_CACHE_DB` env var when set so tests can isolate the
+ * Honors the `MUSEPI_GITHUB_CACHE_DB` env var when set so tests can isolate the
  * cache file without touching the rest of the config root.
  */
 export function getGithubCacheDbPath(): string {
-	const override = process.env.MUSEPI_GITHUB_CACHE_DB ?? process.env.OMP_GITHUB_CACHE_DB;
+	const override = process.env.MUSEPI_GITHUB_CACHE_DB;
 	if (override) return override;
 	return dirs.rootSubdir(path.join("cache", "github-cache.db"), "cache");
 }
 
 /**
  * Get the encrypted auth-broker snapshot cache path (~/.musepi/cache/auth-broker-snapshot.enc).
- * Honors the `OMP_AUTH_BROKER_SNAPSHOT_CACHE` env var when set so tests and
+ * Honors the `MUSEPI_AUTH_BROKER_SNAPSHOT_CACHE` env var when set so tests and
  * operators can isolate or relocate the cache file.
  */
 export function getAuthBrokerSnapshotCachePath(): string {
-	const override = process.env.MUSEPI_AUTH_BROKER_SNAPSHOT_CACHE ?? process.env.OMP_AUTH_BROKER_SNAPSHOT_CACHE;
+	const override = process.env.MUSEPI_AUTH_BROKER_SNAPSHOT_CACHE;
 	if (override) return override;
 	return dirs.rootSubdir(path.join("cache", "auth-broker-snapshot.enc"), "cache");
 }

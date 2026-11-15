@@ -5,11 +5,11 @@ import { TempDir } from "@musepi/pi-utils";
 
 it("imports the CLI entry graph without loading dotenv before profile bootstrap", async () => {
 	using tempDir = TempDir.createSync("@omp-js-process-import-");
-	await Bun.write(path.join(tempDir.path(), ".env"), "OMP_PROCESS_ENTRY_ENV_PROBE=loaded-too-early\n");
+	await Bun.write(path.join(tempDir.path(), ".env"), "MUSEPI_PROCESS_ENTRY_ENV_PROBE=loaded-too-early\n");
 	const env = Object.fromEntries(
 		Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
 	);
-	delete env.OMP_PROCESS_ENTRY_ENV_PROBE;
+	delete env.MUSEPI_PROCESS_ENTRY_ENV_PROBE;
 	env.HOME = tempDir.path();
 	env.USERPROFILE = tempDir.path();
 	const fixture = path.resolve(import.meta.dir, "../fixtures/js-process-entry-import.ts");

@@ -179,7 +179,7 @@ describe("markit converters", () => {
 					LOCALAPPDATA: path.join(homeDir, "AppData", "Local"),
 					USERPROFILE: homeDir,
 					NO_COLOR: "1",
-					OMP_PROFILE: "",
+					MUSEPI_PROFILE: "",
 					PI_CODING_AGENT_DIR: path.join(homeDir, ".omp", "agent"),
 					PI_CONFIG_DIR: ".omp",
 					PI_NO_TITLE: "1",

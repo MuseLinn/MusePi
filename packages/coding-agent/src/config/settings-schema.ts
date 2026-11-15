@@ -514,7 +514,7 @@ export const SETTINGS_SCHEMA = {
 
 	// Auth broker — credentials proxied through a remote `musepi auth-broker serve`
 	// host. Hidden from the UI; populate via env vars or hand-edited config.yml.
-	// Env (`OMP_AUTH_BROKER_URL` / `OMP_AUTH_BROKER_TOKEN`) takes precedence so
+	// Env (`MUSEPI_AUTH_BROKER_URL` / `MUSEPI_AUTH_BROKER_TOKEN`) takes precedence so
 	// per-machine overrides remain trivial.
 	"auth.broker.url": { type: "string", default: undefined },
 	"auth.broker.token": { type: "string", default: undefined, credential: true },

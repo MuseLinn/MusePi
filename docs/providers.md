@@ -168,7 +168,7 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434
 - keys must match `[A-Za-z_][A-Za-z0-9_]*` (shell-identifier shape) — other names are dropped;
 - values may be wrapped in single or double quotes, which are stripped;
 - values containing a NUL byte are dropped;
-- an `OMP_`-prefixed key is also mirrored to the matching `PI_`-prefixed name.
+- an `MUSEPI_`-prefixed key is also mirrored to the matching `PI_`-prefixed name.
 
 ## Built-in local engines
 

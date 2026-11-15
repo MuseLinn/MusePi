@@ -9,13 +9,13 @@ export const DAEMON_PTY_COLUMNS = 120;
 export const DAEMON_PTY_ROWS = 40;
 
 /** Environment key carrying the broker's canonical project or synthetic global scope directory. */
-export const DAEMON_PROJECT_DIR_ENV = "OMP_DAEMON_PROJECT_DIR";
+export const DAEMON_PROJECT_DIR_ENV = "MUSEPI_DAEMON_PROJECT_DIR";
 
 /** Environment key carrying the broker's private runtime directory. */
-export const DAEMON_RUNTIME_DIR_ENV = "OMP_DAEMON_RUNTIME_DIR";
+export const DAEMON_RUNTIME_DIR_ENV = "MUSEPI_DAEMON_RUNTIME_DIR";
 
 /** Optional environment key overriding last-client shutdown grace. */
-export const DAEMON_IDLE_GRACE_ENV = "OMP_DAEMON_IDLE_GRACE_MS";
+export const DAEMON_IDLE_GRACE_ENV = "MUSEPI_DAEMON_IDLE_GRACE_MS";
 
 /** Stable lifecycle states exposed by the launch tool. */
 export type DaemonState = "starting" | "running" | "ready" | "restarting" | "stopping" | "exited" | "failed";

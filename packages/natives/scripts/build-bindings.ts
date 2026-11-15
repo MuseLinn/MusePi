@@ -3,9 +3,9 @@
  * and the runtime enum exports, then installs the host addon. Release addons
  * come from Bazel (`bun run build` → scripts/bazel-natives.ts); this path also
  * serves hosts Bazel cannot run on (Windows, the Docker image) via
- * `OMP_NATIVE_BUILD_BACKEND=cargo`. Host target only — no cross-compilation.
+ * `MUSEPI_NATIVE_BUILD_BACKEND=cargo`. Host target only — no cross-compilation.
  *
- * `OMP_NATIVE_CARGO_PROFILE` selects the cargo profile (default `local`:
+ * `MUSEPI_NATIVE_CARGO_PROFILE` selects the cargo profile (default `local`:
  * incremental, unstripped). Image builds set `ci` for a stripped addon.
  */
 
@@ -248,7 +248,7 @@ const napiBin = path.join(path.dirname(napiManifestPath), napiBinEntry);
 
 // Profiles live in the root Cargo.toml; `local` trades size for iteration
 // speed, `ci` strips and drops incremental state.
-const cargoProfile = Bun.env.OMP_NATIVE_CARGO_PROFILE?.trim() || "local";
+const cargoProfile = Bun.env.MUSEPI_NATIVE_CARGO_PROFILE?.trim() || "local";
 
 const napiArgs = [
 	"build",

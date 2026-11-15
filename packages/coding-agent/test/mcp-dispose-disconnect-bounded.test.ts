@@ -5,7 +5,7 @@
  * subprocesses are reaped instead of orphaned. That disconnect MUST be
  * BOUNDED: an owned manager may hold an HTTP/SSE server whose
  * session-termination DELETE blocks up to the MCP request timeout (30s
- * default, unbounded when `OMP_MCP_TIMEOUT_MS=0`). `dispose()` wraps the
+ * default, unbounded when `MUSEPI_MCP_TIMEOUT_MS=0`). `dispose()` wraps the
  * disconnect in `withTimeout(...)`; this test proves that when the underlying
  * `MCPManager.disconnectAll()` stalls on a stuck transport close, the bound
  * returns promptly so `/exit` and print-mode shutdown are never gated on a

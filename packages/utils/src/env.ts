@@ -200,8 +200,10 @@ function parseEnvLine(line: string): { key: string; value: string } | undefined 
 /**
  * Parses a .env file synchronously into key-value string pairs using
  * {@link parseEnvLine} for Bun-compatible line semantics, then mirrors valid
- * `OMP_` variables to their `PI_` aliases.
+ * `MUSEPI_` variables to their `PI_` aliases.
  */
+const MUSEPI_ENV_PREFIX = "MUSEPI_";
+
 export function parseEnvFile(filePath: string): Record<string, string> {
 	const result: Record<string, string> = {};
 	try {
@@ -214,10 +216,10 @@ export function parseEnvFile(filePath: string): Record<string, string> {
 		// File doesn't exist or can't be read - return empty result
 	}
 
-	// OMP_ overrides PI_
+	// MUSEPI_ overrides PI_
 	for (const k in result) {
-		if (k.startsWith("OMP_")) {
-			result[`PI_${k.slice(4)}`] = result[k];
+		if (k.startsWith(MUSEPI_ENV_PREFIX)) {
+			result[`PI_${k.slice(MUSEPI_ENV_PREFIX.length)}`] = result[k];
 		}
 	}
 

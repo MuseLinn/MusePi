@@ -158,7 +158,7 @@ const PREWARM_DAEMON_PORT = (() => {
 
 // Explicit GPU acceleration (Electron defaults to on; force the flag so the
 // heavy frosted-glass compositing — 24px backdrop blurs, menu overlays —
-// stays GPU-backed). OMP_SOFTWARE_GL=1 opts out for remote/virtualized
+// stays GPU-backed). MUSEPI_SOFTWARE_GL=1 opts out for remote/virtualized
 // displays where the GPU compositor misbehaves.
 // NOTE: Windows used to disable GPU compositing here because transparent
 // windows flicker per-element there. That is fixed by the PLATFORM-NATIVE
@@ -166,7 +166,7 @@ const PREWARM_DAEMON_PORT = (() => {
 // compositor, opaque window — see createWindow): software rendering made
 // the 119 CSS backdrop-filter surfaces CPU-composited every frame, which
 // is the visible lag vs macOS. GPU stays on everywhere now.
-if (process.env.OMP_SOFTWARE_GL === "1") {
+if (process.env.MUSEPI_SOFTWARE_GL === "1") {
 	app.disableHardwareAcceleration();
 } else {
 	app.commandLine.appendSwitch("enable-gpu");
@@ -3705,7 +3705,7 @@ ipcMain.handle("gui-highlight", async (_event, code, lang, colors) => {
 // next app restart). Base interval 1h; each consecutive failed check doubles
 // the delay up to a 6h cap, with ±20% jitter (dsh update-schedule parity) —
 // a flapping connection must not hammer the feed every hour forever.
-// Silence entirely with OMP_NO_AUTO_UPDATE. The renderer owns
+// Silence entirely with MUSEPI_NO_AUTO_UPDATE. The renderer owns
 // dismissal/skip (UpdateToast), so a repeated push for an already-seen or
 // skipped version is a no-op there.
 const {
@@ -3714,7 +3714,7 @@ const {
 	nextPollDelayMs,
 } = require("./update-logic.cjs");
 let pollFailures = 0;
-if (process.env.OMP_NO_AUTO_UPDATE !== "1") {
+if (process.env.MUSEPI_NO_AUTO_UPDATE !== "1") {
 	app.whenReady().then(() => {
 		// One line per launch is enough to answer "did the check even run, and
 		// can this build install an update?" without attaching a debugger.

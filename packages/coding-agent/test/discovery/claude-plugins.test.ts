@@ -89,7 +89,7 @@ describe("listClaudePluginRoots", () => {
 		clearFsCache();
 		originalHome = process.env.HOME;
 		originalAgentDirEnv = process.env.PI_CODING_AGENT_DIR;
-		originalOmpProfileEnv = process.env.OMP_PROFILE;
+		originalOmpProfileEnv = process.env.MUSEPI_PROFILE;
 		originalPiProfileEnv = process.env.PI_PROFILE;
 		originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR;
 		delete process.env.CLAUDE_CONFIG_DIR;
@@ -109,7 +109,7 @@ describe("listClaudePluginRoots", () => {
 		// setAgentDir() clears the profile env vars and snapshots the agent dir,
 		// so restore every env var it can touch before rebuilding the resolver.
 		restoreEnvValue("HOME", originalHome);
-		restoreEnvValue("OMP_PROFILE", originalOmpProfileEnv);
+		restoreEnvValue("MUSEPI_PROFILE", originalOmpProfileEnv);
 		restoreEnvValue("PI_PROFILE", originalPiProfileEnv);
 		restoreEnvValue("PI_CODING_AGENT_DIR", originalAgentDirEnv);
 		restoreEnvValue("CLAUDE_CONFIG_DIR", originalClaudeConfigDir);
@@ -536,11 +536,11 @@ describe("listClaudePluginRoots", () => {
 	test("expands env placeholders in marketplace plugin MCP url and headers", async () => {
 		const pluginsDir = path.join(tempDir, ".claude", "plugins");
 		const pluginPath = path.join(tempDir, "plugins", "context7");
-		const originalApiKey = process.env.OMP_PLUGIN_MCP_API_KEY;
-		const originalUrl = process.env.OMP_PLUGIN_MCP_URL;
+		const originalApiKey = process.env.MUSEPI_PLUGIN_MCP_API_KEY;
+		const originalUrl = process.env.MUSEPI_PLUGIN_MCP_URL;
 		const envPlaceholder = (name: string): string => ["$", "{", name, ":-}"].join("");
-		process.env.OMP_PLUGIN_MCP_API_KEY = "ctx7sk-test-key";
-		process.env.OMP_PLUGIN_MCP_URL = "https://mcp.context7.example";
+		process.env.MUSEPI_PLUGIN_MCP_API_KEY = "ctx7sk-test-key";
+		process.env.MUSEPI_PLUGIN_MCP_URL = "https://mcp.context7.example";
 
 		try {
 			await fs.mkdir(pluginsDir, { recursive: true });
@@ -567,9 +567,9 @@ describe("listClaudePluginRoots", () => {
 				JSON.stringify({
 					context7: {
 						type: "http",
-						url: `${envPlaceholder("OMP_PLUGIN_MCP_URL")}/mcp`,
+						url: `${envPlaceholder("MUSEPI_PLUGIN_MCP_URL")}/mcp`,
 						headers: {
-							CONTEXT7_API_KEY: envPlaceholder("OMP_PLUGIN_MCP_API_KEY"),
+							CONTEXT7_API_KEY: envPlaceholder("MUSEPI_PLUGIN_MCP_API_KEY"),
 						},
 					},
 				}),
@@ -584,10 +584,10 @@ describe("listClaudePluginRoots", () => {
 			expect(server?.url).toBe("https://mcp.context7.example/mcp");
 			expect(server?.headers).toEqual({ CONTEXT7_API_KEY: "ctx7sk-test-key" });
 		} finally {
-			if (originalApiKey === undefined) delete process.env.OMP_PLUGIN_MCP_API_KEY;
-			else process.env.OMP_PLUGIN_MCP_API_KEY = originalApiKey;
-			if (originalUrl === undefined) delete process.env.OMP_PLUGIN_MCP_URL;
-			else process.env.OMP_PLUGIN_MCP_URL = originalUrl;
+			if (originalApiKey === undefined) delete process.env.MUSEPI_PLUGIN_MCP_API_KEY;
+			else process.env.MUSEPI_PLUGIN_MCP_API_KEY = originalApiKey;
+			if (originalUrl === undefined) delete process.env.MUSEPI_PLUGIN_MCP_URL;
+			else process.env.MUSEPI_PLUGIN_MCP_URL = originalUrl;
 		}
 	});
 

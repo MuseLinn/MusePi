@@ -344,7 +344,7 @@ interface IndexedContentLines {
 	starts: number[];
 }
 
-const OMP_ROOT_URL_RE = /^omp:\/\/(?:\/?|docs\/?)$/i;
+const MUSEPI_ROOT_URL_RE = /^omp:\/\/(?:\/?|docs\/?)$/i;
 
 function normalizeSearchLine(line: string): string {
 	return line.endsWith("\r") ? line.slice(0, -1) : line;
@@ -744,7 +744,7 @@ async function expandVirtualInternalResource(
 	context: ResolveContext,
 	ranges: readonly LineRange[] | undefined,
 ): Promise<VirtualSearchResource[]> {
-	if (OMP_ROOT_URL_RE.test(rawPath)) {
+	if (MUSEPI_ROOT_URL_RE.test(rawPath)) {
 		const completions = await internalRouter.complete("omp", "");
 		if (completions && completions.length > 0) {
 			const resources: VirtualSearchResource[] = [];

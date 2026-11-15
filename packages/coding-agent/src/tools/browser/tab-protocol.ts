@@ -106,7 +106,7 @@ export interface BrowserOperation {
 export interface SessionSnapshot {
 	cwd: string;
 	browserScreenshotDir?: string;
-	/** Force non-WebP screenshot encoding (e.g. for Ollama). Unset honors `OMP_NO_WEBP`. */
+	/** Force non-WebP screenshot encoding (e.g. for Ollama). Unset honors `MUSEPI_NO_WEBP`. */
 	excludeWebP?: boolean;
 }
 

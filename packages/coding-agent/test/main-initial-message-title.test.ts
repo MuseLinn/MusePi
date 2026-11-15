@@ -41,7 +41,7 @@ describe.skipIf(!hasPtyHarness)("CLI initial-message title generation", () => {
 					...process.env,
 					HOME: root,
 					NO_COLOR: "1",
-					OMP_TITLE_PROBE_PATH: outputPath,
+					MUSEPI_TITLE_PROBE_PATH: outputPath,
 					PI_CODING_AGENT_DIR: agentDir,
 					PI_NO_TITLE: "",
 					TERM: "xterm-256color",

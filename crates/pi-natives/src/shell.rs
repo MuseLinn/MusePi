@@ -44,7 +44,7 @@ pub struct MinimizerOptions {
 	/// Kill-switch to fall back to the pre-PR (legacy) filter behavior for
 	/// grep / find / pytest. When `Some(true)`, filters that opted into the
 	/// always-shrink Tier 1 / Tier 2 behavior skip the new code path. When
-	/// `None`, defers to the `OMP_MINIMIZER_LEGACY_FILTERS` env var.
+	/// `None`, defers to the `MUSEPI_MINIMIZER_LEGACY_FILTERS` env var.
 	pub legacy_filters:       Option<bool>,
 }
 

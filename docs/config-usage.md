@@ -77,7 +77,7 @@ Project-level bases:
 
 ## Profiles
 
-A named profile (`musepi --profile <name>`, the `--alias` shortcut, or `OMP_PROFILE` / `PI_PROFILE`) relocates the OMP user base. When a profile is active, every OMP-native user-level path written here as `~/.musepi/agent/...` resolves to `~/.musepi/profiles/<name>/agent/...` instead.
+A named profile (`musepi --profile <name>`, the `--alias` shortcut, or `MUSEPI_PROFILE` / `PI_PROFILE`) relocates the OMP user base. When a profile is active, every OMP-native user-level path written here as `~/.musepi/agent/...` resolves to `~/.musepi/profiles/<name>/agent/...` instead.
 
 The relocation is uniform across the native provider (`builtin.ts`) and the generic `config.ts` helpers, so it covers slash commands, rules, prompts, instructions, hooks, tools, extensions, settings, skills, and MCP, plus the top-level `SYSTEM.md` / `RULES.md` / `AGENTS.md` files and runtime state (sessions, blobs, `agent.db`). A profile sees only its own OMP config, never the default profile's `~/.musepi/agent`.
 

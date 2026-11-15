@@ -570,7 +570,7 @@ jobs:
               # watchdog SIGKILLed it (release run 30519992654). The watchdog
               # exists to catch wedged children, not slow-but-progressing
               # chunks — give this bucket a wider budget.
-              OMP_TEST_CHUNK_TIMEOUT: "1200"
+              MUSEPI_TEST_CHUNK_TIMEOUT: "1200"
            run: bun run ci:test:coding-agent:native
 
    test_smoke:
@@ -637,7 +637,7 @@ jobs:
               targets: linux-x64-baseline linux-x64-modern
          - name: Install method smoke tests
            env:
-              OMP_INSTALL_TEST_SKIP_NATIVE_BUILD: "1"
+              MUSEPI_INSTALL_TEST_SKIP_NATIVE_BUILD: "1"
            run: bun run ci:test:install-methods
 
    # Aggregates every validation job so publish-side release jobs gate on one

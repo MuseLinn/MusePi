@@ -12,7 +12,7 @@ ENV PATH="/root/.bun/bin:$PATH"
 # through the cargo/napi-rs backend.
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
 ENV PATH="/root/.cargo/bin:$PATH" \
-    OMP_NATIVE_BUILD_BACKEND=cargo
+    MUSEPI_NATIVE_BUILD_BACKEND=cargo
 
 # Copy local repo
 WORKDIR /repo

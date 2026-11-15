@@ -8,7 +8,11 @@ import { runAuthGatewayCommand } from "@musepi/pi-coding-agent/cli/auth-gateway-
 import { removeWithRetries } from "@musepi/pi-utils";
 
 const BROKER_TOKEN = "gateway-account-pool-token";
-const ENV_KEYS = ["OMP_AUTH_BROKER_URL", "OMP_AUTH_BROKER_TOKEN", "OMP_AUTH_BROKER_ACCOUNT_POOL_FILE"] as const;
+const ENV_KEYS = [
+	"MUSEPI_AUTH_BROKER_URL",
+	"MUSEPI_AUTH_BROKER_TOKEN",
+	"MUSEPI_AUTH_BROKER_ACCOUNT_POOL_FILE",
+] as const;
 
 describe("auth-gateway account pool", () => {
 	let tempDir = "";
@@ -43,9 +47,9 @@ describe("auth-gateway account pool", () => {
 		});
 		const poolPath = path.join(tempDir, "account-pool.json");
 		await Bun.write(poolPath, JSON.stringify({ anthropic: ["email:allowed@example.com"] }));
-		process.env.OMP_AUTH_BROKER_URL = handle.url;
-		process.env.OMP_AUTH_BROKER_TOKEN = BROKER_TOKEN;
-		process.env.OMP_AUTH_BROKER_ACCOUNT_POOL_FILE = poolPath;
+		process.env.MUSEPI_AUTH_BROKER_URL = handle.url;
+		process.env.MUSEPI_AUTH_BROKER_TOKEN = BROKER_TOKEN;
+		process.env.MUSEPI_AUTH_BROKER_ACCOUNT_POOL_FILE = poolPath;
 	});
 
 	afterEach(async () => {

@@ -138,7 +138,7 @@ function manifestUrl() {
 		const pkg = require("../package.json");
 		const configured = pkg?.update?.manifestUrl;
 		return (
-			process.env.OMP_UPDATE_MANIFEST_URL ||
+			process.env.MUSEPI_UPDATE_MANIFEST_URL ||
 			(configured && configured !== DEFAULT_STABLE_MANIFEST_URL ? configured : channelUrl)
 		);
 	} catch {

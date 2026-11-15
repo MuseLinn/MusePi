@@ -54,7 +54,7 @@ describe("MCP reconnect storm (issue #1592)", () => {
 			type: "stdio",
 			command: BUN_EXEC,
 			args: [FIXTURE_PATH],
-			env: { OMP_TEST_SPAWN_LOG: spawnLog },
+			env: { MUSEPI_TEST_SPAWN_LOG: spawnLog },
 		};
 
 		try {

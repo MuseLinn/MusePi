@@ -1,10 +1,10 @@
 import { logger } from "@musepi/pi-utils";
 
 const DEFAULT_MCP_TIMEOUT_MS = 30_000;
-// MusePi-canonical env name; OMP_* kept as a compatibility fallback so
+// MusePi-canonical env name; MUSEPI_* kept as a compatibility fallback so
 // existing user configs (and the upstream omp lineage) keep working.
 const MCP_TIMEOUT_ENV = "MUSEPI_MCP_TIMEOUT_MS";
-const MCP_TIMEOUT_ENV_FALLBACK = "OMP_MCP_TIMEOUT_MS";
+const MCP_TIMEOUT_ENV_FALLBACK = "MUSEPI_MCP_TIMEOUT_MS";
 
 let neverAbortController: AbortController | undefined;
 

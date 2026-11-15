@@ -25,11 +25,11 @@ describe("auth-broker import (CLIProxyAPI)", () => {
 	const savedEnv: Record<string, string | undefined> = {};
 
 	beforeEach(async () => {
-		originalAgentDir = process.env.OMP_AGENT_DIR;
-		savedEnv.OMP_AUTH_BROKER_URL = process.env.OMP_AUTH_BROKER_URL;
-		savedEnv.OMP_AUTH_BROKER_TOKEN = process.env.OMP_AUTH_BROKER_TOKEN;
-		delete process.env.OMP_AUTH_BROKER_URL;
-		delete process.env.OMP_AUTH_BROKER_TOKEN;
+		originalAgentDir = process.env.MUSEPI_AGENT_DIR;
+		savedEnv.MUSEPI_AUTH_BROKER_URL = process.env.MUSEPI_AUTH_BROKER_URL;
+		savedEnv.MUSEPI_AUTH_BROKER_TOKEN = process.env.MUSEPI_AUTH_BROKER_TOKEN;
+		delete process.env.MUSEPI_AUTH_BROKER_URL;
+		delete process.env.MUSEPI_AUTH_BROKER_TOKEN;
 		agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-agent-"));
 		cliproxyDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-cliproxy-"));
 		setAgentDir(agentDir);
@@ -37,11 +37,11 @@ describe("auth-broker import (CLIProxyAPI)", () => {
 
 	afterEach(async () => {
 		process.stdout.write = ORIGINAL_STDOUT_WRITE;
-		if (originalAgentDir === undefined) delete process.env.OMP_AGENT_DIR;
-		else process.env.OMP_AGENT_DIR = originalAgentDir;
+		if (originalAgentDir === undefined) delete process.env.MUSEPI_AGENT_DIR;
+		else process.env.MUSEPI_AGENT_DIR = originalAgentDir;
 		await removeWithRetries(agentDir);
 		await removeWithRetries(cliproxyDir);
-		for (const key of ["OMP_AUTH_BROKER_URL", "OMP_AUTH_BROKER_TOKEN"] as const) {
+		for (const key of ["MUSEPI_AUTH_BROKER_URL", "MUSEPI_AUTH_BROKER_TOKEN"] as const) {
 			if (savedEnv[key] === undefined) delete process.env[key];
 			else process.env[key] = savedEnv[key];
 		}
@@ -207,8 +207,8 @@ describe("auth-broker import (broker-routed)", () => {
 	const savedEnv: Record<string, string | undefined> = {};
 
 	beforeEach(async () => {
-		savedEnv.OMP_AUTH_BROKER_URL = process.env.OMP_AUTH_BROKER_URL;
-		savedEnv.OMP_AUTH_BROKER_TOKEN = process.env.OMP_AUTH_BROKER_TOKEN;
+		savedEnv.MUSEPI_AUTH_BROKER_URL = process.env.MUSEPI_AUTH_BROKER_URL;
+		savedEnv.MUSEPI_AUTH_BROKER_TOKEN = process.env.MUSEPI_AUTH_BROKER_TOKEN;
 		agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-client-"));
 		brokerAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-broker-"));
 		cliproxyDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-import-cliproxy-broker-"));
@@ -223,8 +223,8 @@ describe("auth-broker import (broker-routed)", () => {
 			bearerTokens: [token],
 			disableRefresher: true,
 		});
-		process.env.OMP_AUTH_BROKER_URL = handle.url;
-		process.env.OMP_AUTH_BROKER_TOKEN = token;
+		process.env.MUSEPI_AUTH_BROKER_URL = handle.url;
+		process.env.MUSEPI_AUTH_BROKER_TOKEN = token;
 	});
 
 	afterEach(async () => {
@@ -234,7 +234,7 @@ describe("auth-broker import (broker-routed)", () => {
 		await removeWithRetries(agentDir);
 		await removeWithRetries(brokerAgentDir);
 		await removeWithRetries(cliproxyDir);
-		for (const key of ["OMP_AUTH_BROKER_URL", "OMP_AUTH_BROKER_TOKEN"] as const) {
+		for (const key of ["MUSEPI_AUTH_BROKER_URL", "MUSEPI_AUTH_BROKER_TOKEN"] as const) {
 			if (savedEnv[key] === undefined) delete process.env[key];
 			else process.env[key] = savedEnv[key];
 		}

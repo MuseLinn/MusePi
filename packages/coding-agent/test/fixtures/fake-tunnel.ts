@@ -6,11 +6,11 @@ function requiredEnv(name: string): string {
 	return value;
 }
 
-const argsFile = requiredEnv("OMP_FAKE_TUNNEL_ARGS");
-const signalsFile = requiredEnv("OMP_FAKE_TUNNEL_SIGNALS");
+const argsFile = requiredEnv("MUSEPI_FAKE_TUNNEL_ARGS");
+const signalsFile = requiredEnv("MUSEPI_FAKE_TUNNEL_SIGNALS");
 const args = process.argv.slice(2);
 fs.writeFileSync(argsFile, args.length > 0 ? `${args.join("\n")}\n` : "");
-fs.appendFileSync(requiredEnv("OMP_FAKE_TUNNEL_RUNS"), "run\n");
+fs.appendFileSync(requiredEnv("MUSEPI_FAKE_TUNNEL_RUNS"), "run\n");
 
 if (process.platform !== "win32") {
 	for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -21,10 +21,10 @@ if (process.platform !== "win32") {
 	}
 }
 
-const output = process.env.OMP_FAKE_TUNNEL_OUTPUT;
+const output = process.env.MUSEPI_FAKE_TUNNEL_OUTPUT;
 if (output) console.log(output);
 
-const restartMarker = process.env.OMP_FAKE_TUNNEL_RESTART_MARKER;
+const restartMarker = process.env.MUSEPI_FAKE_TUNNEL_RESTART_MARKER;
 if (restartMarker) {
 	if (!fs.existsSync(restartMarker)) {
 		fs.writeFileSync(restartMarker, "first\n");
@@ -33,6 +33,6 @@ if (restartMarker) {
 	fs.appendFileSync(restartMarker, "restarted\n");
 }
 
-const exitCode = process.env.OMP_FAKE_TUNNEL_EXIT_CODE;
+const exitCode = process.env.MUSEPI_FAKE_TUNNEL_EXIT_CODE;
 if (exitCode !== undefined) process.exit(Number(exitCode));
 setInterval(() => {}, 60_000);

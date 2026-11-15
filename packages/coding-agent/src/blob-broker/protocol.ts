@@ -17,10 +17,10 @@ import type { DestinationRuntimeConfig } from "./uploader-runtime";
 export const BLOB_BROKER_WORKER_ARG = "__omp_worker_blob_broker";
 
 /** Environment key carrying the control socket path the worker listens on. */
-export const BLOB_BROKER_SOCKET_ENV = "OMP_BLOB_BROKER_SOCKET";
+export const BLOB_BROKER_SOCKET_ENV = "MUSEPI_BLOB_BROKER_SOCKET";
 
 /** Environment key carrying the JSON {@link BlobBrokerWorkerConfig}. */
-export const BLOB_BROKER_CONFIG_ENV = "OMP_BLOB_BROKER_CONFIG";
+export const BLOB_BROKER_CONFIG_ENV = "MUSEPI_BLOB_BROKER_CONFIG";
 
 /** Stable broker daemon name for the shared blob broker. */
 export const BLOB_BROKER_DAEMON_NAME = "omp.blob.broker";

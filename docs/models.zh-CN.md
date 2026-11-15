@@ -418,9 +418,9 @@ providers:
 
 ### Broker 模式
 
-当设置了 `OMP_AUTH_BROKER_URL`（或 `auth.broker.url`）时，本地 SQLite 凭据存储会被 `RemoteAuthCredentialStore` 替换。上述第 3、4、6 层（存储的 OAuth 和 API key 凭据）由 broker 提供的快照提供服务，其 `refresh` token 会被脱敏；过期会触发 broker 上的 `POST /v1/credential/:id/refresh`，而非本地刷新。
+当设置了 `MUSEPI_AUTH_BROKER_URL`（或 `auth.broker.url`）时，本地 SQLite 凭据存储会被 `RemoteAuthCredentialStore` 替换。上述第 3、4、6 层（存储的 OAuth 和 API key 凭据）由 broker 提供的快照提供服务，其 `refresh` token 会被脱敏；过期会触发 broker 上的 `POST /v1/credential/:id/refresh`，而非本地刷新。
 
-`AuthStorage.setConfigApiKey` 可以让 `models.yml` 的 `apiKey` 胜出 broker 解析的 OAuth token，且不覆盖运行时的 `--api-key`。完整的 broker/gateway 设计与 env 表面（`OMP_AUTH_BROKER_URL`、`OMP_AUTH_BROKER_TOKEN`、`auth.broker.url`、`auth.broker.token`）见 [`auth-broker-gateway.md`](./auth-broker-gateway.html)。
+`AuthStorage.setConfigApiKey` 可以让 `models.yml` 的 `apiKey` 胜出 broker 解析的 OAuth token，且不覆盖运行时的 `--api-key`。完整的 broker/gateway 设计与 env 表面（`MUSEPI_AUTH_BROKER_URL`、`MUSEPI_AUTH_BROKER_TOKEN`、`auth.broker.url`、`auth.broker.token`）见 [`auth-broker-gateway.md`](./auth-broker-gateway.html)。
 
 ## Model 可用性 vs 全部模型
 

@@ -25,7 +25,7 @@
  * (packages/natives/scripts/build-bindings.ts) against the installed VS Build
  * Tools; every other target on a win32 host fails fast with guidance.
  *
- * Set `OMP_NATIVE_BUILD_BACKEND=cargo` to route the host target through the
+ * Set `MUSEPI_NATIVE_BUILD_BACKEND=cargo` to route the host target through the
  * same local N-API build on systems where Bazel's prebuilt host tools cannot run.
  *
  * Note: musl addons intentionally reuse the plain linux-<arch> filenames, so a
@@ -382,7 +382,7 @@ async function main(): Promise<void> {
 	const host: HostInfo = { platform: process.platform, arch: process.arch, avx2: detectHostAvx2Support() };
 	const destDir = options.dest ? path.resolve(options.dest) : path.join(repoRoot, "packages/natives/native");
 
-	if ((host.platform === "win32" || Bun.env.OMP_NATIVE_BUILD_BACKEND === "cargo") && !options.source) {
+	if ((host.platform === "win32" || Bun.env.MUSEPI_NATIVE_BUILD_BACKEND === "cargo") && !options.source) {
 		if (options.targets.length !== 1 || options.targets[0] !== "host") {
 			if (host.platform === "win32") {
 				throw new Error(
@@ -391,7 +391,7 @@ async function main(): Promise<void> {
 						"(local napi build via VS Build Tools), or run this script from WSL/linux for cross targets.",
 				);
 			}
-			throw new Error("OMP_NATIVE_BUILD_BACKEND=cargo supports only the host target");
+			throw new Error("MUSEPI_NATIVE_BUILD_BACKEND=cargo supports only the host target");
 		}
 		await buildLocalHostAddon(host, destDir);
 		return;
@@ -414,14 +414,14 @@ async function main(): Promise<void> {
 	//      it was built from in `native/.source-hash`. If the sources on disk
 	//      hash differently (natives Rust code moved without a version bump),
 	//      the guard rebuilds instead of silently shipping a stale addon.
-	// `OMP_NATIVES_FORCE_BUILD=1` bypasses both (escape hatch for manual
+	// `MUSEPI_NATIVES_FORCE_BUILD=1` bypasses both (escape hatch for manual
 	// rebuilds, e.g. after upgrading the local toolchain).
 	const hostTarget = hostTargetName(host);
 	const hostOnly =
 		options.targets.length === 1 &&
 		(options.targets[0] === "host" || options.targets[0] === hostTarget) &&
 		!options.source;
-	const forceBuild = Bun.env.OMP_NATIVES_FORCE_BUILD === "1";
+	const forceBuild = Bun.env.MUSEPI_NATIVES_FORCE_BUILD === "1";
 	// Hoisted so both the reuse-guard and the cargo-fallback branch share it.
 	const sourceHash = await computeNativeSourceHash(repoRoot);
 	if (hostOnly && !forceBuild) {
@@ -508,7 +508,7 @@ async function main(): Promise<void> {
 		const bazel = resolveBazelBinary();
 		// CI hands cache wiring (remote or disk) through a bazelrc fragment so
 		// endpoint composition stays in .github/actions/bazel-cache.
-		const rcPath = Bun.env.OMP_BAZEL_RC?.trim();
+		const rcPath = Bun.env.MUSEPI_BAZEL_RC?.trim();
 		const startupArgs = rcPath ? [`--bazelrc=${rcPath}`] : [];
 
 		const buildArgs = [...startupArgs, "build", ...options.bazelArgs, "--", ...labels];

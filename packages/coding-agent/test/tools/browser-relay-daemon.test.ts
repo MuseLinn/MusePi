@@ -39,8 +39,8 @@ describe("browser relay daemon", () => {
 import { closeDaemonClients } from ${JSON.stringify(path.resolve(import.meta.dir, "../../src/launch/client.ts"))};
 import { ensureRelayDaemon } from ${JSON.stringify(path.resolve(import.meta.dir, "../../src/tools/browser/relay/daemon.ts"))};
 
-const cdpUrl = process.env.OMP_TEST_RELAY_URL;
-const marker = process.env.OMP_TEST_READY_MARKER;
+const cdpUrl = process.env.MUSEPI_TEST_RELAY_URL;
+const marker = process.env.MUSEPI_TEST_READY_MARKER;
 if (!cdpUrl || !marker) throw new Error("relay consumer environment is incomplete");
 try {
 	if (!(await ensureRelayDaemon({ cdpUrl }))) throw new Error("relay did not start");
@@ -63,10 +63,10 @@ try {
 					HOME: home,
 					USERPROFILE: home,
 					PI_CONFIG_DIR: ".omp",
-					OMP_PROFILE: profile,
-					OMP_DAEMON_IDLE_GRACE_MS: "200",
-					OMP_TEST_RELAY_URL: cdpUrl,
-					OMP_TEST_READY_MARKER: marker,
+					MUSEPI_PROFILE: profile,
+					MUSEPI_DAEMON_IDLE_GRACE_MS: "200",
+					MUSEPI_TEST_RELAY_URL: cdpUrl,
+					MUSEPI_TEST_READY_MARKER: marker,
 				},
 				stdin: "pipe",
 				stdout: "ignore",

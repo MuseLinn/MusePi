@@ -88,11 +88,11 @@ describe("parseEnvFile", () => {
 		});
 	});
 
-	it("mirrors valid OMP_ variables to PI_ variables", () => {
-		const filePath = writeTempEnv("OMP_FEATURE=enabled\nOMP_BAD=before\0after\n");
+	it("mirrors valid MUSEPI_ variables to PI_ variables", () => {
+		const filePath = writeTempEnv("MUSEPI_FEATURE=enabled\nOMP_BAD=before\0after\n");
 
 		expect(parseEnvFile(filePath)).toEqual({
-			OMP_FEATURE: "enabled",
+			MUSEPI_FEATURE: "enabled",
 			PI_FEATURE: "enabled",
 		});
 	});
@@ -190,12 +190,12 @@ describe("filterChildShellEnv", () => {
 		const cwd = path.dirname(writeTempEnv(""));
 		fs.writeFileSync(
 			path.join(cwd, `.env.${launchDotenvMode()}.local`),
-			"OMP_DOTENV_REPRO_MARKER=synthetic-mode-local-value\n",
+			"MUSEPI_DOTENV_REPRO_MARKER=synthetic-mode-local-value\n",
 		);
 
 		const child = filterChildShellEnv(
 			{
-				OMP_DOTENV_REPRO_MARKER: "synthetic-mode-local-value",
+				MUSEPI_DOTENV_REPRO_MARKER: "synthetic-mode-local-value",
 				UNCHANGED: "parent-value",
 			},
 			cwd,
@@ -208,21 +208,21 @@ describe("filterChildShellEnv", () => {
 		const cwd = path.dirname(writeTempEnv("NODE_ENV=production\n"));
 		fs.writeFileSync(
 			path.join(cwd, ".env.development.local"),
-			"OMP_DOTENV_REPRO_MARKER=synthetic-mode-local-value\n",
+			"MUSEPI_DOTENV_REPRO_MARKER=synthetic-mode-local-value\n",
 		);
 		const envModulePath = path.join(import.meta.dir, "..", "src", "env.ts");
 		const script = [
 			`import { filterChildShellEnv } from ${JSON.stringify(envModulePath)};`,
 			"const child = filterChildShellEnv(process.env, process.cwd());",
 			"process.stdout.write(JSON.stringify({",
-			"  processValue: process.env.OMP_DOTENV_REPRO_MARKER ?? null,",
-			"  childValue: child.OMP_DOTENV_REPRO_MARKER ?? null,",
+			"  processValue: process.env.MUSEPI_DOTENV_REPRO_MARKER ?? null,",
+			"  childValue: child.MUSEPI_DOTENV_REPRO_MARKER ?? null,",
 			"  nodeEnv: process.env.NODE_ENV ?? null,",
 			"}));",
 		].join("\n");
 		const proc = Bun.spawn([process.execPath, "--no-install", "--eval", script], {
 			cwd,
-			env: { ...process.env, NODE_ENV: undefined, OMP_DOTENV_REPRO_MARKER: undefined },
+			env: { ...process.env, NODE_ENV: undefined, MUSEPI_DOTENV_REPRO_MARKER: undefined },
 			stdout: "pipe",
 			stderr: "pipe",
 		});
@@ -241,19 +241,19 @@ describe("filterChildShellEnv", () => {
 	});
 
 	it("reads the launch project directory, not the live cwd, when no cwd is given", async () => {
-		const projectDir = path.dirname(writeTempEnv("OMP_DOTENV_REPRO_MARKER=synthetic-project-value\n"));
+		const projectDir = path.dirname(writeTempEnv("MUSEPI_DOTENV_REPRO_MARKER=synthetic-project-value\n"));
 		const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-utils-env-other-"));
 		tempDirs.push(otherDir);
 		const envModulePath = path.join(import.meta.dir, "..", "src", "env.ts");
 		const script = [
 			`import { filterChildShellEnv } from ${JSON.stringify(envModulePath)};`,
 			`process.chdir(${JSON.stringify(otherDir)});`,
-			'const child = filterChildShellEnv({ OMP_DOTENV_REPRO_MARKER: "synthetic-project-value", UNCHANGED: "parent-value" });',
+			'const child = filterChildShellEnv({ MUSEPI_DOTENV_REPRO_MARKER: "synthetic-project-value", UNCHANGED: "parent-value" });',
 			"process.stdout.write(JSON.stringify(child));",
 		].join("\n");
 		const proc = Bun.spawn([process.execPath, "--no-install", "--eval", script], {
 			cwd: projectDir,
-			env: { ...process.env, OMP_DOTENV_REPRO_MARKER: undefined },
+			env: { ...process.env, MUSEPI_DOTENV_REPRO_MARKER: undefined },
 			stdout: "pipe",
 			stderr: "pipe",
 		});

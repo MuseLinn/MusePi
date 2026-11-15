@@ -112,7 +112,7 @@ it("filters expanded dotenv values while preserving matching launcher values", a
 			"	project: env.TEST_ENV_FROM_DOTENV ?? null,",
 			"	deployment: env.CONVEX_DEPLOYMENT ?? null,",
 			"	url: env.CONVEX_URL ?? null,",
-			"	inherited: env.OMP_TEST_INHERITED_MARKER ?? null,",
+			"	inherited: env.MUSEPI_TEST_INHERITED_MARKER ?? null,",
 			"	matching: env.NODE_ENV ?? null,",
 			"	exported: env.EXPORTED_SECRET ?? null,",
 			"	commented: env.COMMENTED_SECRET ?? null,",
@@ -124,7 +124,7 @@ it("filters expanded dotenv values while preserving matching launcher values", a
 				cwd: tmp,
 				env: {
 					HOME: process.env.HOME ?? "",
-					OMP_TEST_INHERITED_MARKER: "keep-me",
+					MUSEPI_TEST_INHERITED_MARKER: "keep-me",
 					NODE_ENV: "development",
 					PATH: process.env.PATH ?? "",
 					SHELL: process.env.SHELL ?? "/bin/bash",

@@ -42,15 +42,15 @@ function prepareFake(output: string, options: { exitCode?: number; restartOnce?:
 	const argsFile = path.join(fakeBinDir, `args-${suffix}.json`);
 	const runsFile = path.join(fakeBinDir, `runs-${suffix}.txt`);
 	const signalsFile = path.join(fakeBinDir, `signals-${suffix}.txt`);
-	process.env.OMP_FAKE_TUNNEL_ARGS = argsFile;
-	process.env.OMP_FAKE_TUNNEL_RUNS = runsFile;
-	process.env.OMP_FAKE_TUNNEL_SIGNALS = signalsFile;
-	process.env.OMP_FAKE_TUNNEL_OUTPUT = output;
-	if (options.exitCode === undefined) delete process.env.OMP_FAKE_TUNNEL_EXIT_CODE;
-	else process.env.OMP_FAKE_TUNNEL_EXIT_CODE = String(options.exitCode);
+	process.env.MUSEPI_FAKE_TUNNEL_ARGS = argsFile;
+	process.env.MUSEPI_FAKE_TUNNEL_RUNS = runsFile;
+	process.env.MUSEPI_FAKE_TUNNEL_SIGNALS = signalsFile;
+	process.env.MUSEPI_FAKE_TUNNEL_OUTPUT = output;
+	if (options.exitCode === undefined) delete process.env.MUSEPI_FAKE_TUNNEL_EXIT_CODE;
+	else process.env.MUSEPI_FAKE_TUNNEL_EXIT_CODE = String(options.exitCode);
 	const restartMarker = options.restartOnce ? path.join(fakeBinDir, `restart-${suffix}.txt`) : undefined;
-	if (restartMarker === undefined) delete process.env.OMP_FAKE_TUNNEL_RESTART_MARKER;
-	else process.env.OMP_FAKE_TUNNEL_RESTART_MARKER = restartMarker;
+	if (restartMarker === undefined) delete process.env.MUSEPI_FAKE_TUNNEL_RESTART_MARKER;
+	else process.env.MUSEPI_FAKE_TUNNEL_RESTART_MARKER = restartMarker;
 	return { argsFile, runsFile, signalsFile, restartMarker };
 }
 
@@ -119,12 +119,12 @@ afterAll(async () => {
 	await Promise.all(activeExposures.map(active => active.exited));
 	if (originalPath === undefined) delete process.env.PATH;
 	else process.env.PATH = originalPath;
-	delete process.env.OMP_FAKE_TUNNEL_ARGS;
-	delete process.env.OMP_FAKE_TUNNEL_RUNS;
-	delete process.env.OMP_FAKE_TUNNEL_SIGNALS;
-	delete process.env.OMP_FAKE_TUNNEL_OUTPUT;
-	delete process.env.OMP_FAKE_TUNNEL_EXIT_CODE;
-	delete process.env.OMP_FAKE_TUNNEL_RESTART_MARKER;
+	delete process.env.MUSEPI_FAKE_TUNNEL_ARGS;
+	delete process.env.MUSEPI_FAKE_TUNNEL_RUNS;
+	delete process.env.MUSEPI_FAKE_TUNNEL_SIGNALS;
+	delete process.env.MUSEPI_FAKE_TUNNEL_OUTPUT;
+	delete process.env.MUSEPI_FAKE_TUNNEL_EXIT_CODE;
+	delete process.env.MUSEPI_FAKE_TUNNEL_RESTART_MARKER;
 	fs.rmSync(fakeBinDir, { recursive: true, force: true });
 });
 

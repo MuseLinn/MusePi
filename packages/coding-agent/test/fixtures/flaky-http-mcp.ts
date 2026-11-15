@@ -4,20 +4,20 @@
  * by a control file, so a test can model "server restarted" / "laptop woke up"
  * without touching process lifecycle.
  *
- * `$OMP_TEST_HTTP_CONTROL` points at a file. While it contains "up" the server
+ * `$MUSEPI_TEST_HTTP_CONTROL` points at a file. While it contains "up" the server
  * answers initialize/tools/list; while it does not, it returns 503 for every
  * request, which is what an `http`/`sse` transport surfaces as a connection
- * loss. `$OMP_TEST_HTTP_READY` is written with the bound port once listening so
+ * loss. `$MUSEPI_TEST_HTTP_READY` is written with the bound port once listening so
  * the parent can connect without guessing.
  *
  * Used by mcp-quiet-reconnect.test.ts (oh-my-pi #11803).
  */
 import * as fs from "node:fs";
 
-const controlPath = Bun.env.OMP_TEST_HTTP_CONTROL;
-const readyPath = Bun.env.OMP_TEST_HTTP_READY;
+const controlPath = Bun.env.MUSEPI_TEST_HTTP_CONTROL;
+const readyPath = Bun.env.MUSEPI_TEST_HTTP_READY;
 if (!controlPath || !readyPath) {
-	console.error("OMP_TEST_HTTP_CONTROL and OMP_TEST_HTTP_READY are required");
+	console.error("MUSEPI_TEST_HTTP_CONTROL and MUSEPI_TEST_HTTP_READY are required");
 	process.exit(2);
 }
 

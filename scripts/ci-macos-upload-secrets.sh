@@ -16,7 +16,7 @@
 #
 # Usage:
 #   scripts/ci-macos-upload-secrets.sh [dir] [--dry-run]
-#   OMP_REPO=owner/repo scripts/ci-macos-upload-secrets.sh ~/musepi-signing
+#   MUSEPI_REPO=owner/repo scripts/ci-macos-upload-secrets.sh ~/musepi-signing
 
 set -euo pipefail
 
@@ -29,7 +29,7 @@ for arg in "$@"; do
 	esac
 done
 DIR="${DIR:-${MUSEPI_SIGNING_DIR:-$HOME/musepi-signing}}"
-REPO="${OMP_REPO:-can1357/oh-my-pi}"
+REPO="${MUSEPI_REPO:-can1357/oh-my-pi}"
 
 die() {
 	echo "ci-macos-upload-secrets: $1" >&2

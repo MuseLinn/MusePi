@@ -45,7 +45,7 @@ OMP 还会转换以下这些当前 tool 原生的来源：
 
 ### Profiles
 
-命名 profile（`musepi --profile <name>`、`--alias` 快捷方式，或 `OMP_PROFILE`/`PI_PROFILE`）隔离用户级 MCP 配置。当 profile 处于激活状态时，**用户**作用域解析为该 profile 的 agent 目录而非默认目录：
+命名 profile（`musepi --profile <name>`、`--alias` 快捷方式，或 `MUSEPI_PROFILE`/`PI_PROFILE`）隔离用户级 MCP 配置。当 profile 处于激活状态时，**用户**作用域解析为该 profile 的 agent 目录而非默认目录：
 
 - 默认 profile：`~/.musepi/agent/mcp.json`
 - Profile `<name>`：`~/.musepi/profiles/<name>/agent/mcp.json`
@@ -104,7 +104,7 @@ Server 名称必须匹配 `^[a-zA-Z0-9_.-]{1,100}$`。
 - `auth?: { ... }` — OMP 用于 OAuth/API-key 流程的 auth 元数据
 - `oauth?: { ... }` — 在 auth/reauth 期间使用的显式 OAuth client 设置
 
-设置 `OMP_MCP_TIMEOUT_MS=0` 可为当前进程中的每个 MCP server 禁用 client 侧超时。将其设为正的毫秒值（例如 `OMP_MCP_TIMEOUT_MS=120000`）可应用一个全局超时，而无需逐个编辑 server 条目。
+设置 `MUSEPI_MCP_TIMEOUT_MS=0` 可为当前进程中的每个 MCP server 禁用 client 侧超时。将其设为正的毫秒值（例如 `MUSEPI_MCP_TIMEOUT_MS=120000`）可应用一个全局超时，而无需逐个编辑 server 条目。
 
 ### stdio 传输
 

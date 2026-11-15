@@ -76,7 +76,7 @@ function createFakeRedis(): FakeRedis {
 			const keyCount = Number(args[1] ?? "0");
 			const keys = args.slice(2, 2 + keyCount);
 			const argv = args.slice(2 + keyCount);
-			if (script.includes("OMP_WRITE_FULL")) {
+			if (script.includes("MUSEPI_WRITE_FULL")) {
 				checkFailure("set");
 				checkFailure("hset");
 				const [fileKey, metaKey, titleKey] = keys;
@@ -87,7 +87,7 @@ function createFakeRedis(): FakeRedis {
 				else getHash(titleKey).delete(filePath);
 				return 1;
 			}
-			if (script.includes("OMP_APPEND")) {
+			if (script.includes("MUSEPI_APPEND")) {
 				checkFailure("append");
 				checkFailure("hset");
 				const [fileKey, metaKey] = keys;
@@ -97,7 +97,7 @@ function createFakeRedis(): FakeRedis {
 				getHash(metaKey).set(filePath, mtimeMs);
 				return Buffer.byteLength(next, "utf-8");
 			}
-			if (script.includes("OMP_UPDATE_TITLE")) {
+			if (script.includes("MUSEPI_UPDATE_TITLE")) {
 				checkFailure("hset");
 				const [metaKey, titleKey] = keys;
 				const [filePath, mtimeMs, title] = argv;

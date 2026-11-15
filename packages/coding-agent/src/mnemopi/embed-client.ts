@@ -39,7 +39,7 @@ export const MNEMOPI_EMBED_WORKER_ARG = "__omp_worker_mnemopi_embed";
  * Spawn the mnemopi embeddings worker as a subprocess. Exported for tests and
  * the smoke probe; production callers go through {@link spawnMnemopiEmbedWorker}.
  * The child inherits the parent env verbatim — fastembed honours `HF_HUB_*`,
- * `HTTPS_PROXY`, etc., and our `loadFastembed()` reads the same `OMP_*`
+ * `HTTPS_PROXY`, etc., and our `loadFastembed()` reads the same `MUSEPI_*`
  * runtime-install knobs the parent uses.
  */
 export function createMnemopiEmbedSubprocess(): SpawnedSubprocess<MnemopiEmbedWorkerOutbound> {

@@ -523,9 +523,9 @@ function buildChildEnv(): Record<string, string | undefined> {
 // parallel path awaits the child's stdout/stderr pipes, which stay open as
 // long as the wedged process — or any grandchild that inherited them — lives.
 // After this many seconds the child is SIGKILLed and reported as a failure.
-// Override with OMP_TEST_CHUNK_TIMEOUT (seconds).
+// Override with MUSEPI_TEST_CHUNK_TIMEOUT (seconds).
 function chunkTimeoutMs(): number {
-	const raw = Number(Bun.env.OMP_TEST_CHUNK_TIMEOUT?.trim());
+	const raw = Number(Bun.env.MUSEPI_TEST_CHUNK_TIMEOUT?.trim());
 	if (Number.isFinite(raw) && raw >= 1) return raw * 1000;
 	return 600_000;
 }
@@ -607,9 +607,9 @@ function budgetedParallel(requested: number, poolWidth: number): number {
 // timeout that says nothing about the code. Timing out is still worth catching,
 // so keep a ceiling — just one loose enough to only fire on a real hang. The
 // per-chunk watchdog (chunkTimeoutMs) remains the backstop for a wedged process.
-// Override with OMP_TEST_TIMEOUT (seconds); per-test `it(name, fn, ms)` still wins.
+// Override with MUSEPI_TEST_TIMEOUT (seconds); per-test `it(name, fn, ms)` still wins.
 function testTimeoutMs(): number {
-	const raw = Number(Bun.env.OMP_TEST_TIMEOUT?.trim());
+	const raw = Number(Bun.env.MUSEPI_TEST_TIMEOUT?.trim());
 	if (Number.isFinite(raw) && raw >= 1) return raw * 1000;
 	return 30_000;
 }
@@ -878,7 +878,7 @@ export async function runTestCommandsInParallel(commands: TestCommand[], concurr
 		return {
 			exitCode,
 			timedOut,
-			output: `${stdout.text}${stderr.text}${timedOut ? `\n[watchdog] chunk exceeded ${Math.round(chunkTimeoutMs() / 1000)}s; killed with SIGKILL (OMP_TEST_CHUNK_TIMEOUT to change)\n` : ""}`,
+			output: `${stdout.text}${stderr.text}${timedOut ? `\n[watchdog] chunk exceeded ${Math.round(chunkTimeoutMs() / 1000)}s; killed with SIGKILL (MUSEPI_TEST_CHUNK_TIMEOUT to change)\n` : ""}`,
 		};
 	}
 

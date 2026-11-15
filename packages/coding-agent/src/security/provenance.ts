@@ -9,13 +9,13 @@ export const CODEX_SECURITY_UPSTREAM = {
 	archiveSha256: "13745c495b7c5cf5273cf2115df86b9c3ec3056f43151c869e004aa3f30bcffb",
 } as const;
 
-export const OMP_SECURITY_WORKFLOW_VERSION = "1.0.0";
+export const MUSEPI_SECURITY_WORKFLOW_VERSION = "1.0.0";
 
 export function createNativeSecurityProducer(): SecurityProducer {
 	return {
 		kind: "omp-native",
 		name: "MusePi Native Security",
-		version: OMP_SECURITY_WORKFLOW_VERSION,
+		version: MUSEPI_SECURITY_WORKFLOW_VERSION,
 	};
 }
 
@@ -97,7 +97,7 @@ export function createNativeSecurityProvenance(options: {
 export function createSecurityWorkflowFingerprint(inputs: readonly string[]): string {
 	return `omp-security-workflow/v1:sha256:${Bun.SHA256.hash(
 		canonicalSecurityJson({
-			workflowVersion: OMP_SECURITY_WORKFLOW_VERSION,
+			workflowVersion: MUSEPI_SECURITY_WORKFLOW_VERSION,
 			upstream: CODEX_SECURITY_UPSTREAM,
 			inputs,
 		}),

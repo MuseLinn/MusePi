@@ -350,6 +350,7 @@ import { PresetsService } from "./services/presets-service";
 import { ProvidersService } from "./services/providers-service";
 import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
+import { ResourcesService } from "./services/resources-service";
 import { ScheduleService } from "./services/schedule-service";
 import { SessionInspectionService } from "./services/session-inspection-service";
 import { SessionPresenceService } from "./services/session-presence-service";
@@ -608,6 +609,10 @@ export class DaemonServer {
 		// Liveness probe shared by every transport: `ping` is the guest client's
 		// single method name, `system.ping` the GUI keepalive.
 		this.#services.register(new LivenessService());
+		// Resource sampler for the GUI's session info card. Lazy CPU deltas
+		// (no timer): each call measures the interval since the previous one,
+		// so the caller's poll interval is the sampling interval.
+		this.#services.register(new ResourcesService());
 		// Session-scoped git snapshot for review surfaces (base/fork point,
 		// divergence, changed files with kinds). Stateless and read-only.
 		this.#services.register(
@@ -1648,6 +1653,12 @@ export class DaemonServer {
 				// cannot send WS ping frames; the renderer pings this RPC to
 				// detect sockets Electron tears down on system sleep).
 				return this.#services.get<LivenessService>("liveness").ping();
+			}
+			case "system.resources": {
+				// Process and host resource readout for the GUI's session info
+				// card. CPU percentages are relative to the previous call, so
+				// the poller owns the cadence; the first call answers null.
+				return this.#services.get<ResourcesService>("resources").sample();
 			}
 			case "system.quitInspection": {
 				// dsh's desktop `quit-inspection`: answer at quit time so a turn
@@ -4863,7 +4874,7 @@ export class DaemonServer {
 				// RPC so it can render its own panel. Reads the same SQLite
 				// storage the extension writes (per-cwd,
 				// ~/.musepi/autoresearch — the storage module is authoritative;
-				// OMP_AUTORESEARCH_DB_DIR overrides the base).
+				// MUSEPI_AUTORESEARCH_DB_DIR overrides the base).
 				const p = (params ?? {}) as { cwd?: string };
 				const arCwd = p.cwd ?? this.#host.cwd();
 				try {

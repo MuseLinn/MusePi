@@ -66,7 +66,7 @@ pub struct MinimizerOptions {
 	/// grep / find / pytest. When `Some(true)`, filters that opted into the
 	/// always-shrink Tier 1 / Tier 2 behavior skip the new code path and
 	/// return the legacy passthrough. When `None`, defers to the
-	/// `OMP_MINIMIZER_LEGACY_FILTERS` environment variable (truthy = "1",
+	/// `MUSEPI_MINIMIZER_LEGACY_FILTERS` environment variable (truthy = "1",
 	/// "true", or "yes", case-insensitive); default `false`.
 	pub legacy_filters:       Option<bool>,
 }
@@ -87,7 +87,7 @@ pub struct MinimizerConfig {
 	/// Resolved kill-switch: when true, opted-in filters (Tier 1 grep/find,
 	/// Tier 2 pytest) return the pre-PR legacy behavior. Resolved at
 	/// `from_options()` time from caller-supplied
-	/// `MinimizerOptions.legacy_filters` or the `OMP_MINIMIZER_LEGACY_FILTERS`
+	/// `MinimizerOptions.legacy_filters` or the `MUSEPI_MINIMIZER_LEGACY_FILTERS`
 	/// env var; default `false`.
 	pub legacy_filters_active: bool,
 }
@@ -132,7 +132,7 @@ impl MinimizerConfig {
 		}
 		let legacy_requested = resolve_legacy_filters(
 			opts.legacy_filters,
-			std::env::var("OMP_MINIMIZER_LEGACY_FILTERS")
+			std::env::var("MUSEPI_MINIMIZER_LEGACY_FILTERS")
 				.ok()
 				.as_deref(),
 		);
@@ -268,7 +268,7 @@ impl SettingsFile {
 }
 
 /// Resolve the effective `legacy_filters_active` flag from the caller option
-/// and the raw `OMP_MINIMIZER_LEGACY_FILTERS` env value.
+/// and the raw `MUSEPI_MINIMIZER_LEGACY_FILTERS` env value.
 ///
 /// Pure so it can be unit-tested without mutating the process-global
 /// environment (the test harness runs tests in one process in parallel). An

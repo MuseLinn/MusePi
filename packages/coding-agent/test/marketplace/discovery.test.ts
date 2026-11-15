@@ -55,7 +55,7 @@ function validateClaudeRegistryFormat(content: string): Record<string, unknown> 
 // Matches getConfigDirName() — single source of truth is in @musepi/pi-utils,
 // but we know the value is ".omp" and hardcoding it here keeps tests free of
 // native-addon transitive imports.
-const OMP_CONFIG_DIR = ".omp";
+const MUSEPI_CONFIG_DIR = ".omp";
 
 function makeEntry(installPath: string, version = "1.0.0"): InstalledPluginEntry {
 	return {
@@ -75,7 +75,7 @@ let ompRegistryPath: string;
 
 beforeEach(() => {
 	tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "omp-discovery-test-"));
-	ompRegistryPath = path.join(tmpHome, OMP_CONFIG_DIR, "plugins", "installed_plugins.json");
+	ompRegistryPath = path.join(tmpHome, MUSEPI_CONFIG_DIR, "plugins", "installed_plugins.json");
 	fs.mkdirSync(path.dirname(ompRegistryPath), { recursive: true });
 });
 

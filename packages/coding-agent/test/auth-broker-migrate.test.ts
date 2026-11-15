@@ -37,8 +37,8 @@ describe("auth-broker migrate (org-only dedupe)", () => {
 	const savedEnv: Record<string, string | undefined> = {};
 
 	beforeEach(async () => {
-		savedEnv.OMP_AUTH_BROKER_URL = process.env.OMP_AUTH_BROKER_URL;
-		savedEnv.OMP_AUTH_BROKER_TOKEN = process.env.OMP_AUTH_BROKER_TOKEN;
+		savedEnv.MUSEPI_AUTH_BROKER_URL = process.env.MUSEPI_AUTH_BROKER_URL;
+		savedEnv.MUSEPI_AUTH_BROKER_TOKEN = process.env.MUSEPI_AUTH_BROKER_TOKEN;
 		agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-migrate-client-"));
 		brokerAgentDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-migrate-broker-"));
 		setAgentDir(agentDir);
@@ -52,8 +52,8 @@ describe("auth-broker migrate (org-only dedupe)", () => {
 			bearerTokens: [token],
 			disableRefresher: true,
 		});
-		process.env.OMP_AUTH_BROKER_URL = handle.url;
-		process.env.OMP_AUTH_BROKER_TOKEN = token;
+		process.env.MUSEPI_AUTH_BROKER_URL = handle.url;
+		process.env.MUSEPI_AUTH_BROKER_TOKEN = token;
 	});
 
 	afterEach(async () => {
@@ -62,7 +62,7 @@ describe("auth-broker migrate (org-only dedupe)", () => {
 		brokerStore?.close();
 		await removeWithRetries(agentDir);
 		await removeWithRetries(brokerAgentDir);
-		for (const key of ["OMP_AUTH_BROKER_URL", "OMP_AUTH_BROKER_TOKEN"] as const) {
+		for (const key of ["MUSEPI_AUTH_BROKER_URL", "MUSEPI_AUTH_BROKER_TOKEN"] as const) {
 			if (savedEnv[key] === undefined) delete process.env[key];
 			else process.env[key] = savedEnv[key];
 		}

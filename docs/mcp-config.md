@@ -45,7 +45,7 @@ For Claude Code, Codex, Gemini CLI, Cursor, and Windsurf, the project entry is e
 
 ### Profiles
 
-Named profiles (`musepi --profile <name>`, the `--alias` shortcut, or `OMP_PROFILE`/`PI_PROFILE`) isolate user-level MCP config. When a profile is active, the **user** scope resolves to the profile's agent directory instead of the default one:
+Named profiles (`musepi --profile <name>`, the `--alias` shortcut, or `MUSEPI_PROFILE`/`PI_PROFILE`) isolate user-level MCP config. When a profile is active, the **user** scope resolves to the profile's agent directory instead of the default one:
 
 - Default profile: `~/.musepi/agent/mcp.json`
 - Profile `<name>`: `~/.musepi/profiles/<name>/agent/mcp.json`
@@ -104,7 +104,7 @@ Shared fields for every transport:
 - `auth?: { ... }` — auth metadata used by OMP for OAuth/API-key flows
 - `oauth?: { ... }` — explicit OAuth client settings used during auth/reauth
 
-Set `OMP_MCP_TIMEOUT_MS=0` to disable the client-side timeout for every MCP server in the current process. Set it to a positive millisecond value, such as `OMP_MCP_TIMEOUT_MS=120000`, to apply one global timeout without editing each server entry.
+Set `MUSEPI_MCP_TIMEOUT_MS=0` to disable the client-side timeout for every MCP server in the current process. Set it to a positive millisecond value, such as `MUSEPI_MCP_TIMEOUT_MS=120000`, to apply one global timeout without editing each server entry.
 
 ### `stdio` transport
 

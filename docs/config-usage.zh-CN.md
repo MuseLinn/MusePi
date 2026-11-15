@@ -77,7 +77,7 @@
 
 ## Profiles
 
-命名的 profile（`musepi --profile <name>`、`--alias` 快捷方式，或 `OMP_PROFILE` / `PI_PROFILE`）会重定位 OMP 用户基目录。当某个 profile 处于激活状态时，本文档中所有写为 `~/.musepi/agent/...` 的 OMP-native 用户级路径都会解析为 `~/.musepi/profiles/<name>/agent/...`。
+命名的 profile（`musepi --profile <name>`、`--alias` 快捷方式，或 `MUSEPI_PROFILE` / `PI_PROFILE`）会重定位 OMP 用户基目录。当某个 profile 处于激活状态时，本文档中所有写为 `~/.musepi/agent/...` 的 OMP-native 用户级路径都会解析为 `~/.musepi/profiles/<name>/agent/...`。
 
 这种重定位在 native provider（`builtin.ts`）和通用 `config.ts` helper 中保持一致，因此涵盖 slash commands、rules、prompts、instructions、hooks、tools、extensions、settings、skills 和 MCP，以及顶层的 `SYSTEM.md` / `RULES.md` / `AGENTS.md` 文件和 runtime state（sessions、blobs、`agent.db`）。一个 profile 只能看到它自己的 OMP 配置，不能访问默认 profile 的 `~/.musepi/agent`。
 

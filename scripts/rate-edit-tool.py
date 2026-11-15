@@ -951,7 +951,7 @@ def resolve_omp_bin(raw: str | None) -> str:
         return raw
     found = shutil.which("omp")
     if not found:
-        raise SystemExit("Could not find `omp` on PATH. Set --omp-bin or OMP_BIN.")
+        raise SystemExit("Could not find `omp` on PATH. Set --omp-bin or MUSEPI_BIN.")
     return found
 
 
@@ -1412,7 +1412,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run OpenRouter fixture evaluations through omp RPC mode."
     )
-    parser.add_argument("--omp-bin", default=os.environ.get("OMP_BIN"))
+    parser.add_argument("--omp-bin", default=os.environ.get("MUSEPI_BIN"))
     parser.add_argument("--fixtures-dir", default=os.path.expanduser("~/tmp/fixtures"))
     parser.add_argument("--results-dir")
     parser.add_argument(

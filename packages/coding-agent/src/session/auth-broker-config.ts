@@ -7,7 +7,7 @@
  * (including `!command` config indirection) from coding-agent's config layer.
  *
  * Precedence (highest first):
- *   1. `OMP_AUTH_BROKER_URL` / `OMP_AUTH_BROKER_TOKEN` env vars.
+ *   1. `MUSEPI_AUTH_BROKER_URL` / `MUSEPI_AUTH_BROKER_TOKEN` env vars.
  *   2. `auth.broker.url` / `auth.broker.token` in `~/.musepi/agent/config.yml`
  *      (hidden from the settings UI; `!command` resolution supported).
  *   3. Token file `~/.musepi/auth-broker.token` (paired with URL from env or config).
@@ -39,7 +39,7 @@ export { type AuthBrokerClientConfig, getAuthBrokerTokenFilePath };
 /**
  * Process-lifetime memo for {@link resolveAuthBrokerConfig}. Keyed on the env
  * inputs (plus agent dir, which decides which config.yml is read) so tests
- * that flip `OMP_AUTH_BROKER_*` between cases still observe the change, while
+ * that flip `MUSEPI_AUTH_BROKER_*` between cases still observe the change, while
  * repeated resolution within one CLI invocation (startup, subagent sessions)
  * skips the config.yml read and any `!command` token resolution.
  */
@@ -57,7 +57,7 @@ let cachedConfigPromise: Promise<AuthBrokerClientConfig | null> | null = null;
  * retried. Concurrent callers share one in-flight resolution.
  */
 export function resolveAuthBrokerConfig(): Promise<AuthBrokerClientConfig | null> {
-	const key = `${process.env.MUSEPI_AUTH_BROKER_URL ?? process.env.OMP_AUTH_BROKER_URL ?? ""}\u0000${process.env.MUSEPI_AUTH_BROKER_TOKEN ?? process.env.OMP_AUTH_BROKER_TOKEN ?? ""}\u0000${getAgentDir()}`;
+	const key = `${process.env.MUSEPI_AUTH_BROKER_URL ?? ""}\u0000${process.env.MUSEPI_AUTH_BROKER_TOKEN ?? ""}\u0000${getAgentDir()}`;
 	if (cachedConfigPromise && cachedConfigKey === key) return cachedConfigPromise;
 	const promise = resolveAuthBrokerConfigShared({
 		agentDir: getAgentDir(),
@@ -125,6 +125,6 @@ export async function describeAuthBrokerStartupError(error: unknown): Promise<st
 		"musepi is configured to use this broker for credentials and will not fall back to local credentials automatically.\n" +
 		"Start the broker with `musepi auth-broker serve`, or disable it with " +
 		"`musepi config reset auth.broker.url` and `musepi config reset auth.broker.token` " +
-		"(or unset OMP_AUTH_BROKER_URL / OMP_AUTH_BROKER_TOKEN)."
+		"(or unset MUSEPI_AUTH_BROKER_URL / MUSEPI_AUTH_BROKER_TOKEN)."
 	);
 }

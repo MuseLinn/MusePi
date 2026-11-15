@@ -52,7 +52,7 @@ describe("profile directories", () => {
 		originalAgentDir = getAgentDir();
 		originalProfile = getActiveProfile();
 		originalAgentDirEnv = process.env.PI_CODING_AGENT_DIR;
-		// MUSEPI_PROFILE is the sole profile env var; OMP_PROFILE/PI_PROFILE are
+		// MUSEPI_PROFILE is the sole profile env var; MUSEPI_PROFILE/PI_PROFILE are
 		// no longer read (legacy).
 		originalConfigDir = process.env.PI_CONFIG_DIR;
 		originalXdgDataHome = process.env.XDG_DATA_HOME;
@@ -102,7 +102,7 @@ describe("profile directories", () => {
 		} else {
 			setProfile(undefined);
 		}
-		// MUSEPI_PROFILE is the sole profile env var; OMP_PROFILE/PI_PROFILE are
+		// MUSEPI_PROFILE is the sole profile env var; MUSEPI_PROFILE/PI_PROFILE are
 		// no longer read (legacy).
 		await fs.rm(tempRoot, { recursive: true, force: true });
 		await fs.rm(path.join(os.homedir(), configDir), { recursive: true, force: true });
@@ -310,7 +310,7 @@ describe("dirs module import behavior", () => {
 			const workerHostUrl = import.meta.resolve("@musepi/pi-utils/worker-host");
 			const agentDir = path.join(root, "agent");
 			await fs.mkdir(agentDir, { recursive: true });
-			await Bun.write(path.join(agentDir, ".env"), "OMP_WORKER_HOST_PROBE=from-agent-env\n");
+			await Bun.write(path.join(agentDir, ".env"), "MUSEPI_WORKER_HOST_PROBE=from-agent-env\n");
 			const probePath = path.join(root, "probe.ts");
 			await Bun.write(
 				probePath,
@@ -318,7 +318,7 @@ describe("dirs module import behavior", () => {
 					`import { declareWorkerHostEntry, workerHostEntry } from ${JSON.stringify(workerHostUrl)};`,
 					"declareWorkerHostEntry();",
 					"process.stdout.write(JSON.stringify({",
-					"	envProbe: process.env.OMP_WORKER_HOST_PROBE ?? null,",
+					"	envProbe: process.env.MUSEPI_WORKER_HOST_PROBE ?? null,",
 					"	hostDeclared: workerHostEntry() === Bun.main,",
 					"}));",
 				].join("\n"),
@@ -328,7 +328,7 @@ describe("dirs module import behavior", () => {
 				...process.env,
 				PI_CODING_AGENT_DIR: agentDir,
 			};
-			delete childEnv.OMP_WORKER_HOST_PROBE;
+			delete childEnv.MUSEPI_WORKER_HOST_PROBE;
 			const proc = Bun.spawn([process.execPath, probePath], {
 				stdout: "pipe",
 				stderr: "pipe",

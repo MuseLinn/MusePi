@@ -131,8 +131,8 @@ Environment variables are **not** a single settings layer. Each is read by the f
 | `PI_JS` | `eval.js` | `PI_JS=0` disables the JavaScript eval backend. |
 | `PI_TINY_DEVICE` | `providers.tinyModelDevice` | ONNX execution provider for local tiny models. |
 | `PI_TINY_DTYPE` | `providers.tinyModelDtype` | ONNX precision for local tiny models. |
-| `OMP_AUTH_BROKER_URL` | `auth.broker.url` | Env value takes precedence over config. |
-| `OMP_AUTH_BROKER_TOKEN` | `auth.broker.token` | Env value takes precedence over config. |
+| `MUSEPI_AUTH_BROKER_URL` | `auth.broker.url` | Env value takes precedence over config. |
+| `MUSEPI_AUTH_BROKER_TOKEN` | `auth.broker.token` | Env value takes precedence over config. |
 | `PI_CODING_AGENT_DIR` | (relocates agent dir) | Moves `config.yml`, `agent.db`, and the whole agent base. |
 | `PI_CONFIG_FILES` | CLI config overlays | Platform path-list (`:` on Unix, `;` on Windows); files load in order before `--config` overlays. |
 
@@ -743,8 +743,8 @@ searxng:
 | `exa.enableWebsets` | boolean | `false` | Exa websets. |
 | `searxng.endpoint` | string | _(unset)_ | SearXNG instance URL. |
 | `searxng.token` | string | _(unset)_ | SearXNG token; also `searxng.basicUsername`/`searxng.basicPassword`/`searxng.categories`/`searxng.language`. |
-| `auth.broker.url` | string | _(unset)_ | Auth-broker URL. Overridden by `OMP_AUTH_BROKER_URL`. |
-| `auth.broker.token` | string | _(unset)_ | Auth-broker token. Overridden by `OMP_AUTH_BROKER_TOKEN`. |
+| `auth.broker.url` | string | _(unset)_ | Auth-broker URL. Overridden by `MUSEPI_AUTH_BROKER_URL`. |
+| `auth.broker.token` | string | _(unset)_ | Auth-broker token. Overridden by `MUSEPI_AUTH_BROKER_TOKEN`. |
 
 Provider credentials and custom model definitions are configured separately — see [Providers](./providers.html) and [Models](./models.html).
 

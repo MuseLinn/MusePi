@@ -49,7 +49,7 @@ describe("MCP quiet reconnect after the burst ladder fails (omp #11803)", () => 
 
 	async function startFixture(): Promise<string> {
 		child = Bun.spawn([BUN_EXEC, FIXTURE_PATH], {
-			env: { ...process.env, OMP_TEST_HTTP_CONTROL: controlPath, OMP_TEST_HTTP_READY: readyPath },
+			env: { ...process.env, MUSEPI_TEST_HTTP_CONTROL: controlPath, MUSEPI_TEST_HTTP_READY: readyPath },
 			stdout: "ignore",
 			stderr: "ignore",
 		});

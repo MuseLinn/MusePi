@@ -15,10 +15,10 @@ import * as path from "node:path";
 export const LSP_MUX_WORKER_ARG = "__omp_worker_lsp_mux";
 
 /** Environment key carrying the socket endpoint the mux must listen on. */
-export const LSP_MUX_SOCKET_ENV = "OMP_LSP_MUX_SOCKET";
+export const LSP_MUX_SOCKET_ENV = "MUSEPI_LSP_MUX_SOCKET";
 
 /** Environment key carrying the canonical project directory the mux serves. */
-export const LSP_MUX_PROJECT_DIR_ENV = "OMP_LSP_MUX_PROJECT_DIR";
+export const LSP_MUX_PROJECT_DIR_ENV = "MUSEPI_LSP_MUX_PROJECT_DIR";
 
 /** Stable broker daemon name for the shared LSP mux. */
 export const LSP_MUX_DAEMON_NAME = "omp.lsp.mux";

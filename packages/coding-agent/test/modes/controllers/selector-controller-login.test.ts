@@ -125,9 +125,9 @@ describe("SelectorController login", () => {
 		const dialog = new LoginDialogComponent(tui, "openrouter", vi.fn());
 		const prompt = dialog.showPrompt("Paste your OpenRouter API key");
 
-		dialog.pasteText("OMP_PASTE_TEST_123");
+		dialog.pasteText("MUSEPI_PASTE_TEST_123");
 		dialog.handleInput("\n");
 
-		await expect(prompt).resolves.toBe("OMP_PASTE_TEST_123");
+		await expect(prompt).resolves.toBe("MUSEPI_PASTE_TEST_123");
 	});
 });

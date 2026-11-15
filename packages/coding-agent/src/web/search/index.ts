@@ -321,7 +321,7 @@ async function executeSearch(
  * Execute a web search query for CLI/testing workflows.
  *
  * `authStorage` may be omitted; in that case we discover one via the standard
- * factory (`discoverAuthStorage`), which honours `OMP_AUTH_BROKER_URL` and
+ * factory (`discoverAuthStorage`), which honours `MUSEPI_AUTH_BROKER_URL` and
  * otherwise opens the local SQLite credential store.
  */
 export async function runSearchQuery(

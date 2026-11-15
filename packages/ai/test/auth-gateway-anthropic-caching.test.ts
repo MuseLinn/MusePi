@@ -6,7 +6,7 @@
  * `cache_creation_input_tokens` / `cache_read_input_tokens` in the response.
  *
  * Skips unless a local gateway is reachable at the default `127.0.0.1:4000`
- * (override via `OMP_E2E_GATEWAY_URL`) AND the bearer token file exists at
+ * (override via `MUSEPI_E2E_GATEWAY_URL`) AND the bearer token file exists at
  * `~/.omp/auth-gateway.token`.
  *
  * To run: `bun --cwd packages/ai test test/auth-gateway-anthropic-caching.test.ts`
@@ -30,7 +30,7 @@ interface AnthropicResponse {
 	error?: { type: string; message: string };
 }
 
-const MODEL = Bun.env.OMP_E2E_ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
+const MODEL = Bun.env.MUSEPI_E2E_ANTHROPIC_MODEL ?? "claude-sonnet-4-5";
 
 const gateway = await checkAuthGatewayE2EAvailable();
 

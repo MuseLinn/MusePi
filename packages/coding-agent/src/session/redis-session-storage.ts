@@ -46,7 +46,7 @@ export interface RedisSessionStorageOptions {
 const DEFAULT_PREFIX = "omp:sessions:";
 const DEFAULT_SCAN_COUNT = 500;
 
-const WRITE_FULL_SCRIPT = `-- OMP_WRITE_FULL
+const WRITE_FULL_SCRIPT = `-- MUSEPI_WRITE_FULL
 redis.call("SET", KEYS[1], ARGV[1])
 redis.call("HSET", KEYS[2], ARGV[2], ARGV[3])
 if ARGV[4] == "1" then
@@ -56,12 +56,12 @@ else
 end
 return 1`;
 
-const APPEND_SCRIPT = `-- OMP_APPEND
+const APPEND_SCRIPT = `-- MUSEPI_APPEND
 local size = redis.call("APPEND", KEYS[1], ARGV[1])
 redis.call("HSET", KEYS[2], ARGV[2], ARGV[3])
 return size`;
 
-const UPDATE_TITLE_SCRIPT = `-- OMP_UPDATE_TITLE
+const UPDATE_TITLE_SCRIPT = `-- MUSEPI_UPDATE_TITLE
 redis.call("HSET", KEYS[1], ARGV[1], ARGV[2])
 redis.call("HSET", KEYS[2], ARGV[1], ARGV[3])
 return 1`;

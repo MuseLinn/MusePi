@@ -7,7 +7,7 @@
  * input_tokens_details.cached_tokens in the response usage block".
  *
  * Skips unless a local gateway is reachable at the default `127.0.0.1:4000`
- * (override via `OMP_E2E_GATEWAY_URL`) AND the bearer token file exists at
+ * (override via `MUSEPI_E2E_GATEWAY_URL`) AND the bearer token file exists at
  * `~/.omp/auth-gateway.token`.
  *
  * To run: `bun --cwd packages/ai test test/auth-gateway-openai-responses-caching.test.ts`
@@ -36,7 +36,7 @@ interface OpenAIResponse {
 
 // `gpt-5.3-codex` is the model we've verified the ChatGPT-subscription Codex
 // backend accepts; older or higher-tier ids 4xx with "model not supported".
-const MODEL = Bun.env.OMP_E2E_OPENAI_RESPONSES_MODEL ?? "gpt-5.3-codex";
+const MODEL = Bun.env.MUSEPI_E2E_OPENAI_RESPONSES_MODEL ?? "gpt-5.3-codex";
 
 const gateway = await checkAuthGatewayE2EAvailable();
 

@@ -132,8 +132,8 @@ built-in defaults  <-  global config  <-  project config  <-  CLI overlays  <-  
 | `PI_JS` | `eval.js` | `PI_JS=0` 禁用 JavaScript eval backend。 |
 | `PI_TINY_DEVICE` | `providers.tinyModelDevice` | 本地 tiny model 的 ONNX execution provider。 |
 | `PI_TINY_DTYPE` | `providers.tinyModelDtype` | 本地 tiny model 的 ONNX 精度。 |
-| `OMP_AUTH_BROKER_URL` | `auth.broker.url` | 环境变量值优先于配置。 |
-| `OMP_AUTH_BROKER_TOKEN` | `auth.broker.token` | 环境变量值优先于配置。 |
+| `MUSEPI_AUTH_BROKER_URL` | `auth.broker.url` | 环境变量值优先于配置。 |
+| `MUSEPI_AUTH_BROKER_TOKEN` | `auth.broker.token` | 环境变量值优先于配置。 |
 | `PI_CODING_AGENT_DIR` | （重定位 agent 目录） | 移动 `config.yml`、`agent.db` 及整个 agent 基础目录。 |
 | `PI_CONFIG_FILES` | CLI 配置 overlay | 平台路径列表（Unix 上是 `:`，Windows 上是 `;`）；文件在 `--config` overlay 之前按序加载。 |
 
@@ -745,8 +745,8 @@ searxng:
 | `exa.enableWebsets` | boolean | `false` | Exa websets。 |
 | `searxng.endpoint` | string | _（未设置）_ | SearXNG 实例 URL。 |
 | `searxng.token` | string | _（未设置）_ | SearXNG token；另有 `searxng.basicUsername`/`searxng.basicPassword`/`searxng.categories`/`searxng.language`。 |
-| `auth.broker.url` | string | _（未设置）_ | Auth-broker URL。可被 `OMP_AUTH_BROKER_URL` 覆盖。 |
-| `auth.broker.token` | string | _（未设置）_ | Auth-broker token。可被 `OMP_AUTH_BROKER_TOKEN` 覆盖。 |
+| `auth.broker.url` | string | _（未设置）_ | Auth-broker URL。可被 `MUSEPI_AUTH_BROKER_URL` 覆盖。 |
+| `auth.broker.token` | string | _（未设置）_ | Auth-broker token。可被 `MUSEPI_AUTH_BROKER_TOKEN` 覆盖。 |
 
 Provider 凭据与自定义 model definition 单独配置——见 [Providers](./providers.md) 和 [Models](./models.md)。
 

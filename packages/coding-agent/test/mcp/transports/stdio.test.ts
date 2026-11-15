@@ -69,7 +69,7 @@ describe("StdioTransport.connect", () => {
 			args: argv.slice(1),
 			cwd,
 			env: {
-				OMP_STDIO_SPAWN_SHAPE: envValue,
+				MUSEPI_STDIO_SPAWN_SHAPE: envValue,
 			},
 		});
 		const spawnSpy = spyOn(Bun, "spawn");
@@ -88,7 +88,7 @@ describe("StdioTransport.connect", () => {
 					cwd,
 					detached: !(process.platform === "darwin" || process.platform === "win32"),
 					env: expect.objectContaining({
-						OMP_STDIO_SPAWN_SHAPE: envValue,
+						MUSEPI_STDIO_SPAWN_SHAPE: envValue,
 					}),
 					stderr: "pipe",
 					stdin: "pipe",

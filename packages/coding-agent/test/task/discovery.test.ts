@@ -11,7 +11,7 @@ import {
 import { discoverAgents } from "@musepi/pi-coding-agent/task/discovery";
 import { getPluginsDir, getProjectAgentDir, removeWithRetries } from "@musepi/pi-utils";
 
-const OMP_AGENT_MD = [
+const MUSEPI_AGENT_MD = [
 	"---",
 	"name: omp-test-agent",
 	"description: OMP-native test agent.",
@@ -19,7 +19,7 @@ const OMP_AGENT_MD = [
 	"You are an OMP task agent.",
 ].join("\n");
 
-const OMP_PLUGIN_AGENT_MD = [
+const MUSEPI_PLUGIN_AGENT_MD = [
 	"---",
 	"name: loom-verify-spec",
 	"description: Plugin-shipped verification agent.",
@@ -54,7 +54,7 @@ async function writeOmpPluginAgent(home: string): Promise<void> {
 			dependencies: { loom: "1.0.0" },
 		}),
 	);
-	await fs.writeFile(path.join(pluginRoot, "agents", "loom-verify-spec.md"), OMP_PLUGIN_AGENT_MD);
+	await fs.writeFile(path.join(pluginRoot, "agents", "loom-verify-spec.md"), MUSEPI_PLUGIN_AGENT_MD);
 }
 
 describe("discoverAgents", () => {
@@ -76,7 +76,7 @@ describe("discoverAgents", () => {
 
 	test("loads OMP agents but skips Claude Code custom agents", async () => {
 		await fs.mkdir(path.join(getProjectAgentDir(projectDir), "agents"), { recursive: true });
-		await fs.writeFile(path.join(getProjectAgentDir(projectDir), "agents", "omp-test-agent.md"), OMP_AGENT_MD);
+		await fs.writeFile(path.join(getProjectAgentDir(projectDir), "agents", "omp-test-agent.md"), MUSEPI_AGENT_MD);
 
 		await fs.mkdir(path.join(tempHome, ".claude", "agents"), { recursive: true });
 		await fs.writeFile(path.join(tempHome, ".claude", "agents", "user-cc-test-agent.md"), CLAUDE_AGENT_MD);

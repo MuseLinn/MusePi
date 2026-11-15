@@ -132,8 +132,8 @@ try {
 		MUSEPI_CDP_PORT: String(cdpPort),
 		MUSEPI_GUI_DAEMON_PORT: String(daemonPort),
 		MUSEPI_TEST_OPEN_WITH_CAPTURE: openWithCapturePath,
-		OMP_NO_AUTO_UPDATE: "1",
-		OMP_SOFTWARE_GL: "1",
+		MUSEPI_NO_AUTO_UPDATE: "1",
+		MUSEPI_SOFTWARE_GL: "1",
 	};
 	electron = spawn(electronBinary, ["--no-sandbox", `--remote-debugging-port=${cdpPort}`, mainPath], {
 		cwd: fixture,

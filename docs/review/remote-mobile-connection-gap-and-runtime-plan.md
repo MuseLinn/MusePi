@@ -187,7 +187,7 @@ MusePi 目前只覆盖第三行的一半：能生成 ts.net URL，但没有把�
 1. **SSH + sshfs 远程工作区**（桌面 GUI）：`remote.hosts/hostAdd/connect/browse/disconnect` 五个 RPC 已接真，四步向导可用。挂载远端 `/` 后会话 `cwd` 指向本地挂载路径，所有工具零改动。
 2. **远端 daemon 瘦客户端**：`InstanceManagerDialog` 填 `label/url/token`，切当前 daemon URL；对端需 `musepi serve --remote-token <≥16 字符>`。
 3. **collab 实时共享**：LAN 明文 relay + 自签 TLS relay、cloudflared/ngrok tunnel、tailscale serve；手机作为 guest 加入。
-4. **auth-broker**：`OMP_AUTH_BROKER_URL` 置位后凭据托管，broker 独占 refresh token。
+4. **auth-broker**：`MUSEPI_AUTH_BROKER_URL` 置位后凭据托管，broker 独占 refresh token。
 
 ### 5.2 缺口表
 
@@ -440,7 +440,7 @@ libproot.so --kill-on-exit --link2symlink --sysvipc -0 \
 
 - 模型 API key：Android Keystore 加密存储；启动时解密，通过**环境变量**注入 proot。`/proc/<pid>/environ` 仅同 uid 可读，风险可接受。
 - 不把 key 写入 rootfs 的 `credentials.json`；若 daemon 必须落盘，使用 `0600` + 应用私有目录，并在设置页明确告知。
-- 更强方案：`OMP_AUTH_BROKER_URL` 指向自建 broker，手机只持 broker token，provider key 永不落设备（`packages/ai/src/auth-broker/discover.ts:198`）。
+- 更强方案：`MUSEPI_AUTH_BROKER_URL` 指向自建 broker，手机只持 broker token，provider key 永不落设备（`packages/ai/src/auth-broker/discover.ts:198`）。
 - 本地 daemon token 每次启动重新生成，不持久化；UI 通过 MethodChannel 拿，不写 localStorage。
 
 ### 8.9 包体与 ABI

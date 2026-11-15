@@ -126,7 +126,7 @@ function readImageHeaderDimensions(buffer: Uint8Array): ImageHeaderDimensions | 
  * or `"0"` MUST be treated as disabled.
  */
 function isWebPExcluded(): boolean {
-	const raw = Bun.env.MUSEPI_NO_WEBP ?? Bun.env.OMP_NO_WEBP;
+	const raw = Bun.env.MUSEPI_NO_WEBP;
 	if (raw === undefined) return false;
 	const v = raw.toLowerCase();
 	return v === "1" || v === "true";

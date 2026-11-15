@@ -104,7 +104,7 @@ async function startPtyDaemonWithShell(shell: string, initialMarker: string, exp
 					application: process.execPath,
 					args: [
 						"-e",
-						"process.stdout.write(process.env.OMP_TEST_SHELL_MARKER); process.stdout.write(String.fromCharCode(10)); process.stdin.resume();",
+						"process.stdout.write(process.env.MUSEPI_TEST_SHELL_MARKER); process.stdout.write(String.fromCharCode(10)); process.stdin.resume();",
 					],
 					env: {},
 					cwd: projectDir,
@@ -149,7 +149,7 @@ async function startPtyDaemonWithShell(shell: string, initialMarker: string, exp
 		env: {
 			...process.env,
 			SHELL: shell,
-			OMP_TEST_SHELL_MARKER: initialMarker,
+			MUSEPI_TEST_SHELL_MARKER: initialMarker,
 		},
 		stdout: "pipe",
 		stderr: "pipe",
@@ -386,7 +386,7 @@ setInterval(() => {}, 1000);
 	it("preserves compatible login shells for PTY daemons", async () => {
 		if (process.platform === "win32") return;
 		const shellPath = path.join(await tempDir("omp-daemon-posix-shell-"), "zsh");
-		await Bun.write(shellPath, '#!/bin/sh\nexport OMP_TEST_SHELL_MARKER="compatible-shell"\nexec /bin/sh "$@"\n');
+		await Bun.write(shellPath, '#!/bin/sh\nexport MUSEPI_TEST_SHELL_MARKER="compatible-shell"\nexec /bin/sh "$@"\n');
 		await fs.chmod(shellPath, 0o755);
 
 		await startPtyDaemonWithShell(shellPath, "basic-shell", "compatible-shell");

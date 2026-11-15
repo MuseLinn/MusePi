@@ -37,7 +37,7 @@ async function expectPromptDateFromStartupTimezone(options: {
 import { buildSystemPrompt } from ${JSON.stringify(path.resolve(import.meta.dir, "../src/system-prompt.ts"))};
 
 it("renders the prompt date in the startup timezone", async () => {
-	setSystemTime(new Date(process.env.OMP_TEST_NOW!));
+	setSystemTime(new Date(process.env.MUSEPI_TEST_NOW!));
 	try {
 		const { systemPrompt } = await buildSystemPrompt({
 			cwd: process.cwd(),
@@ -55,8 +55,8 @@ it("renders the prompt date in the startup timezone", async () => {
 			activeRepoContext: null,
 		});
 		const rendered = systemPrompt.join("\\n\\n");
-		expect(rendered).toContain(\`Today: \${process.env.OMP_EXPECTED_DATE}\`);
-		expect(rendered).not.toContain(\`Today: \${process.env.OMP_REJECTED_DATE}\`);
+		expect(rendered).toContain(\`Today: \${process.env.MUSEPI_EXPECTED_DATE}\`);
+		expect(rendered).not.toContain(\`Today: \${process.env.MUSEPI_REJECTED_DATE}\`);
 	} finally {
 		setSystemTime();
 	}
@@ -69,9 +69,9 @@ it("renders the prompt date in the startup timezone", async () => {
 			...process.env,
 			HOME: options.tempHomeDir,
 			TZ: options.timeZone,
-			OMP_TEST_NOW: options.now,
-			OMP_EXPECTED_DATE: options.expectedDate,
-			OMP_REJECTED_DATE: options.rejectedDate,
+			MUSEPI_TEST_NOW: options.now,
+			MUSEPI_EXPECTED_DATE: options.expectedDate,
+			MUSEPI_REJECTED_DATE: options.rejectedDate,
 		},
 		stdout: "pipe",
 		stderr: "pipe",

@@ -76,18 +76,18 @@ let tempDir: string;
 let originalEnv: string | undefined;
 
 beforeEach(async () => {
-	originalEnv = process.env.OMP_GITHUB_CACHE_DB;
+	originalEnv = process.env.MUSEPI_GITHUB_CACHE_DB;
 	tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "gh-cache-inv-"));
-	process.env.OMP_GITHUB_CACHE_DB = path.join(tempDir, "github-cache.db");
+	process.env.MUSEPI_GITHUB_CACHE_DB = path.join(tempDir, "github-cache.db");
 	resetCacheForTests();
 });
 
 afterEach(async () => {
 	resetCacheForTests();
 	if (originalEnv === undefined) {
-		delete process.env.OMP_GITHUB_CACHE_DB;
+		delete process.env.MUSEPI_GITHUB_CACHE_DB;
 	} else {
-		process.env.OMP_GITHUB_CACHE_DB = originalEnv;
+		process.env.MUSEPI_GITHUB_CACHE_DB = originalEnv;
 	}
 	await removeWithRetries(tempDir);
 });

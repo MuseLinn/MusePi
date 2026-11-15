@@ -22,7 +22,7 @@
 4. 配置根目录 `.env`（`~/.musepi/.env`，遵循 `PI_CONFIG_DIR`），用于尚未设置的键
 5. Home `.env`（`~/.env`），用于尚未设置的键
 
-每个 `.env` 文件内的额外规则：`OMP_*` 键会在该解析文件中镜像为 `PI_*` 键。
+每个 `.env` 文件内的额外规则：`MUSEPI_*` 键会在该解析文件中镜像为 `PI_*` 键。
 
 ---
 
@@ -106,13 +106,13 @@
 
 | 变量                                | 用途                                                                                         | 何时必需                                                                                              | 备注 / 优先级                                                                                                                                                       |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `OMP_AUTH_BROKER_URL`               | 远程 auth-broker 的 base URL（例如 `https://broker.tailnet:8765`）；选择 broker 模式             | 通过 broker 解析凭据；`musepi auth-gateway serve`（网关本身是 broker 客户端）也需要                  | 优先于 `config.yml` 中的 `auth.broker.url`。当设置但无可用 token 时，`resolveAuthBrokerConfig()` 会硬报错，而不是回退到本地 SQLite。 |
-| `OMP_AUTH_BROKER_TOKEN`             | 除 `/v1/healthz` 外发送到每个 broker 端点的 Bearer token                                        | `OMP_AUTH_BROKER_URL` 已设置且 `auth.broker.token` 或 `<config-dir>/auth-broker.token` 无 token 可用 | 解析顺序：此 env → `auth.broker.token`（支持 `$ENV_NAME` 间接引用）→ `<config-dir>/auth-broker.token`（权限 `0600`）。`<config-dir>` 为 `~/.musepi/`（遵循 `PI_CONFIG_DIR`）。 |
-| `OMP_AUTH_BROKER_SNAPSHOT_TTL_MS`   | 加密本地 broker 快照缓存的新鲜度窗口                                                           | broker 模式下可选                                                                                      | 默认 `3600000`（1 小时）。新鲜度基于 broker 的 `snapshot.generatedAt`；`0` 禁用缓存读写，并强制每次启动都进行旧的阻塞式拉取。 |
-| `OMP_AUTH_BROKER_SNAPSHOT_CACHE`    | 加密本地 broker 快照缓存的路径                                                                  | broker 模式下可选                                                                                      | 默认为 `~/.musepi/cache/auth-broker-snapshot.enc`（或 XDG 缓存等价位置）。对测试、临时主机或重新定位 `0600` 缓存文件有用。 |
-| `OMP_AUTH_BROKER_ACCOUNT_POOL_FILE` | 针对可信 broker 客户端的进程级 OAuth 账户路由                                               | broker 模式下可选                                                                                      | 一个 JSON 对象的路径，将 provider ID 映射到精确的 broker `identityKey` 数组。缺失的 provider 不受限制；`[]` 隐藏该 provider 的 OAuth 账户；API key 仍然可见。启动时解析一次，输入无效则 fail closed。这不是服务器授权。 |
+| `MUSEPI_AUTH_BROKER_URL`               | 远程 auth-broker 的 base URL（例如 `https://broker.tailnet:8765`）；选择 broker 模式             | 通过 broker 解析凭据；`musepi auth-gateway serve`（网关本身是 broker 客户端）也需要                  | 优先于 `config.yml` 中的 `auth.broker.url`。当设置但无可用 token 时，`resolveAuthBrokerConfig()` 会硬报错，而不是回退到本地 SQLite。 |
+| `MUSEPI_AUTH_BROKER_TOKEN`             | 除 `/v1/healthz` 外发送到每个 broker 端点的 Bearer token                                        | `MUSEPI_AUTH_BROKER_URL` 已设置且 `auth.broker.token` 或 `<config-dir>/auth-broker.token` 无 token 可用 | 解析顺序：此 env → `auth.broker.token`（支持 `$ENV_NAME` 间接引用）→ `<config-dir>/auth-broker.token`（权限 `0600`）。`<config-dir>` 为 `~/.musepi/`（遵循 `PI_CONFIG_DIR`）。 |
+| `MUSEPI_AUTH_BROKER_SNAPSHOT_TTL_MS`   | 加密本地 broker 快照缓存的新鲜度窗口                                                           | broker 模式下可选                                                                                      | 默认 `3600000`（1 小时）。新鲜度基于 broker 的 `snapshot.generatedAt`；`0` 禁用缓存读写，并强制每次启动都进行旧的阻塞式拉取。 |
+| `MUSEPI_AUTH_BROKER_SNAPSHOT_CACHE`    | 加密本地 broker 快照缓存的路径                                                                  | broker 模式下可选                                                                                      | 默认为 `~/.musepi/cache/auth-broker-snapshot.enc`（或 XDG 缓存等价位置）。对测试、临时主机或重新定位 `0600` 缓存文件有用。 |
+| `MUSEPI_AUTH_BROKER_ACCOUNT_POOL_FILE` | 针对可信 broker 客户端的进程级 OAuth 账户路由                                               | broker 模式下可选                                                                                      | 一个 JSON 对象的路径，将 provider ID 映射到精确的 broker `identityKey` 数组。缺失的 provider 不受限制；`[]` 隐藏该 provider 的 OAuth 账户；API key 仍然可见。启动时解析一次，输入无效则 fail closed。这不是服务器授权。 |
 
-网关没有专属环境变量——它继承 `OMP_AUTH_BROKER_*`。它自身的入站 bearer token 存放于 `<config-dir>/auth-gateway.token`，通过 `musepi auth-gateway token` 管理。
+网关没有专属环境变量——它继承 `MUSEPI_AUTH_BROKER_*`。它自身的入站 bearer token 存放于 `<config-dir>/auth-gateway.token`，通过 `musepi auth-gateway token` 管理。
 
 ---
 
@@ -352,7 +352,7 @@ SearXNG 还从 `~/.musepi/agent/config.yml` 读取等价的 `searxng.endpoint`�
 | `PI_FORCE_IMAGE_PROTOCOL`    | 在使用处强制受支持的图像协议（`kitty`、`iterm2`/`iterm`、`sixel`、`none`）。在 tmux 内设置 `kitty` 也会选择 Kitty Unicode 占位符放置，除非 `PI_KITTY_PLACEHOLDERS=0` 或 `PI_NO_KITTY_PLACEHOLDERS=1` 禁用它 |
 | `PI_ALLOW_SIXEL_PASSTHROUGH` | 当 `PI_FORCE_IMAGE_PROTOCOL=sixel` 时允许 SIXEL 直通                      |
 | `PI_NO_PTY`                  | 若为 `1`，对 bash tool 禁用交互式 PTY 路径                                                                                                                        |
-| `OMP_MCP_TIMEOUT_MS`         | 为每个 MCP server 覆盖 MCP 客户端请求超时（ms）。`0` 禁用客户端超时（`AbortSignal` 永不触发）。无效（负数或非数字）值会被忽略并给出警告，然后使用各 server 配置或默认值（`30000`）。 |
+| `MUSEPI_MCP_TIMEOUT_MS`         | 为每个 MCP server 覆盖 MCP 客户端请求超时（ms）。`0` 禁用客户端超时（`AbortSignal` 永不触发）。无效（负数或非数字）值会被忽略并给出警告，然后使用各 server 配置或默认值（`30000`）。 |
 
 当 CLI 使用 `--no-pty` 时，`PI_NO_PTY` 也会在内部被设置。
 

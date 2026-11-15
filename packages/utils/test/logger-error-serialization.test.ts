@@ -16,20 +16,20 @@ let prevAgentDir: string | undefined;
 
 beforeAll(() => {
 	tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-logger-error-"));
-	// `getLogsDir()` honors OMP_AGENT_DIR / HOME for its base; pin to our tmp.
+	// `getLogsDir()` honors MUSEPI_AGENT_DIR / HOME for its base; pin to our tmp.
 	// Restore only this key on teardown — reassigning `process.env` wholesale
 	// would replace the live binding with a plain object, diverging it from
 	// `Bun.env` and poisoning every env-reading test that runs afterwards.
-	prevAgentDir = process.env.OMP_AGENT_DIR;
-	process.env.OMP_AGENT_DIR = tempDir;
+	prevAgentDir = process.env.MUSEPI_AGENT_DIR;
+	process.env.MUSEPI_AGENT_DIR = tempDir;
 	logger.setTransports({ file: tempDir, console: false });
 });
 
 afterAll(() => {
 	if (prevAgentDir === undefined) {
-		delete process.env.OMP_AGENT_DIR;
+		delete process.env.MUSEPI_AGENT_DIR;
 	} else {
-		process.env.OMP_AGENT_DIR = prevAgentDir;
+		process.env.MUSEPI_AGENT_DIR = prevAgentDir;
 	}
 	logger.setTransports({ file: false, console: false });
 	fs.rmSync(tempDir, { force: true, recursive: true });

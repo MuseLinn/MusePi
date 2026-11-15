@@ -127,7 +127,7 @@
 
 每个请求：
 
-- timeout 来自 `resolveMCPTimeoutMs`：`OMP_MCP_TIMEOUT_MS` 环境变量覆盖，否则 `config.timeout ?? 30000`；`0` 禁用
+- timeout 来自 `resolveMCPTimeoutMs`：`MUSEPI_MCP_TIMEOUT_MS` 环境变量覆盖，否则 `config.timeout ?? 30000`；`0` 禁用
 - 可选 `AbortSignal` 来自调用方
 - abort 与 timeout 都会 reject pending promise 并清理 map entry
 
@@ -179,7 +179,7 @@ HTTP transport 有逻辑连接状态，但请求路径按 HTTP 调用无状态�
 
 对于 `request()`：
 
-- timeout 使用 `AbortController`，通过 `createMCPTimeout`（`OMP_MCP_TIMEOUT_MS` 覆盖，否则 `config.timeout ?? 30000`；`0` 禁用）
+- timeout 使用 `AbortController`，通过 `createMCPTimeout`（`MUSEPI_MCP_TIMEOUT_MS` 覆盖，否则 `config.timeout ?? 30000`；`0` 禁用）
 - 调用方提供的 external signal 通过 `AbortSignal.any([...])` 合并
 - AbortError 处理区分调用方 abort 与 timeout
 
@@ -215,7 +215,7 @@ HTTP transport 有逻辑连接状态，但请求路径按 HTTP 调用无状态�
 2. **背景 SSE listener**（`startSSEListener()`）
    - 可选的 GET listener，用于服务端发起的通知和服务端到客户端请求
    - `connectToServer()` 在 Streamable HTTP transports 上，在 `initialize` 之后、`notifications/initialized` 之前启动它
-   - listener 启动最多等待一秒；非常小的 request timeout 下等待时间更短；`timeout: 0` / `OMP_MCP_TIMEOUT_MS=0` 禁用该启动截止时间
+   - listener 启动最多等待一秒；非常小的 request timeout 下等待时间更短；`timeout: 0` / `MUSEPI_MCP_TIMEOUT_MS=0` 禁用该启动截止时间
    - 如果 GET 返回 `405`、另一个非 OK 状态、无 body 或超时，listener 静默禁用自身
 
 ## 畸形载荷与断开处理

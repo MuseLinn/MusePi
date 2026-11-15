@@ -53,7 +53,7 @@ describe("global --profile flag", () => {
 		originalOmpProfileEnv = process.env.MUSEPI_PROFILE;
 		originalPiProfileEnv = process.env.PI_PROFILE;
 		originalConfigDir = process.env.PI_CONFIG_DIR;
-		configDir = `.omp-profile-cli-test-${Snowflake.next()}`;
+		configDir = `.musepi-profile-cli-test-${Snowflake.next()}`;
 		process.env.PI_CONFIG_DIR = configDir;
 		process.exitCode = 0;
 	});
@@ -239,8 +239,8 @@ describe("global --profile flag", () => {
 			const profileAgentDir = path.join(home, configDir, "profiles", "work", "agent");
 			await fs.mkdir(defaultAgentDir, { recursive: true });
 			await fs.mkdir(profileAgentDir, { recursive: true });
-			await Bun.write(path.join(defaultAgentDir, ".env"), "OMP_PROFILE_BOOTSTRAP_SENTINEL=default\n");
-			await Bun.write(path.join(profileAgentDir, ".env"), "OMP_PROFILE_BOOTSTRAP_SENTINEL=work\n");
+			await Bun.write(path.join(defaultAgentDir, ".env"), "MUSEPI_PROFILE_BOOTSTRAP_SENTINEL=default\n");
+			await Bun.write(path.join(profileAgentDir, ".env"), "MUSEPI_PROFILE_BOOTSTRAP_SENTINEL=work\n");
 
 			const probePath = path.join(root, "probe.ts");
 			await Bun.write(
@@ -248,7 +248,7 @@ describe("global --profile flag", () => {
 				[
 					`import { runCli } from ${JSON.stringify(url.pathToFileURL(cliEntry).href)};`,
 					'await runCli(["--profile", "work", "--help"]);',
-					'process.stdout.write("\\nSENTINEL=" + (Bun.env.OMP_PROFILE_BOOTSTRAP_SENTINEL ?? ""));',
+					'process.stdout.write("\\nSENTINEL=" + (Bun.env.MUSEPI_PROFILE_BOOTSTRAP_SENTINEL ?? ""));',
 				].join("\n"),
 			);
 
@@ -261,7 +261,7 @@ describe("global --profile flag", () => {
 				MUSEPI_PROFILE: "work",
 			};
 			delete childEnv.PI_CODING_AGENT_DIR;
-			delete childEnv.OMP_PROFILE_BOOTSTRAP_SENTINEL;
+			delete childEnv.MUSEPI_PROFILE_BOOTSTRAP_SENTINEL;
 
 			const proc = Bun.spawn([process.execPath, probePath], {
 				cwd: repoRoot,
