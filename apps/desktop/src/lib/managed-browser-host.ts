@@ -140,8 +140,6 @@ export interface ManagedBrowserHostState {
 	activity: ManagedBrowserActivity | null;
 	busyTabIds: readonly string[];
 	agentActivity: boolean;
-	/** Newest agent action point on a managed tab (click/scroll). */
-	agentMark: ManagedBrowserMark | null;
 	confirm: ManagedBrowserConfirmRequest | null;
 	/** In-app upload confirmation (site picker or agent tab.uploadFile). */
 	upload: ManagedBrowserUploadRequest | null;
@@ -158,7 +156,6 @@ let state: ManagedBrowserHostState = {
 	activity: null,
 	busyTabIds: [],
 	agentActivity: false,
-	agentMark: null,
 	confirm: null,
 	upload: null,
 	error: null,
@@ -1007,7 +1004,6 @@ export function wireHost(): void {
 			port: snapshot.port ?? null,
 			activity: snapshot.activity ?? null,
 			busyTabIds: snapshot.busyTabIds,
-			agentMark: snapshot.agentMark ?? null,
 		});
 	});
 	// Long-lived sets can exceed the cap without any new tab (restored tabs

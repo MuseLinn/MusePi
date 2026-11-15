@@ -72,7 +72,6 @@ import type { RpcClient } from "../lib/rpc";
 import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-nav";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
-import { BrowserAgentMark } from "./browser-agent-mark";
 import { BrowserControlOverlay } from "./browser-control-overlay";
 import {
 	BROWSER_VIEWPORTS,
@@ -335,7 +334,6 @@ export function ManagedBrowserPane({
 	const slotRef = useRef<HTMLDivElement | null>(null);
 	const contentRef = useRef<HTMLDivElement | null>(null);
 	const [controlRect, setControlRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-	const [pageOrigin, setPageOrigin] = useState<{ x: number; y: number } | null>(null);
 	const [findOpen, setFindOpen] = useState(false);
 	const [findQuery, setFindQuery] = useState("");
 	const [deviceToolbarVisible, setDeviceToolbarVisible] = useState(readBrowserDeviceToolbarVisibility);
@@ -615,11 +613,6 @@ export function ManagedBrowserPane({
 		const report = (): void => {
 			const avail = el.getBoundingClientRect();
 			const scrollport = contentRef.current?.getBoundingClientRect() ?? avail;
-			setPageOrigin(previous =>
-				previous && Math.abs(previous.x - avail.x) < 1 && Math.abs(previous.y - avail.y) < 1
-					? previous
-					: { x: avail.x, y: avail.y },
-			);
 			const nextControlRect = {
 				x: scrollport.x + 5,
 				y: scrollport.y + 5,
@@ -1488,11 +1481,6 @@ export function ManagedBrowserPane({
 				style={{ overflow: pageOverflow.x || pageOverflow.y ? "auto" : "hidden" }}
 			>
 				<div ref={slotRef} className="gui-browser-slot" aria-label={t("tools.managedBrowser")} />
-				<BrowserAgentMark
-					mark={host.agentMark && host.agentMark.tabId === host.activeId ? host.agentMark : null}
-					origin={pageOrigin}
-					page={pageBox ? { left: pageBox.left, scale: pageBox.scale } : null}
-				/>
 				{agentControl && (
 					<BrowserControlOverlay
 						activity={agentControl.activity}

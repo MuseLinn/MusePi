@@ -4,6 +4,15 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **回复里的声明式 UI 块**：助手回复可以带 ```` ```ui ```` 围栏，围栏体是与 OpenBitFun / OpenChamber 同一套的 **OpenUI Lang**（`root = Stack([...])`，一行一条语句，参数按位置传），由 15 个成品组件绘制——`Stack/Row/Card/Text/Badge/Callout/KeyValue/Table/Steps/Stat/Progress/BarChart/LineChart`，外加图表输入 `Series` 与可折叠的 `Details`。用同一套语言换来的是模型已有的写法、任意前缀可解析的局部树、点名组件与签名的诊断，以及把 `Card(title: "x")` 这类位置参数错误压成一条明确提示。画不出的块会列出原因并折叠源码，`Table` 复用聊天自己的表格。系统提示同步改成三选一：数据走块、可调参的成品面走卡片、必须像成品或让用户拍板才走页面，`widget` 里重复的 `html` 类型行随之删除。
+  - EN: Replies can carry a declarative UI block written in **OpenUI Lang** — the same language OpenBitFun and OpenChamber use (`root = Stack([...])`, one statement per line, positional arguments) — drawn by 15 finished components: `Stack/Row/Card/Text/Badge/Callout/KeyValue/Table/Steps/Stat/Progress/BarChart/LineChart`, plus the chart input `Series` and the folding `Details`. Sharing the language buys the grammar models already write, partial trees for any prefix, diagnostics that name the component and quote its signature, and one clear error for the positional-argument mistake (`Card(title: "x")`). A block that cannot draw lists its reasons and folds its source, and `Table` reuses the chat's own table. The system prompt now routes three ways — data to a block, adjustable canned faces to a card, a page only when it must look finished or asks the user to choose — and the duplicate `html` type row in `widget` is gone.
+
+- **设置合并为「会话与记忆」**：会话行为、候选输入建议、记忆后端与预设提示词收进一个页面，页内用分段控件切换三组；旧的 `sessions` / `memory` / `suggestions` 深链与扩展 slot 作为别名继续指向该页。记忆这一组独占一屏，不再和会话行混在同一段滚动里。
+  - EN: Settings gain one 会话与记忆 page: session behaviour, next-input suggestions, the memory backend and starter prompts move under a single nav row with a segmented control for its three groups, while the old `sessions` / `memory` / `suggestions` deep links and extension slots keep resolving to it as aliases. Memory gets its own pane instead of stretching the same scroll as the session rows.
+
+- **通知卡改为克制的液态玻璃**：去掉关闭钮上的倒计时环、左侧状态彩条、warning/error 的整卡描边染色，以及多条堆叠时把同级行压成 10px 细片的折叠逻辑；状态色只留在 15px 图标上，卡面一律中性玻璃。尺寸统一为固定 320px 宽（视口不足时 `calc(100vw - 32px)`）、12/14 内边距，桌面与移动两个壳共用同一份度量。
+  - EN: Notification cards become restrained liquid glass: the close button's countdown ring, the left status rail, the warning/error border tints and the collapse that shrank sibling rows to 10px slivers are gone. Status colour lives on the 15px icon only and the card surface stays neutral in every kind. One fixed size — 320px wide with a `calc(100vw - 32px)` ceiling and 12/14 padding — now serves both the desktop and the guest shells.
+
 - **会话头像每回合只在回合顶出现一次**：头像锚点恒为该回合的第一行（折叠时也是折叠头），不再随折叠开关在回合底部与顶部之间跳动，也不再吸顶复制——头像随它所属的回合一起滚走，不会在正文上方再浮一个。提示条仍是唯一吸顶元素，改用实心底与卡片同色的渐隐遮罩，正文不再透过玻璃与它叠在一起。
   - EN: One avatar per turn, always at the turn's head. The orb anchor is the turn's first row (the fold header in both fold states) instead of jumping between the reply and the header, and the avatar is no longer duplicated in a pinned copy — it scrolls away with its own turn. The prompt pill stays the only pinned element, now opaque over a card-coloured scrim so body text no longer reads through it.
 
@@ -43,8 +52,8 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 - **计算机使用新增「保持后台」策略**：设置 `computer.backgroundFallback`（默认 takeover）为 refuse 时，`delivery: "foreground"`、`raise()`、元素 `focus()` 会在发送前被拒绝并说明后台替代路径；目标窗口返回 `BackgroundUnavailable` 后也不再允许前台重试。
   - EN: Computer use gains a keep-in-background policy: with `computer.backgroundFallback` set to refuse (takeover is the default), `delivery: "foreground"`, `raise()` and element `focus()` fail before anything is sent and name the background route instead, and a `BackgroundUnavailable` result can no longer be retried in the foreground.
 
-- **内置浏览器显示 Agent 操作痕迹**：托管面板把 Agent 通过 CDP 派发的点击与滚动落点显示为一个短暂的脉冲环（滚动用虚线环），不向页面注入任何代码；落点按预设的居中与缩放换算到屏幕坐标，新动作替换旧痕迹而不是叠加。
-  - EN: The managed browser panel now shows where the agent acted: clicks and wheel events dispatched over CDP pulse a short ring at the page point (dashed for scroll), with no code injected into the page. Points are mapped through the preset's centering and fit scale, and a newer action replaces the previous mark instead of stacking.
+- **内置浏览器显示 Agent 操作痕迹**：Agent 通过 CDP 派发的点击与滚动落点在页面内画一个短暂的脉冲环（滚动用虚线环），叠加层由主进程在文档加载后注入、页面导航后自动重装，坐标即页面 CSS 像素，不依赖面板缩放换算。
+  - EN: Agent clicks and wheel events dispatched over CDP now pulse a short ring at the page point (dashed for scroll). The main process injects the layer after each document load and re-installs it after navigation; points are page CSS pixels, so no panel-scale mapping is involved.
 
 - **自定义网页尺寸与拖拽调节柄**：设备预设新增「自定义尺寸」，选中后页面按 1024×768 模拟布局，虚线框的右/下调节柄可拖动改变宽高（宽度下限 320、上限 7680）。
   - EN: Device presets gain a "Custom size" entry: the page lays out at 1024×768 and the dashed frame's right/bottom handles drag its width and height (320–7680 wide).

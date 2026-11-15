@@ -38,7 +38,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { createHash } = require("node:crypto");
 const { projectActivity, settleActivity, startActivity, takeoverActivity } = require("./managed-browser-activity.cjs");
-const { AGENT_MARK_MS, agentMarkFor } = require("./agent-marks.cjs");
+const { AGENT_MARK_SCRIPT, agentMarkCall, agentMarkFor } = require("./agent-marks.cjs");
 const { ManagedBrowserRecordStore } = require("./managed-browser-records.cjs");
 const {
 	readExtensionManifest,
@@ -649,6 +649,7 @@ class ManagedTab {
 			this.refreshState();
 			this.controller.notifyLifecycle(this);
 		});
+		wc.on("dom-ready", () => this.installAgentMarks());
 		wc.on("did-stop-loading", () => {
 			this.loading = false;
 			this.refreshState();
@@ -678,6 +679,7 @@ class ManagedTab {
 		// remaining race for clients that attach mid-load.
 		wc.once("did-finish-load", () => {
 			this.ensureDebugger();
+			this.installAgentMarks();
 			this.controller.recordHistory(this);
 		});
 		// `did-attach` can reach main after a fast local page already
@@ -685,6 +687,7 @@ class ManagedTab {
 		// will never fire again.
 		if (!wc.isLoading()) {
 			this.ensureDebugger();
+			this.installAgentMarks();
 			this.controller.recordHistory(this);
 		}
 		// Preferences must be in place before the first navigation resolves:
@@ -1380,7 +1383,6 @@ class ManagedBrowserController {
 		return {
 			port: this.server ? this.port : null,
 			...projectActivity(this.ledger, this.activeTabId),
-			agentMark: this.agentMark ?? null,
 		};
 	}
 
@@ -2278,10 +2280,7 @@ class ManagedBrowserController {
 			this.emitState(this.panelVisible ? {} : { agentActivity: true });
 		}
 		const mark = agentMarkFor(msg.method, msg.params);
-		if (mark) {
-			this.flashAgentTarget(tab, mark);
-			this.publishAgentMark(tab, mark);
-		}
+		if (mark) this.flashAgentTarget(tab, mark);
 		try {
 			const result = (await wc.debugger.sendCommand(msg.method, msg.params)) ?? {};
 			// Detach (e.g. a stopOp tab close) resolves pending commands instead
@@ -2607,21 +2606,20 @@ class ManagedBrowserController {
 		return { ok: true };
 	}
 
-	/**
-	 * Publish the point an agent action touched so the renderer can pulse it.
-	 * The mark expires on its own; a newer action replaces it instead of
-	 * stacking a trail of stale rings.
-	 */
-	publishAgentMark(tab, mark) {
-		this.agentMark = { tabId: String(tab.id), x: mark.x, y: mark.y, kind: mark.kind, at: Date.now() };
-		clearTimeout(this.markTimer);
-		this.markTimer = setTimeout(() => {
-			this.markTimer = null;
-			this.agentMark = null;
-			this.emitState({});
-		}, AGENT_MARK_MS);
-		this.emitState({});
+	/** Reinject the mark layer after a document loads; idempotent per page. */
+	installAgentMarks() {
+		const wc = this.wc;
+		if (!wc || wc.isDestroyed()) return;
+		void wc.executeJavaScript(AGENT_MARK_SCRIPT, true).catch(() => {});
 	}
+
+	/** Pulse the action point inside the page, where it paints above the guest. */
+	injectAgentMark(mark) {
+		const wc = this.wc;
+		if (!wc || wc.isDestroyed()) return;
+		void wc.executeJavaScript(agentMarkCall(mark), true).catch(() => {});
+	}
+
 
 	/**
 	 * Flash the element an agent action is about to hit (proma parity): a user
@@ -2634,6 +2632,7 @@ class ManagedBrowserController {
 	flashAgentTarget(tab, point) {
 		const wc = tab.wc;
 		if (!wc || wc.isDestroyed()) return;
+		this.injectAgentMark(point);
 		void (async () => {
 			try {
 				// DOM.getNodeForLocation needs the DOM domain on THIS debugger

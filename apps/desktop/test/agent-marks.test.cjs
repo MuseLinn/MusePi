@@ -32,3 +32,34 @@ describe("agent operation marks", () => {
 		expect(agentMarkFor("Input.dispatchMouseEvent", { type: "mousePressed", x: 1 })).toBeNull();
 	});
 });
+
+describe("injected mark layer", () => {
+	const { AGENT_MARK_SCRIPT, agentMarkCall } = require("../electron/agent-marks.cjs");
+
+	it("encodes one JSON-safe call with rounded coordinates", () => {
+		expect(agentMarkCall({ x: 12.6, y: 40.2, kind: "click" })).toBe(
+			'window.__musepiAgentMarks && window.__musepiAgentMarks({"x":13,"y":40,"kind":"click"});',
+		);
+	});
+
+	it("keeps the script free of a closing script tag and defines the guard", () => {
+		expect(AGENT_MARK_SCRIPT).toContain("__musepiAgentMarks");
+		expect(AGENT_MARK_SCRIPT).not.toContain("</script");
+	});
+
+	it("pulses one ring per call and stays installed once", async () => {
+		const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+		if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+		try {
+			new Function(AGENT_MARK_SCRIPT)();
+			const layer = document.getElementById("musepi-agent-marks");
+			expect(layer).not.toBeNull();
+			window.__musepiAgentMarks({ x: 10, y: 20, kind: "click" });
+			expect(layer.children.length).toBe(1);
+			new Function(AGENT_MARK_SCRIPT)();
+			expect(document.querySelectorAll("#musepi-agent-marks").length).toBe(1);
+		} finally {
+			await GlobalRegistrator.unregister();
+		}
+	});
+});
