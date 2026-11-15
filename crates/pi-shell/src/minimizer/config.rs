@@ -87,8 +87,8 @@ pub struct MinimizerConfig {
 	/// Resolved kill-switch: when true, opted-in filters (Tier 1 grep/find,
 	/// Tier 2 pytest) return the pre-PR legacy behavior. Resolved at
 	/// `from_options()` time from caller-supplied
-	/// `MinimizerOptions.legacy_filters` or the `MUSEPI_MINIMIZER_LEGACY_FILTERS`
-	/// env var; default `false`.
+	/// `MinimizerOptions.legacy_filters` or the
+	/// `MUSEPI_MINIMIZER_LEGACY_FILTERS` env var; default `false`.
 	pub legacy_filters_active: bool,
 }
 
