@@ -226,7 +226,7 @@ export interface TranscriptProps {
 	 *  click re-expands the run. false renders every tool card 现状逐条. */
 	toolCallSummary?: boolean;
 	/** Pin the current turn's prompt to one line at the top while the turn
-	 *  scrolls (openchamber's `stickyUserHeader`). Default on. */
+	 *  scrolls (`stickyUserHeader`). Default on. */
 	stickyUserPrompt?: boolean;
 	/** TUI display.smoothStreaming parity: false renders streamed text
 	 *  without the character-level reveal (also applied via the
@@ -1861,9 +1861,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	}, [folds, foldOpenOf, toolRuns, runsExpanded]);
 
 	// ── Synthetic timeline rows ──────────────────────────────────────────
-	// A wire entry is not a row. openchamber's TimelineRow union and the Kimi
-	// client's TurnFold both give the fold header a row of its own, and their
-	// tools carry their result state instead of splitting into a second entry.
+	// A wire entry is not a row. The fold header gets a row of its own, and its
+	// tool rows carry their result state instead of splitting into a second entry.
 	// Here the list is built the same way from entry indexes:
 	//
 	//   fold row   — 活动 header (always present; never hosted by a content row)
@@ -2699,7 +2698,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	};
 
 	// One row of the synthetic list: the fold header and the run summary are rows
-	// of their own (openchamber/Kimi model), so no content row ever hosts them.
+	// of their own, so no content row ever hosts them.
 	const renderRow = (row: RenderRow): ReactNode => {
 		if (row.kind === "fold") {
 			return (

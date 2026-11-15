@@ -1,5 +1,5 @@
 /**
- * Completed-round collapse (craft-agents TurnCard parity): a "round" is a
+ * Completed-round collapse: a "round" is a
  * user message through the final assistant reply of that turn. When a round
  * is complete (its final assistant message has a frozen round duration) and
  * is NOT the live tail, the working entries between user and final reply —
@@ -88,7 +88,7 @@ export interface RoundFold {
 	/** Subagent (`task`) results inside the span — the Kimi client reports
 	 *  "used N subagents" rather than folding them into a tool count. */
 	subagentCount: number;
-	/** File-change aggregate inside the span (ZCode 更改 chip parity): files
+	/** File-change aggregate inside the span (更改 chip): files
 	 *  touched by edit/apply_patch tool results + summed diff lines. Zero
 	 *  when the round edited nothing — the header omits the chip then. */
 	filesChanged: number;
