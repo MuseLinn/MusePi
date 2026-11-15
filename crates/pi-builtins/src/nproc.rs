@@ -35,8 +35,8 @@ impl Utility for Nproc {
 			None => 0,
 		};
 
-		let limit = match host.var("MUSEPI_THREAD_LIMIT") {
-			// Caps the count the way GNU nproc's thread limit does. A parse
+		let limit = match host.var("OMP_THREAD_LIMIT") {
+			// OpenMP's standard limit variable; GNU nproc honors it too. A parse
 			// failure or zero means no limit.
 			Some(threads) => match threads.parse() {
 				Ok(0) | Err(_) => usize::MAX,
@@ -48,10 +48,11 @@ impl Utility for Nproc {
 		let mut cores = if self.matches.get_flag(OPT_ALL) {
 			num_cpus_all()
 		} else {
-			match host.var("MUSEPI_NUM_THREADS") {
+			match host.var("OMP_NUM_THREADS") {
 				Some(threads) => {
-					// MUSEPI_NUM_THREADS may be "x,y,z"; GNU nproc uses only the
-					// first value. A parse failure or zero falls back to CPU detection.
+					// OpenMP's standard count variable; it may be "x,y,z" and GNU
+					// nproc uses only the first value. A parse failure or zero
+					// falls back to CPU detection.
 					match threads.split_terminator(',').next() {
 						None => available_parallelism(),
 						Some(value) => match value.trim().parse() {
@@ -83,8 +84,8 @@ fn app() -> Command {
 	Command::new("nproc")
 		.version("0.8.0")
 		.about(
-			"Print the number of cores available to the current process.\nIf the MUSEPI_NUM_THREADS or \
-			 MUSEPI_THREAD_LIMIT environment variables are set, then\nthey will determine the minimum \
+			"Print the number of cores available to the current process.\nIf the OMP_NUM_THREADS or \
+			 OMP_THREAD_LIMIT environment variables are set, then\nthey will determine the minimum \
 			 and maximum returned value respectively.",
 		)
 		.override_usage(format_usage("nproc [OPTIONS]..."))
@@ -152,14 +153,14 @@ mod tests {
 
 	#[test]
 	fn host_num_threads_forces_count() {
-		let (code, capture) = run_in(&[("MUSEPI_NUM_THREADS", "3")], &[]);
+		let (code, capture) = run_in(&[("OMP_NUM_THREADS", "3")], &[]);
 		assert_eq!((code, capture.out(), capture.err()), (0, "3\n".to_string(), String::new()));
 	}
 
 	#[test]
-	fn musepi_thread_limit_caps_num_threads() {
+	fn thread_limit_caps_num_threads() {
 		let (code, capture) = run_in(
-			&[("MUSEPI_NUM_THREADS", "64"), ("MUSEPI_THREAD_LIMIT", "2")],
+			&[("OMP_NUM_THREADS", "64"), ("OMP_THREAD_LIMIT", "2")],
 			&[],
 		);
 		assert_eq!((code, capture.out(), capture.err()), (0, "2\n".to_string(), String::new()));
@@ -167,7 +168,7 @@ mod tests {
 
 	#[test]
 	fn all_prints_positive_integer_and_ignores_num_threads() {
-		let (code, capture) = run_in(&[("MUSEPI_NUM_THREADS", "0")], &["--all"]);
+		let (code, capture) = run_in(&[("OMP_NUM_THREADS", "0")], &["--all"]);
 		assert_eq!(code, 0);
 		assert_eq!(capture.err(), "");
 		let n: usize = capture.out().trim_end().parse().expect("--all output is an integer");
@@ -178,9 +179,9 @@ mod tests {
 	fn process_environment_is_not_consulted() {
 		// A variable present only in the host process must not affect the shell
 		// builtin, whose exported environment lives on `Host`.
-		unsafe { std::env::set_var("MUSEPI_NUM_THREADS", "1234") };
+		unsafe { std::env::set_var("OMP_NUM_THREADS", "1234") };
 		let (code, capture) = run_in(&[], &[]);
-		unsafe { std::env::remove_var("MUSEPI_NUM_THREADS") };
+		unsafe { std::env::remove_var("OMP_NUM_THREADS") };
 		assert_eq!((code, capture.err()), (0, String::new()));
 		assert_ne!(capture.out(), "1234\n");
 		let n: usize = capture.out().trim_end().parse().expect("output is an integer");
@@ -189,10 +190,10 @@ mod tests {
 
 	#[test]
 	fn ignore_subtracts_and_floors_at_one() {
-		let (code, capture) = run_in(&[("MUSEPI_NUM_THREADS", "8")], &["--ignore=3"]);
+		let (code, capture) = run_in(&[("OMP_NUM_THREADS", "8")], &["--ignore=3"]);
 		assert_eq!((code, capture.out()), (0, "5\n".to_string()));
 
-		let (code, capture) = run_in(&[("MUSEPI_NUM_THREADS", "2")], &["--ignore=5"]);
+		let (code, capture) = run_in(&[("OMP_NUM_THREADS", "2")], &["--ignore=5"]);
 		assert_eq!((code, capture.out()), (0, "1\n".to_string()));
 	}
 
