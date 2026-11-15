@@ -307,7 +307,7 @@ function CompanionAvatar({ state, size }: { state: OrbState; size: number }): Re
  *  compact orb state (settings previews, older hosts). Aora renders from
  *  `renderSignals` whenever real signals are present; this fallback keeps the
  *  preset legible instead of faking states Aora cannot honestly receive. */
-const ORB_TO_SIGNALS: Record<OrbState, AgentSignals> = {
+export const ORB_TO_SIGNALS: Record<OrbState, AgentSignals> = {
 	listening: { phase: "idle" },
 	working: { phase: "tool", activity: "working" },
 	searching: { phase: "tool", activity: "searching" },

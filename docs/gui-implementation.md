@@ -48,6 +48,7 @@ Naming rules:
 - `@aora-bot/react` 0.2.0 (which pulls `@aora-bot/engine`) is installed in `apps/desktop` and bundled locally like any other dependency. There is no runtime CDN script and no avatar API or hosted character service, so the avatar renders offline inside the desktop shell.
 - It is a renderer, not a second state source: it consumes `AgentSignals` and projects them with `aoraStateFromSignals(signals, "avatar")`. The `avatar` surface is the compact subset from §0, so states that only make sense on `assistant` or `workbench` collapse before they reach the slot. Never hand the provider another renderer's state enum.
 - The upstream attribution lives in `apps/desktop/README.md` ("Powered by Aora Bot") as the Aora Bot License 1.1 requires; keep it when the dependency is updated.
+- Gestures and state wiring: the engine gets `followPointer` (slots of 32px and up, so the eyes track the cursor) and `emphasis` on hover; `AgentAvatar` layers hover/poke onto the live signals (poke holds 1.5s, only presets with a signal renderer take the click — the pet preset keeps its own reaction). `ChatView` supplies `now` (15s tick, driving the 30s/90s/5min bored/drowsy/sleeping ladder) and the turn outcome (on the working→idle edge: `celebrate` for success, `alerting` for `stopReason=error`, held 4s). The avatar gate admits `bored/drowsy/sleeping` and `surprised`, and maps `orbit` to `working`.
 
 ## 0c. Multi-session companion activity
 

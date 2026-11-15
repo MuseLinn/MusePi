@@ -48,6 +48,7 @@ lang: zh-CN
 - `@aora-bot/react` 0.2.0（会带入 `@aora-bot/engine`）装在 `apps/desktop`，与其他依赖一样本地打包。运行时不加载 CDN 脚本，也不调用头像 API 或托管角色服务，所以在桌面壳内离线也能渲染。
 - 它是 renderer，不是第二个状态源：消费 `AgentSignals`，用 `aoraStateFromSignals(signals, "avatar")` 投影。`avatar` surface 就是 §0 里的紧凑子集，只对 `assistant` 或 `workbench` 有意义的状态会在进入槽位前收敛。不要把别的 renderer 的状态枚举交给这个 provider。
 - 上游署名在 `apps/desktop/README.md`（“Powered by Aora Bot”），这是 Aora Bot License 1.1 的要求；升级依赖时保留它。
+- 交互与状态接线：引擎侧 `followPointer`（≥32px 槽位）让眼睛跟随鼠标、悬停传 `emphasis`；`AgentAvatar` 自己把 hover/poke 叠加到实时 signals 上（poke 维持 1.5s，只有带信号渲染器的预置才接管点击，宠物预置保留自己的反应）。`ChatView` 传入 `now`（15s 一次，驱动 30s/90s/5min 的 bored/drowsy/sleeping）与回合结果（`working→idle` 边沿：成功 `celebrate`、`stopReason=error` 为 `alerting`，保持 4s）；头像门禁允许 `bored/drowsy/sleeping`、`surprised`，并把 `orbit` 映射为 `working`。
 
 ## 0c. 多会话伙伴活动
 

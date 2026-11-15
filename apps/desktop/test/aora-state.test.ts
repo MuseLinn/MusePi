@@ -131,3 +131,32 @@ describe("aoraStateFromSignals — priority and surface", () => {
 		expect(aoraStateFromSignals({})).toBe("idle");
 	});
 });
+
+describe("avatar interaction wiring", () => {
+	test("a poke reaches the avatar surface as a reaction", () => {
+		expect(aoraStateFromSignals({ interaction: "poke" }, "avatar")).toBe("surprised");
+		expect(aoraStateFromSignals({ interaction: "hover" }, "avatar")).toBe("curious");
+	});
+
+	test("several subagents stay 'working' in a small slot", () => {
+		expect(
+			aoraStateFromSignals(
+				{ phase: "tool", subagents: { running: 2, parked: 0, completed: 0, failed: 0 } },
+				"avatar",
+			),
+		).toBe("working");
+	});
+
+	test("the idle ladder is visible on the avatar too", () => {
+		expect(aoraStateFromSignals({ idleMs: BORED_AFTER_MS }, "avatar")).toBe("bored");
+		expect(aoraStateFromSignals({ idleMs: DROWSY_AFTER_MS }, "avatar")).toBe("drowsy");
+		expect(aoraStateFromSignals({ idleMs: SLEEPING_AFTER_MS }, "avatar")).toBe("sleeping");
+	});
+
+	test("a finished turn celebrates, a failed one alerts", () => {
+		expect(aoraStateFromSignals({ outcome: { kind: "success", at: 0 }, justFinished: true }, "avatar")).toBe(
+			"celebrate",
+		);
+		expect(aoraStateFromSignals({ outcome: { kind: "failure", at: 0 } }, "avatar")).toBe("alerting");
+	});
+});

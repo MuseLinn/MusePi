@@ -1,7 +1,7 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { AgentSignals } from "../lib/agent-signals";
 import type { OrbState } from "../vendor/thinking-orbs";
-import { AVATAR_STORAGE_KEY, avatarPreset } from "./avatar-presets";
+import { AVATAR_STORAGE_KEY, avatarPreset, ORB_TO_SIGNALS } from "./avatar-presets";
 
 /**
  * Agent avatar — a thinking-orb by default whose animation reflects the
@@ -21,6 +21,9 @@ import { AVATAR_STORAGE_KEY, avatarPreset } from "./avatar-presets";
  */
 const IDLE_CYCLE: OrbState[] = ["listening", "searching", "shaping"];
 const CYCLE_MS = 4000;
+/** How long a click reaction holds before the live mood shows through again
+ *  (the desktop pet's own reaction uses the same 1.5s). */
+const AVATAR_POKE_HOLD_MS = 1500;
 
 export function AgentAvatar({
 	state = "working",
@@ -60,6 +63,24 @@ export function AgentAvatar({
 			window.removeEventListener("storage", on);
 		};
 	}, []);
+	// Hover/poke are transient gestures, not session facts: they live in local
+	// state for the hold window and then fall back to the live signals. Aora's
+	// engine reads them as interaction signals (hover → emphasis + curious,
+	// poke → surprised); other presets ignore them.
+	const [hovered, setHovered] = useState(false);
+	const [poked, setPoked] = useState(false);
+	const pokeTimer = useRef<number | null>(null);
+	useEffect(
+		() => () => {
+			if (pokeTimer.current !== null) window.clearTimeout(pokeTimer.current);
+		},
+		[],
+	);
+	const poke = (): void => {
+		setPoked(true);
+		if (pokeTimer.current !== null) window.clearTimeout(pokeTimer.current);
+		pokeTimer.current = window.setTimeout(() => setPoked(false), AVATAR_POKE_HOLD_MS);
+	};
 	const [cycleIndex, setCycleIndex] = useState(0);
 	let motionOff = false;
 	try {
@@ -92,10 +113,29 @@ export function AgentAvatar({
 	// Signal-driven presets (Aora) render the richer contract when the call
 	// site has it; every other preset, and every legacy call site, keeps the
 	// compact OrbState path.
-	const draw = (s: OrbState): ReactNode =>
-		signals && preset.renderSignals ? preset.renderSignals(signals, size, seed) : preset.render(s, size, seed);
+	const draw = (s: OrbState): ReactNode => {
+		if (!preset.renderSignals) return preset.render(s, size, seed);
+		// No live signals (toolbar, previews) still renders honestly: the compact
+		// orb state is the base, the gesture is layered on top.
+		const base = signals ?? ORB_TO_SIGNALS[s];
+		const merged: AgentSignals = poked
+			? { ...base, interaction: "poke" }
+			: hovered
+				? { ...base, interaction: "hover" }
+				: base;
+		return preset.renderSignals(merged, size, seed);
+	};
 	return (
-		<span className="gui-agent-avatar" role="img" aria-label={`agent ${state}`}>
+		<span
+			className="gui-agent-avatar"
+			role="img"
+			aria-label={`agent ${state}`}
+			onPointerEnter={() => setHovered(true)}
+			onPointerLeave={() => setHovered(false)}
+			// Only presets with a signal renderer (Aora) take the poke here; the
+			// pet preset owns its own click reaction inside its art box.
+			onClick={preset.renderSignals ? poke : undefined}
+		>
 			{cycling && presetId === "orbs" ? (
 				<span className="gui-agent-avatar-cycle">
 					{IDLE_CYCLE.map(s => (

@@ -164,6 +164,11 @@ const WORKBENCH_STATES = new Set<AoraState>([
 /** Avatar slots are small: keep the reading compact, not the full 44. */
 const AVATAR_STATES = new Set<AoraState>([
 	"idle",
+	// Presence ladder: the same 30s/90s/5min thresholds the desktop pet uses.
+	// A chat avatar that has not been prompted for five minutes is honestly asleep.
+	"bored",
+	"drowsy",
+	"sleeping",
 	"listening",
 	"thinking",
 	"searching",
@@ -180,6 +185,9 @@ const AVATAR_STATES = new Set<AoraState>([
 	"celebrate",
 	"confused",
 	"curious",
+	// A poke reaction has to land somewhere in a small slot; the engine draws it
+	// at 32/64px without turning into a cartoon.
+	"surprised",
 	"alerting",
 	"notifying",
 ]);
@@ -339,6 +347,9 @@ function gateForSurface(state: AoraState, surface: AoraSurface): AoraState {
 			case "reading":
 			case "writing":
 			case "composing":
+			// Several subagents in flight is still work from the avatar's point of
+			// view (a small slot cannot draw an orbit).
+			case "orbit":
 				return "working";
 			default:
 				return "idle";

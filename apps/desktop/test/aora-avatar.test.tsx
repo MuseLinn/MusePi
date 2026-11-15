@@ -63,3 +63,21 @@ describe("AoraAvatar", () => {
 		expect(container.querySelector(".aora-mark")).not.toBeNull();
 	});
 });
+
+describe("AgentAvatar gestures", () => {
+	it("turns a click into the poke reaction on the Aora preset", async () => {
+		localStorage.setItem("musepi-gui-avatar", "aora");
+		try {
+			const { AgentAvatar } = await import("../src/components/AgentAvatar");
+			const container = await mount(<AgentAvatar size={32} />);
+			const avatar = container.querySelector(".gui-agent-avatar");
+			expect(avatar).not.toBeNull();
+			await act(async () => {
+				avatar?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			});
+			expect(container.querySelector("[data-aora-state]")?.getAttribute("data-aora-state")).toBe("surprised");
+		} finally {
+			localStorage.removeItem("musepi-gui-avatar");
+		}
+	});
+});

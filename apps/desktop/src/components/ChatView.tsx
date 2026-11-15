@@ -27,7 +27,7 @@ import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pushActionToast } from "../lib/action-toast";
-import { agentSignalsFromSnapshot } from "../lib/agent-signals";
+import { type AgentOutcome, agentSignalsFromSnapshot } from "../lib/agent-signals";
 import { browserPanelDescriptor } from "../lib/browser-panel-tabs";
 import { companionMoodFromSession, companionStateFromSignals, thinkingOrbStateFromSession } from "../lib/companion";
 import type { ComposerAttachApi } from "../lib/composer-attach";
@@ -883,6 +883,48 @@ export function ChatView({
 	// tool approvals pin `waiting` (the "paused for you" wave) — shared
 	// helper with the header so both avatars tell the same story.
 	const orb = thinkingOrbStateFromSession(snap);
+	// Idle lifecycle clock: the avatar's drowsy/bored/sleeping ladder is measured
+	// in tens of seconds, so one 15s tick is enough — a 1s timer would re-render
+	// the transcript for nothing.
+	const [nowMs, setNowMs] = useState(() => Date.now());
+	useEffect(() => {
+		const id = window.setInterval(() => setNowMs(Date.now()), 15_000);
+		return () => window.clearInterval(id);
+	}, []);
+	// Turn outcome: the working→idle edge is the only moment the avatar can
+	// celebrate or alert. Held briefly, then the live facts win again; a new
+	// turn clears it at once.
+	const [turnOutcome, setTurnOutcome] = useState<AgentOutcome | null>(null);
+	const wasWorkingRef = useRef(false);
+	useEffect(() => {
+		const workingNow = snap?.working === true || snap?.streaming === true;
+		if (workingNow) {
+			setTurnOutcome(null);
+		} else if (wasWorkingRef.current) {
+			const lastAssistant = [...(snap?.entries ?? [])]
+				.reverse()
+				.find(entry => entry.type === "message" && entry.message.role === "assistant");
+			let failed = false;
+			if (lastAssistant?.type === "message" && lastAssistant.message.role === "assistant") {
+				failed = lastAssistant.message.stopReason === "error";
+			}
+			setTurnOutcome({ kind: failed ? "failure" : "success", at: Date.now() });
+		}
+		wasWorkingRef.current = workingNow;
+	}, [snap?.working, snap?.streaming, snap?.entries]);
+	useEffect(() => {
+		if (!turnOutcome) return;
+		const timer = window.setTimeout(() => setTurnOutcome(null), 4_000);
+		return () => window.clearTimeout(timer);
+	}, [turnOutcome]);
+	const agentSignals = useMemo(
+		() =>
+			agentSignalsFromSnapshot(snap, {
+				now: nowMs,
+				...(turnOutcome ? { outcome: turnOutcome, justFinished: true } : {}),
+			}),
+		[snap, nowMs, turnOutcome],
+	);
 	// Avatar display toggle lives in Settings → appearance (musepi-gui-avatars).
 	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
 	// Resizable terminal dock (drag the top edge).
@@ -3234,7 +3276,7 @@ export function ChatView({
 																			<AgentAvatar
 																				state={orb}
 																				size={64}
-																				signals={agentSignalsFromSnapshot(snap)}
+																				signals={agentSignals}
 																				seed={store.sessionId}
 																			/>
 																		) : (
@@ -3564,7 +3606,7 @@ export function ChatView({
 														streaming: snap?.streaming ?? false,
 														hasApprovals: (snap?.approvals.length ?? 0) > 0,
 													})}
-													companionState={companionStateFromSignals(agentSignalsFromSnapshot(snap))}
+													companionState={companionStateFromSignals(agentSignals)}
 													onSend={sendAndCloseJump}
 													onStop={() => void handleStop()}
 													onOpenBackgroundJobs={() => {

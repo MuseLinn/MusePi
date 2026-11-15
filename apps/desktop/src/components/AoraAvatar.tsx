@@ -35,6 +35,10 @@ export function AoraAvatar({ signals, seed = "musepi", size, still, className }:
 				seed={seed}
 				autoPause
 				paused={still}
+				/* Eyes follow the pointer from 32px up; the chat avatar is 64 and
+				 * the header one is 20, where a 2px pupil would read as noise. */
+				followPointer={size >= 32}
+				emphasis={signals?.interaction === "hover"}
 				antics={false}
 			/>
 		</span>
