@@ -577,6 +577,20 @@ export function ChatView({
 	// summarize into one line per run. Same companion-event pattern as the
 	// round-fold default (localStorage events do not fire in the same
 	// document) so flipping the toggle re-renders the live transcript.
+	const [stickyUserPrompt, setStickyUserPrompt] = useState(() => {
+		try {
+			return (localStorage.getItem("musepi-gui-chat-stickyprompt") ?? "1") !== "0";
+		} catch {
+			return true;
+		}
+	});
+	useEffect(() => {
+		const onChanged = (event: Event): void => {
+			setStickyUserPrompt((event as CustomEvent<boolean>).detail);
+		};
+		window.addEventListener("musepi-stickyprompt-changed", onChanged);
+		return () => window.removeEventListener("musepi-stickyprompt-changed", onChanged);
+	}, []);
 	const [toolCallSummary, setToolCallSummary] = useState(() => {
 		try {
 			return (localStorage.getItem("musepi-gui-chat-toolsummary") ?? "1") !== "0";
@@ -3119,6 +3133,7 @@ export function ChatView({
 																	})()}
 																	defaultRoundFoldExpanded={defaultRoundFoldExpanded}
 																	toolCallSummary={toolCallSummary}
+																	stickyUserPrompt={stickyUserPrompt}
 																	/* TUI display-settings parity: the daemon
 																	 * settings drive the transcript (unflagged
 																	 * from tuiOnly 2026-08-12). */

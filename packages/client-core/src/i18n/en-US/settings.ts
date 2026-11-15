@@ -1926,7 +1926,10 @@ export const settings = {
 		"Show recently opened sessions as tabs in the window header; drag to reorder, and closing a tab never deletes the session",
 	"settings.toolCallSummary": "Tool call summary",
 	"settings.toolCallSummaryDescription":
-		"While answering, consecutive tool calls summarize into a one-line abstract; click it to reveal the full process.",
+		"Consecutive tool calls summarize into a one-line abstract; cards, pictures and visual output are never folded into it. Click the summary to reveal the full process.",
+	"settings.stickyPrompt": "Pin the current prompt",
+	"settings.stickyPromptDescription":
+		"While a turn scrolls, keep its prompt on one pinned line at the top; click it to jump back to the message.",
 	"settings.collapseLongUserMessagesDescription":
 		"Overly long messages collapse to two lines by default; click to expand",
 	"settings.showReasoningTraces": "Show reasoning traces",

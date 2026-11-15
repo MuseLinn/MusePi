@@ -225,6 +225,9 @@ export interface TranscriptProps {
 	 *  (`读取了 3 个文件 · 运行了 2 个命令`, round-collapse.buildToolRuns);
 	 *  click re-expands the run. false renders every tool card 现状逐条. */
 	toolCallSummary?: boolean;
+	/** Pin the current turn's prompt to one line at the top while the turn
+	 *  scrolls (openchamber's `stickyUserHeader`). Default on. */
+	stickyUserPrompt?: boolean;
 	/** TUI display.smoothStreaming parity: false renders streamed text
 	 *  without the character-level reveal (also applied via the
 	 *  `gui-chat-no-smooth` html class in the desktop GUI). */
@@ -1336,6 +1339,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		collapseLongUserMessages = false,
 		defaultRoundFoldExpanded = false,
 		toolCallSummary = true,
+		stickyUserPrompt = true,
 		smoothStreaming = true,
 		taskCardStyle = "swarm",
 		hideToolActivity = false,
@@ -2011,6 +2015,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// the scroller's live geometry — the virtualizer re-renders on every scroll
 	// step, so this memo tracks scrolling without its own scroll listener.
 	const stickyUser = useMemo(() => {
+		if (!stickyUserPrompt) return null;
 		if (!virtualEnabled || scrollerEl === null) return null;
 		const listRange = visibleEntryRange(virtualItems, scrollerEl.scrollTop, scrollerEl.clientHeight);
 		if (listRange === null) return null;
@@ -2029,7 +2034,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// sense — pinning it would offer a jump into hidden content.
 		if (candidate !== null && folding && candidate.index < firstCompactionIdx) return null;
 		return candidate;
-	}, [entries, firstCompactionIdx, folding, renderRows, virtualEnabled, scrollerEl, virtualItems]);
+	}, [entries, firstCompactionIdx, folding, renderRows, stickyUserPrompt, virtualEnabled, scrollerEl, virtualItems]);
 
 	// Top sentinel (M1.11): entering the pane pages the next older chunk from
 	// session.history (daemon tail is 200; pages are 500 entries).

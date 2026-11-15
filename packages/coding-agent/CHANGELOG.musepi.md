@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **设置：「吸顶当前提问」可关闭**：会话滚动时把本回合提问固定在顶部的那一行，现在在「设置 → 会话 → 消息渲染」里可以关掉（默认开启，点击仍可跳回原消息）；同时把「工具调用汇总」的说明写清楚——卡片、图片与可视化产物不会被汇总收起。
+  - EN: The pinned current-prompt line can be turned off under Settings → Sessions → Message rendering (it stays on by default, and clicking it still jumps back to the message). The tool-call summary description now says that cards, pictures and visual output are never folded into it.
+
 - **桌面操作覆盖层跟随主题强调色**：光标、命中环、目标框、状态点与胶囊描边改用当前界面主题的 accent（主进程在开启覆盖层时读取渲染器的解析值），主题不可用时回退到内置绿色。
   - EN: The desktop-operation overlay follows the interface accent: cursor, hit ring, target frame, status dot and capsule outline use the theme's resolved accent, read from the renderer when the overlay turns on, with the built-in green as fallback.
 

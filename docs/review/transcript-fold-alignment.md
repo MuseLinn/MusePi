@@ -134,3 +134,20 @@ Me(f, D => {
 - **P4 偏差（保留 off-screen 瞬收）**：`useHoldAnchor` 里"折叠发生在视口上方时临时 mute transition 再钉一次"的做法**保留**。理由：折叠在视口外时用户看不到动画，瞬收 + 一次 scrollTop 钉住比 220ms 的补偿窗口更稳；若移除 mute，锚点 delta 在首帧近似为 0，反而失去作用。也就是说：可视区内的折叠走动画 + 补偿窗口，视口外的折叠直接落位。
 - **P1 收口（合成行）**：虚拟列表的单元从 wire entry 换成合成行 `RenderRow = fold | run | entry`——`活动` 头与工具段头各自成行，配对的 `toolResult` 投影掉，卡片仍在调用行上渲染。与 openchamber 的 `TimelineRow` 联合体、Kimi 的 `tf-head`/`ar-head` 独立头同构。此前「结果行恰好是头宿主」的白名单例外已删除：头不依赖任何内容行存在。
 - **P4 真机验证通过**：默认 profile 下打开会话、滚到折叠处连续开合 6 次，`scrollTop` 漂移 0px（验收阈值 40px），`aria-expanded` 每次正确翻转。隔离 `--user-data-dir` 会在新 profile 上触发首次启动引导，导致会话正文不挂载（与本改动无关），验证应使用默认 profile；共享 daemon 端口被占时用 `MUSEPI_GUI_DAEMON_PORT`/`MUSEPI_DAEMON_DIR` 隔离。
+
+## 9. 设置项对齐（三层折叠 ↔ 开关）
+
+| 折叠层 | 我们的开关 | openchamber | Kimi 客户端 |
+|---|---|---|---|
+| 回合折叠 | 消息自动折叠（`musepi-gui-chat-roundfold`） | 无全局开关，按 turn 记忆展开态（`expandedTurns`） | TurnFold 恒定，按 turn 记忆 |
+| 工具段汇总 | 工具调用汇总（`musepi-gui-chat-toolsummary`） | 无独立层（工作态只显示最新 N 行） | `kimi-web.activity-run-folding` 开关 |
+| 思考过程 | 显示推理轨迹（`musepi-gui-chat-thinking`） | `showReasoningTraces`（默认开） | 有（同一层） |
+| 吸顶提问 | **本轮新增**「吸顶当前提问」（`musepi-gui-chat-stickyprompt`，默认开） | `stickyUserHeader`（默认关） | 无独立开关 |
+| 隐藏工具活动 | `display.hideToolActivity`（与 TUI 共用） | 无 | 无 |
+
+结论与取舍：
+
+- **新增**吸顶提问开关——openchamber 有对应设置，我们此前是硬编码常开；默认保持「开」以维持现状，给不需要吸顶的读者一个出口。
+- **不改**回合折叠/工具汇总/推理三个开关的语义，只把「工具调用汇总」的描述补上「卡片、图片与可视化产物不会被汇总收起」，与新行为一致。
+- `display.hideToolActivity` 继续保留：它是 TUI 与 GUI 共用的显示设置（`display.*`），GUI 里与折叠有重叠但不等价（它在展开的折叠里也隐藏过程），合并会破坏 TUI 契约。
+- 合成行本身不引入新设置（内部实现）。

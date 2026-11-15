@@ -282,6 +282,12 @@ export function ChatSection(): ReactNode {
 					onChange={on => window.dispatchEvent(new CustomEvent("musepi-toolsummary-changed", { detail: on }))}
 				/>
 				<PrefToggle
+					label={t("settings.stickyPrompt")}
+					description={t("settings.stickyPromptDescription")}
+					storageKey="musepi-gui-chat-stickyprompt"
+					onChange={on => window.dispatchEvent(new CustomEvent("musepi-stickyprompt-changed", { detail: on }))}
+				/>
+				<PrefToggle
 					label={t("settings.showReasoningTraces")}
 					description={t("settings.showReasoningTracesDescription")}
 					storageKey="musepi-gui-chat-thinking"
