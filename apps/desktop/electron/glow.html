@@ -236,8 +236,20 @@
 			// The overlay is a plain window (no guest-client bundle): carry the
 			// main window's locale for the badge text. Theme is baked into
 			// the accent already (works on both schemes), nothing to do.
+			const localeKey = "musepi.collab.locale";
+			const readLocale = () => {
+				try {
+					return (
+						localStorage.getItem(localeKey) ||
+						localStorage.getItem("omp.collab.locale") ||
+						"zh-CN"
+					);
+				} catch {
+					return "zh-CN";
+				}
+			};
 			try {
-				if ((localStorage.getItem("omp.collab.locale") || "zh-CN").startsWith("en")) {
+				if (readLocale().startsWith("en")) {
 					document.getElementById("label").textContent = "AI is controlling the desktop";
 				}
 			} catch {
@@ -246,12 +258,7 @@
 			// Computer-input target highlighting. Coordinates arrive already
 			// rebased to this window's viewport (main process distributes by
 			// display and subtracts the window origin).
-			let english = false;
-			try {
-				english = (localStorage.getItem("omp.collab.locale") || "zh-CN").startsWith("en");
-			} catch {
-				/* isolated page */
-			}
+			const english = readLocale().startsWith("en");
 			const KIND_LABELS = english
 				? {
 						click: "Click",

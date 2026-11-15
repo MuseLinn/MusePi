@@ -602,7 +602,7 @@ impl OverlayHandle {
 		let (tx, rx) = flume::unbounded::<OverlayCommand>();
 		let (ready_tx, ready_rx) = flume::bounded::<CoreResult<usize>>(1);
 		let thread = thread::Builder::new()
-			.name("omp-cu-overlay".into())
+			.name("musepi-cu-overlay".into())
 			.spawn(move || overlay_thread(rx, ready_tx))
 			.map_err(|error| {
 				DesktopError::internal(format!("overlay failed to start its UI thread: {error}"))
