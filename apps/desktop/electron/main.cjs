@@ -2244,9 +2244,20 @@ ipcMain.handle("pet-context-menu", () => {
 // the agent's own background input keeps working.
 let glowWindows = new Set();
 let glowActive = false;
+/** Accent passed by the renderer; the overlay falls back to its own green. */
+let glowAccent = null;
 
-function setComputerGlow(on) {
-	if (on === glowActive) return;
+function sendGlowTheme(win) {
+	if (!glowAccent || win.isDestroyed()) return;
+	win.webContents.send("glow:theme", glowAccent);
+}
+
+function setComputerGlow(on, accent) {
+	if (typeof accent === "string" && accent.trim()) glowAccent = accent;
+	if (on === glowActive) {
+		for (const w of glowWindows) sendGlowTheme(w);
+		return;
+	}
 	glowActive = on;
 	if (on) {
 		for (const d of screen.getAllDisplays()) {
@@ -2286,6 +2297,7 @@ function setComputerGlow(on) {
 			// WDA_EXCLUDEFROMCAPTURE, macOS to NSWindowSharingNone.
 			w.setContentProtection(true);
 			w.loadFile(path.join(__dirname, "glow.html"));
+			w.webContents.once("did-finish-load", () => sendGlowTheme(w));
 			w.showInactive();
 			glowWindows.add(w);
 			w.on("closed", () => glowWindows.delete(w));
@@ -2297,8 +2309,21 @@ function setComputerGlow(on) {
 }
 
 // Main-window renderer toggles the glow when a computer tool starts/ends.
-ipcMain.handle("computer-glow", (_event, on) => {
-	setComputerGlow(on === true);
+ipcMain.handle("computer-glow", async (event, on, accent) => {
+	// The renderer owns the theme; read its resolved accent when it was not
+	// passed explicitly, so the overlay matches the app without another channel.
+	let resolved = typeof accent === "string" && accent.trim() ? accent : null;
+	if (!resolved && on === true) {
+		try {
+			const value = await event.sender.executeJavaScript(
+				`getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()`,
+			);
+			if (typeof value === "string" && value.length > 0) resolved = value;
+		} catch {
+			// Keep the overlay's fallback accent.
+		}
+	}
+	setComputerGlow(on === true, resolved);
 	return { ok: true };
 });
 // Computer input action → the overlay window covering the target display,

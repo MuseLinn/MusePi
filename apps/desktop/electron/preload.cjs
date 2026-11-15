@@ -178,7 +178,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	setPetRect: (rect) => ipcRenderer.invoke("pet-set-rect", rect),
 	/** Computer-use overlay glow: ring the displays while the agent
 	 *  drives the desktop (`computer` tool running). */
-	computerGlow: (on) => ipcRenderer.invoke("computer-glow", Boolean(on)),
+	computerGlow: (on, accent) => ipcRenderer.invoke("computer-glow", Boolean(on), accent ?? null),
 	/** Computer-use overlay target: highlight one desktop input action
 	 *  (window/element frame + action point) on the glow overlay. */
 	glowTarget: (event) => ipcRenderer.invoke("glow-target", event),

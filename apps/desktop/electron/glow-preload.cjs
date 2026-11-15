@@ -12,4 +12,10 @@ contextBridge.exposeInMainWorld("glowBridge", {
 		ipcRenderer.on("glow:target", listener);
 		return () => ipcRenderer.removeListener("glow:target", listener);
 	},
+	/** Accent color of the app theme; the overlay recolors itself when it changes. */
+	onTheme(callback) {
+		const listener = (_event, accent) => callback(accent);
+		ipcRenderer.on("glow:theme", listener);
+		return () => ipcRenderer.removeListener("glow:theme", listener);
+	},
 });

@@ -5,6 +5,11 @@
 		<meta name="color-scheme" content="light dark" />
 		<title>MusePi Glow</title>
 		<style>
+			:root {
+				/* Overridden at runtime with the app's accent; the fallback keeps
+				 * the overlay legible when the theme is unavailable. */
+				--glow-accent: oklch(0.62 0.16 162);
+			}
 			/* Computer-use glow overlay: pure visual layer. The window is
 			 * click-through (setIgnoreMouseEvents forward) so this never
 			 * blocks the agent's own input; body keeps pointer-events off
@@ -24,10 +29,10 @@
 				position: fixed;
 				inset: 0;
 				background:
-					radial-gradient(130% 22% at 50% 0%, oklch(0.62 0.16 162 / 0.34), transparent 72%),
-					radial-gradient(130% 22% at 50% 100%, oklch(0.62 0.16 162 / 0.34), transparent 72%),
-					radial-gradient(22% 130% at 0% 50%, oklch(0.62 0.16 162 / 0.3), transparent 72%),
-					radial-gradient(22% 130% at 100% 50%, oklch(0.62 0.16 162 / 0.3), transparent 72%);
+					radial-gradient(130% 22% at 50% 0%, color-mix(in oklch, var(--glow-accent) 34%, transparent), transparent 72%),
+					radial-gradient(130% 22% at 50% 100%, color-mix(in oklch, var(--glow-accent) 34%, transparent), transparent 72%),
+					radial-gradient(22% 130% at 0% 50%, color-mix(in oklch, var(--glow-accent) 30%, transparent), transparent 72%),
+					radial-gradient(22% 130% at 100% 50%, color-mix(in oklch, var(--glow-accent) 30%, transparent), transparent 72%);
 				animation: glow-breathe 2.4s ease-in-out infinite;
 			}
 			@keyframes glow-breathe {
@@ -52,9 +57,9 @@
 				white-space: nowrap;
 				color: #fff;
 				font: 500 13px/1 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-				background: oklch(0.3 0.05 162 / 0.92);
-				border: 1px solid oklch(0.62 0.16 162 / 0.65);
-				box-shadow: 0 6px 24px oklch(0.62 0.16 162 / 0.4), 0 0 0 4px oklch(0.62 0.16 162 / 0.12);
+				background: color-mix(in oklch, var(--glow-accent) 20%, oklch(0.16 0.01 160 / 0.94));
+				border: 1px solid color-mix(in oklch, var(--glow-accent) 65%, transparent);
+				box-shadow: 0 6px 24px color-mix(in oklch, var(--glow-accent) 40%, transparent), 0 0 0 4px color-mix(in oklch, var(--glow-accent) 12%, transparent);
 				animation: badge-in 220ms ease-out both;
 			}
 			.badge-copy {
@@ -67,7 +72,7 @@
 			.badge-detail {
 				max-width: 320px;
 				overflow: hidden;
-				color: oklch(0.88 0.03 162);
+				color: color-mix(in oklch, var(--glow-accent) 30%, white);
 				font: 500 11px/1 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 				text-overflow: ellipsis;
 				white-space: nowrap;
@@ -85,8 +90,8 @@
 				width: 8px;
 				height: 8px;
 				border-radius: 50%;
-				background: #ff8fd8;
-				box-shadow: 0 0 8px #ff8fd8;
+				background: var(--glow-accent);
+				box-shadow: 0 0 8px var(--glow-accent);
 				animation: dot-pulse 1.2s ease-in-out infinite;
 			}
 			@keyframes dot-pulse {
@@ -103,12 +108,12 @@
 			/* Computer-input target: window/element frame highlight. */
 			.target {
 				position: fixed;
-				border: 2px solid oklch(0.62 0.16 162 / 0.9);
+				border: 2px solid color-mix(in oklch, var(--glow-accent) 90%, transparent);
 				border-radius: 6px;
 				box-shadow:
-					0 0 0 3px oklch(0.62 0.16 162 / 0.25),
-					0 0 28px oklch(0.62 0.16 162 / 0.55),
-					inset 0 0 22px oklch(0.62 0.16 162 / 0.18);
+					0 0 0 3px color-mix(in oklch, var(--glow-accent) 25%, transparent),
+					0 0 28px color-mix(in oklch, var(--glow-accent) 55%, transparent),
+					inset 0 0 22px color-mix(in oklch, var(--glow-accent) 18%, transparent);
 				pointer-events: none;
 				z-index: 10;
 				animation:
@@ -119,9 +124,9 @@
 				position: absolute;
 				left: 50%;
 				transform: translateX(-50%);
-				background: oklch(0.3 0.05 162 / 0.92);
+				background: color-mix(in oklch, var(--glow-accent) 20%, oklch(0.16 0.01 160 / 0.94));
 				color: #fff;
-				border: 1px solid oklch(0.62 0.16 162 / 0.6);
+				border: 1px solid color-mix(in oklch, var(--glow-accent) 60%, transparent);
 				border-radius: 999px;
 				padding: 4px 10px;
 				font: 500 11px/1 -apple-system, "PingFang SC", sans-serif;
@@ -153,9 +158,9 @@
 				top: -2px;
 				width: 18px;
 				height: 22px;
-				background: oklch(0.62 0.16 162);
+				background: var(--glow-accent);
 				clip-path: polygon(0 0, 0 100%, 26% 76%, 44% 100%, 62% 92%, 44% 68%, 100% 62%);
-				filter: drop-shadow(0 1px 2px oklch(0 0 0 / 0.45)) drop-shadow(0 0 10px oklch(0.62 0.16 162 / 0.55));
+				filter: drop-shadow(0 1px 2px oklch(0 0 0 / 0.45)) drop-shadow(0 0 10px color-mix(in oklch, var(--glow-accent) 55%, transparent));
 			}
 			.agent-cursor::after {
 				content: "";
@@ -164,7 +169,7 @@
 				top: -9px;
 				width: 18px;
 				height: 18px;
-				border: 1px solid oklch(0.62 0.16 162 / 0.5);
+				border: 1px solid color-mix(in oklch, var(--glow-accent) 50%, transparent);
 				border-radius: 50%;
 			}
 			.agent-cursor[data-press="true"]::after {
@@ -175,9 +180,9 @@
 				left: 20px;
 				top: 16px;
 				padding: 3px 8px;
-				border: 1px solid oklch(0.62 0.16 162 / 0.6);
+				border: 1px solid color-mix(in oklch, var(--glow-accent) 60%, transparent);
 				border-radius: 999px;
-				background: oklch(0.3 0.05 162 / 0.92);
+				background: color-mix(in oklch, var(--glow-accent) 20%, oklch(0.16 0.01 160 / 0.94));
 				color: #fff;
 				font: 500 11px/1 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
 				white-space: nowrap;
@@ -189,9 +194,9 @@
 				width: 30px;
 				height: 30px;
 				margin: -15px 0 0 -15px;
-				border: 3px solid oklch(0.62 0.16 162 / 0.9);
+				border: 3px solid color-mix(in oklch, var(--glow-accent) 90%, transparent);
 				border-radius: 50%;
-				box-shadow: 0 0 16px oklch(0.62 0.16 162 / 0.6);
+				box-shadow: 0 0 16px color-mix(in oklch, var(--glow-accent) 60%, transparent);
 				pointer-events: none;
 				z-index: 10;
 				animation: ring-pulse 900ms ease-out forwards;
@@ -318,6 +323,11 @@
 					setTimeout(boot, 60);
 					return;
 				}
+				bridge.onTheme?.(accent => {
+					if (typeof accent === "string" && accent.trim().length > 0) {
+						document.documentElement.style.setProperty("--glow-accent", accent.trim());
+					}
+				});
 				bridge.onTarget(ev => {
 					const kind = KIND_LABELS[ev.kind] ?? ev.kind;
 					showDetail(ev, kind);

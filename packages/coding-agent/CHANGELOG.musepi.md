@@ -4,6 +4,15 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **桌面操作覆盖层跟随主题强调色**：光标、命中环、目标框、状态点与胶囊描边改用当前界面主题的 accent（主进程在开启覆盖层时读取渲染器的解析值），主题不可用时回退到内置绿色。
+  - EN: The desktop-operation overlay follows the interface accent: cursor, hit ring, target frame, status dot and capsule outline use the theme's resolved accent, read from the renderer when the overlay turns on, with the built-in green as fallback.
+
+- **看板不再提供成品卡**：编辑面板的「加卡片」只给生成物（`ui` 块与自定义 HTML），内置的行情、计算器、时钟等类型降为 legacy——已经摆在看板上的照常渲染，但不再能被新增。新增的板卡因此只有一条路：让 agent 生成块或页面，再放到画布上。
+  - EN: The board no longer offers canned cards. Its add-card list holds generated content only — a `ui` block or a custom HTML page — and the built-in faces (market tape, calculator, clock, …) become legacy: they keep rendering where a board already holds one but can no longer be added. New cards therefore have one route: let the agent generate a block or page and place it on the canvas.
+
+- **移动端布局修正**：面板菜单在手机上让出悬浮底栏（Settings 行此前被盖住、点不到）；文件页在 ≤839px 改为「列表 → 预览 + 返回」的单栏，目录与文件改用图标，行内的重命名/删除静默到 hover 与键盘焦点；设置页去掉与顶栏重复的标题；紧凑输入区优先完整显示模型名（上下文环收进面板，思考等级只留图标但保留无障碍名称）；文件消失时不再显示原始 ENOENT，改为用户文案。
+  - EN: Mobile layout fixes: the phone panel menu clears the floating tab bar (its Settings row was covered and untappable); the files page becomes one pane at a time below 840px — list, then preview with a back control — with icons for folders and files and row actions that stay quiet until hover or keyboard focus; settings drops the title duplicated from the header; the compact composer shows the full model name (the context ring folds away and the thinking level keeps its icon plus accessible name); a vanished file reads as user copy instead of a raw ENOENT.
+
 - **生成物可修、可引用**：画不出的 `ui` 块现在带一个「让 agent 修一下」——它把失败源码与原因作为一条消息发回，下一轮重画，而不是只在界面上留一段红字。`widget` 页面里的选区会回报给宿主，卡片头部出现「引用选中」并接进现有的引用链路。两者都只走既有通道（`musepi-ui-block-answer` / `musepi-gui-quote-append`），不新增跨帧信任。
   - EN: A generated answer can now be repaired and quoted. A `ui` block that failed to draw offers "ask the agent to fix it", which sends the failing source and its reasons as one message so the next turn redraws it, instead of leaving a red note nobody can act on. A selection inside a `widget` page is reported to the host, which surfaces "quote the selection" in the card head and feeds the existing quote path. Both ride existing channels (`musepi-ui-block-answer` / `musepi-gui-quote-append`); no new cross-frame trust.
 
