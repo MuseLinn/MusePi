@@ -16,24 +16,21 @@ use windows_sys::Win32::{
 
 use super::super::error::{CoreResult, DesktopError};
 
-/// Session-local mutex names; `Local\` keeps them inside this logon session.
-/// The second name is the pre-rename lease, held too so an older build of the
-/// app cannot drive real input at the same time as this one.
-const LEASE_NAMES: [&str; 2] = ["Local\\musepi-cu-input", "Local\\musepi-omp-cu-input"];
+/// Session-local mutex name; `Local\` keeps it inside this logon session.
+const LEASE_NAME: &str = "Local\\musepi-cu-input";
 
 /// RAII guard for the real-input lease; dropping releases the mutex.
 #[derive(Debug)]
 pub(crate) struct Win32Lease {
-	#[allow(dead_code, reason = "handles held purely for RAII release on drop")]
-	handles: Vec<OwnedHandle>,
+	#[allow(dead_code, reason = "handle held purely for RAII release on drop")]
+	handle: OwnedHandle,
 }
 
-/// Create one named mutex; `None` means another holder exists.
-fn create(name: &str) -> CoreResult<Option<OwnedHandle>> {
-	let wide: Vec<u16> = name.encode_utf16().chain([0]).collect();
-	// SAFETY: the name is null-terminated UTF-16; a zero return means creation
+pub(crate) fn acquire() -> CoreResult<Win32Lease> {
+	let name: Vec<u16> = LEASE_NAME.encode_utf16().chain([0]).collect();
+	// SAFETY: name is null-terminated UTF-16; a zero return means creation
 	// failed and carries no handle.
-	let handle = unsafe { CreateMutexW(std::ptr::null(), 1, wide.as_ptr()) };
+	let handle = unsafe { CreateMutexW(std::ptr::null(), 1, name.as_ptr()) };
 	if handle.is_null() {
 		return Err(DesktopError::input_failed("failed to create the real-input lease mutex"));
 	}
@@ -42,26 +39,13 @@ fn create(name: &str) -> CoreResult<Option<OwnedHandle>> {
 		// SAFETY: we own this handle; closing our reference does not disturb
 		// the current owner's hold.
 		unsafe { CloseHandle(handle) };
-		return Ok(None);
+		return Err(DesktopError::input_busy(
+			"real input is owned by another desktop session; retry after its turn ends",
+		));
 	}
 	// SAFETY: handle is non-null and owned by us.
-	Ok(Some(unsafe { OwnedHandle::from_raw_handle(handle) }))
-}
-
-pub(crate) fn acquire() -> CoreResult<Win32Lease> {
-	let mut handles = Vec::with_capacity(LEASE_NAMES.len());
-	for name in LEASE_NAMES {
-		match create(name)? {
-			Some(handle) => handles.push(handle),
-			None => {
-				// Dropping the handles acquired so far releases them.
-				return Err(DesktopError::input_busy(
-					"real input is owned by another desktop session; retry after its turn ends",
-				));
-			},
-		}
-	}
-	Ok(Win32Lease { handles })
+	let handle = unsafe { OwnedHandle::from_raw_handle(handle) };
+	Ok(Win32Lease { handle })
 }
 
 #[cfg(test)]

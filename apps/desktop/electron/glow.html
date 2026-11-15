@@ -239,11 +239,7 @@
 			const localeKey = "musepi.collab.locale";
 			const readLocale = () => {
 				try {
-					return (
-						localStorage.getItem(localeKey) ||
-						localStorage.getItem("omp.collab.locale") ||
-						"zh-CN"
-					);
+					return localStorage.getItem(localeKey) || "zh-CN";
 				} catch {
 					return "zh-CN";
 				}

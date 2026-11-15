@@ -35,19 +35,11 @@ const ORPHANED_REMOTE_DESKTOP_TOKEN: &str = "remote-desktop-token";
 
 /// Resolves the state directory (`$XDG_STATE_HOME/musepi` or
 /// `~/.local/state/musepi`) that holds portal tokens.
-///
-/// A directory left by the previous product name is moved over once, so an
-/// existing portal token keeps working instead of prompting again.
 fn state_dir() -> Option<PathBuf> {
 	let base = std::env::var_os("XDG_STATE_HOME")
 		.map(PathBuf::from)
 		.or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state")))?;
-	let dir = base.join("musepi");
-	let legacy = base.join("omp");
-	if !dir.exists() && legacy.exists() {
-		let _ = fs::rename(&legacy, &dir);
-	}
-	Some(dir)
+	Some(base.join("musepi"))
 }
 
 fn remove_token_in(dir: &Path) {
