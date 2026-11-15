@@ -19,11 +19,22 @@
 
 import type { SessionEntry } from "@musepi/pi-wire";
 import { buildTurnRenderUnits, type TurnRenderUnit, turnUnitSpan } from "./render-units.js";
-import { buildRoundFolds, foldSpan, isTurnStart, type RoundFold, roundFoldFromSpan } from "./round-collapse.js";
+import {
+	buildRoundFolds,
+	buildToolRuns,
+	foldSpan,
+	isTurnStart,
+	type RoundFold,
+	roundFoldFromSpan,
+	type ToolRunSummary,
+} from "./round-collapse.js";
 
 export interface TurnDeriveResult {
 	folds: RoundFold[];
 	units: TurnRenderUnit[];
+	/** 工具调用汇总 runs — computed in the same structural pass as the folds so
+	 *  the transcript does not scan `entries` a third time per streamed frame. */
+	runs: ToolRunSummary[];
 }
 
 interface SpanCacheEntry {
@@ -147,7 +158,7 @@ export function deriveTurns(
 		if (!seenKeys.has(key)) c.spans.delete(key);
 	}
 
-	const result: TurnDeriveResult = { folds, units };
+	const result: TurnDeriveResult = { folds, units, runs: buildToolRuns(entries, working) };
 	c.lastSig = sig;
 	c.lastResult = result;
 	c.firstObj = firstEntry;
@@ -163,5 +174,6 @@ export function deriveTurnsUncached(entries: readonly SessionEntry[], working: b
 	return {
 		folds: buildRoundFolds(entries, working),
 		units: buildTurnRenderUnits(entries, working),
+		runs: buildToolRuns(entries, working),
 	};
 }

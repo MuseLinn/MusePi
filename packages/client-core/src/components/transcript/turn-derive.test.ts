@@ -183,3 +183,24 @@ describe("deriveTurns incremental caching", () => {
 		expect(d.units.map(u => u.replyIdx)).toEqual(deriveTurnsUncached(replaced, false).units.map(u => u.replyIdx));
 	});
 });
+
+describe("turn derive runs (one structural pass)", () => {
+	test("the cached derive and the uncached baseline agree on runs", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("r1", "read"),
+			toolResult("r1", "read"),
+			assistantToolCall("g1", "grep"),
+			toolResult("g1", "grep"),
+			assistantText("done"),
+		];
+		const cache = createTurnDeriveCache();
+		const cached = deriveTurns(entries, false, cache);
+		const baseline = deriveTurnsUncached(entries, false);
+		expect(cached.runs).toEqual(baseline.runs);
+		// Reference stability: a second call with no structural change returns
+		// the same result object, so the transcript's memos stay valid.
+		expect(deriveTurns(entries, false, cache).runs).toBe(cached.runs);
+		expect(cached.runs.map(run => run.headIdx)).toEqual([1]);
+	});
+});

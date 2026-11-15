@@ -34,7 +34,7 @@ import { IrcCard, ircPairKeyOf } from "./irc-message";
 import { collectQuoteMarks } from "./quote-anchor";
 import { QuoteHighlightLayer } from "./quote-highlight";
 import { roundTimerKeyByRow } from "./render-units";
-import { buildToolRuns, planLiveActivityTrim, type RoundFold, type ToolRunSummary } from "./round-collapse";
+import { planLiveActivityTrim, type RoundFold, type ToolRunSummary } from "./round-collapse";
 import { classifyTranscriptRow, hasTextBlock } from "./row-kinds";
 import {
 	anchorActionAfterContentChange,
@@ -1710,10 +1710,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	useEffect(() => {
 		deriveCacheRef.current = createTurnDeriveCache();
 	}, [sessionKey]);
-	const { folds, units: turnUnits } = useMemo(
-		() => deriveTurns(entries, working, deriveCacheRef.current),
-		[entries, working],
-	);
+	const {
+		folds,
+		units: turnUnits,
+		runs,
+	} = useMemo(() => deriveTurns(entries, working, deriveCacheRef.current), [entries, working]);
 	// Frozen-total lookup: each turn's LAST assistant row → the turn-start ts
 	// key the daemon/GUI recorders freeze the total under (one key space —
 	// daemon-seeded snapshots and live GUI writes hit the same entry).
@@ -1750,9 +1751,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			return next;
 		});
 	}, []);
+	// Runs ride the same structural derive as the folds (one scan per change);
+	// the two display toggles only decide whether to USE them.
 	const toolRuns = useMemo(
-		() => (toolCallSummary && !hideToolActivity ? buildToolRuns(entries, working) : []),
-		[entries, working, toolCallSummary, hideToolActivity],
+		() => (toolCallSummary && !hideToolActivity ? runs : []),
+		[runs, toolCallSummary, hideToolActivity],
 	);
 	const runByHeadIdx = useMemo(() => {
 		const map = new Map<number, ToolRunSummary>();
