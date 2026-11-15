@@ -1443,3 +1443,35 @@ describe("row projection (one tool is one row)", () => {
 		expect(countElements(html, ".tr-round-fold")).toBe(1);
 	});
 });
+
+describe("synthetic row list (header is its own row)", () => {
+	it("renders the 活动 header before the projected turn's content, not inside a host row", () => {
+		const entries: SessionEntry[] = [
+			userEntry(1),
+			committedAssistantToolCall(),
+			{
+				type: "message",
+				id: "tool-result-1",
+				parentId: null,
+				timestamp: "2026-07-09T00:00:02Z",
+				message: {
+					role: "toolResult",
+					toolCallId: TOOL_CALL_ID,
+					toolName: TOOL_NAME,
+					content: [{ type: "text", text: "ok" }],
+					isError: false,
+					timestamp: 2,
+				},
+			} as unknown as SessionEntry,
+			assistantEntry({ timestamp: 3, text: "done" }),
+		];
+		const html = renderTranscript({ entries, working: false, defaultRoundFoldExpanded: true });
+		const headerAt = html.indexOf("tr-round-fold");
+		const callAt = html.indexOf('data-entry-id="assistant-entry-1"');
+		expect(headerAt).toBeGreaterThan(-1);
+		expect(callAt).toBeGreaterThan(headerAt);
+		// The projected result contributes no row, and the header owns its own.
+		expect(html).not.toContain('data-entry-id="tool-result-1"');
+		expect(countElements(html, ".tr-round-fold")).toBe(1);
+	});
+});

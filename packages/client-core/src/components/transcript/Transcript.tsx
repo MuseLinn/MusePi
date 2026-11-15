@@ -1856,26 +1856,32 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		return set;
 	}, [folds, foldOpenOf, toolRuns, runsExpanded]);
 
-	// ── Row projection: a tool result is not a row of its own ────────────
-	// Wire entries keep the call (an assistant message) and its result (a
-	// separate toolResult entry) apart; openchamber and the Kimi client model
-	// ONE tool part that carries its own state, so one tool is one row. The
-	// card renders on the call row, which leaves a paired result row drawing
-	// nothing — projecting it out of the virtual list removes that empty row
-	// instead of parking it at zero height. Folds, runs, anchors and branch
-	// topology keep using ENTRY indexes; only the list position maps through
-	// `renderIdx`. A result whose call is not loaded (paged out) stays a row,
-	// so nothing can disappear at a window boundary.
-	// A projected result row is safe to drop only when nothing else hangs its
-	// identity on that row: the fold header (a turn that opens on a result) and a
-	// run head keep their row, so the 活动 line / 工具×N summary still has a host.
-	const structuralRows = useMemo(() => {
-		const rows = new Set<number>();
-		for (const fold of folds) rows.add(fold.headerIdx);
-		for (const run of toolRuns) rows.add(run.headIdx);
-		return rows;
-	}, [folds, toolRuns]);
-	const renderIdx = useMemo(() => {
+	// ── Synthetic timeline rows ──────────────────────────────────────────
+	// A wire entry is not a row. openchamber's TimelineRow union and the Kimi
+	// client's TurnFold both give the fold header a row of its own, and their
+	// tools carry their result state instead of splitting into a second entry.
+	// Here the list is built the same way from entry indexes:
+	//
+	//   fold row   — 活动 header (always present; never hosted by a content row)
+	//   run row    — 工具×N summary (when the run is collapsible)
+	//   entry row  — everything else, minus a paired toolResult (its card draws
+	//                on the call row), except a result whose call is not loaded.
+	//
+	// Folds, runs, anchors and branch topology keep ENTRY indexes; only the list
+	// position maps through `renderRows`/`renderPos`.
+	type RenderRow =
+		| { kind: "fold"; fold: RoundFold; key: string }
+		| { kind: "run"; run: ToolRunSummary; key: string }
+		| { kind: "entry"; entryIdx: number; key: string };
+	const renderRows = useMemo<RenderRow[]>(() => {
+		const foldByHeader = new Map<number, RoundFold>();
+		const foldByEntry = new Map<number, RoundFold>();
+		for (const fold of folds) {
+			foldByHeader.set(fold.headerIdx, fold);
+			for (let i = fold.startIdx + 1; i <= fold.endIdx; i++) foldByEntry.set(i, fold);
+		}
+		const runByHead = new Map<number, ToolRunSummary>();
+		for (const run of toolRuns) runByHead.set(run.headIdx, run);
 		const callIds = new Set<string>();
 		for (const entry of entries) {
 			if (entry.type !== "message" || entry.message.role !== "assistant") continue;
@@ -1883,21 +1889,49 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				if (block.type === "toolCall") callIds.add(block.id);
 			}
 		}
-		const positions: number[] = [];
+		const rows: RenderRow[] = [];
 		entries.forEach((entry, index) => {
+			const fold = foldByHeader.get(index);
+			if (fold !== undefined) rows.push({ kind: "fold", fold, key: `fold:${fold.startIdx}` });
+			const run = runByHead.get(index);
+			if (run !== undefined) {
+				const owner = foldByEntry.get(run.headIdx);
+				const blocked = run.idxs.some(i => foldByEntry.get(i)?.exempt.includes(i) ?? false);
+				const ownerClosed = owner !== undefined && !foldOpenOf(owner);
+				if (!blocked && !ownerClosed && !runsExpanded.has(run.key)) {
+					rows.push({ kind: "run", run, key: `run:${run.key}` });
+				}
+			}
 			if (entry.type === "message" && entry.message.role === "toolResult") {
 				const callId = (entry.message as { toolCallId?: string }).toolCallId;
-				if (callId !== undefined && callIds.has(callId) && !structuralRows.has(index)) return;
+				if (callId !== undefined && callIds.has(callId)) return;
 			}
-			positions.push(index);
+			rows.push({ kind: "entry", entryIdx: index, key: entry.id ?? `pos:${index}` });
 		});
-		return positions;
-	}, [entries, structuralRows]);
+		return rows;
+	}, [entries, foldOpenOf, folds, runsExpanded, toolRuns]);
 	const renderPos = useMemo(() => {
 		const map = new Map<number, number>();
-		renderIdx.forEach((entryIdx, pos) => map.set(entryIdx, pos));
+		renderRows.forEach((row, pos) => {
+			if (row.kind === "entry") map.set(row.entryIdx, pos);
+		});
 		return map;
-	}, [renderIdx]);
+	}, [renderRows]);
+	/** Row position for an entry index, or the nearest preceding entry row when
+	 *  that entry is projected out (jump targets are user/assistant rows, but a
+	 *  caller may point at a result). */
+	const rowPosForEntry = useCallback(
+		(entryIdx: number): number | undefined => {
+			const exact = renderPos.get(entryIdx);
+			if (exact !== undefined) return exact;
+			for (let pos = renderRows.length - 1; pos >= 0; pos--) {
+				const row = renderRows[pos];
+				if (row?.kind === "entry" && row.entryIdx < entryIdx) return pos;
+			}
+			return undefined;
+		},
+		[renderPos, renderRows],
+	);
 
 	// ── Entry-level virtualization (M2/P0①) ──────────────────────────────
 	// The scroll host resolves in the ref callback below (desktop scrolls an
@@ -1905,15 +1939,16 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const [scrollerEl, setScrollerEl] = useState<HTMLElement | null>(null);
 	const virtualizerMeasureRef = useRef<(() => void) | null>(null);
 	const virtualizer = useVirtualizer({
-		count: renderIdx.length,
+		count: renderRows.length,
 		getScrollElement: () => scrollerEl,
-		getItemKey: (index: number) => entries[renderIdx[index] ?? -1]?.id ?? index,
+		getItemKey: (index: number) => renderRows[index]?.key ?? index,
 		estimateSize: (index: number) => {
-			const entryIdx = renderIdx[index];
-			if (entryIdx === undefined) return 0;
-			if (collapsedSpanSet.has(entryIdx)) return 2;
-			if (folding && entryIdx < firstCompactionIdx) return 0;
-			return estimateEntryHeight(entries[entryIdx]);
+			const row = renderRows[index];
+			if (row === undefined) return 0;
+			if (row.kind !== "entry") return 34;
+			if (collapsedSpanSet.has(row.entryIdx)) return 2;
+			if (folding && row.entryIdx < firstCompactionIdx) return 0;
+			return estimateEntryHeight(entries[row.entryIdx]);
 		},
 		overscan: 8,
 	});
@@ -1960,24 +1995,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		[virtualizer],
 	);
 	const virtualItems = virtualizer.getVirtualItems();
-	// React-key uniqueness guard: entry ids are normally unique, but a daemon
-	// rekey collision (two same-millisecond advisor "Session update" messages)
-	// once produced duplicate ids. React's reconciliation drops the FIRST
-	// fiber of a duplicate-key pair from its existingChildren map, so that
-	// node is never unmounted — stale advisor rows leaked into every later
-	// session's transcript DOM (fixed at the source too; this is the belt to
-	// the source's braces). First occurrence keeps the bare id so prepend
-	// paging keeps row identity; later duplicates get an ordinal suffix.
-	const rowKeys = useMemo(() => {
-		const seen = new Map<string, number>();
-		return entries.map(entry => {
-			const id = entry.id;
-			if (typeof id !== "string") return null;
-			const n = seen.get(id) ?? 0;
-			seen.set(id, n + 1);
-			return n === 0 ? id : `${id}#${n + 1}`;
-		});
-	}, [entries]);
 	// Test/SSR fallback: without a measurable scroller (happy-dom, SSR) the
 	// virtualizer's window is empty — render the full list so row-level tests
 	// and first-paint SSR keep working. Browsers always have a sized scroller
@@ -1997,8 +2014,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		if (!virtualEnabled || scrollerEl === null) return null;
 		const listRange = visibleEntryRange(virtualItems, scrollerEl.scrollTop, scrollerEl.clientHeight);
 		if (listRange === null) return null;
-		const firstEntry = renderIdx[Math.floor(listRange.first)];
-		const lastEntry = renderIdx[Math.floor(listRange.last)];
+		let firstEntry: number | undefined;
+		let lastEntry: number | undefined;
+		for (let pos = Math.floor(listRange.first); pos <= Math.floor(listRange.last); pos++) {
+			const row = renderRows[pos];
+			if (row?.kind !== "entry") continue;
+			if (firstEntry === undefined || row.entryIdx < firstEntry) firstEntry = row.entryIdx;
+			if (lastEntry === undefined || row.entryIdx > lastEntry) lastEntry = row.entryIdx;
+		}
 		if (firstEntry === undefined || lastEntry === undefined) return null;
 		const candidate = pickStickyUserEntry(entries, { first: firstEntry, last: lastEntry });
 		// Folded pre-compaction history mounts no rows at all, so a prompt
@@ -2006,7 +2029,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// sense — pinning it would offer a jump into hidden content.
 		if (candidate !== null && folding && candidate.index < firstCompactionIdx) return null;
 		return candidate;
-	}, [entries, firstCompactionIdx, folding, renderIdx, virtualEnabled, scrollerEl, virtualItems]);
+	}, [entries, firstCompactionIdx, folding, renderRows, virtualEnabled, scrollerEl, virtualItems]);
 
 	// Top sentinel (M1.11): entering the pane pages the next older chunk from
 	// session.history (daemon tail is 200; pages are 500 entries).
@@ -2049,7 +2072,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const pending = pendingJumpRef.current;
 		if (!pending) return;
 		const idx = entries.findIndex(e => e.id === pending.entryId);
-		const pos = idx < 0 ? undefined : renderPos.get(idx);
+		const pos = idx < 0 ? undefined : rowPosForEntry(idx);
 		if (pos === undefined) {
 			pendingJumpRef.current = null;
 			return;
@@ -2059,7 +2082,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		if (!virtualItems.some(vi => vi.index === pos)) return;
 		pendingJumpRef.current = null;
 		jumpFlashRow(rootRef.current, pending.entryId);
-	}, [virtualItems, entries, renderPos]);
+	}, [virtualItems, entries, rowPosForEntry]);
 	useEffect(() => {
 		if (!jumpRequest || jumpRequest.nonce === lastJumpNonceRef.current) return;
 		lastJumpNonceRef.current = jumpRequest.nonce;
@@ -2106,7 +2129,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				const scroller = scrollerRef.current;
 				if (!scroller) return;
 				const idx = entries.findIndex(e => e.id === anchor.key);
-				const pos = idx < 0 ? undefined : renderPos.get(idx);
+				const pos = idx < 0 ? undefined : rowPosForEntry(idx);
 				if (pos === undefined) return;
 				programmaticScrollRef.current = true;
 				virtualizer.scrollToIndex(pos, { align: "start" });
@@ -2119,7 +2142,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				});
 			},
 		}),
-		[virtualItems, entries, renderPos, virtualizer],
+		[virtualItems, entries, rowPosForEntry, virtualizer],
 	);
 	useEffect(() => {
 		if (anchorCtlRef) anchorCtlRef.current = anchorCtl;
@@ -2444,7 +2467,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const orbAnchor = turnStartIdx === undefined ? undefined : orbAnchorByTurnStart.get(turnStartIdx);
 		const prevIsAssistant =
 			before?.type === "message" && (before.message.role === "assistant" || before.message.role === "toolResult");
-		const rowOwnsOrb = turnStartIdx === undefined ? !(isAssistantMessage && prevIsAssistant) : orbAnchor === absIdx;
 		// M1 turn header: rendered above the turn-start row (the user
 		// prompt or an advisor note — shared isTurnStart semantics).
 		// The frozen round duration keys off the turn-START ts (shared
@@ -2482,7 +2504,18 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// round-collapse `exempt`) stay mounted while the fold is closed: they
 		// are the turn's output, not its process noise.
 		const isExemptRow = fold?.exempt.includes(absIdx) === true;
-		const inHiddenSpan = fold !== undefined && !isHeaderRow && !isReplyRow && !isExemptRow;
+		// A folded turn's avatar lives on its fold row (see renderRows); entries
+		// never carry it, so the header row and the orb cannot drift apart.
+		const rowOwnsOrb =
+			fold !== undefined
+				? false
+				: turnStartIdx === undefined
+					? !(isAssistantMessage && prevIsAssistant)
+					: orbAnchor === absIdx;
+		// Every process row of a closed fold collapses — the 活动 header is its own
+		// row now, so the row it used to host no longer has to stay visible to carry
+		// it.
+		const inHiddenSpan = fold !== undefined && !isReplyRow && !isExemptRow;
 		// ── 工具调用汇总 (Kimi parity) ────────────────────────────────────
 		// An active run renders its HEAD slot as the one-line summary and
 		// collapses its tail rows into zero-height slots (same .tr-fold-slot
@@ -2496,7 +2529,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const runActive = run !== undefined && !runBlocked && !foldClosed;
 		const isRunHead = runActive && run.headIdx === absIdx;
 		const runOpen = runActive && runsExpanded.has(run.key);
-		const isRunHidden = runActive && !isRunHead && !runOpen;
+		// The run row owns the summary in both states; its rows are mounted only
+		// while the run is expanded.
+		const isRunHidden = runActive && !runOpen;
 		// Rows in the hidden span stay MOUNTED and collapse to height 0
 		// (.tr-fold-slot, animatable via interpolate-size) so folding
 		// animates both ways instead of popping in and out. Summarized run
@@ -2511,13 +2546,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// first row render nothing, which is why the avatar vanished on collapse
 		// and why expanding jumped (the header moved rows instead of the content
 		// growing).
-		const hideRowContent = foldClosed && !isReplyRow && !isExemptRow && !isHeaderRow;
-		// The header renders ALONE on its row only when that row is nothing but
-		// process detail: a reply or an exempt artifact row keeps its body, so a
-		// header that coincides with the answer (or with the card it produced)
-		// cannot swallow it.
-		const headerOnlyRow = foldClosed && isHeaderRow && !isReplyRow && !isExemptRow;
-		const renderHeaderHere = isHeaderRow;
+		const hideRowContent = foldClosed && !isReplyRow && !isExemptRow;
 		// Per-round work timer: the live tail row ticks from the
 		// round start (last user message); completed rounds show
 		// their frozen total under the final message. The frozen
@@ -2530,25 +2559,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const roundDuration =
 			(roundTimerKey !== undefined ? roundDurations?.get(roundTimerKey) : undefined) ??
 			(isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined);
-		// The 活动 header is rendered on the row it belongs to (the turn's first
-		// content row) in both fold states. EntryRow mounts no Row for a
-		// toolResult / custom header row, so this loop mounts it.
-		const foldHeader =
-			renderHeaderHere && fold !== undefined ? (
-				<RoundFoldHeader
-					key={`round-fold-${fold.startIdx}`}
-					fold={fold}
-					open={foldOpenOf(fold)}
-					onToggle={() => toggleFold(foldKeyOf(fold))}
-					startTs={entries[fold.startIdx]?.timestamp}
-				/>
-			) : null;
-		// A header row is the turn's first content row, which is frequently a
-		// toolResult / custom row — EntryRow mounts no Row for those, so the
-		// header has to be mounted by this loop instead (it vanished entirely
-		// when it could only ride an assistant body). A closed fold renders the
-		// header alone on that row: its body is process detail the fold owns.
-		const headerStandalone = foldHeader !== null && (!isAssistantMessage || headerOnlyRow);
 		// 隐藏工具活动 hides the process EXCEPT (a) behind an expanded
 		// 活动 row — asking to expand it outranks the setting — and
 		// (b) during the live round, where the activity is the point.
@@ -2562,11 +2572,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const inLiveSpan = working && absIdx >= liveFromIdx;
 		const trimmedByLiveTail = liveTrim !== null && inLiveSpan && absIdx < liveTrim.firstVisibleIdx;
 		const liveMoreHere = liveTrim !== null && inLiveSpan && absIdx === liveTrim.firstVisibleIdx;
-		// The row body: mounted for hidden-span rows too (the slot collapses
-		// them), suppressed only for a closed fold's non-reply header row —
-		// and for a summarized run head, whose body the summary line replaces
-		// (an expanded run keeps its full rows below the summary).
-		const runSummaryHere = isRunHead && run !== undefined;
 		// The "+N more" line the trim counts behind: it rides the first VISIBLE
 		// row, so it scrolls away with the work it describes instead of
 		// stranding a count at the top of a long turn. It is a control, not a
@@ -2592,22 +2597,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const body = trimmedByLiveTail ? null : collapsible || !hideRowContent ? (
 			<Fragment key={entry.id}>
 				{liveMoreLine}
-				{headerStandalone ? (
-					// Inside the message column, so it aligns with the reply.
-					<Row kind="assistant" gutter={rowOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""}>
-						{foldHeader}
-					</Row>
-				) : null}
-				{runSummaryHere ? (
-					<Row kind="assistant" gutter={rowOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""}>
-						{headerStandalone ? null : foldHeader}
-						<ToolRunLine run={run} open={runOpen} onToggle={() => toggleRun(run.key)} />
-					</Row>
-				) : null}
-				{headerOnlyRow || (hideRowContent && !collapsible) ? null : runSummaryHere && !runOpen ? null : (
+				{hideRowContent && !collapsible ? null : (
 					<EntryRow
 						entry={entry}
-						foldHeader={isAssistantMessage && !runSummaryHere ? (foldHeader ?? undefined) : undefined}
 						results={results}
 						active={activeTools}
 						host={host}
@@ -2684,7 +2676,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		}));
 		// 锚点行折进零高度槽(折叠段隐藏跨距 / 汇总尾行)时分叉条随之隐藏:
 		// 它留在原像素位置不动,折叠动画期间看起来就是"位置变来变去"。
-		const anchorCollapsed = hideRowContent || headerOnlyRow || (collapsible && (!foldOpen || isRunHidden));
+		const anchorCollapsed = hideRowContent || (collapsible && (!foldOpen || isRunHidden));
 		if (branchInfo && !anchorCollapsed && kids.length > 1 && entry.type === "message") {
 			return (
 				<div key={entry.id} className="tr-branch-wrap">
@@ -2699,6 +2691,36 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			);
 		}
 		return row;
+	};
+
+	// One row of the synthetic list: the fold header and the run summary are rows
+	// of their own (openchamber/Kimi model), so no content row ever hosts them.
+	const renderRow = (row: RenderRow): ReactNode => {
+		if (row.kind === "fold") {
+			return (
+				<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
+					<RoundFoldHeader
+						fold={row.fold}
+						open={foldOpenOf(row.fold)}
+						onToggle={() => toggleFold(foldKeyOf(row.fold))}
+						startTs={entries[row.fold.startIdx]?.timestamp}
+					/>
+				</Row>
+			);
+		}
+		if (row.kind === "run") {
+			return (
+				<Row kind="assistant" gutter="">
+					<ToolRunLine
+						run={row.run}
+						open={runsExpanded.has(row.run.key)}
+						onToggle={() => toggleRun(row.run.key)}
+					/>
+				</Row>
+			);
+		}
+		const entry = entries[row.entryIdx];
+		return entry === undefined ? null : renderEntryRow(row.entryIdx, entry);
 	};
 
 	// Tail rows (stream, pre-stream ticker, unpaired running tools) belong to
@@ -2748,36 +2770,35 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			)}
 			{virtualEnabled
 				? virtualItems.map(vi => {
-						const absIdx = renderIdx[vi.index] ?? -1;
-						const entry = entries[absIdx];
-						if (entry === undefined) return null;
+						const row = renderRows[vi.index];
+						if (row === undefined) return null;
 						return (
 							<div
-								key={rowKeys[absIdx] ?? vi.key}
+								key={row.key}
 								ref={measureVirtualRow}
 								data-index={vi.index}
-								data-entry-ts={entry.timestamp}
+								data-entry-ts={row.kind === "entry" ? entries[row.entryIdx]?.timestamp : undefined}
 								className="tr-vrow"
-								aria-hidden={folding && absIdx < firstCompactionIdx ? true : undefined}
+								aria-hidden={
+									row.kind === "entry" && folding && row.entryIdx < firstCompactionIdx ? true : undefined
+								}
 							>
-								{renderEntryRow(absIdx, entry)}
+								{renderRow(row)}
 							</div>
 						);
 					})
-				: renderIdx.map(absIdx => {
-						const entry = entries[absIdx];
-						if (entry === undefined) return null;
-						return (
-							<div
-								key={rowKeys[absIdx] ?? entry.id ?? absIdx}
-								data-entry-ts={entry.timestamp}
-								className="tr-vrow"
-								aria-hidden={folding && absIdx < firstCompactionIdx ? true : undefined}
-							>
-								{renderEntryRow(absIdx, entry)}
-							</div>
-						);
-					})}
+				: renderRows.map(row => (
+						<div
+							key={row.key}
+							data-entry-ts={row.kind === "entry" ? entries[row.entryIdx]?.timestamp : undefined}
+							className="tr-vrow"
+							aria-hidden={
+								row.kind === "entry" && folding && row.entryIdx < firstCompactionIdx ? true : undefined
+							}
+						>
+							{renderRow(row)}
+						</div>
+					))}
 			{bottomSpacerHeight > 0 && (
 				<div
 					className="tr-virtual-spacer tr-virtual-spacer--bottom"
