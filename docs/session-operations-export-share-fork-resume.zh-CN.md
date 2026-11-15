@@ -125,7 +125,7 @@ Handler 结果解释：
 3. JSON 被 gzip 压缩并用一个新鲜的 AES-256-GCM 密钥封存（`[12B IV][ciphertext+tag]`）。
 4. 上传目标由 `share.store` 决定：
    - **分享服务器**（默认，`store: "blob"`）——向 `<share.serverUrl>`（默认 `https://my.omp.sh/s`）`POST` 原始 blob，上限 1 MB。超大的快照会被裁剪到能放下为止：先内联图片，再长字符串（32 KB → 8 KB → 2 KB → 512 B 上限），最后是最旧的条目。
-   - **Secret gist**（`store: "gist"`）——当 `gh` 已安装且已认证时，封存 blob 以 base64 编码推送到 `session.ompshare.txt`（封存预算 5 MB；gist 原始抓取上限 10 MB），当 `gh` 不可用时回退到分享服务器。
+   - **Secret gist**（`store: "gist"`）——当 `gh` 已安装且已认证时，封存 blob 以 base64 编码推送到 `session.musepishare.txt`（封存预算 5 MB；gist 原始抓取上限 10 MB），当 `gh` 不可用时回退到分享服务器。
 5. 两种情况下链接都是 `<share.serverUrl>/<id>#<base64url key>`。那里提供的查看页面抓取 blob（十六进制 id 走 GitHub gist API，其它走服务器的 blob 存储）并在客户端解密；密钥只存在于 URL fragment，绝不出现在任何 HTTP 请求中。
 
 UI 会报告分享 URL（以及在适用时的底层 gist URL 和截断说明）。无头 `/share` 打印相同的行。与 `/export` 不同，`/share` 对内存会话（`--no-session`）也有效：快照从实时条目构建，无需会话文件。

@@ -449,7 +449,7 @@ export interface SkillPromptDetails {
  *  `ui-helpers.addMessageToChat` (renderers), `AgentHubOverlayComponent
  *  #buildTranscriptLines`, `runPrintMode`, and `AcpAgent#replayAssistantMessage`
  *  (fallback error emission) read it via `isSilentAbort`. */
-export const SILENT_ABORT_MARKER = "__omp.silent_abort__";
+export const SILENT_ABORT_MARKER = "__musepi.silent_abort__";
 
 /** Type-guard for silent aborts. Renderers MUST call this helper so structured
  *  `errorId` and legacy persisted marker messages stay in lockstep. */

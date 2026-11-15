@@ -87,11 +87,11 @@ class TabState {
 	/** Whether targets for this tab were announced to discovering connections. */
 	announced = false;
 	attaching: Promise<boolean> | null = null;
-	/** True after the relay put this tab in the musepi group; `ompGroupId` holds that group. */
+	/** True after the relay put this tab in the musepi group; `musepiGroupId` holds that group. */
 	grouped = false;
 	/** Group RPC in flight — suppresses duplicate requests from load-time tabUpdated bursts. */
 	grouping = false;
-	ompGroupId: number | undefined;
+	musepiGroupId: number | undefined;
 	/** User pulled the tab out of the musepi group — never re-group it. */
 	groupOptOut = false;
 	/** Real Chrome session ids (OOPIF/worker children) living under this tab's root session. */
@@ -236,7 +236,7 @@ export class RelayBridge {
 			// read as the user dragging every tab out (permanent opt-out).
 			tab.grouped = false;
 			tab.grouping = false;
-			tab.ompGroupId = undefined;
+			tab.musepiGroupId = undefined;
 		}
 		this.#groupQueue.length = 0;
 	}
@@ -683,7 +683,7 @@ export class RelayBridge {
 			if (tab.url !== snap.url) tab.banned = false;
 			// The user dragging a tab out of the musepi group is an opt-out; the
 			// relay never fights the user over grouping.
-			if (tab.grouped && tab.ompGroupId !== undefined && snap.groupId !== tab.ompGroupId) {
+			if (tab.grouped && tab.musepiGroupId !== undefined && snap.groupId !== tab.musepiGroupId) {
 				tab.grouped = false;
 				tab.groupOptOut = true;
 			}
@@ -744,7 +744,7 @@ export class RelayBridge {
 		}
 		if (tab.grouped) {
 			tab.grouped = false;
-			tab.ompGroupId = undefined;
+			tab.musepiGroupId = undefined;
 			void this.#rpc({ op: "ungroup", tabIds: [tab.tabId] }).catch(() => {});
 		}
 	}
@@ -786,7 +786,7 @@ export class RelayBridge {
 						const groupId = grouped[String(tab.tabId)];
 						if (typeof groupId !== "number") continue;
 						tab.grouped = true;
-						tab.ompGroupId = groupId;
+						tab.musepiGroupId = groupId;
 					}
 					this.#log("grouped tabs", { tabIds, grouped });
 				} catch (err) {

@@ -4,7 +4,7 @@ import { renderKernelDisplay } from "@musepi/pi-coding-agent/eval/py/display";
 describe("renderKernelDisplay (raw bundle shape)", () => {
 	it("renders status events without text output", async () => {
 		const { text, outputs } = await renderKernelDisplay({
-			"application/x-omp-status": { op: "glob", count: 12, pattern: "foo" },
+			"application/x-musepi-status": { op: "glob", count: 12, pattern: "foo" },
 		});
 		expect(text).toBe("");
 		expect(outputs).toEqual([{ type: "status", event: { op: "glob", count: 12, pattern: "foo" } }]);

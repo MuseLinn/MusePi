@@ -174,7 +174,7 @@ export class VoiceFrontendClient {
 	}
 }
 
-export const VOICE_FRONTEND_WORKER_ARG = "__omp_worker_voice_frontend";
+export const VOICE_FRONTEND_WORKER_ARG = "__musepi_worker_voice_frontend";
 
 export function createVoiceFrontendSubprocess(): SpawnedSubprocess<VoiceFrontendWorkerOutbound> {
 	return createWorkerSubprocess<VoiceFrontendWorkerOutbound>({

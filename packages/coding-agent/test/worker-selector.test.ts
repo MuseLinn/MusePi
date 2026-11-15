@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { runCli } from "../src/cli";
 import * as computerWorkerEntry from "../src/tools/computer/worker-entry";
 
-// The worker-host re-entry seam dispatches any `__omp_worker_*` selector to
+// The worker-host re-entry seam dispatches any `__musepi_worker_*` selector to
 // `runWorkerEntrypoint`. An unrecognized selector must fail loudly rather than
 // exit 0 with empty output, so a stale/mistyped selector cannot look healthy to
 // a parent process or install smoke path (issue #5712).
@@ -19,10 +19,10 @@ describe("worker selector dispatch", () => {
 	it("fails with a nonzero exit and stderr error on an unknown selector", async () => {
 		const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
-		await runCli(["__omp_worker_does_not_exist"]);
+		await runCli(["__musepi_worker_does_not_exist"]);
 
 		expect(process.exitCode).toBe(1);
-		expect(stderr).toHaveBeenCalledWith("Error: unknown worker selector: __omp_worker_does_not_exist\n");
+		expect(stderr).toHaveBeenCalledWith("Error: unknown worker selector: __musepi_worker_does_not_exist\n");
 	});
 
 	it("leaves normal root flags untouched", async () => {

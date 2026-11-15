@@ -31,7 +31,7 @@ it("imports the CLI entry graph without loading dotenv before profile bootstrap"
 async function pingComputerWorker(
 	entry: string,
 	id: string,
-	argv: string[] = ["__omp_worker_computer"],
+	argv: string[] = ["__musepi_worker_computer"],
 ): Promise<unknown> {
 	const worker = new Worker(entry, {
 		type: "module",

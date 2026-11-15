@@ -19,7 +19,7 @@ Run `bun run gen:models` and deliver the regenerated file with the source change
 
 ## Workers
 
-Workers re-enter the CLI entrypoint; do not create separate worker entry modules. `cli.ts` calls `declareWorkerHostEntry()` and dispatches hidden `__omp_worker_*` selectors before loading command registrations.
+Workers re-enter the CLI entrypoint; do not create separate worker entry modules. `cli.ts` calls `declareWorkerHostEntry()` and dispatches hidden `__musepi_worker_*` selectors before loading command registrations.
 
 Spawn through `workerHostEntry()` from `@musepi/pi-utils`. Use the CLI host when available and retain the direct-module fallback for tests, SDK embedding, and standalone tools. Every new worker kind needs a selector in `cli.ts` and the fallback branch.
 

@@ -6,13 +6,13 @@ describe("parseArgs — Windows extension paths", () => {
 		const parsed = parseArgs([
 			"--extension",
 			"C:\\Users\\Shi",
-			"Xin\\AppData\\Local\\ompcot\\extensions\\embedded-server.mjs",
+			"Xin\\AppData\\Local\\musepicot\\extensions\\embedded-server.mjs",
 			"--mode",
 			"rpc",
 		]);
 
 		expect(parsed.extensions).toEqual([
-			"C:\\Users\\Shi Xin\\AppData\\Local\\ompcot\\extensions\\embedded-server.mjs",
+			"C:\\Users\\Shi Xin\\AppData\\Local\\musepicot\\extensions\\embedded-server.mjs",
 		]);
 		expect(parsed.messages).toEqual([]);
 		expect(parsed.mode).toBe("rpc");

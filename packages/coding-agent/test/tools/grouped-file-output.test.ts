@@ -76,7 +76,7 @@ describe("classifyGroupedLines", () => {
 	});
 
 	it("flags url-like headers for caller-side resolution without a filesystem path", () => {
-		const ctx = classifyGroupedLines(["# omp://docs/", "  body"], REPO_ROOT);
+		const ctx = classifyGroupedLines(["# musepi://docs/", "  body"], REPO_ROOT);
 		expect(ctx[0]).toMatchObject({ kind: "file", isUrl: true });
 		expect(ctx[0]?.headerPath).toBeUndefined();
 	});

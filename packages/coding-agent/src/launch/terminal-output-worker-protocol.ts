@@ -1,7 +1,7 @@
 import type { TerminalOutputOptions } from "./terminal-output";
 
 /** Hidden CLI selector for legacy PTY replay outside the client process. */
-export const TERMINAL_OUTPUT_WORKER_ARG = "__omp_worker_terminal_output";
+export const TERMINAL_OUTPUT_WORKER_ARG = "__musepi_worker_terminal_output";
 
 export interface TerminalOutputWorkerRequest {
 	output: string;

@@ -6,7 +6,7 @@ export const setup = {
 	"setup.extensions": "扩展",
 
 	// ── Setup wizard — splash ────────────────────────────────
-	"setup.ompAlignedCodingAgent": "MusePi 对齐的编码助手",
+	"setup.musepiAlignedCodingAgent": "MusePi 对齐的编码助手",
 	"setup.welcomeLetS.info": "欢迎！让我们快速完成设置。",
 	"setup.pressAnyKeyBegin": "按任意键开始...",
 

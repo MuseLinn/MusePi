@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-# OMP prelude helpers (loaded once into the runner namespace)
-if "__omp_prelude_loaded__" not in globals():
-    __omp_prelude_loaded__ = True
+# MusePi prelude helpers (loaded once into the runner namespace)
+if "__musepi_prelude_loaded__" not in globals():
+    __musepi_prelude_loaded__ = True
     from pathlib import Path
     import os, json, math, re
     from urllib.parse import unquote
 
     INTENT_FIELD = "i"
 
-    # __omp_display is injected by runner.py before the prelude executes; it
+    # __musepi_display is injected by runner.py before the prelude executes; it
     # mirrors IPython's display() semantics with the same MIME bundle output.
-    _omp_display = __omp_display  # type: ignore[name-defined]
+    _musepi_display = __musepi_display  # type: ignore[name-defined]
 
     _PRESENTABLE_REPRS = (
         "_repr_mimebundle_",
@@ -27,20 +27,20 @@ if "__omp_prelude_loaded__" not in globals():
     def display(value):
         """Render a value. Falls back to a JSON+text/plain bundle for plain dict/list/tuple."""
         if any(hasattr(value, attr) for attr in _PRESENTABLE_REPRS):
-            _omp_display(value)
+            _musepi_display(value)
             return
         if isinstance(value, (dict, list, tuple)):
             try:
                 bundle = {"application/json": value, "text/plain": repr(value)}
-                _omp_display(bundle, raw=True)
+                _musepi_display(bundle, raw=True)
                 return
             except Exception:
                 pass
-        _omp_display(value)
+        _musepi_display(value)
 
     def _emit_status(op: str, **data):
         """Emit structured status event for TUI rendering."""
-        _omp_display({"application/x-omp-status": {"op": op, **data}}, raw=True)
+        _musepi_display({"application/x-musepi-status": {"op": op, **data}}, raw=True)
 
     def env(key: str | None = None, value: str | None = None):
         """Get/set environment variables."""
@@ -56,12 +56,12 @@ if "__omp_prelude_loaded__" not in globals():
         _emit_status("env", key=key, value=val, action="get")
         return val
 
-    _OMP_INTERNAL_URL_RE = re.compile(r"^([a-z][a-z0-9+.-]*)://(.*)$", re.IGNORECASE)
+    _MUSEPI_INTERNAL_URL_RE = re.compile(r"^([a-z][a-z0-9+.-]*)://(.*)$", re.IGNORECASE)
 
     def _should_delegate_read(path: str | Path) -> bool:
         return (
             isinstance(path, str)
-            and _OMP_INTERNAL_URL_RE.match(path) is not None
+            and _MUSEPI_INTERNAL_URL_RE.match(path) is not None
             and not path.lower().startswith("local://")
         )
 
@@ -79,7 +79,7 @@ if "__omp_prelude_loaded__" not in globals():
             return result["text"]
         return result
 
-    def _resolve_omp_path(path: str | Path) -> Path:
+    def _resolve_musepi_path(path: str | Path) -> Path:
         """Map a helper path to a real filesystem Path.
 
         A `scheme://…` whose scheme has an injected on-disk root (e.g.
@@ -89,7 +89,7 @@ if "__omp_prelude_loaded__" not in globals():
         paths pass through unchanged; any other `scheme://` is rejected."""
         if not isinstance(path, str):
             return Path(path)
-        match = _OMP_INTERNAL_URL_RE.match(path)
+        match = _MUSEPI_INTERNAL_URL_RE.match(path)
         if not match:
             return Path(path)
         scheme = match.group(1).lower()
@@ -123,7 +123,7 @@ if "__omp_prelude_loaded__" not in globals():
             selector = _read_line_selector(offset, limit)
             tool_path = path if selector is None else f"{path}:{selector}"
             return _read_tool_text(tool_path)
-        p = _resolve_omp_path(path)
+        p = _resolve_musepi_path(path)
         data = p.read_text(encoding="utf-8")
         lines = data.splitlines(keepends=True)
         if offset > 1 or limit is not None:
@@ -137,7 +137,7 @@ if "__omp_prelude_loaded__" not in globals():
 
     def write(path: str | Path, content: str) -> Path:
         """Write file contents (create parents)."""
-        p = _resolve_omp_path(path)
+        p = _resolve_musepi_path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         _emit_status("write", path=str(p), chars=len(content))
@@ -385,11 +385,11 @@ if "__omp_prelude_loaded__" not in globals():
     def _bridge_call(name: str, args: dict):
         """POST one request to the host tool bridge and return its `value`."""
         base, token, session = _tool_proxy_from_env()
-        _run_id_getter = globals().get("__omp_current_run_id__")
+        _run_id_getter = globals().get("__musepi_current_run_id__")
         _run_id = (
             _run_id_getter()
             if callable(_run_id_getter)
-            else globals().get("__omp_run_id__")
+            else globals().get("__musepi_run_id__")
         )
         payload = json.dumps(
             {"session": session, "run": _run_id, "name": name, "args": args}
@@ -643,7 +643,7 @@ if "__omp_prelude_loaded__" not in globals():
 
     def phase(title):
         """Record the current readable phase and emit a status ``phase`` event."""
-        globals()["__omp_current_phase__"] = str(title)
+        globals()["__musepi_current_phase__"] = str(title)
         _emit_status("phase", title=str(title))
         return None
 

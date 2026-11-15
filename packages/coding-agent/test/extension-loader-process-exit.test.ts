@@ -240,7 +240,7 @@ try {
 			// instead of looping on ExtensionExitError.
 			const preload = writeModule(
 				"guard-init-preload.ts",
-				"globalThis.__ompNativeReallyExit = process.reallyExit;\n" +
+				"globalThis.__musepiNativeReallyExit = process.reallyExit;\n" +
 					'process.reallyExit = (() => { throw new Error("guarded during init"); });\n',
 			);
 			const repoRoot = path.resolve(import.meta.dir, "../../..");
@@ -249,7 +249,7 @@ try {
 				`
 import { postmortem } from "${utilsIndex}";
 postmortem.register("probe", reason => process.stdout.write(\`cleanup:\${reason}\\n\`));
-process.reallyExit = globalThis.__ompNativeReallyExit;
+process.reallyExit = globalThis.__musepiNativeReallyExit;
 process.stdout.write("armed\\n");
 process.kill(process.pid, "SIGHUP");
 // Keep the real child event loop alive so the platform can deliver SIGHUP;

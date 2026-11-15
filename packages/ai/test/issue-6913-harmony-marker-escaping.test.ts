@@ -46,7 +46,7 @@ function harmonyPoisonedContext(): { context: Context; user: UserMessage; toolRe
 		toolCallId: "call_1",
 		toolName: "grep",
 		isError: false,
-		content: [{ type: "text", text: `omp://toolconv/harmony.md: ${MARKER}\nmore docs` }],
+		content: [{ type: "text", text: `musepi://toolconv/harmony.md: ${MARKER}\nmore docs` }],
 		timestamp: 0,
 	};
 	return { context: { messages: [user, assistant, toolResult] }, user, toolResult };

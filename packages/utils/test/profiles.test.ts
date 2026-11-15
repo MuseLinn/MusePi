@@ -358,8 +358,8 @@ describe("dirs module import behavior", () => {
 			const workAgentDir = path.join(os.homedir(), probeConfigDir, "profiles", "work", "agent");
 			const defaultAgentDir = path.join(os.homedir(), probeConfigDir, "agent");
 
-			for (const ompProfile of ["", "default"]) {
-				const probePath = path.join(root, `default-profile-${ompProfile || "empty"}.ts`);
+			for (const musepiProfile of ["", "default"]) {
+				const probePath = path.join(root, `default-profile-${musepiProfile || "empty"}.ts`);
 				await Bun.write(
 					probePath,
 					[
@@ -374,7 +374,7 @@ describe("dirs module import behavior", () => {
 				const childEnv: Record<string, string | undefined> = {
 					...process.env,
 					PI_CONFIG_DIR: probeConfigDir,
-					MUSEPI_PROFILE: ompProfile,
+					MUSEPI_PROFILE: musepiProfile,
 					PI_CODING_AGENT_DIR: workAgentDir,
 				};
 				const proc = Bun.spawn([process.execPath, probePath], {

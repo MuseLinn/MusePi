@@ -13,7 +13,7 @@ const embedPayload = embed(files, bodies);
 
 // The embed path only runs in compiled binaries / the npm bundle; dev tests
 // otherwise exercise the disk fallback (empty placeholder), so a regression in
-// the two-line `<filenames>\n<gzip bodies>` parsing would ship broken `omp://`
+// the two-line `<filenames>\n<gzip bodies>` parsing would ship broken `musepi://`
 // docs undetected. These cover the populated-embed decode directly.
 describe("decodeDocsIndex (embedded docs path)", () => {
 	it("lists filenames from the first line without inflating the blob", () => {

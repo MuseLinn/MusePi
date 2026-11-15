@@ -1,5 +1,5 @@
 /**
- * Harness documentation index for the `omp://` protocol.
+ * Harness documentation index for the `musepi://` protocol.
  *
  * Compiled binaries and the prepacked npm bundle inline a compressed index of the
  * docs (injected via `process.env.PI_DOCS_EMBED` at build time). The format is two lines:
@@ -110,10 +110,10 @@ function readShippedEmbed(): DocsIndex | null {
 	return decoded;
 }
 
-/** Empty index for when no docs corpus is reachable — degrades `omp://` instead of throwing ENOENT at callers. */
+/** Empty index for when no docs corpus is reachable — degrades `musepi://` instead of throwing ENOENT at callers. */
 function emptyIndex(): DocsIndex {
 	logger.warn(
-		"omp:// docs corpus unavailable: no build-time embed, on-disk docs/ directory, or shipped dist embed found",
+		"musepi:// docs corpus unavailable: no build-time embed, on-disk docs/ directory, or shipped dist embed found",
 	);
 	return { filenames: [], getBody: () => Promise.resolve(undefined) };
 }

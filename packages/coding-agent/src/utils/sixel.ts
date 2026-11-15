@@ -4,7 +4,7 @@ const SIXEL_START_REGEX = /\x1bP(?:[0-9;]*)q/u;
 const SIXEL_END_SEQUENCE = "\x1b\\";
 const SIXEL_END_BELL = "\x07";
 const SIXEL_SEQUENCE_REGEX = /\x1bP(?:[0-9;]*)q[\s\S]*?(?:\x1b\\|\x07)/gu;
-const SIXEL_PLACEHOLDER_PREFIX = "__OMP_SIXEL_SEQUENCE_";
+const SIXEL_PLACEHOLDER_PREFIX = "__MUSEPI_SIXEL_SEQUENCE_";
 
 /**
  * Returns whether SIXEL passthrough is explicitly enabled.
@@ -62,7 +62,7 @@ export function sanitizeWithOptionalSixelPassthrough(text: string, sanitize: (te
 	});
 
 	const sanitized = sanitize(tokenized);
-	return sanitized.replace(/__OMP_SIXEL_SEQUENCE_(\d+)__/gu, (_, indexText: string) => {
+	return sanitized.replace(/__MUSEPI_SIXEL_SEQUENCE_(\d+)__/gu, (_, indexText: string) => {
 		const index = Number.parseInt(indexText, 10);
 		return preservedSequences[index] ?? "";
 	});

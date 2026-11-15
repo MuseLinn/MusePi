@@ -33,7 +33,7 @@ const client = new SQL(process.env.SESSIONS_DB_URL ?? "sqlite::memory:");
 // dialect) and warms the in-memory mirror with every existing row.
 const storage = await SqlSessionStorage.create({
 	client,
-	table: "omp_session_files", // optional, this is the default
+	table: "musepi_session_files", // optional, this is the default
 	// createTable: false,       // set if migrations are owned elsewhere
 });
 

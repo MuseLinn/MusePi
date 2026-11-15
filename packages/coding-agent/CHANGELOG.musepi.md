@@ -7,6 +7,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 - **Agent 头像恢复眼动与交互，并接上工作状态**：Aora 头像在 ≥32px 的槽位让眼睛跟随鼠标、悬停时眼睛放大聚拢；点击头像会触发一次惊讶反应（1.5s 后回到真实心情）。主会话头像现在能收到回合结果（成功庆祝、失败告警）与空闲阶梯（30s 无聊 / 90s 困倦 / 5min 入睡），多个子代理并行时显示为工作中而不是空闲。
   - EN: The agent avatar tracks the pointer again from 32px slots up, enlarges its eyes on hover, and answers a click with a surprised reaction that resolves back to the live mood after 1.5s. The main chat avatar now receives the turn outcome (celebration on success, alert on failure) and the idle ladder (bored at 30s, drowsy at 90s, asleep at 5 minutes); several subagents in flight read as working instead of idle.
 
+- **内部符号与文档协议统一为 `musepi`**：worker argv 选择器与 legacy-pi 兼容标记改为 `__musepi_*`，GitLab Duo 侧 MCP 前缀改为 `mcp__musepi__`，harness 文档协议由 `omp://` 改为 `musepi://`；eval 前奏的状态 MIME、Ruby 桥、shell completion 函数名与浏览器标签组名同步。对外服务地址、持久化键与 omp 兼容入口保持不变。
+  - EN: Internal symbols and the docs protocol now use `musepi`: worker argv selectors and legacy-pi compat markers are `__musepi_*`, the GitLab Duo MCP prefix is `mcp__musepi__`, harness docs moved from `omp://` to `musepi://`, and the eval preludes' status MIME, the Ruby bridge, shell completion helpers and the browser tab-group name follow. External service URLs, persisted keys and the omp compatibility entry points are unchanged.
+
 - **环境变量统一为 `MUSEPI_` 前缀**：原以 `OMP_` 暴露的环境变量（认证代理、MCP 超时、自动更新、线程上限、WebP、软件渲染、profile、快照缓存、基准变量等）全部改为 `MUSEPI_`，不再读取旧名；文档、CI 与安装脚本同步更新。
   - EN: Environment variables now use the `MUSEPI_` prefix exclusively: auth broker, MCP timeout, auto-update, thread limits, WebP, software GL, profile, snapshot cache and benchmark variables no longer answer to the old `OMP_` names. Docs, CI and install scripts are updated in the same change.
 

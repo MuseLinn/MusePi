@@ -48,7 +48,7 @@ function snapshot(tab: ChromeTab): TabSnapshot | null {
 }
 
 /** Title of the omp tab group; mirrored to session storage so a restarted service worker can still dissolve it. */
-let ompGroupTitle: string | null = null;
+let musepiGroupTitle: string | null = null;
 
 /**
  * Serialize group mutations. Chrome's query→group→set-title sequence is not
@@ -64,8 +64,8 @@ function enqueueGroupOp<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Move tabs into the per-window omp group, creating or reusing it by title. */
 async function groupTabs(tabIds: number[], title: string, color: string): Promise<{ grouped: Record<string, number> }> {
-	ompGroupTitle = title;
-	void chrome.storage.session.set({ ompGroupTitle: title });
+	musepiGroupTitle = title;
+	void chrome.storage.session.set({ musepiGroupTitle: title });
 	const byWindow = new Map<number, number[]>();
 	for (const tabId of tabIds) {
 		try {
@@ -103,13 +103,13 @@ async function groupTabs(tabIds: number[], title: string, color: string): Promis
 
 /** Dissolve every omp-titled group (relay disconnected or asked us to release tabs). */
 async function restoreGroups(): Promise<void> {
-	if (!ompGroupTitle) {
+	if (!musepiGroupTitle) {
 		// Service worker restarted since the last group op; recover the title.
-		const stored = await chrome.storage.session.get({ ompGroupTitle: "" }).catch(() => ({ ompGroupTitle: "" }));
-		ompGroupTitle = typeof stored.ompGroupTitle === "string" && stored.ompGroupTitle ? stored.ompGroupTitle : null;
+		const stored = await chrome.storage.session.get({ musepiGroupTitle: "" }).catch(() => ({ musepiGroupTitle: "" }));
+		musepiGroupTitle = typeof stored.musepiGroupTitle === "string" && stored.musepiGroupTitle ? stored.musepiGroupTitle : null;
 	}
-	if (!ompGroupTitle) return;
-	const groups = await chrome.tabGroups.query({ title: ompGroupTitle }).catch(() => []);
+	if (!musepiGroupTitle) return;
+	const groups = await chrome.tabGroups.query({ title: musepiGroupTitle }).catch(() => []);
 	for (const group of groups) {
 		const tabs = await chrome.tabs.query({ groupId: group.id }).catch(() => []);
 		const ids = tabs.map(tab => tab.id).filter(id => id !== undefined);

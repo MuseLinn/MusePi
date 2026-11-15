@@ -133,7 +133,7 @@ function buildGitLabDuoWorkflowGoalOverflowMessage(goalBytes: number): string {
 	return `prompt is too long: ${goalBytes} bytes exceeds the GitLab Duo Agent goal byte budget (soft ${GITLAB_DUO_WORKFLOW_GOAL_SOFT_OVERFLOW_BYTES}, hard ${GITLAB_DUO_WORKFLOW_GOAL_HARD_OVERFLOW_BYTES})`;
 }
 const GITLAB_DUO_WORKFLOW_LANGUAGE_SERVER_VERSION = "8.104.0";
-const GITLAB_DUO_WORKFLOW_AVAILABLE_MODELS_QUERY = `query omp_gitlabDuoWorkflowAvailableModels($rootNamespaceId: GroupID!) {
+const GITLAB_DUO_WORKFLOW_AVAILABLE_MODELS_QUERY = `query musepi_gitlabDuoWorkflowAvailableModels($rootNamespaceId: GroupID!) {
   aiChatAvailableModels(rootNamespaceId: $rootNamespaceId) {
     defaultModel { name ref }
     selectableModels { name ref }
@@ -149,8 +149,8 @@ export const GITLAB_DUO_WORKFLOW_CLIENT_CAPABILITIES = [
 	"tool_call_approval",
 ] as const;
 
-const GITLAB_DUO_WORKFLOW_INLINE_AGENT_NAME = "omp_agent";
-const GITLAB_DUO_WORKFLOW_INLINE_PROMPT_ID = "omp_inline_prompt";
+const GITLAB_DUO_WORKFLOW_INLINE_AGENT_NAME = "musepi_agent";
+const GITLAB_DUO_WORKFLOW_INLINE_PROMPT_ID = "musepi_inline_prompt";
 // `on_agent_reasoning` is what makes the server tag an agent's pre-tool-call
 // commentary as `message_sub_type: "reasoning"` — the chain-of-thought the
 // official Duo CLI surfaces. An inline flow must opt in explicitly.
@@ -774,7 +774,7 @@ function mapGitLabDuoWorkflowMcpToolCall(args: Record<string, unknown>): {
 	arguments: Record<string, unknown>;
 } {
 	const rawName = stringField(args, "toolName") ?? stringField(args, "tool_name") ?? stringField(args, "name") ?? "";
-	const toolName = rawName.startsWith("mcp__omp__") ? rawName.slice("mcp__omp__".length) : rawName;
+	const toolName = rawName.startsWith("mcp__musepi__") ? rawName.slice("mcp__musepi__".length) : rawName;
 	const parsedArgs = parseGitLabDuoWorkflowMcpArguments(args.args ?? args.arguments);
 	if (toolName === "edit" && typeof parsedArgs.input === "string") {
 		return { name: "edit", arguments: { input: parsedArgs.input } };
@@ -2221,12 +2221,12 @@ function gitLabToolResultToText(toolResult: ToolResultMessage): string {
 
 function buildGitLabMcpToolDefinition(tool: Tool): GitLabMcpToolDefinition {
 	const schema = toolWireSchema(tool);
-	// Register the tool under its BARE name (no `mcp__omp__` prefix). The server does
+	// Register the tool under its BARE name (no `mcp__musepi__` prefix). The server does
 	// not strip prefixes — it registers `_executable_tools` and binds the model schema
 	// under exactly the wire `name` (sanitize_llm_name only replaces illegal chars), so
 	// the name the model sees, the toolset key it is matched against, and OMP's own
 	// tool docs must all be the same bare name. A prefixed wire name only forced the
-	// model to learn `mcp__omp__read` while OMP docs say `read`, with no upside.
+	// model to learn `mcp__musepi__read` while OMP docs say `read`, with no upside.
 	// `originalToolName`/`serverName` stay as MCP metadata; they are not the match key.
 	return {
 		name: tool.name,

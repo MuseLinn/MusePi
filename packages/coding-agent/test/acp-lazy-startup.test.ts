@@ -280,7 +280,7 @@ describe("ACP lazy startup", () => {
 		type ObservedSettings = Record<string, unknown>;
 
 		const runProtocolStartup = async (mode: "rpc" | "rpc-ui" | "acp"): Promise<ObservedSettings> => {
-			using tempDir = TempDir.createSync("@omp-protocol-host-defaulted-");
+			using tempDir = TempDir.createSync("@musepi-protocol-host-defaulted-");
 			const cwd = tempDir.path();
 			const authStorage = await AuthStorage.create(path.join(cwd, "auth.db"));
 			const settings = Settings.isolated({ ...explicit, ...rpcOnlyExplicit });
@@ -346,7 +346,7 @@ describe("ACP lazy startup", () => {
 		};
 
 		const runProtocolStartup = async (mode: "rpc" | "rpc-ui" | "acp"): Promise<ObservedTodoSettings> => {
-			using tempDir = TempDir.createSync("@omp-protocol-todo-settings-");
+			using tempDir = TempDir.createSync("@musepi-protocol-todo-settings-");
 			const cwd = tempDir.path();
 			const authStorage = await AuthStorage.create(path.join(cwd, "auth.db"));
 			const settings = Settings.isolated({

@@ -1,5 +1,5 @@
 /**
- * Autocomplete for internal-url schemes (skill://, rule://, omp://, local://,
+ * Autocomplete for internal-url schemes (skill://, rule://, musepi://, local://,
  * memory://, agent://, artifact://) while composing a prompt.
  *
  * Detection here MUST stay in sync with the generic URL-scheme trigger in the

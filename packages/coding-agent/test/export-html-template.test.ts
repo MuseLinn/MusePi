@@ -90,7 +90,7 @@ function composeExpectedTemplate(): string {
 			.replace(
 				"<template-js/>",
 				() =>
-					`<script>window.__OMP_HIDDEN_ENTRY_TYPES__=${JSON.stringify([...HIDDEN_BY_DEFAULT_ENTRY_TYPES])};</script><script>${templateJs}</script>`,
+					`<script>window.__MUSEPI_HIDDEN_ENTRY_TYPES__=${JSON.stringify([...HIDDEN_BY_DEFAULT_ENTRY_TYPES])};</script><script>${templateJs}</script>`,
 			)
 	);
 }

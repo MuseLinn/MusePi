@@ -209,7 +209,7 @@ new Mnemopi({
 - 子 agent 不拥有单独的 Mnemopi retain 循环；存在父 Mnemopi 状态时它们复用父状态，否则保持惰性。
 - 主后端启动时，符合条件的 working-memory 行会在首次写入可能触发 TTL 裁剪前跨拥有的 bank 提升。提升失败会记录日志，但不会禁用后端。
 - 后端启动是尽力而为。数据库/模型初始化失败时会话继续，Mnemopi 惰性运行并记录警告；记忆工具随后报告后端未初始化。
-- 本地嵌入模型每台机器只加载一次，而不是每个会话一次：每个 (模型, fastembed 缓存目录) 对由一个分离的 `__omp_worker_mnemopi_embed_server` 进程服务。它在 `<state>/run/mnemopi-embed/<model>-<hash>.json` 发布回环端点和仅所有者可读的 token；第一个需要它的 MusePi 进程启动它，后续进程连接。推理运行在服务端私有的 `onnxruntime` 子进程中。服务端 15 分钟无请求后退出并释放模型内存；另一版本的进程连接时会替换它。稳态嵌入超过 2 分钟视为失败，服务端会杀死并重启其推理子进程。共享服务端无法启动时，客户端回退到每进程 worker。
+- 本地嵌入模型每台机器只加载一次，而不是每个会话一次：每个 (模型, fastembed 缓存目录) 对由一个分离的 `__musepi_worker_mnemopi_embed_server` 进程服务。它在 `<state>/run/mnemopi-embed/<model>-<hash>.json` 发布回环端点和仅所有者可读的 token；第一个需要它的 MusePi 进程启动它，后续进程连接。推理运行在服务端私有的 `onnxruntime` 子进程中。服务端 15 分钟无请求后退出并释放模型内存；另一版本的进程连接时会替换它。稳态嵌入超过 2 分钟视为失败，服务端会杀死并重启其推理子进程。共享服务端无法启动时，客户端回退到每进程 worker。
 
 ## 关闭与持久性
 

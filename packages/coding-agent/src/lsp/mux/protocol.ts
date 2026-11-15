@@ -12,7 +12,7 @@
 import * as path from "node:path";
 
 /** Hidden CLI selector used to re-enter the LSP mux worker. */
-export const LSP_MUX_WORKER_ARG = "__omp_worker_lsp_mux";
+export const LSP_MUX_WORKER_ARG = "__musepi_worker_lsp_mux";
 
 /** Environment key carrying the socket endpoint the mux must listen on. */
 export const LSP_MUX_SOCKET_ENV = "MUSEPI_LSP_MUX_SOCKET";

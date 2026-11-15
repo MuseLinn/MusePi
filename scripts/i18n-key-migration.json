@@ -7708,7 +7708,7 @@
 		"Model": "setup.model",
 		"Messages": "setup.messages",
 		"Extensions": "setup.extensions",
-		"OMP-aligned coding agent": "setup.ompAlignedCodingAgent",
+		"OMP-aligned coding agent": "setup.musepiAlignedCodingAgent",
 		"Welcome! Let's get you set up in a few quick steps.": "setup.welcomeLetS.info",
 		"Press any key to begin...": "setup.pressAnyKeyBegin",
 		"Step": "setup.step",

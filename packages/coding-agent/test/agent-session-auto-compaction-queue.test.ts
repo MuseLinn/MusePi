@@ -14,7 +14,7 @@ import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
 import { TempDir, withTimeout } from "@musepi/pi-utils";
 import * as logger from "@musepi/pi-utils/logger";
 
-const runtimeSignalStoreKey = "__ompRuntimeSignals";
+const runtimeSignalStoreKey = "__musepiRuntimeSignals";
 
 type RuntimeSignalGlobal = typeof globalThis & { [runtimeSignalStoreKey]?: string[] };
 
@@ -53,8 +53,8 @@ describe("AgentSession auto-compaction queue resume", () => {
 			pi => {
 				pi.on("session_before_compact", async event => {
 					getRuntimeSignals().push("before_compact:enter");
-					const gate = (globalThis as typeof globalThis & { __ompManualCompactGate?: Promise<void> })
-						.__ompManualCompactGate;
+					const gate = (globalThis as typeof globalThis & { __musepiManualCompactGate?: Promise<void> })
+						.__musepiManualCompactGate;
 					if (gate) await gate;
 					return {
 						compaction: {
@@ -134,8 +134,9 @@ describe("AgentSession auto-compaction queue resume", () => {
 				await Bun.sleep(0);
 			} finally {
 				getRuntimeSignals().length = 0;
-				(globalThis as typeof globalThis & { __ompManualCompactGate?: Promise<void> }).__ompManualCompactGate =
-					undefined;
+				(
+					globalThis as typeof globalThis & { __musepiManualCompactGate?: Promise<void> }
+				).__musepiManualCompactGate = undefined;
 				vi.restoreAllMocks();
 			}
 		}
@@ -299,7 +300,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 		// Park compaction inside its awaited hook so we can queue a follow-up while
 		// the session is disconnected and abort has already run its finally.
 		const gate = Promise.withResolvers<void>();
-		(globalThis as typeof globalThis & { __ompManualCompactGate?: Promise<void> }).__ompManualCompactGate =
+		(globalThis as typeof globalThis & { __musepiManualCompactGate?: Promise<void> }).__musepiManualCompactGate =
 			gate.promise;
 
 		const compactPromise = session.compact();
@@ -350,7 +351,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 		// #autoCompactionAbortController stays installed across the manual /compact
 		// startup abort below.
 		const gate = Promise.withResolvers<void>();
-		(globalThis as typeof globalThis & { __ompManualCompactGate?: Promise<void> }).__ompManualCompactGate =
+		(globalThis as typeof globalThis & { __musepiManualCompactGate?: Promise<void> }).__musepiManualCompactGate =
 			gate.promise;
 
 		const appendCompactionSpy = vi.spyOn(sessionManager, "appendCompaction");

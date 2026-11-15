@@ -10,14 +10,14 @@ import * as path from "node:path";
 import { loadExtensions } from "@musepi/pi-coding-agent/extensibility/extensions/loader";
 import { TempDir } from "@musepi/pi-utils";
 
-const EVENTS_KEY = "__ompExtensionLoaderConcurrencyEvents";
-const RELEASE_KEY = "__ompExtensionLoaderConcurrencyRelease";
-const FAST_EVALUATED_KEY = "__ompExtensionLoaderConcurrencyFastEvaluated";
+const EVENTS_KEY = "__musepiExtensionLoaderConcurrencyEvents";
+const RELEASE_KEY = "__musepiExtensionLoaderConcurrencyRelease";
+const FAST_EVALUATED_KEY = "__musepiExtensionLoaderConcurrencyFastEvaluated";
 
 interface EventsGlobal {
-	__ompExtensionLoaderConcurrencyEvents?: string[];
-	__ompExtensionLoaderConcurrencyRelease?: Promise<void>;
-	__ompExtensionLoaderConcurrencyFastEvaluated?: () => void;
+	__musepiExtensionLoaderConcurrencyEvents?: string[];
+	__musepiExtensionLoaderConcurrencyRelease?: Promise<void>;
+	__musepiExtensionLoaderConcurrencyFastEvaluated?: () => void;
 }
 
 const eventsGlobal = globalThis as EventsGlobal;

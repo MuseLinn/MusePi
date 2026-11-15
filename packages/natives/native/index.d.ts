@@ -265,7 +265,7 @@ export declare class Shell {
  * current-thread-only global pool that cannot steal work from later native
  * calls. Idempotent.
  */
-export declare function __ompInstallTokioRuntime(): void
+export declare function __musepiInstallTokioRuntime(): void
 
 /**
  * Version sentinel — exists solely so the JS loader can prove at load time

@@ -593,12 +593,12 @@ describe("listClaudePluginRoots", () => {
 
 	test("uses OMP then Claude manifest mcpServers paths before .mcp.json", async () => {
 		const pluginsDir = path.join(tempDir, ".claude", "plugins");
-		const ompPluginPath = path.join(tempDir, "plugins", "omp-pointer");
+		const musepiPluginPath = path.join(tempDir, "plugins", "omp-pointer");
 		const claudePluginPath = path.join(tempDir, "plugins", "claude-pointer");
 		await fs.mkdir(pluginsDir, { recursive: true });
 		await Promise.all([
-			fs.mkdir(path.join(ompPluginPath, ".omp-plugin"), { recursive: true }),
-			fs.mkdir(path.join(ompPluginPath, ".claude-plugin"), { recursive: true }),
+			fs.mkdir(path.join(musepiPluginPath, ".omp-plugin"), { recursive: true }),
+			fs.mkdir(path.join(musepiPluginPath, ".claude-plugin"), { recursive: true }),
 			fs.mkdir(path.join(claudePluginPath, ".claude-plugin"), { recursive: true }),
 		]);
 		await fs.writeFile(
@@ -609,7 +609,7 @@ describe("listClaudePluginRoots", () => {
 					"omp-pointer@market": [
 						{
 							scope: "user",
-							installPath: ompPluginPath,
+							installPath: musepiPluginPath,
 							version: "1.0.0",
 							installedAt: "2026-07-28T00:00:00Z",
 							lastUpdated: "2026-07-28T00:00:00Z",
@@ -629,19 +629,19 @@ describe("listClaudePluginRoots", () => {
 		);
 		await Promise.all([
 			fs.writeFile(
-				path.join(ompPluginPath, ".omp-plugin", "plugin.json"),
+				path.join(musepiPluginPath, ".omp-plugin", "plugin.json"),
 				JSON.stringify({ mcpServers: "./mcp-omp.json" }),
 			),
 			fs.writeFile(
-				path.join(ompPluginPath, ".claude-plugin", "plugin.json"),
+				path.join(musepiPluginPath, ".claude-plugin", "plugin.json"),
 				JSON.stringify({ mcpServers: "./mcp-claude.json" }),
 			),
-			fs.writeFile(path.join(ompPluginPath, "mcp-omp.json"), JSON.stringify({ "from-omp": { command: "omp" } })),
+			fs.writeFile(path.join(musepiPluginPath, "mcp-omp.json"), JSON.stringify({ "from-omp": { command: "omp" } })),
 			fs.writeFile(
-				path.join(ompPluginPath, "mcp-claude.json"),
+				path.join(musepiPluginPath, "mcp-claude.json"),
 				JSON.stringify({ "from-claude": { command: "claude" } }),
 			),
-			fs.writeFile(path.join(ompPluginPath, ".mcp.json"), JSON.stringify({ "from-root": { command: "root" } })),
+			fs.writeFile(path.join(musepiPluginPath, ".mcp.json"), JSON.stringify({ "from-root": { command: "root" } })),
 			fs.writeFile(
 				path.join(claudePluginPath, ".claude-plugin", "plugin.json"),
 				JSON.stringify({ mcpServers: "./mcp-claude.json" }),

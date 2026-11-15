@@ -392,7 +392,7 @@ end
 
 function next_drain_marker()
     drain_marker_counter[] += UInt(1)
-    return Vector{UInt8}(codeunits("\0__OMP_DRAIN__:" * string(drain_marker_counter[]) * ":" * string(time_ns()) * "\0"))
+    return Vector{UInt8}(codeunits("\0__MUSEPI_DRAIN__:" * string(drain_marker_counter[]) * ":" * string(time_ns()) * "\0"))
 end
 
 function await_stream_drains()

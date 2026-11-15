@@ -194,21 +194,26 @@ export async function resolvePrBranchPushTarget(
 	maintainerCanModify?: boolean;
 	isCrossRepository: boolean;
 }> {
-	const headRef = await git.config.getBranch(repoRoot, localBranch, "ompPrHeadRef", signal);
+	const headRef = await git.config.getBranch(repoRoot, localBranch, "musepiPrHeadRef", signal);
 	if (!headRef) {
 		throw new ToolError(`branch ${localBranch} has no PR push metadata; check it out via op: pr_checkout first`);
 	}
 
 	const pushRemote = await git.config.getBranch(repoRoot, localBranch, "pushRemote", signal);
 	const remote = await git.config.getBranch(repoRoot, localBranch, "remote", signal);
-	const prUrl = await git.config.getBranch(repoRoot, localBranch, "ompPrUrl", signal);
+	const prUrl = await git.config.getBranch(repoRoot, localBranch, "musepiPrUrl", signal);
 	const maintainerCanModifyValue = await git.config.getBranch(
 		repoRoot,
 		localBranch,
-		"ompPrMaintainerCanModify",
+		"musepiPrMaintainerCanModify",
 		signal,
 	);
-	const isCrossRepositoryValue = await git.config.getBranch(repoRoot, localBranch, "ompPrIsCrossRepository", signal);
+	const isCrossRepositoryValue = await git.config.getBranch(
+		repoRoot,
+		localBranch,
+		"musepiPrIsCrossRepository",
+		signal,
+	);
 
 	const remoteName = pushRemote ?? remote;
 	if (!remoteName) {
@@ -442,19 +447,19 @@ export async function checkoutPullRequest(
 			await git.config.setBranch(repoRoot, localBranch, "remote", remote.name, signal);
 			await git.config.setBranch(repoRoot, localBranch, "merge", `refs/heads/${headRefName}`, signal);
 			await git.config.setBranch(repoRoot, localBranch, "pushRemote", remote.name, signal);
-			await git.config.setBranch(repoRoot, localBranch, "ompPrHeadRef", headRefName, signal);
-			await git.config.setBranch(repoRoot, localBranch, "ompPrUrl", data.url ?? "", signal);
+			await git.config.setBranch(repoRoot, localBranch, "musepiPrHeadRef", headRefName, signal);
+			await git.config.setBranch(repoRoot, localBranch, "musepiPrUrl", data.url ?? "", signal);
 			await git.config.setBranch(
 				repoRoot,
 				localBranch,
-				"ompPrIsCrossRepository",
+				"musepiPrIsCrossRepository",
 				String(Boolean(data.isCrossRepository)),
 				signal,
 			);
 			await git.config.setBranch(
 				repoRoot,
 				localBranch,
-				"ompPrMaintainerCanModify",
+				"musepiPrMaintainerCanModify",
 				String(Boolean(data.maintainerCanModify)),
 				signal,
 			);

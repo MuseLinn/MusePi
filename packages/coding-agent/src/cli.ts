@@ -153,16 +153,16 @@ async function runSmokeTest(): Promise<void> {
 	process.stdout.write("smoke-test: ok\n");
 }
 
-const TINY_WORKER_ARG = "__omp_worker_tiny_inference";
-const STATS_SYNC_WORKER_ARG = "__omp_worker_stats_sync";
-const TAB_WORKER_ARG = "__omp_worker_tab";
-const JS_EVAL_WORKER_ARG = "__omp_worker_js_eval";
-const JS_EVAL_PROCESS_ARG = "__omp_worker_js_eval_process";
-const STT_WORKER_ARG = "__omp_worker_stt";
-const VOICE_FRONTEND_WORKER_ARG = "__omp_worker_voice_frontend";
-const TTS_WORKER_ARG = "__omp_worker_tts";
-const MNEMOPI_EMBED_WORKER_ARG = "__omp_worker_mnemopi_embed";
-const MNEMOPI_EMBED_SERVER_ARG = "__omp_worker_mnemopi_embed_server";
+const TINY_WORKER_ARG = "__musepi_worker_tiny_inference";
+const STATS_SYNC_WORKER_ARG = "__musepi_worker_stats_sync";
+const TAB_WORKER_ARG = "__musepi_worker_tab";
+const JS_EVAL_WORKER_ARG = "__musepi_worker_js_eval";
+const JS_EVAL_PROCESS_ARG = "__musepi_worker_js_eval_process";
+const STT_WORKER_ARG = "__musepi_worker_stt";
+const VOICE_FRONTEND_WORKER_ARG = "__musepi_worker_voice_frontend";
+const TTS_WORKER_ARG = "__musepi_worker_tts";
+const MNEMOPI_EMBED_WORKER_ARG = "__musepi_worker_mnemopi_embed";
+const MNEMOPI_EMBED_SERVER_ARG = "__musepi_worker_mnemopi_embed_server";
 
 async function runWorkerEntrypoint(arg: string | undefined): Promise<boolean> {
 	if (arg === TINY_WORKER_ARG) {
@@ -376,7 +376,7 @@ async function runTinyWorker(): Promise<void> {
 /** Run the CLI with the given argv (no `process.argv` prefix). */
 export async function runCli(argv: string[]): Promise<void> {
 	// Windows: patch Bun.spawn/spawnSync so every child of this process
-	// (CLI, daemon, and each `__omp_worker_*` subprocess re-entering here)
+	// (CLI, daemon, and each `__musepi_worker_*` subprocess re-entering here)
 	// inherits windowsHide without per-call-site opt-in. Idempotent; no-op
 	// off win32 and when the daemon's startDaemon already installed it.
 	installWindowsSpawnGuard();
@@ -459,7 +459,7 @@ export async function runCli(argv: string[]): Promise<void> {
 	// `@musepi/pi-utils/env` here would snapshot the wrong agent `.env`.
 	// Gated on `isProcessEntry`: only the real CLI process entry is a valid
 	// worker host. Worker-thread re-entry already returned above at the
-	// `__omp_worker_` dispatch, and importers (`runCli` in profile-CLI tests,
+	// `__musepi_worker_` dispatch, and importers (`runCli` in profile-CLI tests,
 	// SDK embedding) have `import.meta.main === false` — declaring there would
 	// poison `workerHostEntry()` for the whole test process, forcing eval/stats/
 	// browser workers onto the same-realm inline fallback.

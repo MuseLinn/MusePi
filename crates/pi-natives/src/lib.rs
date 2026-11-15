@@ -266,8 +266,8 @@ pub const fn pi_natives_version_sentinel() {}
 /// invoke a panicking or allocating native call. This runs during `.node`
 /// load, while the dynamic-loader lock is held, so it MUST NOT spawn threads —
 /// the Tokio runtime is installed afterwards on Windows by
-/// [`omp_install_tokio_runtime`], which the JS loader calls once `dlopen` has
-/// returned.
+/// [`musepi_install_tokio_runtime`], which the JS loader calls once `dlopen`
+/// has returned.
 ///
 /// On Windows, the custom Tokio runtime is host-sized to prevent aborts under
 /// memory limits (see [`create_windows_napi_tokio_runtime`]). Non-Windows
@@ -279,7 +279,7 @@ fn install_native_crash_handler() {
 	crash_handler::install();
 }
 
-/// Guards [`omp_install_tokio_runtime`] so the runtime is built at most once
+/// Guards [`musepi_install_tokio_runtime`] so the runtime is built at most once
 /// per process even if the loader invokes it more than once.
 #[cfg(target_os = "windows")]
 static TOKIO_RUNTIME_INSTALLED: AtomicBool = AtomicBool::new(false);
@@ -307,9 +307,9 @@ static TOKIO_RUNTIME_INSTALLED: AtomicBool = AtomicBool::new(false);
 /// spawnable, patched Rayon callsites stay sequential rather than registering a
 /// current-thread-only global pool that cannot steal work from later native
 /// calls. Idempotent.
-#[napi(js_name = "__ompInstallTokioRuntime")]
+#[napi(js_name = "__musepiInstallTokioRuntime")]
 #[allow(clippy::missing_const_for_fn, reason = "napi macro is incompatible with const fn")]
-pub fn omp_install_tokio_runtime() {
+pub fn musepi_install_tokio_runtime() {
 	#[cfg(target_os = "windows")]
 	if TOKIO_RUNTIME_INSTALLED.swap(true, Ordering::SeqCst) {
 		return;

@@ -1,5 +1,5 @@
 /**
- * Worker entry for the project-shared blob daemon (`__omp_worker_blob_broker`).
+ * Worker entry for the project-shared blob daemon (`__musepi_worker_blob_broker`).
  *
  * Hosts a {@link LocalBlobBackend} (store + exposure or uploader) plus an HTTP
  * control plane on a Unix socket. Sessions register blobs over the socket;

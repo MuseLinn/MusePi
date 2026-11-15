@@ -41,7 +41,7 @@ const GIST_MAX_SEALED_BYTES = 5_000_000;
 const IV_LENGTH = 12;
 const SHARE_KEY_BYTES = 32;
 /** The viewer picks the gist file by this suffix. */
-const GIST_FILENAME = "session.ompshare.txt";
+const GIST_FILENAME = "session.musepishare.txt";
 /** Gist ids are hex; the relay never issues pure-hex ids, so the viewer can route on shape. */
 const GIST_ID_RE = /^[0-9a-f]{20,64}$/;
 

@@ -312,14 +312,14 @@ fn xdg_state_logs_from_env(_home: &Path, _config_dir_override: Option<&OsStr>) -
 }
 
 /// Pure XDG-eligibility computation extracted for unit testing — no env
-/// reads, no fs reads. `omp_dir_exists` decides whether the candidate
+/// reads, no fs reads. `musepi_dir_exists` decides whether the candidate
 /// `<xdg_state_home>/omp` actually lives on disk.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn xdg_state_logs(
 	xdg_state_home: Option<&OsStr>,
 	agent_dir_override: Option<&OsStr>,
 	default_agent_dir: &Path,
-	omp_dir_exists: impl FnOnce(&Path) -> bool,
+	musepi_dir_exists: impl FnOnce(&Path) -> bool,
 ) -> Option<PathBuf> {
 	if let Some(ov) = agent_dir_override.filter(|s| !s.is_empty()) {
 		// `path.resolve(value)` on the JS side: make absolute against cwd

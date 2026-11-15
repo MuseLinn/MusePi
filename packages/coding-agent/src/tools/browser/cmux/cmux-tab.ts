@@ -204,7 +204,7 @@ const setValue = (target, value, append = false) => {
 
 const RESPONSE_OBSERVER_SCRIPT = String.raw`
 (() => {
-	const key = "__ompCmuxResponses";
+	const key = "__musepiCmuxResponses";
 	if (globalThis[key]) return true;
 	const state = { nextId: 1, records: [] };
 	Object.defineProperty(globalThis, key, { value: state, configurable: true });
@@ -1075,14 +1075,14 @@ export class CmuxTab {
 
 	async #responseCursor(): Promise<number> {
 		const value = await this.#evalScript<unknown>(
-			"(() => Math.max(0, ((globalThis.__ompCmuxResponses && globalThis.__ompCmuxResponses.nextId) || 1) - 1))()",
+			"(() => Math.max(0, ((globalThis.__musepiCmuxResponses && globalThis.__musepiCmuxResponses.nextId) || 1) - 1))()",
 		);
 		return numberFrom(value, 0);
 	}
 
 	async #responseRecordsAfter(id: number): Promise<CmuxResponseRecord[]> {
 		const value = await this.#evalScript<unknown>(
-			`(() => ((globalThis.__ompCmuxResponses && globalThis.__ompCmuxResponses.records) || []).filter(record => record.id > ${JSON.stringify(id)}))()`,
+			`(() => ((globalThis.__musepiCmuxResponses && globalThis.__musepiCmuxResponses.records) || []).filter(record => record.id > ${JSON.stringify(id)}))()`,
 		);
 		if (!Array.isArray(value)) return [];
 		const records: CmuxResponseRecord[] = [];

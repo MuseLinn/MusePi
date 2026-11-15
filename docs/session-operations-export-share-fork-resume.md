@@ -137,7 +137,7 @@ Only when no custom share handler is found (`shareSession()`):
      entries.
    - **Secret gist** (`store: "gist"`) — when `gh` is installed and
      authenticated, the sealed blob is pushed base64-encoded as
-     `session.ompshare.txt` (budget 5 MB sealed; gist raw fetches cap at
+     `session.musepishare.txt` (budget 5 MB sealed; gist raw fetches cap at
      10 MB), falling back to the share server when `gh` is unusable.
 5. The link is `<share.serverUrl>/<id>#<base64url key>` in both cases. The
    viewer page served there fetches the blob (hex ids via the GitHub gist

@@ -200,7 +200,7 @@ describe("fetchMarketplace", () => {
 		const root = path.join(tmpDir, "both-catalogs");
 		fs.mkdirSync(path.join(root, ".omp-plugin"), { recursive: true });
 		fs.mkdirSync(path.join(root, ".claude-plugin"), { recursive: true });
-		const ompCatalog = {
+		const musepiCatalog = {
 			name: "from-omp-plugin",
 			owner: { name: "Test" },
 			plugins: [{ name: "p", source: "./p", description: "x" }],
@@ -210,7 +210,7 @@ describe("fetchMarketplace", () => {
 			owner: { name: "Test" },
 			plugins: [{ name: "p", source: "./p", description: "x" }],
 		};
-		fs.writeFileSync(path.join(root, ".omp-plugin", "marketplace.json"), JSON.stringify(ompCatalog));
+		fs.writeFileSync(path.join(root, ".omp-plugin", "marketplace.json"), JSON.stringify(musepiCatalog));
 		fs.writeFileSync(path.join(root, ".claude-plugin", "marketplace.json"), JSON.stringify(claudeCatalog));
 
 		const result = await fetchMarketplace(root, tmpDir);

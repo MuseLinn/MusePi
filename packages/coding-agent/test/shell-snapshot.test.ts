@@ -100,7 +100,7 @@ describe("sanitizeSnapshotForBrush", () => {
 	});
 });
 
-// `__omp_emit_referenced_exports` (shell-snapshot-fn-env.sh) re-exports env
+// `__musepi_emit_referenced_exports` (shell-snapshot-fn-env.sh) re-exports env
 // vars that snapshotted functions reference. mise activates a `mise()` shell
 // function whose body expands `$__MISE_EXE`; the snapshot used to persist the
 // function but discard the sidecar var, so the replay shell ran
@@ -122,7 +122,7 @@ describe("shell-snapshot fn-env helper", () => {
 			``,
 		].join("\n");
 
-		const child = Bun.spawn(["bash", "-c", `${fnEnvHelper}\n__omp_emit_referenced_exports`], {
+		const child = Bun.spawn(["bash", "-c", `${fnEnvHelper}\n__musepi_emit_referenced_exports`], {
 			env: {
 				PATH: process.env.PATH ?? "/usr/bin:/bin",
 				__MISE_EXE: "/opt/echo",
@@ -163,7 +163,7 @@ describe("shell-snapshot fn-env helper", () => {
 			``,
 		].join("\n");
 
-		const child = Bun.spawn(["bash", "-c", `${fnEnvHelper}\n__omp_emit_referenced_exports`], {
+		const child = Bun.spawn(["bash", "-c", `${fnEnvHelper}\n__musepi_emit_referenced_exports`], {
 			env: {
 				PATH: process.env.PATH ?? "/usr/bin:/bin",
 				GITHUB_TOKEN: "ghp_REDACTED",
@@ -209,7 +209,7 @@ describe("shell-snapshot fn-env helper", () => {
 
 	it("single-quote-escapes values containing apostrophes and preserves newlines", async () => {
 		const funcs = `shout () { echo "$TRICKY_VAL $NL_VAL"; }\n`;
-		const child = Bun.spawn(["bash", "-c", `${fnEnvHelper}\n__omp_emit_referenced_exports`], {
+		const child = Bun.spawn(["bash", "-c", `${fnEnvHelper}\n__musepi_emit_referenced_exports`], {
 			env: {
 				PATH: process.env.PATH ?? "/usr/bin:/bin",
 				TRICKY_VAL: "it's 'tricky'",

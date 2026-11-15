@@ -47,7 +47,7 @@ export function getTemplate(): string {
 			// set, serialised. The template cannot import it (it is inlined
 			// browser JS), and its own literal copy had already drifted.
 			const hidden = JSON.stringify([...HIDDEN_BY_DEFAULT_ENTRY_TYPES]);
-			return `<script>window.__OMP_HIDDEN_ENTRY_TYPES__=${hidden};</script><script>${templateJs}</script>`;
+			return `<script>window.__MUSEPI_HIDDEN_ENTRY_TYPES__=${hidden};</script><script>${templateJs}</script>`;
 		});
 	return cachedTemplate;
 }

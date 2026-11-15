@@ -71,12 +71,12 @@ function makeEntry(installPath: string, version = "1.0.0"): InstalledPluginEntry
 
 let tmpHome: string;
 /** ~/.omp/plugins/installed_plugins.json inside tmpHome */
-let ompRegistryPath: string;
+let musepiRegistryPath: string;
 
 beforeEach(() => {
 	tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), "omp-discovery-test-"));
-	ompRegistryPath = path.join(tmpHome, MUSEPI_CONFIG_DIR, "plugins", "installed_plugins.json");
-	fs.mkdirSync(path.dirname(ompRegistryPath), { recursive: true });
+	musepiRegistryPath = path.join(tmpHome, MUSEPI_CONFIG_DIR, "plugins", "installed_plugins.json");
+	fs.mkdirSync(path.dirname(musepiRegistryPath), { recursive: true });
 });
 
 afterEach(() => {
@@ -90,7 +90,7 @@ describe("OMP registry path contract", () => {
 		// This is the path that listClaudePluginRoots reads.
 		// Any change to this path must be reflected in helpers.ts.
 		const expected = path.join(tmpHome, ".omp", "plugins", "installed_plugins.json");
-		expect(ompRegistryPath).toBe(expected);
+		expect(musepiRegistryPath).toBe(expected);
 	});
 });
 
@@ -98,9 +98,9 @@ describe("OMP registry path contract", () => {
 
 describe("OMP registry format compatibility with Claude parser", () => {
 	it("empty registry written by writeInstalledPluginsRegistry passes validator", async () => {
-		await writeInstalledPluginsRegistry(ompRegistryPath, { version: 2, plugins: {} });
+		await writeInstalledPluginsRegistry(musepiRegistryPath, { version: 2, plugins: {} });
 
-		const content = fs.readFileSync(ompRegistryPath, "utf8");
+		const content = fs.readFileSync(musepiRegistryPath, "utf8");
 		const parsed = validateClaudeRegistryFormat(content);
 		expect(parsed).not.toBeNull();
 		expect((parsed as Record<string, unknown>).version).toBe(2);
@@ -110,11 +110,11 @@ describe("OMP registry format compatibility with Claude parser", () => {
 		const pluginId = buildPluginId("quality-review", "example-marketplace");
 		const entry = makeEntry(path.join(tmpHome, "plugins", "cache", "example-marketplace--quality-review--1.0.0"));
 
-		let reg = await readInstalledPluginsRegistry(ompRegistryPath);
+		let reg = await readInstalledPluginsRegistry(musepiRegistryPath);
 		reg = addInstalledPlugin(reg, pluginId, entry);
-		await writeInstalledPluginsRegistry(ompRegistryPath, reg);
+		await writeInstalledPluginsRegistry(musepiRegistryPath, reg);
 
-		const content = fs.readFileSync(ompRegistryPath, "utf8");
+		const content = fs.readFileSync(musepiRegistryPath, "utf8");
 		const parsed = validateClaudeRegistryFormat(content);
 		expect(parsed).not.toBeNull();
 
@@ -147,11 +147,11 @@ describe("OMP registry round-trip", () => {
 		const id = buildPluginId("hello-plugin", "test-marketplace");
 		const entry = makeEntry("/tmp/fake-plugin-path");
 
-		let reg = await readInstalledPluginsRegistry(ompRegistryPath);
+		let reg = await readInstalledPluginsRegistry(musepiRegistryPath);
 		reg = addInstalledPlugin(reg, id, entry);
-		await writeInstalledPluginsRegistry(ompRegistryPath, reg);
+		await writeInstalledPluginsRegistry(musepiRegistryPath, reg);
 
-		const readBack = await readInstalledPluginsRegistry(ompRegistryPath);
+		const readBack = await readInstalledPluginsRegistry(musepiRegistryPath);
 		expect(readBack.plugins[id]).toBeDefined();
 		expect(readBack.plugins[id]?.[0]?.installPath).toBe(entry.installPath);
 		expect(readBack.plugins[id]?.[0]?.version).toBe("1.0.0");
@@ -164,12 +164,12 @@ describe("OMP registry round-trip", () => {
 		const entry1 = makeEntry("/tmp/fake-a", "1.0.0");
 		const entry2 = makeEntry("/tmp/fake-b", "2.0.0");
 
-		let reg = await readInstalledPluginsRegistry(ompRegistryPath);
+		let reg = await readInstalledPluginsRegistry(musepiRegistryPath);
 		reg = addInstalledPlugin(reg, id1, entry1);
 		reg = addInstalledPlugin(reg, id2, entry2);
-		await writeInstalledPluginsRegistry(ompRegistryPath, reg);
+		await writeInstalledPluginsRegistry(musepiRegistryPath, reg);
 
-		const readBack = await readInstalledPluginsRegistry(ompRegistryPath);
+		const readBack = await readInstalledPluginsRegistry(musepiRegistryPath);
 		expect(Object.keys(readBack.plugins)).toHaveLength(2);
 		expect(readBack.plugins[id1]?.[0]?.version).toBe("1.0.0");
 		expect(readBack.plugins[id2]?.[0]?.version).toBe("2.0.0");
@@ -185,11 +185,11 @@ describe("OMP registry round-trip", () => {
 			lastUpdated: "2025-01-15T10:30:00.000Z",
 		};
 
-		let reg = await readInstalledPluginsRegistry(ompRegistryPath);
+		let reg = await readInstalledPluginsRegistry(musepiRegistryPath);
 		reg = addInstalledPlugin(reg, id, entry);
-		await writeInstalledPluginsRegistry(ompRegistryPath, reg);
+		await writeInstalledPluginsRegistry(musepiRegistryPath, reg);
 
-		const readBack = await readInstalledPluginsRegistry(ompRegistryPath);
+		const readBack = await readInstalledPluginsRegistry(musepiRegistryPath);
 		expect(readBack.plugins[id]?.[0]?.scope).toBe("project");
 	});
 
@@ -213,11 +213,11 @@ describe("OMP precedence contract (registry structure)", () => {
 		// The replacement logic: roots.filter(r => r.id !== pluginId) keyed by id.
 		// OMP entries must have installPath so they can be added to roots[].
 		const id = buildPluginId("shared-plugin", "common-mkt");
-		const ompEntry = makeEntry("/omp/cached/path");
+		const musepiEntry = makeEntry("/omp/cached/path");
 
 		// OMP registry entry has installPath (required by listClaudePluginRoots)
-		expect(ompEntry.installPath).toBeTruthy();
-		expect(typeof ompEntry.installPath).toBe("string");
+		expect(musepiEntry.installPath).toBeTruthy();
+		expect(typeof musepiEntry.installPath).toBe("string");
 		// ID parses correctly with lastIndexOf("@")
 		const atIndex = id.lastIndexOf("@");
 		expect(atIndex).toBeGreaterThan(0);

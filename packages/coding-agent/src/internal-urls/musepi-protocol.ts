@@ -1,23 +1,23 @@
 /**
- * Protocol handler for omp:// URLs.
+ * Protocol handler for musepi:// URLs.
  *
  * Serves statically embedded documentation files bundled at build time.
  *
  * URL forms:
- * - omp:// - Lists all available documentation files
- * - omp://<file>.md - Reads a specific documentation file
+ * - musepi:// - Lists all available documentation files
+ * - musepi://<file>.md - Reads a specific documentation file
  */
 import * as path from "node:path";
 import { getDocFilenames, getEmbeddedDoc } from "./docs-index";
 import type { InternalResource, InternalUrl, ProtocolHandler, UrlCompletion } from "./types";
 
 /**
- * Handler for omp:// URLs.
+ * Handler for musepi:// URLs.
  *
  * Resolves documentation file names to their content, or lists available docs.
  */
-export class OmpProtocolHandler implements ProtocolHandler {
-	readonly scheme = "omp";
+export class MusepiProtocolHandler implements ProtocolHandler {
+	readonly scheme = "musepi";
 	readonly immutable = true;
 
 	async resolve(url: InternalUrl): Promise<InternalResource> {
@@ -43,7 +43,7 @@ export class OmpProtocolHandler implements ProtocolHandler {
 			throw new Error("No documentation files found");
 		}
 
-		const listing = filenames.map(f => `- [${f}](omp://${f})`).join("\n");
+		const listing = filenames.map(f => `- [${f}](musepi://${f})`).join("\n");
 		const content = `# Documentation\n\n${filenames.length} files available:\n\n${listing}\n`;
 
 		return {
@@ -57,12 +57,12 @@ export class OmpProtocolHandler implements ProtocolHandler {
 	async #readDoc(filename: string, url: InternalUrl): Promise<InternalResource> {
 		// Validate: no traversal, no absolute paths
 		if (path.isAbsolute(filename)) {
-			throw new Error("Absolute paths are not allowed in omp:// URLs");
+			throw new Error("Absolute paths are not allowed in musepi:// URLs");
 		}
 
 		const normalized = path.posix.normalize(filename.replaceAll("\\", "/"));
 		if (normalized === ".." || normalized.startsWith("../") || normalized.includes("/../")) {
-			throw new Error("Path traversal (..) is not allowed in omp:// URLs");
+			throw new Error("Path traversal (..) is not allowed in musepi:// URLs");
 		}
 
 		const docPath =
@@ -80,7 +80,7 @@ export class OmpProtocolHandler implements ProtocolHandler {
 			const suffix =
 				suggestions.length > 0
 					? `\nDid you mean: ${suggestions.join(", ")}`
-					: "\nUse omp:// to list available files.";
+					: "\nUse musepi:// to list available files.";
 			throw new Error(`Documentation file not found: ${filename}${suffix}`);
 		}
 

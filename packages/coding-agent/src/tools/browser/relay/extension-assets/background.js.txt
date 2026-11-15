@@ -27,7 +27,7 @@ function snapshot(tab) {
     groupId: tab.groupId
   };
 }
-var ompGroupTitle = null;
+var musepiGroupTitle = null;
 var groupOps = Promise.resolve();
 function enqueueGroupOp(fn) {
   const result = groupOps.then(fn, fn);
@@ -35,8 +35,8 @@ function enqueueGroupOp(fn) {
   return result;
 }
 async function groupTabs(tabIds, title, color) {
-  ompGroupTitle = title;
-  chrome.storage.session.set({ ompGroupTitle: title });
+  musepiGroupTitle = title;
+  chrome.storage.session.set({ musepiGroupTitle: title });
   const byWindow = new Map;
   for (const tabId of tabIds) {
     try {
@@ -71,13 +71,13 @@ async function groupTabs(tabIds, title, color) {
   return { grouped };
 }
 async function restoreGroups() {
-  if (!ompGroupTitle) {
-    const stored = await chrome.storage.session.get({ ompGroupTitle: "" }).catch(() => ({ ompGroupTitle: "" }));
-    ompGroupTitle = typeof stored.ompGroupTitle === "string" && stored.ompGroupTitle ? stored.ompGroupTitle : null;
+  if (!musepiGroupTitle) {
+    const stored = await chrome.storage.session.get({ musepiGroupTitle: "" }).catch(() => ({ musepiGroupTitle: "" }));
+    musepiGroupTitle = typeof stored.musepiGroupTitle === "string" && stored.musepiGroupTitle ? stored.musepiGroupTitle : null;
   }
-  if (!ompGroupTitle)
+  if (!musepiGroupTitle)
     return;
-  const groups = await chrome.tabGroups.query({ title: ompGroupTitle }).catch(() => []);
+  const groups = await chrome.tabGroups.query({ title: musepiGroupTitle }).catch(() => []);
   for (const group of groups) {
     const tabs = await chrome.tabs.query({ groupId: group.id }).catch(() => []);
     const ids = tabs.map((tab) => tab.id).filter((id) => id !== undefined);

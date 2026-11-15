@@ -1106,7 +1106,7 @@ function isCustomTool(tool: CustomTool | ToolDefinition): tool is CustomTool {
 }
 
 function isLegacyBuiltinToolDefinition(tool: CustomTool | ToolDefinition): boolean {
-	return !isCustomTool(tool) && "__ompLegacyBuiltinTool" in tool && tool.__ompLegacyBuiltinTool === true;
+	return !isCustomTool(tool) && "__musepiLegacyBuiltinTool" in tool && tool.__musepiLegacyBuiltinTool === true;
 }
 
 const TOOL_DEFINITION_MARKER = Symbol("__isToolDefinition");

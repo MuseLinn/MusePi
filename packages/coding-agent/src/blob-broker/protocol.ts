@@ -14,7 +14,7 @@ import type { BlobBrokerSavingsStatus } from "./savings";
 import type { DestinationRuntimeConfig } from "./uploader-runtime";
 
 /** Hidden CLI selector used to re-enter the blob broker worker. */
-export const BLOB_BROKER_WORKER_ARG = "__omp_worker_blob_broker";
+export const BLOB_BROKER_WORKER_ARG = "__musepi_worker_blob_broker";
 
 /** Environment key carrying the control socket path the worker listens on. */
 export const BLOB_BROKER_SOCKET_ENV = "MUSEPI_BLOB_BROKER_SOCKET";

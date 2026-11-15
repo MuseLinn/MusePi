@@ -211,7 +211,7 @@ describe("customMessageEntryToSessionMessage", () => {
 describe("HTML export bookkeeping filter", () => {
 	it("the assembled template injects exactly the canonical set", () => {
 		const html = getTemplate();
-		const match = /window\.__OMP_HIDDEN_ENTRY_TYPES__=(\[.*?\]);/.exec(html);
+		const match = /window\.__MUSEPI_HIDDEN_ENTRY_TYPES__=(\[.*?\]);/.exec(html);
 		expect(match).not.toBeNull();
 		expect(JSON.parse(match![1]!)).toEqual([...HIDDEN_BY_DEFAULT_ENTRY_TYPES]);
 	});
@@ -219,7 +219,9 @@ describe("HTML export bookkeeping filter", () => {
 	it("the injected list is complete — the three lost types are back", () => {
 		// Named rather than counted: a count assertion would still pass if the
 		// wrong three went missing.
-		const injected = JSON.parse(/window\.__OMP_HIDDEN_ENTRY_TYPES__=(\[.*?\]);/.exec(getTemplate())![1]!) as string[];
+		const injected = JSON.parse(
+			/window\.__MUSEPI_HIDDEN_ENTRY_TYPES__=(\[.*?\]);/.exec(getTemplate())![1]!,
+		) as string[];
 		expect(injected).toContain("service_tier_change");
 		expect(injected).toContain("title_change");
 		expect(injected).toContain("reset_boundary");

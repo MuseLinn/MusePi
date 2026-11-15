@@ -5,7 +5,7 @@
  * Same template as HTML exports, but with no embedded session: share-loader.js
  * (injected right after the empty #session-data tag) fetches the sealed blob
  * (gist or relay store), decrypts it with the `#<key>` fragment in-browser, and
- * hands the JSON to template.js via `window.__OMP_SESSION_DATA__`.
+ * hands the JSON to template.js via `window.__MUSEPI_SESSION_DATA__`.
  *
  * The relay repo's build script runs this and embeds the output via go:embed.
  */
@@ -28,7 +28,7 @@ const html = getTemplate()
 	.replace("{{SESSION_DATA}}</script>", () => `</script>\n  <script>${loaderJs}</script>`);
 
 if (html.includes("{{SESSION_DATA}}")) throw new Error("session-data placeholder survived substitution");
-if (!html.includes("__OMP_SESSION_DATA__")) throw new Error("share loader not injected");
+if (!html.includes("__MUSEPI_SESSION_DATA__")) throw new Error("share loader not injected");
 
 await Bun.write(outPath, html);
 console.log(`Generated ${path.resolve(outPath)} (${(html.length / 1024).toFixed(0)} KB)`);

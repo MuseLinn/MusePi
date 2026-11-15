@@ -22,7 +22,7 @@ export default class Read extends Command {
 		"musepi read src/foo.ts:50-100",
 		"musepi read src/foo.ts:raw",
 		"musepi read https://example.com",
-		"musepi read omp://",
+		"musepi read musepi://",
 		"musepi read issue://123",
 		"musepi read path/to/archive.zip:dir/file.ts",
 		"musepi read path/to/db.sqlite:users:42",

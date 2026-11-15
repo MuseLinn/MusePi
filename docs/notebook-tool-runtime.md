@@ -137,7 +137,7 @@ Structured outputs captured separately include:
 
 - `application/json` -> JSON display output
 - `image/png` / `image/jpeg` -> image output
-- `application/x-omp-status` -> status event
+- `application/x-musepi-status` -> status event
 
 Cancellation/timeout:
 

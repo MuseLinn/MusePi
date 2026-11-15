@@ -4,7 +4,7 @@
  * One detached process per (model, cache dir) serves every MusePi process on
  * the machine, so the ONNX model is loaded once instead of once per process.
  * The server never loads onnxruntime itself: inference runs in the existing
- * `__omp_worker_mnemopi_embed` child, which is SIGKILLed on idle exit.
+ * `__musepi_worker_mnemopi_embed` child, which is SIGKILLed on idle exit.
  *
  * Transport is newline-delimited JSON over a loopback TCP socket. The port and
  * a random token are published in a state file readable only by the owner.
@@ -20,7 +20,7 @@ import {
 import { writeFileAtomically } from "../utils/atomic-file";
 import type { MnemopiEmbedWorkerInbound, MnemopiEmbedWorkerOutbound } from "./embed-protocol";
 
-export const MNEMOPI_EMBED_SERVER_ARG = "__omp_worker_mnemopi_embed_server";
+export const MNEMOPI_EMBED_SERVER_ARG = "__musepi_worker_mnemopi_embed_server";
 
 export const MNEMOPI_EMBED_SERVER_MODEL_ENV = "MUSEPI_MNEMOPI_EMBED_MODEL";
 export const MNEMOPI_EMBED_SERVER_CACHE_ENV = "MUSEPI_MNEMOPI_EMBED_CACHE_DIR";
@@ -29,7 +29,7 @@ export const MNEMOPI_EMBED_SERVER_TAG_ENV = "MUSEPI_MNEMOPI_EMBED_TAG";
 export const MNEMOPI_EMBED_SERVER_IDLE_ENV = "MUSEPI_MNEMOPI_EMBED_IDLE_MS";
 
 const DEFAULT_IDLE_MS = 15 * 60 * 1_000;
-const EMBED_WORKER_ARG = "__omp_worker_mnemopi_embed";
+const EMBED_WORKER_ARG = "__musepi_worker_mnemopi_embed";
 
 interface ServerState {
 	port: number;
