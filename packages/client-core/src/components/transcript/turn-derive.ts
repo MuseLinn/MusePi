@@ -19,7 +19,7 @@
 
 import type { SessionEntry } from "@musepi/pi-wire";
 import { buildTurnRenderUnits, type TurnRenderUnit, turnUnitSpan } from "./render-units.js";
-import { buildRoundFolds, foldSpan, isTurnStart, type RoundFold } from "./round-collapse.js";
+import { buildRoundFolds, foldSpan, isTurnStart, type RoundFold, roundFoldFromSpan } from "./round-collapse.js";
 
 export interface TurnDeriveResult {
 	folds: RoundFold[];
@@ -125,24 +125,7 @@ export function deriveTurns(
 		// buildRoundFolds uses).
 		const fold = isLastTurn && working ? null : span.fold;
 		if (fold !== null) {
-			const f = fold;
-			folds.push({
-				startIdx,
-				endIdx,
-				finalIdx: startIdx + f.finalRel,
-				headerIdx: startIdx + 1,
-				toolCount: f.toolCount,
-				commandCount: f.commandCount,
-				exploreCount: f.exploreCount,
-				webCount: f.webCount,
-				subagentCount: f.subagentCount,
-				filesChanged: f.filesChanged,
-				added: f.added,
-				removed: f.removed,
-				userId: entryUserId(startEntry),
-				preview: f.preview,
-				exempt: f.exemptRel.map(r => r + startIdx),
-			});
+			folds.push(roundFoldFromSpan(fold, startIdx, endIdx, entryUserId(startEntry)));
 		}
 		units.push({
 			key: startId.startsWith("pos:") ? `turn-${t}` : startId,

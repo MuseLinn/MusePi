@@ -390,16 +390,13 @@ export function foldSpan(
 	};
 }
 
-function pushFold(
-	folds: RoundFold[],
-	entries: readonly SessionEntry[],
-	startIdx: number,
-	userId: string | null,
-	endIdx: number,
-): void {
-	const span = foldSpan(entries, startIdx, userId, endIdx);
-	if (span === null) return;
-	folds.push({
+/** Absolute fold descriptor from a span computed for the same start/end.
+ *  This is the ONE projection from the relative span shape: `buildRoundFolds`
+ *  and the cached `turn-derive` path both go through it, so a new header field
+ *  cannot be added to one builder and forgotten in the other (the web/subagent
+ *  counts had to be patched in two places before this existed). */
+export function roundFoldFromSpan(span: FoldSpan, startIdx: number, endIdx: number, userId: string | null): RoundFold {
+	return {
 		startIdx,
 		endIdx,
 		finalIdx: startIdx + span.finalRel,
@@ -415,7 +412,19 @@ function pushFold(
 		userId,
 		preview: span.preview,
 		exempt: span.exemptRel.map(r => r + startIdx),
-	});
+	};
+}
+
+function pushFold(
+	folds: RoundFold[],
+	entries: readonly SessionEntry[],
+	startIdx: number,
+	userId: string | null,
+	endIdx: number,
+): void {
+	const span = foldSpan(entries, startIdx, userId, endIdx);
+	if (span === null) return;
+	folds.push(roundFoldFromSpan(span, startIdx, endIdx, userId));
 }
 
 /** True when the entry at `idx` belongs inside a fold's foldable span. */
