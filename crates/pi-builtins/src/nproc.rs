@@ -36,7 +36,7 @@ impl Utility for Nproc {
 		};
 
 		let limit = match host.var("MUSEPI_THREAD_LIMIT") {
-			// Use the OpenMP variable to limit the number of threads. A parse
+			// Caps the count the way GNU nproc's thread limit does. A parse
 			// failure or zero means no limit.
 			Some(threads) => match threads.parse() {
 				Ok(0) | Err(_) => usize::MAX,
@@ -151,13 +151,13 @@ mod tests {
 	}
 
 	#[test]
-	fn host_omp_num_threads_forces_count() {
+	fn host_num_threads_forces_count() {
 		let (code, capture) = run_in(&[("MUSEPI_NUM_THREADS", "3")], &[]);
 		assert_eq!((code, capture.out(), capture.err()), (0, "3\n".to_string(), String::new()));
 	}
 
 	#[test]
-	fn musepi_thread_limit_caps_omp_num_threads() {
+	fn musepi_thread_limit_caps_num_threads() {
 		let (code, capture) = run_in(
 			&[("MUSEPI_NUM_THREADS", "64"), ("MUSEPI_THREAD_LIMIT", "2")],
 			&[],
@@ -166,7 +166,7 @@ mod tests {
 	}
 
 	#[test]
-	fn all_prints_positive_integer_and_ignores_omp_num_threads() {
+	fn all_prints_positive_integer_and_ignores_num_threads() {
 		let (code, capture) = run_in(&[("MUSEPI_NUM_THREADS", "0")], &["--all"]);
 		assert_eq!(code, 0);
 		assert_eq!(capture.err(), "");
