@@ -132,5 +132,5 @@ Me(f, D => {
 - **P2 完成（结构层）**：`buildToolRuns` 现在把 `artifactRowSet` 标记的调用行与 artifact 结果行都当作 run 边界——交付物根本不进 `idxs`，因此 `runBlocked` 里对 artifact 的判断删除（只保留 fold 的 tail/hook 豁免）。这与 Kimi 的行模型（task/notify/单步不进 run）同构，比"汇总时再检查"更可靠。
 - **P4 完成（补偿窗口）**：折叠/工具段切换时把虚拟列表的 `shouldAdjustScrollPositionOnItemSizeChange` 关闭 260ms（复用 prepend 的 `sizeAdjustSuppressUntilRef`），窗口结束后调用一次 `virtualizer.measure()`。动画期间不再逐帧写 `scrollTop`。
 - **P4 偏差（保留 off-screen 瞬收）**：`useHoldAnchor` 里"折叠发生在视口上方时临时 mute transition 再钉一次"的做法**保留**。理由：折叠在视口外时用户看不到动画，瞬收 + 一次 scrollTop 钉住比 220ms 的补偿窗口更稳；若移除 mute，锚点 delta 在首帧近似为 0，反而失去作用。也就是说：可视区内的折叠走动画 + 补偿窗口，视口外的折叠直接落位。
-- **P1 收口**：`RoundFold` 的绝对投影抽成 `roundFoldFromSpan`；`turn-derive` 的缓存/非缓存两条路径现在同时产出 `folds`、`units` 与 `runs`——转录每次结构变化只扫一遍 `entries`，工具段不再单独 memo 扫描。仍待做的是 `toolResult` 行的显式归并（当前 0 高空槽无害）。
+- **P1 收口**：`RoundFold` 的绝对投影抽成 `roundFoldFromSpan`；`turn-derive` 的缓存/非缓存路径同时产出 `folds`、`units` 与 `runs`（一次遍历）；`toolResult` 行现在从虚拟行列表中投影出去——与 openchamber/Kimi 的「一个 tool part 自带 state」同构，卡片仍在调用行上渲染，空槽消失。例外：当结果行是回合的 `活动` 头宿或工具段头时保留该行（否则头会失去挂载点），这条由测试钉住。
 - **P4 真机验证通过**：默认 profile 下打开会话、滚到折叠处连续开合 6 次，`scrollTop` 漂移 0px（验收阈值 40px），`aria-expanded` 每次正确翻转。隔离 `--user-data-dir` 会在新 profile 上触发首次启动引导，导致会话正文不挂载（与本改动无关），验证应使用默认 profile；共享 daemon 端口被占时用 `MUSEPI_GUI_DAEMON_PORT`/`MUSEPI_DAEMON_DIR` 隔离。

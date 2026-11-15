@@ -1856,19 +1856,64 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		return set;
 	}, [folds, foldOpenOf, toolRuns, runsExpanded]);
 
+	// ── Row projection: a tool result is not a row of its own ────────────
+	// Wire entries keep the call (an assistant message) and its result (a
+	// separate toolResult entry) apart; openchamber and the Kimi client model
+	// ONE tool part that carries its own state, so one tool is one row. The
+	// card renders on the call row, which leaves a paired result row drawing
+	// nothing — projecting it out of the virtual list removes that empty row
+	// instead of parking it at zero height. Folds, runs, anchors and branch
+	// topology keep using ENTRY indexes; only the list position maps through
+	// `renderIdx`. A result whose call is not loaded (paged out) stays a row,
+	// so nothing can disappear at a window boundary.
+	// A projected result row is safe to drop only when nothing else hangs its
+	// identity on that row: the fold header (a turn that opens on a result) and a
+	// run head keep their row, so the 活动 line / 工具×N summary still has a host.
+	const structuralRows = useMemo(() => {
+		const rows = new Set<number>();
+		for (const fold of folds) rows.add(fold.headerIdx);
+		for (const run of toolRuns) rows.add(run.headIdx);
+		return rows;
+	}, [folds, toolRuns]);
+	const renderIdx = useMemo(() => {
+		const callIds = new Set<string>();
+		for (const entry of entries) {
+			if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+			for (const block of entry.message.content) {
+				if (block.type === "toolCall") callIds.add(block.id);
+			}
+		}
+		const positions: number[] = [];
+		entries.forEach((entry, index) => {
+			if (entry.type === "message" && entry.message.role === "toolResult") {
+				const callId = (entry.message as { toolCallId?: string }).toolCallId;
+				if (callId !== undefined && callIds.has(callId) && !structuralRows.has(index)) return;
+			}
+			positions.push(index);
+		});
+		return positions;
+	}, [entries, structuralRows]);
+	const renderPos = useMemo(() => {
+		const map = new Map<number, number>();
+		renderIdx.forEach((entryIdx, pos) => map.set(entryIdx, pos));
+		return map;
+	}, [renderIdx]);
+
 	// ── Entry-level virtualization (M2/P0①) ──────────────────────────────
 	// The scroll host resolves in the ref callback below (desktop scrolls an
 	// outer .gui-transcript, the web shell scrolls .tr-root itself).
 	const [scrollerEl, setScrollerEl] = useState<HTMLElement | null>(null);
 	const virtualizerMeasureRef = useRef<(() => void) | null>(null);
 	const virtualizer = useVirtualizer({
-		count: entries.length,
+		count: renderIdx.length,
 		getScrollElement: () => scrollerEl,
-		getItemKey: (index: number) => entries[index]?.id ?? index,
+		getItemKey: (index: number) => entries[renderIdx[index] ?? -1]?.id ?? index,
 		estimateSize: (index: number) => {
-			if (collapsedSpanSet.has(index)) return 2;
-			if (folding && index < firstCompactionIdx) return 0;
-			return estimateEntryHeight(entries[index]);
+			const entryIdx = renderIdx[index];
+			if (entryIdx === undefined) return 0;
+			if (collapsedSpanSet.has(entryIdx)) return 2;
+			if (folding && entryIdx < firstCompactionIdx) return 0;
+			return estimateEntryHeight(entries[entryIdx]);
 		},
 		overscan: 8,
 	});
@@ -1950,15 +1995,18 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// step, so this memo tracks scrolling without its own scroll listener.
 	const stickyUser = useMemo(() => {
 		if (!virtualEnabled || scrollerEl === null) return null;
-		const range = visibleEntryRange(virtualItems, scrollerEl.scrollTop, scrollerEl.clientHeight);
-		if (range === null) return null;
-		const candidate = pickStickyUserEntry(entries, range);
+		const listRange = visibleEntryRange(virtualItems, scrollerEl.scrollTop, scrollerEl.clientHeight);
+		if (listRange === null) return null;
+		const firstEntry = renderIdx[Math.floor(listRange.first)];
+		const lastEntry = renderIdx[Math.floor(listRange.last)];
+		if (firstEntry === undefined || lastEntry === undefined) return null;
+		const candidate = pickStickyUserEntry(entries, { first: firstEntry, last: lastEntry });
 		// Folded pre-compaction history mounts no rows at all, so a prompt
 		// behind the divider is not "above the viewport" in any reachable
 		// sense — pinning it would offer a jump into hidden content.
 		if (candidate !== null && folding && candidate.index < firstCompactionIdx) return null;
 		return candidate;
-	}, [entries, firstCompactionIdx, folding, virtualEnabled, scrollerEl, virtualItems]);
+	}, [entries, firstCompactionIdx, folding, renderIdx, virtualEnabled, scrollerEl, virtualItems]);
 
 	// Top sentinel (M1.11): entering the pane pages the next older chunk from
 	// session.history (daemon tail is 200; pages are 500 entries).
@@ -2001,16 +2049,17 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const pending = pendingJumpRef.current;
 		if (!pending) return;
 		const idx = entries.findIndex(e => e.id === pending.entryId);
-		if (idx < 0) {
+		const pos = idx < 0 ? undefined : renderPos.get(idx);
+		if (pos === undefined) {
 			pendingJumpRef.current = null;
 			return;
 		}
 		// Wait until the target row is actually mounted (it mounts with the
 		// next virtual window after scrollToIndex).
-		if (!virtualItems.some(vi => vi.index === idx)) return;
+		if (!virtualItems.some(vi => vi.index === pos)) return;
 		pendingJumpRef.current = null;
 		jumpFlashRow(rootRef.current, pending.entryId);
-	}, [virtualItems, entries]);
+	}, [virtualItems, entries, renderPos]);
 	useEffect(() => {
 		if (!jumpRequest || jumpRequest.nonce === lastJumpNonceRef.current) return;
 		lastJumpNonceRef.current = jumpRequest.nonce;
@@ -2057,9 +2106,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				const scroller = scrollerRef.current;
 				if (!scroller) return;
 				const idx = entries.findIndex(e => e.id === anchor.key);
-				if (idx < 0) return;
+				const pos = idx < 0 ? undefined : renderPos.get(idx);
+				if (pos === undefined) return;
 				programmaticScrollRef.current = true;
-				virtualizer.scrollToIndex(idx, { align: "start" });
+				virtualizer.scrollToIndex(pos, { align: "start" });
 				// scrollToIndex lands the row top at the viewport top; shift by
 				// the captured offset so it returns to exactly its prior spot.
 				requestAnimationFrame(() => {
@@ -2069,7 +2119,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				});
 			},
 		}),
-		[virtualItems, entries, virtualizer],
+		[virtualItems, entries, renderPos, virtualizer],
 	);
 	useEffect(() => {
 		if (anchorCtlRef) anchorCtlRef.current = anchorCtl;
@@ -2698,7 +2748,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			)}
 			{virtualEnabled
 				? virtualItems.map(vi => {
-						const absIdx = vi.index;
+						const absIdx = renderIdx[vi.index] ?? -1;
 						const entry = entries[absIdx];
 						if (entry === undefined) return null;
 						return (
@@ -2714,16 +2764,20 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							</div>
 						);
 					})
-				: entries.map((entry, absIdx) => (
-						<div
-							key={rowKeys[absIdx] ?? entry.id ?? absIdx}
-							data-entry-ts={entry.timestamp}
-							className="tr-vrow"
-							aria-hidden={folding && absIdx < firstCompactionIdx ? true : undefined}
-						>
-							{renderEntryRow(absIdx, entry)}
-						</div>
-					))}
+				: renderIdx.map(absIdx => {
+						const entry = entries[absIdx];
+						if (entry === undefined) return null;
+						return (
+							<div
+								key={rowKeys[absIdx] ?? entry.id ?? absIdx}
+								data-entry-ts={entry.timestamp}
+								className="tr-vrow"
+								aria-hidden={folding && absIdx < firstCompactionIdx ? true : undefined}
+							>
+								{renderEntryRow(absIdx, entry)}
+							</div>
+						);
+					})}
 			{bottomSpacerHeight > 0 && (
 				<div
 					className="tr-virtual-spacer tr-virtual-spacer--bottom"

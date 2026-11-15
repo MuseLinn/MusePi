@@ -1388,3 +1388,58 @@ describe("round fold header contract", () => {
 		expect(html).toContain("subagent");
 	});
 });
+
+describe("row projection (one tool is one row)", () => {
+	it("drops a paired tool result from the row list and keeps its card on the call row", () => {
+		const entries: SessionEntry[] = [
+			userEntry(1),
+			committedAssistantToolCall(),
+			{
+				type: "message",
+				id: "tool-result-1",
+				parentId: null,
+				timestamp: "2026-07-09T00:00:02Z",
+				message: {
+					role: "toolResult",
+					toolCallId: TOOL_CALL_ID,
+					toolName: TOOL_NAME,
+					content: [{ type: "text", text: "ok" }],
+					isError: false,
+					timestamp: 2,
+				},
+			} as unknown as SessionEntry,
+			assistantEntry({ timestamp: 3, text: "done" }),
+		];
+		const html = renderTranscript({ entries, working: false, defaultRoundFoldExpanded: true });
+		// The result entry is not a row of its own (openchamber/Kimi model: one
+		// tool part carries its state), but the card still renders on the call row.
+		expect(html).not.toContain('data-entry-id="tool-result-1"');
+		expect(html).toContain('data-entry-id="assistant-entry-1"');
+	});
+
+	it("keeps a result row that hosts the turn's 活动 header", () => {
+		const entries: SessionEntry[] = [
+			userEntry(1),
+			{
+				type: "message",
+				id: "tool-result-1",
+				parentId: null,
+				timestamp: "2026-07-09T00:00:01Z",
+				message: {
+					role: "toolResult",
+					toolCallId: TOOL_CALL_ID,
+					toolName: TOOL_NAME,
+					content: [{ type: "text", text: "ok" }],
+					isError: false,
+					timestamp: 2,
+				},
+			} as unknown as SessionEntry,
+			committedAssistantToolCall(),
+			assistantEntry({ timestamp: 3, text: "done" }),
+		];
+		// Closed: if the result were projected out, the 活动 header would lose its
+		// host row entirely and disappear (the regression this guards).
+		const html = renderTranscript({ entries, working: false });
+		expect(countElements(html, ".tr-round-fold")).toBe(1);
+	});
+});
