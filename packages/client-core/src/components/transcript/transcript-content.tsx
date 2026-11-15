@@ -31,6 +31,7 @@ import {
 import type { ToolRenderHost } from "../../tool-render";
 import { ResultVideo } from "../../tool-render/parts";
 import { type BrowserOperationAction, browserActionLabel } from "../../tool-render/tools/browser-activity";
+import { FoldRegion } from "../common/FoldRegion.js";
 import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
 import { TurnErrorBody } from "./error-notice.js";
 import { type FileCardItem, FileCards } from "./FileCards";
@@ -88,9 +89,8 @@ export function ThinkingBlock({
 		}, 1000);
 		return () => clearTimeout(timer);
 	}, [streaming]);
-	// Body stays mounted so collapse animates too (useCollapseHeight).
-	const bodyRef = useRef<HTMLDivElement | null>(null);
-	useCollapseHeight(open, bodyRef);
+	// Body lives in the shared FoldRegion track: opening mounts first, then the
+	// track opens; closing lands at zero before the content unmounts.
 	// Split into sentences for the progressive reveal while streaming.
 	// Fence-aware: ``` blocks are atomic — a boundary inside a fence (JSON
 	// `...`, a comment ending in ". ") must not split the fence across
@@ -140,32 +140,30 @@ export function ThinkingBlock({
 								: t("transcript.thinkingDone")}
 				</span>
 			</button>
-			<div
-				ref={bodyRef}
-				className={`tr-think-body${open ? "" : " tr-think-body--closed"}`}
-				style={collapseStyle(open)}
-			>
-				{redacted ? (
-					t("transcript.text")
-				) : shownSentences.length > 1 ? (
-					shownSentences.map((s, i) => (
-						// Sentences are anonymous text splits — the index is their identity.
-						// Each sentence renders through Markdown (TUI parity: thinking
-						// supports inline markdown); the div wrapper keeps the reveal
-						// animation outside the markdown tree.
-						<div key={i} className={`tr-think-sentence${streaming ? " tr-think-sentence--live" : ""}`}>
-							<Markdown text={s} />
-						</div>
-					))
-				) : (
-					<Markdown text={text} />
-				)}
-				{thinkTruncated && (
-					<button type="button" className="tr-think-more" onClick={() => setShowAll(true)}>
-						{t("settings.expandAll")}（{sentences.length.toLocaleString()}）
-					</button>
-				)}
-			</div>
+			<FoldRegion open={open}>
+				<div className="tr-think-body">
+					{redacted ? (
+						t("transcript.text")
+					) : shownSentences.length > 1 ? (
+						shownSentences.map((s, i) => (
+							// Sentences are anonymous text splits — the index is their identity.
+							// Each sentence renders through Markdown (TUI parity: thinking
+							// supports inline markdown); the div wrapper keeps the reveal
+							// animation outside the markdown tree.
+							<div key={i} className={`tr-think-sentence${streaming ? " tr-think-sentence--live" : ""}`}>
+								<Markdown text={s} />
+							</div>
+						))
+					) : (
+						<Markdown text={text} />
+					)}
+					{thinkTruncated && (
+						<button type="button" className="tr-think-more" onClick={() => setShowAll(true)}>
+							{t("settings.expandAll")}（{sentences.length.toLocaleString()}）
+						</button>
+					)}
+				</div>
+			</FoldRegion>
 		</div>
 	);
 }

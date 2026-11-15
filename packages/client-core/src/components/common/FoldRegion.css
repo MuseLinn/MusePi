@@ -1,0 +1,37 @@
+/*
+ * FoldRegion — the one collapse track (see FoldRegion.tsx for the contract).
+ *
+ * The animated property is the grid track, not an element height: both ends
+ * are real used sizes, so the transition needs no `interpolate-size`, no
+ * `--h` written from JS, and no reflow before each toggle. The child is a
+ * `min-height: 0` grid item so it can shrink below its content height.
+ *
+ * Opening restores `overflow: visible` (tool cards inside an expanded fold
+ * host hover popovers that must escape the row); the closed state clips.
+ */
+.fold-region {
+	display: grid;
+	grid-template-rows: minmax(0, 0fr);
+	overflow: hidden;
+	transition: grid-template-rows 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fold-region--open {
+	grid-template-rows: minmax(0, 1fr);
+	overflow: visible;
+}
+
+.fold-region-inner {
+	min-height: 0;
+	overflow: hidden;
+}
+
+.fold-region--open > .fold-region-inner {
+	overflow: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fold-region {
+		transition: none;
+	}
+}

@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **折叠改为统一的轨道动画**：思考块、活动折叠与工具汇总共用一个折叠 primitive——展开时先挂载内容、下一帧再打开轨道，收起时轨道落到零后再卸载；动画对象是 grid 轨道（`0fr ↔ 1fr`），不再依赖 JS 量高或 `height: auto` 插值。关闭态对读屏与键盘为 `inert`，`prefers-reduced-motion` 下直接切换。
+  - EN: Folds animate on one shared track. Thinking, the activity fold and the tool summary now mount content first and open the track on the next frame, then collapse to zero before unmounting; the animated property is the grid track (0fr ↔ 1fr) rather than a JS-measured height or a height:auto interpolation. A closed region is inert for keyboard and screen readers, and prefers-reduced-motion switches instantly.
+
 - **计算机使用支持按住按键**：`win.holdKeys` / `desktop.holdKeys` 按住指定按键 50–10000ms 后逆序释放，用于修饰键与长按快捷键；时长越界在发送前拒绝，`read_only` 与 `computer.backgroundFallback: "refuse"` 下的前台投递同样被拒，后台投递遇到工具箱拒收时与普通按键一致。
   - EN: Computer use can hold keys: `win.holdKeys` / `desktop.holdKeys` press keys for 50–10000 ms and release them in reverse order, covering modifier holds and press-and-hold shortcuts. An out-of-range duration fails before anything is sent, `read_only` refuses the call, a foreground delivery is refused under `computer.backgroundFallback: "refuse"`, and a background refusal follows the same rules as ordinary key input.
 
