@@ -237,8 +237,9 @@ async function runWorker(
 	code: string,
 	readOnly = false,
 	timeoutMs = 2_000,
+	snapshotOverrides: Partial<ComputerSessionSnapshot> = {},
 ): Promise<Extract<ComputerWorkerOutbound, { type: "result" }>> {
-	transport.inbound({ type: "run", id, code, timeoutMs, session: snapshot(readOnly) });
+	transport.inbound({ type: "run", id, code, timeoutMs, session: snapshot(readOnly, snapshotOverrides) });
 	return (await transport.waitFor(
 		(message): message is Extract<ComputerWorkerOutbound, { type: "result" }> =>
 			message.type === "result" && message.id === id,
@@ -1011,5 +1012,26 @@ describe("held pointer", () => {
 		);
 		expect(result.ok).toBe(false);
 		expect(called).toBe(false);
+	});
+});
+
+describe("background refusal code path", () => {
+	it("appends the keep-in-background policy to a native refusal", async () => {
+		const transport = new MemoryTransport();
+		const session = new FakeNativeSession();
+		session.click = async () => {
+			throw new Error("BackgroundUnavailable: window drops background events");
+		};
+		new ComputerWorkerCore(transport, () => session);
+		const result = await runWorker(
+			transport,
+			"refuse-native",
+			"return await (await desktop.window('42')).click(10, 10);",
+			false,
+			2_000,
+			{ backgroundFallback: "refuse" },
+		);
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.message).toContain("no foreground retry is allowed");
 	});
 });

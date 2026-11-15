@@ -29,6 +29,7 @@ import {
 import { ToolAbortError, ToolError, throwIfAborted } from "../tool-errors";
 import type { ApplicationEntry } from "./app-provider";
 import { annotateRunning, type DesktopApp, hostInstalledApps, launchCommand, resolveApp } from "./apps";
+import { DesktopToolError, desktopErrorFrom } from "./errors";
 import type {
 	ComputerInputEvent,
 	ComputerScreenshot,
@@ -173,7 +174,8 @@ function replyError(payload: RunErrorPayload): Error {
 }
 
 function nativeError(error: unknown): ToolError {
-	return new ToolError(error instanceof Error ? error.message : String(error));
+	const wrapped = desktopErrorFrom(error);
+	return wrapped;
 }
 
 async function nativeCall<T>(signal: AbortSignal, call: () => Promise<T>): Promise<T> {
@@ -238,10 +240,11 @@ async function sendWindowInput<T>(
 		return await send();
 	} catch (error) {
 		if (context.snapshot.backgroundFallback !== "refuse") throw error;
-		const message = error instanceof Error ? error.message : String(error);
-		if (!message.startsWith(BACKGROUND_UNAVAILABLE)) throw error;
+		// Typed at the native boundary, so this is a code check rather than a
+		// message-prefix match.
+		if (!(error instanceof DesktopToolError) || error.code !== "BackgroundUnavailable") throw error;
 		throw new ToolError(
-			`${message}; the user's computer.backgroundFallback setting is "refuse", which keeps the agent in the background, so no foreground retry is allowed`,
+			`${error.message}; the user's computer.backgroundFallback setting is "refuse", which keeps the agent in the background, so no foreground retry is allowed`,
 		);
 	}
 }
