@@ -424,3 +424,28 @@ describe("artifactRowSet (one deliverable predicate for both collapses)", () => 
 		expect(artifactRowSet(entries).has(1)).toBe(false);
 	});
 });
+
+describe("buildToolRuns subagent boundary (Kimi Code client parity)", () => {
+	test("a task call/result never joins a run and splits it in two", () => {
+		const entries = [
+			userMsg(),
+			assistantToolCall("c1", "read"),
+			toolResult("c1", "read"),
+			assistantToolCall("c2", "grep"),
+			toolResult("c2", "grep"),
+			assistantToolCall("t1", "task"),
+			toolResult("t1", "task"),
+			assistantToolCall("c3", "read"),
+			toolResult("c3", "read"),
+			assistantToolCall("c4", "grep"),
+			toolResult("c4", "grep"),
+			assistantText("done"),
+		];
+		const runs = buildToolRuns(entries, false);
+		expect(runs.map(run => run.headIdx)).toEqual([1, 7]);
+		for (const run of runs) {
+			expect(run.idxs).not.toContain(5);
+			expect(run.idxs).not.toContain(6);
+		}
+	});
+});

@@ -123,6 +123,6 @@ Me(f, D => {
 - 回合头是否保留"已工作 X"作为主标题（Kimi 是），还是保留"活动 + 子句"（openchamber 是）。建议：主标题"活动"，右侧耗时，子句行在下方；两者兼得。
 - 运行中可见窗口：Kimi 按「最后一段文本之后」切分，我们按「最近 N 行 + live trim」。建议对齐 Kimi（文本是阅读锚点，N 行会把刚写出的半句切断），但保留 N 作为无文本时的兜底。
 
-## 7. P0 验收时发现的待查项
+## 7. P0 验收时确认的一点
 
-- 真实实例里把回合折叠打开后，span 内的行渲染成**空** `.tr-fold-slot`（`childElementCount: 0`，`grid-template-rows: 0px`）。同一状态下 `.tr-fold-slot` 已正确 `display: grid`，思考块的 `FoldRegion` 能正常展开（实测 1521px → 1821px 过渡）。空行疑似与 `trimmedByLiveTail` / `runSummaryHere && !runOpen` 的 body 置空分支有关，属于行模型问题，P1 重写 `buildTimeline` 时一并定位并加回归用例。
+- 打开回合折叠后，span 内会出现若干**空** `.tr-fold-slot`（`childElementCount: 0`）。核查后确认不是缺陷：这些行是 `toolResult` 行，卡片渲染在配对的那条 assistant 行上（该行是折叠头，展开时正常显示工具卡），结果行本身没有独立内容。`FoldRegion` 的轨道本身工作正常（思考块实测 1521px → 1821px 过渡）。P1 重写行模型时，结果行应显式归并到配对行，而不是留一个空槽。

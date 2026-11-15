@@ -531,11 +531,28 @@ export function buildToolRuns(entries: readonly SessionEntry[], working: boolean
 			flush();
 			continue;
 		}
+		// A subagent's result is an agent's work, not a step of THIS run: keep it
+		// as its own row and end the run around it (Kimi Code client parity —
+		// `task` never joins an activity run). The call row is a work row too, so
+		// break on either side instead of only on the result.
+		if (isSubagentRow(entry)) {
+			flush();
+			continue;
+		}
 		if (classifyTranscriptRow(entry) === "work") idxs.push(i);
 		else flush();
 	}
 	flush();
 	return runs;
+}
+
+/** A row that carries subagent work: the `task` tool call or its result. */
+function isSubagentRow(entry: SessionEntry | undefined): boolean {
+	if (entry === undefined || entry.type !== "message") return false;
+	const message = entry.message;
+	if (message.role === "toolResult") return message.toolName === "task";
+	if (message.role !== "assistant") return false;
+	return message.content.some(block => block.type === "toolCall" && block.name === "task");
 }
 
 /** Default: a running turn keeps every row visible. */
