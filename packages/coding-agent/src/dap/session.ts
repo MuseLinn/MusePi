@@ -1456,7 +1456,7 @@ export class DapSessionManager {
 
 	#buildInitializeArguments(adapter: DapResolvedAdapter): DapInitializeArguments {
 		return {
-			clientID: "omp",
+			clientID: "musepi",
 			clientName: "MusePi",
 			adapterID: adapter.name,
 			locale: "en-US",

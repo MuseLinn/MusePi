@@ -681,7 +681,7 @@ mod tests {
 	#[test]
 	fn bsd_t_prefix_creates_file_in_tmpdir() {
 		let (_dir, root) = canonical_tempdir();
-		let (code, stdout, stderr) = run_in(root.clone(), &tmpdir_env(&root), &["-t", "omp"]);
+		let (code, stdout, stderr) = run_in(root.clone(), &tmpdir_env(&root), &["-t", "musepi"]);
 		assert_eq!(code, 0);
 		assert_eq!(stderr, "");
 		let printed = PathBuf::from(stdout.trim_end_matches('\n'));

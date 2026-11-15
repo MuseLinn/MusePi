@@ -163,7 +163,7 @@ export function loadHindsightConfig(settings: Settings, env: NodeJS.ProcessEnv =
 		retainMode: retainModeEnv ?? settingsRetainMode ?? "full-session",
 		retainEveryNTurns: retainEveryNTurnsEnv ?? settings.get("hindsight.retainEveryNTurns"),
 		retainOverlapTurns: settings.get("hindsight.retainOverlapTurns"),
-		retainContext: settings.get("hindsight.retainContext") ?? "omp",
+		retainContext: settings.get("hindsight.retainContext") ?? "musepi",
 
 		recallBudget: recallBudgetEnv ?? settingsRecallBudget ?? "mid",
 		recallMaxTokens: recallMaxTokensEnv ?? settings.get("hindsight.recallMaxTokens"),

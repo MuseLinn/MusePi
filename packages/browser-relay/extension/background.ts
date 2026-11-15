@@ -53,7 +53,7 @@ let ompGroupTitle: string | null = null;
 /**
  * Serialize group mutations. Chrome's query→group→set-title sequence is not
  * atomic: two concurrent runs both miss the not-yet-titled group and mint
- * duplicate "omp" groups in the same window.
+ * duplicate "musepi" groups in the same window.
  */
 let groupOps: Promise<unknown> = Promise.resolve();
 function enqueueGroupOp<T>(fn: () => Promise<T>): Promise<T> {

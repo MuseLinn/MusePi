@@ -2578,6 +2578,17 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"suggestion.enabled": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "interaction",
+			group: "Session",
+			label: "Input Suggestions",
+			description: "Predict the user's next message after a turn completes and offer it in the empty input box",
+		},
+	},
+
 	// Collab
 	"collab.relayUrl": {
 		type: "string",
@@ -3724,7 +3735,7 @@ export const SETTINGS_SCHEMA = {
 	},
 	"hindsight.retainEveryNTurns": { type: "number", default: 3 },
 	"hindsight.retainOverlapTurns": { type: "number", default: 2 },
-	"hindsight.retainContext": { type: "string", default: "omp" },
+	"hindsight.retainContext": { type: "string", default: "musepi" },
 
 	"hindsight.recallBudget": {
 		type: "enum",
