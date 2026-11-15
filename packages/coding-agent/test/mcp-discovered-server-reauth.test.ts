@@ -1,6 +1,6 @@
 /**
  * Regression coverage for `/mcp reauth` (and `/mcp test|unauth`) on a server
- * that `/mcp list` shows but that lives in no writable OMP config — e.g. a
+ * that `/mcp list` shows but that lives in no writable MusePi config — e.g. a
  * server installed from a Claude Code marketplace plugin, registered under a
  * namespaced name like `cloudflare:cloudflare-api`.
  *

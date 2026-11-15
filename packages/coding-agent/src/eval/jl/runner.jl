@@ -1,4 +1,4 @@
-# OMP Julia runner — subprocess wrapper used by the coding-agent host.
+# MusePi Julia runner — subprocess wrapper used by the coding-agent host.
 # Persistent Julia process that speaks NDJSON over stdout and a custom TSV protocol on stdin.
 
 using Base64

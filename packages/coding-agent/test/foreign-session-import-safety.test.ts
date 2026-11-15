@@ -3,7 +3,7 @@
  * file must be byte-identical afterwards, and two imports must land in two
  * distinct MusePi session files (no overwrite of an earlier copy).
  *
- * Uses the real OMP store so the test exercises the same in-memory load path
+ * Uses the real MusePi store so the test exercises the same in-memory load path
  * production imports take.
  */
 import { afterEach, describe, expect, test } from "bun:test";

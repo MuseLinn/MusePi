@@ -74,7 +74,7 @@ export function foreignSessionInfoToSessionInfo(info: ForeignSessionInfo): Sessi
 	};
 }
 
-/** Import and persist one foreign session under a fresh OMP session identity. */
+/** Import and persist one foreign session under a fresh MusePi session identity. */
 export async function persistForeignSession(
 	store: ForeignSessionStore,
 	info: ForeignSessionInfo,

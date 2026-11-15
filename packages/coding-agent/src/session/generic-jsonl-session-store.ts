@@ -17,7 +17,7 @@ import { SessionManager } from "./session-manager";
 
 /**
  * Tolerant JSONL session reader for agents whose transcript format is not
- * OMP-SDK-native (grok: `~/.grok/sessions/` + encoded-cwd dirs; kimi-code:
+ * MusePi-SDK-native (grok: `~/.grok/sessions/` + encoded-cwd dirs; kimi-code:
  * `~/.kimi-code` wire.jsonl under session dirs). Records are probed for a
  * message shape — `{role, content[]}` blocks, `{type:"message",
  * message:{role}}`, or `turn.prompt` style events — and converted

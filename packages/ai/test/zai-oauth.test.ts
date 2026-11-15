@@ -153,7 +153,7 @@ describe("zai oauth flow", () => {
 		for (const bizReq of requests.slice(2)) {
 			expect(bizReq.authorization).toBe("Bearer biz-token");
 		}
-		// Created OMP's own key name, never ZCode's.
+		// Created MusePi's own key name, never ZCode's.
 		expect(requests[4]?.body).toEqual({ name: "musepi" });
 	});
 

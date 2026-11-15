@@ -43,7 +43,7 @@ describe("normalizeAddressBarUrl — local preview", () => {
 	it("rejects the retired pre-rename spelling", () => {
 		expect(normalizeAddressBarUrl("omp-file://localhost/D:/Projects/MusePi/web/index.html")).toBeNull();
 		expect(normalizeAddressBarUrl("omp-file://localhost/tmp/artifact.html")).toBeNull();
-		expect(normalizeAddressBarUrl("OMP-FILE://localhost/tmp/artifact.html")).toBeNull();
+		expect(normalizeAddressBarUrl("MUSEPI-FILE://localhost/tmp/artifact.html")).toBeNull();
 	});
 
 	it("restores the host when the address arrives without one", () => {

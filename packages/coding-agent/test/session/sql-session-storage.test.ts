@@ -36,6 +36,23 @@ describe("SqlSessionStorage (SQLite backend)", () => {
 		await client.end();
 	});
 
+	it("keeps using the legacy omp_session_files table when it is the only one present", async () => {
+		const client = new SQL("sqlite::memory:");
+		await client.unsafe(
+			`CREATE TABLE omp_session_files (path TEXT PRIMARY KEY, content TEXT NOT NULL, mtime_ms INTEGER NOT NULL, title TEXT, title_source TEXT, title_updated_at TEXT)`,
+		);
+		await client.unsafe(`INSERT INTO omp_session_files (path, content, mtime_ms) VALUES (?, ?, ?)`, [
+			"/sessions/p/old.jsonl",
+			"legacy\n",
+			1,
+		]);
+
+		const storage = await SqlSessionStorage.create({ client });
+		expect(storage.table).toBe("omp_session_files");
+		expect(await storage.readText("/sessions/p/old.jsonl")).toBe("legacy\n");
+		await client.end();
+	});
+
 	it("create() warms the metadata index without selecting full content", async () => {
 		const client = new SQL("sqlite::memory:");
 		await client.unsafe(

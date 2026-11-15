@@ -164,7 +164,7 @@ const RPC_BACKGROUND_DEFAULTED_SETTING_PATHS: SettingPath[] = [
 ];
 
 // Protocol-mode hosts opt into a small set of paths whose host-default we
-// re-apply at startup so embedders inherit OMP's neutral defaults instead of
+// re-apply at startup so embedders inherit MusePi's neutral defaults instead of
 // the local user's globally-persisted preferences for interactive use. The
 // guard preserves any explicit configuration — caller `Settings.isolated`
 // overrides, project `.claude/settings.yml`, `--config` overlays, or global
@@ -1427,7 +1427,7 @@ export async function runRootCommand(
 	normalizeContinueSessionArgs(parsedArgs, rawArgs);
 
 	// Resolve native resume/fork flags or import one foreign transcript into a
-	// fresh persisted OMP session before constructing the AgentSession.
+	// fresh persisted MusePi session before constructing the AgentSession.
 	let sessionManager: SessionManager | undefined;
 	let foreignSource: ForeignSessionSource | undefined;
 	try {

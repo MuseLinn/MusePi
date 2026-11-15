@@ -112,7 +112,7 @@ approval: (args) =>
 
 ## ACP 会话
 
-ACP（`musepi acp`）使用与普通 OMP 启动相同的设置解析器。全局 `~/.musepi/agent/config.yml` 适用，ACP 会话 `cwd` 的项目配置适用，传给 ACP server 进程的任何 `--config <file>` overlay 适用于该进程创建的会话。
+ACP（`musepi acp`）使用与普通 MusePi 启动相同的设置解析器。全局 `~/.musepi/agent/config.yml` 适用，ACP 会话 `cwd` 的项目配置适用，传给 ACP server 进程的任何 `--config <file>` overlay 适用于该进程创建的会话。
 
 要自动批准 ACP 工具调用，在全局或项目配置中设置模式：
 
@@ -132,9 +132,9 @@ musepi acp --config ./acp-yolo.yml   # file contains tools.approvalMode: yolo
 
 优先级是普通设置的优先级：runtime flags（`--approval-mode`、`--auto-approve`、`--yolo`）覆盖 `--config` overlay，后者覆盖项目配置，再覆盖全局配置。ACP 目前不定义 `session/new`、`session/load` 或 `session/resume` 审批策略字段，因此需要按会话 yolo 的 ACP 客户端应使用上述 flag 之一或会话特定的 `--config` overlay 启动单独的 `musepi acp` 进程。
 
-当显式配置或由 runtime flag 提供时，`tools.approvalMode: yolo` 完全适用于 ACP。它跳过 OMP 的审批提示，也跳过 ACP 客户端对 `bash`、`edit`、`delete` 和 `move` 的权限门，除非 `tools.approval.<tool>` 为 `prompt` 或 `deny`。schema 默认是 `yolo`，但默认配置的 ACP 会话仍保留客户端权限门；客户端想要无监督执行时应显式设置 `tools.approvalMode: yolo`。
+当显式配置或由 runtime flag 提供时，`tools.approvalMode: yolo` 完全适用于 ACP。它跳过 MusePi 的审批提示，也跳过 ACP 客户端对 `bash`、`edit`、`delete` 和 `move` 的权限门，除非 `tools.approval.<tool>` 为 `prompt` 或 `deny`。schema 默认是 `yolo`，但默认配置的 ACP 会话仍保留客户端权限门；客户端想要无监督执行时应显式设置 `tools.approvalMode: yolo`。
 
-当需要 ACP 审批时，OMP 通过 ACP 客户端而不是终端 TUI 路由它。客户端门控的 `bash`、`edit`、`delete` 和 `move` 调用使用 ACP `session/request_permission`；当客户端公布 `elicitation.form` 时，通用审批提示使用表单引询。被拒绝、取消或不支持的提示会拒绝/取消工具调用；OMP 不会静默允许它。
+当需要 ACP 审批时，MusePi 通过 ACP 客户端而不是终端 TUI 路由它。客户端门控的 `bash`、`edit`、`delete` 和 `move` 调用使用 ACP `session/request_permission`；当客户端公布 `elicitation.form` 时，通用审批提示使用表单引询。被拒绝、取消或不支持的提示会拒绝/取消工具调用；MusePi 不会静默允许它。
 
 ## 子代理
 

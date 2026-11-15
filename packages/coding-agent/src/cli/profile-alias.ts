@@ -289,7 +289,7 @@ function renderAliasBlock(
 	switch (shell) {
 		case "fish":
 			body = [
-				`function ${aliasName} --wraps ${command.display} --description 'OMP profile ${profile}'`,
+				`function ${aliasName} --wraps ${command.display} --description 'MusePi profile ${profile}'`,
 				`    command ${command.fish} --profile=${profile} $argv`,
 				"end",
 			].join("\n");

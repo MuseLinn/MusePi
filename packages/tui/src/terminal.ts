@@ -813,7 +813,7 @@ export class ProcessTerminal implements Terminal {
 		// gates the renderer's begin/end markers; 2048 (in-band resize) is enabled
 		// only after the terminal confirms support; 2031 (appearance change
 		// notifications) drives mid-session theme tracking. Xterm ?1010/?1011
-		// are disabled while OMP owns the TTY so typing in the editor does not
+		// are disabled while MusePi owns the TTY so typing in the editor does not
 		// force a reader scrolled into native history back to the tail. Each probe
 		// rides the shared DA1 sentinel, so terminals that ignore DECRQM resolve as
 		// unsupported when the DA1 reply arrives.

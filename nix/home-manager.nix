@@ -11,13 +11,13 @@ let
 in
 {
   options.programs.omp = {
-    enable = lib.mkEnableOption "OMP coding agent";
+    enable = lib.mkEnableOption "MusePi coding agent";
 
     package = lib.mkOption {
       type = lib.types.package;
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
       defaultText = lib.literalExpression "inputs.omp.packages.${pkgs.stdenv.hostPlatform.system}.default";
-      description = "OMP package to install.";
+      description = "MusePi package to install.";
     };
 
     settings = lib.mkOption {
@@ -25,7 +25,7 @@ in
       default = null;
       description = ''
         Settings written declaratively to {file}`~/.omp/agent/config.yml`.
-        The file is a read-only store symlink: changes made from inside OMP
+        The file is a read-only store symlink: changes made from inside MusePi
         (`/settings`, onboarding) replace it but revert on the next
         `home-manager switch`.
       '';

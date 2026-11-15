@@ -12,7 +12,7 @@ async function createFixture(order: readonly string[]): Promise<string> {
 	for (const relativePath of order) {
 		const filePath = path.join(root, relativePath);
 		await fs.mkdir(path.dirname(filePath), { recursive: true });
-		await Bun.write(filePath, relativePath === "index.html" ? "<main>OMP</main>" : "body { color: blue; }");
+		await Bun.write(filePath, relativePath === "index.html" ? "<main>MusePi</main>" : "body { color: blue; }");
 	}
 	return root;
 }
@@ -50,7 +50,7 @@ describe("embedded stats client archive", () => {
 		expect(tarHeaderMtimes(tarBytes)).toEqual([0, 0]);
 
 		const files = await new Bun.Archive(gzipBytes).files();
-		expect(await files.get("index.html")?.text()).toBe("<main>OMP</main>");
+		expect(await files.get("index.html")?.text()).toBe("<main>MusePi</main>");
 		expect(await files.get("assets/app.css")?.text()).toBe("body { color: blue; }");
 	});
 });

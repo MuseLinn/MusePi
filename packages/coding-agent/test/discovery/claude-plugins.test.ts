@@ -400,7 +400,7 @@ describe("listClaudePluginRoots", () => {
 		expect(result3.roots).toHaveLength(2);
 	});
 
-	test("isolates cached OMP plugin roots by home when Claude config is shared", async () => {
+	test("isolates cached MusePi plugin roots by home when Claude config is shared", async () => {
 		const sharedClaudeConfig = path.join(tempDir, "shared-claude");
 		const firstHome = path.join(tempDir, "first-home");
 		const secondHome = path.join(tempDir, "second-home");
@@ -591,7 +591,7 @@ describe("listClaudePluginRoots", () => {
 		}
 	});
 
-	test("uses OMP then Claude manifest mcpServers paths before .mcp.json", async () => {
+	test("uses MusePi then Claude manifest mcpServers paths before .mcp.json", async () => {
 		const pluginsDir = path.join(tempDir, ".claude", "plugins");
 		const musepiPluginPath = path.join(tempDir, "plugins", "omp-pointer");
 		const claudePluginPath = path.join(tempDir, "plugins", "claude-pointer");

@@ -6,6 +6,7 @@ import * as path from "node:path";
 import { AuthStorage, REMOTE_REFRESH_SENTINEL, SqliteAuthCredentialStore } from "@musepi/pi-ai";
 import {
 	AUTH_BROKER_CAPABILITIES_HEADER,
+	AUTH_BROKER_CAPABILITIES_VARY,
 	AUTH_BROKER_CAPABILITY_CODEX_METER_BLOCK_SCOPES,
 	AuthBrokerClient,
 	AuthBrokerError,
@@ -197,7 +198,7 @@ describe("auth-broker wire surface", () => {
 		const body = (await res.json()) as { generation: number; serverNowMs: number; refresher: { enabled: boolean } };
 		expect(res.headers.get("etag")).toBe(`"${body.generation}"`);
 		expect(res.headers.get("cache-control")).toBe("no-store");
-		expect(res.headers.get("vary")).toBe(AUTH_BROKER_CAPABILITIES_HEADER);
+		expect(res.headers.get("vary")).toBe(AUTH_BROKER_CAPABILITIES_VARY);
 		expect(body.generation).toBeGreaterThan(0);
 		expect(body.serverNowMs).toBeGreaterThan(0);
 		expect(body.refresher.enabled).toBe(false);
@@ -223,7 +224,7 @@ describe("auth-broker wire surface", () => {
 			},
 		});
 		expect(rawUnchanged.status).toBe(304);
-		expect(rawUnchanged.headers.get("vary")).toBe(AUTH_BROKER_CAPABILITIES_HEADER);
+		expect(rawUnchanged.headers.get("vary")).toBe(AUTH_BROKER_CAPABILITIES_VARY);
 	});
 
 	test("ignores external SQLite commits outside auth tables", async () => {
@@ -809,7 +810,7 @@ describe("auth-broker wire surface", () => {
 			});
 			expect(res.status).toBe(200);
 			expect(res.headers.get("content-type") ?? "").toContain("text/event-stream");
-			expect(res.headers.get("vary")).toBe(AUTH_BROKER_CAPABILITIES_HEADER);
+			expect(res.headers.get("vary")).toBe(AUTH_BROKER_CAPABILITIES_VARY);
 			expect(res.body).not.toBeNull();
 			const reader = (res.body as ReadableStream<Uint8Array>).getReader();
 			const decoder = new TextDecoder();

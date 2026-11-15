@@ -9,7 +9,7 @@ import { type DeletedWorkspaces, sessionHiddenByWorkspace } from "./workspace-re
  *   `session.toolGates`——客户端 tree 接口契约的归属，route-coverage 测试
  *   钉桩）。session.catchup 仍归 EventService（journal 序语义载体，重复认领
  *   会被 routeTable 拒）。
- * - 输入：session.tree（跨会话树， OMP /tree  parity）、session.resume
+ * - 输入：session.tree（跨会话树， MusePi /tree  parity）、session.resume
  *  （快照 + 订阅附着前的 resumeLive 登记）、session.toolGates（live 会话的
  *  工具开关重算）。
  * - 输出：树节点（entry + children）；resume 返回 `{ stream, snapshot,

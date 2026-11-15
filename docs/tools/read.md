@@ -197,7 +197,7 @@ URL selectors are parsed separately in `packages/coding-agent/src/tools/fetch.ts
 ### Internal URLs
 - `read` does not resolve these itself; it delegates to `InternalUrlRouter.instance().resolve()`.
 - Registered protocols are outside this file, but the router in `packages/coding-agent/src/internal-urls/router.ts` is built for `agent://`, `artifact://`, `blob://`, `history://`, `issue://`, `local://`, `mcp://`, `memory://`, `musepi://`, `pr://`, `rule://`, `security://`, `skill://`, and `vault://`.
-  - `security://` is reserved for the OMP-owned, producer-neutral, read-only security-analysis store.
+  - `security://` is reserved for the MusePi-owned, producer-neutral, read-only security-analysis store.
 - `#handleInternalUrl()` behavior:
   - parses the URL with `parseInternalUrl()` so colons inside the host segment are legal
   - for `agent://`, treats non-root path extraction or `?q=` extraction as a special no-pagination mode

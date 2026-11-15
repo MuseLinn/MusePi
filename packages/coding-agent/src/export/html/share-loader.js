@@ -36,7 +36,7 @@
         if (!res.ok) throw new Error('Gist fetch failed: HTTP ' + res.status);
         var gist = await res.json();
         var files = Object.values(gist.files || {});
-        var file = files.find(function(f) { return /\.musepishare\.txt$/.test(f.filename); }) || files[0];
+        var file = files.find(function(f) { return /\.(?:omp|musepi)share\.txt$/.test(f.filename); }) || files[0];
         if (!file) throw new Error('Gist has no files.');
         var text = file.content;
         if (!text || file.truncated) {

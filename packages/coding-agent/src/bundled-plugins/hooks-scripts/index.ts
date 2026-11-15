@@ -9,7 +9,7 @@ import { stringArrayFromRow } from "../../extensibility/plugins/row-config";
  * Directory-shaped hooks, mounted as a preset row.
  *
  * MusePi's historical convention (`.claude/hooks/pre|post`, mirrored by the
- * OMP/Pi providers) is a directory of one script per tool, not an event map.
+ * MusePi/Pi providers) is a directory of one script per tool, not an event map.
  * This row makes that convention executable without adding a second protocol:
  * the scan produces the same config the shared engine already runs, so
  * matching, exit-code semantics, context and merging are identical to the

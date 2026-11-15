@@ -2182,8 +2182,6 @@ export const settings = {
 		"Mount rarely-used (discoverable) tools under xd:// device URLs driven via read/write instead of shipping their schemas on every request. Sessions without a granted write tool skip mounting and expose every tool top-level. Disable to expose every enabled tool top-level.",
 	'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).':
 		'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).',
-	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.':
-		'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.',
 	"settings.hardTimeoutEach.desc":
 		"Hard timeout for each provider's search transport before web_search advances to the next fallback, in seconds (maximum 300)",
 	'Serving path for Fireworks requests. Priority sends `service_tier: "priority"` for higher reliability during peak traffic at a higher price; Standard omits it. Fast (`-fast`) models ignore this — Fast is its own serving path.':
@@ -3816,8 +3814,6 @@ export const settings = {
 		"BCP-47 hint passed to the speech model (e.g. zh, yue, en, ja). Empty = auto-detect — the shipped models are multilingual and usually need no hint.",
 	"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.":
 		"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.",
-	"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace":
-		"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace",
 	Exa: "Exa",
 	"Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.":
 		"Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.",
@@ -3832,8 +3828,8 @@ export const settings = {
 		"Just under the 200K tier break some providers bill double past",
 	"Mark misspelled prompt words with the active macOS dictionaries":
 		"Mark misspelled prompt words with the active macOS dictionaries",
-	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.':
-		'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.',
+	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.':
+		'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.',
 	"Maximum height in terminal rows for inline images (default 20). Set to 0 to use only the viewport-based limit (60% of terminal height).":
 		"Maximum height in terminal rows for inline images (default 20). Set to 0 to use only the viewport-based limit (60% of terminal height).",
 	"Maximum width in terminal columns for inline images (default 100). Set to 0 for unlimited (bounded only by terminal width).":
@@ -3846,8 +3842,8 @@ export const settings = {
 		"Ordered destinations tried when publishing images for provider access",
 	"Percentage plus ticks at the speculative and auto-compaction boundaries":
 		"Percentage plus ticks at the speculative and auto-compaction boundaries",
-	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count":
-		"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count",
+	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting MusePi-owned dialogs does not count":
+		"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting MusePi-owned dialogs does not count",
 	Powerline: "Powerline",
 	"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice":
 		"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice",

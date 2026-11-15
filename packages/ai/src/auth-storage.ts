@@ -703,7 +703,7 @@ const DEFAULT_USAGE_REQUEST_TIMEOUT_MS = 10_000;
 const USAGE_REPORT_CACHE_KEY_VERSION_OVERRIDES: Partial<Record<Provider, number>> = {
 	"google-antigravity": 2,
 	zai: 2,
-	// v2: retires cached reports from the OMP-observed spend estimator (dollar
+	// v2: retires cached reports from the MusePi-observed spend estimator (dollar
 	// units) now that limits come from the upstream percent-based `/usage`
 	// endpoint; the 24h last-good retention would otherwise keep serving them.
 	"opencode-go": 2,

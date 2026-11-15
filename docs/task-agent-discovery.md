@@ -124,7 +124,7 @@ Because bundled parsing uses `level: "fatal"`, malformed bundled frontmatter thr
 
 ## Filesystem and plugin discovery
 
-`discoverAgents(cwd, home)` (`src/task/discovery.ts`) merges agents from OMP-native roots and Claude plugin roots before appending bundled definitions. Cross-harness roots such as `.claude/agents`, `.codex/agents`, and `.gemini/agents` are intentionally skipped — their frontmatter schema is not the OMP task-agent contract (`TASK_AGENT_CONFIG_SOURCE = ".musepi"` filters both dir lists).
+`discoverAgents(cwd, home)` (`src/task/discovery.ts`) merges agents from MusePi-native roots and Claude plugin roots before appending bundled definitions. Cross-harness roots such as `.claude/agents`, `.codex/agents`, and `.gemini/agents` are intentionally skipped — their frontmatter schema is not the MusePi task-agent contract (`TASK_AGENT_CONFIG_SOURCE = ".musepi"` filters both dir lists).
 
 ### Discovery inputs
 

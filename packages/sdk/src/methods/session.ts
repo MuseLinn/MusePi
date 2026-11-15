@@ -1,5 +1,5 @@
 /**
- * Session domain — the OMP session tree (id/parentId hierarchy), subscribe
+ * Session domain — the MusePi session tree (id/parentId hierarchy), subscribe
  * stream, send, archive/rename/label.
  *
  * Maps to coding-agent session layer: `SessionManager` /
@@ -200,7 +200,7 @@ export const sessionTree = {
 	method: "session.tree",
 	auth: "session",
 	params: Type.Object({}),
-	result: Type.Any({ description: "SessionTreeNode[] — flat-indent render data (OMP /tree)" }),
+	result: Type.Any({ description: "SessionTreeNode[] — flat-indent render data (MusePi /tree)" }),
 	impl: "SessionManager.getTree()",
 } satisfies MethodEntry;
 

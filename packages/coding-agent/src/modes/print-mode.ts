@@ -202,7 +202,7 @@ export async function runPrintMode(session: AgentSession, options: PrintModeOpti
 				// HERE so error spans reach the exporter (the postmortem `exit`
 				// handler can't await) and the browser reaper installed in
 				// `dispose()` (releaseTabsForOwner) actually runs — otherwise an
-				// OMP-owned Chromium survives this exit (issue #5643). `dispose()`
+				// MusePi-owned Chromium survives this exit (issue #5643). `dispose()`
 				// is idempotent, so the unreachable call below is a harmless no-op.
 				await session.waitForAdvisorCatchup(PRINT_MODE_ERROR_ADVISOR_DRAIN_TIMEOUT_MS);
 				await flushTelemetryExport();

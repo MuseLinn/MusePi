@@ -1,5 +1,5 @@
 {
-  description = "OMP coding agent and development environment";
+  description = "MusePi coding agent and development environment";
 
   nixConfig = {
     extra-substituters = [ "https://nix-community.cachix.org" ];
@@ -97,7 +97,7 @@
         default = {
           type = "app";
           program = "${self.packages.${system}.default}/bin/omp";
-          meta.description = "Run OMP";
+          meta.description = "Run MusePi";
         };
         omp = self.apps.${system}.default;
       });

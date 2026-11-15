@@ -121,10 +121,10 @@ describe("RpcHostUriBridge", () => {
 		bridge.clear("test cleanup");
 	});
 
-	it("rejects OMP-reserved schemes", () => {
+	it("rejects MusePi-reserved schemes", () => {
 		const bridge = new RpcHostUriBridge(() => {});
 		expect(() => bridge.setSchemes([{ scheme: "security" }])).toThrow(
-			"Host URI scheme is reserved by OMP: security://",
+			"Host URI scheme is reserved by MusePi: security://",
 		);
 	});
 

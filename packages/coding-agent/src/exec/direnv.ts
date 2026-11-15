@@ -104,7 +104,7 @@ async function runDirenv(
  * allow list, or the export fails/times out.
  *
  * direnv's own allow list is honored — an `.envrc` the user has not
- * `direnv allow`ed is NEVER executed or auto-allowed. This keeps OMP's trust
+ * `direnv allow`ed is NEVER executed or auto-allowed. This keeps MusePi's trust
  * boundary identical to the user's own shell: cloning a repo with a poisoned
  * `.envrc` grants it nothing until the user explicitly allows it.
  *

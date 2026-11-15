@@ -259,7 +259,7 @@ const CODEX_WEBSOCKET_MESSAGE_QUEUE_CAPACITY = Number($env.PI_CODEX_WEBSOCKET_ME
 const CODEX_WEBSOCKET_MAX_IDLE_REUSE_MS = Number($env.PI_CODEX_WEBSOCKET_MAX_IDLE_REUSE_MS || 30_000);
 /**
  * Steady-state liveness ceiling for the Codex WebSocket transport. Distinct from
- * the OMP-wide stream watchdog removed in #1392: a WebSocket can stay TCP-open
+ * the MusePi-wide stream watchdog removed in #1392: a WebSocket can stay TCP-open
  * indefinitely without exchanging frames (server crash after upgrade, half-open
  * network path), so we still need a transport-internal cap to detect those
  * states and trigger the WS→SSE fallback. Only applies AFTER the first event
@@ -417,7 +417,7 @@ export interface OpenAICodexTurnRequestDiagnostics {
 	canAppendBeforeRequest: boolean;
 }
 
-/** Raw provider usage plus the normalized buckets OMP displays for the latest Codex turn. */
+/** Raw provider usage plus the normalized buckets MusePi displays for the latest Codex turn. */
 export interface OpenAICodexTurnUsageDiagnostics {
 	rawInputTokens: number;
 	rawCachedTokens: number;
@@ -530,7 +530,7 @@ const CODEX_RESERVED_METADATA_KEYS: Record<string, true> = {
 	request_kind: true,
 	compaction: true,
 	// codex-rs reserves `code_mode_tool_names` for its Responses Lite Code Mode
-	// mapping (#35271); OMP never emits it, but callers must not smuggle it in
+	// mapping (#35271); MusePi never emits it, but callers must not smuggle it in
 	// as an extra either.
 	code_mode_tool_names: true,
 	turn_started_at_unix_ms: true,

@@ -7,7 +7,7 @@
  * The fix lives in `crates/vendor/brush-core/src/commands.rs` and is
  * verified at the unit level by `pi-natives::shell::tests::child_session_action`
  * (truth-table) and `embedded_external_command_runs_in_its_own_session` (real
- * brush spawn). This test pulls the fix end-to-end through the OMP coding
+ * brush spawn). This test pulls the fix end-to-end through the MusePi coding
  * agent stack:
  *
  *   AgentSession.prompt
@@ -34,7 +34,7 @@
  *
  * If this test ever starts failing on macOS/Linux, the embedded-host bug is
  * back and `BashTool` invocations that touch `/dev/tty` or `tcsetpgrp` can
- * SIGTTIN/SIGTTOU the OMP host process.
+ * SIGTTIN/SIGTTOU the MusePi host process.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";

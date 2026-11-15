@@ -10,13 +10,13 @@ let
 in
 {
   options.programs.omp = {
-    enable = lib.mkEnableOption "OMP coding agent";
+    enable = lib.mkEnableOption "MusePi coding agent";
 
     package = lib.mkOption {
       type = lib.types.package;
       default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
       defaultText = lib.literalExpression "inputs.omp.packages.${pkgs.stdenv.hostPlatform.system}.default";
-      description = "OMP package to install system-wide.";
+      description = "MusePi package to install system-wide.";
     };
   };
 

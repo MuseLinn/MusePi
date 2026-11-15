@@ -14,9 +14,9 @@ import { getPluginsDir, getProjectAgentDir, removeWithRetries } from "@musepi/pi
 const MUSEPI_AGENT_MD = [
 	"---",
 	"name: omp-test-agent",
-	"description: OMP-native test agent.",
+	"description: MusePi-native test agent.",
 	"---",
-	"You are an OMP task agent.",
+	"You are a MusePi task agent.",
 ].join("\n");
 
 const MUSEPI_PLUGIN_AGENT_MD = [
@@ -74,7 +74,7 @@ describe("discoverAgents", () => {
 		await removeWithRetries(tempHome);
 	});
 
-	test("loads OMP agents but skips Claude Code custom agents", async () => {
+	test("loads MusePi agents but skips Claude Code custom agents", async () => {
 		await fs.mkdir(path.join(getProjectAgentDir(projectDir), "agents"), { recursive: true });
 		await fs.writeFile(path.join(getProjectAgentDir(projectDir), "agents", "omp-test-agent.md"), MUSEPI_AGENT_MD);
 
@@ -91,7 +91,7 @@ describe("discoverAgents", () => {
 		expect(projectAgentsDir).toBe(path.join(getProjectAgentDir(projectDir), "agents"));
 	});
 
-	test("loads agents from OMP npm plugins under <home>/.musepi/plugins/node_modules", async () => {
+	test("loads agents from MusePi npm plugins under <home>/.musepi/plugins/node_modules", async () => {
 		await writeOmpPluginAgent(tempHome);
 
 		const { agents } = await discoverAgents(projectDir, tempHome);
@@ -100,7 +100,7 @@ describe("discoverAgents", () => {
 		expect(names).toContain("loom-verify-spec");
 	});
 
-	test("excludes OMP npm plugin agents when omp-plugins is disabled", async () => {
+	test("excludes MusePi npm plugin agents when omp-plugins is disabled", async () => {
 		await writeOmpPluginAgent(tempHome);
 		disableProvider("omp-plugins");
 

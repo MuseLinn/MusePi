@@ -1,5 +1,5 @@
 /**
- * Lightweight i18n for the OMP stats dashboard (mirrors guest-client).
+ * Lightweight i18n for the MusePi stats dashboard (mirrors guest-client).
  *
  * Translation keys ARE the English strings (pass-through for en-US).
  * `t()` must only be called at render time, never at module load time.

@@ -159,7 +159,7 @@ describe("HashlineFilesystem ACP fs routing", () => {
 		// Tag-based path recovery rebinds a bare `cfg-…-plan.md` edit onto its
 		// absolute sandbox path. Even though it is NOT the active plan file
 		// (planFilePath is still the default local://PLAN.md, a fresh-slug plan),
-		// the OMP-owned artifact must be written to disk, never pushed to the editor.
+		// the MusePi-owned artifact must be written to disk, never pushed to the editor.
 		const { bridge, spy: bridgeSpy } = makeBridge();
 		const session = createSession(tmpDir, {
 			bridge,

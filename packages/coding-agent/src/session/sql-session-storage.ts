@@ -40,7 +40,9 @@ export interface SqlSessionStorageOptions {
 	 */
 	adapter?: SqlSessionStorageAdapter;
 	/**
-	 * Table name to use. Default: `musepi_session_files`. Must match
+	 * Table name to use. Default: `musepi_session_files`; when that table does
+	 * not exist and the pre-rename `omp_session_files` does, the legacy table is
+	 * used so existing sessions stay visible. Must match
 	 * `[A-Za-z_][A-Za-z0-9_]{0,62}` — inlined into prepared statements at
 	 * startup, so we accept identifier-safe inputs only (no quoted/dotted
 	 * names).
@@ -95,6 +97,8 @@ interface SliceRow {
 }
 
 const DEFAULT_TABLE = "musepi_session_files";
+/** Pre-rename table name; chosen only when it is the sole table present. */
+const LEGACY_TABLE = "omp_session_files";
 const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 const utf8Decoder = new TextDecoder("utf-8");
 
@@ -105,6 +109,26 @@ function enoent(p: string): NodeJS.ErrnoException {
 	err.path = p;
 	err.syscall = "open";
 	return err;
+}
+
+/**
+ * Pick the default table: a store created before the table rename keeps its
+ * sessions in {@link LEGACY_TABLE}, so read and write that table instead of
+ * starting an empty one beside it. An explicit `table` option always wins.
+ */
+async function resolveDefaultTable(client: SqlSessionStorageClient): Promise<string> {
+	if (await tableExists(client, DEFAULT_TABLE)) return DEFAULT_TABLE;
+	if (await tableExists(client, LEGACY_TABLE)) return LEGACY_TABLE;
+	return DEFAULT_TABLE;
+}
+
+async function tableExists(client: SqlSessionStorageClient, table: string): Promise<boolean> {
+	try {
+		await client.unsafe(`SELECT 1 FROM ${table} LIMIT 1`);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 function detectAdapter(client: SqlSessionStorageClient): SqlSessionStorageAdapter {
@@ -248,7 +272,8 @@ export class SqlSessionStorage extends IndexedSessionStorage {
 	 * the storage into `SessionManager.create()`.
 	 */
 	static async create(options: SqlSessionStorageOptions): Promise<SqlSessionStorage> {
-		const backend = new SqlSessionStorageBackend(options);
+		const table = options.table ?? (await resolveDefaultTable(options.client));
+		const backend = new SqlSessionStorageBackend({ ...options, table });
 		const storage = new SqlSessionStorage(backend, backend.adapter, backend.table);
 		await storage.initialize();
 		return storage;

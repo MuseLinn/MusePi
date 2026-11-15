@@ -1756,7 +1756,7 @@ export function convertResponsesInputContent(
 /**
  * Map freeform custom-tool wire names back to the internal tool name for
  * providers that only accept function_call / function_call_output.
- * Built once per request; `apply_patch` → `edit` is the OMP default.
+ * Built once per request; `apply_patch` → `edit` is the MusePi default.
  */
 function buildCustomToolWireNameMap(tools: readonly Tool[] | undefined): ReadonlyMap<string, string> | undefined {
 	if (!tools?.length) return undefined;

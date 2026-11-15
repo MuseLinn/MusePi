@@ -85,7 +85,7 @@ updates never rewrite anything a scrolled reader could be looking at.
   freeze the seam and pinned live regions clip advancement at their final
   boundary. Height-only resizes retain the existing ledger.
 - Direct HerdR panes are not in that category. HerdR's Ghostty core implements
-  ED3, so OMP clears and replays its source-owned transcript after settlement,
+  ED3, so MusePi clears and replays its source-owned transcript after settlement,
   matching direct terminals. Repainting host-reflowed rows in place would
   harden soft wraps and leave residual rows after a later width reversal.
 

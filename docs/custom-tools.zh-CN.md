@@ -47,7 +47,7 @@ CustomTool.execute(toolCallId, params, onUpdate, ctx, signal)
 `discoverAndLoadCustomTools(configuredPaths, cwd, builtInToolNames)` 合并以下来源：
 
 1. 能力提供者（`toolCapability`），包括：
-   - 原生 OMP 配置（`~/.musepi/agent/tools`、`.musepi/tools`）
+   - 原生 MusePi 配置（`~/.musepi/agent/tools`、`.musepi/tools`）
    - Claude 配置（`~/.claude/tools`、`.claude/tools`）
    - Codex 配置（`~/.codex/tools`、`.codex/tools`）
    - Claude marketplace 插件缓存提供者

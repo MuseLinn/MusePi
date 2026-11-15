@@ -198,7 +198,7 @@ function isOlderReleaseVersion(candidate, current) {
 	return false;
 }
 
-// A concurrently starting older OMP binary creates or refreshes this directory
+// A concurrently starting older MusePi binary creates or refreshes this directory
 // before extracting its addon. Keep fresh directories long enough for that
 // startup to finish; a later launch can reclaim them once they are genuinely
 // stale.

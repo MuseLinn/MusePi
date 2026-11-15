@@ -73,7 +73,7 @@ export const setup = {
 	"setup.cmdClickOpen": "Cmd+点击打开",
 	"setup.ctrlClickOpen": "Ctrl+点击打开",
 	"Sign in": "登录",
-	"OMP-aligned coding agent": "MusePi 对齐的编码助手",
+	"MusePi-aligned coding agent": "MusePi 对齐的编码助手",
 	"Welcome! Let's get you set up in a few quick steps.": "欢迎！让我们快速完成设置。",
 	"Press any key to begin...": "按任意键开始...",
 	"Setup complete!": "设置完成！",

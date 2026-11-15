@@ -88,7 +88,7 @@ describe("security contracts", () => {
 		}
 	});
 
-	test("scan IDs remain OMP-owned", () => {
+	test("scan IDs remain MusePi-owned", () => {
 		expect(createSecurityScanId(() => "018f0000-0000-7000-8000-000000000001")).toBe(
 			"secscan_018f0000000070008000000000000001",
 		);

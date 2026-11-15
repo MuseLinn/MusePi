@@ -80,7 +80,7 @@ describe("mcp/startup-events — connection-status cross-module contract", () =>
 	});
 
 	it("shortens config sources when the home directory contains spaces", () => {
-		const homeDir = "/tmp/OMP User";
+		const homeDir = "/tmp/MusePi User";
 		const moduleUrl = new URL("../src/mcp/startup-events.ts", import.meta.url).href;
 		const script = `
 			import os from "node:os";

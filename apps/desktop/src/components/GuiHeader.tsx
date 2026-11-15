@@ -534,7 +534,7 @@ export function GuiHeader({
 			e => e.type === "message" && (e as { message?: { role?: string } }).message?.role === "user",
 		);
 		if (first) {
-			// OMP wire content may be a string or a block array (text/toolCall).
+			// MusePi wire content may be a string or a block array (text/toolCall).
 			const content = (first as { message?: { content?: unknown } }).message?.content;
 			const text =
 				typeof content === "string"

@@ -531,7 +531,7 @@ async function loadMCPServers(ctx: LoadContext): Promise<LoadResult<MCPServer>> 
 				continue;
 			}
 			// Two file shapes are supported:
-			//   nested: { "mcpServers": { name: cfg, ... } }   (OMP/Claude Code project shape)
+			//   nested: { "mcpServers": { name: cfg, ... } }   (MusePi/Claude Code project shape)
 			//   flat:   { name: cfg, ... }                      (Claude marketplace plugin shape)
 			if (!isRecord(parsed)) continue;
 			servers = extractServerMap(parsed);

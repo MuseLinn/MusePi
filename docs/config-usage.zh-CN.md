@@ -77,9 +77,9 @@
 
 ## Profiles
 
-命名的 profile（`musepi --profile <name>`、`--alias` 快捷方式，或 `MUSEPI_PROFILE` / `PI_PROFILE`）会重定位 OMP 用户基目录。当某个 profile 处于激活状态时，本文档中所有写为 `~/.musepi/agent/...` 的 OMP-native 用户级路径都会解析为 `~/.musepi/profiles/<name>/agent/...`。
+命名的 profile（`musepi --profile <name>`、`--alias` 快捷方式，或 `MUSEPI_PROFILE` / `PI_PROFILE`）会重定位 MusePi 用户基目录。当某个 profile 处于激活状态时，本文档中所有写为 `~/.musepi/agent/...` 的 MusePi-native 用户级路径都会解析为 `~/.musepi/profiles/<name>/agent/...`。
 
-这种重定位在 native provider（`builtin.ts`）和通用 `config.ts` helper 中保持一致，因此涵盖 slash commands、rules、prompts、instructions、hooks、tools、extensions、settings、skills 和 MCP，以及顶层的 `SYSTEM.md` / `RULES.md` / `AGENTS.md` 文件和 runtime state（sessions、blobs、`agent.db`）。一个 profile 只能看到它自己的 OMP 配置，不能访问默认 profile 的 `~/.musepi/agent`。
+这种重定位在 native provider（`builtin.ts`）和通用 `config.ts` helper 中保持一致，因此涵盖 slash commands、rules、prompts、instructions、hooks、tools、extensions、settings、skills 和 MCP，以及顶层的 `SYSTEM.md` / `RULES.md` / `AGENTS.md` 文件和 runtime state（sessions、blobs、`agent.db`）。一个 profile 只能看到它自己的 MusePi 配置，不能访问默认 profile 的 `~/.musepi/agent`。
 
 Keybindings 是唯一的例外：命名 profile 会把默认 profile 的 `~/.musepi/agent/keybindings.*` 合并到自己的 `~/.musepi/profiles/<name>/agent/keybindings.*` 下，profile 文件会按 binding 覆盖默认值（[#4867](https://github.com/can1357/oh-my-pi/issues/4867)）。Keybindings 描述的是用户面前的终端/键盘，不会随活跃 profile 改变，因此除非 profile 显式覆盖，否则用户级 remap 在所有 profile 中都能继续工作。被继承的文件对 profile 进程来说是只读的——只有当默认 profile 自身运行时，才会对其执行 legacy-format 迁移。
 
@@ -188,7 +188,7 @@ runtime settings 模型是分层的：
 
 Providers 按数值优先级排序（高的在前）。示例优先级：
 
-- Native OMP（`builtin.ts`）：`100`
+- Native MusePi（`builtin.ts`）：`100`
 - Claude：`80`
 - Codex / agents / Claude marketplace：`70`
 - Gemini：`60`

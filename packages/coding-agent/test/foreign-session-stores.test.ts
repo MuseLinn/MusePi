@@ -342,7 +342,7 @@ describe("CodexSessionStore", () => {
 });
 
 describe("foreign session persistence", () => {
-	it.skipIf(posixLayoutOnly)("writes a fresh OMP identity with source provenance", async () => {
+	it.skipIf(posixLayoutOnly)("writes a fresh MusePi identity with source provenance", async () => {
 		const { info, store } = await createClaudeFixture();
 		const sessionDir = path.join(tempRoot, "omp-sessions");
 

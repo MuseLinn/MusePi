@@ -1525,7 +1525,7 @@ function AppInner(): ReactNode {
 			// their own sequence guard, so a newer refresh still wins per lane.
 			const tSeq = ++treeRefreshSeqRef.current;
 			const mSeq = ++metaRefreshSeqRef.current;
-			// Session tree (OMP /tree) — non-fatal on daemons without it.
+			// Session tree (MusePi /tree) — non-fatal on daemons without it.
 			const treeTask = (async (): Promise<void> => {
 				try {
 					const nodes = await client.request<SessionListNode[]>("session.tree");

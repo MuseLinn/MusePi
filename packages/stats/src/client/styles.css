@@ -1,7 +1,7 @@
 @import "tailwindcss/index.css";
 
 /* ==========================================================================
-   OMP Theme Variables & Color Scheme
+   MusePi Theme Variables & Color Scheme
    ========================================================================== */
 :root {
   color-scheme: dark;
@@ -23,7 +23,7 @@
   --danger: oklch(0.66 0.19 25);
   --warning: oklch(0.79 0.14 85);
 
-  /* Bridge the view components' token vocabulary to the OMP base tokens so
+  /* Bridge the view components' token vocabulary to the MusePi base tokens so
      muted/secondary text and semantic accents resolve instead of silently
      falling back to inherited text color. Re-resolve per theme via var(). */
   --text-primary: var(--text);
@@ -1234,7 +1234,7 @@
 }
 
 /* ==========================================================================
-   Brand mark on the OMP wordmark (both rail + mobile drawer headers)
+   Brand mark on the MusePi wordmark (both rail + mobile drawer headers)
    ========================================================================== */
 .stats-logo-container {
   display: grid;
@@ -1249,7 +1249,7 @@
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #2dd4bf 100%); /* OMP brand gradient mark */
+  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #2dd4bf 100%); /* MusePi brand gradient mark */
 }
 
 .stats-logo-text,

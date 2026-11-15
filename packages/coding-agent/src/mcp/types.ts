@@ -75,8 +75,8 @@ interface MCPServerConfigBase {
 	 * ids instead of per-transport integers. See `RequestIdAllocator` in
 	 * `./request-id`.
 	 *
-	 * OMP-specific, so only the OMP-owned discovery providers parse it (native,
-	 * standalone `mcp.json`, OMP plugins). Providers that translate another
+	 * MusePi-specific, so only the MusePi-owned discovery providers parse it (native,
+	 * standalone `mcp.json`, MusePi plugins). Providers that translate another
 	 * tool's config do not, since the key is not part of those formats.
 	 */
 	requestIdFormat?: MCPRequestIdFormat;

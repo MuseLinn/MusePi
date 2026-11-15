@@ -657,7 +657,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Services",
 			label: "Max In-Flight Requests",
 			description:
-				'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.',
+				'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.',
 		},
 	},
 
@@ -4970,7 +4970,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Available Tools",
 			label: "Security",
 			description:
-				"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace",
+				"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace",
 		},
 	},
 
@@ -6766,7 +6766,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Extensions",
 			label: "Tool Call Handler Timeout (ms)",
 			description:
-				"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count",
+				"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting MusePi-owned dialogs does not count",
 		},
 	},
 

@@ -115,7 +115,7 @@ provider 排序先按优先级（高者胜出），并列时按注册顺序。
 3. 未被忽略
 4. 在包含列表内（如果存在包含列表）
 
-`agents` provider（`.agent[s]/skills`）是规范的 OMP 原生位置，拥有自己的 `enableAgentsUser`/`enableAgentsProject` 开关——禁用 Claude/Codex/Pi **不会**把它一并关掉。对于没有专属开关的 provider（`claude-plugins`、`opencode`、`gemini`、`github` 等），启用逻辑回退为：只要**任意一个**具名来源开关处于启用状态即为启用。
+`agents` provider（`.agent[s]/skills`）是规范的 MusePi 原生位置，拥有自己的 `enableAgentsUser`/`enableAgentsProject` 开关——禁用 Claude/Codex/Pi **不会**把它一并关掉。对于没有专属开关的 provider（`claude-plugins`、`opencode`、`gemini`、`github` 等），启用逻辑回退为：只要**任意一个**具名来源开关处于启用状态即为启用。
 
 ### 冲突与重复处理
 

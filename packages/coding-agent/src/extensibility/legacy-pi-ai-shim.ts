@@ -82,7 +82,7 @@ export function StringEnum<T extends string | number>(
 	return schema;
 }
 
-/** Clamp a historical Pi thinking level against OMP's model metadata. */
+/** Clamp a historical Pi thinking level against MusePi's model metadata. */
 export function clampThinkingLevel<TApi extends Api>(model: Model<TApi>, level: Effort | "off"): Effort | "off" {
 	if (level === "off") return "off";
 	return clampThinkingLevelForModel(model, level) ?? "off";
@@ -93,7 +93,7 @@ export function clampThinkingLevel<TApi extends Api>(model: Model<TApi>, level: 
  * (`@earendil-works/pi-ai` `utils/retry.ts`). Legacy extensions call
  * {@link isRetryableAssistantError} to decide whether to restart a failed
  * assistant turn, so the wording tables must match the upstream semantics they
- * were authored against rather than OMP's own `Error`-based classifiers.
+ * were authored against rather than MusePi's own `Error`-based classifiers.
  */
 const NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN =
 	/GoUsageLimitError|FreeUsageLimitError|Monthly usage limit reached|available balance|insufficient_quota|out of budget|quota exceeded|billing/i;

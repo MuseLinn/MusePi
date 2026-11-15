@@ -4,7 +4,7 @@ import type { AssistantMessage, Context, Model } from "@musepi/pi-ai/types";
 import { Effort } from "@musepi/pi-catalog/effort";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 
-// Issue #8248: with prewalk enabled, OMP switches into a DeepSeek Responses
+// Issue #8248: with prewalk enabled, MusePi switches into a DeepSeek Responses
 // target (opencode-go) after mid-run compaction. The replayed assistant turns
 // were minted by the previous model, so the Responses input builder re-encodes
 // them and demotes their reasoning to plain text, emitting no reasoning item.

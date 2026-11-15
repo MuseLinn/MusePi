@@ -45,7 +45,7 @@ export class InternalUrlRouter {
 		this.register(new VaultProtocolHandler());
 		this.register(new SkillProtocolHandler());
 		this.register(new RuleProtocolHandler());
-		// Reserved OMP-owned security-analysis namespace; vendor adapters normalize into its store.
+		// Reserved MusePi-owned security-analysis namespace; vendor adapters normalize into its store.
 		this.register(new SecurityProtocolHandler());
 		this.register(new McpProtocolHandler());
 		this.register(new IssueProtocolHandler());

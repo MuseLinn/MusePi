@@ -1,9 +1,9 @@
 /**
  * Regression test for #3680: third-party extension / hook modules that call
- * `process.exit()` at the top level must not terminate the host OMP process.
+ * `process.exit()` at the top level must not terminate the host MusePi process.
  *
  * The harness intercepts the load via `withHostGuard`; this test pins that the
- * intercepted error surfaces as a per-module load failure (so OMP keeps going)
+ * intercepted error surfaces as a per-module load failure (so MusePi keeps going)
  * instead of crashing the test runner.
  */
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";

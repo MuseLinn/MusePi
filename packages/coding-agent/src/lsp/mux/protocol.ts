@@ -3,7 +3,7 @@
  *
  * One mux daemon runs per project scope (launched through the same daemon
  * broker that owns the shared Chromium and `hub start` processes). It assigns
- * each concurrent OMP link its own language-server process, then retains idle
+ * each concurrent MusePi link its own language-server process, then retains idle
  * processes briefly for reuse by later links. The link speaks plain
  * Content-Length-framed LSP JSON-RPC after a one-request handshake
  * ({@link MUX_CONNECT_METHOD}); everything below is shared by the worker

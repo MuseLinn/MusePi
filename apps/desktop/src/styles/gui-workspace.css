@@ -2921,7 +2921,7 @@
 	}
 }
 
-/* Forked-session marker (OMP /tree parity): a branch glyph on rows whose
+/* Forked-session marker (MusePi /tree parity): a branch glyph on rows whose
  * entry has a parent — hover shows the parent's label in the row title. */
 .gui-tree-fork {
 	flex-shrink: 0;

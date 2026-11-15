@@ -48,7 +48,7 @@ Advisor 角色使用常规 model-role 解析，包括带 provider 前缀的 id�
 musepi -p --advisor "Review this task."
 ```
 
-在主 prompt 运行期间，advisor 的 concern 和 blocker 会继续 steer 该 live turn。最终 prompt 结束后，print mode 会保留最后的 advisor notes，而不会启动隐藏的主 turn，然后会等待最多十分钟进行最终复查，再释放该会话。错误退出使用 30 秒 drain 预算，以便失败的自动化任务可以终止。如果任一截止时间到期，OMP 会记录将要释放但尚未完成的 review；已完成的 review 保留其 transcript 以及 token/cost 用量。
+在主 prompt 运行期间，advisor 的 concern 和 blocker 会继续 steer 该 live turn。最终 prompt 结束后，print mode 会保留最后的 advisor notes，而不会启动隐藏的主 turn，然后会等待最多十分钟进行最终复查，再释放该会话。错误退出使用 30 秒 drain 预算，以便失败的自动化任务可以终止。如果任一截止时间到期，MusePi 会记录将要释放但尚未完成的 review；已完成的 review 保留其 transcript 以及 token/cost 用量。
 
 斜杠命令：
 

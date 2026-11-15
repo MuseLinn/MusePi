@@ -21,7 +21,7 @@ export interface SessionPickerOptions {
 
 /**
  * Show the TUI session selector and return the selected session, or null if
- * cancelled. The default OMP picker supports deletion, transcript-history
+ * cancelled. The default MusePi picker supports deletion, transcript-history
  * search, and an all-projects scope; foreign import pickers disable those
  * source-owned capabilities.
  */

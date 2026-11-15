@@ -29,7 +29,7 @@ export interface StdioSpawnCommand {
 	/**
 	 * Hide the Windows console window for the direct child.
 	 *
-	 * Windows uses this only when the OMP host has no console to share. When
+	 * Windows uses this only when the MusePi host has no console to share. When
 	 * the host is running inside a terminal, `windowsHide: true` maps to
 	 * `CREATE_NO_WINDOW`, which strips that inheritable console from hidden
 	 * `cmd.exe` / PowerShell wrapper chains. Their console grandchildren then
@@ -51,7 +51,7 @@ export interface StdioSpawnCommand {
 	 * for servers such as `xcrun mcpbridge` (#4987).
 	 *
 	 * Windows: `false`. There is no SIGTSTP/SIGTTIN to escape, and Windows
-	 * wrapper chains must stay in the OMP console session so nested console
+	 * wrapper chains must stay in the MusePi console session so nested console
 	 * grandchildren keep stdout routed through our pipe (#3544).
 	 */
 	detached: boolean;
@@ -372,7 +372,7 @@ export async function resolveStdioSpawnCommand(
 	// is not a batch script. Everything else (resolved .cmd/.bat, or an
 	// unresolved extensionless command) goes through cmd.exe so PATHEXT runs.
 	// Windows stdio servers stay attached so wrapper grandchildren inherit the
-	// same console session. Only hide the child when OMP itself has no console
+	// same console session. Only hide the child when MusePi itself has no console
 	// to share; CREATE_NO_WINDOW breaks console inheritance for nested wrappers.
 	const detached = false;
 	const needsCmdExe = resolved === null || isWindowsBatchCommand(resolvedCommand);

@@ -388,7 +388,7 @@ describe("beam recall free functions", () => {
 		insertWorking(
 			beam,
 			"wm-quasar",
-			"MNEMOPI FULL PIPELINE TEST 20260613: The user Verge prefers OMP memory to run at full power. Unique entity QuasarOtter owns SignalPineapple and uses RecallEngine-Seven.",
+			"MNEMOPI FULL PIPELINE TEST 20260613: The user Verge prefers MusePi memory to run at full power. Unique entity QuasarOtter owns SignalPineapple and uses RecallEngine-Seven.",
 		);
 		beam.db.run(
 			"INSERT INTO facts (fact_id, session_id, subject, predicate, object, timestamp, confidence) VALUES (?, ?, ?, ?, ?, ?, ?)",

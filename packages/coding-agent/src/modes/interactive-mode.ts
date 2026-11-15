@@ -4271,7 +4271,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		// Do not force a final render during teardown: disposed session/UI state can
 		// collapse to an empty frame, clearing the viewport and leaving the parent
 		// shell prompt at row 0. Stop from the last committed frame so the terminal
-		// hands Bash the cursor immediately after visible OMP content.
+		// hands Bash the cursor immediately after visible MusePi content.
 		// Drain any in-flight Kitty key release events before stopping.
 		// This prevents escape sequences from leaking to the parent shell over slow SSH.
 		await this.ui.terminal.drainInput(1000);

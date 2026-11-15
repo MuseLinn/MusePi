@@ -106,7 +106,7 @@ The renderer merges call and result inline, syntax-highlights from the declared 
 
 - Retained kernels are keyed by `ruby:${sessionId}`, normalized cwd, and interpreter.
 - Cells evaluate in persistent `TOPLEVEL_BINDING`; locals, methods, and constants survive. A trailing value is displayed like IRB unless it is nil, an assignment, or a definition.
-- Rich display supports the OMP MIME convention and IRuby-compatible MIME hooks, using the shared kernel display pipeline.
+- Rich display supports the MusePi MIME convention and IRuby-compatible MIME hooks, using the shared kernel display pipeline.
 - `reset` replaces the retained Ruby kernel.
 
 ### Julia (`jl`)

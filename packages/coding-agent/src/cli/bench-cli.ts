@@ -415,7 +415,7 @@ interface BenchRequestOptions {
 	apiKey: ApiKeyResolver;
 	sessionId: string;
 	prompt: string;
-	/** Native OMP messages; cache mode splits the stable prefix from the suffix. */
+	/** Native MusePi messages; cache mode splits the stable prefix from the suffix. */
 	contextMessages?: Context["messages"];
 	maxTokens: number;
 	/** Explicit effort from a `:level` selector suffix; absent = provider default. */

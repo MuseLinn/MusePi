@@ -1917,6 +1917,18 @@ export class DaemonSessionHost {
 					}
 				}
 			},
+			// Next-input candidate for an empty GUI composer. The bundled
+			// prompt-suggestion plugin owns when to predict; the host only
+			// delivers the result to this session's subscribers.
+			showSuggestion: suggestion => {
+				for (const send of live.subscribers.values()) {
+					try {
+						send({ kind: "suggestion", seq: 0, payload: { suggestion } });
+					} catch {
+						// subscriber socket died; removed on close
+					}
+				}
+			},
 		});
 		// Subscribe-time hydration ledger: retain currently-executing tool
 		// visuals (the tool_execution_* envelopes are stream-only — a fresh
@@ -2998,7 +3010,7 @@ export class DaemonSessionHost {
 				mcpServers: null,
 				// SDK transcripts record forks under header.parentSession
 				// (a session-file path) — derive the parent's id so the tree
-				// renders branch structure (OMP /tree). Session files are
+				// renders branch structure (MusePi /tree). Session files are
 				// named "<timestamp>_<sessionId>.jsonl".
 				parentId: h.parentSessionPath
 					? path.basename(h.parentSessionPath, ".jsonl").split("_").slice(1).join("_") || null

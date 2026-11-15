@@ -194,26 +194,20 @@ export async function resolvePrBranchPushTarget(
 	maintainerCanModify?: boolean;
 	isCrossRepository: boolean;
 }> {
-	const headRef = await git.config.getBranch(repoRoot, localBranch, "musepiPrHeadRef", signal);
+	const readPrKey = async (name: string): Promise<string | undefined> =>
+		(await git.config.getBranch(repoRoot, localBranch, `musepiPr${name}`, signal)) ??
+		(await git.config.getBranch(repoRoot, localBranch, `ompPr${name}`, signal));
+
+	const headRef = await readPrKey("HeadRef");
 	if (!headRef) {
 		throw new ToolError(`branch ${localBranch} has no PR push metadata; check it out via op: pr_checkout first`);
 	}
 
 	const pushRemote = await git.config.getBranch(repoRoot, localBranch, "pushRemote", signal);
 	const remote = await git.config.getBranch(repoRoot, localBranch, "remote", signal);
-	const prUrl = await git.config.getBranch(repoRoot, localBranch, "musepiPrUrl", signal);
-	const maintainerCanModifyValue = await git.config.getBranch(
-		repoRoot,
-		localBranch,
-		"musepiPrMaintainerCanModify",
-		signal,
-	);
-	const isCrossRepositoryValue = await git.config.getBranch(
-		repoRoot,
-		localBranch,
-		"musepiPrIsCrossRepository",
-		signal,
-	);
+	const prUrl = await readPrKey("Url");
+	const maintainerCanModifyValue = await readPrKey("MaintainerCanModify");
+	const isCrossRepositoryValue = await readPrKey("IsCrossRepository");
 
 	const remoteName = pushRemote ?? remote;
 	if (!remoteName) {

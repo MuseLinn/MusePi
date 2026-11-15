@@ -78,7 +78,7 @@ providers:
         api: openai-completions
         reasoning: false
         input: [text]
-        imageInputDecoder: stb # local STB decoder; OMP converts WebP before dispatch
+        imageInputDecoder: stb # local STB decoder; MusePi converts WebP before dispatch
         cost:
           input: 0
           output: 0
@@ -118,7 +118,7 @@ providers:
 - `auth`: `apiKey` (default), `none`, or `oauth`; for `models.yml` custom models, `oauth` is accepted by schema but does not waive the `apiKey` requirement
 - `discovery.type`: `ollama`, `llama.cpp`, `lm-studio`, `openai-models-list`, `proxy`, or `litellm`
 - `transport`: `pi-native` only. When set, every model under that provider is sent to a `musepi auth-gateway` compatible `baseUrl` via `POST /v1/pi/stream`; `apiKey` is the gateway bearer.
-- `imageInputDecoder`: `stb` only. Set this on a custom model or `modelOverrides` entry when the serving backend uses an STB-compatible image decoder that cannot accept WebP; OMP converts attached and historical WebP images before provider dispatch.
+- `imageInputDecoder`: `stb` only. Set this on a custom model or `modelOverrides` entry when the serving backend uses an STB-compatible image decoder that cannot accept WebP; MusePi converts attached and historical WebP images before provider dispatch.
 ## Validation rules (current)
 
 ### Full custom provider (`models` is non-empty)
@@ -651,7 +651,7 @@ For `anthropic-messages` models the runtime uses a separate `AnthropicCompat` sh
 
 ### Strict tool schemas (`disableStrictTools`)
 
-Anthropic's API supports a `strict` field on tool definitions that forces the model to always follow the provided schema exactly. OMP enables it by default for a small allowlist of high-frequency built-in `anthropic-messages` tools (`bash`, `python`, `edit`, and `find`) whose schemas fit Anthropic's strict grammar limits; other tools still send normalized schemas but omit `strict`.
+Anthropic's API supports a `strict` field on tool definitions that forces the model to always follow the provided schema exactly. MusePi enables it by default for a small allowlist of high-frequency built-in `anthropic-messages` tools (`bash`, `python`, `edit`, and `find`) whose schemas fit Anthropic's strict grammar limits; other tools still send normalized schemas but omit `strict`.
 
 Third-party providers that front the Anthropic API (AWS Bedrock, Azure, self-hosted proxies) do not always implement this field and will reject requests that include it. Set `disableStrictTools: true` at the provider level to opt out of strict mode for the allowlisted tools:
 
@@ -675,7 +675,7 @@ providers:
           cacheWrite: 3.75
 ```
 
-`disableStrictTools` is a provider-level flag that applies to all models in the provider. It disables the Anthropic `strict` marker only for tools that OMP would otherwise mark strict; it does not change runtime tool argument validation. OMP can automatically retry without strict tools after Anthropic reports a strict-grammar-too-large error before the first streamed token, but proxies that reject the `strict` field for other reasons should set this flag explicitly.
+`disableStrictTools` is a provider-level flag that applies to all models in the provider. It disables the Anthropic `strict` marker only for tools that MusePi would otherwise mark strict; it does not change runtime tool argument validation. MusePi can automatically retry without strict tools after Anthropic reports a strict-grammar-too-large error before the first streamed token, but proxies that reject the `strict` field for other reasons should set this flag explicitly.
 
 Tool schemas going on the wire are normalized by the unified flow in
 `packages/ai/src/utils/schema/normalize.ts` (Google/CCA/MCP dispatchers
@@ -712,7 +712,7 @@ providers:
       type: openai-models-list
 ```
 
-The built-in vLLM provider can be pointed at a non-default endpoint without declaring a custom discovery type. OMP uses vLLM's `/v1/models` metadata and preserves vLLM's `max_model_len` field as the discovered context window.
+The built-in vLLM provider can be pointed at a non-default endpoint without declaring a custom discovery type. MusePi uses vLLM's `/v1/models` metadata and preserves vLLM's `max_model_len` field as the discovered context window.
 
 ```yaml
 providers:

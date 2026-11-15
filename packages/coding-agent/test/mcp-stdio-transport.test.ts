@@ -532,12 +532,12 @@ describe("resolveStdioSpawnCommand", () => {
 
 	it("keeps console-attached Windows cmd.exe wrapper chains out of CREATE_NO_WINDOW (#3567)", async () => {
 		// The #3544 shape is `cmd.exe` → `node wrapper` → another console
-		// launcher (`cmd.exe /C npx.cmd`, PowerShell, similar). If the OMP host
+		// launcher (`cmd.exe /C npx.cmd`, PowerShell, similar). If the MusePi host
 		// already owns a terminal console, `windowsHide: true` maps to
 		// CREATE_NO_WINDOW and strips that inheritable console from the direct
 		// hidden wrapper. Grandchildren then allocate fresh visible conhost
 		// windows during startup or reconnect loops (#3567). Keep the tree
-		// attached to OMP's console instead.
+		// attached to MusePi's console instead.
 		const result = await resolveStdioSpawnCommand(
 			{ type: "stdio", command: "cmd.exe", args: ["/C", "node .codex\\mcp-wrapper.js"] },
 			{

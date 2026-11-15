@@ -227,7 +227,7 @@ async function exchangeCodeForToken(
  * Login with OpenAI Codex OAuth
  */
 export type OpenAICodexLoginOptions = OAuthController & {
-	/** Optional originator value for OpenAI Codex OAuth. Default matches OMP Codex request headers. */
+	/** Optional originator value for OpenAI Codex OAuth. Default matches MusePi Codex request headers. */
 	originator?: string;
 };
 

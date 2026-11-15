@@ -112,8 +112,8 @@ const TRANSLATIONS: Record<string, string> = {
 		"安装来源设为「自定义」时使用的仓库地址。下次安装插件时生效。",
 	'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).':
 		"子代理的隔离后端。auto 由原生 PAL 自动选择最佳可用后端（先 CoW 感知的文件系统，再 overlayfs/ProjFS，最后回退 git worktree / 递归复制）。",
-	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.':
-		'每个供应商 id 的最大并发 LLM 请求数（如 "openai"、"anthropic"），同一配置根下的本地 OMP 进程共享。未列出的供应商不限。',
+	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.':
+		'每个供应商 id 的最大并发 LLM 请求数（如 "openai"、"anthropic"），同一配置根下的本地 MusePi 进程共享。未列出的供应商不限。',
 	'Processing tier for Claude requests. `priority` realizes fast mode (`speed: "fast"`) on supported direct Anthropic models; ignored on Bedrock/Vertex Claude and via OpenRouter.':
 		'Claude 请求的处理档位。priority 在受支持的 Anthropic 直连模型上实现 fast 模式（speed: "fast"）；Bedrock/Vertex Claude 与 OpenRouter 忽略。',
 	'Serving path for Fireworks requests. Priority sends `service_tier: "priority"` for higher reliability during peak traffic at a higher price; Standard omits it. Fast (`-fast`) models ignore this — Fast is its own serving path.':

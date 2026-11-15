@@ -824,7 +824,7 @@ async function tryCreateGist(sealed: Uint8Array): Promise<{ id: string; url: str
 		return null;
 	}
 
-	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-share-"));
+	const dir = await fs.mkdtemp(path.join(os.tmpdir(), "musepi-share-"));
 	try {
 		const file = path.join(dir, GIST_FILENAME);
 		await Bun.write(file, Buffer.from(sealed).toString("base64"));

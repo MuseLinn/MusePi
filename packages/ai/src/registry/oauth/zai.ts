@@ -153,7 +153,7 @@ interface ZaiOrganization {
 /**
  * Provision the durable Z.ai API key from a short-lived OAuth access token,
  * mirroring ZCode: business-login → resolve default org/project from
- * `getCustomerInfo` → find/create the OMP-named key → obtain its secret →
+ * `getCustomerInfo` → find/create the MusePi-named key → obtain its secret →
  * return `${apiKey}.${secretKey}` (the 49-char durable key).
  */
 async function mintZaiApiKey(oauthAccessToken: string, fetchImpl: FetchImpl): Promise<string> {

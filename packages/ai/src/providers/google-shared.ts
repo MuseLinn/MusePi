@@ -83,7 +83,7 @@ export interface GoogleSharedStreamOptions extends StreamOptions {
 	/**
 	 * Caller-owned Google context-cache resource name for GenerateContent.
 	 * Passed through opaquely as the wire `cachedContent` field on
-	 * `google-generative-ai` and `google-vertex` only. OMP does not create,
+	 * `google-generative-ai` and `google-vertex` only. MusePi does not create,
 	 * refresh, validate model/project/location compatibility, or delete the
 	 * resource — callers own that lifecycle.
 	 *

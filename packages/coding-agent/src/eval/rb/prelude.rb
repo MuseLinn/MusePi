@@ -1,5 +1,5 @@
 # frozen_string_literal: false
-# OMP Ruby prelude helpers (loaded once into the runner's TOPLEVEL_BINDING).
+# MusePi Ruby prelude helpers (loaded once into the runner's TOPLEVEL_BINDING).
 #
 # Mirrors eval/py/prelude.py: defines the cross-runtime helper surface
 # (display/read/write/env/output, the `tool` bridge proxy,

@@ -81,7 +81,7 @@ providers:
         api: openai-completions
         reasoning: false
         input: [text]
-        imageInputDecoder: stb # local STB decoder; OMP converts WebP before dispatch
+        imageInputDecoder: stb # local STB decoder; MusePi converts WebP before dispatch
         cost:
           input: 0
           output: 0
@@ -121,7 +121,7 @@ providers:
 - `auth`：`apiKey`（默认）、`none` 或 `oauth`；对于 `models.yml` 自定义模型，schema 接受 `oauth`，但并不免除 `apiKey` 要求
 - `discovery.type`：`ollama`、`llama.cpp`、`lm-studio`、`openai-models-list`、`proxy` 或 `litellm`
 - `transport`：仅 `pi-native`。设置后，该 provider 下的每个模型都通过 `POST /v1/pi/stream` 发送到兼容 `musepi auth-gateway` 的 `baseUrl`；`apiKey` 是 gateway 的 bearer。
-- `imageInputDecoder`：仅 `stb`。当服务后端使用无法接受 WebP 的 STB 兼容图像解码器时，在自定义模型或 `modelOverrides` 条目上设置此项；OMP 在发给 provider 之前会转换附带的和历史 WebP 图像。
+- `imageInputDecoder`：仅 `stb`。当服务后端使用无法接受 WebP 的 STB 兼容图像解码器时，在自定义模型或 `modelOverrides` 条目上设置此项；MusePi 在发给 provider 之前会转换附带的和历史 WebP 图像。
 
 ## 验证规则（当前）
 
@@ -634,7 +634,7 @@ Provider 级 `compat` 是基线；每模型的 `compat` 在其上做 deep merge�
 
 ### 严格 tool schema（`disableStrictTools`）
 
-Anthropic 的 API 在 tool 定义上支持 `strict` 字段，强制模型始终严格遵循所提供的 schema。OMP 默认对一小撮高频内置 `anthropic-messages` tool 的 allowlist（`bash`、`python`、`edit` 和 `find`）启用它，这些 tool 的 schema 符合 Anthropic 的严格语法限制；其他 tool 仍发送规范化 schema，但省略 `strict`。
+Anthropic 的 API 在 tool 定义上支持 `strict` 字段，强制模型始终严格遵循所提供的 schema。MusePi 默认对一小撮高频内置 `anthropic-messages` tool 的 allowlist（`bash`、`python`、`edit` 和 `find`）启用它，这些 tool 的 schema 符合 Anthropic 的严格语法限制；其他 tool 仍发送规范化 schema，但省略 `strict`。
 
 位于 Anthropic API 之前的第三方 provider（AWS Bedrock、Azure、自托管代理）并不总是实现该字段，并且会拒绝包含它的请求。在 provider 级设置 `disableStrictTools: true` 可对白名单 tool 退出严格模式：
 
@@ -658,7 +658,7 @@ providers:
           cacheWrite: 3.75
 ```
 
-`disableStrictTools` 是 provider 级 flag，应用于该 provider 中的所有模型。它仅为 OMP 否则会标记为 strict 的 tool 禁用 Anthropic `strict` 标记；它不改变运行时 tool 参数验证。OMP 可以在 Anthropic 于首个流式 token 前报告 strict-grammar-too-large 错误后自动无 strict tool 重试，但出于其他原因拒绝 `strict` 字段的代理应显式设置此 flag。
+`disableStrictTools` 是 provider 级 flag，应用于该 provider 中的所有模型。它仅为 MusePi 否则会标记为 strict 的 tool 禁用 Anthropic `strict` 标记；它不改变运行时 tool 参数验证。MusePi 可以在 Anthropic 于首个流式 token 前报告 strict-grammar-too-large 错误后自动无 strict tool 重试，但出于其他原因拒绝 `strict` 字段的代理应显式设置此 flag。
 
 线上发送的 tool schema 由 `packages/ai/src/utils/schema/normalize.ts` 中的统一流程规范化（Google/CCA/MCP 分发器外加 OpenAI 严格模式 sanitize+enforce 管线）。strict 模式边界情况（本地 `$ref` 内联、单项 `allOf` 折叠、`anyOf` 包装描述上提、enum/const 原始类型推断）与按 provider 的分发器映射见 [`ai-schema-normalize.md`](./ai-schema-normalize.html)。
 
@@ -689,7 +689,7 @@ providers:
       type: openai-models-list
 ```
 
-内置 vLLM provider 可以指向非默认端点，而无需声明自定义 discovery 类型。OMP 使用 vLLM 的 `/v1/models` metadata，并将 vLLM 的 `max_model_len` 字段保留为发现的 context window。
+内置 vLLM provider 可以指向非默认端点，而无需声明自定义 discovery 类型。MusePi 使用 vLLM 的 `/v1/models` metadata，并将 vLLM 的 `max_model_len` 字段保留为发现的 context window。
 
 ```yaml
 providers:

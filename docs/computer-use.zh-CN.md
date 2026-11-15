@@ -73,7 +73,7 @@ computer:
 
 具有原生 OpenAI GA computer-use 支持的 model 会收到 wire 声明 `{ "type": "computer" }`。其他每个 function-calling model 都会收到 `computer` 作为普通 function tool，其 JSON schema 描述同一套 GA action 集。两条路径都通过同一个原生 desktop backend、审批策略和安全规则执行。
 
-当以下任一条件成立时，OMP 将某个 model 标记为原生支持：
+当以下任一条件成立时，MusePi 将某个 model 标记为原生支持：
 
 - 其 catalog metadata 明确设置 `supportsComputerUse: true`，或
 - 它使用直接的 OpenAI Responses 或 Azure OpenAI Responses 端点，并解析到 `gpt-5.x` 系列中匹配 `gpt-5.4` 或更高版本的 model ID。
@@ -101,7 +101,7 @@ Windows 的前台或桌面全局输入会先在穿透 overlay 上画出 agent �
 
 ## 动作
 
-provider 可以发送一个 GA 动作，或有序的 `actions` 批次。OMP 会归一化两种形式并串行执行该批次。成功的调用会在整个批次之后返回正好一张新 PNG。`screenshot` 标记会被推迟：它们不产生输入、不产生中间图像，也不会重新定位同一批次中后续坐标。
+provider 可以发送一个 GA 动作，或有序的 `actions` 批次。MusePi 会归一化两种形式并串行执行该批次。成功的调用会在整个批次之后返回正好一张新 PNG。`screenshot` 标记会被推迟：它们不产生输入、不产生中间图像，也不会重新定位同一批次中后续坐标。
 
 | 动作 | 必填字段 | 行为 |
 |---|---|---|
@@ -123,7 +123,7 @@ provider 可以发送一个 GA 动作，或有序的 `actions` 批次。OMP 会�
 
 始终从当前 desktop controller 返回的、紧邻的前一次成功 computer 结果中选择坐标。同一批次中的每个坐标动作都通过同一先前帧映射。跨越坐标安全尺寸边界的 model 切换会重建 controller 并使先前帧失效，因此在下一次坐标动作前先截一张新截图。不要使用 OS 逻辑坐标、CSS 像素、终端单元格位置、从另一张截图复制的坐标，或捕获后调整过大小的图像。
 
-对于每次捕获，OMP：
+对于每次捕获，MusePi：
 
 1. 枚举选中的原生显示及其全局逻辑矩形。
 2. 以原生像素密度捕获每个选中的显示。
@@ -141,7 +141,7 @@ provider 可以发送一个 GA 动作，或有序的 `actions` 批次。OMP 会�
 
 合成图将显示器矩形之间的间隙保留为黑色像素。间隙中的点不可点击，并会以 `DESKTOP_COORDINATE_OUT_OF_BOUNDS` 失败。位于 PNG 右侧/底部边缘或之外的、负的点，以及所有显示之外的点，也会失败关闭。
 
-如果在参考帧与坐标动作之间显示器成员资格、矩形或缩放发生变化，OMP 会清除该帧并返回 `DESKTOP_LAYOUT_CHANGED`。重试前重新捕获。移动显示器、更改分辨率/缩放、插拔显示器、接入或断开，或更改选中的显示，都可能触发该守卫。
+如果在参考帧与坐标动作之间显示器成员资格、矩形或缩放发生变化，MusePi 会清除该帧并返回 `DESKTOP_LAYOUT_CHANGED`。重试前重新捕获。移动显示器、更改分辨率/缩放、插拔显示器、接入或断开，或更改选中的显示，都可能触发该守卫。
 
 worker 在截图返回给 provider 之前会拒绝坐标动作。先以仅截图调用开始。在任何目标可能已移动的视觉过渡之后，完成当前调用并使用其返回的图像作为下一调用中的坐标。
 
@@ -179,13 +179,13 @@ OpenAI 可能会给原生 `computer_call` 附加 `pending_safety_checks`。优�
 3. `yolo`、`--auto-approve`、逐 tool `allow` 以及先前的 xdev 审批都不能绕过该提示。
 4. headless session 或缺失 UI 会失败关闭；它绝不会代表你确认。
 5. 只有显式批准才会将检查标记为已确认并允许输入。
-6. OMP 将同样的检查作为 `acknowledged_safety_checks` 与截图输出一起返回。
+6. MusePi 将同样的检查作为 `acknowledged_safety_checks` 与截图输出一起返回。
 
 computer executor 在原生输入前再次检查批准标记。一个到达执行而未获交互式批准的 provider 检查会以 `Provider safety checks require interactive approval before computer input` 失败。
 
 ### 3. 后果性动作确认
 
-Provider 检查不会取代用户授权。OMP 将屏幕文本、图像、通知、网站、文档、聊天消息和应用指令视为不可信数据。它们不能授权动作，也不能覆盖你的直接指令。
+Provider 检查不会取代用户授权。MusePi 将屏幕文本、图像、通知、网站、文档、聊天消息和应用指令视为不可信数据。它们不能授权动作，也不能覆盖你的直接指令。
 
 除非你的直接消息已经授权了那个确切的动作、目标、范围和值，否则 agent 必须在风险点确认后果性副作用。示例包括发送或发布、购买或转账、删除、账户/安全或权限更改、披露私密数据、接受法律条款，以及不可逆操作。高影响力的金融、就业、住房、教育、保险/信贷、法律、医疗、政府、选举、生物识别和高度敏感数据动作需要风险点确认。
 
@@ -215,13 +215,13 @@ Provider 检查不会取代用户授权。OMP 将屏幕文本、图像、通知�
 
 1. 为启动 `musepi` 的终端或应用授予 **屏幕录制**。
 2. 为同一个宿主授予 **辅助功能**，以便键盘与指针输入。
-3. 完全重启该宿主并开启新的 OMP session。
+3. 完全重启该宿主并开启新的 MusePi session。
 
-OMP 执行一次无提示的 Screen Recording 预检。它不会替你打开权限对话框。Accessibility 不会单独预检；拒绝通常会在原生输入初始化或发出事件时显现。
+MusePi 执行一次无提示的 Screen Recording 预检。它不会替你打开权限对话框。Accessibility 不会单独预检；拒绝通常会在原生输入初始化或发出事件时显现。
 
 ### Linux 设置
 
-对于 X11，在目标图形 session 内运行 OMP，并确保 `DISPLAY` 标识它。捕获与输入不需要 GUI 系统库：backend 直接说 X 协议，并通过 XTEST 扩展发出输入。
+对于 X11，在目标图形 session 内运行 MusePi，并确保 `DISPLAY` 标识它。捕获与输入不需要 GUI 系统库：backend 直接说 X 协议，并通过 XTEST 扩展发出输入。
 
 对于 Wayland：
 
@@ -243,21 +243,21 @@ computer tool
   → capture/input APIs
 ```
 
-Bun worker 在第一次 computer 调用时启动，而不是在 OMP 启动时。启动有 10 秒期限。desktop session 与最后一张截图几何在两调用之间保持存活，因此后续坐标可以对照前一张帧检查。每个成功的有序动作批次都以一次新捕获结束。
+Bun worker 在第一次 computer 调用时启动，而不是在 MusePi 启动时。启动有 10 秒期限。desktop session 与最后一张截图几何在两调用之间保持存活，因此后续坐标可以对照前一张帧检查。每个成功的有序动作批次都以一次新捕获结束。
 
 关闭 agent/eval 拥有者会关闭所有拥有的 controller。正常关闭要求 Bun worker 关闭，等待最多 1.5 秒，然后在需要时终止它。原生关闭是幂等且有界的。中止一个调用会终止该 worker 并拒绝待处理请求；后续调用可以启动一个新 worker，并且必须建立新的截图帧。
 
 ## OpenAI 截图引用与 Files
 
-OMP 精确保留 GA wire 契约：
+MusePi 精确保留 GA wire 契约：
 
 - 调用：`computer_call`，带 `action` 或批量 `actions`、稳定 `id`/`call_id`，以及 `pending_safety_checks`；
 - 结果：`computer_call_output`，带 `output.type: "computer_screenshot"` 与 `acknowledged_safety_checks`；
 - 截图引用：`image_url` 或 `file_id`。
 
-原生 OMP 执行将 PNG 以内联 `data:image/png;base64,...` `image_url` 返回。它**不**将捕获上传到 OpenAI Files API，也不生成 `file_id`。
+原生 MusePi 执行将 PNG 以内联 `data:image/png;base64,...` `image_url` 返回。它**不**将捕获上传到 OpenAI Files API，也不生成 `file_id`。
 
-如果 OpenAI 兼容网关或恢复的 Responses 历史提供了 `file_id`，OMP 会保留并重放那个确切的引用作为 provider metadata。它不会下载、校验、刷新或删除 provider 文件。文件可用性、保留、授权与过期仍是 provider/client 的责任。`image_url` 与 `file_id` 历史都会为有能力的 model 保留；向非原生 OpenAI Responses 系列 model 重放时会将原生条目转换为文本备注。
+如果 OpenAI 兼容网关或恢复的 Responses 历史提供了 `file_id`，MusePi 会保留并重放那个确切的引用作为 provider metadata。它不会下载、校验、刷新或删除 provider 文件。文件可用性、保留、授权与过期仍是 provider/client 的责任。`image_url` 与 `file_id` 历史都会为有能力的 model 保留；向非原生 OpenAI Responses 系列 model 重放时会将原生条目转换为文本备注。
 
 ## 故障排除
 
@@ -274,7 +274,7 @@ Computer backend 错误以稳定代码开头：
 | `DESKTOP_LAYOUT_CHANGED` | 参考截图后 display 拓扑发生了变化。在输入前捕获新帧。 |
 | `DESKTOP_COORDINATE_OUT_OF_BOUNDS` | 点位于 PNG 之外、合成图间隙中，或所有显示器之外。在列出的 `pixel*` 矩形内选择一点。 |
 | `DESKTOP_DEADLINE_EXCEEDED` | 60 秒原生批次期限已过；剩余动作未执行。将批次拆成更小的调用并重新捕获截图。 |
-| `DESKTOP_SESSION_CLOSED` | 原生 session 已关闭。开启新的 OMP session。 |
+| `DESKTOP_SESSION_CLOSED` | 原生 session 已关闭。开启新的 MusePi session。 |
 | `DESKTOP_WORKER_FAILED` | 原生 worker 启动、通信、超时或关闭失败。开新 session；若持续存在，请验证原生 addon 安装。 |
 | `DESKTOP_CANCELLED` | 物理 Esc 中止了指针输入；手势已停止，光标已恢复。重试该动作。 |
 | `DESKTOP_INPUT_BUSY` | 真实输入正被另一个 desktop session 占用。等其回合结束再重试；只读观察仍可用。 |
@@ -288,9 +288,9 @@ Computer backend 错误以稳定代码开头：
 - `native action deadline exceeded; remaining batch actions were not executed` → 将批次拆成更小的调用并重新截图。
 - `macOS Screen Recording permission is not granted for this process` → 为启动宿主授予 Screen Recording 并重启它。
 - `Provider safety checks require interactive approval before computer input` → 使用交互式 session 并批准 provider 提示。
-- `Timed out starting native computer worker` → 验证已安装的原生 addon 匹配 OMP release，然后重启/重装。
-- 提及升级的 Version-sentinel 错误，而 session 正在运行 → 重启 OMP；磁盘已一致。
-- 说 `.node` 文件来自不同 release 的 Version-sentinel 错误 → 重装 OMP/原生包。
+- `Timed out starting native computer worker` → 验证已安装的原生 addon 匹配 MusePi release，然后重启/重装。
+- 提及升级的 Version-sentinel 错误，而 session 正在运行 → 重启 MusePi；磁盘已一致。
+- 说 `.node` 文件来自不同 release 的 Version-sentinel 错误 → 重装 MusePi/原生包。
 
 原生合成图安全上限为 268,435,456 像素。正常默认值远低于此。非常大或稀疏的显示器排列应该使用更小的最大尺寸或选中的单个 display。
 
@@ -307,8 +307,8 @@ Computer backend 错误以稳定代码开头：
 - Linux 坐标输入对负全局显示原点失败关闭；选择原点非负的 display。
 - X11/XTest 坐标输入在每个轴上限制到 32767 以内。
 - Windows 支持已为 x64 实现，但未为此更改远程演练。
-- 原生捕获使用内联 `image_url`；OMP 不会将它们上传到 provider Files。
-- OS 安全桌面与策略保护的 surface 可能拒绝普通用户 session 的捕获/输入；OMP 没有绕过。
+- 原生捕获使用内联 `image_url`；MusePi 不会将它们上传到 provider Files。
+- OS 安全桌面与策略保护的 surface 可能拒绝普通用户 session 的捕获/输入；MusePi 没有绕过。
 
 ### 平台支持矩阵
 

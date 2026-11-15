@@ -166,7 +166,13 @@ export type SnapshotStreamEvent = SnapshotStreamSnapshotEvent | SnapshotStreamEn
 export const AUTH_BROKER_API_PREFIX = "/v1";
 
 /** Request header used by clients to advertise optional auth-broker protocol features. */
-export const AUTH_BROKER_CAPABILITIES_HEADER = "OMP-Auth-Broker-Capabilities";
+export const AUTH_BROKER_CAPABILITIES_HEADER = "MUSEPI-Auth-Broker-Capabilities";
+
+/** Header spelling used before the rename; still accepted so a broker and client from different builds negotiate. */
+export const LEGACY_AUTH_BROKER_CAPABILITIES_HEADER = "OMP-Auth-Broker-Capabilities";
+
+/** Every request header the snapshot representation depends on, for `Vary`. */
+export const AUTH_BROKER_CAPABILITIES_VARY = `${AUTH_BROKER_CAPABILITIES_HEADER}, ${LEGACY_AUTH_BROKER_CAPABILITIES_HEADER}`;
 
 /** Client understands independent Codex `chat` and `spark` credential-block scopes. */
 export const AUTH_BROKER_CAPABILITY_CODEX_METER_BLOCK_SCOPES = "codex-meter-block-scopes";

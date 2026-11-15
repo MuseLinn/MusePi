@@ -133,7 +133,7 @@ describe("/security", () => {
 		expect(JSON.parse(await Bun.file(path.join(repositoryRoot, "exported.sarif")).text())).toHaveProperty("version");
 	});
 
-	test("validate returns a static OMP-native residual prompt", async () => {
+	test("validate returns a static MusePi-native residual prompt", async () => {
 		const result = await command("validate secscan_fixture secf_fixture");
 		expect(result).toEqual({
 			prompt: expect.stringContaining("security://scans/secscan_fixture/findings/secf_fixture"),

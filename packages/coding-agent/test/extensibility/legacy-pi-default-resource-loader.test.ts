@@ -43,7 +43,7 @@ async function mkTempCwd(prefix: string): Promise<string> {
 }
 
 describe("DefaultPackageManager.resolve() (issue #5658)", () => {
-	it("enumerates configured extension paths through OMP discovery", async () => {
+	it("enumerates configured extension paths through MusePi discovery", async () => {
 		const tmp = await mkTempCwd("omp-legacy-default-package-manager-");
 		const cwd = path.join(tmp, "project");
 		const agentDir = path.join(tmp, "agent");

@@ -46,7 +46,7 @@ let
         rustFlags = "-C target-cpu=x86-64-v2";
       };
     }
-    .${stdenv.hostPlatform.system} or (throw "Unsupported OMP platform: ${stdenv.hostPlatform.system}");
+    .${stdenv.hostPlatform.system} or (throw "Unsupported MusePi platform: ${stdenv.hostPlatform.system}");
   patchedDependencies = lib.mapAttrs (
     _: patch: source + "/${patch}"
   ) rootPackageJson.patchedDependencies;
@@ -155,7 +155,7 @@ stdenv.mkDerivation {
       signIfRequired "packages/natives/native/${platform.addon}"
     ''}
 
-    echo "Compiling OMP"
+    echo "Compiling MusePi"
     BUN_COMPILE_EXECUTABLE_PATH="${bunRuntimeTemplate}/libexec/bun" \
       bun --cwd="$PWD/packages/coding-agent" run build
 

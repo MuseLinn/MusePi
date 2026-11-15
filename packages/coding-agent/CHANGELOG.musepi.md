@@ -10,6 +10,12 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 - **内部符号与文档协议统一为 `musepi`**：worker argv 选择器与 legacy-pi 兼容标记改为 `__musepi_*`，GitLab Duo 侧 MCP 前缀改为 `mcp__musepi__`，harness 文档协议由 `omp://` 改为 `musepi://`；eval 前奏的状态 MIME、Ruby 桥、shell completion 函数名与浏览器标签组名同步。对外服务地址、持久化键与 omp 兼容入口保持不变。
   - EN: Internal symbols and the docs protocol now use `musepi`: worker argv selectors and legacy-pi compat markers are `__musepi_*`, the GitLab Duo MCP prefix is `mcp__musepi__`, harness docs moved from `omp://` to `musepi://`, and the eval preludes' status MIME, the Ruby bridge, shell completion helpers and the browser tab-group name follow. External service URLs, persisted keys and the omp compatibility entry points are unchanged.
 
+- **改名前的数据继续可读**：SQL 会话存储在 `musepi_session_files` 不存在、旧表 `omp_session_files` 存在时沿用旧表；`pr_push` 读不到 `musepiPr*` 时回退到旧的 `ompPr*` 分支元数据；分享查看页同时接受 `session.ompshare.txt`。auth broker 能力头改为 `MUSEPI-Auth-Broker-Capabilities`，服务端仍接受旧头，`Vary` 同时列出两者。
+  - EN: Data written before the rename stays readable. SQL session storage keeps using `omp_session_files` when only that table exists, `pr_push` falls back to the old `ompPr*` branch metadata when `musepiPr*` is absent, and the share viewer accepts `session.ompshare.txt` as well as the current name. The auth-broker capability header is now `MUSEPI-Auth-Broker-Capabilities`; the broker still accepts the old header and lists both in `Vary`.
+
+- **注释与文档里的 `OMP` 统一为 MusePi**：配置、发现、会话导入、安全扫描、计算机使用等文档与源码注释中的产品自称改为 MusePi，同时修正了 `a MusePi` 的冠词与 wire header 的特殊写法；OpenMP 语义的 `OMP_NUM_THREADS`、`omp`/`pi` 兼容来源与上游 omp 生态的命名保持不变。
+  - EN: Product references to `OMP` in comments and documentation now say MusePi across configuration, discovery, session import, security scanning and computer use, along with the article reads that followed and the wire-header casing. OpenMP's `OMP_NUM_THREADS`, the `omp`/`pi` compatibility sources and upstream omp ecosystem names are unchanged.
+
 - **环境变量统一为 `MUSEPI_` 前缀**：原以 `OMP_` 暴露的环境变量（认证代理、MCP 超时、自动更新、线程上限、WebP、软件渲染、profile、快照缓存、基准变量等）全部改为 `MUSEPI_`，不再读取旧名；文档、CI 与安装脚本同步更新。
   - EN: Environment variables now use the `MUSEPI_` prefix exclusively: auth broker, MCP timeout, auto-update, thread limits, WebP, software GL, profile, snapshot cache and benchmark variables no longer answer to the old `OMP_` names. Docs, CI and install scripts are updated in the same change.
 

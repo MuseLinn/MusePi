@@ -1,4 +1,4 @@
-# OMP Julia prelude helpers (loaded once into the runner's top-level scope).
+# MusePi Julia prelude helpers (loaded once into the runner's top-level scope).
 
 if !isdefined(Main, :__musepi_prelude_loaded)
     global __musepi_prelude_loaded = true

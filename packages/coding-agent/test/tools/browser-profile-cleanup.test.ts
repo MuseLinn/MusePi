@@ -2,7 +2,7 @@
  * Regression test for issue #7058: on Windows, puppeteer-core deletes its temp
  * Chrome profile with an unretried `rm()` from an eager process-exit hook, so an
  * EBUSY on the still-locked profile surfaces as an unhandled rejection that
- * crashes OMP. OMP now owns the profile directory and removes it itself with a
+ * crashes MusePi. MusePi now owns the profile directory and removes it itself with a
  * lock-tolerant, warn-and-leave cleanup.
  */
 

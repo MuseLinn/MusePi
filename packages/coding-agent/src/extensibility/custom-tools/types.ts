@@ -117,7 +117,7 @@ export interface CustomToolContext {
 	asyncJobManager?: AsyncJobManager;
 	/** Registry identity of the owning agent (e.g. "Main"), for job ownership. */
 	agentId?: string;
-	/** Calling session's `local://` root mapping for tools that bridge out of the OMP process. */
+	/** Calling session's `local://` root mapping for tools that bridge out of the MusePi process. */
 	localProtocolOptions?: LocalProtocolOptions;
 	/** Whether to auto-approve all destructive tool operations (--auto-approve CLI flag) */
 	autoApprove?: boolean;

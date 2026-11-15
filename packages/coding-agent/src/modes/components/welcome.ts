@@ -144,7 +144,7 @@ export interface LspServerInfo {
 }
 
 /**
- * Premium welcome screen with block-based OMP logo and two-column layout.
+ * Premium welcome screen with block-based MusePi logo and two-column layout.
  */
 export class WelcomeComponent implements Component {
 	#animStart: number | null = null;
@@ -492,7 +492,7 @@ export const PI_LOGO = ["▀██████████▀", " ╘██    �
 
 /** Multi-stop palette for the diagonal gradient — the brand-gold ladder
  *  (deep bronze → brand gold → warm champagne), matching the site and the
- *  --brand-mark-gradient token. The retired OMP pink/violet/cyan ramp was
+ *  --brand-mark-gradient token. The retired MusePi pink/violet/cyan ramp was
  *  the last pre-rebrand holdout in the TUI. */
 const GRADIENT_STOPS: ReadonlyArray<readonly [number, number, number]> = [
 	[150, 100, 10], // deep bronze

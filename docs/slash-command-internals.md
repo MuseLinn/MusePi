@@ -28,7 +28,7 @@ The capability registry loads all registered providers, sorted by provider prior
 
 Current slash-command providers and priorities:
 
-1. `native` (OMP) — priority `100`
+1. `native` (MusePi) — priority `100`
 2. `omp-plugins` (extension packages) — priority `90`
 3. `claude` — priority `80`
 4. `claude-plugins` — priority `70`
@@ -103,7 +103,7 @@ Both sides are loaded then flattened in user-first order, so **user OpenCode com
 
 Loads plugin command roots via `listClaudePluginRoots(...)`, which reads `~/.claude/plugins/installed_plugins.json`, `~/.musepi/plugins/installed_plugins.json`, and the nearest project-scoped registry resolved from cwd. For each root it scans `<pluginRoot>/commands/*.md` (the directory can be remapped by plugin config keys `commands`/`slash-commands`), and command names are prefixed with the plugin name: `<plugin>:<command>`.
 
-Across the three registries, roots are merged by precedence rather than sorted: `--plugin-dir` injected roots come first, then project-scoped entries (which shadow user entries for the same plugin id), then user entries, with the OMP registry authoritative over Claude's for the same plugin id. Within each registry, per-plugin entry order from the JSON data is preserved; there is no additional sort step.
+Across the three registries, roots are merged by precedence rather than sorted: `--plugin-dir` injected roots come first, then project-scoped entries (which shadow user entries for the same plugin id), then user entries, with the MusePi registry authoritative over Claude's for the same plugin id. Within each registry, per-plugin entry order from the JSON data is preserved; there is no additional sort step.
 
 ## 3) Materialization to runtime `FileSlashCommand`
 

@@ -434,7 +434,7 @@ export interface SessionCompactingResult {
 export interface SessionStopEventResult {
 	/** Continue the main session with additional context before settling */
 	continue?: boolean;
-	/** OMP-native model-visible context for the continuation */
+	/** MusePi-native model-visible context for the continuation */
 	additionalContext?: string;
 	/** Claude/Codex-compatible block decision; maps to a continuation */
 	decision?: "block";

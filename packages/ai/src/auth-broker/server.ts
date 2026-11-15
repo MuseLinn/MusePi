@@ -34,12 +34,14 @@ import type {
 } from "./types";
 import {
 	AUTH_BROKER_CAPABILITIES_HEADER,
+	AUTH_BROKER_CAPABILITIES_VARY,
 	AUTH_BROKER_CAPABILITY_CODEX_METER_BLOCK_SCOPES,
 	DEFAULT_AUTH_BROKER_BIND,
 	DEFAULT_REFRESH_INTERVAL_MS,
 	DEFAULT_REFRESH_SKEW_MS,
 	DEFAULT_SERVER_IDLE_TIMEOUT_S,
 	DEFAULT_STREAM_KEEPALIVE_MS,
+	LEGACY_AUTH_BROKER_CAPABILITIES_HEADER,
 } from "./types";
 import {
 	clientUsageReportRequestSchema,
@@ -107,7 +109,8 @@ function isAuthorized(req: Request, tokens: ReadonlySet<string>): boolean {
 }
 
 function supportsCodexMeterBlockScopes(req: Request): boolean {
-	const capabilities = req.headers.get(AUTH_BROKER_CAPABILITIES_HEADER);
+	const capabilities =
+		req.headers.get(AUTH_BROKER_CAPABILITIES_HEADER) ?? req.headers.get(LEGACY_AUTH_BROKER_CAPABILITIES_HEADER);
 	return (
 		capabilities
 			?.split(",")
@@ -159,7 +162,7 @@ function snapshotHeaders(generation: number): Record<string, string> {
 	return {
 		ETag: `"${generation}"`,
 		"Cache-Control": "no-store",
-		Vary: AUTH_BROKER_CAPABILITIES_HEADER,
+		Vary: AUTH_BROKER_CAPABILITIES_VARY,
 	};
 }
 
@@ -639,7 +642,7 @@ function serveSnapshotStream(
 			"Cache-Control": "no-cache",
 			Connection: "keep-alive",
 			"X-Accel-Buffering": "no",
-			Vary: AUTH_BROKER_CAPABILITIES_HEADER,
+			Vary: AUTH_BROKER_CAPABILITIES_VARY,
 		},
 	});
 }

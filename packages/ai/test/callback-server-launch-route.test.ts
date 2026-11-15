@@ -145,7 +145,7 @@ describe("OAuthCallbackFlow /launch route", () => {
 				},
 				signal: abort.signal,
 			},
-			// Caller pins the provider redirect at `/launch` — an OMP config
+			// Caller pins the provider redirect at `/launch` — a MusePi config
 			// setting `oauth.callbackPath: "/launch"` or a matching
 			// `oauth.redirectUri`. Callback resolution MUST win the route
 			// collision, and no self-redirecting launchUrl should be advertised.

@@ -1,5 +1,5 @@
 # frozen_string_literal: false
-# OMP Ruby runner — subprocess wrapper used by the coding-agent host.
+# MusePi Ruby runner — subprocess wrapper used by the coding-agent host.
 #
 # Mirrors the Python runner (eval/py/runner.py): a persistent Ruby process that
 # speaks NDJSON over stdin/stdout. The host writes one JSON request per line

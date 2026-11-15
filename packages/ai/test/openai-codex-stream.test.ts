@@ -1716,7 +1716,7 @@ describe("openai-codex streaming", () => {
 		expect(metadata.parent_turn_id).toBe("turn_parent-1");
 		expect(turnMetadata.parent_turn_id).toBe("turn_parent-1");
 		// `code_mode_tool_names` is likewise reserved (codex-rs
-		// CODE_MODE_TOOL_NAMES_KEY, #35271): OMP never emits it, and caller extras
+		// CODE_MODE_TOOL_NAMES_KEY, #35271): MusePi never emits it, and caller extras
 		// cannot smuggle it into either projection.
 		expect(metadata.code_mode_tool_names).toBeUndefined();
 		expect(turnMetadata.code_mode_tool_names).toBeUndefined();

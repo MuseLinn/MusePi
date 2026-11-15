@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/can1357/oh-my-pi/main/packages/coding-agent/src/config/mcp-schema.json",
-  "title": "OMP MCP configuration",
-  "description": "Schema for mcp.json, .mcp.json, .omp/mcp.json, and ~/.omp/agent/mcp.json used by the OMP coding agent.",
+  "title": "MusePi MCP configuration",
+  "description": "Schema for mcp.json, .mcp.json, .musepi/mcp.json, and ~/.musepi/agent/mcp.json used by the MusePi coding agent.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -54,7 +54,7 @@
         "type": {
           "type": "string",
           "enum": ["oauth", "apikey"],
-          "description": "Auth strategy understood by OMP."
+          "description": "Auth strategy understood by MusePi."
         },
         "credentialId": {
           "type": "string",
@@ -111,7 +111,7 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "Whether OMP should try to connect this server."
+          "description": "Whether MusePi should try to connect this server."
         },
         "timeout": {
           "type": "number",
@@ -121,7 +121,7 @@
         "requestIdFormat": {
           "type": "string",
           "enum": ["string", "number"],
-          "description": "Encoding for outgoing JSON-RPC request ids (default: \"number\"). Use \"string\" for servers that need collision-resistant snowflake string ids instead of per-transport integers. OMP-specific: set it in an OMP-owned config (`.omp/mcp.json`, `~/.omp/agent/mcp.json`, a project `mcp.json`/`.mcp.json`, or an OMP plugin). Servers imported from another tool's config (Claude, Cursor, VS Code, Gemini, OpenCode, Windsurf) ignore it, since that key is not part of those formats."
+          "description": "Encoding for outgoing JSON-RPC request ids (default: \"number\"). Use \"string\" for servers that need collision-resistant snowflake string ids instead of per-transport integers. MusePi-specific: set it in a MusePi-owned config (`.musepi/mcp.json`, `~/.musepi/agent/mcp.json`, a project `mcp.json`/`.mcp.json`, or a MusePi plugin). Servers imported from another tool's config (Claude, Cursor, VS Code, Gemini, OpenCode, Windsurf) ignore it, since that key is not part of those formats."
         },
         "auth": {
           "$ref": "#/$defs/authConfig"

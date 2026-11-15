@@ -10,7 +10,7 @@ import { buildModel } from "@musepi/pi-catalog/build";
  *
  * Z.AI's Python proxy at api.z.ai/api/anthropic deserializes tool_result
  * blocks into a class that accesses `.id`, even though Anthropic's API only
- * carries `tool_use_id`. As a workaround, OMP must include `id` (aliased to
+ * carries `tool_use_id`. As a workaround, MusePi must include `id` (aliased to
  * `tool_use_id`) on tool_result blocks targeted at z.ai. Standard Anthropic
  * endpoints must remain unchanged (no `id` field).
  */

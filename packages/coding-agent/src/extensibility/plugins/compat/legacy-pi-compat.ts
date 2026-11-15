@@ -997,7 +997,7 @@ function toImportSpecifier(resolvedPath: string): string {
 }
 
 /**
- * Rewrite the extension-owned specifiers OMP must host-resolve — legacy
+ * Rewrite the extension-owned specifiers MusePi must host-resolve — legacy
  * `@(scope)/pi-*`, bare TypeBox packages, package `imports` aliases like
  * `#src/*`, and extension-local bare dependencies — to absolute `file://` URLs
  * or compiled-mode virtual specifiers. Relative siblings and built-in modules
@@ -2121,7 +2121,7 @@ interface ExtensionModuleGraph {
 
 /**
  * Walk the extension's import graph starting at `entryRealPath`, returning the
- * realpath of every reachable source module OMP must rewrite at load time.
+ * realpath of every reachable source module MusePi must rewrite at load time.
  * Relative imports, package `imports` aliases, and ESM bare dependencies are
  * graph-owned recursively because compiled Bun cannot resolve runtime
  * `node_modules` from those modules. Graph-owned CommonJS modules also own
@@ -2513,7 +2513,7 @@ function synthesizeCommonJsDefaultModule(modulePath: string, source: string, tar
 }
 
 /**
- * Linkedom's canvas bridge uses its bundled fallback because OMP does not ship
+ * Linkedom's canvas bridge uses its bundled fallback because MusePi does not ship
  * native canvas.
  */
 async function prepareCommonJsDefaultModule(modulePath: string, source: string): Promise<string> {

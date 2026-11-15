@@ -5,7 +5,7 @@
 ## 角色
 
 collab 是 **MusePi 会话共享协议**:把正在运行的 agent 会话实时共享给其他
-musepi 实例(TUI guest/终端)与 Web/移动端。它起源于上游 OMP TUI 的
+musepi 实例(TUI guest/终端)与 Web/移动端。它起源于上游 MusePi TUI 的
 `/collab` 命令,现在同时服务 Desktop GUI 与 Mobile 客户端(经 daemon
 代理,渲染层由 `@musepi/guest-client` 承载——该包已于 2026-08-16 更名,
 见 `docs/i18n.md` 同期的 repo 结构变更)。

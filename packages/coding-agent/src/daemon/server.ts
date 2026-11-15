@@ -1720,7 +1720,7 @@ export class DaemonServer {
 			case "system.meta": {
 				// Derived, never hardcoded: MUSEPI_VERSION is baked by the
 				// bundle (bundle-dist.ts) or set by src/musepi.ts / the
-				// Electron daemon.cjs spawn; VERSION resolves the OMP engine
+				// Electron daemon.cjs spawn; VERSION resolves the MusePi engine
 				// version from pi-utils. version/musepiVersion/engineVersion
 				// are split so the GUI can show both numbers separately.
 				const musepiVersion = process.env.MUSEPI_VERSION;

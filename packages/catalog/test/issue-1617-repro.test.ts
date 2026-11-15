@@ -3,7 +3,7 @@
  * `anthropic-messages` despite the gateways only serving them at
  * `/v1/chat/completions`. Symptoms include raw MiniMax/tool-call markup
  * (`<invoke name="bash">`, `<tool_call>`, `<description>`, `<cwd>`,
- * `<|minimax|>`) leaking into the UI because OMP POSTs anthropic-shaped
+ * `<|minimax|>`) leaking into the UI because MusePi POSTs anthropic-shaped
  * requests to /v1/messages and the gateway returns non-Anthropic responses.
  *
  * stencil.so declares these ids with `provider.npm = "@ai-sdk/anthropic"`,

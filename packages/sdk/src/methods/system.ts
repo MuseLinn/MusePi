@@ -38,7 +38,7 @@ export const systemMeta = {
 		configDir: Type.Optional(Type.String()),
 		runtime: Type.Optional(Type.String()),
 	}),
-	impl: "daemon meta (musepi version + OMP engine version, derived)",
+	impl: "daemon meta (musepi version + MusePi engine version, derived)",
 } satisfies MethodEntry;
 
 export const systemMethods: MethodEntry[] = [systemCapabilities, systemFeatures, systemMeta];

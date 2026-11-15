@@ -104,10 +104,10 @@ Behavior split:
 - CLI: `--no-extensions` follows the same explicit-only contract. Explicit
   `-e/--extension` and `--hook` paths still load, and only sibling capability
   roots from explicitly named extension packages remain eligible. Project/user
-  `extensions:` settings and installed OMP extension packages are excluded from
+  `extensions:` settings and installed MusePi extension packages are excluded from
   that sibling surface.
 
-This flag governs extension factories and OMP extension-package sibling roots;
+This flag governs extension factories and MusePi extension-package sibling roots;
 it is not a whole-process capability-isolation switch. Skills, MCP servers,
 tools, prompts, and rules owned by other discovery subsystems retain their own
 enable/disable controls.

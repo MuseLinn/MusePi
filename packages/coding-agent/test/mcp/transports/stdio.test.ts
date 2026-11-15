@@ -8,7 +8,7 @@ import { resolveStdioSpawnCommand, StdioTransport, terminateStdioProcess } from 
 describe("resolveStdioSpawnCommand", () => {
 	it("hides Windows executable MCP servers when the host has no console", async () => {
 		// Hidden so a console-app child does not allocate a visible window when
-		// OMP is launched without a terminal console (#3536).
+		// MusePi is launched without a terminal console (#3536).
 		await expect(
 			resolveStdioSpawnCommand(
 				{ command: "server.exe", args: ["--stdio"] },

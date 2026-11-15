@@ -1,5 +1,5 @@
 /**
- * Issue #9345 — `Can't use qwen3-6-35b-a3b on Venice because OMP sends some
+ * Issue #9345 — `Can't use qwen3-6-35b-a3b on Venice because MusePi sends some
  * incorrect params.`
  *
  * Reporter: with `venice/qwen3-6-35b-a3b` configured as the `smol` model role,

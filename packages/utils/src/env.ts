@@ -153,7 +153,7 @@ export function filterChildShellEnv(
 		}
 		if (launchEnvValues || projectEnvNamesLoadedByOmp.has(key)) {
 			// Strong provenance: the launch environment is known and this name is
-			// absent from it, or OMP itself injected the value — either way it came
+			// absent from it, or MusePi itself injected the value — either way it came
 			// from a project dotenv file, not the parent shell.
 			delete result[key];
 		} else if (

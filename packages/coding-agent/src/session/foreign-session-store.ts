@@ -1,6 +1,6 @@
 import type { SessionManager } from "./session-manager";
 
-/** External coding-agent session source supported by OMP imports. */
+/** External coding-agent session source supported by MusePi imports. */
 export type ForeignSessionSource = "claude" | "codex" | "grok" | "musepi" | "pi" | "kimicode" | "omp" | "opencode";
 
 /** Lightweight source metadata used to choose a foreign session before loading its transcript. */
@@ -21,6 +21,6 @@ export interface ForeignSessionStore {
 	readonly source: ForeignSessionSource;
 	/** Lists source sessions without parsing complete transcripts. */
 	list(): Promise<ForeignSessionInfo[]>;
-	/** Converts one source session into a non-persistent OMP session. */
+	/** Converts one source session into a non-persistent MusePi session. */
 	load(session: ForeignSessionInfo): Promise<SessionManager>;
 }

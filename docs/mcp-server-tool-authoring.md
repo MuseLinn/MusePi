@@ -79,7 +79,7 @@ Key behavior:
 
 ### Environment expansion during discovery
 
-OMP-native MCP config (`.musepi/mcp.json`, `~/.musepi/agent/mcp.json`, plus their `.mcp.json` variants) expands `${VAR}` and `${VAR:-default}` placeholders recursively before converting to runtime config. It also accepts boolean/string forms for `enabled` (`true`, `false`, `1`, `0`) and numeric strings for `timeout`.
+MusePi-native MCP config (`.musepi/mcp.json`, `~/.musepi/agent/mcp.json`, plus their `.mcp.json` variants) expands `${VAR}` and `${VAR:-default}` placeholders recursively before converting to runtime config. It also accepts boolean/string forms for `enabled` (`true`, `false`, `1`, `0`) and numeric strings for `timeout`.
 
 The standalone fallback provider in `src/discovery/mcp-json.ts` reads project-root `mcp.json` and `.mcp.json`, expands the same `${...}` placeholders, and type-checks `enabled`/`timeout` without coercing string values.
 

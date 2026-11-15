@@ -1,4 +1,4 @@
-"""OMP Python runner — subprocess wrapper used by the coding-agent host.
+"""MusePi Python runner — subprocess wrapper used by the coding-agent host.
 
 NDJSON protocol over stdin/stdout. Host writes one JSON object per line;
 wrapper writes typed frames back.

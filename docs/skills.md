@@ -114,7 +114,7 @@ Filter order is:
 3. not ignored
 4. included (if include list present)
 
-The `agents` provider (`.agent[s]/skills`) is the canonical OMP-native location and has its own `enableAgentsUser`/`enableAgentsProject` toggles — disabling Claude/Codex/Pi does **not** turn it off. For providers without a dedicated toggle (`claude-plugins`, `opencode`, `gemini`, `github`, …), enablement falls back to: enabled if **any** named source toggle is enabled.
+The `agents` provider (`.agent[s]/skills`) is the canonical MusePi-native location and has its own `enableAgentsUser`/`enableAgentsProject` toggles — disabling Claude/Codex/Pi does **not** turn it off. For providers without a dedicated toggle (`claude-plugins`, `opencode`, `gemini`, `github`, …), enablement falls back to: enabled if **any** named source toggle is enabled.
 
 ### Collision and duplicate handling
 

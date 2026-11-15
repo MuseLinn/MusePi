@@ -205,7 +205,7 @@ describe("skills", () => {
 
 		// Regression for issue #2401: a user who disables the named third-party
 		// CLI toggles (codex/claude/native) MUST still see skills from the
-		// canonical OMP-native `~/.agent[s]/skills` (the `agents` provider).
+		// canonical MusePi-native `~/.agent[s]/skills` (the `agents` provider).
 		// Pre-fix `loadSkills` gated `agents` on `anyBuiltInSkillSourceEnabled`,
 		// so flipping the five third-party toggles off silently disabled it.
 		it("should still load ~/.agents/skills when codex/claude/native toggles are off (#2401)", async () => {
@@ -346,7 +346,7 @@ describe("skills", () => {
 
 		// Regression for PR #2405 review: the fall-through gate used by
 		// unknown third-party providers (opencode/github/claude-plugins/...)
-		// MUST NOT consider the OMP-native `enableAgentsUser`/`...Project`
+		// MUST NOT consider the MusePi-native `enableAgentsUser`/`...Project`
 		// toggles. Otherwise a user who disables Codex/Claude/Pi to silence
 		// third-party CLI noise but keeps the default agents toggles on still
 		// sees opencode skills resurface via the fallback branch.

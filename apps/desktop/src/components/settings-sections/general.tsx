@@ -160,7 +160,7 @@ const TASK_PREVIEW_DETAILS = {
 /** Preview of the two task-card styles (display.taskCardStyle settings
  *  row): MusePi Swarm = the chat-message task tool-call card with the
  *  floating frosted member-grid card beneath it (the composer chip opens
- *  that floating card); OMP original (Classic) = the plain tool-call card
+ *  that floating card); MusePi original (Classic) = the plain tool-call card
  *  only. The cards ARE the real transcript rendering driven by a shared
  *  fixture (same ToolView / taskRenderer.SwarmCard the chat uses) — what
  *  you see is what the style will look like; clicking either card switches

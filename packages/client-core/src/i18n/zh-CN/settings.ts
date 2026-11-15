@@ -2066,8 +2066,6 @@ export const settings = {
 		"将少用（可发现）工具挂载到 xd:// 设备 URL，通过 read/write 驱动，而非在每次请求时携带其 schema。未授予 write 工具的会话跳过挂载并顶层暴露所有工具。禁用后所有已启用工具均顶层暴露。",
 	'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).':
 		'子智能体的隔离后端。"auto" 让原生 PAL 选择最佳可用后端（CoW 文件系统，其次 overlayfs/ProjFS，再其次 git worktree / 递归复制回退）。',
-	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.':
-		'每个提供商 id（例如 "openai" 或 "anthropic"）的最大并发 LLM 请求数，在该配置根目录下的本地 MusePi 进程间共享。未列出的提供商不设限。',
 	"settings.hardTimeoutEach.desc": "web_search 推进到下一个回退前，每个提供商搜索通道的硬超时（秒，最大 300）",
 	'Serving path for Fireworks requests. Priority sends `service_tier: "priority"` for higher reliability during peak traffic at a higher price; Standard omits it. Fast (`-fast`) models ignore this — Fast is its own serving path.':
 		'Fireworks 请求的服务路径。Priority 在高流量期间发送 `service_tier: "priority"` 以获得更高可靠性，价格更高；Standard 省略该项。Fast（`-fast`）模型忽略此项——Fast 本身就是独立服务路径。',
@@ -3612,8 +3610,6 @@ export const settings = {
 		"传给语音模型的 BCP-47 提示（如 zh、yue、en、ja）。留空自动检测——内置模型多语言，通常无需提示。",
 	"Classifier for Smart unexpected-stop detection: online (the TINY role from /models, else smol) by default, or a local on-device model.":
 		"Smart 意外停更检测的分类器：默认在线（/models 里的 TINY 角色，否则 smol），也可用端侧本地模型。",
-	"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace":
-		"启用 OMP 原生安全扫描的规划与执行，以及只读的 security:// 资源命名空间",
 	Exa: "Exa",
 	"Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.":
 		"显式选择终端后端。auto 在 bun-pty 失败时回退 node-pty；bun-pty 或 node-pty 在不支持的平台上直接报错。",
@@ -3626,8 +3622,8 @@ export const settings = {
 		"左右分段之间的线条如何反映上下文用量（仅框式输入框）",
 	"Just under the 200K tier break some providers bill double past": "部分供应商在 200K 档位之上按双倍计费",
 	"Mark misspelled prompt words with the active macOS dictionaries": "用当前启用的 macOS 词典标记拼写错误的输入词",
-	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.':
-		'每个供应商 id 的最大并发 LLM 请求数（如 "openai"、"anthropic"），同一配置根下的本地 OMP 进程共享。未列出的供应商不限。',
+	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.':
+		'每个供应商 id 的最大并发 LLM 请求数（如 "openai"、"anthropic"），同一配置根下的本地 MusePi 进程共享。未列出的供应商不限。',
 	"Maximum height in terminal rows for inline images (default 20). Set to 0 to use only the viewport-based limit (60% of terminal height).":
 		"内联图片的最大高度（终端行数，默认 20）。0 表示只用视口限制（终端高度的 60%）。",
 	"Maximum width in terminal columns for inline images (default 100). Set to 0 for unlimited (bounded only by terminal width).":
@@ -3637,8 +3633,8 @@ export const settings = {
 		"本地语音后端使用的端侧神经语音模型（Kokoro-82M 偏英语，MeloTTS 中文 面向普通话/中英混合）",
 	"Ordered destinations tried when publishing images for provider access": "发布图片供供应商访问时按序尝试的目标列表",
 	"Percentage plus ticks at the speculative and auto-compaction boundaries": "百分比加上投机压缩与自动压缩边界的刻度",
-	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count":
-		"扩展 tool_call 处理器的活动工作超时（正有限值）；非法值取 30000ms，等待 OMP 自有对话框的时间不计入",
+	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting MusePi-owned dialogs does not count":
+		"扩展 tool_call 处理器的活动工作超时（正有限值）；非法值取 30000ms，等待 MusePi 自有对话框的时间不计入",
 	Powerline: "Powerline",
 	"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice":
 		"自动上下文维护的首选回退顺序；不可用或失败的方式自动前进到下一项",

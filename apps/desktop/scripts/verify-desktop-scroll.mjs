@@ -180,7 +180,7 @@ await rmFresh(workRoot);
 for (const d of Object.values(dirs)) fs.mkdirSync(d, { recursive: true });
 
 // Brand the daemon with the GUI's own version (what electron's daemon.cjs
-// start() does via MUSEPI_VERSION): without it the daemon reports the OMP
+// start() does via MUSEPI_VERSION): without it the daemon reports the MusePi
 // engine version, the boot version gate fires, and the GUI restarts the
 // daemon itself — a grandchild orphan this script's finally cannot reap.
 let guiVersion = "";

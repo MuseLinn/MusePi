@@ -225,12 +225,12 @@ async function runLocalLogin(provider: OAuthProvider): Promise<void> {
 			onAuth({ url, launchUrl, instructions }) {
 				process.stdout.write("\nOpen this URL in your browser:\n");
 				// Full URL first so the CLI works from any machine, including SSH
-				// sessions where a `launchUrl` (loopback `/launch` on the OMP
+				// sessions where a `launchUrl` (loopback `/launch` on the MusePi
 				// host) would resolve against the caller's browser and fail.
 				// Headless capture is unaffected: it reads the first URL line.
 				process.stdout.write(`${url}\n`);
 				if (launchUrl && launchUrl !== url) {
-					// Local shortcut for the machine running OMP. Terminals or
+					// Local shortcut for the machine running MusePi. Terminals or
 					// screen-scrapers narrower than the full URL still get an
 					// unbroken copy target here.
 					process.stdout.write(`Local shortcut (this machine only): ${launchUrl}\n`);

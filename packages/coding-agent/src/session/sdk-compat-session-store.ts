@@ -18,7 +18,7 @@ import type { ModelChangeEntry, SessionMessageEntry } from "./session-entries";
 import { SessionManager } from "./session-manager";
 
 /**
- * Sessions owned by an OMP-SDK-compatible agent (musepi/omp/pi share the
+ * Sessions owned by an SDK-compatible agent (musepi/omp/pi share the
  * same session format: `<sessions>/<encoded-cwd>/<ts>_<uuid>.jsonl` of wire
  * records with `type:"message"` + `message.role` blocks). Reading a sibling
  * install is a format-compatible conversion, not a translation.
@@ -212,7 +212,7 @@ async function collectRecords(file: string): Promise<{ value: Record<string, unk
 	return records;
 }
 
-/** OMP-SDK-compatible session store (omp / pi). */
+/** SDK-compatible session store for `musepi`, `omp` and `pi` roots. */
 export class SdkCompatSessionStore implements ForeignSessionStore {
 	readonly source: "musepi" | "omp" | "pi";
 	readonly #roots: string[];

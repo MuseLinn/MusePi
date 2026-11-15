@@ -25,7 +25,7 @@ import type { SecurityStore } from "./store";
 /**
  * ChatGPT's Codex Security cloud control plane. This authenticated web-app
  * contract is not a public OpenAI API: keep it isolated here, fail closed on
- * shape changes, and never use it as a fallback for OMP-native inference.
+ * shape changes, and never use it as a fallback for MusePi-native inference.
  */
 const DEFAULT_CLOUD_BASE_URL = "https://chatgpt.com/backend-api/aardvark";
 const ALL_FINDING_STATUSES = ["new", "triaged", "in_progress", "fixed", "wontfix", "duplicate", "false_positive"];

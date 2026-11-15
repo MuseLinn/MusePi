@@ -250,7 +250,7 @@ async function startInternal(port, env = {}) {
 		windowsHide: true,
 		// Brand the spawned daemon with the GUI's own version: the daemon
 		// runs from src/cli.ts (not musepi.ts), so without this system.meta
-		// reports the OMP engine version as the MusePi version.
+		// reports the MusePi engine version as the MusePi version.
 		env: daemonEnv,
 	});
 	child.stdout?.on("data", chunk => {

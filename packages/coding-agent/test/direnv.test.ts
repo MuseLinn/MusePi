@@ -204,7 +204,7 @@ describe.skipIf(!hasDirenv)("bash executor direnv wiring (end-to-end)", () => {
 		const root = tmp();
 		await Bun.write(path.join(root, ".envrc"), "unset PI_DIRENV_UNSET_E2E\n");
 		await allowEnvrc(root);
-		// Inherited from the process env (as an OMP-provided var would be); the
+		// Inherited from the process env (as a MusePi-provided var would be); the
 		// caller does NOT re-supply it, so direnv's unset must strip it. `printenv`
 		// exits non-zero and prints nothing when the name is genuinely absent. A
 		// unique sessionKey forces a fresh shell that captures the var we just set.

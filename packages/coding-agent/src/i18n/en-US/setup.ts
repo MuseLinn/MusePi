@@ -32,7 +32,7 @@ export const setup: TranslationMap = {
 	"setup.noModelsAvailable.info": "No models available. Configure providers first.",
 	"setup.noProvidersAvailable": "No providers available.",
 	"setup.notConfiguredYet.info": "Not configured yet — add its API key or sign in to enable it.",
-	"setup.musepiAlignedCodingAgent": "OMP-aligned coding agent",
+	"setup.musepiAlignedCodingAgent": "MusePi-aligned coding agent",
 	"setup.optingStoresTracking.info":
 		"Opting in stores a tracking identifier in settings.json and enables anonymous usage analytics.",
 	"setup.pasteAuthorizationCode": "Paste the authorization code (or full redirect URL):",

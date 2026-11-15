@@ -3,7 +3,7 @@
  * `~/.codex/hooks/*.{ts,js}` flatly. Before #3680 it defaulted every untyped
  * filename to a `pre:<basename>` hook, and `discoverExtensionPaths` then
  * imported those scripts as extension factories — a top-level `process.exit()`
- * in any stranger script (Codex hook scripts, scratch files, …) killed OMP
+ * in any stranger script (Codex hook scripts, scratch files, …) killed MusePi
  * during startup. These tests pin the new behavior: only `pre-*` / `post-*`
  * prefixed files are surfaced; everything else is silently skipped.
  */
@@ -71,7 +71,7 @@ describe("codex hook discovery", () => {
 	test("skips untyped Codex hook scripts so they never reach the extension loader (#3680)", async () => {
 		// The reporter's scripts (memory-bank-reminder.ts, skill-activation-prompt.ts)
 		// and the minimal repro (process.exit at module scope) live alongside any
-		// OMP-shaped pre-*/post-* files but do not match the prefix.
+		// MusePi-shaped pre-*/post-* files but do not match the prefix.
 		await codexHook("repro.ts", "process.exit(0)\n");
 		await codexHook("memory-bank-reminder.ts");
 		await codexHook("skill-activation-prompt.ts");

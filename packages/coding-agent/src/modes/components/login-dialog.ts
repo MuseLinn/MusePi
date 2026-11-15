@@ -72,7 +72,7 @@ export class LoginDialogComponent extends Container {
 	/**
 	 * Called by the OAuth `onAuth` callback. Renders the full authorization URL
 	 * as the primary copy target — that works from any machine, including
-	 * SSH/WSL/headless sessions where the OMP-hosted `launchUrl` would resolve
+	 * SSH/WSL/headless sessions where the MusePi-hosted `launchUrl` would resolve
 	 * against the user's local browser and fail. When `launchUrl` is present it
 	 * is offered as an additional local shortcut so narrow local terminals still
 	 * have a truncation-safe copy target (viewport clipping on a long authorize

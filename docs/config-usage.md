@@ -77,9 +77,9 @@ Project-level bases:
 
 ## Profiles
 
-A named profile (`musepi --profile <name>`, the `--alias` shortcut, or `MUSEPI_PROFILE` / `PI_PROFILE`) relocates the OMP user base. When a profile is active, every OMP-native user-level path written here as `~/.musepi/agent/...` resolves to `~/.musepi/profiles/<name>/agent/...` instead.
+A named profile (`musepi --profile <name>`, the `--alias` shortcut, or `MUSEPI_PROFILE` / `PI_PROFILE`) relocates the MusePi user base. When a profile is active, every MusePi-native user-level path written here as `~/.musepi/agent/...` resolves to `~/.musepi/profiles/<name>/agent/...` instead.
 
-The relocation is uniform across the native provider (`builtin.ts`) and the generic `config.ts` helpers, so it covers slash commands, rules, prompts, instructions, hooks, tools, extensions, settings, skills, and MCP, plus the top-level `SYSTEM.md` / `RULES.md` / `AGENTS.md` files and runtime state (sessions, blobs, `agent.db`). A profile sees only its own OMP config, never the default profile's `~/.musepi/agent`.
+The relocation is uniform across the native provider (`builtin.ts`) and the generic `config.ts` helpers, so it covers slash commands, rules, prompts, instructions, hooks, tools, extensions, settings, skills, and MCP, plus the top-level `SYSTEM.md` / `RULES.md` / `AGENTS.md` files and runtime state (sessions, blobs, `agent.db`). A profile sees only its own MusePi config, never the default profile's `~/.musepi/agent`.
 
 Keybindings are the one exception: a named profile merges the default profile's `~/.musepi/agent/keybindings.*` under its own `~/.musepi/profiles/<name>/agent/keybindings.*`, with the profile file overriding per binding ([#4867](https://github.com/can1357/oh-my-pi/issues/4867)). Keybindings describe the terminal/keyboard in front of the user, which doesn't change with the active profile, so user-level remaps keep working in every profile unless the profile explicitly overrides them. The inherited file is read-only for the profile process — legacy-format migration of the default profile's file only happens when the default profile itself runs.
 
@@ -188,7 +188,7 @@ Most non-core config loading flows through the capability registry (`src/capabil
 
 Providers are sorted by numeric priority (higher first). Example priorities:
 
-- Native OMP (`builtin.ts`): `100`
+- Native MusePi (`builtin.ts`): `100`
 - Claude: `80`
 - Codex / agents / Claude marketplace: `70`
 - Gemini: `60`

@@ -207,7 +207,7 @@ export async function loadHooks(paths: string[], cwd: string): Promise<LoadHooks
 /**
  * Discover and load hooks from all registered providers.
  * Uses the capability API to discover hook paths from:
- * 1. OMP native configs (.omp/.pi hooks/)
+ * 1. MusePi native configs (.omp/.pi hooks/)
  * 2. Installed plugins
  * 3. Other editor/IDE configurations
  *

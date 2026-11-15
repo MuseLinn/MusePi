@@ -134,7 +134,7 @@ export const zhCN: TranslationMap = {
 
 	// ── Requests route ────────────────────────────────────────────────────────
 	"All Recent Requests": "全部最近请求",
-	"Up to 50 most recent requests processed by OMP": "由 OMP 处理的最多 50 条最近请求",
+	"Up to 50 most recent requests processed by MusePi": "由 MusePi 处理的最多 50 条最近请求",
 
 	// ── Errors route ──────────────────────────────────────────────────────────
 	"Recent Errors": "最近错误",

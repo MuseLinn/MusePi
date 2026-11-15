@@ -5,7 +5,7 @@ import { t } from "../i18n";
 import type { AgentType, AgentTypeStats } from "../types";
 
 /**
- * Per-agent-type display chrome. Colors follow the OMP brand palette
+ * Per-agent-type display chrome. Colors follow the MusePi brand palette
  * (pink -> violet -> cyan) used by the dashboard charts so the bar reads on
  * both themes without per-theme overrides.
  */

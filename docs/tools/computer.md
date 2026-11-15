@@ -125,7 +125,7 @@ Regular function calls omit this native metadata so every provider serializes th
 
 The renderer merges call and result. Expanded output shows every display; collapsed output shows at most three. Each row includes native ID/name, logical rectangle, PNG pixel rectangle, scale, and primary flag.
 
-OMP native execution never creates a provider Files upload. The provider contract also accepts `{ type: "computer_screenshot", file_id }`; gateway/history parsing preserves that reference in metadata, and capable-model replay emits it unchanged.
+MusePi native execution never creates a provider Files upload. The provider contract also accepts `{ type: "computer_screenshot", file_id }`; gateway/history parsing preserves that reference in metadata, and capable-model replay emits it unchanged.
 
 ## Flow
 

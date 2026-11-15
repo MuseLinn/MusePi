@@ -1046,7 +1046,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 		}
 
 		// A timeout of 0 is an explicit long-running-command contract: the user
-		// must still cancel the call or job, but OMP does not impose a deadline.
+		// must still cancel the call or job, but MusePi does not impose a deadline.
 		const requestedTimeoutSec = rawTimeout;
 		const timeoutDisabled = requestedTimeoutSec === 0;
 		const maxTimeout = this.session.settings.get("tools.maxTimeout");

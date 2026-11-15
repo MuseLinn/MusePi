@@ -2,7 +2,7 @@
 
 
 [English](lsp-config.md) | 中文
-本指南说明如何为 OMP coding agent 配置 language server。
+本指南说明如何为 MusePi coding agent 配置 language server。
 
 代码中的事实来源:
 
@@ -12,7 +12,7 @@
 
 ## 自动检测
 
-当不存在 LSP config 文件时，OMP 通过对两个条件的交集进行自动检测:
+当不存在 LSP config 文件时，MusePi 通过对两个条件的交集进行自动检测:
 
 1. 项目目录包含该 server 的至少一个 `rootMarkers`。
 2. 该 server 二进制文件可用——先检查项目本地 bin 目录（例如 `node_modules/.bin/`、`.venv/bin/`），然后检查 `$PATH`。
@@ -21,7 +21,7 @@
 
 ## 配置文件位置
 
-OMP 从多个文件合并 LSP 配置，从低到高优先级:
+MusePi 从多个文件合并 LSP 配置，从低到高优先级:
 
 | 优先级 | 位置                                                                                                                    |
 | ------ | ----------------------------------------------------------------------------------------------------------------------- |
@@ -38,7 +38,7 @@ OMP 从多个文件合并 LSP 配置，从低到高优先级:
 - 用户级偏好 → `~/.musepi/agent/lsp.json`
 - 项目特定 override → `<project>/.musepi/lsp.json`
 
-> **注意:** 仅当至少一个配置文件贡献 server overrides 时，才会跳过自动检测。只设置 `idleTimeoutMs` 的配置文件仍允许 OMP 自动检测内置 servers。当存在 server overrides 时，OMP 将它们与 defaults 合并，然后加载具有匹配 `rootMarkers`、可用二进制文件且未显式 `disabled` 的 servers。
+> **注意:** 仅当至少一个配置文件贡献 server overrides 时，才会跳过自动检测。只设置 `idleTimeoutMs` 的配置文件仍允许 MusePi 自动检测内置 servers。当存在 server overrides 时，MusePi 将它们与 defaults 合并，然后加载具有匹配 `rootMarkers`、可用二进制文件且未显式 `disabled` 的 servers。
 
 ## 文件结构
 
@@ -86,7 +86,7 @@ JSON 和 YAML 都被接受。顶层对象可以使用 `servers` 包装键，也�
 
 ### Capabilities
 
-`capabilities` 对象启用 OMP 按 server 支持的可选特性:
+`capabilities` 对象启用 MusePi 按 server 支持的可选特性:
 
 ```json
 {

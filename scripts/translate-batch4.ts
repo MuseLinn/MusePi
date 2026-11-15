@@ -82,8 +82,8 @@ const TRANSLATIONS: Record<string, string> = {
 		"blob 服务器对外的公网基础地址（ssh 方式必填，直连可选）",
 	"Automatically fix syntax errors introduced by edits using AST-based localization and a small model":
 		"编辑引入语法错误时，用 AST 定位加小模型自动修复",
-	"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace":
-		"启用 OMP 原生安全扫描的规划与执行，以及只读的 security:// 资源命名空间",
+	"Enable MusePi-native security scan planning, execution, and the read-only security:// resource namespace":
+		"启用 MusePi 原生安全扫描的规划与执行，以及只读的 security:// 资源命名空间",
 	"Re-send the last request with a one-token output budget shortly before its prompt-cache entry expires":
 		"在提示缓存条目临期前，以单 token 输出预算重发上一次请求",
 	"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.":
@@ -112,8 +112,8 @@ const TRANSLATIONS: Record<string, string> = {
 		"显式选择终端后端。auto 在 bun-pty 失败时回退 node-pty；bun-pty 或 node-pty 在不支持的平台上直接报错。",
 	"Speculatively summarize in the background as context nears the compaction threshold, then splice the ready result in when the threshold is crossed":
 		"上下文接近压缩阈值时后台先做投机摘要，越过阈值后把就绪结果拼接进来",
-	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting OMP-owned dialogs does not count":
-		"扩展 tool_call 处理器的活动工作超时（正有限值）；非法值取 30000ms，等待 OMP 自有对话框的时间不计入",
+	"Positive finite active-work timeout for extension tool_call handlers; invalid values use 30000ms, and time awaiting MusePi-owned dialogs does not count":
+		"扩展 tool_call 处理器的活动工作超时（正有限值）；非法值取 30000ms，等待 MusePi 自有对话框的时间不计入",
 	"Voice used by the local TTS backend — the voice picker under each tier in Settings → Voice writes this (Kokoro multi-voice, MeloTTS-zh single ZH voice)":
 		"本地语音后端使用的音色——设置 → 语音中各档位下方的音色选择器写入（Kokoro 多音色，MeloTTS-zh 单中文音色）",
 	"Argv template for the command backend; {file} is the image path, {mime}/{ext} optional. The last URL printed on stdout is used (e.g. pasta -b -f {file})":
@@ -122,8 +122,8 @@ const TRANSLATIONS: Record<string, string> = {
 		"对超过阈值加价的长上下文窗口使用premium档（如 GPT-5.6 1M 在 272K 以上输入按 2 倍计费）；关闭则限制在标准定价窗口",
 	'Processing tier for Claude requests. `priority` realizes fast mode (`speed: "fast"`) on supported direct Anthropic models; ignored on Bedrock/Vertex Claude and via OpenRouter.':
 		'Claude 请求的处理档位。priority 在受支持的 Anthropic 直连模型上实现 fast 模式（speed: "fast"）；Bedrock/Vertex Claude 与 OpenRouter 忽略。',
-	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local OMP processes with this config root. Omitted providers are unlimited.':
-		'每个供应商 id 的最大并发 LLM 请求数（如 "openai"、"anthropic"），同一配置根下的本地 OMP 进程共享。未列出的供应商不限。',
+	'Maximum concurrent LLM requests per provider id (for example "openai" or "anthropic"), shared across local MusePi processes with this config root. Omitted providers are unlimited.':
+		'每个供应商 id 的最大并发 LLM 请求数（如 "openai"、"anthropic"），同一配置根下的本地 MusePi 进程共享。未列出的供应商不限。',
 	"Never auto-spend below this many saved resets (0 = the last credit may be spent automatically). Credits about to expire are exempt — a reserved credit that expires preserves nothing.":
 		"保存的重置额度低于此数时不自动消耗（0 = 最后一份额度也可自动使用）。临期额度不受此限——保留到过期的额度什么也保不住。",
 };
