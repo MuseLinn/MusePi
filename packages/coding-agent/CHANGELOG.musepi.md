@@ -4,6 +4,8 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-11-16
+
 - **右侧面板收起后 rail 消失了,修好并把握柄立为组件规范**:以 `musepi-gui-right=0`(右侧面板收起)启动时,右边缘的 44px 图标栏会整条不渲染——它跟着「面板首次打开才挂载」的 latch 一起走,于是收起状态下没有任何入口能重新打开面板。现在 rail 只取决于是否在工作区外壳内,面板收起时照常显示,点一下即可重新展开。同时把握柄正式定为组件标准:一条命中带 + 一枚胶囊、三态(静止/悬停+键盘聚焦/拖动)、拖动态逐接缝生效、键盘方向键与双击回中,与右面板分栏分隔线同一套语义。
   - EN: The right rail no longer disappears when the right panel is collapsed. Starting with `musepi-gui-right=0` left the whole 44px icon column unrendered, because it was mounted with the panel's "only after the first open" latch — so a collapsed panel had no affordance to reopen it. The rail now depends only on the workspace chrome being present, so it stays visible and one click expands the panel again. The splitter grip is also formalized as a component standard: one hit band plus one pill, three states (rest / hover + keyboard focus / drag), a drag state scoped to the seam being dragged, arrow-key nudging and double-click recentring, matching the right panel's column divider.
 
