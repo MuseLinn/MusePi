@@ -59,7 +59,6 @@ export function createKimiCodeExecutor(
 }
 
 export function apply(ctx: ExtensionAPI): void {
-	ctx.setLabel("实验性 Kimi Code 子智能体");
 	registerExternalExecutableProbe(ctx, "kimi");
 	const executor = ctx.config.getAll().then(config => createKimiCodeExecutor(config));
 	ctx.subagents.register({

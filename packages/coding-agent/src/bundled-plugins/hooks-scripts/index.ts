@@ -42,7 +42,6 @@ async function shellForHooks(): Promise<string> {
 }
 
 export async function apply(ctx: ExtensionAPI, rowConfig?: RowConfig): Promise<void> {
-	ctx.setLabel("目录 Hook 脚本");
 	const roots = stringArrayFromRow(rowConfig?.roots, "roots").map(root => path.resolve(ctx.cwd, root));
 	if (roots.length === 0) return;
 	const pythonRaw = text(rowConfig?.python);

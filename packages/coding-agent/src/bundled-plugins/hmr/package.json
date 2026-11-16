@@ -5,7 +5,7 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "Hot reload",
+		"label": "Hot Reload",
 		"description": "Host-scope watcher that provides ctx.hmr for every host.",
 		"icon": "\u25c8",
 		"scope": "host",

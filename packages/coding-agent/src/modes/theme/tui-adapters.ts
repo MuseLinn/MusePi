@@ -4,9 +4,14 @@ import {
 	supportsLanguage as nativeSupportsLanguage,
 } from "@musepi/pi-natives";
 import type { EditorTheme, MarkdownTheme, SelectListTheme, SettingsListTheme, SymbolTheme } from "@musepi/pi-tui";
+import { renderUiBlockAscii } from "@musepi/pi-tui/components/ui-block-ascii";
 import chalk from "@musepi/pi-utils/chalk";
 import { LRUCache } from "@musepi/pi-utils/lru";
 import { resolveMermaidAscii } from "./mermaid-cache";
+
+/** The fence languages a reply uses for a declarative block. */
+const UI_BLOCK_LANGUAGES = new Set(["ui", "musepi-ui", "openui", "openui-lang"]);
+
 import type { SlashCommandIconName } from "./symbols";
 import { theme } from "./theme";
 import type { Theme } from "./theme-class";
@@ -186,6 +191,11 @@ export function getMarkdownTheme(): MarkdownTheme {
 		underline: (text: string) => theme.underline(text),
 		strikethrough: (text: string) => chalk.strikethrough(text),
 		symbols: getSymbolTheme(),
+		// A `ui` block is a component tree the terminal cannot draw. Showing its
+		// program would be showing source to a reader who asked for an answer, so
+		// it is reduced to the content it carries (see ui-block-ascii.ts).
+		resolveFenceAscii: (lang, source, maxWidth) =>
+			UI_BLOCK_LANGUAGES.has(lang.trim().toLowerCase()) ? renderUiBlockAscii(source, maxWidth) : null,
 		resolveMermaidAscii: mermaid
 			? (source, maxWidth) =>
 					resolveMermaidAscii(source, {

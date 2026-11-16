@@ -75,6 +75,8 @@ export class ModelControls {
 	 *  switch invalidates the session-level classification cache. */
 	#autoResolvedForModel: string | undefined;
 	#serviceTierByFamily: ServiceTierByFamily;
+	/** Resolution warnings already shown; a per-turn role refresh must not repeat them. */
+	readonly #shownResolutionWarnings = new Set<string>();
 
 	constructor(
 		host: ModelControlsHost,
@@ -311,6 +313,17 @@ export class ModelControls {
 	}
 
 	/**
+	 * Show a resolution warning once per session. Role ladders are rebuilt on
+	 * every turn, so repeating the same ambiguity would turn one stale config
+	 * value into a warning on every message.
+	 */
+	#noteResolutionWarning(warning: string | undefined): void {
+		if (!warning || this.#shownResolutionWarnings.has(warning)) return;
+		this.#shownResolutionWarnings.add(warning);
+		this.#host.emitNotice("warning", warning, "model");
+	}
+
+	/**
 	 * Resolve the configured role models in the given order plus the index of
 	 * the currently active one. Roles that have no configured model, or whose
 	 * configured model is not currently available, are skipped. The `default`
@@ -340,6 +353,7 @@ export class ModelControls {
 				settings: this.#host.settings,
 				matchPreferences,
 			});
+			this.#noteResolutionWarning(resolved.warning);
 			if (!resolved.model) continue;
 
 			models.push({

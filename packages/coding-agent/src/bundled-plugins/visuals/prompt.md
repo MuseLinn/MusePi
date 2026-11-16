@@ -1,33 +1,31 @@
-# widget — 内联交互卡片 / 内联页面
+# widget — 一页自包含 HTML
 
-两种东西，一个工具：
+在对话里摊开一页 HTML，给用户**看**或**选**。
 
-- **card**（默认）：结构化活卡片（计算器、滑杆面板、行情、指标、待办、时钟）
-- **page**：一页自包含 HTML，直接在对话里摊开给用户看
+**数据不要走这里。** 表格、对比、步骤、流程、趋势、关键数字、以及需要用户勾选的决定，
+都用回复里的 ` ```ui ` 块（OpenUI Lang，见系统提示的「Visual answers」）。块是可读的、
+可作答的、随回复流式长出的；页面只负责「看起来必须像成品」这件事。
 
 ## 何时使用
 
-回答具有以下结构时**主动**使用（不等用户说"可视化"）：
+只有当答案的**样子本身就是答案**时才用：
 
-- **数值/对比**：计算器（个税、费用、换算）、指标对比、价格/汇率
-- **交互**：用户需要调参观察（滑杆面板——噪声/抖动对信号的影响）
-- **仪表盘感**：一组相关数值（时钟 + 市场状态、行情列表）
-- **清单**：待办、检查项
+- 版式式样的提案：改版前后并排、几个方案的样子对比
+- 必须精确呈现的图稿、示意图、自绘图形
+- 让用户在一个成型的界面上拍板（`awaitAnswer`）
 
-### card 还是 page？
-
-有对应结构类型就用 **card**（有 schema、有默认值、更省 token）。
-只有当答案需要自由布局时才用 **page**：
+其余情况一律不要用：普通文字回答、数据对比、清单、步骤、需要逐项决定的多选题。
 
 <!-- WIDGET_RENDER_WHEN: injected from when.ts, the same text the system prompt carries -->
 
-**不要**用于：普通文字回答、逐行代码解释、文件列表、破坏性/阻塞输入流程、
-大型长驻应用。
+## 怎么写
 
-### page 怎么写
+```
+widget { title?, html?, awaitAnswer? }
+```
 
 一页自包含 HTML（≤64KB），在沙箱里运行：没有网络会话、没有 localStorage，
-远程数据先取好注入 `data`。宿主注入主题类与配色变量，页面必须跟随深浅色。
+远程数据先取好注入页面。宿主注入主题类与配色变量，页面必须跟随深浅色。
 
 - **版式**：宽度随回复栏（桌面约 720px、手机约 360px），最外层不要左右 padding，
   内容不得超宽；宽表格放进 `.musepi-table` 自己横向滚动；图表给固定像素高度；
@@ -44,54 +42,18 @@
 - **图表**用内联 SVG（部分客户端不加载远程脚本），系列色取 `--chart-1`…`--chart-5`，
   同一图表最多 5 色，超出用线型区分。
 - 只画成品类覆盖不到的东西时才自己写 CSS；**设了背景色的元素必须同时设文字色**。
-- **让用户选**：选项用 `.musepi-options`，或表单收集后用 `.musepi-button` 调
-  `musepiSubmit(text, data)` 一次交回。`text` 用用户语言写清全部选择（它进模型
-  上下文）；`data` 只回显给页面自己。`musepiSubmit` 非阻塞——本轮已结束，答案
-  作为下一条用户消息到达；同一轮内必须拿到答案时用 `ask` 工具。
+- **选中即引用**：页面里的选区由宿主转成对话引用（页面自己是沙箱，够不到转写记录）。
+- **卡片工作区**：看板上的卡可以读自己目录里的文件——`window.musepiResources.list()` 与
+  `window.musepiResources.read(path)` 返回 Promise；路径锁在这张卡的工作区内，越界会被宿主拒绝。
+  页面本身没有文件系统，这是唯一的数据来源。
+- **让用户选**：`awaitAnswer: true` 时，选项用 `.musepi-options` 或表单收集后用
+  `.musepi-button` 调 `musepiSubmit(text, data)` 一次交回。`text` 用用户语言写清全部选择
+  （它进模型上下文）；`data` 只回显给页面自己。`musepiSubmit` 非阻塞——本轮已结束，
+  答案作为下一条用户消息到达；需要逐项决定许多条目时用 UI 块的 `Choice` / `Button`。
 
-## 任务一致性（硬性约束）
+## html 主题自适应（硬性要求）
 
-卡片可带 `task` 元数据（运行按钮 + 查看任务）。**任务必须与卡片展示的
-可视化内容直接相关**——例如汇率卡的任务是"刷新汇率"，指标卡的任务是"更新指标
-快照"。禁止把无关作业（系统体检、文件整理等）挂到展示型卡片上；需要独立作业
-时另行设计专用卡片。渲染内联 widget 时如无真实任务则不填 `task` 字段。
-
-## 怎么写
-
-```
-widget { action?, type?, data?, title?, html? }
-```
-
-`action` 省略或 `"card"` → 用 `type` + `data`（结构化卡片）。
-`action: "page"` → 用 `title` + `html`（自由页面），忽略 `type`/`data`。
-
-|type|data 字段|说明|
-|---|---|---|
-|`calc`|`mode: "pre"\|"post"`, `amount: number`|劳务费个税计算器（≤4000 元规则：收入−800，税率 20%）|
-|`slider`|`noise/jitter/freq/amp: number`|参数滑杆 + 实时波形|
-|`ticker`|`label: string`, `value: string`, `delta: number`|行情卡（值 + 涨跌 + 迷你图）|
-|`metric`|`label: string`, `value: number`, `delta: number`|指标卡（数字滚动 + 涨跌色）|
-|`todo`|`items: [{id, text, done}]`|待办清单|
-|`clock`|`market: "cn"\|"us"\|"eu"`|数字时钟 + CN/US/EU 市场状态|
-|`gallery`|`items: [string]`|手风琴画廊|
-|`pomodoro`|`mode: "focus"\|"short"\|"long"`|番茄钟（圆环 + 轮次统计）|
-|`video`|`url`, `bvid`, `title`, `subtitle`|视频卡：`bvid` 填 B站视频号（如 `BV1vT411d7QE`）→ 封面点击内联播放；`url` 填 mp4 直链 → 自绘控制条；都空则装饰封面占位|
-|`music`|`queue: [{id, year, title, artist, file}]`|黑胶播放器：真音频（Internet Archive 公版录音）+ 频谱 + 播放队列|
-|`history`|`header`, `date`, `events: [{year, text}]`|历史上的今天：实时数据源 + 8-bit 像素标题 + 可滚动事件列表|
-|`fx`|`chip`, `title`, `pairs: [{code, unit, note}]`|实时汇率（60s 自动刷新 + 30 日走势）|
-|`stocks`|`chip`, `title`, `rows: [{code, label, badge, name}]`|实时 A 股盯盘（腾讯行情 + 30 日 K 线迷你图）|
-|`gauge`|`value`, `status`|仪表盘读数|
-|`kline`|`candles: [{o, h, l, c, v}]`|K 线图（蜡烛 + 均线）；`price`/`delta`/`stocks` 可选|
-|`heatwall`|`tiles: [{name, delta}]`|涨跌热力墙|
-|`indextape`|`indices: […]`|指数磁带（三市指数）|
-|`html`|`html: string`, `data: object`|自定义 HTML 面（sandbox 内运行；数据经 `data` 注入 `window.musepiWidgetData`；主题经 `window.__WIDGET_THEME__` 与 `<html class="musepi-theme-dark\|light">` 注入；禁第三方 fetch——远程数据先取好再注入；`<img src>` 可用；需要用户选择时用 `musepiSubmit(text, data)` 把答案交回会话；版式、成品类与表单写法见下方「page 怎么写」；必须在同一轮内拿到答案时用 `ask` 工具而不是这个）|
-
-- `data` 可省略字段——缺省值自动补齐（如 `calc` 缺 `mode` 默认 `post`）。
-- `title` 可选，默认组件名。
-
-## html 类型：主题自适应（硬性要求）
-
-桌面端支持深浅色热切换，自定义 HTML 面**必须跟随，禁止单一固定配色**。
+桌面端支持深浅色热切换，页面**必须跟随，禁止单一固定配色**。
 
 ```
 bash: cat skill://widget-design/SKILL.md
@@ -109,15 +71,14 @@ bash: cat skill://widget-design/SKILL.md
 
 ## 铁律
 
-1. **文字在响应，视觉在 widget**：解释性文字/总结放在 widget 外的回复里。
-2. **渲染后不复述**：widget 渲染完成就不再重复卡里已有的内容，只说 widget 表达不了的。
-3. 数据要真实算好填进去（如个税：税前 2000 → `{mode:"pre", amount:2000}`），
-   不要留空让 UI 猜。
-4. 一个回答里结构分散时可以用多个 widget，但别为单个数字滥用。
+1. **文字在响应，页面在对话里**：解释性文字放在页面外的回复里。
+2. **渲染后不复述**：页面渲染完成就不再重复页里已有的内容，只说页面表达不了的。
+3. 数据要真实算好填进去，不要让页面去猜。
+4. 一页只讲一件事；一个回答里需要很多页时，先想想是不是该用 UI 块。
 
 ## 示例
 
 ```
-widget { type: "calc", data: { mode: "pre", amount: 2000 } }
-→ 卡片显示：税前 2000 → 扣税 240、到手 1760、税率 12%（+ 规则说明）
+widget { title: "改版前后", html: "<!doctype html><html><body>…</body></html>" }
+→ 对话里直接摊开两栏对比图
 ```

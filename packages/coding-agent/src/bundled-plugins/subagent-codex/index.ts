@@ -37,7 +37,6 @@ export function createCodexExecutor(
 }
 
 export function apply(ctx: ExtensionAPI): void {
-	ctx.setLabel("实验性 Codex 子智能体");
 	registerExternalExecutableProbe(ctx, "codex");
 	const executor = ctx.config.getAll().then(config => createCodexExecutor(config));
 	ctx.subagents.register({

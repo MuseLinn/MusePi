@@ -2,14 +2,14 @@ import type { SessionsKey } from "../zh-CN/sessions.js";
 
 export const sessions = {
 	// ── Connection & session lifecycle ────────────────────────────────────────
-	"sessions.roomClosed": "Room closed",
-	"sessions.noSuchRoom": "No such room",
-	"sessions.hostAlreadyConnectedRoom": "A host is already connected for this room",
-	"sessions.roomFull": "Room is full",
+	"sessions.roomClosed": "The computer disconnected",
+	"sessions.noSuchRoom": "Can't find this computer",
+	"sessions.hostAlreadyConnectedRoom": "This computer is already open on another device",
+	"sessions.roomFull": "The connection is full",
 	"sessions.badKeyCorruptedFrame": "Bad key or corrupted frame",
 	"sessions.connectionLostWithCode": "Connection lost (code {code})",
 	"sessions.rpcTimedOut": "{method} got no reply in time — check the network and try again",
-	"sessions.timedOutWaitingHost": "Timed out waiting for the host's welcome",
+	"sessions.timedOutWaitingHost": "Your computer didn't respond in time",
 	"sessions.timedOutWaitingHostSSession": "Timed out waiting for the host's session snapshot",
 	"sessions.failedApplySessionSnapshotWithReason": "Failed to apply session snapshot: {reason}",
 	"sessions.failedApplyFrameWithFrame": "Failed to apply {frame} frame",

@@ -23,13 +23,13 @@ export const shell = {
 	"shell.hideAgents": "Hide agents",
 	"shell.showAgents": "Show agents",
 	"shell.leaveSession": "Leave session",
-	"shell.connectingRelay": "Connecting to relay…",
-	"shell.joiningSession": "Joining session…",
+	"shell.connectingRelay": "Connecting to your computer…",
+	"shell.joiningSession": "Opening the session…",
 	"shell.reconnecting": "Reconnecting…",
-	"shell.sessionEnded": "Session ended",
+	"shell.sessionEnded": "Disconnected from your computer",
 	"shell.showMainWindow": "Show main window",
 	"shell.quit": "Quit",
-	"shell.newLink": "New link",
+	"shell.newLink": "Connect another computer",
 
 	// ── Banners ───────────────────────────────────────────────────────────────
 

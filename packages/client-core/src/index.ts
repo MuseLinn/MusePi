@@ -150,6 +150,7 @@ export {
 	ttlFor,
 	WARNING_TOAST_TTL_MS,
 } from "./lib/action-toast";
+export { importCompiledModule } from "./lib/artifact-module";
 export {
 	type AsyncJobItem,
 	type AsyncJobsSnapshot,
@@ -162,6 +163,14 @@ export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
 export { loadMarketplaceDetailPreference, saveMarketplaceDetailPreference } from "./lib/marketplace-preferences";
 export * from "./lib/modal-focus";
+export {
+	clearPromptSuggestion,
+	getPromptSuggestion,
+	type PromptSuggestionSlot,
+	setPromptSuggestion,
+	subscribePromptSuggestions,
+	visiblePromptSuggestion,
+} from "./lib/prompt-suggestion";
 export { hashSeed, punkAvatarUri } from "./lib/punk-gen";
 export { useScrollShadow } from "./lib/scroll-shadow";
 export {
@@ -197,6 +206,7 @@ export {
 export * from "./lib/tooltips";
 export * from "./tool-render";
 export { DiffBlock, type DiffLayout } from "./tool-render/parts";
+export { UI_BLOCK_ANSWER_EVENT, type UiBlockAnswerDetail } from "./ui-blocks/answers";
 export { type ExtensionWidgetArtifact, loadExtensionWidgets } from "./widgets/extension-widgets";
 export type { BoardWidget, WidgetDef, WidgetField, WidgetTone } from "./widgets/registry";
 export {

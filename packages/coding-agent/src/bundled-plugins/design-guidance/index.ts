@@ -65,7 +65,6 @@ export function renderAssetPolicyBrief(selection: unknown): string | undefined {
  * instead of adding a second one.
  */
 export function registerDesignGuidance(ctx: ExtensionAPI): void {
-	ctx.setLabel("设计/素材简报");
 	ctx.prompts.register({
 		...DESIGN_SYSTEM_SECTION,
 		text: context => renderDesignSystemBrief(context.designSystemId),

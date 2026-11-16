@@ -8,6 +8,4 @@ export function apply(ctx: ExtensionAPI): void {
 	terminal(ctx);
 }
 
-function terminal(ctx: ExtensionAPI): void {
-	ctx.setLabel("终端");
-}
+function terminal(ctx: ExtensionAPI): void {}

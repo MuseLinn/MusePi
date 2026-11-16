@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "Android 模拟器",
+		"description": "查看并操作 Android 模拟器：安装 APK、检查 UI 树、读取 logcat。"
+	}
+}

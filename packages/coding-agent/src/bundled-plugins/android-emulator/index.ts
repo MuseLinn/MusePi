@@ -40,7 +40,6 @@ function frameResult(frame: { device: string; png: Uint8Array; capturedAt: numbe
 }
 
 export function apply(ctx: ExtensionAPI): void {
-	ctx.setLabel("MusePi Android 模拟器");
 	const ready = Promise.all([ctx.config.get<string>("adbPath"), ctx.config.get<string>("emulatorPath")]).then(
 		([adbPath, emulatorPath]) =>
 			new AndroidDeviceService({ adbPath: adbPath || undefined, emulatorPath: emulatorPath || undefined }),

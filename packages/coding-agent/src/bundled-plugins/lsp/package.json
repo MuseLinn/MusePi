@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "语言服务（LSP）",
-		"description": "通过语言服务器提供定义、引用、诊断与重命名。",
+		"label": "Language Server (LSP)",
+		"description": "Definitions, references, diagnostics and rename through language servers.",
 		"icon": "🔎",
 		"extensions": ["./index.ts"],
 		"components": [{ "id": "lsp", "entry": "./lsp-tool.ts", "description": "语言服务工具。" }],

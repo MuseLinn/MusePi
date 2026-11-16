@@ -1,12 +1,17 @@
-import { useEffect, useState } from "react";
-
 /**
  * Character-by-character blur-in text (reactbits BlurText parity,
  * zero-dependency): each char starts blurred/faded/dropped and settles in
- * sequence via CSS transitions (the 240ms/160ms motion convention — see
- * docs/gui-design.md §3). Plays once on mount; the `gui-motion-off` class
- * disables it wholesale (prefers-reduced-motion parity).
+ * sequence — see docs/gui-design.md §3. Plays once on mount; the
+ * `gui-motion-off` class disables it wholesale (prefers-reduced-motion parity).
+ *
+ * Timing is CSS-only (a per-char `animation-delay`). The previous JS interval
+ * never fired while the HarmonyOS ability was launching — ArkWeb throttles
+ * timers in that window — so the brand name stayed at opacity 0. Touch shells
+ * skip the animation entirely (shell.css), because a decorative reveal must
+ * never gate text on a timer.
  */
+import type React from "react";
+
 export function BlurText({
 	text,
 	className,
@@ -17,30 +22,10 @@ export function BlurText({
 	/** Per-char stagger, ms. */
 	stepMs?: number;
 }): React.ReactNode {
-	const [revealed, setRevealed] = useState(0);
-
-	useEffect(() => {
-		// The `gui-motion-off` switch is documented to disable the effect
-		// wholesale; the CSS already zeroes the transition, so settle every
-		// character instead of stepping them with an interval.
-		if (typeof document !== "undefined" && document.documentElement.classList.contains("gui-motion-off")) {
-			setRevealed(text.length);
-			return;
-		}
-		let i = 0;
-		setRevealed(0);
-		const id = window.setInterval(() => {
-			i += 1;
-			setRevealed(i);
-			if (i >= text.length) window.clearInterval(id);
-		}, stepMs);
-		return () => window.clearInterval(id);
-	}, [text, stepMs]);
-
 	return (
 		<span className={`gui-blur-text${className ? ` ${className}` : ""}`} aria-label={text} role="text">
 			{text.split("").map((ch, i) => (
-				<span key={i} className={`gui-blur-char${i < revealed ? " gui-blur-char--in" : ""}`}>
+				<span key={i} className="gui-blur-char" style={{ animationDelay: `${i * stepMs}ms` }}>
 					{ch}
 				</span>
 			))}

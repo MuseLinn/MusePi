@@ -66,6 +66,23 @@ declare global {
 			getColorMode?: () => string;
 			/** Push the page's resolved scheme to the native window/bars. */
 			setThemeColor?: (dark: boolean) => void;
+			/**
+			 * Push the resolved accent as `#RRGGBB`. The native TabBar and rail
+			 * cannot read the page's CSS variables, so without this they keep a
+			 * hard-coded brand gold while the page shows whatever preset the
+			 * user picked — two accents in one screen.
+			 */
+			setAccentColor?: (hex: string) => void;
+			/**
+			 * `{key: value}` of every preference the shell has stored (`theme`,
+			 * `accent`, `fontScale`, `locale`, `tabBarMaterial`). Empty object on
+			 * a fresh install → the page migrates its localStorage values in.
+			 */
+			getPrefs?: () => string;
+			/** Persist one preference in the shell's store (native settings). */
+			setPref?: (key: string, value: string) => void;
+			/** `{theme,brand,mono,ocean,jade}` → hex, for the native swatch row. */
+			setAccentPalette?: (json: string) => void;
 			getBadge: () => string;
 			setBadgeCount: (count: number) => void;
 			clearBadge: () => void;
@@ -80,6 +97,18 @@ declare global {
 			setBackDepth?: (depth: number) => void;
 			/** Mirrors the page's bottom-tab destination in the native Tabs bar. */
 			setActiveTab?: (index: number) => void;
+			/** `"rail"` when the shell moved its destinations to a side rail
+			 *  (tablet / unfolded foldable / landscape), `"bottom"` otherwise.
+			 *  The page reserves the rail's width instead of the bar's height. */
+			getChromeLayout?: () => string;
+			/**
+			 * `{width, height, fold, rail}` — the HarmonyOS width breakpoint
+			 * (`xs|sm|md|lg|xl`), the aspect-ratio breakpoint (`flat|square|tall`),
+			 * the fold form (`unknown|folded|expanded|half|dual`) and the rail
+			 * width in vp. Layout follows the window, not the device, so this is
+			 * the only device-shape signal the page consumes.
+			 */
+			getWindowForm?: () => string;
 			/** Hide the native bar under a full-screen overlay (QR scanner). */
 			setTabBarVisible?: (visible: boolean) => void;
 			/** System permission page for the camera (denied-once recovery). */
@@ -100,6 +129,16 @@ declare global {
 			openSessionsSheet?: (payload: string) => void;
 			/** Refresh the rows of an open session sheet (session list changed). */
 			setSessions?: (payload: string) => void;
+			/**
+			 * Mirror the connect guide into the native connect page (tab 0):
+			 * `{skipped, offline, error}` — the page owns connect state.
+			 */
+			setConnectInfo?: (payload: string) => void;
+			/**
+			 * Public metadata of the saved computers for the native connect
+			 * page: `[{id, label, subtitle}]`. Credentials never leave the page.
+			 */
+			setHosts?: (payload: string) => void;
 			/**
 			 * HarmonyOS Live View（实况窗）capsule: `active` mirrors the agent's
 			 * working state. No-ops when the Live View entitlement is closed, so
@@ -375,17 +414,29 @@ export async function setupNotificationTapHandler(): Promise<void> {
 }
 
 /**
+ * Native system-bar insets in dp/vp (CSS px). `left`/`right` exist because a
+ * landscape cutout sits on the side; a shell that cannot report them leaves
+ * them undefined and the CSS falls back to env(safe-area-inset-*).
+ */
+export type NativeInsets = { top: number; bottom: number; left?: number; right?: number };
+
+/**
  * Fetch system-bar insets from the active shell. Returns dp/vp values
  * matching CSS px. Returns undefined when neither shell is available.
  */
-export async function getSystemBarInsets(): Promise<{ top: number; bottom: number } | undefined> {
+export async function getSystemBarInsets(): Promise<NativeInsets | undefined> {
 	if (isHarmonyShell()) {
 		try {
 			const raw = window.harmonyNative!.getSystemBars();
-			const parsed = JSON.parse(raw) as { top: number; bottom: number };
+			const parsed = JSON.parse(raw) as NativeInsets;
 			// A zero top inset is legitimate (no status bar / free window), but
-			// the bottom one may still be non-zero — do not discard the pair.
-			if (parsed != null && (parsed.top > 0 || parsed.bottom > 0)) return parsed;
+			// another edge may still be non-zero — do not discard the rest.
+			if (
+				parsed != null &&
+				(parsed.top > 0 || parsed.bottom > 0 || (parsed.left ?? 0) > 0 || (parsed.right ?? 0) > 0)
+			) {
+				return parsed;
+			}
 		} catch {
 			// plugin absent — fall through to Capacitor
 		}

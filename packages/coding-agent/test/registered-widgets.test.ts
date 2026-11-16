@@ -5,7 +5,7 @@
  * build from their context.
  */
 import { afterEach, describe, expect, test } from "bun:test";
-import { widgetTypesWith } from "../src/bundled-plugins/visuals/tool";
+import { widgetTypesWith } from "../src/bundled-plugins/board/catalog";
 import {
 	forgetRegisteredWidget,
 	getRegisteredWidgets,

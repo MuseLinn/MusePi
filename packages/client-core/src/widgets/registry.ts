@@ -1,41 +1,16 @@
 import type { ReactNode } from "react";
 import { useSyncExternalStore } from "react";
-import { CalcCard } from "./calc";
-import { calcDefaults } from "./calc-defaults";
-import {
-	GaugeCard,
-	HeatwallCard,
-	heatwallDefaults,
-	IndextapeCard,
-	indextapeDefaults,
-	KlineCard,
-	klineDefaults,
-} from "./finance";
-import { FxCard, fxDefaults } from "./fx";
-import { GalleryCard } from "./gallery";
-import { galleryDefaults } from "./gallery-defaults";
-import { gaugeDefaults } from "./gauge-defaults";
-import { HistoryCard, historyDefaults } from "./history";
+import { BlockCard, blockDefaults } from "./block";
 import { HtmlCard, htmlDefaults } from "./html";
-import { MusicCard, musicDefaults } from "./music";
-import { PomodoroCard } from "./pomodoro";
-import { pomodoroDefaults } from "./pomodoro-defaults";
-import { SliderCard } from "./slider";
-import { sliderDefaults } from "./slider-defaults";
-import { StocksCard, stocksDefaults } from "./stocks";
-import { TickerCard } from "./ticker";
-import { tickerDefaults } from "./ticker-defaults";
-import { TodoCard } from "./todo";
-import { todoDefaults } from "./todo-defaults";
-import { VideoCard, videoDefaults } from "./video";
 
 /**
- * Widget registry — the whitelist of board/inline widget types (see
- * docs/archive/board-dashboard.md + docs/archive/widget-design-system.md). Each entry
- * declares its data schema (fields drive agent autocomplete via
- * widget.schema in a later milestone) and its renderer. M1: six
- * self-built interactive components; reactbits visual components
- * (CountUp/ShinyText/SpotlightCard) join as decoration layers.
+ * Widget registry — the whitelist of board card types.
+ *
+ * Two entries, both generated: a `ui` block and a self-contained HTML page.
+ * The canned faces (market tape, calculator, clock, …) were the board's first
+ * design; they were a fixed catalog pretending to be generative UI, so they
+ * are gone rather than kept as a compatibility layer. A board card is now
+ * something the agent generated, and nothing else.
  */
 
 /** One widget instance on a board. */
@@ -79,6 +54,10 @@ export interface WidgetDef {
 	 *  cards, not one uniform theme surface). */
 	tone?: WidgetTone;
 	defaults(): Record<string, unknown>;
+	/** Offered in the board's add-widget list. Canned faces are legacy: they
+	 *  still draw where a board already holds one, but new work is a generated
+	 *  block or page, so they are no longer offered. */
+	palette?: boolean;
 	Component(props: {
 		data: Record<string, unknown>;
 		update(patch: Record<string, unknown>): void;
@@ -97,169 +76,13 @@ export interface WidgetDef {
 
 export const WIDGET_REGISTRY: readonly WidgetDef[] = [
 	{
-		type: "slider",
-		tone: "light",
-		nameKey: "widget slider",
-		descKey: "widget slider desc",
-		fields: [
-			{ key: "noise", label: "noise", type: "number", min: 0, max: 1, step: 0.01 },
-			{ key: "jitter", label: "jitter", type: "number", min: 0, max: 1, step: 0.01 },
-			{ key: "freq", label: "freq", type: "number", min: 0.5, max: 6, step: 0.1 },
-			{ key: "amp", label: "amp", type: "number", min: 0.1, max: 2, step: 0.05 },
-		],
-		defaults: sliderDefaults,
-		Component: SliderCard,
-	},
-	{
-		type: "calc",
-		tone: "light",
-		nameKey: "widget calc",
-		descKey: "widget calc desc",
-		fields: [
-			{ key: "mode", label: "mode", type: "select", options: ["pre", "post"] },
-			{ key: "amount", label: "amount", type: "number", min: 0, step: 1 },
-		],
-		defaults: calcDefaults,
-		Component: CalcCard,
-	},
-	{
-		type: "ticker",
-		tone: "dark",
-		nameKey: "widget ticker",
-		descKey: "widget ticker desc",
-		fields: [
-			{ key: "label", label: "label", type: "string" },
-			{ key: "value", label: "value", type: "string" },
-			{ key: "delta", label: "delta", type: "number" },
-		],
-		defaults: tickerDefaults,
-		Component: TickerCard,
-	},
-	{
-		type: "todo",
+		type: "block",
 		tone: "default",
-		nameKey: "widget todo",
-		descKey: "widget todo desc",
-		fields: [{ key: "items", label: "items", type: "string" }],
-		defaults: todoDefaults,
-		Component: TodoCard,
-	},
-	{
-		type: "pomodoro",
-		tone: "blue",
-		nameKey: "widget pomodoro",
-		descKey: "widget pomodoro desc",
-		fields: [
-			{ key: "mode", label: "mode", type: "select", options: ["focus", "short", "long"] },
-			{ key: "rounds", label: "rounds", type: "number", min: 0, step: 1 },
-		],
-		defaults: pomodoroDefaults,
-		Component: PomodoroCard,
-	},
-	{
-		type: "video",
-		nameKey: "widget video",
-		descKey: "widget video desc",
-		tone: "dark",
-		fields: [{ key: "url", label: "url", type: "string" }],
-		defaults: videoDefaults,
-		Component: VideoCard,
-	},
-	{
-		type: "gallery",
-		nameKey: "widget gallery",
-		descKey: "widget gallery desc",
-		tone: "default",
-		fields: [{ key: "items", label: "items", type: "string" }],
-		defaults: galleryDefaults,
-		Component: GalleryCard,
-	},
-	{
-		type: "gauge",
-		nameKey: "widget gauge",
-		descKey: "widget gauge desc",
-		tone: "dark",
-		fields: [
-			{ key: "value", label: "value", type: "number", min: 0, max: 100 },
-			{ key: "status", label: "status", type: "string" },
-		],
-		defaults: gaugeDefaults,
-		Component: GaugeCard,
-	},
-	{
-		type: "kline",
-		nameKey: "widget kline",
-		descKey: "widget kline desc",
-		tone: "dark",
-		fields: [{ key: "candles", label: "candles", type: "string" }],
-		defaults: klineDefaults,
-		Component: KlineCard,
-	},
-	{
-		type: "heatwall",
-		nameKey: "widget heatwall",
-		descKey: "widget heatwall desc",
-		tone: "dark",
-		fields: [{ key: "tiles", label: "tiles", type: "string" }],
-		defaults: heatwallDefaults,
-		Component: HeatwallCard,
-	},
-	{
-		type: "indextape",
-		nameKey: "widget indextape",
-		descKey: "widget indextape desc",
-		tone: "dark",
-		fields: [{ key: "indices", label: "indices", type: "string" }],
-		defaults: indextapeDefaults,
-		Component: IndextapeCard,
-	},
-	{
-		type: "music",
-		nameKey: "widget music",
-		descKey: "widget music desc",
-		tone: "dark",
-		fields: [
-			{ key: "brand", label: "brand", type: "string" },
-			{ key: "mode", label: "mode", type: "string" },
-		],
-		defaults: musicDefaults,
-		Component: MusicCard,
-	},
-	{
-		type: "history",
-		nameKey: "widget history",
-		descKey: "widget history desc",
-		tone: "default",
-		fields: [
-			{ key: "header", label: "header", type: "string" },
-			{ key: "date", label: "date", type: "string" },
-		],
-		defaults: historyDefaults,
-		Component: HistoryCard,
-	},
-	{
-		type: "fx",
-		nameKey: "widget fx",
-		descKey: "widget fx desc",
-		tone: "dark",
-		fields: [
-			{ key: "chip", label: "chip", type: "string" },
-			{ key: "title", label: "title", type: "string" },
-		],
-		defaults: fxDefaults,
-		Component: FxCard,
-	},
-	{
-		type: "stocks",
-		nameKey: "widget stocks",
-		descKey: "widget stocks desc",
-		tone: "dark",
-		fields: [
-			{ key: "chip", label: "chip", type: "string" },
-			{ key: "title", label: "title", type: "string" },
-		],
-		defaults: stocksDefaults,
-		Component: StocksCard,
+		nameKey: "widget block",
+		descKey: "widget block desc",
+		fields: [{ key: "source", label: "source", type: "string" }],
+		defaults: blockDefaults,
+		Component: BlockCard,
 	},
 	{
 		type: "html",
@@ -312,6 +135,12 @@ export function useWidgetRegistryVersion(): number {
 }
 
 /** Built-ins plus plugin-contributed types, external entries last-wins. */
+/** Types the board's add-widget list offers: generated faces only. A canned
+ *  face keeps `widgetDef()` so an existing board still draws it. */
+export function paletteWidgetDefs(): WidgetDef[] {
+	return widgetDefs().filter(def => def.palette !== false);
+}
+
 export function widgetDefs(): WidgetDef[] {
 	if (externalWidgets.length === 0) return [...WIDGET_REGISTRY];
 	const byType = new Map<string, WidgetDef>(WIDGET_REGISTRY.map(def => [def.type, def]));

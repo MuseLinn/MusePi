@@ -191,6 +191,11 @@ interface XdevMountNoticeDetails {
 	removed: string[];
 }
 
+/** One UI mount-notice fragment: `mounted 1 device` / `mounted 312 devices`. */
+function formatXdevMountCount(verb: "mounted" | "unmounted", count: number): string {
+	return `${verb} ${count} ${count === 1 ? "device" : "devices"}`;
+}
+
 /** Owns tool registration, presentation, prompt rebuilding, skills, and permissions. */
 export class SessionTools {
 	readonly #host: SessionToolsHost;
@@ -1003,9 +1008,11 @@ export class SessionTools {
 		}
 		this.#pendingXdevMountDelta = pending.added.size > 0 || pending.removed.size > 0 ? pending : undefined;
 		if (this.#host.settings.get("startup.quiet")) return;
+		// The UI notice carries counts only: a single MCP server can mount hundreds
+		// of devices, which is why the inventory itself lives in the `xd://` catalog.
 		const parts: string[] = [];
-		if (addedNames.length > 0) parts.push(`mounted ${addedNames.join(", ")}`);
-		if (removedNames.length > 0) parts.push(`unmounted ${removedNames.join(", ")}`);
+		if (addedNames.length > 0) parts.push(formatXdevMountCount("mounted", addedNames.length));
+		if (removedNames.length > 0) parts.push(formatXdevMountCount("unmounted", removedNames.length));
 		this.#host.emitNotice("info", `xd://: ${parts.join("; ")}`, "xdev");
 	}
 

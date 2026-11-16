@@ -1032,6 +1032,9 @@ export class SelectorController {
 								const resolved = resolveModelRoleValue(fallbackRoleValue, availableModels, {
 									settings: this.ctx.settings,
 								});
+								if (resolved.warning) {
+									this.ctx.session.emitNotice("warning", resolved.warning, "model");
+								}
 								if (resolved.model) {
 									const fallbackModel = resolved.model;
 									const isAuto = resolved.thinkingLevel === AUTO_THINKING;

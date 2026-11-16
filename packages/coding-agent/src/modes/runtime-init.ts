@@ -32,6 +32,8 @@ export interface InitializeExtensionsOptions {
 	trackAgentInvokingMessage?: (task: Promise<unknown>) => void;
 	/** Present a generated idle recap; formatting and truncation belong to the host. */
 	showRecap?: (reply: string) => void;
+	/** Offer a predicted next user message in the host's composer (GUI hosts only). */
+	showSuggestion?: (suggestion: string) => void;
 	/** Emit `session_start` after wiring. Defaults to true. */
 	emitSessionStart?: boolean;
 }
@@ -55,6 +57,7 @@ export async function initializeExtensions(session: AgentSession, options: Initi
 		markAgentInvokingMessage,
 		trackAgentInvokingMessage,
 		showRecap,
+		showSuggestion,
 		emitSessionStart = true,
 	} = options;
 	const shutdown = onShutdown ?? (() => {});
@@ -124,6 +127,7 @@ export async function initializeExtensions(session: AgentSession, options: Initi
 				session.sessionManager.recordRecap(reply);
 			},
 			showRecap,
+			showSuggestion,
 			isSettled: () =>
 				!session.isStreaming &&
 				!session.isCompacting &&

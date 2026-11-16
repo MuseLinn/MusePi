@@ -2021,7 +2021,7 @@ export class EventController {
 	async #handleRetryFallbackApplied(
 		event: Extract<AgentSessionEvent, { type: "retry_fallback_applied" }>,
 	): Promise<void> {
-		this.ctx.showWarning(`Fallback: ${event.from} -> ${event.to}`);
+		this.ctx.showWarning(`Fallback: ${event.from} -> ${event.to}${event.reason ? ` (${event.reason})` : ""}`);
 	}
 
 	async #handleRetryFallbackSucceeded(

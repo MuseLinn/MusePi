@@ -21,13 +21,13 @@ export const shell = {
 	"shell.hideAgents": "隐藏代理",
 	"shell.showAgents": "显示代理",
 	"shell.leaveSession": "离开会话",
-	"shell.connectingRelay": "正在连接中继…",
-	"shell.joiningSession": "正在加入会话…",
+	"shell.connectingRelay": "正在连接电脑…",
+	"shell.joiningSession": "正在打开会话…",
 	"shell.reconnecting": "正在重连…",
-	"shell.sessionEnded": "会话已结束",
+	"shell.sessionEnded": "与电脑的连接已断开",
 	"shell.showMainWindow": "显示主窗",
 	"shell.quit": "退出",
-	"shell.newLink": "新链接",
+	"shell.newLink": "连接其他电脑",
 
 	// ── Banners ───────────────────────────────────────────────────────────────
 

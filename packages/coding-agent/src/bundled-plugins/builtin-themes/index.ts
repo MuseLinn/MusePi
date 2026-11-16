@@ -8,6 +8,4 @@ export function apply(ctx: ExtensionAPI): void {
 	builtinThemes(ctx);
 }
 
-function builtinThemes(ctx: ExtensionAPI): void {
-	ctx.setLabel("内置主题包");
-}
+function builtinThemes(ctx: ExtensionAPI): void {}

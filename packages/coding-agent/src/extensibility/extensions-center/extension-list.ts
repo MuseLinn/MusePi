@@ -6,9 +6,9 @@
  * master switch is off.
  */
 import { type Component, matchesKey, padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
-import type { PluginComponentDesc } from "@musepi/pi-wire";
+import { type PluginComponentDesc, resolveLocalizedText } from "@musepi/pi-wire";
 import { isProviderEnabled } from "../../discovery";
-import { t } from "../../i18n/index.js";
+import { getLocale, t } from "../../i18n/index.js";
 import {
 	clampSelection,
 	contentRowWidth,
@@ -227,8 +227,12 @@ export class ExtensionList implements Component {
 		// Status icon
 		const stateIcon = this.#getStateIcon(ext.state, masterDisabled);
 
-		// Name
-		let name = ext.displayName;
+		// Name: the package's locale file for the session's own language, else the
+		// single manifest fallback. The inventory is one list — a zh-CN TUI and an
+		// en-US GUI read two names off the same snapshot.
+		let name = ext.displayNameI18n
+			? (resolveLocalizedText(ext.displayNameI18n, getLocale()) ?? ext.displayName)
+			: ext.displayName;
 		const nameWidth = Math.min(24, width - 16);
 
 		// Build the line with indentation (visually "inside" the master switch)

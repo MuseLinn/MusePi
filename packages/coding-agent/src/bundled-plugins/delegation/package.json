@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "任务委托",
-		"description": "子代理委派策略、并发上限与批处理调用形态。",
+		"label": "Task Delegation",
+		"description": "Subagent delegation policy, concurrency caps and the batch call shape.",
 		"icon": "🧭",
 		"extensions": ["./index.ts"],
 		"host": {

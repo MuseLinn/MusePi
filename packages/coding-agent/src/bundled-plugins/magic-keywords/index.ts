@@ -53,8 +53,6 @@ export function apply(ctx: ExtensionAPI): void {
 }
 
 function magicKeywords(ctx: ExtensionAPI): void {
-	ctx.setLabel("MusePi Magic Keywords");
-
 	// ultrathink: full-spectrum rainbow (hue 0..330), matches the compiled-in
 	// highlighter's sweep exactly.
 	ctx.magicKeywords.register({

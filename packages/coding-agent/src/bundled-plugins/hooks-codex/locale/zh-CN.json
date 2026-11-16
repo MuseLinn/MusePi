@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "Codex 钩子",
+		"description": "把现有 Codex hooks.json 的 command 钩子桥到本会话：SessionStart / UserPromptSubmit / PreToolUse / PostToolUse / Stop。"
+	}
+}

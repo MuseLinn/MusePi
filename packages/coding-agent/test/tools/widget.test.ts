@@ -1,57 +1,20 @@
 /**
- * `widget` tool — inline widget renderer: validates the type against the
- * shared registry table, merges defaults into data, and returns a details
- * payload for the GUI tool-render pipeline.
+ * `widget` tool — draws one self-contained HTML page inline in the reply.
+ *
+ * The structured card types are no longer part of this tool: data belongs in a
+ * UI block (see packages/client-core/src/ui-blocks), and the canned card
+ * registry now belongs to the board, where a card persists on a canvas.
  */
 import { describe, expect, test } from "bun:test";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
 import { WidgetTool } from "../../src/bundled-plugins/visuals/tool";
 
+const page = "<!doctype html><html><body><h1>Compare</h1></body></html>";
+
 describe("widget tool", () => {
-	test("renders a calc widget with merged defaults", async () => {
+	test("renders a page on the html widget's own face", async () => {
 		const tool = new WidgetTool();
-		const res = await tool.execute("c1", { type: "calc", data: { amount: 2000 } });
-		expect(res.isError).not.toBe(true);
-		expect(res.details).toEqual({ action: "card", type: "calc", data: { mode: "post", amount: 2000 } });
-		expect(res.content[0].type).toBe("text");
-	});
-
-	test("rejects unknown types with the available list", async () => {
-		const tool = new WidgetTool();
-		const res = await tool.execute("c1", { type: "nope" });
-		expect(res.isError).toBe(true);
-		const text = res.content[0].type === "text" ? res.content[0].text : "";
-		expect(text).toContain("unknown type");
-		expect(text).toContain("calc");
-	});
-
-	test("carries an optional title", async () => {
-		const tool = new WidgetTool();
-		const res = await tool.execute("c1", { type: "ticker", title: "EUR" });
-		expect(res.details?.title).toBe("EUR");
-		expect(res.details?.data).toHaveProperty("label", "EUR / CNY");
-	});
-
-	test("pomodoro type is known with mode default", async () => {
-		const tool = new WidgetTool();
-		const res = await tool.execute("c1", { type: "pomodoro", data: { mode: "short" } });
-		expect(res.isError).not.toBe(true);
-		expect(res.details?.data).toMatchObject({ mode: "short", rounds: 0 });
-	});
-
-	test("empty data falls back to the type defaults", async () => {
-		const tool = new WidgetTool();
-		const res = await tool.execute("c1", { type: "metric" });
-		expect(res.details?.data).toMatchObject({ value: 4200, delta: 0.12 });
-	});
-});
-
-describe("widget page action", () => {
-	const page = "<!doctype html><html><body><h1>Compare</h1></body></html>";
-
-	test("renders a page as the html widget's face, not a second implementation", async () => {
-		const tool = new WidgetTool();
-		const res = await tool.execute("c1", { action: "page", title: "Compare two plans", html: page });
+		const res = await tool.execute("c1", { title: "Compare two plans", html: page });
 		expect(res.isError).not.toBe(true);
 		// The renderer already owns the sandbox, the answer handback and the
 		// theme tokens for `html`; a page must land on that same face so those
@@ -66,7 +29,7 @@ describe("widget page action", () => {
 		// Without this the model repeats the page's content in prose, which is
 		// what a page exists to avoid.
 		const tool = new WidgetTool();
-		const res = await tool.execute("c1", { action: "page", html: page });
+		const res = await tool.execute("c1", { html: page });
 		const text = res.content[0].type === "text" ? res.content[0].text : "";
 		expect(text).toContain("Don't announce, describe or restate the page");
 	});
@@ -76,7 +39,6 @@ describe("widget page action", () => {
 		// for the file's contents.
 		const tool = new WidgetTool();
 		const res = await tool.execute("c1", {
-			action: "page",
 			html: `<img src="C:\\shots\\a.png"><div style="background:url('/tmp/b.jpg')"></div>`,
 		});
 		expect(res.details?.images).toEqual(["C:\\shots\\a.png", "/tmp/b.jpg"]);
@@ -84,34 +46,39 @@ describe("widget page action", () => {
 
 	test("rejects empty html, and html over the renderer's own cap", async () => {
 		const tool = new WidgetTool();
-		const blank = await tool.execute("c1", { action: "page", html: "   " });
+		const blank = await tool.execute("c1", { html: "   " });
 		expect(blank.isError).toBe(true);
 		expect(blank.content[0].type === "text" ? blank.content[0].text : "").toContain("html is required");
 
 		// The cap is the renderer's MAX_HTML, not a number invented here: a page
 		// over it renders as an "oversize" notice, so accepting more would only
 		// defer the failure to the client.
-		const huge = "x".repeat(MAX_WIDGET_HTML + 1);
-		const over = await tool.execute("c1", { action: "page", html: huge });
+		const over = await tool.execute("c1", { html: "x".repeat(MAX_WIDGET_HTML + 1) });
 		expect(over.isError).toBe(true);
 		expect(over.content[0].type === "text" ? over.content[0].text : "").toContain(String(MAX_WIDGET_HTML));
 
 		// And exactly at the cap still renders.
-		const edge = await tool.execute("c1", { action: "page", html: "x".repeat(MAX_WIDGET_HTML) });
+		const edge = await tool.execute("c1", { html: "x".repeat(MAX_WIDGET_HTML) });
 		expect(edge.isError).not.toBe(true);
 	});
 
 	test("rejects a title over the cap so a heading stays a heading", async () => {
 		const tool = new WidgetTool();
-		const res = await tool.execute("c1", { action: "page", html: page, title: "t".repeat(200) });
+		const res = await tool.execute("c1", { html: page, title: "t".repeat(200) });
 		expect(res.isError).toBe(true);
 		expect(res.content[0].type === "text" ? res.content[0].text : "").toContain("title exceeds");
 	});
 
-	test("still rejects an unknown card type, so the action never becomes a bypass", async () => {
+	test("a call without html is refused, so a page is never implied", async () => {
 		const tool = new WidgetTool();
-		const res = await tool.execute("c1", { type: "nope" });
+		const res = await tool.execute("c1", { title: "只有标题" });
 		expect(res.isError).toBe(true);
-		expect(res.content[0].type === "text" ? res.content[0].text : "").toContain("unknown type");
+		expect(res.content[0].type === "text" ? res.content[0].text : "").toContain("html is required");
+	});
+
+	test("waiting for an answer is carried through to the chat", async () => {
+		const tool = new WidgetTool();
+		const res = await tool.execute("c1", { html: page, awaitAnswer: true });
+		expect(res.details?.awaitAnswer).toBe(true);
 	});
 });

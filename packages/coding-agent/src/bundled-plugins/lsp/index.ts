@@ -14,6 +14,4 @@ export function apply(ctx: ExtensionAPI): void {
 	});
 }
 
-function lsp(ctx: ExtensionAPI): void {
-	ctx.setLabel("语言服务（LSP）");
-}
+function lsp(ctx: ExtensionAPI): void {}

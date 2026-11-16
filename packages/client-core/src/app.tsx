@@ -44,6 +44,7 @@ import { cacheMorphRects, stageLeavingScene } from "./lib/scene-morph";
 import { useTts } from "./lib/tts";
 import { type SessionClient, useGuestSelector } from "./lib/use-guest";
 import type { ToolRenderHost } from "./tool-render";
+import { UI_BLOCK_ANSWER_EVENT } from "./ui-blocks/answers.js";
 import "./components/shell/shell.css";
 
 // Compat shell + Electron bridge → opt the served renderer into the native
@@ -342,10 +343,15 @@ export function App(): ReactNode {
 		// the glass header would show crisp half-clipped bubbles through it.
 		// Mark the shell so CSS can swap glass for a solid bar on HarmonyOS.
 		root.classList.toggle("sh-harmony", isHarmonyShell());
-		// HarmonyOS floats a NATIVE bar (96vp including its bottom margin) over
-		// the web view; Android / PWA float the web pill (76px). Neither owns
-		// layout, so every full-height surface reserves this through CSS.
-		root.style.setProperty("--sh-tabbar-space", isHarmonyShell() ? "96px" : "76px");
+		// HarmonyOS floats a NATIVE bar (its own height plus the gesture inset)
+		// over the web view; Android / PWA float the web pill (76px). Neither
+		// owns layout, so every full-height surface reserves this through CSS.
+		// A rail owns the width, not the bottom strip; the chrome handler below
+		// replaces this provisional number with the bar's real geometry.
+		root.style.setProperty(
+			"--sh-tabbar-space",
+			root.dataset.harmonyChrome === "rail" ? "0px" : isHarmonyShell() ? "96px" : "76px",
+		);
 		return () => {
 			root.classList.remove("sh-has-tabbar");
 			root.classList.remove("sh-harmony");
@@ -411,7 +417,10 @@ export function App(): ReactNode {
 				<div className="sh-tab-scene" key={mobileTab}>
 					{mobileTab === "settings" ? (
 						<div className="sh-tab-page">
-							<MobileSettings />
+							{/* Saved computers work offline: `connect` is the same
+							 * path the connect screen uses, so retrying one from
+							 * here needs neither a session nor a detour. */}
+							<MobileSettings onConnectHost={connect} />
 						</div>
 					) : mobileTab === "chat" ? (
 						/* Chat while offline: a real destination with an empty state,
@@ -601,6 +610,12 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 	const working = useGuestSelector(client, s => s.working);
 	const roundDurations = useGuestSelector(client, s => s.roundDurations);
 	const phase = useGuestSelector(client, s => s.phase);
+	// A one-to-one session (one owner + one agent) does not need "HOST"/"AGENT"
+	// over every message: the bubble side already says who spoke. Labels return
+	// as soon as another participant joins.
+	const participants = useGuestSelector(client, s => s.state?.participants);
+	// Distinct names, not list length: a reconnecting guest can appear twice.
+	const singleParty = new Set((participants ?? []).map(p => p.name.trim() || p.role)).size <= 2;
 
 	const focusedSessionId = useGuestSelector(client, s => s.focusedSessionId);
 	const workspace = useGuestSelector(client, s => s.workspace);
@@ -717,6 +732,8 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 			roundDurations={roundDurations}
 			host={host}
 			emptySlot={emptySlot}
+			userGutter={singleParty ? "" : undefined}
+			agentGutter={singleParty ? "" : undefined}
 			onRevert={id => branchAt(id)}
 			onRetry={(id, _text) => regenerateAt(id)}
 			onFork={(id, text, includeTarget) => forkAt(id, text, includeTarget)}
@@ -803,6 +820,88 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 			// bridge missing — nothing to mirror
 		}
 	}, [working, header]);
+
+	// HarmonyOS shell pushes its window form, not the device name: the chrome
+	// layout (`rail` on a tablet / unfolded foldable / landscape, `bottom` on a
+	// phone), the left gutter the rail occupies, and the bottom strip the
+	// floating bar occupies. The page swaps one reservation for the other and
+	// exposes the breakpoints so the stylesheet can pick a reading column.
+	useEffect(() => {
+		if (!isHarmonyShell()) return;
+		const root = document.documentElement;
+		const applyChrome = (layout: string, rail: number, reserve?: number): void => {
+			if (layout === "rail") {
+				root.dataset.harmonyChrome = "rail";
+				root.style.setProperty("--harmony-rail", `${rail > 0 ? rail : 84}px`);
+			} else {
+				delete root.dataset.harmonyChrome;
+			}
+			// The bar strip is inline (inline beats the stylesheet), so the rail
+			// layout clears it here instead of fighting it from CSS. `reserve` is
+			// the native bar's own geometry (gesture inset + bar + gaps) so the
+			// composer dock and the bar can never drift apart.
+			root.style.setProperty(
+				"--sh-tabbar-space",
+				layout === "rail" ? "0px" : `${reserve && reserve > 0 ? reserve : 96}px`,
+			);
+		};
+		const applyForm = (raw: string): void => {
+			try {
+				const form = JSON.parse(raw) as { width?: string; height?: string; fold?: string; rail?: number };
+				root.dataset.harmonyWindow = form.width ?? "";
+				root.dataset.harmonyHeight = form.height ?? "";
+				root.dataset.harmonyFold = form.fold ?? "";
+				// The rail gutter travels with the form because it depends on the
+				// breakpoint (72/84/96vp) plus any landscape cutout on the left.
+				if (root.dataset.harmonyChrome === "rail" && form.rail && form.rail > 0) {
+					root.style.setProperty("--harmony-rail", `${form.rail}px`);
+				}
+			} catch {
+				// Malformed payload — the previous form keeps describing the window.
+			}
+		};
+		const host = window as unknown as Record<string, unknown>;
+		host.__harmonyChrome = applyChrome;
+		host.__harmonyWindow = applyForm;
+		// The shell pushes on every window change, but a push that lands before
+		// this effect registers is simply lost — and unfolding the phone once
+		// left the rail overlapping the content because exactly that happened.
+		// Re-read the two bridge answers here too: they are synchronous, cheap,
+		// and make the page recover on any resize it survives.
+		const syncFromShell = (): void => {
+			const native = window.harmonyNative;
+			if (!native) return;
+			// Chrome first, then the form: the form carries the breakpoint-exact
+			// rail width and only overrides it once the layout is already `rail`.
+			applyChrome(native.getChromeLayout?.() ?? "bottom", 84);
+			const form = native.getWindowForm?.();
+			if (form) applyForm(form);
+		};
+		syncFromShell();
+		window.addEventListener("resize", syncFromShell);
+		window.addEventListener("orientationchange", syncFromShell);
+		return () => {
+			window.removeEventListener("resize", syncFromShell);
+			window.removeEventListener("orientationchange", syncFromShell);
+			delete host.__harmonyChrome;
+			delete host.__harmonyWindow;
+		};
+	}, []);
+
+	// A block's collected choice arrives as one message (see ui-blocks/answers):
+	// the guest shell delivers it exactly like a typed prompt.
+	useEffect(() => {
+		const onAnswer = (event: Event): void => {
+			const detail = (event as CustomEvent<{ text?: unknown }>).detail;
+			const text = typeof detail?.text === "string" ? detail.text : "";
+			if (!text) return;
+			void client.sendPrompt(text).catch(error => {
+				console.error("[ui-block] answer failed:", error);
+			});
+		};
+		window.addEventListener(UI_BLOCK_ANSWER_EVENT, onAnswer);
+		return () => window.removeEventListener(UI_BLOCK_ANSWER_EVENT, onAnswer);
+	}, [client]);
 
 	const subCount = agents.filter(a => a.kind === "sub").length;
 	const agentIds = useMemo(() => new Set(agents.map(a => a.id)), [agents]);
@@ -1041,7 +1140,15 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 					/>
 				</>
 			)}
-			<Banners phase={phase} endedReason={endedReason} onRejoin={onRejoin} onNewLink={onLeave} />
+			<Banners
+				phase={phase}
+				endedReason={endedReason}
+				onRejoin={onRejoin}
+				onNewLink={onLeave}
+				// On a phone the ended card belongs to the chat destination; over
+				// 连接/设置 it was a modal with no dismiss covering live controls.
+				blocking={!isMobileShell() || mobileTab === "chat"}
+			/>
 			<Toasts />
 		</div>
 	);

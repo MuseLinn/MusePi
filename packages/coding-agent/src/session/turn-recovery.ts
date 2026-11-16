@@ -1545,6 +1545,7 @@ export class TurnRecovery {
 			pinFallback: true,
 			apiKey: fallback.apiKey,
 			signal,
+			reason: health.state === "depleted" ? "usage depleted" : "usage reserve",
 		});
 	}
 
@@ -1568,7 +1569,7 @@ export class TurnRecovery {
 		role: string,
 		selector: RetryFallbackSelector,
 		currentSelector: string,
-		options?: { pinFallback?: boolean; apiKey?: string; signal?: AbortSignal },
+		options?: { pinFallback?: boolean; apiKey?: string; signal?: AbortSignal; reason?: string },
 	): Promise<boolean> {
 		const resolved = resolveModelOverride([selector.raw], this.#host.modelRegistry, this.#host.settings);
 		const candidate = resolved.model ?? this.#host.modelRegistry.find(selector.provider, selector.id);
@@ -1639,6 +1640,7 @@ export class TurnRecovery {
 			from: currentSelector,
 			to: selector.raw,
 			role,
+			reason: options?.reason,
 		});
 		return true;
 	}
@@ -1685,7 +1687,10 @@ export class TurnRecovery {
 				if (!this.#host.contextFitsModel(candidate, failedMessage)) continue;
 				const apiKey = await this.#host.modelRegistry.getApiKey(candidate, this.#host.sessionId());
 				if (!apiKey) continue;
-				return this.applyRetryFallbackCandidate(role, selector, currentSelector, options);
+				return this.applyRetryFallbackCandidate(role, selector, currentSelector, {
+					...options,
+					reason: "request failed",
+				});
 			}
 		}
 
@@ -1787,6 +1792,7 @@ export class TurnRecovery {
 			from: currentSelector,
 			to: baseSelector,
 			role: "fireworks-fast",
+			reason: "fast variant",
 		});
 		return true;
 	}

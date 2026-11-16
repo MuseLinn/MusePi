@@ -120,7 +120,6 @@ export function serverConfigFromRow(config: RowConfig): { serverName: string; co
 // per-extension settings store — the right source for an ambient plugin, not
 // for a preset row.
 export function apply(ctx: ExtensionAPI, rowConfig?: RowConfig): void {
-	ctx.setLabel("MCP 服务器");
 	// MCP registration is SESSION-scoped (ExtensionContext), not instance-scoped:
 	// the server belongs to the session that joined this preset, so the handler
 	// is the only correct place to connect it. The runner releases everything it

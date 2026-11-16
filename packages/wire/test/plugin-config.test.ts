@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { parseConfigFields, parsePluginExperimental, parsePluginResources } from "../src/plugin-config";
+import {
+	localizedPluginText,
+	parseConfigFields,
+	parsePluginExperimental,
+	parsePluginResources,
+	resolveLocalizedText,
+} from "../src/plugin-config";
 
 /**
  * 声明式配置契约校验(设计稿 §1/§4):manifest 是用户可写 JSON,校验必须逐
@@ -105,5 +111,35 @@ describe("parsePluginResources", () => {
 		expect(r?.setupMinutes).toBe(5);
 		expect(r?.models).toHaveLength(1);
 		expect(r?.models?.[0]?.name).toBe("sensevoice");
+	});
+});
+
+describe("localized plugin text", () => {
+	it("resolves the exact tag, then the language, then the English fallback", () => {
+		const text = { en: "Session Resources", "zh-CN": "会话资源监控", zh: "资源监控" };
+		expect(resolveLocalizedText(text, "zh-CN")).toBe("会话资源监控");
+		// Only a bare language shipped: a regional tag still finds it.
+		expect(resolveLocalizedText({ en: "Board", zh: "看板" }, "zh-TW")).toBe("看板");
+		expect(resolveLocalizedText({ en: "Board", zh: "看板" }, "fr-FR")).toBe("Board");
+	});
+
+	it("matches tags case-insensitively and never returns an empty string", () => {
+		// File names carry the author's casing; the interface may report another.
+		expect(resolveLocalizedText({ en: "Board", "zh-CN": "看板" }, "zh-cn")).toBe("看板");
+		expect(resolveLocalizedText({ en: "Board", "zh-CN": "" }, "zh-CN")).toBe("Board");
+		expect(resolveLocalizedText(undefined, "zh-CN", "fallback")).toBe("fallback");
+	});
+
+	it("builds the map from a manifest fallback plus locale files, letting a file win", () => {
+		expect(localizedPluginText("Session Resources", { "zh-CN": "会话资源监控" })).toEqual({
+			en: "Session Resources",
+			"zh-CN": "会话资源监控",
+		});
+		// A package whose manifest is already English still ships an en file.
+		expect(localizedPluginText("会话资源监控", { en: "Session Resources" })).toEqual({
+			en: "Session Resources",
+		});
+		expect(localizedPluginText(undefined, {})).toBeUndefined();
+		expect(localizedPluginText(undefined, { "zh-CN": "看板" })?.en).toBe("看板");
 	});
 });

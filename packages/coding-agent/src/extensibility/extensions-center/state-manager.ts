@@ -167,6 +167,10 @@ export async function loadAllExtensions(
 				name: item.name,
 				displayName: pluginMeta?.label ?? item.name,
 				description: pluginMeta?.description ?? opts?.getDescription?.(item),
+				// 只有自带 `locale/*.json` 的包才带这两份映射：语言由界面挑，
+				// daemon 不下判断（中文 TUI 与英文 GUI 可以是同一个 daemon）。
+				...(pluginMeta?.labelText ? { displayNameI18n: pluginMeta.labelText } : {}),
+				...(pluginMeta?.descriptionText ? { descriptionI18n: pluginMeta.descriptionText } : {}),
 				trigger: opts?.getTrigger?.(item),
 				path: item.path,
 				source: sourceFromMeta(item._source),

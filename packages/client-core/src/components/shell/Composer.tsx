@@ -16,7 +16,7 @@ import {
 	X,
 } from "lucide-react";
 import type { ClipboardEvent, DragEvent, KeyboardEvent, ReactNode, RefObject } from "react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { t } from "../../i18n/index.js";
 import type { JobsRpc } from "../../lib/async-jobs";
 import { attachmentReferenceLine, composePromptWithAttachments, uploadAttachment } from "../../lib/attachment-upload";
@@ -28,6 +28,12 @@ import { haptic } from "../../lib/haptics";
 import type { PendingAttachment } from "../../lib/image";
 import { processImageFile, restoreImageAttachment, revokePreviews, toImageContent } from "../../lib/image";
 import { type NativeRecognition, nativeVoiceSupport, startNativeRecognition } from "../../lib/native-voice";
+import {
+	clearPromptSuggestion,
+	getPromptSuggestion,
+	subscribePromptSuggestions,
+	visiblePromptSuggestion,
+} from "../../lib/prompt-suggestion";
 import { useShellLayout } from "../../lib/responsive-shell";
 import { useMorphTarget } from "../../lib/scene-morph";
 import { useScrollShadow } from "../../lib/scroll-shadow";
@@ -827,6 +833,25 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 	// Same ref object the autosize/focus logic already uses.
 	const taRef = useMorphTarget<HTMLTextAreaElement>("composer-input");
 	const sendMorphRef = useMorphTarget<HTMLButtonElement>("composer-send");
+	// Next-input candidate for this session: the daemon predicts it after a
+	// completed turn, and it is offered only while the composer is empty.
+	// Accepting fills the draft and leaves the candidate in place, so clearing
+	// the text again brings the same prediction back.
+	const promptSuggestion = useSyncExternalStore(subscribePromptSuggestions, () =>
+		focusedSessionId ? getPromptSuggestion(focusedSessionId) : null,
+	);
+	const acceptPromptSuggestion = useCallback(
+		(value: string): void => {
+			setText(value);
+			requestAnimationFrame(() => {
+				const el = taRef.current;
+				if (!el) return;
+				el.focus();
+				el.setSelectionRange(value.length, value.length);
+			});
+		},
+		[taRef],
+	);
 	// 横向边缘羽化:图片附件 chip 排横向滚动时左右羽化。
 	const attachChipsRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(attachChipsRef);
@@ -936,6 +961,21 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 	const voiceCtl = useVoiceInput(client, onVoiceText, () => tts.stop());
 	const voice = voiceCtl.voice;
 	const voiceBusy = voice.kind === "recording" || voice.kind === "transcribing";
+	// The candidate stands in for the placeholder of an empty, writable,
+	// idle composer — the same condition under which accepting it is safe.
+	const shownSuggestion = visiblePromptSuggestion(promptSuggestion, {
+		draftEmpty: text.length === 0,
+		writable: canPrompt,
+		busy: voiceBusy,
+		blocked: uiRequest !== null,
+	});
+	// The thinking level's word is hidden at phone widths (the model name needs
+	// that line); the icon's accessible name still carries the level.
+	const thinkingLabel = t(
+		THINKING_KEY[
+			(THINKING_LADDER as readonly string[]).includes(thinking ?? "") ? (thinking as ThinkingLadder) : "auto"
+		],
+	);
 	// editor-draft mode keeps submit enabled even for whitespace-only prefill;
 	// image/file-only prompts (no caption) are also submittable. Voice capture
 	// owns the input slot while active — sending mid-recording would be
@@ -991,6 +1031,9 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 			setText("");
 			writeDraft(sendKey, "");
 			writeDraft(draftKeyRef.current, "");
+			// The candidate described the turn that just ended, not the one this
+			// message starts: keeping it would offer a reply to a stale context.
+			clearPromptSuggestion(focusedSessionId ?? "");
 			haptic(8);
 		} catch (error) {
 			setSendError(error instanceof Error ? error.message : String(error));
@@ -1108,6 +1151,22 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 	}, []);
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+		// Accept the next-input candidate. Tab is the primary key (the hint in
+		// the composer says so); ArrowRight keeps the gesture for keyboards
+		// where Tab moves focus.
+		if (
+			shownSuggestion !== null &&
+			!composingRef.current &&
+			!e.shiftKey &&
+			!e.ctrlKey &&
+			!e.metaKey &&
+			!e.altKey &&
+			(e.key === "Tab" || e.key === "ArrowRight")
+		) {
+			e.preventDefault();
+			acceptPromptSuggestion(shownSuggestion);
+			return;
+		}
 		if (shouldSubmitOnEnter(e, composingRef.current)) {
 			e.preventDefault();
 			void send();
@@ -1307,18 +1366,26 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 							onCompositionStart={onCompositionStart}
 							onCompositionEnd={onCompositionEnd}
 							placeholder={
-								readOnly
-									? t("composer.readOnlySessionWatching")
-									: canPrompt
-										? isMobileShell()
-											? t("composer.askAnythingShort")
-											: t("composer.askAnythingCommands.info")
-										: t("composer.waitingSession")
+								shownSuggestion !== null
+									? ""
+									: readOnly
+										? t("composer.readOnlySessionWatching")
+										: canPrompt
+											? isMobileShell()
+												? t("composer.askAnythingShort")
+												: t("composer.askAnythingCommands.info")
+											: t("composer.waitingSession")
 							}
 							disabled={!canPrompt}
 							rows={1}
 							spellCheck={false}
 						/>
+					)}
+					{shownSuggestion !== null && (
+						<span className="sh-composer-suggestion" aria-hidden>
+							<span className="sh-composer-suggestion-text">{shownSuggestion}</span>
+							<kbd className="sh-composer-suggestion-key">{t("composer.promptSuggestionAccept")}</kbd>
+						</span>
 					)}
 				</div>
 				<div className="sh-composer-leading">
@@ -1378,17 +1445,10 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 									haptic(8);
 								}}
 								title={t("transcript.thinkingLevel")}
+								aria-label={`${t("transcript.thinkingLevel")}: ${thinkingLabel}`}
 							>
 								<Brain size={13} aria-hidden />
-								<span>
-									{t(
-										THINKING_KEY[
-											(THINKING_LADDER as readonly string[]).includes(thinking ?? "")
-												? (thinking as ThinkingLadder)
-												: "auto"
-										],
-									)}
-								</span>
+								<span>{thinkingLabel}</span>
 							</button>
 						</div>
 					)}

@@ -1,4 +1,5 @@
 import type { CronRun, CronSchedule, CronTask } from "@musepi/pi-wire";
+import { Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -256,18 +257,30 @@ function TaskRow({
 			</div>
 			{!readOnly && (
 				<div className="sh-task-actions">
+					{/* A schedule is a state, so it gets a switch: the old dot glyph
+					 * read as a status marker and had no on/off affordance. */}
 					<button
 						type="button"
-						className={task.enabled ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
+						role="switch"
+						aria-checked={task.enabled}
+						aria-label={task.enabled ? t("guest.disableTask") : t("guest.enableTask")}
 						title={task.enabled ? t("guest.disableTask") : t("guest.enableTask")}
+						className="sh-task-switch"
 						onClick={() => onToggle(task.id)}
 					>
-						{task.enabled ? "●" : "○"}
+						<span className="sh-task-switch-track">
+							<span className="sh-task-switch-thumb" />
+						</span>
 					</button>
 					<button
 						type="button"
-						className="sh-btn sh-btn-icon sh-btn-stop"
+						className={
+							confirming
+								? "sh-btn sh-btn-icon sh-task-delete sh-task-delete--confirm"
+								: "sh-btn sh-btn-icon sh-task-delete"
+						}
 						title={confirming ? t("guest.confirmDeleteTask") : t("guest.deleteTask")}
+						aria-label={confirming ? t("guest.confirmDeleteTask") : t("guest.deleteTask")}
 						onClick={() => {
 							if (confirming) {
 								onDelete(task.id);
@@ -278,7 +291,7 @@ function TaskRow({
 						}}
 						onBlur={() => setConfirming(false)}
 					>
-						{confirming ? t("guest.confirmDeleteTask") : "✕"}
+						<Trash2 size={15} />
 					</button>
 				</div>
 			)}

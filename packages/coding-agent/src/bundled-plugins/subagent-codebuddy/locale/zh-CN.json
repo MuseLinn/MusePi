@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "CodeBuddy 子代理",
+		"description": "通过既有 task 工具运行原生 CodeBuddy CLI。"
+	}
+}

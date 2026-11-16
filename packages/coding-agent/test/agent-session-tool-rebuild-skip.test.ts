@@ -1280,6 +1280,36 @@ These tools became available:
 		expect(delivered[0]).toContain("xd://mcp__nucleus_search");
 	});
 
+	it("reports an xd:// mount delta to the UI as a device count and keeps names for the model", async () => {
+		const { session, contexts } = newSession(async toolNames => `tools:${toolNames.join(",")}`, {
+			xdev: createTestXdevState(),
+			responses: [{ content: ["ok"] }],
+		});
+		const notices: string[] = [];
+		session.subscribe(event => {
+			if (event.type === "notice" && event.source === "xdev") notices.push(event.message);
+		});
+		const search = createMcpCustomTool("mcp__nucleus_search", "nucleus", "search", "Search nucleus");
+		const fetch = createMcpCustomTool("mcp__nucleus_fetch", "nucleus", "fetch", "Fetch nucleus");
+
+		// A large MCP server contributes hundreds of devices; the UI notice counts
+		// them instead of filling the toast with names.
+		await session.refreshMCPTools([search, fetch]);
+		expect(notices).toEqual(["xd://: mounted 2 devices"]);
+		expect(notices[0]).not.toContain("mcp__");
+
+		// The model-facing notice still names every device it must be able to read.
+		await session.prompt("hello");
+		const delivered = mountNoticesIn(contexts[0]);
+		expect(delivered).toHaveLength(1);
+		expect(delivered[0]).toContain("xd://mcp__nucleus_search");
+		expect(delivered[0]).toContain("xd://mcp__nucleus_fetch");
+
+		await session.refreshMCPTools([search]);
+		expect(notices).toEqual(["xd://: mounted 2 devices", "xd://: unmounted 1 device"]);
+		expect(notices[1]).not.toContain("mcp__");
+	});
+
 	it("does not register write while rolling back a direct-tool rebuild failure", async () => {
 		let failRebuild = true;
 		const xdevState = createTestXdevState();

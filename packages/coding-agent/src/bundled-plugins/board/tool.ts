@@ -10,15 +10,28 @@ import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
 import type { ExtensionWidget } from "../../extensibility/extensions/widget-types";
-import { widgetTonesWith, widgetTypesWith } from "../visuals/tool";
+import { widgetTonesWith, widgetTypesWith } from "./catalog";
 import boardDescription from "./prompt.md" with { type: "text" };
+import { listCardResources, ResourceScopeError, readCardText, writeCardText } from "./resources";
 import { readBoards, validateBoards, writeBoards } from "./store";
 
 const boardSchema = type({
-	action: type("string").describe("list | get | save | schema"),
-	"id?": type("string").describe("Board id (get/save targets)"),
+	action: type("string").describe("list | get | save | schema | resource.list | resource.read | resource.write"),
+	"id?": type("string").describe("Board id (get/save/resource targets)"),
 	"board?": type("object").describe("Full board object {id,title,widgets} for save"),
+	"widgetId?": type("string").describe("Card id, for resource.list / resource.read"),
+	"resourcePath?": type("string").describe("Card-relative file path, for resource.read / resource.write"),
+	"resourceText?": type("string").describe("Text to write, for resource.write"),
+	"expectedRev?": type("number").describe(
+		"Revision you last read; save refuses when the board moved on (another writer won)",
+	),
 });
+
+/** A scope refusal is the model's mistake to read, not a stack trace. */
+function scopeError(error: unknown): string {
+	if (error instanceof ResourceScopeError) return error.message;
+	return error instanceof Error ? error.message : String(error);
+}
 
 /** What the board validator reads from the session context: plugin types. */
 type BoardToolContext = {
@@ -43,7 +56,7 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 		{ caption: "List all boards", call: { action: "list" } },
 		{ caption: "Query the widget schema", call: { action: "schema" } },
 		{
-			caption: "Add a pomodoro card to a board",
+			caption: "Put a generated block on a board",
 			call: {
 				action: "save",
 				id: "hello",
@@ -51,7 +64,13 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 					id: "hello",
 					title: "一块活的看板",
 					widgets: [
-						{ id: "w1", type: "pomodoro", title: "番茄钟", data: {}, pos: { x: 0, y: 0, w: 300, h: 300 } },
+						{
+							id: "w1",
+							type: "block",
+							title: "迁移顺序",
+							data: { source: 'root = Stack([Steps([{title: "影子写", status: "done"}, {title: "切主"}])])' },
+							pos: { x: 0, y: 0, w: 452, h: 200 },
+						},
 					],
 				},
 			},
@@ -147,6 +166,61 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 					details: { types, tones },
 				};
 			}
+			case "resource.list": {
+				const boardId = typeof params.id === "string" ? params.id : "";
+				const widgetId = typeof params.widgetId === "string" ? params.widgetId : "";
+				if (!boardId || !widgetId) {
+					return { content: [{ type: "text", text: "board: resource.list needs id + widgetId" }], isError: true };
+				}
+				try {
+					const entries = listCardResources(boardId, widgetId);
+					const text = entries.length
+						? entries
+								.map(
+									entry =>
+										`${entry.kind === "dir" ? "dir " : "file"} ${entry.path}${entry.kind === "file" ? ` (${entry.bytes}B)` : ""}`,
+								)
+								.join("\n")
+						: "（这张卡没有资源文件）";
+					return { content: [{ type: "text", text }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `board: ${scopeError(error)}` }], isError: true };
+				}
+			}
+			case "resource.read": {
+				const boardId = typeof params.id === "string" ? params.id : "";
+				const widgetId = typeof params.widgetId === "string" ? params.widgetId : "";
+				const resourcePath = typeof params.resourcePath === "string" ? params.resourcePath : "";
+				if (!boardId || !widgetId || !resourcePath) {
+					return {
+						content: [{ type: "text", text: "board: resource.read needs id + widgetId + resourcePath" }],
+						isError: true,
+					};
+				}
+				try {
+					return { content: [{ type: "text", text: readCardText(boardId, widgetId, resourcePath) }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `board: ${scopeError(error)}` }], isError: true };
+				}
+			}
+			case "resource.write": {
+				const boardId = typeof params.id === "string" ? params.id : "";
+				const widgetId = typeof params.widgetId === "string" ? params.widgetId : "";
+				const resourcePath = typeof params.resourcePath === "string" ? params.resourcePath : "";
+				const resourceText = typeof params.resourceText === "string" ? params.resourceText : "";
+				if (!boardId || !widgetId || !resourcePath) {
+					return {
+						content: [{ type: "text", text: "board: resource.write needs id + widgetId + resourcePath" }],
+						isError: true,
+					};
+				}
+				try {
+					const bytes = writeCardText(boardId, widgetId, resourcePath, resourceText);
+					return { content: [{ type: "text", text: `已写入 ${resourcePath}（${bytes}B）` }] };
+				} catch (error) {
+					return { content: [{ type: "text", text: `board: ${scopeError(error)}` }], isError: true };
+				}
+			}
 			case "save": {
 				// `builtin` is a system flag set only by the seed code — strip
 				// any agent-supplied copy so a model can't create a board that
@@ -174,9 +248,26 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 						isError: true,
 					};
 				}
+				// A stale regeneration must not overwrite a newer one. The board
+				// carries a revision; a caller that read it passes it back, and a
+				// mismatch means someone else wrote in between.
+				const storedRev = (existing as unknown as { rev?: unknown } | undefined)?.rev;
+				const currentRev = typeof storedRev === "number" ? storedRev : 0;
+				if (typeof params.expectedRev === "number" && params.expectedRev !== currentRev) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `board: "${id}" changed since you read it (rev ${params.expectedRev} → ${currentRev}) — read it again and re-apply your edit`,
+							},
+						],
+						isError: true,
+					};
+				}
+				const next = { ...(board as Record<string, unknown>), rev: currentRev + 1 } as unknown;
 				const idx = current.findIndex(b => b.id === id);
-				if (idx >= 0) current[idx] = board as never;
-				else current.push(board as never);
+				if (idx >= 0) current[idx] = next as never;
+				else current.push(next as never);
 				writeBoards(current);
 				return {
 					content: [

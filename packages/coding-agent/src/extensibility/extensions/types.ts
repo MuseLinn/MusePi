@@ -532,7 +532,11 @@ export interface ExtensionContext {
 	/** Whether the host's composer holds unsubmitted text (terminal hosts only). */
 	hasDraftInput?: () => boolean;
 	/** Run one ephemeral side-channel turn over the current conversation. */
-	runEphemeralTurn?: (options: { promptText: string; signal?: AbortSignal }) => Promise<{ replyText: string }>;
+	runEphemeralTurn?: (options: {
+		promptText: string;
+		signal?: AbortSignal;
+		modelSource?: "sideChannel" | "session";
+	}) => Promise<{ replyText: string }>;
 	/** Live goal state, when the host runs goal mode. */
 	getGoalModeState?: () => GoalModeState | undefined;
 	/** Live todo phases, used as recap anchors. */
@@ -541,6 +545,9 @@ export interface ExtensionContext {
 	recordRecap?: (reply: string) => void;
 	/** Present an idle recap; formatting and truncation belong to the host. */
 	showRecap?: (reply: string) => void;
+	/** Offer a predicted next message in the host's composer. Hosts without a
+	 *  composer (print/RPC/TUI) omit it, and the suggestion path then stays idle. */
+	showSuggestion?: (suggestion: string) => void;
 	/** True when no turn, compaction, queued message, or background delivery is pending. */
 	isSettled?: () => boolean;
 	/** Append one durable custom entry to the session journal. */
@@ -2722,11 +2729,16 @@ export interface ExtensionContextActions {
 	compact: (instructionsOrOptions?: string | CompactOptions) => Promise<void>;
 	runIdleCompaction?: () => Promise<void>;
 	hasDraftInput?: () => boolean;
-	runEphemeralTurn?: (options: { promptText: string; signal?: AbortSignal }) => Promise<{ replyText: string }>;
+	runEphemeralTurn?: (options: {
+		promptText: string;
+		signal?: AbortSignal;
+		modelSource?: "sideChannel" | "session";
+	}) => Promise<{ replyText: string }>;
 	getGoalModeState?: () => GoalModeState | undefined;
 	getTodoPhases?: () => TodoPhase[];
 	recordRecap?: (reply: string) => void;
 	showRecap?: (reply: string) => void;
+	showSuggestion?: (suggestion: string) => void;
 	isSettled?: () => boolean;
 	getSystemPrompt: () => string[];
 }

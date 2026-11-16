@@ -179,8 +179,14 @@ const MIME: Record<string, string> = {
 };
 
 function safeDistPath(distDir: string, urlPath: string): string {
-	const resolved = path.normalize(path.join(distDir, decodeURIComponent(urlPath)));
-	if (!resolved.startsWith(distDir)) return path.join(distDir, "index.html");
+	const root = path.normalize(distDir);
+	const resolved = path.normalize(path.join(root, decodeURIComponent(urlPath)));
+	// Compare by relative path, not string prefix: a dist dir spelled with
+	// forward slashes (env-configured) normalizes to backslashes on Windows, and
+	// a prefix test then rejects every asset and answers index.html for all of
+	// them — module scripts fail with a MIME error.
+	const relative = path.relative(root, resolved);
+	if (relative.startsWith("..") || path.isAbsolute(relative)) return path.join(root, "index.html");
 	return resolved;
 }
 

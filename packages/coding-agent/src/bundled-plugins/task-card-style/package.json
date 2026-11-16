@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "Swarm 任务卡片",
-		"description": "多代理任务卡片的成员网格、头像、进度条与可展开输出。",
+		"label": "Swarm Task Card",
+		"description": "The multi-agent task card: member grid, avatars, progress bars and expandable output.",
 		"icon": "🐝",
 		"extensions": ["./index.ts"]
 	}

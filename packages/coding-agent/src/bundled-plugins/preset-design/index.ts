@@ -34,6 +34,5 @@ export const designPersonaSections = [
 
 /** Cordis entry: register the design sections on the fiber that owns them. */
 export function apply(ctx: ExtensionAPI): void {
-	ctx.setLabel("MusePi Design Persona");
 	for (const section of designPersonaSections) ctx.prompts.register(section);
 }

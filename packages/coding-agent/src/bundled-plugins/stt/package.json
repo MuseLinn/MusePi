@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "语音输入（STT）",
-		"description": "本地 Whisper、SenseVoice 与 Parakeet 语音转写，首次使用时下载模型。",
+		"label": "Voice Input (STT)",
+		"description": "Local Whisper, SenseVoice and Parakeet transcription; models download on first use.",
 		"icon": "🎙️",
 		"extensions": ["./index.ts"],
 		"components": [

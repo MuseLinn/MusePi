@@ -762,6 +762,29 @@ export function getFastembedRuntimeDir(): string {
 	return dirs.rootSubdir(path.join("cache", "fastembed-runtime"), "cache");
 }
 
+/**
+ * Get the compiled extension-component cache directory
+ * (~/.musepi/cache/extension-artifacts). Honors
+ * `MUSEPI_EXTENSION_ARTIFACT_CACHE` so tests can isolate it.
+ */
+export function getExtensionArtifactCacheDir(): string {
+	const override = process.env.MUSEPI_EXTENSION_ARTIFACT_CACHE;
+	if (override) return override;
+	return dirs.rootSubdir(path.join("cache", "extension-artifacts"), "cache");
+}
+
+/**
+ * Get the port file of the loopback extension-artifact origin
+ * (~/.musepi/run/artifacts.port). The port is reused across daemons so a
+ * module URL survives a restart and the browser can revalidate it with its
+ * ETag instead of re-downloading. Honors `MUSEPI_ARTIFACT_PORT_FILE`.
+ */
+export function getExtensionArtifactPortFile(): string {
+	const override = process.env.MUSEPI_ARTIFACT_PORT_FILE;
+	if (override) return override;
+	return dirs.rootSubdir(path.join("run", "artifacts.port"), "state");
+}
+
 /** Get the natives directory (~/.musepi/natives). */
 export function getNativesDir(): string {
 	return dirs.rootSubdir("natives", "cache");

@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "工具卡片渲染器",
-		"description": "内置工具在图形界面中的第一方卡片渲染器集合。",
+		"label": "Tool Card Renderers",
+		"description": "The first-party card renderers for built-in tools in the GUI.",
 		"icon": "🧩",
 		"extensions": ["./index.ts"],
 		"host": {

@@ -8,6 +8,4 @@ export function apply(ctx: ExtensionAPI): void {
 	stt(ctx);
 }
 
-function stt(ctx: ExtensionAPI): void {
-	ctx.setLabel("语音输入（STT）");
-}
+function stt(ctx: ExtensionAPI): void {}

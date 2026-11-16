@@ -6,7 +6,7 @@ export const collab = {
 	"collab.unsupportedRelayUrlSchemeWithScheme": "Unsupported relay URL scheme: {scheme}",
 	"collab.relayLinkMustWss": "Relay link must be wss:// (plain ws:// is only allowed for localhost)",
 	"collab.invalidCollabLinkWithUrl": "Invalid remote access link: {url}",
-	"collab.collabLinkMustContain": "Remote access link must contain a /r/<roomId> path",
+	"collab.collabLinkMustContain": "That link isn't valid — copy it again from your computer",
 	"collab.collabLinkMissingKey": "Remote access link is missing the <key> part",
 	"collab.collabLinkKeyMust": "Remote access link key must be 32 (view) or 48 (full) base64url bytes",
 	"collab.browserCryptoUnavailable.info":

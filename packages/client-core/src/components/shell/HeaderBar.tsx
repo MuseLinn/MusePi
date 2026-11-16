@@ -8,6 +8,7 @@ import {
 	LogOut,
 	MessageSquare,
 	Package,
+	Palette,
 	PanelRight,
 	Settings,
 	SquarePen,
@@ -175,6 +176,28 @@ export function HeaderBar({
 	// sheet, so the native path is opt-in on the bridge being present.
 	const nativeSessions = isHarmonyShell() && typeof window.harmonyNative?.openSessionsSheet === "function";
 	const [nativeSheetOpen, setNativeSheetOpen] = useState(false);
+	/** Wide-shell appearance popover: theme, accent and language share one
+	 *  button instead of three separate controls competing with the panels. */
+	const [appearanceOpen, setAppearanceOpen] = useState(false);
+
+	/** One "open the session list" path for the title and the native side
+	 *  rail: on HarmonyOS the list is a native sheet, elsewhere the web sheet. */
+	const openSessionList = useCallback((): void => {
+		if (nativeSessions && sessions != null) {
+			window.harmonyNative?.openSessionsSheet?.(nativeSessionPayload(sessions, focusedSessionId));
+			setNativeSheetOpen(true);
+			return;
+		}
+		setSheetOpen(open => !open);
+	}, [focusedSessionId, nativeSessions, sessions]);
+
+	// The native side rail (unfolded foldable / landscape) has no session list
+	// of its own; it asks this header to run the same open path as the title.
+	useEffect(() => {
+		const open = (): void => openSessionList();
+		window.addEventListener("musepi:open-sessions", open);
+		return () => window.removeEventListener("musepi:open-sessions", open);
+	}, [openSessionList]);
 
 	useEffect(() => {
 		if (!nativeSessions || !nativeSheetOpen || sessions == null) return;
@@ -242,14 +265,7 @@ export function HeaderBar({
 						ref={titleBtnMorphRef}
 						data-morph-id={titleMorphId ?? undefined}
 						className={`sh-title sh-title-btn${sheetOpen || nativeSheetOpen ? " sh-title--open" : ""}`}
-						onClick={() => {
-							if (nativeSessions && sessions != null) {
-								window.harmonyNative?.openSessionsSheet?.(nativeSessionPayload(sessions, focusedSessionId));
-								setNativeSheetOpen(true);
-								return;
-							}
-							setSheetOpen(open => !open);
-						}}
+						onClick={openSessionList}
 						title={t("general.sessions")}
 					>
 						{title}
@@ -401,9 +417,41 @@ export function HeaderBar({
 					)}
 				{!mobile && !narrow && (
 					<>
-						<ThemeToggle />
-						<AccentToggle />
-						<LanguageToggle />
+						<button
+							type="button"
+							className={appearanceOpen ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
+							onClick={() => setAppearanceOpen(open => !open)}
+							title={t("settings.appearance")}
+							aria-label={t("settings.appearance")}
+							aria-expanded={appearanceOpen}
+						>
+							<Palette size={14} />
+						</button>
+						{appearanceOpen &&
+							createPortal(
+								<>
+									<div className="sh-switcher-overlay" onClick={() => setAppearanceOpen(false)} />
+									<div
+										className="sh-switcher-pop sh-appearance-pop"
+										role="dialog"
+										aria-label={t("settings.appearance")}
+									>
+										<div className="sh-appearance-row">
+											<span>{t("settings.theme")}</span>
+											<ThemeToggle />
+										</div>
+										<div className="sh-appearance-row">
+											<span>{t("settings.accent")}</span>
+											<AccentToggle />
+										</div>
+										<div className="sh-appearance-row">
+											<span>{t("settings.language")}</span>
+											<LanguageToggle />
+										</div>
+									</div>
+								</>,
+								document.body,
+							)}
 						<HostManager currentLink={currentLink} phase={phase} onSwitchTo={onSwitchTo} onLeave={onLeave} />
 					</>
 				)}

@@ -125,17 +125,24 @@ export class FileService implements DaemonService {
 
 	/** RPC fs.readBytes：GUI 文件预览的二进制安全读取（base64 + mime +
 	 *  size）。8 MiB 默认帽、32 MiB 硬帽——预览面向小文件，大文件走 OS
-	 *  打开。 */
-	readBytes(params: { path?: string; maxBytes?: number }): Record<string, unknown> {
+	 *  打开。
+	 *
+	 *  绝对路径按原样读取（桌面 FilePane 拼好 `${cwd}/${entry.path}`）；
+	 *  相对路径按 `cwd`、缺省时按工作区根解析——workspace.tree 的 entry.path
+	 *  是相对会话 cwd 的，浏览器主机视图的文件面板没有别的基准可用。 */
+	readBytes(params: { path?: string; cwd?: string; maxBytes?: number }): Record<string, unknown> {
 		const p = params ?? {};
 		if (!p.path) return { error: "missing path" };
+		const base = p.cwd || this.#deps.fallbackCwd();
+		const abs = path.isAbsolute(p.path) ? p.path : base ? resolveInCwd(base, p.path) : null;
+		if (!abs) return { error: "path escapes workspace" };
 		try {
-			const st = fs.statSync(p.path);
+			const st = fs.statSync(abs);
 			if (!st.isFile()) return { error: "not a file" };
 			const max = Math.min(Math.max(p.maxBytes ?? 8 * 1024 * 1024, 1), 32 * 1024 * 1024);
 			if (st.size > max) return { error: `file too large (${st.size} bytes)` };
-			const buf = fs.readFileSync(p.path);
-			return { base64: buf.toString("base64"), size: buf.length, mime: mimeForPath(p.path) };
+			const buf = fs.readFileSync(abs);
+			return { base64: buf.toString("base64"), size: buf.length, mime: mimeForPath(abs) };
 		} catch (err) {
 			return { error: err instanceof Error ? err.message : String(err) };
 		}

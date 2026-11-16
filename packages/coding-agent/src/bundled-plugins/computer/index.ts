@@ -14,6 +14,4 @@ export function apply(ctx: ExtensionAPI): void {
 	});
 }
 
-function computer(ctx: ExtensionAPI): void {
-	ctx.setLabel("电脑操作");
-}
+function computer(ctx: ExtensionAPI): void {}

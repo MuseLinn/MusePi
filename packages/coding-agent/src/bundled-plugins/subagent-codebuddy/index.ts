@@ -49,7 +49,6 @@ export function createCodeBuddyExecutor(
 }
 
 export function apply(ctx: ExtensionAPI): void {
-	ctx.setLabel("实验性 CodeBuddy 子智能体");
 	registerExternalExecutableProbe(ctx, "codebuddy");
 	const executor = ctx.config.getAll().then(config => createCodeBuddyExecutor(config));
 	ctx.subagents.register({

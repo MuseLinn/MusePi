@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "终端",
+		"description": "为 TUI 与图形界面终端提供 bun-pty、node-pty 后端及自动回退。"
+	}
+}

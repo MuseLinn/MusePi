@@ -156,6 +156,46 @@ describe("readExtensionPluginMeta", () => {
 		expect(meta!.fields.map(f => f.key)).toEqual(["flag"]);
 	});
 
+	test("reads locale/<tag>.json next to the manifest into per-language display text", async () => {
+		const entry = await writeExtension({
+			"index.ts": "export default {}",
+			"package.json": JSON.stringify({
+				musepi: { label: "Board", description: "Kanban cards", extensions: ["index.ts"] },
+			}),
+			"locale/zh-CN.json": JSON.stringify({ meta: { title: "看板", description: "看板卡片" } }),
+			"locale/ja.json": JSON.stringify({ meta: { title: "ボード" } }),
+		});
+		const meta = await readExtensionPluginMeta(entry);
+		// The manifest label is the `en` fallback; files add the other languages.
+		expect(meta?.labelText).toEqual({ en: "Board", "zh-CN": "看板", ja: "ボード" });
+		expect(meta?.descriptionText).toEqual({ en: "Kanban cards", "zh-CN": "看板卡片" });
+	});
+
+	test("omits the localized maps entirely when the package ships no locale files", async () => {
+		const entry = await writeExtension({
+			"index.ts": "export default {}",
+			"package.json": JSON.stringify({ musepi: { label: "Board" } }),
+		});
+		const meta = await readExtensionPluginMeta(entry);
+		// No files, no redundant `{ en }` map: readers fall back to `label`.
+		expect(meta?.label).toBe("Board");
+		expect(meta?.labelText).toBeUndefined();
+	});
+
+	test("skips a malformed locale file instead of failing the whole registration", async () => {
+		const entry = await writeExtension({
+			"index.ts": "export default {}",
+			"package.json": JSON.stringify({ musepi: { label: "Board" } }),
+			"locale/zh-CN.json": JSON.stringify({ meta: { title: "看板" } }),
+			"locale/broken.json": "{ not json",
+			// A file name that is not a language tag at all (one letter).
+			"locale/x.json": JSON.stringify({ meta: { title: "nope" } }),
+			"locale/readme.txt": "ignored",
+		});
+		const meta = await readExtensionPluginMeta(entry);
+		expect(meta?.labelText).toEqual({ en: "Board", "zh-CN": "看板" });
+	});
+
 	test("still reads the legacy omp block (old upstream extensions keep working)", async () => {
 		const entry = await writeExtension({
 			"index.ts": "export default {}",

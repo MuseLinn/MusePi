@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "Codex 子代理",
+		"description": "通过既有 task 工具与官方 app-server 协议运行 Codex。"
+	}
+}

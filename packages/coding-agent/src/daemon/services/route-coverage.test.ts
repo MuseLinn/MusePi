@@ -39,6 +39,7 @@ import { PresetsService } from "./presets-service";
 import { ProvidersService } from "./providers-service";
 import { HostServices } from "./registry";
 import { RemoteService } from "./remote-service";
+import { ResourcesService } from "./resources-service";
 import { ScheduleService } from "./schedule-service";
 import { SessionInspectionService } from "./session-inspection-service";
 import { SessionPresenceService } from "./session-presence-service";
@@ -94,6 +95,8 @@ function buildRegistry(): HostServices {
 	);
 	// LivenessService：无依赖，ping/system.ping 共用同一应答。
 	services.register(new LivenessService());
+	// ResourcesService：无依赖，只认领 system.resources（本测试不采样）。
+	services.register(new ResourcesService());
 	// DiagnosticsService：只认领 system.services，快照源在本测试里不触盘。
 	services.register(
 		new DiagnosticsService({

@@ -567,6 +567,7 @@ export class ExtensionRunner {
 	#getTodoPhasesFn?: ExtensionContextActions["getTodoPhases"];
 	#recordRecapFn?: ExtensionContextActions["recordRecap"];
 	#showRecapFn?: ExtensionContextActions["showRecap"];
+	#showSuggestionFn?: ExtensionContextActions["showSuggestion"];
 	#isSettledFn?: ExtensionContextActions["isSettled"];
 	#getSystemPromptFn: () => string[] = () => [];
 	#getAsyncJobSnapshotFn: () => AsyncJobSnapshot | null = () => null;
@@ -943,6 +944,7 @@ export class ExtensionRunner {
 		this.#getTodoPhasesFn = contextActions.getTodoPhases;
 		this.#recordRecapFn = contextActions.recordRecap;
 		this.#showRecapFn = contextActions.showRecap;
+		this.#showSuggestionFn = contextActions.showSuggestion;
 		this.#isSettledFn = contextActions.isSettled;
 
 		// Command context actions (optional, only for interactive mode)
@@ -1746,6 +1748,7 @@ export class ExtensionRunner {
 			getTodoPhases: this.#getTodoPhasesFn,
 			recordRecap: this.#recordRecapFn,
 			showRecap: this.#showRecapFn,
+			showSuggestion: this.#showSuggestionFn,
 			isSettled: this.#isSettledFn,
 			appendCustomEntry: (customType, data) => this.sessionManager.appendCustomEntry(customType, data),
 			ensureSessionOnDisk: () => this.sessionManager.ensureOnDisk(),

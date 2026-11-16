@@ -23,8 +23,8 @@ import type {
 	ToolApprovalRequest,
 	SessionEntry as WireSessionEntry,
 } from "@musepi/pi-wire";
+import { WIDGET_TYPES } from "../bundled-plugins/board/catalog.js";
 import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../bundled-plugins/board/store.js";
-import { WIDGET_TYPES } from "../bundled-plugins/visuals/tool.js";
 import {
 	computeNextRun,
 	loadCronRuns,
@@ -1031,15 +1031,20 @@ export class CollabHost {
 				const { cwd, maxDepth, perDirLimit } = p as { cwd?: string; maxDepth?: number; perDirLimit?: number };
 				return await this.#workspaceTree(cwd, { maxDepth, perDirLimit });
 			}
-			case "fs.read": {
+			// `fs.readBytes` is the binary preview read — the same name and shape
+			// the daemon serves. `fs.read` keeps answering bytes here for guests
+			// shipped before that name existed; the daemon's `fs.read` is UTF-8
+			// text, so no client may treat the two transports as one contract.
+			case "fs.read":
+			case "fs.readBytes": {
 				const { path: rel, maxBytes } = p as { path?: string; maxBytes?: number };
-				if (typeof rel !== "string") throw new Error("fs.read: path required");
+				if (typeof rel !== "string") throw new Error(`${method}: path required`);
 				const abs = resolveInCwd(this.#ctx.sessionManager.getCwd(), rel);
-				if (!abs) throw new Error("fs.read: path escapes workspace");
+				if (!abs) throw new Error(`${method}: path escapes workspace`);
 				const stat = await fs.stat(abs);
-				if (!stat.isFile()) throw new Error("fs.read: not a file");
+				if (!stat.isFile()) throw new Error(`${method}: not a file`);
 				const cap = Math.max(0, Math.min(maxBytes ?? 8 * 1024 * 1024, 32 * 1024 * 1024));
-				if (stat.size > cap) throw new Error(`fs.read: file too large (${stat.size} bytes)`);
+				if (stat.size > cap) throw new Error(`${method}: file too large (${stat.size} bytes)`);
 				const buf = await fs.readFile(abs);
 				return { base64: buf.toString("base64"), size: buf.byteLength, mime: mimeForPath(abs) };
 			}

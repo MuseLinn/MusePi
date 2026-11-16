@@ -1,0 +1,71 @@
+/* 会话信息卡「资源」分区（chat.session-info.resources 插件）— 液态玻璃卡片
+ * 内的读数行，材质与排版复用宿主主题令牌（--color-* / --radius-* / --spring
+ * 由 :root 提供）。卡片自己的 .gui-session-info-* 规则由宿主 CSS 拥有，本文件
+ * 只用自己的 mpres- 命名空间，避免两处对同一元素下不同的尺寸。 */
+
+.mpres-section {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+/* 与卡片其它分区的标题同一层级：小号、加粗、弱色。 */
+.mpres-title {
+	font-size: 10.5px;
+	font-weight: 650;
+	letter-spacing: 0.02em;
+	color: var(--color-text-faint);
+}
+
+/* 一行三段：固定宽度的标签、吃掉剩余宽度的条、右对齐的等宽数值。 */
+.mpres-row {
+	display: grid;
+	grid-template-columns: 52px minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	font-size: 11px;
+	line-height: 15px;
+	color: var(--color-text-muted);
+}
+
+.mpres-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* 细条：凹陷的轨道 + 强调色填充，宽度由组件写 inline style。 */
+.mpres-track {
+	display: block;
+	height: 4px;
+	overflow: hidden;
+	border-radius: var(--radius-full, 9999px);
+	background: var(--color-surface-sunken);
+	box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.mpres-fill {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--color-accent);
+	transition: width 320ms var(--spring, ease-out);
+}
+
+.mpres-value {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+/* 2s 一次采样，条长只在真变化时跳动；关掉动画的用户不该看到它滑动。 */
+.gui-motion-off .mpres-fill {
+	transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mpres-fill {
+		transition: none;
+	}
+}

@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "设计/素材简报",
-		"description": "内置设计体系与素材策略的提示词简报（按当前选择渲染）。",
+		"label": "Design and Asset Briefs",
+		"description": "Prompt briefs for the built-in design systems and asset policy, rendered for the current selection.",
 		"icon": "◈",
 		"extensions": ["./index.ts"]
 	}

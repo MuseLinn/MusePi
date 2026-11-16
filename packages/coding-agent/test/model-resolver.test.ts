@@ -17,6 +17,7 @@ import {
 	resolveAllowedModels,
 	resolveCliModel,
 	resolveExplicitModelRole,
+	resolveModelFromSettings,
 	resolveModelFromString,
 	resolveModelOverride,
 	resolveModelRoleValue,
@@ -2292,5 +2293,80 @@ describe("effort-tier variant aliases", () => {
 	test("consumed X-thinking twins resolve via the grammar fallback", () => {
 		expect(parseModelPattern("venice/kimi-k2-thinking", variantModels).model?.id).toBe("kimi-k2");
 		expect(parseModelPattern("kimi-k2-thinking", variantModels).model?.id).toBe("kimi-k2");
+	});
+});
+
+describe("ambiguous and downgraded model selection", () => {
+	const sharedIdModels: Model<"anthropic-messages">[] = [
+		buildModel({
+			id: "gpt-4o",
+			name: "GPT-4o",
+			api: "anthropic-messages",
+			provider: "openai",
+			baseUrl: "https://api.openai.com",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
+			contextWindow: 128000,
+			maxTokens: 4096,
+		}),
+		buildModel({
+			id: "gpt-4o",
+			name: "GPT-4o (Azure)",
+			api: "anthropic-messages",
+			provider: "azure",
+			baseUrl: "https://azure.example.com",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 2, output: 3, cacheRead: 0.2, cacheWrite: 2 },
+			contextWindow: 128000,
+			maxTokens: 4096,
+		}),
+	];
+
+	test("names the chosen provider and the alternatives for a bare id", () => {
+		const result = parseModelPattern("gpt-4o", sharedIdModels);
+		expect(result.model).toBeDefined();
+		expect(result.warning).toContain("is served by multiple providers");
+		expect(result.warning).toContain("openai/gpt-4o");
+		expect(result.warning).toContain("azure/gpt-4o");
+	});
+
+	test("prefers the caller's current provider instead of usage order", () => {
+		const result = parseModelPattern("gpt-4o", sharedIdModels, { preferredProvider: "azure" });
+		expect(result.model?.provider).toBe("azure");
+		expect(result.warning).toBeUndefined();
+	});
+
+	test("does not silently downgrade a missing id to a longer sibling", () => {
+		const onlyMini: Model<"anthropic-messages">[] = [
+			buildModel({
+				id: "gpt-5.4-mini",
+				name: "GPT-5.4 mini",
+				api: "anthropic-messages",
+				provider: "openai",
+				baseUrl: "https://api.openai.com",
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 128000,
+				maxTokens: 4096,
+			}),
+		];
+		const result = parseModelPattern("gpt-5.4", onlyMini);
+		expect(result.model).toBeUndefined();
+		expect(result.warning).toContain('No model matches "gpt-5.4"');
+		expect(result.warning).toContain("openai/gpt-5.4-mini");
+	});
+
+	test("keeps mid-id shorthand resolution without a warning", () => {
+		const result = parseModelPattern("sonnet", mockModels);
+		expect(result.model?.id).toBe("claude-sonnet-4-5");
+		expect(result.warning).toBeUndefined();
+	});
+
+	test("a configured bare role that misses does not become the first available model", () => {
+		const settings = Settings.isolated({ modelRoles: { default: "claude-9-opus" } });
+		expect(resolveModelFromSettings({ settings, availableModels: mockModels })).toBeUndefined();
 	});
 });

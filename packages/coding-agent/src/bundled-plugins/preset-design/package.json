@@ -7,7 +7,7 @@
 	"type": "module",
 	"musepi": {
 		"label": "MusePi Design Persona",
-		"description": "The design preset's role, workflow, brief, artifact, and boundary prompt sections.",
+		"description": "The design preset's role, workflow, brief, artifact and boundary prompt sections.",
 		"icon": "🎨",
 		"presetOnly": true,
 		"extensions": ["./index.ts"]

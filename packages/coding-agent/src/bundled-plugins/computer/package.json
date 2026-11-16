@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "电脑操作",
-		"description": "通过截图、输入与无障碍树操作宿主机桌面。",
+		"label": "Computer Use",
+		"description": "Operate the host desktop through screenshots, input and the accessibility tree.",
 		"icon": "🖱️",
 		"extensions": ["./index.ts"],
 		"components": [{ "id": "computer", "entry": "./computer-tool.ts", "description": "电脑操作工具。" }],

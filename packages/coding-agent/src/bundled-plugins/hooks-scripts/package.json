@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "目录 Hook 脚本",
-		"description": "把 <root>/pre|post 下的命令钩子声明为预设组合里的一行：pre/<tool> 映射 PreToolUse，post/<tool> 映射 PostToolUse，文件名为工具名（* 表示全部）。",
+		"label": "Folder Hook Scripts",
+		"description": "Declare command hooks under <root>/pre|post as one line of a preset: pre/<tool> maps PreToolUse, post/<tool> maps PostToolUse, and the file name is the tool name (* for every tool).",
 		"icon": "H",
 		"presetOnly": true,
 		"extensions": ["./index.ts"],

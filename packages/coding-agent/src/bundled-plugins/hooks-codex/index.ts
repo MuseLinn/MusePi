@@ -37,7 +37,6 @@ async function shellForHooks(): Promise<string> {
 }
 
 export async function apply(ctx: ExtensionAPI, rowConfig?: RowConfig): Promise<void> {
-	ctx.setLabel("Codex Hooks");
 	const configPath = text(rowConfig?.configPath);
 	if (configPath === "") return;
 	const file = path.resolve(ctx.cwd, configPath);

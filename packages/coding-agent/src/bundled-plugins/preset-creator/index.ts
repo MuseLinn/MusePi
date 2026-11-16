@@ -21,6 +21,5 @@ export const creatorPersonaSections = [{ name: "mode:creator:role", order: 25, t
 
 /** Cordis entry: register the persona section on the fiber that owns it. */
 export function apply(ctx: ExtensionAPI): void {
-	ctx.setLabel("MusePi Creator Persona");
 	for (const section of creatorPersonaSections) ctx.prompts.register(section);
 }

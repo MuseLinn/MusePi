@@ -4,7 +4,7 @@ export const collab = {
 	"collab.unsupportedRelayUrlSchemeWithScheme": "不支持的中继 URL 协议：{scheme}",
 	"collab.relayLinkMustWss": "中继链接必须为 wss://（纯 ws:// 仅允许用于 localhost）",
 	"collab.invalidCollabLinkWithUrl": "无效的远程访问链接：{url}",
-	"collab.collabLinkMustContain": "远程访问链接必须包含 /r/<房间ID> 路径",
+	"collab.collabLinkMustContain": "链接格式不正确，请从电脑端重新复制",
 	"collab.collabLinkMissingKey": "远程访问链接缺少 <key> 部分",
 	"collab.collabLinkKeyMust": "远程访问链接密钥必须为 32（只读）或 48（完整）个 base64url 字节",
 	"collab.browserCryptoUnavailable.info":
@@ -15,7 +15,7 @@ export const collab = {
 	"relay link must be wss:// (plain ws:// is only allowed for localhost)":
 		"relay link must be wss:// (plain ws:// is only allowed for localhost)",
 	"Invalid collab link: {url}": "无效的远程访问链接：{url}",
-	"Collab link must contain a /r/<roomId> path": "远程访问链接必须包含 /r/<房间ID> 路径",
+	"Collab link must contain a /r/<roomId> path": "链接格式不正确，请从电脑端重新复制",
 	"Collab link is missing the <key> part": "远程访问链接缺少 <key> 部分",
 	"Collab link key must be 32 (view) or 48 (full) base64url bytes":
 		"远程访问链接密钥必须为 32（只读）或 48（完整）个 base64url 字节",

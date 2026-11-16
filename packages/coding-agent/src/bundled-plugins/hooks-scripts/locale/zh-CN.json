@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "目录 Hook 脚本",
+		"description": "把 <root>/pre|post 下的命令钩子声明为预设组合里的一行：pre/<tool> 映射 PreToolUse，post/<tool> 映射 PostToolUse，文件名为工具名（* 表示全部）。"
+	}
+}

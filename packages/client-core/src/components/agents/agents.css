@@ -474,3 +474,26 @@
 .ag-panel[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
 	mask-image: linear-gradient(to top, transparent 0, #000 12px);
 }
+
+/* The rail had no title: rows began at the window edge, so the column read
+ * as an unlabelled list. One sticky line names it and counts the roster. */
+.ag-panel-head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 2px 4px 8px;
+	background: var(--glass-bg-strong, var(--bg));
+	backdrop-filter: blur(10px);
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.ag-panel-head small {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 500;
+	color: var(--fg-faint);
+}

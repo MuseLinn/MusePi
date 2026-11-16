@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "宿主集成",
-		"description": "xd:// 设备协议与自动化 QA 回报通道的提示词，以及记忆/MCP 指引与用户追加提示词等运行时上下文。",
+		"label": "Host Integrations",
+		"description": "Prompts for the xd:// device protocol and the automated-QA report channel, plus runtime context such as memory/MCP guidance and user-appended prompts.",
 		"icon": "🔌",
 		"extensions": ["./index.ts"],
 		"host": {

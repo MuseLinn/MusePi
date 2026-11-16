@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "浏览器",
-		"description": "脚本化 Chromium 自动化与应用内浏览器桥接。",
+		"label": "Browser",
+		"description": "Scripted Chromium automation and the in-app browser bridge.",
 		"icon": "🌐",
 		"extensions": ["./index.ts"],
 		"components": [

@@ -84,7 +84,6 @@ export async function scanSkillRoot(root: string): Promise<ExtensionSkillDeclara
 /** Second parameter: the preset row's config (see `mountPlugin`'s contract).
  *  `ctx.config` is the per-extension store, used only for an ambient mount. */
 export async function apply(ctx: ExtensionAPI, rowConfig?: { roots?: unknown }): Promise<void> {
-	ctx.setLabel("文件技能");
 	const all = rowConfig ?? ((await ctx.config.getAll()) as { roots?: unknown });
 	const roots = stringArrayFromRow(all.roots, "roots");
 	for (const raw of roots) {

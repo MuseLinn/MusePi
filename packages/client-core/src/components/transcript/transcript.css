@@ -4144,11 +4144,10 @@ a.tr-tool-search-title:hover {
 	top: -8px;
 	height: 60px;
 	z-index: 0;
-	background: linear-gradient(
-		to bottom,
-		var(--gui-card-surface-fade, var(--color-surface)) 62%,
-		transparent 100%
-	);
+	/* Opaque under the pill, fading at its lower edge. The fade token is a
+	 * translucent mix, so the row above the pill showed through and got cut
+	 * mid-glyph on the Harmony and Android shells. */
+	background: linear-gradient(to bottom, var(--color-surface) 62%, transparent 100%);
 	pointer-events: none;
 }
 
@@ -4699,5 +4698,113 @@ a.tr-tool-search-title:hover {
 @media (prefers-reduced-motion: reduce) {
 	.tr-fold-slot {
 		transition: none;
+	}
+}
+
+/* ---- label side follows the message side on phones ---------------------
+ * Below 640px a row is a vertical flex (label above body), so the mirrored
+ * desktop gutter placement no longer decides which edge the label hugs. The
+ * generic mobile rule forced every label left, while the later assistant rule
+ * kept agent labels right — HOST sat left above a right-hand bubble and AGENT
+ * sat right above left-hand text. These two rules put each name over its own
+ * message. */
+@media (max-width: 640px) {
+	.tr-row--user .tr-gutter {
+		text-align: right;
+		padding-right: 2px;
+	}
+
+	.tr-row--assistant .tr-gutter,
+	.tr-row--custom .tr-gutter {
+		text-align: left;
+		padding-right: 0;
+	}
+}
+
+.tr-actions {
+	gap: 2px;
+}
+
+.tr-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 3px 6px;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--fg-faint);
+	transition:
+		color 120ms ease-out,
+		background 120ms ease-out;
+}
+
+.tr-action:hover {
+	color: var(--fg);
+	background: color-mix(in oklab, var(--fg) 7%, transparent);
+	border-color: transparent;
+}
+
+.tr-action:active {
+	transform: scale(0.94);
+}
+
+@media (pointer: coarse) {
+	.tr-actions .tr-action {
+		min-width: 40px;
+		min-height: 40px;
+		padding: 0;
+		font-size: 12.5px;
+		background: transparent;
+		border-color: transparent;
+	}
+
+	.tr-actions .tr-action:active {
+		background: color-mix(in oklab, var(--fg) 9%, transparent);
+	}
+}
+
+/* Role names must stay on one line. The gutter is a 28–40px rail built for
+ * Latin initials; a CJK display name wrapped into a vertical stack at the
+ * bubble edge ("宿主" read top-to-bottom). One line, ellipsized when it does
+ * not fit — the full name stays in the cell's title. */
+.tr-row .tr-gutter {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+@media (min-width: 641px) {
+	.tr-row .tr-gutter {
+		font-size: 12px;
+		letter-spacing: 0.04em;
+	}
+}
+
+/* Touch shells drop the floating prompt reference. It is a desktop reading
+ * aid; on a phone the pinned pill overlaps the first visible row, and its
+ * fade band cut that row mid-glyph. The original message stays in the
+ * transcript, so nothing is lost. */
+.sh-has-tabbar .tr-sticky-user-slot {
+	display: none;
+}
+
+/* A one-to-one session hides the role gutter (empty string from the pane).
+ * Reclaim its column instead of leaving a 40px indent before every reply:
+ * the body moves into the first track and the action row follows it. Rows
+ * that carry a real sender badge (a forwarded collab prompt) keep the rail. */
+.tr-row > .tr-gutter:empty {
+	display: none;
+}
+
+@media (min-width: 641px) {
+	.tr-row--user:has(> .tr-gutter:empty),
+	.tr-row--assistant:has(> .tr-gutter:empty) {
+		grid-template-columns: minmax(0, 1fr) 28px;
+	}
+
+	.tr-row--assistant:has(> .tr-gutter:empty) .tr-body,
+	.tr-row--assistant:has(> .tr-gutter:empty) .tr-actions {
+		grid-column: 1;
 	}
 }

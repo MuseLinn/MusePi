@@ -4,6 +4,7 @@
 import type {
 	ConfigFieldDesc,
 	ConfigFieldError,
+	LocalizedPluginText,
 	PluginCompatibility,
 	PluginComponentDesc,
 	PluginConfigValues,
@@ -67,10 +68,16 @@ export interface Extension {
 	kind: ExtensionKind;
 	/** Extension name */
 	name: string;
-	/** Display name (may differ from name) */
+	/** Display name (may differ from name). The `en` fallback when the package
+	 *  ships locale files; readers resolve {@link displayNameI18n} for their own
+	 *  language first. */
 	displayName: string;
-	/** Description if available */
+	/** Description if available. Same fallback rule as {@link displayName}. */
 	description?: string;
+	/** Per-language display name from the package's `locale/<tag>.json`. */
+	displayNameI18n?: LocalizedPluginText;
+	/** Per-language description from the package's `locale/<tag>.json`. */
+	descriptionI18n?: LocalizedPluginText;
 	/** Manifest-declared experimental status. */
 	experimental?: boolean;
 	/** 清单声明的图标：emoji、文字字形或 http(s)/file URI。 */

@@ -1,0 +1,14 @@
+{
+	"name": "musepi-prompt-suggestion",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Predict the user's next message after a turn completes and offer it in the empty composer.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "↩",
+		"label": "Input Suggestions",
+		"description": "Offer a predicted next message in the empty input box; Tab or → accepts it.",
+		"extensions": ["./index.ts"]
+	}
+}

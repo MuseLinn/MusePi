@@ -5,6 +5,7 @@ export const composer = {
 	"composer.askAnythingCommands.info": "问任何事，/ 命令，@ 上下文…",
 	"composer.askAnythingShort": "问任何事…",
 	"composer.waitingSession": "等待会话…",
+	"composer.promptSuggestionAccept": "Tab",
 	"composer.submitResponse": "提交回复",
 	"composer.send": "发送（回车）",
 	"composer.workingActive": "工作中",
@@ -73,7 +74,7 @@ export const composer = {
 	"composer.attachmentExpiredReAdd": "附件已失效，请重新添加",
 	"composer.noWorkspaceAttachments": "会话还没有工作区，无法上传附件",
 	"composer.modelThinking": "模型与思考",
-	"composer.hostSessionModel": "宿主会话当前模型",
+	"composer.hostSessionModel": "电脑端会话当前模型",
 
 	// ── 附件提及（Kimi 桌面端对齐）：chip → 输入框 token，渲染为 accent pill + hover 预览 ──
 	"composer.mentionAttachment": "提及",
@@ -219,7 +220,7 @@ export const composer = {
 	"attachment expired re-add": "附件已失效，请重新添加",
 	"no workspace for attachments": "会话还没有工作区，无法上传附件",
 	"model & thinking": "模型与思考",
-	"host session model": "宿主会话当前模型",
+	"host session model": "电脑端会话当前模型",
 	"mention attachment": "提及",
 	"mention image {n}": "提及图片 {n}",
 	"mention file {n}": "提及文件 {n}",

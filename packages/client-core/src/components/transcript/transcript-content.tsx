@@ -875,7 +875,13 @@ export function RoundFoldHeader({
 		);
 	}
 	if (segments.length === 0 && fold.toolCount > 0) {
-		segments.push(<span key="tools">{t("transcript.roundToolsWithCount", { count: String(fold.toolCount) })}</span>);
+		segments.push(
+			<span key="tools">
+				{fold.toolCount === 1
+					? t("transcript.roundToolOne")
+					: t("transcript.roundToolsWithCount", { count: String(fold.toolCount) })}
+			</span>,
+		);
 	}
 	return (
 		<button

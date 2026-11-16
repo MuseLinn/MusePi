@@ -5,7 +5,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: ExtensionAPI): void {
-	ctx.setLabel("MusePi 压缩摘要");
 	ctx.slots.register({
 		slot: "panel.tab.compaction",
 		moduleUrl: "./ui/summary-panel.tsx",

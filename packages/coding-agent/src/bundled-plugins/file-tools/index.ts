@@ -16,6 +16,4 @@ export function apply(ctx: ExtensionAPI): void {
 	});
 }
 
-function fileTools(ctx: ExtensionAPI): void {
-	ctx.setLabel("文件工具与索引");
-}
+function fileTools(ctx: ExtensionAPI): void {}

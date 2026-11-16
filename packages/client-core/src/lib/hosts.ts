@@ -4,6 +4,7 @@
  * item. Native shells never mirror new host credentials into plaintext.
  */
 import { parseCollabLink } from "@musepi/collab-proto";
+import { t } from "../i18n/index.js";
 import { secureGet, secureRemove, secureSet } from "./secure-store";
 
 export interface HostCandidate {
@@ -63,6 +64,29 @@ export function hostOf(link: string): string {
 	} catch {
 		return link;
 	}
+}
+
+/**
+ * A saved address without protocol noise: `host:port`, plus whether the link
+ * goes through a relay. The key, scheme and room path are transport details —
+ * a companion app shows where it connects, not how.
+ *
+ * Shared by the connect screen and the settings list so the same computer
+ * cannot read as two different things in two places.
+ */
+export function addressParts(address: string): { host: string; relay: boolean } {
+	try {
+		const url = new URL(address.replace(/^wss?:/, "http:"));
+		return { host: url.host, relay: url.pathname.startsWith("/r/") };
+	} catch {
+		return { host: address, relay: false };
+	}
+}
+
+/** Transport-free address, with the relay hint when there is one. */
+export function addressLabel(address: string): string {
+	const parts = addressParts(address);
+	return parts.relay ? `${parts.host} · ${t("settings.hostPathRelay")}` : parts.host;
 }
 
 function candidateFor(address: string): HostCandidate {

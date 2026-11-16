@@ -111,6 +111,10 @@ export function AgentsPanel(props: {
 
 	return (
 		<div ref={panelRef} className="ag-panel">
+			<div className="ag-panel-head">
+				<span>{t("general.agents")}</span>
+				<small>{agents.length}</small>
+			</div>
 			{sorted.mains.map(agent => (
 				<AgentRow
 					key={agent.id}

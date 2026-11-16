@@ -19,7 +19,7 @@ import { ThinkingLevel } from "@musepi/pi-agent-core";
 import type { Api, Effort, KnownProvider, Model, ModelSpec } from "@musepi/pi-ai";
 import { buildModel } from "@musepi/pi-catalog/build";
 import { modelMatchesHost } from "@musepi/pi-catalog/hosts";
-import { buildModelProviderPriorityRank } from "@musepi/pi-catalog/identity";
+import { buildModelProviderPriorityRank, type ModelRef, modelRef } from "@musepi/pi-catalog/identity";
 import { stripThinkingVariantToken } from "@musepi/pi-catalog/identity/family";
 import { clampThinkingLevelForModel } from "@musepi/pi-catalog/model-thinking";
 import { modelsAreEqual } from "@musepi/pi-catalog/models";
@@ -205,8 +205,8 @@ export function parseModelString(
 /**
  * Format a model as "provider/modelId" string.
  */
-export function formatModelString(model: Model<Api>): string {
-	return `${model.provider}/${model.id}`;
+export function formatModelString(model: Model<Api>): ModelRef {
+	return modelRef(model.provider, model.id);
 }
 
 function getSingleRoutingOnly(routing: unknown): string | undefined {
@@ -463,6 +463,12 @@ export interface ModelMatchPreferences {
 	providerOrder?: readonly string[];
 	/** Providers to deprioritize when no recent usage or provider priority is available. */
 	deprioritizeProviders?: string[];
+	/**
+	 * Provider the caller is currently on. A bare id served by several providers
+	 * resolves within this provider first, so a fallback or role pattern cannot
+	 * silently move the turn to another provider's billing and auth path.
+	 */
+	preferredProvider?: string;
 }
 
 export type ModelLookupRegistry = Pick<ModelRegistry, "getAvailable">;
@@ -476,6 +482,7 @@ interface ModelPreferenceContext {
 	providerPriorityRank: Map<string, number>;
 	deprioritizedProviders: Set<string>;
 	modelOrder: Map<string, number>;
+	preferredProvider?: string;
 }
 
 function buildPreferenceContext(
@@ -502,15 +509,27 @@ function buildPreferenceContext(
 		modelOrder.set(formatModelString(availableModels[i]), i);
 	}
 
-	return { modelUsageRank, providerUsageRank, providerPriorityRank, deprioritizedProviders, modelOrder };
+	return {
+		modelUsageRank,
+		providerUsageRank,
+		providerPriorityRank,
+		deprioritizedProviders,
+		modelOrder,
+		preferredProvider: preferences?.preferredProvider,
+	};
 }
 
 export function getModelMatchPreferences(
-	settings?: Partial<Pick<Settings, "get" | "getStorage">>,
+	settings?: Partial<Pick<Settings, "get" | "getStorage" | "getModelRole">>,
 ): ModelMatchPreferences {
+	// A provider-qualified default role is the closest thing to "the provider the
+	// user is on" available before a session exists; a bare-id default cannot
+	// answer it and leaves the ambiguity warning in place.
+	const parsedDefault = parseModelString(settings?.getModelRole?.("default")?.trim() ?? "");
 	return {
 		usageOrder: settings?.getStorage?.()?.getModelUsageOrder(),
 		providerOrder: settings?.get?.("modelProviderOrder"),
+		preferredProvider: parsedDefault?.provider,
 	};
 }
 
@@ -523,12 +542,18 @@ function mergeModelMatchPreferences(
 		usageOrder: preferences?.usageOrder ?? settingsPreferences.usageOrder,
 		providerOrder: preferences?.providerOrder ?? settingsPreferences.providerOrder,
 		deprioritizeProviders: preferences?.deprioritizeProviders,
+		preferredProvider: preferences?.preferredProvider ?? settingsPreferences.preferredProvider,
 	};
 }
 
 function pickPreferredModel(candidates: Model<Api>[], context: ModelPreferenceContext): Model<Api> {
 	if (candidates.length <= 1) return candidates[0];
-	return [...candidates].sort((a, b) => {
+	// A bare id served by several providers resolves within the provider the
+	// caller is already on before usage or catalog order can move the turn.
+	const preferred = context.preferredProvider?.toLowerCase();
+	const scoped = preferred ? candidates.filter(model => model.provider.toLowerCase() === preferred) : [];
+	const pool = scoped.length > 0 ? scoped : candidates;
+	return [...pool].sort((a, b) => {
 		const aKey = formatModelString(a);
 		const bKey = formatModelString(b);
 		const aUsage = context.modelUsageRank.get(aKey);
@@ -614,6 +639,19 @@ function findExactModelReferenceMatch(modelReference: string, availableModels: M
 	}
 	return undefined;
 }
+
+/** How a pattern reached its model. Warnings use it; callers never branch on it. */
+type ModelMatchKind = "exact" | "bare-id" | "alias" | "fuzzy" | "partial";
+
+interface ModelMatchOutcome {
+	model?: Model<Api>;
+	kind?: ModelMatchKind;
+	/** Every model in the winning tier, so an ambiguous pick can name its alternatives. */
+	candidates?: Model<Api>[];
+	/** Set when a match was rejected rather than chosen. */
+	warning?: string;
+}
+
 /**
  * The single model-matching engine. Tries, in order:
  * 1. exact `provider/id` reference (variant-alias and OpenRouter routed/date
@@ -622,7 +660,10 @@ function findExactModelReferenceMatch(modelReference: string, availableModels: M
  * 3. retired effort-tier variant alias (collapsed catalog entries),
  * 4. provider-scoped fuzzy match,
  * 5. substring match with the alias-vs-dated pick.
- * Returns the matched model or undefined if no match found.
+ *
+ * The outcome names the tier and every candidate in it. A bare id served by
+ * several providers stays a match, but the caller can now say which provider won
+ * and what the alternatives were instead of presenting one silent choice.
  *
  * `exactOnly` stops after the exact phases (1-3), skipping the fuzzy/substring
  * fallbacks (4-5). Callers use it to resolve the full selector exactly before
@@ -635,10 +676,10 @@ function matchModel(
 	availableModels: Model<Api>[],
 	context: ModelPreferenceContext,
 	options?: { exactOnly?: boolean },
-): Model<Api> | undefined {
+): ModelMatchOutcome {
 	const exactRefMatch = findExactModelReferenceMatch(modelPattern, availableModels);
 	if (exactRefMatch) {
-		return exactRefMatch;
+		return { model: exactRefMatch, kind: "exact" };
 	}
 
 	// Exact ID match (case-insensitive) — this must happen before provider-scoped
@@ -648,12 +689,12 @@ function matchModel(
 	const lowerPattern = modelPattern.toLowerCase();
 	const exactMatches = availableModels.filter(m => m.id.toLowerCase() === lowerPattern);
 	if (exactMatches.length > 0) {
-		return pickPreferredModel(exactMatches, context);
+		return { model: pickPreferredModel(exactMatches, context), kind: "bare-id", candidates: exactMatches };
 	}
 
 	const bedrockInferenceProfile = resolveBedrockInferenceProfileModelId(modelPattern, availableModels);
 	if (bedrockInferenceProfile) {
-		return bedrockInferenceProfile;
+		return { model: bedrockInferenceProfile, kind: "alias" };
 	}
 
 	// Retired effort-tier variant ids (bare, no provider prefix) resolve to
@@ -667,7 +708,8 @@ function matchModel(
 		const aliasMatches = availableModels.filter(m => m.id.toLowerCase() === lowerAliasTarget);
 		if (aliasMatches.length > 0) {
 			const preferred = bareAlias ? aliasMatches.filter(m => bareAlias.providers.includes(m.provider)) : [];
-			return pickPreferredModel(preferred.length > 0 ? preferred : aliasMatches, context);
+			const pool = preferred.length > 0 ? preferred : aliasMatches;
+			return { model: pickPreferredModel(pool, context), kind: "alias", candidates: pool };
 		}
 	}
 
@@ -676,7 +718,7 @@ function matchModel(
 	// into a longer sibling id; callers that still hold an unstripped suffix ask
 	// for exact-only so the suffix is split off before any fuzzy attempt.
 	if (options?.exactOnly) {
-		return undefined;
+		return {};
 	}
 	// Check for provider/modelId format — fuzzy match within provider only.
 	const slashIndex = modelPattern.indexOf("/");
@@ -694,13 +736,13 @@ function matchModel(
 			// providers have ids that legitimately end in `@` (Vertex `claude-opus-4-8@default`),
 			// and the fallback never routes them, so they must keep fuzzy matching.
 			if (splitUpstreamRouting(modelId) && providerModels.some(supportsUpstreamRouting)) {
-				return undefined;
+				return {};
 			}
 			const scored = providerModels
 				.map(model => ({ model, match: fuzzyMatch(modelId, model.id) }))
 				.filter(entry => entry.match.matches);
 			if (scored.length === 0) {
-				return undefined;
+				return {};
 			}
 
 			scored.sort((a, b) => {
@@ -719,7 +761,7 @@ function matchModel(
 				const bOrder = context.modelOrder.get(bKey) ?? 0;
 				return aOrder - bOrder;
 			});
-			return scored[0]?.model;
+			return { model: scored[0]?.model, kind: "fuzzy", candidates: scored.map(entry => entry.model) };
 		}
 	}
 
@@ -729,7 +771,22 @@ function matchModel(
 	);
 
 	if (matches.length === 0) {
-		return undefined;
+		return {};
+	}
+
+	// A pattern that only exists as the prefix of longer ids is ambiguous, not a
+	// match: `gpt-5.4` must not silently become `gpt-5.4-mini`. Reject it with the
+	// candidates so the caller can show what is actually available. Patterns that
+	// occur mid-id (`sonnet`) keep the long-standing shorthand behavior.
+	if (lowerPattern && !context.preferredProvider && matches.every(m => m.id.toLowerCase().startsWith(lowerPattern))) {
+		const listed = matches.slice(0, 5).map(formatModelString);
+		return {
+			candidates: matches,
+			warning:
+				`No model matches "${modelPattern}"; closest ids: ${listed.join(", ")}` +
+				(matches.length > listed.length ? ` (+${matches.length - listed.length} more)` : "") +
+				". Select provider/id to pin one.",
+		};
 	}
 
 	// Separate into aliases and dated versions
@@ -737,19 +794,19 @@ function matchModel(
 	const datedVersions = matches.filter(m => !isAlias(m.id));
 
 	if (aliases.length > 0) {
-		return pickPreferredModel(aliases, context);
+		return { model: pickPreferredModel(aliases, context), kind: "partial", candidates: aliases };
 	}
-	if (datedVersions.length === 0) return undefined;
+	if (datedVersions.length === 0) return {};
 
 	if (datedVersions.length === 1) {
-		return datedVersions[0];
+		return { model: datedVersions[0], kind: "partial", candidates: datedVersions };
 	}
 
 	const sortedById = [...datedVersions].sort((a, b) => b.id.localeCompare(a.id));
 	const topId = sortedById[0]?.id;
-	if (!topId) return undefined;
+	if (!topId) return {};
 	const topCandidates = sortedById.filter(model => model.id === topId);
-	return pickPreferredModel(topCandidates, context);
+	return { model: pickPreferredModel(topCandidates, context), kind: "partial", candidates: topCandidates };
 }
 
 export interface ParsedModelResult {
@@ -760,6 +817,36 @@ export interface ParsedModelResult {
 	upstream?: string;
 	warning: string | undefined;
 	explicitThinkingLevel: boolean;
+}
+
+/**
+ * Name the chosen model and its alternatives when a pattern matched more than
+ * one candidate. Stays silent when the caller's own provider won, so ordinary
+ * shorthands do not warn on every resolve.
+ */
+function ambiguityWarning(
+	pattern: string,
+	outcome: ModelMatchOutcome,
+	context: ModelPreferenceContext,
+): string | undefined {
+	const { model, candidates } = outcome;
+	if (!model || !candidates || candidates.length <= 1) return undefined;
+	if (context.preferredProvider && model.provider.toLowerCase() === context.preferredProvider.toLowerCase()) {
+		return undefined;
+	}
+	const alternatives = candidates
+		.filter(candidate => candidate !== model)
+		.slice(0, 4)
+		.map(formatModelString);
+	const reason =
+		outcome.kind === "partial" || outcome.kind === "fuzzy"
+			? "matched approximately"
+			: "is served by multiple providers";
+	return (
+		`Model "${pattern}" ${reason}; using ${formatModelString(model)}` +
+		(alternatives.length > 0 ? ` (also: ${alternatives.join(", ")})` : "") +
+		". Select provider/id to pin it."
+	);
 }
 
 /**
@@ -783,8 +870,13 @@ function parseModelPatternWithContext(
 ): ParsedModelResult {
 	// Exact match on the full pattern first (no fuzzy): a literal id that
 	const exactMatch = matchModel(pattern, availableModels, context, { exactOnly: true });
-	if (exactMatch) {
-		return { model: exactMatch, thinkingLevel: undefined, warning: undefined, explicitThinkingLevel: false };
+	if (exactMatch.model) {
+		return {
+			model: exactMatch.model,
+			thinkingLevel: undefined,
+			warning: ambiguityWarning(pattern, exactMatch, context),
+			explicitThinkingLevel: false,
+		};
 	}
 
 	// Prefer a fuzzy match whose actual id ends in the suffix, preserving
@@ -793,11 +885,11 @@ function parseModelPatternWithContext(
 	const { base, level } = splitThinkingSuffix(pattern, -1, MAX_THINKING_SUFFIX_OPTIONS);
 	if (level) {
 		const literalSuffixMatch = matchModel(pattern, availableModels, context);
-		if (literalSuffixMatch?.id.toLowerCase().endsWith(`:${level}`)) {
+		if (literalSuffixMatch.model?.id.toLowerCase().endsWith(`:${level}`)) {
 			return {
-				model: literalSuffixMatch,
+				model: literalSuffixMatch.model,
 				thinkingLevel: undefined,
-				warning: undefined,
+				warning: ambiguityWarning(pattern, literalSuffixMatch, context),
 				explicitThinkingLevel: false,
 			};
 		}
@@ -824,8 +916,21 @@ function parseModelPatternWithContext(
 	// No valid thinking suffix: fall back to fuzzy/substring matching on the
 	// whole pattern.
 	const fallbackMatch = matchModel(pattern, availableModels, context);
-	if (fallbackMatch) {
-		return { model: fallbackMatch, thinkingLevel: undefined, warning: undefined, explicitThinkingLevel: false };
+	if (fallbackMatch.model) {
+		return {
+			model: fallbackMatch.model,
+			thinkingLevel: undefined,
+			warning: ambiguityWarning(pattern, fallbackMatch, context),
+			explicitThinkingLevel: false,
+		};
+	}
+	if (fallbackMatch.warning) {
+		return {
+			model: undefined,
+			thinkingLevel: undefined,
+			warning: fallbackMatch.warning,
+			explicitThinkingLevel: false,
+		};
 	}
 
 	const lastColonIndex = pattern.lastIndexOf(":");
@@ -1396,18 +1501,19 @@ export function resolveModelFromSettings(options: {
 }): Model<Api> | undefined {
 	const { settings, availableModels, matchPreferences, roleOrder } = options;
 	const roles = roleOrder ?? MODEL_ROLE_IDS;
-	let sawConfiguredProviderQualifiedRole = false;
+	// A configured role that does not resolve stays unresolved. Falling back to
+	// `availableModels[0]` here substitutes an unrelated model for an explicit
+	// choice — the same silent rerouting the resolver now reports for bare ids.
+	let sawConfiguredRole = false;
 	for (const role of roles) {
 		const configured = settings.getModelRole(role);
 		if (!configured) continue;
+		sawConfiguredRole = true;
 		const expanded = expandRoleAlias(configured, settings).trim();
-		if (expanded.includes("/")) {
-			sawConfiguredProviderQualifiedRole = true;
-		}
 		const resolved = resolveModelFromString(expanded, availableModels, matchPreferences);
 		if (resolved) return resolved;
 	}
-	return sawConfiguredProviderQualifiedRole ? undefined : availableModels[0];
+	return sawConfiguredRole ? undefined : availableModels[0];
 }
 
 /**
@@ -1939,7 +2045,13 @@ export function resolveCliModel(options: {
 	}
 
 	const candidates = provider ? allModels.filter(model => model.provider === provider) : availableModels;
-	let parsed = parseModelPattern(pattern, candidates, preferences, {
+	// An explicit provider pins the routing, so shorthand prefixes stay valid
+	// there (`openrouter/qwen`) while an unscoped `gpt-5.4` still refuses to
+	// become `gpt-5.4-mini`.
+	const scopedPreferences: ModelMatchPreferences | undefined = provider
+		? { ...preferences, preferredProvider: provider }
+		: preferences;
+	let parsed = parseModelPattern(pattern, candidates, scopedPreferences, {
 		allowInvalidThinkingSelectorFallback: false,
 	});
 	if (!parsed.model && !provider) {
@@ -1961,7 +2073,7 @@ export function resolveCliModel(options: {
 		};
 	}
 
-	let selector = provider ? formatModelString(model) : undefined;
+	let selector: string | undefined = provider ? formatModelString(model) : undefined;
 	if (selector !== undefined && upstream) {
 		selector = `${selector}@${upstream}`;
 	}

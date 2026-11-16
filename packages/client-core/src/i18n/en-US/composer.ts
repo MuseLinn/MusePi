@@ -7,6 +7,7 @@ export const composer = {
 	"composer.askAnythingCommands.info": "Ask anything, / for commands, @ for context…",
 	"composer.askAnythingShort": "Ask anything…",
 	"composer.waitingSession": "Waiting for session…",
+	"composer.promptSuggestionAccept": "Tab",
 	"composer.submitResponse": "Submit response",
 	"composer.send": "Send (Enter)",
 	"composer.workingActive": "Working",

@@ -69,6 +69,7 @@ export const sessionStreamEnvelope = Type.Object({
 		Type.Literal("stream-end"),
 		Type.Literal("recap"),
 		Type.Literal("title"),
+		Type.Literal("suggestion"),
 	]),
 	seq: Type.Integer({ minimum: 0 }),
 	payload: Type.Unknown(),
@@ -127,7 +128,11 @@ export type SessionStreamEvent =
 	| { kind: "recap"; seq: number; payload: { text: string; at: number } }
 	// Session title changed (auto-generated after the first user message, or
 	// a replan refresh) — the GUI refreshes its session tree label on this.
-	| { kind: "title"; seq: number; payload: { title: string | null } };
+	| { kind: "title"; seq: number; payload: { title: string | null } }
+	// Next-input candidate for an empty composer, predicted from the turn that
+	// just completed. Session state only, never a transcript entry: the client
+	// offers it in the input box and discards it when the user moves on.
+	| { kind: "suggestion"; seq: number; payload: { suggestion: string } };
 
 export type { SessionStreamEnvelope } from "./events-types";
 

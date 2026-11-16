@@ -1,12 +1,12 @@
 import { ArrowUpRight, ChevronRight, KeyRound, Link2, Monitor, ScanLine, X } from "lucide-react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { t } from "../../i18n/index.js";
+import { t, tLoose } from "../../i18n/index.js";
 import { useLocale } from "../../i18n/use-locale.js";
 import { useBackLayer } from "../../lib/back-stack";
 import { isHarmonyShell, isMobileShell } from "../../lib/capacitor";
 import { haptic } from "../../lib/haptics";
-import { loadResolvedHosts, type ResolvedHost, removeHost } from "../../lib/hosts";
+import { addressParts, loadResolvedHosts, type ResolvedHost, removeHost } from "../../lib/hosts";
 import { secureGet, secureSet } from "../../lib/secure-store";
 import { useCollapseHeight } from "../../lib/use-collapse";
 import { AccentToggle } from "./AccentToggle";
@@ -79,37 +79,47 @@ function SavedComputers({
 				<span className="sh-connect-count">{hosts.length}</span>
 			</div>
 			<div className="sh-connect-recent-list">
-				{hosts.map((host, index) => (
-					<div
-						key={host.id}
-						className={`sh-connect-recent-item${index === 0 ? " sh-connect-recent-item--primary" : ""}`}
-					>
-						<button
-							type="button"
-							className="sh-connect-recent-main"
-							title={host.candidates[0]?.address}
-							onClick={() => onConnect(host)}
+				{hosts.map((host, index) => {
+					// The row used to print the address twice (label, then the same
+					// address again with the relay hint), so two saved computers on
+					// the same LAN read as identical lines. The subtitle now carries
+					// the only distinguishing fact: the relay hint, or the computer's
+					// own name when it has one.
+					const parts = addressParts(host.candidates[0]?.address ?? "");
+					const named = isDisplayableHostName(host.deviceName, host.label) ? host.deviceName : "";
+					const subtitle = parts.relay ? t("settings.hostPathRelay") : named;
+					return (
+						<div
+							key={host.id}
+							className={`sh-connect-recent-item${index === 0 ? " sh-connect-recent-item--primary" : ""}`}
 						>
-							<span className="sh-connect-recent-icon" aria-hidden="true">
-								<Monitor size={18} />
-							</span>
-							<span className="sh-connect-recent-copy">
-								<span className="sh-connect-recent-name">{host.label}</span>
-								<span className="sh-connect-recent-link">{host.candidates[0]?.address}</span>
-							</span>
-							<ArrowUpRight className="sh-connect-recent-open" size={16} aria-hidden="true" />
-						</button>
-						<button
-							type="button"
-							className="sh-btn sh-btn-icon sh-connect-recent-rm"
-							title={t("general.remove")}
-							aria-label={`${t("general.remove")} ${host.label}`}
-							onClick={() => onRemove(host.id)}
-						>
-							<X size={15} />
-						</button>
-					</div>
-				))}
+							<button
+								type="button"
+								className="sh-connect-recent-main"
+								title={`${host.label}${subtitle ? ` · ${subtitle}` : ""}`}
+								onClick={() => onConnect(host)}
+							>
+								<span className="sh-connect-recent-icon" aria-hidden="true">
+									<Monitor size={18} />
+								</span>
+								<span className="sh-connect-recent-copy">
+									<span className="sh-connect-recent-name">{host.label}</span>
+									{subtitle !== "" && <span className="sh-connect-recent-link">{subtitle}</span>}
+								</span>
+								<ArrowUpRight className="sh-connect-recent-open" size={16} aria-hidden="true" />
+							</button>
+							<button
+								type="button"
+								className="sh-btn sh-btn-icon sh-connect-recent-rm"
+								title={t("general.remove")}
+								aria-label={`${t("general.remove")} ${host.label}`}
+								onClick={() => onRemove(host.id)}
+							>
+								<X size={15} />
+							</button>
+						</div>
+					);
+				})}
 			</div>
 		</section>
 	);
@@ -118,6 +128,21 @@ function SavedComputers({
 /** Remote-workspace entry point. Saved computers are the fastest route;
  *  QR is the primary new-connection action, while pair codes and links are
  *  progressively disclosed alternatives. */
+/**
+ * Whether a recorded device name is worth showing.
+ *
+ * The stored value is whatever the peer announced at connect time, and older
+ * records carry the protocol role instead of a machine name — two LAN hosts
+ * both showed the subtitle "guest", which reads as a debug string leaking into
+ * the list. Only names that differ from the address and are not roles pass.
+ */
+function isDisplayableHostName(name: string | undefined, label: string): boolean {
+	if (!name) return false;
+	const trimmed = name.trim();
+	if (trimmed === "" || trimmed === label) return false;
+	return !/^(guest|host|agent|unknown|musepi)$/i.test(trimmed);
+}
+
 export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: ConnectScreenProps): ReactNode {
 	const [link, setLink] = useState(defaultLink ?? "");
 	const [name, setName] = useState(defaultName);
@@ -281,6 +306,61 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		setScanning(true);
 	};
 
+	// Native connect page (HarmonyOS tab 0) asks this page to do the work:
+	// resolve a saved computer's credential and connect — the E2E link never
+	// mirrors into ArkTS, so the native list holds public metadata only.
+	const connectHost = useCallback(
+		(id: string): void => {
+			const host = recent.find(item => item.id === id);
+			if (host) connect(host.link, host.deviceName);
+		},
+		[recent, connect],
+	);
+
+	// The native Scan Kit result arrives here as a raw collab link; the page
+	// connects like any other manual entry.
+	const scanResult = useCallback(
+		(link: string): void => {
+			connect(link, name.trim() || t("settings.myPhone"));
+		},
+		[connect, name],
+	);
+
+	// The native connect page also hands every action back to this guide:
+	// connecting to a saved computer, opening the QR scanner, and toggling
+	// the skip state. Same ref pattern — registered once, latest closures,
+	// torn down with the rest.
+	const guideHandlers = useRef({ connectHost, skip, returnToGuide, scanQr, scanResult });
+	guideHandlers.current = { connectHost, skip, returnToGuide, scanQr, scanResult };
+	useEffect(() => {
+		if (!isHarmonyShell()) return;
+		const w = window as unknown as Record<string, unknown>;
+		w.__musepiConnectHost = (id: string): void => {
+			guideHandlers.current.connectHost(id);
+		};
+		w.__musepiSkipConnect = (): void => {
+			guideHandlers.current.skip();
+		};
+		w.__musepiReturnToConnect = (): void => {
+			guideHandlers.current.returnToGuide();
+		};
+		w.__musepiOpenScanner = (): void => {
+			guideHandlers.current.scanQr();
+		};
+		w.__musepiScanResult = (link: string): void => {
+			if (typeof link === "string" && link !== "") {
+				guideHandlers.current.scanResult(link);
+			}
+		};
+		return () => {
+			delete w.__musepiConnectHost;
+			delete w.__musepiSkipConnect;
+			delete w.__musepiReturnToConnect;
+			delete w.__musepiOpenScanner;
+			delete w.__musepiScanResult;
+		};
+	}, []);
+
 	// Android back key while scanning: close the scanner overlay instead of
 	// exiting the app (scanner priority 95 — ConnectScreen has no Session
 	// layers beneath, so nothing competes).
@@ -303,6 +383,29 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	};
 
 	const shown = localError ?? error;
+
+	// Mirror the guide into the native connect page (HarmonyOS tab 0): the
+	// shell paints its own ArkTS page over this one, so it needs the state
+	// this card owns — skipped / offline / error. Error text is already
+	// localized here and rendered verbatim by the native side.
+	useEffect(() => {
+		if (!isHarmonyShell()) return;
+		window.harmonyNative?.setConnectInfo?.(JSON.stringify({ skipped, offline, error: shown ?? "" }));
+	}, [skipped, offline, shown]);
+
+	// Same mirror for the saved computers. Public metadata only — the rows
+	// carry the same subtitle the web card shows (relay hint or the
+	// computer's own name), and tapping one asks this page to connect.
+	useEffect(() => {
+		if (!isHarmonyShell()) return;
+		const rows = recent.map(host => {
+			const parts = addressParts(host.candidates[0]?.address ?? "");
+			const named = isDisplayableHostName(host.deviceName, host.label) ? host.deviceName : "";
+			return { id: host.id, label: host.label, subtitle: parts.relay ? t("settings.hostPathRelay") : named };
+		});
+		window.harmonyNative?.setHosts?.(JSON.stringify(rows));
+	}, [recent]);
+
 	// QR scanning needs a camera-bearing native WebView. Both Capacitor
 	// (Android) and the HarmonyOS ArkWeb shell qualify — the latter grants
 	// getUserMedia through Web.onPermissionRequest + the CAMERA user grant.
@@ -524,7 +627,10 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 
 				{shown && (
 					<div key={shown} className="sh-connect-error" role="alert">
-						{shown}
+						{/* Protocol errors arrive as English strings; the zh map carries
+						 *  the same text as a key, so known ones translate and unknown
+						 *  ones pass through unchanged. */}
+						{tLoose(shown)}
 					</div>
 				)}
 				<button type="button" className="sh-connect-skip" onClick={skip}>

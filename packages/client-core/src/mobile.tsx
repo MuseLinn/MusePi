@@ -12,11 +12,14 @@ import {
 	getSystemBarInsets,
 	isHarmonyShell,
 	isNativeShell,
+	type NativeInsets,
 	setKeyboardInset,
 	setupAndroidBackHandler,
 	setupDeepLinkHandler,
 	setupNotificationTapHandler,
 } from "./lib/capacitor";
+import { cssColorToHex } from "./lib/color";
+import { installNativePrefBridge, pushAccentPalette, syncNativePrefs } from "./lib/native-prefs";
 import { applyTextScale } from "./lib/text-scale";
 import { initTooltips } from "./lib/tooltips";
 
@@ -74,11 +77,29 @@ async function setupCapacitorKeyboardInset(): Promise<void> {
 // flip, including follow-system changes delivered over the native bridge.
 function setupImmersiveSystemBars(): void {
 	const root = document.documentElement;
+	// The native bar paints its own selection colour, so it needs the accent as
+	// a concrete rgb value; `--accent` is authored in oklch, so the conversion
+	// lives in lib/color.ts next to the palette reader.
+	let lastAccent = "";
 	const syncNative = (): void => {
 		const dark = root.dataset.theme !== "light";
 		if (isHarmonyShell()) {
 			try {
-				window.harmonyNative?.setThemeColor?.(dark);
+				// The shell owns the theme on HarmonyOS (it stores it in
+				// Preferences). If the page pushed its own scheme back, the app
+				// would boot dark over a light preference and the sidebar glass
+				// would follow the wrong mask — one writer, one truth.
+				if (!window.harmonyNative?.getPrefs?.()) {
+					window.harmonyNative?.setThemeColor?.(dark);
+				}
+				const accent = cssColorToHex(getComputedStyle(root).getPropertyValue("--accent"));
+				if (accent && accent !== lastAccent) {
+					lastAccent = accent;
+					window.harmonyNative?.setAccentColor?.(accent);
+					// The palette is scheme-dependent: a light flip recolours every
+					// preset, and the native swatches would keep the dark values.
+					pushAccentPalette();
+				}
 			} catch {
 				// bridge not injected yet — the delayed pass below retries
 			}
@@ -99,9 +120,21 @@ function setupImmersiveSystemBars(): void {
 	syncNative();
 	// javaScriptProxy may land a tick after the module graph executes.
 	window.setTimeout(syncNative, 60);
-	new MutationObserver(syncNative).observe(root, {
+	const observer = new MutationObserver(records => {
+		syncNative();
+		// A custom accent lands as an inline `--accent` right after
+		// `data-accent="custom"`, so one more pass after the style flush sees
+		// the real value instead of the previous preset.
+		if (records.some(r => r.attributeName === "data-accent" || r.attributeName === "data-theme")) {
+			requestAnimationFrame(syncNative);
+		}
+	});
+	// `style` is deliberately not observed: the shell itself writes inline
+	// variables on <html> (safe areas, bar reserve, font scale), so watching it
+	// would re-enter this callback on every layout change.
+	observer.observe(root, {
 		attributes: true,
-		attributeFilter: ["data-theme", "data-color-scheme"],
+		attributeFilter: ["data-theme", "data-color-scheme", "data-accent"],
 	});
 }
 
@@ -143,12 +176,14 @@ function readEnvInsets(): EnvInsets {
 
 async function setupSafeAreaFallback(): Promise<void> {
 	const css = document.documentElement;
-	const apply = (native?: { top: number; bottom: number }): void => {
+	const apply = (native?: NativeInsets): void => {
 		const env = readEnvInsets();
 		css.style.setProperty("--safe-top", `${env.top || native?.top || 0}px`);
 		css.style.setProperty("--safe-bottom", `${env.bottom || native?.bottom || 0}px`);
-		css.style.setProperty("--safe-left", `${env.left}px`);
-		css.style.setProperty("--safe-right", `${env.right}px`);
+		// The horizontal pair matters on landscape cutouts and folded edges. A
+		// shell that cannot report it (Capacitor) leaves it at env()'s value.
+		css.style.setProperty("--safe-left", `${env.left || native?.left || 0}px`);
+		css.style.setProperty("--safe-right", `${env.right || native?.right || 0}px`);
 	};
 	apply();
 	try {
@@ -172,6 +207,10 @@ async function setupSafeAreaFallback(): Promise<void> {
 void setupCapacitorKeyboardInset();
 void setupSafeAreaFallback();
 setupImmersiveSystemBars();
+// Settings moved into the shell on HarmonyOS: adopt its stored values (or hand
+// it ours on first launch) and listen for changes made in the native page.
+installNativePrefBridge();
+syncNativePrefs();
 void setupAndroidBackHandler();
 void setupDeepLinkHandler();
 void setupNotificationTapHandler();

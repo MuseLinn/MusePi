@@ -7,9 +7,19 @@ export interface BannersProps {
 	endedReason: string | null;
 	onRejoin(): void;
 	onNewLink(): void;
+	/**
+	 * Whether the ended state may take over the screen.
+	 *
+	 * The card is an `alertdialog` with no dismiss: correct over a transcript
+	 * that just died, wrong over the settings tab, where it covered controls
+	 * the user was using and offered two answers to a question they had not
+	 * asked. Mobile passes `false` off the chat destination and gets a status
+	 * line instead.
+	 */
+	blocking?: boolean;
 }
 
-export function Banners({ phase, endedReason, onRejoin, onNewLink }: BannersProps): ReactNode {
+export function Banners({ phase, endedReason, onRejoin, onNewLink, blocking = true }: BannersProps): ReactNode {
 	if (phase === "connecting" || phase === "waiting") {
 		return (
 			<div className="sh-banner" role="status">
@@ -27,6 +37,20 @@ export function Banners({ phase, endedReason, onRejoin, onNewLink }: BannersProp
 		);
 	}
 	if (phase === "ended") {
+		if (!blocking) {
+			return (
+				<div className="sh-banner sh-banner--ended" role="status">
+					<span className="sh-banner-dot" />
+					<span className="sh-banner-text">
+						{t("shell.sessionEnded")}
+						{endedReason ? ` — ${endedReason}` : ""}
+					</span>
+					<button type="button" className="sh-banner-action" onClick={onRejoin}>
+						{t("settings.rejoin")}
+					</button>
+				</div>
+			);
+		}
 		return (
 			<div className="sh-ended" role="alertdialog" aria-label={t("shell.sessionEnded")}>
 				<div className="sh-ended-card">

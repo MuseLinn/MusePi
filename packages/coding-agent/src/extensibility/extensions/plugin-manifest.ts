@@ -15,10 +15,18 @@
  * 生命周期:每次扩展扫描(loadAllExtensions)对每个 extension-module
  * 调用一次;extensions.list 有 TTL 缓存,代价有界。
  */
+import { readdir } from "node:fs/promises";
 import * as path from "node:path";
-import { isEacces, isEnoent } from "@musepi/pi-utils";
-import type { ConfigFieldDesc, ConfigFieldError, PluginComponentDecl, PluginResources } from "@musepi/pi-wire";
+import { isEacces, isEnoent, logger } from "@musepi/pi-utils";
+import type {
+	ConfigFieldDesc,
+	ConfigFieldError,
+	LocalizedPluginText,
+	PluginComponentDecl,
+	PluginResources,
+} from "@musepi/pi-wire";
 import {
+	localizedPluginText,
 	parseConfigFields,
 	parsePluginComponents,
 	parsePluginExperimental,
@@ -27,6 +35,9 @@ import {
 
 /** 从入口文件向上查找 package.json 的最大目录层级。 */
 const MAX_MANIFEST_DEPTH = 4;
+
+/** `locale/<tag>.json` 的文件名即语言标签（与 `locale/en.json` 同构）。 */
+const LANGUAGE_ID = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/;
 
 /**
  * 一个扩展插件声明的、已通过校验的配置与资源元数据。
@@ -46,10 +57,19 @@ export interface ExtensionPluginMeta {
 	configErrors: ConfigFieldError[];
 	/** 声明的资源占用(disk/memory/setup/models)。 */
 	resources?: PluginResources;
-	/** 声明的「包含的组件」(dsh 子插件 parity;entry 组件 = 独立装载单元)。 */
+	/** 声明的「包含的组件」(子插件契约;entry 组件 = 独立装载单元)。 */
 	components?: PluginComponentDecl[];
 	label?: string;
 	description?: string;
+	/**
+	 * 按语言分列的显示名/说明(`locale/*.json` 声明时才有)。
+	 *
+	 * 只在包里真的带了 locale 文件时出现:没有文件的插件由 `label` /
+	 * `description` 承担,不再下发一份只有 `en` 的冗余映射。语言由界面挑,
+	 * daemon 不下判断(同一个 daemon 可以同时服务中文 TUI 与英文 GUI)。
+	 */
+	labelText?: LocalizedPluginText;
+	descriptionText?: LocalizedPluginText;
 	/** 清单声明的图标：emoji、文字字形或 http(s)/file URI（插件列表与详情共用）。 */
 	icon?: string;
 	/** 只在 Agent 预设里按会话提供的 persona 包：没有独立的用户启停面。 */
@@ -75,8 +95,9 @@ function parseHostBinding(raw: unknown): ExtensionHostBinding | undefined {
  * 插件声明,无元数据)。
  */
 export async function readExtensionPluginMeta(entryPath: string): Promise<ExtensionPluginMeta | null> {
-	const raw = await readManifestBlock(entryPath);
-	if (!raw) return null;
+	const manifest = await readPackageManifestNear(entryPath);
+	const raw = manifest?.pkg.musepi ?? manifest?.pkg.omp ?? manifest?.pkg.pi ?? null;
+	if (!raw || !manifest) return null;
 	const { fields, errors } = parseConfigFields(raw.config);
 	const resources = parsePluginResources(raw.resources);
 	const { components } = parsePluginComponents(raw.components);
@@ -87,6 +108,11 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 		typeof raw.description === "string" && raw.description.trim() ? raw.description.trim() : undefined;
 	const icon = typeof raw.icon === "string" && raw.icon.trim() ? raw.icon.trim() : undefined;
 	const presetOnly = raw.presetOnly === true;
+	// 语言文案只在包里带了 locale 文件时读目录；没有就是空表,不产生多余字段。
+	const locale = manifest.root ? await readLocaleText(manifest.root) : { titles: {}, descriptions: {} };
+	const labelText = Object.keys(locale.titles).length > 0 ? localizedPluginText(label, locale.titles) : undefined;
+	const descriptionText =
+		Object.keys(locale.descriptions).length > 0 ? localizedPluginText(description, locale.descriptions) : undefined;
 	if (
 		fields.length === 0 &&
 		errors.length === 0 &&
@@ -108,6 +134,8 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 		...(components.length > 0 ? { components } : {}),
 		...(label ? { label } : {}),
 		...(description ? { description } : {}),
+		...(labelText ? { labelText } : {}),
+		...(descriptionText ? { descriptionText } : {}),
 		...(icon ? { icon } : {}),
 		...(presetOnly ? { presetOnly } : {}),
 		...(experimental ? { experimental } : {}),
@@ -169,8 +197,71 @@ async function readPackageManifestNear(entryPath: string): Promise<{ pkg: Packag
 	return null;
 }
 
-async function readManifestBlock(entryPath: string): Promise<ManifestBlock | null> {
+/** 一个包的 `locale/*.json` 里声明的显示文案,按语言标签分列。 */
+interface LocaleText {
+	titles: Record<string, string>;
+	descriptions: Record<string, string>;
+}
+
+/**
+ * 读 `<root>/locale/<tag>.json`(dsh `locale/en.json` 同构)。
+ *
+ * 每个文件是 `{ "meta": { "title", "description" } }`;文件名即语言标签,
+ * 由界面按自己的语言挑。**没有 `locale/` 目录是常态**(大多数插件只有清单
+ * 里那一句兜底文案),ENOENT 直接返回空。坏文件按 manifest 的 fail-soft
+ * 纪律处理:跳过并记一条 warn,不拖垮整个扩展的登记。
+ */
+/**
+ * 清单声明的名字（`musepi.label`），给宿主做「扩展叫什么」的默认值。
+ *
+ * 与 {@link readExtensionPluginMeta} 分开是因为调用点不同：装载一个扩展时只需要
+ * 一个名字，不需要读 `locale/` 目录、也不需要校验 config 字段表。
+ */
+export async function readExtensionPluginLabel(entryPath: string): Promise<string | undefined> {
 	const manifest = await readPackageManifestNear(entryPath);
-	if (!manifest) return null;
-	return manifest.pkg.musepi ?? manifest.pkg.omp ?? manifest.pkg.pi ?? null;
+	const raw = manifest?.pkg.musepi ?? manifest?.pkg.omp ?? manifest?.pkg.pi ?? null;
+	if (!raw || typeof raw !== "object") return undefined;
+	const label = (raw as { label?: unknown }).label;
+	return typeof label === "string" && label.trim() ? label.trim() : undefined;
+}
+
+async function readLocaleText(root: string): Promise<LocaleText> {
+	const out: LocaleText = { titles: {}, descriptions: {} };
+	const dir = path.join(root, "locale");
+	let names: string[];
+	try {
+		const entries = await readdir(dir, { withFileTypes: true, encoding: "utf8" });
+		names = entries.filter(entry => entry.isFile()).map(entry => entry.name);
+	} catch (error) {
+		if (!(isEnoent(error) || isEacces(error))) {
+			logger.warn(`plugin locale directory unreadable: ${dir}`, { error: String(error) });
+		}
+		return out;
+	}
+	for (const name of names) {
+		if (!name.endsWith(".json")) continue;
+		const language = name.slice(0, -".json".length);
+		if (!LANGUAGE_ID.test(language)) {
+			logger.warn(`plugin locale file ignored (not a language tag): ${path.join(dir, name)}`);
+			continue;
+		}
+		const file = path.join(dir, name);
+		try {
+			const parsed = (await Bun.file(file).json()) as { meta?: unknown } | null;
+			const meta = parsed?.meta;
+			if (!meta || typeof meta !== "object" || Array.isArray(meta)) continue;
+			const title = textField((meta as Record<string, unknown>).title);
+			const description = textField((meta as Record<string, unknown>).description);
+			if (title) out.titles[language] = title;
+			if (description) out.descriptions[language] = description;
+		} catch (error) {
+			logger.warn(`plugin locale file unreadable: ${file}`, { error: String(error) });
+		}
+	}
+	return out;
+}
+
+/** 一个可选的本地化文本字段:非空字符串才算声明。 */
+function textField(value: unknown): string | undefined {
+	return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }

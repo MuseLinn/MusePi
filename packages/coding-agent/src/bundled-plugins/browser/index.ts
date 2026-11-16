@@ -14,6 +14,4 @@ export function apply(ctx: ExtensionAPI): void {
 	});
 }
 
-function browser(ctx: ExtensionAPI): void {
-	ctx.setLabel("浏览器");
-}
+function browser(ctx: ExtensionAPI): void {}

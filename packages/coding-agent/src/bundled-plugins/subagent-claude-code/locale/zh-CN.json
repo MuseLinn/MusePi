@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "Claude Code 子代理",
+		"description": "通过既有 task 工具运行原生 Claude Code CLI。"
+	}
+}

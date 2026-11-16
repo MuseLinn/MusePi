@@ -19,6 +19,7 @@ import {
 import type { PluginManagementPackage } from "../../extensibility/plugins/profile/plugin-management";
 import type { PluginRuntimeTarget } from "../../extensibility/plugins/runtime/mount";
 import type { ResolvedMode } from "../../presets/resolve";
+import type { ArtifactServerHandle } from "../artifact-server";
 import type { CordisDynamicPluginRuntime } from "../cordis-dynamic-plugins";
 import type { LiveApplyTarget } from "../live-plugin-apply";
 import type { WebRouteRegistry } from "../web-routes";
@@ -69,6 +70,61 @@ import type { DaemonService } from "./types";
  * 纯搬移不改行为，docs/review/0.5.0-m2-daemon-host-layering.md §5）。
  */
 
+/**
+ * Serve a compiled module from the loopback artifact origin instead of inline
+ * code. Keys come from the item's identity, so a slot keeps the same URL across
+ * boots and the browser's stored ETag decides whether the bytes travel again.
+ */
+function publishArtifacts<T extends { code: string; css?: string; codeFile?: string; cssFile?: string }>(
+	items: readonly T[],
+	kind: string,
+	identity: (item: T) => string,
+	server: ArtifactServerHandle,
+): Array<T & { url?: string; cssUrl?: string }> {
+	return items.map(item => {
+		const { codeFile, cssFile, ...rest } = item;
+		const base = `${kind}-${Bun.hash(identity(item)).toString(36)}`;
+		if (codeFile) {
+			// Build-time output: hand the origin the file and keep the bytes out of
+			// the daemon's heap (and out of this response).
+			const url = server.publishFile(base, codeFile);
+			return {
+				...rest,
+				code: "",
+				...(cssFile
+					? { css: undefined, cssUrl: server.publishFile(`${base}-css`, cssFile, "text/css; charset=utf-8") }
+					: {}),
+				url,
+			} as T & { url?: string; cssUrl?: string };
+		}
+		if (!item.code) return rest as T & { url?: string; cssUrl?: string };
+		const url = server.publish(base, item.code);
+		if (!item.css) return { ...rest, code: "", url } as T & { url?: string; cssUrl?: string };
+		// Component-scoped CSS is its own resource: a slot's stylesheet is
+		// routinely larger than its code, and it revalidates the same way.
+		return {
+			...rest,
+			code: "",
+			css: undefined,
+			url,
+			cssUrl: server.publish(`${base}-css`, item.css, "text/css; charset=utf-8"),
+		} as T & { url?: string; cssUrl?: string };
+	});
+}
+
+/** Inline delivery: materialize file-backed artifacts and drop their paths. */
+function inlineArtifacts<T extends { code: string; css?: string; codeFile?: string; cssFile?: string }>(
+	items: readonly T[],
+): T[] {
+	return items.map(item => {
+		const { codeFile, cssFile, ...rest } = item;
+		if (codeFile === undefined) return rest as T;
+		const code = fs.readFileSync(codeFile, "utf8");
+		const css = cssFile === undefined ? undefined : fs.readFileSync(cssFile, "utf8");
+		return { ...rest, code, ...(css ? { css } : {}) } as T;
+	});
+}
+
 export interface ExtensionServiceDeps {
 	settings(): Settings | null;
 	ensureRegistry(): Promise<unknown>;
@@ -79,6 +135,12 @@ export interface ExtensionServiceDeps {
 	 * Extension-contributed HTTP routes are (re)mounted here.
 	 */
 	webRoutes?(): WebRouteRegistry | undefined;
+	/**
+	 * Loopback origin that serves compiled extension artifacts as resources.
+	 * Present ⇒ a caller asking for `delivery: "url"` receives one URL per
+	 * module instead of its code.
+	 */
+	artifacts?(): ArtifactServerHandle | undefined;
 	/** web.port 发现文件的绝对路径（宿主计算：socket 目录下）。 */
 	webPortFile(): string;
 	/** 预设目录（宿主注入 #modesDir；缺省回退 $env/用户目录——测试可隔离）。 */
@@ -372,11 +434,24 @@ export class ExtensionService implements DaemonService {
 	 *  still carries `version`, so a caller can full-fetch only when the
 	 *  contribution set actually changed. */
 	async list(params?: unknown) {
+		// Phase timing, off by default: this call is the renderer's most
+		// expensive boot-time request, and which phase owns the seconds is not
+		// visible from the outside. `MUSEPI_EXTENSIONS_PROFILE=1` reports it.
+		const profile = process.env.MUSEPI_EXTENSIONS_PROFILE === "1";
+		const marks: Array<[string, number]> = [];
+		let lastAt = performance.now();
+		const mark = (label: string): void => {
+			if (!profile) return;
+			const now = performance.now();
+			marks.push([label, Math.round(now - lastAt)]);
+			lastAt = now;
+		};
 		// 扩展控制中心统一数据源 (TUI /extensions parity): all 10
 		// capability kinds normalized to one Extension shape with
 		// three states (active/disabled/shadowed). raw is heavy and
 		// served lazily via extensions.raw for the inspector.
 		const extensions = await this.getExtensions();
+		mark("extensions");
 		let s = this.#deps.settings();
 		if (!s) {
 			// Shell mode/enabled live in settings; bootstrap the shared
@@ -521,6 +596,7 @@ export class ExtensionService implements DaemonService {
 		// of the feature that was newer. 三态白名单里 undefined = 全部启用，不构成
 		// 「按预设提供」语义（只有显式声明的预设才算提供者）。fail-soft：预设面是
 		// 增益信息，任何一步失败都不阻塞清单主数据。
+		mark("compat");
 		const presets: PresetCompositionView[] = [];
 		const enabledInByName = new Map<string, string[]>();
 		try {
@@ -621,6 +697,7 @@ export class ExtensionService implements DaemonService {
 		} catch {
 			// 预设面不可用 → 清单照常，只是没有「启用于」行。
 		}
+		mark("presets");
 		const { buildProviderTabs } = await import("../../extensibility/extensions-center/state-manager");
 		const tabs = buildProviderTabs(extensions);
 		const { getAllProvidersInfo } = await import("../../capability");
@@ -629,6 +706,7 @@ export class ExtensionService implements DaemonService {
 			displayName: p.displayName,
 			enabled: p.enabled,
 		}));
+		mark("components");
 		// Renderer-side slot components (ui-slots analogue): compiled
 		// from active extension-module entries, cached 10s with the
 		// extension scan. The GUI mounts them by slot id.
@@ -643,12 +721,14 @@ export class ExtensionService implements DaemonService {
 			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 			this.#deps.cwd(),
 		);
+		mark("slots");
 		// Renderer-side per-tool views (registerToolView): the
 		// transcript dispatches by tool name, replacing the built-in renderer.
 		const toolViews = await collectToolViews(
 			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 			this.#deps.cwd(),
 		);
+		mark("toolViews");
 		// Widget types (registerWidget): daemon metadata + compiled renderer
 		// module. The GUI registers them into the widget registry; the board
 		// picker and inline renderer read the same entries.
@@ -656,18 +736,21 @@ export class ExtensionService implements DaemonService {
 			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 			this.#deps.cwd(),
 		);
+		mark("widgets");
 		// Status-bar segments (registerStatusBarSegment): the GUI status bar
 		// merges these after its built-ins, ordered by `order`.
 		const statusBarSegments = await collectStatusBarSegments(
 			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 			this.#deps.cwd(),
 		);
+		mark("statusBar");
 		// Scrollbar skins (registerScrollbarSkin): the floating rail merges these
 		// over its built-in catalog by id, so a theme bundle owns the look.
 		const scrollbarSkins = await collectScrollbarSkins(
 			extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 			this.#deps.cwd(),
 		);
+		mark("skins");
 		const lightOnly = (params as { components?: unknown } | undefined)?.components === false;
 		const version = componentVersionOf(extensions);
 		if (lightOnly) {
@@ -678,14 +761,35 @@ export class ExtensionService implements DaemonService {
 				version,
 			};
 		}
+		mark("registry");
+		if (profile) {
+			const total = marks.reduce((sum, [, ms]) => sum + ms, 0);
+			logger.info("extensions.list phases", { marks: [...marks, ["total", total]] });
+		}
+		const artifacts =
+			(params as { delivery?: unknown } | undefined)?.delivery === "url" ? this.#deps.artifacts?.() : undefined;
+		const delivered = artifacts
+			? {
+					components: publishArtifacts(
+						components,
+						"slot",
+						c => `${c.extensionId}|${c.slot}|${c.label ?? ""}`,
+						artifacts,
+					),
+					toolViews: publishArtifacts(toolViews, "tool", v => `${v.extensionId}|${v.tool}`, artifacts),
+					// Widgets stay inline: the board stores a card's compiled source with
+					// the card, so a URL there would outlive the artifact it points at.
+					widgets,
+				}
+			: { components: inlineArtifacts(components), toolViews, widgets };
 		return {
 			extensions: extensions.map(({ raw: _raw, ...rest }) => rest),
 			tabs,
 			providers,
 			version,
-			components,
-			toolViews,
-			widgets,
+			components: delivered.components,
+			toolViews: delivered.toolViews,
+			widgets: delivered.widgets,
 			statusBarSegments,
 			scrollbarSkins,
 			// Desktop-shell config: enabled/mode/

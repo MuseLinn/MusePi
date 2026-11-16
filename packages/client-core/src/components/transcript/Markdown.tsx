@@ -30,12 +30,21 @@ const ADVISORY_SEV_KEY: Record<string, TranslationKey> = {
 import { downloadBlob } from "../../lib/download";
 import { electronBridge } from "../../lib/electron-bridge";
 import { useDeepScrollShadow, useScrollShadow } from "../../lib/scroll-shadow";
+import {
+	applyAnswers,
+	autoRepairFailedBlocks,
+	handleAnswerClick,
+	handleAnswerInput,
+	setAnswerMarks,
+} from "../../ui-blocks/answers.js";
+import { isUiBlockLanguage, renderUiBlockFence, splitOpenUiFence } from "../../ui-blocks/render.js";
 import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
 import { isLocalFilePath } from "./markdown-shared";
 import { mathExtensions } from "./math";
 import { ensureMermaidFallbackObserver, mermaidMode, renderMermaidHtml } from "./mermaid";
 import { graphemeSpans } from "./reveal";
+import "../../ui-blocks/ui-blocks.css";
 import { useStreamingReveal } from "./use-streaming-reveal";
 
 /** Human-readable label for a fenced code block header. */
@@ -184,6 +193,12 @@ const md = new Marked({
 			const l = (lang ?? "").trim().toLowerCase();
 			if (l === "mermaid" || l === "mmd") {
 				return renderMermaidHtml(text, mermaidMode());
+			}
+			// Declarative UI block: data and structure the reply should show
+			// rather than describe. Rendered from JSON Lines so a fence still
+			// streaming draws its finished lines.
+			if (isUiBlockLanguage(l)) {
+				return renderUiBlockFence(text);
 			}
 			const langAttr = lang ? ` class="language-${escapeHtml(lang)}"` : "";
 			const body = escaped ? text : escapeHtml(text);
@@ -877,8 +892,14 @@ export const Markdown = memo(function Markdown({
 	// never markdown-parsed — see renderStreamingMarkdown.
 	const streamRef = useRef<StreamingRenderState | null>(null);
 	const render = useMemo(() => {
-		const result = renderStreamingMarkdown(text, streaming, streamRef.current);
+		// A reply that has opened a `ui` fence but not closed it yet still shows
+		// its block: the parser takes any prefix, so the partial tree draws and
+		// keeps growing. The fence never reaches the markdown parser, which would
+		// otherwise hold it as an unfinished code block.
+		const open = streaming ? splitOpenUiFence(text) : null;
+		const result = renderStreamingMarkdown(open ? open.head : text, streaming && !open, streamRef.current);
 		streamRef.current = result.state;
+		if (open) result.html = `${result.html}${renderUiBlockFence(open.source, false)}`;
 		return result;
 	}, [text, streaming]);
 
@@ -894,6 +915,11 @@ export const Markdown = memo(function Markdown({
 	// and toggle their wide layout from the same toolbar.
 	const onCopy = useCallback((e: ReactMouseEvent<HTMLDivElement>): void => {
 		const target = e.target as HTMLElement;
+		// A UI block's controls answer the block, not the transcript.
+		if (handleAnswerClick(target)) {
+			e.preventDefault();
+			return;
+		}
 		// Chat link → managed in-app browser (proma AgentBrowserLinkProvider
 		// parity): http(s) link clicks dispatch musepi-open-url so ChatView can
 		// open them in the right-panel browser instead of the system browser
@@ -1197,6 +1223,28 @@ export const Markdown = memo(function Markdown({
 		tailAppendedRef.current = target;
 	}, [render.tail, effect]);
 
+	// UI block answers: the markdown HTML is rewritten on every commit, so the
+	// store's state is re-applied to the fresh DOM. A control that changed the
+	// store redraws every mounted block, because the store is the single truth
+	// and a block can be re-rendered by an unrelated stream tick.
+	useLayoutEffect(() => {
+		const root = rootRef.current;
+		if (!root) return;
+		applyAnswers(root);
+		// A settled reply with a block that never drew asks for one repair by
+		// itself (GenUI auto-repair parity). A streaming reply waits: its errors
+		// are not final, and `autoRepairFailedBlocks` is idempotent per signature.
+		if (!streaming) autoRepairFailedBlocks(root);
+		setAnswerMarks(() => applyAnswers(document));
+		return () => setAnswerMarks(null);
+	}, [text, streaming]);
+
+	// Text typed into a block's field never reaches React: it belongs to the
+	// block's own answer state.
+	const onBlockInput = useCallback((e: React.FormEvent<HTMLDivElement>): void => {
+		handleAnswerInput(e.target as Element);
+	}, []);
+
 	// Local images: swap raw filesystem srcs for data URLs via the desktop
 	// bridge. Re-runs on each text change (new message content), like the
 	// highlight pass; cache keeps repeated renders instant.
@@ -1289,7 +1337,12 @@ export const Markdown = memo(function Markdown({
 	const effectCls = streaming ? ` gui-chat-effect-${effect}` : "";
 	return (
 		<>
-			<div ref={rootRef} className={`tr-md${streaming ? " tr-md--streaming" : ""}${effectCls}`} onClick={onCopy}>
+			<div
+				ref={rootRef}
+				className={`tr-md${streaming ? " tr-md--streaming" : ""}${effectCls}`}
+				onClick={onCopy}
+				onInput={onBlockInput}
+			>
 				<div ref={htmlRef} dangerouslySetInnerHTML={{ __html: body }} />
 				{/* Stable streaming-tail container: React never rebuilds this
 				 * element's children — the per-char spans are appended by the

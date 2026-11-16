@@ -280,18 +280,20 @@ describe("AgentSession retry fallback", () => {
 		expect(session.model?.provider).toBe(secondFallback.provider);
 		expect(session.model?.id).toBe(secondFallback.id);
 		expect(retryStartEvents.map(event => event.delayMs)).toEqual([0, 0]);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
 				to: `${firstFallback.provider}/${firstFallback.id}`,
 				role: "default",
+				reason: "request failed",
 			},
 			{
 				type: "retry_fallback_applied",
 				from: `${firstFallback.provider}/${firstFallback.id}`,
 				to: `${secondFallback.provider}/${secondFallback.id}`,
 				role: "default",
+				reason: "request failed",
 			},
 		]);
 		expect(retryEndEvents).toHaveLength(1);
@@ -1425,7 +1427,7 @@ describe("AgentSession retry fallback", () => {
 		]);
 		expect(session.model?.provider).toBe(secondFallback.provider);
 		expect(session.model?.id).toBe(secondFallback.id);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${firstFallback.provider}/${firstFallback.id}`,
@@ -1540,7 +1542,7 @@ describe("AgentSession retry fallback", () => {
 			provider: advisorFallback.provider,
 			id: advisorFallback.id,
 		});
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: advisorRoleSelector,
@@ -1687,7 +1689,7 @@ describe("AgentSession retry fallback", () => {
 		]);
 		expect(session.model?.provider).toBe(fallbackModel.provider);
 		expect(session.model?.id).toBe(fallbackModel.id);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
@@ -1739,7 +1741,7 @@ describe("AgentSession retry fallback", () => {
 			`${primaryModel.provider}/${primaryModel.id}`,
 			`${modelKeyFallback.provider}/${modelKeyFallback.id}`,
 		]);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
@@ -1861,7 +1863,7 @@ describe("AgentSession retry fallback", () => {
 		]);
 		expect(session.model?.provider).toBe(fallbackModel.provider);
 		expect(session.model?.id).toBe(fallbackModel.id);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
@@ -1932,7 +1934,7 @@ describe("AgentSession retry fallback", () => {
 			`${primaryModel.provider}/${primaryModel.id}`,
 			`${fallbackModel.provider}/${fallbackModel.id}`,
 		]);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
@@ -2010,7 +2012,7 @@ describe("AgentSession retry fallback", () => {
 			`${primaryModel.provider}/${primaryModel.id}`,
 			`${primaryModel.provider}/${primaryModel.id}`,
 		]);
-		expect(fallbackAppliedEvents).toEqual([]);
+		expect(fallbackAppliedEvents).toMatchObject([]);
 		expect(retryStartEvents).toEqual([]);
 		expect(session.model?.id).toBe(primaryModel.id);
 		expect(getLastAssistantMessage(session)).toMatchObject({
@@ -2096,7 +2098,7 @@ describe("AgentSession retry fallback", () => {
 			`${primaryModel.provider}/${primaryModel.id}`,
 			`${primaryModel.provider}/${primaryModel.id}`,
 		]);
-		expect(fallbackAppliedEvents).toEqual([]);
+		expect(fallbackAppliedEvents).toMatchObject([]);
 		expect(retryStartEvents).toHaveLength(1);
 		expect(retryEndEvents).toEqual([expect.objectContaining({ success: true })]);
 		expect(session.model?.id).toBe(primaryModel.id);
@@ -2160,7 +2162,7 @@ describe("AgentSession retry fallback", () => {
 		// The switch could not happen and the error is non-retryable: surface it
 		// after a single attempt instead of backoff-retrying the failing model.
 		expect(requestedModels).toEqual([`${primaryModel.provider}/${primaryModel.id}`]);
-		expect(fallbackAppliedEvents).toEqual([]);
+		expect(fallbackAppliedEvents).toMatchObject([]);
 		expect(getLastAssistantMessage(session).stopReason).toBe("error");
 	});
 
@@ -2207,7 +2209,7 @@ describe("AgentSession retry fallback", () => {
 		]);
 		expect(session.model?.provider).toBe("google-vertex");
 		expect(session.model?.id).toBe(primaryModel.id);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
@@ -2261,7 +2263,7 @@ describe("AgentSession retry fallback", () => {
 		]);
 		expect(session.model?.provider).toBe("openrouter");
 		expect(session.model?.id).toBe(`google/${primaryModel.id}`);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
@@ -2315,7 +2317,7 @@ describe("AgentSession retry fallback", () => {
 		]);
 		expect(session.model?.provider).toBe("google-vertex");
 		expect(session.model?.id).toBe(fallbackModel.id);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
@@ -2368,7 +2370,7 @@ describe("AgentSession retry fallback", () => {
 		]);
 		expect(session.model?.provider).toBe(fallbackModel.provider);
 		expect(session.model?.id).toBe(fallbackModel.id);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
@@ -2459,7 +2461,7 @@ describe("AgentSession retry fallback", () => {
 			`${primaryModel.provider}/${primaryModel.id}`,
 			`${fallbackModel.provider}/${fallbackModel.id}`,
 		]);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
@@ -2726,7 +2728,7 @@ describe("AgentSession retry fallback", () => {
 			`${primaryModel.provider}/${primaryModel.id}`,
 			`${firstFallback.provider}/${firstFallback.id}`,
 		]);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,
@@ -3430,7 +3432,7 @@ describe("AgentSession retry fallback", () => {
 			`${primaryModel.provider}/${primaryModel.id}`,
 			`${fallbackModel.provider}/${fallbackModel.id}`,
 		]);
-		expect(fallbackAppliedEvents).toEqual([
+		expect(fallbackAppliedEvents).toMatchObject([
 			{
 				type: "retry_fallback_applied",
 				from: `${primaryModel.provider}/${primaryModel.id}`,

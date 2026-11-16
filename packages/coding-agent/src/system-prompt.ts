@@ -17,7 +17,6 @@ import {
 	logger,
 	prompt,
 } from "@musepi/pi-utils";
-import { WIDGET_RENDER_WHEN } from "./bundled-plugins/visuals/when";
 import { contextFileCapability } from "./capability/context-file";
 import { systemPromptCapability } from "./capability/system-prompt";
 import { findConfigFile } from "./config";
@@ -1033,7 +1032,6 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		renderMermaid,
 		/** Same "when to visualize" rule the widget tool description carries;
 		 *  one source (visuals/when.ts), two readers. */
-		widgetRenderWhen: WIDGET_RENDER_WHEN,
 		xdevTools,
 		hasDynamicXdevTools: xdevTools.some(mounted => mounted.dynamic === true),
 		xdevDocs,

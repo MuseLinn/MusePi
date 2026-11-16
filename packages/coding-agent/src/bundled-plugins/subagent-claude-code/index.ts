@@ -50,7 +50,6 @@ export function createClaudeCodeExecutor(
 }
 
 export function apply(ctx: ExtensionAPI): void {
-	ctx.setLabel("实验性 Claude Code 子智能体");
 	registerExternalExecutableProbe(ctx, "claude");
 	const executor = ctx.config.getAll().then(config => createClaudeCodeExecutor(config));
 	ctx.subagents.register({

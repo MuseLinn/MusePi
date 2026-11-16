@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "终端",
-		"description": "为 TUI 与图形界面终端提供 bun-pty、node-pty 后端及自动回退。",
+		"label": "Terminal",
+		"description": "bun-pty and node-pty backends with automatic fallback, for the TUI and the GUI terminal.",
 		"icon": "⌨️",
 		"extensions": ["./index.ts"],
 		"components": [

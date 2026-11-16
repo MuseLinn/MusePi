@@ -1,16 +1,20 @@
 import type { WorkspaceEntry } from "@musepi/pi-wire";
+import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
+import { type FilePreviewResult, readFilePreview, releaseFilePreview } from "../../lib/file-preview";
 import { ConfirmDialog } from "../shell/ConfirmDialog";
+import { FilePreviewBody } from "./FilePreviewBody";
 
 /**
  * Guest workspace file panel: workspace.tree rendered as an expandable
- * directory tree (loaded once, folded locally), fs.read for text previews,
- * and (for write guests) delete, rename and new-file write via fs.delete /
- * fs.rename / fs.write. Root is the session cwd from the snapshot.
- * Read-only guests get browse + preview only.
+ * directory tree (loaded once, folded locally), fs.readBytes previews chosen
+ * by mime (text, image, audio, video, download), and (for write guests)
+ * delete, rename and new-file write via fs.delete / fs.rename / fs.write.
+ * Root is the session cwd from the snapshot. Read-only guests get browse +
+ * preview only.
  */
 
 interface FilePanelProps {
@@ -30,13 +34,15 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 	const [rootPath, setRootPath] = useState<string>("");
 	const [error, setError] = useState<string | null>(null);
 	const [selected, setSelected] = useState<WorkspaceEntry | null>(null);
-	const [preview, setPreview] = useState<{ text: string; size: number; mime: string } | null>(null);
-	const [previewErr, setPreviewErr] = useState<string | null>(null);
+	const [preview, setPreview] = useState<FilePreviewResult | null>(null);
+	const previewRef = useRef<FilePreviewResult | null>(null);
 	const [renaming, setRenaming] = useState<string | null>(null); // entry path being renamed
 	const [renameValue, setRenameValue] = useState("");
 	const [newFileName, setNewFileName] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [pendingDelete, setPendingDelete] = useState<WorkspaceEntry | null>(null);
+
+	const workspaceRoot = cwd ?? rootPath;
 
 	const load = useCallback(async (): Promise<void> => {
 		try {
@@ -56,26 +62,32 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 		void load();
 	}, [load]);
 
+	const readSeq = useRef(0);
+
+	const setPreviewOwned = useCallback((next: FilePreviewResult | null): void => {
+		releaseFilePreview(previewRef.current);
+		previewRef.current = next;
+		setPreview(next);
+	}, []);
+
+	// The last preview owns an object URL until it is replaced or the panel
+	// unmounts; leaking it keeps the whole file in memory.
+	useEffect(() => () => releaseFilePreview(previewRef.current), []);
+
 	const openFile = useCallback(
 		async (entry: WorkspaceEntry): Promise<void> => {
+			const seq = ++readSeq.current;
 			setSelected(entry);
-			setPreview(null);
-			setPreviewErr(null);
-			try {
-				const res = await client.rpc<{ base64: string; size: number; mime: string; error?: string }>("fs.read", {
-					path: entry.path,
-					maxBytes: 64 * 1024,
-				});
-				if (res.error) {
-					setPreviewErr(res.error);
-					return;
-				}
-				setPreview({ text: atob(res.base64), size: res.size, mime: res.mime });
-			} catch (err) {
-				setPreviewErr(err instanceof Error ? err.message : String(err));
+			setPreviewOwned(null);
+			const result = await readFilePreview(client, entry, { cwd: cwd ?? rootPath ?? null });
+			// A slower read must not replace the file the user picked after it.
+			if (seq !== readSeq.current) {
+				releaseFilePreview(result);
+				return;
 			}
+			setPreviewOwned(result);
 		},
-		[client],
+		[client, cwd, rootPath, setPreviewOwned],
 	);
 
 	const del = useCallback((entry: WorkspaceEntry): void => {
@@ -86,11 +98,12 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 		if (!pendingDelete) return;
 		setBusy(true);
 		try {
-			await client.rpc("fs.delete", { path: pendingDelete.path });
+			await client.rpc("fs.delete", { cwd: workspaceRoot, path: pendingDelete.path });
 			await load();
 			if (selected?.path === pendingDelete.path) {
+				readSeq.current += 1;
 				setSelected(null);
-				setPreview(null);
+				setPreviewOwned(null);
 			}
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
@@ -104,7 +117,11 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 		if (!renaming || !renameValue.trim()) return;
 		setBusy(true);
 		try {
-			await client.rpc("fs.rename", { from: renaming, to: joinPath(dirOf(renaming), renameValue.trim()) });
+			await client.rpc("fs.rename", {
+				cwd: workspaceRoot,
+				from: renaming,
+				to: joinPath(dirOf(renaming), renameValue.trim()),
+			});
 			setRenaming(null);
 			await load();
 		} catch (err) {
@@ -118,8 +135,12 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 		if (!newFileName.trim()) return;
 		setBusy(true);
 		try {
-			const dir = selected ? dirOf(selected.path) : rootPath;
-			await client.rpc("fs.write", { path: joinPath(dir || rootPath, newFileName.trim()), content: "" });
+			const dir = selected ? dirOf(selected.path) : "";
+			await client.rpc("fs.write", {
+				cwd: workspaceRoot,
+				path: joinPath(dir, newFileName.trim()),
+				content: "",
+			});
 			setNewFileName("");
 			await load();
 		} catch (err) {
@@ -145,7 +166,7 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 					</button>
 				</div>
 			)}
-			<div className="sh-files-body">
+			<div className="sh-files-body" data-selected={selected !== null ? "true" : undefined}>
 				<div className="sh-files-tree">
 					{tree === null ? (
 						<p className="sh-panel-state">{t("settings.loading2")}</p>
@@ -179,19 +200,31 @@ export function FilePanel({ client, cwd, readOnly }: FilePanelProps): ReactNode 
 				<div className="sh-files-preview">
 					{selected === null ? (
 						<p className="sh-panel-muted">{t("guest.selectFilePreview")}</p>
-					) : previewErr !== null ? (
-						<p className="sh-panel-error">{previewErr}</p>
 					) : preview === null ? (
 						<p className="sh-panel-state">{t("settings.loading2")}</p>
 					) : (
 						<>
 							<div className="sh-files-preview-head">
+								<button
+									type="button"
+									className="sh-files-back"
+									aria-label={t("settings.files")}
+									onClick={() => {
+										readSeq.current += 1;
+										setSelected(null);
+										setPreviewOwned(null);
+									}}
+								>
+									<ChevronLeft size={16} aria-hidden />
+								</button>
 								<span className="sh-files-preview-name">{selected.name}</span>
-								<span className="sh-panel-muted">
-									{preview.size} B · {preview.mime}
-								</span>
+								{preview.kind !== "error" && (
+									<span className="sh-panel-muted">
+										{preview.size} B · {preview.mime || "—"}
+									</span>
+								)}
 							</div>
-							<pre className="sh-files-preview-text">{preview.text}</pre>
+							<FilePreviewBody preview={preview} />
 						</>
 					)}
 				</div>
@@ -260,11 +293,14 @@ function TreeRow({
 					type="button"
 					className={`sh-tree-toggle${node.expanded ? " sh-tree-toggle--open" : ""}`}
 					onClick={() => onToggle(node)}
+					aria-expanded={node.expanded}
 				>
-					▸
+					<ChevronRight size={14} aria-hidden />
 				</button>
 			) : (
-				<span className="sh-tree-spacer" />
+				<span className="sh-tree-file-icon" aria-hidden>
+					<FileText size={14} />
+				</span>
 			)}
 			{renaming ? (
 				<input
@@ -352,7 +388,7 @@ function buildTree(entries: WorkspaceEntry[]): TreeNode[] {
 		const node: TreeNode = { ...entry, path: full, children: entry.isDir ? [] : null, expanded: false };
 		nodes.set(full, node);
 		const dir = dirOf(full);
-		const parent = dir === "/" || dir === "" ? null : nodes.get(dir);
+		const parent = dir === "" ? null : nodes.get(dir);
 		if (parent?.children) parent.children.push(node);
 		else top.push(node);
 	}
@@ -371,18 +407,20 @@ function setExpanded(nodes: TreeNode[] | null, path: string): TreeNode[] | null 
 	});
 }
 
+/** Workspace-relative tree key. No leading slash: the same string is what
+ *  every `fs.*` RPC accepts (the collab host rejects absolute paths, and the
+ *  daemon resolves it against the session cwd). */
 function normalize(p: string): string {
-	if (p === "/") return "/";
-	return `/${p.split("/").filter(Boolean).join("/")}`;
+	return p.split("/").filter(Boolean).join("/");
 }
 
 function dirOf(p: string): string {
 	const parts = normalize(p).split("/").filter(Boolean);
 	parts.pop();
-	return `/${parts.join("/")}`;
+	return parts.join("/");
 }
 
 function joinPath(dir: string, name: string): string {
 	if (name.startsWith("/")) return normalize(name);
-	return normalize(`${dir}/${name}`);
+	return normalize(dir ? `${dir}/${name}` : name);
 }

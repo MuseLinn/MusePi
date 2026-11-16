@@ -7,7 +7,8 @@
 import * as os from "node:os";
 import { arkToWireSchema, isArkSchema } from "@musepi/pi-ai/utils/schema";
 import { type Component, truncateToWidth, wrapTextWithAnsi } from "@musepi/pi-tui";
-import { t } from "../../i18n/index.js";
+import { resolveLocalizedText } from "@musepi/pi-wire";
+import { getLocale, t } from "../../i18n/index.js";
 import { theme } from "../../modes/theme/theme";
 import { shortenPath } from "../../tools/render-utils";
 import type { Extension, ExtensionState } from "./types";
@@ -30,7 +31,10 @@ export class InspectorPanel implements Component {
 		const lines: string[] = [];
 
 		// Name header
-		lines.push(theme.bold(theme.fg("accent", ext.displayName)));
+		const name = ext.displayNameI18n
+			? (resolveLocalizedText(ext.displayNameI18n, getLocale()) ?? ext.displayName)
+			: ext.displayName;
+		lines.push(theme.bold(theme.fg("accent", name)));
 		lines.push("");
 
 		// Kind badge

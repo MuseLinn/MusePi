@@ -1191,6 +1191,12 @@ export interface MarkdownTheme {
 	 * Return null to fall back to fenced code rendering.
 	 */
 	resolveMermaidAscii?: (source: string, maxWidth?: number) => string | null;
+	/**
+	 * Resolve a readable rendering for another fence language (a `ui` block, a
+	 * generated scene). Return null to fall back to a code block. This is the
+	 * seam a host uses to draw content a terminal cannot render as components.
+	 */
+	resolveFenceAscii?: (lang: string, source: string, maxWidth?: number) => string | null;
 	symbols: SymbolTheme;
 }
 
@@ -2298,15 +2304,18 @@ export class Markdown implements Component {
 			}
 
 			case "code": {
-				// Mermaid diagrams render as ASCII art when the theme supplies a
-				// resolver. The art is preformatted, so clip each row to the content
-				// width: the later wrap pass would otherwise fragment the box-drawing
-				// canvas. truncateToWidth is ANSI- and wide-char-aware, and the
-				// resolver already re-fits over-wide horizontal graphs top-down.
-				if (token.lang === "mermaid" && this.#theme.resolveMermaidAscii) {
-					const ascii = this.#theme.resolveMermaidAscii(token.text, width);
-					if (ascii) {
-						for (const asciiLine of ascii.split("\n")) {
+				{
+					// Mermaid diagrams render as ASCII art when the theme supplies a
+					// resolver. The art is preformatted, so clip each row to the content
+					// width: the later wrap pass would otherwise fragment the box-drawing
+					// canvas. truncateToWidth is ANSI- and wide-char-aware, and the
+					// resolver already re-fits over-wide horizontal graphs top-down.
+					const fenceAscii =
+						token.lang && this.#theme.resolveFenceAscii
+							? this.#theme.resolveFenceAscii(token.lang, token.text, width)
+							: null;
+					if (fenceAscii) {
+						for (const asciiLine of fenceAscii.split("\n")) {
 							lines.push(
 								renderedLine(
 									visibleWidth(asciiLine) > width
@@ -2315,23 +2324,39 @@ export class Markdown implements Component {
 								),
 							);
 						}
-						if (nextTokenType && nextTokenType !== "space") {
-							lines.push(renderedLine(""));
-						}
+						if (nextTokenType && nextTokenType !== "space") lines.push(renderedLine(""));
 						break;
 					}
-				}
+					if (token.lang === "mermaid" && this.#theme.resolveMermaidAscii) {
+						const ascii = this.#theme.resolveMermaidAscii(token.text, width);
+						if (ascii) {
+							for (const asciiLine of ascii.split("\n")) {
+								lines.push(
+									renderedLine(
+										visibleWidth(asciiLine) > width
+											? truncateToWidth(asciiLine, width, Ellipsis.Omit)
+											: asciiLine,
+									),
+								);
+							}
+							if (nextTokenType && nextTokenType !== "space") {
+								lines.push(renderedLine(""));
+							}
+							break;
+						}
+					}
 
-				const codeIndent = padding(this.#codeBlockIndent);
-				lines.push(renderedLine(this.#theme.codeBlockBorder(`\`\`\`${token.lang || ""}`)));
-				for (const bodyLine of this.#renderCodeBodyLines(token, codeIndent)) {
-					lines.push(bodyLine);
+					const codeIndent = padding(this.#codeBlockIndent);
+					lines.push(renderedLine(this.#theme.codeBlockBorder(`\`\`\`${token.lang || ""}`)));
+					for (const bodyLine of this.#renderCodeBodyLines(token, codeIndent)) {
+						lines.push(bodyLine);
+					}
+					lines.push(renderedLine(this.#theme.codeBlockBorder("```")));
+					if (nextTokenType && nextTokenType !== "space") {
+						lines.push(renderedLine("")); // Add spacing after code blocks (unless space token follows)
+					}
+					break;
 				}
-				lines.push(renderedLine(this.#theme.codeBlockBorder("```")));
-				if (nextTokenType && nextTokenType !== "space") {
-					lines.push(renderedLine("")); // Add spacing after code blocks (unless space token follows)
-				}
-				break;
 			}
 
 			case "list": {

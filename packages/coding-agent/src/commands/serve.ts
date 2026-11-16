@@ -30,7 +30,17 @@ export default class Serve extends Command {
 	};
 
 	async run(): Promise<void> {
+		// Phase timing for the desktop shell's spawn: `performance.now()` counts
+		// from process start, so the first mark includes module loading — the part
+		// a caller cannot see and the part that dominates a cold daemon.
+		const trace = (label: string): void => {
+			if (process.env.MUSEPI_STARTUP_PERF === "1") {
+				console.error(`[serve] ${label} ${Math.round(performance.now())}ms`);
+			}
+		};
+		trace("run.start");
 		const { flags } = await this.parse(Serve);
+		trace("parsed");
 		const wsPort = flags.port;
 		if (wsPort !== undefined && (wsPort < 1 || wsPort > 65535)) {
 			throw new Error(`Invalid --port: ${wsPort}`);
@@ -58,6 +68,7 @@ export default class Serve extends Command {
 			remoteToken,
 			parentPid,
 		});
+		trace("daemon.started");
 		process.stdout.write(`musepi daemon listening on ${socketPath}\n`);
 		if (boundWsPort) {
 			process.stdout.write(

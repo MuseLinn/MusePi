@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "语音输入（STT）",
+		"description": "本地 Whisper、SenseVoice 与 Parakeet 语音转写，首次使用时下载模型。"
+	}
+}

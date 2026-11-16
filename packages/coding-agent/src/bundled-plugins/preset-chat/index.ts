@@ -31,6 +31,5 @@ export const chatPersonaSections = [
 
 /** Cordis entry: register the persona section on the fiber that owns it. */
 export function apply(ctx: ExtensionAPI): void {
-	ctx.setLabel("MusePi Chat Persona");
 	for (const section of chatPersonaSections) ctx.prompts.register(section);
 }

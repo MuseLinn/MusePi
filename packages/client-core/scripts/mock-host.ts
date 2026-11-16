@@ -429,7 +429,8 @@ function handleRpcRequest(reqId: number, method: string, params: unknown, fromPe
 				);
 				break;
 			}
-			case "fs.read": {
+			case "fs.read":
+			case "fs.readBytes": {
 				const path = String(p.path ?? "");
 				const size = mockFileSizes.get(path);
 				if (size === undefined) {

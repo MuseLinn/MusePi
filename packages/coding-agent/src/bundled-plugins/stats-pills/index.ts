@@ -39,8 +39,6 @@ export function apply(ctx: ExtensionAPI): void {
 }
 
 function statsPills(ctx: ExtensionAPI): void {
-	ctx.setLabel("MusePi 性能与用量");
-
 	// `composer.dock` 是输入卡下方的整行座位，正是这类「一行读数」
 	// 该待的位置——读数属于 composer 的页脚行，跟在输入卡之后，不占用
 	// 上方 dock 的状态行，也不会压在对话内容上。

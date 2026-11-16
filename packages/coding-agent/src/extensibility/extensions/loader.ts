@@ -61,7 +61,7 @@ import { getAllPluginExtensionPaths } from "../plugins/runtime/loader";
 import { resolvePath, withHostGuard } from "../utils";
 import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
 import { handlerTimeoutForEvent } from "./handler-timeout";
-import { readExtensionPluginMeta } from "./plugin-manifest";
+import { readExtensionPluginLabel, readExtensionPluginMeta } from "./plugin-manifest";
 import { currentSessionScope, PRESET_SCOPE_TAG } from "./session-dispatch";
 import { sessionStopContinues } from "./session-stop-result";
 import { applyToolResultPatch } from "./tool-result-patch";
@@ -1557,6 +1557,11 @@ async function bindExtension(
 	}
 	try {
 		const extension = createExtension(extensionPath, imported.resolvedPath);
+		// The name the agent-facing `extensions-inventory` prompt section and the
+		// `plugins.list` readout show. The manifest owns it, so a package cannot
+		// name itself twice and drift; `ctx.setLabel` remains the runtime override
+		// for a plugin that decides its name while loading.
+		extension.label = await readExtensionPluginLabel(imported.resolvedPath);
 		await withHostGuard(() =>
 			runFactoryInFiber(extension, runtime, cwd, eventBus, factory, ownContext =>
 				wrapApi(createConcreteExtensionAPI(extension, runtime, cwd, eventBus, ownContext), extension),

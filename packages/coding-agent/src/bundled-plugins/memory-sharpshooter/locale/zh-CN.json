@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "Sharpshooter 记忆后端",
+		"description": "宿主侧适配器：把 Sharpshooter 引擎注册为记忆后端 provider。"
+	}
+}

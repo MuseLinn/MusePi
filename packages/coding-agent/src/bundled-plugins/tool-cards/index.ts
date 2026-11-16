@@ -8,6 +8,4 @@ export function apply(ctx: ExtensionAPI): void {
 	toolCards(ctx);
 }
 
-function toolCards(ctx: ExtensionAPI): void {
-	ctx.setLabel("工具卡片渲染器");
-}
+function toolCards(ctx: ExtensionAPI): void {}

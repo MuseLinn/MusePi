@@ -1,0 +1,14 @@
+{
+	"name": "musepi-session-info-resources",
+	"version": "0.1.0",
+	"private": true,
+	"description": "MusePi session info card: process and machine resource readouts.",
+	"license": "MIT",
+	"type": "module",
+	"musepi": {
+		"icon": "🖥",
+		"label": "Session Resources",
+		"description": "Three resource readouts inside the session info card: process RSS and CPU, machine CPU, memory used of total. An unmeasured CPU reads as a dash.",
+		"extensions": ["./index.ts"]
+	}
+}

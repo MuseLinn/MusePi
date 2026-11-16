@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "文件技能",
-		"description": "把一个或多个 skill 根目录声明为预设组合里的一行：目录 bundle（<name>/SKILL.md）与扁平 <name>.md 都会注册进本会话的技能目录。",
+		"label": "Skill Folders",
+		"description": "Declare one or more skill roots as one line of a preset: directory bundles (<name>/SKILL.md) and flat <name>.md both register into this session's skill catalog.",
 		"icon": "S",
 		"presetOnly": true,
 		"extensions": ["./index.ts"],

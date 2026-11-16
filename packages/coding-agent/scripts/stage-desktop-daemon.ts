@@ -111,6 +111,15 @@ async function stagePlugin(sourceDir: string, destinationDir: string): Promise<v
 	if (skillsStat?.isDirectory()) {
 		await fs.cp(skillsSource, path.join(destinationDir, "skills"), { recursive: true });
 	}
+	// `locale/<tag>.json` is read from disk by `readExtensionPluginMeta` when
+	// discovery walks the staged tree — it is data, not an import, so bundling
+	// the entry would not carry it. Ship it whole or every plugin falls back to
+	// its single manifest label in the packaged build.
+	const localeSource = path.join(sourceDir, "locale");
+	const localeStat = await fs.stat(localeSource).catch(() => null);
+	if (localeStat?.isDirectory()) {
+		await fs.cp(localeSource, path.join(destinationDir, "locale"), { recursive: true });
+	}
 	const entries = declaredEntries(manifest, name);
 	const declaredComponents = parsePluginComponents(manifest.musepi?.components).components;
 	const entryFiles = new Set([

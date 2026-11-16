@@ -3960,6 +3960,7 @@ export class AgentSession {
 				from: event.from,
 				to: event.to,
 				role: event.role,
+				reason: event.reason,
 			});
 		} else if (event.type === "retry_fallback_succeeded") {
 			await this.#extensionRunner.emit({
@@ -6857,7 +6858,7 @@ export class AgentSession {
 				// Await the idempotent dispose() before exiting so the browser
 				// reaper and other bounded teardown complete — a fire-and-forget
 				// `void this.dispose()` raced process.exit() and could leave an
-				// OMP-owned Chromium alive (#5643).
+				// MusePi-owned Chromium alive (#5643).
 				void this.dispose().finally(() => process.exit(0));
 			},
 			getContextUsage: () => this.getContextUsage(),
@@ -9013,14 +9014,22 @@ export class AgentSession {
 	 * the snapshot + stream pipeline. The snapshot includes any in-flight
 	 * streaming assistant text so the model sees the half-finished response
 	 * rather than missing context.
+	 *
+	 * `modelSource` picks which model runs the side turn. The default follows
+	 * `sideChannelModel` so /btw, /omfg and the idle recap can be pointed at a
+	 * different model than the session runs. Callers that continue the current
+	 * turn instead — a prediction of what the user types next — must pass
+	 * `"session"`: the provider's cached prefix belongs to that model, so a
+	 * different one turns every such request into a full cache miss.
 	 */
 	async runEphemeralTurn(args: {
 		promptText: string;
 		onTextDelta?: (delta: string) => void;
 		signal?: AbortSignal;
 		dedupeReply?: boolean;
+		modelSource?: "sideChannel" | "session";
 	}): Promise<{ replyText: string; assistantMessage: AssistantMessage }> {
-		const model = this.#sideChannelModel();
+		const model = args.modelSource === "session" ? this.model : this.#sideChannelModel();
 		if (!model) {
 			throw new Error("No active model on session");
 		}

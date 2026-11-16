@@ -307,6 +307,7 @@ import { dropManagedBrowserBridge } from "../tools/browser/managed-bridge";
 import { isFileIndexBackendEnabled } from "../tools/file-backend";
 import { openPath } from "../utils/open";
 import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
+import { type ArtifactServerHandle, startArtifactServer, tryStartArtifactServer } from "./artifact-server";
 import { applyPluginChangeToSessions, type LiveApplySummary, type LiveApplyTarget } from "./live-plugin-apply";
 import { AgentsService } from "./services/agents-service";
 import { ApprovalService } from "./services/approval-service";
@@ -437,9 +438,20 @@ export class DaemonServer {
 	#webUrl: string | null = null;
 	/** Plugin-contributed HTTP route table (set once the web server is up). */
 	#webRoutes: WebRouteRegistry | null = null;
+	/** Loopback origin serving compiled extension artifacts as resources. */
+	#artifacts: ArtifactServerHandle | null = null;
 
 	setWebUrl(url: string | null): void {
 		this.#webUrl = url;
+	}
+
+	/**
+	 * Hand the artifact origin to the extension service: `extensions.list`
+	 * publishes compiled modules here and answers with their URLs instead of
+	 * inline code. Absent server ⇒ inline delivery, exactly as before.
+	 */
+	setArtifactServer(handle: ArtifactServerHandle | null): void {
+		this.#artifacts = handle;
 	}
 
 	getWebUrl(): string | null {
@@ -697,6 +709,7 @@ export class DaemonServer {
 				cwd: () => this.#host.cwd(),
 				webUrl: () => this.#webUrl,
 				webRoutes: () => this.#webRoutes ?? undefined,
+				artifacts: () => this.#artifacts ?? undefined,
 				webPortFile: () => path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port"),
 				modesDir: () => this.#modesDir(),
 				dynamicRuntime: () => this.#getDynamicPlugins(),
@@ -6348,6 +6361,23 @@ export async function startDaemon(
 	// (and any extension center) sees where the runtime-served content lives.
 	server.setWebUrl(webHandle?.url ?? null);
 	server.setWebRoutes(webHandle?.routes ?? null);
+	// Compiled extension artifacts get an origin of their own: the renderer
+	// holds a URL per module and revalidates it over HTTP instead of receiving
+	// every module inside `extensions.list`. When the daemon also serves the
+	// renderer, artifacts ride that same origin — the page can then import a
+	// module URL directly instead of evaluating a blob. Otherwise they get a
+	// loopback port of their own (stable across daemons, see artifacts.port).
+	const artifacts = webHandle ? startArtifactServer({ bind: false }) : await tryStartArtifactServer();
+	let unregisterArtifacts: (() => void) | undefined;
+	if (webHandle && artifacts) {
+		artifacts.setOrigin(webHandle.url);
+		unregisterArtifacts = webHandle.routes?.register({
+			kind: "prefix",
+			path: "/extensions/artifacts/",
+			handler: request => artifacts.handle(request),
+		});
+	}
+	server.setArtifactServer(artifacts);
 	server.setSocketPath(socketPath);
 
 	const netServer = net.createServer(socket => {
@@ -6436,8 +6466,10 @@ export async function startDaemon(
 			} catch {
 				// already gone
 			}
+			unregisterArtifacts?.();
 			if (wsHandle) await wsHandle.close();
 			if (webHandle) await webHandle.close();
+			if (artifacts) await artifacts.close();
 			unsubscribePause();
 			for (const socket of sockets) socket.destroy();
 			await server.disposeHostContext();

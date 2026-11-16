@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "MusePi 产品技能",
-		"description": "提供看板、界面、插件开发与 MusePi 使用等六项内置技能及其资源。",
+		"label": "MusePi Product Skills",
+		"description": "Six built-in skills — board, interface, plugin development and using MusePi — with their resources.",
 		"icon": "✦",
 		"extensions": ["./index.ts"]
 	}

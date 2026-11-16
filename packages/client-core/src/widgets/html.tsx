@@ -6,7 +6,7 @@ import { MAX_WIDGET_HTML } from "@musepi/pi-utils/widget-html-limit";
 import { Pencil as PencilIconData, X as XIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
 	ANNOTATION_TEARDOWN_SCRIPT,
@@ -224,7 +224,15 @@ export function readFaceTokens(): Record<string, string> {
 }
 
 /** What a sandbox face is allowed to ask the host for. */
-export type WidgetFaceMessage = { kind: "resize"; height: number } | { kind: "submit"; text: string; data?: unknown };
+export type WidgetFaceMessage =
+	| { kind: "resize"; height: number }
+	| { kind: "submit"; text: string; data?: unknown }
+	/** A card reading one of its own workspace files. The host resolves it
+	 *  against the card's folder; the face never sees a path outside it. */
+	| { kind: "resource"; id: number; op: "list" | "read"; path: string }
+	/** What the reader highlighted inside the page. The host turns it into a
+	 *  chat quote — the page cannot reach the transcript itself. */
+	| { kind: "selection"; text: string };
 
 /**
  * Route one postMessage from a sandbox face.
@@ -244,6 +252,19 @@ export function readWidgetFaceMessage(
 	if (!d || typeof d !== "object") return null;
 	if (d.type === "musepi-widget-resize" && typeof d.height === "number") {
 		return { kind: "resize", height: d.height };
+	}
+	if (d.type === "musepi-widget-selection" && typeof (d as { text?: unknown }).text === "string") {
+		const text = (d as { text: string }).text.trim();
+		return text ? { kind: "selection", text: text.slice(0, MAX_SUBMIT_TEXT) } : null;
+	}
+	if (
+		d.type === "musepi-widget-resource" &&
+		typeof (d as { id?: unknown }).id === "number" &&
+		(((d as { op?: unknown }).op === "read" && typeof (d as { path?: unknown }).path === "string") ||
+			(d as { op?: unknown }).op === "list")
+	) {
+		const op = (d as { op: "list" | "read" }).op;
+		return { kind: "resource", id: (d as { id: number }).id, op, path: (d as { path?: string }).path ?? "" };
 	}
 	if (d.type === "musepi-widget-submit" && typeof d.text === "string" && d.text.length > 0) {
 		const data = readAnswerData(d.data);
@@ -265,6 +286,37 @@ function readAnswerData(value: unknown): unknown {
 	}
 	return json.length <= MAX_SUBMIT_DATA ? value : undefined;
 }
+
+/** How one card's workspace is addressed: the board it sits on and its card id. */
+export interface WidgetResourceScope {
+	boardId: string;
+	widgetId: string;
+}
+
+/**
+ * Who answers a card's file requests.
+ *
+ * The registry is module state because cards are plain components reached
+ * through the widget registry: threading a resolver down that path would add a
+ * prop to every renderer for one feature. The host (the board page) installs
+ * one resolver for the whole surface and clears it on unmount, which is also
+ * what bounds the capability: with no resolver installed, a card cannot read
+ * anything.
+ */
+export type WidgetResourceResolver = (
+	scope: WidgetResourceScope,
+	op: "list" | "read",
+	path: string,
+) => Promise<{ text?: string; entries?: unknown[] }>;
+
+let resourceResolver: WidgetResourceResolver | null = null;
+
+export function setWidgetResourceResolver(next: WidgetResourceResolver | null): void {
+	resourceResolver = next;
+}
+
+/** The card's own scope, published by the surface that renders it. */
+export const WidgetScopeContext = createContext<WidgetResourceScope | null>(null);
 
 export function htmlDefaults(): Record<string, unknown> {
 	return { html: "", data: {} };
@@ -351,33 +403,33 @@ window.DaimonCanvas = window.DaimonCanvas || { canvasId: ${JSON.stringify(canvas
 // below it; prefer body content (which can shrink), grow the frame for
 // scrollers pinned to the bottom edge (the chat scrolls, not the card), and
 // give the page its own scrollbar only when the host caps the frame.
-var ompMeasure = { dirty: 1, positioned: [], scrollers: [], scrollerMemo: new WeakMap(), lastHeight: 0, lastOverflow: false, scheduled: 0 };
-function ompInsideClipper(el) {
+var musepiMeasure = { dirty: 1, positioned: [], scrollers: [], scrollerMemo: new WeakMap(), lastHeight: 0, lastOverflow: false, scheduled: 0 };
+function musepiInsideClipper(el) {
   for (var a = el.parentElement; a && a !== document.body; a = a.parentElement) {
     var o = getComputedStyle(a);
     if (o.overflowX !== "visible" || o.overflowY !== "visible") return true;
   }
   return false;
 }
-function ompScan() {
-  ompMeasure.dirty = 0;
-  ompMeasure.positioned = [];
-  ompMeasure.scrollers = [];
+function musepiScan() {
+  musepiMeasure.dirty = 0;
+  musepiMeasure.positioned = [];
+  musepiMeasure.scrollers = [];
   var all = document.body ? document.body.getElementsByTagName("*") : [];
   for (var i = 0; i < all.length && i < 5000; i++) {
     var el = all[i];
     var style = getComputedStyle(el);
     var pos = style.position;
-    if ((pos === "absolute" || pos === "fixed") && !ompInsideClipper(el)) ompMeasure.positioned.push(el);
-    if (/^(?:scroll|auto)$/.test(style.overflowY)) ompMeasure.scrollers.push(el);
+    if ((pos === "absolute" || pos === "fixed") && !musepiInsideClipper(el)) musepiMeasure.positioned.push(el);
+    if (/^(?:scroll|auto)$/.test(style.overflowY)) musepiMeasure.scrollers.push(el);
   }
 }
-function ompBodyBoxHeight(d) {
+function musepiBodyBoxHeight(d) {
   var b = d.getBoundingClientRect();
   return b.top + window.scrollY + (d.clientTop + d.scrollHeight) * (d.offsetHeight ? b.height / d.offsetHeight : 1);
 }
-function ompBodyContentHeight(d) {
-  var box = ompBodyBoxHeight(d);
+function musepiBodyContentHeight(d) {
+  var box = musepiBodyBoxHeight(d);
   // A stretched body (height:100%, a min-height shell) reports the viewport
   // through scrollHeight. The in-flow children's extent is the real content
   // bottom then, so a fitted card can shrink instead of holding a viewport of
@@ -397,15 +449,15 @@ function ompBodyContentHeight(d) {
   extent += parseFloat(getComputedStyle(d).paddingBottom) || 0;
   return extent > 0 ? Math.min(box, extent) : box;
 }
-function ompMeasureHeight() {
+function musepiMeasureHeight() {
   var r = document.documentElement;
   var d = document.body;
-  if (ompMeasure.dirty) ompScan();
+  if (musepiMeasure.dirty) musepiScan();
   // Is any scroller (or the body) actually scrolling its own content? A page
   // with one is a fill-the-frame page: do not shrink it to its children.
   var scrollerOverflows = false;
-  for (var k = 0; k < ompMeasure.scrollers.length; k++) {
-    var scroller = ompMeasure.scrollers[k];
+  for (var k = 0; k < musepiMeasure.scrollers.length; k++) {
+    var scroller = musepiMeasure.scrollers[k];
     if (scroller.scrollHeight > scroller.clientHeight + 1) {
       scrollerOverflows = true;
       break;
@@ -421,15 +473,15 @@ function ompMeasureHeight() {
   // Body content, unless the body itself scrolls/clips: then its scrollHeight
   // is the scroller's size, not the content's.
   if (d && !/^(?:hidden|clip|scroll|auto)$/.test(getComputedStyle(d).overflowY)) {
-    var bodyHeight = scrollerOverflows ? ompBodyBoxHeight(d) : ompBodyContentHeight(d);
+    var bodyHeight = scrollerOverflows ? musepiBodyBoxHeight(d) : musepiBodyContentHeight(d);
     // Overflowing root: the taller wins. Fitted root: the body's content is
     // the authority and may shrink below the frame's viewport.
     v = rootOverflows ? Math.max(v, bodyHeight) : bodyHeight;
   }
   if (v <= 0) v = r.getBoundingClientRect().height;
   // Positioned popups that stick out past the card are part of its box.
-  for (var i = 0; i < ompMeasure.positioned.length; i++) {
-    var p = ompMeasure.positioned[i];
+  for (var i = 0; i < musepiMeasure.positioned.length; i++) {
+    var p = musepiMeasure.positioned[i];
     var pr = p.getBoundingClientRect();
     if (!pr.width && !pr.height) continue;
     var bottom = pr.bottom + window.scrollY;
@@ -439,19 +491,19 @@ function ompMeasureHeight() {
   // scrolling inside it: one scrollbar (the chat's), not two. Its grown
   // request is remembered while its own height is unchanged, so growing the
   // frame (which unpins it) cannot oscillate back to the short size.
-  for (var j = -1; j < ompMeasure.scrollers.length; j++) {
-    var s = j < 0 ? d : ompMeasure.scrollers[j];
+  for (var j = -1; j < musepiMeasure.scrollers.length; j++) {
+    var s = j < 0 ? d : musepiMeasure.scrollers[j];
     if (!s || s.scrollHeight <= s.clientHeight + 1) continue;
     if (j < 0 && !/^(?:scroll|auto)$/.test(getComputedStyle(s).overflowY)) continue;
     var sr = s.getBoundingClientRect();
     var pinned = sr.top <= 1 && Math.abs(sr.bottom - window.innerHeight) <= 1;
-    var memo = ompMeasure.scrollerMemo.get(s);
+    var memo = musepiMeasure.scrollerMemo.get(s);
     var grown;
     if (memo && Math.abs(memo[0] - sr.height) < 0.5) {
       grown = memo[1];
     } else if (pinned) {
       grown = window.innerHeight + s.scrollHeight - s.clientHeight;
-      ompMeasure.scrollerMemo.set(s, [sr.height, grown]);
+      musepiMeasure.scrollerMemo.set(s, [sr.height, grown]);
     } else {
       continue;
     }
@@ -460,30 +512,64 @@ function ompMeasureHeight() {
   // The page scrollbar exists only when the host caps the frame (content
   // taller than the card may occupy); a fitted card shows none.
   var overflow = v > window.innerHeight + 1;
-  if (overflow !== ompMeasure.lastOverflow) {
-    ompMeasure.lastOverflow = overflow;
+  if (overflow !== musepiMeasure.lastOverflow) {
+    musepiMeasure.lastOverflow = overflow;
     r.style.overflowY = overflow ? "auto" : "hidden";
   }
   return v;
 }
-function ompReportHeight() {
+function musepiReportHeight() {
   try {
-    var height = Math.ceil(ompMeasureHeight());
-    if (height === ompMeasure.lastHeight) return;
-    ompMeasure.lastHeight = height;
+    var height = Math.ceil(musepiMeasureHeight());
+    if (height === musepiMeasure.lastHeight) return;
+    musepiMeasure.lastHeight = height;
     parent.postMessage({ type: "musepi-widget-resize", mountId: window.DaimonCanvas && window.DaimonCanvas.mountId, height: height }, "*");
   } catch (err) {}
 }
-function ompScheduleReport() {
-  if (ompMeasure.scheduled) return;
+function musepiScheduleReport() {
+  if (musepiMeasure.scheduled) return;
   // Timers, not requestAnimationFrame: a backgrounded tab/webview pauses rAF,
   // and a page that shrinks while hidden would keep its stale frame height
   // until it is shown again.
-  ompMeasure.scheduled = setTimeout(function () {
-    ompMeasure.scheduled = 0;
-    ompReportHeight();
+  musepiMeasure.scheduled = setTimeout(function () {
+    musepiMeasure.scheduled = 0;
+    musepiReportHeight();
   }, 16);
 }
+/* A card's workspace. Every call is answered by the host, which resolves the
+   path inside this card's own folder: the face cannot name a file outside it,
+   and with no workspace it gets a refusal instead of hanging. */
+var musepiResourceSeq = 0;
+var musepiResourcePending = {};
+function musepiResourceRequest(op, path) {
+  return new Promise(function (resolve, reject) {
+    var id = ++musepiResourceSeq;
+    musepiResourcePending[id] = { resolve: resolve, reject: reject };
+    try {
+      parent.postMessage({ type: "musepi-widget-resource", id: id, op: op, path: path }, "*");
+    } catch (err) {
+      delete musepiResourcePending[id];
+      reject(err);
+    }
+  });
+}
+window.musepiResources = {
+  list: function () { return musepiResourceRequest("list", ""); },
+  read: function (path) { return musepiResourceRequest("read", String(path == null ? "" : path)); }
+};
+/* A selection inside the page is quotable: the host turns it into a chat quote,
+   because a sandbox cannot reach the transcript. Debounced, and an empty
+   selection reports empty so the affordance disappears. */
+var musepiSelectionTimer = 0;
+function musepiReportSelection() {
+  var text = "";
+  try { text = String(window.getSelection ? window.getSelection().toString() : "").trim(); } catch (err) {}
+  try { parent.postMessage({ type: "musepi-widget-selection", text: text.slice(0, 4000) }, "*"); } catch (err) {}
+}
+document.addEventListener("selectionchange", function () {
+  clearTimeout(musepiSelectionTimer);
+  musepiSelectionTimer = setTimeout(musepiReportSelection, 180);
+});
 window.musepiSubmit = function (text, data) {
   // One answer per card: the host drops repeats, and this keeps the face
   // from queueing them in the first place.
@@ -492,13 +578,13 @@ window.musepiSubmit = function (text, data) {
     parent.postMessage({ type: "musepi-widget-submit", text: String(text == null ? "" : text), data: data === undefined ? undefined : data }, "*");
   } catch (err) {}
 };
-window.addEventListener("load", function () { ompMeasure.dirty = 1; ompReportHeight(); });
-window.addEventListener("resize", ompReportHeight);
+window.addEventListener("load", function () { musepiMeasure.dirty = 1; musepiReportHeight(); });
+window.addEventListener("resize", musepiReportHeight);
 if (window.ResizeObserver) {
-  var ompResizeObserver = new ResizeObserver(ompReportHeight);
-  ompResizeObserver.observe(document.documentElement);
+  var musepiResizeObserver = new ResizeObserver(musepiReportHeight);
+  musepiResizeObserver.observe(document.documentElement);
   document.addEventListener("DOMContentLoaded", function () {
-    if (document.body) ompResizeObserver.observe(document.body);
+    if (document.body) musepiResizeObserver.observe(document.body);
   });
 }
 new MutationObserver(function (records) {
@@ -507,11 +593,11 @@ new MutationObserver(function (records) {
   // when its child shrinks, so ResizeObserver alone would miss it.
   for (var i = 0; i < records.length; i++) {
     if (records[i].type !== "attributes") {
-      ompMeasure.dirty = 1;
+      musepiMeasure.dirty = 1;
       break;
     }
   }
-  ompScheduleReport();
+  musepiScheduleReport();
 }).observe(document.documentElement, {
   subtree: true,
   childList: true,
@@ -522,7 +608,7 @@ new MutationObserver(function (records) {
 // A focused frame keeps every key, so the app's Cmd/Ctrl shortcuts die while
 // the page has focus. Pass on the chords the page left alone; clipboard,
 // select-all and undo stay the page's own.
-function ompForwardKey(e, kind) {
+function musepiForwardKey(e, kind) {
   if (!(e.metaKey || e.ctrlKey) || e.altKey || e.isComposing) return;
   var t = e.target;
   if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ""))) return;
@@ -531,20 +617,20 @@ function ompForwardKey(e, kind) {
   if (k === "c" || k === "v" || k === "x" || k === "a" || k === "z") return;
   try { parent.postMessage({ type: "musepi-widget-key", kind: kind, key: e.key, code: e.code, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey }, "*"); } catch (err) {}
 }
-window.addEventListener("keydown", function (e) { ompForwardKey(e, "down"); });
-window.addEventListener("keyup", function (e) { ompForwardKey(e, "up"); });
+window.addEventListener("keydown", function (e) { musepiForwardKey(e, "down"); });
+window.addEventListener("keyup", function (e) { musepiForwardKey(e, "up"); });
 // A page that fits its frame never scrolls inside; hand the wheel back so it
 // scrolls the chat around the page. A page the host had to cap keeps its own
 // scrollbar, and the wheel must scroll that page first — one scroller at a
 // time, matching the height probe above.
-function ompPageScrollable(deltaY) {
+function musepiPageScrollable(deltaY) {
   var sc = document.scrollingElement;
   if (!sc || sc.scrollHeight <= sc.clientHeight + 1) return false;
   var atTop = sc.scrollTop <= 0;
   var atBottom = sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 1;
   return !((deltaY < 0 && atTop) || (deltaY > 0 && atBottom));
 }
-function ompCanScroll(node, deltaY) {
+function musepiCanScroll(node, deltaY) {
   while (node && node.nodeType === 1) {
     var style = getComputedStyle(node);
     if (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight + 1) {
@@ -554,10 +640,10 @@ function ompCanScroll(node, deltaY) {
     }
     node = node.parentElement;
   }
-  return ompPageScrollable(deltaY);
+  return musepiPageScrollable(deltaY);
 }
 window.addEventListener("wheel", function (e) {
-  if (ompCanScroll(e.target, e.deltaY)) return;
+  if (musepiCanScroll(e.target, e.deltaY)) return;
   try { parent.postMessage({ type: "musepi-widget-wheel", deltaY: e.deltaY, deltaMode: e.deltaMode }, "*"); } catch (err) {}
 }, { passive: true });
 window.addEventListener("message", function (e) {
@@ -565,7 +651,14 @@ window.addEventListener("message", function (e) {
   if (d && d.type === "musepi-widget-font" && typeof d.px === "number") {
     document.documentElement.style.fontSize = d.px + "px";
     document.documentElement.style.setProperty("--page-rem", d.px + "px");
-    ompReportHeight();
+    musepiReportHeight();
+  }
+  if (d && d.type === "musepi-widget-resource-result" && typeof d.id === "number") {
+    var pending = musepiResourcePending[d.id];
+    if (!pending) return;
+    delete musepiResourcePending[d.id];
+    if (d.ok) pending.resolve({ text: d.text, entries: d.entries });
+    else pending.reject(new Error(typeof d.error === "string" ? d.error : "resource unavailable"));
   }
   if (d && d.type === "musepi-widget-answered") {
     window.musepiWidgetAnswered = true;
@@ -680,6 +773,14 @@ export function HtmlCard({
 	const raw = typeof data.html === "string" ? data.html : "";
 	const oversize = raw.length > MAX_HTML;
 	const frameRef = useRef<HTMLIFrameElement | null>(null);
+	// The surface publishes which card this is; the listener reads it through a
+	// ref so installing a scope never rebuilds the frame.
+	const scope = useContext(WidgetScopeContext);
+	// What the reader highlighted inside the page, so the head row can offer a
+	// quote. The page cannot add one itself: the transcript is not its DOM.
+	const [faceSelection, setFaceSelection] = useState("");
+	const scopeRef = useRef<WidgetResourceScope | null>(scope);
+	scopeRef.current = scope;
 	// One answer per card. Ref, not state: a re-render must not reopen the gate.
 	const gateRef = useRef(createAnswerGate());
 	/** The answer this card accepted. Kept so a REBUILT frame (theme flip
@@ -950,6 +1051,28 @@ export function HtmlCard({
 				if (frameKey) rememberFrameHeight(frameKey, height);
 				setFrameReady(true);
 				setFrameHeight(prev => (prev === height ? prev : height));
+			} else if (msg?.kind === "selection") {
+				setFaceSelection(msg.text);
+			} else if (msg?.kind === "resource") {
+				// The card asks for a file in its own workspace. No scope or no
+				// resolver means no capability: answer with a refusal rather than
+				// leaving the page waiting forever.
+				const reply = (payload: { ok: boolean; text?: string; entries?: unknown[]; error?: string }): void => {
+					frameRef.current?.contentWindow?.postMessage(
+						{ type: "musepi-widget-resource-result", id: msg.id, ...payload },
+						"*",
+					);
+				};
+				const scope = scopeRef.current;
+				if (!scope || !resourceResolver) {
+					reply({ ok: false, error: "this card has no workspace" });
+					return;
+				}
+				void resourceResolver(scope, msg.op, msg.path)
+					.then(result => reply({ ok: true, ...result }))
+					.catch((error: unknown) =>
+						reply({ ok: false, error: error instanceof Error ? error.message : String(error) }),
+					);
 			} else if (msg?.kind === "submit") {
 				const claimed = gateRef.current.claim(msg.text);
 				if (claimed === null) return;
@@ -971,6 +1094,20 @@ export function HtmlCard({
 	}
 	// The annotation entry sits with the card's other head actions. A face
 	// outside a card (board canvas, export) has no slot and keeps its own row.
+	const quoteAction = faceSelection ? (
+		<button
+			type="button"
+			className="gui-widget-annotate-btn"
+			title={t("annotation.quoteSelection")}
+			aria-label={t("annotation.quoteSelection")}
+			onClick={() => {
+				window.dispatchEvent(new CustomEvent("musepi-gui-quote-append", { detail: { text: faceSelection } }));
+				setFaceSelection("");
+			}}
+		>
+			””
+		</button>
+	) : null;
 	const annotateAction = annotateCapture ? (
 		<button
 			type="button"
@@ -983,15 +1120,22 @@ export function HtmlCard({
 			<MorphIcon icon={annotating ? XIconData : PencilIconData} size={12} spring="snappy" />
 		</button>
 	) : null;
+	const headActions = (
+		<>
+			{quoteAction}
+			{annotateAction}
+		</>
+	);
+	const hasHeadActions = quoteAction !== null || annotateAction !== null;
 	return (
 		<div className="gui-widget-html-wrap">
-			{annotateAction ? (
+			{hasHeadActions ? (
 				headSlot ? (
-					createPortal(annotateAction, headSlot)
+					createPortal(headActions, headSlot)
 				) : (
 					// Board canvas / HTML export: no card head to portal into, so the
-					// entry keeps its own row above the page.
-					<div className="gui-widget-html-tools">{annotateAction}</div>
+					// entries keep their own row above the page.
+					<div className="gui-widget-html-tools">{headActions}</div>
 				)
 			) : null}
 			<iframe

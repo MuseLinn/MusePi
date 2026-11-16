@@ -80,6 +80,11 @@ async function fixture(): Promise<{ repoRoot: string; outputDir: string; binaryP
 			"---\nname: fixture-skill\ndescription: Fixture skill\n---\nUse the fixture resource.\n",
 		);
 		await Bun.write(path.join(pluginDir, "skills", "fixture-skill", "scripts", "search.py"), "print('fixture')\n");
+		// Display text is read from disk by discovery, never imported by the entry.
+		await Bun.write(
+			path.join(pluginDir, "locale", "zh-CN.json"),
+			JSON.stringify({ meta: { title: `${name} 中文名`, description: `${name} 中文说明` } }),
+		);
 	}
 	const outputDir = await fs.mkdtemp(path.join(os.tmpdir(), "musepi-staged-standalone-"));
 	temporaryDirs.push(outputDir);
@@ -126,6 +131,11 @@ describe("desktop daemon staging", () => {
 			expect(await Bun.file(path.join(pluginDir, "skills", "fixture-skill", "scripts", "search.py")).text()).toBe(
 				"print('fixture')\n",
 			);
+			// Without this copy the packaged build silently loses every translated
+			// plugin name and falls back to the manifest label.
+			expect(await Bun.file(path.join(pluginDir, "locale", "zh-CN.json")).json()).toEqual({
+				meta: { title: `${name} 中文名`, description: `${name} 中文说明` },
+			});
 
 			const effects: Array<{ label: string }> = [];
 			const component = await import(`file:///${path.join(pluginDir, "component.js").replaceAll("\\", "/")}`);

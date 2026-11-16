@@ -12,6 +12,5 @@ export function apply(ctx: ExtensionAPI): void {
 }
 
 function taskCardStyle(ctx: ExtensionAPI): void {
-	ctx.setLabel("Swarm 任务卡片");
 	registerTaskCardStyle(ctx);
 }

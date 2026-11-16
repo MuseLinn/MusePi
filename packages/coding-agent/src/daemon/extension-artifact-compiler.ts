@@ -1,10 +1,12 @@
+import { existsSync, readdirSync, readFileSync, type Stats, statSync } from "node:fs";
+import { mkdir, rename } from "node:fs/promises";
 import * as path from "node:path";
 import {
 	EXTENSION_HOST_MODULES,
 	type ExtensionHostModuleDeclaration,
 	matchExtensionHostModule,
 } from "@musepi/collab-proto/extension-host-modules";
-import { logger } from "@musepi/pi-utils";
+import { getExtensionArtifactCacheDir, logger } from "@musepi/pi-utils";
 import type { BunPlugin } from "bun";
 import { LEGACY_EXTENSION_MODULE_KIND, PLUGIN_MODULE_KIND } from "../capability/extension-module";
 import type { Extension } from "../extensibility/extensions/types";
@@ -42,6 +44,11 @@ export interface SlotComponent {
 	/** Component-scoped CSS (extracted from the component's own `import
 	 *  "./x.css"` chains; rendered via a <style> tag by the host). */
 	css?: string;
+	/** Build-time artifact files backing this component. URL delivery hands the
+	 *  file to the artifact origin instead of reading it; inline delivery reads
+	 *  it once. Never serialized to a client. */
+	codeFile?: string;
+	cssFile?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
 	availability?: "always" | "on-demand";
@@ -59,6 +66,9 @@ export interface ToolViewItem {
 	label?: string;
 	/** Self-contained ESM JavaScript (react bundled in). Empty on compile failure. */
 	code: string;
+	/** Build-time artifact backing this view (see SlotComponent.codeFile). */
+	codeFile?: string;
+	cssFile?: string;
 	/** Compile error message (the renderer falls back to the generic view). */
 	error?: string;
 	/** Component-scoped CSS (extracted like slot components). */
@@ -161,6 +171,146 @@ export function invalidateExtensionLoad(entryPath: string): void {
 
 /** Compile cache: abs path + mtime → compiled code + extracted css. */
 const compileCache = new Map<string, { mtimeMs: number; code: string; css?: string }>();
+
+/**
+ * Compiled artifacts survive the daemon that produced them. A cold daemon
+ * recompiles every active component before the first `extensions.list` can
+ * answer — the desktop composition is 19 components and tens of megabytes —
+ * even when nothing behind them changed. Keep the output on disk and
+ * revalidate it against the inputs that decide it.
+ *
+ * `stamp` is the newest mtime across the workspace sources a component can
+ * embed, so any app edit invalidates everything that could carry it;
+ * over-invalidating costs one recompile, under-invalidating ships stale code.
+ * `version` covers the compiler's own inputs — its options and the host-module
+ * contract — which a source walk cannot see.
+ */
+const ARTIFACT_CACHE_VERSION = "1";
+const WORKSPACE_STAMP_TTL_MS = 10_000;
+const artifactStamps = new Map<string, { at: number; stamp: number }>();
+
+/** Root of the workspace containing `startDir`, when the manifests declare one. */
+function findWorkspaceRoot(startDir: string): string | undefined {
+	let dir = startDir;
+	for (;;) {
+		try {
+			const manifest = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")) as {
+				workspaces?: unknown;
+			};
+			if (manifest.workspaces !== undefined) return dir;
+		} catch {
+			// no readable manifest here — keep climbing
+		}
+		const parent = path.dirname(dir);
+		if (parent === dir) return undefined;
+		dir = parent;
+	}
+}
+
+/** Every app and package source tree a compiled component can pull in. */
+function workspaceSourceRoots(root: string): string[] {
+	const roots: string[] = [];
+	for (const group of ["apps", "packages"]) {
+		const groupDir = path.join(root, group);
+		let children: string[];
+		try {
+			children = readdirSync(groupDir);
+		} catch {
+			continue;
+		}
+		for (const child of children) {
+			const src = path.join(groupDir, child, "src");
+			if (existsSync(src)) roots.push(src);
+		}
+	}
+	return roots;
+}
+
+/** Newest mtime under `root`; `node_modules` and VCS metadata never count. */
+function newestMtime(root: string): number {
+	let stat: Stats;
+	try {
+		stat = statSync(root);
+	} catch {
+		return 0;
+	}
+	if (!stat.isDirectory()) return stat.mtimeMs;
+	let entries: string[];
+	try {
+		entries = readdirSync(root);
+	} catch {
+		return stat.mtimeMs;
+	}
+	let newest = stat.mtimeMs;
+	for (const name of entries) {
+		if (name === "node_modules" || name === ".git") continue;
+		newest = Math.max(newest, newestMtime(path.join(root, name)));
+	}
+	return newest;
+}
+
+/** Newest source mtime that decides `entryPath`'s compiled output. */
+export function sourceStamp(entryPath: string): number {
+	const dir = path.dirname(entryPath);
+	const root = findWorkspaceRoot(dir);
+	// One walk per workspace, not per entry: a component set of two dozen entries
+	// would otherwise re-walk the same tree two dozen times inside one call.
+	const key = root ?? dir;
+	const cached = artifactStamps.get(key);
+	if (cached && Date.now() - cached.at < WORKSPACE_STAMP_TTL_MS) return cached.stamp;
+	const roots = root === undefined ? [dir] : workspaceSourceRoots(root);
+	let stamp = 0;
+	for (const source of roots) stamp = Math.max(stamp, newestMtime(source));
+	artifactStamps.set(key, { at: Date.now(), stamp });
+	return stamp;
+}
+
+/** One component's on-disk artifact plus the inputs that produced it. */
+interface ArtifactCacheRecord {
+	version: string;
+	bun: string;
+	stamp: number;
+	entryMtimeMs: number;
+	entrySize: number;
+	code: string;
+	css?: string;
+}
+
+function artifactCacheFile(componentPath: string): string {
+	const key = Bun.hash(path.resolve(componentPath).replace(/\\/g, "/")).toString(36);
+	return path.join(getExtensionArtifactCacheDir(), `${key}.json`);
+}
+
+function readArtifactCache(
+	componentPath: string,
+	stamp: number,
+	entry: { mtimeMs: number; size: number },
+): { code: string; css?: string } | undefined {
+	let record: ArtifactCacheRecord;
+	try {
+		record = JSON.parse(readFileSync(artifactCacheFile(componentPath), "utf8")) as ArtifactCacheRecord;
+	} catch {
+		return undefined;
+	}
+	if (record.version !== ARTIFACT_CACHE_VERSION) return undefined;
+	if (record.bun !== Bun.version) return undefined;
+	if (record.stamp !== stamp) return undefined;
+	if (record.entryMtimeMs !== entry.mtimeMs || record.entrySize !== entry.size) return undefined;
+	return { code: record.code, css: record.css };
+}
+
+async function writeArtifactCache(componentPath: string, record: ArtifactCacheRecord): Promise<void> {
+	const target = artifactCacheFile(componentPath);
+	const tmp = `${target}.${process.pid}.tmp`;
+	try {
+		await mkdir(path.dirname(target), { recursive: true });
+		await Bun.write(tmp, JSON.stringify(record));
+		await rename(tmp, target);
+	} catch (error) {
+		// A cache the daemon cannot write is a slow boot, never a failed one.
+		logger.warn("extension artifact cache write failed", { componentPath, error: String(error) });
+	}
+}
 
 // CommonJS is intentional here. Bun's virtual-ESM interop can emit an empty
 // exports object for these host-only modules; a direct export preserves both
@@ -277,29 +427,102 @@ async function loadExtensionOnce(entryPath: string, cwd: string): Promise<Extens
 	return extension;
 }
 
-export async function compileComponentModule(componentPath: string): Promise<{ code: string; css?: string }> {
-	let mtimeMs: number | undefined;
-	try {
-		mtimeMs = (await Bun.file(componentPath).stat()).mtimeMs;
-	} catch {
-		// Path vanished — fall through to a fresh compile attempt.
+/**
+ * The one build configuration for a compiled component. The daemon's on-demand
+ * compile and an app's build-time artifact pass must emit the same module shape,
+ * or a prebuilt artifact would behave differently from a freshly compiled one:
+ * host modules externalized, and React bound to the host's instance —
+ * components reference React through the `React` identifier (never a bare
+ * import), and a bundled copy would double-react and null the hooks dispatcher.
+ */
+/**
+ * The build-time artifact files for a component, when a host built them.
+ * Returns paths, not bytes: a caller that delivers URLs can hand the file to
+ * the artifact origin, so `extensions.list` never reads (or hashes) the whole
+ * composition. Validation is the entry's own mtime and size plus the file's
+ * presence — see {@link declaredComponents} for why no workspace walk runs here.
+ */
+/**
+ * Slot declarations a host lifted at build time, with their artifact files.
+ * When present the daemon assembles the surface straight from build output;
+ * without them it has to mount each plugin's module graph, which is the single
+ * most expensive step of the first registry call.
+ *
+ * Freshness is the artifact's own (entry mtime and size, file present), not a
+ * workspace walk: the manifest is rewritten by the same build that wrote the
+ * files, and a stale `dist` is what the app already refuses to launch with. A
+ * full source walk here cost ~600 ms on every cold registry call.
+ */
+function declaredComponents(
+	entryPath: string,
+): Array<{ slot: string; label?: string; codeFile: string; cssFile?: string }> | undefined {
+	const dir = process.env.MUSEPI_PLUGIN_ARTIFACTS;
+	if (!dir) return undefined;
+	const manifest = readPrebuiltManifest(dir);
+	const rows = manifest.declarations?.[path.resolve(entryPath).replaceAll("\\", "/")];
+	if (!rows || rows.length === 0) return undefined;
+	const out: Array<{ slot: string; label?: string; codeFile: string; cssFile?: string }> = [];
+	for (const row of rows) {
+		const codeFile = path.join(dir, row.file);
+		if (!existsSync(codeFile)) return undefined;
+		const cssFile = row.css === undefined ? undefined : path.join(dir, row.css);
+		if (cssFile !== undefined && !existsSync(cssFile)) return undefined;
+		out.push({
+			slot: row.slot,
+			...(row.label ? { label: row.label } : {}),
+			codeFile,
+			...(cssFile ? { cssFile } : {}),
+		});
 	}
-	const cached = compileCache.get(componentPath);
-	if (cached && mtimeMs !== undefined && cached.mtimeMs === mtimeMs) {
-		return { code: cached.code, css: cached.css };
-	}
+	return out;
+}
 
-	const result = await Bun.build({
-		entrypoints: [componentPath],
+/**
+ * Whether the build says a plugin declares a given optional surface. `true` or
+ * `undefined` keeps the load path (unknown means "cannot tell"); only an
+ * explicit `false` skips it, which is what removes a module-graph load per
+ * plugin from the collectors that would otherwise enumerate an empty set.
+ */
+function declaredSurface(
+	entryPath: string,
+	kind: "toolViews" | "widgets" | "statusBar" | "skins",
+): boolean | undefined {
+	const dir = process.env.MUSEPI_PLUGIN_ARTIFACTS;
+	if (!dir) return undefined;
+	const surfaces = readPrebuiltManifest(dir).surfaces;
+	if (surfaces === undefined) return undefined;
+	const row = surfaces[path.resolve(entryPath).replaceAll("\\", "/")];
+	return row?.[kind];
+}
+
+export function prebuiltArtifactFiles(componentPath: string): { codeFile: string; cssFile?: string } | undefined {
+	const dir = process.env.MUSEPI_PLUGIN_ARTIFACTS;
+	if (!dir) return undefined;
+	let entry: { mtimeMs: number; size: number };
+	try {
+		const info = statSync(componentPath);
+		entry = { mtimeMs: info.mtimeMs, size: info.size };
+	} catch {
+		return undefined;
+	}
+	const manifest = readPrebuiltManifest(dir);
+	const record = manifest.entries?.[path.resolve(componentPath).replaceAll("\\", "/")];
+	if (!record) return undefined;
+	if (record.mtimeMs !== entry.mtimeMs || record.size !== entry.size) return undefined;
+	const codeFile = path.join(dir, record.file);
+	if (!existsSync(codeFile)) return undefined;
+	const cssFile = record.css === undefined ? undefined : path.join(dir, record.css);
+	return cssFile === undefined || existsSync(cssFile) ? { codeFile, ...(cssFile ? { cssFile } : {}) } : { codeFile };
+}
+
+export function componentBuildConfig(entrypoints: string[]): Bun.BuildConfig {
+	return {
+		entrypoints,
 		format: "esm",
 		target: "browser",
 		minify: true,
 		sourcemap: "none",
 		plugins: [hostModulesPlugin()],
-		// Components reference React through the `React` identifier (never
-		// bare-import it): the renderer injects window.MusePiReact before
-		// mounting, so the compiled module uses the HOST's react instance —
-		// a bundled copy would double-react and null the hooks dispatcher.
 		jsx: {
 			runtime: "classic",
 			factory: "window.MusePiReact.createElement",
@@ -309,7 +532,104 @@ export async function compileComponentModule(componentPath: string): Promise<{ c
 			React: "window.MusePiReact",
 			"process.env.NODE_ENV": '"production"',
 		},
-	});
+	} satisfies Bun.BuildConfig;
+}
+
+/**
+ * A host that compiled its own plugins during its build publishes the result
+ * here (`MUSEPI_PLUGIN_ARTIFACTS` → a directory with `manifest.json`). The
+ * daemon then serves that artifact instead of compiling again, and the artifact
+ * shares the host's build graph rather than duplicating it at every boot.
+ * Validation is the same pair the disk cache uses: the entry's own mtime/size
+ * and the workspace stamp at build time.
+ */
+interface PrebuiltManifest {
+	stamp?: number;
+	entries?: Record<string, { file: string; css?: string; mtimeMs: number; size: number }>;
+	/** Slot declarations per plugin entry module, lifted at build time. */
+	declarations?: Record<string, Array<{ slot: string; file: string; css?: string; label?: string }>>;
+	/** What each plugin declares, so a collector can skip a plugin with none. */
+	surfaces?: Record<string, { toolViews?: boolean; widgets?: boolean; statusBar?: boolean; skins?: boolean }>;
+}
+
+let prebuiltCache: { at: number; dir: string; manifest: PrebuiltManifest } | undefined;
+
+/** The manifest, re-read at most every two seconds so a rebuild lands without
+ *  a daemon restart while a burst of components still shares one read. */
+function readPrebuiltManifest(dir: string): PrebuiltManifest {
+	const now = Date.now();
+	if (!prebuiltCache || prebuiltCache.dir !== dir || now - prebuiltCache.at > 2_000) {
+		let manifest: PrebuiltManifest = {};
+		try {
+			manifest = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")) as PrebuiltManifest;
+		} catch {
+			// No build-time pass ran for this host — compile on demand as before.
+		}
+		prebuiltCache = { at: now, dir, manifest };
+	}
+	return prebuiltCache.manifest;
+}
+
+function readPrebuiltArtifact(
+	componentPath: string,
+	stamp: number,
+	entry: { mtimeMs: number; size: number },
+): { code: string; css?: string } | undefined {
+	const dir = process.env.MUSEPI_PLUGIN_ARTIFACTS;
+	if (!dir) return undefined;
+	const now = Date.now();
+	if (!prebuiltCache || prebuiltCache.dir !== dir || now - prebuiltCache.at > 2_000) {
+		let manifest: PrebuiltManifest = {};
+		try {
+			manifest = JSON.parse(readFileSync(path.join(dir, "manifest.json"), "utf8")) as PrebuiltManifest;
+		} catch {
+			// No build-time pass ran for this host — compile on demand as before.
+		}
+		prebuiltCache = { at: now, dir, manifest };
+	}
+	const record = prebuiltCache.manifest.entries?.[path.resolve(componentPath).replace(/\\/g, "/")];
+	if (!record) return undefined;
+	if (prebuiltCache.manifest.stamp !== stamp) return undefined;
+	if (record.mtimeMs !== entry.mtimeMs || record.size !== entry.size) return undefined;
+	try {
+		const code = readFileSync(path.join(dir, record.file), "utf8");
+		const css = record.css ? readFileSync(path.join(dir, record.css), "utf8") : undefined;
+		return css ? { code, css } : { code };
+	} catch {
+		return undefined;
+	}
+}
+
+export async function compileComponentModule(componentPath: string): Promise<{ code: string; css?: string }> {
+	let entry: { mtimeMs: number; size: number } | undefined;
+	try {
+		const info = await Bun.file(componentPath).stat();
+		entry = { mtimeMs: info.mtimeMs, size: info.size };
+	} catch {
+		// Path vanished — fall through to a fresh compile attempt.
+	}
+	const cached = compileCache.get(componentPath);
+	if (cached && entry !== undefined && cached.mtimeMs === entry.mtimeMs) {
+		return { code: cached.code, css: cached.css };
+	}
+	// Revalidated against the sources that decide the output, so a daemon that
+	// just started serves what the previous one compiled instead of rebuilding
+	// the whole plugin composition.
+	const stamp = sourceStamp(componentPath);
+	if (entry !== undefined) {
+		const built = readPrebuiltArtifact(componentPath, stamp, entry);
+		if (built) {
+			compileCache.set(componentPath, { mtimeMs: entry.mtimeMs, code: built.code, css: built.css });
+			return built;
+		}
+		const stored = readArtifactCache(componentPath, stamp, entry);
+		if (stored) {
+			compileCache.set(componentPath, { mtimeMs: entry.mtimeMs, code: stored.code, css: stored.css });
+			return { code: stored.code, css: stored.css };
+		}
+	}
+
+	const result = await Bun.build(componentBuildConfig([componentPath]));
 	const output = result.outputs[0];
 	if (!output) {
 		throw new Error(result.logs.map(l => l.message).join("; ") || "no output");
@@ -331,7 +651,18 @@ export async function compileComponentModule(componentPath: string): Promise<{ c
 		const companion = componentPath.replace(/\.js$/, ".css");
 		if (await Bun.file(companion).exists()) css = await Bun.file(companion).text();
 	}
-	if (mtimeMs !== undefined) compileCache.set(componentPath, { mtimeMs, code, css });
+	if (entry !== undefined) {
+		compileCache.set(componentPath, { mtimeMs: entry.mtimeMs, code, css });
+		await writeArtifactCache(componentPath, {
+			version: ARTIFACT_CACHE_VERSION,
+			bun: Bun.version,
+			stamp,
+			entryMtimeMs: entry.mtimeMs,
+			entrySize: entry.size,
+			code,
+			css,
+		});
+	}
 	return { code, css };
 }
 
@@ -352,11 +683,48 @@ export async function collectSlotComponents(
 			entry.state !== "active"
 		)
 			continue;
+		// A host that lifted slot declarations at build time answers here without
+		// mounting the plugin: loading every plugin's module graph just to learn
+		// which slots it declares was the single most expensive step of the first
+		// registry call (measured ~2 s for the desktop composition).
+		const declared = declaredComponents(entry.path);
+		if (declared) {
+			for (const row of declared) {
+				out.push({
+					slot: row.slot,
+					extensionId: entry.path,
+					...(row.label ? { label: row.label } : {}),
+					code: "",
+					codeFile: row.codeFile,
+					...(row.cssFile ? { cssFile: row.cssFile } : {}),
+				});
+			}
+			continue;
+		}
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
 		for (const component of extension.components ?? []) {
 			const absPath = path.resolve(extension.resolvedPath, "..", component.moduleUrl);
 			try {
+				// A host-built artifact is delivered as a file: reading it here would
+				// move the whole composition through the daemon for no reason.
+				const built = prebuiltArtifactFiles(absPath);
+				if (built) {
+					out.push({
+						slot: component.slot,
+						extensionId: extension.path,
+						label: component.label,
+						code: "",
+						codeFile: built.codeFile,
+						...(built.cssFile ? { cssFile: built.cssFile } : {}),
+						...(component.order !== undefined ? { order: component.order } : {}),
+						...(component.availability ? { availability: component.availability } : {}),
+						...(component.entryKinds && component.entryKinds.length > 0
+							? { entryKinds: component.entryKinds }
+							: {}),
+					});
+					continue;
+				}
 				const compiled = await compileComponentModule(absPath);
 				out.push({
 					slot: component.slot,
@@ -392,6 +760,10 @@ export async function collectSlotComponents(
 export function invalidateExtensionCaches(): void {
 	extensionLoadCache.clear();
 	compileCache.clear();
+	// Source edits are what invalidate the on-disk artifacts; dropping the
+	// memo makes the next lookup re-walk the tree instead of trusting a stamp
+	// taken before the change.
+	artifactStamps.clear();
 }
 
 /**
@@ -592,6 +964,7 @@ export async function collectStatusBarSegments(
 			entry.state !== "active"
 		)
 			continue;
+		if (declaredSurface(entry.path, "statusBar") === false) continue;
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
 		for (const seg of extension.statusBarSegments ?? []) {
@@ -630,6 +1003,7 @@ export async function collectScrollbarSkins(
 			entry.state !== "active"
 		)
 			continue;
+		if (declaredSurface(entry.path, "skins") === false) continue;
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
 		for (const skin of extension.scrollbarSkins ?? []) {
@@ -666,6 +1040,7 @@ export async function collectToolViews(
 			entry.state !== "active"
 		)
 			continue;
+		if (declaredSurface(entry.path, "toolViews") === false) continue;
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
 		for (const view of extension.toolViews ?? []) {
@@ -713,6 +1088,7 @@ export async function collectWidgetViews(
 			entry.state !== "active"
 		)
 			continue;
+		if (declaredSurface(entry.path, "widgets") === false) continue;
 		const extension = await loadExtensionOnce(entry.path, cwd);
 		if (!extension) continue;
 		for (const widget of extension.widgets ?? []) {

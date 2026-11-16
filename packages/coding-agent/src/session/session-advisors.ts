@@ -1319,6 +1319,7 @@ export class SessionAdvisors {
 				from: currentSelector,
 				to: selector.raw,
 				role,
+				reason: "advisor fallback",
 			});
 			return true;
 		}

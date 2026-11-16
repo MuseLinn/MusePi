@@ -1,0 +1,703 @@
+/* Declarative UI blocks inside an assistant reply.
+ *
+ * A block sits on the reply's own surface: no outer card, no frame, no banner
+ * title — the same rule the widget page follows. Structure comes from type,
+ * spacing and tone so five boxes in one reply do not read as stripes.
+ * Everything here draws from the app's semantic tokens; nothing re-declares a
+ * palette, so light/dark and accent changes carry through. */
+
+.tr-ui {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	margin: 10px 0 14px;
+}
+
+.tr-ui-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.tr-ui-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	align-items: stretch;
+}
+
+.tr-ui-row > * {
+	flex: 1 1 160px;
+	min-width: 0;
+}
+
+/* A control keeps its own width: two buttons in a row are choices, not a
+ * half-and-half layout. */
+.tr-ui-row > .tr-ui-button {
+	flex: 0 0 auto;
+}
+
+.tr-ui-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg-raised);
+}
+
+.tr-ui-card-title {
+	margin: 0;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	line-height: 1.35;
+	color: var(--fg);
+}
+
+.tr-ui-text {
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.55;
+	color: var(--fg);
+}
+
+.tr-ui-text p {
+	margin: 0 0 6px;
+}
+
+.tr-ui-text p:last-child {
+	margin-bottom: 0;
+}
+
+.tr-ui-code {
+	padding: 0 4px;
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+	font-family: var(--font-mono, monospace);
+	font-size: 0.92em;
+}
+
+.tr-ui-badge {
+	display: inline-flex;
+	/* A badge is a word, not a row: inside a column flex container it must not
+	 * stretch to the card's width. */
+	align-self: flex-start;
+	align-items: center;
+	padding: 1px 6px;
+	border-radius: var(--radius-sm);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--fg-muted);
+	background: color-mix(in oklab, var(--fg) 7%, transparent);
+}
+
+.tr-ui-badge[data-tone="info"] {
+	color: var(--info, var(--accent));
+	background: color-mix(in oklab, var(--info, var(--accent)) 14%, transparent);
+}
+
+.tr-ui-badge[data-tone="success"] {
+	color: var(--ok);
+	background: color-mix(in oklab, var(--ok) 14%, transparent);
+}
+
+.tr-ui-badge[data-tone="warning"] {
+	color: var(--warn);
+	background: color-mix(in oklab, var(--warn) 14%, transparent);
+}
+
+.tr-ui-badge[data-tone="error"] {
+	color: var(--err);
+	background: color-mix(in oklab, var(--err) 14%, transparent);
+}
+
+/* Only a warning or an error earns a box: five tinted banners in one reply
+ * read as stripes, so info/success stay plain text with their badge. */
+.tr-ui-callout {
+	padding: 8px 10px;
+	border-radius: var(--radius-md);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.55;
+	color: var(--fg);
+	background: color-mix(in oklab, var(--fg) 5%, transparent);
+}
+
+.tr-ui-callout[data-tone="warning"] {
+	background: color-mix(in oklab, var(--warn) 12%, transparent);
+}
+
+.tr-ui-callout[data-tone="error"] {
+	background: color-mix(in oklab, var(--err) 12%, transparent);
+}
+
+.tr-ui-callout-title {
+	display: block;
+	margin-bottom: 2px;
+}
+
+.tr-ui-callout p {
+	margin: 0;
+}
+
+.tr-ui-kv {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 4px 10px;
+	margin: 0;
+	font-size: var(--ui-font-size-sm);
+}
+
+.tr-ui-kv dt {
+	color: var(--fg-muted);
+}
+
+.tr-ui-kv dd {
+	margin: 0;
+	color: var(--fg);
+	overflow-wrap: anywhere;
+}
+
+/* Step marks joined by a line, left to right in a row and top to bottom in a
+ * column; the connector turns success-green behind finished steps. */
+.tr-ui-steps {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.tr-ui-steps[data-direction="row"] {
+	flex-direction: row;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.tr-ui-step {
+	position: relative;
+	display: flex;
+	gap: 8px;
+	padding: 6px 0;
+	font-size: var(--ui-font-size-sm);
+}
+
+/* The connector runs from this mark to the next one, and only behind finished
+ * steps: a green line under a "todo" reads as done. */
+.tr-ui-steps[data-direction="column"] .tr-ui-step:not(:last-child)::before {
+	content: "";
+	position: absolute;
+	left: 4px;
+	top: 15px;
+	bottom: -6px;
+	width: 1px;
+	background: color-mix(in oklab, var(--fg) 16%, transparent);
+}
+
+.tr-ui-steps[data-direction="column"] .tr-ui-step[data-status="done"]:not(:last-child)::before {
+	background: color-mix(in oklab, var(--ok) 55%, transparent);
+}
+
+.tr-ui-step-mark {
+	flex: none;
+	width: 9px;
+	height: 9px;
+	margin-top: 6px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 22%, transparent);
+}
+
+.tr-ui-step[data-status="done"] .tr-ui-step-mark {
+	background: var(--ok);
+}
+
+.tr-ui-step[data-status="current"] .tr-ui-step-mark {
+	background: var(--accent);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+}
+
+.tr-ui-step[data-status="blocked"] .tr-ui-step-mark {
+	background: var(--err);
+}
+
+.tr-ui-step-body {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.tr-ui-step-title {
+	color: var(--fg);
+}
+
+.tr-ui-step[data-status="todo"] .tr-ui-step-title {
+	color: var(--fg-muted);
+}
+
+.tr-ui-step[data-status="current"] .tr-ui-step-title {
+	font-weight: 600;
+}
+
+.tr-ui-step-note {
+	color: var(--fg-muted);
+}
+
+.tr-ui-stat {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 2px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg-raised);
+	min-width: 0;
+}
+
+.tr-ui-stat-label {
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.tr-ui-stat-value {
+	font-size: 1.35em;
+	font-weight: 600;
+	line-height: 1.2;
+	color: var(--fg);
+}
+
+.tr-ui-progress {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 4px 10px;
+	align-items: baseline;
+	font-size: var(--ui-font-size-sm);
+}
+
+.tr-ui-progress-label {
+	color: var(--fg);
+}
+
+.tr-ui-progress-value {
+	color: var(--fg-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-ui-progress-track {
+	grid-column: 1 / -1;
+	display: block;
+	height: 5px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 10%, transparent);
+	overflow: hidden;
+}
+
+.tr-ui-progress-fill {
+	display: block;
+	height: 100%;
+	border-radius: 999px;
+	background: var(--accent);
+	transition: width 180ms ease;
+}
+
+.tr-ui-progress[data-done="true"] .tr-ui-progress-fill {
+	background: var(--ok);
+}
+
+/* `Table` draws as the chat's own table (wrapped by the markdown pipeline's
+ * decorateTables): one implementation, so column fitting, copy and download
+ * behave exactly as for a table written straight into the reply. */
+.tr-ui-card table,
+.tr-ui-stack > table {
+	margin: 0;
+}
+
+.tr-ui-chart {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 0;
+	font-size: var(--ui-font-size-sm);
+}
+
+.tr-ui-bar-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	gap: 2px 10px;
+}
+
+.tr-ui-bar-label {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--fg);
+}
+
+.tr-ui-bar-value {
+	color: var(--fg-muted);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.tr-ui-bar-share {
+	margin-left: 6px;
+	color: var(--fg-faint);
+}
+
+.tr-ui-bar {
+	grid-column: 1 / -1;
+	display: block;
+	height: 4px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 9%, transparent);
+	overflow: hidden;
+}
+
+.tr-ui-bar-fill {
+	display: block;
+	height: 100%;
+	border-radius: 999px;
+	background: var(--chart-1, var(--accent));
+}
+
+.tr-ui-chart-total,
+.tr-ui-chart-unit {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.tr-ui-chart--line {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	grid-template-areas:
+		"range svg"
+		"foot foot";
+	gap: 4px 8px;
+	align-items: center;
+}
+
+.tr-ui-chart--line svg {
+	grid-area: svg;
+	width: 100%;
+	height: 96px;
+	overflow: visible;
+}
+
+/* The two value bounds sit in one column so they land on the plot's own top
+ * and bottom edges instead of being auto-placed beside the legend. */
+.tr-ui-chart-rangecol {
+	grid-area: range;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	align-self: stretch;
+	padding: 2px 0;
+}
+
+.tr-ui-chart-range {
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-faint);
+	font-variant-numeric: tabular-nums;
+}
+
+.tr-ui-chart-foot {
+	grid-area: foot;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.tr-ui-chart-axes {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.tr-ui-chart-axis {
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-faint);
+}
+
+.tr-ui-chart-legend {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 10px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.tr-ui-chart-key {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.tr-ui-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+}
+
+.tr-ui-details {
+	border-top: 1px solid var(--border);
+	padding-top: 6px;
+}
+
+.tr-ui-details summary {
+	cursor: pointer;
+	font-size: var(--ui-font-size-sm);
+	color: var(--fg-muted);
+}
+
+.tr-ui-details[open] summary {
+	color: var(--fg);
+	margin-bottom: 6px;
+}
+
+/* A block that lost parts says so, and folds its source: a silently partial
+ * block reads as an app bug rather than as the model's mistake. */
+.tr-ui-note {
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--warn);
+}
+
+.tr-ui-note ul {
+	margin: 4px 0 0;
+	padding-inline-start: 18px;
+}
+
+.tr-ui-src summary {
+	cursor: pointer;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-faint);
+}
+
+.tr-ui-src pre {
+	margin: 6px 0 0;
+	padding: 8px 10px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* ── what a block asks ──────────────────────────────────────────────────
+ * Choices read as rows, not chips: a chip's chosen state barely shows in some
+ * themes, and a single choice looked the same as a multiple one. The control
+ * mark carries the state, the label never changes colour alone. */
+.tr-ui-choice {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	min-width: 0;
+}
+
+.tr-ui-choice-label {
+	margin-bottom: 4px;
+	padding: 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.tr-ui-option {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	width: 100%;
+	padding: 5px 2px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: none;
+	color: var(--fg);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	text-align: start;
+	cursor: pointer;
+}
+
+.tr-ui-option:disabled {
+	cursor: default;
+	opacity: 0.75;
+}
+
+.tr-ui-option-mark {
+	flex: none;
+	width: 14px;
+	height: 14px;
+	margin-top: 2px;
+	border: 1px solid color-mix(in oklab, var(--fg) 28%, transparent);
+	border-radius: 999px;
+}
+
+.tr-ui-option[data-ui-kind="checkbox"] .tr-ui-option-mark {
+	border-radius: var(--radius-sm);
+}
+
+.tr-ui-option[data-ui-chosen="true"] .tr-ui-option-mark {
+	border-color: var(--accent);
+	background: var(--accent);
+	box-shadow: inset 0 0 0 3px var(--bg-raised);
+}
+
+.tr-ui-option-body {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.tr-ui-option-label {
+	font-weight: 500;
+}
+
+.tr-ui-option[data-ui-chosen="true"] .tr-ui-option-label {
+	font-weight: 600;
+}
+
+.tr-ui-option-note {
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.tr-ui-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.tr-ui-field-label {
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.tr-ui-input {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 5px 8px;
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	color: var(--fg);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	resize: vertical;
+}
+
+.tr-ui-input:focus-visible {
+	outline: none;
+	border-color: var(--accent);
+}
+
+/* Buttons live in the card that names the decision; the primary one is the
+ * agent's pick and stays tinted until that decision has an answer. */
+.tr-ui-button {
+	padding: 4px 10px;
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	color: var(--fg);
+	background: color-mix(in oklab, var(--fg) 7%, transparent);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	cursor: pointer;
+}
+
+.tr-ui-button[data-variant="primary"] {
+	color: var(--accent-fg, #fff);
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
+.tr-ui-button[data-ui-chosen="true"] {
+	box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.tr-ui-button:disabled {
+	cursor: default;
+}
+
+.tr-ui-card .tr-ui-button {
+	margin-inline-end: 6px;
+}
+
+/* The answer bar appears once the block has something to send; before that a
+ * "send" button would be a promise the block cannot keep. */
+.tr-ui-answerbar {
+	display: none;
+	grid-template-columns: 1fr auto;
+	gap: 8px;
+	align-items: center;
+}
+
+.tr-ui[data-ui-ready="true"] .tr-ui-answerbar {
+	display: grid;
+}
+
+.tr-ui[data-ui-sent="true"] .tr-ui-answerbar {
+	display: none;
+}
+
+.tr-ui-send {
+	padding: 5px 12px;
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	color: var(--accent-fg, #fff);
+	background: var(--accent);
+	border: 0;
+	border-radius: var(--radius-md);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.tr-ui-send:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+/* A settled block reads as a record: the controls stop inviting presses. */
+.tr-ui[data-ui-sent="true"] .tr-ui-choice,
+.tr-ui[data-ui-sent="true"] .tr-ui-field {
+	opacity: 0.7;
+}
+
+/* A slider is the app's slider: the browser's blue accent is off-palette, and
+ * the live value has to read as a readout, not as the end of the label. */
+.tr-ui-range {
+	width: 100%;
+	accent-color: var(--accent);
+}
+
+.tr-ui-field-readout {
+	float: inline-end;
+	color: var(--fg-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+/* A block that could not draw offers one action: ask for a fix. It sits with
+ * the reasons, because that is the moment the user decides to spend a turn. */
+.tr-ui-repair {
+	align-self: flex-start;
+	padding: 4px 10px;
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	color: var(--fg);
+	background: color-mix(in oklab, var(--fg) 7%, transparent);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	cursor: pointer;
+}
+
+.tr-ui-repair:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+}

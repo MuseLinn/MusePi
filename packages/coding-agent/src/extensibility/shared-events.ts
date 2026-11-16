@@ -281,6 +281,8 @@ export interface RetryFallbackAppliedEvent {
 	from: string;
 	to: string;
 	role: string;
+	/** Why the switch happened (`request failed`, `usage reserve`, `fast variant`). */
+	reason?: string;
 }
 
 /** Fired when a request succeeds on the fallback model applied by auto-retry. */

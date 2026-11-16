@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "Kimi Code 子代理",
+		"description": "通过既有 task 工具运行原生 Kimi Code CLI。"
+	}
+}

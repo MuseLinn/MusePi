@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "文件工具与索引",
-		"description": "工作区读取、写入、搜索工具族与后台内容索引。",
+		"label": "File Tools and Index",
+		"description": "Workspace read, write and search tools plus the background content index.",
 		"icon": "📁",
 		"extensions": ["./index.ts"],
 		"components": [

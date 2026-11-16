@@ -5,6 +5,7 @@ import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
 import { WidgetErrorBoundary } from "../../widgets/error-boundary";
 import { type ExtensionWidgetArtifact, loadExtensionWidgets } from "../../widgets/extension-widgets";
+import { setWidgetResourceResolver, WidgetScopeContext } from "../../widgets/html";
 import { registerExternalWidgets, useWidgetRegistryVersion, widgetDef } from "../../widgets/registry";
 
 /**
@@ -22,6 +23,27 @@ export function BoardPanel({ client }: BoardPanelProps): ReactNode {
 	useWidgetRegistryVersion();
 	const [boards, setBoards] = useState<BoardData[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
+
+	// Cards may read files from their own workspace; the daemon pins every path
+	// to the card's folder. Installed for the panel's lifetime only.
+	useEffect(() => {
+		setWidgetResourceResolver(async (scope, op, path) => {
+			if (op === "list") {
+				const res = await client.rpc<{ entries?: unknown[] }>("board.resource.list", {
+					boardId: scope.boardId,
+					widgetId: scope.widgetId,
+				});
+				return { entries: res?.entries ?? [] };
+			}
+			const res = await client.rpc<{ text?: string }>("board.resource.read", {
+				boardId: scope.boardId,
+				widgetId: scope.widgetId,
+				path,
+			});
+			return { text: res?.text ?? "" };
+		});
+		return () => setWidgetResourceResolver(null);
+	}, [client]);
 
 	const load = useCallback(async (): Promise<void> => {
 		try {
@@ -77,7 +99,7 @@ export function BoardPanel({ client }: BoardPanelProps): ReactNode {
 							{[...board.widgets]
 								.sort((a, b) => a.pos.y - b.pos.y || a.pos.x - b.pos.x)
 								.map(w => (
-									<BoardWidgetCard key={w.id} widget={w} update={noop} />
+									<BoardWidgetCard key={w.id} widget={w} update={noop} boardId={board.id} />
 								))}
 						</div>
 					)}
@@ -90,9 +112,12 @@ export function BoardPanel({ client }: BoardPanelProps): ReactNode {
 export function BoardWidgetCard({
 	widget,
 	update,
+	boardId = "main",
 }: {
 	widget: WireBoardWidget;
 	update(patch: Record<string, unknown>): void;
+	/** Which board this card sits on: the scope its workspace resolves against. */
+	boardId?: string;
 }): ReactNode {
 	const def = widgetDef(widget.type);
 	if (!def) {
@@ -124,7 +149,9 @@ export function BoardWidgetCard({
 			</div>
 			<div className="sh-board-widget-body">
 				<WidgetErrorBoundary>
-					<def.Component data={widget.data} update={update} />
+					<WidgetScopeContext.Provider value={{ boardId, widgetId: widget.id }}>
+						<def.Component data={widget.data} update={update} />
+					</WidgetScopeContext.Provider>
 				</WidgetErrorBoundary>
 			</div>
 		</div>

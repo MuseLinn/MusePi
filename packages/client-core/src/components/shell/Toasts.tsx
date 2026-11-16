@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { t } from "../../i18n/index.js";
@@ -11,8 +11,17 @@ import {
 	subscribeActionToasts,
 } from "../../lib/action-toast";
 
+/** Status glyph per kind — the only colour cue on an otherwise neutral card. */
+const TOAST_ICON = {
+	info: Info,
+	success: CheckCircle2,
+	warning: AlertTriangle,
+	error: XCircle,
+} as const;
+
 function ToastItem({ toast }: { toast: ActionToast }): ReactNode {
 	const isError = toast.kind === "error";
+	const Glyph = TOAST_ICON[toast.kind];
 
 	return (
 		<div
@@ -21,6 +30,7 @@ function ToastItem({ toast }: { toast: ActionToast }): ReactNode {
 			aria-live={isError ? "assertive" : undefined}
 			aria-atomic={isError ? "true" : undefined}
 		>
+			<Glyph size={14} className="sh-toast-icon" aria-hidden />
 			<span className="sh-toast-msg">{toast.message}</span>
 			<button
 				type="button"

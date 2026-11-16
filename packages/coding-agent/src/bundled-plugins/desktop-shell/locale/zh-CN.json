@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "MusePi 桌面壳",
+		"description": "Electron 桌面壳与 daemon 渲染服务之间的兼容连接。"
+	}
+}

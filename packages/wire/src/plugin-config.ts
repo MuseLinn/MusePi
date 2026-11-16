@@ -38,6 +38,65 @@ export interface PluginResources {
 }
 
 /**
+ * 插件自述的显示文案，按语言标签分列（`LocalizedText` 契约）。
+ *
+ * `en` 是兜底：任何没有该语言的界面都读它，所以它必须存在。其余键来自
+ * 包内 `locale/<tag>.json`（`{ "meta": { "title", "description" } }`），
+ * 由 `plugin-manifest.ts` 读取，daemon 原样下发，**由界面按自己的语言挑**——
+ * 同一个 daemon 可以同时服务中文 TUI 与英文 GUI，语言不是服务端状态。
+ */
+export interface LocalizedPluginText {
+	en: string;
+	[locale: string]: string;
+}
+
+/**
+ * 按界面语言取一条本地化文案：完整标签 → 主语言子标签 → `en` → 调用方的
+ * 兜底值。
+ *
+ * 三级回退的顺序是有意的：`zh-CN` 的界面优先读 `zh-CN`（台湾/香港的写法差异
+ * 由作者决定），其次 `zh`（作者只写了一份中文），最后才是英文。反过来先读
+ * `zh` 会让 `zh-CN` 的专门文案永远用不上。
+ */
+export function resolveLocalizedText(
+	text: LocalizedPluginText | null | undefined,
+	locale: string,
+	fallback?: string,
+): string | undefined {
+	if (!text) return fallback;
+	// 文件名保留了作者的大小写（`zh-CN.json`），界面语言也常写成别的形式
+	// （`zh-cn`、`zh_TW`），所以逐键做大小写无关的比较，而不是直接下标取值。
+	const wanted = locale.toLowerCase();
+	for (const [key, value] of Object.entries(text)) {
+		if (key.toLowerCase() === wanted && value) return value;
+	}
+	const language = wanted.split("-")[0] ?? "";
+	if (language) {
+		for (const [key, value] of Object.entries(text)) {
+			if (key.toLowerCase() === language && value) return value;
+		}
+	}
+	return text.en ?? fallback;
+}
+
+/**
+ * 把 manifest 的兜底文案与 `locale/*.json` 合并成 {@link LocalizedPluginText}。
+ * 兜底文案占 `en` 位；同名语言以 locale 文件为准（文件更具体）。
+ * 两条都没有时返回 `undefined`，调用方自己决定回退到什么。
+ */
+export function localizedPluginText(
+	fallback: string | undefined,
+	locales: Record<string, string> | undefined,
+): LocalizedPluginText | undefined {
+	const entries = Object.entries(locales ?? {}).filter(([locale, value]) => locale.length > 0 && value.length > 0);
+	if (entries.length === 0) return fallback ? { en: fallback } : undefined;
+	// `en` 由兜底文案提供，但同名 locale 文件更具体，可以覆盖它（与兜底文案同序）。
+	const en = fallback ?? entries.find(([locale]) => locale.toLowerCase() === "en")?.[1];
+	if (en === undefined) return { en: entries[0]![1], ...Object.fromEntries(entries) };
+	return { en, ...Object.fromEntries(entries) };
+}
+
+/**
  * 插件清单声明的「包含的组件」(manifest `components`,dsh bundle 插件
  * `cordis.patch.yml` 的 `- insert:` 子插件 parity):每个组件是**独立装载
  * 单元**——清单给出 `entry`(相对清单目录的模块路径)时,宿主装载把它挂为

@@ -8,6 +8,4 @@ export function apply(ctx: ExtensionAPI): void {
 	desktopShell(ctx);
 }
 
-function desktopShell(ctx: ExtensionAPI): void {
-	ctx.setLabel("MusePi 桌面壳");
-}
+function desktopShell(ctx: ExtensionAPI): void {}

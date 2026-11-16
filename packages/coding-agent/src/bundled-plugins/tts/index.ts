@@ -8,6 +8,4 @@ export function apply(ctx: ExtensionAPI): void {
 	tts(ctx);
 }
 
-function tts(ctx: ExtensionAPI): void {
-	ctx.setLabel("语音输出（TTS）");
-}
+function tts(ctx: ExtensionAPI): void {}

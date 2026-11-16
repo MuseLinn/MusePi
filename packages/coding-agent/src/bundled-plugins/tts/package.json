@@ -5,8 +5,8 @@
 	"type": "module",
 	"license": "MIT",
 	"musepi": {
-		"label": "语音输出（TTS）",
-		"description": "Kokoro 与 MeloTTS 中文流式语音朗读，首次使用时下载模型。",
+		"label": "Voice Output (TTS)",
+		"description": "Streaming Chinese speech via Kokoro and MeloTTS; models download on first use.",
 		"icon": "🔊",
 		"extensions": ["./index.ts"],
 		"components": [
