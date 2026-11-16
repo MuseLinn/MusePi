@@ -790,6 +790,23 @@ describe("Transcript display-settings parity (TUI)", () => {
 		expect(countOccurrences(html, `>${t("settings.agent")}<`)).toBe(1);
 	});
 
+	it("keeps the turn's rail on every row so one answer has one left edge", () => {
+		// The orb is painted once per turn; without a turn-scoped rail the
+		// following assistant rows collapsed the gutter and their text started
+		// flush-left, so a single answer visibly jumped left mid-turn.
+		const html = renderTranscript({
+			entries: [
+				userEntry(1),
+				assistantEntry({ timestamp: 2, text: "first" }),
+				assistantEntry({ timestamp: 3, text: "done" }),
+			],
+			working: false,
+		});
+		expect(countOccurrences(html, `>${t("settings.agent")}<`)).toBe(1);
+		expect(countElements(html, ".tr-row--assistant")).toBe(2);
+		expect(countElements(html, ".tr-row--railed")).toBe(1);
+	});
+
 	it("draws one orb per turn, not per assistant message", () => {
 		const needle = `>${t("settings.agent")}<`;
 		const one = renderTranscript({

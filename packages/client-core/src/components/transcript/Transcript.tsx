@@ -17,7 +17,18 @@ function hapticTap(): void {
 
 import { asyncJobResultView } from "@musepi/pi-wire";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Fragment, memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	createContext,
+	Fragment,
+	memo,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
 import { fmtDuration, fmtTokens } from "../../lib/format";
@@ -415,10 +426,17 @@ function selectionTextWithin(root: HTMLElement | null): string | null {
 	return text.length > 0 ? text : null;
 }
 
+/** A turn paints its orb on one anchor row. The rest of the turn still keeps
+ *  the same rail, so every body in the turn shares one left edge instead of
+ *  starting flush and jumping in when the orb scrolls past. Set per row by
+ *  the entry renderer; explicit `rail` on a synthetic row wins. */
+const RowRailContext = createContext(false);
+
 function Row({
 	kind,
 	id,
 	gutter,
+	rail,
 	title,
 	turnStart,
 	children,
@@ -438,6 +456,11 @@ function Row({
 	kind: "user" | "assistant" | "custom" | "job" | "marker" | "bash";
 	id?: string;
 	gutter: ReactNode;
+	/** Keep the gutter's width even when this row shows nothing in it.
+	 *  A turn paints its orb on ONE anchor row; without this the remaining
+	 *  rows collapse the rail and the turn's text starts at two different
+	 *  left edges. */
+	rail?: boolean;
 	title?: string;
 	/** 该行是会话轮次的起始行(user 提示或 display:true 的顾问笔记——
 	 *  与 isTurnStart 同口径)。导航条 scroll-spy 靠它把顾问轮纳入
@@ -511,9 +534,13 @@ function Row({
 		}
 	};
 	const bodyRef = useRef<HTMLDivElement | null>(null);
+	const inheritedRail = useContext(RowRailContext);
+	// User / job / marker / bash rows own their own layout; the assistant
+	// rail is the only one that participates in this scheme.
+	const keepsRail = (kind === "assistant" || kind === "custom") && (rail ?? inheritedRail);
 	return (
 		<div
-			className={`tr-row tr-row--${kind}`}
+			className={`tr-row tr-row--${kind}${keepsRail ? " tr-row--railed" : ""}`}
 			data-turn-start={turnStart ? "" : undefined}
 			data-turn-start-ts={turnStart ? title : undefined}
 		>
@@ -2469,6 +2496,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// before the first turn start keep the legacy neighbour rule.
 		const turnStartIdx = turnStartOf(absIdx);
 		const orbAnchor = turnStartIdx === undefined ? undefined : orbAnchorByTurnStart.get(turnStartIdx);
+		// The rail is TURN-scoped like the orb: every row of a turn that shows
+		// an orb keeps the gutter's width, so the whole turn shares one left
+		// edge. Only the anchor row paints the orb; the rest reserve the space.
+		const turnShowsOrb = turnStartIdx === undefined || orbAnchor !== undefined;
+		const rowRail = agentGutter !== "" && turnShowsOrb;
 		const prevIsAssistant =
 			before?.type === "message" && (before.message.role === "assistant" || before.message.role === "toolResult");
 		// M1 turn header: rendered above the turn-start row (the user
@@ -2587,6 +2619,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				key={`live-more-${entry.id}`}
 				kind="assistant"
 				gutter={rowOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""}
+				rail={!rowOwnsOrb && rowRail}
 			>
 				<button
 					type="button"
@@ -2602,47 +2635,51 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			<Fragment key={entry.id}>
 				{liveMoreLine}
 				{hideRowContent && !collapsible ? null : (
-					<EntryRow
-						entry={entry}
-						results={results}
-						active={activeTools}
-						host={host}
-						userGutter={userGutter}
-						agentGutter={rowOwnsOrb ? agentGutter : ""}
-						userPlain={userPlain}
-						collapseLongUserMessages={collapseLongUserMessages}
-						hideToolActivity={rowHideTools}
-						textOnly={rowTextOnly}
-						showTokenUsage={showTokenUsage}
-						usageHere={usageHere}
-						smoothStreaming={smoothStreaming}
-						taskCardStyle={taskCardStyle}
-						artifacts={turnArtifactsByFinal.get(entry.id)}
-						turnFiles={turnSurfacesByFinal.files.get(entry.id)}
-						sources={turnSurfacesByFinal.sources.get(entry.id)}
-						errorAttempt={entry.id !== undefined ? errorPlan.ownedByAssistant.get(entry.id)?.attempt : undefined}
-						ircContinued={ircContinued}
-						thinkingLevel={thinkingLevel}
-						streamingLast={streamingLast}
-						runStartTs={streamingLast ? lastUserTs : undefined}
-						roundDuration={roundDuration}
-						onQuote={onQuote}
-						onJumpToMessage={onJumpToMessage}
-						onEdit={onEdit}
-						onRetry={onRetry}
-						onRevert={onRevert}
-						onFork={onFork}
-						onSpeak={onSpeak}
-						onSaveImage={onSaveImage}
-						onPreviewImage={openPreview}
-						onOpenCompaction={onOpenCompaction}
-						speaking={speakingId != null && speakingId === entry.id}
-						onStopSpeak={onStopSpeak}
-						retryTarget={retryTargets.get(entry.id) ?? null}
-						advisorOpen={advisorOpenIds.has(advisorKeyOf(entry))}
-						onToggleAdvisor={toggleAdvisorOpen}
-						renderTranscriptNode={renderTranscriptNode}
-					/>
+					<RowRailContext.Provider value={!rowOwnsOrb && rowRail}>
+						<EntryRow
+							entry={entry}
+							results={results}
+							active={activeTools}
+							host={host}
+							userGutter={userGutter}
+							agentGutter={rowOwnsOrb ? agentGutter : ""}
+							userPlain={userPlain}
+							collapseLongUserMessages={collapseLongUserMessages}
+							hideToolActivity={rowHideTools}
+							textOnly={rowTextOnly}
+							showTokenUsage={showTokenUsage}
+							usageHere={usageHere}
+							smoothStreaming={smoothStreaming}
+							taskCardStyle={taskCardStyle}
+							artifacts={turnArtifactsByFinal.get(entry.id)}
+							turnFiles={turnSurfacesByFinal.files.get(entry.id)}
+							sources={turnSurfacesByFinal.sources.get(entry.id)}
+							errorAttempt={
+								entry.id !== undefined ? errorPlan.ownedByAssistant.get(entry.id)?.attempt : undefined
+							}
+							ircContinued={ircContinued}
+							thinkingLevel={thinkingLevel}
+							streamingLast={streamingLast}
+							runStartTs={streamingLast ? lastUserTs : undefined}
+							roundDuration={roundDuration}
+							onQuote={onQuote}
+							onJumpToMessage={onJumpToMessage}
+							onEdit={onEdit}
+							onRetry={onRetry}
+							onRevert={onRevert}
+							onFork={onFork}
+							onSpeak={onSpeak}
+							onSaveImage={onSaveImage}
+							onPreviewImage={openPreview}
+							onOpenCompaction={onOpenCompaction}
+							speaking={speakingId != null && speakingId === entry.id}
+							onStopSpeak={onStopSpeak}
+							retryTarget={retryTargets.get(entry.id) ?? null}
+							advisorOpen={advisorOpenIds.has(advisorKeyOf(entry))}
+							onToggleAdvisor={toggleAdvisorOpen}
+							renderTranscriptNode={renderTranscriptNode}
+						/>
+					</RowRailContext.Provider>
 				)}
 			</Fragment>
 		) : null;
@@ -2713,8 +2750,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			);
 		}
 		if (row.kind === "run") {
+			const runTurnStart = turnStartOf(row.run.headIdx);
+			const runRail = agentGutter !== "" && orbAnchorByTurnStart.get(runTurnStart ?? -1) !== undefined;
 			return (
-				<Row kind="assistant" gutter="">
+				<Row kind="assistant" gutter="" rail={runRail}>
 					<ToolRunLine
 						run={row.run}
 						open={runsExpanded.has(row.run.key)}
@@ -2731,7 +2770,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// the live turn. They keep the orb only when that turn has no committed
 	// row owning it yet — otherwise the running answer added a second orb at
 	// the bottom of a turn that already displayed one.
-	const tailOwnsOrb = orbAnchorByTurnStart.get(turnUnits.at(-1)?.startIdx ?? -1) === undefined;
+	const tailTurnStart = turnUnits.at(-1)?.startIdx;
+	const tailOwnsOrb = orbAnchorByTurnStart.get(tailTurnStart ?? -1) === undefined;
+	// The live turn's own rows keep the rail when a committed row already
+	// owns the orb: the running answer must not start flush-left mid-turn.
+	const tailRail = agentGutter !== "" && tailTurnStart !== undefined && !tailOwnsOrb;
 
 	return (
 		<div
@@ -2815,14 +2858,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			 * where the reply will land — instead of hanging off the
 			 * previous round's message. */}
 			{working && stream === null && lastUserTs !== undefined && !lastAssistantInRound && (
-				<Row kind="assistant" gutter={tailOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""}>
+				<Row kind="assistant" gutter={tailOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""} rail={tailRail}>
 					<div className="tr-ghost-working">
 						<WorkingLine start={lastUserTs} meta={modelLevelMeta(undefined, thinkingLevel)} />
 					</div>
 				</Row>
 			)}
 			{stream !== null && (
-				<Row kind="assistant" gutter={tailOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""}>
+				<Row kind="assistant" gutter={tailOwnsOrb ? (agentGutter ?? t("settings.agent")) : ""} rail={tailRail}>
 					<AssistantBody
 						message={stream}
 						results={results}
@@ -2847,7 +2890,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				</Row>
 			)}
 			{tailTools.length > 0 && !hideToolActivity && (
-				<Row kind="assistant" gutter={tailOwnsOrb && stream === null ? (agentGutter ?? t("settings.agent")) : ""}>
+				<Row
+					kind="assistant"
+					gutter={tailOwnsOrb && stream === null ? (agentGutter ?? t("settings.agent")) : ""}
+					rail={tailRail}
+				>
 					{tailTools.map(tool => (
 						<ToolCard
 							key={tool.toolCallId}

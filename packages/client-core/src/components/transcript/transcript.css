@@ -4830,3 +4830,31 @@ a.tr-tool-search-title:hover {
 		grid-column: 1;
 	}
 }
+
+/* One orb per turn, one left edge per turn. The orb is painted on the turn's
+ * anchor row only, but its column stays reserved for the whole turn: without
+ * this the anchor row was indented and every following row started flush, so
+ * a single answer appeared to jump left between its thinking and its text.
+ * Rows without a turn orb (a turn that produced none) keep the old collapse. */
+.tr-row--railed > .tr-gutter:empty {
+	display: block;
+}
+
+@media (min-width: 641px) {
+	.tr-row--assistant.tr-row--railed:has(> .tr-gutter:empty) {
+		grid-template-columns: 40px minmax(0, 1fr) 28px;
+	}
+
+	.tr-row--assistant.tr-row--railed:has(> .tr-gutter:empty) .tr-body,
+	.tr-row--assistant.tr-row--railed:has(> .tr-gutter:empty) .tr-actions {
+		grid-column: 2;
+	}
+
+	.tr-row--custom.tr-row--railed:has(> .tr-gutter:empty) {
+		grid-template-columns: 40px minmax(0, 1fr);
+	}
+
+	.tr-row--custom.tr-row--railed:has(> .tr-gutter:empty) .tr-body {
+		grid-column: 2;
+	}
+}
