@@ -1199,7 +1199,7 @@ export const settings = {
 	"settings.boardOrganize": "整理",
 	"settings.boardRemove": "删除",
 	"settings.commandsSettings": "斜杠命令目录（与输入框 / 补全同源）",
-	"settings.mcpSettings": "MCP 服务器（与扩展中心共用 mcp.json 开关）",
+	"settings.mcpSettings": "与扩展中心共用 mcp.json 开关；下方列出这份配置里声明的服务器及其连接方式。",
 	"settings.mcpConfiguredServers": "已配置的服务器（mcp.json）",
 	"settings.mcpAuthOauth": "OAuth 授权",
 	"settings.mcpAuthToken": "Token",

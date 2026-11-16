@@ -1264,7 +1264,8 @@ export const settings = {
 	"settings.boardOrganize": "Organize",
 	"settings.boardRemove": "Delete",
 	"settings.commandsSettings": "Slash command catalog (same source as the input / completion)",
-	"settings.mcpSettings": "MCP servers (shares the mcp.json toggles with the extensions center)",
+	"settings.mcpSettings":
+		"Shares the mcp.json toggles with the extensions center; the servers declared in that config and how each connects are listed below.",
 	"settings.mcpConfiguredServers": "Configured servers (mcp.json)",
 	"settings.mcpAuthOauth": "OAuth",
 	"settings.mcpAuthToken": "Token",

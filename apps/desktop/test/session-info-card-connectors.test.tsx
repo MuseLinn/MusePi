@@ -69,13 +69,15 @@ describe("SessionInfoCard connectors", () => {
 		// The empty state names the section and its action; restating the MCP
 		// description here duplicated the heading in other words.
 		expect(container.textContent).toContain(t("tools.connectorsPanelTitle"));
-		expect(container.textContent).toContain(t("settings.mcpServers"));
+		expect(container.textContent).toContain(t("settings.connectors"));
 		expect(container.textContent).not.toContain(t("settings.mcpSettings"));
 		const manage = container.querySelector<HTMLButtonElement>(".gui-session-info-manage-connectors");
 		expect(manage).not.toBeNull();
 
+		// The one settings page that owns connector enablement and auth — MCP
+		// servers are a kind inside it, not a page of their own.
 		await act(async () => manage?.click());
-		expect(opened).toEqual(["mcp"]);
+		expect(opened).toEqual(["connectors"]);
 	});
 
 	it("lists configured servers and still offers the manage entry", async () => {
@@ -93,6 +95,6 @@ describe("SessionInfoCard connectors", () => {
 		expect(manage).not.toBeUndefined();
 
 		await act(async () => manage?.click());
-		expect(opened).toEqual(["mcp"]);
+		expect(opened).toEqual(["connectors"]);
 	});
 });

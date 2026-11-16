@@ -25,7 +25,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useAgentTabControl } from "../lib/agent-tab-control";
 import { type AnnotationHost, cancelAnnotationSession, runAnnotationSession } from "../lib/annotation-session";
-import { formatAddressDisplayParts } from "../lib/browser-address";
+import { formatAddressDisplayParts, pageIcon as resolvePageIcon } from "../lib/browser-address";
 import { browserMenuModel } from "../lib/browser-menu-model";
 import { BROWSER_PREFERENCES_CHANGED_EVENT, readBrowserShowFullUrl } from "../lib/browser-preferences";
 import {
@@ -220,13 +220,14 @@ function hostnameFromUrl(url: string): string {
 	}
 }
 
-function faviconUrl(url: string): string | undefined {
-	if (!/^https?:\/\//i.test(url)) return undefined;
-	try {
-		return new URL("/favicon.ico", new URL(url).origin).toString();
-	} catch {
-		return undefined;
-	}
+/** Address-bar icon state: the guessed favicon URL plus whether that guess failed.
+ *
+ * The guess and the fallback rule both live in `pageIcon`; this hook only owns
+ * the one piece of state that has to survive a render (which URL failed). */
+function usePageIcon(url: string): { src: string | undefined; failed: boolean; onError: () => void } {
+	const [failedFor, setFailedFor] = useState<string | null>(null);
+	const icon = resolvePageIcon(url, failedFor);
+	return { ...icon, onError: () => setFailedFor(icon.src ?? null) };
 }
 
 function isHistoryUrl(url: string): boolean {
@@ -851,7 +852,7 @@ export function ManagedBrowserPane({
 		? { url: "" }
 		: formatAddressDisplayParts(activeUrl, activeTab?.title, showFullUrl);
 	const shownAddressValue = addressEditing ? addressValue : "";
-	const pageIconUrl = faviconUrl(activeUrl);
+	const pageIcon = usePageIcon(activeUrl);
 
 	const copyCurrentUrl = useCallback(async (): Promise<void> => {
 		if (!(await copyToClipboard(activeUrl))) throw new Error(t("tools.browserCopyUrlFailed"));
@@ -1009,8 +1010,13 @@ export function ManagedBrowserPane({
 				</div>
 				<form className="gui-browser-address" onSubmit={handleAddressSubmit}>
 					<span className="gui-browser-address-icon" aria-hidden>
-						{pageIconUrl && !isBlank ? (
-							<img src={pageIconUrl} alt="" className="h-4 w-4 rounded-[3px] object-contain" />
+						{pageIcon.src && !pageIcon.failed && !isBlank ? (
+							<img
+								src={pageIcon.src}
+								alt=""
+								className="h-4 w-4 rounded-[3px] object-contain"
+								onError={pageIcon.onError}
+							/>
 						) : (
 							<Icon name="compass-3" className="h-4 w-4" />
 						)}
