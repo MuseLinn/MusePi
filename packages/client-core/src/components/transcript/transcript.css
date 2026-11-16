@@ -84,6 +84,13 @@
 
 .tr-body {
 	min-width: 0;
+	/* Stretch the grid track: `.tr-body` is the second column of `.tr-row`'s
+	 * `minmax(0, 1fr)` grid, and `align-items: flex-start` (which the inner
+	 * rows want) also shrinks THIS box to its content width. A long advisor
+	 * note or async-job field then collapsed to 32–64px and wrapped one
+	 * character per line. `stretch` keeps the track, leaving the inner
+	 * alignment untouched. */
+	justify-self: stretch;
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
@@ -110,6 +117,21 @@
 
 .tr-row--custom .tr-body {
 	color: var(--fg-muted);
+}
+
+/* Custom (advisor / async-job) rows keep the default two-column track, so each
+ * child must still be placed explicitly: without it `.tr-body` lands in the
+ * narrow gutter column and every note wraps one character per line — the same
+ * failure the user-row placement below documents. */
+.tr-row--custom .tr-gutter {
+	grid-column: 1;
+	grid-row: 1;
+	align-self: start;
+}
+
+.tr-row--custom .tr-body {
+	grid-column: 2;
+	grid-row: 1;
 }
 
 /* User messages: right-aligned rounded bubble (ZCode-style). */
@@ -563,6 +585,11 @@ button.tr-display-context-source:hover {
 }
 
 .tr-advisor-main {
+	/* `flex: 1` is what gives the note its width: without it the column falls
+	 * back to its content's min-content width, and a long note wraps one
+	 * character per line (measured: 32px wide, 2118px tall). `min-width: 0`
+	 * then lets it shrink gracefully instead of pushing the row wider. */
+	flex: 1 1 auto;
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
@@ -4664,6 +4691,10 @@ a.tr-tool-search-title:hover {
 }
 
 .tr-row--job .tr-body {
+	/* Explicit column, like every other track owner: without it the body
+	 * claims the 40px gutter column and the card collapses to vertical text. */
+	grid-column: 2;
+	grid-row: 1;
 	align-items: flex-end;
 }
 
@@ -4804,12 +4835,17 @@ a.tr-tool-search-title:hover {
 
 @media (min-width: 641px) {
 	.tr-row--user:has(> .tr-gutter:empty),
-	.tr-row--assistant:has(> .tr-gutter:empty) {
+	.tr-row--assistant:has(> .tr-gutter:empty),
+	.tr-row--custom:has(> .tr-gutter:empty) {
 		grid-template-columns: minmax(0, 1fr) 28px;
 	}
 
 	.tr-row--assistant:has(> .tr-gutter:empty) .tr-body,
-	.tr-row--assistant:has(> .tr-gutter:empty) .tr-actions {
+	.tr-row--assistant:has(> .tr-gutter:empty) .tr-actions,
+	/* A custom row's gutter is empty too (advisor notes and async-job cards
+	 * carry no avatar) — without this it kept the collapsed 64px first track
+	 * and its body wrapped one character per line. */
+	.tr-row--custom:has(> .tr-gutter:empty) .tr-body {
 		grid-column: 1;
 	}
 }
