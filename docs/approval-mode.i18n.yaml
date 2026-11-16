@@ -1,5 +1,5 @@
 # Consistency record for approval-mode.md / approval-mode.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/approval-mode
-approval-mode.md: 9ecf405ce01e5a2db9e01293b57923d2d987c3f0
-approval-mode.zh-CN.md: 8909f8c2e8ff3c724c11ca6fa270cc60ff71a47a
+approval-mode.md: 35206f62f0ee692d3c441847eaedd38c504ebf82
+approval-mode.zh-CN.md: 2412721aac8123a34f8c6dfd2482d052b4e6c17d

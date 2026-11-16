@@ -332,7 +332,7 @@ fn xdg_state_logs(
 	}
 	let xdg = xdg_state_home.filter(|s| !s.is_empty())?;
 	let state_dir = Path::new(xdg).join(APP_NAME);
-	if !state_dir_exists(&state_dir) {
+	if !musepi_dir_exists(&state_dir) {
 		return None;
 	}
 	Some(state_dir.join("logs"))
