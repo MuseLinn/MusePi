@@ -27,9 +27,8 @@ interface SuggestionState {
  * Both halves matter: the turn's system prompt, history and tool catalog make
  * the wording continue the conversation instead of guessing at it, and keeping
  * its model (not the side-channel override, not a tiny role) is what lets the
- * provider's cached prefix still hit — BitFun's `enable_prompt_suggestion`
- * works the same way, which is why its hint promises cache reuse rather than a
- * cheap call.
+ * provider's cached prefix still hit, which is why the hint promises cache
+ * reuse rather than a cheap call.
  *
  * The session is never modified, a running main turn is never blocked, and
  * every failure stays here: a missing candidate is simply no candidate. Hosts

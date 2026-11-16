@@ -1,10 +1,10 @@
 /**
  * The component catalog an assistant writes UI blocks against.
  *
- * The language is OpenUI Lang — the same one OpenBitFun and OpenChamber speak —
- * parsed by `@openuidev/lang-core`. Sharing the language matters more than any
- * single feature: both references teach models `name = Component(args)`, so a
- * MusePi-specific format would be a dialect every model has to relearn.
+ * The language is OpenUI Lang, parsed by `@openuidev/lang-core`. Reusing the
+ * established language matters more than any single feature: models already
+ * know `name = Component(args)`, so a MusePi-specific format would be a dialect
+ * every model has to relearn.
  *
  * The parser also supplies what a hand-rolled format cannot: a partial tree for
  * any prefix (a block grows while the reply streams), per-argument diagnostics
