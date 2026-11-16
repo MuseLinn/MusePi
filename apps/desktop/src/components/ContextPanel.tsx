@@ -291,6 +291,7 @@ export function ContextPanel({
 	onViewChange,
 	panelTabs,
 	onExpandPanel,
+	onCollapsePanel,
 	agentId,
 	onAgentSelect,
 	onOpenSession,
@@ -362,6 +363,10 @@ export function ContextPanel({
 	/** Expand a folded panel. The agent-activity reveal needs it (and only
 	 *  it): the rail and ⌘-shortcut paths expand for the same reason. */
 	onExpandPanel?(): void;
+	/** Fold the panel when its last tab closes. An empty panel is a surface
+	 *  with nothing to show, and leaving it open keeps a 450px column of blank
+	 *  chrome beside the chat. */
+	onCollapsePanel?(): void;
 	/** Selected swarm subagent (swarm-card member row / roster row): its
 	 *  trajectory detail docks over the pane as a layer — same panel, not a
 	 *  second navigation surface. */
@@ -921,8 +926,12 @@ export function ContextPanel({
 			const nextActive = next.tabs.find(tab => tab.id === next.activeId);
 			const nextManagedId = nextActive ? browserTarget(nextActive) : null;
 			if (nextManagedId) selectBrowserTab(nextManagedId);
+			// The last tab closing folds the panel: the rail stays as the way back
+			// in, while an open-but-empty panel would hold a full column of blank
+			// chrome beside the chat for no surface at all.
+			if (next.tabs.length === 0) onCollapsePanel?.();
 		},
-		[browserHost.activeId, panelTabs],
+		[browserHost.activeId, panelTabs, onCollapsePanel],
 	);
 
 	// Close a tab whose file has unsaved in-app edits only after the user

@@ -3961,7 +3961,12 @@ a.tr-tool-search-title:hover {
 		opacity 150ms ease;
 }
 .tr-fold-slot > * {
+	/* Both axes: a grid item defaults to `min-width: auto`, so a row whose
+	 * content is wider than the turn column (a long path, a command line)
+	 * makes the track wider than its container instead of wrapping inside it —
+	 * the text then squeezed into a sliver while the card overflowed. */
 	min-height: 0;
+	min-width: 0;
 }
 .tr-fold-slot--open {
 	grid-template-rows: minmax(0, 1fr);

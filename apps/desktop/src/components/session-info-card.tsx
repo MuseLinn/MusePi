@@ -83,9 +83,6 @@ const DOCK_MIN_CHAT_COLUMN_PX = 560;
 /** Workspace card gutter, matching gui-chat.css `--gui-card-gutter`. */
 const CARD_GUTTER_PX = 8;
 
-/** The right panel's fixed card width (gui-chat.css `.gui-pane-right--inner`). */
-const PANEL_WIDTH_PX = 288;
-
 /**
  * Everything the shared row spends before the chat column sees a pixel: the
  * dock (288 + its gutters), the rail (44 + its gutters) and the folded right
@@ -94,22 +91,6 @@ const PANEL_WIDTH_PX = 288;
  */
 export const SESSION_INFO_DOCK_MIN_ROW_PX =
 	SESSION_INFO_DOCK_WIDTH_PX + CARD_GUTTER_PX * 2 + 44 + CARD_GUTTER_PX * 2 + CARD_GUTTER_PX + DOCK_MIN_CHAT_COLUMN_PX;
-
-/**
- * Row width that still fits the OPEN right panel beside the docked column: the
- * panel's own card plus both gutters and margins, the docked column, the rail
- * and the transcript's minimum. Below it the dock folds to 0 and the panel
- * takes the row; the card does not move seats.
- */
-export const SESSION_INFO_DOCK_BESIDE_PANEL_MIN_ROW_PX =
-	PANEL_WIDTH_PX +
-	CARD_GUTTER_PX * 2 +
-	CARD_GUTTER_PX * 2 +
-	SESSION_INFO_DOCK_WIDTH_PX +
-	CARD_GUTTER_PX * 2 +
-	44 +
-	CARD_GUTTER_PX * 2 +
-	DOCK_MIN_CHAT_COLUMN_PX;
 
 /** Same cadence as the other working-tree readouts — they describe one tree. */
 const POLL_MS = 15_000;

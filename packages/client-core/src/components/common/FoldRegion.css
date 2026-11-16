@@ -22,7 +22,11 @@
 }
 
 .fold-region-inner {
+	/* A grid item defaults to `min-width: auto`; without this a wide child
+	 * (a long path, a command line) widens the track past its container and
+	 * the content wraps into a sliver instead of filling the column. */
 	min-height: 0;
+	min-width: 0;
 	overflow: hidden;
 }
 

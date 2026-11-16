@@ -108,11 +108,7 @@ import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionArtifactPreviewDialog, type SessionArtifactPreviewRequest } from "./SessionArtifactPreviewDialog";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
 import { SplitterGrip } from "./SplitterGrip";
-import {
-	SESSION_INFO_DOCK_BESIDE_PANEL_MIN_ROW_PX,
-	SESSION_INFO_DOCK_MIN_ROW_PX,
-	SessionInfoCard,
-} from "./session-info-card";
+import { SESSION_INFO_DOCK_MIN_ROW_PX, SessionInfoCard } from "./session-info-card";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
 import { TurnMapCanvas } from "./TurnMapCanvas";
@@ -2809,10 +2805,18 @@ export function ChatView({
 	// row still fits both, and folds to 0 (one spring, same as the panel) when
 	// it does not. Before the first measurement it docks, so a wide window never
 	// flashes a float card in the corner it is about to leave.
-	const sessionInfoDockMinRow = rightPanelOpen
-		? SESSION_INFO_DOCK_BESIDE_PANEL_MIN_ROW_PX
-		: SESSION_INFO_DOCK_MIN_ROW_PX;
-	const sessionInfoDock = chatRowWidth === null || chatRowWidth >= sessionInfoDockMinRow;
+	const sessionInfoDockMinRow = SESSION_INFO_DOCK_MIN_ROW_PX;
+	// `chatRowWidth === null` means "not measured yet", which is the common case
+	// on the welcome scene (`showChat` is false there, so the observer never
+	// runs). Treating it as "wide enough" docked a 304px column into a 771px
+	// row and squeezed the chat column to 451px, where tool cards wrapped one
+	// character per line — the width budget must admit it does not know yet.
+	// An open right panel owns the row's spare width, so the card floats over the
+	// transcript instead of taking its own column: three columns (chat, card,
+	// panel) squeeze the conversation into a strip too narrow to read code in.
+	// The dock is for the panel-closed layout, where the column is the card's
+	// permanent seat.
+	const sessionInfoDock = !rightPanelOpen && chatRowWidth !== null && chatRowWidth >= sessionInfoDockMinRow;
 	// The card stays mounted through its exit window so the seat folds instead
 	// of the row re-laying out in one frame.
 	const sessionInfoDockOpen = sessionInfoOpen && !focusMode && sessionInfoDock;
@@ -3779,6 +3783,11 @@ export function ChatView({
 								onViewChange: setActiveView,
 								panelTabs,
 								onExpandPanel: onExpandRightPanel,
+								// Only fold while it is actually open: a toggle would EXPAND a
+								// folded panel, which is the opposite of what an empty tab set means.
+								onCollapsePanel: () => {
+									if (rightPanelOpen) onToggleRightPanel?.();
+								},
 								agentId: panelAgentId,
 								onAgentSelect: selectAgent,
 								onOpenSession,
