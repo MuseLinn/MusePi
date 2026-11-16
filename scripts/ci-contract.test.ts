@@ -10,8 +10,16 @@ interface WorkflowStep {
 	with?: Record<string, unknown>;
 }
 
+interface WorkflowJob {
+	needs?: string[];
+	if?: string;
+	outputs?: Record<string, string>;
+	steps?: WorkflowStep[];
+}
+
 interface Workflow {
-	jobs?: Record<string, { needs?: string[]; if?: string }>;
+	on?: Record<string, { paths?: unknown }>;
+	jobs?: Record<string, WorkflowJob>;
 }
 
 function readYaml(file: string): Workflow {
@@ -141,5 +149,111 @@ describe("CI runtime and delivery contracts", () => {
 		const upload = steps.findIndex(step => step.uses?.startsWith("softprops/action-gh-release@"));
 		const verify = steps.findIndex(step => step.run?.includes("gui-release-channel.ts verify-published"));
 		expect(verify).toBeGreaterThan(upload);
+	});
+});
+
+describe("CI merge gate", () => {
+	const workflow = readYaml(".github/workflows/ci.yml");
+	const jobs = workflow.jobs ?? {};
+
+	it("starts the workflow for every pull request so the required check always exists", () => {
+		expect(workflow.on?.pull_request).toBeDefined();
+		expect(workflow.on?.pull_request?.paths).toBeUndefined();
+	});
+
+	it("aggregates every blocking job into one always-run check", () => {
+		const gate = jobs.ci_required;
+		expect(gate).toBeDefined();
+		expect(gate?.if).toContain("always()");
+		const needs = new Set(gate?.needs ?? []);
+		const excluded = new Set([
+			"changes",
+			"ci_required",
+			"release_metadata",
+			"release_gate",
+			"release_binary",
+			"release_binary_darwin",
+			"release_github",
+			"release_github_verify",
+			"release_brew",
+			"native_addons_arm",
+			"native_addons_musl",
+			"native_addons_win",
+		]);
+		for (const job of Object.keys(jobs)) {
+			if (excluded.has(job)) continue;
+			expect(needs.has(job), `${job} must feed CI required`).toBe(true);
+		}
+		for (const job of needs) {
+			expect(job.startsWith("release_"), `${job} must not gate merges`).toBe(false);
+		}
+	});
+
+	it("gates every heavy job on the changes path detector", () => {
+		const alwaysRuns = new Set(["changes", "ci_required", "check", "docs_spec"]);
+		for (const [name, job] of Object.entries(jobs)) {
+			if (alwaysRuns.has(name) || name.startsWith("release_")) continue;
+			expect(job.if, `${name} must wait for changes`).toContain("needs.changes.outputs.code");
+			expect(job.needs, `${name} must depend on changes`).toContain("changes");
+		}
+	});
+
+	it("accepts skipped heavy jobs only when the change gate found no code", () => {
+		const python = requiredChecksInterpreter();
+		expect(python).toBeDefined();
+		const result = (value: string, outputs: Record<string, string> = {}) => ({ result: value, outputs });
+		const run = (needs: Record<string, unknown>) =>
+			Bun.spawnSync([python!, ".github/scripts/required_checks.py"], {
+				cwd: repoRoot,
+				env: { ...process.env, NEEDS: JSON.stringify(needs) },
+				stdout: "pipe",
+				stderr: "pipe",
+			}).exitCode;
+
+		expect(
+			run({
+				changes: result("success", { code: "true" }),
+				check: result("success"),
+				rust_validate: result("success"),
+			}),
+		).toBe(0);
+		expect(
+			run({
+				changes: result("success", { code: "false" }),
+				check: result("success"),
+				rust_validate: result("skipped"),
+			}),
+		).toBe(0);
+		expect(
+			run({
+				changes: result("success", { code: "true" }),
+				check: result("success"),
+				rust_validate: result("skipped"),
+			}),
+		).toBe(1);
+		expect(
+			run({
+				changes: result("success", { code: "false" }),
+				check: result("skipped"),
+				rust_validate: result("skipped"),
+			}),
+		).toBe(1);
+		expect(run({ changes: result("failure"), check: result("success") })).toBe(1);
+	});
+});
+
+function requiredChecksInterpreter(): string | undefined {
+	for (const candidate of [process.env.PYTHON, "python3", "python"]) {
+		if (!candidate) continue;
+		const probe = Bun.spawnSync([candidate, "--version"], { stdout: "pipe", stderr: "pipe" });
+		if (probe.exitCode === 0) return candidate;
+	}
+	return undefined;
+}
+
+describe("CI contract coverage", () => {
+	it("runs the CI contract test inside the required check", () => {
+		const steps = allSteps(readYaml(".github/workflows/ci.yml").jobs?.check);
+		expect(steps.some(step => step.run?.includes("scripts/ci-contract.test.ts"))).toBe(true);
 	});
 });
