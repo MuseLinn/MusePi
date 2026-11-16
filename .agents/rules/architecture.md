@@ -17,6 +17,32 @@ Catalog values and model helpers come from `@musepi/pi-catalog/<module>`, never 
 
 Run `bun run gen:models` and deliver the regenerated file with the source change. Regression tests target the resolver/descriptor, not bundled JSON. Whether to commit remains governed by the user's explicit instruction.
 
+## Package boundaries
+
+跨包引用只走包名，并在引用方 `package.json` 声明依赖。`scripts/check-package-boundaries.ts` 拒绝三类写法：
+
+- 未声明的 workspace 包引用（本地靠符号链接能解析，干净安装或发布后才失败）。
+- `src/` 里用相对路径爬出本包（测试可以跨包取无导出的内部实现，已由 `scripts/package-boundaries-baseline.json` 记账，只挡新增）。
+- `packages/*` 库包反向依赖 `apps/*` 或 `tools/*`。
+
+修法是补依赖声明（已发布的包用 `catalog:`，未发布的用 `workspace:*`），不是把违规记进 baseline。baseline 只留“没有导出可替代”的测试期例外。
+
+## Model identity
+
+`formatModelString` returns `ModelRef` from `@musepi/pi-catalog/identity`, a compile-time-only brand over the canonical `provider/id` string. Persisted sessions, settings and CLI arguments keep plain strings; the brand only stops internal code from accepting a bare id where a resolved identity is required.
+
+Resolution runs in `packages/coding-agent/src/config/model-resolver.ts`:
+
+- a bare id served by several providers resolves within `preferredProvider` when the caller knows it; otherwise the warning names the winner and up to four alternatives;
+- a pattern that only exists as the prefix of longer ids is rejected with the closest ids instead of silently downgrading;
+- an explicit provider prefix keeps shorthand matching inside that provider.
+
+## Generated artifacts
+
+`gen:tool-views` 写入 `packages/coding-agent/src/export/html/tool-views.generated.js`；`scripts/verify-generated.ts` 在内存里重建并逐行比对，渲染层改了却忘记重生成会让 `check:tools` 失败。新增确定性的生成器注册到该脚本的 `ARTIFACTS`。
+
+`models.json` 仍是本地生成步骤：发现流程需要 provider 网络与本地凭据，裸 CI 无法复现，所以没有字节级漂移门禁；它的回归测试仍打在 resolver 与 descriptor 上。
+
 ## Workers
 
 Workers re-enter the CLI entrypoint; do not create separate worker entry modules. `cli.ts` calls `declareWorkerHostEntry()` and dispatches hidden `__musepi_worker_*` selectors before loading command registrations.

@@ -18,7 +18,9 @@ Each new test names an externally observable failure mode and exercises real beh
 
 Good tests cover transformations, distinct branches, malformed input, precedence, negative contracts, wire/persisted shapes, and real regression reproductions. Do not add static echoes, success passthroughs, wording/default checks, duplicate same-path rows, placeholder assertions, or tests that merely prove code ran.
 
-Prefer contract-level assertions and focused package verification. Do not duplicate the same behavior at multiple abstraction levels. Small low-risk changes need tests only when they protect a real contract or regression-prone edge.
+Prefer contract-level assertions and focused package verification. Assert externally observable behavior (state transitions, output/error mapping, the world after an action), not DOM classes, data attributes, private fields, or "the marker is absent" checks that can flip with an implementation change while the feature stays correct. Do not duplicate the same behavior at multiple abstraction levels. Small low-risk changes need tests only when they protect a real contract or regression-prone edge.
+
+A regression guard must be shown to fail on the unfixed code: reproduce the regression, watch the guard go red for that reason, then revert. A guard that passes both ways guards nothing. For delegated fixes, re-run the gates yourself on the actual tree — a report describes intent, not what landed.
 
 Tests must be safe in the full suite:
 
@@ -34,6 +36,8 @@ Production behavior follows RED → GREEN: reproduce the contract failure, watch
 ## Verification and failure reporting
 
 For CI workflows, test sharding, runtime-version drift, or nondeterministic async tests, follow `.agents/skills/musepi-ci-test-reliability/SKILL.md`.
+
+Merge gating is one check: `CI required` aggregates every blocking job and is the only status branch protection needs. Heavy jobs run only when the `changes` job reports a build input, and `scripts/ci-contract.test.ts` fails when a new job is not wired into the gate.
 
 Use package scripts as the command source of truth. Start with affected contracts and package checks, then run the repository checks required for the deliverable and the original end-to-end scenario.
 
