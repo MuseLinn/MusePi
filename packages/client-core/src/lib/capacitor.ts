@@ -457,6 +457,36 @@ export async function getSystemBarInsets(): Promise<NativeInsets | undefined> {
 }
 
 /**
+ * The registered badge plugin, or its native bridge.
+ *
+ * `window.Capacitor.Plugins` only gains an entry after `registerPlugin("Badge")`
+ * — nothing in the app calls it, so reading `Plugins.Badge` directly was always
+ * undefined and every badge update silently failed. `nativePromise` reaches a
+ * plugin the native shell registered in `capacitor.plugins.json` without the
+ * proxy needing to exist.
+ */
+interface BadgeBridge {
+	get: () => Promise<{ count: number }>;
+	set: (options: { count: number }) => Promise<void>;
+	clear: () => Promise<void>;
+}
+
+function badgeBridge(): BadgeBridge | null {
+	const cap = window.Capacitor as unknown as {
+		Plugins?: Record<string, unknown>;
+		nativePromise?: <O, R>(pluginName: string, methodName: string, options?: O) => Promise<R>;
+	};
+	const registered = cap.Plugins?.Badge as BadgeBridge | undefined;
+	if (registered) return registered;
+	if (typeof cap.nativePromise !== "function") return null;
+	return {
+		get: () => cap.nativePromise<Record<string, never>, { count: number }>("Badge", "get", {}),
+		set: options => cap.nativePromise<{ count: number }, void>("Badge", "set", options),
+		clear: () => cap.nativePromise<Record<string, never>, void>("Badge", "clear", {}),
+	};
+}
+
+/**
  * Launcher icon badge (unread count) — Capacitor ShortcutBadger or
  * Harmony BadgeManager. Silently no-ops on unsupported launchers.
  */
@@ -470,13 +500,10 @@ export async function incrementBadge(): Promise<void> {
 			return;
 		}
 		if (isNativeShell()) {
-			const Badge = window.Capacitor!.Plugins!.Badge as {
-				get: () => Promise<{ count: number }>;
-				set: (o: { count: number }) => Promise<void>;
-				clear: () => Promise<void>;
-			};
-			const { count } = await Badge.get();
-			await Badge.set({ count: count + 1 });
+			const badge = badgeBridge();
+			if (!badge) return;
+			const { count } = await badge.get();
+			await badge.set({ count: count + 1 });
 		}
 	} catch {
 		// launcher without badge support — silent
@@ -492,10 +519,7 @@ export async function clearBadge(): Promise<void> {
 			return;
 		}
 		if (isNativeShell()) {
-			const Badge = window.Capacitor!.Plugins!.Badge as {
-				clear: () => Promise<void>;
-			};
-			await Badge.clear();
+			await badgeBridge()?.clear();
 		}
 	} catch {
 		// launcher without badge support — silent

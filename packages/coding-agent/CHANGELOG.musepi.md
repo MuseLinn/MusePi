@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **安卓：启动器角标恢复计数，会话切换卡不再被键盘顶出屏幕**：角标此前读取一个从未注册过的插件代理，异常被吞掉，后台收到通知也不会有任何角标变化；现在通过原生桥接直接调用已注册的 Badge 插件。会话切换卡在小屏加键盘时会高过可用高度，标题与搜索框被推到屏幕外且无法滚动；现在卡片上限等于键盘上方的可见区域，列表自己吸收差额。
+  - EN: Android launcher badges count again, and the session switcher no longer grows past the keyboard. Badge updates read a plugin proxy that was never registered, so the error was swallowed and notifications never changed the badge; the bridge now calls the registered Badge plugin directly. On a small screen with the IME up, the sessions sheet was taller than the space left above the keyboard — the title and search field clipped off screen with no way to scroll them — and the card is now capped to that visible strip with the list absorbing the difference.
+
 - **配对面板直接给出电脑地址，失败不再静默**：分享面板的 6 位码旁边现在显示这台电脑的局域网地址——手机必须同时填地址，而此前只能自己去查 IP；配对端点绑定失败、码生成失败都会在面板里说明原因，不再发一个永远解析不了的码。分享进行中面板会轮询状态，手机连上后「等待连接」会变成参与者列表。手机端也放宽了输入：粘贴 `http://192.168.1.7/` 这类地址会剥掉协议与路径、补上 8301 端口；配对码只收数字并在满 6 位前禁用按钮；扫到非配对码的二维码会就地提示，不再直接关闭扫码层去连接；鸿蒙配对表单提交失败时保持打开，错误与已填内容都留在原地。
   - EN: The share panel now shows this computer's LAN address beside the 6-digit code — the phone must submit both, and finding the IP used to be the user's job. A pair endpoint that failed to bind, or a code that could not be generated, is reported in the panel instead of handing out a code that can never resolve, and while sharing the panel polls status so "waiting for a phone" becomes the participant list. The phone side accepts what people paste: a URL like `http://192.168.1.7/` loses its scheme and path and gains port 8301; the code field takes digits only and the button stays disabled until all six are present; a QR code that is not a pair code is reported in place instead of closing the scanner and connecting anyway; and the HarmonyOS pair sheet stays open on rejection with the error and the typed values visible.
 

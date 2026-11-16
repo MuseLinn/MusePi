@@ -4060,6 +4060,26 @@
 	animation: ss-card-in 240ms var(--spring-liquid);
 }
 
+/* Below the docked breakpoint the card can outgrow the strip left above the
+ * IME: header + search + a 60vh list + footer is taller than that space, and
+ * the sheet has no scroll, so the title and search field clipped off the top
+ * and became unreachable. Cap the card to the visible strip; the list absorbs
+ * the difference, and the safe-area margin no longer double-counts the IME. */
+@media (max-width: 599px) {
+	.ss-card {
+		max-height: calc(100dvh - var(--mp-keyboard-inset, 0px) - 24px);
+		margin-bottom: calc(10px + max(0px, var(--safe-bottom, 0px) - var(--mp-keyboard-inset, 0px)));
+		display: flex;
+		flex-direction: column;
+	}
+
+	.ss-list {
+		flex: 1 1 auto;
+		min-height: 0;
+		max-height: none;
+	}
+}
+
 @media (min-width: 600px) {
 	.ss-backdrop {
 		align-items: center;
