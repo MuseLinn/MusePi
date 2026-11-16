@@ -130,7 +130,8 @@ describe("RemoteAccessDialog recovery", () => {
 
 	test("a minted pair code carries the address the phone must type", async () => {
 		const harness = await renderDialog(async method => {
-			if (method === "remote-access.status") return { hosting: true, webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654" };
+			if (method === "remote-access.status")
+				return { hosting: true, webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654" };
 			if (method === "channels.plugins") return [];
 			if (method === "channels.list") return [];
 			if (method === "remote-access.pair.generate") {
@@ -155,7 +156,8 @@ describe("RemoteAccessDialog recovery", () => {
 
 	test("a pair endpoint that cannot bind is reported instead of minting a dead code", async () => {
 		const harness = await renderDialog(async method => {
-			if (method === "remote-access.status") return { hosting: true, webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654" };
+			if (method === "remote-access.status")
+				return { hosting: true, webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654" };
 			if (method === "channels.plugins") return [];
 			if (method === "channels.list") return [];
 			if (method === "remote-access.pair.generate") throw new Error("pair endpoint unavailable: EADDRINUSE");
