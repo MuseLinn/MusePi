@@ -21,6 +21,7 @@ import {
 	componentBuildConfig,
 	sourceStamp,
 } from "../../../packages/coding-agent/src/daemon/extension-artifact-compiler";
+import { type DeclaredSlot, type ManifestDeclaration, mergeDeclarations, parseDeclaredSlots } from "./plugin-manifest";
 
 const pkgDir = path.resolve(import.meta.dir, "..");
 const repoRoot = path.resolve(pkgDir, "..", "..");
@@ -58,33 +59,18 @@ async function entrypoints(): Promise<string[]> {
 	return [...found].sort();
 }
 
-/** Slot declarations a plugin's entry module makes, parsed from its source.
+/** Slot declarations a plugin's entry module makes, read from disk.
  *
- *  A register call is a literal object (`slot`, `moduleUrl`, `label`), so the
- *  declaration can be lifted at build time — which is what lets the daemon
- *  assemble the surface from build output instead of mounting every plugin's
- *  cordis fiber at boot. A plugin that computes its slot at runtime is simply
- *  absent here and keeps the load path.
- */
-async function declaredSlots(
-	dir: string,
-): Promise<Array<{ slot: string; moduleUrl: string; label?: string }> | undefined> {
+ *  Parsing lives in `./plugin-manifest` so the accumulation rule has one home
+ *  that a test can exercise without running a build. */
+async function declaredSlots(dir: string): Promise<DeclaredSlot[] | undefined> {
 	let text: string;
 	try {
 		text = await Bun.file(path.join(dir, "index.ts")).text();
 	} catch {
 		return undefined;
 	}
-	const rows: Array<{ slot: string; moduleUrl: string; label?: string }> = [];
-	for (const match of text.matchAll(/register\(\{([^}]*)\}\)/g)) {
-		const body = match[1] ?? "";
-		const slot = /slot:\s*"([^"]+)"/.exec(body)?.[1];
-		const moduleUrl = /moduleUrl:\s*"\.\/([^"]+)"/.exec(body)?.[1];
-		if (slot === undefined || moduleUrl === undefined) continue;
-		const label = /label:\s*"([^"]+)"/.exec(body)?.[1];
-		rows.push({ slot, moduleUrl: `./${moduleUrl}`, ...(label ? { label } : {}) });
-	}
-	return rows;
+	return parseDeclaredSlots(text);
 }
 
 await rm(outDir, { recursive: true, force: true });
@@ -93,7 +79,7 @@ await mkdir(outDir, { recursive: true });
 const entries = await entrypoints();
 const entriesOut: Record<string, { file: string; css?: string; mtimeMs: number; size: number }> = {};
 // Slot declarations per plugin entry module, keyed the same way as `entries`.
-const declarations: Record<string, Array<{ slot: string; file: string; css?: string; label?: string }>> = {};
+const declarations: Record<string, ManifestDeclaration[]> = {};
 // Which optional surfaces a plugin declares at all. A collector that asks for
 // one of these can skip mounting the plugin when the build says it has none —
 // enumerating an empty set was costing a full module-graph load per plugin.
@@ -150,14 +136,11 @@ for (const entry of entries) {
 			statusBar: /registerStatusBarSegment\(/.test(source),
 			skins: /registerScrollbarSkin\(/.test(source),
 		};
-		declarations[entryKey] = declared
-			.filter(row => row.moduleUrl === `./${relative}`)
-			.map(row => ({
-				slot: row.slot,
-				file: codeFile,
-				...(cssFile ? { css: cssFile } : {}),
-				...(row.label ? { label: row.label } : {}),
-			}));
+		declarations[entryKey] = mergeDeclarations(declarations[entryKey], declared, {
+			relative,
+			file: codeFile,
+			...(cssFile ? { css: cssFile } : {}),
+		});
 	}
 }
 

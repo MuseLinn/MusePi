@@ -453,25 +453,46 @@ async function loadExtensionOnce(entryPath: string, cwd: string): Promise<Extens
  * files, and a stale `dist` is what the app already refuses to launch with. A
  * full source walk here cost ~600 ms on every cold registry call.
  */
-function declaredComponents(
-	entryPath: string,
-): Array<{ slot: string; label?: string; codeFile: string; cssFile?: string }> | undefined {
+function declaredComponents(entryPath: string):
+	| Array<{
+			slot: string;
+			label?: string;
+			codeFile: string;
+			cssFile?: string;
+			order?: number;
+			availability?: "always" | "on-demand";
+	  }>
+	| undefined {
 	const dir = process.env.MUSEPI_PLUGIN_ARTIFACTS;
 	if (!dir) return undefined;
 	const manifest = readPrebuiltManifest(dir);
 	const rows = manifest.declarations?.[path.resolve(entryPath).replaceAll("\\", "/")];
 	if (!rows || rows.length === 0) return undefined;
-	const out: Array<{ slot: string; label?: string; codeFile: string; cssFile?: string }> = [];
+	const out: Array<{
+		slot: string;
+		label?: string;
+		codeFile: string;
+		cssFile?: string;
+		order?: number;
+		availability?: "always" | "on-demand";
+	}> = [];
 	for (const row of rows) {
 		const codeFile = path.join(dir, row.file);
 		if (!existsSync(codeFile)) return undefined;
 		const cssFile = row.css === undefined ? undefined : path.join(dir, row.css);
 		if (cssFile !== undefined && !existsSync(cssFile)) return undefined;
+		// The manifest is build output, but the daemon only ever saw it as JSON:
+		// an unrecognised availability word must fall back to the load path's
+		// meaning (a launchable tab) rather than reach the rail filter as junk.
+		const availability =
+			row.availability === "always" || row.availability === "on-demand" ? row.availability : undefined;
 		out.push({
 			slot: row.slot,
 			...(row.label ? { label: row.label } : {}),
 			codeFile,
 			...(cssFile ? { cssFile } : {}),
+			...(row.order !== undefined ? { order: row.order } : {}),
+			...(availability ? { availability } : {}),
 		});
 	}
 	return out;
@@ -547,7 +568,18 @@ interface PrebuiltManifest {
 	stamp?: number;
 	entries?: Record<string, { file: string; css?: string; mtimeMs: number; size: number }>;
 	/** Slot declarations per plugin entry module, lifted at build time. */
-	declarations?: Record<string, Array<{ slot: string; file: string; css?: string; label?: string }>>;
+	declarations?: Record<
+		string,
+		Array<{
+			slot: string;
+			file: string;
+			css?: string;
+			label?: string;
+			order?: number;
+			/** Written by the host's build; validated on read, never trusted raw. */
+			availability?: string;
+		}>
+	>;
 	/** What each plugin declares, so a collector can skip a plugin with none. */
 	surfaces?: Record<string, { toolViews?: boolean; widgets?: boolean; statusBar?: boolean; skins?: boolean }>;
 }
@@ -697,6 +729,8 @@ export async function collectSlotComponents(
 					code: "",
 					codeFile: row.codeFile,
 					...(row.cssFile ? { cssFile: row.cssFile } : {}),
+					...(row.order !== undefined ? { order: row.order } : {}),
+					...(row.availability ? { availability: row.availability } : {}),
 				});
 			}
 			continue;
