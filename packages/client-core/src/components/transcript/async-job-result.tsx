@@ -10,11 +10,10 @@
  */
 
 import type { AsyncJobResultView } from "@musepi/pi-wire";
-import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
-import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse";
+import { useCollapseHeight } from "../../lib/use-collapse";
 
 type Tone = "ok" | "err" | "warn" | "accent";
 
@@ -152,7 +151,6 @@ function CollapsibleJobOutput({ output }: { output: string }): ReactNode {
 		</>
 	);
 }
-
 export function AsyncJobResultCard({ view }: { view: AsyncJobResultView }): ReactNode {
 	const tone = toneOf(view.status);
 	const output = view.output ?? "";
@@ -160,21 +158,13 @@ export function AsyncJobResultCard({ view }: { view: AsyncJobResultView }): Reac
 	const meta = [view.lines ? t("transcript.asyncJobLines", { count: String(view.lines) }) : undefined, view.size]
 		.filter(Boolean)
 		.join(" · ");
-	// Whole-card disclosure: the header line is the anchor, the body (output +
-	// hint) collapses under it. Reference clients keep the status line visible
-	// and fold the payload away — a completed background job routinely carries
-	// hundreds of lines the reader did not ask to see inline.
-	const [open, setOpen] = useState(true);
-	const bodyRef = useRef<HTMLDivElement | null>(null);
-	useCollapseHeight(open, bodyRef);
+	// One disclosure, not two. The status line is a readout — it stays visible
+	// and is not a button; the only thing that folds is the output, and only when
+	// there is more of it than the preview shows. A second whole-card fold on top
+	// of that hid the very preview the readout was introducing.
 	return (
 		<div className={`tr-async-result tr-async-job tr-async-job--${tone}`}>
-			<button
-				type="button"
-				className="tr-async-result-row tr-async-job-head"
-				aria-expanded={open}
-				onClick={() => setOpen(value => !value)}
-			>
+			<div className="tr-async-result-row tr-async-job-head">
 				<span className="tr-async-result-done" aria-hidden>
 					{glyphOf(tone)}
 				</span>
@@ -183,24 +173,17 @@ export function AsyncJobResultCard({ view }: { view: AsyncJobResultView }): Reac
 				{view.duration ? <span className="tr-async-result-dur">({view.duration})</span> : null}
 				<span className="tr-async-job-status">{statusLabel(view.status)}</span>
 				{meta ? <span className="tr-async-result-dur">{meta}</span> : null}
-				<ChevronRight
-					size={13}
-					className={`tr-async-job-chev${open ? " tr-async-job-chev--open" : ""}`}
-					aria-hidden
-				/>
-			</button>
-			<div ref={bodyRef} className="tr-async-job-collapse" style={collapseStyle(open)}>
-				{output ? (
-					clampable ? (
-						<CollapsibleJobOutput output={output} />
-					) : (
-						<div className="tr-async-job-body">
-							<JobOutputBody output={output} />
-						</div>
-					)
-				) : null}
-				{view.hint ? <div className="tr-async-job-hint">{view.hint.replace(/`/g, "")}</div> : null}
 			</div>
+			{output ? (
+				clampable ? (
+					<CollapsibleJobOutput output={output} />
+				) : (
+					<div className="tr-async-job-body">
+						<JobOutputBody output={output} />
+					</div>
+				)
+			) : null}
+			{view.hint ? <div className="tr-async-job-hint">{view.hint.replace(/`/g, "")}</div> : null}
 		</div>
 	);
 }

@@ -4705,28 +4705,9 @@ a.tr-tool-search-title:hover {
 .tr-async-job-head {
 	width: 100%;
 	padding: 0;
-	border: 0;
-	background: none;
 	color: inherit;
 	font: inherit;
 	text-align: left;
-	cursor: pointer;
-}
-
-.tr-async-job-chev {
-	flex: none;
-	margin-left: auto;
-	color: var(--fg-faint);
-	transition: transform 160ms var(--spring, cubic-bezier(0.22, 1, 0.36, 1));
-}
-
-.tr-async-job-chev--open {
-	transform: rotate(90deg);
-}
-
-.tr-async-job-collapse {
-	width: 100%;
-	overflow: hidden;
 }
 
 /* Reduced motion: the fold track jumps to its end state instead of animating;

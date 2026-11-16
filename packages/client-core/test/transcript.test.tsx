@@ -587,7 +587,9 @@ describe("async-job-result settlement card", () => {
 		expect(html).toContain("tr-async-job");
 		expect(html).toContain("tr-row--job");
 		expect(html).toContain("tr-async-job-head");
-		expect(html).toContain('aria-expanded="true"');
+		// The status line is a plain readout; folding lives on the output control.
+		expect(html).not.toContain("tr-async-job-collapse");
+		expect(html).not.toContain("tr-async-job-chev");
 		expect(html).not.toContain("tr-custom");
 		expect(html).not.toContain("<task-result");
 		expect(html).not.toContain("<meta");

@@ -446,35 +446,54 @@ describe("message quote action", () => {
 });
 
 describe("background completion card", () => {
-	it("folds as a whole from its header while keeping the body mounted", async () => {
-		const entry = {
+	function jobEntry(output: string): SessionEntry {
+		return {
 			type: "custom_message" as const,
 			id: "job-1",
 			parentId: null,
 			timestamp: "2026-11-12T00:00:00Z",
 			customType: "async-job-result",
 			display: true,
-			content: 'Background task job "Alice" completed.',
-			details: {
-				jobId: "Alice",
-				status: "completed",
-				label: "Alice",
-				output: "line one\nline two",
-			},
+			// The output travels inside the `<task-result>` envelope; `details`
+			// carries only the status line's facts.
+			content: `Background task job "Alice" completed:\n\n<task-result id="Alice" agent="task" status="completed" duration="2m57s">\n<output>\n${output}\n</output>\n</task-result>`,
+			details: { jobId: "Alice", status: "completed", label: "Alice" },
 			attribution: "agent",
 		} as unknown as SessionEntry;
-		const { container, root } = await mount(transcriptEl([entry]));
+	}
+
+	it("offers one disclosure: the status line is a readout, not a fold", async () => {
+		const { container, root } = await mount(transcriptEl([jobEntry("line one\nline two")]));
 
 		expect(container.querySelector(".tr-row--job")).not.toBeNull();
-		const head = container.querySelector<HTMLButtonElement>(".tr-async-job-head");
-		expect(head?.getAttribute("aria-expanded")).toBe("true");
-		const body = container.querySelector<HTMLElement>(".tr-async-job-collapse");
-		expect(body).not.toBeNull();
+		// Short output: nothing to fold, so no control at all — and the header is
+		// never a button competing with the output control for the same gesture.
+		expect(container.querySelector(".tr-async-job-more")).toBeNull();
+		const head = container.querySelector<HTMLElement>(".tr-async-job-head");
+		expect(head?.tagName).not.toBe("BUTTON");
+		expect(head?.hasAttribute("aria-expanded")).toBe(false);
+		expect(container.querySelector(".tr-async-job-text")?.textContent).toBe("line one\nline two");
 
-		await act(async () => head?.click());
-		expect(head?.getAttribute("aria-expanded")).toBe("false");
-		// The body stays mounted so the collapse can animate both ways.
-		expect(container.querySelector(".tr-async-job-collapse")).not.toBeNull();
+		await act(async () => root.unmount());
+	});
+
+	it("expands long output in place instead of folding the card", async () => {
+		const long = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`).join("\n");
+		const { container, root } = await mount(transcriptEl([jobEntry(long)]));
+
+		const more = container.querySelector<HTMLButtonElement>(".tr-async-job-more");
+		expect(more?.getAttribute("aria-expanded")).toBe("false");
+		expect(more?.textContent).toBe(t("transcript.asyncJobShowMore"));
+		expect(container.querySelector(".tr-async-job-body")?.className).toContain("--clamped");
+
+		await act(async () => more?.click());
+		expect(more?.getAttribute("aria-expanded")).toBe("true");
+		expect(more?.textContent).toBe(t("transcript.asyncJobShowLess"));
+		// The clamp is what bounded the preview; expanding lifts it.
+		expect(container.querySelector(".tr-async-job-body")?.className).not.toContain("--clamped");
+		// Every line is in the document: expanding reveals output, it does not
+		// swap one fold for another.
+		expect(container.querySelector(".tr-async-job-text")?.textContent).toBe(long);
 
 		await act(async () => root.unmount());
 	});
