@@ -43,7 +43,7 @@ Layout: `apps/` holds deployable surfaces, `packages/` holds reusable libraries,
 | CI workflows, test sharding, runtime versions, flaky/async tests | `.agents/skills/musepi-ci-test-reliability/SKILL.md` |
 | Documentation, bilingual pairs, package READMEs, agent-facing docs | `.agents/rules/documentation.md` |
 | Changelog and release | `.agents/rules/release.md` |
-| GUI design or interaction | `docs/gui-design.md`, `docs/gui-design.zh-CN.md`; dialogs also `docs/gui-dialog-spec.md`, widgets also `docs/gui-widget-spec.md` |
+| GUI design or interaction | `docs/gui-design.md`, `docs/gui-design.zh-CN.md`; dialogs also `docs/gui-dialog-spec.md`, widgets also `docs/gui-widget-spec.md`; reusable components and their tokens: `docs/gui-components.md` |
 | GUI RPC, lifecycle, implementation gotchas | `docs/gui-implementation.md`, `docs/gui-implementation.zh-CN.md` |
 | Extension API or HMR | `docs/extensions-dev.md`, `docs/extensions-dev.zh-CN.md`, `docs/capability-seams.md` |
 | i18n architecture | `docs/i18n.md`, `docs/i18n.zh-CN.md` |
@@ -52,9 +52,10 @@ The nearest package README and local code/test precedent supply local convention
 
 ## Always-on constraints
 
-- Model identity is `provider/id`, never a bare id. Session model selection stays session-scoped; role effort choices use the selected model's supported ladder, including `auto` when supported.
+- Model identity is `provider/id`, never a bare id. Session model selection stays session-scoped; role effort choices use the selected model's supported ladder, including `auto` when supported. Bare-id ambiguity names the chosen provider and its alternatives; an unscoped prefix never resolves to a longer sibling id.
 - Agent-facing capabilities are designed with the model contract and UI together: review tool schema/description, static prompt guidance, structured results, user rendering, and behavior tests in the same change; if no prompt change is needed, record why.
 - Reuse central utilities before adding a helper. Git/jj process execution goes through `packages/coding-agent/src/utils/git.ts` or `jj.ts`.
+- Cross-package imports use the package name and a declared dependency; `scripts/check-package-boundaries.ts` rejects undeclared imports, `src/` paths that leave the package, and library packages depending on `apps/` or `tools/`. Generated artifacts must match their generator (`scripts/verify-generated.ts`).
 - Converge on evidence: the same interaction or helper appearing in a second place is a signal, and a third is a defect. Before a fourth copy, extract a named primitive and record its contract in the owning doc; do not build a generic abstraction with fewer than two real consumers. For hover-revealed controls, the contract is hover plus `:focus-visible` (never `:focus-within`) with sibling readouts switching in the same state set — see `docs/gui-design.md`.
 - The connector catalog accepts remote `http`/`sse` endpoints, local `stdio` commands, and managed CLI packages; stdio/CLI mount only after per-fingerprint user approval, CLI installs stay in the isolated prefix, enabling a connector is user state, never model state, the agent-facing catalog tool stays read-only, and Token values never leave the encrypted connector secret store.
 - Never edit `packages/catalog/src/models.json` directly; change its generator/resolver and regenerate.

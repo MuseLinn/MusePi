@@ -88,6 +88,29 @@
 	--radius-2xl: 16px;
 	--radius-full: 9999px;
 
+	/* ── Pane splitter grip (one primitive for every resizable seam) ───────
+	 * Sidebar | chat, chat | right panel and chat | terminal dock share ONE
+	 * grip: the same pill, the same three states (rest / hover+focus /
+	 * drag), scaled by the same variables. A splitter reads as one control
+	 * across the window instead of three hand-rolled affordances, and the
+	 * cross-axis size answers the two reports that motivated it — 握柄太短
+	 * (28px on a 700px seam barely registers) and 握柄太细 (a 1–2px
+	 * hairline is a divider, not something you grab).
+	 *
+	 * The grip is CENTRED on the seam it owns: the vertical grips sit at
+	 * the card seam's midpoint (never the workspace's 50%, which is why the
+	 * sidebar handle used to ride ~24px above the seam), and the dock grip
+	 * sits on the horizontal seam. Position is the owner's business; these
+	 * variables are only the shared look. */
+	--gui-grip-thickness: 5px;
+	--gui-grip-thickness-active: 7px;
+	--gui-grip-length: 40px;
+	--gui-grip-length-active: 52px;
+	--gui-grip-rest: color-mix(in oklab, var(--fg, var(--color-text)) 38%, transparent);
+	--gui-grip-hover: color-mix(in oklab, var(--fg, var(--color-text)) 62%, transparent);
+	--gui-grip-drag: var(--color-accent);
+	--gui-grip-transition: 140ms cubic-bezier(0.22, 1, 0.36, 1);
+
 	/* Shared 4px spacing rhythm and control geometry. Component-specific
 	 * layout can still use other values; shared controls consume these tokens. */
 	--space-1: 4px;

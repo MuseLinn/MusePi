@@ -114,6 +114,11 @@ export function usePointerDrag({
 			s.dragged = true;
 			// Once it's a drag, suppress native selection/gestures.
 			e.preventDefault();
+			// Tag the band AND the pill it owns: the pill's state rules match it
+			// directly (an `:is(…)>` descendant chain is mangled by the minifier,
+			// which emitted an unparented rule that lit every grip).
+			s.element.setAttribute("data-resizing", "");
+			s.element.querySelector(".gui-split-grip")?.setAttribute("data-resizing", "");
 			cb.current.onDragStart?.({
 				element: s.element,
 				pointerId: s.pointerId,
@@ -128,6 +133,8 @@ export function usePointerDrag({
 		const s = state.current;
 		if (!s || s.pointerId !== e.pointerId) return;
 		state.current = null;
+		s.element.removeAttribute("data-resizing");
+		s.element.querySelector(".gui-split-grip")?.removeAttribute("data-resizing");
 		if (s.element.hasPointerCapture(e.pointerId)) s.element.releasePointerCapture(e.pointerId);
 		if (s.dragged) {
 			cb.current.onDragEnd?.({ dragged: true, dx: s.x - s.startX, dy: s.y - s.startY });

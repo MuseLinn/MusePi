@@ -689,21 +689,6 @@
 	padding:0 10px;
 	font-size:12.5px;
 }
-.gui-resize-x:after
-{
-	content:"";
-	position:absolute;
-	background:0 0;
-	width:1px;
-	transition:background .12s ease-out;
-	top:0;
-	bottom:0;
-	left:2px;
-}
-.gui-resize-x:hover:after
-{
-	background:var(--color-accent-bd);
-}
 .gui-session-row--unread .gui-session-title:after
 {
 	content:"";

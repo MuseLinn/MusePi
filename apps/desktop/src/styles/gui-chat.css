@@ -199,8 +199,11 @@
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	left: -3px;
-	width: 6px;
+	/* Hugs the dock's inner edge: the card clips its own overflow, so a band
+	 * straddling the seam lost its outer half — and the half-pill with it.
+	 * 8px matches the bottom dock's band thickness. */
+	left: 0;
+	width: 8px;
 	cursor: col-resize;
 }
 
@@ -649,46 +652,38 @@
  * the page host, positioned at that slot rect, is a root-level element the
  * panel's `overflow: hidden` cannot move this handle out from under. */
 .gui-pane-resize-x {
-	position: absolute;
-	left: 0;
-	top: 0;
-	bottom: 0;
+	/* `fixed`, not `absolute`: the band is the element the pointer must find,
+	 * and `.gui-pane-right--inner` clips its children (`overflow: clip`, for a
+	 * documented scroll reason). An in-flow band therefore sat INSIDE the
+	 * panel's edge — the pill could be moved onto the seam, but the grab area
+	 * stayed on the panel, so nothing on the seam was draggable. Escaping the
+	 * clip puts the hit box exactly where the pill is drawn.
+	 *
+	 * The seam is measured by ContextPanel (a fixed box cannot derive it from
+	 * layout); the fallbacks keep the band usable before the first measure. */
+	position: fixed;
+	left: var(--gui-pane-resize-seam, 0px);
+	top: var(--gui-pane-resize-seam-y, 50%);
+	/* Centred on the seam in both axes: 6px either side of it. */
+	transform: translate(-50%, -50%);
 	/* 12px, not 4px: the workspace split put an 8px gap between the chat card and
 	 * this panel, so the perceived boundary is the gap — a 4px strip tucked
 	 * inside the card was easy to miss and read as "the width cannot be
 	 * adjusted any more" (user: 光标变了但难拖,区域很小). */
 	width: 12px;
+	height: var(--gui-pane-resize-h, 100vh);
 	z-index: 600;
 	cursor: col-resize;
 	touch-action: none;
 }
 
-/* Drag affordance (side-pane `.gui-resize-x::after` parity). The old border-left
- * divider that marked this edge went away with the workspace split, so the edge
- * had no indicator at all: one hairline appears on hover and turns accent —
- * thicker — for the whole drag. */
-.gui-pane-resize-x::after {
-	content: "";
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	left: 1px;
-	width: 2px;
-	border-radius: var(--radius-xs);
-	background: transparent;
-	transition:
-		background 120ms ease-out,
-		width 120ms ease-out;
+/* A folded panel leaves no seam to grab. */
+.gui-pane-right--inner--closed .gui-pane-resize-x {
+	display: none;
 }
 
-.gui-pane-resize-x:hover::after {
-	background: var(--color-accent-bd);
-}
-
-body.gui-resizing .gui-pane-resize-x::after {
-	background: var(--color-accent);
-	width: 3px;
-}
+/* The pill uses the shared primitive's own centring (`.gui-split-grip` in
+ * gui-settings.css): the band already sits on the seam, so no offset here. */
 
 /* Gesture shield for the edge drags above. The page in the right pane is an
  * OOPIF guest: a captured pointer in the main frame does NOT keep receiving
@@ -2200,18 +2195,33 @@ body.gui-resizing .gui-pane-resize-x::after {
 
 /* ── Resizable terminal dock handle ──────────────────────────────────── */
 .gui-dock-handle {
-	position: absolute;
-	top: 0;
-	left: 0;
-	right: 0;
-	height: 8px;
+	/* `fixed` for the same reason as the right-panel band: the dock shell is
+	 * `overflow: hidden` (it animates its own height), so an in-flow band could
+	 * only ever receive pointer events on the card above it, never on the gap
+	 * between the card and the terminal. The band is placed on the seam by
+	 * ChatView's measurement, and the pill mounts inside it. */
+	position: fixed;
+	left: var(--gui-dock-resize-seam-x, 0px);
+	width: var(--gui-dock-resize-w, 100%);
+	top: var(--gui-dock-resize-seam, 0px);
+	/* 10px either side of the seam — the pointer's own margin of error. */
+	height: 10px;
+	transform: translateY(-50%);
 	cursor: row-resize;
 	z-index: 5;
 }
 
-.gui-dock-handle:hover {
-	background: color-mix(in oklab, var(--color-accent) 24%, transparent);
+/* A closed dock keeps its band mounted (the shell folds to height 0) but must
+ * paint and grab nothing — same rule as the dock's own edges. */
+.gui-terminal-dock:not(.gui-terminal-dock--open) .gui-dock-handle,
+.gui-terminal-dock:not(.gui-terminal-dock--open) .gui-terminal-right-handle {
+	display: none;
 }
+
+/* Dock drags mark the band itself (`data-resizing` from usePointerDrag), so
+ * the shared `[data-resizing]` rule in gui-settings.css covers both dock
+ * grips with no per-seam duplicate here. The pill uses the primitive's own
+ * centring: the band already sits on the horizontal seam. */
 
 /* ── TitlebarLeftControls cluster menus (collapsed sidebar) ──────────── */
 .gui-overlay-menu {
@@ -2811,6 +2821,13 @@ body.gui-resizing .gui-pane-right {
 	line-height: 1.5;
 	color: var(--color-text-muted);
 	margin: 4px 0 0;
+}
+
+/* Sub-navigation inside one settings page (会话与记忆): the page owns the
+ * heading, so this row only sits below it with the same 18px rhythm the first
+ * section would have had. */
+.gui-settings-subnav {
+	margin-top: 18px;
 }
 
 /* openchamber SettingsSection chrome: one style of section header (L2 title
@@ -6534,10 +6551,11 @@ body.gui-resizing .gui-pane-right {
 }
 
 /* The tile itself — ONE glass card in two seats (session-info-card.tsx): a
- * docked column while the right panel is collapsed, a floating card over the
- * transcript when the panel is open (manual reveal) or the row is too narrow
- * to dock. Material, radius, shadow, spacing and scrolling live here so the
- * two seats can never drift apart; only the box model is per seat. */
+ * docked column beside the chat (the panel opens next to it, never instead of
+ * it), and a floating card over the transcript for a row too narrow to dock
+ * after an explicit reveal. Material, radius, shadow, spacing and scrolling
+ * live here so the two seats can never drift apart; only the box model is per
+ * seat. */
 .gui-session-info {
 	display: flex;
 	flex-direction: column;
@@ -6576,11 +6594,14 @@ body.gui-resizing .gui-pane-right {
 
 /* Float seat: right edge of the session column, over the transcript but INSIDE
  * the column (the rail is a sibling), so it can never cover the rail, the
- * panel or a portaled menu. `top`/`max-height` come from ChatView and start
- * below the surface-mode row.
+ * panel or a portaled menu. `top`/`max-height` come from ChatView: the cap
+ * subtracts the composer zone's measured height (the `bottomInset` prop), so
+ * the card stops above the input instead of being painted under it. The
+ * composer itself is `position: absolute; bottom: 0` over the transcript and
+ * owns no flow space, which is why the card cannot rely on layout for that.
  *
  * z-index 3 is load-bearing: it keeps the card under the header tool cluster
- * (30), menus and tooltips. */
+ * (30), the composer (5), menus and tooltips. */
 .gui-session-info--float {
 	position: absolute;
 	right: 12px;
@@ -6606,7 +6627,9 @@ body.gui-resizing .gui-pane-right {
 /* Dock wrapper: a real flex item whose width IS the chat column's push/pull.
  * The card itself keeps its margin, width and scroll; the wrapper clips it and
  * folds 288px + gutters → 0 on the same spring as the right panel, so closing
- * the tile no longer hands the transcript 288px in a single frame. */
+ * the tile no longer hands the transcript 288px in a single frame. It folds on
+ * the same spring when the open panel leaves the row too narrow for both; the
+ * card stays mounted through its exit window and never changes seats. */
 .gui-session-info-seat {
 	display: flex;
 	flex: 0 0 auto;
@@ -6624,6 +6647,10 @@ body.gui-resizing .gui-pane-right {
 	width: 0;
 	opacity: 0;
 	pointer-events: none;
+	/* Folded states leave no trace: the card's gutters live inside the seat's
+	 * width, so zero width already drops them; a margin here would reopen a
+	 * gap against the panel the seat just yielded to. */
+	margin: 0;
 }
 
 @keyframes gui-session-info-in {
@@ -7392,4 +7419,82 @@ body.gui-resizing .gui-pane-right {
 	font-family: var(--font-mono);
 	color: var(--err);
 	overflow-wrap: anywhere;
+}
+
+/* ── Chat surface boot placeholder ────────────────────────────────────────
+ * Holds the content area between the shell's first paint and the chat
+ * plugin's mount. Three breathing dots at reading width: enough motion to
+ * read as "working", nothing that competes with the surface it precedes. */
+.gui-chat-boot {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 18px;
+	min-height: 0;
+	color: var(--fg-faint);
+}
+
+.gui-chat-boot-mark {
+	display: grid;
+	place-items: center;
+	width: 48px;
+	height: 48px;
+	border-radius: var(--radius-2xl);
+	background: var(--bg-raised);
+	box-shadow: var(--shadow-sm);
+	opacity: 0.9;
+	animation: gui-chat-boot-mark 2.4s ease-in-out infinite;
+}
+
+.gui-chat-boot-dots {
+	display: flex;
+	gap: 6px;
+}
+
+.gui-chat-boot-dots span {
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: currentColor;
+	opacity: 0.45;
+	animation: gui-chat-boot-dot 1.2s ease-in-out infinite;
+}
+
+.gui-chat-boot-dots span:nth-child(2) {
+	animation-delay: 0.16s;
+}
+
+.gui-chat-boot-dots span:nth-child(3) {
+	animation-delay: 0.32s;
+}
+
+@keyframes gui-chat-boot-dot {
+	0%,
+	100% {
+		opacity: 0.25;
+		transform: translateY(0);
+	}
+	50% {
+		opacity: 0.75;
+		transform: translateY(-2px);
+	}
+}
+
+@keyframes gui-chat-boot-mark {
+	0%,
+	100% {
+		transform: translateY(0);
+	}
+	50% {
+		transform: translateY(-2px);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-chat-boot-mark,
+	.gui-chat-boot-dots span {
+		animation: none;
+	}
 }

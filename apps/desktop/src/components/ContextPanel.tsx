@@ -42,6 +42,7 @@ import {
 import { createPortal } from "react-dom";
 import { browserPanelDescriptor, browserTarget, reconcileBrowserPanelTabs } from "../lib/browser-panel-tabs";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
+import { containingBlockOrigin } from "../lib/containing-block-origin";
 import { restrictToXAxis } from "../lib/dnd-axis";
 import {
 	canMoveEditorHistory,
@@ -122,6 +123,7 @@ import { GitPanel } from "./git-panel";
 import { NotesPane } from "./notes-pane";
 import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
 import { SideSessionView } from "./SideSessionView";
+import { SplitterGrip } from "./SplitterGrip";
 import { SubagentAvatar } from "./SubagentAvatar";
 import { SubagentPanel, SubagentSessionView } from "./SubagentPanel";
 import { SurfaceTabStripSortable } from "./surface-tabs";
@@ -265,6 +267,11 @@ function mergeSubagentRoster(
 	const rest = [...persisted.values()].sort((a, b) => b.lastActivity - a.lastActivity);
 	return [...merged, ...rest];
 }
+
+/** Width the panel opens at when nothing is stored: `panelWidth(0.5)` yields
+ *  0.5 × 900. The double-click reset must not call `panelWidth()` itself — it
+ *  reads the stored width, so the reset would be a no-op. */
+const DEFAULT_PANEL_WIDTH = 450;
 
 /**
  * Right pane — ZCode-style session tools: 上下文 / 文件 tabs plus a tool
@@ -711,6 +718,44 @@ export function ContextPanel({
 	// (the panel's right edge and the chat column's left edge), so the cap is
 	// stable — and a fixed 1200 let the panel squeeze the chat out entirely.
 	const panelRef = useRef<HTMLElement | null>(null);
+	// The grip pill escapes the panel's `overflow: clip` with `position: fixed`,
+	// which means it cannot read its own seam from layout — nothing may place a
+	// fixed child at the midpoint of a gap the clip box hides. The panel
+	// measures that midpoint once it can: the gap runs from this panel's left
+	// edge to the chat card's right edge, so the seam is their mean. Published
+	// as `--gui-pane-resize-seam` for the pill and refreshed on resize, on a
+	// fold, and when the chat column changes width (sidebar drag).
+	useLayoutEffect(() => {
+		const panel = panelRef.current;
+		if (!panel) return;
+		const write = (): void => {
+			const card = document.querySelector(".gui-chat-column, .gui-welcome-card, .gui-float-card");
+			const panelRect = panel.getBoundingClientRect();
+			const cardRect = card?.getBoundingClientRect();
+			// Subtract the pill's containing block origin: an ancestor with a
+			// transform/filter/backdrop-filter becomes the containing block for
+			// `position: fixed`, so viewport coordinates written raw would be
+			// offset by that ancestor's own origin (measured: the pill landed
+			// 299.6px right — exactly .gui-chat-keeper's left).
+			const origin = containingBlockOrigin(panel);
+			panel.style.setProperty("--gui-pane-resize-seam-y", `${(panelRect.top + panelRect.bottom) / 2 - origin.y}px`);
+			// The band is `fixed` too, so it needs its own height: it spans the
+			// panel's vertical extent, not the viewport.
+			panel.style.setProperty("--gui-pane-resize-h", `${panelRect.height}px`);
+			if (!cardRect || cardRect.right >= panelRect.left) return;
+			panel.style.setProperty("--gui-pane-resize-seam", `${(cardRect.right + panelRect.left) / 2 - origin.x}px`);
+		};
+		write();
+		const observer = new ResizeObserver(write);
+		observer.observe(panel);
+		const card = document.querySelector(".gui-chat-column, .gui-welcome-card, .gui-float-card");
+		if (card) observer.observe(card);
+		window.addEventListener("resize", write);
+		return () => {
+			observer.disconnect();
+			window.removeEventListener("resize", write);
+		};
+	}, [width]);
 	const maxWidthRef = useRef(MAX_PANEL_WIDTH);
 	const measureCap = useCallback((): number => {
 		const panel = panelRef.current?.getBoundingClientRect();
@@ -766,6 +811,33 @@ export function ContextPanel({
 			setGestureShield(true);
 			resizeDrag.onPointerDown(e);
 		},
+	};
+	// Keyboard and double-click write through the same contract as the drag
+	// release: clamp to the chat column's budget, then persist. The budget is
+	// re-measured here because a key press can follow a layout change the
+	// window-resize observer never saw (sidebar collapse, panel fold).
+	const commitPanelWidth = (next: number): void => {
+		// Same start condition as a pointer grab: a maximized panel has no width
+		// style, so the write would be invisible. The exit flushes synchronously,
+		// which also makes the budget below measure the docked box.
+		if (maximized) exitPanelMaximized(panelRef.current);
+		maxWidthRef.current = measureCap();
+		const settled = Math.round(Math.min(maxWidthRef.current, Math.max(MIN_PANEL_WIDTH, next)));
+		setWidth(settled);
+		writePanelWidth(settled);
+	};
+	// 2% of the current width per press, 10% with Shift — the sidebar grip's
+	// step (app.tsx nudgeSideWidth), so both width seams answer keys alike.
+	const nudgePanelWidth = (direction: -1 | 1, coarse: boolean): void => {
+		commitPanelWidth(width + direction * width * (coarse ? 0.1 : 0.02));
+	};
+	const onResizeHandleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+		if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+		event.preventDefault();
+		// Left moves the seam left (the separator convention), and this panel's
+		// seam is its left edge — so Left WIDENS it. The sidebar grip's sign is
+		// the opposite because its seam is its right edge.
+		nudgePanelWidth(event.key === "ArrowLeft" ? 1 : -1, event.shiftKey);
 	};
 	// The window drives the budget: shrinking it squeezes the panel, never the
 	// chat column (and a persisted width from a wide window is clamped too).
@@ -1627,10 +1699,22 @@ export function ContextPanel({
 				document.getElementById("transcript.root") ?? document.body,
 			)}
 			<aside ref={panelRef} className={panelClass} style={maximized ? undefined : { width }}>
-				{/* Left-edge drag handle for width: pointer capture on the 4px
-				 * strip plus the gesture shield (the page guest swallows captured
-				 * moves that leave the strip). */}
-				<div className="gui-pane-resize-x" {...(resizeHandleHandlers ?? {})} aria-hidden />
+				{/* Left-edge width separator: the 12px band owns the pointer drag
+				 * (capture plus the gesture shield — the page guest swallows
+				 * captured moves that leave the band), and the same band is the
+				 * keyboard handle and the anchor for the shared grip pill. */}
+				<div
+					className="gui-pane-resize-x"
+					role="separator"
+					aria-orientation="vertical"
+					aria-label={t("settings.resizeRightPanel")}
+					tabIndex={0}
+					{...(resizeHandleHandlers ?? {})}
+					onKeyDown={onResizeHandleKeyDown}
+					onDoubleClick={() => commitPanelWidth(DEFAULT_PANEL_WIDTH)}
+				>
+					<SplitterGrip />
+				</div>
 				<div className="flex h-full min-h-0 w-full flex-col">
 					{panelTabs.split ? (
 						<DndContext

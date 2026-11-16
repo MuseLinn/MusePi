@@ -4231,52 +4231,110 @@
 	cursor: col-resize;
 }
 
-/* Sidebar/chat splitter. Its centre is the seam between the two cards: the
- * sidebar card's right edge plus half of the shared --gui-card-gutter
- * (the chat surface contributes the other half). Anchoring to the same
- * variables the panes lay themselves out with keeps the handle on the seam
- * when --gui-side-w changes; a pixel offset from the state width landed the
- * handle ~19px inside the sidebar card. */
-.gui-resize-x--side {
-	left: calc(var(--gui-rail-w) + var(--gui-side-w) + var(--gui-card-gutter) * 1.5 - 5px);
-	width: 10px;
-}
-
-.gui-resize-grip {
+/* ── Pane splitter grip (one primitive for every resizable seam) ───────
+ * Sidebar|chat, chat|right panel and chat|terminal dock each mount ONE
+ * `.gui-split-grip` pill inside a positioning hit band. The band decides
+ * where the seam is; the pill is the same control everywhere, so the three
+ * seams stop looking like three unrelated affordances. Geometry (thickness,
+ * length, three-state colour) is `--gui-grip-*` in tokens.css.
+ *
+ * States are rest / hover+`:focus-visible` / drag. `:focus-visible` rather
+ * than `:focus-within`: a pointer grab must not leave a lit grip behind. */
+.gui-split-grip {
 	position: absolute;
 	top: 50%;
 	left: 50%;
-	width: 3px;
-	height: 28px;
-	margin: -14px 0 0 -1.5px;
-	border-radius: 999px;
-	background: transparent;
-	transition: background 120ms ease-out;
+	width: var(--gui-grip-thickness);
+	height: var(--gui-grip-length);
+	transform: translate(-50%, -50%);
+	border-radius: var(--radius-full);
+	background: var(--gui-grip-rest);
+	pointer-events: none;
+	transition:
+		background var(--gui-grip-transition),
+		width var(--gui-grip-transition),
+		height var(--gui-grip-transition);
 }
 
-.gui-resize-x--side:hover .gui-resize-grip,
-.gui-resize-x--side:focus-visible .gui-resize-grip,
-body.gui-resizing .gui-resize-x--side .gui-resize-grip {
-	background: var(--color-accent-bd);
+/* Horizontal seam (terminal dock): the pill lies along the seam. */
+.gui-split-grip--row {
+	width: var(--gui-grip-length);
+	height: var(--gui-grip-thickness);
 }
 
-.gui-resize-x::after {
-	content: "";
-	position: absolute;
-	top: 0;
-	bottom: 0;
-	left: 2px;
-	width: 1px;
-	background: transparent;
-	transition: background 120ms ease-out;
+/* Interaction states are keyed on the PILL, not on an ancestor band. A
+ * descendant combinator through `:is(…)` is flattened badly by the minifier
+ * (it emitted an unparented `.gui-split-grip { background: hover }` that hit
+ * every grip at rest), so the band propagates its state onto the pill it owns
+ * — `data-hot` for hover/focus, `data-resizing` for the drag — and each rule
+ * below matches the pill directly. */
+.gui-split-grip[data-hot] {
+	background: var(--gui-grip-hover);
+	width: var(--gui-grip-thickness-active);
+	height: var(--gui-grip-length-active);
 }
 
-.gui-resize-x--side::after {
-	display: none;
+.gui-split-grip--row[data-hot] {
+	width: var(--gui-grip-length-active);
+	height: var(--gui-grip-thickness-active);
 }
 
-.gui-resize-x:not(.gui-resize-x--side):hover::after {
-	background: var(--color-accent-bd);
+/* Dragging is per-seam, not global: `body.gui-resizing` says "a resize is in
+ * flight" (it drives the resize cursor and selection lock), so lighting the
+ * grip from it lit every seam at once — dragging the sidebar highlighted the
+ * right panel's grip too. The drag owner tags its own pill. */
+.gui-split-grip[data-resizing] {
+	background: var(--gui-grip-drag);
+	width: var(--gui-grip-thickness-active);
+	height: var(--gui-grip-length-active);
+}
+
+.gui-split-grip--row[data-resizing] {
+	width: var(--gui-grip-length-active);
+	height: var(--gui-grip-thickness-active);
+}
+
+/* Hover/focus still live on the BAND (the pointer and the tab stop are there),
+ * so the pill adopts the band's state through `:has()` on the band instead of
+ * a descendant chain — the minifier flattens `:is(…)>` badly, but `:has()` is
+ * evaluated on the pill's own ancestor and survives minification intact. */
+:is(.gui-resize-x--side, .gui-pane-resize-x, .gui-dock-handle, .gui-terminal-right-handle):hover:not([data-resizing])
+	.gui-split-grip,
+:is(.gui-resize-x--side, .gui-pane-resize-x, .gui-dock-handle, .gui-terminal-right-handle):focus-visible:not([data-resizing])
+	.gui-split-grip {
+	background: var(--gui-grip-hover);
+	width: var(--gui-grip-thickness-active);
+	height: var(--gui-grip-length-active);
+}
+
+:is(.gui-resize-x--side, .gui-pane-resize-x, .gui-dock-handle, .gui-terminal-right-handle):hover:not([data-resizing])
+	.gui-split-grip--row,
+:is(.gui-resize-x--side, .gui-pane-resize-x, .gui-dock-handle, .gui-terminal-right-handle):focus-visible:not([data-resizing])
+	.gui-split-grip--row {
+	width: var(--gui-grip-length-active);
+	height: var(--gui-grip-thickness-active);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-split-grip {
+		transition: none;
+	}
+}
+
+/* Sidebar/chat splitter. Its centre is the seam between the two CARDS: the
+ * sidebar card's right edge (rail + side + one gutter) through the chat
+ * card's left edge (rail + side + three gutters). That gap's midpoint is
+ * rail + side + two gutters — anchoring one gutter closer (…* 1.5) put the
+ * pill 4px toward the sidebar, the "偏向左侧面板" report.
+ *
+ * Vertically the band is bound to the CARD, not the workspace: the card
+ * insets itself by header + two gutters at the top and two at the bottom,
+ * so a workspace-relative 50% rode ~24px above the seam. */
+.gui-resize-x--side {
+	left: calc(var(--gui-rail-w) + var(--gui-side-w) + var(--gui-card-gutter) * 2 - 6px);
+	width: 12px;
+	top: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2);
+	bottom: calc(var(--gui-card-gutter) * 2);
 }
 
 body.gui-resizing {
