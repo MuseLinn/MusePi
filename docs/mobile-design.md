@@ -169,7 +169,7 @@ Settings（独立全屏页）
 - 头部：品牌 lockup + 主题/accent/语言切换（与桌面一致，`--order` 语义化排序）；
 - 已保存电脑：列表显示电脑名称、地址、电脑图标和进入箭头；元数据与凭证分离，原生壳的新房间凭证只写 OS 安全存储，浏览器使用 localStorage；删除即 `✕`，无需确认（可随时重连恢复）；**仅成功连接（welcome 帧到达后）才记录**，失败/超时不记录；
 - 新连接：原生扫码使用 accent 主按钮（`getUserMedia` + jsQR 纯 JS 解码，无插件）；配对码与链接使用次级折叠表单，`useCollapseHeight` 保持挂载可动画（`aria-expanded` 表达触发器状态，`aria-hidden + inert` 表达折叠态）；
-- 配对流程：6 位码 + 电脑地址 → `pair.resolve`（6s 超时，友好错误文案）→ 记住地址（secure）；
+- 配对流程：6 位码 + 电脑地址 → `pair.resolve`（6s 超时，友好错误文案）→ 记住地址（secure）。地址会先剥掉协议与路径、缺端口补 8301（`normalizePairHost`），粘贴 `http://192.168.1.7/` 也能用；桌面分享面板在码旁直接给出这台电脑的地址，码生成失败在面板内报错而不是发一个无法解析的码；
 - 跳过态：`sh-connect-card--empty` 空态 + "connect to a computer" 返回引导；`SKIP_KEY` 持久化；
 - 错误：`localError ?? error` 单行展示，`key={shown}` 触发重渲染动画。
 
@@ -345,7 +345,7 @@ Settings（独立全屏页）
 - `getUserMedia` + `jsQR`（纯 JS 解码）——**不用 `@capacitor-mlkit/barcode-scanning`**：该插件依赖 Google Play
   Services 的 barcode 模块，在卓易通 / 鸿蒙兼容层与无 GMS 设备上不可用（早期文档曾写 mlkit，与实现不符，2026-09-12 修正）；
 - `CAMERA` 权限 manifest 声明（`uses-permission` + 可选 `uses-feature`）；
-- 结果 `displayValue` 即 collab 链接 → 直接 connect；异常 → 友好错误 + 配对码兜底。
+- 结果先经 `linkFromScannedCode` 归一化：`ws(s)://` / `https://` 链接直接 connect，`musepi://connect?link=…` 解包后再连；其余（Wi‑Fi、商品码）就地提示「不是 MusePi 配对码」，不关闭扫码层也不发起连接。
 
 ### 6.6 深链
 
