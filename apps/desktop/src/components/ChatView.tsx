@@ -45,6 +45,7 @@ import {
 	forgetComposerSlot,
 	recordComposerSlotHeight,
 } from "../lib/composer-tail-inset";
+import { containingBlockOrigin } from "../lib/containing-block-origin";
 import { FILE_WORKSPACE_SURFACE } from "../lib/file-workspace";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
@@ -106,7 +107,12 @@ import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionArtifactPreviewDialog, type SessionArtifactPreviewRequest } from "./SessionArtifactPreviewDialog";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
-import { SESSION_INFO_DOCK_MIN_ROW_PX, SessionInfoCard } from "./session-info-card";
+import { SplitterGrip } from "./SplitterGrip";
+import {
+	SESSION_INFO_DOCK_BESIDE_PANEL_MIN_ROW_PX,
+	SESSION_INFO_DOCK_MIN_ROW_PX,
+	SessionInfoCard,
+} from "./session-info-card";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
 import { TurnMapCanvas } from "./TurnMapCanvas";
@@ -357,6 +363,21 @@ function useExitPresence(open: boolean, exitMs: number): { mounted: boolean; clo
 	return { mounted, closing };
 }
 
+/** Terminal dock resize bounds — one source for the pointer drag, the
+ *  keyboard step and the persisted right-dock width. */
+const TERMINAL_DOCK_HEIGHT_MIN = 96;
+const TERMINAL_DOCK_HEIGHT_MAX = 480;
+const TERMINAL_DOCK_RIGHT_WIDTH_MIN = 240;
+const TERMINAL_DOCK_RIGHT_WIDTH_MAX = 720;
+
+function clampDockHeight(height: number): number {
+	return Math.min(TERMINAL_DOCK_HEIGHT_MAX, Math.max(TERMINAL_DOCK_HEIGHT_MIN, height));
+}
+
+function clampDockRightWidth(width: number): number {
+	return Math.min(TERMINAL_DOCK_RIGHT_WIDTH_MAX, Math.max(TERMINAL_DOCK_RIGHT_WIDTH_MIN, width));
+}
+
 export function ChatView({
 	store,
 	rpc,
@@ -405,9 +426,6 @@ export function ChatView({
 	ask,
 	onAskAnswer,
 	sessionTitle,
-	/** Sessions with unread updates (the rail/session list badge). The avatar
-	 *  reads it as "something new for you", like the desktop pet does. */
-	unread = 0,
 	sessionInfoOpen = false,
 	onToggleSessionInfo,
 }: {
@@ -523,9 +541,6 @@ export function ChatView({
 	 *  via onAskAnswer (session.askAnswer). */
 	ask?: AskRequest | null;
 	onAskAnswer?(answer: AskAnswer): void;
-	/** Sessions with unread updates (rail/session-list badge). The avatar reads it
-	 *  as "something new for you", the same fact the desktop pet consumes. */
-	unread?: number;
 	/** Session title shown in the floating session info card (app.tsx owns the
 	 *  session label; the card is the collapsed right panel's stand-in). */
 	sessionTitle?: string | null;
@@ -927,14 +942,9 @@ export function ChatView({
 		() =>
 			agentSignalsFromSnapshot(snap, {
 				now: nowMs,
-				unread,
-				// The ask card is the only question surface this shell owns; a
-				// pending one means the turn is waiting on the reader.
-				questions: ask === null ? 0 : 1,
-				awaitingInput: ask !== null,
 				...(turnOutcome ? { outcome: turnOutcome, justFinished: true } : {}),
 			}),
-		[ask, snap, nowMs, turnOutcome, unread],
+		[snap, nowMs, turnOutcome],
 	);
 	// Avatar display toggle lives in Settings → appearance (musepi-gui-avatars).
 	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
@@ -946,7 +956,7 @@ export function ChatView({
 		localStorage.getItem("musepi-gui-terminal-placement") === "right" ? "right" : "bottom",
 	);
 	const [rightWidth, setRightWidth] = useState(() =>
-		Math.min(720, Math.max(240, Number(localStorage.getItem("musepi-gui-terminal-right-width") ?? 360))),
+		clampDockRightWidth(Number(localStorage.getItem("musepi-gui-terminal-right-width") ?? 360)),
 	);
 	useEffect(() => {
 		const onPlacement = (event: Event): void => {
@@ -963,7 +973,7 @@ export function ChatView({
 			rightDockStartRef.current = rightWidth;
 		},
 		onDragMove: ({ dx }) => {
-			setRightWidth(Math.min(720, Math.max(240, rightDockStartRef.current - dx)));
+			setRightWidth(clampDockRightWidth(rightDockStartRef.current - dx));
 		},
 		onDragEnd: () => {
 			terminalDockRef.current?.classList.remove("gui-terminal-dock--resizing");
@@ -982,14 +992,57 @@ export function ChatView({
 			dockStartRef.current = dockHeight;
 		},
 		onDragMove: ({ dy }) => {
-			const h = Math.min(480, Math.max(96, dockStartRef.current - dy));
-			setDockHeight(h);
+			setDockHeight(clampDockHeight(dockStartRef.current - dy));
 		},
 		onDragEnd: () => {
 			terminalDockRef.current?.classList.remove("gui-terminal-dock--resizing");
 		},
 	});
+	// Keyboard step on a dock grip: 2 % of the current size, 10 % with Shift,
+	// inside the same bounds as the pointer drag. Arrows move the seam, so
+	// growing the dock is Up for the bottom dock and Left for the right dock.
+	const nudgeDockHeight = (direction: -1 | 1, coarse: boolean): void => {
+		const step = Math.max(1, Math.round(dockHeight * (coarse ? 0.1 : 0.02)));
+		setDockHeight(clampDockHeight(dockHeight + direction * step));
+	};
+	const nudgeDockRightWidth = (direction: -1 | 1, coarse: boolean): void => {
+		const step = Math.max(1, Math.round(rightWidth * (coarse ? 0.1 : 0.02)));
+		const next = clampDockRightWidth(rightWidth + direction * step);
+		setRightWidth(next);
+		localStorage.setItem("musepi-gui-terminal-right-width", String(next));
+	};
 	const terminalDockRef = useRef<HTMLDivElement | null>(null);
+	// The dock's grip pill is `position: fixed` because the dock shell clips its
+	// children (the open/close height animation needs it). A fixed pill cannot
+	// read the seam from layout, so the dock publishes the midpoint between the
+	// chat card's bottom edge and its own top edge into `--gui-dock-resize-seam`
+	// — the pill then sits IN the gap instead of on top of the card.
+	useLayoutEffect(() => {
+		const dock = terminalDockRef.current;
+		if (!dock || !terminalOpen || terminalPlacement !== "bottom") return;
+		const write = (): void => {
+			const dockRect = dock.getBoundingClientRect();
+			const card = document.querySelector(".gui-chat-column, .gui-welcome-card, .gui-float-card");
+			const cardRect = card?.getBoundingClientRect();
+			const seam = cardRect && cardRect.bottom <= dockRect.top ? (cardRect.bottom + dockRect.top) / 2 : dockRect.top;
+			// Same counting-block correction as the right-panel grip: a `fixed`
+			// pill resolves against the nearest transformed/filtered ancestor.
+			const origin = containingBlockOrigin(dock);
+			dock.style.setProperty("--gui-dock-resize-seam", `${seam - origin.y}px`);
+			// The band is `fixed` and full-width; keep it on the chat column so
+			// it never covers the sidebar or the right panel.
+			dock.style.setProperty("--gui-dock-resize-seam-x", `${dockRect.left - origin.x}px`);
+			dock.style.setProperty("--gui-dock-resize-w", `${dockRect.width}px`);
+		};
+		write();
+		const observer = new ResizeObserver(write);
+		observer.observe(dock);
+		window.addEventListener("resize", write);
+		return () => {
+			observer.disconnect();
+			window.removeEventListener("resize", write);
+		};
+	}, [terminalOpen, terminalPlacement, dockHeight]);
 	// The dock shell below stays mounted so open/close animates; the
 	// TerminalPanel inside mounts on the FIRST dock open anywhere in this
 	// view and then NEVER unmounts. Visibility still follows the session
@@ -1231,6 +1284,13 @@ export function ChatView({
 		window.addEventListener("musepi-gui-open-session-side", onOpenSide);
 		return () => window.removeEventListener("musepi-gui-open-session-side", onOpenSide);
 	}, [panelTabs.open, store?.sessionId, rightPanelOpen, focusMode, onExpandRightPanel]);
+
+	// The right panel's shell is one large compiled module. Keeping it mounted
+	// while the panel is closed (only so the collapse animates) makes every
+	// session open pay for a surface nobody is looking at, so mounting waits for
+	// the first open; from then on it stays mounted and the animation is intact.
+	const panelShellMounted = useRef(false);
+	if ((rightPanelOpen && !focusMode) || panelShellMounted.current) panelShellMounted.current = true;
 
 	const setActiveView = useCallback(
 		(view: string | null): void => {
@@ -2742,23 +2802,24 @@ export function ChatView({
 		setTimeout(release, 320);
 	}, [focusMode]);
 
-	// Session info seat: the panel's own state decides WHETHER the tile shows
-	// (app.tsx); this only decides WHERE. A collapsed panel gets the docked
-	// column, an open panel or a narrow row gets the float card. Before the
-	// first measurement it docks, so a wide window never flashes a float card
-	// in the corner it is about to leave.
-	const sessionInfoDock = !rightPanelOpen && (chatRowWidth === null || chatRowWidth >= SESSION_INFO_DOCK_MIN_ROW_PX);
-	// The dock is a flex sibling of the chat column, so its width IS the chat
-	// column's push/pull: the seat stays in the row and folds to 0 (CSS
-	// transition), and the card only stays mounted through its exit window.
-	// Mounting the card conditionally instead re-laid the row out in one frame
-	// — the transcript jumped 288px wider the instant the tile closed.
+	// Session info seat: the card's own preference (app.tsx) decides WHETHER it
+	// shows; this decides WHERE. The dock is a flex sibling of the chat column,
+	// so its width IS the chat column's push/pull. An open panel does not move
+	// the card: it keeps that column between the chat and the panel while the
+	// row still fits both, and folds to 0 (one spring, same as the panel) when
+	// it does not. Before the first measurement it docks, so a wide window never
+	// flashes a float card in the corner it is about to leave.
+	const sessionInfoDockMinRow = rightPanelOpen
+		? SESSION_INFO_DOCK_BESIDE_PANEL_MIN_ROW_PX
+		: SESSION_INFO_DOCK_MIN_ROW_PX;
+	const sessionInfoDock = chatRowWidth === null || chatRowWidth >= sessionInfoDockMinRow;
+	// The card stays mounted through its exit window so the seat folds instead
+	// of the row re-laying out in one frame.
 	const sessionInfoDockOpen = sessionInfoOpen && !focusMode && sessionInfoDock;
 	// A narrow row cannot dock, so the fallback seat floats OVER the transcript.
 	// Auto-showing it there covers the conversation the card is meant to
-	// summarize, so that seat waits for an explicit toggle; the panel-open
-	// reveal is already explicit.
-	const sessionInfoAutoFloat = !rightPanelOpen && !sessionInfoDock;
+	// summarize, so that seat waits for an explicit toggle.
+	const sessionInfoNarrowRow = !sessionInfoDock;
 	const [sessionInfoFloatRequested, setSessionInfoFloatRequested] = useState(false);
 	const sessionInfoSessionId = store?.sessionId ?? null;
 	useEffect(() => {
@@ -2766,8 +2827,13 @@ export function ChatView({
 		// does not carry over.
 		setSessionInfoFloatRequested(false);
 	}, [sessionInfoSessionId]);
-	const sessionInfoFloatOpen =
-		sessionInfoOpen && !focusMode && !sessionInfoDock && (!sessionInfoAutoFloat || sessionInfoFloatRequested);
+	const sessionInfoFloatOpen = sessionInfoOpen && !focusMode && !sessionInfoDock && sessionInfoFloatRequested;
+	// What the narrow-row toggle drives: the float seat needs BOTH the stored
+	// preference and an explicit request, so the click flips the pair instead of
+	// reading back the rendered seat — focus mode or a leftover request must not
+	// swallow it.
+	const sessionInfoFloatChosen = sessionInfoOpen && sessionInfoFloatRequested;
+	const sessionInfoVisible = sessionInfoDockOpen || sessionInfoFloatOpen;
 	const sessionInfoDockPresence = useExitPresence(sessionInfoDockOpen, SESSION_INFO_SEAT_EXIT_MS);
 	const sessionInfoFloatPresence = useExitPresence(sessionInfoFloatOpen, SESSION_INFO_SEAT_EXIT_MS);
 	// A draft session's connector pick was stored under the cwd while the
@@ -2995,28 +3061,28 @@ export function ChatView({
 												<button
 													type="button"
 													className="gui-chat-info-toggle"
-													aria-pressed={sessionInfoDock ? sessionInfoOpen : sessionInfoFloatOpen}
+													aria-pressed={sessionInfoVisible}
 													title={
-														sessionInfoFloatOpen || sessionInfoDockOpen
+														sessionInfoVisible
 															? t("general.sessionInfoHide")
 															: t("general.sessionInfoShow")
 													}
 													aria-label={
-														sessionInfoFloatOpen || sessionInfoDockOpen
+														sessionInfoVisible
 															? t("general.sessionInfoHide")
 															: t("general.sessionInfoShow")
 													}
 													onClick={() => {
-														if (!sessionInfoAutoFloat) {
+														if (!sessionInfoNarrowRow) {
 															onToggleSessionInfo();
 															return;
 														}
-														// Narrow row: the first click opens the float the auto
-														// rule suppressed; the next one closes it and records
-														// the preference.
-														if (sessionInfoFloatOpen) setSessionInfoFloatRequested(false);
+														// Narrow row: the float is the only seat, and it needs both the
+														// stored preference and an explicit request, so each click sets
+														// or clears the pair instead of reading back the rendered seat.
+														if (sessionInfoFloatChosen) setSessionInfoFloatRequested(false);
 														else setSessionInfoFloatRequested(true);
-														if (sessionInfoOpen === sessionInfoFloatOpen) onToggleSessionInfo();
+														if (sessionInfoFloatChosen === sessionInfoOpen) onToggleSessionInfo();
 													}}
 												>
 													<MorphIcon
@@ -3655,26 +3721,32 @@ export function ChatView({
 												/>
 											)}
 										</div>
-										{/* Floating session info card — the manual reveal while the
-										 * right panel is open, or a narrow row's fallback for the dock.
-										 * INSIDE this column (never over the rail or the open panel)
-										 * and below the header row; z-index 3 keeps it under menus
-										 * and tooltips. Mounted through its exit window so closing
-										 * fades instead of blinking out. */}
+										{/* Floating session info card — only the explicit reveal of a
+										 * row too narrow to dock. INSIDE the chat body (never over
+										 * the rail or the panel) and below the header row; z-index 3
+										 * keeps it under menus and tooltips. Mounted through its exit
+										 * window so closing fades instead of blinking out. */}
 										{sessionInfoFloatPresence.mounted && (
 											<SessionInfoCard
 												{...sessionInfoCardProps}
 												mode="float"
+												/* The composer floats over the transcript (absolute, bottom 0),
+												 * so it takes no flow space: the card is handed its height to
+												 * cap itself above it. The card cannot read the published
+												 * `--chat-composer-inset` — it is a sibling of the element that
+												 * publishes it, not a descendant. */
+												bottomInset={composerInset}
 												closing={sessionInfoFloatPresence.closing}
 											/>
 										)}
 									</div>
-									{/* Docked session info column — the collapsed right panel's
-									 * stand-in. Its own flex column between the chat column and
-									 * the panel host, same card gutter as the panel, so it reads
-									 * as a third workspace card instead of an overlay. The
-									 * wrapper stays in the row (width 0 while closed) so opening
-									 * and closing push/pull the chat column on one spring. */}
+									{/* Docked session info column — the session's metadata as a
+									 * workspace column beside the chat. It keeps its place while
+									 * the panel is open as long as the row fits both, and folds
+									 * to 0 (same spring as the panel) when it does not, so the
+									 * card never changes seats. The wrapper stays in the row so
+									 * opening and closing push/pull the chat column on one
+									 * spring. */}
 									{!focusMode && (
 										<div
 											className={`gui-session-info-seat${sessionInfoDockOpen ? "" : " gui-session-info-seat--closed"}`}
@@ -3692,88 +3764,94 @@ export function ChatView({
 					{/* Right panel stays mounted so the width collapse animates;
 					 * `open` folds it to a 0px sliver instead of unmounting. The
 					 * mini window has no workspace chrome: no rail, no panel. */}
+					{!mini && panelShellMounted.current && (
+						<SlotComponentHost
+							slot={PANEL_SHELL_SLOT}
+							rpc={rpc}
+							panelShell={{
+								snap,
+								rpc,
+								cwd: store?.cwd ?? project ?? "",
+								open: rightPanelOpen && !focusMode,
+								openRequest: openFileReq,
+								browserOpenRequest: openBrowserReq,
+								onBrowserTakeover: onStop,
+								onViewChange: setActiveView,
+								panelTabs,
+								onExpandPanel: onExpandRightPanel,
+								agentId: panelAgentId,
+								onAgentSelect: selectAgent,
+								onOpenSession,
+								onNewSession: text => onSubmitNewSession(text),
+								agentHost: host,
+								extTabs,
+								overviewEntries,
+								overviewLoading: snap?.historyLoading === true,
+								overviewError: store?.historyBlocked ?? false,
+								onLoadOlderHistory: onLoadOlderStable,
+								onJumpToEntry: entryId => requestJump({ entryId }),
+								leafId: effectiveLeaf,
+								activePathIds: trustedPathIds,
+								pathEntries: pathEntriesOrNull,
+								modeCatalog: modes,
+								planShowRequest,
+								onBranchTo: id => {
+									void branchTo(id, id).then(res => {
+										if (res?.editorText) setPendingEdit(res.editorText);
+									});
+								},
+								onSwitchTo: id => {
+									setPendingEdit(null);
+									void switchToNode(id, { backfillDraft: false });
+								},
+								onForkAt: id => {
+									const entry = snap?.entries.find(e => e.id === id);
+									const isUser = entry?.type === "message" && entry.message.role === "user";
+									void forkFromMessage(id, undefined, !isUser);
+								},
+							}}
+						/>
+					)}
+					{/* Right-edge 44px icon rail: tool icons + panel fold toggle +
+					 * extension rail.right slot. Sibling of the panel at the
+					 * surface's right edge.
+					 *
+					 * Deliberately OUTSIDE the panelShellMounted latch below: that
+					 * latch only arms once the panel has been open, so mounting the
+					 * rail with it left a panel that started collapsed with NO way
+					 * to reopen it — the rail is the reopen affordance, so it has
+					 * to exist precisely when the panel does not. */}
 					{!mini && (
-						<>
-							<SlotComponentHost
-								slot={PANEL_SHELL_SLOT}
-								rpc={rpc}
-								panelShell={{
-									snap,
-									rpc,
-									cwd: store?.cwd ?? project ?? "",
-									open: rightPanelOpen && !focusMode,
-									openRequest: openFileReq,
-									browserOpenRequest: openBrowserReq,
-									onBrowserTakeover: onStop,
-									onViewChange: setActiveView,
-									panelTabs,
-									onExpandPanel: onExpandRightPanel,
-									agentId: panelAgentId,
-									onAgentSelect: selectAgent,
-									onOpenSession,
-									onNewSession: text => onSubmitNewSession(text),
-									agentHost: host,
-									extTabs,
-									overviewEntries,
-									overviewLoading: snap?.historyLoading === true,
-									overviewError: store?.historyBlocked ?? false,
-									onLoadOlderHistory: onLoadOlderStable,
-									onJumpToEntry: entryId => requestJump({ entryId }),
-									leafId: effectiveLeaf,
-									activePathIds: trustedPathIds,
-									pathEntries: pathEntriesOrNull,
-									modeCatalog: modes,
-									planShowRequest,
-									onBranchTo: id => {
-										void branchTo(id, id).then(res => {
-											if (res?.editorText) setPendingEdit(res.editorText);
-										});
-									},
-									onSwitchTo: id => {
-										setPendingEdit(null);
-										void switchToNode(id, { backfillDraft: false });
-									},
-									onForkAt: id => {
-										const entry = snap?.entries.find(e => e.id === id);
-										const isUser = entry?.type === "message" && entry.message.role === "user";
-										void forkFromMessage(id, undefined, !isUser);
-									},
-								}}
-							/>
-							{/* Right-edge 44px icon rail: tool icons + panel fold toggle + extension
-							 * rail.right slot. Sibling of the panel at the surface's
-							 * right edge; present on the welcome scene too. */}
-							<RightRail
-								sessionId={store?.sessionId ?? null}
-								cwd={store?.cwd ?? project ?? ""}
-								rpc={rpc}
-								openSurfaces={openSurfaces}
-								rightPanelOpen={rightPanelOpen && !focusMode}
-								terminalOpen={terminalOpen}
-								onToggleTerminal={onToggleTerminal}
-								extTabs={extTabs}
-								onSelect={id => {
-									// Same view while open → collapse (Chrome side-panel
-									// semantics); otherwise select and expand.
-									if (id === activeView && rightPanelOpen && !focusMode) {
-										onToggleRightPanel?.();
-										return;
-									}
-									setActiveView(id);
-									if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
-								}}
-								onSelectNew={id => {
-									// M1.12: middle-click / ⌘-click means "another one of
-									// these" — a new instance, not a focus. The panel also
-									// has to be showing for a second instance to be
-									// reachable, so this expands rather than folds.
-									if (id === "browser") openBrowserPanel(true);
-									else panelTabs.open({ surface: id, label: tabLabelFor(id) }, { forceNew: true });
-									if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
-								}}
-								onToggleRightPanel={onToggleRightPanel}
-							/>
-						</>
+						<RightRail
+							sessionId={store?.sessionId ?? null}
+							cwd={store?.cwd ?? project ?? ""}
+							rpc={rpc}
+							openSurfaces={openSurfaces}
+							rightPanelOpen={rightPanelOpen && !focusMode}
+							terminalOpen={terminalOpen}
+							onToggleTerminal={onToggleTerminal}
+							extTabs={extTabs}
+							onSelect={id => {
+								// Same view while open → collapse (Chrome side-panel
+								// semantics); otherwise select and expand.
+								if (id === activeView && rightPanelOpen && !focusMode) {
+									onToggleRightPanel?.();
+									return;
+								}
+								setActiveView(id);
+								if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+							}}
+							onSelectNew={id => {
+								// M1.12: middle-click / ⌘-click means "another one of
+								// these" — a new instance, not a focus. The panel also
+								// has to be showing for a second instance to be
+								// reachable, so this expands rather than folds.
+								if (id === "browser") openBrowserPanel(true);
+								else panelTabs.open({ surface: id, label: tabLabelFor(id) }, { forceNew: true });
+								if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+							}}
+							onToggleRightPanel={onToggleRightPanel}
+						/>
 					)}
 				</div>
 				{btwQuestion !== null && !focusMode && (
@@ -3825,7 +3903,7 @@ export function ChatView({
 				 * intact. */}
 				<div
 					ref={terminalDockRef}
-					className={`gui-terminal-dock relative flex flex-shrink-0 flex-col overflow-hidden border-t border-[var(--border)]${
+					className={`gui-terminal-dock relative flex flex-shrink-0 flex-col overflow-hidden${
 						terminalOpen ? " gui-terminal-dock--open" : ""
 					}${terminalPlacement === "right" ? " gui-terminal-dock--right" : ""}`}
 					style={{
@@ -3833,16 +3911,45 @@ export function ChatView({
 						...(terminalPlacement === "right" ? { width: terminalOpen ? rightWidth : 0 } : {}),
 					}}
 				>
-					{/* Drag handle: the dock pushes the composer up and its
-					 * height is user-adjustable. */}
-					<div className="gui-dock-handle" {...dockResizeDrag} style={{ touchAction: "none" }} aria-hidden />
+					{/* Dock grips: both seams mount the shared pill on the dock's own
+					 * edge band, and `.gui-terminal-dock--resizing` (set by the
+					 * drags above) drives its drag state. A folded dock hides both
+					 * handles, so the seam never needs a border to advertise it. */}
+					<div
+						className="gui-dock-handle"
+						{...dockResizeDrag}
+						style={{ touchAction: "none" }}
+						role="separator"
+						aria-orientation="horizontal"
+						aria-label={t("settings.resizeTerminalDock")}
+						tabIndex={0}
+						onKeyDown={event => {
+							const direction = event.key === "ArrowUp" ? 1 : event.key === "ArrowDown" ? -1 : 0;
+							if (direction === 0) return;
+							event.preventDefault();
+							nudgeDockHeight(direction, event.shiftKey);
+						}}
+					>
+						<SplitterGrip orientation="horizontal" />
+					</div>
 					{terminalPlacement === "right" && (
 						<div
 							className="gui-terminal-right-handle"
 							{...rightDockResizeDrag}
 							style={{ touchAction: "none" }}
-							aria-hidden
-						/>
+							role="separator"
+							aria-orientation="vertical"
+							aria-label={t("settings.resizeTerminalDock")}
+							tabIndex={0}
+							onKeyDown={event => {
+								const direction = event.key === "ArrowLeft" ? 1 : event.key === "ArrowRight" ? -1 : 0;
+								if (direction === 0) return;
+								event.preventDefault();
+								nudgeDockRightWidth(direction, event.shiftKey);
+							}}
+						>
+							<SplitterGrip />
+						</div>
 					)}
 					{terminalPanelMounted && (
 						<TerminalPanel rpc={rpc} cwd={store?.cwd ?? project ?? ""} onAllClosed={onCloseTerminal} />
