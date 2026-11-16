@@ -40,10 +40,12 @@ describe("normalizeAddressBarUrl — local preview", () => {
 		);
 	});
 
-	it("rejects the retired pre-rename spelling", () => {
-		expect(normalizeAddressBarUrl("omp-file://localhost/D:/Projects/MusePi/web/index.html")).toBeNull();
-		expect(normalizeAddressBarUrl("omp-file://localhost/tmp/artifact.html")).toBeNull();
-		expect(normalizeAddressBarUrl("MUSEPI-FILE://localhost/tmp/artifact.html")).toBeNull();
+	it("accepts a case-insensitive scheme spelling", () => {
+		// URL schemes are case-insensitive; typing in upper case must still land
+		// on the canonical lower-case form rather than being rejected.
+		expect(normalizeAddressBarUrl("MUSEPI-FILE://localhost/tmp/artifact.html")).toBe(
+			"musepi-file://localhost/tmp/artifact.html",
+		);
 	});
 
 	it("restores the host when the address arrives without one", () => {

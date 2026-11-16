@@ -175,7 +175,7 @@ describe("internal-url-autocomplete", () => {
 				"history",
 				"local",
 				"memory",
-				"omp",
+				"musepi",
 				"rule",
 				"security",
 				"skill",

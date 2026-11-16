@@ -4,6 +4,12 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **代理操作标记重新画在网页里**：点击脉冲与拖拽轨迹此前画不出来——负责注入标记的两个方法挂在浏览器控制器上，却去读控制器并不持有的页面对象，页面加载回调一调用就抛错，标记层从未注入。现在标记按标签页的页面对象注入，代理每次操作仍会在落点闪一下，拖拽轨迹也照旧在页面内绘制。
+  - EN: Agent action marks paint inside the page again. The click pulse and drag trail never rendered: the two methods that inject them lived on the browser controller but read a page object the controller does not hold, so the page-load callback threw before injecting anything. Injection now uses the tab's own page object, so each agent action pulses at its landing point and drag trails draw inside the page as before.
+
+- **看板插件不再因加载顺序被拒绝**：内置看板声明依赖可视化插件提供的 `genui` 服务，而插件发现顺序来自文件系统——可视化插件排在后面时，看板会在启动时被拒绝，看板工具整个缺席。现在同一批装载里因服务未就绪的插件会等提供者挂载后重试，只有确实无人提供时才报错。
+  - EN: The board plugin is no longer refused because of load order. It declares a dependency on the `genui` service the visuals plugin provides, and discovery order comes from the file system — when visuals landed later, board was refused at startup and the board tool was missing entirely. Plugins deferred for an unavailable service in the same batch now retry after their provider mounts, and only a service nobody provides is reported as an error.
+
 - **浏览器地址栏的网站图标不再破图；连接器页的 MCP 标题不再重复两遍**：地址栏图标此前只有一种取法——去站点根目录找 `/favicon.ico`。很多站点把图标放在页面 `<link>` 里、或干脆不提供这个文件，图片加载失败就渲染成一张破图。现在加载失败会退回空白标签页那枚指南针图标，并按页面记住失败：换到别的站点会重新尝试，不会继承上个站点的失败状态。连接器页里「MCP 服务器」标题下方原本是一句以「MCP 服务器（…）」开头的说明，把标题又念了一遍；现在只说明它与扩展中心共用开关、下方列出哪些服务器。
   - EN: The browser address bar no longer shows a broken image when a site's icon lives somewhere else, and the connector page no longer states the MCP heading twice. The icon had exactly one source — `/favicon.ico` at the site root — and sites that declare their icon in a `<link>` or ship none made the image fail and paint as a broken picture. A failed load now falls back to the compass glyph a blank tab shows, remembered per page: another site retries instead of inheriting the earlier failure. On the connector page the MCP heading was followed by a description that began by repeating it; the description now only says that it shares the toggle with the extensions center and lists the servers below.
 

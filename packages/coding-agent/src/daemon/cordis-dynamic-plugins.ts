@@ -832,18 +832,41 @@ export class CordisDynamicPluginRuntime {
 			}
 		}
 		// New records (or a record whose entry changed) mount without consulting
-		// another row's package name or path.
-		for (const target of targets.values()) {
-			const existing = this.#records.get(target.key);
-			if (existing?.status === "active") {
-				if (existing.entryKey === target.entry) continue;
-				await this.#unloadRecord(existing);
+		// another row's package name or path. A plugin whose `inject` names a
+		// service another plugin in the SAME batch provides is deferred and
+		// retried after the provider mounted — discovery order is the file
+		// system's, not the dependency graph's, and refusing a consumer that
+		// would be satisfiable one slot later is not a diagnosable answer.
+		let pending = [...targets.values()];
+		const deferrals = new Map<string, string>();
+		while (pending.length > 0) {
+			const deferred: ExtensionTarget[] = [];
+			let progressed = false;
+			for (const target of pending) {
+				const existing = this.#records.get(target.key);
+				if (existing?.status === "active") {
+					if (existing.entryKey === target.entry) continue;
+					await this.#unloadRecord(existing);
+				}
+				try {
+					await this.load(target.input, cwd, disabledComponents);
+					progressed = true;
+				} catch (err) {
+					if (err instanceof DynamicExtensionLoadError && err.code === "service-missing") {
+						deferrals.set(target.entry, err.message);
+						deferred.push(target);
+						continue;
+					}
+					errors.push({ path: target.entry, error: err instanceof Error ? err.message : String(err) });
+				}
 			}
-			try {
-				await this.load(target.input, cwd, disabledComponents);
-			} catch (err) {
-				errors.push({ path: target.entry, error: err instanceof Error ? err.message : String(err) });
+			if (!progressed) {
+				for (const target of deferred) {
+					errors.push({ path: target.entry, error: deferrals.get(target.entry) ?? "unmet dependency" });
+				}
+				break;
 			}
+			pending = deferred;
 		}
 		return {
 			extensions: [...this.#records.values()]

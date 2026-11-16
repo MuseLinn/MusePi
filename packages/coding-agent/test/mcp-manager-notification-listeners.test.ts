@@ -53,6 +53,19 @@ function makeFrameCollector(): {
 	};
 }
 
+/**
+ * Poll until `predicate` holds. Names the awaited state so a timeout reports
+ * what the test was waiting for; the ceiling is generous because the CI lane
+ * runs many chunks concurrently and scheduling delays are not product failures.
+ */
+async function waitForCondition(predicate: () => boolean, waitingFor: string, timeoutMs = 5_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (!predicate()) {
+		if (Date.now() > deadline) throw new Error(`timed out after ${timeoutMs}ms waiting for ${waitingFor}`);
+		await Bun.sleep(5);
+	}
+}
+
 describe("MCPManager notification listeners", () => {
 	let workDir: string;
 
@@ -204,9 +217,9 @@ describe("MCPManager notification listeners", () => {
 			// connectServers may kick the callback for the initial tool load via
 			// its background continuation; drain that first so we can assert
 			// specifically on the refresh path.
-			await Bun.sleep(30);
+			await waitForCondition(() => events.includes("cb:start"), "the initial tools-changed callback to start");
 			release();
-			await Bun.sleep(30);
+			await waitForCondition(() => events.includes("cb:end"), "the initial tools-changed callback to finish");
 			const priorLen = events.length;
 
 			// Trigger a fresh refresh and hold the callback again — this is the
@@ -219,8 +232,7 @@ describe("MCPManager notification listeners", () => {
 				cbState = "ended";
 			});
 			const refreshDone = manager.refreshServerTools("alpha");
-			// Give the callback time to enter the await.
-			await Bun.sleep(20);
+			await waitForCondition(() => cbState === "started", "the refresh callback to enter its await");
 			expect(cbState).toBe("started");
 			// refreshServerTools has NOT resolved yet — proves it's awaiting.
 			let refreshResolved = false;
@@ -284,9 +296,7 @@ describe("MCPManager notification listeners", () => {
 			// Wait for the initial-connect background continuation to fire the
 			// callback (call #1, ungated). Once it's recorded, we know the
 			// callback is idle and the next invocation will be call #2.
-			for (let i = 0; i < 20 && !events.includes("initial-cb:done"); i++) {
-				await Bun.sleep(10);
-			}
+			await waitForCondition(() => events.includes("initial-cb:done"), "the initial tools-changed callback");
 			expect(events).toContain("initial-cb:done");
 
 			// Simulate a post-connect `notifications/tools/list_changed` frame
@@ -299,10 +309,7 @@ describe("MCPManager notification listeners", () => {
 			if (!conn?.transport.onNotification) throw new Error("expected transport onNotification to be wired");
 			void conn.transport.onNotification("notifications/tools/list_changed", {});
 
-			// Give the async chain time to enter the callback's await.
-			for (let i = 0; i < 20 && !events.includes("cb:start"); i++) {
-				await Bun.sleep(10);
-			}
+			await waitForCondition(() => events.includes("cb:start"), "the notification callback to enter its await");
 			expect(events).toContain("cb:start");
 
 			// CRITICAL: at this point the callback is holding, and the
@@ -316,10 +323,7 @@ describe("MCPManager notification listeners", () => {
 			// and the listener fires — in that order.
 			releaseGate();
 
-			// Wait for the listener to fire (or bail on timeout).
-			for (let i = 0; i < 50 && !events.includes("listener:fire"); i++) {
-				await Bun.sleep(10);
-			}
+			await waitForCondition(() => events.includes("listener:fire"), "the notification listener to fire");
 
 			const idxCbEnd = events.indexOf("cb:end");
 			const idxFire = events.indexOf("listener:fire");

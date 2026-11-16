@@ -184,12 +184,12 @@ export class SessionService implements DaemonService {
 	}
 
 	/** RPC session.resume：快照 + resumeLive 登记（订阅附着前置状态，
-	 *  读取侧在 server.ts 的 catchupIfNeeded——仅当会话本就 live 才附着，
-	 *  历史会话保持只读快照、不激活，P0-6）。compactedThrough = 请求 cursor
-	 *  早于压缩检查点（期间 delta 已折进快照，客户端须刷新派生态）。stream
-	 *  = 发起 resume 的连接 id（live 存在时客户端切流凭证）。live 时快照
-	 *  附带 activeTools/agentsProgress 水合（subscribe 路由的 dock/swarm 首帧
-	 *  等价物——GUI 打开路径改 resume 首选后不能丢这段）。 */
+	 *  读取侧在 server.ts 的 catchupIfNeeded）。历史会话按需激活后再附着——
+	 *  打开会话后的 live 状态 RPC 都以激活为前提，不激活则聊天面只有快照。
+	 *  compactedThrough = 请求 cursor 早于压缩检查点（期间 delta 已折进快照，
+	 *  客户端须刷新派生态）。stream = 发起 resume 的连接 id（激活成功时的
+	 *  切流凭证）。live 时快照附带 activeTools/agentsProgress 水合（subscribe
+	 *  路由的 dock/swarm 首帧等价物）。 */
 	async resume(
 		params: { sessionId: string; cursor?: number },
 		conn: { id: string },

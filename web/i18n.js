@@ -63,13 +63,13 @@
     "demo.fallback.retry": "Retry",
     "demo.caption": "Real desktop renderer with local demo data — nothing here talks to a daemon.",
 
-    /* 0.7.0 能力浏览 */
-    "nav.release": "0.7.0 highlights",
-    "release.kicker": "0.7.0 · Workspace highlights",
+    /* 工作台能力浏览 */
+    "nav.release": "Workspace capabilities",
+    "release.kicker": "Workspace · Shipped capabilities",
     "release.h2": "From doing the work to reviewing and reshaping it together",
     "release.desc":
       "The agent moves tasks forward while you retain direct viewing, editing and precise referencing. These four capability groups are in the product now, not on a distant roadmap.",
-    "release.tabs.aria": "Explore 0.7.0 highlights",
+    "release.tabs.aria": "Explore workspace capabilities",
     "release.tab.files": "File workspace",
     "release.tab.office": "Office editing & quotes",
     "release.tab.plugins": "Plugins & presets",
@@ -186,7 +186,7 @@
       "It's a free test during the feature-polishing phase — all core capabilities are open, with no limit on sessions or messages. The community edition stays free forever; Pro and Team are a farther-off consideration that only comes up once the existing capabilities mature — MusePi won't quietly turn what's already free behind a paywall.",
     "faq.q2": "Which platforms are supported?",
     "faq.a2":
-      "Desktop covers macOS (Apple silicon), Windows 10/11 (x64 and ARM64) and Linux (.AppImage and .deb, x64 and ARM64); the terminal TUI runs on all three plus WSL; the mobile companion offers an arm64 .apk for Android. They all connect to the same background service, with identical sessions and settings.",
+      "Desktop covers macOS (Apple silicon), Windows 10/11 (x64 and ARM64) and Linux (.AppImage and .deb, x64 and ARM64); the terminal TUI runs on all three plus WSL; the mobile companion offers an arm64 .apk for Android; the HarmonyOS NEXT shell ships in the repository and builds with DevEco Studio, with no prebuilt package yet. They all connect to the same background service, with identical sessions and settings.",
     "faq.q3": "Do I need my own model API keys?",
     "faq.a3":
       "Yes. MusePi supports 60+ model providers; just enter your own keys in settings and model costs are billed directly with the provider you choose. MusePi doesn't proxy or take a cut. You can also connect local models.",

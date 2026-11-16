@@ -2393,14 +2393,11 @@ function AppInner(): ReactNode {
 					agentsProgress?: SubagentProgressPayload[];
 				} | null = null;
 				try {
-					// P0-6: snapshot-first open. session.resume attaches the live
-					// stream only when the session is ALREADY live (via the
-					// post-response catchup); a history session stays a read-only
-					// snapshot — no AgentSession/MCP/discovery spin-up, so
-					// MAX_LIVE_SESSIONS / idle reclaim keep working. The old
-					// subscribe-first order activated EVERY opened session and
-					// made the snapshot path dead code. subscribe remains only as
-					// the explicit-stream fallback below.
+					// Snapshot + stream ticket in one request. The daemon serves
+					// the snapshot first, then attaches this connection after the
+					// response (activating a history session on the way, so the
+					// live-status RPCs that follow have a session to read).
+					// subscribe remains only as the explicit-stream fallback below.
 					const res = await client.request<{
 						stream: string | null;
 						snapshot: {

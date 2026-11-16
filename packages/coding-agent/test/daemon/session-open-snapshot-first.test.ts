@@ -1,15 +1,16 @@
 /**
- * 快照优先的会话打开路径（P0-6，docs/review/0.5.1-defect-handoff.md）。
+ * 会话打开路径（P0-6，docs/review/0.5.1-defect-handoff.md）。
  *
- * 钉死的契约：桌面打开路径走 session.resume——live 会话照常附着实时流，
- * 历史会话只拿只读快照，绝不创建 AgentSession / 加载 MCP / 跑 discovery
- * （MAX_LIVE_SESSIONS=8 与空闲回收因此重新生效）；激活只发生在显式写
- * 操作（session.send / session.branchAt 一族）。
+ * 契约：桌面打开路径走 session.resume，一次请求拿到快照与实时流凭证。
+ * 快照先返回，附着在响应之后（catchupIfNeeded）——live 会话直接订阅，
+ * 历史会话先按需激活再订阅，因为打开后的 live 状态 RPC（thinkingInfo /
+ * contextUsage / pauseStatus / modes）都以激活为前提；不激活则聊天面只有
+ * 快照、没有 live，状态面板与后续操作都是空壳。MAX_LIVE_SESSIONS 与空闲
+ * 回收仍由 session-host 的 LRU 上限负责，打开不是绕过它们的旁路。
  *
  * 失败模式（旧实现）：打开路径先试 session.subscribe——它内部无条件
- * activate，于是每点开一个历史会话都拉起完整 AgentSession + MCP +
- * discovery，「历史会话只读快照、按需激活」的设计成死代码，live 上限
- * 被穿透，闲置会话永不回收。
+ * activate，且响应体里没有快照，客户端要再发一次 session.snapshot；
+ * 两次请求之间的增量帧会丢，历史会话被重复激活。
  */
 import { describe, expect, test } from "bun:test";
 import { type DaemonConnection, DaemonServer, type DaemonSessionHost } from "../../src/daemon/server";
@@ -54,7 +55,7 @@ function makeHost(opts: { live?: Record<string, Record<string, unknown>> }): Hos
 }
 
 describe("snapshot-first session open (P0-6)", () => {
-	test("resume on a history (non-live) session returns the snapshot WITHOUT activating or attaching", async () => {
+	test("resume on a history session activates it once and attaches after the response", async () => {
 		const { host, calls } = makeHost({});
 		const server = new DaemonServer(host);
 		const conn = captureConn("conn-view");
@@ -65,14 +66,14 @@ describe("snapshot-first session open (P0-6)", () => {
 		};
 
 		// Snapshot served (with tail-window parity from tailSnapshot)…
-		expect(res.stream).toBeNull();
+		expect(res.stream).toBe("conn-view");
 		expect(res.snapshot.entries).toEqual([{ id: "e-sess-hist" }]);
 		expect(res.snapshot.tail).toEqual({ hasMore: false, beforeId: null });
-		// …and the acceptance contract: no AgentSession spin-up, no stream attach.
-		expect(calls.activate).toEqual([]);
+		// …activation happens exactly once, and the stream attaches after the response.
+		expect(calls.activate).toEqual(["sess-hist"]);
 		await server.catchupIfNeeded("session.resume", { sessionId: "sess-hist" }, conn);
-		expect(calls.subscribe).toEqual([]);
-		// Negative contract: no live-only hydration keys on a history snapshot.
+		expect(calls.subscribe).toEqual([["sess-hist", "conn-view"]]);
+		// A freshly activated session has no stream-only visuals to hydrate yet.
 		expect("activeTools" in res.snapshot).toBe(false);
 		expect("agentsProgress" in res.snapshot).toBe(false);
 	});

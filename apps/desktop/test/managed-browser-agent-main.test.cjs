@@ -17,6 +17,7 @@ function managedGuest() {
 		getUserAgent: () => "MusePiTest/1.0",
 		setUserAgent() {},
 		setZoomFactor() {},
+		executeJavaScript: async () => undefined,
 		debugger: {
 			attach() {},
 			isAttached: () => false,

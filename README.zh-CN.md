@@ -28,12 +28,13 @@ MusePi 集编程智能体、Electron 工作台、终端界面和远程客户端�
 
 ## 安装
 
-### 桌面、Android 与终端下载
+### 桌面、移动与终端下载
 
 从 [Releases 页面](https://github.com/MuseLinn/MusePi/releases)下载与版本匹配的桌面安装包和 Android 软件包。[MusePi 官网](https://muselinn.github.io/MusePi/)提供双语下载指引。
 
 - **桌面端：** macOS `.dmg`、Windows 逐用户 `setup.exe`、Linux `.AppImage` / `.deb`。
 - **Android：** 安装 `app-debug.apk`，再与局域网内的主机配对。
+- **鸿蒙：** `apps/harmony` 中的 NEXT WebView 壳用 DevEco Studio 构建，暂未发布预编译安装包。
 - **终端：** 通过脚本或源码安装 `musepi`。
 
 macOS、Linux 和 WSL：

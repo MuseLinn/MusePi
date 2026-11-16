@@ -651,7 +651,7 @@ class ManagedTab {
 			this.refreshState();
 			this.controller.notifyLifecycle(this);
 		});
-		wc.on("dom-ready", () => this.installAgentMarks());
+		wc.on("dom-ready", () => this.controller.installAgentMarks(this));
 		wc.on("did-stop-loading", () => {
 			this.loading = false;
 			this.refreshState();
@@ -682,7 +682,7 @@ class ManagedTab {
 		// remaining race for clients that attach mid-load.
 		wc.once("did-finish-load", () => {
 			this.ensureDebugger();
-			this.installAgentMarks();
+			this.controller.installAgentMarks(this);
 			this.controller.recordHistory(this);
 		});
 		// `did-attach` can reach main after a fast local page already
@@ -690,7 +690,7 @@ class ManagedTab {
 		// will never fire again.
 		if (!wc.isLoading()) {
 			this.ensureDebugger();
-			this.installAgentMarks();
+			this.controller.installAgentMarks(this);
 			this.controller.recordHistory(this);
 		}
 		// Preferences must be in place before the first navigation resolves:
@@ -2630,8 +2630,8 @@ class ManagedBrowserController {
 	}
 
 	/** Reinject the mark layer after a document loads; idempotent per page. */
-	installAgentMarks() {
-		const wc = this.wc;
+	installAgentMarks(tab) {
+		const wc = tab?.wc;
 		if (!wc || wc.isDestroyed()) return;
 		void wc.executeJavaScript(AGENT_MARK_SCRIPT, true).catch(() => {});
 	}
@@ -2644,8 +2644,8 @@ class ManagedBrowserController {
 	}
 
 	/** Pulse the action point inside the page, where it paints above the guest. */
-	injectAgentMark(mark) {
-		const wc = this.wc;
+	injectAgentMark(tab, mark) {
+		const wc = tab?.wc;
 		if (!wc || wc.isDestroyed()) return;
 		void wc.executeJavaScript(agentMarkCall(mark), true).catch(() => {});
 	}
@@ -2662,7 +2662,7 @@ class ManagedBrowserController {
 	flashAgentTarget(tab, point) {
 		const wc = tab.wc;
 		if (!wc || wc.isDestroyed()) return;
-		this.injectAgentMark(point);
+		this.injectAgentMark(tab, point);
 		void (async () => {
 			try {
 				// DOM.getNodeForLocation needs the DOM domain on THIS debugger

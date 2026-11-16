@@ -63,6 +63,7 @@ function guest() {
 		getUserAgent: () => "FixtureAgent",
 		setUserAgent() {},
 		setZoomFactor() {},
+		executeJavaScript: async () => undefined,
 	};
 }
 
