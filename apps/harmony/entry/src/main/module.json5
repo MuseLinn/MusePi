@@ -28,6 +28,15 @@
 				"name": "ohos.permission.CAMERA",
 				"reason": "$string:perm_camera_reason",
 				"usedScene": { "abilities": ["EntryAbility"], "when": "inuse" }
+			},
+			// Voice input in the chat composer: the page records through
+			// getUserMedia, and ArkWeb reports AUDIO_CAPTURE through
+			// onPermissionRequest. Declared separately from the camera so the
+			// microphone dialog carries its own reason instead of the scanner's.
+			{
+				"name": "ohos.permission.MICROPHONE",
+				"reason": "$string:perm_mic_reason",
+				"usedScene": { "abilities": ["EntryAbility"], "when": "inuse" }
 			}
 		],
 		"abilities": [

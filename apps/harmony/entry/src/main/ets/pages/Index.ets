@@ -17,7 +17,7 @@ import {
 	parseInsets,
 } from '../common/window-model';
 import { PREF_KEYS, PrefsStore } from '../common/prefs';
-import { MuseSettings } from '../components/MuseSettings';
+import { MuseSettings, animateSettingsPush } from '../components/MuseSettings';
 
 /**
  * MusePi WebView shell — loads the client-core mobile bundle from rawfile and
@@ -47,8 +47,9 @@ import { MuseSettings } from '../components/MuseSettings';
  * this bridge must answer synchronously, so the page mirrors the last value
  * instead of querying.
  *
- * Back key: `onBackPress()` below runs IME-first, then the page's layer
- * stack (`window.__harmonyBack()`), then falls through to the system.
+ * Back key: `onBackPress()` below walks the native settings stack, then the
+ * IME, then the page's layer stack (`window.__harmonyBack()`), then falls
+ * through to the system.
  */
 /**
  * Live View scenario id. HarmonyOS only renders a Live View whose `event`
@@ -154,6 +155,7 @@ interface MuseBridgeObject {
 	setTabBarMaterial: (style: number) => void;
 	openPairSheet: () => void;
 	openLinkSheet: () => void;
+	closeConnectSheet: () => void;
 	openSessionsSheet: (payload: string) => void;
 	setSessions: (payload: string) => void;
 	setConnectInfo: (payload: string) => void;
@@ -208,6 +210,13 @@ struct Index {
 	@State webTab: number = 0;
 	/** Native settings overlay (HarmonyOS owns settings; the page does not). */
 	@State @Watch('onSettingsOpenChanged') settingsOpen: boolean = false;
+	/**
+	 * Which level of the settings stack is showing (`hub` or one of its
+	 * sections). Owned here rather than inside the overlay because the back KEY
+	 * is handled by this page: closing the whole overlay from a section would
+	 * skip the level the user expects to land on first.
+	 */
+	@State settingsPage: string = 'hub';
 	/** `{theme,brand,mono,ocean,jade}` → hex, pushed by the page so the accent
 	 *  swatches show the colour they will actually apply. */
 	@State accentPalette: string = '{}';
@@ -391,20 +400,31 @@ struct Index {
 	/**
 	 * Hardware/gesture back.
 	 *
-	 * Mirrors the Android shell's order (`setupAndroidBackHandler`): the IME
-	 * first, then the app's own layer stack, then the system. HarmonyOS gives
-	 * this callback only a synchronous answer, while `runJavaScript` is async —
-	 * so both facts it needs are already mirrored natively: the IME height from
-	 * the window event, and the layer depth from `harmonyNative.setBackDepth`
-	 * (pushed on every register/unregister).
+	 * Same idea as the Android shell's `setupAndroidBackHandler` — the app's own
+	 * layers first, the system last — with the native settings overlay ahead of
+	 * both: it is a destination painted over the page, so nothing in the page
+	 * can be the topmost layer while it is open. HarmonyOS gives this callback
+	 * only a synchronous answer, while `runJavaScript` is async — so both facts
+	 * it needs are already mirrored natively: the IME height from the window
+	 * event, and the layer depth from `harmonyNative.setBackDepth` (pushed on
+	 * every register/unregister).
 	 *
 	 * Returning `false` hands the press back to the system (background the
 	 * ability), which is what "back on the root screen" should do.
 	 */
 	onBackPress(): boolean {
-		// The native settings overlay is the topmost layer: back closes it before
-		// the page sees the key, exactly like a pushed page in a system app.
+		// The native settings overlay is the topmost layer: back walks its own
+		// stack before the page sees the key, exactly like a system app. A
+		// section goes back to the hub; the hub closes settings. A docked page
+		// has no hub of its own (the list is always beside the section), so
+		// there back closes the overlay directly.
 		if (this.settingsOpen) {
+			if (!this.settingsWide() && this.settingsPage !== 'hub') {
+				animateSettingsPush(this.getUIContext(), () => {
+					this.settingsPage = 'hub';
+				});
+				return true;
+			}
 			this.settingsOpen = false;
 			return true;
 		}
@@ -466,6 +486,14 @@ struct Index {
 	private pushDeepLink(uri: string): void {
 		const escaped = uri.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 		this.controller.runJavaScript(`window.__harmonyDeepLink && window.__harmonyDeepLink("${escaped}")`)
+			.then(() => {
+				// Delivered: drain the stash so a later page reload cannot replay
+				// a link the user has already acted on. A push that never resolved
+				// (page not ready) leaves it for `onPageEnd`/`consumeDeepLink()`.
+				if ((AppStorage.get<string>('pendingDeepLink') ?? '') === uri) {
+					AppStorage.setOrCreate('pendingDeepLink', '');
+				}
+			})
 			.catch(() => {
 				// page not ready — leave stashed; consumeDeepLink() drains on mount
 			});
@@ -533,21 +561,22 @@ struct Index {
 	}
 
 	/**
-	 * ArkWeb needs BOTH the app-level CAMERA user grant and the web
-	 * PermissionRequest grant before getUserMedia can feed the QR scanner.
-	 * Only our private bundled origin is ever granted; a remote page cannot
-	 * reach device resources through this shell.
+	 * App-level grant for one device permission.
+	 *
+	 * The system dialog carries the reason declared for the permission in
+	 * `module.json5`, so the caller has to name the permission it actually
+	 * needs: a voice-only capture request that asked for CAMERA made the
+	 * microphone dialog explain QR scanning.
+	 *
+	 * An existing grant is checked first: `requestPermissionsFromUser()`
+	 * returns -1 without a dialog once the user has denied it, which surfaced
+	 * as a silent NotAllowedError on the page.
 	 */
-	private async ensureCameraPermission(): Promise<boolean> {
+	private async ensurePermission(permission: Permissions): Promise<boolean> {
 		try {
 			const ctx = this.getUIContext().getHostContext();
 			if (!ctx) return false;
 			const atManager = abilityAccessCtrl.createAtManager();
-			const permission: Permissions = 'ohos.permission.CAMERA';
-			// Already granted (second scan, or granted from system settings)?
-			// requestPermissionsFromUser() would return -1 without a dialog once
-			// the user has denied it, which surfaced as a silent
-			// NotAllowedError on the page.
 			try {
 				const status = atManager.checkAccessTokenSync(ctx.applicationInfo.accessTokenId, permission);
 				if (status === abilityAccessCtrl.GrantStatus.PERMISSION_GRANTED) {
@@ -557,11 +586,55 @@ struct Index {
 				// checkAccessTokenSync unavailable — fall through to the request
 			}
 			const result = await atManager.requestPermissionsFromUser(ctx, [permission]);
-			AppStorage.setOrCreate('cameraAuthResult', JSON.stringify(result.authResults));
 			return result.authResults.length > 0 && result.authResults[0] === 0;
 		} catch (e) {
-			console.warn(`[musepi] camera permission failed: ${JSON.stringify(e)}`);
+			console.warn(`[musepi] ${permission} request failed: ${JSON.stringify(e)}`);
 			return false;
+		}
+	}
+
+	/**
+	 * Camera grant for the QR scanner.
+	 *
+	 * ArkWeb needs BOTH the app-level CAMERA user grant and the web
+	 * PermissionRequest grant before getUserMedia can feed the scanner; only
+	 * our private bundled origin is ever granted, so a remote page cannot
+	 * reach device resources through this shell.
+	 */
+	private async ensureCameraPermission(): Promise<boolean> {
+		const granted = await this.ensurePermission('ohos.permission.CAMERA');
+		AppStorage.setOrCreate('cameraAuthResult', granted ? '[0]' : '[-1]');
+		return granted;
+	}
+
+	/** Microphone grant for voice input. Same two-gate rule as the camera: this
+	 *  is the user's decision, `onPermissionRequest` is the page's. */
+	private ensureMicrophonePermission(): Promise<boolean> {
+		return this.ensurePermission('ohos.permission.MICROPHONE');
+	}
+
+	/**
+	 * Resolve one web capture request against the app-level grants.
+	 *
+	 * `getAccessibleResource()` returns every device the page asked for in one
+	 * list, but each entry is a separate HarmonyOS permission with its own
+	 * dialog: the request is answered per resource, and a resource the user
+	 * refused denies the whole request (ArkWeb has no per-resource deny, and
+	 * `getUserMedia` treats a partial grant as a failed stream).
+	 */
+	private async grantWebCapture(request: PermissionRequest, resources: string[],
+		needsCamera: boolean, needsMic: boolean): Promise<void> {
+		try {
+			const cameraGranted = !needsCamera || await this.ensureCameraPermission();
+			const micGranted = !needsMic || await this.ensureMicrophonePermission();
+			if (!cameraGranted || !micGranted) {
+				request.deny();
+				return;
+			}
+			request.grant(resources);
+		} catch (e) {
+			console.warn(`[musepi] capture grant failed: ${JSON.stringify(e)}`);
+			request.deny();
 		}
 	}
 
@@ -580,8 +653,9 @@ struct Index {
 			});
 	}
 
-	/** Diagnostic readout: what origin asked for the camera, and the last
-	 * authResults. Empty strings when nothing has asked yet. */
+	/** Diagnostic readout: what origin asked for the camera, and the shell's
+	 *  last camera decision (`[0]` granted, `[-1]` not). Empty strings when
+	 *  nothing has asked yet. */
 	getCameraDiagnostics(): string {
 		return JSON.stringify({
 			origin: AppStorage.get<string>('cameraOrigin') ?? '',
@@ -723,11 +797,14 @@ struct Index {
 		this.pushTab(index);
 	}
 
-	/** Closing the overlay returns the bar to the page's own destination. */
+	/** Closing the overlay returns the bar to the page's own destination, and
+	 *  the next open starts on the hub again (the state used to reset by
+	 *  unmounting with the overlay). */
 	onSettingsOpenChanged(): void {
 		if (this.settingsOpen) {
 			return;
 		}
+		this.settingsPage = 'hub';
 		if (this.activeTab !== this.webTab) {
 			this.activeTab = this.webTab;
 			this.tabsController.changeIndex(this.webTab);
@@ -765,6 +842,12 @@ struct Index {
 	 * the page to re-emit `setThemeColor` — a light settings page over a dark
 	 * rail is exactly the mismatch that looks like a bug. The page remains the
 	 * renderer; the shell only takes the value it just wrote.
+	 *
+	 * The bar material is the same rule in the other direction: the bar is
+	 * native, so the settings page's own choice has to reach `currentMaterial`
+	 * immediately. Only the page echoes `setTabBarMaterial`, which is the
+	 * WebView's path — waiting for it left the pill on the old thickness until
+	 * the next launch.
 	 */
 	private applyPref(key: string, value: string): void {
 		if (key === 'theme') {
@@ -776,6 +859,12 @@ struct Index {
 			// Bar icons belong to the same decision: the page no longer pushes
 			// the scheme, so the shell has to repaint them itself.
 			this.applySystemBarStyle(this.themeDark);
+		}
+		if (key === 'tabBarMaterial') {
+			const style = Number(value);
+			if (style >= 0 && style <= 3) {
+				this.materialStyle = style;
+			}
 		}
 		const js = `window.__musepiPref && window.__musepiPref(${JSON.stringify(key)}, ${JSON.stringify(value)})`;
 		this.controller.runJavaScript(js).catch((e: BusinessError) => {
@@ -1052,10 +1141,14 @@ struct Index {
 			.animation({ duration: 200, curve: curves.springMotion(0.35, 0.9) })
 			.onClick(() => this.pushSessionAction('new', ''))
 		}
-		.width(this.listPaneWidth())
+		.width(this.listPaneWidth() + this.insets().left)
 		.height('100%')
+		// A landscape cutout sits in the left inset, and the pane starts at the
+		// window edge: the strip is added OUTSIDE the designed column width, so
+		// the list keeps its width instead of losing a notch-wide slice. The
+		// divider follows the widened edge (see `paneDivider`).
 		.padding({
-			left: 6,
+			left: this.insets().left + 6,
 			right: 6,
 			top: this.insets().top + BAR_GAP,
 			bottom: this.insets().bottom + BAR_GAP,
@@ -1135,8 +1228,10 @@ struct Index {
 		.backgroundColor(Color.Transparent)
 		// Straddle the edge: half of the strip sits over the list, half over the
 		// content, so the grab target is where the user's eye says the border is.
+		// The list column carries the left cutout inset as extra width, and the
+		// handle has to sit on that wider edge or it drifts off the border.
 		.position({
-			x: this.listPaneWidth() - PANE_HANDLE / 2,
+			x: this.listPaneWidth() + this.insets().left - PANE_HANDLE / 2,
 			y: 0,
 		})
 		.zIndex(11)
@@ -1558,10 +1653,22 @@ struct Index {
 		this.sheetVisible = true;
 	}
 
-	/** Page → native: open the remote-link sheet. */
+	/** Page → native: open the remote-link sheet, empty.
+	 *  The form is a one-shot hand-off: reusing the previous link would look
+	 *  like a pre-filled suggestion and made a mistyped link reappear. */
 	openLinkSheet(): void {
+		this.linkUrl = '';
+		this.linkName = '';
 		this.sheetKind = 'link';
 		this.sheetVisible = true;
+	}
+
+	/** Page → native: the pair/link submission was accepted — close the sheet.
+	 *  The native side never closes it on submit: a rejected pair code or an
+	 *  unreachable host is reported back by the page, and the values have to
+	 *  stay visible to be corrected. */
+	closeConnectSheet(): void {
+		this.sheetVisible = false;
 	}
 
 	/** Page → native: open the session switcher with its rows. */
@@ -1616,6 +1723,23 @@ struct Index {
 		}
 	}
 
+	/**
+	 * A refused camera grant is otherwise invisible: the scanner simply never
+	 * opens. Say why, then offer the permission page — once HarmonyOS stops
+	 * showing the dialog, that page is the only way back in.
+	 */
+	private promptCameraDenied(): void {
+		try {
+			this.getUIContext().getPromptAction().showToast({
+				message: $r('app.string.camera_permission_needed'),
+				duration: 2500,
+			});
+		} catch (e) {
+			console.warn(`[musepi] camera toast failed: ${JSON.stringify(e)}`);
+		}
+		this.openCameraSettings();
+	}
+
 	/** Native connect page → scan with the system Scan Kit — the platform's
 	 *  own barcode UI, not the WebView's getUserMedia overlay (which stays the
 	 *  Android path). The raw result is pushed to the page, which resolves the
@@ -1627,17 +1751,10 @@ struct Index {
 			return;
 		}
 		// Camera is a runtime permission. Scan Kit's page would ask anyway, but
-		// requesting up front makes a denial deterministic and visible before
-		// the scanner opens.
-		const atManager = abilityAccessCtrl.createAtManager();
-		try {
-			const grant = await atManager.requestPermissionsFromUser(context,
-				['ohos.permission.CAMERA'] as Permissions[]);
-			if (grant.authResults.length === 0 || grant.authResults[0] !== 0) {
-				return;
-			}
-		} catch (e) {
-			console.warn(`[musepi] camera permission request failed: ${JSON.stringify(e)}`);
+		// resolving it up front makes a denial visible before the scanner opens.
+		const granted = await this.ensureCameraPermission();
+		if (!granted) {
+			this.promptCameraDenied();
 			return;
 		}
 		try {
@@ -1858,7 +1975,9 @@ struct Index {
 		this.controller.runJavaScript(js).catch((e: BusinessError) => {
 			console.warn(`[musepi] pair push failed: ${JSON.stringify(e)}`);
 		});
-		this.sheetVisible = false;
+		// Stays open: the page answers a bad code by reporting it through
+		// `setConnectInfo`, and only calls `harmonyNative.closeConnectSheet()`
+		// once the submission was accepted.
 	}
 
 	private submitLinkSheet(): void {
@@ -1871,7 +1990,7 @@ struct Index {
 		this.controller.runJavaScript(js).catch((e: BusinessError) => {
 			console.warn(`[musepi] link push failed: ${JSON.stringify(e)}`);
 		});
-		this.sheetVisible = false;
+		// Same one-shot contract as the pair form: closed by the page on success.
 	}
 
 	/**
@@ -1956,6 +2075,17 @@ struct Index {
 					.onClick(() => {
 						this.submitLinkSheet();
 					})
+			}
+			// Rejections stay on the form and are reported back by the page
+			// (`setConnectInfo.error`): closing the sheet on submit would hide
+			// both the reason and the values that need correcting.
+			if (this.connectError !== '') {
+				Text(this.connectError)
+					.fontSize(12.5)
+					.fontColor(this.themeDark ? '#FF7B72' : '#C62828')
+					.padding({ left: 2, top: -4 })
+					.maxLines(2)
+					.textOverflow({ overflow: TextOverflow.Ellipsis })
 			}
 		}
 		.width('100%')
@@ -2496,6 +2626,7 @@ struct Index {
 			setTabBarMaterial: (style: number): void => this.setTabBarMaterial(style),
 			openPairSheet: (): void => this.openPairSheet(),
 			openLinkSheet: (): void => this.openLinkSheet(),
+			closeConnectSheet: (): void => this.closeConnectSheet(),
 			openSessionsSheet: (payload: string): void => this.openSessionsSheet(payload),
 			setSessions: (payload: string): void => this.setSessions(payload),
 			setConnectInfo: (payload: string): void => this.setConnectInfo(payload),
@@ -2565,7 +2696,7 @@ struct Index {
 							'setPref', 'setAccentPalette', 'getBadge', 'setBadgeCount', 'clearBadge', 'consumeDeepLink',
 							'setBackDepth', 'setActiveTab', 'getChromeLayout', 'getWindowForm', 'setTabBarVisible',
 							'openCameraSettings', 'getCameraDiagnostics', 'setTabBarMaterial', 'openPairSheet',
-							'openLinkSheet', 'openSessionsSheet', 'setSessions', 'setConnectInfo', 'setHosts',
+							'openLinkSheet', 'closeConnectSheet', 'openSessionsSheet', 'setSessions', 'setConnectInfo', 'setHosts',
 							'setLiveView'],
 						controller: this.controller,
 					})
@@ -2583,18 +2714,27 @@ struct Index {
 							request.deny();
 							return;
 						}
-						const resources = request.getAccessibleResource();
-						this.ensureCameraPermission()
-							.then((granted: boolean) => {
-								if (granted) request.grant(resources);
-								else request.deny();
-							})
-							.catch(() => { request.deny(); });
+						// One list, several permissions: each capture device has its
+						// own HarmonyOS grant and its own dialog copy, so the request
+						// is answered per resource instead of asking for the camera on
+						// behalf of a microphone. Devices this shell does not expose
+						// (MIDI, sensors) are refused outright.
+						const resources: string[] = request.getAccessibleResource();
+						const needsCamera = resources.indexOf(ProtectedResourceType.VIDEO_CAPTURE) >= 0;
+						const needsMic = resources.indexOf(ProtectedResourceType.AUDIO_CAPTURE) >= 0;
+						if (!needsCamera && !needsMic) {
+							request.deny();
+							return;
+						}
+						this.grantWebCapture(request, resources, needsCamera, needsMic);
 					})
 					.onPageEnd(() => {
-						// Cold-start link stashed before the page mounted its handler:
-						// push once the first page finished loading.
-						const stashed = AppStorage.get<string>('pendingDeepLink') ?? '';
+						// Cold-start link stashed before the page mounted its handler.
+						// Drained through `consumeDeepLink()` rather than re-read: the
+						// page has normally taken it while mounting, so only a link
+						// that has not been delivered yet is pushed — a reload must not
+						// replay one the user already acted on.
+						const stashed = this.consumeDeepLink();
 						if (stashed !== '') {
 							this.pushDeepLink(stashed);
 						}
@@ -2698,6 +2838,12 @@ struct Index {
 	}
 
 
+	/** True when the settings overlay docks its section beside the level-one
+	 *  list (`md` and up); a phone drills in and owns a hub to return to. */
+	private settingsWide(): boolean {
+		return this.metrics.width === 'md' || this.metrics.width === 'lg' || this.metrics.width === 'xl';
+	}
+
 	@Builder
 	settingsRow() {
 		Row() {
@@ -2707,7 +2853,8 @@ struct Index {
 				insetTop: this.insets().top,
 				bottomReserve: this.bottomChromeHeight(),
 				palette: this.accentPalette,
-				wide: this.metrics.width === 'md' || this.metrics.width === 'lg' || this.metrics.width === 'xl',
+				wide: this.settingsWide(),
+				page: $settingsPage,
 				onPref: (key: string, value: string): void => this.applyPref(key, value),
 				onOpenSessions: (): void => this.openSessionsFromChrome(),
 				onGoConnect: (): void => {

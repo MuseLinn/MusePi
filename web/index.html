@@ -446,7 +446,7 @@
               <span data-i18n="faq.q4">我的代码和数据安全吗？</span>
               <svg class="mp-faq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <div class="mp-faq-a" id="faq-a4" role="region" aria-hidden="true" aria-labelledby="faq-q4"><div class="mp-faq-a-inner"><p data-i18n="faq.a4">MusePi 在你自己的机器上运行，会话、设置与历史都存在本地，默认不上传。移动伴侣通过局域网扫码配对、远程控制全程端到端加密，不经过任何第三方服务器。唯一的对外网络请求，是你自己配置的那家模型提供商。</p></div></div>
+            <div class="mp-faq-a" id="faq-a4" role="region" aria-hidden="true" aria-labelledby="faq-q4"><div class="mp-faq-a-inner"><p data-i18n="faq.a4">MusePi 在你自己的机器上运行，会话、设置与历史都存在本地，默认不上传。移动伴侣通过局域网扫码配对、远程控制全程端到端加密，不经过任何第三方服务器。其余对外请求取决于你开了什么：模型请求发给你自己配置的提供商；桌面版启动时从 GitHub 读取更新清单以提示新版本（设置 <code>MUSEPI_NO_AUTO_UPDATE=1</code> 可跳过自动检查）；只有你主动开启公网隧道时，协作流量才会经 cloudflared 中转。</p></div></div>
           </div>
           <div class="mp-faq-item">
             <button class="mp-faq-q" type="button" aria-expanded="false" aria-controls="faq-a5" id="faq-q5">
@@ -460,7 +460,7 @@
               <span data-i18n="faq.q6">怎么开始？</span>
               <svg class="mp-faq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <div class="mp-faq-a" id="faq-a6" role="region" aria-hidden="true" aria-labelledby="faq-q6"><div class="mp-faq-a-inner"><p data-i18n="faq.a6">一行命令装好终端 TUI（后台服务随之启动）：<code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code>（macOS / Linux / WSL），Windows 用 <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>。需要 Node ≥ 22 或 Bun。想直接上手图形界面，就在首屏的平台菜单里选你的系统，或去 Releases 看全部安装包。</p></div></div>
+            <div class="mp-faq-a" id="faq-a6" role="region" aria-hidden="true" aria-labelledby="faq-q6"><div class="mp-faq-a-inner"><p data-i18n="faq.a6">一行命令装好终端 TUI（后台服务随之启动）：<code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code>（macOS / Linux / WSL），Windows 用 <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>。预编译二进制不需要额外运行时，源码安装需要 Bun 1.4.4 或更新版本。想直接上手图形界面，就在首屏的平台菜单里选你的系统，或去 Releases 看全部安装包。</p></div></div>
           </div>
         </div>
       </div>
@@ -471,7 +471,7 @@
       <div class="mp-container mp-cta-band-inner mp-reveal">
         <div class="mp-cta-band-copy">
           <h2 class="mp-h2" data-i18n="cta.h2">把它接到你手上的机器</h2>
-          <p data-i18n="cta.sub">一行命令装好后台服务与桌面应用，或在首屏的平台菜单里直接挑你的安装包。遇到问题或想要新能力，到 GitHub 提 issue 就好。</p>
+          <p data-i18n="cta.sub">一行命令装好终端 TUI 与后台服务；桌面应用在首屏的平台菜单里挑你的安装包。遇到问题或想要新能力，到 GitHub 提 issue 就好。</p>
         </div>
         <div class="mp-cta-band-actions">
           <a class="mp-btn mp-btn--primary" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-i18n="cta.dl">下载</a>

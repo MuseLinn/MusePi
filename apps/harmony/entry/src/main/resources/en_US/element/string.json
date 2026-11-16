@@ -21,6 +21,10 @@
       "value": "Voice input in agent chat"
     },
     {
+      "name": "camera_permission_needed",
+      "value": "Camera access is needed to scan — enable it in Settings"
+    },
+    {
       "name": "tab_connect",
       "value": "Connect"
     },
@@ -165,12 +169,12 @@
       "value": "Display language"
     },
     {
-      "name": "settings_tabbar",
-      "value": "Tab bar material"
+      "name": "settings_material",
+      "value": "Interface material"
     },
     {
-      "name": "settings_tabbar_sub",
-      "value": "Fancier to the left, lighter on battery to the right"
+      "name": "settings_material_sub",
+      "value": "Light response on cards, buttons and the tab bar"
     },
     {
       "name": "settings_about",
@@ -187,6 +191,18 @@
     {
       "name": "settings_computers",
       "value": "Computers"
+    },
+    {
+      "name": "settings_computers_sub",
+      "value": "Sessions and saved computers"
+    },
+    {
+      "name": "settings_connect_other",
+      "value": "Connect another computer"
+    },
+    {
+      "name": "settings_sessions_open",
+      "value": "Open session list"
     },
     {
       "name": "settings_not_connected",

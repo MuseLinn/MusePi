@@ -1,11 +1,22 @@
 import { deviceInfo, pasteboard } from '@kit.BasicServicesKit';
-import { promptAction, uiMaterial } from '@kit.ArkUI';
+import { promptAction, UIContext, uiMaterial } from '@kit.ArkUI';
 import { bundleManager } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { PREF_KEYS, PrefsStore } from '../common/prefs';
 
 const TAG: string = 'MuseSettings';
 const DOMAIN: number = 0x0000;
+
+/**
+ * One level of the settings stack entering.
+ *
+ * Shared with the shell page because the back KEY lives there: returning from
+ * a section to the hub has to look like the in-page back button, which is this
+ * motion — a bare state swap reads as two different apps.
+ */
+export function animateSettingsPush(ctx: UIContext, apply: () => void): void {
+	ctx.animateTo({ duration: 220, curve: Curve.FastOutSlowIn }, apply);
+}
 
 /** One preset of the accent row, resolved by the page so the swatch IS the
  *  colour the tap applies (the token file derives a different lightness per
@@ -45,9 +56,10 @@ interface SettingRow {
  * material are purely local.
  *
  * Structure follows the shell's own navigation: a hub with rows that carry their
- * current value on the right, and one sub-page per decision. Everything here is
- * local state; the shell persists it (PrefsStore) and mirrors it into the page
- * through `__musepiPref`.
+ * current value on the right, and one sub-page per decision. The preference
+ * values are local here — the shell persists them (PrefsStore) and mirrors them
+ * into the page through `__musepiPref` — while the stack level is owned by the
+ * shell, because the back key that walks it is a page lifecycle callback.
  */
 @Component
 export struct MuseSettings {
@@ -79,8 +91,10 @@ export struct MuseSettings {
 	onGoConnect: () => void = () => {};
 	/** Number of sessions the page currently has, for the computers row. */
 	@Prop sessionCount: number;
-	/** Which page of the stack is showing: `hub` or one of the sub-pages. */
-	@State page: string = 'hub';
+	/** Which page of the stack is showing: `hub` or one of the sub-pages.
+	 *  Owned by the shell page: the hardware back key is handled there, and it
+	 *  has to walk the same stack (section → hub → closed) this page slides. */
+	@Link page: string;
 	@State theme: string = 'system';
 	@State accent: string = 'theme';
 	@State fontScale: string = '15';
@@ -131,13 +145,14 @@ export struct MuseSettings {
 
 	/** Navigate the stack with the slide the rest of the system uses. */
 	private goTo(target: string): void {
-		this.getUIContext().animateTo({ duration: 220, curve: Curve.FastOutSlowIn }, () => {
+		animateSettingsPush(this.getUIContext(), () => {
 			this.page = target;
 		});
 	}
 
-	/** A choice that changes a visible surface animates; a choice that only
-	 *  stores a value (material) does not need to. */
+	/** A choice that changes a visible surface animates; the store write stays
+	 *  outside the animation, once, so a drag-like sequence of taps cannot
+	 *  write per frame. */
 	private pick(key: string, value: string, apply: () => void): void {
 		this.getUIContext().animateTo({ duration: 200, curve: Curve.FastOutSlowIn }, apply);
 		this.commit(key, value);
@@ -403,9 +418,7 @@ export struct MuseSettings {
 			}
 		}
 		.width('100%')
-		.onClick(() => {
-			this.page = target;
-		})
+		.onClick(() => this.goTo(target))
 		.accessibilityGroup(true)
 	}
 

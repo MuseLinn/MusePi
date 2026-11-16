@@ -58,7 +58,9 @@ bun run setup
 bun run musepi
 ```
 
-The install scripts accept `--ref <tag|commit|branch>` to select a checkout and `--source` to build instead of downloading a prebuilt binary.
+The `sh` installer accepts `--ref <tag|commit|branch>` to select a release or checkout and `--source` to build instead of downloading the prebuilt binary. The PowerShell installer runs through `irm | iex`, which passes no arguments: set `$env:PI_REF` to select a version and `$env:PI_SOURCE=1` to build from source before running it.
+
+Prebuilt binaries carry their own runtime; only a from-source install needs Bun 1.4.4 or newer.
 
 ## What is included
 

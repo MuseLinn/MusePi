@@ -88,7 +88,12 @@ HarmonyOS 工具链，二者其一即可：
 
 页面侧 `window.harmonyNative`（javaScriptProxy，同步 JSON 字符串返回）：
 `getSystemBars` / `getBadge` / `setBadgeCount` / `clearBadge` / `consumeDeepLink` /
-`setBackDepth` / `openPairSheet` / `openLinkSheet` / `openSessionsSheet` / `setSessions`。
+`setBackDepth` / `openPairSheet` / `openLinkSheet` / `closeConnectSheet` /
+`openSessionsSheet` / `setSessions`。
+
+配对码／远程链接表单提交后由原生保持打开：页面接受这次提交后再调
+`closeConnectSheet` 关闭；被拒绝的值（配对码错误、主机不可达）由页面通过
+`setConnectInfo` 报告，表单留在屏幕上以便修改。
 
 原生推送（runJavaScript）：`window.__harmonyDeepLink(uri)`（暖启动深链）、
 `window.__harmonyKeyboard(vp)`（IME 高度）、`window.__harmonyBack()`（消费一次返回）、
@@ -99,9 +104,13 @@ HarmonyOS 工具链，二者其一即可：
 `pick|new|hosts|settings|closed` 与 id；列表变化时页面用 `setSessions` 刷新。会话数据与导航
 仍归页面，原生不持有业务状态。
 
-返回键：`Index.onBackPress()` 先收键盘（`imeHeightPx > 0`），再交给页面层栈
+返回键：`Index.onBackPress()` 先走原生设置页自己的层级（二级页 → hub → 关闭设置，
+宽窗口无 hub 时直接关闭），再收键盘（`imeHeightPx > 0`），然后交给页面层栈
 （`backDepth > 0` → `__harmonyBack()`），都没有则交回系统（应用退后台）。页面通过
 `setBackDepth` 同步层栈深度——`onBackPress` 必须同步作答，等不了 `runJavaScript` 的往返。
+
+设置页的层级状态（`settingsPage`）由 `Index` 持有、以 `@Link` 传给 `MuseSettings`：
+返回键在壳里，二级页的推入动效在组件里，两者必须操作同一份状态。
 
 深链：`musepi://connect?link=<collab link>`，EntryAbility onCreate（冷启动存
 AppStorage）/ onNewWant（暖启动直推）。

@@ -1,6 +1,6 @@
 # 安卓 OTA 更新方案(@capgo Web-layer OTA)
 
-> 面向 `apps/mobile`（Capacitor 8 壳，web 代码在 `packages/client-core`，Android `versionCode 40` / `versionName 0.7.5`）。
+> 面向 `apps/mobile`（Capacitor 8 壳，web 代码在 `packages/client-core`；Android 版本号以 `apps/mobile/android/app/build.gradle` 为准，当前 `versionCode 41` / `versionName 0.7.6`）。
 > 2026-08-26 调研后立项。桌面端 OTA 见 `docs/archive/ota-update-design.md`（electron-updater），本文件仅覆盖移动端。
 
 - **状态**: 方案文档(待实现)

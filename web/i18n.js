@@ -192,18 +192,18 @@
       "Yes. MusePi supports 60+ model providers; just enter your own keys in settings and model costs are billed directly with the provider you choose. MusePi doesn't proxy or take a cut. You can also connect local models.",
     "faq.q4": "Are my code and data safe?",
     "faq.a4":
-      "MusePi runs on your own machine; sessions, settings and history are stored locally and aren't uploaded by default. The mobile companion pairs over the LAN by QR code, and remote control is end-to-end encrypted the whole way — no third-party server in between. The only outbound network request is to the model provider you configure.",
+      "MusePi runs on your own machine; sessions, settings and history are stored locally and aren't uploaded by default. The mobile companion pairs over the LAN by QR code, and remote control is end-to-end encrypted the whole way — no third-party server in between. Everything else that leaves the machine follows what you turn on: model requests go to the provider you configure; the desktop app reads the GitHub release manifest at launch to surface new versions (set MUSEPI_NO_AUTO_UPDATE=1 to skip the automatic check); and only when you start a public tunnel does collaboration traffic pass through cloudflared.",
     "faq.q5": "Where does MusePi come from?",
     "faq.a5":
       "MusePi is an AI workspace: the desktop GUI, the terminal, the mobile companion and the resident desktop pet share one background service, with models, tools and surfaces all swappable. The desktop and mobile apps, the extension system and the collaboration surfaces are our own work; everything is MIT-licensed.",
     "faq.q6": "How do I get started?",
     "faq.a6":
-      "One command installs the terminal TUI (the background service starts with it): <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Requires Node ≥ 22 or Bun. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
+      "One command installs the terminal TUI (the background service starts with it): <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Prebuilt binaries need no extra runtime; a from-source install needs Bun 1.4.4 or newer. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
 
     /* CTA band */
     "cta.h2": "Connect it to the machines you have",
     "cta.sub":
-      "One command installs the background service and the desktop app, or pick your package from the platform menu in the first screen. Hit a problem or want a capability that is not there yet? Open an issue on GitHub.",
+      "One command installs the terminal TUI and the background service; pick the desktop app from the platform menu in the first screen. Hit a problem or want a capability that is not there yet? Open an issue on GitHub.",
     "cta.community": "Ask / Report",
     "cta.dl": "Download",
 
