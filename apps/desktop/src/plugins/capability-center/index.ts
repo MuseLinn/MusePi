@@ -20,7 +20,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: CapabilityPluginApi): void {
-	ctx.setLabel("MusePi 能力中心");
 	ctx.slots.register({
 		slot: "app.capability",
 		moduleUrl: "./page.tsx",

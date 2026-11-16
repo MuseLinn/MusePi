@@ -1,8 +1,9 @@
-/** Vite resolves the ESM workers during development. Electron production uses
- * the prebuilt workers copied beside index.html: Bun leaves package-based
- * worker URLs untouched instead of emitting their dependency graphs. */
+/** Vite resolves the ESM workers during development. A built bundle — loaded
+ * from `file://` or from the daemon's HTTP origin — uses the prebuilt workers
+ * copied beside index.html: Bun leaves package-based worker URLs untouched
+ * instead of emitting their dependency graphs. */
 export function createMonacoWorker(_workerId: string, label: string): Worker {
-	const packaged = window.location.protocol === "file:";
+	const packaged = window.location.port !== "5173";
 	if (label === "json") {
 		if (packaged) return new Worker(new URL("monaco-workers/json.worker.js", window.location.href));
 		return new Worker(

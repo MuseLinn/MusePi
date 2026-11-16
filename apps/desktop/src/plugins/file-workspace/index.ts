@@ -23,7 +23,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: FileWorkspacePluginApi): void {
-	ctx.setLabel("MusePi 文件工作区");
 	ctx.slots.register({
 		slot: FILE_WORKSPACE_SLOT,
 		moduleUrl: "./page.tsx",

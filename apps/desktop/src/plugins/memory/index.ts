@@ -25,7 +25,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: MemoryPluginApi): void {
-	ctx.setLabel("MusePi 记忆");
 	ctx.slots.register({
 		slot: "settings.tab.memory",
 		moduleUrl: "./page.tsx",

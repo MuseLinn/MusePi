@@ -6,7 +6,8 @@
 	"type": "module",
 	"musepi": {
 		"icon": "▤",
-		"description": "浏览、编辑和引用工作区文件，支持 Monaco、Markdown、PDF 与常见文档预览。",
+		"label": "MusePi File Workspace",
+		"description": "Workspace tree, Monaco and Markdown editing, PDF and document previews, and file references in one Cordis-owned panel.",
 		"extensions": ["./index.ts"]
 	}
 }

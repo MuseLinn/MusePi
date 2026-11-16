@@ -1,20 +1,21 @@
 /**
  * Session info card (desktop GUI).
  *
- * The right panel owns the session's metadata while it is open, so this tile is
- * the collapsed panel's stand-in: it repeats the few facts that otherwise cost a
- * panel open — session title, model reference ("provider/id"), working-tree diff
+ * The right panel owns the session's metadata when it is open; this tile is the
+ * same metadata as a workspace column, so reading it never requires opening the
+ * panel: session title, model reference ("provider/id"), working-tree diff
  * totals, live/ended subagents, todo-board progress, the MCP connectors the
  * session may use, running plugins, the open panel tabs, and the surfaces that
  * can still be opened here. It has two seats:
  *
  * - `dock`: an independent glass column between the chat column and the panel
- *   host, with its own scroll. Used while the panel is collapsed and the shared
- *   row can still leave the transcript a usable width.
+ *   host, with its own scroll. It keeps that column while the panel is open as
+ *   long as the shared row still leaves the transcript a usable width beside
+ *   both; below that the column folds to 0 and the panel takes the row.
  * - `float`: the same tile over the transcript's right edge, inside the chat
- *   column, when the panel is open (manual reveal) or the row is too narrow for
- *   a docked column. It starts below the chat card's header row and paints
- *   under menus and tooltips.
+ *   column, for a row too narrow to dock and only after an explicit reveal. It
+ *   starts below the chat card's header row, stops above the composer, and
+ *   paints under menus and tooltips.
  *
  * Wiring split: app.tsx owns the open state (per-session, see
  * `useSessionInfoCardVisibility`), ChatView picks the seat and supplies the panel
@@ -28,7 +29,7 @@
  * rows are readouts too — they open the trajectory surface instead of
  * duplicating its timeline.
  */
-import { fractionPercent, ProgressMeter, type TranslationKey, t } from "@musepi/client-core";
+import { fractionPercent, ProgressMeter, type TranslationKey, t, useLocale } from "@musepi/client-core";
 import { fmtCost, fmtDuration } from "@musepi/client-core/src/lib/format";
 import { agentProgressFraction } from "@musepi/client-core/src/tool-render/tools/task";
 import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
@@ -49,6 +50,7 @@ import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { SessionInfoPluginRow, SessionInfoSlotData } from "../lib/slot-host";
 import {
+	extensionDisplayName,
 	SESSION_INFO_AGENTS_SLOT,
 	SESSION_INFO_SLOT,
 	SESSION_INFO_SLOT_PREFIX,
@@ -78,13 +80,36 @@ export const SESSION_INFO_DOCK_WIDTH_PX = 288;
  *  stops reading as a conversation and the float seat is the better trade. */
 const DOCK_MIN_CHAT_COLUMN_PX = 560;
 
+/** Workspace card gutter, matching gui-chat.css `--gui-card-gutter`. */
+const CARD_GUTTER_PX = 8;
+
+/** The right panel's fixed card width (gui-chat.css `.gui-pane-right--inner`). */
+const PANEL_WIDTH_PX = 288;
+
 /**
  * Everything the shared row spends before the chat column sees a pixel: the
  * dock (288 + its gutters), the rail (44 + its gutters) and the folded right
  * panel's leftover gutter. Below this row width ChatView floats the tile
  * instead of docking it.
  */
-export const SESSION_INFO_DOCK_MIN_ROW_PX = SESSION_INFO_DOCK_WIDTH_PX + 16 + 44 + 16 + 8 + DOCK_MIN_CHAT_COLUMN_PX;
+export const SESSION_INFO_DOCK_MIN_ROW_PX =
+	SESSION_INFO_DOCK_WIDTH_PX + CARD_GUTTER_PX * 2 + 44 + CARD_GUTTER_PX * 2 + CARD_GUTTER_PX + DOCK_MIN_CHAT_COLUMN_PX;
+
+/**
+ * Row width that still fits the OPEN right panel beside the docked column: the
+ * panel's own card plus both gutters and margins, the docked column, the rail
+ * and the transcript's minimum. Below it the dock folds to 0 and the panel
+ * takes the row; the card does not move seats.
+ */
+export const SESSION_INFO_DOCK_BESIDE_PANEL_MIN_ROW_PX =
+	PANEL_WIDTH_PX +
+	CARD_GUTTER_PX * 2 +
+	CARD_GUTTER_PX * 2 +
+	SESSION_INFO_DOCK_WIDTH_PX +
+	CARD_GUTTER_PX * 2 +
+	44 +
+	CARD_GUTTER_PX * 2 +
+	DOCK_MIN_CHAT_COLUMN_PX;
 
 /** Same cadence as the other working-tree readouts — they describe one tree. */
 const POLL_MS = 15_000;
@@ -173,35 +198,16 @@ interface SessionInfoVisibility {
 /**
  * Per-session open state.
  *
- * The panel's own state supplies the DEFAULT: a collapsed panel shows the card,
- * an expanded one hides it. A manual toggle wins until the panel next changes
- * state; switching sessions restores that session's stored choice instead of
- * carrying the previous session's toggle across.
+ * The stored choice is the whole answer: opening the right panel no longer
+ * hides the card (it keeps its dock seat beside the panel), so nothing here
+ * reacts to the panel. A session that never chose starts open.
  */
-export function useSessionInfoCardVisibility({
-	sessionId,
-	panelOpen,
-}: {
-	sessionId: string | null;
-	panelOpen: boolean;
-}): SessionInfoVisibility {
-	const [open, setOpen] = useState<boolean>(() => readSessionInfoPreference(sessionId) ?? !panelOpen);
-	// Last panel state this hook observed. Comparing against it makes the panel
-	// effect a real-change trigger only: a session switch must not reset the
-	// per-session choice it just restored.
-	const panelOpenRef = useRef(panelOpen);
+export function useSessionInfoCardVisibility({ sessionId }: { sessionId: string | null }): SessionInfoVisibility {
+	const [open, setOpen] = useState<boolean>(() => readSessionInfoPreference(sessionId) ?? true);
 
 	useEffect(() => {
-		setOpen(readSessionInfoPreference(sessionId) ?? !panelOpenRef.current);
+		setOpen(readSessionInfoPreference(sessionId) ?? true);
 	}, [sessionId]);
-
-	useEffect(() => {
-		if (panelOpenRef.current === panelOpen) return;
-		panelOpenRef.current = panelOpen;
-		const next = !panelOpen;
-		setOpen(next);
-		writeSessionInfoPreference(sessionId, next);
-	}, [panelOpen, sessionId]);
 
 	const toggle = useCallback((): void => {
 		setOpen(current => {
@@ -378,11 +384,23 @@ interface SessionInfoCardProps {
 	/** Whether the session is working — keeps an unfinished todo board visible
 	 *  while every task is still pending. */
 	working?: boolean;
-	/** Seat: a docked column or the floating card. ChatView picks it (panel
-	 *  state + measured row width); the tile itself only paints the difference. */
+	/** Seat: a docked column or the floating card. ChatView picks it (measured
+	 *  row width + the explicit narrow-row reveal); the tile itself only paints
+	 *  the difference. */
 	mode?: "dock" | "float";
-	/** Float only: px from the chat column's top — below the chat header row. */
+	/** Float only: px from the chat body's top. The header row floats over that
+	 *  box, so the default starts the card below it. */
 	top?: number;
+	/**
+	 * Float only: px the card's cap must leave at the bottom for the composer.
+	 *
+	 * The composer is `position: absolute; bottom: 0` over the transcript, so it
+	 * owns no flow space and the card's box would otherwise run to the column's
+	 * bottom and be painted under it. The host measures the composer zone and
+	 * passes it here: the card is a SIBLING of the element that publishes
+	 * `--chat-composer-inset`, so a reader registration cannot reach it.
+	 */
+	bottomInset?: number;
 	/** Playing the exit animation; the host unmounts the card afterwards. */
 	closing?: boolean;
 	onSelectTab?(id: string): void;
@@ -410,6 +428,7 @@ export function SessionInfoCard({
 	working = false,
 	mode = "float",
 	top = 44,
+	bottomInset = 0,
 	closing = false,
 	onSelectTab,
 	onOpenSurface,
@@ -457,10 +476,20 @@ export function SessionInfoCard({
 		};
 		setUsageState("loading");
 		void load();
-		const timer = setInterval(() => void load(), POLL_MS);
+		// The same rule the directory readouts and the resource section follow: a
+		// hidden window has no pixel to update, so the tick is skipped; coming
+		// back samples once instead of waiting out the interval.
+		const timer = setInterval(() => {
+			if (!document.hidden) void load();
+		}, POLL_MS);
+		const onVisible = (): void => {
+			if (!document.hidden) void load();
+		};
+		document.addEventListener("visibilitychange", onVisible);
 		return () => {
 			alive = false;
 			clearInterval(timer);
+			document.removeEventListener("visibilitychange", onVisible);
 		};
 	}, [rpc, sessionId, cwd]);
 
@@ -569,6 +598,7 @@ export function SessionInfoCard({
 	// 分区组件(`chat.session-info.plugins`)与内置回退拿到的是同一份读数:
 	// 卡片读注册表一次,counts 与 rows 都从这里出。
 	const extensionRegistry = useExtensionRegistry(rpc);
+	const locale = useLocale();
 	const pluginEntries = useMemo(
 		() =>
 			(extensionRegistry?.extensions ?? []).filter(
@@ -583,11 +613,13 @@ export function SessionInfoCard({
 	const sessionInfoPlugins = useMemo(() => {
 		const rows: SessionInfoPluginRow[] = pluginEntries.map(entry => ({
 			id: entry.id,
-			label: entry.displayName || entry.name || entry.id,
+			// The same name the extension center shows in this UI language: the
+			// card is a second surface for one inventory, not a second naming.
+			label: extensionDisplayName(entry, locale),
 			active: entry.state === "active",
 		}));
 		return { runningPlugins: rows.filter(row => row.active).length, pluginEntries: rows };
-	}, [pluginEntries]);
+	}, [pluginEntries, locale]);
 
 	// ── Subagents: live/ended split + per-agent elapsed timers ─────────────
 	// A blocked agent leads the card: it is the one row that needs the human.
@@ -795,7 +827,14 @@ export function SessionInfoCard({
 			/* Float geometry only: the dock is an in-flow flex column whose box
 			 * and scroll come from CSS. Inline top on the dock would fight the
 			 * card gutter and detach it from the column it shares with the chat. */
-			style={floating ? { top: `${top}px`, maxHeight: `calc(100% - ${top + 12}px)` } : undefined}
+			style={
+				floating
+					? {
+							top: `${top}px`,
+							maxHeight: `calc(100% - ${top}px - ${bottomInset}px - 12px)`,
+						}
+					: undefined
+			}
 		>
 			<header className="gui-session-info-head">
 				<Icon name="information" className="gui-session-info-head-icon" />

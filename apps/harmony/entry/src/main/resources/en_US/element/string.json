@@ -87,6 +87,242 @@
     {
       "name": "sessions_empty",
       "value": "No matching sessions"
+    },
+    {
+      "name": "sessions_none",
+      "value": "No sessions yet"
+    },
+    {
+      "name": "sessions_connect_hint",
+      "value": "Connect a computer first"
+    },
+    {
+      "name": "connect_title",
+      "value": "Pick up where your computer left off"
+    },
+    {
+      "name": "connect_sub",
+      "value": "Connect to continue the conversation"
+    },
+    {
+      "name": "connect_offline",
+      "value": "Offline — showing cached content, connecting needs a network"
+    },
+    {
+      "name": "connect_scan",
+      "value": "Scan desktop QR code"
+    },
+    {
+      "name": "connect_pair",
+      "value": "Use pair code"
+    },
+    {
+      "name": "connect_link",
+      "value": "Use remote access link"
+    },
+    {
+      "name": "connect_computers",
+      "value": "Saved computers"
+    },
+    {
+      "name": "connect_empty",
+      "value": "No saved computers yet"
+    },
+    {
+      "name": "connect_skip",
+      "value": "Skip for now"
+    },
+    {
+      "name": "connect_connect",
+      "value": "Connect a computer"
+    },
+    {
+      "name": "connect_settings_a11y",
+      "value": "Open settings"
+    },
+    {
+      "name": "a11y_selected",
+      "value": "Selected"
+    },
+    {
+      "name": "settings_back",
+      "value": "Back"
+    },
+    {
+      "name": "settings_appearance",
+      "value": "Appearance"
+    },
+    {
+      "name": "settings_appearance_sub",
+      "value": "Theme, accent, text size"
+    },
+    {
+      "name": "settings_language",
+      "value": "Language"
+    },
+    {
+      "name": "settings_language_sub",
+      "value": "Display language"
+    },
+    {
+      "name": "settings_tabbar",
+      "value": "Tab bar material"
+    },
+    {
+      "name": "settings_tabbar_sub",
+      "value": "Fancier to the left, lighter on battery to the right"
+    },
+    {
+      "name": "settings_about",
+      "value": "About"
+    },
+    {
+      "name": "settings_version",
+      "value": "Version"
+    },
+    {
+      "name": "settings_system_version",
+      "value": "System"
+    },
+    {
+      "name": "settings_computers",
+      "value": "Computers"
+    },
+    {
+      "name": "settings_not_connected",
+      "value": "Not connected"
+    },
+    {
+      "name": "settings_sessions_count",
+      "value": "%d sessions"
+    },
+    {
+      "name": "settings_diagnostics",
+      "value": "Help & diagnostics"
+    },
+    {
+      "name": "settings_copy_diagnostics",
+      "value": "Copy diagnostics"
+    },
+    {
+      "name": "settings_copied",
+      "value": "Copied"
+    },
+    {
+      "name": "settings_pane_width",
+      "value": "Resize session list"
+    },
+    {
+      "name": "whats_new",
+      "value": "What's new"
+    },
+    {
+      "name": "whats_new_title",
+      "value": "What changed"
+    },
+    {
+      "name": "whats_new_item_1",
+      "value": "Three columns when unfolded — rail, session list and conversation side by side, with a draggable divider between the last two"
+    },
+    {
+      "name": "whats_new_item_2",
+      "value": "Settings is fully native now: a level-one list beside the chosen section — theme, colours, interface material, computers and diagnostics"
+    },
+    {
+      "name": "whats_new_item_3",
+      "value": "The rail, settings and sheets share one immersive material, and every switch and press has its own transition"
+    },
+    {
+      "name": "whats_new_ok",
+      "value": "Got it"
+    },
+    {
+      "name": "settings_group_general",
+      "value": "General"
+    },
+    {
+      "name": "theme_title",
+      "value": "Theme"
+    },
+    {
+      "name": "theme_system",
+      "value": "System"
+    },
+    {
+      "name": "theme_light",
+      "value": "Light"
+    },
+    {
+      "name": "theme_dark",
+      "value": "Dark"
+    },
+    {
+      "name": "font_scale_title",
+      "value": "Text size"
+    },
+    {
+      "name": "font_small",
+      "value": "Small"
+    },
+    {
+      "name": "font_default",
+      "value": "Default"
+    },
+    {
+      "name": "font_large",
+      "value": "Large"
+    },
+    {
+      "name": "accent_title",
+      "value": "Accent"
+    },
+    {
+      "name": "accent_theme",
+      "value": "Follow theme"
+    },
+    {
+      "name": "accent_brand",
+      "value": "Brand"
+    },
+    {
+      "name": "accent_mono",
+      "value": "Mono"
+    },
+    {
+      "name": "accent_ocean",
+      "value": "Ocean"
+    },
+    {
+      "name": "accent_jade",
+      "value": "Jade"
+    },
+    {
+      "name": "tabbar_hint",
+      "value": "Fancier to the left, lighter on battery to the right"
+    },
+    {
+      "name": "material_regular",
+      "value": "Rich"
+    },
+    {
+      "name": "material_balanced",
+      "value": "Balanced"
+    },
+    {
+      "name": "material_thin",
+      "value": "Light"
+    },
+    {
+      "name": "material_ultra",
+      "value": "Ultra light"
+    },
+    {
+      "name": "language_zh",
+      "value": "中文"
+    },
+    {
+      "name": "language_en",
+      "value": "English"
     }
   ]
 }

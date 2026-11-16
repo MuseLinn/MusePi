@@ -102,12 +102,12 @@ export function SettingsView({
 	// 会话管理插件页:声明 `settings.tab.sessions` 的扩展接管内置「会话」分区。
 	// 插件停用/未装载时保留内置 SessionsSection(自动清理等保留策略不丢失)。
 	const extSessionsTab = extSettingsTabs.find(
-		tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}sessions` && tab.code.length > 0 && !tab.error,
+		tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}sessions` && (tab.code.length > 0 || tab.url) && !tab.error,
 	);
 	// 记忆插件页:声明 `settings.tab.memory` 的扩展接管内置「记忆」分区。
 	// 插件停用/未装载时保留内置 MemorySection。
 	const extMemoryTab = extSettingsTabs.find(
-		tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}memory` && tab.code.length > 0 && !tab.error,
+		tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}memory` && (tab.code.length > 0 || tab.url) && !tab.error,
 	);
 	// 单行偏好槽:settings.action.<id> 组件。
 	const actionItems = useSlotComponentsByPrefix(rpc, SETTINGS_ACTION_SLOT_PREFIX);
@@ -558,29 +558,33 @@ export function SettingsView({
 							)}
 							{activeSection === "notifications" && <NotificationsSection rpc={rpc} />}
 							{activeSection === "pet" && <CompanionSection />}
-							{activeSection === "sessions" &&
-								(extSessionsTab ? (
-									<SlotComponentMount
-										item={extSessionsTab}
-										rpc={rpc}
-										sessionId={sessionId}
-										onOpenSession={onOpenSession}
-									/>
-								) : (
-									<SessionsSection rpc={rpc} currentSessionId={sessionId} />
-								))}
+							{activeSection === "session-memory" && (
+								<SessionMemorySection
+									rpc={rpc}
+									currentSessionId={sessionId}
+									sessionSlot={
+										extSessionsTab ? (
+											<SlotComponentMount
+												item={extSessionsTab}
+												rpc={rpc}
+												sessionId={sessionId}
+												onOpenSession={onOpenSession}
+											/>
+										) : null
+									}
+									memorySlot={
+										extMemoryTab ? (
+											<SlotComponentMount item={extMemoryTab} rpc={rpc} sessionId={sessionId} />
+										) : null
+									}
+								/>
+							)}
 							{activeSection === "git" && <GitSection rpc={rpc} />}
 							{activeSection === "shortcuts" && <ShortcutsSection />}
 							{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
 							{activeSection === "voice" && <VoiceSection rpc={rpc} sessionId={sessionId} />}
 							{activeSection === "context" && <ContextSection rpc={rpc} />}
 							{activeSection === "files" && <FilesLspSection rpc={rpc} />}
-							{activeSection === "memory" &&
-								(extMemoryTab ? (
-									<SlotComponentMount item={extMemoryTab} rpc={rpc} sessionId={sessionId} />
-								) : (
-									<MemorySection rpc={rpc} />
-								))}
 							{activeSection === "skills" && <SkillsSection rpc={rpc} />}
 							{activeSection.startsWith("ext:")
 								? (() => {
@@ -597,7 +601,6 @@ export function SettingsView({
 										) : null;
 									})()
 								: null}
-							{activeSection === "suggestions" && <PromptsSection />}
 							{activeSection === "modes" && <ModesSection rpc={rpc} onCreateChat={onCreateChat} />}
 							{activeSection === "migration" && <MigrationSection rpc={rpc} />}
 							{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
@@ -633,12 +636,10 @@ import {
 	InteractionSection,
 	McpSection,
 	MediaSection,
-	MemorySection,
 	ModelSection,
 	ModesSection,
 	NotificationsSection,
-	PromptsSection,
-	SessionsSection,
+	SessionMemorySection,
 	ShellSection,
 	ShortcutsSection,
 	SkillsSection,

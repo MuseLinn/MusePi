@@ -22,7 +22,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: ScheduledPanelPluginApi): void {
-	ctx.setLabel("MusePi 任务中心左栏");
 	ctx.slots.register({
 		slot: "sidebar.panel.scheduled",
 		moduleUrl: "./page.tsx",

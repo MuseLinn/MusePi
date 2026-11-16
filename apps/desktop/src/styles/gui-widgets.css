@@ -4387,15 +4387,25 @@
 	align-items: flex-end;
 	gap: 8px;
 	pointer-events: none;
+	/* One card's height ceiling, held inside the corner's 20px top/bottom insets
+	 * and the two 8px gaps so a full three-row stack stays within the window. */
+	--gui-action-toast-max-height: calc((100dvh - 40px - 16px) / 3);
 }
+/* One toast = one glass card at one size. The width is fixed rather than
+ * content-hugging so a three-row stack reads as a column instead of a ragged
+ * staircase, and 320px matches the update toast in the same corner. Status
+ * colour lives on the icon only: a tinted fill or a left rail competes with
+ * the message for attention, which is the opposite of what a notice needs. */
 .gui-action-toast {
 	position: relative;
 	display: flex;
 	align-items: flex-start;
 	gap: 10px;
-	width: max-content;
-	max-width: min(420px, calc(100vw - 32px));
-	padding: 9px 12px 9px 14px;
+	box-sizing: border-box;
+	width: 320px;
+	max-width: calc(100vw - 32px);
+	max-height: var(--gui-action-toast-max-height);
+	padding: 12px 14px;
 	border-radius: var(--radius-lg);
 	border: 1px solid var(--glass-border);
 	background: var(--glass-sheen), var(--glass-bg-strong);
@@ -4403,24 +4413,8 @@
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(1.4);
 	box-shadow: var(--glass-shadow);
 	color: var(--color-text);
-	font-size: var(--ui-font-size-sm);
 	pointer-events: auto;
-	max-height: 400px;
-	transition:
-		max-height 180ms ease,
-		opacity 180ms ease;
 	animation: gui-action-toast-in 200ms var(--spring-liquid, ease);
-}
-
-/* Collapsed stack: only the newest toast stays legible; older rows shrink to
- * a sliver and expand when the pointer or keyboard focus enters the stack. */
-.gui-action-toasts[data-expanded="false"] .gui-action-toast:not(.gui-action-toast--front):not(.gui-action-toast--closing) {
-	max-height: 10px;
-	overflow: hidden;
-	opacity: 0.55;
-	padding-top: 0;
-	padding-bottom: 0;
-	pointer-events: none;
 }
 
 /* Exit: the row stays mounted for the keyframe's 180 ms. */
@@ -4451,39 +4445,11 @@
 		transition: none;
 	}
 }
-/* Kind accent: a short colored rail keeps the glass neutral while making
- * completion / question / error scannable at a glance. */
-.gui-action-toast::before {
-	content: "";
-	position: absolute;
-	left: 0;
-	top: 8px;
-	bottom: 8px;
-	width: 3px;
-	border-radius: 0 999px 999px 0;
-	background: color-mix(in oklab, var(--color-text-muted) 45%, transparent);
-}
-.gui-action-toast--success::before {
-	background: var(--color-success, #4ade80);
-}
-.gui-action-toast--error::before {
-	background: var(--color-danger, #f87171);
-}
-.gui-action-toast--warning::before {
-	background: var(--color-warning, #fbbf24);
-}
-/* 状态色：图标与描边随 kind 微染，底色保持玻璃中性——浮窗不尖叫。 */
 .gui-action-toast--success .gui-action-toast-icon {
 	color: var(--color-success, #4ade80);
 }
-.gui-action-toast--error {
-	border-color: color-mix(in oklab, var(--color-danger, #f87171) 45%, transparent);
-}
 .gui-action-toast--error .gui-action-toast-icon {
 	color: var(--color-danger, #f87171);
-}
-.gui-action-toast--warning {
-	border-color: color-mix(in oklab, var(--color-warning, #fbbf24) 40%, transparent);
 }
 .gui-action-toast--warning .gui-action-toast-icon {
 	color: var(--color-warning, #fbbf24);
@@ -4498,13 +4464,23 @@
 	margin-top: 2px;
 }
 .gui-action-toast-content {
+	flex: 1;
 	min-width: 0;
+	/* 26px = the card's 12px vertical padding plus both 1px borders: above that
+	 * the message scrolls inside the card instead of growing it past the ceiling. */
+	max-height: calc(var(--gui-action-toast-max-height) - 26px);
+	overflow-y: auto;
 	overflow-wrap: anywhere;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
 }
 .gui-action-toast-title {
+	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
+	line-height: 1.35;
 }
 .gui-action-toast-msg {
+	font-size: var(--ui-font-size-sm);
 	line-height: 1.45;
 }
 .gui-action-toast-details {
@@ -4514,6 +4490,8 @@
 	font-size: 11px;
 	line-height: 1.45;
 }
+/* Actions sit on the first line, right-aligned against the message's top so
+ * a two-button row never pushes the card taller than its text needs. */
 .gui-action-toast-btn {
 	flex-shrink: 0;
 	padding: 3px 10px;
@@ -4544,16 +4522,28 @@
 	color: var(--color-text);
 	background: color-mix(in oklab, var(--color-text) 8%, transparent);
 }
-/* The close cross doubles as the countdown dial: the ring empties over the
- * toast's remaining lifetime and freezes while hovered or focused. */
-.gui-action-toast .gui-action-toast-close {
+/* Dismiss: the bare glyph, with the remaining lifetime drawn as a ring around
+ * it that empties as the toast's timer runs. It freezes with the pointer or
+ * focus inside the stack, which is exactly when the timers freeze. Only a toast
+ * that closes by itself carries one; a persistent error has no lifetime to
+ * show. */
+.gui-action-toast-close {
 	position: relative;
+	flex-shrink: 0;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	width: 18px;
 	height: 18px;
 	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-faint);
+	font: inherit;
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
 }
 .gui-action-toast .gui-toast-ring {
 	position: absolute;
@@ -4578,6 +4568,9 @@
 	to {
 		stroke-dashoffset: 0;
 	}
+}
+.gui-action-toast-close:hover {
+	color: var(--color-text);
 }
 @keyframes gui-action-toast-in {
 	from {

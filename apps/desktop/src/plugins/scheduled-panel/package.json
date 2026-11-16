@@ -6,7 +6,8 @@
 	"type": "module",
 	"musepi": {
 		"icon": "▤",
-		"description": "Task list, search, status filter and workspace groups in the rail's sidebar slot.",
+		"label": "MusePi Scheduled Panel",
+		"description": "Task-center second-tier sidebar panel: search, status filter and workspace groups.",
 		"extensions": ["./index.ts"]
 	}
 }

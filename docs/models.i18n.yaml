@@ -1,5 +1,5 @@
 # Consistency record for models.md / models.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/models
-models.md: f424cdef9a51a00e80afc6705a51aafceba01281
-models.zh-CN.md: 8e3abc56ae57daa36e9e830b6ef24053cb667de0
+models.md: ff80eb67e5e23d4a6473422626f2add357b960fd
+models.zh-CN.md: acc9688fc14a5b16535aaaeab2f51e06d2256b9b

@@ -24,7 +24,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: SessionManagerPluginApi): void {
-	ctx.setLabel("MusePi 会话管理");
 	ctx.slots.register({
 		slot: "settings.tab.sessions",
 		moduleUrl: "./page.tsx",

@@ -21,7 +21,9 @@ const here = dirname(fileURLToPath(import.meta.url));
 const harmonyRoot = join(here, "..");
 // The bundle lives in packages/client-core (the old `guest-client` name is
 // kept as a fallback so a stale checkout still resolves).
-const distCandidates = ["client-core", "guest-client"].map((name) => join(harmonyRoot, "..", name, "dist"));
+const distCandidates = ["client-core", "guest-client"].map((name) =>
+	join(harmonyRoot, "..", "..", "packages", name, "dist"),
+);
 const dist = distCandidates.find((candidate) => existsSync(join(candidate, "mobile.html")));
 const rawfile = join(harmonyRoot, "entry", "src", "main", "resources", "rawfile");
 

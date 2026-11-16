@@ -11,6 +11,5 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: RightPanelPluginApi): void {
-	ctx.setLabel("MusePi 右侧面板");
 	ctx.slots.register({ slot: "panel.shell", moduleUrl: "./page.tsx", label: "右侧面板" });
 }

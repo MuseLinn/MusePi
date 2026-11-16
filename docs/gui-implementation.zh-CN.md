@@ -117,7 +117,7 @@ TUI `recap.enabled`/`recap.idleSeconds`(schema tab `interaction`、group Notific
 
 ## 2. 扩展控制中心(daemon 契约)
 
-设置「扩展」tab + 侧栏「扩展」入口共用 `components/ExtensionsCenter.tsx`,TUI /extensions parity。UI 形态(见 gui-design.md 无——此处只记契约):顶部 provider tabs(`buildProviderTabs` 排序:ALL → 有内容的 enabled → disabled → 空,disabled 灰显可点)+ 左侧 provider→kind(计数)→item 三级树(provider 级开关走 setProviderEnabled,native/内置节点只读;kind 折叠记忆)+ 右侧详情(名称/类型/描述/触发/来源 via X (等级)/路径/状态/指令内容/raw inspector 折叠)。
+设置「扩展」tab + 侧栏「扩展」入口共用 `components/ExtensionsCenter.tsx`,TUI /extensions parity。UI 形态(见 gui-design.md 无——此处只记契约):顶部 provider tabs(`buildProviderTabs` 排序:ALL → 有内容的 enabled → disabled → 空,disabled 灰显可点)+ 左侧 provider→kind(计数)→item 三级树(provider 级开关走 setProviderEnabled,native/内置节点只读;kind 折叠记忆)+ 右侧详情(名称/类型/描述/触发/来源 via X (等级)/路径/状态/指令内容/raw inspector 折叠)。列表行、详情标题、设置卡片的分组名与搜索命中都经 `extensionDisplayName(item, locale)` 取名——包内 `locale/<tag>.json` 的当前语言 → 清单里那一句 → 模块名(见 `docs/i18n.md`);模块名留在行的悬停提示里,因为标签是给人读的,而 id 是提 issue 时要的。
 
 daemon RPC:
 - `extensions.list`(TTL 10s 缓存,复用 state-manager 的 loadAllExtensions,返回 10 种 kind 统一 Extension 形状,无 raw——raw 走 `extensions.raw{id}` 16KB 截断)
@@ -1306,3 +1306,15 @@ provider prep 里待一会。15 秒时两者都变成一个红色的「请求失
 - **HTML 卡片标注与宽表**:`widgets/html.tsx` 复用 `annotationOverlayLabels()`，会话内 HTML 卡片与浏览器页面走同一套结构化标注 panel；表格加宽按内容 hash 写入 `musepi-gui-wide-tables`，重新挂载后恢复，超过 200 条裁剪。
 - **MCP OAuth 服务**:`McpOAuthService` 提供 `mcp.oauth.start/status/cancel`，复用 `MCPOAuthFlow`（回调服务器/PKCE/DCR）、`analyzeAuthError`/`discoverOAuthEndpoints` 与 `mcpOAuthCredentialId`；成功后把 credential 写入 `modelRegistry.authStorage`，`reloadMcpConnectors()` 先 `authStorage.reload()` 再 reconcile，多个 workspace 的 manager 才能看到新 grant。只支持浏览器回调，不提供手工 code 输入；5 分钟未回调按错误结束。
 - **子代理会话身份（`session.agents` / `agents.transcript`）**：子代理 transcript 有三个 id——文件名（`agents.*` RPC 寻址的 agent id）、`session` 头里的 id（`session.list` 行与 GUI 打开的会话 id）、`session_init.agent`（子代理定义名）。右栏名册改由父会话产物目录的磁盘行（`knownSessions` 的 subagent 行）派生，注册表只补实时 status/activity：一次性子代理跑完即 unregister，纯注册表口径会在用户回头看的时候刚好变空。行上带真实的子会话 id 与 agent 名，并过滤 advisor 行以及被打开成主会话的 `Main-*` ref。`session_init` 携带整段 systemPrompt、`agent` 是最后一个字段（生产环境常 >100 KB），因此 agent 名走一次有界、按路径缓存的读取（`session/subagent-agent-name.ts`），而不是列表前缀；`agents.transcript` 在注册表没有 ref 时回退到 `<parentBase>/<agentId>.jsonl`（再按 header id 兜底），已结束子代理的转录因此仍可读。侧栏子会话行标注 agent 名，`agentCount` 改按磁盘父子关系统计。
+
+## 启动剖析：量什么，数字怎么看（2026-11-16）
+
+三个开关覆盖整条启动链，默认都不产生输出：
+
+- `MUSEPI_STARTUP_PERF=1` —— Electron 主进程经 `markStartup` 输出 `[startup-performance] <阶段> +<ms>`（`app.ready`、`window.created`、`renderer.dom-ready`、`renderer.loaded`），渲染端通过 `startup-mark` IPC 转发自己的标记（`boot.start`、`daemon.probed`、`daemon.spawned`、`daemon.connected`、`version.gate`、`boot.done`）。daemon 的 `serve` 输出 `[serve] run.start|parsed|daemon.started`，计时从进程启动开始——第一个标记就是调用方平时看不到的模块加载成本。
+- `MUSEPI_EXTENSIONS_PROFILE=1` —— `extensions.list` 打印分段耗时（`extensions`、`compat`、`presets`、`components`、`slots`、`toolViews`、`widgets`、`statusBar`、`skins`）。
+- `[daemon] bound on :<port> in <ms>` —— `daemon.cjs` 每次 spawn 都会打印。
+
+开发树在 Windows 上的参考值（构建期构件落地之后）：daemon **约 4.2s 模块加载 + 约 0.6s 装配**（打包可执行文件不付逐文件源码解析的代价），`window.created` **1.0–1.3s**，首次 `extensions.list` **约 0.5s** 且编译数为 0，热机 `boot.done` **约 4.3s**。单次测量当噪声看：同一份构建在同一台机器上出现过 4s 与 34s，取决于残留 daemon 与文件缓存状态，连续三次一致才算结论。
+
+某个阶段看起来慢时，先查下面两种模式——它们都在这里吃到过秒级代价：对**陈旧发现文件**的等待（记录着端口却没人监听，应立即判负而不是重试），以及**上限过长**的能力探测（超时本身变成了启动的等待）。构件原点、兼容渲染端原点、daemon 端口都属于第一种。

@@ -6,7 +6,8 @@
 	"type": "module",
 	"musepi": {
 		"icon": "✦",
-		"description": "Skills / plugins / marketplace navigation in the rail's sidebar slot.",
+		"label": "MusePi Capability Panel",
+		"description": "Capability-center second-tier sidebar panel: skills, plugins and marketplace navigation with counts.",
 		"extensions": ["./index.ts"]
 	}
 }

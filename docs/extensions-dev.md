@@ -499,6 +499,26 @@ export default async function (pi: ExtensionAPI) {
 - 生效语义:`restart: "none"` 字段每次调用现读——GUI 表单改完立即可见;`session` 字段在扩展加载时快照,新会话/重载后生效;`daemon` 字段约定需重启 daemon。
 - 存储落点:`<agentDir>/extensions/plugin-config.json`,键空间与 `disabledExtensions` 一致(`extension-module:<name>`)。
 
+### 13.1 插件名字的本地化(`locale/<tag>.json`,dsh parity,2026-11-15)
+
+插件在「设置 → 扩展与插件」里的**名称与说明**可以按语言各写一份,界面按自己的语言挑(daemon 不挑,一份快照同时服务中文 TUI 与英文 GUI):
+
+```
+my-plugin/
+├── package.json          musepi.label / musepi.description = en 兜底
+└── locale/
+    ├── zh-CN.json        { "meta": { "title": "看板", "description": "看板卡片" } }
+    └── ja.json           { "meta": { "title": "ボード" } }
+```
+
+- **文件名即语言标签**(`zh-CN.json`、`ja.json`),不像语言标签的文件被忽略并记一条 warn。
+- `musepi.label` / `musepi.description` 继续是 `en` 兜底:**没有 locale 目录是常态**,这类包行为不变,所以采用它是增量的。
+- 只有声明了 locale 文件的包才会在 `extensions.list` 里带 `displayNameI18n` / `descriptionI18n`;没有文件时不发冗余映射。
+- 解析顺序:完整标签 → 主语言子标签 → `en` → 模块名;大小写无关。实现见 `packages/wire/src/plugin-config.ts` 的 `resolveLocalizedText()`。
+- 一个坏文件不影响其它语言,也不阻断扩展登记(与 §13 同一条 fail-soft 纪律)。
+- 随产品发布的 52 个内置插件(40 个会话插件包 + 12 个桌面 Cordis 插件)已全部双语;新插件漏写文案由 `test/bundled-plugin-locales.test.ts` 拦下。
+- `ctx.setLabel` 不是界面名:它填的 `Extension.label` 只喂给**模型**的扩展清单(order 25)和旧的 `plugins.list`,所以是单一语言的稳定名。装载器默认从 `musepi.label` 取它,第一方插件不要再自己声明(会漂移);`test/extension-label.test.ts` 守着。
+
 契约与类型:`ConfigFieldDesc`/`PluginResources`/`coerceConfigValues` 见 `packages/wire/src/plugin-config.ts`;存储见 `packages/coding-agent/src/extensibility/extensions-center/plugin-config-store.ts`;运行时读取见 `ConcreteExtensionAPI.config`(loader.ts)。
 
 ## 14. 插件安装(spec 安装与能力报告,2026-10-06)
@@ -838,6 +858,14 @@ export const EXTENSION_HOST_MODULES = [
 
 The daemon artifact compiler (`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`) consults this table for every resolved import. A match becomes a shim that reads `window.MusePiHostModules[key]`; **no source of the host module enters the bundle**. The shim throws when the table or the key is missing, so a host that does not publish the contract fails at import instead of running against a stale copy. Non-matching imports, including pure helpers such as `lib/leaf-walk`, are still bundled normally. React and React DOM keep their separate mapping to `window.MusePiReact*`.
 
+Compiled artifacts are cached on disk (`~/.musepi/cache/extension-artifacts`, relocated by `MUSEPI_EXTENSION_ARTIFACT_CACHE`) and revalidated against the newest mtime under `apps/*/src` and `packages/*/src` plus the entry's own mtime and size. A daemon that just started therefore serves what the previous one compiled instead of rebuilding the whole composition; any source edit invalidates every artifact that could embed it. Writing the cache is best-effort — an unwritable directory costs a slow boot, never a failed compile.
+
+Delivery is per resource. A caller that passes `delivery: "url"` (the desktop does) gets one URL per module and one per component stylesheet instead of their bytes: the daemon publishes them on a loopback artifact origin — `GET /extensions/artifacts/<key>` with `cache-control: no-cache`, a content ETag and `304` on `If-None-Match`, plus the CORS header a `file://` shell needs, and the resource's own content type — and a slot fetches only what it is about to mount. The origin's port is recorded in `~/.musepi/run/artifacts.port` and reused, so a resource URL survives the daemon restart and the renderer revalidates it instead of downloading it again. Callers that omit the parameter (relay transports, the compat shell) keep receiving inline code.
+Shared chunks across the artifact set were measured before adopting them: one build over all 19 entries with `splitting` emits 379 outputs totalling 33.5 MB against ~40 MB of per-entry artifacts — about 15%, because the heavy libraries differ per surface (chart/mermaid/katex in the side panel, konva/xterm/katex in chat) and the stylesheets stay per-entry. That saving did not justify flattening the delivery contract into a chunk namespace.
+
+A host that builds its own plugin surfaces can publish them instead of letting the daemon compile at boot. `apps/desktop/scripts/build-plugins.ts` (the app's `build:plugins` step) compiles every surface a first-party plugin declares — `page.tsx`, `rail.tsx`, `settings.tsx`, `host.tsx`, and the bundled plugins' `ui/*` — with the daemon's own `componentBuildConfig`, and writes `dist/plugins/<plugin>-<file>.js` plus a manifest. The daemon reads that manifest through `MUSEPI_PLUGIN_ARTIFACTS` and serves the file when the manifest still describes the inputs (entry mtime and size, plus the workspace source stamp), falling back to an on-demand compile for anything the pass did not cover — third-party plugins, or a source edit since the build. The pass is a build-time optimization only: it changes no contract, and a stale or missing manifest is the pre-existing path.
+ The same pass lifts each plugin's slot declarations, so the daemon assembles the surface from build output instead of mounting every plugin's module graph on the first registry call.
+
 ### Renderer
 
 `apps/desktop/src/lib/host-modules.ts` is the one place that binds keys to instances:
@@ -853,6 +881,8 @@ const hostModules = {
 `satisfies` makes a contract entry without a bound instance a type error, and a key without a contract entry a compile error. `exposeHostModules()` publishes the table as `window.MusePiHostModules` before any compiled component mounts. The older `window.MusePiPromptDialog` and `window.MusePiManagedBrowserHost` globals remain aliases of the same namespace objects, so already-compiled bundles keep reading host state.
 
 `slot-host` is the one entry that registers itself rather than being imported by `host-modules.ts`: `slot-host.tsx` already imports `exposeHostModules` to install the browser bridge, so importing it back from the table would create a cycle. It registers its namespace when the module loads, and the app imports it before any compiled component mounts.
+
+Because that entry is a namespace, the rewrite reads a property: any export missing from `slotHostBindings` is `undefined` at the plugin's call site, and the component throws on first render instead of at import. Every export a plugin may import must be registered; React is the one exception, since it arrives through `window.MusePiReact*`. `test/host-modules.test.ts` keeps the module's export list and the table in agreement.
 
 ### Current entries
 

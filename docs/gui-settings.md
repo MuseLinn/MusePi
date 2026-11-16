@@ -38,6 +38,7 @@ gui-main (flex ROW)
 - **Content column**: 840px centered, symmetric side margins; padding `calc(32px * density)` / `calc(48px * density)`.
 - **Sections**: `.gui-settings-section` (1px border-t divider, no divider on the first section) + title/description; field rows `.gui-settings-field` (224px label-column grid, right-aligned controls); toggle rows `.gui-settings-row`.
 - Sidebar nav items, group titles, and dropdown controls were all ported following openchamber 1.18 styling.
+- **One page, several groups**: 会话与记忆 is the first merged page. Its nav row (`session-memory`) owns three groups switched by a segmented control — session behaviour plus next-input suggestions, the memory backend, and starter prompts. Memory keeps its own pane because it carries a backend, counters and maintenance actions. The retired ids `sessions` / `memory` / `suggestions` stay valid as capability aliases (`lib/settings-nav.ts`), and an extension slot `settings.tab.sessions` / `settings.tab.memory` renders inside its group instead of claiming the whole page.
 
 ## 3. Theme System (Three Orthogonal Axes)
 

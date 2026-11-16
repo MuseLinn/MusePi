@@ -250,6 +250,13 @@ equivalence:
 
 被禁用或未认证的 provider 会被跳过。
 
+歧义不静默决定：
+
+- 裸 id 被多个 provider 提供时，调用方已知当前 provider 就在其中解析；否则告警写明选中的 `provider/id` 和至多四个候选。
+- 只在更长 id 里作为前缀出现的 pattern（catalog 只有 `gpt-5.4-mini` 时的 `gpt-5.4`）不算命中，报告最近候选而不是静默降级。
+- 显式 provider 前缀保留该 provider 内的简写匹配（`openrouter/qwen`）。
+- 自动回退会提示前后两个选择器及原因（请求失败、额度用尽、额度进入保留区、Fast 变体降级）。
+
 Session 状态与 transcript 仍记录实际执行该轮的 concrete provider/model。
 
 Provider 默认值 vs 每模型覆盖：

@@ -6,7 +6,8 @@
 	"type": "module",
 	"musepi": {
 		"icon": "▤",
-		"description": "在设置中管理历史会话：按项目、状态与更新时间筛选，搜索并批量归档、恢复或删除会话。",
+		"label": "MusePi Session Manager",
+		"description": "Manage past sessions in Settings: filter by project, status and update time, search, and bulk archive, restore or delete.",
 		"extensions": ["./index.ts"]
 	}
 }

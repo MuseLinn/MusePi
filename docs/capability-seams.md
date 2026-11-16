@@ -17,8 +17,8 @@
 | GUI 渲染侧（widget/插槽/节点 kind） | `packages/client-core/src/widgets/registry.ts`、`packages/collab-proto/src/extension-slots.ts` | 各文件头部 |
 | 编译插件的宿主模块表 | `packages/collab-proto/src/extension-host-modules.ts`（`EXTENSION_HOST_MODULES` / `matchExtensionHostModule`） | 同文件头部；渲染端实例表见 `apps/desktop/src/lib/host-modules.ts` |
 | Android 模拟器插件 | `packages/coding-agent/src/bundled-plugins/android-emulator/index.ts`（扩展隔离的 RPC / `android_emulator`） | 同文件头部 |
-| 可视化插件（卡片 + 内联页面） | `packages/coding-agent/src/bundled-plugins/visuals/index.ts`（`widget` 工具 / 类型表） | 同文件头部 |
-| 看板插件 | `packages/coding-agent/src/bundled-plugins/board/index.ts`（`board` 工具 / 看板存储） | 同文件头部 |
+| 生成式 UI 插件（会话可视化：`ui` 块 + 内联页面） | `packages/coding-agent/src/bundled-plugins/visuals/index.ts`（`widget` 工具 / `provide: "genui"`） | 同文件头部 |
+| 看板插件（依赖 `genui`：卡片类型表 + 持久化画布） | `packages/coding-agent/src/bundled-plugins/board/index.ts`（`board` 工具 / `catalog.ts` / 看板存储） | 同文件头部 |
 | Cordis preset 组合运行时 | `packages/coding-agent/src/extensibility/plugins/preset-runtime.ts`（`CordisPresetRuntime`） | 同文件头部 |
 | 预设自带 MCP 服务器 / 文件技能 | `packages/coding-agent/src/bundled-plugins/mcp-client/index.ts`（一行一服务器，`session_start` 内 `registerMcpServer`）、`packages/coding-agent/src/bundled-plugins/skill-filesystem/index.ts`（`roots` 快照 → `registerSkill`） | 各包入口头部；均为 `presetOnly`，随 preset generation 装载与回收 |
 | Cordis 会话页 | `apps/desktop/src/plugins/chat-view/index.ts`（`app.chat`） | 同文件头部 |

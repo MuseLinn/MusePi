@@ -24,7 +24,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: CapabilityPanelPluginApi): void {
-	ctx.setLabel("MusePi 能力中心左栏");
 	ctx.slots.register({
 		slot: "sidebar.panel.capability",
 		moduleUrl: "./page.tsx",

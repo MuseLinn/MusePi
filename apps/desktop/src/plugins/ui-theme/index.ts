@@ -25,7 +25,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: UiThemePluginApi): void {
-	ctx.setLabel("MusePi 主题");
 	// The rail is a window-level fixed layer; its component portals to body.
 	ctx.slots.register({ slot: "app.overlay", moduleUrl: "./rail.tsx", label: "滚动进度轨" });
 	// The skin picker/import/always-visible section sits in the built-in

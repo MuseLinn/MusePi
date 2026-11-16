@@ -11,7 +11,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: ManagedBrowserPluginApi): void {
-	ctx.setLabel("MusePi 内置浏览器");
 	ctx.slots.register({ slot: "browser.host", moduleUrl: "./host.tsx", label: "浏览器宿主" });
 	ctx.slots.register({
 		slot: "panel.tab.browser",

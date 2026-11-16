@@ -104,8 +104,6 @@ export function MemorySection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const backend = status?.status?.backend;
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("settings.memorySettings")}</h2>
-			<p className="gui-settings-page-desc">{t("settings.memorySettingsDescription")}</p>
 			<SchemaTabSection
 				rpc={rpc}
 				tabs={["memory"]}

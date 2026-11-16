@@ -1,5 +1,6 @@
-import { type TranslationKey, t } from "@musepi/client-core";
+import { type TranslationKey, t, useLocale } from "@musepi/client-core";
 import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
+import type { LocalizedPluginText } from "@musepi/pi-wire";
 import { ChevronDown as ChevronDownIconData, ChevronRight as ChevronRightIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -10,6 +11,8 @@ import type { RpcClient } from "../lib/rpc";
 import {
 	ConfigFormSlotMount,
 	type ExtensionItem,
+	extensionDescription,
+	extensionDisplayName,
 	type ProviderInfo,
 	SETTINGS_ITEM_SLOT_PREFIX,
 	type SlotComponent,
@@ -110,6 +113,7 @@ function OverviewView({
 		kind: string;
 		name: string;
 		displayName?: string;
+		displayNameI18n?: LocalizedPluginText;
 		loadError?: string | null;
 		state: string;
 		source: { provider: string };
@@ -122,6 +126,7 @@ function OverviewView({
 	onToggleProvider(p: { id: string; displayName: string; enabled: boolean }): void;
 	onForceEnable(e: { id: string }): void;
 }): ReactNode {
+	const locale = useLocale();
 	const failed = extensions.filter(e => e.loadError);
 	const shadowed = extensions.filter(e => e.state === "shadowed");
 	const attention = [...failed, ...shadowed].slice(0, 6);
@@ -148,7 +153,7 @@ function OverviewView({
 			label: t("tools.extStatFailed"),
 			value: failed.length,
 			tone: failed.length > 0 ? "err" : undefined,
-			sub: failed[0]?.displayName ?? failed[0]?.name,
+			sub: failed[0] ? extensionDisplayName(failed[0], locale) : undefined,
 		},
 		{
 			label: t("tools.extStatUnhosted"),
@@ -185,7 +190,7 @@ function OverviewView({
 									className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : " gui-ext-dot--shadowed"}`}
 								/>
 								<span className="gui-ext-overview-row-text">
-									<span className="gui-ext-overview-row-title">{e.displayName ?? e.name}</span>
+									<span className="gui-ext-overview-row-title">{extensionDisplayName(e, locale)}</span>
 									{e.loadError && <span className="gui-ext-overview-row-sub">{e.loadError}</span>}
 								</span>
 								{e.loadError ? (
@@ -254,6 +259,7 @@ function OverviewView({
 }
 
 export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	const locale = useLocale();
 	const data = useExtensionRegistry(rpc);
 	const extensions = data?.extensions ?? null;
 	const tabs = data?.tabs ?? [];
@@ -313,7 +319,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	// 与扩展中心条目的 path 匹配)。
 	const extSettingCards = useMemo(() => {
 		const enabled = new Set((data?.extensions ?? []).filter(e => e.state === "active").map(e => e.path));
-		const nameOf = new Map((data?.extensions ?? []).map(e => [e.path, e.displayName || e.name]));
+		const nameOf = new Map((data?.extensions ?? []).map(e => [e.path, extensionDisplayName(e, locale)]));
 		const byExt = new Map<string, SlotComponent[]>();
 		for (const c of data?.components ?? []) {
 			// Per-row config cards (`settings.item.<extId>`) live here. The
@@ -331,7 +337,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		return [...byExt.entries()]
 			.map(([extId, items]) => [extId, items, nameOf.get(extId) ?? extId.split(/[\\/]/).pop() ?? extId] as const)
 			.sort((a, b) => a[2].localeCompare(b[2]));
-	}, [data]);
+	}, [data, locale]);
 	const extSettingsScope = rpc
 		? {
 				get: (keys: string[]) => rpc.request<Record<string, unknown>>("settings.get", { keys }),
@@ -455,12 +461,19 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		return (extensions ?? []).filter(e => {
 			if (tab !== "all" && e.source.provider !== tab) return false;
 			if (!q) return true;
-			return [e.name, e.displayName, e.description ?? "", e.trigger ?? "", e.source.providerName, e.kind]
+			return [
+				e.name,
+				extensionDisplayName(e, locale),
+				extensionDescription(e, locale) ?? "",
+				e.trigger ?? "",
+				e.source.providerName,
+				e.kind,
+			]
 				.join(" ")
 				.toLowerCase()
 				.includes(q);
 		});
-	}, [extensions, tab, query]);
+	}, [extensions, tab, query, locale]);
 
 	// Tree: one node per provider (native included since M2.1 — it renders
 	// without a master switch, same as the inventory provider tabs). Empty
@@ -776,7 +789,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																				<span
 																					className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
 																				/>
-																				<span className="min-w-0 flex-1 truncate">{e.name}</span>
+																				<span className="min-w-0 flex-1 truncate" title={e.name}>
+																					{extensionDisplayName(e, locale)}
+																				</span>
 																				{e.loadError && (
 																					<span className="gui-ext-item-tag gui-ext-item-tag--err">
 																						{t("tools.extLoadFailed")}
@@ -842,7 +857,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 							<div className="gui-ext-detail">
 								{selected ? (
 									<>
-										<div className="gui-ext-detail-name">{selected.displayName}</div>
+										<div className="gui-ext-detail-name">{extensionDisplayName(selected, locale)}</div>
 										<div className="gui-ext-detail-meta">
 											{t("tools.extensionType")}: {kindLabel(selected.kind)}
 											{isGuiKind(selected) && (
@@ -852,7 +867,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 												<span className="gui-ext-item-tag">{t("tools.extReadOnly")}</span>
 											)}
 										</div>
-										{selected.description && <p className="gui-ext-detail-desc">{selected.description}</p>}
+										{extensionDescription(selected, locale) && (
+											<p className="gui-ext-detail-desc">{extensionDescription(selected, locale)}</p>
+										)}
 										{selected.trigger && (
 											<div className="gui-ext-detail-section">
 												<div className="gui-ext-detail-label">{t("tools.trigger")}</div>

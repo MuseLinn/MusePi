@@ -6,7 +6,8 @@
 	"type": "module",
 	"musepi": {
 		"icon": "✦",
-		"description": "Browse and manage capabilities at package and bundle granularity.",
+		"label": "MusePi Capability Center",
+		"description": "Skills, package/bundle management, and marketplace in one Cordis-owned page.",
 		"extensions": ["./index.ts"]
 	}
 }

@@ -40,8 +40,12 @@ describe("memory Cordis plugin", () => {
 				availability: "always",
 			},
 		]);
+		// The memory page is no longer its own nav row: the merged 会话与记忆 page
+		// owns the row, and this slot renders inside its memory group. The slot
+		// still must not appear as a duplicate extension row.
 		const items = navGroups([{ slot: "settings.tab.memory", label: "记忆" }]).flatMap(group => group.items);
 		expect(items.some(item => item.id === "ext:settings.tab.memory")).toBe(false);
-		expect(items.find(item => item.id === "memory")?.label).toBe(t("settings.memorySettings"));
+		expect(items.find(item => item.id === "memory")).toBeUndefined();
+		expect(items.find(item => item.id === "session-memory")?.label).toBe(t("settings.sessionMemory"));
 	});
 });

@@ -1,6 +1,7 @@
 import { isTopModal, SpotlightCard, t, useModalFocus } from "@musepi/client-core";
 import { WidgetErrorBoundary } from "@musepi/client-core/src/widgets/error-boundary";
 import { WidgetFit } from "@musepi/client-core/src/widgets/fit";
+import { setWidgetResourceResolver, WidgetScopeContext } from "@musepi/client-core/src/widgets/html";
 import { type BoardWidget, useWidgetRegistryVersion, widgetDef } from "@musepi/client-core/src/widgets/registry";
 import { hasTask, type WidgetTask } from "@musepi/client-core/src/widgets/task";
 import {
@@ -366,6 +367,34 @@ export interface BoardRpc {
 	request(method: string, params?: Record<string, unknown>): Promise<unknown>;
 }
 
+/**
+ * A card may read files from its own workspace. The resolver is installed once
+ * for the whole board surface and answers through the daemon, which pins every
+ * path to `~/.musepi/boards/<boardId>/<widgetId>/` — the GUI never decides what
+ * is in scope.
+ */
+function useBoardResourceBridge(rpc: BoardRpc | undefined): void {
+	useEffect(() => {
+		if (!rpc) return;
+		setWidgetResourceResolver(async (scope, op, path) => {
+			if (op === "list") {
+				const res = await rpc.request("board.resource.list", {
+					boardId: scope.boardId,
+					widgetId: scope.widgetId,
+				});
+				return { entries: (res as { entries?: unknown[] } | null)?.entries ?? [] };
+			}
+			const res = await rpc.request("board.resource.read", {
+				boardId: scope.boardId,
+				widgetId: scope.widgetId,
+				path,
+			});
+			return { text: (res as { text?: string } | null)?.text ?? "" };
+		});
+		return () => setWidgetResourceResolver(null);
+	}, [rpc]);
+}
+
 export function BoardPage({
 	onBack,
 	rpc,
@@ -385,6 +414,7 @@ export function BoardPage({
 	cwd?: string;
 }): ReactNode {
 	useWidgetRegistryVersion();
+	useBoardResourceBridge(rpc);
 	const [boards, setBoards] = useState<BoardData[]>(() => loadBoards());
 	// Daemon persistence: boards live at ~/.musepi/boards/boards.json (the
 	// GUI, the agent and other windows share one store). localStorage is
@@ -1327,7 +1357,11 @@ export function BoardPage({
 									<div className="gui-board-card-body">
 										<WidgetFit>
 											<WidgetErrorBoundary>
-												<def.Component data={w.data} update={patch => updateWidgetData(w.id, patch)} />
+												<WidgetScopeContext.Provider
+													value={{ boardId: active?.id ?? "main", widgetId: w.id }}
+												>
+													<def.Component data={w.data} update={patch => updateWidgetData(w.id, patch)} />
+												</WidgetScopeContext.Provider>
 											</WidgetErrorBoundary>
 										</WidgetFit>
 									</div>

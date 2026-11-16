@@ -144,7 +144,7 @@ export function AttachMenu({
 		let alive = true;
 		setPlugins({ kind: "loading" });
 		void rpc
-			.request<{ extensions: ExtensionItem[] }>("extensions.list", {})
+			.request<{ extensions: ExtensionItem[] }>("extensions.list", { components: false })
 			.then(res => {
 				if (alive) setPlugins({ kind: "ready", data: (res?.extensions ?? []).filter(e => e.state === "active") });
 			})

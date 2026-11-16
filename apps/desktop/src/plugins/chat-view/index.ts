@@ -20,7 +20,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: ChatViewPluginApi): void {
-	ctx.setLabel("MusePi 会话页");
 	ctx.slots.register({
 		slot: "app.chat",
 		moduleUrl: "./page.tsx",

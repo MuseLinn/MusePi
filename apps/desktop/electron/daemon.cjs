@@ -234,13 +234,25 @@ async function startInternal(port, env = {}) {
 		console.error("[daemon] adopt existing listener on :" + port);
 		return port;
 	}
+	// A fresh daemon means a fresh listener: the cached owner is no longer true.
+	listenerPidCache.clear();
 	const { program, args } = daemonCommand(port);
+	const spawnT0 = Date.now();
 	console.error("[daemon] start", program, args.join(" "));
 	let daemonStdout = "";
 	let daemonStderr = "";
 	const pluginRoots = packagedPluginRoots();
 	const daemonEnv = { ...process.env, MUSEPI_VERSION: guiVersion(), ...env };
 	if (pluginRoots.length > 0) daemonEnv.MUSEPI_BUNDLED_PLUGIN_ROOTS = pluginRoots.join(path.delimiter);
+	// The app compiles its own plugin surfaces during `bun run build`
+	// (scripts/build-plugins.ts). Point the daemon at that manifest so a boot
+	// serves the built artifacts instead of recompiling the whole composition —
+	// the compile stays as the fallback for anything the pass did not cover
+	// (third-party plugins, or a source edit since the build).
+	const prebuiltPlugins = path.join(__dirname, "..", "dist", "plugins");
+	if (!__dirname.includes("app.asar") && fs.existsSync(path.join(prebuiltPlugins, "manifest.json"))) {
+		daemonEnv.MUSEPI_PLUGIN_ARTIFACTS ??= prebuiltPlugins;
+	}
 	const child = spawn(program, args, {
 		detached: true,
 		stdio: ["ignore", "pipe", "pipe"],
@@ -267,7 +279,7 @@ async function startInternal(port, env = {}) {
 		// Only accept OUR port — a stale ws.port from another daemon must not
 		// satisfy the wait (the spawned process writes its own --port).
 		if (bound === port && (await portOpen(bound))) {
-			console.error("[daemon] bound on :" + bound);
+			console.error(`[daemon] bound on :${bound} in ${Date.now() - spawnT0}ms`);
 			// Shell-disabled: the daemon does not serve guest-client, so a
 			// stale web.port from an earlier shell-enabled daemon must not
 			// send the GUI to the collab-client renderer next launch.
@@ -329,7 +341,25 @@ async function start(port, env = {}) {
  *  so daemon-restart silently adopts the old listener instead of replacing it.
  *  macOS/Linux: lsof, with `-iTCP:<port>` kept as ONE argument (splitting
  *  it makes lsof treat the port as a file name and fail). */
+/**
+ * Cache for `listenerPid`: on Windows it shells out to netstat and, failing
+ * that, PowerShell — seconds of process spawn for a question whose answer only
+ * changes when a daemon restarts. The boot gate asks once; without the cache
+ * that spawn sat directly on the startup path.
+ */
+const listenerPidCache = new Map();
+const LISTENER_PID_TTL_MS = 10_000;
+
 function listenerPid(port) {
+	const cached = listenerPidCache.get(port);
+	if (cached && Date.now() - cached.at < LISTENER_PID_TTL_MS) return Promise.resolve(cached.pid);
+	return resolveListenerPid(port).then(pid => {
+		listenerPidCache.set(port, { at: Date.now(), pid });
+		return pid;
+	});
+}
+
+function resolveListenerPid(port) {
 	return new Promise(resolve => {
 		if (process.platform === "win32") {
 			let completed = false;
@@ -876,7 +906,9 @@ function readManagedDaemons() {
  * frees its port instead of colliding with the replacement.
  */
 async function reapOrphanedDaemons() {
+	const reapT0 = Date.now();
 	const entries = readManagedDaemons();
+	console.error(`[daemon] reaper: ${entries.length} record(s) in ${Date.now() - reapT0}ms`);
 	let reaped = 0;
 	for (const entry of entries) {
 		let drop = false;

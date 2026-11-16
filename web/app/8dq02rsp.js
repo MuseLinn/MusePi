@@ -1680,7 +1680,7 @@ window.musepiWidgetData = window.__WIDGET_DATA__;
 ${E}
 window.musepiWidgetTokens = ${JSON.stringify(C)};
 window.DaimonCanvas = window.DaimonCanvas || { canvasId: ${JSON.stringify(f)}, mountId: ${JSON.stringify(p)} };
-function ompReportHeight() {
+function musepiReportHeight() {
   try {
     parent.postMessage({ type: "musepi-widget-resize", mountId: window.DaimonCanvas && window.DaimonCanvas.mountId, height: document.documentElement.scrollHeight }, "*");
   } catch (err) {}
@@ -1693,9 +1693,9 @@ window.musepiSubmit = function (text, data) {
     parent.postMessage({ type: "musepi-widget-submit", text: String(text == null ? "" : text), data: data === undefined ? undefined : data }, "*");
   } catch (err) {}
 };
-window.addEventListener("load", ompReportHeight);
-window.addEventListener("resize", ompReportHeight);
-new MutationObserver(ompReportHeight).observe(document.documentElement, { subtree: true, childList: true, attributes: true });
+window.addEventListener("load", musepiReportHeight);
+window.addEventListener("resize", musepiReportHeight);
+new MutationObserver(musepiReportHeight).observe(document.documentElement, { subtree: true, childList: true, attributes: true });
 window.addEventListener("message", function (e) {
   var d = e.data;
   if (d && d.type === "musepi-widget-answered") {

@@ -6,7 +6,8 @@
 	"type": "module",
 	"musepi": {
 		"icon": "▥",
-		"description": "右侧面板壳、标签、分栏与最大化，独立于会话和浏览器页面。",
+		"label": "MusePi Panel",
+		"description": "Right-panel shell, tabs, split layout, and maximize behavior.",
 		"extensions": ["./index.ts"]
 	}
 }

@@ -2,6 +2,12 @@ import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/cl
 import { AsyncJobBar } from "@musepi/client-core/src/components/shell/AsyncJobBar";
 import { normalizeQueueSnapshot, type QueueGroup, type QueueSnapshot } from "@musepi/client-core/src/lib/message-queue";
 import {
+	clearPromptSuggestion,
+	getPromptSuggestion,
+	subscribePromptSuggestions,
+	visiblePromptSuggestion,
+} from "@musepi/client-core/src/lib/prompt-suggestion";
+import {
 	composeDisplayContextPrompt,
 	type DisplayContext,
 	type MessageDisplayContext,
@@ -10,7 +16,7 @@ import {
 } from "@musepi/client-core/src/messages/display-context";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { KeyboardEvent, ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { t } from "../i18n/index.js";
 import type { CompanionMood, CompanionState } from "../lib/companion";
 import type { ComposerAttachRef } from "../lib/composer-attach";
@@ -469,6 +475,33 @@ export function Composer({
 			return false;
 		}
 	};
+
+	// ── Next-input candidate (`suggestion` envelope) ──────────────────────
+	// The daemon predicts the user's next message after a turn completes; it
+	// occupies this composer's placeholder only while the draft is empty. A
+	// welcome composer is not a session's input, so it never shows one.
+	const promptSuggestion = useSyncExternalStore(subscribePromptSuggestions, () =>
+		sessionId ? getPromptSuggestion(sessionId) : null,
+	);
+	const shownSuggestion = visiblePromptSuggestion(promptSuggestion, {
+		draftEmpty: text.length === 0,
+		writable: !welcome,
+		busy: working,
+		blocked: false,
+	});
+	const acceptPromptSuggestion = useCallback(
+		(value: string): void => {
+			setText(value);
+			requestAnimationFrame(() => {
+				const ta = taRef.current;
+				if (!ta) return;
+				ta.focus();
+				ta.setSelectionRange(value.length, value.length);
+				autosize(ta);
+			});
+		},
+		[taRef],
+	);
 
 	// ── Goal / plan mode + todo progress (TUI /goal /plan parity) ─────────
 	// Extracted to composer/use-modes; destructured names match the
@@ -1523,6 +1556,10 @@ export function Composer({
 				setText("");
 				setAttachments([]);
 				setEnhance("idle");
+				// The candidate described the turn that just ended, not the one
+				// this message starts: keeping it would offer a reply to a context
+				// the user has already moved past.
+				if (sessionId) clearPromptSuggestion(sessionId);
 				// Clear re-measures: the controlled value="", onChange never fires for
 				// the programmatic clear, so the stretched inline height would stick
 				// (send with a multi-line draft leaves the box tall). rAF runs after
@@ -1611,6 +1648,20 @@ export function Composer({
 		// IME composition: every key (including the confirming Enter) belongs
 		// to the editor — never run completion or submit while composing.
 		if (composingRef.current || e.nativeEvent.isComposing || e.keyCode === 229) {
+			return;
+		}
+		// Accept the next-input candidate. Tab is the advertised key; ArrowRight
+		// covers keyboards where Tab moves focus instead.
+		if (
+			shownSuggestion !== null &&
+			!e.shiftKey &&
+			!e.ctrlKey &&
+			!e.metaKey &&
+			!e.altKey &&
+			(e.key === "Tab" || e.key === "ArrowRight")
+		) {
+			e.preventDefault();
+			acceptPromptSuggestion(shownSuggestion);
 			return;
 		}
 		// Attachment keyboard flow (WeChat parity): Backspace/Delete on an
@@ -2479,15 +2530,23 @@ export function Composer({
 						}}
 						onKeyDown={onKeyDown}
 						placeholder={
-							working
-								? t("general.agentWorkingSend.info")
-								: isDesignSession
-									? t("composer.designEmptyPlaceholder")
-									: t("composer.askAnythingCommands.info")
+							shownSuggestion !== null
+								? ""
+								: working
+									? t("general.agentWorkingSend.info")
+									: isDesignSession
+										? t("composer.designEmptyPlaceholder")
+										: t("composer.askAnythingCommands.info")
 						}
 						spellCheck={spellcheckEnabled()}
 						autoComplete="off"
 					/>
+					{shownSuggestion !== null && (
+						<span className="gui-composer-suggestion" aria-hidden>
+							<span className="gui-composer-suggestion-text">{shownSuggestion}</span>
+							<kbd className="gui-composer-suggestion-key">{t("composer.promptSuggestionAccept")}</kbd>
+						</span>
+					)}
 				</div>
 				{renderFloatMenu(
 					<CompletionMenus

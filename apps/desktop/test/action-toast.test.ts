@@ -1,4 +1,4 @@
-/** Action-toast view contracts. The store contract lives in client-core. */
+/** Action-toast view contracts. Store semantics live in client-core's own suite. */
 import { afterAll, afterEach, beforeAll, describe, expect, setSystemTime, test, vi } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
@@ -57,6 +57,14 @@ function toastElement(): HTMLElement {
 	return element;
 }
 
+function activeCount(): number {
+	return getToasts().length;
+}
+
+function rows(): HTMLElement[] {
+	return [...document.querySelectorAll<HTMLElement>(".gui-action-toast")];
+}
+
 function hover(element: HTMLElement, entering: boolean): void {
 	act(() => {
 		element.dispatchEvent(
@@ -70,6 +78,12 @@ function hover(element: HTMLElement, entering: boolean): void {
 
 function advance(ms: number): void {
 	act(() => vi.advanceTimersByTime(ms));
+}
+
+function closeFirst(): void {
+	const close = toastElement().querySelector<HTMLButtonElement>(".gui-action-toast-close");
+	if (!close) throw new Error("toast close button did not render");
+	act(() => close.click());
 }
 
 afterEach(() => {
@@ -86,34 +100,42 @@ afterEach(() => {
 });
 
 describe("ActionToastStack", () => {
-	test("owns the replacement registration after a stale DOM is replaced", () => {
-		expect(ownsDomRegistration).toBe(true);
+	test("a toast disappears at its lifetime", () => {
+		vi.useFakeTimers();
+		setSystemTime(10_000);
+		mountStack();
+		act(() => void pushActionToast({ message: "稍后撤销", actionLabel: "撤销" }));
+
+		advance(ACTION_TOAST_TTL_MS - 1);
+		expect(activeCount()).toBe(1);
+		advance(1);
+		expect(activeCount()).toBe(0);
 	});
 
 	test("hover freezes the remaining lifetime and leaving resumes it", () => {
 		vi.useFakeTimers();
 		setSystemTime(10_000);
 		mountStack();
-		act(() => pushActionToast({ message: "稍后撤销", actionLabel: "撤销" }));
+		act(() => void pushActionToast({ message: "稍后撤销", actionLabel: "撤销" }));
 		const toast = toastElement();
 
 		advance(2_000);
 		hover(toast, true);
 		advance(ACTION_TOAST_TTL_MS + 1_000);
-		expect(getToasts()).toHaveLength(1);
+		expect(activeCount()).toBe(1);
 
 		hover(toast, false);
 		advance(ACTION_TOAST_TTL_MS - 2_000 - 1);
-		expect(getToasts()).toHaveLength(1);
+		expect(activeCount()).toBe(1);
 		advance(1);
-		expect(getToasts()).toHaveLength(0);
+		expect(activeCount()).toBe(0);
 	});
 
-	test("focus pauses independently when the pointer leaves", () => {
+	test("focus freezes the lifetime even after the pointer leaves", () => {
 		vi.useFakeTimers();
 		setSystemTime(10_000);
 		mountStack();
-		act(() => pushActionToast({ message: "键盘撤销", actionLabel: "撤销" }));
+		act(() => void pushActionToast({ message: "键盘撤销", actionLabel: "撤销" }));
 		const toast = toastElement();
 		const action = toast.querySelector<HTMLButtonElement>(".gui-action-toast-btn");
 		const outside = document.createElement("button");
@@ -124,36 +146,61 @@ describe("ActionToastStack", () => {
 		hover(toast, true);
 		hover(toast, false);
 		advance(ACTION_TOAST_TTL_MS + 1_000);
-		expect(getToasts()).toHaveLength(1);
+		expect(activeCount()).toBe(1);
 
 		act(() => outside.focus());
 		advance(ACTION_TOAST_TTL_MS);
-		expect(getToasts()).toHaveLength(0);
+		expect(activeCount()).toBe(0);
 	});
 
-	test("a manual close dismisses a non-error toast", () => {
+	test("hovering one row freezes every visible toast, and leaving resumes them", () => {
+		vi.useFakeTimers();
+		setSystemTime(10_000);
 		mountStack();
-		act(() => pushActionToast({ message: "可关闭的通知" }));
-		const close = toastElement().querySelector<HTMLButtonElement>(".gui-action-toast-close");
-		expect(close).not.toBeNull();
+		act(() => {
+			pushActionToast({ message: "a", dedupeKey: "a" });
+			pushActionToast({ message: "b", dedupeKey: "b" });
+		});
+		hover(rows()[0], true);
+		advance(ACTION_TOAST_TTL_MS + 1_000);
+		expect(activeCount()).toBe(2);
 
-		act(() => close!.click());
-		expect(getToasts()).toHaveLength(0);
+		hover(rows()[0], false);
+		advance(ACTION_TOAST_TTL_MS);
+		expect(activeCount()).toBe(0);
 	});
 
-	test("an error is persistent and announced assertively", () => {
+	test("a replacement stays frozen while the stack is hovered", () => {
+		vi.useFakeTimers();
+		setSystemTime(10_000);
+		mountStack();
+		act(() => void pushActionToast({ message: "retrying", dedupeKey: "session:retry" }));
+		hover(toastElement(), true);
+		act(() => void pushActionToast({ message: "retrying again", kind: "info", dedupeKey: "session:retry" }));
+
+		advance(ACTION_TOAST_TTL_MS + 1_000);
+		expect(activeCount()).toBe(1);
+
+		hover(toastElement(), false);
+		advance(ACTION_TOAST_TTL_MS);
+		expect(activeCount()).toBe(0);
+	});
+
+	test("an error stays until dismissed and is announced assertively", () => {
 		vi.useFakeTimers();
 		mountStack();
-		act(() => pushActionToast({ message: "操作失败", kind: "error" }));
+		act(() => void pushActionToast({ message: "操作失败", kind: "error" }));
 		const toast = toastElement();
 		expect(toast.getAttribute("role")).toBe("alert");
 		expect(toast.getAttribute("aria-live")).toBe("assertive");
 
 		advance(60_000);
-		expect(getToasts()).toHaveLength(1);
+		expect(activeCount()).toBe(1);
+		closeFirst();
+		expect(activeCount()).toBe(0);
 	});
 
-	test("a warning expires and renders its title and technical details", () => {
+	test("a warning renders its content and expires at the warning lifetime", () => {
 		vi.useFakeTimers();
 		mountStack();
 		act(() =>
@@ -165,137 +212,98 @@ describe("ActionToastStack", () => {
 			}),
 		);
 		const toast = toastElement();
-		expect(toast.classList.contains("gui-action-toast--warning")).toBe(true);
-		expect(toast.getAttribute("role")).toBeNull();
-		expect((document.querySelector(".gui-action-toasts") as HTMLElement).getAttribute("role")).toBe("status");
 		expect(toast.querySelector(".gui-action-toast-title")?.textContent).toBe("保存失败");
+		expect(toast.querySelector(".gui-action-toast-msg")?.textContent).toBe("请检查文件权限后重试");
 		expect(toast.querySelector(".gui-action-toast-details")?.textContent).toBe("EPERM: operation not permitted");
 
 		advance(WARNING_TOAST_TTL_MS);
-		expect(getToasts()).toHaveLength(0);
+		expect(activeCount()).toBe(0);
 	});
 
-	test("a collapsed stack expands on hover and focus", () => {
+	test("every pushed toast is readable at once, up to the stack cap", () => {
 		mountStack();
 		act(() => {
 			pushActionToast({ message: "one", dedupeKey: "1" });
 			pushActionToast({ message: "two", dedupeKey: "2" });
+			pushActionToast({ message: "three", dedupeKey: "3" });
+			pushActionToast({ message: "four", dedupeKey: "4" });
 		});
-		const stack = document.querySelector(".gui-action-toasts") as HTMLElement;
-		expect(stack.dataset.expanded).toBe("false");
-		act(() => stack.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
-		expect(stack.dataset.expanded).toBe("true");
-		act(() => stack.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body })));
-		expect(stack.dataset.expanded).toBe("false");
-		act(() => (document.querySelector(".gui-action-toast-close") as HTMLButtonElement).focus());
-		expect(stack.dataset.expanded).toBe("true");
+		const texts = rows().map(row => row.querySelector(".gui-action-toast-msg")?.textContent);
+		expect(texts).toHaveLength(3);
+		expect(texts).toContain("two");
+		expect(texts).toContain("three");
+		expect(texts).toContain("four");
 	});
 
-	test("closing plays the exit class before unmounting", () => {
+	test("a dismissed row stays visible through its exit, then unmounts", () => {
 		vi.useFakeTimers();
 		mountStack();
 		act(() => void pushActionToast({ message: "bye" }));
-		act(() => (document.querySelector(".gui-action-toast-close") as HTMLButtonElement).click());
-		expect(document.querySelector(".gui-action-toast--closing")).not.toBeNull();
-		act(() => vi.advanceTimersByTime(180));
-		expect(document.querySelector(".gui-action-toast--closing")).toBeNull();
+		closeFirst();
+		expect(rows()).toHaveLength(1);
+		advance(179);
+		expect(rows()).toHaveLength(1);
+		advance(1);
+		expect(rows()).toHaveLength(0);
 	});
 
-	test("cancel runs before the toast is dismissed", () => {
+	test("the cancel action runs before the toast is dismissed", () => {
 		vi.useFakeTimers();
 		let cancelled = 0;
 		mountStack();
 		act(() => void pushActionToast({ message: "retry?", cancelLabel: "取消", onCancel: () => cancelled++ }));
-		act(() => (document.querySelector(".gui-action-toast-cancel") as HTMLButtonElement).click());
+		const cancel = toastElement().querySelector<HTMLButtonElement>(".gui-action-toast-cancel");
+		if (!cancel) throw new Error("toast cancel button did not render");
+		act(() => cancel.click());
 		expect(cancelled).toBe(1);
-		expect(getToasts()).toHaveLength(0);
-		expect(document.querySelector(".gui-action-toast--closing")).not.toBeNull();
-		act(() => vi.advanceTimersByTime(180));
-		expect(document.querySelector(".gui-action-toast")).toBeNull();
+		expect(activeCount()).toBe(0);
+		expect(rows()).toHaveLength(1);
+		advance(180);
+		expect(rows()).toHaveLength(0);
 	});
 
-	test("errors carry no countdown ring and pause freezes it", () => {
+	test("the countdown on a self-closing toast runs for exactly its lifetime", () => {
+		vi.useFakeTimers();
+		setSystemTime(10_000);
 		mountStack();
 		act(() => void pushActionToast({ message: "info" }));
-		expect(document.querySelector(".gui-toast-ring")).not.toBeNull();
-		act(() => void pushActionToast({ kind: "error", message: "bad" }));
-		const error = document.querySelector(".gui-action-toast--error") as HTMLElement;
-		expect(error.querySelector(".gui-toast-ring")).toBeNull();
-		hover(document.querySelector(".gui-action-toast") as HTMLElement, true);
-		expect((document.querySelector(".gui-action-toast") as HTMLElement).dataset.paused).toBe("true");
+		const infoRing = toastElement().querySelector<SVGSVGElement>(".gui-toast-ring");
+		expect(infoRing?.style.animationDuration).toBe(`${ACTION_TOAST_TTL_MS}ms`);
+
+		act(() => void pushActionToast({ message: "warning", kind: "warning", dedupeKey: "w" }));
+		const warning = rows().find(row => row.textContent?.includes("warning"));
+		const warningRing = warning?.querySelector<SVGSVGElement>(".gui-toast-ring");
+		expect(warningRing?.style.animationDuration).toBe(`${WARNING_TOAST_TTL_MS}ms`);
+
+		// The toast really leaves at the duration its countdown advertises.
+		advance(WARNING_TOAST_TTL_MS);
+		expect(getToasts().some(toast => toast.dedupeKey === "w")).toBe(false);
 	});
 
-	test("a focused row keeps the stack expanded after the pointer leaves", () => {
-		mountStack();
-		act(() => {
-			pushActionToast({ message: "one", dedupeKey: "1" });
-			pushActionToast({ message: "two", dedupeKey: "2" });
-		});
-		const stack = document.querySelector(".gui-action-toasts") as HTMLElement;
-		const outside = document.createElement("button");
-		document.body.appendChild(outside);
-
-		act(() => (document.querySelector(".gui-action-toast-close") as HTMLButtonElement).focus());
-		expect(stack.dataset.expanded).toBe("true");
-
-		act(() => stack.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
-		act(() => stack.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body })));
-		expect(stack.dataset.expanded).toBe("true");
-
-		act(() => outside.focus());
-		expect(stack.dataset.expanded).toBe("false");
-	});
-
-	test("hovering one row pauses every visible timer", () => {
-		vi.useFakeTimers();
-		mountStack();
-		act(() => void pushActionToast({ message: "a", dedupeKey: "a" }));
-		act(() => void pushActionToast({ message: "b", dedupeKey: "b" }));
-		hover(document.querySelectorAll(".gui-action-toast")[0] as HTMLElement, true);
-		expect(getToasts().every(toast => toast.expiresAt === Number.POSITIVE_INFINITY)).toBe(true);
-
-		const stack = document.querySelector(".gui-action-toasts") as HTMLElement;
-		act(() => stack.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body })));
-		expect(getToasts().every(toast => Number.isFinite(toast.expiresAt))).toBe(true);
-	});
-
-	test("a replacement stays paused while the stack is hovered", () => {
-		mountStack();
-		act(() => void pushActionToast({ message: "retrying", dedupeKey: "session:retry" }));
-		hover(toastElement(), true);
-		act(() => void pushActionToast({ message: "retrying again", kind: "info", dedupeKey: "session:retry" }));
-		expect(getToasts()).toHaveLength(1);
-		expect(getToasts()[0]?.expiresAt).toBe(Number.POSITIVE_INFINITY);
-
-		const stack = document.querySelector(".gui-action-toasts") as HTMLElement;
-		act(() => stack.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body })));
-		expect(Number.isFinite(getToasts()[0]?.expiresAt)).toBe(true);
-	});
-
-	test("re-pushing the same message drops its leaving row", () => {
+	test("re-pushing a source drops its still-exiting row", () => {
 		vi.useFakeTimers();
 		mountStack();
 		act(() => void pushActionToast({ message: "已归档会话" }));
-		act(() => (document.querySelector(".gui-action-toast-close") as HTMLButtonElement).click());
+		closeFirst();
 		act(() => void pushActionToast({ message: "已归档会话" }));
-		expect(document.querySelectorAll(".gui-action-toast")).toHaveLength(1);
-		expect(document.querySelector(".gui-action-toast--closing")).toBeNull();
-		act(() => vi.advanceTimersByTime(180));
-		expect(document.querySelectorAll(".gui-action-toast")).toHaveLength(1);
+		expect(rows()).toHaveLength(1);
+		advance(180);
+		expect(rows()).toHaveLength(1);
 	});
 
-	test("a re-pushed then re-closed toast leaves one closing row", () => {
+	test("closing a re-pushed toast leaves one row that then unmounts", () => {
 		vi.useFakeTimers();
 		mountStack();
 		act(() => void pushActionToast({ message: "已归档会话" }));
-		act(() => (document.querySelector(".gui-action-toast-close") as HTMLButtonElement).click());
+		closeFirst();
 		act(() => void pushActionToast({ message: "已归档会话" }));
-		act(() => (document.querySelector(".gui-action-toast-close") as HTMLButtonElement).click());
-		expect(document.querySelectorAll(".gui-action-toast")).toHaveLength(1);
-		expect(document.querySelectorAll(".gui-action-toast--closing")).toHaveLength(1);
+		closeFirst();
+		expect(rows()).toHaveLength(1);
+		advance(180);
+		expect(rows()).toHaveLength(0);
 	});
 
-	test("the polite live region exists before the first toast", () => {
+	test("the polite live region announces before the first toast", () => {
 		mountStack();
 		const stack = document.querySelector(".gui-action-toasts") as HTMLElement;
 		expect(stack.getAttribute("role")).toBe("status");

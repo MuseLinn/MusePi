@@ -1,0 +1,5 @@
+# Consistency record for input-suggestions.md / input-suggestions.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/input-suggestions
+input-suggestions.md: a4384d466a829848c530f4c8dc4c33fdb02167ce
+input-suggestions.zh-CN.md: 5d6a44552dc66052998fe04ba1a04221b55c6315

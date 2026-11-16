@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "bun:test";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { ChatView } from "../src/components/ChatView";
+import { invalidateGitStatus } from "../src/lib/git-status-cache";
 import type { RpcClient } from "../src/lib/rpc";
 import { GuiSessionStore } from "../src/lib/session-store";
 
@@ -39,7 +40,14 @@ function view(store: GuiSessionStore, sessionInfoOpen: boolean) {
 
 const sleep = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms));
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+	vi.restoreAllMocks();
+	// This file mounts the real session info card, which reads the working tree
+	// through the process-wide git status cache. A leftover entry would answer
+	// another file's `git.status` tests from here instead of its own handler.
+	invalidateGitStatus();
+	localStorage.clear();
+});
 
 describe("ChatView 会话卡窄行座位", () => {
 	it("窄行不自动浮出信息卡，点按钮才打开，再点收起", async () => {

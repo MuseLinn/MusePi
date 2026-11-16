@@ -6,7 +6,8 @@
 	"type": "module",
 	"musepi": {
 		"icon": "🌐",
-		"description": "应用内浏览器页面与常驻网页宿主，共享标签、登录状态和 Agent 控制。",
+		"label": "MusePi Browser UI",
+		"description": "Managed browser pane and persistent guest host.",
 		"extensions": ["./index.ts"]
 	}
 }

@@ -1,9 +1,9 @@
 import { t } from "@musepi/client-core/src/i18n/index.js";
 import {
+	paletteWidgetDefs,
 	useWidgetRegistryVersion,
 	type WidgetField,
 	widgetDef,
-	widgetDefs,
 } from "@musepi/client-core/src/widgets/registry";
 import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
@@ -122,7 +122,7 @@ export function WidgetEditor({
 			<div className="gui-widget-editor-add">
 				<span className="gui-widget-editor-label">{t("settings.boardAddWidget")}</span>
 				<div className="gui-widget-editor-add-list">
-					{widgetDefs().map(w => (
+					{paletteWidgetDefs().map(w => (
 						<button
 							type="button"
 							key={w.type}

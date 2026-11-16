@@ -22,7 +22,6 @@ export const inject = [] as const;
 export const provide = [] as const;
 
 export function apply(ctx: SessionInfoAgentsPluginApi): void {
-	ctx.setLabel("MusePi 会话信息子代理分区");
 	ctx.slots.register({
 		slot: "chat.session-info.agents",
 		moduleUrl: "./page.tsx",

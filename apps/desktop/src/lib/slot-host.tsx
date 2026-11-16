@@ -2,6 +2,7 @@ import {
 	bindTranslationNamespace,
 	fmtTokens,
 	getLocaleSnapshot,
+	importCompiledModule,
 	loadExtensionWidgets,
 	registerExternalToolRenderers,
 	registerExternalWidgets,
@@ -15,12 +16,14 @@ import { EXTENSION_SLOT_DECLARATION, EXTENSION_SLOT_NAMES, slotKindOf } from "@m
 import type {
 	ConfigFieldDesc,
 	ConfigFieldError,
+	LocalizedPluginText,
 	PluginCompatibility,
 	PluginComponentDesc,
 	PluginConfigValues,
 	PluginResources,
 	SessionEntry,
 } from "@musepi/pi-wire";
+import { resolveLocalizedText } from "@musepi/pi-wire";
 import type { ComponentProps, ComponentType, ReactNode } from "react";
 import * as React from "react";
 import {
@@ -348,6 +351,12 @@ export interface SlotComponent {
 	label?: string;
 	/** Self-contained ESM JavaScript (react bundled in). */
 	code: string;
+	/** Loopback URL of the same module, when the daemon serves artifacts as
+	 *  resources — the mount fetches this instead of the inline code. */
+	url?: string;
+	/** Loopback URL of the component-scoped stylesheet, when it is served as a
+	 *  resource rather than inline in {@link SlotComponent.css}. */
+	cssUrl?: string;
 	error?: string;
 	/** Component-scoped CSS extracted at compile time (rendered via <style>). */
 	css?: string;
@@ -370,6 +379,11 @@ export interface ToolViewItem {
 	label?: string;
 	/** Self-contained ESM JavaScript (react bundled in). Empty on compile failure. */
 	code: string;
+	/** Loopback URL of the same module (see {@link SlotComponent.url}). */
+	url?: string;
+	/** Loopback URL of the component-scoped stylesheet (see
+	 *  {@link SlotComponent.cssUrl}). */
+	cssUrl?: string;
 	error?: string;
 	/** Component-scoped CSS extracted at compile time. */
 	css?: string;
@@ -415,6 +429,13 @@ export interface ExtensionItem {
 	name: string;
 	displayName: string;
 	description?: string;
+	/**
+	 * 插件自带的按语言分列显示名/说明（包内 `locale/<tag>.json`）。
+	 * 缺省 = 该包只有一份文案，读 `displayName` / `description`。
+	 * 语言由界面挑：`extensionDisplayName()` / `extensionDescription()`。
+	 */
+	displayNameI18n?: LocalizedPluginText;
+	descriptionI18n?: LocalizedPluginText;
 	/** Manifest-declared experimental status. */
 	experimental?: boolean;
 	/** 清单声明的图标：emoji、文字字形或 http(s)/file URI。 */
@@ -455,6 +476,35 @@ export interface ExtensionItem {
 	/** 兼容性预检判定（回退保护②;incompatible = 结构化拒绝的证据面,
 	 *  exempted = 精确版本豁免放行,GUI 归因段据此渲染 + 提供豁免入口）。 */
 	compatibility?: PluginCompatibility;
+}
+
+/**
+ * 一个扩展在 `locale` 下的显示名：包内 locale 文件 → 清单单句文案 → 模块名。
+ *
+ * 语言属于界面，不属于 daemon：同一条 `extensions.list` 在中文 TUI 与英文 GUI
+ * 里读出两个名字，服务端不必知道谁在看。
+ */
+export function extensionDisplayName(
+	item: {
+		readonly name: string;
+		readonly displayName?: string;
+		readonly displayNameI18n?: LocalizedPluginText;
+	},
+	locale: string,
+): string {
+	const localized = resolveLocalizedText(item.displayNameI18n, locale);
+	return localized || item.displayName || item.name;
+}
+
+/** 同 {@link extensionDisplayName}，说明那一列。 */
+export function extensionDescription(
+	item: {
+		readonly description?: string;
+		readonly descriptionI18n?: LocalizedPluginText;
+	},
+	locale: string,
+): string | undefined {
+	return resolveLocalizedText(item.descriptionI18n, locale) || item.description;
 }
 
 export interface ExtensionTab {
@@ -759,12 +809,27 @@ const POLL_MS = 10_000;
 
 function startRegistryStore(rpc: RpcClient, notify: () => void): void {
 	const st = registryStores.get(rpc)!;
-	/** Full fetch: carries the compiled slot/view payloads (tens of MB). */
+	/** Full fetch: carries the compiled slot/view payloads. `delivery: "url"`
+	 *  makes the daemon publish each module on its loopback origin and answer
+	 *  with URLs, so this response stays metadata and a slot fetches the one
+	 *  module it mounts. */
 	const loadFull = (): void => {
 		void rpc
-			.request<ExtensionRegistryData | null>("extensions.list", {})
+			.request<ExtensionRegistryData | null>("extensions.list", { delivery: "url" })
 			.then(res => {
 				if (!res) return;
+				// Warm the boot-critical module: the chat surface is imported the
+				// moment a session opens, and its parse is the longest single step
+				// on that path. Fetching it together with the registry overlaps it
+				// with everything else the shell does before the first click.
+				const chat = res.components?.find(c => c.slot === CHAT_VIEW_SLOT && (c.url || c.code));
+				if (chat) {
+					// The module runs against the host's React the moment it
+					// evaluates; publishing it here (the mount path does the same)
+					// keeps the prefetch from being the first, React-less evaluation.
+					exposeHostReact();
+					void importCompiledModule(chat).catch(() => undefined);
+				}
 				st.version = res.version ?? null;
 				if (res !== st.data) {
 					st.data = res;
@@ -850,7 +915,7 @@ export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComp
 	return useMemo(() => {
 		const all = data?.components ?? [];
 		const matching = all
-			.filter(c => c.slot === slot && (c.code.length > 0 || c.error))
+			.filter(c => c.slot === slot && (c.code.length > 0 || c.url || c.error))
 			.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 		// `single` seats hold ONE occupant: the last contributor (by order, then
 		// registration order) takes the seat, the earlier ones give way. Rendering
@@ -868,7 +933,7 @@ export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string)
 	return useMemo(() => {
 		const all = data?.components ?? [];
 		return all
-			.filter(c => c.slot.startsWith(prefix) && (c.code.length > 0 || c.error))
+			.filter(c => c.slot.startsWith(prefix) && (c.code.length > 0 || c.url || c.error))
 			.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 	}, [data, prefix]);
 }
@@ -1050,22 +1115,32 @@ export function SlotComponentMount({
 	// Component-scoped CSS (daemon extracts it at compile time): inject a
 	// <style> beside the component and drop it on unmount.
 	useEffect(() => {
-		if (!item.css) return;
+		if (!item.css && !item.cssUrl) return;
 		const style = document.createElement("style");
 		style.setAttribute("data-slot-css", `${item.extensionId}:${item.slot}`);
-		style.textContent = item.css;
 		document.head.appendChild(style);
-		return () => style.remove();
-	}, [item.css, item.extensionId, item.slot]);
+		// Inline when the daemon sent it, fetched when it published the sheet as
+		// its own artifact resource — the slot paints either way, and a fetched
+		// sheet lands right after the module it belongs to.
+		let alive = true;
+		if (item.css) style.textContent = item.css;
+		else if (item.cssUrl) {
+			void fetch(item.cssUrl)
+				.then(res => (res.ok ? res.text() : ""))
+				.then(text => {
+					if (alive && text) style.textContent = text;
+				})
+				.catch(() => {
+					// A missing sheet leaves the slot unstyled, never unmounted.
+				});
+		}
+		return () => {
+			alive = false;
+			style.remove();
+		};
+	}, [item.css, item.cssUrl, item.extensionId, item.slot]);
 	useEffect(() => {
 		let alive = true;
-		// The blob URL must outlive the import: revoking it inside this
-		// effect's cleanup kills a fetch still in flight, and the registry
-		// hands out a new `item` object on every poll (and a StrictMode
-		// remount runs cleanup immediately) — so the revoke raced the
-		// import and the component failed with "Failed to fetch dynamically
-		// imported module". Revoke only once the import has settled.
-		let url: string | null = null;
 		// Daemon compile failure (item.error set + empty code): the blob
 		// import of "" would fail with a misleading "must export a default
 		// React component" — surface the daemon's real error instead.
@@ -1081,10 +1156,10 @@ export function SlotComponentMount({
 				// `React` identifier (window.MusePiReact) — see
 				// daemon/extension-artifact-compiler.ts. Inject before import.
 				exposeHostReact();
-				// Dynamic import: specifier is a runtime blob URL served from
-				// the extension registry — static import is impossible here.
-				url = URL.createObjectURL(new Blob([item.code], { type: "text/javascript" }));
-				const mod = (await import(url)) as {
+				// Compiled modules arrive one URL each: fetching here keeps boot's
+				// payload to metadata and lets the browser revalidate the module
+				// with its ETag on the next mount.
+				const mod = (await importCompiledModule(item)) as {
 					default?: ComponentType;
 					apply?: (ctx: PluginClientContext) => void;
 				};
@@ -1127,11 +1202,6 @@ export function SlotComponentMount({
 				setComp(() => Component);
 			} catch (e) {
 				if (alive) setError(String(e));
-			} finally {
-				// Settle first, then release — a revoked-in-flight fetch is
-				// unrecoverable and the failure message points at the wrong
-				// thing (the module's own code, which is fine).
-				if (url) URL.revokeObjectURL(url);
 			}
 		})();
 		return () => {
@@ -1142,7 +1212,7 @@ export function SlotComponentMount({
 			moduleTeardown.current?.();
 			moduleTeardown.current = null;
 		};
-	}, [item.code, item.error, item.extensionId, item.slot]);
+	}, [item.code, item.url, item.error, item.extensionId, item.slot]);
 	if (error) {
 		return (
 			<div className="gui-slot-error" role="alert">
@@ -1206,16 +1276,13 @@ export function useExtensionToolViews(rpc: RpcClient | null): void {
 			return;
 		}
 		let alive = true;
-		const urls: string[] = [];
 		const registered: Record<string, ToolRenderer> = {};
 		void (async () => {
 			for (const item of toolViews) {
 				if (item.error) continue; // 编译失败:回退内置/generic 渲染器
 				try {
 					exposeHostReact();
-					const url = URL.createObjectURL(new Blob([item.code], { type: "text/javascript" }));
-					urls.push(url);
-					const mod = (await import(url)) as { default?: unknown };
+					const mod = (await importCompiledModule(item)) as { default?: unknown };
 					if (!alive) return;
 					const exported = mod.default;
 					// 两种合法形状:
@@ -1238,9 +1305,6 @@ export function useExtensionToolViews(rpc: RpcClient | null): void {
 				}
 			}
 			if (alive) registerExternalToolRenderers(registered);
-			// Same settle-then-release rule as the component loader: revoking
-			// a URL while its import is in flight fails the fetch.
-			for (const url of urls) URL.revokeObjectURL(url);
 		})();
 		return () => {
 			alive = false;
@@ -1332,6 +1396,7 @@ const slotHostBindings = {
 	TRANSCRIPT_NODE_SLOT,
 	SESSION_INFO_SLOT_PREFIX,
 	SESSION_INFO_SLOT,
+	SESSION_INFO_AGENTS_SLOT,
 	SIDEBAR_PANEL_SLOT_PREFIX,
 	SCHEDULED_PANEL_SLOT,
 	CAPABILITY_PANEL_SLOT,
@@ -1344,6 +1409,8 @@ const slotHostBindings = {
 	selectPanelTabComponent,
 	selectSidebarPanelComponent,
 	selectTranscriptNodeComponents,
+	extensionDisplayName,
+	extensionDescription,
 	useExtensionRegistry,
 	useExtensionToolViews,
 	useExtensionScrollbarSkins,

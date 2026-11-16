@@ -1,5 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#000000" fill-rule="evenodd">
-  <!-- Settings: solid ring with a punched-out centre (gear read at 24px
-       without thin teeth that disappear when the tab bar shrinks them). -->
-  <path d="M12 2.6a9.4 9.4 0 1 0 0 18.8 9.4 9.4 0 0 0 0-18.8zm0 5.6a3.8 3.8 0 1 1 0 7.6 3.8 3.8 0 0 1 0-7.6z"/>
+  <!-- Settings: three sliders with ring knobs. The previous ring read as a
+       record button and matched neither the web gear nor a settings control.
+       Ring knobs keep the outline weight of the web's stroke icons. -->
+  <path d="M3 4.6h18a1.2 1.2 0 0 1 0 2.4H3a1.2 1.2 0 0 1 0-2.4Z"/>
+  <path d="M9 3.2a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Zm0 2.2a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z"/>
+  <path d="M3 10.8h18a1.2 1.2 0 0 1 0 2.4H3a1.2 1.2 0 0 1 0-2.4Z"/>
+  <path d="M15.4 9.4a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Zm0 2.2a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z"/>
+  <path d="M3 17h18a1.2 1.2 0 0 1 0 2.4H3a1.2 1.2 0 0 1 0-2.4Z"/>
+  <path d="M10.6 15.6a3.4 3.4 0 1 0 0 6.8 3.4 3.4 0 0 0 0-6.8Zm0 2.2a1.2 1.2 0 1 1 0 2.4 1.2 1.2 0 0 1 0-2.4Z"/>
 </svg>

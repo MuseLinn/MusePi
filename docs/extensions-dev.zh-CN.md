@@ -490,6 +490,26 @@ export default async function (pi: ExtensionAPI) {
 - 生效语义：`restart: "none"` 字段每次调用现读——GUI 表单改完立即可见；`session` 字段在扩展加载时快照，新会话/重载后生效；`daemon` 字段约定需重启 daemon。
 - 存储落点：`<agentDir>/extensions/plugin-config.json`，键空间与 `disabledExtensions` 一致（`extension-module:<name>`）。
 
+### 13.1 插件名字的本地化（`locale/<tag>.json`，dsh parity，2026-11-15）
+
+插件在「设置 → 扩展与插件」里的**名称与说明**可以按语言各写一份，界面按自己的语言挑（daemon 不挑，一份快照同时服务中文 TUI 与英文 GUI）：
+
+```
+my-plugin/
+├── package.json          musepi.label / musepi.description = en 兜底
+└── locale/
+    ├── zh-CN.json        { "meta": { "title": "看板", "description": "看板卡片" } }
+    └── ja.json           { "meta": { "title": "ボード" } }
+```
+
+- **文件名即语言标签**（`zh-CN.json`、`ja.json`），必须像语言标签，否则该文件被忽略并记一条 warn。
+- `musepi.label` / `musepi.description` 继续是 `en` 兜底：**没有 locale 目录是常态**，这类包行为不变，所以采用它是增量的。
+- 只有声明了 locale 文件的包才会在 `extensions.list` 里带 `displayNameI18n` / `descriptionI18n`；没有文件时不发冗余映射。
+- 解析顺序：完整标签 → 主语言子标签 → `en` → 模块名；大小写无关。实现见 `packages/wire/src/plugin-config.ts` 的 `resolveLocalizedText()`。
+- 一个坏文件不影响其它语言，也不阻断扩展登记（与 §13 的 fail-soft 同一条纪律）。
+- 随产品发布的 52 个内置插件（40 个会话插件包 + 12 个桌面 Cordis 插件）已全部双语；新插件漏写文案由 `test/bundled-plugin-locales.test.ts` 拦下。
+- `ctx.setLabel` 不是界面名：它填的 `Extension.label` 只喂给**模型**的扩展清单（order 25）和旧的 `plugins.list`，所以是单一语言的稳定名。装载器默认从 `musepi.label` 取它，第一方插件不要再自己声明（会漂移）；`test/extension-label.test.ts` 守着。
+
 契约与类型：`ConfigFieldDesc`/`PluginResources`/`coerceConfigValues` 见 `packages/wire/src/plugin-config.ts`；存储见 `packages/coding-agent/src/extensibility/extensions-center/plugin-config-store.ts`；运行时读取见 `ConcreteExtensionAPI.config`（loader.ts）。
 
 ## 15. 插件安装（spec 安装与能力报告，2026-10-06）
@@ -799,6 +819,14 @@ export const EXTENSION_HOST_MODULES = [
 
 daemon 侧 artifact compiler（`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`）对每条解析后的 import 查这张表。命中即替换为读取 `window.MusePiHostModules[key]` 的 shim，**宿主模块源码不进入 bundle**。表或 key 缺失时 shim 在导入阶段抛错，宿主没有发布契约就立即失败，而不是拿着旧副本继续跑。未命中的 import 照常打包，包括 `lib/leaf-walk` 这类纯 helper。React 与 React DOM 仍走各自到 `window.MusePiReact*` 的映射。
 
+编译产物落在磁盘（`~/.musepi/cache/extension-artifacts`，可用 `MUSEPI_EXTENSION_ARTIFACT_CACHE` 改位置），并按 `apps/*/src` 与 `packages/*/src` 下的最新 mtime、以及入口自身的 mtime 与大小校验。刚启动的 daemon 因此直接沿用上一个进程编译的结果，而不是重建整套组合；任何源码改动都会让可能包含它的产物全部失效。写缓存是尽力而为：目录不可写只意味着启动慢一点，不会让编译失败。
+
+投递按资源进行。传 `delivery: "url"` 的调用方（桌面端）拿到的是每个模块、每个组件样式表各一个 URL，而不是字节本身：daemon 把它们发布在 loopback 构件原点上——`GET /extensions/artifacts/<key>`，`cache-control: no-cache`、内容 ETag、`If-None-Match` 命中回 `304`，带 `file://` 壳需要的 CORS 头与各自的 content-type——槽位只取它即将挂载的那一份。原点端口记录在 `~/.musepi/run/artifacts.port` 并复用，资源 URL 因此能跨 daemon 重启存活，渲染端做的是复验而不是重新下载。不传该参数的调用方（中继传输、兼容壳）仍收到内联代码。
+构件集的共享 chunk 在采纳前做过测量：把 19 个入口一次性 `splitting` 构建得到 379 个产物、合计 33.5MB，而逐入口产物合计约 40MB——只有约 15%，因为重库按表面分布（侧栏是 chart/mermaid/katex，聊天是 konva/xterm/katex），样式表也仍是逐入口。这点收益不足以把投递契约改成 chunk 命名空间。
+
+宿主也可以把自己的插件界面在构建期产出，而不是让 daemon 在启动时编译。`apps/desktop/scripts/build-plugins.ts`（应用的 `build:plugins`）用 daemon 同一份 `componentBuildConfig` 编译第一方插件声明的每个表面——`page.tsx`、`rail.tsx`、`settings.tsx`、`host.tsx`，以及 bundled 插件的 `ui/*`——产出 `dist/plugins/<plugin>-<file>.js` 与清单。daemon 通过 `MUSEPI_PLUGIN_ARTIFACTS` 读取清单：清单仍然描述当前输入（入口 mtime 与大小、工作区源码 stamp）时直接提供该文件，覆盖不到的（第三方插件、构建后又改了源码）回退到即时编译。这一层纯粹是构建期优化：不改变任何契约，清单缺失或过期走的就是原来的路径。
+同一趟构建还会提取每个插件的槽位声明，daemon 因此可以直接用构建产物拼出界面，而不必在首次注册表调用时装载每个插件的模块图。
+
 ### 渲染端
 
 `apps/desktop/src/lib/host-modules.ts` 是 key 到实例的唯一绑定处：
@@ -814,6 +842,8 @@ const hostModules = {
 `satisfies` 让「契约有条目但渲染端没绑定实例」和「渲染端多出契约没有的 key」都变成类型错误。`exposeHostModules()` 在编译组件挂载前把表发布为 `window.MusePiHostModules`。旧的 `window.MusePiPromptDialog` 与 `window.MusePiManagedBrowserHost` 保留为同一批命名空间对象的别名，已编译的 bundle 继续读到宿主状态。
 
 `slot-host` 是唯一自注册的条目，而不是由 `host-modules.ts` 反向 import：`slot-host.tsx` 已经 import `exposeHostModules` 来安装浏览器桥，若表再 import 它就会形成循环。它在模块加载时登记自己的命名空间，应用在任何编译组件挂载前 import 它。
+
+这个条目发布的是命名空间，改写后按属性读取：`slotHostBindings` 里缺一项，插件调用处就是 `undefined`，组件在首次渲染时抛错而不是在导入阶段失败。因此插件可能 import 的每个导出都必须登记；React 是唯一例外，它经 `window.MusePiReact*` 下发。`test/host-modules.test.ts` 保证模块导出与这张表一致。
 
 ### 当前条目
 

@@ -4,8 +4,10 @@ import {
 	type MarketplaceCardAction,
 	MarketplaceGrid,
 	t,
+	useLocale,
 	useModalFocus,
 } from "@musepi/client-core";
+import type { LocalizedPluginText } from "@musepi/pi-wire";
 import {
 	Check as CheckIconData,
 	CircleCheck as CircleCheckIconData,
@@ -18,6 +20,7 @@ import { createPortal } from "react-dom";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { lookupSkillMarketIcon } from "../lib/skill-market";
+import { extensionDisplayName } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
 import { StateIcon } from "./StateIcon";
@@ -188,12 +191,14 @@ function DiagnosticsView({
 		id: string;
 		name: string;
 		displayName?: string;
+		displayNameI18n?: LocalizedPluginText;
 		loadError?: string | null;
 		state: string;
 		shadowedBy?: string | null;
 	}> | null;
 	tabs: Array<{ id: string; enabled: boolean }>;
 }): ReactNode {
+	const locale = useLocale();
 	const [warnings, setWarnings] = useState<string[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -215,14 +220,14 @@ function DiagnosticsView({
 		const out: DiagRow[] = [];
 		for (const e of extensions ?? []) {
 			if (e.loadError) {
-				out.push({ id: e.id, kind: "load-error", title: e.displayName ?? e.name, detail: e.loadError });
+				out.push({ id: e.id, kind: "load-error", title: extensionDisplayName(e, locale), detail: e.loadError });
 				continue;
 			}
 			if (e.state === "shadowed") {
 				out.push({
 					id: e.id,
 					kind: "shadowed",
-					title: e.displayName ?? e.name,
+					title: extensionDisplayName(e, locale),
 					detail: e.shadowedBy ? t("tools.shadowedByWithName", { name: e.shadowedBy }) : undefined,
 				});
 			}
@@ -234,7 +239,7 @@ function DiagnosticsView({
 			if (!tab.enabled) out.push({ id: `t:${tab.id}`, kind: "provider-off", title: tab.id });
 		}
 		return out;
-	}, [extensions, warnings, tabs]);
+	}, [extensions, warnings, tabs, locale]);
 
 	const loading = extensions === null;
 

@@ -5,6 +5,7 @@ import { t as clientCoreT } from "@musepi/client-core";
 import { EXTENSION_HOST_MODULES } from "@musepi/collab-proto/extension-host-modules";
 import { compileComponentModule } from "../../../packages/coding-agent/src/daemon/extension-artifact-compiler";
 import { exposeHostModules } from "../src/lib/host-modules";
+import * as slotHost from "../src/lib/slot-host";
 import { SlotComponentHost } from "../src/lib/slot-host";
 
 type HostWindow = {
@@ -41,6 +42,18 @@ describe("host module table", () => {
 	it("registers slot-host's own plugin surface", () => {
 		expect(typeof hostModule("slot-host")?.SlotComponentHost).toBe("function");
 		expect(hostModule("slot-host")?.SlotComponentHost).toBe(SlotComponentHost);
+	});
+
+	it("registers every slot-host export a compiled plugin can reach", () => {
+		// A compiled plugin's `import { x } from "../../lib/slot-host"` becomes
+		// `MusePiHostModules["slot-host"].x`, so an export left out of the table
+		// reads as `undefined` and throws at first render instead of at import.
+		// React is the one deliberate exception — it arrives through
+		// `window.MusePiReact`.
+		const viaWindowReact = new Set(["hostReactBindings", "hostReactDOMBindings", "hostReactDOMClientBindings"]);
+		const registered = hostModule("slot-host") ?? {};
+		const missing = Object.keys(slotHost).filter(name => !viaWindowReact.has(name) && !(name in registered));
+		expect(missing).toEqual([]);
 	});
 
 	it("exposes the plugin-facing hooks and stores", () => {

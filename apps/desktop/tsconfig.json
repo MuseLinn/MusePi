@@ -4,6 +4,9 @@
 		"src",
 		"scripts"
 	],
+	"exclude": [
+		"scripts/build-plugins.ts"
+	],
 	"compilerOptions": {
 		"jsx": "react-jsx",
 		"lib": [

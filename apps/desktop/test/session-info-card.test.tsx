@@ -69,6 +69,21 @@ async function flush(): Promise<void> {
 	});
 }
 
+/**
+ * Wait until `predicate` holds. A seat swap is two timers deep — the row
+ * measurement, then the seat's exit window — so a fixed sleep races them: the
+ * same assertion passed or failed depending on what else was running.
+ */
+async function waitFor(predicate: () => boolean, timeoutMs = 3000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (!predicate()) {
+		if (Date.now() > deadline) throw new Error("waitFor timed out");
+		await act(async () => {
+			await Bun.sleep(16);
+		});
+	}
+}
+
 interface Mounted {
 	host: HTMLElement;
 	rerender(node: ReactNode): Promise<void>;
@@ -622,8 +637,8 @@ describe("SessionInfoCard 子代理与待办", () => {
 /**
  * Mirrors app.tsx: keep the hook's latest state on the DOM.
  */
-function VisibilityHost({ sessionId, panelOpen }: { sessionId: string | null; panelOpen: boolean }): ReactNode {
-	const { open, toggle } = useSessionInfoCardVisibility({ sessionId, panelOpen });
+function VisibilityHost({ sessionId }: { sessionId: string | null }): ReactNode {
+	const { open, toggle } = useSessionInfoCardVisibility({ sessionId });
 	return (
 		<>
 			<span data-open={open ? "1" : "0"} />
@@ -639,53 +654,32 @@ function openState(host: HTMLElement): string | null {
 }
 
 describe("会话信息卡展开状态", () => {
-	it("面板收起时默认显示，手动切换后按会话持久化", async () => {
-		const view = await mount(<VisibilityHost sessionId="session-1" panelOpen={false} />);
+	it("没有存储偏好时默认显示，手动切换后按会话持久化", async () => {
+		const view = await mount(<VisibilityHost sessionId="session-1" />);
 		expect(openState(view.host)).toBe("1");
 		await act(async () => view.host.querySelector("button")!.click());
 		expect(openState(view.host)).toBe("0");
 		expect(localStorage.getItem("musepi-gui-session-info-session-1")).toBe("0");
 		await view.unmount();
 
-		// Remount = reopening the session: the manual choice survives even though
-		// the panel is still collapsed (whose default would show the card).
-		const again = await mount(<VisibilityHost sessionId="session-1" panelOpen={false} />);
+		// Remount = reopening the session: the manual choice survives. The panel's
+		// state is not an input here, so opening it cannot overwrite this.
+		const again = await mount(<VisibilityHost sessionId="session-1" />);
 		expect(openState(again.host)).toBe("0");
 		await again.unmount();
 	});
 
-	it("面板打开时默认隐藏，面板状态一变就覆盖手动态", async () => {
-		const view = await mount(<VisibilityHost sessionId="session-2" panelOpen={false} />);
-		await act(async () => view.host.querySelector("button")!.click());
-		expect(openState(view.host)).toBe("0");
-
-		// Panel expands: reset to that state's default (hidden), manual choice lost.
-		await view.rerender(<VisibilityHost sessionId="session-2" panelOpen={true} />);
-		expect(openState(view.host)).toBe("0");
-
-		// Manual choice stands again until the panel next changes.
-		await act(async () => view.host.querySelector("button")!.click());
-		expect(openState(view.host)).toBe("1");
-		await view.rerender(<VisibilityHost sessionId="session-2" panelOpen={true} />);
-		expect(openState(view.host)).toBe("1");
-
-		// Collapsing the panel shows the card again.
-		await view.rerender(<VisibilityHost sessionId="session-2" panelOpen={false} />);
-		expect(openState(view.host)).toBe("1");
-		await view.unmount();
-	});
-
 	it("切换会话时读取该会话自己的偏好，而不是沿用上一个会话", async () => {
-		const view = await mount(<VisibilityHost sessionId="session-a" panelOpen={false} />);
+		const view = await mount(<VisibilityHost sessionId="session-a" />);
 		await act(async () => view.host.querySelector("button")!.click());
 		expect(openState(view.host)).toBe("0");
 
-		// No stored preference for b: its default (panel collapsed) applies.
-		await view.rerender(<VisibilityHost sessionId="session-b" panelOpen={false} />);
+		// No stored preference for b: the default (open) applies.
+		await view.rerender(<VisibilityHost sessionId="session-b" />);
 		expect(openState(view.host)).toBe("1");
 
 		// Back to a: its own stored choice returns.
-		await view.rerender(<VisibilityHost sessionId="session-a" panelOpen={false} />);
+		await view.rerender(<VisibilityHost sessionId="session-a" />);
 		expect(openState(view.host)).toBe("0");
 		await view.unmount();
 	});
@@ -718,8 +712,26 @@ describe("SessionInfoCard 座位", () => {
 		expect(floatEl.getAttribute("data-mode")).toBe("float");
 		expect(floatEl.classList.contains("gui-session-info--float")).toBe(true);
 		expect(floatEl.style.top).toBe("154px");
-		expect(floatEl.style.maxHeight).toBe(`calc(100% - ${154 + 12}px)`);
+		// The cap also clears the composer: the composer floats over the
+		// transcript and owns no flow space, so its measured height arrives as
+		// `bottomInset` — otherwise a long card is painted under the input.
+		expect(floatEl.style.maxHeight).toBe("calc(100% - 154px - 0px - 12px)");
 		await float.unmount();
+	});
+
+	it("浮卡的封顶扣掉宿主传入的 composer 高度，停靠列不受影响", async () => {
+		const float = await mount(<SessionInfoCard {...CARD_PROPS} rpc={makeRpc()} top={44} bottomInset={137} />);
+		const floatEl = float.host.querySelector<HTMLElement>(".gui-session-info")!;
+		expect(floatEl.style.maxHeight).toBe("calc(100% - 44px - 137px - 12px)");
+		await float.unmount();
+
+		// The dock is an in-flow column beside the chat: the composer is not
+		// under it, so its box stays CSS-owned.
+		const dock = await mount(<SessionInfoCard {...CARD_PROPS} rpc={makeRpc()} mode="dock" bottomInset={137} />);
+		const dockEl = dock.host.querySelector<HTMLElement>(".gui-session-info")!;
+		expect(dockEl.style.maxHeight).toBe("");
+		expect(dockEl.style.top).toBe("");
+		await dock.unmount();
 	});
 });
 
@@ -807,18 +819,37 @@ describe("ChatView 会话信息卡座位", () => {
 		await view.unmount();
 	});
 
-	it("面板展开：浮卡落在会话列内，起点在 surface 模式行之下", async () => {
-		mockLayout({ rowWidth: 1200 });
+	it("面板展开：行宽够时停靠列留在面板旁，不换座位", async () => {
+		mockLayout({ rowWidth: 1400 });
 		const view = await mount(renderChat({ sessionInfoOpen: true, rightPanelOpen: true }));
-		const card = view.host.querySelector<HTMLElement>(".gui-session-info--float");
+		const card = view.host.querySelector<HTMLElement>(".gui-session-info--dock");
 		expect(card).not.toBeNull();
-		expect(card!.closest(".gui-chat-column")).not.toBeNull();
-		// Default float geometry: below the surface-mode row (44px + one gap
-		// is folded into the default; the status-card stack is gone).
-		expect(card!.style.top).toBe("44px");
-		// The old status-card stack is gone from the scene entirely.
+		// Still a workspace column: outside the chat column, before the rail/panel.
+		expect(card!.closest(".gui-chat-column")).toBeNull();
+		const rail = view.host.querySelector<HTMLElement>(".gui-right-rail")!;
+		expect(card!.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+		// No second seat and no remount: the panel open leaves the card where it is.
+		expect(view.host.querySelector(".gui-session-info--float")).toBeNull();
 		expect(view.host.querySelector(".gui-status-cards")).toBeNull();
+		await view.unmount();
+	});
+
+	it("面板展开但行太窄：停靠列折叠让位，不自动浮出", async () => {
+		mockLayout({ rowWidth: 1200 });
+		const view = await mount(
+			renderChat({ sessionInfoOpen: true, rightPanelOpen: true, onToggleSessionInfo: () => {} }),
+		);
+		await act(async () => Bun.sleep(220));
 		expect(view.host.querySelector(".gui-session-info--dock")).toBeNull();
+		expect(view.host.querySelector(".gui-session-info--float")).toBeNull();
+		const toggle = view.host.querySelector<HTMLButtonElement>(".gui-chat-info-toggle")!;
+		expect(toggle.getAttribute("aria-pressed")).toBe("false");
+
+		await act(async () => toggle.click());
+		const float = view.host.querySelector<HTMLElement>(".gui-session-info--float");
+		expect(float).not.toBeNull();
+		expect(float!.closest(".gui-chat-column")).not.toBeNull();
+		expect(toggle.getAttribute("aria-pressed")).toBe("true");
 		await view.unmount();
 	});
 
@@ -832,8 +863,7 @@ describe("ChatView 会话信息卡座位", () => {
 		// measures narrow. A narrow row's float seat stays closed until the user
 		// asks for it — auto-showing there would cover the transcript the card
 		// summarizes.
-		await act(async () => Bun.sleep(220));
-		expect(view.host.querySelector(".gui-session-info--dock")).toBeNull();
+		await waitFor(() => view.host.querySelector(".gui-session-info--dock") === null);
 		expect(view.host.querySelector(".gui-session-info--float")).toBeNull();
 		const toggle = view.host.querySelector<HTMLButtonElement>(".gui-chat-info-toggle")!;
 		expect(toggle.getAttribute("aria-pressed")).toBe("false");
@@ -854,7 +884,7 @@ describe("ChatView 会话信息卡座位", () => {
 			true,
 		);
 		await act(async () => Bun.sleep(260));
-		expect(view.host.querySelector(".gui-session-info--float")).toBeNull();
+		await waitFor(() => view.host.querySelector(".gui-session-info--float") === null);
 		await view.unmount();
 	});
 

@@ -39,6 +39,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	/** Port of a running daemon (ws.port file), or null. */
 	probeDaemonPort: () => ipcRenderer.invoke("daemon-probe"),
+	/** Cheap TCP check before attempting a WebSocket handshake: a closed port
+	 *  makes the handshake wait for its timeout, which sits on the boot path. */
+	daemonPortOpen: (port) => ipcRenderer.invoke("daemon-port-open", port),
 	/** GUI package version (OTA/发布一致性比对,见 app.tsx boot)。 */
 	getAppVersion: () => ipcRenderer.invoke("app-version"),
 	/** Restart the whole app (splash / connect-failure recovery). The shell

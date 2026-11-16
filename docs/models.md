@@ -461,6 +461,13 @@ So a model can exist in registry but not be selectable until auth is available.
 
 `--provider` is legacy; `--model` is preferred.
 
+Ambiguity is reported, not hidden:
+
+- A bare id served by several providers resolves within the caller's current provider when one is known; otherwise the warning names the chosen `provider/id` and up to four alternatives.
+- A pattern that only exists as the prefix of longer ids (`gpt-5.4` when the catalog has `gpt-5.4-mini`) is not a match. It reports the closest ids instead of silently downgrading.
+- An explicit provider prefix keeps shorthand matching inside that provider (`openrouter/qwen`).
+- Automatic fallback switches announce the previous and next selector with their reason (`request failed`, `usage depleted`, `usage reserve`, `fast variant`).
+
 Resolution precedence for exact selectors:
 
 1. exact `provider/modelId` bypasses coalescing

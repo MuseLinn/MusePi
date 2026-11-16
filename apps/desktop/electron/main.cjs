@@ -2953,10 +2953,32 @@ function loadMainWindowBounds() {
 async function resolveCompatUrl() {
 	const explicit = process.env.MUSEPI_GUI_COMPAT_URL;
 	if (explicit) return explicit;
-	const url = probeWeb();
-	if (!url) return null;
-	const port = Number.parseInt(new URL(url).port, 10);
-	return port > 0 && (await portOpen(port)) ? url : null;
+	// The daemon writes web.port once its socket is listening, which can land a
+	// beat after the GUI's own daemon probe succeeds — wait for it instead of
+	// racing the file and silently loading the local bundle.
+	//
+	// The wait is bounded as a whole: `portOpen` costs up to 500 ms per attempt,
+	// so a stale discovery file used to hold window creation for seconds
+	// (measured 7.5 s) before falling back to the local bundle. A stale file is
+	// the common case — shell mode is off by default — so it must resolve fast.
+	// Short on purpose: with shell mode off (the default) the daemon never
+	// writes an origin at all, so the common case is "no file" and waiting the
+	// full window is pure delay. A daemon that is starting writes the file right
+	// after its socket binds, which is well inside this budget.
+	const deadline = Date.now() + 400;
+	for (;;) {
+		const url = probeWeb();
+		if (url) {
+			const port = Number.parseInt(new URL(url).port, 10);
+			if (port > 0 && (await portOpen(port))) return url;
+			// A recorded origin whose port is closed is stale: no amount of
+			// waiting makes a dead daemon listen, and a live one would have
+			// answered. Only a missing file can still become an origin.
+			return null;
+		}
+		if (Date.now() >= deadline) return null;
+		await new Promise(resolve => setTimeout(resolve, 100));
+	}
 }
 
 async function createWindow() {
@@ -3748,6 +3770,7 @@ if (process.env.MUSEPI_NO_AUTO_UPDATE !== "1") {
 // ── IPC: daemon lifecycle (daemon_probe / daemon_start equivalents) ──────
 
 ipcMain.handle("daemon-probe", () => probe());
+ipcMain.handle("daemon-port-open", (_event, port) => portOpen(Number(port)));
 // A stale listener on the port (an orphaned daemon from a previous GUI
 // that wasn't torn down) makes the fresh spawn exit immediately with
 // EADDRINUSE — the GUI's daemon-start then reports "daemon exited during

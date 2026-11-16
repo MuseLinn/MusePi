@@ -1,0 +1,6 @@
+{
+	"meta": {
+		"title": "MusePi 文件工作区",
+		"description": "浏览、编辑和引用工作区文件，支持 Monaco、Markdown、PDF 与常见文档预览。"
+	}
+}

@@ -6,7 +6,8 @@
 	"type": "module",
 	"musepi": {
 		"icon": "π",
-		"description": "Host the session transcript, composer, and welcome page through one chat slot.",
+		"label": "MusePi Chat View",
+		"description": "Welcome, transcript, and composer in one Cordis-owned surface.",
 		"extensions": ["./index.ts"]
 	}
 }

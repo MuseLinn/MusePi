@@ -26,10 +26,9 @@ export type SectionId =
 	| "appearance"
 	| "model"
 	| "files"
-	| "memory"
 	| "notifications"
 	| "pet"
-	| "sessions"
+	| "session-memory"
 	| "git"
 	| "shortcuts"
 	| "interaction"
@@ -48,14 +47,13 @@ export type SectionId =
 	| "usage"
 	| "migration"
 	| "browser"
-	| "suggestions"
 	| "modes";
 
 /** Capability names entry points use, which are NOT section ids: they must go
  *  through SECTION_ALIAS to reach a page. Kept in the type so `openSettings`
  *  call sites stay exhaustive, and OUT of SectionId so no call site can treat
  *  one as directly renderable. */
-export type SectionAlias = "providers" | "plugins";
+export type SectionAlias = "providers" | "plugins" | "sessions" | "memory" | "suggestions";
 
 /** What a caller may ask the settings pane to open. */
 export type SectionRequest = SectionId | SectionAlias;
@@ -67,6 +65,11 @@ export const SECTION_ALIAS: Record<SectionAlias, SectionId> = {
 	// 0.5.1: 设置侧「插件」独立 tab 已摘除（插件列表由一级能力中心承载）；
 	// 存量 "plugins" 深链落到「扩展与插件」控制中心（其内部仍含插件泳道）。
 	plugins: "skills",
+	// 会话 / 记忆 / 预设提示词合并为「会话与记忆」一页：三个旧 id 继续作为
+	// 能力名解析到该页，深链与扩展 slot 的存量目标不会失效。
+	sessions: "session-memory",
+	memory: "session-memory",
+	suggestions: "session-memory",
 };
 
 /** Section the pane lands on when nothing valid was requested. */

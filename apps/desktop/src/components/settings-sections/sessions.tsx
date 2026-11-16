@@ -96,9 +96,6 @@ export function SessionsSection({
 	};
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("general.sessions")}</h2>
-			<p className="gui-settings-page-desc">{t("general.sessionsSettings")}</p>
-
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("general.sessionDefaults")}</div>
 				<div className="gui-settings-row">

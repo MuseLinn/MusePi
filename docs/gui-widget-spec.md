@@ -31,6 +31,8 @@
 
 ---
 
+> 适用范围：本文描述的是**看板**上的卡片。`widget` 工具已不再输出卡片——数据与结构走回复里的 `ui` 块（见 `docs/ui-blocks.md`），页面走 `widget` 的 HTML 面。卡片类型表 `WIDGET_TYPES` 因此只服务看板与 `widget.schema` RPC。
+
 ## 2. 注册：一个 widget 必须同时出现在三处
 
 `WidgetDef`（`packages/client-core/src/widgets/registry.ts`）的字段是契约，不是可选装饰：

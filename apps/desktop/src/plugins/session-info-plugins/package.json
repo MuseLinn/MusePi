@@ -6,7 +6,8 @@
 	"type": "module",
 	"musepi": {
 		"icon": "◉",
-		"description": "会话信息卡里的「插件」分区：运行中计数与可展开的插件状态列表。",
+		"label": "MusePi Session Info: Plugins",
+		"description": "The session info card's plugin section: running count and the expandable running/disabled list.",
 		"extensions": ["./index.ts"]
 	}
 }

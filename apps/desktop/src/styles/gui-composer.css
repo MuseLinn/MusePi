@@ -3121,6 +3121,42 @@ button.gui-stats-pill {
  * absent — nothing in the send path expands them, a pill would promise
  * behaviour that doesn't exist. */
 
+/* Next-input candidate over an empty session composer: the placeholder slot,
+ * matched to `.gui-ta-highlight--session` metrics so the glyphs sit exactly
+ * where typed text will. One ellipsised line plus the accept key; no card or
+ * icon, and no pointer input — the click belongs to the textarea beneath. */
+.gui-composer-suggestion {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 6px 2px;
+	font-size: var(--ui-font-size-sm);
+	line-height: 20px;
+	color: var(--color-text-muted);
+	user-select: none;
+	pointer-events: none;
+}
+
+.gui-composer-suggestion-text {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.gui-composer-suggestion-key {
+	flex: none;
+	padding: 0 4px;
+	font-family: inherit;
+	font-size: 10px;
+	line-height: 16px;
+	color: var(--color-text-faint);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+}
+
 /* Transparent-ink pairing: the textarea keeps only its caret; the overlay
  * supplies the visible glyphs. Placeholder gets an explicit colour (it
  * would otherwise inherit `transparent` and vanish). */

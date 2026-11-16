@@ -6,7 +6,8 @@
 	"type": "module",
 	"musepi": {
 		"icon": "◈",
-		"description": "在设置中配置记忆后端、浏览工作区记忆文件，并查看状态或执行清空、整合等维护操作。",
+		"label": "MusePi Memory",
+		"description": "Backend selection, workspace memory browser, live status, and maintenance in one Cordis-owned page.",
 		"extensions": ["./index.ts"]
 	}
 }

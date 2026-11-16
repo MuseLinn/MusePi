@@ -16,26 +16,25 @@ import { Icon } from "../vendor/oc-icons";
 /** Matches the exit keyframe; the row stays mounted for this long. */
 const EXIT_MS = 180;
 
+/**
+ * One toast: a kind icon, an optional title, the message, an optional detail
+ * line and up to two buttons. The surface stays neutral glass in every kind —
+ * only the icon carries the status colour, because a tinted card competes with
+ * the message it is supposed to deliver.
+ */
 function ActionToastItem({
 	toast,
 	closing,
-	front,
 	paused,
 	onDismiss,
 }: {
 	toast: ActionToast;
 	closing: boolean;
-	front: boolean;
 	paused: boolean;
 	onDismiss(toast: ActionToast): void;
 }): ReactNode {
 	const isError = toast.kind === "error";
-	const className = [
-		"gui-action-toast",
-		`gui-action-toast--${toast.kind}`,
-		front ? "gui-action-toast--front" : "",
-		closing ? "gui-action-toast--closing" : "",
-	]
+	const className = ["gui-action-toast", `gui-action-toast--${toast.kind}`, closing ? "gui-action-toast--closing" : ""]
 		.filter(Boolean)
 		.join(" ");
 
@@ -90,7 +89,7 @@ function ActionToastItem({
 			)}
 			<button
 				type="button"
-				className="gui-action-toast-close gui-update-toast-close"
+				className="gui-action-toast-close"
 				onClick={() => onDismiss(toast)}
 				title={t("settings.dismiss")}
 				aria-label={t("settings.dismiss")}
@@ -119,7 +118,14 @@ function ActionToastItem({
 	);
 }
 
-/** Unified bottom-right stack for local actions and application notices. */
+/**
+ * Unified bottom-right stack for local actions and application notices.
+ *
+ * Every row keeps its full height: a stack that collapses sibling rows to
+ * slivers hides messages the user has not read yet, and the store already caps
+ * the stack at three rows. Hover or keyboard focus inside the stack freezes
+ * every dismissal timer so a toast cannot expire under the pointer.
+ */
 export function ActionToastStack(): ReactNode {
 	const toasts = useSyncExternalStore(subscribeActionToasts, getToasts);
 	const [hovered, setHovered] = useState(false);
@@ -181,7 +187,6 @@ export function ActionToastStack(): ReactNode {
 		return () => window.removeEventListener("focus", onFocus);
 	}, [toasts]);
 
-	const frontId = toasts.at(-1)?.id;
 	const activeIds = new Set(toasts.map(toast => toast.id));
 	const keyOf = (toast: ActionToast): string => toast.dedupeKey ?? `message:${toast.message}`;
 	const activeKeys = new Set(toasts.map(keyOf));
@@ -193,7 +198,6 @@ export function ActionToastStack(): ReactNode {
 		if (!previous || previous.id < toast.id) closingByKey.set(key, toast);
 	}
 	const rows = [...toasts, ...closingByKey.values()].sort((a, b) => a.id - b.id);
-	const isExpanded = paused || toasts.length <= 1;
 
 	return (
 		<div
@@ -201,7 +205,6 @@ export function ActionToastStack(): ReactNode {
 			role="status"
 			aria-live="polite"
 			aria-atomic="false"
-			data-expanded={isExpanded ? "true" : "false"}
 			onMouseEnter={() => setHovered(true)}
 			onMouseLeave={() => setHovered(false)}
 			onFocusCapture={() => setFocused(true)}
@@ -215,7 +218,6 @@ export function ActionToastStack(): ReactNode {
 					key={toast.id}
 					toast={toast}
 					closing={!activeIds.has(toast.id)}
-					front={toast.id === frontId}
 					paused={paused}
 					onDismiss={dismiss}
 				/>
