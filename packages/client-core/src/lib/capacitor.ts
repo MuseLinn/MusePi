@@ -478,11 +478,12 @@ function badgeBridge(): BadgeBridge | null {
 	};
 	const registered = cap.Plugins?.Badge as BadgeBridge | undefined;
 	if (registered) return registered;
-	if (typeof cap.nativePromise !== "function") return null;
+	const nativePromise = cap.nativePromise;
+	if (typeof nativePromise !== "function") return null;
 	return {
-		get: () => cap.nativePromise<Record<string, never>, { count: number }>("Badge", "get", {}),
-		set: options => cap.nativePromise<{ count: number }, void>("Badge", "set", options),
-		clear: () => cap.nativePromise<Record<string, never>, void>("Badge", "clear", {}),
+		get: () => nativePromise<Record<string, never>, { count: number }>("Badge", "get", {}),
+		set: options => nativePromise<{ count: number }, void>("Badge", "set", options),
+		clear: () => nativePromise<Record<string, never>, void>("Badge", "clear", {}),
 	};
 }
 
