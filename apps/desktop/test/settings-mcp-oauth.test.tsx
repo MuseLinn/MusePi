@@ -3,7 +3,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { setLocale, t } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { McpSection } from "../src/components/settings-sections/mcp";
+import { McpServersSection } from "../src/components/settings-sections/mcp";
 import type { RpcClient, StreamEvent } from "../src/lib/rpc";
 
 /**
@@ -95,7 +95,7 @@ async function mount(fake: FakeRpc): Promise<HTMLElement> {
 	document.body.appendChild(host);
 	const root = createRoot(host);
 	mounted.add(root);
-	await act(async () => root.render(createElement(McpSection, { rpc: asRpc(fake) })));
+	await act(async () => root.render(createElement(McpServersSection, { rpc: asRpc(fake) })));
 	await flush();
 	return host;
 }

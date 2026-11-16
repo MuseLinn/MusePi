@@ -18,9 +18,11 @@ interface ConfiguredMcpServer {
 	enabled?: boolean;
 }
 
-/** Settings → 智能体 → MCP 服务器.
+/** Hand-configured MCP servers, nested inside the connector page.
  *
- * Two data sources, one page:
+ * Two data sources, one section — the catalog page owns connector discovery,
+ * and these rows are its second source: servers a person wrote into `mcp.json`
+ * directly rather than picking from the catalog.
  * - `extensions.list` (mcp-kind extensions) keeps the existing enable toggles
  *   on the mcp.json denylist path;
  * - `mcp.servers.list` adds what the toggles cannot show — transport, URL and
@@ -32,7 +34,7 @@ interface ConfiguredMcpServer {
  * lives in the shared OAuth hook and is opened through the OS handler, never
  * rendered, so a secret-bearing URL does not leak into the settings DOM or
  * logs. */
-export function McpSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export function McpServersSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const data = useExtensionRegistry(rpc);
 	const mcps = useMemo(() => (data?.extensions ?? []).filter(e => e.kind === "mcp"), [data]);
 	const [servers, setServers] = useState<ConfiguredMcpServer[] | null>(null);
@@ -64,7 +66,7 @@ export function McpSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("settings.mcpServers")}</h2>
+			<h3 className="gui-settings-nav-group">{t("settings.mcpServers")}</h3>
 			<p className="gui-settings-page-desc">{t("settings.mcpSettings")}</p>
 			{mcps.length === 0 ? (
 				<div className="gui-settings-row">{t("settings.noMcpServers")}</div>
@@ -97,7 +99,7 @@ export function McpSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			)}
 			{servers !== null && servers.length > 0 && (
 				<>
-					<h3 className="gui-settings-nav-group">{t("settings.mcpConfiguredServers")}</h3>
+					<h4 className="gui-settings-nav-group">{t("settings.mcpConfiguredServers")}</h4>
 					{servers.map(server => {
 						const flow = flows[server.name];
 						const extension = byName.get(server.name);

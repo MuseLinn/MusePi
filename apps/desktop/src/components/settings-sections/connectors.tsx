@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
+import { McpServersSection } from "./mcp";
 import { useMcpOAuth } from "./use-mcp-oauth";
 
 interface CatalogConnector {
@@ -692,6 +693,7 @@ export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 					);
 				})
 			)}
+			<McpServersSection rpc={rpc} />
 		</>
 	);
 }

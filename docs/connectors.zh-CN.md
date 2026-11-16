@@ -118,6 +118,8 @@ OAuth 授权仍落在 AuthStorage。MCP 客户端拥有的行（`mcp_oauth:` 与
 
 `connector-catalog` 发现 provider（priority 40）把每个已启用条目投影为名为 `connector:<id>` 的规范 MCP 服务器。该命名空间避免目录条目遮蔽手写的 `mcp.json` 服务器，也让 `/mcp` 输出能区分两者。声明了静态 header 时标记为 `origin-locked`；凭据由 auth storage 按服务器 URL 解析。
 
+GUI 如实反映这层包含关系：设置里只有一个入口「连接器」，手写的 `mcp.json` 服务器作为该页底部的「已配置服务器」分区渲染（`apps/desktop/src/components/settings-sections/mcp.tsx`，由 `connectors.tsx` 挂载）。此前目录旁边还有一个独立的「MCP 服务器」页，而它显示得更少——只有开关，没有 transport、URL 与 OAuth 登录。退役的 `mcp` 设置 id 保留在 `SECTION_ALIAS`（`apps/desktop/src/lib/settings-nav.ts`）中，存量深链继续落在连接器页。
+
 ## RPC 面
 
 | 路由 | 行为 |

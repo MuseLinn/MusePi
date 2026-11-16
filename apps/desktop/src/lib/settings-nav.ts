@@ -40,7 +40,6 @@ export type SectionId =
 	| "skills"
 	| "subagents"
 	| "commands"
-	| "mcp"
 	| "connectors"
 	| "hooks"
 	| "indexes"
@@ -53,7 +52,7 @@ export type SectionId =
  *  through SECTION_ALIAS to reach a page. Kept in the type so `openSettings`
  *  call sites stay exhaustive, and OUT of SectionId so no call site can treat
  *  one as directly renderable. */
-export type SectionAlias = "providers" | "plugins" | "sessions" | "memory" | "suggestions";
+export type SectionAlias = "providers" | "plugins" | "sessions" | "memory" | "suggestions" | "mcp";
 
 /** What a caller may ask the settings pane to open. */
 export type SectionRequest = SectionId | SectionAlias;
@@ -70,6 +69,11 @@ export const SECTION_ALIAS: Record<SectionAlias, SectionId> = {
 	sessions: "session-memory",
 	memory: "session-memory",
 	suggestions: "session-memory",
+	// MCP servers are a connector kind, not a sibling of the catalog: the
+	// connector page owns discovery, enablement and auth, and shows the
+	// hand-configured servers as one of its sources. The old id keeps
+	// deep links landing on the page that now holds them.
+	mcp: "connectors",
 };
 
 /** Section the pane lands on when nothing valid was requested. */

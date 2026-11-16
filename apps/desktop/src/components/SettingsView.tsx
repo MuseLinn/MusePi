@@ -605,7 +605,6 @@ export function SettingsView({
 							{activeSection === "migration" && <MigrationSection rpc={rpc} />}
 							{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
 							{activeSection === "commands" && <CommandsSection rpc={rpc} />}
-							{activeSection === "mcp" && <McpSection rpc={rpc} />}
 							{activeSection === "connectors" && <ConnectorsSection rpc={rpc} />}
 							{activeSection === "hooks" && <HooksSection rpc={rpc} />}
 							{activeSection === "browser" && <BrowserSection rpc={rpc} />}
@@ -634,7 +633,6 @@ import {
 	HooksSection,
 	IndexesSection,
 	InteractionSection,
-	McpSection,
 	MediaSection,
 	ModelSection,
 	ModesSection,

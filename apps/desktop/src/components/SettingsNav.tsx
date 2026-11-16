@@ -332,7 +332,6 @@ export function navGroups(
 			items: [
 				{ id: "skills", icon: "sparkling", label: t("tools.extensionsPlugins"), enabled: true },
 				{ id: "subagents", icon: "user", label: t("settings.tasksSubagents"), enabled: true },
-				{ id: "mcp", icon: "server", label: t("settings.mcpServers"), enabled: true },
 				{ id: "connectors", icon: "plug", label: t("settings.connectors"), enabled: true },
 				{ id: "commands", icon: "terminal-box", label: t("settings.commands"), enabled: true },
 				{ id: "hooks", icon: "node-tree", label: t("settings.hooks"), enabled: true },

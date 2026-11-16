@@ -118,6 +118,8 @@ OAuth grants still land in AuthStorage. Rows owned by the MCP client (`mcp_oauth
 
 The `connector-catalog` discovery provider (priority 40) projects each enabled entry into a canonical MCP server named `connector:<id>`. That namespace keeps a catalog entry from shadowing a hand-written `mcp.json` server and lets `/mcp` output distinguish the two. Static headers, when declared, are marked `origin-locked`; credentials are resolved from auth storage by server URL.
 
+The GUI reflects that containment: settings has ONE entry, 连接器, and hand-written `mcp.json` servers render as the 已配置服务器 section at the bottom of that page (`apps/desktop/src/components/settings-sections/mcp.tsx`, mounted from `connectors.tsx`). A separate MCP page used to sit beside the catalog and showed less — a toggle without transport, URL, or OAuth login. The retired `mcp` settings id stays in `SECTION_ALIAS` (`apps/desktop/src/lib/settings-nav.ts`) so existing deep links land on the connector page.
+
 ## RPC surface
 
 | Route | Behavior |

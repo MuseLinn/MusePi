@@ -1210,7 +1210,7 @@ export function SessionInfoCard({
 						}
 						onSelectAll={() => setConnectorSelection([])}
 						onUseAll={() => setConnectorSelection(null)}
-						onManage={() => onOpenSettings?.("mcp")}
+						onManage={() => onOpenSettings?.("connectors")}
 					/>
 				</section>
 			) : (
@@ -1219,9 +1219,9 @@ export function SessionInfoCard({
 					<button
 						type="button"
 						className="gui-connector-link gui-session-info-manage-connectors self-start"
-						onClick={() => onOpenSettings?.("mcp")}
+						onClick={() => onOpenSettings?.("connectors")}
 					>
-						{t("settings.mcpServers")}
+						{t("settings.connectors")}
 					</button>
 				</section>
 			)}
