@@ -1616,6 +1616,8 @@ export const settings = {
 	"settings.enter6DigitCodeMusepiMobile": "在 MusePi Mobile 中输入 6 位配对码（同一网络）",
 	"settings.copyWatchOnlyLink": "复制只读链接",
 	"settings.text": "{name}（仅观看）",
+	"settings.scanNotPairCode": "这个二维码不是 MusePi 配对码，换一个再试",
+	"settings.pairCodeWithAddress": "在同一网络的手机上输入上面的码，电脑地址填 {host}",
 	"settings.singleUseExpiresSWithSeconds": "单次有效 · {seconds} 秒后失效",
 	"settings.codeHasExpiredGet": "此配对码已失效 — 请重新获取",
 	"settings.scanQrCode2": "扫码连接",

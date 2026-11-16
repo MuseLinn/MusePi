@@ -148,6 +148,7 @@ export function RemoteAccessDialog({
 	const [webLink, setWebLink] = useState<string | null>(null);
 	const [mode, setMode] = useState<ShareMode>("session");
 	const [pairCode, setPairCode] = useState<string | null>(null);
+	const [pairHost, setPairHost] = useState<string | null>(null);
 	const [pairCodeExpiresAt, setPairCodeExpiresAt] = useState<number | null>(null);
 	const [now, setNow] = useState(() => Date.now());
 	const [copiedView, setCopiedView] = useState(false);
@@ -204,6 +205,15 @@ export function RemoteAccessDialog({
 	useEffect(() => {
 		if (webLink && qrRef.current) drawQr(qrRef.current, webLink);
 	}, [webLink]);
+
+	// The share panel is the only place that answers "did the phone connect?".
+	// The status RPC is cheap; polling only while this dialog is open and
+	// hosting keeps an idle share honest without a background timer.
+	useEffect(() => {
+		if (!open || info?.hosting !== true || !rpc) return;
+		const timer = window.setInterval(() => void refresh(), 3000);
+		return () => window.clearInterval(timer);
+	}, [open, info?.hosting, rpc, refresh]);
 
 	const pendingChannel = (channels ?? []).some(c => c.state === "connecting" || c.state === "waiting_scan");
 	useEffect(() => {
@@ -297,13 +307,21 @@ export function RemoteAccessDialog({
 	const genPairCode = async (): Promise<void> => {
 		if (!rpc) return;
 		try {
-			const res = await rpc.request<{ code: string; expiresInSeconds: number }>("remote-access.pair.generate", {});
+			const res = await rpc.request<{ code: string; expiresInSeconds: number; lanHost?: string | null }>(
+				"remote-access.pair.generate",
+				{},
+			);
 			setPairCode(res.code);
+			setPairHost(res.lanHost ?? null);
 			setPairCodeExpiresAt(Date.now() + res.expiresInSeconds * 1000);
 			setNow(Date.now());
-		} catch {
+		} catch (err) {
+			// A code the phone cannot resolve is worse than no code: say why the
+			// LAN endpoint is unavailable instead of leaving an empty slot.
 			setPairCode(null);
+			setPairHost(null);
 			setPairCodeExpiresAt(null);
+			setError(err instanceof Error ? err.message : String(err));
 		}
 	};
 
@@ -318,6 +336,10 @@ export function RemoteAccessDialog({
 			});
 			setInfo({ ...res, hosting: true });
 			if (res.webLink) setWebLink(res.webLink);
+			// A code minted for the previous share was cleared server-side.
+			setPairCode(null);
+			setPairHost(null);
+			setPairCodeExpiresAt(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -334,6 +356,9 @@ export function RemoteAccessDialog({
 			});
 			setInfo({ hosting: false });
 			setWebLink(null);
+			setPairCode(null);
+			setPairHost(null);
+			setPairCodeExpiresAt(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -480,11 +505,13 @@ export function RemoteAccessDialog({
 									</button>
 								</div>
 								<span className="gui-collab-pair-hint">
-									{pairSecondsLeft === null
-										? t("settings.enter6DigitCodeMusepiMobile")
-										: pairSecondsLeft > 0
-											? t("settings.singleUseExpiresSWithSeconds", { seconds: String(pairSecondsLeft) })
-											: t("settings.codeHasExpiredGet")}
+									{pairHost
+										? t("settings.pairCodeWithAddress", { host: pairHost })
+										: pairSecondsLeft === null
+											? t("settings.enter6DigitCodeMusepiMobile")
+											: pairSecondsLeft > 0
+												? t("settings.singleUseExpiresSWithSeconds", { seconds: String(pairSecondsLeft) })
+												: t("settings.codeHasExpiredGet")}
 								</span>
 							</div>
 						</div>

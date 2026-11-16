@@ -25,17 +25,72 @@ export interface ConnectScreenProps {
 }
 
 const PAIR_HOST_KEY = "musepi.collab.pairHost";
-const SKIP_KEY = "omp-collab-skipped";
+const SKIP_KEY = "musepi.collab.skipped";
+/** Pre-rename spelling; read so a device that skipped earlier stays skipped. */
+const LEGACY_SKIP_KEY = "omp-collab-skipped";
 /** Pair endpoint port (daemon server.ts PAIR_PORT). */
 const PAIR_PORT = 8301;
 
+/**
+ * A typed computer address as `host[:port]`.
+ *
+ * People paste what they see — `http://192.168.1.7`, a URL with a path, a
+ * trailing slash — and the old `host.includes(":")` test turned those into
+ * `ws://http://…` or `ws://1.2.3.4/:8301`, which threw a raw SyntaxError. Only
+ * the host (and an explicit port) identify the pair endpoint, so the rest is
+ * stripped here and the result is validated before a socket is opened.
+ */
+export function normalizePairHost(raw: string): string | null {
+	let value = raw.trim();
+	if (!value) return null;
+	value = value.replace(/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//, "");
+	const [authority] = value.split(/[/?#]/, 1);
+	if (!authority) return null;
+	// IPv6 literals keep their brackets; everything else allows one optional port.
+	const match = /^(\[[0-9a-fA-F:]+\]|[^:\s]+)(?::(\d{1,5}))?$/.exec(authority);
+	if (!match) return null;
+	const host = match[1]!;
+	const port = match[2] ?? String(PAIR_PORT);
+	return `${host}:${port}`;
+}
+
 /** Resolve a 6-digit pair code against the daemon's LAN pair endpoint
  *  (pair.resolve) to obtain the full collab webLink. */
+/**
+ * The collab link behind a scanned code, or null.
+ *
+ * A camera scans whatever is in front of it — a Wi-Fi join code, a product
+ * barcode — and the old path connected with any string, so the guide closed and
+ * a protocol error appeared as if MusePi itself had failed. `musepi://connect`
+ * links (the same shape the Android deep link uses) are unwrapped; only a
+ * transport URL survives.
+ */
+export function linkFromScannedCode(raw: string): string | null {
+	const value = raw.trim();
+	try {
+		const url = new URL(value);
+		if (url.protocol === "musepi:") {
+			const link = url.searchParams.get("link") ?? url.searchParams.get("url");
+			return link && /^(wss?|https?):\/\//i.test(link) ? link : null;
+		}
+	} catch {
+		return null;
+	}
+	return /^(wss?|https?):\/\//i.test(value) ? value : null;
+}
+
 function resolvePairCodeOnLan(code: string, host: string): Promise<string> {
-	const origin = host.includes(":") ? host : `${host}:${PAIR_PORT}`;
+	const origin = normalizePairHost(host);
+	if (!origin) return Promise.reject(new Error(t("settings.cannotReachComputerSame")));
 	const url = `ws://${origin}`;
 	return new Promise<string>((resolve, reject) => {
-		const ws = new WebSocket(url);
+		let ws: WebSocket;
+		try {
+			ws = new WebSocket(url);
+		} catch {
+			reject(new Error(t("settings.cannotReachComputerSame")));
+			return;
+		}
 		const timer = setTimeout(() => {
 			ws.close();
 			reject(new Error(t("settings.pairCodeTimedOut")));
@@ -86,8 +141,10 @@ function SavedComputers({
 					// the only distinguishing fact: the relay hint, or the computer's
 					// own name when it has one.
 					const parts = addressParts(host.candidates[0]?.address ?? "");
-					const named = isDisplayableHostName(host.deviceName, host.label) ? host.deviceName : "";
-					const subtitle = parts.relay ? t("settings.hostPathRelay") : named;
+					// `deviceName` is the name the phone announced when it connected,
+					// not the computer's — showing it labelled every saved machine
+					// with this phone's name. The address is the fact that differs.
+					const subtitle = parts.relay ? t("settings.hostPathRelay") : parts.host;
 					return (
 						<div
 							key={host.id}
@@ -128,21 +185,6 @@ function SavedComputers({
 /** Remote-workspace entry point. Saved computers are the fastest route;
  *  QR is the primary new-connection action, while pair codes and links are
  *  progressively disclosed alternatives. */
-/**
- * Whether a recorded device name is worth showing.
- *
- * The stored value is whatever the peer announced at connect time, and older
- * records carry the protocol role instead of a machine name — two LAN hosts
- * both showed the subtitle "guest", which reads as a debug string leaking into
- * the list. Only names that differ from the address and are not roles pass.
- */
-function isDisplayableHostName(name: string | undefined, label: string): boolean {
-	if (!name) return false;
-	const trimmed = name.trim();
-	if (trimmed === "" || trimmed === label) return false;
-	return !/^(guest|host|agent|unknown|musepi)$/i.test(trimmed);
-}
-
 export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: ConnectScreenProps): ReactNode {
 	const [link, setLink] = useState(defaultLink ?? "");
 	const [name, setName] = useState(defaultName);
@@ -156,7 +198,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	const [offline, setOffline] = useState(typeof navigator !== "undefined" && !navigator.onLine);
 	const [skipped, setSkipped] = useState(() => {
 		try {
-			return localStorage.getItem(SKIP_KEY) === "1";
+			return localStorage.getItem(SKIP_KEY) === "1" || localStorage.getItem(LEGACY_SKIP_KEY) === "1";
 		} catch {
 			return false;
 		}
@@ -205,6 +247,9 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		// hook, so a failed connect never pollutes the saved hosts.
 		onConnect(target, who);
 		haptic(12);
+		// The native sheet stays open until the page accepts the submission
+		// (HarmonyOS): a rejected code or unreachable host has to stay editable.
+		if (isHarmonyShell()) window.harmonyNative?.closeConnectSheet?.();
 	};
 
 	const forgetHost = async (id: string): Promise<void> => {
@@ -283,6 +328,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	const skip = (): void => {
 		try {
 			localStorage.setItem(SKIP_KEY, "1");
+			localStorage.removeItem(LEGACY_SKIP_KEY);
 		} catch {
 			// storage unavailable
 		}
@@ -320,7 +366,14 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	// The native Scan Kit result arrives here as a raw collab link; the page
 	// connects like any other manual entry.
 	const scanResult = useCallback(
-		(link: string): void => {
+		(raw: string): void => {
+			const link = linkFromScannedCode(raw);
+			if (!link) {
+				setLocalError(t("settings.scanNotPairCode"));
+				haptic([20, 60, 20]);
+				return;
+			}
+			setLocalError(null);
 			connect(link, name.trim() || t("settings.myPhone"));
 		},
 		[connect, name],
@@ -400,8 +453,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		if (!isHarmonyShell()) return;
 		const rows = recent.map(host => {
 			const parts = addressParts(host.candidates[0]?.address ?? "");
-			const named = isDisplayableHostName(host.deviceName, host.label) ? host.deviceName : "";
-			return { id: host.id, label: host.label, subtitle: parts.relay ? t("settings.hostPathRelay") : named };
+			return { id: host.id, label: host.label, subtitle: parts.relay ? t("settings.hostPathRelay") : parts.host };
 		});
 		window.harmonyNative?.setHosts?.(JSON.stringify(rows));
 	}, [recent]);
@@ -532,7 +584,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 										pattern="[0-9]{6}"
 										maxLength={6}
 										value={pairCode}
-										onChange={e => setPairCode(e.target.value)}
+										onChange={e => setPairCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
 										placeholder="123456"
 										autoComplete="off"
 										data-morph-id="composer-input"
@@ -549,7 +601,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 									<button
 										className="sh-btn sh-btn-primary"
 										type="submit"
-										disabled={pairBusy || !pairCode.trim() || !pairHost.trim()}
+										disabled={pairBusy || pairCode.length !== 6 || !pairHost.trim()}
 										data-morph-id="composer-send"
 									>
 										{pairBusy ? t("settings.connecting2") : t("settings.pair")}

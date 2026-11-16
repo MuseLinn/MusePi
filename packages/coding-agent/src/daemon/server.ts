@@ -1118,8 +1118,15 @@ export class DaemonServer {
 	/** Lazily start the LAN pair endpoint (pair.resolve only). Bound to
 	 *  0.0.0.0 so the mobile app can fetch the full collab link from a
 	 *  6-digit code; it carries no other RPC surface. */
+	/** Last bind failure, surfaced by `pair.generate`: handing out a code the
+	 *  phone can never resolve puts the whole failure on the other device. */
+	#pairWsError: string | null = null;
+
 	async #ensurePairServer(): Promise<void> {
-		if (this.#pairWs) return;
+		if (this.#pairWs) {
+			this.#pairWsError = null;
+			return;
+		}
 		try {
 			this.#pairWs = await startDaemonWs({
 				port: PAIR_PORT,
@@ -1147,11 +1154,23 @@ export class DaemonServer {
 				},
 				onClose: () => {},
 			});
+			this.#pairWsError = null;
 		} catch (err) {
-			logger.warn("pair endpoint unavailable", {
-				error: err instanceof Error ? err.message : String(err),
-			});
+			this.#pairWsError = err instanceof Error ? err.message : String(err);
+			logger.warn("pair endpoint unavailable", { error: this.#pairWsError });
 		}
+	}
+
+	/** The LAN address a phone should dial. The pair endpoint binds 0.0.0.0, so
+	 *  the reachable identity is one of this machine's IPv4 addresses; the first
+	 *  non-internal one is the usual Wi-Fi/Ethernet address. */
+	#pairLanHost(): string | null {
+		for (const addresses of Object.values(os.networkInterfaces())) {
+			for (const address of addresses ?? []) {
+				if (address.family === "IPv4" && !address.internal) return address.address;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -4020,7 +4039,13 @@ export class DaemonServer {
 				if (!webLink) throw new Error("no collab link yet — refresh the share");
 				const { code, expiresAt } = this.#pairCodes.mint(webLink);
 				await this.#ensurePairServer();
-				return { code, expiresInSeconds: Math.round((expiresAt - Date.now()) / 1000), lanPort: PAIR_PORT };
+				if (this.#pairWsError) throw new Error(`pair endpoint unavailable: ${this.#pairWsError}`);
+				return {
+					code,
+					expiresInSeconds: Math.round((expiresAt - Date.now()) / 1000),
+					lanPort: PAIR_PORT,
+					lanHost: this.#pairLanHost(),
+				};
 			}
 			case "channels.list": {
 				return this.#channels.list();

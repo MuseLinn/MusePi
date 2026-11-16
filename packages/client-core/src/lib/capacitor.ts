@@ -121,6 +121,9 @@ declare global {
 			openPairSheet?: () => void;
 			/** Native半模态 sheet for the remote-link form. */
 			openLinkSheet?: () => void;
+			/** Close the connect sheet after the page accepted a submission.
+			 *  Rejections keep it open so the values can be corrected. */
+			closeConnectSheet?: () => void;
 			/**
 			 * Native session switcher. The page owns the list and its localized
 			 * text; the sheet only renders and reports the chosen row, so the

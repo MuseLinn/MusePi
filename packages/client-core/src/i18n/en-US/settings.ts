@@ -1689,6 +1689,8 @@ export const settings = {
 	"settings.enter6DigitCodeMusepiMobile": "Enter the 6-digit code in MusePi Mobile (same network)",
 	"settings.copyWatchOnlyLink": "Copy watch-only link",
 	"settings.text": "{name} (watch-only)",
+	"settings.scanNotPairCode": "This QR code is not a MusePi pair code — try another",
+	"settings.pairCodeWithAddress": "Enter the code above on a phone on the same network; computer address {host}",
 	"settings.singleUseExpiresSWithSeconds": "Single use · expires in {seconds}s",
 	"settings.codeHasExpiredGet": "This code has expired — get a new one",
 	"settings.scanQrCode2": "Scan QR code",
