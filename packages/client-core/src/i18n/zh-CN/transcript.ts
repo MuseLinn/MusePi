@@ -4,11 +4,16 @@ export const transcript = {
 	"transcript.uiBlockSend": "发送选择",
 	"transcript.uiBlockAnswerHeader": "界面选择：",
 	"transcript.uiBlockAnswerNote": "补充说明",
+	"annotation.quoteSelection": "引用选中的内容",
+	"transcript.uiBlockRepair": "让 agent 修一下",
+	"transcript.uiBlockRepairRequest":
+		"这块界面没画出来，请修好它并保留原有意图：\n\n```ui\n{source}\n```\n\n错误：\n{errors}",
 	"transcript.uiBlockEmpty": "这块界面没有可显示的内容。",
 	"transcript.uiBlockPartial": "这块界面有 {count} 处没能画出：",
 	"transcript.uiBlockLine": "第 {line} 行：{reason}",
 	"transcript.uiBlockSource": "源码",
 	"transcript.roundToolsWithCount": "工具 ×{count}",
+	"transcript.roundToolOne": "工具 ×1",
 	"transcript.exploredCodebase": "探索了代码库",
 	"transcript.roundCommandsWithCount": "命令 ×{count}",
 	"transcript.roundWebWithCount": "调研 ×{count}",
@@ -307,6 +312,7 @@ export const transcript = {
 	"transcript.turnFilesDiffUnavailable": "此文件的改动无法逐项展示",
 	"transcript.turnFilesRebuilding": "正在加载本轮改动…",
 	"transcript.turnFilesOpenFile": "打开文件",
+	"transcript.bootPreparing": "正在准备会话界面",
 } as const;
 
 /** Key union for the transcript domain (source of truth). */

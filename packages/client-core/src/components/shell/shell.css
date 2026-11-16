@@ -711,6 +711,7 @@
 .sh-composer-editor {
 	grid-area: editor;
 	min-width: 0;
+	position: relative;
 }
 
 .sh-composer-leading,
@@ -766,6 +767,43 @@
 
 .sh-composer-input::placeholder {
 	color: var(--fg-faint);
+}
+
+/* Next-input candidate: occupies the placeholder slot of an empty composer,
+ * aligned to the textarea's own 6px/8px padding. One ellipsised line plus the
+ * accept key — no card, icon or border, because it must read as a placeholder
+ * the user can accept rather than as another control in the toolbar. It never
+ * takes pointer input: the click belongs to the textarea underneath. */
+.sh-composer-suggestion {
+	position: absolute;
+	inset-inline: 8px;
+	top: 6px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--ui-font-size);
+	line-height: 22px;
+	color: var(--fg-muted);
+	user-select: none;
+	pointer-events: none;
+}
+
+.sh-composer-suggestion-text {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.sh-composer-suggestion-key {
+	flex: none;
+	padding: 0 4px;
+	font-family: inherit;
+	font-size: var(--ui-font-size-xs);
+	line-height: 16px;
+	color: var(--fg-faint);
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-sm);
 }
 
 .sh-composer-input:disabled {
@@ -1477,6 +1515,53 @@
 	animation: pulse 1.2s ease-in-out infinite;
 }
 
+/* Ended state outside the chat destination: the same strip as the connecting
+ * banner, in the error tint, with the one action that can help. The modal
+ * version is reserved for the transcript it interrupts. */
+.sh-banner--ended {
+	max-width: min(92vw, 520px);
+	color: var(--err);
+}
+
+/* In the session shell the top strip has to widen to carry a sentence, and a
+ * wide strip at `top` covered the title and the header tools. An ended session
+ * is a status the user may want to act on rather than read, so on a phone it
+ * docks above the tab bar as a snackbar — clear of the header, in thumb reach. */
+.sh-has-tabbar .sh-banner--ended {
+	top: auto;
+	left: 12px;
+	right: 12px;
+	bottom: calc(var(--safe-bottom, 0px) + var(--sh-tabbar-space, 96px) + 8px);
+	transform: none;
+	max-width: none;
+	justify-content: flex-start;
+	padding: 10px 14px;
+	border-radius: var(--radius-2xl);
+	font-size: var(--ui-font-size-sm);
+	box-shadow: var(--shadow-overlay);
+}
+
+.sh-banner--ended .sh-banner-dot {
+	background: var(--err);
+	animation: none;
+}
+
+.sh-banner-text {
+	overflow: hidden;
+	min-width: 0;
+	text-overflow: ellipsis;
+}
+
+.sh-banner-action {
+	padding: 2px 6px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--accent);
+	font: inherit;
+	font-weight: 600;
+}
+
 .sh-ended {
 	position: fixed;
 	inset: 0;
@@ -1571,40 +1656,62 @@
 	gap: 8px;
 	max-width: 320px;
 	margin-left: auto;
+	/* One card's height ceiling: the strip between 12px top/bottom insets and both
+	 * safe areas, less the two 8px gaps, split across the store's three-row cap. */
+	--sh-toast-max-height: calc(
+		(100dvh - 24px - var(--safe-top, 0px) - var(--safe-bottom, 0px) - var(--mp-keyboard-inset, 0px) - 16px) /
+			3
+	);
 }
 
+/* One neutral glass card, same metrics as the desktop stack: a fixed 320px
+ * ceiling, 12/14 padding, one status glyph. The kind colour lives on the glyph
+ * alone — an accent rail or tinted fill competes with the message. */
 .sh-toast {
 	display: flex;
 	align-items: flex-start;
 	gap: 8px;
-	padding: 8px 10px;
+	box-sizing: border-box;
+	max-height: var(--sh-toast-max-height);
+	padding: 10px 12px;
 	font-size: var(--ui-font-size-xs);
 	color: var(--fg);
 	background: var(--glass-sheen), var(--glass-bg-strong);
 	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
 	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
 	border: 1px solid var(--glass-border);
-	border-left-width: 2px;
 	border-radius: var(--radius-lg);
 	box-shadow: var(--glass-shadow);
 }
 
-.sh-toast-info {
-	border-left-color: var(--accent);
+.sh-toast-icon {
+	flex: none;
+	margin-top: 1px;
+	color: var(--fg-muted);
 }
 
-.sh-toast-warning {
-	border-left-color: var(--warn);
+.sh-toast-success .sh-toast-icon {
+	color: var(--ok);
 }
 
-.sh-toast-error {
-	border-left-color: var(--err);
+.sh-toast-warning .sh-toast-icon {
+	color: var(--warn);
+}
+
+.sh-toast-error .sh-toast-icon {
+	color: var(--err);
 }
 
 .sh-toast-msg {
 	flex: 1;
 	min-width: 0;
+	/* 22px = the card's 10px vertical padding plus both 1px borders: above that
+	 * the message scrolls inside the card instead of growing it past the ceiling. */
+	max-height: calc(var(--sh-toast-max-height) - 22px);
+	overflow-y: auto;
 	overflow-wrap: anywhere;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
 }
 
 .sh-toast-close {
@@ -1679,7 +1786,13 @@
 	min-height: 0;
 	max-height: 100%;
 	display: grid;
-	place-items: start center;
+	/* Centred while the guide fits, start once it does not: a short connect
+	 * screen sat against the top edge with ~350px of dead space under the
+	 * pair-code row, which reads as an unfinished page rather than a centred
+	 * one. `safe` keeps the overflow case scrollable instead of clipping the
+	 * first row. */
+	place-items: safe center;
+	align-content: safe center;
 	overflow-y: auto;
 	overflow-y: overlay;
 	overscroll-behavior: contain;
@@ -3761,6 +3874,27 @@
 	word-break: break-all;
 }
 
+.sh-files-preview-image {
+	max-width: 100%;
+	max-height: 60vh;
+	object-fit: contain;
+	border-radius: var(--radius);
+	background: var(--bg);
+}
+
+.sh-files-preview-media {
+	width: 100%;
+	border-radius: var(--radius);
+	background: var(--bg);
+}
+
+.sh-files-preview-binary {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+}
+
 .sh-files-actions {
 	display: flex;
 	gap: 8px;
@@ -3787,6 +3921,9 @@
 }
 
 .sh-tree-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	flex: none;
 	width: 16px;
 	height: 16px;
@@ -3794,10 +3931,19 @@
 	border: none;
 	background: transparent;
 	color: var(--fg-muted);
-	font-size: 10px;
 	cursor: pointer;
 	transform: rotate(0deg);
 	transition: transform 120ms ease;
+}
+
+.sh-tree-file-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 16px;
+	height: 16px;
+	color: var(--fg-faint);
 }
 
 .sh-tree-toggle--open {
@@ -4513,27 +4659,40 @@
 
 .gui-blur-char {
 	display: inline-block;
-	filter: blur(8px);
-	opacity: 0;
-	transform: translateY(10px);
-	transition:
-		filter var(--gui-motion-blur) ease,
-		opacity var(--gui-motion-blur) ease,
-		transform var(--gui-motion-blur) var(--spring);
+	animation: gui-blur-char-in var(--gui-motion-blur, 240ms) var(--spring) both;
 	will-change: filter, opacity, transform;
 }
 
-.gui-blur-char--in {
-	filter: blur(0);
-	opacity: 1;
-	transform: none;
+@keyframes gui-blur-char-in {
+	from {
+		filter: blur(8px);
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		filter: blur(0);
+		opacity: 1;
+		transform: none;
+	}
+}
+
+/* A decorative reveal must never decide whether text exists: touch shells
+ * (Android / HarmonyOS / mobile web) show it immediately, and reduced motion
+ * does the same. */
+@media (hover: none) {
+	.gui-blur-char {
+		animation: none;
+		filter: none;
+		opacity: 1;
+		transform: none;
+	}
 }
 
 .gui-motion-off .gui-blur-char {
+	animation: none;
 	filter: none;
 	opacity: 1;
 	transform: none;
-	transition: none;
 }
 
 /* ── StatusText: in-place cross-fade for state copy (gui-design.md §3a) ────
@@ -5638,22 +5797,9 @@
 .sh-mobile-settings {
 	width: min(100%, 720px);
 	margin: 0 auto;
-	padding: 20px 16px calc(32px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
+	padding: 22px 16px calc(32px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
 }
 
-.sh-mobile-settings-head {
-	margin: 0 0 16px;
-}
-
-.sh-mobile-settings-head h2 {
-	/* HarmonyOS settings title: large, left aligned, no subtitle. */
-	margin: 0;
-	font-size: 26px;
-	font-weight: 600;
-	letter-spacing: -0.01em;
-}
-
-.sh-mobile-settings-head p,
 .sh-mobile-setting-description {
 	margin: 0;
 	color: var(--fg-muted);
@@ -5662,63 +5808,312 @@
 }
 
 .sh-mobile-settings-section {
-	margin: 0 0 22px;
+	margin: 0 0 26px;
 	padding: 0;
 	border: 0;
 	background: transparent;
 	box-shadow: none;
 }
 
+/* Section headers are labels for the card below, not headings competing with
+ * the row text: one small step down from the 16px row label, tightened
+ * tracking, and enough air above to separate groups. */
 .sh-mobile-settings-section > h3 {
-	margin: 0 0 8px 2px;
+	margin: 0 0 10px 4px;
 	color: var(--fg-muted);
 	font-size: 13px;
-	font-weight: 400;
+	font-weight: 600;
+	letter-spacing: 0.02em;
 }
 
 /* One rounded surface per group (system settings list language): the group
  * owns the card, the rows own only the hairline separators. The old shape put
  * a bordered card around every section AND a 16px inset on it, which read as a
- * web card rather than a HarmonyOS list. */
+ * web card rather than a HarmonyOS list.
+ *
+ * The card is lifted off the page by surface + hairline + a 1px top highlight
+ * instead of a shadow: on near-black surfaces a shadow is invisible and the
+ * card then reads as a flat rectangle of the same colour as the page. */
 .sh-setting-group {
 	overflow: hidden;
-	border: 0.5px solid var(--glass-border);
-	border-radius: var(--radius-xl);
-	background: var(--glass-bg);
-	box-shadow: inset 0 1px 0 var(--glass-edge-hi);
+	border: 0.5px solid color-mix(in oklab, var(--fg) 12%, transparent);
+	border-radius: var(--radius-2xl);
+	background: var(--gui-card-surface, var(--bg-raised));
+	box-shadow: inset 0 1px 0 color-mix(in oklab, var(--fg) 7%, transparent);
 }
 
 .sh-mobile-setting-row {
+	position: relative;
 	display: flex;
-	min-height: 56px;
+	min-height: 58px;
 	align-items: center;
 	justify-content: space-between;
 	gap: 16px;
-	padding: 0 14px;
+	padding: 0 16px;
 	font-size: 16px;
-	border-bottom: 0.5px solid var(--border);
 }
 
-.sh-setting-group > .sh-mobile-setting-row:last-child {
-	border-bottom: 0;
+/* HarmonyOS separators are inset from the leading edge and stop at the trailing
+ * one — a full-bleed rule through a rounded card is the tell of a web list. */
+.sh-mobile-setting-row + .sh-mobile-setting-row::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 16px;
+	right: 0;
+	height: 0.5px;
+	background: var(--border);
+}
+
+.sh-setting-label {
+	font-weight: 500;
+	line-height: 1.3;
+	letter-spacing: 0.005em;
 }
 
 .sh-mobile-setting-row--stack {
 	align-items: stretch;
 	flex-direction: column;
 	justify-content: center;
-	gap: 8px;
-	padding: 12px 14px;
+	gap: 12px;
+	padding: 16px;
 }
 
 /* Secondary line under a settings label (why the stops are ordered that way). */
 .sh-setting-hint {
 	display: block;
-	margin-top: 2px;
+	margin-top: 3px;
 	color: var(--fg-faint);
 	font-size: 12px;
 	font-weight: 400;
-	line-height: 1.4;
+	line-height: 1.45;
+}
+
+/* Status chip beside a section title ("已连接"): the list it heads is about
+   computers, and whether one of them is live is the first thing to know. */
+.sh-setting-section-note {
+	margin-left: 8px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--accent) 16%, transparent);
+	color: var(--accent);
+	font-size: 11px;
+	font-weight: 500;
+	font-weight: 500;
+}
+
+/* ---- saved computers (mobile settings) ---------------------------------
+ * A list, not a modal: the row is the record, the trailing buttons edit it.
+ * Inside `sh-setting-group` the rows supply their own hairline so the group
+ * still reads as one card. */
+.sh-mobile-computers {
+	display: flex;
+	flex-direction: column;
+}
+
+.sh-mobile-computers-empty {
+	padding: 18px 16px;
+	color: var(--fg-faint);
+	font-size: 13px;
+	text-align: center;
+}
+
+.sh-mobile-computer {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-height: 60px;
+	padding: 0 8px 0 12px;
+	border-bottom: 0.5px solid var(--border);
+}
+
+.sh-mobile-computer:last-child {
+	border-bottom: 0;
+}
+
+.sh-mobile-computer--edit {
+	padding: 8px 12px;
+}
+
+.sh-mobile-computer--edit .sh-input {
+	width: 100%;
+}
+
+.sh-mobile-computer-main {
+	display: flex;
+	min-width: 0;
+	flex: 1;
+	align-items: center;
+	gap: 12px;
+	padding: 8px 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	text-align: left;
+}
+
+.sh-mobile-computer-main:disabled {
+	opacity: 1; /* the current host stays readable, it just is not a button */
+}
+
+.sh-mobile-computer-icon {
+	display: grid;
+	width: 32px;
+	height: 32px;
+	flex: 0 0 auto;
+	place-items: center;
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--accent) 14%, transparent);
+	color: var(--accent);
+}
+
+.sh-mobile-computer-copy {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.sh-mobile-computer-name {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 6px;
+	overflow: hidden;
+	color: var(--fg);
+	font-size: 15px;
+	line-height: 1.25;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sh-mobile-computer-cur {
+	padding: 1px 7px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--accent) 18%, transparent);
+	color: var(--accent);
+	font-size: 10px;
+	font-weight: 600;
+}
+
+.sh-mobile-computer-addr {
+	overflow: hidden;
+	color: var(--fg-faint);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sh-mobile-computer-act {
+	width: 36px;
+	height: 36px;
+	flex: 0 0 auto;
+	color: var(--fg-muted);
+}
+
+.sh-mobile-computer-rm {
+	color: color-mix(in oklab, var(--err) 78%, var(--fg-muted));
+}
+
+
+/* ---- accent swatches ----------------------------------------------------
+ * Five presets, each painted from its own `data-accent` scope so the dot is
+ * the real token value (the light scheme derives different lightness per
+ * preset, and `data-accent` is how the token file expresses that). */
+.sh-accent-swatches {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin: -4px 0 -4px -8px;
+}
+
+/* 44px hit area around a 30px dot: the visual is small, the target is not. */
+.sh-accent-swatch-btn {
+	display: grid;
+	width: 44px;
+	height: 44px;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	cursor: pointer;
+}
+
+.sh-accent-swatch {
+	display: grid;
+	width: 30px;
+	height: 30px;
+	place-items: center;
+	border-radius: 50%;
+	background: var(--accent);
+	box-shadow:
+		inset 0 0 0 0.5px color-mix(in oklab, var(--fg) 22%, transparent),
+		0 1px 2px oklch(0 0 0 / 30%);
+	transition: transform 160ms var(--spring);
+}
+
+.sh-accent-swatch-check {
+	color: var(--accent-fg);
+}
+
+/* Selection is a ring outside the dot, not a border inside it: a border would
+ * shrink every preset by 2px and make the chosen one read as a different
+ * colour from the one it applies. */
+.sh-accent-swatch-btn[aria-checked="true"] .sh-accent-swatch {
+	box-shadow:
+		inset 0 0 0 0.5px color-mix(in oklab, var(--fg) 22%, transparent),
+		0 0 0 2px var(--bg),
+		0 0 0 4px color-mix(in oklab, var(--fg) 55%, transparent);
+}
+
+.sh-accent-swatch-btn:active .sh-accent-swatch {
+	transform: scale(0.9);
+}
+
+/* Settings-row controls are the primary touch target on this page, so they get
+ * the full 44px instead of the header's compact 34px, and a softer radius than
+ * the pill so a card of three different controls still reads as one system. */
+.sh-mobile-settings .gui-seg {
+	height: 44px;
+	max-width: none;
+	padding: 3px;
+	border-radius: var(--radius-xl);
+}
+
+.sh-mobile-settings .gui-seg-item {
+	padding: 0 12px;
+	border-radius: var(--radius-lg);
+	font-size: 13px;
+	/* `--color-text-muted` was tuned for the page surface; on the raised card it
+	 * lands around 3:1, so unselected stops («小 / 标准 / 大», «English») read as
+	 * disabled. Lift the resting label and let the thumb carry the selection. */
+	color: color-mix(in oklab, var(--fg) 74%, transparent);
+	font-weight: 500;
+}
+
+.sh-mobile-settings .gui-seg-item[aria-checked="true"] {
+	color: var(--fg);
+}
+
+/* The thumb sat on `--color-surface-raised` — the same colour as the card it
+ * lives on, so the selection was only visible as a 2% lightness step. */
+.sh-mobile-settings .gui-seg-thumb {
+	top: 3px;
+	bottom: 3px;
+	left: 3px;
+	width: calc((100% - 6px) / var(--seg-count));
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--fg) 14%, var(--bg-raised));
+	box-shadow: 0 1px 2px oklch(0 0 0 / 35%);
+}
+
+/* Two stops hug their labels; four stretch, because 「精美/均衡/轻柔/极薄」 has
+ * to stay inside one line at phone width. */
+.sh-mobile-settings .sh-mobile-language {
+	flex: 0 0 auto;
+	width: auto;
+	min-width: 172px;
 }
 
 .sh-mobile-font-size {
@@ -5765,14 +6160,49 @@
 .sh-mobile-disconnect {
 	display: flex;
 	width: 100%;
-	min-height: 48px;
+	min-height: 50px;
 	align-items: center;
 	justify-content: center;
 	gap: 8px;
-	border: 1px solid color-mix(in oklab, var(--err) 25%, var(--glass-border));
-	border-radius: var(--radius-xl);
-	background: color-mix(in oklab, var(--err) 6%, var(--glass-bg));
+	border: 1px solid color-mix(in oklab, var(--err) 30%, transparent);
+	border-radius: var(--radius-2xl);
+	background: color-mix(in oklab, var(--err) 8%, transparent);
 	color: var(--err);
+	font-size: 15px;
+	font-weight: 500;
+}
+
+.sh-mobile-disconnect:active {
+	background: color-mix(in oklab, var(--err) 16%, transparent);
+}
+
+/* In the mobile shell the bottom tab bar already owns 设置, so the connect
+ * header's inline theme/accent/language cluster was a second copy of the same
+ * three controls — and at phone width it squeezed the lockup into a 400px
+ * strip of five controls. */
+.sh-has-tabbar .sh-connect-preferences {
+	display: none;
+}
+
+/* Mobile header tools: 40px circles with a translucent fill, no border.
+ * The shared `.sh-btn` is a bordered rounded rectangle sized for a desktop
+ * toolbar; beside a floating pill tab bar that read as a second, squarer
+ * system of controls in the same screen. */
+.sh-has-tabbar .sh-header .sh-btn-icon {
+	width: 40px;
+	height: 40px;
+	min-height: 40px;
+	justify-content: center;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+	color: var(--fg);
+}
+
+.sh-has-tabbar .sh-header .sh-btn-icon:active {
+	background: color-mix(in oklab, var(--fg) 15%, transparent);
+	transform: scale(0.94);
 }
 
 @media (max-width: 640px) {
@@ -6439,4 +6869,455 @@
 	font-size: 12px;
 	line-height: 1.5;
 	color: var(--fg-muted);
+}
+
+/* ---- phone refinements (2026-11-15 audit) ---------------------------------
+ * Three defects that only show on a real 412×915 phone viewport:
+ *   1. the bottom-sheet panel menu sat UNDER the floating tab bar (z 60), so
+ *      its last row (Settings — the only door on a single-session host) was
+ *      half covered and untappable;
+ *   2. the model capsule kept its desktop 108px cap, truncating
+ *      "Claude Haiku 4.5" to "Claude H..." while the row had spare width;
+ *   3. the files tab kept its two-column tree/preview grid, crushing the tree
+ *      to 220px and clipping the preview off the right edge. */
+@media (max-width: 599px) {
+	.sh-has-tabbar .sh-switcher-pop.sh-panel-menu-pop {
+		bottom: calc(12px + var(--safe-bottom, 0px) + var(--sh-tabbar-space));
+		z-index: 70;
+	}
+
+	.sh-mt-model {
+		max-width: min(42vw, 168px);
+	}
+
+	/* The expanded compact row was still 24px too narrow for
+	 * "Claude Haiku 4.5": the context ring and the thinking level's word took
+	 * exactly that space. Context lives in its own panel on a phone, and the
+	 * level keeps its brain icon (its aria-label still names it) — the model
+	 * name, which the user reads before every send, wins the width. */
+	.sh-ctx-ring {
+		display: none;
+	}
+
+	.sh-mt-seg {
+		padding: 0 8px;
+	}
+
+	.sh-mt-seg > svg + span {
+		display: none;
+	}
+}
+
+/* Files: one pane at a time on a phone. The list owns the screen until a file
+ * is opened; the preview then replaces it and its head carries the way back.
+ * The two-column grid stays for the desktop host view (≥840px). */
+@media (max-width: 839px) {
+	.sh-files-body {
+		grid-template-columns: 1fr;
+	}
+
+	.sh-files-preview {
+		display: none;
+	}
+
+	.sh-files-body[data-selected="true"] .sh-files-tree {
+		display: none;
+	}
+
+	.sh-files-body[data-selected="true"] .sh-files-preview {
+		display: flex;
+	}
+
+	.sh-files-back {
+		display: inline-flex;
+	}
+
+	.sh-files-preview-head {
+		align-items: center;
+	}
+}
+
+.sh-files-back {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	margin: -4px 0 -4px -6px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--fg-muted);
+}
+
+/* Two columns keep their own way back: the tree never leaves the screen. */
+@media (min-width: 840px) {
+	.sh-files-back {
+		display: none;
+	}
+}
+
+/* File rows: 44px tall, actions quiet at rest so a row reads as a name, not
+ * as a 2×2 grid of bordered buttons. The destructive action keeps its shape
+ * and accessible name; colour arrives on hover / keyboard focus. */
+.sh-tree-row {
+	min-height: 44px;
+	padding: 0 4px;
+}
+
+.sh-tree-op {
+	border-color: transparent;
+	background: transparent;
+	box-shadow: none;
+	color: var(--fg-faint);
+}
+
+.sh-tree-op:hover,
+.sh-tree-op:focus-visible {
+	border-color: var(--border);
+	background: var(--bg-raised);
+	color: var(--fg);
+}
+
+.sh-tree-op--danger,
+.sh-tree-op--danger:hover {
+	color: var(--fg-faint);
+}
+
+.sh-tree-op--danger:hover,
+.sh-tree-op--danger:focus-visible {
+	color: var(--err);
+}
+
+/* ---- phone header & message actions (2026-11-15, round 2) ---------------
+ * The header's two nav icons sat inside a bordered glass pill with the
+ * subagent count floating outside it; the message action row turned four
+ * bare icons into four bordered 44px pills. Both read as widgets rather than
+ * chrome. The header keeps plain 44px ghost targets (19px glyphs) and the
+ * count moves inside its button; actions become ghost icons that light up
+ * on press, with the tap target preserved by the coarse-pointer rule. */
+@media (max-width: 599px) {
+	.sh-header {
+		padding-left: 14px;
+		padding-right: 6px;
+	}
+
+	.sh-header .sh-title {
+		font-size: 17px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+	}
+
+	.sh-header-right {
+		gap: 0;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		box-shadow: none;
+	}
+
+	.sh-header-right .sh-btn-icon {
+		width: 44px;
+		min-width: 44px;
+		height: 44px;
+		color: var(--fg-muted);
+	}
+
+	.sh-header-right .sh-btn-icon svg {
+		width: 19px;
+		height: 19px;
+	}
+
+	.sh-header-right .sh-btn-icon.sh-btn-on {
+		color: var(--accent);
+	}
+
+	/* Count rides the agent button's corner, inside its 44px box, with a ring
+	 * in the header ground so it never merges with the icon. */
+	.sh-header-right .sh-badge {
+		top: 5px;
+		right: 5px;
+		min-width: 15px;
+		height: 15px;
+		font: 600 9.5px / 15px var(--font-mono);
+		border-radius: 999px;
+		box-shadow: 0 0 0 2px var(--bg);
+	}
+}
+
+
+/* ---- desktop header grouping (2026-11-15, round 2) ---------------------
+ * Twelve ungrouped controls made the top bar read as a toolbar dump: six
+ * panel icons, an appearance trio, a host switcher and two trailing icon
+ * buttons all at the same visual weight. The panel cluster gets dividers,
+ * glyphs grow to 15px inside 32px targets, and the model/context metadata
+ * folds away between 841 and 1199px where it competes with the title. */
+@media (min-width: 841px) {
+	.sh-header {
+		padding: 10px 16px;
+		padding-top: calc(10px + var(--safe-top, 0px));
+	}
+
+	.sh-header .sh-title {
+		font-size: 15px;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+	}
+
+	.sh-header-right {
+		gap: 6px;
+	}
+
+	.sh-header-right .sh-btn-icon {
+		width: 32px;
+		min-width: 32px;
+		height: 32px;
+	}
+
+	.sh-header-right .sh-btn-icon svg {
+		width: 15px;
+		height: 15px;
+	}
+
+	.sh-header-nav {
+		padding: 0 6px;
+		border-left: 1px solid color-mix(in oklab, var(--fg) 10%, transparent);
+		border-right: 1px solid color-mix(in oklab, var(--fg) 10%, transparent);
+	}
+
+	.sh-header-right .sh-badge {
+		top: 1px;
+		right: 1px;
+	}
+}
+
+@media (min-width: 841px) and (max-width: 1199px) {
+	.sh-header-right > .sh-chip-meta,
+	.sh-header-right > .sh-gauge {
+		display: none;
+	}
+}
+
+/* Wide-shell appearance popover: one palette button owns theme, accent and
+ * language, so the header stops carrying three separate controls. */
+.sh-appearance-pop {
+	position: fixed;
+	top: calc(12px + var(--safe-top, 0px) + 48px);
+	right: 16px;
+	z-index: 70;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	width: min(280px, calc(100vw - 32px));
+	padding: 12px;
+}
+
+.sh-appearance-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--fg-muted);
+}
+
+/* The composer has room on a desktop row; the old 108px cap cut
+ * "Claude Haiku 4.5" with 600px of unused space beside it. */
+.sh-mt-model {
+	max-width: 168px;
+}
+
+/* ---- scheduled tasks: a switch, not a dot (2026-11-15) -----------------
+ * `● / ○` read as a status marker, and a permanently red ✕ dominated every
+ * row. The schedule state becomes a real 44px switch; delete is a quiet trash
+ * that turns red only for its confirm step. Run history gets a disclosure row
+ * with a rotating caret instead of a bare <summary>. */
+.sh-task-actions .sh-btn-icon {
+	width: 40px;
+	height: 40px;
+}
+
+.sh-task-switch {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 44px;
+	height: 44px;
+	padding: 0;
+	border: 0;
+	background: none;
+	cursor: pointer;
+}
+
+.sh-task-switch-track {
+	position: relative;
+	width: 38px;
+	height: 22px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 14%, transparent);
+	transition: background 160ms ease-out;
+}
+
+.sh-task-switch[aria-checked="true"] .sh-task-switch-track {
+	background: var(--accent);
+}
+
+.sh-task-switch-thumb {
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 18px;
+	height: 18px;
+	border-radius: 50%;
+	background: var(--bg-raised);
+	box-shadow: 0 1px 2px oklch(0 0 0 / 30%);
+	transition: transform 160ms var(--spring);
+}
+
+.sh-task-switch[aria-checked="true"] .sh-task-switch-thumb {
+	transform: translateX(16px);
+	background: var(--accent-fg);
+}
+
+.sh-task-delete {
+	color: var(--fg-faint);
+}
+
+.sh-task-delete:hover,
+.sh-task-delete:focus-visible {
+	color: var(--err);
+}
+
+.sh-task-delete--confirm {
+	color: var(--err);
+	background: color-mix(in oklab, var(--err) 14%, transparent);
+	border-color: transparent;
+}
+
+.sh-runs-summary {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 44px;
+	padding: 0 6px;
+	border-radius: var(--radius-md);
+	list-style: none;
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-sm);
+}
+
+.sh-runs-summary::-webkit-details-marker {
+	display: none;
+}
+
+.sh-runs-summary::before {
+	content: "";
+	width: 0;
+	height: 0;
+	border-left: 5px solid currentColor;
+	border-top: 4px solid transparent;
+	border-bottom: 4px solid transparent;
+	transition: transform 120ms ease-out;
+}
+
+.sh-runs[open] .sh-runs-summary::before {
+	transform: rotate(90deg);
+}
+
+.sh-runs-summary:hover {
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+}
+
+/* ---- tablet band (600–839) ---------------------------------------------
+ * Between the phone shell and the three-column desktop the app used to jump
+ * straight to desktop chrome: text ran the full 800px, the file panel stayed
+ * collapsed to one pane, and a toast could land under the floating tab bar.
+ * This band keeps a reading column, restores the two-pane file view, and
+ * lifts transient messages above the bar. */
+@media (min-width: 600px) and (max-width: 839px) {
+	.sh-transcript {
+		width: 100%;
+		max-width: 760px;
+		margin-inline: auto;
+	}
+
+	.sh-composer-inner {
+		max-width: 760px;
+		margin-inline: auto;
+	}
+
+	/* A 700px tablet fits the tree and a readable preview again. */
+	.sh-files-body {
+		grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+	}
+
+	.sh-files-preview {
+		display: flex;
+	}
+
+	.sh-files-body[data-selected="true"] .sh-files-tree {
+		display: block;
+	}
+
+	.sh-files-back {
+		display: none;
+	}
+}
+
+.sh-has-tabbar .sh-toasts {
+	bottom: calc(
+		12px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px) + var(--sh-tabbar-space)
+	);
+}
+
+/* ---- HarmonyOS rail (tablet / unfolded foldable / landscape) ------------
+ * The shell decides chrome from the window, never from the device name (see
+ * apps/harmony/.../common/window-model.ets) and pushes both numbers: the left
+ * gutter the rail occupies and the bottom strip the floating bar occupies.
+ * The WebView still fills the window, so the page reserves exactly one. */
+html[data-harmony-chrome="rail"] .sh-app,
+html[data-harmony-chrome="rail"] .sh-connect {
+	padding-left: var(--harmony-rail, 84px);
+}
+
+html[data-harmony-chrome="rail"] .sh-composer {
+	padding-bottom: calc(12px + var(--safe-bottom, 0px) + var(--mp-keyboard-inset, 0px));
+}
+
+/* The connect card centres itself in the padded column; when the column is
+ * narrower than its 520px max (a foldable with a 220vp list beside it) the
+ * overflow went left, under the list. Cap it to the column instead. */
+html[data-harmony-chrome="rail"] .sh-connect-card {
+	max-width: min(520px, calc(100vw - var(--harmony-rail, 84px) - 32px));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	html[data-harmony-chrome="rail"] .sh-app,
+	html[data-harmony-chrome="rail"] .sh-connect {
+		transition: padding-left 220ms var(--spring);
+	}
+}
+
+/* ---- HarmonyOS reading column (md / lg windows) -------------------------
+ * A tablet or an unfolded foldable is not a phone with more pixels: at 900vp
+ * a 15px body ran ~120 characters per line, which is past the point where the
+ * eye loses the line on return. Cap the measure and centre it — the same
+ * "inset layout" the 600–839 band already applies, extended to the windows the
+ * rail unlocks. `md` keeps the band's 760px so the two rules cannot disagree. */
+html[data-harmony-window="md"] .sh-transcript,
+html[data-harmony-window="md"] .sh-composer-inner {
+	width: 100%;
+	max-width: 760px;
+	margin-inline: auto;
+}
+
+html[data-harmony-window="lg"] .sh-transcript,
+html[data-harmony-window="lg"] .sh-composer-inner,
+html[data-harmony-window="xl"] .sh-transcript,
+html[data-harmony-window="xl"] .sh-composer-inner {
+	width: 100%;
+	max-width: 880px;
+	margin-inline: auto;
 }

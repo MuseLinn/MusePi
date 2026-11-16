@@ -6,11 +6,16 @@ export const transcript = {
 	"transcript.uiBlockSend": "Send choice",
 	"transcript.uiBlockAnswerHeader": "Chosen on screen:",
 	"transcript.uiBlockAnswerNote": "Note",
+	"annotation.quoteSelection": "Quote the selection",
+	"transcript.uiBlockRepair": "Ask the agent to fix it",
+	"transcript.uiBlockRepairRequest":
+		"This block did not draw. Fix it, keeping the intent:\n\n```ui\n{source}\n```\n\nErrors:\n{errors}",
 	"transcript.uiBlockEmpty": "This block has nothing to show.",
 	"transcript.uiBlockPartial": "This block could not draw {count} part(s):",
 	"transcript.uiBlockLine": "Line {line}: {reason}",
 	"transcript.uiBlockSource": "Source",
 	"transcript.roundToolsWithCount": "{count} tools",
+	"transcript.roundToolOne": "1 tool",
 	"transcript.exploredCodebase": "explored the codebase",
 	"transcript.roundCommandsWithCount": "{count} commands",
 	"transcript.roundWebWithCount": "{count} web lookups",
@@ -309,4 +314,5 @@ export const transcript = {
 	"transcript.turnFilesDiffUnavailable": "This file’s changes can’t be shown line by line",
 	"transcript.turnFilesRebuilding": "Loading this turn’s changes…",
 	"transcript.turnFilesOpenFile": "Open file",
+	"transcript.bootPreparing": "Preparing the conversation",
 } as const satisfies Record<TranscriptKey, string>;
