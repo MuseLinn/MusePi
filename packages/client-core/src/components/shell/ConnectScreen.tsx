@@ -54,8 +54,6 @@ export function normalizePairHost(raw: string): string | null {
 	return `${host}:${port}`;
 }
 
-/** Resolve a 6-digit pair code against the daemon's LAN pair endpoint
- *  (pair.resolve) to obtain the full collab webLink. */
 /**
  * The collab link behind a scanned code, or null.
  *
@@ -79,6 +77,8 @@ export function linkFromScannedCode(raw: string): string | null {
 	return /^(wss?|https?):\/\//i.test(value) ? value : null;
 }
 
+/** Resolve a 6-digit pair code against the daemon's LAN pair endpoint
+ *  (pair.resolve) to obtain the full collab webLink. */
 function resolvePairCodeOnLan(code: string, host: string): Promise<string> {
 	const origin = normalizePairHost(host);
 	if (!origin) return Promise.reject(new Error(t("settings.cannotReachComputerSame")));
@@ -138,8 +138,8 @@ function SavedComputers({
 					// The row used to print the address twice (label, then the same
 					// address again with the relay hint), so two saved computers on
 					// the same LAN read as identical lines. The subtitle now carries
-					// the only distinguishing fact: the relay hint, or the computer's
-					// own name when it has one.
+					// the only distinguishing fact: the relay hint, or the address
+					// itself.
 					const parts = addressParts(host.candidates[0]?.address ?? "");
 					// `deviceName` is the name the phone announced when it connected,
 					// not the computer's — showing it labelled every saved machine

@@ -128,6 +128,54 @@ describe("RemoteAccessDialog recovery", () => {
 		}
 	});
 
+	test("a minted pair code carries the address the phone must type", async () => {
+		const harness = await renderDialog(async method => {
+			if (method === "remote-access.status") return { hosting: true, webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654" };
+			if (method === "channels.plugins") return [];
+			if (method === "channels.list") return [];
+			if (method === "remote-access.pair.generate") {
+				return { code: "123456", expiresInSeconds: 600, lanHost: "192.168.1.7" };
+			}
+			throw new Error(`unexpected rpc: ${method}`);
+		});
+		try {
+			const dialog = harness.dialog();
+			clickButton(dialog, "获取配对码");
+			await act(async () => {
+				await Promise.resolve();
+				await Promise.resolve();
+			});
+			expect(dialog.textContent).toContain("123456");
+			// Without the address the phone form is unanswerable.
+			expect(dialog.textContent).toContain("192.168.1.7");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("a pair endpoint that cannot bind is reported instead of minting a dead code", async () => {
+		const harness = await renderDialog(async method => {
+			if (method === "remote-access.status") return { hosting: true, webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654" };
+			if (method === "channels.plugins") return [];
+			if (method === "channels.list") return [];
+			if (method === "remote-access.pair.generate") throw new Error("pair endpoint unavailable: EADDRINUSE");
+			throw new Error(`unexpected rpc: ${method}`);
+		});
+		try {
+			const dialog = harness.dialog();
+			clickButton(dialog, "获取配对码");
+			await act(async () => {
+				await Promise.resolve();
+				await Promise.resolve();
+			});
+			const alert = dialog.querySelector('[role="alert"]');
+			expect(alert?.textContent).toContain("pair endpoint unavailable");
+			expect(dialog.textContent).not.toContain("123456");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
 	test("sharing scope stays fixed while its start request is pending", async () => {
 		let rejectStart: ((reason: Error) => void) | undefined;
 		const harness = await renderDialog(async method => {
