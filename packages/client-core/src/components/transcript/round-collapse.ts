@@ -36,23 +36,41 @@ export { isTurnStartEntry as isTurnStart };
  *  closed summary hid a card the fold would have kept. */
 export function artifactRowSet(entries: readonly SessionEntry[]): Set<number> {
 	const owners = new Map<string, number>();
+	/** Artifact tool calls per assistant row — the card renders on the CALL row,
+	 *  so a matching result is not required for the row to be an artifact. */
+	const artifactCalls = new Map<number, string[]>();
 	const rows = new Set<number>();
 	entries.forEach((entry, index) => {
 		if (entry.type !== "message" || entry.message.role !== "assistant") return;
 		for (const block of entry.message.content) {
 			if (block.type !== "toolCall") continue;
 			owners.set(block.id, index);
-			if (isArtifactTool(block.name)) rows.add(index);
+			if (!isArtifactTool(block.name)) continue;
+			const calls = artifactCalls.get(index) ?? [];
+			calls.push(block.id);
+			artifactCalls.set(index, calls);
 		}
 	});
+	// A failed artifact call is process, not output: the card never arrives, so
+	// the row folds with the rest of the round. A call with no result still
+	// counts (the card renders from the call, and the result may be streamed
+	// into a custom entry).
+	const errored = new Set<string>();
 	entries.forEach((entry, index) => {
 		if (entry.type !== "message" || entry.message.role !== "toolResult") return;
 		const message = entry.message;
-		if (message.isError === true) return;
-		const owner = owners.get((message as { toolCallId?: string }).toolCallId ?? "");
+		const callId = (message as { toolCallId?: string }).toolCallId ?? "";
+		if (message.isError === true) {
+			errored.add(callId);
+			return;
+		}
+		const owner = owners.get(callId);
 		if (owner === undefined) return;
-		if (isArtifactTool(message.toolName) || resultPicturesOf(message).length > 0) rows.add(owner);
+		if (resultPicturesOf(message).length > 0) rows.add(owner);
 	});
+	for (const [row, calls] of artifactCalls) {
+		if (calls.some(callId => !errored.has(callId))) rows.add(row);
+	}
 	return rows;
 }
 

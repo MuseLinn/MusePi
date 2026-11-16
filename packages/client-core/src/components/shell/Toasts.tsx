@@ -45,9 +45,12 @@ function ToastItem({ toast }: { toast: ActionToast }): ReactNode {
 	);
 }
 
+/** Stable empty snapshot for the server render (and the first hydration pass). */
+const EMPTY_TOASTS = [] as const;
+
 /** Bottom-strip presentation of the shared in-app toast store (guest/mobile shell). */
 export function Toasts(): ReactNode {
-	const toasts = useSyncExternalStore(subscribeActionToasts, getToasts);
+	const toasts = useSyncExternalStore(subscribeActionToasts, getToasts, () => EMPTY_TOASTS);
 	const [hovered, setHovered] = useState(false);
 	const [focused, setFocused] = useState(false);
 	const paused = hovered || focused;

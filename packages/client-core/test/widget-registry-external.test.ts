@@ -26,20 +26,20 @@ describe("external widget registry", () => {
 		expect(widgetDef("metric")?.label).toBe("指标");
 		const types = widgetDefs().map(def => def.type);
 		expect(types).toContain("metric");
-		expect(types).toContain("gauge");
+		expect(types).toContain("html");
 	});
 
 	it("lets a plugin override a built-in type", () => {
-		registerExternalWidgets([external({ type: "gauge", label: "Plugin gauge" })]);
-		expect(widgetDef("gauge")?.label).toBe("Plugin gauge");
+		registerExternalWidgets([external({ type: "html", label: "Plugin html" })]);
+		expect(widgetDef("html")?.label).toBe("Plugin html");
 		// No duplicate row in the merged list.
-		expect(widgetDefs().filter(def => def.type === "gauge")).toHaveLength(1);
+		expect(widgetDefs().filter(def => def.type === "html")).toHaveLength(1);
 	});
 
 	it("restores the built-ins when the external set is cleared", () => {
 		registerExternalWidgets([external()]);
 		registerExternalWidgets([]);
 		expect(widgetDef("metric")).toBeUndefined();
-		expect(widgetDef("gauge")?.nameKey).toBe("widget gauge");
+		expect(widgetDef("html")?.nameKey).toBe("widget html");
 	});
 });

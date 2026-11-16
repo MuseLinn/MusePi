@@ -33,15 +33,15 @@ function widgetResult(type: string, data: Record<string, unknown>, title?: strin
 }
 
 describe("inline widget renderer", () => {
-	it("renders a calc widget from result.details with merged data", () => {
+	it("renders a block widget from result.details", () => {
 		const html = renderToStaticMarkup(
 			bodyElement({
-				args: { type: "calc", data: { amount: 2000 } },
-				result: widgetResult("calc", { mode: "post", amount: 2000 }),
+				args: { type: "block" },
+				result: widgetResult("block", { source: 'root = Stack([Card("筹码分布", [Text("主力净流入 2000 万")])])' }),
 			} as never),
 		);
 		expect(html).toContain("tv-widget");
-		expect(html).toContain("calc");
+		expect(html).toContain("board-block");
 		expect(html).toContain("2000");
 	});
 
@@ -59,8 +59,8 @@ describe("inline widget renderer", () => {
 	it("uses the type's i18n name as the default title", () => {
 		const html = renderToStaticMarkup(
 			bodyElement({
-				args: { type: "pomodoro" },
-				result: widgetResult("pomodoro", {}),
+				args: { type: "html" },
+				result: widgetResult("html", { html: "<p>预览</p>" }),
 			} as never),
 		);
 		expect(html).toContain("tv-widget-title");
@@ -69,12 +69,12 @@ describe("inline widget renderer", () => {
 	it("passes details data through to the shared component untouched", () => {
 		const html = renderToStaticMarkup(
 			bodyElement({
-				args: { type: "ticker", data: { label: "USD / CNY" } },
-				result: widgetResult("ticker", { label: "USD / CNY", value: "6.7634" }),
+				args: { type: "html", data: { label: "USD / CNY" } },
+				result: widgetResult("html", { html: "<p>6.7634</p>", data: { label: "USD / CNY" } }),
 			} as never),
 		);
-		expect(html).toContain("USD / CNY");
 		expect(html).toContain("6.7634");
+		expect(html).toContain("USD / CNY");
 	});
 
 	it("renders the custom HTML face with the injected html in the sandbox srcdoc", () => {

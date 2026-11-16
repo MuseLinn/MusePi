@@ -2583,7 +2583,7 @@ export const SETTINGS_SCHEMA = {
 		default: true,
 		ui: {
 			tab: "interaction",
-			group: "Session",
+			group: "Input",
 			label: "Input Suggestions",
 			description: "Predict the user's next message after a turn completes and offer it in the empty input box",
 		},

@@ -205,7 +205,14 @@ export class SessionService implements DaemonService {
 		const snapshot = await this.#deps.snapshot(params.sessionId);
 		let live = this.#deps.resolveLive?.(params.sessionId) ?? null;
 		if (!live && this.#deps.activateLive) {
-			live = await this.#deps.activateLive(params.sessionId).catch(() => null);
+			// Activation can fail for an orphaned row (transcript gone) — and it
+			// can fail synchronously, which `.catch` on the call would miss. A
+			// failed activation degrades to the snapshot, never to a broken open.
+			try {
+				live = await this.#deps.activateLive(params.sessionId);
+			} catch {
+				live = null;
+			}
 		}
 		this.#deps.setResumeLive(conn, live);
 		const checkpointSeq = await this.#deps.checkpointSeq(params.sessionId);

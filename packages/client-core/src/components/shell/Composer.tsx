@@ -837,8 +837,11 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 	// completed turn, and it is offered only while the composer is empty.
 	// Accepting fills the draft and leaves the candidate in place, so clearing
 	// the text again brings the same prediction back.
-	const promptSuggestion = useSyncExternalStore(subscribePromptSuggestions, () =>
-		focusedSessionId ? getPromptSuggestion(focusedSessionId) : null,
+	const promptSuggestion = useSyncExternalStore(
+		subscribePromptSuggestions,
+		() => (focusedSessionId ? getPromptSuggestion(focusedSessionId) : null),
+		// Server render (tests, static export) has no daemon prediction yet.
+		() => null,
 	);
 	const acceptPromptSuggestion = useCallback(
 		(value: string): void => {

@@ -18,8 +18,9 @@ import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isola
  *    内文件被删会让该路径陈旧——真实复现「会话文件被单独删除」）；
  * ② store-only 行（activation 物化行，持久层不记路径）的 cwd 对应 slug
  *    目录整个消失（真实复现「测试/临时工作区被整体删除」）。
- * 同时两条负契约：磁盘文件还在的行保留；目录还在的 store-only 行保留
- * （persist 前 lazy 阶段的外部不可见形态，无法证明消失即不动）。
+ * 负契约：磁盘文件还在的行保留。store-only 行（没有记录 transcript 路径）
+ * 一律回收——激活按会话文件解析，没有文件的行永远打不开；同工作区目录里的
+ * 真实会话共享这个目录，所以「目录还在」不能证明这一行可用。
  *
  * Why this exists: 曾有版本只合并不清理，删除/测试工作区在项目列表里
  * 永久残留，只能手动清库。
@@ -40,7 +41,6 @@ let keptCwd: string;
 let keptSlug: string;
 let deadSlug: string;
 let deadDirCwd: string;
-let deadDirSlug: string;
 
 function transcript(id: string, cwd: string): string {
 	return [
@@ -86,11 +86,6 @@ beforeAll(async () => {
 	);
 	// DEAD_DIR 的 slug 目录（会话产物目录）起初也在盘上（后面测试里整体删除）；
 	// cwd 目录本身删除与否不影响探测——对账看的是 slug 产物树。
-	deadDirSlug = peekDefaultSessionDir(deadDirCwd, sessionsRoot);
-	await fsp.mkdir(deadDirSlug, { recursive: true });
-	// 放一个占位文件：daemon 构造时的空 slug 清扫会合法地删掉空目录，
-	// 本夹具要模拟「有产物的工作区」，必须非空才能活到测试体。
-	await fsp.writeFile(path.join(deadDirSlug, "keep.txt"), "x");
 
 	host = new DaemonSessionHost();
 	store = new ViewStore(viewStorePath(JOURNAL_DIR));
@@ -119,8 +114,6 @@ describe("knownSessions 的 ghost 行对账", () => {
 		const rows = await host.knownSessions();
 		expect(rows.some(r => r.sessionId === LIVE_DISK_ID)).toBe(true);
 		expect(rows.some(r => r.sessionId === DEAD_FILE_ID)).toBe(true);
-		expect(rows.some(r => r.sessionId === DEAD_DIR_ID)).toBe(true);
-		expect(rows.some(r => r.sessionId === KEPT_DIR_ID)).toBe(true);
 	});
 
 	it("transcript 文件已删的行被对账删除（文件级删除，缓存内 sessionFile 陈旧路径）", async () => {
@@ -133,17 +126,14 @@ describe("knownSessions 的 ghost 行对账", () => {
 		expect(store.list().some(r => r.sessionId === DEAD_FILE_ID)).toBe(false);
 	});
 
-	it("slug 产物目录整个消失的 store-only 行被对账删除（工作区级删除）", async () => {
-		// 复现「测试/临时工作区被整体删除」：slug 产物树没了，store 行还在。
-		await fsp.rm(deadDirSlug, { recursive: true, force: true });
-		await fsp.rm(deadDirCwd, { recursive: true, force: true });
+	it("没有 transcript 的 store-only 行一律回收（目录还在也不能打开）", async () => {
+		// 激活按会话文件解析；同工作区目录里的真实会话共享这个目录，所以
+		// 「目录还在」不能证明这一行可用。两类 store-only 行（目录在 / 目录没）
+		// 都在首次合并时被回收，并同步从 view store 移除。
 		const rows = await host.knownSessions();
-		expect(rows.some(r => r.sessionId === DEAD_DIR_ID)).toBe(false);
-		expect(store.list().some(r => r.sessionId === DEAD_DIR_ID)).toBe(false);
-	});
-
-	it("目录还在的 store-only 行不误删（无法证明消失即保留）", async () => {
-		const rows = await host.knownSessions();
-		expect(rows.some(r => r.sessionId === KEPT_DIR_ID)).toBe(true);
+		for (const id of [KEPT_DIR_ID, DEAD_DIR_ID]) {
+			expect(rows.some(r => r.sessionId === id)).toBe(false);
+			expect(store.list().some(r => r.sessionId === id)).toBe(false);
+		}
 	});
 });

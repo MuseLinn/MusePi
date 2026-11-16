@@ -24,7 +24,15 @@ function withTempBoard(body: () => Promise<void>): Promise<void> {
 			{
 				id: "b1",
 				title: "测试板",
-				widgets: [{ id: "w1", type: "clock", title: "时钟", data: {}, pos: { x: 0, y: 0, w: 300, h: 210 } }],
+				widgets: [
+					{
+						id: "w1",
+						type: "html",
+						title: "行情页",
+						data: { html: "<p>正文</p>" },
+						pos: { x: 0, y: 0, w: 300, h: 210 },
+					},
+				],
 			},
 			{ id: "bbuiltin", title: "内置示例", builtin: true, widgets: [] },
 		]),
@@ -62,10 +70,10 @@ describe("board tool", () => {
 		const tool = new BoardTool();
 		const res = await tool.execute("c1", { action: "schema" });
 		const details = res.details as { types: Record<string, unknown>; tones: Record<string, string> };
-		expect(details.types).toHaveProperty("clock");
-		expect(details.types).toHaveProperty("pomodoro");
-		expect(details.tones.clock).toBe("dark");
-		expect(details.tones.pomodoro).toBe("blue");
+		expect(details.types).toHaveProperty("block");
+		expect(details.types).toHaveProperty("html");
+		expect(details.tones.block).toBe("default");
+		expect(details.tones.html).toBe("default");
 	});
 
 	test("save upserts a board", async () => {
@@ -75,8 +83,20 @@ describe("board tool", () => {
 				id: "b1",
 				title: "测试板 v2",
 				widgets: [
-					{ id: "w1", type: "clock", title: "时钟", data: {}, pos: { x: 0, y: 0, w: 300, h: 210 } },
-					{ id: "w2", type: "pomodoro", title: "番茄钟", data: {}, pos: { x: 0, y: 240, w: 300, h: 300 } },
+					{
+						id: "w1",
+						type: "html",
+						title: "行情页",
+						data: { html: "<p>正文</p>" },
+						pos: { x: 0, y: 0, w: 300, h: 210 },
+					},
+					{
+						id: "w2",
+						type: "block",
+						title: "筹码分布",
+						data: { source: "root = Stack([])" },
+						pos: { x: 0, y: 240, w: 300, h: 300 },
+					},
 				],
 			};
 			const res = await tool.execute("c1", { action: "save", id: "b1", board });
@@ -113,7 +133,7 @@ describe("board tool", () => {
 				board: {
 					id: "b1",
 					title: "x",
-					widgets: [{ id: "w", type: "clock", data: {}, pos: { x: 0, y: 0.5, w: 100, h: 100 } }],
+					widgets: [{ id: "w", type: "html", data: { html: "<p>x</p>" }, pos: { x: 0, y: 0.5, w: 100, h: 100 } }],
 				},
 			});
 			expect(res.isError).toBe(true);
