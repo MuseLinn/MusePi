@@ -370,7 +370,9 @@ describe("SessionInfoCard 连接器与插件", () => {
 		].find(button => button.textContent === t("tools.connectorsManage"));
 		expect(manage).not.toBeUndefined();
 		await act(async () => manage!.click());
-		expect(opened).toEqual(["mcp"]);
+		// The connector page owns enablement and auth; MCP servers are a kind in
+		// it, so the manage entry lands there rather than on a retired page.
+		expect(opened).toEqual(["connectors"]);
 		await unmount();
 	});
 
@@ -819,18 +821,16 @@ describe("ChatView 会话信息卡座位", () => {
 		await view.unmount();
 	});
 
-	it("面板展开：行宽够时停靠列留在面板旁，不换座位", async () => {
+	it("面板展开：信息卡不再占一列，也不自动浮出让位", async () => {
 		mockLayout({ rowWidth: 1400 });
 		const view = await mount(renderChat({ sessionInfoOpen: true, rightPanelOpen: true }));
-		const card = view.host.querySelector<HTMLElement>(".gui-session-info--dock");
-		expect(card).not.toBeNull();
-		// Still a workspace column: outside the chat column, before the rail/panel.
-		expect(card!.closest(".gui-chat-column")).toBeNull();
-		const rail = view.host.querySelector<HTMLElement>(".gui-right-rail")!;
-		expect(card!.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
-		// No second seat and no remount: the panel open leaves the card where it is.
+		// An open right panel owns the row's spare width: the card never takes a
+		// second column there (three columns squeeze the transcript into a strip
+		// too narrow to read code in), and it does not pop up by itself either —
+		// the float seat covers the conversation it is meant to summarize, so it
+		// waits for an explicit toggle.
+		expect(view.host.querySelector(".gui-session-info--dock")).toBeNull();
 		expect(view.host.querySelector(".gui-session-info--float")).toBeNull();
-		expect(view.host.querySelector(".gui-status-cards")).toBeNull();
 		await view.unmount();
 	});
 

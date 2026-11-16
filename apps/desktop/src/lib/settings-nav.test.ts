@@ -1,38 +1,26 @@
+// SettingsNav imports icon components that build DOM nodes at module scope, so
+// the shim must precede it (same reason the other component tests do this).
+import "../../test/happy-dom-shim";
 import { describe, expect, it } from "bun:test";
+import { navGroups } from "../components/SettingsNav";
 import { DEFAULT_SECTION, resolveActiveSection, SECTION_ALIAS } from "./settings-nav";
 
-/** The nav ids the pane really exposes (mirrors SettingsView's `navGroups`).
- *  Kept explicit here so the test fails loudly if a section is renamed or
- *  dropped without thinking about the alias/fallback rules. */
-const NAV_IDS = new Set([
-	"general",
-	"appearance",
-	"notifications",
-	"pet",
-	"sessions",
-	"git",
-	"shortcuts",
-	"model",
-	"interaction",
-	"voice",
-	"context",
-	"shell",
-	"tools",
-	"media",
-	"files",
-	"memory",
-	"skills",
-	"subagents",
-	"mcp",
-	"commands",
-	"hooks",
-	"suggestions",
-	"modes",
-	"browser",
-	"indexes",
-	"usage",
-	"migration",
-]);
+/** The nav ids the pane really exposes, read from the same `navGroups` the
+ *  sidebar renders. A hand-copied list drifted from the real nav — it still
+ *  carried ids that had become aliases (sessions / memory / suggestions / mcp)
+ *  — so the "every alias lands on a real page" check was testing a fiction.
+ *
+ *  `navGroups` takes extension tabs, which need a daemon; none is registered
+ *  here, so this reflects the built-in rows. */
+function navIds(): Set<string> {
+	const ids = new Set<string>();
+	for (const group of navGroups([])) {
+		for (const item of group.items) ids.add(item.id);
+	}
+	return ids;
+}
+
+const NAV_IDS = navIds();
 
 describe("resolveActiveSection", () => {
 	it("passes through a nav id unchanged", () => {
@@ -48,6 +36,9 @@ describe("resolveActiveSection", () => {
 		// 0.5.1: 设置侧「插件」独立 tab 已摘除（插件列表归一级能力中心），
 		// "plugins" 成为能力别名，存量深链落到「扩展与插件」控制中心。
 		expect(resolveActiveSection("plugins", NAV_IDS)).toBe("skills");
+		// MCP servers are a connector kind: the retired page id must reach the
+		// connector page rather than falling back to the default.
+		expect(resolveActiveSection("mcp", NAV_IDS)).toBe("connectors");
 		// Every alias must land on a real page.
 		for (const target of Object.values(SECTION_ALIAS)) {
 			expect(NAV_IDS.has(target)).toBe(true);

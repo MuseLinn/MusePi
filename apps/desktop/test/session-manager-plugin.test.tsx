@@ -220,10 +220,12 @@ describe("session-manager Cordis plugin", () => {
 		]);
 		// The nav derives its rows from the same slot list. The plugin takes
 		// over the built-in 会话 page in place, so there is exactly one row and
-		// no duplicate `ext:` entry.
+		// no duplicate `ext:` entry. The built-in page's id is `session-memory`
+		// (会话 / 记忆 / 预设提示词 merged into one page); `sessions` is only a
+		// capability alias that resolves to it.
 		const items = navGroups([{ slot: "settings.tab.sessions", label: "会话" }]).flatMap(group => group.items);
 		expect(items.some(item => item.id === "ext:settings.tab.sessions")).toBe(false);
-		expect(items.find(item => item.id === "sessions")?.label).toBe(t("general.sessions"));
+		expect(items.find(item => item.id === "session-memory")?.label).toBe(t("settings.sessionMemory"));
 		// The retired 历史会话 page is gone from the 数据与统计 group: message
 		// browsing lives on the session page now.
 		expect(items.some(item => item.id === "history")).toBe(false);
