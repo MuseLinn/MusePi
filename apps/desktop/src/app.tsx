@@ -1,8 +1,10 @@
 import {
 	getLocaleSnapshot,
 	setLocale,
+	setPromptSuggestion,
 	subscribeLocale,
 	t,
+	UI_BLOCK_ANSWER_EVENT,
 	unarchiveSession,
 	archiveSession as writeArchivedSession,
 } from "@musepi/client-core";
@@ -16,6 +18,7 @@ import { AppRail, type RailItem } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
 import { CapabilitySidePanel } from "./components/CapabilitySidePanel";
+import { ChatBootPlaceholder } from "./components/ChatBootPlaceholder";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
 import type { CreationMessage } from "./components/CreationModeRow";
@@ -41,6 +44,7 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import type { SessionTabRow } from "./components/SessionTabsStrip";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
+import { SplitterGrip } from "./components/SplitterGrip";
 import {
 	type BootPhase,
 	BootRecoveryActions,
@@ -209,6 +213,21 @@ async function probeDaemonPort(): Promise<number | null> {
 		return typeof port === "number" && port > 0 ? port : null;
 	} catch {
 		return null;
+	}
+}
+
+/** Is anything listening on this loopback port? Asked before a WebSocket
+ *  handshake, whose timeout otherwise lands on the boot path when the daemon is
+ *  not running yet. Unknown shapes answer `true` so the caller keeps trying. */
+async function daemonPortOpen(port: number): Promise<boolean> {
+	if (!isElectron()) return true;
+	try {
+		const { electronAPI } = window as unknown as {
+			electronAPI: { daemonPortOpen?(p: number): Promise<boolean> };
+		};
+		return (await electronAPI.daemonPortOpen?.(port)) ?? true;
+	} catch {
+		return true;
 	}
 }
 
@@ -441,6 +460,13 @@ function CreationSavedToast({
 	);
 }
 
+/** Side-rail width: the pointer drag, the keyboard step and the double-click
+ *  reset share one pair of bounds and one stored key. */
+const SIDE_WIDTH_MIN = 180;
+const SIDE_WIDTH_MAX = 420;
+const SIDE_WIDTH_DEFAULT = 256;
+const SIDE_WIDTH_STORAGE_KEY = "musepi-gui-side-w";
+
 function AppInner(): ReactNode {
 	// Re-render the whole tree when the locale flips (i18n toggle parity —
 	// t() reads the module-level locale, so without a subscription the
@@ -614,6 +640,19 @@ function AppInner(): ReactNode {
 		};
 		window.addEventListener("musepi-gui-toast", onToast);
 		return () => window.removeEventListener("musepi-gui-toast", onToast);
+	}, []);
+	// A UI block's collected choice arrives as one message, not one per press:
+	// four options must not start four turns. The block builds the text; the
+	// host only delivers it into the session the user is looking at.
+	const sendUiBlockAnswer = useRef<((text: string) => void) | null>(null);
+	useEffect(() => {
+		const onAnswer = (event: Event): void => {
+			const detail = (event as CustomEvent<{ text?: unknown }>).detail;
+			const text = typeof detail?.text === "string" ? detail.text : "";
+			if (text) sendUiBlockAnswer.current?.(text);
+		};
+		window.addEventListener(UI_BLOCK_ANSWER_EVENT, onAnswer);
+		return () => window.removeEventListener(UI_BLOCK_ANSWER_EVENT, onAnswer);
 	}, []);
 	const [tree, setTree] = useState<SessionListNode[]>([]);
 	// Sessions with an undismissed completion (pet badge + persistent
@@ -827,7 +866,9 @@ function AppInner(): ReactNode {
 		return () => window.removeEventListener("pointermove", onMove);
 	}, [peekPanel, holdPeek, closePeek]);
 	const [narrowSidebarOpen, setNarrowSidebarOpen] = useState(false);
-	const [sideWidth, setSideWidth] = useState<number>(() => Number(localStorage.getItem("musepi-gui-side-w") ?? 256));
+	const [sideWidth, setSideWidth] = useState<number>(() =>
+		Number(localStorage.getItem(SIDE_WIDTH_STORAGE_KEY) ?? SIDE_WIDTH_DEFAULT),
+	);
 	const toggleSidebar = useCallback((): void => {
 		if (window.matchMedia("(max-width: 720px)").matches) {
 			setNarrowSidebarOpen(open => !open);
@@ -856,25 +897,42 @@ function AppInner(): ReactNode {
 	}, []);
 	// Side-rail width drag. (The right panel has its own drag on the normalized
 	// pointer-drag primitive — see ContextPanel.)
+	const writeSideWidth = (width: number): void => {
+		setSideWidth(width);
+		localStorage.setItem(SIDE_WIDTH_STORAGE_KEY, String(width));
+	};
 	const startResize = (startX: number, startW: number, min: number, max: number): void => {
+		// The seam's own drag flag (see gui-settings.css): `body.gui-resizing` is
+		// global — it freezes selection and sets the cursor for ANY resize — so
+		// the grip's drag state keys off this band instead, or every seam lights up.
+		const band = document.querySelector<HTMLElement>(".gui-resize-x--side");
+		const pill = band?.querySelector<HTMLElement>(".gui-split-grip");
+		band?.setAttribute("data-resizing", "");
+		pill?.setAttribute("data-resizing", "");
 		const onMove = (e: MouseEvent): void => {
-			const w = Math.min(max, Math.max(min, startW + (e.clientX - startX)));
-			setSideWidth(w);
-			localStorage.setItem("musepi-gui-side-w", String(w));
+			writeSideWidth(Math.min(max, Math.max(min, startW + (e.clientX - startX))));
 		};
 		const onUp = (): void => {
 			document.removeEventListener("mousemove", onMove);
 			document.removeEventListener("mouseup", onUp);
 			document.body.classList.remove("gui-resizing");
+			band?.removeAttribute("data-resizing");
+			pill?.removeAttribute("data-resizing");
 		};
 		document.addEventListener("mousemove", onMove);
 		document.addEventListener("mouseup", onUp);
 		document.body.classList.add("gui-resizing");
 	};
+	/** Keyboard step on the width grip: 2% of the current width, 10% with
+	 *  Shift, inside the same bounds as the pointer drag. */
+	const nudgeSideWidth = (direction: -1 | 1, coarse: boolean): void => {
+		const step = sideWidth * (coarse ? 0.1 : 0.02);
+		writeSideWidth(Math.round(Math.min(SIDE_WIDTH_MAX, Math.max(SIDE_WIDTH_MIN, sideWidth + direction * step))));
+	};
 	const [rightCollapsed, setRightCollapsed] = useState(() => localStorage.getItem("musepi-gui-right") === "0");
-	// Session info card (the collapsed right panel's stand-in): one open choice
-	// per session, reset by the panel's own state — see the hook's contract.
-	const sessionInfo = useSessionInfoCardVisibility({ sessionId: selectedId, panelOpen: !rightCollapsed });
+	// Session info card: one open choice per session, independent of the right
+	// panel's state — the card keeps its dock seat beside an open panel.
+	const sessionInfo = useSessionInfoCardVisibility({ sessionId: selectedId });
 	const [project, setProject] = useState<string | null>(() => {
 		try {
 			return localStorage.getItem("musepi-gui-project");
@@ -1796,6 +1854,17 @@ function AppInner(): ReactNode {
 					void refreshSessions(client);
 					return;
 				}
+				// Next-input candidate for this session's empty composer. Held in
+				// the client-core store so the composer (shared with the mobile
+				// shell) reads one source; envelopes only reach the subscribed
+				// session, so an absent id means "the selected one".
+				if (event.kind === "suggestion") {
+					const suggestionPayload = event.payload as { suggestion?: unknown } | undefined;
+					const suggestion = typeof suggestionPayload?.suggestion === "string" ? suggestionPayload.suggestion : "";
+					const target = event.sessionId ?? selectedIdRef.current;
+					if (target) setPromptSuggestion(target, suggestion);
+					return;
+				}
 				// Desktop notifications: the
 				// agent turn completing and approval requests. Gated by the
 				// notifications setting (musepi-gui-notify).
@@ -1947,7 +2016,9 @@ function AppInner(): ReactNode {
 		const tryUrl = async (u: string): Promise<boolean> => {
 			try {
 				setBootPhase("connect");
+				const connectAt = performance.now();
 				await connect(u);
+				markStartup(`daemon.connected ${Math.round(performance.now() - connectAt)}ms`);
 				// OTA/发布一致性:daemon 是 detached 进程(daemon.cjs spawn
 				// detached:true),GUI 重启从不刷新它 —— 新版本 GUI 连旧
 				// daemon 会看不到新功能(2026-08-17 实测)。daemon.cjs
@@ -1995,7 +2066,12 @@ function AppInner(): ReactNode {
 							// "present" — restart is reserved for an explicit
 							// "unknown method"/"unknown extension" answer, which
 							// is the only proof the daemon predates this GUI.
-							const CAPABILITY_PROBE_TIMEOUT_MS = 4_000;
+							// A stale daemon answers a missing method with an error in
+							// milliseconds; only a *slow* one times out. 4 s turned a
+							// sluggish probe into a four-second boot, while a timeout is
+							// already treated as "answered", so the short bound keeps the
+							// stale detection and drops the wait.
+							const CAPABILITY_PROBE_TIMEOUT_MS = 1_000;
 							const bounded = <T,>(p: Promise<T>): Promise<T | "timeout"> =>
 								Promise.race([
 									p,
@@ -2058,9 +2134,25 @@ function AppInner(): ReactNode {
 						// 权);有在跑回合 → adopt(守护进程不动,所有权移交给
 						// 本 GUI,退出时照常拆卸,回合不受影响)。
 						if (!stale && !capabilityRestarted.has(u)) {
-							const orphaned = (await api.daemonOrphaned?.().catch(() => false)) ?? false;
+							// The two probes do not depend on each other: ownership is
+							// an IPC to the shell, "is any turn running" is an RPC. Run
+							// them together — serially they cost a full round trip each
+							// on the boot path.
+							// Bounded: the ownership probe shells out on Windows, and a slow
+							// answer must not hold the window. A boot that cannot decide in
+							// time keeps the working connection and leaves the decision to
+							// the next launch — the same outcome as "not orphaned" here.
+							const probes = Promise.all([
+								api.daemonOrphaned?.().catch(() => false) ?? Promise.resolve(false),
+								rpc.request<Array<{ working?: boolean }>>("session.list").catch(() => null),
+							]);
+							const decided = await Promise.race([
+								probes,
+								new Promise<null>(resolve => setTimeout(() => resolve(null), 800)),
+							]);
+							const orphaned = decided?.[0] ?? false;
+							const rows = decided?.[1] ?? null;
 							if (orphaned) {
-								const rows = await rpc.request<Array<{ working?: boolean }>>("session.list").catch(() => null);
 								const working = rows?.some(r => r.working === true) ?? false;
 								if (working) {
 									await api.adoptDaemon?.().catch(() => {});
@@ -2086,11 +2178,17 @@ function AppInner(): ReactNode {
 			}
 		};
 		try {
-			if ((await tryUrl(url)) === true) return;
+			// A closed port cannot answer a handshake: skip the attempt instead of
+			// waiting out its timeout (measured ~2 s on the boot path).
+			const initialPort = Number.parseInt(new URL(url).port || String(DEFAULT_PORT), 10);
+			const reachable = !(isElectron() && isLocalUrl(url)) || (await daemonPortOpen(initialPort));
+			if (reachable && (await tryUrl(url)) === true) return;
 			// Electron shell: discover a running daemon, else spawn one.
 			if (isElectron() && isLocalUrl(url)) {
 				setBootPhase("probe");
+				const probeAt = performance.now();
 				const port = await probeDaemonPort();
+				markStartup(`daemon.probed ${Math.round(performance.now() - probeAt)}ms :${port ?? 0}`);
 				if (port && (await tryUrl(`ws://127.0.0.1:${port}`)) === true) return;
 				try {
 					setBootPhase("spawn");
@@ -2117,6 +2215,11 @@ function AppInner(): ReactNode {
 				await promise;
 			}
 			markStartup("boot.done");
+			// Connected is not composed: hold the splash until the daemon's own
+			// fiber projection reports the plugin surface active, because a
+			// rendered shell whose plugins never activated shows empty regions.
+			// Bounded — a plugin that never activates hands off to whatever the
+			// shell can render.
 			setBooting(false);
 			void rpcRef.current?.request("system.prewarmStart").catch(() => {});
 		}
@@ -3087,6 +3190,14 @@ function AppInner(): ReactNode {
 		},
 		[createSession, project, sendPrompt],
 	);
+
+	// A block's answer is delivered into the session on screen, as an ordinary
+	// user turn: the agent reads it like a message, because that is what it is.
+	useEffect(() => {
+		sendUiBlockAnswer.current = (text: string): void => {
+			void sendPrompt(text);
+		};
+	}, [sendPrompt]);
 
 	/** Creation flow: open a chat session under the given modeId
 	 *  (creation contexts pass "creator") and send the first prompt right
@@ -4311,6 +4422,7 @@ function AppInner(): ReactNode {
 					<SlotComponentHost
 						slot={CHAT_VIEW_SLOT}
 						rpc={rpc}
+						fallback={<ChatBootPlaceholder />}
 						chatView={{
 							store,
 							rpc,
@@ -4335,7 +4447,6 @@ function AppInner(): ReactNode {
 							defaultModelId,
 							presetThinkingLevel,
 							busy: status === "connecting",
-												unread: unreadSessions.size,
 							paused: pauseInfo.sessionId === selectedId && pauseInfo.paused,
 							pausedAt: pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null,
 							onResume: () => void togglePause(),
@@ -4550,12 +4661,20 @@ function AppInner(): ReactNode {
 							className="gui-resize-x gui-resize-x--side"
 							role="separator"
 							aria-orientation="vertical"
+							aria-label={t("settings.resizeSidebar")}
+							tabIndex={0}
 							onMouseDown={e => {
 								e.preventDefault();
-								startResize(e.clientX, sideWidth, 180, 420);
+								startResize(e.clientX, sideWidth, SIDE_WIDTH_MIN, SIDE_WIDTH_MAX);
 							}}
+							onKeyDown={e => {
+								if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+								e.preventDefault();
+								nudgeSideWidth(e.key === "ArrowLeft" ? -1 : 1, e.shiftKey);
+							}}
+							onDoubleClick={() => writeSideWidth(SIDE_WIDTH_DEFAULT)}
 						>
-							<span className="gui-resize-grip" aria-hidden="true" />
+							<SplitterGrip />
 						</div>
 					)}
 					{narrowSidebarOpen && (
@@ -4586,7 +4705,6 @@ function AppInner(): ReactNode {
 						data-panel={activePanelId ?? undefined}
 						data-peek={peekEligible ? "true" : undefined}
 						data-peek-open={peekOpen ? "true" : undefined}
-						style={{ "--gui-side-w": `${sideWidth}px` } as CSSProperties}
 						onPointerEnter={peekEligible ? holdPeek : undefined}
 						onPointerLeave={peekEligible ? closePeek : undefined}
 						onClickCapture={event => {
@@ -4761,6 +4879,7 @@ function AppInner(): ReactNode {
 										<SlotComponentHost
 											slot={CHAT_VIEW_SLOT}
 											rpc={rpc}
+											fallback={<ChatBootPlaceholder />}
 											chatView={{
 												store,
 												rpc,
@@ -4785,7 +4904,6 @@ function AppInner(): ReactNode {
 												defaultModelId,
 												presetThinkingLevel,
 												busy: status === "connecting",
-												unread: unreadSessions.size,
 												paused: pauseInfo.sessionId === selectedId && pauseInfo.paused,
 												pausedAt: pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null,
 												onResume: () => void togglePause(),
