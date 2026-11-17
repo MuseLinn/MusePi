@@ -189,6 +189,29 @@ describe("reading blocks", () => {
 		expect(refused.html).not.toContain("data-ui-link-send");
 	});
 
+	test("an Image draws a local path or an http(s) URL and refuses the rest", () => {
+		const local = renderUiBlock('root = Stack([Image("/tmp/a.png", "改前")])');
+		expect(local.errors).toEqual([]);
+		expect(local.html).toContain('src="/tmp/a.png"');
+		expect(local.html).toContain('alt="改前"');
+		expect(renderUiBlock('root = Stack([Image("https://example.test/a.png", "x")])').html).toContain(
+			'src="https://example.test/a.png"',
+		);
+		// The same guard prose images use: no script URL, no non-image file.
+		expect(renderUiBlock('root = Stack([Image("javascript:alert(1)", "x")])').nodes).toBe(0);
+		expect(renderUiBlock('root = Stack([Image("/etc/hosts", "x")])').nodes).toBe(0);
+	});
+
+	test("an Image keeps its caption, and two of them pair up in a Row", () => {
+		const paired = renderUiBlock(
+			'root = Stack([Row([Image("/a.png", "改前", "旧版"), Image("/b.png", "改后", "新版")])])',
+		);
+		expect(paired.errors).toEqual([]);
+		expect(paired.html.match(/class="tr-ui-image-frame"/g) ?? []).toHaveLength(2);
+		expect(paired.html).toContain("旧版");
+		expect(paired.html).toContain("tr-ui-figure-caption");
+	});
+
 	test("an Icon draws from the fixed set and an unknown name draws nothing", () => {
 		const known = renderUiBlock('root = Stack([Icon("git-branch", "分支")])');
 		expect(known.errors).toEqual([]);

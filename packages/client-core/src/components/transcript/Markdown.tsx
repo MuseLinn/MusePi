@@ -40,12 +40,15 @@ import {
 import { isUiBlockLanguage, renderUiBlockFence, splitOpenUiFence } from "../../ui-blocks/render.js";
 import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
+import { isLocalImageSrc, localImagePath } from "./local-image.js";
 import { isLocalFilePath } from "./markdown-shared";
 import { mathExtensions } from "./math";
 import { ensureMermaidFallbackObserver, mermaidMode, renderMermaidHtml } from "./mermaid";
 import { graphemeSpans } from "./reveal";
 import "../../ui-blocks/ui-blocks.css";
 import { useStreamingReveal } from "./use-streaming-reveal";
+
+export { isLocalImageSrc } from "./local-image.js";
 
 /** Human-readable label for a fenced code block header. */
 function codeLangLabel(lang: string): string {
@@ -638,29 +641,6 @@ interface LocalImageBridge {
 }
 
 const localImageBridge = (): LocalImageBridge | null => electronBridge();
-
-/**
- * Filesystem path behind an image src: strips `file://` and undoes the
- * renderer's `encodeURI` (marked percent-encodes spaces and every non-ASCII
- * character, so `/tmp/图 1.png` arrives as `/tmp/%E5%9B%BE%201.png` and names
- * no real file). Remote/data/blob URLs never reach here.
- */
-function localImagePath(src: string): string {
-	const raw = src.startsWith("file://") ? src.slice("file://".length) : src;
-	try {
-		return decodeURIComponent(raw);
-	} catch {
-		return raw;
-	}
-}
-
-/** `/abs/path.png`, `~/x.png`, `./rel.png`, `../rel.png`, `file://…` — but
- *  never http(s)/data/blob URLs, and never local paths without a known
- *  image extension (`/etc/hosts` stays a plain text path). */
-export function isLocalImageSrc(src: string): boolean {
-	if (/^(https?:|data:|blob:)/i.test(src)) return false;
-	return /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)$/i.test(localImagePath(src));
-}
 
 /**
  * Swap filesystem image srcs for data URLs via the desktop bridge.

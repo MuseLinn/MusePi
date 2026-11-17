@@ -12,6 +12,7 @@
  * `widget` page.
  */
 
+import { isLocalImageSrc } from "../components/transcript/local-image.js";
 import { t } from "../i18n/index.js";
 import { rememberBlockFailure } from "./answers.js";
 import { parseUiBlock, type UiBlockTree } from "./catalog.js";
@@ -357,6 +358,28 @@ function linkBlock(props: Record<string, unknown>): string {
 	return `<a class="tr-ui-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${body}</a>`;
 }
 
+/**
+ * A picture. The chat's own image pass (`resolveLocalImages`) already walks
+ * every mounted `img[src]` under the message root and swaps a filesystem path
+ * for a data URL, so a block only has to render the real `src` — inventing a
+ * second loader here would duplicate the whitelist and the cache.
+ *
+ * Both shapes are allowed because the guard is the same one prose images use:
+ * `isLocalImageSrc` accepts an image path and refuses `javascript:` and any
+ * non-image file, while an http(s) URL is what a reply legitimately cites.
+ */
+function imageBlock(props: Record<string, unknown>): string {
+	const src = str(props, "src").trim();
+	const alt = str(props, "alt");
+	const caption = str(props, "caption");
+	const allowed = /^https?:\/\//i.test(src) || isLocalImageSrc(src);
+	if (!allowed) return "";
+	const figure = `<img class="tr-ui-image-src" src="${esc(src)}" alt="${esc(alt)}" loading="lazy" decoding="async">`;
+	return caption
+		? `<figure class="tr-ui-figure"><span class="tr-ui-image-frame">${figure}</span><figcaption class="tr-ui-figure-caption">${inline(caption)}</figcaption></figure>`
+		: `<span class="tr-ui-image-frame">${figure}</span>`;
+}
+
 function iconBlock(props: Record<string, unknown>): string {
 	const node = uiBlockIcon(str(props, "name"));
 	if (!node) return "";
@@ -492,6 +515,7 @@ const RENDERERS: Record<string, (node: UiBlockTree, ctx: RenderContext) => strin
 	Quote: node => quote(node.props),
 	Link: node => linkBlock(node.props),
 	Icon: node => iconBlock(node.props),
+	Image: node => imageBlock(node.props),
 	Divider: node => divider(node.props),
 	Code: node => codeBlock(node.props),
 	Details: (node, ctx) => details(node, ctx),

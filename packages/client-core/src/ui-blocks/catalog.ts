@@ -136,6 +136,13 @@ const Icon = defineComponent({
 	props: z.object({ name: z.string(), label: z.string().optional() }),
 	component: null,
 });
+const Image = defineComponent({
+	name: "Image",
+	description:
+		"a picture the reply is about; `src` is a local path the chat reads, or an http(s) URL; `alt` says what it shows",
+	props: z.object({ src: z.string(), alt: z.string(), caption: z.string().optional() }),
+	component: null,
+});
 const Divider = defineComponent({
 	name: "Divider",
 	description: "a rule between two groups; `label` centres a short caption on it",
@@ -164,6 +171,7 @@ const leaf = z.union([
 	Quote.ref,
 	Link.ref,
 	Icon.ref,
+	Image.ref,
 	Divider.ref,
 	Code.ref,
 ]);
@@ -296,6 +304,7 @@ export const uiBlockLibrary = createLibrary({
 		Quote,
 		Link,
 		Icon,
+		Image,
 		Divider,
 		Code,
 		Choice,
