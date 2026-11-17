@@ -80,7 +80,7 @@ export function MockAssistantRow({
 }): ReactNode {
 	return (
 		<div className="tr-row tr-row--assistant">
-			<div className="tr-gutter">{showAvatar && <AgentAvatar state="working" size={64} />}</div>
+			<div className="tr-gutter">{showAvatar && <AgentAvatar state="working" size={32} />}</div>
 			<div className="tr-body">
 				<Markdown text={markdown} />
 			</div>
@@ -122,14 +122,21 @@ export function MockActivityFoldRow({ open = false }: { open?: boolean }): React
  *  expanded side is where the header's rotated chevron, the revealed tool
  *  rows and the tail count live, and a styling change there was invisible. */
 function MockExpandedActivity(): ReactNode {
+	// One row, one 活动 block: the header and the rows it reveals live in the
+	// same transcript column as the reply (gutter rail + body), so the preview
+	// lines up the way a real turn does. Rendering the collapsed header AND an
+	// expanded copy stacked made the preview read as a duplicated control.
 	return (
-		<div className="tr-activity-preview-expanded" role="presentation">
-			<MockActivityFoldRow open />
-			<div className="tr-activity-preview-rows">
-				<div className="tr-activity-preview-row">{t("general.previewActivityEdit")}</div>
-				<div className="tr-activity-preview-row">{t("general.previewActivityCommand")}</div>
-				<div className="tr-activity-preview-row">{t("general.previewActivityRead")}</div>
-				<div className="tr-live-more">{t("tools.moreLinesWithCount", { count: "6" })}</div>
+		<div className="tr-row tr-row--assistant tr-row--railed">
+			<div className="tr-gutter" />
+			<div className="tr-body">
+				<MockActivityFoldRow open />
+				<div className="tr-activity-preview-rows">
+					<div className="tr-activity-preview-row">{t("general.previewActivityEdit")}</div>
+					<div className="tr-activity-preview-row">{t("general.previewActivityCommand")}</div>
+					<div className="tr-activity-preview-row">{t("general.previewActivityRead")}</div>
+					<div className="tr-live-more">{t("tools.moreLinesWithCount", { count: "6" })}</div>
+				</div>
 			</div>
 		</div>
 	);
@@ -148,11 +155,24 @@ export function MockComposer({
 }): ReactNode {
 	return (
 		<div className="gui-effect-preview-composer">
-			<div className="gui-effect-preview-input">{input ?? t("composer.askAnythingCommands.info")}</div>
-			{mic}
-			<span className="gui-effect-preview-send" aria-hidden>
-				<Icon name="send-plane" className="h-3.5 w-3.5" />
-			</span>
+			<div className="gui-effect-preview-inputrow">
+				<span className="gui-effect-preview-input">{input ?? t("composer.askAnythingCommands.info")}</span>
+			</div>
+			{/* Footer line mirrors the real composer: mode agent, model, then the
+			 * send target on the right. Static — this is a styling preview, not
+			 * an input the reader can type into. */}
+			<div className="gui-effect-preview-tools">
+				<span className="gui-effect-preview-chip">
+					<Icon name="sparkling" className="h-3 w-3" />
+					{t("settings.agent")}
+				</span>
+				<span className="gui-effect-preview-chip">{t("preview statusbar model")}</span>
+				{mic}
+				<span className="gui-effect-preview-spacer" />
+				<span className="gui-effect-preview-send" aria-hidden>
+					<Icon name="send-plane" className="h-3.5 w-3.5" />
+				</span>
+			</div>
 		</div>
 	);
 }
@@ -189,10 +209,9 @@ export function MockConversationPreview({
 	return (
 		<div className="gui-effect-preview">
 			<MockUserRow markdown={userMarkdown ?? t("general.previewUserMessage")} showAvatar={showAvatars} />
-			<MockActivityFoldRow />
-			{/* Both fold states, so a styling change to either is visible here:
-			 * the collapsed header above is what a finished turn rests as, and
-			 * the expanded block below is what clicking it reveals. */}
+			{/* The opened 活动 block stands for both states: its header IS the
+			 * collapsed summary, and the rows below it are what the toggle
+			 * reveals. One block, aligned to the reply's column. */}
 			<MockExpandedActivity />
 			<MockAssistantRow
 				markdown={assistantMarkdown ?? t("general.previewAgentMessage")}

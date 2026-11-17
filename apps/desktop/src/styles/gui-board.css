@@ -625,10 +625,14 @@
 	transition: transform 120ms ease-out;
 }
 
+/* The tone surface is painted here (gui-tone.css), so this wrapper needs the
+ * card radius: without it the square background showed behind the rounded
+ * inner at all four corners. */
 .gui-board-card {
 	position: absolute;
 	display: flex;
 	box-sizing: border-box;
+	border-radius: var(--radius-xl);
 	transition: opacity 140ms ease, left 120ms ease-out, top 120ms ease-out, width 120ms ease-out, height 120ms ease-out;
 }
 
@@ -873,6 +877,20 @@
 	}
 }
 
+
+/* A board card is a fixed-size surface: its page fills the card instead of
+ * sizing itself from the page's reported content height. The face reports a
+ * height for transcript cards (where the row grows with the page); on a board
+ * that report stopped the iframe at its content height, leaving the rest of
+ * the card blank and clipping anything below it. */
+.gui-board-card-body .gui-widget-html-wrap,
+.gui-board-card-body .gui-widget-html,
+.gui-board-focus-card .gui-widget-html-wrap,
+.gui-board-focus-card .gui-widget-html,
+.gui-board-home-preview-cell .gui-widget-html-wrap,
+.gui-board-home-preview-cell .gui-widget-html {
+	height: 100% !important;
+}
 
 .gui-board-card-body {
 	/* The widget bleeds to ALL card edges (kimi immersive) — the resize
