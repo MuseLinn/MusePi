@@ -5,6 +5,7 @@ import {
 	isSent,
 	sendAnswer,
 	setAnswer,
+	setCardNote,
 	setNote,
 	UI_BLOCK_ANSWER_EVENT,
 } from "./answers";
@@ -64,18 +65,79 @@ describe("answers", () => {
 		setAnswer("d", "note", "", "Q");
 		expect(composeAnswer("d")).toBe("");
 	});
+
+	test("a card's note rides under the decision it qualifies", () => {
+		setAnswer("note1", "card:数据库", "Postgres", "数据库");
+		setAnswer("note1", "card:缓存", "Redis", "缓存");
+		setCardNote("note1", "数据库", "要读副本");
+		const text = composeAnswer("note1");
+		// The condition is attached to its own option, indented, not pooled below.
+		expect(text).toContain("- 数据库：Postgres\n  ");
+		expect(text).toContain("要读副本");
+		expect(text).not.toContain("- 缓存：Redis\n  ");
+	});
+
+	test("a card answered only with a condition still reaches the agent", () => {
+		setCardNote("note2", "部署窗口", "先在预发验证");
+		const text = composeAnswer("note2");
+		expect(text).toContain("部署窗口");
+		expect(text).toContain("先在预发验证");
+	});
+
+	test("an emptied card note is dropped, not sent as whitespace", () => {
+		setAnswer("note3", "k", "v", "D");
+		setCardNote("note3", "D", "临时");
+		setCardNote("note3", "D", "   ");
+		expect(composeAnswer("note3")).not.toContain("临时");
+	});
 });
 
 describe("delegated clicks", () => {
 	test("a send affordance is consumed by its own block", () => {
 		const host = { dataset: { uiBlock: "e" } };
+		// `closest` returns the nearest MATCHING ancestor: a send button is not a
+		// link row, and the mock has to say so or it stands in for both.
 		const send = {
 			closest: (selector: string) =>
-				selector === "[data-ui-repair]" ? null : selector === "[data-ui-send]" ? send : host,
+				selector === "[data-ui-repair]" || selector === "[data-ui-link-send]"
+					? null
+					: selector === "[data-ui-send]"
+						? send
+						: host,
 		};
 		setAnswer("e", "k", "v", "D");
 		expect(handleAnswerClick(send as unknown as Element)).toBe(true);
 		expect(isSent("e")).toBe(true);
+	});
+
+	test("a link with a message opens its page and sends the sentence once", () => {
+		const opened: string[] = [];
+		(globalThis as { window?: unknown }).window = {
+			dispatchEvent: (event: CustomEvent<{ text?: string; url?: string }>) => {
+				if (event.type === UI_BLOCK_ANSWER_EVENT && event.detail.text) dispatched.push({ text: event.detail.text });
+				if (event.type === "musepi-open-url" && event.detail.url) opened.push(event.detail.url);
+				return true;
+			},
+		};
+		const host = { dataset: { uiBlock: "link1" } };
+		const link = {
+			getAttribute: (name: string) =>
+				name === "data-ui-message" ? "已登录，继续" : name === "data-ui-href" ? "https://example.test/a" : null,
+			closest: (selector: string) =>
+				selector === "[data-ui-link-send]"
+					? link
+					: selector === "[data-ui-block]"
+						? host
+						: selector === "[data-ui-repair]"
+							? null
+							: null,
+		};
+		expect(handleAnswerClick(link as unknown as Element)).toBe(true);
+		expect(opened).toEqual(["https://example.test/a"]);
+		expect(dispatched.at(-1)?.text).toBe("已登录，继续");
+		// The same row is spent: a redraw must not send a second turn.
+		expect(handleAnswerClick(link as unknown as Element)).toBe(true);
+		expect(dispatched).toHaveLength(1);
 	});
 });
 

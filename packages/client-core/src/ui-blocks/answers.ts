@@ -53,6 +53,13 @@ interface BlockAnswers {
 	values: Map<string, { decision: string; value: string }>;
 	/** The block's own note field, when the user wrote one. */
 	note: string;
+	/** Notes attached to ONE decision card, keyed by its title. A user who picks
+	 *  an almost-right option needs to add a condition to THAT option; a single
+	 *  block-wide note would attach it to every card at once. */
+	cardNotes: Map<string, string>;
+	/** Links already followed with a message, keyed by that message: one click
+	 *  is one turn, and a redraw must not offer the same navigation twice. */
+	sentLinks: Set<string>;
 	/** Decision labels in the order the block declared them. */
 	decisions: string[];
 	/** True once an answer has been sent; the block then reads as settled. */
@@ -75,7 +82,7 @@ export function rememberBlockFailure(hash: string, source: string, errors: reado
 function stateFor(hash: string): BlockAnswers {
 	let state = blocks.get(hash);
 	if (!state) {
-		state = { values: new Map(), note: "", decisions: [], sent: false };
+		state = { values: new Map(), note: "", cardNotes: new Map(), sentLinks: new Set(), decisions: [], sent: false };
 		blocks.set(hash, state);
 	}
 	return state;
@@ -104,6 +111,21 @@ export function setAnswer(hash: string, name: string, value: string, decision: s
 export function setNote(hash: string, note: string): void {
 	stateFor(hash).note = note;
 	marks?.();
+}
+
+/** A note attached to one decision card (its title), not the whole block. */
+export function setCardNote(hash: string, card: string, note: string): void {
+	const state = stateFor(hash);
+	if (note.trim()) state.cardNotes.set(card, note);
+	else state.cardNotes.delete(card);
+	marks?.();
+}
+
+/** Whether any decision in this block has an answer or a card note. */
+export function hasAnyAnswer(hash: string): boolean {
+	const state = blocks.get(hash);
+	if (!state) return false;
+	return state.values.size > 0 || state.note.trim() !== "" || state.cardNotes.size > 0;
 }
 
 /** Compose the message a block sends. Empty when nothing was chosen. */
@@ -156,8 +178,25 @@ export function autoRepairFailedBlocks(root: ParentNode): void {
 
 export function composeAnswer(hash: string): string {
 	const state = blocks.get(hash);
-	if (!state || state.values.size === 0) return "";
-	const lines = [...state.values.values()].map(({ decision, value }) => `- ${decision}：${value}`);
+	if (!state) return "";
+	// A card's note sits under the decision it qualifies, indented, so the agent
+	// reads "this option — with this condition" as one thought.
+	const used = new Set<string>();
+	const lines: string[] = [];
+	for (const { decision, value } of state.values.values()) {
+		lines.push(`- ${decision}：${value}`);
+		const cardNote = state.cardNotes.get(decision)?.trim();
+		if (cardNote) {
+			used.add(decision);
+			lines.push(`  ${t("transcript.uiBlockCardNote")}：${cardNote}`);
+		}
+	}
+	// A card answered only with a condition still has to reach the agent: the
+	// user named the option in prose, the note is the whole answer.
+	for (const [card, text] of state.cardNotes) {
+		if (!used.has(card) && text.trim()) lines.push(`- ${card}：${text.trim()}`);
+	}
+	if (lines.length === 0) return "";
 	const header = t("transcript.uiBlockAnswerHeader");
 	const note = state.note.trim() ? `\n${t("transcript.uiBlockAnswerNote")}：${state.note.trim()}` : "";
 	return `${header}\n${lines.join("\n")}${note}`;
@@ -202,15 +241,20 @@ export function applyAnswers(root: ParentNode): void {
 		const state = blocks.get(hash);
 		const sent = state?.sent === true;
 		host.dataset.uiSent = sent ? "true" : "false";
-		host.dataset.uiReady = (state?.values.size ?? 0) > 0 ? "true" : "false";
+		// The answer bar appears as soon as ANY decision or note exists — a card
+		// answered only with a note has to be sendable too.
+		host.dataset.uiReady = hasAnyAnswer(hash) ? "true" : "false";
 		for (const control of host.querySelectorAll<HTMLElement>("[data-ui-name]")) {
 			const name = control.getAttribute("data-ui-name") ?? "";
-			// The note is not a decision: re-applying it from `values` would wipe
+			// Notes are not decisions: re-applying one from `values` would wipe
 			// what the user typed on the next redraw.
+			const kind = control.getAttribute("data-ui-kind");
 			const value =
-				control.getAttribute("data-ui-kind") === "note"
+				kind === "note"
 					? (state?.note ?? "")
-					: (state?.values.get(name)?.value ?? "");
+					: kind === "card-note"
+						? (state?.cardNotes.get(control.getAttribute("data-ui-card") ?? "") ?? "")
+						: (state?.values.get(name)?.value ?? "");
 			if (control.tagName === "INPUT" || control.tagName === "TEXTAREA") {
 				const field = control as HTMLInputElement | HTMLTextAreaElement;
 				if (field.value !== value && !field.matches(":focus")) field.value = value;
@@ -220,6 +264,15 @@ export function applyAnswers(root: ParentNode): void {
 			control.dataset.uiChosen = chosen ? "true" : "false";
 			control.setAttribute("aria-pressed", chosen ? "true" : "false");
 			if (control instanceof HTMLButtonElement) control.disabled = sent;
+		}
+		// A link that carries a message is spent once followed: it opened a page
+		// and asked a question, and repeating either would be a second turn the
+		// user did not ask for.
+		for (const link of host.querySelectorAll<HTMLElement>("[data-ui-link-send]")) {
+			const message = link.getAttribute("data-ui-message") ?? "";
+			const spent = state?.sentLinks.has(message) === true;
+			link.dataset.uiChosen = spent ? "true" : "false";
+			if (link instanceof HTMLButtonElement) link.disabled = spent || sent;
 		}
 	}
 }
@@ -242,6 +295,25 @@ export function handleAnswerClick(target: Element): boolean {
 		});
 		if (typeof window !== "undefined") {
 			window.dispatchEvent(new CustomEvent<UiBlockAnswerDetail>(UI_BLOCK_ANSWER_EVENT, { detail: { text } }));
+		}
+		return true;
+	}
+	const link = target.closest<HTMLElement>("[data-ui-link-send]");
+	if (link) {
+		const host = link.closest<HTMLElement>("[data-ui-block]");
+		const hash = host?.dataset.uiBlock;
+		if (!hash) return false;
+		const message = link.getAttribute("data-ui-message") ?? "";
+		const href = link.getAttribute("data-ui-href") ?? "";
+		const state = stateFor(hash);
+		if (!message || state.sentLinks.has(message)) return true;
+		state.sentLinks.add(message);
+		marks?.();
+		if (typeof window !== "undefined") {
+			if (href) window.dispatchEvent(new CustomEvent("musepi-open-url", { detail: { url: href } }));
+			window.dispatchEvent(
+				new CustomEvent<UiBlockAnswerDetail>(UI_BLOCK_ANSWER_EVENT, { detail: { text: message } }),
+			);
 		}
 		return true;
 	}
@@ -271,10 +343,18 @@ export function handleAnswerClick(target: Element): boolean {
 export function handleAnswerInput(target: Element): boolean {
 	const control = target.closest<HTMLElement>("[data-ui-name]");
 	if (!control) return false;
-	if (control.getAttribute("data-ui-kind") === "note") {
+	const kind = control.getAttribute("data-ui-kind");
+	if (kind === "note") {
 		const hash = control.closest<HTMLElement>("[data-ui-block]")?.dataset.uiBlock;
 		if (!hash) return false;
 		setNote(hash, (control as HTMLInputElement).value);
+		return true;
+	}
+	if (kind === "card-note") {
+		const hash = control.closest<HTMLElement>("[data-ui-block]")?.dataset.uiBlock;
+		const card = control.getAttribute("data-ui-card");
+		if (!hash || !card) return false;
+		setCardNote(hash, card, (control as HTMLInputElement).value);
 		return true;
 	}
 	const read = readName(control);

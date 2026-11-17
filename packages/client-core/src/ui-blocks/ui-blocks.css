@@ -675,6 +675,20 @@
 	margin-inline-end: 6px;
 }
 
+/* A card's own note sits under the options it qualifies, lighter than the
+ * block-wide note so the two do not read as the same field. */
+.tr-ui-card-note {
+	margin-top: 2px;
+	font-size: var(--ui-font-size-xs);
+	background: transparent;
+	border-style: dashed;
+}
+
+.tr-ui-card-note:focus-visible {
+	background: var(--bg);
+	border-style: solid;
+}
+
 /* The answer bar appears once the block has something to send; before that a
  * "send" button would be a promise the block cannot keep. */
 .tr-ui-answerbar {
@@ -846,6 +860,60 @@
 .tr-ui-link--blocked .tr-ui-link-label {
 	text-decoration: line-through;
 	text-decoration-color: var(--fg-faint);
+}
+
+/* A link that also asks something reads as one row with a trailing mark: the
+ * row is a button, so it keeps the link's colour and hover without inheriting
+ * an `<a>`'s navigation. */
+button.tr-ui-link--send {
+	position: relative;
+	width: 100%;
+	align-items: stretch;
+	padding: 6px 22px 6px 8px;
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	text-align: start;
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+}
+
+button.tr-ui-link--send:hover {
+	background: var(--bg-inset);
+}
+
+button.tr-ui-link--send .tr-ui-link-label {
+	text-decoration: underline;
+	text-decoration-color: color-mix(in oklab, currentColor 45%, transparent);
+}
+
+.tr-ui-link-send-mark {
+	position: absolute;
+	inset-inline-end: 8px;
+	top: 6px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-faint);
+}
+
+button.tr-ui-link--send[data-ui-chosen="true"] {
+	color: var(--fg-muted);
+	cursor: default;
+}
+
+button.tr-ui-link--send[data-ui-chosen="true"] .tr-ui-link-label {
+	text-decoration: none;
+}
+
+button.tr-ui-link--send[data-ui-chosen="true"] .tr-ui-link-send-mark {
+	visibility: hidden;
+}
+
+/* Inline marks sit on the text baseline so a label keeps its line height. */
+.tr-ui-icon {
+	width: 1em;
+	height: 1em;
+	flex: none;
+	vertical-align: -0.125em;
 }
 
 /* A bare rule draws itself; a labelled one is a flex row whose two hairlines

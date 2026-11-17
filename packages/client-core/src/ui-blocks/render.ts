@@ -15,6 +15,7 @@
 import { t } from "../i18n/index.js";
 import { rememberBlockFailure } from "./answers.js";
 import { parseUiBlock, type UiBlockTree } from "./catalog.js";
+import { uiBlockIcon } from "./icons.js";
 
 const TONES = ["neutral", "info", "success", "warning", "error"] as const;
 type Tone = (typeof TONES)[number];
@@ -338,12 +339,39 @@ function linkBlock(props: Record<string, unknown>): string {
 	const label = str(props, "label") || href;
 	if (!href) return `<span class="tr-ui-link tr-ui-link--blocked">${inline(label)}</span>`;
 	const description = str(props, "description");
-	return (
-		`<a class="tr-ui-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer">` +
+	const message = str(props, "message").trim();
+	const body =
 		`<span class="tr-ui-link-label">${inline(label)}</span>` +
-		(description ? `<span class="tr-ui-link-note">${inline(description)}</span>` : "") +
-		`</a>`
-	);
+		(description ? `<span class="tr-ui-link-note">${inline(description)}</span>` : "");
+	// A link that also asks something is one gesture: open the page AND tell the
+	// assistant, so the user is not made to copy the URL back into the composer.
+	// It sends immediately — a navigation is not a pending decision to batch up.
+	if (message) {
+		return (
+			`<button type="button" class="tr-ui-link tr-ui-link--send" data-ui-link-send data-ui-href="${esc(href)}" data-ui-message="${esc(message)}">` +
+			body +
+			`<span class="tr-ui-link-send-mark" aria-hidden="true">↗</span>` +
+			`</button>`
+		);
+	}
+	return `<a class="tr-ui-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${body}</a>`;
+}
+
+function iconBlock(props: Record<string, unknown>): string {
+	const node = uiBlockIcon(str(props, "name"));
+	if (!node) return "";
+	const label = str(props, "label");
+	const body = node
+		.map(([tag, attrs]) => {
+			const written = Object.entries(attrs ?? {})
+				.map(([key, value]) => `${esc(key)}="${esc(value)}"`)
+				.join(" ");
+			return `<${tag}${written ? ` ${written}` : ""}/>`;
+		})
+		.join("");
+	// No name means decoration: the surrounding label carries the meaning.
+	const a11y = label ? `role="img" aria-label="${esc(label)}"` : 'aria-hidden="true"';
+	return `<svg class="tr-ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${a11y}>${body}</svg>`;
 }
 
 function divider(props: Record<string, unknown>): string {
@@ -373,6 +401,13 @@ function details(node: UiBlockTree, ctx: RenderContext): string {
 	return `<details class="tr-ui-details"><summary>${inline(str(node.props, "title"))}</summary>${body}</details>`;
 }
 
+/** Whether this subtree contains a control that answers a decision. */
+function hasDecisions(node: UiBlockTree): boolean {
+	if (node.type === "Choice" || node.type === "Button" || node.type === "Slider" || node.type === "DateInput")
+		return true;
+	return node.children.some(hasDecisions);
+}
+
 /** Per-type rendering. A type absent here draws nothing and is named in the note. */
 const RENDERERS: Record<string, (node: UiBlockTree, ctx: RenderContext) => string> = {
 	Stack: (node, ctx) => (kids(node, ctx) ? `<div class="tr-ui-stack">${kids(node, ctx)}</div>` : ""),
@@ -392,7 +427,14 @@ const RENDERERS: Record<string, (node: UiBlockTree, ctx: RenderContext) => strin
 		// A card of buttons is one decision, and its title names that decision.
 		const body = kids(node, { ...ctx, card: title || ctx.card });
 		if (!body && !title) return "";
-		return `<section class="tr-ui-card"><h4 class="tr-ui-card-title">${inline(title)}</h4>${body}</section>`;
+		// A card that asks for a decision also accepts a condition on it: the
+		// user picks the closest option and adds "with a regression test" to THAT
+		// card, instead of one note that would attach to every card at once.
+		const note =
+			title && hasDecisions(node)
+				? `<input class="tr-ui-input tr-ui-card-note" type="text" data-ui-name="card-note:${esc(title)}" data-ui-kind="card-note" data-ui-card="${esc(title)}" placeholder="${esc(t("transcript.uiBlockCardNote"))}">`
+				: "";
+		return `<section class="tr-ui-card"><h4 class="tr-ui-card-title">${inline(title)}</h4>${body}${note}</section>`;
 	},
 	Text: node => `<div class="tr-ui-text">${paragraphs(str(node.props, "markdown"))}</div>`,
 	Badge: node => badge(node.props),
@@ -407,6 +449,7 @@ const RENDERERS: Record<string, (node: UiBlockTree, ctx: RenderContext) => strin
 	List: node => listBlock(node.props),
 	Quote: node => quote(node.props),
 	Link: node => linkBlock(node.props),
+	Icon: node => iconBlock(node.props),
 	Divider: node => divider(node.props),
 	Code: node => codeBlock(node.props),
 	Details: (node, ctx) => details(node, ctx),

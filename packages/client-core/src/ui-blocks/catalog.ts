@@ -120,8 +120,20 @@ const Quote = defineComponent({
 });
 const Link = defineComponent({
 	name: "Link",
-	description: "one http(s) or mailto link; a description says what it opens",
-	props: z.object({ label: z.string(), href: z.string(), description: z.string().optional() }),
+	description:
+		"one http(s) or mailto link; `description` says what it opens, `message` sends that sentence to the assistant when clicked",
+	props: z.object({
+		label: z.string(),
+		href: z.string(),
+		description: z.string().optional(),
+		message: z.string().optional(),
+	}),
+	component: null,
+});
+const Icon = defineComponent({
+	name: "Icon",
+	description: "a small inline mark before a label; `label` is what a screen reader says",
+	props: z.object({ name: z.string(), label: z.string().optional() }),
 	component: null,
 });
 const Divider = defineComponent({
@@ -151,6 +163,7 @@ const leaf = z.union([
 	List.ref,
 	Quote.ref,
 	Link.ref,
+	Icon.ref,
 	Divider.ref,
 	Code.ref,
 ]);
@@ -264,6 +277,7 @@ export const uiBlockLibrary = createLibrary({
 		List,
 		Quote,
 		Link,
+		Icon,
 		Divider,
 		Code,
 		Choice,

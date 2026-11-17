@@ -175,6 +175,30 @@ describe("reading blocks", () => {
 		expect(refused.html).toContain("tr-ui-link--blocked");
 	});
 
+	test("a Link with a message becomes one gesture that opens and answers", () => {
+		const block = renderUiBlock(
+			'root = Stack([Link("授权页", "https://example.test/login", "登录后继续", "已登录，继续")])',
+		);
+		expect(block.errors).toEqual([]);
+		expect(block.html).toContain("data-ui-link-send");
+		expect(block.html).toContain('data-ui-href="https://example.test/login"');
+		expect(block.html).toContain('data-ui-message="已登录，继续"');
+		// A refused scheme stays refused even when a message rides along.
+		const refused = renderUiBlock('root = Stack([Link("x", "javascript:alert(1)", "", "go")])');
+		expect(refused.html).toContain("tr-ui-link--blocked");
+		expect(refused.html).not.toContain("data-ui-link-send");
+	});
+
+	test("an Icon draws from the fixed set and an unknown name draws nothing", () => {
+		const known = renderUiBlock('root = Stack([Icon("git-branch", "分支")])');
+		expect(known.errors).toEqual([]);
+		expect(known.html).toContain('class="tr-ui-icon"');
+		expect(known.html).toContain('aria-label="分支"');
+		// Decoration by default: with no label it is hidden from assistive tech.
+		expect(renderUiBlock('root = Stack([Text("a"), Icon("check")])').html).toContain('aria-hidden="true"');
+		expect(renderUiBlock('root = Stack([Text("a"), Icon("no-such-icon")])').html).not.toContain("tr-ui-icon");
+	});
+
 	test("a Divider is a rule with or without a caption", () => {
 		const plain = renderUiBlock("root = Stack([Divider()])");
 		expect(plain.html).toContain('<hr class="tr-ui-divider"');
@@ -264,6 +288,23 @@ describe("key value leader", () => {
 		expect(block.html).toContain("tr-ui-kv-row");
 		expect(block.html).toContain("tr-ui-kv-leader");
 		expect(block.html).toContain("abc123");
+	});
+});
+
+describe("card notes", () => {
+	test("a decision card draws its own note field; a display card does not", () => {
+		const asking = renderUiBlock('root = Stack([Card("部署窗口", [Button("今晚"), Button("明天")])])');
+		expect(asking.errors).toEqual([]);
+		expect(asking.html).toContain('data-ui-kind="card-note"');
+		expect(asking.html).toContain('data-ui-card="部署窗口"');
+
+		const plain = renderUiBlock('root = Stack([Card("结论", [Text("就这样")])])');
+		expect(plain.html).not.toContain("card-note");
+	});
+
+	test("an untitled card has nothing to key a note by and draws none", () => {
+		const block = renderUiBlock('root = Stack([Card("", [Button("A")])])');
+		expect(block.html).not.toContain("card-note");
 	});
 });
 
