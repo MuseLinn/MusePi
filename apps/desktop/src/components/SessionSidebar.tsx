@@ -1281,7 +1281,11 @@ export function SessionSidebar({
 							</span>
 						</div>
 					)}
-					<div className="gui-scroll-frame min-h-0 flex-1">
+					{/* A flex column wrapper: the scroller's `flex-1` only bounds its
+					 *  height when its parent is a flex container. As a plain block the
+					 *  list grew to its content height and the pane's overflow-hidden
+					 *  clipped the tail — the list could not scroll at all. */}
+					<div className="gui-scroll-frame flex min-h-0 flex-1 flex-col">
 						<div
 							ref={sessionListRef}
 							/* Keyed by view so a groups↔projects (or archive) switch

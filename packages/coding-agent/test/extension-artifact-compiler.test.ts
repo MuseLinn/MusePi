@@ -74,6 +74,35 @@ describe("extension slot components", () => {
 		}
 	}, 60_000);
 
+	test("binds a bare react-dom import to the host ReactDOM, not to React", async () => {
+		// @tanstack/react-virtual imports `flushSync` from "react-dom". A
+		// compiler that routed the bare specifier to the React module produced
+		// `window.MusePiReact.flushSync` — undefined — and the exception fired
+		// the first time a virtualized list measured, taking the window down.
+		const dir = await mkdtemp(path.join(tmpdir(), "ext-react-dom-host-"));
+		const entry = path.join(dir, "index.ts");
+		await writeFile(
+			entry,
+			`export default function (pi: any): void { pi.registerComponent({ slot: "app.capability", moduleUrl: "./page.tsx" }); }`,
+		);
+		await writeFile(
+			path.join(dir, "page.tsx"),
+			`import { flushSync } from "react-dom";
+			export default function Page() { return <span>{String(typeof flushSync)}</span>; }`,
+		);
+		try {
+			const components = await collectSlotComponents(
+				[{ kind: "plugin-module", state: "active", path: entry }],
+				process.cwd(),
+			);
+			expect(components).toHaveLength(1);
+			expect(components[0]?.error).toBeUndefined();
+			expect(components[0]?.code).toContain("window.MusePiReactDOM");
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	}, 60_000);
+
 	test("skips non-extension-module entries and shadowed states", async () => {
 		const components = await collectSlotComponents(
 			[

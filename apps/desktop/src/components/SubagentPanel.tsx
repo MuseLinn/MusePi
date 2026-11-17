@@ -9,6 +9,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { useFocusTrap } from "../lib/use-focus-trap";
+import { AgentAvatar } from "./AgentAvatar";
 
 const EMPTY_TOOLS: TranscriptProps["activeTools"] = new Map();
 const POLL_MS = 1200;
@@ -264,6 +265,20 @@ export function SubagentSessionView(props: {
 							activeTools={EMPTY_TOOLS}
 							working={agent.status === "running" && fetchError === null}
 							host={host}
+							// Same orb the main chat paints: a subagent transcript is a
+							// session transcript, and reading it without an avatar made
+							// the drawer look like a different, unfinished surface.
+							agentGutter={
+								localStorage.getItem("musepi-gui-avatars") === "0" ? (
+									""
+								) : (
+									<AgentAvatar
+										state={agent.status === "running" ? "working" : "listening"}
+										size={32}
+										seed={agent.id ?? agentId}
+									/>
+								)
+							}
 						/>
 						<SessionErrorDock
 							entries={entries}

@@ -3,10 +3,13 @@ import { t } from "@musepi/client-core/src/i18n/index.js";
 import { useScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
 import type { DisplayContext, MessageDisplayContext } from "@musepi/client-core/src/messages/display-context";
 import { type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { agentSignalsFromSnapshot } from "../lib/agent-signals";
+import { thinkingOrbStateFromSession } from "../lib/companion";
 import type { RpcClient } from "../lib/rpc";
 import { subscribeSideSessionEvents } from "../lib/side-session-stores";
 import { useSideSessionStore } from "../lib/use-side-session-store";
 import { Icon } from "../vendor/oc-icons";
+import { AgentAvatar } from "./AgentAvatar";
 import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
 import { Composer } from "./Composer";
@@ -112,6 +115,11 @@ function SideSessionBody({
 	const [quotes, setQuotes] = useState<DisplayContext[]>([]);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(bodyRef);
+	// Same avatar contract as the main chat: one orb per turn, state from the
+	// side store (Sessions and Subagents read one transcript shape).
+	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
+	const orb = thinkingOrbStateFromSession(snap);
+	const agentSignals = agentSignalsFromSnapshot(snap, { now: Date.now() });
 
 	useEffect(
 		() =>
@@ -217,6 +225,9 @@ function SideSessionBody({
 						streamDone={false}
 						activeTools={snap.activeTools}
 						working={snap.working}
+						agentGutter={
+							showAvatars ? <AgentAvatar state={orb} size={32} signals={agentSignals} seed={sessionId} /> : ""
+						}
 					/>
 				</div>
 				<ScrollEdgeBlur edge="top" />

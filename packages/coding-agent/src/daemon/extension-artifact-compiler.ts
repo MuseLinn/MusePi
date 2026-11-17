@@ -393,13 +393,18 @@ function hostModulesPlugin(): BunPlugin {
 				namespace: "musepi-host-react",
 			}));
 			build.onLoad({ filter: /.*/, namespace: "musepi-host-react" }, args => {
+				// Bare `react-dom` is its own specifier: without it the ternary fell
+				// through to the React module, so `import { flushSync } from
+				// "react-dom"` (what @tanstack/react-virtual does) compiled to
+				// `window.MusePiReact.flushSync` — undefined at runtime, and the
+				// exception surfaced the first time a virtualized list measured.
 				const contents = args.path.includes("jsx-")
 					? HOST_JSX_MODULE
-					: args.path === "react-dom/client"
-						? HOST_REACT_DOM_CLIENT_MODULE
-						: args.path.startsWith("react-dom/")
-							? HOST_REACT_DOM_MODULE
-							: HOST_REACT_MODULE;
+					: args.path === "react-dom" || args.path.startsWith("react-dom/")
+						? args.path === "react-dom/client"
+							? HOST_REACT_DOM_CLIENT_MODULE
+							: HOST_REACT_DOM_MODULE
+						: HOST_REACT_MODULE;
 				return { contents, loader: "js" };
 			});
 		},
