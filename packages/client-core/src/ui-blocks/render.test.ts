@@ -266,3 +266,25 @@ describe("key value leader", () => {
 		expect(block.html).toContain("abc123");
 	});
 });
+
+describe("card table styling reaches through the chat's table wrapper", () => {
+	/**
+	 * `Markdown.decorateTables` wraps every rendered `<table>` in
+	 * `.tr-table > .tr-table-scroll` (horizontal scroll plus the copy toolbar).
+	 * A `> table` rule aimed at a card therefore matches nothing — the first
+	 * version of this styling was dead code for exactly that reason, so the
+	 * stylesheet must reach through the wrapper instead of assuming a direct
+	 * child.
+	 */
+	test("the stylesheet never targets a table as a direct child of a card", async () => {
+		const css = await Bun.file(new URL("./ui-blocks.css", import.meta.url)).text();
+		expect(css).not.toMatch(/\.tr-ui-card\s*>\s*table/);
+		expect(css).toMatch(/\.tr-ui-card\s+\.tr-table\s*>\s*table/);
+	});
+
+	test("the app's table decorator is the wrapper the rule expects", async () => {
+		const markdown = await Bun.file(new URL("../components/transcript/Markdown.tsx", import.meta.url)).text();
+		expect(markdown).toContain('class="tr-table"');
+		expect(markdown).toContain('class="tr-table-scroll"');
+	});
+});

@@ -944,6 +944,12 @@ div.tr-ui-divider::after {
  * The renderer marks a column right-aligned when every filled cell is a
  * number; this is the only place the alignment becomes visual. Tabular figures
  * make the column edges line up when the digits differ in width. */
+/* The chat's table rules (`.tr-md th/td { text-align: left }`) load after this
+ * file in the desktop bundle, so an equal-specificity rule would lose on order.
+ * Naming both the block root and the table wrapper outranks it without
+ * `!important`, which the rest of the stylesheet does not use. */
+.tr-ui .tr-table td[data-align="right"],
+.tr-ui .tr-table th[data-align="right"],
 .tr-ui table td[data-align="right"],
 .tr-ui table th[data-align="right"] {
 	text-align: right;
@@ -951,23 +957,41 @@ div.tr-ui-divider::after {
 }
 
 /* Inside a card the card IS the frame: the table drops its own border and its
- * side padding so rows run edge to edge, and keeps only the row dividers. */
-.tr-ui-card > table {
+ * side padding so rows run edge to edge, and keeps only the row dividers.
+ *
+ * The table is NOT a direct child: `Markdown.decorateTables` wraps every table
+ * it renders in `.tr-table > .tr-table-scroll` (the horizontal scroll container
+ * plus its wide-table toolbar). A `> table` selector therefore matches nothing
+ * here, which is exactly how the first version of this rule silently did
+ * nothing — reach through the wrapper instead. */
+.tr-ui-card .tr-table,
+.tr-ui-card .tr-table-scroll,
+.tr-ui-card .tr-table > table {
 	border: 0;
+	background: none;
+}
+
+.tr-ui-card .tr-table {
 	margin: 0 -2px;
 }
 
-.tr-ui-card > table th,
-.tr-ui-card > table td {
+/* A card's table width is the card's, so the chat's "widen" control has nothing
+ * to act on there; copy stays, because copying the rows is still useful. */
+.tr-ui-card .tr-table-wide {
+	display: none;
+}
+
+.tr-ui-card .tr-table > table th,
+.tr-ui-card .tr-table > table td {
 	padding-inline: 2px;
 }
 
-.tr-ui-card > table th:first-child,
-.tr-ui-card > table td:first-child {
+.tr-ui-card .tr-table > table th:first-child,
+.tr-ui-card .tr-table > table td:first-child {
 	padding-inline-start: 0;
 }
 
-.tr-ui-card > table th:last-child,
-.tr-ui-card > table td:last-child {
+.tr-ui-card .tr-table > table th:last-child,
+.tr-ui-card .tr-table > table td:last-child {
 	padding-inline-end: 0;
 }
