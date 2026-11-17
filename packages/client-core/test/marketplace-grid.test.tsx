@@ -36,6 +36,12 @@ function makeClient(responses: MarketplaceCardEntry[][]) {
 		async rpc<T>(method: string, _params?: unknown): Promise<T> {
 			const list = responses[Math.min(calls.length, responses.length - 1)];
 			calls.push(method);
+			if (method === "marketplace.topic") {
+				// Discovery is an addition to the catalog, not another catalog:
+				// these tests answer it with nothing so the grid shows the
+				// curated list alone.
+				return { plugins: [], failures: [] } as unknown as T;
+			}
 			await new Promise(resolve => {
 				pending.push(resolve);
 			});
@@ -100,7 +106,7 @@ describe("MarketplaceGrid data flow", () => {
 		const client = makeClient([[makeEntry()]]);
 		const { root, div } = await mount({ client, onAction: () => {} });
 		try {
-			expect(client.calls).toEqual(["marketplace.list"]);
+			expect(client.calls).toEqual(["marketplace.list", "marketplace.topic"]);
 			// fetch still pending → skeleton shown, no cards yet
 			expect(div.querySelectorAll(".mp-card").length).toBe(0);
 			client.flush();
@@ -149,7 +155,7 @@ describe("MarketplaceGrid data flow", () => {
 			await act(async () => {});
 			// refresh re-pulled the list (now installed) — busy cleared,
 			// badge + Remove affordance flipped on
-			expect(client.calls).toEqual(["marketplace.list", "marketplace.list"]);
+			expect(client.calls).toEqual(["marketplace.list", "marketplace.topic", "marketplace.list"]);
 			card = div.querySelector<HTMLElement>(".mp-card");
 			expect(card?.getAttribute("data-busy")).toBe("false");
 			expect(div.textContent ?? "").toContain("github-mcp");

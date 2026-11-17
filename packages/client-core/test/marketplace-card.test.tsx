@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Container, Cpu, FlaskConical, GitBranch, MonitorPlay, Package, ShieldCheck, Wrench } from "lucide-react";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MarketplaceCard } from "../src/components/marketplace/MarketplaceCard";
 import { MarketplaceGrid } from "../src/components/marketplace/MarketplaceGrid";
@@ -194,5 +195,25 @@ describe("MarketplaceGrid", () => {
 		expect(html).toContain("mp-filter-bar");
 		expect(html).toContain(">ai<");
 		expect(html).toContain(">web<");
+	});
+	it("marks a topic-discovered plugin as unreviewed and a curated one as curated", () => {
+		// The GitHub tag is the author's own claim, so the card has to say
+		// nobody read the code; a curated catalog entry carries the opposite.
+		const discovered = renderToStaticMarkup(
+			createElement(MarketplaceCard, {
+				entry: makeEntry({ name: "someone-tool", reviewed: false, stars: 42 }),
+				onAction: () => {},
+			}),
+		);
+		expect(discovered).toContain("mp-card-badge--unreviewed");
+
+		const curated = renderToStaticMarkup(
+			createElement(MarketplaceCard, {
+				entry: makeEntry({ name: "superpowers", category: "curated" }),
+				onAction: () => {},
+			}),
+		);
+		expect(curated).toContain("mp-card-badge--curated");
+		expect(curated).not.toContain("mp-card-badge--unreviewed");
 	});
 });

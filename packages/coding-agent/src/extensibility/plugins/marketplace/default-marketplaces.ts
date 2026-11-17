@@ -15,6 +15,9 @@ const CATALOGS: Record<string, MarketplaceCatalog> = {
 				source: "./",
 				icon: "https://raw.githubusercontent.com/obra/superpowers/v7.0.2/assets/app-icon.png",
 				author: { name: "Jesse Vincent", email: "jesse@fsck.com" },
+				// Curated: reviewed by this project, listed first in the market.
+				category: "curated",
+				tags: ["planning", "tdd", "debugging"],
 			},
 		],
 	},
@@ -29,6 +32,9 @@ const CATALOGS: Record<string, MarketplaceCatalog> = {
 				version: "0.0.197",
 				source: "./",
 				icon: "https://raw.githubusercontent.com/GoogleChrome/modern-web-guidance/v0.0.197/assets/logo.png",
+				// Curated: reviewed by this project, listed first in the market.
+				category: "curated",
+				tags: ["web", "best-practices"],
 			},
 		],
 	},

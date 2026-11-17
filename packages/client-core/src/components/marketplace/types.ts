@@ -78,6 +78,16 @@ export interface MarketplaceCardEntry {
 	installs?: number;
 	/** Marketplace display name; used by the grid for grouping. */
 	marketplace?: string;
+	/**
+	 * False for a plugin found by GitHub topic: the tag is its author's own
+	 * claim and nobody read the code. Absent means the entry came from a
+	 * catalog this project curates, so it needs no warning.
+	 */
+	reviewed?: boolean;
+	/** `owner/repo` for a discovered plugin, which is what it installs by. */
+	repo?: string;
+	/** Star count, shown for discovered plugins to help judge a stranger. */
+	stars?: number;
 }
 
 /**

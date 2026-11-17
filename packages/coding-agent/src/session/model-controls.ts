@@ -581,7 +581,19 @@ export class ModelControls {
 	 * preferred default or the current effective level.
 	 */
 	#reapplyThinkingLevel(preferredDefault?: ThinkingLevel): void {
-		this.setThinkingLevel(this.#autoThinking ? AUTO_THINKING : (preferredDefault ?? this.#thinkingLevel));
+		if (this.#autoThinking) {
+			this.setThinkingLevel(AUTO_THINKING);
+			return;
+		}
+		// A model without a configured defaultLevel keeps the level the previous
+		// model ran at, which is right while the new model offers that rung and
+		// wrong as soon as it does not: switching from a model with `medium` to
+		// one offering only low/high/max left the session configured at a rung
+		// that model does not have. Fall back to the new model's first rung then.
+		const carried = preferredDefault ?? this.#thinkingLevel;
+		const offered = this.#model?.reasoning ? getSupportedEfforts(this.#model) : [];
+		const outside = carried !== undefined && offered.length > 0 && !offered.includes(carried as Effort);
+		this.setThinkingLevel(outside ? (offered[0] as ThinkingLevel) : carried);
 	}
 
 	/**

@@ -104,8 +104,8 @@
 	z-index: 1;
 	display: flex;
 	flex-direction: column;
-	min-width: 260px;
-	max-width: 344px;
+	min-width: 320px;
+	max-width: 420px;
 	/* Fixed height, not max-height: with max-height the flex content (search
 	 * + list) re-measures on scrollbar state and list-loading, and because
 	 * the popup is bottom-anchored the search box visibly jumps when the

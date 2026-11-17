@@ -1,4 +1,4 @@
-import { Check, Download, RefreshCw } from "lucide-react";
+import { Check, Download, RefreshCw, Star } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { t } from "../../i18n/index.js";
 import {
@@ -139,6 +139,18 @@ export function MarketplaceCard({
 								{t("guest.pluginUpdateBadge")}
 							</span>
 						)}
+						{/* 精选：本项目审阅过的目录条目（category=curated）。 */}
+						{entry.category?.toLowerCase() === "curated" && (
+							<span className="mp-card-badge mp-card-badge--curated">
+								<Check size={11} strokeWidth={2.5} aria-hidden="true" />
+								{t("guest.mpBadgeCurated")}
+							</span>
+						)}
+						{/* 未审核：按 GitHub topic 发现的插件。topic 是作者自己的声明，
+						 *  没有人读过代码，所以这张卡片必须把这一点说在明处。 */}
+						{entry.reviewed === false && (
+							<span className="mp-card-badge mp-card-badge--unreviewed">{t("guest.mpBadgeUnreviewed")}</span>
+						)}
 						{/* 设计体系内容标识（M3.7d）：catalog 声明 category/tags =
 						 *  design-system 的包在能力中心市场 tab 带徽章，可发现。 */}
 						{hasDesignSystemContent(entry) && (
@@ -147,15 +159,25 @@ export function MarketplaceCard({
 						{entry.author !== undefined && entry.author.length > 0 && (
 							<span className="mp-card-meta-item">{t("guest.pluginAuthorBy", { author: entry.author })}</span>
 						)}
+						{typeof entry.stars === "number" && entry.reviewed === false && (
+							<span className="mp-card-meta-item">
+								<Star size={11} strokeWidth={1.9} aria-hidden="true" />
+								{shortNumber(entry.stars)}
+							</span>
+						)}
 						{typeof entry.installs === "number" && (
 							<span className="mp-card-meta-item">
 								<Download size={11} strokeWidth={1.9} aria-hidden="true" />
 								{shortNumber(entry.installs)}
 							</span>
 						)}
-						{entry.category !== undefined && entry.category.length > 0 && (
-							<span className="mp-card-chip">{entry.category}</span>
-						)}
+						{/* `curated` is a standing, not a subject: it already reads as a
+						 *  badge above, so repeating it as a chip says the same thing twice. */}
+						{entry.category !== undefined &&
+							entry.category.length > 0 &&
+							entry.category.toLowerCase() !== "curated" && (
+								<span className="mp-card-chip">{entry.category}</span>
+							)}
 						{entry.license !== undefined && entry.license.length > 0 && (
 							<span className="mp-card-chip">{entry.license}</span>
 						)}

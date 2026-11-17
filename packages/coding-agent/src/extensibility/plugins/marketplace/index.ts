@@ -6,5 +6,6 @@ export * from "./list-entries";
 export * from "./manager";
 export * from "./registry";
 export * from "./source-resolver";
+export * from "./topic-discovery";
 export * from "./types";
 export * from "./version";

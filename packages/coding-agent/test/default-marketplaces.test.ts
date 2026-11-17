@@ -36,6 +36,11 @@ describe("default curated marketplaces", () => {
 			"https://raw.githubusercontent.com/obra/superpowers/v7.0.2/assets/app-icon.png",
 			"https://raw.githubusercontent.com/GoogleChrome/modern-web-guidance/v0.0.197/assets/logo.png",
 		]);
+		// Both are reviewed by this project, so the market can list them apart
+		// from what anyone may publish. The tag has to survive the listing for
+		// that to be possible at all.
+		expect(available.map(entry => entry.category)).toEqual(["curated", "curated"]);
+		expect(available.every(entry => Array.isArray(entry.tags) && entry.tags.length > 0)).toBe(true);
 	});
 
 	it("keeps custom registries default-free unless explicitly enabled", async () => {

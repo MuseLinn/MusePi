@@ -2431,6 +2431,14 @@ export function ChatView({
 		for (const entry of snap.entries) {
 			if (entry.type === "thinking_level_change") level = entry.thinkingLevel ?? null;
 		}
+		// A model switch re-clamps the level without necessarily appending a new
+		// thinking_level_change (the clamped value can equal the old one), so the
+		// transcript's last entry can name a rung the NEW model does not have —
+		// the chip read "medium" on a model offering only low/high/max. The live
+		// ladder is the authority on what the session now runs at.
+		if (level !== null && thinkingEfforts.length > 0 && !thinkingEfforts.includes(level)) {
+			return thinkingInfoLevel ?? thinkingEfforts[0] ?? level;
+		}
 		return level ?? thinkingInfoLevel ?? null;
 	})();
 	// The work-timer badge wants the ACTUAL effort this round used — the

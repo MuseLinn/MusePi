@@ -180,6 +180,7 @@ export class MarketplaceService implements DaemonService {
 		"marketplace.sources.add": "addSource",
 		"marketplace.sources.remove": "removeSource",
 		"marketplace.sources.refresh": "refreshSources",
+		"marketplace.topic": "topicPlugins",
 		"skills.list": "listSkills",
 		"skills.delete": "deleteSkill",
 		"skills.install": "installSkill",
@@ -367,6 +368,20 @@ export class MarketplaceService implements DaemonService {
 			this.#marketplaceCache = { at: Date.now(), entries };
 		}
 		return { entries: this.#marketplaceCache.entries };
+	}
+
+	/**
+	 * RPC marketplace.topic: repositories tagged `musepi-plugin`.
+	 *
+	 * A tag is its author's claim, so every entry comes back `reviewed: false`
+	 * and the market lists it apart from the curated catalog. Discovery never
+	 * fails the market: a failed search or one unreadable repository comes back
+	 * in `failures` while the rest of the list stands.
+	 */
+	async topicPlugins(params: unknown) {
+		const { discoverPluginsByTopic } = await import("../../extensibility/plugins/marketplace/topic-discovery");
+		const p = (params ?? {}) as { topic?: string };
+		return await discoverPluginsByTopic({ topic: p.topic });
 	}
 
 	/** RPC marketplace.detail：读取完整插件介绍与技能，复用持久化源码缓存。 */

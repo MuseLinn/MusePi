@@ -435,6 +435,25 @@
 	background: color-mix(in oklab, var(--accent) 12%, transparent);
 }
 
+/* 精选徽章：与「已安装」同族但更沉，表示这是本项目审阅过的条目，
+ * 而不是用户自己的安装状态。 */
+.mp-card-badge--curated {
+	border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+	background: color-mix(in oklab, var(--accent) 18%, transparent);
+	/* The badge sits on a dark card, where --accent-fg (tuned for accent fills)
+	 * reads near-black. Use the theme accent itself, which is legible on both. */
+	color: color-mix(in oklab, var(--accent) 78%, var(--fg));
+	font-weight: 600;
+}
+
+/* 未审核徽章：中性警示。topic 是作者自己的声明，没有人读过代码，
+ * 所以用 warn 而非 accent——它该被看见，但不该像「精选」一样被当成背书。 */
+.mp-card-badge--unreviewed {
+	border-color: color-mix(in srgb, var(--warn) 32%, transparent);
+	background: color-mix(in srgb, var(--warn) 10%, transparent);
+	color: color-mix(in srgb, var(--warn) 88%, var(--fg));
+}
+
 /* 可更新徽章：warning hue，与「已安装」的 accent 区分——状态是警示而非完成。 */
 .mp-card-badge--update {
 	border-color: color-mix(in srgb, var(--warn) 40%, transparent);

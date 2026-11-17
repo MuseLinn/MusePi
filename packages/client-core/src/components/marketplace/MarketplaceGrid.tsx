@@ -93,6 +93,8 @@ export function MarketplaceGrid({
 	const [sourceInput, setSourceInput] = useState("");
 	const [sourceBusy, setSourceBusy] = useState(false);
 	const [upgradingAll, setUpgradingAll] = useState(false);
+	const [discovered, setDiscovered] = useState<readonly MarketplaceCardEntry[]>([]);
+	const [discoverFailures, setDiscoverFailures] = useState<readonly string[]>([]);
 
 	useEffect(() => {
 		saveMarketplaceViewPreferences({ segment, filter, category });
@@ -141,6 +143,52 @@ export function MarketplaceGrid({
 		};
 	}, [client]);
 
+	/**
+	 * Plugins found by GitHub topic. They are not part of any catalog this
+	 * project curates, so they load separately and render in their own section
+	 * with an unreviewed badge: one failed search must not empty the catalog.
+	 */
+	const loadDiscovered = useCallback(async (): Promise<void> => {
+		if (client == null) return;
+		try {
+			const res = await client.rpc<{
+				plugins?: Array<{
+					repo: string;
+					name: string;
+					description?: string;
+					version?: string;
+					icon?: string;
+					homepage?: string;
+					license?: string;
+					stars?: number;
+					reviewed?: boolean;
+				}>;
+				failures?: string[];
+			}>("marketplace.topic");
+			const plugins = res?.plugins ?? [];
+			setDiscovered(
+				plugins.map(p => ({
+					name: p.name,
+					version: p.version,
+					description: p.description,
+					homepage: p.homepage,
+					license: p.license,
+					icon: p.icon,
+					repo: p.repo,
+					stars: p.stars ?? 0,
+					reviewed: false,
+					// The repo is what it installs by; the grid labels the source
+					// with it so two forks of one package stay apart.
+					marketplace: "github-topic",
+					tags: ["unreviewed"],
+				})),
+			);
+			setDiscoverFailures(res?.failures ?? []);
+		} catch (err) {
+			setDiscoverFailures([errorMessage(err)]);
+		}
+	}, [client]);
+
 	const loadSources = useCallback(async (): Promise<void> => {
 		if (client == null) return;
 		try {
@@ -158,6 +206,13 @@ export function MarketplaceGrid({
 		if (client == null || segment !== "sources") return;
 		void loadSources();
 	}, [client, segment, loadSources]);
+
+	// Discovery runs with the catalog segment: it is an addition to the market,
+	// not a second place to look for plugins.
+	useEffect(() => {
+		if (client == null || segment !== "catalog") return;
+		void loadDiscovered();
+	}, [client, segment, loadDiscovered]);
 
 	const runSourceMutation = async (mutation: () => Promise<void>): Promise<void> => {
 		setSourceBusy(true);
@@ -252,9 +307,15 @@ export function MarketplaceGrid({
 		[entries],
 	);
 
+	// Discovered plugins join the catalog list, never the installed one: they
+	// are candidates, and their `reviewed: false` is what tells the reader so.
+	const catalogEntries = useMemo(
+		() => [...entries, ...discovered.filter(d => !entries.some(e => e.repo === d.repo))],
+		[entries, discovered],
+	);
 	const scopedEntries = useMemo(
-		() => (segment === "installed" ? entries.filter(e => e.installed === true) : entries),
-		[entries, segment],
+		() => (segment === "installed" ? entries.filter(e => e.installed === true) : catalogEntries),
+		[entries, segment, catalogEntries],
 	);
 
 	const filtered = useMemo(() => {

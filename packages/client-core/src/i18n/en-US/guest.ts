@@ -56,6 +56,8 @@ export const guest = {
 	"guest.marketplaceUpgradeConfirm": "Upgrade {name} from v{from} to v{to}? Source: “{source}”",
 	"guest.marketplaceUpgradeAllConfirm": "Upgrade all {count} plugins with updates?",
 	"guest.mpBadgeDesignSystem": "Design system",
+	"guest.mpBadgeCurated": "Curated",
+	"guest.mpBadgeUnreviewed": "Unreviewed",
 	"guest.pluginEmptyTitle": "No matching plugins.",
 	"guest.pluginEmptyClear": "Clear filters",
 	"guest.pluginDetailHomepage": "Homepage",

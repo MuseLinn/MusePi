@@ -54,6 +54,8 @@ export const guest = {
 	"guest.marketplaceUpgradeConfirm": "将 {name} 从 v{from} 升级到 v{to}？来源：「{source}」",
 	"guest.marketplaceUpgradeAllConfirm": "升级全部 {count} 个可更新插件？",
 	"guest.mpBadgeDesignSystem": "设计体系",
+	"guest.mpBadgeCurated": "精选",
+	"guest.mpBadgeUnreviewed": "未审核",
 	"guest.pluginEmptyTitle": "没有匹配的插件。",
 	"guest.pluginEmptyClear": "清除筛选",
 	"guest.pluginDetailHomepage": "主页",
