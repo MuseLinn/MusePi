@@ -968,7 +968,15 @@ seq 单一权威 = daemon journal：journal 打开时从文件尾部恢复 `#seq
 `ViewStoreService.search(params: {query?, limit?, sessionId?})` 负责透传。
 
 **为什么这个作用域是必需项而非优化项。** ⌘F 只搜一个会话，而 `session.search` 是带 `LIMIT`
-的跨会话 `LIKE`。没有作用域时，**别的会话**的命中会吃掉 limit，把当前会话的结果饿死 ——
+的跨会话查询。没有作用域时，**别的会话**的命中会吃掉 limit，把当前会话的结果饿死 ——
+
+**排序与分词（FTS5）。** 上面那个 `LIMIT` 作用在两路合并之后：一路是对双字组展开列
+（`messages.expanded`，外部内容表 `messages_fts`）的 FTS5 `MATCH`，另一路是 `LIKE` 兜底，
+接住前缀通配表达不了的中间子串（`gin` → `login`）。unicode61 会把一整段连续中文当成
+单个 token，所以 `utils/fts-text.ts` 里的双字组展开才是「记忆后端」中「后端」可被搜到的
+原因；`file-index` 用的是同一份。被索引的原文仍留在 `messages.content` 里，保证行本身
+可读；daemon 的消息投影是唯一写入方 —— 升级时回填必须发生在触发器创建**之前**，因为
+外部内容表上的 UPDATE 触发器会为索引里从未存在的行发一条 `delete`，把索引弄坏。
 而串进来的命中比查不到更糟：那一行的 `timestamp` **就是** transcript 的跳转键，所以一个
 外来命中会滚到错误的行，或者根本滚不到。未知 `sessionId` 必须返回 `[]`，绝不能退化成
 无作用域搜索（断言见 `test/daemon/view-store.test.ts`）。

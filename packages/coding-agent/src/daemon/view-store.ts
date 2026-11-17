@@ -21,8 +21,13 @@
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { logger } from "@musepi/pi-utils";
 import type { MessageEntry, SessionEntry, SessionState } from "@musepi/pi-wire";
 import type { SessionSnapshot } from "@musepi/sdk";
+import { expandForIndex, expandForQuery } from "../utils/fts-text";
+
+/** Rows per backfill transaction. Each chunk is one commit (one fsync). */
+const BACKFILL_CHUNK_ROWS = 50_000;
 
 export interface MaterializedRow {
 	sessionId: string;
@@ -185,10 +190,56 @@ export class ViewStore {
 				role TEXT NOT NULL,
 				model TEXT,
 				content TEXT NOT NULL DEFAULT '',
+				expanded TEXT NOT NULL DEFAULT '',
 				timestamp INTEGER NOT NULL,
 				PRIMARY KEY (session_id, seq)
 			)
 		`);
+		// Old databases lack `expanded` (the FTS search column) — same
+		// idempotent path as the sessions-table columns above.
+		const msgCols = this.#db.query("PRAGMA table_info(messages)").all() as Array<{ name: string }>;
+		const addedExpanded = !msgCols.some(c => c.name === "expanded");
+		if (addedExpanded) this.#db.run("ALTER TABLE messages ADD COLUMN expanded TEXT NOT NULL DEFAULT ''");
+		// Order matters: populate the new column BEFORE the triggers exist. An
+		// UPDATE trigger on an external-content FTS table issues a 'delete' for
+		// a row the index never held, which corrupts the index ("database disk
+		// image is malformed") rather than merely leaving it stale.
+		if (addedExpanded) this.#backfillExpandedValues();
+		const hadFts = this.#db.query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages_fts'").get();
+		// `content` keeps the readable text for snippet(); MATCH runs against
+		// `expanded` (bigram-expanded, so CJK substrings are reachable — see
+		// utils/fts-text.ts). External-content: the messages table stays the
+		// single source of truth and the triggers below keep the index in step.
+		this.#db.run(`
+			CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+				content,
+				expanded,
+				content='messages',
+				content_rowid='rowid'
+			)
+		`);
+		this.#db.run(`
+			CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+				INSERT INTO messages_fts(rowid, content, expanded) VALUES (new.rowid, new.content, new.expanded);
+			END
+		`);
+		this.#db.run(`
+			CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+				INSERT INTO messages_fts(messages_fts, rowid, content, expanded)
+				VALUES ('delete', old.rowid, old.content, old.expanded);
+			END
+		`);
+		this.#db.run(`
+			CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+				INSERT INTO messages_fts(messages_fts, rowid, content, expanded)
+				VALUES ('delete', old.rowid, old.content, old.expanded);
+				INSERT INTO messages_fts(rowid, content, expanded) VALUES (new.rowid, new.content, new.expanded);
+			END
+		`);
+		// A first FTS table over an existing messages table has an empty index;
+		// a pre-FTS database whose column was already added by an interrupted
+		// upgrade needs the same rebuild.
+		if (addedExpanded || !hadFts) this.#rebuildFts();
 		this.#db.run(`
 			CREATE TABLE IF NOT EXISTS agents (
 				session_id TEXT NOT NULL,
@@ -439,22 +490,26 @@ export class ViewStore {
 					}
 				}
 			}
-			const rowValues = (msg: MessageEntry["message"], entry: SessionEntry): Array<string | number | null> => [
-				msg.role,
-				"model" in msg ? (String((msg as { model?: unknown }).model ?? "") ?? null) : null,
-				"content" in msg ? contentToText(msg.content) : "",
-				// Mid-stream wire messages carry no timestamp yet; the
-				// entry-level timestamp (message_start time) is the closest
-				// stable value. Coalescing here keeps a shutdown/close during
-				// streaming from tripping the NOT NULL constraint (and killing
-				// the daemon).
-				msg.timestamp ?? (Date.parse(entry.timestamp) || Date.now()),
-			];
+			const rowValues = (msg: MessageEntry["message"], entry: SessionEntry): Array<string | number | null> => {
+				const content = "content" in msg ? contentToText(msg.content) : "";
+				return [
+					msg.role,
+					"model" in msg ? (String((msg as { model?: unknown }).model ?? "") ?? null) : null,
+					content,
+					expandForIndex(content),
+					// Mid-stream wire messages carry no timestamp yet; the
+					// entry-level timestamp (message_start time) is the closest
+					// stable value. Coalescing here keeps a shutdown/close during
+					// streaming from tripping the NOT NULL constraint (and killing
+					// the daemon).
+					msg.timestamp ?? (Date.parse(entry.timestamp) || Date.now()),
+				];
+			};
 			const insertStmt = this.#db.query(
-				"INSERT INTO messages (session_id, seq, role, model, content, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+				"INSERT INTO messages (session_id, seq, role, model, content, expanded, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
 			);
 			const updateStmt = this.#db.query(
-				"UPDATE messages SET role = ?, model = ?, content = ?, timestamp = ? WHERE session_id = ? AND seq = ?",
+				"UPDATE messages SET role = ?, model = ?, content = ?, expanded = ?, timestamp = ? WHERE session_id = ? AND seq = ?",
 			);
 			if (!aligned || !index) {
 				this.#db.query("DELETE FROM messages WHERE session_id = ?").run(sessionId);
@@ -558,43 +613,135 @@ export class ViewStore {
 	}
 
 	/**
-	 * Message search (LIKE on message text). Returns matching messages with
-	 * their session; the caller groups by session. `sessionId` narrows the
-	 * scan to one conversation — the ⌘F find bar needs the whole session
-	 * ordered newest-first, which a cross-session LIMIT would starve once
-	 * other sessions match too.
+	 * Message search over message text. Returns matching messages with their
+	 * session; the caller groups by session.
+	 *
+	 * Two arms, merged: an FTS5 MATCH against the bigram-expanded column
+	 * (word/prefix hits, ranked, and the only arm that can reach a CJK
+	 * substring) plus a LIKE fallback for infixes FTS's prefix wildcard cannot
+	 * express — `gin` must still find `login`, which is what the previous
+	 * LIKE-only implementation guaranteed. Results keep the historical
+	 * newest-first order so callers' jump keys stay valid.
+	 *
+	 * `sessionId` narrows to one conversation — the ⌘F find bar needs the whole
+	 * session ordered newest-first, which a cross-session LIMIT would starve
+	 * once other sessions match too.
 	 */
 	search(query: string, limit = 50, sessionId?: string): MessageHit[] {
-		const like = `%${query}%`;
-		const rows = (
-			sessionId
-				? this.#db
-						.query(
-							`SELECT session_id, seq, role, model, content, timestamp
-							 FROM messages
-							 WHERE content LIKE ? AND session_id = ?
-							 ORDER BY timestamp DESC
-							 LIMIT ?`,
-						)
-						.all(like, sessionId, limit)
-				: this.#db
-						.query(
-							`SELECT session_id, seq, role, model, content, timestamp
-							 FROM messages
-							 WHERE content LIKE ?
-							 ORDER BY timestamp DESC
-							 LIMIT ?`,
-						)
-						.all(like, limit)
-		) as MessageRow[];
-		return rows.map(r => ({
-			sessionId: r.session_id,
-			seq: r.seq,
-			role: r.role,
-			model: r.model,
-			content: r.content,
-			timestamp: r.timestamp,
-		}));
+		const trimmed = query.trim();
+		if (!trimmed) return [];
+
+		const columns = "session_id, seq, role, model, content, timestamp";
+		const byRowid = new Map<number, MessageRow>();
+
+		// Arm 1: FTS5. `messages_fts` is external-content over `messages`, so a
+		// join brings back the display columns; rowid is the join key.
+		const matchExpr = expandForQuery(trimmed);
+		if (matchExpr) {
+			try {
+				const ftsSql = `SELECT m.rowid AS rid, ${columns
+					.split(", ")
+					.map(c => `m.${c}`)
+					.join(", ")}
+					FROM messages_fts f JOIN messages m ON m.rowid = f.rowid
+					WHERE messages_fts MATCH ?${sessionId ? " AND m.session_id = ?" : ""}
+					ORDER BY f.rank
+					LIMIT ?`;
+				const ftsRows = (
+					sessionId
+						? this.#db.query(ftsSql).all(matchExpr, sessionId, limit)
+						: this.#db.query(ftsSql).all(matchExpr, limit)
+				) as Array<MessageRow & { rid: number }>;
+				for (const row of ftsRows) byRowid.set(row.rid, row);
+			} catch {
+				// Malformed FTS expression (a punctuation-only query reduces to a
+				// bare `*`) — the LIKE arm below still answers.
+			}
+		}
+
+		// Arm 2: infix fallback. Skipped once the FTS arm already filled the
+		// limit with prefix-ranked hits, since the merge below truncates anyway.
+		if (byRowid.size < limit) {
+			const like = `%${trimmed}%`;
+			const likeSql = `SELECT rowid AS rid, ${columns}
+				FROM messages
+				WHERE content LIKE ?${sessionId ? " AND session_id = ?" : ""}
+				ORDER BY timestamp DESC
+				LIMIT ?`;
+			const likeRows = (
+				sessionId ? this.#db.query(likeSql).all(like, sessionId, limit) : this.#db.query(likeSql).all(like, limit)
+			) as Array<MessageRow & { rid: number }>;
+			for (const row of likeRows) if (!byRowid.has(row.rid)) byRowid.set(row.rid, row);
+		}
+
+		return [...byRowid.values()]
+			.sort((a, b) => b.timestamp - a.timestamp)
+			.slice(0, limit)
+			.map(r => ({
+				sessionId: r.session_id,
+				seq: r.seq,
+				role: r.role,
+				model: r.model,
+				content: r.content,
+				timestamp: r.timestamp,
+			}));
+	}
+
+	/**
+	 * Populate `expanded` for rows written before the column existed.
+	 *
+	 * Runs once, on a database created by an older build: without it, search
+	 * silently answers only for messages persisted after the upgrade, which is
+	 * the worst failure mode this store can have (the history is present and
+	 * looks complete while being unreachable).
+	 *
+	 * The expansion is pure text work, so it stays in JS and reaches SQLite
+	 * through a temp table that one set-based UPDATE joins against. The chunk
+	 * boundary is measured in ROWS, not sessions: a commit per session costs a
+	 * fsync each, and a 200k-row store measured 4.3s chunked per session
+	 * against 3.4s chunked per 50k rows. Chunking by session was also wrong in
+	 * a second way — a `WHERE rowid IN (SELECT …)` per session degrades into a
+	 * full-table scan per session.
+	 *
+	 * Deliberately runs BEFORE the FTS triggers are created — see the caller.
+	 */
+	#backfillExpandedValues(): void {
+		const rows = this.#db.query("SELECT rowid AS rid, content FROM messages").all() as Array<{
+			rid: number;
+			content: string;
+		}>;
+		if (rows.length === 0) return;
+		this.#db.run(
+			"CREATE TEMP TABLE IF NOT EXISTS expanded_backfill (rowid INTEGER PRIMARY KEY, expanded TEXT NOT NULL)",
+		);
+		const insertStmt = this.#db.query("INSERT INTO expanded_backfill (rowid, expanded) VALUES (?, ?)");
+		const updateStmt = this.#db.query(
+			"UPDATE messages SET expanded = b.expanded FROM expanded_backfill b WHERE messages.rowid = b.rowid",
+		);
+		for (let offset = 0; offset < rows.length; offset += BACKFILL_CHUNK_ROWS) {
+			const chunk = rows.slice(offset, offset + BACKFILL_CHUNK_ROWS);
+			this.#db.run("BEGIN");
+			try {
+				this.#db.run("DELETE FROM expanded_backfill");
+				for (const row of chunk) insertStmt.run(row.rid, expandForIndex(row.content));
+				updateStmt.run();
+				this.#db.run("COMMIT");
+			} catch (error) {
+				this.#db.run("ROLLBACK");
+				logger.warn("ViewStore expanded backfill failed for one chunk", { error: String(error) });
+				break;
+			}
+		}
+		this.#db.run("DROP TABLE IF EXISTS expanded_backfill");
+	}
+
+	/** Rebuild the external-content index from the messages table. */
+	#rebuildFts(): void {
+		try {
+			this.#db.run("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')");
+		} catch (error) {
+			logger.warn("ViewStore FTS rebuild failed", { error: String(error) });
+		}
 	}
 
 	/** All message rows for one session (session-management message detail).

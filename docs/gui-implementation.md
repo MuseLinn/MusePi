@@ -1018,7 +1018,17 @@ touching any file listed there.
 `ViewStoreService.search(params: {query?, limit?, sessionId?})` passes it through.
 
 **Why the scope is required, not an optimization.** ⌘F searches one conversation, but
-`session.search` is a cross-session `LIKE` with a `LIMIT`. Without the scope, hits from
+`session.search` is a cross-session query with a `LIMIT`. Without the scope, hits from
+
+**Ranking and tokenization (FTS5).** The `LIMIT` above is applied after merging two arms:
+an FTS5 `MATCH` over a bigram-expanded column (`messages.expanded`, external-content
+`messages_fts`) and a `LIKE` fallback for infixes a prefix wildcard cannot express
+(`gin` → `login`). unicode61 keeps a continuous CJK run as one token, so the bigram
+expansion in `utils/fts-text.ts` is what makes 后端 reachable inside 记忆后端; the same
+module serves `file-index`. Indexed text keeps living in `messages.content` so a row stays
+readable, and the daemon's message projection is the only writer — a schema upgrade
+backfills the column **before** the triggers exist, because an UPDATE trigger on an
+external-content table issues a `delete` for a row the index never held and corrupts it.
 _other_ sessions consume the limit and starve the conversation being searched — and a
 foreign hit is worse than a missing one: the row's `timestamp` **is** the transcript jump
 key, so a leaked hit scrolls to the wrong row or to nothing at all. An unknown `sessionId`

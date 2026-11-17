@@ -2,6 +2,8 @@
  * Unit tests for the daemon's cross-session query tables
  * (src/daemon/view-store.ts).
  */
+
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -303,6 +305,92 @@ describe("ViewStore cross-session tables", () => {
 		expect(store.search("zzz-no-such-text")).toEqual([]);
 	});
 
+	test("search reaches a CJK substring inside a longer run", () => {
+		// 失败模式：unicode61 把连续中文当一个 token，LIKE-only 时代的
+		// 前缀匹配取不到「记忆后端」里的「后端」。bigram 列是唯一的出路。
+		const store = tempStore();
+		store.upsert("s1", snapshot("s1", [{ role: "user", content: "帮我看看记忆后端的实现", timestamp: 1 }], 1));
+		expect(store.search("后端")).toHaveLength(1);
+		expect(store.search("记忆后端")).toHaveLength(1);
+		// 单字查询也要命中：双字组 + 前缀通配。
+		expect(store.search("端")).toHaveLength(1);
+	});
+
+	test("search covers assistant text and tool output, not just user turns", () => {
+		// 失败模式：只索引 user prompt 的历史实现，搜不到 agent 说过的话
+		// 或工具吐出的内容——而那恰恰是排查时最常找的东西。
+		const store = tempStore();
+		store.upsert(
+			"s1",
+			snapshot(
+				"s1",
+				[
+					{ role: "user", content: "why does it fail", timestamp: 1 },
+					{ role: "assistant", content: "resolveMemoryBackend returns offBackend here", timestamp: 2 },
+					{ role: "toolResult", content: "packages/coding-agent/src/memory-backend/types.ts", timestamp: 3 },
+				] as unknown as WireMessage[],
+				3,
+			),
+		);
+		expect(store.search("resolveMemoryBackend")).toHaveLength(1);
+		expect(store.search("offBackend")).toHaveLength(1);
+		expect(store.search("types.ts")).toHaveLength(1);
+	});
+
+	test("search still answers an infix that a prefix wildcard cannot express", () => {
+		// 失败模式：把 LIKE 分支删掉，只留 FTS 前缀匹配，`gin` 就再也
+		// 找不到 `login`——这是旧实现的既有能力，不能回退。
+		const store = tempStore();
+		store.upsert("s1", snapshot("s1", [{ role: "user", content: "the login bug", timestamp: 1 }], 1));
+		expect(store.search("gin")).toHaveLength(1);
+		expect(store.search("log")).toHaveLength(1);
+	});
+
+	test("a punctuation-only query returns nothing instead of throwing", () => {
+		// 失败模式：空/标点查询经展开后变成裸 `*`，FTS5 抛错会冒泡成
+		// daemon 崩溃。契约是空结果。
+		const store = tempStore();
+		store.upsert("s1", snapshot("s1", [{ role: "user", content: "anything", timestamp: 1 }], 1));
+		expect(store.search("   ")).toEqual([]);
+		expect(store.search("*")).toEqual([]);
+		expect(store.search("!!!")).toEqual([]);
+	});
+
+	test("a database written before the FTS column existed becomes searchable", () => {
+		// 失败模式：升级后不回填，历史消息留在表里却搜不到——"看着完整、
+		// 实际不可达"，是这个 store 最坏的失效形态。
+		const d = fs.mkdtempSync(path.join(os.tmpdir(), "vstore-legacy-"));
+		dirs.push(d);
+		const dbPath = path.join(d, "materialized.db");
+
+		// 用旧 schema 造库：没有 expanded 列，也没有 messages_fts。
+		const legacy = new Database(dbPath, { create: true });
+		legacy.run(`CREATE TABLE messages (
+			session_id TEXT NOT NULL,
+			seq INTEGER NOT NULL,
+			role TEXT NOT NULL,
+			model TEXT,
+			content TEXT NOT NULL DEFAULT '',
+			timestamp INTEGER NOT NULL,
+			PRIMARY KEY (session_id, seq)
+		)`);
+		legacy.run("INSERT INTO messages (session_id, seq, role, model, content, timestamp) VALUES (?, ?, ?, ?, ?, ?)", [
+			"s-old",
+			0,
+			"user",
+			null,
+			"legacy 记忆后端的旧记录",
+			1000,
+		]);
+		legacy.close();
+
+		// 新代码打开同一路径：应当补列、回填、重建索引。
+		const store = new ViewStore(dbPath, { minSnapshotJsonIntervalMs: 0 });
+		stores.push(store);
+		expect(store.search("后端")).toHaveLength(1);
+		expect(store.search("旧记录")).toHaveLength(1);
+	});
+
 	test("array-content messages are flattened to text for search", () => {
 		const store = tempStore();
 		store.upsert(
@@ -396,6 +484,17 @@ describe("ViewStore cross-session tables", () => {
 		expect(store.list()).toHaveLength(0);
 		expect(store.load("s1")).toBeUndefined();
 		expect(store.search("x")).toEqual([]);
+	});
+
+	test("a removed session stops being searchable through the FTS index", () => {
+		// 失败模式：remove 只清了 messages 表，FTS 索引里仍留着那一行，
+		// 于是已删除的会话还能被搜到并跳转过去——删除本该是不可见的。
+		// 用一个 LIKE 兜底也匹配不到的多字词，排除兜底臂的干扰。
+		const store = tempStore();
+		store.upsert("s1", snapshot("s1", [{ role: "user", content: "记忆后端的实现细节", timestamp: 1 }], 1));
+		expect(store.search("后端")).toHaveLength(1);
+		store.remove("s1");
+		expect(store.search("后端")).toEqual([]);
 	});
 });
 

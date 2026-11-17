@@ -19,6 +19,7 @@
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { expandForIndex, expandForQuery } from "../utils/fts-text";
 
 const MAX_FILES = 50_000;
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -82,36 +83,9 @@ export function prefixQuery(q: string): string {
 	return `${q.trim().replace(/\s+/g, " ")}*`;
 }
 
-/**
- * CJK bigram expansion: unicode61 keeps a contiguous CJK run as ONE token,
- * so a query for a word inside the run ("乘法" inside "看板乘法") can never
- * match. Expanding both sides into adjacent 2-char bigrams turns any CJK
- * substring into an exact token: 看板乘法 → 看板 板功 功能 (queries get the
- * same expansion + per-token prefix, so 看板/板功/功能/看板乘法 all hit).
- * Non-CJK text passes through untouched.
- */
-export function expandCjk(s: string): string {
-	return s.replace(/[\u4e00-\u9fff]+/g, run => {
-		const grams: string[] = [];
-		for (let i = 0; i < run.length; i++) grams.push(run.slice(i, i + 2));
-		return grams.join(" ");
-	});
-}
-
-/** Index-side: bigram-expanded text (contents stored for snippet only —
- * the FTS column is expanded; snippet() reads the ORIGINAL column). */
-export function indexText(s: string): string {
-	return expandCjk(s);
-}
-
-/** Query-side: bigram expansion + per-token prefix (implicit AND). */
-export function indexQuery(q: string): string {
-	return expandCjk(q.trim().replace(/\s+/g, " "))
-		.split(" ")
-		.filter(Boolean)
-		.map(t => `${t}*`)
-		.join(" ");
-}
+// Bigram expansion lives in utils/fts-text.ts — the daemon's message index
+// needs the identical transform, and a second copy would drift.
+export { expandCjk, expandForIndex as indexText, expandForQuery as indexQuery } from "../utils/fts-text";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS idx_meta (key TEXT PRIMARY KEY, value TEXT);
@@ -274,10 +248,10 @@ export class FileIndexService {
 					}
 					const text = buf.toString("utf8");
 					if (existing) {
-						updateContent.run(text, expandCjk(text), p);
+						updateContent.run(text, expandForIndex(text), p);
 						upsert.run(p, st.mtimeMs, st.size);
 					} else {
-						insertFts.run(p, text, expandCjk(text));
+						insertFts.run(p, text, expandForIndex(text));
 						upsert.run(p, st.mtimeMs, st.size);
 					}
 					if (++tx >= 500) {
@@ -339,7 +313,7 @@ export class FileIndexService {
 				`SELECT path, snippet(idx_fts, 1, '\u0001', '\u0002', '…', 16) AS snip
 				 FROM idx_fts WHERE expanded MATCH ? ORDER BY rank LIMIT ?`,
 			);
-			const rows = statement.all(indexQuery(query), limit) as { path: string; snip: string }[];
+			const rows = statement.all(expandForQuery(query), limit) as { path: string; snip: string }[];
 			return rows.map(r => ({ path: r.path, snippet: r.snip }));
 		} catch {
 			// Malformed query (e.g. bare `*`) — treat as no matches.
