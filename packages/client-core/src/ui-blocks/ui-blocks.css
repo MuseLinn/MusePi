@@ -957,22 +957,25 @@ div.tr-ui-divider::after {
 }
 
 /* Inside a card the card IS the frame: the table drops its own border and its
- * side padding so rows run edge to edge, and keeps only the row dividers.
+ * side padding so rows run edge to edge and keeps only the row dividers.
  *
- * The table is NOT a direct child: `Markdown.decorateTables` wraps every table
- * it renders in `.tr-table > .tr-table-scroll` (the horizontal scroll container
- * plus its wide-table toolbar). A `> table` selector therefore matches nothing
- * here, which is exactly how the first version of this rule silently did
- * nothing — reach through the wrapper instead. */
+ * `Markdown.decorateTables` renders every table as
+ * `.tr-table > .tr-table-scroll > table`, so the table's parent is the scroll
+ * container — a `> table` on the card, or `.tr-table > table`, matches nothing.
+ * Both were tried and measured: the 1px frame stayed on a card's table. */
 .tr-ui-card .tr-table,
 .tr-ui-card .tr-table-scroll,
-.tr-ui-card .tr-table > table {
+.tr-ui-card .tr-table-scroll > table {
 	border: 0;
+	border-radius: 0;
 	background: none;
 }
 
+/* Bleed to the card's padding edge so the row dividers run the full width and
+ * the last column is not clipped short of the card's right edge. The card pads
+ * 12px inline, so the negative margin has to match it exactly. */
 .tr-ui-card .tr-table {
-	margin: 0 -2px;
+	margin-inline: -12px;
 }
 
 /* A card's table width is the card's, so the chat's "widen" control has nothing
@@ -981,17 +984,31 @@ div.tr-ui-divider::after {
 	display: none;
 }
 
-.tr-ui-card .tr-table > table th,
-.tr-ui-card .tr-table > table td {
-	padding-inline: 2px;
+/* The chat's table paints a right border on every cell except the last, so a
+ * card's table kept its column rules and read as a second grid inside the card.
+ * Only the row dividers stay: the card's own frame is the outer edge. */
+/* The chat's cell rule is a shorthand (`border: none`) plus per-side overrides,
+ * and a later stylesheet re-introduces a left border — measured `border-left:
+ * 0.571px solid` on a card's cells. Reset every side explicitly instead of
+ * relying on any single side's cascade: the card's own frame is the only edge
+ * this table should have, and only the row dividers stay. */
+.tr-ui-card .tr-table-scroll > table th,
+.tr-ui-card .tr-table-scroll > table td {
+	border: 0;
+	border-bottom: 1px solid var(--border);
+	padding-inline: 12px;
 }
 
-.tr-ui-card .tr-table > table th:first-child,
-.tr-ui-card .tr-table > table td:first-child {
-	padding-inline-start: 0;
+.tr-ui-card .tr-table-scroll > table tr:last-child td {
+	border-bottom: 0;
 }
 
-.tr-ui-card .tr-table > table th:last-child,
-.tr-ui-card .tr-table > table td:last-child {
-	padding-inline-end: 0;
+.tr-ui-card .tr-table-scroll > table th:first-child,
+.tr-ui-card .tr-table-scroll > table td:first-child {
+	padding-inline-start: 12px;
+}
+
+.tr-ui-card .tr-table-scroll > table th:last-child,
+.tr-ui-card .tr-table-scroll > table td:last-child {
+	padding-inline-end: 12px;
 }

@@ -276,15 +276,19 @@ describe("card table styling reaches through the chat's table wrapper", () => {
 	 * stylesheet must reach through the wrapper instead of assuming a direct
 	 * child.
 	 */
-	test("the stylesheet never targets a table as a direct child of a card", async () => {
+	test("the stylesheet reaches a card's table through the decorator's nesting", async () => {
 		const css = await Bun.file(new URL("./ui-blocks.css", import.meta.url)).text();
+		// Measured twice the hard way: the table's parent is the SCROLL container
+		// (`.tr-table > .tr-table-scroll > table`), so both `> table` on the card
+		// and `.tr-table > table` matched nothing and left the 1px frame on.
 		expect(css).not.toMatch(/\.tr-ui-card\s*>\s*table/);
-		expect(css).toMatch(/\.tr-ui-card\s+\.tr-table\s*>\s*table/);
+		expect(css).not.toMatch(/\.tr-ui-card\s+\.tr-table\s*>\s*table\s*[,{]/);
+		expect(css).toMatch(/\.tr-ui-card\s+\.tr-table-scroll\s*>\s*table/);
 	});
 
-	test("the app's table decorator is the wrapper the rule expects", async () => {
+	test("the decorator really nests table inside the scroll container", async () => {
 		const markdown = await Bun.file(new URL("../components/transcript/Markdown.tsx", import.meta.url)).text();
-		expect(markdown).toContain('class="tr-table"');
-		expect(markdown).toContain('class="tr-table-scroll"');
+		// The assertion above is only correct while this stays true.
+		expect(markdown).toContain('class="tr-table-scroll"><table>');
 	});
 });
