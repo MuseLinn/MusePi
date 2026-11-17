@@ -140,21 +140,51 @@
 	margin: 0;
 }
 
+/* Label and value on one row, joined by a dotted leader: the eye follows the
+ * row across a wide reply instead of landing in the gap. `fit-content(55%)`
+ * keeps a long value from pushing the label column open; the value wraps
+ * inside its own column instead. */
 .tr-ui-kv {
-	display: grid;
-	grid-template-columns: max-content 1fr;
-	gap: 4px 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 	margin: 0;
 	font-size: var(--ui-font-size-sm);
 }
 
+.tr-ui-kv-row {
+	display: grid;
+	grid-template-columns: fit-content(55%) minmax(0, 1fr);
+	align-items: baseline;
+	gap: 8px;
+}
+
 .tr-ui-kv dt {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
 	color: var(--fg-muted);
+}
+
+.tr-ui-kv dt > * {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.tr-ui-kv-leader {
+	flex: 1;
+	min-width: 16px;
+	align-self: end;
+	margin-bottom: 3px;
+	border-bottom: 1px dotted var(--border-strong);
 }
 
 .tr-ui-kv dd {
 	margin: 0;
 	color: var(--fg);
+	text-align: end;
+	font-variant-numeric: tabular-nums;
 	overflow-wrap: anywhere;
 }
 
@@ -281,8 +311,23 @@
 }
 
 .tr-ui-progress-value {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
 	color: var(--fg-muted);
 	font-variant-numeric: tabular-nums;
+}
+
+/* The count beside the percent, only when the max is not 100: alone, "73%"
+ * of an unknown total says nothing about how far along the work is. */
+.tr-ui-progress-count {
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+.tr-ui-progress-tick {
+	color: var(--ok);
+	font-size: 0.85em;
 }
 
 .tr-ui-progress-track {
@@ -893,4 +938,36 @@ div.tr-ui-divider::after {
 	.tr-ui-grid {
 		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 	}
+}
+
+/* ---- table alignment ----
+ * The renderer marks a column right-aligned when every filled cell is a
+ * number; this is the only place the alignment becomes visual. Tabular figures
+ * make the column edges line up when the digits differ in width. */
+.tr-ui table td[data-align="right"],
+.tr-ui table th[data-align="right"] {
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Inside a card the card IS the frame: the table drops its own border and its
+ * side padding so rows run edge to edge, and keeps only the row dividers. */
+.tr-ui-card > table {
+	border: 0;
+	margin: 0 -2px;
+}
+
+.tr-ui-card > table th,
+.tr-ui-card > table td {
+	padding-inline: 2px;
+}
+
+.tr-ui-card > table th:first-child,
+.tr-ui-card > table td:first-child {
+	padding-inline-start: 0;
+}
+
+.tr-ui-card > table th:last-child,
+.tr-ui-card > table td:last-child {
+	padding-inline-end: 0;
 }

@@ -204,15 +204,39 @@ function steps(props: Record<string, unknown>): string {
 	return `<ol class="tr-ui-steps" data-direction="${direction}">${html}</ol>`;
 }
 
+/**
+ * A column reads as numeric only when every filled cell is a number. Decided
+ * per column rather than per cell: a column that alternates `12` and `n/a`
+ * must not zigzag its alignment down the table.
+ */
+function numericColumn(rows: readonly unknown[][], index: number): boolean {
+	let seen = false;
+	for (const row of rows) {
+		const cell = row[index];
+		if (cell === undefined || cell === null || cell === "") continue;
+		seen = true;
+		if (typeof cell !== "number" && !Number.isFinite(Number(cell))) return false;
+	}
+	return seen;
+}
+
 function table(props: Record<string, unknown>): string {
 	const columns = list<unknown>(props, "columns").map(String);
 	const rows = list<unknown>(props, "rows").filter(Array.isArray) as unknown[][];
 	if (columns.length === 0) return "";
-	const head = columns.map(column => `<th>${inline(column)}</th>`).join("");
-	const body = rows
-		.map(
-			row => `<tr>${columns.map((_column, index) => `<td>${inline(String(row[index] ?? ""))}</td>`).join("")}</tr>`,
+	// Numbers line up on their right edge, so a column of amounts is scannable;
+	// the alignment is announced in the markup rather than left to CSS, because
+	// only the renderer knows which cells are numbers.
+	const align = columns.map((_column, index) => (numericColumn(rows, index) ? "right" : "left"));
+	const cell = (index: number, content: string): string =>
+		align[index] === "right" ? `<td data-align="right">${content}</td>` : `<td>${content}</td>`;
+	const head = columns
+		.map((column, index) =>
+			align[index] === "right" ? `<th data-align="right">${inline(column)}</th>` : `<th>${inline(column)}</th>`,
 		)
+		.join("");
+	const body = rows
+		.map(row => `<tr>${columns.map((_column, index) => cell(index, inline(String(row[index] ?? "")))).join("")}</tr>`)
 		.join("");
 	return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
@@ -220,10 +244,18 @@ function table(props: Record<string, unknown>): string {
 function keyValue(props: Record<string, unknown>): string {
 	const items = list<unknown>(props, "items").filter(item => typeof item === "object" && item !== null);
 	if (items.length === 0) return "";
+	// A dotted leader joins each label to its value, so the eye follows one row
+	// across a wide reply instead of landing in the gap; the value wraps inside
+	// its own column rather than widening the row.
 	return `<dl class="tr-ui-kv">${items
 		.map(raw => {
 			const item = raw as Record<string, unknown>;
-			return `<dt>${inline(String(item.label ?? ""))}</dt><dd>${inline(String(item.value ?? ""))}</dd>`;
+			return (
+				`<div class="tr-ui-kv-row">` +
+				`<dt>${inline(String(item.label ?? ""))}<span class="tr-ui-kv-leader" aria-hidden="true"></span></dt>` +
+				`<dd>${inline(String(item.value ?? ""))}</dd>` +
+				`</div>`
+			);
 		})
 		.join("")}</dl>`;
 }
@@ -248,16 +280,30 @@ function stat(props: Record<string, unknown>): string {
 	);
 }
 
+/**
+ * One value against a max.
+ *
+ * Three rules the bar alone cannot carry: the percentage never reads 100
+ * before the work is done (29 of 40 must not round up to 100), the count is
+ * spelled out whenever the max is not 100 (a bare "73%" of an unknown total
+ * says nothing), and a finished bar turns success-green so a list of bars shows
+ * which ones are closed.
+ */
 function progress(props: Record<string, unknown>): string {
 	const value = num(props, "value") ?? 0;
 	const max = num(props, "max") ?? 100;
-	const percent = max > 0 ? Math.max(0, Math.min(100, Math.round((value / max) * 100))) : 0;
-	const done = percent >= 100;
+	const share = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+	const done = share >= 1;
+	// Multiply first, then divide: `(29 / 100) * 100` lands on 28.999… and floor
+	// would print 28 for a round number.
+	const percent = done ? 100 : Math.max(0, Math.min(99, Math.floor((value * 100) / (max || 1))));
+	const count =
+		max !== 100 ? `<span class="tr-ui-progress-count">${esc(String(value))} / ${esc(String(max))}</span>` : "";
 	return (
-		`<div class="tr-ui-progress"${done ? ' data-done="true"' : ""}>` +
+		`<div class="tr-ui-progress"${done ? ' data-done="true"' : ""} role="progressbar" aria-valuenow="${esc(String(value))}" aria-valuemin="0" aria-valuemax="${esc(String(max))}" aria-label="${esc(str(props, "label"))}">` +
 		`<span class="tr-ui-progress-label">${esc(str(props, "label"))}</span>` +
-		`<span class="tr-ui-progress-value">${percent}%</span>` +
-		`<span class="tr-ui-progress-track"><span class="tr-ui-progress-fill" style="width:${percent}%"></span></span>` +
+		`<span class="tr-ui-progress-value">${done ? '<span class="tr-ui-progress-tick" aria-hidden="true">✓</span>' : ""}${percent}%${count}</span>` +
+		`<span class="tr-ui-progress-track"><span class="tr-ui-progress-fill" style="width:${(share * 100).toFixed(2)}%"></span></span>` +
 		`</div>`
 	);
 }

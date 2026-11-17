@@ -205,3 +205,64 @@ describe("grid layout", () => {
 		expect(block.html).toContain("--tr-ui-grid-columns:4");
 	});
 });
+
+describe("table alignment", () => {
+	test("a column of numbers aligns right and a column of text does not", () => {
+		const block = renderUiBlock('root = Stack([Table(["项目", "成本"], [["影子写", 120], ["双读", 80]])])');
+		expect(block.errors).toEqual([]);
+		// Header and cells of the numeric column both carry the marker.
+		expect(block.html).toContain('<th data-align="right">成本</th>');
+		expect(block.html).toContain('<td data-align="right">120</td>');
+		expect(block.html).toContain("<th>项目</th>");
+		expect(block.html).not.toContain('<td data-align="right">影子写</td>');
+	});
+
+	test("a column that mixes numbers and text stays left aligned", () => {
+		const block = renderUiBlock('root = Stack([Table(["值"], [[120], ["n/a"]])])');
+		expect(block.html).not.toContain('data-align="right"');
+	});
+
+	test("an empty column is not treated as numeric", () => {
+		const block = renderUiBlock('root = Stack([Table(["值"], [[]])])');
+		expect(block.html).not.toContain('data-align="right"');
+	});
+});
+
+describe("progress detail", () => {
+	test("never reads 100% before the work is done", () => {
+		// 29 of 100 must not round up, and 39 of 40 must floor to 97.
+		const near = renderUiBlock('root = Stack([Progress("构建", 39, 40)])');
+		expect(near.html).toContain("97%");
+		expect(near.html).not.toContain("100%");
+		expect(near.html).not.toContain('data-done="true"');
+	});
+
+	test("spells out the count when the max is not 100", () => {
+		const block = renderUiBlock('root = Stack([Progress("构建", 29, 40)])');
+		expect(block.html).toContain("tr-ui-progress-count");
+		expect(block.html).toContain("29 / 40");
+		const plain = renderUiBlock('root = Stack([Progress("构建", 42)])');
+		expect(plain.html).not.toContain("tr-ui-progress-count");
+		expect(plain.html).toContain("42%");
+	});
+
+	test("a finished bar shows 100% with the success state and announces the range", () => {
+		const block = renderUiBlock('root = Stack([Progress("构建", 40, 40)])');
+		expect(block.html).toContain('data-done="true"');
+		expect(block.html).toContain("100%");
+		expect(block.html).toContain('role="progressbar"');
+		expect(block.html).toContain('aria-valuemax="40"');
+	});
+});
+
+describe("key value leader", () => {
+	test("each pair is one row with a leader between label and value", () => {
+		const block = renderUiBlock(
+			'root = Stack([KeyValue([{label: "分支", value: "main"}, {label: "提交", value: "abc123"}])])',
+		);
+		expect(block.errors).toEqual([]);
+		expect(block.html).toContain("tr-ui-kv-row");
+		expect(block.html).toContain("tr-ui-kv-leader");
+		expect(block.html).toContain("abc123");
+	});
+});
