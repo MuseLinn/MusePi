@@ -1270,8 +1270,8 @@
 
 .gui-effect-preview-composer {
 	display: flex;
-	align-items: center;
-	gap: 10px;
+	flex-direction: column;
+	gap: 8px;
 	/* Match the real composer card (gui-composer-frame): frosted glass,
 	 * hairline ring + shadow — the preview should show what the chat
 	 * actually renders, not a simplified solid card. */
@@ -1284,11 +1284,46 @@
 	box-shadow: var(--gui-input-shadow);
 }
 
+.gui-effect-preview-inputrow {
+	display: flex;
+	align-items: center;
+	min-height: 40px;
+	padding: 2px 2px 0;
+}
+
 .gui-effect-preview-input {
 	flex: 1;
 	min-width: 0;
 	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-faint);
+}
+
+/* Footer of the mock composer: the real card carries the mode agent, the
+ * model and the send target on its own line; a single placeholder line read
+ * like a search box instead of the chat input. */
+.gui-effect-preview-tools {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 2px 2px;
+}
+
+.gui-effect-preview-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	border-radius: var(--radius-full);
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface) 60%, transparent);
+	color: var(--color-text-muted);
+	font-size: 11.5px;
+	line-height: 1.4;
+	white-space: nowrap;
+}
+
+.gui-effect-preview-spacer {
+	flex: 1;
 }
 
 .gui-effect-preview-send {
