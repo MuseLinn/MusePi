@@ -262,6 +262,65 @@ function progress(props: Record<string, unknown>): string {
 	);
 }
 
+function listBlock(props: Record<string, unknown>): string {
+	const items = list<unknown>(props, "items")
+		.map(item => String(item ?? ""))
+		.filter(item => item !== "");
+	if (items.length === 0) return "";
+	const ordered = props.ordered === true;
+	const tag = ordered ? "ol" : "ul";
+	const body = items.map(item => `<li>${inline(item)}</li>`).join("");
+	return `<${tag} class="tr-ui-list" data-ordered="${ordered ? "true" : "false"}">${body}</${tag}>`;
+}
+
+function quote(props: Record<string, unknown>): string {
+	const body = paragraphs(str(props, "markdown"));
+	if (!body) return "";
+	const source = str(props, "source");
+	return `<blockquote class="tr-ui-quote">${body}${source ? `<cite class="tr-ui-quote-source">${inline(source)}</cite>` : ""}</blockquote>`;
+}
+
+/** Only http(s) and mailto survive: a block is model-authored, so `javascript:`
+ *  or a `data:` page must never become a clickable target. */
+function safeHref(value: string): string {
+	const href = value.trim();
+	return /^(https?:|mailto:)/i.test(href) ? href : "";
+}
+
+function linkBlock(props: Record<string, unknown>): string {
+	const href = safeHref(str(props, "href"));
+	const label = str(props, "label") || href;
+	if (!href) return `<span class="tr-ui-link tr-ui-link--blocked">${inline(label)}</span>`;
+	const description = str(props, "description");
+	return (
+		`<a class="tr-ui-link" href="${esc(href)}" target="_blank" rel="noopener noreferrer">` +
+		`<span class="tr-ui-link-label">${inline(label)}</span>` +
+		(description ? `<span class="tr-ui-link-note">${inline(description)}</span>` : "") +
+		`</a>`
+	);
+}
+
+function divider(props: Record<string, unknown>): string {
+	const label = str(props, "label");
+	return label
+		? `<div class="tr-ui-divider" role="separator"><span>${inline(label)}</span></div>`
+		: `<hr class="tr-ui-divider" aria-hidden="true">`;
+}
+
+function codeBlock(props: Record<string, unknown>): string {
+	const code = str(props, "code");
+	if (!code.trim()) return "";
+	const language = str(props, "language");
+	const title = str(props, "title");
+	return (
+		`<figure class="tr-ui-code-block">` +
+		(title || language
+			? `<figcaption class="tr-ui-code-head">${title ? `<span class="tr-ui-code-title">${inline(title)}</span>` : ""}${language ? `<span class="tr-ui-code-lang">${esc(language)}</span>` : ""}</figcaption>`
+			: "") +
+		`<pre><code>${esc(code)}</code></pre></figure>`
+	);
+}
+
 function details(node: UiBlockTree, ctx: RenderContext): string {
 	const body = kids(node, ctx);
 	if (!body) return "";
@@ -272,6 +331,14 @@ function details(node: UiBlockTree, ctx: RenderContext): string {
 const RENDERERS: Record<string, (node: UiBlockTree, ctx: RenderContext) => string> = {
 	Stack: (node, ctx) => (kids(node, ctx) ? `<div class="tr-ui-stack">${kids(node, ctx)}</div>` : ""),
 	Row: (node, ctx) => (kids(node, ctx) ? `<div class="tr-ui-row">${kids(node, ctx)}</div>` : ""),
+	// Equal columns, capped at what still reads on a narrow reply: a grid of
+	// six tiles on a phone is two tiles per line, not six 40px slivers.
+	Grid: (node, ctx) => {
+		const body = kids(node, ctx);
+		if (!body) return "";
+		const columns = Math.max(1, Math.min(4, Math.round(num(node.props, "columns") ?? 2)));
+		return `<div class="tr-ui-grid" style="--tr-ui-grid-columns:${columns}">${body}</div>`;
+	},
 	// A titled card with nothing under it is still worth drawing: the title is
 	// content. An untitled empty one is not.
 	Card: (node, ctx) => {
@@ -291,6 +358,11 @@ const RENDERERS: Record<string, (node: UiBlockTree, ctx: RenderContext) => strin
 	Progress: node => progress(node.props),
 	BarChart: node => barChart(node.props),
 	LineChart: node => lineChart(node.props),
+	List: node => listBlock(node.props),
+	Quote: node => quote(node.props),
+	Link: node => linkBlock(node.props),
+	Divider: node => divider(node.props),
+	Code: node => codeBlock(node.props),
 	Details: (node, ctx) => details(node, ctx),
 	Choice: (node, ctx) => choice(node, ctx),
 	Input: (node, ctx) => input(node, ctx),

@@ -701,3 +701,196 @@
 	border-color: var(--accent);
 	color: var(--accent);
 }
+
+/* ---- list / quote / link / divider / code ----
+ * Text-and-reading blocks. None of them carries a frame: they sit on the
+ * reply's own surface like Text does, and structure comes from the marker, the
+ * rule or the type — five bordered boxes in one reply read as stripes. */
+
+.tr-ui-list {
+	margin: 0;
+	padding-left: 1.25em;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.55;
+}
+
+.tr-ui-list[data-ordered="true"] {
+	list-style: decimal;
+}
+
+.tr-ui-list[data-ordered="false"] {
+	list-style: disc;
+}
+
+.tr-ui-list li::marker {
+	color: var(--fg-faint);
+}
+
+.tr-ui-quote {
+	margin: 0;
+	padding: 2px 0 2px 12px;
+	border-left: 2px solid var(--border-strong);
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.55;
+}
+
+.tr-ui-quote p {
+	margin: 0 0 6px;
+}
+
+.tr-ui-quote p:last-of-type {
+	margin-bottom: 0;
+}
+
+.tr-ui-quote-source {
+	display: block;
+	margin-top: 6px;
+	font-size: var(--ui-font-size-xs);
+	font-style: normal;
+	color: var(--fg-faint);
+}
+
+/* A link reads as a row: the label carries the weight, the description says
+ * what it opens. Underlining the whole row made a two-line link look like a
+ * paragraph of links. */
+.tr-ui-link {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 6px 8px;
+	margin: 0 -8px;
+	border-radius: var(--radius);
+	color: var(--accent);
+	text-decoration: none;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.45;
+	overflow-wrap: anywhere;
+}
+
+.tr-ui-link:hover {
+	background: var(--bg-inset);
+	text-decoration: none;
+}
+
+.tr-ui-link:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 1px;
+}
+
+.tr-ui-link-label {
+	font-weight: 500;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.tr-ui-link-note {
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-xs);
+}
+
+/* A refused scheme still shows the label and its text, but never as a target. */
+.tr-ui-link--blocked {
+	color: var(--fg-muted);
+	cursor: default;
+}
+
+.tr-ui-link--blocked .tr-ui-link-label {
+	text-decoration: line-through;
+	text-decoration-color: var(--fg-faint);
+}
+
+/* A bare rule draws itself; a labelled one is a flex row whose two hairlines
+ * are pseudo-elements, so the caption sits centred without a background patch
+ * that would have to match whatever surface the reply happens to sit on. */
+hr.tr-ui-divider {
+	margin: 2px 0;
+	border: 0;
+	height: 1px;
+	background: var(--border);
+}
+
+div.tr-ui-divider {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 2px 0;
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+div.tr-ui-divider::before,
+div.tr-ui-divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--border);
+}
+
+.tr-ui-code-block {
+	margin: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--bg-inset);
+	overflow: hidden;
+}
+
+.tr-ui-code-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 7px 12px;
+	border-bottom: 1px solid var(--border);
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-xs);
+}
+
+.tr-ui-code-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--fg);
+}
+
+.tr-ui-code-lang {
+	flex: none;
+	font-family: var(--font-mono);
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--fg-faint);
+}
+
+.tr-ui-code-block pre {
+	margin: 0;
+	padding: 10px 12px;
+	overflow-x: auto;
+	font-family: var(--font-mono);
+	font-size: calc(var(--ui-font-size-sm) - 0.5px);
+	line-height: 1.5;
+	color: var(--fg);
+}
+
+.tr-ui-code-block code {
+	font: inherit;
+	white-space: pre;
+}
+
+/* Equal columns for tiles. `auto-fit` below the requested count means a narrow
+ * reply wraps to fewer columns instead of squeezing a Stat to one character
+ * per line. */
+.tr-ui-grid {
+	display: grid;
+	grid-template-columns: repeat(var(--tr-ui-grid-columns, 2), minmax(0, 1fr));
+	gap: 10px;
+}
+
+@media (max-width: 460px) {
+	.tr-ui-grid {
+		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+	}
+}

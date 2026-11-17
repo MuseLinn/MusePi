@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **回复里的可视化块补齐阅读与排版组件**：`List`、`Quote`、`Link`、`Divider`、`Code` 与 `Grid` 进入同一条 `ui` 块的组件目录——列举、引用、单个链接、分组分隔、代码片段与等宽磁贴以前只能用散文或表格绕着写。`Link` 只接受 http/https/mailto，脚本类的 URL 会画成被划掉的文字而不是可点目标；`Grid` 的列数上限为 4，窄屏自动回落到按最小宽度换行。组件说明与运行时校验来自同一份目录，指引文本同步更新。
+  - EN: Replies gain the reading and layout blocks a `ui` block was missing: `List`, `Quote`, `Link`, `Divider`, `Code` and `Grid` join the same catalog — enumerations, quoted passages, a single URL, a group separator, a snippet and equal-width tiles previously had to be written as prose or bent into a table. `Link` accepts only http/https/mailto (a script URL draws as struck-through text, never a target), and `Grid` caps at four columns and falls back to wrapping below a narrow width. The component list, the parser's validation and the agent guidance all come from one catalog.
+
 - **外观预览与示例看板恢复可用**：外观设置的「效果预览」不再叠两行「活动」、头像不再压住正文、折叠块与回复同一列对齐，底部输入框改成和真实 composer 一致的卡片（输入行 + 助手/模型页脚 + 发送钮）。示例看板此前只有卡片标题、打开全是空白——种子数据仍在引用已随可视化迁移下线的静态卡片类型（clock/fx/stocks/kline…），现在两张示例板都改用真实的页面卡片，含可读的行情、任务与歌单内容；卡片外层的直角底色导致圆角失效，现已与内层同一圆角，页面也改为填满卡片而不是按内容高度截断。
   - EN: The appearance preview and the sample boards work again. The 效果预览 no longer stacks two 活动 rows, the avatar no longer sits on the reply text, the fold block shares the reply's column, and the mock input is now the real composer shape (input line + agent/model footer + send). The sample boards used to show only titles and open blank: their seeds still referenced the static card types retired with the visual migration (clock / fx / stocks / kline …). Both boards now use real page cards with readable market, task and playlist content; the card wrapper's square tone background no longer defeats the inner radius, and a page fills its card instead of stopping at its content height.
 

@@ -146,3 +146,62 @@ describe("streaming fences", () => {
 		expect(html).not.toContain("tr-ui-note");
 	});
 });
+
+describe("reading blocks", () => {
+	test("a List draws its items and numbers them when ordered", () => {
+		const block = renderUiBlock('root = Stack([List(["alpha", "beta"], true), List(["gamma"])])');
+		expect(block.errors).toEqual([]);
+		expect(block.html).toContain('<ol class="tr-ui-list" data-ordered="true">');
+		expect(block.html).toContain('<ul class="tr-ui-list" data-ordered="false">');
+		expect(block.html).toContain("alpha");
+	});
+
+	test("a Quote keeps its source under the passage", () => {
+		const block = renderUiBlock('root = Stack([Quote("要引用的话", "出处")])');
+		expect(block.errors).toEqual([]);
+		expect(block.html).toContain("tr-ui-quote");
+		expect(block.html).toContain("tr-ui-quote-source");
+		expect(block.html).toContain("要引用的话");
+	});
+
+	test("a Link opens in a new tab and never offers a script URL", () => {
+		const ok = renderUiBlock('root = Stack([Link("文档", "https://example.test/a", "打开说明")])');
+		expect(ok.errors).toEqual([]);
+		expect(ok.html).toContain('href="https://example.test/a"');
+		expect(ok.html).toContain('rel="noopener noreferrer"');
+		const refused = renderUiBlock('root = Stack([Link("危险", "javascript:alert(1)")])');
+		// The label still reads, but it is not a target.
+		expect(refused.html).not.toContain("javascript:alert");
+		expect(refused.html).toContain("tr-ui-link--blocked");
+	});
+
+	test("a Divider is a rule with or without a caption", () => {
+		const plain = renderUiBlock("root = Stack([Divider()])");
+		expect(plain.html).toContain('<hr class="tr-ui-divider"');
+		const labelled = renderUiBlock('root = Stack([Divider("或")])');
+		expect(labelled.html).toContain("tr-ui-divider");
+		expect(labelled.html).toContain("或");
+	});
+
+	test("a Code block keeps its language and title in the head", () => {
+		const block = renderUiBlock('root = Stack([Code("const x = 1;", "ts", "示例")])');
+		expect(block.errors).toEqual([]);
+		expect(block.html).toContain("tr-ui-code-block");
+		expect(block.html).toContain("tr-ui-code-lang");
+		expect(block.html).toContain("ts");
+	});
+});
+
+describe("grid layout", () => {
+	test("a Grid lays its tiles out in the requested columns", () => {
+		const block = renderUiBlock('root = Stack([Grid([Stat("A", 1), Stat("B", 2), Stat("C", 3)], 3)])');
+		expect(block.errors).toEqual([]);
+		expect(block.html).toContain('class="tr-ui-grid"');
+		expect(block.html).toContain("--tr-ui-grid-columns:3");
+	});
+
+	test("a Grid clamps its column count to what a reply can show", () => {
+		const block = renderUiBlock('root = Stack([Grid([Stat("A", 1), Stat("B", 2)], 9)])');
+		expect(block.html).toContain("--tr-ui-grid-columns:4");
+	});
+});

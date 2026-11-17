@@ -106,6 +106,37 @@ const LineChart = defineComponent({
 	component: null,
 });
 
+const List = defineComponent({
+	name: "List",
+	description: "items one per line; `ordered` numbers them",
+	props: z.object({ items: z.array(z.string()), ordered: z.boolean().optional() }),
+	component: null,
+});
+const Quote = defineComponent({
+	name: "Quote",
+	description: "a quoted passage with an optional attribution",
+	props: z.object({ markdown: z.string(), source: z.string().optional() }),
+	component: null,
+});
+const Link = defineComponent({
+	name: "Link",
+	description: "one http(s) or mailto link; a description says what it opens",
+	props: z.object({ label: z.string(), href: z.string(), description: z.string().optional() }),
+	component: null,
+});
+const Divider = defineComponent({
+	name: "Divider",
+	description: "a rule between two groups; `label` centres a short caption on it",
+	props: z.object({ label: z.string().optional() }),
+	component: null,
+});
+const Code = defineComponent({
+	name: "Code",
+	description: "a code block; `language` is a hint the chat prints as its label",
+	props: z.object({ code: z.string(), language: z.string().optional(), title: z.string().optional() }),
+	component: null,
+});
+
 const leaf = z.union([
 	Text.ref,
 	Badge.ref,
@@ -117,6 +148,11 @@ const leaf = z.union([
 	Progress.ref,
 	BarChart.ref,
 	LineChart.ref,
+	List.ref,
+	Quote.ref,
+	Link.ref,
+	Divider.ref,
+	Code.ref,
 ]);
 
 const Choice = defineComponent({
@@ -187,6 +223,12 @@ const Row = defineComponent({
 	props: z.object({ children: z.array(z.union([leaf, ask])) }),
 	component: null,
 });
+const Grid = defineComponent({
+	name: "Grid",
+	description: "equal columns for tiles (Stats, Cards); default 2",
+	props: z.object({ children: z.array(z.union([leaf, ask, Row.ref])), columns: z.number().optional() }),
+	component: null,
+});
 const Details = defineComponent({
 	name: "Details",
 	description: "a section folded under its title",
@@ -196,13 +238,13 @@ const Details = defineComponent({
 const Card = defineComponent({
 	name: "Card",
 	description: 'a titled group; title is inline Markdown, "" for none',
-	props: z.object({ title: z.string(), children: z.array(z.union([leaf, ask, Row.ref, Details.ref])) }),
+	props: z.object({ title: z.string(), children: z.array(z.union([leaf, ask, Row.ref, Grid.ref, Details.ref])) }),
 	component: null,
 });
 const Stack = defineComponent({
 	name: "Stack",
 	description: "the root: the whole block",
-	props: z.object({ children: z.array(z.union([leaf, ask, Row.ref, Card.ref, Details.ref])) }),
+	props: z.object({ children: z.array(z.union([leaf, ask, Row.ref, Grid.ref, Card.ref, Details.ref])) }),
 	component: null,
 });
 
@@ -219,12 +261,18 @@ export const uiBlockLibrary = createLibrary({
 		Series,
 		BarChart,
 		LineChart,
+		List,
+		Quote,
+		Link,
+		Divider,
+		Code,
 		Choice,
 		Input,
 		DateInput,
 		Slider,
 		Button,
 		Row,
+		Grid,
 		Details,
 		Card,
 		Stack,
