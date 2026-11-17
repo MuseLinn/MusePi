@@ -291,6 +291,66 @@ describe("key value leader", () => {
 	});
 });
 
+describe("choices and buttons key their own answers", () => {
+	test("two button rows outside a card do not answer into one slot", () => {
+		const block = renderUiBlock('root = Stack([Row([Button("浅色"), Button("深色")]), Row([Button("简约")])])');
+		expect(block.errors).toEqual([]);
+		const names = [...block.html.matchAll(/data-ui-name="([^"]*)"/g)].map(match => match[1] ?? "");
+		// Every button needs its own slot, and none may be the empty `field:`.
+		expect(names).toEqual(["field::浅色", "field::深色", "field::简约"]);
+	});
+
+	test("a button's own name keys it when the reply supplies one", () => {
+		const block = renderUiBlock('root = Stack([Row([Button("浅色", "secondary", "light", "主题")])])');
+		expect(block.html).toContain('data-ui-name="field:主题:light"');
+	});
+
+	test("buttons inside a card still share the card's title as one decision", () => {
+		const block = renderUiBlock('root = Stack([Card("主题", [Button("浅色"), Button("深色")])])');
+		// The card's own note field is a separate control, not a button answer.
+		const names = [...block.html.matchAll(/<button[^>]*data-ui-name="([^"]*)"/g)].map(match => match[1] ?? "");
+		expect(names).toEqual(["card:主题", "card:主题"]);
+	});
+
+	test("a row layout draws pills, and a description drops it back to a list", () => {
+		const row = renderUiBlock('root = Stack([Choice("t", ["浅色", "深色"], "主题", false, "row")])');
+		expect(row.errors).toEqual([]);
+		expect(row.html).toContain('data-layout="row"');
+
+		const list = renderUiBlock('root = Stack([Choice("t", ["浅色"])])');
+		expect(list.html).toContain('data-layout="list"');
+
+		// A description needs its own line, so the row shape cannot hold it.
+		const described = renderUiBlock(
+			'root = Stack([Choice("t", [{label: "浅色", description: "白天"}, "深色"], "主题", false, "row")])',
+		);
+		expect(described.html).toContain('data-layout="list"');
+	});
+});
+
+describe("tabs", () => {
+	test("draws a strip and one panel per page, opening the first", () => {
+		const block = renderUiBlock('root = Stack([Tabs([Tab("概览", [Text("一")]), Tab("明细", [Text("二")])])])');
+		expect(block.errors).toEqual([]);
+		expect(block.html).toContain('role="tablist"');
+		expect(block.html.match(/role="tab"/g) ?? []).toHaveLength(2);
+		expect(block.html.match(/role="tabpanel"/g) ?? []).toHaveLength(2);
+		expect(block.html).toContain('data-ui-open="概览"');
+		// Only the first page is open on the first draw.
+		expect(block.html.match(/<div class="tr-ui-tab-panel"[^>]*data-open="false" hidden/g) ?? []).toHaveLength(1);
+	});
+
+	test("two groups on one block are keyed separately by their labels", () => {
+		const block = renderUiBlock('root = Stack([Tabs([Tab("A", [Text("1")])]), Tabs([Tab("B", [Text("2")])])])');
+		expect(block.html).toContain('data-ui-tabs="A"');
+		expect(block.html).toContain('data-ui-tabs="B"');
+	});
+
+	test("a Tabs group with no pages draws nothing", () => {
+		expect(renderUiBlock("root = Stack([Tabs([])])").nodes).toBe(0);
+	});
+});
+
 describe("card notes", () => {
 	test("a decision card draws its own note field; a display card does not", () => {
 		const asking = renderUiBlock('root = Stack([Card("部署窗口", [Button("今晚"), Button("明天")])])');

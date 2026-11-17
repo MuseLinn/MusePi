@@ -3,6 +3,7 @@ import {
 	composeAnswer,
 	handleAnswerClick,
 	isSent,
+	openTab,
 	sendAnswer,
 	setAnswer,
 	setCardNote,
@@ -93,13 +94,27 @@ describe("answers", () => {
 });
 
 describe("delegated clicks", () => {
+	test("switching a tab page is remembered and answers nothing", () => {
+		const host = { dataset: { uiBlock: "tabs1" } };
+		const tab = {
+			getAttribute: (name: string) =>
+				name === "data-ui-tab" ? "概览\u0001明细" : name === "data-ui-tab-page" ? "明细" : null,
+			closest: (selector: string) =>
+				selector === "[data-ui-tab]" ? tab : selector === "[data-ui-block]" ? host : null,
+		};
+		expect(handleAnswerClick(tab as unknown as Element)).toBe(true);
+		expect(openTab("tabs1", "概览\u0001明细")).toBe("明细");
+		// Switching views must not compose a message: it answers nothing.
+		expect(composeAnswer("tabs1")).toBe("");
+	});
+
 	test("a send affordance is consumed by its own block", () => {
 		const host = { dataset: { uiBlock: "e" } };
 		// `closest` returns the nearest MATCHING ancestor: a send button is not a
 		// link row, and the mock has to say so or it stands in for both.
 		const send = {
 			closest: (selector: string) =>
-				selector === "[data-ui-repair]" || selector === "[data-ui-link-send]"
+				selector === "[data-ui-repair]" || selector === "[data-ui-link-send]" || selector === "[data-ui-tab]"
 					? null
 					: selector === "[data-ui-send]"
 						? send

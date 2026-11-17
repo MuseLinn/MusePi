@@ -170,12 +170,14 @@ const leaf = z.union([
 
 const Choice = defineComponent({
 	name: "Choice",
-	description: "name keys this answer: one option per line, `multiple` adds checkboxes",
+	description:
+		"name keys this answer: one option per line, `multiple` adds checkboxes; `layout` draws them as a list (default) or as one row of pills",
 	props: z.object({
 		name: z.string(),
 		options: z.array(z.union([z.string(), z.object({ label: z.string(), description: z.string().optional() })])),
 		label: z.string().optional(),
 		multiple: z.boolean().optional(),
+		layout: z.enum(["list", "row"]).optional(),
 	}),
 	component: null,
 });
@@ -192,11 +194,13 @@ const Input = defineComponent({
 });
 const Button = defineComponent({
 	name: "Button",
-	description: "value is the item it decides; put one Button per option inside a Card",
+	description:
+		"value is the item it decides; put one Button per option inside a Card. Outside a Card every Button is its own decision, so give each one a `name`",
 	props: z.object({
 		label: z.string(),
 		variant: z.enum(["primary", "secondary"]).optional(),
 		value: z.string().optional(),
+		name: z.string().optional(),
 	}),
 	component: null,
 });
@@ -254,10 +258,24 @@ const Card = defineComponent({
 	props: z.object({ title: z.string(), children: z.array(z.union([leaf, ask, Row.ref, Grid.ref, Details.ref])) }),
 	component: null,
 });
+const Tab = defineComponent({
+	name: "Tab",
+	description: "one page of a Tabs group; label is the short word on its tab",
+	props: z.object({ label: z.string(), children: z.array(z.union([leaf, ask, Row.ref, Grid.ref, Details.ref])) }),
+	component: null,
+});
+const Tabs = defineComponent({
+	name: "Tabs",
+	description: "one page shown at a time; only for views the reader switches between, never to hide the answer itself",
+	props: z.object({ children: z.array(Tab.ref) }),
+	component: null,
+});
 const Stack = defineComponent({
 	name: "Stack",
 	description: "the root: the whole block",
-	props: z.object({ children: z.array(z.union([leaf, ask, Row.ref, Grid.ref, Card.ref, Details.ref])) }),
+	props: z.object({
+		children: z.array(z.union([leaf, ask, Row.ref, Grid.ref, Card.ref, Tabs.ref, Details.ref])),
+	}),
 	component: null,
 });
 
@@ -289,6 +307,8 @@ export const uiBlockLibrary = createLibrary({
 		Grid,
 		Details,
 		Card,
+		Tab,
+		Tabs,
 		Stack,
 	],
 	root: "Stack",

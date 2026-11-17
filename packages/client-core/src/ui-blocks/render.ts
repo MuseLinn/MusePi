@@ -401,6 +401,48 @@ function details(node: UiBlockTree, ctx: RenderContext): string {
 	return `<details class="tr-ui-details"><summary>${inline(str(node.props, "title"))}</summary>${body}</details>`;
 }
 
+/**
+ * One page at a time, switched by delegated clicks rather than by script.
+ *
+ * A block is an HTML string the transcript regenerates on every commit, so the
+ * open page cannot live in the DOM alone; each page carries its label, the
+ * store keeps which label is open, and `applyAnswers` re-opens it after a
+ * redraw. Only the pages are hidden — the tab strip always shows every label,
+ * so the reader still sees what else is there.
+ */
+function tabs(node: UiBlockTree, ctx: RenderContext): string {
+	const pages = node.children.filter(child => child.type === "Tab");
+	if (pages.length === 0) return "";
+	// The group is keyed by its labels: two Tabs groups on one block must not
+	// share an open page, and the key has to survive a re-render unchanged.
+	const group = pages.map(page => str(page.props, "label")).join("\u0001");
+	const buttons: string[] = [];
+	const panels: string[] = [];
+	let first = "";
+	for (const [index, page] of pages.entries()) {
+		const label = str(page.props, "label") || `#${index + 1}`;
+		if (!first) first = label;
+		buttons.push(
+			`<button type="button" class="tr-ui-tab" role="tab" data-ui-tab="${esc(group)}" data-ui-tab-page="${esc(label)}" aria-selected="${index === 0 ? "true" : "false"}" tabindex="${index === 0 ? "0" : "-1"}">${inline(label)}</button>`,
+		);
+		const body = kids(page, ctx);
+		// The first page is open in the markup itself: a redraw must not flash an
+		// empty frame between the HTML arriving and `applyAnswers` running.
+		const isFirst = index === 0;
+		panels.push(
+			`<div class="tr-ui-tab-panel" role="tabpanel" data-ui-tab-page="${esc(label)}" data-open="${isFirst ? "true" : "false"}"${isFirst ? "" : " hidden"}>${body}</div>`,
+		);
+	}
+	// `data-ui-open` names the page that reads as open before any click, so the
+	// first draw matches the store instead of flashing an empty frame.
+	return (
+		`<div class="tr-ui-tabs" data-ui-tabs="${esc(group)}" data-ui-open="${esc(first)}">` +
+		`<div class="tr-ui-tab-strip" role="tablist">${buttons.join("")}</div>` +
+		panels.join("") +
+		`</div>`
+	);
+}
+
 /** Whether this subtree contains a control that answers a decision. */
 function hasDecisions(node: UiBlockTree): boolean {
 	if (node.type === "Choice" || node.type === "Button" || node.type === "Slider" || node.type === "DateInput")
@@ -453,6 +495,8 @@ const RENDERERS: Record<string, (node: UiBlockTree, ctx: RenderContext) => strin
 	Divider: node => divider(node.props),
 	Code: node => codeBlock(node.props),
 	Details: (node, ctx) => details(node, ctx),
+	Tabs: (node, ctx) => tabs(node, ctx),
+	Tab: () => "",
 	Choice: (node, ctx) => choice(node, ctx),
 	Input: (node, ctx) => input(node, ctx),
 	DateInput: (node, ctx) => dateInput(node, ctx),
@@ -484,6 +528,14 @@ function fieldName(props: Record<string, unknown>, ctx: RenderContext): string {
 	return ctx.card ? `card:${ctx.card}` : `field:${str(props, "name")}`;
 }
 
+/** A button outside a card is its own decision, so two buttons must not share
+ *  one answer slot: `name` keys it, and a button left without one falls back to
+ *  its own label rather than collapsing every button into the same `field:`. */
+function buttonName(props: Record<string, unknown>, ctx: RenderContext): string {
+	if (ctx.card) return `card:${ctx.card}`;
+	return `${fieldName(props, ctx)}:${str(props, "value") || str(props, "label")}`;
+}
+
 function choice(node: UiBlockTree, ctx: RenderContext): string {
 	const props = node.props;
 	const name = fieldName(props, ctx);
@@ -508,7 +560,11 @@ function choice(node: UiBlockTree, ctx: RenderContext): string {
 				`</button>`,
 		)
 		.join("");
-	return `<fieldset class="tr-ui-choice" data-ui-multiple="${multiple ? "true" : "false"}">${label ? `<legend class="tr-ui-choice-label">${inline(label)}</legend>` : ""}${rows}</fieldset>`;
+	// A row of pills is the same answers drawn compactly: two or three short
+	// words are one glance, while three stacked rows would cost three lines of
+	// reply. A description needs its own line, so it rules the row out.
+	const shape = props.layout === "row" && !options.some(option => option.description) ? "row" : "list";
+	return `<fieldset class="tr-ui-choice" data-ui-multiple="${multiple ? "true" : "false"}" data-layout="${shape}">${label ? `<legend class="tr-ui-choice-label">${inline(label)}</legend>` : ""}${rows}</fieldset>`;
 }
 
 function input(node: UiBlockTree, ctx: RenderContext): string {
@@ -561,7 +617,7 @@ function slider(node: UiBlockTree, ctx: RenderContext): string {
 
 function button(node: UiBlockTree, ctx: RenderContext): string {
 	const props = node.props;
-	const name = fieldName(props, ctx);
+	const name = buttonName(props, ctx);
 	const decision = decisionOf(props, ctx, str(props, "label"));
 	const value = str(props, "value") || str(props, "label");
 	const variant = props.variant === "primary" ? "primary" : "secondary";

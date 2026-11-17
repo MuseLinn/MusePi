@@ -614,6 +614,39 @@
 	color: var(--fg-muted);
 }
 
+/* A row of pills: the same answers, one glance wide. The fieldset turns into a
+ * wrapping row and each option loses its full-width claim, so three short
+ * words cost one line instead of three. */
+.tr-ui-choice[data-layout="row"] {
+	flex-direction: row;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.tr-ui-choice[data-layout="row"] .tr-ui-choice-label {
+	flex-basis: 100%;
+}
+
+.tr-ui-choice[data-layout="row"] .tr-ui-option {
+	width: auto;
+	gap: 0;
+	padding: 4px 10px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: transparent;
+}
+
+.tr-ui-choice[data-layout="row"] .tr-ui-option-mark {
+	display: none;
+}
+
+.tr-ui-choice[data-layout="row"] .tr-ui-option[data-ui-chosen="true"] {
+	color: var(--accent-fg, #fff);
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
 .tr-ui-field {
 	display: flex;
 	flex-direction: column;
@@ -914,6 +947,68 @@ button.tr-ui-link--send[data-ui-chosen="true"] .tr-ui-link-send-mark {
 	height: 1em;
 	flex: none;
 	vertical-align: -0.125em;
+}
+
+/* Tabs: a strip of labels over one page at a time. The strip scrolls rather
+ * than wraps, so a five-page group never pushes the reply's text down. */
+.tr-ui-tabs {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+}
+
+.tr-ui-tab-strip {
+	display: flex;
+	gap: 2px;
+	overflow-x: auto;
+	scrollbar-width: none;
+	border-bottom: 1px solid var(--border);
+}
+
+.tr-ui-tab-strip::-webkit-scrollbar {
+	display: none;
+}
+
+.tr-ui-tab {
+	flex: none;
+	padding: 5px 10px;
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	color: var(--fg-muted);
+	background: none;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -1px;
+	cursor: pointer;
+}
+
+.tr-ui-tab:hover {
+	color: var(--fg);
+}
+
+.tr-ui-tab:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: -2px;
+}
+
+/* The open page is named in words, not only in colour: the weight and the rule
+ * both follow, so a reader who cannot see the tint still knows where they are. */
+.tr-ui-tab[aria-selected="true"] {
+	color: var(--fg);
+	font-weight: 600;
+	border-bottom-color: var(--accent);
+}
+
+.tr-ui-tab-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+}
+
+.tr-ui-tab-panel[hidden] {
+	display: none;
 }
 
 /* A bare rule draws itself; a labelled one is a flex row whose two hairlines

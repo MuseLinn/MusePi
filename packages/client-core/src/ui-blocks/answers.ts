@@ -60,6 +60,11 @@ interface BlockAnswers {
 	/** Links already followed with a message, keyed by that message: one click
 	 *  is one turn, and a redraw must not offer the same navigation twice. */
 	sentLinks: Set<string>;
+	/** Which page of each Tabs group is open, keyed by the group's own key. The
+	 *  reply's HTML is regenerated on every re-render, so an open page kept in
+	 *  the DOM would snap back to the first one as soon as the message scrolls
+	 *  out of view and in again. */
+	tabs: Map<string, string>;
 	/** Decision labels in the order the block declared them. */
 	decisions: string[];
 	/** True once an answer has been sent; the block then reads as settled. */
@@ -82,7 +87,15 @@ export function rememberBlockFailure(hash: string, source: string, errors: reado
 function stateFor(hash: string): BlockAnswers {
 	let state = blocks.get(hash);
 	if (!state) {
-		state = { values: new Map(), note: "", cardNotes: new Map(), sentLinks: new Set(), decisions: [], sent: false };
+		state = {
+			values: new Map(),
+			note: "",
+			cardNotes: new Map(),
+			sentLinks: new Set(),
+			tabs: new Map(),
+			decisions: [],
+			sent: false,
+		};
 		blocks.set(hash, state);
 	}
 	return state;
@@ -119,6 +132,17 @@ export function setCardNote(hash: string, card: string, note: string): void {
 	if (note.trim()) state.cardNotes.set(card, note);
 	else state.cardNotes.delete(card);
 	marks?.();
+}
+
+/** Open one page of a Tabs group. Not a decision: switching views answers nothing. */
+export function setTab(hash: string, group: string, page: string): void {
+	stateFor(hash).tabs.set(group, page);
+	marks?.();
+}
+
+/** The page a Tabs group was left on, or "" before the reader has switched. */
+export function openTab(hash: string, group: string): string {
+	return blocks.get(hash)?.tabs.get(group) ?? "";
 }
 
 /** Whether any decision in this block has an answer or a card note. */
@@ -274,6 +298,34 @@ export function applyAnswers(root: ParentNode): void {
 			link.dataset.uiChosen = spent ? "true" : "false";
 			if (link instanceof HTMLButtonElement) link.disabled = spent || sent;
 		}
+		applyTabs(host, state);
+	}
+}
+
+/**
+ * Re-open the page each Tabs group was left on. Called from `applyAnswers`
+ * because a commit rewrites the whole block's HTML, and the browser then shows
+ * the first page again.
+ */
+function applyTabs(host: Element, state: BlockAnswers | undefined): void {
+	if (typeof host.querySelectorAll !== "function") return;
+	for (const group of host.querySelectorAll<HTMLElement>("[data-ui-tabs]")) {
+		const key = group.getAttribute("data-ui-tabs") ?? "";
+		const open = state?.tabs.get(key) ?? group.getAttribute("data-ui-open") ?? "";
+		group.setAttribute("data-ui-open", open);
+		for (const tab of group.querySelectorAll<HTMLElement>("[data-ui-tab]")) {
+			const isOpen = tab.getAttribute("data-ui-tab-page") === open;
+			tab.setAttribute("aria-selected", isOpen ? "true" : "false");
+			tab.dataset.uiChosen = isOpen ? "true" : "false";
+			// Only the open tab is a Tab stop; arrow keys move within the group.
+			tab.tabIndex = isOpen ? 0 : -1;
+		}
+		for (const panel of group.querySelectorAll<HTMLElement>("[data-ui-tab-page]")) {
+			if (panel.hasAttribute("data-ui-tab")) continue;
+			const isOpen = panel.getAttribute("data-ui-tab-page") === open;
+			panel.hidden = !isOpen;
+			panel.dataset.open = isOpen ? "true" : "false";
+		}
 	}
 }
 
@@ -315,6 +367,19 @@ export function handleAnswerClick(target: Element): boolean {
 				new CustomEvent<UiBlockAnswerDetail>(UI_BLOCK_ANSWER_EVENT, { detail: { text: message } }),
 			);
 		}
+		return true;
+	}
+	// A tab switch changes what is visible, not what is answered: it never
+	// reaches the answer store as a value.
+	const tab = target.closest<HTMLElement>("[data-ui-tab]");
+	if (tab) {
+		const host = tab.closest<HTMLElement>("[data-ui-block]");
+		const hash = host?.dataset.uiBlock;
+		const group = tab.getAttribute("data-ui-tab");
+		const page = tab.getAttribute("data-ui-tab-page");
+		if (!hash || !group || !page) return false;
+		setTab(hash, group, page);
+		if (host) applyTabs(host, blocks.get(hash));
 		return true;
 	}
 	const send = target.closest<HTMLElement>("[data-ui-send]");
