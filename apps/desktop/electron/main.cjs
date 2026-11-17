@@ -724,6 +724,16 @@ function petCharRight() {
 let petIgnoreState = null;
 /** Last hover state pushed to the pet window (drives the hover mood row). */
 let petHoverState = null;
+/** Cursor is within reach of the sprite — drives the quick bar. Sticky:
+ *  entering uses 40px, leaving 56px, so a cursor parked on the boundary
+ *  cannot flicker the whole bar on and off. */
+let petProximityState = false;
+/** The quick bar is a text field right now. The window stays interactive for
+ *  as long as this is true — otherwise the click-through poll drops the caret
+ *  the moment the cursor moves off the bar. */
+let petComposerOpen = false;
+const PET_PROXIMITY_ENTER_CSS = 40;
+const PET_PROXIMITY_EXIT_CSS = 56;
 /**
  * Renderer pointer is DOWN on the pet but no move has been sent yet
  * (dragRef.pressed, before DRAG_THRESHOLD travel). The click-through poll
@@ -1288,6 +1298,12 @@ function updatePetClickThrough() {
 	// covers an in-flight drag (armed on the first pet-drag-client).
 	if (petDragArmed || petDragLast !== null) {
 		ignore = false;
+	} else if (petComposerOpen) {
+		// The quick bar became a text field: the window must keep receiving
+		// mouse and keyboard, or the caret is dropped the moment the cursor
+		// steps off the (now invisible) bar. The composer is dismissed by
+		// Escape or by submitting, not by the cursor leaving.
+		ignore = false;
 	} else if (petHitbox) {
 		// All three spaces (cursor / window position / renderer CSS px) are
 		// converted into window-position space before comparing — on a
@@ -1314,6 +1330,33 @@ function updatePetClickThrough() {
 	if (hovering !== petHoverState && !petWindow.isDestroyed()) {
 		petHoverState = hovering;
 		petWindow.webContents.send("pet:hover", hovering);
+	}
+	// Proximity drives the quick bar, and it is deliberately NOT `hovering`:
+	// `hovering` is a strict hitbox test, while the bar has to appear as the
+	// cursor approaches the pet — reaching for a control that only exists
+	// once you are already on the sprite means the first attempt hits the
+	// desktop. Enter 40px / leave 56px is the hysteresis that keeps a cursor
+	// resting on the boundary from flickering the whole bar.
+	if (!petWindow.isDestroyed()) {
+		const cursor = cursorToPos(screen.getCursorScreenPoint());
+		const [wx, wy] = petWindow.getPosition();
+		// Distance to the sprite rect (the interaction target), not to the
+		// window: the 320×290 window is mostly transparent padding, so a
+		// window-rect test would pop the bar ~100px early on every side.
+		const rect = petRect ?? petHitbox;
+		let near = petProximityState;
+		if (rect) {
+			const left = wx + cssToPos(rect.x);
+			const top = wy + cssToPos(rect.y);
+			const dx = Math.max(left - cursor.x, 0, cursor.x - (left + cssToPos(rect.width)));
+			const dy = Math.max(top - cursor.y, 0, cursor.y - (top + cssToPos(rect.height)));
+			const threshold = cssToPos(petProximityState ? PET_PROXIMITY_EXIT_CSS : PET_PROXIMITY_ENTER_CSS);
+			near = dx * dx + dy * dy <= threshold * threshold;
+		}
+		if (near !== petProximityState) {
+			petProximityState = near;
+			petWindow.webContents.send("pet:proximity", near);
+		}
 	}
 	// Gaze piggybacks on this same poll: the cursor is already in hand, so
 	// eye-following costs one subtraction and a bounded send. The vector is
@@ -2074,6 +2117,48 @@ ipcMain.handle("pet-set-hitbox", (_event, rect) => {
 	}
 	petIgnoreState = null; // force a refresh on the next poll
 	updatePetClickThrough();
+	return { ok: true };
+});
+// Quick-bar actions. The pet window owns the pill; every action it offers is
+// really a main-window command (new chat, dictation, open the app), so the
+// handlers forward over the same pet:command channel the reply path uses.
+ipcMain.handle("pet-quick-command", (_event, command) => {
+	const type = command?.type;
+	if (!mainWindow || mainWindow.isDestroyed()) return { ok: false };
+	if (type === "new-chat") {
+		mainWindow.webContents.send("pet:command", { type: "new-chat" });
+		focusMainFromPet();
+	} else if (type === "dictate") {
+		mainWindow.webContents.send("pet:command", { type: "dictate" });
+		focusMainFromPet();
+	} else if (type === "open-app") {
+		focusMainFromPet();
+	} else {
+		return { ok: false };
+	}
+	return { ok: true };
+});
+// The quick bar turns into a text field, so the pet window needs the
+// keyboard. It is created non-focusable on purpose (a companion must never
+// steal focus from the app the user is working in), so the composer opts the
+// window in and out again.
+ipcMain.handle("pet-composer-focus", (_event, focusable) => {
+	if (!petWindow || petWindow.isDestroyed()) return { ok: false };
+	petComposerOpen = focusable === true;
+	petWindow.setFocusable(petComposerOpen);
+	if (petComposerOpen) petWindow.focus();
+	petIgnoreState = null; // force a refresh on the next poll
+	return { ok: true };
+});
+// Quick-bar composer text → a NEW chat in the main window. This is not the
+// bubble reply path: a reply lands in the session that is currently open,
+// while the quick bar opens a fresh conversation. The main window owns the
+// daemon connection, so it creates the session and sends the prompt.
+ipcMain.handle("pet-quick-send", (_event, text) => {
+	if (mainWindow && !mainWindow.isDestroyed() && typeof text === "string" && text.trim()) {
+		mainWindow.webContents.send("pet:command", { type: "new-chat-send", text: text.trim() });
+		focusMainFromPet();
+	}
 	return { ok: true };
 });
 // Sprite-only rect (no badge) — drives dock alignment so the CHARACTER

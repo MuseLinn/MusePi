@@ -4,6 +4,36 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **鸿蒙：材质名称与实际材质对上了**：材质档位此前整体错位一位——存储值本就是系统的
+  `ImmersiveStyle` 索引（0 精美 / 1 均衡 / 2 轻柔 / 3 极薄），而设置页把整条阶梯偏移了，
+  于是滑块停在「精美」的位置、名字写着「均衡」，两端标签也反了。真机上把滑块拖到最左，
+  界面写「极薄」，底栏其实是最厚的材质。现在三处映射统一到同一条阶梯。
+  EN: The material names now match the materials. The stored value IS the system's
+  `ImmersiveStyle` index (0 REGULAR / 1 THICK / 2 THIN / 3 ULTRA_THIN), but the settings page
+  shifted the whole ladder by one: the slider sat at “精美” while the name read “均衡”, and the
+  two end labels were reversed. On a real device, dragging the slider fully left showed “极薄”
+  while the bar was actually the thickest material. All three mappings now share one ladder.
+
+- **鸿蒙：列表里的材质摘要会跟着滑块变**：ArkUI 的 Builder 参数按值传递，把名称算好再传
+  进去就固定了——滑块动了、详情页的文案跟着变了，列表摘要却停在旧值，切走再切回也不变。
+  现在这一行在 Builder 体内直接读状态，改动会立即反映到列表。
+  EN: The material summary in the list now follows the slider. An ArkUI builder argument is
+  evaluated when the parent builds, so passing the resolved name froze it: the slider moved and
+  the detail caption followed, while the list summary kept the old value — even after leaving
+  the page and coming back. That row now reads the state inside the builder, so a change shows
+  up in the list immediately.
+
+- **GitHub 连接器可以连上了：填一次自己的 OAuth 应用即可**：GitHub 的授权服务器不提供注册端点，客户端没法自我注册，而且它拒绝只有 PKCE 的交换——只带 code verifier 不带 client secret 时会回答 `incorrect_client_credentials`。所以这一条需要一个你手工注册的应用：client id 和 client secret 填进连接器表单，两者进入加密存储，目录里只留字段名。文档 `docs/github-connector.md` 写清了注册步骤和连不上时的三种报错。
+  没有填 client 的 GitHub 条目不会被挂载——否则它会停在一个走不完的授权页上，像一个半配置好的服务。
+  - EN: The GitHub connector connects now: fill in your own OAuth app once. GitHub's authorization server publishes no registration endpoint, so a client cannot register itself, and it refuses a PKCE-only exchange — a request with a code verifier but no client secret is answered with `incorrect_client_credentials`. The row therefore needs an app you register by hand: the client id and client secret go into the connector form, both land in the encrypted store, and the catalog keeps only the field names. `docs/github-connector.md` has the registration steps and the three errors you may hit.
+  A GitHub row without a client is not mounted — it would otherwise sit at an authorization page that cannot complete, looking like a half-configured server.
+
+- **鸿蒙：材质滑块点了立刻生效，启动图标恢复品牌配色**：界面材质的滑块之前只有滑块自身在动，标题与列表摘要却停在旧值——回调把赋值放进了动画里，状态从未被写回，控件又弹回原位，而偏好已经在底下变了。现在先同步状态再写存储，点轨道也会提交（点轨道只触发 Click，不伴随 End）。启动图标此前是一块黑圆盘：径向渐变用了 ArkUI 不解析的 oklch 颜色函数，渐变整体失效。已换成等价的 sRGB，图标恢复为金色球面脸。
+  EN: On HarmonyOS the material slider now applies immediately and the launcher icon keeps its brand colours. The slider moved while the caption and the row summary stayed on the old value: the callback assigned inside the animation, so the state was never written back, the control snapped back, and the preference had already changed underneath. State is now synchronised before the store write, and a tap on the track commits too (a track tap reports Click without End). The launcher icon was a flat black disc because its radial gradient used a colour function ArkUI does not parse, so the gradient failed outright; it now uses the equivalent sRGB and renders as the golden orb face.
+
+- **折叠屏展开后浏览器里不再退回桌面布局**：触屏判据此前是「无悬停 且 主指针为粗指针」，而折叠屏的主指针是触控板，实测 `pointer: coarse` 为假、`hover: none` 为真，判据因此失效；宽度上限 840 又把展开态排除在外，于是同一份页面在应用里是手机布局、在浏览器里是桌面布局。触屏信号改用「无法悬停」这一真实含义，宽度上限放宽到 1100 以覆盖折叠屏展开态；宽度上限仍然保留，否则带触控屏的笔记本会把窄窗口也拖进手机布局。
+  EN: A foldable no longer falls back to the desktop layout in a browser. The touch test was “no hover AND a coarse primary pointer”, but a foldable's primary pointer is the trackpad — measured on a Pura X Max, `pointer: coarse` is false while `hover: none` is true — and the 840px width cap excluded the unfolded viewport as well. The touch signal now reads the no-hover capability, and the width cap is raised to 1100px to cover an unfolded foldable. The width cap stays: without it a touchscreen laptop would drag a narrow desktop window into the phone layout, and narrowing a desktop window must keep the workspace directory.
+
 - **跨会话搜索改用全文索引，中文能搜到词中间的字，助手发言与工具输出一并可查**：此前 `session.search` 与 ⌘F 走的是 `content LIKE '%词%'` 全表扫描——没有索引，也没有排序，会话一多就慢且结果按时间倒序而非相关度。现在 `messages` 表加了一列双字组展开文本，并挂上 FTS5 外部内容索引；`content` 列保留原文供片段回显，`MATCH` 走展开列。unicode61 会把一整段连续中文当成单个 token，所以「记忆后端」里的「后端」在旧实现下永远搜不到，现在靠相邻双字组解决，双方同时展开即可命中任意长度（单字「端」也命中）。索引覆盖面也从「仅用户提问」扩到助手发言与工具返回——排查时最常要找的恰恰是这两处。原有的子串能力没有丢：`gin` 仍能命中 `login`，因为 FTS 前缀通配之后还留着一条 LIKE 兜底。老库在升级首次打开时自动补列并重建索引，历史消息不会出现「看着还在、其实搜不到」。中文分词从 `file-index` 提到 `utils/fts-text.ts`，两处索引共用同一份，不再有两份会走样的实现。
   - EN: Cross-session search now runs on a full-text index, so a Chinese query reaches a word in the middle of a run and assistant turns and tool output are searchable too. `session.search` and the ⌘F bar used `content LIKE '%word%'` — a full table scan with no index and no ranking, which both slowed down and ordered by time rather than relevance as sessions piled up. The `messages` table now carries a bigram-expanded column with an FTS5 external-content index over it; `content` keeps the original text for snippets while `MATCH` runs against the expanded copy. unicode61 treats a whole continuous Chinese run as one token, so 后端 inside 记忆后端 could never be found; adjacent bigrams fix that, expanded on both sides so any length matches, including a single character. Coverage also widens from "user prompts only" to assistant turns and tool results — the two places you look during an investigation. The old substring behavior survives: `gin` still finds `login`, because a LIKE fallback stays behind the FTS prefix wildcard. A pre-upgrade database gets the column and a rebuilt index on first open, so history never ends up present-but-unreachable. The Chinese tokenizer moved out of `file-index` into `utils/fts-text.ts`, shared by both indexes instead of drifting in two copies.
 

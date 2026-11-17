@@ -238,6 +238,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("pet:hover", listener);
 		return () => ipcRenderer.removeListener("pet:hover", listener);
 	},
+	/** Pet window: cursor is within reach of the sprite (40px in / 56px out,
+	 *  measured from the sprite rect, not the window). Drives the quick bar;
+	 *  separate from hover because the bar appears before the cursor reaches
+	 *  the sprite. */
+	onPetProximity: (cb) => {
+		const listener = (_e, near) => cb(near === true);
+		ipcRenderer.on("pet:proximity", listener);
+		return () => ipcRenderer.removeListener("pet:proximity", listener);
+	},
+	/** Pet quick-bar action → main window (new chat / dictation / open app). */
+	petQuickCommand: (type) => ipcRenderer.invoke("pet-quick-command", { type }),
+	/** The quick bar became a text field: the pet window has to be focusable
+	 *  for the caret to land in it, and non-focusable again afterwards. */
+	petComposerFocus: (focusable) => ipcRenderer.invoke("pet-composer-focus", focusable === true),
+	/** Send the quick-bar composer's text as a new chat. */
+	petQuickSend: (text) => ipcRenderer.invoke("pet-quick-send", text),
 	/** Pet window: normalized gaze vector (cursor offset from the window
 	 *  centre, clamped to ±1) — drives eye tracking on the builtin sprite. */
 	onPetGaze: (cb) => {

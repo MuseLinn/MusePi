@@ -148,6 +148,21 @@ $rows | ConvertTo-Json -Compress
 	);
 }
 
+/** The primary display's size, in physical px — the cursor cannot be
+ *  parked outside it, and a pet near the screen edge makes "park it far
+ *  away" land off-screen. */
+function primaryScreenSize() {
+	const script = String.raw`
+Add-Type -AssemblyName System.Windows.Forms
+$b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+Write-Output "$($b.Width),$($b.Height)"
+`;
+	const run = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8" });
+	if (run.status !== 0) return { width: 1920, height: 1080 };
+	const [width, height] = String(run.stdout).trim().split(",").map(Number);
+	return { width: Number.isFinite(width) ? width : 1920, height: Number.isFinite(height) ? height : 1080 };
+}
+
 async function createNativeWindowProbe(ownerPid) {
 	const script = String.raw`
 Add-Type -TypeDefinition @'
@@ -639,6 +654,296 @@ try {
 			"real stacked mode shows the shared arrow beside the pet",
 			await petPage.evaluate(() => document.querySelector(".pet-window__badge")?.textContent === "⌃"),
 		);
+		// Quick bar: collapsed it must be invisible and inert, expanded it must
+		// be a row of 24px round buttons with 8px spacing under the sprite, and
+		// its dividers must drop out while a neighbouring button is hovered.
+		//
+		// The smoke's setup drags the pet, which leaves the cursor on it, so
+		// park the native cursor far away FIRST — otherwise the "starts
+		// collapsed" snapshot measures an already-expanded bar.
+		const petBox = await petPage.evaluate(() => {
+			const rect = document.querySelector(".pet-window__pet")?.getBoundingClientRect();
+			return rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } : null;
+		});
+		if (process.platform === "win32" && petBox) {
+			const petNativeBounds = nativeWindowBounds()["MusePi Pet"];
+			const dpr = await petPage.evaluate(() => devicePixelRatio);
+			positionNativeCursor(
+				Math.max(8, petNativeBounds.left + petBox.left - 220),
+				Math.max(8, petNativeBounds.top + (petBox.top + petBox.bottom) / 2),
+				dpr,
+			);
+			await sleep(450);
+		}
+		const quickbarCollapsed = await petPage.evaluate(() => {
+			const bar = document.querySelector(".pet-window__quickbar");
+			if (!bar) return { missing: true };
+			const style = getComputedStyle(bar);
+			const rect = bar.getBoundingClientRect();
+			const buttons = Array.from(bar.querySelectorAll(".pet-window__quickbar-btn"));
+			const petRect = document.querySelector(".pet-window__pet")?.getBoundingClientRect();
+			return {
+				missing: false,
+				expanded: bar.classList.contains("pet-window__quickbar--expanded"),
+				opacity: style.opacity,
+				pointerEvents: style.pointerEvents,
+				width: Math.round(rect.width),
+				buttonOpacity: buttons.map(button => getComputedStyle(button).opacity),
+				buttonTabIndex: buttons.map(button => button.tabIndex),
+				belowSprite: petRect ? rect.top >= petRect.bottom - 2 : null,
+				svgCount: buttons.filter(button => button.querySelector("svg")).length,
+			};
+		});
+		check(
+			"real pet quick bar starts collapsed, inert and below the sprite",
+			!quickbarCollapsed.missing &&
+				!quickbarCollapsed.expanded &&
+				quickbarCollapsed.opacity === "0" &&
+				quickbarCollapsed.pointerEvents === "none" &&
+				quickbarCollapsed.belowSprite === true &&
+				quickbarCollapsed.buttonTabIndex.every(index => index === -1),
+			quickbarCollapsed,
+		);
+		// Now bring the cursor in: 20px off the sprite's right edge is inside
+		// the 40px enter radius yet outside the sprite, so only proximity fires.
+		if (process.platform === "win32" && petBox) {
+			const petNativeBounds = nativeWindowBounds()["MusePi Pet"];
+			const dpr = await petPage.evaluate(() => devicePixelRatio);
+			const screen = primaryScreenSize();
+			positionNativeCursor(
+				Math.min(screen.width - 8, petNativeBounds.left + petBox.right + 20),
+				Math.max(8, petNativeBounds.top + (petBox.top + petBox.bottom) / 2),
+				dpr,
+			);
+			await sleep(450);
+		}
+		const quickbarExpanded = await petPage.evaluate(() => {
+			const bar = document.querySelector(".pet-window__quickbar");
+			const buttons = Array.from(bar?.querySelectorAll(".pet-window__quickbar-btn") ?? []);
+			const rects = buttons.map(button => button.getBoundingClientRect());
+			const gaps = rects.slice(1).map((rect, index) => Math.round(rect.left - rects[index].right));
+			const dividers = Array.from(bar?.querySelectorAll(".pet-window__quickbar-divider") ?? []);
+			return {
+				expanded: bar?.classList.contains("pet-window__quickbar--expanded") ?? false,
+				opacity: bar ? getComputedStyle(bar).opacity : "",
+				pointerEvents: bar ? getComputedStyle(bar).pointerEvents : "",
+				buttonSize: rects.map(rect => ({ width: Math.round(rect.width), height: Math.round(rect.height) })),
+				width: bar ? Math.round(bar.getBoundingClientRect().width) : 0,
+				gaps,
+				radius: buttons[0] ? getComputedStyle(buttons[0]).borderTopLeftRadius : "",
+				dividerOpacity: dividers.map(divider => getComputedStyle(divider).opacity),
+				buttonTabIndex: buttons.map(button => button.tabIndex),
+				labels: buttons.map(button => button.getAttribute("aria-label")),
+			};
+		});
+		// The ROW carries three buttons; the COMPOSER carries a leading and a
+		// trailing one. Both live in the same surface, so the button list is
+		// five once the composer is mounted — the row's three are faded out
+		// by then, but they keep their DOM order so nothing jumps.
+		const rowButtons = quickbarExpanded.buttonSize.slice(0, 3);
+		const rowGaps = quickbarExpanded.gaps.slice(0, 2);
+		check(
+			"real pet quick bar expands to 24px round buttons with 8px spacing",
+			quickbarExpanded.expanded &&
+				quickbarExpanded.opacity === "1" &&
+				quickbarExpanded.pointerEvents === "auto" &&
+				rowButtons.length === 3 &&
+				rowButtons.every(size => size.width === 24 && size.height === 24) &&
+				rowGaps.every(gap => Math.abs(gap - 8) <= 1) &&
+				quickbarExpanded.buttonTabIndex.slice(0, 3).every(index => index === 0) &&
+				quickbarExpanded.labels.slice(0, 3).every(label => Boolean(label)),
+			quickbarExpanded,
+		);
+		// The row must be exactly as wide as its three buttons and two
+		// dividers. An invisible composer field left in the flex flow once
+		// held the pill at the composer's width while it showed only the
+		// buttons — the row looked like an empty input the whole time.
+		check(
+			"real pet quick bar is no wider than its controls",
+			quickbarExpanded.width <= 110,
+			quickbarExpanded.width,
+		);
+		check(
+			"real pet quick bar shows its two dividers while idle",
+			quickbarExpanded.dividerOpacity.length === 2 && quickbarExpanded.dividerOpacity.every(value => value === "1"),
+			quickbarExpanded.dividerOpacity,
+		);
+		// Hover a button: the hairline beside it must disappear (the seam
+		// rule). This runs BEFORE the composer morph — the morph replaces the
+		// buttons with a text field, so afterwards "the pointer is over a
+		// button" is no longer a given.
+		const firstBtn = await petPage.$(".pet-window__quickbar-btn");
+		if (firstBtn) {
+			const box = await firstBtn.boundingBox();
+			if (box) {
+				await petPage.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+				await sleep(150);
+			}
+			const hoveredDividers = await petPage.evaluate(() =>
+				Array.from(document.querySelectorAll(".pet-window__quickbar-divider")).map(divider => getComputedStyle(divider).opacity),
+			);
+			check(
+				"real pet quick bar drops the divider beside a hovered button",
+				hoveredDividers.length === 2 && hoveredDividers[0] === "0",
+				hoveredDividers,
+			);
+			await petPage.mouse.move(2, 2);
+			await sleep(220);
+		}
+		// The morph is a spring, not a bezier: the surface must swell PAST
+		// its target width and settle back. Sampling the width during the
+		// animation is the only way to tell the two apart — a bezier
+		// reaches its target and stops, a spring sails past it first.
+		const springOvershoot = await petPage.evaluate(async () => {
+			const bar = document.querySelector(".pet-window__quickbar");
+			const button = bar?.querySelector(".pet-window__quickbar-btn");
+			if (!bar || !button) return { missing: true };
+			const before = { inline: bar.style.width, rect: Math.round(bar.getBoundingClientRect().width), cls: bar.className };
+			button.click();
+			const widths = [];
+			const started = performance.now();
+			while (performance.now() - started < 900) {
+				widths.push(Math.round(bar.getBoundingClientRect().width));
+				await new Promise(resolve => requestAnimationFrame(resolve));
+			}
+			const peak = Math.max(...widths);
+			const last = widths[widths.length - 1];
+			return { missing: false, peak, final: last, samples: widths.length, trace: widths.slice(0, 40), before };
+		});
+		check(
+			"real pet quick bar morph overshoots like a spring",
+			!springOvershoot.missing &&
+				// The peak must be past the target: a bezier reaches its
+				// target and stops, a spring sails past it first.
+				springOvershoot.peak > 265 &&
+				// ... and the surface must actually return to its target
+				// instead of staying swollen. The measured width is the
+				// BORDER box, so the target (261 content + 2px of border)
+				// reads as 263.
+				Math.abs(springOvershoot.final - 263) <= 1 &&
+				springOvershoot.peak <= 310,
+			springOvershoot,
+		);
+		// Put the bar back into its button row so the morph assertions below
+		// start from the state they describe.
+		await petPage.keyboard.press("Escape");
+		await sleep(400);
+		// The morph: the row IS the composer. Clicking 新聊天 must widen the
+		// same surface into a text field — the buttons leave, the field
+		// arrives, and the element's own width/height change. A second panel
+		// opening next to the bar would not satisfy this.
+		const morphBefore = await petPage.evaluate(() => {
+			const bar = document.querySelector(".pet-window__quickbar");
+			const rect = bar?.getBoundingClientRect();
+			return {
+				width: rect ? Math.round(rect.width) : 0,
+				height: rect ? Math.round(rect.height) : 0,
+				composing: bar?.classList.contains("pet-window__quickbar--composing") ?? false,
+			};
+		});
+		await petPage.click(".pet-window__quickbar-btn");
+		await sleep(500);
+		const morphAfter = await petPage.evaluate(() => {
+			const bar = document.querySelector(".pet-window__quickbar");
+			const rect = bar?.getBoundingClientRect();
+			const input = bar?.querySelector(".pet-window__quickbar-input");
+			const buttons = Array.from(bar?.querySelectorAll(".pet-window__quickbar-btn") ?? []);
+			return {
+				width: rect ? Math.round(rect.width) : 0,
+				height: rect ? Math.round(rect.height) : 0,
+				composing: bar?.classList.contains("pet-window__quickbar--composing") ?? false,
+				inputOpacity: input ? getComputedStyle(input).opacity : "",
+				inputFocused: document.activeElement === input,
+				inputLeft: input ? input.getBoundingClientRect().left : 0,
+				inputRight: input ? input.getBoundingClientRect().right : 0,
+				leadButton: Boolean(bar?.querySelector(".pet-window__quickbar-btn--lead")),
+				sendButton: Boolean(bar?.querySelector(".pet-window__quickbar-btn--send")),
+				leadLeft: bar?.querySelector(".pet-window__quickbar-btn--lead")?.getBoundingClientRect().left ?? 0,
+				sendRight: bar?.querySelector(".pet-window__quickbar-btn--send")?.getBoundingClientRect().right ?? 0,
+				sendDisabled: bar?.querySelector(".pet-window__quickbar-btn--send")?.disabled ?? false,
+				buttonOpacity: buttons.map(button => getComputedStyle(button).opacity),
+				dividerOpacity: Array.from(bar?.querySelectorAll(".pet-window__quickbar-divider") ?? []).map(
+					divider => getComputedStyle(divider).opacity,
+				),
+				placeholder: input?.getAttribute("placeholder") ?? "",
+			};
+		});
+		check(
+			"real pet quick bar morphs into a composer on the same surface",
+			morphAfter.composing === true &&
+				morphAfter.width > morphBefore.width &&
+				morphAfter.inputOpacity === "1" &&
+				morphAfter.buttonOpacity.slice(0, 3).every(value => value === "0") &&
+				morphAfter.dividerOpacity.every(value => value === "0"),
+			{ morphBefore, morphAfter },
+		);
+		// The composer carries a leading button and a trailing send button,
+		// the way Codex's quick-chat does — a field with no way to send and
+		// no way to switch to voice is a dead end.
+		check(
+			"real pet quick bar composer has a leading and a trailing button",
+			morphAfter.leadButton &&
+				morphAfter.sendButton &&
+				morphAfter.leadLeft < morphAfter.inputLeft &&
+				morphAfter.sendRight > morphAfter.inputRight &&
+				morphAfter.sendDisabled === true,
+			morphAfter,
+		);
+		check(
+			"real pet quick bar composer takes the caret",
+			morphAfter.inputFocused === true && morphAfter.placeholder.length > 0,
+			morphAfter,
+		);
+		// Escape closes the composer and the surface returns to the button row.
+		await petPage.keyboard.press("Escape");
+		await sleep(400);
+		const morphClosed = await petPage.evaluate(() => {
+			const bar = document.querySelector(".pet-window__quickbar");
+			const rect = bar?.getBoundingClientRect();
+			return {
+				composing: bar?.classList.contains("pet-window__quickbar--composing") ?? false,
+				width: rect ? Math.round(rect.width) : 0,
+				buttonOpacity: Array.from(bar?.querySelectorAll(".pet-window__quickbar-btn") ?? []).map(
+					button => getComputedStyle(button).opacity,
+				),
+			};
+		});
+		check(
+			"real pet quick bar returns to its button row when the composer closes",
+			morphClosed.composing === false &&
+				// The row returns to the width it had before the morph — not
+				// to a hard-coded number: the row's width is measured from
+				// its content (three buttons, two hairlines, gaps).
+				Math.abs(morphClosed.width - morphBefore.width) <= 2 &&
+				morphClosed.buttonOpacity.slice(0, 3).every(value => value === "1"),
+			morphClosed,
+		);
+		// Move the OS cursor far away — the leave threshold is 56px, so park it
+		// well outside and let the poll re-evaluate.
+		if (process.platform === "win32" && petBox) {
+			const petNativeBounds = nativeWindowBounds()["MusePi Pet"];
+			const dpr = await petPage.evaluate(() => devicePixelRatio);
+			positionNativeCursor(
+				Math.max(8, petNativeBounds.left + petBox.left - 220),
+				Math.max(8, petNativeBounds.top + (petBox.top + petBox.bottom) / 2),
+				dpr,
+			);
+			await sleep(400);
+		}
+		check(
+			"real pet quick bar collapses again when the cursor leaves",
+			await petPage.evaluate(() => {
+				const bar = document.querySelector(".pet-window__quickbar");
+				return Boolean(bar) && !bar.classList.contains("pet-window__quickbar--expanded") && getComputedStyle(bar).opacity === "0";
+			}),
+		);
+		if (!quickbarExpanded.expanded) {
+			check(
+				"real pet quick bar received the proximity channel",
+				false,
+				"the bar never expanded when the native cursor entered the 40px radius",
+			);
+		}
 		await petPage.click(".pet-window__badge");
 		await petPage.waitForFunction(() => Boolean(document.querySelector(".pet-window__badge--hidden")), { timeout: 3000 });
 		const countMode = await petPage.evaluate(() => ({

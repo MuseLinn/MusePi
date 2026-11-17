@@ -83,6 +83,19 @@ interface CompanionBubblesBridge {
 
 const BUBBLE_MS = 8000;
 const MAX_VISIBLE_BUBBLES = 5;
+/** Exit budget. Must cover the longest exit animation in pet-window.css
+ *  (`--duration-settle` 200ms + the largest stagger delay). The node stays
+ *  mounted with `data-exiting` for exactly this long, then is removed — a
+ *  list re-render that drops it first can never show an exit at all. */
+const BUBBLE_EXIT_MS = 220;
+/** Entrance stagger. The first card starts almost immediately and each
+ *  following one trails by a fixed step, so a stack that arrives together
+ *  reads as arriving in order rather than as one flash. */
+const BUBBLE_STAGGER_MS = 48;
+const BUBBLE_STAGGER_BASE_MS = 32;
+/** Beyond this many cards the trailing delay stops growing: a long list
+ *  would otherwise hold its last card invisible for most of a second. */
+const BUBBLE_STAGGER_MAX = 4;
 
 function bubbleMotionOff(): boolean {
 	return (
@@ -139,6 +152,19 @@ export function CompanionBubbles(): ReactNode {
 	// Transient + approval notifications (session-scoped completion/error
 	// pushes are superseded by the authoritative session cards).
 	const [bubbles, setBubbles] = useState<Bubble[]>([]);
+	// Keys currently playing their exit. A dismissal marks the key here,
+	// leaves the node mounted so the CSS animation can run, and removes it
+	// after BUBBLE_EXIT_MS. Removal is centralized so every path (auto-
+	// dismiss, ✓, ✗, clear-all, main-window-driven) gets the same exit.
+	const [exiting, setExiting] = useState<ReadonlySet<string>>(() => new Set());
+	const exitTimersRef = useRef<Map<string, number>>(new Map());
+	/** Latest lists for the long-lived IPC subscriptions (they are registered
+	 *  once, so a direct state read would be the mount-time snapshot). */
+	const cardsRef = useRef<CompanionSessionCard[]>([]);
+	const bubblesRef = useRef<Bubble[]>([]);
+	/** Set once exitItems exists — the subscriptions above are declared before
+	 *  it and call through the ref. */
+	const exitItemsRef = useRef<(keys: string[]) => void>(() => {});
 	// Authoritative session cards pushed by the main window (working +
 	// unread finished sessions).
 	const [cards, setCards] = useState<CompanionSessionCard[]>([]);
@@ -175,6 +201,98 @@ export function CompanionBubbles(): ReactNode {
 		document.querySelector<HTMLInputElement>(".pet-bubble__reply-wrap--open .pet-bubble__reply-input")?.focus();
 	}, [replyFor]);
 	const bridge = (window as unknown as { electronAPI?: CompanionBubblesBridge }).electronAPI;
+
+	// ── Exit choreography ─────────────────────────────────────────────────
+	/** Remove the items behind `keys` from both lists. Keys are render keys
+	 *  (`c:<sessionId>` / `b:<id>`), so one sweep covers whichever list owns
+	 *  the item. */
+	const dropKeys = (keys: ReadonlySet<string>): void => {
+		setCards(prev =>
+			prev.some(c => keys.has(`c:${c.sessionId}`)) ? prev.filter(c => !keys.has(`c:${c.sessionId}`)) : prev,
+		);
+		setBubbles(prev => (prev.some(b => keys.has(`b:${b.id}`)) ? prev.filter(b => !keys.has(`b:${b.id}`)) : prev));
+	};
+
+	/** Mark items as exiting and remove them once their animation has played.
+	 *  The caller has already applied whatever the dismissal implies (read
+	 *  state, approval decision) — this only owns the visual removal. */
+	const exitItems = (keys: string[]): void => {
+		if (keys.length === 0) return;
+		const set = new Set(keys);
+		if (bubbleMotionOff()) {
+			dropKeys(set);
+			return;
+		}
+		setExiting(prev => {
+			const next = new Set(prev);
+			for (const key of keys) next.add(key);
+			return next;
+		});
+		// One timer per batch: every key in this call exits together, so the
+		// list is swept once instead of once per key.
+		const timer = window.setTimeout(() => {
+			dropKeys(set);
+			setExiting(prev => {
+				let changed = false;
+				const next = new Set(prev);
+				for (const key of keys) {
+					if (next.delete(key)) changed = true;
+				}
+				return changed ? next : prev;
+			});
+		}, BUBBLE_EXIT_MS);
+		exitTimersRef.current.set(keys.join("\n"), timer);
+	};
+	exitItemsRef.current = exitItems;
+
+	// Keep the subscription-facing snapshots current. The IPC effects above
+	// register once, so they read through these refs instead of their
+	// mount-time closure.
+	useEffect(() => {
+		cardsRef.current = cards;
+	}, [cards]);
+	useEffect(() => {
+		bubblesRef.current = bubbles;
+	}, [bubbles]);
+
+	// Timers outlive a single render but never the window; clear them so a
+	// teardown cannot fire a state update into an unmounted root.
+	useEffect(() => {
+		const timers = exitTimersRef.current;
+		return () => {
+			for (const timer of timers.values()) window.clearTimeout(timer);
+			timers.clear();
+		};
+	}, []);
+
+	// ── Entrance stagger ──────────────────────────────────────────────────
+	// Only keys first seen in this mount get a delay; a re-render must not
+	// replay the entrance on cards that are already on screen.
+	const seenKeysRef = useRef<Set<string>>(new Set());
+	const [staggerDelays, setStaggerDelays] = useState<ReadonlyMap<string, number>>(() => new Map());
+
+	const cardKeys = cards.map(c => `c:${c.sessionId}`);
+	const bubbleKeys = bubbles.map(b => `b:${b.id}`);
+	const renderKeys = [...cardKeys, ...bubbleKeys].join("\n");
+
+	useEffect(() => {
+		const keys = renderKeys ? renderKeys.split("\n") : [];
+		const seen = seenKeysRef.current;
+		const fresh = keys.filter(key => !seen.has(key));
+		if (fresh.length === 0) return;
+		for (const key of keys) seen.add(key);
+		// Forget keys that left the list so a returning session re-enters.
+		for (const key of seen) if (!keys.includes(key)) seen.delete(key);
+		setStaggerDelays(prev => {
+			const next = new Map(prev);
+			// Delay is assigned by order among the items appearing together,
+			// capped so a long list does not leave its tail blank.
+			fresh.forEach((key, index) => {
+				next.set(key, Math.min(index, BUBBLE_STAGGER_MAX) * BUBBLE_STAGGER_MS + BUBBLE_STAGGER_BASE_MS);
+			});
+			return next;
+		});
+	}, [renderKeys]);
 
 	// pet:activity — session cards, bubbles, approvals, theme/locale push.
 	useEffect(() => {
@@ -298,7 +416,7 @@ export function CompanionBubbles(): ReactNode {
 					// until decided (completion/error live on the cards now).
 					if (bubble.kind !== "question") {
 						window.setTimeout(() => {
-							setBubbles(prev => prev.filter(b => b.id !== id));
+							exitItemsRef.current([`b:${id}`]);
 						}, BUBBLE_MS);
 					}
 				}
@@ -308,14 +426,22 @@ export function CompanionBubbles(): ReactNode {
 			// Unrelated local dismissals remain suppressed.
 			if (Array.isArray(payload.dismissSessions) && payload.dismissSessions.length > 0) {
 				const ids = new Set(payload.dismissSessions);
-				setBubbles(prev => {
-					const next = prev.filter(b => !(b.sessionId && ids.has(b.sessionId)));
-					return next.length === prev.length ? prev : next;
-				});
-				setCards(prev => {
-					const next = prev.filter(c => !ids.has(c.sessionId));
-					return next.length === prev.length ? prev : next;
-				});
+				const keys = [
+					...cardsRef.current.filter(c => ids.has(c.sessionId)).map(c => `c:${c.sessionId}`),
+					...bubblesRef.current.filter(b => b.sessionId && ids.has(b.sessionId)).map(b => `b:${b.id}`),
+				];
+				if (keys.length > 0) {
+					// Exits first, removal after the animation — the main window
+					// already dropped these from its own view.
+					for (const key of keys) {
+						if (key.startsWith("b:")) {
+							const id = Number(key.slice(2));
+							const bubble = bubblesRef.current.find(b => b.id === id);
+							if (bubble?.requestId) dismissedRequestIdsRef.current.add(bubble.requestId);
+						}
+					}
+					exitItemsRef.current(keys);
+				}
 			}
 			if (payload.theme === "light" || payload.theme === "dark") {
 				document.documentElement.dataset.theme = payload.theme;
@@ -334,7 +460,9 @@ export function CompanionBubbles(): ReactNode {
 	// bubble (the main window was already told via pet:command).
 	useEffect(() => {
 		return bridge?.onPetApprovalResolved?.(({ requestId }) => {
-			setBubbles(prev => prev.filter(b => b.requestId !== requestId));
+			const ids = bubblesRef.current.filter(b => b.requestId === requestId).map(b => b.id);
+			if (ids.length > 0) dismissedRequestIdsRef.current.add(requestId);
+			exitItemsRef.current(ids.map(id => `b:${id}`));
 		});
 	}, []);
 
@@ -621,7 +749,7 @@ export function CompanionBubbles(): ReactNode {
 	 *  main window; a later activity revision may surface the session again. */
 	const dismissCard = (c: CompanionSessionCard): void => {
 		hiddenSessionsRef.current.set(c.sessionId, sessionActivityKey(c));
-		setCards(prev => prev.filter(x => x.sessionId !== c.sessionId));
+		exitItems([`c:${c.sessionId}`]);
 		if (replyFor === `c:${c.sessionId}`) {
 			setReplyFor(null);
 			setReplyText("");
@@ -638,7 +766,7 @@ export function CompanionBubbles(): ReactNode {
 	const stopCard = (c: CompanionSessionCard): void => {
 		void bridge?.petStopSession?.(c.sessionId);
 		hiddenSessionsRef.current.set(c.sessionId, sessionActivityKey(c));
-		setCards(prev => prev.filter(x => x.sessionId !== c.sessionId));
+		exitItems([`c:${c.sessionId}`]);
 		if (replyFor === `c:${c.sessionId}`) {
 			setReplyFor(null);
 			setReplyText("");
@@ -654,7 +782,7 @@ export function CompanionBubbles(): ReactNode {
 
 	const dismissBubble = (b: Bubble): void => {
 		if (b.requestId) dismissedRequestIdsRef.current.add(b.requestId);
-		setBubbles(prev => prev.filter(x => x.id !== b.id));
+		exitItems([`b:${b.id}`]);
 		if (replyFor === `b:${b.id}`) {
 			setReplyFor(null);
 			setReplyText("");
@@ -667,7 +795,7 @@ export function CompanionBubbles(): ReactNode {
 	const confirmBubble = (b: Bubble): void => {
 		if (b.requestId) {
 			void bridge?.petApprove?.(b.requestId, true);
-			setBubbles(prev => prev.filter(x => x.id !== b.id));
+			exitItems([`b:${b.id}`]);
 			return;
 		}
 		dismissBubble(b);
@@ -676,7 +804,7 @@ export function CompanionBubbles(): ReactNode {
 	const denyBubble = (b: Bubble): void => {
 		if (!b.requestId) return;
 		void bridge?.petApprove?.(b.requestId, false);
-		setBubbles(prev => prev.filter(x => x.id !== b.id));
+		exitItems([`b:${b.id}`]);
 	};
 
 	/** Inline reply row shared by session cards and session-scoped bubbles. */
@@ -739,8 +867,9 @@ export function CompanionBubbles(): ReactNode {
 			if (bubble.requestId) dismissedRequestIdsRef.current.add(bubble.requestId);
 		}
 		priorityItemRef.current = null;
-		setCards([]);
-		setBubbles([]);
+		// Same exit path as a single dismissal: the whole visible list leaves
+		// together instead of vanishing on the next frame.
+		exitItems([...cards.map(c => `c:${c.sessionId}`), ...bubbles.map(b => `b:${b.id}`)]);
 		setReplyFor(null);
 		setReplyText("");
 		setStackMode("stacked");
@@ -755,6 +884,17 @@ export function CompanionBubbles(): ReactNode {
 		if (stackMode === "stacked" && itemCount > 1) switchMode("expanded");
 		else action();
 	};
+
+	/** Entrance delay for a card, or nothing once it has entered. Applied as
+	 *  an inline `animation-delay`; a card with no recorded delay (it was
+	 *  already on screen when this mount began) starts immediately and is not
+	 *  replayed. An exiting card drops the delay: `animation-delay` would
+	 *  otherwise hold the exit back for the entrance's stagger. */
+	const staggerStyle = (key: string): CSSProperties | undefined => {
+		if (exiting.has(key)) return undefined;
+		const delay = staggerDelays.get(key);
+		return delay ? ({ animationDelay: `${delay}ms` } as CSSProperties) : undefined;
+	};
 	const items: ReactNode[] = [
 		...cards.map((c): ReactNode => {
 			const replyKey = `c:${c.sessionId}`;
@@ -767,6 +907,8 @@ export function CompanionBubbles(): ReactNode {
 					data-mood={c.mood}
 					data-state={c.companionState}
 					data-attention={c.attention}
+					data-exiting={exiting.has(replyKey) ? "" : undefined}
+					style={staggerStyle(replyKey)}
 					onClick={() => runAction(() => openCard(c))}
 				>
 					<button
@@ -854,11 +996,17 @@ export function CompanionBubbles(): ReactNode {
 		}),
 		...bubbles.map((b): ReactNode => {
 			const replyKey = `b:${b.id}`;
+			// Without a session or a pending approval there is nothing to act
+			// on: the card is a one-line notice, so it enters and leaves as a
+			// caption (opacity only) instead of as a card that lifts and blurs.
+			const caption = !b.sessionId && !b.requestId;
 			return (
 				<div
 					key={replyKey}
-					className={`pet-bubble pet-bubble--${b.kind}`}
+					className={`pet-bubble pet-bubble--${b.kind}${caption ? " pet-bubble--caption" : ""}`}
 					data-actions={2 + (b.sessionId ? 1 : 0) + (b.requestId ? 1 : 0)}
+					data-exiting={exiting.has(replyKey) ? "" : undefined}
+					style={staggerStyle(replyKey)}
 					onClick={() =>
 						runAction(() => {
 							if (b.sessionId) void bridge?.petOpenSession?.(b.sessionId);

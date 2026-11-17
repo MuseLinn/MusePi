@@ -1004,6 +1004,16 @@ export function Composer({
 	// dialog owns download-then-dictate, so a first click never fires a bare
 	// GB-scale transcribe RPC at the user.
 	const voiceSetup = useVoiceSetupGate({ rpc, onProceed: dictation.toggle });
+	// The desktop pet's quick bar asks for dictation through the same gate, so
+	// a first use still gets the download-then-dictate dialog instead of a
+	// bare RPC.
+	useEffect(() => {
+		const onDictate = (): void => {
+			void voiceSetup.onToggle();
+		};
+		window.addEventListener("musepi-gui-dictate-start", onDictate);
+		return () => window.removeEventListener("musepi-gui-dictate-start", onDictate);
+	}, [voiceSetup]);
 	useEffect(() => {
 		if (!rpc) return;
 		const load = (): void => {

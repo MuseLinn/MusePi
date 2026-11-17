@@ -265,6 +265,33 @@
 	/* overshoot spring — the liquid motion curve (menu/pane/press) */
 	--spring-liquid: cubic-bezier(0.34, 1.56, 0.64, 1);
 
+	/* ── Bezier motion ladder (pet bubbles, 2026-11-18) ───────────────────
+	 * A second family next to the --spring-* curves, not a replacement.
+	 * Springs express "an element that already exists deforms"; these express
+	 * "content arrives and leaves", where the endpoints must land exactly on
+	 * 0 and 1 with no residual bounce. The pet bubbles need that: a speech
+	 * caption that overshoots on its way out reads as a glitch.
+	 *
+	 * `appear` enters fast then settles (Codex --cubic-enter), `appear-snappy`
+	 * is the same gesture at a tighter ramp, `dismiss` accelerates away and
+	 * tapers. Paired with `--ease-caption`, the symmetric pair a one-line
+	 * caption fades in and out on — slow on both ends so neither edge of the
+	 * fade reads as a step.
+	 *
+	 * Do NOT repoint --spring-liquid at these: four keyframes (stage bump,
+	 * squash, composer hop, badge pop) depend on its +15.6% overshoot. */
+	--ease-appear: cubic-bezier(0.19, 1, 0.22, 1);
+	--ease-appear-snappy: cubic-bezier(0.23, 1, 0.32, 1);
+	--ease-dismiss: cubic-bezier(0.8, 0, 0.4, 1);
+	--ease-caption: cubic-bezier(0.4, 0, 0.6, 1);
+
+	/* Duration ladder for the same family. Existing 140/160/180/240/320ms
+	 * literals stay until each owning component is migrated; new motion picks
+	 * from these three. */
+	--duration-quick: 150ms;
+	--duration-settle: 200ms;
+	--duration-calm: 300ms;
+
 	/* ── Global liquid-glass ladder (2026-11-08) ─────────────────────────
 	 * L1 cards / L2 floating layers / L3 interaction states. These are
 	 * CONTRAST tokens, not decoration: the dark scheme used to paint card

@@ -28,12 +28,15 @@
  *     gesture or mood change wakes it
  */
 
-import { setLocale, t } from "@musepi/client-core";
+import { COMPACT_MORPH_SPRING, setLocale, t } from "@musepi/client-core";
+import { ArrowUp, AudioLines, ChevronDown, SquarePen } from "lucide";
+import { MorphIcon } from "morphicons/react";
 import {
 	type CSSProperties,
 	type ReactNode,
 	type PointerEvent as ReactPointerEvent,
 	StrictMode,
+	useCallback,
 	useEffect,
 	useRef,
 	useState,
@@ -66,6 +69,7 @@ import {
 import type { CompanionGestureInput } from "./lib/companion-gesture";
 import { applyCompanionPalette } from "./lib/companion-palette";
 import { initTooltips } from "./lib/tooltips";
+import { useSpringSize } from "./lib/use-spring-size";
 
 /** Horizontal travel (px) that must accumulate before the pet mirrors its
  *  walk frames — absorbs the ±1–2px per-move jitter of real mouse deltas. */
@@ -93,6 +97,18 @@ import "@musepi/client-core/src/styles/overlay-fallback.css";
 interface PetBridge {
 	onPetActivity?(cb: (payload: CompanionActivity) => void): () => void;
 	onPetHover?(cb: (hovering: boolean) => void): () => void;
+	/** Cursor is within reach of the sprite (40px in / 56px out) — drives the
+	 *  quick bar. Deliberately separate from hover: the bar has to appear
+	 *  before the cursor reaches the sprite, or the first reach for a control
+	 *  lands on the desktop. */
+	onPetProximity?(cb: (near: boolean) => void): () => void;
+	/** Quick-bar action → main window (new chat / dictation / open app). */
+	petQuickCommand?(type: "new-chat" | "dictate" | "open-app"): Promise<unknown>;
+	/** The quick bar became a text field: the pet window must be focusable
+	 *  while it is open, or the caret never lands in it. */
+	petComposerFocus?(focusable: boolean): Promise<unknown>;
+	/** Send the quick-bar composer's text as a new chat. */
+	petQuickSend?(text: string): Promise<unknown>;
 	/** Normalized gaze vector (cursor offset from the window centre, clamped
 	 *  to ±1) — eye-tracking target, pushed by the click-through poll. */
 	onPetGaze?(cb: (gaze: GazeVec) => void): () => void;
@@ -142,6 +158,29 @@ function PetApp(): ReactNode {
 	// spritesheet row, the state picks the face / motion / effects.
 	const [sessionState, setSessionState] = useState<CompanionState | null>(null);
 	const [hovering, setHovering] = useState(false);
+	// Cursor within reach of the sprite — the quick bar's expanded state. The
+	// main process owns the 40/56px hysteresis so this flips only on a real
+	// crossing, never on poll-to-poll jitter.
+	const [petNear, setPetNear] = useState(false);
+	// The quick bar in composer state: the same surface has become a text
+	// field. Kept separate from `petNear` because the composer survives the
+	// cursor leaving — the field has to stay reachable while the user types.
+	const [composerOpen, setComposerOpen] = useState(false);
+	const [composerText, setComposerText] = useState("");
+	const composerRef = useRef<HTMLInputElement>(null);
+	// The bar's DOM node, for the focus check that decides whether a blur is
+	// a dismissal or just a move inside the bar. The spring hook has its
+	// own callback ref; this one is read-only.
+	const quickbarNodeRef = useRef<HTMLDivElement | null>(null);
+	/* The bar's two shapes. The spring drives the surface between them.
+	 *
+	 * The two widths are MEASURED, not estimated: the row's width comes from
+	 * its content (three 24px buttons, two hairlines, the gaps and the row's
+	 * own padding), and a number that is off by a few pixels shows up as the
+	 * surface shrinking before it grows — the spring faithfully animating from
+	 * a start that was never on screen. The numbers are measured at runtime
+	 * from the row's own layout rather than hard-coded, for the same reason. */
+	const QUICKBAR_EXPANDED = { width: 261, height: 37 };
 	const [dragging, setDragging] = useState(false);
 	// Ambient idle choreography: while the pet sits calm at rest, briefly swap
 	// to a livelier idle row (thinking / lingering) so it has a life of its own
@@ -274,6 +313,100 @@ function PetApp(): ReactNode {
 		if (!bridge?.onPetHover) return;
 		return bridge.onPetHover?.(setHovering);
 	}, []);
+
+	// Proximity drives the quick bar. Same reason as hover: the window is
+	// click-through, so the renderer cannot watch the cursor itself.
+	useEffect(() => {
+		if (!bridge?.onPetProximity) return;
+		return bridge.onPetProximity?.(setPetNear);
+	}, []);
+
+	// The morph: the surface's width and height are written every frame by
+	// the spring, so the change carries a real overshoot rather than a
+	// bezier fitted by eye. The same parameters are a shared design
+	// resource (client-core/lib/spring-motion) — any surface that changes
+	// shape can adopt them.
+	const { ref: quickbarRef } = useSpringSize({
+		expanded: composerOpen,
+		expandedWidth: QUICKBAR_EXPANDED.width,
+		expandedHeight: QUICKBAR_EXPANDED.height,
+		spring: COMPACT_MORPH_SPRING,
+	});
+
+	// ── Quick-bar composer ────────────────────────────────────────────────
+	// Opening it morphs the bar into a text field (the same surface — see
+	// pet-window.css). The pet window is created non-focusable so it never
+	// steals the keyboard from the app the user is working in; a composer
+	// needs the opposite, so the window has to become focusable for as long
+	// as the field is open.
+	const openComposer = useCallback((): void => {
+		setComposerOpen(true);
+		void bridge?.petComposerFocus?.(true);
+	}, []);
+	const closeComposer = useCallback((): void => {
+		setComposerOpen(false);
+		setComposerText("");
+		void bridge?.petComposerFocus?.(false);
+	}, []);
+	const submitComposer = useCallback((): void => {
+		const text = composerText.trim();
+		if (!text) {
+			closeComposer();
+			return;
+		}
+		void bridge?.petQuickCommand?.("new-chat");
+		void bridge?.petQuickSend?.(text);
+		closeComposer();
+	}, [composerText, closeComposer]);
+
+	// Focus the field once the surface has begun morphing, so the caret
+	// appears in a field that is already visible rather than in one that
+	// is still zero-width.
+	useEffect(() => {
+		if (!composerOpen) return;
+		const timer = window.setTimeout(() => composerRef.current?.focus(), 120);
+		return () => window.clearTimeout(timer);
+	}, [composerOpen]);
+
+	// Escape closes the composer. It is bound on the window, not only on the
+	// input: the field can lose focus (the click-through poll, a native
+	// focus change) and a key event that goes nowhere would leave the pet
+	// holding an open composer the user cannot dismiss.
+	useEffect(() => {
+		if (!composerOpen) return;
+		const onKey = (event: KeyboardEvent): void => {
+			if (event.key === "Escape") {
+				event.preventDefault();
+				closeComposer();
+			}
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [composerOpen, closeComposer]);
+
+	// The composer must not survive the pet being hidden: an invisible text
+	// field holding the keyboard focus would strand the user.
+	useEffect(() => {
+		if (!composerOpen) return;
+		return bridge?.onPetAnimatingOut?.(() => closeComposer());
+	}, [composerOpen, closeComposer]);
+
+	// Focus leaving the pet closes the composer and puts the bar back. The
+	// window is click-through by default, so the pet only holds the keyboard
+	// while the composer is open — and a field the user cannot see (because
+	// the pet scrolled behind another window) is worse than no field at all.
+	useEffect(() => {
+		if (!composerOpen) return;
+		const onBlur = (): void => {
+			// A blur into another element of THIS window (the send button,
+			// the leading button) is not a dismissal.
+			const next = document.activeElement;
+			if (next && quickbarNodeRef.current?.contains(next)) return;
+			closeComposer();
+		};
+		window.addEventListener("blur", onBlur);
+		return () => window.removeEventListener("blur", onBlur);
+	}, [composerOpen, closeComposer]);
 
 	// Gaze refs: the engine reads gazeRef per frame (no React state — an
 	// IPC stream must never re-render). gazeMirrorRef tracks the sprite's
@@ -544,7 +677,11 @@ function PetApp(): ReactNode {
 			void bridge.setPetRect?.(petRect);
 			let rect: { x: number; y: number; width: number; height: number } | null = null;
 			const union: Record<string, number> = {};
-			for (const el of [pet, badge]) {
+			// The quick bar is part of the interactive surface once expanded —
+			// without it the poll would keep the window click-through exactly
+			// over the buttons the user is reaching for.
+			const quickbar = document.querySelector<HTMLElement>(".pet-window__quickbar--expanded");
+			for (const el of [pet, badge, quickbar]) {
 				if (!el) continue;
 				const r = el.getBoundingClientRect();
 				if (r.width <= 0 || r.height <= 0) continue;
@@ -572,6 +709,10 @@ function PetApp(): ReactNode {
 		const ro = new ResizeObserver(schedule);
 		const pet = document.querySelector<HTMLElement>(".pet-window__pet");
 		for (const el of document.querySelectorAll(".pet-window__pet, .pet-window__badge")) ro.observe(el);
+		// The bar changes the interactive union without changing the sprite, so
+		// it needs its own observation.
+		const quickbar = document.querySelector<HTMLElement>(".pet-window__quickbar");
+		if (quickbar) ro.observe(quickbar);
 		const motionEvents = [
 			"animationstart",
 			"animationend",
@@ -962,6 +1103,115 @@ function PetApp(): ReactNode {
 							z z z
 						</span>
 					)}
+				</div>
+				{/* Quick bar: one control in two shapes (see pet-window.css).
+				 * Collapsed it is a thin sliver with no hit targets, so it
+				 * cannot intercept the pet's own click/drag; expanded it is a
+				 * row of 24px buttons. The expansion is driven by proximity,
+				 * not by hover — see onPetProximity.
+				 *
+				 * The row and the composer are ONE surface: clicking 新聊天
+				 * morphs this very element into a text field, driven by the
+				 * JS spring (use-spring-size) so the shape change carries a
+				 * real overshoot instead of a fitted bezier.
+				 *
+				 * Buttons keep their DOM order across both states: the row is
+				 * laid out the same way in each, so nothing jumps when the
+				 * shell resizes. Dividers are absolute so they never take a
+				 * button's flex slot. */}
+				<div
+					ref={element => {
+						quickbarRef(element);
+						quickbarNodeRef.current = element;
+					}}
+					className={`pet-window__quickbar${composerOpen ? " pet-window__quickbar--composing" : petNear ? " pet-window__quickbar--expanded" : " pet-window__quickbar--collapsed"}`}
+					role={composerOpen ? undefined : "toolbar"}
+					aria-label={t("settings.petQuickbarLabel")}
+					aria-hidden={petNear || composerOpen ? undefined : true}
+					onPointerDown={e => e.stopPropagation()}
+				>
+					<button
+						type="button"
+						className="pet-window__quickbar-btn"
+						aria-label={t("settings.petQuickbarNewChat")}
+						title={t("settings.petQuickbarNewChat")}
+						tabIndex={petNear && !composerOpen ? 0 : -1}
+						onClick={() => openComposer()}
+					>
+						<MorphIcon icon={SquarePen} size={14} />
+					</button>
+					<span className="pet-window__quickbar-divider" aria-hidden="true" />
+					<button
+						type="button"
+						className="pet-window__quickbar-btn"
+						aria-label={t("settings.petQuickbarDictate")}
+						title={t("settings.petQuickbarDictate")}
+						tabIndex={petNear && !composerOpen ? 0 : -1}
+						onClick={() => void bridge?.petQuickCommand?.("dictate")}
+					>
+						<MorphIcon icon={AudioLines} size={14} />
+					</button>
+					<span className="pet-window__quickbar-divider" aria-hidden="true" />
+					<button
+						type="button"
+						className="pet-window__quickbar-btn"
+						aria-label={t("settings.petQuickbarOpen")}
+						title={t("settings.petQuickbarOpen")}
+						tabIndex={petNear && !composerOpen ? 0 : -1}
+						onClick={() => void bridge?.petQuickCommand?.("open-app")}
+					>
+						<MorphIcon icon={ChevronDown} size={14} />
+					</button>
+					{/* The composer is the SAME surface as the row — it appears
+					 * where the buttons were, so the pill morphs into a field
+					 * instead of a second panel opening next to it.
+					 *
+					 * The layout mirrors Codex's quick-chat: a leading button
+					 * (voice), the field, and a trailing send button. The
+					 * leading button is the voice entry the button row
+					 * carries, so nothing is lost when the row becomes a
+					 * field. */}
+					<div className="pet-window__quickbar-composer">
+						<button
+							type="button"
+							className="pet-window__quickbar-btn pet-window__quickbar-btn--lead"
+							aria-label={t("settings.petQuickbarDictate")}
+							title={t("settings.petQuickbarDictate")}
+							tabIndex={composerOpen ? 0 : -1}
+							onClick={() => void bridge?.petQuickCommand?.("dictate")}
+						>
+							<MorphIcon icon={AudioLines} size={13} />
+						</button>
+						<input
+							ref={composerRef}
+							className="pet-window__quickbar-input"
+							placeholder={t("settings.petQuickbarPlaceholder")}
+							value={composerText}
+							tabIndex={composerOpen ? 0 : -1}
+							aria-label={t("settings.petQuickbarLabel")}
+							onChange={e => setComposerText(e.target.value)}
+							onKeyDown={e => {
+								if (e.key === "Enter") {
+									e.preventDefault();
+									submitComposer();
+								} else if (e.key === "Escape") {
+									e.preventDefault();
+									closeComposer();
+								}
+							}}
+						/>
+						<button
+							type="button"
+							className="pet-window__quickbar-btn pet-window__quickbar-btn--send"
+							aria-label={t("settings.petQuickbarSend")}
+							title={t("settings.petQuickbarSend")}
+							tabIndex={composerOpen ? 0 : -1}
+							disabled={!composerText.trim()}
+							onClick={() => submitComposer()}
+						>
+							<MorphIcon icon={ArrowUp} size={13} />
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>

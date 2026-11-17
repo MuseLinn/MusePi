@@ -188,6 +188,16 @@ export {
 	writeArchivedSessions,
 } from "./lib/session-archive";
 export {
+	animateSpring,
+	COMPACT_MORPH_SPRING,
+	MORPH_SPRING,
+	type SpringConfig,
+	type SpringOptions,
+	sampleSpring,
+	springPhysics,
+	springProgress,
+} from "./lib/spring-motion";
+export {
 	ACCENT_PRESETS,
 	type AccentPreference,
 	accentInkContrast,

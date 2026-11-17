@@ -173,6 +173,261 @@
 	}
 }
 
+/* ── Quick bar under the pet ─────────────────────────────────────────────
+ * ONE element with two shapes, the way Codex does it: the quick-chat row
+ * and its composer are the same surface, and switching between them morphs
+ * the surface rather than swapping one for the other. The morph is driven by
+ * three custom properties -- width, height and radius -- because those are
+ * the three that carry the shape: the row is a 24px-tall pill of round
+ * buttons, the composer is a wider, taller pill with a text field in it.
+ *
+ * Why it sits BELOW the sprite: the bubbles window owns the space above the
+ * pet (it is pinned there), and a control row that appears on the same side
+ * as the message stack would cover the newest message at exactly the moment
+ * the user reaches for the pet.
+ *
+ * The row is `pointer-events: none` until expanded. Its hit target is
+ * reported to the main process (pet-set-hitbox) so the click-through poll
+ * lets clicks land — a transparent window that ignores mouse input cannot
+ * receive them on its own. */
+.pet-window__quickbar {
+	position: absolute;
+	/* Anchored to the stage: horizontally centred on the sprite, clear of its
+	 * feet and of the rest shadow. `bottom: -18px` put the row's top edge
+	 * 6px above the sprite's bottom edge (stage height = sprite), covering
+	 * the feet; the row is 24px tall plus a 1px border, so -34px keeps a
+	 * visible gap below the pet. */
+	left: 50%;
+	bottom: -34px;
+	transform: translateX(-50%);
+	display: flex;
+	align-items: center;
+	gap: var(--pet-quickbar-gap, 8px);
+	padding: 0 2px;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-full);
+	height: var(--pet-quickbar-control, 24px);
+	background: var(--glass-sheen), color-mix(in oklab, var(--glass-bg-strong) 95%, var(--pet-surface));
+	box-shadow: var(--pet-bubble-shadow);
+	overflow: hidden;
+	pointer-events: auto;
+	/* The morph itself is driven by the JS spring (use-spring-size), which
+	 * writes width and height every frame — a CSS transition on those would
+	 * fight it, and a CSS width would be re-applied on every React render
+	 * and stomp the spring's value. Only the opacity cross-fade stays here:
+	 * the buttons and the field are swapped by class, and their fade is a
+	 * separate concern from the surface's shape. */
+	transition: opacity var(--duration-quick) var(--ease-appear-snappy);
+}
+
+/* Collapsed: the row fades out in place. No scale — the row is absolutely
+ * positioned, so shrinking it only moves paint while the hit area (reported
+ * separately, and gated on the expanded class) stays put, which would leave
+ * an invisible-but-clickable band under the pet. */
+.pet-window__quickbar--collapsed {
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* Collapsed the composer must not hold the row open: it is absolutely
+ * positioned, so this only hides the caret and any painted placeholder. */
+.pet-window__quickbar--collapsed .pet-window__quickbar-composer {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.pet-window__quickbar--expanded {
+	opacity: 1;
+}
+
+/* Composer state: the row HAS BECOME a text field. The buttons leave (they
+ * were the old content of this surface), the field arrives, and both
+ * cross-fade on the same curve so the surface is never half-formed.
+ *
+ * The SIZE is deliberately NOT set here. It is owned by the JS spring
+ * (use-spring-size), which writes width and height every frame — a CSS
+ * width would be re-applied on every React render and would stomp the
+ * spring's value the moment the composer opened. */
+.pet-window__quickbar--composing {
+	gap: 0;
+	padding: 0;
+	border-radius: var(--radius-full);
+}
+
+/* Buttons: square at rest of the row, circular, icon-centred. The highlight
+ * is a ::before disc, so hover paints inside the button without shifting the
+ * icon. */
+.pet-window__quickbar-btn {
+	position: relative;
+	isolation: isolate;
+	flex: 0 0 auto;
+	width: var(--pet-quickbar-control, 24px);
+	height: var(--pet-quickbar-control, 24px);
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: 0;
+	border-radius: var(--radius-full);
+	background: transparent;
+	color: var(--color-text);
+	cursor: pointer;
+	/* The buttons leave the surface when it becomes a composer: they fade out
+	 * and blur slightly, so the row reads as having emptied itself rather
+	 * than as a row that happened to be covered by a text field. */
+	transition:
+		background-color var(--duration-quick) var(--ease-appear-snappy),
+		color var(--duration-quick) var(--ease-appear-snappy),
+		opacity var(--duration-quick) var(--ease-appear-snappy),
+		filter var(--duration-quick) var(--ease-appear-snappy);
+}
+
+.pet-window__quickbar--composing .pet-window__quickbar-btn,
+.pet-window__quickbar--composing .pet-window__quickbar-divider {
+	opacity: 0;
+	pointer-events: none;
+}
+
+/* The composer field. It replaces the buttons inside the same surface, so
+ * it carries no background of its own — the pill around it is the surface.
+ *
+ * It is absolutely positioned, NOT a flex item: an invisible field still
+ * occupies layout space, so a flex item would hold the row open at the
+ * composer's width even while the row shows only three buttons. */
+/* The composer is a row of its own: a leading button (voice), the field, and
+ * a trailing send button — the arrangement Codex's quick-chat uses. It is
+ * absolutely positioned, NOT a flex item of the bar: an invisible field
+ * still occupies layout space, so a flex item would hold the row open at
+ * the composer's width even while the row shows only three buttons. */
+.pet-window__quickbar-composer {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 6px;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--duration-quick) var(--ease-appear-snappy);
+}
+
+.pet-window__quickbar--composing .pet-window__quickbar-composer {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.pet-window__quickbar-input {
+	flex: 1 1 auto;
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 12.5px;
+	line-height: 1.4;
+	/* The field arrives with the surface: it fades in on the same curve the
+	 * buttons leave on, so the swap reads as one shape changing. */
+	transition: opacity var(--duration-quick) var(--ease-appear-snappy);
+}
+
+.pet-window__quickbar-input::placeholder {
+	color: color-mix(in oklab, var(--color-text) 55%, transparent);
+}
+
+.pet-window__quickbar-input:focus-visible {
+	outline: none;
+}
+
+/* The leading and trailing buttons inside the composer. They are smaller
+ * than the row's own buttons (24px) — a control inside a control would
+ * otherwise be as large as the thing it sits in. */
+.pet-window__quickbar-btn--lead,
+.pet-window__quickbar-btn--send {
+	width: 22px;
+	height: 22px;
+	color: color-mix(in oklab, var(--color-text) 78%, transparent);
+}
+
+.pet-window__quickbar-btn--send:not(:disabled) {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+}
+
+.pet-window__quickbar-btn--send:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.pet-window__quickbar-btn::before {
+	content: "";
+	position: absolute;
+	z-index: -1;
+	top: 50%;
+	left: 50%;
+	width: 100%;
+	height: 100%;
+	transform: translate(-50%, -50%);
+	border-radius: var(--radius-full);
+	background: transparent;
+	transition: background-color var(--duration-quick) var(--ease-appear-snappy);
+}
+
+.pet-window__quickbar-btn:hover::before {
+	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+}
+
+.pet-window__quickbar-btn:active::before {
+	background: color-mix(in oklab, var(--color-text) 18%, transparent);
+}
+
+.pet-window__quickbar-btn:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 70%, transparent);
+}
+
+/* Divider between adjacent buttons. It is a flex item with a negative inline
+ * margin that eats most of the row gap, so the hairline sits centred in the
+ * gap without adding width — and it stays correct at any control size or gap
+ * because it derives from the same variables.
+ *
+ * The seam hides the moment either neighbour is engaged: two hairlines
+ * flanking a live button read as a bracket around it, not as structure. Hide
+ * is immediate, restore is delayed — the reverse of the usual order, so the
+ * line does not blink as the pointer crosses it. */
+.pet-window__quickbar-divider {
+	flex: 0 0 1px;
+	width: 1px;
+	height: 12px;
+	/* The divider sits in the row's 8px gap, so the gap applies twice (once
+	 * on each side) around its own 1px. Pull back half the gap plus half its
+	 * own width, otherwise every button pair measures 10px instead of 8px. */
+	margin-inline: calc(var(--pet-quickbar-gap, 8px) / -2 - 0.5px);
+	background: var(--glass-border);
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 0s var(--duration-quick);
+}
+
+.pet-window__quickbar--expanded .pet-window__quickbar-divider {
+	opacity: 1;
+}
+
+/* In composer state the dividers are already hidden by the button rule; this
+ * restates it with higher specificity so the expanded rule cannot win. */
+.pet-window__quickbar--composing .pet-window__quickbar-divider {
+	opacity: 0;
+}
+
+.pet-window__quickbar-btn:hover + .pet-window__quickbar-divider,
+.pet-window__quickbar-divider:has(+ .pet-window__quickbar-btn:hover),
+.pet-window__quickbar-btn:focus-visible + .pet-window__quickbar-divider,
+.pet-window__quickbar-divider:has(+ .pet-window__quickbar-btn:focus-visible) {
+	opacity: 0;
+	transition: opacity 0s;
+}
+
 /* Drag-direction mirror — own element so scaleX never fights the bump
  * animation or the :hover transform on .pet-window__pet (transform
  * keyframes would override a static transform on the same node). */
@@ -458,21 +713,90 @@
 	opacity: 0.55;
 }
 
-/* Entrances share the liquid spring; exits and hover fades stay snappy. */
+/* Card entrances keep the blur language (that is this product's signature)
+ * but ride a bezier that lands on 1 with no residual bounce, and each card
+ * starts 48ms after the previous one. A spring was wrong here for the same
+ * reason the exit needed one: the entrance scales from 0.98 and any overshoot
+ * pushed the card past its measured height, which the window had already been
+ * sized to.
+ *
+ * The transform-origin is the pet-facing edge, so a card GROWS OUT OF the
+ * pet rather than fading in place: the bubble window is pinned 8px above the
+ * sprite, so the bottom edge is the side the user reads as "coming from the
+ * pet". */
 .pet-bubbles--expanded .pet-bubble {
-	animation: pet-bubble-pop 240ms var(--spring-liquid) both;
+	animation: pet-bubble-pop var(--duration-calm) var(--ease-appear-snappy) both;
+	transform-origin: 50% 100%;
+}
+
+/* Exit. The renderer keeps a card mounted with `data-exiting` for one frame
+ * budget (BUBBLE_EXIT_MS) so this can play before the node is removed — a
+ * list re-render that drops the node first can never show an exit at all.
+ * The exit mirrors the entrance: it sinks back toward the pet it came from. */
+.pet-bubble[data-exiting] {
+	animation: pet-bubble-out var(--duration-settle) var(--ease-dismiss) both;
+	pointer-events: none;
+	transform-origin: 50% 100%;
 }
 
 @keyframes pet-bubble-pop {
 	from {
 		opacity: 0;
-		transform: translateY(-8px) scale(0.98);
+		transform: translateY(10px) scale(0.94);
 		filter: blur(6px);
 	}
 	to {
 		opacity: 1;
 		transform: none;
 		filter: blur(0);
+	}
+}
+
+@keyframes pet-bubble-out {
+	from {
+		opacity: 1;
+		transform: none;
+		filter: blur(0);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(4px) scale(0.99);
+		filter: blur(6px);
+	}
+}
+
+/* A one-line notification is a caption, not a card: it fades in and out on
+ * the same symmetric pair with nothing else moving. Displacement on a
+ * single-line notice is noise — there is no stack for it to be part of.
+ * Doubled class: `.pet-bubbles--expanded .pet-bubble` sets animation-name at
+ * the same specificity, and this must win on source order alone. */
+.pet-bubble.pet-bubble--caption {
+	animation-name: pet-bubble-caption-in;
+	animation-duration: var(--duration-settle);
+	animation-timing-function: var(--ease-caption);
+}
+
+.pet-bubble.pet-bubble--caption[data-exiting] {
+	animation-name: pet-bubble-caption-out;
+	animation-duration: var(--duration-settle);
+	animation-timing-function: var(--ease-caption);
+}
+
+@keyframes pet-bubble-caption-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes pet-bubble-caption-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
 	}
 }
 
@@ -949,7 +1273,10 @@ html.bubbles-root .pet-bubbles {
 	.pet-bubble__dismiss,
 	.pet-bubble__actions,
 	.pet-bubble__action,
-	.pet-bubble__reply-wrap {
+	.pet-bubble__reply-wrap,
+	.pet-window__quickbar,
+	.pet-window__quickbar-btn,
+	.pet-window__quickbar-divider {
 		animation: none !important;
 		transition: none !important;
 	}

@@ -3907,6 +3907,25 @@ function AppInner(): ReactNode {
 				}
 			} else if (cmd.type === "approve" && cmd.requestId) {
 				void decideApproval(cmd.requestId, cmd.approved === true);
+			} else if (cmd.type === "new-chat") {
+				// Pet quick bar: start a fresh chat. The window is already
+				// focused (the main process focuses it), so this lands the
+				// composer in front of the user ready to type.
+				void createSession();
+			} else if (cmd.type === "new-chat-send" && typeof cmd.text === "string" && cmd.text.trim()) {
+				// The quick bar's composer: a NEW conversation carrying this
+				// text. It must not reuse the open session the way a bubble
+				// reply does, so the session is created first and the prompt
+				// goes into it.
+				const text = cmd.text;
+				void createSession().then(id => {
+					if (id) void sendPrompt(text, undefined, id);
+				});
+			} else if (cmd.type === "dictate") {
+				// Pet quick bar mic. The composer owns the dictation lifecycle
+				// and its first-use download gate, so the request goes through
+				// its event instead of duplicating the flow here.
+				window.dispatchEvent(new CustomEvent("musepi-gui-dictate-start"));
 			} else if (cmd.type === "mark-read" && typeof cmd.sessionId === "string") {
 				// Pet bubble ✓: the user acknowledged that notification —
 				// clear the session's unread badge and advance its read
