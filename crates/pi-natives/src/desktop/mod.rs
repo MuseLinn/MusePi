@@ -270,9 +270,14 @@ impl Request {
 			| Self::KeyChord { target, mode, .. }
 			| Self::HoldKeys { target, mode, .. }
 			| Self::HoldPointer { target, mode, .. } => Some((target.clone(), *mode)),
-			// The window a reference names is resolved on the worker, so the
-			// request holds global input as the desktop target it clicks into.
-			Self::AxClick { options, .. } => Some((Target::Desktop, options.mode)),
+			// The window a reference names is resolved on the worker, so a
+			// takeover request holds global input as the desktop target it clicks
+			// into. A background one is delivered to that window like any other
+			// window-message input, and takes no machine-level lease.
+			Self::AxClick { options, .. } if control::is_takeover(options.mode) => {
+				Some((Target::Desktop, options.mode))
+			},
+			Self::AxClick { .. } => None,
 			_ => None,
 		}
 	}
@@ -361,9 +366,10 @@ impl Worker {
 		target: &Target,
 		width: u32,
 		height: u32,
-	) -> CoreResult<(Vec<DesktopDisplay>, Option<DesktopWindow>)> {
+		layout: &[DesktopDisplay],
+	) -> CoreResult<Vec<DesktopDisplay>> {
 		match target {
-			Target::Desktop => Ok((self.backend()?.displays()?, None)),
+			Target::Desktop => Ok(layout.to_vec()),
 			Target::Window(_) => {
 				let window = self.window(target)?;
 				let display = DesktopDisplay {
@@ -380,7 +386,7 @@ impl Worker {
 					pixel_height: height,
 					is_primary:   false,
 				};
-				Ok((vec![display], Some(window)))
+				Ok(vec![display])
 			},
 		}
 	}
@@ -407,6 +413,9 @@ impl Worker {
 	/// takes the cross-session real-input lease first, and a takeover one arms
 	/// the physical-Escape stop.
 	fn process(&mut self, request: &Request, token: &OperationToken) -> CoreResult<Response> {
+		// A cancel stops work submitted before it, so a request queued behind an
+		// earlier one never runs: the token was taken when the host submitted it.
+		token.check()?;
 		let _lease = request
 			.input_scope()
 			.filter(|(target, mode)| control::needs_lease(target, *mode))
@@ -453,8 +462,11 @@ impl Worker {
 				let image = apply_capture_caps(image, &mut geometry, caps)?;
 				let width = image.width();
 				let height = image.height();
-				let (source, _) = self.capture_source(target, width, height)?;
-				geometry.record_layout(&source)?;
+				// The display layout is recorded for every target, so a later zoom
+				// can refuse a frame the desktop has outgrown.
+				let layout = self.backend()?.displays()?;
+				geometry.record_layout(&layout)?;
+				let source = self.capture_source(target, width, height, &layout)?;
 				let displays = geometry.display_metadata(&source);
 				let png = encode_png(image)?;
 				self.frames.insert(target.key().to_string(), geometry);
@@ -478,19 +490,19 @@ impl Worker {
 			Request::CaptureRegion { target, region, caps, .. } => {
 				let (base, _) = self.validated_frame(target)?;
 				base.validate_region(region)?;
+				// Refuse a frame the desktop has outgrown before spending a capture
+				// on it; the crop below still checks the fresh geometry.
+				let layout = self.backend()?.displays().map_err(|error| {
+					DesktopError::invalid_coordinate_frame(format!(
+						"could not validate captured display layout: {error}"
+					))
+				})?;
+				base.validate_layout(&layout)?;
 				// Zoom shows native detail, so it re-captures the target at its own
 				// resolution instead of upscaling the frame the caller saw.
 				let (image, fresh) = self.backend()?.capture(target, &CaptureCaps::default())?;
-				if matches!(target, Target::Desktop) {
-					let layout = self.backend()?.displays().map_err(|error| {
-						DesktopError::invalid_coordinate_frame(format!(
-							"could not validate captured display layout: {error}"
-						))
-					})?;
-					base.validate_layout(&layout)?;
-				}
 				let (fresh_width, fresh_height) = fresh.dimensions();
-				let (source, _) = self.capture_source(target, fresh_width, fresh_height)?;
+				let source = self.capture_source(target, fresh_width, fresh_height, &layout)?;
 				let (image, source_width, source_height) =
 					base.crop_region(image, &fresh, region, caps)?;
 				let width = image.width();
@@ -1534,15 +1546,20 @@ mod capture_tests {
 	const WAYLAND_ID: &str = "atspi::1.31:/org/a11y/atspi/accessible/1";
 
 	/// Backend that mints a composite AT-SPI window id, mirroring the Wayland
-	/// `AtSpiAx` path. Exists to exercise `Worker::process` without a display.
+	/// `AtSpiAx` path, over one 64×48 display. Counts capture calls and keeps a
+	/// mutable display layout so zoom tests can tell a re-capture from a reuse
+	/// and a stale frame from a current one. Exists to exercise `Worker` without
+	/// a display.
 	struct FakeWaylandBackend {
-		window: DesktopWindow,
+		window:   DesktopWindow,
+		layout:   Arc<Mutex<Vec<DesktopDisplay>>>,
+		captures: Arc<Mutex<u32>>,
 	}
 
 	impl FakeWaylandBackend {
 		fn new() -> Self {
 			Self {
-				window: DesktopWindow {
+				window:   DesktopWindow {
 					id:      WAYLAND_ID.to_string(),
 					title:   "Obsidian".to_string(),
 					app:     "obsidian".to_string(),
@@ -1553,6 +1570,21 @@ mod capture_tests {
 					height:  48,
 					focused: true,
 				},
+				layout:   Arc::new(Mutex::new(vec![DesktopDisplay {
+					id:           "screen-1".to_string(),
+					name:         "test".to_string(),
+					x:            0,
+					y:            0,
+					width:        64,
+					height:       48,
+					scale:        1.0,
+					pixel_x:      0,
+					pixel_y:      0,
+					pixel_width:  64,
+					pixel_height: 48,
+					is_primary:   true,
+				}])),
+				captures: Arc::new(Mutex::new(0)),
 			}
 		}
 	}
@@ -1568,7 +1600,7 @@ mod capture_tests {
 		}
 
 		fn displays(&mut self) -> CoreResult<Vec<DesktopDisplay>> {
-			Ok(Vec::new())
+			Ok(self.layout.lock().clone())
 		}
 
 		fn windows(&mut self) -> CoreResult<Vec<DesktopWindow>> {
@@ -1580,6 +1612,7 @@ mod capture_tests {
 			target: &Target,
 			_caps: &CaptureCaps,
 		) -> CoreResult<(RgbaImage, FrameGeometry)> {
+			*self.captures.lock() += 1;
 			match target {
 				Target::Window(id) if id == &self.window.id => {
 					let image = RgbaImage::new(self.window.width, self.window.height);
@@ -1590,7 +1623,11 @@ mod capture_tests {
 				Target::Window(id) => {
 					Err(DesktopError::window_not_found(format!("Wayland window {id} not found")))
 				},
-				Target::Desktop => Err(DesktopError::capture_failed("desktop capture not exercised")),
+				Target::Desktop => {
+					let layout = self.layout.lock().clone();
+					let image = RgbaImage::new(64, 48);
+					Ok((image, FrameGeometry::for_displays(&layout)))
+				},
 			}
 		}
 
@@ -1666,5 +1703,162 @@ mod capture_tests {
 			panic!("unknown window id should fail");
 		};
 		assert_eq!(err.code, ErrorCode::WindowNotFound);
+	}
+
+	fn zoom_request(target: Target, region: CaptureRegion, caps: CaptureCaps) -> Request {
+		let (reply, _rx) = flume::bounded(1);
+		Request::CaptureRegion { target, region, caps, reply }
+	}
+
+	/// A zoom shows native detail: it captures again instead of enlarging the
+	/// capped PNG the caller already has, reports the full frame's coordinate
+	/// size, and leaves the frame pointer input reads untouched.
+	#[test]
+	fn zoom_uses_fresh_native_pixels_and_preserves_the_full_click_frame() {
+		let backend = FakeWaylandBackend::new();
+		let captures = Arc::clone(&backend.captures);
+		let mut worker = worker_with(backend);
+		let token = control::CancellationSource::default().token();
+		let target = Target::Window(WAYLAND_ID.to_string());
+		let (reply, _rx) = flume::bounded(1);
+		worker
+			.process(
+				&Request::Capture {
+					target: target.clone(),
+					caps: CaptureCaps { max_width: Some(32), max_height: None },
+					reply,
+				},
+				&token,
+			)
+			.unwrap();
+		let base = worker.frame(&target).unwrap();
+		let region = CaptureRegion { x: 8.0, y: 6.0, width: 8.0, height: 6.0 };
+		let Response::Capture(zoom) = worker
+			.process(
+				&zoom_request(target.clone(), region, CaptureCaps {
+					max_width:  Some(8),
+					max_height: None,
+				}),
+				&token,
+			)
+			.unwrap()
+		else {
+			panic!("expected zoom capture");
+		};
+		assert_eq!(*captures.lock(), 2, "zoom must capture again, not enlarge the old PNG");
+		assert_eq!((zoom.source_width, zoom.source_height), (16, 12));
+		assert_eq!((zoom.width, zoom.height), (8, 6));
+		assert_eq!((zoom.coordinate_width, zoom.coordinate_height), (32, 24));
+		assert_eq!(zoom.region, Some(region));
+		assert_eq!(worker.frame(&target).unwrap(), base, "zoom must not replace the click frame");
+		assert_eq!(worker.map_point(&target, 16.0, 12.0).unwrap().0, 32.0);
+	}
+
+	/// A frame that is missing, has an invalid rectangle, or belongs to a
+	/// display layout that has changed since is refused before any capture.
+	#[test]
+	fn zoom_rejects_missing_invalid_and_stale_frames_before_capture() {
+		let backend = FakeWaylandBackend::new();
+		let captures = Arc::clone(&backend.captures);
+		let layout = Arc::clone(&backend.layout);
+		let mut worker = worker_with(backend);
+		let token = control::CancellationSource::default().token();
+		let target = Target::Window(WAYLAND_ID.to_string());
+		let region = CaptureRegion { x: 0.0, y: 0.0, width: 8.0, height: 6.0 };
+		let request = zoom_request(target.clone(), region, CaptureCaps::default());
+		assert_eq!(
+			worker.process(&request, &token).err().unwrap().code,
+			ErrorCode::InvalidCoordinateFrame
+		);
+		assert_eq!(*captures.lock(), 0);
+		worker
+			.process(&capture_request(target.clone()), &token)
+			.unwrap();
+		let invalid =
+			zoom_request(target, CaptureRegion { x: f64::NAN, ..region }, CaptureCaps::default());
+		assert_eq!(
+			worker.process(&invalid, &token).err().unwrap().code,
+			ErrorCode::InvalidCoordinateFrame
+		);
+		layout.lock()[0].scale = 2.0;
+		assert_eq!(
+			worker.process(&request, &token).err().unwrap().code,
+			ErrorCode::InvalidCoordinateFrame
+		);
+		assert_eq!(*captures.lock(), 1, "invalid zoom must not reach the capture backend");
+	}
+
+	// Not ported: upstream's
+	// `desktop_zoom_pins_captured_display_after_active_focus_changes`. It switches
+	// the session's active display at runtime; MusePi fixes the selector once at
+	// construction (`DisplaySelector::All` or one id), so there is no active
+	// display that can change under a captured frame to pin.
+
+	/// A cancel stops work submitted before it, not only the operation in
+	/// flight: a queued capture fails without reaching the backend or replacing
+	/// the frame a click would use.
+	#[test]
+	fn cancel_fails_a_queued_capture_without_replacing_the_frame() {
+		let backend = FakeWaylandBackend::new();
+		let captures = Arc::clone(&backend.captures);
+		let mut worker = worker_with(backend);
+		let token = control::CancellationSource::default().token();
+		let target = Target::Window(WAYLAND_ID.to_string());
+		worker
+			.process(&capture_request(target.clone()), &token)
+			.unwrap();
+		let base = worker.frame(&target).unwrap();
+		let queued_source = control::CancellationSource::default();
+		let queued = queued_source.token();
+		queued_source.cancel();
+		let error = worker
+			.process(&capture_request(target.clone()), &queued)
+			.err()
+			.expect("a cancelled queued capture must fail");
+		assert_eq!(error.code, ErrorCode::Cancelled);
+		assert_eq!(*captures.lock(), 1, "a cancelled capture never reaches the backend");
+		assert_eq!(worker.frame(&target).unwrap(), base, "a cancelled capture keeps the frame");
+	}
+
+	fn ax_click_request(options: Option<PointerOptions>) -> Request {
+		let (reply, _rx) = flume::bounded(1);
+		Request::AxClick {
+			reference: "ax:missing".to_string(),
+			options: ParsedPointerOptions::parse(options).unwrap(),
+			reply,
+		}
+	}
+
+	/// A background `axClick` is window-message input and must not take the
+	/// machine-level input lease; only takeover input does. Holding this
+	/// process's real input ownership makes any attempt report `InputBusy`.
+	#[test]
+	fn background_ax_click_takes_no_machine_lease() {
+		let _serial = control::OWNERSHIP_TEST.lock();
+		let blocking = control::CancellationSource::default();
+		let blocker_token = blocking.token();
+		let blocker =
+			control::InputLease::acquire(&blocker_token, false).expect("blocker owns input");
+		let mut worker = worker_with(FakeWaylandBackend::new());
+		let token = control::CancellationSource::default().token();
+		let background = worker
+			.process(&ax_click_request(None), &token)
+			.err()
+			.expect("an unresolved reference still fails");
+		assert_ne!(
+			background.code,
+			ErrorCode::InputBusy,
+			"a background ax click must not wait on the machine lease"
+		);
+		let takeover = ax_click_request(Some(PointerOptions {
+			delivery_mode: Some("foreground".to_string()),
+			..PointerOptions::default()
+		}));
+		assert_eq!(
+			worker.process(&takeover, &token).err().unwrap().code,
+			ErrorCode::InputBusy,
+			"a takeover ax click needs the machine lease"
+		);
+		drop(blocker);
 	}
 }
