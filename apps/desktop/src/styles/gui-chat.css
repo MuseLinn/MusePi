@@ -1002,9 +1002,9 @@
 .gui-composer-wrap--morphing {
 	transition: none !important;
 }
-/* The textarea's own autosize `height 160ms` transition chases the
- * wrap's per-frame layout during the morph and adds a second layout pass
- * per frame — suppress it for the window too. */
+/* The textarea's own autosize transition (critically damped spring, 180ms)
+ * chases the wrap's per-frame layout during the morph and adds a second
+ * layout pass per frame — suppress it for the window too. */
 .gui-composer-wrap--morphing textarea,
 .gui-composer-wrap--morphing .gui-composer-frame {
 	transition: none !important;

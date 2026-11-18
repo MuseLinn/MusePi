@@ -6,6 +6,7 @@ import {
 	punkAvatarUri,
 	relTime,
 	SessionErrorDock,
+	springEasing,
 	Transcript,
 	type TranscriptAnchor,
 	type TranscriptAnchorCtl,
@@ -326,6 +327,30 @@ function openChatViewBrowserPanel(panelTabs: UsePanelTabsResult, sessionId: stri
 /** Exit window shared by both session-info seats (matches the card's 180ms
  *  entrance and the right panel's 220ms width fold). */
 const SESSION_INFO_SEAT_EXIT_MS = 180;
+
+/** Focus-mode composer morph. The surface changes shape — a compact box
+ *  becomes a full-height editor — so it uses a spring, like every other
+ *  morph in the app. Overshoot 6%: the composer is bottom-anchored and a
+ *  larger bounce would push it past the window edge. The curve is sampled
+ *  from the shared spring resource AT MODULE LOAD, so there is no hardcoded
+ *  copy of the stops to drift out of sync with the parameters. */
+const COMPOSER_MORPH_MS = 320;
+const COMPOSER_MORPH_EASING = springEasing(
+	{ visualDuration: COMPOSER_MORPH_MS / 1000 - 0.04, bounce: 0.06 },
+	16,
+	COMPOSER_MORPH_MS,
+);
+
+/** Reduced motion: land on the target with no intermediate frames. WAAPI is
+ *  not covered by CSS `@media (prefers-reduced-motion: reduce)` — without
+ *  this explicit check a user who asked for less motion still gets the
+ *  whole 320ms morph on every ⌘⇧E. */
+function composerMotionOff(): boolean {
+	return (
+		document.documentElement.classList.contains("gui-motion-off") ||
+		window.matchMedia("(prefers-reduced-motion: reduce)").matches
+	);
+}
 
 /**
  * Keep a node mounted for one exit animation. `open` mounts on the next
@@ -2650,6 +2675,9 @@ export function ChatView({
 	// competing 280ms curves fighting every frame (the frame-rate collapse).
 	const composerWrapRef = useRef<HTMLDivElement | null>(null);
 	const wrapMorphVer = useRef(0);
+	/** The in-flight morph animation. Held so a rapid toggle can cancel it
+	 *  instead of letting two animations write the same height property. */
+	const wrapAnimRef = useRef<Animation | null>(null);
 
 	// Session info dock seat. The dock is a real flex column beside the chat
 	// column, so it needs a row wide enough to leave the transcript usable.
@@ -2772,6 +2800,13 @@ export function ChatView({
 			if (!focusMode) el.style.height = "";
 			return;
 		}
+		// Reduced motion: land on the target immediately. WAAPI animations
+		// are NOT covered by CSS @media rules, so without this early return
+		// the user who asked for less motion still gets the full morph.
+		if (composerMotionOff()) {
+			el.style.height = focusMode ? `${target}px` : "";
+			return;
+		}
 		// Pin the TARGET height first: the layout then seats the wrap at
 		// its steady-state top (bottom-anchored via --bottom-anchor while
 		// focused), which is exactly the position the animation must land
@@ -2782,16 +2817,22 @@ export function ChatView({
 		const layoutTop = el.getBoundingClientRect().top;
 		const dy = prevWrapTop.current !== null ? prevWrapTop.current - layoutTop : 0;
 		const fromTx = Math.abs(dy) >= 1 ? `translateY(${dy}px)` : "none";
+		// A rapid ⌘⇧E toggle interrupts the previous morph. The version
+		// guard below stops its `release`, but the old animation would keep
+		// writing height every frame, fighting the new one on the same
+		// property. Cancel it for real before starting the new one.
+		wrapAnimRef.current?.cancel();
 		const anim = el.animate(
 			[
 				{ height: `${from}px`, transform: fromTx },
 				{ height: `${target}px`, transform: "none" },
 			],
 			{
-				duration: 280,
-				easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+				duration: COMPOSER_MORPH_MS,
+				easing: COMPOSER_MORPH_EASING,
 			},
 		);
+		wrapAnimRef.current = anim;
 		// Release the pinned height once the morph settles (finish event is
 		// unreliable — cancelled animations never fire it, headless never
 		// advances — so a versioned timer backs it up). Open must stay
@@ -2801,9 +2842,19 @@ export function ChatView({
 			if (wrapMorphVer.current !== ver) return;
 			el.classList.remove("gui-composer-wrap--morphing");
 			if (!focusMode) el.style.height = "";
+			if (wrapAnimRef.current === anim) wrapAnimRef.current = null;
 		};
 		anim.addEventListener("finish", release);
-		setTimeout(release, 320);
+		setTimeout(release, COMPOSER_MORPH_MS + 40);
+		return () => {
+			// Effect cleanup on unmount or a new focusMode tick: cancel the
+			// animation so it cannot outlive the state it was morphing
+			// towards. A cancelled animation never fires `finish`, so the
+			// version guard is what keeps stale releases from unpinning a
+			// newer morph.
+			anim.cancel();
+			if (wrapAnimRef.current === anim) wrapAnimRef.current = null;
+		};
 	}, [focusMode]);
 
 	// Session info seat: the card's own preference (app.tsx) decides WHETHER it
