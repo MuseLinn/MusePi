@@ -3247,7 +3247,8 @@ button.gui-stats-pill {
 .gui-send-btn,
 .gui-ta-hl-slash,
 .gui-ta-hl-bang,
-.gui-ta-hl-magic {
+.gui-ta-hl-magic,
+.gui-ta-hl-mention {
 	position: relative;
 	border: 0;
 	background: var(--glass-bg);
@@ -3299,7 +3300,8 @@ button.gui-stats-pill {
 .gui-send-btn::before,
 .gui-ta-hl-slash::before,
 .gui-ta-hl-bang::before,
-.gui-ta-hl-magic::before {
+.gui-ta-hl-magic::before,
+.gui-ta-hl-mention::before {
 	content: "";
 	position: absolute;
 	inset: 0;
@@ -3326,7 +3328,8 @@ button.gui-stats-pill {
 .gui-send-btn > *,
 .gui-ta-hl-slash > *,
 .gui-ta-hl-bang > *,
-.gui-ta-hl-magic > * {
+.gui-ta-hl-magic > *,
+.gui-ta-hl-mention > * {
 	position: relative;
 	z-index: 1;
 }
@@ -3428,24 +3431,33 @@ button.gui-stats-pill {
 	cursor: default;
 }
 
-/* In-input token pills — glass family members. The armed-state tint rides
- * ON the shared material: accent ink over an accent-tinted glass fill,
- * with the family's rim + sheen coming from the group selectors above.
+/* In-input token pills — one liquid-glass recipe for slash commands, shell
+ * bangs, magic keywords and attachment mentions. The accent is both the ink
+ * and the tint; the family specular rim, sheen wash and a tight ambient lift
+ * carry the material, so a token reads as a small piece of the same glass as
+ * the composer's other pills instead of a flat text highlight.
+ *
  * Metric-neutrality is the law here: anything that changes glyph advance
- * (font family/weight, letter-spacing, horizontal padding without the
- * twin negative margin) desyncs the mirror from the transparent textarea
- * and the caret drifts off the painted characters. `padding: 1px 4px` is
- * repaid by `margin: -1px -4px`, so the capsule paints outside its box
- * without occupying it. No :hover/:active — the highlight overlay is
- * pointer-events none, those states can never fire. */
+ * (font family/weight, letter-spacing, horizontal padding without the twin
+ * negative margin) desyncs the mirror from the transparent textarea and the
+ * caret drifts off the painted characters. `padding: 1px 5px` is repaid by
+ * `margin: -1px -5px`, so the capsule paints outside its box without
+ * occupying it. Slash/bang/magic keep pointer-events none (the overlay never
+ * receives them); only the mention pill re-arms them below. */
 .gui-ta-hl-slash,
 .gui-ta-hl-bang,
-.gui-ta-hl-magic {
-	color: var(--color-accent);
-	background-color: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
+.gui-ta-hl-magic,
+.gui-ta-hl-mention {
+	color: color-mix(in oklab, var(--color-accent) 82%, var(--color-text));
+	background-color: color-mix(in oklab, var(--color-accent) 18%, var(--glass-bg-strong));
 	border-radius: 999px;
-	padding: 1px 4px;
-	margin: -1px -4px;
+	padding: 1px 5px;
+	margin: -1px -5px;
+	box-shadow:
+		inset 0 0 0 1px var(--glass-hairline-strong),
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
+		0 1px 2px oklch(0 0 0 / 10%);
 }
 
 .gui-style-select-caret {
@@ -3616,29 +3628,26 @@ button.gui-stats-pill {
 	background: color-mix(in oklab, var(--color-accent, var(--accent)) 28%, transparent);
 }
 
-/* ── Attachment mention pill (restyle 2026-09-26, Kimi desktop parity):
- * the `@名` token painted by the highlight overlay. Metric-neutral
- * per the overlay pairing rules: horizontal padding 6px repaid by an equal
- * negative margin, so glyph advance is untouched. Clean Kimi-style pill:
- * accent-tinted glass fill (--glass-* family), no rim/border noise.
- * pointer-events auto on THIS pill only — hover opens the preview card,
- * click jumps the caret to the token. ── */
+/* ── Attachment mention pill (Kimi desktop parity): the `@名` token painted
+ * by the highlight overlay. Material comes from the unified token recipe
+ * above; this block owns only interaction — pointer-events are armed on THIS
+ * pill so hover opens the preview card and click jumps the caret to the
+ * token. Hover lifts the same glass one step instead of swapping surfaces. ── */
 .gui-ta-hl-mention {
-	position: relative;
-	border-radius: 999px;
-	padding: 0 6px;
-	margin: 0 -6px;
-	background: color-mix(in oklab, var(--accent) 14%, var(--glass-bg));
-	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	color: var(--accent);
 	pointer-events: auto;
 	cursor: pointer;
-	transition: background-color 120ms ease-out;
+	transition:
+		background-color 120ms ease-out,
+		box-shadow 120ms ease-out;
 }
 
 .gui-ta-hl-mention:hover {
-	background: color-mix(in oklab, var(--accent) 24%, var(--glass-bg));
+	background-color: color-mix(in oklab, var(--color-accent) 30%, var(--glass-bg-strong));
+	box-shadow:
+		inset 0 0 0 1px var(--glass-hairline-strong),
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
+		0 2px 6px oklch(0 0 0 / 16%);
 }
 
 /* Hover preview card (portaled to body, fixed from the pill's rect — the
@@ -3654,9 +3663,14 @@ button.gui-stats-pill {
 	max-width: 320px;
 	padding: 8px 10px;
 	border-radius: var(--radius-lg);
-	border: 1px solid var(--border);
-	background: var(--color-surface-raised);
-	box-shadow: 0 12px 32px oklch(0 0 0 / 35%);
+	border: 1px solid var(--glass-hairline-strong);
+	background-color: var(--glass-float-bg);
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow:
+		inset 0 1px 0 var(--glass-rim-hi),
+		inset 0 -1px 0 var(--glass-rim-lo),
+		var(--glass-float-shadow);
 	color: var(--color-text);
 	font-size: 12px;
 	pointer-events: none;

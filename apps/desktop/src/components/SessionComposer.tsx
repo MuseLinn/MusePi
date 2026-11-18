@@ -21,6 +21,7 @@ import { t } from "../i18n/index.js";
 import type { CompanionMood, CompanionState } from "../lib/companion";
 import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
+import { readPasteImageMention } from "../lib/composer-prefs";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
@@ -62,6 +63,7 @@ import {
 } from "./composer/action-buttons";
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
+import { imageChipCount, insertPastedImageMentions } from "./composer/attachment-mention-paste";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
@@ -71,6 +73,8 @@ import { LargeTextPasteGesture } from "./composer/large-text-paste";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
 import {
+	deleteMentionTokenAfter,
+	deleteMentionTokenBefore,
 	expandMentionTokens,
 	mentionTokenName,
 	resolveMentionChip,
@@ -1681,6 +1685,23 @@ export function SessionComposer({
 		if (e.key === "Backspace" || e.key === "Delete") {
 			const ta = taRef.current;
 			if (ta) {
+				// Mention tokens are atoms: one key removes the whole `@图片N`
+				// (and its trailing space), matching the pill the user sees.
+				// Only LIVE tokens qualify — an unresolved `@名字` is prose.
+				if (ta.selectionStart === ta.selectionEnd) {
+					const live = (name: string): boolean => resolveMentionChip(name, attachments) !== null;
+					const edit =
+						e.key === "Backspace"
+							? deleteMentionTokenBefore(ta.value, ta.selectionStart ?? 0, live)
+							: deleteMentionTokenAfter(ta.value, ta.selectionStart ?? 0, live);
+					if (edit) {
+						e.preventDefault();
+						setText(edit.next);
+						const caret = edit.caret;
+						requestAnimationFrame(() => taRef.current?.setSelectionRange(caret, caret));
+						return;
+					}
+				}
 				if (ta.value.length === 0 && attachments.length > 0) {
 					e.preventDefault();
 					setAttachments(prev => prev.slice(0, -1));
@@ -2439,11 +2460,19 @@ export function SessionComposer({
 						}}
 						onPaste={e => {
 							const pastedText = e.clipboardData.getData("text");
-							onPaste(e);
+							// Snapshot before intake: the mention ordinal continues
+							// from the chips already staged at paste time.
+							const priorImages = imageChipCount(attachments);
+							const added = onPaste(e);
 							if (e.defaultPrevented) {
 								// The attachment branch consumed the paste; a clipboard
 								// carrying text AND an image must keep both.
 								insertPastedPlainText(taRef.current, pastedText);
+								if (readPasteImageMention()) {
+									void added
+										.then(chips => insertPastedImageMentions(taRef.current, chips, priorImages))
+										.catch(() => {});
+								}
 								return;
 							}
 							if (!isLongPastedText(pastedText)) {
@@ -2492,7 +2521,15 @@ export function SessionComposer({
 							}
 						}}
 						onDragOver={onDragOver}
-						onDrop={onDrop}
+						onDrop={e => {
+							const priorImages = imageChipCount(attachments);
+							const added = onDrop(e);
+							if (readPasteImageMention()) {
+								void added
+									.then(chips => insertPastedImageMentions(taRef.current, chips, priorImages))
+									.catch(() => {});
+							}
+						}}
 						onChange={e => {
 							setText(e.target.value);
 							// The large-paste gesture needs to see the text AFTER the

@@ -38,6 +38,23 @@ describe("marketEntryInstalled", () => {
 	it("ignores empty installed-name noise", () => {
 		expect(marketEntryInstalled({ name: "x", slug: "x" }, new Set([""]))).toBe(false);
 	});
+
+	it("uses recorded provenance so the other catalog's same-name card is not installed", () => {
+		const markets = new Map([["dev-expert", { source: "skillhub" as const, slug: "dev-expert" }]]);
+		const installed = new Set(["dev-expert"]);
+		expect(
+			marketEntryInstalled({ name: "Dev Expert", slug: "dev-expert", source: "skillhub" }, installed, markets),
+		).toBe(true);
+		expect(
+			marketEntryInstalled({ name: "Dev Expert", slug: "dev-expert", source: "skills.sh" }, installed, markets),
+		).toBe(false);
+	});
+
+	it("falls back to the name when an old install has no provenance", () => {
+		expect(
+			marketEntryInstalled({ name: "Dev Expert", slug: "dev-expert", source: "skills.sh" }, new Set(["dev-expert"])),
+		).toBe(true);
+	});
 });
 
 describe("skill market icon cache", () => {

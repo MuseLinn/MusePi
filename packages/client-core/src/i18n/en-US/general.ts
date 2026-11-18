@@ -827,6 +827,8 @@ export const general = {
 	"general.skillMarketInstallFailedScriptDeclined": "Install failed: install scripts declined.",
 	// Card-click preview drawer (look before you install; same shell as the installed-skill drawer).
 	"general.skillMarketInstall": "Install",
+	"general.skillMarketReplaceConfirm":
+		"A skill named {name} is already installed. Installing from this source replaces it, including local edits.",
 	"general.skillMarketHomepage": "Source page",
 	"general.skillMarketPreviewLoading": "Loading preview…",
 	"general.skillMarketPreviewNone": "No content preview for this source",

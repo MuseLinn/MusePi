@@ -241,3 +241,64 @@ export function spliceMentionToken(
 	const next = `${head}${glue}${token}${value.slice(end)}`;
 	return { next, caret: start + glue.length + token.length };
 }
+
+/** Splice several tokens in one gesture (paste intake). Same glue rule as
+ *  `spliceMentionToken`; tokens are separated by the trailing space each one
+ *  carries, so the result reads as `@图片1 @图片2 ` and closes the `@`
+ *  completion panel. */
+export function spliceMentionTokens(
+	value: string,
+	selectionStart: number,
+	selectionEnd: number,
+	names: readonly string[],
+): { next: string; caret: number } {
+	if (names.length === 0) return { next: value, caret: selectionStart };
+	const start = Math.min(Math.max(0, selectionStart), value.length);
+	const end = Math.min(Math.max(0, selectionEnd), value.length);
+	const head = value.slice(0, start);
+	const glue = /[A-Za-z0-9_]$/.test(head) ? " " : "";
+	const body = names.map(name => `${makeMentionToken(name)} `).join("");
+	return { next: `${head}${glue}${body}${value.slice(end)}`, caret: start + glue.length + body.length };
+}
+
+export interface MentionEdit {
+	next: string;
+	caret: number;
+}
+
+/**
+ * Atomic deletion (Kimi atom parity): Backspace with the caret right after a
+ * LIVE token removes the whole token instead of one character at a time.
+ * "Live" means the resolver still finds a staged chip — an unresolved
+ * `@名字` is ordinary prose and must keep character deletion.
+ */
+export function deleteMentionTokenBefore(
+	value: string,
+	caret: number,
+	resolves: (name: string) => boolean,
+): MentionEdit | null {
+	for (const span of parseMentionTokens(value)) {
+		if (span.end !== caret && !(span.end === caret - 1 && value[caret - 1] === " ")) continue;
+		if (!resolves(span.name)) continue;
+		const from = span.start;
+		const to = span.end === caret ? caret : span.end + 1;
+		return { next: value.slice(0, from) + value.slice(to), caret: from };
+	}
+	return null;
+}
+
+/** Forward twin: Delete with the caret at a live token's start removes the
+ *  token and the single space that follows it. */
+export function deleteMentionTokenAfter(
+	value: string,
+	caret: number,
+	resolves: (name: string) => boolean,
+): MentionEdit | null {
+	for (const span of parseMentionTokens(value)) {
+		if (span.start !== caret) continue;
+		if (!resolves(span.name)) continue;
+		const to = value[span.end] === " " ? span.end + 1 : span.end;
+		return { next: value.slice(0, span.start) + value.slice(to), caret: span.start };
+	}
+	return null;
+}

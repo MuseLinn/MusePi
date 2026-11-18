@@ -1356,6 +1356,8 @@ export const settings = {
 	"settings.connectorsDisconnectFailed": "Disconnect failed: {error}",
 	"settings.connectorsConnect": "Connect",
 	"settings.connectorsDisconnect": "Disconnect",
+	"settings.connectorsManage": "Manage",
+	"settings.connectorsViewAll": "View all {count}",
 	"settings.connectorsAuthOauth": "OAuth",
 	"settings.connectorsAuthNone": "No auth",
 	"settings.connectorsAuthCli": "CLI auth",
@@ -2022,6 +2024,9 @@ export const settings = {
 	/* ── Settings: chat / notifications / sessions / shortcuts / agents ── */
 	"settings.chatSettings": "Chat settings",
 	"settings.chatSettingsDescription": "Message bubbles, timestamps, and streaming rendering",
+	"settings.composerSection": "Input box",
+	"settings.pasteImageAutoMention": "Auto-mention pasted images",
+	"settings.pasteImageAutoMentionHint": "Add an @ mention when an image is pasted into the input box",
 	"settings.userMessageRendering": "User message rendering",
 	"settings.userMessageRenderingDescription": "Render user messages as Markdown or plain text",
 	"settings.markdown": "Markdown",

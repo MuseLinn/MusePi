@@ -18,9 +18,12 @@ export function railPeekEligible(state: {
 	sideCollapsed: boolean;
 	settingsActive: boolean;
 	narrowSidebarOpen: boolean;
+	/** Drawer mode: the narrow layout owns the panel as an overlay, so the
+	 *  docked-collapse hover preview has nothing to float. */
+	narrowSidebar?: boolean;
 }): boolean {
 	// A page destination is NOT excluded: its rail button owns a panel too.
-	return state.sideCollapsed && !state.settingsActive && !state.narrowSidebarOpen;
+	return state.sideCollapsed && !state.settingsActive && !state.narrowSidebarOpen && state.narrowSidebar !== true;
 }
 
 export function isSidebarPanelId(value: string | null): value is SidebarPanelId {

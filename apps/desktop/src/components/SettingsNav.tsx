@@ -70,6 +70,7 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 		"检查",
 		"check",
 	],
+	composer: ["输入框", "composer", "input", "粘贴", "paste", "图片", "image", "提及", "mention", "@"],
 	appearance: [
 		"主题",
 		"theme",
@@ -312,6 +313,7 @@ export function navGroups(
 			items: [
 				{ id: "general", icon: "settings-3", label: t("settings.general2"), enabled: true },
 				{ id: "appearance", icon: "palette", label: t("settings.appearance"), enabled: true },
+				{ id: "composer", icon: "edit", label: t("settings.composerSection"), enabled: true },
 				{ id: "notifications", icon: "notification-3", label: t("settings.notificationsSound"), enabled: true },
 				{ id: "pet", icon: "robot-2", label: t("settings.agentCompanion"), enabled: true },
 				{ id: "session-memory", icon: "brain", label: t("settings.sessionMemory"), enabled: true },

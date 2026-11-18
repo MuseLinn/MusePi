@@ -129,6 +129,7 @@ import { computeSettingsShellState } from "./lib/settings-shell";
 import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
 import { applySideSessionEvent } from "./lib/side-session-stores";
+import { sidebarDrawerThreshold } from "./lib/sidebar-drawer";
 import {
 	BROWSER_HOST_SLOT,
 	CAPABILITY_CENTER_SLOT,
@@ -869,11 +870,17 @@ function AppInner(): ReactNode {
 		return () => window.removeEventListener("pointermove", onMove);
 	}, [peekPanel, holdPeek, closePeek]);
 	const [narrowSidebarOpen, setNarrowSidebarOpen] = useState(false);
+	/** Drawer mode is computed from the width the session column actually
+	 *  needs (see sidebarDrawerThreshold), not a fixed window breakpoint: a
+	 *  docked panel changes the answer. The ref keeps the click handlers
+	 *  below free of the state dependency. */
+	const sidebarDrawerRef = useRef(false);
+	const [sidebarDrawer, setSidebarDrawer] = useState(false);
 	const [sideWidth, setSideWidth] = useState<number>(() =>
 		Number(localStorage.getItem(SIDE_WIDTH_STORAGE_KEY) ?? SIDE_WIDTH_DEFAULT),
 	);
 	const toggleSidebar = useCallback((): void => {
-		if (window.matchMedia("(max-width: 720px)").matches) {
+		if (sidebarDrawerRef.current) {
 			setNarrowSidebarOpen(open => !open);
 			return;
 		}
@@ -886,17 +893,13 @@ function AppInner(): ReactNode {
 	 *  commit, so the destination arrives WITH the panel its interaction lives
 	 *  in instead of dropping the pane as soon as the pointer leaves the rail. */
 	const revealSidePanel = useCallback((): void => {
-		if (window.matchMedia("(max-width: 720px)").matches) return;
+		if (sidebarDrawerRef.current) {
+			// Narrow layout: the panel IS the drawer — a destination click opens it.
+			setNarrowSidebarOpen(true);
+			return;
+		}
 		setSideCollapsed(false);
 		localStorage.setItem("musepi-gui-side", "1");
-	}, []);
-	useEffect(() => {
-		const query = window.matchMedia("(max-width: 720px)");
-		const onChange = (): void => {
-			if (!query.matches) setNarrowSidebarOpen(false);
-		};
-		query.addEventListener("change", onChange);
-		return () => query.removeEventListener("change", onChange);
 	}, []);
 	// Side-rail width drag. (The right panel has its own drag on the normalized
 	// pointer-drag primitive — see ContextPanel.)
@@ -1323,7 +1326,12 @@ function AppInner(): ReactNode {
 	const secondTierPanelVisible = scheduledPanelVisible || capabilityPanelVisible;
 	// A floating panel is only meaningful while the docked one is closed.
 	// Clearing the state here (not in a render branch) keeps hook order stable.
-	const peekEligible = railPeekEligible({ sideCollapsed, settingsActive, narrowSidebarOpen });
+	const peekEligible = railPeekEligible({
+		sideCollapsed,
+		settingsActive,
+		narrowSidebarOpen,
+		narrowSidebar: sidebarDrawer,
+	});
 	useEffect(() => {
 		if (!peekEligible) {
 			setPeekPanel(null);
@@ -1395,6 +1403,22 @@ function AppInner(): ReactNode {
 	const panelSelectNonce = useRef(0);
 	// Focus mode: the composer expands to fill the surface.
 	const [focusMode, setFocusMode] = useState(false);
+	/** The sidebar drawer threshold follows the widths the workspace actually
+	 *  needs (docked sidebar + session minimum + docked panel minimum), so a
+	 *  panel that is open folds the sidebar sooner than a bare workspace. */
+	useEffect(() => {
+		const compute = (): void => {
+			const next = window.innerWidth < sidebarDrawerThreshold(sideWidth, !rightCollapsed && !focusMode);
+			sidebarDrawerRef.current = next;
+			setSidebarDrawer(next);
+		};
+		compute();
+		window.addEventListener("resize", compute);
+		return () => window.removeEventListener("resize", compute);
+	}, [sideWidth, rightCollapsed, focusMode]);
+	useEffect(() => {
+		if (!sidebarDrawer) setNarrowSidebarOpen(false);
+	}, [sidebarDrawer]);
 	// Mini chat window (Electron mini-chat-open → ?mini=1): a chat-only
 	// surface — no sidebar, header, or settings.
 	const isMini = typeof location !== "undefined" && new URLSearchParams(location.search).get("mini") === "1";
@@ -4656,7 +4680,10 @@ function AppInner(): ReactNode {
 				{/* Immersive shell: a full-width toolbar riding
 				 * the top edge, the three panes below it sharing its surface
 				 * (no divider, same frosted tint). */}
-				<div className="gui-main relative flex min-h-0 flex-1">
+				<div
+					className="gui-main relative flex min-h-0 flex-1"
+					data-narrow-sidebar={sidebarDrawer ? "true" : undefined}
+				>
 					{/* Two-tier left column: the rail is a real flex child (not an
 					 * overlay), so the panel slot and the chat column are pushed
 					 * right by exactly its width — the same geometry ChatGPT's

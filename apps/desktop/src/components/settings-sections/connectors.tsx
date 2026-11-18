@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
+import { DialogFrame } from "../DialogFrame";
 import { CONNECTOR_BRAND_GLYPHS } from "./connector-brand-icons.generated";
 import { ConnectorImportDialog } from "./connector-import-dialog";
 import { DeviceGrantPanel } from "./device-grant-panel";
@@ -123,6 +124,9 @@ function errorMessage(error: unknown): string {
  */
 const CONNECTOR_CATEGORY_ORDER: readonly string[] = ["dev", "docs", "ai", "design", "data", "business"];
 
+/** Rows a category shows before offering its own filter, so six categories do not become one long page. */
+const CONNECTOR_GROUP_PREVIEW = 6;
+
 /** Category heading, falling back to the raw id so an unknown one stays legible. */
 function categoryLabel(key: string): string {
 	if (key === "") return t("settings.connectorsCategoryOther");
@@ -143,10 +147,21 @@ function statusLabel(status: CatalogConnector["status"]): string {
 	return t("settings.connectorsStatusDisconnected");
 }
 
+/** How a row signs in, in the one word that fits beside its name. */
+function connectorAuthLabel(connector: CatalogConnector): string {
+	if (connector.kind === "cli") {
+		return connector.cliAuth ? t("settings.connectorsAuthCli") : t("settings.connectorsAuthNone");
+	}
+	if (connector.authMode === "oauth") return t("settings.connectorsAuthOauth");
+	if (connector.authMode === "token") return t("settings.connectorsAuthToken");
+	return t("settings.connectorsAuthNone");
+}
+
 export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [connectors, setConnectors] = useState<CatalogConnector[] | null>(null);
 	const [query, setQuery] = useState("");
-	const [expanded, setExpanded] = useState<string | null>(null);
+	const [detailId, setDetailId] = useState<string | null>(null);
+	const [detailConnector, setDetailConnector] = useState<CatalogConnector | null>(null);
 	const [pending, setPending] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [tokenTarget, setTokenTarget] = useState<string | null>(null);
@@ -166,6 +181,21 @@ export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 	const [deviceTarget, setDeviceTarget] = useState<string | null>(null);
 	const locale = useLocale();
 	const useChineseDescription = locale.toLowerCase().startsWith("zh");
+
+	/**
+	 * The detail dialog keeps the last connector it showed. `DialogFrame` runs
+	 * a 180ms exit, and a shell keyed to the current id would go blank during it.
+	 */
+	const openDetail = useCallback((connector: CatalogConnector): void => {
+		setDetailConnector(connector);
+		setDetailId(connector.id);
+	}, []);
+
+	useEffect(() => {
+		if (detailId === null) return;
+		const fresh = connectors?.find(item => item.id === detailId);
+		if (fresh) setDetailConnector(fresh);
+	}, [connectors, detailId]);
 
 	const load = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
@@ -245,6 +275,9 @@ ${connector.category ?? ""}`.toLowerCase();
 	 * the groups alone rather than inventing a recommendation.
 	 */
 	const featured = useMemo(() => visible.filter(connector => connector.featured === true), [visible]);
+
+	/** Live connections sit above the taxonomy, the way a library splits installed from available. */
+	const connected = useMemo(() => visible.filter(connector => connector.status === "connected"), [visible]);
 
 	/**
 	 * Groups in the fixed order the bundled catalog uses. A category this build
@@ -348,7 +381,7 @@ ${connector.category ?? ""}`.toLowerCase();
 					setApprovalEnvKeys(result.envKeys ?? []);
 					setApprovalInstall(result.installCommand);
 					setApprovalAuth(result.authCommand);
-					setExpanded(connector.id);
+					openDetail(connector);
 					return;
 				}
 				if (result.needsCliAuth && result.flowId) {
@@ -358,16 +391,19 @@ ${connector.category ?? ""}`.toLowerCase();
 						...(result.authorizationUrl ? { url: result.authorizationUrl } : {}),
 						...(result.userCode ? { code: result.userCode } : {}),
 					});
-					setExpanded(connector.id);
+					openDetail(connector);
 					return;
 				}
 				if (result.needsTokenConfig) {
 					setTokenTarget(connector.id);
-					setExpanded(connector.id);
 					setTokenValues({});
+					openDetail(connector);
 					return;
 				}
 				if (result.needsAuth && connector.authMode === "oauth") {
+					// The detail dialog carries the authorization link, so it has to
+					// be on screen before the browser flow turns into a waiting state.
+					openDetail(connector);
 					await login(result.serverName);
 					return;
 				}
@@ -389,7 +425,7 @@ ${connector.category ?? ""}`.toLowerCase();
 				setPending(null);
 			}
 		},
-		[load, login, rpc],
+		[load, login, openDetail, rpc],
 	);
 
 	const saveToken = useCallback(
@@ -410,7 +446,7 @@ ${connector.category ?? ""}`.toLowerCase();
 					setApprovalEnvKeys(result.envKeys ?? []);
 					setApprovalInstall(result.installCommand);
 					setApprovalAuth(result.authCommand);
-					setExpanded(connector.id);
+					openDetail(connector);
 					return;
 				}
 				if (result.needsCliAuth && result.flowId) {
@@ -420,11 +456,13 @@ ${connector.category ?? ""}`.toLowerCase();
 						...(result.authorizationUrl ? { url: result.authorizationUrl } : {}),
 						...(result.userCode ? { code: result.userCode } : {}),
 					});
-					setExpanded(connector.id);
+					openDetail(connector);
 					return;
 				}
-				if (result.needsAuth && connector.authMode === "oauth") await login(result.serverName);
-				else {
+				if (result.needsAuth && connector.authMode === "oauth") {
+					openDetail(connector);
+					await login(result.serverName);
+				} else {
 					reportOutcome(
 						{ kind: "success", message: t("settings.connectorsTokenSaved", { name: connector.name }) },
 						connector.id,
@@ -442,7 +480,7 @@ ${connector.category ?? ""}`.toLowerCase();
 				setPending(null);
 			}
 		},
-		[load, login, rpc, tokenValues],
+		[load, login, openDetail, rpc, tokenValues],
 	);
 
 	const disconnect = useCallback(
@@ -483,431 +521,461 @@ ${connector.category ?? ""}`.toLowerCase();
 		[cancel, cliFlow, flows, load, reset, rpc],
 	);
 
+	/** Brand mark from the bundled vector set; no network request per row. */
+	const renderGlyph = (connector: CatalogConnector, size: "row" | "detail"): ReactNode => {
+		const glyph = CONNECTOR_BRAND_GLYPHS[connector.id];
+		const box = size === "detail" ? "h-6 w-6" : "h-5 w-5";
+		if (glyph) {
+			if ("src" in glyph) {
+				return <img src={glyph.src} alt="" className={`${box} object-contain`} />;
+			}
+			return (
+				<svg viewBox={glyph.viewBox} className={box} role="presentation">
+					{glyph.paths.map((path, index) => (
+						<path key={index} d={path.d} fill={path.fill ?? "currentColor"} />
+					))}
+				</svg>
+			);
+		}
+		if (connector.icon) {
+			return <img src={connector.icon} alt="" className={`${box} object-contain`} loading="lazy" />;
+		}
+		return connector.name.slice(0, 1).toUpperCase();
+	};
+
 	/**
-	 * One connector row. Extracted so the featured block and the category
-	 * groups draw the same card; every action it offers comes from the flow,
-	 * probe, and approval state above.
+	 * One catalog row. The row opens the detail dialog; the trailing control is
+	 * the single action taken from the list. A connect that turns out to need a
+	 * credential, a local-process approval, or a browser hand-off opens that
+	 * dialog, so the flow is never left behind a row the user cannot see.
 	 */
-	const renderCard = (connector: CatalogConnector): ReactNode => {
-		const serverName = `connector:${connector.id}`;
-		const flow = flows[serverName];
-		const isPending = pending === connector.id;
-		const isOpen = expanded === connector.id;
-		const probeState = probes[connector.id];
-		const probeable = probeName(connector) !== null;
+	const renderRow = (connector: CatalogConnector): ReactNode => {
+		const flow = flows[`connector:${connector.id}`];
+		const busy =
+			pending === connector.id ||
+			connector.status === "connecting" ||
+			flow?.kind === "starting" ||
+			flow?.kind === "waiting";
 		const description =
 			useChineseDescription && connector.descriptionZh ? connector.descriptionZh : connector.description;
 		return (
-			<div key={connector.id} className="gui-agent-card gui-connector-card">
-				<div className="flex items-center gap-3">
-					<div
-						className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[var(--color-bg-elevated)] text-[13px] font-medium"
-						aria-hidden="true"
-					>
-						{(() => {
-							const glyph = CONNECTOR_BRAND_GLYPHS[connector.id];
-							if (glyph) {
-								if ("src" in glyph) {
-									return <img src={glyph.src} alt="" className="h-5 w-5 object-contain" />;
-								}
-								return (
-									<svg viewBox={glyph.viewBox} className="h-5 w-5" role="presentation">
-										{glyph.paths.map((path, index) => (
-											<path key={index} d={path.d} fill={path.fill ?? "currentColor"} />
-										))}
-									</svg>
-								);
-							}
-							if (connector.icon) {
-								return <img src={connector.icon} alt="" className="h-5 w-5 object-contain" loading="lazy" />;
-							}
-							return connector.name.slice(0, 1).toUpperCase();
-						})()}
-					</div>
+			<div key={connector.id} className="gui-connector-card">
+				<button type="button" className="gui-connector-main" onClick={() => openDetail(connector)}>
+					<span className="gui-connector-icon" aria-hidden="true">
+						{renderGlyph(connector, "row")}
+					</span>
+					<span className="gui-connector-text">
+						<span className="gui-connector-title">
+							<span className="gui-connector-name">{connector.name}</span>
+							<span className="gui-provider-chip">{connectorAuthLabel(connector)}</span>
+							{connector.verified === "needs-app" && (
+								<span className="gui-provider-chip">{t("settings.connectorsNeedsApp")}</span>
+							)}
+							<span className="gui-provider-chip">{statusLabel(connector.status)}</span>
+						</span>
+						<span className="gui-connector-desc">{description}</span>
+					</span>
+				</button>
+				<div className="gui-connector-action">
+					{connector.enabled ? (
+						<button type="button" className="gui-btn" onClick={() => openDetail(connector)}>
+							{t("settings.connectorsManage")}
+						</button>
+					) : (
+						<button
+							type="button"
+							className="gui-btn gui-btn-primary"
+							disabled={busy}
+							onClick={() => void connect(connector)}
+						>
+							{busy ? t("settings.connectorsStatusConnecting") : t("settings.connectorsConnect")}
+						</button>
+					)}
+				</div>
+			</div>
+		);
+	};
+
+	/**
+	 * Second-level connector detail. Everything that used to expand inside the
+	 * row lives here — what the connector reaches, examples, the credential
+	 * form, CLI authorization, the local-process approval, and the probe
+	 * verdict — so the list stays scannable at 60 entries.
+	 */
+	const renderDetail = (connector: CatalogConnector): ReactNode => {
+		const flow = flows[`connector:${connector.id}`];
+		const probeState = probes[connector.id];
+		const probeable = probeName(connector) !== null;
+		const isPending = pending === connector.id;
+		const details = useChineseDescription ? (connector.detailsZh ?? connector.details) : connector.details;
+		const description =
+			useChineseDescription && connector.descriptionZh ? connector.descriptionZh : connector.description;
+		const probeButton = probeable ? (
+			<button
+				type="button"
+				className="gui-btn"
+				disabled={probeState?.pending}
+				onClick={() => void testConnection(connector)}
+			>
+				{probeState?.pending ? t("settings.testing") : t("Test connection")}
+			</button>
+		) : null;
+		return (
+			<div className="gui-connector-detail">
+				<div className="gui-connector-detail-head">
+					<span className="gui-connector-detail-icon" aria-hidden="true">
+						{renderGlyph(connector, "detail")}
+					</span>
 					<div className="min-w-0 flex-1">
 						<div className="flex flex-wrap items-center gap-1.5">
-							<button
-								type="button"
-								className="truncate text-left text-[13px] font-medium"
-								aria-expanded={isOpen}
-								onClick={() => setExpanded(isOpen ? null : connector.id)}
-							>
-								{connector.name}
-							</button>
-							<span className="gui-provider-chip">
-								{connector.kind === "cli"
-									? connector.cliAuth
-										? t("settings.connectorsAuthCli")
-										: t("settings.connectorsAuthNone")
-									: connector.authMode === "oauth"
-										? t("settings.connectorsAuthOauth")
-										: connector.authMode === "token"
-											? t("settings.connectorsAuthToken")
-											: t("settings.connectorsAuthNone")}
-							</span>
+							<h3 className="gui-settings-page-title">{connector.name}</h3>
+							<span className="gui-provider-chip">{connectorAuthLabel(connector)}</span>
 							{connector.verified === "needs-app" && (
 								<span className="gui-provider-chip">{t("settings.connectorsNeedsApp")}</span>
 							)}
 							<span className="gui-provider-chip">{statusLabel(connector.status)}</span>
 						</div>
-						<div className="truncate text-[12px] text-[var(--color-text-muted)]">{description}</div>
-						{flow?.kind === "starting" && (
-							<div className="text-[12px] text-[var(--color-text-muted)]">
-								{t("settings.mcpOauthLoginStarting")}
-							</div>
-						)}
-						{flow?.kind === "waiting" && (
-							<div className="text-[12px] text-[var(--color-text-muted)]">
-								{t("settings.mcpOauthLoginWaiting")}
-							</div>
-						)}
-						{flow?.kind === "error" && (
-							<div className="text-[12px] text-[var(--color-danger)]">{flow.message}</div>
-						)}
-						{probeState?.text && (
-							<div
-								className={
-									probeState.ok
-										? "text-[12px] text-[var(--color-success)]"
-										: "text-[12px] text-[var(--color-danger)]"
-								}
-							>
-								{probeState.text}
-							</div>
-						)}
+						<div className="gui-settings-page-desc">
+							{categoryLabel(connector.category ?? "")} · {description}
+						</div>
 					</div>
-					<div className="flex flex-shrink-0 items-center gap-1.5">
-						{tokenTarget === connector.id ||
-						approvalTarget === connector.id ||
-						cliFlow?.connectorId === connector.id ? null : flow?.kind === "waiting" ? (
+					<button type="button" className="gui-btn" onClick={() => setDetailId(null)}>
+						{t("settings.close")}
+					</button>
+				</div>
+				<div className="gui-connector-detail-body">
+					<div className="gui-connector-detail-actions">
+						{flow?.kind === "waiting" ? (
 							<>
 								<button
 									type="button"
-									className="gui-btn"
+									className="gui-btn gui-btn-primary"
 									onClick={() => void openExternalUrl(flow.authorizationUrl).catch(() => {})}
 								>
 									{t("settings.mcpOpenAuthorization")}
 								</button>
-								<button type="button" className="gui-btn" onClick={() => void cancel(serverName, flow.flowId)}>
+								<button
+									type="button"
+									className="gui-btn"
+									onClick={() => void cancel(`connector:${connector.id}`, flow.flowId)}
+								>
 									{t("settings.cancel")}
 								</button>
 							</>
+						) : connector.enabled ? (
+							<>
+								<button
+									type="button"
+									className="gui-btn"
+									disabled={isPending}
+									onClick={() => void disconnect(connector)}
+								>
+									{t("settings.connectorsDisconnect")}
+								</button>
+								{probeButton}
+							</>
 						) : (
 							<>
-								{probeable && (
-									<button
-										type="button"
-										className="gui-btn"
-										disabled={probeState?.pending}
-										onClick={() => void testConnection(connector)}
-									>
-										{probeState?.pending ? t("settings.testing") : t("Test connection")}
-									</button>
-								)}
-								{connector.enabled ? (
+								<button
+									type="button"
+									className="gui-btn gui-btn-primary"
+									disabled={isPending}
+									onClick={() => void connect(connector)}
+								>
+									{t("settings.connectorsConnect")}
+								</button>
+								{probeButton}
+								{connector.authMode === "oauth" && (
 									<button
 										type="button"
 										className="gui-btn"
 										disabled={isPending}
-										onClick={() => void disconnect(connector)}
+										onClick={() => {
+											// The device panel polls outside this dialog so closing it
+											// cannot strand a sign-in that is already waiting.
+											setDeviceTarget(connector.id);
+											setDetailId(null);
+										}}
 									>
-										{t("settings.connectorsDisconnect")}
+										{t("settings.mcpDeviceStart")}
 									</button>
-								) : (
-									<>
-										{connector.authMode === "oauth" && (
-											<button
-												type="button"
-												className="gui-btn"
-												disabled={isPending}
-												onClick={() => setDeviceTarget(connector.id)}
-											>
-												{t("settings.mcpDeviceStart")}
-											</button>
-										)}
-										{connector.tokenSchema?.personalAccessToken && (
-											<button
-												type="button"
-												className="gui-btn"
-												disabled={isPending}
-												onClick={() => {
-													setTokenTarget(connector.id);
-													setExpanded(connector.id);
-													setTokenValues({});
-												}}
-											>
-												{t("settings.connectorsPatButton")}
-											</button>
-										)}
-										<button
-											type="button"
-											className="gui-btn gui-btn-primary"
-											disabled={isPending}
-											onClick={() => void connect(connector)}
-										>
-											{t("settings.connectorsConnect")}
-										</button>
-									</>
+								)}
+								{connector.tokenSchema?.personalAccessToken && (
+									<button
+										type="button"
+										className="gui-btn"
+										disabled={isPending}
+										onClick={() => {
+											setTokenTarget(connector.id);
+											setTokenValues({});
+										}}
+									>
+										{t("settings.connectorsPatButton")}
+									</button>
 								)}
 							</>
 						)}
 					</div>
-				</div>
-				{isOpen &&
-					(cliFlow?.connectorId === connector.id ||
-						approvalTarget === connector.id ||
-						tokenTarget === connector.id ||
-						connector.examples?.length ||
-						connector.docsUrl) && (
-						<div className="border-t border-[var(--color-border-subtle)] pt-2">
-							{cliFlow?.connectorId === connector.id && (
-								<div className="mb-3">
-									<div className="text-[12px] font-medium">{t("settings.connectorsCliAuthTitle")}</div>
-									<div className="mb-2 text-[11.5px] text-[var(--color-text-muted)]">
-										{t("settings.connectorsCliAuthHint")}
-									</div>
-									{cliFlow.url && (
-										<div className="mt-2">
-											<button
-												type="button"
-												className="gui-btn"
-												onClick={() => void openExternalUrl(cliFlow.url!).catch(() => {})}
-											>
-												{t("settings.mcpOpenAuthorization")}
-											</button>
-											<code className="mt-1 block break-all text-[11px] text-[var(--color-text-muted)]">
-												{cliFlow.url}
-											</code>
-										</div>
-									)}
-									{cliFlow.code && (
-										<div className="mt-2 text-[12px]">
-											<span className="text-[var(--color-text-muted)]">
-												{t("settings.connectorsCliAuthCode")}
-											</span>{" "}
-											<code>{cliFlow.code}</code>
-										</div>
-									)}
-									<div className="mt-2 flex items-center gap-1.5">
-										<span className="text-[11.5px] text-[var(--color-text-muted)]">
-											{t("settings.connectorsCliAuthWaiting")}
-										</span>
-										<button type="button" className="gui-btn" onClick={() => void cancelCli()}>
-											{t("settings.cancel")}
-										</button>
-									</div>
-								</div>
-							)}
-							{approvalTarget === connector.id && (
-								<div className="mb-3">
-									<div className="text-[12px] font-medium">
-										{connector.kind === "cli"
-											? t("settings.connectorsCliApprovalTitle")
-											: t("settings.connectorsApprovalTitle")}
-									</div>
-									<div className="mb-2 text-[11.5px] text-[var(--color-text-muted)]">
-										{connector.kind === "cli"
-											? t("settings.connectorsCliApprovalHint")
-											: t("settings.connectorsApprovalHint")}
-									</div>
-									{connector.kind === "cli" ? (
-										<div className="space-y-1 text-[11.5px]">
-											{approvalInstall && (
-												<div className="break-all">
-													<span className="text-[var(--color-text-muted)]">
-														{t("settings.connectorsCliInstallLabel")}
-													</span>
-													<code>{approvalInstall}</code>
-												</div>
-											)}
-											{approvalAuth && (
-												<div className="break-all">
-													<span className="text-[var(--color-text-muted)]">
-														{t("settings.connectorsCliAuthLabel")}
-													</span>
-													<code>{approvalAuth}</code>
-												</div>
-											)}
-										</div>
-									) : (
-										<pre className="overflow-x-auto rounded-md bg-[var(--color-bg-elevated)] px-2 py-1 text-[11.5px]">
-											{[connector.server?.command, ...approvalArgs].filter(Boolean).join(" ")}
-										</pre>
-									)}
-									{approvalEnvKeys.length > 0 && (
-										<div className="text-[11px] text-[var(--color-text-muted)]">
-											{t("settings.connectorsApprovalEnv", { keys: approvalEnvKeys.join(", ") })}
-										</div>
-									)}
-									<div className="flex items-center gap-1.5 pt-2">
-										<button
-											type="button"
-											className="gui-btn gui-btn-primary"
-											disabled={pending === connector.id}
-											onClick={() => {
-												setApprovalTarget(null);
-												setApprovalArgs([]);
-												setApprovalEnvKeys([]);
-												void connect(connector, true);
-											}}
-										>
-											{t("settings.connectorsApprovalConnect")}
-										</button>
-										<button type="button" className="gui-btn" onClick={() => setApprovalTarget(null)}>
-											{t("settings.cancel")}
-										</button>
-									</div>
-								</div>
-							)}
-							{tokenTarget === connector.id && connector.tokenSchema && (
-								<div className="mb-3">
-									{connector.tokenSchema.title && (
-										<div className="text-[12px] font-medium">{connector.tokenSchema.title}</div>
-									)}
-									{connector.tokenSchema.description && (
-										<div className="mb-2 text-[11.5px] text-[var(--color-text-muted)]">
-											{connector.tokenSchema.description}
-										</div>
-									)}
-									{connector.tokenSchema.personalAccessToken && (
-										<label className="mb-2 block">
-											<span className="text-[11.5px] text-[var(--color-text-muted)]">
-												{connector.tokenSchema.personalAccessToken.label ??
-													t("settings.connectorsPatLabel")}
-											</span>
-											<input
-												className="gui-input mt-1 w-full"
-												type="password"
-												value={tokenValues[connector.tokenSchema.personalAccessToken.field] ?? ""}
-												placeholder={connector.tokenSet ? t("settings.connectorsTokenExisting") : undefined}
-												onChange={event =>
-													setTokenValues(current => ({
-														...current,
-														[connector.tokenSchema!.personalAccessToken!.field]: event.target.value,
-													}))
-												}
-											/>
-											{connector.tokenSchema.personalAccessToken.docUrl && (
-												<button
-													type="button"
-													className="gui-btn-ghost mt-2 text-[12px]"
-													onClick={() =>
-														void openExternalUrl(
-															connector.tokenSchema!.personalAccessToken!.docUrl!,
-														).catch(() => {})
-													}
-												>
-													{t("settings.connectorsPatWhere")}
-												</button>
-											)}
-										</label>
-									)}
-									{connector.tokenSchema.fields.map(field => (
-										<label key={field.key} className="mb-2 block">
-											<span className="text-[11.5px] text-[var(--color-text-muted)]">
-												{field.label}
-												{field.required ? " *" : ""}
-											</span>
-											<input
-												className="gui-input mt-1 w-full"
-												type={field.type}
-												value={tokenValues[field.key] ?? ""}
-												placeholder={
-													connector.tokenSet && field.type === "password"
-														? t("settings.connectorsTokenExisting")
-														: field.placeholder
-												}
-												onChange={event =>
-													setTokenValues(current => ({
-														...current,
-														[field.key]: event.target.value,
-													}))
-												}
-											/>
-											{field.description && (
-												<span className="text-[11px] text-[var(--color-text-muted)]">
-													{field.description}
-												</span>
-											)}
-										</label>
-									))}
-									<div className="flex items-center gap-1.5">
-										<button
-											type="button"
-											className="gui-btn gui-btn-primary"
-											disabled={pending === connector.id}
-											onClick={() => void saveToken(connector)}
-										>
-											{t("settings.connectorsTokenSave")}
-										</button>
-										<button
-											type="button"
-											className="gui-btn"
-											onClick={() => {
-												setTokenTarget(null);
-												setTokenValues({});
-											}}
-										>
-											{t("settings.cancel")}
-										</button>
-									</div>
-								</div>
-							)}
-							{(useChineseDescription ? (connector.detailsZh ?? connector.details) : connector.details) && (
-								<p className="text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-									{useChineseDescription ? (connector.detailsZh ?? connector.details) : connector.details}
-								</p>
-							)}
-							{connector.examples?.length ? (
-								<>
-									<div className="mb-1 text-[11.5px] text-[var(--color-text-muted)]">
-										{t("settings.connectorsExamples")}
-									</div>
-									<ul className="space-y-1">
-										{connector.examples.map(example => (
-											<li
-												key={example}
-												className="rounded-md bg-[var(--color-bg-elevated)] px-2 py-1 text-[12px]"
-											>
-												{example}
-											</li>
-										))}
-									</ul>
-								</>
-							) : null}
-							{connector.docsUrl && (
-								<button
-									type="button"
-									className="gui-btn-ghost mt-2 text-[12px]"
-									onClick={() => void openExternalUrl(connector.docsUrl!).catch(() => {})}
-								>
-									{t("settings.connectorsDocs")}
-								</button>
-							)}
+					{flow?.kind === "starting" && (
+						<div className="text-[12px] text-[var(--color-text-muted)]">
+							{t("settings.mcpOauthLoginStarting")}
 						</div>
 					)}
+					{flow?.kind === "waiting" && (
+						<div className="text-[12px] text-[var(--color-text-muted)]">{t("settings.mcpOauthLoginWaiting")}</div>
+					)}
+					{flow?.kind === "error" && <div className="text-[12px] text-[var(--color-danger)]">{flow.message}</div>}
+					{probeState?.text && (
+						<div
+							className={
+								probeState.ok
+									? "text-[12px] text-[var(--color-success)]"
+									: "text-[12px] text-[var(--color-danger)]"
+							}
+						>
+							{probeState.text}
+						</div>
+					)}
+					{cliFlow?.connectorId === connector.id && (
+						<div className="gui-connector-detail-block">
+							<div className="text-[12px] font-medium">{t("settings.connectorsCliAuthTitle")}</div>
+							<div className="text-[11.5px] text-[var(--color-text-muted)]">
+								{t("settings.connectorsCliAuthHint")}
+							</div>
+							{cliFlow.url && (
+								<>
+									<button
+										type="button"
+										className="gui-btn"
+										onClick={() => void openExternalUrl(cliFlow.url!).catch(() => {})}
+									>
+										{t("settings.mcpOpenAuthorization")}
+									</button>
+									<code className="break-all text-[11px] text-[var(--color-text-muted)]">{cliFlow.url}</code>
+								</>
+							)}
+							{cliFlow.code && (
+								<div className="text-[12px]">
+									<span className="text-[var(--color-text-muted)]">{t("settings.connectorsCliAuthCode")}</span>{" "}
+									<code>{cliFlow.code}</code>
+								</div>
+							)}
+							<div className="flex items-center gap-1.5">
+								<span className="text-[11.5px] text-[var(--color-text-muted)]">
+									{t("settings.connectorsCliAuthWaiting")}
+								</span>
+								<button type="button" className="gui-btn" onClick={() => void cancelCli()}>
+									{t("settings.cancel")}
+								</button>
+							</div>
+						</div>
+					)}
+					{approvalTarget === connector.id && (
+						<div className="gui-connector-detail-block">
+							<div className="text-[12px] font-medium">
+								{connector.kind === "cli"
+									? t("settings.connectorsCliApprovalTitle")
+									: t("settings.connectorsApprovalTitle")}
+							</div>
+							<div className="text-[11.5px] text-[var(--color-text-muted)]">
+								{connector.kind === "cli"
+									? t("settings.connectorsCliApprovalHint")
+									: t("settings.connectorsApprovalHint")}
+							</div>
+							{connector.kind === "cli" ? (
+								<div className="space-y-1 text-[11.5px]">
+									{approvalInstall && (
+										<div className="break-all">
+											<span className="text-[var(--color-text-muted)]">
+												{t("settings.connectorsCliInstallLabel")}
+											</span>
+											<code>{approvalInstall}</code>
+										</div>
+									)}
+									{approvalAuth && (
+										<div className="break-all">
+											<span className="text-[var(--color-text-muted)]">
+												{t("settings.connectorsCliAuthLabel")}
+											</span>
+											<code>{approvalAuth}</code>
+										</div>
+									)}
+								</div>
+							) : (
+								<pre className="overflow-x-auto rounded-md bg-[var(--color-bg-elevated)] px-2 py-1 text-[11.5px]">
+									{[connector.server?.command, ...approvalArgs].filter(Boolean).join(" ")}
+								</pre>
+							)}
+							{approvalEnvKeys.length > 0 && (
+								<div className="text-[11px] text-[var(--color-text-muted)]">
+									{t("settings.connectorsApprovalEnv", { keys: approvalEnvKeys.join(", ") })}
+								</div>
+							)}
+							<div className="flex items-center gap-1.5 pt-1">
+								<button
+									type="button"
+									className="gui-btn gui-btn-primary"
+									disabled={pending === connector.id}
+									onClick={() => {
+										setApprovalTarget(null);
+										setApprovalArgs([]);
+										setApprovalEnvKeys([]);
+										void connect(connector, true);
+									}}
+								>
+									{t("settings.connectorsApprovalConnect")}
+								</button>
+								<button type="button" className="gui-btn" onClick={() => setApprovalTarget(null)}>
+									{t("settings.cancel")}
+								</button>
+							</div>
+						</div>
+					)}
+					{tokenTarget === connector.id && connector.tokenSchema && (
+						<div className="gui-connector-detail-block">
+							{connector.tokenSchema.title && (
+								<div className="text-[12px] font-medium">{connector.tokenSchema.title}</div>
+							)}
+							{connector.tokenSchema.description && (
+								<div className="text-[11.5px] text-[var(--color-text-muted)]">
+									{connector.tokenSchema.description}
+								</div>
+							)}
+							{connector.tokenSchema.personalAccessToken && (
+								<label className="block">
+									<span className="text-[11.5px] text-[var(--color-text-muted)]">
+										{connector.tokenSchema.personalAccessToken.label ?? t("settings.connectorsPatLabel")}
+									</span>
+									<input
+										className="gui-input mt-1 w-full"
+										type="password"
+										value={tokenValues[connector.tokenSchema.personalAccessToken.field] ?? ""}
+										placeholder={connector.tokenSet ? t("settings.connectorsTokenExisting") : undefined}
+										onChange={event =>
+											setTokenValues(current => ({
+												...current,
+												[connector.tokenSchema!.personalAccessToken!.field]: event.target.value,
+											}))
+										}
+									/>
+									{connector.tokenSchema.personalAccessToken.docUrl && (
+										<button
+											type="button"
+											className="gui-btn-ghost mt-1 text-[12px]"
+											onClick={() =>
+												void openExternalUrl(connector.tokenSchema!.personalAccessToken!.docUrl!).catch(
+													() => {},
+												)
+											}
+										>
+											{t("settings.connectorsPatWhere")}
+										</button>
+									)}
+								</label>
+							)}
+							{connector.tokenSchema.fields.map(field => (
+								<label key={field.key} className="block">
+									<span className="text-[11.5px] text-[var(--color-text-muted)]">
+										{field.label}
+										{field.required ? " *" : ""}
+									</span>
+									<input
+										className="gui-input mt-1 w-full"
+										type={field.type}
+										value={tokenValues[field.key] ?? ""}
+										placeholder={
+											connector.tokenSet && field.type === "password"
+												? t("settings.connectorsTokenExisting")
+												: field.placeholder
+										}
+										onChange={event =>
+											setTokenValues(current => ({ ...current, [field.key]: event.target.value }))
+										}
+									/>
+									{field.description && (
+										<span className="text-[11px] text-[var(--color-text-muted)]">{field.description}</span>
+									)}
+								</label>
+							))}
+							<div className="flex items-center gap-1.5">
+								<button
+									type="button"
+									className="gui-btn gui-btn-primary"
+									disabled={pending === connector.id}
+									onClick={() => void saveToken(connector)}
+								>
+									{t("settings.connectorsTokenSave")}
+								</button>
+								<button
+									type="button"
+									className="gui-btn"
+									onClick={() => {
+										setTokenTarget(null);
+										setTokenValues({});
+									}}
+								>
+									{t("settings.cancel")}
+								</button>
+							</div>
+						</div>
+					)}
+					{details && <p className="text-[12px] leading-relaxed text-[var(--color-text-muted)]">{details}</p>}
+					{connector.examples?.length ? (
+						<div className="gui-connector-detail-block">
+							<div className="text-[11.5px] text-[var(--color-text-muted)]">
+								{t("settings.connectorsExamples")}
+							</div>
+							<ul className="space-y-1">
+								{connector.examples.map(example => (
+									<li key={example} className="rounded-md bg-[var(--color-bg-elevated)] px-2 py-1 text-[12px]">
+										{example}
+									</li>
+								))}
+							</ul>
+						</div>
+					) : null}
+					{connector.docsUrl && (
+						<button
+							type="button"
+							className="gui-btn-ghost self-start text-[12px]"
+							onClick={() => void openExternalUrl(connector.docsUrl!).catch(() => {})}
+						>
+							{t("settings.connectorsDocs")}
+						</button>
+					)}
+				</div>
 			</div>
 		);
 	};
-
 	return (
 		<>
-			<div className="flex items-start justify-between gap-4">
-				<div className="min-w-0">
-					<h2 className="gui-settings-page-title">{t("settings.connectors")}</h2>
-					<p className="gui-settings-page-desc">{t("settings.connectorsDesc")}</p>
-				</div>
-				<div className="flex flex-shrink-0 items-center gap-2">
-					<button type="button" className="gui-btn" onClick={() => setImportOpen(true)}>
-						{t("settings.connectorsImport")}
-					</button>
-					<button type="button" className="gui-btn" onClick={() => void refresh()}>
-						{t("settings.connectorsRefresh")}
-					</button>
-				</div>
+			<div className="min-w-0">
+				<h2 className="gui-settings-page-title">{t("settings.connectors")}</h2>
+				<p className="gui-settings-page-desc">{t("settings.connectorsDesc")}</p>
 			</div>
 
-			<div className="gui-settings-row">
+			{/* The device sign-in polls from here rather than inside the detail
+			    dialog: closing the dialog must not strand a code that is already
+			    being entered in the browser. */}
+			{deviceTarget !== null && (
+				<DeviceGrantPanel
+					rpc={rpc}
+					serverName={`connector:${deviceTarget}`}
+					open={deviceTarget !== null}
+					onDone={() => {
+						void load();
+						pushActionToast({
+							kind: "success",
+							message: t("settings.connectorsDeviceConnected", {
+								name: connectors?.find(item => item.id === deviceTarget)?.name ?? deviceTarget ?? "",
+							}),
+							dedupeKey: `connector:${deviceTarget ?? ""}:outcome`,
+						});
+					}}
+				/>
+			)}
+
+			<div className="flex items-center gap-2">
 				<input
 					className="gui-input min-w-0 flex-1"
 					value={query}
@@ -915,6 +983,12 @@ ${connector.category ?? ""}`.toLowerCase();
 					placeholder={t("settings.connectorsSearch")}
 					aria-label={t("settings.connectorsSearch")}
 				/>
+				<button type="button" className="gui-btn" onClick={() => setImportOpen(true)}>
+					{t("settings.connectorsImport")}
+				</button>
+				<button type="button" className="gui-btn" onClick={() => void refresh()}>
+					{t("settings.connectorsRefresh")}
+				</button>
 			</div>
 
 			{categories.length > 1 && (
@@ -960,36 +1034,38 @@ ${connector.category ?? ""}`.toLowerCase();
 				<div className="gui-settings-row">{t("settings.connectorsEmpty")}</div>
 			) : (
 				<>
+					{connected.length > 0 && category === null && query.trim() === "" && (
+						<>
+							<h3 className="gui-settings-section-title">{t("settings.connectorsStatusConnected")}</h3>
+							<div className="gui-connector-grid">{connected.map(renderRow)}</div>
+						</>
+					)}
 					{featured.length > 0 && category === null && (
 						<>
 							<h3 className="gui-settings-section-title">{t("settings.connectorsFeatured")}</h3>
-							<div className="flex flex-col gap-2">{featured.map(renderCard)}</div>
+							<div className="gui-connector-grid">{featured.map(renderRow)}</div>
 						</>
 					)}
-					{groups.map(group => (
-						<div key={group.key || "other"} className="mt-4">
-							<h3 className="gui-settings-section-title">{categoryLabel(group.key)}</h3>
-							<div className="flex flex-col gap-2">{group.items.map(renderCard)}</div>
-						</div>
-					))}
+					{groups.map(group => {
+						const preview = category === null && query.trim() === "";
+						const rows = preview ? group.items.slice(0, CONNECTOR_GROUP_PREVIEW) : group.items;
+						return (
+							<div key={group.key || "other"} className="mt-4">
+								<h3 className="gui-settings-section-title">{categoryLabel(group.key)}</h3>
+								<div className="gui-connector-grid">{rows.map(renderRow)}</div>
+								{preview && group.items.length > CONNECTOR_GROUP_PREVIEW && (
+									<button
+										type="button"
+										className="gui-btn-ghost mt-1 text-[12px]"
+										onClick={() => setCategory(group.key)}
+									>
+										{t("settings.connectorsViewAll", { count: String(group.items.length) })}
+									</button>
+								)}
+							</div>
+						);
+					})}
 				</>
-			)}
-			{deviceTarget !== null && (
-				<DeviceGrantPanel
-					rpc={rpc}
-					serverName={`connector:${deviceTarget}`}
-					open={deviceTarget !== null}
-					onDone={() => {
-						void load();
-						pushActionToast({
-							kind: "success",
-							message: t("settings.connectorsDeviceConnected", {
-								name: connectors?.find(item => item.id === deviceTarget)?.name ?? deviceTarget ?? "",
-							}),
-							dedupeKey: `connector:${deviceTarget ?? ""}:outcome`,
-						});
-					}}
-				/>
 			)}
 			<ConnectorImportDialog
 				rpc={rpc}
@@ -997,6 +1073,14 @@ ${connector.category ?? ""}`.toLowerCase();
 				onClose={() => setImportOpen(false)}
 				onImported={() => void load()}
 			/>
+			<DialogFrame
+				open={detailId !== null}
+				onClose={() => setDetailId(null)}
+				label={detailConnector?.name ?? t("settings.connectors")}
+				className="gui-dialog--connector"
+			>
+				{detailConnector && renderDetail(detailConnector)}
+			</DialogFrame>
 			<McpServersSection rpc={rpc} />
 		</>
 	);

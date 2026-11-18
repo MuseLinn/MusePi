@@ -19,7 +19,7 @@ import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { parseGitUrl } from "../extensibility/plugins/shared/git-url";
-import { writeSkillSource } from "./skill-source";
+import { hashSkillDirectory, writeSkillSource } from "./skill-source";
 
 export interface InstallSkillOptions {
 	url: string;
@@ -184,12 +184,14 @@ async function installFromClonedRepo(
 	}
 	await cp(skillDir, dest, { recursive: true });
 	const commit = await gitHead(repoDir);
+	const contentHash = await hashSkillDirectory(dest);
 	await writeSkillSource(dest, {
 		schemaVersion: 1,
 		source: "git",
 		url: redactSourceUrl(opts.url),
 		...(opts.subdir ? { subdir: opts.subdir } : {}),
 		...(commit ? { commit } : {}),
+		...(contentHash ? { contentHash } : {}),
 		installedAt: new Date().toISOString(),
 	});
 	return { name, dir: dest };

@@ -24,6 +24,7 @@
 export type SectionId =
 	| "general"
 	| "appearance"
+	| "composer"
 	| "model"
 	| "files"
 	| "notifications"

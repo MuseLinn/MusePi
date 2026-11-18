@@ -19,6 +19,8 @@ describe("railPeekEligible", () => {
 	test("settings and the narrow drawer are excluded", () => {
 		expect(railPeekEligible({ ...base, settingsActive: true })).toBe(false);
 		expect(railPeekEligible({ ...base, narrowSidebarOpen: true })).toBe(false);
+		// Drawer mode owns the panel as an overlay; there is no docked slot to float.
+		expect(railPeekEligible({ ...base, narrowSidebar: true })).toBe(false);
 	});
 
 	test("a page destination is NOT excluded — its rail button owns a panel too", () => {

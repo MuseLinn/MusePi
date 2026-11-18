@@ -12,12 +12,13 @@
  * `updateAvailable: null` plus a failure line, never an exception across the
  * RPC boundary. Nothing here writes or installs.
  */
-import { isNewerVersion } from "../extensibility/plugins/marketplace/version";
 import type { SkillMarketEntry } from "./marketplace-client";
-import type { SkillSourceRecord } from "./skill-source";
+import { hashSkillDirectory, type SkillSourceRecord } from "./skill-source";
 
 export interface SkillUpdateInput {
 	name: string;
+	/** Installed skill folder; used to detect local edits before an update. */
+	dir?: string;
 	market?: SkillSourceRecord | null;
 }
 
@@ -41,6 +42,11 @@ export interface SkillUpdateStatus {
 	latestCommit?: string;
 	/** true = newer available, false = current, null = not comparable. */
 	updateAvailable: boolean | null;
+	/** How the published version relates to the installed one. `different`
+	 *  means the versions differ but cannot be ordered (no silent downgrade). */
+	versionRelation?: "newer" | "same" | "different" | "unknown";
+	/** The folder no longer matches the content hash recorded at install. */
+	locallyModified?: boolean;
 	/** Other catalogs publishing the same skill (same name or slug). */
 	alternatives?: SkillUpdateCandidate[];
 	checkedAt: number;
@@ -74,8 +80,12 @@ export async function lsRemoteHead(url: string, timeoutMs = GIT_TIMEOUT_MS): Pro
 	}
 }
 
-/** Default latest-version source. Exported so tests can swap it. */
-export const defaultLatestLookup: LatestSkillLookup = async record => {
+/** Primary lookups are cached briefly: a list refresh must not spend one
+ *  remote call per installed skill every time. */
+const LATEST_TTL_MS = 60_000;
+const latestCache = new Map<string, { at: number; value: { version?: string; commit?: string } | null }>();
+
+const rawLatestLookup: LatestSkillLookup = async record => {
 	if (record.source === "skillhub") {
 		if (!record.slug) return null;
 		const { skillHubDetail } = await import("./marketplace-client");
@@ -86,6 +96,16 @@ export const defaultLatestLookup: LatestSkillLookup = async record => {
 	if (!url) return null;
 	const commit = await lsRemoteHead(url);
 	return commit ? { commit } : null;
+};
+
+/** Default latest-version source. Exported so tests can swap it. */
+export const defaultLatestLookup: LatestSkillLookup = async record => {
+	const key = `${record.source}:${record.slug ?? ""}:${record.url ?? ""}:${record.repo ?? ""}`;
+	const cached = latestCache.get(key);
+	if (cached && Date.now() - cached.at < LATEST_TTL_MS) return cached.value;
+	const value = await rawLatestLookup(record);
+	latestCache.set(key, { at: Date.now(), value });
+	return value;
 };
 
 /** Exact name/slug matches from both catalogs, recorded source marked. */
@@ -140,15 +160,43 @@ export const defaultAlternativesLookup: AlternativesLookup = async (record, skil
 	return value;
 };
 
-/** Compare one install against its source's latest facts. */
+/** Ordering relation between the installed and published facts. */
+export function skillVersionRelation(
+	record: SkillSourceRecord,
+	latest: { version?: string; commit?: string } | null,
+): "newer" | "same" | "different" | "unknown" {
+	if (!latest) return "unknown";
+	if (record.version && latest.version) {
+		if (record.version === latest.version) return "same";
+		try {
+			// Only an orderable semver counts as newer. Free-form catalog
+			// versions stay `different`: calling a downgrade an update would be
+			// worse than asking the user to reinstall.
+			return Bun.semver.order(latest.version, record.version) > 0 ? "newer" : "different";
+		} catch {
+			return "different";
+		}
+	}
+	if (record.commit && latest.commit) return record.commit === latest.commit ? "same" : "newer";
+	return "unknown";
+}
+
+/** Compare one install against its source's latest facts; only a strictly
+ *  newer version counts as an update (a downgrade is a reinstall, not an update). */
 export function compareSkillUpdate(
 	record: SkillSourceRecord,
 	latest: { version?: string; commit?: string } | null,
 ): boolean | null {
-	if (!latest) return null;
-	if (record.version && latest.version) return isNewerVersion(latest.version, record.version);
-	if (record.commit && latest.commit) return record.commit !== latest.commit;
-	return null;
+	const relation = skillVersionRelation(record, latest);
+	if (relation === "unknown") return null;
+	return relation === "newer";
+}
+
+/** Only an update that would actually write needs the digest; skip otherwise. */
+async function isLocallyModified(dir: string | undefined, record: SkillSourceRecord): Promise<boolean> {
+	if (!dir || !record.contentHash) return false;
+	const current = await hashSkillDirectory(dir);
+	return current !== null && current !== record.contentHash;
 }
 
 export async function checkSkillUpdates(
@@ -183,6 +231,8 @@ export async function checkSkillUpdates(
 				latestVersion: latest?.version,
 				latestCommit: latest?.commit,
 				updateAvailable: compareSkillUpdate(record, latest),
+				versionRelation: skillVersionRelation(record, latest),
+				...((await isLocallyModified(item.dir, record)) ? { locallyModified: true } : {}),
 				...(candidates.length > 0 ? { alternatives: candidates } : {}),
 				checkedAt,
 				...(error ? { error } : {}),

@@ -764,10 +764,12 @@ export function ContextPanel({
 	const maxWidthRef = useRef(MAX_PANEL_WIDTH);
 	const measureCap = useCallback((): number => {
 		const panel = panelRef.current?.getBoundingClientRect();
-		// No transcript (welcome screen): there is no chat column to protect.
-		const chat = document.querySelector(".gui-transcript")?.getBoundingClientRect();
-		if (!panel || !chat) return MAX_PANEL_WIDTH;
-		return maxPanelWidth(panel.right, chat.left);
+		// The column to protect is the session card OR the welcome card —
+		// the welcome screen has no transcript, and skipping the budget there
+		// let an open panel crush the empty-state composer.
+		const column = document.querySelector(".gui-chat-column, .gui-welcome-card")?.getBoundingClientRect();
+		if (!panel || !column) return MAX_PANEL_WIDTH;
+		return maxPanelWidth(panel.right, column.left);
 	}, []);
 	// Both endpoints ride refs. Reading a render-closure `width` on release
 	// meant the snap used the value from the render that STARTED the drag, so

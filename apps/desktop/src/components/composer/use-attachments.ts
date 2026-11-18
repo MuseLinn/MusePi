@@ -2,7 +2,7 @@ import { arrayMove } from "@dnd-kit/sortable";
 import { fileUrlFromPath } from "@musepi/client-core";
 import type { AttachmentPutResult } from "@musepi/pi-wire";
 import type { ClipboardEvent, DragEvent } from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../../lib/image-resize";
 import type { RpcClient } from "../../lib/rpc";
 import { parseSketchScene, type SketchScene, sceneHasImage } from "../../lib/sketch-scene";
@@ -404,16 +404,23 @@ export function useAttachments(
 ): {
 	attachments: ComposerAttachment[];
 	setAttachments(next: ComposerAttachment[] | ((prev: ComposerAttachment[]) => ComposerAttachment[])): void;
-	addFiles(files: File[]): Promise<void>;
-	onPaste(e: ClipboardEvent): void;
+	/** Resolves with the chips appended by this call — callers that mirror
+	 *  the intake into the draft (paste-image mentions) need their final
+	 *  names and order. */
+	addFiles(files: File[]): Promise<ComposerAttachment[]>;
+	onPaste(e: ClipboardEvent): Promise<ComposerAttachment[]>;
 	onDragOver(e: DragEvent): void;
-	onDrop(e: DragEvent): void;
+	onDrop(e: DragEvent): Promise<ComposerAttachment[]>;
 } {
 	const { stageFiles = true } = options;
 	const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
+	// Mirror for name dedupe and the returned batch: the state updater runs
+	// later, and the caller needs the appended chips as a value.
+	const attachmentsRef = useRef(attachments);
+	attachmentsRef.current = attachments;
 
-	const addFiles = async (files: File[]): Promise<void> => {
-		if (files.length === 0) return;
+	const addFiles = async (files: File[]): Promise<ComposerAttachment[]> => {
+		if (files.length === 0) return [];
 		const imgs = files.filter(f => f.type.startsWith("image/"));
 		const others = files.filter(f => !f.type.startsWith("image/"));
 		const autoResize = imgs.length > 0 ? await readAutoResizeImages(rpc) : false;
@@ -444,31 +451,29 @@ export function useAttachments(
 				...(stageFiles ? { staged: uploadOneAttachment(rpc, f, f.name).catch(() => null) } : {}),
 			})),
 		]);
-		setAttachments(prev => {
-			// Dedupe against the staged chips AND within the batch: name-mention
-			// tokens resolve by name (first match), so same-named chips would
-			// all point at the first one.
-			const taken = new Set(prev.map(p => p.name));
-			const named = entries.map(e => {
-				const name = uniqueAttachmentName(e.name, taken);
-				taken.add(name);
-				return name === e.name ? e : { ...e, name };
-			});
-			return [...prev, ...named];
+		// Dedupe against the staged chips AND within the batch: name-mention
+		// tokens resolve by name (first match), so same-named chips would
+		// all point at the first one.
+		const taken = new Set(attachmentsRef.current.map(p => p.name));
+		const named = entries.map(e => {
+			const name = uniqueAttachmentName(e.name, taken);
+			taken.add(name);
+			return name === e.name ? e : { ...e, name };
 		});
+		setAttachments(prev => [...prev, ...named]);
+		return named;
 	};
 
-	const onPaste = (e: ClipboardEvent): void => {
+	const onPaste = (e: ClipboardEvent): Promise<ComposerAttachment[]> => {
 		// Any pasted file (image or not) becomes a chip; plain text is left
 		// to the textarea / long-paste gate.
 		const files = [...e.clipboardData.items]
 			.filter(i => i.kind === "file")
 			.map(i => i.getAsFile())
 			.filter((f): f is File => f !== null);
-		if (files.length > 0) {
-			e.preventDefault();
-			void addFiles(files);
-		}
+		if (files.length === 0) return Promise.resolve([]);
+		e.preventDefault();
+		return addFiles(files);
 	};
 
 	const onDragOver = (e: DragEvent): void => {
@@ -478,14 +483,13 @@ export function useAttachments(
 		if (e.dataTransfer.types.includes("Files")) e.preventDefault();
 	};
 
-	const onDrop = (e: DragEvent): void => {
+	const onDrop = (e: DragEvent): Promise<ComposerAttachment[]> => {
 		const files = [...e.dataTransfer.files];
 		// Full-type parity: a non-image drop used to be ignored (and the
 		// browser default — opening the file — was never suppressed).
-		if (files.length > 0) {
-			e.preventDefault();
-			void addFiles(files);
-		}
+		if (files.length === 0) return Promise.resolve([]);
+		e.preventDefault();
+		return addFiles(files);
 	};
 
 	return { attachments, setAttachments, addFiles, onPaste, onDragOver, onDrop };

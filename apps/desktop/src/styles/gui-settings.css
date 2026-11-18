@@ -6164,11 +6164,155 @@ body.gui-resizing {
 	margin-bottom: 8px;
 }
 
-/* Connector catalog rows stack the shared card face so examples and the docs
-   link expand under the row instead of opening a second surface. */
+/* ── Settings: connector catalog ────────────────────────────────────────
+ * Two-column rows on the shared L1 card face. Anything longer than a name and
+ * one sentence opens in the detail dialog, so the list stays scannable at 60
+ * entries instead of growing inline forms. */
+.gui-connector-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px;
+}
+
+@media (max-width: 900px) {
+	.gui-connector-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
 .gui-connector-card {
+	gap: 8px;
+	min-width: 0;
+	margin-bottom: 0;
+	transition: border-color 0.15s ease;
+}
+
+.gui-connector-card:hover {
+	border-color: var(--border-strong);
+}
+
+.gui-connector-main {
+	display: flex;
+	align-items: center;
+	flex: 1 1 auto;
+	gap: 10px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	text-align: left;
+	cursor: pointer;
+	border-radius: var(--radius-md);
+}
+
+.gui-connector-main:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 3px;
+}
+
+.gui-connector-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 36px;
+	height: 36px;
+	overflow: hidden;
+	border-radius: var(--radius-lg);
+	background: var(--color-bg-elevated);
+}
+
+.gui-connector-text {
+	display: flex;
 	flex-direction: column;
-	align-items: stretch;
+	gap: 2px;
+	min-width: 0;
+}
+
+.gui-connector-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-connector-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.gui-connector-desc {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+.gui-connector-action {
+	display: flex;
+	align-items: center;
+	flex: none;
+}
+
+/* Detail dialog: the row's one verb stays in the list; description, examples,
+   credentials and approvals live here and scroll inside the dialog. */
+.gui-dialog.gui-dialog--connector {
+	width: min(680px, 94vw);
+	height: auto;
+	max-height: min(84vh, 760px);
+	overflow-y: auto;
+	scrollbar-width: thin;
+}
+
+.gui-connector-detail {
+	display: flex;
+	flex-direction: column;
+}
+
+.gui-connector-detail-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	padding: 16px;
+	border-bottom: 1px solid var(--border);
+}
+
+.gui-connector-detail-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 44px;
+	height: 44px;
+	overflow: hidden;
+	border-radius: var(--radius-xl);
+	background: var(--color-bg-elevated);
+}
+
+.gui-connector-detail-body {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 16px;
+}
+
+.gui-connector-detail-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.gui-connector-detail-block {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding-top: 12px;
+	border-top: 1px solid var(--color-border-subtle);
 }
 
 /* ── Settings: 预设页分组卡片 + 「查看配置」只读视图 ─────────────────────

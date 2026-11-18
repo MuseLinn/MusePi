@@ -9,7 +9,9 @@ import type { MutableRefObject } from "react";
  * cross-fade cannot leave a stale entry behind.
  */
 export interface ComposerAttachApi {
-	addFiles(files: File[]): Promise<void>;
+	/** The chips the intake appended; callers that only stage files ignore
+	 *  the value. */
+	addFiles(files: File[]): Promise<unknown>;
 }
 
 export type ComposerAttachRef = MutableRefObject<ComposerAttachApi | null>;

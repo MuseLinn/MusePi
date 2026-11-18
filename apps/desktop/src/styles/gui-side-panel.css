@@ -85,6 +85,32 @@
 	min-height: var(--gui-card-gutter);
 }
 
+/* ── Drawer mode (narrow workspace) ──────────────────────────────────────
+ * Narrow windows keep the same mounted sidebar as an overlay drawer. The
+ * keeper must leave the flex flow entirely: translating it off-screen while
+ * it stayed in flow reserved a blank column beside the chat (user report).
+ * The threshold is computed in lib/sidebar-drawer.ts and published on
+ * `.gui-main` — an attribute selector here also outranks the base
+ * `position: relative` above regardless of stylesheet load order. */
+.gui-main[data-narrow-sidebar="true"] .gui-side-keeper {
+	position: absolute;
+	inset: 0 auto 0 0;
+	z-index: 61;
+	visibility: hidden;
+	transform: translateX(-100%);
+	transition:
+		transform 200ms var(--spring),
+		visibility 200ms;
+}
+
+.gui-main[data-narrow-sidebar="true"] .gui-side-keeper--drawer-open {
+	visibility: visible;
+	transform: translateX(0);
+}
+
+/* The pane keeps the docked card geometry (height calc + header margin) —
+ * overriding its height here would overflow the keeper's bottom edge. */
+
 /* ── Hover-peek: the same card, floating instead of occupying width ─────
  * Every pane keeps its geometry while folded; only the hovered one fades in.
  * `data-peek-open` is NOT tied to `data-panel`, so leaving a rail button has
@@ -124,11 +150,9 @@
 	pointer-events: auto;
 }
 
-@media (max-width: 720px) {
-	/* Narrow windows already have a full drawer. */
-	.gui-side-keeper[data-peek="true"] > .gui-pane-side {
-		display: none;
-	}
+/* Narrow windows already have a full drawer. */
+.gui-main[data-narrow-sidebar="true"] .gui-side-keeper[data-peek="true"] > .gui-pane-side {
+	display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

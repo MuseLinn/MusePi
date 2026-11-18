@@ -160,6 +160,21 @@ function rowFor(host: HTMLElement, name: string): HTMLElement {
 	return found;
 }
 
+/** The detail dialog is portaled to `document.body`, outside the settings host. */
+function detailDialog(): HTMLElement {
+	const found = document.querySelector<HTMLElement>(".gui-dialog--connector");
+	if (!found) throw new Error("connector detail dialog not open");
+	return found;
+}
+
+async function openDetail(host: HTMLElement, name: string): Promise<HTMLElement> {
+	const opener = rowFor(host, name).querySelector<HTMLButtonElement>(".gui-connector-main");
+	if (!opener) throw new Error(`row has no detail opener: ${name}`);
+	await act(async () => opener.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+	await flush(2);
+	return detailDialog();
+}
+
 function typeInto(input: HTMLInputElement, value: string): void {
 	// The DOM suites drive the React onChange through the props key; native
 	// "input" events are ignored by this harness.
@@ -258,8 +273,8 @@ describe("connector settings", () => {
 		// away from it.
 		expect(toastMessages()).toContain("已连接 Alpha Meetings");
 
-		const disconnect = button(host, "断开");
-		await act(async () => disconnect.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		const detail = await openDetail(host, "Beta Docs");
+		await act(async () => button(detail, "断开").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 		expect(fake.calls("connectors.disconnect")).toEqual([{ id: "beta" }]);
 		expect(toastMessages()).toContain("已断开 Beta Docs");
@@ -297,11 +312,13 @@ describe("connector settings", () => {
 		await act(async () => button(initialRow, "连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 
-		const row = rowFor(host, "Gamma API");
-		const input = row.querySelector("input") as HTMLInputElement;
+		// Connect reported `needsTokenConfig`, so the dialog carrying the form is
+		// open rather than an inline expansion under the row.
+		const detail = detailDialog();
+		const input = detail.querySelector("input") as HTMLInputElement;
 		expect(input).toBeDefined();
 		await act(async () => typeInto(input, "secret"));
-		await act(async () => button(row, "保存并连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await act(async () => button(detail, "保存并连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 
 		expect(fake.calls("connectors.token.save")).toEqual([{ id: "gamma", values: { API_KEY: "secret" } }]);
@@ -342,9 +359,9 @@ describe("connector settings", () => {
 		await act(async () => button(row, "连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 
-		const approvalRow = rowFor(host, "Delta Stdio");
-		expect(approvalRow.textContent).toContain("node server.js");
-		const approveButton = button(approvalRow, "允许并连接");
+		const approval = detailDialog();
+		expect(approval.textContent).toContain("node server.js");
+		const approveButton = button(approval, "允许并连接");
 		await act(async () => approveButton.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 
@@ -398,13 +415,13 @@ describe("connector settings", () => {
 		await act(async () => button(row, "连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 
-		const approval = rowFor(host, "Echo CLI");
+		const approval = detailDialog();
 		expect(approval.textContent).toContain("允许安装或授权 CLI");
 		expect(approval.textContent).toContain("npm install -g echo-cli");
 		await act(async () => button(approval, "允许并连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 
-		const auth = rowFor(host, "Echo CLI");
+		const auth = detailDialog();
 		expect(auth.textContent).toContain("ABCD-1234");
 		expect(auth.textContent).toContain("https://example.com/device");
 		expect(calls).toEqual([{ id: "echo-cli" }, { id: "echo-cli", approve: true }]);
@@ -427,8 +444,8 @@ describe("connector settings", () => {
 		);
 
 		const host = await mount(fake);
-		const row = rowFor(host, "Delta Stdio");
-		await act(async () => button(row, "测试连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		const detail = await openDetail(host, "Delta Stdio");
+		await act(async () => button(detail, "测试连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(2);
 
 		// Only the server name crosses the wire: the daemon reads `command`/`args`
@@ -436,7 +453,7 @@ describe("connector settings", () => {
 		expect(fake.calls("mcp.servers.probe")).toEqual([{ name: "connector:delta" }]);
 		// The handshake can take seconds: the button is disabled and named for
 		// the pending state so a second click cannot start another probe.
-		expect(button(rowFor(host, "Delta Stdio"), "测试中").disabled).toBe(true);
+		expect(button(detailDialog(), "测试中").disabled).toBe(true);
 
 		await act(async () => {
 			resolveProbe?.({
@@ -448,13 +465,13 @@ describe("connector settings", () => {
 		});
 		await flush(4);
 
-		expect(rowFor(host, "Delta Stdio").textContent).toContain("probe-fixture · 1 个工具");
+		expect(detailDialog().textContent).toContain("probe-fixture · 1 个工具");
 		// A probe must never mount the server: connect/disconnect stay untouched.
 		expect(fake.calls("connectors.connect")).toEqual([]);
 		expect(fake.calls("connectors.disconnect")).toEqual([]);
 	});
 
-	test("shows the probe failure reason on the row", async () => {
+	test("shows the probe failure reason in the detail dialog", async () => {
 		const fake = new FakeRpc();
 		fake.handlers.set("connectors.catalog.list", () => catalogResponse());
 		fake.handlers.set("mcp.servers.probe", () => ({
@@ -464,11 +481,11 @@ describe("connector settings", () => {
 		}));
 
 		const host = await mount(fake);
-		const row = rowFor(host, "Gamma API");
-		await act(async () => button(row, "测试连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		const detail = await openDetail(host, "Gamma API");
+		await act(async () => button(detail, "测试连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 
-		expect(rowFor(host, "Gamma API").textContent).toContain("HTTP 401 Unauthorized");
+		expect(detailDialog().textContent).toContain("HTTP 401 Unauthorized");
 		// The token row is probed by name too — its header never rides the wire.
 		expect(fake.calls("mcp.servers.probe")).toEqual([{ name: "connector:gamma" }]);
 		expect(fake.calls("connectors.connect")).toEqual([]);
@@ -479,18 +496,18 @@ describe("connector settings", () => {
 		fake.handlers.set("connectors.catalog.list", () => catalogResponse());
 		const host = await mount(fake);
 
-		const offersProbe = (name: string): boolean =>
-			[...rowFor(host, name).querySelectorAll("button")].some(
-				candidate => candidate.textContent?.trim() === "测试连接",
-			);
+		const offersProbe = async (name: string): Promise<boolean> => {
+			const detail = await openDetail(host, name);
+			return [...detail.querySelectorAll("button")].some(candidate => candidate.textContent?.trim() === "测试连接");
+		};
 
-		expect(offersProbe("Beta Docs")).toBe(true);
+		expect(await offersProbe("Beta Docs")).toBe(true);
 		// The daemon resolves each installed config and injects its credentials,
 		// so stdio `args`, token headers, and OAuth grants no longer block testing.
-		expect(offersProbe("Delta Stdio")).toBe(true);
-		expect(offersProbe("Gamma API")).toBe(true);
-		expect(offersProbe("Alpha Meetings")).toBe(true);
+		expect(await offersProbe("Delta Stdio")).toBe(true);
+		expect(await offersProbe("Gamma API")).toBe(true);
+		expect(await offersProbe("Alpha Meetings")).toBe(true);
 		// A managed CLI connector has no MCP server behind it.
-		expect(offersProbe("Echo CLI")).toBe(false);
+		expect(await offersProbe("Echo CLI")).toBe(false);
 	});
 });

@@ -7,8 +7,18 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
-import { checkSkillUpdates, compareSkillUpdate, matchSkillAlternatives } from "../src/skills/market-updates";
-import { readSkillSource, type SkillSourceRecord, writeSkillSource } from "../src/skills/skill-source";
+import {
+	checkSkillUpdates,
+	compareSkillUpdate,
+	matchSkillAlternatives,
+	skillVersionRelation,
+} from "../src/skills/market-updates";
+import {
+	hashSkillDirectory,
+	readSkillSource,
+	type SkillSourceRecord,
+	writeSkillSource,
+} from "../src/skills/skill-source";
 
 describe("skill provenance sidecar", () => {
 	it("round-trips a record and rejects unknown shapes", async () => {
@@ -34,6 +44,21 @@ describe("skill provenance sidecar", () => {
 		}
 	});
 
+	it("hashes the folder, ignores the sidecar, and notices an edit", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "musepi-skill-hash-"));
+		try {
+			await Bun.write(path.join(dir, "SKILL.md"), "---\nname: demo\n---\nbody\n");
+			const first = await hashSkillDirectory(dir);
+			expect(first).toMatch(/^[0-9a-f]{64}$/);
+			await writeSkillSource(dir, { schemaVersion: 1, source: "skillhub", installedAt: "" });
+			expect(await hashSkillDirectory(dir)).toBe(first);
+			await Bun.write(path.join(dir, "SKILL.md"), "---\nname: demo\n---\nedited\n");
+			expect(await hashSkillDirectory(dir)).not.toBe(first);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("ignores a sidecar written by something else", async () => {
 		const dir = await mkdtemp(path.join(tmpdir(), "musepi-skill-source-"));
 		try {
@@ -50,6 +75,25 @@ describe("compareSkillUpdate", () => {
 		const record: SkillSourceRecord = { schemaVersion: 1, source: "skillhub", version: "1.0.0", installedAt: "" };
 		expect(compareSkillUpdate(record, { version: "1.1.0" })).toBe(true);
 		expect(compareSkillUpdate(record, { version: "1.0.0" })).toBe(false);
+	});
+
+	it("does not call a downgrade or a non-semver change an update", () => {
+		const downgrade: SkillSourceRecord = {
+			schemaVersion: 1,
+			source: "skillhub",
+			version: "2.0.0",
+			installedAt: "",
+		};
+		expect(compareSkillUpdate(downgrade, { version: "1.0.0" })).toBe(false);
+		expect(skillVersionRelation(downgrade, { version: "1.0.0" })).toBe("different");
+		const freeForm: SkillSourceRecord = {
+			schemaVersion: 1,
+			source: "skillhub",
+			version: "2026-08-13",
+			installedAt: "",
+		};
+		expect(compareSkillUpdate(freeForm, { version: "2026-09-01" })).toBe(false);
+		expect(skillVersionRelation(freeForm, { version: "2026-09-01" })).toBe("different");
 	});
 
 	it("falls back to commits for skills.sh / git installs", () => {
@@ -156,6 +200,44 @@ describe("checkSkillUpdates", () => {
 			updateAvailable: true,
 		});
 		expect(failures).toEqual([]);
+	});
+
+	it("marks a folder whose content no longer matches the recorded hash", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "musepi-skill-modified-"));
+		try {
+			await Bun.write(path.join(dir, "SKILL.md"), "---
+name: demo
+---
+body
+");
+			const contentHash = await hashSkillDirectory(dir);
+			await Bun.write(path.join(dir, "SKILL.md"), "---
+name: demo
+---
+edited
+");
+			const { updates } = await checkSkillUpdates(
+				[
+					{
+						name: "demo",
+						dir,
+						market: {
+							schemaVersion: 1,
+							source: "skillhub",
+							slug: "demo",
+							version: "1.0.0",
+							contentHash: contentHash ?? undefined,
+							installedAt: "",
+						} satisfies SkillSourceRecord,
+					},
+				],
+				async () => ({ version: "2.0.0" }),
+				async () => [],
+			);
+			expect(updates[0]?.locallyModified).toBe(true);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
 	});
 
 	it("keeps an unreachable source as an unknown status with a failure line", async () => {

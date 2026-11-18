@@ -34,7 +34,7 @@ import { parseGitUrl } from "../extensibility/plugins/shared/git-url";
 import { gitHead, normalizeSkillSource, resolveSkillDir, shallowClone, skillTargetName } from "./install";
 import { skillHubDownloadUrl } from "./marketplace-client";
 import { extractZipEntries, fetchBytes } from "./marketplace-install";
-import { writeSkillSource } from "./skill-source";
+import { hashSkillDirectory, writeSkillSource } from "./skill-source";
 
 export type MarketplaceInstallState =
 	| "inspecting"
@@ -397,12 +397,14 @@ export class MarketplaceInstallMachine {
 			this.#setPhase(rec, "installing");
 			await cp(skillDir, dest, { recursive: true });
 			const installedAt = new Date().toISOString();
+			const contentHash = await hashSkillDirectory(dest);
 			if (rec.params.source === "skillhub") {
 				await writeSkillSource(dest, {
 					schemaVersion: 1,
 					source: "skillhub",
 					slug: rec.params.slug,
 					...(rec.params.version ? { version: rec.params.version } : {}),
+					...(contentHash ? { contentHash } : {}),
 					installedAt,
 				});
 			} else {
@@ -413,6 +415,7 @@ export class MarketplaceInstallMachine {
 					slug: rec.params.slug,
 					...(rec.params.repo ? { repo: rec.params.repo } : {}),
 					...(commit ? { commit } : {}),
+					...(contentHash ? { contentHash } : {}),
 					installedAt,
 				});
 			}

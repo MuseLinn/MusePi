@@ -36,7 +36,7 @@ export function attachPaste({
 	setAttachments,
 }: {
 	text: string;
-	addFiles(files: File[]): Promise<void>;
+	addFiles(files: File[]): Promise<unknown>;
 	setAttachments(next: ComposerAttachment[] | ((prev: ComposerAttachment[]) => ComposerAttachment[])): void;
 }): void {
 	const { file, name, editText } = createPasteAttachment(text);

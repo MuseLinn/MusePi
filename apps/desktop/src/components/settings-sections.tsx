@@ -11,6 +11,7 @@ export { BrowserSection } from "./settings-sections/browser";
 export { ChatSection, PrefSegmented, PrefToggle } from "./settings-sections/chat";
 export { CommandsSection } from "./settings-sections/commands";
 export { CompanionCard, CompanionMarket, CompanionMarketCard, CompanionSection } from "./settings-sections/companion";
+export { ComposerSection } from "./settings-sections/composer";
 export { ConnectorsSection } from "./settings-sections/connectors";
 export { ContextSection } from "./settings-sections/context";
 export { FilesLspSection } from "./settings-sections/files";

@@ -13,6 +13,7 @@ import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
+import { readPasteImageMention } from "../lib/composer-prefs";
 import { isContextCommand } from "../lib/context-command";
 import { templateTabForChip } from "../lib/creation";
 import { projectName } from "../lib/electron";
@@ -60,12 +61,15 @@ import {
 } from "./CreationModeRow";
 import { VoiceButton, VoiceStatusStrip } from "./composer/action-buttons";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
+import { imageChipCount, insertPastedImageMentions } from "./composer/attachment-mention-paste";
 import { ConnectorChip, ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { DesignSystemRail } from "./composer/design-system-rail";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import {
+	deleteMentionTokenAfter,
+	deleteMentionTokenBefore,
 	expandMentionTokens,
 	mentionTokenName,
 	resolveMentionChip,
@@ -2033,7 +2037,14 @@ export function HeroComposer({
 												.filter((f): f is File => f !== null);
 											if (files.length > 0) {
 												e.preventDefault();
-												void addFiles(files);
+												const priorImages = imageChipCount(attachments);
+												void addFiles(files)
+													.then(added => {
+														if (readPasteImageMention()) {
+															insertPastedImageMentions(taRef.current, added, priorImages);
+														}
+													})
+													.catch(() => {});
 												// Mixed clipboard: the file became a chip, so keep
 												// the text half the default insertion lost.
 												insertPastedPlainText(taRef.current, pastedText);
@@ -2056,7 +2067,14 @@ export function HeroComposer({
 											const files = [...e.dataTransfer.files];
 											if (files.length > 0) {
 												e.preventDefault();
-												void addFiles(files);
+												const priorImages = imageChipCount(attachments);
+												void addFiles(files)
+													.then(added => {
+														if (readPasteImageMention()) {
+															insertPastedImageMentions(taRef.current, added, priorImages);
+														}
+													})
+													.catch(() => {});
 											}
 										}}
 										onChange={e => {
@@ -2082,6 +2100,26 @@ export function HeroComposer({
 											if (e.key === "Backspace" || e.key === "Delete") {
 												const ta = taRef.current;
 												if (ta) {
+													// Mention tokens are atoms: one key removes the whole
+													// `@图片N` (and its trailing space); unresolved
+													// `@名字` stays prose.
+													if (ta.selectionStart === ta.selectionEnd) {
+														const live = (name: string): boolean =>
+															resolveMentionChip(name, attachments) !== null;
+														const edit =
+															e.key === "Backspace"
+																? deleteMentionTokenBefore(ta.value, ta.selectionStart ?? 0, live)
+																: deleteMentionTokenAfter(ta.value, ta.selectionStart ?? 0, live);
+														if (edit) {
+															e.preventDefault();
+															setText(edit.next);
+															const caret = edit.caret;
+															requestAnimationFrame(() =>
+																taRef.current?.setSelectionRange(caret, caret),
+															);
+															return;
+														}
+													}
 													if (ta.value.length === 0 && attachments.length > 0) {
 														e.preventDefault();
 														setAttachments(prev => prev.slice(0, -1));

@@ -3,8 +3,14 @@ import { formatBytes } from "@musepi/pi-utils/format";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
-import { marketEntryInstalled, rememberSkillMarketIcons } from "../lib/skill-market";
+import {
+	type InstalledMarketIndex,
+	type InstalledMarketLike,
+	marketEntryInstalled,
+	rememberSkillMarketIcons,
+} from "../lib/skill-market";
 import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
 
@@ -169,6 +175,10 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	// 已安装判定与已安装图标回退共享同一份小写名集合 + 市场图标缓存
 	// （lib/skill-market）：name/slug 双键判定，装完即翻「已安装」。
 	const [installedNames, setInstalledNames] = useState<ReadonlySet<string>>(new Set());
+	// 来源身份：两目录同名时只让“实际安装的那个来源”显示已安装。
+	const [installedMarkets, setInstalledMarkets] = useState<InstalledMarketIndex>(new Map());
+
+	const { confirm } = useConfirm();
 
 	const [pageData, setPageData] = useState<MarketPage | null>(null);
 	const [featured, setFeatured] = useState<SkillEntry[]>([]);
@@ -195,7 +205,9 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	const refreshInstalled = useCallback((): void => {
 		if (!rpc) return;
 		void rpc
-			.request<{ skills: { name?: string; ignored?: boolean }[] }>("skills.list", {})
+			.request<{
+				skills: { name?: string; ignored?: boolean; market?: { source: string; slug?: string } }[];
+			}>("skills.list", {})
 			.then(res => {
 				const rows = res?.skills ?? [];
 				setInstalled({
@@ -203,13 +215,25 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					disabled: rows.filter(s => s.ignored).length,
 				});
 				setInstalledNames(new Set(rows.map(s => (s.name ?? "").toLowerCase()).filter(Boolean)));
+				const markets = new Map<string, InstalledMarketLike>();
+				for (const row of rows) {
+					const source = row.market?.source;
+					if (source !== "skillhub" && source !== "skills.sh" && source !== "git") continue;
+					const record: InstalledMarketLike = {
+						source,
+						...(row.market?.slug ? { slug: row.market.slug } : {}),
+					};
+					if (row.name) markets.set(row.name.toLowerCase(), record);
+					if (row.market?.slug) markets.set(row.market.slug.toLowerCase(), record);
+				}
+				setInstalledMarkets(markets);
 			})
 			.catch(() => {});
 	}, [rpc]);
 
 	const isInstalled = useCallback(
-		(entry: SkillEntry): boolean => marketEntryInstalled(entry, installedNames),
-		[installedNames],
+		(entry: SkillEntry): boolean => marketEntryInstalled(entry, installedNames, installedMarkets),
+		[installedNames, installedMarkets],
 	);
 
 	// 成功提示自动消退;失败提示驻留(用户需要读完原因)。
@@ -302,10 +326,21 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	 * 「已安装」，父级同步「我安装的 N」计数。
 	 */
 	const installEntry = useCallback(
-		(entry: SkillEntry): void => {
+		async (entry: SkillEntry): Promise<void> => {
 			if (!rpc || busyId) return;
 			// 已安装的前置拦截：角标已翻绿✓，这里再挡一次竞态双击。
-			if (marketEntryInstalled(entry, installedNames)) return;
+			if (marketEntryInstalled(entry, installedNames, installedMarkets)) return;
+			// The same name installed from another source: overwrite is a real
+			// replacement, so ask before discarding the current folder.
+			const nameTaken = marketEntryInstalled(entry, installedNames);
+			if (nameTaken) {
+				const ok = await confirm(
+					t("general.skillMarketReplaceConfirm", { name: entry.name }),
+					t("general.skillMarketInstall"),
+					{ destructive: true },
+				);
+				if (!ok) return;
+			}
 			if (entry.source === "skills.sh" && !entry.repo) {
 				setNotice({
 					ok: false,
@@ -319,6 +354,10 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					source: entry.source,
 					slug: entry.slug,
 					...(entry.repo ? { repo: entry.repo } : {}),
+					// Recorded in the provenance sidecar so the update check has
+					// something to compare for SkillHub installs.
+					...(entry.version ? { version: entry.version } : {}),
+					...(nameTaken ? { overwrite: true } : {}),
 				})
 				.then(res => {
 					setActive({
@@ -333,7 +372,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					setNotice({ ok: false, text: t("general.skillMarketInstallFailedWithName", { name: entry.name, msg }) });
 				});
 		},
-		[rpc, busyId, installedNames],
+		[rpc, busyId, installedNames, installedMarkets, confirm],
 	);
 
 	// 订阅 daemon 全局事件：只认本视图发起的那笔安装（installId 对账）。

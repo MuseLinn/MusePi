@@ -808,6 +808,7 @@ export const general = {
 	"general.skillMarketInstallFailedScriptDeclined": "安装失败：已拒绝安装脚本。",
 	// 卡片点击预览抽屉（信息先览，再决定安装；与「我安装的」技能详情同一套抽屉外壳）。
 	"general.skillMarketInstall": "安装",
+	"general.skillMarketReplaceConfirm": "已安装同名技能 {name}。从该来源安装会替换现有目录，本地修改会丢失。",
 	"general.skillMarketHomepage": "来源主页",
 	"general.skillMarketPreviewLoading": "正在加载预览…",
 	"general.skillMarketPreviewNone": "该来源暂不支持正文预览",

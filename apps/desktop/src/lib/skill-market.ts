@@ -18,13 +18,38 @@ export interface MarketEntryLike {
 	name: string;
 	slug: string;
 	iconUrl?: string;
+	/** Catalog identity; absent in old fixtures, which fall back to name match. */
+	source?: "skillhub" | "skills.sh";
 }
 
 const normalize = (s: string): string => s.trim().toLowerCase();
 
-/** 已安装判定：市场条目的 name 或 slug 命中已安装名集合即视为已安装。 */
-export function marketEntryInstalled(entry: MarketEntryLike, installedNames: ReadonlySet<string>): boolean {
-	return installedNames.has(normalize(entry.name)) || installedNames.has(normalize(entry.slug));
+/** Provenance of one installed skill, keyed by name and slug. */
+export interface InstalledMarketLike {
+	source: "skillhub" | "skills.sh" | "git";
+	slug?: string;
+}
+
+export type InstalledMarketIndex = ReadonlyMap<string, InstalledMarketLike>;
+
+/**
+ * 已安装判定：有 provenance 的技能按「来源 + slug」匹配，所以另一个目录里的
+ * 同名卡片不会假装已安装；没有 provenance 的旧安装/手写技能继续按名字回退。
+ */
+export function marketEntryInstalled(
+	entry: MarketEntryLike,
+	installedNames: ReadonlySet<string>,
+	markets?: InstalledMarketIndex,
+): boolean {
+	const keys = [normalize(entry.name), normalize(entry.slug)];
+	for (const key of keys) {
+		const market = markets?.get(key);
+		if (market) {
+			if (entry.source === undefined) return true;
+			return market.source === entry.source && normalize(market.slug ?? "") === normalize(entry.slug);
+		}
+	}
+	return keys.some(key => installedNames.has(key));
 }
 
 const iconByKey = new Map<string, string>();

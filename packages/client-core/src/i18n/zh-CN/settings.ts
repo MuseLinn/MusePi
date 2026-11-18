@@ -1287,6 +1287,8 @@ export const settings = {
 	"settings.connectorsDisconnectFailed": "断开失败：{error}",
 	"settings.connectorsConnect": "连接",
 	"settings.connectorsDisconnect": "断开",
+	"settings.connectorsManage": "管理",
+	"settings.connectorsViewAll": "查看全部 {count}",
 	"settings.connectorsAuthOauth": "OAuth",
 	"settings.connectorsAuthNone": "无需授权",
 	"settings.connectorsAuthCli": "CLI 授权",
@@ -1933,6 +1935,9 @@ export const settings = {
 	/* ── Settings: chat / notifications / sessions / shortcuts / agents ── */
 	"settings.chatSettings": "聊天设置",
 	"settings.chatSettingsDescription": "消息气泡、时间戳与流式渲染",
+	"settings.composerSection": "输入框",
+	"settings.pasteImageAutoMention": "粘贴图片时自动提及",
+	"settings.pasteImageAutoMentionHint": "在输入框中粘贴图片时自动添加 @ 提及",
 	"settings.userMessageRendering": "用户消息渲染",
 	"settings.userMessageRenderingDescription": "用户消息以 Markdown 渲染或以纯文本显示",
 	"settings.markdown": "Markdown",

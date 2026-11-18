@@ -9,8 +9,10 @@
 export const MIN_PANEL_WIDTH = 260;
 export const MAX_PANEL_WIDTH = 1200;
 
-/** The chat column never shrinks below this (readable messages + a usable composer). */
-export const MIN_CHAT_WIDTH = 420;
+/** The chat column never shrinks below this (readable messages + a usable
+ *  composer). 320 keeps a message column readable and still fits the
+ *  composer once the model capsule shrinks its label instead of wrapping. */
+export const MIN_CHAT_WIDTH = 320;
 
 /**
  * Largest panel width that still leaves `minChat` for the chat column.

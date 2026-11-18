@@ -546,6 +546,7 @@ export function SettingsView({
 									))}
 								</>
 							)}
+							{activeSection === "composer" && <ComposerSection />}
 							{activeSection === "model" && (
 								<ModelSection
 									providers={providers}
@@ -639,6 +640,7 @@ import {
 	BrowserSection,
 	CommandsSection,
 	CompanionSection,
+	ComposerSection,
 	ConnectorsSection,
 	ContextSection,
 	FilesLspSection,

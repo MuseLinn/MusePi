@@ -76,6 +76,8 @@ interface SkillUpdateRow {
 	latestVersion?: string;
 	latestCommit?: string;
 	updateAvailable: boolean | null;
+	versionRelation?: "newer" | "same" | "different" | "unknown";
+	locallyModified?: boolean;
 	alternatives?: SkillUpdateCandidate[];
 	error?: string;
 }
@@ -355,6 +357,7 @@ function SkillDrawer({
 	rpc,
 	skill,
 	update,
+	updateCheckFailed,
 	updating,
 	onUpdate,
 	onUpdateFrom,
@@ -365,6 +368,7 @@ function SkillDrawer({
 	rpc: RpcClient;
 	skill: SkillRow;
 	update?: SkillUpdateRow;
+	updateCheckFailed?: boolean;
 	updating?: boolean;
 	onUpdate?(): void;
 	onUpdateFrom?(candidate: SkillUpdateCandidate): void;
@@ -647,11 +651,13 @@ function SkillDrawer({
 								<div className="gui-cap-drawer-versions-empty">
 									{update?.updateAvailable === true
 										? t("tools.skillUpdateAvailable")
-										: update?.updateAvailable === false
-											? t("tools.skillUpdateCurrent")
-											: update?.error
-												? t("tools.skillUpdateUnknown")
-												: t("tools.skillUpdateChecking")}
+										: update?.versionRelation === "different"
+											? t("tools.skillUpdateDifferent")
+											: update?.updateAvailable === false
+												? t("tools.skillUpdateCurrent")
+												: update?.error || updateCheckFailed
+													? t("tools.skillUpdateUnknown")
+													: t("tools.skillUpdateChecking")}
 								</div>
 							) : (
 								<div className="gui-cap-drawer-versions-empty">
@@ -668,6 +674,12 @@ function SkillDrawer({
 										{updating ? t("tools.skillUpdateRunning") : t("tools.skillUpdateAction")}
 									</button>
 								)}
+							{update?.locallyModified && (
+								<div className="gui-cap-drawer-risk">
+									<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
+									<span>{t("tools.skillUpdateLocalEdits")}</span>
+								</div>
+							)}
 							{update?.alternatives?.some(candidate => !candidate.current) && (
 								<>
 									<div className="gui-cap-drawer-section mt-3">{t("tools.skillUpdateSources")}</div>
@@ -676,7 +688,7 @@ function SkillDrawer({
 											<span className="gui-cap-drawer-kv-key">{candidate.source}</span>
 											<span className="gui-cap-drawer-kv-val">
 												{candidate.latestVersion ? `v${candidate.latestVersion}` : candidate.slug}
-												{candidate.current ? ` · ${t("tools.skillUpdateCurrent")}` : ""}
+												{candidate.current ? ` · ${t("tools.skillUpdateCurrentSource")}` : ""}
 											</span>
 											{onUpdateFrom && (
 												<button
@@ -794,6 +806,7 @@ function InstalledSkillsPane({
 }): ReactNode {
 	const [skills, setSkills] = useState<SkillRow[] | null>(null);
 	const [updates, setUpdates] = useState<Map<string, SkillUpdateRow> | null>(null);
+	const [updateCheckFailed, setUpdateCheckFailed] = useState(false);
 	const [updating, setUpdating] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [query, setQuery] = useState("");
@@ -813,8 +826,14 @@ function InstalledSkillsPane({
 		if (!rpc) return;
 		void rpc
 			.request<{ updates: SkillUpdateRow[] }>("skills.marketplace.updates", {})
-			.then(res => setUpdates(new Map((res?.updates ?? []).map(u => [u.name, u]))))
-			.catch(() => setUpdates(new Map()));
+			.then(res => {
+				setUpdates(new Map((res?.updates ?? []).map(u => [u.name, u])));
+				setUpdateCheckFailed(false);
+			})
+			.catch(() => {
+				setUpdates(new Map());
+				setUpdateCheckFailed(true);
+			});
 	}, [rpc]);
 
 	// 拉取技能清单:挂载时 + 每次批量操作后(daemon 侧另有 10s TTL)。
@@ -875,14 +894,35 @@ function InstalledSkillsPane({
 						overwrite: true,
 						version: candidate?.latestVersion ?? updates?.get(skill.name)?.latestVersion,
 					});
-					const deadline = Date.now() + 60_000;
+					let deadline = Date.now() + 60_000;
+					let approvalAsked = false;
 					for (;;) {
 						await new Promise(resolve => setTimeout(resolve, 600));
 						const status = await rpc.request<{
-							installs: Array<{ installId: string; state: string; message?: string }>;
+							installs: Array<{
+								installId: string;
+								state: string;
+								message?: string;
+								scripts?: string[];
+							}>;
 						}>("skills.marketplace.status", {});
 						const rec = status.installs.find(i => i.installId === started.installId);
 						if (rec?.state === "done") break;
+						if (rec?.state === "awaiting-approval" && !approvalAsked) {
+							approvalAsked = true;
+							const ok = await confirm(
+								t("general.skillMarketInstallScripts", { count: rec.scripts?.length ?? 0 }),
+								t("general.skillMarketInstallApprove"),
+							);
+							// A pending install waiting for a decision is not a
+							// timeout: reset the clock after the user answers.
+							deadline = Date.now() + 60_000;
+							await rpc.request("skills.marketplace.approve", {
+								installId: started.installId,
+								approve: ok,
+							});
+							continue;
+						}
 						if (rec && (rec.state === "failed" || rec.state === "cancelled")) {
 							throw new Error(rec.message ?? rec.state);
 						}
@@ -897,6 +937,35 @@ function InstalledSkillsPane({
 			}
 		},
 		[rpc, updating, updates, reload],
+	);
+
+	/** Same-source update: ask only when the folder no longer matches the
+	 *  content hash recorded at install. */
+	const requestUpdate = useCallback(
+		async (skill: SkillRow): Promise<void> => {
+			if (updates?.get(skill.name)?.locallyModified) {
+				const ok = await confirm(t("tools.skillUpdateLocalEdits"), t("tools.skillUpdateAction"), {
+					destructive: true,
+				});
+				if (!ok) return;
+			}
+			void updateSkill(skill);
+		},
+		[confirm, updates, updateSkill],
+	);
+
+	/** Switching sources replaces the folder: ask before discarding local edits. */
+	const requestUpdateFrom = useCallback(
+		async (skill: SkillRow, candidate: SkillUpdateCandidate): Promise<void> => {
+			if (!candidate.current) {
+				const ok = await confirm(t("tools.skillUpdateSwitchConfirm"), t("tools.skillUpdateSwitch"), {
+					destructive: true,
+				});
+				if (!ok) return;
+			}
+			void updateSkill(skill, candidate);
+		},
+		[confirm, updateSkill],
 	);
 
 	/** 卡片/列表行上"是否可批量操作"的单一判据,批量按钮与行内徽标共用。 */
@@ -1314,9 +1383,10 @@ function InstalledSkillsPane({
 						rpc={rpc}
 						skill={drawer}
 						update={updates?.get(drawer.name)}
+						updateCheckFailed={updateCheckFailed}
 						updating={updating === drawer.name}
-						onUpdate={() => void updateSkill(drawer)}
-						onUpdateFrom={candidate => void updateSkill(drawer, candidate)}
+						onUpdate={() => void requestUpdate(drawer)}
+						onUpdateFrom={candidate => void requestUpdateFrom(drawer, candidate)}
 						onClose={() => setDrawerName(null)}
 						onChanged={reload}
 						onDeleted={name =>
