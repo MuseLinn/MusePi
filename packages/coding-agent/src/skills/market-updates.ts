@@ -232,8 +232,7 @@ export async function checkSkillUpdates(
 				latestCommit: latest?.commit,
 				updateAvailable: compareSkillUpdate(record, latest),
 				versionRelation: skillVersionRelation(record, latest),
-				...((compareSkillUpdate(record, latest) === true ||
-				skillVersionRelation(record, latest) === "different") &&
+				...((compareSkillUpdate(record, latest) === true || skillVersionRelation(record, latest) === "different") &&
 				(await isLocallyModified(item.dir, record))
 					? { locallyModified: true }
 					: {}),

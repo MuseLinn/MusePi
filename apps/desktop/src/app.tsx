@@ -2952,6 +2952,7 @@ function AppInner(): ReactNode {
 			deliverAs?: "prompt" | "steer" | "followUp" | "continue",
 			displayContext?: MessageDisplayContext,
 			videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
+			parentId?: string | null,
 		): Promise<void> => {
 			const client = rpcRef.current;
 			const id = sessionId ?? selectedId;
@@ -2963,7 +2964,7 @@ function AppInner(): ReactNode {
 			// 感觉"没发送"。
 			const store = storeRef.current;
 			if (store && store.sessionId === id && !deliverAs) {
-				store.optimisticEcho(text, images, displayContext);
+				store.optimisticEcho(text, images, displayContext, parentId);
 			}
 			try {
 				// Refresh the tree/metadata right after the daemon ACCEPTS the
@@ -4473,8 +4474,8 @@ function AppInner(): ReactNode {
 							mini: true,
 							onAddProvider: () => openSettings("providers"),
 							onOpenSettings: openSettings,
-							onSend: (text, images, deliverAs, displayContext, videos) =>
-								void sendPrompt(text, images, undefined, deliverAs, displayContext, videos),
+							onSend: (text, images, deliverAs, displayContext, videos, parentId) =>
+								void sendPrompt(text, images, undefined, deliverAs, displayContext, videos, parentId),
 							onStop: stop,
 							onDecideApproval: decideApproval,
 							onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),
@@ -4933,8 +4934,16 @@ function AppInner(): ReactNode {
 												parentSession: activeParentSession,
 												onOpenParentSession: id => void openSession(id),
 												onOpenSession: id => void openSession(id),
-												onSend: (text, images, deliverAs, displayContext, videos) =>
-													void sendPrompt(text, images, undefined, deliverAs, displayContext, videos),
+												onSend: (text, images, deliverAs, displayContext, videos, parentId) =>
+													void sendPrompt(
+														text,
+														images,
+														undefined,
+														deliverAs,
+														displayContext,
+														videos,
+														parentId,
+													),
 												onStop: stop,
 												onDecideApproval: decideApproval,
 												onReloadSession: () => (selectedId ? openSession(selectedId) : undefined),

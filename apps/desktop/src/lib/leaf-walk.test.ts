@@ -49,6 +49,32 @@ describe("walkLeafPath — branched session (实机回归 01a0f7a7)", () => {
 	});
 });
 
+describe("walkLeafPath — optimistic echo at a rewind branch point", () => {
+	const optimistic = (parentId: string | null) => msg(`user:optimistic-1`, parentId);
+
+	it("a parented echo keeps one active path: the reverted sibling branches stay hidden", () => {
+		const entries = [...BRANCHED, optimistic("assistant:2")];
+		const walk = walkLeafPath(entries, "user:optimistic-1");
+		expect(walk.complete).toBe(true);
+		const visible = filterVisibleEntries(entries, walk, new Set(walk.path.map(p => p.id)), {
+			pinnedToRoot: false,
+		});
+		// 回退重发:旧分支 A/C/D 全部离开 transcript,只剩基线 + 新回显。
+		expect(visible.map(e => (e as { id: string }).id)).toEqual(["user:1", "assistant:2", "user:optimistic-1"]);
+	});
+
+	it("a parentless echo (the old shape) cuts the chain and re-shows every sibling", () => {
+		const entries = [...BRANCHED, optimistic(null)];
+		const walk = walkLeafPath(entries, "user:optimistic-1");
+		expect(walk.complete).toBe(false);
+		const visible = filterVisibleEntries(entries, walk, new Set(walk.path.map(p => p.id)), {
+			pinnedToRoot: false,
+		});
+		// 链断 → 全显示:旧分支重新出现,正是实机“撤回后重发显示不正常”。
+		expect(visible).toHaveLength(entries.length);
+	});
+});
+
 describe("walkLeafPath — chain-cut contracts (regression guards)", () => {
 	it("a parent above the loaded window cuts the chain — nothing may be hidden", () => {
 		// 尾窗加载:最老条目的 parentId 指向窗外。回归后果:complete 被误判

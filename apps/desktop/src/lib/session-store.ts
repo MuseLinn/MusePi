@@ -257,6 +257,11 @@ export class GuiSessionStore {
 		text: string;
 		images?: { type: "image"; data: string; mimeType: string }[];
 		displayContext?: MessageDisplayContext;
+		/** Branch parent the daemon will attach this prompt under. Kept on the
+		 *  echo so the transcript can walk a complete path immediately after a
+		 *  rewind, instead of treating the parentless tail as a cut chain and
+		 *  re-showing the branch the user just left. */
+		parentId?: string | null;
 	} | null = null;
 	#optimisticSeq = 0;
 	/** Cached snapshot — `useSyncExternalStore` requires a stable reference
@@ -627,8 +632,9 @@ export class GuiSessionStore {
 		text: string,
 		images?: { type: "image"; data: string; mimeType: string }[],
 		displayContext?: MessageDisplayContext,
+		parentId?: string | null,
 	): void {
-		this.#optimisticUser = { text, images, displayContext };
+		this.#optimisticUser = { text, images, displayContext, parentId };
 		this.#optimisticSeq += 1;
 		this.#snapshot = this.#buildSnapshot();
 		this.#emit();
@@ -678,7 +684,7 @@ export class GuiSessionStore {
 				type: "message",
 				// 本地唯一 id(与 daemon 的 user:timestamp 空间隔离,绝不去重冲突)。
 				id: `user:optimistic-${this.#optimisticSeq}`,
-				parentId: null,
+				parentId: o.parentId ?? null,
 				timestamp: new Date().toISOString(),
 				message: {
 					role: "user",

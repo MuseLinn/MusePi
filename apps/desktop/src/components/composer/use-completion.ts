@@ -5,6 +5,7 @@ import { currentLine, tokenQuery } from "../../lib/completion-trigger";
 import type { RpcClient } from "../../lib/rpc";
 import { rankSlashEntries } from "../../lib/slash-rank";
 import { autosize } from "../composer-autosize";
+import type { ComposerEditorHandle } from "./editor-types";
 import type { SessionListNode } from "../SessionList";
 import type { SlashEntry } from "../SlashRow";
 import type { HashCompletionEntry } from "./completion-menus";
@@ -56,7 +57,7 @@ export function useCompletion({
 	/** Depth cap for "@" rows; omitted = every scanned depth (session parity). */
 	atMaxDepth?: number;
 }): {
-	taRef: { current: HTMLTextAreaElement | null };
+	taRef: { current: ComposerEditorHandle | null };
 	// Slash-command completion (TUI parity): typing "/" lists the daemon's
 	// builtin registry; Enter/click inserts the command token.
 	slashOpen: boolean;
@@ -89,7 +90,7 @@ export function useCompletion({
 	onHashInput(value: string): void;
 	insertHash(id: string): void;
 } {
-	const taRef = useRef<HTMLTextAreaElement | null>(null);
+	const taRef = useRef<ComposerEditorHandle | null>(null);
 	// Slash-command completion (TUI parity): typing "/" lists the daemon's
 	// builtin registry; Enter/click inserts the command token.
 	const [slashOpen, setSlashOpen] = useState(false);

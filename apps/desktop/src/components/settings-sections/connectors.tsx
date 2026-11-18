@@ -573,8 +573,8 @@ ${connector.category ?? ""}`.toLowerCase();
 							{connector.verified === "needs-app" && (
 								<span className="gui-provider-chip">{t("settings.connectorsNeedsApp")}</span>
 							)}
-							{connector.status === "connected" && (
-								<span className="gui-provider-chip">{t("settings.connectorsStatusConnected")}</span>
+							{connector.status !== "disconnected" && (
+								<span className="gui-provider-chip">{statusLabel(connector.status)}</span>
 							)}
 						</span>
 						<span className="gui-connector-desc">{description}</span>
@@ -586,12 +586,7 @@ ${connector.category ?? ""}`.toLowerCase();
 							{t("settings.connectorsManage")}
 						</button>
 					) : (
-						<button
-							type="button"
-							className="gui-btn"
-							disabled={busy}
-							onClick={() => void connect(connector)}
-						>
+						<button type="button" className="gui-btn" disabled={busy} onClick={() => void connect(connector)}>
 							{busy ? t("settings.connectorsStatusConnecting") : t("settings.connectorsConnect")}
 						</button>
 					)}

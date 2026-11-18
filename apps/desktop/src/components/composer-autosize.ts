@@ -1,4 +1,5 @@
 import { getComposerHeightLimit, isComposerContentCapped } from "./composer-height-limit";
+import type { ComposerEditorHandle } from "./composer/editor-types";
 
 const LINE_PX = 20;
 const PAD_Y = 16;
@@ -38,8 +39,14 @@ function heightCap(el: HTMLTextAreaElement): number {
 }
 
 /** Shared by the session and welcome composers. */
-export function autosize(el: HTMLTextAreaElement | null): void {
+export function autosize(el: HTMLTextAreaElement | ComposerEditorHandle | null): void {
 	if (!el) return;
+	// CodeMirror owns the text, caret and height: re-measure instead of
+	// writing inline heights into a mirror element.
+	if ("autosize" in el) {
+		el.autosize();
+		return;
+	}
 	if (el.dataset.focused === "1") {
 		// Focus mode: the flex layout fills the surface — don't fight it.
 		el.style.height = "100%";

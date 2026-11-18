@@ -1,4 +1,4 @@
-import { isSttDownloadEvent, type SttModelStatusResponse } from "@musepi/pi-wire";
+import { type ImageContent, isSttDownloadEvent, type SttModelStatusResponse } from "@musepi/pi-wire";
 import {
 	Brain,
 	Camera,
@@ -946,6 +946,36 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 		setText(prev => (prev ? `${prev} ${recognized}` : recognized));
 		taRef.current?.focus();
 	}, []);
+	// 撤回回填(mobile/web 与 Kimi 桌面端对齐):会话页把被撤回的原文通过
+	// 这个事件交回输入框。不自动发送——用户仍可修改或撤销撤回。
+	useEffect(() => {
+		const onRestore = (event: Event): void => {
+			const detail = (event as CustomEvent<{ text?: unknown; images?: unknown }>).detail;
+			const restored = typeof detail?.text === "string" ? detail.text : "";
+			const restoredImages = Array.isArray(detail?.images)
+				? detail.images.flatMap((image, index) => {
+						const candidate = image as { type?: unknown; data?: unknown; mimeType?: unknown };
+						return candidate.type === "image" &&
+							typeof candidate.data === "string" &&
+							typeof candidate.mimeType === "string"
+							? [restoreImageAttachment(candidate as ImageContent, `image-${index + 1}`)]
+							: [];
+					})
+				: [];
+			if (restored.length === 0 && restoredImages.length === 0) return;
+			setText(restored);
+			if (restoredImages.length > 0) setPending(prev => [...prev, ...restoredImages]);
+			requestAnimationFrame(() => {
+				const el = taRef.current;
+				if (!el) return;
+				el.focus();
+				el.setSelectionRange(restored.length, restored.length);
+				autosize(el);
+			});
+		};
+		window.addEventListener("musepi-gui-restore-prompt", onRestore);
+		return () => window.removeEventListener("musepi-gui-restore-prompt", onRestore);
+	}, [taRef]);
 	// Barge-in ("口述打断"): speaking the mic command stops playback first.
 	const voiceCtl = useVoiceInput(client, onVoiceText, () => tts.stop());
 	const voice = voiceCtl.voice;

@@ -177,3 +177,18 @@ describe("Composer draft sending", () => {
 		expect(pickers.every(input => input.type === "file")).toBe(true);
 	});
 });
+
+describe("Composer revert restore", () => {
+	it("puts the reverted prompt back into the textarea with the caret at its end", async () => {
+		await renderComposer(liveClient());
+		const textarea = document.querySelector<HTMLTextAreaElement>(".sh-composer-input");
+		if (!textarea) throw new Error("composer textarea did not render");
+
+		await act(async () => {
+			window.dispatchEvent(new CustomEvent("musepi-gui-restore-prompt", { detail: { text: "原来的问题" } }));
+		});
+
+		expect(textarea.value).toBe("原来的问题");
+		expect(textarea.selectionStart).toBe("原来的问题".length);
+	});
+});

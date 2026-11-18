@@ -728,7 +728,11 @@ export class DaemonServer {
 					this.#services.get<ExtensionService>("extensions").invalidateExtensionsCache(),
 				invalidatePluginCaches: () => this.#services.get<ExtensionService>("extensions").invalidatePluginCaches(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
-				onInstallState: payload => this.#services.get<EventService>("events").broadcast(payload),
+				onInstallState: payload => {
+					this.#services.get<EventService>("events").broadcast(payload);
+					// A finished skill install changes the catalog live sessions see.
+					if (payload.state === "done") this.#refreshLiveSkillCatalogs();
+				},
 				resolvePackagePaths: name => this.resolvePackageExtensionPaths(name),
 				applyLive: target => this.applyPluginEntriesLive(target),
 				onApplyState: payload => this.#services.get<EventService>("events").broadcast(payload),
@@ -1419,6 +1423,26 @@ export class DaemonServer {
 		const installed = await getAllPlugins(this.#host.cwd());
 		const plugin = installed.find(entry => entry.name === name);
 		return plugin ? resolvePluginExtensionPaths(plugin) : [];
+	}
+
+	/**
+	 * Refresh the catalog every live session sees after a skill install, update
+	 * or delete. Bodies are already read from disk on each `skill://` access
+	 * (the reference rereads the definition on every `skill` call); only the
+	 * name/description catalog is snapshotted, so an idle session can pick up
+	 * the change without being recreated. A streaming turn keeps the prompt it
+	 * started with, exactly like the directory-change path below.
+	 */
+	#refreshLiveSkillCatalogs(): void {
+		for (const live of this.#host.allSessions()) {
+			if (isLiveSessionBusy(live)) continue;
+			void live.agentSession.refreshSkills().catch(error => {
+				logger.warn("Failed to refresh the skill catalog after a skill change", {
+					sessionId: live.sessionId,
+					error: String(error),
+				});
+			});
+		}
 	}
 
 	/** Rediscover skills and rebuild the prompt after a session-scoped directory
@@ -2634,10 +2658,14 @@ export class DaemonServer {
 				return this.#services.get<MarketplaceService>("marketplace").listSkills();
 			}
 			case "skills.delete": {
-				return this.#services.get<MarketplaceService>("marketplace").deleteSkill(params ?? {});
+				const result = await this.#services.get<MarketplaceService>("marketplace").deleteSkill(params ?? {});
+				this.#refreshLiveSkillCatalogs();
+				return result;
 			}
 			case "skills.install": {
-				return this.#services.get<MarketplaceService>("marketplace").installSkill(params ?? {});
+				const result = await this.#services.get<MarketplaceService>("marketplace").installSkill(params ?? {});
+				this.#refreshLiveSkillCatalogs();
+				return result;
 			}
 			case "skills.read": {
 				return this.#services.get<MarketplaceService>("marketplace").readSkill(params ?? {});

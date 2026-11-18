@@ -15,7 +15,7 @@ import {
 	normalizeDisplayContexts,
 } from "@musepi/client-core/src/messages/display-context";
 import type { SessionEntry } from "@musepi/pi-wire";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { t } from "../i18n/index.js";
 import type { CompanionMood, CompanionState } from "../lib/companion";
@@ -68,7 +68,7 @@ import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { GoalDetailCard } from "./composer/goal-detail-card";
-import { ComposerHighlight } from "./composer/input-highlight";
+import { CodeMirrorComposer } from "./composer/CodeMirrorComposer";
 import { LargeTextPasteGesture } from "./composer/large-text-paste";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
@@ -121,7 +121,7 @@ import { attachPaste, isLongPastedText, saveEditedPaste, useLongTextPaste } from
 import { useModes } from "./composer/use-modes";
 import { useSessionDesignSystem } from "./composer/use-session-design-system";
 import { useVoiceSetupGate } from "./composer/voice-setup";
-import { autosize, MIN_ROWS } from "./composer-autosize";
+import { autosize } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ScreenshotEditorDialog } from "./ScreenshotEditorDialog";
@@ -186,7 +186,12 @@ export interface SessionComposerProps {
 	quotes: DisplayContext[];
 	onQuotesChange(next: DisplayContext[]): void;
 	/** User-message edit: load text into the composer. */
-	pendingEdit?: string | null;
+	/** Prompt restored for re-answer (Kimi undo parity): the text plus the
+	 *  pictures that rode with it. */
+	pendingEdit?: {
+		text: string;
+		images?: { type: "image"; data: string; mimeType: string }[];
+	} | null;
 	onEditConsumed?(): void;
 	onSetThinking?(level: ThinkingLevel | null): void;
 	/** Model switch inside the composer (session.setModel) — parent re-fetches
@@ -217,13 +222,15 @@ export interface SessionComposerProps {
 	attachApiRef?: ComposerAttachRef;
 }
 
-function shouldSubmitOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, composing: boolean): boolean {
+type ComposerKeyEvent = globalThis.KeyboardEvent & { nativeEvent?: { isComposing?: boolean } };
+
+function shouldSubmitOnEnter(e: ComposerKeyEvent, composing: boolean): boolean {
 	if (e.key !== "Enter") return false;
 	// IME composition: the confirming Enter must commit the candidate text,
 	// not send the message. isComposing covers standard IMEs; keyCode 229 is
 	// Safari's legacy marker (WebKit dispatches Enter after compositionend,
 	// when isComposing is already false).
-	if (composing || e.nativeEvent.isComposing || e.keyCode === 229) return false;
+	if (composing || (e.nativeEvent?.isComposing ?? e.isComposing) || e.keyCode === 229) return false;
 	if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return false;
 	return true;
 }
@@ -1647,7 +1654,7 @@ export function SessionComposer({
 		],
 	);
 
-	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+	const onKeyDown = (e: ComposerKeyEvent): void => {
 		// Self-healing composition latch (see the textarea's onBlur/onFocus):
 		// Chromium tags every key INSIDE a live composition with keyCode 229,
 		// so a keydown that is neither 229 nor marked composing means the latch
@@ -1657,12 +1664,17 @@ export function SessionComposer({
 		// nothing while the mouse-only Send button kept working. Enter stays
 		// exempt because WebKit dispatches the confirming Enter keyCode 13
 		// AFTER compositionend, where the latch must still hold.
-		if (composingRef.current && !e.nativeEvent.isComposing && e.keyCode !== 229 && e.key !== "Enter") {
+		if (
+			composingRef.current &&
+			!(e.nativeEvent?.isComposing ?? e.isComposing) &&
+			e.keyCode !== 229 &&
+			e.key !== "Enter"
+		) {
 			composingRef.current = false;
 		}
 		// IME composition: every key (including the confirming Enter) belongs
 		// to the editor — never run completion or submit while composing.
-		if (composingRef.current || e.nativeEvent.isComposing || e.keyCode === 229) {
+		if (composingRef.current || (e.nativeEvent?.isComposing ?? e.isComposing) || e.keyCode === 229) {
 			return;
 		}
 		// Accept the next-input candidate. Tab is the advertised key; ArrowRight
@@ -1876,9 +1888,16 @@ export function SessionComposer({
 			handledEditRef.current = null;
 			return;
 		}
-		if (handledEditRef.current === pendingEdit) return;
-		handledEditRef.current = pendingEdit;
-		setText(pendingEdit);
+		// Identity covers pictures too: a second undo of the same text with a
+		// different image count is a different edit and must land.
+		const editKey = `${pendingEdit.text}\u0000${pendingEdit.images?.length ?? 0}`;
+		if (handledEditRef.current === editKey) return;
+		handledEditRef.current = editKey;
+		setText(pendingEdit.text);
+		const restoredImages = attachmentsFromWireImages(pendingEdit.images);
+		if (restoredImages.length > 0) {
+			setAttachments(prev => [...prev, ...restoredImages]);
+		}
 		requestAnimationFrame(() => {
 			taRef.current?.focus();
 			autosize(taRef.current);
@@ -1890,7 +1909,7 @@ export function SessionComposer({
 	useEffect(() => {
 		const ta = taRef.current;
 		if (!ta) return;
-		ta.dataset.focused = focused ? "1" : "0";
+		ta.setFocused(focused);
 		autosize(ta);
 	}, [focused]);
 
@@ -2203,16 +2222,13 @@ export function SessionComposer({
 								const ta = taRef.current;
 								if (!ta) return;
 								ta.focus();
-								const start = ta.selectionStart ?? text.length;
-								const end = ta.selectionEnd ?? text.length;
-								ta.setRangeText(token, start, end, "end");
+								ta.insertText(token);
 								const next = ta.value;
 								setText(next);
 								autosize(ta);
-								// The completion panels are driven off textarea onChange,
-								// which a programmatic setRangeText never fires — so
-								// "+ → insert command" landed a bare "/" with no menu.
-								// Re-run the same parsers the change handler uses.
+								// The completion panels are driven off onChange; a
+								// programmatic insert must re-run the same parsers so
+								// "+ → insert command" opens the menu instead of a bare "/".
 								onSlashInput(next);
 								onAtInput(next);
 								onHashInput(next);
@@ -2412,52 +2428,15 @@ export function SessionComposer({
 					}}
 				/>
 				<div className="gui-ta-stack">
-					<ComposerHighlight
-						text={text}
-						className="gui-ta-highlight--session"
-						resolveMention={name => {
-							// null = unresolved (no such ordinal/name) → the token
-							// is plain text: the overlay leaves it unpainted and the
-							// send path leaves it unexpanded.
-							const hit = resolveMentionChip(name, attachments);
-							return hit
-								? {
-										kind: hit.chip.kind,
-										name: hit.chip.name,
-										size: hit.chip.size,
-										dataUrl: hit.chip.dataUrl || undefined,
-									}
-								: null;
-						}}
-						onMentionClick={start => {
-							// Pill click = caret jump to the token (hover preview is
-							// display-only). Mousedown default was already cancelled
-							// so focus never left the textarea.
-							const ta = taRef.current;
-							if (!ta) return;
-							ta.focus();
-							ta.setSelectionRange(start, start);
-						}}
-					/>
-					<textarea
+					<CodeMirrorComposer
 						ref={el => {
 							taRef.current = el;
-							menuAnchorRef(el);
+							menuAnchorRef(el?.dom ?? null);
 						}}
 						value={text}
-						rows={MIN_ROWS}
-						/* Marks the session composer for the type-anywhere redirect:
-						 * a keystroke with nothing focused lands here. The welcome
-						 * composer is deliberately not marked — it is not a session's
-						 * input and must not silently capture stray typing. */
-						data-composer-input=""
-						onScroll={e => {
-							// Mirror the textarea's scroll onto the highlight overlay
-							// (previousElementSibling inside the shared stack) so the
-							// painted tokens track the caret when the draft overflows.
-							const overlay = e.currentTarget.previousElementSibling as HTMLElement | null;
-							if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
-						}}
+						dataComposerInput
+						dataFocused={focused}
+						variant="session"
 						onPaste={e => {
 							const pastedText = e.clipboardData.getData("text");
 							// Snapshot before intake: the mention ordinal continues
@@ -2487,8 +2466,8 @@ export function SessionComposer({
 							if (!ta) return;
 							const candidate = largePasteGesture.beginPaste(pastedText, {
 								value: ta.value,
-								selectionStart: ta.selectionStart ?? ta.value.length,
-								selectionEnd: ta.selectionEnd ?? ta.value.length,
+								selectionStart: ta.selectionStart,
+								selectionEnd: ta.selectionEnd,
 							});
 							if (candidate) {
 								e.preventDefault();
@@ -2503,19 +2482,15 @@ export function SessionComposer({
 									},
 									() => {
 										const el = taRef.current;
-										if (!el) return null;
-										return {
-											value: el.value,
-											selectionStart: el.selectionStart ?? el.value.length,
-											selectionEnd: el.selectionEnd ?? el.value.length,
-										};
+										return el
+											? {
+													value: el.value,
+													selectionStart: el.selectionStart,
+													selectionEnd: el.selectionEnd,
+												}
+											: null;
 									},
-									(from, to, citation) => {
-										const el = taRef.current;
-										if (!el) return;
-										el.setRangeText(citation, from, to, "end");
-										el.dispatchEvent(new Event("input", { bubbles: true }));
-									},
+									(from, to, citation) => taRef.current?.replaceRange(from, to, citation),
 									"[附件]",
 								);
 							}
@@ -2530,16 +2505,15 @@ export function SessionComposer({
 									.catch(() => {});
 							}
 						}}
-						onChange={e => {
-							setText(e.target.value);
+						onChange={(value, selection) => {
+							setText(value);
 							// The large-paste gesture needs to see the text AFTER the
-							// browser inserted it: the insertion is the first half of
-							// the gesture, and knowing where it landed is what lets the
-							// second paste of the same text replace it.
+							// edit: knowing where it landed is what lets the second
+							// paste of the same text replace it.
 							largePasteGesture.change({
-								value: e.target.value,
-								selectionStart: e.target.selectionStart ?? e.target.value.length,
-								selectionEnd: e.target.selectionEnd ?? e.target.value.length,
+								value,
+								selectionStart: selection.start,
+								selectionEnd: selection.end,
 							});
 							// A genuine keystroke that edits the box exits input-history
 							// browsing (programmatic history recall sets state, never
@@ -2547,17 +2521,13 @@ export function SessionComposer({
 							if (historyIndex !== null) setHistoryIndex(null);
 							if (clearAllRef.current) {
 								clearAllRef.current = false;
-								if (e.target.value === "") setAttachments([]);
+								if (value === "") setAttachments([]);
 							}
-							onSlashInput(e.target.value);
-							onAtInput(e.target.value);
-							onHashInput(e.target.value);
-							autosize(taRef.current);
+							onSlashInput(value);
+							onAtInput(value);
+							onHashInput(value);
 						}}
 						onCompositionStart={() => {
-							composingRef.current = true;
-						}}
-						onCompositionUpdate={() => {
 							composingRef.current = true;
 						}}
 						onCompositionEnd={() => {
@@ -2570,13 +2540,10 @@ export function SessionComposer({
 						onBlur={() => {
 							// A composition can end WITHOUT compositionend — an IME
 							// cancel, a window switch, Esc, a renderer reload. Losing
-							// focus always terminates it, so this is the safe reset
-							// for the latch that would otherwise stay true forever
-							// (Enter silently stops sending until restart).
+							// focus always terminates it.
 							composingRef.current = false;
 						}}
 						onFocus={() => {
-							// Nothing can still be composing when focus arrives.
 							composingRef.current = false;
 						}}
 						onKeyDown={onKeyDown}
@@ -2591,6 +2558,28 @@ export function SessionComposer({
 						}
 						spellCheck={spellcheckEnabled()}
 						autoComplete="off"
+						resolveMention={name => {
+							// null = unresolved (no such ordinal/name) → plain text:
+							// unpainted and unexpanded on send.
+							const hit = resolveMentionChip(name, attachments);
+							return hit
+								? {
+										kind: hit.chip.kind,
+										name: hit.chip.name,
+										size: hit.chip.size,
+										dataUrl: hit.chip.dataUrl || undefined,
+									}
+								: null;
+						}}
+						mentionVersion={attachments}
+						onMentionClick={start => {
+							// Pill click = caret jump to the token (hover preview is
+							// display-only).
+							const ta = taRef.current;
+							if (!ta) return;
+							ta.focus();
+							ta.setSelectionRange(start, start);
+						}}
 					/>
 					{shownSuggestion !== null && (
 						<span className="gui-composer-suggestion" aria-hidden>

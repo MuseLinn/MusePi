@@ -836,7 +836,31 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 				emptySlot={emptySlot}
 				userGutter={singleParty ? "" : undefined}
 				agentGutter={singleParty ? "" : undefined}
-				onRevert={id => moveLeaf(id, true)}
+				onRevert={(id, text) => {
+					// Kimi parity: the reverted prompt — text and pictures — goes
+					// back into the composer through the shared restore event; the
+					// leaf still moves, so undo/continue semantics are unchanged.
+					const entry = entries.find(candidate => candidate.id === id);
+					const content = entry?.type === "message" ? (entry.message as { content?: unknown }).content : undefined;
+					const images = Array.isArray(content)
+						? content.filter(
+								(block): block is { type: "image"; data: string; mimeType: string } =>
+									typeof block === "object" &&
+									block !== null &&
+									(block as { type?: unknown }).type === "image" &&
+									typeof (block as { data?: unknown }).data === "string" &&
+									typeof (block as { mimeType?: unknown }).mimeType === "string",
+							)
+						: [];
+					if (text || images.length > 0) {
+						window.dispatchEvent(
+							new CustomEvent("musepi-gui-restore-prompt", {
+								detail: { text, ...(images.length > 0 ? { images } : {}) },
+							}),
+						);
+					}
+					moveLeaf(id, true);
+				}}
 				onRetry={(id, _text) => regenerateAt(id)}
 				onFork={(id, text, includeTarget) => forkAt(id, text, includeTarget)}
 				onSpeak={(text, id) => tts.speak(text, id)}

@@ -564,7 +564,9 @@ function Row({
 							title={t("general.revertMessage")}
 							aria-label={t("general.revertMessage")}
 							onClick={() => {
-								if (quoteText) onRevert(id, quoteText);
+								// Image-only prompts have no text; the host still needs the
+								// revert (and may restore the pictures from the entry).
+								onRevert(id, quoteText ?? "");
 							}}
 						>
 							<Undo2 size={13} />
@@ -607,7 +609,7 @@ function Row({
 							title={t("settings.editResend")}
 							aria-label={t("settings.editResend")}
 							onClick={() => {
-								if (quoteText) onEdit(id, quoteText);
+								onEdit(id, quoteText ?? "");
 							}}
 						>
 							<Pencil size={13} />

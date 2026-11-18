@@ -47,6 +47,14 @@ describe("乐观回显", () => {
 		expect(last.message?.role).toBe("user");
 	});
 
+	it("带上发送时的分支父节点 — 回退重发的乐观条目不再是无父尾行", () => {
+		const s = store();
+		s.optimisticEcho("again", undefined, undefined, "assistant:2");
+		const snap = s.getSnapshot();
+		const last = snap.entries[snap.entries.length - 1] as { parentId?: string | null };
+		expect(last.parentId).toBe("assistant:2");
+	});
+
 	it("daemon 同签名 message_start 到达 → 乐观条目移除,权威条目接管(无重复)", async () => {
 		const s = store();
 		s.optimisticEcho("hello");

@@ -159,6 +159,8 @@ The `connector-catalog` discovery provider (priority 40) projects each enabled e
 
 The GUI reflects that containment: settings has ONE entry, 连接器, and hand-written `mcp.json` servers render as the 已配置服务器 section at the bottom of that page (`apps/desktop/src/components/settings-sections/mcp.tsx`, mounted from `connectors.tsx`). A separate MCP page used to sit beside the catalog and showed less — a toggle without transport, URL, or OAuth login. The retired `mcp` settings id stays in `SECTION_ALIAS` (`apps/desktop/src/lib/settings-nav.ts`) so existing deep links land on the connector page.
 
+The page is two levels. Rows are an index — icon, name, one sentence, one action — grouped as connected, featured, and category, each category showing six rows until the user narrows it. Everything longer (the full description, examples, docs, the credential form, CLI authorization, local-process approval, the probe verdict) lives in the detail dialog a row opens. A connect that turns out to need authorization, a credential, or an approval opens that dialog, so a flow never waits behind a row the user cannot see. The device-code panel stays on the page instead of the dialog: its polling lives in the component, and closing the dialog must not strand a sign-in that is already being entered in the browser.
+
 ## RPC surface
 
 | Route | Behavior |

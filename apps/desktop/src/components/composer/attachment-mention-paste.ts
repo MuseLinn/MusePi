@@ -9,6 +9,7 @@
  * event so a controlled textarea's value and caret land exactly where a
  * native paste would (same mechanism as `insertPastedPlainText`).
  */
+import type { ComposerEditorHandle } from "./editor-types";
 import { ordinalMentionLabel, spliceMentionTokens } from "./mention-token";
 import type { ComposerAttachment } from "./use-attachments";
 
@@ -23,16 +24,22 @@ export function pastedImageMentionLabels(added: readonly ComposerAttachment[], p
 
 /** Splice the labels at the textarea's current caret as `@图片N ` tokens. */
 export function insertPastedImageMentions(
-	el: HTMLTextAreaElement | null,
+	el: HTMLTextAreaElement | ComposerEditorHandle | null,
 	added: readonly ComposerAttachment[],
 	priorImageCount: number,
 ): void {
 	if (!el) return;
 	const labels = pastedImageMentionLabels(added, priorImageCount);
 	if (labels.length === 0) return;
-	const start = el.selectionStart ?? el.value.length;
-	const end = el.selectionEnd ?? start;
+	const start = el.selectionStart;
+	const end = el.selectionEnd;
 	const { next, caret } = spliceMentionTokens(el.value, start, end, labels);
+	if ("insertText" in el) {
+		// CodeMirror: one transaction replaces the selection and leaves the
+		// caret after the inserted tokens.
+		el.replaceRange(start, end, next.slice(start, caret));
+		return;
+	}
 	// `setRangeText` + `input` is the path the mixed-clipboard text insertion
 	// already uses; React's value tracker does not swallow it.
 	el.setRangeText(next.slice(start, caret), start, end, "end");

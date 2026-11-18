@@ -115,7 +115,7 @@ function dedupeSpans(sorted: HighlightSpan[]): HighlightSpan[] {
 	return out;
 }
 
-const HL_CLASS: Record<HighlightKind, string> = {
+export const HL_CLASS: Record<HighlightKind, string> = {
 	slash: "gui-ta-hl-slash",
 	bang: "gui-ta-hl-bang",
 	magic: "gui-ta-hl-magic",

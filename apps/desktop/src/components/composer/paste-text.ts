@@ -1,6 +1,8 @@
+import type { ComposerEditorHandle } from "./editor-types";
+
 /**
  * Insert the plain-text half of a clipboard payload at the caret of a
- * controlled textarea.
+ * controlled textarea or CodeMirror composer.
  *
  * A clipboard that carries BOTH text and an image (copying from Word, a chat
  * app, or a browser selection with an inline picture) used to lose its text:
@@ -9,8 +11,12 @@
  * an `input` event is the same mechanism the long-paste citation uses, so the
  * controlled value and the caret land exactly where a native paste would.
  */
-export function insertPastedPlainText(el: HTMLTextAreaElement | null, text: string): void {
+export function insertPastedPlainText(el: HTMLTextAreaElement | ComposerEditorHandle | null, text: string): void {
 	if (!el || text.length === 0) return;
+	if ("insertText" in el) {
+		el.insertText(text);
+		return;
+	}
 	const start = el.selectionStart ?? el.value.length;
 	const end = el.selectionEnd ?? start;
 	el.setRangeText(text, start, end, "end");

@@ -476,6 +476,9 @@ export function ChatView({
 		deliverAs?: "prompt" | "steer" | "followUp",
 		displayContext?: MessageDisplayContext,
 		videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
+		/** Branch parent the prompt attaches under; the optimistic echo needs
+		 *  it so the transcript keeps one active path after a rewind. */
+		parentId?: string | null,
 	): void;
 	onStop(): void;
 	onDecideApproval(requestId: string, approved: boolean, note?: string): void;
@@ -1539,6 +1542,14 @@ export function ChatView({
 			displayContext?: MessageDisplayContext,
 			videos?: { type: "video"; mimeType: string; url?: string; data?: string }[],
 		): void => {
+			// Branch parent BEFORE the leaf is dropped: the optimistic echo is
+			// otherwise parentless, `walkLeafPath` treats the tail as a cut chain
+			// and the transcript falls back to showing every sibling branch the
+			// rewind just left behind.
+			const entries = snap?.entries ?? [];
+			const last = entries[entries.length - 1] as { id?: unknown } | undefined;
+			const parentId =
+				currentLeafKey === "root" ? null : (currentLeafKey ?? (typeof last?.id === "string" ? last.id : null));
 			setJumpBack(null);
 			// Sending from a branch point commits it: drop the explicit leaf so
 			// the view follows the new tip. Without this the transcript filter
@@ -1546,9 +1557,9 @@ export function ChatView({
 			// the send just produced.
 			setCurrentLeafKey(null);
 			setPinnedPathIds(null);
-			onSend(text, images, deliverAs, displayContext, videos);
+			onSend(text, images, deliverAs, displayContext, videos, parentId);
 		},
-		[onSend],
+		[onSend, snap?.entries, currentLeafKey],
 	);
 	// 保存为图片 → the export dialog (options + live preview) owns the
 	// rasterization; the transcript row's save button just opens it.
@@ -1569,6 +1580,9 @@ export function ChatView({
 	 */
 	const jumpBackToMessage = async (messageId: string, text: string): Promise<boolean> => {
 		if (!store) return false;
+		// Kimi parity: undo restores the prompt AND its pictures. The entry is
+		// the source; an off-window message still restores the text it carries.
+		const images = userMessageImages(snap?.entries.find(entry => entry.id === messageId));
 		const fromLeafKey = effectiveLeaf;
 		try {
 			const res = await rpc.request<{
@@ -1593,7 +1607,9 @@ export function ChatView({
 			// transcript filter even when the walk from the leaf is cut by
 			// the tail window (long-session rewind).
 			if (Array.isArray(res.path)) setPinnedPathIds(new Set(res.path));
-			if (text) setPendingEdit(text);
+			if (text || images.length > 0) {
+				setPendingEdit({ text, ...(images.length > 0 ? { images } : {}) });
+			}
 			setJumpBack(fromLeafKey ? { fromLeafKey, text } : null);
 			pulseSwitch();
 			return true;
@@ -1782,17 +1798,53 @@ export function ChatView({
 	// from retry, which keeps the node and re-answers it. The dropped tail
 	// stays on the tree (map/trajectory) as a sibling branch; nothing is
 	// truncated.
-	const rewindFromUserMessage = async (messageId: string): Promise<void> => {
+	const rewindFromUserMessage = async (messageId: string, text: string): Promise<void> => {
 		// Converged path: branchAt AFTER the run actually unwinds (runTreeOp).
 		// Hand the message's own id to branchAt: the daemon's user→parent
 		// mapping covers rewind-to-root natively. The old entry lookup +
 		// null-parentId interception toasted "branch failed" BEFORE the RPC
 		// whenever the first user message was rewound.
-		await runTreeOp(() => jumpBackToMessage(messageId, ""));
+		//
+		// Kimi parity: the reverted prompt goes back into the composer. The
+		// transcript passes the message text; an empty one still moves the leaf
+		// without touching the draft (structural tree revert).
+		await runTreeOp(() => jumpBackToMessage(messageId, text));
 	};
+	/** Prompt text carried by a user entry (tree/menu revert needs the same
+	 *  backfill without the transcript row's quoteText plumbing). */
+	const userMessageText = (entry: SessionEntry | undefined): string => {
+		if (entry?.type !== "message") return "";
+		// `WireMessage` also carries BashExecutionMessage (no content field).
+		const content = (entry.message as { content?: unknown }).content;
+		if (typeof content === "string") return content;
+		if (!Array.isArray(content)) return "";
+		return content
+			.filter((block): block is { type: "text"; text: string } => block.type === "text")
+			.map(block => block.text)
+			.join(" ");
+	};
+	/** Image blocks of the same user entry — Kimi restores them together with
+	 *  the text on undo, so a re-answer does not silently lose the pictures. */
+	const userMessageImages = (entry: SessionEntry | undefined): { type: "image"; data: string; mimeType: string }[] => {
+		if (entry?.type !== "message") return [];
+		const content = (entry.message as { content?: unknown }).content;
+		if (!Array.isArray(content)) return [];
+		return content.filter(
+			(block): block is { type: "image"; data: string; mimeType: string } =>
+				typeof block === "object" &&
+				block !== null &&
+				(block as { type?: unknown }).type === "image" &&
+				typeof (block as { data?: unknown }).data === "string" &&
+				typeof (block as { mimeType?: unknown }).mimeType === "string",
+		);
+	};
+	interface PendingComposerEdit {
+		text: string;
+		images?: { type: "image"; data: string; mimeType: string }[];
+	}
 	// Pending composer prefill: message text sent back for re-editing
 	// (jump-back 回填 + transcript inline edit). null = no pending edit.
-	const [pendingEdit, setPendingEdit] = useState<string | null>(null);
+	const [pendingEdit, setPendingEdit] = useState<PendingComposerEdit | null>(null);
 	// Fork (分叉 / TUI /branch parity): non-destructive — copy the session
 	// truncated at this message into a NEW session, open it, and backfill
 	// the composer with the message text (the TUI /branch loads the
@@ -1817,7 +1869,7 @@ export function ChatView({
 				});
 				if (res?.sessionId) {
 					await onForkSession?.(res.sessionId);
-					if (text) setPendingEdit(text);
+					if (text) setPendingEdit({ text });
 				}
 			} catch (err) {
 				// Concurrent snapshot forks are rejected with a retryable code
@@ -1873,7 +1925,7 @@ export function ChatView({
 		// seeded store starts its counter back at 0, so structureRev alone kept
 		// the PREVIOUS session's leaf here (and its walk below) — the new
 		// transcript was then filtered against the old path, leaving one row.
-	}, [currentLeafKey, snap?.sessionId, snap?.structureRev]);
+	}, [currentLeafKey, snap?.sessionId, snap?.structureRev, snap?.entries.length]);
 	// Walk root → leaf via parentId (breadcrumb path). `complete` records WHY the
 	// walk stopped — at a genuine root (an entry with no parentId — the topology
 	// is trustworthy) or on a parentId that is not in the loaded window (the
@@ -2046,7 +2098,7 @@ export function ChatView({
 				const res = await branchTo(id, id);
 				// 切换语义可显式关草稿回填(地图「切换到此分支」:纯切分支,
 				// 若带着上一轮重答留下的草稿会让输入框停留在旧文本)。
-				if (res?.editorText && opts?.backfillDraft !== false) setPendingEdit(res.editorText);
+				if (res?.editorText && opts?.backfillDraft !== false) setPendingEdit({ text: res.editorText });
 			});
 		},
 		// P1-12: the entry lookup inside reads id/timestamp — both immutable
@@ -2371,7 +2423,7 @@ export function ChatView({
 		(id: string): void => {
 			void runTreeOp(async () => {
 				const res = await branchTo(id, id);
-				if (res?.editorText) setPendingEdit(res.editorText);
+				if (res?.editorText) setPendingEdit({ text: res.editorText });
 			});
 		},
 		[runTreeOp, branchTo],
@@ -3195,7 +3247,7 @@ export function ChatView({
 												onFork={(entry, text, includeTarget) =>
 													void forkFromMessage(entry.id, text, includeTarget)
 												}
-												onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
+												onRevertTo={entry => void rewindFromUserMessage(entry.id, userMessageText(entry))}
 												activePathIds={trustedPathIds}
 											/>
 											{onToggleSessionInfo && (
@@ -3423,7 +3475,7 @@ export function ChatView({
 																	/* 撤回: move the leaf only — nothing is
 																	 * backfilled into the composer (与「编辑并
 																	 * 重发」互补)。 */
-																	onRevert={id => void rewindFromUserMessage(id)}
+																	onRevert={(id, text) => void rewindFromUserMessage(id, text)}
 																	/* 编辑并重发 (TUI navigateTree 选用户消息 parity):
 																	 * branchAt 到该消息(leaf 落父节点,旧尾部成为
 																	 * sibling branch)+ 原文回填 composer——发送即在
@@ -3905,7 +3957,7 @@ export function ChatView({
 								planShowRequest,
 								onBranchTo: id => {
 									void branchTo(id, id).then(res => {
-										if (res?.editorText) setPendingEdit(res.editorText);
+										if (res?.editorText) setPendingEdit({ text: res.editorText });
 									});
 								},
 								onSwitchTo: id => {
