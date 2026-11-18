@@ -4119,7 +4119,10 @@ function AppInner(): ReactNode {
 					);
 				} else {
 					const chatHost = document.querySelector<HTMLElement>('[data-chat-input="true"]');
-					(chatHost?.querySelector<HTMLElement>(".cm-content") ?? chatHost?.querySelector<HTMLTextAreaElement>("textarea"))?.focus();
+					(
+						chatHost?.querySelector<HTMLElement>(".cm-content") ??
+						chatHost?.querySelector<HTMLTextAreaElement>("textarea")
+					)?.focus();
 				}
 			} else if (mod && eventMatches(e, "search")) {
 				e.preventDefault();
