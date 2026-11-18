@@ -1,7 +1,10 @@
 /**
  * Settings → 智能体 → 连接器: the connector catalog page.
  *
- * One row per catalog entry. Enablement and live status come from the daemon
+ * Rows are a two-column index of the catalog; anything longer than a name and
+ * one sentence — the long description, examples, the credential form, CLI
+ * authorization, the local-process approval — opens in the detail dialog.
+ * Enablement and live status come from the daemon
  * (`connectors.catalog.list`); connecting writes the enablement state and, for
  * an OAuth connector, immediately starts the same browser flow the MCP section
  * uses. The page never renders an authorization URL, token, or static header.
@@ -567,11 +570,12 @@ ${connector.category ?? ""}`.toLowerCase();
 					<span className="gui-connector-text">
 						<span className="gui-connector-title">
 							<span className="gui-connector-name">{connector.name}</span>
-							<span className="gui-provider-chip">{connectorAuthLabel(connector)}</span>
 							{connector.verified === "needs-app" && (
 								<span className="gui-provider-chip">{t("settings.connectorsNeedsApp")}</span>
 							)}
-							<span className="gui-provider-chip">{statusLabel(connector.status)}</span>
+							{connector.status === "connected" && (
+								<span className="gui-provider-chip">{t("settings.connectorsStatusConnected")}</span>
+							)}
 						</span>
 						<span className="gui-connector-desc">{description}</span>
 					</span>
@@ -584,7 +588,7 @@ ${connector.category ?? ""}`.toLowerCase();
 					) : (
 						<button
 							type="button"
-							className="gui-btn gui-btn-primary"
+							className="gui-btn"
 							disabled={busy}
 							onClick={() => void connect(connector)}
 						>

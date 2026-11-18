@@ -199,8 +199,9 @@ describe("connector settings", () => {
 
 		expect(host.textContent).toContain("Alpha Meetings");
 		expect(host.textContent).toContain("Beta Docs");
-		expect(host.textContent).toContain("已连接");
-		expect(host.textContent).toContain("未连接");
+		expect(rowFor(host, "Beta Docs").textContent).toContain("已连接");
+		expect(rowFor(host, "Beta Docs").textContent).toContain("管理");
+		expect(rowFor(host, "Alpha Meetings").textContent).toContain("连接");
 
 		const input = host.querySelector("input") as HTMLInputElement;
 		await act(async () => typeInto(input, "beta"));
@@ -410,12 +411,12 @@ describe("connector settings", () => {
 
 		const host = await mount(fake);
 		const row = rowFor(host, "Echo CLI");
-		expect(row.textContent).toContain("CLI 授权");
-		expect(row.textContent).not.toContain("无需授权");
 		await act(async () => button(row, "连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 
 		const approval = detailDialog();
+		expect(approval.textContent).toContain("CLI 授权");
+		expect(approval.textContent).not.toContain("无需授权");
 		expect(approval.textContent).toContain("允许安装或授权 CLI");
 		expect(approval.textContent).toContain("npm install -g echo-cli");
 		await act(async () => button(approval, "允许并连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
