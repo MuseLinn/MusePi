@@ -142,18 +142,13 @@ apps/desktop/vendor/
 
 # Dev desktop data isolation (dev-desktop.mjs): isolated daemon home, socket
 # dir and Electron userData for `bun run desktop:dev` — never committed.
-apps/desktop/.desktop-build/
-# The renderer bundle actually emitted by the dev/build pipeline lands one
-# level UP from the package (`packages/.desktop-build/`), so the rule above
-# never matched it and the directory showed up as untracked on every run.
-packages/.desktop-build/
+# It lands at the repository root, inside a package, or one level above one,
+# depending on where the pipeline is started, so match every depth.
+**/.desktop-build/
 
 # Brand glyph intermediates from scripts/regen-brand-icons.py (manually pasted
 # into tray.cjs) — never committed
 .tray-glyph-*.b64
-
-# Root-level dev desktop scratch (list-procs.ps1, verify-scroll, ws-probe.mjs)
-/.desktop-build/
 
 # Local prototype state (machine-specific, not shared config)
 .musepi/project.json
