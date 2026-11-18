@@ -232,6 +232,36 @@ describe("checkSkillUpdates", () => {
 		}
 	});
 
+	it("backfills a missing version and content hash into an older sidecar", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "musepi-skill-backfill-"));
+		try {
+			await Bun.write(path.join(dir, "SKILL.md"), "---\nname: demo\n---\nbody\n");
+			await writeSkillSource(dir, {
+				schemaVersion: 1,
+				source: "skillhub",
+				slug: "demo",
+				installedAt: "2026-11-01T00:00:00.000Z",
+			});
+			await checkSkillUpdates(
+				[
+					{
+						name: "demo",
+						dir,
+						market: await readSkillSource(dir),
+					},
+				],
+				async () => ({ version: "1.2.0" }),
+				async () => [],
+			);
+			const updated = await readSkillSource(dir);
+			expect(updated?.version).toBe("1.2.0");
+			expect(updated?.contentHash).toMatch(/^[0-9a-f]{64}$/);
+			expect(updated?.slug).toBe("demo");
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("keeps an unreachable source as an unknown status with a failure line", async () => {
 		const { updates, failures } = await checkSkillUpdates(
 			[

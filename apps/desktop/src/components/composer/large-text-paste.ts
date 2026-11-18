@@ -14,7 +14,7 @@
  * A single large paste therefore never blocks, and the escape hatch is
  * discovered by the person who needs it rather than imposed on everyone.
  *
- * 宿主是 textarea（非 CodeMirror），文档从 value 读取。
+ * 宿主是 CodeMirror 编辑器；文档从 value 读取，选区由手柄给出。
  */
 
 const LARGE_TEXT_PASTE_CHAR_THRESHOLD = 2000;

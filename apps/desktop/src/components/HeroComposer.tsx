@@ -62,10 +62,10 @@ import {
 import { VoiceButton, VoiceStatusStrip } from "./composer/action-buttons";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { imageChipCount, insertPastedImageMentions } from "./composer/attachment-mention-paste";
+import { CodeMirrorComposer } from "./composer/CodeMirrorComposer";
 import { ConnectorChip, ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { DesignSystemRail } from "./composer/design-system-rail";
-import { ComposerHighlight } from "./composer/input-highlight";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import {
 	deleteMentionTokenAfter,
@@ -1784,9 +1784,7 @@ export function HeroComposer({
 											const ta = taRef.current;
 											if (!ta) return;
 											ta.focus();
-											const start = ta.selectionStart ?? text.length;
-											const end = ta.selectionEnd ?? text.length;
-											ta.setRangeText(token, start, end, "end");
+											ta.insertText(token);
 											setText(ta.value);
 											autosize(ta);
 										}}
@@ -1988,50 +1986,21 @@ export function HeroComposer({
 									/>
 								)}
 								<div className="gui-ta-stack">
-									<ComposerHighlight
-										text={text}
-										className="gui-ta-highlight--welcome"
-										resolveMention={name => {
-											// null = unresolved (no such ordinal/name) →
-											// plain text (unpainted, unexpanded on send).
-											const hit = resolveMentionChip(name, attachments);
-											return hit
-												? {
-														kind: hit.chip.kind,
-														name: hit.chip.name,
-														size: hit.chip.size,
-														dataUrl: hit.chip.dataUrl || undefined,
-													}
-												: null;
-										}}
-										onMentionClick={start => {
-											const ta = taRef.current;
-											if (!ta) return;
-											ta.focus();
-											ta.setSelectionRange(start, start);
-										}}
-									/>
-									<textarea
+									<CodeMirrorComposer
 										ref={el => {
 											taRef.current = el;
-											compAnchorRef(el);
+											compAnchorRef(el?.dom ?? null);
 										}}
-										className="gui-ta-welcome"
-										rows={3}
-										data-focused={focused ? "1" : "0"}
 										value={text}
-										onScroll={e => {
-											// Mirror the textarea's scroll onto the highlight
-											// overlay (previousElementSibling in the stack).
-											const overlay = e.currentTarget.previousElementSibling as HTMLElement | null;
-											if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
-										}}
+										variant="welcome"
+										dataFocused={focused}
+										autoFocus
 										onPaste={e => {
 											// Any pasted file becomes a chip (session-composer
-											// parity); plain text falls through to the
-											// textarea / long-paste gate.
-											const pastedText = e.clipboardData.getData("text");
-											const files = [...e.clipboardData.items]
+											// parity); plain text falls through to the editor /
+											// long-paste gate.
+											const pastedText = e.clipboardData?.getData("text") ?? "";
+											const files = [...(e.clipboardData?.items ?? [])]
 												.filter(i => i.kind === "file")
 												.map(i => i.getAsFile())
 												.filter((f): f is File => f !== null);
@@ -2056,15 +2025,13 @@ export function HeroComposer({
 											}
 										}}
 										onDragOver={e => {
-											// Chromium only fires drop on an element whose
-											// dragover was prevented. Keep this textarea
-											// independent of the window-level anchor; both
-											// converge on addFiles, and the anchor skips
-											// drops already marked defaultPrevented.
-											if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+											// Chromium only fires drop on an element whose dragover
+											// was prevented; both this editor and the window-level
+											// anchor converge on addFiles.
+											if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
 										}}
 										onDrop={e => {
-											const files = [...e.dataTransfer.files];
+											const files = [...(e.dataTransfer?.files ?? [])];
 											if (files.length > 0) {
 												e.preventDefault();
 												const priorImages = imageChipCount(attachments);
@@ -2077,23 +2044,21 @@ export function HeroComposer({
 													.catch(() => {});
 											}
 										}}
-										onChange={e => {
-											setText(e.target.value);
+										onChange={value => {
+											setText(value);
 											if (clearAllRef.current) {
 												clearAllRef.current = false;
-												if (e.target.value === "") setAttachments([]);
+												if (value === "") setAttachments([]);
 											}
-											onSlashInput(e.target.value);
-											onAtInput(e.target.value);
-											onHashInput(e.target.value);
-											// Initial height equals the content height, so
-											// first lines never resize the card.
+											onSlashInput(value);
+											onAtInput(value);
+											onHashInput(value);
 											autosize(taRef.current);
 										}}
 										onKeyDown={e => {
 											// IME composition: the confirming Enter commits the
 											// candidate text — never submit while composing.
-											if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+											if (e.isComposing || e.keyCode === 229) return;
 											// Attachment keyboard flow (WeChat parity): Backspace/
 											// Delete on an empty input removes the last image chip;
 											// a select-all delete empties attachments too.
@@ -2108,8 +2073,8 @@ export function HeroComposer({
 															resolveMentionChip(name, attachments) !== null;
 														const edit =
 															e.key === "Backspace"
-																? deleteMentionTokenBefore(ta.value, ta.selectionStart ?? 0, live)
-																: deleteMentionTokenAfter(ta.value, ta.selectionStart ?? 0, live);
+																? deleteMentionTokenBefore(ta.value, ta.selectionStart, live)
+																: deleteMentionTokenAfter(ta.value, ta.selectionStart, live);
 														if (edit) {
 															e.preventDefault();
 															setText(edit.next);
@@ -2210,8 +2175,27 @@ export function HeroComposer({
 												return false;
 											}
 										})()}
-										autoFocus
 										autoComplete="off"
+										resolveMention={name => {
+											// null = unresolved (no such ordinal/name) →
+											// plain text (unpainted, unexpanded on send).
+											const hit = resolveMentionChip(name, attachments);
+											return hit
+												? {
+														kind: hit.chip.kind,
+														name: hit.chip.name,
+														size: hit.chip.size,
+														dataUrl: hit.chip.dataUrl || undefined,
+													}
+												: null;
+										}}
+										mentionVersion={attachments}
+										onMentionClick={start => {
+											const ta = taRef.current;
+											if (!ta) return;
+											ta.focus();
+											ta.setSelectionRange(start, start);
+										}}
 									/>
 								</div>
 							</div>

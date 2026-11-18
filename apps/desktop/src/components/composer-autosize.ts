@@ -1,5 +1,5 @@
-import { getComposerHeightLimit, isComposerContentCapped } from "./composer-height-limit";
 import type { ComposerEditorHandle } from "./composer/editor-types";
+import { getComposerHeightLimit, isComposerContentCapped } from "./composer-height-limit";
 
 const LINE_PX = 20;
 const PAD_Y = 16;

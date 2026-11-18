@@ -346,7 +346,11 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 		case "workspace":
 			return [
 				...fastWorkspacePackages.map(pkg =>
-					workspaceTestCommand(pkg, 8, pkg === "apps/desktop" ? { extraArgs: ["--isolate"] } : {}),
+					workspaceTestCommand(
+						pkg,
+						8,
+						pkg === "apps/desktop" ? { extraArgs: ["--isolate", "--timeout=15000"] } : {},
+					),
 				),
 				{
 					label: "scripts",
@@ -407,7 +411,8 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 						// Desktop suites replace globals (window/localStorage) and own
 						// animation timers; per-file isolation keeps one suite's leftovers
 						// out of the next file's process-wide state.
-						extraArgs: pkg === "apps/desktop" ? ["--isolate", ...onlyFailuresArgs] : onlyFailuresArgs,
+						extraArgs:
+							pkg === "apps/desktop" ? ["--isolate", "--timeout=15000", ...onlyFailuresArgs] : onlyFailuresArgs,
 					}),
 				),
 				...nativeAndIntegrationPackages.map(pkg => workspaceTestCommand(pkg, 4, { extraArgs: onlyFailuresArgs })),

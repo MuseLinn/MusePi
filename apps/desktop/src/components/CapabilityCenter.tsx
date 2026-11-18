@@ -807,6 +807,7 @@ function InstalledSkillsPane({
 	const [skills, setSkills] = useState<SkillRow[] | null>(null);
 	const [updates, setUpdates] = useState<Map<string, SkillUpdateRow> | null>(null);
 	const [updateCheckFailed, setUpdateCheckFailed] = useState(false);
+	const [updatesChecking, setUpdatesChecking] = useState(false);
 	const [updating, setUpdating] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [query, setQuery] = useState("");
@@ -823,7 +824,8 @@ function InstalledSkillsPane({
 	/** 市场/ Git 安装的来源版本比对；没有来源记录的技能不在结果里。
 	 *  远端不可达只影响对应条目的状态，不阻塞列表。 */
 	const loadUpdates = useCallback((): void => {
-		if (!rpc) return;
+		if (!rpc || updatesChecking) return;
+		setUpdatesChecking(true);
 		void rpc
 			.request<{ updates: SkillUpdateRow[] }>("skills.marketplace.updates", {})
 			.then(res => {
@@ -833,8 +835,9 @@ function InstalledSkillsPane({
 			.catch(() => {
 				setUpdates(new Map());
 				setUpdateCheckFailed(true);
-			});
-	}, [rpc]);
+			})
+			.finally(() => setUpdatesChecking(false));
+	}, [rpc, updatesChecking]);
 
 	// 拉取技能清单:挂载时 + 每次批量操作后(daemon 侧另有 10s TTL)。
 	const reload = useCallback((): void => {
@@ -846,14 +849,19 @@ function InstalledSkillsPane({
 				setSkills(rows);
 				setError(null);
 				onCountChange?.(rows.length);
-				loadUpdates();
 			})
 			.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-	}, [rpc, onCountChange, loadUpdates]);
+	}, [rpc, onCountChange]);
 
 	useEffect(() => {
 		reload();
 	}, [reload]);
+
+	// 更新检查是显式动作：进入技能页检查一次，之后由页头按钮触发。
+	// （每次启停/删除后的列表刷新不再顺带打远端。）
+	useEffect(() => {
+		loadUpdates();
+	}, []);
 
 	/** 来源感知更新：git / skills.sh 走同步 skills.install；SkillHub 走
 	 *  安装状态机，轮询到终态后再刷新列表。 */
@@ -930,13 +938,14 @@ function InstalledSkillsPane({
 					}
 				}
 				reload();
+				loadUpdates();
 			} catch (e: unknown) {
 				setError(e instanceof Error ? e.message : String(e));
 			} finally {
 				setUpdating(null);
 			}
 		},
-		[rpc, updating, updates, reload],
+		[rpc, updating, updates, reload, loadUpdates],
 	);
 
 	/** Same-source update: ask only when the folder no longer matches the
@@ -966,6 +975,11 @@ function InstalledSkillsPane({
 			void updateSkill(skill, candidate);
 		},
 		[confirm, updateSkill],
+	);
+
+	const updateCount = useMemo(
+		() => [...(updates?.values() ?? [])].filter(update => update.updateAvailable === true).length,
+		[updates],
 	);
 
 	/** 卡片/列表行上"是否可批量操作"的单一判据,批量按钮与行内徽标共用。 */
@@ -1161,6 +1175,21 @@ function InstalledSkillsPane({
 				<div className="gui-cap-row">
 					<span className="gui-cap-row-title">{t("tools.skillAllTitle")}</span>
 					<span className="gui-cap-row-count">· {filtered.length}</span>
+					{updateCount > 0 && (
+						<span className="gui-ext-item-tag gui-ext-item-tag--gui">
+							{t("tools.skillUpdatesAvailableCount", { count: String(updateCount) })}
+						</span>
+					)}
+					<button
+						type="button"
+						className="gui-cap-viewbtn"
+						aria-label={t("tools.skillCheckUpdates")}
+						title={t("tools.skillCheckUpdates")}
+						onClick={loadUpdates}
+						disabled={updatesChecking}
+					>
+						<Icon name="refresh" className={`h-4 w-4${updatesChecking ? " gui-spin" : ""}`} />
+					</button>
 					<div className="gui-cap-viewtoggle">
 						<button
 							type="button"

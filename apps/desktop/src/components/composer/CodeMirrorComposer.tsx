@@ -1,35 +1,10 @@
 import { history, historyKeymap, standardKeymap } from "@codemirror/commands";
-import {
-	Annotation,
-	EditorState,
-	Prec,
-	StateEffect,
-	StateField,
-	type Extension,
-} from "@codemirror/state";
-import {
-	Decoration,
-	type DecorationSet,
-	EditorView,
-	keymap,
-} from "@codemirror/view";
-import {
-	forwardRef,
-	useEffect,
-	useImperativeHandle,
-	useLayoutEffect,
-	useRef,
-	useState,
-	type ReactNode,
-} from "react";
+import { Annotation, EditorState, type Extension, Prec, StateEffect, StateField } from "@codemirror/state";
+import { Decoration, type DecorationSet, EditorView, keymap } from "@codemirror/view";
+import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-	HL_CLASS,
-	type HighlightKind,
-	type MentionPreview,
-	parseHighlightSpans,
-} from "./input-highlight";
 import type { ComposerEditorHandle } from "./editor-types";
+import { type HighlightKind, HL_CLASS, type MentionPreview, parseHighlightSpans } from "./input-highlight";
 
 /**
  * CodeMirror 6 composer editor (openchamber parity).
@@ -152,8 +127,30 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 		valueRef.current = value;
 		// Handlers reach the long-lived view through refs: a parent render must
 		// not rebuild the editor and drop focus/selection mid-typing.
-		const handlersRef = useRef({ onChange, onKeyDown, onPaste, onDragOver, onDrop, onFocus, onBlur, onCompositionStart, onCompositionEnd, onMentionClick });
-		handlersRef.current = { onChange, onKeyDown, onPaste, onDragOver, onDrop, onFocus, onBlur, onCompositionStart, onCompositionEnd, onMentionClick };
+		const handlersRef = useRef({
+			onChange,
+			onKeyDown,
+			onPaste,
+			onDragOver,
+			onDrop,
+			onFocus,
+			onBlur,
+			onCompositionStart,
+			onCompositionEnd,
+			onMentionClick,
+		});
+		handlersRef.current = {
+			onChange,
+			onKeyDown,
+			onPaste,
+			onDragOver,
+			onDrop,
+			onFocus,
+			onBlur,
+			onCompositionStart,
+			onCompositionEnd,
+			onMentionClick,
+		};
 		const resolverRef = useRef(resolveMention);
 		resolverRef.current = resolveMention;
 		const spansRef = useRef<ReturnType<typeof parseHighlightSpans>>([]);
@@ -242,7 +239,11 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 								const coords = editor.coordsAtPos(at.span.start);
 								if (!coords) return false;
 								setPop(current => {
-									if (current?.name === at.name && Math.abs(current.x - coords.left) < 2 && Math.abs(current.y - coords.top) < 2) {
+									if (
+										current?.name === at.name &&
+										Math.abs(current.x - coords.left) < 2 &&
+										Math.abs(current.y - coords.top) < 2
+									) {
 										return current;
 									}
 									return { name: at.name, preview, x: coords.left, y: coords.top };
@@ -374,7 +375,7 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 								),
 							)
 						: lineCap;
-					host.style.maxHeight = dataFocused ? "none" : `${cap}px`;
+					host.style.maxHeight = host.getAttribute("data-focused") === "1" ? "none" : `${cap}px`;
 					view.requestMeasure();
 				},
 				setFocused(focused) {

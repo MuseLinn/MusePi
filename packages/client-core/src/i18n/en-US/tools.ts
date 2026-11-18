@@ -891,6 +891,8 @@ export const tools = {
 	"tools.skillUpdateRunning": "Updating…",
 	"tools.skillUpdateChecking": "Checking…",
 	"tools.skillUpdateSources": "Sources",
+	"tools.skillCheckUpdates": "Check for updates",
+	"tools.skillUpdatesAvailableCount": "{count} update(s)",
 	"tools.skillUpdateSwitch": "Switch source",
 	"tools.skillBuiltinUpdateNote": "Built-in skill — updates with the MusePi client.",
 	"tools.skillUserUpdateNote": "Installed skill — reinstall from the same source to update; there is no remote check.",

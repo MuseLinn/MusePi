@@ -41,6 +41,8 @@ The capability center badges installed cards whose check found a newer version, 
 
 When both catalogs publish the same skill (matched by name or slug), the check also returns every candidate source. The drawer lists them with their version and a per-source action — the recorded source updates in place, another source switches the install and rewrites the sidecar. Installing the same name from a second source always replaces the folder; it never leaves two copies, and the market asks before replacing.
 
+Install, update, and delete also refresh the catalog of idle live sessions before their next turn (streaming turns keep the prompt they started with), so an updated description appears without recreating the session; skill bodies were already read from disk on every `skill://` access. The check itself is explicit — once when the skills page opens and again from the header button, which shows how many updates are available. An older sidecar missing its version or content hash is backfilled once from the catalog.
+
 Three more guards keep "update" honest:
 
 - **Strict ordering**: only an orderable semver that is higher counts as an update. A downgrade or a free-form version is reported as "version differs" and offers a reinstall, never "update available".

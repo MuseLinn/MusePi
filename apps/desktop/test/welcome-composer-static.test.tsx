@@ -23,14 +23,14 @@ it("keeps empty-state placeholder and tip static while focus mode is open", asyn
 	const root = createRoot(container);
 	roots.add(root);
 	await act(async () => root.render(<HeroComposer onSubmit={() => {}} rpc={rpc} focused />));
-	const textarea = container.querySelector("textarea");
+	const placeholderNode = container.querySelector(".gui-cm-placeholder");
 	const tip = container.querySelector(".gui-tip");
-	const placeholder = textarea?.placeholder;
+	const placeholder = placeholderNode?.textContent;
 	const tipText = tip?.textContent;
 
 	await act(async () => vi.advanceTimersByTime(10_000));
 
-	expect(textarea?.placeholder).toBe(placeholder);
+	expect(container.querySelector(".gui-cm-placeholder")?.textContent).toBe(placeholder);
 	expect(tip?.textContent).toBe(tipText);
 });
 
@@ -42,15 +42,15 @@ it("lets the welcome textarea claim OS file drags on its own", async () => {
 	const root = createRoot(container);
 	roots.add(root);
 	await act(async () => root.render(<HeroComposer onSubmit={() => {}} rpc={rpc} />));
-	const textarea = container.querySelector("textarea");
-	expect(textarea).not.toBeNull();
+	const editor = container.querySelector(".cm-content");
+	expect(editor).not.toBeNull();
 
 	const over = new Event("dragover", { bubbles: true, cancelable: true });
 	Object.defineProperty(over, "dataTransfer", {
 		value: { types: ["Files"], files: [], dropEffect: "none" },
 	});
 	await act(async () => {
-		textarea?.dispatchEvent(over);
+		editor?.dispatchEvent(over);
 	});
 	expect(over.defaultPrevented).toBe(true);
 });

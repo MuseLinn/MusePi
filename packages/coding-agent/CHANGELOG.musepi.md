@@ -4,6 +4,10 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **技能更新后不必新建会话，检查更新也变成显式动作**：技能安装、更新或删除后，daemon 会为没有在流式回合中的活跃会话重新发现目录；技能正文本来就在每次读取时从磁盘取，所以更新后的描述与内容下一轮就能用。检查更新改为进入技能页时一次 + 页头按钮，并显示可更新数量；旧安装缺少版本或内容哈希时会自动补全一次，更新检测不再一直显示“无法检查”。
+  - EN: A skill update no longer requires a new session. After a skill install, update, or delete, the daemon rediscovers the catalog for idle live sessions; skill bodies are read from disk on every access, so the new description and content are available on the next turn. Update checks are explicit — once when the skills page opens and again from the header button, which shows the number of available updates. Older installs missing a version or content hash are backfilled once, so the check no longer stays at "unavailable".
+
+
 - **技能更新补上破坏性确认与“降级不算更新”**：同名技能从另一个来源安装前会说明将替换目录；版本比较改为严格 semver，只有更高版本才显示「可更新」，降级或自由格式显示「版本不同」并提供重新安装；安装时记录内容哈希，本地改过的技能在更新前会再次确认；SkillHub 更新遇到需要批准的脚本会就地询问并继续，不再等到超时；市场的「已安装」徽标按来源匹配，另一个目录的同名卡片不再假称已安装。
   - EN: Skill updates now confirm destructive replacements and stop calling downgrades updates. Installing a same-name skill from another source explains that the folder will be replaced; version comparison is strict semver, so only a higher version reads as "update available", while a downgrade or a free-form version reads as "version differs" with a reinstall action. Installs record a content hash, and an edited folder gets a second confirmation before an update. A SkillHub update that needs script approval asks in place and continues instead of timing out, and the market's installed badge matches by source so the other catalog's same-name card no longer claims to be installed.
 

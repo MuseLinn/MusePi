@@ -64,11 +64,11 @@ import {
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { imageChipCount, insertPastedImageMentions } from "./composer/attachment-mention-paste";
+import { CodeMirrorComposer } from "./composer/CodeMirrorComposer";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { GoalDetailCard } from "./composer/goal-detail-card";
-import { CodeMirrorComposer } from "./composer/CodeMirrorComposer";
 import { LargeTextPasteGesture } from "./composer/large-text-paste";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
@@ -1909,7 +1909,7 @@ export function SessionComposer({
 	useEffect(() => {
 		const ta = taRef.current;
 		if (!ta) return;
-		ta.setFocused(focused);
+		ta.setFocused(focused === true);
 		autosize(ta);
 	}, [focused]);
 
@@ -2438,7 +2438,7 @@ export function SessionComposer({
 						dataFocused={focused}
 						variant="session"
 						onPaste={e => {
-							const pastedText = e.clipboardData.getData("text");
+							const pastedText = e.clipboardData?.getData("text") ?? "";
 							// Snapshot before intake: the mention ordinal continues
 							// from the chips already staged at paste time.
 							const priorImages = imageChipCount(attachments);

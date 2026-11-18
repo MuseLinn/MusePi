@@ -13,7 +13,7 @@
  * RPC boundary. Nothing here writes or installs.
  */
 import type { SkillMarketEntry } from "./marketplace-client";
-import { hashSkillDirectory, type SkillSourceRecord } from "./skill-source";
+import { hashSkillDirectory, type SkillSourceRecord, writeSkillSource } from "./skill-source";
 
 export interface SkillUpdateInput {
 	name: string;
@@ -192,6 +192,36 @@ export function compareSkillUpdate(
 	return relation === "newer";
 }
 
+/**
+ * Bring an older sidecar up to what the current install records: SkillHub
+ * installs made before version recording get the published version, and any
+ * install missing the content digest gets a baseline now. Data only, no
+ * overwrite of source/repo/slug, and failures are silent (the check still
+ * reports its own answer).
+ */
+async function backfillProvenance(
+	dir: string | undefined,
+	record: SkillSourceRecord,
+	latest: { version?: string; commit?: string } | null,
+): Promise<void> {
+	if (!dir) return;
+	const next: SkillSourceRecord = { ...record };
+	let changed = false;
+	if (!next.version && latest?.version) {
+		next.version = latest.version;
+		changed = true;
+	}
+	if (!next.contentHash) {
+		const hash = await hashSkillDirectory(dir);
+		if (hash) {
+			next.contentHash = hash;
+			changed = true;
+		}
+	}
+	if (!changed) return;
+	await writeSkillSource(dir, next).catch(() => {});
+}
+
 /** Only an update that would actually write needs the digest; skip otherwise. */
 async function isLocallyModified(dir: string | undefined, record: SkillSourceRecord): Promise<boolean> {
 	if (!dir || !record.contentHash) return false;
@@ -220,6 +250,7 @@ export async function checkSkillUpdates(
 					alternatives(record, item.name).catch(() => [] as SkillUpdateCandidate[]),
 				]);
 				if (!latest) error = "source unreachable or has no comparable version";
+				if (latest) await backfillProvenance(item.dir, record, latest);
 			} catch (err: unknown) {
 				error = err instanceof Error ? err.message : String(err);
 			}

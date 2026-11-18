@@ -3067,6 +3067,106 @@ button.gui-stats-pill {
 	min-width: 0;
 }
 
+/* ── CodeMirror composer (openchamber parity) ──────────────────────────
+ * The editor owns text + caret, so there is no second mirror layer. The host
+ * carries the same metrics as the old textarea variants; `autosize()` only
+ * publishes min/max heights, CodeMirror grows inside them. */
+.gui-cm-composer {
+	position: relative;
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-width: 0;
+	width: 100%;
+	color: var(--color-text);
+}
+
+.gui-cm-composer .cm-editor {
+	flex: 1 1 auto;
+	min-height: 0;
+	background: transparent;
+	color: var(--color-text);
+	font-family: inherit;
+	outline: none;
+}
+
+.gui-cm-composer .cm-scroller {
+	overflow-y: auto;
+	scrollbar-width: none;
+	font-family: inherit;
+}
+
+.gui-cm-composer .cm-scroller::-webkit-scrollbar {
+	display: none;
+}
+
+.gui-cm-composer .cm-content {
+	min-height: calc(2 * 20px + 12px);
+	padding: 6px 2px;
+	font-family: inherit;
+	font-size: var(--ui-font-size-sm);
+	line-height: 20px;
+	caret-color: var(--color-text);
+}
+
+.gui-cm-composer--welcome .cm-content {
+	min-height: calc(3 * 1.625em + 28px);
+	padding: 14px 4px;
+	font-size: 14px;
+	line-height: 1.625;
+}
+
+.gui-cm-composer .cm-line {
+	padding: 0;
+}
+
+.gui-cm-composer .cm-editor.cm-focused {
+	outline: none;
+}
+
+.gui-cm-composer .cm-selectionBackground,
+.gui-cm-composer .cm-content ::selection {
+	background: color-mix(in oklab, var(--color-accent) 28%, transparent);
+}
+
+.gui-cm-composer .cm-cursor,
+.gui-cm-composer .cm-dropCursor {
+	border-left-color: var(--color-text);
+}
+
+.gui-cm-composer[data-focused="1"] {
+	flex: 1;
+	max-height: none !important;
+}
+
+.gui-cm-composer[data-focused="1"] .cm-editor {
+	height: 100%;
+}
+
+/* Placeholder overlay: React owns `value`, so the empty state is known
+ * without a CodeMirror widget (widgets wrap the caret and break IMEs that
+ * probe the empty text context). */
+.gui-cm-placeholder {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+	user-select: none;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	color: var(--muted);
+	padding: 6px 2px;
+	font-family: inherit;
+	font-size: var(--ui-font-size-sm);
+	line-height: 20px;
+}
+
+.gui-cm-composer--welcome .gui-cm-placeholder {
+	padding: 14px 4px;
+	font-size: 14px;
+	line-height: 1.625;
+}
+
 .gui-ta-highlight {
 	position: absolute;
 	inset: 0;
@@ -3442,14 +3542,18 @@ button.gui-stats-pill {
  * negative margin) desyncs the mirror from the transparent textarea and the
  * caret drifts off the painted characters. `padding: 1px 5px` is repaid by
  * `margin: -1px -5px`, so the capsule paints outside its box without
- * occupying it. Slash/bang/magic keep pointer-events none (the overlay never
- * receives them); only the mention pill re-arms them below. */
+ * occupying it. CodeMirror token marks are inline spans with no inner wrapper,
+ * so the sheen rides `background-image` (not a ::before that would paint over
+ * the text), and pointer-events stay off — the editor resolves hover/click
+ * from coordinates. `box-decoration-break: clone` keeps a wrapped token
+ * looking like two pill fragments instead of one stretched box. */
 .gui-ta-hl-slash,
 .gui-ta-hl-bang,
 .gui-ta-hl-magic,
 .gui-ta-hl-mention {
 	color: color-mix(in oklab, var(--color-accent) 82%, var(--color-text));
 	background-color: color-mix(in oklab, var(--color-accent) 18%, var(--glass-bg-strong));
+	background-image: var(--glass-sheen);
 	border-radius: 999px;
 	padding: 1px 5px;
 	margin: -1px -5px;
@@ -3458,6 +3562,16 @@ button.gui-stats-pill {
 		inset 0 1px 0 var(--glass-edge-hi),
 		inset 0 -1px 0 var(--glass-edge-lo),
 		0 1px 2px oklch(0 0 0 / 10%);
+	box-decoration-break: clone;
+	-webkit-box-decoration-break: clone;
+	pointer-events: none;
+}
+
+.gui-ta-hl-slash::before,
+.gui-ta-hl-bang::before,
+.gui-ta-hl-magic::before,
+.gui-ta-hl-mention::before {
+	display: none;
 }
 
 .gui-style-select-caret {
@@ -3634,20 +3748,10 @@ button.gui-stats-pill {
  * pill so hover opens the preview card and click jumps the caret to the
  * token. Hover lifts the same glass one step instead of swapping surfaces. ── */
 .gui-ta-hl-mention {
-	pointer-events: auto;
-	cursor: pointer;
+	cursor: text;
 	transition:
 		background-color 120ms ease-out,
 		box-shadow 120ms ease-out;
-}
-
-.gui-ta-hl-mention:hover {
-	background-color: color-mix(in oklab, var(--color-accent) 30%, var(--glass-bg-strong));
-	box-shadow:
-		inset 0 0 0 1px var(--glass-hairline-strong),
-		inset 0 1px 0 var(--glass-edge-hi),
-		inset 0 -1px 0 var(--glass-edge-lo),
-		0 2px 6px oklch(0 0 0 / 16%);
 }
 
 /* Hover preview card (portaled to body, fixed from the pill's rect — the

@@ -1,7 +1,6 @@
 import { arrayMove } from "@dnd-kit/sortable";
 import { fileUrlFromPath } from "@musepi/client-core";
 import type { AttachmentPutResult } from "@musepi/pi-wire";
-import type { ClipboardEvent, DragEvent } from "react";
 import { useRef, useState } from "react";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../../lib/image-resize";
 import type { RpcClient } from "../../lib/rpc";
@@ -393,6 +392,19 @@ export function attachmentDraftPayload(attachments: readonly ComposerAttachment[
  * use-draft-persistence stashes the payload under its own key, and a
  * session switch must bring the images back with the text.
  */
+/** Structural clipboard shape: both React's synthetic event and the native
+ *  CodeMirror DOM event satisfy it. */
+export interface ComposerClipboardEvent {
+	clipboardData: DataTransfer | null;
+	preventDefault(): void;
+}
+
+/** Structural drag shape, same reason. */
+export interface ComposerDragEvent {
+	dataTransfer: DataTransfer | null;
+	preventDefault(): void;
+}
+
 export function useAttachments(
 	rpc: RpcClient,
 	options: {
@@ -408,9 +420,9 @@ export function useAttachments(
 	 *  the intake into the draft (paste-image mentions) need their final
 	 *  names and order. */
 	addFiles(files: File[]): Promise<ComposerAttachment[]>;
-	onPaste(e: ClipboardEvent): Promise<ComposerAttachment[]>;
-	onDragOver(e: DragEvent): void;
-	onDrop(e: DragEvent): Promise<ComposerAttachment[]>;
+	onPaste(e: ComposerClipboardEvent): Promise<ComposerAttachment[]>;
+	onDragOver(e: ComposerDragEvent): void;
+	onDrop(e: ComposerDragEvent): Promise<ComposerAttachment[]>;
 } {
 	const { stageFiles = true } = options;
 	const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
@@ -464,10 +476,10 @@ export function useAttachments(
 		return named;
 	};
 
-	const onPaste = (e: ClipboardEvent): Promise<ComposerAttachment[]> => {
+	const onPaste = (e: ComposerClipboardEvent): Promise<ComposerAttachment[]> => {
 		// Any pasted file (image or not) becomes a chip; plain text is left
-		// to the textarea / long-paste gate.
-		const files = [...e.clipboardData.items]
+		// to the editor / long-paste gate.
+		const files = [...(e.clipboardData?.items ?? [])]
 			.filter(i => i.kind === "file")
 			.map(i => i.getAsFile())
 			.filter((f): f is File => f !== null);
@@ -476,15 +488,15 @@ export function useAttachments(
 		return addFiles(files);
 	};
 
-	const onDragOver = (e: DragEvent): void => {
+	const onDragOver = (e: ComposerDragEvent): void => {
 		// Allow the drop: without a preventDefault on dragover the browser
-		// never fires drop on the textarea (files dragged from the OS would
+		// never fires drop on the editor (files dragged from the OS would
 		// navigate the window instead of attaching).
-		if (e.dataTransfer.types.includes("Files")) e.preventDefault();
+		if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
 	};
 
-	const onDrop = (e: DragEvent): Promise<ComposerAttachment[]> => {
-		const files = [...e.dataTransfer.files];
+	const onDrop = (e: ComposerDragEvent): Promise<ComposerAttachment[]> => {
+		const files = [...(e.dataTransfer?.files ?? [])];
 		// Full-type parity: a non-image drop used to be ignored (and the
 		// browser default — opening the file — was never suppressed).
 		if (files.length === 0) return Promise.resolve([]);

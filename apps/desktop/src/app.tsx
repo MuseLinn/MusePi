@@ -4118,7 +4118,8 @@ function AppInner(): ReactNode {
 						new CustomEvent("musepi-gui-quote-append", { detail: { text: selection.text, displayContext } }),
 					);
 				} else {
-					(document.querySelector('[data-chat-input="true"] textarea') as HTMLTextAreaElement | null)?.focus();
+					const chatHost = document.querySelector<HTMLElement>('[data-chat-input="true"]');
+					(chatHost?.querySelector<HTMLElement>(".cm-content") ?? chatHost?.querySelector<HTMLTextAreaElement>("textarea"))?.focus();
 				}
 			} else if (mod && eventMatches(e, "search")) {
 				e.preventDefault();

@@ -1,5 +1,6 @@
 import "./happy-dom-shim";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { EditorView } from "@codemirror/view";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { Composer } from "../src/components/Composer";
@@ -96,50 +97,45 @@ function mountComposer(cwd: string, onSend: (text: string) => void): HTMLTextAre
 			/>,
 		),
 	);
-	return host.querySelector<HTMLTextAreaElement>("textarea[data-composer-input]")!;
+	return host.querySelector<HTMLElement>("[data-composer-input] .cm-content")!;
 }
 
-/** Drive the controlled textarea through the onChange React attached.
- *
- * A synthetic `input` event does not reach React's change plugin under this
- * happy-dom build: the native event reaches the root listener, but React never
- * dispatches onChange, so the box would keep an empty state. Typing here calls
- * the handler directly — the same workaround as welcome-completion.test.tsx.
- * The flow under test is draft → history ring → send, not event delegation. */
-function setBox(textarea: HTMLTextAreaElement, value: string): void {
-	const key = Object.keys(textarea).find(k => k.startsWith("__reactProps"));
-	const props = key
-		? (textarea as unknown as Record<string, { onChange?: (e: { target: HTMLTextAreaElement }) => void }>)[key]
-		: null;
-	const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
-	setter.call(textarea, value);
+/** Drive the CodeMirror document; the update listener is the same onChange
+ *  path a keystroke takes. The flow under test is draft → history ring → send,
+ *  not event delegation. */
+function doc(el: HTMLElement): string {
+	return EditorView.findFromDOM(el)?.state.doc.toString() ?? "";
+}
+
+function setBox(el: HTMLElement, value: string): void {
+	const view = EditorView.findFromDOM(el);
+	if (!view) throw new Error("CodeMirror view not mounted");
 	act(() => {
-		props?.onChange?.({ target: textarea });
+		view.dispatch({
+			changes: { from: 0, to: view.state.doc.length, insert: value },
+			selection: { anchor: 0 },
+		});
 	});
 	// ArrowUp only starts browsing with the caret at the very start of a
-	// non-empty draft; the programmatic value set leaves it at the end.
-	textarea.setSelectionRange(0, 0);
+	// non-empty draft; the external value effect would move it to the end.
+	act(() => view.dispatch({ selection: { anchor: 0 } }));
 }
 
-/** Same event-system workaround as {@link setBox}: the keydown handler is
- *  invoked directly, with the fields the composer reads. */
-function pressKey(textarea: HTMLTextAreaElement, key: string): void {
-	const key2 = Object.keys(textarea).find(k => k.startsWith("__reactProps"));
-	const props = key2 ? (textarea as unknown as Record<string, { onKeyDown?: (e: unknown) => void }>)[key2] : null;
+/** Dispatch the native key event; the composer's highest-precedence keymap
+ *  reads exactly the fields a real keydown carries. */
+function pressKey(el: HTMLElement, key: string): void {
+	const event = new KeyboardEvent("keydown", {
+		key,
+		bubbles: true,
+		cancelable: true,
+		shiftKey: false,
+		ctrlKey: false,
+		metaKey: false,
+		altKey: false,
+	});
+	Object.defineProperty(event, "keyCode", { value: key === "Enter" ? 13 : 0 });
 	act(() => {
-		props?.onKeyDown?.({
-			key,
-			keyCode: key === "Enter" ? 13 : 0,
-			shiftKey: false,
-			ctrlKey: false,
-			metaKey: false,
-			altKey: false,
-			nativeEvent: { isComposing: false },
-			preventDefault: () => {},
-			stopPropagation: () => {},
-			target: textarea,
-			currentTarget: textarea,
-		});
+		el.dispatchEvent(event);
 	});
 }
 
@@ -249,18 +245,18 @@ describe("Composer history keys", () => {
 		setBox(textarea, "draft text");
 
 		pressKey(textarea, "ArrowUp");
-		expect(textarea.value).toBe("latest");
+		expect(doc(textarea)).toBe("latest");
 		pressKey(textarea, "ArrowUp");
-		expect(textarea.value).toBe("second");
+		expect(doc(textarea)).toBe("second");
 		pressKey(textarea, "ArrowUp");
-		expect(textarea.value).toBe("first");
+		expect(doc(textarea)).toBe("first");
 
 		pressKey(textarea, "ArrowDown");
-		expect(textarea.value).toBe("second");
+		expect(doc(textarea)).toBe("second");
 		pressKey(textarea, "ArrowDown");
-		expect(textarea.value).toBe("latest");
+		expect(doc(textarea)).toBe("latest");
 		pressKey(textarea, "ArrowDown");
-		expect(textarea.value).toBe("draft text");
+		expect(doc(textarea)).toBe("draft text");
 	});
 
 	it("puts the just-sent prompt first for the next recall", () => {
@@ -271,11 +267,11 @@ describe("Composer history keys", () => {
 		setBox(textarea, "composed prompt");
 		pressKey(textarea, "Enter");
 		expect(sent).toEqual(["composed prompt"]);
-		expect(textarea.value).toBe("");
+		expect(doc(textarea)).toBe("");
 
 		pressKey(textarea, "ArrowUp");
-		expect(textarea.value).toBe("composed prompt");
+		expect(doc(textarea)).toBe("composed prompt");
 		pressKey(textarea, "ArrowUp");
-		expect(textarea.value).toBe("second");
+		expect(doc(textarea)).toBe("second");
 	});
 });

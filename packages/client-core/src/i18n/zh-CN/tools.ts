@@ -854,6 +854,8 @@ export const tools = {
 	"tools.skillUpdateRunning": "正在更新…",
 	"tools.skillUpdateChecking": "正在检查…",
 	"tools.skillUpdateSources": "来源",
+	"tools.skillCheckUpdates": "检查更新",
+	"tools.skillUpdatesAvailableCount": "{count} 个可更新",
 	"tools.skillUpdateSwitch": "切换来源",
 	"tools.skillBuiltinUpdateNote": "内置技能随 MusePi 客户端更新。",
 	"tools.skillUserUpdateNote": "已安装技能：从同一来源重新安装即可更新，暂无远程检查。",

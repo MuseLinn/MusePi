@@ -1,5 +1,6 @@
 import "./happy-dom-shim";
 import { afterEach, describe, expect, it } from "bun:test";
+import { EditorView } from "@codemirror/view";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { HeroComposer } from "../src/components/HeroComposer";
@@ -47,19 +48,13 @@ async function flush(): Promise<void> {
 	});
 }
 
-/** Drive the controlled textarea through its React onChange. happy-dom 20's
- *  synthetic input dispatch does not reach React's value tracker for this
- *  component graph (the same harness works for a bare textarea), so the test
- *  calls the handler React attached — the wiring under test is
- *  composer → shared controller → menu, not React's event plugin. */
-function type(ta: HTMLTextAreaElement, value: string): void {
-	const key = Object.keys(ta).find(k => k.startsWith("__reactProps"));
-	const props = key
-		? (ta as unknown as Record<string, { onChange?: (e: { target: HTMLTextAreaElement }) => void }>)[key]
-		: null;
-	const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-	setter?.call(ta, value);
-	props?.onChange?.({ target: ta });
+/** Drive the CodeMirror document: the component's update listener is the
+ *  same `onChange` path a real keystroke takes. The wiring under test is
+ *  composer → shared controller → menu. */
+function type(el: Element, value: string): void {
+	const view = EditorView.findFromDOM(el as HTMLElement);
+	if (!view) throw new Error("CodeMirror view not mounted");
+	view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
 }
 
 describe("empty-state completion through the shared controller", () => {
@@ -71,7 +66,7 @@ describe("empty-state completion through the shared controller", () => {
 		await act(async () => root.render(<HeroComposer onSubmit={() => {}} rpc={makeRpc()} project="C:/workspace" />));
 		await flush();
 
-		const ta = container.querySelector("textarea");
+		const ta = container.querySelector(".cm-content");
 		expect(ta).not.toBeNull();
 		await act(async () => {
 			type(ta!, "@");
@@ -92,7 +87,7 @@ describe("empty-state completion through the shared controller", () => {
 		await act(async () => root.render(<HeroComposer onSubmit={() => {}} rpc={makeRpc()} project="C:/workspace" />));
 		await flush();
 
-		const ta = container.querySelector("textarea");
+		const ta = container.querySelector(".cm-content");
 		await act(async () => {
 			type(ta!, "/");
 		});
