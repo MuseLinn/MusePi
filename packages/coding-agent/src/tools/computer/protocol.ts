@@ -4,6 +4,9 @@ import type { DesktopCapabilities } from "@musepi/pi-natives";
 /** Hidden CLI selector that re-enters the computer worker host. */
 export const COMPUTER_WORKER_ARG = "__musepi_worker_computer";
 
+/** Reported provider name when the worker's own desktop session answers. */
+export const BUILTIN_COMPUTER_PROVIDER = "builtin";
+
 /** Frozen run settings transferred from the tool session to the worker. */
 export interface ComputerSessionSnapshot {
 	cwd: string;
@@ -18,6 +21,9 @@ export interface ComputerSessionSnapshot {
 	/** Host-registered application catalogue provider, when one replaced the
 	 *  worker's built-in source for this run. */
 	applicationProvider?: string | null;
+	/** Provider accepting computer use for this run: a host slot name, or
+	 *  `builtin` when the slot is empty or its incumbent is releasing. */
+	computerProvider?: string;
 }
 
 /** Reply envelope for a session tool invoked by desktop JavaScript. */
