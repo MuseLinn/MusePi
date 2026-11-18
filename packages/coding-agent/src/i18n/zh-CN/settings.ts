@@ -2102,6 +2102,9 @@ export const settings = {
 	"Plugin Install Source": "插件安装来源",
 	"Resize Scrollback": "重整历史滚动区",
 	"Screen Glow Indicator": "屏幕辉光指示",
+	"Desktop Preview": "桌面预览画中画",
+	"While the computer tool runs, show a picture-in-picture preview inside the chat that follows the desktop and the last action; turning it off stops preview captures entirely":
+		"计算机工具运行时，在聊天窗口内以画中画显示桌面并跟随最近一次操作；关闭后完全不再抓取预览帧",
 	"Shared Language Servers": "共享语言服务器",
 	"Silence threshold (ms)": "静音阈值（毫秒）",
 	"Solid accent line, no context feedback": "纯强调色线条，无上下文反馈",

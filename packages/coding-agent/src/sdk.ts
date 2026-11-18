@@ -680,6 +680,12 @@ export interface CreateAgentSessionOptions {
 	 */
 	toolSessionHasUI?: boolean;
 	/**
+	 * A GUI surface renders throttled tool previews (the desktop picture-in-picture).
+	 * Only the rpc-ui daemon sets it: the TUI and headless runs have no viewer, so
+	 * tools must not spend capture work there even though {@link hasUI} is true.
+	 */
+	viewerSurface?: boolean;
+	/**
 	 * Defer `confirm` reserve-policy fallback until AgentSession prompt-time UI is configured.
 	 * ACP uses this while capabilities are negotiated without enabling UI-only tools.
 	 */
@@ -2127,6 +2133,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			setActiveToolNames,
 			toolRegistry,
 			hasUI: options.hasUI === true || options.toolSessionHasUI === true,
+			viewerSurface: options.viewerSurface === true,
 			get uiContext() {
 				return toolContextStore.getUIContext();
 			},

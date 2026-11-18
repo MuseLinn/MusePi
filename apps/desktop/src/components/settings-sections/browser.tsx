@@ -43,6 +43,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [tabCount, setTabCount] = useState<number | null>(null);
 	const [clearing, setClearing] = useState(false);
 	const [glow, setGlow] = useState<boolean | null>(null);
+	const [viewer, setViewer] = useState<boolean | null>(null);
 	// 托管浏览器桥是**渲染端**事实(主进程 CDP 桥的绑定端口、agent 标签页),
 	// 不经过 daemon —— 直接订阅宿主 store,与右栏面板同源。
 	const [guiUrl, setGuiUrl] = useState<string | null>(null);
@@ -81,6 +82,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					"browser.download.dir",
 					"browser.download.agentMaxBytes",
 					"computer.glow",
+					"computer.viewer",
 				],
 			})
 			.then(res => {
@@ -99,6 +101,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					setAgentMaxBytes(String(res["browser.download.agentMaxBytes"]));
 				}
 				setGlow(res["computer.glow"] !== false);
+				setViewer(res["computer.viewer"] !== false);
 			})
 			.catch(() => {});
 		void rpc
@@ -129,7 +132,8 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			| "browser.policy.restrictToPublic"
 			| "browser.agentControl"
 			| "browser.download.askWhereToSave"
-			| "computer.glow",
+			| "computer.glow"
+			| "computer.viewer",
 		next: boolean,
 	): void => {
 		void rpc?.request("settings.set", { key, value: next }).then(() => {
@@ -453,6 +457,22 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								<div className="gui-cgp-ring" />
 							</div>
 						)}
+						<div className="gui-settings-row">
+							<div>
+								<div className="gui-settings-row-label">{t("tools.computerViewer")}</div>
+								<div className="gui-settings-row-desc">{t("tools.computerViewerDescription")}</div>
+							</div>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={viewer === true}
+								className={`gui-toggle${viewer === true ? " gui-toggle--on" : ""}`}
+								onClick={() => setBool("computer.viewer", !(viewer === true))}
+								aria-label={t("tools.computerViewer")}
+							>
+								<span className="gui-toggle-knob" />
+							</button>
+						</div>
 					</div>
 				</>
 			)}

@@ -16,7 +16,12 @@ import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
 import { managedBrowserEnabled } from "./browser/managed-bridge";
 import { applicationProviders } from "./computer/app-provider";
-import type { ComputerInputEvent, ComputerScreenshot, ComputerSessionSnapshot } from "./computer/protocol";
+import type {
+	ComputerInputEvent,
+	ComputerScreenshot,
+	ComputerSessionSnapshot,
+	ComputerViewerFrame,
+} from "./computer/protocol";
 import { type ComputerController, ComputerSupervisor, registerComputerController } from "./computer/supervisor";
 import type { ToolSession } from "./index";
 import { ToolError, throwIfAborted } from "./tool-errors";
@@ -74,6 +79,8 @@ export interface ComputerToolDetails {
 	axPermission?: string;
 	/** Desktop input actions streamed during the run (glow overlay). */
 	inputEvents?: ComputerInputEvent[];
+	/** Latest picture-in-picture preview frame; never model-visible. */
+	viewer?: ComputerViewerFrame;
 }
 
 /** Creates the session-scoped controller used by the computer tool. */
@@ -146,6 +153,14 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 		const coordinateSafe = usesCoordinateSafeImageSizing(this.session.getActiveModel?.());
 		const configuredMaxWidth = this.session.settings.get("computer.maxWidth");
 		const configuredMaxHeight = this.session.settings.get("computer.maxHeight");
+		// A GUI update callback is the only viewer subscriber; without one (CLI
+		// runs) the worker never issues a preview capture. `computer.glow` and
+		// `computer.viewer` are independent: glow paints the host desktop,
+		// viewer paints the chat's picture-in-picture.
+		const viewerEnabled =
+			this.session.viewerSurface === true &&
+			_onUpdate !== undefined &&
+			this.session.settings.get("computer.viewer") !== false;
 		const snapshot: ComputerSessionSnapshot = {
 			cwd: this.session.cwd,
 			sessionId: this.session.getEvalSessionId?.() ?? this.session.getSessionId?.() ?? "computer",
@@ -159,6 +174,22 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 			readOnly: !!params.read_only,
 			backgroundFallback: this.session.settings.get("computer.backgroundFallback") ?? "takeover",
 			applicationProvider: applicationProviders.providerName,
+			viewer: viewerEnabled,
+		};
+		// One frame and one action are retained for the run so every partial
+		// result is self-contained: the GUI replaces partials wholesale, and a
+		// frame update must not drop the action it was rendered with.
+		let lastFrame: ComputerViewerFrame | undefined;
+		let lastInput: ComputerInputEvent | undefined;
+		const publish = (): void => {
+			_onUpdate?.({
+				content: [],
+				details: {
+					screenshots: [],
+					...(lastInput ? { inputEvents: [lastInput] } : {}),
+					...(viewerEnabled && lastFrame ? { viewer: lastFrame } : {}),
+				},
+			});
 		};
 		const run = await this.#controller.run(
 			params.code,
@@ -170,7 +201,14 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 				// GUI's glow overlay highlights the operation target live.
 				// The partialResult carries only details (no content), so
 				// nothing model-visible is rendered.
-				_onUpdate?.({ content: [], details: { screenshots: [], inputEvents: [event] } });
+				lastInput = event;
+				publish();
+			},
+			(frame: ComputerViewerFrame): void => {
+				// Preview frames ride the same details-only bypass; they never
+				// reach `run.displays`, which is the model-visible surface.
+				lastFrame = frame;
+				publish();
 			},
 		);
 		throwIfAborted(signal);

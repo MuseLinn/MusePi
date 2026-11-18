@@ -1431,6 +1431,8 @@ export class DaemonSessionHost {
 			createAgentSession({
 				cwd,
 				hasUI: true,
+				// The desktop window renders the computer picture-in-picture.
+				viewerSurface: true,
 				interfaceLabel: "desktop (GUI)",
 				eventBus: sessionBus,
 				pauseGate,
@@ -1567,6 +1569,8 @@ export class DaemonSessionHost {
 				cwd: resumeCwd,
 				sessionManager: manager,
 				hasUI: true,
+				// The desktop window renders the computer picture-in-picture.
+				viewerSurface: true,
 				interfaceLabel: "desktop (GUI)",
 				eventBus: new SessionScopedEventBus(this.#eventBus, sessionId),
 				pauseGate,

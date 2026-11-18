@@ -1,6 +1,7 @@
 import {
 	buildTurnIndex,
 	CodeHighlightProvider,
+	ComputerViewerPipView,
 	downloadBlob,
 	isBranchFormingEntry,
 	punkAvatarUri,
@@ -117,6 +118,9 @@ import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
 import { TurnMapCanvas } from "./TurnMapCanvas";
 import { TurnRail } from "./TurnRail";
+
+/** Stable empty map for the desktop preview before a session store lands. */
+const EMPTY_ACTIVE_TOOLS: ReadonlyMap<string, never> = new Map<string, never>();
 
 /** session.history 分页响应，供 store 按需请求下一页。 */
 interface HistoryPage {
@@ -3336,6 +3340,15 @@ export function ChatView({
 											 * content fade via mask-image, applied only while the
 											 * transcript overflows (top/bottom data attrs). */}
 											<div className="gui-transcript-wrap relative min-h-0 min-w-0 flex-1">
+												{store && (
+													<div className="gui-pip-host" ref={registerComposerInsetReader}>
+														<ComputerViewerPipView
+															activeTools={snap?.activeTools ?? EMPTY_ACTIVE_TOOLS}
+															sessionKey={store.sessionId}
+															blocked={(snap?.approvals.length ?? 0) > 0}
+														/>
+													</div>
+												)}
 												{/* History-session cold-open skeleton (React-Bits style):
 												 * the daemon reactivates the session on demand — cover
 												 * the (stale) previous transcript while the RPC runs. */}

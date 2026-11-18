@@ -4,6 +4,15 @@ import type { DesktopCapabilities } from "@musepi/pi-natives";
 /** Hidden CLI selector that re-enters the computer worker host. */
 export const COMPUTER_WORKER_ARG = "__musepi_worker_computer";
 
+/** Cadence of the GUI picture-in-picture preview (~2 fps). */
+export const VIEWER_FRAME_INTERVAL_MS = 500;
+
+/** Long-edge cap of one viewer frame, in pixels. */
+export const VIEWER_FRAME_MAX_EDGE = 480;
+
+/** Consecutive preview failures before the viewer gives up for the run. */
+export const VIEWER_MAX_FAILURES = 5;
+
 /** Reported provider name when the worker's own desktop session answers. */
 export const BUILTIN_COMPUTER_PROVIDER = "builtin";
 
@@ -24,6 +33,9 @@ export interface ComputerSessionSnapshot {
 	/** Provider accepting computer use for this run: a host slot name, or
 	 *  `builtin` when the slot is empty or its incumbent is releasing. */
 	computerProvider?: string;
+	/** Stream throttled preview frames for the GUI picture-in-picture. False
+	 *  (and absent) means the worker never issues a preview capture. */
+	viewer?: boolean;
 }
 
 /** Reply envelope for a session tool invoked by desktop JavaScript. */
@@ -89,6 +101,24 @@ export interface ComputerScreenshot {
 	target: string;
 }
 
+/**
+ * One throttled desktop preview for the GUI picture-in-picture. Produced by a
+ * dedicated preview capture session, so it never replaces the coordinate
+ * frame pointer input is mapped against. Never part of the model-visible
+ * output: it only travels through tool updates.
+ */
+export interface ComputerViewerFrame {
+	/** Base64 PNG bytes (no `data:` prefix). */
+	data: string;
+	mimeType: "image/png";
+	width: number;
+	height: number;
+	/** Capture target: `desktop` or a window id. */
+	target: string;
+	/** Capture time, epoch ms. */
+	at: number;
+}
+
 /** Clone-safe error metadata returned across the worker boundary. */
 export interface RunErrorPayload {
 	name: string;
@@ -114,6 +144,7 @@ export type ComputerWorkerOutbound =
 			args: unknown;
 	  }
 	| { type: "input"; id: string; runId: string; event: ComputerInputEvent }
+	| { type: "frame"; id: string; runId: string; frame: ComputerViewerFrame }
 	| { type: "closed" };
 
 /** Transport used by the worker core in Bun workers and tests. */

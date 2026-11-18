@@ -55,6 +55,12 @@ export {
  *  here instead of keeping local copies. */
 export { AsyncJobBar } from "./components/shell/AsyncJobBar";
 export { BlurText } from "./components/shell/BlurText";
+export {
+	ComputerViewerPip,
+	type ComputerViewerPipSource,
+	ComputerViewerPipView,
+	type ViewerToolState,
+} from "./components/shell/ComputerViewerPip";
 export { ConnectScreen, type ConnectScreenProps } from "./components/shell/ConnectScreen";
 export { DotMatrixMark } from "./components/shell/DotMatrixMark";
 export { LanguageToggle } from "./components/shell/LanguageToggle";

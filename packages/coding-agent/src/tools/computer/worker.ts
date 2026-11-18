@@ -30,14 +30,18 @@ import { ToolAbortError, ToolError, throwIfAborted } from "../tool-errors";
 import type { ApplicationEntry } from "./app-provider";
 import { annotateRunning, type DesktopApp, hostInstalledApps, launchCommand, resolveApp } from "./apps";
 import { DesktopToolError, desktopErrorFrom } from "./errors";
-import type {
-	ComputerInputEvent,
-	ComputerScreenshot,
-	ComputerSessionSnapshot,
-	ComputerWorkerInbound,
-	ComputerWorkerTransport,
-	RunErrorPayload,
-	ToolReply,
+import {
+	type ComputerInputEvent,
+	type ComputerScreenshot,
+	type ComputerSessionSnapshot,
+	type ComputerViewerFrame,
+	type ComputerWorkerInbound,
+	type ComputerWorkerTransport,
+	type RunErrorPayload,
+	type ToolReply,
+	VIEWER_FRAME_INTERVAL_MS,
+	VIEWER_FRAME_MAX_EDGE,
+	VIEWER_MAX_FAILURES,
 } from "./protocol";
 
 /** One immediate child of a window's native menu. */
@@ -143,6 +147,9 @@ interface ComputerRunContext {
 	 *  screenshot, so the scaling baseline must follow the target, not
 	 *  the run (interleaved windows would otherwise mis-scale). */
 	shotSizes?: Map<string, { width: number; height: number }>;
+	/** Target of the most recent model-visible screenshot; the viewer
+	 *  preview follows it. */
+	lastShotTarget?: string;
 }
 
 type RunContextAccessor = () => ComputerRunContext;
@@ -303,6 +310,7 @@ async function captureScreenshot(
 	// Keyed by target so interleaved window/desktop captures stay correct.
 	context.shotSizes ??= new Map();
 	context.shotSizes.set(frame.target, { width: frame.width, height: frame.height });
+	context.lastShotTarget = frame.target;
 	const scaled = frame.width !== frame.sourceWidth || frame.height !== frame.sourceHeight;
 	context.screenshots.push({
 		path: destination,
@@ -863,6 +871,7 @@ export class ComputerWorkerCore {
 				});
 			},
 		};
+		let stopViewer: (() => void) | undefined;
 		let returnValue: unknown;
 		let failure: { error: unknown } | undefined;
 		let completed = false;
@@ -871,6 +880,13 @@ export class ComputerWorkerCore {
 			const session = this.#ensureSession(message.session);
 			const runtime = this.#ensureRuntime(message.session);
 			runtime.setCwd(message.session.cwd);
+			// A viewer loop exists only when the session asked for one: without
+			// a GUI subscriber the worker issues no preview capture at all. It
+			// starts after the run session exists so the preview session is a
+			// separate, later native session.
+			if (message.session.viewer) {
+				stopViewer = this.#startViewer(message.id, message.session, runContext, signal);
+			}
 			const desktop = this.#createDesktopScope(session);
 			runtime.setRunScope({
 				desktop: bindRunFacade(desktop, signal),
@@ -927,6 +943,7 @@ export class ComputerWorkerCore {
 			failure = { error };
 		} finally {
 			runAc.abort(postmortem.markExpectedCleanupError(new ToolAbortError("Computer run ended")));
+			stopViewer?.();
 			if (this.#active?.id === message.id) this.#active = null;
 		}
 		if (failure !== undefined) {
@@ -953,6 +970,73 @@ export class ComputerWorkerCore {
 				payload: { displays: output.finish(), returnValue: cloneSafe(returnValue), screenshots, capabilities },
 			});
 		}
+	}
+
+	/**
+	 * Streams throttled previews for the GUI picture-in-picture. Captures run
+	 * in their own preview session: a native capture replaces the target's
+	 * coordinate frame, and the run's frame is the one pointer input maps
+	 * against, so a thumbnail must never touch it. Frames are best-effort —
+	 * a preview failure never fails the agent's script.
+	 */
+	#startViewer(
+		runId: string,
+		snapshot: ComputerSessionSnapshot,
+		runContext: ComputerRunContext,
+		signal: AbortSignal,
+	): () => void {
+		let preview: NativeDesktopSession | undefined;
+		let timer: ReturnType<typeof setInterval> | undefined;
+		let inFlight = false;
+		let failures = 0;
+		let disposed = false;
+		const stop = (): void => {
+			if (disposed) return;
+			disposed = true;
+			if (timer !== undefined) clearInterval(timer);
+			timer = undefined;
+			void preview?.close().catch(() => undefined);
+			preview = undefined;
+		};
+		const tick = async (): Promise<void> => {
+			if (disposed || inFlight || signal.aborted) return;
+			inFlight = true;
+			try {
+				preview ??= this.#createSession({ display: snapshot.display });
+				const frame = await preview.capture(runContext.lastShotTarget ?? "desktop", {
+					maxWidth: VIEWER_FRAME_MAX_EDGE,
+					maxHeight: VIEWER_FRAME_MAX_EDGE,
+				});
+				if (disposed || signal.aborted) return;
+				failures = 0;
+				const latest: ComputerViewerFrame = {
+					data: Buffer.from(frame.data.buffer, frame.data.byteOffset, frame.data.byteLength).toString("base64"),
+					mimeType: "image/png",
+					width: frame.width,
+					height: frame.height,
+					target: frame.target,
+					at: Date.now(),
+				};
+				// Sent immediately, never queued: the previous frame is dropped
+				// here, so at most one frame is in flight per tick.
+				this.#transport.send({
+					type: "frame",
+					id: `computer-frame-${runId}-${crypto.randomUUID()}`,
+					runId,
+					frame: latest,
+				});
+			} catch {
+				// Give up after repeated refusals (no capture permission, the
+				// previewed desktop went away) instead of hammering the backend.
+				if (++failures >= VIEWER_MAX_FAILURES) stop();
+			} finally {
+				inFlight = false;
+			}
+		};
+		timer = setInterval(() => void tick(), VIEWER_FRAME_INTERVAL_MS);
+		timer.unref?.();
+		void tick();
+		return stop;
 	}
 
 	#runtimeHooks(active: ActiveRun, output: RunOutput): RuntimeHooks {
