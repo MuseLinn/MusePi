@@ -1,10 +1,10 @@
 mod applications;
 mod ax;
 mod backend;
+mod control;
 mod error;
 mod frame;
 mod keys;
-mod lease;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -28,7 +28,7 @@ mod win32;
 use std::{
 	collections::HashMap,
 	panic::AssertUnwindSafe,
-	sync::Arc,
+	sync::{Arc, atomic::AtomicU32},
 	thread::{self, JoinHandle},
 	time::Duration,
 };
@@ -36,6 +36,7 @@ use std::{
 use applications::{Application, ApplicationOpenOptions, ApplicationQuery};
 use ax::{AxRegistry, register_node};
 use backend::{Backend, DeliveryMode, MouseButton, PointerEvent};
+use control::{CancellationSource, OperationToken};
 use error::{CoreResult, DesktopError};
 use frame::{FrameGeometry, apply_capture_caps, encode_png};
 use keys::{parse_keys, parse_modifiers};
@@ -77,6 +78,12 @@ enum Request {
 	},
 	Capture {
 		target: Target,
+		caps:   CaptureCaps,
+		reply:  Reply,
+	},
+	CaptureRegion {
+		target: Target,
+		region: CaptureRegion,
 		caps:   CaptureCaps,
 		reply:  Reply,
 	},
@@ -217,6 +224,7 @@ impl Request {
 			| Self::ListDisplays { reply }
 			| Self::ListWindows { reply }
 			| Self::Capture { reply, .. }
+			| Self::CaptureRegion { reply, .. }
 			| Self::Click { reply, .. }
 			| Self::MoveMouse { reply, .. }
 			| Self::Drag { reply, .. }
@@ -247,6 +255,26 @@ impl Request {
 
 	const fn is_close(&self) -> bool {
 		matches!(self, Self::Close { .. })
+	}
+
+	/// The target and delivery mode of a request that sends input to the
+	/// machine, which is what the cross-session real-input lease guards.
+	fn input_scope(&self) -> Option<(Target, DeliveryMode)> {
+		match self {
+			Self::Click { target, options, .. } | Self::Drag { target, options, .. } => {
+				Some((target.clone(), options.mode))
+			},
+			Self::MoveMouse { target, mode, .. }
+			| Self::Scroll { target, mode, .. }
+			| Self::TypeText { target, mode, .. }
+			| Self::KeyChord { target, mode, .. }
+			| Self::HoldKeys { target, mode, .. }
+			| Self::HoldPointer { target, mode, .. } => Some((target.clone(), *mode)),
+			// The window a reference names is resolved on the worker, so the
+			// request holds global input as the desktop target it clicks into.
+			Self::AxClick { options, .. } => Some((Target::Desktop, options.mode)),
+			_ => None,
+		}
 	}
 }
 
@@ -310,18 +338,60 @@ impl Worker {
 		})
 	}
 
-	fn map_point(
+	/// The frame coordinate input reads, with the target's current window so a
+	/// resized window is refused instead of mapped onto stale pixels.
+	fn validated_frame(
 		&mut self,
 		target: &Target,
-		x: f64,
-		y: f64,
-	) -> CoreResult<(f64, f64, FrameGeometry)> {
+	) -> CoreResult<(FrameGeometry, Option<DesktopWindow>)> {
 		let frame = self.frame(target)?;
 		let current = if matches!(target, Target::Window(_)) {
 			Some(self.window(target)?)
 		} else {
 			None
 		};
+		frame.validate_window(current.as_ref())?;
+		Ok((frame, current))
+	}
+
+	/// The display catalogue a capture reports: the desktop's own displays, or
+	/// the captured window seen as one pseudo-display.
+	fn capture_source(
+		&mut self,
+		target: &Target,
+		width: u32,
+		height: u32,
+	) -> CoreResult<(Vec<DesktopDisplay>, Option<DesktopWindow>)> {
+		match target {
+			Target::Desktop => Ok((self.backend()?.displays()?, None)),
+			Target::Window(_) => {
+				let window = self.window(target)?;
+				let display = DesktopDisplay {
+					id:           window.id.clone(),
+					name:         format!("{} — {}", window.app, window.title),
+					x:            window.x,
+					y:            window.y,
+					width:        window.width,
+					height:       window.height,
+					scale:        f64::from(width) / f64::from(window.width.max(1)),
+					pixel_x:      0,
+					pixel_y:      0,
+					pixel_width:  width,
+					pixel_height: height,
+					is_primary:   false,
+				};
+				Ok((vec![display], Some(window)))
+			},
+		}
+	}
+
+	fn map_point(
+		&mut self,
+		target: &Target,
+		x: f64,
+		y: f64,
+	) -> CoreResult<(f64, f64, FrameGeometry)> {
+		let (frame, current) = self.validated_frame(target)?;
 		let (x, y) = frame.map_point(x, y, current.as_ref())?;
 		Ok((x, y, frame))
 	}
@@ -333,7 +403,19 @@ impl Worker {
 			.ok_or_else(DesktopError::ax_unsupported)
 	}
 
-	fn process(&mut self, request: &Request) -> CoreResult<Response> {
+	/// Runs one request under the operation that owns it: an input operation
+	/// takes the cross-session real-input lease first, and a takeover one arms
+	/// the physical-Escape stop.
+	fn process(&mut self, request: &Request, token: &OperationToken) -> CoreResult<Response> {
+		let _lease = request
+			.input_scope()
+			.filter(|(target, mode)| control::needs_lease(target, *mode))
+			.map(|(_, mode)| control::InputLease::acquire(token, control::is_takeover(mode)))
+			.transpose()?;
+		self.dispatch(request)
+	}
+
+	fn dispatch(&mut self, request: &Request) -> CoreResult<Response> {
 		match request {
 			Request::Capabilities { .. } => {
 				let caps = match self.backend.as_mut() {
@@ -371,26 +453,8 @@ impl Worker {
 				let image = apply_capture_caps(image, &mut geometry, caps)?;
 				let width = image.width();
 				let height = image.height();
-				let source = match target {
-					Target::Desktop => self.backend()?.displays()?,
-					Target::Window(_) => {
-						let w = self.window(target)?;
-						vec![DesktopDisplay {
-							id:           w.id,
-							name:         format!("{} — {}", w.app, w.title),
-							x:            w.x,
-							y:            w.y,
-							width:        w.width,
-							height:       w.height,
-							scale:        f64::from(width) / f64::from(w.width.max(1)),
-							pixel_x:      0,
-							pixel_y:      0,
-							pixel_width:  width,
-							pixel_height: height,
-							is_primary:   false,
-						}]
-					},
-				};
+				let (source, _) = self.capture_source(target, width, height)?;
+				geometry.record_layout(&source)?;
 				let displays = geometry.display_metadata(&source);
 				let png = encode_png(image)?;
 				self.frames.insert(target.key().to_string(), geometry);
@@ -402,6 +466,49 @@ impl Worker {
 					height,
 					source_width,
 					source_height,
+					coordinate_width: width,
+					coordinate_height: height,
+					region: None,
+					target: target.key().to_string(),
+					displays,
+					backend: capabilities.backend,
+					display_server: capabilities.display_server,
+				}))
+			},
+			Request::CaptureRegion { target, region, caps, .. } => {
+				let (base, _) = self.validated_frame(target)?;
+				base.validate_region(region)?;
+				// Zoom shows native detail, so it re-captures the target at its own
+				// resolution instead of upscaling the frame the caller saw.
+				let (image, fresh) = self.backend()?.capture(target, &CaptureCaps::default())?;
+				if matches!(target, Target::Desktop) {
+					let layout = self.backend()?.displays().map_err(|error| {
+						DesktopError::invalid_coordinate_frame(format!(
+							"could not validate captured display layout: {error}"
+						))
+					})?;
+					base.validate_layout(&layout)?;
+				}
+				let (fresh_width, fresh_height) = fresh.dimensions();
+				let (source, _) = self.capture_source(target, fresh_width, fresh_height)?;
+				let (image, source_width, source_height) =
+					base.crop_region(image, &fresh, region, caps)?;
+				let width = image.width();
+				let height = image.height();
+				let (coordinate_width, coordinate_height) = base.dimensions();
+				let displays = base.display_metadata(&source);
+				let png = encode_png(image)?;
+				let capabilities = self.backend()?.capabilities();
+				*self.capabilities.lock() = capabilities.clone();
+				Ok(Response::Capture(DesktopCapture {
+					data: Uint8Array::from(png),
+					width,
+					height,
+					source_width,
+					source_height,
+					coordinate_width,
+					coordinate_height,
+					region: Some(*region),
 					target: target.key().to_string(),
 					displays,
 					backend: capabilities.backend,
@@ -685,8 +792,15 @@ fn create_backend(_: DisplaySelector) -> CoreResult<Box<dyn Backend>> {
 	Err(DesktopError::capture_failed("desktop backend unavailable on this platform"))
 }
 
+/// One queued request with the operation generation it was submitted under, so
+/// a cancel stops queued work rather than only the operation in flight.
+struct QueuedRequest {
+	request: Request,
+	token:   OperationToken,
+}
+
 struct Lifecycle {
-	tx:     Option<flume::Sender<Request>>,
+	tx:     Option<flume::Sender<QueuedRequest>>,
 	done:   Option<flume::Receiver<()>>,
 	join:   Option<JoinHandle<()>>,
 	closed: bool,
@@ -695,9 +809,10 @@ struct SessionCore {
 	selector:     DisplaySelector,
 	lifecycle:    Mutex<Lifecycle>,
 	capabilities: Arc<Mutex<DesktopCapabilities>>,
+	cancellation: CancellationSource,
 }
 impl SessionCore {
-	fn new(selector: DisplaySelector) -> Arc<Self> {
+	fn new(selector: DisplaySelector, escape_stops: Arc<AtomicU32>) -> Arc<Self> {
 		Arc::new(Self {
 			selector,
 			lifecycle: Mutex::new(Lifecycle {
@@ -707,10 +822,11 @@ impl SessionCore {
 				closed: false,
 			}),
 			capabilities: Arc::new(Mutex::new(DesktopCapabilities::unavailable())),
+			cancellation: CancellationSource::counting_escapes(escape_stops),
 		})
 	}
 
-	fn ensure_started(&self) -> CoreResult<flume::Sender<Request>> {
+	fn ensure_started(&self) -> CoreResult<flume::Sender<QueuedRequest>> {
 		let mut lifecycle = self.lifecycle.lock();
 		if lifecycle.closed {
 			return Err(DesktopError::closed());
@@ -718,7 +834,7 @@ impl SessionCore {
 		if let Some(tx) = &lifecycle.tx {
 			return Ok(tx.clone());
 		}
-		let (tx, rx) = flume::unbounded::<Request>();
+		let (tx, rx) = flume::unbounded::<QueuedRequest>();
 		let (done_tx, done_rx) = flume::bounded(1);
 		let selector = self.selector.clone();
 		let caps = Arc::clone(&self.capabilities);
@@ -726,12 +842,14 @@ impl SessionCore {
 			.name("musepi-desktop-session".into())
 			.spawn(move || {
 				let mut worker = Worker::new(selector, caps);
-				while let Ok(request) = rx.recv() {
+				while let Ok(QueuedRequest { request, token }) = rx.recv() {
 					let close = request.is_close();
-					let result = std::panic::catch_unwind(AssertUnwindSafe(|| worker.process(&request)))
-						.unwrap_or_else(|_| {
-							Err(DesktopError::internal("native desktop worker panicked"))
-						});
+					let _scope = token.enter();
+					let result =
+						std::panic::catch_unwind(AssertUnwindSafe(|| worker.process(&request, &token)))
+							.unwrap_or_else(|_| {
+								Err(DesktopError::internal("native desktop worker panicked"))
+							});
 					request.reply(result);
 					if close {
 						break;
@@ -748,11 +866,15 @@ impl SessionCore {
 		Ok(tx)
 	}
 
-	fn call(&self, make: impl FnOnce(Reply) -> Request) -> CoreResult<Response> {
+	fn call(
+		&self,
+		token: OperationToken,
+		make: impl FnOnce(Reply) -> Request,
+	) -> CoreResult<Response> {
 		let (txr, rxr) = flume::bounded(1);
 		self
 			.ensure_started()?
-			.send(make(txr))
+			.send(QueuedRequest { request: make(txr), token })
 			.map_err(|_| DesktopError::internal("native desktop worker stopped unexpectedly"))?;
 		rxr.recv_timeout(OPERATION_TIMEOUT).map_err(|e| {
 			DesktopError::timeout(format!("native desktop operation did not complete: {e}"))
@@ -766,8 +888,11 @@ impl SessionCore {
 			return Ok(());
 		};
 		let (rtx, rrx) = flume::bounded(1);
-		tx.send(Request::Close { reply: rtx })
-			.map_err(|_| DesktopError::closed())?;
+		tx.send(QueuedRequest {
+			request: Request::Close { reply: rtx },
+			token:   self.cancellation.token(),
+		})
+		.map_err(|_| DesktopError::closed())?;
 		let _ = rrx.recv_timeout(CLOSE_TIMEOUT).map_err(|e| {
 			DesktopError::timeout(format!("timed out closing native desktop worker: {e}"))
 		})?;
@@ -789,7 +914,10 @@ impl Drop for SessionCore {
 		let lifecycle = self.lifecycle.get_mut();
 		if let Some(tx) = lifecycle.tx.take() {
 			let (reply, _) = flume::bounded(1);
-			let _ = tx.send(Request::Close { reply });
+			let _ = tx.send(QueuedRequest {
+				request: Request::Close { reply },
+				token:   self.cancellation.token(),
+			});
 		}
 		let _ = lifecycle.join.take();
 	}
@@ -803,21 +931,46 @@ fn response_unit(response: Response) -> CoreResult<()> {
 	}
 }
 
+/// Physical-Escape stops counted under `key` by every desktop session created
+/// with it, including closed ones, until the key is forgotten.
+#[napi]
+pub fn desktop_escape_stops(key: String) -> u32 {
+	control::escape_stops(&key)
+}
+
+/// Drops the stop count kept under `key` once no session will use it again.
+#[napi]
+pub fn forget_desktop_escape_stops(key: String) {
+	control::forget_escape_stops(&key);
+}
+
 /// Persistent, serialized native desktop capture/input/accessibility session.
 #[napi]
 pub struct DesktopSession {
 	core: Arc<SessionCore>,
 }
+impl Drop for DesktopSession {
+	fn drop(&mut self) {
+		// A running async task can retain SessionCore after its JS wrapper dies.
+		// Cancel that work now rather than waiting for the last Arc to disappear.
+		self.core.cancellation.cancel();
+	}
+}
 #[napi]
 impl DesktopSession {
 	#[napi(constructor)]
 	pub fn new(options: Option<DesktopSessionOptions>) -> Result<Self> {
-		Ok(Self { core: SessionCore::new(DisplaySelector::parse(options.and_then(|o| o.display))) })
+		let options = options.unwrap_or_default();
+		let escape_stops = control::escape_stop_counter(options.escape_stop_key.as_deref());
+		Ok(Self { core: SessionCore::new(DisplaySelector::parse(options.display), escape_stops) })
 	}
 
 	#[napi(getter)]
 	pub fn capabilities(&self) -> DesktopCapabilities {
-		match self.core.call(|reply| Request::Capabilities { reply }) {
+		match self
+			.core
+			.call(self.core.cancellation.token(), |reply| Request::Capabilities { reply })
+		{
 			Ok(Response::Capabilities(c)) => c,
 			_ => self.core.capabilities.lock().clone(),
 		}
@@ -826,8 +979,9 @@ impl DesktopSession {
 	#[napi]
 	pub fn list_displays(&self) -> Result<task::Promise<Vec<DesktopDisplay>>> {
 		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
 		Ok(task::blocking("desktop.listDisplays", (), move |_| {
-			match c.call(|reply| Request::ListDisplays { reply })? {
+			match c.call(token, |reply| Request::ListDisplays { reply })? {
 				Response::Displays(v) => Ok(v),
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
@@ -838,8 +992,9 @@ impl DesktopSession {
 	#[napi]
 	pub fn list_windows(&self) -> Result<task::Promise<Vec<DesktopWindow>>> {
 		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
 		Ok(task::blocking("desktop.listWindows", (), move |_| {
-			match c.call(|reply| Request::ListWindows { reply })? {
+			match c.call(token, |reply| Request::ListWindows { reply })? {
 				Response::Windows(v) => Ok(v),
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
@@ -854,8 +1009,9 @@ impl DesktopSession {
 		path: Vec<String>,
 	) -> Result<task::Promise<Vec<DesktopMenuItem>>> {
 		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
 		Ok(task::blocking("desktop.menuItems", (), move |_| {
-			match c.call(|reply| Request::MenuItems { window, path, reply })? {
+			match c.call(token, |reply| Request::MenuItems { window, path, reply })? {
 				Response::MenuItems(v) => Ok(v),
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
@@ -866,8 +1022,9 @@ impl DesktopSession {
 	#[napi]
 	pub fn menu_select(&self, window: String, path: Vec<String>) -> Result<task::Promise<()>> {
 		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
 		Ok(task::blocking("desktop.menuSelect", (), move |_| {
-			match c.call(|reply| Request::MenuSelect { window, path, reply })? {
+			match c.call(token, |reply| Request::MenuSelect { window, path, reply })? {
 				Response::Unit => Ok(()),
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
@@ -903,9 +1060,40 @@ impl DesktopSession {
 		caps: Option<CaptureCaps>,
 	) -> Result<task::Promise<DesktopCapture>> {
 		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
 		let target = Target::parse(&target);
 		Ok(task::blocking("desktop.capture", (), move |_| {
-			match c.call(|reply| Request::Capture { target, caps: caps.unwrap_or_default(), reply })? {
+			match c.call(token, |reply| Request::Capture {
+				target,
+				caps: caps.unwrap_or_default(),
+				reply,
+			})? {
+				Response::Capture(v) => Ok(v),
+				_ => Err(DesktopError::internal("unexpected response")),
+			}
+			.map_err(Into::into)
+		}))
+	}
+
+	/// Capture a fresh native-detail region without replacing the full input
+	/// coordinate frame.
+	#[napi]
+	pub fn capture_region(
+		&self,
+		target: String,
+		region: CaptureRegion,
+		caps: Option<CaptureCaps>,
+	) -> Result<task::Promise<DesktopCapture>> {
+		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
+		let target = Target::parse(&target);
+		Ok(task::blocking("desktop.captureRegion", (), move |_| {
+			match c.call(token, |reply| Request::CaptureRegion {
+				target,
+				region,
+				caps: caps.unwrap_or_default(),
+				reply,
+			})? {
 				Response::Capture(v) => Ok(v),
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
@@ -1094,8 +1282,9 @@ impl DesktopSession {
 		opts: Option<AxSnapshotOptions>,
 	) -> Result<task::Promise<AxSnapshot>> {
 		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
 		Ok(task::blocking("desktop.axSnapshot", (), move |_| {
-			match c.call(|reply| Request::AxSnapshot {
+			match c.call(token, |reply| Request::AxSnapshot {
 				target: Target::parse(&target),
 				options: opts.unwrap_or_default(),
 				reply,
@@ -1141,8 +1330,9 @@ impl DesktopSession {
 	#[napi]
 	pub fn ax_node(&self, reference: String) -> Result<task::Promise<AxNode>> {
 		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
 		Ok(task::blocking("desktop.axNode", (), move |_| {
-			match c.call(|reply| Request::AxNode { reference, reply })? {
+			match c.call(token, |reply| Request::AxNode { reference, reply })? {
 				Response::Node(Some(v)) => Ok(v),
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
@@ -1153,8 +1343,9 @@ impl DesktopSession {
 	#[napi]
 	pub fn ax_attributes(&self, reference: String) -> Result<task::Promise<Vec<(String, String)>>> {
 		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
 		Ok(task::blocking("desktop.axAttributes", (), move |_| {
-			match c.call(|reply| Request::AxAttributes { reference, reply })? {
+			match c.call(token, |reply| Request::AxAttributes { reference, reply })? {
 				Response::Attributes(v) => Ok(v),
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
@@ -1209,8 +1400,74 @@ impl DesktopSession {
 		}))
 	}
 
+	/// Immediately cancel operations submitted before this call. Later
+	/// operations may proceed.
+	#[napi]
+	pub fn cancel(&self) {
+		self.core.cancellation.cancel();
+	}
+
+	/// How many times the user's physical Escape has stopped takeover input in
+	/// this session, or under its `escapeStopKey`. Host cancels, retirement and
+	/// release never count, so a rise tells the host the user stopped the work.
+	#[napi(getter)]
+	pub fn escape_stops(&self) -> u32 {
+		self.core.cancellation.escape_stops()
+	}
+
+	/// Native ownership only. Human approval is required by the host before
+	/// calling this method.
+	#[napi]
+	pub fn acquire_control(&self) -> Result<task::Promise<DesktopControlState>> {
+		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
+		Ok(task::blocking("desktop.acquireControl", (), move |_| {
+			token.check()?;
+			if c.lifecycle.lock().closed {
+				return Err(DesktopError::closed().into());
+			}
+			c.cancellation.acquire_control(&token)?;
+			if let Err(error) = token.check() {
+				c.cancellation.release_control();
+				return Err(error.into());
+			}
+			Ok(DesktopControlState { active: c.cancellation.control_active() })
+		}))
+	}
+
+	#[napi]
+	pub fn release_control(&self) {
+		self.core.cancellation.release_control();
+	}
+
+	#[napi]
+	pub fn control_state(&self) -> DesktopControlState {
+		DesktopControlState { active: self.core.cancellation.control_active() }
+	}
+
+	/// Retire queued work from a completed helper without revoking held control.
+	#[napi]
+	pub fn retire(&self) {
+		self.core.cancellation.retire();
+	}
+
+	/// Sets when the current computer run ends, `remaining_ms` from now; each
+	/// run sets it before its first call. Input waiting for a Wayland portal
+	/// permission prompt gives up shortly before it.
+	#[napi]
+	pub fn set_run_deadline(&self, remaining_ms: f64) {
+		let deadline = Duration::try_from_secs_f64(remaining_ms.max(0.0) / 1000.0)
+			.ok()
+			.and_then(|remaining| std::time::Instant::now().checked_add(remaining));
+		#[cfg(target_os = "linux")]
+		self.core.cancellation.set_deadline(deadline);
+		#[cfg(not(target_os = "linux"))]
+		let _ = deadline;
+	}
+
 	#[napi]
 	pub fn close(&self) -> task::Promise<()> {
+		self.cancel();
 		let c = Arc::clone(&self.core);
 		task::blocking("desktop.close", (), move |_| c.close().map_err(Into::into))
 	}
@@ -1222,7 +1479,12 @@ impl DesktopSession {
 		make: impl FnOnce(Reply) -> Request + Send + 'static,
 	) -> task::Promise<()> {
 		let c = Arc::clone(&self.core);
-		task::blocking(label, (), move |_| c.call(make).and_then(response_unit).map_err(Into::into))
+		let token = c.cancellation.token();
+		task::blocking(label, (), move |_| {
+			c.call(token, make)
+				.and_then(response_unit)
+				.map_err(Into::into)
+		})
 	}
 
 	fn nodes(
@@ -1231,8 +1493,9 @@ impl DesktopSession {
 		make: impl FnOnce(Reply) -> Request + Send + 'static,
 	) -> task::Promise<Vec<AxNode>> {
 		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
 		task::blocking(label, (), move |_| {
-			match c.call(make)? {
+			match c.call(token, make)? {
 				Response::Nodes(v) => Ok(v),
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
@@ -1246,8 +1509,9 @@ impl DesktopSession {
 		make: impl FnOnce(Reply) -> Request + Send + 'static,
 	) -> task::Promise<Option<AxNode>> {
 		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
 		task::blocking(label, (), move |_| {
-			match c.call(make)? {
+			match c.call(token, make)? {
 				Response::Node(v) => Ok(v),
 				_ => Err(DesktopError::internal("unexpected response")),
 			}
@@ -1377,8 +1641,9 @@ mod capture_tests {
 	#[test]
 	fn capture_accepts_non_numeric_wayland_window_id() {
 		let mut worker = worker_with(FakeWaylandBackend::new());
+		let token = control::CancellationSource::default().token();
 		let response = worker
-			.process(&capture_request(Target::Window(WAYLAND_ID.to_string())))
+			.process(&capture_request(Target::Window(WAYLAND_ID.to_string())), &token)
 			.expect("wayland window id should be accepted by capture");
 		let Response::Capture(capture) = response else {
 			panic!("expected a capture response");
@@ -1394,7 +1659,9 @@ mod capture_tests {
 	#[test]
 	fn capture_rejects_unknown_window_id_via_backend_lookup() {
 		let mut worker = worker_with(FakeWaylandBackend::new());
-		let Err(err) = worker.process(&capture_request(Target::Window("does-not-exist".to_string())))
+		let token = control::CancellationSource::default().token();
+		let Err(err) =
+			worker.process(&capture_request(Target::Window("does-not-exist".to_string())), &token)
 		else {
 			panic!("unknown window id should fail");
 		};

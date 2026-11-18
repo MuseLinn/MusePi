@@ -6,8 +6,6 @@ pub mod delivery;
 #[cfg(target_os = "windows")]
 mod input;
 #[cfg(target_os = "windows")]
-mod lease;
-#[cfg(target_os = "windows")]
 mod menus;
 #[cfg(target_os = "windows")]
 mod overlay;
@@ -37,7 +35,6 @@ pub(crate) struct Win32Backend {
 	display:      DisplaySelector,
 	global_input: Enigo,
 	ax:           Win32Ax,
-	lease:        Option<lease::Win32Lease>,
 	overlay:      Option<overlay::OverlayHandle>,
 }
 
@@ -51,24 +48,20 @@ impl Win32Backend {
 		// The overlay is best-effort: a session without a window still offers
 		// full input, only without the second cursor.
 		let overlay = overlay::OverlayHandle::try_create().ok();
-		Ok(Self { display, global_input, ax: Win32Ax::new(), lease: None, overlay })
+		Ok(Self { display, global_input, ax: Win32Ax::new(), overlay })
 	}
 
-	/// Acquires the cross-session real-input lease when the request touches
-	/// shared input, and announces the takeover on the overlay. Window-message
-	/// delivery bypasses both: it moves neither the shared cursor nor the
+	/// Announces a takeover on the overlay. The cross-session real-input lease
+	/// is taken by the session worker before this backend runs, so one
+	/// operation owns input and focus at a time across processes. Window-message
+	/// delivery announces nothing: it moves neither the shared cursor nor the
 	/// system input queue.
-	fn begin_input(&mut self, target: &Target, mode: DeliveryMode) -> CoreResult<()> {
-		if !super::lease::needs_lease(target, mode) {
-			return Ok(());
-		}
-		if self.lease.is_none() {
-			self.lease = Some(lease::acquire()?);
-		}
-		if let Some(overlay) = &self.overlay {
+	fn begin_input(&self, target: &Target, mode: DeliveryMode) {
+		if super::control::needs_lease(target, mode)
+			&& let Some(overlay) = &self.overlay
+		{
 			overlay.notice("foreground input is taking over mouse and keyboard");
 		}
-		Ok(())
 	}
 
 	fn end_input(&self) {
@@ -141,7 +134,7 @@ impl Backend for Win32Backend {
 		duration: std::time::Duration,
 		mode: DeliveryMode,
 	) -> CoreResult<()> {
-		self.begin_input(target, mode)?;
+		self.begin_input(target, mode);
 		let result =
 			input::hold_pointer(&mut self.global_input, target, x, y, button, duration, mode);
 		self.end_input();
@@ -155,7 +148,7 @@ impl Backend for Win32Backend {
 		duration: std::time::Duration,
 		mode: DeliveryMode,
 	) -> CoreResult<()> {
-		self.begin_input(target, mode)?;
+		self.begin_input(target, mode);
 		let result = input::hold_keys(&mut self.global_input, target, keys, duration, mode);
 		self.end_input();
 		result
@@ -168,7 +161,7 @@ impl Backend for Win32Backend {
 		_frame: &FrameGeometry,
 		mode: DeliveryMode,
 	) -> CoreResult<()> {
-		self.begin_input(target, mode)?;
+		self.begin_input(target, mode);
 		if let Some(overlay) = &self.overlay {
 			overlay.show_event(&event);
 		}
@@ -178,7 +171,7 @@ impl Backend for Win32Backend {
 	}
 
 	fn type_text(&mut self, target: &Target, text: &str, mode: DeliveryMode) -> CoreResult<()> {
-		self.begin_input(target, mode)?;
+		self.begin_input(target, mode);
 		let result = input::type_text(&mut self.global_input, target, text, mode);
 		self.end_input();
 		result
@@ -190,7 +183,7 @@ impl Backend for Win32Backend {
 		keys: &[KeyName],
 		mode: DeliveryMode,
 	) -> CoreResult<()> {
-		self.begin_input(target, mode)?;
+		self.begin_input(target, mode);
 		let result = input::key_chord(&mut self.global_input, target, keys, mode);
 		self.end_input();
 		result
@@ -207,22 +200,24 @@ impl Backend for Win32Backend {
 
 #[cfg(all(test, target_os = "windows"))]
 mod tests {
-	use super::{super::error::ErrorCode, *};
+	use super::super::{control, error::ErrorCode};
 
-	/// Manual end-to-end: the backend acquires the machine-wide lease, and a
-	/// second backend observes it as busy. Ignored by default because it
-	/// touches real global lease state and creates overlay windows.
+	/// Manual end-to-end: the real-input lease is machine-wide, so a second
+	/// operation observes the first as busy. Ignored by default because it
+	/// takes the real input lease.
 	#[test]
 	#[ignore = "needs an interactive desktop; acquires the real input lease"]
-	fn backend_lease_blocks_second_backend() {
-		let mut first = Win32Backend::new(DisplaySelector::All).expect("first backend starts");
-		first
-			.begin_input(&Target::Desktop, DeliveryMode::Background)
-			.expect("first backend acquires the lease");
-		let mut second = Win32Backend::new(DisplaySelector::All).expect("second backend starts");
-		let busy = second
-			.begin_input(&Target::Desktop, DeliveryMode::Background)
-			.expect_err("second backend must observe a busy lease");
+	fn real_input_lease_blocks_a_second_operation() {
+		let source = control::CancellationSource::default();
+		let first_token = source.token();
+		let first = control::InputLease::acquire(&first_token, false)
+			.expect("first operation acquires the lease");
+		let second_token = control::CancellationSource::default().token();
+		let busy = control::InputLease::acquire(&second_token, false)
+			.err()
+			.expect("second operation must observe a busy lease");
 		assert_eq!(busy.code, ErrorCode::InputBusy);
+		drop(first);
+		control::InputLease::acquire(&first_token, false).expect("lease releases with the operation");
 	}
 }

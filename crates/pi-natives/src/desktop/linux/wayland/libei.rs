@@ -16,11 +16,35 @@ use reis::{
 
 use crate::desktop::{
 	backend::{Modifiers, MouseButton, PointerEvent},
+	control,
 	error::{CoreResult, DesktopError},
 	keys::KeyName,
 };
 
 const DEVICE_DISCOVERY_DRAIN_TIMEOUT: Duration = Duration::from_millis(500);
+/// The permission dialog is given up this long before the operation's
+/// deadline, so closing the refused portal session still fits inside it.
+const CONSENT_MARGIN: Duration = Duration::from_secs(2);
+
+/// Bounds a wait on the `RemoteDesktop` permission dialog by the current
+/// operation's deadline (the run's end the host announced). GNOME can open the
+/// dialog behind other windows; unbounded, only the run's own timeout ends the
+/// wait, and the run fails without saying why.
+async fn until_deadline<T>(future: impl std::future::Future<Output = T>) -> CoreResult<T> {
+	let Some(deadline) = control::current_token().and_then(|token| token.deadline()) else {
+		return Ok(future.await);
+	};
+	let give_up = deadline.checked_sub(CONSENT_MARGIN).unwrap_or(deadline);
+	tokio::time::timeout_at(give_up.into(), future)
+		.await
+		.map_err(|_| {
+			DesktopError::timeout(concat!(
+				"the RemoteDesktop permission dialog was not answered before the call's deadline, so "
+				"nothing was sent and its portal session is being closed; the dialog can open behind "
+				"other windows. Retry and ask the user to answer the new dialog",
+			))
+		})
+}
 
 #[derive(Clone, Copy)]
 struct DiscoveryTargets {
@@ -124,9 +148,11 @@ impl Libei {
 						)
 						.await
 						.map_err(|err| format!("RemoteDesktop SelectDevices: {err}"))?;
-					let response = portal
-						.start(&session, None)
+					// Only `Start` waits on the user; the steps around it are not
+					// the dialog and keep their own bounds.
+					let response = until_deadline(portal.start(&session, None))
 						.await
+						.map_err(|err| err.to_string())?
 						.map_err(|err| format!("RemoteDesktop Start: {err}"))?
 						.response()
 						.map_err(|err| format!("RemoteDesktop permission: {err}"))?;

@@ -6,6 +6,7 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAP
 use super::{
 	super::{
 		backend::{DeliveryMode, InputTiming, Modifiers, MouseButton, PointerEvent},
+		control,
 		error::{CoreResult, DesktopError},
 		keys::KeyName,
 		types::Target,
@@ -139,6 +140,7 @@ fn global_pointer(input: &mut Enigo, event: PointerEvent) -> CoreResult<()> {
 					if escape_pressed() {
 						return Err(DesktopError::cancelled("pointer input aborted by physical Escape"));
 					}
+					control::check()?;
 					input
 						.button(button_to_enigo(button), Direction::Click)
 						.map_err(enigo_error)?;
@@ -168,6 +170,7 @@ fn global_pointer(input: &mut Enigo, event: PointerEvent) -> CoreResult<()> {
 					if escape_pressed() {
 						return Err(DesktopError::cancelled("pointer input aborted by physical Escape"));
 					}
+					control::check()?;
 					input
 						.move_mouse(x.round() as i32, y.round() as i32, Coordinate::Abs)
 						.map_err(enigo_error)?;
@@ -701,7 +704,7 @@ mod foreground {
 
 	use super::{
 		CoreResult, CursorGuard, DesktopError, InputTiming, KeyName, Modifiers, MouseButton,
-		PointerEvent, background, capture, escape_pressed, settle,
+		PointerEvent, background, capture, control, escape_pressed, settle,
 	};
 
 	struct ForegroundGuard {
@@ -801,24 +804,27 @@ mod foreground {
 		button: MouseButton,
 		duration: std::time::Duration,
 	) -> CoreResult<()> {
+		control::check()?;
 		let _guard = ForegroundGuard::activate(id)?;
 		let _cursor = CursorGuard::capture();
 		move_to(x, y)?;
 		settle(InputTiming::CLICK.move_settle_ms);
 		let (down, up) = button_flags(button);
 		send(mouse_event(down, 0))?;
-		// A hold is bounded by the caller, so a physical Escape is the only
-		// early exit; the button is released either way.
+		// A hold is bounded by the caller; a physical Escape or a host cancel is
+		// the only early exit, and the button is released either way.
 		let aborted = escape_pressed();
-		if !aborted {
-			std::thread::sleep(duration);
-		}
-		let released = send(mouse_event(up, 0));
+		let cancelled = if aborted {
+			None
+		} else {
+			control::wait(duration).err()
+		};
+		let released = control::cleanup(|| send(mouse_event(up, 0)));
 		settle(InputTiming::CLICK.after_ms);
 		if aborted {
 			return Err(DesktopError::cancelled("pointer hold aborted by physical Escape"));
 		}
-		released
+		cancelled.map_or(released, Err)
 	}
 
 	pub(super) fn pointer(id: &str, event: PointerEvent) -> CoreResult<()> {
@@ -993,16 +999,16 @@ mod foreground {
 			}
 			held.push(vk);
 		}
-		std::thread::sleep(duration);
+		let cancelled = control::wait(duration).err();
 		let mut result = Ok(());
 		for vk in held.into_iter().rev() {
-			if let Err(error) = send(key_event(vk, 0, KEYEVENTF_KEYUP))
+			if let Err(error) = control::cleanup(|| send(key_event(vk, 0, KEYEVENTF_KEYUP)))
 				&& result.is_ok()
 			{
 				result = Err(error);
 			}
 		}
-		result
+		cancelled.map_or(result, Err)
 	}
 
 	pub(super) fn type_text(id: &str, text: &str) -> CoreResult<()> {
@@ -1101,10 +1107,13 @@ fn global_hold_pointer(
 	input
 		.button(button_to_enigo(button), Direction::Press)
 		.map_err(enigo_error)?;
-	std::thread::sleep(duration);
-	input
-		.button(button_to_enigo(button), Direction::Release)
-		.map_err(enigo_error)
+	let cancelled = control::wait(duration).err();
+	let released = control::cleanup(|| {
+		input
+			.button(button_to_enigo(button), Direction::Release)
+			.map_err(enigo_error)
+	});
+	cancelled.map_or(released, Err)
 }
 
 pub(super) fn hold_pointer(

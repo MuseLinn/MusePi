@@ -45,18 +45,24 @@ pub struct DesktopWindow {
 
 #[napi(object)]
 pub struct DesktopCapture {
-	pub data:           Uint8Array,
-	pub width:          u32,
-	pub height:         u32,
+	pub data:              Uint8Array,
+	pub width:             u32,
+	pub height:            u32,
 	/// Pre-scaling capture width in native pixels; equals `width` when unscaled.
-	pub source_width:   u32,
+	pub source_width:      u32,
 	/// Pre-scaling capture height in native pixels; equals `height` when
 	/// unscaled.
-	pub source_height:  u32,
-	pub target:         String,
-	pub displays:       Vec<DesktopDisplay>,
-	pub backend:        String,
-	pub display_server: Option<String>,
+	pub source_height:     u32,
+	/// Dimensions of the full screenshot coordinate frame used by pointer input.
+	pub coordinate_width:  u32,
+	pub coordinate_height: u32,
+	/// Region in the full screenshot's coordinates; zoom pixels are not input
+	/// coordinates.
+	pub region:            Option<CaptureRegion>,
+	pub target:            String,
+	pub displays:          Vec<DesktopDisplay>,
+	pub backend:           String,
+	pub display_server:    Option<String>,
 }
 
 #[napi(object)]
@@ -98,7 +104,17 @@ impl DesktopCapabilities {
 #[napi(object)]
 #[derive(Debug, Clone, Default)]
 pub struct DesktopSessionOptions {
-	pub display: Option<String>,
+	pub display:         Option<String>,
+	/// Counts the user's physical Escape under this key, shared by every
+	/// session created with it and readable after a session dies.
+	pub escape_stop_key: Option<String>,
+}
+
+/// Whether this session currently holds explicit task ownership.
+#[napi(object)]
+#[derive(Debug, Clone, Copy)]
+pub struct DesktopControlState {
+	pub active: bool,
 }
 
 #[napi(object)]
@@ -106,6 +122,16 @@ pub struct DesktopSessionOptions {
 pub struct CaptureCaps {
 	pub max_width:  Option<u32>,
 	pub max_height: Option<u32>,
+}
+
+/// Rectangle in pixels of the most recent full screenshot of the same target.
+#[napi(object)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CaptureRegion {
+	pub x:      f64,
+	pub y:      f64,
+	pub width:  f64,
+	pub height: f64,
 }
 
 #[napi(object)]
