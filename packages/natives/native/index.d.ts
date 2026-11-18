@@ -39,6 +39,8 @@ export declare class DesktopSession {
   listApplications(query?: ApplicationQuery | undefined | null): Promise<Array<Application>>
   openApplication(target: string, options?: ApplicationOpenOptions | undefined | null): Promise<Application>
   capture(target: string, caps?: CaptureCaps | undefined | null): Promise<DesktopCapture>
+  /** Capture a fresh native-detail region without replacing the full input coordinate frame. */
+  captureRegion(target: string, region: CaptureRegion, caps?: CaptureCaps | undefined | null): Promise<DesktopCapture>
   click(target: string, x: number, y: number, opts?: PointerOptions | undefined | null): Promise<undefined>
   moveMouse(target: string, x: number, y: number, opts?: PointerOptions | undefined | null): Promise<undefined>
   drag(target: string, path: Array<DesktopPoint>, opts?: PointerOptions | undefined | null): Promise<undefined>
@@ -64,6 +66,26 @@ export declare class DesktopSession {
   axSetValue(reference: string, value: string): Promise<undefined>
   axFocus(reference: string): Promise<undefined>
   axClick(reference: string, opts?: PointerOptions | undefined | null): Promise<undefined>
+  /** Immediately cancel operations submitted before this call. Later operations may proceed. */
+  cancel(): void
+  /**
+   * How many times the user's physical Escape has stopped takeover input in
+   * this session, or under its `escapeStopKey`. Host cancels, retirement and
+   * release never count, so a rise tells the host the user stopped the work.
+   */
+  get escapeStops(): number
+  /** Native ownership only. Human approval is required by the host before calling this method. */
+  acquireControl(): Promise<DesktopControlState>
+  releaseControl(): void
+  controlState(): DesktopControlState
+  /** Retire queued work from a completed helper without revoking held control. */
+  retire(): void
+  /**
+   * Sets when the current computer run ends, `remaining_ms` from now; each
+   * run sets it before its first call. Input waiting for a Wayland portal
+   * permission prompt gives up shortly before it.
+   */
+  setRunDeadline(remainingMs: number): void
   close(): Promise<undefined>
 }
 
@@ -624,6 +646,14 @@ export interface CaptureCaps {
   maxHeight?: number
 }
 
+/** Rectangle in pixels of the most recent full screenshot of the same target. */
+export interface CaptureRegion {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
 /** Clipboard image payload encoded as PNG bytes. */
 export interface ClipboardImage {
   /** PNG-encoded image bytes. */
@@ -704,10 +734,23 @@ export interface DesktopCapture {
    * unscaled.
    */
   sourceHeight: number
+  /** Dimensions of the full screenshot coordinate frame used by pointer input. */
+  coordinateWidth: number
+  coordinateHeight: number
+  /**
+   * Region in the full screenshot's coordinates; zoom pixels are not input
+   * coordinates.
+   */
+  region?: CaptureRegion
   target: string
   displays: Array<DesktopDisplay>
   backend: string
   displayServer?: string
+}
+
+/** Whether this session currently holds explicit task ownership. */
+export interface DesktopControlState {
+  active: boolean
 }
 
 /**
@@ -730,6 +773,12 @@ export interface DesktopDisplay {
 }
 
 /**
+ * Physical-Escape stops counted under `key` by every desktop session created
+ * with it, including closed ones, until the key is forgotten.
+ */
+export declare function desktopEscapeStops(key: string): number
+
+/**
  * One immediate child of a native application menu. Paths contain the actual
  * native labels, including ellipses; selection accepts normalized labels.
  */
@@ -749,6 +798,11 @@ export interface DesktopPoint {
 
 export interface DesktopSessionOptions {
   display?: string
+  /**
+   * Counts the user's physical Escape under this key, shared by every
+   * session created with it and readable after a session dies.
+   */
+  escapeStopKey?: string
 }
 
 /** One capturable top-level window in global logical desktop coordinates. */
@@ -962,6 +1016,9 @@ export declare enum FileType {
   /** Symbolic link. */
   Symlink = 3
 }
+
+/** Drops the stop count kept under `key` once no session will use it again. */
+export declare function forgetDesktopEscapeStops(key: string): void
 
 /** Fuzzy file path search for autocomplete. */
 export declare function fuzzyFind(options: FuzzyFindOptions): Promise<FuzzyFindResult>
