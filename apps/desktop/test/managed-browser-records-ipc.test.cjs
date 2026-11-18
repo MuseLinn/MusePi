@@ -124,8 +124,8 @@ describe("managed browser history and downloads", () => {
 
 		const port = await first.startServer();
 		expect(port).not.toBeNull();
-		const history = await fetch(`http://127.0.0.1:${port}/musepi/history`).then(response => response.json());
-		const downloads = await fetch(`http://127.0.0.1:${port}/musepi/downloads`).then(response => response.json());
+		const history = await Bun.fetch(`http://127.0.0.1:${port}/musepi/history`).then(response => response.json());
+		const downloads = await Bun.fetch(`http://127.0.0.1:${port}/musepi/downloads`).then(response => response.json());
 		expect(history[0].url).toBe("https://example.test/newer");
 		expect(history.every(record => !record.url.includes("user:pass"))).toBe(true);
 		expect(downloads[0].status).toBe("completed");

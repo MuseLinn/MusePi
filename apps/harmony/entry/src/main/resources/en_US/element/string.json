@@ -93,6 +93,14 @@
       "value": "No matching sessions"
     },
     {
+      "name": "sessions_group_running",
+      "value": "Running"
+    },
+    {
+      "name": "sessions_group_recent",
+      "value": "Recent"
+    },
+    {
       "name": "sessions_none",
       "value": "No sessions yet"
     },
@@ -339,6 +347,134 @@
     {
       "name": "language_en",
       "value": "English"
+    },
+    {
+      "name": "settings_group_reach",
+      "value": "Notifications & voice"
+    },
+    {
+      "name": "settings_notifications",
+      "value": "Notifications"
+    },
+    {
+      "name": "settings_notifications_sub",
+      "value": "Permission, turn alerts, do not disturb"
+    },
+    {
+      "name": "notify_allow",
+      "value": "Allow notifications"
+    },
+    {
+      "name": "notify_allow_sub",
+      "value": "System notification permission"
+    },
+    {
+      "name": "notify_turn_done",
+      "value": "Alert when a turn finishes"
+    },
+    {
+      "name": "notify_turn_done_sub",
+      "value": "Post a notification when a background turn ends"
+    },
+    {
+      "name": "notify_dnd",
+      "value": "Do not disturb"
+    },
+    {
+      "name": "notify_dnd_sub",
+      "value": "No banners — keep them in the notification center"
+    },
+    {
+      "name": "notify_state_on",
+      "value": "On"
+    },
+    {
+      "name": "notify_state_off",
+      "value": "Off"
+    },
+    {
+      "name": "notify_state_dnd",
+      "value": "Do not disturb"
+    },
+    {
+      "name": "settings_voice",
+      "value": "Voice"
+    },
+    {
+      "name": "settings_voice_sub",
+      "value": "Voice and recognition language"
+    },
+    {
+      "name": "voice_style_title",
+      "value": "Voice"
+    },
+    {
+      "name": "voice_style_default",
+      "value": "System default"
+    },
+    {
+      "name": "voice_style_concise",
+      "value": "Concise"
+    },
+    {
+      "name": "voice_style_warm",
+      "value": "Warm"
+    },
+    {
+      "name": "voice_lang_title",
+      "value": "Recognition language"
+    },
+    {
+      "name": "voice_lang_system",
+      "value": "Follow system"
+    },
+    {
+      "name": "settings_storage",
+      "value": "Storage & privacy"
+    },
+    {
+      "name": "settings_storage_sub",
+      "value": "Local data and cache"
+    },
+    {
+      "name": "storage_footprint",
+      "value": "Cache and web data"
+    },
+    {
+      "name": "storage_clear",
+      "value": "Clear local data"
+    },
+    {
+      "name": "storage_clear_sub",
+      "value": "Web cache, cookies, and offline data"
+    },
+    {
+      "name": "storage_clear_title",
+      "value": "Clear local data"
+    },
+    {
+      "name": "storage_clear_message",
+      "value": "Saved sign-in and cache will be deleted. The next launch returns to the connect screen."
+    },
+    {
+      "name": "action_cancel",
+      "value": "Cancel"
+    },
+    {
+      "name": "storage_clear_confirm",
+      "value": "Clear"
+    },
+    {
+      "name": "storage_cleared",
+      "value": "Cleared"
+    },
+    {
+      "name": "a11y_switch_on",
+      "value": "On"
+    },
+    {
+      "name": "a11y_switch_off",
+      "value": "Off"
     }
   ]
 }

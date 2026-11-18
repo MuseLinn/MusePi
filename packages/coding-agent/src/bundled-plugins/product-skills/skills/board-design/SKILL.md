@@ -1,5 +1,6 @@
 ---
 name: board-design
+version: 1.0.0
 description: 桌面看板（board）的设计与读写规范——何时建板、怎么规划卡片布局、如何选 widget 类型并配 data/pos（避免类型数据错配和不可用布局）。触发：用户要求"看板/桌面卡片墙/把 X 放上看板/添加卡片"。
 ---
 

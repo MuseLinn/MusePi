@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { type BrandIconStyle, readBrandIconStyle, writeBrandIconStyle } from "../lib/brand-icon-style";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
 import { resolveActiveSection, type SectionId, type SectionRequest } from "../lib/settings-nav";
@@ -275,6 +276,7 @@ export function SettingsView({
 		if (scroll && rows.length > 0) rows[0].scrollIntoView({ block: "center", behavior: "smooth" });
 	}, [settingsQuery, activeSection]);
 	const [showAvatars, setShowAvatars] = useState(() => localStorage.getItem("musepi-gui-avatars") !== "0");
+	const [brandIconStyle, setBrandIconStyle] = useState<BrandIconStyle>(readBrandIconStyle);
 	const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
 	const [apiProviders, setApiProviders] = useState<ApiProviderInfo[]>([]);
 	const [custom, setCustom] = useState<CustomProvider[]>([]);
@@ -324,9 +326,13 @@ export function SettingsView({
 				providers?: Record<
 					string,
 					{
+						label?: string;
+						baseUrl?: string;
 						models?: {
 							id: string;
 							name?: string;
+							api?: string;
+							supportsTools?: boolean;
 							input?: string[];
 							contextWindow?: number;
 							maxTokens?: number;
@@ -337,6 +343,8 @@ export function SettingsView({
 			setCustom(
 				Object.entries(cfg?.providers ?? {}).map(([name, v]) => ({
 					name,
+					...(v?.label ? { label: v.label } : {}),
+					...(v?.baseUrl ? { baseUrl: v.baseUrl } : {}),
 					models: Array.isArray(v?.models) ? v.models : [],
 				})),
 			);
@@ -520,6 +528,12 @@ export function SettingsView({
 											const next = !showAvatars;
 											localStorage.setItem("musepi-gui-avatars", next ? "1" : "0");
 											setShowAvatars(next);
+										}}
+										brandIconStyle={brandIconStyle}
+										onToggleBrandIconStyle={() => {
+											const next: BrandIconStyle = brandIconStyle === "mono" ? "color" : "mono";
+											writeBrandIconStyle(next);
+											setBrandIconStyle(next);
 										}}
 									/>
 									{appearanceItems.map(item => (

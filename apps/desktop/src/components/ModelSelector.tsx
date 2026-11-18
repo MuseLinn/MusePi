@@ -204,8 +204,9 @@ export function ModelSelector({
 	 *  list head (or to another session's stale preselect). */
 	currentModelId?: string | null;
 	/** Compact capsule presentation (ModelThinkingCapsule): switch the
-	 *  container/button to the `.gui-model-capsule-seg(-btn)` classes and
-	 *  anchor the menu on the button (ThinkingSelector parity). */
+	 *  container/button to the `.gui-model-capsule-seg(-btn)` classes, drop
+	 *  the chevron, and anchor the menu on the button (ThinkingSelector
+	 *  parity). */
 	capsule?: boolean;
 	/** Top-menu action (openchamber 添加新提供商): opens the settings
 	 *  providers page; omitted where no settings opener is reachable. */
@@ -279,6 +280,14 @@ export function ModelSelector({
 			if (payload?.type === "models.changed") setCatalogSeq(s => s + 1);
 		});
 	}, [rpc]);
+
+	// Opening the menu re-reads the catalog. models.yml can be rewritten outside
+	// the app (a provider plugin reconnecting, a hand edit), which broadcasts
+	// nothing; the daemon reloads it on the next models.list, and this pull is
+	// what makes an already-mounted selector show the result.
+	useEffect(() => {
+		if (open) setCatalogSeq(s => s + 1);
+	}, [open]);
 
 	// Refresh the catalog only (no seeding): session mode lists the session's
 	// available models, welcome mode the shared registry catalog.
@@ -591,7 +600,7 @@ export function ModelSelector({
 				<span className="gui-model-capsule-seg-text truncate" style={{ maxWidth: maxLabelWidth }}>
 					{label}
 				</span>
-				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+				{!capsule && <Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />}
 			</button>
 			{renderMenu(
 				<div className="gui-model-menu" onKeyDown={onMenuKeyDown}>

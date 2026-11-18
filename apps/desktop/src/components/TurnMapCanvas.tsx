@@ -18,6 +18,7 @@ import {
 	TURN_NODE_W,
 	type TurnMapDirection,
 	type TurnMapNode,
+	turnDisplayLabel,
 	visibleTurnMapNodes,
 } from "./turn-map-layout";
 
@@ -42,6 +43,43 @@ const MAX_SCALE = 2.2;
 
 /** 方向持久化键(读不到/非法值默认纵向)。 */
 const MAP_DIRECTION_KEY = "musepi.map.direction";
+
+/**
+ * 空白拖拽 → 点击的门控。
+ *
+ * 指针在空白处平移后松手,浏览器仍会在落点合成一次 click(落点常在空白,
+ * 也可能落在卡片/控件上)。那次 click 必须被吞,否则会误折叠卡片或触发
+ * 控件;但抑制不能无限期存在——合成 click 紧跟 pointerup,超过
+ * DRAG_CLICK_WINDOW_MS 的点击一定是用户新操作。只有时间窗能同时满足
+ * 两种情况:拖拽后点卡片要正常响应,而拖拽刚松手的那次 click 要被吞。
+ */
+export const DRAG_CLICK_WINDOW_MS = 400;
+
+export interface DragClickGate {
+	/** 新手势开始(pointerdown):上一手势遗留的抑制立即失效。 */
+	begin(): void;
+	/** 拖拽结束(pointerup):moved = 本次是否平移过,移过则吞掉随后的 click。 */
+	end(moved: boolean): void;
+	/** 询问并消费抑制:true = 该 click 由拖拽合成,调用方应拦下。 */
+	consume(): boolean;
+}
+
+export function createDragClickGate(now: () => number = Date.now): DragClickGate {
+	let until = Number.NEGATIVE_INFINITY;
+	return {
+		begin(): void {
+			until = Number.NEGATIVE_INFINITY;
+		},
+		end(moved: boolean): void {
+			until = moved ? now() + DRAG_CLICK_WINDOW_MS : Number.NEGATIVE_INFINITY;
+		},
+		consume(): boolean {
+			const active = now() <= until;
+			until = Number.NEGATIVE_INFINITY;
+			return active;
+		},
+	};
+}
 
 function readMapDirection(): TurnMapDirection {
 	try {
@@ -182,7 +220,7 @@ export const TmNodeCard = memo(function TmNodeCard({
 	// 展示编号 = 树深度(分支后会话按新主线重新编号);无 pathTurn 回退 journal 序。
 	// 展示标签 = 深度 + 同父兄弟序(撤回/编辑重发后同深度的兄弟轮显示
 	// "2-1"/"2-2",不再两个都叫 "Turn 2");无标签回退编号。
-	const shownTurn = n.group.displayTurnLabel ?? n.group.displayTurn ?? n.group.turn;
+	const shownTurn = turnDisplayLabel(n.group);
 	return (
 		<div
 			className={`tm-node${isExpanded ? "" : " tm-node--compact"}${n.branch ? " tm-node--branch" : ""}${isLeaf ? " tm-node--leaf" : ""}${isCurrent ? " tm-node--current" : ""}${searchDim ? " tm-node--dim" : ""}${searchHit ? " tm-node--hit" : ""}`}
@@ -298,8 +336,8 @@ export const TmNodeCard = memo(function TmNodeCard({
 												<span className="tm-lane-meta">{durationText(ev.durationMs)}</span>
 											)}
 											{ev.ttftMs !== undefined && (
-												<span className="tm-lane-meta" title="TTFT">
-													ttft {durationText(ev.ttftMs)}
+												<span className="tm-lane-meta" title={t("settings.trajectoryTtft")}>
+													{t("transcript.turnMapTtft", { duration: durationText(ev.ttftMs) })}
 												</span>
 											)}
 											{ev.tsMs !== undefined && (
@@ -421,6 +459,8 @@ export function TurnMapCanvas({
 	const wrapRef = useRef<HTMLDivElement | null>(null);
 	const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
 	const dragRef = useRef<{ px: number; py: number; vx: number; vy: number; moved: boolean } | null>(null);
+	// 拖拽合成 click 的抑制门(手势内有效,见 createDragClickGate)。
+	const clickGate = useRef(createDragClickGate());
 	const [dragging, setDragging] = useState(false);
 	// 单击/双击消歧(单击 = 切换折叠,双击 = 跳对话)。
 	const singleClickTimer = useRef<number | undefined>(undefined);
@@ -605,6 +645,9 @@ export function TurnMapCanvas({
 	const onPointerDown = useCallback(
 		(e: React.PointerEvent) => {
 			if (e.button !== 0) return;
+			// 任何新手势都作废上一手势遗留的抑制:拖拽在空白处松手后,
+			// 下一次点卡片必须正常响应。
+			clickGate.current.begin();
 			const target = e.target as HTMLElement;
 			if (target.closest(".tm-node, .tm-hover, .tm-topbar, .tm-nav, .tm-zoom, .tm-search, .gui-context-menu"))
 				return;
@@ -623,18 +666,18 @@ export function TurnMapCanvas({
 		if (Math.abs(dx) + Math.abs(dy) > 6) d.moved = true;
 		setView(v => ({ ...v, x: d.vx + dx, y: d.vy + dy }));
 	}, []);
-	const suppressClick = useRef(false);
 	const onPointerUp = useCallback(() => {
-		suppressClick.current = dragRef.current?.moved ?? false;
+		// 平移过的空白拖拽:浏览器随后合成的 click 落在空白或卡片上都要吞。
+		clickGate.current.end(dragRef.current?.moved ?? false);
 		dragRef.current = null;
 		setDragging(false);
 	}, []);
 
-	// 单击 = 切换折叠/展开;双击 = 跳对话。
+	/**
+	 * 单击 = 切换折叠/展开;双击 = 跳对话。220ms 消歧窗口是结构性的:
+	 * 两次 click 先到、dblclick 后到,不延迟就会先折叠再展开(闪烁)再跳转。
+	 */
 	const handleClick = useCallback((turnKey: string) => {
-		const suppressed = suppressClick.current;
-		suppressClick.current = false;
-		if (suppressed) return;
 		clearTimeout(singleClickTimer.current);
 		singleClickTimer.current = window.setTimeout(() => {
 			singleClickTimer.current = undefined;
@@ -648,9 +691,6 @@ export function TurnMapCanvas({
 	}, []);
 	const handleDblClick = useCallback(
 		(node: TurnMapNode) => {
-			const suppressed = suppressClick.current;
-			suppressClick.current = false;
-			if (suppressed) return;
 			clearTimeout(singleClickTimer.current);
 			singleClickTimer.current = undefined;
 			const ev = jumpEventOf(node.group);
@@ -850,6 +890,14 @@ export function TurnMapCanvas({
 			onPointerMove={onPointerMove}
 			onPointerUp={onPointerUp}
 			onPointerCancel={onPointerUp}
+			onClickCapture={e => {
+				// 拖拽松手后浏览器合成的 click:落点可能是空白、卡片或控件,
+				// 在此一次性消费,卡片与控件都不再看到它。键盘激活没有拖拽,
+				// consume() 恒为 false。
+				if (!clickGate.current.consume()) return;
+				e.preventDefault();
+				e.stopPropagation();
+			}}
 			onContextMenu={e => {
 				e.preventDefault();
 				setCtxMenu({ x: e.clientX, y: e.clientY, node: null, event: null });
@@ -935,7 +983,7 @@ export function TurnMapCanvas({
 					>
 						{nodes.map(n => (
 							<span
-								key={n.group.turn}
+								key={trajectoryTurnKey(n.group)}
 								className={`tm-nav-band tm-comp--${n.advisor ? "advisor" : (n.group.events[0]?.kind ?? "user")}`}
 								style={horizontal ? { width: navGeo.band } : { height: navGeo.band }}
 							/>
@@ -997,7 +1045,7 @@ export function TurnMapCanvas({
 									const y2 = horizontal ? e.to.y + e.to.h / 2 : e.to.y - 4;
 									return (
 										<line
-											key={`m${e.from.group.turn}-${e.to.group.turn}`}
+											key={`m${trajectoryTurnKey(e.from.group)}>${trajectoryTurnKey(e.to.group)}`}
 											className="tm-edge tm-edge--main"
 											x1={x1}
 											y1={y1}
@@ -1023,7 +1071,7 @@ export function TurnMapCanvas({
 									: `M ${j.x} ${j.y} C ${j.x} ${my}, ${mx} ${by2}, ${bx2} ${by2}`;
 								return (
 									<path
-										key={`b${e.from.group.turn}-${e.to.group.turn}`}
+										key={`b${trajectoryTurnKey(e.from.group)}>${trajectoryTurnKey(e.to.group)}`}
 										className="tm-edge tm-edge--branch"
 										d={d}
 									/>
@@ -1031,24 +1079,19 @@ export function TurnMapCanvas({
 							})}
 							{/* 干线交汇点:兄弟分支共享的 git 树式分叉圆点,
 							    压在主线连线上(后画,覆盖干线)。 */}
-							{layout.junctions.map(j => (
-								<circle key={`j${j.sourceTurn}`} className="tm-junction" cx={j.x} cy={j.y} r={4} />
+							{layout.junctions.map((j, i) => (
+								<circle key={`j-${j.sourceTurn}-${i}`} className="tm-junction" cx={j.x} cy={j.y} r={4} />
 							))}
 						</svg>
 						{layout.lanes
-							.filter(lane => visibleTurns.has(lane.first.group.turn))
+							.filter(lane => visibleTurns.has(lane.first.group.turn) && lane.sourceLabel !== null)
 							.map(lane => (
 								<div
-									key={`lane-${lane.lane}`}
+									key={`lane-${lane.lane}-${lane.first.group.turn}`}
 									className="tm-lane-head"
 									style={{ left: lane.first.x, top: Math.max(0, lane.first.y - 22) }}
 								>
-									{tLoose("transcript.turnMapBranch", {
-										turn:
-											nodes.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurnLabel ??
-											nodes.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurn ??
-											lane.sourceTurn,
-									})}
+									{tLoose("transcript.turnMapBranch", { turn: lane.sourceLabel! })}
 								</div>
 							))}
 						{visibleNodes.map(n => (
@@ -1079,7 +1122,7 @@ export function TurnMapCanvas({
 					<div className="tm-hover-head">
 						{hoverNode.group.turn === 0
 							? t("settings.trajectorySystemEvents")
-							: `Turn ${hoverNode.group.displayTurnLabel ?? hoverNode.group.displayTurn ?? hoverNode.group.turn}`}
+							: t("transcript.turnMapTurnLabel", { turn: turnDisplayLabel(hoverNode.group) })}
 						<span className="tm-hover-time">
 							{hoverNode.group.firstTs
 								? new Date(hoverNode.group.firstTs).toLocaleTimeString(undefined, timeFormatOptions())

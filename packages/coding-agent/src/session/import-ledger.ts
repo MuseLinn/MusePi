@@ -9,6 +9,12 @@ export interface ImportedSessionRecord {
 	source: string;
 	/** Id in the foreign store (stable for that source). */
 	sourceId: string;
+	/**
+	 * The source's own path, when it has one. An id is not unique across a
+	 * store — Kimi names every subagent's file after its agent folder — so the
+	 * path is what distinguishes two sessions that share an id.
+	 */
+	sourcePath?: string;
 	/** New MusePi session id created by the copy. */
 	sessionId: string;
 	/** New MusePi session file; its absence means the copy was deleted. */
@@ -16,11 +22,11 @@ export interface ImportedSessionRecord {
 	importedAt: number;
 }
 
-/** Ledger keyed by `source\0sourceId`; the source namespace keeps ids apart. */
+/** Ledger keyed by `source\0sourceId(\0sourcePath)`; the source namespace keeps ids apart. */
 export type ImportLedger = Record<string, ImportedSessionRecord>;
 
-export function importLedgerKey(source: string, sourceId: string): string {
-	return `${source}\u0000${sourceId}`;
+export function importLedgerKey(source: string, sourceId: string, sourcePath?: string): string {
+	return sourcePath ? `${source}\u0000${sourceId}\u0000${sourcePath}` : `${source}\u0000${sourceId}`;
 }
 
 /**
@@ -49,6 +55,7 @@ export async function loadImportLedger(agentDir: string = getAgentDir()): Promis
 			ledger[key] = {
 				source: record.source,
 				sourceId: record.sourceId,
+				sourcePath: typeof record.sourcePath === "string" ? record.sourcePath : undefined,
 				sessionId: record.sessionId,
 				sessionFile: record.sessionFile,
 				importedAt: typeof record.importedAt === "number" ? record.importedAt : 0,
@@ -61,9 +68,19 @@ export async function loadImportLedger(agentDir: string = getAgentDir()): Promis
 	}
 }
 
-/** `null` when the copy was deleted or the entry is absent. */
-export function importedRecord(ledger: ImportLedger, source: string, sourceId: string): ImportedSessionRecord | null {
-	const record = ledger[importLedgerKey(source, sourceId)];
+/**
+ * `null` when the copy was deleted or the entry is absent. A record stored
+ * before the path was part of the key still answers for its id.
+ */
+export function importedRecord(
+	ledger: ImportLedger,
+	source: string,
+	sourceId: string,
+	sourcePath?: string,
+): ImportedSessionRecord | null {
+	const record =
+		(sourcePath ? ledger[importLedgerKey(source, sourceId, sourcePath)] : undefined) ??
+		ledger[importLedgerKey(source, sourceId)];
 	if (!record) return null;
 	try {
 		if (!fs.existsSync(record.sessionFile)) return null;
@@ -79,7 +96,7 @@ let writeChain: Promise<void> = Promise.resolve();
 export function recordImportedSession(record: ImportedSessionRecord, agentDir: string = getAgentDir()): Promise<void> {
 	const next = writeChain.then(async () => {
 		const ledger = await loadImportLedger(agentDir);
-		ledger[importLedgerKey(record.source, record.sourceId)] = record;
+		ledger[importLedgerKey(record.source, record.sourceId, record.sourcePath)] = record;
 		const file = path.join(agentDir, LEDGER_FILENAME);
 		const tmp = `${file}.tmp`;
 		await fs.promises.mkdir(agentDir, { recursive: true });

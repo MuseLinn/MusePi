@@ -28,6 +28,12 @@ export const shell = {
 	"shell.showMainWindow": "显示主窗",
 	"shell.quit": "退出",
 	"shell.newLink": "连接其他电脑",
+	"shell.roleHost": "电脑端",
+	"shell.roleGuest": "访客",
+	"shell.sessionWorking": "运行中",
+	"shell.sessionPaused": "已暂停",
+	/** The workspace directory's active filter hides every session. */
+	"shell.allSessionsArchived": "这里的会话已全部归档 — 切换到“已归档”查看",
 
 	// ── Banners ───────────────────────────────────────────────────────────────
 

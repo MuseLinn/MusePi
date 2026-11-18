@@ -11,11 +11,12 @@ import type {
 	ToolResultMessage,
 	UserMessage,
 } from "@musepi/pi-ai";
-import { isRecord } from "@musepi/pi-utils";
+import { isRecord, stripWindowsExtendedLengthPathPrefix } from "@musepi/pi-utils";
 import { readForeignJsonRecords } from "./foreign-session-jsonl";
 import type { ForeignSessionInfo, ForeignSessionStore } from "./foreign-session-store";
 import type { CompactionEntry, ModelChangeEntry, SessionEntry, SessionMessageEntry } from "./session-entries";
 import { SessionManager } from "./session-manager";
+import { isSafeAdditionalDirectory, MAX_WORKSPACE_DIRECTORIES } from "./session-workspace";
 
 interface CodexThreadRow {
 	id: string;
@@ -25,6 +26,7 @@ interface CodexThreadRow {
 	cwd: string;
 	title: string | null;
 	first_user_message: string | null;
+	project_id?: string | null;
 }
 
 interface CodexIndexRow {
@@ -61,6 +63,100 @@ const EMPTY_USAGE: AssistantMessage["usage"] = {
 function stringField(record: Record<string, unknown>, key: string): string | undefined {
 	const value = record[key];
 	return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * Codex records Windows workspaces in their extended-length form (`\\?\D:\…`),
+ * which no other surface compares equal to the plain path in the rollout.
+ */
+function workspacePath(value: string): string {
+	return stripWindowsExtendedLengthPathPrefix(value, "win32");
+}
+
+/** Comparison key: Windows paths compare case-insensitively across separators. */
+function workspacePathKey(value: string): string {
+	const normalized = workspacePath(value).replaceAll("\\", "/").replace(/\/+$/, "");
+	return /^[A-Za-z]:\//.test(normalized) || normalized.startsWith("//") ? normalized.toLowerCase() : normalized;
+}
+
+function tableExists(database: Database, name: string): boolean {
+	return (
+		database
+			.query<{ name: string }, [string]>("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+			.get(name) !== null
+	);
+}
+
+function columnExists(database: Database, table: string, column: string): boolean {
+	return (
+		database
+			.query<{ name: string }, [string, string]>(`SELECT name FROM pragma_table_info(?) WHERE name = ?`)
+			.get(table, column) !== null
+	);
+}
+
+/**
+ * Codex projects own an ordered root list whose first entry is the primary
+ * workspace. Reads the registry into project id → roots; databases that
+ * predate it yield an empty map.
+ */
+function loadProjectRoots(database: Database): Map<string, string[]> {
+	const projects = new Map<string, string[]>();
+	if (!tableExists(database, "projects") || !tableExists(database, "project_roots")) return projects;
+	const rows = database
+		.query<{ project_id: string; path: string }, []>(
+			`SELECT p.id AS project_id, r.path AS path
+			 FROM projects p JOIN project_roots r ON r.project_id = p.id
+			 ORDER BY p.position, r.position`,
+		)
+		.all();
+	for (const row of rows) {
+		if (!row.project_id || !row.path) continue;
+		const roots = projects.get(row.project_id) ?? [];
+		roots.push(workspacePath(row.path));
+		projects.set(row.project_id, roots);
+	}
+	return projects;
+}
+
+/** The project whose roots contain `cwd`, when the thread carries no project id. */
+function projectForCwd(projects: Map<string, string[]>, cwd: string): string[] | undefined {
+	const key = workspacePathKey(cwd);
+	for (const roots of projects.values()) {
+		if (roots.some(root => workspacePathKey(root) === key)) return roots;
+	}
+	return undefined;
+}
+
+/**
+ * `roots` without the primary workspace, preserving the recorded order.
+ *
+ * A recorded root is a default, not a choice made on this machine, so an
+ * unsafe or stale entry is dropped instead of failing the import — the same
+ * rule the daemon applies to inherited project roots. The cap keeps a
+ * malformed source from proposing an unbounded workspace.
+ */
+async function additionalRoots(roots: readonly string[] | undefined, cwd: string): Promise<string[] | undefined> {
+	if (!roots || roots.length === 0) return undefined;
+	const seen = new Set<string>([workspacePathKey(cwd)]);
+	const additional: string[] = [];
+	for (const root of roots) {
+		const key = workspacePathKey(root);
+		if (seen.has(key)) continue;
+		seen.add(key);
+		if (additional.length >= MAX_WORKSPACE_DIRECTORIES) break;
+		if (!(await isSafeAdditionalDirectory(root))) continue;
+		additional.push(root);
+	}
+	return additional.length > 0 ? additional : undefined;
+}
+
+/** Workspace roots a rollout recorded beside its cwd (`runtime_workspace_roots`). */
+function rolloutWorkspaceRoots(payload: Record<string, unknown> | undefined): string[] | undefined {
+	const value = payload?.runtime_workspace_roots;
+	if (!Array.isArray(value)) return undefined;
+	const roots = value.filter((root): root is string => typeof root === "string" && root.length > 0);
+	return roots.length > 0 ? roots.map(workspacePath) : undefined;
 }
 
 function numberField(record: Record<string, unknown>, key: string): number | undefined {
@@ -471,24 +567,29 @@ export class CodexSessionStore implements ForeignSessionStore {
 			try {
 				const database = new Database(databasePath, { readonly: true });
 				try {
-					const rows = database
-						.query<CodexThreadRow, []>(
-							"SELECT id, rollout_path, created_at, updated_at, cwd, title, first_user_message FROM threads",
-						)
-						.all();
+					// `project_id` only exists once Codex added its project registry.
+					const selectColumns = columnExists(database, "threads", "project_id")
+						? "id, rollout_path, created_at, updated_at, cwd, title, first_user_message, project_id"
+						: "id, rollout_path, created_at, updated_at, cwd, title, first_user_message";
+					const rows = database.query<CodexThreadRow, []>(`SELECT ${selectColumns} FROM threads`).all();
+					const projects = loadProjectRoots(database);
 					const sessions: ForeignSessionInfo[] = [];
 					for (const row of rows) {
 						if (!row.id || !row.rollout_path || !row.cwd) continue;
+						const cwd = workspacePath(row.cwd);
 						const rolloutPath = path.isAbsolute(row.rollout_path)
 							? row.rollout_path
 							: path.join(this.#root, row.rollout_path);
 						const modified = dateFromEpoch(row.updated_at, new Date(0));
 						const created = dateFromEpoch(row.created_at, modified);
+						const roots =
+							(row.project_id ? projects.get(row.project_id) : undefined) ?? projectForCwd(projects, cwd);
 						sessions.push({
 							source: "codex",
 							id: row.id,
 							path: rolloutPath,
-							cwd: row.cwd,
+							cwd,
+							additionalDirectories: await additionalRoots(roots, cwd),
 							title: row.title ?? undefined,
 							created,
 							modified,
@@ -516,8 +617,9 @@ export class CodexSessionStore implements ForeignSessionStore {
 			const first = await firstJsonRecord(filePath);
 			if (first?.type !== "session_meta" || !isRecord(first.payload)) continue;
 			const id = stringField(first.payload, "id") ?? rolloutId(filePath);
-			const cwd = stringField(first.payload, "cwd");
-			if (!cwd) continue;
+			const rawCwd = stringField(first.payload, "cwd");
+			if (!rawCwd) continue;
+			const cwd = workspacePath(rawCwd);
 			const stat = await fs.promises.stat(filePath);
 			const indexed = index.get(id);
 			const sourceCreated = stringField(first.payload, "timestamp");
@@ -528,6 +630,7 @@ export class CodexSessionStore implements ForeignSessionStore {
 				id,
 				path: filePath,
 				cwd,
+				additionalDirectories: await additionalRoots(rolloutWorkspaceRoots(first.payload), cwd),
 				title: indexed?.thread_name,
 				created,
 				modified,
@@ -551,9 +654,14 @@ export class CodexSessionStore implements ForeignSessionStore {
 		if (records.length === 0) throw new Error(`Codex session ${info.id} at ${info.path} is empty or malformed`);
 
 		const metadata = records.find(record => record.type === "session_meta" && isRecord(record.payload));
-		const cwd =
-			metadata && isRecord(metadata.payload) ? (stringField(metadata.payload, "cwd") ?? info.cwd) : info.cwd;
+		const metadataPayload = metadata && isRecord(metadata.payload) ? metadata.payload : undefined;
+		const rawCwd = (metadataPayload ? stringField(metadataPayload, "cwd") : undefined) ?? info.cwd;
+		const cwd = rawCwd ? workspacePath(rawCwd) : rawCwd;
 		const manager = SessionManager.inMemory(cwd);
+		const roots = info.additionalDirectories ?? rolloutWorkspaceRoots(metadataPayload);
+		const additional = await additionalRoots(roots, cwd);
+		if (additional) await manager.setAdditionalDirectories(additional);
+
 		const canonical = canonicalTexts(records);
 		const converted: ConvertedRecord[] = [];
 		const toolNames = new Map<string, string>();

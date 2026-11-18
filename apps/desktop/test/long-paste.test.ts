@@ -1,3 +1,4 @@
+import "./happy-dom-shim";
 import { describe, expect, test } from "bun:test";
 import type { ComposerAttachment } from "../src/components/composer/use-attachments";
 import { attachPaste, createPasteAttachment, saveEditedPaste } from "../src/components/composer/use-long-text-paste";

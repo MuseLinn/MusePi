@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher long-press shortcuts. Both reuse the musepi://connect intent the
+     activity already declares, and launchMode="singleTask" means a second
+     launch reuses the live WebView instead of restarting it. No link payload is
+     attached: client-core ignores a musepi:// URL without ?link=, so each
+     shortcut brings the app forward without starting a connection. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new_session"
+        android:shortcutDisabledMessage="@string/shortcut_disabled_message"
+        android:shortcutId="new_session"
+        android:shortcutLongLabel="@string/shortcut_new_session_long"
+        android:shortcutShortLabel="@string/shortcut_new_session_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="musepi://connect"
+            android:targetClass="com.musepi.mobile.MainActivity"
+            android:targetPackage="com.musepi.mobile" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_scan"
+        android:shortcutDisabledMessage="@string/shortcut_disabled_message"
+        android:shortcutId="scan_connect"
+        android:shortcutLongLabel="@string/shortcut_scan_long"
+        android:shortcutShortLabel="@string/shortcut_scan_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="musepi://connect?link="
+            android:targetClass="com.musepi.mobile.MainActivity"
+            android:targetPackage="com.musepi.mobile" />
+    </shortcut>
+</shortcuts>

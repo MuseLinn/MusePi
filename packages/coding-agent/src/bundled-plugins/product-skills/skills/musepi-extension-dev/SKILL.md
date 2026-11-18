@@ -1,5 +1,6 @@
 ---
 name: musepi-extension-dev
+version: 1.0.0
 description: 为 MusePi（TUI/CLI + 桌面 GUI）开发扩展——custom tools、extensions（生命周期/事件）、hooks、plugins、slash commands、skills。触发：用户要求"加个工具/扩展/命令/hook/插件"、"给 musepi 加 X 支持"、修改扩展加载机制、写 MCP 相关集成。桌面 GUI 会话（daemon）与 TUI 共享同一扩展系统，扩展天然两形态可用。
 ---
 
@@ -90,6 +91,14 @@ daemon 会话给 agent 挂了一组扩展自举工具，让创造类任务不靠
 - **组件**：插件 package.json `musepi.components` 声明组件数组（`[{ id, label?, deny? }]`）；宿主为组件建独立子 fiber，设置页可对单组件启停（deny 列表落盘）。整插件 reload 时组件一并重建。
 - **宿主 fiber 检视**：cordis 组 fiber 下各插件/组件的加载状态可从扩展检视入口查询（`extension_status` / 插件管理页）。
 - **兼容性预检**：加载插件前宿主先做 Bun/平台兼容性检查；声明不兼容时插件详情弹窗给归因段，用户可对整个插件**授予精确版本豁免**（写 `<agentDir>/compatibility.json`，RPC `extensions.setVersionExemption`）——比 `bunfig` 豁免窄，只放过单个版本。
+
+## 发布到插件市场
+
+1. **打包**：`musepi plugin pack [path] [-o dir] [--json]` 生成可分发的 `.tgz`。它要求包有 `name`、`version` 和 `musepi` / `omp` / `pi` 清单，检查声明的入口存在后调用 `bun pm pack`；不访问 registry，也不执行 publish。
+2. **公开发布**：需要让别人按包名安装时，走包 registry 的发布流程（版本、依赖与 `engines` 由包管理器校验）。`plugin pack` 只打包——不要把「打包成功」报告成「已发布」。
+3. **进市场**：市场是「一个仓库存一份 catalog」。仓库根放 `.omp-plugin/marketplace.json`（Claude Code 兼容用 `.claude-plugin/marketplace.json`），`plugins[]` 每项写 `name` / `description` / `version` / `source`；`source` 可以是相对路径、npm 包名或 git 地址。字段全表见 `docs/marketplace.md`。
+4. **分发来源**：用户执行 `/marketplace add <owner/repo>`（或桌面端能力中心 → 市场添加来源）后即可发现与安装。未发布、只在本机的包仍可走插件页的 spec 安装（tarball / 本地目录 / git）。
+5. **自检**：安装完成后看能力报告（runnable / partial / blocked）与插件详情；槽位没有挂载点的组件会显示为 partial，不会静默消失。
 
 ## 文档路由表（需要细节时读这些，别猜）
 

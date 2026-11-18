@@ -1438,55 +1438,64 @@ export async function runRootCommand(
 			}
 			const sourceName = foreignSessionSourceName(foreignSource);
 			const store = (deps.createForeignSessionStore ?? createForeignSessionStore)(foreignSource);
-			let foreignSessions: ForeignSessionInfo[];
 			try {
-				foreignSessions = await logger.time(`list${sourceName}Sessions`, () => store.list());
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				throw new SessionResolutionError(`Failed to list ${sourceName} sessions: ${message}`);
-			}
-			if (foreignSessions.length === 0) {
-				writeStartupNotice(parsedArgs, `${chalk.dim(`No ${sourceName} sessions found`)}\n`);
-				stopStartupWatchdog();
-				process.exit(0);
-			}
-			const choices = foreignSessions.map(foreignSessionInfoToSessionInfo);
-			pauseStartupWatchdog();
-			let selected: SessionInfo | null;
-			try {
-				selected = await logger.time(`select${sourceName}Session`, deps.selectSession ?? selectSession, choices, {
-					title: `Import ${sourceName} Session`,
-					scopeLabel: false,
-					showCwd: true,
-					allowDelete: false,
-					allowGlobalScope: false,
-					historySearch: false,
-				});
-			} finally {
-				resumeStartupWatchdog();
-			}
-			if (!selected) {
-				writeStartupNotice(parsedArgs, `${chalk.dim(`No ${sourceName} session selected`)}\n`);
-				stopStartupWatchdog();
-				process.exit(0);
-			}
-			const foreignSession = foreignSessions.find(
-				session => session.id === selected.id && session.path === selected.path,
-			);
-			if (!foreignSession) {
-				throw new SessionResolutionError(`Selected ${sourceName} session is no longer available`);
-			}
-			try {
-				sessionManager = await logger.time(
-					`import${sourceName}Session`,
-					persistForeignSession,
-					store,
-					foreignSession,
-					{ fallbackCwd: cwd, sessionDir: parsedArgs.sessionDir },
+				let foreignSessions: ForeignSessionInfo[];
+				try {
+					foreignSessions = await logger.time(`list${sourceName}Sessions`, () => store.list());
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error);
+					throw new SessionResolutionError(`Failed to list ${sourceName} sessions: ${message}`);
+				}
+				if (foreignSessions.length === 0) {
+					writeStartupNotice(parsedArgs, `${chalk.dim(`No ${sourceName} sessions found`)}\n`);
+					stopStartupWatchdog();
+					process.exit(0);
+				}
+				const choices = foreignSessions.map(foreignSessionInfoToSessionInfo);
+				pauseStartupWatchdog();
+				let selected: SessionInfo | null;
+				try {
+					selected = await logger.time(
+						`select${sourceName}Session`,
+						deps.selectSession ?? selectSession,
+						choices,
+						{
+							title: `Import ${sourceName} Session`,
+							scopeLabel: false,
+							showCwd: true,
+							allowDelete: false,
+							allowGlobalScope: false,
+							historySearch: false,
+						},
+					);
+				} finally {
+					resumeStartupWatchdog();
+				}
+				if (!selected) {
+					writeStartupNotice(parsedArgs, `${chalk.dim(`No ${sourceName} session selected`)}\n`);
+					stopStartupWatchdog();
+					process.exit(0);
+				}
+				const foreignSession = foreignSessions.find(
+					session => session.id === selected.id && session.path === selected.path,
 				);
-			} catch (error) {
-				const message = error instanceof Error ? error.message : String(error);
-				throw new SessionResolutionError(`Failed to import ${sourceName} session: ${message}`);
+				if (!foreignSession) {
+					throw new SessionResolutionError(`Selected ${sourceName} session is no longer available`);
+				}
+				try {
+					sessionManager = await logger.time(
+						`import${sourceName}Session`,
+						persistForeignSession,
+						store,
+						foreignSession,
+						{ fallbackCwd: cwd, sessionDir: parsedArgs.sessionDir },
+					);
+				} catch (error) {
+					const message = error instanceof Error ? error.message : String(error);
+					throw new SessionResolutionError(`Failed to import ${sourceName} session: ${message}`);
+				}
+			} finally {
+				store.close?.();
 			}
 		} else {
 			sessionManager = await logger.time(

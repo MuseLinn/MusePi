@@ -68,6 +68,45 @@ function cleanPreview(value: string): string | undefined {
 	return cleaned.length > 0 ? cleaned : undefined;
 }
 
+/** Bytes read from the end of a transcript to find its title records. */
+const CLAUDE_TITLE_TAIL_BYTES = 32 * 1024;
+
+/**
+ * The last `custom-title` / `ai-title` a transcript recorded, read from a tail
+ * window. Claude appends a title record when it names a session, so the newest
+ * one sits at the end; reading the whole transcript to list a picker row would
+ * cost far more than the name is worth.
+ */
+export async function readTranscriptTitleForTests(file: string): Promise<string | undefined> {
+	let handle: Awaited<ReturnType<typeof fs.open>> | null = null;
+	try {
+		handle = await fs.open(file, "r");
+		const { size } = await handle.stat();
+		const length = Math.min(size, CLAUDE_TITLE_TAIL_BYTES);
+		if (length === 0) return undefined;
+		const buffer = Buffer.alloc(length);
+		await handle.read(buffer, 0, length, size - length);
+		let custom: string | undefined;
+		let ai: string | undefined;
+		for (const line of buffer.toString("utf8").split("\n")) {
+			if (!line.includes('"type":"')) continue;
+			try {
+				const value: unknown = JSON.parse(line);
+				if (!isRecord(value)) continue;
+				if (value.type === "custom-title") custom = stringField(value, "customTitle") ?? custom;
+				else if (value.type === "ai-title") ai = stringField(value, "aiTitle") ?? ai;
+			} catch {
+				// The window starts mid-line; that fragment is not a record.
+			}
+		}
+		return custom ?? ai;
+	} catch {
+		return undefined;
+	} finally {
+		await handle?.close();
+	}
+}
+
 async function readHistoryIndex(file: string): Promise<Map<string, ClaudeHistoryMetadata>> {
 	const metadata = new Map<string, ClaudeHistoryMetadata>();
 	try {
@@ -330,6 +369,7 @@ export class ClaudeSessionStore implements ForeignSessionStore {
 					id,
 					path: item.file,
 					cwd: indexed?.cwd ?? item.cwd,
+					title: await readTranscriptTitleForTests(item.file),
 					created: new Date(createdMs),
 					modified: new Date(modifiedMs),
 					firstMessage: indexed?.firstMessage,

@@ -56,7 +56,7 @@ describe("CompatSlotHost (extended-mode slot consumption)", () => {
 	});
 
 	it("renders nothing when the registry has no components for the slot", () => {
-		seedRegistry("composer.dock", "ext-a");
+		seedRegistry("conversation.composer.dock", "ext-a");
 		const html = renderToStaticMarkup(<CompatSlotHost slot="statusbar" />);
 		expect(html).toBe("");
 	});

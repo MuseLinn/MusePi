@@ -1,6 +1,6 @@
 /**
- * The desktop shell lives behind slots: `app.chat` (conversation page),
- * `app.capability` (capability center), `panel.shell` and the rail. A daemon
+ * The desktop shell lives behind slots: `main.conversation` (conversation page),
+ * `main.capability` (capability center), `panel.shell` and the rail. A daemon
  * that does not discover the desktop plugin packages serves no slot component,
  * and every one of those surfaces renders blank — the failure is invisible in
  * the row list, so pin the compiled contribution here.
@@ -46,10 +46,10 @@ describe("desktop slot registration", () => {
 			expect(byId.get(id)?.kind).toBe("plugin-module");
 		}
 		const slots = new Set(res.components.map(component => component.slot));
-		for (const slot of ["app.chat", "app.capability"]) {
+		for (const slot of ["main.conversation", "main.capability"]) {
 			expect(slots).toContain(slot);
 		}
-		const chat = res.components.find(component => component.slot === "app.chat");
+		const chat = res.components.find(component => component.slot === "main.conversation");
 		expect((chat?.code?.length ?? 0) > 0).toBe(true);
 	}, 120_000);
 

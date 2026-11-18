@@ -61,6 +61,8 @@ import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
 import { onSettingsChanged } from "../lib/settings-events";
 import {
+	COMPOSER_BAR_SLOT,
+	CONVERSATION_CHAT_NODE_SLOT,
 	PANEL_SHELL_SLOT,
 	PANEL_TAB_SLOT_PREFIX,
 	resolveManagedBrowserPanelTab,
@@ -68,7 +70,6 @@ import {
 	SlotComponentMount,
 	selectPanelTabComponent,
 	selectTranscriptNodeComponents,
-	TRANSCRIPT_NODE_SLOT,
 	useExtensionScrollbarSkins,
 	useExtensionToolViews,
 	useExtensionWidgets,
@@ -82,6 +83,7 @@ import {
 	surfaceRequiresSession,
 } from "../lib/surfaces/registry";
 import { setDockOpen } from "../lib/terminal-dock-state";
+import { clampThinkingChipLevel } from "../lib/thinking-chip";
 import { type UsePanelTabsResult, usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -97,7 +99,7 @@ import { PunkAvatar } from "./avatar-presets";
 import { BtwFloatingCard } from "./BtwFloatingCard";
 import { ChatDropAnchor } from "./ChatDropAnchor";
 import { ChatFind, type FindHit } from "./ChatFind";
-import { Composer } from "./Composer";
+import { Composer, type HeroComposerProps } from "./Composer";
 import type { CreationMessage } from "./CreationModeRow";
 import { flushPendingConnectorSelection } from "./composer/connector-panel";
 import { MessageTreeButton } from "./MessageTree";
@@ -107,6 +109,7 @@ import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionArtifactPreviewDialog, type SessionArtifactPreviewRequest } from "./SessionArtifactPreviewDialog";
+import type { SessionComposerProps } from "./SessionComposer";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
 import { SplitterGrip } from "./SplitterGrip";
 import { SESSION_INFO_DOCK_MIN_ROW_PX, SessionInfoCard } from "./session-info-card";
@@ -114,7 +117,6 @@ import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
 import { TurnMapCanvas } from "./TurnMapCanvas";
 import { TurnRail } from "./TurnRail";
-import { WelcomeComposer } from "./WelcomeComposer";
 
 /** session.history 分页响应，供 store 按需请求下一页。 */
 interface HistoryPage {
@@ -330,13 +332,16 @@ const SESSION_INFO_SEAT_EXIT_MS = 180;
 
 /** Focus-mode composer morph. The surface changes shape — a compact box
  *  becomes a full-height editor — so it uses a spring, like every other
- *  morph in the app. Overshoot 6%: the composer is bottom-anchored and a
- *  larger bounce would push it past the window edge. The curve is sampled
- *  from the shared spring resource AT MODULE LOAD, so there is no hardcoded
- *  copy of the stops to drift out of sync with the parameters. */
-const COMPOSER_MORPH_MS = 320;
+ *  morph in the app. CRITICALLY DAMPED (bounce 0), not the 6% overshoot this
+ *  used to carry: the composer is bottom-anchored, so an overshooting height
+ *  pushes its top edge past the surface it is growing into and the settle
+ *  reads as a bump against the window edge. The welcome form morphs on a
+ *  zero-overshoot 280ms curve and both states must read the same.
+ *  The curve is sampled from the shared spring resource AT MODULE LOAD, so
+ *  there is no hardcoded copy of the stops to drift out of sync. */
+const COMPOSER_MORPH_MS = 280;
 const COMPOSER_MORPH_EASING = springEasing(
-	{ visualDuration: COMPOSER_MORPH_MS / 1000 - 0.04, bounce: 0.06 },
+	{ visualDuration: COMPOSER_MORPH_MS / 1000, bounce: 0 },
 	16,
 	COMPOSER_MORPH_MS,
 );
@@ -1372,14 +1377,14 @@ export function ChatView({
 			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
 		}
 	}, [store, snap?.entries, panelTabs.open, rightPanelOpen, focusMode, onExpandRightPanel]);
-	// transcript.node seat dispatch: extensions register renderers for specific
+	// conversation.chat.node seat dispatch: extensions register renderers for specific
 	// node kinds (transcriptNodeKind). A matched renderer OWNS the entry's
 	// rendering (may include the built-in children base or render fully custom);
 	// (may include the built-in children base or render fully custom);
 	// unregistered kinds fall through to the built-in.
 	// Memoized: the identity is part of EntryRow's memo comparison, and the
 	// component set changes only on extensions.changed — not on stream frames.
-	const transcriptNodeComponents = useSlotComponents(rpc, TRANSCRIPT_NODE_SLOT);
+	const transcriptNodeComponents = useSlotComponents(rpc, CONVERSATION_CHAT_NODE_SLOT);
 	const renderTranscriptNode = useCallback(
 		(node: TranscriptNodeInjection) => {
 			const selected = selectTranscriptNodeComponents(transcriptNodeComponents, node.kind);
@@ -2460,11 +2465,9 @@ export function ChatView({
 		// thinking_level_change (the clamped value can equal the old one), so the
 		// transcript's last entry can name a rung the NEW model does not have —
 		// the chip read "medium" on a model offering only low/high/max. The live
-		// ladder is the authority on what the session now runs at.
-		if (level !== null && thinkingEfforts.length > 0 && !thinkingEfforts.includes(level)) {
-			return thinkingInfoLevel ?? thinkingEfforts[0] ?? level;
-		}
-		return level ?? thinkingInfoLevel ?? null;
+		// ladder is the authority on what the session now runs at; it is null
+		// until session.thinkingInfo resolves, which must not crash the render.
+		return clampThinkingChipLevel(level, thinkingEfforts, thinkingInfoLevel);
 	})();
 	// The work-timer badge wants the ACTUAL effort this round used — the
 	// last thinking_level_change entry carries the auto-classified resolved
@@ -2725,6 +2728,9 @@ export function ChatView({
 	 * virtualized row and restyles all of them. See composer-inset-readers.
 	 */
 	const [composerInset, setComposerInset] = useState(0);
+	// Publishes the current height once, on demand. The ResizeObserver below
+	// stays silent for the focus-morph window and calls this on release.
+	const publishComposerInsetRef = useRef<(() => void) | null>(null);
 	useEffect(() => {
 		if (!showChat) return;
 		const body = chatBodyRef.current;
@@ -2736,10 +2742,21 @@ export function ChatView({
 			const { tailInset } = recordComposerSlotHeight(body, height);
 			publishComposerInsets(body, { inset: height, tailInset });
 		};
+		publishComposerInsetRef.current = publish;
 		publish();
-		const observer = new ResizeObserver(publish);
+		const observer = new ResizeObserver(() => {
+			// The ⌘⇧E morph rewrites the wrap height every frame. Publishing each
+			// frame re-renders this whole view (inset state) and re-measures the
+			// virtual transcript while the morph is already laying out — the
+			// stutter the welcome form never had (it owns no such observer).
+			// One write at release is enough: nothing below the composer reads
+			// the inset mid-morph.
+			if (wrap.classList.contains("gui-composer-wrap--morphing")) return;
+			publish();
+		});
 		observer.observe(wrap);
 		return () => {
+			publishComposerInsetRef.current = null;
 			observer.disconnect();
 			forgetComposerSlot(body);
 			withdrawComposerInsets(body);
@@ -2814,6 +2831,10 @@ export function ChatView({
 		el.style.height = `${target}px`;
 		el.classList.add("gui-composer-wrap--morphing");
 		void el.offsetHeight;
+		// The readers take the TARGET height up front: the observer skips the
+		// morph, and leaving focus would otherwise keep the full-height tail
+		// reserve until release while the transcript is already visible.
+		publishComposerInsetRef.current?.();
 		const layoutTop = el.getBoundingClientRect().top;
 		const dy = prevWrapTop.current !== null ? prevWrapTop.current - layoutTop : 0;
 		const fromTx = Math.abs(dy) >= 1 ? `translateY(${dy}px)` : "none";
@@ -2843,6 +2864,9 @@ export function ChatView({
 			el.classList.remove("gui-composer-wrap--morphing");
 			if (!focusMode) el.style.height = "";
 			if (wrapAnimRef.current === anim) wrapAnimRef.current = null;
+			// The observer skipped every frame of the morph; publish the settled
+			// height once so the tail spacer and the rail catch up.
+			publishComposerInsetRef.current?.();
 		};
 		anim.addEventListener("finish", release);
 		setTimeout(release, COMPOSER_MORPH_MS + 40);
@@ -2947,6 +2971,74 @@ export function ChatView({
 		},
 	};
 
+	// The input card is a Cordis seat (`conversation.composer.bar`). The host owns every
+	// piece of state; the built-in Composer is the fallback when no contribution
+	// renders, and a contribution receives this same props object.
+	const heroComposerProps: { mode: "hero" } & HeroComposerProps = {
+		mode: "hero",
+		busy,
+		rpc,
+		project,
+		onProject,
+		focused: focusMode,
+		onToggleFocus,
+		presetModelId: defaultModelId,
+		presetThinkingLevel,
+		onSubmit: (text, opts) => onSubmitNewSession(text, opts),
+		reminders,
+		onSelectReminder,
+		onMarkAllRead,
+		modes,
+		modeId,
+		onModeChange,
+		designSubmit: onDesignSubmit,
+		onAddProvider,
+		attachApiRef,
+	};
+	const sessionComposerProps: SessionComposerProps | null = store
+		? {
+				working: snap?.working ?? false,
+				entries: snap?.entries ?? [],
+				companionMood: companionMoodFromSession({
+					working: snap?.working ?? false,
+					streaming: snap?.streaming ?? false,
+					hasApprovals: (snap?.approvals.length ?? 0) > 0,
+				}),
+				companionState: companionStateFromSignals(agentSignals),
+				onSend: sendAndCloseJump,
+				onStop: () => void handleStop(),
+				onOpenBackgroundJobs: () => {
+					setActiveView("jobs");
+					if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+				},
+				rpc,
+				sessionId: store.sessionId,
+				cwd: store.cwd,
+				thinkingLevel,
+				thinkingConfigLevel: thinkingInfoAuto ? "auto" : thinkingLevel,
+				onSetThinking: setThinking,
+				onModelChange: onComposerModelChange,
+				onAddProvider,
+				attachApiRef,
+				thinkingCeiling,
+				thinkingEfforts,
+				presetModelId,
+				welcome: showWelcome,
+				quotes,
+				onQuotesChange: setQuotes,
+				pendingEdit,
+				onEditConsumed: () => setPendingEdit(null),
+				focused: focusMode,
+				onToggleFocus,
+				onBtw: q => setBtwQuestion(q),
+				activeTask:
+					displaySettings["display.taskCardStyle"] === "classic"
+						? null
+						: ([...(snap?.activeTools?.values() ?? [])].filter(t => t.toolName === "task").at(-1) ?? null),
+				swarmHost: host,
+			}
+		: null;
+
 	return (
 		<main
 			id={`session-panel-${store?.sessionId ?? "welcome"}`}
@@ -3014,25 +3106,11 @@ export function ChatView({
 										paddingRight: terminalPlacement === "right" && terminalOpen ? rightWidth : 0,
 									}}
 								>
-									<WelcomeComposer
-										busy={busy}
+									<SlotComponentHost
 										rpc={rpc}
-										project={project}
-										onProject={onProject}
-										focused={focusMode}
-										onToggleFocus={onToggleFocus}
-										presetModelId={defaultModelId}
-										presetThinkingLevel={presetThinkingLevel}
-										onSubmit={(text, opts) => onSubmitNewSession(text, opts)}
-										reminders={reminders}
-										onSelectReminder={onSelectReminder}
-										onMarkAllRead={onMarkAllRead}
-										modes={modes}
-										modeId={modeId}
-										onModeChange={onModeChange}
-										designSubmit={onDesignSubmit}
-										onAddProvider={onAddProvider}
-										attachApiRef={attachApiRef}
+										slot={COMPOSER_BAR_SLOT}
+										composer={heroComposerProps}
+										fallback={<Composer {...heroComposerProps} />}
 									/>
 								</div>
 							</div>
@@ -3737,52 +3815,14 @@ export function ChatView({
 													<Icon name="sparkling" className="h-3.5 w-3.5" />
 													<span>{t("general.advisorTranscriptReadonly")}</span>
 												</div>
-											) : (
-												<Composer
-													working={snap?.working ?? false}
-													entries={snap?.entries ?? []}
-													companionMood={companionMoodFromSession({
-														working: snap?.working ?? false,
-														streaming: snap?.streaming ?? false,
-														hasApprovals: (snap?.approvals.length ?? 0) > 0,
-													})}
-													companionState={companionStateFromSignals(agentSignals)}
-													onSend={sendAndCloseJump}
-													onStop={() => void handleStop()}
-													onOpenBackgroundJobs={() => {
-														setActiveView("jobs");
-														if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
-													}}
+											) : sessionComposerProps ? (
+												<SlotComponentHost
 													rpc={rpc}
-													sessionId={store.sessionId}
-													cwd={store.cwd}
-													thinkingLevel={thinkingLevel}
-													thinkingConfigLevel={thinkingInfoAuto ? "auto" : thinkingLevel}
-													onSetThinking={setThinking}
-													onModelChange={onComposerModelChange}
-													onAddProvider={onAddProvider}
-													attachApiRef={attachApiRef}
-													thinkingCeiling={thinkingCeiling}
-													thinkingEfforts={thinkingEfforts}
-													presetModelId={presetModelId}
-													welcome={showWelcome}
-													quotes={quotes}
-													onQuotesChange={setQuotes}
-													pendingEdit={pendingEdit}
-													onEditConsumed={() => setPendingEdit(null)}
-													focused={focusMode}
-													onToggleFocus={onToggleFocus}
-													onBtw={q => setBtwQuestion(q)}
-													activeTask={
-														displaySettings["display.taskCardStyle"] === "classic"
-															? null
-															: ([...(snap?.activeTools?.values() ?? [])]
-																	.filter(t => t.toolName === "task")
-																	.at(-1) ?? null)
-													}
-													swarmHost={host}
+													slot={COMPOSER_BAR_SLOT}
+													composer={sessionComposerProps}
+													fallback={<Composer {...sessionComposerProps} />}
 												/>
-											)}
+											) : null}
 										</div>
 										{/* Floating session info card — only the explicit reveal of a
 										 * row too narrow to dock. INSIDE the chat body (never over
@@ -4036,5 +4076,5 @@ export function ChatView({
 	);
 }
 
-/** Host-owned session surface contract injected through the app.chat slot. */
+/** Host-owned session surface contract injected through the main.conversation slot. */
 export type ChatViewProps = Parameters<typeof ChatView>[0];

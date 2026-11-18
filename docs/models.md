@@ -142,6 +142,15 @@ Must define at least one of:
 - `modelOverrides`
 - `discovery`
 
+### Provider display name
+
+`label` (an optional non-empty string) is the name the model picker's
+provider header and model rows show. The provider id stays the identity:
+model refs (`provider/id`), favorites, role pins and `session.setModel` all
+use it, so renaming a label never invalidates a stored pick. Without one, the
+picker shows the id verbatim. It is metadata only — it does not satisfy the
+"define at least one of" rule above.
+
 ### Discovery
 
 - `discovery` requires provider-level `api`, except `discovery.type: proxy` (per-model wire auto-detected).
@@ -188,6 +197,21 @@ catalog matches the cached one, the cached rows are returned verbatim —
 the static + dynamic merge is bypassed entirely. The fingerprint is
 memoized per process by tagging the static-models array with a symbol
 property, so repeated cold-start calls do not re-hash.
+
+### Pick up `models.yml` edits made outside the app
+
+The registry loads `models.yml` once and keeps the composed catalog in
+memory. A writer outside the app — a provider plugin replacing its
+`providers.<id>.models` block, a hand edit — changes nothing until something
+reloads the registry.
+
+`ModelRegistry.refreshIfStale()` compares the file's mtime with the last load
+and, only when it moved, rebuilds offline (no network probe). The daemon's
+catalog reads (`models.list`, `models.listAvailable`, `models.catalog`,
+`models.detail`) call it before answering, and the desktop model menu also
+re-reads when it opens, so an already-mounted picker catches up to an external
+edit without restarting the daemon. In-app edits (`models.add` /
+`models.remove`) keep using `refresh()` plus the `models.changed` broadcast.
 
 ## Canonical model equivalence and coalescing
 
@@ -541,6 +565,15 @@ They now also expose canonical/coalesced models:
 
 - `/model` includes a canonical view alongside provider tabs
 - `musepi models` prints provider-grouped tables of every concrete model, and `musepi models canonical` prints the coalesced canonical view
+
+`musepi models ls --json` prints the same available catalog as one JSON object,
+`{ models: [...] }`. Each row carries `provider`, `providerLabel` (the
+`providers.<id>.label`, else the provider id), `id`, `selector`, `name`,
+`contextWindow`, `maxTokens`, `reasoning`, `thinking`, `input`, and `cost`.
+It lists **available** models only — a provider needs credentials, or
+`auth: none` — which makes it the machine-readable inventory an external tool
+or adapter should read: `models.yml` names custom providers but says nothing
+about the bundled catalog or the credentials behind either.
 
 Selecting a canonical entry stores the canonical selector. Selecting a provider row stores the explicit `provider/modelId`.
 

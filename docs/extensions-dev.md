@@ -56,6 +56,8 @@ Creator quick-create sends only the user's natural-language requirement. Its pre
 
 Desktop releases must stage self-contained first-party plugin bundles with the daemon. Run `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>` after compiling it. The script compiles and validates `bundled-plugins` and `desktop-plugins` under `apps/desktop/vendor/daemon`, including every entry declared by `musepi.extensions` and `musepi.components`; component styles remain beside the compiled component. Direct and transitive JavaScript dependencies are bundled, while the terminal PTY bridge and its native runtime packages are copied into the staged layout. Electron unpacks this directory and passes both absolute roots to the daemon through the platform-delimited `MUSEPI_BUNDLED_PLUGIN_ROOTS` variable. Development discovery retains its source-tree fallbacks; a release must not depend on source trees or development dependencies.
 
+The staged tree is runtime content only. Maintainer-only files stay in the source package (`DEV_ONLY_PLUGIN_FILES`, e.g. the `ui-ux-pro-max` data validator) and are dropped while staging; `assertStagedPluginLayout` then fails the release when a staged plugin contains tests, source maps, declaration files, or a nested `node_modules`. Maintainer guidance such as `musepi-contributing` is not a shipped skill: it lives in the repository's `.agents/skills` and is visible only inside this checkout.
+
 Discovered JavaScript and TypeScript hooks use the production extension chain: `discoverExtensionPaths()` → `hookCapability` → `loadExtensions()` → `ExtensionRunner`. The legacy `HookRunner` exports remain for public API compatibility and their direct consumers; they are not a second production execution path. TUI settings and plugin entries read the same schema, discovery results, and Cordis enablement state as the desktop client. The TUI does not introduce a separate installer or plugin-state store.
 
 ## 2. 扩展能做什么(能力面)
@@ -170,19 +172,25 @@ export default function (pi: ExtensionAPI): void {
 **组件契约**(编译时强制):
 - 默认导出 React 组件;
 - JSX 使用 `window.MusePiReact.createElement`。`react`、`react-dom`、`react-dom/client` 和 `react/jsx-runtime` 的普通或 type-only import 都由 daemon 映射到宿主 React，不会打包第二份 React；不得绕过这条映射，自行打包或从其他地址加载 React。
-- **Injected props (all optional)**: `{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, page, chatView, panelShell, browser, formatTokens }`. `rpc` is the daemon bridge; `sessionId`/`cwd` identify the active session; `slot`/`extensionId` identify the contribution. `panelTab` is present for `panel.tab.*` and carries the current instance's `id/surface/target/label/readOnly/dedupeKey`, including in split columns. The reserved `panel.tab.files` mount also receives `fileWorkspace`, the host-owned file-tab, draft, reveal-request, and editor-history contract. The single `app.chat` mount receives `chatView`, the host-owned session, workspace, right-panel, and terminal contract; it must not copy that state. The `panel.shell` mount receives the full right-panel contract through `panelShell`; `panel.tab.browser` receives `{ open, openRequest, onTakeover }` through `browser`. Full-page slots receive navigation under `page`; `app.capability` specifically receives `page: { tab, onTabChange, onBack }`, not top-level navigation props. `formatTokens` keeps numeric readouts consistent with the host transcript. Components must remain usable when any prop is absent.
+- **Injected props (all optional)**: `{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, page, chatView, panelShell, browser, formatTokens }`. `rpc` is the daemon bridge; `sessionId`/`cwd` identify the active session; `slot`/`extensionId` identify the contribution. `panelTab` is present for `panel.tab.*` and carries the current instance's `id/surface/target/label/readOnly/dedupeKey`, including in split columns. The reserved `panel.tab.files` mount also receives `fileWorkspace`, the host-owned file-tab, draft, reveal-request, and editor-history contract. The single `main.conversation` mount receives `chatView`, the host-owned session, workspace, right-panel, and terminal contract; it must not copy that state. The `panel.shell` mount receives the full right-panel contract through `panelShell`; `panel.tab.browser` receives `{ open, openRequest, onTakeover }` through `browser`. Full-page slots receive navigation under `page`; `main.capability` specifically receives `page: { tab, onTabChange, onBack }`, not top-level navigation props. `formatTokens` keeps numeric readouts consistent with the host transcript. Components must remain usable when any prop is absent.
 - **样式**:组件内 `import "./x.css"` 会被 daemon 提取并在挂载时注入 `<style data-slot-css>`(组件卸载即移除)——不要依赖全局样式文件;
 - **失败可见**:编译失败/加载失败在宿主处以红色错误块显示(不再静默消失);运行时错误有 `gui-slot-error` 样式。
 
 **槽位清单**(daemon `assertKnownComponentSlot` 校验,未知槽名注册会抛错;单一权威见 `packages/collab-proto/src/extension-slots.ts`):
 - `panel.tab.<id>` — 右面板动态 tab。默认提供 rail 启动入口；声明 `availability: "on-demand"` 时不进入 rail、空状态或新建菜单，只由会话内容或工具结果中的 `details.panelTab` 描述符打开。描述符使用 `surface: "ext:panel.tab.<id>"`，可携带 `target`、`dedupeKey` 和 `label`；失败工具结果不会打开标签。`panel.tab.files` 是保留特例：它映射到持久化 surface `files`，不进入通用扩展 launcher，也不接受 `ext:panel.tab.files` 作为第二个 surface。
-- `panel.shell` — full right-panel shell (single). The `panel` plugin owns tabs, split layout, and maximize presentation; `app.chat` does not bundle it.
-- `app.overlay` — root-level fixed overlay (single): owns the floating horizontal/vertical scroll rail and portals itself to `document.body`. The host keeps the built-in `<FloatingScrollbar/>` as the fallback when no contribution is mounted.
+- `panel.shell` — full right-panel shell (single). The `panel` plugin owns tabs, split layout, and maximize presentation; `main.conversation` does not bundle it.
+- `shell.overlay` — root-level fixed overlay (single): owns the floating horizontal/vertical scroll rail and portals itself to `document.body`. The host keeps the built-in `<FloatingScrollbar/>` as the fallback when no contribution is mounted.
 - `browser.host` — persistent managed-browser guest host (single), mounted at the app root independently of `panel.tab.browser`. Both artifacts bind the same `window.MusePiManagedBrowserHost` store instead of bundling separate copies.
 - `settings.tab.<id>` — 设置页左侧导航项:扩展声明一个设置页即出现在设置导航,内容区挂载组件。
 - `sidebar.panel.<destination id>` — 二级左栏面板(2026-11-08):宿主按 rail 目的地 id 取唯一贡献,挂进 `.gui-side-keeper`,由 `data-panel` 决定显隐;几何读 keeper 上的 `--gui-side-w`,不接宿主专用 props。编译插件通过宿主模块表共享 `lib/scheduled-task-nav`(`task-nav`),否则会拿到另一份快照 store。插件停用或编译失败时宿主回退内置面板,目的地仍可用。
 - `rail.<id>` — 右缘图标轨(前缀命名空间;`rail.right` 是保留的精确槽)
-- `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端(list 语义,多扩展可同槽)
+- `main.conversation` (single) / `main.capability` (single) — root `main` keys: the complete conversation page (welcome + transcript) and the capability-center page. One occupant per key; the host renders its built-in page when nothing is mounted.
+- `conversation.composer.bar` (single) — the whole input card in hero and session states; the `chat-view` plugin owns it alongside `main.conversation`.
+- `conversation.input.dock` / `conversation.composer.dock` — full-width rows above / below the input card (list; multiple contributors may share the seat). One plugin may own several entries in one seat by giving each a distinct `id`: the stats plugin registers its `activity` and `usage` pills as two entries (`order` 0/1), so another plugin can replace one pill by id instead of the whole readout.
+- `conversation.input.left` / `conversation.input.right` / `conversation.input.overlay` — the tool row ends and the in-card floating layer (list).
+- `conversation.input.model` / `.attachments` / `.permission` / `.plan` / `.activity` (single) — the composer controls; a later contributor replaces the earlier one.
+- `conversation.hero.brand.mark` / `.workspace` / `.agentPreset` (single) and `conversation.hero.options` (list) — empty-state seats with built-in fallbacks. `conversation.hero.frame` is a decoration layer inside the welcome scene: this host has no hoc wrapper semantics, so it cannot take over the host content.
+- `conversation.chat.node` (list) — transcript node seat, dispatched by node kind (see §10).
 - `panel.right` / `settings.extensions` — 旧保留槽(仍可用)。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载,见下):注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染,并注入 `settingsScope` 读写代理。
 - `settings.item.<extId>` — 扩展设置卡片(2026-08-17;2026-08-20 起展示于**扩展中心底部**,随插件 inventory):按扩展 id 派发一张卡片,组件经 `settingsScope` prop 读写设置键(见下)。
 - `settings.action.<id>` — 单行偏好槽(2026-08-20):组件挂到设置页"通用"分区末尾,功能插件贡献单行偏好(语言/外观/Enter 行为),无需整 tab 或整卡。
@@ -384,12 +392,12 @@ pi.registerScrollbarSkin({
 - **校验**：loader 要求 `id`/`displayName`/`base`/三个颜色/数值 `size`；颜色值若含 `url()`、`image-set()`、`expression()` 直接抛错（这些值会写入 CSS 自定义属性，不能成为网络/执行面）；`pacGlyph` 只接受 `data:` URL。
 - **数据流**：daemon 装载 → `collectScrollbarSkins` → `extensions.list.scrollbarSkins` → 桌面 `useExtensionScrollbarSkins`（ChatView）→ `scrollbar-skins` 宿主模块 → 浮动轨与外观选择器读同一份目录。
 - **优先级**：contributed → imported（用户导入的 zip）→ built-in，按 `id` 去重，插件可覆盖内置皮肤。插件停用后 contributed 清空，内置目录仍在，轨不会失去皮肤。
-- **内置目录归 `ui-theme` 渲染端 bundle 所有**：`apps/desktop/src/plugins/ui-theme/` 内的 `skins.ts` 定义 snake / gummy-rainbow / pacman，`rail.tsx` 渲染、`rail.css` 提供样式、`settings.tsx` 提供外观卡；`index.ts` 注册 `app.overlay` + `settings.item.ui-theme`。宿主保留同构兜底，供 bundle 停用、编译失败或 guest/mobile 宿主使用。
+- **内置目录归 `ui-theme` 渲染端 bundle 所有**：`apps/desktop/src/plugins/ui-theme/` 内的 `skins.ts` 定义 snake / gummy-rainbow / pacman，`rail.tsx` 渲染、`rail.css` 提供样式、`settings.tsx` 提供外观卡；`index.ts` 注册 `shell.overlay` + `settings.item.ui-theme`。宿主保留同构兜底，供 bundle 停用、编译失败或 guest/mobile 宿主使用。
 - **daemon 主题插件仍可贡献皮肤**：`registerScrollbarSkin` 是给 daemon 侧主题包的稳定缝；内置目录不再由 `builtin-themes` 注册，避免两个所有者。
-- **编译插件共享注册表**：`scrollbar-skins` 在 `EXTENSION_HOST_MODULES` 中（路径 `plugins/ui-theme/skins`），编译后的 `app.overlay` 覆盖层读取的是宿主实例，而不是打包副本（见 §19）。
+- **编译插件共享注册表**：`scrollbar-skins` 在 `EXTENSION_HOST_MODULES` 中（路径 `plugins/ui-theme/skins`），编译后的 `shell.overlay` 覆盖层读取的是宿主实例，而不是打包副本（见 §19）。
 - **参考实现**：`apps/desktop/src/plugins/ui-theme/`（`rail.tsx` / `rail.css` / `skins.ts` / `settings.tsx` / `index.ts`）。
 
-## 10. 扩展 transcript 节点渲染(transcript.node seat, DSH 粒度, 2026-08-27)
+## 10. 扩展 transcript 节点渲染(conversation.chat.node seat, DSH 粒度, 2026-08-27)
 
 扩展为**指定节点 kind** 贡献 transcript 渲染器。对应 DSH `conversation.chat.node` 的单一"聊天节点 seat"槽：按节点 kind(entryKey) 分发，命中即"拥有"该条目的渲染，未命中回退到内建渲染(fallback)。
 
@@ -397,7 +405,7 @@ pi.registerScrollbarSkin({
 
 ```ts
 pi.registerComponent({
-	slot: "transcript.node",
+	slot: "conversation.chat.node",
 	moduleUrl: "./ui/my-node.tsx",
 	label: "My Chat Node",
 	entryKinds: ["message:user"], // 派发键(transcriptNodeKind)
@@ -410,7 +418,7 @@ pi.registerComponent({
   - `children` = 内建 MusePi 对该条目的渲染 —— 组件可包含它做"增强"(保留官方骨架), 或完全自绘(**拥有**该 kind)。
 - 未命中的 kind -> 内建渲染(children 直接返回), 等价 DSH fallback。
 
-**分派**: daemon 编译(透传 `entryKinds`) -> `extensions.list.components` -> GUI `useSlotComponents(rpc, "transcript.node")` -> `renderTranscriptNode`(ChatView) 按 kind 过滤(`selectTranscriptNodeComponents`) -> 命中组件收到 `node` 上下文拥有渲染, 未命中回退内建。组件集只在 `extensions.changed` 变化, 不随 stream 帧变(memo 安全)。
+**分派**: daemon 编译(透传 `entryKinds`) -> `extensions.list.components` -> GUI `useSlotComponents(rpc, "conversation.chat.node")` -> `renderTranscriptNode`(ChatView) 按 kind 过滤(`selectTranscriptNodeComponents`) -> 命中组件收到 `node` 上下文拥有渲染, 未命中回退内建。组件集只在 `extensions.changed` 变化, 不随 stream 帧变(memo 安全)。
 
 **防置换**: 扩展声明的 kind 只影响该 kind 条目的渲染; 内建类型(message/compaction/branch_summary/model_change 等)仍由宿主持有, 扩展只能经 `children` 基座增强声明的 kind。与 DSH 一致 —— 官方 sidebar/conversation 的 owner 始终是宿主, 插件贡献到 seat, 不覆写核心。
 
@@ -424,8 +432,8 @@ Electron 壳由第一方 Cordis 包 `desktop-shell` 提供,与其他 MusePi 包�
 - daemon `--web-port` serve 渲染器(`guest-client/dist`) + `/__daemon.json`(wsUrl/token); 壳 `probeWeb()` 读 `web.port` 自动发现。
 
 **Shell 三模式**(DSH compatibility/extended/enhanced):
-- `compatibility`(默认): 注入脚本只注册 `transcript.node` —— 扩展贡献聊天节点。
-- `extended`: 注入脚本额外注册 `composer.dock` / `panel.tab.workbench` / `statusbar`; guest-client 的 `CompatSlotHost` 按 slot 渲染注册组件(composer 上方 dock、底部状态条、workbench 面板)。
+- `compatibility`(默认): 注入脚本只注册 `conversation.chat.node` —— 扩展贡献聊天节点。
+- `extended`: 注入脚本额外注册 `conversation.composer.dock` / `panel.tab.workbench` / `statusbar`; guest-client 的 `CompatSlotHost` 按 slot 渲染注册组件(composer 上方 dock、底部状态条、workbench 面板)。
 - `enhanced`: 渲染器侧同 extended, 壳保留原生 titlebar(原生 UI 面板预留)。
 
 **注册表契约**: daemon 注入脚本(`static-web.ts` `compatSlotHostScript`, 仅 `?shell=1`) blob-import 已编译组件 → `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`; guest-client 初始化注册表(`main.tsx`), `Transcript`/`CompatSlotHost` 只读消费。纯浏览器 guest 无注入脚本 → 注册表为空 → 内建渲染。
@@ -560,6 +568,8 @@ my-plugin/
 安装校验使用生产 `mountPlugin` 链解析每个 `extensions` 入口，因此纯 Cordis 的 `name` / `inject` / `Config` / `apply` 与 legacy 默认导出 factory 都按各自真实语义检查。校验在独立 runtime 和 event bus 上执行，成功后立即调用 `disposePluginPrimitives` 释放资源；入口缺失或挂载失败会拒绝安装并触发既有回滚，不会留下半安装状态。
 
 `musepi plugin pack [path] [-o dir] [--json]` 在本地生成可分发的 `.tgz`。它要求包具有 `name`、`version` 和 `musepi` / `omp` / `pi` 清单，检查声明的入口存在后调用 `bun pm pack`，不访问 registry，也不执行 publish。将生成的文件发给接收方后，可在插件页拖入，或执行 `musepi plugin install <tarball 绝对路径>`。绝对 `.tgz` 路径按归档安装，不会误入目录 link 分支。需要公开发布时，仍使用包 registry 的发布流程；`plugin pack` 本身不发布。
+
+要进入插件市场，让用户能按来源发现并安装：把包条目写进仓库根的 `.omp-plugin/marketplace.json`（Claude Code 兼容放 `.claude-plugin/marketplace.json`），`plugins[]` 的每项给出 `name`、`description`、`version` 与 `source`（相对路径、npm 包名或 git 地址）。用户执行 `/marketplace add <owner/repo>` 或从能力中心市场页添加该来源后即可安装。catalog 字段与来源分类见 `docs/marketplace.md`；未发布的包继续走本节 spec 安装，不需要先有市场。
 
 ### 拖入安装
 
@@ -774,7 +784,7 @@ export function apply(ctx: PluginClientContext): void {   // optional: module-le
 |---|---|
 | `effect(dispose, label?)` | Register a teardown. Runs in **reverse** order (a later contribution may depend on an earlier one). |
 | `signal: AbortSignal` | Aborted when this module load is superseded or unmounted. Pass it to `fetch`/`EventSource` instead of tracking lifetime by hand. |
-| `slot: string` | The seat this component mounted into (`composer.model`, `settings.tab.x`, …). |
+| `slot: string` | The seat this component mounted into (`conversation.input.model`, `settings.tab.x`, …). |
 | `extensionId: string` | The extension entry path that produced the component. |
 
 ### Why this seam has to exist
@@ -901,7 +911,7 @@ Because that entry is a namespace, the rewrite reads a property: any export miss
 | `voice` | `lib/voice.ts` | Active TTS/dictation sessions, playback context, and stop/resume handles: audio state and cancellation must not diverge across bundles |
 | `panel-maximize` | `lib/panel-maximize.ts` | Maximized flag, subscribers, and animation registry: the host and every plugin observe one panel-maximize state |
 | `suggestions` | `lib/suggestions.ts` | Suggestion contributors, storage, and subscriptions: user-curated suggestions stay the same across the host and plugins |
-| `scrollbar-skins` | `plugins/ui-theme/skins.ts` | Contributed/imported/built-in skin catalog: the `ui-theme` settings card writes it and a compiled `app.overlay` rail reads the same list |
+| `scrollbar-skins` | `plugins/ui-theme/skins.ts` | Contributed/imported/built-in skin catalog: the `ui-theme` settings card writes it and a compiled `shell.overlay` rail reads the same list |
 | `client-core` | `@musepi/client-core` (bare) | The whole client-core namespace: its React contexts and module-level state |
 | `i18n` | `@musepi/client-core/src/i18n` (bare) | Locale registry behind `t` / `setLocale` |
 

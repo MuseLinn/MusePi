@@ -16,6 +16,8 @@ interface ConfiguredMcpServer {
 	command?: string;
 	auth?: "oauth" | "apikey";
 	enabled?: boolean;
+	/** `mcp.json` for the file this app owns; otherwise the agent that declared it. */
+	source?: string;
 }
 
 /** Hand-configured MCP servers, nested inside the connector page.
@@ -112,6 +114,9 @@ export function McpServersSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 									<div className="flex flex-wrap items-center gap-1.5">
 										<span className="truncate text-[13px] font-medium">{server.name}</span>
 										<span className="gui-provider-chip">{server.transport}</span>
+										{server.source && server.source !== "mcp.json" && (
+											<span className="gui-provider-chip">{server.source}</span>
+										)}
 										{server.auth && (
 											<span className="gui-provider-chip">
 												{server.auth === "oauth" ? t("settings.mcpAuthOauth") : t("settings.mcpAuthToken")}

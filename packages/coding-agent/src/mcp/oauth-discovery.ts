@@ -17,8 +17,25 @@ export interface OAuthEndpoints {
 	clientId?: string;
 	/** Dynamic client registration endpoint advertised by the authorization server. */
 	registrationUrl?: string;
+	/** Device-authorization endpoint, for the RFC 8628 grant. */
+	deviceAuthorizationUrl?: string;
 	scopes?: string;
 	resource?: string;
+}
+
+/**
+ * The device-authorization endpoint, for the RFC 8628 grant.
+ *
+ * GitHub advertises it as `device_authorization_endpoint`; other servers use
+ * the OAuth-Authorization-Server spelling. Either name is read.
+ */
+function readDeviceAuthorizationUrl(metadata: Record<string, unknown>): string | undefined {
+	const value =
+		metadata.device_authorization_endpoint ??
+		metadata.deviceAuthorizationEndpoint ??
+		metadata.device_authorization_url ??
+		metadata.device_authorization_uri;
+	return typeof value === "string" && value.trim() !== "" ? value : undefined;
 }
 
 function readRegistrationUrl(metadata: Record<string, unknown>): string | undefined {
@@ -119,7 +136,15 @@ export function extractOAuthEndpoints(error: Error): OAuthEndpoints | null {
 			(obj.resource_uri as string | undefined) ||
 			(obj.resourceUri as string | undefined);
 
-		return { authorizationUrl, tokenUrl, registrationUrl: readRegistrationUrl(obj), clientId, scopes, resource };
+		return {
+			authorizationUrl,
+			tokenUrl,
+			registrationUrl: readRegistrationUrl(obj),
+			deviceAuthorizationUrl: readDeviceAuthorizationUrl(obj),
+			clientId,
+			scopes,
+			resource,
+		};
 	};
 
 	const clientIdFromAuthUrl = (authorizationUrl: string): string | undefined => {

@@ -92,6 +92,19 @@ interface MuseSideTab {
 	label: Resource;
 }
 
+/**
+ * One section of the session list.
+ *
+ * Rows split by whether a turn is running right now, which is the only state
+ * the payload carries that changes what a user wants to reach first. An empty
+ * `header` means "the only visible group" — a lone heading over a lone list
+ * would just repeat the sheet title.
+ */
+interface HarmonySessionGroup {
+	header: ResourceStr;
+	rows: HarmonySessionRow[];
+}
+
 /** Payload of `openSessionsSheet` / `setSessions`. */
 interface HarmonySessionPayload {
 	current: string;
@@ -886,6 +899,21 @@ struct Index {
 			});
 	}
 
+	/**
+	 * Reload the page after settings wiped its stored credentials.
+	 *
+	 * A reload, not a re-render: the live document still holds the session that
+	 * the cleared store no longer has, so the page has to run its boot checks
+	 * again and land on the connect screen.
+	 */
+	private reloadPage(): void {
+		try {
+			this.controller.refresh();
+		} catch (e) {
+			console.warn(`[musepi] page reload failed: ${JSON.stringify(e)}`);
+		}
+	}
+
 	/* ---- window form ---------------------------------------------------- */
 
 	/** Insets in vp, re-parsed on read: they change on rotation and folding. */
@@ -1004,6 +1032,40 @@ struct Index {
 	}
 
 	/**
+	 * One row of the wide-window column.
+	 *
+	 * Denser than the sheet's row on purpose: the column is a persistent nav
+	 * list beside the transcript, so it trades the cwd line and the time for
+	 * more rows in the same height.
+	 */
+	@Builder
+	paneRowBody(row: HarmonySessionRow) {
+		Column({ space: 2 }) {
+			Text(row.title)
+				.fontSize(14)
+				.fontWeight(row.current ? FontWeight.Medium : FontWeight.Normal)
+				.fontColor(row.current ? this.primaryTextColor() : this.secondaryTextColor())
+				.maxLines(1)
+				.textOverflow({ overflow: TextOverflow.Ellipsis })
+				.width('100%')
+			if (row.meta !== '') {
+				Text(row.meta)
+					.fontSize(11)
+					.fontColor(this.secondaryTextColor())
+					.maxLines(1)
+					.width('100%')
+			}
+		}
+		.width('100%')
+		.padding({ left: 12, right: 8, top: 9, bottom: 9 })
+		.borderRadius(12)
+		.backgroundColor(row.current ? this.accentTint(this.themeDark ? 0.20 : 0.16) : Color.Transparent)
+		.alignItems(HorizontalAlign.Start)
+		.accessibilityText(`${row.title} ${row.meta}`)
+		.accessibilityDescription(row.current ? this.selectedLabel : '')
+	}
+
+	/**
 	 * Session list column (wide windows only).
 	 *
 	 * Owns no state: the rows arrive from the page (`setSessions`) and a tap
@@ -1039,14 +1101,12 @@ struct Index {
 			// permanently on screen, filtering it in place is what the shape
 			// affords — opening a modal to filter a visible list is a detour.
 			if (this.sessionRows.length > 6) {
-				TextInput({ text: this.paneQuery, placeholder: $r('app.string.sessions_search') })
-					.height(34)
-					.fontSize(13)
+				Search({ value: this.paneQuery, placeholder: $r('app.string.sessions_search') })
+					.height(36)
+					.textFont({ size: 13 })
 					.placeholderFont({ size: 13 })
 					.placeholderColor(this.secondaryTextColor())
 					.fontColor(this.primaryTextColor())
-					.padding({ left: 10, right: 10 })
-					.borderRadius(10)
 					.backgroundColor(this.themeDark ? '#1FFFFFFF' : '#0D000000')
 					.margin({ left: 8, right: 8, top: 4 })
 					.onChange((value: string) => {
@@ -1076,39 +1136,35 @@ struct Index {
 				.layoutWeight(1)
 				.justifyContent(FlexAlign.Center)
 				.alignItems(HorizontalAlign.Center)
+			} else if (this.paneSessions().length === 0) {
+				// A filter that matched nothing is not an empty workspace: say
+				// what is empty, and leave the filter in place to be corrected.
+				Text($r('app.string.sessions_empty'))
+					.fontSize(13)
+					.fontColor(this.secondaryTextColor())
+					.width('100%')
+					.textAlign(TextAlign.Center)
+					.padding({ top: 28, bottom: 28 })
+				Blank()
 			} else {
 				List({ space: 2 }) {
-					ForEach(this.sessionRows, (row: HarmonySessionRow) => {
-					ListItem() {
-						Column({ space: 2 }) {
-							Text(row.title)
-								.fontSize(14)
-								.fontWeight(row.current ? FontWeight.Medium : FontWeight.Normal)
-								.fontColor(row.current ? this.primaryTextColor() : this.secondaryTextColor())
-								.maxLines(1)
-								.textOverflow({ overflow: TextOverflow.Ellipsis })
-								.width('100%')
-							if (row.meta !== '') {
-								Text(row.meta)
-									.fontSize(11)
-									.fontColor(this.secondaryTextColor())
-									.maxLines(1)
-									.width('100%')
-							}
+					ForEach(this.sessionGroups(this.paneQuery), (group: HarmonySessionGroup) => {
+						ListItemGroup({
+							header: group.header === '' ? undefined : () => {
+								this.sessionGroupHeader(group.header);
+							},
+						}) {
+							ForEach(group.rows, (row: HarmonySessionRow) => {
+								ListItem() {
+									this.paneRowBody(row)
+								}
+								.stateStyles({
+									pressed: { .backgroundColor(this.accentTint(this.themeDark ? 0.26 : 0.20)) },
+								})
+								.onClick(() => this.pushSessionAction('pick', row.id))
+							}, (row: HarmonySessionRow) => `${row.id}|${row.current}|${row.meta}|${row.title}`)
 						}
-						.width('100%')
-						.padding({ left: 12, right: 8, top: 9, bottom: 9 })
-						.borderRadius(12)
-						.backgroundColor(row.current ? this.accentTint(this.themeDark ? 0.20 : 0.16) : Color.Transparent)
-						.alignItems(HorizontalAlign.Start)
-					}
-					.stateStyles({
-						pressed: { .backgroundColor(this.accentTint(this.themeDark ? 0.26 : 0.20)) },
-					})
-					.onClick(() => this.pushSessionAction('pick', row.id))
-					.accessibilityText(`${row.title} ${row.meta}`)
-					.accessibilityDescription(row.current ? this.selectedLabel : '')
-					}, (row: HarmonySessionRow) => `${row.id}|${row.current}|${row.meta}|${row.title}`)
+					}, (group: HarmonySessionGroup) => `${group.header}|${group.rows.length}`)
 				}
 				.width('100%')
 				.layoutWeight(1)
@@ -1808,12 +1864,52 @@ struct Index {
 	}
 
 	private filteredSessions(): HarmonySessionRow[] {
-		const query = this.sessionQuery.trim().toLowerCase();
-		if (query === '') {
-			return this.sessionRows;
+		return this.filterRows(this.sessionQuery, this.sessionRows);
+	}
+
+	/** Rows the pane's own filter keeps; same predicate as the sheet's. */
+	private paneSessions(): HarmonySessionRow[] {
+		return this.filterRows(this.paneQuery, this.sessionRows);
+	}
+
+	private filterRows(query: string, rows: HarmonySessionRow[]): HarmonySessionRow[] {
+		const needle = query.trim().toLowerCase();
+		if (needle === '') {
+			return rows;
 		}
-		return this.sessionRows.filter((row: HarmonySessionRow): boolean =>
-			row.title.toLowerCase().includes(query) || row.cwd.toLowerCase().includes(query));
+		return rows.filter((row: HarmonySessionRow): boolean =>
+			row.title.toLowerCase().includes(needle) || row.cwd.toLowerCase().includes(needle));
+	}
+
+	/**
+	 * Split into the two groups the list shows, keeping the page's order.
+	 *
+	 * The payload arrives already ordered (the page sorts by recency), so the
+	 * groups are a stable partition rather than a re-sort: running sessions
+	 * first, everything else exactly as delivered.
+	 */
+	private sessionGroups(query: string): HarmonySessionGroup[] {
+		const rows = this.filterRows(query, this.sessionRows);
+		const running: HarmonySessionRow[] = [];
+		const rest: HarmonySessionRow[] = [];
+		for (const row of rows) {
+			if (row.working) {
+				running.push(row);
+			} else {
+				rest.push(row);
+			}
+		}
+		const groups: HarmonySessionGroup[] = [];
+		// Two headings only when both groups are non-empty: a lone heading over
+		// a lone list repeats the sheet title instead of grouping anything.
+		const split = running.length > 0 && rest.length > 0;
+		if (running.length > 0) {
+			groups.push({ header: split ? $r('app.string.sessions_group_running') : '', rows: running });
+		}
+		if (rest.length > 0) {
+			groups.push({ header: split ? $r('app.string.sessions_group_recent') : '', rows: rest });
+		}
+		return groups;
 	}
 
 	private sessionAction(type: string, id: string): void {
@@ -1832,6 +1928,82 @@ struct Index {
 			});
 	}
 
+	/**
+	 * Group heading inside the sheet list.
+	 *
+	 * A plain row rather than `SubHeader`: this list sits in a system sheet that
+	 * already pads its content, and the heading groups the rows below it rather
+	 * than introducing a section with its own actions.
+	 */
+	@Builder
+	sessionGroupHeader(title: ResourceStr) {
+		Text(title)
+			.fontSize(12)
+			.fontWeight(FontWeight.Medium)
+			.fontColor(this.secondaryTextColor())
+			.width('100%')
+			.padding({ left: 4, top: 10, bottom: 6 })
+	}
+
+	/** One session row: state dot, title + cwd, counters + time, current mark. */
+	@Builder
+	sessionRowBody(row: HarmonySessionRow) {
+		Row({ space: 12 }) {
+			// A 8vp dot, drawn as a filled box: `Circle().fill()` is
+			// API 26 and would abort the list on an older device.
+			Row()
+				.width(8)
+				.height(8)
+				.borderRadius(4)
+				.backgroundColor(row.current ? this.tabSelectedColor() : this.secondaryTextColor())
+			Column({ space: 2 }) {
+				Text(row.title)
+					.fontSize(16)
+					.fontWeight(FontWeight.Medium)
+					.maxLines(1)
+					.textOverflow({ overflow: TextOverflow.Ellipsis })
+				if (row.cwd !== '') {
+					Text(row.cwd)
+						.fontSize(12)
+						.fontColor(this.secondaryTextColor())
+						.maxLines(1)
+						.textOverflow({ overflow: TextOverflow.Ellipsis })
+				}
+			}
+			.alignItems(HorizontalAlign.Start)
+			.layoutWeight(1)
+			Column({ space: 2 }) {
+				Text(row.meta)
+					.fontSize(12)
+					.fontColor(this.secondaryTextColor())
+					.maxLines(1)
+				if (row.when !== '') {
+					Text(row.when)
+						.fontSize(12)
+						.fontColor(this.secondaryTextColor())
+						.maxLines(1)
+				}
+			}
+			.alignItems(HorizontalAlign.End)
+			if (row.working) {
+				LoadingProgress()
+					.width(16)
+					.height(16)
+					.color(this.tabSelectedColor())
+			} else if (row.current) {
+				Text('✓')
+					.fontSize(14)
+					.fontColor(this.tabSelectedColor())
+			}
+		}
+		.width('100%')
+		.constraintSize({ minHeight: 64 })
+		.padding({ left: 4, right: 4 })
+		.alignItems(VerticalAlign.Center)
+		.accessibilityText(`${row.title} ${row.meta}`)
+		.accessibilityDescription(row.current ? this.selectedLabel : '')
+	}
+
 	@Builder
 	sessionsSheetBody() {
 		Column({ space: 10 }) {
@@ -1843,7 +2015,9 @@ struct Index {
 					this.sessionQuery = value;
 				})
 			if (this.filteredSessions().length === 0) {
-				Text($r('app.string.sessions_empty'))
+				Text(this.sessionRows.length === 0
+					? $r('app.string.sessions_none')
+					: $r('app.string.sessions_empty'))
 					.fontSize(14)
 					.fontColor(this.secondaryTextColor())
 					.width('100%')
@@ -1852,66 +2026,24 @@ struct Index {
 				Blank()
 			} else {
 				List({ space: 0 }) {
-					ForEach(this.filteredSessions(), (row: HarmonySessionRow) => {
-						ListItem() {
-							Row({ space: 12 }) {
-								// A 8vp dot, drawn as a filled box: `Circle().fill()` is
-								// API 26 and would abort the list on an older device.
-								Row()
-									.width(8)
-									.height(8)
-									.borderRadius(4)
-									.backgroundColor(row.current ? this.tabSelectedColor() : this.secondaryTextColor())
-								Column({ space: 2 }) {
-									Text(row.title)
-										.fontSize(16)
-										.fontWeight(FontWeight.Medium)
-										.maxLines(1)
-										.textOverflow({ overflow: TextOverflow.Ellipsis })
-									if (row.cwd !== '') {
-										Text(row.cwd)
-											.fontSize(12)
-											.fontColor(this.secondaryTextColor())
-											.maxLines(1)
-											.textOverflow({ overflow: TextOverflow.Ellipsis })
-									}
+					ForEach(this.sessionGroups(this.sessionQuery), (group: HarmonySessionGroup) => {
+						ListItemGroup({
+							header: group.header === '' ? undefined : () => {
+								this.sessionGroupHeader(group.header);
+							},
+						}) {
+							ForEach(group.rows, (row: HarmonySessionRow) => {
+								ListItem() {
+									this.sessionRowBody(row)
 								}
-								.alignItems(HorizontalAlign.Start)
-								.layoutWeight(1)
-								Column({ space: 2 }) {
-									Text(row.meta)
-										.fontSize(12)
-										.fontColor(this.secondaryTextColor())
-										.maxLines(1)
-									if (row.when !== '') {
-										Text(row.when)
-											.fontSize(12)
-											.fontColor(this.secondaryTextColor())
-											.maxLines(1)
-									}
-								}
-								.alignItems(HorizontalAlign.End)
-								if (row.current) {
-									Text('✓')
-										.fontSize(14)
-										.fontColor(this.tabSelectedColor())
-								}
-							}
-							.width('100%')
-							.constraintSize({ minHeight: 64 })
-							.padding({ left: 4, right: 4 })
-							.alignItems(VerticalAlign.Center)
-							.accessibilityText(`${row.title} ${row.meta}`)
-							.accessibilityDescription(row.current ? this.selectedLabel : '')
+								.onClick(() => this.sessionAction('pick', row.id))
+							}, (row: HarmonySessionRow) => `${row.id}|${row.current}|${row.meta}|${row.when}|${row.title}`)
 						}
-						.onClick(() => {
-							this.sessionAction('pick', row.id);
-						})
-					}, (row: HarmonySessionRow) => `${row.id}|${row.current}|${row.meta}|${row.when}|${row.title}`)
+					}, (group: HarmonySessionGroup) => `${group.header}|${group.rows.length}`)
 				}
 				.width('100%')
 				.layoutWeight(1)
-				.divider({ strokeWidth: 0.5, color: '#14000000' })
+				.divider({ strokeWidth: 0.5, color: this.dividerColor() })
 				.scrollBar(BarState.Off)
 			}
 			Row({ space: 8 }) {
@@ -2139,14 +2271,11 @@ struct Index {
 
 			Scroll() {
 				Column({ space: 14 }) {
-					// Hero first, like the reference guide: brand orb, title,
-					// one-line promise — who you are, what this screen does,
-					// then the actions below it.
+					// The client carries the identity in its top lockup and leaves
+					// the centre of the connect screen to the promise. This page
+					// centred a 72px orb instead, so the shell read as a different
+					// product from the client it mirrors.
 					Column({ space: 10 }) {
-						Image($r('app.media.app_icon'))
-							.width(72)
-							.height(72)
-							.borderRadius(20)
 						Text($r('app.string.connect_title'))
 							.fontSize(26)
 							.fontWeight(FontWeight.Bold)
@@ -2861,6 +2990,7 @@ struct Index {
 					this.settingsOpen = false;
 					this.activateTab(0);
 				},
+				onClearWebData: (): void => this.reloadPage(),
 				sessionCount: this.sessionRows.length,
 			})
 				.layoutWeight(1)

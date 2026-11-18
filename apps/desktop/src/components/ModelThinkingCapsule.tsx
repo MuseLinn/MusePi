@@ -13,9 +13,9 @@ import { type ThinkingLevel, ThinkingSelector } from "./ThinkingSelector";
  * divider; both selectors keep their full menu content (search, favorites,
  * DEFAULT pin / effort ladder with per-model ceiling) unchanged.
  *
- * Width budget: at narrow composer widths the segment labels collapse to
- * icon-only (TUI compactThinkingLevel parity) via the container query on
- * the pill — the menus still carry the full labels.
+ * Width budget: at narrow composer widths the model label collapses to its
+ * brand icon via the container query on the pill; the thinking label stays
+ * as the segment's only mark. The menus still carry the full labels.
  */
 export function ModelThinkingCapsule({
 	rpc,

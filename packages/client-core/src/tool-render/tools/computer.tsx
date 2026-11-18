@@ -10,7 +10,7 @@ import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Badges, Kv, KvGrid, Note, Output, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
-import { detailsRecord, str } from "../util";
+import { detailsRecord, fileUrlFromPath, str } from "../util";
 
 interface ComputerShot {
 	path?: string;
@@ -30,7 +30,7 @@ function shotsOf(_args: Record<string, unknown>, result: ToolRenderProps["result
 function srcOf(shot: ComputerShot): string | null {
 	const tgt = typeof shot.target === "string" ? shot.target : "";
 	if (tgt.startsWith("data:")) return tgt;
-	if (typeof shot.path === "string" && shot.path.length > 0) return `file://${shot.path}`;
+	if (typeof shot.path === "string" && shot.path.length > 0) return fileUrlFromPath(shot.path);
 	return tgt || null;
 }
 

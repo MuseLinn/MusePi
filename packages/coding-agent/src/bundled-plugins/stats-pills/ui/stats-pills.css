@@ -1,19 +1,18 @@
-/* 性能与用量（composer.dock 插件）— 液态玻璃材质复用宿主设计令牌
+/* 性能与用量（conversation.composer.dock 插件）— 液态玻璃材质复用宿主设计令牌
  * （--glass-* / --color-* / --radius-* 由宿主主题在 :root 提供），
  * 让这枚插件的视觉跟着应用主题走，而不是自带一份写死的配色。 */
 
-.mpstats-row {
-	display: flex;
-	flex-wrap: wrap;
+/* 两枚胶囊是同一个 dock 座位上的两条独立条目（activity / usage），
+ * 排布由宿主的 dock 行负责。空读数占位由第一条条目渲染，保证输入区
+ * 在初始加载与空会话之间不跳动。 */
+.mpstats-empty {
+	display: inline-flex;
 	align-items: center;
-	justify-content: center;
-	gap: 6px;
-	box-sizing: border-box;
-	min-height: 32px;
-	max-width: 100%;
-	padding: 4px 10px 2px;
-	line-height: 1.4;
-	color: var(--color-text-muted);
+	min-height: 24px;
+	padding: 0 4px;
+	font-size: 11px;
+	line-height: 16px;
+	color: var(--color-text-faint);
 }
 
 .mpstats-pill {

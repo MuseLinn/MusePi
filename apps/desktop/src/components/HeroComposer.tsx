@@ -11,14 +11,11 @@ import { Plus as PlusIcon, X as XIcon } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { type AtCompletionEntry, loadAtCompletionEntries } from "../lib/at-completion";
-import { currentLine, lastTokenIndex, tokenQuery } from "../lib/completion-trigger";
 import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
 import { isContextCommand } from "../lib/context-command";
 import { templateTabForChip } from "../lib/creation";
 import { projectName } from "../lib/electron";
-import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import { type ModeLabelEntry, resolveModeDescription, resolveModeLabel } from "../lib/mode-label";
 import { projectLabels } from "../lib/project-label";
 import type { RpcClient } from "../lib/rpc";
@@ -26,7 +23,15 @@ import { onSettingsChanged } from "../lib/settings-events";
 import { sfxFor } from "../lib/sfx";
 import { modLabel } from "../lib/shortcuts";
 import type { SketchScene } from "../lib/sketch-scene";
-import { rankSlashEntries } from "../lib/slash-rank";
+import {
+	COMPOSER_INPUT_DOCK_SLOT,
+	HERO_AGENT_PRESET_SLOT,
+	HERO_BRAND_MARK_SLOT,
+	HERO_FRAME_SLOT,
+	HERO_OPTIONS_SLOT,
+	HERO_WORKSPACE_SLOT,
+	SlotComponentHost,
+} from "../lib/slot-host";
 import {
 	loadSuggestions,
 	resolveSuggestion,
@@ -34,6 +39,7 @@ import {
 	SUGGESTIONS_CHANGED_EVENT,
 	SUGGESTIONS_COLLAPSED_COUNT,
 } from "../lib/suggestions";
+import { clampThinkingChipLevel } from "../lib/thinking-chip";
 import { isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import type { SttSubmitTrigger } from "../lib/voice";
@@ -46,17 +52,6 @@ import {
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
 import { CompanionArt, useCompanionArt } from "./CompanionArt";
-import {
-	fmtQuotaDuration,
-	type UsageActiveAccountView,
-	type UsageDisabledCredentialView,
-	UsageGapLines,
-	UsageProviderSection,
-	type UsageReloginDeadlineView,
-	type UsageReportsData,
-	type UsageReportView,
-	type UsageUnreportedAccountView,
-} from "./Composer";
 import {
 	type CreationMessage,
 	CreationModeRow,
@@ -85,12 +80,14 @@ import {
 	attachmentFiles,
 	attachmentImageParts,
 	attachmentVideoSelection,
+	type ComposerAttachment,
 	dataUrlToFile,
 	markSketchChip,
 	nextSketchFileName,
 	reorderAttachmentChips,
-	uniqueAttachmentName,
+	useAttachments,
 } from "./composer/use-attachments";
+import { useCompletion } from "./composer/use-completion";
 import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { attachPaste, isLongPastedText, saveEditedPaste, useLongTextPaste } from "./composer/use-long-text-paste";
@@ -101,8 +98,19 @@ import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
 import { ScreenshotEditorDialog } from "./ScreenshotEditorDialog";
+import {
+	fmtQuotaDuration,
+	type UsageActiveAccountView,
+	type UsageDisabledCredentialView,
+	UsageGapLines,
+	UsageProviderSection,
+	type UsageReloginDeadlineView,
+	type UsageReportsData,
+	type UsageReportView,
+	type UsageUnreportedAccountView,
+} from "./SessionComposer";
 import { SketchPad } from "./SketchPad";
-import { type SlashEntry, SlashRow } from "./SlashRow";
+import { SlashRow } from "./SlashRow";
 import type { ThinkingLevel } from "./ThinkingSelector";
 
 /** Time-aware greeting: seven brackets — 清晨 / 早上 / 中午 /
@@ -139,28 +147,12 @@ const TIP_KEYS = [
 	"settings.customizeScrollbarSkinAppearance",
 ] as const;
 
-/** One chip in the empty-state composer. Shape-compatible with the session
- *  composer's ComposerAttachment (composer-frame renders both), plus the raw
- *  handle for non-image files — the welcome has no workspace, so the bytes
- *  ride here until the host writes them into the session it creates. */
-interface WelcomeAttachment {
-	id: number;
-	kind: "image" | "file";
-	dataUrl: string;
-	mimeType: string;
-	name: string;
-	size: number;
-	file?: File;
-	/** Collapsed-paste marker and full text (click opens the editor). */
-	paste?: boolean;
-	editText?: string;
-	/** Board-drawn chip (SketchPad): clicking it reopens the canvas. */
-	sketch?: boolean;
-	/** Editable board content behind that chip (its strokes, not its pixels):
-	 *  reopening restores every object so a re-edit can fix one local detail
-	 *  instead of painting over a flat copy of the exported PNG. */
-	sketchScene?: SketchScene;
-}
+/** Empty-state chips ARE the session composer's chips: resizing, dedupe and
+ *  paste/drop intake live in `useAttachments`. The draft path only differs in
+ *  when file bytes leave the renderer — no session exists yet, so the raw
+ *  handles ride in memory until the host writes them into the session this
+ *  first prompt creates (`stageFiles: false`). */
+type WelcomeAttachment = ComposerAttachment;
 
 /**
  * Empty-state composer: large centered input with a
@@ -173,7 +165,7 @@ interface WelcomeAttachment {
  * reduced copy (images only, no file entry, chips that could not be
  * reopened), which read as an unfinished feature rather than a state.
  */
-export function WelcomeComposer({
+export function HeroComposer({
 	onSubmit,
 	busy,
 	rpc,
@@ -388,7 +380,7 @@ export function WelcomeComposer({
 		const a = attachments.find(x => x.id === id);
 		if (a?.editText !== undefined) setEditingPaste({ id, text: a.editText });
 	};
-	const [attachments, setAttachments] = useState<WelcomeAttachment[]>([]);
+	const { attachments, setAttachments, addFiles } = useAttachments(rpc, { stageFiles: false });
 	// Armed plan/goal: one tap arms the mode chip —
 	// NO popup dialog and NO session creation, so the welcome input keeps
 	// its shape. The first sent message applies the mode (goal: the
@@ -397,7 +389,6 @@ export function WelcomeComposer({
 	const [planArmed, setPlanArmed] = useState(false);
 	const [goalArmed, setGoalArmed] = useState(false);
 	const [guidedArmed, setGuidedArmed] = useState(false);
-	const attachId = useRef(0);
 	/** Attach chip clicked → open the same attach menu the paperclip opens
 	 *  (the frame owns no picker of its own; the menu does). */
 	const openAttachMenu = useRef<(() => void) | null>(null);
@@ -514,6 +505,8 @@ export function WelcomeComposer({
 	// defaultThinkingLevel) may arrive after first paint — apply it until the
 	// user touches the selector. undefined = no snapshot yet.
 	const thinkingTouched = useRef(false);
+	// 占位起点:模型的真实 ladder 到达后由 reconcile effect 落到支持的档位,
+	// 而不是把这个值直接当作「中」显示。
 	const [thinking, setThinking] = useState<ThinkingLevel | null>("medium");
 	useEffect(() => {
 		if (presetThinkingLevel !== undefined && !thinkingTouched.current) setThinking(presetThinkingLevel);
@@ -537,6 +530,9 @@ export function WelcomeComposer({
 	// efforts): the selector shows off/auto + the model's real rungs, and
 	// re-queries when the selection changes.
 	const [thinkingEfforts, setThinkingEfforts] = useState<string[] | null>(null);
+	/** 选中模型自己的默认档位(catalog `thinking.defaultLevel`):模型声明了就用它,
+	 *  没声明才回落到全局默认。切换模型必须重新取,否则胶囊挂着上一个模型的值。 */
+	const [thinkingModelDefault, setThinkingModelDefault] = useState<ThinkingLevel | null>(null);
 	const effectiveModelId = presetModelId ?? modelId;
 	// The ladder must follow the model the session will actually run: a real
 	// pick (modelTouched) beats the DEFAULT/session snapshot — the same
@@ -544,19 +540,22 @@ export function WelcomeComposer({
 	// setModelId re-renders, so reading it here tracks the pick.
 	const ladderModelId = modelTouched.current ? modelId : effectiveModelId;
 	useEffect(() => {
-		if (!rpc || !ladderModelId) {
-			setThinkingEfforts(null);
-			return;
-		}
+		// 换模型 = 换 ladder + 换默认:上一个模型的 ladder 不能拿来收紧新模型,
+		// 用户在上一个模型上的显式选择也不代表新模型(默认值重新接管)。
+		setThinkingEfforts(null);
+		setThinkingModelDefault(null);
+		thinkingTouched.current = false;
+		if (!rpc || !ladderModelId) return;
 		let cancelled = false;
 		void rpc
-			.request<{ efforts?: string[] } | null>("models.detail", { id: ladderModelId })
+			.request<{ efforts?: string[]; defaultLevel?: string | null } | null>("models.detail", { id: ladderModelId })
 			.then(detail => {
 				if (cancelled) return;
 				// null = id not resolved (e.g. provider-qualified selector the
 				// daemon couldn't match) → full ladder; a resolved model with
 				// empty efforts genuinely has no controllable surface → off+auto.
 				setThinkingEfforts(detail === null ? null : detail.efforts?.length ? detail.efforts : []);
+				setThinkingModelDefault((detail?.defaultLevel ?? null) as ThinkingLevel | null);
 			})
 			.catch(() => {
 				if (!cancelled) setThinkingEfforts(null);
@@ -565,6 +564,19 @@ export function WelcomeComposer({
 			cancelled = true;
 		};
 	}, [rpc, ladderModelId]);
+	// 胶囊绝不该显示当前模型没有的档位;新模型先落到它自己的默认档位
+	// (catalog defaultLevel → 全局默认 → 第一档)。ladder 未到时不动,避免首帧
+	// 闪一下兜底值。
+	useEffect(() => {
+		if (thinkingEfforts === null) return;
+		setThinking(prev => {
+			const preferred = thinkingTouched.current
+				? prev
+				: ((thinkingModelDefault ?? presetThinkingLevel ?? prev) as ThinkingLevel | null);
+			const next = clampThinkingChipLevel(preferred, thinkingEfforts) as ThinkingLevel | null;
+			return next === prev ? prev : next;
+		});
+	}, [thinkingEfforts, thinkingModelDefault, presetThinkingLevel]);
 	const [tipKey] = useState<(typeof TIP_KEYS)[number]>(() => TIP_KEYS[Math.floor(Math.random() * TIP_KEYS.length)]!);
 	// Git branch selector: current branch +
 	// local branch list for the active project; hidden outside a repo.
@@ -713,78 +725,59 @@ export function WelcomeComposer({
 			window.removeEventListener("storage", onChanged);
 		};
 	}, []);
-	// / @ # completion (composer parity): slash commands, workspace files,
-	// session references — floating preview menus while typing.
-	const [slashOpen, setSlashOpen] = useState(false);
-	const [slashQuery, setSlashQuery] = useState("");
-	const [slashCmds, setSlashCmds] = useState<SlashEntry[] | null>(null);
-	// Selection indexes must be STATE: arrow keys set them inside onKeyDown
-	// and the active-row highlight depends on them — refs never re-render,
-	// so the highlight only moved on unrelated renders (typing/streaming).
-	const [slashIdx, setSlashIdx] = useState(0);
-	// Absolute caret offsets of the token that opened each menu — the
-	// selected entry replaces exactly that range (see insertCompletion).
-	const [slashAnchor, setSlashAnchor] = useState<number | null>(null);
-	const [atOpen, setAtOpen] = useState(false);
-	const [atQuery, setAtQuery] = useState("");
-	const [atEntries, setAtEntries] = useState<AtCompletionEntry[] | null>(null);
-	// A project switch changes both the primary root and its remembered roots.
+	// / @ # completion (composer parity) — the same controller the session
+	// composer uses (composer/use-completion). The empty state differs only in
+	// what it can resolve: there is no session id yet, so the selected
+	// project's remembered roots stand in for the session's directories.
+	const [completionExtraRoots, setCompletionExtraRoots] = useState<string[]>([]);
 	useEffect(() => {
-		setAtEntries(null);
-	}, [project]);
-	const [atIdx, setAtIdx] = useState(0);
-	const [atAnchor, setAtAnchor] = useState<number | null>(null);
-	const [hashOpen, setHashOpen] = useState(false);
-	const [hashQuery, setHashQuery] = useState("");
-	const [hashSessions, setHashSessions] = useState<{ id: string; cwd?: string }[] | null>(null);
-	const [hashLabels, setHashLabels] = useState<Map<string, string>>(new Map());
-	const [hashIdx, setHashIdx] = useState(0);
-	const [hashAnchor, setHashAnchor] = useState<number | null>(null);
-	const slashFilter = (() => {
-		const q = slashQuery.toLowerCase();
-		// /skill, /skills, /skill: — surface every skill command (the
-		// literal "skills" text never appears in skill:foo names).
-		const isSkillQuery = q === "skill" || q === "skills" || q.startsWith("skill:");
-		// Composer-intercepted slash commands (open GUI panels instead of
-		// hitting the agent) — they win ties in the / completion ranking.
-		const guiNative: ReadonlySet<string> = new Set(["usage"]);
-		// GUI-native /usage (empty state — no session yet). The daemon's
-		// catalog already carries the TUI usage entry; keep only the GUI one.
-		const guiUsageCmd: SlashEntry = {
-			name: "usage",
-			description: t("general.showSubscriptionUsage"),
-			kind: "command",
-			category: "GUI",
+		let cancelled = false;
+		setCompletionExtraRoots([]);
+		if (!rpc || !project) return;
+		void rpc
+			.request<{ workspaces?: Array<{ root: string; additionalDirs?: string[] }> }>("workspace.list", {})
+			.then(list => {
+				if (cancelled) return;
+				setCompletionExtraRoots(list?.workspaces?.find(row => row.root === project)?.additionalDirs ?? []);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
 		};
-		const list = [...(slashCmds ?? []).filter(c => c.name !== "usage"), guiUsageCmd];
-		// Ranked (slash-rank.ts): exact/prefix matches first, GUI-native
-		// commands win ties — /usage opens the panel instead of hitting the
-		// agent, so it belongs above look-alike daemon entries.
-		return rankSlashEntries(
-			list.filter(c =>
-				isSkillQuery && c.kind === "skill"
-					? true
-					: c.name.includes(q) || (c.description ?? "").toLowerCase().includes(q),
-			),
-			q,
-			guiNative,
-		);
-	})();
-	const atFilter =
-		atEntries?.filter(
-			e =>
-				e.name.toLowerCase().includes(atQuery.toLowerCase()) ||
-				e.path.toLowerCase().includes(atQuery.toLowerCase()),
-		) ?? [];
-	// `#` completion filters the session list by query (id / label /
-	// cwd) — same contract as the @ file completion below.
-	const hashFilter = (hashSessions ?? []).filter(s => {
-		const q = hashQuery.trim().toLowerCase();
-		if (!q) return true;
-		const label = hashLabels.get(s.id) ?? "";
-		return (
-			label.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || (s.cwd ?? "").toLowerCase().includes(q)
-		);
+	}, [rpc, project]);
+	const {
+		taRef,
+		slashOpen,
+		setSlashOpen,
+		slashIdx,
+		setSlashIdx,
+		slashFilter,
+		onSlashInput,
+		insertSlash,
+		atOpen,
+		setAtOpen,
+		atIdx,
+		setAtIdx,
+		atFilter,
+		onAtInput,
+		insertAt,
+		hashOpen,
+		setHashOpen,
+		hashIdx,
+		setHashIdx,
+		hashFilter,
+		hashLabel,
+		onHashInput,
+		insertHash,
+	} = useCompletion({
+		rpc,
+		cwd: project ?? undefined,
+		sessionId: null,
+		extraRoots: completionExtraRoots,
+		// The empty state lists the shallow tree only; a session's @ panel
+		// reaches any depth.
+		atMaxDepth: 2,
+		setText,
 	});
 	const [projOpen, setProjOpen] = useState(false);
 	const [presetOpen, setPresetOpen] = useState(false);
@@ -874,7 +867,6 @@ export function WelcomeComposer({
 		active?.scrollIntoView({ block: "nearest" });
 	}, [slashIdx, atIdx, hashIdx, slashOpen, atOpen, hashOpen]);
 
-	const taRef = useRef<HTMLTextAreaElement | null>(null);
 	const formRef = useRef<HTMLFormElement | null>(null);
 	// Select-all + delete clears text AND attachments together (consumed
 	// by onChange once the textarea reports the emptied value).
@@ -922,107 +914,6 @@ export function WelcomeComposer({
 	const pickDesignStyle = useCallback((id: string | null): void => {
 		setDesignStyle(id);
 	}, []);
-
-	// Completion triggers (composer parity): a / @ # that is not glued to ASCII
-	// word characters opens the floating preview lists; Enter/click inserts the
-	// token. The rule is shared with the session composer (lib/completion-trigger)
-	// — it used to demand a LINE-LEADING token here, so the empty state and an
-	// open session disagreed about the same keystroke.
-	const onCompletionInput = (value: string): void => {
-		const { line, lineStart } = currentLine(value);
-		const slash = tokenQuery(line, "/");
-		if (slash) {
-			setSlashQuery(slash.query);
-			setSlashAnchor(lineStart + slash.anchor);
-			setSlashOpen(true);
-			setSlashIdx(0);
-			if (!slashCmds && rpc) {
-				void rpc
-					.request<SlashEntry[]>("commands.list", {})
-					.then(list => setSlashCmds(list ?? []))
-					.catch(() => {});
-			}
-		} else {
-			setSlashOpen(false);
-		}
-		const at = tokenQuery(line, "@");
-		if (at) {
-			setAtQuery(at.query);
-			setAtAnchor(lineStart + at.anchor);
-			setAtOpen(true);
-			setAtIdx(0);
-			if (!atEntries && rpc) {
-				void (async () => {
-					// The welcome composer has no session yet; use the selected
-					// project's remembered roots so @ still spans a multi-root
-					// project.
-					let extraRoots: string[] = [];
-					if (project) {
-						const list = await rpc
-							.request<{ workspaces?: Array<{ root: string; additionalDirs?: string[] }> }>("workspace.list", {})
-							.catch(() => null);
-						extraRoots = list?.workspaces?.find(row => row.root === project)?.additionalDirs ?? [];
-					}
-					const entries = await loadAtCompletionEntries({ rpc, cwd: project ?? undefined, extraRoots });
-					setAtEntries(entries.filter(entry => entry.depth <= 2));
-				})().catch(() => setAtEntries([]));
-			}
-		} else {
-			setAtOpen(false);
-		}
-		const hash = tokenQuery(line, "#");
-		if (hash) {
-			setHashQuery(hash.query);
-			setHashAnchor(lineStart + hash.anchor);
-			setHashOpen(true);
-			setHashIdx(0);
-			if (!hashSessions && rpc) {
-				void rpc
-					.request<{ id: string; timestamp?: string; messageCount?: number; cwd?: string }[]>("session.list", {})
-					.then(list => setHashSessions(list ?? []))
-					.catch(() => setHashSessions([]));
-				// Titles come from the session tree (renames/首条消息 labels).
-				void rpc
-					.request<{ entry: { id: string; label?: string }; children?: unknown[] }[]>("session.tree", {})
-					.then(tree => {
-						const labels = new Map<string, string>();
-						const walk = (ns: { entry: { id: string; label?: string }; children?: unknown[] }[]): void => {
-							for (const n of ns ?? []) {
-								if (n.entry?.label) labels.set(n.entry.id, n.entry.label);
-								walk((n.children as { entry: { id: string; label?: string }; children?: unknown[] }[]) ?? []);
-							}
-						};
-						walk(tree ?? []);
-						setHashLabels(labels);
-					})
-					.catch(() => {});
-			}
-		} else {
-			setHashOpen(false);
-		}
-	};
-	const insertCompletion = (type: "slash" | "at" | "hash", value: string): void => {
-		const ta = taRef.current;
-		if (!ta) return;
-		const token = type === "slash" ? "/" : type === "at" ? "@" : "#";
-		// Replace the token the user actually typed (its absolute offset was
-		// recorded when the menu opened), falling back to the last
-		// trigger-position occurrence if that offset went stale. A line-leading
-		// anchor is wrong here: the token may sit anywhere in the line.
-		const anchor = type === "slash" ? slashAnchor : type === "at" ? atAnchor : hashAnchor;
-		const { line, lineStart } = currentLine(ta.value);
-		const fallback = lastTokenIndex(line, token);
-		const at = anchor ?? (fallback >= 0 ? lineStart + fallback : null);
-		const start = at ?? ta.value.length;
-		const query = ta.value.slice(start + 1);
-		const end = /^\S*$/.test(query) ? start + 1 + query.length : start + 1;
-		ta.setRangeText(`${token}${value} `, start, end, "end");
-		setText(ta.value);
-		if (type === "slash") setSlashOpen(false);
-		if (type === "at") setAtOpen(false);
-		if (type === "hash") setHashOpen(false);
-		requestAnimationFrame(() => autosize(taRef.current));
-	};
 
 	// Focus-mode size morph. CSS transitions don't play reliably here
 	// (flex display change + the pin/reflow dance), so the morph runs on
@@ -1153,55 +1044,6 @@ export function WelcomeComposer({
 		autosize(taRef.current);
 	}, []);
 
-	/** Attachment intake — the session composer's `addFiles`, mirrored for the
-	 *  session-less state: images become data-URL chips (front-resized,
-	 *  `images.autoResize`-governed), every other file becomes a file chip
-	 *  whose raw handle rides in state until the host writes it into the
-	 *  session this first prompt creates. */
-	const addFiles = async (files: File[]): Promise<void> => {
-		if (files.length === 0) return;
-		const imgs = files.filter(f => f.type.startsWith("image/"));
-		const others = files.filter(f => !f.type.startsWith("image/"));
-		// Front-resize large images (TUI parity, images.autoResize-governed).
-		const autoResize = imgs.length > 0 ? await readAutoResizeImages(rpc) : false;
-		const entries = await Promise.all([
-			...imgs.map(async (f): Promise<WelcomeAttachment> => {
-				const dataUrl = await readFileAsDataURL(f);
-				const resized = autoResize ? await resizeImageDataUrl(dataUrl, f.type) : null;
-				return {
-					id: attachId.current++,
-					kind: "image",
-					dataUrl: resized?.dataUrl ?? dataUrl,
-					mimeType: resized?.mimeType ?? f.type,
-					name: f.name,
-					size: f.size,
-				};
-			}),
-			...others.map(
-				(f): WelcomeAttachment => ({
-					id: attachId.current++,
-					kind: "file",
-					dataUrl: "",
-					mimeType: f.type || "application/octet-stream",
-					name: f.name,
-					size: f.size,
-					file: f,
-				}),
-			),
-		]);
-		setAttachments(prev => {
-			// Name-mention tokens resolve by name (first match) — dedupe the
-			// batch against the staged chips (session composer's addFiles
-			// parity: pasted screenshots all arrive as "image.png").
-			const taken = new Set(prev.map(p => p.name));
-			const named = entries.map(e => {
-				const name = uniqueAttachmentName(e.name, taken);
-				taken.add(name);
-				return name === e.name ? e : { ...e, name };
-			});
-			return [...prev, ...named];
-		});
-	};
 	// Annotation screenshots use the ordinary attachment pipeline; their text
 	// stays in display context until send.
 	const addFilesForAnnotationRef = useRef(addFiles);
@@ -1489,11 +1331,21 @@ export function WelcomeComposer({
 				 * accents, feather edge and click ripples; replaces the static
 				 * π watermark. Toggle lives in 设置 → 常规 (musepi-gui-dotmatrix). */}
 				{dotMatrixOn && <DotMatrixMark text={dotMatrixText || "MusePi"} className="gui-welcome-mark" />}
+				{/* conversation.hero.frame 座位槽：欢迎区装饰层（背景/装饰），
+				 * 不接管宿主内容、不拦指针；无贡献时零渲染。 */}
+				<div className="pointer-events-none absolute inset-0 z-0">
+					<SlotComponentHost rpc={rpc} slot={HERO_FRAME_SLOT} cwd={project ?? undefined} />
+				</div>
 				<div className="relative z-10 flex w-full max-w-[720px] flex-col items-center gui-welcome-inner">
 					{/* Workspace picker: dropdown list attached
 					 * right above the input — current project, open folder, remote. */}
 					<div className="gui-brand mb-2 flex items-center gap-2">
-						<span className="gui-brand-mark">π</span>
+						<SlotComponentHost
+							rpc={rpc}
+							slot={HERO_BRAND_MARK_SLOT}
+							cwd={project ?? undefined}
+							fallback={<span className="gui-brand-mark">π</span>}
+						/>
 						<BlurText text={t("settings.musepi")} className="text-[22px] font-bold" />
 					</div>
 					<p className="gui-welcome-greet pointer-events-none mb-4">
@@ -1559,144 +1411,162 @@ export function WelcomeComposer({
 					 * left-aligned. */}
 					{onProject && (
 						<div className="gui-project-row mb-2 flex w-full min-w-0 items-center gap-1.5 px-0.5">
-							<div className="relative z-20" ref={projAnchorRef}>
-								<button
-									type="button"
-									className="gui-project-chip"
-									onClick={() => setProjOpen(v => !v)}
-									aria-label={t("settings.currentProject")}
-								>
-									<Icon name="folder" className="h-3.5 w-3.5" />
-									<span className="max-w-[200px] truncate">
-										{project ? (savedLabels.get(project) ?? projectName(project)) : t("settings.notProject")}
-									</span>
-									<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-								</button>
-								{renderProjMenu(
-									<>
-										{project && (
-											<button
-												type="button"
-												className="gui-view-opt gui-view-opt--active"
-												onClick={() => setProjOpen(false)}
-											>
-												<Icon name="folder" className="h-3.5 w-3.5" />
-												<span className="min-w-0 flex-1 truncate">
-													{savedLabels.get(project) ?? projectName(project)}
-												</span>
-												<Icon name="check" className="h-3 w-3 flex-shrink-0" />
-											</button>
-										)}
-										{/* Saved workspaces (sidebar 项目 tab parity): every folder
-										 * the app knows, one tap to switch. Current project is
-										 * already listed above with the check — skip it here. */}
-										{savedProjects.filter(p => p !== project).length > 0 && (
+							<SlotComponentHost
+								rpc={rpc}
+								slot={HERO_WORKSPACE_SLOT}
+								cwd={project ?? undefined}
+								fallback={
+									<div className="relative z-20" ref={projAnchorRef}>
+										<button
+											type="button"
+											className="gui-project-chip"
+											onClick={() => setProjOpen(v => !v)}
+											aria-label={t("settings.currentProject")}
+										>
+											<Icon name="folder" className="h-3.5 w-3.5" />
+											<span className="max-w-[200px] truncate">
+												{project
+													? (savedLabels.get(project) ?? projectName(project))
+													: t("settings.notProject")}
+											</span>
+											<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+										</button>
+										{renderProjMenu(
 											<>
-												<div className="gui-proj-menu-label">{t("settings.savedWorkspaces")}</div>
-												{savedProjects
-													.filter(p => p !== project)
-													.map(p => (
-														<button
-															key={p}
-															type="button"
-															className="gui-view-opt"
-															title={p}
-															onClick={() => {
-																setProjOpen(false);
-																onProject?.(p);
-															}}
-														>
-															<Icon name="folder" className="h-3.5 w-3.5" />
-															<span className="min-w-0 flex-1 truncate">
-																{savedLabels.get(p) ?? projectName(p)}
-															</span>
-														</button>
-													))}
-												<div className="gui-proj-menu-sep" />
-											</>
-										)}
-										<button
-											type="button"
-											className="gui-view-opt"
-											onClick={() => {
-												setProjOpen(false);
-												onProject("add");
-											}}
-										>
-											<Icon name="folder-add" className="h-3.5 w-3.5" />
-											<span>{t("settings.addProject")}</span>
-										</button>
-										<button
-											type="button"
-											className="gui-view-opt"
-											onClick={() => {
-												setProjOpen(false);
-												onProject("remote");
-											}}
-										>
-											<Icon name="server" className="h-3.5 w-3.5" />
-											<span>{t("settings.remoteConnection")}</span>
-										</button>
-										{project && (
-											<button
-												type="button"
-												className="gui-view-opt"
-												onClick={() => {
-													setProjOpen(false);
-													onProject("none");
-												}}
-											>
-												<Icon name="folder" className="h-3.5 w-3.5" />
-												<span>{t("settings.notProject")}</span>
-											</button>
-										)}
-									</>,
-								)}
-							</div>
-							{/* 预设(mode)chip:与项目 chip 并排一行,
-							 * 新会话创建时应用。样式与项目选择同款(按钮 + 浮层菜单)。 */}
-							{modes && (
-								<div className="relative z-20 flex-shrink-0" ref={presetAnchorRef}>
-									<button
-										type="button"
-										className="gui-project-chip"
-										onClick={() => setPresetOpen(v => !v)}
-										aria-label={t("settings.modesTitle")}
-									>
-										<Icon name="stack" className="h-3.5 w-3.5" />
-										<span className="max-w-[160px] truncate">{resolveModeLabel(activeModeId, modes)}</span>
-										<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
-									</button>
-									{renderPresetMenu(
-										<>
-											{/* 无"默认(无预设)":modeId 恒非 null(默认 work),
-											 * 每次新建都带一个预设。 */}
-											{modes.map(m => {
-												const desc = resolveModeDescription(m.id);
-												return (
+												{project && (
 													<button
-														key={m.id}
 														type="button"
-														className={`gui-view-opt${activeModeId === m.id ? " gui-view-opt--active" : ""}${desc ? " gui-view-opt--desc" : ""}`}
+														className="gui-view-opt gui-view-opt--active"
+														onClick={() => setProjOpen(false)}
+													>
+														<Icon name="folder" className="h-3.5 w-3.5" />
+														<span className="min-w-0 flex-1 truncate">
+															{savedLabels.get(project) ?? projectName(project)}
+														</span>
+														<Icon name="check" className="h-3 w-3 flex-shrink-0" />
+													</button>
+												)}
+												{/* Saved workspaces (sidebar 项目 tab parity): every folder
+												 * the app knows, one tap to switch. Current project is
+												 * already listed above with the check — skip it here. */}
+												{savedProjects.filter(p => p !== project).length > 0 && (
+													<>
+														<div className="gui-proj-menu-label">{t("settings.savedWorkspaces")}</div>
+														{savedProjects
+															.filter(p => p !== project)
+															.map(p => (
+																<button
+																	key={p}
+																	type="button"
+																	className="gui-view-opt"
+																	title={p}
+																	onClick={() => {
+																		setProjOpen(false);
+																		onProject?.(p);
+																	}}
+																>
+																	<Icon name="folder" className="h-3.5 w-3.5" />
+																	<span className="min-w-0 flex-1 truncate">
+																		{savedLabels.get(p) ?? projectName(p)}
+																	</span>
+																</button>
+															))}
+														<div className="gui-proj-menu-sep" />
+													</>
+												)}
+												<button
+													type="button"
+													className="gui-view-opt"
+													onClick={() => {
+														setProjOpen(false);
+														onProject("add");
+													}}
+												>
+													<Icon name="folder-add" className="h-3.5 w-3.5" />
+													<span>{t("settings.addProject")}</span>
+												</button>
+												<button
+													type="button"
+													className="gui-view-opt"
+													onClick={() => {
+														setProjOpen(false);
+														onProject("remote");
+													}}
+												>
+													<Icon name="server" className="h-3.5 w-3.5" />
+													<span>{t("settings.remoteConnection")}</span>
+												</button>
+												{project && (
+													<button
+														type="button"
+														className="gui-view-opt"
 														onClick={() => {
-															onModeChange?.(m.id);
-															setPresetOpen(false);
+															setProjOpen(false);
+															onProject("none");
 														}}
 													>
-														<span className="min-w-0 flex-1 truncate">
-															{resolveModeLabel(m.id, modes)}
-														</span>
-														{activeModeId === m.id && (
-															<Icon name="check" className="h-3 w-3 flex-shrink-0" />
-														)}
-														{desc && <span className="gui-view-opt-desc">{desc}</span>}
+														<Icon name="folder" className="h-3.5 w-3.5" />
+														<span>{t("settings.notProject")}</span>
 													</button>
-												);
-											})}
-										</>,
-									)}
-								</div>
-							)}
+												)}
+											</>,
+										)}
+									</div>
+								}
+							/>
+							{/* 预设(mode)chip:与项目 chip 并排一行,
+							 * 新会话创建时应用。样式与项目选择同款(按钮 + 浮层菜单)。 */}
+							<SlotComponentHost
+								rpc={rpc}
+								slot={HERO_AGENT_PRESET_SLOT}
+								cwd={project ?? undefined}
+								fallback={
+									modes ? (
+										<div className="relative z-20 flex-shrink-0" ref={presetAnchorRef}>
+											<button
+												type="button"
+												className="gui-project-chip"
+												onClick={() => setPresetOpen(v => !v)}
+												aria-label={t("settings.modesTitle")}
+											>
+												<Icon name="stack" className="h-3.5 w-3.5" />
+												<span className="max-w-[160px] truncate">
+													{resolveModeLabel(activeModeId, modes)}
+												</span>
+												<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
+											</button>
+											{renderPresetMenu(
+												<>
+													{/* 无"默认(无预设)":modeId 恒非 null(默认 work),
+													 * 每次新建都带一个预设。 */}
+													{modes.map(m => {
+														const desc = resolveModeDescription(m.id);
+														return (
+															<button
+																key={m.id}
+																type="button"
+																className={`gui-view-opt${activeModeId === m.id ? " gui-view-opt--active" : ""}${desc ? " gui-view-opt--desc" : ""}`}
+																onClick={() => {
+																	onModeChange?.(m.id);
+																	setPresetOpen(false);
+																}}
+															>
+																<span className="min-w-0 flex-1 truncate">
+																	{resolveModeLabel(m.id, modes)}
+																</span>
+																{activeModeId === m.id && (
+																	<Icon name="check" className="h-3 w-3 flex-shrink-0" />
+																)}
+																{desc && <span className="gui-view-opt-desc">{desc}</span>}
+															</button>
+														);
+													})}
+												</>,
+											)}
+										</div>
+									) : null
+								}
+							/>
 							{branchInfo && (
 								<div className="relative z-20" ref={branchAnchorRef}>
 									<button
@@ -1781,36 +1651,40 @@ export function WelcomeComposer({
 							}
 							attachments={attachments}
 							aboveRow={
-								connectorServers.length > 0 ? (
-									<div className="gui-composer-above">
-										<div className="gui-composer-dock">
-											<ConnectorChip
-												open={connectorsOpen}
-												onToggle={() => setConnectorsOpen(v => !v)}
-												anchorRef={connectorsAnchorRef}
-												serverCount={connectorServers.length}
-												chosenCount={connectorChosen}
-												menu={renderConnectorsMenu(
-													<ConnectorPanel
-														snapshot={connectorSnapshot}
-														loadFailed={connectorsLoadFailed}
-														onToggleServer={name =>
-															connectorSnapshot &&
-															setConnectorSelection(nextSelection(connectorSnapshot, name))
-														}
-														onToggleServers={names =>
-															setConnectorSelection(
-																names.length === connectorSnapshot?.servers.length ? null : names,
-															)
-														}
-														onSelectAll={() => setConnectorSelection([])}
-														onUseAll={() => setConnectorSelection(null)}
-													/>,
-												)}
-											/>
+								<>
+									{/* conversation.input.dock 座位槽：输入卡上方整行（队列/待办）。 */}
+									<SlotComponentHost rpc={rpc} slot={COMPOSER_INPUT_DOCK_SLOT} cwd={project ?? undefined} />
+									{connectorServers.length > 0 ? (
+										<div className="gui-composer-above">
+											<div className="gui-composer-dock">
+												<ConnectorChip
+													open={connectorsOpen}
+													onToggle={() => setConnectorsOpen(v => !v)}
+													anchorRef={connectorsAnchorRef}
+													serverCount={connectorServers.length}
+													chosenCount={connectorChosen}
+													menu={renderConnectorsMenu(
+														<ConnectorPanel
+															snapshot={connectorSnapshot}
+															loadFailed={connectorsLoadFailed}
+															onToggleServer={name =>
+																connectorSnapshot &&
+																setConnectorSelection(nextSelection(connectorSnapshot, name))
+															}
+															onToggleServers={names =>
+																setConnectorSelection(
+																	names.length === connectorSnapshot?.servers.length ? null : names,
+																)
+															}
+															onSelectAll={() => setConnectorSelection([])}
+															onUseAll={() => setConnectorSelection(null)}
+														/>,
+													)}
+												/>
+											</div>
 										</div>
-									</div>
-								) : null
+									) : null}
+								</>
 							}
 							onRemoveAttachment={id => {
 								const next = attachments.filter(p => p.id !== id);
@@ -2059,7 +1933,7 @@ export function WelcomeComposer({
 															key={c.name}
 															item={c}
 															active={i === slashIdx}
-															onClick={() => insertCompletion("slash", c.name)}
+															onClick={() => insertSlash(c.name)}
 														/>
 													))}
 												</div>
@@ -2073,7 +1947,7 @@ export function WelcomeComposer({
 													key={e.insertPath ?? e.path}
 													type="button"
 													className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
-													onClick={() => insertCompletion("at", e.insertPath ?? e.path)}
+													onClick={() => insertAt(e.insertPath ?? e.path)}
 												>
 													<span className="min-w-0 flex-1 truncate">
 														{e.isDir ? "📁 " : "📄 "}
@@ -2089,11 +1963,9 @@ export function WelcomeComposer({
 													key={s.id}
 													type="button"
 													className={`gui-model-opt${i === hashIdx ? " gui-model-opt--active" : ""}`}
-													onClick={() => insertCompletion("hash", s.id)}
+													onClick={() => insertHash(s.id)}
 												>
-													<span className="min-w-0 flex-1 truncate">
-														#{hashLabels.get(s.id) ?? s.cwd ?? s.id}
-													</span>
+													<span className="min-w-0 flex-1 truncate">#{hashLabel(s)}</span>
 												</button>
 											))}
 									</div>,
@@ -2193,7 +2065,9 @@ export function WelcomeComposer({
 												clearAllRef.current = false;
 												if (e.target.value === "") setAttachments([]);
 											}
-											onCompletionInput(e.target.value);
+											onSlashInput(e.target.value);
+											onAtInput(e.target.value);
+											onHashInput(e.target.value);
 											// Initial height equals the content height, so
 											// first lines never resize the card.
 											autosize(taRef.current);
@@ -2234,24 +2108,23 @@ export function WelcomeComposer({
 													list: slashFilter,
 													idx: slashIdx,
 													setIdx: setSlashIdx,
-													insert: () =>
-														slashFilter[slashIdx] &&
-														insertCompletion("slash", slashFilter[slashIdx]!.name),
+													insert: () => slashFilter[slashIdx] && insertSlash(slashFilter[slashIdx]!.name),
 												},
 												{
 													open: atOpen,
 													list: atFilter,
 													idx: atIdx,
 													setIdx: setAtIdx,
-													insert: () => atFilter[atIdx] && insertCompletion("at", atFilter[atIdx]!.path),
+													insert: () =>
+														atFilter[atIdx] &&
+														insertAt(atFilter[atIdx]!.insertPath ?? atFilter[atIdx]!.path),
 												},
 												{
 													open: hashOpen,
 													list: hashFilter,
 													idx: hashIdx,
 													setIdx: setHashIdx,
-													insert: () =>
-														hashFilter[hashIdx] && insertCompletion("hash", hashFilter[hashIdx]!.id),
+													insert: () => hashFilter[hashIdx] && insertHash(hashFilter[hashIdx]!.id),
 												},
 											];
 											for (const m of menus) {
@@ -2384,6 +2257,8 @@ export function WelcomeComposer({
 									</button>
 								);
 							})}
+							{/* conversation.hero.options 座位槽：快捷选项行追加的 list 席位。 */}
+							<SlotComponentHost rpc={rpc} slot={HERO_OPTIONS_SLOT} cwd={project ?? undefined} />
 							{showMore && (
 								<button
 									type="button"

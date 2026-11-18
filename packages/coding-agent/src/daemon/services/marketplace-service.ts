@@ -69,6 +69,12 @@ export interface SkillListItem {
 	filePath: string;
 	source: string;
 	hide: boolean;
+	/** Frontmatter `version` when the skill declares one. Built-in skills carry
+	 *  the shipped package's version; absent means unpinned. */
+	version?: string;
+	/** Install provenance for market/git-installed skills; absent for skills
+	 *  the user authored or that shipped with the client. */
+	market?: import("../../skills/skill-source").SkillSourceRecord;
 	/** Virtual skills declared by extensions (registerSkill) carry their
 	 *  markdown body here instead of a file (filePath === ""). */
 	content?: string;
@@ -274,14 +280,21 @@ export class MarketplaceService implements DaemonService {
 		if (!this.#skillsCache || Date.now() - this.#skillsCache.at > 10_000) {
 			const { discoverSkills } = await import("../../sdk");
 			const { skills, warnings } = await discoverSkills(this.#deps.cwd());
-			const scanned = skills.map(s => ({
-				name: s.name,
-				description: s.description,
-				filePath: s.filePath,
-				source: s.source,
-				hide: s.hide === true,
-				_source: s._source,
-			}));
+			const { readSkillSource } = await import("../../skills/skill-source");
+			const scanned = await Promise.all(
+				skills.map(async s => ({
+					name: s.name,
+					description: s.description,
+					filePath: s.filePath,
+					source: s.source,
+					hide: s.hide === true,
+					...(s.version ? { version: s.version } : {}),
+					...(s._source?.level === "user" && s.baseDir
+						? { market: (await readSkillSource(s.baseDir)) ?? undefined }
+						: {}),
+					_source: s._source,
+				})),
+			);
 			// 扩展声明的虚拟技能(registerSkill):与文件扫描技能合并展示。
 			// 无 backing 文件(filePath=""),
 			// content 随行携带供 skills.read 直接返回;扩展卸载/禁用后
@@ -767,6 +780,7 @@ export class MarketplaceService implements DaemonService {
 				repo: p.repo,
 				name: p.name,
 				overwrite: p.overwrite,
+				version: p.version,
 			},
 			destRoot,
 		);
@@ -791,6 +805,15 @@ export class MarketplaceService implements DaemonService {
 		const p = (params ?? {}) as { installId?: string; approve?: boolean };
 		if (!p.installId) throw new Error("skills.marketplace.approve: installId required");
 		return this.#installs.approve(p.installId, p.approve === true);
+	}
+
+	/** RPC skills.marketplace.updates：已安装技能的来源与最新版本比对。
+	 *  SkillHub 比 `latestVersion`，skills.sh / git 比 HEAD commit；没有来源
+	 *  记录的用户技能不在结果里。 */
+	async checkSkillUpdates() {
+		const skills = await this.getSkills();
+		const { checkSkillUpdates } = await import("../../skills/market-updates");
+		return await checkSkillUpdates(skills.map(skill => ({ name: skill.name, market: skill.market })));
 	}
 
 	/** RPC skills.marketplace.preview：点击卡片先预览——skills.sh 从发布者

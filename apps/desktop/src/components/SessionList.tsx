@@ -219,7 +219,7 @@ function writeCollapsedIds(ids: ReadonlySet<string>): void {
 	}
 }
 
-/** 收起/展开单行高度补间：与全局伸缩规范（use-collapse.ts / WelcomeComposer
+/** 收起/展开单行高度补间：与全局伸缩规范（use-collapse.ts / HeroComposer
  *  建议区）同一阶梯 —— 240ms、cubic-bezier(0.22,1,0.36,1)。子树多行同时补间，
  *  视觉上整棵子树同步收缩。 */
 const SUBTREE_ANIM_MS = 240;

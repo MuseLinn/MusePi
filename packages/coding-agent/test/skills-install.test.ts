@@ -7,9 +7,11 @@ import {
 	installSkillFromGit,
 	normalizeSkillSource,
 	parseSkillName,
+	redactSourceUrl,
 	resolveSkillDir,
 	skillTargetName,
 } from "../src/skills/install";
+import { readSkillSource } from "../src/skills/skill-source";
 
 let repoDir: string;
 let destRoot: string;
@@ -36,6 +38,13 @@ describe("normalizeSkillSource", () => {
 	test("expands GitHub slugs, keeps URLs", () => {
 		expect(normalizeSkillSource("owner/repo")).toBe("https://github.com/owner/repo.git");
 		expect(normalizeSkillSource("https://github.com/owner/repo.git")).toBe("https://github.com/owner/repo.git");
+	});
+});
+
+describe("redactSourceUrl", () => {
+	test("removes HTTP credentials and leaves local paths untouched", () => {
+		expect(redactSourceUrl("https://user:token@example.com/repo.git")).toBe("https://example.com/repo.git");
+		expect(redactSourceUrl(repoDir)).toBe(repoDir);
 	});
 });
 
@@ -67,6 +76,10 @@ describe("installSkillFromGit (local path clone, offline)", () => {
 		const result = await installSkillFromGit({ url: repoDir, subdir: "my-skill", destRoot, allowLocalPath: true });
 		expect(result.name).toBe("my-skill");
 		expect(existsSync(join(result.dir, "SKILL.md"))).toBe(true);
+		// Provenance sidecar: `skills.marketplace.updates` compares this commit.
+		const source = await readSkillSource(result.dir);
+		expect(source).toMatchObject({ source: "git", url: repoDir, subdir: "my-skill" });
+		expect(source?.commit).toMatch(/^[0-9a-f]{40}$/);
 	});
 
 	test("refuses overwrite without the flag, replaces with it", async () => {

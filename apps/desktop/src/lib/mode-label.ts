@@ -8,7 +8,7 @@ export interface ModeLabelEntry {
 
 /**
  * 会话预设取名链 — ContextPanel 右栏头部、SessionHoverCard 悬浮卡与
- * WelcomeComposer 预设 chip/菜单三处共用，永远显示同一个名字：
+ * HeroComposer 预设 chip/菜单三处共用，永远显示同一个名字：
  *
  * 1. 内置预设（work/chat/creator/design）走 i18n `mode {id}` 词表（daemon
  *    端已本地化）；
@@ -18,7 +18,7 @@ export interface ModeLabelEntry {
  *    绝不把裸 id 打给用户。
  *
  * 空 id 不走兜底而直接视作 "work"：历史会话 daemon modeId 为 null，而
- * 守护进程默认预设就是 work（与 WelcomeComposer 的 `modeId ?? "work"`
+ * 守护进程默认预设就是 work（与 HeroComposer 的 `modeId ?? "work"`
  * 同一约定）——这些会话必须显示 "工作模式"，不是 "默认模式"。
  */
 export function resolveModeLabel(

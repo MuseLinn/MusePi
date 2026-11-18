@@ -9,7 +9,7 @@ import { creation as creationZh } from "@musepi/client-core/src/i18n/zh-CN/creat
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import type { CreationMessage } from "../src/components/CreationModeRow";
-import { WelcomeComposer } from "../src/components/WelcomeComposer";
+import { HeroComposer } from "../src/components/HeroComposer";
 import { applyChip, buildProjectMetadata, type CREATION_CHIPS, DEFAULT_CREATION_DRAFT } from "../src/lib/creation";
 import type { RpcClient } from "../src/lib/rpc";
 
@@ -68,7 +68,7 @@ async function renderWelcome(rpc: RpcClient): Promise<ReturnType<typeof createRo
 	const root = createRoot(host);
 	await act(async () => {
 		root.render(
-			createElement(WelcomeComposer, {
+			createElement(HeroComposer, {
 				rpc,
 				project: "C:\\proj",
 				modes: [

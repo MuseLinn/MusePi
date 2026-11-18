@@ -118,21 +118,18 @@
 			"types": "./src/index.ts",
 			"import": "./src/index.ts"
 		},
-		"./modes/orchestrate": {
-			"types": "./src/modes/orchestrate.ts",
-			"import": "./src/modes/orchestrate.ts"
-		},
-		"./modes/ultrathink": {
-			"types": "./src/modes/ultrathink.ts",
-			"import": "./src/modes/ultrathink.ts"
-		},
-		"./modes/workflow": {
-			"types": "./src/modes/workflow.ts",
-			"import": "./src/modes/workflow.ts"
-		},
 		"./*": {
 			"types": "./src/*.ts",
 			"import": "./src/*.ts"
+		},
+		"./*.js": "./src/*.ts",
+		"./assembly": {
+			"types": "./src/assembly/index.ts",
+			"import": "./src/assembly/index.ts"
+		},
+		"./assembly/*": {
+			"types": "./src/assembly/*.ts",
+			"import": "./src/assembly/*.ts"
 		},
 		"./async": {
 			"types": "./src/async/index.ts",
@@ -166,6 +163,10 @@
 			"types": "./src/cli/*.ts",
 			"import": "./src/cli/*.ts"
 		},
+		"./cli/commands/*": {
+			"types": "./src/cli/commands/*.ts",
+			"import": "./src/cli/commands/*.ts"
+		},
 		"./cli/gallery-fixtures": {
 			"types": "./src/cli/gallery-fixtures/index.ts",
 			"import": "./src/cli/gallery-fixtures/index.ts"
@@ -173,10 +174,6 @@
 		"./cli/gallery-fixtures/*": {
 			"types": "./src/cli/gallery-fixtures/*.ts",
 			"import": "./src/cli/gallery-fixtures/*.ts"
-		},
-		"./cli/commands/*": {
-			"types": "./src/cli/commands/*.ts",
-			"import": "./src/cli/commands/*.ts"
 		},
 		"./commands/*": {
 			"types": "./src/commands/*.ts",
@@ -242,6 +239,18 @@
 			"types": "./src/config/*.ts",
 			"import": "./src/config/*.ts"
 		},
+		"./connectors/bundled-catalog": {
+			"types": "./src/connectors/bundled-catalog.ts",
+			"import": "./src/connectors/bundled-catalog.ts"
+		},
+		"./daemon/terminal-provider": {
+			"types": "./src/daemon/terminal-provider.ts",
+			"import": "./src/daemon/terminal-provider.ts"
+		},
+		"./daemon/terminal-registry": {
+			"types": "./src/daemon/terminal-registry.ts",
+			"import": "./src/daemon/terminal-registry.ts"
+		},
 		"./dap": {
 			"types": "./src/dap/index.ts",
 			"import": "./src/dap/index.ts"
@@ -277,6 +286,18 @@
 		"./edit/modes/*": {
 			"types": "./src/edit/modes/*.ts",
 			"import": "./src/edit/modes/*.ts"
+		},
+		"./eval": {
+			"types": "./src/eval/index.ts",
+			"import": "./src/eval/index.ts"
+		},
+		"./eval/js/*": {
+			"types": "./src/eval/js/*.ts",
+			"import": "./src/eval/js/*.ts"
+		},
+		"./eval/py/*": {
+			"types": "./src/eval/py/*.ts",
+			"import": "./src/eval/py/*.ts"
 		},
 		"./exa": {
 			"types": "./src/exa/index.ts",
@@ -334,6 +355,14 @@
 			"types": "./src/extensibility/extensions/index.ts",
 			"import": "./src/extensibility/extensions/index.ts"
 		},
+		"./extensibility/extensions-center": {
+			"types": "./src/extensibility/extensions-center/index.ts",
+			"import": "./src/extensibility/extensions-center/index.ts"
+		},
+		"./extensibility/extensions-center/*": {
+			"types": "./src/extensibility/extensions-center/*.ts",
+			"import": "./src/extensibility/extensions-center/*.ts"
+		},
 		"./extensibility/extensions/*": {
 			"types": "./src/extensibility/extensions/*.ts",
 			"import": "./src/extensibility/extensions/*.ts"
@@ -362,6 +391,14 @@
 			"types": "./src/extensibility/plugins/marketplace/*.ts",
 			"import": "./src/extensibility/plugins/marketplace/*.ts"
 		},
+		"./hindsight": {
+			"types": "./src/hindsight/index.ts",
+			"import": "./src/hindsight/index.ts"
+		},
+		"./hindsight/*": {
+			"types": "./src/hindsight/*.ts",
+			"import": "./src/hindsight/*.ts"
+		},
 		"./internal-urls": {
 			"types": "./src/internal-urls/index.ts",
 			"import": "./src/internal-urls/index.ts"
@@ -369,18 +406,6 @@
 		"./internal-urls/*": {
 			"types": "./src/internal-urls/*.ts",
 			"import": "./src/internal-urls/*.ts"
-		},
-		"./eval": {
-			"types": "./src/eval/index.ts",
-			"import": "./src/eval/index.ts"
-		},
-		"./eval/js/*": {
-			"types": "./src/eval/js/*.ts",
-			"import": "./src/eval/js/*.ts"
-		},
-		"./eval/py/*": {
-			"types": "./src/eval/py/*.ts",
-			"import": "./src/eval/py/*.ts"
 		},
 		"./lsp": {
 			"types": "./src/lsp/index.ts",
@@ -422,10 +447,6 @@
 			"types": "./src/mcp/transports/*.ts",
 			"import": "./src/mcp/transports/*.ts"
 		},
-		"./presets/*": {
-			"types": "./src/presets/*.ts",
-			"import": "./src/presets/*.ts"
-		},
 		"./memories": {
 			"types": "./src/memories/index.ts",
 			"import": "./src/memories/index.ts"
@@ -441,14 +462,6 @@
 		"./memory-backend/*": {
 			"types": "./src/memory-backend/*.ts",
 			"import": "./src/memory-backend/*.ts"
-		},
-		"./hindsight": {
-			"types": "./src/hindsight/index.ts",
-			"import": "./src/hindsight/index.ts"
-		},
-		"./hindsight/*": {
-			"types": "./src/hindsight/*.ts",
-			"import": "./src/hindsight/*.ts"
 		},
 		"./modes": {
 			"types": "./src/modes/index.ts",
@@ -470,14 +483,6 @@
 			"types": "./src/modes/components/*.ts",
 			"import": "./src/modes/components/*.ts"
 		},
-		"./extensibility/extensions-center": {
-			"types": "./src/extensibility/extensions-center/index.ts",
-			"import": "./src/extensibility/extensions-center/index.ts"
-		},
-		"./extensibility/extensions-center/*": {
-			"types": "./src/extensibility/extensions-center/*.ts",
-			"import": "./src/extensibility/extensions-center/*.ts"
-		},
 		"./modes/components/status-line": {
 			"types": "./src/modes/components/status-line/index.ts",
 			"import": "./src/modes/components/status-line/index.ts"
@@ -490,6 +495,14 @@
 			"types": "./src/modes/controllers/*.ts",
 			"import": "./src/modes/controllers/*.ts"
 		},
+		"./modes/orchestrate": {
+			"types": "./src/modes/orchestrate.ts",
+			"import": "./src/modes/orchestrate.ts"
+		},
+		"./modes/rpc/*": {
+			"types": "./src/modes/rpc/*.ts",
+			"import": "./src/modes/rpc/*.ts"
+		},
 		"./modes/setup-wizard": {
 			"types": "./src/modes/setup-wizard/index.ts",
 			"import": "./src/modes/setup-wizard/index.ts"
@@ -497,10 +510,6 @@
 		"./modes/setup-wizard/*": {
 			"types": "./src/modes/setup-wizard/*.ts",
 			"import": "./src/modes/setup-wizard/*.ts"
-		},
-		"./modes/rpc/*": {
-			"types": "./src/modes/rpc/*.ts",
-			"import": "./src/modes/rpc/*.ts"
 		},
 		"./modes/theme/*": {
 			"types": "./src/modes/theme/*.ts",
@@ -510,9 +519,17 @@
 			"types": "./src/modes/theme/defaults/index.ts",
 			"import": "./src/modes/theme/defaults/index.ts"
 		},
+		"./modes/ultrathink": {
+			"types": "./src/modes/ultrathink.ts",
+			"import": "./src/modes/ultrathink.ts"
+		},
 		"./modes/utils/*": {
 			"types": "./src/modes/utils/*.ts",
 			"import": "./src/modes/utils/*.ts"
+		},
+		"./modes/workflow": {
+			"types": "./src/modes/workflow.ts",
+			"import": "./src/modes/workflow.ts"
 		},
 		"./plan-mode/*": {
 			"types": "./src/plan-mode/*.ts",
@@ -526,6 +543,11 @@
 			"types": "./src/plugin-credentials/*.ts",
 			"import": "./src/plugin-credentials/*.ts"
 		},
+		"./presets/*": {
+			"types": "./src/presets/*.ts",
+			"import": "./src/presets/*.ts"
+		},
+		"./prompts/*": "./src/prompts/*.md",
 		"./prompts/composer": {
 			"types": "./src/prompts/composer.ts",
 			"import": "./src/prompts/composer.ts"
@@ -558,7 +580,6 @@
 			"types": "./src/prompts/types.ts",
 			"import": "./src/prompts/types.ts"
 		},
-		"./prompts/*": "./src/prompts/*.md",
 		"./secrets": {
 			"types": "./src/secrets/index.ts",
 			"import": "./src/secrets/index.ts"
@@ -599,6 +620,10 @@
 			"types": "./src/tools/index.ts",
 			"import": "./src/tools/index.ts"
 		},
+		"./tools/*": {
+			"types": "./src/tools/*.ts",
+			"import": "./src/tools/*.ts"
+		},
 		"./tools/hub": {
 			"types": "./src/tools/hub/index.ts",
 			"import": "./src/tools/hub/index.ts"
@@ -606,10 +631,6 @@
 		"./tools/hub/*": {
 			"types": "./src/tools/hub/*.ts",
 			"import": "./src/tools/hub/*.ts"
-		},
-		"./tools/*": {
-			"types": "./src/tools/*.ts",
-			"import": "./src/tools/*.ts"
 		},
 		"./tui": {
 			"types": "./src/tui/index.ts",
@@ -646,23 +667,6 @@
 		"./web/search/providers/*": {
 			"types": "./src/web/search/providers/*.ts",
 			"import": "./src/web/search/providers/*.ts"
-		},
-		"./*.js": "./src/*.ts",
-		"./assembly": {
-			"types": "./src/assembly/index.ts",
-			"import": "./src/assembly/index.ts"
-		},
-		"./assembly/*": {
-			"types": "./src/assembly/*.ts",
-			"import": "./src/assembly/*.ts"
-		},
-		"./daemon/terminal-provider": {
-			"types": "./src/daemon/terminal-provider.ts",
-			"import": "./src/daemon/terminal-provider.ts"
-		},
-		"./daemon/terminal-registry": {
-			"types": "./src/daemon/terminal-registry.ts",
-			"import": "./src/daemon/terminal-registry.ts"
 		}
 	},
 	"piConfig": {

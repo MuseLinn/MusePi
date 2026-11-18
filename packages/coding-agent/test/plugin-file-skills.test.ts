@@ -14,7 +14,6 @@ const DISABLE_THIRD_PARTY_SKILLS = {
 
 const PRODUCT_SKILLS = [
 	"board-design",
-	"musepi-contributing",
 	"musepi-extension-dev",
 	"musepi-help",
 	"ui-ux-pro-max",

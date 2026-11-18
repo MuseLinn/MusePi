@@ -11,6 +11,20 @@ export interface StageDaemonOptions {
 	readonly outputDir: string;
 }
 
+/** Maintainer-only files that stay in the source package and never ship. */
+const DEV_ONLY_PLUGIN_FILES: Record<string, readonly string[]> = {
+	"product-skills": ["skills/ui-ux-pro-max/scripts/validate_data.py"],
+};
+
+/** Artifacts that must never reach a staged plugin tree. */
+const FORBIDDEN_STAGED_ARTIFACTS: readonly RegExp[] = [
+	/(^|[/])node_modules[/]/i,
+	/\.(?:test|spec)\.[cm]?[jt]sx?$/i,
+	/\.map$/i,
+	/\.tsbuildinfo$/i,
+	/\.d\.ts$/i,
+];
+
 interface PluginManifest {
 	readonly musepi?: { extensions?: unknown; components?: unknown };
 	readonly [key: string]: unknown;
@@ -120,6 +134,9 @@ async function stagePlugin(sourceDir: string, destinationDir: string): Promise<v
 	if (localeStat?.isDirectory()) {
 		await fs.cp(localeSource, path.join(destinationDir, "locale"), { recursive: true });
 	}
+	for (const relative of DEV_ONLY_PLUGIN_FILES[name] ?? []) {
+		await fs.rm(path.join(destinationDir, relative), { force: true });
+	}
 	const entries = declaredEntries(manifest, name);
 	const declaredComponents = parsePluginComponents(manifest.musepi?.components).components;
 	const entryFiles = new Set([
@@ -194,6 +211,42 @@ export async function stageDaemon(options: StageDaemonOptions): Promise<void> {
 	const bridgeDestination = path.join(options.outputDir, "bundled-plugins", "terminal", "pty-bridge.cjs");
 	await fs.mkdir(path.dirname(bridgeDestination), { recursive: true });
 	await fs.copyFile(path.join(codingAgentRoot, "src", "daemon", "pty-bridge.cjs"), bridgeDestination);
+	await assertStagedPluginLayout(options.outputDir);
+}
+
+/**
+ * Release gate: a staged plugin tree is runtime content, not a source checkout.
+ * Test files, source maps, declaration files and nested `node_modules` here mean
+ * the staging pass copied something it should have bundled or dropped, and the
+ * release would ship maintainer files to every user. Fail the build instead.
+ */
+export async function assertStagedPluginLayout(root: string): Promise<void> {
+	const violations: string[] = [];
+	const walk = async (dir: string): Promise<void> => {
+		for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+			const full = path.join(dir, entry.name);
+			const relative = path.relative(root, full).replaceAll("\\", "/");
+			if (entry.isDirectory()) {
+				if (entry.name === "node_modules") {
+					violations.push(`${relative}/`);
+					continue;
+				}
+				await walk(full);
+				continue;
+			}
+			if (FORBIDDEN_STAGED_ARTIFACTS.some(pattern => pattern.test(relative))) {
+				violations.push(relative);
+			}
+		}
+	};
+	for (const tree of ["bundled-plugins", "desktop-plugins"]) {
+		const dir = path.join(root, tree);
+		const stat = await fs.stat(dir).catch(() => null);
+		if (stat?.isDirectory()) await walk(dir);
+	}
+	if (violations.length > 0) {
+		throw new Error(`Staged plugin layout contains development artifacts: ${violations.sort().join(", ")}`);
+	}
 }
 
 async function main(): Promise<void> {

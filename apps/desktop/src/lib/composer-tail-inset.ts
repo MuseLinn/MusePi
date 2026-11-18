@@ -14,7 +14,7 @@
  *
  * One subtlety: the resting height is the MINIMUM ever measured, and the
  * measurement starts when the composer mounts — but structural rows (the
- * connector chip, plugin rows on the composer.dock seat) mount ASYNCHRONOUSLY
+ * connector chip, plugin rows on the conversation.composer.dock seat) mount ASYNCHRONOUSLY
  * after their RPC / registry import. Latching the minimum from those first
  * seconds freezes the reservation below the composer's real resting height,
  * and the transcript's last row hides under those rows for the whole session.
@@ -49,7 +49,7 @@ export const FLOATING_COMPOSER_DEFAULT_TAIL_INSET_PX = FLOATING_COMPOSER_DEFAULT
 /**
  * How long the minimum-latch stays open, measured from the column's first
  * real (height > 0) measurement. Structural rows that mount asynchronously
- * (connector chip, composer.dock plugin rows) land inside this window; the
+ * (connector chip, conversation.composer.dock plugin rows) land inside this window; the
  * reservation follows the current height until it closes, then the minimum
  * ever measured becomes the resting height as before.
  */

@@ -21,8 +21,10 @@
 | 看板插件（依赖 `genui`：卡片类型表 + 持久化画布） | `packages/coding-agent/src/bundled-plugins/board/index.ts`（`board` 工具 / `catalog.ts` / 看板存储） | 同文件头部 |
 | Cordis preset 组合运行时 | `packages/coding-agent/src/extensibility/plugins/preset-runtime.ts`（`CordisPresetRuntime`） | 同文件头部 |
 | 预设自带 MCP 服务器 / 文件技能 | `packages/coding-agent/src/bundled-plugins/mcp-client/index.ts`（一行一服务器，`session_start` 内 `registerMcpServer`）、`packages/coding-agent/src/bundled-plugins/skill-filesystem/index.ts`（`roots` 快照 → `registerSkill`） | 各包入口头部；均为 `presetOnly`，随 preset generation 装载与回收 |
-| Cordis 会话页 | `apps/desktop/src/plugins/chat-view/index.ts`（`app.chat`） | 同文件头部 |
-| Cordis 能力中心 | `apps/desktop/src/plugins/capability-center/index.ts`（`app.capability`） | 同文件头部 |
+| Cordis 会话页 | `apps/desktop/src/plugins/chat-view/index.ts`（`main.conversation`） | 同文件头部 |
+| Cordis 输入卡 | `apps/desktop/src/plugins/chat-view/index.ts`（`conversation.composer.bar`，与 `main.conversation` 同插件） | 同文件头部 |
+| Cordis 空态席位 | `apps/desktop/src/components/HeroComposer.tsx`（`conversation.hero.brand.mark/workspace/agentPreset/options`，宿主内建回退） | 席位声明在 `packages/collab-proto/src/extension-slots.ts`；插件占住 single 席位即替换对应控件 |
+| Cordis 能力中心 | `apps/desktop/src/plugins/capability-center/index.ts`（`main.capability`） | 同文件头部 |
 | Cordis 右栏壳 | `apps/desktop/src/plugins/panel/index.ts`（`panel.shell`） | 同文件头部；最大化由 `lib/panel-maximize.ts` 宿主控制器提交 |
 | Cordis 内置浏览器 UI | `apps/desktop/src/plugins/browser-ui/index.ts`（`panel.tab.browser` / `browser.host`） | 同文件头部；页面与常驻 guest 宿主分离，store 经 `MusePiManagedBrowserHost` 共享 |
 | Cordis 文件工作区 | `apps/desktop/src/plugins/file-workspace/index.ts`（`panel.tab.files`） | 同文件头部 |
@@ -31,7 +33,7 @@
 | Cordis 会话信息分区 | `apps/desktop/src/plugins/session-info-plugins/index.ts`（`chat.session-info.plugins`） | 同文件头部；卡片只透传只读读数，插件停用/编译失败时回退内置列表 |
 | Cordis 会话信息任意分区 | `apps/desktop/src/components/session-info-card.tsx`（`chat.session-info.<id>` 前缀自动挂载） | 同文件头部；按前缀渲染所有贡献，`chat.session-info.plugins` 保留内置回退，插件新增分区无需宿主改动 |
 | Cordis 会话信息子代理分区 | `apps/desktop/src/plugins/session-info-agents/index.ts`（`chat.session-info.agents`） | 同文件头部；宿主只透传只读投影（百分比/阻塞/耗时/成本），插件停用或编译失败时回退内置分区 |
-| Cordis 主题 bundle（滚动进度轨） | `apps/desktop/src/plugins/ui-theme/index.ts`（`app.overlay` + `settings.appearance.item`） | 同文件头部；轨道组件 `rail.tsx`、CSS `rail.css`、皮肤目录 `skins.ts`、外观分区 `settings.tsx` 全归该 bundle；停用/编译失败时 `app.overlay` 回退内置 `<FloatingScrollbar/>`，外观分区消失 |
+| Cordis 主题 bundle（滚动进度轨） | `apps/desktop/src/plugins/ui-theme/index.ts`（`shell.overlay` + `settings.appearance.item`） | 同文件头部；轨道组件 `rail.tsx`、CSS `rail.css`、皮肤目录 `skins.ts`、外观分区 `settings.tsx` 全归该 bundle；停用/编译失败时 `shell.overlay` 回退内置 `<FloatingScrollbar/>`，外观分区消失 |
 | 滚动条皮肤贡献（daemon 主题插件） | `packages/coding-agent/src/extensibility/extensions/types.ts`（`registerScrollbarSkin` / `ctx.skins.register`） | 类型声明 + `docs/extensions-dev.md` §9.2；皮肤经 `extensions.list.scrollbarSkins` 下发，contributed → imported → built-in 按 id 合并 |
 | Cordis 二级左栏面板 | `apps/desktop/src/plugins/scheduled-panel/index.ts`（`sidebar.panel.scheduled`）、`apps/desktop/src/plugins/capability-panel/index.ts`（`sidebar.panel.capability`）；前缀声明在 `packages/collab-proto/src/extension-slots.ts` | 同文件头部；宿主按 `data-panel` 选面板，插件缺失/编译失败回退内置组件；`task-nav` 与 `capability-nav` 经宿主模块表共享（页面与面板是独立 React 子树）；悬停预览按 rail 按钮的 `panelId` 派发 |
 | 第一方子系统插件与 entry 组件 | `packages/coding-agent/src/bundled-plugins/*/package.json`、`packages/coding-agent/src/daemon/cordis-dynamic-plugins.ts`（`musepi.host` / `musepi.components` / `CordisDynamicPluginRuntime`） | 各包入口与运行时文件头部 |

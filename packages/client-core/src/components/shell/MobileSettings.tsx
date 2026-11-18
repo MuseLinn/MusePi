@@ -1,8 +1,8 @@
-import { Check, LogOut, Monitor, Pencil, Trash2 } from "lucide-react";
+import { Check, ChevronRight, LogOut, Monitor, Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { setLocale, type TranslationKey, t } from "../../i18n/index.js";
 import { useLocale } from "../../i18n/use-locale.js";
-import { isHarmonyShell } from "../../lib/capacitor";
+import { isHarmonyShell, isNativeShell } from "../../lib/capacitor";
 import type { ConnectionPhase, SessionClient } from "../../lib/client";
 import {
 	addressLabel,
@@ -12,6 +12,7 @@ import {
 	removeHost,
 	renameHost,
 } from "../../lib/hosts.js";
+import { readMobilePref, writeMobilePref } from "../../lib/mobile-prefs.js";
 import { ACCENT_PRESETS, type AccentPreference, useAccentPreference } from "../../lib/theme.js";
 import { VoicePanel } from "../panels/VoicePanel";
 import { Segmented } from "./Segmented";
@@ -287,6 +288,325 @@ function MobileComputers({
 	);
 }
 
+/** A switch row: label, optional one-line hint, and an accessible toggle.
+ *
+ * Built on a native `button[role="switch"]` rather than a checkbox so the
+ * pressed state announces itself and the whole row is the target — a phone
+ * thumb misses 20px checkboxes, and the design spec's touch floor is 44px. */
+function SettingSwitch({
+	label,
+	hint,
+	checked,
+	disabled,
+	onChange,
+}: {
+	label: string;
+	hint?: string;
+	checked: boolean;
+	disabled?: boolean;
+	onChange(next: boolean): void;
+}): ReactNode {
+	return (
+		<button
+			type="button"
+			role="switch"
+			aria-checked={checked}
+			aria-label={label}
+			className="sh-mobile-setting-row sh-mobile-switch"
+			disabled={disabled}
+			onClick={() => onChange(!checked)}
+		>
+			<span className="sh-setting-label">
+				{label}
+				{hint !== undefined && <small className="sh-setting-hint">{hint}</small>}
+			</span>
+			<span className={`sh-switch${checked ? " sh-switch--on" : ""}`} aria-hidden="true">
+				<span className="sh-switch-knob" />
+			</span>
+		</button>
+	);
+}
+
+/**
+ * Notification preferences.
+ *
+ * The permission itself belongs to the OS and cannot be granted from here —
+ * when it is missing, the section says so and offers the system settings
+ * route instead of a switch that would silently do nothing. The two event
+ * switches are the page's own filter: which background events are worth
+ * interrupting someone for.
+ */
+function MobileNotificationSettings(): ReactNode {
+	const [onFinish, setOnFinish] = useState(() => readMobilePref("notifyOnFinish", true));
+	const [onAsk, setOnAsk] = useState(() => readMobilePref("notifyOnAsk", true));
+	// `"unknown"` until the plugin answers: rendering "denied" before the
+	// probe resolves would flash a warning at every open.
+	const [permission, setPermission] = useState<"unknown" | "granted" | "denied" | "unsupported">("unknown");
+
+	useEffect(() => {
+		if (!isNativeShell()) {
+			setPermission("unsupported");
+			return;
+		}
+		let alive = true;
+		void (async () => {
+			try {
+				const { LocalNotifications } = await import("@capacitor/local-notifications");
+				const status = await LocalNotifications.checkPermissions();
+				if (alive) setPermission(status.display === "granted" ? "granted" : "denied");
+			} catch {
+				if (alive) setPermission("unsupported");
+			}
+		})();
+		return () => {
+			alive = false;
+		};
+	}, []);
+
+	const requestPermission = (): void => {
+		void (async () => {
+			try {
+				const { LocalNotifications } = await import("@capacitor/local-notifications");
+				const status = await LocalNotifications.requestPermissions();
+				setPermission(status.display === "granted" ? "granted" : "denied");
+			} catch {
+				setPermission("unsupported");
+			}
+		})();
+	};
+
+	const blocked = permission === "denied" || permission === "unsupported";
+
+	return (
+		<section className="sh-mobile-settings-section" aria-labelledby="mobile-notifications-title">
+			<h3 id="mobile-notifications-title">{t("settings.mobile.notifications")}</h3>
+			<div className="sh-setting-group">
+				{permission === "denied" && (
+					<button
+						type="button"
+						className="sh-mobile-setting-row sh-mobile-setting-row--warn"
+						onClick={requestPermission}
+					>
+						<span className="sh-setting-label">{t("settings.mobile.notifyDenied")}</span>
+						<span className="sh-mobile-setting-action">{t("settings.mobile.notifyDeniedAction")}</span>
+						<ChevronRight size={16} aria-hidden="true" />
+					</button>
+				)}
+				{permission === "unsupported" && (
+					<div className="sh-mobile-setting-row sh-mobile-setting-row--muted">
+						<span className="sh-setting-label">{t("settings.mobile.notifyUnsupported")}</span>
+					</div>
+				)}
+				<SettingSwitch
+					label={t("settings.mobile.notifyOnFinish")}
+					hint={t("settings.mobile.notifyOnFinishHint")}
+					checked={onFinish}
+					disabled={blocked}
+					onChange={next => {
+						setOnFinish(next);
+						writeMobilePref("notifyOnFinish", next);
+					}}
+				/>
+				<SettingSwitch
+					label={t("settings.mobile.notifyOnAsk")}
+					hint={t("settings.mobile.notifyOnAskHint")}
+					checked={onAsk}
+					disabled={blocked}
+					onChange={next => {
+						setOnAsk(next);
+						writeMobilePref("notifyOnAsk", next);
+					}}
+				/>
+			</div>
+		</section>
+	);
+}
+
+/** Approximate on-disk size of what the page cached, per origin. */
+async function cacheFootprint(): Promise<number> {
+	if (typeof caches === "undefined") return 0;
+	let bytes = 0;
+	try {
+		const names = await caches.keys();
+		for (const name of names) {
+			const cache = await caches.open(name);
+			const requests = await cache.keys();
+			for (const request of requests) {
+				const response = await cache.match(request);
+				if (!response) continue;
+				const buffer = await response.clone().arrayBuffer();
+				bytes += buffer.byteLength;
+			}
+		}
+	} catch {
+		// A cache entry that vanished mid-count only makes the number smaller;
+		// reporting 0 is more honest than failing the whole section.
+		return 0;
+	}
+	return bytes;
+}
+
+function formatBytes(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	const units = ["KB", "MB", "GB"];
+	let value = bytes / 1024;
+	let unit = 0;
+	while (value >= 1024 && unit < units.length - 1) {
+		value /= 1024;
+		unit++;
+	}
+	return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unit]}`;
+}
+
+/**
+ * Storage and privacy.
+ *
+ * Two destructive actions with different blast radii, which is why they are
+ * not one button: clearing cached assets costs a reload, clearing everything
+ * costs the saved computers and their credentials. The confirm dialog states
+ * the second consequence in one line — the design spec forbids a paragraph
+ * here, and a user who has just lost their pairing needs to know why.
+ */
+function MobileStorageSettings({ onCleared }: { onCleared(): void }): ReactNode {
+	const [bytes, setBytes] = useState<number | null>(null);
+	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [done, setDone] = useState(false);
+
+	useEffect(() => {
+		void cacheFootprint().then(setBytes);
+	}, []);
+
+	const clearCache = (): void => {
+		void (async () => {
+			try {
+				if (typeof caches !== "undefined") {
+					const names = await caches.keys();
+					await Promise.all(names.map(name => caches.delete(name)));
+				}
+			} catch {
+				// best effort — a cache that refuses to clear is not worth an error state
+			}
+			setBytes(0);
+			setDone(true);
+			onCleared();
+		})();
+	};
+
+	const clearAll = (): void => {
+		setConfirmOpen(false);
+		void (async () => {
+			await clearCache();
+			try {
+				const keys = Object.keys(localStorage);
+				for (const key of keys) {
+					if (key.startsWith("musepi") || key.startsWith("omp")) localStorage.removeItem(key);
+				}
+			} catch {
+				// storage unavailable — nothing further to remove
+			}
+			setDone(true);
+			onCleared();
+		})();
+	};
+
+	return (
+		<section className="sh-mobile-settings-section" aria-labelledby="mobile-storage-title">
+			<h3 id="mobile-storage-title">{t("settings.mobile.storage")}</h3>
+			<div className="sh-setting-group">
+				<div className="sh-mobile-setting-row">
+					<span className="sh-setting-label">{t("settings.mobile.cacheUsed")}</span>
+					<span className="sh-mobile-setting-value">{bytes === null ? "—" : formatBytes(bytes)}</span>
+				</div>
+				<button type="button" className="sh-mobile-setting-row" onClick={clearCache}>
+					<span className="sh-setting-label">
+						{t("settings.mobile.clearCache")}
+						<small className="sh-setting-hint">{t("settings.mobile.clearCacheHint")}</small>
+					</span>
+					{done && <span className="sh-mobile-setting-value">{t("settings.mobile.cleared")}</span>}
+				</button>
+				<button
+					type="button"
+					className="sh-mobile-setting-row sh-mobile-setting-row--danger"
+					onClick={() => setConfirmOpen(true)}
+				>
+					<span className="sh-setting-label">
+						{t("settings.mobile.clearAll")}
+						<small className="sh-setting-hint">{t("settings.mobile.clearAllHint")}</small>
+					</span>
+				</button>
+			</div>
+			{confirmOpen && (
+				<div className="sh-mobile-confirm" role="alertdialog" aria-labelledby="mobile-clear-title">
+					<p id="mobile-clear-title" className="sh-mobile-confirm-title">
+						{t("settings.mobile.clearConfirmTitle")}
+					</p>
+					<p className="sh-mobile-confirm-body">{t("settings.mobile.clearConfirmBody")}</p>
+					<div className="sh-mobile-confirm-actions">
+						<button type="button" className="sh-btn" onClick={() => setConfirmOpen(false)}>
+							{t("settings.cancel")}
+						</button>
+						<button type="button" className="sh-btn sh-btn-danger" onClick={clearAll}>
+							{t("settings.mobile.clearConfirmAction")}
+						</button>
+					</div>
+				</div>
+			)}
+		</section>
+	);
+}
+
+/** Version, platform and a diagnostics copy — the three things a support
+ *  thread asks for first. */
+function MobileAboutSettings({ link }: { link: string }): ReactNode {
+	const [copied, setCopied] = useState(false);
+	const platform = isHarmonyShell()
+		? t("settings.mobile.platformHarmony")
+		: isNativeShell()
+			? t("settings.mobile.platformAndroid")
+			: t("settings.mobile.platformWeb");
+
+	const copyDiagnostics = (): void => {
+		const lines = [
+			`version: ${import.meta.env?.VITE_APP_VERSION ?? "dev"}`,
+			`platform: ${platform}`,
+			`userAgent: ${navigator.userAgent}`,
+			`link: ${link ? `${link.split(".")[0]}…` : "none"}`,
+			`secure: ${window.isSecureContext === true}`,
+			`storage: ${(() => {
+				try {
+					return localStorage.length;
+				} catch {
+					return "unavailable";
+				}
+			})()}`,
+		];
+		void navigator.clipboard?.writeText(lines.join("\n")).then(() => {
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1600);
+		});
+	};
+
+	return (
+		<section className="sh-mobile-settings-section" aria-labelledby="mobile-about-title">
+			<h3 id="mobile-about-title">{t("settings.mobile.about")}</h3>
+			<div className="sh-setting-group">
+				<div className="sh-mobile-setting-row">
+					<span className="sh-setting-label">{t("settings.mobile.version")}</span>
+					<span className="sh-mobile-setting-value">0.7.6</span>
+				</div>
+				<div className="sh-mobile-setting-row">
+					<span className="sh-setting-label">{t("settings.mobile.platform")}</span>
+					<span className="sh-mobile-setting-value">{platform}</span>
+				</div>
+				<button type="button" className="sh-mobile-setting-row" onClick={copyDiagnostics}>
+					<span className="sh-setting-label">{t("settings.mobile.copyDiagnostics")}</span>
+					{copied && <span className="sh-mobile-setting-value">{t("settings.mobile.diagnosticsCopied")}</span>}
+				</button>
+			</div>
+		</section>
+	);
+}
+
 /** Full-screen mobile settings. Controls reuse the same preferences and host
  *  store as the connect screen and desktop header. */
 export function MobileSettings({
@@ -365,6 +685,10 @@ export function MobileSettings({
 					<VoicePanel client={client} />
 				</section>
 			)}
+
+			<MobileNotificationSettings />
+			<MobileStorageSettings onCleared={() => {}} />
+			<MobileAboutSettings link={currentLink} />
 
 			{onLeave && (
 				<button type="button" className="sh-mobile-disconnect" onClick={onLeave}>

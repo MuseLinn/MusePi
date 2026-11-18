@@ -49,7 +49,7 @@ const hostModules = {
 	"capability-nav": capabilityNav,
 	"client-core": clientCore,
 	i18n: clientCoreI18n,
-} satisfies Omit<Record<ExtensionHostModuleKey, unknown>, "slot-host">;
+} satisfies Omit<Record<ExtensionHostModuleKey, unknown>, "slot-host" | "composer">;
 
 /**
  * Bind one instance into the published table.
@@ -76,7 +76,12 @@ export function exposeHostModules(): void {
 	// Every key is bound by the time this runs: the shell imports `slot-host`,
 	// which registers itself before calling this. Missing entries are a broken
 	// supplier contract and must fail at publish, not at a later plugin import.
-	const missing = EXTENSION_HOST_MODULES.filter(({ key }) => !(key in hostModules)).map(({ key }) => key);
+	// slot-host publishes this table and the composer pulls slot-host in, so
+	// both bind themselves during their own evaluation.
+	const selfRegistering = new Set(["slot-host", "composer"]);
+	const missing = EXTENSION_HOST_MODULES.filter(({ key }) => !selfRegistering.has(key) && !(key in hostModules)).map(
+		({ key }) => key,
+	);
 	if (missing.length > 0) {
 		throw new Error(`MusePiHostModules is missing ${missing.map(key => `"${key}"`).join(", ")}`);
 	}

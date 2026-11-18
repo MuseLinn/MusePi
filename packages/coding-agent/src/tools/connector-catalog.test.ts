@@ -54,7 +54,10 @@ describe("connector_catalog tool", () => {
 		expect(text).toContain("alpha — Alpha Meetings");
 		expect(text).toContain("beta — Beta Docs");
 		expect(text).toContain("not enabled");
-		expect(list.details).toMatchObject({ action: "list", count: 2 });
+		// The bundled catalog ships rows too, so the count is a floor here.
+		const details = list.details as { action?: string; count?: number };
+		expect(details.action).toBe("list");
+		expect(details.count).toBeGreaterThanOrEqual(2);
 
 		const search = await tool.execute("call-2", { action: "search", query: "meeting" });
 		const searchText = search.content[0]?.type === "text" ? search.content[0].text : "";

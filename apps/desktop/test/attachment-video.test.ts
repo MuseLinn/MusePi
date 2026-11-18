@@ -29,7 +29,7 @@ describe("attachmentVideoSelection", () => {
 		const chip = videoChip(1);
 		const selection = attachmentVideoSelection([chip]);
 		expect(selection.chipIds.has(1)).toBe(true);
-		expect(selection.parts).toEqual([{ type: "video", mimeType: "video/mp4", url: "file://D:\\media\\clip.mp4" }]);
+		expect(selection.parts).toEqual([{ type: "video", mimeType: "video/mp4", url: "file:///D:/media/clip.mp4" }]);
 	});
 
 	it("leaves a video chip on the workspace channel when no path is available", () => {

@@ -452,51 +452,6 @@ export function GuiHeader({
 		};
 	}, [rpc, store]);
 
-	// ── Header chips (§3.1 A2): context-window usage + git branch ──────
-	// Read-only summaries of existing daemon RPCs. The ctx chip shares
-	// the Composer's value-compare discipline so a poll tick that changed
-	// nothing costs no re-render.
-	const [ctxChip, setCtxChip] = useState<{
-		tokens: number;
-		contextWindow: number;
-		percent: number;
-	} | null>(null);
-	useEffect(() => {
-		if (!store) return;
-		let cancelled = false;
-		const load = (): void => {
-			void rpc
-				.request<{
-					tokens: number;
-					contextWindow: number;
-					percent: number;
-				} | null>("session.contextUsage", {
-					sessionId: store.sessionId,
-				})
-				.then(usage => {
-					if (cancelled || !usage) return;
-					setCtxChip(prev =>
-						prev &&
-						prev.tokens === usage.tokens &&
-						prev.percent === usage.percent &&
-						prev.contextWindow === usage.contextWindow
-							? prev
-							: usage,
-					);
-				})
-				.catch(() => {});
-		};
-		load();
-		// Poll only while the agent works (Composer parity): idle sessions
-		// don't move, and a quiet header shouldn't spam the daemon.
-		if (!snap?.working) return;
-		const id = window.setInterval(load, 5000);
-		return () => {
-			cancelled = true;
-			window.clearInterval(id);
-		};
-	}, [rpc, store, snap?.working]);
-
 	// Git branch chip: read-only display (branch switching lives in the
 	// transcript session info card); 15s cadence matches the RightRail counters.
 	const [gitBranch, setGitBranch] = useState<string | null>(null);
@@ -995,11 +950,6 @@ export function GuiHeader({
 								>
 									{store ? projectLabel : project ? projectName(project) : t("general.local")}
 								</span>
-								{ctxChip && (
-									<span className="gui-header-chip" title={t("general.contextUsage")}>
-										{t("ctx percent", { percent: Math.round(ctxChip.percent) })}
-									</span>
-								)}
 							</span>
 						</button>
 					</div>

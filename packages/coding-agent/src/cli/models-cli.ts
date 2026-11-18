@@ -65,6 +65,8 @@ export function resolveModelsArgs(
 
 interface ModelJson {
 	provider: string;
+	/** Display name from the provider's `models.yml` label, else its id. */
+	providerLabel: string;
 	id: string;
 	selector: string;
 	name: string;
@@ -103,9 +105,10 @@ function byProviderThenId(left: Model<Api>, right: Model<Api>): number {
 	return left.id.localeCompare(right.id);
 }
 
-function toModelJson(model: Model<Api>): ModelJson {
+function toModelJson(model: Model<Api>, providerLabel: string): ModelJson {
 	return {
 		provider: model.provider,
+		providerLabel,
 		id: model.id,
 		selector: `${model.provider}/${model.id}`,
 		name: model.name,
@@ -204,7 +207,12 @@ function renderProviderModels(
 				`Warning: models.yml validation failed — custom providers disabled\n${configError.message}\n`,
 			);
 		}
-		const output: ModelsJson = { models: filtered.slice().sort(byProviderThenId).map(toModelJson) };
+		const output: ModelsJson = {
+			models: filtered
+				.slice()
+				.sort(byProviderThenId)
+				.map(model => toModelJson(model, modelRegistry.getProviderLabel(model.provider) ?? model.provider)),
+		};
 		writeLine(JSON.stringify(output));
 		return;
 	}

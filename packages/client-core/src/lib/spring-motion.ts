@@ -254,7 +254,11 @@ export const COMPACT_MORPH_SPRING: SpringConfig = {
  * @param durationMs CSS duration to print alongside the curve. Defaults to
  *        the spring's hard cap.
  */
-export function springEasing(config: SpringConfig, samples = 32, durationMs?: number): string {
+export function springEasing(
+	config: SpringConfig & Pick<SpringOptions, "maxDuration">,
+	samples = 32,
+	durationMs?: number,
+): string {
 	const duration = durationMs ?? config.maxDuration ?? Math.max(0.4, (config.visualDuration ?? 0.44) * 2);
 	const options: SpringOptions = { from: 0, to: 1, ...config, maxDuration: duration / 1000 };
 	const stops: string[] = [];

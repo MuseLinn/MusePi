@@ -21,6 +21,25 @@ Skills 是启动时发现的文件型能力包，并以以下形式暴露给模�
 - 来源元数据（`provider`、`level`、path）
 
 运行时只要求 `name` 和 `path` 即可判定有效。但在实践中，匹配质量取决于 `description` 是否有意义。
+## 版本与更新
+
+技能可以在 frontmatter 声明 `version`。能力中心会显示它，其余技能标为无版本锁定；发现流程从不比较版本，所以它只用于溯源，不是兼容性门槛。
+
+- **内置技能**随客户端的插件包分发，随 MusePi 客户端更新；版本就是随包版本的标识，不能单独卸载。`ui-ux-pro-max` 固定的是它那份策展数据的校验日期（见 `data/catalog-summary.json`）——它的“版本”是数据快照，不是包 semver。
+- **从 Git 或技能市场安装的技能**是用户自己的副本。从同一来源重新安装就是更新方式；当前没有远程版本检查，抽屉里会如实说明，而不是承诺一个不存在的按钮。
+- **插件提供的技能**随声明它的插件/包更新。
+- `musepi-contributing` 是维护者规范：放在仓库的 `.agents/skills`，不属于随包清单，也不进入发布暂存。
+
+
+### 市场安装与更新检查
+
+从 SkillHub、skills.sh 或 `skills.install` 安装时，技能目录内会写入 `.musepi-skill.json`：来源类型、catalog slug / repo / URL（已去除凭据）、安装到的版本或 commit、安装时间。它只是数据，不会变成技能。
+
+`skills.marketplace.updates` 拿这份记录与来源比对：SkillHub 提供 `latestVersion`，skills.sh 与 git 安装按 commit 比较（`git ls-remote HEAD`）。来源不可达时返回 `updateAvailable: null` 并带一条失败说明，绝不当作“已是最新”。没有来源记录的技能（用户手写或随包内置）不会出现在结果里。
+
+能力中心会给检测到新版本的已安装卡片加标记，版本抽屉通过同一安装路径带 `overwrite` 执行更新（SkillHub 走安装状态机）。没有静默自动更新。
+
+两个目录都收录同一个技能时（按名字或 slug 匹配），检查结果会带上所有候选来源。抽屉逐条列出来源与版本，并给出来源级操作：原来源就地更新，另一个来源则切换安装并重写 provenance。同名技能从第二个来源安装一定替换原目录，不会保留两份副本。
 
 ## 必需的目录布局与对 SKILL.md 的要求
 

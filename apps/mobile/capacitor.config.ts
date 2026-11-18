@@ -29,6 +29,17 @@ const config: CapacitorConfig = {
 			overlaysWebView: true,
 			style: "DARK",
 		},
+		LocalNotifications: {
+			// These are the only Android keys @capacitor/local-notifications
+			// reads (smallIcon, iconColor, sound — see its
+			// LocalNotificationManager). Channels are NOT configurable here: the
+			// plugin creates an IMPORTANCE_DEFAULT channel named "Default" and
+			// takes a per-notification `channelId` instead. The branded
+			// "musepi-session" channel is created natively in MainActivity, with
+			// its name and description in res/values/strings.xml.
+			smallIcon: "ic_stat_musepi",
+			iconColor: "#D9A441",
+		},
 	},
 };
 

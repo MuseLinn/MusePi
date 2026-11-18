@@ -2,24 +2,17 @@ import { t } from "@musepi/client-core";
 import { formatWhen } from "@musepi/client-core/src/lib/format";
 import {
 	ArrowLeft,
-	Bot,
-	Braces,
 	Check,
 	Download,
-	Flower2,
 	FolderClosed,
+	Folders,
 	LoaderCircle,
 	Minus,
-	MoonStar,
 	Plus,
 	ScanSearch,
 	Search,
 	ShieldCheck,
-	Sparkles,
-	SquareTerminal,
-	Terminal,
 	TriangleAlert,
-	Zap,
 } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
@@ -29,6 +22,7 @@ import type { RpcClient } from "../lib/rpc";
 import "../styles/gui-import.css";
 import type { CustomGroup } from "./CustomGroups";
 import { FadeScroll } from "./FadeScroll";
+import { SourceGlyph } from "./source-glyph";
 
 interface AgentSource {
 	source: string;
@@ -37,12 +31,16 @@ interface AgentSource {
 
 interface ForeignSessionRow {
 	id: string;
+	/** Source file or folder; the stable key when two sessions share an id. */
+	path?: string;
 	title: string;
 	cwd: string;
 	created: string;
 	modified: string;
 	messageCount: number;
 	firstMessage: string;
+	/** Ordered reference roots the import will add beside `cwd`. */
+	additionalDirectories?: string[];
 	/** New MusePi session id when this foreign session was already copied. */
 	importedSessionId?: string | null;
 }
@@ -62,24 +60,10 @@ interface WorkspaceGroup {
 /** Selection key — source and workspace the session lives in. */
 const selKey = (source: string, cwd: string): string => `${source}\u0000${cwd}`;
 
-/** Per-agent glyph for the source picker; unknown sources keep the generic bot. */
-const SOURCE_ICONS: Record<string, typeof Bot> = {
-	musepi: Sparkles,
-	omp: Terminal,
-	pi: Bot,
-	opencode: SquareTerminal,
-	grok: Zap,
-	kimicode: MoonStar,
-	claude: Flower2,
-	codex: Braces,
-};
-
-const sourceIcon = (source: string): typeof Bot => SOURCE_ICONS[source] ?? Bot;
-
 const workspaceName = (cwd: string): string => cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
 
 /**
- * Import sessions from other agents (omp/pi/opencode/grok/kimi/claude/codex).
+ * Import sessions from other agents (omp/pi/opencode/grok/kimi/deepseek/claude/codex).
  *
  * Explicit two-step flow — nothing scans on entry:
  *   1. import.agents lists the candidate agents (no session scan); the user
@@ -115,7 +99,10 @@ export function ImportSessionsSetup({
 	const [importedNow, setImportedNow] = useState<Set<string>>(new Set());
 
 	const isImported = (source: string, session: ForeignSessionRow): boolean =>
-		Boolean(session.importedSessionId) || importedNow.has(`${source}\u0000${session.id}`);
+		Boolean(session.importedSessionId) || importedNow.has(`${source}\u0000${session.path ?? session.id}`);
+
+	/** Stable selection key: the source path, since ids can repeat across sessions. */
+	const rowKey = (session: ForeignSessionRow): string => session.path ?? session.id;
 
 	// Agent list only — deliberately cheap, no session store scan.
 	useEffect(() => {
@@ -205,8 +192,9 @@ export function ImportSessionsSetup({
 		setSelected(prev => {
 			const key = selKey(source, cwd);
 			const next = new Set(prev[key] ?? []);
-			if (next.has(session.id)) next.delete(session.id);
-			else next.add(session.id);
+			const id = rowKey(session);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
 			return { ...prev, [key]: next };
 		});
 	};
@@ -215,7 +203,7 @@ export function ImportSessionsSetup({
 		setSelected(prev => {
 			const key = selKey(source, group.cwd);
 			const cur = prev[key] ?? new Set();
-			const selectable = group.sessions.filter(s => !isImported(source, s)).map(s => s.id);
+			const selectable = group.sessions.filter(s => !isImported(source, s)).map(s => rowKey(s));
 			const allChecked = selectable.length > 0 && selectable.every(id => cur.has(id));
 			const next = new Set(cur);
 			for (const id of selectable) {
@@ -256,17 +244,18 @@ export function ImportSessionsSetup({
 		// into editable custom groups (one per workspace) after the copy loop.
 		const byCwd = new Map<string, string[]>();
 		const rows = new Map<string, ForeignSessionRow>();
-		for (const src of scanned ?? []) for (const row of src.sessions) rows.set(`${src.source}\u0000${row.id}`, row);
-		const work: Array<{ source: string; cwd: string; id: string }> = [];
-		for (const [key, ids] of Object.entries(selected)) {
+		for (const src of scanned ?? [])
+			for (const row of src.sessions) rows.set(`${src.source}\u0000${rowKey(row)}`, row);
+		const work: Array<{ source: string; cwd: string; key: string }> = [];
+		for (const [key, keys] of Object.entries(selected)) {
 			const source = key.split("\u0000")[0] ?? "";
 			const cwd = key.split("\u0000")[1] ?? "";
-			for (const id of ids) work.push({ source, cwd, id });
+			for (const id of keys) work.push({ source, cwd, key: id });
 		}
 		setProgress({ done: 0, total: work.length });
 		for (const [index, item] of work.entries()) {
-			const { source, cwd, id } = item;
-			const row = rows.get(`${source}\u0000${id}`);
+			const { source, cwd, key } = item;
+			const row = rows.get(`${source}\u0000${key}`);
 			if (row?.importedSessionId) {
 				skipped += 1;
 				setProgress({ done: index + 1, total: work.length });
@@ -277,13 +266,13 @@ export function ImportSessionsSetup({
 				// workspace directory (fallbackCwd = daemon cwd).
 				const res = await rpc.request<{ sessionId?: string; skipped?: boolean }>("import.session", {
 					source,
-					id,
+					id: key,
 				});
 				if (res?.skipped) {
 					skipped += 1;
 				} else {
 					ok += 1;
-					copied.push(`${source}\u0000${id}`);
+					copied.push(`${source}\u0000${key}`);
 					if (res?.sessionId) {
 						const list = byCwd.get(cwd) ?? [];
 						list.push(res.sessionId);
@@ -292,7 +281,7 @@ export function ImportSessionsSetup({
 				}
 			} catch {
 				failed += 1;
-				failures.push({ source, title: row?.title || row?.firstMessage || id });
+				failures.push({ source, title: row?.title || row?.firstMessage || key });
 			}
 			setProgress({ done: index + 1, total: work.length });
 		}
@@ -389,7 +378,7 @@ export function ImportSessionsSetup({
 										onClick={() => toggleAgent(agent.source)}
 									>
 										<span className="gui-import-source-glyph">
-											<MorphIcon icon={sourceIcon(agent.source)} size={15} spring="snappy" />
+											<SourceGlyph source={agent.source} size={15} />
 										</span>
 										<span className="gui-import-source-name">{agent.name}</span>
 										<span className="gui-import-tick">
@@ -434,7 +423,7 @@ export function ImportSessionsSetup({
 									return (
 										<section key={src.source} className="gui-import-group">
 											<div className="gui-import-group-head">
-												<MorphIcon icon={sourceIcon(src.source)} size={12} />
+												<SourceGlyph source={src.source} size={12} />
 												<span className="gui-import-group-name">{src.name}</span>
 												<span className="gui-import-group-count">{visible}</span>
 												{importedCount > 0 && (
@@ -487,10 +476,10 @@ export function ImportSessionsSetup({
 														</div>
 														{group.sessions.map(s => {
 															const imported = isImported(src.source, s);
-															const checked = cur.has(s.id);
+															const checked = cur.has(rowKey(s));
 															return (
 																<button
-																	key={s.id}
+																	key={rowKey(s)}
 																	type="button"
 																	className={`gui-import-session${
 																		imported ? " is-imported" : checked ? " is-on" : ""
@@ -510,6 +499,17 @@ export function ImportSessionsSetup({
 																	<span className="gui-import-session-title">
 																		{s.title || s.firstMessage || s.id}
 																	</span>
+																	{s.additionalDirectories?.length ? (
+																		<span
+																			className="gui-import-roots"
+																			title={s.additionalDirectories.join("\n")}
+																		>
+																			<MorphIcon icon={Folders} size={9} />
+																			{t("settings.importAdditionalRoots", {
+																				count: s.additionalDirectories.length,
+																			})}
+																		</span>
+																	) : null}
 																	{imported && (
 																		<span className="gui-import-tag">
 																			<MorphIcon icon={Check} size={9} />

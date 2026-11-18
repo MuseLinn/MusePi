@@ -8,7 +8,7 @@
  * - 生命周期：随插件 fiber 与槽位挂载/卸载；面板搜索词与选中态在目的地切换
  *   和 hover-peek 期间因宿主常驻挂载而保留。
  * - 启停：父插件停用或编译失败时宿主回退内置 `CapabilitySidePanel`，不阻断能力中心。
- * - 冲突：不注册第二个 rail 目的地，不在 `app.capability` 页面内复制左列；
+ * - 冲突：不注册第二个 rail 目的地，不在 `main.capability` 页面内复制左列；
  *   页面页头不再渲染三个 tab 按钮，只保留标题 / 描述 / 返回。
  * - 检视入口：本目录与 `test/capability-panel-plugin.test.tsx`。
  */

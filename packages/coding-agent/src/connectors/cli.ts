@@ -21,7 +21,16 @@ import type { ConnectorCliSpec, ConnectorPlatform, ConnectorPlatformCommand } fr
 
 const INSTALL_TIMEOUT_MS = 5 * 60_000;
 const COMMAND_TIMEOUT_MS = 30_000;
-const AUTH_OUTPUT_WINDOW_MS = 4_000;
+/**
+ * How long to wait for an auth command to print its URL and code.
+ *
+ * The loop returns as soon as both are parsed, so this is only the worst case:
+ * a command that never prints gets this long. Four seconds was tight enough
+ * that spawning a runtime on a loaded machine could exceed it and leave the
+ * caller with an empty result while the process would have printed a moment
+ * later.
+ */
+const AUTH_OUTPUT_WINDOW_MS = 10_000;
 const INSTALLERS = new Set([
 	"npm",
 	"npm.cmd",
@@ -196,26 +205,36 @@ async function runArgv(
 	if (argv.length === 0) return { ok: false, exitCode: null, stdout: "", stderr: "empty command", timedOut: false };
 	const env = envWithPath(options.env);
 	const plan = planSpawn(argv, env.PATH ?? "");
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), options.timeoutMs);
+	// The timeout kills the process rather than aborting through a signal: a
+	// signal carries the realm it was constructed in, and a host that installs
+	// its own AbortController (a test DOM, a sandbox) hands Bun.spawn a foreign
+	// instance it refuses. Killing needs no such class.
+	let timedOut = false;
+	let proc: ReturnType<typeof Bun.spawn> | undefined;
+	const timer = setTimeout(() => {
+		timedOut = true;
+		proc?.kill();
+	}, options.timeoutMs);
 	try {
-		const proc = Bun.spawn({
+		proc = Bun.spawn({
 			cmd: plan.argv,
 			windowsVerbatimArguments: plan.verbatim,
 			stdout: "pipe",
 			stderr: "pipe",
 			env,
 			cwd: ensureAgentDir(),
-			signal: controller.signal,
 		});
 		const [stdout, stderr, exitCode] = await Promise.all([
-			new Response(proc.stdout).text(),
-			new Response(proc.stderr).text(),
+			new Response(proc.stdout as ReadableStream).text(),
+			new Response(proc.stderr as ReadableStream).text(),
 			proc.exited,
 		]);
+		if (timedOut) {
+			return { ok: false, exitCode: null, stdout: "", stderr: "command timed out", timedOut: true };
+		}
 		return { ok: exitCode === 0, exitCode, stdout, stderr, timedOut: false };
 	} catch (error) {
-		if (controller.signal.aborted) {
+		if (timedOut) {
 			return { ok: false, exitCode: null, stdout: "", stderr: "command timed out", timedOut: true };
 		}
 		return {
@@ -348,13 +367,20 @@ export async function startCliAuth(spec: ConnectorCliSpec): Promise<CliAuthStart
 	const decoder = new TextDecoder();
 	let text = "";
 	const deadline = Date.now() + AUTH_OUTPUT_WINDOW_MS;
+	// One pending read, reused across turns. A fresh `reader.read()` per turn
+	// would race the sleep, and a race drops the loser: a chunk that arrived
+	// while the sleep won the turn went to a promise nobody held, and the
+	// authorization URL it carried was lost for good.
+	let pending: ReturnType<typeof reader.read> | undefined;
 	while (Date.now() < deadline) {
-		const chunk = await Promise.race([reader.read(), Bun.sleep(200).then(() => ({ timeout: true as const }))]);
+		pending ??= reader.read();
+		const chunk = await Promise.race([pending, Bun.sleep(200).then(() => ({ timeout: true as const }))]);
 		if ("timeout" in chunk) {
 			const parsed = parseCliAuthOutput(text, spec.authUrlDomain);
 			if (parsed.authorizationUrl || parsed.userCode) break;
 			continue;
 		}
+		pending = undefined;
 		if (chunk.done) break;
 		text += decoder.decode(chunk.value, { stream: true });
 		const parsed = parseCliAuthOutput(text, spec.authUrlDomain);

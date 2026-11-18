@@ -150,7 +150,11 @@ export function parseChangelogHighlights(markdown: string): ChangelogVersion[] {
 		current = null;
 	};
 
-	for (const line of markdown.split("\n")) {
+	// `\r?\n`: a checkout on Windows (or an editor that rewrites the file)
+	// leaves a trailing `\r`, and every anchored pattern below would then miss
+	// — the whole changelog parses as zero versions and the what's-new panel
+	// renders empty.
+	for (const line of markdown.split(/\r?\n/)) {
 		const heading = line.match(/^##\s+\[([^\]]+)\]\s*(?:-\s*(.*))?$/);
 		if (heading) {
 			push();

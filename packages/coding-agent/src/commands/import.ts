@@ -13,6 +13,7 @@ import { Args, Command, Flags } from "@musepi/pi-utils/cli";
 import { importHelp as commandHelp } from "../cli/command-help";
 import {
 	createForeignSessionStore,
+	foreignSessionSourceName,
 	foreignSessionSources,
 	persistForeignSession,
 } from "../session/foreign-session-import";
@@ -104,6 +105,8 @@ export default class Import extends Command {
 			process.stderr.write(`Failed to scan ${source} sessions: ${(error as Error).message}\n`);
 			process.exitCode = 1;
 			return;
+		} finally {
+			store.close?.();
 		}
 		if (json) {
 			process.stdout.write(
@@ -151,10 +154,11 @@ export default class Import extends Command {
 			return;
 		}
 		const match =
-			sessions.find(s => s.id === id) ??
 			sessions.find(s => s.path === id) ??
+			sessions.find(s => s.id === id) ??
 			sessions.find(s => s.path.endsWith(id));
 		if (!match) {
+			store.close?.();
 			process.stderr.write(
 				`Session not found in ${source}: ${id}. Run \`musepi import ${source} --sessions\` to list.\n`,
 			);
@@ -163,12 +167,13 @@ export default class Import extends Command {
 		}
 
 		const sessionDir = cwd ?? getAgentDir();
-		process.stdout.write(`Importing ${match.id} from ${this.#sourceName(source)}...\n`);
+		process.stdout.write(`Importing ${this.#displayName(match)} from ${this.#sourceName(source)}...\n`);
 		const imported = await persistForeignSession(store, match, {
 			fallbackCwd: cwd ?? getAgentDir(),
 			sessionDir,
 			suppressBreadcrumb: true,
 		});
+		store.close?.();
 		const sessionFile = imported.getSessionFile();
 		await imported.close();
 		if (!sessionFile) {
@@ -179,28 +184,16 @@ export default class Import extends Command {
 		if (json) {
 			process.stdout.write(`${JSON.stringify({ ok: true, source, sourceId: match.id, sessionFile })}\n`);
 		} else {
-			process.stdout.write(`Imported ${match.id} → ${sessionFile}\n`);
+			process.stdout.write(`Imported ${this.#displayName(match)} → ${sessionFile}\n`);
 		}
 	}
 
+	/** Title, then first message, then id — a bare id names nothing to a reader. */
+	#displayName(info: { title?: string; firstMessage?: string; id: string }): string {
+		return info.title || info.firstMessage || info.id;
+	}
+
 	#sourceName(source: ForeignSessionSource): string {
-		switch (source) {
-			case "claude":
-				return "Claude";
-			case "codex":
-				return "Codex";
-			case "grok":
-				return "Grok";
-			case "kimicode":
-				return "Kimi Code";
-			case "musepi":
-				return "MusePi";
-			case "omp":
-				return "OMP";
-			case "opencode":
-				return "OpenCode";
-			case "pi":
-				return "Pi";
-		}
+		return foreignSessionSourceName(source);
 	}
 }

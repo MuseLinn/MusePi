@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pre-API-31 launch window: brand base plus the app icon — the same pair the
+     Android 12+ system splash draws from windowSplashScreenBackground and
+     windowSplashScreenAnimatedIcon, so the two API bands look alike. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/splashBackground" />
+    <item
+        android:drawable="@mipmap/ic_launcher"
+        android:gravity="center"
+        android:width="128dp"
+        android:height="128dp" />
+</layer-list>

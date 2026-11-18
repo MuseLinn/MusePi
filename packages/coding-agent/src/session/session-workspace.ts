@@ -1,3 +1,4 @@
+import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 
@@ -50,4 +51,28 @@ export function normalizeSessionWorkspace(args: { cwd: string; directories?: str
 /** The workspace directories beyond `cwd`, in order (ACP `additionalDirectories` shape). */
 export function additionalWorkspaceDirectories(workspace: SessionWorkspace): string[] {
 	return workspace.directories.filter(directory => directory !== workspace.cwd);
+}
+
+/** Maximum number of secondary workspace roots beyond the primary directory. */
+export const MAX_WORKSPACE_DIRECTORIES = 64;
+
+/**
+ * Additional roots must not be the user's home or a filesystem root: the agent
+ * gains read/write reach into them, and one mistaken pick would expose every
+ * unrelated project at once. The primary root is exempt — opening a home
+ * directory as a project stays a deliberate choice. Symlinks are resolved
+ * first so `~/link-to-home` cannot bypass the check.
+ *
+ * Lives here rather than with the daemon's directory RPCs so an importer can
+ * apply the same rule without depending on a host service.
+ */
+export async function isSafeAdditionalDirectory(directory: string): Promise<boolean> {
+	const real = await fs.realpath(directory).catch(() => directory);
+	const forbidden = comparisonKey(real);
+	return forbidden !== comparisonKey(os.homedir()) && forbidden !== comparisonKey(path.parse(real).root);
+}
+
+function comparisonKey(directory: string): string {
+	const resolved = path.resolve(directory);
+	return process.platform === "win32" ? resolved.toLowerCase() : resolved;
 }

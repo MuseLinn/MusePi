@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import * as path from "node:path";
 import { getConfigRootDir, isEnoent, logger } from "@musepi/pi-utils";
 import type { SessionDirectoryInfo, WorkspaceDuplicateDirectory, WorkspaceProject } from "@musepi/pi-wire";
-import { normalizeWorkspaceDirectory } from "../../session/session-workspace";
+import { MAX_WORKSPACE_DIRECTORIES, normalizeWorkspaceDirectory } from "../../session/session-workspace";
 import type { DaemonService } from "./types";
 
 /**
@@ -32,8 +32,7 @@ import type { DaemonService } from "./types";
  * additional 目录；setPrimary 把目标目录与旧主目录原子互换。
  */
 
-/** Maximum number of secondary workspace roots beyond the primary directory. */
-export const MAX_WORKSPACE_DIRECTORIES = 64;
+export { MAX_WORKSPACE_DIRECTORIES } from "../../session/session-workspace";
 
 const REGISTRY_VERSION = 1;
 const REGISTRY_FILENAME = "projects.json";
@@ -164,15 +163,9 @@ async function requireSafeAdditionalDirectory(directory: string): Promise<void> 
 }
 
 /** Non-throwing probe for inherited project roots: a stale unsafe entry must
- *  not block every new session. */
-export async function isSafeAdditionalDirectory(directory: string): Promise<boolean> {
-	try {
-		await requireSafeAdditionalDirectory(directory);
-		return true;
-	} catch {
-		return false;
-	}
-}
+ *  not block every new session. Delegates to the session-level rule so an
+ *  importer and this service cannot disagree about what is safe. */
+export { isSafeAdditionalDirectory } from "../../session/session-workspace";
 
 export async function workspaceDirectoryExists(directory: string): Promise<boolean> {
 	try {

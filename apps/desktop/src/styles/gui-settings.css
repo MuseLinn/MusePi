@@ -22,6 +22,206 @@
 	background: transparent;
 }
 
+
+/* Custom provider form (settings dialog + onboarding guide): labelled fields,
+   one model list where discovered and hand-typed rows are the same shape, and
+   a per-row capability override panel. */
+.gui-cpf {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	padding: var(--space-4);
+}
+.gui-cpf-group {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+}
+.gui-cpf-group-title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+.gui-cpf-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	min-width: 0;
+}
+.gui-cpf-label {
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+.gui-cpf-help {
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--color-text-faint);
+}
+.gui-cpf-row {
+	display: flex;
+	gap: var(--space-2);
+}
+.gui-cpf-row > .gui-cpf-field {
+	flex: 1 1 0;
+}
+.gui-cpf-models-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--space-2);
+}
+.gui-cpf-models-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	flex: none;
+}
+.gui-cpf-models {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+.gui-cpf-model {
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-text) 3%, transparent);
+}
+.gui-cpf-model[data-open] {
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+.gui-cpf-model-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+	padding: var(--space-2);
+}
+.gui-cpf-model-toggle {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--color-text);
+	cursor: pointer;
+	text-align: left;
+	font-size: 13px;
+}
+.gui-cpf-model-id {
+	font-family: var(--font-mono);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-cpf-model-id[data-invalid] {
+	color: var(--color-error);
+}
+.gui-cpf-model-name {
+	flex: none;
+	max-width: 45%;
+	color: var(--color-text-faint);
+	font-size: 12px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-cpf-model-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-3);
+	padding: var(--space-2);
+	border-top: 1px solid var(--border);
+}
+.gui-cpf-caps {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	padding: var(--space-2);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-sm);
+}
+.gui-cpf-caps-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+}
+.gui-cpf-checks {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2) var(--space-3);
+}
+.gui-cpf-check {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+.gui-cpf-link {
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--color-accent);
+	font-size: 12px;
+	cursor: pointer;
+}
+.gui-cpf-empty {
+	padding: var(--space-3);
+	border: 1px dashed var(--border-strong);
+	border-radius: var(--radius-md);
+	color: var(--color-text-faint);
+	font-size: 13px;
+	text-align: center;
+}
+.gui-cpf-error {
+	color: var(--color-error);
+	font-size: 13px;
+}
+.gui-cpf-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-2);
+}
+.gui-cpf-secret {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+.gui-cpf-secret > .gui-input {
+	flex: 1 1 auto;
+}
+
+/* Fetched-model dialog: two checkbox groups (new rows, rows the endpoint
+   dropped) instead of one add-only list. */
+.gui-dialog.gui-dialog--models {
+	width: min(520px, 92vw);
+	height: auto;
+	max-height: min(70vh, 560px);
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklab, var(--color-text) 22%, transparent) transparent;
+}
+.gui-cpf-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	font-size: 12px;
+	color: var(--color-text-faint);
+}
+.gui-cpf-summary-id {
+	font-family: var(--font-mono);
+}
+.gui-cpf-summary-url {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
 /* Search results for individual settings (above the page rows): the nav is
  * the only search surface, so cross-page hits live here and jump to the page
  * that renders the row. */
@@ -129,11 +329,13 @@
 
 /* ── Model/thinking capsule (ModelThinkingCapsule, dsh single-trigger
  *    parity): ONE pill, TWO segments — model left, thinking effort right,
- *    each opening its own unchanged menu. The pill collapses its segment
- *    labels to icon-only (TUI compactThinkingLevel parity) when the
- *    composer frame (its nearest container ancestor) is narrow — the
- *    `@container` queries below resolve against .gui-composer-frame's
- *    inline size, so the pill shrinks with the surface, not with itself. ── */
+ *    each opening its own unchanged menu. Inside the capsule neither
+ *    segment carries a chevron or leading icon; the model brand icon and
+ *    the level text are the only marks. When the composer frame (its
+ *    nearest container ancestor) is narrow the model label gives way to
+ *    its brand icon — the `@container` queries below resolve against
+ *    .gui-composer-frame's inline size, so the pill shrinks with the
+ *    surface, not with itself. ── */
 .gui-model-capsule {
 	display: inline-flex;
 	align-items: center;
@@ -213,19 +415,10 @@
 }
 
 
-/* Narrow composer: the thinking-effort label gives way first (the brain
- * icon + title keep the level discoverable), then the model label, then
- * the divider—all at thresholds where the composer frame is genuinely
- * cramped (not at normal desktop widths). */
-@container (max-width: 480px) {
-	.gui-model-capsule-seg-text--thinking {
-		opacity: 0;
-		width: 0;
-		padding: 0;
-		overflow: hidden;
-	}
-}
-
+/* Narrow composer: the model label yields to its brand icon, then the
+ * divider goes — at thresholds where the composer frame is genuinely
+ * cramped (not at normal desktop widths). The thinking label never
+ * collapses: it is that segment's only content. */
 @container (max-width: 380px) {
 	.gui-model-capsule-seg-text {
 		opacity: 0;

@@ -159,6 +159,22 @@ Settings（独立全屏页）
 
 `--safe-top/--safe-bottom/--mp-keyboard-inset` 由 JS/插件注入（§6.1）。运行中折叠、展开或旋转会重新计算 SIZE 类。640／520／420px 仅保留局部排版精修，不再充当整体布局断点。桌面 web 的 Workspace 目录行为不随手机草稿导航改变。
 
+#### 呈现面 vs 原生能力（`lib/surface.ts`）
+
+「是不是手机」和「外面有没有原生壳」是两个问题，合并成一个布尔会同时错两个方向：手机浏览器被当成桌面（丢掉底部目的地、草稿流、会话 Sheet 的三个入口），而窄窗口的桌面浏览器被当成手机（丢掉工作区目录）。三者分工如下，改判定前先读这一节：
+
+| 函数 | 回答的问题 | 使用方 |
+|---|---|---|
+| `isMobileSurface()` | 是否该用手机信息架构 | 呈现层：底部目的地、空态、草稿流、场景 morph、断线横幅归属、紧凑导航、会话 Sheet 底栏、Composer 提示 |
+| `isMobileShell()` | 外面是否有原生外壳 | 原生能力：深链暂存与监听、本地通知、前台清角标、徽标 |
+| `hasNativeKeyboard()` | 谁负责键盘 inset | 只有原生壳（`resize:'none'` + 上报 IME 高度）写 `--mp-keyboard-inset`；浏览器靠视觉视口收缩，两边都写会抬高一整个键盘 |
+
+`isMobileSurface()` = 原生壳 **或**（主指针为 `coarse` 且视口 `<840px`）。触屏用 `(hover: none) and (pointer: coarse)` 媒体查询判定，仍不读 UA；带触控板的平板与触屏笔记本报 `fine`，因此留在多栏布局——那里的 rail 已经承载了全部目的地，再叠一条浮动底栏只会压住正文。
+
+React 侧用 `useMobileSurface()` 取同一判定，折叠、旋转、改窗口、接上外接键盘都会重算并重新渲染。
+
+相机扫码不在此列：`getUserMedia` 是 Web 能力，入口按 `canScanQr()`（安全上下文 + `navigator.mediaDevices.getUserMedia`）显隐，不按外壳显隐——手机浏览器能扫码，拒绝权限的壳仍显示入口并由扫码层报错指向配对码。
+
 ## 4. 屏幕规格
 
 ### 4.1 Connect（远程工作区入口）
@@ -900,3 +916,207 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - `rpc` 默认超时仍为"无"（长任务如 `stt.transcribe` 需要）；只有移动端热点路径显式传入。
 - rAF 动画在页面隐藏时由平台自动暂停，`DotMatrixMark` 另有 IntersectionObserver 离屏门控，
   本轮未再加显式暂停。
+
+## 15. 会话树、可访问性与动效基线（2026-11-18）
+
+### 15.1 移动端会话树
+
+转录上方新增一条根→叶面包屑（`components/transcript/tree-outline-nav.tsx`，拓扑派生在
+`tree-outline.ts`）。点击任一段调用 `session.branchAt` 把叶子移过去，旧尾部保留为兄弟
+分支；当前叶已有子节点时提示「再发送会创建新分支」；撤回后给一行可撤销提示。
+
+撤回语义此前有缺陷：`branchAt` 返回的 `editorText` 被直接重发，等于当场提交新分支，
+撤销因此没有意义。现在只移动叶子，不重发。
+
+### 15.2 可访问性
+
+- 会话行滑动动作（重命名/删除/删除确认）与改名输入补 `:focus-visible`，复用 `--ring`。
+  环用 `outline-offset: -2px`：两者都在 `overflow: hidden` 的滑动容器里，外扩会被裁掉。
+- 行状态从 `aria-hidden` 纯圆点改为可读出的「运行中 / 已暂停」（`role="img"` + 名称），
+  空闲行不播报；当前会话带 `aria-current`。
+- 触控目标补漏：后台任务按钮（22px）、文件树箭头（16px）、扫码关闭（40px）、
+  收起态侧栏（实宽 34px 会裁掉 48px 的切换钮，故取 66px = 48 + 内边距 + 边框）。
+
+### 15.3 减少动态效果
+
+系统开启「减少动态效果」时，23 个常驻无限动画停帧（两份样式表共 21 处新增
+`prefers-reduced-motion` 块）。`.gui-motion-off` 仍只在桌面写入，移动端不依赖它。
+
+`.gui-shiny-text` 不能只写 `animation: none`：关键帧停在负 `background-position` 会只剩
+近乎透明的渐变边缘，文字不可读，因此同时退回普通文字填充。
+
+守卫：`test/reduced-motion-coverage.test.ts` 静态解析两份 CSS，要求每个
+`animation-iteration-count: infinite` 选择器都被一条**更靠后**的 reduce 规则覆盖
+（只存在不够——媒体查询不改优先级，放前面会被后续基础规则压掉）。
+
+### 15.4 令牌体检结论
+
+`docs/review/2026-11-17-mobile-ui-token-audit.md`：颜色已高度令牌化（裸值 4.8%/8.4%），
+间距几乎未做（91.5%/98.8%），阴影与动效时长居中。`--space-*` 已定义但两份文件只用了
+59 次/4 次。间距阶梯与真实用量错位（6px、10px 不在 4 的倍数阶梯上），需要产品先决定
+是补半步令牌还是归并，本次不动。
+
+### 15.5 未验证
+
+- 全部移动端改动只做到编译与静态断言级：无真机、无浏览器。`pointer: coarse` 的实际
+  命中盒、`prefers-reduced-motion` 在 ArkWeb 上是否生效、读屏播报顺序均未实测。
+- 鸿蒙从零编译 33/33 通过、Android `assembleDebug` 通过，均不代表运行时可验收。
+
+### 15.6 真机验收（2026-11-18，HUAWEI Pura X Max / HarmonyOS 7.0.0 / API 26）
+
+首次在真机上跑通安装 → 启动 → 连接 → 输入。
+
+**通过的项**
+
+- `devecocli signature generate --type debug` → `entry-default-signed.hap` → 安装 → `devecocli run`：`Smoke: PASS`。
+- 原生 ArkUI 悬浮 Tabs（API 26 `barFloatingStyle`）：点「设置」正确打开设置页，栏体保持悬浮。
+- 键盘适配：输入框随键盘上移，未被遮挡（`.sh-composer` 的 inset 链路在真机上成立）。
+- 端到端消息链路：手机 → LAN 中继 → daemon 收到 prompt；daemon 的错误也正确回传显示在手机上。
+- 证书弹窗点「继续访问」后页面可正常渲染。
+
+**发现的问题**
+
+1. **手机端会话区空白。** `app.tsx` 的 `inWorkspace` 要求 `!mobile`，手机上恒为假，因此永远不进会话列表；同时没有自动聚焦任何会话，`focusedSessionId === null` 走进草稿分支。daemon 里确实有 live 会话，界面却两者都不显示。
+2. **折叠屏断点失效。** 真机 `innerWidth = 940`，超过 `PHONE_MAX_WIDTH = 840`，`isTouchSurface()` 为 false。壳内仍进移动布局是因为 `isMobileShell()` 认出了 `harmonyNative`；**同一份页面用浏览器打开就退回桌面布局**。这是「手机浏览器拿到手机 IA」这条契约在宽屏设备上的缺口。
+3. **共享链接是自签名证书。** 系统浏览器每次都弹「证书不可信」，必须手动点「继续访问」。中继证书 `CN=musepi-collab lan` 自签，手机不信任。
+4. **手机连不上中继（环境侧）。** `192.168.31.16` 与 `172.21.32.1` 在手机上均不通；Windows 防火墙三个配置文件全开且没有 7654/7655 入站规则。首次连接成功过一次，之后不再通。加放行规则需要管理员权限，未执行。
+
+**未验证**
+
+- 返回键三段行为（先收键盘 → 关 sheet → 退应用）：`hdc` 模拟的左边缘滑动被系统识别成「最近任务」，未触发应用返回；设置页在布局树里也没有可见返回按钮。
+- 会话列表滑动、会话树面包屑：受问题 1 阻塞，会话区为空无法进入会话。
+
+### 15.8 品牌标识与客户端对齐（2026-11-18）
+
+鸿蒙壳的连接页此前把 `app_icon` 放大到 **72px** 居中当主视觉，而客户端的连接页
+**没有**这个大球——客户端的身份只出现在顶栏的 lockup（28px 球 +「MusePi」文字，
+`shell.css:1979` `.sh-lockup`）。点阵字 `DotMatrixMark` 在客户端已于
+`shell.css:5031` 全面废弃（`display: none`，注释写明「the lockup carries the
+identity」），只剩启动画面在用。
+
+所以鸿蒙壳自成一派：它既没有客户端的顶栏 lockup 形态，又多了一个客户端根本不
+存在的大球。修正：连接页中央去掉 72px 大球，只留标题与副标题，与客户端一致；
+顶栏保持 26px 小球 + 文字的 lockup。
+
+### 15.9 图标资源：鸿蒙与客户端对齐（2026-11-18）
+
+把三套图标渲染出来并排对比后，发现**鸿蒙的图标资源从未与客户端同步过**：
+
+| 资源 | 造型 |
+| --- | --- |
+| `apps/desktop/build/icon.png`（客户端应用图标） | 金色 IP 球体 + 耳机 + 两只眼 + 微笑，深色点阵卡片 |
+| `packages/client-core/public/favicon.svg`（web favicon） | 同一套 |
+| `apps/mobile/.../ic_launcher.png`（Android 启动器） | 同一套 |
+| `apps/harmony/.../app_icon.svg`（鸿蒙） | **另一套**：小球居中、脸在中间偏下、没有耳机 |
+
+之前只把鸿蒙那套的 `oklch()` 换成 sRGB，等于把一套旧图标的颜色修对了——方向错了。
+
+修正：鸿蒙的 `app_icon.svg` 改为客户端主文件 `apps/desktop/build/icon.svg`（品牌 S5，
+IP 球体 + 耳机 + 表情），其中 21 处 `oklch()` 全部换算为等价 sRGB（ArkUI 的 SVG
+光栅器不解析该函数）。entry 与 AppScope 两份都换。
+
+**鸿蒙的 `media` 目录只接受 SVG**：换成 PNG 后应用直接白屏，设备日志报
+`DeliverResource, PluginMgr resType 1002 no lib register`。PNG 需走 `rawfile`。
+
+界面内的小图标（26px 行首、连接页、启动器图标、启动窗口图标）全部指向同一个
+`app_icon`，不再有「小尺寸版」这种变体。
+
+**托盘图标也换成同一套造型**。原先是「球体挖空头带」的旧剪影，没有眼睛也没有微笑，
+与标准图标不是一个语言。现改为品牌球体的单色版：
+- 实心帧（未读/忙碌）：填实的球，脸部**镂空**——托盘运行时会把所有 RGB 重写成任务栏
+  颜色，细节必须活在 alpha 通道里，用第二颜色画的脸会被抹掉；
+- 空心帧（空闲）：线稿球。
+
+形状差异保留（Windows 靠形状区分状态，因为 `Shell_NotifyIcon` 不支持部分透明）。
+两个 SVG 源（`build/icon-tray-solid.svg` / `icon-tray-hollow.svg`）同步更新，
+`scripts/render-brand-assets.mjs` → `regen-brand-icons.py` → base64 这条链
+下次重新生成时不会退回旧造型。
+
+### 15.7 真机发现并修复的三处缺陷（2026-11-18）
+
+**1. 界面材质的滑块点了不生效**
+
+真机复现：把滑块从「极薄」点到最左，滑块值确实变成 `0.000000`，但两处文案
+（详情页标题与列表页摘要）仍显示「极薄」。
+
+原因：`Slider` 的 `value` 绑 `materialStep()`，它读 `@State material`；而
+`onChange` 只在 `pick()` 的回调里赋值 `material`，那个回调又包在 `animateTo` 内，
+状态从未被同步写入——于是控件自己弹回原位，偏好却已经在底下变了。
+
+另外点击轨道只触发 `SliderChangeMode.Click`（不伴随 `End`），所以两个提交模式都
+要判断。修复：先同步 `this.material`，再 `commit()` 写存储。
+
+**2. 启动图标是黑色的**
+
+`app_icon.svg` 的径向渐变用了三处 `oklch()`。ArkUI 的 SVG 光栅器不解析
+`oklch()`，渐变整体失效，图标退化成一块黑圆盘——这正是「颜色没渲染出来、看起来
+像另一个旧图标」的成因。等价 sRGB：`#F7D69F` / `#B1873D` / `#4B2F00`
+（entry 与 AppScope 两份都要改，启动器读的是 AppScope 那份）。
+
+**3. 折叠屏展开后浏览器里退回桌面布局**
+
+真机实测：`hover: none` 为真、`pointer: coarse` 为**假**（折叠屏的主指针是触控板），
+`innerWidth` 940。原判据 `(hover: none) and (pointer: coarse)` 因此在真机上失效，
+而 `PHONE_MAX_WIDTH = 840` 又把展开态排除在外。
+
+修复：触屏信号改用 `hover: none`（这才是「无法悬停」的真实含义），宽度上限放宽
+到 1100 以覆盖折叠屏展开态。宽度上限仍然保留——否则带触控屏的笔记本会把窄窗口
+也拖进手机布局，而拖窄桌面窗口必须保留工作区目录。
+
+**4. 材质名称与实际材质整体错位一档**（真机发现）
+
+存储值就是 shell 的 `uiMaterial.ImmersiveStyle` 索引（`Index.currentMaterial`）：
+`0`=REGULAR 精美、`1`=THICK 均衡、`2`=THIN 轻柔、`3`=ULTRA_THIN 极薄。但
+`materialValue()` 把 `1` 当作精美、`0` 当作均衡，`materialStep()` 同样偏移一位——
+于是滑块停在「精美」的位置、名字却写「均衡」，滑块两端标签也反了（左「极薄」
+右「精美」）。真机上把滑块拖到最左会显示「极薄」，而底栏其实是最厚的材质。
+
+修复：三处映射统一到同一条阶梯（0 精美 / 1 均衡 / 2 轻柔 / 3 极薄），两端标签方向
+随之改正。
+
+**5. ArkUI 的 `@Builder` 参数按值传递，列表摘要不跟随状态**
+
+`navRow(..., this.materialValue(), ...)` 在父级构建时就把名称算成字符串传入，Builder
+参数再被固定下来；于是滑块动了、详情页文案跟着变了，列表摘要却停在旧值——切走再
+切回也不变（真机确认）。
+
+修复：新增 `materialNavRow`，在 Builder 体内直接读 `this.material`，让 ArkUI 建立
+状态依赖并重绘。其余行传的是常量，不受影响。
+
+**模拟器复验（MusePiFold，HarmonyOS 7.0.0 / API 26）**
+
+真机最后因再次锁屏未复验的两项，在折叠屏模拟器上补齐：
+
+- 材质滑块：点最右 → 滑块 `3.000000`，详情页文案「极薄」，**左侧列表摘要同步变为
+  「极薄」**（`materialNavRow` 生效），两端标签左「精美」右「极薄」，方向正确。
+- 启动图标：截图确认为金色球面脸，不是黑圆盘。
+- 原生会话列表：用 `harmonyNative.openSessionsSheet` 注入两条会话，ArkUI 的
+  `List` + `Search` + 分组标题（「正在运行」）渲染正常，当前会话带勾选，状态点区分
+  运行中/空闲。
+
+**断点信号在两个平台上恰好相反**
+
+| 平台 | `hover: none` | `pointer: coarse` | 宽度 |
+| --- | --- | --- | --- |
+| 真机 Pura X Max | **真** | 假 | 940 |
+| 模拟器 MusePiFold | 假 | **真** | 708 |
+
+用 `pointer: coarse` 会在真机上失效（折叠屏的主指针是触控板）；用 `hover: none` 会在
+模拟器上不误判。**`hover: none` 是唯一两边都正确的信号**，已写进
+`test/surface.test.ts`（两条用例分别钉住真机与模拟器的信号组合）。
+
+**「会话区空白」不是缺陷**
+
+真机浏览器里看到的空白，实际是「连上了但页面走了桌面布局」：桌面形态下
+`emptySlot` 为 `undefined`，转录区什么都不渲染。手机形态永远有 `emptySlot`
+（草稿态是欢迎提示，水合中是骨架屏），所以不会出现空白。断点修复消除了这个前提，
+并新增契约测试 `app-mobile-navigation.test.tsx`「never leaves the transcript area
+blank on a phone surface」钉住它。
+
+**仍未复验**：真机上的返回键三段行为（先收键盘 → 关 sheet → 退应用）——`hdc` 模拟的
+左边缘滑动被系统识别成「最近任务」，而设置页在布局树里没有可见返回按钮，只能靠系统
+手势。
+
+**会话区空白这一条仍未定位**：之前观察到的空白发生在**系统浏览器**里（shell 未装
+在浏览器中），而壳内的草稿态实测是正常的（有欢迎提示与输入框）。壳内是否也有空白
+需要解锁后在壳内复验，不能据浏览器现象下结论。

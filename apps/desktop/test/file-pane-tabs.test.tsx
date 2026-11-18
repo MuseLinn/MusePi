@@ -75,6 +75,71 @@ describe("FilePane tree assembly", () => {
 	});
 });
 
+describe.skipIf(process.platform !== "win32")("FilePane Windows tree paths", () => {
+	const originalElectronAPI = window.electronAPI;
+	const winCwd = "D:\\Projects";
+	const winEntry: WorkspaceEntry = {
+		path: "Agents/MusePi",
+		name: "MusePi",
+		isDir: true,
+		size: 0,
+		mtime: 0,
+		depth: 2,
+	};
+
+	beforeEach(() => {
+		Object.defineProperty(window, "electronAPI", {
+			configurable: true,
+			writable: true,
+			value: { copyText: vi.fn().mockResolvedValue(true), openWith: vi.fn().mockResolvedValue(true) },
+		});
+	});
+
+	afterEach(() => {
+		Object.defineProperty(window, "electronAPI", {
+			configurable: true,
+			writable: true,
+			value: originalElectronAPI,
+		});
+	});
+
+	it("copies and opens a native Windows path from tree entries", async () => {
+		const rpc = {
+			request: async (method: string) => {
+				if (method === "workspace.tree") return { entries: [winEntry] };
+				return null;
+			},
+			addEventListener: () => () => {},
+		} as unknown as RpcClient;
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+		const root = createRoot(container);
+		mounted.add(root);
+		await act(async () =>
+			root.render(<FilePane bufferStore={filePreviewBuffers} rpc={rpc} cwd={winCwd} browseRoot="Agents" />),
+		);
+		await waitFor(() => container.querySelector(".gui-filepane-row") !== null);
+		const breadcrumb = container.querySelector(".gui-filepane-path")?.textContent ?? "";
+		expect(breadcrumb).not.toContain("~/");
+		expect(breadcrumb).toContain(winCwd);
+
+		await act(async () =>
+			container
+				.querySelector<HTMLButtonElement>(".gui-filepane-row")
+				?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true })),
+		);
+		const copyPath = [...document.querySelectorAll<HTMLButtonElement>("[role=menuitem]")].find(
+			item => item.textContent?.trim() === "Copy path",
+		);
+		expect(copyPath).toBeTruthy();
+		await act(async () => copyPath?.click());
+		expect(window.electronAPI?.copyText).toHaveBeenCalledWith("D:\\Projects\\Agents\\MusePi");
+
+		await act(async () => container.querySelector<HTMLButtonElement>(".gui-filepane-open-btn")?.click());
+		expect(window.electronAPI?.openWith).toHaveBeenCalledWith("", "D:\\Projects\\Agents\\MusePi");
+	});
+});
+
 describe("FilePane panel tab opening", () => {
 	let clipboardDescriptor: PropertyDescriptor | undefined;
 	beforeEach(() => {

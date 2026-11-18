@@ -8,6 +8,29 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Build a browser-safe `file://` URL from a filesystem path. Host-agnostic:
+ * the browser has no Node `url` module, so Windows drive/UNC forms are
+ * normalized explicitly and `encodeURI` handles spaces and non-ASCII names.
+ */
+export function fileUrlFromPath(value: string): string {
+	const windowsDrive = /^[A-Za-z]:[\\/]/.test(value);
+	if (/^file:\/\//i.test(value)) {
+		const rest = value.slice("file://".length);
+		if (windowsDrive || /^[A-Za-z]:[\\/]/.test(rest)) return fileUrlFromPath(rest);
+		if (rest.startsWith("//")) return `file://${encodeURI(rest.slice(2))}`;
+		if (rest.startsWith("/")) return `file://${encodeURI(rest.replace(/\\/g, "/"))}`;
+		return `file://${encodeURI(rest.replace(/\\/g, "/"))}`;
+	}
+	if (!windowsDrive && /^[a-z][a-z0-9+.-]*:/i.test(value)) return value;
+
+	const normalized = value.replace(/\\/g, "/");
+	if (normalized.startsWith("//")) return `file://${encodeURI(normalized.slice(2))}`;
+	if (/^[A-Za-z]:\//.test(normalized)) return `file:///${encodeURI(normalized)}`;
+	const path = normalized.startsWith("/") ? normalized : `/${normalized}`;
+	return `file://${encodeURI(path)}`;
+}
+
 /** String passthrough; anything else (including null/undefined) → null. */
 export function str(value: unknown): string | null {
 	return typeof value === "string" ? value : null;
@@ -197,7 +220,7 @@ export function computerShotsOf(result: unknown): string[] {
 		const rec = shot as Record<string, unknown>;
 		const target = typeof rec.target === "string" ? rec.target : "";
 		if (target.startsWith("data:")) srcs.push(target);
-		else if (typeof rec.path === "string" && rec.path.length > 0) srcs.push(`file://${rec.path}`);
+		else if (typeof rec.path === "string" && rec.path.length > 0) srcs.push(fileUrlFromPath(rec.path));
 		else if (target) srcs.push(target);
 	}
 	return srcs;

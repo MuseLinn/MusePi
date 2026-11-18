@@ -291,7 +291,7 @@ describe("build-time slot declarations", () => {
 				stamp: 0,
 				entries: {},
 				declarations: {
-					[entry.replaceAll("\\", "/")]: [{ slot: "app.chat", file: "demo-page.js", label: "会话" }],
+					[entry.replaceAll("\\", "/")]: [{ slot: "main.conversation", file: "demo-page.js", label: "会话" }],
 				},
 			}),
 		);
@@ -302,7 +302,7 @@ describe("build-time slot declarations", () => {
 			process.cwd(),
 		);
 		expect(components).toHaveLength(1);
-		expect(components[0]?.slot).toBe("app.chat");
+		expect(components[0]?.slot).toBe("main.conversation");
 		expect(components[0]?.label).toBe("会话");
 		expect(components[0]?.code).toBe("");
 		expect(components[0]?.codeFile).toBe(path.join(artifactDir, "demo-page.js"));

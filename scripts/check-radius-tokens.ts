@@ -30,7 +30,16 @@ const ROOTS = ["apps/desktop/src", "packages/client-core/src"];
 const TOKENS_FILE = "packages/client-core/src/styles/tokens.css";
 const LADDER = ["--radius-xs", "--radius-sm", "--radius-md", "--radius-lg", "--radius-xl", "--radius-2xl"] as const;
 
-/** Semantic shapes that are not part of the ladder (pill / circle / none). */
+/**
+ * 语义形状（非阶梯）：药丸、圆、去角。
+ *
+ * `999px` / `99px` 与 `--radius-full`（9999px）并列为放行值，这是刻意的兼容放行，
+ * 不是遗漏：药丸半径在 CSS 里会按半高 clamp，超小元素上三者视觉等价，而全仓已有
+ * 280 处 `999px` 与 7 处 `99px`（其中 `apps/desktop` 的历史样式占多数）。收紧成只认
+ * `9999px` 会让守卫一次性红 287 处，把一个纯一致性问题变成横跨十余个文件的机械替换，
+ * 那需要产品先决定药丸半径的规范化口径。三者只在 min-height 很大的元素上才有可见差异。
+ * 新增样式仍应用 `var(--radius-full)`；此处放行不代表裸值是新代码的推荐写法。
+ */
 const ALLOWED_RE =
 	/^(?:var\(--radius[-\w]*\)|9999px|999px|99px|50%|0|inherit|calc\(infinity \* 1px\)|0\.5px|1\.5px|0\.25rem)(?:\s+(?:var\(--radius[-\w]*\)|9999px|999px|99px|50%|0|inherit|calc\(infinity \* 1px\)|0\.5px|1\.5px|0\.25rem))*$/;
 

@@ -44,7 +44,7 @@ export function ThinkingSelector({
 	efforts?: readonly string[] | null;
 	/** Capsule mode (ModelThinkingCapsule): the trigger renders as a
 	 *  transparent segment inside the shared pill — no own pill surface,
-	 *  no chevron; the menu itself is unchanged. */
+	 *  no leading icon, no chevron; the menu itself is unchanged. */
 	capsule?: boolean;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
@@ -82,7 +82,7 @@ export function ThinkingSelector({
 				}
 				aria-label={t("transcript.thinkingLevel")}
 			>
-				<Icon name="brain" className="h-3.5 w-3.5" />
+				{!capsule && <Icon name="brain" className="h-3.5 w-3.5" />}
 				<span className="gui-model-capsule-seg-text gui-model-capsule-seg-text--thinking max-w-[120px] truncate">
 					{thinkingLabel(value)}
 				</span>

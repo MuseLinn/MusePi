@@ -55,7 +55,7 @@ describe("focus-mode composer morph", () => {
 		// one guarded by `if (...)`.
 		const first = source.indexOf("composerMotionOff()");
 		const check = source.indexOf("composerMotionOff()", first + 1);
-		const pin = source.indexOf("el.classList.add(\"gui-composer-wrap--morphing\")");
+		const pin = source.indexOf('el.classList.add("gui-composer-wrap--morphing")');
 		const animate = source.indexOf("el.animate(");
 		expect(check).toBeGreaterThan(first);
 		expect(pin).toBeGreaterThan(check);

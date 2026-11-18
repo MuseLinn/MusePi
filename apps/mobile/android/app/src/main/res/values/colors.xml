@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Brand palette. Mirrors packages/client-core/src/styles/tokens.css and the
+     theme-color meta in client-core/mobile.html so the launch window and the
+     notification accent match the web shell instead of the platform default.
+     Light uses the darker gold: #D9A441 does not carry contrast on #FAF7FC. -->
+<resources>
+    <color name="colorPrimary">#8A6A1F</color>
+    <color name="colorPrimaryDark">#6B5015</color>
+    <color name="colorAccent">#8A6A1F</color>
+    <!-- Surface behind the WebView, and the splash background built on it. -->
+    <color name="windowBackground">#FAF7FC</color>
+    <color name="splashBackground">#FAF7FC</color>
+</resources>

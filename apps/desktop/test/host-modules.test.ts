@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { t as clientCoreT } from "@musepi/client-core";
 import { EXTENSION_HOST_MODULES } from "@musepi/collab-proto/extension-host-modules";
 import { compileComponentModule } from "../../../packages/coding-agent/src/daemon/extension-artifact-compiler";
+import "../src/components/Composer";
 import { exposeHostModules } from "../src/lib/host-modules";
 import * as slotHost from "../src/lib/slot-host";
 import { SlotComponentHost } from "../src/lib/slot-host";
@@ -105,11 +106,14 @@ describe("host module table", () => {
 		expect(translate("settings.cancel")).toBe("Cancel");
 	});
 
-	it("compiles the chat page against slot-host instead of bundling it", async () => {
+	it("compiles the chat page against the host's shared modules instead of bundling them", async () => {
 		const { code } = await compileComponentModule(path.resolve("src/plugins/chat-view/page.tsx"));
 		expect(code).toContain('missing "slot-host"');
-		expect(code).toContain('missing "voice"');
-		expect(code).toContain('missing "suggestions"');
+		// The input card is its own host module; the page must bind to it rather
+		// than pull a second Composer (and its voice/suggestions deps) into the
+		// artifact.
+		expect(code).toContain('missing "composer"');
+		expect(code).toContain('missing "client-core"');
 		expect(code).not.toContain("ConfirmContext");
 	}, 60_000);
 

@@ -313,6 +313,74 @@ describe("layoutTurnMap", () => {
 	});
 });
 
+describe("车道头来源(按真实分叉来源分段)", () => {
+	/** 带稳定 id/parentId 的轮组:分支轮的父轮由 parentId 解析。 */
+	const linked = (turn: number, id: string, parentId?: string, branch = false): TrajectoryTurnGroup => ({
+		turn,
+		id,
+		parentId,
+		displayTurn: turn,
+		events: [
+			{
+				id: `${id}-e`,
+				entryId: id,
+				kind: "user",
+				title: id,
+				turn,
+				pathTurn: turn,
+				tsMs: turn * 1000,
+				branch: branch || undefined,
+			},
+		],
+		firstTs: new Date(turn * 1000).toISOString(),
+		startMs: turn * 1000,
+		endMs: turn * 1000 + 1,
+	});
+
+	it("同车道内父轮不同的连续分支轮各自分段,车道头跟随真实来源", () => {
+		// 回归:t1/t2 主线,t3 从 t1 分叉、t4 从 t2 分叉。两者连续同车道,
+		// 旧实现整条车道只记首个来源 → t4 的头部错标「自 Turn 1」。
+		const turns = [linked(1, "u1"), linked(2, "u2"), linked(3, "u3", "u1", true), linked(4, "u4", "u2", true)];
+		const layout = layoutTurnMap(turns);
+		const laneNodes = layout.nodes.filter(n => n.branch);
+		expect(laneNodes.map(n => n.sourceTurn)).toEqual([1, 2]);
+		expect(laneNodes.every(n => n.lane === 1)).toBe(true);
+		expect(layout.lanes.map(l => ({ lane: l.lane, first: l.first.group.turn, sourceTurn: l.sourceTurn }))).toEqual([
+			{ lane: 1, first: 3, sourceTurn: 1 },
+			{ lane: 1, first: 4, sourceTurn: 2 },
+		]);
+		// 车道头文案 = 来源轮的展示编号,不是首个分支轮的来源。
+		expect(layout.lanes.map(l => l.sourceLabel)).toEqual([1, 2]);
+	});
+
+	it("轮号重复时交汇点按节点身份连接,不把两个父轮的圆点合并", () => {
+		// journal 轮号可重复(历史前插/重答)。这里两个分支轮分别从 turn 2
+		// 与 turn 1 分叉,而 turn 1 又同时是另一个主线轮:按轮号回查会锁死
+		// 在同号的第一个节点上,交汇点位置与连线来源都会错。
+		const turns = [
+			linked(1, "u1"),
+			linked(1, "u2"),
+			linked(2, "u3", "u2", true),
+			linked(3, "u4", "u1", true),
+			linked(4, "u5", "u1"),
+		];
+		const layout = layoutTurnMap(turns);
+		const branchEdges = layout.edges.filter(e => e.branch);
+		expect(branchEdges.map(e => e.from.group.id)).toEqual(["u2", "u1"]);
+		// 两个父轮的交汇点位置不同(不是同一个圆点)。
+		const [j1, j2] = layout.junctions.map(j => `${j.x},${j.y}`);
+		expect(j1).not.toBe(j2);
+	});
+
+	it("同车道同来源的连续分支轮共用一段(不因逐轮追加而碎片化)", () => {
+		const turns = [linked(1, "u1"), linked(2, "u2"), linked(3, "u3", "u1", true), linked(4, "u4", "u1", true)];
+		const layout = layoutTurnMap(turns);
+		expect(layout.lanes).toHaveLength(1);
+		expect(layout.lanes[0]?.first.group.turn).toBe(3);
+		expect(layout.lanes[0]?.sourceTurn).toBe(1);
+	});
+});
+
 describe("layoutTurnMap 横向布局", () => {
 	it("主线沿 X 轴水平推进(y=0),分支车道纵向开行", () => {
 		const turns = [turnGroup(1), turnGroup(2), turnGroup(3, { branch: true }), turnGroup(4)];

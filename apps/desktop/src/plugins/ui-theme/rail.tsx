@@ -1255,7 +1255,7 @@ function RailSlot({
 }
 
 /**
- * `app.overlay` entry: the rail is a window-level fixed layer, so the bundle
+ * `shell.overlay` entry: the rail is a window-level fixed layer, so the bundle
  * portals it to `document.body` instead of inheriting a panel's containing
  * block. The host renders {@link FloatingScrollbar} directly as its fallback.
  */

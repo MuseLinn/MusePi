@@ -45,6 +45,34 @@ export interface ConnectorTokenSchema {
 	fields: ConnectorTokenField[];
 	/** Default `${value}` → `Authorization: Bearer <first field>`. */
 	header?: { name: string; template: string };
+	/**
+	 * Carries the first field as a URL query parameter instead of a header.
+	 * Some vendors issue a plain key for a query parameter (Amap's `?key=`),
+	 * and an `Authorization` header there would be ignored. `header` wins when
+	 * both are declared.
+	 */
+	query?: string;
+	/**
+	 * The fields are an OAuth client id and secret rather than a token.
+	 *
+	 * A vendor that publishes no registration endpoint needs an application
+	 * registered before sign-in (GitHub refuses a PKCE-only exchange, so the
+	 * secret is required there). The values land in the encrypted secret
+	 * store and are read back at exchange time; the catalog keeps only the
+	 * field names.
+	 */
+	oauthClient?: { clientIdField: string; clientSecretField: string };
+	/**
+	 * A pasted personal access token, used when the OAuth flow is not
+	 * available or the user prefers it.
+	 *
+	 * The field is optional and separate from the OAuth client: a catalog
+	 * that names it offers the token form as well as the browser sign-in.
+	 * The value is read from the encrypted store and sent as the
+	 * authorization header only while no OAuth grant exists, so a sign-in
+	 * that succeeded is never silently downgraded to a token.
+	 */
+	personalAccessToken?: { field: string; label?: string; docUrl?: string };
 }
 
 /** One remote MCP endpoint declared by a catalog entry. */
@@ -115,6 +143,14 @@ export function connectorKind(entry: { server?: ConnectorServerSpec; cli?: Conne
 /** OAuth hints a catalog may pin instead of relying on runtime discovery. */
 export interface ConnectorOAuthSpec {
 	clientId?: string;
+	/**
+	 * Secret for an authorization-code exchange. GitHub refuses a PKCE-only
+	 * exchange — it answers `incorrect_client_credentials` — so a GitHub row
+	 * needs one. The value is a reference to the encrypted connector secret
+	 * store, never the secret itself: a catalog is a document a user can read
+	 * and copy, and a client secret in one would travel with it.
+	 */
+	clientSecret?: string;
 	/** Authorization-server metadata endpoints, when the provider fixes them. */
 	authorizationUrl?: string;
 	tokenUrl?: string;
@@ -128,7 +164,25 @@ export interface ConnectorCatalogEntry {
 	id: string;
 	name: string;
 	description: string;
+	/** Chinese one-liner, shown instead of `description` on a Chinese UI. */
+	descriptionZh?: string;
+	/**
+	 * Two or three sentences for the expanded card: what the connector reaches,
+	 * and what it is for. The one-liner above is what the collapsed row shows.
+	 */
+	details?: string;
+	/** Chinese counterpart of `details`. */
+	detailsZh?: string;
 	category?: string;
+	/** Promoted to the page's opening section. */
+	featured?: boolean;
+	/**
+	 * How far the sign-in walk was verified for this row. `oauth` and `none`
+	 * mean a client reached the point where the user signs in; `token` means
+	 * a pasted key is the way in; `needs-app` means the vendor requires a
+	 * registered application first, so the row cannot connect as shipped.
+	 */
+	verified?: "oauth" | "none" | "token" | "needs-app";
 	icon?: string;
 	docsUrl?: string;
 	examples?: string[];
@@ -142,8 +196,12 @@ export interface ConnectorCatalogEntry {
 	tokenSchema?: ConnectorTokenSchema;
 	/** Absolute path of the file (or URL) that produced this entry. */
 	source: string;
-	/** Where the entry came from; `package` is the WorkBuddy-compatible layout. */
-	sourceKind: "index" | "package" | "remote";
+	/**
+	 * Where the entry came from, lowest precedence first: `bundled` ships with
+	 * the product, `package` is the WorkBuddy-compatible layout, and `index`
+	 * (or a remote index) is the user's own catalog.
+	 */
+	sourceKind: "bundled" | "index" | "package" | "remote";
 }
 
 /** Persisted enablement for one connector. */

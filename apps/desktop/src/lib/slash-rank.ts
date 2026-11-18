@@ -2,7 +2,7 @@ import type { SlashEntry } from "../components/SlashRow";
 
 /**
  * Rank slash-command completion matches for the "/" menu (shared by the
- * session Composer and the WelcomeComposer so both menus stay in sync):
+ * session Composer and the HeroComposer so both menus stay in sync):
  * exact name > name prefix > name substring > description substring.
  * Within a tier, GUI-native commands (composer-intercepted — /usage and
  * /context open panels instead of hitting the agent) win, so typing "/c"

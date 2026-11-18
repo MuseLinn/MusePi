@@ -18,7 +18,7 @@ import { SlotComponentMount } from "../src/lib/slot-host";
  */
 
 const ITEM_BASE = {
-	slot: "composer.model",
+	slot: "conversation.input.model",
 	extensionId: "/pkg/index.ts",
 	label: "probe",
 	order: 0,
@@ -131,7 +131,7 @@ describe("plugin module apply(ctx)", () => {
 		const handle = mount(code);
 		await settle();
 		const seen = (window as never as { __probeCtx: { slot: string; extensionId: string } }).__probeCtx;
-		expect(seen.slot).toBe("composer.model");
+		expect(seen.slot).toBe("conversation.input.model");
 		expect(seen.extensionId).toBe("/pkg/index.ts");
 		await handle.unmount();
 	});

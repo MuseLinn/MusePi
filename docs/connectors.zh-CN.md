@@ -18,13 +18,36 @@ scope:
 
 ## 来源
 
-加载器按优先级读取三类来源：
+加载器按优先级读取四类来源：
 
-1. `MUSEPI_CONNECTOR_CATALOG` — 绝对 JSON 文件路径、相对 agent 目录的路径，或 `http(s)` URL。远端索引有 10 秒超时，失败不会阻塞其他来源。
+1. `MUSEPI_CONNECTOR_CATALOG` — 绝对 JSON 文件路径、相对 agent 目录的路径、`http(s)` URL，或两个词之一：
+   - `auto` 检查本应用发布的索引：`https://raw.githubusercontent.com/MuseLinn/MusePi/main/connectors/catalog.json`。
+   - `off` 让目录保持本地，即使存在默认地址。
+   远端索引有 10 秒超时，失败不会阻塞其他来源。
 2. `<agentDir>/connectors/catalog.json` — 默认本地索引。
 3. `<agentDir>/connectors/marketplace/<id>/` — 兼容 WorkBuddy 的包：`plugin.json` 加 `mcp.json`。
+4. 随产品分发的目录 — `packages/coding-agent/src/connectors/bundled-catalog.ts`，每个 profile 开箱即有的那一份清单。它写成代码而不是 JSON，因为它随 CLI 一起打包；优先级最低，因此用户索引或包能替换同名条目。
 
-条目按 id 去重，索引条目优先于包条目。目录接受远端 `http`/`sse` 端点、本地 `stdio` 命令与托管 CLI 包。stdio 条目只有在用户批准该命令指纹后才会挂载；目录不安装包，命令必须已经可用（`npx`/`uvx` 或已安装的二进制）。
+条目按 id 去重，更强的来源胜出；只有同一层级里声明了不同服务器的两条才会产生警告。正是因为这一层，连接器页面在任何人写索引之前就能列出真实服务。目录接受远端 `http`/`sse` 端点、本地 `stdio` 命令与托管 CLI 包。stdio 条目只有在用户批准该命令指纹后才会挂载；目录不安装包，命令必须已经可用（`npx`/`uvx` 或已安装的二进制）。
+
+### 自动检查
+
+自动检查是**默认关闭、主动开启**的（`MUSEPI_CONNECTOR_CATALOG=auto`）。它是在设置页发起的一次网络请求：那个地址并非处处可达，在连不上的机器上，首次打开会先卡住一个请求超时才回落到本来就在本地的目录。编译进应用的目录即时打开、离线可用，所以它是默认值；需要的人或部署再主动打开。
+
+配置了远端索引时，索引正文连同 `ETag` 与抓取时间缓存在 `<agentDir>/connectors/index-cache/<hash>.json`：
+
+| 情况 | 行为 |
+| --- | --- |
+| 缓存不到六小时 | 直接用缓存，不发请求。 |
+| 超过六小时 | 用 `If-None-Match` 重新校验；`304` 只刷新抓取时间，条目保留。 |
+| 请求失败且存在缓存 | 用缓存里的条目，并给一条警告说明失败原因与缓存的年龄。断网不会让某个连接器凭空消失。 |
+| 请求失败且没有缓存 | 这一个来源没有条目，其余来源照常加载。 |
+
+`connectors.catalog.refresh`（「刷新目录」按钮）无视缓存窗口强制重新校验，所以用户按下它拿到的是当前索引。
+
+索引只覆盖应用自带的内容：同 id 的条目替换内置行，新 id 增加一行。启用仍是用户动作，stdio 条目仍需批准命令，加载器仍会拒绝静态凭据头——远端索引能改变**提供什么**，改变不了**已经信任什么**。
+
+发布改动的方式：改默认分支上的 `connectors/catalog.json`。改错的最坏结果是一条连不上的行，下面那层内置目录不受影响。
 
 ### 索引结构
 
@@ -79,7 +102,7 @@ scope:
 }
 ```
 
-`auth.mode` 为 `oauth`（默认）、`none` 或 `token`。可选的 `oauth` 提示（`clientId`、`authorizationUrl`、`tokenUrl`、`scopes`、`callbackPort`、`callbackPath`）映射到现有 MCP OAuth 配置；省略时回退到运行时发现。`token` 条目必须声明表单 schema；值存入加密的连接器密钥库，绝不写进目录：
+`auth.mode` 为 `oauth`（默认）、`none` 或 `token`。`descriptionZh` 为中文界面提供一句中文说明，`featured: true` 让条目进入页面顶部的推荐区。可选的 `oauth` 提示（`clientId`、`authorizationUrl`、`tokenUrl`、`scopes`、`callbackPort`、`callbackPath`）映射到现有 MCP OAuth 配置；省略时回退到运行时发现。`token` 条目必须声明表单 schema；值存入加密的连接器密钥库，绝不写进目录：
 
 ```json
 {
@@ -137,6 +160,38 @@ GUI 如实反映这层包含关系：设置里只有一个入口「连接器」�
 
 `connect` 不启动 OAuth。当 `needsAuth` 为真时，客户端用返回的服务器名调用现有的 `mcp.oauth.start`；授权落在 auth storage，manager 随后重连。桌面端还会传 `redirectUri: musepi://oauth/callback`：Electron shell 注册 `musepi://`，把 URL 转给渲染器，渲染器再调 `mcp.oauth.callback`。state 与 PKCE 在 flow 内校验，因此其他应用唤起该协议也无法完成授权。当 `needsTokenConfig` 为真时，连接器不会被启用，客户端显示 Token 表单，经 `connectors.token.save` 保存后再次调用 `connect`。这样手写服务器与目录连接器共用一套 OAuth 实现和一套凭据存储。
 
+## 从其他智能体导入
+
+发现层本来就会读取每个智能体的 MCP 配置——Cursor、VS Code、Claude、Codex、Kimi Code 等——那些服务在会话里已经可用。`connectors.import.scan` 提供的正是这一份集合，`connectors.import.apply` 把选中的复制进 `<agentDir>/connectors/custom.json`，在那里它们以用户自有条目的身份加入目录。
+
+导入是复制，不是链接：其他智能体的文件不会被写入，之后移除导入的连接器也不会动它。
+
+其他智能体以明文保存的凭据——`Authorization` 请求头，或名字里就写着 token 的环境变量——会移进加密的连接器密钥存储，目录里只留字段名。把它留在原处，等于让它继续被本机上的每个工具读到。而名字像配置的环境变量（`CODEX_HOME`、`JAVA_HOME`、一份可信路径列表）留在条目里：它不是密钥，服务端也是当配置读的。
+
+导入进来的本地命令与目录里声明的命令一样，仍需用户批准才会在此运行。
+
+## 验证
+
+`scripts/probe-connectors.ts` 走完每一行真实会走的登录路径：匿名 `initialize`、受保护资源与授权服务器元数据，然后是用 loopback redirect 的动态客户端注册，停在授权页，不产生任何授权。每一行的结论记在目录条目的 `verified` 字段里。
+
+这个探测之所以存在，是因为厂商文档不是答案。Figma 拒绝路径不以 `/callback` 结尾的 redirect URI，也拒绝名单外的 client name，而它的文档承诺注册可用。Asana 声明的授权服务器不提供注册，资源自身却有一个能注册的。只有真的去注册一次，这些才会显形。
+
+### 品牌图标
+
+每个内置连接器的图标是仓库里的数据，位于
+`apps/desktop/src/components/settings-sections/connector-brand-icons.generated.ts`，
+由 `scripts/generate-connector-brand-icons.ts` 生成。若在渲染时向厂商索取，每张卡片都会发一次请求，也等于告诉每家厂商这台机器打开了设置页，所以图标随应用一起发。
+
+生成器按此顺序取源：已安装的 `simple-icons` 包（版本由 lockfile 固定，不联网）、`logos` 集合、以及厂商自己页面声明的图标。`apps/desktop/test/connector-brand-icons.test.ts` 会在某个内置连接器没有图标、且不在已记录例外里时失败，因此「加了连接器却忘了重新生成」在发布前就会被抓到。
+
+改动目录后重新跑一遍：
+
+```sh
+bun scripts/probe-connectors.ts            # 全部
+bun scripts/probe-connectors.ts github figma
+bun scripts/probe-connectors.ts --json
+```
+
 ## 安全边界
 
 - 线上目录行不包含 `headers`；不返回 token、client secret 或凭据 id。
@@ -159,6 +214,7 @@ GUI 如实反映这层包含关系：设置里只有一个入口「连接器」�
 ## 实现
 
 - `packages/coding-agent/src/connectors/types.ts`
+- `packages/coding-agent/src/connectors/bundled-catalog.ts`
 - `packages/coding-agent/src/connectors/catalog.ts`
 - `packages/coding-agent/src/connectors/state.ts`
 - `packages/coding-agent/src/connectors/runtime.ts`

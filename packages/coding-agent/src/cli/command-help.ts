@@ -74,7 +74,8 @@ export const modelsHelp = { description: "List, search, and refresh available mo
 
 export const pluginHelp = { description: "Manage plugins (install, uninstall, list, etc.)" } satisfies CommandMetadata;
 export const importHelp = {
-	description: "Import sessions from another coding-agent (claude, codex, opencode, grok, kimicode, musepi, omp, pi)",
+	description:
+		"Import sessions from another coding-agent (claude, codex, dsh, opencode, grok, kimicode, musepi, omp, pi)",
 } satisfies CommandMetadata;
 
 export const psHelp = {

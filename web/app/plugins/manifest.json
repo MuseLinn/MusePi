@@ -1,7 +1,7 @@
 {
 	"components": [
 		{
-			"slot": "app.chat",
+			"slot": "main.conversation",
 			"extensionId": "apps/desktop/src/plugins/chat-view/index.ts",
 			"label": "会话",
 			"code": "chat-view.js",

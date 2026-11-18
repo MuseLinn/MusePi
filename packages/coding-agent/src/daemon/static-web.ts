@@ -50,7 +50,7 @@ const DAEMON_CONFIG_PATH = "/__daemon.json";
 /** Injected compat slot host: served only to
  *  `?shell=1` (the Electron compat shell). The client-core bundle stays a
  *  passive renderer — this script is the host that pulls the daemon's
- *  compiled `transcript.node` extension components (extensions.list) and
+ *  compiled `conversation.chat.node` extension components (extensions.list) and
  *  registers them on `window.MusePiCompatHost`; the bundle's Transcript then
  *  dispatches registered kinds through the same seat it uses for an injected
  *  renderTranscriptNode. Runs entirely outside the React tree; the bundle
@@ -109,16 +109,16 @@ export function compatSlotHostScript(): string {
 		} catch {
 			return; // daemon unreachable — no extensions to host
 		}
-		// Shell modes: compatibility = transcript.node only; extended adds
+		// Shell modes: compatibility = conversation.chat.node only; extended adds
 		// the composer/panel/statusbar slots; enhanced keeps those plus native
 		// shell UI (Electron side). The injected host registers components for
 		// the slots the current mode consumes.
 		const mode = registry && registry.shell && typeof registry.shell.mode === "string"
 			? registry.shell.mode
 			: "compatibility";
-		const slots = new Set(["transcript.node"]);
+		const slots = new Set(["conversation.chat.node"]);
 		if (mode === "extended" || mode === "enhanced") {
-			slots.add("composer.dock");
+			slots.add("conversation.composer.dock");
 			slots.add("panel.tab.workbench");
 			slots.add("statusbar");
 		}
@@ -231,7 +231,7 @@ export async function startDaemonWeb(options: DaemonWebOptions): Promise<DaemonW
 			}
 			// Compat shell: `?shell=1` (Electron compat) gets the compat slot
 			// host injected — the daemon-hosted extension components for
-			// transcript.node. Plain browsers (collab guests) never see it.
+			// conversation.chat.node. Plain browsers (collab guests) never see it.
 			if (isRoot && url.searchParams.get("shell") === "1" && filePath.endsWith("index.html")) {
 				const html = await file.text();
 				const withHost = html.includes("</head>")

@@ -18,7 +18,7 @@ import CapabilityPanel from "../src/plugins/capability-panel/page";
  * The capability center's second-tier panel is a real Cordis contribution,
  * not a hard-coded branch. These contracts pin the seam: declaration,
  * registration, host selection/fallback, and the ONE shared nav store that
- * both the compiled `app.capability` page and this panel must bind.
+ * both the compiled `main.capability` page and this panel must bind.
  */
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");

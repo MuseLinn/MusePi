@@ -1,14 +1,14 @@
 /**
  * Capability-center second-tier panel bridge (2026-11-08).
  *
- * The rail owns the panel and the `app.capability` slot owns the page: two
+ * The rail owns the panel and the `main.capability` slot owns the page: two
  * independent React subtrees. The page publishes ONE projection of its state
  * (active tab + the two counts it already loads); the panel renders that
  * projection and sends actions back. Neither subtree imports the other, and
  * a slot mount passes no geometry props.
  *
  * This module is registered in EXTENSION_HOST_MODULES (`capability-nav`), so
- * the compiled `app.capability` page and the compiled `sidebar.panel.capability`
+ * the compiled `main.capability` page and the compiled `sidebar.panel.capability`
  * panel share ONE store instead of bundling private copies.
  */
 

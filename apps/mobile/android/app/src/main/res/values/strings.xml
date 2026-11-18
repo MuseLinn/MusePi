@@ -4,4 +4,22 @@
     <string name="title_activity_main">MusePi</string>
     <string name="package_name">com.musepi.mobile</string>
     <string name="custom_url_scheme">com.musepi.mobile</string>
+
+    <!-- Notification channel created in MainActivity. The LocalNotifications
+         plugin has no channel configuration of its own, so these are read by
+         the native channel setup rather than by capacitor.config.ts. -->
+    <string name="notification_channel_session_name">Session updates</string>
+    <string name="notification_channel_session_description">A background session finished replying or needs your attention.</string>
+
+    <!-- Launcher long-press shortcuts (res/xml/shortcuts.xml). -->
+    <string name="shortcut_new_session_short">New session</string>
+    <string name="shortcut_new_session_long">Open MusePi to start a new session</string>
+    <string name="shortcut_scan_short">Scan to connect</string>
+    <string name="shortcut_scan_long">Open the connect screen to scan a code</string>
+    <string name="shortcut_disabled_message">Shortcut unavailable</string>
+
+    <!-- Share sheet (ACTION_SEND text/plain). MainActivity rewrites the shared
+         text into the musepi:// deep link; this shows only when the text holds
+         no collab link, so the tap is not silently a no-op. -->
+    <string name="share_no_link">No session link in the shared text</string>
 </resources>

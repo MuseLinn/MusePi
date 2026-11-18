@@ -50,9 +50,14 @@ describe("plugin build manifest", () => {
 		]);
 	});
 
-	it("keeps seat ordering for a contribution that declares it", async () => {
+	it("keeps one dock entry per pill, with its id and order", async () => {
 		const rows = await declare("../../packages/coding-agent/src/bundled-plugins/stats-pills");
-		expect(rows.find(row => row.slot === "composer.dock")?.order).toBe(10);
+		expect(
+			rows.filter(row => row.slot === "conversation.composer.dock").map(row => ({ id: row.id, order: row.order })),
+		).toEqual([
+			{ id: "activity", order: 0 },
+			{ id: "usage", order: 1 },
+		]);
 	});
 
 	it("drops a declaration whose module does not belong to the surface being built", () => {

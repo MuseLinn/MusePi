@@ -1,0 +1,961 @@
+/**
+ * Connectors that ship with the product.
+ *
+ * This is the one catalog every profile starts with, so the Connectors page
+ * lists real services before anyone writes an index or installs a package.
+ * Loaded at the lowest precedence: a user `catalog.json`, a connector package,
+ * or an `MUSEPI_CONNECTOR_CATALOG` index that declares the same id replaces
+ * the entry here, which is how a pinned or forked endpoint wins.
+ *
+ * What belongs:
+ *
+ * - The vendor runs the endpoint. A community wrapper of someone else's API is
+ *   not a connector, because its availability and its scopes are not the
+ *   vendor's promise.
+ * - It installs in one step: browser OAuth, a token field, or no auth at all. A
+ *   service that first needs an OAuth client registered by us or by the user
+ *   stays out until it has one — the row would otherwise end at a dead end,
+ *   which is worse than not offering it. That is why Slack, HubSpot, Box and
+ *   PagerDuty are absent despite running real MCP servers.
+ * - Team work. Engineering, product, design, data, docs and operations.
+ *   Consumer services (music, travel, fitness, personal finance) stay out.
+ *
+ * Every endpoint below was probed with `scripts/probe-connectors.ts`, which
+ * walks the sign-in path a client would take: an anonymous `initialize`, the
+ * protected-resource and authorization-server metadata, then a dynamic client
+ * registration with a loopback redirect. It stops at the authorization page
+ * and grants nothing. A row is in this list because that walk reached the
+ * point where a user would sign in.
+ *
+ * The probe found one thing worth writing down: a vendor's own documentation
+ * is not the answer. Figma rejects a redirect URI whose path does not end in
+ * `/callback`, and rejects a client name outside its list, while its docs
+ * promise a working registration. Asana advertises an authorization server
+ * that offers no registration, but the resource itself runs one that does.
+ * Both only show up when a registration is actually attempted.
+ *
+ * Categories are a fixed set so the page can group them in a stable order.
+ * `CATEGORY_ORDER` is that order; an entry naming anything else still renders,
+ * under 其他. `featured` fills the opening section — keep it near six, because
+ * a "recommended" block that holds half the catalog recommends nothing.
+ */
+
+/** Category ids, in the order the Connectors page groups them. */
+export const BUNDLED_CATEGORY_ORDER = ["dev", "docs", "ai", "design", "data", "business"] as const;
+
+export type BundledCategory = (typeof BUNDLED_CATEGORY_ORDER)[number];
+
+type Seed = Readonly<Record<string, unknown>>;
+
+const oauth = (url: string, extra: Record<string, unknown> = {}): Seed => ({
+	server: { type: "http", url },
+	auth: { mode: "oauth" },
+	...extra,
+});
+
+const open = (url: string, extra: Record<string, unknown> = {}): Seed => ({
+	server: { type: "http", url },
+	auth: { mode: "none" },
+	...extra,
+});
+
+const token = (url: string, schema: Record<string, unknown>, extra: Record<string, unknown> = {}): Seed => ({
+	server: { type: "http", url },
+	auth: { mode: "token" },
+	tokenSchema: schema,
+	...extra,
+});
+
+const bearer = (title: string, label: string, docUrl: string): Record<string, unknown> => ({
+	title,
+	docUrl,
+	fields: [{ key: "Token", label, type: "password", required: true }],
+});
+
+const KEY = (title: string, label: string, docUrl: string): Record<string, unknown> => ({
+	title,
+	docUrl,
+	fields: [{ key: "Key", label, type: "password", required: true }],
+});
+
+export const BUNDLED_CONNECTORS: readonly Seed[] = [
+	// ── Development ────────────────────────────────────────────────────────
+	{
+		id: "github",
+		name: "GitHub",
+		category: "dev",
+		featured: true,
+		// GitHub's authorization server publishes no registration endpoint, so a
+		// client cannot register itself; an app has to exist before sign-in.
+		// This is the app MusePi registered for exactly that purpose, with
+		// device flow enabled so a sign-in needs no client secret and no
+		// callback URL.
+		//
+		// The browser-callback path still needs a client secret, because GitHub
+		// refuses a PKCE-only exchange. The device-flow path does not, so the
+		// secret stays optional here.
+		oauth: { clientId: "Ov23liWleGB0BcR9IPBm" },
+		tokenSchema: {
+			title: "Connect GitHub",
+			description: "Sign in with a device code, or paste a personal access token if the device flow is unavailable.",
+			docUrl: "https://github.com/settings/tokens",
+			fields: [],
+			personalAccessToken: {
+				field: "GITHUB_TOKEN",
+				label: "Personal access token",
+				docUrl: "https://github.com/settings/tokens",
+			},
+		},
+		verified: "oauth",
+		docsUrl: "https://docs.github.com/en/copilot/how-tos/context/model-context-protocol",
+		description: "Repositories, issues, and pull requests.",
+		descriptionZh: "仓库、Issue 与拉取请求。",
+		details:
+			"Repositories, issues, pull requests and Actions through GitHub's own remote server. The catalog asks for the context, repos, issues and pull_requests toolsets so a session carries only what it needs.",
+		detailsZh:
+			"通过 GitHub 自己的远程服务访问仓库、Issue、拉取请求与 Actions。目录只申请 context、repos、issues、pull_requests 四个工具集，会话里只带用得上的工具。",
+		examples: ["Summarize the pull requests waiting on my review", "Find the issue that introduced this function"],
+		...oauth("https://api.githubcopilot.com/mcp/", {
+			server: {
+				type: "http",
+				url: "https://api.githubcopilot.com/mcp/",
+				headers: { "X-MCP-Toolsets": "context,repos,issues,pull_requests" },
+			},
+		}),
+	},
+	{
+		id: "gitlab",
+		name: "GitLab",
+		category: "dev",
+		examples: ["Which merge requests are blocking this release?"],
+		verified: "oauth",
+		docsUrl: "https://docs.gitlab.com/user/gitlab_duo/model_context_protocol/mcp_server/",
+		description: "Projects, merge requests, and pipelines.",
+		descriptionZh: "项目、合并请求与流水线。",
+		details:
+			"Projects, merge requests and pipelines from gitlab.com. Useful when a repository lives on GitLab rather than GitHub.",
+		detailsZh: "来自 gitlab.com 的项目、合并请求与流水线。仓库托管在 GitLab 而不是 GitHub 时用它。",
+		...oauth("https://gitlab.com/api/v4/mcp"),
+	},
+	{
+		id: "sentry",
+		name: "Sentry",
+		category: "dev",
+		verified: "oauth",
+		docsUrl: "https://docs.sentry.io/product/sentry-mcp/",
+		description: "Errors, traces, and releases.",
+		descriptionZh: "错误、追踪与发布。",
+		details:
+			"Errors, traces and releases, with the stack context the issue was reported with. Asking what broke after a deploy is faster than reading the dashboard.",
+		detailsZh: "错误、追踪与发布，附带问题上报时的堆栈上下文。问它「上次发布之后什么坏了」比翻看面板更快。",
+		examples: ["What broke in the last deploy?", "Group these issues by root cause"],
+		...oauth("https://mcp.sentry.dev/mcp"),
+	},
+	{
+		id: "cloudflare",
+		name: "Cloudflare",
+		category: "dev",
+		examples: ["Which DNS records still point at the old server?"],
+		verified: "oauth",
+		featured: true,
+		docsUrl: "https://developers.cloudflare.com/agents/model-context-protocol/",
+		description: "Workers, DNS, and account resources.",
+		descriptionZh: "Workers、DNS 与账户资源。",
+		details:
+			"Workers, DNS and account resources. Changes here reach production traffic, so check the zone before editing a record.",
+		detailsZh: "Workers、DNS 与账户资源。这里的改动会影响线上流量，改记录之前先确认是哪个 zone。",
+		...oauth("https://mcp.cloudflare.com/mcp"),
+	},
+	{
+		id: "vercel",
+		name: "Vercel",
+		category: "dev",
+		examples: ["Why did the latest deployment fail?"],
+		verified: "oauth",
+		docsUrl: "https://vercel.com/docs/mcp",
+		description: "Projects, deployments, and logs.",
+		descriptionZh: "项目、部署与日志。",
+		details:
+			"Projects, deployments and their logs. A failed build can be read from the deployment rather than opened in a browser.",
+		detailsZh: "项目、部署与部署日志。构建失败可以直接从部署记录里读，不用再开浏览器。",
+		...oauth("https://mcp.vercel.com"),
+	},
+	{
+		id: "netlify",
+		name: "Netlify",
+		category: "dev",
+		examples: ["Why did the last deploy fail?"],
+		verified: "oauth",
+		docsUrl: "https://docs.netlify.com/build/build-with-ai/netlify-mcp-server/",
+		description: "Sites, deploys, and forms.",
+		descriptionZh: "站点、部署与表单。",
+		details:
+			"Sites, deploys and forms. The deploy list carries the failure reason, so a broken build is one question away.",
+		detailsZh: "站点、部署与表单。部署列表里带着失败原因，构建坏了问一句就够。",
+		...oauth("https://netlify-mcp.netlify.app/mcp"),
+	},
+	{
+		id: "render",
+		name: "Render",
+		category: "dev",
+		examples: ["Why did this service restart overnight?"],
+		verified: "token",
+		docsUrl: "https://render.com/docs/mcp-server",
+		description: "Services, deploys, and logs on Render.",
+		descriptionZh: "Render 上的服务、部署与日志。",
+		details: "Services, deploys and logs on Render. The credential is an API key rather than a browser sign-in.",
+		detailsZh: "Render 上的服务、部署与日志。凭据是 API key，不走浏览器登录。",
+		...token(
+			"https://mcp.render.com/mcp",
+			bearer("Connect Render", "API key", "https://dashboard.render.com/u/settings#api-keys"),
+		),
+	},
+	{
+		id: "postman",
+		name: "Postman",
+		category: "dev",
+		examples: ["Run the smoke-test collection"],
+		verified: "oauth",
+		docsUrl: "https://learning.postman.com/docs/developer/postman-api/intro-api/",
+		description: "Collections, requests, and workspaces.",
+		descriptionZh: "集合、请求与工作区。",
+		details:
+			"Collections, requests and workspaces. Running a saved collection is a way to exercise an endpoint without writing a script.",
+		detailsZh: "集合、请求与工作区。跑一个已保存的集合，是不写脚本也能验证接口的办法。",
+		...oauth("https://mcp.postman.com/mcp"),
+	},
+	{
+		id: "sourcegraph",
+		name: "Sourcegraph",
+		category: "dev",
+		examples: ["Where is this function defined across our repos?"],
+		verified: "oauth",
+		docsUrl: "https://sourcegraph.com/docs/api/mcp",
+		description: "Code search across your repositories.",
+		descriptionZh: "跨仓库代码搜索。",
+		details:
+			"Code search across the repositories a Sourcegraph instance indexes. It answers where a function is defined and who calls it.",
+		detailsZh: "在 Sourcegraph 索引的仓库里做代码搜索。它能回答某个函数在哪定义、被谁调用。",
+		...oauth("https://sourcegraph.com/.api/mcp"),
+	},
+	{
+		id: "deepwiki",
+		name: "DeepWiki",
+		category: "dev",
+		verified: "none",
+		docsUrl: "https://docs.devin.ai/work-with-devin/deepwiki-mcp",
+		description: "Documentation for public code repositories.",
+		descriptionZh: "公开代码仓库的文档解读。",
+		details:
+			"Documentation for public repositories, generated from the code and its issues. Sign-in is not required, so it works before any account is connected.",
+		detailsZh: "公开仓库的文档解读，从代码与 Issue 生成。不需要登录，任何账号都还没连的时候就能用。",
+		examples: ["How does this library's event loop work?"],
+		...open("https://mcp.deepwiki.com/mcp"),
+	},
+	{
+		id: "context7",
+		name: "Context7",
+		category: "dev",
+		examples: ["Show the current API for this library's router"],
+		verified: "none",
+		docsUrl: "https://github.com/upstash/context7",
+		description: "Library documentation and code examples.",
+		descriptionZh: "库文档与代码示例。",
+		details:
+			"Library documentation and current code examples, looked up by package. It exists to stop answers that cite an API two versions out of date.",
+		detailsZh: "按包名查库文档与当前版本的代码示例。它存在的意义是避免答案引用两个版本之前的 API。",
+		...open("https://mcp.context7.com/mcp"),
+	},
+	{
+		id: "microsoft-learn",
+		name: "Microsoft Learn",
+		category: "dev",
+		examples: ["How do I configure this Azure feature?"],
+		verified: "none",
+		docsUrl: "https://learn.microsoft.com/en-us/training/support/mcp",
+		description: "Microsoft product documentation.",
+		descriptionZh: "微软产品文档。",
+		details: "Microsoft product documentation. Sign-in is not required.",
+		detailsZh: "微软产品文档。不需要登录。",
+		...open("https://learn.microsoft.com/api/mcp"),
+	},
+	{
+		id: "apollo-graphos",
+		name: "Apollo GraphOS",
+		category: "dev",
+		examples: ["Which operations would break if this field is removed?"],
+		verified: "none",
+		docsUrl: "https://www.apollographql.com/docs/graphos/platform/mcp",
+		description: "GraphQL schemas and operations.",
+		descriptionZh: "GraphQL schema 与操作。",
+		details:
+			"GraphQL schemas and operations from Apollo GraphOS. Useful for checking whether a field change would break a query that ships.",
+		detailsZh: "Apollo GraphOS 里的 GraphQL schema 与操作。用来确认改一个字段会不会弄坏已发布的查询。",
+		...open("https://mcp.apollographql.com"),
+	},
+	{
+		id: "scalar",
+		name: "Scalar",
+		category: "dev",
+		examples: ["Look up the request schema for this endpoint"],
+		verified: "none",
+		docsUrl: "https://scalar.com/products/api-references/mcp",
+		description: "API reference documentation.",
+		descriptionZh: "API 参考文档。",
+		details: "API reference documentation served by Scalar. Sign-in is not required.",
+		detailsZh: "Scalar 提供的 API 参考文档。不需要登录。",
+		...open("https://scalar.com/mcp"),
+	},
+
+	// ── Documents and knowledge ────────────────────────────────────────────
+	{
+		id: "notion",
+		name: "Notion",
+		category: "docs",
+		verified: "oauth",
+		featured: true,
+		docsUrl: "https://developers.notion.com/docs/mcp",
+		description: "Pages, databases, and wiki content.",
+		descriptionZh: "页面、数据库与知识库。",
+		details:
+			"Pages, databases and wiki content. A page can be drafted from a conversation and filed where the team already looks.",
+		detailsZh: "页面、数据库与知识库内容。可以把一段对话直接起稿成页面，放到团队原本就在看的位置。",
+		examples: ["Draft a page from these meeting notes", "What does our onboarding doc say about expenses?"],
+		...oauth("https://mcp.notion.com/mcp"),
+	},
+	{
+		id: "atlassian",
+		name: "Atlassian",
+		category: "docs",
+		examples: ["What changed in Jira since yesterday?", "Find the Confluence page on our release process"],
+		verified: "oauth",
+		docsUrl: "https://www.atlassian.com/platform/remote-mcp-server",
+		description: "Jira issues and Confluence pages.",
+		descriptionZh: "Jira Issue 与 Confluence 页面。",
+		details:
+			"Jira issues and Confluence pages through Atlassian's remote server. The same connector reaches both, so a ticket and the page that explains it are one question apart.",
+		detailsZh:
+			"通过 Atlassian 的远程服务访问 Jira Issue 与 Confluence 页面。一个连接器同时覆盖两者，工单和解释它的文档只隔一句提问。",
+		...oauth("https://mcp.atlassian.com/v2/mcp"),
+	},
+	{
+		id: "dropbox",
+		name: "Dropbox",
+		category: "docs",
+		examples: ["Find the contract we signed last quarter"],
+		verified: "oauth",
+		docsUrl: "https://help.dropbox.com/integrations/ai/mcp",
+		description: "Files and folders.",
+		descriptionZh: "文件与文件夹。",
+		details:
+			"Files and folders in a Dropbox account. Searching for the current version of a document is the common case.",
+		detailsZh: "Dropbox 账户里的文件与文件夹。最常见的用法是找出某份文档的当前版本。",
+		...oauth("https://mcp.dropbox.com/mcp"),
+	},
+	{
+		id: "egnyte",
+		name: "Egnyte",
+		category: "docs",
+		examples: ["Where is the newest version of the brand guidelines?"],
+		verified: "oauth",
+		docsUrl: "https://helpdesk.egnyte.com/hc/en-us/articles/360051338712",
+		description: "Content in an Egnyte workspace.",
+		descriptionZh: "Egnyte 工作区里的内容。",
+		details:
+			"Content in an Egnyte workspace. Organizations that keep documents behind Egnyte rather than a consumer drive use this.",
+		detailsZh: "Egnyte 工作区里的内容。给那些把文档放在 Egnyte 而不是消费级网盘的组织用。",
+		...oauth("https://mcp-server.egnyte.com/mcp"),
+	},
+
+	// ── AI and search ──────────────────────────────────────────────────────
+	{
+		id: "huggingface",
+		name: "Hugging Face",
+		category: "ai",
+		examples: ["Find a small model fine-tuned for translation"],
+		verified: "none",
+		docsUrl: "https://huggingface.co/docs/hub/en/hf-mcp-server",
+		description: "Models, datasets, and Spaces.",
+		descriptionZh: "模型、数据集与 Spaces。",
+		details:
+			"Models, datasets and Spaces. Searching for a model that fits a size or licence budget is the usual entry point.",
+		detailsZh: "模型、数据集与 Spaces。通常从找一个符合体积或许可预算的模型开始。",
+		...oauth("https://huggingface.co/mcp"),
+	},
+	{
+		id: "perplexity",
+		name: "Perplexity",
+		category: "ai",
+		examples: ["What changed in this regulation recently?"],
+		verified: "oauth",
+		docsUrl: "https://docs.perplexity.ai/guides/mcp-server",
+		description: "Web answers with citations.",
+		descriptionZh: "带出处的网页问答。",
+		details:
+			"Web answers with citations. Every claim comes back with the page it came from, which is what makes it usable in a report.",
+		detailsZh: "带出处的网页问答。每条结论都附来源页面，这才让它可以进报告。",
+		...oauth("https://www.perplexity.ai/rest/computer/mcp"),
+	},
+	{
+		id: "firecrawl",
+		name: "Firecrawl",
+		category: "ai",
+		examples: ["Turn this documentation site into markdown"],
+		verified: "oauth",
+		docsUrl: "https://docs.firecrawl.dev/mcp-server",
+		description: "Crawl and extract web pages as markdown.",
+		descriptionZh: "抓取网页并转成 Markdown。",
+		details:
+			"Crawls a site and returns pages as markdown. Useful for turning vendor documentation into something a context window can hold.",
+		detailsZh: "抓取站点并把页面转成 markdown。用来把厂商文档变成上下文窗口塞得下的形态。",
+		...oauth("https://mcp.firecrawl.dev/v2/mcp-oauth"),
+	},
+	{
+		id: "tavily",
+		name: "Tavily",
+		category: "ai",
+		examples: ["Search for the latest on this topic"],
+		verified: "oauth",
+		docsUrl: "https://docs.tavily.com/documentation/mcp",
+		description: "Search built for agents.",
+		descriptionZh: "面向 Agent 的搜索。",
+		details:
+			"Search built for agents: results arrive trimmed for a model rather than for a person. Pairs well with a crawler.",
+		detailsZh: "面向 Agent 的搜索：结果按模型可读的形态裁过，而不是给人看的页面。和抓取类工具配合得好。",
+		...oauth("https://mcp.tavily.com/mcp"),
+	},
+	{
+		id: "exa",
+		name: "Exa",
+		category: "ai",
+		examples: ["Find recent papers on retrieval evaluation"],
+		verified: "none",
+		docsUrl: "https://docs.exa.ai/reference/exa-mcp",
+		description: "Semantic web search.",
+		descriptionZh: "语义化网页搜索。",
+		details:
+			"Semantic web search. It matches meaning rather than keywords, which helps when the exact wording is unknown.",
+		detailsZh: "语义化网页搜索。它按意思而不是关键词匹配，措辞不确定时更有用。",
+		...open("https://mcp.exa.ai/mcp"),
+	},
+	{
+		id: "parallel",
+		name: "Parallel",
+		category: "ai",
+		examples: ["Search for recent coverage of this launch"],
+		verified: "none",
+		docsUrl: "https://docs.parallel.ai/integrations/mcp/parallel-mcp",
+		description: "Web search and page extraction.",
+		descriptionZh: "网页搜索与正文提取。",
+		details: "Web search and page extraction. Sign-in is not required.",
+		detailsZh: "网页搜索与正文提取。不需要登录。",
+		...open("https://search.parallel.ai/mcp"),
+	},
+	{
+		id: "jina",
+		name: "Jina AI",
+		category: "ai",
+		examples: ["Read this page and summarize it"],
+		verified: "none",
+		docsUrl: "https://jina.ai/reader/#apiform",
+		description: "Read and search the web as text.",
+		descriptionZh: "把网页读成文本并搜索。",
+		details:
+			"Reads a page as text and searches the web. The key raises the rate limit; the free tier works without one.",
+		detailsZh: "把网页读成文本，也能搜索网页。填 key 能提高限额，不填也有免费额度。",
+		...token("https://mcp.jina.ai/v1", bearer("Connect Jina AI", "API key", "https://jina.ai/api-dashboard/")),
+	},
+	{
+		id: "mem0",
+		name: "Mem0",
+		category: "ai",
+		examples: ["What did we decide about the pricing model last month?"],
+		verified: "oauth",
+		docsUrl: "https://docs.mem0.ai/integrations/mcp-server",
+		description: "Long-term memory shared across sessions.",
+		descriptionZh: "跨会话共享的长期记忆。",
+		details:
+			"Long-term memory that persists across sessions. What was decided last month can be recalled without re-reading a transcript.",
+		detailsZh: "跨会话保留的长期记忆。上个月定下的事能直接调出来，不用翻对话记录。",
+		...oauth("https://mcp.mem0.ai/mcp"),
+	},
+	{
+		id: "amap",
+		name: "Amap",
+		category: "ai",
+		verified: "token",
+		docsUrl: "https://lbs.amap.com/api/mcp-server/summary",
+		description: "Maps, places, and routes in China.",
+		descriptionZh: "中国境内的地图、地点与路线。",
+		details:
+			"Maps, places and routes inside China, which the global map services cover poorly. The key goes in the query string, as Amap requires.",
+		detailsZh: "中国境内的地图、地点与路线，全球地图服务在这一块覆盖很差。密钥按高德的要求放在查询参数里。",
+		examples: ["Find a café near People's Square and route me there"],
+		...token(
+			"https://mcp.amap.com/mcp",
+			{
+				title: "Connect Amap",
+				docUrl: "https://lbs.amap.com/api/mcp-server/create",
+				fields: [{ key: "Key", label: "Web service key", type: "password", required: true }],
+				// Amap reads the key from the query string, not a header.
+				query: "key",
+			},
+			{},
+		),
+	},
+
+	{
+		id: "feishu",
+		name: "飞书",
+		category: "business",
+		verified: "oauth",
+		docsUrl: "https://open.feishu.cn/document/mcp_open_tools/developers-call-remote-mcp-server",
+		description: "Docs, messages, and people in Feishu.",
+		descriptionZh: "飞书的云文档、消息与成员。",
+		details:
+			"Cloud documents, messages and people in Feishu, through the vendor's own remote server. Sign-in registers a client automatically, so nothing has to be created in the Feishu console first.",
+		detailsZh: "通过飞书自己的远程服务访问云文档、消息与成员。登录时自动注册客户端，不需要先去飞书后台创建应用。",
+		examples: ["Search our docs for the onboarding checklist", "What did the team say in this group last week?"],
+		...oauth("https://mcp.feishu.cn/mcp"),
+	},
+	{
+		id: "lark",
+		name: "Lark",
+		category: "business",
+		examples: ["Search Lark docs for the onboarding checklist"],
+		verified: "oauth",
+		docsUrl: "https://open.larksuite.com/document/mcp_open_tools/developers-call-remote-mcp-server",
+		description: "Docs, messages, and people in Lark.",
+		descriptionZh: "Lark 的云文档、消息与成员。",
+		details:
+			"Cloud documents, messages and people in Lark, the international edition. The flow is the same as Feishu's, on the larksuite.com domain.",
+		detailsZh: "Lark 国际版的云文档、消息与成员。流程与飞书相同，走 larksuite.com 域名。",
+		...oauth("https://mcp.larksuite.com/mcp"),
+	},
+
+	// ── Design ─────────────────────────────────────────────────────────────
+	{
+		id: "figma",
+		name: "Figma",
+		category: "design",
+		verified: "oauth",
+		featured: true,
+		docsUrl: "https://developers.figma.com/docs/figma-mcp-server/",
+		description: "Design files, components, and comments.",
+		descriptionZh: "设计文件、组件与评论。",
+		details:
+			"Design files, components and comments. Comparing two frames or listing the components a screen uses are the common asks.",
+		detailsZh: "设计文件、组件与评论。常见问法是对比两个画板，或列出某个界面用了哪些组件。",
+		examples: ["What changed between these two frames?", "List the components this screen uses"],
+		...oauth("https://mcp.figma.com/mcp"),
+	},
+	{
+		id: "canva",
+		name: "Canva",
+		category: "design",
+		examples: ["Find the latest version of the brand deck"],
+		verified: "oauth",
+		docsUrl: "https://www.canva.dev/docs/connect/canva-mcp-server/",
+		description: "Designs, folders, and exports.",
+		descriptionZh: "设计、文件夹与导出。",
+		details: "Designs, folders and exports. It reaches finished assets rather than the editor.",
+		detailsZh: "设计、文件夹与导出。它拿到的是成品素材，不是编辑器本身。",
+		...oauth("https://mcp.canva.com/mcp"),
+	},
+	{
+		id: "miro",
+		name: "Miro",
+		category: "design",
+		examples: ["Summarize the sticky notes on this board"],
+		verified: "oauth",
+		docsUrl: "https://developers.miro.com/docs/miro-mcp",
+		description: "Boards and whiteboard items.",
+		descriptionZh: "看板与白板内容。",
+		details:
+			"Boards and the items on them. Summarizing a wall of sticky notes is the case this saves the most time on.",
+		detailsZh: "看板与板上的内容。整理一整面便利贴，是它最省时间的场景。",
+		...oauth("https://mcp.miro.com/"),
+	},
+	{
+		id: "webflow",
+		name: "Webflow",
+		category: "design",
+		examples: ["Which pages are missing SEO descriptions?"],
+		verified: "oauth",
+		docsUrl: "https://developers.webflow.com/data/docs/mcp-server",
+		description: "Sites, pages, and CMS content.",
+		descriptionZh: "站点、页面与 CMS 内容。",
+		details: "Sites, pages and CMS content. Checking which pages are missing metadata is a frequent use.",
+		detailsZh: "站点、页面与 CMS 内容。检查哪些页面缺元信息是常见用法。",
+		...oauth("https://mcp.webflow.com/mcp"),
+	},
+	{
+		id: "sanity",
+		name: "Sanity",
+		category: "design",
+		examples: ["Find the blog posts missing a hero image"],
+		verified: "oauth",
+		docsUrl: "https://www.sanity.io/docs/developer-guides/sanity-mcp",
+		description: "Content lake documents and schemas.",
+		descriptionZh: "Content Lake 里的文档与 schema。",
+		details:
+			"Documents and schemas in a Sanity Content Lake. It reads the content model, so it knows what a valid document looks like.",
+		detailsZh: "Sanity Content Lake 里的文档与 schema。它读得到内容模型，所以知道一份合法文档长什么样。",
+		...oauth("https://mcp.sanity.io"),
+	},
+	{
+		id: "tldraw",
+		name: "tldraw",
+		category: "design",
+		examples: ["Add a diagram for this flow to the board"],
+		verified: "none",
+		docsUrl: "https://tldraw.dev/docs/mcp",
+		description: "Diagrams on a shared canvas.",
+		descriptionZh: "共享画布上的示意图。",
+		details: "A shared canvas for diagrams. Sign-in is not required.",
+		detailsZh: "用于画图的共享画布。不需要登录。",
+		...open("https://tldraw-mcp-app.tldraw.workers.dev/mcp"),
+	},
+
+	// ── Data ───────────────────────────────────────────────────────────────
+	{
+		id: "supabase",
+		name: "Supabase",
+		category: "data",
+		verified: "oauth",
+		featured: true,
+		docsUrl: "https://supabase.com/docs/guides/getting-started/mcp",
+		description: "Databases, tables, and project settings.",
+		descriptionZh: "数据库、表与项目设置。",
+		details:
+			"Databases, tables and project settings. Row-level security and slow queries are the two things worth asking about first.",
+		detailsZh: "数据库、表与项目设置。最值得先问的两件事是行级安全和慢查询。",
+		examples: ["Which tables have no row-level security?", "Show the slowest queries this week"],
+		...oauth("https://mcp.supabase.com/mcp"),
+	},
+	{
+		id: "neon",
+		name: "Neon",
+		category: "data",
+		examples: ["Show the slowest query on this branch"],
+		verified: "oauth",
+		docsUrl: "https://neon.com/docs/ai/neon-mcp-server",
+		description: "Postgres databases and branches.",
+		descriptionZh: "Postgres 数据库与分支。",
+		details:
+			"Postgres databases and branches. A branch is a copy-on-write database, so a migration can be tried without touching production.",
+		detailsZh: "Postgres 数据库与分支。分支是写时复制的数据库，迁移可以先在分支上试，不碰生产。",
+		...oauth("https://mcp.neon.tech/mcp"),
+	},
+	{
+		id: "airtable",
+		name: "Airtable",
+		category: "data",
+		examples: ["Which records in the launch base are still unassigned?"],
+		verified: "oauth",
+		docsUrl: "https://support.airtable.com/docs/airtable-mcp-server",
+		description: "Bases, tables, and records.",
+		descriptionZh: "Base、表与记录。",
+		details:
+			"Bases, tables and records. It is a database people actually maintain, so the schema is part of the answer.",
+		detailsZh: "Base、表与记录。这是有人真的在维护的数据库，所以 schema 也是答案的一部分。",
+		...oauth("https://mcp.airtable.com/mcp"),
+	},
+	{
+		id: "prisma",
+		name: "Prisma",
+		category: "data",
+		examples: ["Show the schema of this database"],
+		verified: "oauth",
+		docsUrl: "https://www.prisma.io/docs/postgres/integrations/mcp-server",
+		description: "Postgres databases managed through Prisma.",
+		descriptionZh: "通过 Prisma 管理的 Postgres 数据库。",
+		details:
+			"Postgres databases managed through Prisma. Useful when the schema lives in a Prisma project rather than in the database alone.",
+		detailsZh: "通过 Prisma 管理的 Postgres 数据库。schema 存在 Prisma 项目里而不只在数据库里时用它。",
+		...oauth("https://mcp.prisma.io/mcp"),
+	},
+	{
+		id: "planetscale",
+		name: "PlanetScale",
+		category: "data",
+		examples: ["How much has this table grown this month?"],
+		verified: "oauth",
+		docsUrl: "https://planetscale.com/docs/vitess/mcp",
+		description: "MySQL databases and branches.",
+		descriptionZh: "MySQL 数据库与分支。",
+		details:
+			"MySQL databases and branches. Branching works like a schema-aware copy, so a query can be tried against production data first.",
+		detailsZh: "MySQL 数据库与分支。分支像一份懂 schema 的拷贝，可以先拿生产数据试查询。",
+		...oauth("https://mcp.pscale.dev/mcp/planetscale"),
+	},
+	{
+		id: "turso",
+		name: "Turso",
+		category: "data",
+		examples: ["Show the schema of this database"],
+		verified: "oauth",
+		docsUrl: "https://docs.turso.tech/features/ai-and-mcp",
+		description: "SQLite databases and their schemas.",
+		descriptionZh: "SQLite 数据库与 schema。",
+		details: "SQLite databases and their schemas. The low-latency model suits edge and per-user data.",
+		detailsZh: "SQLite 数据库与 schema。低延迟的形态适合边缘和按用户切分的数据。",
+		...oauth("https://mcp.turso.ai/mcp"),
+	},
+	{
+		id: "cockroachdb",
+		name: "CockroachDB",
+		category: "data",
+		examples: ["Which tables are growing fastest?"],
+		verified: "oauth",
+		docsUrl: "https://www.cockroachlabs.com/docs/cockroachcloud/mcp",
+		description: "Clusters and SQL against them.",
+		descriptionZh: "集群及其 SQL 查询。",
+		details:
+			"Clusters and SQL against them. Distributed SQL means a query plan is worth reading before a schema change.",
+		detailsZh: "集群及其 SQL。分布式 SQL 之下，改 schema 之前值得先看一眼查询计划。",
+		...oauth("https://cockroachlabs.cloud/mcp"),
+	},
+	{
+		id: "clickhouse",
+		name: "ClickHouse",
+		category: "data",
+		examples: ["Which query took the most CPU yesterday?"],
+		verified: "oauth",
+		docsUrl: "https://clickhouse.com/docs/cloud/manage/mcp",
+		description: "Analytical queries over ClickHouse Cloud.",
+		descriptionZh: "对 ClickHouse Cloud 做分析查询。",
+		details: "Analytical queries over ClickHouse Cloud. Built for aggregation, not for row-by-row lookups.",
+		detailsZh: "对 ClickHouse Cloud 做分析查询。它是为聚合而生，不适合逐行查。",
+		...oauth("https://mcp.clickhouse.cloud/mcp"),
+	},
+	{
+		id: "motherduck",
+		name: "MotherDuck",
+		category: "data",
+		examples: ["Which customers churned last quarter?"],
+		verified: "oauth",
+		docsUrl: "https://motherduck.com/docs/key-tasks/ai-and-motherduck/motherduck-mcp/",
+		description: "DuckDB warehouses and their tables.",
+		descriptionZh: "DuckDB 数据仓库与表。",
+		details:
+			"DuckDB warehouses and their tables. Analytical queries run close to the data rather than shipping it elsewhere.",
+		detailsZh: "DuckDB 数据仓库与表。分析查询在数据旁边跑，不用把数据搬到别处。",
+		...oauth("https://api.motherduck.com/mcp"),
+	},
+	{
+		id: "amplitude",
+		name: "Amplitude",
+		category: "data",
+		examples: ["Compare this week's signups with last week"],
+		verified: "oauth",
+		docsUrl: "https://amplitude.com/docs/analytics/amplitude-mcp",
+		description: "Product analytics events and cohorts.",
+		descriptionZh: "产品分析事件与人群。",
+		details: "Product analytics events and cohorts. Asking which cohort retained better is the usual first question.",
+		detailsZh: "产品分析事件与人群。最常问的第一个问题是哪个人群留存更好。",
+		...oauth("https://mcp.amplitude.com/mcp"),
+	},
+	{
+		id: "posthog",
+		name: "PostHog",
+		category: "data",
+		examples: ["Which funnel step loses the most users?"],
+		verified: "oauth",
+		docsUrl: "https://posthog.com/docs/model-context-protocol",
+		description: "Product analytics, funnels, and feature flags.",
+		descriptionZh: "产品分析、漏斗与功能开关。",
+		details:
+			"Product analytics, funnels and feature flags. The funnel and the flag live together, so a rollout can be judged by its own data.",
+		detailsZh: "产品分析、漏斗与功能开关。漏斗和开关在一起，一次放量可以用它自己的数据来评判。",
+		...oauth("https://mcp.posthog.com/mcp"),
+	},
+
+	// ── Business operations ────────────────────────────────────────────────
+	{
+		id: "linear",
+		name: "Linear",
+		category: "business",
+		verified: "oauth",
+		featured: true,
+		docsUrl: "https://linear.app/docs/mcp",
+		description: "Issues, projects, and cycles.",
+		descriptionZh: "Issue、项目与周期。",
+		details:
+			"Issues, projects and cycles. A cycle view answers what is blocking a release faster than the board does.",
+		detailsZh: "Issue、项目与周期。问这个周期卡在哪，比翻看板更快。",
+		examples: ["What is blocking this cycle?", "File these bugs under the right project"],
+		...oauth("https://mcp.linear.app/mcp"),
+	},
+	{
+		id: "stripe",
+		name: "Stripe",
+		category: "business",
+		examples: ["Which subscriptions are about to renew?"],
+		verified: "oauth",
+		docsUrl: "https://docs.stripe.com/mcp",
+		description: "Payments, invoices, and customers.",
+		descriptionZh: "支付、发票与客户。",
+		details: "Payments, invoices and customers. Money data is sensitive, so read before writing.",
+		detailsZh: "支付、发票与客户。资金数据敏感，先读再写。",
+		...oauth("https://mcp.stripe.com"),
+	},
+	{
+		id: "paypal",
+		name: "PayPal",
+		category: "business",
+		examples: ["Which invoices are still unpaid?"],
+		verified: "oauth",
+		docsUrl: "https://developer.paypal.com/community/blog/paypal-mcp-server/",
+		description: "Orders, payments, and invoices.",
+		descriptionZh: "订单、支付与发票。",
+		details: "Orders, payments and invoices. Useful when a shop settles through PayPal rather than a card processor.",
+		detailsZh: "订单、支付与发票。店铺走 PayPal 而不是信用卡收单时用它。",
+		...oauth("https://mcp.paypal.com/mcp"),
+	},
+	{
+		id: "intercom",
+		name: "Intercom",
+		category: "business",
+		examples: ["What are customers asking about most this week?"],
+		verified: "oauth",
+		docsUrl: "https://developers.intercom.com/docs/guides/mcp",
+		description: "Conversations, contacts, and articles.",
+		descriptionZh: "会话、联系人与帮助文章。",
+		details: "Conversations, contacts and help articles. Grouping this week's complaints by cause is the common ask.",
+		detailsZh: "会话、联系人与帮助文章。最常做的是把本周的抱怨按原因归类。",
+		...oauth("https://mcp.intercom.com/mcp"),
+	},
+	{
+		id: "monday",
+		name: "monday.com",
+		category: "business",
+		examples: ["What is the status of this week's sprint items?"],
+		verified: "oauth",
+		docsUrl: "https://developer.monday.com/api-reference/docs/monday-mcp",
+		description: "Boards, items, and workflows.",
+		descriptionZh: "看板、条目与工作流。",
+		details: "Boards, items and workflows. It answers status questions across several boards at once.",
+		detailsZh: "看板、条目与工作流。它能一次回答跨多个看板的状态问题。",
+		...oauth("https://mcp.monday.com/mcp"),
+	},
+	{
+		id: "clickup",
+		name: "ClickUp",
+		category: "business",
+		examples: ["What is due this week in the marketing list?"],
+		verified: "oauth",
+		docsUrl: "https://developer.clickup.com/docs/mcp",
+		description: "Tasks, lists, and docs.",
+		descriptionZh: "任务、列表与文档。",
+		details: "Tasks, lists and docs. Lists nest under folders, so name the space when asking.",
+		detailsZh: "任务、列表与文档。列表在文件夹之下嵌套，提问时带上空间名更准。",
+		...oauth("https://mcp.clickup.com/mcp"),
+	},
+	{
+		id: "asana",
+		name: "Asana",
+		category: "business",
+		examples: ["What is overdue in the launch project?"],
+		verified: "oauth",
+		docsUrl: "https://developers.asana.com/docs/using-asanas-model-context-protocol-mcp-server",
+		description: "Tasks, projects, and workspaces.",
+		descriptionZh: "任务、项目与工作区。",
+		details: "Tasks, projects and workspaces. Overdue work is the most useful first question.",
+		detailsZh: "任务、项目与工作区。最有用的第一个问题是什么逾期了。",
+		...oauth("https://mcp.asana.com/v2/mcp"),
+	},
+	{
+		id: "todoist",
+		name: "Todoist",
+		category: "business",
+		examples: ["What is due today?"],
+		verified: "oauth",
+		docsUrl: "https://developer.todoist.com/guides/#mcp",
+		description: "Tasks and projects.",
+		descriptionZh: "任务与项目。",
+		details:
+			"Tasks and projects. It is a personal list more often than a team board, so it sees what you owe yourself.",
+		detailsZh: "任务与项目。它更多是个人清单而不是团队看板，看到的是你欠自己的事。",
+		...oauth("https://ai.todoist.net/mcp"),
+	},
+	{
+		id: "zapier",
+		name: "Zapier",
+		category: "business",
+		examples: ["Trigger the workflow that files a ticket"],
+		verified: "oauth",
+		docsUrl: "https://docs.zapier.com/mcp/home",
+		description: "Actions across thousands of connected apps.",
+		descriptionZh: "在数千个已连接应用上执行动作。",
+		details:
+			"Actions across thousands of connected apps. The connector triggers a workflow that already exists rather than building one.",
+		detailsZh: "在数千个已连接应用上执行动作。它触发的是已经存在的工作流，不是在这里新建。",
+		...oauth("https://mcp.zapier.com/api/mcp/mcp"),
+	},
+	{
+		id: "attio",
+		name: "Attio",
+		category: "business",
+		examples: ["Which deals moved to negotiation this month?"],
+		verified: "oauth",
+		docsUrl: "https://docs.attio.com/docs/mcp",
+		description: "CRM records, lists, and notes.",
+		descriptionZh: "CRM 记录、列表与备注。",
+		details: "CRM records, lists and notes. Asking which deals moved stage this month is the usual entry.",
+		detailsZh: "CRM 记录、列表与备注。通常从这个月哪些交易换了阶段开始。",
+		...oauth("https://mcp.attio.com/mcp"),
+	},
+	{
+		id: "cal-com",
+		name: "Cal.com",
+		category: "business",
+		examples: ["When am I free for a 30-minute call this week?"],
+		verified: "oauth",
+		docsUrl: "https://cal.com/docs/developing/guides/mcp",
+		description: "Availability and bookings.",
+		descriptionZh: "可用时间与预约。",
+		details: "Availability and bookings. It answers when you are free without opening a calendar.",
+		detailsZh: "可用时间与预约。不用打开日历就能知道什么时候有空。",
+		...oauth("https://mcp.cal.com/mcp"),
+	},
+	{
+		id: "ramp",
+		name: "Ramp",
+		category: "business",
+		examples: ["Which cards have unusual spend this month?"],
+		verified: "oauth",
+		docsUrl: "https://docs.ramp.com/developer-api/v1/mcp",
+		description: "Spend, cards, and reimbursements.",
+		descriptionZh: "支出、卡与报销。",
+		details: "Spend, cards and reimbursements. Unusual spend is what this is worth asking about first.",
+		detailsZh: "支出、卡与报销。最值得先问的是有没有异常支出。",
+		...oauth("https://ramp-mcp-remote.ramp.com/mcp"),
+	},
+	{
+		id: "ashby",
+		name: "Ashby",
+		category: "business",
+		examples: ["Which candidates are waiting on a decision?"],
+		verified: "oauth",
+		docsUrl: "https://developer.ashbyhq.com/mcp",
+		description: "Candidates, jobs, and interviews.",
+		descriptionZh: "候选人、职位与面试。",
+		details: "Candidates, jobs and interviews. Recruiting pipelines are where it holds the state.",
+		detailsZh: "候选人、职位与面试。招聘流程的状态都在这里。",
+		...oauth("https://mcp.ashbyhq.com/mcp/v1"),
+	},
+	{
+		id: "plain",
+		name: "Plain",
+		category: "business",
+		examples: ["What are customers reporting about login?"],
+		verified: "oauth",
+		docsUrl: "https://www.plain.com/docs/mcp",
+		description: "Support threads and customers.",
+		descriptionZh: "支持工单与客户。",
+		details: "Support threads and customers. Built for a support team that works from one queue.",
+		detailsZh: "支持工单与客户。它是为一个从单一队列干活的支持团队做的。",
+		...oauth("https://mcp.plain.com/mcp"),
+	},
+];

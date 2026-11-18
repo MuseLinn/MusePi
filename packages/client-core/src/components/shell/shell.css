@@ -1,4 +1,21 @@
-/* Shell styles (sh-*). Token vars only — no raw colors. */
+/* Shell styles (sh-*)。
+ *
+ * 颜色：语义令牌（--color-* / --bg / --fg / --border / --accent 等）是默认写法，
+ * 但本文件并非全部令牌化，裸颜色分为刻意例外与残留债：
+ *
+ * 刻意例外——
+ *   1. 阴影、遮罩、环形轨道与玻璃边缘使用中性黑/白的 alpha 分量
+ *      （oklch(0 0 0 / x%)、oklch(1 0 0 / x%)）。它们不随主题换色；
+ *   2. Electron compat 壳层的标题条、dock、statusbar 使用写死的中性深色
+ *      rgba，是兼容壳层自己的固定表面色，当前不随 --bg 换色；
+ *   3. 二维码遮罩的不透明黑底与白色控件文字按取景画面固定，不随主题变浅；
+ *   4. var(--token, 裸值) 的第二个参数是兜底，只在令牌缺失时生效。
+ *
+ * 残留债（改它需要产品确认视觉，不是可自由替换的等价改写）——
+ *   二维码「识别成功」指示用 #22c55e，而令牌表已有语义等价且随主题切换的 --ok。
+ *
+ * scripts/check-css-tokens.ts 只校验 --color-* 引用是否已定义，不禁止裸颜色。
+ * 新增样式优先用令牌；确需裸值时在紧邻注释里写明它跟随哪个外部表面。 */
 
 /* ---- app frame ---- */
 .compat-titlebar {
@@ -150,6 +167,13 @@
 	}
 	100% {
 		transform: translateX(350%);
+	}
+}
+/* 扫描白条是「等待中」的唯一动效信号；停帧后白条仍占轨道的 40%，
+ * 不靠运动也能读出「有进度」。 */
+@media (prefers-reduced-motion: reduce) {
+	.sh-approval-wait-bar {
+		animation: none;
 	}
 }
 .sh-btn-approve {
@@ -383,6 +407,22 @@
 .sh-btn-stop {
 	color: var(--err);
 	border-color: var(--border-strong);
+}
+
+/* Confirmed destructive action in a dialog. `sh-btn-stop` is the in-place
+ * "stop this turn" affordance and only colours its text; a dialog's confirm
+ * button has to read as the irreversible one before the click, not after. */
+.sh-btn-danger {
+	color: var(--bg);
+	background: var(--err);
+	border-color: var(--err);
+}
+
+.sh-btn-danger:hover:not(:disabled) {
+	color: var(--bg);
+	background: var(--err);
+	border-color: var(--err);
+	filter: brightness(1.06);
 }
 
 .sh-btn-icon {
@@ -671,6 +711,13 @@
 
 .sh-dot-ended {
 	background: var(--err);
+}
+
+/* 圆点的颜色已经表达「重连中」，脉冲只是强调。 */
+@media (prefers-reduced-motion: reduce) {
+	.sh-dot-reconnecting {
+		animation: none;
+	}
 }
 
 /* ---- composer ---- */
@@ -1054,6 +1101,17 @@
 	}
 }
 
+/* 录音/转写不靠运动也读得懂：脉冲环是实心麦克风上的装饰，声波柱有静态
+ * 静止高度，spinner 的偏心圆弧本身就是「转写中」的形状。 */
+@media (prefers-reduced-motion: reduce) {
+	.sh-voice-pulse::before,
+	.sh-voice-pulse::after,
+	.sh-voice-wave span,
+	.sh-voice-spinner {
+		animation: none;
+	}
+}
+
 .sh-voice--error {
 	background: var(--color-danger-soft);
 	border-color: var(--color-danger-bd);
@@ -1211,6 +1269,13 @@
 	}
 	50% {
 		transform: scale(1.12);
+	}
+}
+
+/* TTS 播放中的芯片：强调色填充与进度轨已表达状态，缩放循环是纯装饰。 */
+@media (prefers-reduced-motion: reduce) {
+	.sh-tts-chip--pulse {
+		animation: none;
 	}
 }
 
@@ -1453,7 +1518,9 @@
 }
 
 .sh-queue-row-actions button:hover,
-.sh-queue-actions button:hover {
+.sh-queue-row-actions button:focus-visible,
+.sh-queue-actions button:hover,
+.sh-queue-actions button:focus-visible {
 	color: var(--accent);
 	background: var(--accent-muted);
 }
@@ -1513,6 +1580,13 @@
 	border-radius: 50%;
 	background: var(--warn);
 	animation: pulse 1.2s ease-in-out infinite;
+}
+
+/* 与 .sh-dot-reconnecting 同一个圆点：颜色表达状态，脉冲只是强调。 */
+@media (prefers-reduced-motion: reduce) {
+	.sh-banner-dot {
+		animation: none;
+	}
 }
 
 /* Ended state outside the chat destination: the same strip as the connecting
@@ -1724,7 +1798,8 @@
 	border-radius: var(--radius-sm);
 }
 
-.sh-toast-close:hover {
+.sh-toast-close:hover,
+.sh-toast-close:focus-visible {
 	color: var(--fg);
 }
 
@@ -1978,7 +2053,8 @@
 	font-size: 12px;
 }
 
-.sh-connect-recent-rm:hover {
+.sh-connect-recent-rm:hover,
+.sh-connect-recent-rm:focus-visible {
 	color: var(--err);
 }
 
@@ -3098,8 +3174,36 @@
 	.sh-mt-seg,
 	.sh-panel-menu-item,
 	.sh-attach-option,
-	.sh-connect-recent-item {
+	.sh-connect-recent-item,
+	.sh-ws-sidebar-toggle,
+	.sh-ws-group-head,
+	.sh-ws-side-item,
+	.sh-queue-row-actions button,
+	.sh-queue-actions button,
+	.ss-swipe-btn {
 		min-height: 48px;
+	}
+	/* The rail's 26px collapse control and the queue's 40px row actions were
+	 * the last icon targets under the platform floor. */
+	.sh-ws-sidebar-toggle {
+		min-width: 48px;
+	}
+	/* Controls whose desktop size is a glyph box, not a tap target: background
+	 * job actions (22px), the file-tree disclosure (16px) and the scanner
+	 * close (40px). */
+	.sh-jobaction,
+	.sh-tree-toggle,
+	.qr-close {
+		min-width: 48px;
+		min-height: 48px;
+	}
+	/* The collapsed rail is an `overflow: hidden` strip around its own toggle,
+	 * so the rail's border box must hold a 48px content box:
+	 * 48 + 8px × 2 inline padding + 1px × 2 border. The compound selector is
+	 * required: `.sh-ws-sidebar` declares `min-width: 0` further down the sheet
+	 * and would otherwise win the tie on source order. */
+	.sh-ws-sidebar.sh-ws-sidebar--closed {
+		min-width: 66px;
 	}
 	/* iOS zooms the page when a focused field computes below 16px. */
 	.sh-input,
@@ -3196,9 +3300,14 @@
 	flex: 0 0 auto;
 }
 
-.sh-ws-sidebar-toggle:hover {
+.sh-ws-sidebar-toggle:hover,
+.sh-ws-sidebar-toggle:focus-visible {
 	background: color-mix(in oklab, var(--fg-muted, var(--muted)) 10%, transparent);
 	color: var(--fg);
+}
+
+.sh-ws-sidebar-toggle:active {
+	transform: scale(0.92);
 }
 
 .sh-ws-sidebar-head {
@@ -3230,7 +3339,8 @@
 	min-width: 0;
 }
 
-.sh-ws-group-head:hover {
+.sh-ws-group-head:hover,
+.sh-ws-group-head:focus-visible {
 	background: color-mix(in oklab, var(--fg-muted, var(--muted)) 8%, transparent);
 }
 
@@ -3275,7 +3385,8 @@
 	min-width: 0;
 }
 
-.sh-ws-side-item:hover:not(:disabled) {
+.sh-ws-side-item:hover:not(:disabled),
+.sh-ws-side-item:focus-visible:not(:disabled) {
 	background: color-mix(in oklab, var(--fg-muted, var(--muted)) 8%, transparent);
 }
 
@@ -3382,6 +3493,41 @@
 	}
 }
 
+/*
+ * Phone surface: the directory is a LIST of sessions, not a project rail plus
+ * a card grid. The rail duplicates what the sheet already offers (project
+ * groups), and on a foldable the grid columns stay wide enough to waste the
+ * width. Keyed on the surface, not on width — a 940px foldable still uses the
+ * phone layout, and the width-based rule above never applies to it.
+ */
+.sh-workspace[data-surface="mobile"] {
+	flex-direction: column;
+	gap: 10px;
+	padding: 12px 14px 96px;
+	max-width: none;
+}
+
+.sh-workspace[data-surface="mobile"] .sh-ws-sidebar {
+	display: none;
+}
+
+.sh-workspace[data-surface="mobile"] .sh-workspace-head {
+	gap: 2px;
+}
+
+.sh-workspace[data-surface="mobile"] .sh-workspace-title {
+	font-size: 17px;
+}
+
+.sh-workspace[data-surface="mobile"] .sh-workspace-desc {
+	font-size: 12px;
+}
+
+.sh-workspace[data-surface="mobile"] .sh-workspace-grid {
+	grid-template-columns: 1fr;
+	gap: 8px;
+}
+
 .sh-ws-card {
 	display: flex;
 	flex-direction: column;
@@ -3454,9 +3600,14 @@
 	transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
 }
 
-.sh-ws-action-btn:hover {
+.sh-ws-action-btn:hover,
+.sh-ws-action-btn:focus-visible {
 	border-color: var(--accent, oklch(0.674 0.23 341));
 	color: var(--accent, oklch(0.674 0.23 341));
+}
+
+.sh-ws-action-btn:active {
+	transform: scale(0.92);
 }
 
 .sh-ws-rename-input {
@@ -3532,6 +3683,13 @@
 @keyframes sh-ws-spin {
 	to {
 		transform: rotate(360deg);
+	}
+}
+
+/* 旁边的状态文案已经写着 working；旋转只是强调，静态圆环仍是 spinner 形状。 */
+@media (prefers-reduced-motion: reduce) {
+	.sh-ws-spin {
+		animation: none;
 	}
 }
 
@@ -4263,6 +4421,14 @@
 	animation: ss-spin 900ms linear infinite;
 }
 
+/* 会话行的 working 圈与下拉刷新：圆弧缺口本身已是 loading 形状，停帧不丢失
+ * 「进行中」语义；无限旋转在低端机上是常驻合成开销。 */
+@media (prefers-reduced-motion: reduce) {
+	.ss-spin {
+		animation: none;
+	}
+}
+
 .ss-item-body {
 	flex: 1;
 	min-width: 0;
@@ -4406,6 +4572,12 @@
 	.qr-overlay,
 	.qr-video {
 		animation: none;
+	}
+	/* Press feedback is geometry, not colour: the scale is decorative, so a
+	 * user who asked for less motion keeps the highlight but not the shrink. */
+	.sh-ws-action-btn:active,
+	.sh-ws-sidebar-toggle:active {
+		transform: none;
 	}
 }
 
@@ -4553,6 +4725,15 @@
 	}
 	to {
 		transform: scale(1.02);
+	}
+}
+
+/* 扫码线停在上沿、取景框保持绿色描边：取景框与四角已经表达「正在识别」，
+ * 上下扫动和 1.02 倍的呼吸都是提示性动效，不是识别所必需。 */
+@media (prefers-reduced-motion: reduce) {
+	.qr-scanline,
+	.qr-frame--found .qr-scanline {
+		animation: none;
 	}
 }
 
@@ -4813,6 +4994,17 @@
 	background-image: none;
 	-webkit-text-fill-color: initial;
 	animation: none;
+}
+
+/* 停帧后渐变停在 200% 位置，文字只剩渐变边缘色（近透明）。所以这里不能只关
+ * animation：必须和 .gui-motion-off 一样退回普通文字填充——桌面动效开关在
+ * 移动端不写入，这条媒体查询才是移动端唯一的兜底。 */
+@media (prefers-reduced-motion: reduce) {
+	.gui-shiny-text {
+		background-image: none;
+		-webkit-text-fill-color: initial;
+		animation: none;
+	}
 }
 
 /* ── SpotlightCard (reactbits parity, zero-dep): pointer-follow glow.
@@ -5329,6 +5521,15 @@
 	background: var(--err);
 }
 
+/* 动作对位于 .ss-swipe 的 overflow: hidden 内，环只能画在按钮里侧，
+ * 否则最需要它的外缘会被裁掉。三个状态各自列出，避免改修饰类时丢了环。 */
+.ss-swipe-btn:focus-visible,
+.ss-swipe-btn--delete:focus-visible,
+.ss-swipe-btn--confirm:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: -2px;
+}
+
 .ss-rename {
 	padding: 6px 10px;
 }
@@ -5343,6 +5544,12 @@
 	color: var(--fg);
 	font-size: 14px;
 	outline: none;
+}
+
+/* 改名输入替换在同一裁剪壳里，环同样画在内侧。 */
+.ss-rename-input:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: -2px;
 }
 
 /* ---- image attachments (composer chips + source sheet) ----
@@ -5873,6 +6080,15 @@
 	font-size: 16px;
 }
 
+/* A row carrying a hint is a two-line block, not a 58px line with text
+ * spilling out of it: the label plus its hint needs vertical air on both
+ * sides, and the shared 58px floor cannot supply it once the hint wraps to
+ * two lines (a long Chinese sentence does). */
+.sh-mobile-setting-row:has(.sh-setting-hint) {
+	padding-top: 12px;
+	padding-bottom: 12px;
+}
+
 /* HarmonyOS separators are inset from the leading edge and stop at the trailing
  * one — a full-bleed rule through a rounded card is the tell of a web list. */
 .sh-mobile-setting-row + .sh-mobile-setting-row::before {
@@ -5889,6 +6105,148 @@
 	font-weight: 500;
 	line-height: 1.3;
 	letter-spacing: 0.005em;
+}
+
+/* ---- mobile switches, values, destructive rows, confirm block -----------
+ * A settings switch is a 44px-tall button whose visual track is small: the
+ * platform floor is about the hot zone, not the painted pixels. The knob is
+ * one element with a transform, so the on-state costs no layout. */
+.sh-mobile-switch {
+	width: 100%;
+	padding: 0 16px;
+	font: inherit;
+	color: var(--fg);
+	text-align: left;
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+}
+
+.sh-mobile-switch:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.sh-switch {
+	position: relative;
+	flex: none;
+	width: 46px;
+	height: 28px;
+	border-radius: var(--radius-full);
+	background: color-mix(in oklab, var(--fg) 22%, transparent);
+	transition: background 180ms var(--spring-snappy);
+}
+
+.sh-switch--on {
+	background: var(--accent);
+}
+
+.sh-switch-knob {
+	position: absolute;
+	top: 3px;
+	left: 3px;
+	width: 22px;
+	height: 22px;
+	border-radius: var(--radius-full);
+	background: var(--bg);
+	box-shadow: 0 1px 3px oklch(0 0 0 / 28%);
+	transition: transform 200ms var(--spring-snappy);
+}
+
+.sh-switch--on .sh-switch-knob {
+	transform: translateX(18px);
+	background: var(--accent-fg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.sh-switch,
+	.sh-switch-knob {
+		transition: none;
+	}
+}
+
+/* Trailing read-only readout in a settings row (cache size, version). */
+.sh-mobile-setting-value {
+	flex: none;
+	color: var(--fg-muted);
+	font-size: 14px;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Row-level action affordance: reads as a link, not a button. */
+.sh-mobile-setting-action {
+	flex: none;
+	color: var(--accent);
+	font-size: 14px;
+	font-weight: 500;
+}
+
+/* A row that only explains a state (permission unavailable). */
+.sh-mobile-setting-row--muted {
+	color: var(--fg-faint);
+	font-size: 14px;
+}
+
+/* The system keeps the warning hue for the blocked state itself. */
+.sh-mobile-setting-row--warn .sh-setting-label {
+	color: var(--warn);
+}
+
+button.sh-mobile-setting-row {
+	width: 100%;
+	font: inherit;
+	color: inherit;
+	text-align: left;
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+}
+
+button.sh-mobile-setting-row:active {
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+}
+
+/* Destructive row: the label turns red on press, never at rest — a permanently
+ * red row in a list of neutral rows reads as an error, and the confirmation
+ * dialog is where the consequence is actually stated. */
+button.sh-mobile-setting-row--danger:active .sh-setting-label {
+	color: var(--err);
+}
+
+/* Inline confirm block, anchored to the group it belongs to. A centred modal
+ * for a two-choice question on a phone costs a full focus trap and a backdrop
+ * for no gain; the card stays in place and the page cannot scroll behind it
+ * by accident because the block pushes content rather than floating over it. */
+.sh-mobile-confirm {
+	margin-top: 10px;
+	padding: 16px;
+	border: 0.5px solid color-mix(in oklab, var(--err) 40%, transparent);
+	border-radius: var(--radius-xl);
+	background: color-mix(in oklab, var(--err) 8%, var(--bg-raised));
+}
+
+.sh-mobile-confirm-title {
+	margin: 0 0 6px;
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.sh-mobile-confirm-body {
+	margin: 0 0 14px;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--fg-muted);
+}
+
+.sh-mobile-confirm-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+}
+
+.sh-mobile-confirm-actions .sh-btn {
+	min-height: 44px;
 }
 
 .sh-mobile-setting-row--stack {

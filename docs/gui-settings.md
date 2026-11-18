@@ -61,7 +61,7 @@ gui-main (flex ROW)
 - `--gui-glass-alpha` = transparency slider (30–90%, `musepi-gui-glass`).
 - **Window transparency toggle** (`musepi-gui-glass-enabled`): when off, sets `--gui-glass-overlay: 100%` so all glass surfaces become opaque and hides the slider; when on, removes that variable.
 - **Native window glass** (2026-08-04): the desktop window uses `vibrancy: "under-window"` + `backgroundColor: "#00000000"` (no need for `transparent: true`), letting the desktop wallpaper show through the window; base.css's `body { background: var(--bg) }` is overridden to transparent by gui.css's `html body` rule (browser visitors unaffected); `.gui-shell` is transparent, while the sidebar/nav rail/detail panels use `color-mix(…, transparent)` semi-transparent overlays, and the chat card/settings card stay opaque. The toggle also calls `setVibrancy`/`setBackgroundColor` through the `gui-vibrancy` IPC channel (`BrowserWindow.fromWebContents(event.sender)` — you cannot use `event.sender` directly; that is a WebContents).
-- Desktop runtime: **Electron 43.2.0** (Node 24.18; upgraded from 37 on 2026-08-04; 37 is EOL). The natives loader's `import.meta.dir ?? import.meta.dirname` fallback is unnecessary under Node 24 but harmless.
+- Desktop runtime: **Electron 45.3.4** (Chromium 156, Node 24.22; upgraded from 43 on 2026-11-18; 43.2.0 itself replaced 37 on 2026-08-04). The sandboxed preloads only use `electron`/`process`, so the 45 removal of the `events`/`timers`/`url` shims and the `Buffer`/`setImmediate` globals does not affect them; the main process still has the full Node environment. The natives loader's `import.meta.dir ?? import.meta.dirname` fallback is unnecessary under Node 24 but harmless.
 
 ## 5. Appearance Page Sections
 

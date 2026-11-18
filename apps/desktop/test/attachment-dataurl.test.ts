@@ -1,3 +1,4 @@
+import "./happy-dom-shim";
 import { describe, expect, test } from "bun:test";
 import { dataUrlToFile, parseAttachmentDraft } from "../src/components/composer/use-attachments";
 

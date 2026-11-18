@@ -17,7 +17,7 @@ describe("extension React host bindings", () => {
 		const entry = path.join(dir, "index.ts");
 		await writeFile(
 			entry,
-			`export default function (pi: any): void { pi.registerComponent({ slot: "app.capability", moduleUrl: "./page.tsx" }); }`,
+			`export default function (pi: any): void { pi.registerComponent({ slot: "main.capability", moduleUrl: "./page.tsx" }); }`,
 		);
 		await writeFile(
 			path.join(dir, "page.tsx"),

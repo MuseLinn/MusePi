@@ -241,7 +241,7 @@ export async function migrateLegacyProjects(
 /**
  * Rewrite the legacy key as a derived mirror of the registry.
  *
- * `WelcomeComposer`, the PR board and the scheduled-task page still read this
+ * `HeroComposer`, the PR board and the scheduled-task page still read this
  * key; the projects tab never reads it back (the migration marker blocks
  * re-import), so the mirror is output-only and cannot become a second source
  * of truth. Skipped until the migration consumed the key, so an unimported

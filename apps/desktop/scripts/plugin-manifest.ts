@@ -18,6 +18,7 @@ export interface DeclaredSlot {
 	moduleUrl: string;
 	label?: string;
 	order?: number;
+	id?: string;
 	availability?: string;
 }
 
@@ -28,6 +29,7 @@ export interface ManifestDeclaration {
 	css?: string;
 	label?: string;
 	order?: number;
+	id?: string;
 	availability?: string;
 }
 
@@ -46,11 +48,13 @@ export function parseDeclaredSlots(source: string): DeclaredSlot[] {
 		const label = /label:\s*"([^"]+)"/.exec(body)?.[1];
 		const order = /order:\s*(-?\d+)/.exec(body)?.[1];
 		const availability = /availability:\s*"([^"]+)"/.exec(body)?.[1];
+		const id = /(?:^|[\s,{])id:\s*"([^"]+)"/.exec(body)?.[1];
 		rows.push({
 			slot,
 			moduleUrl: `./${moduleUrl}`,
 			...(label ? { label } : {}),
 			...(order ? { order: Number(order) } : {}),
+			...(id ? { id } : {}),
 			...(availability ? { availability } : {}),
 		});
 	}
@@ -77,6 +81,7 @@ export function mergeDeclarations(
 				...(surface.css ? { css: surface.css } : {}),
 				...(row.label ? { label: row.label } : {}),
 				...(row.order !== undefined ? { order: row.order } : {}),
+				...(row.id ? { id: row.id } : {}),
 				...(row.availability ? { availability: row.availability } : {}),
 			})),
 	];

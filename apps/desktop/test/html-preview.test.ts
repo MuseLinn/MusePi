@@ -1,3 +1,4 @@
+import "./happy-dom-shim";
 import { describe, expect, it } from "bun:test";
 import { htmlPreviewRequiresBuild, inlineHtmlPreviewStyles, withHtmlPreviewBase } from "../src/lib/html-preview";
 

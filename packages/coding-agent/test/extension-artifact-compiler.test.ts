@@ -34,7 +34,7 @@ describe("extension slot components", () => {
 		const entry = path.join(dir, "index.ts");
 		await writeFile(
 			entry,
-			`export default function (pi: any): void { pi.registerComponent({ slot: "app.capability", moduleUrl: "./page.tsx" }); }`,
+			`export default function (pi: any): void { pi.registerComponent({ slot: "main.capability", moduleUrl: "./page.tsx" }); }`,
 		);
 		await writeFile(
 			path.join(dir, "page.tsx"),
@@ -83,7 +83,7 @@ describe("extension slot components", () => {
 		const entry = path.join(dir, "index.ts");
 		await writeFile(
 			entry,
-			`export default function (pi: any): void { pi.registerComponent({ slot: "app.capability", moduleUrl: "./page.tsx" }); }`,
+			`export default function (pi: any): void { pi.registerComponent({ slot: "main.capability", moduleUrl: "./page.tsx" }); }`,
 		);
 		await writeFile(
 			path.join(dir, "page.tsx"),
@@ -288,4 +288,31 @@ export default function (pi: any): void {
 			await rm(dir, { recursive: true, force: true });
 		}
 	}, 60_000);
+
+	test("keeps two entries from one plugin in one list seat distinct by id", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "ext-slot-id-"));
+		const entry = path.join(dir, "index.ts");
+		await writeFile(
+			entry,
+			`export default function (pi: any): void {
+	pi.registerComponent({ slot: "conversation.composer.dock", id: "activity", moduleUrl: "./activity.tsx", order: 0 });
+	pi.registerComponent({ slot: "conversation.composer.dock", id: "usage", moduleUrl: "./usage.tsx", order: 1 });
+}
+`,
+		);
+		await writeFile(path.join(dir, "activity.tsx"), "export default function Activity() { return null; }");
+		await writeFile(path.join(dir, "usage.tsx"), "export default function Usage() { return null; }");
+		try {
+			const components = await collectSlotComponents(
+				[{ kind: "extension-module", state: "active", path: entry }],
+				process.cwd(),
+			);
+			expect(components.map(c => ({ slot: c.slot, id: c.id, order: c.order }))).toEqual([
+				{ slot: "conversation.composer.dock", id: "activity", order: 0 },
+				{ slot: "conversation.composer.dock", id: "usage", order: 1 },
+			]);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	}, 120_000);
 });

@@ -27,7 +27,7 @@ import { AssetPolicyRow } from "./composer/asset-policy-row";
  * composer 上方一行;没有弹层、没有标题栏、没有第二个输入框——发送
  * 走欢迎页 composer 本体,本组件只拥有「类型选择 → projectMetadata」
  * 的编译。模板 chip 的内容区(TemplateRail,§3.4 机制不变)由
- * WelcomeComposer 渲染在 composer 下方,opendesign 铁律:composer 是
+ * HeroComposer 渲染在 composer 下方,opendesign 铁律:composer 是
  * 创建页永久锚点,选中 chip 永不替换输入框。
  *
  * chip 只承载类型(kind/intent 写进创作草稿,§2.3),类型特有字段全部
@@ -63,7 +63,7 @@ const CHIP_ICONS: Record<CreationChip, IconName> = {
 	other: "more",
 };
 
-/** 模式页输入框的发送载荷(WelcomeComposer 的 onSubmit 形状)。 */
+/** 模式页输入框的发送载荷(HeroComposer 的 onSubmit 形状)。 */
 export interface CreationMessage {
 	text: string;
 	images?: { type: "image"; data: string; mimeType: string }[];
@@ -135,7 +135,7 @@ export function CreationModeRow({
 	/** 当前工作目录(欢迎页项目 chip)—— 创作会话的 cwd 复用它。 */
 	project: string | null;
 	/** 素材策略行 + 「高级 ▸」折叠区的渲染插槽(composer 下方、设计体系
-	 *  rail 之下的容器,由 WelcomeComposer 在 designActive 时挂载)。chip
+	 *  rail 之下的容器,由 HeroComposer 在 designActive 时挂载)。chip
 	 *  排在 composer 上方、素材策略行在 composer 下方,同一组件两头渲染,
 	 *  经 portal 落到插槽;草稿单一所有权留在本组件。未给(测试/旧调用方)
 	 *  不渲染素材行。 */
@@ -146,7 +146,7 @@ export function CreationModeRow({
 	/** 收起模式页(§2.1:Escape/切回其他 mode chip 回到普通欢迎页)。 */
 	onClose(): void;
 	/** 起点选择的回写通道 —— picker 渲染在 composer 正上方
-	 *  （WelcomeComposer），但草稿归本组件所有，所以选中的形状从那里回来。
+	 *  （HeroComposer），但草稿归本组件所有，所以选中的形状从那里回来。
 	 *  未给时选择无处落草稿，picker 也就不会渲染。 */
 	onStartFromChange?(id: string | null): void;
 	/** 派生态上报(composer 覆盖 placeholder / 展开模板 rail / 禁按发送)。 */
@@ -297,7 +297,7 @@ export function CreationModeRow({
 				</div>
 			</div>
 			{/* 素材策略行 + 「高级 ▸」折叠区(M3.7c §4):composer 下方、设计
-			 *  体系 rail 之下(§2.2 信息架构最底行),经 portal 落进 WelcomeComposer
+			 *  体系 rail 之下(§2.2 信息架构最底行),经 portal 落进 HeroComposer
 			 *  的插槽;草稿单一所有权在本组件,切 chip 展开态/字段都不丢。收起
 			 *  或插槽缺失(测试/旧调用方)时不渲染。 */}
 			{active && assetSlot

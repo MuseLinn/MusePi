@@ -26,6 +26,7 @@ export function WorkspaceView({
 	onDeleteSession,
 	onRenameSession,
 	onStopSession,
+	mobile,
 }: {
 	client: SessionClient;
 	sessions: readonly WorkspaceSessionInfo[];
@@ -38,6 +39,8 @@ export function WorkspaceView({
 	onRenameSession?(sessionId: string, title: string): Promise<unknown>;
 	/** Stop a working session's running turn (guest session.abort RPC). */
 	onStopSession?(sessionId: string): Promise<unknown>;
+	/** Phone-shaped surface: single column, no project rail, compact header. */
+	mobile?: boolean;
 }): ReactNode {
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	// Collapsed project groups (keyed by cwd; "" = no folder).
@@ -55,8 +58,18 @@ export function WorkspaceView({
 		[sessions, archived, archivedView],
 	);
 	const groups = useMemo(() => groupByProject(visibleSessions), [visibleSessions]);
+	// Two different silences need two different sentences: a host with no
+	// sessions is not a view hiding all of them. Without the second branch an
+	// active view whose every session is archived renders a blank grid, which
+	// reads as "still loading".
+	const emptyHint =
+		sessions.length === 0
+			? t("transcript.noSessionsYet")
+			: !archivedView && visibleSessions.length === 0
+				? t("shell.allSessionsArchived")
+				: null;
 	return (
-		<div className="sh-workspace">
+		<div className="sh-workspace" data-surface={mobile ? "mobile" : undefined}>
 			<aside className={`sh-ws-sidebar${sidebarOpen ? "" : " sh-ws-sidebar--closed"}`}>
 				<button
 					type="button"
@@ -107,7 +120,7 @@ export function WorkspaceView({
 									</section>
 								);
 							})}
-							{sessions.length === 0 && <p className="sh-ws-sidebar-empty">{t("transcript.noSessionsYet")}</p>}
+							{emptyHint && <p className="sh-ws-sidebar-empty">{emptyHint}</p>}
 						</div>
 					</>
 				)}
@@ -156,7 +169,7 @@ export function WorkspaceView({
 						/>
 					))}
 				</div>
-				{sessions.length === 0 && <p className="sh-workspace-empty">{t("transcript.noSessionsYet")}</p>}
+				{emptyHint && <p className="sh-workspace-empty">{emptyHint}</p>}
 			</div>
 		</div>
 	);

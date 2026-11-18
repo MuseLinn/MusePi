@@ -9,7 +9,7 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import type { CreationMessage } from "../src/components/CreationModeRow";
 import { useSessionDesignSystem } from "../src/components/composer/use-session-design-system";
-import { WelcomeComposer } from "../src/components/WelcomeComposer";
+import { HeroComposer } from "../src/components/HeroComposer";
 import type { RpcClient } from "../src/lib/rpc";
 
 /**
@@ -95,7 +95,7 @@ async function renderWelcome(rpc: RpcClient): Promise<ReturnType<typeof createRo
 	const root = createRoot(host);
 	await act(async () => {
 		root.render(
-			createElement(WelcomeComposer, {
+			createElement(HeroComposer, {
 				rpc,
 				project: "C:\\proj",
 				modes: [

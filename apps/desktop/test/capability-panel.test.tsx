@@ -20,7 +20,7 @@ import CapabilityCenterPage, { type Tab } from "../src/plugins/capability-center
  * the destination had no second-tier navigation column, so it read as one
  * container with three tabs instead of rail → panel → content like 首页 /
  * 任务中心. The tabs now live in the rail's sidebar slot as an independent
- * React subtree; the `app.capability` page publishes one projection and
+ * React subtree; the `main.capability` page publishes one projection and
  * consumes the panel's actions through `lib/capability-nav`.
  *
  * These tests mount both subtrees together so they exercise the REAL bridge,

@@ -9,7 +9,7 @@ const base = { id: "e1", parentId: null, timestamp: "0" };
  *  dispatch key; other WireMessage fields are irrelevant to this contract. */
 const msg = (message: object): SessionEntry => ({ ...base, type: "message", message }) as unknown as SessionEntry;
 
-/** transcript.node seat 派发键 → entry 的确定性映射 (DSH entryKey 类比)。
+/** conversation.chat.node seat 派发键 → entry 的确定性映射 (DSH entryKey 类比)。
  *  每条断言证明一个可观察契约:给定 wire entry,kind 是稳定派发字符串。 */
 describe("transcriptNodeKind dispatch", () => {
 	test("message entries dispatch by role", () => {

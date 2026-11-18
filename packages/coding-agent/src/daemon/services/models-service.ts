@@ -8,7 +8,9 @@
  * - Output: picker rows (`modelDetailRow`), the provider-grouped catalog, and
  *   add/remove acks after the registry reloads.
  * - Lifecycle: stateless. `models.yml` is the durable store; this service
- *   writes it and asks the registry to refresh.
+ *   writes it and asks the registry to refresh. Catalog reads also re-check the
+ *   file's mtime first (`refreshIfStale`), because a provider plugin can replace
+ *   its block without going through this service.
  */
 
 import * as fs from "node:fs";
@@ -49,11 +51,14 @@ export class ModelsService implements DaemonService {
 		// selector must not go empty when opening old sessions.
 		const p = (params ?? {}) as { sessionId: string };
 		const live = this.host.get(p.sessionId);
-		const registry = live ? undefined : await this.host.ensureRegistry();
+		const registry = live ? live.agentSession.modelRegistry : await this.host.ensureRegistry();
+		// A provider writer can rewrite models.yml without any in-app mutation
+		// (the magpie plugin reconnects and replaces providers.magpie.models);
+		// nothing broadcasts that, so every catalog read re-checks the config
+		// mtime and reloads before answering.
+		await registry?.refreshIfStale();
 		const models = live ? live.agentSession.getAvailableModels() : (registry?.getAvailable() ?? []);
-		return models.map(model =>
-			modelDetailRow(model, (registry ?? live?.agentSession.modelRegistry)?.getProviderLabel(model.provider)),
-		);
+		return models.map(model => modelDetailRow(model, registry?.getProviderLabel(model.provider)));
 	}
 
 	async listCustom(params: unknown): Promise<unknown> {
@@ -103,6 +108,7 @@ export class ModelsService implements DaemonService {
 		// exists.
 		const registry = await this.host.ensureRegistry();
 		if (!registry) return [];
+		await registry.refreshIfStale();
 		return registry.getAvailable().map(model => modelDetailRow(model, registry.getProviderLabel(model.provider)));
 	}
 
@@ -125,6 +131,7 @@ export class ModelsService implements DaemonService {
 		// providers from this one call — no per-session scan involved.
 		const registry = await this.host.ensureRegistry();
 		if (!registry) return [];
+		await registry.refreshIfStale();
 		const all = registry.getAll();
 		const available = new Set(registry.getAvailable().map(model => model.provider));
 		const registryNames = new Map(PROVIDER_REGISTRY.map(def => [def.id, def.name]));
@@ -189,6 +196,7 @@ export class ModelsService implements DaemonService {
 		if (!p.id) throw new Error("model id required");
 		const registry = await this.host.ensureRegistry();
 		if (!registry) return null;
+		await registry.refreshIfStale();
 		const available = registry.getAvailable();
 		// Accept both bare ids ("deepseek-v4-flash") and provider-qualified
 		// selectors ("opencode-go/deepseek-v4-flash" — the modelRoles
@@ -218,6 +226,8 @@ export class ModelsService implements DaemonService {
 		const p = (params ?? {}) as {
 			provider: {
 				name: string;
+				/** Display name; null removes one an earlier save wrote. */
+				label?: string | null;
 				baseUrl?: string;
 				apiKey?: string;
 				api?: string;
@@ -250,6 +260,11 @@ export class ModelsService implements DaemonService {
 		const entry: Record<string, unknown> = {
 			...(providers[p.provider.name] as Record<string, unknown> | undefined),
 		};
+		if (p.provider.label !== undefined) {
+			const label = p.provider.label?.trim();
+			if (label) entry.label = label;
+			else delete entry.label;
+		}
 		if (p.provider.baseUrl) entry.baseUrl = p.provider.baseUrl;
 		if (p.provider.apiKey) entry.apiKey = p.provider.apiKey;
 		const api = p.provider.api ?? "openai-completions";
@@ -340,6 +355,7 @@ function modelDetailRow(
 		cost?: { input?: number; output?: number };
 		reasoning?: boolean;
 		input?: string[];
+		thinking?: { defaultLevel?: string };
 	},
 	providerLabel?: string,
 ): {
@@ -358,6 +374,9 @@ function modelDetailRow(
 	imageGen: boolean;
 	videoGen: boolean;
 	efforts: string[];
+	/** The model's own default effort (catalog `thinking.defaultLevel`); null
+	 *  means "no declared default", so callers fall back to the global setting. */
+	defaultLevel: string | null;
 } {
 	const capabilities = resolveModelCapabilities(model.id, model.input);
 	const provider = model.provider ?? "";
@@ -379,5 +398,6 @@ function modelDetailRow(
 		imageGen: capabilities.imageGen,
 		videoGen: capabilities.videoGen,
 		efforts: getSupportedEfforts(model as never).map(e => String(e)),
+		defaultLevel: model.thinking?.defaultLevel ?? null,
 	};
 }

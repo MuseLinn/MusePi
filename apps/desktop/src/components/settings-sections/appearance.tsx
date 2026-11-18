@@ -58,6 +58,7 @@ import {
 	WEEK_START_KEY,
 	type WeekStartPref,
 } from "../../lib/appearance";
+import type { BrandIconStyle } from "../../lib/brand-icon-style";
 import { applyGlassMaterial } from "../../lib/glass";
 import { nativeHighlight } from "../../lib/highlight";
 import type { RpcClient } from "../../lib/rpc";
@@ -123,10 +124,14 @@ const TYPE_THEME_SEGMENTS: SegmentedOption<ThemePreference>[] = [
 export function AppearanceSection({
 	showAvatars,
 	onToggleAvatars,
+	brandIconStyle,
+	onToggleBrandIconStyle,
 	rpc,
 }: {
 	showAvatars: boolean;
 	onToggleAvatars(): void;
+	brandIconStyle?: BrandIconStyle;
+	onToggleBrandIconStyle?(): void;
 	rpc: RpcClient | null;
 }): ReactNode {
 	// Picking the already-active theme (theme.ts setThemePreference) emits
@@ -147,7 +152,7 @@ export function AppearanceSection({
 	// Custom-accent picker popover (app-styled ColorPickerPanel, replaces the
 	// native <input type="color"> — portaled via useFloatingMenu). NOTE: no
 	// className here — ColorPickerPanel's root carries the card surface;
-	// passing one double-draws the rounded card (WelcomeComposer lesson).
+	// passing one double-draws the rounded card (HeroComposer lesson).
 	// Interaction: opening snapshots the current preference into a LOCAL
 	// preview; edits touch only the preview (no veil/apply); 「应用」 applies
 	// it (veil + morphicon); closing discards the preview.
@@ -571,6 +576,24 @@ export function AppearanceSection({
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
+				{brandIconStyle && onToggleBrandIconStyle ? (
+					<div className="gui-settings-row">
+						<div className="flex-1">
+							<div className="gui-settings-row-label">{t("settings.brandIconsColor")}</div>
+							<div className="gui-settings-row-desc">{t("settings.brandIconsColorHint")}</div>
+						</div>
+						<button
+							type="button"
+							role="switch"
+							aria-checked={brandIconStyle === "color"}
+							className={`gui-toggle${brandIconStyle === "color" ? " gui-toggle--on" : ""}`}
+							onClick={onToggleBrandIconStyle}
+							aria-label={t("settings.brandIconsColor")}
+						>
+							<span className="gui-toggle-knob" />
+						</button>
+					</div>
+				) : null}
 			</div>
 
 			{/* ── 效果预览 — the shared simulated conversation view (voice-test

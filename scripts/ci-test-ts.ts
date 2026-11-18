@@ -345,7 +345,9 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 	switch (mode) {
 		case "workspace":
 			return [
-				...fastWorkspacePackages.map(pkg => workspaceTestCommand(pkg, 8)),
+				...fastWorkspacePackages.map(pkg =>
+					workspaceTestCommand(pkg, 8, pkg === "apps/desktop" ? { extraArgs: ["--isolate"] } : {}),
+				),
 				{
 					label: "scripts",
 					cwd: ".",
@@ -400,7 +402,14 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 		// one failure report. Repo script tests remain available via `test:scripts`.
 		case "local-ts":
 			return [
-				...fastWorkspacePackages.map(pkg => workspaceTestCommand(pkg, 8, { extraArgs: onlyFailuresArgs })),
+				...fastWorkspacePackages.map(pkg =>
+					workspaceTestCommand(pkg, 8, {
+						// Desktop suites replace globals (window/localStorage) and own
+						// animation timers; per-file isolation keeps one suite's leftovers
+						// out of the next file's process-wide state.
+						extraArgs: pkg === "apps/desktop" ? ["--isolate", ...onlyFailuresArgs] : onlyFailuresArgs,
+					}),
+				),
 				...nativeAndIntegrationPackages.map(pkg => workspaceTestCommand(pkg, 4, { extraArgs: onlyFailuresArgs })),
 				...localOnlyWorkspacePackages.map(pkg => workspaceTestCommand(pkg, 4, { extraArgs: onlyFailuresArgs })),
 				...(await commandsForMode("coding-agent-heavy")),

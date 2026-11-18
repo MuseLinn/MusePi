@@ -40,6 +40,7 @@ import { expandEnvVarsDeep } from "../../discovery/helpers";
 import { connectToServer, disconnectServer } from "../../mcp/client";
 import { loadAllMCPConfigs } from "../../mcp/config";
 import { readMCPConfigFile } from "../../mcp/config-writer";
+import { DeviceGrantError, pollDeviceAuthorization, startDeviceAuthorization } from "../../mcp/device-grant";
 import {
 	type AuthDetectionResult,
 	analyzeAuthError,
@@ -91,6 +92,30 @@ interface McpOAuthFlowRecord {
 	flow?: MCPOAuthFlow;
 }
 
+/**
+ * A device-grant flow.
+ *
+ * The RFC 8628 grant has no callback and no authorization URL: the user types
+ * a short code on a page the server names. It therefore carries its own
+ * record rather than sharing the browser flow's shape.
+ */
+interface McpDeviceFlowRecord {
+	flowId: string;
+	server: string;
+	status: "pending" | "success" | "error";
+	error?: string;
+	deviceCode: string;
+	clientId: string;
+	tokenUrl: string;
+	scopes?: string;
+	interval: number;
+	expiresAt: number;
+	/** The page the user opens, and the code they type there. */
+	verificationUri: string;
+	userCode: string;
+	material: McpOAuthMaterial;
+}
+
 /** Refresh material captured at flow construction, persisted with the grant. */
 interface McpOAuthMaterial {
 	serverUrl: string;
@@ -128,10 +153,13 @@ export class McpOAuthService implements DaemonService {
 		"mcp.oauth.status": "status",
 		"mcp.oauth.cancel": "cancel",
 		"mcp.oauth.callback": "callback",
+		"mcp.oauth.device.start": "deviceStart",
+		"mcp.oauth.device.poll": "devicePoll",
 	} as const;
 
 	readonly #deps: McpOAuthServiceDeps;
 	readonly #flows = new Map<string, McpOAuthFlowRecord>();
+	readonly #deviceFlows = new Map<string, McpDeviceFlowRecord>();
 
 	constructor(deps: McpOAuthServiceDeps) {
 		this.#deps = deps;
@@ -234,6 +262,145 @@ export class McpOAuthService implements DaemonService {
 		return this.#project(record);
 	}
 
+	/**
+	 * RPC mcp.oauth.device.start：开始一次设备码登录。
+	 *
+	 * The RFC 8628 grant needs a client id but no client secret and no
+	 * callback URL, so it serves the vendors that publish no registration
+	 * endpoint — GitHub among them. The reply carries the page the user opens
+	 * and the code they type there.
+	 */
+	async deviceStart(params: { name?: unknown }): Promise<{
+		flowId: string;
+		userCode: string;
+		verificationUri: string;
+		interval: number;
+		expiresIn: number;
+	}> {
+		const name = readString(params?.name);
+		if (!name) throw new Error("name required");
+		const { config, url } = await this.#resolveServer(name);
+		const controller = new AbortController();
+		const endpoints = await this.#resolveEndpoints(name, config, controller.signal);
+		const clientId = endpoints.clientId ?? config.oauth?.clientId;
+		if (!clientId) {
+			throw new Error(
+				"MCP server has no client id; the device grant needs one, and this server publishes no registration endpoint",
+			);
+		}
+		const authorizationServer = new URL(endpoints.authorizationUrl).origin;
+		const start = await startDeviceAuthorization({
+			authorizationServer,
+			clientId,
+			...(endpoints.scopes ? { scopes: endpoints.scopes } : {}),
+			...(endpoints.deviceAuthorizationUrl ? { deviceAuthorizationEndpoint: endpoints.deviceAuthorizationUrl } : {}),
+		});
+		const flowId = randomUUID();
+		const record: McpDeviceFlowRecord = {
+			flowId,
+			server: name,
+			status: "pending",
+			deviceCode: start.deviceCode,
+			clientId,
+			tokenUrl: endpoints.tokenUrl,
+			...(endpoints.scopes ? { scopes: endpoints.scopes } : {}),
+			interval: start.interval,
+			expiresAt: Date.now() + start.expiresIn * 1000,
+			verificationUri: start.verificationUri,
+			userCode: start.userCode,
+			material: { serverUrl: url, tokenUrl: endpoints.tokenUrl, clientId },
+		};
+		this.#deviceFlows.set(flowId, record);
+		logger.info("MCP OAuth device flow started", { server: name, flowId });
+		return {
+			flowId,
+			userCode: start.userCode,
+			verificationUri: start.verificationUri,
+			interval: start.interval,
+			expiresIn: start.expiresIn,
+		};
+	}
+
+	/**
+	 * RPC mcp.oauth.device.poll：问一次设备码登录的结果。
+	 *
+	 * The caller drives the cadence: `interval` says how many seconds the
+	 * server asked to wait between polls, and `slow_down` means the poll came
+	 * too early. A grant is stored in the same credential row the browser
+	 * flow uses, so the two are interchangeable afterwards.
+	 */
+	async devicePoll(params: { flowId?: unknown }): Promise<{
+		flowId: string;
+		status: "pending" | "success" | "error";
+		error?: string;
+		interval?: number;
+	}> {
+		const flowId = readString(params?.flowId);
+		if (!flowId) throw new Error("flowId required");
+		const record = this.#deviceFlows.get(flowId);
+		if (!record) throw new Error(`unknown device OAuth flow: ${flowId}`);
+		if (record.status !== "pending") {
+			return { flowId, status: record.status, ...(record.error ? { error: record.error } : {}) };
+		}
+		if (Date.now() > record.expiresAt) {
+			record.status = "error";
+			record.error = "The device code expired before it was authorized";
+			this.#deviceFlows.delete(flowId);
+			return { flowId, status: "error", error: record.error };
+		}
+		try {
+			const result = await pollDeviceAuthorization({
+				tokenUrl: record.tokenUrl,
+				clientId: record.clientId,
+				deviceCode: record.deviceCode,
+			});
+			if (result.status === "pending") {
+				// The server adds five seconds when a poll comes too early.
+				if (result.slowDown) record.interval += 5;
+				return { flowId, status: "pending", interval: record.interval };
+			}
+			const tokens = result.tokens;
+			if (!tokens) throw new Error("device flow returned no token");
+			const storage = await this.#deps.authStorage();
+			if (!storage) throw new Error("Model registry is unavailable; cannot store the MCP OAuth credential");
+			const credential: MCPStoredOAuthCredential = {
+				type: "oauth",
+				access: tokens.accessToken,
+				refresh: tokens.refreshToken ?? "",
+				expires: tokens.expiresIn ?? 0,
+				tokenUrl: record.tokenUrl,
+				clientId: record.clientId,
+				resource: record.material.serverUrl,
+				authorizationUrl: record.tokenUrl,
+			};
+			await storage.set(mcpOAuthCredentialId(record.material.serverUrl), credential);
+			record.status = "success";
+			this.#deviceFlows.delete(flowId);
+			try {
+				await this.#deps.reloadConnectors?.();
+			} catch (error) {
+				logger.warn("MCP reload after device login failed", {
+					server: record.server,
+					error: describeError(error),
+				});
+			}
+			logger.info("MCP OAuth device login completed", { server: record.server, flowId });
+			return { flowId, status: "success" };
+		} catch (error) {
+			const code = error instanceof DeviceGrantError ? error.code : undefined;
+			// A pending or slow-down answer is progress, not a failure.
+			if (code === "authorization_pending" || code === "slow_down") {
+				if (code === "slow_down") record.interval += 5;
+				return { flowId, status: "pending", interval: record.interval };
+			}
+			record.status = "error";
+			record.error = describeError(error);
+			this.#deviceFlows.delete(flowId);
+			logger.info("MCP OAuth device login failed", { server: record.server, flowId, error: record.error });
+			return { flowId, status: "error", error: record.error };
+		}
+	}
+
 	/** RPC mcp.oauth.cancel：中止一条仍在等待浏览器回调的流程。 */
 	cancel(params: { flowId?: unknown }): McpOAuthStatus & { ok: true } {
 		const record = this.#record(params);
@@ -253,6 +420,9 @@ export class McpOAuthService implements DaemonService {
 			if (record.status === "pending") this.#abortRecord(record, "MCP OAuth login cancelled by daemon shutdown");
 		}
 		this.#flows.clear();
+		// A device flow holds no process and no listener, but its record must
+		// not outlive the daemon that owns it.
+		this.#deviceFlows.clear();
 	}
 
 	#project(record: McpOAuthFlowRecord): McpOAuthStatus {

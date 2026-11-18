@@ -1,6 +1,6 @@
 import "./happy-dom-shim"; // MUST be first: component module graphs define HTMLElement subclasses at evaluation time.
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
-import { setLocale } from "@musepi/client-core";
+import { dismissActionToast, getToasts, setLocale } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { ConnectorsSection } from "../src/components/settings-sections/connectors";
@@ -30,6 +30,14 @@ setLocale("zh-CN");
 afterAll(() => {
 	setLocale("en-US");
 });
+afterEach(() => {
+	for (const toast of getToasts()) dismissActionToast(toast.id);
+});
+
+/** The toast body texts currently on the shared stack. */
+function toastMessages(): string[] {
+	return getToasts().map(toast => toast.message);
+}
 interface CannedRequest {
 	method: string;
 	params: unknown;
@@ -246,11 +254,15 @@ describe("connector settings", () => {
 		await act(async () => connect.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 		expect(fake.calls("mcp.oauth.start")).toEqual([]);
+		// The row is somewhere in a long list, so the result has to be visible
+		// away from it.
+		expect(toastMessages()).toContain("已连接 Alpha Meetings");
 
 		const disconnect = button(host, "断开");
 		await act(async () => disconnect.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		await flush(4);
 		expect(fake.calls("connectors.disconnect")).toEqual([{ id: "beta" }]);
+		expect(toastMessages()).toContain("已断开 Beta Docs");
 	});
 
 	test("shows the token form when connect reports needsTokenConfig", async () => {

@@ -4,10 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { t, tLoose } from "../../i18n/index.js";
 import { useLocale } from "../../i18n/use-locale.js";
 import { useBackLayer } from "../../lib/back-stack";
-import { isHarmonyShell, isMobileShell } from "../../lib/capacitor";
+import { isHarmonyShell } from "../../lib/capacitor";
 import { haptic } from "../../lib/haptics";
 import { addressParts, loadResolvedHosts, type ResolvedHost, removeHost } from "../../lib/hosts";
 import { secureGet, secureSet } from "../../lib/secure-store";
+import { canScanQr } from "../../lib/surface";
 import { useCollapseHeight } from "../../lib/use-collapse";
 import { AccentToggle } from "./AccentToggle";
 import { BlurText } from "./BlurText";
@@ -458,10 +459,12 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		window.harmonyNative?.setHosts?.(JSON.stringify(rows));
 	}, [recent]);
 
-	// QR scanning needs a camera-bearing native WebView. Both Capacitor
-	// (Android) and the HarmonyOS ArkWeb shell qualify — the latter grants
-	// getUserMedia through Web.onPermissionRequest + the CAMERA user grant.
-	const native = isMobileShell();
+	// QR scanning is a web capability: getUserMedia + jsQR work in a phone
+	// browser exactly as well as in a native WebView, so the entry follows
+	// what the page can do rather than what surrounds it. A shell that denies
+	// the camera still shows the row — the scanner reports the refusal and
+	// points at the pair code, which is a better outcome than a missing entry.
+	const canScan = canScanQr();
 
 	const savedComputers = (
 		<SavedComputers
@@ -524,7 +527,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 				)}
 				{savedComputers}
 				<section className="sh-connect-methods" aria-label={t("settings.newConnection")}>
-					{native && (
+					{canScan && (
 						<button
 							type="button"
 							className="sh-connect-method sh-connect-method--scan"

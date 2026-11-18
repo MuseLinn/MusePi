@@ -71,3 +71,45 @@
 		max-width: none;
 	}
 }
+
+/*
+ * The phone surface keeps the rail an overlay at every width.
+ *
+ * A foldable reports ~940 CSS px, which lands above the 840px cut above, so
+ * the rail became a permanent 300px column next to the transcript — a
+ * desktop arrangement on a device whose only input is a finger. The rail
+ * stays reachable through the header toggle and opens over the transcript,
+ * exactly like it does on a narrow phone. The geometry copies the ≤839px
+ * overlay rule in shell.css (absolute, right-anchored) so the two paths
+ * cannot drift apart.
+ */
+.sh-app[data-surface="mobile"] .sh-main {
+	position: relative;
+}
+
+.sh-app[data-surface="mobile"] .sh-rail {
+	position: absolute;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	z-index: 30;
+	width: 280px;
+	max-width: 85vw;
+	border-left: 1px solid var(--border-strong);
+	border-top: none;
+	border-radius: 0;
+	box-shadow: var(--rail-mobile-shadow);
+}
+
+.sh-app[data-surface="mobile"] .sh-rail-backdrop {
+	display: block;
+	position: absolute;
+	inset: 0;
+	z-index: 25;
+	background: var(--backdrop);
+}
+
+.sh-app[data-surface="mobile"] .sh-transcript {
+	max-width: 46rem;
+	margin: 0 auto;
+}

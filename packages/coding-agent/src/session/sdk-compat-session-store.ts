@@ -18,13 +18,15 @@ import type { ModelChangeEntry, SessionMessageEntry } from "./session-entries";
 import { SessionManager } from "./session-manager";
 
 /**
- * Sessions owned by an SDK-compatible agent (musepi/omp/pi share the
- * same session format: `<sessions>/<encoded-cwd>/<ts>_<uuid>.jsonl` of wire
- * records with `type:"message"` + `message.role` blocks). Reading a sibling
- * install is a format-compatible conversion, not a translation.
+ * Sessions owned by a sibling install of OMP or Pi, which share MusePi's
+ * format: `<sessions>/<encoded-cwd>/<ts>_<uuid>.jsonl` of wire records with
+ * `type:"message"` + `message.role` blocks. Reading a sibling install is a
+ * format-compatible conversion, not a translation.
+ *
+ * MusePi itself is deliberately absent: its own sessions are the ones the app
+ * already lists, so importing from it would only copy them beside themselves.
  */
-const SDK_SESSION_ROOTS: Record<"musepi" | "omp" | "pi", string[]> = {
-	musepi: ["~/.musepi/agent/sessions", "~/.musepi/sessions", "~/.musepi/agent/data/sessions"],
+const SDK_SESSION_ROOTS: Record<"omp" | "pi", string[]> = {
 	omp: ["~/.omp/agent/sessions", "~/.omp/sessions", "~/.omp/agent/data/sessions"],
 	pi: ["~/.pi/agent/sessions", "~/.pi/sessions", "~/.pi/agent/data/sessions"],
 };
@@ -45,6 +47,28 @@ function isoToMs(value: unknown, fallback: number): number {
 	}
 	if (typeof value === "number" && Number.isFinite(value)) return value;
 	return fallback;
+}
+
+/**
+ * Session metadata an SDK-format header carries. The header is the first
+ * `type:"session"` line and names the working directory the session ran in;
+ * recovering that from the file name or the folder slug loses it, because the
+ * slug is a lossy encoding of the cwd.
+ */
+interface SdkSessionHeader {
+	cwd?: string;
+	title?: string;
+}
+
+function sdkSessionHeader(record: Record<string, unknown>): SdkSessionHeader | undefined {
+	if (record.type !== "session") return undefined;
+	return { cwd: stringField(record, "cwd"), title: stringField(record, "title") };
+}
+
+/** Title held by the fixed-width first-line title slot, which older records predate. */
+function titleSlotTitle(record: Record<string, unknown>): string | undefined {
+	if (record.type !== "title") return undefined;
+	return stringField(record, "title");
 }
 
 function firstMessagePreview(record: Record<string, unknown>): string | undefined {
@@ -212,12 +236,12 @@ async function collectRecords(file: string): Promise<{ value: Record<string, unk
 	return records;
 }
 
-/** SDK-compatible session store for `musepi`, `omp` and `pi` roots. */
+/** SDK-compatible session store for `omp` and `pi` roots. */
 export class SdkCompatSessionStore implements ForeignSessionStore {
-	readonly source: "musepi" | "omp" | "pi";
+	readonly source: "omp" | "pi";
 	readonly #roots: string[];
 
-	constructor(source: "musepi" | "omp" | "pi", roots?: string[]) {
+	constructor(source: "omp" | "pi", roots?: string[]) {
 		this.source = source;
 		this.#roots = roots ?? SDK_SESSION_ROOTS[source].map(expandHome);
 	}
@@ -248,6 +272,7 @@ export class SdkCompatSessionStore implements ForeignSessionStore {
 						id: path.basename(file, ".jsonl"),
 						path: file,
 						cwd: meta.cwd,
+						title: meta.title,
 						created: new Date(meta.created),
 						modified: new Date(meta.modified),
 						firstMessage: meta.firstMessage,
@@ -269,12 +294,21 @@ export class SdkCompatSessionStore implements ForeignSessionStore {
 	async #readHead(
 		file: string,
 		root: string,
-	): Promise<{ cwd: string; created: number; modified: number; firstMessage?: string; messageCount: number }> {
+	): Promise<{
+		cwd: string;
+		title?: string;
+		created: number;
+		modified: number;
+		firstMessage?: string;
+		messageCount: number;
+	}> {
 		const stats = await fs.stat(file);
 		let created = stats.mtimeMs;
 		let modified = stats.mtimeMs;
 		let firstMessage: string | undefined;
 		let messageCount = 0;
+		let slotTitle: string | undefined;
+		let header: SdkSessionHeader | undefined;
 		let bytes = 0;
 		const handle = await fs.open(file, "r");
 		try {
@@ -292,19 +326,32 @@ export class SdkCompatSessionStore implements ForeignSessionStore {
 					created = Math.min(created, ts);
 					modified = Math.max(modified, ts);
 				}
-				if (record.type === "session" && typeof record.cwd === "string") {
-					modified = Math.max(modified, ts); // cwd on session record
-				}
+				header ??= sdkSessionHeader(record);
+				slotTitle ??= titleSlotTitle(record);
 				if (record.type === "message") messageCount += 1;
 				if (!firstMessage) firstMessage = firstMessagePreview(record);
 			}
 		} finally {
 			await handle.close();
 		}
-		return { cwd: await this.#cwdFor(file, root), created, modified, firstMessage, messageCount };
+		return {
+			cwd: header?.cwd ?? (await this.#cwdFor(file, root)),
+			// The fixed-width slot is what `updateSessionTitle` rewrites; the
+			// header only snapshots it, so a rename can leave the header stale or
+			// absent. This is the order `session-listing.ts` already uses.
+			title: slotTitle ?? header?.title,
+			created,
+			modified,
+			firstMessage,
+			messageCount,
+		};
 	}
 
-	/** SDK shape: sessions/<encoded-cwd>/<file>; a `.cwd` marker overrides. */
+	/**
+	 * Slug fallback for a session file whose header carries no cwd. The slug is
+	 * a lossy encoding (`-` for separators and colons), so this is only a name
+	 * to show, never a directory to open.
+	 */
 	async #cwdFor(file: string, root: string): Promise<string> {
 		const dir = path.dirname(file);
 		try {
@@ -321,10 +368,22 @@ export class SdkCompatSessionStore implements ForeignSessionStore {
 		const records = await collectRecords(info.path);
 		if (records.length === 0) throw new Error(`Session ${info.id} contains no readable records`);
 
-		let sourceCwd: string | undefined;
 		let title: string | undefined;
 		const usedIds = new Set<string>();
 		const toolNames = new Map<string, string>();
+		// The header is the first line and decides the workspace before any entry
+		// is replayed: a picker's cwd must be the project the session ran in, not
+		// the slug it was filed under.
+		let sourceCwd: string | undefined;
+		let headerTitle: string | undefined;
+		for (const { value } of records) {
+			const header = sdkSessionHeader(value);
+			if (header) {
+				sourceCwd = header.cwd;
+				headerTitle = header.title;
+				break;
+			}
+		}
 		const manager = SessionManager.inMemory(sourceCwd ?? info.cwd);
 		let lastModel: string | undefined;
 		let parentId: string | null = null;
@@ -332,8 +391,9 @@ export class SdkCompatSessionStore implements ForeignSessionStore {
 
 		for (const { value } of records) {
 			const ts = isoToMs(value.timestamp, Date.now());
-			if (value.type === "session" && typeof value.cwd === "string") sourceCwd = value.cwd;
-			if (value.type === "title" && typeof value.title === "string" && value.title.length > 0) title = value.title;
+			// Slot first, then the header's snapshot — the same order the listing
+			// and `#readHead` use, so an imported name matches what the picker showed.
+			title ??= titleSlotTitle(value);
 			if (value.type === "model_change" && typeof value.model === "string") {
 				if (value.model !== lastModel) {
 					const id = uniqueEntryId(`sdk-model-${synthetic++}`, usedIds);
@@ -365,7 +425,8 @@ export class SdkCompatSessionStore implements ForeignSessionStore {
 			}
 		}
 
-		if (title) await manager.setSessionName(title, "auto");
+		const name = title ?? headerTitle ?? info.title;
+		if (name) await manager.setSessionName(name, "auto");
 		return manager;
 	}
 }

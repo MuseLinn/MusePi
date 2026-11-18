@@ -99,25 +99,56 @@ export function connectorToMCPServer(
 		server.headers = { ...entry.server.headers };
 		server.headerPolicy = "origin-locked";
 	}
+	// A pasted personal access token rides in the authorization header. The
+	// manager overwrites a same-named header when an OAuth grant exists, so a
+	// sign-in that succeeded is never silently downgraded to the token.
+	const pat = entry.tokenSchema?.personalAccessToken;
+	if (pat) {
+		const value = secret?.[pat.field];
+		if (value) {
+			server.headers = { ...server.headers, Authorization: `Bearer ${value}` };
+			server.headerPolicy = "origin-locked";
+		}
+	}
 	if (entry.auth.mode === "oauth") {
+		const client = entry.tokenSchema?.oauthClient;
+		// The client id and secret come from the encrypted store when the
+		// schema names them; the catalog itself never carries either.
+		const clientId = client ? secret?.[client.clientIdField] : entry.oauth?.clientId;
+		const clientSecret = client ? secret?.[client.clientSecretField] : undefined;
+		// A row that needs an OAuth client is not mounted without it — unless a
+		// pasted token answers the row on its own, which is the whole point of
+		// the fallback.
+		const hasPatValue = pat ? (secret?.[pat.field]?.length ?? 0) > 0 : false;
+		if (client && (!clientId || !clientSecret) && !hasPatValue) return undefined;
 		server.auth = {
 			type: "oauth",
-			...(entry.oauth?.clientId ? { clientId: entry.oauth.clientId } : {}),
+			...(clientId ? { clientId } : {}),
 			...(entry.oauth?.tokenUrl ? { tokenUrl: entry.oauth.tokenUrl } : {}),
 		};
-		if (entry.oauth) {
-			const oauth: NonNullable<MCPServer["oauth"]> = {};
-			if (entry.oauth.clientId) oauth.clientId = entry.oauth.clientId;
-			if (entry.oauth.callbackPort !== undefined) oauth.callbackPort = entry.oauth.callbackPort;
-			if (entry.oauth.callbackPath) oauth.callbackPath = entry.oauth.callbackPath;
-			if (Object.keys(oauth).length > 0) server.oauth = oauth;
-		}
+		const oauth: NonNullable<MCPServer["oauth"]> = {};
+		if (clientId) oauth.clientId = clientId;
+		if (clientSecret) oauth.clientSecret = clientSecret;
+		if (entry.oauth?.callbackPort !== undefined) oauth.callbackPort = entry.oauth.callbackPort;
+		if (entry.oauth?.callbackPath) oauth.callbackPath = entry.oauth.callbackPath;
+		if (Object.keys(oauth).length > 0) server.oauth = oauth;
 	}
 	if (entry.auth.mode === "token") {
 		const schema = entry.tokenSchema;
 		if (!schema || !secret) return undefined;
+		const first = schema.fields[0]?.key;
+		if (schema.query) {
+			// A query-carried key goes into the URL; the field value is
+			// percent-encoded, so it cannot smuggle a second parameter.
+			const value = first ? secret[first] : undefined;
+			if (!value) return undefined;
+			const url = new URL(entry.server.url);
+			url.searchParams.set(schema.query, value);
+			server.url = url.toString();
+			return server;
+		}
 		const header = schema.header ?? DEFAULT_TOKEN_HEADER;
-		const value = renderToken(header.template, secret, schema.fields[0]?.key);
+		const value = renderToken(header.template, secret, first);
 		if (value === undefined) return undefined;
 		server.headers = { ...server.headers, [header.name]: value };
 		server.headerPolicy = "origin-locked";

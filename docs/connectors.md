@@ -18,13 +18,52 @@ A connector is a discoverable remote MCP server plus the display and auth metada
 
 ## Sources
 
-The loader reads three sources, highest precedence first:
+The loader reads four sources, highest precedence first:
 
-1. `MUSEPI_CONNECTOR_CATALOG` — an absolute JSON file path, a path relative to the agent directory, or an `http(s)` URL. Remote indexes use a 10 s timeout and never block the other sources on failure.
+1. `MUSEPI_CONNECTOR_CATALOG` — an absolute JSON file path, a path relative to the agent directory, an `http(s)` URL, or one of two words:
+   - `auto` checks the index this app publishes at
+     `https://raw.githubusercontent.com/MuseLinn/MusePi/main/connectors/catalog.json`.
+   - `off` keeps the catalog local even if a default would otherwise apply.
+   Remote indexes use a 10 s timeout and never block the other sources on failure.
 2. `<agentDir>/connectors/catalog.json` — the default local index.
 3. `<agentDir>/connectors/marketplace/<id>/` — WorkBuddy-compatible packages: `plugin.json` plus `mcp.json`.
+4. The bundled catalog — `packages/coding-agent/src/connectors/bundled-catalog.ts`, the one list every profile starts with. It is code rather than JSON because it ships inside the CLI bundle, and it sits at the lowest precedence so a user index or a package replaces a same-id entry.
 
-Entries are deduplicated by id; an index entry wins over a package entry. The catalog accepts remote `http`/`sse` endpoints, local `stdio` commands, and managed CLI packages. A stdio entry is mounted only after the user approves that exact command fingerprint; the catalog never installs packages, so the command must already be available (`npx`/`uvx` or an installed binary).
+Entries are deduplicated by id; a stronger source wins, and only two declarations in the same tier that name different servers produce a warning. The bundled layer is why the Connectors page lists real services before anyone writes an index. The catalog accepts remote `http`/`sse` endpoints, local `stdio` commands, and managed CLI packages. A stdio entry is mounted only after the user approves that exact command fingerprint; the catalog never installs packages, so the command must already be available (`npx`/`uvx` or an installed binary).
+
+### The automatic check
+
+The automatic check is **opt-in** (`MUSEPI_CONNECTOR_CATALOG=auto`) rather than
+on by default. It is a network call made from a settings screen: the host is
+not reachable everywhere, and on a machine that cannot reach it the first open
+would stall for the request timeout before falling back to a catalog that was
+already local. A catalog compiled into the app opens instantly and works
+offline, so that is the default; a user or a deployment turns the check on
+deliberately.
+
+When a remote index is configured, its body is cached at
+`<agentDir>/connectors/index-cache/<hash>.json` together with its `ETag` and
+fetch time:
+
+| Situation | What happens |
+| --- | --- |
+| Cached less than six hours ago | The cached copy is used; no request. |
+| Older than six hours | Revalidated with `If-None-Match`; a `304` refreshes the fetch time and keeps the entries. |
+| The request fails, a cached copy exists | The cached entries are used and a warning names the failure and the age of the copy. A network outage does not make a connector disappear. |
+| The request fails, no cached copy | No entries from this source; the other sources still load. |
+
+`connectors.catalog.refresh` (the **刷新目录** button) revalidates regardless of
+the cache window, so a user who presses it gets the current index.
+
+The index only overrides what the app ships. An entry with the same id
+replaces the bundled row; a new id adds a row. Enabling is still the user's
+action, a stdio entry still needs its command approved, and the loader still
+refuses a static credential header — a remote index can change what is
+*offered*, never what is already trusted.
+
+Publishing a change: edit `connectors/catalog.json` on the default branch. The
+worst case for a bad edit is a row that does not connect; the bundled catalog
+underneath is untouched.
 
 ### Index shape
 
@@ -79,7 +118,7 @@ The remote index shape:
 }
 ```
 
-`auth.mode` is `oauth` (default), `none`, or `token`. Optional `oauth` hints (`clientId`, `authorizationUrl`, `tokenUrl`, `scopes`, `callbackPort`, `callbackPath`) map onto the existing MCP OAuth config; omitted hints fall back to runtime discovery. A `token` entry must declare a form schema; values are stored in the encrypted connector secret store, never in the catalog:
+`auth.mode` is `oauth` (default), `none`, or `token`. `descriptionZh` supplies a Chinese one-liner for a Chinese UI, and `featured: true` puts an entry in the page's opening section. Optional `oauth` hints (`clientId`, `authorizationUrl`, `tokenUrl`, `scopes`, `callbackPort`, `callbackPath`) map onto the existing MCP OAuth config; omitted hints fall back to runtime discovery. A `token` entry must declare a form schema; values are stored in the encrypted connector secret store, never in the catalog. A schema may carry the value in a header or in a URL query parameter, because some vendors issue a plain key for a query string (`query: "key"` for Amap's `?key=`) rather than a bearer token; `header` wins when both are declared:
 
 ```json
 {
@@ -133,9 +172,49 @@ The GUI reflects that containment: settings has ONE entry, 连接器, and hand-w
 | `connectors.token.save` | Validate Token form values against the schema, merge them into the encrypted store, and require every required field. Empty values keep the stored value. |
 | `connectors.cli.status` | Run the CLI `status` command for a pending auth flow; `success` enables the connector. |
 | `connectors.cli.cancel` | Stop the auth process and forget the flow. |
+| `connectors.import.scan` | MCP servers the other agents on this machine have configured, by source and endpoint. Credential fields are listed by name; no value crosses the wire. |
+| `connectors.import.apply` | Copy the picked servers into the user's own catalog and move a plain-text credential into the encrypted secret store. The source file is never written to. |
 | `mcp.servers.probe` | Handshake and release, joining no session and caching nothing. With `url`/`command` it validates like `add`; with only a `name` (plus optional `cwd`/`sessionId`) it resolves the user `mcp.json` entry, then the workspace's live manager config, injects stored credentials through `prepareConfig`, and connects. Returns `{ ok, serverInfo?, toolNames?, resourceCount?, promptCount?, error? }`; a missing live manager is a stated failure, never a credential-less retry. |
 
 `connect` does not start OAuth. When `needsAuth` is true the client calls the existing `mcp.oauth.start` with the returned server name; the grant lands in auth storage and the manager reconnects. On desktop the start call also passes `redirectUri: musepi://oauth/callback`: the Electron shell registers `musepi://`, forwards the URL to the renderer, and the renderer calls `mcp.oauth.callback`. State and PKCE are validated inside the flow, so an unrelated app invoking the scheme cannot finish a grant. When `needsTokenConfig` is true the connector is not enabled and the client shows the Token form, saves it through `connectors.token.save`, then calls `connect` again. This keeps one OAuth implementation and one credential store for hand-written servers and catalog connectors alike.
+
+## Importing from other agents
+
+The discovery layer already reads every agent's MCP configuration — Cursor, VS Code, Claude, Codex, Kimi Code and the rest — so those servers are reachable in a session. `connectors.import.scan` offers exactly that set, and `connectors.import.apply` copies the picked ones into `<agentDir>/connectors/custom.json`, where they join the catalog as user-owned entries.
+
+Importing is a copy, not a link. The other agent's file is never written to, and removing the imported connector later leaves it untouched.
+
+A credential the other agent stored in plain text — an `Authorization` header, or an environment variable whose name says it is a token — moves into the encrypted connector secret store, and the catalog keeps only the field name. Leaving the plaintext where it was would keep it readable to every other tool on the machine. An environment variable that is ordinary configuration (`CODEX_HOME`, `JAVA_HOME`, a trusted-path list) stays in the entry: it is not a secret, and the server reads it as configuration.
+
+An imported local command still needs the user's approval before it runs, exactly like a catalog entry that declares one.
+
+## Verification
+
+`scripts/probe-connectors.ts` walks the sign-in path each row would take: an anonymous `initialize`, the protected-resource and authorization-server metadata, then a dynamic client registration with a loopback redirect, stopping at the authorization page without granting anything. Its verdict per row is recorded in the catalog's `verified` field.
+
+The probe exists because a vendor's documentation is not the answer. Figma rejects a redirect URI whose path does not end in `/callback`, and rejects a client name outside its list, while its docs promise a working registration. Asana advertises an authorization server that offers no registration, while the resource itself runs one that does. Both only appear when a registration is actually attempted.
+
+### Brand marks
+
+Each bundled connector's mark is committed data in
+`apps/desktop/src/components/settings-sections/connector-brand-icons.generated.ts`,
+generated by `scripts/generate-connector-brand-icons.ts`. Reading it from a
+vendor at render time would make one request per card and tell each vendor
+that this machine opened its settings page, so the marks ship with the app.
+
+The generator prefers, in order: `simple-icons` from the installed package
+(pinned by the lockfile, no network), the `logos` collection, and the icon the
+vendor's own page declares. `apps/desktop/test/connector-brand-icons.test.ts`
+fails when a bundled connector has no mark and is not a recorded exception, so
+adding a connector without regenerating is caught before release.
+
+Run it after changing the catalog:
+
+```sh
+bun scripts/probe-connectors.ts            # every row
+bun scripts/probe-connectors.ts github figma
+bun scripts/probe-connectors.ts --json
+```
 
 ## Security boundaries
 
@@ -159,6 +238,7 @@ Enterprise registries and connector-to-connector token injection are out of scop
 ## Implementation
 
 - `packages/coding-agent/src/connectors/types.ts`
+- `packages/coding-agent/src/connectors/bundled-catalog.ts`
 - `packages/coding-agent/src/connectors/catalog.ts`
 - `packages/coding-agent/src/connectors/state.ts`
 - `packages/coding-agent/src/connectors/runtime.ts`

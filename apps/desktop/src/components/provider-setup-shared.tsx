@@ -91,8 +91,8 @@ export interface EndpointModels {
 	toggleAll(): void;
 	allSelected: boolean;
 	/** Candidates checked but not yet adopted — the caller merges them
-	 *  into its own adopted shape (settings rows carry capability fields,
-	 *  onboarding rows don't; the hook stays shape-agnostic). */
+	 *  into its own draft rows; the hook stays shape-agnostic so one form can
+	 *  own both lists. */
 	pickedNew(adoptedIds: Iterable<string>): { id: string; name?: string }[];
 }
 
@@ -184,58 +184,140 @@ export function useEndpointModels(rpc: RpcClient | null, draft: EndpointDraft): 
 }
 
 /** Candidate picker for "fetch available models": the endpoint's reply as
- *  a checkbox list the user adopts from. Nothing here writes
- *  configuration — adopted rows land in the caller's form only. Nested
- *  inside the caller's own DialogFrame (settings) or card (onboarding);
- *  the frame itself portals to body either way. */
+ *  a checkbox list the user adopts from, plus the current rows the endpoint
+ *  no longer returns. Applying merges the first and removes the second, so a
+ *  fetch updates the list instead of piling models up. Nothing here writes
+ *  configuration — the caller edits its own draft. Nested inside the caller's
+ *  own DialogFrame; the frame itself portals to body either way. */
 export function EndpointCandidatesDialog({
 	candidates,
+	existing,
 	picked,
 	allSelected,
 	onToggleOne,
 	onToggleAll,
-	onAdopt,
+	stale,
+	pickedStale,
+	allStaleSelected,
+	onToggleStale,
+	onToggleAllStale,
+	onApply,
 	onClose,
 }: {
 	candidates: { id: string; name?: string }[] | null;
+	/** Ids already in the draft: offered as listed, not as new rows. */
+	existing: ReadonlySet<string>;
 	picked: ReadonlySet<string>;
 	allSelected: boolean;
 	onToggleOne(id: string): void;
 	onToggleAll(): void;
-	onAdopt(): void;
+	/** Draft rows the endpoint did not return; checked ones are removed. */
+	stale: { id: string; name?: string }[];
+	pickedStale: ReadonlySet<string>;
+	allStaleSelected: boolean;
+	onToggleStale(id: string): void;
+	onToggleAllStale(): void;
+	onApply(): void;
 	onClose(): void;
 }): ReactNode {
+	const added = (candidates ?? []).filter(model => picked.has(model.id) && !existing.has(model.id)).length;
+	const removed = pickedStale.size;
+	const nothingToDo = added === 0 && removed === 0;
 	return (
 		<DialogFrame
 			open={candidates !== null}
 			onClose={onClose}
-			className="gui-dialog--confirm"
+			className="gui-dialog--models"
 			label={t("settings.availableModels")}
 		>
 			<div className="gui-dialog-head">
 				<div className="text-[14px] font-medium">{t("settings.availableModels")}</div>
-				<button type="button" className="gui-btn" onClick={onAdopt}>
-					{t("settings.adoptSelected")}
+				<button type="button" className="gui-btn" onClick={onClose}>
+					{t("settings.close")}
 				</button>
 			</div>
-			<div className="p-3">
-				<div className="mb-2 flex items-center justify-between">
-					<span className="text-[13px] text-[var(--color-text-faint)]">{t("settings.selectModelsAdd")}</span>
-					<button type="button" className="text-[12px] text-[var(--color-accent)]" onClick={onToggleAll}>
-						{allSelected ? t("settings.deselectAll") : t("settings.selectAll")}
+			<div className="flex flex-col gap-3 p-3">
+				<section>
+					<div className="mb-2 flex items-center justify-between">
+						<span className="text-[13px] font-medium">
+							{t("settings.modelsToAdd")} · {(candidates ?? []).filter(m => !existing.has(m.id)).length}
+						</span>
+						<button type="button" className="text-[12px] text-[var(--color-accent)]" onClick={onToggleAll}>
+							{allSelected ? t("settings.deselectAll") : t("settings.selectAll")}
+						</button>
+					</div>
+					{candidates !== null && candidates.length === 0 ? (
+						<div className="text-[13px] text-[var(--color-text-faint)]">
+							{t("settings.noModelsFoundEndpoint")}
+						</div>
+					) : (
+						<FadeScroll className="flex max-h-[220px] flex-col gap-1 overflow-y-auto">
+							{(candidates ?? []).map(model => {
+								const listed = existing.has(model.id);
+								return (
+									<label key={model.id} className="flex cursor-pointer items-center gap-2">
+										<input
+											type="checkbox"
+											checked={listed || picked.has(model.id)}
+											disabled={listed}
+											onChange={() => onToggleOne(model.id)}
+										/>
+										<span className="flex-1 truncate font-mono text-[13px]">{model.id}</span>
+										{listed ? (
+											<span className="text-[12px] text-[var(--color-text-faint)]">
+												{t("settings.modelAlreadyListed")}
+											</span>
+										) : model.name && model.name !== model.id ? (
+											<span className="truncate text-[12px] text-[var(--color-text-faint)]">
+												{model.name}
+											</span>
+										) : null}
+									</label>
+								);
+							})}
+						</FadeScroll>
+					)}
+				</section>
+				{stale.length > 0 ? (
+					<section>
+						<div className="mb-1 flex items-center justify-between">
+							<span className="text-[13px] font-medium">
+								{t("settings.modelsMissing")} · {stale.length}
+							</span>
+							<button
+								type="button"
+								className="text-[12px] text-[var(--color-accent)]"
+								onClick={onToggleAllStale}
+							>
+								{allStaleSelected ? t("settings.deselectAll") : t("settings.selectAll")}
+							</button>
+						</div>
+						<div className="mb-1 text-[12px] text-[var(--color-text-faint)]">
+							{t("settings.modelsMissingHint")}
+						</div>
+						<FadeScroll className="flex max-h-[160px] flex-col gap-1 overflow-y-auto">
+							{stale.map(model => (
+								<label key={model.id} className="flex cursor-pointer items-center gap-2">
+									<input
+										type="checkbox"
+										checked={pickedStale.has(model.id)}
+										onChange={() => onToggleStale(model.id)}
+									/>
+									<span className="flex-1 truncate font-mono text-[13px] text-[var(--color-text-muted)] line-through">
+										{model.id}
+									</span>
+								</label>
+							))}
+						</FadeScroll>
+					</section>
+				) : null}
+				<div className="flex justify-end">
+					<button type="button" className="gui-btn gui-btn-approve" disabled={nothingToDo} onClick={onApply}>
+						{added + removed === 0
+							? t("settings.applyModelChanges", { add: 0, remove: 0 })
+							: t("settings.applyModelChanges", { add: added, remove: removed })}
 					</button>
 				</div>
-				<FadeScroll className="flex max-h-[260px] flex-col gap-1 overflow-y-auto">
-					{(candidates ?? []).map(m => (
-						<label key={m.id} className="flex cursor-pointer items-center gap-2">
-							<input type="checkbox" checked={picked.has(m.id)} onChange={() => onToggleOne(m.id)} />
-							<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
-							{m.name && m.name !== m.id && (
-								<span className="truncate text-[12px] text-[var(--color-text-faint)]">{m.name}</span>
-							)}
-						</label>
-					))}
-				</FadeScroll>
 			</div>
 		</DialogFrame>
 	);

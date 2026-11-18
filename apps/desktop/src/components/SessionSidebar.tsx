@@ -656,7 +656,7 @@ export function SessionSidebar({
 	}, [sessionMeta]);
 	// Registry load: import the pre-registry localStorage list once, then read
 	// `workspace.list` and mirror the roots back for surfaces that still read
-	// the legacy key (WelcomeComposer, PR board, scheduled tasks).
+	// the legacy key (HeroComposer, PR board, scheduled tasks).
 	useEffect(() => {
 		if (!rpc) {
 			setProjects([]);

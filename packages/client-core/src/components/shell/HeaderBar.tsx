@@ -19,17 +19,20 @@ import { createPortal } from "react-dom";
 import { type TranslationKey, t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
 import type { SessionActionDetail } from "../../lib/capacitor";
-import { isHarmonyShell, isMobileShell, SESSION_ACTION_EVENT } from "../../lib/capacitor";
+import { isHarmonyShell, SESSION_ACTION_EVENT } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
 import { fmtPercent, formatWhen, shortenPath } from "../../lib/format";
 import { useShellLayout } from "../../lib/responsive-shell";
 import { sessionTitleMorphId, useMorphTarget } from "../../lib/scene-morph";
 import { useGuestSelector } from "../../lib/use-guest";
+import { useMobileSurface } from "../../lib/use-mobile-surface";
 import { AccentToggle } from "./AccentToggle";
 import { HostManager } from "./HostManager";
 import { LanguageToggle } from "./LanguageToggle";
+import { phaseLabel } from "./phase-label";
 import { SessionsSheet } from "./SessionsSheet";
 import { ThemeToggle } from "./ThemeToggle";
+import { thinkingLevelLabel } from "./thinking-level";
 
 /** Guest side panels reachable from the header nav. */
 export type GuestPanel = "board" | "scheduled" | "files" | "marketplace" | "workbench" | "voice" | "settings";
@@ -130,7 +133,7 @@ export function HeaderBar({
 }: HeaderBarProps): ReactNode {
 	// Field-level subscriptions: the header only re-renders when its own
 	// fields change, never on every transcript/notice frame.
-	const mobile = isMobileShell();
+	const mobile = useMobileSurface();
 	const layout = useShellLayout();
 	const narrow = layout !== "wide";
 	// A wide unfolded phone is still a phone: 939vp of width does not turn a
@@ -158,6 +161,8 @@ export function HeaderBar({
 	const titleBtnMorphRef = useMorphTarget<HTMLButtonElement>(titleMorphId);
 	const titleSpanMorphRef = useMorphTarget<HTMLSpanElement>(titleMorphId);
 	const usage = state?.contextUsage;
+	// Thinking level is wire vocabulary; the chip shows the localized rung.
+	const thinkingText = thinkingLevelLabel(state?.thinkingLevel);
 	let pct: number | null = null;
 	if (usage) {
 		pct =
@@ -293,7 +298,7 @@ export function HeaderBar({
 					</span>
 				)}
 				{state?.model && <span className="sh-chip sh-chip-meta">{state.model.name}</span>}
-				{state?.thinkingLevel && <span className="sh-chip sh-chip-meta">{state.thinkingLevel}</span>}
+				{thinkingText && <span className="sh-chip sh-chip-meta">{thinkingText}</span>}
 				{pct != null && (
 					<span
 						className={pct > 80 ? "sh-gauge sh-gauge-warn" : "sh-gauge"}
@@ -311,14 +316,14 @@ export function HeaderBar({
 							<span
 								key={`${p.name}:${i}`}
 								className={p.role === "host" ? "sh-avatar sh-avatar-host" : "sh-avatar"}
-								title={`${p.name} · ${p.role}${p.readOnly ? ` · ${t("composer.viewOnly")}` : ""}`}
+								title={`${p.name} · ${t(p.role === "host" ? "shell.roleHost" : "shell.roleGuest")}${p.readOnly ? ` · ${t("composer.viewOnly")}` : ""}`}
 							>
 								{(p.name[0] ?? "?").toUpperCase()}
 							</span>
 						))}
 					</span>
 				)}
-				<span className={`sh-dot sh-dot-${phase}`} title={phase} />
+				<span className={`sh-dot sh-dot-${phase}`} title={phaseLabel(phase)} />
 				{compactNav ? (
 					<span className="sh-header-nav">
 						<button

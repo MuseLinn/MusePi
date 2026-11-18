@@ -1,5 +1,6 @@
 ---
 name: musepi-help
+version: 1.0.0
 description: MusePi 产品使用帮助——回答"怎么用/是什么/出问题怎么办"类问题（TUI/CLI/桌面 GUI/看板/widget/配置/扩展/许可）。触发：任何关于 MusePi 本身的使用、功能、配置、故障问题。
 ---
 

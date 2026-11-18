@@ -14,20 +14,7 @@ import {
 	renameHost,
 } from "../../lib/hosts";
 import { isTopModal, useModalFocus } from "../../lib/modal-focus";
-
-function phaseLabel(phase: ConnectionPhase): string {
-	switch (phase) {
-		case "live":
-		case "workspace":
-			return t("transcript.connected");
-		case "reconnecting":
-			return t("shell.reconnecting");
-		case "ended":
-			return t("settings.notConnected");
-		default:
-			return t("settings.connecting2");
-	}
-}
+import { phaseLabel } from "./phase-label";
 
 function pathLabel(host: ResolvedHost): string {
 	switch (host.candidates[0]?.kind) {

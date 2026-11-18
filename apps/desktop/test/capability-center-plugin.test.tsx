@@ -26,7 +26,7 @@ describe("capability-center Cordis plugin", () => {
 				},
 			},
 		} as unknown as ExtensionAPI);
-		expect(components).toEqual([expect.objectContaining({ slot: "app.capability", moduleUrl: "./page.tsx" })]);
+		expect(components).toEqual([expect.objectContaining({ slot: "main.capability", moduleUrl: "./page.tsx" })]);
 	});
 
 	it("moves the three tabs out of the page header into the second-tier panel bridge", async () => {
@@ -79,7 +79,7 @@ describe("capability-center Cordis plugin", () => {
 		const host = document.createElement("div");
 		const root = createRoot(host);
 		const item = {
-			slot: "app.capability",
+			slot: "main.capability",
 			extensionId: "/plugins/capability-center/index.ts",
 			code: `export default function Page({ page }) { return window.MusePiReact.createElement("span", null, page.tab); }`,
 		};
@@ -102,7 +102,7 @@ describe("capability-center Cordis plugin", () => {
 		const root = createRoot(host);
 		const globals = globalThis as { __capabilityCleanup?: number; __capabilityImports?: number };
 		const item = {
-			slot: "app.capability",
+			slot: "main.capability",
 			extensionId: "/plugins/capability-center/index.ts",
 			code: `globalThis.__capabilityImports = (globalThis.__capabilityImports ?? 0) + 1;
 				await Bun.sleep(60);

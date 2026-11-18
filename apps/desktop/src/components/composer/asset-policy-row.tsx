@@ -19,7 +19,7 @@ import { Reveal } from "../Reveal";
  * 素材策略行 + 「高级 ▸」折叠区（M3.7c §4，
  * docs/review/0.5.0-m3-mode-page-redesign.md §2.2 信息架构最底行）。
  *
- * 落在 composer 下方、设计体系预览 rail 之下（WelcomeComposer 提供
+ * 落在 composer 下方、设计体系预览 rail 之下（HeroComposer 提供
  * portal 插槽,本组件由 CreationModeRow 渲染——草稿单一所有权留在
  * chip 排,这里只消费 draft/updateDraft）。
  *

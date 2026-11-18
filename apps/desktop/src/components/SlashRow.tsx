@@ -8,7 +8,7 @@ import { slashDisplayName } from "./slash-row-shared";
  * Slash-command completion row (openchamber-style rich menu): first line
  * carries the command name, subcommand hints and two category badges
  * (kind + scope); the second line shows the description. Shared by the
- * session Composer and the WelcomeComposer so both / menus stay in sync.
+ * session Composer and the HeroComposer so both / menus stay in sync.
  */
 export interface SlashEntry {
 	name: string;

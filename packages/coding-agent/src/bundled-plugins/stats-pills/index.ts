@@ -4,7 +4,7 @@
  * ## 为什么它是一个插件而不是宿主组件
  *
  * 这两个读数回答的是「这次对话用了多少、快不快」，属于**会话的观测面**，不是
- * 输入区的结构。宿主的 composer 只需要留一个座位（`composer.dock`）让人放读数，
+ * 输入区的结构。宿主的 composer 只需要留一个座位（`conversation.composer.dock`）让人放读数，
  * 至于放什么、怎么算、显示成几行，应该是可替换的——用户可能想要更详细的读数，
  * 或者根本不想要这一行。
  *
@@ -13,6 +13,13 @@
  * 1. **可关**：不需要这一行的人可以停用它，而不是忍受它占位置；
  * 2. **可替换**：第三方可以写一个自己的读数插件挂到同一个座位，宿主的渲染
  *    代码一行不动。
+ *
+ * ## 两条条目，不是一个整体
+ *
+ * 座位是 list，两枚胶囊各注册一条条目（`id: "activity"` / `id: "usage"`，
+ * `order` 0/1），与参考实现的颗粒度一致：第三方可以只替换其中一枚读数，
+ * 保留另一枚。两条条目都从同一个 `session.contextUsage` 读数取数——它们彼此
+ * 独立，不假设对方会替自己取数。
  *
  * ## 数据来源
  *
@@ -39,18 +46,25 @@ export function apply(ctx: ExtensionAPI): void {
 }
 
 function statsPills(ctx: ExtensionAPI): void {
-	// `composer.dock` 是输入卡下方的整行座位，正是这类「一行读数」
-	// 该待的位置——读数属于 composer 的页脚行，跟在输入卡之后，不占用
-	// 上方 dock 的状态行，也不会压在对话内容上。
+	// `conversation.composer.dock` 是输入卡下方的整行座位。两枚读数各占一条
+	// 条目（参考实现同样是「一个胶囊一条条目」）：`id` 让另一份插件可以按 id
+	// 只替换其中一枚，而不是拿走整行读数。
 	//
-	// `order` 取一个较小值：统计行是页脚的第一行，排在其它停靠条目
-	// 之前才符合阅读顺序（先看用量，再看其它提示）。
+	// `order` 0/1 固定阅读顺序：先看活动与速度，再看用量。
 	ctx.slots.register({
-		slot: "composer.dock",
-		moduleUrl: "./ui/stats-row.tsx",
-		label: "性能与用量",
-		order: 10,
+		slot: "conversation.composer.dock",
+		id: "activity",
+		moduleUrl: "./ui/activity-pill.tsx",
+		label: "活动与速度",
+		order: 0,
+	});
+	ctx.slots.register({
+		slot: "conversation.composer.dock",
+		id: "usage",
+		moduleUrl: "./ui/usage-pill.tsx",
+		label: "用量",
+		order: 1,
 	});
 
-	ctx.logger.info("[stats-pills] composer stats row registered (composer.dock)");
+	ctx.logger.info("[stats-pills] composer stats entries registered (conversation.composer.dock: activity, usage)");
 }

@@ -44,7 +44,9 @@ function createHost(state: State): ModelControlsHost {
 		promptGeneration: () => 1,
 		resolveActiveEditMode: () => "normal" as never,
 		syncAfterModelChange: async () => {},
-		setModelWithProviderSessionReset: async (m: Model) => void (state.model = m),
+		setModelWithProviderSessionReset: async (m: Model) => {
+			state.model = m;
+		},
 		clearActiveRetryFallback: () => {},
 		clearInheritedProviderPromptCacheKey: () => {},
 		magicKeywordEnabled: () => false,

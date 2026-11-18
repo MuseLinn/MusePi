@@ -125,4 +125,161 @@ describe("connector runtime projection", () => {
 			envPolicy: "literal",
 		});
 	});
+
+	it("carries a query-parameter key in the URL and a header key in a header", () => {
+		const queryKey: ConnectorCatalogEntry = {
+			id: "query-key",
+			name: "Query key",
+			description: "key travels in the query string",
+			server: { type: "http", url: "https://query.example/mcp" },
+			auth: { mode: "token" },
+			tokenSchema: {
+				fields: [{ key: "Key", label: "Key", type: "password", required: true }],
+				query: "key",
+			},
+			source: "/tmp/catalog.json",
+			sourceKind: "index",
+		};
+		const headerKey: ConnectorCatalogEntry = {
+			id: "header-key",
+			name: "Header key",
+			description: "key travels in a header",
+			server: { type: "http", url: "https://header.example/mcp" },
+			auth: { mode: "token" },
+			tokenSchema: { fields: [{ key: "Token", label: "Token", type: "password", required: true }] },
+			source: "/tmp/catalog.json",
+			sourceKind: "index",
+		};
+
+		const [queryServer, headerServer] = projectConnectorServers(
+			[queryKey, headerKey],
+			state({ "query-key": true, "header-key": true }),
+			{
+				"query-key": { Key: "a b&c" },
+				"header-key": { Token: "secret" },
+			},
+		);
+
+		// The value is escaped, so it cannot introduce a second parameter.
+		expect(queryServer?.url).toBe("https://query.example/mcp?key=a+b%26c");
+		expect(queryServer?.headers).toBeUndefined();
+		expect(headerServer?.headers).toEqual({ Authorization: "Bearer secret" });
+		expect(headerServer?.url).toBe("https://header.example/mcp");
+	});
+
+	it("mounts an OAuth row only once its client id and secret are stored", () => {
+		const entry: ConnectorCatalogEntry = {
+			id: "github",
+			name: "GitHub",
+			description: "needs a registered app",
+			server: { type: "http", url: "https://api.githubcopilot.com/mcp/" },
+			auth: { mode: "oauth" },
+			tokenSchema: {
+				fields: [
+					{ key: "GITHUB_CLIENT_ID", label: "Client ID", type: "text", required: true },
+					{ key: "GITHUB_CLIENT_SECRET", label: "Client secret", type: "password", required: true },
+				],
+				oauthClient: { clientIdField: "GITHUB_CLIENT_ID", clientSecretField: "GITHUB_CLIENT_SECRET" },
+			},
+			source: "/tmp/catalog.json",
+			sourceKind: "index",
+		};
+		const state = { version: 1 as const, connectors: { github: { enabled: true } } };
+
+		expect(projectConnectorServers([entry], state)).toHaveLength(0);
+		// Half a client is still no client.
+		expect(projectConnectorServers([entry], state, { github: { GITHUB_CLIENT_ID: "Iv1.abc" } })).toHaveLength(0);
+
+		const [server] = projectConnectorServers([entry], state, {
+			github: { GITHUB_CLIENT_ID: "Iv1.abc", GITHUB_CLIENT_SECRET: "s3cret" },
+		});
+		expect(server?.oauth).toEqual({ clientId: "Iv1.abc", clientSecret: "s3cret" });
+		expect(server?.auth).toEqual({ type: "oauth", clientId: "Iv1.abc" });
+	});
+
+	it("mounts an OAuth row with only a pasted token, and prefers the token over nothing", () => {
+		const entry: ConnectorCatalogEntry = {
+			id: "github",
+			name: "GitHub",
+			description: "device code or a pasted token",
+			server: { type: "http", url: "https://api.githubcopilot.com/mcp/" },
+			auth: { mode: "oauth" },
+			oauth: { clientId: "Iv1.example" },
+			tokenSchema: {
+				fields: [],
+				personalAccessToken: { field: "GITHUB_TOKEN" },
+			},
+			source: "/tmp/catalog.json",
+			sourceKind: "index",
+		};
+		const state = { version: 1 as const, connectors: { github: { enabled: true } } };
+
+		// The row mounts on its own: the pinned client id is enough for the
+		// device grant, and the token is only needed when that path is out.
+		const [server] = projectConnectorServers([entry], state, { github: { GITHUB_TOKEN: "ghp_secret" } });
+		expect(server?.headers).toEqual({ Authorization: "Bearer ghp_secret" });
+		expect(server?.headerPolicy).toBe("origin-locked");
+		expect(server?.oauth?.clientId).toBe("Iv1.example");
+	});
+
+	it("does not mount a row that needs an OAuth client when only a token is missing", () => {
+		const entry: ConnectorCatalogEntry = {
+			id: "needs-client",
+			name: "Needs a client",
+			description: "no client, no token",
+			server: { type: "http", url: "https://client.example/mcp" },
+			auth: { mode: "oauth" },
+			tokenSchema: {
+				fields: [],
+				oauthClient: { clientIdField: "CLIENT_ID", clientSecretField: "CLIENT_SECRET" },
+				personalAccessToken: { field: "GITHUB_TOKEN" },
+			},
+			source: "/tmp/catalog.json",
+			sourceKind: "index",
+		};
+		const state = { version: 1 as const, connectors: { "needs-client": { enabled: true } } };
+
+		expect(projectConnectorServers([entry], state)).toHaveLength(0);
+		// Half a client is still no client.
+		expect(projectConnectorServers([entry], state, { "needs-client": { CLIENT_ID: "Iv1.abc" } })).toHaveLength(0);
+		// A pasted token answers the row on its own.
+		expect(projectConnectorServers([entry], state, { "needs-client": { GITHUB_TOKEN: "ghp_secret" } })).toHaveLength(
+			1,
+		);
+	});
+
+	it("keeps the OAuth grant ahead of a pasted token", () => {
+		const entry: ConnectorCatalogEntry = {
+			id: "github",
+			name: "GitHub",
+			description: "both a grant and a token",
+			server: { type: "http", url: "https://api.githubcopilot.com/mcp/" },
+			auth: { mode: "oauth" },
+			tokenSchema: {
+				fields: [],
+				personalAccessToken: { field: "GITHUB_TOKEN" },
+			},
+			source: "/tmp/catalog.json",
+			sourceKind: "index",
+		};
+		const state = { version: 1 as const, connectors: { github: { enabled: true } } };
+		const [server] = projectConnectorServers([entry], state, { github: { GITHUB_TOKEN: "ghp_secret" } });
+		// The manager overwrites a same-named header when an OAuth grant
+		// exists, so the token is only a fallback.
+		expect(server?.headers?.Authorization).toBe("Bearer ghp_secret");
+	});
+
+	it("drops a query-key connector until its key is configured", () => {
+		const entry: ConnectorCatalogEntry = {
+			id: "unset",
+			name: "Unset",
+			description: "no key yet",
+			server: { type: "http", url: "https://unset.example/mcp" },
+			auth: { mode: "token" },
+			tokenSchema: { fields: [{ key: "Key", label: "Key", type: "password" }], query: "key" },
+			source: "/tmp/catalog.json",
+			sourceKind: "index",
+		};
+		expect(projectConnectorServers([entry], state({ unset: true }))).toHaveLength(0);
+	});
 });

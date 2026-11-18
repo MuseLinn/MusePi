@@ -841,6 +841,17 @@ export const tools = {
 	"tools.skillKvPath": "安装路径",
 	"tools.skillKvPathVirtual": "扩展声明（无独立文件）",
 	"tools.skillVersionsEmpty": "暂无历史版本记录",
+	"tools.skillUpdateAvailable": "可更新",
+	"tools.skillUpdateAction": "更新",
+	"tools.skillUpdateLatest": "最新",
+	"tools.skillUpdateCurrent": "已是最新",
+	"tools.skillUpdateUnknown": "暂时无法检查更新",
+	"tools.skillUpdateRunning": "正在更新…",
+	"tools.skillUpdateChecking": "正在检查…",
+	"tools.skillUpdateSources": "来源",
+	"tools.skillUpdateSwitch": "切换来源",
+	"tools.skillBuiltinUpdateNote": "内置技能随 MusePi 客户端更新。",
+	"tools.skillUserUpdateNote": "已安装技能：从同一来源重新安装即可更新，暂无远程检查。",
 	"tools.skillRiskBody": "卸载会删除该技能的目录及其中的脚本与资源，且不可撤销。",
 
 	// ── Tool renderer labels ──────────────────────────────────────────────────

@@ -45,6 +45,41 @@ import { StateIcon } from "./StateIcon";
  * sources.
  */
 
+/** Install provenance recorded by the daemon (`.musepi-skill.json`). */
+interface SkillMarketMeta {
+	source: "skillhub" | "skills.sh" | "git";
+	slug?: string;
+	repo?: string;
+	url?: string;
+	subdir?: string;
+	version?: string;
+	commit?: string;
+	installedAt: string;
+}
+
+/** Another catalog publishing the same skill. */
+interface SkillUpdateCandidate {
+	source: SkillMarketMeta["source"];
+	slug: string;
+	repo?: string;
+	name?: string;
+	latestVersion?: string;
+	current: boolean;
+}
+
+/** One row of `skills.marketplace.updates`. */
+interface SkillUpdateRow {
+	name: string;
+	source: SkillMarketMeta["source"];
+	installedVersion?: string;
+	installedCommit?: string;
+	latestVersion?: string;
+	latestCommit?: string;
+	updateAvailable: boolean | null;
+	alternatives?: SkillUpdateCandidate[];
+	error?: string;
+}
+
 /** One row of daemon skills.list (trimmed to what the UI renders). */
 interface SkillRow {
 	name: string;
@@ -54,6 +89,8 @@ interface SkillRow {
 	hide: boolean;
 	content?: string;
 	ignored: boolean;
+	version?: string;
+	market?: SkillMarketMeta;
 	_source?: { provider: string; providerName: string; path: string; level: "user" | "project" | "native" };
 }
 
@@ -68,7 +105,6 @@ const BUNDLED_SKILL_NAMES: readonly string[] = [
 	"musepi-extension-dev",
 	"ui-ux-pro-max",
 	"board-design",
-	"musepi-contributing",
 ];
 
 /** bundled 技能：ensureBundledSkills 落盘到 user 级 skills 目录，native
@@ -318,12 +354,20 @@ function DiagnosticsView({
 function SkillDrawer({
 	rpc,
 	skill,
+	update,
+	updating,
+	onUpdate,
+	onUpdateFrom,
 	onClose,
 	onChanged,
 	onDeleted,
 }: {
 	rpc: RpcClient;
 	skill: SkillRow;
+	update?: SkillUpdateRow;
+	updating?: boolean;
+	onUpdate?(): void;
+	onUpdateFrom?(candidate: SkillUpdateCandidate): void;
 	onClose(): void;
 	onChanged(): void;
 	onDeleted(name: string): void;
@@ -586,8 +630,68 @@ function SkillDrawer({
 								<span className="gui-cap-drawer-kv-val">{skillVersionLabel(skill)}</span>
 								<span className="gui-cap-drawer-kv-key">{t("tools.skillKvSource")}</span>
 								<span className="gui-cap-drawer-kv-val">{skillOriginLabel(skill)}</span>
+								{skill.market && (
+									<>
+										<span className="gui-cap-drawer-kv-key">{t("tools.skillUpdateLatest")}</span>
+										<span className="gui-cap-drawer-kv-val">
+											{update?.latestVersion
+												? `v${update.latestVersion}`
+												: update?.latestCommit
+													? update.latestCommit.slice(0, 7)
+													: "—"}
+										</span>
+									</>
+								)}
 							</div>
-							<div className="gui-cap-drawer-versions-empty">{t("tools.skillVersionsEmpty")}</div>
+							{skill.market ? (
+								<div className="gui-cap-drawer-versions-empty">
+									{update?.updateAvailable === true
+										? t("tools.skillUpdateAvailable")
+										: update?.updateAvailable === false
+											? t("tools.skillUpdateCurrent")
+											: update?.error
+												? t("tools.skillUpdateUnknown")
+												: t("tools.skillUpdateChecking")}
+								</div>
+							) : (
+								<div className="gui-cap-drawer-versions-empty">
+									{skillLevel(skill) === "builtin"
+										? t("tools.skillBuiltinUpdateNote")
+										: t("tools.skillUserUpdateNote")}
+								</div>
+							)}
+							{update?.updateAvailable === true &&
+								onUpdate &&
+								!(update.alternatives?.some(candidate => !candidate.current) ?? false) && (
+									<button type="button" className="gui-btn mt-2" onClick={onUpdate} disabled={updating}>
+										<Icon name="download" className="h-3.5 w-3.5" />
+										{updating ? t("tools.skillUpdateRunning") : t("tools.skillUpdateAction")}
+									</button>
+								)}
+							{update?.alternatives?.some(candidate => !candidate.current) && (
+								<>
+									<div className="gui-cap-drawer-section mt-3">{t("tools.skillUpdateSources")}</div>
+									{update.alternatives.map(candidate => (
+										<div className="gui-cap-drawer-kv" key={`${candidate.source}:${candidate.slug}`}>
+											<span className="gui-cap-drawer-kv-key">{candidate.source}</span>
+											<span className="gui-cap-drawer-kv-val">
+												{candidate.latestVersion ? `v${candidate.latestVersion}` : candidate.slug}
+												{candidate.current ? ` · ${t("tools.skillUpdateCurrent")}` : ""}
+											</span>
+											{onUpdateFrom && (
+												<button
+													type="button"
+													className="gui-btn"
+													disabled={updating}
+													onClick={() => onUpdateFrom(candidate)}
+												>
+													{candidate.current ? t("tools.skillUpdateAction") : t("tools.skillUpdateSwitch")}
+												</button>
+											)}
+										</div>
+									))}
+								</>
+							)}
 						</div>
 					)}
 				</div>
@@ -689,6 +793,8 @@ function InstalledSkillsPane({
 	onAcquire(): void;
 }): ReactNode {
 	const [skills, setSkills] = useState<SkillRow[] | null>(null);
+	const [updates, setUpdates] = useState<Map<string, SkillUpdateRow> | null>(null);
+	const [updating, setUpdating] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [query, setQuery] = useState("");
 	const [level, setLevel] = useState<"all" | LevelKey | "disabled">("all");
@@ -701,6 +807,16 @@ function InstalledSkillsPane({
 	const [drawerName, setDrawerName] = useState<string | null>(null);
 	const { confirm } = useConfirm();
 
+	/** 市场/ Git 安装的来源版本比对；没有来源记录的技能不在结果里。
+	 *  远端不可达只影响对应条目的状态，不阻塞列表。 */
+	const loadUpdates = useCallback((): void => {
+		if (!rpc) return;
+		void rpc
+			.request<{ updates: SkillUpdateRow[] }>("skills.marketplace.updates", {})
+			.then(res => setUpdates(new Map((res?.updates ?? []).map(u => [u.name, u]))))
+			.catch(() => setUpdates(new Map()));
+	}, [rpc]);
+
 	// 拉取技能清单:挂载时 + 每次批量操作后(daemon 侧另有 10s TTL)。
 	const reload = useCallback((): void => {
 		if (!rpc) return;
@@ -711,13 +827,77 @@ function InstalledSkillsPane({
 				setSkills(rows);
 				setError(null);
 				onCountChange?.(rows.length);
+				loadUpdates();
 			})
 			.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-	}, [rpc, onCountChange]);
+	}, [rpc, onCountChange, loadUpdates]);
 
 	useEffect(() => {
 		reload();
 	}, [reload]);
+
+	/** 来源感知更新：git / skills.sh 走同步 skills.install；SkillHub 走
+	 *  安装状态机，轮询到终态后再刷新列表。 */
+	const updateSkill = useCallback(
+		async (skill: SkillRow, candidate?: SkillUpdateCandidate): Promise<void> => {
+			if (!rpc || updating) return;
+			const market = skill.market;
+			if (!market && !candidate) return;
+			setUpdating(skill.name);
+			setError(null);
+			try {
+				const wantsGit =
+					candidate?.source === "skills.sh" ||
+					(!candidate && (market?.source === "git" || market?.source === "skills.sh"));
+				if (wantsGit) {
+					const url =
+						!candidate && market?.source === "git"
+							? market.url
+							: (candidate?.repo ?? market?.repo)
+								? `https://github.com/${candidate?.repo ?? market?.repo}`
+								: undefined;
+					if (!url) throw new Error("skill source has no repository");
+					const subdir =
+						candidate?.slug ?? market?.subdir ?? (market?.source === "skills.sh" ? market?.slug : undefined);
+					await rpc.request("skills.install", {
+						url,
+						...(subdir ? { subdir } : {}),
+						name: skill.name,
+						overwrite: true,
+					});
+				} else {
+					const slug = candidate?.slug ?? market?.slug;
+					if (!slug) throw new Error("skill source has no catalog slug");
+					const started = await rpc.request<{ installId: string }>("skills.marketplace.install", {
+						source: "skillhub",
+						slug,
+						name: skill.name,
+						overwrite: true,
+						version: candidate?.latestVersion ?? updates?.get(skill.name)?.latestVersion,
+					});
+					const deadline = Date.now() + 60_000;
+					for (;;) {
+						await new Promise(resolve => setTimeout(resolve, 600));
+						const status = await rpc.request<{
+							installs: Array<{ installId: string; state: string; message?: string }>;
+						}>("skills.marketplace.status", {});
+						const rec = status.installs.find(i => i.installId === started.installId);
+						if (rec?.state === "done") break;
+						if (rec && (rec.state === "failed" || rec.state === "cancelled")) {
+							throw new Error(rec.message ?? rec.state);
+						}
+						if (Date.now() > deadline) throw new Error("update timed out");
+					}
+				}
+				reload();
+			} catch (e: unknown) {
+				setError(e instanceof Error ? e.message : String(e));
+			} finally {
+				setUpdating(null);
+			}
+		},
+		[rpc, updating, updates, reload],
+	);
 
 	/** 卡片/列表行上"是否可批量操作"的单一判据,批量按钮与行内徽标共用。 */
 	const uninstallable = isSkillUninstallable;
@@ -992,6 +1172,11 @@ function InstalledSkillsPane({
 										 * 随客户端分发 · 不可卸载」塞进脚注 —— 同一件事说两遍，还把
 										 * 脚注挤到贴着下边框。不可卸载的说明留在详情抽屉的风险块里。 */}
 										<div className="gui-cap-card-foot">
+											{updates?.get(s.name)?.updateAvailable === true && (
+												<span className="gui-ext-item-tag gui-ext-item-tag--gui">
+													{t("tools.skillUpdateAvailable")}
+												</span>
+											)}
 											{s.ignored ? (
 												<span className="gui-ext-item-tag gui-ext-item-tag--err">
 													{t("tools.skillDisabled")}
@@ -1039,6 +1224,11 @@ function InstalledSkillsPane({
 										<span className="gui-cap-listrow-meta">
 											{skillLevelLabel(s)} · {skillOriginLabel(s)}
 										</span>
+										{updates?.get(s.name)?.updateAvailable === true && (
+											<span className="gui-ext-item-tag gui-ext-item-tag--gui">
+												{t("tools.skillUpdateAvailable")}
+											</span>
+										)}
 										{s.ignored && (
 											<span className="gui-ext-item-tag gui-ext-item-tag--err">
 												{t("tools.skillDisabled")}
@@ -1123,6 +1313,10 @@ function InstalledSkillsPane({
 					<SkillDrawer
 						rpc={rpc}
 						skill={drawer}
+						update={updates?.get(drawer.name)}
+						updating={updating === drawer.name}
+						onUpdate={() => void updateSkill(drawer)}
+						onUpdateFrom={candidate => void updateSkill(drawer, candidate)}
 						onClose={() => setDrawerName(null)}
 						onChanged={reload}
 						onDeleted={name =>

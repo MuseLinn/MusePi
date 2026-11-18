@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { type AtCompletionEntry, loadAtCompletionEntries, rankAtCompletionEntries } from "../../lib/at-completion";
 import { currentLine, tokenQuery } from "../../lib/completion-trigger";
@@ -42,13 +42,19 @@ export function useCompletion({
 	rpc,
 	cwd,
 	sessionId,
+	extraRoots,
 	setText,
+	atMaxDepth,
 }: {
 	rpc: RpcClient | null;
 	cwd?: string;
 	/** Live session id — "@" spans every working directory of the session. */
 	sessionId?: string | null;
+	/** Remembered roots for hosts without a live session (welcome composer). */
+	extraRoots?: readonly string[];
 	setText(value: string): void;
+	/** Depth cap for "@" rows; omitted = every scanned depth (session parity). */
+	atMaxDepth?: number;
 }): {
 	taRef: { current: HTMLTextAreaElement | null };
 	// Slash-command completion (TUI parity): typing "/" lists the daemon's
@@ -56,7 +62,7 @@ export function useCompletion({
 	slashOpen: boolean;
 	setSlashOpen(open: boolean): void;
 	slashIdx: number;
-	setSlashIdx(v: (prev: number) => number): void;
+	setSlashIdx: Dispatch<SetStateAction<number>>;
 	slashFilter: SlashEntry[];
 	/** Full command registry (commands.list) once fetched — the slash
 	 *  badge tip keys off it. */
@@ -68,7 +74,7 @@ export function useCompletion({
 	atOpen: boolean;
 	setAtOpen(open: boolean): void;
 	atIdx: number;
-	setAtIdx(v: (prev: number) => number): void;
+	setAtIdx: Dispatch<SetStateAction<number>>;
 	atFilter: AtCompletionEntry[];
 	onAtInput(value: string): void;
 	insertAt(path: string): void;
@@ -77,7 +83,7 @@ export function useCompletion({
 	hashOpen: boolean;
 	setHashOpen(open: boolean): void;
 	hashIdx: number;
-	setHashIdx(v: (prev: number) => number): void;
+	setHashIdx: Dispatch<SetStateAction<number>>;
 	hashFilter: HashCompletionEntry[];
 	hashLabel(e: { id: string; cwd?: string }): string;
 	onHashInput(value: string): void;
@@ -112,7 +118,7 @@ export function useCompletion({
 	useEffect(() => {
 		atRequestRef.current += 1;
 		setAtEntries(null);
-	}, [sessionId, cwd]);
+	}, [sessionId, cwd, extraRoots]);
 	// "#" completion (insert a session reference): lists session.list, with
 	// titles resolved from session.tree labels (fallback: cwd basename).
 	const [hashOpen, setHashOpen] = useState(false);
@@ -229,9 +235,10 @@ export function useCompletion({
 			setAtIdx(0);
 			if (!atEntries && rpc) {
 				const request = ++atRequestRef.current;
-				void loadAtCompletionEntries({ rpc, cwd, sessionId })
+				void loadAtCompletionEntries({ rpc, cwd, sessionId, extraRoots })
 					.then(entries => {
-						if (atRequestRef.current === request) setAtEntries(entries);
+						if (atRequestRef.current !== request) return;
+						setAtEntries(atMaxDepth === undefined ? entries : entries.filter(e => e.depth <= atMaxDepth));
 					})
 					.catch(() => {
 						if (atRequestRef.current === request) setAtEntries([]);

@@ -18,8 +18,28 @@ A discovered skill is represented as:
 - `filePath` (the `SKILL.md` path)
 - `baseDir` (skill directory)
 - source metadata (`provider`, `level`, path)
+- optional `version` from the frontmatter (display/provenance only)
 
 The runtime only requires `name` and `path` for validity. In practice, matching quality depends on `description` being meaningful.
+
+## Versions and updates
+
+A skill may declare `version` in its frontmatter. The capability center shows it and marks everything else as unpinned; discovery never compares versions, so this is provenance rather than a compatibility gate.
+
+- **Built-in skills** ship with the client's plugin packages and update with the MusePi client. Their version is the shipped skill/package version, and they cannot be uninstalled separately. `ui-ux-pro-max` pins the date its curated dataset was verified (see `data/catalog-summary.json`), because its "version" is the data snapshot rather than a package semver.
+- **Skills installed from Git or the skill market** are user-owned copies. Reinstalling from the same source is the update path; no remote version check is configured, and the drawer says so instead of promising one.
+- **Plugin-provided skills** update with the plugin or package that declares them.
+- `musepi-contributing` is maintainer guidance: it lives in the repository's `.agents/skills`, is not part of the shipped inventory, and is never staged into a release.
+
+### Market installs and update checks
+
+An install from SkillHub, skills.sh, or `skills.install` writes `.musepi-skill.json` inside the skill folder: the source kind, catalog slug / repo / URL (credentials stripped), the installed version or commit, and the install time. The file is data only and never becomes a skill.
+
+`skills.marketplace.updates` compares that record with the source: SkillHub publishes `latestVersion`, while skills.sh and git installs move by commit (`git ls-remote HEAD`). A source that cannot answer yields `updateAvailable: null` with a failure line, never "current". Skills without a provenance file are user-authored or shipped and do not appear in the result.
+
+The capability center badges installed cards whose check found a newer version, and the versions drawer runs the update through the same install path with `overwrite` (SkillHub through the install state machine). There is no silent auto-update.
+
+When both catalogs publish the same skill (matched by name or slug), the check also returns every candidate source. The drawer lists them with their version and a per-source action — the recorded source updates in place, another source switches the install and rewrites the sidecar. Installing the same name from a second source always replaces the folder; it never leaves two copies.
 
 ## Required layout and SKILL.md expectations
 

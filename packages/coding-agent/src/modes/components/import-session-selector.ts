@@ -1,6 +1,6 @@
 /**
  * `/import-session` TUI selector — two-step interactive flow:
- *  1. Select source agent (claude, codex, musepi, omp, …)
+ *  1. Select source agent (claude, codex, omp, pi, …)
  *  2. Select session from that source → persist
  *
  * Reuses the CLI `musepi import` backend (createForeignSessionStore /
@@ -19,6 +19,7 @@ import {
 } from "../../modes/utils/keybinding-matchers";
 import {
 	createForeignSessionStore,
+	foreignSessionSourceName,
 	foreignSessionSources,
 	persistForeignSession,
 } from "../../session/foreign-session-import";
@@ -36,28 +37,12 @@ interface ImportSessionEntry {
 	id: string;
 	path: string;
 	title: string;
+	firstMessage: string;
 	messageCount: number;
 }
 
 function sourceName(source: ForeignSessionSource): string {
-	switch (source) {
-		case "claude":
-			return "Claude";
-		case "codex":
-			return "Codex";
-		case "grok":
-			return "Grok";
-		case "kimicode":
-			return "Kimi Code";
-		case "musepi":
-			return "MusePi";
-		case "omp":
-			return "OMP";
-		case "opencode":
-			return "OpenCode";
-		case "pi":
-			return "Pi";
-	}
+	return foreignSessionSourceName(source);
 }
 
 export class ImportSessionSelector extends Container {
@@ -177,6 +162,7 @@ export class ImportSessionSelector extends Container {
 				id: s.id,
 				path: s.path,
 				title: s.title ?? "",
+				firstMessage: s.firstMessage ?? "",
 				messageCount: s.messageCount ?? 0,
 			}));
 			this.#selectedIndex = 0;
@@ -185,6 +171,8 @@ export class ImportSessionSelector extends Container {
 		} catch (error) {
 			this.#errorMessage = `Failed to scan ${sourceName(source)}: ${(error as Error).message}`;
 			this.#phase = "source";
+		} finally {
+			store.close?.();
 		}
 		this.#render();
 	}
@@ -196,8 +184,9 @@ export class ImportSessionSelector extends Container {
 		this.#render();
 		const store = createForeignSessionStore(this.#selectedSource);
 		const sessions = await store.list();
-		const match = sessions.find(s => s.id === session.id);
+		const match = sessions.find(s => s.path === session.path) ?? sessions.find(s => s.id === session.id);
 		if (!match) {
+			store.close?.();
 			this.#errorMessage = `Session ${session.id} not found (changed between list and import).`;
 			this.#phase = "session";
 			this.#render();
@@ -209,11 +198,13 @@ export class ImportSessionSelector extends Container {
 				sessionDir: getAgentDir(),
 				suppressBreadcrumb: true,
 			});
-			this.#successMessage = `Imported ${session.id} from ${sourceName(this.#selectedSource)}`;
+			this.#successMessage = `Imported ${match.title || match.firstMessage || match.id} from ${sourceName(this.#selectedSource)}`;
 			this.#phase = "done";
 		} catch (error) {
 			this.#errorMessage = `Import failed: ${(error as Error).message}`;
 			this.#phase = "session";
+		} finally {
+			store.close?.();
 		}
 		this.#render();
 	}
@@ -301,11 +292,15 @@ export class ImportSessionSelector extends Container {
 		const { startIndex, endIndex } = centeredWindow(this.#selectedIndex, this.#sessions.length, MAX_VISIBLE);
 		for (let i = startIndex; i < endIndex && i < this.#sessions.length; i++) {
 			const s = this.#sessions[i];
+			if (!s) continue;
 			const prefix = i === this.#selectedIndex ? theme.fg("accent", "❯ ") : "  ";
-			const idLabel = i === this.#selectedIndex ? theme.bold(s.id) : s.id;
-			const title = s.title ? ` — ${theme.fg("dim", s.title)}` : "";
+			// Name first, raw id only as the last resort: an id alone is
+			// indistinguishable between neighbouring sessions.
+			const name = s.title || s.firstMessage || s.id;
+			const label = i === this.#selectedIndex ? theme.bold(name) : name;
+			const idLabel = s.title || s.firstMessage ? theme.fg("dim", ` — ${s.id}`) : "";
 			const count = s.messageCount > 0 ? theme.fg("muted", ` (${s.messageCount})`) : "";
-			this.addChild(new Text(`${prefix}${idLabel}${title}${count}`, 1, 0));
+			this.addChild(new Text(`${prefix}${label}${idLabel}${count}`, 1, 0));
 		}
 	}
 

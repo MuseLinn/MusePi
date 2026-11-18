@@ -66,6 +66,7 @@ import { jsx, jsxs } from "react/jsx-runtime";
 import * as ReactDOM from "react-dom";
 import * as ReactDOMClient from "react-dom/client";
 import type { ChatViewProps } from "../components/ChatView";
+import type { ComposerProps } from "../components/Composer";
 import type { ContextPanel } from "../components/ContextPanel";
 import { setContributedScrollbarSkins } from "../plugins/ui-theme/skins";
 import { FILE_WORKSPACE_SLOT, FILE_WORKSPACE_SURFACE, type FileWorkspaceHost } from "./file-workspace";
@@ -203,13 +204,13 @@ function slot(name: string): string {
 
 /** First slot id — the settings page's extension-contributed section. */
 export const SETTINGS_EXTENSION_SLOT = slot("settings.extensions");
-/** Full welcome and session surface slot. */
-export const CHAT_VIEW_SLOT = slot("app.chat");
-/** Full capability-center page slot. */
-export const CAPABILITY_CENTER_SLOT = slot("app.capability");
-/** Root-level overlay layer (floating scroll rail); host keeps a fallback. */
-export const APP_OVERLAY_SLOT = slot("app.overlay");
-/** Full right-panel shell, independently replaceable from app.chat. */
+/** Full welcome and session surface slot (root `main` key `conversation`). */
+export const CONVERSATION_SLOT = slot("main.conversation");
+/** Full capability-center page slot (root `main` key `capability`). */
+export const CAPABILITY_CENTER_SLOT = slot("main.capability");
+/** Window-level overlay layer (floating scroll rail); host keeps a fallback. */
+export const SHELL_OVERLAY_SLOT = slot("shell.overlay");
+/** Full right-panel shell, independently replaceable from main.conversation. */
 export const PANEL_SHELL_SLOT = slot("panel.shell");
 /** Always-mounted managed browser guest host. */
 export const BROWSER_HOST_SLOT = slot("browser.host");
@@ -228,21 +229,29 @@ export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4
 /** 内置外观页的行/分区座位。 */
 export const SETTINGS_APPEARANCE_ITEM_SLOT = slot("settings.appearance.item");
 /** Composer 座位槽（见 EXTENSION_SLOT_DECLARATION 的席位表）。 */
-export const COMPOSER_DOCK_SLOT = slot("composer.dock");
-export const COMPOSER_LEFT_SLOT = slot("composer.left");
-export const COMPOSER_RIGHT_SLOT = slot("composer.right");
-export const COMPOSER_MODEL_SLOT = slot("composer.model");
-export const COMPOSER_ATTACHMENTS_SLOT = slot("composer.attachments");
-export const COMPOSER_PERMISSION_SLOT = slot("composer.permission");
-export const COMPOSER_PLAN_SLOT = slot("composer.plan");
-export const COMPOSER_ACTIVITY_SLOT = slot("composer.activity");
-export const COMPOSER_OVERLAY_SLOT = slot("composer.overlay");
-export const COMPOSER_REQUEST_DRAFT_SLOT = slot("composer.requestDraft");
-export const COMPOSER_FOR_SLOT = slot("composer.for");
-/** transcript.node seat slot —— 单一
+export const COMPOSER_BAR_SLOT = slot("conversation.composer.bar");
+export const COMPOSER_DOCK_SLOT = slot("conversation.composer.dock");
+export const COMPOSER_INPUT_DOCK_SLOT = slot("conversation.input.dock");
+export const COMPOSER_LEFT_SLOT = slot("conversation.input.left");
+export const COMPOSER_RIGHT_SLOT = slot("conversation.input.right");
+export const COMPOSER_MODEL_SLOT = slot("conversation.input.model");
+export const COMPOSER_ATTACHMENTS_SLOT = slot("conversation.input.attachments");
+export const COMPOSER_PERMISSION_SLOT = slot("conversation.input.permission");
+export const COMPOSER_PLAN_SLOT = slot("conversation.input.plan");
+export const COMPOSER_ACTIVITY_SLOT = slot("conversation.input.activity");
+export const COMPOSER_OVERLAY_SLOT = slot("conversation.input.overlay");
+export const COMPOSER_REQUEST_DRAFT_SLOT = slot("conversation.input.requestDraft");
+export const COMPOSER_FOR_SLOT = slot("conversation.input.for");
+/** 空态（hero）席位：整页外框、品牌标记、工作区、工作模式与快捷选项。 */
+export const HERO_FRAME_SLOT = slot("conversation.hero.frame");
+export const HERO_BRAND_MARK_SLOT = slot("conversation.hero.brand.mark");
+export const HERO_WORKSPACE_SLOT = slot("conversation.hero.workspace");
+export const HERO_AGENT_PRESET_SLOT = slot("conversation.hero.agentPreset");
+export const HERO_OPTIONS_SLOT = slot("conversation.hero.options");
+/** conversation.chat.node seat slot —— 单一
  *  聊天节点 seat,按节点 kind(entryKey)分发;turn-tail/tool/user/assistant
  *  都是该 seat 的节点 kind,而非独立槽。 */
-export const TRANSCRIPT_NODE_SLOT = slot("transcript.node");
+export const CONVERSATION_CHAT_NODE_SLOT = slot("conversation.chat.node");
 
 /**
  * 会话信息卡的分区席位命名空间(`chat.session-info.<id>`)。
@@ -362,9 +371,13 @@ export interface SlotComponent {
 	css?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
+	/** Entry identity within its slot (one dock entry per pill); the mount key
+	 *  and the injected stylesheet key include it, so two entries from one
+	 *  plugin in the same list seat stay distinct. */
+	id?: string;
 	/** On-demand panel tabs render when opened but have no rail launcher. */
 	availability?: "always" | "on-demand";
-	/** transcript.node seat: node kinds (transcriptNodeKind entryKey) this
+	/** conversation.chat.node seat: node kinds (transcriptNodeKind entryKey) this
 	 *  renderer owns. No entryKinds → does not participate in per-kind
 	 *  dispatch (targets other exact slots). */
 	entryKinds?: string[];
@@ -692,7 +705,7 @@ export interface PluginClientContext {
 	effect(dispose: () => void, label?: string): void;
 	/** Aborted when this module load is superseded or unmounted. */
 	readonly signal: AbortSignal;
-	/** The seat this component was mounted into (`composer.model`, …). */
+	/** The seat this component was mounted into (`conversation.input.model`, …). */
 	readonly slot: string;
 	/** The extension entry path this component came from. */
 	readonly extensionId: string;
@@ -716,10 +729,14 @@ export interface SlotComponentProps {
 	slot?: string;
 	/** Extension path that contributed this component. */
 	extensionId?: string;
-	/** Navigation contract for the full-page app.capability mount. */
+	/** Navigation contract for the full-page main.capability mount. */
 	page?: CapabilityCenterPageNavigation;
-	/** Host-owned welcome and session surface contract for app.chat. */
+	/** Host-owned welcome and session surface contract for main.conversation. */
 	chatView?: ChatViewProps;
+	/** The input card's full contract for conversation.composer.bar: the same props the
+	 *  built-in Composer takes, in either mode. The host keeps state ownership;
+	 *  a contributor only renders it. */
+	composer?: ComposerProps;
 	/** Full right-panel shell contract for panel.shell. */
 	panelShell?: ComponentProps<typeof ContextPanel>;
 	/** Managed browser pane contract for panel.tab.browser. */
@@ -764,7 +781,7 @@ export interface SlotComponentProps {
 	 *  (ext.call RPC). Bound to the component's extensionId; absent when
 	 *  no rpc bridge is available. */
 	extensionCall?: (method: string, params?: unknown) => Promise<unknown>;
-	/** transcript.node seat。宿主(渲染器)按节点
+	/** conversation.chat.node seat。宿主(渲染器)按节点
 	 *  kind(entryKey)派发到注册组件;组件可用 `children`(内建 MusePi 渲染)做
 	 *  增强/追加,或独立渲染。核心消息渲染仍由宿主持有 —— 扩展只贡献到 seat。 */
 	node?: {
@@ -822,7 +839,7 @@ function startRegistryStore(rpc: RpcClient, notify: () => void): void {
 				// moment a session opens, and its parse is the longest single step
 				// on that path. Fetching it together with the registry overlaps it
 				// with everything else the shell does before the first click.
-				const chat = res.components?.find(c => c.slot === CHAT_VIEW_SLOT && (c.url || c.code));
+				const chat = res.components?.find(c => c.slot === CONVERSATION_SLOT && (c.url || c.code));
 				if (chat) {
 					// The module runs against the host's React the moment it
 					// evaluates; publishing it here (the mount path does the same)
@@ -909,6 +926,31 @@ export function useUnhostedSlots(rpc: RpcClient | null): string[] {
 	}, [data]);
 }
 
+/**
+ * List-seat identity: an entry with an `id` is ONE addressable contribution, so
+ * a later contributor with the same id replaces the earlier one in place
+ * (reference semantics: replace or add a single pill by id). Entries without
+ * an id cannot be addressed, so they all stay.
+ */
+export function mergeListSeatEntries(items: readonly SlotComponent[]): SlotComponent[] {
+	const out: SlotComponent[] = [];
+	const byId = new Map<string, number>();
+	for (const item of items) {
+		if (item.id === undefined) {
+			out.push(item);
+			continue;
+		}
+		const at = byId.get(item.id);
+		if (at === undefined) {
+			byId.set(item.id, out.length);
+			out.push(item);
+			continue;
+		}
+		out[at] = item;
+	}
+	return out;
+}
+
 /** Pick compiled components registered for one exact slot. */
 export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComponent[] {
 	const data = useExtensionRegistry(rpc);
@@ -922,7 +964,7 @@ export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComp
 		// both would put two competing readouts in one place — e.g. two model
 		// balances side by side with no way to tell which is authoritative.
 		if (slotKindOf(slot) === "single") return matching.slice(-1);
-		return matching;
+		return mergeListSeatEntries(matching);
 	}, [data, slot]);
 }
 
@@ -938,7 +980,7 @@ export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string)
 	}, [data, prefix]);
 }
 
-/** transcript.node seat 派发: 从注册到 `transcript.node`
+/** conversation.chat.node seat 派发: 从注册到 `conversation.chat.node`
  *  的组件中挑出声明处理该 kind 的。无 entryKinds 的组件不参与按 kind 派发
  *  (它面向其它精确槽位)。命中列表为空 -> seat 回退到内建渲染;
  *  命中 -> 命中组件"拥有"该节点渲染(可包含 children 基座做增强或完全自绘)。 */
@@ -1014,6 +1056,7 @@ export function SlotComponentHost({
 	cwd,
 	page,
 	chatView,
+	composer,
 	panelShell,
 	browser,
 	sessionInfo,
@@ -1025,6 +1068,7 @@ export function SlotComponentHost({
 	cwd?: string;
 	page?: SlotComponentProps["page"];
 	chatView?: SlotComponentProps["chatView"];
+	composer?: SlotComponentProps["composer"];
 	panelShell?: SlotComponentProps["panelShell"];
 	browser?: SlotComponentProps["browser"];
 	sessionInfo?: SlotComponentProps["sessionInfo"];
@@ -1038,13 +1082,14 @@ export function SlotComponentHost({
 		<>
 			{renderable.map(item => (
 				<SlotComponentMount
-					key={`${item.extensionId}:${item.slot}`}
+					key={`${item.extensionId}:${item.id ?? item.slot}`}
 					item={item}
 					rpc={rpc}
 					sessionId={sessionId}
 					cwd={cwd}
 					page={page}
 					chatView={chatView}
+					composer={composer}
 					panelShell={panelShell}
 					browser={browser}
 					sessionInfo={sessionInfo}
@@ -1065,6 +1110,7 @@ export function SlotComponentMount({
 	onOpenSession,
 	page,
 	chatView,
+	composer,
 	panelShell,
 	browser,
 	settingsScope,
@@ -1081,8 +1127,10 @@ export function SlotComponentMount({
 	cwd?: string;
 	onOpenSession?: SlotComponentProps["onOpenSession"];
 	page?: SlotComponentProps["page"];
-	/** Host-owned welcome and session surface contract (app.chat only). */
+	/** Host-owned welcome and session surface contract (main.conversation only). */
 	chatView?: SlotComponentProps["chatView"];
+	/** Full input-card contract (conversation.composer.bar only). */
+	composer?: SlotComponentProps["composer"];
 	panelShell?: SlotComponentProps["panelShell"];
 	browser?: SlotComponentProps["browser"];
 	/** Settings read/write proxy (keyed settings-item hosts inject it). */
@@ -1091,7 +1139,7 @@ export function SlotComponentMount({
 	panelTab?: SlotComponentProps["panelTab"];
 	/** Host-owned file workspace contract (panel.tab.files only). */
 	fileWorkspace?: SlotComponentProps["fileWorkspace"];
-	/** transcript.node seat 节点上下文: 命中
+	/** conversation.chat.node seat 节点上下文: 命中
 	 *  kind 的组件收到它,可用 node.children 增强或完全自绘。 */
 	node?: SlotComponentProps["node"];
 	/** turn 级上下文。 */
@@ -1117,7 +1165,7 @@ export function SlotComponentMount({
 	useEffect(() => {
 		if (!item.css && !item.cssUrl) return;
 		const style = document.createElement("style");
-		style.setAttribute("data-slot-css", `${item.extensionId}:${item.slot}`);
+		style.setAttribute("data-slot-css", `${item.extensionId}:${item.id ?? item.slot}`);
 		document.head.appendChild(style);
 		// Inline when the daemon sent it, fetched when it published the sheet as
 		// its own artifact resource — the slot paints either way, and a fetched
@@ -1231,6 +1279,7 @@ export function SlotComponentMount({
 		onOpenSession,
 		page,
 		chatView,
+		composer,
 		panelShell,
 		browser,
 		slot: item.slot,
@@ -1369,9 +1418,9 @@ export function useExtensionScrollbarSkins(rpc: RpcClient | null): void {
  */
 const slotHostBindings = {
 	SETTINGS_EXTENSION_SLOT,
-	CHAT_VIEW_SLOT,
+	CONVERSATION_SLOT,
 	CAPABILITY_CENTER_SLOT,
-	APP_OVERLAY_SLOT,
+	SHELL_OVERLAY_SLOT,
 	PANEL_SHELL_SLOT,
 	BROWSER_HOST_SLOT,
 	RIGHT_PANEL_SLOT,
@@ -1382,7 +1431,9 @@ const slotHostBindings = {
 	SETTINGS_ITEM_SLOT_PREFIX,
 	SETTINGS_ACTION_SLOT_PREFIX,
 	SETTINGS_APPEARANCE_ITEM_SLOT,
+	COMPOSER_BAR_SLOT,
 	COMPOSER_DOCK_SLOT,
+	COMPOSER_INPUT_DOCK_SLOT,
 	COMPOSER_LEFT_SLOT,
 	COMPOSER_RIGHT_SLOT,
 	COMPOSER_MODEL_SLOT,
@@ -1393,7 +1444,12 @@ const slotHostBindings = {
 	COMPOSER_OVERLAY_SLOT,
 	COMPOSER_REQUEST_DRAFT_SLOT,
 	COMPOSER_FOR_SLOT,
-	TRANSCRIPT_NODE_SLOT,
+	HERO_FRAME_SLOT,
+	HERO_BRAND_MARK_SLOT,
+	HERO_WORKSPACE_SLOT,
+	HERO_AGENT_PRESET_SLOT,
+	HERO_OPTIONS_SLOT,
+	CONVERSATION_CHAT_NODE_SLOT,
 	SESSION_INFO_SLOT_PREFIX,
 	SESSION_INFO_SLOT,
 	SESSION_INFO_AGENTS_SLOT,
@@ -1408,6 +1464,7 @@ const slotHostBindings = {
 	selectLaunchablePanelTabs,
 	selectPanelTabComponent,
 	selectSidebarPanelComponent,
+	mergeListSeatEntries,
 	selectTranscriptNodeComponents,
 	extensionDisplayName,
 	extensionDescription,

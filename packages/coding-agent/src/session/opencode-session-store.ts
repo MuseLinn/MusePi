@@ -15,18 +15,60 @@ import type { SessionMessageEntry } from "./session-entries";
 import { SessionManager } from "./session-manager";
 
 /**
- * Sessions from opencode (anomalyco fork / opencode.ai): SQLite at
- * `<xdg-data>/opencode/opencode.db` with session/message/part tables.
- * message.data and part.data are JSON strings carrying role + content
- * blocks — read tolerantly (structure may drift across schema versions).
+ * Sessions from opencode (anomalyco fork / opencode.ai): SQLite with
+ * session/message/part tables. Two schemas are in circulation — the original
+ * `session`/`message`/`part` tables and, from 2.x, `session_v2`/
+ * `session_message`/`session_part` — so every query resolves its table first
+ * rather than assuming one shape. A message's `data` JSON differs too: the
+ * newer rows keep a user's prompt as `text` and an assistant's blocks as
+ * `content[{type:"reasoning"|"text"}]`.
  */
 
 function dbCandidates(): string[] {
+	const out: string[] = [];
 	if (process.platform === "win32") {
 		const local = process.env.LOCALAPPDATA ?? path.join(homedir(), "AppData", "Local");
-		return [path.join(local, "opencode", "opencode.db")];
+		out.push(path.join(local, "opencode", "opencode.db"));
 	}
-	return [path.join(homedir(), ".local", "share", "opencode", "opencode.db")];
+	// opencode keeps its database under the XDG data root on every platform,
+	// including Windows installs that never use %LOCALAPPDATA%.
+	out.push(path.join(homedir(), ".local", "share", "opencode", "opencode.db"));
+	return out;
+}
+
+/** Which tables this database provides: 2.x renamed all three. */
+interface OpencodeSchema {
+	session: string;
+	message: string;
+	part?: string;
+	/** `data` carries the message payload (2.x) rather than the part table holding it. */
+	messageData: boolean;
+}
+
+function tableNames(db: Database): Set<string> {
+	const rows = db.query("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+	return new Set(rows.map(row => row.name));
+}
+
+function resolveSchema(db: Database): OpencodeSchema | undefined {
+	const names = tableNames(db);
+	if (names.has("session_v2") && names.has("session_message")) {
+		return {
+			session: "session_v2",
+			message: "session_message",
+			part: names.has("session_part") ? "session_part" : undefined,
+			messageData: true,
+		};
+	}
+	if (names.has("session") && names.has("message")) {
+		return {
+			session: "session",
+			message: "message",
+			part: names.has("part") ? "part" : undefined,
+			messageData: false,
+		};
+	}
+	return undefined;
 }
 
 interface OpencodeRow {
@@ -42,6 +84,9 @@ interface MessageRow {
 	id: string;
 	time_created: number;
 	data: string;
+	/** 2.x carries the role on the row (`user`/`assistant`) rather than in `data`. */
+	session_id?: string;
+	type?: string;
 }
 
 function stringField(record: Record<string, unknown>, key: string): string | undefined {
@@ -49,8 +94,9 @@ function stringField(record: Record<string, unknown>, key: string): string | und
 	return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-/** Collect text/image/tool blocks from an opencode message/part data JSON,
- *  tolerant of both nested `parts[]` and a top-level role+content shape. */
+/** Collect text/image/tool blocks from an opencode message/part data JSON.
+ *  2.x rows carry `text` (user) or `content[reasoning|text|tool]` (assistant);
+ *  older rows carry `parts[]`. */
 function collectBlocks(value: unknown): {
 	role?: string;
 	texts: string[];
@@ -67,16 +113,27 @@ function collectBlocks(value: unknown): {
 	} = { texts: [], thinking: [], tools: [], images: [] };
 	if (!isRecord(value)) return out;
 	if (typeof value.role === "string") out.role = value.role;
+	if (typeof value.text === "string") out.texts.push(value.text);
 	const walk = (blocks: unknown): void => {
 		if (!Array.isArray(blocks)) return;
 		for (const block of blocks) {
 			if (!isRecord(block)) continue;
 			if (block.type === "text" && typeof block.text === "string") out.texts.push(block.text);
-			else if (block.type === "thinking" && typeof block.thinking === "string") out.thinking.push(block.thinking);
-			else if (block.type === "tool" || block.type === "tool_use" || block.type === "toolCall") {
-				const id = stringField(block, "id") ?? stringField(block, "toolCallId");
+			else if (
+				(block.type === "thinking" || block.type === "reasoning") &&
+				typeof (block.thinking ?? block.text) === "string"
+			) {
+				out.thinking.push((block.thinking ?? block.text) as string);
+			} else if (block.type === "tool" || block.type === "tool_use" || block.type === "toolCall") {
+				const id = stringField(block, "id") ?? stringField(block, "toolCallId") ?? stringField(block, "callID");
 				const name = stringField(block, "name") ?? stringField(block, "tool");
-				const input = isRecord(block.input) ? block.input : isRecord(block.arguments) ? block.arguments : {};
+				const input = isRecord(block.input)
+					? block.input
+					: isRecord(block.arguments)
+						? block.arguments
+						: isRecord(block.state) && isRecord(block.state.input)
+							? block.state.input
+							: {};
 				out.tools.push({ id, name, input });
 			} else if (block.type === "image" || block.type === "file") {
 				const data =
@@ -90,6 +147,7 @@ function collectBlocks(value: unknown): {
 			}
 		}
 	};
+	walk(value.content);
 	walk(value.parts);
 	return out;
 }
@@ -102,11 +160,35 @@ function uniqueEntryId(base: string, used: Set<string>): string {
 	return candidate;
 }
 
+/** The role a row carries: in `data` (1.x) or on the row (2.x). */
+function messageRole(data: Record<string, unknown>, rowType: string | undefined): string | undefined {
+	const role = typeof data.role === "string" ? data.role : undefined;
+	return role ?? rowType;
+}
+
+/** Fold one `session_part` row into the message's blocks. */
+function applyPart(
+	blocks: {
+		texts: string[];
+		thinking: string[];
+		tools: { id?: string; name?: string; input?: Record<string, unknown> }[];
+		images: ImageContent[];
+	},
+	part: Record<string, unknown>,
+): void {
+	const collected = collectBlocks(part);
+	blocks.texts.push(...collected.texts);
+	blocks.thinking.push(...collected.thinking);
+	blocks.tools.push(...collected.tools);
+	blocks.images.push(...collected.images);
+}
+
 /** opencode session store — read-only SQLite queries. */
 export class OpencodeSessionStore implements ForeignSessionStore {
 	readonly source: "opencode" = "opencode";
 	readonly #paths: string[];
 	#db: Database | null = null;
+	#schema: OpencodeSchema | null | undefined;
 
 	constructor(paths?: string[]) {
 		this.#paths = paths ?? dbCandidates();
@@ -128,14 +210,15 @@ export class OpencodeSessionStore implements ForeignSessionStore {
 
 	async list(): Promise<ForeignSessionInfo[]> {
 		const db = this.#open();
-		if (!db) return [];
-		const rows: OpencodeRow[] = [];
+		const schema = this.#resolve(db);
+		if (!db || !schema) return [];
+		let rows: OpencodeRow[] = [];
 		try {
-			rows.push(
-				...(db
-					.query("SELECT id, title, directory, time_created, time_updated FROM session ORDER BY time_updated DESC")
-					.all() as OpencodeRow[]),
-			);
+			rows = db
+				.query(
+					`SELECT id, title, directory, time_created, time_updated FROM ${schema.session} ORDER BY time_updated DESC`,
+				)
+				.all() as OpencodeRow[];
 		} catch {
 			return [];
 		}
@@ -151,20 +234,66 @@ export class OpencodeSessionStore implements ForeignSessionStore {
 		}));
 	}
 
+	#resolve(db: Database | null): OpencodeSchema | undefined {
+		if (this.#schema !== undefined) return this.#schema ?? undefined;
+		this.#schema = db ? (resolveSchema(db) ?? null) : null;
+		return this.#schema ?? undefined;
+	}
+
+	/** Release the read-only database handle this store opened. */
+	close(): void {
+		this.#db?.close();
+		this.#db = null;
+	}
+
+	/** Part rows by message id, for the legacy schema that splits blocks out. */
+	#partsByMessage(db: Database, schema: OpencodeSchema, sessionId: string): Map<string, Record<string, unknown>[]> {
+		const out = new Map<string, Record<string, unknown>[]>();
+		if (!schema.part || schema.messageData) return out;
+		let rows: { message_id: string; data: string }[];
+		try {
+			rows = db
+				.query(`SELECT message_id, data FROM ${schema.part} WHERE session_id = ? ORDER BY ordinal, id`)
+				.all(sessionId) as { message_id: string; data: string }[];
+		} catch {
+			return out;
+		}
+		for (const row of rows) {
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(row.data);
+			} catch {
+				continue;
+			}
+			if (!isRecord(parsed)) continue;
+			const list = out.get(row.message_id) ?? [];
+			list.push(parsed);
+			out.set(row.message_id, list);
+		}
+		return out;
+	}
+
 	async load(info: ForeignSessionInfo): Promise<SessionManager> {
 		if (info.source !== this.source) throw new Error(`Cannot load ${info.source} session with this store`);
 		const db = this.#open();
-		if (!db) throw new Error("opencode database not found");
+		const schema = this.#resolve(db);
+		if (!db || !schema) throw new Error("opencode database not found");
 		const rows = db
-			.query("SELECT id, time_created, data FROM message WHERE session_id = ? ORDER BY time_created, id")
+			.query(
+				schema.messageData
+					? `SELECT id, session_id, type, time_created, data FROM ${schema.message} WHERE session_id = ? ORDER BY seq, time_created`
+					: `SELECT id, time_created, data FROM ${schema.message} WHERE session_id = ? ORDER BY time_created, id`,
+			)
 			.all(info.id) as MessageRow[];
 		if (rows.length === 0) throw new Error(`Session ${info.id} contains no messages`);
 
 		const manager = SessionManager.inMemory(info.cwd);
 		const usedIds = new Set<string>();
+		const toolNames = new Map<string, string>();
 		let parentId: string | null = null;
 		let synthetic = 0;
 		const title = info.title;
+		const parts = this.#partsByMessage(db, schema, info.id);
 
 		for (const row of rows) {
 			let data: Record<string, unknown>;
@@ -173,9 +302,12 @@ export class OpencodeSessionStore implements ForeignSessionStore {
 			} catch {
 				continue;
 			}
+			// 2.x rows also hold bookkeeping (`idle`, `error`); only message rows convert.
+			const role = messageRole(data, row.type);
+			if (role !== "user" && role !== "assistant" && role !== "tool") continue;
 			const blocks = collectBlocks(data);
+			for (const part of parts.get(row.id) ?? []) applyPart(blocks, part);
 			const ts = row.time_created * 1000;
-			const role = blocks.role ?? stringField(data, "role");
 			if (role === "user" && (blocks.texts.length > 0 || blocks.images.length > 0)) {
 				const content: string | (TextContent | ImageContent)[] =
 					blocks.images.length > 0
@@ -195,24 +327,24 @@ export class OpencodeSessionStore implements ForeignSessionStore {
 				};
 				manager.ingestReplicatedEntry(entry);
 				parentId = id;
-			} else if (role === "assistant" || blocks.tools.length > 0) {
+			} else if (role === "assistant") {
 				const content: (TextContent | ThinkingContent | ToolCall)[] = [
 					...blocks.thinking.map(t => ({ type: "thinking" as const, thinking: t })),
 					...blocks.texts.map(t => ({ type: "text" as const, text: t })),
-					...blocks.tools.map(t => ({
-						type: "toolCall" as const,
-						id: t.id ?? `t${synthetic}`,
-						name: t.name ?? "tool",
-						arguments: t.input ?? {},
-					})),
+					...blocks.tools.map(t => {
+						const id = t.id ?? `t${synthetic}`;
+						if (t.name) toolNames.set(id, t.name);
+						return { type: "toolCall" as const, id, name: t.name ?? "tool", arguments: t.input ?? {} };
+					}),
 				];
 				if (content.length === 0) continue;
+				const model = isRecord(data.model) ? data.model : undefined;
 				const message: AssistantMessage = {
 					role: "assistant",
 					content,
 					api: "opencode",
-					provider: "opencode",
-					model: "unknown",
+					provider: (model ? stringField(model, "providerID") : undefined) ?? "opencode",
+					model: (model ? stringField(model, "id") : undefined) ?? "unknown",
 					usage: {
 						input: 0,
 						output: 0,

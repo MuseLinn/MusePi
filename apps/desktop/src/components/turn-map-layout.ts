@@ -55,17 +55,39 @@ export interface TurnMapEdge {
 	junction?: { x: number; y: number };
 }
 
+/**
+ * 车道头分段:同一车道内连续、同来源的分支轮共用一段;来源一变就另起
+ * 一段(车道号不变)。车道头文案属于段,不属于车道——一个车道可以先后
+ * 从两个不同父轮分叉,整条车道只记首个来源会把后段错标成前段的来源。
+ */
+interface TurnMapLaneSegment {
+	lane: number;
+	/** 该段首个分支轮(车道头挂在它上方)。 */
+	first: TurnMapNode;
+	/** 分叉来源轮节点;未解析出主线轮时为 null。 */
+	source: TurnMapNode | null;
+	/** 分叉来源主线轮号;来源未解析时为 null(= source 为 null)。 */
+	sourceTurn: number | null;
+	/** 车道头展示编号(来源轮的兄弟序标签 → 树深度 → 轮号);无来源时 null。 */
+	sourceLabel: string | number | null;
+}
+
 export interface TurnMapLayout {
 	nodes: TurnMapNode[];
 	edges: TurnMapEdge[];
 	/** 主线轮(按序)。 */
 	main: TurnMapNode[];
-	/** 分支车道头文案数据(车道号 → 首个分支轮)。 */
-	lanes: { lane: number; first: TurnMapNode; sourceTurn: number }[];
+	/** 分支车道头分段(按车道号、出现顺序)。 */
+	lanes: TurnMapLaneSegment[];
 	/** 干线交汇点(兄弟分支按 sourceTurn 去重)。 */
 	junctions: TurnMapJunction[];
 	width: number;
 	height: number;
+}
+
+/** 轮的展示编号:同父兄弟序标签(如 "2-1")→ 树深度 → journal 序。 */
+export function turnDisplayLabel(group: TrajectoryTurnGroup): string | number {
+	return group.displayTurnLabel ?? group.displayTurn ?? group.turn;
 }
 
 /** 轮内泳道可视上限(px):事件卡超过即轮内滚动,卡片不再长高
@@ -146,7 +168,11 @@ export function layoutTurnMap(
 	let mainPos = 0;
 	// 每车道的当前游标(分支轮从分叉源坐标起排)。
 	const lanePos = new Map<number, number>();
-	const laneSource = new Map<number, number>();
+	// 每车道当前车道头段(来源变了就另起一段)。
+	const laneSegment = new Map<number, TurnMapLaneSegment>();
+	const laneSegments: TurnMapLaneSegment[] = [];
+	// 分支轮 → 解析出的来源轮节点(交汇点与边共用,避免按可重复轮号回查)。
+	const branchSourceOf = new Map<TurnMapNode, TurnMapNode>();
 	// h 模式车道行:行顶 y(同行节点共享)与行底水位(新行不得压上一行)。
 	const laneRowY = new Map<number, number>();
 	let laneRowBottom = 0;
@@ -161,6 +187,8 @@ export function layoutTurnMap(
 		// h = 卡宽 + 间距(展开增量向卡下方生长,不占横向)。
 		const step = horizontal ? TURN_NODE_W + TURN_GAP_Y : TURN_NODE_H + extra + TURN_GAP_Y;
 		let node: TurnMapNode;
+		// 分支轮的解析来源(段头与边共用);主线轮为 undefined。
+		let branchSource: TurnMapNode | undefined;
 		if (!branch) {
 			node = {
 				group,
@@ -189,7 +217,7 @@ export function layoutTurnMap(
 					: undefined) ??
 				main[main.length - 1];
 			const sourceTurn = source?.group.turn ?? 0;
-			if (!laneSource.has(lane)) laneSource.set(lane, sourceTurn);
+			branchSource = source;
 			if (horizontal) {
 				// 车道行 y:新行 = 车道序基准与前一行底部(含展开)取大;同行
 				// 节点共享行顶。行内从分叉源右缘起向右排。
@@ -231,35 +259,48 @@ export function layoutTurnMap(
 			}
 		}
 		nodes.push(node);
+		if (node.branch) {
+			if (branchSource) branchSourceOf.set(node, branchSource);
+			// 车道头分段:同车道内来源不变 = 同段;来源变了另起一段。
+			const segment = laneSegment.get(node.lane);
+			if (!segment || segment.sourceTurn !== node.sourceTurn) {
+				const next: TurnMapLaneSegment = {
+					lane: node.lane,
+					first: node,
+					source: branchSource ?? null,
+					sourceTurn: node.sourceTurn,
+					sourceLabel: branchSource ? turnDisplayLabel(branchSource.group) : node.sourceTurn,
+				};
+				laneSegment.set(node.lane, next);
+				laneSegments.push(next);
+			}
+		}
 	}
 	// 主线直连边。
 	for (let i = 0; i + 1 < main.length; i++) edges.push({ from: main[i]!, to: main[i + 1]!, branch: false });
 	// 分支边:源轮 → 分支轮(贝塞尔由渲染层画);交汇点落在父轮结束之后
 	// 的干线间距中点(v:主线卡中心 × 父轮下缘+GAP/2;h:父轮右缘+GAP/2 ×
-	// 父轮垂直中心),兄弟分支按 sourceTurn 共享一个交汇点。
+	// 父轮垂直中心),兄弟分支共享一个交汇点。
+	// 源轮按节点身份而非轮号定位:journal 轮号在历史前插/重答后可重复,
+	// 按轮号回查会接错线并把不同父轮的交汇点合并成一个。
 	const junctions: TurnMapJunction[] = [];
-	const junctionBySource = new Map<number, TurnMapJunction>();
+	const junctionBySource = new Map<TurnMapNode, TurnMapJunction>();
 	for (const n of nodes) {
 		if (!n.branch) continue;
-		const source = nodes.find(m => m.group.turn === n.sourceTurn);
+		const source = branchSourceOf.get(n);
 		if (!source) continue;
 		const jx = horizontal ? source.x + TURN_NODE_W + TURN_GAP_Y / 2 : source.x + TURN_NODE_W / 2;
 		const jy = horizontal ? source.y + source.h / 2 : source.y + source.h + TURN_GAP_Y / 2;
-		let junction = junctionBySource.get(source.group.turn);
+		let junction = junctionBySource.get(source);
 		if (!junction) {
 			junction = { x: jx, y: jy, sourceTurn: source.group.turn };
-			junctionBySource.set(source.group.turn, junction);
+			junctionBySource.set(source, junction);
 			junctions.push(junction);
 		}
 		edges.push({ from: source, to: n, branch: true, junction: { x: junction.x, y: junction.y } });
 	}
-	const lanes = [...laneSource.entries()]
-		.sort((a, b) => a[0] - b[0])
-		.map(([laneNo, sourceTurn]) => ({
-			lane: laneNo,
-			first: nodes.find(n => n.lane === laneNo) as TurnMapNode,
-			sourceTurn,
-		}));
+	// 车道头分段:按车道号排序,同车道内保持出现顺序(sort 稳定)。
+	const lanes = laneSegments.sort((a, b) => a.lane - b.lane);
 	const laneCount = Math.max(1, lane + 1);
 	// 车道跨度(横向开列的总宽 / 纵向开行的总高)与主线跨度。
 	const laneSpan = laneCount * TURN_NODE_W + (laneCount - 1) * TURN_LANE_GAP;

@@ -100,6 +100,7 @@ import { BlobStore, isBlobRef, resolveImageData } from "../session/blob-store";
 import type { CompactMode } from "../session/compact-modes";
 import {
 	createForeignSessionStore,
+	foreignSessionRow,
 	foreignSessionSourceName,
 	foreignSessionSources,
 	persistForeignSession,
@@ -2662,6 +2663,9 @@ export class DaemonServer {
 			case "skills.marketplace.preview": {
 				return this.#services.get<MarketplaceService>("marketplace").previewMarketSkill(params ?? {});
 			}
+			case "skills.marketplace.updates": {
+				return this.#services.get<MarketplaceService>("marketplace").checkSkillUpdates();
+			}
 			case "skills.marketplace.status": {
 				return this.#services.get<MarketplaceService>("marketplace").installStatus();
 			}
@@ -4112,11 +4116,13 @@ export class DaemonServer {
 				const sources = await Promise.all(
 					want.map(async source => {
 						let sessions: ForeignSessionInfo[] = [];
+						const store = createForeignSessionStore(source);
 						try {
-							const store = createForeignSessionStore(source);
-							sessions = (await store.list()).slice(0, 100);
+							sessions = await store.list();
 						} catch {
 							sessions = [];
+						} finally {
+							store.close?.();
 						}
 						// One ledger read per source; a recorded copy whose file was
 						// deleted is treated as not imported, so it can be restored.
@@ -4124,17 +4130,13 @@ export class DaemonServer {
 						return {
 							source,
 							name: foreignSessionSourceName(source),
+							// The picker shows every session: a cap here silently hid the
+							// rest of a large store, so a 455-session agent looked like
+							// 100 unrelated rows.
 							count: sessions.length,
-							sessions: sessions.map(s => ({
-								id: s.id,
-								title: s.title ?? "",
-								cwd: s.cwd,
-								created: s.created.toISOString(),
-								modified: s.modified.toISOString(),
-								messageCount: s.messageCount ?? 0,
-								firstMessage: s.firstMessage ?? "",
-								importedSessionId: importedRecord(ledger, source, s.id)?.sessionId ?? null,
-							})),
+							sessions: sessions.map(s =>
+								foreignSessionRow(s, importedRecord(ledger, source, s.id, s.path)?.sessionId ?? null),
+							),
 						};
 					}),
 				);
@@ -4146,14 +4148,20 @@ export class DaemonServer {
 				if (!foreignSessionSources().includes(source)) throw new Error(`unknown import source: ${source}`);
 				const store = createForeignSessionStore(source);
 				const sessions = await store.list();
-				const match = sessions.find(s => s.id === p.id) ?? sessions.find(s => s.path === p.id);
+				// Path first: two sources can reuse an id (Kimi names every agent's
+				// file the same), so an id alone may resolve to another session.
+				const match =
+					sessions.find(s => s.path === p.id) ??
+					sessions.find(s => s.id === p.id) ??
+					sessions.find(s => s.path.endsWith(p.id));
 				if (!match) throw new Error(`session not found in ${source}: ${p.id}`);
 				// Idempotent: a second import of the same foreign session returns
 				// the existing copy instead of duplicating it. A copy whose file
 				// was deleted is not treated as imported.
 				const ledger = await loadImportLedger();
-				const already = importedRecord(ledger, source, match.id);
+				const already = importedRecord(ledger, source, match.id, match.path);
 				if (already) {
+					store.close?.();
 					return {
 						ok: true,
 						skipped: true,
@@ -4167,6 +4175,7 @@ export class DaemonServer {
 					fallbackCwd: p.cwd ?? this.#host.cwd() ?? undefined,
 					suppressBreadcrumb: true,
 				});
+				store.close?.();
 				const sessionFile = imported.getSessionFile();
 				const sessionId = imported.getSessionId();
 				await imported.close();
@@ -4174,6 +4183,7 @@ export class DaemonServer {
 				await recordImportedSession({
 					source,
 					sourceId: match.id,
+					sourcePath: match.path,
 					sessionId,
 					sessionFile,
 					importedAt: Date.now(),

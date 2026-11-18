@@ -1,3 +1,4 @@
+import "./happy-dom-shim";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { markSketchChip, nextSketchFileName, uploadAttachmentFiles } from "../src/components/composer/use-attachments";
 

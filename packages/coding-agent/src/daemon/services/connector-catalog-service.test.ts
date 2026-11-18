@@ -110,8 +110,15 @@ describe("ConnectorCatalogService", () => {
 		});
 
 		const initial = await service.list();
-		expect(initial.connectors.map(row => row.id)).toEqual(["alpha", "beta", "delta", "echo-cli", "gamma"]);
-		expect(initial.connectors[0]).toMatchObject({ enabled: false, status: "disconnected", authMode: "oauth" });
+		// The fixture's ids, matched as a subset: the bundled layer ships rows too.
+		expect(initial.connectors.map(row => row.id)).toEqual(
+			expect.arrayContaining(["alpha", "beta", "delta", "echo-cli", "gamma"]),
+		);
+		expect(initial.connectors.find(row => row.id === "alpha")).toMatchObject({
+			enabled: false,
+			status: "disconnected",
+			authMode: "oauth",
+		});
 
 		const connected = await service.connect({ id: "alpha" });
 		expect(connected).toMatchObject({
@@ -130,6 +137,23 @@ describe("ConnectorCatalogService", () => {
 		const disconnected = await service.setEnabled({ id: "alpha", enabled: false });
 		expect(disconnected).toEqual({ ok: true, id: "alpha", enabled: false });
 		expect(reloads).toBe(2);
+	});
+
+	it("asks for a browser sign-in unless a pasted token answers the row", async () => {
+		const service = new ConnectorCatalogService({
+			cwd: () => "/workspace",
+			connectorsSnapshotForCwd: async () => ({ servers: [] }),
+			reloadConnectors: async () => undefined,
+		});
+
+		// A plain OAuth row still needs a sign-in.
+		const plain = await service.connect({ id: "alpha" });
+		expect(plain).toMatchObject({ ok: true, id: "alpha", needsAuth: true });
+
+		// The GitHub row carries a pasted-token fallback, so it also needs a
+		// sign-in until that token is filled.
+		const withTokenForm = await service.connect({ id: "github" });
+		expect(withTokenForm).toMatchObject({ ok: true, id: "github", needsAuth: true });
 	});
 
 	it("requires a token before connecting and deletes it on disconnect", async () => {

@@ -64,6 +64,7 @@ import {
 	filePreviewWorkspacePath,
 	panelBrowserPreviewUrl,
 	resolveFilePreviewPath,
+	resolveNativeFilePath,
 	type WorkspaceEntry,
 } from "../../lib/file-workspace";
 import {
@@ -90,7 +91,7 @@ import "../../styles/gui-file-workspace.css";
 import { MarkdownMetadata } from "./MarkdownMetadata";
 
 export type { WorkspaceEntry };
-export { filePreviewPathEquals, filePreviewWorkspacePath, resolveFilePreviewPath };
+export { filePreviewPathEquals, filePreviewWorkspacePath, resolveFilePreviewPath, resolveNativeFilePath };
 
 /** Markdown preview switch: rendered markdown vs the raw source text. */
 const MD_VIEW_SEGMENTS: SegmentedOption<"rendered" | "source">[] = [
@@ -1177,7 +1178,7 @@ export function FilePane({
 	const copyPath = useCallback(
 		async (entry: WorkspaceEntry): Promise<void> => {
 			try {
-				await window.electronAPI?.copyText(`${cwd}/${entry.path}`);
+				await window.electronAPI?.copyText(resolveNativeFilePath(cwd, entry.path));
 			} catch {
 				// clipboard unavailable — nothing to do
 			}
@@ -1455,7 +1456,7 @@ export function FilePane({
 			items.push({
 				label: t("general.openApp"),
 				icon: "external-link",
-				onSelect: () => void window.electronAPI?.openWith("", `${cwd}/${entry.path}`),
+				onSelect: () => void window.electronAPI?.openWith("", resolveNativeFilePath(cwd, entry.path)),
 			});
 		}
 		items.push({ label: t("settings.rename"), icon: "pencil", onSelect: () => startRename(entry, depth) });
@@ -1492,7 +1493,7 @@ export function FilePane({
 				aria-label={t("general.openApp")}
 				onClick={ev => {
 					ev.stopPropagation();
-					void window.electronAPI?.openWith("", `${cwd}/${entry.path}`);
+					void window.electronAPI?.openWith("", resolveNativeFilePath(cwd, entry.path));
 				}}
 			>
 				<ExternalLink size={12} />
@@ -1742,7 +1743,7 @@ export function FilePane({
 						<span className="truncate">{pathBaseName(cwd)}</span>
 						<ChevronDown size={11} />
 					</button>
-				) : (
+				) : /^[A-Za-z]:[\\/]/.test(cwd) ? null : (
 					<span className="gui-filepane-path-root">~/</span>
 				)}
 				<span className="truncate">{cwd.replace(/^\/Users\/[^/]+\//, "")}</span>

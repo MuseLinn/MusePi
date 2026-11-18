@@ -17,11 +17,16 @@ const STORE_NAME: string = 'musepi_settings';
  *
  * Keys mirror the web preference names 1:1 so a value round-trips without a
  * translation table:
- *   theme        system | light | dark
- *   accent       theme | brand | mono | ocean | jade
- *   fontScale    13 | 15 | 17
- *   locale       zh-CN | en-US
+ *   theme          system | light | dark
+ *   accent         theme | brand | mono | ocean | jade
+ *   fontScale      13 | 15 | 17
+ *   locale         zh-CN | en-US
  *   tabBarMaterial 0..3
+ *   notifyOnFinish 1 | 0   (post a notification when a background turn ends)
+ *   notifyOnAsk    1 | 0   (written by the page only; stored so it persists)
+ *   notifyDnd      1 | 0
+ *   voiceStyle     default | concise | warm
+ *   voiceLocale    system | zh-CN | en-US
  *
  * Synchronous, because `getPrefs()` is a javaScriptProxy method and the bridge
  * contract is "answer without awaiting". `preferences` exposes `getSync` /
@@ -88,4 +93,24 @@ export class PrefsStore {
 	}
 }
 
-export const PREF_KEYS: string[] = ['theme', 'accent', 'fontScale', 'locale', 'tabBarMaterial'];
+/**
+ * Keys mirrored to the page through `getPrefs` / `__musepiPref`.
+ *
+ * `notifyOnFinish` / `notifyOnAsk` are the page's own names (`mobile-prefs.ts`),
+ * kept verbatim so both surfaces write one value instead of two. The shell has
+ * no row for `notifyOnAsk`; storing it is what makes that page toggle survive a
+ * restart. `notifyDnd` / `voiceStyle` / `voiceLocale` are switched here and read
+ * by the page's voice panel. Shell-private keys (pane widths) stay out.
+ */
+export const PREF_KEYS: string[] = [
+	'theme',
+	'accent',
+	'fontScale',
+	'locale',
+	'tabBarMaterial',
+	'notifyOnFinish',
+	'notifyOnAsk',
+	'notifyDnd',
+	'voiceStyle',
+	'voiceLocale',
+];

@@ -9,3 +9,5 @@
 4. 完成后报告预设 id、保存结果和校验结果。
 
 创建或修改扩展时，遵循 musepi-extension-dev 技能。创造模式已自动激活扩展自举工具环（extension_load/extension_reload/extension_status/extension_validate/extension_rollback 与 ext_define/ext_run/ext_stop/ext_undefine/ext_inspect；extensions_list 常激活）。创建扩展后用它加载、自查、热修和回退，不要只靠写文件猜状态。
+
+插件需要分发时，按同一技能的「发布到插件市场」一节执行：先用 `musepi plugin pack` 打出可分发的 tarball，需要公开时再走包 registry 的发布流程；要让人能在插件市场里发现，把包条目写进你自己的市场 catalog（`.omp-plugin/marketplace.json`，桌面端也在能力中心的市场页提供添加来源），用户添加该来源后即可安装。发布结果以 registry 与 catalog 的实际内容为准，不要把本地路径或未发布的 tarball 报告为已发布。

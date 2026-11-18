@@ -917,6 +917,13 @@ button.tr-display-context-source:hover {
 	}
 }
 
+/* 渐变的所有色停都是可见文字色，停帧后仍是一段可读的渐变，不会变成空白。 */
+@media (prefers-reduced-motion: reduce) {
+	.tr-think-label {
+		animation: none;
+	}
+}
+
 .tr-think-body {
 	align-self: stretch;
 	margin: 2px 0;
@@ -1166,6 +1173,15 @@ button.tr-display-context-source:hover {
 @keyframes tr-dot-bounce {
 	0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
 	30% { transform: translateY(-3px); opacity: 1; }
+}
+
+/* 呼吸与跳动只加强「还在想」；标签文字和三个圆点本身已经是 pending 的形状，
+ * 停帧后仍能读成占位而不是空白。 */
+@media (prefers-reduced-motion: reduce) {
+	.tr-shimmer,
+	.tr-think-dots i {
+		animation: none;
+	}
 }
 
 /* ---- tool cards ----
@@ -1577,6 +1593,13 @@ button.tr-display-context-source:hover {
 @keyframes tr-mermaid-spin {
 	to {
 		transform: rotate(360deg);
+	}
+}
+
+/* 偏心圆弧本身就是 spinner 形状；旁边的「渲染中」文案说明状态。 */
+@media (prefers-reduced-motion: reduce) {
+	.tr-mermaid-loading::before {
+		animation: none;
 	}
 }
 
@@ -2122,6 +2145,13 @@ button.tr-display-context-source:hover {
 	}
 	50% {
 		opacity: 0.45;
+	}
+}
+
+/* 播报状态由 --fg-strong 的高亮色承担；呼吸只是强调，停帧不影响可读性。 */
+@media (prefers-reduced-motion: reduce) {
+	.tr-action--speaking {
+		animation: none;
 	}
 }
 
@@ -2690,6 +2720,16 @@ a.tr-tool-search-title:hover {
 	animation-delay: 0.3s;
 }
 
+/* 图片与搜索占位：底色块和标题/查询文案已经表达「占位中」，扫光只是提示。
+ * 放在三个基础规则之后，同选择器同优先级才能压住它们。 */
+@media (prefers-reduced-motion: reduce) {
+	.tr-img-shimmer,
+	.tr-search-shimmer,
+	.tr-search-ph-line {
+		animation: none;
+	}
+}
+
 /* inline citations — aicss inline-citations: superscript [N] markers in
  * the answer reference the numbered source footer below. */
 .tr-cite {
@@ -2881,6 +2921,14 @@ a.tr-tool-search-title:hover {
 	}
 	to {
 		transform: translateX(320%);
+	}
+}
+
+/* 窗口化补页的细进度条：静止时白条停在轨道内，轨道底与「加载更早消息」
+ * 的可滚结构仍然表达「还有内容在来」。 */
+@media (prefers-reduced-motion: reduce) {
+	.tr-window-loading-bar {
+		animation: none;
 	}
 }
 
@@ -3184,6 +3232,7 @@ a.tr-tool-search-title:hover {
 	font-variant-numeric: tabular-nums;
 }
 
+
 .tr-working-spin {
 	width: 10px;
 	height: 10px;
@@ -3210,6 +3259,15 @@ a.tr-tool-search-title:hover {
 		transform: rotate(360deg);
 	}
 }
+
+/* 工作计时旁的 10px 圆环：偏心弧线在静止时仍是 spinner 形状，旁侧计时文案
+ * 说明该回合还在跑。 */
+@media (prefers-reduced-motion: reduce) {
+	.tr-working-spin {
+		animation: none;
+	}
+}
+
 
 /* ── TTSR warning block (TUI TtsrNotificationComponent parity): rule
  *    violation → stream rewind → injected rules, warning-tinted. ─────── */
@@ -4856,5 +4914,194 @@ a.tr-tool-search-title:hover {
 
 	.tr-row--custom.tr-row--railed:has(> .tr-gutter:empty) .tr-body {
 		grid-column: 2;
+	}
+}
+
+/* ── 移动端会话树摘要条 (面包屑 / 分叉提示 / 撤回撤销) ────────────────
+ * 挂在滚动容器之外(见 app.tsx TranscriptPane):滚到任何位置都还知道
+ * "我在树的哪里"。单行横向滚动,过深的链靠 overflow 而不是折行 —— 折行
+ * 会把转录顶端再往下压一整块。深度上限由 TreeOutlineNav 的 MAX_CRUMBS
+ * 决定,CSS 只负责溢出表现。 */
+.tr-tree-outline {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	flex: none;
+	padding: 6px 16px 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+/* 摘要条与转录同在一个 flex 列里。`.tr-root` 自带 height:100%,直接叠上
+ * 会多出正好一条的高度,把转录底部推到视口之外 —— 这一档把它交回 flex
+ * 分配,让它吃掉剩余空间。 */
+.sh-pull > .tr-tree-outline + .tr-root {
+	flex: 1 1 auto;
+	height: auto;
+	min-height: 0;
+}
+
+/* 撤回后的撤销行:一行里放图标、目标文本、撤销与关闭。目标文本用省略号
+ * 收起 —— 它是"撤回到哪"的提示,不是内容本身。 */
+.tr-tree-outline-undo,
+.tr-tree-outline-hint {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.tr-tree-outline-undo {
+	padding: 5px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--warn) 10%, var(--bg-raised));
+	color: var(--fg);
+	animation: tr-tree-outline-in 200ms var(--spring, ease-out);
+}
+
+.tr-tree-outline-undo-icon {
+	flex: none;
+	color: var(--warn);
+}
+
+.tr-tree-outline-undo-text {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tr-tree-outline-undo-action {
+	flex: none;
+	min-height: 24px;
+	padding: 0 8px;
+	border: 1px solid var(--accent-bd, var(--border-strong));
+	border-radius: var(--radius-full);
+	color: var(--accent);
+	font: inherit;
+	font-weight: 600;
+	background: transparent;
+	cursor: pointer;
+}
+
+.tr-tree-outline-undo-action:active {
+	background: var(--accent-muted);
+}
+
+.tr-tree-outline-close {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 0;
+	border-radius: var(--radius-full);
+	color: var(--fg-muted);
+	background: transparent;
+	cursor: pointer;
+}
+
+.tr-tree-outline-close:focus-visible,
+.tr-tree-outline-undo-action:focus-visible,
+.tr-tree-outline-seg:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}
+
+/* 分叉提示:说明"现在发送会发生什么",所以用强调色而不是和面包屑同色。 */
+.tr-tree-outline-hint {
+	padding: 0 2px;
+	color: var(--accent);
+	line-height: 1.4;
+}
+
+.tr-tree-outline-hint > span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.tr-tree-outline-crumbs {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: none;
+	-webkit-overflow-scrolling: touch;
+}
+
+.tr-tree-outline-crumbs::-webkit-scrollbar {
+	display: none;
+}
+
+.tr-tree-outline-more {
+	flex: none;
+	padding-right: 2px;
+	color: var(--fg-faint);
+}
+
+.tr-tree-outline-crumb {
+	display: inline-flex;
+	align-items: center;
+	flex: none;
+	gap: 2px;
+	max-width: 40vw;
+}
+
+.tr-tree-outline-sep {
+	flex: none;
+	color: var(--fg-faint);
+}
+
+/* 每段是一枚可点的胶囊:点它 = 把 leaf 移过去(旧尾部保留为兄弟分支)。
+ * 触摸目标高度按 28px 给,低于这一档在手机上点不准。 */
+.tr-tree-outline-seg {
+	min-height: 28px;
+	max-width: 100%;
+	padding: 0 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-full);
+	color: var(--fg);
+	font: inherit;
+	background: var(--bg-raised);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.tr-tree-outline-seg--user {
+	border-color: color-mix(in oklab, var(--accent) 30%, var(--border));
+}
+
+.tr-tree-outline-seg--toolResult {
+	color: var(--fg-muted);
+}
+
+.tr-tree-outline-seg[aria-current="location"] {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+@keyframes tr-tree-outline-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tr-tree-outline-undo {
+		animation: none;
 	}
 }

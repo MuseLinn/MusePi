@@ -9,7 +9,7 @@ import { type DesignSystemEntry, designSystemLabel } from "./use-design-systems"
 
 /**
  * Design style picker — 会话 composer（Composer.tsx footerLeft）与欢迎页
- * （WelcomeComposer，design 预设 armed 时）共用的同一颗选择胶囊。
+ * （HeroComposer，design 预设 armed 时）共用的同一颗选择胶囊。
  *
  * M3.7b（docs/review/0.5.0-m3-mode-page-redesign.md §3）：数据源是
  * `design.systems.list` RPC（useDesignSystems，调用方传入；RPC 不可用时

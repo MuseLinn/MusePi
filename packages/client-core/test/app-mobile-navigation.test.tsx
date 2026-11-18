@@ -10,6 +10,7 @@ import { CollabSocket } from "../src/lib/socket";
 GlobalRegistrator.register();
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 const { App } = await import("../src/app");
+const { t } = await import("../src/i18n/index.js");
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
 const SESSION: WorkspaceSessionInfo = {
@@ -179,5 +180,37 @@ describe("mobile workspace navigation", () => {
 		expect(document.querySelector(".sh-app")?.getAttribute("data-layout")).toBe("compact");
 		expect(document.querySelector(".sh-rail")).toBeNull();
 		expect(document.querySelector(".sh-content")?.getAttribute("data-rail")).toBe("false");
+	});
+
+	it("never leaves the transcript area blank on a phone surface", async () => {
+		// The phone surface always supplies an `emptySlot`: the greeting for a
+		// draft, the skeleton while a session hydrates. A blank transcript meant
+		// the page had no surface at all — a desktop-shaped layout that renders
+		// no empty state — which is what a wide touch browser got before the
+		// `hover: none` breakpoint fix.
+		await renderWorkspace(true);
+		expect(document.querySelector(".sh-app")?.getAttribute("data-surface")).toBe("mobile");
+		expect(document.querySelector(".sh-welcome-hint")).not.toBeNull();
+
+		// Enter a session: while it hydrates the skeleton owns the empty area.
+		await act(async () => document.querySelector<HTMLButtonElement>(".sh-title-btn")?.click());
+		await act(async () => document.querySelector<HTMLButtonElement>(".ss-item")?.click());
+		await act(async () => {
+			client?.applyFrameForTest({
+				t: "welcome",
+				proto: COLLAB_PROTO,
+				header: HEADER,
+				state: STATE,
+				agents: [] as AgentSnapshot[],
+				entryCount: 0,
+			});
+			await Bun.sleep(30);
+		});
+		// One of the two empty states is always present — never nothing. A
+		// session that has landed (phase live, no entries yet) shows the
+		// greeting; one still hydrating shows the skeleton.
+		const empty = document.querySelector(".sh-welcome-hint") ?? document.querySelector(".sh-skeleton");
+		expect(empty).not.toBeNull();
+		expect(document.querySelector(".tr-empty")).toBeNull();
 	});
 });

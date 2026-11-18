@@ -34,13 +34,17 @@ import { usePrompt } from "../lib/prompt-dialog";
 import { readSessionTabsEnabled, setSessionTabsEnabled } from "../lib/session-tabs";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { ColorPickerPanel } from "./ColorPicker";
-import { GuiSelect } from "./GuiSelect";
+import {
+	type CustomProviderDraft,
+	CustomProviderForm,
+	type CustomProviderPayload,
+	emptyCustomProviderDraft,
+} from "./CustomProviderForm";
 import { ImportSessionsSetup } from "./ImportSessionsSetup";
 import { MenuPopup } from "./MenuPopup";
 import { ModelBrandIcon } from "./model-brand-icon";
 import { OnboardingVoiceSetup } from "./OnboardingVoiceSetup";
 import { PersonalizeSetup } from "./PersonalizeSetup";
-import { EndpointCandidatesDialog, QuickProviderChips, URL_HINTS, useEndpointModels } from "./provider-setup-shared";
 import { Reveal } from "./Reveal";
 
 /** Exit animation duration (mirrors gui-obo-card-out below). */
@@ -425,17 +429,6 @@ function SessionTabsSetup({ enabled, onChange }: { enabled: boolean; onChange(en
 	);
 }
 
-const EMPTY_FORM = {
-	name: "",
-	baseUrl: "",
-	apiKey: "",
-	api: "openai-completions",
-	modelId: "",
-	modelName: "",
-	// Models adopted from the "settings.fetchAvailableModels" interrogation.
-	adopted: [] as { id: string; name?: string }[],
-};
-
 /** Step 4 — provider setup: builtin OAuth/API-key rows + custom
  *  OpenAI-compatible form with a live connection test. */
 function ProviderSetup({
@@ -448,14 +441,12 @@ function ProviderSetup({
 	const [tab, setTab] = useState<"builtin" | "custom">("builtin");
 	const [builtins, setBuiltins] = useState<BuiltinProviderInfo[] | null>(null);
 	const [apiProviders, setApiProviders] = useState<ApiProviderInfo[]>([]);
-	// Custom form.
-	const [form, setForm] = useState(EMPTY_FORM);
+	// Custom form: the same CustomProviderForm the settings dialog renders, so
+	// the guide and the settings page cannot drift apart again.
+	const [customDraft] = useState(() => emptyCustomProviderDraft());
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [added, setAdded] = useState<{ name: string } | null>(null);
-	// "Fetch available models" + quick-fill chips — shared with the settings
-	// custom-provider dialog (single authoritative flow, provider-setup-shared).
-	const ep = useEndpointModels(rpc, { name: form.name, baseUrl: form.baseUrl, apiKey: form.apiKey, api: form.api });
 	// Connection test.
 	const [testing, setTesting] = useState(false);
 	const [testOk, setTestOk] = useState(false);
@@ -703,50 +694,16 @@ function ProviderSetup({
 		}
 	};
 
-	/** Ask the endpoint the form currently shows which models it serves —
-	 *  shared implementation (useEndpointModels). Adoption here merges the
-	 *  picked candidates into the onboarding form's simple rows. */
-	const adoptSelected = (): void => {
-		setForm(v => ({ ...v, adopted: [...v.adopted, ...ep.pickedNew(v.adopted.map(m => m.id))] }));
-		ep.closePicker();
-	};
-
-	/** Drop one adopted model row from the form. */
-	const removeAdopted = (id: string): void => {
-		setForm(v => ({ ...v, adopted: v.adopted.filter(m => m.id !== id) }));
-	};
-
-	const submit = async (): Promise<void> => {
+	const submit = async (provider: CustomProviderPayload): Promise<void> => {
 		setError(null);
 		if (!rpc) {
 			setError(t("settings.notConnected"));
 			return;
 		}
-		if (
-			!form.name.trim() ||
-			!form.baseUrl.trim() ||
-			(form.modelId.trim().length === 0 && form.adopted.length === 0)
-		) {
-			setError(t("settings.providerNameBase.info2"));
-			return;
-		}
 		setBusy(true);
 		try {
-			await rpc.request("settings.modelsAdd", {
-				provider: {
-					name: form.name.trim(),
-					baseUrl: form.baseUrl.trim(),
-					...(form.apiKey.trim() ? { apiKey: form.apiKey.trim() } : {}),
-					...(form.api !== "openai-completions" ? { api: form.api } : {}),
-					models: [
-						...form.adopted.map(m => ({ id: m.id, ...(m.name ? { name: m.name } : {}) })),
-						...(form.modelId.trim()
-							? [{ id: form.modelId.trim(), ...(form.modelName.trim() ? { name: form.modelName.trim() } : {}) }]
-							: []),
-					],
-				},
-			});
-			setAdded({ name: form.name.trim() });
+			await rpc.request("settings.modelsAdd", { provider });
+			setAdded({ name: provider.label ?? provider.name });
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
@@ -754,28 +711,29 @@ function ProviderSetup({
 		}
 	};
 
-	const testConnection = async (): Promise<void> => {
+	const testConnection = async (draft: CustomProviderDraft): Promise<void> => {
 		setError(null);
 		setTestOk(false);
 		if (!rpc) {
 			setError(t("settings.notConnected"));
 			return;
 		}
-		if (!form.baseUrl.trim() || !form.modelId.trim()) {
+		const modelId = draft.models.find(model => model.id.trim())?.id.trim() ?? "";
+		if (!draft.baseUrl.trim() || !modelId) {
 			setError(t("settings.providerNameBase.info"));
 			return;
 		}
-		if (!form.apiKey.trim()) {
+		if (!draft.apiKey.trim()) {
 			setError(t("settings.apiKeyRequiredTest"));
 			return;
 		}
 		setTesting(true);
 		try {
 			await rpc.request("providers.testConnection", {
-				baseUrl: form.baseUrl.trim(),
-				apiKey: form.apiKey.trim(),
-				api: form.api,
-				modelId: form.modelId.trim(),
+				baseUrl: draft.baseUrl.trim(),
+				apiKey: draft.apiKey.trim(),
+				api: draft.api,
+				modelId,
 			});
 			setTestOk(true);
 		} catch (err) {
@@ -1043,146 +1001,34 @@ function ProviderSetup({
 					)}
 				</div>
 			) : (
-				<div className="gui-obo-custom">
-					<QuickProviderChips onPick={(name, baseUrl) => setForm(v => ({ ...v, name, baseUrl }))} />
-					<input
-						className="gui-input"
-						placeholder={t("settings.providerName")}
-						value={form.name}
-						onChange={e => setForm(v => ({ ...v, name: e.target.value }))}
-					/>
-					<input
-						className="gui-input"
-						placeholder={URL_HINTS[form.api] ?? "https://api.example.com/v1"}
-						value={form.baseUrl}
-						onChange={e => setForm(v => ({ ...v, baseUrl: e.target.value }))}
-					/>
-					<input
-						className="gui-input"
-						placeholder={t("settings.apiKey")}
-						type="password"
-						value={form.apiKey}
-						onChange={e => setForm(v => ({ ...v, apiKey: e.target.value }))}
-					/>
-					{/* Fetch available models: interrogates the endpoint the form
-					 * currently shows (including an unsaved key), and offers the
-					 * reply as adoptable candidates. 添加模型 sits beside it —
-					 * settings-dialog parity (the manual-row path the guide form
-					 * was missing, which made its model list feel read-only). */}
-					<div className="flex items-center gap-2">
-						<button
-							type="button"
-							className="gui-btn"
-							disabled={!form.baseUrl || ep.fetchingModels || busy}
-							title={form.baseUrl ? undefined : t("settings.enterBaseUrlFetch")}
-							onClick={() => void ep.fetchModels()}
-						>
-							{ep.fetchingModels ? t("settings.fetchingModels") : t("settings.fetchAvailableModels")}
-						</button>
-						<button
-							type="button"
-							className="gui-btn"
-							disabled={busy}
-							title={t("settings.addModelHint")}
-							onClick={() =>
-								setForm(v => ({
-									...v,
-									adopted: [...v.adopted, { id: v.modelId.trim(), name: v.modelName.trim() || undefined }],
-									modelId: "",
-									modelName: "",
-								}))
-							}
-						>
-							{t("settings.addModel")}
-						</button>
-						{form.adopted.length > 0 && (
-							<span className="text-[12px] text-[var(--color-text-faint)]">
-								{t("settings.adoptedModels")}: {form.adopted.length}
-							</span>
-						)}
-					</div>
-					{ep.fetchError && <div className="gui-obo-provider-error">{ep.fetchError}</div>}
-					{form.adopted.length > 0 && (
-						<div className="flex flex-col gap-1">
-							{form.adopted.map(m => (
-								<div key={m.id} className="flex items-center gap-2">
-									<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
-									<button
-										type="button"
-										className="gui-btn"
-										aria-label={`${t("settings.delete")} ${m.id}`}
-										onClick={() => removeAdopted(m.id)}
-									>
-										<Icon name="delete-bin" className="h-3.5 w-3.5" />
-									</button>
-								</div>
-							))}
-						</div>
+				<CustomProviderForm
+					rpc={rpc}
+					mode="create"
+					initial={customDraft}
+					busy={busy}
+					error={error}
+					submitLabel={t("settings.addProvider")}
+					onSubmit={submit}
+					renderActions={draft => (
+						<>
+							<button
+								type="button"
+								className="gui-btn gui-obo-test"
+								disabled={testing || busy}
+								onClick={() => void testConnection(draft)}
+							>
+								{testing ? `${t("settings.testing")}…` : t("settings.testConnection")}
+							</button>
+							{testOk && (
+								<span className="gui-obo-test-ok">
+									<Icon name="check" className="h-3.5 w-3.5" />
+									{t("settings.connectionOk")}
+								</span>
+							)}
+						</>
 					)}
-					<div className="flex gap-2">
-						<input
-							className="gui-input flex-1"
-							placeholder={t("settings.modelId")}
-							value={form.modelId}
-							onChange={e => setForm(v => ({ ...v, modelId: e.target.value }))}
-						/>
-						<input
-							className="gui-input flex-1"
-							placeholder={t("settings.modelName")}
-							value={form.modelName}
-							onChange={e => setForm(v => ({ ...v, modelName: e.target.value }))}
-						/>
-					</div>
-					<GuiSelect
-						className="gui-input"
-						value={form.api}
-						onChange={nv => setForm(v => ({ ...v, api: nv }))}
-						options={[
-							{ value: "openai-completions", label: "openai" },
-							{ value: "openai-responses", label: "openai responses" },
-							{ value: "anthropic-messages", label: "anthropic" },
-							{ value: "google-generative-ai", label: "google" },
-						]}
-					/>
-					{error && <div className="gui-obo-provider-error">{error}</div>}
-					<div className="flex gap-2">
-						<button
-							type="button"
-							className="gui-btn gui-btn-approve gui-obo-provider-submit"
-							disabled={busy}
-							onClick={() => void submit()}
-						>
-							{busy ? `${t("settings.saving")}…` : t("settings.addProvider")}
-						</button>
-						<button
-							type="button"
-							className="gui-btn gui-obo-test"
-							disabled={testing}
-							onClick={() => void testConnection()}
-						>
-							{testing ? `${t("settings.testing")}…` : t("settings.testConnection")}
-						</button>
-						{testOk && (
-							<span className="gui-obo-test-ok">
-								<Icon name="check" className="h-3.5 w-3.5" />
-								{t("settings.connectionOk")}
-							</span>
-						)}
-					</div>
-				</div>
+				/>
 			)}
-
-			{/* Candidate picker for "settings.fetchAvailableModels" — shared with the
-			 * settings custom-provider dialog (provider-setup-shared). */}
-			<EndpointCandidatesDialog
-				candidates={ep.candidates}
-				picked={ep.picked}
-				allSelected={ep.allSelected}
-				onToggleOne={ep.toggleOne}
-				onToggleAll={ep.toggleAll}
-				onAdopt={() => void adoptSelected()}
-				onClose={ep.closePicker}
-			/>
 
 			{loginState && (
 				<div className="gui-obo-login" role="dialog">

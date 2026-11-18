@@ -1,11 +1,24 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import * as net from "node:net";
+import * as os from "node:os";
 import * as path from "node:path";
 // daemon.cjs lives outside tsconfig include (electron/) and has no types.
 // @ts-expect-error — untyped CJS module (electron/, outside tsconfig include)
-import { PORT_FILE, pidAlive, REGISTRY_DIR, readManagedDaemons, reapOrphanedDaemons } from "../electron/daemon.cjs";
+import * as daemon from "../electron/daemon.cjs";
+
+const { pidAlive, readManagedDaemons, reapOrphanedDaemons } = daemon;
+
+/**
+ * Paths inside the private discovery dir. `resetSocketDirForTests` updates the
+ * module's own locals, but the values it exports were copied at import time,
+ * so the test derives both paths from the dir it chose instead of reading the
+ * stale exports.
+ */
+let socketDir = "";
+const registryDir = (): string => path.join(socketDir, "managed");
+const wsPortFile = (): string => path.join(socketDir, "ws.port");
 
 /**
  * The reaper's POSITIVE case: an orphaned daemon that IS ours must actually be
@@ -59,13 +72,13 @@ function startFakeDaemon(port: number): Promise<ChildProcess> {
 }
 
 function seedOrphan(entry: Record<string, unknown>): void {
-	mkdirSync(REGISTRY_DIR, { recursive: true });
-	writeFileSync(path.join(REGISTRY_DIR, `${entry.pid}.json`), JSON.stringify(entry), "utf8");
+	mkdirSync(registryDir(), { recursive: true });
+	writeFileSync(path.join(registryDir(), `${entry.pid}.json`), JSON.stringify(entry), "utf8");
 }
 
 function writeWsPort(port: number): void {
-	mkdirSync(path.dirname(PORT_FILE), { recursive: true });
-	writeFileSync(PORT_FILE, String(port), "utf8");
+	mkdirSync(path.dirname(wsPortFile()), { recursive: true });
+	writeFileSync(wsPortFile(), String(port), "utf8");
 }
 
 /** Wait until the port stops answering (the reap is asynchronous). */
@@ -100,11 +113,23 @@ afterEach(async () => {
 		}
 	}
 	try {
-		rmSync(PORT_FILE, { force: true });
+		rmSync(wsPortFile(), { force: true });
 	} catch {
 		/* ignore */
 	}
-	rmSync(REGISTRY_DIR, { recursive: true, force: true });
+	rmSync(registryDir(), { recursive: true, force: true });
+});
+
+/**
+ * Private discovery dir. The default is `%TEMP%/musepi-daemon`, which a
+ * running dev GUI shares: deleting its `ws.port` mid-test makes that GUI
+ * respawn a daemon whose registry record then lands in the same directory and
+ * breaks the "reaped, so the registry is empty" assertion. Repointing the
+ * module at a private dir (the exported test-only seam) keeps the two apart.
+ */
+beforeAll(() => {
+	socketDir = mkdtempSync(path.join(os.tmpdir(), "musepi-reaper-"));
+	daemon.resetSocketDirForTests(socketDir);
 });
 
 /** A pid that is definitely not running: the recorded "owner". */
@@ -117,8 +142,8 @@ describe("orphan reaper reclaim", () => {
 	// behind by an earlier run (or a sibling test file in the same process)
 	// made the "reaped, so the registry is empty" assertion depend on ordering.
 	beforeEach(() => {
-		rmSync(REGISTRY_DIR, { recursive: true, force: true });
-		rmSync(PORT_FILE, { force: true });
+		rmSync(registryDir(), { recursive: true, force: true });
+		rmSync(wsPortFile(), { force: true });
 	});
 
 	it("terminates a daemon we spawned whose owning shell is gone", async () => {
@@ -126,7 +151,6 @@ describe("orphan reaper reclaim", () => {
 		const daemon = await startFakeDaemon(port);
 		writeWsPort(port);
 		seedOrphan({ pid: daemon.pid, ownerPid: DEAD_OWNER, port });
-
 		expect(pidAlive(DEAD_OWNER)).toBe(false);
 
 		const result = await reapOrphanedDaemons();
@@ -166,7 +190,7 @@ describe("orphan reaper reclaim", () => {
 
 	it("does not reclaim when the listener is a different pid than the record", async () => {
 		const port = await freePort();
-		const daemon = await startFakeDaemon(port);
+		const listener = await startFakeDaemon(port);
 		writeWsPort(port);
 		// Same port, but the record names the test runner instead of the real
 		// listener → pid recycling. Must not SIGTERM the recorded pid.
@@ -175,7 +199,7 @@ describe("orphan reaper reclaim", () => {
 		const result = await reapOrphanedDaemons();
 		expect(result.reaped).toBe(0);
 		expect(pidAlive(LIVE_PID)).toBe(true);
-		expect(pidAlive(daemon.pid)).toBe(true);
+		expect(pidAlive(listener.pid)).toBe(true);
 	}, 30_000);
 });
 
@@ -185,6 +209,8 @@ describe("orphan reaper reclaim", () => {
  * boot target a dead port.
  */
 afterAll(() => {
-	rmSync(PORT_FILE, { force: true });
-	rmSync(REGISTRY_DIR, { recursive: true, force: true });
+	rmSync(wsPortFile(), { force: true });
+	rmSync(registryDir(), { recursive: true, force: true });
+	daemon.resetSocketDirForTests(null);
+	rmSync(socketDir, { recursive: true, force: true });
 });

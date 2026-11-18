@@ -45,6 +45,7 @@ import type { Surface } from "./assembly/types.ts";
 import { AsyncJobManager } from "./async";
 import { AutoLearnController, buildAutoLearnInstructions } from "./autolearn/controller";
 import { createAutoresearchExtension } from "./autoresearch";
+import { LEGACY_PLUGIN_OWNED_SKILLS } from "./bundled-skills/index";
 import { loadCapability } from "./capability";
 import { type Rule, ruleCapability, setActiveRules } from "./capability/rule";
 import { bucketRules } from "./capability/rule-buckets";
@@ -1448,6 +1449,7 @@ function hashSkillContent(content: string): string {
 	return String(h >>> 0);
 }
 
+/** Skills a plugin owns today. */
 const PLUGIN_OWNED_BUNDLED_SKILLS = [
 	"android-emulator",
 	"widget-design",
@@ -1455,13 +1457,12 @@ const PLUGIN_OWNED_BUNDLED_SKILLS = [
 	"musepi-extension-dev",
 	"ui-ux-pro-max",
 	"board-design",
-	"musepi-contributing",
 ] as const;
 
 /** Remove only unedited legacy copies whose skill now belongs to a Cordis plugin. */
 export function migratePluginOwnedBundledSkills(skillsDir: string, manifest: Record<string, string>): boolean {
 	let dirty = false;
-	for (const name of PLUGIN_OWNED_BUNDLED_SKILLS) {
+	for (const name of [...PLUGIN_OWNED_BUNDLED_SKILLS, ...LEGACY_PLUGIN_OWNED_SKILLS]) {
 		const previousHash = manifest[name];
 		if (previousHash === undefined) continue;
 		const target = path.join(skillsDir, name, "SKILL.md");

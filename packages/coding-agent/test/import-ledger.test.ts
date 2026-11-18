@@ -36,6 +36,54 @@ describe("import ledger", () => {
 		expect(importedRecord(ledger, "codex", "abc")).toBeNull();
 	});
 
+	test("two sessions sharing an id stay apart by path", async () => {
+		const agentDir = tempDir();
+		const first = path.join(tempDir(), "first.jsonl");
+		const second = path.join(tempDir(), "second.jsonl");
+		fs.writeFileSync(first, "{}\n");
+		fs.writeFileSync(second, "{}\n");
+		// Kimi used to name every agent file `main`; the path is what tells
+		// two sessions with the same id apart.
+		await recordImportedSession(
+			{
+				source: "kimicode",
+				sourceId: "main",
+				sourcePath: "/s/a",
+				sessionId: "copy-a",
+				sessionFile: first,
+				importedAt: 1,
+			},
+			agentDir,
+		);
+		await recordImportedSession(
+			{
+				source: "kimicode",
+				sourceId: "main",
+				sourcePath: "/s/b",
+				sessionId: "copy-b",
+				sessionFile: second,
+				importedAt: 2,
+			},
+			agentDir,
+		);
+		const ledger = await loadImportLedger(agentDir);
+		expect(importedRecord(ledger, "kimicode", "main", "/s/a")?.sessionId).toBe("copy-a");
+		expect(importedRecord(ledger, "kimicode", "main", "/s/b")?.sessionId).toBe("copy-b");
+	});
+
+	test("a record stored without a path still resolves by id", async () => {
+		const agentDir = tempDir();
+		const sessionFile = path.join(tempDir(), "legacy.jsonl");
+		fs.writeFileSync(sessionFile, "{}\n");
+		await recordImportedSession(
+			{ source: "claude", sourceId: "abc", sessionId: "old-copy", sessionFile, importedAt: 1 },
+			agentDir,
+		);
+		expect(importedRecord(await loadImportLedger(agentDir), "claude", "abc", "/now/known")?.sessionId).toBe(
+			"old-copy",
+		);
+	});
+
 	test("a deleted copy is not treated as imported", async () => {
 		const agentDir = tempDir();
 		const sessionFile = path.join(tempDir(), "gone.jsonl");

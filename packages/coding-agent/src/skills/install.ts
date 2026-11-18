@@ -19,6 +19,7 @@ import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { parseGitUrl } from "../extensibility/plugins/shared/git-url";
+import { writeSkillSource } from "./skill-source";
 
 export interface InstallSkillOptions {
 	url: string;
@@ -133,9 +134,36 @@ export async function shallowClone(url: string, opts: { cwd?: string; signal?: A
 /** Resolve + copy half of the git installer, split from the clone so the
  *  clone can take an AbortSignal (marketplace install cancel path rides it).
  *  Caller owns the scratch dir. */
+/** Strip credentials from a recorded source URL: the sidecar is plain text. */
+export function redactSourceUrl(raw: string): string {
+	// Only HTTP(S) URLs carry credentials. A Windows path (`C:\...`) parses as
+	// a `c:` URL and would come back lowercased and with slashes rewritten.
+	if (!/^https?:\/\//i.test(raw)) return raw;
+	try {
+		const url = new URL(raw);
+		url.username = "";
+		url.password = "";
+		return url.toString();
+	} catch {
+		return raw;
+	}
+}
+
+/** HEAD commit of a clone; null when git is unavailable or the dir is not a repo. */
+export async function gitHead(dir: string): Promise<string | null> {
+	try {
+		const proc = Bun.spawn(["git", "-C", dir, "rev-parse", "HEAD"], { stdout: "pipe", stderr: "ignore" });
+		if ((await proc.exited) !== 0) return null;
+		const text = (await new Response(proc.stdout as ReadableStream).text()).trim();
+		return /^[0-9a-f]{7,40}$/i.test(text) ? text : null;
+	} catch {
+		return null;
+	}
+}
+
 async function installFromClonedRepo(
 	scratch: string,
-	opts: { subdir?: string; name?: string; overwrite?: boolean; destRoot: string },
+	opts: { subdir?: string; name?: string; overwrite?: boolean; destRoot: string; url: string },
 ): Promise<InstalledSkill> {
 	const repoDir = path.join(scratch, "repo");
 	const skillDir = resolveSkillDir(repoDir, opts.subdir);
@@ -155,6 +183,15 @@ async function installFromClonedRepo(
 		throw new Error(`skill "${name}" already exists (pass overwrite to replace)`);
 	}
 	await cp(skillDir, dest, { recursive: true });
+	const commit = await gitHead(repoDir);
+	await writeSkillSource(dest, {
+		schemaVersion: 1,
+		source: "git",
+		url: redactSourceUrl(opts.url),
+		...(opts.subdir ? { subdir: opts.subdir } : {}),
+		...(commit ? { commit } : {}),
+		installedAt: new Date().toISOString(),
+	});
 	return { name, dir: dest };
 }
 
@@ -169,7 +206,7 @@ export async function installSkillFromGit(opts: InstallSkillOptions): Promise<In
 
 	const scratch = await shallowClone(source, { cwd: opts.cwd ?? process.cwd(), signal: opts.signal });
 	try {
-		return await installFromClonedRepo(scratch, opts);
+		return await installFromClonedRepo(scratch, { ...opts, url: source });
 	} finally {
 		await rm(scratch, { recursive: true, force: true }).catch(() => {});
 	}

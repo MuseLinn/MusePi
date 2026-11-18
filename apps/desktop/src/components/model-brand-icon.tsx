@@ -58,6 +58,7 @@ import Yi from "@lobehub/icons/es/Yi";
 import ZenMux from "@lobehub/icons/es/ZenMux";
 import Zhipu from "@lobehub/icons/es/Zhipu";
 import type { ReactNode } from "react";
+import { useBrandIconStyle } from "../lib/brand-icon-style";
 import { Icon } from "../vendor/oc-icons";
 
 /**
@@ -85,38 +86,49 @@ export function ModelBrandIcon({
 	modelId: string;
 	size?: number;
 }): ReactNode {
-	const BrandIcon = brandFor(provider, modelId);
+	const style = useBrandIconStyle();
+	const pair = brandFor(provider, modelId);
+	const BrandIcon = style === "color" ? (pair?.color ?? pair?.mono) : pair?.mono;
 	if (BrandIcon) return <BrandIcon size={size} className="flex-shrink-0" />;
 	return <Icon name="ai-agent" className="flex-shrink-0" style={{ width: size, height: size }} />;
 }
 
 type BrandComponent = (props: { size?: number; className?: string }) => ReactNode;
+interface BrandPair {
+	mono: BrandComponent;
+	color?: BrandComponent;
+}
 
-const brand = (component: unknown): BrandComponent => component as BrandComponent;
+/** A default deep import is the Mono component; `.Color` is on the same function. */
+function pair(component: unknown): BrandPair {
+	const mono = component as BrandComponent;
+	const colour = (component as { Color?: unknown }).Color;
+	return colour ? { mono, color: colour as BrandComponent } : { mono };
+}
 
 /** Map a provider (or model id) to a Lobe Icons brand component, or null. */
-function brandFor(provider: string, modelId: string): BrandComponent | null {
+function brandFor(provider: string, modelId: string): BrandPair | null {
 	// 1. Exact provider name match
 	const exact = PROVIDER_MAP.get(provider.toLowerCase().trim());
 	if (exact) return exact;
 
 	// 2. Fallback: match by model id patterns (custom providers, bare SKUs)
 	const model = modelId.toLowerCase();
-	if (model.includes("claude")) return brand(Claude);
+	if (model.includes("claude")) return pair(Claude);
 	if (model.includes("gpt") || model.includes("o1") || model.includes("o3") || model.includes("o4"))
-		return brand(OpenAI);
-	if (model.includes("gemini")) return brand(Gemini);
-	if (model.includes("grok")) return brand(Grok);
-	if (model.includes("deepseek")) return brand(DeepSeek);
-	if (model.includes("qwen") || model.includes("qwq") || model.includes("qvq")) return brand(Qwen);
+		return pair(OpenAI);
+	if (model.includes("gemini")) return pair(Gemini);
+	if (model.includes("grok")) return pair(Grok);
+	if (model.includes("deepseek")) return pair(DeepSeek);
+	if (model.includes("qwen") || model.includes("qwq") || model.includes("qvq")) return pair(Qwen);
 	// kimi-code serves bare SKUs (`k3`, `k3-256k`) with no family token in the id.
-	if (model.includes("kimi") || model.includes("moonshot") || /^k[23](?:\.\d)?(?:-|$)/.test(model)) return brand(Kimi);
-	if (model.includes("glm")) return brand(Zhipu);
-	if (/^step[-_.]/.test(model)) return brand(Stepfun);
-	if (model.includes("minimax") || model.includes("abab")) return brand(Minimax);
-	if (model.includes("mimo")) return brand(XiaomiMiMo);
-	if (model.includes("hunyuan") || model.includes("hy3")) return brand(Hunyuan);
-	if (model.includes("llama")) return brand(Meta);
+	if (model.includes("kimi") || model.includes("moonshot") || /^k[23](?:\.\d)?(?:-|$)/.test(model)) return pair(Kimi);
+	if (model.includes("glm")) return pair(Zhipu);
+	if (/^step[-_.]/.test(model)) return pair(Stepfun);
+	if (model.includes("minimax") || model.includes("abab")) return pair(Minimax);
+	if (model.includes("mimo")) return pair(XiaomiMiMo);
+	if (model.includes("hunyuan") || model.includes("hy3")) return pair(Hunyuan);
+	if (model.includes("llama")) return pair(Meta);
 	if (
 		model.includes("mistral") ||
 		model.includes("mixtral") ||
@@ -125,94 +137,94 @@ function brandFor(provider: string, modelId: string): BrandComponent | null {
 		model.includes("devstral") ||
 		model.includes("pixtral")
 	)
-		return brand(Mistral);
-	if (model.includes("doubao")) return brand(Doubao);
-	if (model.includes("ernie") || model.includes("wenxin")) return brand(Wenxin);
-	if (/(^|[/_])yi[-_.]/.test(model)) return brand(Yi);
-	if (model.includes("internlm")) return brand(InternLM);
-	if (model.includes("sensenova")) return brand(SenseNova);
-	if (model.includes("cohere") || /(^|[/_])command[-_.+]/.test(model)) return brand(Cohere);
-	if (model.includes("nemotron")) return brand(Nvidia);
-	if (/(^|[/_])phi[-_.]/.test(model)) return brand(Microsoft);
-	if (/(^|[/_])solar[-_.]/.test(model)) return brand(Upstage);
+		return pair(Mistral);
+	if (model.includes("doubao")) return pair(Doubao);
+	if (model.includes("ernie") || model.includes("wenxin")) return pair(Wenxin);
+	if (/(^|[/_])yi[-_.]/.test(model)) return pair(Yi);
+	if (model.includes("internlm")) return pair(InternLM);
+	if (model.includes("sensenova")) return pair(SenseNova);
+	if (model.includes("cohere") || /(^|[/_])command[-_.+]/.test(model)) return pair(Cohere);
+	if (model.includes("nemotron")) return pair(Nvidia);
+	if (/(^|[/_])phi[-_.]/.test(model)) return pair(Microsoft);
+	if (/(^|[/_])solar[-_.]/.test(model)) return pair(Upstage);
 
 	return null;
 }
 
-const PROVIDER_MAP = new Map<string, BrandComponent>([
-	["agnes", brand(AgnesAI)],
-	["agnes-global", brand(AgnesAI)],
-	["alibaba", brand(Alibaba)],
-	["alibaba-coding-plan", brand(Alibaba)],
-	["alibaba-token-plan", brand(Alibaba)],
-	["amazon-bedrock", brand(Bedrock)],
-	["anthropic", brand(Anthropic)],
-	["azure", brand(Azure)],
-	["baseten", brand(Baseten)],
-	["bedrock-mantle", brand(Bedrock)],
-	["cerebras", brand(Cerebras)],
-	["claude", brand(Claude)],
-	["cloudflare-ai-gateway", brand(Cloudflare)],
-	["cursor", brand(Cursor)],
-	["deepseek", brand(DeepSeek)],
-	["devin", brand(Devin)],
-	["doubao", brand(Doubao)],
-	["fireworks", brand(Fireworks)],
-	["gemini", brand(Gemini)],
-	["github-copilot", brand(GithubCopilot)],
-	["gmi-cloud", brand(GmiCloud)],
-	["google", brand(Google)],
-	["google-antigravity", brand(Google)],
-	["google-gemini-cli", brand(GeminiCLI)],
-	["google-vertex", brand(VertexAI)],
-	["grok", brand(Grok)],
-	["groq", brand(Groq)],
-	["huggingface", brand(HuggingFace)],
-	["hunyuan", brand(Hunyuan)],
-	["kilo", brand(KiloCode)],
-	["kimi", brand(Kimi)],
-	["kimi-code", brand(Kimi)],
-	["meta", brand(Meta)],
-	["minimax", brand(Minimax)],
-	["minimax-cn", brand(Minimax)],
-	["minimax-code", brand(Minimax)],
-	["minimax-code-cn", brand(Minimax)],
-	["mistral", brand(Mistral)],
-	["moonshot", brand(Moonshot)],
-	["novita", brand(Novita)],
-	["nvidia", brand(Nvidia)],
-	["ollama", brand(Ollama)],
-	["ollama-cloud", brand(Ollama)],
-	["openai", brand(OpenAI)],
-	["openai-codex", brand(OpenAI)],
-	["opencode", brand(OpenCode)],
-	["opencode-go", brand(OpenCode)],
-	["opencode-zen", brand(OpenCode)],
-	["openrouter", brand(OpenRouter)],
-	["perplexity", brand(Perplexity)],
-	["qianfan", brand(BaiduCloud)],
-	["qwen", brand(Qwen)],
-	["qwen-portal", brand(Qwen)],
-	["sakana", brand(Sakana)],
-	["siliconcloud", brand(SiliconCloud)],
-	["siliconflow", brand(SiliconCloud)],
-	["spark", brand(Spark)],
-	["stepplan", brand(Stepfun)],
-	["stepplan-global", brand(Stepfun)],
-	["together", brand(Together)],
-	["venice", brand(Venice)],
-	["vercel-ai-gateway", brand(Vercel)],
-	["vertexai", brand(VertexAI)],
-	["volcengine", brand(Volcengine)],
-	["wafer-serverless", brand(Wafer)],
-	["xai", brand(XAI)],
-	["xai-oauth", brand(XAI)],
-	["xiaomi", brand(XiaomiMiMo)],
-	["xiaomi-token-plan-ams", brand(XiaomiMiMo)],
-	["xiaomi-token-plan-cn", brand(XiaomiMiMo)],
-	["xiaomi-token-plan-sgp", brand(XiaomiMiMo)],
-	["zai", brand(Zhipu)],
-	["zenmux", brand(ZenMux)],
-	["zhipu", brand(Zhipu)],
-	["zhipu-coding-plan", brand(Zhipu)],
+const PROVIDER_MAP = new Map<string, BrandPair>([
+	["agnes", pair(AgnesAI)],
+	["agnes-global", pair(AgnesAI)],
+	["alibaba", pair(Alibaba)],
+	["alibaba-coding-plan", pair(Alibaba)],
+	["alibaba-token-plan", pair(Alibaba)],
+	["amazon-bedrock", pair(Bedrock)],
+	["anthropic", pair(Anthropic)],
+	["azure", pair(Azure)],
+	["baseten", pair(Baseten)],
+	["bedrock-mantle", pair(Bedrock)],
+	["cerebras", pair(Cerebras)],
+	["claude", pair(Claude)],
+	["cloudflare-ai-gateway", pair(Cloudflare)],
+	["cursor", pair(Cursor)],
+	["deepseek", pair(DeepSeek)],
+	["devin", pair(Devin)],
+	["doubao", pair(Doubao)],
+	["fireworks", pair(Fireworks)],
+	["gemini", pair(Gemini)],
+	["github-copilot", pair(GithubCopilot)],
+	["gmi-cloud", pair(GmiCloud)],
+	["google", pair(Google)],
+	["google-antigravity", pair(Google)],
+	["google-gemini-cli", pair(GeminiCLI)],
+	["google-vertex", pair(VertexAI)],
+	["grok", pair(Grok)],
+	["groq", pair(Groq)],
+	["huggingface", pair(HuggingFace)],
+	["hunyuan", pair(Hunyuan)],
+	["kilo", pair(KiloCode)],
+	["kimi", pair(Kimi)],
+	["kimi-code", pair(Kimi)],
+	["meta", pair(Meta)],
+	["minimax", pair(Minimax)],
+	["minimax-cn", pair(Minimax)],
+	["minimax-code", pair(Minimax)],
+	["minimax-code-cn", pair(Minimax)],
+	["mistral", pair(Mistral)],
+	["moonshot", pair(Moonshot)],
+	["novita", pair(Novita)],
+	["nvidia", pair(Nvidia)],
+	["ollama", pair(Ollama)],
+	["ollama-cloud", pair(Ollama)],
+	["openai", pair(OpenAI)],
+	["openai-codex", pair(OpenAI)],
+	["opencode", pair(OpenCode)],
+	["opencode-go", pair(OpenCode)],
+	["opencode-zen", pair(OpenCode)],
+	["openrouter", pair(OpenRouter)],
+	["perplexity", pair(Perplexity)],
+	["qianfan", pair(BaiduCloud)],
+	["qwen", pair(Qwen)],
+	["qwen-portal", pair(Qwen)],
+	["sakana", pair(Sakana)],
+	["siliconcloud", pair(SiliconCloud)],
+	["siliconflow", pair(SiliconCloud)],
+	["spark", pair(Spark)],
+	["stepplan", pair(Stepfun)],
+	["stepplan-global", pair(Stepfun)],
+	["together", pair(Together)],
+	["venice", pair(Venice)],
+	["vercel-ai-gateway", pair(Vercel)],
+	["vertexai", pair(VertexAI)],
+	["volcengine", pair(Volcengine)],
+	["wafer-serverless", pair(Wafer)],
+	["xai", pair(XAI)],
+	["xai-oauth", pair(XAI)],
+	["xiaomi", pair(XiaomiMiMo)],
+	["xiaomi-token-plan-ams", pair(XiaomiMiMo)],
+	["xiaomi-token-plan-cn", pair(XiaomiMiMo)],
+	["xiaomi-token-plan-sgp", pair(XiaomiMiMo)],
+	["zai", pair(Zhipu)],
+	["zenmux", pair(ZenMux)],
+	["zhipu", pair(Zhipu)],
+	["zhipu-coding-plan", pair(Zhipu)],
 ]);

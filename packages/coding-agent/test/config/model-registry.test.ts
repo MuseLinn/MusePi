@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AuthStorage } from "@musepi/pi-ai";
@@ -12,6 +12,7 @@ function createStubAuthStorage(): AuthStorage {
 		setFallbackResolver: () => {},
 		clearConfigApiKeys: () => {},
 		hasAuth: () => false,
+		peekApiKey: () => undefined,
 		getApiKey: async () => undefined,
 	};
 	return stub as unknown as AuthStorage;
@@ -178,6 +179,85 @@ describe("ModelRegistry", () => {
 		vi.spyOn(registry, "getApiKey").mockRejectedValue(new Error("auth failed"));
 
 		expect(await registry.getApiKeyAndHeaders(model)).toEqual({ ok: false, error: "auth failed" });
+	});
+
+	test("a custom provider's label names it while its id stays the identity", () => {
+		const modelsPath = path.join(tmpDir, "models.yaml");
+		writeFileSync(
+			modelsPath,
+			[
+				"providers:",
+				"  my-gw:",
+				"    label: My Gateway",
+				"    baseUrl: https://gw.example/v1",
+				"    api: openai-completions",
+				"    auth: none",
+				"    models:",
+				"      - id: m1",
+				"  unlabeled:",
+				"    baseUrl: https://bare.example/v1",
+				"    api: openai-completions",
+				"    auth: none",
+				"    models:",
+				"      - id: m2",
+				"",
+			].join("\n"),
+		);
+		const labeled = new ModelRegistry(createStubAuthStorage(), modelsPath);
+		expect(labeled.getError()).toBeUndefined();
+		// The picker's header and model rows read the label; refs, favorites and
+		// role pins keep the provider id.
+		expect(labeled.getProviderLabel("my-gw")).toBe("My Gateway");
+		expect(labeled.find("my-gw", "m1")?.provider).toBe("my-gw");
+		expect(labeled.getProviderLabel("unlabeled")).toBeUndefined();
+	});
+
+	test("an empty label fails the file instead of naming a provider with nothing", () => {
+		const modelsPath = path.join(tmpDir, "models.yaml");
+		writeFileSync(
+			modelsPath,
+			["providers:", "  my-gw:", '    label: " "', "    baseUrl: https://gw.example/v1", ""].join("\n"),
+		);
+		const broken = new ModelRegistry(createStubAuthStorage(), modelsPath);
+		expect(broken.getError()).toBeDefined();
+		expect(broken.getProviderLabel("my-gw")).toBeUndefined();
+	});
+
+	test("refreshIfStale reloads the custom catalog only after models.yml changed on disk", async () => {
+		// A provider plugin (magpie) rewrites providers.magpie.models without
+		// going through the registry. A read must catch up on the next call, and
+		// an unchanged file must not rebuild the catalog.
+		const modelsPath = path.join(tmpDir, "models.yaml");
+		const writeModels = (ids: string[]) =>
+			writeFileSync(
+				modelsPath,
+				[
+					"providers:",
+					"  gateway:",
+					"    baseUrl: http://127.0.0.1:9991",
+					"    api: openai-completions",
+					"    auth: none",
+					"    models:",
+					...ids.map(id => `      - id: ${id}`),
+					"",
+				].join("\n"),
+			);
+		writeModels(["first-model", "removed-model"]);
+		const staleRegistry = new ModelRegistry(createStubAuthStorage(), modelsPath);
+		expect(staleRegistry.find("gateway", "added-model")).toBeUndefined();
+
+		expect(await staleRegistry.refreshIfStale()).toBe(false);
+
+		const bumped = new Date(statSync(modelsPath).mtimeMs + 1_000);
+		writeModels(["first-model", "added-model"]);
+		utimesSync(modelsPath, bumped, bumped);
+		// The in-memory snapshot still holds the boot-time list.
+		expect(staleRegistry.find("gateway", "added-model")).toBeUndefined();
+
+		expect(await staleRegistry.refreshIfStale()).toBe(true);
+		expect(staleRegistry.find("gateway", "added-model")).toBeDefined();
+		expect(staleRegistry.find("gateway", "removed-model")).toBeUndefined();
+		expect(await staleRegistry.refreshIfStale()).toBe(false);
 	});
 
 	test("a configured provider baseUrl wins before any model is discovered", () => {

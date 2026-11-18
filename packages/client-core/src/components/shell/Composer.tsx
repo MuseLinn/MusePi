@@ -21,7 +21,6 @@ import { t } from "../../i18n/index.js";
 import type { JobsRpc } from "../../lib/async-jobs";
 import { attachmentReferenceLine, composePromptWithAttachments, uploadAttachment } from "../../lib/attachment-upload";
 import { useBackLayer } from "../../lib/back-stack";
-import { isMobileShell } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
 import { draftKey, readDraft, writeDraft } from "../../lib/drafts";
 import { haptic } from "../../lib/haptics";
@@ -37,6 +36,7 @@ import {
 import { useShellLayout } from "../../lib/responsive-shell";
 import { useMorphTarget } from "../../lib/scene-morph";
 import { useScrollShadow } from "../../lib/scroll-shadow";
+import { isMobileSurface } from "../../lib/surface";
 import type { TtsSnapshot } from "../../lib/tts";
 import { readSttLangPref, useTts, useTtsSnapshot } from "../../lib/tts";
 import { useGuestSelector } from "../../lib/use-guest";
@@ -48,21 +48,7 @@ import { ContextRing } from "./ContextRing";
 import { MatrixLoader } from "./MatrixLoader";
 import { MessageQueueSheet, useMessageQueue } from "./MessageQueueSheet";
 import { SuggestionChips } from "./SuggestionChips";
-
-/** Thinking ladder, display order (TUI `--thinking` parity; labels reuse the
- *  transcript-domain "thinking *" keys). `auto` = session sentinel. */
-const THINKING_LADDER = ["off", "minimal", "low", "medium", "high", "xhigh", "max", "auto"] as const;
-type ThinkingLadder = (typeof THINKING_LADDER)[number];
-const THINKING_KEY: Record<ThinkingLadder, Parameters<typeof t>[0]> = {
-	off: "transcript.thinkingOff",
-	minimal: "transcript.thinkingMinimal",
-	low: "transcript.thinkingLow",
-	medium: "transcript.thinkingMedium",
-	high: "transcript.thinkingHigh",
-	xhigh: "transcript.thinkingXhigh",
-	max: "transcript.thinkingMax",
-	auto: "transcript.thinkingAuto",
-};
+import { isThinkingLadder, THINKING_KEY, THINKING_LADDER, type ThinkingLadder } from "./thinking-level";
 
 export interface ComposerProps {
 	client: SessionClient;
@@ -974,11 +960,7 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 	});
 	// The thinking level's word is hidden at phone widths (the model name needs
 	// that line); the icon's accessible name still carries the level.
-	const thinkingLabel = t(
-		THINKING_KEY[
-			(THINKING_LADDER as readonly string[]).includes(thinking ?? "") ? (thinking as ThinkingLadder) : "auto"
-		],
-	);
+	const thinkingLabel = t(THINKING_KEY[isThinkingLadder(thinking) ? thinking : "auto"]);
 	// editor-draft mode keeps submit enabled even for whitespace-only prefill;
 	// image/file-only prompts (no caption) are also submittable. Voice capture
 	// owns the input slot while active — sending mid-recording would be
@@ -1374,7 +1356,7 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 									: readOnly
 										? t("composer.readOnlySessionWatching")
 										: canPrompt
-											? isMobileShell()
+											? isMobileSurface()
 												? t("composer.askAnythingShort")
 												: t("composer.askAnythingCommands.info")
 											: t("composer.waitingSession")
@@ -1734,9 +1716,7 @@ function ModelThinkingSheet({
 	const [stage, setStage] = useState<"hidden" | "settings.open" | "closing">(open ? "settings.open" : "hidden");
 	const model = useGuestSelector(client, s => s.state?.model ?? null);
 	const thinking = useGuestSelector(client, s => s.state?.thinkingLevel ?? null);
-	const current: ThinkingLadder = (THINKING_LADDER as readonly string[]).includes(thinking ?? "")
-		? (thinking as ThinkingLadder)
-		: "auto";
+	const current: ThinkingLadder = isThinkingLadder(thinking) ? thinking : "auto";
 	useEffect(() => {
 		setStage(prev => (open ? "settings.open" : prev === "settings.open" ? "closing" : "hidden"));
 	}, [open]);

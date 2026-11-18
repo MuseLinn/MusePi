@@ -1,0 +1,5 @@
+# Consistency record for github-connector.md / github-connector.zh-CN.md
+# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
+# in the same PR, then re-record: bun run verify-translation-pairing --write docs/github-connector
+github-connector.md: e82b23aaec139a964a5aa4341e234c3789123c47
+github-connector.zh-CN.md: 1b4a887e50d164f708b96d96fc04d427745584e8

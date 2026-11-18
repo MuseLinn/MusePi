@@ -1,5 +1,6 @@
 ---
 name: musepi-contributing
+version: 1.0.0
 description: MusePi 仓库提交规范助手——帮用户按项目模板与 CONTRIBUTING 规范起草/提交 GitHub issue、pull request、commit message 与 changelog，以及跑 release 流程。触发：用户要"提 issue/PR"、"写 PR body"、"提交代码"、"commit 规范"、"发版/release"、或询问仓库贡献流程。
 ---
 

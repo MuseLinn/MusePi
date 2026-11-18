@@ -1,6 +1,6 @@
 /**
  * 能力缝声明（索引：docs/capability-seams.md「Cordis 能力中心」）：
- * - 名称+ns：`capability-center` 桌面 Cordis 插件、`app.capability` single 槽位。
+ * - 名称+ns：`capability-center` 桌面 Cordis 插件、`main.capability` single 槽位。
  * - 输入：页面 tab、返回与 tab 切换回调、daemon RPC。
  * - 输出：技能、普通包/bundle 管理和市场整页。
  * - 生命周期：页面随插件 fiber 与槽位挂载/卸载，应用壳不保留静态备用页。
@@ -21,7 +21,7 @@ export const provide = [] as const;
 
 export function apply(ctx: CapabilityPluginApi): void {
 	ctx.slots.register({
-		slot: "app.capability",
+		slot: "main.capability",
 		moduleUrl: "./page.tsx",
 		label: "能力中心",
 	});

@@ -10,7 +10,18 @@
  */
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
-if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+// A suite that unregisters the shared DOM in its afterAll leaves later files
+// without it; `isRegistered` can still read true while the globals are gone.
+// Probe a property happy-dom actually provides before trusting the flag, and
+// re-register a fresh window when it is missing.
+const domUsable =
+	GlobalRegistrator.isRegistered &&
+	typeof globalThis.window?.matchMedia === "function" &&
+	typeof globalThis.localStorage?.clear === "function";
+if (!domUsable) {
+	if (GlobalRegistrator.isRegistered) GlobalRegistrator.unregister();
+	GlobalRegistrator.register();
+}
 (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Outside Electron `openExternalUrl()` falls back to `window.open()`, and

@@ -1,7 +1,7 @@
 /**
  * Transcript message-content renderers: pure entry -> JSX building blocks
  * (user/assistant/tool bodies, thinking blocks, round fold headers, TTSR &
- * advisor cards) plus the transcript.node compat seat and its dispatch
+ * advisor cards) plus the conversation.chat.node compat seat and its dispatch
  * helper. Extracted from Transcript.tsx — the windowed list, Row chrome and
  * EntryRow dispatch stay there; they import from this module.
  */
@@ -231,7 +231,7 @@ export function isBranchFormingEntry(entry: SessionEntry): boolean {
 	return readLiveCustomMessage(entry.message) === undefined;
 }
 
-/** transcript.node seat 派发键 (DSH `conversation.chat.node` entryKey 类比):
+/** conversation.chat.node seat 派发键 (DSH `conversation.chat.node` entryKey 类比):
  *  entry / message role -> 稳定渲染器 kind 字符串。宿主(调用方)按此派发到
  *  注册的 seat 渲染器;内置类型(a message/compaction/…) 走内建渲染,扩展可
  *  追加 (augment,经 `children`) 或贡献新 kind。 */
@@ -275,7 +275,7 @@ export function transcriptNodeKind(entry: SessionEntry): string {
 	}
 }
 
-/** transcript.node seat 注入 (DSH `conversation.chat.node` analog):宿主
+/** conversation.chat.node seat 注入 (DSH `conversation.chat.node` analog):宿主
  *  (GUI) 提供按条目派发的渲染器 —— 按 `transcriptNodeKind(entry)` 分发,
  *  可用 `children`(内建 MusePi 渲染)增强/追加,或独立渲染。缺省 -> 仅内建
  *  渲染(inert)。调用方 MUST memoize 该回调(其身份参与 EntryRow 的
@@ -319,14 +319,14 @@ export interface MusePiCompatHost {
 
 export function compatHostRenderer(kind: string): ((node: TranscriptNodeInjection) => ReactNode) | undefined {
 	const host = (globalThis as { MusePiCompatHost?: MusePiCompatHost }).MusePiCompatHost;
-	const entry = host?.get("transcript.node", kind);
+	const entry = host?.get("conversation.chat.node", kind);
 	if (!entry) return undefined;
 	const { Component, extensionId } = entry;
 	return (node: TranscriptNodeInjection) =>
 		createElement(Component, {
 			node: { entry: node.entry, kind: node.kind, children: node.children },
 			extensionId,
-			slot: "transcript.node",
+			slot: "conversation.chat.node",
 			children: node.children,
 		});
 }

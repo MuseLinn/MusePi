@@ -1,5 +1,6 @@
 import type { OfficeQuoteAnchor, PdfQuoteAnchor } from "@musepi/pi-wire";
 import type { EditorHistoryDirection, EditorLocation } from "./editor-navigation";
+import { shellPlatform } from "./electron";
 
 /** The file surface keeps its persisted id while its renderer is plugin-owned. */
 export const FILE_WORKSPACE_SURFACE = "files";
@@ -57,6 +58,18 @@ function filePreviewBufferKey(path: string): string {
 export function resolveFilePreviewPath(cwd: string, path: string): string {
 	if (path.startsWith("/") || path.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(path)) return path;
 	return `${cwd.replace(/[\\/]+$/, "")}/${path}`;
+}
+
+/**
+ * Absolute path for OS-level file actions (copy path, open with). Tree paths
+ * are POSIX-style while a Windows cwd is native; join them with the host's
+ * separator so Explorer and the clipboard receive one canonical path.
+ */
+export function resolveNativeFilePath(cwd: string, path: string): string {
+	const absolute = resolveFilePreviewPath(cwd, path);
+	if (shellPlatform() !== "win32" && !/^[A-Za-z]:[\\/]/.test(cwd) && !cwd.startsWith("\\\\")) return absolute;
+	const normalized = absolute.replace(/\//g, "\\");
+	return normalized.startsWith("\\\\") ? `\\\\${normalized.slice(2)}` : normalized;
 }
 
 /**

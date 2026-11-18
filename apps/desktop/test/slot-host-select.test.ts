@@ -1,6 +1,7 @@
 import "./happy-dom-shim";
 import { describe, expect, it } from "bun:test";
 import {
+	mergeListSeatEntries,
 	type SlotComponent,
 	selectLaunchablePanelTabs,
 	selectPanelTabComponent,
@@ -12,7 +13,7 @@ function comp(over: Partial<SlotComponent> & { slot: string; extensionId: string
 	return { order: 0, ...over };
 }
 
-/** transcript.node seat 派发 (DSH entryKey 类比):按 kind 命中 entryKinds,
+/** conversation.chat.node seat 派发 (DSH entryKey 类比):按 kind 命中 entryKinds,
  * 无 entryKinds 不参与;order 升序;空命中 -> 空数组(seat 回退内建)。 */
 describe("selectTranscriptNodeComponents", () => {
 	it("empty list -> empty selection (seat falls back to built-in)", () => {
@@ -20,13 +21,13 @@ describe("selectTranscriptNodeComponents", () => {
 	});
 
 	it("matches a component whose entryKinds includes the kind", () => {
-		const a = comp({ slot: "transcript.node", extensionId: "e1", code: "c", entryKinds: ["message:user"] });
+		const a = comp({ slot: "conversation.chat.node", extensionId: "e1", code: "c", entryKinds: ["message:user"] });
 		expect(selectTranscriptNodeComponents([a], "message:user")).toEqual([a]);
 	});
 
 	it("kind-scoped: a renderer does NOT leak to kinds it did not declare", () => {
 		const a = comp({
-			slot: "transcript.node",
+			slot: "conversation.chat.node",
 			extensionId: "e1",
 			code: "c",
 			entryKinds: ["message:assistant", "message:tool_result"],
@@ -43,14 +44,14 @@ describe("selectTranscriptNodeComponents", () => {
 
 	it("preserves ascending order", () => {
 		const low = comp({
-			slot: "transcript.node",
+			slot: "conversation.chat.node",
 			extensionId: "low",
 			code: "c",
 			order: 1,
 			entryKinds: ["message:user"],
 		});
 		const high = comp({
-			slot: "transcript.node",
+			slot: "conversation.chat.node",
 			extensionId: "high",
 			code: "c",
 			order: 10,
@@ -114,5 +115,28 @@ describe("compiled plugin host bridges", () => {
 		const bridge = (window as unknown as { MusePiPromptDialog?: Record<string, unknown> }).MusePiPromptDialog;
 		expect(typeof bridge?.useConfirm).toBe("function");
 		expect(typeof bridge?.usePrompt).toBe("function");
+	});
+});
+
+/** A list seat may hold several entries; an `id` makes one entry addressable,
+ *  so a later contributor replaces that entry instead of adding a second one. */
+describe("mergeListSeatEntries", () => {
+	it("keeps entries without an id side by side", () => {
+		const a = comp({ slot: "conversation.composer.dock", extensionId: "e1", code: "c" });
+		const b = comp({ slot: "conversation.composer.dock", extensionId: "e2", code: "c" });
+		expect(mergeListSeatEntries([a, b])).toEqual([a, b]);
+	});
+
+	it("replaces one entry by id in place and keeps the others", () => {
+		const activity = comp({ slot: "conversation.composer.dock", extensionId: "stats", code: "a", id: "activity" });
+		const usage = comp({ slot: "conversation.composer.dock", extensionId: "stats", code: "u", id: "usage" });
+		const replacement = comp({
+			slot: "conversation.composer.dock",
+			extensionId: "mine",
+			code: "u2",
+			id: "usage",
+			order: 5,
+		});
+		expect(mergeListSeatEntries([activity, usage, replacement])).toEqual([activity, replacement]);
 	});
 });

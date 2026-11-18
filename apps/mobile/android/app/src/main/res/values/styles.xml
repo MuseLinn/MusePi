@@ -1,34 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!-- Customize your theme here. -->
+    <!-- Application theme. BridgeActivity reparents the activity to
+         AppTheme.NoActionBar in onCreate(); this one only covers the window
+         before that, so it carries the same brand colours and background. -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.DarkActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:windowBackground">@color/windowBackground</item>
     </style>
 
-    <!-- Main theme: edge-to-edge — transparent system bars so the WebView
-         paints under the status bar and gesture nav (immersive). The web UI
-         offsets itself via env(safe-area-inset-*) (viewport-fit=cover). -->
-    <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <!-- Shared body of the real (edge-to-edge) theme. values-night redefines
+         AppTheme.NoActionBar on top of this parent and overrides only the
+         system-bar icon polarity, so the two qualifiers cannot drift apart.
+
+         The parent stays AppCompat deliberately. Everything inside the window
+         is WebView and the web UI carries its own token system, so
+         Theme.Material3.* would add a dependency that no native view consumes.
+         Android 12+ dynamic colour is skipped for the same reason and because
+         it re-derives colorPrimary from the wallpaper, which would fight the
+         web accent: the brand gold has to stay the default. -->
+    <style name="AppTheme.Base" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:background">@null</item>
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <!-- First frame behind the WebView: the shell surface, not white. -->
+        <item name="android:windowBackground">@color/windowBackground</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <!-- Light theme default: dark status/nav icons on the light web bg.
+        <!-- Light default: dark status/nav icons on the light shell.
              mobile.tsx re-applies the correct style per active theme at boot. -->
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 
+    <style name="AppTheme.NoActionBar" parent="AppTheme.Base" />
 
+    <!-- Launch theme: the brand background and the app icon, so the pre-API-31
+         window matches what the API 31+ system splash draws from the same pair
+         of attributes. postSplashScreenTheme lands on the edge-to-edge theme. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@color/splashBackground</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowBackground">@drawable/splash_window_background</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

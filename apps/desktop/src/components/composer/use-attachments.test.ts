@@ -1,3 +1,4 @@
+import "../../../test/happy-dom-shim";
 import { describe, expect, test } from "bun:test";
 import {
 	attachmentFiles,

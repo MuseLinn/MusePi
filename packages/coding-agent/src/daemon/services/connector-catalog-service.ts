@@ -36,6 +36,7 @@ import {
 	runCliStatus,
 	startCliAuth,
 } from "../../connectors/cli";
+import { collectImportCandidates, importConnectors } from "../../connectors/import";
 import {
 	deleteConnectorSecrets,
 	hasConnectorSecrets,
@@ -63,6 +64,15 @@ export interface ConnectorCatalogItem {
 	id: string;
 	name: string;
 	description: string;
+	/** Chinese one-liner for a Chinese UI; absent when the source has none. */
+	descriptionZh?: string;
+	/** Two or three sentences for the expanded card. */
+	details?: string;
+	detailsZh?: string;
+	/** Promoted to the page's opening section. */
+	featured?: boolean;
+	/** How far the sign-in walk was verified for this row. */
+	verified?: "oauth" | "none" | "token" | "needs-app";
 	category?: string;
 	icon?: string;
 	docsUrl?: string;
@@ -130,7 +140,36 @@ async function commandAvailable(command: string): Promise<boolean> {
 	return Bun.which(command) !== null;
 }
 
+/**
+ * Whether the entry's credential fields are filled.
+ *
+ * A token connector needs its token; an OAuth connector that names an OAuth
+ * client needs that client's id and secret, because a vendor with no
+ * registration endpoint cannot complete a sign-in without them.
+ */
+/** Whether a pasted personal access token answers this row on its own. */
+async function hasPastedToken(entry: ConnectorCatalogEntry): Promise<boolean> {
+	const pat = entry.tokenSchema?.personalAccessToken;
+	if (!pat) return false;
+	const stored = (await readConnectorSecrets(entry.id)) ?? {};
+	return (stored[pat.field]?.length ?? 0) > 0;
+}
+
 async function tokenReady(entry: ConnectorCatalogEntry): Promise<boolean> {
+	if (entry.auth.mode === "oauth") {
+		const client = entry.tokenSchema?.oauthClient;
+		const pat = entry.tokenSchema?.personalAccessToken;
+		if (!client && !pat) return true;
+		const stored = (await readConnectorSecrets(entry.id)) ?? {};
+		// A pasted token is a complete alternative to the browser sign-in, so
+		// it satisfies the row on its own.
+		if (pat && (stored[pat.field]?.length ?? 0) > 0) return true;
+		// A pinned client id lets the row sign in on its own; a pasted token
+		// stays optional in that case.
+		if (entry.oauth?.clientId) return true;
+		if (!client) return false;
+		return (stored[client.clientIdField]?.length ?? 0) > 0 && (stored[client.clientSecretField]?.length ?? 0) > 0;
+	}
 	if (entry.auth.mode !== "token") return true;
 	if (!entry.tokenSchema) return false;
 	return hasConnectorSecrets(entry.id, requiredTokenKeys(entry));
@@ -161,6 +200,11 @@ async function toItem(
 		status,
 		sourceKind: entry.sourceKind,
 	};
+	if (entry.descriptionZh) item.descriptionZh = entry.descriptionZh;
+	if (entry.details) item.details = entry.details;
+	if (entry.detailsZh) item.detailsZh = entry.detailsZh;
+	if (entry.featured === true) item.featured = true;
+	if (entry.verified) item.verified = entry.verified;
 	if (entry.category) item.category = entry.category;
 	if (entry.icon) item.icon = entry.icon;
 	if (entry.docsUrl) item.docsUrl = entry.docsUrl;
@@ -196,6 +240,8 @@ export class ConnectorCatalogService implements DaemonService {
 		"connectors.token.save": "saveToken",
 		"connectors.cli.status": "cliStatus",
 		"connectors.cli.cancel": "cliCancel",
+		"connectors.import.scan": "importScan",
+		"connectors.import.apply": "importApply",
 	} as const;
 
 	readonly #deps: ConnectorCatalogServiceDeps;
@@ -264,7 +310,9 @@ export class ConnectorCatalogService implements DaemonService {
 	/** Re-scan every source; returns the new size and source warnings. */
 	async refresh(): Promise<{ count: number; warnings: string[] }> {
 		clearConnectorCatalogCache();
-		const catalog = await loadConnectorCatalog();
+		// A user who presses refresh is asking for the current index, not the
+		// copy that is still within its cache window.
+		const catalog = await loadConnectorCatalog({ refresh: true });
 		return { count: catalog.entries.length, warnings: catalog.warnings };
 	}
 
@@ -281,7 +329,11 @@ export class ConnectorCatalogService implements DaemonService {
 		if (!entry) throw new Error(`unknown connector: ${id}`);
 		if (entry.cli) return this.#connectCli(entry, params);
 		if (!entry.server) throw new Error(`connector has no server: ${id}`);
-		if (entry.auth.mode === "token" && !(await tokenReady(entry))) {
+		const needsCredential =
+			entry.auth.mode === "token" ||
+			entry.tokenSchema?.oauthClient !== undefined ||
+			entry.tokenSchema?.personalAccessToken !== undefined;
+		if (needsCredential && !(await tokenReady(entry))) {
 			return {
 				ok: false,
 				id,
@@ -324,7 +376,10 @@ export class ConnectorCatalogService implements DaemonService {
 			id,
 			name: entry.name,
 			serverName: connectorServerName(id),
-			needsAuth: entry.auth.mode === "oauth",
+			// A pasted token answers the row on its own, so a browser sign-in
+			// after it would be a second, unneeded step. An OAuth row with no
+			// token still needs one.
+			needsAuth: entry.auth.mode === "oauth" && !(await hasPastedToken(entry)),
 			status,
 		};
 	}
@@ -377,9 +432,14 @@ export class ConnectorCatalogService implements DaemonService {
 		const entry = catalog.entries.find(candidate => candidate.id === id);
 		if (!entry) throw new Error(`unknown connector: ${id}`);
 		const schema = entry.tokenSchema;
-		if (entry.auth.mode !== "token" || !schema) throw new Error(`connector ${id} does not use a token`);
+		const isOAuthClient = entry.auth.mode === "oauth" && schema?.oauthClient !== undefined;
+		const hasPat = schema?.personalAccessToken !== undefined;
+		if ((entry.auth.mode !== "token" && !isOAuthClient && !hasPat) || !schema) {
+			throw new Error(`connector ${id} does not use a token`);
+		}
 
 		const allowed = new Set(schema.fields.map(field => field.key));
+		if (schema.personalAccessToken) allowed.add(schema.personalAccessToken.field);
 		const values: Record<string, string> = {};
 		for (const [key, value] of Object.entries(params.values)) {
 			if (!allowed.has(key)) throw new Error(`unknown token field: ${key}`);
@@ -390,7 +450,15 @@ export class ConnectorCatalogService implements DaemonService {
 		await mergeConnectorSecrets(id, values);
 		if (!(await tokenReady(entry))) {
 			const stored = (await readConnectorSecrets(id)) ?? {};
-			const missing = requiredTokenKeys(entry).filter(key => (stored[key]?.length ?? 0) === 0);
+			const client = schema.oauthClient;
+			const pat = schema.personalAccessToken;
+			const missing = client
+				? [
+						...(pat && (stored[pat.field]?.length ?? 0) > 0 ? [] : [pat?.field].filter((k): k is string => !!k)),
+						client.clientIdField,
+						client.clientSecretField,
+					].filter(key => (stored[key]?.length ?? 0) === 0)
+				: requiredTokenKeys(entry).filter(key => (stored[key]?.length ?? 0) === 0);
 			throw new Error(`missing required token fields: ${missing.join(", ")}`);
 		}
 		return { ok: true, id, tokenSet: true };
@@ -503,6 +571,59 @@ export class ConnectorCatalogService implements DaemonService {
 			return { flowId, connectorId: flow.connectorId, status: "error", error: "CLI authorization timed out" };
 		}
 		return { flowId, connectorId: flow.connectorId, status: "pending", raw: status.raw };
+	}
+
+	/**
+	 * Servers the other agents on this machine already have configured.
+	 *
+	 * Only names and endpoint shapes cross the wire. A credential the other
+	 * agent stored in plain text is listed by field name; its value stays in
+	 * the daemon until the user picks the row.
+	 */
+	async importScan(params: { cwd?: unknown } = {}): Promise<{
+		candidates: Array<{
+			source: string;
+			name: string;
+			transport: "http" | "sse" | "stdio";
+			url?: string;
+			command?: string;
+			secretFields: string[];
+		}>;
+	}> {
+		const cwd = typeof params?.cwd === "string" && params.cwd.length > 0 ? params.cwd : this.#deps.cwd();
+		const candidates = await collectImportCandidates(cwd);
+		return {
+			candidates: candidates.map(candidate => ({
+				source: candidate.source,
+				name: candidate.name,
+				transport: candidate.transport,
+				...(candidate.url ? { url: candidate.url } : {}),
+				...(candidate.command ? { command: candidate.command } : {}),
+				secretFields: candidate.secretFields,
+			})),
+		};
+	}
+
+	/**
+	 * Import the picked servers into the user's own catalog.
+	 *
+	 * A plain-text credential moves into the encrypted secret store and the
+	 * entry keeps only a reference to it. The imported entry starts disabled:
+	 * a local command still needs the user's approval before it runs here.
+	 */
+	async importApply(params: { items?: unknown } = {}): Promise<{ imported: string[]; skipped: string[] }> {
+		const items = Array.isArray(params?.items) ? params.items : [];
+		const picked = items
+			.filter(
+				(item): item is { source: string; name: string } =>
+					typeof item === "object" && item !== null && typeof (item as { source?: unknown }).source === "string",
+			)
+			.map(item => ({ source: item.source, name: String((item as { name?: unknown }).name ?? "") }));
+		if (picked.length === 0) throw new Error("no connectors selected");
+		const result = await importConnectors(picked, { cwd: this.#deps.cwd() });
+		clearConnectorCatalogCache();
+		await this.#reload();
+		return result;
 	}
 
 	/** Cancel one CLI auth flow and stop its auth process. */

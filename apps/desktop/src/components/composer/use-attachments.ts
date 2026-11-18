@@ -1,4 +1,5 @@
 import { arrayMove } from "@dnd-kit/sortable";
+import { fileUrlFromPath } from "@musepi/client-core";
 import type { AttachmentPutResult } from "@musepi/pi-wire";
 import type { ClipboardEvent, DragEvent } from "react";
 import { useState } from "react";
@@ -313,7 +314,7 @@ export function attachmentVideoSelection(attachments: readonly ComposerAttachmen
 		const path = bridge?.getDroppedFilePath?.(a.file) ?? "";
 		if (!path) continue;
 		chipIds.add(a.id);
-		parts.push({ type: "video", mimeType: a.mimeType, url: path.startsWith("file://") ? path : `file://${path}` });
+		parts.push({ type: "video", mimeType: a.mimeType, url: fileUrlFromPath(path) });
 	}
 	return { chipIds, parts };
 }
@@ -392,7 +393,15 @@ export function attachmentDraftPayload(attachments: readonly ComposerAttachment[
  * use-draft-persistence stashes the payload under its own key, and a
  * session switch must bring the images back with the text.
  */
-export function useAttachments(rpc: RpcClient): {
+export function useAttachments(
+	rpc: RpcClient,
+	options: {
+		/** Start the send-time upload when a file chip appears (session mode).
+		 *  The draft composer has no session to send into yet and passes its
+		 *  raw handles to the create flow instead, so it opts out. */
+		stageFiles?: boolean;
+	} = {},
+): {
 	attachments: ComposerAttachment[];
 	setAttachments(next: ComposerAttachment[] | ((prev: ComposerAttachment[]) => ComposerAttachment[])): void;
 	addFiles(files: File[]): Promise<void>;
@@ -400,6 +409,7 @@ export function useAttachments(rpc: RpcClient): {
 	onDragOver(e: DragEvent): void;
 	onDrop(e: DragEvent): void;
 } {
+	const { stageFiles = true } = options;
 	const [attachments, setAttachments] = useState<ComposerAttachment[]>([]);
 
 	const addFiles = async (files: File[]): Promise<void> => {
@@ -431,7 +441,7 @@ export function useAttachments(rpc: RpcClient): {
 				// Start the upload with the chip, not with the send: a large file
 				// then overlaps with the time the user spends writing. An unsent
 				// chip leaves an unreferenced blob, which the blob GC reclaims.
-				staged: uploadOneAttachment(rpc, f, f.name).catch(() => null),
+				...(stageFiles ? { staged: uploadOneAttachment(rpc, f, f.name).catch(() => null) } : {}),
 			})),
 		]);
 		setAttachments(prev => {

@@ -2,7 +2,7 @@ import "./happy-dom-shim";
 import { afterEach, expect, it, vi } from "bun:test";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { WelcomeComposer } from "../src/components/WelcomeComposer";
+import { HeroComposer } from "../src/components/HeroComposer";
 import type { RpcClient } from "../src/lib/rpc";
 
 const roots = new Set<Root>();
@@ -22,7 +22,7 @@ it("keeps empty-state placeholder and tip static while focus mode is open", asyn
 	document.body.appendChild(container);
 	const root = createRoot(container);
 	roots.add(root);
-	await act(async () => root.render(<WelcomeComposer onSubmit={() => {}} rpc={rpc} focused />));
+	await act(async () => root.render(<HeroComposer onSubmit={() => {}} rpc={rpc} focused />));
 	const textarea = container.querySelector("textarea");
 	const tip = container.querySelector(".gui-tip");
 	const placeholder = textarea?.placeholder;
@@ -41,7 +41,7 @@ it("lets the welcome textarea claim OS file drags on its own", async () => {
 	document.body.appendChild(container);
 	const root = createRoot(container);
 	roots.add(root);
-	await act(async () => root.render(<WelcomeComposer onSubmit={() => {}} rpc={rpc} />));
+	await act(async () => root.render(<HeroComposer onSubmit={() => {}} rpc={rpc} />));
 	const textarea = container.querySelector("textarea");
 	expect(textarea).not.toBeNull();
 

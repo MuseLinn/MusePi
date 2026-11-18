@@ -30,6 +30,12 @@ export const shell = {
 	"shell.showMainWindow": "Show main window",
 	"shell.quit": "Quit",
 	"shell.newLink": "Connect another computer",
+	"shell.roleHost": "Computer",
+	"shell.roleGuest": "Guest",
+	"shell.sessionWorking": "Running",
+	"shell.sessionPaused": "Paused",
+	/** The workspace directory's active filter hides every session. */
+	"shell.allSessionsArchived": "Every session here is archived — switch to Archived to see them",
 
 	// ── Banners ───────────────────────────────────────────────────────────────
 

@@ -218,7 +218,7 @@
 
 **单一权威**：`packages/collab-proto/src/extension-slots.ts:12-23`。
 
-- exact 槽（7 个）：`extension-slots.ts:13-21` — `panel.right`、`rail.right`、`settings.extensions`、`composer.dock`、`composer.left`、`composer.right`、`transcript.node`
+- exact 槽（7 个）：`extension-slots.ts:13-21` — `panel.right`、`rail.right`、`settings.extensions`、`conversation.composer.dock`、`conversation.input.left`、`conversation.input.right`、`conversation.chat.node`
 - prefix 槽族（5 个）：`extension-slots.ts:22` — `panel.tab.`、`settings.tab.`、`rail.`、`settings.item.`、`settings.action.`
 - 注册时**未知槽名直接抛错**（扩展整体加载失败，fail-loud 不静默）：`loader.ts:297-304`（`assertKnownComponentSlot`）；诊断文案 `types.ts:298-301` 注释
 - 能力报告侧镜像同一组常量（防漂移但**是复制而非引用**）：`capability-report.ts:72-87`
@@ -776,13 +776,13 @@ plugins.list / plugins.packages / plugins.setEnabled
 | 内置模型角色 | `BUILTIN_MODEL_ROLES` | `daemon/server.ts:6965` |
 | 内置 mental model 种子 | `BUILTIN_SEEDS` | `hindsight/mental-models.ts:69` |
 
-### 10.9 bundled skills（6 个）
+### 10.9 bundled skills（5 个）
 
-`packages/coding-agent/src/bundled-skills/index.ts:19-26`，`BUNDLED_SKILL_NAMES` 于 `:31`：
+`packages/coding-agent/src/bundled-skills/index.ts:19-26`，`BUNDLED_SKILL_NAMES` 于 `:31`（legacy 安装器迁移清单，含已移出的 `musepi-contributing`）：
 
-`widget-design`、`musepi-help`、`musepi-extension-dev`、`ui-ux-pro-max`、`board-design`、`musepi-contributing`
+`widget-design`、`musepi-help`、`musepi-extension-dev`、`ui-ux-pro-max`、`board-design`
 
-单一清单源（安装器 + 扩展中心注册表共用，契约测试取交集）— `bundled-skills/index.ts:1-9`。
+单一清单源（安装器 + 扩展中心注册表共用，契约测试取交集）— `bundled-skills/index.ts:1-9`。`musepi-contributing` 是维护者规范，只作为仓库项目技能 `.agents/skills/musepi-contributing` 存在，不随发行包分发。
 
 ### 10.10 其他内置硬编码面
 

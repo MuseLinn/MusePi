@@ -2992,10 +2992,14 @@ export interface ExtensionComponent {
 	label?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
+	/** Entry identity within its slot. A list seat can hold several entries from
+	 *  one plugin (one dock entry per pill); an `id` lets another plugin replace
+	 *  or address exactly that entry instead of the plugin's whole contribution. */
+	id?: string;
 	/** panel.tab.*: always shows a rail launcher; on-demand tabs are opened by
 	 * session content or an explicit tool panel request. */
 	availability?: "always" | "on-demand";
-	/** transcript.node seat: the node kinds (transcriptNodeKind entryKey)
+	/** conversation.chat.node seat: the node kinds (transcriptNodeKind entryKey)
 	 *  this renderer owns. A component with no entryKinds does not
 	 *  participate in per-kind node dispatch (it targets other exact slots).
 	 *  DSH `conversation.chat.node` entryKey analog. */

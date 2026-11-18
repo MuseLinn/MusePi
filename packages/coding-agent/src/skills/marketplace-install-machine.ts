@@ -31,9 +31,10 @@ import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { logger } from "@musepi/pi-utils";
 import { parseGitUrl } from "../extensibility/plugins/shared/git-url";
-import { normalizeSkillSource, resolveSkillDir, shallowClone, skillTargetName } from "./install";
+import { gitHead, normalizeSkillSource, resolveSkillDir, shallowClone, skillTargetName } from "./install";
 import { skillHubDownloadUrl } from "./marketplace-client";
 import { extractZipEntries, fetchBytes } from "./marketplace-install";
+import { writeSkillSource } from "./skill-source";
 
 export type MarketplaceInstallState =
 	| "inspecting"
@@ -139,6 +140,7 @@ interface InstallRecord {
 		repo?: string;
 		name?: string;
 		overwrite?: boolean;
+		version?: string;
 	};
 	destRoot: string;
 	view: MarketplaceInstallView;
@@ -158,6 +160,9 @@ export interface MarketplaceInstallStartParams {
 	repo?: string;
 	name?: string;
 	overwrite?: boolean;
+	/** Catalog version the caller installed (SkillHub publishes one). Stored
+	 *  in the provenance sidecar so `skills.marketplace.updates` can compare. */
+	version?: string;
 }
 
 /** 终态记录保留上限（status 查询可见，超出裁最旧）。 */
@@ -391,6 +396,26 @@ export class MarketplaceInstallMachine {
 			// ── installing：staging → dest 的唯一落盘窗口 ────────────────
 			this.#setPhase(rec, "installing");
 			await cp(skillDir, dest, { recursive: true });
+			const installedAt = new Date().toISOString();
+			if (rec.params.source === "skillhub") {
+				await writeSkillSource(dest, {
+					schemaVersion: 1,
+					source: "skillhub",
+					slug: rec.params.slug,
+					...(rec.params.version ? { version: rec.params.version } : {}),
+					installedAt,
+				});
+			} else {
+				const commit = await gitHead(path.join(rec.stagingDir ?? "", "repo"));
+				await writeSkillSource(dest, {
+					schemaVersion: 1,
+					source: "skills.sh",
+					slug: rec.params.slug,
+					...(rec.params.repo ? { repo: rec.params.repo } : {}),
+					...(commit ? { commit } : {}),
+					installedAt,
+				});
+			}
 			if (signal.aborted || rec.cancelRequested) throw new InstallAbort();
 
 			await this.#cleanup(rec, false);

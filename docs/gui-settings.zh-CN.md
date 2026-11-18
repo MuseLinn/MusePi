@@ -60,7 +60,7 @@ gui-main (flex ROW)
 - `--gui-glass-alpha` = 透明度滑杆(30-90%,`musepi-gui-glass`)。
 - **窗口透明度开关**(`musepi-gui-glass-enabled`):关闭时设置 `--gui-glass-overlay: 100%` 使所有玻璃面不透明,并隐藏滑杆;开启时移除该变量。
 - **原生窗口玻璃**(2026-08-04):桌面窗口 `vibrancy: "under-window"` + `backgroundColor: "#00000000"`(无需 `transparent: true`),桌面壁纸透过窗口显示;`base.css` 的 `body { background: var(--bg) }` 由 gui.css 的 `html body` 覆盖为透明(浏览器访客不受影响);`.gui-shell` 透明,侧栏/导航轨/详情面板用 `color-mix(…, transparent)` 半透明蒙层,聊天卡片/设置卡片保持不透明。开关同时通过 `gui-vibrancy` IPC 调用 `setVibrancy`/`setBackgroundColor`(`BrowserWindow.fromWebContents(event.sender)` — 不能直接用 `event.sender`,那是 WebContents)。
-- 桌面运行环境:**Electron 43.2.0**(Node 24.18,2026-08-04 从 37 升级;37 已 EOL)。natives loader 的 `import.meta.dir ?? import.meta.dirname` 回退在 Node 24 下无需但无害。
+- 桌面运行环境:**Electron 45.3.4**(Chromium 156、Node 24.22,2026-11-18 从 43 升级;43.2.0 本身于 2026-08-04 取代 37)。沙箱 preload 只用到 `electron`/`process`,所以 45 移除的 `events`/`timers`/`url` shim 与 `Buffer`/`setImmediate` 全局不影响它们;主进程仍是完整 Node 环境。natives loader 的 `import.meta.dir ?? import.meta.dirname` 回退在 Node 24 下无需但无害。
 
 ## 5. 设置页各分区(外观页)
 

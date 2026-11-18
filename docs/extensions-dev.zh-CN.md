@@ -42,6 +42,8 @@ Creator 快捷创建只发送用户的自然语言需求。预设 prompt 持有�
 
 桌面发布包必须随 daemon 一起暂存可独立加载的第一方插件产物。编译 daemon 后运行 `bun packages/coding-agent/scripts/stage-desktop-daemon.ts --binary <daemon-binary>`。脚本将 `bundled-plugins` 与 `desktop-plugins` 编译到 `apps/desktop/vendor/daemon`，校验每个 `musepi.extensions` 与 `musepi.components` 声明的入口，并将组件样式保留在编译产物旁。普通及传递 JavaScript 依赖会打入组件产物，终端 PTY 桥接文件与原生运行时包则复制到暂存目录。Electron 解包该目录，再通过按平台分隔的 `MUSEPI_BUNDLED_PLUGIN_ROOTS` 变量把两个绝对根目录传给 daemon。开发环境仍保留源码树回退；发布包不得依赖源码树或开发依赖。
 
+暂存树只放运行时内容。维护者专用文件留在源码包（`DEV_ONLY_PLUGIN_FILES`，例如 `ui-ux-pro-max` 的数据校验脚本），暂存时丢弃；随后 `assertStagedPluginLayout` 在暂存插件里发现测试、source map、声明文件或嵌套 `node_modules` 时直接让发布失败。`musepi-contributing` 这类维护者规范不是随包技能：它放在仓库的 `.agents/skills`，只在本仓库 clone 内可见。
+
 行的 `config` 通过 `apply(ctx, config)` 的第二个参数（或导出的 `Config`）送达插件；`ctx.config` 是扩展自己的设置存储，不是行配置。预设行同时也是「按会话提供 MCP 服务器与文件技能」的组合单位。`musepi-mcp-client` 是 `presetOnly` 行包：每行声明一台服务器（`serverName`、`transport`、stdio 的 `command`/`args`/`env`/`cwd` 或 `url`/`headers`、`timeout`、`enabled`），在会话的 `session_start` 里通过 `registerMcpServer` 连接，随同一 runner 释放。`musepi-skill-filesystem` 在挂载时把 `roots` 下的技能（`<name>/SKILL.md` 或扁平 `<name>.md`，必须有 frontmatter）经 `registerSkill` 注册；发现是挂载时的快照而非监听，因为 preset generation 本身是可回收的。两个包都不做 ambient 装载，也没有全局配置面。命令钩子同样是行包：`musepi-hooks-claude-code` 与 `musepi-hooks-codex` 挂载外部 `hooks.json`（`configPath`），通过 `extensibility/hooks/command` 的共享引擎把五个命令钩子点映射到会话事件；两者只差 matcher 模式与 `${…}` 替换。目录型约定由第三个行包 `musepi-hooks-scripts` 承担：`roots` 下 `pre/<tool>` / `post/<tool>` 的脚本扫描成同一份配置（`pre` → PreToolUse，`post` → PostToolUse，文件名为工具名，`*`/`all` 表示全部），因此它与其他两个方言共用匹配、退出码、上下文与合并语义，而不是第二套协议。
 
 发现的 JavaScript／TypeScript hooks 使用生产扩展链：`discoverExtensionPaths()` → `hookCapability` → `loadExtensions()` → `ExtensionRunner`。旧 `HookRunner` 导出仅为公开 API 兼容及其直接消费者保留，不是第二条生产执行链。TUI 的设置与插件入口读取和桌面客户端相同的 schema、发现结果及 Cordis 启停状态，不引入独立安装器或插件状态存储。
@@ -158,19 +160,25 @@ export default function (pi: ExtensionAPI): void {
 **组件契约**（编译时强制）：
 - 默认导出 React 组件；
 - JSX 使用 `window.MusePiReact.createElement`。`react`、`react-dom`、`react-dom/client` 和 `react/jsx-runtime` 的普通或 type-only import 都由 daemon 映射到宿主 React，不会打包第二份 React；不得绕过这条映射，自行打包或从其他地址加载 React；
-- **注入 props（全部可选，宿主传哪项哪项有值）**：`{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, page, chatView, panelShell, browser, formatTokens }` —— `rpc` 是 daemon RPC 桥；`sessionId`/`cwd` 标识当前会话；`slot`/`extensionId` 标识贡献身份。`panelTab` 仅 `panel.tab.*` 注入，携带当前实例的 `id/surface/target/label/readOnly/dedupeKey`，分栏时也对应本列。保留的 `panel.tab.files` 挂载还会收到 `fileWorkspace`，即宿主拥有的文件标签、草稿、定位请求和编辑历史契约。single `app.chat` 挂载接收 `chatView`，即宿主拥有的会话、工作区、右栏和终端契约；插件不得复制这些状态。`panel.shell` 通过 `panelShell` 接收完整右栏契约；`panel.tab.browser` 通过 `browser` 接收 `{ open, openRequest, onTakeover }`。整页槽位通过 `page` 注入导航；`app.capability` 具体接收 `page: { tab, onTabChange, onBack }`，不是顶层导航 props。`formatTokens` 让插件读数与宿主 transcript 格式一致。组件不依赖任何一项仍可工作；
+- **注入 props（全部可选，宿主传哪项哪项有值）**：`{ rpc, sessionId, cwd, slot, extensionId, panelTab, fileWorkspace, page, chatView, panelShell, browser, formatTokens }` —— `rpc` 是 daemon RPC 桥；`sessionId`/`cwd` 标识当前会话；`slot`/`extensionId` 标识贡献身份。`panelTab` 仅 `panel.tab.*` 注入，携带当前实例的 `id/surface/target/label/readOnly/dedupeKey`，分栏时也对应本列。保留的 `panel.tab.files` 挂载还会收到 `fileWorkspace`，即宿主拥有的文件标签、草稿、定位请求和编辑历史契约。single `main.conversation` 挂载接收 `chatView`，即宿主拥有的会话、工作区、右栏和终端契约；插件不得复制这些状态。`panel.shell` 通过 `panelShell` 接收完整右栏契约；`panel.tab.browser` 通过 `browser` 接收 `{ open, openRequest, onTakeover }`。整页槽位通过 `page` 注入导航；`main.capability` 具体接收 `page: { tab, onTabChange, onBack }`，不是顶层导航 props。`formatTokens` 让插件读数与宿主 transcript 格式一致。组件不依赖任何一项仍可工作；
 - **样式**：组件内 `import "./x.css"` 会被 daemon 提取并在挂载时注入 `<style data-slot-css>`（组件卸载即移除）——不要依赖全局样式文件；
 - **失败可见**：编译失败/加载失败在宿主处以红色错误块显示（不再静默消失）；运行时错误有 `gui-slot-error` 样式。
 
 **槽位清单**（daemon `assertKnownComponentSlot` 校验，未知槽名注册会抛错；单一权威见 `packages/collab-proto/src/extension-slots.ts`）：
 - `panel.tab.<id>` — 右面板动态 tab。默认提供 rail 启动入口；声明 `availability: "on-demand"` 时不进入 rail、空状态或新建菜单，只由会话内容或工具结果中的 `details.panelTab` 描述符打开。描述符使用 `surface: "ext:panel.tab.<id>"`，可携带 `target`、`dedupeKey` 和 `label`；失败工具结果不会打开标签。`panel.tab.files` 是保留特例：它映射到持久化 surface `files`，不进入通用扩展 launcher，也不接受 `ext:panel.tab.files` 作为第二个 surface。
-- `panel.shell` — 完整右栏壳（single）。`panel` 插件拥有标签、分栏和最大化呈现，`app.chat` 不再打包右栏。
-- `app.overlay` — 根级固定覆盖层（single）：拥有横向/纵向浮动滚动进度轨，并 portal 到 `document.body`。没有贡献者时宿主回退内置 `<FloatingScrollbar/>`。
+- `panel.shell` — 完整右栏壳（single）。`panel` 插件拥有标签、分栏和最大化呈现，`main.conversation` 不再打包右栏。
+- `shell.overlay` — 根级固定覆盖层（single）：拥有横向/纵向浮动滚动进度轨，并 portal 到 `document.body`。没有贡献者时宿主回退内置 `<FloatingScrollbar/>`。
 - `browser.host` — 常驻受管浏览器 guest 宿主（single），在应用根部挂载，独立于 `panel.tab.browser`。两个产物共享 `window.MusePiManagedBrowserHost`，不分别打包 store。
 - `settings.tab.<id>` — 设置页左侧导航项：扩展声明一个设置页即出现在设置导航，内容区挂载组件。
 - `sidebar.panel.<destination id>` — 二级左栏面板（2026-11-08）：宿主按 rail 目的地 id 取唯一贡献，挂进 `.gui-side-keeper`，由 `data-panel` 决定显隐；几何读 keeper 上的 `--gui-side-w`，不接宿主专用 props。编译插件通过宿主模块表共享 `lib/scheduled-task-nav`（`task-nav`），否则会拿到另一份快照 store。插件停用或编译失败时宿主回退内置面板，目的地仍可用。
 - `rail.<id>` — 右缘图标轨（前缀命名空间；`rail.right` 是保留的精确槽）
-- `composer.dock` / `composer.left` / `composer.right` — 输入卡上方行 / 工具栏两端（list 语义，多扩展可同槽）
+- `main.conversation`（single）/ `main.capability`（single）—— 根级 `main` 保留键：完整会话页（欢迎页 + transcript）与能力中心页。一个键只有一个占据者，无贡献时宿主渲染内建页面。
+- `conversation.composer.bar`（single）—— 整个输入卡（hero 与 session 两种状态），由 `chat-view` 插件与 `main.conversation` 一起拥有。
+- `conversation.input.dock` / `conversation.composer.dock` —— 输入卡上方 / 下方的整行条目（list，多扩展可同槽）。一个插件可以用不同的 `id` 在同一座位拥有多条条目：stats 插件把 `activity` 与 `usage` 两枚胶囊注册成两条条目（`order` 0/1），第三方可以只替换其中一枚，而不是整行读数。
+- `conversation.input.left` / `conversation.input.right` / `conversation.input.overlay` —— 工具栏两端与输入卡内的浮层（list）。
+- `conversation.input.model` / `.attachments` / `.permission` / `.plan` / `.activity`（single）—— 输入卡控件；后注册者取代先注册者。
+- `conversation.hero.brand.mark` / `.workspace` / `.agentPreset`（single）与 `conversation.hero.options`（list）—— 空态席位，均有内建回退。`conversation.hero.frame` 是欢迎区内的装饰层：本宿主没有 hoc 包装语义，不能接管宿主内容。
+- `conversation.chat.node`（list）—— transcript 节点 seat，按节点 kind 派发（见 §10）。
 - `panel.right` / `settings.extensions` — 旧保留槽（仍可用）。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载，见下）：注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染，并注入 `settingsScope` 读写代理。
 - `settings.item.<extId>` — 扩展设置卡片（2026-08-17；2026-08-20 起展示于**扩展中心底部**，随插件 inventory）：按扩展 id 派发一张卡片，组件经 `settingsScope` prop 读写设置键（见下）。
 - `settings.action.<id>` — 单行偏好槽（2026-08-20）：组件挂到设置页“通用”分区末尾，功能插件贡献单行偏好（语言/外观/Enter 行为），无需整 tab 或整卡。
@@ -375,12 +383,12 @@ pi.registerScrollbarSkin({
 - **校验**：loader 要求 `id`/`displayName`/`base`/三个颜色/数值 `size`；颜色值若含 `url()`、`image-set()`、`expression()` 直接抛错（这些值会写入 CSS 自定义属性，不能成为网络/执行面）；`pacGlyph` 只接受 `data:` URL。
 - **数据流**：daemon 装载 → `collectScrollbarSkins` → `extensions.list.scrollbarSkins` → 桌面 `useExtensionScrollbarSkins`（ChatView）→ `scrollbar-skins` 宿主模块 → 浮动轨与外观选择器读同一份目录。
 - **优先级**：contributed → imported（用户导入的 zip）→ built-in，按 `id` 去重，插件可覆盖内置皮肤。插件停用后 contributed 清空，内置目录仍在，轨不会失去皮肤。
-- **内置目录归 `ui-theme` 渲染端 bundle 所有**：`apps/desktop/src/plugins/ui-theme/` 内的 `skins.ts` 定义 snake / gummy-rainbow / pacman，`rail.tsx` 渲染、`rail.css` 提供样式、`settings.tsx` 提供外观卡；`index.ts` 注册 `app.overlay` + `settings.item.ui-theme`。宿主保留同构兜底，供 bundle 停用、编译失败或 guest/mobile 宿主使用。
+- **内置目录归 `ui-theme` 渲染端 bundle 所有**：`apps/desktop/src/plugins/ui-theme/` 内的 `skins.ts` 定义 snake / gummy-rainbow / pacman，`rail.tsx` 渲染、`rail.css` 提供样式、`settings.tsx` 提供外观卡；`index.ts` 注册 `shell.overlay` + `settings.item.ui-theme`。宿主保留同构兜底，供 bundle 停用、编译失败或 guest/mobile 宿主使用。
 - **daemon 主题插件仍可贡献皮肤**：`registerScrollbarSkin` 是给 daemon 侧主题包的稳定缝；内置目录不再由 `builtin-themes` 注册，避免两个所有者。
-- **编译插件共享注册表**：`scrollbar-skins` 在 `EXTENSION_HOST_MODULES` 中（路径 `plugins/ui-theme/skins`），编译后的 `app.overlay` 覆盖层读取的是宿主实例，而不是打包副本（见 §19）。
+- **编译插件共享注册表**：`scrollbar-skins` 在 `EXTENSION_HOST_MODULES` 中（路径 `plugins/ui-theme/skins`），编译后的 `shell.overlay` 覆盖层读取的是宿主实例，而不是打包副本（见 §19）。
 - **参考实现**：`apps/desktop/src/plugins/ui-theme/`（`rail.tsx` / `rail.css` / `skins.ts` / `settings.tsx` / `index.ts`）。
 
-## 11. 扩展 transcript 节点渲染（transcript.node seat，DSH 粒度，2026-08-27）
+## 11. 扩展 transcript 节点渲染（conversation.chat.node seat，DSH 粒度，2026-08-27）
 
 扩展为**指定节点 kind** 贡献 transcript 渲染器。对应 DSH `conversation.chat.node` 的单一“聊天节点 seat”槽：按节点 kind（entryKey）分发，命中即“拥有”该条目的渲染，未命中回退到内建渲染（fallback）。
 
@@ -388,7 +396,7 @@ pi.registerScrollbarSkin({
 
 ```ts
 pi.registerComponent({
-	slot: "transcript.node",
+	slot: "conversation.chat.node",
 	moduleUrl: "./ui/my-node.tsx",
 	label: "My Chat Node",
 	entryKinds: ["message:user"], // 派发键（transcriptNodeKind）
@@ -401,7 +409,7 @@ pi.registerComponent({
   - `children` = 内建 MusePi 对该条目的渲染——组件可包含它做“增强”（保留官方骨架），或完全自绘（**拥有**该 kind）。
 - 未命中的 kind → 内建渲染（children 直接返回），等价 DSH fallback。
 
-**分派**：daemon 编译（透传 `entryKinds`）→ `extensions.list.components` → GUI `useSlotComponents(rpc, "transcript.node")` → `renderTranscriptNode`（ChatView）按 kind 过滤（`selectTranscriptNodeComponents`）→ 命中组件收到 `node` 上下文拥有渲染，未命中回退内建。组件集只在 `extensions.changed` 变化，不随 stream 帧变（memo 安全）。
+**分派**：daemon 编译（透传 `entryKinds`）→ `extensions.list.components` → GUI `useSlotComponents(rpc, "conversation.chat.node")` → `renderTranscriptNode`（ChatView）按 kind 过滤（`selectTranscriptNodeComponents`）→ 命中组件收到 `node` 上下文拥有渲染，未命中回退内建。组件集只在 `extensions.changed` 变化，不随 stream 帧变（memo 安全）。
 
 **防置换**：扩展声明的 kind 只影响该 kind 条目的渲染；内建类型（message/compaction/branch_summary/model_change 等）仍由宿主持有，扩展只能经 `children` 基座增强声明的 kind。与 DSH 一致——官方 sidebar/conversation 的 owner 始终是宿主，插件贡献到 seat，不覆写核心。
 
@@ -415,8 +423,8 @@ Electron 壳由第一方 Cordis 包 `desktop-shell` 提供，与其他 MusePi �
 - daemon `--web-port` serve 渲染器（`guest-client/dist`）+ `/__daemon.json`（wsUrl/token）；壳 `probeWeb()` 读 `web.port` 自动发现。
 
 **Shell 三模式**（DSH compatibility/extended/enhanced）：
-- `compatibility`（默认）：注入脚本只注册 `transcript.node` —— 扩展贡献聊天节点。
-- `extended`：注入脚本额外注册 `composer.dock` / `panel.tab.workbench` / `statusbar`；guest-client 的 `CompatSlotHost` 按 slot 渲染注册组件（composer 上方 dock、底部状态条、workbench 面板）。
+- `compatibility`（默认）：注入脚本只注册 `conversation.chat.node` —— 扩展贡献聊天节点。
+- `extended`：注入脚本额外注册 `conversation.composer.dock` / `panel.tab.workbench` / `statusbar`；guest-client 的 `CompatSlotHost` 按 slot 渲染注册组件（composer 上方 dock、底部状态条、workbench 面板）。
 - `enhanced`：渲染器侧同 extended，壳保留原生 titlebar（原生 UI 面板预留）。
 
 **注册表契约**：daemon 注入脚本（`static-web.ts` `compatSlotHostScript`, 仅 `?shell=1`）blob-import 已编译组件 → `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`；guest-client 初始化注册表（`main.tsx`），`Transcript`/`CompatSlotHost` 只读消费。纯浏览器 guest 无注入脚本 → 注册表为空 → 内建渲染。
@@ -551,6 +559,8 @@ my-plugin/
 安装校验使用生产 `mountPlugin` 链解析每个 `extensions` 入口，因此纯 Cordis 的 `name` / `inject` / `Config` / `apply` 与 legacy 默认导出 factory 都按各自真实语义检查。校验在独立 runtime 和 event bus 上执行，成功后立即调用 `disposePluginPrimitives` 释放资源；入口缺失或挂载失败会拒绝安装并触发既有回滚，不会留下半安装状态。
 
 `musepi plugin pack [path] [-o dir] [--json]` 在本地生成可分发的 `.tgz`。它要求包具有 `name`、`version` 和 `musepi` / `omp` / `pi` 清单，检查声明的入口存在后调用 `bun pm pack`，不访问 registry，也不执行 publish。将生成的文件发给接收方后，可在插件页拖入，或执行 `musepi plugin install <tarball 绝对路径>`。绝对 `.tgz` 路径按归档安装，不会误入目录 link 分支。需要公开发布时，仍使用包 registry 的发布流程；`plugin pack` 本身不发布。
+
+要进入插件市场，让用户能按来源发现并安装：把包条目写进仓库根的 `.omp-plugin/marketplace.json`（Claude Code 兼容放 `.claude-plugin/marketplace.json`），`plugins[]` 的每项给出 `name`、`description`、`version` 与 `source`（相对路径、npm 包名或 git 地址）。用户执行 `/marketplace add <owner/repo>` 或从能力中心市场页添加该来源后即可安装。catalog 字段与来源分类见 `docs/marketplace.md`；未发布的包继续走本节 spec 安装，不需要先有市场。
 
 ### 拖入安装
 
@@ -764,7 +774,7 @@ export function apply(ctx: PluginClientContext): void {   // 可选:模块级装
 |---|---|
 | `effect(dispose, label?)` | 登记一次拆卸。**逆序执行**(后装的贡献可能依赖先装的) |
 | `signal: AbortSignal` | 本模块被取代/卸载时中止;交给 `fetch`/`EventSource`,不要手工跟踪生命周期 |
-| `slot: string` | 挂载到的座位(`composer.model`、`settings.tab.x` …) |
+| `slot: string` | 挂载到的座位(`conversation.input.model`、`settings.tab.x` …) |
 | `extensionId: string` | 产出该组件的扩展入口路径 |
 
 ### 为什么必须存在这条缝
@@ -862,7 +872,7 @@ const hostModules = {
 | `voice` | `lib/voice.ts` | 活跃 TTS/听写会话、播放上下文与停止/恢复句柄：音频状态与取消操作不能跨 bundle 分叉 |
 | `panel-maximize` | `lib/panel-maximize.ts` | 最大化标志、订阅者与动画注册表：宿主和每个插件观察同一个面板最大化状态 |
 | `suggestions` | `lib/suggestions.ts` | 建议贡献者、存储与订阅：用户维护的建议在宿主和插件之间保持同一份 |
-| `scrollbar-skins` | `plugins/ui-theme/skins.ts` | 贡献/导入/内置皮肤目录：`ui-theme` 设置卡写入，编译后的 `app.overlay` 轨读取同一份 |
+| `scrollbar-skins` | `plugins/ui-theme/skins.ts` | 贡献/导入/内置皮肤目录：`ui-theme` 设置卡写入，编译后的 `shell.overlay` 轨读取同一份 |
 | `client-core` | `@musepi/client-core`（裸包） | 整个 client-core 命名空间：其中的 React context 与模块级状态 |
 | `i18n` | `@musepi/client-core/src/i18n`（裸包） | `t` / `setLocale` 共用的 locale 注册表 |
 

@@ -13,6 +13,9 @@ import type { MessageDisplayContext, SessionEntry, SessionPresence, SubagentProg
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { ActionToastStack } from "./components/ActionToast";
+// Loaded for its host-table registration: compiled input-card artifacts bind
+// to `window.MusePiHostModules.composer`.
+import "./components/Composer";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import { AppRail, type RailItem } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
@@ -127,13 +130,13 @@ import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
 import { applySideSessionEvent } from "./lib/side-session-stores";
 import {
-	APP_OVERLAY_SLOT,
 	BROWSER_HOST_SLOT,
 	CAPABILITY_CENTER_SLOT,
-	CHAT_VIEW_SLOT,
+	CONVERSATION_SLOT,
 	hostReactBindings,
 	hostReactDOMBindings,
 	hostReactDOMClientBindings,
+	SHELL_OVERLAY_SLOT,
 	SIDEBAR_PANEL_SLOT_PREFIX,
 	SlotComponentHost,
 	SlotComponentMount,
@@ -4436,7 +4439,7 @@ function AppInner(): ReactNode {
 				</div>
 				<div className="gui-mini-chat relative flex min-h-0 min-w-0 flex-1 flex-col">
 					<SlotComponentHost
-						slot={CHAT_VIEW_SLOT}
+						slot={CONVERSATION_SLOT}
 						rpc={rpc}
 						fallback={<ChatBootPlaceholder />}
 						chatView={{
@@ -4893,7 +4896,7 @@ function AppInner(): ReactNode {
 								{(() => {
 									const chatSurface = (
 										<SlotComponentHost
-											slot={CHAT_VIEW_SLOT}
+											slot={CONVERSATION_SLOT}
 											rpc={rpc}
 											fallback={<ChatBootPlaceholder />}
 											chatView={{
@@ -5249,7 +5252,7 @@ function AppInner(): ReactNode {
 			 * see plugins/ui-theme/rail.tsx). The whole overlay is one replaceable
 			 * seat: a Cordis plugin can own a different rail, and the built-in
 			 * one stays as the fallback when none is mounted. */}
-			<SlotComponentHost rpc={rpc} slot={APP_OVERLAY_SLOT} fallback={<FloatingScrollbar />} />
+			<SlotComponentHost rpc={rpc} slot={SHELL_OVERLAY_SLOT} fallback={<FloatingScrollbar />} />
 			{/* Boot hand-off: the shell is already mounted and animating in
 			 * underneath; the splash fades out over it for one short beat. */}
 			{splashHold && (

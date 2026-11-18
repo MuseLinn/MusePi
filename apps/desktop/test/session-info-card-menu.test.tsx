@@ -4,6 +4,7 @@ import { setLocale, t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { SessionInfoCard } from "../src/components/session-info-card";
+import { invalidateGitStatuses } from "../src/lib/git-status-cache";
 import type { RpcClient } from "../src/lib/rpc";
 
 // 信息卡溢出菜单契约:复制工作区路径 + 会话维护(shaking / provider 流 / 清空上下文)。
@@ -107,6 +108,13 @@ afterEach(async () => {
 		await act(async () => root.unmount());
 	}
 	while (hosts.length > 0) hosts.pop()!.remove();
+	// `git-status-cache` is a module-level Map with a 15s TTL — longer than a
+	// whole `bun test` run. The fake `git.numstat` answered here would still be
+	// cached when the next FILE mounts the same card, so that file's own mock
+	// never gets called and it asserts against these values (verified: without
+	// this line, session-info-card.test.tsx fails with "ready" where it expects
+	// "error"). Invalidation is the same entry point the app uses.
+	invalidateGitStatuses([]);
 });
 
 describe("SessionInfoCard 溢出菜单", () => {

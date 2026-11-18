@@ -338,7 +338,7 @@ export interface TranscriptProps {
 		activePathIds: ReadonlySet<string>;
 		onSwitchBranch?(leafEntryId: string): void;
 	};
-	/** transcript.node seat 注入:
+	/** conversation.chat.node seat 注入:
 	 *  host 提供按条目派发的渲染器,按 `transcriptNodeKind(entry)` 分发,
 	 *  可用 `children`(内建渲染)增强/追加;缺省 -> 仅内建渲染(inert)。
 	 *  调用方 MUST memoize(身份参与 EntryRow memo 比较)。 */
@@ -785,7 +785,7 @@ interface EntryRowProps {
 	/** This IRC row continues the previous row's agent pair (header already
 	 *  rendered). */
 	ircContinued?: boolean;
-	/** transcript.node seat 注入 —— 按条目派发(见 TranscriptProps)。 */
+	/** conversation.chat.node seat 注入 —— 按条目派发(见 TranscriptProps)。 */
 	renderTranscriptNode?: (node: TranscriptNodeInjection) => ReactNode;
 }
 

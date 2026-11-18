@@ -93,10 +93,26 @@ function forgetRoot(cwd: string): void {
 	}
 }
 
+/**
+ * Drop the outstanding request for a root as well as its cached value.
+ *
+ * A reader that arrives while a request is in flight joins that promise, so a
+ * request that never settles (a deadline, an aborted session) would otherwise
+ * capture every later reader of the same root — the card sits on its loading
+ * state with no way to ask again. Dropping the entry makes the next reader
+ * issue a fresh request.
+ */
+function forgetPending(cwd?: string): void {
+	for (const key of inFlight.keys()) {
+		if (cwd === undefined || key.startsWith(`${cwd}\0`)) inFlight.delete(key);
+	}
+}
+
 /** Drop one root (after stage/commit/discard) or the whole cache. */
 export function invalidateGitStatus(cwd?: string): void {
 	if (cwd === undefined) cache.clear();
 	else forgetRoot(cwd);
+	forgetPending(cwd);
 	window.dispatchEvent(new CustomEvent<string | undefined>(STATUS_CHANGED_EVENT, { detail: cwd }));
 }
 
@@ -105,8 +121,10 @@ export function invalidateGitStatus(cwd?: string): void {
 export function invalidateGitStatuses(roots: readonly string[]): void {
 	if (roots.length === 0) {
 		cache.clear();
+		forgetPending();
 	} else {
 		for (const root of roots) forgetRoot(root);
+		for (const root of roots) forgetPending(root);
 	}
 	window.dispatchEvent(
 		new CustomEvent<string | undefined>(STATUS_CHANGED_EVENT, {

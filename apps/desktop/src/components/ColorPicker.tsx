@@ -195,7 +195,7 @@ export function ColorPickerPanel({
 	return (
 		// Card surface lives HERE — the useFloatingMenu call sites must NOT
 		// pass a className (the portal wrapper would double-draw this rounded
-		// frosted card behind it; WelcomeComposer quota-panel lesson).
+		// frosted card behind it; HeroComposer quota-panel lesson).
 		<div className="gui-color-picker">
 			<div
 				ref={svRef}

@@ -1,6 +1,6 @@
 /**
  * Example extension: contributes a renderer-side component to the
- * "transcript.node" seat slot — the DSH `conversation.chat.node` analog.
+ * "conversation.chat.node" seat slot — the DSH `conversation.chat.node` counterpart.
  * The daemon compiles ui/user-note.tsx to self-contained ESM; the GUI
  * dispatches transcripts by node kind (transcriptNodeKind) and hands this
  * component the entry it OWNS (entryKinds: ["message:user"]).
@@ -13,7 +13,7 @@ import type { ExtensionAPI } from "../../src/extensibility/extensions/types";
 
 export default function (pi: ExtensionAPI): void {
 	pi.registerComponent({
-		slot: "transcript.node",
+		slot: "conversation.chat.node",
 		moduleUrl: "./ui/user-note.tsx",
 		label: "User-note node",
 		// Dispatch key(s): which transcriptNodeKind entries this renderer owns.

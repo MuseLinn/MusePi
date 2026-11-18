@@ -146,6 +146,10 @@ providers:
 - `modelOverrides`
 - `discovery`
 
+### Provider 显示名
+
+`label`（可选，非空字符串）是模型选择器 provider 分组标题与模型行里显示的名称。provider id 仍是身份：模型引用（`provider/id`）、收藏、角色固定和 `session.setModel` 都用它，改 label 不会让已存的选择失效。不写则原样显示 id。它只是元数据，不算上面“至少定义一项”里的一项。
+
 ### 发现
 
 - `discovery` 需要 provider 级 `api`，`discovery.type: proxy` 除外（每模型 wire 自动检测）。
@@ -185,6 +189,12 @@ ModelRegistry 管线（刷新时）：
 ### Provider-model 缓存与静态指纹
 
 每个 provider 的缓存模型列表持久化在 model-cache SQLite 数据库（当前 schema 版本 6）中，带有一个 `static_fingerprint` 列，对合并进该行的静态 catalog 切片进行哈希。当 `resolveProviderModels` 跳过网络拉取且内存静态 catalog 的指纹与缓存匹配时，缓存行按原样返回——完全绕过静态 + 动态合并。指纹通过给 static-models 数组添加 symbol 属性按进程 memoize，因此重复的冷启动调用不会重新哈希。
+
+### 应用之外的 `models.yml` 改动如何生效
+
+Registry 只在启动时读一次 `models.yml`，之后目录常驻内存。应用外的写入者——供应商插件替换自己的 `providers.<id>.models` 块、手工编辑——在有人触发重载之前不会改变任何东西。
+
+`ModelRegistry.refreshIfStale()` 比对文件 mtime 与上次加载时间，只有确实变化时才做一次离线重建（不探测网络）。daemon 的目录读取（`models.list`、`models.listAvailable`、`models.catalog`、`models.detail`）在返回前都会调用它，桌面端模型菜单展开时也会重新拉取，因此已经挂载的选择器不必重启 daemon 就能看到外部改动。应用内编辑（`models.add` / `models.remove`）仍走 `refresh()` 加 `models.changed` 广播。
 
 ## 规范模型等价与合并
 
@@ -524,6 +534,8 @@ disabledProviders:
 
 - `/model` 在 provider 标签旁包含一个规范视图
 - `musepi models` 打印每个具体模型的 provider 分组表格，`musepi models canonical` 打印合并后的规范视图
+
+`musepi models ls --json` 把同一份可用目录打印成一个 JSON 对象 `{ models: [...] }`。每行带 `provider`、`providerLabel`（`providers.<id>.label`，没有则用 provider id）、`id`、`selector`、`name`、`contextWindow`、`maxTokens`、`reasoning`、`thinking`、`input` 与 `cost`。它只列**可用**模型（provider 需要有凭据或 `auth: none`），因此外部工具或适配器应当读它，而不是自己解析 `models.yml`：后者只写了自定义 provider，既看不到内置目录，也看不到凭据。
 
 选择规范条目会存储规范选择器。选择 provider 行会存储显式的 `provider/modelId`。
 

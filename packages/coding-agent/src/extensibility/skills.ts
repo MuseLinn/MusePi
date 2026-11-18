@@ -23,6 +23,10 @@ export interface Skill {
 	filePath: string;
 	baseDir: string;
 	source: string;
+	/** Optional `version` declared in the skill's frontmatter. The capability
+	 *  center shows it and built-ins carry the version of the shipped package;
+	 *  absence means unpinned, not "unknown failure". */
+	version?: string;
 	/**
 	 * When `true`, the skill is loaded and reachable via `skill://<name>` and
 	 * (when enabled) `/skill:<name>`, but is excluded from the rendered system
@@ -111,6 +115,7 @@ export async function loadSkillsFromDir(options: LoadSkillsFromDirOptions): Prom
 			filePath: capSkill.path,
 			baseDir: capSkill.path.replace(/[\\/]SKILL\.md$/, ""),
 			source: options.source,
+			...(typeof capSkill.frontmatter?.version === "string" && { version: capSkill.frontmatter.version }),
 			...(capSkill.containRoot !== undefined && { containRoot: capSkill.containRoot }),
 			hide: capSkill.frontmatter?.hide === true || capSkill.frontmatter?.disableModelInvocation === true,
 			_source: capSkill._source,
@@ -298,6 +303,7 @@ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadS
 				filePath: capSkill.path,
 				baseDir: capSkill.path.replace(/[\\/]SKILL\.md$/, ""),
 				source: `${capSkill._source.provider}:${capSkill.level}`,
+				...(typeof capSkill.frontmatter?.version === "string" && { version: capSkill.frontmatter.version }),
 				...(capSkill.containRoot !== undefined && { containRoot: capSkill.containRoot }),
 				hide: capSkill.frontmatter?.hide === true || capSkill.frontmatter?.disableModelInvocation === true,
 				_source: capSkill._source,

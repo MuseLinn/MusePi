@@ -472,6 +472,20 @@
 	white-space: nowrap;
 }
 
+/* Reference roots the copy brings along. Faint like the timestamp: the row
+ * title and workspace already carry the decision, and this only stops a
+ * multi-directory import from looking single-directory. */
+.gui-import-roots {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex: none;
+	color: var(--fg-faint);
+	font-size: 10.5px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
 .gui-import-tag {
 	display: inline-flex;
 	align-items: center;
@@ -615,6 +629,7 @@
  * a 1000px card): secondary metadata yields before the row titles do. */
 @container gui-import (max-width: 520px) {
 	.gui-import-session-meta,
+	.gui-import-roots,
 	.gui-import-imported-total {
 		display: none;
 	}

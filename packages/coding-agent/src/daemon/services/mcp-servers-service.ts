@@ -28,9 +28,13 @@
  */
 
 import * as path from "node:path";
+import { loadCapability } from "../../capability";
+import { type MCPServer, mcpCapability } from "../../capability/mcp";
 import { type MCPProbeResult, probeServer } from "../../mcp/client";
 import { addMCPServer, readMCPConfigFile, removeMCPServer, validateServerName } from "../../mcp/config-writer";
 import type { MCPAuthConfig, MCPConfigFile, MCPServerConfig } from "../../mcp/types";
+// The discovery providers that read the other agents' configurations.
+import "../../discovery/builtin";
 import type { DaemonService } from "./types";
 
 /** One configured connector, safe to render and safe to put on the wire. */
@@ -41,6 +45,12 @@ export interface McpServerSummary {
 	command?: string;
 	auth?: MCPAuthConfig["type"];
 	enabled?: boolean;
+	/**
+	 * Where the server came from. `mcp.json` is the file this service owns;
+	 * any other value is a discovery provider — `cursor`, `vscode`, `claude`,
+	 * `codex` and the rest — naming the agent whose configuration declared it.
+	 */
+	source?: string;
 }
 
 /** Live manager slice a by-name probe needs: the preserved config plus the
@@ -201,13 +211,57 @@ export class McpServersService implements DaemonService {
 		return config;
 	}
 
-	/** Configured connectors, sorted by name. No token/header ever crosses the wire. */
+	/**
+	 * Every MCP server this machine exposes, sorted by name.
+	 *
+	 * Two sources, one list: the `mcp.json` this service owns, and the servers
+	 * the other agents' configurations declare. The second set was already
+	 * reachable in a session — it is what the discovery providers load — but
+	 * the settings page showed only the first, so the same machine listed
+	 * different numbers of servers in two places. Each row names its source.
+	 *
+	 * No token or header ever crosses the wire.
+	 */
 	async list(): Promise<{ servers: McpServerSummary[] }> {
 		const config = await this.#read();
-		const servers = Object.entries(config.mcpServers ?? {})
-			.map(([name, server]) => summarize(name, server))
-			.sort((a, b) => a.name.localeCompare(b.name));
+		const owned = Object.entries(config.mcpServers ?? {}).map(([name, server]) => ({
+			...summarize(name, server),
+			source: "mcp.json",
+		}));
+		const discovered = await this.#discoveredServers();
+		const known = new Set(owned.map(server => server.name));
+		const servers = [...owned, ...discovered.filter(server => !known.has(server.name))].sort((a, b) =>
+			a.name.localeCompare(b.name),
+		);
 		return { servers };
+	}
+
+	/**
+	 * MCP servers the other agents' configurations declare.
+	 *
+	 * A provider that cannot be read contributes nothing: the list is a
+	 * convenience, and a broken configuration elsewhere on the machine must
+	 * not empty this page.
+	 */
+	async #discoveredServers(): Promise<McpServerSummary[]> {
+		try {
+			const result = await loadCapability<MCPServer>(mcpCapability.id, { includeDisabled: true });
+			return (result.items ?? [])
+				.filter(server => server._source?.provider !== "connector-catalog")
+				.map(server => {
+					const transport = server.transport ?? (server.command ? "stdio" : "http");
+					return {
+						name: server.name,
+						transport: transport === "sse" || transport === "http" ? transport : "stdio",
+						...(server.url ? { url: server.url } : {}),
+						...(server.command ? { command: server.command } : {}),
+						...(server.auth?.type ? { auth: server.auth.type } : {}),
+						source: server._source?.provider ?? "unknown",
+					} as McpServerSummary;
+				});
+		} catch {
+			return [];
+		}
 	}
 
 	/**

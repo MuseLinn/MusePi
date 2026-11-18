@@ -279,6 +279,7 @@ export const getModelsConfigSchemaBundle = once(() => {
 	const ProviderAuthSchema = type('"apiKey" | "none" | "oauth"');
 
 	const ProviderConfigSchema = type({
+		"label?": "string",
 		"baseUrl?": "string",
 		"apiKey?": "string",
 		"api?": ApiSchema,
@@ -300,6 +301,9 @@ export const getModelsConfigSchemaBundle = once(() => {
 		 */
 		"transport?": '"pi-native"',
 	}).narrow((value, ctx) => {
+		if (value.label !== undefined && typeof value.label === "string" && value.label.trim().length === 0) {
+			return ctx.mustBe("label a non-empty string");
+		}
 		if (value.baseUrl !== undefined && typeof value.baseUrl === "string" && value.baseUrl.length === 0) {
 			return ctx.mustBe("baseUrl a non-empty string");
 		}

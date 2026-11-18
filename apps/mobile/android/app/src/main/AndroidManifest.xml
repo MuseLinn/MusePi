@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Predictive back (Android 13+): Capacitor's App plugin routes back
+         through getOnBackPressedDispatcher(), which registers the single
+         framework OnBackInvokedCallback, so the flag and the web backButton
+         listener stay one path — no double dispatch. -->
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -8,7 +12,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:theme="@style/AppTheme">
+        android:theme="@style/AppTheme"
+        android:enableOnBackInvokedCallback="true">
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
@@ -32,6 +37,25 @@
                      the existing WebView instance (appUrlOpen warm-start). -->
                 <data android:scheme="musepi" android:host="connect" />
             </intent-filter>
+
+            <!-- Share sheet: a collab link pasted from a chat app. MainActivity
+                 rewrites the ACTION_SEND intent into the musepi:// deep link
+                 above before the bridge sees it, because @capacitor/app emits
+                 appUrlOpen only for ACTION_VIEW (AppPlugin.handleOnNewIntent).
+                 text/plain only — that is what chat apps share, and the
+                 manifest has to declare every type the filter matches. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
+            <!-- Launcher long-press shortcuts. Static shortcuts are declared on
+                 the ACTIVITY through this meta-data key; there is no
+                 android:shortcuts attribute. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
 
         </activity>
 

@@ -123,6 +123,8 @@ interface CustomModelsResult {
 	overrides?: Map<string, ProviderOverride>;
 	modelOverrides?: Map<string, Map<string, ModelOverride>>;
 	keylessProviders?: Set<string>;
+	/** Custom providers' display names (`providers.<id>.label`), by provider id. */
+	providerLabels?: Map<string, string>;
 	discoverableProviders?: DiscoveryProviderConfig[];
 	configuredProviders?: Set<string>;
 	error?: ConfigError;
@@ -181,6 +183,8 @@ export class ModelRegistry {
 	#providerLookupSnapshots: Map<string, Model<Api>[]> = new Map();
 	#customProviderApiKeys: Map<string, string> = new Map();
 	#keylessProviders: Set<string> = new Set();
+	/** Custom providers' display names from `providers.<id>.label`. */
+	#customProviderLabels: Map<string, string> = new Map();
 	#discoverableProviders: DiscoveryProviderConfig[] = [];
 	#customModelOverlays: CustomModelOverlay[] = [];
 	#providerOverrides: Map<string, ProviderOverride> = new Map();
@@ -194,6 +198,7 @@ export class ModelRegistry {
 	#suppressedSelectors: Map<string, number> = new Map();
 	#backgroundRefresh?: Promise<void>;
 	#policyReapply?: Promise<void>;
+	#staleRefresh?: Promise<boolean>;
 	#modelsDevPrimed = false;
 	#lastDiscoveryWarnings: Map<string, string> = new Map();
 	// Runtime extension model overlays — persist across refresh() cycles so that
@@ -404,6 +409,41 @@ export class ModelRegistry {
 		}
 	}
 
+	/**
+	 * Catch a read path up with `models.yml` edits that landed outside this
+	 * process — a provider plugin rewriting its block, a hand edit, any writer
+	 * that never calls `refresh()`.
+	 *
+	 * Waits out an in-flight background refresh, then rebuilds only when the
+	 * config's mtime moved past the last load, so a current catalog costs one
+	 * stat. The rebuild is offline: an external edit is picked up without a
+	 * network probe. Resolves true when the catalog may have moved (the caller
+	 * should re-read it), false when the in-memory catalog is already current.
+	 * Concurrent callers coalesce onto one check, so a burst of catalog RPCs
+	 * against the same registry rebuilds once.
+	 */
+	async refreshIfStale(): Promise<boolean> {
+		this.#staleRefresh ??= this.#runRefreshIfStale().finally(() => {
+			this.#staleRefresh = undefined;
+		});
+		return this.#staleRefresh;
+	}
+
+	async #runRefreshIfStale(): Promise<boolean> {
+		let changed = false;
+		if (this.#backgroundRefresh) {
+			await this.#backgroundRefresh;
+			changed = true;
+		}
+		if (this.#modelsConfigFile.getMtimeMs() === this.#lastStaticLoadMtime) {
+			return changed;
+		}
+		this.#reloadStaticModels();
+		this.#suppressedSelectors.clear();
+		await this.#refreshRuntimeDiscoveries("offline");
+		return true;
+	}
+
 	async refreshProvider(providerId: string, strategy: ModelRefreshStrategy = "online"): Promise<void> {
 		this.#reloadStaticModels();
 		for (const selector of this.#suppressedSelectors.keys()) {
@@ -588,12 +628,14 @@ export class ModelRegistry {
 			overrides = new Map(),
 			modelOverrides = new Map(),
 			keylessProviders = new Set(),
+			providerLabels = new Map(),
 			discoverableProviders = [],
 			configuredProviders = new Set(),
 			error: configError,
 		} = this.#loadCustomModels();
 		this.#configError = configError;
 		this.#keylessProviders = keylessProviders;
+		this.#customProviderLabels = providerLabels;
 		this.#discoverableProviders = discoverableProviders;
 		this.#customModelOverlays = customModels;
 		this.#providerOverrides = overrides;
@@ -621,6 +663,7 @@ export class ModelRegistry {
 		this.#models = [];
 		this.#unprojectedModels = [];
 		this.#hasFullSnapshot = false;
+		this.#customProviderLabels.clear();
 		this.#cachedStandardModelsByProvider.clear();
 		this.#pendingStandardCacheProviders.clear();
 		this.#cachedAuthoritativeProviders.clear();
@@ -1074,6 +1117,7 @@ export class ModelRegistry {
 				overrides: new Map(),
 				modelOverrides: new Map(),
 				keylessProviders: new Set(),
+				providerLabels: new Map(),
 				discoverableProviders: [],
 				configuredProviders: new Set(),
 				found: false,
@@ -1087,6 +1131,7 @@ export class ModelRegistry {
 				overrides: new Map(),
 				modelOverrides: new Map(),
 				keylessProviders: new Set(),
+				providerLabels: new Map(),
 				discoverableProviders: [],
 				configuredProviders: new Set(),
 				error,
@@ -1107,6 +1152,7 @@ export class ModelRegistry {
 		const overrides = new Map<string, ProviderOverride>();
 		const allModelOverrides = new Map<string, Map<string, ModelOverride>>();
 		const keylessProviders = new Set<string>();
+		const providerLabels = new Map<string, string>();
 		const discoverableProviders: DiscoveryProviderConfig[] = [];
 		const providerEntries = Object.entries(value.providers ?? {});
 		const configuredProviders = new Set(Object.keys(value.providers ?? {}));
@@ -1136,6 +1182,10 @@ export class ModelRegistry {
 					remoteCompaction: providerConfig.remoteCompaction,
 					transport: providerConfig.transport,
 				});
+			}
+
+			if (providerConfig.label?.trim()) {
+				providerLabels.set(providerName, providerConfig.label.trim());
 			}
 
 			const authMode = (providerConfig.auth ?? "apiKey") as ProviderAuthMode;
@@ -1186,6 +1236,7 @@ export class ModelRegistry {
 			overrides,
 			modelOverrides: allModelOverrides,
 			keylessProviders,
+			providerLabels,
 			discoverableProviders,
 			configuredProviders,
 			found: true,
@@ -1946,7 +1997,11 @@ export class ModelRegistry {
 	 * extension owns its own naming.
 	 */
 	getProviderLabel(provider: string): string | undefined {
-		return this.#runtimeProviderLabels.get(provider) ?? getProviderDefinition(provider)?.name;
+		return (
+			this.#runtimeProviderLabels.get(provider) ??
+			this.#customProviderLabels.get(provider) ??
+			getProviderDefinition(provider)?.name
+		);
 	}
 
 	/**

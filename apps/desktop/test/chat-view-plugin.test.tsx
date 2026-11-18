@@ -26,7 +26,10 @@ describe("chat-view Cordis plugin", () => {
 				},
 			},
 		} as unknown as ExtensionAPI);
-		expect(components).toEqual([expect.objectContaining({ slot: "app.chat", moduleUrl: "./page.tsx" })]);
+		expect(components).toEqual([
+			expect.objectContaining({ slot: "main.conversation", moduleUrl: "./page.tsx" }),
+			expect.objectContaining({ slot: "conversation.composer.bar", moduleUrl: "./composer.tsx" }),
+		]);
 	});
 
 	it("passes the exact host-owned chat contract through the real slot mount", async () => {
@@ -50,7 +53,7 @@ describe("chat-view Cordis plugin", () => {
 			onToggleFocus,
 		} satisfies ChatViewProps;
 		const item = {
-			slot: "app.chat",
+			slot: "main.conversation",
 			extensionId: "/plugins/chat-view/index.ts",
 			code: `export default function Page(props) {
 				globalThis.__chatViewProps = props.chatView;

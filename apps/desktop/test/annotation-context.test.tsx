@@ -7,7 +7,7 @@ import { dispatchAnnotationAttach } from "../../../packages/client-core/src/anno
 import { UserMsgContent } from "../../../packages/client-core/src/components/transcript/transcript-content";
 import { Composer } from "../src/components/Composer";
 import { QuoteCards } from "../src/components/composer/quote-cards";
-import { WelcomeComposer } from "../src/components/WelcomeComposer";
+import { HeroComposer } from "../src/components/HeroComposer";
 import type { RpcClient } from "../src/lib/rpc";
 import { GuiSessionStore } from "../src/lib/session-store";
 
@@ -27,7 +27,7 @@ const rpc = {
 
 const mounted = new Set<Root>();
 
-// WelcomeComposer's BlurText reveal is a timer-driven mount animation; these
+// HeroComposer's BlurText reveal is a timer-driven mount animation; these
 // assertions do not depend on it, so run the file with motion disabled and
 // keep the timer out of unrelated act boundaries.
 beforeAll(() => {
@@ -80,7 +80,7 @@ describe("annotation composer contexts", () => {
 
 	it("attaches a browser annotation without writing its prompt into the welcome textarea", async () => {
 		window.localStorage.setItem("musepi-gui-dotmatrix", "0");
-		const container = await mount(<WelcomeComposer onSubmit={() => {}} rpc={rpc} />);
+		const container = await mount(<HeroComposer onSubmit={() => {}} rpc={rpc} />);
 		await act(async () => dispatchAnnotationAttach({ text: annotation.prompt, displayContext: annotation }));
 		expect(container.querySelector("textarea")?.value).toBe("");
 		expect(container.querySelector(".gui-quote-chip")).not.toBeNull();

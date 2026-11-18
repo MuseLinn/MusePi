@@ -878,6 +878,17 @@ export const tools = {
 	"tools.skillKvPath": "Installed at",
 	"tools.skillKvPathVirtual": "Declared by an extension (no file)",
 	"tools.skillVersionsEmpty": "No version history yet",
+	"tools.skillUpdateAvailable": "Update available",
+	"tools.skillUpdateAction": "Update",
+	"tools.skillUpdateLatest": "Latest",
+	"tools.skillUpdateCurrent": "Up to date",
+	"tools.skillUpdateUnknown": "Update check unavailable",
+	"tools.skillUpdateRunning": "Updating…",
+	"tools.skillUpdateChecking": "Checking…",
+	"tools.skillUpdateSources": "Sources",
+	"tools.skillUpdateSwitch": "Switch source",
+	"tools.skillBuiltinUpdateNote": "Built-in skill — updates with the MusePi client.",
+	"tools.skillUserUpdateNote": "Installed skill — reinstall from the same source to update; there is no remote check.",
 	"tools.skillRiskBody":
 		"Uninstalling deletes the skill's folder, including its scripts and assets. This cannot be undone.",
 

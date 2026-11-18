@@ -4,7 +4,14 @@ import { t, tLoose } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TmNodeCard, TurnMapCanvas, turnEndEventOf, turnUserEventOf } from "../src/components/TurnMapCanvas";
+import {
+	createDragClickGate,
+	DRAG_CLICK_WINDOW_MS,
+	TmNodeCard,
+	TurnMapCanvas,
+	turnEndEventOf,
+	turnUserEventOf,
+} from "../src/components/TurnMapCanvas";
 import type { TrajectoryEvent } from "../src/components/trajectory-data";
 import type { TurnMapNode } from "../src/components/turn-map-layout";
 
@@ -100,7 +107,8 @@ describe("轮卡折叠/展开渲染分支", () => {
 		expect(html).toContain("↓456");
 		// durationText 粗粒度:3200ms → "3s"、210ms → "0.2s"(ttft 前缀标识)。
 		expect(html).toContain('<span class="tm-lane-meta">3s</span>');
-		expect(html).toContain("ttft 0.2s");
+		// ttft 走词表(硬编码英文会在 zh-CN 下漏翻)。
+		expect(html).toContain(t("transcript.turnMapTtft", { duration: "0.2s" }));
 	});
 
 	it("泳道明细:工具行双行卡(参数摘要副行,tab 净化)", () => {
@@ -233,6 +241,122 @@ describe("TurnMapCanvas SSR 冒烟", () => {
 		// 搜索导航(既有回归,保持覆盖)。
 		expect(t("settings.trajectorySearchPrevious")).not.toBe(t("settings.trajectorySearchNext"));
 		expect(t("settings.trajectorySearchPrevious")).not.toBe(t("settings.trajectoryClearFilter"));
+	});
+});
+
+describe("createDragClickGate(拖拽合成 click 的抑制)", () => {
+	it("平移过的拖拽只吞一次 click,拖拽结束之后的新手势不受影响", () => {
+		const t = 0;
+		const gate = createDragClickGate(() => t);
+		gate.begin();
+		gate.end(true);
+		expect(gate.consume()).toBe(true);
+		// 合成 click 只合成一次;之后的 click 是用户新操作。
+		expect(gate.consume()).toBe(false);
+		// 新手势(pointerdown)无条件作废旧抑制。
+		gate.begin();
+		gate.end(true);
+		gate.begin();
+		expect(gate.consume()).toBe(false);
+	});
+
+	it("未平移的按下不抑制(空白单击不会吞掉下一次卡片点击)", () => {
+		const gate = createDragClickGate(() => 0);
+		gate.begin();
+		gate.end(false);
+		expect(gate.consume()).toBe(false);
+	});
+
+	it("抑制在时间窗后过期:没有合成 click 时不会永久吞掉后续点击", () => {
+		// 回归:抑制只由卡片处理器清零时,手势若以 pointercancel 收尾或浏览器
+		// 未合成 click,标记会一直悬着,吞掉之后第一次单击与整次双击。
+		let t = 0;
+		const gate = createDragClickGate(() => t);
+		gate.begin();
+		gate.end(true);
+		t += DRAG_CLICK_WINDOW_MS + 1;
+		expect(gate.consume()).toBe(false);
+	});
+});
+
+describe("空白拖拽后的点击不被吞", () => {
+	function pointer(type: string, target: EventTarget, x: number, y: number): void {
+		act(() =>
+			target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y })),
+		);
+	}
+
+	/** 在空白处按下、平移超过阈值、松手(浏览器随后还会在落点合成 click)。 */
+	async function panBlank(container: HTMLElement): Promise<void> {
+		const wrap = container.querySelector<HTMLElement>(".tm-wrap")!;
+		pointer("pointerdown", wrap, 400, 400);
+		pointer("pointermove", wrap, 460, 430);
+		pointer("pointerup", wrap, 460, 430);
+		// 关键:松手时浏览器在落点(这里是空白)合成一次 click。
+		await act(async () => wrap.click());
+	}
+
+	async function mount(entries: unknown[]): Promise<HTMLElement> {
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+		const root = createRoot(container);
+		mountedRoots.add(root);
+		await act(async () => root.render(<TurnMapCanvas entries={entries} />));
+		return container;
+	}
+
+	/** 真实指针序列:pointerdown → pointerup → click(浏览器这么合成点击事件)。 */
+	async function clickWithPointer(card: HTMLElement): Promise<void> {
+		pointer("pointerdown", card, 400, 400);
+		pointer("pointerup", card, 400, 400);
+		await act(async () => card.click());
+	}
+
+	it("拖拽平移松手后,紧接着单击卡片正常折叠/展开", async () => {
+		const container = await mount(windowEntries(2, 3));
+		await panBlank(container);
+		await clickWithPointer(container.querySelector<HTMLElement>(".tm-node")!);
+		await act(async () => Bun.sleep(260));
+		expect(container.querySelectorAll(".tm-node:not(.tm-node--compact)")).toHaveLength(1);
+	});
+
+	it("拖拽被 pointercancel 中止(没有合成 click)后,下一次点卡片仍正常", async () => {
+		// 手势被系统接管(触摸滚动等)时只有 pointercancel,没有 click 来
+		// 消费抑制;抑制必须随下一次手势失效,不能悬着吞掉后续点击。
+		const container = await mount(windowEntries(2, 3));
+		const wrap = container.querySelector<HTMLElement>(".tm-wrap")!;
+		pointer("pointerdown", wrap, 400, 400);
+		pointer("pointermove", wrap, 460, 430);
+		pointer("pointercancel", wrap, 460, 430);
+		await clickWithPointer(container.querySelector<HTMLElement>(".tm-node")!);
+		await act(async () => Bun.sleep(260));
+		expect(container.querySelectorAll(".tm-node:not(.tm-node--compact)")).toHaveLength(1);
+	});
+
+	it("拖拽平移松手后,紧接着双击卡片整次跳转不被吞", async () => {
+		const jumps: string[] = [];
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+		const root = createRoot(container);
+		mountedRoots.add(root);
+		await act(async () =>
+			root.render(<TurnMapCanvas entries={windowEntries(2, 3)} onJumpToEntry={id => jumps.push(id)} />),
+		);
+		await panBlank(container);
+		const card = container.querySelector<HTMLElement>(".tm-node")!;
+		await act(async () => {
+			// 双击 = 两次 (pointerdown → pointerup → click) + 一次 dblclick。
+			for (let i = 0; i < 2; i++) {
+				card.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 400, clientY: 400 }));
+				card.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, clientX: 400, clientY: 400 }));
+				card.click();
+			}
+			card.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+		});
+		await act(async () => Bun.sleep(260));
+		expect(jumps).toEqual(["u2"]);
+		// 双击不残留折叠(第一次 click 被消歧窗口吞掉)。
+		expect(container.querySelectorAll(".tm-node:not(.tm-node--compact)")).toHaveLength(0);
 	});
 });
 

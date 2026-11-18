@@ -4,7 +4,7 @@ import { type TranslationKey, t } from "../../i18n/index.js";
 
 /**
  * Empty-state draft suggestion chips (openchamber DraftPresetChips parity,
- * absorbed from the gui WelcomeComposer). Built-in entries are i18n-keyed
+ * absorbed from the gui DraftComposer). Built-in entries are i18n-keyed
  * so labels/prompts localize at render; one tap fills the composer draft
  * via {@link onPick} and the user edits/sends from there. The first 8 chips
  * show collapsed; `+` reveals the rest with a staggered blur-in and morphs

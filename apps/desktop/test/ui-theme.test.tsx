@@ -14,8 +14,8 @@ describe("ui-theme Cordis bundle", () => {
 				register: component => seats.push(component),
 			},
 		});
-		expect(seats.map(seat => seat.slot)).toEqual(["app.overlay", "settings.appearance.item"]);
-		expect(() => assertKnownComponentSlot("app.overlay")).not.toThrow();
+		expect(seats.map(seat => seat.slot)).toEqual(["shell.overlay", "settings.appearance.item"]);
+		expect(() => assertKnownComponentSlot("shell.overlay")).not.toThrow();
 		expect(() => assertKnownComponentSlot("settings.appearance.item")).not.toThrow();
 	});
 
@@ -32,7 +32,7 @@ describe("ui-theme Cordis bundle", () => {
 			root,
 		);
 		expect(components.map(item => ({ slot: item.slot, error: item.error }))).toEqual([
-			{ slot: "app.overlay", error: undefined },
+			{ slot: "shell.overlay", error: undefined },
 			{ slot: "settings.appearance.item", error: undefined },
 		]);
 		// The bundle owns skins.ts in its own folder, but the compiled rail and

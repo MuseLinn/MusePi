@@ -1,5 +1,5 @@
 /**
- * 性能与用量读数（slot: `composer.dock`）— 插件自己的组件。
+ * 性能与用量读数（slot: `conversation.composer.dock`）— 插件自己的组件。
  *
  * 两枚胶囊（液态玻璃样式用本应用的设计令牌）：
  *
@@ -29,7 +29,7 @@
  * 改都同帧生效。
  */
 
-import "./stats-row.css";
+import "./stats-pills.css";
 
 // ── 平台面 ──────────────────────────────────────────────────────────────
 // 宿主把此文件编译给 renderer，但在 daemon 工程内做类型检查（无 DOM lib）。
@@ -66,16 +66,16 @@ interface RectLike {
 	readonly width: number;
 	readonly height: number;
 }
-interface ElemLike {
+export interface ElemLike {
 	getBoundingClientRect(): RectLike;
 }
 
-type ReactNode = unknown;
-type StatsMode = "detailed" | "compact";
+export type ReactNode = unknown;
+export type StatsMode = "detailed" | "compact";
 type StatId = "activity" | "usage";
 
 /** One `session.contextUsage` usage row, as the daemon sends it. */
-interface UsageView {
+export interface UsageView {
 	input: number;
 	output: number;
 	cacheRead: number;
@@ -86,7 +86,7 @@ interface UsageView {
 }
 
 /** One `session.contextUsage.windowStats` row (pi-wire 的 WindowStats 形状)。 */
-interface WindowStatsView {
+export interface WindowStatsView {
 	turns: number;
 	steps: number;
 	llmMs: number;
@@ -102,7 +102,7 @@ interface ContextUsageResponse {
 	windowStats?: WindowStatsView | null;
 }
 
-interface SlotProps {
+export interface SlotProps {
 	rpc?: {
 		request: <T>(method: string, params?: Record<string, unknown>) => Promise<T>;
 	} | null;
@@ -112,6 +112,63 @@ interface SlotProps {
 const STATS_MODE_KEY = "musepi-gui-stats-mode";
 const STATS_MODE_EVENT = "musepi-stats-mode-changed";
 const POLL_INTERVAL_MS = 3000;
+
+/** 空读数占位（第一枚胶囊负责，保持输入区高度不跳动）。 */
+export function StatsEmpty(): ReactNode {
+	return React.createElement("span", { className: "mpstats-empty", "aria-hidden": true }, "—");
+}
+
+/** 简洁/详细偏好：两枚胶囊各自订阅同一个 localStorage 键。 */
+export function useStatsMode(): StatsMode {
+	return React.useSyncExternalStore(subscribeStatsMode, readStatsMode, () => "detailed" as StatsMode);
+}
+
+/** `session.contextUsage` 读数。每枚胶囊各自轮询：两枚是独立的 dock 席位，
+ *  不能假设另一枚会替自己取数（对齐参考实现「一条条目一枚胶囊」的粒度）。 */
+export function useStatsReadings(
+	rpc: SlotProps["rpc"],
+	sessionId: string | null | undefined,
+): { usage: UsageView | null; windowStats: WindowStatsView | null } {
+	const [readings, setReadings] = React.useState<{
+		sessionId: string | null;
+		usage: UsageView | null;
+		windowStats: WindowStatsView | null;
+	}>({ sessionId: null, usage: null, windowStats: null });
+	const currentSessionId = sessionId ?? null;
+	React.useEffect(() => {
+		setReadings(current =>
+			current.sessionId === currentSessionId
+				? current
+				: { sessionId: currentSessionId, usage: null, windowStats: null },
+		);
+		if (!rpc || !sessionId) return;
+		let alive = true;
+		const poll = (): void => {
+			void rpc
+				.request<ContextUsageResponse | null>("session.contextUsage", { sessionId })
+				.then(row => {
+					if (!alive || row === null) return;
+					setReadings({
+						sessionId,
+						usage: row.usage ?? null,
+						windowStats: row.windowStats ?? null,
+					});
+				})
+				.catch(() => {
+					// A transient read failure must not erase the last good readings.
+				});
+		};
+		poll();
+		const timer = setInterval(poll, POLL_INTERVAL_MS);
+		return () => {
+			alive = false;
+			clearInterval(timer);
+		};
+	}, [rpc, currentSessionId, sessionId]);
+	return currentSessionId === readings.sessionId
+		? { usage: readings.usage, windowStats: readings.windowStats }
+		: { usage: null, windowStats: null };
+}
 
 function readStatsMode(): StatsMode {
 	try {
@@ -156,7 +213,7 @@ function formatDuration(ms: number): string {
 }
 
 /** Decode speed reading; null when no decode-timed step exists. */
-function formatSpeed(stats: WindowStatsView): string | null {
+export function formatSpeed(stats: WindowStatsView): string | null {
 	return stats.decodeMs > 0 ? `${((stats.decodeTokens / stats.decodeMs) * 1000).toFixed(1)} tok/s` : null;
 }
 
@@ -179,7 +236,7 @@ function billedTotalTokens(usage: UsageView): number {
 }
 
 /** True when the session has billed any tokens — gates the usage pill. */
-function hasTokenActivity(usage: UsageView | null): boolean {
+export function hasTokenActivity(usage: UsageView | null): boolean {
 	return usage !== null && (usage.input + usage.cacheRead + usage.cacheWrite > 0 || usage.output > 0);
 }
 
@@ -375,7 +432,7 @@ function PillShell(props: PillShellProps): ReactNode {
 }
 
 /** 活动胶囊：轮次/步数 + 解码速度；弹窗列耗时分解。 */
-function ActivityPill(props: {
+export function ActivityPill(props: {
 	stats: WindowStatsView;
 	compact: boolean;
 	open: boolean;
@@ -438,7 +495,7 @@ function ActivityPill(props: {
 }
 
 /** 用量胶囊：token 总量 + 缓存命中率；弹窗按账单桶拆分。 */
-function UsagePill(props: {
+export function UsagePill(props: {
 	usage: UsageView;
 	compact: boolean;
 	open: boolean;
@@ -503,114 +560,4 @@ function UsagePill(props: {
 			...rows,
 		),
 	});
-}
-
-// ── 行 ──────────────────────────────────────────────────────────────────
-
-export default function StatsRow(props: SlotProps): ReactNode {
-	const { rpc, sessionId } = props;
-	const mode = React.useSyncExternalStore(subscribeStatsMode, readStatsMode, () => "detailed" as StatsMode);
-	const [readings, setReadings] = React.useState<{
-		sessionId: string | null;
-		usage: UsageView | null;
-		windowStats: WindowStatsView | null;
-	}>({ sessionId: null, usage: null, windowStats: null });
-	// 同一行最多开一个弹窗（Escape/外部点按关闭，互不叠放）。
-	const [openStat, setOpenStat] = React.useState<StatId | null>(null);
-	const activityAnchor = React.useRef<ElemLike | null>(null);
-	const usageAnchor = React.useRef<ElemLike | null>(null);
-	const currentSessionId = sessionId ?? null;
-	const usage = readings.sessionId === currentSessionId ? readings.usage : null;
-	const windowStats = readings.sessionId === currentSessionId ? readings.windowStats : null;
-	const empty = React.createElement("span", { className: "mpstats-empty", "aria-hidden": true }, "—");
-
-	React.useEffect(() => {
-		setReadings(current =>
-			current.sessionId === currentSessionId
-				? current
-				: { sessionId: currentSessionId, usage: null, windowStats: null },
-		);
-		setOpenStat(null);
-		if (!rpc || !sessionId) return;
-		let alive = true;
-		const poll = (): void => {
-			void rpc
-				.request<ContextUsageResponse | null>("session.contextUsage", { sessionId })
-				.then(row => {
-					if (!alive || row === null) return;
-					setReadings({
-						sessionId,
-						usage: row.usage ?? null,
-						windowStats: row.windowStats ?? null,
-					});
-				})
-				.catch(() => {
-					// A transient read failure must not erase the last good readings.
-				});
-		};
-		poll();
-		const timer = setInterval(poll, POLL_INTERVAL_MS);
-		return () => {
-			alive = false;
-			clearInterval(timer);
-		};
-	}, [rpc, currentSessionId, sessionId]);
-
-	if (mode === "compact") {
-		// Compact = plain readings only (speed + cache hit); no popovers.
-		const speed = windowStats ? formatSpeed(windowStats) : null;
-		const hit = usage !== null && hasTokenActivity(usage) && usage.cacheHitRate !== null ? usage.cacheHitRate : null;
-		return React.createElement(
-			"div",
-			{ className: "mpstats-row", "data-composer-stats": "" },
-			windowStats
-				? React.createElement(ActivityPill, {
-						stats: windowStats,
-						compact: true,
-						open: false,
-						onToggle: () => {},
-						anchorRef: activityAnchor,
-					})
-				: null,
-			hit !== null && usage
-				? React.createElement(UsagePill, {
-						usage,
-						compact: true,
-						open: false,
-						onToggle: () => {},
-						anchorRef: usageAnchor,
-					})
-				: null,
-			speed === null && hit === null ? empty : null,
-		);
-	}
-	const stats = windowStats;
-	const showActivity = stats !== null && stats.steps > 0;
-	const showUsage = hasTokenActivity(usage);
-	const toggle = (id: StatId) => (): void => {
-		setOpenStat(prev => (prev === id ? null : id));
-	};
-	return React.createElement(
-		"div",
-		{ className: "mpstats-row", "data-composer-stats": "" },
-		showActivity && stats
-			? React.createElement(ActivityPill, {
-					stats,
-					compact: false,
-					open: openStat === "activity",
-					onToggle: toggle("activity"),
-					anchorRef: activityAnchor,
-				})
-			: null,
-		showUsage && usage
-			? React.createElement(UsagePill, {
-					usage,
-					compact: false,
-					open: openStat === "usage",
-					onToggle: toggle("usage"),
-					anchorRef: usageAnchor,
-				})
-			: null,
-		!showActivity && !showUsage ? empty : null,
-	);
 }

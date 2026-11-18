@@ -5,12 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
-import { isMobileShell } from "../../lib/capacitor";
 import type { SessionClient } from "../../lib/client";
 import { type DragSample, isFlick, settleMs, velocityFrom } from "../../lib/drag-settle";
 import { formatWhen, shortenPath } from "../../lib/format";
 import { haptic } from "../../lib/haptics";
 import { isTopModal, useModalFocus } from "../../lib/modal-focus";
+import { useMobileSurface } from "../../lib/use-mobile-surface";
 
 /**
  * Floating bottom sheet for switching live sessions (openchamber
@@ -112,6 +112,7 @@ export function SessionsSheet({
 	}, [open]);
 
 	const prefersReduced = usePrefersReducedMotion();
+	const mobileSurface = useMobileSurface();
 
 	// Always mounted; the visible/closing stage drives the CSS animations.
 	// `visible` keeps the DOM during the exit animation so a close never
@@ -194,6 +195,12 @@ export function SessionsSheet({
 
 	if (stage === "hidden") return null;
 
+	// The footer carries the only reachable entries to new-session, host
+	// management and settings on a phone-shaped surface, so it follows the
+	// surface rather than the shell: a phone browser would otherwise open a
+	// sheet whose entire bottom row is missing.
+	const surface = mobileSurface;
+
 	const sheet = (
 		<div className={`ss-backdrop${stage === "closing" ? " ss-closing" : ""}`} role="presentation" onClick={onClose}>
 			<div
@@ -272,7 +279,7 @@ export function SessionsSheet({
 						);
 					})}
 				</div>
-				{isMobileShell() && (
+				{surface && (
 					<div className="ss-footer">
 						<button type="button" className="ss-footer-action ss-footer-action--new" onClick={onNewSession}>
 							<SquarePen size={17} aria-hidden />
@@ -345,6 +352,9 @@ function SwipeableRow({
 	const velocity = useRef(0);
 
 	const open = offset <= -SWIPE_ACTIONS_PX + 2;
+	// 标题之外，运行/暂停是列表里唯一无法从文本得知的状态；行尾菜单区整体
+	// aria-hidden，读屏拿不到。空闲行保持静默——每行都念「空闲」会淹掉标题。
+	const statusLabel = session.working ? t("shell.sessionWorking") : session.paused ? t("shell.sessionPaused") : null;
 	// Row state resets when another row opens.
 	useEffect(() => {
 		if (anySwiped) {
@@ -481,6 +491,7 @@ function SwipeableRow({
 				<button
 					type="button"
 					className={`ss-item${active ? " ss-item--active" : ""}`}
+					aria-current={active ? "true" : undefined}
 					style={{
 						transform: `translateX(${offset}px)`,
 						transition: dragging ? "none" : `transform ${settle}ms var(--spring-liquid)`,
@@ -499,11 +510,19 @@ function SwipeableRow({
 					onPointerUp={onPointerUp}
 					onPointerCancel={onPointerUp}
 				>
-					<span className="ss-item-status" aria-hidden>
+					{/* 必须 `role="img"`：裸 span 的 generic role 会丢弃 aria-label，
+					 * 有它标签才能并入行按钮的名字而不是覆盖标题。图标本身留
+					 * aria-hidden，同一个状态只念一次。 */}
+					<span
+						className="ss-item-status"
+						role={statusLabel ? "img" : undefined}
+						aria-label={statusLabel ?? undefined}
+						aria-hidden={statusLabel ? undefined : true}
+					>
 						{session.working ? (
-							<Loader2 size={13} className="ss-spin" />
+							<Loader2 size={13} className="ss-spin" aria-hidden />
 						) : (
-							<span className={`ss-item-dot${session.paused ? " ss-item-dot--paused" : ""}`} />
+							<span className={`ss-item-dot${session.paused ? " ss-item-dot--paused" : ""}`} aria-hidden />
 						)}
 					</span>
 					<span className="ss-item-body">

@@ -36,6 +36,10 @@ export const EXTENSION_HOST_MODULES = [
 	{ key: "update-ux", path: "lib/update-ux" },
 	{ key: "tooltips", path: "lib/tooltips" },
 	{ key: "slot-host", path: "lib/slot-host" },
+	/** The unified input card: the chat-view plugin's composer seat and the
+	 *  host must render the SAME component module (one copy of its hooks and
+	 *  state wiring), and the artifact must not re-bundle it. */
+	{ key: "composer", path: "components/Composer" },
 	{ key: "monaco-runtime", path: "lib/monaco-runtime" },
 	{ key: "monaco-lsp", path: "lib/monaco-lsp" },
 	{ key: "voice", path: "lib/voice" },
@@ -48,7 +52,7 @@ export const EXTENSION_HOST_MODULES = [
 	/** Shared task-center nav store: a compiled sidebar panel must read the
 	 *  SAME snapshot the page publishes, not a bundled copy of the store. */
 	{ key: "task-nav", path: "lib/scheduled-task-nav" },
-	/** Shared capability-center nav store: the compiled app.capability page
+	/** Shared capability-center nav store: the compiled main.capability page
 	 *  publishes the tab/counts and the compiled sidebar.panel.capability
 	 *  panel reads them; both must bind the ONE host instance. */
 	{ key: "capability-nav", path: "lib/capability-nav" },

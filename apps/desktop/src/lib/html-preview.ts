@@ -1,8 +1,10 @@
+import { fileUrlFromPath } from "@musepi/client-core";
+
 function fileBaseHref(documentPath: string): string {
 	const normalized = documentPath.replace(/\\/g, "/");
 	const absolute = normalized.startsWith("/") ? normalized : `/${normalized}`;
 	const separator = absolute.lastIndexOf("/");
-	return `file://${encodeURI(absolute.slice(0, separator + 1))}`;
+	return fileUrlFromPath(`${absolute.slice(0, separator)}/`);
 }
 
 /** Resolve relative images, styles and scripts against the previewed file.

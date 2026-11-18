@@ -167,4 +167,54 @@ describe("desktop daemon staging", () => {
 
 		await expect(stageDaemon(options)).rejects.toThrow("ENOENT");
 	});
+
+	it("refuses a staged tree that carries development artifacts", async () => {
+		const options = await fixture();
+		const pluginDir = path.join(
+			options.repoRoot,
+			"packages",
+			"coding-agent",
+			"src",
+			"bundled-plugins",
+			"daemon-plugin",
+		);
+		await Bun.write(path.join(pluginDir, "skills", "fixture-skill", "scripts", "debug.test.ts"), "export {};\n");
+
+		await expect(stageDaemon(options)).rejects.toThrow("development artifacts");
+	});
+
+	it("drops maintainer-only scripts from the staged product skills", async () => {
+		const options = await fixture();
+		const pluginDir = path.join(
+			options.repoRoot,
+			"packages",
+			"coding-agent",
+			"src",
+			"bundled-plugins",
+			"product-skills",
+		);
+		await Bun.write(
+			path.join(pluginDir, "package.json"),
+			JSON.stringify({ name: "product-skills", musepi: { extensions: ["./index.ts"] } }),
+		);
+		await Bun.write(path.join(pluginDir, "index.ts"), "export function apply() {}\n");
+		await Bun.write(
+			path.join(pluginDir, "skills", "ui-ux-pro-max", "scripts", "validate_data.py"),
+			"print('maintainer')\n",
+		);
+		await Bun.write(path.join(pluginDir, "skills", "ui-ux-pro-max", "scripts", "search.py"), "print('runtime')\n");
+
+		await stageDaemon(options);
+
+		const staged = path.join(
+			options.outputDir,
+			"bundled-plugins",
+			"product-skills",
+			"skills",
+			"ui-ux-pro-max",
+			"scripts",
+		);
+		expect(await Bun.file(path.join(staged, "validate_data.py")).exists()).toBe(false);
+		expect(await Bun.file(path.join(staged, "search.py")).exists()).toBe(true);
+	});
 });

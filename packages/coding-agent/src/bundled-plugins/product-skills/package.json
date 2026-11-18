@@ -6,7 +6,7 @@
 	"license": "MIT",
 	"musepi": {
 		"label": "MusePi Product Skills",
-		"description": "Six built-in skills — board, interface, plugin development and using MusePi — with their resources.",
+		"description": "Five built-in skills — board, interface, plugin development and using MusePi — with their resources.",
 		"icon": "✦",
 		"extensions": ["./index.ts"]
 	}

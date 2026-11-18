@@ -4,7 +4,7 @@
  *
  * These live in one module because BOTH composers use them — the session
  * composer (`composer/use-completion`) and the welcome composer
- * (`WelcomeComposer`) — and they had drifted: the session one was fixed for
+ * (`HeroComposer`) — and they had drifted: the session one was fixed for
  * "中文正文或标点紧邻 @ 也能唤起面板" while the welcome one still demanded a
  * line-leading token, so the empty state and an open session behaved
  * differently for the same keystroke.

@@ -1,4 +1,4 @@
-import type { AssistantMessage, AttachmentGetResult, AttachmentStatResult, SessionEntry } from "@musepi/pi-wire";
+import type { AssistantMessage, AttachmentGetResult, AttachmentStatResult } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AgentDrawer } from "./components/agents/AgentDrawer";
@@ -21,7 +21,10 @@ import { TranscriptSkeleton } from "./components/shell/TranscriptSkeleton";
 import { WelcomeHint } from "./components/shell/WelcomeHint";
 import { WorkspaceView } from "./components/shell/WorkspaceView";
 import { msgText, Transcript } from "./components/transcript/Transcript";
+import { deriveTreeOutline } from "./components/transcript/tree-outline";
+import { TreeOutlineNav } from "./components/transcript/tree-outline-nav";
 import { t } from "./i18n/index.js";
+import { pushActionToast } from "./lib/action-toast";
 import { useBackLayer } from "./lib/back-stack";
 import {
 	clearBadge,
@@ -41,8 +44,10 @@ import { loadResolvedHosts, rememberHost } from "./lib/hosts";
 import { enableNativeGlass } from "./lib/native-glass";
 import { useShellLayout } from "./lib/responsive-shell";
 import { cacheMorphRects, stageLeavingScene } from "./lib/scene-morph";
+import { isMobileSurface } from "./lib/surface";
 import { useTts } from "./lib/tts";
 import { type SessionClient, useGuestSelector } from "./lib/use-guest";
+import { useMobileSurface } from "./lib/use-mobile-surface";
 import type { ToolRenderHost } from "./tool-render";
 import { UI_BLOCK_ANSWER_EVENT } from "./ui-blocks/answers.js";
 import "./components/shell/shell.css";
@@ -79,6 +84,12 @@ function hashLink(): string | null {
 export function App(): ReactNode {
 	const [client, setClient] = useState<GuestClient | HostClient | null>(null);
 	const [connectError, setConnectError] = useState<string | null>(null);
+	// Presentation surface, not native capability: a phone browser gets the
+	// same bottom destinations and draft-first flow as the shells, while a
+	// narrow desktop window keeps the workspace directory. Re-evaluated on
+	// rotation, folding and resize, so a foldable moving between postures
+	// swaps IA instead of leaving a floating bar over a wide layout.
+	const mobileSurface = useMobileSurface();
 	// Latest-ref mirror for the morph gate below: the connect callbacks are
 	// memoized empty, so they can't read `client` from their closure.
 	const clientRef = useRef<GuestClient | HostClient | null>(null);
@@ -334,7 +345,7 @@ export function App(): ReactNode {
 	// no settings destination at all before, and a tab bar that disappears on
 	// disconnect reads as a broken app rather than a two-state layout.
 	const [mobileTab, setMobileTab] = useState<MobileTab>("connect");
-	const showTabBar = isMobileShell();
+	const showTabBar = mobileSurface;
 
 	useEffect(() => {
 		const root = document.documentElement;
@@ -545,6 +556,11 @@ function useMobileNotifications(client: SessionClient | null, link: string | nul
 								title: t("settings.musepiSessionUpdate"),
 								body: text.slice(0, 140) || t("settings.sessionUpdate"),
 								smallIcon: "ic_stat_musepi",
+								// Must match `SESSION_CHANNEL_ID` in the Android
+								// MainActivity, which creates the branded channel.
+								// Without it the plugin falls back to its own generic
+								// "Default" channel and the brand colours are lost.
+								channelId: "musepi-session",
 								// Deep-link payload: tapping the notification routes
 								// back to this session via DEEP_LINK_EVENT (see
 								// setupDeepLinkHandler) even after a cold start.
@@ -603,6 +619,7 @@ interface SessionProps {
  * a stream — never the shell, header, composer, or toasts.
  */
 function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRenderHost }): ReactNode {
+	const mobileSurface = useMobileSurface();
 	const entries = useGuestSelector(client, s => s.entries);
 	const stream = useGuestSelector(client, s => s.stream);
 	const streamDone = useGuestSelector(client, s => s.streamDone);
@@ -630,34 +647,51 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 		() => tts.getSnapshot().speakingId,
 	);
 	// Mobile empty state gets the time-aware greeting + rotating tip in place
-	// of the bare "no activity yet" line (gui WelcomeComposer parity). While a
+	// of the bare "no activity yet" line (gui DraftComposer parity). While a
 	// session is still hydrating the transcript is empty too, and the greeting
 	// would announce an existing conversation as brand new — the skeleton owns
 	// that window instead. The new-session draft is the one genuinely empty
 	// state: it keeps the greeting.
 	const draftSession = workspace !== null && focusedSessionId === null;
 	const hydrating = entries.length === 0 && stream === null && !draftSession && phase !== "live";
-	const emptySlot = isMobileShell() ? hydrating ? <TranscriptSkeleton /> : <WelcomeHint /> : undefined;
+	const emptySlot = mobileSurface ? hydrating ? <TranscriptSkeleton /> : <WelcomeHint /> : undefined;
 	// Revert (撤回) is a session-tree operation: branchAt moves the leaf IN
 	// PLACE at the target node (TUI /tree parity) — the old leaf and its
-	// subtree stay reachable as a sibling branch, never truncated. For a user
-	// node the daemon backfills the text; the host re-sends it so the turn
-	// resumes at that point. (True composer pre-fill — TUI waits for the
-	// user to confirm — is a follow-up; the GUI composer has no external
-	// set-text channel yet.)
-	const branchAt = (messageId: string): void => {
-		if (!focusedSessionId) return;
-		void client
-			.rpc<{ editorText?: string | null; editorImages?: unknown[] }>("session.branchAt", {
-				sessionId: focusedSessionId,
-				messageId,
-			})
-			.then(result => {
-				if (result.editorText) host.sendPrompt?.(result.editorText);
-			})
-			.catch(err => {
-				console.error("[transcript] branchAt failed:", err);
-			});
+	// subtree stay reachable as a sibling branch, never truncated. Nothing is
+	// re-sent: the user is parked at the branch point, which is what makes
+	// the fork hint and the undo row meaningful (same contract as the desktop
+	// 撤回; auto-resending the prompt here would commit the new branch and
+	// leave undo with nothing to undo).
+	//
+	// The RPC answer carries the post-move leaf; the session's own events do
+	// not (a tree move appends no entry), so the leaf is tracked locally.
+	// `leafPin` is scoped to the session that produced it — switching sessions
+	// falls back to the tip instead of pinning an id the new tree lacks.
+	interface BranchResult {
+		ok?: boolean;
+		leafId?: string | null;
+	}
+	const [leafPin, setLeafPin] = useState<{
+		sessionId: string | null;
+		/** 移动之前转录尖端的 id:尖端一变,说明用户已从该节点继续。 */
+		tipId: string | null;
+		leaf: { mode: "tip" } | { mode: "root" } | { mode: "node"; id: string };
+	} | null>(null);
+	// 撤回后可撤销:原 leaf 变成兄弟分支,再发一次 branchAt 就能回去。
+	// `tipId` 与 leafPin 同理 —— 用户从撤回点继续发送就提交了新分支,
+	// 撤销窗口随之关闭。
+	const [reverted, setReverted] = useState<{
+		sessionId: string | null;
+		tipId: string | null;
+		fromLeafId: string;
+		label: string;
+	} | null>(null);
+	const requestBranch = (messageId: string): Promise<BranchResult> => {
+		if (!focusedSessionId) return Promise.reject(new Error("no focused session"));
+		return client.rpc<BranchResult>("session.branchAt", {
+			sessionId: focusedSessionId,
+			messageId,
+		});
 	};
 	// Retry (重试) on an assistant reply regenerates it IN PLACE: the daemon
 	// truncates to just before the reply (old reply + tail stay as a sibling
@@ -696,52 +730,121 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 	};
 	// Branch topology for the transcript's session-tree nav (layer-1 branch
 	// bars + sibling switching): child counts keyed by entry id from
-	// parentId links, the active path (leaf → root), and switch → branchAt.
+	// parentId links, the active path (root → leaf), and switch → branchAt.
+	// The branch bar and the mobile breadcrumb consume ONE derivation, so the
+	// highlighted path and the breadcrumb can never disagree.
+	const tipId = entries.length > 0 ? entries[entries.length - 1]!.id : null;
+	// A pin survives only while the transcript tip is still where it was when
+	// the branch moved: the daemon moves the leaf without appending, so the
+	// first new entry is the user continuing from that node — at which point
+	// the view must follow the tip again, not stay on the branch point.
+	const pin = leafPin && leafPin.sessionId === focusedSessionId && leafPin.tipId === tipId ? leafPin.leaf : null;
+	const outline = useMemo(() => deriveTreeOutline(entries, pin ?? { mode: "tip" }), [entries, pin]);
+	const messageLabel = (id: string): string => {
+		const entry = entries.find(candidate => candidate.id === id);
+		if (entry?.type !== "message") return "";
+		const message = entry.message;
+		if (message.role === "bashExecution") return message.command.replace(/\s+/g, " ").trim().slice(0, 60);
+		return msgText(message).replace(/\s+/g, " ").trim().slice(0, 60);
+	};
+	/** 把 leaf 移到 `id`。撤回要留撤销入口,面包屑与分支条切换不留(与桌面端
+	 *  显式节点切换会清掉撤销浮层一致)。 */
+	const moveLeaf = (messageId: string, remember = false): void => {
+		const fromLeafId = outline.leafId;
+		void requestBranch(messageId)
+			.then(result => {
+				if (result.ok === false) {
+					pushActionToast({ kind: "error", message: t("general.branchFailed") });
+					return;
+				}
+				setLeafPin({
+					sessionId: focusedSessionId,
+					tipId,
+					leaf: result.leafId ? { mode: "node", id: result.leafId } : { mode: "root" },
+				});
+				setReverted(
+					remember && fromLeafId
+						? { sessionId: focusedSessionId, tipId, fromLeafId, label: messageLabel(messageId) }
+						: null,
+				);
+			})
+			.catch(err => {
+				pushActionToast({
+					kind: "error",
+					message: `${t("general.branchFailed")}: ${err instanceof Error ? err.message : String(err)}`,
+				});
+			});
+	};
 	const branchInfo = useMemo(() => {
 		if (!focusedSessionId || entries.length === 0) return undefined;
-		const childCount = new Map<string, number>();
-		for (const e of entries) {
-			if (e.parentId) childCount.set(e.parentId, (childCount.get(e.parentId) ?? 0) + 1);
-		}
-		const activePathIds = new Set<string>();
-		// Leaf = last entry without children; walk parentId up to the root.
-		let leaf: SessionEntry | undefined;
-		for (let i = entries.length - 1; i >= 0; i--) {
-			if (!childCount.has(entries[i].id)) {
-				leaf = entries[i];
-				break;
-			}
-		}
-		for (let cur = leaf; cur; cur = entries.find(e => e.id === cur?.parentId)) {
-			if (!cur) break;
-			activePathIds.add(cur.id);
-		}
 		return {
-			childCount,
-			activePathIds,
-			onSwitchBranch: (leafEntryId: string) => branchAt(leafEntryId),
+			childCount: outline.childCount,
+			activePathIds: new Set(outline.path.map(node => node.id)),
+			onSwitchBranch: (leafEntryId: string) => moveLeaf(leafEntryId),
 		};
-	}, [entries, focusedSessionId, client]);
+		// moveLeaf 每次渲染都是新函数,但它只读当次渲染的 outline/entries,
+		// 而这两者已在依赖里;把它列为依赖只会让 memo 每次都失效。
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [entries, focusedSessionId, client, outline]);
+	// 撤销:原 leaf 仍在树上(撤回从不截断),再发一次 branchAt 就回去了。
+	const undoRevert = (): void => {
+		const target = reverted;
+		if (!target) return;
+		void client
+			.rpc<{ ok?: boolean; leafId?: string | null }>("session.branchAt", {
+				sessionId: target.sessionId ?? focusedSessionId,
+				messageId: target.fromLeafId,
+			})
+			.then(result => {
+				if (result.ok === false) {
+					pushActionToast({ kind: "error", message: t("general.branchFailed") });
+					return;
+				}
+				setLeafPin({ sessionId: focusedSessionId, tipId, leaf: { mode: "tip" } });
+				setReverted(null);
+			})
+			.catch(err => {
+				pushActionToast({
+					kind: "error",
+					message: `${t("general.branchFailed")}: ${err instanceof Error ? err.message : String(err)}`,
+				});
+			});
+	};
 	return (
-		<Transcript
-			entries={entries}
-			stream={stream}
-			streamDone={streamDone}
-			activeTools={activeTools}
-			working={working}
-			roundDurations={roundDurations}
-			host={host}
-			emptySlot={emptySlot}
-			userGutter={singleParty ? "" : undefined}
-			agentGutter={singleParty ? "" : undefined}
-			onRevert={id => branchAt(id)}
-			onRetry={(id, _text) => regenerateAt(id)}
-			onFork={(id, text, includeTarget) => forkAt(id, text, includeTarget)}
-			onSpeak={(text, id) => tts.speak(text, id)}
-			speakingId={speakingId}
-			onStopSpeak={() => tts.stop()}
-			branchInfo={branchInfo}
-		/>
+		<>
+			{mobileSurface && (
+				<TreeOutlineNav
+					outline={outline}
+					undo={
+						reverted && reverted.sessionId === focusedSessionId && reverted.tipId === tipId
+							? { label: reverted.label, onUndo: undoRevert, onDismiss: () => setReverted(null) }
+							: null
+					}
+					// 面包屑点击 = 把 leaf 移到该节点(旧尾部保留为兄弟分支),与
+					// 桌面端 switchToNode 同一语义;不滚动到该行。
+					onJump={id => moveLeaf(id)}
+				/>
+			)}
+			<Transcript
+				entries={entries}
+				stream={stream}
+				streamDone={streamDone}
+				activeTools={activeTools}
+				working={working}
+				roundDurations={roundDurations}
+				host={host}
+				emptySlot={emptySlot}
+				userGutter={singleParty ? "" : undefined}
+				agentGutter={singleParty ? "" : undefined}
+				onRevert={id => moveLeaf(id, true)}
+				onRetry={(id, _text) => regenerateAt(id)}
+				onFork={(id, text, includeTarget) => forkAt(id, text, includeTarget)}
+				onSpeak={(text, id) => tts.speak(text, id)}
+				speakingId={speakingId}
+				onStopSpeak={() => tts.stop()}
+				branchInfo={branchInfo}
+			/>
+		</>
 	);
 }
 
@@ -949,7 +1052,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 		}
 	}, [layout, subCount]);
 
-	const mobile = isMobileShell();
+	const mobile = useMobileSurface();
 	const draftSession = mobile && workspace !== null && focusedSessionId === null;
 	const title = draftSession
 		? t("settings.newSession")
@@ -965,7 +1068,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 	// flip commits. Desktop/web shells keep the plain hard switch — the
 	// navigation paths outside the mobile shell never change.
 	const stageMobileSceneMorph = useCallback((): void => {
-		if (!isMobileShell()) return;
+		if (!isMobileSurface()) return;
 		const root =
 			document.querySelector<HTMLElement>(".sh-workspace") ?? document.querySelector<HTMLElement>(".sh-content");
 		if (!root) return;
@@ -1036,6 +1139,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 				.filter(Boolean)
 				.join(" ")}
 			data-layout={layout}
+			data-surface={mobile ? "mobile" : undefined}
 		>
 			{isCompatShell() && <div className="compat-titlebar" aria-hidden="true" />}
 			<HeaderBar
@@ -1069,6 +1173,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 						onDeleteSession={id => client.rpc("session.delete", { sessionId: id })}
 						onRenameSession={(id, title) => client.rpc("session.rename", { sessionId: id, title })}
 						onStopSession={id => client.rpc("session.abort", { sessionId: id })}
+						mobile={mobile}
 					/>
 				) : activePanel !== null ? (
 					<section className="sh-content" data-rail="false">
@@ -1122,7 +1227,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 			</main>
 			{!inWorkspace && activePanel === null && (
 				<>
-					<CompatSlotHost slot="composer.dock" className="sh-compat-dock" />
+					<CompatSlotHost slot="conversation.composer.dock" className="sh-compat-dock" />
 					<Composer client={client} draftScope={currentLink} />
 				</>
 			)}
@@ -1147,7 +1252,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 				onNewLink={onLeave}
 				// On a phone the ended card belongs to the chat destination; over
 				// 连接/设置 it was a modal with no dismiss covering live controls.
-				blocking={!isMobileShell() || mobileTab === "chat"}
+				blocking={!mobile || mobileTab === "chat"}
 			/>
 			<Toasts />
 		</div>

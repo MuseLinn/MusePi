@@ -173,6 +173,18 @@ describe("flat release notes (this repository's shape)", () => {
 		expect(current?.highlights.length).toBeGreaterThan(0);
 		expect(current?.highlights[0]?.kind).toBe("note");
 	});
+
+	test("CRLF line endings parse the same as LF", () => {
+		// A Windows checkout, or any editor that rewrites the file, puts a `\r`
+		// before every newline. Every anchored pattern in the parser is `$`-bound,
+		// so an intolerant split yields zero versions and the what's-new panel
+		// renders empty — the failure mode this test pins.
+		const lf = "## [1.0.0] - 2026-01-01\n\n- **标题**：说明。\n";
+		const crlf = lf.replace(/\n/g, "\r\n");
+		expect(parseChangelogHighlights(crlf)).toEqual(parseChangelogHighlights(lf));
+		expect(parseChangelogHighlights(crlf)[0]?.version).toBe("1.0.0");
+		expect(parseChangelogHighlights(crlf)[0]?.count).toBe(1);
+	});
 });
 
 describe("localizeChangelogMarkdown", () => {

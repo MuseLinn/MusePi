@@ -2,7 +2,8 @@ import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
 import * as React from "react";
 import { act } from "react";
 import { GlobalRegistrator } from "../../client-core/node_modules/@happy-dom/global-registrator";
-import StatsRow from "../src/bundled-plugins/stats-pills/ui/stats-row";
+import ActivityDockPill from "../src/bundled-plugins/stats-pills/ui/activity-pill";
+import UsageDockPill from "../src/bundled-plugins/stats-pills/ui/usage-pill";
 
 interface Root {
 	render(node: React.ReactNode): void;
@@ -113,7 +114,13 @@ function controlledRpc(outcomes: RpcOutcome[]): { request<T>(method: string): Pr
 	};
 }
 
-const StatsRowComponent = StatsRow as unknown as (props: {
+/** The two dock entries are mounted in the same order the plugin registers
+ *  them, so the test sees the row the user sees. */
+const ActivityComponent = ActivityDockPill as unknown as (props: {
+	rpc: { request<T>(method: string): Promise<T> };
+	sessionId: string;
+}) => React.ReactNode;
+const UsageComponent = UsageDockPill as unknown as (props: {
 	rpc: { request<T>(method: string): Promise<T> };
 	sessionId: string;
 }) => React.ReactNode;
@@ -129,10 +136,20 @@ async function mountStats(
 	const container = doc.createElement("div");
 	doc.body.appendChild(container);
 	const root = createRoot(container as never);
-	const rpc = controlledRpc(outcomes);
+	// Each dock entry owns its own read (they are separate seats), so each gets
+	// its own RPC cursor over the same scripted outcomes.
+	const activityRpc = controlledRpc(outcomes);
+	const usageRpc = controlledRpc(outcomes);
 	const render = async (session: string): Promise<void> => {
 		await act(async () => {
-			root.render(React.createElement(StatsRowComponent, { rpc, sessionId: session }));
+			root.render(
+				React.createElement(
+					React.Fragment,
+					null,
+					React.createElement(ActivityComponent, { rpc: activityRpc, sessionId: session }),
+					React.createElement(UsageComponent, { rpc: usageRpc, sessionId: session }),
+				),
+			);
 			await Promise.resolve();
 		});
 	};
@@ -183,7 +200,7 @@ describe("stats row session data", () => {
 		vi.useFakeTimers();
 		const style = doc.createElement("style");
 		style.textContent = await Bun.file(
-			new URL("../src/bundled-plugins/stats-pills/ui/stats-row.css", import.meta.url),
+			new URL("../src/bundled-plugins/stats-pills/ui/stats-pills.css", import.meta.url),
 		).text();
 		doc.head.appendChild(style);
 		const response = Promise.withResolvers<UsageResponse | null>();
@@ -192,23 +209,23 @@ describe("stats row session data", () => {
 			{ kind: "value", value: null },
 		]);
 		try {
-			const row = container.querySelector(".mpstats-row");
-			expect(row).not.toBeNull();
+			const placeholder = container.querySelector(".mpstats-empty");
+			expect(placeholder).not.toBeNull();
 			expect(container.textContent).toContain("—");
-			expect(view.getComputedStyle(row!).minHeight).toBe("32px");
+			expect(view.getComputedStyle(placeholder!).minHeight).toBe("24px");
 			await act(async () => {
 				response.resolve(null);
 				await response.promise;
 			});
-			expect(container.querySelector(".mpstats-row")).not.toBeNull();
+			expect(container.querySelector(".mpstats-empty")).not.toBeNull();
 			expect(container.textContent).toContain("—");
-			expect(view.getComputedStyle(row!).minHeight).toBe("32px");
+			expect(view.getComputedStyle(placeholder!).minHeight).toBe("24px");
 			await act(async () => {
 				vi.advanceTimersByTime(3000);
 				await Promise.resolve();
 			});
-			expect(container.querySelector(".mpstats-row")).not.toBeNull();
-			expect(view.getComputedStyle(row!).minHeight).toBe("32px");
+			expect(container.querySelector(".mpstats-empty")).not.toBeNull();
+			expect(view.getComputedStyle(placeholder!).minHeight).toBe("24px");
 		} finally {
 			await unmount(root);
 		}

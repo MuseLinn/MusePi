@@ -51,8 +51,10 @@ export interface SlotComponent {
 	cssFile?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
+	/** Entry identity within its slot (one dock entry per pill). */
+	id?: string;
 	availability?: "always" | "on-demand";
-	/** transcript.node seat: node kinds (transcriptNodeKind entryKey) this
+	/** conversation.chat.node seat: node kinds (transcriptNodeKind entryKey) this
 	 *  renderer owns. No entryKinds -> does not participate in per-kind node
 	 *  dispatch. Entry-key analog. */
 	entryKinds?: string[];
@@ -465,6 +467,7 @@ function declaredComponents(entryPath: string):
 			codeFile: string;
 			cssFile?: string;
 			order?: number;
+			id?: string;
 			availability?: "always" | "on-demand";
 	  }>
 	| undefined {
@@ -479,6 +482,7 @@ function declaredComponents(entryPath: string):
 		codeFile: string;
 		cssFile?: string;
 		order?: number;
+		id?: string;
 		availability?: "always" | "on-demand";
 	}> = [];
 	for (const row of rows) {
@@ -497,6 +501,7 @@ function declaredComponents(entryPath: string):
 			codeFile,
 			...(cssFile ? { cssFile } : {}),
 			...(row.order !== undefined ? { order: row.order } : {}),
+			...(row.id ? { id: row.id } : {}),
 			...(availability ? { availability } : {}),
 		});
 	}
@@ -581,6 +586,8 @@ interface PrebuiltManifest {
 			css?: string;
 			label?: string;
 			order?: number;
+			/** Entry identity within the slot (one dock entry per pill). */
+			id?: string;
 			/** Written by the host's build; validated on read, never trusted raw. */
 			availability?: string;
 		}>
@@ -735,6 +742,7 @@ export async function collectSlotComponents(
 					codeFile: row.codeFile,
 					...(row.cssFile ? { cssFile: row.cssFile } : {}),
 					...(row.order !== undefined ? { order: row.order } : {}),
+					...(row.id ? { id: row.id } : {}),
 					...(row.availability ? { availability: row.availability } : {}),
 				});
 			}
@@ -757,6 +765,7 @@ export async function collectSlotComponents(
 						codeFile: built.codeFile,
 						...(built.cssFile ? { cssFile: built.cssFile } : {}),
 						...(component.order !== undefined ? { order: component.order } : {}),
+						...(component.id ? { id: component.id } : {}),
 						...(component.availability ? { availability: component.availability } : {}),
 						...(component.entryKinds && component.entryKinds.length > 0
 							? { entryKinds: component.entryKinds }
@@ -772,6 +781,7 @@ export async function collectSlotComponents(
 					code: compiled.code,
 					...(compiled.css ? { css: compiled.css } : {}),
 					...(component.order !== undefined ? { order: component.order } : {}),
+					...(component.id ? { id: component.id } : {}),
 					...(component.availability ? { availability: component.availability } : {}),
 					...(component.entryKinds && component.entryKinds.length > 0 ? { entryKinds: component.entryKinds } : {}),
 				});
@@ -785,6 +795,7 @@ export async function collectSlotComponents(
 					code: "",
 					error: String(error),
 					...(component.order !== undefined ? { order: component.order } : {}),
+					...(component.id ? { id: component.id } : {}),
 					...(component.availability ? { availability: component.availability } : {}),
 				});
 			}
