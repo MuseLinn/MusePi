@@ -1,6 +1,4 @@
-use std::io::Cursor;
-
-use image::{DynamicImage, ImageFormat, RgbaImage, imageops::FilterType};
+use image::{RgbaImage, imageops::FilterType};
 
 use super::{
 	error::{CoreResult, DesktopError},
@@ -456,10 +454,13 @@ fn capped_dimensions(
 	Ok((width, height))
 }
 
-pub fn encode_png(image: RgbaImage) -> CoreResult<Vec<u8>> {
+pub fn encode_png(image: &RgbaImage) -> CoreResult<Vec<u8>> {
+	use image::ImageEncoder as _;
+
+	let (width, height) = image.dimensions();
 	let mut png = Vec::with_capacity(image.len() / 2);
-	DynamicImage::ImageRgba8(image)
-		.write_to(&mut Cursor::new(&mut png), ImageFormat::Png)
+	image::codecs::png::PngEncoder::new(&mut png)
+		.write_image(image.as_raw(), width, height, image::ExtendedColorType::Rgba8)
 		.map_err(|error| DesktopError::capture_failed(format!("PNG encoding failed: {error}")))?;
 	Ok(png)
 }

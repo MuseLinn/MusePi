@@ -129,8 +129,17 @@ impl CancellationSource {
 		self.cancel();
 	}
 
+	#[cfg(test)]
 	pub(crate) fn control_active(&self) -> bool {
 		self.0.state.lock().is_some()
+	}
+
+	/// Whether a lease is held and what its physical-Escape stop has.
+	pub(crate) fn control_state(&self) -> (bool, EscapeStop) {
+		let state = self.0.state.lock();
+		state
+			.as_ref()
+			.map_or((false, EscapeStop::NotRequested), |lease| (true, lease.escape_stop))
 	}
 
 	/// How many times the user's physical Escape has stopped this session.
@@ -143,6 +152,40 @@ impl CancellationSource {
 	#[cfg(target_os = "linux")]
 	pub(crate) fn set_deadline(&self, deadline: Option<Instant>) {
 		*self.0.deadline.lock() = deadline;
+	}
+}
+
+/// What a held lease armed for the user's physical-Escape stop. A monitor
+/// that cannot start never refuses ownership, so the host has to be able to
+/// read whether the safety net is actually there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EscapeStop {
+	/// The platform monitor is running under this lease.
+	Armed,
+	/// The platform offers a monitor but starting it failed.
+	Unavailable,
+	/// No monitor exists on this platform or display server.
+	#[cfg_attr(
+		windows,
+		allow(
+			dead_code,
+			reason = "Windows always offers a monitor; macOS, Wayland and test leases report \
+			          Unsupported"
+		)
+	)]
+	Unsupported,
+	/// No lease is held.
+	NotRequested,
+}
+
+impl EscapeStop {
+	pub(crate) const fn as_str(self) -> &'static str {
+		match self {
+			Self::Armed => "armed",
+			Self::Unavailable => "unavailable",
+			Self::Unsupported => "unsupported",
+			Self::NotRequested => "not_requested",
+		}
 	}
 }
 
@@ -324,11 +367,12 @@ fn busy() -> DesktopError {
 /// another host thread. Closing/crashing the process releases the OS resource.
 struct ControlLease {
 	#[cfg(windows)]
-	_escape: Option<windows::EscapeMonitor>,
+	_escape:     Option<windows::EscapeMonitor>,
 	#[cfg(target_os = "linux")]
-	_escape: Option<linux::EscapeMonitor>,
-	_kernel: KernelOwner,
-	running: AtomicBool,
+	_escape:     Option<linux::EscapeMonitor>,
+	escape_stop: EscapeStop,
+	_kernel:     KernelOwner,
+	running:     AtomicBool,
 }
 
 impl ControlLease {
@@ -339,25 +383,37 @@ impl ControlLease {
 	/// offer it need no special permission on Windows, X11 input monitoring can
 	/// be unavailable, and macOS has no monitor yet. Refusing would let a
 	/// missing safety net disable input that works without one, so ownership is
-	/// still granted and `escape_stops` simply never rises.
+	/// still granted and `escape_stops` simply never rises. The lease records
+	/// `EscapeStop::Unavailable` instead of dropping the failure, so
+	/// `controlState().escapeStop` reports the missing net to the host.
 	fn acquire(source: &CancellationSource, takeover: bool) -> CoreResult<Self> {
 		let kernel = KernelOwner::acquire()?;
 		let stop = || EmergencyStop(Arc::downgrade(&source.0));
 		#[cfg(windows)]
-		let escape = takeover
-			.then(|| windows::EscapeMonitor::start(stop()).ok())
-			.flatten();
+		let (escape, escape_stop) = if takeover {
+			match windows::EscapeMonitor::start(stop()) {
+				Ok(monitor) => (Some(monitor), EscapeStop::Armed),
+				Err(_) => (None, EscapeStop::Unavailable),
+			}
+		} else {
+			(None, EscapeStop::NotRequested)
+		};
 		#[cfg(target_os = "linux")]
-		let escape = takeover
-			.then(|| linux::EscapeMonitor::start(stop()).ok().flatten())
-			.flatten();
-		#[cfg(any(windows, target_os = "linux"))]
-		return Ok(Self { _escape: escape, _kernel: kernel, running: AtomicBool::new(false) });
+		let (escape, escape_stop) = if takeover {
+			match linux::EscapeMonitor::start(stop()) {
+				Ok(Some(monitor)) => (Some(monitor), EscapeStop::Armed),
+				Ok(None) => (None, EscapeStop::Unsupported),
+				Err(_) => (None, EscapeStop::Unavailable),
+			}
+		} else {
+			(None, EscapeStop::NotRequested)
+		};
 		#[cfg(not(any(windows, target_os = "linux")))]
-		{
+		let (escape, escape_stop) = {
 			let _ = (source, takeover, stop);
-			Ok(Self { _kernel: kernel, running: AtomicBool::new(false) })
-		}
+			(None, EscapeStop::Unsupported)
+		};
+		Ok(Self { _escape: escape, escape_stop, _kernel: kernel, running: AtomicBool::new(false) })
 	}
 }
 
@@ -599,7 +655,12 @@ pub(crate) fn grant_for_test(source: &CancellationSource) {
 			Err(error) => panic!("test kernel owner: {error:?}"),
 		}
 	};
-	let owner = ControlLease { _escape: None, _kernel: kernel, running: AtomicBool::new(false) };
+	let owner = ControlLease {
+		_escape:     None,
+		escape_stop: EscapeStop::Unsupported,
+		_kernel:     kernel,
+		running:     AtomicBool::new(false),
+	};
 	*source.0.state.lock() = Some(Arc::new(owner));
 }
 
@@ -731,6 +792,37 @@ mod tests {
 		drop(lease);
 		drop(KernelOwner::acquire().expect("background input releases kernel ownership"));
 		remove_test_lock();
+	}
+
+	#[test]
+	fn a_held_lease_reports_what_its_escape_stop_armed() {
+		let _serial = OWNERSHIP_TEST.lock();
+		let source = CancellationSource::default();
+		grant_for_test(&source);
+		let (active, escape_stop) = source.control_state();
+		assert!(active, "the test grant installs a lease");
+		assert_eq!(
+			escape_stop,
+			EscapeStop::Unsupported,
+			"the test lease arms no platform monitor, and says so"
+		);
+		source
+			.acquire_control(&source.token())
+			.expect("idempotent acquisition");
+		assert_eq!(source.control_state(), (true, EscapeStop::Unsupported));
+		source.release_control();
+		assert_eq!(source.control_state(), (false, EscapeStop::NotRequested));
+		drop(source);
+		drop(KernelOwner::acquire().expect("released ownership"));
+		remove_test_lock();
+	}
+
+	#[test]
+	fn escape_stop_states_have_stable_labels() {
+		assert_eq!(EscapeStop::Armed.as_str(), "armed");
+		assert_eq!(EscapeStop::Unavailable.as_str(), "unavailable");
+		assert_eq!(EscapeStop::Unsupported.as_str(), "unsupported");
+		assert_eq!(EscapeStop::NotRequested.as_str(), "not_requested");
 	}
 
 	#[test]

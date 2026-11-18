@@ -12,6 +12,8 @@ import type {
 	DesktopSessionOptions,
 	DesktopWindow,
 	PointerOptions,
+	VisualRegions,
+	VisualRegionsOptions,
 } from "@musepi/pi-natives";
 import { createDesktopSession } from "@musepi/pi-natives/desktop";
 import * as postmortem from "@musepi/pi-utils/postmortem";
@@ -108,6 +110,8 @@ export interface NativeDesktopSession {
 	axSetValue(ref: string, value: string): Promise<void>;
 	axFocus(ref: string): Promise<void>;
 	axClick(ref: string, opts?: PointerOptions | null): Promise<void>;
+	/** Region proposals from the last screenshot of `target`; absent on older addons. */
+	visualRegions?(target: string, options?: VisualRegionsOptions | null): Promise<VisualRegions>;
 	close(): Promise<void>;
 }
 
@@ -500,6 +504,23 @@ class Win {
 
 	screenshot(options?: ScreenshotOptions): Promise<{ path: string; width: number; height: number }> {
 		return captureScreenshot(this.#session, this.#getContext, this.id, options);
+	}
+
+	/**
+	 * Proposes regions from the pixels of this target's most recent
+	 * screenshot. A pure read: sends no input, moves no focus and takes no
+	 * input lease. Rectangles are half-open pixels of that screenshot, the
+	 * same space `click()` reads. Regions are proposals, not elements: an
+	 * empty list with a `reason` means the frame had nothing to propose, and
+	 * anything you act on must be re-observed afterwards.
+	 */
+	async regions(options?: { maxRegions?: number }): Promise<VisualRegions> {
+		const context = this.#getContext();
+		throwIfAborted(context.signal);
+		if (!this.#session.visualRegions) {
+			throw new ToolError("region proposals need a newer native addon (visualRegions is missing)");
+		}
+		return await nativeCall(context.signal, () => this.#session.visualRegions!(this.id, options ?? null));
 	}
 
 	async click(x: number, y: number, options?: ClickOptions): Promise<void> {
@@ -1134,6 +1155,7 @@ export class ComputerWorkerCore {
 				return window ? makeWin(window) : null;
 			},
 			screenshot: (options?: ScreenshotOptions) => captureScreenshot(session, getContext, "desktop", options),
+			regions: (options?: { maxRegions?: number }) => desktopTarget.regions(options),
 			click: desktopTarget.click.bind(desktopTarget),
 			doubleClick: desktopTarget.doubleClick.bind(desktopTarget),
 			move: desktopTarget.move.bind(desktopTarget),

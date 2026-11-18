@@ -11,7 +11,9 @@ pub enum ErrorCode {
 	InvalidKey,
 	InvalidCoordinateFrame,
 	StaleRef,
+	NoFrame,
 	AxUnsupported,
+	Unsupported,
 	AxFailed,
 	Timeout,
 	Closed,
@@ -32,7 +34,9 @@ impl ErrorCode {
 			Self::InvalidKey => "InvalidKey",
 			Self::InvalidCoordinateFrame => "InvalidCoordinateFrame",
 			Self::StaleRef => "StaleRef",
+			Self::NoFrame => "NoFrame",
 			Self::AxUnsupported => "AxUnsupported",
+			Self::Unsupported => "Unsupported",
 			Self::AxFailed => "AxFailed",
 			Self::Timeout => "Timeout",
 			Self::Closed => "Closed",
@@ -91,8 +95,16 @@ impl DesktopError {
 		Self::new(ErrorCode::StaleRef, message)
 	}
 
+	pub(crate) fn no_frame(message: impl Into<String>) -> Self {
+		Self::new(ErrorCode::NoFrame, message)
+	}
+
 	pub(crate) fn ax_unsupported() -> Self {
 		Self::new(ErrorCode::AxUnsupported, "accessibility is unavailable on this backend")
+	}
+
+	pub(crate) fn unsupported(message: impl Into<String>) -> Self {
+		Self::new(ErrorCode::Unsupported, message)
 	}
 
 	pub(crate) fn ax_failed(message: impl Into<String>) -> Self {
