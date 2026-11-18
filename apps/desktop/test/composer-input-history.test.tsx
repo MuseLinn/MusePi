@@ -123,7 +123,9 @@ function setBox(el: HTMLElement, value: string): void {
 
 /** Dispatch the native key event; the composer's highest-precedence keymap
  *  reads exactly the fields a real keydown carries. */
-function pressKey(el: HTMLElement, key: string): void {
+async function pressKey(el: HTMLElement, key: string): Promise<void> {
+	const view = EditorView.findFromDOM(el);
+	view?.focus();
 	const event = new KeyboardEvent("keydown", {
 		key,
 		bubbles: true,
@@ -239,39 +241,39 @@ describe("useInputHistory", () => {
 });
 
 describe("Composer history keys", () => {
-	it("walks a seeded ring newest → older → newest → draft", () => {
+	it("walks a seeded ring newest → older → newest → draft", async () => {
 		localStorage.setItem("musepi-gui-input-history:C:/ws-keys", JSON.stringify(["first", "second", "latest"]));
 		const textarea = mountComposer("C:/ws-keys", () => {});
 		setBox(textarea, "draft text");
 
-		pressKey(textarea, "ArrowUp");
+		await pressKey(textarea, "ArrowUp");
 		expect(doc(textarea)).toBe("latest");
-		pressKey(textarea, "ArrowUp");
+		await pressKey(textarea, "ArrowUp");
 		expect(doc(textarea)).toBe("second");
-		pressKey(textarea, "ArrowUp");
+		await pressKey(textarea, "ArrowUp");
 		expect(doc(textarea)).toBe("first");
 
-		pressKey(textarea, "ArrowDown");
+		await pressKey(textarea, "ArrowDown");
 		expect(doc(textarea)).toBe("second");
-		pressKey(textarea, "ArrowDown");
+		await pressKey(textarea, "ArrowDown");
 		expect(doc(textarea)).toBe("latest");
-		pressKey(textarea, "ArrowDown");
+		await pressKey(textarea, "ArrowDown");
 		expect(doc(textarea)).toBe("draft text");
 	});
 
-	it("puts the just-sent prompt first for the next recall", () => {
+	it("puts the just-sent prompt first for the next recall", async () => {
 		localStorage.setItem("musepi-gui-input-history:C:/ws-send", JSON.stringify(["first", "second"]));
 		const sent: string[] = [];
 		const textarea = mountComposer("C:/ws-send", text => sent.push(text));
 
 		setBox(textarea, "composed prompt");
-		pressKey(textarea, "Enter");
+		await pressKey(textarea, "Enter");
 		expect(sent).toEqual(["composed prompt"]);
 		expect(doc(textarea)).toBe("");
 
-		pressKey(textarea, "ArrowUp");
+		await pressKey(textarea, "ArrowUp");
 		expect(doc(textarea)).toBe("composed prompt");
-		pressKey(textarea, "ArrowUp");
+		await pressKey(textarea, "ArrowUp");
 		expect(doc(textarea)).toBe("second");
 	});
 });

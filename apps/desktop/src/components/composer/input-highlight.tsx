@@ -82,10 +82,9 @@ export function parseHighlightSpans(text: string, resolveMention: MentionResolve
 	return dedupeSpans(spans.sort((a, b) => a.start - b.start));
 }
 
-/** First span wins: paint order by start, later spans that begin inside a
- *  painted one are dropped (same greedy the renderer's cursor guard uses —
- *  the parser just guarantees the invariant up front). "!!workflowz" is a
- *  shell bang, not a thinking trigger. */
+/** First span wins: later spans that begin inside a painted one are dropped
+ *  (the decoration set relies on that non-overlap invariant). "!!workflowz" is
+ *  a shell bang, not a thinking trigger. */
 function dedupeSpans(sorted: HighlightSpan[]): HighlightSpan[] {
 	const out: HighlightSpan[] = [];
 	let cursor = -1;

@@ -1,9 +1,9 @@
 /**
  * Attachment mention tokens (Kimi desktop parity): a chip's "mention"
  * action inserts a plain-text token into the composer document at the caret —
- * the editor stays the single input surface, the token
- * rides draft persistence for free because it lives in the text, and the
- * send path expands it into explicit attachment references.
+ * the editor stays the single input surface, the token rides draft persistence
+ * for free because it lives in the text, and the send path expands it into
+ * explicit attachment references.
  *
  * Token grammar (v2, 2026-09-26): `@名字` — an `@` followed by a run of
  * characters that are not whitespace, not `[`/`]`, and not `/`/`\`; a run
@@ -11,7 +11,7 @@
  * all, which keeps the bare-`@path` print-mode/TUI semantics intact (that
  * flow inserts a workspace PATH and is never expanded in the GUI). A
  * candidate is only a MENTION when 名字 resolves against a chip staged in
- * the composer: the overlay paints it (through the host's resolveMention)
+ * the composer: the editor paints it (through the host's resolveMention)
  * and the send path expands it. Everything else — bare `@path`, prose
  * `@word`, a token whose attachment has been removed — is plain text:
  * never painted, never rewritten on send (the token survives verbatim).
@@ -24,8 +24,8 @@
  *
  * Chip-inserted tokens are ORDINAL (v3, 2026-09-28): `@图片N` / `@文件N`,
  * N = the 1-based position among same-kind chips in chip order — the
- * numbered badge Kimi desktop shows as a rich-text atom. The token text itself is the badge
- * (no separate label layer). Ordinal tokens beat name tokens on identity:
+ * numbered badge Kimi desktop shows as a rich-text atom. The token text itself
+ * is the badge (no separate label layer). Ordinal tokens beat name tokens on identity:
  * pasted screenshots all arrive as "image.png", and a name match resolves
  * to the FIRST chip with that name — every mention pointed at the first
  * image. Chip-order changes (reorder / remove) rewrite the numbers in the

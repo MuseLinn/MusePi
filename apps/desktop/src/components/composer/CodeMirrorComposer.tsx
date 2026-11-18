@@ -95,6 +95,27 @@ function selectionOf(state: EditorState): ComposerSelection {
 	return { start: state.selection.main.from, end: state.selection.main.to };
 }
 
+/** Map a document offset across an external whole-document replacement by its
+ *  unchanged prefix/suffix; an offset inside the changed middle clamps to the
+ *  change start. An empty old document maps to the end (a restored prompt
+ *  should put the caret after its text). */
+function mapPosition(oldText: string, nextText: string, position: number): number {
+	if (oldText.length === 0) return nextText.length;
+	let prefix = 0;
+	while (prefix < oldText.length && prefix < nextText.length && oldText[prefix] === nextText[prefix]) {
+		prefix++;
+	}
+	let oldEnd = oldText.length;
+	let nextEnd = nextText.length;
+	while (oldEnd > prefix && nextEnd > prefix && oldText[oldEnd - 1] === nextText[nextEnd - 1]) {
+		oldEnd--;
+		nextEnd--;
+	}
+	if (position <= prefix) return position;
+	if (position >= oldEnd) return nextEnd + (position - oldEnd);
+	return prefix;
+}
+
 export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorComposerProps>(
 	function CodeMirrorComposer(props, ref) {
 		const {
@@ -285,24 +306,34 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 			if (!view) return;
 			const current = view.state.doc.toString();
 			if (current === value) return;
-			// Defer the write: an onChange handler can synchronously render the
-			// parent (tests and flushSync paths), and CodeMirror forbids a
-			// dispatch while its own update is still in progress. The microtask
-			// lands before the caller's requestAnimationFrame caret restore and
-			// re-checks the latest prop.
-			queueMicrotask(() => {
+			const apply = (): void => {
 				const live = viewRef.current;
 				if (!live) return;
 				const latest = valueRef.current;
 				const doc = live.state.doc.toString();
 				if (doc === latest) return;
+				const selection = live.state.selection.main;
+				// Keep the caret near the same text: attachment renumbering and
+				// token retargeting rewrite in place, and jumping to the end would
+				// throw the user out of the sentence they were editing.
+				const anchor = mapPosition(doc, latest, selection.anchor);
+				const head = mapPosition(doc, latest, selection.head);
 				live.dispatch({
 					changes: { from: 0, to: doc.length, insert: latest },
-					selection: { anchor: latest.length },
+					selection: { anchor, head },
 					annotations: valuePropWrite.of(true),
 				});
 				live.requestMeasure();
-			});
+			};
+			try {
+				apply();
+			} catch {
+				// An onChange handler can synchronously render the parent (tests and
+				// flushSync paths), and CodeMirror forbids a dispatch while its own
+				// update is still in progress. Retry on the next microtask, before
+				// the caller's requestAnimationFrame caret restore.
+				queueMicrotask(apply);
+			}
 		}, [value]);
 
 		// Attachment inventory changed without a document edit: repaint the
