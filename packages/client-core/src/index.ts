@@ -194,6 +194,7 @@ export {
 	type SpringConfig,
 	type SpringOptions,
 	sampleSpring,
+	springEasing,
 	springPhysics,
 	springProgress,
 } from "./lib/spring-motion";

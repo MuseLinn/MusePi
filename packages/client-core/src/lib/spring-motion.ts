@@ -233,3 +233,39 @@ export const COMPACT_MORPH_SPRING: SpringConfig = {
 	visualDuration: 0.32,
 	bounce: 0.18,
 };
+
+/**
+ * Sample a spring into a CSS `linear()` easing curve.
+ *
+ * This is how a spring reaches CSS-only properties — a sidebar's width, a
+ * progress fill — without an rAF driver on every element. The curve is a
+ * list of (progress @ time%) stops, so CSS plays the EXACT shape a spring
+ * would have produced: under-damped springs sail past 1 and come back, a
+ * critically damped one lands on 1 monotonically.
+ *
+ * The stops are mote-carlo even in TIME, not in progress: a spring moves
+ * fastest at the start, so an even-progress sampling would flatten the
+ * interesting part. The last stop is pinned to exactly 1 so the animation
+ * ends on its target rather than a fraction short.
+ *
+ * @param config the spring parameters
+ * @param samples number of stops (24 is plenty for a UI transition; 30-40
+ *        for a large travel where the overshoot must read crisply)
+ * @param durationMs CSS duration to print alongside the curve. Defaults to
+ *        the spring's hard cap.
+ */
+export function springEasing(config: SpringConfig, samples = 32, durationMs?: number): string {
+	const duration = durationMs ?? config.maxDuration ?? Math.max(0.4, (config.visualDuration ?? 0.44) * 2);
+	const options: SpringOptions = { from: 0, to: 1, ...config, maxDuration: duration / 1000 };
+	const stops: string[] = [];
+	for (let index = 0; index <= samples; index++) {
+		const fraction = index / samples;
+		const { value } = sampleSpring(options, fraction * (duration / 1000));
+		// The last stop must be 1 exactly, or the element settles a pixel
+		// short of its target. Intermediate stops keep the spring's raw
+		// value, including any overshoot past 1.
+		const printed = index === samples ? 1 : Number(value.toFixed(5));
+		stops.push(index === 0 ? "0" : `${printed} ${(fraction * 100).toFixed(3)}%`);
+	}
+	return `linear(${stops.join(", ")})`;
+}

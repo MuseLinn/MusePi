@@ -195,7 +195,18 @@
 	line-height: 20px;
 	padding: 6px 2px;
 	max-height: 176px;
-	transition: height 160ms ease;
+	/* The textarea grows with its content — a critically damped spring
+	 * (bounce 0, so typing never makes the box bounce). The curve is a
+	 * spring sampled into `linear()` stops; see springEasing() in
+	 * client-core/lib/spring-motion. Generated with
+	 * { visualDuration: 0.16, bounce: 0 } over 180ms. */
+	transition: height 180ms
+		linear(
+			0, 0.05322 8.333%, 0.16852 16.667%, 0.30261 25%,
+			0.43297 33.333%, 0.54919 41.667%, 0.6476 50%,
+			0.72816 58.333%, 0.79252 66.667%, 0.84303 75%,
+			0.8821 83.333%, 0.912 91.667%, 1 100%
+		);
 	/* Per-line direction: each line takes the direction of its first strong
 	 * character, so a line mixing Chinese and Latin (or Arabic) reads
 	 * correctly. The box itself keeps the app's direction — with dir=auto on
