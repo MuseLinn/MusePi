@@ -10,6 +10,7 @@ import { createRoot } from "react-dom/client";
 import { type CreationMessage, resetCreationDraftCacheForTest } from "../src/components/CreationModeRow";
 import { HeroComposer } from "../src/components/HeroComposer";
 import type { RpcClient } from "../src/lib/rpc";
+import { setComposerDoc } from "./composer-test-utils";
 
 /**
  * M3.7c 素材策略 + 高级折叠契约（docs/review/0.5.0-m3-mode-page-redesign.md
@@ -153,19 +154,10 @@ async function ensureAdvancedOpen(): Promise<void> {
 	expect(advancedToggle().getAttribute("aria-expanded")).toBe("true");
 }
 
-/**
- * 模拟输入 + 发送（与 creation-mode-page.test.tsx 同款驱动:happy-dom 下
- * React 19 合成 input 事件进不了 ChangeEventPlugin,直接调 textarea 自身
- * props 的 onChange,再原生点击发送按钮）。
- */
+/** 模拟输入 + 发送：CodeMirror 文档事务等价于一次键入。 */
 async function typeAndSend(text: string): Promise<void> {
-	const textarea = document.body.querySelector("textarea");
-	expect(textarea).not.toBeNull();
-	const propsKey = Object.keys(textarea!).find(k => k.startsWith("__reactProps$"))!;
-	const props = (textarea as unknown as Record<string, { onChange(e: unknown): void }>)[propsKey]!;
-	(textarea as HTMLTextAreaElement).value = text;
 	await act(async () => {
-		props.onChange({ target: textarea, currentTarget: textarea });
+		setComposerDoc(text);
 	});
 	const sendBtn = document.body.querySelector<HTMLButtonElement>(".gui-send-btn");
 	expect(sendBtn).not.toBeNull();

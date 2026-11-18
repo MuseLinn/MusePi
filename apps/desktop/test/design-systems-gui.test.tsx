@@ -11,6 +11,7 @@ import type { CreationMessage } from "../src/components/CreationModeRow";
 import { useSessionDesignSystem } from "../src/components/composer/use-session-design-system";
 import { HeroComposer } from "../src/components/HeroComposer";
 import type { RpcClient } from "../src/lib/rpc";
+import { setComposerDoc } from "./composer-test-utils";
 
 /**
  * M3.7b GUI 路契约（docs/review/0.5.0-m3-mode-page-redesign.md §3.3/§6 3.7b 行）：
@@ -145,16 +146,10 @@ function chipButton(label: string): HTMLButtonElement {
 	return btn!;
 }
 
-/** happy-dom 下 React 19 合成 input 进不了 ChangeEventPlugin，照
- *  creation-mode-page.test.tsx 的手法直接驱动 textarea props.onChange。 */
+/** 模拟输入 + 发送：CodeMirror 文档事务等价于一次键入。 */
 async function typeAndSend(text: string): Promise<void> {
-	const textarea = document.body.querySelector("textarea");
-	expect(textarea).not.toBeNull();
-	const propsKey = Object.keys(textarea!).find(k => k.startsWith("__reactProps$"))!;
-	const props = (textarea as unknown as Record<string, { onChange(e: unknown): void }>)[propsKey]!;
-	(textarea as HTMLTextAreaElement).value = text;
-	act(() => {
-		props.onChange({ target: textarea, currentTarget: textarea });
+	await act(async () => {
+		setComposerDoc(text);
 	});
 	const sendBtn = document.body.querySelector<HTMLButtonElement>(".gui-send-btn");
 	expect(sendBtn).not.toBeNull();

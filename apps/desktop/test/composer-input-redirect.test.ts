@@ -12,18 +12,27 @@
  */
 import "./happy-dom-shim"; // MUST be first: installs the DOM globals.
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 import {
-	findComposerTextarea,
+	findComposerEditor,
 	isComposerRedirectTarget,
 	redirectKeyToComposer,
 	redirectPasteToComposer,
 } from "../src/lib/composer-input-redirect";
 
-function textarea(): HTMLTextAreaElement {
-	return document.querySelector<HTMLTextAreaElement>("textarea[data-composer-input]")!;
+let view: EditorView;
+
+function doc(): string {
+	return view.state.doc.toString();
+}
+
+function setDoc(value: string): void {
+	view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
 }
 
 afterEach(() => {
+	view.destroy();
 	document.body.innerHTML = "";
 });
 
@@ -31,10 +40,14 @@ beforeEach(() => {
 	document.body.innerHTML = `
 		<div class="gui-chat-body">
 			<div class="gui-transcript" id="transcript">some transcript text</div>
-			<textarea data-composer-input=""></textarea>
+			<div class="gui-cm-composer" data-composer-input=""></div>
 			<button id="btn">send</button>
 			<input id="field" />
 		</div>`;
+	view = new EditorView({
+		state: EditorState.create({ doc: "" }),
+		parent: document.querySelector(".gui-cm-composer")!,
+	});
 	// happy-dom has no layout; a zero-rect element reads as "not on screen" and
 	// the redirect would skip it, so every fixture element must report a rect.
 	for (const el of document.querySelectorAll(".gui-chat-body *")) {
@@ -51,7 +64,7 @@ describe("composer input redirect", () => {
 		const event = key({ key: "h" });
 		document.getElementById("transcript")!.dispatchEvent(event);
 		expect(redirectKeyToComposer(event)).toBe(true);
-		expect(textarea().value).toBe("h");
+		expect(doc()).toBe("h");
 	});
 
 	it("leaves a focused control's own keys alone", () => {
@@ -60,7 +73,7 @@ describe("composer input redirect", () => {
 		const event = key({ key: " " });
 		document.getElementById("btn")!.dispatchEvent(event);
 		expect(redirectKeyToComposer(event)).toBe(false);
-		expect(textarea().value).toBe("");
+		expect(doc()).toBe("");
 	});
 
 	it("leaves a text field's input alone", () => {
@@ -94,16 +107,17 @@ describe("composer input redirect", () => {
 	});
 
 	it("appends to the end of the existing draft instead of replacing it", () => {
-		textarea().value = "hello ";
+		setDoc("hello ");
 		const event = key({ key: "w" });
 		document.getElementById("transcript")!.dispatchEvent(event);
 		expect(redirectKeyToComposer(event)).toBe(true);
-		expect(textarea().value).toBe("hello w");
+		expect(doc()).toBe("hello w");
 	});
 
-	it("finds no composer when the session textarea is off screen", () => {
-		(textarea() as unknown as { getClientRects: () => unknown[] }).getClientRects = () => [];
-		expect(findComposerTextarea()).toBeNull();
+	it("finds no composer when the session editor is off screen", () => {
+		const host = document.querySelector<HTMLElement>(".gui-cm-composer")!;
+		host.getClientRects = () => [] as unknown as DOMRectList;
+		expect(findComposerEditor()).toBeNull();
 	});
 
 	it("reports a redirect target only when the event is still preventable", () => {
@@ -119,6 +133,6 @@ describe("composer input redirect", () => {
 		document.getElementById("field")!.dispatchEvent(event);
 		// The field keeps it; nothing is replayed into the composer.
 		expect(redirectPasteToComposer(event)).toBe(false);
-		expect(textarea().value).toBe("");
+		expect(doc()).toBe("");
 	});
 });

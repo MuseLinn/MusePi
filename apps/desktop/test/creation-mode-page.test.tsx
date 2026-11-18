@@ -12,6 +12,7 @@ import type { CreationMessage } from "../src/components/CreationModeRow";
 import { HeroComposer } from "../src/components/HeroComposer";
 import { applyChip, buildProjectMetadata, type CREATION_CHIPS, DEFAULT_CREATION_DRAFT } from "../src/lib/creation";
 import type { RpcClient } from "../src/lib/rpc";
+import { composerDoc, composerPlaceholder, setComposerDoc } from "./composer-test-utils";
 
 /**
  * M3.7a 模式页骨架契约——欢迎页内联形态(v2 修订,
@@ -117,20 +118,10 @@ function onChip(el: HTMLButtonElement): boolean {
 	return el.classList.contains("gui-creation-chip--on");
 }
 
-/**
- * 模拟输入 + 发送。happy-dom 下 React 19 的合成 input/keydown 事件进不了
- * ChangeEventPlugin(插件内部崩溃、onChange 不触发),所以改为直接驱动
- * textarea 自身 props 里的 onChange(等价于用户键入),再原生点击发送
- * 按钮(chip/模板的 .click() 在本环境已被验证可靠)。
- */
+/** 模拟输入 + 发送：CodeMirror 文档事务等价于一次键入，再原生点击发送。 */
 async function typeAndSend(text: string): Promise<void> {
-	const textarea = document.body.querySelector("textarea");
-	expect(textarea).not.toBeNull();
-	const propsKey = Object.keys(textarea!).find(k => k.startsWith("__reactProps$"))!;
-	const props = (textarea as unknown as Record<string, { onChange(e: unknown): void }>)[propsKey]!;
-	(textarea as HTMLTextAreaElement).value = text;
 	await act(async () => {
-		props.onChange({ target: textarea, currentTarget: textarea });
+		setComposerDoc(text);
 	});
 	const sendBtn = document.body.querySelector<HTMLButtonElement>(".gui-send-btn");
 	expect(sendBtn).not.toBeNull();
@@ -146,13 +137,12 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		await settle();
 		expect(onChip(chipButton(t("creation.creationTabPrototype")))).toBe(true);
 		expect(onChip(chipButton(t("creation.creationTabOther")))).toBe(false);
-		const textarea = document.body.querySelector("textarea")!;
-		expect(textarea.placeholder).toBe(t("creation.creationPlaceholderPrototype"));
+		expect(composerPlaceholder()).toBe(t("creation.creationPlaceholderPrototype"));
 		await act(async () => {
 			chipButton(t("creation.creationMediaVideo")).click();
 		});
 		await settle();
-		expect(textarea.placeholder).toBe(t("creation.creationPlaceholderVideo"));
+		expect(composerPlaceholder()).toBe(t("creation.creationPlaceholderVideo"));
 		await unmountRoot(root);
 	});
 
@@ -214,8 +204,7 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		await settle(); // 等模板列表 RPC 回填并渲染 rail
 		// opendesign 铁律：composer 是创建页永久锚点——template chip 选中时
 		// 输入框常驻可输入，不再被 rail 替换/卸载。
-		const textarea = document.body.querySelector("textarea");
-		expect(textarea).not.toBeNull();
+		expect(document.body.querySelector(".gui-cm-composer .cm-content")).not.toBeNull();
 		// rail 落在 composer 之下、设计体系 rail 之上（DOM 顺序断言）。
 		const form = document.body.querySelector(".gui-welcome-form")!;
 		const rail = document.body.querySelector("[data-testid='gui-template-rail']")!;
@@ -242,22 +231,16 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 	test("切换 chip composer 不卸载、草稿存活", async () => {
 		const root = await renderWelcome(makeRpc());
 		await settle();
-		const textarea = document.body.querySelector("textarea")!;
-		const propsKey = Object.keys(textarea).find(k => k.startsWith("__reactProps$"))!;
-		const props = (textarea as unknown as Record<string, { onChange(e: unknown): void }>)[propsKey]!;
-		(textarea as HTMLTextAreaElement).value = "写了一半的需求";
-		await act(async () => {
-			props.onChange({ target: textarea, currentTarget: textarea });
-		});
-		const before = document.body.querySelector("textarea")!;
+		setComposerDoc("写了一半的需求");
+		const before = document.body.querySelector(".gui-cm-composer")!;
 		await act(async () => {
 			chipButton(t("creation.creationTabTemplate")).click();
 		});
 		await settle();
-		const after = document.body.querySelector("textarea")!;
+		const after = document.body.querySelector(".gui-cm-composer")!;
 		// 同一节点（未卸载重挂），值不丢——先写需求再点模板的场景成立。
 		expect(after).toBe(before);
-		expect(after.value).toBe("写了一半的需求");
+		expect(composerDoc()).toBe("写了一半的需求");
 		await act(async () => {
 			chipButton(t("creation.creationTabPrototype")).click();
 		});
@@ -280,7 +263,7 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		await act(async () => {
 			blank!.click();
 		});
-		expect(document.activeElement).toBe(document.body.querySelector("textarea"));
+		expect(document.activeElement).toBe(document.body.querySelector(".cm-content"));
 		await act(async () => {
 			chipButton(t("creation.creationTabPrototype")).click();
 		});
@@ -328,7 +311,7 @@ describe("M3.7a 模式页骨架契约", () => {
 		// 只有一个(欢迎页 composer 本体)。
 		expect(document.body.querySelector(".gui-creation-backdrop")).toBeNull();
 		expect(document.body.querySelector(".gui-creation-panel")).toBeNull();
-		expect(document.body.querySelectorAll("textarea")).toHaveLength(1);
+		expect(document.body.querySelectorAll(".gui-cm-composer")).toHaveLength(1);
 		// 词表侧:creation 域不再持有这两个字段的键。
 		expect("creation project name" in creationZh).toBe(false);
 		expect("creation workspace" in creationZh).toBe(false);

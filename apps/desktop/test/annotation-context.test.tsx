@@ -10,6 +10,7 @@ import { QuoteCards } from "../src/components/composer/quote-cards";
 import { HeroComposer } from "../src/components/HeroComposer";
 import type { RpcClient } from "../src/lib/rpc";
 import { GuiSessionStore } from "../src/lib/session-store";
+import { composerDoc } from "./composer-test-utils";
 
 const annotation: DisplayContext = {
 	kind: "browser-annotation",
@@ -73,7 +74,7 @@ describe("annotation composer contexts", () => {
 	it("attaches a browser annotation without writing its prompt into the session textarea", async () => {
 		const container = await mount(<SessionComposerFixture />);
 		await act(async () => dispatchAnnotationAttach({ text: annotation.prompt, displayContext: annotation }));
-		expect(container.querySelector("textarea")?.value).toBe("");
+		expect(composerDoc(container)).toBe("");
 		expect(container.querySelector(".gui-quote-chip")).not.toBeNull();
 		expect(container.querySelector(".gui-quote-card")).toBeNull();
 	});
@@ -82,7 +83,7 @@ describe("annotation composer contexts", () => {
 		window.localStorage.setItem("musepi-gui-dotmatrix", "0");
 		const container = await mount(<HeroComposer onSubmit={() => {}} rpc={rpc} />);
 		await act(async () => dispatchAnnotationAttach({ text: annotation.prompt, displayContext: annotation }));
-		expect(container.querySelector("textarea")?.value).toBe("");
+		expect(composerDoc(container)).toBe("");
 		expect(container.querySelector(".gui-quote-chip")).not.toBeNull();
 		expect(container.querySelector(".gui-quote-card")).toBeNull();
 	});

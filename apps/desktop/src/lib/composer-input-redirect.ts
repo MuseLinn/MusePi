@@ -17,8 +17,9 @@
  *    annotation rather than a message;
  *  - the key is a modifier chord or an IME composition.
  *
- * 宿主是原生 textarea（非 CodeMirror 视图）。
+ * 宿主是 CodeMirror 的 contentDOM；文档仍按纯字符串写入。
  */
+import { EditorView } from "@codemirror/view";
 
 const EDITABLE_SELECTOR = [
 	"input",
@@ -101,21 +102,34 @@ export function isComposerRedirectTarget(event: Event): boolean {
 	return true;
 }
 
-/** The composer a redirect should land in: the on-screen session textarea. */
-export function findComposerTextarea(): HTMLTextAreaElement | null {
-	for (const el of document.querySelectorAll<HTMLTextAreaElement>("textarea[data-composer-input]")) {
-		if (el.getClientRects().length > 0) return el;
+/** The composer a redirect should land in: the on-screen editor contentDOM. */
+export function findComposerEditor(): HTMLElement | null {
+	for (const host of document.querySelectorAll<HTMLElement>(".gui-cm-composer[data-composer-input]")) {
+		if (host.getClientRects().length === 0) continue;
+		const content = host.querySelector<HTMLElement>(".cm-content");
+		if (content) return content;
 	}
 	return null;
 }
 
 /** Insert at the caret end and focus, the way typing would. */
-function insertInto(ta: HTMLTextAreaElement, text: string): void {
+function insertInto(target: HTMLElement, text: string): void {
+	const view = EditorView.findFromDOM(target);
+	if (view) {
+		const end = view.state.doc.length;
+		view.dispatch({
+			changes: { from: end, to: end, insert: text },
+			selection: { anchor: end + text.length },
+			userEvent: "input.type",
+		});
+		view.focus();
+		return;
+	}
+	// Plain-text fixture/fallback: keep the old textarea contract.
+	const ta = target as HTMLTextAreaElement;
 	ta.focus();
 	const end = ta.value.length;
 	ta.setSelectionRange(end, end);
-	// A dispatched input event keeps every existing onChange path working
-	// (autosize, draft persistence, slash/mention detection).
 	ta.setRangeText(text, end, end, "end");
 	ta.dispatchEvent(new Event("input", { bubbles: true }));
 }
@@ -133,10 +147,10 @@ export function redirectKeyToComposer(event: KeyboardEvent): boolean {
 	// An IME composition is mid-word; stealing it would lose the input.
 	if (event.isComposing) return false;
 	if (!isComposerRedirectTarget(event)) return false;
-	const ta = findComposerTextarea();
-	if (!ta) return false;
+	const editor = findComposerEditor();
+	if (!editor) return false;
 	event.preventDefault();
-	insertInto(ta, event.key);
+	insertInto(editor, event.key);
 	return true;
 }
 
@@ -150,17 +164,17 @@ export function redirectKeyToComposer(event: KeyboardEvent): boolean {
 export function redirectPasteToComposer(event: ClipboardEvent): boolean {
 	const data = event.clipboardData;
 	if (!data || !isComposerRedirectTarget(event)) return false;
-	const ta = findComposerTextarea();
-	if (!ta) return false;
+	const editor = findComposerEditor();
+	if (!editor) return false;
 	event.preventDefault();
-	ta.focus();
+	editor.focus();
 	const replay = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
-	ta.dispatchEvent(replay);
+	editor.dispatchEvent(replay);
 	// Nothing consumed the replay (no handler on a synthetic event): fall back
 	// to inserting the plain text so the paste is never silently dropped.
 	if (!replay.defaultPrevented) {
 		const text = data.getData("text/plain");
-		if (text) insertInto(ta, text);
+		if (text) insertInto(editor, text);
 	}
 	return true;
 }

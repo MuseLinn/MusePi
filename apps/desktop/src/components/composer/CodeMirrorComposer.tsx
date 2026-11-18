@@ -285,19 +285,33 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 			if (!view) return;
 			const current = view.state.doc.toString();
 			if (current === value) return;
-			view.dispatch({
-				changes: { from: 0, to: current.length, insert: value },
-				selection: { anchor: value.length },
-				annotations: valuePropWrite.of(true),
+			// Defer the write: an onChange handler can synchronously render the
+			// parent (tests and flushSync paths), and CodeMirror forbids a
+			// dispatch while its own update is still in progress. The microtask
+			// lands before the caller's requestAnimationFrame caret restore and
+			// re-checks the latest prop.
+			queueMicrotask(() => {
+				const live = viewRef.current;
+				if (!live) return;
+				const latest = valueRef.current;
+				const doc = live.state.doc.toString();
+				if (doc === latest) return;
+				live.dispatch({
+					changes: { from: 0, to: doc.length, insert: latest },
+					selection: { anchor: latest.length },
+					annotations: valuePropWrite.of(true),
+				});
+				live.requestMeasure();
 			});
-			view.requestMeasure();
 		}, [value]);
 
 		// Attachment inventory changed without a document edit: repaint the
 		// mention decorations against the new chip list.
 		useEffect(() => {
 			viewRef.current?.dispatch({ effects: refreshTokens.of(null) });
-		}, [mentionVersion, resolveMention]);
+			// The resolver itself is read through resolverRef; only the chip
+			// list identity changes what "resolved" means.
+		}, [mentionVersion]);
 
 		function mentionAt(
 			editor: EditorView,

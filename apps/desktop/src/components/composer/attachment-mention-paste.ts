@@ -6,8 +6,8 @@
  *
  * The token is plain text, so it rides draft persistence, copy/paste and the
  * highlight overlay for free. Insertion uses `setRangeText` + an `input`
- * event so a controlled textarea's value and caret land exactly where a
- * native paste would (same mechanism as `insertPastedPlainText`).
+ * CodeMirror receives one `replaceRange` transaction; the textarea fallback
+ * keeps `setRangeText` + `input` for the same caret semantics.
  */
 import type { ComposerEditorHandle } from "./editor-types";
 import { ordinalMentionLabel, spliceMentionTokens } from "./mention-token";
@@ -22,7 +22,7 @@ export function pastedImageMentionLabels(added: readonly ComposerAttachment[], p
 		.map((_, index) => ordinalMentionLabel("image", priorImageCount + index + 1));
 }
 
-/** Splice the labels at the textarea's current caret as `@图片N ` tokens. */
+/** Splice the labels at the editor caret as `@图片N ` tokens. */
 export function insertPastedImageMentions(
 	el: HTMLTextAreaElement | ComposerEditorHandle | null,
 	added: readonly ComposerAttachment[],

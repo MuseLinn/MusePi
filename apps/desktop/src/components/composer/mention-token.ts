@@ -1,7 +1,7 @@
 /**
  * Attachment mention tokens (Kimi desktop parity): a chip's "mention"
- * action inserts a plain-text token into the textarea at the caret — the
- * textarea stays the single input surface (no contenteditable), the token
+ * action inserts a plain-text token into the composer document at the caret —
+ * the editor stays the single input surface, the token
  * rides draft persistence for free because it lives in the text, and the
  * send path expands it into explicit attachment references.
  *
@@ -24,8 +24,7 @@
  *
  * Chip-inserted tokens are ORDINAL (v3, 2026-09-28): `@图片N` / `@文件N`,
  * N = the 1-based position among same-kind chips in chip order — the
- * numbered badge Kimi desktop shows as a rich-text atom. The textarea
- * mirror must stay metric-neutral, so the token text itself is the badge
+ * numbered badge Kimi desktop shows as a rich-text atom. The token text itself is the badge
  * (no separate label layer). Ordinal tokens beat name tokens on identity:
  * pasted screenshots all arrive as "image.png", and a name match resolves
  * to the FIRST chip with that name — every mention pointed at the first
@@ -220,8 +219,8 @@ export function retargetMentionTokens<T extends { id: number; kind: "image" | "f
 /** Splice a mention token (plus one trailing space, which both reads
  *  naturally and closes the `@` completion panel — its trigger rule
  *  (lib/completion-trigger) treats a whitespace-bearing tail as prose) at
- *  the textarea's caret, replacing the selection. Returns the new value
- *  and the caret position AFTER the token; null when the textarea is
+ *  the editor caret, replacing the selection. Returns the new value
+ *  and the caret position AFTER the token; null when the editor is
  *  gone. Pure string math — the host applies setText + caret restore. */
 export function spliceMentionToken(
 	value: string,
