@@ -344,8 +344,22 @@
 	/* Material (liquid-glass fill/blur/rim) comes from the shared footer-pill
 	 * recipe in gui-composer.css — this file loads AFTER it, so any
 	 * background declared here would override the group. Layout only. */
-	flex-shrink: 0;
+	/* Shrinks before the composer row wraps: a cramped frame truncates the
+	 * model label (the thinking label keeps its size) instead of pushing the
+	 * action group onto a second line. min-width stays `auto` so the
+	 * automatic minimum still includes the thinking segment. */
+	flex-shrink: 1;
+}
+
+/* The model segment absorbs the shrink; the thinking segment after the
+ * divider keeps its size. */
+.gui-model-capsule-seg:first-child {
+	flex: 1 1 auto;
 	min-width: 0;
+}
+
+.gui-model-capsule-sep + .gui-model-capsule-seg {
+	flex: none;
 }
 
 .gui-model-capsule-seg {
@@ -369,6 +383,7 @@
 	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
 	cursor: pointer;
+	min-width: 0;
 	transition: background 150ms var(--spring), color 150ms var(--spring);
 }
 
@@ -411,16 +426,25 @@
  * reads as a morph (text → icon), not a pop. */
 .gui-model-capsule-seg-text {
 	opacity: 1;
+	flex: 0 1 auto;
+	min-width: 0;
 	transition: opacity 180ms var(--spring);
+}
+
+/* The thinking label is that segment's only mark — never collapse it, and
+ * don't let the sibling's shrink eat it either. */
+.gui-model-capsule-seg-text--thinking {
+	flex: none;
 }
 
 
 /* Narrow composer: the model label yields to its brand icon, then the
  * divider goes — at thresholds where the composer frame is genuinely
- * cramped (not at normal desktop widths). The thinking label never
- * collapses: it is that segment's only content. */
+ * cramped (not at normal desktop widths). Only the MODEL label collapses:
+ * the thinking label is the right segment's only content, so hiding it left
+ * an empty pill (user report). */
 @container (max-width: 380px) {
-	.gui-model-capsule-seg-text {
+	.gui-model-capsule-seg:first-child .gui-model-capsule-seg-text {
 		opacity: 0;
 		width: 0;
 		padding: 0;

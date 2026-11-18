@@ -1330,8 +1330,8 @@ button.gui-stats-pill {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 28px;
-	height: 28px;
+	width: 26px;
+	height: 26px;
 	border: 0;
 	border-radius: 999px;
 	background: var(--color-accent);
@@ -3264,13 +3264,16 @@ button.gui-stats-pill {
 		transform 120ms var(--spring-liquid);
 }
 
-/* Layout for the two select chips (the shared material group carries none). */
+/* Layout for the two select chips (the shared material group carries none).
+ * 26px matches the round footer controls (mic / send / capsule) so the
+ * session's right-side cluster shares one baseline height. */
 .gui-approval-btn,
 .gui-style-select-btn {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
-	padding: 3px 10px;
+	height: 26px;
+	padding: 0 10px;
 	border-radius: 999px;
 	font-size: 11.5px;
 	font-family: inherit;
@@ -3406,8 +3409,8 @@ button.gui-stats-pill {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 32px;
-	height: 32px;
+	width: 26px;
+	height: 26px;
 	flex: none;
 	border-radius: 999px;
 	color: var(--color-accent);

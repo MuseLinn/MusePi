@@ -1888,7 +1888,7 @@ export function HeroComposer({
 										disabled={!canSend}
 										aria-label={t("settings.sendMessage")}
 									>
-										<Icon name="send-plane" className="h-4 w-4" />
+										<Icon name="send-plane" className="h-3.5 w-3.5" />
 									</button>
 								</>
 							}
