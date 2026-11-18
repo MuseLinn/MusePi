@@ -14,7 +14,7 @@ import {
 	type DesktopSessionOptions,
 	desktopEscapeStops,
 	forgetDesktopEscapeStops,
-} from "./index.js";
+} from "../native/index.js";
 
 export function desktopSessionTypeCheck(session: DesktopSession): void {
 	const options: DesktopSessionOptions = { display: "1", escapeStopKey: "run-1" };
