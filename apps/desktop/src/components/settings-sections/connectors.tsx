@@ -291,7 +291,6 @@ ${connector.category ?? ""}`.toLowerCase();
 				dedupeKey: "connector:catalog:refresh",
 			});
 		} catch (refreshError) {
-			setError(t("settings.connectorsRefreshFailed", { error: errorMessage(refreshError) }));
 			pushActionToast({
 				kind: "error",
 				message: t("settings.connectorsRefreshFailed", { error: errorMessage(refreshError) }),
@@ -379,7 +378,6 @@ ${connector.category ?? ""}`.toLowerCase();
 					);
 				}
 			} catch (connectError) {
-				setError(t("settings.connectorsConnectFailed", { error: errorMessage(connectError) }));
 				reportOutcome(
 					{
 						kind: "error",
@@ -433,7 +431,6 @@ ${connector.category ?? ""}`.toLowerCase();
 					);
 				}
 			} catch (saveError) {
-				setError(t("settings.connectorsConnectFailed", { error: errorMessage(saveError) }));
 				reportOutcome(
 					{
 						kind: "error",
@@ -472,7 +469,6 @@ ${connector.category ?? ""}`.toLowerCase();
 					connector.id,
 				);
 			} catch (disconnectError) {
-				setError(t("settings.connectorsDisconnectFailed", { error: errorMessage(disconnectError) }));
 				reportOutcome(
 					{
 						kind: "error",

@@ -94,9 +94,7 @@ export function ConnectorImportDialog({
 			onImported();
 			onClose();
 		} catch (applyError) {
-			const message = applyError instanceof Error ? applyError.message : String(applyError);
-			setError(message);
-			pushActionToast({ kind: "error", message, dedupeKey: "connector:import" });
+			setError(applyError instanceof Error ? applyError.message : String(applyError));
 		} finally {
 			setBusy(false);
 		}
