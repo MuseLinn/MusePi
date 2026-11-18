@@ -169,6 +169,10 @@ export interface ToolSession {
 	additionalDirectories?: string[];
 	/** Whether UI is available */
 	hasUI: boolean;
+	/** Whether this session's UI renders throttled tool previews (the desktop
+	 *  picture-in-picture). False for the TUI and headless runs even when
+	 *  {@link hasUI} is true. */
+	viewerSurface?: boolean;
 	/**
 	 * Host-injected UI context (TUI / RPC / daemon approval bridge). Subagents
 	 * forward it so their approval and ask prompts land in the parent's UI.

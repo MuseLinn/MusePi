@@ -11,6 +11,7 @@ import { WorkspacePanel } from "./components/panels/WorkspacePanel";
 import { ApprovalCard } from "./components/shell/ApprovalCard";
 import { Banners } from "./components/shell/Banners";
 import { Composer } from "./components/shell/Composer";
+import { ComputerViewerPip } from "./components/shell/ComputerViewerPip";
 import { ConnectScreen } from "./components/shell/ConnectScreen";
 import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
 import { MobileSettings } from "./components/shell/MobileSettings";
@@ -1231,6 +1232,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 							<PullToRefresh onRefresh={refreshTranscript}>
 								<TranscriptPane client={client} host={toolHost} />
 							</PullToRefresh>
+							<ComputerViewerPip client={client} />
 						</div>
 					</section>
 				)}

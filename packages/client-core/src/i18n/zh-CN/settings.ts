@@ -4102,6 +4102,7 @@ export const settings = {
 		"已完成或已放弃的待办从组件移除前的延迟",
 	"Densest cell with sentence-hue ink.": "最密单元格，句子色调墨水。",
 	"Describe Images for Text Models": "为文本模型描述图片",
+	"Desktop Preview": "桌面预览画中画",
 	"Detect consecutive identical tool calls across turns and inject a corrective steer":
 		"跨回合检测连续相同工具调用并注入纠偏引导",
 	Deterministic: "确定性",
@@ -5026,6 +5027,8 @@ export const settings = {
 		"插件从哪个包仓库安装。Auto 先问官方仓库，失败属于可重试类型时再试公共镜像；Custom 使用下方地址；Package manager 交给包管理器自己的配置。",
 	"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing":
 		"计算机工具操控桌面时，在显示器上显示全屏辉光边缘、状态徽标与逐步操作的目标高亮，代理在做什么始终可见",
+	"While the computer tool runs, show a picture-in-picture preview inside the chat that follows the desktop and the last action; turning it off stops preview captures entirely":
+		"计算机工具运行时，在聊天窗口内以画中画显示桌面并跟随最近一次操作；关闭后完全不再抓取预览帧",
 	"With in-band tool calls, stop the model immediately when it starts hallucinating a tool result mid-turn. Disable to let the model finish generating and discard the fabricated continuation instead.":
 		"带内工具调用时，模型在回合中开始幻觉工具结果就立即停止。关闭则让模型生成完，然后丢弃伪造的续写。",
 	"Within this window, cached issue/PR view rows are returned directly (seconds; default 5 minutes)":

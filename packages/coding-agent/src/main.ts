@@ -1637,6 +1637,9 @@ export async function runRootCommand(
 	sessionOptions.authStorage = authStorage;
 	sessionOptions.modelRegistry = modelRegistry;
 	sessionOptions.hasUI = isInteractive || mode === "rpc-ui";
+	// Only the desktop daemon has a preview surface (the computer
+	// picture-in-picture). The TUI counts as hasUI but renders no preview.
+	sessionOptions.viewerSurface = mode === "rpc-ui";
 	// Brand + interface identity: the agent sees which MusePi frontend runs
 	// it. Interactive = terminal (TUI); the daemon injects "desktop (GUI)".
 	sessionOptions.interfaceLabel = isInteractive ? "terminal (TUI)" : undefined;

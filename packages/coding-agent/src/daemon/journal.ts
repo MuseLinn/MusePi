@@ -18,6 +18,26 @@ import * as path from "node:path";
 import type { AgentEvent as WireAgentEvent } from "@musepi/pi-wire";
 import { shrinkForReplication } from "../collab/replication-shrink";
 
+/**
+ * Journals never carry a tool's volatile preview frames. A viewer frame is a
+ * ~170 KB base64 image replaced every 500 ms; recording it would append
+ * hundreds of KB per second to the JSONL, and a replaying client has no use
+ * for a stale frame — the next live update lands within one interval. The
+ * live broadcast keeps the frame; only the on-disk record drops it.
+ */
+function withoutVolatilePreview(event: WireAgentEvent): WireAgentEvent {
+	if (event.type !== "tool_execution_update") return event;
+	const partial = event.partialResult;
+	if (!partial || typeof partial !== "object") return event;
+	const details = (partial as { details?: unknown }).details;
+	if (!details || typeof details !== "object" || !("viewer" in details)) return event;
+	const { viewer: _viewer, ...restDetails } = details as Record<string, unknown>;
+	return {
+		...event,
+		partialResult: { ...(partial as Record<string, unknown>), details: restDetails },
+	};
+}
+
 export interface JournalRecord {
 	seq: number;
 	ts: string;
@@ -274,7 +294,11 @@ export class AppendJournal {
 		// The index is a view of the file's current bytes; an append invalidates
 		// it, and the next read rebuilds it from the longer text.
 		this.#lineIndexCache = null;
-		const record: JournalRecord = { seq, ts: new Date().toISOString(), event: shrinkForReplication(event) };
+		const record: JournalRecord = {
+			seq,
+			ts: new Date().toISOString(),
+			event: shrinkForReplication(withoutVolatilePreview(event)),
+		};
 		const line = `${JSON.stringify(record)}\n`;
 		this.#writtenBytes += line.length;
 		// Writes are queued on a chain: fire-and-forget at the call site,

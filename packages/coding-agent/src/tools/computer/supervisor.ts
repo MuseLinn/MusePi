@@ -13,6 +13,7 @@ import {
 	type ComputerInputEvent,
 	type ComputerRunOk,
 	type ComputerSessionSnapshot,
+	type ComputerViewerFrame,
 	type ComputerWorkerInbound,
 	type ComputerWorkerOutbound,
 	type RunErrorPayload,
@@ -41,6 +42,8 @@ export interface ComputerController {
 		signal?: AbortSignal,
 		/** Streams desktop input actions for UI feedback (glow overlay). */
 		onInput?: (event: ComputerInputEvent) => void,
+		/** Streams throttled preview frames for the GUI picture-in-picture. */
+		onViewerFrame?: (frame: ComputerViewerFrame) => void,
 	): Promise<ComputerRunOk>;
 	capabilities(): Promise<DesktopCapabilities | undefined>;
 	close(): Promise<void>;
@@ -81,6 +84,7 @@ interface PendingRun {
 	signal?: AbortSignal;
 	toolCalls: Map<string, AbortController>;
 	onInput?: (event: ComputerInputEvent) => void;
+	onViewerFrame?: (frame: ComputerViewerFrame) => void;
 }
 
 function wrapWorker(worker: Worker): ComputerWorkerHandle {
@@ -194,6 +198,7 @@ export class ComputerSupervisor implements ComputerController {
 		snapshot: ComputerSessionSnapshot,
 		signal?: AbortSignal,
 		onInput?: (event: ComputerInputEvent) => void,
+		onViewerFrame?: (frame: ComputerViewerFrame) => void,
 	): Promise<ComputerRunOk> {
 		if (this.#closed) throw new ToolError("Computer session is closed");
 		if (signal?.aborted) throw new ToolAbortError();
@@ -202,7 +207,7 @@ export class ComputerSupervisor implements ComputerController {
 
 		const id = `computer-${++this.#nextId}`;
 		const { promise, resolve, reject } = Promise.withResolvers<ComputerRunOk>();
-		const pending: PendingRun = { resolve, reject, signal, toolCalls: new Map(), onInput };
+		const pending: PendingRun = { resolve, reject, signal, toolCalls: new Map(), onInput, onViewerFrame };
 		this.#pending.set(id, pending);
 		const abort = (): void => {
 			this.#safeSend({ type: "abort", id });
@@ -290,6 +295,12 @@ export class ComputerSupervisor implements ComputerController {
 		if (message.type === "input") {
 			const pending = this.#pending.get(message.runId);
 			pending?.onInput?.(message.event);
+			return;
+		}
+		if (message.type === "frame") {
+			const pending = this.#pending.get(message.runId);
+			if (!pending) return;
+			pending.onViewerFrame?.(message.frame);
 		}
 	}
 

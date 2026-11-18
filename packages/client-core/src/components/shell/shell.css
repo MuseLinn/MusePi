@@ -186,6 +186,195 @@
 	border-color: color-mix(in oklab, var(--err) 55%, transparent);
 	color: var(--err);
 }
+/* ---- computer picture-in-picture preview ----
+ * Anchored to the transcript column, so the card ends where the composer
+ * begins and never covers the input. Wide windows keep a 320px card inside
+ * the reading column; narrow windows shrink it and cap the frame height so a
+ * portrait window still shows the transcript above it. */
+.cvp {
+	position: absolute;
+	right: 12px;
+	bottom: 12px;
+	z-index: 40;
+	width: min(320px, calc(100% - 24px));
+	pointer-events: none;
+}
+.cvp > * {
+	pointer-events: auto;
+}
+.cvp-card {
+	margin: 0;
+	overflow: hidden;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-xl);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	box-shadow: var(--glass-shadow);
+	animation: cvp-rise 220ms var(--spring) both;
+}
+@keyframes cvp-rise {
+	from {
+		opacity: 0;
+		transform: translateY(8px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+.cvp-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 6px 6px 10px;
+}
+.cvp-dot {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--fg-muted);
+}
+.cvp[data-running="true"] .cvp-dot {
+	background: var(--ok);
+	animation: cvp-pulse 1.6s ease-in-out infinite;
+}
+@keyframes cvp-pulse {
+	50% {
+		opacity: 0.35;
+	}
+}
+.cvp-title {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-xs, 12px);
+	color: var(--fg);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.cvp-icon {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--fg-muted);
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+}
+.cvp-icon:hover {
+	background: var(--glass-border);
+	color: var(--fg);
+}
+.cvp-icon:focus-visible,
+.cvp-thumb-main:focus-visible,
+.cvp-thumb-close:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+.cvp-frame {
+	display: block;
+	width: 100%;
+	height: auto;
+	max-height: 40vh;
+	object-fit: contain;
+	background: #000;
+}
+.cvp-caption {
+	padding: 6px 10px 8px;
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--fg-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.cvp-thumb {
+	position: relative;
+	display: flex;
+	justify-content: flex-end;
+}
+.cvp-thumb-main {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	max-width: 100%;
+	padding: 4px;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-xl);
+	background: var(--glass-sheen), var(--glass-bg-strong);
+	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
+	box-shadow: var(--glass-shadow);
+	cursor: pointer;
+	text-align: left;
+}
+.cvp-thumb-frame {
+	flex: none;
+	width: 64px;
+	height: 40px;
+	object-fit: cover;
+	border-radius: var(--radius-lg);
+	background: #000;
+}
+.cvp-thumb-caption {
+	min-width: 0;
+	padding-right: 6px;
+	font-size: 11px;
+	color: var(--fg-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.cvp-thumb-close {
+	position: absolute;
+	top: -7px;
+	right: -7px;
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 1px solid var(--glass-border);
+	border-radius: 50%;
+	background: var(--glass-bg-strong);
+	color: var(--fg-muted);
+	font-size: 12px;
+	line-height: 1;
+	cursor: pointer;
+}
+.cvp-thumb-close:hover {
+	color: var(--fg);
+}
+@media (max-width: 640px) {
+	.cvp {
+		right: 8px;
+		bottom: 8px;
+		width: min(230px, calc(100% - 16px));
+	}
+	.cvp-frame {
+		max-height: 26vh;
+	}
+	.cvp-thumb-frame {
+		width: 52px;
+		height: 34px;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.cvp-card {
+		animation: none;
+	}
+	.cvp[data-running="true"] .cvp-dot {
+		animation: none;
+	}
+}
 .sh-app {
 	display: grid;
 	grid-template-rows: auto 1fr auto;
@@ -283,6 +472,7 @@
 }
 
 .sh-transcript {
+	position: relative;
 	width: 100%;
 	max-width: 880px;
 	min-height: 0;

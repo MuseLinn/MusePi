@@ -58,6 +58,11 @@ Inside a running session, the `/computer` slash command (`/computer`, `/computer
 | `computer.display` | `all` | Composite every active display, or select one numeric native display ID. |
 | `computer.maxWidth` | `1920` | Maximum composite screenshot width in pixels. Image transports that cannot preserve original detail, including GitHub Copilot Responses and xAI OAuth, cap the effective width at `1280`; Claude-family models use the same cap as a compatibility fallback. |
 | `computer.maxHeight` | `1200` | Maximum composite screenshot height in pixels. Those coordinate-safe transports cap the effective height at `896`; other models retain the configured limit. |
+| `computer.viewer` | `true` | Show a picture-in-picture preview of the desktop while the tool runs. Off means no preview capture is issued at all. The terminal UI never requests previews, even though it has a UI. |
+
+The desktop preview follows the run without touching the model's context: thumbnails travel only through tool updates, never through the screenshots and text the model reads. They come from a separate capture session capped at 480 px on the long edge, at about two frames per second, so they cannot disturb the coordinate frame pointer input is mapped against. The card lives in the chat pane: it rises on its own when a run starts, follows the last action, and collapses to a static thumbnail when the run ends; it is hidden while an approval is waiting, and cleared when the session changes.
+
+Previews are produced by the desktop daemon's sessions. The Electron window shows the card, and so does the same chat shell served to a browser or a Capacitor mobile build — they render the same view from the same events. The terminal UI and headless runs neither show nor request previews. The journal drops frames (they are volatile, and a reconnecting client gets the next one within half a second); only the live stream carries them.
 
 The first successful result lists each display ID, name, logical rectangle, screenshot-pixel rectangle, scale, and primary status. Use one of those IDs as a string when you want a single display:
 

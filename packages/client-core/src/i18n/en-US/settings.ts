@@ -5010,6 +5010,7 @@ export const settings = {
 	"Save role models in the active profile config (current behavior)":
 		"Save role models in the active profile config (current behavior)",
 	"Screen Glow Indicator": "Screen Glow Indicator",
+	"Desktop Preview": "Desktop Preview",
 	"Screenshot Directory": "Screenshot Directory",
 	"SearXNG Endpoint": "SearXNG Endpoint",
 	"Seconds a model stream may stay silent between events; -1 uses provider/env defaults, 0 disables the watchdog":
@@ -5308,6 +5309,8 @@ export const settings = {
 		"Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.",
 	"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing":
 		"While the computer tool operates the host desktop, show a full-screen glow edge, status badge, and per-action target highlight on your displays so you always see what the agent is doing",
+	"While the computer tool runs, show a picture-in-picture preview inside the chat that follows the desktop and the last action; turning it off stops preview captures entirely":
+		"While the computer tool runs, show a picture-in-picture preview inside the chat that follows the desktop and the last action; turning it off stops preview captures entirely",
 	"With in-band tool calls, stop the model immediately when it starts hallucinating a tool result mid-turn. Disable to let the model finish generating and discard the fabricated continuation instead.":
 		"With in-band tool calls, stop the model immediately when it starts hallucinating a tool result mid-turn. Disable to let the model finish generating and discard the fabricated continuation instead.",
 	"Within this window, cached issue/PR view rows are returned directly (seconds; default 5 minutes)":

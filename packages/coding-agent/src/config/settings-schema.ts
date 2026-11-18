@@ -4849,6 +4849,18 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"computer.viewer": {
+		type: "boolean",
+		default: true,
+		ui: {
+			tab: "tools",
+			group: "Computer",
+			label: "Desktop Preview",
+			description:
+				"While the computer tool runs, show a picture-in-picture preview inside the chat that follows the desktop and the last action; turning it off stops preview captures entirely",
+		},
+	},
+
 	"inspect_image.timeoutMs": {
 		type: "number",
 		default: 300_000,

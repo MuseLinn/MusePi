@@ -59,6 +59,11 @@ musepi config get computer.enabled
 | `computer.display` | `all` | 合成每个活动的显示，或选择一个数值型原生 display ID。 |
 | `computer.maxWidth` | `1920` | 最大合成截图宽度（像素）。无法保留原始细节的图像传输（包括 GitHub Copilot Responses 与 xAI OAuth）会将有效宽度上限设为 `1280`；Claude 系列 model 使用同样的上限作为兼容性回退。 |
 | `computer.maxHeight` | `1200` | 最大合成截图高度（像素）。那些坐标安全传输会将有效高度上限设为 `896`；其他 model 保留配置的限制。 |
+| `computer.viewer` | `true` | tool 运行期间显示桌面画中画预览。关闭后完全不发起预览抓帧。终端 UI 虽然有 UI，但从不请求预览。 |
+
+桌面预览跟随运行，但不占用模型的上下文：缩略帧只经 tool update 旁路上行，绝不进入模型读到的截图与文本。它来自独立的 capture session，长边上限 480 像素、约每秒两帧，因此不会影响指针输入所映射的坐标帧。卡片位于会话区：运行开始时自动升起并跟随最近一次操作，运行结束后收为静态缩略图；审批等待期间隐藏，切换 session 时清空。
+
+预览由桌面 daemon 的会话产生。Electron 窗口会显示这张卡片；同一套聊天 shell 在浏览器页面与 Capacitor 移动端构建里也会显示——它们从同一批事件渲染同一个视图。终端 UI 与 headless 运行既不显示也不请求预览。journal 会丢弃帧（帧是易失的，重连客户端半秒内就会收到下一帧）；只有实时广播携带它们。
 
 第一个成功结果会列出每个 display ID、名称、逻辑矩形、截图像素矩形、缩放与主状态。当你想使用单个显示时，用这些 ID 之一作为字符串：
 

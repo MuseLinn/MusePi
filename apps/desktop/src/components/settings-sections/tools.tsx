@@ -61,7 +61,7 @@ export function ToolsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{/* computer.glow lives in 浏览器与桌面 (its custom row live-applies
 			 * via the omp-glow-setting event) — the schema copy would duplicate
 			 * it here (user: 工具/浏览器与桌面 重合). */}
-			<SchemaTabSection rpc={rpc} tabs={["tools"]} excludeKeys={["computer.glow"]} />
+			<SchemaTabSection rpc={rpc} tabs={["tools"]} excludeKeys={["computer.glow", "computer.viewer"]} />
 			{/* Tool approvals moved from 交互 (group-level dedupe): the
 			 * approval policy gates exactly the tools toggled above. */}
 			<div className="gui-settings-section">

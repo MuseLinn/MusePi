@@ -801,6 +801,24 @@
 	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
 }
 
+/* ── Computer picture-in-picture host ──────────────────────────────────
+ * The transcript wrap is `flex: 1` inside a body whose floating composer is
+ * `position: absolute` — so the wrap's bottom edge sits BEHIND the composer.
+ * The host covers that box and lifts the card by the composer's measured
+ * height (`--chat-composer-inset`, published onto this element by its reader
+ * registration), so neither the expanded card nor the collapsed thumbnail
+ * ever lands under the input. The host itself stays transparent to the
+ * pointer; the card's own layers opt back in. */
+.gui-pip-host {
+	position: absolute;
+	inset: 0;
+	z-index: 4;
+	pointer-events: none;
+}
+.gui-pip-host .cvp {
+	bottom: calc(var(--chat-composer-inset, 0px) + 12px);
+}
+
 /* ── Floating sidebar toggle on the pane boundary (ZCode immersive) ─── */
 /* Session composer column — focus mode animates height px↔100% (JS pins
  * the current height, then transitions to the target; flex:1 would snap). */

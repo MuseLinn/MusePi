@@ -285,7 +285,8 @@ export class HostClient implements SessionClient {
 						toolName: string;
 						args?: unknown;
 						intent?: string;
-						partialResult?: string;
+						/** Opaque tool partial result (objects included). */
+						partialResult?: unknown;
 					}>;
 					agentsProgress?: Array<{ id: string; progress: SubagentProgressPayload }>;
 				};
@@ -517,16 +518,13 @@ export class HostClient implements SessionClient {
 				if (typeof toolName !== "string") return;
 				const existing = this.#activeTools.get(toolCallId);
 				const tool: ActiveTool = existing
-					? {
-							...existing,
-							...(typeof event.partialResult === "string" ? { partialResult: event.partialResult } : {}),
-						}
+					? { ...existing, partialResult: event.partialResult }
 					: {
 							toolCallId,
 							toolName,
 							args: event.args,
 							intent: typeof event.intent === "string" ? event.intent : undefined,
-							...(typeof event.partialResult === "string" ? { partialResult: event.partialResult } : {}),
+							partialResult: event.partialResult,
 							startedAt: Date.now(),
 						};
 				this.#activeTools = new Map(this.#activeTools).set(toolCallId, tool);
