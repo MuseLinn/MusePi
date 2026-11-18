@@ -6,7 +6,9 @@ import { workerHostEntry } from "@musepi/pi-utils/worker-host";
 import type { ToolSession } from "../index";
 import { ToolAbortError, ToolError } from "../tool-errors";
 import { type ApplicationProviderRegistry, applicationProviders as applicationProviderRegistry } from "./app-provider";
+import { registerOwnerRelease, releaseOwnerResources } from "./owner-release";
 import {
+	BUILTIN_COMPUTER_PROVIDER,
 	COMPUTER_WORKER_ARG,
 	type ComputerInputEvent,
 	type ComputerRunOk,
@@ -15,6 +17,14 @@ import {
 	type ComputerWorkerOutbound,
 	type RunErrorPayload,
 } from "./protocol";
+import { type ComputerProviderSlot, computerProviders as defaultComputerProviders } from "./provider-slot";
+
+export {
+	type ComputerProvider,
+	ComputerProviderSlot,
+	computerProviders,
+	registerComputerProvider,
+} from "./provider-slot";
 
 const START_TIMEOUT_MS = 10_000;
 const CLOSE_TIMEOUT_MS = 1_500;
@@ -143,6 +153,7 @@ export class ComputerSupervisor implements ComputerController {
 	readonly #createWorker: ComputerWorkerFactory;
 	readonly #callSessionTool: ComputerSessionToolCaller;
 	readonly #applicationProviders: ApplicationProviderRegistry;
+	readonly #computerProviders: ComputerProviderSlot;
 	readonly #timeouts: ComputerSupervisorTimeouts;
 	#worker?: ComputerWorkerHandle;
 	#startPromise?: Promise<void>;
@@ -163,12 +174,14 @@ export class ComputerSupervisor implements ComputerController {
 			throw new ToolError("Computer session tool bridge is unavailable");
 		},
 		applicationProviders?: ApplicationProviderRegistry,
+		computerProviders?: ComputerProviderSlot,
 	) {
 		this.#session = session;
 		this.#createWorker = createWorker;
 		this.#timeouts = timeouts;
 		this.#callSessionTool = callSessionTool;
 		this.#applicationProviders = applicationProviders ?? applicationProviderRegistry;
+		this.#computerProviders = computerProviders ?? defaultComputerProviders;
 	}
 
 	async capabilities(): Promise<DesktopCapabilities | undefined> {
@@ -199,7 +212,18 @@ export class ComputerSupervisor implements ComputerController {
 		else signal?.addEventListener("abort", abort, { once: true });
 
 		try {
-			this.#worker?.send({ type: "run", id, code, timeoutMs, session: snapshot });
+			this.#worker?.send({
+				type: "run",
+				id,
+				code,
+				timeoutMs,
+				// Read when the run starts: only a provider accepting work counts,
+				// so an incumbent that is still releasing reports the built-in one.
+				session: {
+					...snapshot,
+					computerProvider: this.#computerProviders.provider?.name ?? BUILTIN_COMPUTER_PROVIDER,
+				},
+			});
 			return await this.#raceWithGrace(promise, timeoutMs);
 		} finally {
 			signal?.removeEventListener("abort", abort);
@@ -213,7 +237,9 @@ export class ComputerSupervisor implements ComputerController {
 		this.#startReject = started.reject;
 		this.#startResolve = started.resolve;
 		try {
-			logger.debug("Starting computer worker");
+			logger.debug("Starting computer worker", {
+				provider: this.#computerProviders.provider?.name ?? BUILTIN_COMPUTER_PROVIDER,
+			});
 			const worker = this.#createWorker();
 			this.#worker = worker;
 			this.#unsubscribeMessage = worker.onMessage(message => this.#handleMessage(message));
@@ -405,27 +431,15 @@ export class ComputerSupervisor implements ComputerController {
 	}
 }
 
-const ownedSupervisors = new Map<string, Set<ComputerController>>();
-
 /** Registers a controller for owner-scoped session cleanup. */
 export function registerComputerController(ownerId: string | undefined, controller: ComputerController): () => void {
-	if (!ownerId) return () => {};
-	const controllers = ownedSupervisors.get(ownerId) ?? new Set<ComputerController>();
-	controllers.add(controller);
-	ownedSupervisors.set(ownerId, controllers);
-	return () => {
-		controllers.delete(controller);
-		if (controllers.size === 0) ownedSupervisors.delete(ownerId);
-	};
+	return registerOwnerRelease(ownerId, () => controller.close());
 }
 
-/** Closes every computer session owned by an agent session. */
+/** Closes every computer session owned by an agent session, then every
+ *  computer-use provider that owner still holds. */
 export async function releaseComputerSessionsForOwner(ownerId: string | undefined): Promise<void> {
-	if (!ownerId) return;
-	const controllers = ownedSupervisors.get(ownerId);
-	if (!controllers) return;
-	ownedSupervisors.delete(ownerId);
-	await Promise.allSettled(Array.from(controllers, controller => controller.close()));
+	await releaseOwnerResources(ownerId);
 }
 
 /** Verifies computer worker startup, messaging, and bounded shutdown. */
