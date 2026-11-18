@@ -176,16 +176,20 @@ export function springProgress(options: SpringOptions, elapsed: number): number 
 /**
  * Drive a spring from a callback. Returns a stop function.
  *
- * The callback receives the sampled value and the elapsed time. It runs on
- * `requestAnimationFrame`, so it stops when the tab is hidden — a spring
- * that keeps ticking in a background tab is a spring that resumes mid-flight.
+ * The callback receives the sampled value, the elapsed time, and the
+ * VELOCITY. The velocity is what tells a caller whether the spring has
+ * settled or is merely passing through the target on its way to the
+ * overshoot — the difference between "this has arrived" and "this is
+ * momentarily near where it is going". It runs on `requestAnimationFrame`,
+ * so it stops when the tab is hidden — a spring that keeps ticking in a
+ * background tab is a spring that resumes mid-flight.
  *
  * `onDone` fires once the animation reaches its cap, whether or not it has
  * visibly settled.
  */
 export function animateSpring(
 	options: SpringOptions,
-	onFrame: (value: number, elapsed: number) => void,
+	onFrame: (value: number, elapsed: number, velocity: number) => void,
 	onDone?: () => void,
 ): () => void {
 	const started = performance.now();
@@ -194,8 +198,8 @@ export function animateSpring(
 	const step = (): void => {
 		if (stopped) return;
 		const elapsed = (performance.now() - started) / 1000;
-		const { value } = sampleSpring(options, elapsed);
-		onFrame(value, elapsed);
+		const { value, velocity } = sampleSpring(options, elapsed);
+		onFrame(value, elapsed, velocity);
 		if (elapsed >= (options.maxDuration ?? 4)) {
 			stopped = true;
 			onDone?.();

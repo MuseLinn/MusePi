@@ -39,6 +39,26 @@ afterEach(() => {
 	delete (window as unknown as Record<string, unknown>).electronAPI;
 });
 
+/**
+ * How many cards are still LIVE — i.e. not playing their exit.
+ *
+ * A dismissed card leaves the DOM for the length of its exit animation so
+ * the motion can play, but it is gone as far as the user is concerned: it
+ * is inert, and the stack no longer counts it. A test that asserted
+ * "the list is gone from the DOM" would therefore fail for the right
+ * reason (the exit exists) and the wrong one (it also checked the wrong
+ * thing).
+ */
+function liveCardCount(): number {
+	return document.querySelectorAll(".pet-bubble:not([data-exiting])").length;
+}
+
+/** True when nothing is live — the list is empty of anything the user can
+ *  still act on, whether or not an exit is still playing. */
+function listIsEmpty(): boolean {
+	return liveCardCount() === 0;
+}
+
 function mountBubbles(): {
 	push(payload: CompanionActivity): void;
 	advance(): void;
@@ -158,7 +178,7 @@ describe("desktop pet bubble state transitions", () => {
 		expect(document.querySelector(".pet-bubbles--stacked")).not.toBeNull();
 
 		bridge.advance();
-		expect(document.querySelector(".pet-bubbles")).toBeNull();
+		expect(listIsEmpty()).toBe(true);
 		expect(bridge.visibility.at(-1)).toBe(false);
 
 		bridge.advance();
@@ -192,10 +212,10 @@ describe("desktop pet bubble state transitions", () => {
 		const firstTurn = { ...firstCard, activityKey: "turn-1" };
 		bridge.push({ sessions: [firstTurn] });
 		bridge.advance();
-		expect(document.querySelector(".pet-bubbles")).toBeNull();
+		expect(listIsEmpty()).toBe(true);
 
 		bridge.push({ sessions: [firstTurn] });
-		expect(document.querySelector(".pet-bubbles")).toBeNull();
+		expect(listIsEmpty()).toBe(true);
 		bridge.push({ sessions: [{ ...firstTurn, activityKey: "turn-2" }] });
 		expect(document.querySelector(".pet-bubbles--stacked")).not.toBeNull();
 	});
@@ -210,17 +230,30 @@ describe("desktop pet bubble state transitions", () => {
 		expect(bridge.reads).toEqual([]);
 		expect(bridge.allReads).toEqual([]);
 		expect(bridge.approvals).toEqual([]);
-		expect(document.querySelector(".pet-bubbles")).toBeNull();
+		expect(listIsEmpty()).toBe(true);
 
 		bridge.push({ sessions: [firstTurn], approval });
-		expect(document.querySelector(".pet-bubbles")).toBeNull();
+		expect(listIsEmpty()).toBe(true);
 		bridge.push({
 			sessions: [{ ...firstTurn, activityKey: "turn-2" }],
 			approval: { requestId: "request-2", tool: "bash" },
 		});
-		expect(document.querySelectorAll(".pet-bubble").length).toBe(1);
-		act(() => document.querySelector<HTMLElement>(".pet-bubbles--stacked > .pet-bubble")!.click());
-		expect(document.querySelectorAll(".pet-bubbles--expanded .pet-bubble").length).toBe(2);
+		// The new activity REPLACES the card that was fading out — same
+		// session, newer turn — and the approval bubble joins it. The
+		// approval is the NEWEST item, so it takes the top of the stack and
+		// the session card sits below it; the stack says so.
+		// The approval is the newest item, so it takes the top of the stack;
+		// the session card and the approval that was cleared sit below it.
+		expect(document.querySelector(".pet-bubbles--stacked > .pet-bubble--question")).not.toBeNull();
+		expect(document.querySelector(".pet-bubble__more")?.textContent).toContain("2");
+		// Clicking the top card with more cards below expands the stack
+		// rather than acting on the card that was clicked.
+		const clickTarget = document.querySelector<HTMLElement>(
+			".pet-bubbles--stacked > .pet-bubble:not([data-exiting])",
+		);
+		expect(clickTarget).not.toBeNull();
+		act(() => clickTarget!.click());
+		expect(document.querySelectorAll(".pet-bubbles--expanded .pet-bubble").length).toBe(3);
 		expect(bridge.reads).toEqual([]);
 		expect(bridge.allReads).toEqual([]);
 		expect(bridge.approvals).toEqual([]);
@@ -231,7 +264,7 @@ describe("desktop pet bubble state transitions", () => {
 		bridge.push({ sessions: [firstCard] });
 		act(() => document.querySelector<HTMLElement>(".pet-bubble--session .pet-bubble__action--primary")!.click());
 		expect(bridge.reads).toEqual(["main-session"]);
-		expect(document.querySelector(".pet-bubbles")).toBeNull();
+		expect(listIsEmpty()).toBe(true);
 	});
 
 	test("dismissing one card remembers only its current activity and keeps it unread", () => {
@@ -240,10 +273,10 @@ describe("desktop pet bubble state transitions", () => {
 		bridge.push({ sessions: [firstTurn] });
 		act(() => document.querySelector<HTMLElement>(".pet-bubble--session .pet-bubble__dismiss")!.click());
 		expect(bridge.reads).toEqual([]);
-		expect(document.querySelector(".pet-bubbles")).toBeNull();
+		expect(listIsEmpty()).toBe(true);
 
 		bridge.push({ sessions: [firstTurn] });
-		expect(document.querySelector(".pet-bubbles")).toBeNull();
+		expect(listIsEmpty()).toBe(true);
 		bridge.push({ sessions: [{ ...firstTurn, activityKey: "turn-2" }] });
 		expect(document.querySelector(".pet-bubbles--stacked")).not.toBeNull();
 		expect(bridge.reads).toEqual([]);

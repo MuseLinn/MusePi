@@ -157,6 +157,8 @@ export function CompanionBubbles(): ReactNode {
 	// after BUBBLE_EXIT_MS. Removal is centralized so every path (auto-
 	// dismiss, ✓, ✗, clear-all, main-window-driven) gets the same exit.
 	const [exiting, setExiting] = useState<ReadonlySet<string>>(() => new Set());
+	/** The same set, readable from the long-lived IPC subscription. */
+	const exitingRef = useRef<ReadonlySet<string>>(exiting);
 	const exitTimersRef = useRef<Map<string, number>>(new Map());
 	/** Latest lists for the long-lived IPC subscriptions (they are registered
 	 *  once, so a direct state read would be the mount-time snapshot). */
@@ -223,23 +225,28 @@ export function CompanionBubbles(): ReactNode {
 			dropKeys(set);
 			return;
 		}
-		setExiting(prev => {
-			const next = new Set(prev);
-			for (const key of keys) next.add(key);
-			return next;
-		});
+		// The ref is updated SYNCHRONOUSLY, not inside the state updater:
+		// an updater runs during the render phase, so a ref written there
+		// would still be stale when the same tick's list replacement reads
+		// it — and the cards playing their exit would be unmounted mid-
+		// animation.
+		const nextExiting = new Set(exitingRef.current);
+		for (const key of keys) nextExiting.add(key);
+		exitingRef.current = nextExiting;
+		setExiting(nextExiting);
 		// One timer per batch: every key in this call exits together, so the
 		// list is swept once instead of once per key.
 		const timer = window.setTimeout(() => {
 			dropKeys(set);
-			setExiting(prev => {
-				let changed = false;
-				const next = new Set(prev);
-				for (const key of keys) {
-					if (next.delete(key)) changed = true;
-				}
-				return changed ? next : prev;
-			});
+			const remaining = new Set(exitingRef.current);
+			let changed = false;
+			for (const key of keys) {
+				if (remaining.delete(key)) changed = true;
+			}
+			if (changed) {
+				exitingRef.current = remaining;
+				setExiting(remaining);
+			}
 		}, BUBBLE_EXIT_MS);
 		exitTimersRef.current.set(keys.join("\n"), timer);
 	};
@@ -324,15 +331,30 @@ export function CompanionBubbles(): ReactNode {
 				}
 				// Authoritative list — replace wholesale. Dismissal memory is
 				// keyed by activity revision so a later turn can reappear.
-				setCards(
-					payload.sessions.filter(card => {
+				//
+				// Cards that are PLAYING THEIR EXIT are carried over: the
+				// authoritative list knows nothing about them, and
+				// replacing the array outright would unmount them mid-
+				// animation — the exit would be cut off the moment a new
+				// activity arrived.
+				setCards(prev => {
+					// The sessions were captured above, outside the updater —
+					// TypeScript cannot narrow `payload.sessions` inside a
+					// closure, and the array is the same one either way.
+					const sessions = payload.sessions ?? [];
+					const next = sessions.filter(card => {
 						const activityKey = sessionActivityKey(card);
 						const dismissed = hidden.get(card.sessionId);
 						if (dismissed === activityKey) return false;
 						if (dismissed) hidden.delete(card.sessionId);
 						return true;
-					}),
-				);
+					});
+					const leaving = prev.filter(
+						card =>
+							exitingRef.current.has(`c:${card.sessionId}`) && !next.some(c => c.sessionId === card.sessionId),
+					);
+					return leaving.length > 0 ? [...next, ...leaving] : next;
+				});
 			}
 			if (payload.approval?.requestId) {
 				const approval = payload.approval;
@@ -593,7 +615,14 @@ export function CompanionBubbles(): ReactNode {
 		};
 	}, []);
 
-	const itemCount = bubbles.length + cards.length;
+	// Cards that are PLAYING THEIR EXIT are gone as far as the count is
+	// concerned: the user dismissed them, so the stack must not keep the
+	// window open for them, and the "more than one item" check must not
+	// expand the list to protect a card that is on its way out. They stay
+	// in the DOM only long enough to finish their animation.
+	const liveItemCount =
+		bubbles.length + cards.length - [...exiting].filter(key => key.startsWith("b:") || key.startsWith("c:")).length;
+	const itemCount = Math.max(0, liveItemCount);
 	useEffect(() => {
 		// Mirror the mode before hiding the native window. The reverse order can
 		// leave the pet showing the previous mode when the hidden renderer stalls.
@@ -875,13 +904,22 @@ export function CompanionBubbles(): ReactNode {
 		setStackMode("stacked");
 	};
 
-	if (itemCount === 0) return null;
+	// The stack renders while a card is PLAYING ITS EXIT, so the animation
+	// has a surface to play on. `liveItemCount` (the count that excludes
+	// exiting cards) is what decides whether the window should stay open.
+	const totalItems = bubbles.length + cards.length;
+	if (totalItems === 0) return null;
 
 	// A stacked stack with multiple cards expands before an action runs. This
 	// prevents a hidden priority card from being replied to or dismissed by
 	// accident. Expanded cards keep the list open when their session opens.
+	//
+	// The check counts EVERY card, including the ones playing their exit:
+	// they still occupy the stack visually, and a click that lands while
+	// one is fading out must not be swallowed by a stack that refuses to
+	// expand.
 	const runAction = (action: () => void): void => {
-		if (stackMode === "stacked" && itemCount > 1) switchMode("expanded");
+		if (stackMode === "stacked" && totalItems > 1) switchMode("expanded");
 		else action();
 	};
 
