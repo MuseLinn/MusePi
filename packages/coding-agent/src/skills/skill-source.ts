@@ -7,7 +7,9 @@
  * rewritten on every reinstall. It is deliberately data-only: no executable
  * content, no credentials.
  */
+
 import { createHash } from "node:crypto";
+import type { Dirent } from "node:fs";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 
@@ -64,7 +66,7 @@ export async function hashSkillDirectory(root: string): Promise<string | null> {
 	let files = 0;
 	let bytes = 0;
 	const walk = async (dir: string, relative: string): Promise<boolean> => {
-		let entries;
+		let entries: Dirent[];
 		try {
 			entries = await readdir(dir, { withFileTypes: true });
 		} catch {

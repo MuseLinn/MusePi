@@ -205,17 +205,9 @@ describe("checkSkillUpdates", () => {
 	it("marks a folder whose content no longer matches the recorded hash", async () => {
 		const dir = await mkdtemp(path.join(tmpdir(), "musepi-skill-modified-"));
 		try {
-			await Bun.write(path.join(dir, "SKILL.md"), "---
-name: demo
----
-body
-");
+			await Bun.write(path.join(dir, "SKILL.md"), "---\nname: demo\n---\nbody\n");
 			const contentHash = await hashSkillDirectory(dir);
-			await Bun.write(path.join(dir, "SKILL.md"), "---
-name: demo
----
-edited
-");
+			await Bun.write(path.join(dir, "SKILL.md"), "---\nname: demo\n---\nedited\n");
 			const { updates } = await checkSkillUpdates(
 				[
 					{

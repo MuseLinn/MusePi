@@ -4,6 +4,10 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **技能更新补上破坏性确认与“降级不算更新”**：同名技能从另一个来源安装前会说明将替换目录；版本比较改为严格 semver，只有更高版本才显示「可更新」，降级或自由格式显示「版本不同」并提供重新安装；安装时记录内容哈希，本地改过的技能在更新前会再次确认；SkillHub 更新遇到需要批准的脚本会就地询问并继续，不再等到超时；市场的「已安装」徽标按来源匹配，另一个目录的同名卡片不再假称已安装。
+  - EN: Skill updates now confirm destructive replacements and stop calling downgrades updates. Installing a same-name skill from another source explains that the folder will be replaced; version comparison is strict semver, so only a higher version reads as "update available", while a downgrade or a free-form version reads as "version differs" with a reinstall action. Installs record a content hash, and an edited folder gets a second confirmation before an update. A SkillHub update that needs script approval asks in place and continues instead of timing out, and the market's installed badge matches by source so the other catalog's same-name card no longer claims to be installed.
+
+
 - **输入框里的 token 统一成液态玻璃材质**：`/` 命令、`!` shell、magic keyword 与 `@` 提及四种 token 共用同一套 `--glass-*` 配方——accent 玻璃填充、`--glass-hairline-strong` 内边线、上下 specular rim、轻投影与共享 sheen，不再是一块扁平的色底；hover 预览卡改用 L2 浮层的 hairline + rim + float shadow。水平 padding 仍由等量负 margin 抵消，镜像层字宽与光标位置不变。
   - EN: In-input tokens now share the liquid-glass material. Slash commands, shell bangs, magic keywords and `@` mentions all use the same `--glass-*` recipe: an accent glass fill, a `--glass-hairline-strong` inner hairline, specular top/bottom rims, a tight ambient lift and the shared sheen wash — no more flat color block. The hover preview card moves to the L2 floating spec (hairline + rim + float shadow). Horizontal padding is still repaid by an equal negative margin, so glyph advance and the mirrored caret do not move.
 

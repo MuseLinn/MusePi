@@ -559,7 +559,7 @@ ${connector.category ?? ""}`.toLowerCase();
 		const description =
 			useChineseDescription && connector.descriptionZh ? connector.descriptionZh : connector.description;
 		return (
-			<div key={connector.id} className="gui-connector-card">
+			<div key={connector.id} className="gui-agent-card gui-connector-card">
 				<button type="button" className="gui-connector-main" onClick={() => openDetail(connector)}>
 					<span className="gui-connector-icon" aria-hidden="true">
 						{renderGlyph(connector, "row")}

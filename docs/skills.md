@@ -39,7 +39,13 @@ An install from SkillHub, skills.sh, or `skills.install` writes `.musepi-skill.j
 
 The capability center badges installed cards whose check found a newer version, and the versions drawer runs the update through the same install path with `overwrite` (SkillHub through the install state machine). There is no silent auto-update.
 
-When both catalogs publish the same skill (matched by name or slug), the check also returns every candidate source. The drawer lists them with their version and a per-source action — the recorded source updates in place, another source switches the install and rewrites the sidecar. Installing the same name from a second source always replaces the folder; it never leaves two copies.
+When both catalogs publish the same skill (matched by name or slug), the check also returns every candidate source. The drawer lists them with their version and a per-source action — the recorded source updates in place, another source switches the install and rewrites the sidecar. Installing the same name from a second source always replaces the folder; it never leaves two copies, and the market asks before replacing.
+
+Three more guards keep "update" honest:
+
+- **Strict ordering**: only an orderable semver that is higher counts as an update. A downgrade or a free-form version is reported as "version differs" and offers a reinstall, never "update available".
+- **Local edits**: installs record a content hash (sidecar excluded). If the folder no longer matches it, the drawer warns and the update asks before overwriting.
+- **Script approval**: a SkillHub update that stops at `awaiting-approval` asks in place and resumes; it does not sit until a timeout. The market's installed badge also matches by source, so the other catalog's same-name card does not claim to be installed.
 
 ## Required layout and SKILL.md expectations
 

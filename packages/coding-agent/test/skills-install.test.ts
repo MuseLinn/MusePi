@@ -80,6 +80,7 @@ describe("installSkillFromGit (local path clone, offline)", () => {
 		const source = await readSkillSource(result.dir);
 		expect(source).toMatchObject({ source: "git", url: repoDir, subdir: "my-skill" });
 		expect(source?.commit).toMatch(/^[0-9a-f]{40}$/);
+		expect(source?.contentHash).toMatch(/^[0-9a-f]{64}$/);
 	});
 
 	test("refuses overwrite without the flag, replaces with it", async () => {
