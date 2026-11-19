@@ -252,6 +252,11 @@
 	gap: 0;
 	padding: 0;
 	border-radius: var(--radius-full);
+	/* The open field anchors the add menu, the attachment row's error copy
+	 * and the thumbnails' remove buttons above/at its edges. The pill's
+	 * shrink-wrap clip is right for the collapsed row but cuts every popover
+	 * that leaves the pill — the add menu opened invisibly because of it. */
+	overflow: visible;
 }
 
 /* Buttons: square at rest of the row, circular, icon-centred. The highlight

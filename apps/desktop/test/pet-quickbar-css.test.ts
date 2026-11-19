@@ -13,4 +13,12 @@ describe("pet quick-bar composer CSS", () => {
 		expect(css).not.toMatch(/\.pet-window__quickbar--composing\s+\.pet-window__quickbar-btn/);
 		expect(css).toMatch(/\.pet-window__quickbar--composing\s*>\s*\.pet-window__quickbar-btn/);
 	});
+
+	test("the open field lets popovers escape the pill", () => {
+		// The add menu and the attachment error sit above the pill. The
+		// collapsed row's shrink-wrap clip cut them off entirely until the
+		// composing state opted out of overflow: hidden.
+		const block = css.match(/\.pet-window__quickbar--composing\s*\{([^}]*)\}/)?.[1] ?? "";
+		expect(block).toMatch(/overflow:\s*visible/);
+	});
 });
