@@ -10,7 +10,7 @@
  * uses. The page never renders an authorization URL, token, or static header.
  */
 
-import { pushActionToast, t, useLocale } from "@musepi/client-core";
+import { pushActionToast, SearchField, t, useLocale } from "@musepi/client-core";
 import { Copy, CornerDownLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1157,13 +1157,13 @@ ${connector.category ?? ""}`.toLowerCase();
 				/>
 			)}
 
-			<div className="flex items-center gap-2">
-				<input
-					className="gui-input min-w-0 flex-1"
+			<div className="gui-search-row flex items-center gap-2">
+				<SearchField
+					className="min-w-0 flex-1"
 					value={query}
-					onChange={event => setQuery(event.target.value)}
+					onChange={setQuery}
 					placeholder={t("settings.connectorsSearch")}
-					aria-label={t("settings.connectorsSearch")}
+					ariaLabel={t("settings.connectorsSearch")}
 				/>
 				<button
 					ref={importButtonRef}

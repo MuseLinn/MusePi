@@ -1,4 +1,4 @@
-import { SpotlightCard, type TranslationKey, t } from "@musepi/client-core";
+import { SearchField, SpotlightCard, type TranslationKey, t } from "@musepi/client-core";
 import { ChevronDown as ChevronDownIconData, ChevronUp as ChevronUpIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
@@ -1587,13 +1587,10 @@ export function ModelSection({
 								) : (
 									<>
 										<div className="gui-provider-search">
-											<Icon name="search" className="h-3.5 w-3.5 text-[var(--color-text-faint)]" />
-											<input
-												className="gui-input min-w-0 flex-1"
+											<SearchField
 												value={providerQuery}
-												onChange={e => setProviderQuery(e.target.value)}
+												onChange={setProviderQuery}
 												placeholder={t("settings.searchProviders")}
-												aria-label={t("settings.searchProviders")}
 											/>
 										</div>
 										<HeightMorph morphKey={`${showAll}:${providerQ}`}>

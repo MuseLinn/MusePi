@@ -1438,31 +1438,9 @@
 	white-space: nowrap;
 }
 
+/* 文件目录菜单的过滤框:表面来自共享 `.gui-search`(compact),这里只留外边距。 */
 .gui-filepane-directory-search {
-	display: flex;
-	align-items: center;
-	gap: 6px;
 	margin: 0 2px 6px;
-	padding: 6px 8px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	background: var(--color-surface-sunken);
-	color: var(--color-text-muted);
-}
-
-.gui-filepane-directory-search:focus-within {
-	border-color: var(--color-accent);
-}
-
-.gui-filepane-directory-search input {
-	flex: 1;
-	min-width: 0;
-	border: 0;
-	outline: 0;
-	background: transparent;
-	color: var(--color-text);
-	font: inherit;
-	font-size: var(--ui-font-size-xs);
 }
 
 .gui-filepane-directory-list {

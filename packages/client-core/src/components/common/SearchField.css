@@ -1,0 +1,83 @@
+/* Shared search field — the one geometry every list filter uses.
+ *
+ * Every value comes from the `--control-*` tokens (tokens.css § control
+ * geometry); this file must not re-derive a fill, hairline, rim, focus ring or
+ * height. Changing the product's control language means changing those tokens,
+ * not the call sites. */
+.gui-search {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	height: var(--control-height-field);
+	padding: 0 10px;
+	border: 1px solid var(--control-hairline);
+	border-radius: var(--radius-lg);
+	background: var(--control-fill);
+	box-shadow: var(--control-rim);
+	color: var(--color-text-faint);
+	transition:
+		border-color 120ms ease,
+		background 120ms ease,
+		box-shadow 120ms ease;
+}
+
+.gui-search:focus-within {
+	border-color: var(--control-focus-border);
+	background: var(--control-fill-hover);
+	box-shadow: var(--control-rim), var(--control-focus-ring);
+}
+
+/* Narrow columns (settings sidebar, menus, sheets): same surface, a shorter
+ * row so it does not crowd the list underneath. */
+.gui-search--compact {
+	height: var(--control-height-compact);
+	padding: 0 8px;
+}
+
+/* Touch surfaces (mobile sheets): the 44px target. 16px text keeps mobile
+ * browsers from zooming the page on focus; the pill radius is the sheet's
+ * own shape, not a second control language. */
+.gui-search--touch {
+	height: var(--control-height-touch);
+	padding: 0 10px;
+	border-radius: var(--radius-full);
+}
+
+.gui-search--touch .gui-search-input {
+	font-size: 16px;
+}
+
+.gui-search--disabled {
+	opacity: 0.55;
+}
+
+.gui-search-icon {
+	flex: none;
+	opacity: 0.55;
+}
+
+.gui-search-input {
+	flex: 1;
+	min-width: 0;
+	height: 100%;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: var(--control-font-size);
+}
+
+.gui-search-input:focus,
+.gui-search-input:focus-visible {
+	outline: none;
+	box-shadow: none;
+}
+
+.gui-search-input::placeholder {
+	color: var(--color-text-faint);
+}
+
+.gui-search-input::-webkit-search-cancel-button {
+	display: none;
+}

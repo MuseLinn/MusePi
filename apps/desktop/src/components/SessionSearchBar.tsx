@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { SearchField, t } from "@musepi/client-core";
 import type { ReactNode, RefObject } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
@@ -93,66 +93,64 @@ export function SessionSearchBar({
 				</span>
 				<span>{pending ? t("settings.pressEnterSearch") : t("settings.escClearClose")}</span>
 			</div>
-			<div className="gui-session-search">
-				<Icon name="search" className="h-3.5 w-3.5 flex-none" />
-				<input
-					ref={inputRef}
-					className="gui-input min-w-0 flex-1"
-					value={draft}
-					enterKeyHint="search"
-					// Draft-only: nothing is filtered until Enter (or a clear).
-					onChange={e => {
-						const next = e.target.value;
-						setDraft(next);
-						if (!composing.current && next.trim().length === 0 && query !== "") onQueryChange("");
-					}}
-					onCompositionStart={() => {
-						composing.current = true;
-					}}
-					onCompositionEnd={e => {
-						composing.current = false;
-						if (e.currentTarget.value.trim().length === 0 && query !== "") onQueryChange("");
-					}}
-					onKeyDown={e => {
-						// Enter during IME composition picks a candidate — it must
-						// never reach the search.
-						if (composing.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
-						if (e.key === "Enter") {
-							e.preventDefault();
-							e.stopPropagation();
-							const next = draft.trim();
-							if (!e.repeat && next !== query) onQueryChange(next);
-							return;
-						}
-						if (e.key !== "Escape") return;
-						// Escape belongs to this field: the window-level bare-Escape
-						// interrupt must not see it (escape-stop field ownership), and
-						// the first press clears while the second dismisses.
+			<SearchField
+				className="gui-session-search"
+				size="compact"
+				inputRef={inputRef}
+				value={draft}
+				enterKeyHint="search"
+				placeholder={t("settings.searchSessions")}
+				// Draft-only: nothing is filtered until Enter (or a clear).
+				onChange={next => {
+					setDraft(next);
+					if (!composing.current && next.trim().length === 0 && query !== "") onQueryChange("");
+				}}
+				onCompositionStart={() => {
+					composing.current = true;
+				}}
+				onCompositionEnd={e => {
+					composing.current = false;
+					if (e.currentTarget.value.trim().length === 0 && query !== "") onQueryChange("");
+				}}
+				onKeyDown={e => {
+					// Enter during IME composition picks a candidate — it must
+					// never reach the search.
+					if (composing.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
+					if (e.key === "Enter") {
 						e.preventDefault();
 						e.stopPropagation();
-						if (hasDraft || hasQuery) clear();
-						else onOpenChange(false);
-					}}
-					placeholder={t("settings.searchSessions")}
-					aria-label={t("settings.searchSessions")}
-				/>
-				{hasDraft && (
-					<button
-						type="button"
-						className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
-						// Keeps focus (and the open search) while the click lands.
-						onMouseDown={e => e.preventDefault()}
-						onClick={() => {
-							clear();
-							inputRef.current?.focus();
-						}}
-						title={t("settings.clear")}
-						aria-label={t("settings.clear")}
-					>
-						<Icon name="close" className="h-3 w-3" />
-					</button>
-				)}
-			</div>
+						const next = draft.trim();
+						if (!e.repeat && next !== query) onQueryChange(next);
+						return;
+					}
+					if (e.key !== "Escape") return;
+					// Escape belongs to this field: the window-level bare-Escape
+					// interrupt must not see it (escape-stop field ownership), and
+					// the first press clears while the second dismisses.
+					e.preventDefault();
+					e.stopPropagation();
+					if (hasDraft || hasQuery) clear();
+					else onOpenChange(false);
+				}}
+				trailing={
+					hasDraft && (
+						<button
+							type="button"
+							className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
+							// Keeps focus (and the open search) while the click lands.
+							onMouseDown={e => e.preventDefault()}
+							onClick={() => {
+								clear();
+								inputRef.current?.focus();
+							}}
+							title={t("settings.clear")}
+							aria-label={t("settings.clear")}
+						>
+							<Icon name="close" className="h-3 w-3" />
+						</button>
+					)
+				}
+			/>
 			{!pending && hasQuery && matchCount === 0 && (
 				<p className="px-[10px] py-3 text-[13px] text-[var(--color-text-faint)]">
 					{t("settings.noMatchingSessions")}

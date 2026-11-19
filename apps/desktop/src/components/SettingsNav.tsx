@@ -1,4 +1,4 @@
-import { t, tLoose } from "@musepi/client-core";
+import { SearchField, t, tLoose } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SectionId, SectionRequest } from "../lib/settings-nav";
@@ -504,15 +504,13 @@ export function SettingsNav({
 							aria-label={t("settings.searchSettings")}
 						>
 							<div className="gui-settings-search-pop-input">
-								<Icon name="search" className="h-3.5 w-3.5 flex-none" />
-								<input
-									// eslint-disable-next-line jsx-a11y/no-autofocus -- explicit search-button activation continues into the field.
-									autoFocus
-									className="gui-input min-w-0 flex-1"
+								{/* eslint-disable-next-line jsx-a11y/no-autofocus -- explicit search-button activation continues into the field. */}
+								<SearchField
+									size="compact"
 									value={query}
-									onChange={e => onQueryChange(e.target.value)}
+									onChange={onQueryChange}
 									placeholder={t("settings.searchSettings")}
-									aria-label={t("settings.searchSettings")}
+									autoFocus
 									onKeyDown={e => {
 										if (e.key === "Escape") {
 											e.preventDefault();
@@ -520,18 +518,20 @@ export function SettingsNav({
 											closeSearch();
 										}
 									}}
+									trailing={
+										query && (
+											<button
+												type="button"
+												className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
+												onClick={() => onQueryChange("")}
+												title={t("settings.clear")}
+												aria-label={t("settings.clear")}
+											>
+												<Icon name="close" className="h-3 w-3" />
+											</button>
+										)
+									}
 								/>
-								{query && (
-									<button
-										type="button"
-										className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
-										onClick={() => onQueryChange("")}
-										title={t("settings.clear")}
-										aria-label={t("settings.clear")}
-									>
-										<Icon name="close" className="h-3 w-3" />
-									</button>
-								)}
 							</div>
 							<div className="gui-settings-search-pop-results">
 								{filterNavGroups(groups, query).map(group => (
@@ -561,27 +561,26 @@ export function SettingsNav({
 					</MenuPopup>
 				</div>
 			) : (
-				<label className="gui-settings-search">
-					<Icon name="search" className="h-3.5 w-3.5 flex-none" />
-					<input
-						className="gui-input min-w-0 flex-1"
-						value={query}
-						onChange={e => onQueryChange(e.target.value)}
-						placeholder={t("settings.searchSettings")}
-						aria-label={t("settings.searchSettings")}
-					/>
-					{query && (
-						<button
-							type="button"
-							className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
-							onClick={() => onQueryChange("")}
-							title={t("settings.clear")}
-							aria-label={t("settings.clear")}
-						>
-							<Icon name="close" className="h-3 w-3" />
-						</button>
-					)}
-				</label>
+				<SearchField
+					className="gui-settings-search"
+					size="compact"
+					value={query}
+					onChange={onQueryChange}
+					placeholder={t("settings.searchSettings")}
+					trailing={
+						query && (
+							<button
+								type="button"
+								className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
+								onClick={() => onQueryChange("")}
+								title={t("settings.clear")}
+								aria-label={t("settings.clear")}
+							>
+								<Icon name="close" className="h-3 w-3" />
+							</button>
+						)
+					}
+				/>
 			)}
 			<div ref={navRef} className="gui-settings-nav-scroll" data-top-scroll="false" data-bottom-scroll="false">
 				{!collapsedNav && settingMatches.length > 0 && (

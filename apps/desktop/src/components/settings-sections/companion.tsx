@@ -1,4 +1,12 @@
-import { Segmented, type SegmentedOption, SpotlightCard, type TranslationKey, t, tLoose } from "@musepi/client-core";
+import {
+	SearchField,
+	Segmented,
+	type SegmentedOption,
+	SpotlightCard,
+	type TranslationKey,
+	t,
+	tLoose,
+} from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import "../../i18n/companion-style";
@@ -365,13 +373,12 @@ export function CompanionMarket({
 		<div className="gui-pet-market">
 			<div className="gui-pet-market__head">
 				<span className="gui-pet-group-label">{t("companion.petMarket")}</span>
-				<input
-					type="search"
-					className="gui-input gui-pet-market__search"
+				<SearchField
+					className="gui-pet-market__search"
 					value={query}
-					onChange={e => setQuery(e.target.value)}
+					onChange={setQuery}
 					placeholder={t("companion.petMarketSearchPlaceholder")}
-					aria-label={t("companion.petMarket")}
+					ariaLabel={t("companion.petMarket")}
 				/>
 			</div>
 			{error && <div className="gui-pet-market__error">{t("companion.petMarketError", { reason: error })}</div>}

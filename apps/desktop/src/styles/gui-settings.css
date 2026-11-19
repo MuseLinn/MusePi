@@ -5542,33 +5542,19 @@ body.gui-resizing {
 	line-height: 1.45;
 }
 
-.gui-session-search,
-.gui-settings-search {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	flex: none;
+/* 会话搜索栏 / 设置侧栏搜索框:表面来自共享 `.gui-search`,这里只留各自的外边距。 */
+.gui-session-search {
 	margin: 0 10px 4px;
-	padding: 3px 8px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-lg);
-	background: color-mix(in oklab, var(--fg) 3%, transparent);
-	color: var(--fg-faint);
 }
-.gui-session-search .gui-input,
-.gui-settings-search .gui-input {
-	border: none;
-	background: transparent;
-	padding: 4px 2px;
-	font-size: 12.5px;
-}
-.gui-session-search .gui-input:focus,
-.gui-settings-search .gui-input:focus {
-	outline: none;
-	box-shadow: none;
-}
+
 .gui-settings-search {
 	margin: 4px 10px 6px;
+}
+
+/* A row that pairs the shared search field with actions keeps one control
+ * height: a plain `.gui-btn` is 2px shorter than the field by default. */
+.gui-search-row > .gui-btn {
+	min-height: var(--control-height-field);
 }
 
 /* ---- Session table (设置 → 会话) ----
@@ -8291,11 +8277,13 @@ body.gui-resizing {
 
 	.gui-settings-search-pop-input {
 		display: flex;
-		align-items: center;
-		gap: 6px;
 		padding: 6px 8px;
 		border-bottom: 1px solid var(--border);
-		color: var(--color-text-faint);
+	}
+
+	.gui-settings-search-pop-input > .gui-search {
+		flex: 1;
+		min-width: 0;
 	}
 
 	.gui-settings-search-pop-results {

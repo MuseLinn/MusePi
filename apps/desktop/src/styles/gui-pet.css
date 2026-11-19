@@ -682,12 +682,8 @@
 }
 .gui-pet-market__search
 {
-	border-radius: var(--radius-lg);
 	flex:1;
 	min-width:0;
-	height:30px;
-	padding:0 10px;
-	font-size:12.5px;
 }
 .gui-session-row--unread .gui-session-title:after
 {

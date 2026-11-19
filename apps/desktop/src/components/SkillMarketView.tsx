@@ -1,4 +1,4 @@
-import { isTopModal, Markdown, type TranslationKey, t, useModalFocus } from "@musepi/client-core";
+import { isTopModal, Markdown, SearchField, type TranslationKey, t, useModalFocus } from "@musepi/client-core";
 import { formatBytes } from "@musepi/pi-utils/format";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -470,18 +470,15 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 		<div className="gui-skill-market">
 			{/* 工具行 (设计稿 01):搜索 → 全部来源下拉 → 热门优先下拉 → + 添加技能 */}
 			<div className="gui-skill-market-bar gui-liquid-glass">
-				<label className="gui-skill-market-search">
-					<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-					<input
-						type="search"
-						value={keyword}
-						placeholder={t("general.skillMarketSearch")}
-						onChange={ev => {
-							setKeyword(ev.target.value);
-							setPage(1);
-						}}
-					/>
-				</label>
+				<SearchField
+					className="gui-skill-market-search"
+					value={keyword}
+					onChange={value => {
+						setKeyword(value);
+						setPage(1);
+					}}
+					placeholder={t("general.skillMarketSearch")}
+				/>
 				{/* Frosted GuiSelect (规范下拉): replaces the native <select>. */}
 				<GuiSelect<SourceFilter>
 					value={source}

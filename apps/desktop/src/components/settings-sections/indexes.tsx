@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { SearchField, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
@@ -175,12 +175,11 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 					: t("settings.indexUnavailable")}
 			</div>
 			<div className="gui-settings-row">
-				<input
-					type="search"
-					className="gui-settings-input w-full"
-					placeholder={t("settings.instantSearchPlaceholder")}
+				<SearchField
+					className="w-full"
 					value={idxQuery}
-					onChange={e => setIdxQuery(e.target.value)}
+					onChange={setIdxQuery}
+					placeholder={t("settings.instantSearchPlaceholder")}
 				/>
 			</div>
 			{idxSearching ? (

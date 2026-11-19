@@ -3708,24 +3708,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-provider-search {
-	display: flex;
-	align-items: center;
-	gap: 8px;
 	margin-bottom: 12px;
-	padding: 6px 10px;
-	border-radius: var(--radius-lg);
-	border: 1px solid var(--color-bd);
-	background: var(--color-surface);
-}
-
-.gui-provider-search:focus-within {
-	border-color: var(--color-accent-bd);
-}
-
-.gui-provider-search .gui-input {
-	border: none;
-	background: transparent;
-	padding: 2px 0;
 }
 
 .gui-provider-card {

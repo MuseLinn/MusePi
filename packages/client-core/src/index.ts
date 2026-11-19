@@ -16,6 +16,9 @@ export { Gauge, type GaugeProps } from "./components/charts/Gauge";
 export { KLine, type KLineCandle, type KLineProps } from "./components/charts/KLine";
 export { LineChart, type LineChartProps, type LineChartSerie } from "./components/charts/LineChart";
 export { Sparkline, type SparklineProps } from "./components/charts/Sparkline";
+/** One search field for every list filter (docs/gui-design.md § capability
+ *  controls; geometry from the `--control-*` tokens). */
+export { SearchField, type SearchFieldProps } from "./components/common/SearchField";
 export { ComposerEditor, type ComposerEditorProps } from "./components/composer/ComposerEditor";
 export type {
 	ComposerEditorHandle,

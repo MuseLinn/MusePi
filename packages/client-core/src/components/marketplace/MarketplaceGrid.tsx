@@ -1,9 +1,10 @@
-import { PackageOpen, RefreshCw, Search, SearchX } from "lucide-react";
+import { PackageOpen, RefreshCw, SearchX } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { loadMarketplaceViewPreferences, saveMarketplaceViewPreferences } from "../../lib/marketplace-preferences";
 import { useScrollShadow } from "../../lib/scroll-shadow";
+import { SearchField } from "../common/SearchField.js";
 import { MarketplaceCard } from "./MarketplaceCard";
 import type { MarketplaceCardAction, MarketplaceCardEntry, MarketplaceSource } from "./types";
 import "./marketplace.css";
@@ -356,17 +357,14 @@ export function MarketplaceGrid({
 		<div ref={shellRef} className="mp-grid-shell" aria-busy={showLoading ? "true" : "false"}>
 			<header className="mp-grid-toolbar gui-liquid-glass">
 				{showCatalogControls && (
-					<label className="mp-search-field">
-						<Search size={14} strokeWidth={2} aria-hidden="true" />
-						<input
-							type="search"
-							className="mp-search"
-							placeholder={t("guest.pluginSearchPlaceholder")}
-							value={filter}
-							onChange={e => setFilter(e.target.value)}
-							aria-label={t("guest.pluginSearchLabel")}
-						/>
-					</label>
+					<SearchField
+						className="mp-search-field"
+						inputClassName="mp-search"
+						value={filter}
+						onChange={setFilter}
+						placeholder={t("guest.pluginSearchPlaceholder")}
+						ariaLabel={t("guest.pluginSearchLabel")}
+					/>
 				)}
 				{showCatalogControls ? (
 					<>

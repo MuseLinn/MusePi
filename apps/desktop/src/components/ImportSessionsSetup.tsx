@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { SearchField, t } from "@musepi/client-core";
 import { formatWhen } from "@musepi/client-core/src/lib/format";
 import {
 	ArrowLeft,
@@ -392,17 +392,12 @@ export function ImportSessionsSetup({
 				) : (
 					<>
 						<div className="gui-import-toolbar">
-							<label className="gui-import-search">
-								<MorphIcon icon={Search} size={13} className="gui-import-search-icon" />
-								<input
-									type="search"
-									className="gui-import-search-input"
-									value={filter}
-									placeholder={t("settings.searchSessions")}
-									aria-label={t("settings.searchSessions")}
-									onChange={e => setFilter(e.target.value)}
-								/>
-							</label>
+							<SearchField
+								className="gui-import-search"
+								value={filter}
+								onChange={setFilter}
+								placeholder={t("settings.searchSessions")}
+							/>
 							{importedTotal > 0 && (
 								<span className="gui-import-imported-total">
 									{t("settings.importImportedCount", { count: importedTotal })}

@@ -4,6 +4,7 @@ import {
 	type MarketplaceCardAction,
 	MarketplaceGrid,
 	motionDisabled,
+	SearchField,
 	t,
 	useLocale,
 	useModalFocus,
@@ -1116,15 +1117,12 @@ function InstalledSkillsPane({
 		<div className="gui-skill-installed">
 			{/* 工具行:来源/排序 双下拉 + 批量管理开关 (设计稿 2:250)。 */}
 			<div className="gui-skill-market-bar">
-				<label className="gui-skill-market-search">
-					<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-					<input
-						type="search"
-						placeholder={t("tools.searchSkills")}
-						value={query}
-						onChange={e => setQuery(e.target.value)}
-					/>
-				</label>
+				<SearchField
+					className="gui-skill-market-search"
+					value={query}
+					onChange={setQuery}
+					placeholder={t("tools.searchSkills")}
+				/>
 				{/* Frosted GuiSelect (规范下拉): the native <select> was system
 					 chrome — the "原始下拉" the consistency pass calls out. The
 					 explicit type parameter keeps T narrow (the Dispatch-based

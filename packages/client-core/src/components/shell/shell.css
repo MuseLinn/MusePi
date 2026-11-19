@@ -4499,36 +4499,11 @@
 	padding: 4px 8px 12px;
 }
 
-/* Session search: a 44px target that keeps the sheet's frosted surface and
-   uses 16px text so mobile browsers do not zoom on focus. */
+/* Session search: the shared `.gui-search` touch variant owns the target
+   height, 16px text, pill and surface; this rule only states the sheet's
+   margins. */
 .ss-search {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	min-height: 44px;
 	margin: 0 10px 8px;
-	padding: 0 10px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-full);
-	background: var(--bg-inset);
-	color: var(--fg-muted);
-}
-
-.ss-search-input {
-	flex: 1;
-	min-width: 0;
-	border: 0;
-	background: none;
-	color: var(--fg);
-	font: inherit;
-	font-size: 16px;
-	line-height: 1.4;
-	padding: 10px 0;
-	outline: none;
-}
-
-.ss-search-input::placeholder {
-	color: var(--fg-muted);
 }
 
 .ss-search-clear {

@@ -61,6 +61,7 @@ Shared by desktop and mobile; changes must be verified on both.
 | `shell/` | `ConfirmDialog` / `Banners` / `Toasts` / `ApprovalCard` | Confirmation, banners, toasts, approvals |
 | `shell/` | `DotMatrixMark` / `MatrixLoader` / `ShinyText` / `BlurText` | Brand and loading motion |
 | `common/` | `FoldRegion` | Collapsible region |
+| `common/` | `SearchField` | One search field for every list filter (`field` 34px / `compact` 28px / `touch` 44px); surface from `--control-*` tokens |
 | `panels/` | `BoardPanel` / `FilePanel` / `ScheduledPanel` / `VoicePanel` / `WorkspacePanel` | Right-panel surfaces |
 | `agents/` | `AgentsPanel` / `AgentDrawer` | Subagent HUD and detail |
 | `marketplace/` | `MarketplaceGrid` / `MarketplaceCard` / `MarketplacePanel` | Marketplace grid (the capability page re-skins it, never copies it) |
@@ -75,11 +76,10 @@ Shared by desktop and mobile; changes must be verified on both.
 
 ## Known gaps (recorded, not resolved)
 
-Building this catalog surfaced three places that are still not converged. Keep them in mind when changing things:
+Building this catalog surfaced two places that are still not converged. Keep them in mind when changing things:
 
-1. **No token for control height.** The search field is a literal 32px in its base rule and 34px under `.gui-capability-page`; there is no `--control-h-*`.
-2. **Interaction-state naming is not unified.** `--glass-hover*` covers generic hover, while component-specific three-state sets like `--gui-grip-*` are newer; a new component must decide whether to reuse the former or open a family by the naming rule.
-3. **CSS contract tests cover only radius and the grip.** Outside `scripts/check-radius-tokens.ts` and `test/splitter-grip.test.ts`, most component styles have no guard.
+1. **Interaction-state naming is not unified.** `--glass-hover*` covers generic hover, while component-specific three-state sets like `--gui-grip-*` are newer; a new component must decide whether to reuse the former or open a family by the naming rule.
+2. **CSS contract tests cover only radius and the grip.** Outside `scripts/check-radius-tokens.ts` and `test/splitter-grip.test.ts`, most component styles have no guard.
 
 When adding a component, update its row here and record the contract it follows in `docs/gui-design.md`.
 

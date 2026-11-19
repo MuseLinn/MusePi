@@ -263,45 +263,10 @@
 	flex: none;
 }
 
+/* 导入会话搜索框:表面来自共享 `.gui-search`,这里只留弹性宽度。 */
 .gui-import-search {
-	display: flex;
-	align-items: center;
-	gap: 8px;
 	flex: 1 1 auto;
 	min-width: 0;
-	height: var(--control-height-sm);
-	padding: 0 10px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	background: var(--color-surface-sunken);
-	transition:
-		border-color 140ms ease,
-		box-shadow 140ms ease;
-}
-
-.gui-import-search:focus-within {
-	border-color: var(--color-accent-bd);
-	box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 12%, transparent);
-}
-
-.gui-import-search-icon {
-	flex: none;
-	color: var(--fg-faint);
-}
-
-.gui-import-search-input {
-	flex: 1 1 auto;
-	min-width: 0;
-	border: 0;
-	outline: none;
-	background: transparent;
-	color: inherit;
-	font: inherit;
-	font-size: var(--ui-font-size-sm);
-}
-
-.gui-import-search-input::placeholder {
-	color: var(--fg-faint);
 }
 
 .gui-import-imported-total {

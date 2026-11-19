@@ -26,48 +26,12 @@
 	align-items: center;
 }
 
-/* Search field: one wrapper owns the surface (icon + input), so the same
- * geometry works in every host; the desktop capability page re-skins it to
- * its glass recipe without touching this shared component. */
+/* Search field: the shared `.gui-search` owns the surface (icon + input), so
+ * the same geometry works in every host. This rule only states the toolbar
+ * placement; the desktop capability page needs no re-skin any more. */
 .mp-search-field {
-	display: flex;
-	align-items: center;
-	gap: 6px;
 	flex: 1 1 220px;
 	min-width: 0;
-	padding: 0 10px;
-	height: 34px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
-	background: var(--bg-inset);
-	color: var(--fg-faint);
-	transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
-}
-
-.mp-search-field:focus-within {
-	border-color: var(--accent-bd);
-	box-shadow: 0 0 0 3px var(--ring);
-}
-
-.mp-search {
-	flex: 1;
-	min-width: 0;
-	height: 100%;
-	padding: 0;
-	border: 0;
-	outline: none;
-	background: transparent;
-	color: var(--fg);
-	font: inherit;
-}
-
-.mp-search::placeholder {
-	color: var(--fg-faint);
-}
-
-.mp-search:focus-visible {
-	outline: none;
-	box-shadow: none;
 }
 
 .mp-filter-bar {

@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { SearchField, t } from "@musepi/client-core";
 import type { DragEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
@@ -328,27 +328,23 @@ export function PluginInstallDialog({
 					onDragLeave={() => setDragging(false)}
 					onDrop={onDrop}
 				>
-					<div className="gui-ext-plugins-search">
-						<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-50" />
-						<input
-							ref={inputRef}
-							type="text"
-							value={spec}
-							disabled={busy}
-							placeholder={t("settings.pluginInstallPlaceholder")}
-							aria-label={t("settings.pluginInstallPlaceholder")}
-							onChange={event => setSpec(event.currentTarget.value)}
-							onKeyDown={event => {
-								// Enter submits unless an input-method candidate is being
-								// confirmed, which is also Enter — submitting there would
-								// install a half-typed spec.
-								if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-									event.preventDefault();
-									start(spec);
-								}
-							}}
-						/>
-					</div>
+					<SearchField
+						className="gui-ext-plugins-search"
+						inputRef={inputRef}
+						value={spec}
+						onChange={setSpec}
+						disabled={busy}
+						placeholder={t("settings.pluginInstallPlaceholder")}
+						onKeyDown={event => {
+							// Enter submits unless an input-method candidate is being
+							// confirmed, which is also Enter — submitting there would
+							// install a half-typed spec.
+							if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+								event.preventDefault();
+								start(spec);
+							}
+						}}
+					/>
 					<div className="gui-plugin-drop-hint">{t("settings.pluginInstallDropHint")}</div>
 				</div>
 

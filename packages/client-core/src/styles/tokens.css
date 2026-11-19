@@ -121,6 +121,21 @@
 	--control-height-sm: 32px;
 	--control-height-md: 36px;
 	--control-height-touch: 44px;
+	/* One control recipe for search fields, `GuiSelect` triggers and tool-row
+	 * actions — the family that shares a row: same height, radius, hairline,
+	 * recessed fill, inset rim and focus ring. 34px is the row height the
+	 * native control stack settled on (the GuiSelect trigger). Components
+	 * consume these; never re-derive the mixes per component. Radius stays on
+	 * the `--radius-lg` ladder so `check-radius-tokens` keeps one source. */
+	--control-height-field: 34px;
+	--control-height-compact: 28px;
+	--control-fill: color-mix(in oklab, var(--fg) 4%, transparent);
+	--control-fill-hover: color-mix(in oklab, var(--fg) 6%, transparent);
+	--control-hairline: var(--border);
+	--control-rim: inset 0 1px 0 var(--glass-rim-hi);
+	--control-focus-border: color-mix(in oklab, var(--accent) 55%, transparent);
+	--control-focus-ring: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+	--control-font-size: var(--ui-font-size-sm);
 
 	/* Named stacking layers for portaled UI. Keep local stacking contexts
 	 * inside components; cross-surface layers consume these tokens. */

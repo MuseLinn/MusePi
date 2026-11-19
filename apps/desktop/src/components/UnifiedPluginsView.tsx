@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { SearchField, t } from "@musepi/client-core";
 import { coerceConfigValues } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { type ExternalExecutableProbeResult, externalAgentBinary } from "../lib/external-agent-config";
@@ -791,16 +791,12 @@ export function UnifiedPluginsView({
 		<div className="gui-ext-plugins" data-variant={variant}>
 			{/* dsh 面板顶栏：搜索 + 计数 + 「+ 添加插件」 */}
 			<div className="gui-ext-plugins-toolbar gui-liquid-glass">
-				<label className="gui-ext-plugins-search">
-					<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-50" />
-					<input
-						type="search"
-						value={query}
-						placeholder={t("tools.extSearchPlugins")}
-						aria-label={t("tools.extSearchPlugins")}
-						onChange={event => setQuery(event.currentTarget.value)}
-					/>
-				</label>
+				<SearchField
+					className="gui-ext-plugins-search"
+					value={query}
+					onChange={setQuery}
+					placeholder={t("tools.extSearchPlugins")}
+				/>
 				<span className="gui-ext-plugins-toolbar-count">
 					{t("tools.extPluginsConfig")} {builtinConfig.length} · {t("tools.extPluginsExperimental")}{" "}
 					{experimentalBuiltins.length} · {t("tools.extPluginsInstalled")}{" "}

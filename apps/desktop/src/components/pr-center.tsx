@@ -9,7 +9,7 @@
  * with the machine's own credentials (gh CLI); a missing or unauthenticated
  * gh surfaces a readable error instead of a blank pane.
  */
-import { Markdown, Segmented, type SegmentedOption, type TranslationKey, t } from "@musepi/client-core";
+import { Markdown, SearchField, Segmented, type SegmentedOption, type TranslationKey, t } from "@musepi/client-core";
 import { createFileQuoteContext } from "@musepi/client-core/src/messages/display-context";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -1694,15 +1694,12 @@ export function PrCenter({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNo
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="gui-pr-toolbar">
 				<div className="gui-pr-search-row">
-					<label className="gui-ext-plugins-search gui-pr-search">
-						<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-50" />
-						<input
-							value={query}
-							onChange={e => setQuery(e.target.value)}
-							placeholder={t("general.prSearchPlaceholder")}
-							aria-label={t("general.prSearchPlaceholder")}
-						/>
-					</label>
+					<SearchField
+						className="gui-pr-search"
+						value={query}
+						onChange={setQuery}
+						placeholder={t("general.prSearchPlaceholder")}
+					/>
 				</div>
 				<div className="gui-pane-subtabs" role="tablist" aria-label={t("settings.pullRequests")}>
 					<button

@@ -1,5 +1,5 @@
-import { t } from "@musepi/client-core";
-import { FileText, Folder, Search } from "lucide-react";
+import { SearchField, t } from "@musepi/client-core";
+import { FileText, Folder } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { WorkspaceEntry } from "../lib/file-workspace";
@@ -84,18 +84,16 @@ export function FileDirectoryMenu({
 					{currentPath || cwd}
 				</span>
 			</div>
-			<label className="gui-filepane-directory-search">
-				<Search size={13} />
-				<input
-					autoFocus
-					type="search"
-					value={query}
-					placeholder={t("settings.searchFiles")}
-					aria-label={t("settings.searchFiles")}
-					onChange={event => setQuery(event.target.value)}
-					spellCheck={false}
-				/>
-			</label>
+			<SearchField
+				className="gui-filepane-directory-search"
+				size="compact"
+				autoFocus
+				iconSize={13}
+				value={query}
+				onChange={setQuery}
+				placeholder={t("settings.searchFiles")}
+				spellCheck={false}
+			/>
 			<FadeScroll className="gui-filepane-directory-list">
 				{error && <p className="gui-error">{error}</p>}
 				{!error && filtered === null && <p className="gui-filepane-empty">{t("settings.loading2")}</p>}

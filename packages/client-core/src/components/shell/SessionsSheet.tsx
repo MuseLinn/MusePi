@@ -1,5 +1,5 @@
 import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
-import { Check, Loader2, Pencil, Search, Server, Settings, SquarePen, Trash2, X } from "lucide-react";
+import { Check, Loader2, Pencil, Server, Settings, SquarePen, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -11,6 +11,7 @@ import { formatWhen, shortenPath } from "../../lib/format";
 import { haptic } from "../../lib/haptics";
 import { isTopModal, useModalFocus } from "../../lib/modal-focus";
 import { useMobileSurface } from "../../lib/use-mobile-surface";
+import { SearchField } from "../common/SearchField.js";
 
 /**
  * Floating bottom sheet for switching live sessions (openchamber
@@ -232,28 +233,26 @@ export function SessionsSheet({
 					</div>
 				</div>
 				{sessions.length > 0 && (
-					<div className="ss-search">
-						<Search size={15} aria-hidden />
-						<input
-							type="search"
-							className="ss-search-input"
-							value={query}
-							placeholder={t("settings.searchSessions")}
-							aria-label={t("settings.searchSessions")}
-							enterKeyHint="search"
-							onChange={e => setQuery(e.target.value)}
-						/>
-						{query.length > 0 && (
-							<button
-								type="button"
-								className="ss-search-clear"
-								aria-label={t("settings.clear")}
-								onClick={() => setQuery("")}
-							>
-								<X size={13} />
-							</button>
-						)}
-					</div>
+					<SearchField
+						className="ss-search"
+						size="touch"
+						value={query}
+						onChange={setQuery}
+						placeholder={t("settings.searchSessions")}
+						enterKeyHint="search"
+						trailing={
+							query.length > 0 && (
+								<button
+									type="button"
+									className="ss-search-clear"
+									aria-label={t("settings.clear")}
+									onClick={() => setQuery("")}
+								>
+									<X size={13} />
+								</button>
+							)
+						}
+					/>
 				)}
 				<div className="ss-list">
 					{filtered.length === 0 && (

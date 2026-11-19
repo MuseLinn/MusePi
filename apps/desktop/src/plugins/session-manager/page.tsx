@@ -1,5 +1,5 @@
 import type { TranslationKey } from "@musepi/client-core";
-import { SESSION_OUTCOME_LABEL_KEYS, Segmented, t, useArchivedSessions } from "@musepi/client-core";
+import { SESSION_OUTCOME_LABEL_KEYS, SearchField, Segmented, t, useArchivedSessions } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { hitText } from "../../components/settings-sections/shared";
@@ -914,21 +914,18 @@ export default function SessionManagerPage({ rpc, sessionId, onOpenSession }: Sl
 						</option>
 					))}
 				</select>
-				<label className="gui-settings-search min-w-[160px] flex-1" style={{ margin: 0 }}>
-					<Icon name="search" className="h-3.5 w-3.5 flex-none" />
-					<input
-						className="gui-input min-w-0 flex-1"
-						type="search"
-						value={query}
-						onChange={event => {
-							setQuery(event.target.value);
-							setPage(1);
-						}}
-						placeholder={t("settings.sessionManager.searchPlaceholder")}
-						aria-label={t("settings.sessionManager.searchPlaceholder")}
-					/>
-					{searching && <Icon name="loader-4" className="h-3.5 w-3.5 flex-none animate-spin opacity-60" />}
-				</label>
+				<SearchField
+					className="min-w-[160px] flex-1"
+					value={query}
+					onChange={value => {
+						setQuery(value);
+						setPage(1);
+					}}
+					placeholder={t("settings.sessionManager.searchPlaceholder")}
+					trailing={
+						searching && <Icon name="loader-4" className="h-3.5 w-3.5 flex-none animate-spin opacity-60" />
+					}
+				/>
 				{filtersActive && (
 					<button type="button" className="gui-btn gui-btn--small" onClick={resetFilters}>
 						{t("settings.sessionManager.reset")}
