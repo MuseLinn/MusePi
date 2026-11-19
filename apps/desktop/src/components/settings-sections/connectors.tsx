@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { copyToClipboard, openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
+import { morphSurfaceFrom } from "../../lib/view-transition";
 import { DialogFrame } from "../DialogFrame";
 import { CONNECTOR_BRAND_GLYPHS } from "./connector-brand-icons.generated";
 import { ConnectorImportDialog } from "./connector-import-dialog";
@@ -125,9 +126,9 @@ function reportOutcome(
 	pushActionToast({ ...outcome, dedupeKey: `connector:${connectorId}:outcome` });
 }
 
-/** Viewport rectangle of a connector row, the origin of its dialog. */
-function connectorRowRect(id: string): DOMRect | null {
-	return document.querySelector<HTMLElement>(`[data-connector-id="${id}"]`)?.getBoundingClientRect() ?? null;
+/** The connector row a dialog grows out of, when it is on screen. */
+function connectorRowElement(id: string): HTMLElement | null {
+	return document.querySelector<HTMLElement>(`[data-connector-id="${id}"]`);
 }
 
 function errorMessage(error: unknown): string {
@@ -241,10 +242,7 @@ export function ConnectorsSection({
 	const [warnings, setWarnings] = useState<string[]>([]);
 	const [category, setCategory] = useState<string | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
-	const [importOrigin, setImportOrigin] = useState<DOMRect | null>(null);
 	const [deviceTarget, setDeviceTarget] = useState<string | null>(null);
-	const [deviceOrigin, setDeviceOrigin] = useState<DOMRect | null>(null);
-	const [detailOrigin, setDetailOrigin] = useState<DOMRect | null>(null);
 	const locale = useLocale();
 	const useChineseDescription = locale.toLowerCase().startsWith("zh");
 
@@ -253,10 +251,11 @@ export function ConnectorsSection({
 	 * a 180ms exit, and a shell keyed to the current id would go blank during it.
 	 */
 	const openDetail = useCallback((connector: CatalogConnector): void => {
-		setDetailOrigin(connectorRowRect(connector.id));
-		setDetailConnector(connector);
-		setDetailId(connector.id);
-		setAlternativesOpen(false);
+		morphSurfaceFrom(connectorRowElement(connector.id), "connector-surface", () => {
+			setDetailConnector(connector);
+			setDetailId(connector.id);
+			setAlternativesOpen(false);
+		});
 	}, []);
 
 	useEffect(() => {
@@ -522,9 +521,11 @@ ${connector.category ?? ""}`.toLowerCase();
 						// This row has a pinned client id but no secret, so the browser
 						// exchange cannot finish. The device grant is its sign-in path and
 						// keeps polling from the page, not from this dialog.
-						setDeviceOrigin(connectorRowRect(connector.id));
-						setDeviceTarget(connector.id);
-						setDetailId(null);
+						const origin = document.querySelector(".gui-dialog--connector") ?? connectorRowElement(connector.id);
+						morphSurfaceFrom(origin, "device-signin", () => {
+							setDeviceTarget(connector.id);
+							setDetailId(null);
+						});
 						return;
 					}
 					// The detail dialog carries the authorization link, so it has to
@@ -1120,7 +1121,6 @@ ${connector.category ?? ""}`.toLowerCase();
 					rpc={rpc}
 					serverName={`connector:${deviceTarget}`}
 					open={deviceTarget !== null}
-					originRect={deviceOrigin}
 					autoStart
 					onClose={() => setDeviceTarget(null)}
 					onDone={() => {
@@ -1144,8 +1144,7 @@ ${connector.category ?? ""}`.toLowerCase();
 					type="button"
 					className="gui-btn"
 					onClick={event => {
-						setImportOrigin(event.currentTarget.getBoundingClientRect());
-						setImportOpen(true);
+						morphSurfaceFrom(event.currentTarget, "connector-import", () => setImportOpen(true));
 					}}
 				>
 					{t("settings.connectorsImport")}
@@ -1234,7 +1233,6 @@ ${connector.category ?? ""}`.toLowerCase();
 			<ConnectorImportDialog
 				rpc={rpc}
 				open={importOpen}
-				originRect={importOrigin}
 				onClose={() => setImportOpen(false)}
 				onImported={() => void load()}
 			/>
@@ -1243,7 +1241,6 @@ ${connector.category ?? ""}`.toLowerCase();
 				onClose={() => setDetailId(null)}
 				label={detailConnector?.name ?? t("settings.connectors")}
 				className="gui-dialog--connector"
-				originRect={detailOrigin}
 				morphKey={
 					detailConnector
 						? `${detailConnector.id}:${alternativesOpen}:${tokenTarget === detailConnector.id}:${

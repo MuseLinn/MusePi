@@ -6208,11 +6208,55 @@ body.gui-resizing {
 	min-height: 0;
 }
 
-/* Shared-origin entrance: the frame itself travels, so the built-in entrance
-   animation must not run on top of it. */
-.gui-dialog.gui-dialog--from-origin {
-	animation: none;
+/* Shared-surface transition (View Transitions API): the destination dialog
+   carries the name the trigger element holds for the old snapshot, so the
+   browser matches the two rectangles and animates position + size on one
+   composited group. No hand-written transforms; snapshots are drawn at their
+   own size, so neither side's content stretches. */
+.gui-dialog--connector {
+	view-transition-name: connector-surface;
+}
+
+.gui-dialog--connector-import {
+	view-transition-name: connector-import;
+}
+
+.gui-dialog--device {
+	view-transition-name: device-signin;
+}
+
+::view-transition-group(connector-surface),
+::view-transition-group(connector-import),
+::view-transition-group(device-signin) {
+	z-index: 1;
+	/* 260ms ease-out: a shared surface settles; it does not spring back. */
+	animation-duration: 260ms;
+	animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+::view-transition-group(root) {
+	z-index: 0;
+}
+
+/* The new snapshot is taken before the dialog's own entrance advances, so its
+   first (transparent) frame must be painted in full; the entrance animation
+   would otherwise run on top of the geometry the browser is already
+   animating. */
+.gui-view-transition .gui-dialog--pending {
 	opacity: 1;
+	transform: none;
+}
+
+.gui-view-transition .gui-dialog--entered {
+	animation: none;
+}
+
+.gui-view-transition .gui-dialog-backdrop--pending {
+	opacity: 1;
+}
+
+.gui-view-transition .gui-dialog-backdrop--entered {
+	animation: none;
 }
 
 @media (max-width: 900px) {

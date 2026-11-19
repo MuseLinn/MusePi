@@ -1,0 +1,56 @@
+import { flushSync } from "react-dom";
+
+type ViewTransitionDocument = Document & {
+	startViewTransition?: (update: () => void) => { finished: Promise<void> };
+};
+
+/**
+ * View Transitions for a surface that has a visible trigger — the browser's
+ * own shared-element transition (what HarmonyOS calls 共享元素转场 / 一镜到底).
+ *
+ * The trigger element is named for the OLD snapshot only; the destination
+ * (a dialog) carries the same `view-transition-name` in CSS. The browser
+ * matches the two rectangles, animates position and size on one composited
+ * group, and cross-fades the content — no hand-written transforms, no second
+ * panel, and the content of either side never stretches because each snapshot
+ * is drawn at its own size.
+ */
+
+/** Motion must be allowed by the runtime, the app toggle, and the OS setting. */
+export function sharedSurfaceTransitionAllowed(): boolean {
+	const doc = globalThis.document as ViewTransitionDocument | undefined;
+	if (!doc?.startViewTransition) return false;
+	return !(
+		document.documentElement.classList.contains("gui-motion-off") ||
+		window.matchMedia("(prefers-reduced-motion: reduce)").matches
+	);
+}
+
+/**
+ * Run `update` inside a same-document view transition with `element` as the
+ * shared rectangle. Falls back to a plain update where the API or motion is
+ * unavailable, so the dialog keeps its ordinary entrance.
+ */
+export function morphSurfaceFrom(element: Element | null, name: string, update: () => void): void {
+	const doc = globalThis.document as ViewTransitionDocument | undefined;
+	if (!element || !doc?.startViewTransition || !sharedSurfaceTransitionAllowed()) {
+		update();
+		return;
+	}
+	const origin = element as HTMLElement;
+	const previous = origin.style.viewTransitionName;
+	origin.style.viewTransitionName = name;
+	document.documentElement.classList.add("gui-view-transition");
+	const transition = doc.startViewTransition(() => {
+		flushSync(() => {
+			// The new state must hold exactly one element with this name: the
+			// destination is what carries it now.
+			origin.style.viewTransitionName = previous;
+			update();
+		});
+	});
+	void transition.finished.finally(() => {
+		origin.style.viewTransitionName = previous;
+		document.documentElement.classList.remove("gui-view-transition");
+	});
+}
