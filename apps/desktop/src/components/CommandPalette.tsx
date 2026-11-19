@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { t, tLoose } from "@musepi/client-core";
 import { ListChecks as ListChecksIconData, Menu as MenuIconData, Rocket as RocketIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
@@ -6,12 +6,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
+import { matchSettingRows, useSettingSearchRows } from "../lib/settings-search";
 import { shortcutLabel } from "../lib/shortcuts";
 import { useFocusTrap } from "../lib/use-focus-trap";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { HeightMorph } from "./HeightMorph";
 import { MENU_ANIM_MS } from "./MenuPopup";
+import { navGroups } from "./SettingsNav";
 
 type PaletteTab = "all" | "actions" | "sessions";
 
@@ -46,6 +48,7 @@ export function CommandPalette({
 	onOpenShortcuts,
 	onImportSessions,
 	onShowWhatsNew,
+	onOpenSetting,
 }: {
 	open: boolean;
 	onClose(): void;
@@ -67,6 +70,8 @@ export function CommandPalette({
 	onOpenShortcuts?(): void;
 	onImportSessions?(): void;
 	onShowWhatsNew?(): void;
+	/** Open a settings page (and optionally scroll to one schema row). */
+	onOpenSetting?(section: string, key: string): void;
 }): ReactNode {
 	const [query, setQuery] = useState("");
 	const [tab, setTab] = useState<PaletteTab>("all");
@@ -324,6 +329,39 @@ export function CommandPalette({
 		}));
 	}, [exactSession, queryText, rows, sessions, onSelectSession]);
 
+	/** Settings pages and schema rows for the current query. The same index
+	 *  the settings pane searches (`settings.schema {all:true}`), so ⌘K can name
+	 *  a switch without the user opening settings first. */
+	const settingRows = useSettingSearchRows(rpc);
+	const settingItems = useMemo<PaletteItem[]>(() => {
+		if (!queryText || !onOpenSetting) return [];
+		const items: PaletteItem[] = [];
+		const pageLabels = new Map<string, string>();
+		for (const group of navGroups([])) {
+			for (const item of group.items) {
+				pageLabels.set(item.id, item.label);
+				if (item.label.toLowerCase().includes(queryText) || item.id.toLowerCase().includes(queryText)) {
+					items.push({
+						icon: item.icon,
+						label: item.label,
+						hint: t("settings.settings"),
+						fn: () => onOpenSetting(item.id, ""),
+					});
+				}
+			}
+		}
+		for (const row of matchSettingRows(settingRows, queryText, 6)) {
+			items.push({
+				icon: "settings-3",
+				label: tLoose(row.label),
+				hint: pageLabels.get(row.section) ?? t("settings.settings"),
+				snippet: row.description ? tLoose(row.description) : undefined,
+				fn: () => onOpenSetting(row.section, row.key),
+			});
+		}
+		return items;
+	}, [onOpenSetting, queryText, settingRows]);
+
 	// A query filters the commands too: with "鹅鹅" typed, the three unrelated
 	// suggestions must not sit above the session that actually matched.
 	const matchLabel = (label: string): boolean => !queryText || label.toLowerCase().includes(queryText);
@@ -335,6 +373,7 @@ export function CommandPalette({
 		if (actionRows.length > 0) sections.push({ title: t("general.suggestions"), rows: actionRows });
 		if (panelRows.length > 0) sections.push({ title: t("general.panels"), rows: panelRows });
 		if (moreRows.length > 0) sections.push({ title: t("general.moreActions"), rows: moreRows });
+		if (settingItems.length > 0) sections.push({ title: t("settings.settings"), rows: settingItems });
 	}
 	if (tab !== "actions") {
 		sections.push({

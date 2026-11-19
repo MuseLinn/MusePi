@@ -24,7 +24,6 @@
 export type SectionId =
 	| "general"
 	| "appearance"
-	| "composer"
 	| "model"
 	| "files"
 	| "notifications"
@@ -53,7 +52,7 @@ export type SectionId =
  *  through SECTION_ALIAS to reach a page. Kept in the type so `openSettings`
  *  call sites stay exhaustive, and OUT of SectionId so no call site can treat
  *  one as directly renderable. */
-export type SectionAlias = "providers" | "plugins" | "sessions" | "memory" | "suggestions" | "mcp";
+export type SectionAlias = "providers" | "plugins" | "sessions" | "memory" | "suggestions" | "mcp" | "composer";
 
 /** What a caller may ask the settings pane to open. */
 export type SectionRequest = SectionId | SectionAlias;
@@ -70,6 +69,10 @@ export const SECTION_ALIAS: Record<SectionAlias, SectionId> = {
 	sessions: "session-memory",
 	memory: "session-memory",
 	suggestions: "session-memory",
+	// 输入框 was a one-row page (paste-image mention); it now lives in
+	// 会话与记忆 with the other input/session behaviour. The old id stays a
+	// capability name so existing links land on the page that owns it.
+	composer: "session-memory",
 	// MCP servers are a connector kind, not a sibling of the catalog: the
 	// connector page owns discovery, enablement and auth, and shows the
 	// hand-configured servers as one of its sources. The old id keeps

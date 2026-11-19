@@ -2084,7 +2084,6 @@ export const settings = {
 	/* ── Settings: chat / notifications / sessions / shortcuts / agents ── */
 	"settings.chatSettings": "Chat settings",
 	"settings.chatSettingsDescription": "Message bubbles, timestamps, and streaming rendering",
-	"settings.composerSection": "Input box",
 	"settings.pasteImageAutoMention": "Auto-mention pasted images",
 	"settings.pasteImageAutoMentionHint": "Add an @ mention when an image is pasted into the input box",
 	"settings.userMessageRendering": "User message rendering",

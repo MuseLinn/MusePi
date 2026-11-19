@@ -1,4 +1,73 @@
 import { tLoose } from "@musepi/client-core";
+import { useEffect, useState } from "react";
+import type { RpcClient } from "./rpc";
+
+interface SchemaUi {
+	hidden?: boolean;
+	tuiOnly?: boolean;
+	label?: string;
+	description?: string;
+	group?: string;
+}
+
+/**
+ * Cross-page index of the schema-driven settings rows, shared by the settings
+ * nav search and the ⌘K palette: one `settings.schema {all:true}` round trip
+ * names every row any page can render, even the pages not currently open.
+ * Translation happens at render time.
+ */
+export function useSettingSearchRows(rpc: RpcClient | null): SettingSearchRow[] {
+	const [rows, setRows] = useState<SettingSearchRow[]>([]);
+	useEffect(() => {
+		if (!rpc) return;
+		let alive = true;
+		void rpc
+			.request<Record<string, { key: string; ui?: SchemaUi }[]>>("settings.schema", { all: true })
+			.then(res => {
+				if (!alive) return;
+				const next: SettingSearchRow[] = [];
+				for (const [tab, items] of Object.entries(res ?? {})) {
+					for (const item of items ?? []) {
+						const ui = item.ui;
+						if (!ui || ui.hidden || ui.tuiOnly || !ui.label) continue;
+						const section = settingSectionFor(tab, ui.group);
+						if (!section) continue;
+						next.push({
+							key: item.key,
+							section,
+							tab,
+							group: ui.group,
+							label: ui.label,
+							description: ui.description,
+						});
+					}
+				}
+				setRows(next);
+			})
+			.catch(() => {
+				// Keep the nav-only behaviour when the daemon is old or away.
+			});
+		return () => {
+			alive = false;
+		};
+	}, [rpc]);
+	return rows;
+}
+
+/** Relevance of one row for a query: label hits outrank description hits, and
+ *  an exact/prefix label outranks a later substring. 0 = no hit. */
+function settingScore(row: SettingSearchRow, needle: string): number {
+	const label = tLoose(row.label).toLowerCase();
+	const source = row.label.toLowerCase();
+	const at = label.indexOf(needle);
+	const sourceAt = source.indexOf(needle);
+	const best = at >= 0 ? at : sourceAt;
+	let score =
+		best === 0 ? (label === needle || source === needle ? 120 : 100) : best > 0 ? 60 - Math.min(best, 50) / 5 : 0;
+	if (row.key.toLowerCase().includes(needle)) score = Math.max(score, 40);
+	if (row.description && tLoose(row.description).toLowerCase().includes(needle)) score = Math.max(score, 30);
+	return score;
+}
 
 /**
  * Cross-page index of the schema-driven settings rows, so the settings search
@@ -64,7 +133,7 @@ export function settingSectionFor(tab: string, group?: string): string | null {
 export function matchSettingRows(rows: readonly SettingSearchRow[], query: string, limit = 12): SettingSearchRow[] {
 	const needle = query.trim().toLowerCase();
 	if (!needle) return [];
-	const matches: SettingSearchRow[] = [];
+	const matches: { row: SettingSearchRow; score: number }[] = [];
 	for (const row of rows) {
 		const label = tLoose(row.label).toLowerCase();
 		const description = row.description ? tLoose(row.description).toLowerCase() : "";
@@ -74,9 +143,11 @@ export function matchSettingRows(rows: readonly SettingSearchRow[], query: strin
 			row.key.toLowerCase().includes(needle) ||
 			description.includes(needle)
 		) {
-			matches.push(row);
-			if (matches.length >= limit) break;
+			matches.push({ row, score: settingScore(row, needle) });
 		}
 	}
-	return matches;
+	return matches
+		.sort((a, b) => b.score - a.score)
+		.slice(0, limit)
+		.map(match => match.row);
 }

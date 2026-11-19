@@ -1,5 +1,6 @@
 import "./happy-dom-shim";
 import { afterEach, describe, expect, test } from "bun:test";
+import { t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { CommandPalette } from "../src/components/CommandPalette";
@@ -91,6 +92,51 @@ describe("CommandPalette keyboard contract", () => {
 
 		act(() => root.render(<CommandPalette {...props(false)} />));
 		expect(document.activeElement).toBe(opener);
+	});
+});
+
+describe("CommandPalette settings search", () => {
+	test("offers settings pages and schema rows, and opens the row it names", async () => {
+		const opened: [string, string][] = [];
+		const rpc = {
+			request: (method: string) => {
+				if (method === "settings.schema") {
+					return Promise.resolve({
+						appearance: [{ key: "ui.accent", ui: { label: "Accent color", description: "Theme accent" } }],
+					});
+				}
+				return Promise.resolve({ matches: [], sessions: [] });
+			},
+		} as unknown as RpcClient;
+		const host = document.createElement("div");
+		host.id = "root";
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		roots.push(root);
+		hosts.push(host);
+		act(() =>
+			root.render(
+				<CommandPalette {...props(true)} rpc={rpc} onOpenSetting={(section, key) => opened.push([section, key])} />,
+			),
+		);
+		const input = document.querySelector<HTMLInputElement>('[role="combobox"]')!;
+		act(() => {
+			const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+			setValue.call(input, "accent");
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 20));
+		});
+
+		const row = [...document.querySelectorAll<HTMLButtonElement>("[data-palette-row]")].find(button =>
+			button.textContent?.includes("Accent color"),
+		);
+		expect(row).not.toBeNull();
+		// The page label rides the row's hint so the target page is named.
+		expect(row!.textContent).toContain(t("settings.appearance"));
+		act(() => row!.click());
+		expect(opened).toEqual([["appearance", "ui.accent"]]);
 	});
 });
 

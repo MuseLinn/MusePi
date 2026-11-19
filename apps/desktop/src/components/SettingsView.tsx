@@ -5,7 +5,7 @@ import { type BrandIconStyle, readBrandIconStyle, writeBrandIconStyle } from "..
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
 import { resolveActiveSection, type SectionId, type SectionRequest } from "../lib/settings-nav";
-import { type SettingSearchRow, settingSectionFor } from "../lib/settings-search";
+import { useSettingSearchRows } from "../lib/settings-search";
 import {
 	SETTINGS_ACTION_SLOT_PREFIX,
 	SETTINGS_APPEARANCE_ITEM_SLOT,
@@ -17,7 +17,6 @@ import {
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { HeightMorph } from "./HeightMorph";
 import { MigrationSection } from "./MigrationSection";
-import type { SchemaUi } from "./SchemaSettings";
 import { navGroups, SettingsNav } from "./SettingsNav";
 
 /** Entry points address a section by CAPABILITY, the nav addresses it by
@@ -74,6 +73,7 @@ export function SettingsView({
 	providerEvent,
 	onBack,
 	initialSection,
+	initialRow,
 	onOpenSession,
 	onCreateChat,
 	cwd,
@@ -85,7 +85,10 @@ export function SettingsView({
 	/** Section to land on when the pane opens (sidebar 技能 entry, composer
 	 *  添加供应商 entry). A capability alias is accepted and resolved to its
 	 *  page — see lib/settings-nav.ts. */
-	initialSection?: SectionRequest;
+	initialSection?: string;
+	/** ⌘K result: open the owning page and scroll to this schema row once it
+	 *  renders. `key` empty means "just land on the page". */
+	initialRow?: { section: string; key: string; nonce: number } | null;
 	/** Open a session from the 索引库 search results (app layer owns openSession). */
 	onOpenSession?: (sessionId: string) => void;
 	/** DSH creation-flow entry: settings preset 新建 sends a natural-language
@@ -129,52 +132,22 @@ export function SettingsView({
 	const activeSection = resolveActiveSection(section, navSectionIds);
 	// Fixed settings search: filters the nav by section label (live).
 	const [settingsQuery, setSettingsQuery] = useState("");
-	// Cross-page schema index for the search: one `settings.schema {all:true}`
-	// round trip supplies every row the pages can render, so a search can name
-	// a setting whose page is not open. Translation happens at render time.
-	const [settingRows, setSettingRows] = useState<SettingSearchRow[]>([]);
+	const settingRows = useSettingSearchRows(rpc);
 	const [pendingSetting, setPendingSetting] = useState<{ key: string; nonce: number } | null>(null);
-	useEffect(() => {
-		if (!rpc) return;
-		let alive = true;
-		void rpc
-			.request<Record<string, { key: string; ui?: SchemaUi }[]>>("settings.schema", { all: true })
-			.then(res => {
-				if (!alive) return;
-				const rows: SettingSearchRow[] = [];
-				for (const [tab, items] of Object.entries(res ?? {})) {
-					for (const item of items ?? []) {
-						const ui = item.ui;
-						if (!ui || ui.hidden || ui.tuiOnly || !ui.label) continue;
-						const section = settingSectionFor(tab, ui.group);
-						if (!section) continue;
-						rows.push({
-							key: item.key,
-							section,
-							tab,
-							group: ui.group,
-							label: ui.label,
-							description: ui.description,
-						});
-					}
-				}
-				setSettingRows(rows);
-			})
-			.catch(() => {
-				// Search keeps the nav-only behaviour when the daemon is old or away.
-			});
-		return () => {
-			alive = false;
-		};
-	}, [rpc]);
 
 	// Jump from a search result: open the owning page, clear the query (so the
 	// page is not left filtered) and hand the row key to the scroll effect.
 	const jumpToSetting = useCallback((section: string, key: string): void => {
 		setSection(section as SectionRequest);
 		setSettingsQuery("");
-		setPendingSetting({ key, nonce: Date.now() });
+		if (key) setPendingSetting({ key, nonce: Date.now() });
 	}, []);
+	// A ⌘K settings result hands the pane its target after mount (the palette
+	// closes first, so this cannot be the pane's initial state).
+	useEffect(() => {
+		if (!initialRow) return;
+		jumpToSetting(initialRow.section, initialRow.key);
+	}, [initialRow, jumpToSetting]);
 	useEffect(() => {
 		if (!pendingSetting) return;
 		const nonce = pendingSetting.nonce;
@@ -546,7 +519,6 @@ export function SettingsView({
 									))}
 								</>
 							)}
-							{activeSection === "composer" && <ComposerSection />}
 							{activeSection === "model" && (
 								<ModelSection
 									providers={providers}
@@ -650,7 +622,6 @@ import {
 	BrowserSection,
 	CommandsSection,
 	CompanionSection,
-	ComposerSection,
 	ConnectorsSection,
 	ContextSection,
 	FilesLspSection,

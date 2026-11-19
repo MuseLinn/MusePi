@@ -1,7 +1,9 @@
 import { pushActionToast, Segmented, type SegmentedOption, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
+import { PASTE_IMAGE_MENTION_KEY } from "../../lib/composer-prefs";
 import type { RpcClient } from "../../lib/rpc";
+import { PrefToggle } from "./chat";
 import { MemorySection } from "./memory";
 import { SessionsSection } from "./sessions";
 import { PromptsSection } from "./suggestions";
@@ -117,6 +119,16 @@ export function SessionMemorySection({
 				<>
 					{sessionSlot ?? <SessionsSection rpc={rpc} currentSessionId={currentSessionId} />}
 					<InputSuggestionRow rpc={rpc} />
+					{/* Input-box behaviour lives with the session it composes into: the
+					 * standalone 输入框 page held this one row. */}
+					<div className="gui-settings-section">
+						<PrefToggle
+							label={t("settings.pasteImageAutoMention")}
+							description={t("settings.pasteImageAutoMentionHint")}
+							storageKey={PASTE_IMAGE_MENTION_KEY}
+							on
+						/>
+					</div>
 				</>
 			) : group === "memory" ? (
 				(memorySlot ?? <MemorySection rpc={rpc} />)

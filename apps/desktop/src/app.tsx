@@ -1202,9 +1202,10 @@ function AppInner(): ReactNode {
 	}, [capabilityAvailable]);
 	// Section the settings pane lands on (sidebar 技能 entry + welcome
 	// composer 自定义补充 preselect).
-	const [settingsSection, setSettingsSection] = useState<
-		"skills" | "suggestions" | "providers" | "browser" | "mcp" | undefined
-	>(undefined);
+	const [settingsSection, setSettingsSection] = useState<string | undefined>(undefined);
+	// ⌘K settings result: the page to land on and the schema row to scroll to.
+	// SettingsView resolves aliases and retries the row until its schema loads.
+	const [settingsRow, setSettingsRow] = useState<{ section: string; key: string; nonce: number } | null>(null);
 	// Settings open/close rides the same blur transition as the board /
 	// scheduled / chat swaps: the outgoing surface blurs out (150ms), then
 	// the settings view (or the workspace) enters with its 300ms blur-in.
@@ -1220,14 +1221,11 @@ function AppInner(): ReactNode {
 		// filled it in. Only known section names are accepted; everything else
 		// (DOM event, undefined, retired id) means "land on the default section".
 		(section?: unknown): void => {
-			const target =
-				section === "skills" ||
-				section === "suggestions" ||
-				section === "providers" ||
-				section === "browser" ||
-				section === "mcp"
-					? section
-					: undefined;
+			// Any page id or capability alias is valid: SettingsView resolves it and
+			// falls back to the default page, so this layer only rejects non-strings
+			// (a DOM event that reached an `onX={openSettings}` prop).
+			const target = typeof section === "string" && section.length > 0 ? section : undefined;
+			setSettingsRow(null);
 			if (settingsOpen) return;
 			// Blur the current surface out first (leavingView keeps it mounted).
 			setLeavingView(
@@ -5198,6 +5196,7 @@ function AppInner(): ReactNode {
 									sessionId={store?.sessionId ?? null}
 									providerEvent={providerEvent}
 									initialSection={settingsSection}
+									initialRow={settingsRow}
 									onBack={closeSettings}
 									cwd={sessionMeta.get(store?.sessionId ?? "")?.cwd}
 									onOpenSession={sessionId => {
@@ -5286,6 +5285,10 @@ function AppInner(): ReactNode {
 				onOpenShortcuts={() => setShortcutsOpen(true)}
 				onImportSessions={() => setImportOpen(true)}
 				onShowWhatsNew={() => window.dispatchEvent(new CustomEvent("musepi-open-announcement"))}
+				onOpenSetting={(section, key) => {
+					openSettings(section);
+					setSettingsRow({ section, key, nonce: Date.now() });
+				}}
 			/>
 			{/* Process-global freeze overlay: covers the entire window
 			 * (settings dialogs included) with a frosted-glass scrim. */}

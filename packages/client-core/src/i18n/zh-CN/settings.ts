@@ -1991,7 +1991,6 @@ export const settings = {
 	/* ── Settings: chat / notifications / sessions / shortcuts / agents ── */
 	"settings.chatSettings": "聊天设置",
 	"settings.chatSettingsDescription": "消息气泡、时间戳与流式渲染",
-	"settings.composerSection": "输入框",
 	"settings.pasteImageAutoMention": "粘贴图片时自动提及",
 	"settings.pasteImageAutoMentionHint": "在输入框中粘贴图片时自动添加 @ 提及",
 	"settings.userMessageRendering": "用户消息渲染",
