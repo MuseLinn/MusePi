@@ -2824,6 +2824,7 @@
 	width: min(320px, calc(100vw - 32px));
 	max-height: calc(100dvh - 100px);
 	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 .sh-has-tabbar .sh-panel-menu-item {
@@ -2961,6 +2962,7 @@
 	min-height: 0;
 	padding: 4px 10px 12px;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 .sh-host-manager-item {
 	min-height: 52px;

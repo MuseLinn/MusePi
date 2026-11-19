@@ -1940,6 +1940,7 @@
 	max-height: min(60vh, 420px);
 	overflow-y: auto;
 	overflow-x: hidden;
+	overscroll-behavior: contain;
 	padding: 4px;
 	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
 	box-shadow:

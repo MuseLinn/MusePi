@@ -40,6 +40,22 @@ function nearestScrollable(start: HTMLElement | null): HTMLElement | null {
 	return null;
 }
 
+/** Nearest box between `node` and `stop` (inclusive) that can scroll vertically.
+ *  Measured from the wheel's own target, because a popup can hold a scrolling
+ *  list inside a wrapper that does not scroll itself. */
+function scrollableUnder(node: EventTarget | null, stop: HTMLElement): HTMLElement | null {
+	let el: Element | null = node instanceof Element ? node : null;
+	while (el) {
+		if (el instanceof HTMLElement) {
+			const { overflowY } = getComputedStyle(el);
+			if (/(auto|scroll|overlay)/.test(overflowY) && el.scrollHeight > el.clientHeight + 1) return el;
+		}
+		if (el === stop) return null;
+		el = el.parentElement;
+	}
+	return null;
+}
+
 /**
  * Fixed-position floating menu anchored to a button (openchamber/radix
  * semantics): rendered through a portal into document.body so no ancestor's
@@ -374,17 +390,16 @@ export function useFloatingMenu(
 				onWheel={event => {
 					const el = menuRef.current;
 					if (!el) return;
-					// The popup owns the wheel while it still has room to scroll
-					// in this direction.
-					const canScroll = el.scrollHeight > el.clientHeight + 1;
-					const atTop = el.scrollTop <= 0;
-					const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
-					if (canScroll && !((event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottom))) return;
-					// At an edge — or too short to scroll at all — the gesture
-					// belongs to the surface the menu is attached to. Closing here
-					// dropped the menu whenever the pointer happened to rest over a
-					// short list while the wheel moved the page; an open menu is
-					// already re-positioned with its anchor by the scroll listener.
+					// A scrollable box under the pointer owns the gesture: it
+					// scrolls natively while it has room, and at either edge its
+					// own `overscroll-behavior: contain` stops the chain. Adding
+					// a forwarded scroll on top of that moved the surface behind
+					// the menu (user: 浮层滚到头后背景跟着滚) — the popup is
+					// portaled, so the gesture never belonged to the page.
+					if (scrollableUnder(event.target, el)) return;
+					// Nothing under the pointer can scroll (a short menu, or a
+					// row strip without its own scroll box): the gesture belongs
+					// to the surface the menu is attached to.
 					const target =
 						nearestScrollable(anchorOption instanceof HTMLElement ? anchorOption : anchorRef.current) ??
 						document.querySelector<HTMLElement>(".gui-transcript") ??

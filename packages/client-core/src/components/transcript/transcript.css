@@ -1705,6 +1705,7 @@ button.tr-display-context-source:hover {
 .tr-mm-lb-scroll {
 	overflow: auto;
 	overflow: overlay;
+	overscroll-behavior: contain;
 	max-height: 82vh;
 	background: oklch(1 0 0 / 0.04);
 	border-radius: var(--radius-xl);

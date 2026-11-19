@@ -49,6 +49,7 @@
 	flex-direction: column;
 	max-height: 320px;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	padding: 4px;
 	/* Frosted surface lives on .gui-menu-popup (single glass recipe). */
 }
@@ -105,6 +106,7 @@
 	min-height: 0;
 	overflow-y: auto;
 	overflow-x: hidden;
+	overscroll-behavior: contain;
 	padding-right: 2px;
 }
 

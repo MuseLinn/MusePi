@@ -180,6 +180,7 @@
 	width: min(400px, calc(100vw - 24px));
 	max-height: 320px;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	padding: 10px 12px;
 }
 
@@ -1817,6 +1818,7 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	padding: 12px 16px 16px;
 	font-size: var(--ui-font-size-sm);
 }
@@ -4316,6 +4318,7 @@
 	opacity: 1;
 	transform: none;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 .tr-branch-item {
 	display: flex;
@@ -7114,6 +7117,7 @@ button.traj-error-note:hover {
 	max-width: 320px;
 	max-height: 300px;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	padding: 4px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);

@@ -887,6 +887,7 @@
 	gap: 2px;
 	max-height: 42vh;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 /* Keyboard-driven highlight — same wash as :hover so mouse and keyboard
@@ -3847,6 +3848,7 @@ button.gui-stats-pill {
 	gap: 2px;
 	max-height: 280px;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 .gui-connector-panel--empty {
