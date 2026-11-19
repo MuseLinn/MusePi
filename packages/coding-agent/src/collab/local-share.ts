@@ -171,6 +171,9 @@ export function configuredExposure(): string {
 	return typeof value === "string" && value.trim() ? value.trim() : "cloudflared";
 }
 
+/** Prefix of the status line emitted when `collab.webUrl` is unusable; the daemon surfaces it as a share warning. */
+export const COLLAB_WEB_URL_WARNING_PREFIX = "collab: ignoring collab.webUrl";
+
 /**
  * Browser origins the in-process relay must accept besides its own pages.
  * `collab.webUrl` hosts the client on a different origin from the websocket
@@ -186,7 +189,7 @@ export function configuredWebOrigins(onStatus?: (line: string) => void): string[
 	const value = readSetting<string>("collab.webUrl", "");
 	const text = typeof value === "string" ? value.trim() : "";
 	if (!text) return [];
-	const hint = (reason: string) => onStatus?.(`collab: ignoring collab.webUrl "${text}" — ${reason}`);
+	const hint = (reason: string) => onStatus?.(`${COLLAB_WEB_URL_WARNING_PREFIX} "${text}" — ${reason}`);
 	let url: URL;
 	try {
 		url = new URL(text);

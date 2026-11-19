@@ -8,7 +8,12 @@ import {
 	type ExposureStartResult,
 } from "@musepi/pi-coding-agent/collab/exposure";
 import { CollabHost } from "@musepi/pi-coding-agent/collab/host";
-import { configuredWebOrigins, type LanShareUrls, LocalShareManager } from "@musepi/pi-coding-agent/collab/local-share";
+import {
+	configuredWebOrigins,
+	findLanIpv4,
+	type LanShareUrls,
+	LocalShareManager,
+} from "@musepi/pi-coding-agent/collab/local-share";
 import { resetSettingsForTest, Settings } from "@musepi/pi-coding-agent/config/settings";
 import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
@@ -122,14 +127,31 @@ describe("collab relay allowed origins", () => {
 		expect(configuredWebOrigins()).toEqual(["http://127.0.0.1:3000"]);
 		settings.set("collab.webUrl", "http://192.168.1.5:3000");
 		expect(configuredWebOrigins()).toEqual(["http://192.168.1.5:3000"]);
+		settings.set("collab.webUrl", "http://[::1]:3000");
+		expect(configuredWebOrigins()).toEqual(["http://[::1]:3000"]);
+		// Private-range boundaries: 172.16-31 and 100.64-127 are allowed.
+		settings.set("collab.webUrl", "http://172.31.255.1");
+		expect(configuredWebOrigins()).toEqual(["http://172.31.255.1"]);
+		settings.set("collab.webUrl", "http://100.127.255.1");
+		expect(configuredWebOrigins()).toEqual(["http://100.127.255.1"]);
 
 		// A `null` origin must never reach the relay's allowlist.
-		for (const invalid of ["file:///x", "data:text/html,x", "javascript:alert(1)", "http://web.example"]) {
+		for (const invalid of [
+			"file:///x",
+			"data:text/html,x",
+			"javascript:alert(1)",
+			"blob:https://web.example/1234",
+			"http://web.example",
+			"http://172.32.0.1",
+			"http://100.128.0.1",
+		]) {
 			settings.set("collab.webUrl", invalid);
 			expect(configuredWebOrigins()).toEqual([]);
 		}
 
 		settings.set("collab.webUrl", "https://web.example/collab?x=1");
+		expect(configuredWebOrigins()).toEqual([]);
+		settings.set("collab.webUrl", "https://web.example/collab#frag");
 		expect(configuredWebOrigins()).toEqual([]);
 
 		settings.set("collab.webUrl", "");
@@ -161,6 +183,32 @@ describe("collab relay allowed origins", () => {
 
 		await manager.stop();
 	});
+
+	it("forwards the unusable collab.webUrl warning through startExposure", async () => {
+		settings.set("collab.webUrl", "file:///x");
+		const lines: string[] = [];
+		const manager = new LocalShareManager({
+			port: 0,
+			registry: stubRegistry(),
+			onStatus: line => lines.push(line),
+		});
+		await manager.startExposure("stub", { verifyReachable: false });
+		expect(lines.some(line => line.includes("collab.webUrl") && line.includes("http:// or https://"))).toBe(true);
+		await manager.stop();
+	});
+
+	it("forwards the unusable collab.webUrl warning through startLan", async () => {
+		if (!findLanIpv4()) return; // headless hosts without a routable NIC skip this
+		settings.set("collab.webUrl", "file:///x");
+		const lines: string[] = [];
+		const manager = new LocalShareManager({ port: 0, onStatus: line => lines.push(line) });
+		try {
+			await manager.startLan();
+			expect(lines.some(line => line.includes("collab.webUrl") && line.includes("http:// or https://"))).toBe(true);
+		} finally {
+			await manager.stop();
+		}
+	});
 });
 
 function fakeShareUrls(): LanShareUrls {
@@ -182,6 +230,8 @@ function createRuntimeHarness() {
 		showError,
 		present,
 		settings: { get: vi.fn(() => "") },
+		sessionManager: { getSessionId: () => "sess-1" },
+		session: { isStreaming: false, subscribe: vi.fn(() => () => {}) },
 	} as unknown as InteractiveModeContext;
 	return {
 		ctx,
@@ -225,6 +275,31 @@ describe("/collab tunnel exposure", () => {
 		const harness = createRuntimeHarness();
 
 		await executeBuiltinSlashCommand("/collab tunnel ngrok", harness.runtime);
+
+		expect(startTunnel).toHaveBeenCalledWith("ngrok");
+	});
+});
+
+describe("/collab workspace tunnel exposure", () => {
+	it("uses collab.exposure when no provider is named inline", async () => {
+		settings.set("collab.exposure", "tailscale");
+		mockStartedHost();
+		const startTunnel = vi.spyOn(LocalShareManager.prototype, "startTunnel").mockResolvedValue(fakeShareUrls());
+		const harness = createRuntimeHarness();
+
+		await executeBuiltinSlashCommand("/collab workspace tunnel", harness.runtime);
+
+		expect(startTunnel).toHaveBeenCalledWith("tailscale");
+		expect(harness.ctx.collabHost).toBeInstanceOf(CollabHost);
+	});
+
+	it("accepts an inline provider inside the workspace scope", async () => {
+		settings.set("collab.exposure", "tailscale");
+		mockStartedHost();
+		const startTunnel = vi.spyOn(LocalShareManager.prototype, "startTunnel").mockResolvedValue(fakeShareUrls());
+		const harness = createRuntimeHarness();
+
+		await executeBuiltinSlashCommand("/collab workspace tunnel ngrok", harness.runtime);
 
 		expect(startTunnel).toHaveBeenCalledWith("ngrok");
 	});

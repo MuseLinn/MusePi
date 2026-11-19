@@ -2609,7 +2609,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Collab",
 			label: "Web UI URL",
 			description:
-				"Browser UI used by /collab links; empty derives from collab.relayUrl; explicit http:// is localhost-only",
+				"Browser UI used by /collab links; empty derives from collab.relayUrl; explicit http:// is allowed only for localhost or a private address",
 		},
 	},
 

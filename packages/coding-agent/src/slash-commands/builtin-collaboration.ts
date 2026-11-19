@@ -495,8 +495,12 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 				// Multi-session workspace share: guests land on a directory of
 				// every known session and pick one to watch live. The TUI host
 				// can only stream its own session; others list as history.
-				const [arg0] = rest.trim().split(/\s+/);
+				const [arg0, arg1] = rest.trim().split(/\s+/);
 				const isTunnel = arg0 === "tunnel";
+				// `/collab workspace tunnel [cloudflared|ngrok|tailscale]` mirrors
+				// the session share: an inline transport overrides `collab.exposure`.
+				const providerArg = isTunnel && arg1 && INLINE_TUNNEL_PROVIDERS.has(arg1) ? arg1 : undefined;
+				const provider = providerArg ?? configuredExposure();
 				const transport = new LocalShareManager({
 					onStatus: line => ctx.showStatus(line, { dim: true }),
 				});
@@ -532,7 +536,7 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 				const host = new CollabHost(ctx, "workspace");
 				let urls: LanShareUrls;
 				try {
-					urls = isTunnel ? await transport.startTunnel("cloudflared") : await transport.startLan();
+					urls = isTunnel ? await transport.startTunnel(provider) : await transport.startLan();
 					await host.start(urls.joinUrl, urls.webUrl, urls.webJoinUrl);
 				} catch (err) {
 					await transport.stop().catch(() => {});

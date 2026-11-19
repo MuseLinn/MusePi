@@ -78,7 +78,7 @@ Serve 通过 `https://<machine>.<tailnet>.ts.net` 暴露 relay。它不再要求
 
 ### 健康检查、撤销与时限
 
-每条隧道都盯着自己的子进程，并每 30 秒探测一次公网主机。隧道失效会立即撤销：URL 清空，health 变为 `degraded` 并带上原因与下一步建议，背后的 relay 同时关闭。分享状态是权威的——`remote-access.status` 返回 `mode`、`sessionId`、`exposure` 和 `health`，并在 host 结束、会话切换或曝光失效后报告 `hosting: false`，分享面板不会继续展示死链接。原因不会随记录一起消失：`hosting` 为 `false` 时，同一应答会带上 `lastEnd {exposure, health, at, reason, detail, hint}`（下次 `collab.start` 时清空），失效隧道的 `detail` 与下一步 `hint` 正是从这里到达 UI。
+每条隧道都盯着自己的子进程，并每 30 秒探测一次公网主机。隧道失效会立即撤销：URL 清空，health 变为 `degraded` 并带上原因与下一步建议，背后的 relay 同时关闭。分享状态是权威的——`remote-access.status` 返回 `mode`、`sessionId`、`exposure` 和 `health`，并在 host 结束、会话切换或曝光失效后报告 `hosting: false`，分享面板不会继续展示死链接。原因不会随记录一起消失：`hosting` 为 `false` 时，同一应答会带上 `lastEnd {exposure, health, at, reason, detail, hint}`（下次 `collab.start` 时清空），失效隧道的 `detail` 与下一步 `hint` 正是从这里到达 UI。仍在共享的应答还会在配置值使分享降级但仍可用时带上 `warning`——例如不可用的 `collab.webUrl`，其来源会被 relay 拒绝——该提示同样在下次 `collab.start` 时清空。
 
 `collab.shareTtlMinutes`（默认 `0`，不自动停止）会在配置的分钟数后自动停止分享。
 
@@ -169,14 +169,14 @@ https://web.example/collab/#relay.example.com/r/<roomId>.<secret> → web UI 与
 
 `packages/client-core` 是针对相同链接的独立浏览器客户端——访客侧无需安装 musepi。relay 在 `/` 提供它，这也是 `/collab` deep link 可点击加入的原因：`https://<relay>/#<link>` 会加载客户端并从 fragment 自动连接。它渲染实时 transcript（流式文本、thinking、工具卡片）、按需 transcripts 的 subagent 面板，以及带有相同访客能力（prompt、interrupt、hub actions）的 composer。在该包内运行 `bun run dev` 用于本地实例，运行 `bun run mock-host` 使用离线脚本化主机开发，运行 `bun run build` 输出可部署到任意地方的静态 `dist/`（WebCrypto 需要 HTTPS）。客户端只与 relay 通信，key 始终留在 i…
 
-当浏览器 UI 与 websocket relay 分开托管时，请设置 `collab.webUrl`。为空时，`/collab` 从 `collab.relayUrl` 推导 `http(s)://host[:port]`；显式 web UI URL 必须使用 `https://`，开发环境例外：仅允许 `http://localhost`。生成的浏览器 URL 仍然在 fragment 中携带 relay 专属的 collab link。对于自己启动 relay 的分享，配置的 UI 来源也会传给该 relay，因此跨源 WebSocket 会被接受，而不是被 Origin 门以 `403` 拒绝。
+当浏览器 UI 与 websocket relay 分开托管时，请设置 `collab.webUrl`。为空时，`/collab` 从 `collab.relayUrl` 推导 `http(s)://host[:port]`；显式 web UI URL 必须使用 `https://`，开发环境例外：`http://` 仅允许 localhost、回环地址或私有地址。生成的浏览器 URL 仍然在 fragment 中携带 relay 专属的 collab link。对于自己启动 relay 的分享，配置的 UI 来源也会传给该 relay，因此跨源 WebSocket 会被接受，而不是被 Origin 门以 `403` 拒绝。
 
 ## 设置
 
 | 设置 | 默认值 | 含义 |
 |---|---|---|
 | `collab.relayUrl` | `wss://my.omp.sh` | `/collab` 未内联传入 relay 时使用的默认 relay |
-| `collab.webUrl` | empty | `/collab` 链接使用的浏览器 UI URL；为空时从 relay 推导；显式 `http://` 仅允许 localhost |
+| `collab.webUrl` | empty | `/collab` 链接使用的浏览器 UI URL；为空时从 relay 推导；显式 `http://` 仅允许 localhost 或私有地址 |
 | `collab.displayName` | OS username | 对其他参与者显示的名称 |
 | `collab.exposure` | `cloudflared` | `/collab tunnel` 与未指定传输的隧道分享使用的默认曝光 id |
 | `collab.cloudflaredHostname` | empty | named Cloudflare 隧道的 hostname；为空时使用 quick 隧道 |
@@ -203,8 +203,8 @@ relay 是一个小型内容无关 Go 服务。除活跃连接外不保留状态�
 
 - **心跳** — 每 25 秒发一次 WebSocket ping。一个 ping 整整一个间隔都没有回应的 peer 被视为半开连接（Wi-Fi 切换、Doze、NAT 过期），会被断开；这些流量也让安静隧道的空闲计时器不会关掉健康分享。客户端会自动回应 ping。
 - **主机掉线与重认领** — 主机连接没有正常关闭就消失时，房间保留 30 秒。访客会收到 `4001` 并在该窗口内退避重试（从第一次 `4001` 起最多 30 秒、五次尝试）；主机用同一链接重连即可重认领同一房间，并获知窗口期内加入的访客。主机正常关闭则房间立即结束，relay 停止服务时访客收到 `1001`。
-- **关闭码** — `4001` 表示主机暂时不在、房间可能回来：重试。`4004` 表示房间已不存在（主机停止、宽限期结束，或链接来自旧分享）：重试没有意义。`1001` 表示 relay 本身停止服务：同样终止。`4009`（另一个主机占着房间）和 `4029`（房间已满）对本次尝试是终止。`1008` 是策略性拒绝——同一地址访客过多，或入站字节速率超限——客户端可以重连，但同一个条件会反复出现，直到原因改变；`1013` 表示 relay 容量（房间或连接上限）不足，应稍后重试。
-- **准入限制** — 进程内 relay 对每个客户端地址同时允许 32 条已升级连接、每分钟 60 次新升级，以及 16 条尚未升级的 socket。后两项预算刻意分开：加载浏览器页面及其资源只花 pending 预算，从不花加入预算，所以刷新风暴不会把真正的访客锁在外面。全局上限为 256 条连接与 64 个房间；每个房间 16 位访客，同一地址最多 8 位。升级前的拒绝走 HTTP：来源不允许返回 `403`，连接数或速率受限返回 `429`，relay 满载返回 `503`。
+- **关闭码** — `4001` 表示主机暂时不在、房间可能回来：重试。`4004` 表示房间已不存在（主机停止、宽限期结束，或链接来自旧分享）：重试没有意义。`1001` 表示 relay 本身停止服务：同样终止。`4009`（另一个主机占着房间）和 `4029`（房间已满）对本次尝试是终止。`1008` 是策略性拒绝——同一地址访客过多，或入站字节速率超限——客户端可以重连，但同一个条件会反复出现，直到原因改变；`1013` 表示 relay 的 64 个房间上限，应稍后重试；全局连接上限（256）在升级前直接以 HTTP `503` 拒绝。
+- **准入限制** — 进程内 relay 对每个客户端地址同时允许 32 条已升级连接、每分钟 60 次新升级，以及 16 条尚未升级的 socket。后两项预算刻意分开：加载浏览器页面及其资源只花 pending 预算，从不花加入预算，所以刷新风暴不会把真正的访客锁在外面。全局上限为 256 条连接与 64 个房间；每个房间 16 位访客，同一地址最多 8 位。升级前的拒绝走 HTTP：来源不允许返回 `403`，连接数或速率受限返回 `429`，达到全局连接上限返回 `503`。
 - **Origin 门** — 浏览器会在 WebSocket 升级时带上 `Origin`。relay 接受自己的 origin、内置 App 外壳（`https://localhost`、`capacitor://localhost`、`ionic://localhost`）以及 `allowedOrigins` 中传入的来源；不带 `Origin` 的终端客户端放行。这也是进程内分享会自动接受 `collab.webUrl` 来源的原因：UI 与 relay 可以分别由不同 origin 提供。
 
 ### 加入失败时怎么排查
@@ -218,7 +218,8 @@ relay 是一个小型内容无关 Go 服务。除活跃连接外不保留状态�
 | `1001` / “sharing stopped” | relay 本身停止服务 | 等 relay 恢复后重连；链接本身仍有效 |
 | `1008` / “too many guests from one address” | 同一地址已占满房间 16 个访客位中的 8 个（单地址公平上限） | 换一个地址加入，或自托管一个提高单地址上限的 relay |
 | `1008` / “byte rate limit exceeded” | 客户端向 relay 发送的速率超过 32 MiB/s | 通常是客户端进入循环或有 bug；先修好再重连，否则上限会再次触发 |
-| `1013` / “relay is at capacity” | relay 达到全局房间或连接上限 | 稍后重试，或自托管一个提高上限的 relay |
+| `1013` / “relay is at capacity” | relay 达到 64 个房间上限 | 稍后重试，或自托管一个提高房间上限的 relay |
+| `503` / “relay is at capacity” | relay 在升级前已达到全局连接上限（256） | 稍后重试，或自托管一个提高连接上限的 relay |
 | `4009` / “host conflict” | 另一个主机已经占着该 room id | 停掉那个主机，或等它错过一个心跳间隔；room id 属于单次分享，重新分享即可避开 |
 | `4029` / “room is full” | 房间达到 16 位访客上限 | 改用访客更少的只读分享，或自托管一个提高房间上限的 relay |
 | web UI 能打开但会话连不上 | UI 来源与 relay 来源不同，且 relay 不允许 UI 的来源 | 进程内分享设置 `collab.webUrl`；自托管 relay 则允许该 UI 来源 |

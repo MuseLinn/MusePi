@@ -67,7 +67,13 @@ import { loadChannelBindings, saveChannelBindings } from "../channels/bindings";
 import { BUILTIN_PLUGINS, loadChannelPlugins } from "../channels/plugins";
 import { type ExposureStatus, exposureRegistry, LAN_EXPOSURE, lanExposureStatus } from "../collab/exposure";
 import { CollabHost } from "../collab/host";
-import { configuredExposure, ensureBuiltinExposures, findLanIpv4, LocalShareManager } from "../collab/local-share";
+import {
+	COLLAB_WEB_URL_WARNING_PREFIX,
+	configuredExposure,
+	ensureBuiltinExposures,
+	findLanIpv4,
+	LocalShareManager,
+} from "../collab/local-share";
 import { PairCodes } from "../collab/pair-codes";
 import { findConfigFile } from "../config";
 import { resolveProviderModelReference } from "../config/model-resolver";
@@ -436,6 +442,8 @@ interface CollabShare {
 	exposure: string;
 	/** Latest exposure health; null until the transport reports one. */
 	health: ExposureStatus | null;
+	/** Configuration warning that outlived relay startup (currently an unusable `collab.webUrl`). */
+	warning?: string;
 }
 
 /**
@@ -4137,9 +4145,15 @@ export class DaemonServer {
 				// The transport reports health so a dead tunnel cannot keep a
 				// working-looking share alive; TTL expiry stops the host too.
 				let shareRef: CollabShare | null = null;
+				// Startup diagnostics (an unusable `collab.webUrl`) arrive through
+				// onStatus before the share record exists; keep the last one so
+				// `remote-access.status` can explain a rejected browser origin.
+				let warning: string | undefined;
 				const transport = new LocalShareManager({
 					port: undefined,
-					onStatus: () => {},
+					onStatus: line => {
+						if (line.startsWith(COLLAB_WEB_URL_WARNING_PREFIX)) warning = line;
+					},
 					onExposureHealth: status => {
 						if (!shareRef || this.#collab !== shareRef) return;
 						shareRef.health = status;
@@ -4174,6 +4188,7 @@ export class DaemonServer {
 					...(live ? { sessionId: live.sessionId } : {}),
 					exposure: requestedExposure,
 					health: transport.exposureStatus,
+					...(warning ? { warning } : {}),
 				};
 				this.#collab = shareRef;
 				return {
@@ -4184,6 +4199,7 @@ export class DaemonServer {
 					sessionId: shareRef.sessionId ?? null,
 					exposure: requestedExposure,
 					health: shareRef.health,
+					...(shareRef.warning ? { warning: shareRef.warning } : {}),
 				};
 			}
 			case "collab.exposures": {
@@ -4264,6 +4280,7 @@ export class DaemonServer {
 					link: current.host.link,
 					webLink: current.host.webLink,
 					viewLink: current.host.viewLink,
+					...(current.warning ? { warning: current.warning } : {}),
 				};
 			}
 			case "collab.pair.generate":
