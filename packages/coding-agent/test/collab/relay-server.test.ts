@@ -26,6 +26,7 @@ import {
 	FrameDecoder,
 	RelayProtocolError,
 	type RelayServerHandle,
+	type RelayServerOptions,
 	startRelayServer,
 } from "@musepi/pi-coding-agent/collab/relay-server";
 
@@ -33,6 +34,7 @@ const OP_CONTINUATION = 0x0;
 const OP_BINARY = 0x2;
 const OP_CLOSE = 0x8;
 const OP_PING = 0x9;
+const OP_PONG = 0xa;
 const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 // ── Raw WebSocket client (client side of the same protocol the server speaks) ─
@@ -44,16 +46,22 @@ interface RawMessage {
 
 class RawWsClient {
 	readonly messages: RawMessage[] = [];
-	#socket: net.Socket;
+	readonly #socket: net.Socket;
 	#buffer = new Uint8Array(0);
 	#closed: Promise<{ code: number; reason: string }>;
 	#resolveClosed!: (v: { code: number; reason: string }) => void;
 	#fragOpcode = -1;
 	#fragParts: Uint8Array[] = [];
 	#closeSeen: { code: number; reason: string } | null = null;
+	/** Answer server pings like a browser WebSocket stack does. */
+	readonly #autoPong: boolean;
+	/** Delay before the pong, to model a slow round trip. */
+	readonly #pongDelayMs: number;
 
-	private constructor(socket: net.Socket) {
+	private constructor(socket: net.Socket, autoPong: boolean, pongDelayMs: number) {
 		this.#socket = socket;
+		this.#autoPong = autoPong;
+		this.#pongDelayMs = pongDelayMs;
 		this.#closed = new Promise(resolve => {
 			this.#resolveClosed = resolve;
 		});
@@ -63,18 +71,32 @@ class RawWsClient {
 		});
 	}
 
-	static connect(port: number, role: "host" | "guest"): Promise<RawWsClient> {
+	static connect(
+		port: number,
+		role: "host" | "guest",
+		opts: {
+			roomId?: string;
+			headers?: Record<string, string>;
+			pong?: boolean;
+			pongDelayMs?: number;
+		} = {},
+	): Promise<RawWsClient> {
 		return new Promise((resolve, reject) => {
 			const socket = net.connect(port, "127.0.0.1", () => {
 				const key = randomBytes(16).toString("base64");
-				const client = new RawWsClient(socket);
+				const client = new RawWsClient(socket, opts.pong !== false, opts.pongDelayMs ?? 0);
+				const extra = Object.entries(opts.headers ?? {})
+					.map(([name, value]) => `${name}: ${value}\r\n`)
+					.join("");
 				socket.write(
-					`GET /r/${"a".repeat(16)}?role=${role} HTTP/1.1\r\n` +
+					`GET /r/${opts.roomId ?? "a".repeat(16)}?role=${role} HTTP/1.1\r\n` +
 						`Host: 127.0.0.1:${port}\r\n` +
 						"Connection: Upgrade\r\n" +
 						"Upgrade: websocket\r\n" +
 						"Sec-WebSocket-Version: 13\r\n" +
-						`Sec-WebSocket-Key: ${key}\r\n\r\n`,
+						`Sec-WebSocket-Key: ${key}\r\n` +
+						extra +
+						"\r\n",
 				);
 				client.#expectAccept(key).then(
 					() => resolve(client),
@@ -143,6 +165,12 @@ class RawWsClient {
 					const code =
 						payload.byteLength >= 2 ? new DataView(payload.buffer, payload.byteOffset).getUint16(0, false) : 1000;
 					this.#closeSeen = { code, reason: new TextDecoder().decode(payload.subarray(2)) };
+				} else if (opcode === OP_PING && this.#autoPong) {
+					const reply = () => {
+						if (!this.#socket.destroyed) this.#writeMaskedFrame(OP_PONG, payload);
+					};
+					if (this.#pongDelayMs > 0) setTimeout(reply, this.#pongDelayMs);
+					else reply();
 				}
 			} else if (fin && this.#fragOpcode === -1) {
 				this.messages.push({ opcode, payload });
@@ -172,22 +200,36 @@ class RawWsClient {
 	sendBinary(targetPeer: number, payload: Uint8Array): void {
 		const head = new Uint8Array(4);
 		new DataView(head.buffer).setUint32(0, targetPeer, false);
-		const frame = concat(head, payload);
-		const body = this.#mask(frame);
-		const header = new Uint8Array(2);
-		header[0] = 0x80 | OP_BINARY;
-		// Length field counts the data bytes, not the 4-byte mask key.
-		header[1] = 0x80 | frame.byteLength;
-		this.#socket.write(concat(header, body));
+		this.#writeMaskedFrame(OP_BINARY, concat(head, payload));
 	}
 
 	sendText(text: string): void {
-		const bytes = new TextEncoder().encode(text);
-		const body = this.#mask(bytes);
-		const header = new Uint8Array(2);
-		header[0] = 0x80 | 0x1;
-		header[1] = 0x80 | bytes.byteLength;
+		this.#writeMaskedFrame(0x1, new TextEncoder().encode(text));
+	}
+
+	/** One masked client frame; supports the 16-bit length used by rate tests. */
+	#writeMaskedFrame(opcode: number, frame: Uint8Array): void {
+		const body = this.#mask(frame);
+		const long = frame.byteLength >= 126 && frame.byteLength < 65536;
+		const header = new Uint8Array(long ? 4 : 2);
+		header[0] = 0x80 | opcode;
+		if (long) {
+			header[1] = 0x80 | 126;
+			new DataView(header.buffer).setUint16(2, frame.byteLength, false);
+		} else {
+			header[1] = 0x80 | frame.byteLength;
+		}
 		this.#socket.write(concat(header, body));
+	}
+
+	/** The server's close code, whether we asked to close or it dropped us. */
+	get closed(): Promise<{ code: number; reason: string }> {
+		return this.#closed;
+	}
+
+	/** Close handshake the way a deliberate host stop does (code 1000). */
+	sendClose(code: number): void {
+		this.#writeMaskedFrame(OP_CLOSE, encodeClosePayload(code, ""));
 	}
 
 	get readyState(): "open" | "closed" {
@@ -235,11 +277,31 @@ function envelopeFrom(msg: RawMessage): { targetOrSender: number; payload: Uint8
 }
 
 const servers: RelayServerHandle[] = [];
-async function startServer(): Promise<RelayServerHandle> {
-	const handle = await startRelayServer({ port: 0, host: "127.0.0.1" });
+async function startServer(options: Partial<RelayServerOptions> = {}): Promise<RelayServerHandle> {
+	const handle = await startRelayServer({ port: 0, host: "127.0.0.1", ...options });
 	servers.push(handle);
 	return handle;
 }
+
+/** One plain HTTP request; the response text is all a rejection test needs. */
+function rawHttpRequest(port: number, path: string, headers: Record<string, string> = {}): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const socket = net.connect(port, "127.0.0.1", () => {
+			const extra = Object.entries(headers)
+				.map(([name, value]) => `${name}: ${value}\r\n`)
+				.join("");
+			socket.write(`GET ${path} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\n${extra}Connection: close\r\n\r\n`);
+		});
+		let text = "";
+		socket.on("data", chunk => {
+			text += chunk.toString("latin1");
+		});
+		socket.on("close", () => resolve(text));
+		socket.on("error", reject);
+	});
+}
+
+const ROOM_HEADERS = { Upgrade: "websocket", Connection: "Upgrade", "Sec-WebSocket-Version": "13" };
 
 afterAll(async () => {
 	for (const handle of servers) await handle.close().catch(() => {});
@@ -427,7 +489,9 @@ describe("relay server rooms", () => {
 	});
 
 	it("fills a room and reports 4029", async () => {
-		const server = await startServer();
+		// Per-address fairness is tested separately; this room is one address by
+		// construction, so lift that cap to reach the seat cap.
+		const server = await startServer({ maxGuestsPerIp: 32 });
 		const host = await RawWsClient.connect(server.port, "host");
 		const guests: RawWsClient[] = [];
 		for (let i = 0; i < 16; i++) guests.push(await RawWsClient.connect(server.port, "guest"));
@@ -439,20 +503,21 @@ describe("relay server rooms", () => {
 		await host.close();
 	});
 
-	it("closes all guests with 4001 + room-closed when the host drops", async () => {
+	it("closes guests with 4001 and retains the room when the host drops", async () => {
 		const server = await startServer();
 		const host = await RawWsClient.connect(server.port, "host");
 		const guest = await RawWsClient.connect(server.port, "guest");
 		await host.close();
-		// The merged room-closed + close frame arrives asynchronously; wait for
-		// it before tearing the guest side down so the close code is captured.
+		// The merged close arrives asynchronously; wait for it before tearing
+		// the guest side down so the close code is captured.
 		await guest.waitFor(() => guest.messages.some(m => m.opcode === OP_CLOSE));
 		const { code, reason } = await guest.close();
 		expect(code).toBe(4001);
-		expect(reason).toBe("room closed");
-		// Guest got the room-closed control before the socket closed.
+		expect(reason).toBe("host disconnected");
+		expect(server.roomCount()).toBe(1);
+		// The room is not gone: no end-of-session control, so the guest retries.
 		const texts = guest.messages.filter(m => m.opcode === 0x1).map(m => new TextDecoder().decode(m.payload));
-		expect(texts).toContain(JSON.stringify({ t: "room-closed" }));
+		expect(texts).not.toContain(JSON.stringify({ t: "room-closed" }));
 	});
 
 	it("rejects a non-websocket request with 426", async () => {
@@ -486,5 +551,377 @@ describe("relay server rooms", () => {
 		expect(spa.status).toBe(200);
 		expect(await spa.text()).toContain("collab-ui");
 		rmSync(dir, { recursive: true, force: true });
+	});
+});
+
+// ── Heartbeat ───────────────────────────────────────────────────────────────
+
+describe("relay server heartbeat", () => {
+	it("pings host and guests, and drops a peer that stops answering", async () => {
+		const server = await startServer({ heartbeatIntervalMs: 40 });
+		const host = await RawWsClient.connect(server.port, "host");
+		const guest = await RawWsClient.connect(server.port, "guest", { pong: false });
+
+		await host.waitFor(() => host.messages.some(m => m.opcode === OP_PING), 1_000, "host ping");
+		await guest.waitFor(() => guest.messages.some(m => m.opcode === OP_PING), 1_000, "guest ping");
+
+		// The silent peer is gone one interval after its unanswered ping; the
+		// answering host survives and keeps receiving pings.
+		const { code } = await guest.closed;
+		expect(code).toBe(1006);
+		await host.waitFor(
+			() => host.messages.filter(m => m.opcode === OP_PING).length >= 3,
+			1_000,
+			"host keeps answering",
+		);
+		expect(host.readyState).toBe("open");
+		await host.close();
+	});
+});
+
+// ── Host reconnect grace ────────────────────────────────────────────────────
+
+describe("relay server host grace", () => {
+	it("retains the room and lets the same roomId reclaim it", async () => {
+		const server = await startServer({ hostGraceMs: 500 });
+		const roomId = "grace-room-1___";
+		const host = await RawWsClient.connect(server.port, "host", { roomId });
+		const guest = await RawWsClient.connect(server.port, "guest", { roomId });
+
+		const guestClosed = guest.closed;
+		await host.close();
+		expect((await guestClosed).code).toBe(4001);
+		expect(server.roomCount()).toBe(1);
+
+		// A guest may rejoin while nobody owns the room, and waits for the host.
+		const retry = await RawWsClient.connect(server.port, "guest", { roomId });
+		expect(retry.readyState).toBe("open");
+
+		// The same roomId reclaims the room (no 4009) and learns about the waiter.
+		const hostAgain = await RawWsClient.connect(server.port, "host", { roomId });
+		await hostAgain.waitFor(
+			() =>
+				hostAgain.messages.some(
+					m =>
+						m.opcode === 0x1 &&
+						(JSON.parse(new TextDecoder().decode(m.payload)) as { t: string }).t === "peer-joined",
+				),
+			1_000,
+			"peer-joined after reclaim",
+		);
+		const joins = hostAgain.messages
+			.filter(m => m.opcode === 0x1)
+			.map(m => JSON.parse(new TextDecoder().decode(m.payload)) as { t: string; peer: number });
+		expect(joins.some(j => j.t === "peer-joined" && j.peer === 2)).toBe(true);
+
+		await retry.close();
+		await hostAgain.close();
+	});
+
+	it("destroys the room and announces room-closed when the grace expires", async () => {
+		const server = await startServer({ hostGraceMs: 300 });
+		const roomId = "grace-room-2___";
+		const host = await RawWsClient.connect(server.port, "host", { roomId });
+		const guest = await RawWsClient.connect(server.port, "guest", { roomId });
+		const guestClosed = guest.closed;
+
+		await host.close();
+		expect((await guestClosed).code).toBe(4001);
+
+		// A guest that retried inside the window waits for the host; expiry is
+		// the point where the room really is gone, so it gets the end-of-session
+		// control with the close.
+		const waiter = await RawWsClient.connect(server.port, "guest", { roomId });
+		await waiter.waitFor(() => waiter.messages.some(m => m.opcode === OP_CLOSE), 2_000, "waiter closed");
+		expect((await waiter.closed).code).toBe(4001);
+		const texts = waiter.messages.filter(m => m.opcode === 0x1).map(m => new TextDecoder().decode(m.payload));
+		expect(texts).toContain(JSON.stringify({ t: "room-closed" }));
+		expect(server.roomCount()).toBe(0);
+
+		const late = await RawWsClient.connect(server.port, "guest", { roomId });
+		expect((await late.closed).code).toBe(4004);
+	});
+
+	it("tears the room down immediately when the host closes on purpose", async () => {
+		const server = await startServer({ hostGraceMs: 5_000 });
+		const roomId = "grace-room-3___";
+		const host = await RawWsClient.connect(server.port, "host", { roomId });
+		const guest = await RawWsClient.connect(server.port, "guest", { roomId });
+		const guestClosed = guest.closed;
+
+		// A normal close is how a host that stops sharing leaves; no grace.
+		host.sendClose(1000);
+		expect((await guestClosed).code).toBe(4001);
+		expect(server.roomCount()).toBe(0);
+
+		const retry = await RawWsClient.connect(server.port, "guest", { roomId });
+		expect((await retry.closed).code).toBe(4004);
+	});
+
+	it("keeps the room alive for new guests after a host conflict", async () => {
+		const server = await startServer();
+		const host = await RawWsClient.connect(server.port, "host");
+		const intruder = await RawWsClient.connect(server.port, "host");
+		expect((await intruder.closed).code).toBe(4009);
+
+		const guest = await RawWsClient.connect(server.port, "guest");
+		expect(guest.readyState).toBe("open");
+		await guest.close();
+		await host.close();
+	});
+
+	it("does not replace a host whose pong is merely in flight", async () => {
+		// Ping every 1500 ms, answer after 1200 ms: the second host provably lands
+		// inside the round trip, even with a slow poll and connect.
+		const server = await startServer({ heartbeatIntervalMs: 1_500 });
+		const roomId = "steady-host-room__";
+		const host = await RawWsClient.connect(server.port, "host", { roomId, pongDelayMs: 1_200 });
+		const guest = await RawWsClient.connect(server.port, "guest", { roomId });
+
+		await host.waitFor(() => host.messages.some(m => m.opcode === OP_PING), 3_000, "ping in flight");
+		const second = await RawWsClient.connect(server.port, "host", { roomId });
+		expect((await second.closed).code).toBe(4009);
+		expect(host.readyState).toBe("open");
+		// The host keeps its seat, so the attached guest stays attached.
+		expect(guest.readyState).toBe("open");
+
+		await guest.close();
+		await host.close();
+	});
+
+	it("reclaims the room after the heartbeat drops a silent host", async () => {
+		const server = await startServer({ heartbeatIntervalMs: 60 });
+		const roomId = "silent-host-room___";
+		const silentHost = await RawWsClient.connect(server.port, "host", { roomId, pong: false });
+		const guest = await RawWsClient.connect(server.port, "guest", { roomId });
+		const guestClosed = guest.closed;
+
+		// One unanswered interval is a miss: the heartbeat drops the socket and
+		// the room returns to the claimable (host: null) state.
+		expect((await silentHost.closed).code).toBe(1006);
+		expect((await guestClosed).code).toBe(4001);
+		expect(server.roomCount()).toBe(1);
+
+		// The same roomId reclaims rather than conflicting — the reclaim path
+		// the grace window exists for.
+		const hostAgain = await RawWsClient.connect(server.port, "host", { roomId });
+		expect(hostAgain.readyState).toBe("open");
+		await hostAgain.close();
+	});
+});
+
+// ── Basic protections ───────────────────────────────────────────────────────
+
+describe("relay server protections", () => {
+	it("rejects cross-site Origins and accepts same-origin, app shells, and origin-less clients", async () => {
+		const server = await startServer();
+		const rejected = await rawHttpRequest(server.port, `/r/${"a".repeat(16)}?role=guest`, {
+			...ROOM_HEADERS,
+			"Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+			Origin: "https://evil.example",
+		});
+		expect(rejected.startsWith("HTTP/1.1 403")).toBe(true);
+
+		// The relay's own page, and the bundled mobile shell, are allowed.
+		const host = await RawWsClient.connect(server.port, "host", {
+			headers: { Origin: `http://127.0.0.1:${server.port}` },
+		});
+		const guest = await RawWsClient.connect(server.port, "guest", { headers: { Origin: "https://localhost" } });
+		expect(guest.readyState).toBe("open");
+
+		await guest.close();
+		await host.close();
+	});
+
+	it("honours explicitly allowed origins", async () => {
+		const server = await startServer({ allowedOrigins: ["https://web.example"] });
+		const host = await RawWsClient.connect(server.port, "host", { headers: { Origin: "https://web.example" } });
+		expect(host.readyState).toBe("open");
+		await host.close();
+	});
+
+	it("caps upgrade connections per client address", async () => {
+		const server = await startServer({ maxConnectionsPerIp: 1 });
+		const first = await RawWsClient.connect(server.port, "host");
+		const rejected = await rawHttpRequest(server.port, `/r/${"a".repeat(16)}?role=guest`, {
+			...ROOM_HEADERS,
+			"Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+		});
+		expect(rejected.startsWith("HTTP/1.1 429")).toBe(true);
+		// A non-upgrade request is not an upgraded connection and bypasses the cap.
+		expect((await rawHttpRequest(server.port, "/", {})).startsWith("HTTP/1.1 426")).toBe(true);
+		await first.close();
+	});
+
+	it("rate-limits new upgrades per client address", async () => {
+		const server = await startServer({ connectRatePerMinutePerIp: 2 });
+		const host = await RawWsClient.connect(server.port, "host");
+		const guest = await RawWsClient.connect(server.port, "guest");
+		const rejected = await rawHttpRequest(server.port, `/r/${"a".repeat(16)}?role=guest`, {
+			...ROOM_HEADERS,
+			"Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+		});
+		expect(rejected.startsWith("HTTP/1.1 429")).toBe(true);
+		await guest.close();
+		await host.close();
+	});
+
+	it("serves the static UI without spending the upgrade budget", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "relay-static-budget-"));
+		writeFileSync(join(dir, "index.html"), "<html>collab-ui</html>");
+		writeFileSync(join(dir, "app.js"), "console.log(1)");
+		const server = await startServer({ staticDir: dir, connectRatePerMinutePerIp: 2 });
+		const base = `http://127.0.0.1:${server.port}`;
+
+		// A page load plus a reload is many connections; none of them is an upgrade.
+		for (let i = 0; i < 5; i++) {
+			expect((await fetch(`${base}/`, { headers: { connection: "close" } })).status).toBe(200);
+			expect((await fetch(`${base}/app.js`, { headers: { connection: "close" } })).status).toBe(200);
+		}
+
+		// The upgrade budget is intact: two joins fit, the third is refused.
+		const host = await RawWsClient.connect(server.port, "host");
+		const guest = await RawWsClient.connect(server.port, "guest");
+		const rejected = await rawHttpRequest(server.port, `/r/${"a".repeat(16)}?role=guest`, {
+			...ROOM_HEADERS,
+			"Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+		});
+		expect(rejected.startsWith("HTTP/1.1 429")).toBe(true);
+
+		await guest.close();
+		await host.close();
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("releases a static socket once the response flushes, even if the client never closes", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "relay-static-stall-"));
+		writeFileSync(join(dir, "index.html"), "<html>collab-ui</html>");
+		// Four sockets fill the global cap; the upgrade only fits if the relay
+		// released them instead of waiting for each client's FIN.
+		const server = await startServer({ staticDir: dir, maxConnections: 4 });
+
+		const stalled: net.Socket[] = [];
+		for (let i = 0; i < 4; i++) {
+			// allowHalfOpen keeps our side open after the relay's FIN, so the relay
+			// never receives the close it would otherwise wait for.
+			const socket = net.connect({ port: server.port, host: "127.0.0.1", allowHalfOpen: true });
+			socket.on("error", () => {});
+			stalled.push(socket);
+			await new Promise<void>(resolve => socket.once("connect", () => resolve()));
+			// Drain the response but never close: the client's FIN is what the
+			// relay must not wait for.
+			socket.resume();
+			socket.write(`GET / HTTP/1.1\r\nHost: 127.0.0.1:${server.port}\r\n\r\n`);
+		}
+
+		// Well past the release linger: only then can the upgrade pass the global
+		// cap with four clients that still refuse to send their FIN.
+		await new Promise(resolve => setTimeout(resolve, 500));
+		const host = await RawWsClient.connect(server.port, "host");
+		expect(host.readyState).toBe("open");
+
+		await host.close();
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("bounds un-upgraded sockets per address", async () => {
+		const server = await startServer({ maxPendingConnectionsPerIp: 2 });
+		const idle: net.Socket[] = [];
+		for (let i = 0; i < 2; i++) {
+			const socket = net.connect(server.port, "127.0.0.1");
+			socket.on("error", () => {});
+			idle.push(socket);
+			await new Promise<void>(resolve => socket.once("connect", () => resolve()));
+		}
+
+		// A socket that never sends a request still occupies a pending slot.
+		const rejected = await rawHttpRequest(server.port, "/", {});
+		expect(rejected.startsWith("HTTP/1.1 429")).toBe(true);
+
+		// Freeing the slots lets a real join through again.
+		for (const socket of idle) socket.destroy();
+		await new Promise(resolve => setTimeout(resolve, 50));
+		const host = await RawWsClient.connect(server.port, "host");
+		expect(host.readyState).toBe("open");
+		await host.close();
+	});
+
+	it("caps total connections", async () => {
+		const server = await startServer({ maxConnections: 1 });
+		const first = await RawWsClient.connect(server.port, "host");
+		const rejected = await rawHttpRequest(server.port, `/r/${"a".repeat(16)}?role=guest`, {});
+		expect(rejected.startsWith("HTTP/1.1 503")).toBe(true);
+		await first.close();
+	});
+
+	it("caps rooms and reports 1013 to the extra host", async () => {
+		const server = await startServer({ maxRooms: 1 });
+		const hostA = await RawWsClient.connect(server.port, "host", { roomId: "capacity-room-a" });
+		const hostB = await RawWsClient.connect(server.port, "host", { roomId: "capacity-room-b" });
+		expect((await hostB.closed).code).toBe(1013);
+		expect(hostA.readyState).toBe("open");
+		await hostA.close();
+	});
+
+	it("closes a peer that exceeds the inbound byte rate", async () => {
+		const server = await startServer({ maxBytesPerSecond: 512 });
+		const host = await RawWsClient.connect(server.port, "host");
+		const guest = await RawWsClient.connect(server.port, "guest");
+		guest.sendBinary(0, new Uint8Array(2_048));
+		expect((await guest.closed).code).toBe(1008);
+		await host.close();
+	});
+
+	it("keeps one address from taking every guest slot", async () => {
+		// Default fairness cap: half the seats per address.
+		const server = await startServer();
+		const host = await RawWsClient.connect(server.port, "host");
+		const guests: RawWsClient[] = [];
+		for (let i = 0; i < 8; i++) guests.push(await RawWsClient.connect(server.port, "guest"));
+
+		const extra = await RawWsClient.connect(server.port, "guest");
+		expect((await extra.closed).code).toBe(1008);
+
+		// A freed seat is reusable by the same address.
+		await guests[0]!.close();
+		await host.waitFor(
+			() =>
+				host.messages.some(
+					m =>
+						m.opcode === 0x1 &&
+						(JSON.parse(new TextDecoder().decode(m.payload)) as { t: string }).t === "peer-left",
+				),
+			1_000,
+			"peer-left",
+		);
+		const again = await RawWsClient.connect(server.port, "guest");
+		expect(again.readyState).toBe("open");
+
+		await again.close();
+		for (const guest of guests.slice(1)) await guest.close();
+		await host.close();
+	});
+});
+
+describe("relay server proxy-aware fairness", () => {
+	it("reads the real guest address from a local tunnel proxy", async () => {
+		const server = await startServer();
+		const host = await RawWsClient.connect(server.port, "host");
+		const guests: RawWsClient[] = [];
+		const forwarded = (address: string) => ({ headers: { "X-Forwarded-For": address } });
+		for (let i = 0; i < 8; i++) {
+			guests.push(await RawWsClient.connect(server.port, "guest", forwarded("203.0.113.7")));
+		}
+
+		const sameAddress = await RawWsClient.connect(server.port, "guest", forwarded("203.0.113.7"));
+		expect((await sameAddress.closed).code).toBe(1008);
+
+		// A different forwarded address is a different guest for fairness.
+		const otherAddress = await RawWsClient.connect(server.port, "guest", forwarded("203.0.113.8"));
+		expect(otherAddress.readyState).toBe("open");
+
+		await otherAddress.close();
+		for (const guest of guests) await guest.close();
+		await host.close();
 	});
 });

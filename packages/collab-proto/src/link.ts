@@ -2,7 +2,11 @@
  * Collab share-link format + wire envelope. Browser-safe (base64url through
  * btoa/atob — no Buffer), merged from the host and guest implementations.
  *
- * Link format: `wss://<host[:port]>/r/<roomId>.<base64url-32-byte-key>`
+ * Link format: `wss://<host[:port]>/r/<roomId>#<base64url-key>` — the room
+ * secret rides the fragment, which browsers and proxies never put on the
+ * wire. The legacy `wss://<host[:port]>/r/<roomId>.<key>` path form is still
+ * parsed but no longer generated. The default relay collapses to a bare
+ * `<roomId>.<key>`, a form with no origin and no path at all.
  * Wire envelope: `[4B uint32 BE peerId][sealed payload]` — the guest always
  * sends peerId 0; the relay rewrites it to the sender's id.
  */
@@ -129,28 +133,47 @@ export function normalizeRelayOrigin(relayUrl: string): { origin: string } | { e
 	return { origin: `${scheme}//${url.hostname}${port}` };
 }
 
+export interface CollabLinkOptions {
+	/**
+	 * Generate the legacy path-borne secret (`/r/<roomId>.<key>`). Only for
+	 * links that stay on one machine or a trusted private network. Default false.
+	 */
+	keyInPath?: boolean;
+}
+
 /**
- * Render the shareable link. Compact forms: the default relay collapses to
- * `<roomId>.<key>`, other wss relays drop the scheme (`host[:port]/r/…`);
- * only localhost ws:// links keep their full URL so parsing cannot
+ * Render the shareable join link. Compact forms: the default relay collapses
+ * to `<roomId>.<key>`, other wss relays drop the scheme (`host[:port]/r/…`);
+ * only localhost/private ws:// links keep their full URL so parsing cannot
  * mis-infer wss.
  *
- * The room secret is dot-joined (`<roomId>.<key>`) rather than `#`-joined:
- * RFC 3986 forbids a raw `#` inside a fragment, so strict URL stacks (macOS
- * Foundation behind terminal click-to-open) percent-encode a second `#` to
- * `%23` and break the link. Parsers still accept the legacy `#` form and the
- * mangled `%23` form.
+ * The room secret goes in the fragment. A link is pasted into browsers and
+ * terminals, and every byte of a URL path is sent to — and logged by — the
+ * outermost proxy: with a tunnel share that is the tunnel edge. Fragments
+ * never leave the client. The legacy path form
+ * (`/r/<roomId>.<key>`) stays parseable; it is no longer generated.
  *
  * Full links append the write token to the key
  * (`base64url(key ∥ writeToken)`); read-only (view) links carry the bare
  * 32-byte key, which is also the pre-token link format.
  */
-export function formatCollabLink(relayUrl: string, roomId: string, key: Uint8Array, writeToken?: Uint8Array): string {
+export function formatCollabLink(
+	relayUrl: string,
+	roomId: string,
+	key: Uint8Array,
+	writeToken?: Uint8Array,
+	options: CollabLinkOptions = {},
+): string {
 	const normalized = normalizeRelayOrigin(relayUrl);
 	if ("error" in normalized) throw new Error(normalized.error);
 	const secret = writeToken ? concat(key, writeToken) : key;
 	const keyText = encodeBase64Url(secret);
-	if (normalized.origin === DEFAULT_RELAY_URL) return `${roomId}.${keyText}`;
+	if (normalized.origin === DEFAULT_RELAY_URL) {
+		// The bare form carries no origin and no path, so nothing reaches the
+		// relay until a client expands it; the dot keeps it free of `#` so web
+		// deep links can wrap it without a second, fragile fragment marker.
+		return `${roomId}.${keyText}`;
+	}
 	// LAN relays (localhost / RFC 1918 IPv4) keep their full scheme: a
 	// scheme-less LAN link would be re-parsed as wss:// and hit the wrong
 	// port. Public wss relays stay compact (`host[:port]/r/…`).
@@ -160,7 +183,7 @@ export function formatCollabLink(relayUrl: string, roomId: string, key: Uint8Arr
 		normalized.origin.startsWith("wss://") && !keepScheme
 			? normalized.origin.slice("wss://".length)
 			: normalized.origin;
-	return `${compact}/r/${roomId}.${keyText}`;
+	return `${compact}/r/${roomId}${options.keyInPath ? `.${keyText}` : `#${keyText}`}`;
 }
 
 function normalizeCollabWebBaseUrl(relayUrl: string, webUrl?: string): string {
@@ -195,7 +218,9 @@ function normalizeCollabWebBaseUrl(relayUrl: string, webUrl?: string): string {
 /**
  * Render the browser deep link. The browser UI may be hosted separately from
  * the relay; the fragment always carries the relay-specific collab link, so
- * room secrets stay out of HTTP path and query bytes.
+ * room secrets stay out of HTTP path and query bytes. The inner link keeps the
+ * dot form: it already lives in a fragment, and a second `#` inside one is
+ * what strict URL stacks percent-encode.
  */
 export function formatCollabWebLink(
 	relayUrl: string,
@@ -204,7 +229,7 @@ export function formatCollabWebLink(
 	writeToken?: Uint8Array,
 	webUrl?: string,
 ): string {
-	return `${normalizeCollabWebBaseUrl(relayUrl, webUrl)}/#${formatCollabLink(relayUrl, roomId, key, writeToken)}`;
+	return `${normalizeCollabWebBaseUrl(relayUrl, webUrl)}/#${formatCollabLink(relayUrl, roomId, key, writeToken, { keyInPath: true })}`;
 }
 
 /** Parse any accepted link form back into its parts. Errors carry a message. */
@@ -240,8 +265,9 @@ export function parseCollabLink(link: string): ParsedCollabLink | { error: strin
 		return { error: "Collab link must contain a /r/<roomId> path" };
 	}
 	const roomId = match[1]!;
-	// Key rides dot-joined in the path (`/r/<roomId>.<key>`); legacy links
-	// carry it in the fragment (`/r/<roomId>#<key>`).
+	// Secret forms: generated links carry it in the fragment
+	// (`/r/<roomId>#<key>`); legacy links carry it dot-joined in the path
+	// (`/r/<roomId>.<key>`), as does the bare default-relay form.
 	const fragment = match[2] ?? (url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
 	if (!fragment) {
 		return { error: "Collab link is missing the <key> part" };
