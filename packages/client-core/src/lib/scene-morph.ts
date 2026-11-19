@@ -22,14 +22,8 @@
 
 import type { RefObject } from "react";
 import { useLayoutEffect, useRef } from "react";
-import {
-	computeMorph,
-	MORPH_EASING_IN,
-	MORPH_EASING_OUT,
-	MORPH_MS,
-	type MorphRect,
-	motionDisabled,
-} from "../components/image-morph";
+import { computeMorph, type MorphRect, motionDisabled } from "../components/image-morph";
+import { dismissEasing, oneTakeMotion } from "./motion-tokens";
 
 /** 非共享元素滑出幅度 (§3.3 #2: 高度形变到 0 + 8px 下滑). */
 export const SCENE_COLLAPSE_SLIDE_PX = 8;
@@ -98,9 +92,10 @@ export function flyFromCache(id: string, el: HTMLElement): void {
 	const r = el.getBoundingClientRect();
 	const frames = sceneKeyframes(from, { left: r.left, top: r.top, width: r.width, height: r.height });
 	if (!frames) return;
+	const motion = oneTakeMotion();
 	el.animate(
 		frames.map(transform => ({ transform, transformOrigin: "top left" })),
-		{ duration: MORPH_MS, easing: MORPH_EASING_IN },
+		{ duration: motion.durationMs, easing: motion.easing },
 	);
 }
 
@@ -170,7 +165,7 @@ export function stageLeavingScene(root: HTMLElement | null): void {
 			{ height: `${rect.height}px`, transform: "translateY(0)" },
 			{ height: "0px", transform: `translateY(${SCENE_COLLAPSE_SLIDE_PX}px)` },
 		],
-		{ duration, easing: MORPH_EASING_OUT, fill: "forwards" },
+		{ duration, easing: dismissEasing(), fill: "forwards" },
 	);
 	const done = (): void => wrap.remove();
 	anim.addEventListener("finish", done, { once: true });

@@ -50,18 +50,6 @@ export function computeMorph(origin: MorphRect, target: MorphRect): MorphTransfo
 	};
 }
 
-/** WAAPI easing for the entrance flight — `--spring-liquid`'s value
- *  (cubic-bezier(0.34, 1.56, 0.64, 1)); Web Animations cannot resolve the
- *  CSS var, so the token's value is mirrored here (M1.10 §3.1 entrance). */
-export const MORPH_EASING_IN = "cubic-bezier(0.34, 1.56, 0.64, 1)";
-
-/** Close flight: no overshoot on the way back (M1.10 §3.1 退出 — ease-in 化
- *  spring, `--spring-snappy` semantics). */
-export const MORPH_EASING_OUT = "cubic-bezier(0.4, 0, 0.2, 1)";
-
-/** Scene-morph档 from the M1.10 §3.2 ladder (300-420ms). */
-export const MORPH_MS = 360;
-
 /** Motion-off degradation: the desktop shell's kill-switch class or the OS
  *  reduced-motion preference skips the morph and every CSS fade. */
 export function motionDisabled(): boolean {

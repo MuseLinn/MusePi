@@ -21,18 +21,12 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
 import { downloadBlob } from "../../lib/download";
+import { oneTakeMotion } from "../../lib/motion-tokens";
 import { InlineWidget } from "../../tool-render/tools/widget";
 import type { ToolRenderHost } from "../../tool-render/types";
 import { useWidgetRegistryVersion, widgetDef } from "../../widgets/registry";
 import { type WidgetSource, widgetSource } from "../../widgets/source";
-import {
-	computeMorph,
-	MORPH_EASING_IN,
-	MORPH_EASING_OUT,
-	MORPH_MS,
-	type MorphRect,
-	motionDisabled,
-} from "../image-morph";
+import { computeMorph, type MorphRect, motionDisabled } from "../image-morph";
 
 /** localStorage key for the standalone widget display. */
 export const WIDGET_STANDALONE_KEY = "musepi-gui-widget-standalone";
@@ -130,6 +124,7 @@ export function WidgetFullscreen({
 		if (!body || !origin || motionDisabled()) return;
 		const m = computeMorph(origin, body.getBoundingClientRect());
 		if (!m) return;
+		const motion = oneTakeMotion();
 		setFlying(true);
 		const anim = body.animate(
 			[
@@ -139,7 +134,7 @@ export function WidgetFullscreen({
 				},
 				{ transform: "none", transformOrigin: "top left" },
 			],
-			{ duration: MORPH_MS, easing: MORPH_EASING_IN },
+			{ duration: motion.durationMs, easing: motion.easing },
 		);
 		anim.onfinish = () => {
 			// A close started mid-flight owns the blur until the panel is gone.
@@ -160,6 +155,7 @@ export function WidgetFullscreen({
 			onClose();
 			return;
 		}
+		const motion = oneTakeMotion();
 		closingRef.current = true;
 		setFlying(true);
 		const anim = body.animate(
@@ -170,7 +166,7 @@ export function WidgetFullscreen({
 					transformOrigin: "top left",
 				},
 			],
-			{ duration: MORPH_MS, easing: MORPH_EASING_OUT, fill: "forwards" },
+			{ duration: motion.durationMs, easing: motion.easing, fill: "forwards" },
 		);
 		anim.onfinish = () => onClose();
 	}, [onClose, originRect]);
@@ -183,7 +179,16 @@ export function WidgetFullscreen({
 		return () => window.removeEventListener("keydown", onKey);
 	}, [requestClose]);
 	return createPortal(
-		<div className="tr-widget-fs" role="dialog" aria-modal="true" data-flying={flying ? "true" : "false"}>
+		<div
+			className="tr-widget-fs"
+			role="dialog"
+			aria-modal="true"
+			data-flying={flying ? "true" : "false"}
+			onClick={event => {
+				// The blank area around the panel closes it, like the image preview.
+				if (event.target === event.currentTarget) requestClose();
+			}}
+		>
 			<button type="button" className="tr-widget-fs-x" aria-label={t("settings.close")} onClick={requestClose}>
 				<X size={16} />
 			</button>

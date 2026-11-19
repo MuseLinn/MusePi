@@ -6245,14 +6245,14 @@ body.gui-resizing {
 /* Motion orchestration: the leaving snapshot clears quickly, the entering one
    starts just after, so the two never read as stacked layers. */
 ::view-transition-old(*) {
-	animation-duration: var(--duration-quick, 150ms);
+	animation-duration: var(--one-take-exit, 120ms);
 	animation-timing-function: var(--ease-dismiss, cubic-bezier(0.8, 0, 0.4, 1));
 }
 
 ::view-transition-new(*) {
-	animation-duration: var(--duration-settle, 200ms);
+	animation-duration: var(--one-take-enter, 180ms);
 	animation-timing-function: var(--ease-appear, cubic-bezier(0.19, 1, 0.22, 1));
-	animation-delay: var(--one-take-offset, 40ms);
+	animation-delay: var(--one-take-offset, 32ms);
 }
 
 /* The new snapshot is taken before the dialog's own entrance advances, so its

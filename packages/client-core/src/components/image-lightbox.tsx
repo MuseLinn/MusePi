@@ -3,14 +3,8 @@ import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "re
 import { createPortal } from "react-dom";
 import { t } from "../i18n/index.js";
 import { isTopModal, useModalFocus } from "../lib/modal-focus";
-import {
-	computeMorph,
-	MORPH_EASING_IN,
-	MORPH_EASING_OUT,
-	MORPH_MS,
-	type MorphRect,
-	motionDisabled,
-} from "./image-morph.js";
+import { oneTakeMotion } from "../lib/motion-tokens.js";
+import { computeMorph, type MorphRect, motionDisabled } from "./image-morph.js";
 import "./image-lightbox.css";
 
 /** Exit animation length — must match tr-img-lb-out in image-lightbox.css. */
@@ -159,7 +153,7 @@ export function ImageLightbox({
 	// ── Exit animation: hold the last content while the overlay plays
 	// tr-img-lb-out (EXIT_MS), then drop it. Reopening cancels. When the
 	// open morph played, the exit instead flies the frame back into the
-	// source chip (MORPH_MS, see below). ──
+	// source chip (the one-take token, see below). ──
 	const lastOpenRef = useRef<{ items: readonly { src: string; alt?: string }[]; index: number } | null>(null);
 	const exitTimerRef = useRef<Timer | undefined>(undefined);
 	// State flip to force the final render once the exit timer drops the
@@ -189,6 +183,7 @@ export function ImageLightbox({
 		// mid-preview yields a null originRect and we fall back to the fade.
 		const origin = originRect;
 		if (morphLiveRef.current && origin != null && !motionDisabled()) {
+			const motion = oneTakeMotion();
 			setMorphClosing(true);
 			const raf = requestAnimationFrame(() => {
 				const img = imgRef.current;
@@ -207,7 +202,7 @@ export function ImageLightbox({
 							transformOrigin: "top left",
 						},
 					],
-					{ duration: MORPH_MS, easing: MORPH_EASING_OUT, fill: "forwards" },
+					{ duration: motion.durationMs, easing: motion.easing, fill: "forwards" },
 				);
 			});
 			exitTimerRef.current = setTimeout(() => {
@@ -215,7 +210,7 @@ export function ImageLightbox({
 				exitTimerRef.current = undefined;
 				setExited(true);
 				setMorphClosing(false);
-			}, MORPH_MS);
+			}, motion.durationMs);
 			return () => {
 				cancelAnimationFrame(raf);
 				clearTimeout(exitTimerRef.current);
@@ -252,6 +247,7 @@ export function ImageLightbox({
 		const frame = frameRef.current;
 		if (!img || !frame) return;
 		const fly = (): void => {
+			const motion = oneTakeMotion();
 			const target = img.getBoundingClientRect();
 			const m = computeMorph(originRect, target);
 			if (!m) return;
@@ -264,7 +260,7 @@ export function ImageLightbox({
 					},
 					{ transform: "none", transformOrigin: "top left" },
 				],
-				{ duration: MORPH_MS, easing: MORPH_EASING_IN },
+				{ duration: motion.durationMs, easing: motion.easing },
 			);
 		};
 		// The stage rect is only meaningful once the image has intrinsic
