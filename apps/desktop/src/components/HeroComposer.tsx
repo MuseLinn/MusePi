@@ -94,6 +94,7 @@ import { useComposerMarks } from "./composer/use-composer-marks";
 import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { attachPaste, isLongPastedText, saveEditedPaste, useLongTextPaste } from "./composer/use-long-text-paste";
+import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize } from "./composer-autosize";
 import { HeightMorph } from "./HeightMorph";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
@@ -473,6 +474,18 @@ export function HeroComposer({
 			requestAnimationFrame(() => autosize(taRef.current));
 		},
 	});
+	// First-use voice guide (session-composer parity): the welcome mic opens the
+	// download-then-dictate dialog instead of firing a bare transcribe RPC.
+	const voiceSetup = useVoiceSetupGate({ rpc, onProceed: dictation.toggle, enabled: sttEnabled });
+	// The desktop pet's quick bar asks for dictation through this same gate, so
+	// the welcome state answers the capsule exactly like an open session does.
+	useEffect(() => {
+		const onDictate = (): void => {
+			void voiceSetup.onToggle();
+		};
+		window.addEventListener("musepi-gui-dictate-start", onDictate);
+		return () => window.removeEventListener("musepi-gui-dictate-start", onDictate);
+	}, [voiceSetup]);
 	// 上手就绪态（setup.status，欢迎页状态感知空态）：null = 未加载；
 	// true = 模型未配置 → 渲染恢复引导卡。刷新源 = 挂载 + onboarding 内
 	// 供应商动作广播（musepi-gui-providers-changed）+ onboarding 完成 +
@@ -1908,7 +1921,11 @@ export function HeroComposer({
 									<ApprovalModeButton rpc={rpc} />
 									{/* Compact motion-only mic control; the live waveform,
 									 * clock and phase copy live in the in-input strip. */}
-									<VoiceButton state={dictation.phase} disabled={!sttEnabled} onToggle={dictation.toggle} />
+									<VoiceButton
+										state={dictation.phase}
+										disabled={!sttEnabled}
+										onToggle={() => void voiceSetup.onToggle()}
+									/>
 									<button
 										type="submit"
 										ref={quotaAnchorRef}
@@ -1935,6 +1952,7 @@ export function HeroComposer({
 									<span className="min-w-0 flex-1">{dictation.error}</span>
 								</div>
 							)}
+							{voiceSetup.dialog}
 							<div className="gui-welcome-ta-wrap flex items-start gap-1.5">
 								{quotes.length > 0 && (
 									<div className="gui-welcome-quotes">

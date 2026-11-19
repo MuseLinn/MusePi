@@ -2154,9 +2154,30 @@ ipcMain.handle("pet-composer-focus", (_event, focusable) => {
 // bubble reply path: a reply lands in the session that is currently open,
 // while the quick bar opens a fresh conversation. The main window owns the
 // daemon connection, so it creates the session and sends the prompt.
-ipcMain.handle("pet-quick-send", (_event, text) => {
+ipcMain.handle("pet-quick-send", (_event, payload) => {
+	// Older renderers sent a bare string; the composer now sends
+	// { text, images } so photos and screenshots travel with the prompt.
+	const text = typeof payload === "string" ? payload : payload?.text;
+	const rawImages = typeof payload === "object" && payload ? payload.images : null;
+	const images = Array.isArray(rawImages)
+		? rawImages
+				.filter(
+					image =>
+						image &&
+						typeof image.data === "string" &&
+						image.data.length > 0 &&
+						typeof image.mimeType === "string" &&
+						image.mimeType.startsWith("image/"),
+				)
+				.slice(0, 4)
+				.map(image => ({ type: "image", data: image.data, mimeType: image.mimeType }))
+		: [];
 	if (mainWindow && !mainWindow.isDestroyed() && typeof text === "string" && text.trim()) {
-		mainWindow.webContents.send("pet:command", { type: "new-chat-send", text: text.trim() });
+		mainWindow.webContents.send("pet:command", {
+			type: "new-chat-send",
+			text: text.trim(),
+			...(images.length > 0 ? { images } : {}),
+		});
 		focusMainFromPet();
 	}
 	return { ok: true };

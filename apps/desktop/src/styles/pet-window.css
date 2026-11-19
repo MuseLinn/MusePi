@@ -351,13 +351,154 @@
 }
 
 .pet-window__quickbar-btn--send:not(:disabled) {
-	color: var(--color-text);
-	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+	color: var(--color-accent-fg);
+	background: var(--color-accent);
 }
 
 .pet-window__quickbar-btn--send:disabled {
 	opacity: 0.4;
 	cursor: default;
+}
+
+/* Voice has no surface of its own until the main window answers, so the click
+   acknowledges here: a pulse while the request is in flight, danger when the
+   window is not connected. */
+.pet-window__quickbar-btn--busy {
+	color: var(--color-accent);
+	animation: pet-quickbar-busy 700ms ease-in-out infinite;
+}
+
+.pet-window__quickbar-btn--failed,
+.pet-window__quickbar-menu-row--failed {
+	color: var(--color-danger);
+}
+
+@keyframes pet-quickbar-busy {
+	0%,
+	100% {
+		opacity: 0.45;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+/* An attachment row makes the same pill taller (the spring animates the
+   height) instead of opening a second surface — the Codex Mini composer
+   behaves the same way when its message carries images. */
+.pet-window__quickbar--attachments .pet-window__quickbar-composer {
+	/* The field stays bottom-aligned so it never jumps while the pill grows
+	   upward to make room for the thumbnails. */
+	top: auto;
+	height: 37px;
+}
+
+.pet-window__quickbar-attachments {
+	position: absolute;
+	top: 4px;
+	left: 6px;
+	right: 6px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	height: 22px;
+	overflow: hidden;
+	animation: pet-quickbar-attachments-in 160ms var(--ease-appear-snappy) 140ms both;
+}
+
+@keyframes pet-quickbar-attachments-in {
+	from {
+		opacity: 0;
+		transform: translateY(3px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.pet-window__quickbar-attachment {
+	position: relative;
+	flex: 0 0 auto;
+	width: 22px;
+	height: 22px;
+}
+
+.pet-window__quickbar-attachment img {
+	width: 22px;
+	height: 22px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	object-fit: cover;
+}
+
+.pet-window__quickbar-attachment-remove {
+	position: absolute;
+	top: -5px;
+	right: -5px;
+	display: grid;
+	place-items: center;
+	width: 13px;
+	height: 13px;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-full);
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	cursor: pointer;
+}
+
+.pet-window__quickbar-attach-error {
+	position: absolute;
+	right: 6px;
+	bottom: calc(100% + 4px);
+	color: var(--color-danger);
+	font-size: 11px;
+	line-height: 1.3;
+	text-align: right;
+	text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+/* Add menu inside the composer: images, screenshot, voice and the main window
+   live here so the field keeps the usual add-on-the-left, send-on-the-right
+   grammar. */
+.pet-window__quickbar-menu {
+	position: absolute;
+	left: 4px;
+	bottom: calc(100% + 6px);
+	z-index: 20;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 156px;
+	padding: 4px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	box-shadow: var(--shadow-md, 0 8px 24px rgb(0 0 0 / 0.18));
+}
+
+.pet-window__quickbar-menu-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.pet-window__quickbar-menu-row:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.pet-window__quickbar-menu-row--busy {
+	color: var(--color-accent);
 }
 
 .pet-window__quickbar-btn::before {

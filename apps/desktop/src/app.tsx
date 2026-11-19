@@ -3543,6 +3543,7 @@ function AppInner(): ReactNode {
 							sessionId?: string;
 							requestId?: string;
 							approved?: boolean;
+							images?: { type: "image"; data: string; mimeType: string }[];
 						}) => void,
 					): () => void;
 					computerGlow?(on: boolean): Promise<unknown>;
@@ -3954,12 +3955,20 @@ function AppInner(): ReactNode {
 				void createSession();
 			} else if (cmd.type === "new-chat-send" && typeof cmd.text === "string" && cmd.text.trim()) {
 				// The quick bar's composer: a NEW conversation carrying this
-				// text. It must not reuse the open session the way a bubble
-				// reply does, so the session is created first and the prompt
-				// goes into it.
+				// text (and any images it picked). It must not reuse the open
+				// session the way a bubble reply does, so the session is
+				// created first and the prompt goes into it.
 				const text = cmd.text;
+				const images = (cmd.images ?? []).filter(
+					image =>
+						image &&
+						typeof image.data === "string" &&
+						image.data.length > 0 &&
+						typeof image.mimeType === "string" &&
+						image.mimeType.startsWith("image/"),
+				);
 				void createSession().then(id => {
-					if (id) void sendPrompt(text, undefined, id);
+					if (id) void sendPrompt(text, images.length > 0 ? images : undefined, id);
 				});
 			} else if (cmd.type === "dictate") {
 				// Pet quick bar mic. The composer owns the dictation lifecycle

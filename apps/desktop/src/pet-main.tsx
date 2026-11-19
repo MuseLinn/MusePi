@@ -29,7 +29,7 @@
  */
 
 import { COMPACT_MORPH_SPRING, setLocale, t } from "@musepi/client-core";
-import { ArrowUp, AudioLines, ChevronDown, SquarePen } from "lucide";
+import { AppWindow, ArrowUp, AudioLines, Camera, ChevronDown, ImagePlus, Plus, SquarePen, X } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import {
 	type CSSProperties,
@@ -107,8 +107,11 @@ interface PetBridge {
 	/** The quick bar became a text field: the pet window must be focusable
 	 *  while it is open, or the caret never lands in it. */
 	petComposerFocus?(focusable: boolean): Promise<unknown>;
-	/** Send the quick-bar composer's text as a new chat. */
-	petQuickSend?(text: string): Promise<unknown>;
+	/** Send the quick-bar composer's text (and attached images) as a new chat. */
+	petQuickSend?(text: string, images?: { type: "image"; data: string; mimeType: string }[]): Promise<unknown>;
+	/** Primary-display screenshot (the same capture the main composer's
+	 *  screenshot entry uses) — becomes an image attachment on the bar. */
+	captureScreen?(): Promise<{ dataUrl?: string; error?: string }>;
 	/** Normalized gaze vector (cursor offset from the window centre, clamped
 	 *  to ±1) — eye-tracking target, pushed by the click-through poll. */
 	onPetGaze?(cb: (gaze: GazeVec) => void): () => void;
@@ -140,6 +143,41 @@ const DRAG_THRESHOLD_PX = 8;
  *  greeting before the random pick takes over. */
 const DOUBLE_CLICK_MS = 300;
 
+/** Images the quick bar can carry into one message. Codex's Mini composer
+ *  grows its pill by an attachment row; the same model keeps the pet surface
+ *  honest — images and screenshots travel with the prompt, while files,
+ *  sketches and plugins stay in the main composer where they have a picker. */
+const PET_ATTACHMENT_LIMIT = 4;
+const PET_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+
+interface PetAttachment {
+	id: string;
+	name: string;
+	dataUrl: string;
+	mimeType: string;
+}
+
+function readImageAttachment(file: File): Promise<PetAttachment | null> {
+	return new Promise(resolve => {
+		const reader = new FileReader();
+		reader.onload = () => {
+			const dataUrl = typeof reader.result === "string" ? reader.result : "";
+			if (!dataUrl.startsWith("data:image/")) {
+				resolve(null);
+				return;
+			}
+			resolve({
+				id: crypto.randomUUID(),
+				name: file.name || "image",
+				dataUrl,
+				mimeType: file.type || "image/png",
+			});
+		};
+		reader.onerror = () => resolve(null);
+		reader.readAsDataURL(file);
+	});
+}
+
 function PetApp(): ReactNode {
 	const { enabled, art: localArt } = useCompanionArt();
 	// The main window owns petdex state (its localStorage is unreachable from
@@ -166,7 +204,24 @@ function PetApp(): ReactNode {
 	// field. Kept separate from `petNear` because the composer survives the
 	// cursor leaving — the field has to stay reachable while the user types.
 	const [composerOpen, setComposerOpen] = useState(false);
+	/** The add menu inside the composer. */
+	const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+	/** A dictate click acknowledges itself for a beat, then reports failure. */
+	const [dictateBusy, setDictateBusy] = useState(false);
+	const [dictateFailed, setDictateFailed] = useState(false);
+	const dictateTimer = useRef<number | null>(null);
 	const [composerText, setComposerText] = useState("");
+	/** Images riding this message: photos picked here or one screenshot. */
+	const [attachments, setAttachments] = useState<PetAttachment[]>([]);
+	const attachmentsRef = useRef<PetAttachment[]>([]);
+	attachmentsRef.current = attachments;
+	const [attachError, setAttachError] = useState<string | null>(null);
+	const attachErrorTimer = useRef<number | null>(null);
+	const imagePickerRef = useRef<HTMLInputElement>(null);
+	// The OS file dialog takes focus away from this window. That blur is not
+	// a dismissal — the composer must survive the pick and still be there to
+	// receive the thumbnails.
+	const pickingRef = useRef(false);
 	const composerRef = useRef<HTMLInputElement>(null);
 	// The bar's DOM node, for the focus check that decides whether a blur is
 	// a dismissal or just a move inside the bar. The spring hook has its
@@ -329,7 +384,9 @@ function PetApp(): ReactNode {
 	const { ref: quickbarRef } = useSpringSize({
 		expanded: composerOpen,
 		expandedWidth: QUICKBAR_EXPANDED.width,
-		expandedHeight: QUICKBAR_EXPANDED.height,
+		// One attachment row makes the same pill taller instead of opening a
+		// second surface; the spring animates the growth.
+		expandedHeight: QUICKBAR_EXPANDED.height + (attachments.length > 0 ? 30 : 0),
 		spring: COMPACT_MORPH_SPRING,
 	});
 
@@ -345,17 +402,141 @@ function PetApp(): ReactNode {
 	}, []);
 	const closeComposer = useCallback((): void => {
 		setComposerOpen(false);
+		setQuickMenuOpen(false);
 		setComposerText("");
+		setAttachments([]);
+		setAttachError(null);
 		void bridge?.petComposerFocus?.(false);
+	}, [bridge]);
+
+	const showAttachError = useCallback((message: string): void => {
+		setAttachError(message);
+		if (attachErrorTimer.current !== null) window.clearTimeout(attachErrorTimer.current);
+		attachErrorTimer.current = window.setTimeout(() => {
+			setAttachError(null);
+			attachErrorTimer.current = null;
+		}, 2600);
 	}, []);
+
+	/**
+	 * Picked photos join the message. The bar grows by one attachment row (the
+	 * spring animates the height), mirroring Codex's Mini composer: the same
+	 * pill carries the prompt and what travels with it.
+	 */
+	const addImageFiles = useCallback(
+		(files: File[]): void => {
+			const images = files.filter(file => file.type.startsWith("image/"));
+			if (images.length === 0) return;
+			const room = PET_ATTACHMENT_LIMIT - attachmentsRef.current.length;
+			if (room <= 0) {
+				showAttachError(t("settings.petQuickbarAttachLimit"));
+				return;
+			}
+			const usable = images.filter(file => file.size <= PET_IMAGE_MAX_BYTES);
+			if (usable.length < images.length) showAttachError(t("settings.petQuickbarImageTooLarge"));
+			if (images.length > room) showAttachError(t("settings.petQuickbarAttachLimit"));
+			if (usable.length === 0) return;
+			void Promise.all(usable.slice(0, room).map(readImageAttachment)).then(loaded => {
+				const accepted = loaded.filter((item): item is PetAttachment => item !== null);
+				if (accepted.length === 0) {
+					showAttachError(t("settings.petQuickbarImageTooLarge"));
+					return;
+				}
+				setAttachments(current => [...current, ...accepted].slice(0, PET_ATTACHMENT_LIMIT));
+			});
+		},
+		[showAttachError],
+	);
+
+	/** One primary-display screenshot, same capture the composer's screenshot entry uses. */
+	const attachScreen = useCallback((): void => {
+		setQuickMenuOpen(false);
+		const capture = bridge?.captureScreen;
+		if (!capture) return;
+		if (attachmentsRef.current.length >= PET_ATTACHMENT_LIMIT) {
+			showAttachError(t("settings.petQuickbarAttachLimit"));
+			return;
+		}
+		void capture()
+			.then(result => {
+				const dataUrl = result?.dataUrl;
+				if (!dataUrl?.startsWith("data:image/")) return;
+				const mimeType = dataUrl.slice(5, dataUrl.indexOf(";")) || "image/png";
+				setAttachments(current =>
+					current.length >= PET_ATTACHMENT_LIMIT
+						? current
+						: [...current, { id: crypto.randomUUID(), name: "screenshot.png", dataUrl, mimeType }],
+				);
+			})
+			.catch(() => {});
+	}, [bridge, showAttachError]);
+
+	const removeAttachment = useCallback((id: string): void => {
+		setAttachments(current => current.filter(attachment => attachment.id !== id));
+	}, []);
+	/**
+	 * Voice has no visible surface of its own until the main window handles
+	 * it, so the click acknowledges immediately (busy pulse) and reports a
+	 * failure (the window was not connected) instead of doing nothing.
+	 */
+	const requestDictate = useCallback((): void => {
+		setQuickMenuOpen(false);
+		setDictateBusy(true);
+		setDictateFailed(false);
+		if (dictateTimer.current !== null) window.clearTimeout(dictateTimer.current);
+		const bridgeCall = bridge?.petQuickCommand?.("dictate");
+		void Promise.resolve(bridgeCall)
+			.then(result => {
+				const ok =
+					result === undefined || result === null
+						? true
+						: typeof result === "object" && result !== null && "ok" in result
+							? (result as { ok?: unknown }).ok !== false
+							: true;
+				if (!ok) setDictateFailed(true);
+				dictateTimer.current = window.setTimeout(
+					() => {
+						setDictateBusy(false);
+						setDictateFailed(false);
+						dictateTimer.current = null;
+					},
+					ok ? 700 : 1400,
+				);
+			})
+			.catch(() => {
+				setDictateFailed(true);
+				dictateTimer.current = window.setTimeout(() => {
+					setDictateBusy(false);
+					setDictateFailed(false);
+					dictateTimer.current = null;
+				}, 1400);
+			});
+	}, [bridge]);
+
+	useEffect(
+		() => () => {
+			if (dictateTimer.current !== null) window.clearTimeout(dictateTimer.current);
+			if (attachErrorTimer.current !== null) window.clearTimeout(attachErrorTimer.current);
+		},
+		[],
+	);
+
 	const submitComposer = useCallback((): void => {
 		const text = composerText.trim();
 		if (!text) {
 			closeComposer();
 			return;
 		}
-		void bridge?.petQuickCommand?.("new-chat");
-		void bridge?.petQuickSend?.(text);
+		const images = attachmentsRef.current
+			.map(attachment => ({
+				type: "image" as const,
+				data: attachment.dataUrl.split(",")[1] ?? "",
+				mimeType: attachment.mimeType,
+			}))
+			.filter(part => part.data.length > 0);
+		// `new-chat-send` creates the conversation itself; asking for a new
+		// chat first would create a second, empty one.
+		void bridge?.petQuickSend?.(text, images.length > 0 ? images : undefined);
 		closeComposer();
 	}, [composerText, closeComposer]);
 
@@ -367,6 +548,17 @@ function PetApp(): ReactNode {
 		const timer = window.setTimeout(() => composerRef.current?.focus(), 120);
 		return () => window.clearTimeout(timer);
 	}, [composerOpen]);
+
+	// The add menu closes on any pointer outside the bar.
+	useEffect(() => {
+		if (!quickMenuOpen) return;
+		const onPointer = (event: PointerEvent): void => {
+			if (quickbarNodeRef.current?.contains(event.target as Node)) return;
+			setQuickMenuOpen(false);
+		};
+		window.addEventListener("pointerdown", onPointer, true);
+		return () => window.removeEventListener("pointerdown", onPointer, true);
+	}, [quickMenuOpen]);
 
 	// Escape closes the composer. It is bound on the window, not only on the
 	// input: the field can lose focus (the click-through poll, a native
@@ -398,14 +590,24 @@ function PetApp(): ReactNode {
 	useEffect(() => {
 		if (!composerOpen) return;
 		const onBlur = (): void => {
-			// A blur into another element of THIS window (the send button,
-			// the leading button) is not a dismissal.
-			const next = document.activeElement;
-			if (next && quickbarNodeRef.current?.contains(next)) return;
+			// `window` blur means the WINDOW lost focus, not that focus moved
+			// inside it. The old activeElement guard kept the composer open on
+			// a real blur (the field remains activeElement while blurred), which
+			// is why clicking anywhere else left the field unfolded.
+			if (pickingRef.current) return;
 			closeComposer();
 		};
 		window.addEventListener("blur", onBlur);
-		return () => window.removeEventListener("blur", onBlur);
+		// The system picker returning focus is the only signal a cancelled
+		// pick gives — clearing the flag here keeps a later blur honest.
+		const onFocus = (): void => {
+			pickingRef.current = false;
+		};
+		window.addEventListener("focus", onFocus);
+		return () => {
+			window.removeEventListener("blur", onBlur);
+			window.removeEventListener("focus", onFocus);
+		};
 	}, [composerOpen, closeComposer]);
 
 	// Gaze refs: the engine reads gazeRef per frame (no React state — an
@@ -1124,12 +1326,54 @@ function PetApp(): ReactNode {
 						quickbarRef(element);
 						quickbarNodeRef.current = element;
 					}}
-					className={`pet-window__quickbar${composerOpen ? " pet-window__quickbar--composing" : petNear ? " pet-window__quickbar--expanded" : " pet-window__quickbar--collapsed"}`}
+					className={`pet-window__quickbar${composerOpen ? " pet-window__quickbar--composing" : petNear ? " pet-window__quickbar--expanded" : " pet-window__quickbar--collapsed"}${attachments.length > 0 ? " pet-window__quickbar--attachments" : ""}`}
 					role={composerOpen ? undefined : "toolbar"}
 					aria-label={t("settings.petQuickbarLabel")}
 					aria-hidden={petNear || composerOpen ? undefined : true}
 					onPointerDown={e => e.stopPropagation()}
 				>
+					<input
+						ref={imagePickerRef}
+						type="file"
+						accept="image/*"
+						multiple
+						hidden
+						onChange={e => {
+							const files = Array.from(e.currentTarget.files ?? []);
+							e.currentTarget.value = "";
+							pickingRef.current = false;
+							addImageFiles(files);
+							requestAnimationFrame(() => composerRef.current?.focus());
+						}}
+					/>
+					{attachError && (
+						<span className="pet-window__quickbar-attach-error" role="alert">
+							{attachError}
+						</span>
+					)}
+					{attachments.length > 0 && (
+						<div
+							className="pet-window__quickbar-attachments"
+							role="list"
+							aria-label={t("settings.petQuickbarAttachments")}
+						>
+							{attachments.map(attachment => (
+								<span key={attachment.id} className="pet-window__quickbar-attachment" role="listitem">
+									<img src={attachment.dataUrl} alt={attachment.name} />
+									<button
+										type="button"
+										className="pet-window__quickbar-attachment-remove"
+										aria-label={t("settings.petQuickbarRemoveAttachment", { name: attachment.name })}
+										title={t("settings.petQuickbarRemoveAttachment", { name: attachment.name })}
+										tabIndex={composerOpen ? 0 : -1}
+										onClick={() => removeAttachment(attachment.id)}
+									>
+										<MorphIcon icon={X} size={9} />
+									</button>
+								</span>
+							))}
+						</div>
+					)}
 					<button
 						type="button"
 						className="pet-window__quickbar-btn"
@@ -1143,11 +1387,11 @@ function PetApp(): ReactNode {
 					<span className="pet-window__quickbar-divider" aria-hidden="true" />
 					<button
 						type="button"
-						className="pet-window__quickbar-btn"
-						aria-label={t("settings.petQuickbarDictate")}
-						title={t("settings.petQuickbarDictate")}
+						className={`pet-window__quickbar-btn${dictateBusy ? " pet-window__quickbar-btn--busy" : ""}${dictateFailed ? " pet-window__quickbar-btn--failed" : ""}`}
+						aria-label={dictateFailed ? t("settings.petQuickbarVoiceFailed") : t("settings.petQuickbarDictate")}
+						title={dictateFailed ? t("settings.petQuickbarVoiceFailed") : t("settings.petQuickbarDictate")}
 						tabIndex={petNear && !composerOpen ? 0 : -1}
-						onClick={() => void bridge?.petQuickCommand?.("dictate")}
+						onClick={requestDictate}
 					>
 						<MorphIcon icon={AudioLines} size={14} />
 					</button>
@@ -1166,21 +1410,70 @@ function PetApp(): ReactNode {
 					 * where the buttons were, so the pill morphs into a field
 					 * instead of a second panel opening next to it.
 					 *
-					 * The layout mirrors Codex's quick-chat: a leading button
-					 * (voice), the field, and a trailing send button. The
-					 * leading button is the voice entry the button row
-					 * carries, so nothing is lost when the row becomes a
-					 * field. */}
+					 * The field keeps the composer grammar: add menu on the
+					 * left (images, screenshot, voice, the main window), the
+					 * field, and a send button on the right. Images and
+					 * screenshots ride the message; files, sketches and
+					 * plugins stay in the main composer where they have a
+					 * picker and a place to land. */}
+					{quickMenuOpen && composerOpen && (
+						<div className="pet-window__quickbar-menu" role="menu" aria-label={t("settings.petQuickbarAdd")}>
+							<button
+								type="button"
+								role="menuitem"
+								className="pet-window__quickbar-menu-row"
+								onClick={() => {
+									setQuickMenuOpen(false);
+									pickingRef.current = true;
+									imagePickerRef.current?.click();
+								}}
+							>
+								<MorphIcon icon={ImagePlus} size={13} />
+								<span>{t("settings.petQuickbarAttachImage")}</span>
+							</button>
+							<button
+								type="button"
+								role="menuitem"
+								className="pet-window__quickbar-menu-row"
+								onClick={attachScreen}
+							>
+								<MorphIcon icon={Camera} size={13} />
+								<span>{t("settings.petQuickbarCapture")}</span>
+							</button>
+							<button
+								type="button"
+								role="menuitem"
+								className={`pet-window__quickbar-menu-row${dictateBusy ? " pet-window__quickbar-menu-row--busy" : ""}${dictateFailed ? " pet-window__quickbar-menu-row--failed" : ""}`}
+								onClick={requestDictate}
+							>
+								<MorphIcon icon={AudioLines} size={13} />
+								<span>{t("settings.petQuickbarDictate")}</span>
+							</button>
+							<button
+								type="button"
+								role="menuitem"
+								className="pet-window__quickbar-menu-row"
+								onClick={() => {
+									setQuickMenuOpen(false);
+									void bridge?.petQuickCommand?.("open-app");
+								}}
+							>
+								<MorphIcon icon={AppWindow} size={13} />
+								<span>{t("settings.petQuickbarOpen")}</span>
+							</button>
+						</div>
+					)}
 					<div className="pet-window__quickbar-composer">
 						<button
 							type="button"
 							className="pet-window__quickbar-btn pet-window__quickbar-btn--lead"
-							aria-label={t("settings.petQuickbarDictate")}
-							title={t("settings.petQuickbarDictate")}
+							aria-label={t("settings.petQuickbarAdd")}
+							title={t("settings.petQuickbarAdd")}
+							aria-expanded={quickMenuOpen}
 							tabIndex={composerOpen ? 0 : -1}
-							onClick={() => void bridge?.petQuickCommand?.("dictate")}
+							onClick={() => setQuickMenuOpen(open => !open)}
 						>
-							<MorphIcon icon={AudioLines} size={13} />
+							<MorphIcon icon={Plus} size={13} />
 						</button>
 						<input
 							ref={composerRef}

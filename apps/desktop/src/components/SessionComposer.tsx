@@ -1016,7 +1016,7 @@ export function SessionComposer({
 	// model cached ⇒ straight into dictation; missing ⇒ the liquid-glass setup
 	// dialog owns download-then-dictate, so a first click never fires a bare
 	// GB-scale transcribe RPC at the user.
-	const voiceSetup = useVoiceSetupGate({ rpc, onProceed: dictation.toggle });
+	const voiceSetup = useVoiceSetupGate({ rpc, onProceed: dictation.toggle, enabled: sttEnabled });
 	// The desktop pet's quick bar asks for dictation through the same gate, so
 	// a first use still gets the download-then-dictate dialog instead of a
 	// bare RPC.

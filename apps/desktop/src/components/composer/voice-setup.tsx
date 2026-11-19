@@ -20,6 +20,7 @@
 import { t } from "@musepi/client-core";
 import { isSttDownloadEvent, type SttModelStatusResponse } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { pushActionToast } from "../../lib/action-toast";
 import type { RpcClient } from "../../lib/rpc";
 
 /** Size hints mirror stt/models.ts `sizeHint` (local UI data; the wire row
@@ -58,8 +59,14 @@ export interface VoiceSetupGate {
 	dialog: ReactNode;
 }
 
-export function useVoiceSetupGate(opts: { rpc: RpcClient | null; onProceed(): void }): VoiceSetupGate {
-	const { rpc, onProceed } = opts;
+export function useVoiceSetupGate(opts: {
+	rpc: RpcClient | null;
+	onProceed(): void;
+	/** stt.enabled gate: when speech input is off, the toggle explains why
+	 *  instead of passing a no-op into dictation (pet quick bar path). */
+	enabled?: boolean;
+}): VoiceSetupGate {
+	const { rpc, onProceed, enabled } = opts;
 	const [setup, setSetup] = useState<SetupState | null>(null);
 	// Ref mirrors: the event listener closes over the latest state without
 	// re-subscribing per tick, and onProceed must stay the caller's CURRENT
@@ -121,6 +128,12 @@ export function useVoiceSetupGate(opts: { rpc: RpcClient | null; onProceed(): vo
 	const onToggle = useCallback(async (): Promise<void> => {
 		// Guide already open: swallow the mic click (the dialog owns the flow).
 		if (setupRef.current) return;
+		if (enabled === false) {
+			// The pet quick bar routes here without a disabled mic to explain
+			// itself, so speech input turned off must answer the click.
+			pushActionToast({ kind: "warning", message: t("settings.dictationDisabled"), dedupeKey: "dictation:off" });
+			return;
+		}
 		if (!rpc) {
 			// No daemon connection — let dictation surface its own error copy.
 			onProceedRef.current();
@@ -156,7 +169,7 @@ export function useVoiceSetupGate(opts: { rpc: RpcClient | null; onProceed(): vo
 			total: 0,
 			error: null,
 		});
-	}, [rpc]);
+	}, [rpc, enabled]);
 
 	const dialog = setup ? (
 		<VoiceSetupDialog
