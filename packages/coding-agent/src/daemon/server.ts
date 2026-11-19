@@ -1083,6 +1083,11 @@ export class DaemonServer {
 	 *  next share starts. */
 	#lastShareEnd: ShareEnd | null = null;
 
+	/** Configuration warning from the last share; kept after it ends so the
+	 *  setup view can explain why a browser UI origin was rejected. Recomputed
+	 *  by every `collab.start`. */
+	#lastShareWarning: string | undefined;
+
 	/** Stop the active share and forget it. The host's own teardown calls this
 	 *  through `onEnded`, so a session switch cannot leave a dead link behind. */
 	async #stopShare(reason: string): Promise<void> {
@@ -3963,6 +3968,7 @@ export class DaemonServer {
 				// A new request supersedes the previous end record; its reason has
 				// been visible since the previous status query.
 				this.#lastShareEnd = null;
+				this.#lastShareWarning = undefined;
 				// Scope is decided before anything is activated: a workspace
 				// share must not silently pre-focus the session the GUI happens
 				// to have open. Tunnel is a transport choice, not a scope.
@@ -3986,6 +3992,9 @@ export class DaemonServer {
 						hosted.exposure === requestedExposure &&
 						(collabMode !== "session" || hosted.sessionId === p.sessionId);
 					if (sameScope) {
+						// Reuse keeps the diagnostic the running share was created
+						// with; the warning survives until a fresh share computes one.
+						this.#lastShareWarning = hosted.warning;
 						return {
 							link: hosted.host.link,
 							webLink: hosted.host.webLink,
@@ -3994,6 +4003,7 @@ export class DaemonServer {
 							sessionId: hosted.sessionId ?? null,
 							exposure: hosted.exposure,
 							health: hosted.health,
+							...(hosted.warning ? { warning: hosted.warning } : {}),
 						};
 					}
 					await this.#stopShare("restarting share with a different scope");
@@ -4191,6 +4201,7 @@ export class DaemonServer {
 					...(warning ? { warning } : {}),
 				};
 				this.#collab = shareRef;
+				this.#lastShareWarning = warning;
 				return {
 					link: collabHost.link,
 					webLink: collabHost.webLink,
@@ -4250,6 +4261,7 @@ export class DaemonServer {
 					return {
 						hosting: false,
 						...(this.#lastShareEnd ? { lastEnd: this.#lastShareEnd } : {}),
+						...(this.#lastShareWarning ? { warning: this.#lastShareWarning } : {}),
 					};
 				}
 				// The host tears itself down when the session switches; a status
@@ -4259,6 +4271,7 @@ export class DaemonServer {
 					return {
 						hosting: false,
 						...(this.#lastShareEnd ? { lastEnd: this.#lastShareEnd } : {}),
+						...(this.#lastShareWarning ? { warning: this.#lastShareWarning } : {}),
 					};
 				}
 				return {

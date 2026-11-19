@@ -588,6 +588,7 @@ export const settings = {
 	"settings.shareEndedRestarted": "The share ended when its settings changed; the old link no longer works.",
 	"settings.shareEndedGeneric": "The share ended.",
 	"settings.shareEndedNextStep": "Choose a network path to start sharing again.",
+	"settings.shareConfigWarning": "Ignored collab.webUrl — browser guests from that origin will be rejected.",
 	"settings.shareDegraded": "Share path degraded",
 	"settings.shareDegradedHint": "The link is no longer shown; start sharing again.",
 	"settings.participantHost": "This computer",

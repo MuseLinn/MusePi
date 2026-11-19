@@ -197,8 +197,7 @@ describe("collab relay allowed origins", () => {
 		await manager.stop();
 	});
 
-	it("forwards the unusable collab.webUrl warning through startLan", async () => {
-		if (!findLanIpv4()) return; // headless hosts without a routable NIC skip this
+	it.skipIf(!findLanIpv4())("forwards the unusable collab.webUrl warning through startLan", async () => {
 		settings.set("collab.webUrl", "file:///x");
 		const lines: string[] = [];
 		const manager = new LocalShareManager({ port: 0, onStatus: line => lines.push(line) });
@@ -302,5 +301,6 @@ describe("/collab workspace tunnel exposure", () => {
 		await executeBuiltinSlashCommand("/collab workspace tunnel ngrok", harness.runtime);
 
 		expect(startTunnel).toHaveBeenCalledWith("ngrok");
+		expect(harness.ctx.collabHost).toBeInstanceOf(CollabHost);
 	});
 });

@@ -78,7 +78,7 @@ Serve 通过 `https://<machine>.<tailnet>.ts.net` 暴露 relay。它不再要求
 
 ### 健康检查、撤销与时限
 
-每条隧道都盯着自己的子进程，并每 30 秒探测一次公网主机。隧道失效会立即撤销：URL 清空，health 变为 `degraded` 并带上原因与下一步建议，背后的 relay 同时关闭。分享状态是权威的——`remote-access.status` 返回 `mode`、`sessionId`、`exposure` 和 `health`，并在 host 结束、会话切换或曝光失效后报告 `hosting: false`，分享面板不会继续展示死链接。原因不会随记录一起消失：`hosting` 为 `false` 时，同一应答会带上 `lastEnd {exposure, health, at, reason, detail, hint}`（下次 `collab.start` 时清空），失效隧道的 `detail` 与下一步 `hint` 正是从这里到达 UI。仍在共享的应答还会在配置值使分享降级但仍可用时带上 `warning`——例如不可用的 `collab.webUrl`，其来源会被 relay 拒绝——该提示同样在下次 `collab.start` 时清空。
+每条隧道都盯着自己的子进程，并每 30 秒探测一次公网主机。隧道失效会立即撤销：URL 清空，health 变为 `degraded` 并带上原因与下一步建议，背后的 relay 同时关闭。分享状态是权威的——`remote-access.status` 返回 `mode`、`sessionId`、`exposure` 和 `health`，并在 host 结束、会话切换或曝光失效后报告 `hosting: false`，分享面板不会继续展示死链接。原因不会随记录一起消失：`hosting` 为 `false` 时，同一应答会带上 `lastEnd {exposure, health, at, reason, detail, hint}`（下次 `collab.start` 时清空），失效隧道的 `detail` 与下一步 `hint` 正是从这里到达 UI。应答还会在某个配置值让分享的一部分不可用时带上 `warning`——例如不可用的 `collab.webUrl`，其来源会被 relay 以 `403` 拒绝。分享运行中、复用同一分享时，以及分享停止后，都会返回同一条提示；重新开始分享时会重新计算。
 
 `collab.shareTtlMinutes`（默认 `0`，不自动停止）会在配置的分钟数后自动停止分享。
 

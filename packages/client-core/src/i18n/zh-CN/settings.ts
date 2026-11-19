@@ -546,6 +546,7 @@ export const settings = {
 	"settings.shareEndedRestarted": "分享因切换设置而结束，旧链接已失效。",
 	"settings.shareEndedGeneric": "分享已结束。",
 	"settings.shareEndedNextStep": "选择网络方式后可重新开始分享。",
+	"settings.shareConfigWarning": "已忽略 collab.webUrl——该来源的浏览器访客会被拒绝。",
 	"settings.shareDegraded": "分享链路已降级",
 	"settings.shareDegradedHint": "链接已停止展示；请重新开始共享。",
 	"settings.participantHost": "本机",
