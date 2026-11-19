@@ -55,10 +55,13 @@ class RawWsClient {
 	#closeSeen: { code: number; reason: string } | null = null;
 	/** Answer server pings like a browser WebSocket stack does. */
 	readonly #autoPong: boolean;
+	/** Delay before the pong, to model a slow round trip. */
+	readonly #pongDelayMs: number;
 
-	private constructor(socket: net.Socket, autoPong: boolean) {
+	private constructor(socket: net.Socket, autoPong: boolean, pongDelayMs: number) {
 		this.#socket = socket;
 		this.#autoPong = autoPong;
+		this.#pongDelayMs = pongDelayMs;
 		this.#closed = new Promise(resolve => {
 			this.#resolveClosed = resolve;
 		});
@@ -71,12 +74,17 @@ class RawWsClient {
 	static connect(
 		port: number,
 		role: "host" | "guest",
-		opts: { roomId?: string; headers?: Record<string, string>; pong?: boolean } = {},
+		opts: {
+			roomId?: string;
+			headers?: Record<string, string>;
+			pong?: boolean;
+			pongDelayMs?: number;
+		} = {},
 	): Promise<RawWsClient> {
 		return new Promise((resolve, reject) => {
 			const socket = net.connect(port, "127.0.0.1", () => {
 				const key = randomBytes(16).toString("base64");
-				const client = new RawWsClient(socket, opts.pong !== false);
+				const client = new RawWsClient(socket, opts.pong !== false, opts.pongDelayMs ?? 0);
 				const extra = Object.entries(opts.headers ?? {})
 					.map(([name, value]) => `${name}: ${value}\r\n`)
 					.join("");
@@ -158,7 +166,11 @@ class RawWsClient {
 						payload.byteLength >= 2 ? new DataView(payload.buffer, payload.byteOffset).getUint16(0, false) : 1000;
 					this.#closeSeen = { code, reason: new TextDecoder().decode(payload.subarray(2)) };
 				} else if (opcode === OP_PING && this.#autoPong) {
-					this.#writeMaskedFrame(OP_PONG, payload);
+					const reply = () => {
+						if (!this.#socket.destroyed) this.#writeMaskedFrame(OP_PONG, payload);
+					};
+					if (this.#pongDelayMs > 0) setTimeout(reply, this.#pongDelayMs);
+					else reply();
 				}
 			} else if (fin && this.#fragOpcode === -1) {
 				this.messages.push({ opcode, payload });
@@ -658,28 +670,42 @@ describe("relay server host grace", () => {
 		await host.close();
 	});
 
-	it("lets a reconnecting host take over a socket that missed its heartbeat", async () => {
-		const server = await startServer({ heartbeatIntervalMs: 200 });
-		const roomId = "stale-host-room___";
-		const silentHost = await RawWsClient.connect(server.port, "host", { roomId, pong: false });
+	it("does not replace a host whose pong is merely in flight", async () => {
+		// Ping every 300 ms, answer after 150 ms: the second host lands inside
+		// the round trip. A ping in flight is not a missed heartbeat.
+		const server = await startServer({ heartbeatIntervalMs: 300 });
+		const roomId = "steady-host-room__";
+		const host = await RawWsClient.connect(server.port, "host", { roomId, pongDelayMs: 150 });
 		const guest = await RawWsClient.connect(server.port, "guest", { roomId });
 
-		// The first ping marks the host unresponsive; the next tick would drop it.
-		await silentHost.waitFor(() => silentHost.messages.some(m => m.opcode === OP_PING), 1_000, "first ping");
-		const hostAgain = await RawWsClient.connect(server.port, "host", { roomId });
-		await hostAgain.waitFor(
-			() =>
-				hostAgain.messages.some(
-					m =>
-						m.opcode === 0x1 &&
-						(JSON.parse(new TextDecoder().decode(m.payload)) as { t: string }).t === "peer-joined",
-				),
-			1_000,
-			"takeover announcement",
-		);
-		expect((await silentHost.closed).code).toBe(1006);
+		await host.waitFor(() => host.messages.some(m => m.opcode === OP_PING), 1_000, "ping in flight");
+		const second = await RawWsClient.connect(server.port, "host", { roomId });
+		expect((await second.closed).code).toBe(4009);
+		expect(host.readyState).toBe("open");
+		// The host keeps its seat, so the attached guest stays attached.
+		expect(guest.readyState).toBe("open");
 
 		await guest.close();
+		await host.close();
+	});
+
+	it("reclaims the room after the heartbeat drops a silent host", async () => {
+		const server = await startServer({ heartbeatIntervalMs: 60 });
+		const roomId = "silent-host-room___";
+		const silentHost = await RawWsClient.connect(server.port, "host", { roomId, pong: false });
+		const guest = await RawWsClient.connect(server.port, "guest", { roomId });
+		const guestClosed = guest.closed;
+
+		// One unanswered interval is a miss: the heartbeat drops the socket and
+		// the room returns to the claimable (host: null) state.
+		expect((await silentHost.closed).code).toBe(1006);
+		expect((await guestClosed).code).toBe(4001);
+		expect(server.roomCount()).toBe(1);
+
+		// The same roomId reclaims rather than conflicting — the reclaim path
+		// the grace window exists for.
+		const hostAgain = await RawWsClient.connect(server.port, "host", { roomId });
+		expect(hostAgain.readyState).toBe("open");
 		await hostAgain.close();
 	});
 });
@@ -714,22 +740,57 @@ describe("relay server protections", () => {
 		await host.close();
 	});
 
-	it("caps connections per client address", async () => {
+	it("caps upgrade connections per client address", async () => {
 		const server = await startServer({ maxConnectionsPerIp: 1 });
 		const first = await RawWsClient.connect(server.port, "host");
-		const rejected = await rawHttpRequest(server.port, `/r/${"a".repeat(16)}?role=guest`, {});
+		const rejected = await rawHttpRequest(server.port, `/r/${"a".repeat(16)}?role=guest`, {
+			...ROOM_HEADERS,
+			"Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+		});
 		expect(rejected.startsWith("HTTP/1.1 429")).toBe(true);
+		// A non-upgrade request is not an upgraded connection and bypasses the cap.
+		expect((await rawHttpRequest(server.port, "/", {})).startsWith("HTTP/1.1 426")).toBe(true);
 		await first.close();
 	});
 
-	it("rate-limits new connections per client address", async () => {
+	it("rate-limits new upgrades per client address", async () => {
 		const server = await startServer({ connectRatePerMinutePerIp: 2 });
 		const host = await RawWsClient.connect(server.port, "host");
 		const guest = await RawWsClient.connect(server.port, "guest");
-		const rejected = await rawHttpRequest(server.port, `/r/${"a".repeat(16)}?role=guest`, {});
+		const rejected = await rawHttpRequest(server.port, `/r/${"a".repeat(16)}?role=guest`, {
+			...ROOM_HEADERS,
+			"Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+		});
 		expect(rejected.startsWith("HTTP/1.1 429")).toBe(true);
 		await guest.close();
 		await host.close();
+	});
+
+	it("serves the static UI without spending the upgrade budget", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "relay-static-budget-"));
+		writeFileSync(join(dir, "index.html"), "<html>collab-ui</html>");
+		writeFileSync(join(dir, "app.js"), "console.log(1)");
+		const server = await startServer({ staticDir: dir, connectRatePerMinutePerIp: 2 });
+		const base = `http://127.0.0.1:${server.port}`;
+
+		// A page load plus a reload is many connections; none of them is an upgrade.
+		for (let i = 0; i < 5; i++) {
+			expect((await fetch(`${base}/`, { headers: { connection: "close" } })).status).toBe(200);
+			expect((await fetch(`${base}/app.js`, { headers: { connection: "close" } })).status).toBe(200);
+		}
+
+		// The upgrade budget is intact: two joins fit, the third is refused.
+		const host = await RawWsClient.connect(server.port, "host");
+		const guest = await RawWsClient.connect(server.port, "guest");
+		const rejected = await rawHttpRequest(server.port, `/r/${"a".repeat(16)}?role=guest`, {
+			...ROOM_HEADERS,
+			"Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ==",
+		});
+		expect(rejected.startsWith("HTTP/1.1 429")).toBe(true);
+
+		await guest.close();
+		await host.close();
+		rmSync(dir, { recursive: true, force: true });
 	});
 
 	it("caps total connections", async () => {

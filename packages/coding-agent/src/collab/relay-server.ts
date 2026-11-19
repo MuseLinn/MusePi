@@ -26,10 +26,12 @@
  *   it; guests closed with 4001 retry inside that window instead of dying. A
  *   host that closes normally (1000) or a relay that stops (1001) ends the
  *   room at once — the clients treat those as terminal, not as a blip.
- * - Per-address connection counts, new-connection rate, inbound byte rate,
- *   Origin, and connection/room caps bound one-sided abuse. A rejection keeps
- *   the existing close meanings (4004/4009/4029); overload and policy
- *   rejections use 1013/1008.
+ * - Per-address upgrade counts and new-connection rate, inbound byte rate,
+ *   Origin, and connection/room caps bound one-sided abuse. Page and asset
+ *   fetches are exempt from the per-address limits: one UI load opens many
+ *   short connections, and behind a tunnel they all share the proxy address.
+ *   A rejection keeps the existing close meanings (4004/4009/4029); overload
+ *   and policy rejections use 1013/1008.
  *
  * The relay never sees plaintext: envelopes carry AES-GCM sealed payloads, and
  * the JSON control channel carries no session data. Clients send no strings —
@@ -268,9 +270,9 @@ export interface RelayServerOptions {
 	maxGuestsPerIp?: number;
 	/** Most simultaneous TCP connections; default 256. 0 disables. */
 	maxConnections?: number;
-	/** Most simultaneous TCP connections from one client address; default 32. 0 disables. */
+	/** Most simultaneous WebSocket upgrades from one client address; default 32. 0 disables. */
 	maxConnectionsPerIp?: number;
-	/** New connections accepted per client address per rolling minute; default 60. 0 disables. */
+	/** WebSocket upgrades accepted per client address per rolling minute; default 60. 0 disables. */
 	connectRatePerMinutePerIp?: number;
 	/** Most rooms kept at once (host grace counts as kept); default 64. 0 disables. */
 	maxRooms?: number;
@@ -307,6 +309,14 @@ export interface RelayServerHandle {
 	roomCount: () => number;
 }
 
+/**
+ * Per-upgrade bookkeeping: whether this socket's upgrade was counted against
+ * the per-address limit, so its close releases exactly one slot.
+ */
+interface UpgradeGate {
+	counted: boolean;
+}
+
 interface Peer {
 	id: number;
 	role: "host" | "guest";
@@ -317,8 +327,12 @@ interface Peer {
 	plaintext: boolean;
 	/** Client address the per-address caps and the guest fairness cap key on. */
 	ip: string;
-	/** A ping is outstanding; any inbound byte proves the peer is alive. */
-	awaitingPong: boolean;
+	/**
+	 * When the outstanding ping was written, or null when the last ping has
+	 * been answered (any inbound byte counts). Only a ping that has been
+	 * outstanding for a whole heartbeat interval means the peer is gone.
+	 */
+	awaitingPongSince: number | null;
 	/** Remaining inbound bytes (token bucket, refilled at the configured rate). */
 	byteBudget: number;
 	byteBudgetAt: number;
@@ -351,9 +365,9 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 	const rooms = options.rooms ?? new Map<string, Room>();
 	const sockets = new Set<net.Socket>();
 	const peers = new Set<Peer>();
-	/** Live sockets per client address, for the per-address connection cap. */
+	/** Live upgraded connections per client address, for the per-address cap. */
 	const connectionsByIp = new Map<string, number>();
-	/** Recent accept times per client address, for the new-connection rate cap. */
+	/** Recent upgrade times per client address, for the new-connection rate cap. */
 	const connectTimesByIp = new Map<string, number[]>();
 
 	const server = options.tls
@@ -384,17 +398,14 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 		// global cap counts live sockets rather than every socket ever seen.
 		socket.on("close", () => sockets.delete(socket));
 		const ip = normalizeIp(socket.remoteAddress);
-		if (!admitConnection(socket, ip)) return;
+		if (!admitConnection(socket)) return;
+		const gate: UpgradeGate = { counted: false };
 		const handshakeTimer = setTimeout(() => socket.destroy(), HANDSHAKE_TIMEOUT_MS);
 		handshakeTimer.unref?.();
 		socket.setKeepAlive(true, DEFAULT_HEARTBEAT_MS);
 		socket.on("close", () => {
 			clearTimeout(handshakeTimer);
-			const live = connectionsByIp.get(ip);
-			if (live !== undefined) {
-				if (live <= 1) connectionsByIp.delete(ip);
-				else connectionsByIp.set(ip, live - 1);
-			}
+			if (gate.counted) releaseIpCount(ip);
 		});
 		let buf = "";
 		const onData = (chunk: Buffer): void => {
@@ -409,25 +420,36 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 			const tail = buf.slice(idx + 4);
 			buf = buf.slice(0, idx);
 			if (tail) socket.unshift(Buffer.from(tail, "latin1"));
-			handleRequest(socket, buf, ip);
+			handleRequest(socket, buf, ip, gate);
 		};
 		socket.on("data", onData);
 	}
 
 	/**
-	 * Connection-level gates, applied before any upgrade header is parsed so a
-	 * flood is rejected at the cheapest point: global cap (503), per-address cap
-	 * and new-connection rate (429). Rejections are plain HTTP — the client's
-	 * WebSocket stack reports a failed handshake, which CollabSocket retries
-	 * with backoff like any other transient failure.
+	 * Global connection gate, applied before the upgrade header is parsed so a
+	 * flood is rejected at the cheapest point (503). Per-address limits live on
+	 * the upgrade path instead — see {@link admitUpgrade}.
 	 */
-	function admitConnection(socket: net.Socket, ip: string): boolean {
+	function admitConnection(socket: net.Socket): boolean {
 		if (maxConnections > 0 && sockets.size > maxConnections) {
 			rejectHttp(socket, 503, "relay is at capacity");
 			return false;
 		}
-		const live = (connectionsByIp.get(ip) ?? 0) + 1;
-		if (maxConnectionsPerIp > 0 && live > maxConnectionsPerIp) {
+		return true;
+	}
+
+	/**
+	 * Per-address gates for WebSocket upgrades: live upgraded connections and
+	 * the new-connection rate (429). Page and asset fetches are deliberately
+	 * excluded — one UI load opens dozens of short static connections, and
+	 * behind a tunnel they all arrive from the proxy's loopback address, so
+	 * counting them would spend the budget the join handshake needs. Static
+	 * traffic stays bounded by the global connection cap and the handshake
+	 * timeout.
+	 */
+	function admitUpgrade(socket: net.Socket, ip: string): boolean {
+		const live = connectionsByIp.get(ip) ?? 0;
+		if (maxConnectionsPerIp > 0 && live + 1 > maxConnectionsPerIp) {
 			rejectHttp(socket, 429, "too many connections from this address");
 			return false;
 		}
@@ -449,11 +471,18 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 			recent.push(now);
 			connectTimesByIp.set(ip, recent);
 		}
-		connectionsByIp.set(ip, live);
+		connectionsByIp.set(ip, live + 1);
 		return true;
 	}
 
-	function handleRequest(socket: net.Socket, headerText: string, ip: string): void {
+	function releaseIpCount(ip: string): void {
+		const live = connectionsByIp.get(ip);
+		if (live === undefined) return;
+		if (live <= 1) connectionsByIp.delete(ip);
+		else connectionsByIp.set(ip, live - 1);
+	}
+
+	function handleRequest(socket: net.Socket, headerText: string, ip: string, gate: UpgradeGate): void {
 		const lines = headerText.split("\r\n");
 		const requestLine = lines[0] ?? "";
 		const [method, target] = requestLine.split(" ");
@@ -478,6 +507,8 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 		if (origin !== undefined && !isAllowedOrigin(origin, headers.get("host"), allowedOrigins)) {
 			return rejectHttp(socket, 403, "origin not allowed");
 		}
+		if (!admitUpgrade(socket, ip)) return;
+		gate.counted = true;
 
 		const url = new URL(target ?? "/", "http://localhost");
 		const match = ROOM_PATH_RE.exec(url.pathname);
@@ -512,12 +543,12 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 			if (role === "host") {
 				// A second host never tears the live room down: a stranger who
 				// learns the roomId must not be able to evict the real host and
-				// its guests. A host socket that already missed a heartbeat is the
-				// exception — the half-open connection is dead on the wire, and
-				// waiting for the OS to close it would lock the real host out of
-				// its own room.
+				// its guests. The only exception is a host socket that has already
+				// missed a whole heartbeat interval — the same condition the
+				// heartbeat drops sockets on — because waiting for that drop would
+				// lock the real host out of its own room.
 				const incumbent = room!.host;
-				if (incumbent?.awaitingPong) {
+				if (incumbent && hasMissedHeartbeat(incumbent, Date.now())) {
 					incumbent.room = null;
 					peers.delete(incumbent);
 					incumbent.socket.destroy();
@@ -564,7 +595,7 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 			room: null,
 			plaintext,
 			ip: clientIp,
-			awaitingPong: false,
+			awaitingPongSince: null,
 			byteBudget: maxBytesPerSecond,
 			byteBudgetAt: Date.now(),
 		};
@@ -600,7 +631,7 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 		}
 
 		socket.on("data", (chunk: Buffer) => {
-			peer.awaitingPong = false;
+			peer.awaitingPongSince = null;
 			if (!spendByteBudget(peer, chunk.byteLength)) {
 				void closeWithCode(socket, CLOSE_POLICY_VIOLATION, "byte rate limit exceeded");
 				return;
@@ -639,6 +670,20 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 		if (peer.byteBudget < cost) return false;
 		peer.byteBudget -= cost;
 		return true;
+	}
+
+	/**
+	 * Liveness signal shared by the heartbeat and the host-reclaim path: a ping
+	 * has been outstanding for a whole interval, so the peer is gone. A ping
+	 * that is merely in flight (the normal RTT case) is not a miss — otherwise
+	 * a healthy host could be evicted during every heartbeat round-trip.
+	 */
+	function hasMissedHeartbeat(peer: Peer, now: number): boolean {
+		return (
+			heartbeatIntervalMs > 0 &&
+			peer.awaitingPongSince !== null &&
+			now - peer.awaitingPongSince >= heartbeatIntervalMs
+		);
 	}
 
 	function guestsFromIp(room: Room, ip: string): number {
@@ -766,15 +811,19 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 	const heartbeatTimer =
 		heartbeatIntervalMs > 0
 			? setInterval(() => {
+					const now = Date.now();
 					for (const peer of peers) {
-						// One full interval without an inbound byte after a ping means
-						// the connection is half-open: the client is gone and only a
-						// TCP retransmit would ever notice.
-						if (peer.awaitingPong) {
+						// A ping unanswered for a whole interval means the connection
+						// is half-open: the client is gone and only a TCP retransmit
+						// would ever notice.
+						if (hasMissedHeartbeat(peer, now)) {
 							peer.socket.destroy();
 							continue;
 						}
-						peer.awaitingPong = true;
+						// A ping still in flight has the rest of its interval to be
+						// answered; pinging again would only reset the clock.
+						if (peer.awaitingPongSince !== null) continue;
+						peer.awaitingPongSince = now;
 						if (peer.socket.writable && !peer.socket.destroyed) {
 							peer.socket.write(encodeFrame(OP_PING, new Uint8Array(0)));
 						}
