@@ -2167,7 +2167,7 @@ export function HeroComposer({
 												working: busy === true,
 												attachmentCount: attachments.length,
 												designPlaceholder:
-													designActive && railState && railState.placeholder
+													designActive && railState?.placeholder
 														? railState.placeholder
 														: isDesignArmed
 															? t("composer.designEmptyPlaceholder")

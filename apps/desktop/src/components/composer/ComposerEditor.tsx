@@ -293,10 +293,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 			refresh();
 		}, [mentionVersion]);
 
-		function mentionAt(
-			editor: EditorView,
-			event: MouseEvent,
-		): { span: HighlightSpan; name: string } | null {
+		function mentionAt(editor: EditorView, event: MouseEvent): { span: HighlightSpan; name: string } | null {
 			const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY });
 			if (pos === null) return null;
 			const doc = editor.state.doc.toString();
