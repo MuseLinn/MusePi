@@ -27,39 +27,7 @@ afterEach(() => {
 });
 
 describe("DeviceGrantPanel", () => {
-	test("renders a primed device code on the first frame without starting a second flow", () => {
-		const calls: string[] = [];
-		const rpc = {
-			request: (method: string) => {
-				calls.push(method);
-				return Promise.resolve({ status: "pending" });
-			},
-		} as unknown as RpcClient;
-
-		mount(
-			<DeviceGrantPanel
-				rpc={rpc}
-				serverName="connector:github"
-				open
-				autoStart
-				initialFlow={{
-					flowId: "flow-1",
-					userCode: "ABCD-1234",
-					verificationUri: "https://example.test/device",
-					interval: 3600,
-				}}
-				onClose={() => {}}
-				onDone={() => {}}
-			/>,
-		);
-
-		// The one-take opens on the final layout: the code is already there and
-		// the panel did not ask the daemon for another one.
-		expect(document.body.textContent).toContain(t("settings.mcpDeviceCode", { code: "ABCD-1234" }));
-		expect(calls).not.toContain("mcp.oauth.device.start");
-	});
-
-	test("without a primed flow the panel starts one and shows the pending label", async () => {
+	test("autoStart paints the pending skeleton immediately, then swaps the code in place", async () => {
 		const calls: string[] = [];
 		let release: (value: unknown) => void = () => {};
 		const started = new Promise(resolve => {
@@ -84,7 +52,13 @@ describe("DeviceGrantPanel", () => {
 			/>,
 		);
 
-		await act(async () => Bun.sleep(10));
+		// First frame: the same rows the code will occupy — the dialog must not
+		// grow later (that growth was the shared-surface flash).
+		const openButton = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find(
+			button => button.textContent === t("settings.mcpDeviceOpen"),
+		);
+		expect(document.body.textContent).toContain(t("settings.mcpDeviceStarting"));
+		expect(openButton?.disabled).toBe(true);
 		expect(calls).toContain("mcp.oauth.device.start");
 
 		await act(async () => {
@@ -97,5 +71,6 @@ describe("DeviceGrantPanel", () => {
 			await Bun.sleep(10);
 		});
 		expect(document.body.textContent).toContain(t("settings.mcpDeviceCode", { code: "WXYZ-9876" }));
+		expect(document.body.textContent).not.toContain(t("settings.mcpDeviceStarting"));
 	});
 });

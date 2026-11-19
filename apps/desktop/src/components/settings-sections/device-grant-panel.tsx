@@ -39,7 +39,6 @@ export function DeviceGrantPanel({
 	onClose,
 	onDone,
 	autoStart = false,
-	initialFlow = null,
 }: {
 	rpc: RpcClient | null;
 	/** The MCP server name, e.g. `connector:github`. */
@@ -49,12 +48,8 @@ export function DeviceGrantPanel({
 	onDone(): void;
 	/** Start the flow on mount: the caller already chose the device grant. */
 	autoStart?: boolean;
-	/** Already-started flow (the caller primed it before the shared-surface
-	 *  transition). Rendering the code on the first frame keeps the dialog's
-	 *  one-take geometry stable instead of growing mid-transition. */
-	initialFlow?: { flowId: string; userCode: string; verificationUri: string; interval: number } | null;
 }): ReactNode {
-	const [flow, setFlow] = useState<DeviceFlowState | null>(initialFlow ? { ...initialFlow, status: "pending" } : null);
+	const [flow, setFlow] = useState<DeviceFlowState | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [starting, setStarting] = useState(false);
 	const timerRef = useRef<Timer | null>(null);
@@ -141,15 +136,8 @@ export function DeviceGrantPanel({
 	useEffect(() => {
 		if (!open || !autoStart || startedRef.current) return;
 		startedRef.current = true;
-		// A primed flow already has its code: join the poll loop instead of
-		// asking the daemon for a second code (which would change the digits
-		// under the user right after the dialog opens).
-		if (flow) {
-			void poll(flow.flowId, flow.interval);
-			return;
-		}
 		void start();
-	}, [autoStart, flow, open, poll, start]);
+	}, [autoStart, open, start]);
 
 	if (!open) return null;
 
@@ -188,14 +176,27 @@ export function DeviceGrantPanel({
 					{error && <div className="text-[12px] text-[var(--color-danger)]">{error}</div>}
 
 					{flow === null ? (
-						<button
-							type="button"
-							className="gui-btn gui-btn-primary self-start"
-							disabled={starting}
-							onClick={() => void start()}
-						>
-							{starting ? t("settings.mcpDeviceStarting") : t("settings.mcpDeviceStart")}
-						</button>
+						autoStart || starting ? (
+							/* First frame = the pending shape: the code row and the action
+							 * row already exist, so the code arrives by replacing text
+							 * instead of growing the dialog while its shared-surface
+							 * transition is still running. */
+							<div className="flex flex-col gap-2">
+								<div className="text-[13px]">{t("settings.mcpDeviceStarting")}</div>
+								<div className="flex items-center gap-1.5">
+									<button type="button" className="gui-btn" disabled>
+										{t("settings.mcpDeviceOpen")}
+									</button>
+									<span className="text-[11.5px] text-[var(--color-text-muted)]">
+										{t("settings.mcpDeviceWaiting")}
+									</span>
+								</div>
+							</div>
+						) : (
+							<button type="button" className="gui-btn gui-btn-primary self-start" onClick={() => void start()}>
+								{t("settings.mcpDeviceStart")}
+							</button>
+						)
 					) : (
 						<div className="flex flex-col gap-2">
 							{flow.status === "pending" && (

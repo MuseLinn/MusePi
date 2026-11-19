@@ -45,8 +45,16 @@ export function DialogFrame({
 	 * Opened by a shared-surface view transition: the browser already animated
 	 * the geometry, so the dialog's own entrance must never start afterwards —
 	 * a second animation on the same open would read as a flash.
+	 *
+	 * Initialised from the marker at MOUNT as well: a dialog that mounts
+	 * already-open (a conditionally rendered panel) never hits the
+	 * `open && !mounted` branch, ran its `pending → entered` phases inside the
+	 * transition, and then replayed `--entered`'s entrance the moment the
+	 * marker class left — the measured "appears, then flashes once" report.
 	 */
-	const entranceSuppressed = useRef(false);
+	const entranceSuppressed = useRef(
+		open && typeof document !== "undefined" && document.documentElement.classList.contains("gui-view-transition"),
+	);
 	if (open && !mounted) {
 		entranceSuppressed.current = document.documentElement.classList.contains("gui-view-transition");
 	}
@@ -140,7 +148,7 @@ export function DialogFrame({
 				aria-label={label}
 				onClick={e => e.stopPropagation()}
 			>
-				<HeightMorph morphKey={morphKey ?? null} className="gui-dialog-morph">
+				<HeightMorph morphKey={morphKey ?? null} className="gui-dialog-morph" fade={!suppressed}>
 					{children}
 				</HeightMorph>
 			</div>

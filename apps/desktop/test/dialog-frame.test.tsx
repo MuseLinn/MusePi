@@ -101,6 +101,23 @@ describe("DialogFrame", () => {
 		expect(document.querySelector('[role="dialog"]')).toBeNull();
 	});
 
+	test("a dialog that mounts inside a one-take never runs its own entrance", async () => {
+		document.documentElement.classList.add("gui-view-transition");
+		mount(
+			<DialogFrame open onClose={() => {}} label="Mounted in transition">
+				<button type="button">Action</button>
+			</DialogFrame>,
+		);
+		const dialog = document.querySelector('[role="dialog"]')!;
+		// The first frame is static: no pending→entered phases, so nothing can
+		// replay when the marker class leaves at the end of the transition.
+		expect(dialog.className).toContain("gui-dialog--static");
+		document.documentElement.classList.remove("gui-view-transition");
+		await act(async () => Bun.sleep(100));
+		expect(dialog.className).toContain("gui-dialog--static");
+		expect(dialog.className).not.toContain("gui-dialog--entered");
+	});
+
 	test("without a one-take the exit animation still keeps the dialog mounted", () => {
 		const root = mount(
 			<DialogFrame open onClose={() => {}} label="Ordinary dialog">
