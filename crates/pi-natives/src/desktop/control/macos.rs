@@ -23,7 +23,6 @@ const KEYBOARD_KEYCODE: u32 = 9;
 /// `NSEvent` key code 53, the Escape key.
 const ESCAPE_KEYCODE: i64 = 53;
 const KEY_DOWN: u32 = 10;
-const FLAGS_CHANGED: u32 = 12;
 /// `kCGSessionEventTap`.
 const SESSION_TAP: u32 = 1;
 
@@ -81,10 +80,10 @@ struct TapContext<C> {
 	tap:   Ref,
 }
 
-/// Only the key-down half of the event stream: Escape is acted on at the press,
-/// and a release or a modifier change carries nothing this monitor reports.
+/// Only key presses: Escape is acted on at the down event, and a release
+/// carries nothing this monitor reports.
 const fn monitor_mask() -> u64 {
-	(1 << KEY_DOWN) | (1 << FLAGS_CHANGED)
+	1 << KEY_DOWN
 }
 
 /// A physical Escape press: the hardware key, from no process, untagged.
@@ -288,13 +287,13 @@ mod tests {
 		assert!(!physical_escape(KEY_DOWN, 53, 42, 0));
 		assert!(!physical_escape(KEY_DOWN, 0, 0, 0));
 		assert!(!physical_escape(11, 53, 0, 0), "a release is not a press");
-		assert!(!physical_escape(FLAGS_CHANGED, 53, 0, 0));
+		assert!(!physical_escape(12, 53, 0, 0), "a modifier change is not a press");
 	}
 
 	#[test]
 	fn the_tap_listens_for_key_presses_only() {
-		assert_ne!(monitor_mask() & (1 << KEY_DOWN), 0);
-		for kind in [1, 2, 3, 4, 5, 6, 7, 11, 25, 26] {
+		assert_eq!(monitor_mask(), 1 << KEY_DOWN, "only key presses are watched");
+		for kind in [1, 2, 3, 4, 5, 6, 7, 11, 12, 13, 25, 26] {
 			assert_eq!(monitor_mask() & (1 << kind), 0, "{kind}");
 		}
 	}

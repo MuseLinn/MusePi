@@ -175,6 +175,10 @@ export declare class MacOSFrontApp {
    * Owns desktop input/focus control only for each hand-back, and rejects if
    * another operation owns it then. Resolves how many times it put the app
    * back.
+   *
+   * Nothing in this build calls it yet: the click path exports the API but
+   * does not read the front app before a background click or hold it
+   * afterwards.
    */
   keepInFront(durationMs: number): Promise<number>
 }

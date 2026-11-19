@@ -395,13 +395,14 @@ impl ControlLease {
 	/// `takeover` arms the physical-Escape stop; background input keeps the
 	/// user's keyboard untouched.
 	///
-	/// A monitor that cannot start never refuses `takeover`: the platforms that
-	/// offer it need no special permission on Windows, X11 input monitoring can
-	/// be unavailable, and macOS has no monitor yet. Refusing would let a
-	/// missing safety net disable input that works without one, so ownership is
-	/// still granted and `escape_stops` simply never rises. The lease records
-	/// `EscapeStop::Unavailable` instead of dropping the failure, so
-	/// `controlState().escapeStop` reports the missing net to the host.
+	/// A monitor that cannot start never refuses `takeover`: Windows offers one
+	/// without a special permission, X11 input monitoring can be unavailable,
+	/// and macOS gates a listen-only tap on Input Monitoring, which the user may
+	/// not have granted. Refusing would let a missing safety net disable input
+	/// that works without one, so ownership is still granted and `escape_stops`
+	/// simply never rises. The lease records `EscapeStop::Unavailable` instead
+	/// of dropping the failure, so `controlState().escapeStop` reports the
+	/// missing net to the host.
 	fn acquire(source: &CancellationSource, takeover: bool) -> CoreResult<Self> {
 		let kernel = KernelOwner::acquire()?;
 		let stop = || EmergencyStop(Arc::downgrade(&source.0));

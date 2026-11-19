@@ -185,7 +185,7 @@ fn read_entry(path: &Path, id: String) -> CoreResult<Entry> {
 	if boolean(&values, "Hidden")? {
 		return Err(invalid("desktop entry is hidden"));
 	}
-	if values.get("NoDisplay").is_some_and(|value| value == "true") {
+	if boolean(&values, "NoDisplay")? {
 		return Err(invalid("desktop entry is not shown"));
 	}
 	if values.get("Type").map(String::as_str) != Some("Application") {

@@ -6,6 +6,13 @@
 //! back is a decision per poll: any sign that the user is picking an app
 //! themselves ends the hold, so a hand-back never fights the user for the
 //! front.
+//!
+//! This module exports the API only: nothing in this build reads the front app
+//! before a background click or holds it afterwards. Wiring it into the click
+//! path needs macOS runtime evidence — whether the tap can be created, whether
+//! `SLSEventPostToPid` round-trips the event tag, and whether
+//! `CGEventSourceCounterForEventType` counts posted clicks — before code that
+//! moves the user's focus starts running.
 
 use std::time::{Duration, Instant};
 
@@ -111,6 +118,10 @@ impl MacosFrontApp {
 	/// Owns desktop input/focus control only for each hand-back, and rejects if
 	/// another operation owns it then. Resolves how many times it put the app
 	/// back.
+	///
+	/// Nothing in this build calls it yet: the click path exports the API but
+	/// does not read the front app before a background click or hold it
+	/// afterwards.
 	#[napi]
 	#[cfg_attr(
 		not(target_os = "macos"),

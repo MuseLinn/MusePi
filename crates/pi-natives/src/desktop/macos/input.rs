@@ -954,6 +954,17 @@ fn post_global_mouse(
 	button_number: i64,
 	flags: CGEventFlags,
 ) -> CoreResult<()> {
+	let event = CGEvent::new_mouse_event(source.clone(), event_type, point(x, y)?, button)
+		.map_err(|()| DesktopError::input_failed("failed to create a Quartz pointer event"))?;
+	event.set_integer_value_field(EventField::MOUSE_EVENT_CLICK_STATE, click_state);
+	if button_number != 0 {
+		event.set_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER, button_number);
+	}
+	event.set_flags(flags);
+	post_global(&event)?;
+	// Counted after the post: a press that never went out leaves no counter
+	// change, and counting it would let the front-app hold mistake a later
+	// user click for this process's own.
 	if matches!(
 		event_type,
 		CGEventType::LeftMouseDown
@@ -965,14 +976,7 @@ fn post_global_mouse(
 	) {
 		OWN_BUTTON_EVENTS.fetch_add(1, Ordering::AcqRel);
 	}
-	let event = CGEvent::new_mouse_event(source.clone(), event_type, point(x, y)?, button)
-		.map_err(|()| DesktopError::input_failed("failed to create a Quartz pointer event"))?;
-	event.set_integer_value_field(EventField::MOUSE_EVENT_CLICK_STATE, click_state);
-	if button_number != 0 {
-		event.set_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER, button_number);
-	}
-	event.set_flags(flags);
-	post_global(&event)
+	Ok(())
 }
 
 #[allow(
