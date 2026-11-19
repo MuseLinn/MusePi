@@ -5199,9 +5199,11 @@ export const settings = {
 	"Speech rate (0.5–2)": "Speech rate (0.5–2)",
 	"Speech-to-Text": "Speech-to-Text",
 	"Global dictation": "Global dictation",
-	"Dictate into the focused application with a global shortcut": "Dictate into the focused application with a global shortcut",
+	"Dictate into the focused application with a global shortcut":
+		"Dictate into the focused application with a global shortcut",
 	"Global dictation shortcut": "Global dictation shortcut",
-	"Electron accelerator that starts and stops global dictation": "Electron accelerator that starts and stops global dictation",
+	"Electron accelerator that starts and stops global dictation":
+		"Electron accelerator that starts and stops global dictation",
 	"Speech-to-Text Submit Trigger": "Speech-to-Text Submit Trigger",
 	"Speaker Verification": "Speaker Verification",
 	"Speech Enhancement": "Speech Enhancement",
