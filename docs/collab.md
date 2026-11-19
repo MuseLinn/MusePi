@@ -40,7 +40,7 @@ The guest's previous session is restored on `/leave` (or when the host stops).
 | `/collab status` | Show link + participants |
 | `/collab stop` | Stop sharing |
 | `/collab lan` | Share over the local network (self-hosted relay, no public endpoint) |
-| `/collab tunnel [cloudflared\|ngrok]` | Share through a public tunnel |
+| `/collab tunnel [cloudflared\|ngrok\|tailscale]` | Share through a public tunnel (defaults to `collab.exposure`) |
 | `/pair` | Start a LAN share and show a 6-digit code for the mobile app |
 | `/join <link>` | Join a shared session as a guest |
 | `/leave` | Leave (guest) or stop sharing (host) |
@@ -203,7 +203,7 @@ Every in-process relay — the one LAN, tunnel, and `collab.start` shares run �
 
 - **Heartbeat** — a WebSocket ping every 25 seconds. A peer that leaves a ping unanswered for a full interval is treated as half-open (Wi-Fi handoff, Doze, NAT expiry) and dropped; the traffic also keeps a quiet tunnel's idle timer from closing a healthy share. Clients answer pings automatically.
 - **Host drops and reclaim** — when a host connection disappears without a close, its room survives for 30 seconds. Guests are closed with `4001` and retry with backoff inside that window (at most 30 seconds and five attempts from the first `4001`); the host reclaims the same room by reconnecting with the same link, and learns about guests that joined during the gap. A host that closes normally ends the room immediately, and a relay that stops closes guests with `1001`.
-- **Close codes** — `4001` means the host is gone but the room may come back: retry. `4004` means the room no longer exists (host stopped, grace expired, or a link from an older share): retry cannot help. `1001` means the relay itself stopped serving: also terminal. `4009` (another host owns the room) and `4029` (room full) are terminal for that attempt; `1008` (policy) and `1013` (relay overload) are retried.
+- **Close codes** — `4001` means the host is gone but the room may come back: retry. `4004` means the room no longer exists (host stopped, grace expired, or a link from an older share): retry cannot help. `1001` means the relay itself stopped serving: also terminal. `4009` (another host owns the room) and `4029` (room full) are terminal for that attempt. `1008` is a policy rejection — too many guests from one address, or the inbound byte rate — and the client may reconnect, but the same condition recurs until the cause changes; `1013` is relay capacity (room or connection caps), so retry later.
 - **Admission limits** — the in-process relay allows, per client address, 32 live upgrades, 60 new upgrades per minute, and 16 sockets that have not upgraded yet. Those budgets are separate on purpose: loading the browser page and its assets uses the pending budget, never the join budget, so a reload storm cannot lock a real guest out. Globally it keeps 256 connections and 64 rooms; a room holds 16 guests, at most 8 from one address. Rejections before the upgrade are HTTP: `403` for a disallowed origin, `429` for a connection or rate cap, `503` when the relay is at capacity.
 - **Origin gate** — browsers attach `Origin` to the WebSocket upgrade. The relay accepts its own origin, the bundled app shells (`https://localhost`, `capacitor://localhost`, `ionic://localhost`), and any origin passed in `allowedOrigins`; terminal clients that send no `Origin` pass. This is why an in-process share accepts the `collab.webUrl` origin automatically: the UI and the relay may be served from different origins.
 
@@ -216,8 +216,11 @@ Every in-process relay — the one LAN, tunnel, and `collab.start` shares run �
 | `4004` / "no such room" | the host stopped, the share TTL expired, the 30-second reclaim window ended, or the link belongs to an older share | start a new share and hand out its new link |
 | `4001` repeating | the host connection dropped; the room is waiting for it | keep the guest retrying inside 30 seconds, and check the host's network or tunnel; after five attempts start a new share |
 | `1001` / "sharing stopped" | the relay itself shut down | reconnect once the relay is back; the link itself stays valid |
+| `1008` / "too many guests from one address" | one address already holds 8 of the room's 16 guest seats (the per-address fairness cap) | join from another address, or self-host a relay with a higher per-address cap |
+| `1008` / "byte rate limit exceeded" | the client sent more than 32 MiB/s into the relay | usually a looping or buggy client; fix it before reconnecting, since the limit trips again |
+| `1013` / "relay is at capacity" | the relay reached its global room or connection cap | retry later, or self-host a relay with higher caps |
 | `4009` / "host conflict" | another host already owns that room id | stop that host, or let it miss a heartbeat interval; room ids are per share, so a new share avoids the collision |
-| `4029` / "room is full" | the room reached 16 guests, or 8 from one address | start a view-only share with fewer guests, or self-host a relay with higher room/per-address caps |
+| `4029` / "room is full" | the room reached its 16-guest cap | start a view-only share with fewer guests, or self-host a relay with a higher per-room cap |
 | The web UI opens but no session connects | the UI origin and the relay origin differ and the relay does not allow the UI's | set `collab.webUrl` for an in-process share, or allow the UI origin on the relay |
 
 

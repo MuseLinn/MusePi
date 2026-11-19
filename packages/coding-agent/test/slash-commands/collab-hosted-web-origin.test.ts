@@ -110,15 +110,43 @@ function handshake(port: number, origin: string): Promise<string> {
 }
 
 describe("collab relay allowed origins", () => {
-	it("normalizes collab.webUrl into an origin and ignores empty or invalid values", async () => {
+	it("accepts only http(s) web UI origins and rejects non-web schemes", () => {
 		settings.set("collab.webUrl", "https://web.example/collab");
 		expect(configuredWebOrigins()).toEqual(["https://web.example"]);
 
-		settings.set("collab.webUrl", "");
+		// http is allowed where the web-link formatter allows it: local and
+		// private hosts only.
+		settings.set("collab.webUrl", "http://localhost:3000");
+		expect(configuredWebOrigins()).toEqual(["http://localhost:3000"]);
+		settings.set("collab.webUrl", "http://127.0.0.1:3000");
+		expect(configuredWebOrigins()).toEqual(["http://127.0.0.1:3000"]);
+		settings.set("collab.webUrl", "http://192.168.1.5:3000");
+		expect(configuredWebOrigins()).toEqual(["http://192.168.1.5:3000"]);
+
+		// A `null` origin must never reach the relay's allowlist.
+		for (const invalid of ["file:///x", "data:text/html,x", "javascript:alert(1)", "http://web.example"]) {
+			settings.set("collab.webUrl", invalid);
+			expect(configuredWebOrigins()).toEqual([]);
+		}
+
+		settings.set("collab.webUrl", "https://web.example/collab?x=1");
 		expect(configuredWebOrigins()).toEqual([]);
 
-		settings.set("collab.webUrl", "not a url");
+		settings.set("collab.webUrl", "");
 		expect(configuredWebOrigins()).toEqual([]);
+	});
+
+	it("reports an unusable collab.webUrl instead of silently ignoring it", () => {
+		const lines: string[] = [];
+		settings.set("collab.webUrl", "file:///x");
+		expect(configuredWebOrigins(line => lines.push(line))).toEqual([]);
+		expect(lines[0]).toContain("collab.webUrl");
+		expect(lines[0]).toContain("http:// or https://");
+
+		settings.set("collab.webUrl", "not a url");
+		lines.length = 0;
+		expect(configuredWebOrigins(line => lines.push(line))).toEqual([]);
+		expect(lines[0]).toContain("must be an http:// or https:// URL");
 	});
 
 	it("lets the configured web UI origin reach the in-process relay", async () => {
