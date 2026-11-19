@@ -782,9 +782,14 @@ mod tests {
 				}
 			}
 		}
-		let proposals = propose(&frame, DEFAULT_MAX_REGIONS);
-		assert!(proposals.truncated, "the component budget cut the scan short");
-		assert_eq!(proposals.regions.len(), DEFAULT_MAX_REGIONS as usize);
+		// 64 allows all 32 row proposals, so only the component budget can mark
+		// this result truncated: a regression in `components_capped` fails here.
+		let proposals = propose(&frame, MAX_REGIONS);
+		assert!(
+			proposals.truncated,
+			"the component budget is the only reason 32 proposals under a 64 cap truncate"
+		);
+		assert!(!proposals.regions.is_empty());
 	}
 
 	#[test]
