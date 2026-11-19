@@ -1262,7 +1262,7 @@ export const settings = {
 	"settings.imageWatermarkPlaceholder": "水印文字",
 	"settings.board": "看板",
 	"settings.prBoard": "问题与拉取请求",
-	"settings.workbench": "工作台",
+	"settings.workbench": "右侧栏",
 	"settings.boardTitle": "看板标题",
 	"settings.boardHelloTitle": "工作台",
 	"settings.boardFinanceTitle": "每日财经",

@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **「工作台」改为「右侧栏」，面板槽位改名为 `panel.tab.dock`**：guest 壳右栏的按钮与标题改用统一的「右侧栏」词汇（英文 “Right sidebar”），与 dsh 的 right Sidebar 对齐。插件槽位 `panel.tab.workbench` 同时更名为 `panel.tab.dock`——槽位名属于插件 API，这是破坏性变更：旧槽位不再被宿主挂载，仍注册旧名的插件需同步改名才能继续显示；该面板槽由宿主提供并挂载，插件只贡献其中的内容。
+  - EN: The workbench panel is now the right sidebar, and its slot id is `panel.tab.dock`. The guest shell's panel button and title use the shared right-sidebar vocabulary (「右侧栏」 / "Right sidebar"), matching dsh's right Sidebar. The plugin slot `panel.tab.workbench` was renamed to `panel.tab.dock`; slot ids are plugin API, so this is a breaking change — the host no longer mounts the old slot, and a plugin still registering the old name contributes nothing until it renames in lockstep. The host provides and mounts this panel seat; plugins contribute only its content.
+
 ## [0.7.7] - 2026-11-19
 
 - **设置内容区收敛为统一工厂，新增页面不再需要改壳**：已注册的 `settings.section.<id>` 页面由内容区工厂直接渲染（等价 dsh `settings.section.view`），内置页分支只作为未装载/编译失败的回退；原先连接器/索引库的专用分支删除。此前通过槽位新增的页面会出现在导航却渲染空白。
