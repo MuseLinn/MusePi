@@ -68,6 +68,7 @@ import {
 	CONVERSATION_CHAT_NODE_SLOT,
 	PANEL_SHELL_SLOT,
 	PANEL_TAB_SLOT_PREFIX,
+	preloadSlotModules,
 	resolveManagedBrowserPanelTab,
 	SlotComponentHost,
 	SlotComponentMount,
@@ -1311,6 +1312,15 @@ export function ChatView({
 	// session open pay for a surface nobody is looking at, so mounting waits for
 	// the first open; from then on it stays mounted and the animation is intact.
 	const panelShellMounted = useRef(false);
+	const panelShellContributions = useSlotComponents(rpc, PANEL_SHELL_SLOT);
+	// The right panel reaches its module lazily (the shell mounts on first
+	// expand). Import it while the panel is still folded: the module cache makes
+	// the mount-time import a hit, so the first click opens the panel in the
+	// same frame instead of waiting for the fetch (which also stranded the
+	// click that arrived during the load).
+	useEffect(() => {
+		preloadSlotModules(panelShellContributions);
+	}, [panelShellContributions]);
 	if ((rightPanelOpen && !focusMode) || panelShellMounted.current) panelShellMounted.current = true;
 
 	const setActiveView = useCallback(

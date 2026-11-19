@@ -951,6 +951,25 @@ export function mergeListSeatEntries(items: readonly SlotComponent[]): SlotCompo
 	return out;
 }
 
+/** Warm compiled slot modules without rendering their component.
+ *
+ *  A slot that mounts lazily (the right-panel shell arms on first open) pays
+ *  the module fetch at the moment it first appears: the first click that
+ *  mounted it spent a frame or more waiting for the import and read as "the
+ *  toggle did nothing", and the click that arrived after the load folded the
+ *  freshly mounted panel. The browser's module cache is keyed by URL, so the
+ *  mount-time import becomes a cache hit.
+ */
+export function preloadSlotModules(components: readonly SlotComponent[]): void {
+	for (const item of components) {
+		if (item.error || (item.code.length === 0 && !item.url)) continue;
+		exposeHostReact();
+		void importCompiledModule(item).catch(() => {
+			// A failed preload leaves the mount-time error path untouched.
+		});
+	}
+}
+
 /** Pick compiled components registered for one exact slot. */
 export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComponent[] {
 	const data = useExtensionRegistry(rpc);
