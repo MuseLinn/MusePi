@@ -1,3 +1,4 @@
+import { composerPlaceholder } from "@musepi/client-core";
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
 import { AsyncJobBar } from "@musepi/client-core/src/components/shell/AsyncJobBar";
 import { normalizeQueueSnapshot, type QueueGroup, type QueueSnapshot } from "@musepi/client-core/src/lib/message-queue";
@@ -64,7 +65,7 @@ import {
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { imageChipCount, insertPastedImageMentions } from "./composer/attachment-mention-paste";
-import { CodeMirrorComposer } from "./composer/CodeMirrorComposer";
+import { ComposerEditor } from "./composer/ComposerEditor";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
@@ -2428,7 +2429,7 @@ export function SessionComposer({
 					}}
 				/>
 				<div className="gui-ta-stack">
-					<CodeMirrorComposer
+					<ComposerEditor
 						ref={el => {
 							taRef.current = el;
 							menuAnchorRef(el?.dom ?? null);
@@ -2550,11 +2551,13 @@ export function SessionComposer({
 						placeholder={
 							shownSuggestion !== null
 								? ""
-								: working
-									? t("general.agentWorkingSend.info")
-									: isDesignSession
-										? t("composer.designEmptyPlaceholder")
-										: t("composer.askAnythingCommands.info")
+								: composerPlaceholder({
+										surface: "session",
+										working,
+										attachmentCount: attachments.length,
+										hasConversation: (entries?.length ?? 0) > 0,
+										designPlaceholder: isDesignSession ? t("composer.designEmptyPlaceholder") : null,
+									})
 						}
 						spellCheck={spellcheckEnabled()}
 						autoComplete="off"

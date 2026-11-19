@@ -1,10 +1,18 @@
 import { history, historyKeymap, standardKeymap } from "@codemirror/commands";
-import { Annotation, EditorState, type Extension, Prec, StateEffect, StateField } from "@codemirror/state";
-import { Decoration, type DecorationSet, EditorView, keymap } from "@codemirror/view";
+import { EditorState } from "@codemirror/state";
+import { EditorView, keymap } from "@codemirror/view";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import type { ComposerEditorHandle } from "./editor-types";
-import { type HighlightKind, HL_CLASS, type MentionPreview, parseHighlightSpans } from "./input-highlight";
+import {
+	interceptKeymap,
+	mapPosition,
+	refreshTokens,
+	selectionOf,
+	tokenField,
+	valuePropWrite,
+} from "./composer-editor-code";
+import { ComposerMentionPop, type MentionPop } from "./composer-editor-pop";
+import type { ComposerEditorHandle, ComposerSelection } from "./composer-editor-types";
+import type { HighlightSpan, MentionPreview } from "./token-spans";
 
 /**
  * CodeMirror 6 composer editor (openchamber parity).
@@ -18,12 +26,7 @@ import { type HighlightKind, HL_CLASS, type MentionPreview, parseHighlightSpans 
  * call, so completion, voice, paste and draft paths keep their code.
  */
 
-export interface ComposerSelection {
-	start: number;
-	end: number;
-}
-
-export interface CodeMirrorComposerProps {
+export interface ComposerEditorProps {
 	value: string;
 	onChange(value: string, selection: ComposerSelection): void;
 	onKeyDown?(event: KeyboardEvent): boolean | void;
@@ -50,74 +53,8 @@ export interface CodeMirrorComposerProps {
 	autoFocus?: boolean;
 }
 
-interface MentionPop {
-	name: string;
-	preview: MentionPreview;
-	x: number;
-	y: number;
-}
-
-const valuePropWrite = Annotation.define<true>();
-const refreshTokens = StateEffect.define<null>();
-
-const TOKEN_MARK: Record<HighlightKind, Decoration> = {
-	slash: Decoration.mark({ class: HL_CLASS.slash }),
-	bang: Decoration.mark({ class: HL_CLASS.bang }),
-	magic: Decoration.mark({ class: HL_CLASS.magic }),
-	mention: Decoration.mark({ class: HL_CLASS.mention }),
-};
-
-function tokenField(
-	resolverRef: { current: ((name: string) => MentionPreview | null) | undefined },
-	spansRef: { current: ReturnType<typeof parseHighlightSpans> },
-): Extension {
-	const build = (state: EditorState): DecorationSet => {
-		const spans = parseHighlightSpans(state.doc.toString(), name => resolverRef.current?.(name) ?? null);
-		spansRef.current = spans;
-		return Decoration.set(
-			spans.map(span => TOKEN_MARK[span.kind].range(span.start, span.end)),
-			true,
-		);
-	};
-	return StateField.define<DecorationSet>({
-		create: build,
-		update(decorations, transaction) {
-			if (transaction.docChanged || transaction.effects.some(effect => effect.is(refreshTokens))) {
-				return build(transaction.state);
-			}
-			return decorations;
-		},
-		provide: field => EditorView.decorations.from(field),
-	});
-}
-
-function selectionOf(state: EditorState): ComposerSelection {
-	return { start: state.selection.main.from, end: state.selection.main.to };
-}
-
-/** Map a document offset across an external whole-document replacement by its
- *  unchanged prefix/suffix; an offset inside the changed middle clamps to the
- *  change start. An empty old document maps to the end (a restored prompt
- *  should put the caret after its text). */
-function mapPosition(oldText: string, nextText: string, position: number): number {
-	if (oldText.length === 0) return nextText.length;
-	let prefix = 0;
-	while (prefix < oldText.length && prefix < nextText.length && oldText[prefix] === nextText[prefix]) {
-		prefix++;
-	}
-	let oldEnd = oldText.length;
-	let nextEnd = nextText.length;
-	while (oldEnd > prefix && nextEnd > prefix && oldText[oldEnd - 1] === nextText[nextEnd - 1]) {
-		oldEnd--;
-		nextEnd--;
-	}
-	if (position <= prefix) return position;
-	if (position >= oldEnd) return nextEnd + (position - oldEnd);
-	return prefix;
-}
-
-export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorComposerProps>(
-	function CodeMirrorComposer(props, ref) {
+export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorProps>(
+	function ComposerEditor(props, ref) {
 		const {
 			value,
 			onChange,
@@ -174,20 +111,15 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 		};
 		const resolverRef = useRef(resolveMention);
 		resolverRef.current = resolveMention;
-		const spansRef = useRef<ReturnType<typeof parseHighlightSpans>>([]);
+		const spansRef = useRef<HighlightSpan[]>([]);
+		/** True while CodeMirror is dispatching an update and our onChange runs:
+		 *  a synchronous parent render/effect must not dispatch again. */
+		const inUpdateRef = useRef(false);
 		const [pop, setPop] = useState<MentionPop | null>(null);
 
 		useLayoutEffect(() => {
 			const host = hostRef.current;
 			if (!host) return;
-			const interceptKeys = [
-				{
-					any: (_view: EditorView, event: KeyboardEvent): boolean => {
-						const handled = handlersRef.current.onKeyDown?.(event);
-						return handled === true || event.defaultPrevented;
-					},
-				},
-			];
 			const view = new EditorView({
 				state: EditorState.create({
 					doc: valueRef.current,
@@ -196,7 +128,7 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 						EditorView.lineWrapping,
 						// Composer keys win over CodeMirror defaults (Enter sends,
 						// ArrowUp walks history, Backspace removes a mention atom).
-						Prec.highest(keymap.of(interceptKeys)),
+						interceptKeymap(event => handlersRef.current.onKeyDown?.(event) ?? false),
 						keymap.of([...standardKeymap, ...historyKeymap]),
 						tokenField(resolverRef, spansRef),
 						EditorView.updateListener.of(update => {
@@ -207,7 +139,12 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 								);
 								setPop(null);
 								if (!programmatic) {
-									handlers.onChange(update.state.doc.toString(), selectionOf(update.state));
+									inUpdateRef.current = true;
+									try {
+										handlers.onChange(update.state.doc.toString(), selectionOf(update.state));
+									} finally {
+										inUpdateRef.current = false;
+									}
 								}
 							}
 						}),
@@ -307,6 +244,10 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 			const current = view.state.doc.toString();
 			if (current === value) return;
 			const apply = (): void => {
+				if (inUpdateRef.current) {
+					queueMicrotask(apply);
+					return;
+				}
 				const live = viewRef.current;
 				if (!live) return;
 				const latest = valueRef.current;
@@ -339,15 +280,23 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 		// Attachment inventory changed without a document edit: repaint the
 		// mention decorations against the new chip list.
 		useEffect(() => {
-			viewRef.current?.dispatch({ effects: refreshTokens.of(null) });
 			// The resolver itself is read through resolverRef; only the chip
-			// list identity changes what "resolved" means.
+			// list identity changes what "resolved" means. Defer if a parent
+			// render lands inside CodeMirror's own update dispatch.
+			const refresh = (): void => {
+				if (inUpdateRef.current) {
+					queueMicrotask(refresh);
+					return;
+				}
+				viewRef.current?.dispatch({ effects: refreshTokens.of(null) });
+			};
+			refresh();
 		}, [mentionVersion]);
 
 		function mentionAt(
 			editor: EditorView,
 			event: MouseEvent,
-		): { span: ReturnType<typeof parseHighlightSpans>[number]; name: string } | null {
+		): { span: HighlightSpan; name: string } | null {
 			const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY });
 			if (pos === null) return null;
 			const doc = editor.state.doc.toString();
@@ -435,37 +384,17 @@ export const CodeMirrorComposer = forwardRef<ComposerEditorHandle, CodeMirrorCom
 		return (
 			<div
 				ref={hostRef}
-				className={`gui-cm-composer gui-cm-composer--${variant}${className ? ` ${className}` : ""}`}
+				className={`gui-composer-editor gui-composer-editor--${variant}${className ? ` ${className}` : ""}`}
 				data-focused={dataFocused ? "1" : "0"}
 				{...(dataComposerInput ? { "data-composer-input": "" } : {})}
 			>
 				{value.length === 0 && placeholder ? (
-					<span className="gui-cm-placeholder" aria-hidden>
+					<span className="gui-composer-editor-placeholder" aria-hidden>
 						{placeholder}
 					</span>
 				) : null}
-				{pop
-					? createPortal(
-							<div className="gui-mention-pop" style={{ left: `${pop.x}px`, top: `${pop.y - 8}px` }} aria-hidden>
-								{pop.preview.kind === "image" && pop.preview.dataUrl ? (
-									<img className="gui-mention-pop-thumb" src={pop.preview.dataUrl} alt="" draggable={false} />
-								) : null}
-								<span className="gui-mention-pop-name">{pop.preview.name}</span>
-								{mentionSizeLabel(pop.preview.size) && (
-									<span className="gui-mention-pop-size">{mentionSizeLabel(pop.preview.size)}</span>
-								)}
-							</div>,
-							document.body,
-						)
-					: null}
+				{pop ? <ComposerMentionPop pop={pop} /> : null}
 			</div>
 		);
 	},
 );
-
-function mentionSizeLabel(size: number | undefined): string {
-	if (!size || !Number.isFinite(size) || size <= 0) return "";
-	if (size < 1024) return `${size} B`;
-	if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-	return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}

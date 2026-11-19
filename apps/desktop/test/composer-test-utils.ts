@@ -8,7 +8,7 @@ import { EditorView } from "@codemirror/view";
  * belongs to the caller (React updates follow the update listener).
  */
 export function composerContent(root: ParentNode = document): HTMLElement {
-	const content = root.querySelector<HTMLElement>(".gui-cm-composer .cm-content");
+	const content = root.querySelector<HTMLElement>(".gui-composer-editor .cm-content");
 	if (!content) throw new Error("CodeMirror composer did not render");
 	return content;
 }
@@ -32,5 +32,5 @@ export function setComposerDoc(value: string, root: ParentNode = document): void
 }
 
 export function composerPlaceholder(root: ParentNode = document): string | null {
-	return root.querySelector<HTMLElement>(".gui-cm-placeholder")?.textContent ?? null;
+	return root.querySelector<HTMLElement>(".gui-composer-editor-placeholder")?.textContent ?? null;
 }

@@ -620,7 +620,17 @@ export function SettingsView({
 							{activeSection === "migration" && <MigrationSection rpc={rpc} />}
 							{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
 							{activeSection === "commands" && <CommandsSection rpc={rpc} />}
-							{activeSection === "connectors" && <ConnectorsSection rpc={rpc} />}
+							{activeSection === "connectors" && (
+								<ConnectorsSection
+									rpc={rpc}
+									onApplyPrompt={text => {
+										// The established composer channel: both the session and
+										// welcome composers append the text and focus themselves.
+										window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text } }));
+										onBack();
+									}}
+								/>
+							)}
 							{activeSection === "hooks" && <HooksSection rpc={rpc} />}
 							{activeSection === "browser" && <BrowserSection rpc={rpc} />}
 							{activeSection === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}

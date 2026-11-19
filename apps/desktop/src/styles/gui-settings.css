@@ -6174,6 +6174,12 @@ body.gui-resizing {
 	gap: 8px;
 }
 
+/* One spacing rule for every block — connected, featured and categories — so
+   none of them can drift from the chips row by hand. */
+.gui-connector-section {
+	margin-top: 16px;
+}
+
 @media (max-width: 900px) {
 	.gui-connector-grid {
 		grid-template-columns: minmax(0, 1fr);
@@ -6313,6 +6319,56 @@ body.gui-resizing {
 	gap: 6px;
 	padding-top: 12px;
 	border-top: 1px solid var(--color-border-subtle);
+}
+
+.gui-connector-examples {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-connector-example {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 4px 4px 4px 8px;
+	border-radius: var(--radius-md);
+	background: var(--color-bg-elevated);
+}
+
+.gui-connector-example-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.gui-connector-example-actions {
+	display: flex;
+	flex: none;
+	gap: 2px;
+}
+
+.gui-connector-example-action {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition:
+		color 120ms ease-out,
+		background-color 120ms ease-out;
+}
+
+.gui-connector-example-action:hover {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
 }
 
 /* ── Settings: 预设页分组卡片 + 「查看配置」只读视图 ─────────────────────

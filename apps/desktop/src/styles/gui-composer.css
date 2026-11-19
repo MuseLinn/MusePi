@@ -3071,7 +3071,7 @@ button.gui-stats-pill {
  * The editor owns text + caret, so there is no second mirror layer. The host
  * carries the same metrics as the old textarea variants; `autosize()` only
  * publishes min/max heights, CodeMirror grows inside them. */
-.gui-cm-composer {
+.gui-composer-editor {
 	position: relative;
 	display: flex;
 	flex: 1 1 auto;
@@ -3081,7 +3081,7 @@ button.gui-stats-pill {
 	color: var(--color-text);
 }
 
-.gui-cm-composer .cm-editor {
+.gui-composer-editor .cm-editor {
 	flex: 1 1 auto;
 	min-height: 0;
 	background: transparent;
@@ -3090,17 +3090,17 @@ button.gui-stats-pill {
 	outline: none;
 }
 
-.gui-cm-composer .cm-scroller {
+.gui-composer-editor .cm-scroller {
 	overflow-y: auto;
 	scrollbar-width: none;
 	font-family: inherit;
 }
 
-.gui-cm-composer .cm-scroller::-webkit-scrollbar {
+.gui-composer-editor .cm-scroller::-webkit-scrollbar {
 	display: none;
 }
 
-.gui-cm-composer .cm-content {
+.gui-composer-editor .cm-content {
 	min-height: calc(2 * 20px + 12px);
 	padding: 6px 2px;
 	font-family: inherit;
@@ -3109,44 +3109,44 @@ button.gui-stats-pill {
 	caret-color: var(--color-text);
 }
 
-.gui-cm-composer--welcome .cm-content {
+.gui-composer-editor--welcome .cm-content {
 	min-height: calc(3 * 1.625em + 28px);
 	padding: 14px 4px;
 	font-size: 14px;
 	line-height: 1.625;
 }
 
-.gui-cm-composer .cm-line {
+.gui-composer-editor .cm-line {
 	padding: 0;
 }
 
-.gui-cm-composer .cm-editor.cm-focused {
+.gui-composer-editor .cm-editor.cm-focused {
 	outline: none;
 }
 
-.gui-cm-composer .cm-selectionBackground,
-.gui-cm-composer .cm-content ::selection {
+.gui-composer-editor .cm-selectionBackground,
+.gui-composer-editor .cm-content ::selection {
 	background: color-mix(in oklab, var(--color-accent) 28%, transparent);
 }
 
-.gui-cm-composer .cm-cursor,
-.gui-cm-composer .cm-dropCursor {
+.gui-composer-editor .cm-cursor,
+.gui-composer-editor .cm-dropCursor {
 	border-left-color: var(--color-text);
 }
 
-.gui-cm-composer[data-focused="1"] {
+.gui-composer-editor[data-focused="1"] {
 	flex: 1;
 	max-height: none !important;
 }
 
-.gui-cm-composer[data-focused="1"] .cm-editor {
+.gui-composer-editor[data-focused="1"] .cm-editor {
 	height: 100%;
 }
 
 /* Placeholder overlay: React owns `value`, so the empty state is known
  * without a CodeMirror widget (widgets wrap the caret and break IMEs that
  * probe the empty text context). */
-.gui-cm-placeholder {
+.gui-composer-editor-placeholder {
 	position: absolute;
 	inset: 0;
 	overflow: hidden;
@@ -3154,14 +3154,17 @@ button.gui-stats-pill {
 	user-select: none;
 	white-space: pre-wrap;
 	overflow-wrap: break-word;
-	color: var(--muted);
+	/* `--muted` is a background token (--bg-inset) and paints near-black in
+	 * both schemes — the old textarea placeholder used the text-faint ink. */
+	color: var(--color-text-faint);
+	opacity: 1;
 	padding: 6px 2px;
 	font-family: inherit;
 	font-size: var(--ui-font-size-sm);
 	line-height: 20px;
 }
 
-.gui-cm-composer--welcome .gui-cm-placeholder {
+.gui-composer-editor--welcome .gui-composer-editor-placeholder {
 	padding: 14px 4px;
 	font-size: 14px;
 	line-height: 1.625;

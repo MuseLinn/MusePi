@@ -104,7 +104,7 @@ export function isComposerRedirectTarget(event: Event): boolean {
 
 /** The composer a redirect should land in: the on-screen editor contentDOM. */
 export function findComposerEditor(): HTMLElement | null {
-	for (const host of document.querySelectorAll<HTMLElement>(".gui-cm-composer[data-composer-input]")) {
+	for (const host of document.querySelectorAll<HTMLElement>(".gui-composer-editor[data-composer-input]")) {
 		if (host.getClientRects().length === 0) continue;
 		const content = host.querySelector<HTMLElement>(".cm-content");
 		if (content) return content;

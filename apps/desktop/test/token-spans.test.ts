@@ -1,6 +1,6 @@
 import "./dom-shim";
 import { describe, expect, test } from "bun:test";
-import { parseHighlightSpans } from "../src/components/composer/input-highlight";
+import { parseHighlightSpans } from "../src/components/composer/token-spans";
 
 /**
  * Contract (TUI editor parity): the overlay paints ONLY live syntax —

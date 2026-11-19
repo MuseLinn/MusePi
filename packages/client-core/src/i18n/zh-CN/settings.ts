@@ -1334,6 +1334,8 @@ export const settings = {
 	"settings.connectorsStatusConnecting": "连接中",
 	"settings.connectorsStatusDisconnected": "未连接",
 	"settings.connectorsExamples": "试试这样用",
+	"settings.connectorsCopyExample": "复制示例",
+	"settings.connectorsUseExample": "写入输入框",
 	"settings.connectorsDocs": "查看文档",
 	"Test connection": "测试连接",
 	"{server} · {count} tools": "{server} · {count} 个工具",

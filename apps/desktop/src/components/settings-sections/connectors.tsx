@@ -9,10 +9,12 @@
  * an OAuth connector, immediately starts the same browser flow the MCP section
  * uses. The page never renders an authorization URL, token, or static header.
  */
+
 import { pushActionToast, t, useLocale } from "@musepi/client-core";
+import { Copy, CornerDownLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { openExternalUrl } from "../../lib/electron";
+import { copyToClipboard, openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
 import { DialogFrame } from "../DialogFrame";
@@ -35,6 +37,7 @@ interface CatalogConnector {
 	verified?: "oauth" | "none" | "token" | "needs-app";
 	docsUrl?: string;
 	examples?: string[];
+	examplesZh?: string[];
 	kind: "mcp" | "cli";
 	cliAuth: boolean;
 	server?: { transport: "http" | "sse" | "stdio"; url?: string; command?: string };
@@ -160,7 +163,14 @@ function connectorAuthLabel(connector: CatalogConnector): string {
 	return t("settings.connectorsAuthNone");
 }
 
-export function ConnectorsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export function ConnectorsSection({
+	rpc,
+	onApplyPrompt,
+}: {
+	rpc: RpcClient | null;
+	/** Hand an example to the composer: the host closes settings and inserts it. */
+	onApplyPrompt?: (text: string) => void;
+}): ReactNode {
 	const [connectors, setConnectors] = useState<CatalogConnector[] | null>(null);
 	const [query, setQuery] = useState("");
 	const [detailId, setDetailId] = useState<string | null>(null);
@@ -269,9 +279,12 @@ ${connector.category ?? ""}`.toLowerCase();
 	const visible = useMemo(() => {
 		if (!connectors) return [];
 		const needle = query.trim().toLowerCase();
-		if (!needle) return connectors;
-		return connectors.filter(connector => searchable(connector).includes(needle));
-	}, [connectors, query]);
+		return connectors.filter(
+			connector =>
+				(category === null || (connector.category ?? "") === category) &&
+				(needle === "" || searchable(connector).includes(needle)),
+		);
+	}, [connectors, query, category]);
 
 	/**
 	 * The page's opening section. A catalog that marks nothing falls back to
@@ -609,6 +622,15 @@ ${connector.category ?? ""}`.toLowerCase();
 		const details = useChineseDescription ? (connector.detailsZh ?? connector.details) : connector.details;
 		const description =
 			useChineseDescription && connector.descriptionZh ? connector.descriptionZh : connector.description;
+		const exampleList =
+			useChineseDescription && connector.examplesZh?.length ? connector.examplesZh : connector.examples;
+		const copyExample = (example: string): void => {
+			void copyToClipboard(example).then(copied => {
+				if (copied) {
+					pushActionToast({ kind: "success", message: t("settings.copied"), dedupeKey: "connector:example" });
+				}
+			});
+		};
 		const probeButton = probeable ? (
 			<button
 				type="button"
@@ -919,15 +941,37 @@ ${connector.category ?? ""}`.toLowerCase();
 						</div>
 					)}
 					{details && <p className="text-[12px] leading-relaxed text-[var(--color-text-muted)]">{details}</p>}
-					{connector.examples?.length ? (
+					{exampleList?.length ? (
 						<div className="gui-connector-detail-block">
 							<div className="text-[11.5px] text-[var(--color-text-muted)]">
 								{t("settings.connectorsExamples")}
 							</div>
-							<ul className="space-y-1">
-								{connector.examples.map(example => (
-									<li key={example} className="rounded-md bg-[var(--color-bg-elevated)] px-2 py-1 text-[12px]">
-										{example}
+							<ul className="gui-connector-examples">
+								{exampleList.map(example => (
+									<li key={example} className="gui-connector-example">
+										<span className="gui-connector-example-text">{example}</span>
+										<span className="gui-connector-example-actions">
+											{onApplyPrompt && (
+												<button
+													type="button"
+													className="gui-connector-example-action"
+													title={t("settings.connectorsUseExample")}
+													aria-label={t("settings.connectorsUseExample")}
+													onClick={() => onApplyPrompt(example)}
+												>
+													<CornerDownLeft size={13} />
+												</button>
+											)}
+											<button
+												type="button"
+												className="gui-connector-example-action"
+												title={t("settings.connectorsCopyExample")}
+												aria-label={t("settings.connectorsCopyExample")}
+												onClick={() => copyExample(example)}
+											>
+												<Copy size={13} />
+											</button>
+										</span>
 									</li>
 								))}
 							</ul>
@@ -1034,22 +1078,22 @@ ${connector.category ?? ""}`.toLowerCase();
 			) : (
 				<>
 					{connected.length > 0 && category === null && query.trim() === "" && (
-						<>
+						<div className="gui-connector-section">
 							<h3 className="gui-settings-section-title">{t("settings.connectorsStatusConnected")}</h3>
 							<div className="gui-connector-grid">{connected.map(renderRow)}</div>
-						</>
+						</div>
 					)}
 					{featured.length > 0 && category === null && (
-						<>
+						<div className="gui-connector-section">
 							<h3 className="gui-settings-section-title">{t("settings.connectorsFeatured")}</h3>
 							<div className="gui-connector-grid">{featured.map(renderRow)}</div>
-						</>
+						</div>
 					)}
 					{groups.map(group => {
 						const preview = category === null && query.trim() === "";
 						const rows = preview ? group.items.slice(0, CONNECTOR_GROUP_PREVIEW) : group.items;
 						return (
-							<div key={group.key || "other"} className="mt-4">
+							<div key={group.key || "other"} className="gui-connector-section">
 								<h3 className="gui-settings-section-title">{categoryLabel(group.key)}</h3>
 								<div className="gui-connector-grid">{rows.map(renderRow)}</div>
 								{preview && group.items.length > CONNECTOR_GROUP_PREVIEW && (

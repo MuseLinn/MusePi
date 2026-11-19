@@ -40,13 +40,13 @@ beforeEach(() => {
 	document.body.innerHTML = `
 		<div class="gui-chat-body">
 			<div class="gui-transcript" id="transcript">some transcript text</div>
-			<div class="gui-cm-composer" data-composer-input=""></div>
+			<div class="gui-composer-editor" data-composer-input=""></div>
 			<button id="btn">send</button>
 			<input id="field" />
 		</div>`;
 	view = new EditorView({
 		state: EditorState.create({ doc: "" }),
-		parent: document.querySelector(".gui-cm-composer")!,
+		parent: document.querySelector(".gui-composer-editor")!,
 	});
 	// happy-dom has no layout; a zero-rect element reads as "not on screen" and
 	// the redirect would skip it, so every fixture element must report a rect.
@@ -115,7 +115,7 @@ describe("composer input redirect", () => {
 	});
 
 	it("finds no composer when the session editor is off screen", () => {
-		const host = document.querySelector<HTMLElement>(".gui-cm-composer")!;
+		const host = document.querySelector<HTMLElement>(".gui-composer-editor")!;
 		host.getClientRects = () => [] as unknown as DOMRectList;
 		expect(findComposerEditor()).toBeNull();
 	});

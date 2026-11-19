@@ -22,6 +22,7 @@ import type { JobsRpc } from "../../lib/async-jobs";
 import { attachmentReferenceLine, composePromptWithAttachments, uploadAttachment } from "../../lib/attachment-upload";
 import { useBackLayer } from "../../lib/back-stack";
 import type { SessionClient } from "../../lib/client";
+import { composerPlaceholder } from "../../lib/composer-placeholder";
 import { draftKey, readDraft, writeDraft } from "../../lib/drafts";
 import { haptic } from "../../lib/haptics";
 import type { PendingAttachment } from "../../lib/image";
@@ -1383,13 +1384,15 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 							placeholder={
 								shownSuggestion !== null
 									? ""
-									: readOnly
-										? t("composer.readOnlySessionWatching")
-										: canPrompt
-											? isMobileSurface()
-												? t("composer.askAnythingShort")
-												: t("composer.askAnythingCommands.info")
-											: t("composer.waitingSession")
+									: composerPlaceholder({
+											surface: draftSession ? "welcome" : "session",
+											compact: isMobileSurface(),
+											readOnly,
+											waiting: !canPrompt && !readOnly,
+											working: busy,
+											attachmentCount: pending.length + files.length,
+											hasConversation: !empty,
+										})
 							}
 							disabled={!canPrompt}
 							rows={1}

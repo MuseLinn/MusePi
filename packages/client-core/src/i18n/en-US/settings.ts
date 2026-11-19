@@ -1405,6 +1405,8 @@ export const settings = {
 	"settings.connectorsStatusConnecting": "Connecting",
 	"settings.connectorsStatusDisconnected": "Not connected",
 	"settings.connectorsExamples": "Try it",
+	"settings.connectorsCopyExample": "Copy example",
+	"settings.connectorsUseExample": "Use in composer",
 	"settings.connectorsDocs": "View docs",
 	"Test connection": "Test connection",
 	"{server} · {count} tools": "{server} · {count} tools",

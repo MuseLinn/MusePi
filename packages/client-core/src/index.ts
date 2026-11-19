@@ -165,6 +165,7 @@ export {
 	jobTypeLabel,
 	useAsyncJobs,
 } from "./lib/async-jobs";
+export { type ComposerPlaceholderInput, composerPlaceholder } from "./lib/composer-placeholder";
 export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
 export { loadMarketplaceDetailPreference, saveMarketplaceDetailPreference } from "./lib/marketplace-preferences";

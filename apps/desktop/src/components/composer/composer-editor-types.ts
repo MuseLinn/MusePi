@@ -7,6 +7,12 @@
  * completion, paste and draft path. DOM-specific helpers (`autosize`, pasted
  * text insertion) branch on `insertText` / `autosize` instead of casting.
  */
+/** Caret or selection in document offsets. */
+export interface ComposerSelection {
+	start: number;
+	end: number;
+}
+
 export interface ComposerEditorHandle {
 	readonly value: string;
 	readonly selectionStart: number;

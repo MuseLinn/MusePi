@@ -1,6 +1,5 @@
 import "./dom-shim";
 import { describe, expect, test } from "bun:test";
-import { parseHighlightSpans } from "../src/components/composer/input-highlight";
 import {
 	expandMentionTokens,
 	makeMentionToken,
@@ -10,6 +9,7 @@ import {
 	retargetMentionTokens,
 	spliceMentionToken,
 } from "../src/components/composer/mention-token";
+import { parseHighlightSpans } from "../src/components/composer/token-spans";
 
 /**
  * Contract (attachment mention, Kimi desktop parity, v2 grammar): a chip's

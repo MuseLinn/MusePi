@@ -1077,6 +1077,49 @@ function renderCustomMessage({
 			</Row>
 		);
 	}
+	if (customType === "skill_catalog") {
+		// 技能目录时间线注入行：安装/更新/删除技能或目录变化后，会话落一条
+		// display-only custom_message（模型看的是重建后的 base prompt）。
+		const change =
+			details !== null && typeof details === "object"
+				? (details as { added?: unknown; removed?: unknown; changed?: unknown })
+				: {};
+		const names = (value: unknown): string[] =>
+			Array.isArray(value) ? value.filter((name): name is string => typeof name === "string") : [];
+		const added = names(change.added);
+		const removed = names(change.removed);
+		const changed = names(change.changed);
+		return (
+			<Row kind="custom" gutter="" title={timestamp}>
+				<div className="tr-tool-registry" role="status">
+					<span className="tr-tool-registry-chip">{t("general.skillCatalogUpdated")}</span>
+					{added.length > 0 && (
+						<span className="tr-tool-registry-delta tr-tool-registry-delta--add">
+							{t("general.skillCatalogAddedWithCount", { count: String(added.length) })}
+						</span>
+					)}
+					{removed.length > 0 && (
+						<span className="tr-tool-registry-delta tr-tool-registry-delta--remove">
+							{t("general.skillCatalogRemovedWithCount", { count: String(removed.length) })}
+						</span>
+					)}
+					{changed.length > 0 && (
+						<span className="tr-tool-registry-delta">
+							{t("general.skillCatalogChangedWithCount", { count: String(changed.length) })}
+						</span>
+					)}
+					<span className="tr-tool-registry-names" title={[...added, ...removed, ...changed].join(", ")}>
+						{t("general.skillCatalogNames")}:{" "}
+						{[
+							...added.map(name => `+${name}`),
+							...removed.map(name => `−${name}`),
+							...changed.map(name => `~${name}`),
+						].join(" ")}
+					</span>
+				</div>
+			</Row>
+		);
+	}
 	if (!display) return null;
 	return (
 		<Row kind="custom" gutter="" title={timestamp}>

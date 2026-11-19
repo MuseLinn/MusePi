@@ -1,4 +1,4 @@
-import type { ComposerEditorHandle } from "./composer/editor-types";
+import type { ComposerEditorHandle } from "./composer/composer-editor-types";
 import { getComposerHeightLimit, isComposerContentCapped } from "./composer-height-limit";
 
 const LINE_PX = 20;

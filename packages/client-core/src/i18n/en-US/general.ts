@@ -761,6 +761,11 @@ export const general = {
 	"general.toolsAddedWithCount": "+{count} added",
 	"general.toolsRemovedWithCount": "−{count} removed",
 	"general.toolRegistryNames": "Tools affected",
+	"general.skillCatalogUpdated": "Skill catalog updated",
+	"general.skillCatalogAddedWithCount": "+{count} added",
+	"general.skillCatalogRemovedWithCount": "−{count} removed",
+	"general.skillCatalogChangedWithCount": "~{count} changed",
+	"general.skillCatalogNames": "Skills affected",
 	"general.modelSupportsTools": "Model supports tools",
 	// Surface tab strip close button (files pane multi-instance tabs).
 	"general.closeOtherTabs": "Close other tabs",

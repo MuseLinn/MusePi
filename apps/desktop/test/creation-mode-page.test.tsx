@@ -204,7 +204,7 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		await settle(); // 等模板列表 RPC 回填并渲染 rail
 		// opendesign 铁律：composer 是创建页永久锚点——template chip 选中时
 		// 输入框常驻可输入，不再被 rail 替换/卸载。
-		expect(document.body.querySelector(".gui-cm-composer .cm-content")).not.toBeNull();
+		expect(document.body.querySelector(".gui-composer-editor .cm-content")).not.toBeNull();
 		// rail 落在 composer 之下、设计体系 rail 之上（DOM 顺序断言）。
 		const form = document.body.querySelector(".gui-welcome-form")!;
 		const rail = document.body.querySelector("[data-testid='gui-template-rail']")!;
@@ -232,12 +232,12 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		const root = await renderWelcome(makeRpc());
 		await settle();
 		setComposerDoc("写了一半的需求");
-		const before = document.body.querySelector(".gui-cm-composer")!;
+		const before = document.body.querySelector(".gui-composer-editor")!;
 		await act(async () => {
 			chipButton(t("creation.creationTabTemplate")).click();
 		});
 		await settle();
-		const after = document.body.querySelector(".gui-cm-composer")!;
+		const after = document.body.querySelector(".gui-composer-editor")!;
 		// 同一节点（未卸载重挂），值不丢——先写需求再点模板的场景成立。
 		expect(after).toBe(before);
 		expect(composerDoc()).toBe("写了一半的需求");
@@ -311,7 +311,7 @@ describe("M3.7a 模式页骨架契约", () => {
 		// 只有一个(欢迎页 composer 本体)。
 		expect(document.body.querySelector(".gui-creation-backdrop")).toBeNull();
 		expect(document.body.querySelector(".gui-creation-panel")).toBeNull();
-		expect(document.body.querySelectorAll(".gui-cm-composer")).toHaveLength(1);
+		expect(document.body.querySelectorAll(".gui-composer-editor")).toHaveLength(1);
 		// 词表侧:creation 域不再持有这两个字段的键。
 		expect("creation project name" in creationZh).toBe(false);
 		expect("creation workspace" in creationZh).toBe(false);

@@ -76,15 +76,19 @@ function catalogResponse(): Record<string, unknown> {
 				id: "alpha",
 				name: "Alpha Meetings",
 				description: "Schedule meetings",
+				category: "dev",
 				server: { transport: "http", url: "https://alpha.example/mcp" },
 				authMode: "oauth",
 				enabled: false,
 				status: "disconnected",
+				examples: ["Summarize the pull requests waiting on my review"],
+				examplesZh: ["汇总等着我审的拉取请求"],
 			},
 			{
 				id: "beta",
 				name: "Beta Docs",
 				description: "Search documents",
+				category: "docs",
 				server: { transport: "http", url: "https://beta.example/mcp" },
 				authMode: "none",
 				enabled: true,
@@ -94,6 +98,7 @@ function catalogResponse(): Record<string, unknown> {
 				id: "echo-cli",
 				name: "Echo CLI",
 				description: "Managed CLI",
+				category: "dev",
 				kind: "cli",
 				cliAuth: true,
 				authMode: "none",
@@ -105,6 +110,7 @@ function catalogResponse(): Record<string, unknown> {
 				id: "delta",
 				name: "Delta Stdio",
 				description: "Local process",
+				category: "dev",
 				server: { transport: "stdio", command: "node" },
 				authMode: "none",
 				tokenSet: true,
@@ -115,6 +121,7 @@ function catalogResponse(): Record<string, unknown> {
 				id: "gamma",
 				name: "Gamma API",
 				description: "Token protected",
+				category: "dev",
 				server: { transport: "http", url: "https://gamma.example/mcp" },
 				authMode: "token",
 				tokenSet: false,
@@ -130,12 +137,12 @@ function catalogResponse(): Record<string, unknown> {
 
 const mounted = new Set<Root>();
 
-async function mount(fake: FakeRpc): Promise<HTMLElement> {
+async function mount(fake: FakeRpc, props: { onApplyPrompt?: (text: string) => void } = {}): Promise<HTMLElement> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
 	mounted.add(root);
-	await act(async () => root.render(createElement(ConnectorsSection, { rpc: asRpc(fake) })));
+	await act(async () => root.render(createElement(ConnectorsSection, { rpc: asRpc(fake), ...props })));
 	await flush();
 	return host;
 }
@@ -208,6 +215,37 @@ describe("connector settings", () => {
 		await flush(2);
 		expect(host.textContent).toContain("Beta Docs");
 		expect(host.textContent).not.toContain("Alpha Meetings");
+	});
+
+	test("applies the localized example to the composer", async () => {
+		const fake = new FakeRpc();
+		fake.handlers.set("connectors.catalog.list", () => catalogResponse());
+		const applied: string[] = [];
+		const host = await mount(fake, { onApplyPrompt: text => applied.push(text) });
+
+		const detail = await openDetail(host, "Alpha Meetings");
+		expect(detail.textContent).toContain("汇总等着我审的拉取请求");
+		const use = [...detail.querySelectorAll("button")].find(
+			candidate => candidate.getAttribute("aria-label") === "写入输入框",
+		);
+		expect(use).toBeDefined();
+		await act(async () => use!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(applied).toEqual(["汇总等着我审的拉取请求"]);
+	});
+
+	test("filters the catalog by category chip", async () => {
+		const fake = new FakeRpc();
+		fake.handlers.set("connectors.catalog.list", () => catalogResponse());
+		const host = await mount(fake);
+
+		await act(async () => button(host, "文档与知识").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await flush(2);
+		expect(host.textContent).toContain("Beta Docs");
+		expect(host.textContent).not.toContain("Alpha Meetings");
+
+		await act(async () => button(host, "全部").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await flush(2);
+		expect(host.textContent).toContain("Alpha Meetings");
 	});
 
 	test("connect starts the shared OAuth flow with the connector server name", async () => {

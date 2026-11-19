@@ -1,4 +1,4 @@
-import { BlurText, DotMatrixMark, t } from "@musepi/client-core";
+import { BlurText, composerPlaceholder, DotMatrixMark, t } from "@musepi/client-core";
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
 import {
 	composeDisplayContextPrompt,
@@ -62,7 +62,7 @@ import {
 import { VoiceButton, VoiceStatusStrip } from "./composer/action-buttons";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { imageChipCount, insertPastedImageMentions } from "./composer/attachment-mention-paste";
-import { CodeMirrorComposer } from "./composer/CodeMirrorComposer";
+import { ComposerEditor } from "./composer/ComposerEditor";
 import { ConnectorChip, ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { DesignSystemRail } from "./composer/design-system-rail";
@@ -1986,7 +1986,7 @@ export function HeroComposer({
 									/>
 								)}
 								<div className="gui-ta-stack">
-									<CodeMirrorComposer
+									<ComposerEditor
 										ref={el => {
 											taRef.current = el;
 											compAnchorRef(el?.dom ?? null);
@@ -2162,11 +2162,17 @@ export function HeroComposer({
 										}}
 										placeholder={
 											placeholder ??
-											(designActive && railState
-												? railState.placeholder
-												: isDesignArmed
-													? t("composer.designEmptyPlaceholder")
-													: t("composer.askAnythingCommands.info"))
+											composerPlaceholder({
+												surface: "welcome",
+												working: busy === true,
+												attachmentCount: attachments.length,
+												designPlaceholder:
+													designActive && railState && railState.placeholder
+														? railState.placeholder
+														: isDesignArmed
+															? t("composer.designEmptyPlaceholder")
+															: null,
+											})
 										}
 										spellCheck={(() => {
 											try {
