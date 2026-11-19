@@ -28,7 +28,7 @@ lang: zh-CN
 | 产品与实现契约 | `docs/` |
 | 模块所有权与局部不变量 | 包 README 或 `DOCUMENTATION.md` |
 | 计划、审计与验证记录 | `docs/review/` |
-| 已完结或被取代的计划 | `docs/archive/` |
+| 已完结或被取代的计划 | 删除；历史由 git 记录 |
 
 代码、脚本、配置、目录结构和 `--help` 已能回答许多查询。文档应记录非显然契约、理由、副作用和工作流，不要缓存可以低成本查询的事实。
 
@@ -38,7 +38,7 @@ lang: zh-CN
 
 长文档不必然需要拆分。读者必须反复跳过无关内容、受众不同，或某个独立契约可以靠近所属模块时，才拆分。不要把必须一起阅读的完整流程切成碎片。
 
-每篇文档开头给读者地图：本文负责什么、不负责什么、下一步应看哪篇。历史叙述归 ADR、changelog 或归档计划，不放在当前契约的开头。
+每篇文档开头给读者地图：本文负责什么、不负责什么、下一步应看哪篇。历史叙述归 ADR 与 changelog，不放在当前契约的开头。
 
 ## 元数据
 
@@ -59,13 +59,13 @@ scope:
 字段含义：
 
 - `title`：站点与读者可见标题；正文仍保留一个 H1。
-- `status`：`living`、`reference`、`draft` 或 `archived`。
+- `status`：`living`、`reference` 或 `draft`。
 - `summary`：让读者判断本页是否回答其问题的一句话。
 - `scope`： owning 代码或文档路径，不是所有消费者的清单。
 - `layout`：文档站页面使用 `default`。
 - `lang`：中文页标 `zh-CN`，英文页可省略。
 
-`living` 表示 scope 内代码变化时必须同步复核；`reference` 是稳定背景；`draft` 不是当前契约；`archived` 是历史材料，不再更新活状态。不要手维护“最后更新日期”，时间序列由 git 记录。
+`living` 表示 scope 内代码变化时必须同步复核；`reference` 是稳定背景；`draft` 不是当前契约；已完结或被取代的材料直接删除，不再保留成第二套文档，历史由 git 记录。不要手维护“最后更新日期”，时间序列由 git 记录。
 
 运行 `bun scripts/check-docs.ts`。既有旧文件可渐进迁移，新文件和已纳管核心文档必须有合法元数据。迁出旧状态时应补齐元数据，而不是放宽检查器。
 
@@ -86,7 +86,7 @@ bun run verify-translation-pairing docs/example
 bun run verify-translation-pairing --write docs/example
 ```
 
-写入命令只记录指定配对的 hash。不要为了清理旧债务执行全量写入，把无关文件混入当前改动。临时或已闭合文档应删除或归档，不作为活文档继续翻译。
+写入命令只记录指定配对的 hash。不要为了清理旧债务执行全量写入，把无关文件混入当前改动。临时或已闭合文档直接删除，不作为活文档继续翻译。
 
 `.agents/` 下的 agent 专用规则以及 `scripts/verify-translation-pairing.ts` 明确排除的文件保持英文。每个包都有中英文 README，既有例外由 `scripts/verify-package-readmes.ts` 记录。
 

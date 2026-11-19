@@ -36,6 +36,7 @@
 
 import { randomUUID } from "node:crypto";
 import { getMCPConfigPath, logger, withTimeout } from "@musepi/pi-utils";
+import { loadConnectorCatalog } from "../../connectors/catalog";
 import { expandEnvVarsDeep } from "../../discovery/helpers";
 import { connectToServer, disconnectServer } from "../../mcp/client";
 import { loadAllMCPConfigs } from "../../mcp/config";
@@ -155,6 +156,7 @@ export class McpOAuthService implements DaemonService {
 		"mcp.oauth.callback": "callback",
 		"mcp.oauth.device.start": "deviceStart",
 		"mcp.oauth.device.poll": "devicePoll",
+		"mcp.oauth.device.cancel": "deviceCancel",
 	} as const;
 
 	readonly #deps: McpOAuthServiceDeps;
@@ -401,6 +403,20 @@ export class McpOAuthService implements DaemonService {
 		}
 	}
 
+	/**
+	 * RPC mcp.oauth.device.cancel：放弃一条设备码流程。
+	 *
+	 * Closing the sign-in surface means the person stopped walking away from
+	 * the code; forgetting the record also keeps a later poll from finishing a
+	 * grant they left behind.
+	 */
+	deviceCancel(params: { flowId?: unknown }): { ok: true } {
+		const flowId = readString(params?.flowId);
+		if (!flowId) throw new Error("flowId required");
+		this.#deviceFlows.delete(flowId);
+		return { ok: true };
+	}
+
 	/** RPC mcp.oauth.cancel：中止一条仍在等待浏览器回调的流程。 */
 	cancel(params: { flowId?: unknown }): McpOAuthStatus & { ok: true } {
 		const record = this.#record(params);
@@ -524,7 +540,8 @@ export class McpOAuthService implements DaemonService {
 	}> {
 		const cwd = this.#deps.cwd();
 		const { configs } = await loadAllMCPConfigs(cwd);
-		const config = configs[name] ?? (await this.#readConfiguredServer(name, cwd));
+		const config =
+			configs[name] ?? (await this.#readConfiguredServer(name, cwd)) ?? (await this.#catalogServer(name));
 		if (!config) {
 			const userPath = getMCPConfigPath("user", cwd);
 			const projectPath = getMCPConfigPath("project", cwd);
@@ -555,6 +572,35 @@ export class McpOAuthService implements DaemonService {
 			if (candidate) return candidate;
 		}
 		return undefined;
+	}
+
+	/**
+	 * A connector is authorized before it is enabled, so it is not in any MCP
+	 * config yet. The catalog still holds its endpoint and pinned OAuth hints,
+	 * which is all a flow needs; the grant is keyed by the same URL either way.
+	 */
+	async #catalogServer(name: string): Promise<MCPHttpServerConfig | MCPSseServerConfig | undefined> {
+		if (!name.startsWith("connector:")) return undefined;
+		const id = name.slice("connector:".length);
+		const { entries } = await loadConnectorCatalog();
+		const entry = entries.find(candidate => candidate.id === id);
+		const server = entry?.server;
+		if (!entry || (server?.type !== "http" && server?.type !== "sse")) return undefined;
+		const oauth = entry.oauth;
+		return {
+			type: server.type,
+			url: server.url,
+			...(server.headers ? { headers: server.headers } : {}),
+			oauth: {
+				...(oauth?.clientId ? { clientId: oauth.clientId } : {}),
+				...(oauth?.authorizationUrl ? { authorizationUrl: oauth.authorizationUrl } : {}),
+				...(oauth?.tokenUrl ? { tokenUrl: oauth.tokenUrl } : {}),
+				...(oauth?.deviceAuthorizationUrl ? { deviceAuthorizationUrl: oauth.deviceAuthorizationUrl } : {}),
+				...(oauth?.scopes ? { scopes: oauth.scopes } : {}),
+				...(oauth?.callbackPort ? { callbackPort: oauth.callbackPort } : {}),
+				...(oauth?.callbackPath ? { callbackPath: oauth.callbackPath } : {}),
+			},
+		};
 	}
 
 	/**
@@ -589,6 +635,12 @@ export class McpOAuthService implements DaemonService {
 		}
 		if (!endpoints) {
 			throw new Error(`Could not discover OAuth endpoints for "${name}" (${config.url})`);
+		}
+		// A catalog may pin the device endpoint when the vendor publishes no
+		// metadata to discover it from (GitHub documents it, but not as
+		// authorization-server metadata).
+		if (!endpoints.deviceAuthorizationUrl && config.oauth?.deviceAuthorizationUrl) {
+			endpoints = { ...endpoints, deviceAuthorizationUrl: config.oauth.deviceAuthorizationUrl };
 		}
 		return endpoints;
 	}

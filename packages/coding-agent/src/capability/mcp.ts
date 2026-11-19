@@ -60,6 +60,8 @@ export interface MCPServer {
 		redirectUri?: string;
 		callbackPort?: number;
 		callbackPath?: string;
+		/** RFC 8628 device endpoint, when the vendor documents one explicitly. */
+		deviceAuthorizationUrl?: string;
 		prompt?: string;
 	};
 	/** Transport type */

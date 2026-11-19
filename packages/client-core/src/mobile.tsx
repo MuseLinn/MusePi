@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./app";
 import { DotMatrixMark } from "./components/shell/DotMatrixMark";
 import "./styles/tokens.css";
+import "./styles/composer-editor.css";
 import "./styles/fonts.css";
 import "./styles/base.css";
 import "./styles/mobile.css";

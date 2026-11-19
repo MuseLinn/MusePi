@@ -1,0 +1,125 @@
+/*
+ * Shared CodeMirror composer base (desktop + mobile).
+ *
+ * The host owns layout; CodeMirror owns text, caret, wrapping and IME. Token
+ * paint classes come from the caller's marks, so this file stays generic.
+ */
+
+.musepi-composer-editor {
+	position: relative;
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-width: 0;
+	width: 100%;
+	color: var(--color-text, var(--fg));
+}
+
+.musepi-composer-editor .cm-editor {
+	flex: 1 1 auto;
+	min-height: 0;
+	background: transparent;
+	color: inherit;
+	font-family: inherit;
+	outline: none;
+}
+
+.musepi-composer-editor .cm-scroller {
+	overflow-y: auto;
+	scrollbar-width: none;
+	font-family: inherit;
+}
+
+.musepi-composer-editor .cm-scroller::-webkit-scrollbar {
+	display: none;
+}
+
+.musepi-composer-editor .cm-content {
+	min-height: calc(2 * 20px + 12px);
+	padding: 6px 2px;
+	font-family: inherit;
+	font-size: var(--ui-font-size-sm);
+	line-height: 20px;
+	caret-color: var(--color-text, var(--accent));
+}
+
+.musepi-composer-editor--welcome .cm-content {
+	min-height: calc(3 * 1.625em + 28px);
+	padding: 14px 4px;
+	font-size: 14px;
+	line-height: 1.625;
+}
+
+.musepi-composer-editor--compact .cm-content {
+	min-height: 34px;
+	padding: 6px 8px;
+	font-size: var(--ui-font-size);
+	line-height: 22px;
+}
+
+.musepi-composer-editor .cm-line {
+	padding: 0;
+}
+
+.musepi-composer-editor .cm-editor.cm-focused {
+	outline: none;
+}
+
+.musepi-composer-editor .cm-selectionBackground,
+.musepi-composer-editor .cm-content ::selection {
+	background: color-mix(in oklab, var(--color-accent, var(--accent)) 28%, transparent);
+}
+
+.musepi-composer-editor .cm-cursor,
+.musepi-composer-editor .cm-dropCursor {
+	border-left-color: var(--color-text, var(--fg));
+}
+
+.musepi-composer-editor[data-focused="1"] {
+	flex: 1;
+	max-height: none !important;
+}
+
+.musepi-composer-editor[data-focused="1"] .cm-editor {
+	height: 100%;
+}
+
+.musepi-composer-editor[data-editable="0"] {
+	opacity: 0.55;
+}
+
+.musepi-composer-editor__placeholder {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+	user-select: none;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	color: var(--color-text-faint, var(--fg-faint));
+	opacity: 1;
+	padding: 6px 2px;
+	font-family: inherit;
+	font-size: var(--ui-font-size-sm);
+	line-height: 20px;
+}
+
+.musepi-composer-editor--welcome .musepi-composer-editor[data-editable="0"] {
+	opacity: 0.55;
+}
+
+.musepi-composer-editor__placeholder {
+	padding: 14px 4px;
+	font-size: 14px;
+	line-height: 1.625;
+}
+
+.musepi-composer-editor--compact .musepi-composer-editor[data-editable="0"] {
+	opacity: 0.55;
+}
+
+.musepi-composer-editor__placeholder {
+	padding: 6px 8px;
+	font-size: var(--ui-font-size);
+	line-height: 22px;
+}

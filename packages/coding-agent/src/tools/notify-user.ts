@@ -40,6 +40,11 @@ export class NotifyUserTool implements AgentTool<typeof notifyUserSchema, Notify
 	readonly parameters = notifyUserSchema;
 	readonly strict = true;
 	readonly loadMode = "essential";
+	/** Posting a notice has no side effect beyond the message the transcript
+	 *  already persists, so it must not take the pre-execution durable flush:
+	 *  a wedged journal write would otherwise block the calls queued behind
+	 *  it for a purely visual update. */
+	readonly requiresDurableIntent = false;
 	readonly intent = (args: Partial<NotifyUserParams>) => args.title ?? "posting a progress update";
 
 	constructor(_session: ToolSession) {

@@ -78,7 +78,10 @@
 		"morphicons": "^1.7.1",
 		"react": "19.2.7",
 		"react-dom": "19.2.7",
-		"zod": "^4.6.7"
+		"zod": "^4.6.7",
+		"@codemirror/commands": "^6.11.0",
+		"@codemirror/state": "^6.7.1",
+		"@codemirror/view": "6.43.14"
 	},
 	"devDependencies": {
 		"@happy-dom/global-registrator": "^20.12.0",

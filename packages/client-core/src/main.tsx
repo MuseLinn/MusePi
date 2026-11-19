@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./app";
 import { initTooltips } from "./lib/tooltips";
 import "./styles/tokens.css";
+import "./styles/composer-editor.css";
 import "./styles/base.css";
 import "./styles/overlay-fallback.css";
 import * as i18n from "./i18n";

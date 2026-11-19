@@ -24,7 +24,7 @@
 
 ---
 
-MusePi combines a coding agent, an Electron workbench, a terminal UI, and remote clients. The desktop app includes an editable file workspace, review tools, a managed browser, a desktop pet, and a capability center for first-party and third-party Cordis plugins. MusePi is independently versioned; reference projects and upstream lineage are recorded in [docs/archive/upstream-lineage.md](docs/archive/upstream-lineage.md).
+MusePi combines a coding agent, an Electron workbench, a terminal UI, and remote clients. The desktop app includes an editable file workspace, review tools, a managed browser, a desktop pet, and a capability center for first-party and third-party Cordis plugins. MusePi is independently versioned; reference projects are absorption sources only, never version-alignment targets.
 
 ## Install
 
@@ -159,4 +159,3 @@ Run the release workflow only for an explicit release request. Version and chang
 
 - [`docs/`](docs/): product and implementation documentation, with bilingual pairs where required.
 - [`packages/coding-agent/CHANGELOG.musepi.md`](packages/coding-agent/CHANGELOG.musepi.md): release notes.
-- [`docs/archive/upstream-lineage.md`](docs/archive/upstream-lineage.md): upstream lineage and reference-absorption history.

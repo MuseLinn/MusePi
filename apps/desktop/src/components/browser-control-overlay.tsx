@@ -23,6 +23,9 @@ const EXIT_MS = 180;
 export function BrowserControlOverlay({
 	activity,
 	onTakeover,
+	onHandBack,
+	userOwned = false,
+	userOwnedTitle,
 	onReveal,
 	now,
 	frameRect,
@@ -31,7 +34,15 @@ export function BrowserControlOverlay({
 	visible,
 }: {
 	activity: BrowserControlActivity | null;
-	onTakeover(): void | Promise<void>;
+	/** Hand the tab to the user. The host receives which tab, so plugins can
+	 *  react without re-deriving it from the activity ledger. */
+	onTakeover(info: { tabId: string; url: string; title: string }): void | Promise<void>;
+	/** Give the tab back to the agent after a takeover. */
+	onHandBack?(): void | Promise<void>;
+	/** The user holds this tab: show a persistent takeover pill instead of the
+	 *  agent capsule, so the handoff stays visible and reversible. */
+	userOwned?: boolean;
+	userOwnedTitle?: string;
 	onReveal?(): void;
 	now?: number;
 	frameRect?: { x: number; y: number; width: number; height: number };
@@ -72,6 +83,52 @@ export function BrowserControlOverlay({
 		return () => window.clearInterval(timer);
 	}, [active, now]);
 
+	// User-owned: the agent no longer controls this tab. Keep the handoff
+	// visible and give it back explicitly; nothing resumes on its own.
+	if (userOwned && !(displayActivity && active)) {
+		return typeof document === "undefined"
+			? null
+			: createPortal(
+					<div
+						className="gui-browser-control-frame"
+						data-browser-control="user"
+						style={{
+							position: "fixed",
+							left: frameRect?.x ?? 5,
+							top: frameRect?.y ?? 5,
+							width: frameRect?.width ?? "calc(100% - 10px)",
+							height: frameRect?.height ?? "calc(100% - 10px)",
+							zIndex: 1000,
+						}}
+					>
+						<div className="gui-browser-control-card gui-liquid-glass">
+							<span className="gui-browser-control-leading" aria-hidden>
+								<Icon name="user" className="h-4 w-4" />
+							</span>
+							<span className="gui-browser-control-copy">
+								<span className="gui-browser-control-title" role="status" aria-live="polite">
+									{t("tools.userOwnedTab")}
+								</span>
+								<span className="gui-browser-control-summary">
+									{userOwnedTitle ?? t("tools.userOwnedHint")}
+								</span>
+							</span>
+							<button
+								type="button"
+								className="gui-browser-control-takeover"
+								aria-label={t("tools.browserHandBack")}
+								title={t("tools.browserHandBackHint")}
+								disabled={pending}
+								onClick={() => void handBack()}
+							>
+								<Icon name="robot" className="h-3.5 w-3.5" />
+								<span>{t("tools.browserHandBack")}</span>
+							</button>
+						</div>
+					</div>,
+					document.body,
+				);
+	}
 	if (!displayActivity) return null;
 	const startedAt = since ?? displayActivity.at;
 	const elapsed = Math.max(0, Math.floor((clock - startedAt) / 1000));
@@ -87,9 +144,22 @@ export function BrowserControlOverlay({
 		if (pending) return;
 		setPending(true);
 		try {
-			await onTakeover();
+			await onTakeover({
+				tabId: displayActivity.tabId,
+				url: displayActivity.domain ?? "",
+				title: displayActivity.summary,
+			});
 		} catch {
 			// Keep the current operation visible so the user can retry.
+		} finally {
+			setPending(false);
+		}
+	};
+	const handBack = async (): Promise<void> => {
+		if (pending) return;
+		setPending(true);
+		try {
+			await onHandBack?.();
 		} finally {
 			setPending(false);
 		}

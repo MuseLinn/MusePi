@@ -18,7 +18,7 @@ import {
 	visibleTurnMapNodes,
 } from "../src/components/turn-map-layout";
 
-// 轮级会话地图布局(0.5.0-map-redesign):主线时间轴 + 分支开列;
+// 轮级会话地图布局:主线时间轴 + 分支开列;
 // 折叠态紧凑卡、横向/纵向双方向。
 
 /** 节点当前有效高度(折叠 = 紧凑卡;展开 = 基础 + 泳道增量)。 */

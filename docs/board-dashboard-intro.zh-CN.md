@@ -3,7 +3,7 @@
 [English](board-dashboard-intro.md) | 中文
 
 > 本文是看板（Board/Dashboard）组件平台的通俗介绍文档，面向使用与理解系统的人。
-> 架构立项见 `docs/archive/board-dashboard.md`，组件渲染规范见 `docs/archive/widget-design-system.md`。
+> 组件渲染规范见 `docs/gui-widget-spec.md`。
 
 MusePi 看板是 musepi-omp 在 2026 年 8 月立项的"组件看板"平台——它不是传统意义上的仪表盘，而是一块可交互、可编辑、可常驻桌面的组件画布，用户既可以直接使用，也可以让 AI 代理（agent）通过工具亲手为你排版、填数据、甚至生成新组件。它参考了 Kimi Work 的产品形态（可交互可编辑的看板卡片、消息内联 widget）与 BitFun Canvas 的技术范式（Agentic Mini Apps、iframe 沙箱桥接），但最终走出了一条属于自己的路线：**白名单组件注册表 + schema 驱动的数据流**。
 
@@ -55,7 +55,7 @@ MusePi 看板是 musepi-omp 在 2026 年 8 月立项的"组件看板"平台—�
 
 ## 八、设计系统：kimi 规范到 MusePi token
 
-组件视觉不是各画各的，而是共用一份从 kimi 官方 widget 设计系统提炼、映射到 MusePi token 的规范（`widget-design-system.md`）。核心原则是**黑白优先、灰为层级**：交互强调用 text-primary 加灰色 tint，accent 蓝只用于数据可视化与语义强调，绝不拿彩色当"可交互"标记；组件不设默认背景，宿主背景透出，禁用渐变光球、bokeh、重阴影等装饰。图表色遵循色盲安全规则（红绿不同图、灰度可辨、不单靠颜色），数字显示强制 `tabular-nums` 且不换 mono 字体，间距/圆角全部落在固定阶梯上（4/8/12/16/20/24/32 与 4/6/8/10/12/16/full），嵌套圆角外大内小，动效限 60–300ms 且有目的。规范同时约束了流式渲染：内容早出、样式短、控件用 inline style、`<script>` 放最后，保证在流式 DOM diff 中不闪烁。
+组件视觉不是各画各的，而是共用一份从 kimi 官方 widget 设计系统提炼、映射到 MusePi token 的规范（`docs/gui-widget-spec.md`）。核心原则是**黑白优先、灰为层级**：交互强调用 text-primary 加灰色 tint，accent 蓝只用于数据可视化与语义强调，绝不拿彩色当"可交互"标记；组件不设默认背景，宿主背景透出，禁用渐变光球、bokeh、重阴影等装饰。图表色遵循色盲安全规则（红绿不同图、灰度可辨、不单靠颜色），数字显示强制 `tabular-nums` 且不换 mono 字体，间距/圆角全部落在固定阶梯上（4/8/12/16/20/24/32 与 4/6/8/10/12/16/full），嵌套圆角外大内小，动效限 60–300ms 且有目的。规范同时约束了流式渲染：内容早出、样式短、控件用 inline style、`<script>` 放最后，保证在流式 DOM diff 中不闪烁。
 
 ## 九、安全边界与未来路线
 

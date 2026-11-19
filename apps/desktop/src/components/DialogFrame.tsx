@@ -2,6 +2,7 @@ import { isTopModal, useModalFocus } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { HeightMorph } from "./HeightMorph";
 
 /**
  * Modal dialog shell with the same two-phase enter / closing exit the
@@ -20,12 +21,20 @@ export function DialogFrame({
 	children,
 	className,
 	label,
+	morphKey,
 }: {
 	open: boolean;
 	onClose(): void;
 	children: ReactNode;
 	className?: string;
 	label: string;
+	/**
+	 * Content identity for the size morph: when it changes, the dialog springs
+	 * from its old height to the new one instead of jumping. Pass something
+	 * that names the state being shown (a step, a connector id + its open
+	 * panels). Omit when the dialog's height is fixed.
+	 */
+	morphKey?: unknown;
 }): ReactNode {
 	const [mounted, setMounted] = useState(open);
 	const [phase, setPhase] = useState<"enter" | "open" | "closing">(open ? "enter" : "open");
@@ -104,7 +113,9 @@ export function DialogFrame({
 				aria-label={label}
 				onClick={e => e.stopPropagation()}
 			>
-				{children}
+				<HeightMorph morphKey={morphKey ?? null} className="gui-dialog-morph">
+					{children}
+				</HeightMorph>
 			</div>
 		</div>,
 		document.body,

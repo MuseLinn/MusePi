@@ -110,8 +110,6 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 - [zcode-absorption-todos.md](review/zcode-absorption-todos.html) · [openchamber-absorption-todos.md](review/openchamber-absorption-todos.html) — 带逐项结论的吸收清单
 - [porting-to-natives.md](porting-to-natives.html) · [porting-from-pi-mono.md](porting-from-pi-mono.html) — 移植现场笔记
 - [windows-development.md](windows-development.html) — Windows 构建环境搭建
-- [ERRATA-GPT5-HARMONY.md](archive/ERRATA-GPT5-HARMONY.html) — 历史研究笔记，明确声明不是运行时契约
 - [review/](review/) — 评审中的设计稿与验证记录（约 50 份）
-- [archive/](archive/) — 已被取代的文档，留存历史（约 47 份；见 [archive/README.md](archive/README.md)）
 - [gui-verification/](gui-verification/) — GUI 验证记录与截图（约 28 份）
 - [adr/](adr/) — 架构决策记录

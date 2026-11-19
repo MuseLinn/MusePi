@@ -727,6 +727,9 @@ interface EntryRowProps {
 	agentGutter?: ReactNode;
 	/** True when this row is the live-streaming assistant message. */
 	streamingLast?: boolean;
+	/** Agent liveness — settles an unpaired tool call as interrupted when the
+	 *  agent is idle, instead of leaving the card pending forever. */
+	working?: boolean;
 	/** Round start (last user message ts) for the live ticker. */
 	runStartTs?: number;
 	/** Frozen round duration (ms) — the completed round's total. */
@@ -859,6 +862,7 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 		prev.userPlain !== next.userPlain ||
 		prev.collapseLongUserMessages !== next.collapseLongUserMessages ||
 		prev.streamingLast !== next.streamingLast ||
+		prev.working !== next.working ||
 		prev.runStartTs !== next.runStartTs ||
 		prev.roundDuration !== next.roundDuration ||
 		prev.hideToolActivity !== next.hideToolActivity ||
@@ -1169,6 +1173,7 @@ const EntryRow = memo(function EntryRow({
 	userPlain = false,
 	collapseLongUserMessages = false,
 	streamingLast = false,
+	working = false,
 	runStartTs,
 	roundDuration,
 	hideToolActivity = false,
@@ -1287,6 +1292,7 @@ const EntryRow = memo(function EntryRow({
 									results={results}
 									active={active}
 									pending={streamingLast}
+									working={working}
 									runStartTs={runStartTs}
 									roundDuration={roundDuration}
 									host={host}
@@ -2705,6 +2711,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							ircContinued={ircContinued}
 							thinkingLevel={thinkingLevel}
 							streamingLast={streamingLast}
+							working={working}
 							runStartTs={streamingLast ? lastUserTs : undefined}
 							roundDuration={roundDuration}
 							onQuote={onQuote}
@@ -2916,6 +2923,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						results={results}
 						active={activeTools}
 						pending={!streamDone}
+						working
 						runStartTs={lastUserTs}
 						roundDuration={
 							// Ghost stream row: the round froze under the turn-start

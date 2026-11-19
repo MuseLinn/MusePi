@@ -1,5 +1,6 @@
 import { BlurText, composerPlaceholder, DotMatrixMark, t } from "@musepi/client-core";
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
+import { ComposerEditor } from "@musepi/client-core/src/components/composer/ComposerEditor";
 import {
 	composeDisplayContextPrompt,
 	createChatQuoteContext,
@@ -13,7 +14,6 @@ import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
-import { readPasteImageMention } from "../lib/composer-prefs";
 import { isContextCommand } from "../lib/context-command";
 import { templateTabForChip } from "../lib/creation";
 import { projectName } from "../lib/electron";
@@ -61,8 +61,6 @@ import {
 } from "./CreationModeRow";
 import { VoiceButton, VoiceStatusStrip } from "./composer/action-buttons";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
-import { imageChipCount, insertPastedImageMentions } from "./composer/attachment-mention-paste";
-import { ComposerEditor } from "./composer/ComposerEditor";
 import { ConnectorChip, ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { DesignSystemRail } from "./composer/design-system-rail";
@@ -76,7 +74,6 @@ import {
 	retargetMentionTokens,
 	spliceMentionToken,
 } from "./composer/mention-token";
-import { insertPastedPlainText } from "./composer/paste-text";
 import { QuoteCards } from "./composer/quote-cards";
 import { StartFromPicker } from "./composer/start-from-picker";
 import { TemplateRail } from "./composer/template-rail";
@@ -92,6 +89,8 @@ import {
 	useAttachments,
 } from "./composer/use-attachments";
 import { useCompletion } from "./composer/use-completion";
+import { useComposerIntake } from "./composer/use-composer-intake";
+import { useComposerMarks } from "./composer/use-composer-marks";
 import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { attachPaste, isLongPastedText, saveEditedPaste, useLongTextPaste } from "./composer/use-long-text-paste";
@@ -385,6 +384,7 @@ export function HeroComposer({
 		if (a?.editText !== undefined) setEditingPaste({ id, text: a.editText });
 	};
 	const { attachments, setAttachments, addFiles } = useAttachments(rpc, { stageFiles: false });
+	const { marks, resolveMention } = useComposerMarks(text, attachments);
 	// Armed plan/goal: one tap arms the mode chip —
 	// NO popup dialog and NO session creation, so the welcome input keeps
 	// its shape. The first sent message applies the mode (goal: the
@@ -875,6 +875,32 @@ export function HeroComposer({
 	// Select-all + delete clears text AND attachments together (consumed
 	// by onChange once the textarea reports the emptied value).
 	const clearAllRef = useRef(false);
+	const intake = useComposerIntake({
+		editor: taRef,
+		attachments,
+		addFiles,
+		setAttachments,
+		setText,
+		clearAllRef,
+		autosize: () => autosize(taRef.current),
+		onLongPaste: (pastedText, event) => {
+			if (!isLongPastedText(pastedText)) return false;
+			event.preventDefault();
+			requestPaste(pastedText);
+			return true;
+		},
+		onValueChange: value => {
+			onSlashInput(value);
+			onAtInput(value);
+			onHashInput(value);
+		},
+		onMentionClick: start => {
+			const ta = taRef.current;
+			if (!ta) return;
+			ta.focus();
+			ta.setSelectionRange(start, start);
+		},
+	});
 	// Value-driven autosize fallback (long-paste choose, quote append,
 	// /retry edit…): programmatic setText bypasses onChange, so the box
 	// re-measures after every draft commit — not just keystrokes.
@@ -1993,68 +2019,13 @@ export function HeroComposer({
 										}}
 										value={text}
 										variant="welcome"
+										className="gui-composer-editor gui-composer-editor--welcome"
 										dataFocused={focused}
 										autoFocus
-										onPaste={e => {
-											// Any pasted file becomes a chip (session-composer
-											// parity); plain text falls through to the editor /
-											// long-paste gate.
-											const pastedText = e.clipboardData?.getData("text") ?? "";
-											const files = [...(e.clipboardData?.items ?? [])]
-												.filter(i => i.kind === "file")
-												.map(i => i.getAsFile())
-												.filter((f): f is File => f !== null);
-											if (files.length > 0) {
-												e.preventDefault();
-												const priorImages = imageChipCount(attachments);
-												void addFiles(files)
-													.then(added => {
-														if (readPasteImageMention()) {
-															insertPastedImageMentions(taRef.current, added, priorImages);
-														}
-													})
-													.catch(() => {});
-												// Mixed clipboard: the file became a chip, so keep
-												// the text half the default insertion lost.
-												insertPastedPlainText(taRef.current, pastedText);
-												return;
-											}
-											if (isLongPastedText(pastedText)) {
-												e.preventDefault();
-												requestPaste(pastedText);
-											}
-										}}
-										onDragOver={e => {
-											// Chromium only fires drop on an element whose dragover
-											// was prevented; both this editor and the window-level
-											// anchor converge on addFiles.
-											if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
-										}}
-										onDrop={e => {
-											const files = [...(e.dataTransfer?.files ?? [])];
-											if (files.length > 0) {
-												e.preventDefault();
-												const priorImages = imageChipCount(attachments);
-												void addFiles(files)
-													.then(added => {
-														if (readPasteImageMention()) {
-															insertPastedImageMentions(taRef.current, added, priorImages);
-														}
-													})
-													.catch(() => {});
-											}
-										}}
-										onChange={value => {
-											setText(value);
-											if (clearAllRef.current) {
-												clearAllRef.current = false;
-												if (value === "") setAttachments([]);
-											}
-											onSlashInput(value);
-											onAtInput(value);
-											onHashInput(value);
-											autosize(taRef.current);
-										}}
+										onPaste={intake.onPaste}
+										onDragOver={intake.onDragOver}
+										onDrop={intake.onDrop}
+										onChange={intake.onChange}
 										onKeyDown={e => {
 											// IME composition: the confirming Enter commits the
 											// candidate text — never submit while composing.
@@ -2182,26 +2153,9 @@ export function HeroComposer({
 											}
 										})()}
 										autoComplete="off"
-										resolveMention={name => {
-											// null = unresolved (no such ordinal/name) →
-											// plain text (unpainted, unexpanded on send).
-											const hit = resolveMentionChip(name, attachments);
-											return hit
-												? {
-														kind: hit.chip.kind,
-														name: hit.chip.name,
-														size: hit.chip.size,
-														dataUrl: hit.chip.dataUrl || undefined,
-													}
-												: null;
-										}}
-										mentionVersion={attachments}
-										onMentionClick={start => {
-											const ta = taRef.current;
-											if (!ta) return;
-											ta.focus();
-											ta.setSelectionRange(start, start);
-										}}
+										marks={marks}
+										resolveMention={resolveMention}
+										onMentionClick={intake.onMentionClick}
 									/>
 								</div>
 							</div>

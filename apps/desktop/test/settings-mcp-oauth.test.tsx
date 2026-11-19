@@ -119,14 +119,13 @@ describe("MCP settings", () => {
 		fake.handlers.set("mcp.servers.list", () => serversResponse());
 		const host = await mount(fake);
 
-		expect(host.textContent).toContain(t("settings.mcpConfiguredServers"));
+		expect(host.textContent).toContain(t("settings.mcpServers"));
 		expect(host.textContent).toContain("oauth-server");
 		expect(host.textContent).toContain("https://mcp.example.com/mcp");
 		expect(host.textContent).toContain("token-server");
 		expect(host.textContent).toContain("local-server");
 		expect(host.textContent).toContain(t("settings.mcpAuthOauth"));
 		expect(host.textContent).toContain(t("settings.mcpTokenManagedByConfig"));
-		expect(host.textContent).toContain(t("settings.mcpStdioCredentials"));
 
 		// Exactly one login button: token- and stdio-managed rows must not offer
 		// a fake credential input or an OAuth button.
@@ -254,7 +253,7 @@ describe("MCP settings", () => {
 		expect(host.textContent).not.toContain(t("settings.mcpOauthLoginWaiting"));
 	});
 
-	test("desktop login asks for the custom-scheme deep-link callback", async () => {
+	test("desktop login lets the daemon own the loopback callback", async () => {
 		Object.defineProperty(window, "electronAPI", {
 			value: { openExternal: async () => true },
 			configurable: true,
@@ -280,9 +279,7 @@ describe("MCP settings", () => {
 			await act(async () => login.click());
 			await flush();
 
-			expect(fake.calls("mcp.oauth.start")).toEqual([
-				{ name: "oauth-server", redirectUri: "musepi://oauth/callback" },
-			]);
+			expect(fake.calls("mcp.oauth.start")).toEqual([{ name: "oauth-server" }]);
 		} finally {
 			Reflect.deleteProperty(window, "electronAPI");
 		}

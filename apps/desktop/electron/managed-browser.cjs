@@ -836,6 +836,16 @@ class ManagedBrowserController {
 		this.ipcRegistered = false;
 		this.sessionSeq = 0;
 		this.ledger = [];
+		/** Tabs whose control the user took over: further agent CDP commands on
+		 *  them fail instead of fighting the user's pointer. Cleared when a tab is
+		 *  created or destroyed. */
+		this.userOwnedTabs = new Set();
+		/** Forwarded CDP commands still awaiting the real webContents, keyed by
+		 *  connection + request id. A takeover settles them early so the agent's
+		 *  browser call fails fast instead of running to completion off-screen. */
+		this.inflightOps = new Map();
+		/** Guests whose keyboard takeover watcher is attached (one per webContents). */
+		this.inputWatched = new WeakSet();
 		this.server = null;
 		this.port = DEFAULT_PORT;
 		this.partitionGuarded = false;
@@ -1132,6 +1142,7 @@ class ManagedBrowserController {
 		const tab = new ManagedTab(this, url, openedByAgent, undefined, agent);
 		const id = String(tab.id);
 		this.tabs.set(id, tab);
+		this.userOwnedTabs.delete(id);
 		if (!this.activeTabId) this.activeTabId = id;
 		this.recordActivity(tab, "open", url, "opened");
 		// The renderer badges the tab with its operator; a user tab omits the
@@ -1224,6 +1235,7 @@ class ManagedBrowserController {
 			}
 			return { ok: false };
 		}
+		this.watchUserInput(tab, wc);
 		if (adopted) void this.announceTabCreated(tab);
 		return { ok: true };
 	}
@@ -1251,6 +1263,7 @@ class ManagedBrowserController {
 		const id = String(tab.id);
 		if (!this.tabs.has(id)) return;
 		this.tabs.delete(id);
+		this.userOwnedTabs.delete(id);
 		if (this.agentTabId === id) this.agentTabId = null;
 		if (this.activeTabId === id) {
 			const next = [...this.tabs.values()][0];
@@ -1385,6 +1398,9 @@ class ManagedBrowserController {
 	state() {
 		return {
 			port: this.server ? this.port : null,
+			// Ownership handoff: the renderer badges these tabs and offers
+			// "hand control back" without having to infer it from the ledger.
+			userOwnedTabIds: [...this.userOwnedTabs],
 			...projectActivity(this.ledger, this.activeTabId),
 		};
 	}
@@ -1650,9 +1666,55 @@ class ManagedBrowserController {
 	/** Hand the live page to the user without the hard-stop tab disposal. */
 	takeoverOp(tabId) {
 		const id = String(tabId ?? this.activeTabId ?? "");
-		if (id) takeoverActivity(this.ledger, id);
+		if (id) {
+			// Ownership handoff, not a turn stop: the user drives this tab from
+			// now on, and the agent's next CDP command on it is refused with a
+			// reason the model can read.
+			this.userOwnedTabs.add(id);
+			takeoverActivity(this.ledger, id);
+			this.settleInflightOps(id);
+			const tab = this.tabs.get(id);
+			try {
+				tab?.wc?.stop();
+			} catch {
+				// already stopped/destroyed
+			}
+		}
 		this.emitState({});
 		return this.state();
+	}
+
+	/** Give the tab back to the agent (explicit user action). The next agent
+	 *  command on it is accepted again; nothing resumes on its own. */
+	handBackControl(tabId) {
+		const id = String(tabId ?? "");
+		if (!id) return this.state();
+		this.userOwnedTabs.delete(id);
+		this.emitState({});
+		return this.state();
+	}
+
+	/** Settle every in-flight agent command on a tab: the takeover means those
+	 *  actions must stop now, not finish invisibly after the user has the page. */
+	settleInflightOps(tabId) {
+		const reason = "The user took over this tab. Stop operating it and wait for their instruction.";
+		for (const [key, op] of this.inflightOps) {
+			if (op.tabId !== tabId || op.cancelled) continue;
+			op.cancelled = true;
+			this.inflightOps.delete(key);
+			this.replyError(op.conn, op.msg, reason);
+		}
+	}
+
+	/** Keyboard input on an agent-driven tab means the user took it over. */
+	watchUserInput(tab, wc) {
+		if (this.inputWatched.has(wc)) return;
+		this.inputWatched.add(wc);
+		wc.on("before-input-event", (_event, input) => {
+			if (!input || input.type !== "keyDown") return;
+			if (this.agentTabId !== String(tab.id)) return;
+			this.takeoverOp(tab.id);
+		});
 	}
 
 	/** Interrupt the agent's in-flight operation on a tab: stop the loading
@@ -2257,6 +2319,16 @@ class ManagedBrowserController {
 			this.reply(conn, msg, { data: buffer.toString("base64") });
 			return;
 		}
+		if (this.userOwnedTabs.has(String(tab.id))) {
+			// The user has the tab. Refuse the automation instead of racing them;
+			// the tool result tells the model to wait for the user's next message.
+			this.replyError(
+				conn,
+				msg,
+				"The user took over this tab. Stop operating it and wait for their instruction.",
+			);
+			return;
+		}
 		if (!tab.ensureDebugger()) {
 			this.replyError(conn, msg, "Managed tab debugger is unavailable (DevTools may be attached)");
 			return;
@@ -2286,8 +2358,14 @@ class ManagedBrowserController {
 		if (mark) this.flashAgentTarget(tab, mark);
 		const drag = agentDragStep(msg.method, msg.params);
 		if (drag) this.trackAgentDrag(tab, drag);
+		const opKey = `${conn.id}:${msg.id}`;
+		const inflight = { conn, msg, tabId: String(tab.id), cancelled: false };
+		this.inflightOps.set(opKey, inflight);
 		try {
 			const result = (await wc.debugger.sendCommand(msg.method, msg.params)) ?? {};
+			// A takeover settled this command early; its real result must not be
+			// written a second time.
+			if (inflight.cancelled) return;
 			// Detach (e.g. a stopOp tab close) resolves pending commands instead
 			// of rejecting — do not overwrite the canceled mark the stop applied.
 			if (activityKey && this.tabs.has(String(tab.id))) {
@@ -2296,6 +2374,7 @@ class ManagedBrowserController {
 			}
 			this.reply(conn, msg, result);
 		} catch (error) {
+			if (inflight.cancelled) return;
 			if (activityKey) {
 				this.markOpStatus(activityKey, "failed");
 				this.emitState({});
@@ -2306,6 +2385,8 @@ class ManagedBrowserController {
 				error instanceof Error ? error.message : String(error),
 				typeof error?.code === "number" ? error.code : CDP_ERROR_SERVER,
 			);
+		} finally {
+			this.inflightOps.delete(opKey);
 		}
 	}
 
@@ -2806,6 +2887,7 @@ class ManagedBrowserController {
 		ipcMain.handle("managed-browser:set-lifecycle", (_e, input) => this.setTabLifecycle(input));
 		ipcMain.handle("managed-browser:stop", (_e, tabId) => this.stopOp(tabId));
 		ipcMain.handle("managed-browser:takeover", (_e, tabId) => this.takeoverOp(tabId));
+		ipcMain.handle("managed-browser:handback", (_e, tabId) => this.handBackControl(tabId));
 		ipcMain.handle("managed-browser:confirm-result", (_e, input) => {
 			const pending = this.pendingConfirm;
 			if (!pending || !input || pending.requestId !== input.requestId) return { ok: false };

@@ -7,12 +7,9 @@
  */
 import { t } from "@musepi/client-core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { isElectron, openExternalUrl } from "../../lib/electron";
+import { openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
-
-/** Desktop custom protocol registered by the Electron shell. */
-const OAUTH_DEEP_LINK = "musepi://oauth/callback";
 
 export interface OAuthFlowStatus {
 	flowId: string;
@@ -135,7 +132,6 @@ export function useMcpOAuth(rpc: RpcClient | null, onSettled?: (serverName: stri
 			try {
 				const started = await rpc.request<{ flowId: string; authorizationUrl: string }>("mcp.oauth.start", {
 					name,
-					...(isElectron() ? { redirectUri: OAUTH_DEEP_LINK } : {}),
 				});
 				setFlows(current => ({
 					...current,

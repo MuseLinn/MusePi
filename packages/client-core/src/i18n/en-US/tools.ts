@@ -1990,6 +1990,10 @@ export const tools = {
 	"tools.browserDialogUser": "User",
 	"tools.browserDialogAuto": "Auto-policy",
 	"tools.browserTakeover": "Take over",
+	"tools.userOwnedTab": "You control this tab",
+	"tools.userOwnedHint": "Agent browser actions are stopped; hand it back to let the agent continue",
+	"tools.browserHandBack": "Hand back",
+	"tools.browserHandBackHint": "Give this tab back to the agent",
 	"tools.browserTakeoverHint": "Stop Agent browser operations and take control",
 	"tools.browserTakeoverPending": "Stopping…",
 	"tools.controlPaused": "Agent paused — waiting for you",
@@ -2007,6 +2011,8 @@ export const tools = {
 	// ── Tool card titles: wire name → readable name ("Used X (args)") ─────────
 	"tools.usedTool": "Used {tool}",
 	"tools.usingTool": "Using {tool}",
+	"tools.callInterrupted":
+		"Interrupted before recording a result. It may already have run — verify the current state before retrying.",
 	"tools.widgetWaiting": "Waiting for your choice",
 	"tools.widgetAnswered": "Answered",
 	"tools.argOpen": "(",

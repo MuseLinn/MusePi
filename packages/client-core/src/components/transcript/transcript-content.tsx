@@ -444,18 +444,30 @@ function TurnUsage({ message }: { message: AssistantMessage }): ReactNode {
 export function MsgContent({
 	content,
 	onPreviewImage,
+	host,
 }: {
 	content: string | readonly (TextContent | ImageContent | VideoContent)[];
 	/** Open the full-size image preview lightbox at this message image
 	 *  (all of the message's images form the gallery). */
 	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	/** Resolves persisted `blob:sha256:` image refs (guests/exports omit it). */
+	host?: ToolRenderHost;
 }): ReactNode {
 	// All image blocks of this message, in order — the preview gallery.
 	const images = useMemo(() => {
 		if (typeof content === "string") return [];
 		return content
 			.filter((b): b is ImageContent => b.type === "image")
-			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("settings.attachment") }));
+			.map(b => ({
+				// Persisted images over the blob threshold keep a `blob:sha256:`
+				// ref; ImageCardStack resolves it through the host.
+				src:
+					typeof b.data === "string" && b.data.startsWith("blob:")
+						? b.data
+						: `data:${b.mimeType};base64,${b.data}`,
+				mimeType: b.mimeType,
+				alt: t("settings.attachment"),
+			}));
 	}, [content]);
 	if (typeof content === "string") {
 		// ACP-mode `/usage` report (buildUsageReportText) renders as a card,
@@ -503,7 +515,12 @@ export function MsgContent({
 						if (images.length > 1) return null;
 						// Anonymous content blocks have no stable id — index is identity.
 						return (
-							<ImageCardStack key={`img${i}`} items={images} onOpen={idx => onPreviewImage?.(images, idx)} />
+							<ImageCardStack
+								key={`img${i}`}
+								items={images}
+								host={host}
+								onOpen={(idx, list) => onPreviewImage?.(list, idx)}
+							/>
 						);
 					case "video":
 						return (
@@ -517,7 +534,9 @@ export function MsgContent({
 						return null;
 				}
 			})}
-			{images.length > 1 && <ImageCardStack items={images} onOpen={i => onPreviewImage?.(images, i)} />}
+			{images.length > 1 && (
+				<ImageCardStack items={images} host={host} onOpen={(i, list) => onPreviewImage?.(list, i)} />
+			)}
 		</>
 	);
 }
@@ -701,7 +720,16 @@ export function UserMsgContent({
 		if (typeof content === "string") return [];
 		return content
 			.filter((b): b is ImageContent => b.type === "image")
-			.map(b => ({ src: `data:${b.mimeType};base64,${b.data}`, alt: t("settings.attachment") }));
+			.map(b => ({
+				// Persisted images over the blob threshold keep a `blob:sha256:`
+				// ref; ImageCardStack resolves it through the host.
+				src:
+					typeof b.data === "string" && b.data.startsWith("blob:")
+						? b.data
+						: `data:${b.mimeType};base64,${b.data}`,
+				mimeType: b.mimeType,
+				alt: t("settings.attachment"),
+			}));
 	}, [content]);
 	if (typeof content === "string") {
 		const parsed = parseAttachmentRefs(textWithoutDisplayContext(content, displayContext));
@@ -729,7 +757,12 @@ export function UserMsgContent({
 						if (images.length > 1) return null;
 						// Anonymous content blocks have no stable id — index is identity.
 						return (
-							<ImageCardStack key={`img${i}`} items={images} onOpen={idx => onPreviewImage?.(images, idx)} />
+							<ImageCardStack
+								key={`img${i}`}
+								items={images}
+								host={host}
+								onOpen={(idx, list) => onPreviewImage?.(list, idx)}
+							/>
 						);
 					case "video":
 						return (
@@ -743,7 +776,9 @@ export function UserMsgContent({
 						return null;
 				}
 			})}
-			{images.length > 1 && <ImageCardStack items={images} onOpen={i => onPreviewImage?.(images, i)} />}
+			{images.length > 1 && (
+				<ImageCardStack items={images} host={host} onOpen={(i, list) => onPreviewImage?.(list, i)} />
+			)}
 			{attachments.length > 0 && <UserAttachmentCards refs={attachments} host={host} />}
 			{cards}
 		</>
@@ -1167,6 +1202,7 @@ export function AssistantBody({
 	results,
 	active,
 	pending,
+	working,
 	runStartTs,
 	roundDuration,
 	host,
@@ -1200,6 +1236,9 @@ export function AssistantBody({
 	active: ReadonlyMap<string, ActiveTool>;
 	/** Still streaming — suppress stop-reason chips on the partial message. */
 	pending: boolean;
+	/** Agent liveness — an unpaired tool call is queued while working, and
+	 *  interrupted once the agent is idle (see ToolCard). */
+	working?: boolean;
 	/** Round start (last user message ts) — the live ticker's anchor so the
 	 *  count spans the whole working period, including tool execution. */
 	runStartTs?: number;
@@ -1328,6 +1367,10 @@ export function AssistantBody({
 						result={result}
 						host={host}
 						running={!result && (act !== undefined || pending)}
+						/* A persisted turn cut off mid-execution: no result, no live
+						 * tool, and the agent is idle. Settle it as interrupted
+						 * instead of leaving the card pending forever. */
+						interrupted={!result && act === undefined && !pending && working !== true}
 						partialResult={act?.partialResult}
 						taskCardStyle={taskCardStyle}
 						onPreviewImage={onPreviewImage}

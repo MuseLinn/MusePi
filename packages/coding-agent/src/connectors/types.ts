@@ -154,6 +154,12 @@ export interface ConnectorOAuthSpec {
 	/** Authorization-server metadata endpoints, when the provider fixes them. */
 	authorizationUrl?: string;
 	tokenUrl?: string;
+	/**
+	 * RFC 8628 device endpoint. Vendors that run the device grant but publish no
+	 * authorization-server metadata (GitHub) must name it, or the client can
+	 * only guess a path the vendor does not serve.
+	 */
+	deviceAuthorizationUrl?: string;
 	scopes?: string;
 	callbackPort?: number;
 	callbackPath?: string;

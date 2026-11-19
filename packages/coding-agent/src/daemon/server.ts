@@ -363,6 +363,7 @@ import { TerminalService, type TerminalServiceDeps } from "./services/terminal-s
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
 import { VoiceService } from "./services/voice-service";
+import { WidgetService } from "./services/widget-service";
 import {
 	isSafeAdditionalDirectory,
 	resolveWorkspaceDirectories,
@@ -657,6 +658,7 @@ export class DaemonServer {
 		);
 		this.#services.register(new AttachmentService());
 		this.#services.register(new EditorService());
+		this.#services.register(new WidgetService());
 		// ArchiveService 无宿主依赖：归档落 agent dir 下，随会话隔离走。
 		this.#services.register(new ArchiveService());
 		// 收编第四刀（设计稿 §2 目标形态）：terminal-core builtin 插件单元——
@@ -826,6 +828,7 @@ export class DaemonServer {
 				cwd: () => this.#host.cwd(),
 				connectorsSnapshotForCwd: cwd => this.#host.connectorsSnapshotForCwd(cwd),
 				reloadConnectors: () => this.#host.reloadMcpConnectors(),
+				authStorage: () => this.#host.authStorage(),
 			}),
 		);
 		this.#services.register(
@@ -2201,6 +2204,17 @@ export class DaemonServer {
 			case "mcp.oauth.callback": {
 				return this.#services.get<McpOAuthService>("mcpOAuth").callback(params ?? {});
 			}
+			case "mcp.oauth.device.start": {
+				// 设备码授权(RFC 8628)：无 client secret、无回调地址，用于没有
+				// 注册端点的厂商(GitHub)。routes 表与 switch 双登记缺一不可。
+				return this.#services.get<McpOAuthService>("mcpOAuth").deviceStart(params ?? {});
+			}
+			case "mcp.oauth.device.poll": {
+				return this.#services.get<McpOAuthService>("mcpOAuth").devicePoll(params ?? {});
+			}
+			case "mcp.oauth.device.cancel": {
+				return this.#services.get<McpOAuthService>("mcpOAuth").deviceCancel(params ?? {});
+			}
 			case "connectors.catalog.list": {
 				return this.#services.get<ConnectorCatalogService>("connectorCatalog").list(params ?? {});
 			}
@@ -2227,6 +2241,12 @@ export class DaemonServer {
 			}
 			case "connectors.cli.cancel": {
 				return this.#services.get<ConnectorCatalogService>("connectorCatalog").cliCancel(params ?? {});
+			}
+			case "connectors.import.scan": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").importScan(params ?? {});
+			}
+			case "connectors.import.apply": {
+				return this.#services.get<ConnectorCatalogService>("connectorCatalog").importApply(params ?? {});
 			}
 			case "credentials.list": {
 				// M4 P1: 连接器配置的凭据引用清单（只有 meta，无密钥）。
@@ -3356,6 +3376,11 @@ export class DaemonServer {
 				if (typeof p.sessionId !== "string") throw new Error("sessionId required");
 				this.#host.setEditorDraft(p.sessionId, p.draft === true);
 				return { ok: true };
+			}
+			case "widget.answer": {
+				// A page that holds the turn (widget + awaitAnswer) resolves its
+				// pending tool call here; nothing else can answer it.
+				return this.#services.get<WidgetService>("widget").answer(params);
 			}
 			case "session.send": {
 				const p = (params ?? {}) as {

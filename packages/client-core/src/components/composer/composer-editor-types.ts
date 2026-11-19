@@ -13,6 +13,23 @@ export interface ComposerSelection {
 	end: number;
 }
 
+/** One painted token range. The caller owns token semantics; the editor only
+ *  paints `className` and reads `mentionName` for the hover card. */
+export interface EditorMark {
+	from: number;
+	to: number;
+	className: string;
+	mentionName?: string;
+}
+
+/** Attachment data behind a mention hover card, resolved by the caller. */
+export interface MentionPreview {
+	kind: "image" | "file";
+	name: string;
+	size?: number;
+	dataUrl?: string;
+}
+
 export interface ComposerEditorHandle {
 	readonly value: string;
 	readonly selectionStart: number;

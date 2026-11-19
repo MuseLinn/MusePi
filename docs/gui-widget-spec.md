@@ -1,7 +1,7 @@
 # 小组件卡片规格
 
 > 状态：2026-10-04 定稿。本文是 `packages/client-core/src/widgets/` 的现行规范。
-> 架构立项见 `docs/archive/board-dashboard.md`（已归档，只作背景），渲染规范的前身见 `docs/archive/widget-design-system.md`（已归档）。**两份归档文档都不再是现行标准** —— 它们记录的是立项与初版设计意图，本文记录的是当前实现的实际契约。
+> 本文记录的是当前实现的实际契约。
 > 适用范围：看板卡片（Board）与消息内联 widget 共用的 registry 组件层。
 
 ---

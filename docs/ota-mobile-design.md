@@ -1,7 +1,7 @@
 # 安卓 OTA 更新方案(@capgo Web-layer OTA)
 
 > 面向 `apps/mobile`（Capacitor 8 壳，web 代码在 `packages/client-core`；Android 版本号以 `apps/mobile/android/app/build.gradle` 为准，当前 `versionCode 41` / `versionName 0.7.6`）。
-> 2026-08-26 调研后立项。桌面端 OTA 见 `docs/archive/ota-update-design.md`（electron-updater），本文件仅覆盖移动端。
+> 2026-08-26 调研后立项。桌面端 OTA 走 electron-updater，见 `docs/gui-implementation.md` 的更新章节；本文件仅覆盖移动端。
 
 - **状态**: 方案文档(待实现)
 - **日期**: 2026-08-26
@@ -74,5 +74,5 @@ const config: CapacitorConfig = {
 
 ## 6. 参考
 
-- 桌面 OTA:docs/archive/ota-update-design.md(electron-updater v6.4.1 + GitHub provider)
+- 桌面 OTA:electron-updater v6.4.1 + GitHub provider(见 `docs/gui-implementation.md` 更新章节)
 - 调研报告:2026-08-26 scout(方案对比 + Capgo API 要点,见 commit 说明)

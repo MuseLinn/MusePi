@@ -83,7 +83,7 @@ export class PresetsService implements DaemonService {
 	}
 
 	async list(params: unknown): Promise<unknown> {
-		// 预设中心数据源(docs/archive/modes-plan.md §7):摘要列表,含继承链与
+		// 预设中心数据源:摘要列表,含继承链与
 		// 结构信息;扩展 id 存在性校验在 save/validate 层做。
 		const { listModeIds, loadModeFile, ensureModeTemplates, BUILTIN_MODE_TEMPLATES } = await import(
 			"../../presets/resolve"

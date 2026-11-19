@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./app";
 import { initTooltips } from "./lib/tooltips";
 import "@musepi/client-core/src/styles/tokens.css";
+import "@musepi/client-core/src/styles/composer-editor.css";
 import "@musepi/client-core/src/styles/base.css";
 import "@musepi/client-core/src/components/shell/shell.css";
 import "@musepi/client-core/src/components/transcript/transcript.css";

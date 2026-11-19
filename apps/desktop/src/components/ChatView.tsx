@@ -1232,8 +1232,7 @@ export function ChatView({
 	// External browser reveal (chat link click → managed browser, proma
 	// AgentBrowserLinkProvider parity). nonce re-triggers the same URL.
 	const [openBrowserReq, setOpenBrowserReq] = useState<{ url: string; nonce: number } | null>(null);
-	// Active right-panel view — TAB-PRIMARY (docs/archive/gui-right-panel-redesign.md
-	// §3.3.2, supersedes the "single navigation axis" model): one panel-level
+	// Active right-panel view — TAB-PRIMARY (supersedes the "single navigation axis" model): one panel-level
 	// tab strip hosts every open surface, and the rail opens-or-focuses tabs
 	// instead of swapping the panel body. `activeView` is DERIVED from the
 	// active tab's surface so every existing setActiveView call site keeps its
@@ -1267,7 +1266,7 @@ export function ChatView({
 	const setViewMode = useCallback((mode: "chat" | "canvas") => {
 		startTransition(() => setViewModeState(mode));
 	}, []);
-	// 地图单一投影:轮级(0.5.0-map-redesign——节点 = 轮,164 轮 = 164 张卡)。
+	// 地图单一投影:轮级(节点 = 轮,164 轮 = 164 张卡)。
 	// 消息级画布(SessionTreeCanvas)已下线:两套同数据源视图收敛为一个轮级
 	// 地图,消息级分支结构由 ContextPanel 的 TrajectoryView 分支树模式承担。
 	// Extension panel-tab slots (panel.tab.*) — launchable items live in the
@@ -3112,8 +3111,7 @@ export function ChatView({
 			<div className="gui-drag-strip" aria-hidden />
 			{/* Workspace split: the session column,
 			 * the side pane and the terminal dock are INDEPENDENT rounded cards
-			 * floating on the glass base (docs/archive/gui-right-panel-redesign.md
-			 * §3.3.2) — no more single
+			 * floating on the glass base — no more single
 			 * card with a vertical divider. This wrapper is layout-only now;
 			 * each region carries its own card chrome. `gui-chat-surface` stays
 			 * as the JS anchor for the maximize measurement query. The window
@@ -3943,7 +3941,9 @@ export function ChatView({
 								open: rightPanelOpen && !focusMode,
 								openRequest: openFileReq,
 								browserOpenRequest: openBrowserReq,
-								onBrowserTakeover: onStop,
+								// Takeover is an ownership handoff: the managed-browser side
+								// refuses further agent commands on the tab. It must NOT stop
+								// the turn — the agent continues and reads the refusal.
 								onViewChange: setActiveView,
 								panelTabs,
 								onExpandPanel: onExpandRightPanel,

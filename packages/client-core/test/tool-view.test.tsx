@@ -200,4 +200,39 @@ describe("ToolView xd:// dispatches", () => {
 			registerExternalToolRenderers({});
 		}
 	});
+
+	it("renders notify_user as an annotated progress row, not a foldable tool card", () => {
+		const html = renderToStaticMarkup(
+			<ToolCard
+				toolCallId="n1"
+				name="notify_user"
+				args={{ title: "检查渲染", message: "已确认 **bold** 生效。\n\n- 圆点\n- 标题" }}
+			/>,
+		);
+
+		expect(html).toContain('class="tr-progress-update"');
+		expect(html).toContain("tr-progress-dot");
+		expect(html).toContain("检查渲染");
+		// Markdown body: bold + bullets, not a pre-wrap text blob.
+		expect(html).toContain("<strong>bold</strong>");
+		expect(html).toContain("<li>圆点</li>");
+		expect(html).not.toContain("tv-card");
+	});
+
+	it("settles a call with no result and an idle agent as interrupted", () => {
+		const html = renderToStaticMarkup(
+			<ToolCard toolCallId="w1" name="write" args={{ path: "game.js" }} interrupted />,
+		);
+
+		expect(html).toContain("tv-status--interrupted");
+		expect(html).toContain("tv-interrupted");
+		expect(html).not.toContain("tv-status--pending");
+	});
+
+	it("keeps a dispatched call pending while the agent is still working", () => {
+		const html = renderToStaticMarkup(<ToolCard toolCallId="w1" name="write" args={{ path: "game.js" }} />);
+
+		expect(html).toContain("tv-status--pending");
+		expect(html).not.toContain("tv-status--interrupted");
+	});
 });

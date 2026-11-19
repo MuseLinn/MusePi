@@ -46,10 +46,11 @@ widget { title?, html?, awaitAnswer? }
 - **卡片工作区**：看板上的卡可以读自己目录里的文件——`window.musepiResources.list()` 与
   `window.musepiResources.read(path)` 返回 Promise；路径锁在这张卡的工作区内，越界会被宿主拒绝。
   页面本身没有文件系统，这是唯一的数据来源。
-- **让用户选**：`awaitAnswer: true` 时，选项用 `.musepi-options` 或表单收集后用
-  `.musepi-button` 调 `musepiSubmit(text, data)` 一次交回。`text` 用用户语言写清全部选择
-  （它进模型上下文）；`data` 只回显给页面自己。`musepiSubmit` 非阻塞——本轮已结束，
-  答案作为下一条用户消息到达；需要逐项决定许多条目时用 UI 块的 `Choice` / `Button`。
+- **让用户选**：`awaitAnswer: true` 时本轮**停在页面这里等回答**——选项用 `.musepi-options`
+  或表单收集后调 `musepiSubmit(text, data)` 一次交回，工具结果带着答案继续本轮。`text` 用
+  用户语言写清全部选择（它进模型上下文）；`data` 回显给页面并随结果保留。只有用户主动
+  停止回合才会得到「未回答」。未设 `awaitAnswer` 的普通卡片仍是非阻塞的（答案作为下一条
+  用户消息）；需要逐项决定许多条目时用 UI 块的 `Choice` / `Button`。
 
 ## html 主题自适应（硬性要求）
 

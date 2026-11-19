@@ -583,3 +583,50 @@ test("reads complete records through short filesystem reads", async () => {
 		await journal.close();
 	}
 });
+
+describe("flush and rewrite failure containment", () => {
+	test("flushWithin reports a resolved chain and bounds a wedged one", async () => {
+		const j = new AppendJournal(tempDir(), "s1");
+		await j.open();
+		j.append(event("thinking_level_changed", 1));
+		expect(await j.flushWithin(500)).toBe(true);
+		await j.close();
+
+		// A flush that never settles must not hold the caller past its bound:
+		// the durable-intent path runs before every tool call.
+		class WedgedJournal extends AppendJournal {
+			override flush(): Promise<void> {
+				return new Promise(() => {});
+			}
+		}
+		const wedged = new WedgedJournal(tempDir(), "s2");
+		const started = Date.now();
+		expect(await wedged.flushWithin(30)).toBe(false);
+		expect(Date.now() - started).toBeLessThan(1_000);
+	});
+
+	test("a failed compaction rewrite leaves the journal appendable", async () => {
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		j.append(event("thinking_level_changed", 1));
+		j.append(event("thinking_level_changed", 2));
+		await j.flush();
+
+		// Non-retryable rename failure: the rewrite closes every fd before the
+		// rename, so the instance must be reopened in the failure path too.
+		const renameSpy = spyOn(fs.promises, "rename").mockImplementation(async () => {
+			throw Object.assign(new Error("injected rename failure"), { code: "EIO" });
+		});
+		try {
+			await expect(j.compact(j.tailSeq, { checkpoint: true })).rejects.toThrow("injected rename failure");
+		} finally {
+			renameSpy.mockRestore();
+		}
+
+		j.append(event("thinking_level_changed", 3));
+		expect(await j.flushWithin(500)).toBe(true);
+		expect(await j.durableTailSeq()).toBe(3);
+		await j.close();
+	});
+});

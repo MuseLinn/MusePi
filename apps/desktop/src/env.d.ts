@@ -84,6 +84,8 @@ interface Window {
 		managedBrowserStop(tabId?: string): Promise<unknown>;
 		/** Stop automation without closing the agent tab or changing its page. */
 		managedBrowserTakeover(tabId?: string): Promise<unknown>;
+		/** Give an agent-controlled tab back (the user had taken it over). */
+		managedBrowserHandBack(tabId: string): Promise<unknown>;
 		/** Device preset for a tab: "phone"/"tablet" set a device UA (plus
 		 *  client hints and touch) so the SITE serves its mobile document;
 		 *  "fit"/"desktop" clear the identity. `viewport` emulates the layout
@@ -185,5 +187,7 @@ interface ManagedBrowserState {
 	port: number | null;
 	activity: ManagedBrowserActivity | null;
 	busyTabIds: string[];
+	/** Tabs the user took over; the agent's commands on them are refused. */
+	userOwnedTabIds?: string[];
 	agentActivity?: boolean;
 }

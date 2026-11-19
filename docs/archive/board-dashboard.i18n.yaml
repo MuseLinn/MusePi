@@ -1,5 +1,0 @@
-# Consistency record for board-dashboard.md / board-dashboard.zh-CN.md
-# Blob hashes at last confirmed-consistent state. Edit one side -> update the other
-# in the same PR, then re-record: bun run verify-translation-pairing --write docs/archive/board-dashboard
-board-dashboard.md: 608df16754b1922a3472d4961c79986ecb4b88b5
-board-dashboard.zh-CN.md: 9334b7994a8678783dba176e01419090e7888835

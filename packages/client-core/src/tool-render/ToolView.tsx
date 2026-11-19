@@ -21,11 +21,17 @@ import "./tool-render.css";
 const COLLAPSE_DELAY_MS = 1800;
 
 export interface ToolViewProps {
+	/** Wire tool-call id (settles a held `widget` turn when the page answers). */
+	toolCallId?: string;
 	name: string;
 	args?: unknown;
 	result?: ToolResultLike;
 	/** Tool is still executing (live collab view). */
 	running?: boolean;
+	/** The call never recorded a result and the agent is idle: a persisted turn
+	 *  was cut off mid-execution (daemon exit, crash). Distinct from `pending`,
+	 *  which is a call the live turn has not dispatched yet. */
+	interrupted?: boolean;
 	/** Model-provided intent (`i`), shown atop the body. */
 	intent?: string;
 	/** Streaming partial output tail while running. */
@@ -128,6 +134,7 @@ export function ToolView(props: ToolViewProps): ReactNode {
 		: props.result;
 	const renderer = resolveToolRenderer(name);
 	const renderProps: ToolRenderProps = {
+		toolCallId: props.toolCallId ?? "",
 		name,
 		args: xdev?.args ?? args,
 		result,
@@ -138,7 +145,15 @@ export function ToolView(props: ToolViewProps): ReactNode {
 	};
 
 	const isError = props.result?.isError === true;
-	const status = props.running ? "run" : isError ? "err" : props.result ? "ok" : "pending";
+	const status = props.running
+		? "run"
+		: isError
+			? "err"
+			: props.result
+				? "ok"
+				: props.interrupted
+					? "interrupted"
+					: "pending";
 	// Known tools read as "已使用 Bash" / "Used Bash"; the key argument stays in
 	// the Summary slot beside it. Unknown tools keep the raw wire name.
 	const title = toolCallTitle(name, renderer, props.running === true);
@@ -214,6 +229,7 @@ export function ToolView(props: ToolViewProps): ReactNode {
 			</button>
 			<div ref={bodyRef} className={`tv-body${open ? "" : " tv-body--closed"}`} style={collapseStyle(open)}>
 				{intent && <div className="tv-intent">{intent}</div>}
+				{props.interrupted && <div className="tv-interrupted">{t("tools.callInterrupted")}</div>}
 				{renderer.Body ? <renderer.Body {...renderProps} /> : null}
 			</div>
 			{partial && (

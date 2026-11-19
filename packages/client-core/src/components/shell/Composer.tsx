@@ -15,7 +15,7 @@ import {
 	Volume2,
 	X,
 } from "lucide-react";
-import type { ClipboardEvent, DragEvent, KeyboardEvent, ReactNode, RefObject } from "react";
+import type { KeyboardEvent, ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { t } from "../../i18n/index.js";
 import type { JobsRpc } from "../../lib/async-jobs";
@@ -43,6 +43,8 @@ import { readSttLangPref, useTts, useTtsSnapshot } from "../../lib/tts";
 import { useGuestSelector } from "../../lib/use-guest";
 import type { VoiceCapture } from "../../lib/voice";
 import { startVoiceCapture, transcribeAudio } from "../../lib/voice";
+import { ComposerEditor } from "../composer/ComposerEditor";
+import type { ComposerEditorHandle } from "../composer/composer-editor-types";
 import { shouldShowChatLoading } from "../transcript/render-units";
 import { AsyncJobBar } from "./AsyncJobBar";
 import { ContextRing } from "./ContextRing";
@@ -79,8 +81,12 @@ const LINE_PX = 22;
 const PAD_Y = 12;
 const MAX_ROWS = 8;
 
-function autosize(el: HTMLTextAreaElement | null, singleLine = false): void {
+function autosize(el: HTMLTextAreaElement | ComposerEditorHandle | null, singleLine = false): void {
 	if (!el) return;
+	if ("autosize" in el) {
+		el.autosize();
+		return;
+	}
 	if (singleLine) {
 		el.style.height = `${LINE_PX + PAD_Y}px`;
 		el.style.overflowY = "hidden";
@@ -98,9 +104,20 @@ function autosize(el: HTMLTextAreaElement | null, singleLine = false): void {
  * `nativeEvent.isComposing` covers most browsers; `composing` bridges WebKit, which fires the
  * confirming Enter keydown *after* `compositionend`.
  */
-export function shouldSubmitOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, composing: boolean): boolean {
+interface EnterKeyEvent {
+	key: string;
+	shiftKey: boolean;
+	ctrlKey: boolean;
+	altKey: boolean;
+	metaKey: boolean;
+	keyCode?: number;
+	isComposing?: boolean;
+	nativeEvent?: { isComposing?: boolean };
+}
+
+export function shouldSubmitOnEnter(e: EnterKeyEvent, composing: boolean): boolean {
 	if (e.key !== "Enter" || e.shiftKey) return false;
-	return !(e.nativeEvent.isComposing || composing);
+	return !((e.nativeEvent?.isComposing ?? e.isComposing) || composing);
 }
 
 /**
@@ -818,7 +835,8 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 	// Shared-element morph target (M1.10 §3.3 批次 B): the textarea and the
 	// send button fly in from the connect screen's input/button on connect.
 	// Same ref object the autosize/focus logic already uses.
-	const taRef = useMorphTarget<HTMLTextAreaElement>("composer-input");
+	const taRef = useRef<ComposerEditorHandle | null>(null);
+	const morphRef = useMorphTarget<HTMLElement>("composer-input");
 	const sendMorphRef = useMorphTarget<HTMLButtonElement>("composer-send");
 	// Next-input candidate for this session: the daemon predicts it after a
 	// completed turn, and it is offered only while the composer is empty.
@@ -1114,8 +1132,8 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 	);
 
 	const onPaste = useCallback(
-		(event: ClipboardEvent<HTMLTextAreaElement>): void => {
-			const picked = [...event.clipboardData.items]
+		(event: { clipboardData: DataTransfer | null; preventDefault(): void }): void => {
+			const picked = [...(event.clipboardData?.items ?? [])]
 				.filter(item => item.kind === "file")
 				.map(item => item.getAsFile())
 				.filter((file): file is File => file !== null);
@@ -1127,24 +1145,23 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 	);
 
 	const onDragOver = useCallback(
-		(event: DragEvent<HTMLDivElement>): void => {
-			if (!canPrompt || !event.dataTransfer.types.includes("Files")) return;
+		(event: { dataTransfer: DataTransfer | null; preventDefault(): void }): void => {
+			if (!canPrompt || !event.dataTransfer?.types.includes("Files")) return;
 			event.preventDefault();
 			setDragging(true);
 		},
 		[canPrompt],
 	);
 
-	const onDragLeave = useCallback((event: DragEvent<HTMLDivElement>): void => {
-		if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+	const onDragLeave = useCallback((): void => {
 		setDragging(false);
 	}, []);
 
 	const onDrop = useCallback(
-		(event: DragEvent<HTMLDivElement>): void => {
+		(event: { dataTransfer: DataTransfer | null; preventDefault(): void }): void => {
 			setDragging(false);
 			if (!canPrompt) return;
-			const picked = [...event.dataTransfer.files];
+			const picked = [...(event.dataTransfer?.files ?? [])];
 			if (picked.length === 0) return;
 			event.preventDefault();
 			void addFiles(picked);
@@ -1166,7 +1183,7 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 		haptic(8);
 	}, []);
 
-	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+	const onKeyDown = (e: globalThis.KeyboardEvent): void => {
 		// Accept the next-input candidate. Tab is the primary key (the hint in
 		// the composer says so); ArrowRight keeps the gesture for keyboards
 		// where Tab moves focus.
@@ -1369,13 +1386,20 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 							onDiscard={voiceCtl.discard}
 						/>
 					) : (
-						<textarea
-							ref={taRef}
-							className="sh-composer-input"
-							data-morph-id="composer-input"
+						<ComposerEditor
+							ref={el => {
+								taRef.current = el;
+								morphRef.current = el?.dom ?? null;
+							}}
 							value={text}
-							onChange={e => setText(e.target.value)}
+							onChange={value => setText(value)}
+							variant="compact"
+							className="sh-composer-editor"
+							morphId="composer-input"
 							onPaste={onPaste}
+							onDragOver={onDragOver}
+							onDragLeave={onDragLeave}
+							onDrop={onDrop}
 							onFocus={() => setEngaged(true)}
 							onBlur={() => setEngaged(false)}
 							onKeyDown={onKeyDown}
@@ -1394,9 +1418,8 @@ export function Composer({ client, draftScope = "" }: ComposerProps): ReactNode 
 											hasConversation: !empty,
 										})
 							}
-							disabled={!canPrompt}
-							rows={1}
 							spellCheck={false}
+							editable={canPrompt}
 						/>
 					)}
 					{shownSuggestion !== null && (

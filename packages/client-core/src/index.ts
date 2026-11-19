@@ -166,6 +166,8 @@ export {
 	useAsyncJobs,
 } from "./lib/async-jobs";
 export { type ComposerPlaceholderInput, composerPlaceholder } from "./lib/composer-placeholder";
+export { ComposerEditor, type ComposerEditorProps } from "./components/composer/ComposerEditor";
+export type { ComposerEditorHandle, ComposerSelection, EditorMark, MentionPreview } from "./components/composer/composer-editor-types";
 export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
 export { loadMarketplaceDetailPreference, saveMarketplaceDetailPreference } from "./lib/marketplace-preferences";

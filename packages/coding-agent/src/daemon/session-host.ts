@@ -478,6 +478,11 @@ export function estimateSnapcompactSavings(session: AgentSession): SnapcompactSa
 
 /** Live sessions with no activity (send or event) for this long are auto-closed. */
 export const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** Bound on the durable-intent journal flush that runs before every tool call.
+ *  The session file already holds the intent, so a wedged journal write must
+ *  degrade to a warning instead of freezing the run before `execute()`. */
+const DURABLE_INTENT_FLUSH_TIMEOUT_MS = 5_000;
 /** Mobile pair endpoint port — resolves pair codes only (LAN). */
 export const PAIR_PORT = 8301;
 /**
@@ -1397,7 +1402,7 @@ export class DaemonSessionHost {
 		autoTitle?: boolean;
 		modelPattern?: string;
 		thinkingLevel?: ConfiguredThinkingLevel;
-		/** 会话预设(mode)id:v1 创建时应用(白名单/提示词/settings;docs/archive/modes-plan.md)。 */
+		/** 会话预设(mode)id:v1 创建时应用(白名单/提示词/settings)。 */
 		modeId?: string;
 		/** M3.2 创作面 project metadata(§4 契约):daemon 会话头为权威
 		 *  (persistHeaderPatch 落 view-store 快照头),并镜像写
@@ -1453,7 +1458,14 @@ export class DaemonSessionHost {
 					if (wireEvent && live.journal) {
 						live.durableToolIntentSeqs.set(event, live.journal.append(wireEvent));
 					}
-					await live.journal?.flush();
+					const journal = live.journal;
+					if (journal && !(await journal.flushWithin(DURABLE_INTENT_FLUSH_TIMEOUT_MS))) {
+						logger.warn("Journal flush timed out before tool execution", {
+							sessionId: live.sessionId,
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+						});
+					}
 				},
 				...(await desktopSessionPromptInputs(cwd)),
 				// M3 §3: designSystemId 随创建进 SDK——rebuildSystemPrompt 每次
@@ -1591,7 +1603,14 @@ export class DaemonSessionHost {
 					if (wireEvent && live.journal) {
 						live.durableToolIntentSeqs.set(event, live.journal.append(wireEvent));
 					}
-					await live.journal?.flush();
+					const journal = live.journal;
+					if (journal && !(await journal.flushWithin(DURABLE_INTENT_FLUSH_TIMEOUT_MS))) {
+						logger.warn("Journal flush timed out before tool execution", {
+							sessionId: live.sessionId,
+							toolCallId: event.toolCallId,
+							toolName: event.toolName,
+						});
+					}
 				},
 				...(await desktopSessionPromptInputs(resumeCwd)),
 				...(projectMetadata ? { projectMetadata } : {}),

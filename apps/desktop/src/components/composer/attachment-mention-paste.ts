@@ -9,7 +9,7 @@
  * CodeMirror receives one `replaceRange` transaction; the textarea fallback
  * keeps `setRangeText` + `input` for the same caret semantics.
  */
-import type { ComposerEditorHandle } from "./composer-editor-types";
+import type { ComposerEditorHandle } from "@musepi/client-core/src/components/composer/composer-editor-types";
 import { ordinalMentionLabel, spliceMentionTokens } from "./mention-token";
 import type { ComposerAttachment } from "./use-attachments";
 

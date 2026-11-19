@@ -131,6 +131,17 @@ function catalogResponse(): Record<string, unknown> {
 				enabled: false,
 				status: "disconnected",
 			},
+			{
+				id: "device-only",
+				name: "Device Only",
+				description: "Device sign-in",
+				category: "dev",
+				deviceAuth: true,
+				server: { transport: "http", url: "https://device.example/mcp" },
+				authMode: "oauth",
+				enabled: false,
+				status: "disconnected",
+			},
 		],
 	};
 }
@@ -277,6 +288,38 @@ describe("connector settings", () => {
 		await Bun.sleep(1100);
 		await flush(4);
 		expect(fake.calls("connectors.catalog.list").length).toBeGreaterThan(1);
+	});
+
+	test("connect uses the device grant when the row has no browser exchange", async () => {
+		const fake = new FakeRpc();
+		fake.handlers.set("connectors.catalog.list", () => catalogResponse());
+		fake.handlers.set("connectors.connect", () => ({
+			ok: false,
+			id: "device-only",
+			name: "Device Only",
+			serverName: "connector:device-only",
+			needsAuth: true,
+			needsDeviceAuth: true,
+			status: "connecting",
+		}));
+		fake.handlers.set("mcp.oauth.device.start", () => ({
+			flowId: "device-1",
+			userCode: "WXYZ-9876",
+			verificationUri: "https://example.com/device",
+			interval: 1,
+		}));
+		fake.handlers.set("mcp.oauth.device.poll", () => ({ status: "success" }));
+
+		const host = await mount(fake);
+		const row = rowFor(host, "Device Only");
+		await act(async () => button(row, "连接").dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await flush(4);
+
+		// The browser exchange cannot finish for this row, so it is never started.
+		expect(fake.calls("mcp.oauth.start")).toEqual([]);
+		expect(fake.calls("mcp.oauth.device.start")).toEqual([{ name: "connector:device-only" }]);
+		expect(document.body.textContent).toContain("WXYZ-9876");
+		expect(host.querySelector(".gui-dialog--connector")).toBeNull();
 	});
 
 	test("skips OAuth for an open connector and disconnects an enabled one", async () => {

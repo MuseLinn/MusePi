@@ -1,18 +1,17 @@
 import { history, historyKeymap, standardKeymap } from "@codemirror/commands";
-import { EditorState } from "@codemirror/state";
+import { Compartment, EditorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import {
 	interceptKeymap,
 	mapPosition,
-	refreshTokens,
+	marksField,
+	refreshMarks,
 	selectionOf,
-	tokenField,
 	valuePropWrite,
 } from "./composer-editor-code";
 import { ComposerMentionPop, type MentionPop } from "./composer-editor-pop";
-import type { ComposerEditorHandle, ComposerSelection } from "./composer-editor-types";
-import type { HighlightSpan, MentionPreview } from "./token-spans";
+import type { ComposerEditorHandle, ComposerSelection, EditorMark, MentionPreview } from "./composer-editor-types";
 
 /**
  * CodeMirror 6 composer editor (openchamber parity).
@@ -32,6 +31,7 @@ export interface ComposerEditorProps {
 	onKeyDown?(event: KeyboardEvent): boolean | void;
 	onPaste?(event: ClipboardEvent): void;
 	onDragOver?(event: DragEvent): void;
+	onDragLeave?(): void;
 	onDrop?(event: DragEvent): void;
 	onFocus?(): void;
 	onBlur?(): void;
@@ -40,18 +40,24 @@ export interface ComposerEditorProps {
 	placeholder?: string;
 	spellCheck?: boolean;
 	autoComplete?: string;
-	/** Resolve a mention name against the live chip list; null = plain text. */
+	/** Painted token ranges, recomputed by the caller on every text/context change. */
+	marks?: readonly EditorMark[];
+	/** Resolve a mention name for the hover card; null = no preview. */
 	resolveMention?(name: string): MentionPreview | null;
-	/** Recompute mention decorations when the chip list changes. */
-	mentionVersion?: unknown;
 	onMentionClick?(start: number): void;
 	className?: string;
 	dataComposerInput?: boolean;
 	dataFocused?: boolean;
-	variant?: "session" | "welcome";
+	variant?: "session" | "welcome" | "compact";
 	ariaLabel?: string;
 	autoFocus?: boolean;
+	/** Editable is a live prop: the mobile composer disables it while a host
+	 *  session is unavailable. */
+	editable?: boolean;
+	morphId?: string;
 }
+
+const editableCompartment = new Compartment();
 
 export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorProps>(
 	function ComposerEditor(props, ref) {
@@ -61,6 +67,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 			onKeyDown,
 			onPaste,
 			onDragOver,
+			onDragLeave,
 			onDrop,
 			onFocus,
 			onBlur,
@@ -70,7 +77,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 			spellCheck = false,
 			autoComplete = "off",
 			resolveMention,
-			mentionVersion,
+			marks = [],
 			onMentionClick,
 			className,
 			dataComposerInput = false,
@@ -78,6 +85,8 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 			variant = "session",
 			ariaLabel,
 			autoFocus = false,
+			editable = true,
+			morphId,
 		} = props;
 		const hostRef = useRef<HTMLDivElement | null>(null);
 		const viewRef = useRef<EditorView | null>(null);
@@ -90,6 +99,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 			onKeyDown,
 			onPaste,
 			onDragOver,
+			onDragLeave,
 			onDrop,
 			onFocus,
 			onBlur,
@@ -102,6 +112,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 			onKeyDown,
 			onPaste,
 			onDragOver,
+			onDragLeave,
 			onDrop,
 			onFocus,
 			onBlur,
@@ -111,7 +122,8 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 		};
 		const resolverRef = useRef(resolveMention);
 		resolverRef.current = resolveMention;
-		const spansRef = useRef<HighlightSpan[]>([]);
+		const marksRef = useRef<readonly EditorMark[]>(marks);
+		marksRef.current = marks;
 		/** True while CodeMirror is dispatching an update and our onChange runs:
 		 *  a synchronous parent render/effect must not dispatch again. */
 		const inUpdateRef = useRef(false);
@@ -125,12 +137,13 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 					doc: valueRef.current,
 					extensions: [
 						history(),
+						editableCompartment.of(EditorView.editable.of(editable)),
 						EditorView.lineWrapping,
 						// Composer keys win over CodeMirror defaults (Enter sends,
 						// ArrowUp walks history, Backspace removes a mention atom).
 						interceptKeymap(event => handlersRef.current.onKeyDown?.(event) ?? false),
 						keymap.of([...standardKeymap, ...historyKeymap]),
-						tokenField(resolverRef, spansRef),
+						marksField(marksRef),
 						EditorView.updateListener.of(update => {
 							const handlers = handlersRef.current;
 							if (update.docChanged) {
@@ -161,6 +174,12 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 							},
 							dragover: (event: DragEvent) => {
 								handlersRef.current.onDragOver?.(event);
+								return false;
+							},
+							dragleave: (event: DragEvent, editor: EditorView) => {
+								const related = event.relatedTarget as Node | null;
+								if (related && editor.contentDOM.contains(related)) return false;
+								handlersRef.current.onDragLeave?.();
 								return false;
 							},
 							drop: (event: DragEvent) => {
@@ -194,7 +213,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 									setPop(current => (current === null ? current : null));
 									return false;
 								}
-								const coords = editor.coordsAtPos(at.span.start);
+								const coords = editor.coordsAtPos(at.mark.from);
 								if (!coords) return false;
 								setPop(current => {
 									if (
@@ -215,7 +234,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 							click: (event: MouseEvent, editor: EditorView) => {
 								const at = mentionAt(editor, event);
 								if (!at) return false;
-								handlersRef.current.onMentionClick?.(at.span.start);
+								handlersRef.current.onMentionClick?.(at.mark.from);
 								return true;
 							},
 						}),
@@ -234,6 +253,12 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 			// Built once: handlers and the resolver are read through refs.
 			// eslint-disable-next-line react-hooks/exhaustive-deps
 		}, []);
+
+		useEffect(() => {
+			viewRef.current?.dispatch({
+				effects: editableCompartment.reconfigure(EditorView.editable.of(editable)),
+			});
+		}, [editable]);
 
 		// External value writes (completion, undo backfill, voice, enhance):
 		// replace the document, keep the caret at the end like a controlled
@@ -280,27 +305,23 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 		// Attachment inventory changed without a document edit: repaint the
 		// mention decorations against the new chip list.
 		useEffect(() => {
-			// The resolver itself is read through resolverRef; only the chip
-			// list identity changes what "resolved" means. Defer if a parent
-			// render lands inside CodeMirror's own update dispatch.
+			// Defer if a parent render lands inside CodeMirror's own update dispatch.
 			const refresh = (): void => {
 				if (inUpdateRef.current) {
 					queueMicrotask(refresh);
 					return;
 				}
-				viewRef.current?.dispatch({ effects: refreshTokens.of(null) });
+				viewRef.current?.dispatch({ effects: refreshMarks.of(null) });
 			};
 			refresh();
-		}, [mentionVersion]);
+		}, [marks]);
 
-		function mentionAt(editor: EditorView, event: MouseEvent): { span: HighlightSpan; name: string } | null {
+		function mentionAt(editor: EditorView, event: MouseEvent): { mark: EditorMark; name: string } | null {
 			const pos = editor.posAtCoords({ x: event.clientX, y: event.clientY });
 			if (pos === null) return null;
-			const doc = editor.state.doc.toString();
-			for (const span of spansRef.current) {
-				if (span.kind !== "mention" || pos < span.start || pos > span.end) continue;
-				const raw = doc.slice(span.start, span.end);
-				return { span, name: raw.startsWith("@") || raw.startsWith("＠") ? raw.slice(1) : raw };
+			for (const mark of marksRef.current) {
+				if (!mark.mentionName || pos < mark.from || pos > mark.to) continue;
+				return { mark, name: mark.mentionName };
 			}
 			return null;
 		}
@@ -351,7 +372,7 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 					const style = getComputedStyle(view.contentDOM);
 					const lineHeight = Number.parseFloat(style.lineHeight) || 20;
 					const padding = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom);
-					const rows = variant === "welcome" ? 3 : 2;
+					const rows = variant === "welcome" ? 3 : variant === "compact" ? 1 : 2;
 					host.style.minHeight = `${rows * lineHeight + padding}px`;
 					const bound = host.closest<HTMLElement>(".gui-chat-body");
 					const lineCap = 8 * lineHeight + padding;
@@ -381,12 +402,14 @@ export const ComposerEditor = forwardRef<ComposerEditorHandle, ComposerEditorPro
 		return (
 			<div
 				ref={hostRef}
-				className={`gui-composer-editor gui-composer-editor--${variant}${className ? ` ${className}` : ""}`}
+				className={`musepi-composer-editor musepi-composer-editor--${variant}${className ? ` ${className}` : ""}`}
 				data-focused={dataFocused ? "1" : "0"}
+				data-editable={editable ? "1" : "0"}
+				{...(morphId ? { "data-morph-id": morphId } : {})}
 				{...(dataComposerInput ? { "data-composer-input": "" } : {})}
 			>
 				{value.length === 0 && placeholder ? (
-					<span className="gui-composer-editor-placeholder" aria-hidden>
+					<span className="musepi-composer-editor__placeholder" aria-hidden>
 						{placeholder}
 					</span>
 				) : null}

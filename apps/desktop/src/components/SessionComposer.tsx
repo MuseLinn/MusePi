@@ -1,5 +1,6 @@
 import { composerPlaceholder } from "@musepi/client-core";
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
+import { ComposerEditor } from "@musepi/client-core/src/components/composer/ComposerEditor";
 import { AsyncJobBar } from "@musepi/client-core/src/components/shell/AsyncJobBar";
 import { normalizeQueueSnapshot, type QueueGroup, type QueueSnapshot } from "@musepi/client-core/src/lib/message-queue";
 import {
@@ -22,7 +23,6 @@ import { t } from "../i18n/index.js";
 import type { CompanionMood, CompanionState } from "../lib/companion";
 import type { ComposerAttachRef } from "../lib/composer-attach";
 import { ComposerFrame } from "../lib/composer-frame";
-import { readPasteImageMention } from "../lib/composer-prefs";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
@@ -64,8 +64,6 @@ import {
 } from "./composer/action-buttons";
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
-import { imageChipCount, insertPastedImageMentions } from "./composer/attachment-mention-paste";
-import { ComposerEditor } from "./composer/ComposerEditor";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
@@ -83,7 +81,6 @@ import {
 	spliceMentionToken,
 } from "./composer/mention-token";
 import { GoalChip, PlanChip } from "./composer/mode-chips";
-import { insertPastedPlainText } from "./composer/paste-text";
 import { PlanPanel } from "./composer/plan-panel";
 import { QueuePanel } from "./composer/queue-panel";
 import { QuoteCards } from "./composer/quote-cards";
@@ -114,6 +111,8 @@ import {
 	useAttachments,
 } from "./composer/use-attachments";
 import { useCompletion } from "./composer/use-completion";
+import { useComposerIntake } from "./composer/use-composer-intake";
+import { useComposerMarks } from "./composer/use-composer-marks";
 import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
@@ -308,7 +307,8 @@ export function SessionComposer({
 	}, []);
 	const [enhance, setEnhance] = useState<EnhanceState>("idle");
 	// Image paste/drop attachments (extracted: composer/use-attachments).
-	const { attachments, setAttachments, addFiles, onPaste, onDragOver, onDrop } = useAttachments(rpc);
+	const { attachments, setAttachments, addFiles, onPaste } = useAttachments(rpc);
+	const { marks, resolveMention } = useComposerMarks(text, attachments);
 	// Annotation screenshots use the ordinary attachment pipeline; their text
 	// stays in display context until send.
 	const addFilesRef = useRef(addFiles);
@@ -1218,6 +1218,71 @@ export function SessionComposer({
 	// Select-all + delete clears text AND attachments together (the flag
 	// is consumed by onChange once the textarea reports the emptied value).
 	const clearAllRef = useRef(false);
+	const intake = useComposerIntake({
+		editor: taRef,
+		attachments,
+		addFiles,
+		setAttachments,
+		setText,
+		clearAllRef,
+		autosize: () => autosize(taRef.current),
+		onPasteFiles: onPaste,
+		onLongPaste: (pastedText, event) => {
+			if (!isLongPastedText(pastedText)) {
+				largePasteGesture.invalidate();
+				return false;
+			}
+			const ta = taRef.current;
+			if (!ta) return false;
+			const candidate = largePasteGesture.beginPaste(pastedText, {
+				value: ta.value,
+				selectionStart: ta.selectionStart,
+				selectionEnd: ta.selectionEnd,
+			});
+			if (!candidate) return false;
+			event.preventDefault();
+			void largePasteGesture.convert(
+				candidate,
+				async () => {
+					const file = new File([candidate.clipboardText], `paste-${Date.now()}.md`, {
+						type: "text/markdown",
+					});
+					await addFiles([file]);
+					return true;
+				},
+				() => {
+					const el = taRef.current;
+					return el
+						? {
+								value: el.value,
+								selectionStart: el.selectionStart,
+								selectionEnd: el.selectionEnd,
+							}
+						: null;
+				},
+				(from, to, citation) => taRef.current?.replaceRange(from, to, citation),
+				"[附件]",
+			);
+			return true;
+		},
+		onValueChange: (value, selection) => {
+			largePasteGesture.change({
+				value,
+				selectionStart: selection.start,
+				selectionEnd: selection.end,
+			});
+			if (historyIndex !== null) setHistoryIndex(null);
+			onSlashInput(value);
+			onAtInput(value);
+			onHashInput(value);
+		},
+		onMentionClick: start => {
+			const ta = taRef.current;
+			if (!ta) return;
+			ta.focus();
+			ta.setSelectionRange(start, start);
+		},
+	});
 	// The completion menus (@/ #//) share one portaled anchor: the textarea.
 	// Portaling lets the frosted glass sample real content behind the menu
 	// (in-place, the composer frame's own backdrop is all the blur sees).
@@ -2438,96 +2503,11 @@ export function SessionComposer({
 						dataComposerInput
 						dataFocused={focused}
 						variant="session"
-						onPaste={e => {
-							const pastedText = e.clipboardData?.getData("text") ?? "";
-							// Snapshot before intake: the mention ordinal continues
-							// from the chips already staged at paste time.
-							const priorImages = imageChipCount(attachments);
-							const added = onPaste(e);
-							if (e.defaultPrevented) {
-								// The attachment branch consumed the paste; a clipboard
-								// carrying text AND an image must keep both.
-								insertPastedPlainText(taRef.current, pastedText);
-								if (readPasteImageMention()) {
-									void added
-										.then(chips => insertPastedImageMentions(taRef.current, chips, priorImages))
-										.catch(() => {});
-								}
-								return;
-							}
-							if (!isLongPastedText(pastedText)) {
-								largePasteGesture.invalidate();
-								return;
-							}
-							// The first large paste lands normally — the user sees what
-							// they pasted. Pasting the SAME text again within a second
-							// is the signal that inline was not wanted: it becomes an
-							// attachment and the inline copy is replaced by a citation.
-							const ta = taRef.current;
-							if (!ta) return;
-							const candidate = largePasteGesture.beginPaste(pastedText, {
-								value: ta.value,
-								selectionStart: ta.selectionStart,
-								selectionEnd: ta.selectionEnd,
-							});
-							if (candidate) {
-								e.preventDefault();
-								void largePasteGesture.convert(
-									candidate,
-									async () => {
-										const file = new File([candidate.clipboardText], `paste-${Date.now()}.md`, {
-											type: "text/markdown",
-										});
-										await addFiles([file]);
-										return true;
-									},
-									() => {
-										const el = taRef.current;
-										return el
-											? {
-													value: el.value,
-													selectionStart: el.selectionStart,
-													selectionEnd: el.selectionEnd,
-												}
-											: null;
-									},
-									(from, to, citation) => taRef.current?.replaceRange(from, to, citation),
-									"[附件]",
-								);
-							}
-						}}
-						onDragOver={onDragOver}
-						onDrop={e => {
-							const priorImages = imageChipCount(attachments);
-							const added = onDrop(e);
-							if (readPasteImageMention()) {
-								void added
-									.then(chips => insertPastedImageMentions(taRef.current, chips, priorImages))
-									.catch(() => {});
-							}
-						}}
-						onChange={(value, selection) => {
-							setText(value);
-							// The large-paste gesture needs to see the text AFTER the
-							// edit: knowing where it landed is what lets the second
-							// paste of the same text replace it.
-							largePasteGesture.change({
-								value,
-								selectionStart: selection.start,
-								selectionEnd: selection.end,
-							});
-							// A genuine keystroke that edits the box exits input-history
-							// browsing (programmatic history recall sets state, never
-							// fires onChange — so browse stays until the user edits).
-							if (historyIndex !== null) setHistoryIndex(null);
-							if (clearAllRef.current) {
-								clearAllRef.current = false;
-								if (value === "") setAttachments([]);
-							}
-							onSlashInput(value);
-							onAtInput(value);
-							onHashInput(value);
-						}}
+						className="gui-composer-editor gui-composer-editor--session"
+						onPaste={intake.onPaste}
+						onDragOver={intake.onDragOver}
+						onDrop={intake.onDrop}
+						onChange={intake.onChange}
 						onCompositionStart={() => {
 							composingRef.current = true;
 						}}
@@ -2561,28 +2541,9 @@ export function SessionComposer({
 						}
 						spellCheck={spellcheckEnabled()}
 						autoComplete="off"
-						resolveMention={name => {
-							// null = unresolved (no such ordinal/name) → plain text:
-							// unpainted and unexpanded on send.
-							const hit = resolveMentionChip(name, attachments);
-							return hit
-								? {
-										kind: hit.chip.kind,
-										name: hit.chip.name,
-										size: hit.chip.size,
-										dataUrl: hit.chip.dataUrl || undefined,
-									}
-								: null;
-						}}
-						mentionVersion={attachments}
-						onMentionClick={start => {
-							// Pill click = caret jump to the token (hover preview is
-							// display-only).
-							const ta = taRef.current;
-							if (!ta) return;
-							ta.focus();
-							ta.setSelectionRange(start, start);
-						}}
+						marks={marks}
+						resolveMention={resolveMention}
+						onMentionClick={intake.onMentionClick}
 					/>
 					{shownSuggestion !== null && (
 						<span className="gui-composer-suggestion" aria-hidden>

@@ -191,6 +191,8 @@ export function createApprovalBridge(
 	};
 
 	const uiContext: ExtensionUIContext = {
+		// A page that holds the turn is answered through the GUI's widget card.
+		widgetAnswers: true,
 		// The approval gate awaits this exact select; any OTHER select (ask
 		// tool questions, plan pickers) routes to the GUI ask card.
 		async select(title, options) {

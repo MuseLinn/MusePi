@@ -1,4 +1,4 @@
-import type { ComposerEditorHandle } from "./composer-editor-types";
+import type { ComposerEditorHandle } from "@musepi/client-core/src/components/composer/composer-editor-types";
 
 /**
  * Insert the plain-text half of a clipboard payload at the caret of a

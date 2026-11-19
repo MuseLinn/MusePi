@@ -390,6 +390,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	managedBrowserStop: (tabId) => ipcRenderer.invoke("managed-browser:stop", tabId),
 	/** Stop the current turn's automation but keep the page for the user. */
 	managedBrowserTakeover: (tabId) => ipcRenderer.invoke("managed-browser:takeover", tabId),
+	/** Give an agent-controlled tab back after the user took it over. */
+	managedBrowserHandBack: (tabId) => ipcRenderer.invoke("managed-browser:handback", tabId),
 	/** Device preset + emulated viewport for the active tab
 	 *  ("fit" clears the identity and the metrics override). */
 	managedBrowserSetDevice: (input) => ipcRenderer.invoke("managed-browser:set-device", input),

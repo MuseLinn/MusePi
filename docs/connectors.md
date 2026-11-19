@@ -118,7 +118,7 @@ The remote index shape:
 }
 ```
 
-`auth.mode` is `oauth` (default), `none`, or `token`. `descriptionZh` supplies a Chinese one-liner for a Chinese UI, and `featured: true` puts an entry in the page's opening section. Optional `oauth` hints (`clientId`, `authorizationUrl`, `tokenUrl`, `scopes`, `callbackPort`, `callbackPath`) map onto the existing MCP OAuth config; omitted hints fall back to runtime discovery. A `token` entry must declare a form schema; values are stored in the encrypted connector secret store, never in the catalog. A schema may carry the value in a header or in a URL query parameter, because some vendors issue a plain key for a query string (`query: "key"` for Amap's `?key=`) rather than a bearer token; `header` wins when both are declared:
+`auth.mode` is `oauth` (default), `none`, or `token`. `descriptionZh` supplies a Chinese one-liner for a Chinese UI, and `featured: true` puts an entry in the page's opening section. Optional `oauth` hints (`clientId`, `authorizationUrl`, `tokenUrl`, `scopes`, `callbackPort`, `callbackPath`, `deviceAuthorizationUrl`) map onto the existing MCP OAuth config; omitted hints fall back to runtime discovery. `deviceAuthorizationUrl` matters for vendors that run the device grant but publish no authorization-server metadata — GitHub's `/login/device/code` — because the conventional fallback path is not one they serve. A `token` entry must declare a form schema; values are stored in the encrypted connector secret store, never in the catalog. A schema may carry the value in a header or in a URL query parameter, because some vendors issue a plain key for a query string (`query: "key"` for Amap's `?key=`) rather than a bearer token; `header` wins when both are declared:
 
 ```json
 {
@@ -161,6 +161,10 @@ The GUI reflects that containment: settings has ONE entry, 连接器, and hand-w
 
 The page is two levels. Rows are an index — icon, name, one sentence, one action — grouped as connected, featured, and category, each category showing six rows until the user narrows it. Everything longer (the full description, examples, docs, the credential form, CLI authorization, local-process approval, the probe verdict) lives in the detail dialog a row opens. A connect that turns out to need authorization, a credential, or an approval opens that dialog, so a flow never waits behind a row the user cannot see. The device-code panel stays on the page instead of the dialog: its polling lives in the component, and closing the dialog must not strand a sign-in that is already being entered in the browser. Examples follow the UI language (`examplesZh` when present) and each one can be copied or handed to the composer, which closes settings and appends the sentence to the draft.
 
+Servers outside the catalog — what `mcp.json` and other agents declare — sit in their own section below the catalog, separated by a rule: one row per server with its transport, source, auth and live state, and one switch that decides whether a session can use it. The same server cannot appear twice, once as a toggle and once as a configuration dump.
+
+Sign-in is one action. A row whose catalog entry pins a client id without a client secret reports `deviceAuth`; `connectors.connect` answers `needsDeviceAuth` and Connect starts the device grant (and its poll) directly, instead of opening an authorization page that cannot complete. Any personal-access-token fallback sits under 其他登录方式. The desktop no longer requests a custom-scheme redirect: the daemon rejects a non-http(s) redirect URI, and browser OAuth uses its loopback listener. Enablement is transactional: `connect` leaves an unauthorized row untouched, and the client enables it with `setEnabled` once the grant lands, so a failed or abandoned flow never leaves a row that reads as connected. The device code is its own dialog; closing it cancels the pending flow.
+
 ## RPC surface
 
 | Route | Behavior |
@@ -168,9 +172,9 @@ The page is two levels. Rows are an index — icon, name, one sentence, one acti
 | `connectors.catalog.list` | Catalog rows with enablement and live `connected` / `connecting` / `disconnected` status; optional `query`. |
 | `connectors.catalog.detail` | One row plus its OAuth hints. |
 | `connectors.catalog.refresh` | Drop the 5 s catalog cache and re-scan every source. |
-| `connectors.connect` | Enable one connector, reload managers, return `{ serverName, needsAuth, status }`; a stdio entry returns `{ needsApproval, command, args, envKeys }` until called with `approve: true`. |
+| `connectors.connect` | Answer whether a connector can be enabled. An OAuth row without a stored grant returns `{ needsAuth }` (or `{ needsDeviceAuth }`) and changes nothing; an open row enables, reloads managers, and returns `{ serverName, needsAuth: false, status }`; a stdio entry returns `{ needsApproval, command, args, envKeys }` until called with `approve: true`. |
 | `connectors.disconnect` | Disable one connector and reload. |
-| `connectors.setEnabled` | Explicit toggle over the same two operations. |
+| `connectors.setEnabled` | Explicit toggle over the same two operations. The client calls it with `enabled: true` after a sign-in lands: with the grant stored, the same `connect` path enables the row, so a failed flow never leaves it enabled. |
 | `connectors.token.save` | Validate Token form values against the schema, merge them into the encrypted store, and require every required field. Empty values keep the stored value. |
 | `connectors.cli.status` | Run the CLI `status` command for a pending auth flow; `success` enables the connector. |
 | `connectors.cli.cancel` | Stop the auth process and forget the flow. |
@@ -184,7 +188,7 @@ The page is two levels. Rows are an index — icon, name, one sentence, one acti
 
 The discovery layer already reads every agent's MCP configuration — Cursor, VS Code, Claude, Codex, Kimi Code and the rest — so those servers are reachable in a session. `connectors.import.scan` offers exactly that set, and `connectors.import.apply` copies the picked ones into `<agentDir>/connectors/custom.json`, where they join the catalog as user-owned entries.
 
-Importing is a copy, not a link. The other agent's file is never written to, and removing the imported connector later leaves it untouched.
+Importing is a copy, not a link. The other agent's file is never written to, and removing the imported connector later leaves it untouched. The scan reports each server's live MCP state (available, disabled, shadowed) and whether the same endpoint is already in the user's catalog, so the dialog badges it and greys out a would-be duplicate. Writing happens on a second, explicit confirmation that names the selected servers and the three effects: the entry goes to `connectors/custom.json`, credentials move into the encrypted store, and the connector stays disabled until approved.
 
 A credential the other agent stored in plain text — an `Authorization` header, or an environment variable whose name says it is a token — moves into the encrypted connector secret store, and the catalog keeps only the field name. Leaving the plaintext where it was would keep it readable to every other tool on the machine. An environment variable that is ordinary configuration (`CODEX_HOME`, `JAVA_HOME`, a trusted-path list) stays in the entry: it is not a secret, and the server reads it as configuration.
 

@@ -14,6 +14,7 @@ import { type } from "@musepi/musepi-type";
 import type { AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
 import { MAX_WIDGET_HTML } from "@musepi/pi-utils";
+import { awaitWidgetAnswer, type WidgetAnswer } from "../../tools/widget-answer";
 import widgetDescription from "./prompt.md" with { type: "text" };
 import { WIDGET_RENDER_WHEN } from "./when";
 
@@ -97,6 +98,9 @@ export interface WidgetToolDetails {
 	/** The page asks the user to choose; the card keeps a waiting line until
 	 *  an answer leaves it. */
 	awaitAnswer?: boolean;
+	/** The user's answer, present only when `awaitAnswer` held the turn and the
+	 *  answer landed. The renderer shows the answered state from it. */
+	answer?: WidgetAnswer;
 }
 
 export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDetails> {
@@ -125,11 +129,11 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 	];
 
 	async execute(
-		_toolCallId: string,
+		toolCallId: string,
 		params: typeof widgetSchema.infer,
-		_signal?: AbortSignal,
-		_onUpdate?: AgentToolUpdateCallback<WidgetToolDetails>,
-		_context?: unknown,
+		signal?: AbortSignal,
+		onUpdate?: AgentToolUpdateCallback<WidgetToolDetails>,
+		context?: unknown,
 	): Promise<AgentToolResult<WidgetToolDetails>> {
 		const html = typeof params.html === "string" ? params.html : "";
 		if (!html.trim()) {
@@ -168,18 +172,53 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 			...(params.awaitAnswer === true ? { awaitAnswer: true } : {}),
 		};
 		if (title) details.title = title;
+		const rendersInChat =
+			`Rendered page${title ? ` "${title}"` : ""} (${html.length} characters). ` +
+			"Shown to the user in the chat above your reply. Don't announce, describe or restate the page; reply with only what it doesn't already say." +
+			(details.images?.length
+				? ` The page references ${details.images.length} local image(s), which the chat inlines for it.`
+				: "");
+
+		// A page that asks the user to choose holds the turn: the card renders
+		// from this first update while `execute` waits for the answer, and the
+		// turn ends with the choice instead of running past it. Hosts without a
+		// UI (TUI/CLI) have no way to answer, so they keep the immediate return.
+		const canAnswer = (context as { ui?: { widgetAnswers?: boolean } } | undefined)?.ui?.widgetAnswers === true;
+		if (details.awaitAnswer === true && canAnswer) {
+			onUpdate?.({ content: [], details });
+			const answer = await awaitWidgetAnswer(toolCallId, signal);
+			if (!answer) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `${rendersInChat} The user did not answer before the turn stopped; the page stays in the transcript unanswered.`,
+						},
+					],
+					details,
+				};
+			}
+			details.answer = answer;
+			const payload =
+				answer.data === undefined
+					? ""
+					: `
+Data: ${JSON.stringify(answer.data).slice(0, 8_000)}`;
+			return {
+				content: [
+					{
+						type: "text",
+						text: `${rendersInChat}
+
+The user answered with \`${answer.text}\`.${payload}`,
+					},
+				],
+				details,
+			};
+		}
+
 		return {
-			content: [
-				{
-					type: "text",
-					text:
-						`Rendered page${title ? ` "${title}"` : ""} (${html.length} characters). ` +
-						"Shown to the user in the chat above your reply. Don't announce, describe or restate the page; reply with only what it doesn't already say." +
-						(details.images?.length
-							? ` The page references ${details.images.length} local image(s), which the chat inlines for it.`
-							: ""),
-				},
-			],
+			content: [{ type: "text", text: rendersInChat }],
 			details,
 		};
 	}

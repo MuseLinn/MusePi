@@ -1,38 +1,24 @@
 import { Annotation, type EditorState, type Extension, Prec, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap } from "@codemirror/view";
-import type { ComposerSelection } from "./composer-editor-types";
-import { type HighlightKind, HL_CLASS, type MentionPreview, parseHighlightSpans } from "./token-spans";
+import type { ComposerSelection, EditorMark } from "./composer-editor-types";
 
 /** Marks the transaction that writes a changed `value` prop into the editor. */
 export const valuePropWrite = Annotation.define<true>();
 /** Repaint mention decorations when the staged chip list changes. */
-export const refreshTokens = StateEffect.define<null>();
+export const refreshMarks = StateEffect.define<null>();
 
-const TOKEN_MARK: Record<HighlightKind, Decoration> = {
-	slash: Decoration.mark({ class: HL_CLASS.slash }),
-	bang: Decoration.mark({ class: HL_CLASS.bang }),
-	magic: Decoration.mark({ class: HL_CLASS.magic }),
-	mention: Decoration.mark({ class: HL_CLASS.mention }),
-};
-
-/** Token spans -> CodeMirror mark decorations, rebuilt on doc/context change. */
-export function tokenField(
-	resolverRef: { current: ((name: string) => MentionPreview | null) | undefined },
-	spansRef: { current: ReturnType<typeof parseHighlightSpans> },
-): Extension {
-	const build = (state: EditorState): DecorationSet => {
-		const spans = parseHighlightSpans(state.doc.toString(), name => resolverRef.current?.(name) ?? null);
-		spansRef.current = spans;
-		return Decoration.set(
-			spans.map(span => TOKEN_MARK[span.kind].range(span.start, span.end)),
+/** EditorMarks -> CodeMirror mark decorations, rebuilt on doc/context change. */
+export function marksField(marksRef: { current: readonly EditorMark[] }): Extension {
+	const build = (): DecorationSet =>
+		Decoration.set(
+			marksRef.current.map(mark => Decoration.mark({ class: mark.className }).range(mark.from, mark.to)),
 			true,
 		);
-	};
 	return StateField.define<DecorationSet>({
 		create: build,
 		update(decorations, transaction) {
-			if (transaction.docChanged || transaction.effects.some(effect => effect.is(refreshTokens))) {
-				return build(transaction.state);
+			if (transaction.docChanged || transaction.effects.some(effect => effect.is(refreshMarks))) {
+				return build();
 			}
 			return decorations;
 		},

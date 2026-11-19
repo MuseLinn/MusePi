@@ -7,6 +7,7 @@ import { ToolView } from "../../tool-render/ToolView";
 import type { ToolRenderHost, ToolResultImage } from "../../tool-render/types";
 import { detailsRecord } from "../../tool-render/util";
 import { ImageCardStack } from "./image-card-stack";
+import { Markdown } from "./Markdown";
 import { isArtifactTool, resultPicturesOf, toolShotsOf } from "./tool-media";
 import { toolKind } from "./toolcard-shared";
 import { WidgetCard, widgetPayloadFromResult, widgetStandaloneEnabled } from "./widget-standalone";
@@ -35,6 +36,27 @@ export function hoistToolMedia(
 	};
 }
 
+/** `notify_user` is a progress update, not a tool log: render it as annotated
+ *  prose (accent dot + title + Markdown body), matching Kimi's progress row. */
+function ProgressUpdate({ args, running }: { args: unknown; running?: boolean }): ReactNode {
+	const record = typeof args === "object" && args !== null ? (args as Record<string, unknown>) : null;
+	const title = record !== null && typeof record.title === "string" ? record.title : "";
+	const message = record !== null && typeof record.message === "string" ? record.message : "";
+	return (
+		<section className="tr-progress-update" data-running={running === true}>
+			<span className="tr-progress-dot" aria-hidden />
+			<div className="tr-progress-main">
+				<div className="tr-progress-title">{title || t("tools.toolNotifyUser")}</div>
+				{message ? (
+					<div className="tr-progress-body">
+						<Markdown text={message} />
+					</div>
+				) : null}
+			</div>
+		</section>
+	);
+}
+
 export interface ToolCardProps {
 	toolCallId: string;
 	name: string;
@@ -42,6 +64,8 @@ export interface ToolCardProps {
 	intent?: string;
 	result?: ToolResultMessage;
 	running?: boolean;
+	/** No result and the agent is idle: the call was cut off mid-flight. */
+	interrupted?: boolean;
 	partialResult?: unknown;
 	host?: ToolRenderHost;
 	/** display.taskCardStyle parity: "classic" uses the plain tool-call card
@@ -77,11 +101,26 @@ function widgetDefaultOpen(): boolean {
  *  it in the message flow (craft-agents message-image parity) so the user
  *  never has to expand a folded card to see the picture. */
 export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode {
-	const { name, intent, args, result, running, partialResult, host, taskCardStyle, mediaOnly, onPreviewImage } = props;
+	const {
+		toolCallId,
+		name,
+		intent,
+		args,
+		result,
+		running,
+		interrupted,
+		partialResult,
+		host,
+		taskCardStyle,
+		mediaOnly,
+		onPreviewImage,
+	} = props;
+	// A progress update is prose, not a tool card; no fold, no "using" chrome.
+	if (name === "notify_user" && !mediaOnly) return <ProgressUpdate args={args} running={running} />;
 	const partial =
 		running && !result ? (typeof partialResult === "string" ? partialResult : messageText(partialResult)) : "";
 	const structuredPartial =
-		name === "browser" &&
+		(name === "browser" || name === "widget") &&
 		running &&
 		!result &&
 		typeof partialResult === "object" &&
@@ -120,7 +159,10 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	}
 	const mediaItems = [
 		...images.map((img, i) => ({
-			src: `data:${img.mimeType};base64,${img.data}`,
+			// Persisted images over the blob threshold keep a `blob:sha256:` ref;
+			// ImageCardStack resolves it through the host (lib/blob-image).
+			src: img.data.startsWith("blob:") ? img.data : `data:${img.mimeType};base64,${img.data}`,
+			mimeType: img.mimeType,
 			alt: t("tools.toolResultWithCount", { count: String(i + 1) }),
 		})),
 		...shotSrcs.map((src, i) => ({ src, alt: t("tools.computerScreenshotWithCount", { count: String(i + 1) }) })),
@@ -129,28 +171,31 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	// passes this when the text-only reply is a media row).
 	if (mediaOnly) {
 		return mediaItems.length > 0 ? (
-			<ImageCardStack items={mediaItems} onOpen={idx => onPreviewImage?.(mediaItems, idx)} />
+			<ImageCardStack items={mediaItems} host={host} onOpen={(idx, list) => onPreviewImage?.(list, idx)} />
 		) : null;
 	}
 	return (
 		<>
 			<ToolView
+				toolCallId={toolCallId}
 				name={name}
 				args={args}
 				result={mediaResult}
 				running={running}
+				interrupted={interrupted}
 				intent={intent}
 				kind={toolKind(name, intent)}
 				partial={partial || undefined}
 				host={host}
 				taskCardStyle={taskCardStyle}
 				/* ZCode parity: live tools open while they run, fold when done;
-				 * artifacts (widget/board cards) stay open per the user setting. */
-				defaultOpen={isArtifact ? artifactDefaultOpen : running === true}
+				 * artifacts (widget/board cards) stay open per the user setting;
+				 * a cut-off call opens so its interruption note is readable. */
+				defaultOpen={isArtifact ? artifactDefaultOpen : running === true || interrupted === true}
 				collapseWhenDone={!isArtifact}
 			/>
 			{mediaItems.length > 0 && (
-				<ImageCardStack items={mediaItems} onOpen={idx => onPreviewImage?.(mediaItems, idx)} />
+				<ImageCardStack items={mediaItems} host={host} onOpen={(idx, list) => onPreviewImage?.(list, idx)} />
 			)}
 		</>
 	);

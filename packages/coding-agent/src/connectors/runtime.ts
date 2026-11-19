@@ -131,6 +131,7 @@ export function connectorToMCPServer(
 		if (clientSecret) oauth.clientSecret = clientSecret;
 		if (entry.oauth?.callbackPort !== undefined) oauth.callbackPort = entry.oauth.callbackPort;
 		if (entry.oauth?.callbackPath) oauth.callbackPath = entry.oauth.callbackPath;
+		if (entry.oauth?.deviceAuthorizationUrl) oauth.deviceAuthorizationUrl = entry.oauth.deviceAuthorizationUrl;
 		if (Object.keys(oauth).length > 0) server.oauth = oauth;
 	}
 	if (entry.auth.mode === "token") {

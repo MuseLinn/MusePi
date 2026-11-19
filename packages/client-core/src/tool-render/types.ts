@@ -104,6 +104,9 @@ export interface ToolRenderHost {
 	 * Hosts without it (guests, HTML exports) omit the capability entirely;
 	 * attachment cards still render, with no size and no preview action.
 	 */
+	/** Answer a `widget` page that is holding the turn (`awaitAnswer`).
+	 *  Absent in hosts with no daemon RPC surface (exports, board previews). */
+	answerWidget?(toolCallId: string, text: string, data?: unknown): Promise<void>;
 	attachment?: {
 		stat?(hash: string): Promise<AttachmentStatResult>;
 		read?(hash: string, offset?: number, limit?: number): Promise<AttachmentGetResult | { error: string }>;
@@ -120,6 +123,9 @@ export interface ToolRenderHost {
 export type ToolKind = "diff" | "search" | "image";
 
 export interface ToolRenderProps {
+	/** Wire tool calls carry the id the daemon needs to settle a held turn
+	 *  (`widget.answer`); exports, previews and old test harnesses omit it. */
+	toolCallId?: string;
 	/** Wire tool name (may be an alias of the registry key, e.g. `grep` → search). */
 	name: string;
 	/** Parsed tool-call arguments with the internal `i` intent already stripped. */

@@ -27,7 +27,7 @@ Every rule has one authoritative home. Other documents link to it and keep only 
 | Product and implementation contracts | `docs/` |
 | Module ownership and local invariants | Package README or `DOCUMENTATION.md` |
 | Plans, audits, and verification records | `docs/review/` |
-| Closed or superseded plans | `docs/archive/` |
+| Closed or superseded plans | Deleted; git history is the record |
 
 Code, scripts, configuration, directory layout, and `--help` already answer many lookups. Document non-obvious contracts, reasons, side effects, and workflows instead of caching facts that can be queried cheaply.
 
@@ -37,7 +37,7 @@ Always-loaded text is expensive on every turn. Keep only information every task 
 
 Long documents are not automatically bad. Split one when a reader must repeatedly scan unrelated material, when audiences differ, or when an independent contract can live beside its owning module. Do not split a coherent procedure into fragments that must all be read together.
 
-Each document opens with a reader map: what it owns, what it deliberately excludes, and the related document to consult next. Historical narration belongs in ADRs, changelogs, or archived plans, not at the start of a current-state contract.
+Each document opens with a reader map: what it owns, what it deliberately excludes, and the related document to consult next. Historical narration belongs in ADRs and changelogs, not at the start of a current-state contract.
 
 ## Metadata
 
@@ -58,13 +58,13 @@ scope:
 Fields have these meanings:
 
 - `title`: site and reader-facing title; the body still has one H1.
-- `status`: `living`, `reference`, `draft`, or `archived`.
+- `status`: `living`, `reference`, or `draft`.
 - `summary`: one sentence that lets a reader decide whether this page answers the question.
 - `scope`: owning code or documentation paths, not a list of every consumer.
 - `layout`: `default` for pages rendered by the documentation site.
 - `lang`: `zh-CN` on Chinese pages; English pages may omit it.
 
-`living` requires synchronized review when scoped code changes. `reference` is stable background. `draft` is not a current contract. `archived` is historical and receives no living-status updates. Do not add manually maintained “last updated” dates; git owns chronology.
+`living` requires synchronized review when scoped code changes. `reference` is stable background. `draft` is not a current contract. Closed or superseded material is deleted instead of kept as a parallel set of documents; git history owns it. Do not add manually maintained “last updated” dates; git owns chronology.
 
 Run `bun scripts/check-docs.ts`. Existing legacy files migrate incrementally, while new files and adopted core docs require valid metadata. Moving a file out of legacy status means adding the metadata, not weakening the checker.
 
@@ -85,7 +85,7 @@ bun run verify-translation-pairing docs/example
 bun run verify-translation-pairing --write docs/example
 ```
 
-The write command records hashes only for the named pair. Do not run an unscoped write merely to clean old debt; it mixes unrelated files into the current change. Temporary or closed documents are removed or archived rather than maintained as living translations.
+The write command records hashes only for the named pair. Do not run an unscoped write merely to clean old debt; it mixes unrelated files into the current change. Temporary or closed documents are deleted rather than maintained as living translations.
 
 Agent-only rules under `.agents/` and the explicit exclusions in `scripts/verify-translation-pairing.ts` remain English-only. Every package has an English and Chinese README; legacy exceptions are tracked by `scripts/verify-package-readmes.ts`.
 

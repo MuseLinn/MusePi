@@ -89,6 +89,8 @@ interface MCPServerConfigBase {
 		redirectUri?: string;
 		callbackPort?: number;
 		callbackPath?: string;
+		/** RFC 8628 device endpoint, when the vendor documents one explicitly. */
+		deviceAuthorizationUrl?: string;
 		/** `prompt` param for the authorization request (default "consent"; "" to omit) */
 		prompt?: string;
 	};

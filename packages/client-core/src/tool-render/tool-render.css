@@ -94,6 +94,19 @@
 	background: var(--tv-faint);
 }
 
+/* Cut-off call: a hollow warn ring reads as "started, never finished" —
+ * distinguishable from both the pending dot and the running spinner. */
+.tv-status--interrupted {
+	background: transparent;
+	box-shadow: inset 0 0 0 1.5px var(--tv-warn);
+}
+
+.tv-interrupted {
+	color: var(--tv-warn);
+	font-size: 12.5px;
+	line-height: 1.5;
+}
+
 .tv-spin {
 	flex: none;
 	width: 9px;

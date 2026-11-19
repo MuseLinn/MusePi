@@ -38,6 +38,7 @@ export function InlineWidget({
 	title,
 	sendPrompt,
 	ask = false,
+	answered = false,
 	rasterizeCard,
 	actions,
 	codeView = null,
@@ -45,10 +46,13 @@ export function InlineWidget({
 	type: string;
 	data: Record<string, unknown>;
 	title: string;
-	sendPrompt?: (text: string) => void;
+	sendPrompt?: (text: string, data?: unknown) => void;
 	/** The face asks the user to choose: keep a status line until an answer
 	 *  leaves the card. */
 	ask?: boolean;
+	/** The tool result already carries the answer (a held page that was answered
+	 *  before this render — replay, or the turn resumed after answering). */
+	answered?: boolean;
 	/** 统一标注(桌面渲染器提供卡片 rasterize 时才有):把卡片元素拍成图,
 	 *  html 卡片的标注截图由它合成。 */
 	rasterizeCard?: (element: HTMLElement) => Promise<Blob | null>;
@@ -58,14 +62,14 @@ export function InlineWidget({
 	codeView?: WidgetSource | null;
 }): ReactNode {
 	const [local, setLocal] = useState<Record<string, unknown>>(data);
-	const [answered, setAnswered] = useState(false);
+	const [answeredNow, setAnsweredNow] = useState(false);
 	const [headSlot, setHeadSlot] = useState<HTMLElement | null>(null);
 	// A face hands an answer to the conversation through sendPrompt; wrapping it
 	// here is the only signal the card has that the user chose something.
 	const submit = sendPrompt
-		? (text: string) => {
-				setAnswered(true);
-				sendPrompt(text);
+		? (text: string, data?: unknown) => {
+				setAnsweredNow(true);
+				sendPrompt(text, data);
 			}
 		: undefined;
 	// Re-render when a plugin contributes this type after the session loaded.
@@ -135,8 +139,8 @@ export function InlineWidget({
 				// A waiting page names its state under the page: the card is answered
 				// elsewhere (the answer becomes a user message), so without this the
 				// page just looks unresponsive.
-				<div className={`tv-widget-ask${answered ? " tv-widget-ask--done" : ""}`}>
-					{answered ? t("tools.widgetAnswered") : t("tools.widgetWaiting")}
+				<div className={`tv-widget-ask${answered || answeredNow ? " tv-widget-ask--done" : ""}`}>
+					{answered || answeredNow ? t("tools.widgetAnswered") : t("tools.widgetWaiting")}
 				</div>
 			)}
 		</div>
@@ -166,7 +170,7 @@ export const widgetRenderer: ToolRenderer = {
 		const type = str(details?.type) ?? str(rawArgs?.type) ?? "";
 		return title || type;
 	},
-	Body: ({ args, result, host }: ToolRenderProps): ReactNode => {
+	Body: ({ args, result, host, toolCallId }: ToolRenderProps): ReactNode => {
 		useWidgetRegistryVersion();
 		const details = detailsRecord(result);
 		const type = str(details?.type) ?? str((isRecord(args) ? args : null)?.type) ?? "";
@@ -181,13 +185,23 @@ export const widgetRenderer: ToolRenderer = {
 		}
 		const data = isRecord(details?.data) ? (details.data as Record<string, unknown>) : {};
 		const title = str(details?.title) ?? def.label ?? t((def.nameKey ?? "widget unknown") as never);
+		const awaiting = details?.awaitAnswer === true;
+		// A held page answers its own tool call, so the turn continues with the
+		// choice; every other card hands the answer back as a user prompt.
+		const submit =
+			awaiting && host?.answerWidget && toolCallId
+				? (text: string, answerData?: unknown) => {
+						void host.answerWidget?.(toolCallId, text, answerData);
+					}
+				: host?.sendPrompt;
 		return (
 			<InlineWidget
 				type={type}
 				data={data}
 				title={title}
-				sendPrompt={host?.sendPrompt}
-				ask={details?.awaitAnswer === true}
+				sendPrompt={submit}
+				ask={awaiting}
+				answered={isRecord(details?.answer)}
 				rasterizeCard={host?.rasterizeCard}
 			/>
 		);

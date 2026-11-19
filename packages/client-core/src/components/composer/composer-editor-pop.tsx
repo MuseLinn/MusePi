@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import type { MentionPreview } from "./token-spans";
+import type { MentionPreview } from "./composer-editor-types";
 
 export interface MentionPop {
 	name: string;

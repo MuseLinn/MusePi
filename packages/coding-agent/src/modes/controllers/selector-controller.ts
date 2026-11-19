@@ -1448,7 +1448,7 @@ export class SelectorController {
 	}
 
 	/** Open the trajectory projection of the session tree (`/trace`): the same
-	 *  entry tree with time/cost columns overlaid (`docs/archive/tui-trace-plan.md`). */
+	 *  entry tree with time/cost columns overlaid . */
 	showTraceSelector(): void {
 		this.showTreeSelector("trace");
 	}

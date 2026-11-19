@@ -1936,6 +1936,10 @@ export const tools = {
 	"tools.browserDialogUser": "用户",
 	"tools.browserDialogAuto": "自动策略",
 	"tools.browserTakeover": "我来接管",
+	"tools.userOwnedTab": "你已接管此标签",
+	"tools.userOwnedHint": "Agent 的浏览器操作已停止；交还后它才能继续",
+	"tools.browserHandBack": "交还控制",
+	"tools.browserHandBackHint": "把这张标签交还给 Agent 继续操作",
 	"tools.browserTakeoverHint": "停止 Agent 的浏览器操作，由你接管",
 	"tools.browserTakeoverPending": "正在停止…",
 	"tools.controlPaused": "Agent 已暂停，等待你接管",
@@ -1953,6 +1957,7 @@ export const tools = {
 	// ── Tool card titles：wire 名 → 可读名（ToolView 的「已使用 X（参数）」）──
 	"tools.usedTool": "已使用 {tool}",
 	"tools.usingTool": "正在使用 {tool}",
+	"tools.callInterrupted": "调用已中断，未记录结果。它可能已经执行过，重试前请确认当前状态。",
 	"tools.widgetWaiting": "等待你的选择",
 	"tools.widgetAnswered": "已回复",
 	"tools.argOpen": "（",

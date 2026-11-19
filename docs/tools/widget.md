@@ -42,6 +42,7 @@ Contract: `packages/coding-agent/test/visual-prompt.test.ts`.
 | `type` | card | Widget type key (must exist in the registry schema). |
 | `html` | page | The page document; receives the page kit, theme tokens, and `musepiSubmit`. |
 | `data` | no | Widget payload; merged over the type's defaults (and injected into a page as `window.musepiWidgetData`). |
+| `awaitAnswer` | no | The page asks the user to choose: the tool call holds the turn until `musepiSubmit` answers it, then the result carries `answer {text, data}` and the model continues. Aborting the turn settles it unanswered. |
 | `title` | no | Card or page title (falls back to the type's i18n name). |
 | `data.task` | no | Optional runnable task attached to the card — MUST describe the card's own content (e.g. a ticker card's task refreshes rates); unrelated jobs are not allowed on display cards. |
 

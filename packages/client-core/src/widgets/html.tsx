@@ -763,9 +763,11 @@ export function HtmlCard({
 	mountId?: string;
 	/** Board canvas passes editMode; inline widgets keep interaction on. */
 	interactive?: boolean;
-	/** Submit a face's answer into the conversation as a user prompt.
-	 * Absent in hosts that do not accept widget input (board canvas). */
-	sendPrompt?: (text: string) => void;
+	/** Submit a face's answer: as a user prompt (ordinary card) or into the
+	 *  pending tool call (a page holding the turn). `data` is the structured
+	 *  payload a face may attach; ordinary prompts ignore it. Absent in hosts
+	 *  that do not accept widget input (board canvas). */
+	sendPrompt?: (text: string, data?: unknown) => void;
 	/** 统一标注(桌面渲染器提供卡片 rasterize 时才出现入口):宿主把卡片
 	 * 拍成图,标注截图的合成由本组件完成。缺省时隐藏标注按钮。 */
 	annotateCapture?: () => Promise<Blob | null>;
@@ -1078,7 +1080,7 @@ export function HtmlCard({
 				if (claimed === null) return;
 				const answer = { text: claimed, ...(msg.data !== undefined ? { data: msg.data } : {}) };
 				answerRef.current = answer;
-				sendPrompt?.(claimed);
+				sendPrompt?.(claimed, msg.data);
 				// Tell the face so it can render a settled state; the injected
 				// stylesheet dims its controls whether or not it listens.
 				frameRef.current?.contentWindow?.postMessage({ type: "musepi-widget-answered", ...answer }, "*");

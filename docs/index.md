@@ -113,8 +113,6 @@ decision; **not** a description of current behaviour.
 - [zcode-absorption-todos.md](review/zcode-absorption-todos.html) · [openchamber-absorption-todos.md](review/openchamber-absorption-todos.html) — absorption checklists with per-item verdicts
 - [porting-to-natives.md](porting-to-natives.html) · [porting-from-pi-mono.md](porting-from-pi-mono.html) — porting field notes
 - [windows-development.md](windows-development.html) — Windows build environment setup
-- [ERRATA-GPT5-HARMONY.md](archive/ERRATA-GPT5-HARMONY.html) — historical research note, explicitly not a runtime contract
 - [review/](review/) — design drafts under review and verification write-ups (~50 files)
-- [archive/](archive/) — superseded documents, kept for history (~47 files; see [archive/README.md](archive/README.md))
 - [gui-verification/](gui-verification/) — GUI verification runs and screenshots (~28 files)
 - [adr/](adr/) — architecture decision records

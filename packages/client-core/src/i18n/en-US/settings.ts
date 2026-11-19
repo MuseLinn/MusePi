@@ -1317,12 +1317,11 @@ export const settings = {
 	"settings.boardRemove": "Delete",
 	"settings.commandsSettings": "Slash command catalog (same source as the input / completion)",
 	"settings.mcpSettings":
-		"Shares the mcp.json toggles with the extensions center; the servers declared in that config and how each connects are listed below.",
-	"settings.mcpConfiguredServers": "Configured servers (mcp.json)",
+		"Servers outside the connector catalog: what mcp.json and other agents declare. The switch decides whether a session can use them; a local process manages its own credentials.",
+	"settings.mcpAvailable": "Available in sessions",
 	"settings.mcpAuthOauth": "OAuth",
 	"settings.mcpAuthToken": "Token",
 	"settings.mcpTokenManagedByConfig": "Token is managed by mcp.json",
-	"settings.mcpStdioCredentials": "Credentials are managed by the child process",
 	"settings.mcpOauthLoginStarting": "Preparing browser authorization…",
 	"settings.mcpOauthLoginWaiting": "Waiting for the browser to finish authorizing… (up to 5 minutes)",
 	"settings.mcpOauthLoginFailed": "Login failed: {error}",
@@ -1339,7 +1338,23 @@ export const settings = {
 	"settings.connectorsImport": "Import",
 	"settings.connectorsImportTitle": "Import from other agents",
 	"settings.connectorsImportDesc":
-		"MCP servers the other agents on this machine already have configured. Importing copies them: the endpoint goes into your own catalog, a credential moves into the encrypted store, and the source file is left alone.",
+		"MCP servers the other agents on this machine already have configured — a session can reach them as it is. Importing copies them into connectors you own: the endpoint enters your catalog, credentials move into the encrypted store, and the source file is left alone.",
+	"settings.connectorsImportPicked": "{count} selected",
+	"settings.connectorsImportSelectAll": "Select all",
+	"settings.connectorsImportClear": "Clear",
+	"settings.connectorsImportNext": "Next ({count})",
+	"settings.connectorsImportBack": "Back",
+	"settings.connectorsImportConfirmDesc":
+		"Importing copies rather than takes over: confirming writes to your own connector catalog.",
+	"settings.connectorsImportConfirmTitle": "Import {count} servers",
+	"settings.connectorsImportEffectCatalog":
+		"The endpoint goes into connectors/custom.json; the source file is never modified.",
+	"settings.connectorsImportEffectSecret":
+		"Plain-text credentials move into the encrypted store, and only field names remain in the entry.",
+	"settings.connectorsImportEffectDisabled":
+		"Imported connectors stay disabled; a local process still needs your approval to run.",
+	"settings.connectorsImportShadowed": "Shadowed",
+	"settings.connectorsImportAlready": "Imported",
 	"settings.connectorsImportScanning": "Scanning…",
 	"settings.connectorsImportEmpty": "No servers found in the other agents' configurations.",
 	"settings.connectorsImportHasSecret": "has a credential",
@@ -1347,6 +1362,7 @@ export const settings = {
 	"settings.mcpDeviceTitle": "Sign in with a device code",
 	"settings.mcpDeviceDesc": "Open the page in a browser and type this code. No callback URL and no client secret.",
 	"settings.mcpDeviceStart": "Sign in with a device code",
+	"settings.mcpDeviceStarting": "Getting a device code…",
 	"settings.mcpDeviceCode": "Device code: {code}",
 	"settings.mcpDeviceOpen": "Open the verification page",
 	"settings.mcpDeviceWaiting": "Waiting for authorization…",
@@ -1386,8 +1402,11 @@ export const settings = {
 	"settings.connectorsTokenSaved": "Saved the credential for {name}",
 	"settings.connectorsImported": "Imported {count} connectors",
 	"settings.connectorsImportSkipped": "{count} could not be imported",
-	"settings.connectorsDeviceConnected": "Connected {name} with a device code",
 	"settings.connectorsPatButton": "Connect with a token",
+	"settings.connectorsOtherSignIn": "Other sign-in methods",
+	"settings.connectorsPatHint": "Paste a personal access token instead when browser sign-in is not available.",
+	"settings.connectorsDeviceHint":
+		"This connector signs in with a device code: after Connect, open the address the page shows and enter the code.",
 	"settings.connectorsPatLabel": "Personal access token",
 	"settings.connectorsPatWhere": "Create a token on GitHub",
 	"settings.connectorsFeatured": "Recommended",
@@ -1408,6 +1427,10 @@ export const settings = {
 	"settings.connectorsCopyExample": "Copy example",
 	"settings.connectorsUseExample": "Use in composer",
 	"settings.connectorsDocs": "View docs",
+	"settings.connectorsErrorSignIn": "This connector is not signed in yet. Use Connect to finish signing in.",
+	"settings.connectorsErrorNetwork": "Could not reach the service. Check the network and try again.",
+	"settings.connectorsErrorUnknown": "The connection did not complete. Try again.",
+	"settings.connectorsErrorDetails": "Details",
 	"Test connection": "Test connection",
 	"{server} · {count} tools": "{server} · {count} tools",
 	"settings.boardRemoveConfirm": "Delete board “{name}”?",
@@ -3662,7 +3685,7 @@ export const settings = {
 	"settings.trajectoryRate": "Throughput",
 	"settings.extensionsStateDisabled": "Disabled",
 	"settings.settingsWithCount": "{count} settings",
-	// Welcome-composer starter chips — distinct from named presets (modes), see docs/archive/modes-plan.md
+	// Welcome-composer starter chips — distinct from named presets (modes)
 	"settings.starterPrompts": "Starter prompts",
 	"settings.starterPromptsHint":
 		"Manage the quick prompt chips below the empty-state composer: click to fill, edits apply immediately.",

@@ -8,7 +8,7 @@ import { autosize } from "../composer-autosize";
 import type { SessionListNode } from "../SessionList";
 import type { SlashEntry } from "../SlashRow";
 import type { HashCompletionEntry } from "./completion-menus";
-import type { ComposerEditorHandle } from "./composer-editor-types";
+import type { ComposerEditorHandle } from "@musepi/client-core/src/components/composer/composer-editor-types";
 
 /** Composer-intercepted slash commands (open GUI panels or fire GUI-owned
  *  RPCs instead of hitting the agent) — they win ties in the / completion

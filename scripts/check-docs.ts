@@ -2,7 +2,7 @@ import { readdir } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { $ } from "bun";
 
-const STATUSES = new Set(["living", "reference", "draft", "archived"]);
+const STATUSES = new Set(["living", "reference", "draft"]);
 const REQUIRED_METADATA = new Set([
 	"docs/assembly.md",
 	"docs/assembly.zh-CN.md",
@@ -61,7 +61,7 @@ function metadataErrors(source: string): string[] {
 	if (!value) return ["frontmatter must be a mapping"];
 	const errors: string[] = [];
 	if (!value.title) errors.push("title must be a non-empty string");
-	if (!STATUSES.has(value.status)) errors.push("status must be living, reference, draft, or archived");
+	if (!STATUSES.has(value.status)) errors.push("status must be living, reference, or draft");
 	if (!value.summary) errors.push("summary must be a non-empty string");
 	if (value.scope.length === 0) errors.push("scope must list at least one owning path");
 	return errors;
@@ -82,13 +82,7 @@ const root = resolve(rootFlag >= 0 ? process.argv[rootFlag + 1] : resolve(import
 const result = await $`git -C ${root} ls-tree -r --name-only HEAD -- docs`.quiet().nothrow();
 const existingAtHead = new Set(result.exitCode === 0 ? result.text().split(/\r?\n/).filter(Boolean) : []);
 const failures: string[] = [];
-const PROCESS_RECORD_PREFIXES = [
-	"docs/archive/",
-	"docs/adr/",
-	"docs/gui-verification/",
-	"docs/review/",
-	"docs/superpowers/",
-];
+const PROCESS_RECORD_PREFIXES = ["docs/adr/", "docs/gui-verification/", "docs/review/", "docs/superpowers/"];
 
 for (const file of await markdownFiles(join(root, "docs"))) {
 	const path = relative(root, file).replaceAll("\\", "/");

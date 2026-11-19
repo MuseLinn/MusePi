@@ -102,7 +102,7 @@ scope:
 }
 ```
 
-`auth.mode` 为 `oauth`（默认）、`none` 或 `token`。`descriptionZh` 为中文界面提供一句中文说明，`featured: true` 让条目进入页面顶部的推荐区。可选的 `oauth` 提示（`clientId`、`authorizationUrl`、`tokenUrl`、`scopes`、`callbackPort`、`callbackPath`）映射到现有 MCP OAuth 配置；省略时回退到运行时发现。`token` 条目必须声明表单 schema；值存入加密的连接器密钥库，绝不写进目录：
+`auth.mode` 为 `oauth`（默认）、`none` 或 `token`。`descriptionZh` 为中文界面提供一句中文说明，`featured: true` 让条目进入页面顶部的推荐区。可选的 `oauth` 提示（`clientId`、`authorizationUrl`、`tokenUrl`、`scopes`、`callbackPort`、`callbackPath`、`deviceAuthorizationUrl`）映射到现有 MCP OAuth 配置；省略时回退到运行时发现。`deviceAuthorizationUrl` 是给「跑设备码但不发布授权服务器元数据」的厂商用的（例如 GitHub 的 `/login/device/code`），因为约定的回退路径并不是它们提供的。`token` 条目必须声明表单 schema；值存入加密的连接器密钥库，绝不写进目录：
 
 ```json
 {
@@ -145,6 +145,10 @@ GUI 如实反映这层包含关系：设置里只有一个入口「连接器」�
 
 页面分两层。列表是索引——图标、名称、一句话、一个动作——按「已连接」「推荐」「分类」分组，每个分类先显示六条，直到用户主动收窄。更长的一切（完整说明、示例、文档、凭据表单、CLI 授权、本地进程批准、探测结果）都在行打开的详情弹窗里。从列表连接时如果确实需要授权、凭据或批准，弹窗会自动打开，流程不会停在用户看不见的行后面。设备码面板留在页面上而不是弹窗里：它的轮询在组件本地，关闭弹窗不能中断一个已经在浏览器里输入的登录。示例跟随界面语言（有 `examplesZh` 时用它），每条都可以复制，或交给输入框——那会关闭设置页并把这句话追加到草稿里。
 
+目录之外的服务器——`mcp.json` 与其他智能体声明的内容——放在目录下方一个独立分区里，用一条分隔线隔开：一行一个服务器，带传输方式、来源、鉴权与实时状态，一个开关决定会话能否使用它；同一个服务器不会再以「开关列表」和「配置清单」两份出现。
+
+登录只有一个动作。目录条目固定了 client id 又没有 client secret 的行会报告 `deviceAuth`，`connectors.connect` 返回 `needsDeviceAuth`，点「连接」直接开始设备码及其轮询，而不是打开一个注定完不成的授权页；personal access token 之类的替代方式收在「其他登录方式」里。桌面端不再请求自定义协议回调——daemon 拒绝非 http(s) 的 redirect URI，浏览器 OAuth 由它的 loopback 监听完成。启用是有事务性的：`connect` 不动未授权的行，授权落地后客户端用 `setEnabled` 启用，所以失败或放弃的流程不会留下一个看起来已连上的行。设备码有自己的弹窗，关闭即取消待完成的流程。
+
 ## RPC 面
 
 | 路由 | 行为 |
@@ -152,9 +156,9 @@ GUI 如实反映这层包含关系：设置里只有一个入口「连接器」�
 | `connectors.catalog.list` | 目录行，带启用状态与实时 `connected` / `connecting` / `disconnected`；可选 `query`。 |
 | `connectors.catalog.detail` | 单行及其 OAuth 提示。 |
 | `connectors.catalog.refresh` | 丢弃 5 秒目录缓存并重新扫描所有来源。 |
-| `connectors.connect` | 启用一个连接器，重载 manager，返回 `{ serverName, needsAuth, status }`；stdio 条目在带 `approve: true` 调用前返回 `{ needsApproval, command, args, envKeys }`。 |
+| `connectors.connect` | 回答这个连接器能否启用。OAuth 条目没有已存授权时返回 `{ needsAuth }`（或 `{ needsDeviceAuth }`）且不改变任何状态；无授权条目直接启用、重载 manager 并返回 `{ serverName, needsAuth: false, status }`；stdio 条目在带 `approve: true` 调用前返回 `{ needsApproval, command, args, envKeys }`。 |
 | `connectors.disconnect` | 禁用一个连接器并重载。 |
-| `connectors.setEnabled` | 对上述两个操作的显式开关。 |
+| `connectors.setEnabled` | 对上述两个操作的显式开关。登录成功后客户端用 `enabled: true` 调用它：授权已存在，同一条 `connect` 路径完成启用，所以失败的授权不会留下一个启用态。 |
 | `connectors.token.save` | 按 schema 校验 Token 表单值，合并进加密库，并要求所有必填字段。空值保留已存值。 |
 | `connectors.cli.status` | 为待授权流程运行 CLI `status` 命令；`success` 时启用连接器。 |
 | `connectors.cli.cancel` | 停止认证进程并忘记该流程。 |
@@ -166,7 +170,7 @@ GUI 如实反映这层包含关系：设置里只有一个入口「连接器」�
 
 发现层本来就会读取每个智能体的 MCP 配置——Cursor、VS Code、Claude、Codex、Kimi Code 等——那些服务在会话里已经可用。`connectors.import.scan` 提供的正是这一份集合，`connectors.import.apply` 把选中的复制进 `<agentDir>/connectors/custom.json`，在那里它们以用户自有条目的身份加入目录。
 
-导入是复制，不是链接：其他智能体的文件不会被写入，之后移除导入的连接器也不会动它。
+导入是复制，不是链接：其他智能体的文件不会被写入，之后移除导入的连接器也不会动它。扫描会带上每个服务的实时 MCP 状态（可用、停用、被覆盖）以及同一端点是否已经在用户目录里，弹窗据此显示徽章并把重复项置灰。真正写入发生在第二次明确确认：确认页列出选中的服务与三条后果——条目写入 `connectors/custom.json`、凭据移入加密存储、连接器在批准前保持停用。
 
 其他智能体以明文保存的凭据——`Authorization` 请求头，或名字里就写着 token 的环境变量——会移进加密的连接器密钥存储，目录里只留字段名。把它留在原处，等于让它继续被本机上的每个工具读到。而名字像配置的环境变量（`CODEX_HOME`、`JAVA_HOME`、一份可信路径列表）留在条目里：它不是密钥，服务端也是当配置读的。
 

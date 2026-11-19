@@ -342,6 +342,31 @@ export class AppendJournal {
 	}
 
 	/**
+	 * Flush with a bound, for callers that must not stall a turn on disk.
+	 *
+	 * `flush()` awaits the append chain, and one write that never settles —
+	 * a wedged handle, a file lock held by a scanner — stalls every append
+	 * queued behind it. The durable-intent path runs before every tool call,
+	 * so an unbounded wait there freezes the whole run with no error. Reads
+	 * still use `flush()`; this is only for best-effort durability points
+	 * where continuing is strictly better than hanging.
+	 *
+	 * Returns false when the deadline passed; the queued write keeps its
+	 * place in the chain and may still land later.
+	 */
+	async flushWithin(timeoutMs: number): Promise<boolean> {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const deadline = new Promise<false>(resolve => {
+			timer = setTimeout(() => resolve(false), timeoutMs);
+		});
+		try {
+			return await Promise.race([this.flush().then(() => true as const), deadline]);
+		} finally {
+			if (timer !== undefined) clearTimeout(timer);
+		}
+	}
+
+	/**
 	 * Tail seq that is actually readable back from disk.
 	 *
 	 * `tailSeq` is the last seq *assigned*; a write can still be queued, or have
@@ -730,17 +755,19 @@ export class AppendJournal {
 	 */
 	async #replaceFile(tmpPath: string): Promise<void> {
 		await this.flush();
-		// Close every instance's fd (the live session's journal may be a
-		// DIFFERENT instance than the one running this rewrite).
-		await forEachFdInstance(this.filePath, inst => inst.#releaseFd());
-		let lastErr: unknown;
+		// Release is inside the try so a failure there still reaches the
+		// reopen: `#releaseFd` parks `#fdReady` on a promise that only a
+		// reopen resolves, and an instance abandoned in that state makes
+		// every later append — and flush() itself — wait forever.
 		try {
+			// Close every instance's fd (the live session's journal may be a
+			// DIFFERENT instance than the one running this rewrite).
+			await forEachFdInstance(this.filePath, inst => inst.#releaseFd());
 			for (let attempt = 1; ; attempt++) {
 				try {
 					await fs.promises.rename(tmpPath, this.filePath);
 					break;
 				} catch (err) {
-					lastErr = err;
 					const code = (err as NodeJS.ErrnoException)?.code;
 					if (!code || !RETRYABLE_RENAME_CODES.has(code) || attempt >= 4) throw err;
 					await new Promise(r => setTimeout(r, 50 * 2 ** (attempt - 1)));

@@ -1,5 +1,7 @@
 import { type ReactNode, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { type BlobImageItem, useResolvedImageItems } from "../../lib/blob-image";
+import type { ToolRenderHost } from "../../tool-render/types";
 import "./image-card-stack.css";
 
 /**
@@ -11,14 +13,25 @@ import "./image-card-stack.css";
  * current index. Behind cards recede via scale / vertical offset /
  * rotation (pure CSS transitions).
  */
-export function ImageCardStack({
+export function ImageCardStack<T extends BlobImageItem>({
 	items,
+	host,
 	onOpen,
 }: {
-	items: { src: string; alt: string }[];
-	/** Open the preview lightbox at this image (message gallery). */
-	onOpen(index: number): void;
+	items: readonly T[];
+	/** Host capability that resolves `blob:sha256:` refs to displayable bytes.
+	 *  Absent in guests/exports: refs keep their alt text there. */
+	host?: ToolRenderHost;
+	/** Open the preview lightbox at this image (message gallery). The second
+	 *  argument is the resolved list, so the lightbox never receives a ref
+	 *  the host could not display. */
+	onOpen(index: number, items: { src: string; alt: string }[]): void;
 }): ReactNode {
+	// A restored session stores images as blob refs; resolve before painting so
+	// the card and the lightbox share one displayable list.
+	const resolved = useResolvedImageItems(items, host);
+	// The lightbox takes the plain gallery shape; mimeType stays card-side.
+	const gallery = resolved.map(item => ({ src: item.src, alt: item.alt }));
 	const [index, setIndex] = useState(0);
 	const [dx, setDx] = useState(0);
 	const [dragging, setDragging] = useState(false);
@@ -50,12 +63,12 @@ export function ImageCardStack({
 			return;
 		}
 		setDx(0);
-		if (!d.moved) onOpen(index);
+		if (!d.moved) onOpen(index, gallery);
 	};
 
 	return (
 		<div className="tr-img-stack" role="group" aria-label={t("settings.previewImage")}>
-			{items.map((item, i) => {
+			{resolved.map((item, i) => {
 				const pos = (((i - index + count) % count) + count) % count;
 				const depth = count > 1 ? pos / (count - 1) : 0;
 				const ease = depth * depth;
@@ -84,7 +97,7 @@ export function ImageCardStack({
 								? (e: React.KeyboardEvent<HTMLDivElement>) => {
 										if (e.key === "Enter" || e.key === " ") {
 											e.preventDefault();
-											onOpen(index);
+											onOpen(index, gallery);
 										} else if (e.key === "ArrowRight") {
 											next();
 										} else if (e.key === "ArrowLeft") {

@@ -20,28 +20,36 @@ interface ConfiguredMcpServer {
 	source?: string;
 }
 
-/** Hand-configured MCP servers, nested inside the connector page.
+/** One server row: the extension entry (state + toggle) merged with its config. */
+interface ServerRow {
+	name: string;
+	displayName: string;
+	description?: string;
+	transport?: ConfiguredMcpServer["transport"];
+	url?: string;
+	command?: string;
+	auth?: ConfiguredMcpServer["auth"];
+	source?: string;
+	state?: McpItem["state"];
+	extension?: McpItem;
+	/** No extension entry (rare): keep the row readable, without a toggle. */
+	enabled?: boolean;
+}
+
+/**
+ * Servers outside the connector catalog, at the bottom of the Connectors page.
  *
- * Two data sources, one section — the catalog page owns connector discovery,
- * and these rows are its second source: servers a person wrote into `mcp.json`
- * directly rather than picking from the catalog.
- * - `extensions.list` (mcp-kind extensions) keeps the existing enable toggles
- *   on the mcp.json denylist path;
- * - `mcp.servers.list` adds what the toggles cannot show — transport, URL and
- *   auth kind per configured server — plus the browser OAuth login
- *   (`mcp.oauth.start/status/cancel`) for http/sse servers.
- *
- * Token-auth servers keep their token in mcp.json: the row says so instead of
- * offering a field that would have nowhere to persist. The authorization URL
- * lives in the shared OAuth hook and is opened through the OS handler, never
- * rendered, so a secret-bearing URL does not leak into the settings DOM or
- * logs. */
+ * Two sources describe the same set: `extensions.list` owns the enable toggle
+ * (the mcp.json denylist path) and the live state, while `mcp.servers.list`
+ * adds transport, URL and auth kind. They used to render as two stacked
+ * inventories, so the same server appeared twice with different chrome. This
+ * merges them by name into one row per server — one place to see what it is
+ * and one switch that decides whether a session can use it.
+ */
 export function McpServersSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const data = useExtensionRegistry(rpc);
 	const mcps = useMemo(() => (data?.extensions ?? []).filter(e => e.kind === "mcp"), [data]);
 	const [servers, setServers] = useState<ConfiguredMcpServer[] | null>(null);
-
-	const byName = useMemo(() => new Map(mcps.map(m => [m.name, m])), [mcps]);
 
 	const loadServers = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
@@ -49,8 +57,8 @@ export function McpServersSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 			const res = await rpc.request<{ servers?: ConfiguredMcpServer[] }>("mcp.servers.list", {});
 			setServers(Array.isArray(res?.servers) ? res.servers : []);
 		} catch {
-			// A malformed mcp.json rejects the RPC; the page still shows the
-			// extension toggles above instead of pretending nothing is defined.
+			// A malformed mcp.json rejects the RPC; the extension rows below still
+			// describe what discovery found, instead of pretending nothing exists.
 			setServers([]);
 		}
 	}, [rpc]);
@@ -61,145 +69,153 @@ export function McpServersSection({ rpc }: { rpc: RpcClient | null }): ReactNode
 
 	const { flows, login, cancel: cancelLogin } = useMcpOAuth(rpc, () => void loadServers());
 
-	const toggle = (e: McpItem, next: boolean): void => {
+	/** One row per server name; the config enriches, the extension decides state. */
+	const rows = useMemo<ServerRow[]>(() => {
+		const byName = new Map<string, ServerRow>();
+		for (const server of servers ?? []) {
+			byName.set(server.name, {
+				name: server.name,
+				displayName: server.name,
+				transport: server.transport,
+				...(server.url ? { url: server.url } : {}),
+				...(server.command ? { command: server.command } : {}),
+				...(server.auth ? { auth: server.auth } : {}),
+				...(server.source ? { source: server.source } : {}),
+				...(server.enabled !== undefined ? { enabled: server.enabled } : {}),
+			});
+		}
+		for (const item of mcps) {
+			const existing = byName.get(item.name);
+			if (existing) {
+				existing.extension = item;
+				existing.state = item.state;
+				existing.displayName = item.displayName || item.name;
+				if (item.description) existing.description = item.description;
+			} else {
+				byName.set(item.name, {
+					name: item.name,
+					displayName: item.displayName || item.name,
+					...(item.description ? { description: item.description } : {}),
+					state: item.state,
+					extension: item,
+				});
+			}
+		}
+		return [...byName.values()].sort((a, b) => a.displayName.localeCompare(b.displayName));
+	}, [mcps, servers]);
+
+	const toggle = (row: ServerRow, next: boolean): void => {
+		if (!row.extension) return;
 		// daemon 广播 extensions.changed → 单例重拉,不本地乐观更新。
-		void rpc?.request("extensions.setEnabled", { id: e.id, enabled: next });
+		void rpc?.request("extensions.setEnabled", { id: row.extension.id, enabled: next });
 	};
 
 	return (
-		<>
-			<h3 className="gui-settings-nav-group">{t("settings.mcpServers")}</h3>
+		<section className="gui-settings-section-divider">
+			<h3 className="gui-settings-section-title">{t("settings.mcpServers")}</h3>
 			<p className="gui-settings-page-desc">{t("settings.mcpSettings")}</p>
-			{mcps.length === 0 ? (
+			{rows.length === 0 ? (
 				<div className="gui-settings-row">{t("settings.noMcpServers")}</div>
 			) : (
-				mcps.map(m => (
-					<div key={m.id} className="gui-agent-card">
-						<div className="min-w-0 flex-1">
-							<div className="flex items-center gap-1.5">
-								<span className="truncate text-[13px] font-medium">{m.displayName || m.name}</span>
-								<span className="gui-provider-chip">MCP</span>
-							</div>
-							{m.description && (
-								<div className="truncate text-[12px] text-[var(--color-text-muted)]">{m.description}</div>
-							)}
-						</div>
-						<button
-							type="button"
-							role="switch"
-							aria-checked={m.state === "active"}
-							className={`gui-toggle${m.state === "active" ? " gui-toggle--on" : ""}`}
-							onClick={() => {
-								tapFeedback();
-								toggle(m, m.state !== "active");
-							}}
-						>
-							<span className="gui-toggle-knob" />
-						</button>
-					</div>
-				))
-			)}
-			{servers !== null && servers.length > 0 && (
-				<>
-					<h4 className="gui-settings-nav-group">{t("settings.mcpConfiguredServers")}</h4>
-					{servers.map(server => {
-						const flow = flows[server.name];
-						const extension = byName.get(server.name);
-						// OAuth is the only browser flow; a token-auth server keeps its
-						// token in mcp.json, and stdio servers own their credentials.
-						const canLogin = server.transport !== "stdio" && server.auth !== "apikey";
-						return (
-							<div key={server.name} className="gui-agent-card">
-								<div className="min-w-0 flex-1">
-									<div className="flex flex-wrap items-center gap-1.5">
-										<span className="truncate text-[13px] font-medium">{server.name}</span>
-										<span className="gui-provider-chip">{server.transport}</span>
-										{server.source && server.source !== "mcp.json" && (
-											<span className="gui-provider-chip">{server.source}</span>
-										)}
-										{server.auth && (
-											<span className="gui-provider-chip">
-												{server.auth === "oauth" ? t("settings.mcpAuthOauth") : t("settings.mcpAuthToken")}
-											</span>
-										)}
-										{extension ? (
-											<span className="gui-provider-chip">
-												{extension.state === "active" ? t("settings.active") : t("settings.disabled")}
-											</span>
-										) : (
-											server.enabled === false && (
-												<span className="gui-provider-chip">{t("settings.disabled")}</span>
-											)
-										)}
-									</div>
-									<div className="truncate font-mono text-[11.5px] text-[var(--color-text-muted)]">
-										{server.url ?? server.command ?? ""}
-									</div>
-									{server.auth === "apikey" && (
-										<div className="text-[12px] text-[var(--color-text-muted)]">
-											{t("settings.mcpTokenManagedByConfig")}
-										</div>
+				rows.map(row => {
+					const flow = flows[row.name];
+					// OAuth is the only browser flow; a token-auth server keeps its
+					// token in mcp.json, and stdio servers own their credentials.
+					const canLogin = row.transport !== undefined && row.transport !== "stdio" && row.auth !== "apikey";
+					const active = row.state ? row.state === "active" : row.enabled !== false;
+					return (
+						<div key={row.name} className="gui-agent-card">
+							<div className="min-w-0 flex-1">
+								<div className="flex flex-wrap items-center gap-1.5">
+									<span className="truncate text-[13px] font-medium">{row.displayName}</span>
+									{row.transport && <span className="gui-provider-chip">{row.transport}</span>}
+									{row.source && row.source !== "mcp.json" && (
+										<span className="gui-provider-chip">{row.source}</span>
 									)}
-									{server.transport === "stdio" && (
-										<div className="text-[12px] text-[var(--color-text-muted)]">
-											{t("settings.mcpStdioCredentials")}
-										</div>
+									{row.auth && (
+										<span className="gui-provider-chip">
+											{row.auth === "oauth" ? t("settings.mcpAuthOauth") : t("settings.mcpAuthToken")}
+										</span>
 									)}
-									{flow?.kind === "starting" && (
-										<div className="text-[12px] text-[var(--color-text-muted)]">
-											{t("settings.mcpOauthLoginStarting")}
-										</div>
-									)}
-									{flow?.kind === "waiting" && (
-										<div className="text-[12px] text-[var(--color-text-muted)]">
-											{t("settings.mcpOauthLoginWaiting")}
-										</div>
-									)}
-									{flow?.kind === "success" && (
-										<div className="text-[12px] text-[var(--color-success)]">
-											{t("settings.authorizationDone")}
-										</div>
-									)}
-									{flow?.kind === "error" && (
-										<div className="text-[12px] text-[var(--color-danger)]">{flow.message}</div>
-									)}
+									<span className="gui-provider-chip">
+										{active ? t("settings.mcpAvailable") : t("settings.disabled")}
+									</span>
 								</div>
-								{canLogin && (
-									<div className="flex flex-shrink-0 items-center gap-1.5">
-										{flow?.kind === "waiting" ? (
-											<>
-												<button
-													type="button"
-													className="gui-btn"
-													onClick={() => void openExternalUrl(flow.authorizationUrl).catch(() => {})}
-												>
-													{t("settings.mcpOpenAuthorization")}
-												</button>
-												<button
-													type="button"
-													className="gui-btn"
-													onClick={() => void cancelLogin(server.name, flow.flowId)}
-												>
-													{t("settings.cancel")}
-												</button>
-											</>
-										) : (
+								<div className="truncate font-mono text-[11.5px] text-[var(--color-text-muted)]">
+									{row.url ?? row.command ?? row.description ?? ""}
+								</div>
+								{row.auth === "apikey" && (
+									<div className="text-[12px] text-[var(--color-text-muted)]">
+										{t("settings.mcpTokenManagedByConfig")}
+									</div>
+								)}
+								{flow?.kind === "starting" && (
+									<div className="text-[12px] text-[var(--color-text-muted)]">
+										{t("settings.mcpOauthLoginStarting")}
+									</div>
+								)}
+								{flow?.kind === "waiting" && (
+									<div className="text-[12px] text-[var(--color-text-muted)]">
+										{t("settings.mcpOauthLoginWaiting")}
+									</div>
+								)}
+								{flow?.kind === "success" && (
+									<div className="text-[12px] text-[var(--color-success)]">
+										{t("settings.authorizationDone")}
+									</div>
+								)}
+								{flow?.kind === "error" && (
+									<div className="text-[12px] text-[var(--color-danger)]">{flow.message}</div>
+								)}
+							</div>
+							<div className="flex flex-shrink-0 items-center gap-1.5">
+								{canLogin &&
+									(flow?.kind === "waiting" ? (
+										<>
 											<button
 												type="button"
 												className="gui-btn"
-												disabled={flow?.kind === "starting"}
-												onClick={() => void login(server.name)}
+												onClick={() => void openExternalUrl(flow.authorizationUrl).catch(() => {})}
 											>
-												{t("settings.login")}
+												{t("settings.mcpOpenAuthorization")}
 											</button>
-										)}
-									</div>
-								)}
+											<button
+												type="button"
+												className="gui-btn"
+												onClick={() => void cancelLogin(row.name, flow.flowId)}
+											>
+												{t("settings.cancel")}
+											</button>
+										</>
+									) : (
+										<button
+											type="button"
+											className="gui-btn"
+											disabled={flow?.kind === "starting"}
+											onClick={() => void login(row.name)}
+										>
+											{t("settings.login")}
+										</button>
+									))}
+								{row.extension ? (
+									<button
+										type="button"
+										role="switch"
+										aria-checked={row.state === "active"}
+										className={`gui-toggle${row.state === "active" ? " gui-toggle--on" : ""}`}
+										onClick={() => {
+											tapFeedback();
+											toggle(row, row.state !== "active");
+										}}
+									>
+										<span className="gui-toggle-knob" />
+									</button>
+								) : null}
 							</div>
-						);
-					})}
-				</>
+						</div>
+					);
+				})
 			)}
-		</>
+		</section>
 	);
 }

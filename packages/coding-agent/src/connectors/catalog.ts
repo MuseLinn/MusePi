@@ -331,6 +331,9 @@ function parseOAuthSpec(raw: unknown): ConnectorOAuthSpec | undefined {
 	if (authorizationUrl && isHttpUrl(authorizationUrl)) spec.authorizationUrl = authorizationUrl;
 	const tokenUrl = readString(raw.tokenUrl, 2_048);
 	if (tokenUrl && isHttpUrl(tokenUrl)) spec.tokenUrl = tokenUrl;
+	const deviceAuthorizationUrl = readString(raw.deviceAuthorizationUrl, 2_048);
+	if (deviceAuthorizationUrl && isHttpUrl(deviceAuthorizationUrl))
+		spec.deviceAuthorizationUrl = deviceAuthorizationUrl;
 	const scopes = readString(raw.scopes, 1_024);
 	if (scopes) spec.scopes = scopes;
 	if (typeof raw.callbackPort === "number" && Number.isInteger(raw.callbackPort) && raw.callbackPort > 0) {

@@ -743,7 +743,7 @@ export interface SlotComponentProps {
 	browser?: {
 		open: boolean;
 		openRequest?: { url: string; nonce: number } | null;
-		onTakeover?(): void;
+		onTakeover?(info: { tabId: string; url: string; title: string }): void;
 	};
 	/** Current right-panel tab instance; present only for panel.tab.* mounts. */
 	panelTab?: {

@@ -11,7 +11,7 @@ Use progressive disclosure:
 - Root `AGENTS.md`: only always-loaded execution boundaries, project routing, and cross-cutting constraints.
 - `.agents/rules/`: detailed English-only engineering rules loaded by task domain.
 - `.agents/skills/*/SKILL.md`: reusable procedures with trigger-focused frontmatter; large task-specific references live beside the skill.
-- `docs/`: current product/implementation documentation. Planning and audit records belong in `docs/review/`; closed plans belong in `docs/archive/` and receive no living-status updates.
+- `docs/`: current product/implementation documentation. Planning and audit records belong in `docs/review/`; closed plans are deleted, with git history as the record, and never kept as a second tree of docs.
 - Package-local README/`DOCUMENTATION.md`: module ownership and invariants that do not belong in the root guide.
 
 Do not create summary/handoff documents as repository deliverables unless requested. Scratch plans and reports stay in ignored work areas.
@@ -31,7 +31,7 @@ A paired document consists of `X.md`, `X.zh-CN.md`, and `X.i18n.yaml`. Both lang
 - Use `bun run verify-translation-pairing <stem...>` for strict named-pair checks.
 - After confirming semantic parity, record only the edited pairs with `bun run verify-translation-pairing --write <stem...>`.
 - Corpus-wide report mode is informational; never mix unrelated historical hash refreshes into a task.
-- Temporary or closed documents should be removed or archived, not translated as living docs.
+- Temporary or closed documents are deleted rather than translated or retained as living docs.
 
 Every package under `packages/` has `README.md` and `README.zh-CN.md`. Existing exceptions live only in `scripts/verify-package-readmes.ts`; translating one removes its exception.
 

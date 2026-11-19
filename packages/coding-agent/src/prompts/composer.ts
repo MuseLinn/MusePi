@@ -1,6 +1,6 @@
 /**
  * PromptComposer:命名区块(§5.1)的插槽注入与聚合,委托给具名注册表。
- * 契约:docs/archive/modes-plan.md §5。
+ * 契约:Modes v2 §5。
  *
  * 挂点(§5.7):会话创建时包装 rebuildSystemPrompt 回调 ——
  * buildSystemPrompt 输出(base: string[], baseSlots) → compose()/composeComplete() → 返回。

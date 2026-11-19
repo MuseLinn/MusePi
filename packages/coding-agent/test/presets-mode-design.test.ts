@@ -77,7 +77,7 @@ describe("built-in creator preset", () => {
 		expect(prompt).toContain("用户消息只包含创作需求");
 		expect(prompt).toContain("modes.validate");
 		expect(prompt).toContain("modes.save");
-		expect(prompt).not.toContain("docs/archive/modes-plan.md");
+		expect(prompt).not.toContain("docs/archive");
 		expect(BUILTIN_MODE_TEMPLATES.creator?.plugins).toContainEqual({ name: "musepi-preset-creator" });
 	});
 });

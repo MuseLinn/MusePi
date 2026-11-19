@@ -15,7 +15,7 @@ import { DialogFrame } from "../DialogFrame";
 import { FadeScroll } from "../FadeScroll";
 
 /** Settings → 智能体 → 预设:命名预设(工具集 + 提示词 + settings 覆盖)卡片面板
- *  + 完整编辑器(modes-plan §8/§9:ModesCenter)。数据源 daemon modes.list/
+ *  + 完整编辑器(ModesCenter)。数据源 daemon modes.list/
  *  modes.get/modes.save;modes.changed 即时刷新。编辑字段:label/description/
  *  extends(继承多选)/extensions(三态白名单)/prompt 区块列表/promptComplete/
  *  runtimeContext/settings 键值。

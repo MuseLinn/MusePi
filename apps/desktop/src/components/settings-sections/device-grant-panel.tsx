@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
+import { DialogFrame } from "../DialogFrame";
 
 /**
  * A device-grant sign-in.
@@ -35,17 +36,24 @@ export function DeviceGrantPanel({
 	rpc,
 	serverName,
 	open,
+	onClose,
 	onDone,
+	autoStart = false,
 }: {
 	rpc: RpcClient | null;
 	/** The MCP server name, e.g. `connector:github`. */
 	serverName: string;
 	open: boolean;
+	onClose(): void;
 	onDone(): void;
+	/** Start the flow on mount: the caller already chose the device grant. */
+	autoStart?: boolean;
 }): ReactNode {
 	const [flow, setFlow] = useState<DeviceFlowState | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [starting, setStarting] = useState(false);
 	const timerRef = useRef<Timer | null>(null);
+	const startedRef = useRef(false);
 
 	const stop = useCallback(() => {
 		if (timerRef.current) clearTimeout(timerRef.current);
@@ -97,6 +105,7 @@ export function DeviceGrantPanel({
 		if (!rpc) return;
 		tapFeedback();
 		setError(null);
+		setStarting(true);
 		try {
 			const started = await rpc.request<{
 				flowId: string;
@@ -114,51 +123,98 @@ export function DeviceGrantPanel({
 			await poll(started.flowId, started.interval);
 		} catch (startError) {
 			setError(startError instanceof Error ? startError.message : String(startError));
+		} finally {
+			setStarting(false);
 		}
 	}, [poll, rpc, serverName]);
 
+	/**
+	 * Auto-start once per mount. The catalog's connect path already decided this
+	 * row signs in with a device code, so making the person press a second
+	 * "start" button would be asking the same question twice.
+	 */
+	useEffect(() => {
+		if (!open || !autoStart || startedRef.current) return;
+		startedRef.current = true;
+		void start();
+	}, [autoStart, open, start]);
+
 	if (!open) return null;
 
+	/**
+	 * Closing the sign-in surface means the person stopped: cancel the pending
+	 * flow so a code still being typed elsewhere cannot finish a grant they
+	 * walked away from.
+	 */
+	const dismiss = (): void => {
+		if (flow?.status === "pending") {
+			void rpc?.request("mcp.oauth.device.cancel", { flowId: flow.flowId }).catch(() => {});
+		}
+		stop();
+		onClose();
+	};
+
 	return (
-		<div className="gui-agent-card">
-			<div className="text-[12px] font-medium">{t("settings.mcpDeviceTitle")}</div>
-			<div className="mb-2 text-[11.5px] text-[var(--color-text-muted)]">{t("settings.mcpDeviceDesc")}</div>
+		<DialogFrame
+			open={open}
+			onClose={dismiss}
+			label={t("settings.mcpDeviceTitle")}
+			className="gui-dialog--device"
+			morphKey={`${flow?.status ?? "idle"}:${Boolean(error)}:${starting}`}
+		>
+			<div className="gui-connector-detail">
+				<div className="gui-connector-detail-head">
+					<div className="min-w-0 flex-1">
+						<h3 className="gui-settings-page-title">{t("settings.mcpDeviceTitle")}</h3>
+						<div className="gui-settings-page-desc">{t("settings.mcpDeviceDesc")}</div>
+					</div>
+					<button type="button" className="gui-btn" onClick={dismiss}>
+						{t("settings.close")}
+					</button>
+				</div>
+				<div className="gui-connector-detail-body">
+					{error && <div className="text-[12px] text-[var(--color-danger)]">{error}</div>}
 
-			{error && <div className="text-[12px] text-[var(--color-danger)]">{error}</div>}
-
-			{flow === null ? (
-				<button type="button" className="gui-btn gui-btn-primary" onClick={() => void start()}>
-					{t("settings.mcpDeviceStart")}
-				</button>
-			) : (
-				<div className="flex flex-col gap-2">
-					{flow.status === "pending" && (
-						<>
-							<div className="text-[12px]">{t("settings.mcpDeviceCode", { code: flow.userCode })}</div>
-							<div className="flex items-center gap-1.5">
-								<button
-									type="button"
-									className="gui-btn"
-									onClick={() => void openExternalUrl(flow.verificationUri).catch(() => {})}
-								>
-									{t("settings.mcpDeviceOpen")}
-								</button>
-								<span className="text-[11.5px] text-[var(--color-text-muted)]">
-									{t("settings.mcpDeviceWaiting")}
-								</span>
-							</div>
-						</>
-					)}
-					{flow.status === "success" && (
-						<div className="text-[12px] text-[var(--color-success)]">{t("settings.authorizationDone")}</div>
-					)}
-					{flow.status === "error" && (
-						<div className="text-[12px] text-[var(--color-danger)]">
-							{flow.error ?? t("settings.mcpOauthLoginFailed", { error: "" })}
+					{flow === null ? (
+						<button
+							type="button"
+							className="gui-btn gui-btn-primary self-start"
+							disabled={starting}
+							onClick={() => void start()}
+						>
+							{starting ? t("settings.mcpDeviceStarting") : t("settings.mcpDeviceStart")}
+						</button>
+					) : (
+						<div className="flex flex-col gap-2">
+							{flow.status === "pending" && (
+								<>
+									<div className="text-[13px]">{t("settings.mcpDeviceCode", { code: flow.userCode })}</div>
+									<div className="flex items-center gap-1.5">
+										<button
+											type="button"
+											className="gui-btn"
+											onClick={() => void openExternalUrl(flow.verificationUri).catch(() => {})}
+										>
+											{t("settings.mcpDeviceOpen")}
+										</button>
+										<span className="text-[11.5px] text-[var(--color-text-muted)]">
+											{t("settings.mcpDeviceWaiting")}
+										</span>
+									</div>
+								</>
+							)}
+							{flow.status === "success" && (
+								<div className="text-[12px] text-[var(--color-success)]">{t("settings.authorizationDone")}</div>
+							)}
+							{flow.status === "error" && (
+								<div className="text-[12px] text-[var(--color-danger)]">
+									{flow.error ?? t("settings.mcpOauthLoginFailed", { error: "" })}
+								</div>
+							)}
 						</div>
 					)}
 				</div>
-			)}
-		</div>
+			</div>
+		</DialogFrame>
 	);
 }

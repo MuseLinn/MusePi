@@ -62,7 +62,7 @@ Top-level entry modules: `cli.ts`, `main.ts`, `sdk.ts`, `index.ts` (SDK barrel),
 |---|---|---|
 | `cli/`, `commands/`, `commit/`, `export/` | Command-line adapters and concrete subcommands | — |
 | `modes/` | Interactive TUI, print, and RPC runtimes | [rpc.md](../../docs/rpc.md), [sdk.md](../../docs/sdk.md) |
-| `session/` | `AgentSession`, JSONL session tree, storage, history | [session.md](../../docs/session.md), [session-tree-plan.md](../../docs/archive/session-tree-plan.md) |
+| `session/` | `AgentSession`, JSONL session tree, storage, history | [session.md](../../docs/session.md) |
 | `config/`, `registry/`, `secrets/` | Settings, model/provider registry, secret obfuscation | [settings.md](../../docs/settings.md), [config-usage.md](../../docs/config-usage.md), [models.md](../../docs/models.md), [secrets.md](../../docs/secrets.md) |
 | `tools/` | Built-in tool implementations + render/meta helpers | [custom-tools.md](../../docs/custom-tools.md), [`tools/`](../../docs/tools/) |
 | `exec/`, `eval/`, `ssh/`, `dap/`, `debug/` | Execution backends (shell, py/js kernels, ssh, debugger) | [bash-tool-runtime.md](../../docs/bash-tool-runtime.md), [python-repl.md](../../docs/python-repl.md) |
@@ -84,7 +84,6 @@ Top-level entry modules: `cli.ts`, `main.ts`, `sdk.ts`, `index.ts` (SDK barrel),
 
 ### Sessions, persistence, and turn lifecycle
 - [session.md](../../docs/session.md) — storage and entry model
-- [session-tree-plan.md](../../docs/archive/session-tree-plan.md) — branch/tree architecture
 - [session-switching-and-recent-listing.md](../../docs/session-switching-and-recent-listing.md)
 - [session-operations-export-share-fork-resume.md](../../docs/session-operations-export-share-fork-resume.md)
 - [compaction.md](../../docs/compaction.md) — compaction and branch summaries
@@ -98,7 +97,7 @@ Top-level entry modules: `cli.ts`, `main.ts`, `sdk.ts`, `index.ts` (SDK barrel),
 - [models.md](../../docs/models.md), [providers.md](../../docs/providers.md), [adding-a-provider.md](../../docs/adding-a-provider.md)
 - [local-models.md](../../docs/local-models.md)
 - [provider-streaming-internals.md](../../docs/provider-streaming-internals.md), [ai-schema-normalize.md](../../docs/ai-schema-normalize.md)
-- [toolconv/](../../docs/toolconv/) — per-family tool-call conversion (anthropic, deepseek, gemini, gemma, glm-4.5, harmony, hermes, kimi-k2, minimax, pi-native, qwen3, xml); see also [ERRATA-GPT5-HARMONY.md](../../docs/archive/ERRATA-GPT5-HARMONY.md)
+- [toolconv/](../../docs/toolconv/) — per-family tool-call conversion (anthropic, deepseek, gemini, gemma, glm-4.5, harmony, hermes, kimi-k2, minimax, pi-native, qwen3, xml)
 - [keybindings.md](../../docs/keybindings.md)
 - [secrets.md](../../docs/secrets.md), [auth-broker-gateway.md](../../docs/auth-broker-gateway.md), [install-id.md](../../docs/install-id.md)
 - [system-prompt-customization.md](../../docs/system-prompt-customization.md)

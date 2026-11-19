@@ -42,6 +42,8 @@ interface CatalogConnector {
 	cliAuth: boolean;
 	server?: { transport: "http" | "sse" | "stdio"; url?: string; command?: string };
 	authMode: "oauth" | "none" | "token";
+	/** The device grant is this row's sign-in path (pinned client id, no secret). */
+	deviceAuth?: boolean;
 	tokenSet: boolean;
 	tokenSchema?: {
 		title?: string;
@@ -65,6 +67,8 @@ interface CatalogConnector {
 interface ConnectResult {
 	serverName: string;
 	needsAuth: boolean;
+	/** The browser exchange cannot complete; use the device grant. */
+	needsDeviceAuth?: boolean;
 	needsTokenConfig?: boolean;
 	needsApproval?: boolean;
 	command?: string;
@@ -92,6 +96,8 @@ interface ProbeOutcome {
 	pending: boolean;
 	ok?: boolean;
 	text?: string;
+	/** Raw failure text, shown behind the details disclosure. */
+	detail?: string;
 }
 
 /**
@@ -121,6 +127,44 @@ function reportOutcome(
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Turn a transport or auth failure into the next step a person can take. The
+ * raw text — an HTTP status and a `WWW-Authenticate` header, usually — is kept
+ * for the details disclosure; it is not the sentence to read first.
+ */
+function connectorError(raw: string): { text: string; raw?: string } {
+	const message = raw.trim();
+	if (!message) return { text: t("settings.connectorsErrorUnknown") };
+	if (
+		/redirect uri|invalid_client|invalid_request|unauthorized|401|no access token|www-authenticate|incorrect_client/i.test(
+			message,
+		)
+	) {
+		return { text: t("settings.connectorsErrorSignIn"), raw: message };
+	}
+	if (/enotfound|econnrefused|fetch failed|network|socket|timed? ?out|etimedout/i.test(message)) {
+		return { text: t("settings.connectorsErrorNetwork"), raw: message };
+	}
+	return { text: message };
+}
+
+/** Failure line plus the raw response behind a disclosure. */
+function ConnectorFailure({ message, detail }: { message: string; detail?: string }): ReactNode {
+	const failure = connectorError(message);
+	const raw = detail ?? failure.raw;
+	return (
+		<>
+			<div className="text-[12px] text-[var(--color-danger)]">{failure.text}</div>
+			{raw && raw !== failure.text && (
+				<details className="gui-connector-failure-details">
+					<summary>{t("settings.connectorsErrorDetails")}</summary>
+					<pre>{raw}</pre>
+				</details>
+			)}
+		</>
+	);
 }
 
 /**
@@ -175,6 +219,7 @@ export function ConnectorsSection({
 	const [query, setQuery] = useState("");
 	const [detailId, setDetailId] = useState<string | null>(null);
 	const [detailConnector, setDetailConnector] = useState<CatalogConnector | null>(null);
+	const [alternativesOpen, setAlternativesOpen] = useState(false);
 	const [pending, setPending] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [tokenTarget, setTokenTarget] = useState<string | null>(null);
@@ -202,6 +247,7 @@ export function ConnectorsSection({
 	const openDetail = useCallback((connector: CatalogConnector): void => {
 		setDetailConnector(connector);
 		setDetailId(connector.id);
+		setAlternativesOpen(false);
 	}, []);
 
 	useEffect(() => {
@@ -230,7 +276,36 @@ export function ConnectorsSection({
 		void load();
 	}, [load]);
 
-	const { flows, login, cancel, reset } = useMcpOAuth(rpc, () => void load());
+	/**
+	 * A row becomes enabled only after its sign-in lands: the daemon answers
+	 * `needsAuth` without touching enablement, and this runs when the browser
+	 * or device flow settles. A failed or abandoned login therefore leaves the
+	 * row where it started instead of enabled with a "disconnect" action.
+	 */
+	const enableAfterLogin = useCallback(
+		async (serverName: string): Promise<void> => {
+			const id = serverName.startsWith("connector:") ? serverName.slice("connector:".length) : "";
+			if (!id || !rpc) return;
+			try {
+				await rpc.request("connectors.setEnabled", { id, enabled: true });
+				reportOutcome(
+					{
+						kind: "success",
+						message: t("settings.connectorsConnected", {
+							name: connectors?.find(item => item.id === id)?.name ?? id,
+						}),
+					},
+					id,
+				);
+			} catch (enableError) {
+				reportOutcome({ kind: "error", message: connectorError(errorMessage(enableError)).text }, id);
+			}
+			await load();
+		},
+		[connectors, load, rpc],
+	);
+
+	const { flows, login, cancel, reset } = useMcpOAuth(rpc, name => void enableAfterLogin(name));
 
 	useEffect(() => {
 		if (!cliFlow || !rpc) return;
@@ -362,17 +437,34 @@ ${connector.category ?? ""}`.toLowerCase();
 			setProbes(current => ({ ...current, [connector.id]: { pending: true } }));
 			try {
 				const result = await rpc.request<ProbeResult>("mcp.servers.probe", { name });
-				const text = result.ok
-					? t("{server} · {count} tools", {
-							server: result.serverInfo?.name ?? connector.name,
-							count: result.toolNames?.length ?? 0,
-						})
-					: (result.error ?? "");
-				setProbes(current => ({ ...current, [connector.id]: { pending: false, ok: result.ok, text } }));
+				if (result.ok) {
+					const text = t("{server} · {count} tools", {
+						server: result.serverInfo?.name ?? connector.name,
+						count: result.toolNames?.length ?? 0,
+					});
+					setProbes(current => ({ ...current, [connector.id]: { pending: false, ok: true, text } }));
+				} else {
+					const failure = connectorError(result.error ?? "");
+					setProbes(current => ({
+						...current,
+						[connector.id]: {
+							pending: false,
+							ok: false,
+							text: failure.text,
+							...(failure.raw ? { detail: failure.raw } : {}),
+						},
+					}));
+				}
 			} catch (probeError) {
+				const failure = connectorError(errorMessage(probeError));
 				setProbes(current => ({
 					...current,
-					[connector.id]: { pending: false, ok: false, text: errorMessage(probeError) },
+					[connector.id]: {
+						pending: false,
+						ok: false,
+						text: failure.text,
+						...(failure.raw ? { detail: failure.raw } : {}),
+					},
 				}));
 			}
 		},
@@ -417,6 +509,14 @@ ${connector.category ?? ""}`.toLowerCase();
 					return;
 				}
 				if (result.needsAuth && connector.authMode === "oauth") {
+					if (result.needsDeviceAuth) {
+						// This row has a pinned client id but no secret, so the browser
+						// exchange cannot finish. The device grant is its sign-in path and
+						// keeps polling from the page, not from this dialog.
+						setDeviceTarget(connector.id);
+						setDetailId(null);
+						return;
+					}
 					// The detail dialog carries the authorization link, so it has to
 					// be on screen before the browser flow turns into a waiting state.
 					openDetail(connector);
@@ -433,7 +533,9 @@ ${connector.category ?? ""}`.toLowerCase();
 				reportOutcome(
 					{
 						kind: "error",
-						message: t("settings.connectorsConnectFailed", { error: errorMessage(connectError) }),
+						message: t("settings.connectorsConnectFailed", {
+							error: connectorError(errorMessage(connectError)).text,
+						}),
 					},
 					connector.id,
 				);
@@ -488,7 +590,9 @@ ${connector.category ?? ""}`.toLowerCase();
 				reportOutcome(
 					{
 						kind: "error",
-						message: t("settings.connectorsConnectFailed", { error: errorMessage(saveError) }),
+						message: t("settings.connectorsConnectFailed", {
+							error: connectorError(errorMessage(saveError)).text,
+						}),
 					},
 					connector.id,
 				);
@@ -526,7 +630,9 @@ ${connector.category ?? ""}`.toLowerCase();
 				reportOutcome(
 					{
 						kind: "error",
-						message: t("settings.connectorsDisconnectFailed", { error: errorMessage(disconnectError) }),
+						message: t("settings.connectorsDisconnectFailed", {
+							error: connectorError(errorMessage(disconnectError)).text,
+						}),
 					},
 					connector.id,
 				);
@@ -706,37 +812,42 @@ ${connector.category ?? ""}`.toLowerCase();
 									{t("settings.connectorsConnect")}
 								</button>
 								{probeButton}
-								{connector.authMode === "oauth" && (
-									<button
-										type="button"
-										className="gui-btn"
-										disabled={isPending}
-										onClick={() => {
-											// The device panel polls outside this dialog so closing it
-											// cannot strand a sign-in that is already waiting.
-											setDeviceTarget(connector.id);
-											setDetailId(null);
-										}}
-									>
-										{t("settings.mcpDeviceStart")}
-									</button>
-								)}
 								{connector.tokenSchema?.personalAccessToken && (
 									<button
 										type="button"
 										className="gui-btn"
-										disabled={isPending}
-										onClick={() => {
-											setTokenTarget(connector.id);
-											setTokenValues({});
-										}}
+										aria-expanded={alternativesOpen}
+										onClick={() => setAlternativesOpen(open => !open)}
 									>
-										{t("settings.connectorsPatButton")}
+										{t("settings.connectorsOtherSignIn")}
 									</button>
 								)}
 							</>
 						)}
 					</div>
+					{connector.deviceAuth && !connector.enabled && (
+						<div className="text-[11.5px] text-[var(--color-text-muted)]">
+							{t("settings.connectorsDeviceHint")}
+						</div>
+					)}
+					{alternativesOpen && connector.tokenSchema?.personalAccessToken && !connector.enabled && (
+						<div className="gui-connector-detail-block">
+							<button
+								type="button"
+								className="gui-btn self-start"
+								disabled={isPending}
+								onClick={() => {
+									setTokenTarget(connector.id);
+									setTokenValues({});
+								}}
+							>
+								{t("settings.connectorsPatButton")}
+							</button>
+							<div className="text-[11.5px] text-[var(--color-text-muted)]">
+								{t("settings.connectorsPatHint")}
+							</div>
+						</div>
+					)}
 					{flow?.kind === "starting" && (
 						<div className="text-[12px] text-[var(--color-text-muted)]">
 							{t("settings.mcpOauthLoginStarting")}
@@ -745,18 +856,13 @@ ${connector.category ?? ""}`.toLowerCase();
 					{flow?.kind === "waiting" && (
 						<div className="text-[12px] text-[var(--color-text-muted)]">{t("settings.mcpOauthLoginWaiting")}</div>
 					)}
-					{flow?.kind === "error" && <div className="text-[12px] text-[var(--color-danger)]">{flow.message}</div>}
-					{probeState?.text && (
-						<div
-							className={
-								probeState.ok
-									? "text-[12px] text-[var(--color-success)]"
-									: "text-[12px] text-[var(--color-danger)]"
-							}
-						>
-							{probeState.text}
-						</div>
-					)}
+					{flow?.kind === "error" && <ConnectorFailure message={flow.message} />}
+					{probeState?.text &&
+						(probeState.ok ? (
+							<div className="text-[12px] text-[var(--color-success)]">{probeState.text}</div>
+						) : (
+							<ConnectorFailure message={probeState.text} detail={probeState.detail} />
+						))}
 					{cliFlow?.connectorId === connector.id && (
 						<div className="gui-connector-detail-block">
 							<div className="text-[12px] font-medium">{t("settings.connectorsCliAuthTitle")}</div>
@@ -997,23 +1103,20 @@ ${connector.category ?? ""}`.toLowerCase();
 				<p className="gui-settings-page-desc">{t("settings.connectorsDesc")}</p>
 			</div>
 
-			{/* The device sign-in polls from here rather than inside the detail
-			    dialog: closing the dialog must not strand a code that is already
-			    being entered in the browser. */}
+			{/* The device sign-in owns its own dialog so it cannot hide behind a
+			    row; closing it cancels the pending flow rather than stranding it. */}
 			{deviceTarget !== null && (
 				<DeviceGrantPanel
 					rpc={rpc}
 					serverName={`connector:${deviceTarget}`}
 					open={deviceTarget !== null}
+					autoStart
+					onClose={() => setDeviceTarget(null)}
 					onDone={() => {
-						void load();
-						pushActionToast({
-							kind: "success",
-							message: t("settings.connectorsDeviceConnected", {
-								name: connectors?.find(item => item.id === deviceTarget)?.name ?? deviceTarget ?? "",
-							}),
-							dedupeKey: `connector:${deviceTarget ?? ""}:outcome`,
-						});
+						const id = deviceTarget;
+						if (!id) return;
+						setDeviceTarget(null);
+						void enableAfterLogin(`connector:${id}`);
 					}}
 				/>
 			)}
@@ -1121,6 +1224,15 @@ ${connector.category ?? ""}`.toLowerCase();
 				onClose={() => setDetailId(null)}
 				label={detailConnector?.name ?? t("settings.connectors")}
 				className="gui-dialog--connector"
+				morphKey={
+					detailConnector
+						? `${detailConnector.id}:${alternativesOpen}:${tokenTarget === detailConnector.id}:${
+								approvalTarget === detailConnector.id
+							}:${cliFlow?.connectorId === detailConnector.id ? cliFlow.flowId : ""}:${
+								flows[`connector:${detailConnector.id}`]?.kind ?? ""
+							}:${probes[detailConnector.id]?.text ?? ""}`
+						: ""
+				}
 			>
 				{detailConnector && renderDetail(detailConnector)}
 			</DialogFrame>

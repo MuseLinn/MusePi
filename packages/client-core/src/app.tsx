@@ -1044,6 +1044,11 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 					console.error("[transcript] prompt failed:", error);
 				});
 			},
+			// A page that holds the turn answers its own tool call here; the daemon
+			// settles the pending `widget` execute and the turn continues.
+			answerWidget: async (toolCallId, text, data) => {
+				await client.rpc("widget.answer", { toolCallId, text, data });
+			},
 			// User-message attachment cards: size probe and paged text preview.
 			// Both methods already exist on the daemon; the host only exposes them.
 			attachment: {

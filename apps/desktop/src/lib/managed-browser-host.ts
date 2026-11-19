@@ -139,6 +139,8 @@ export interface ManagedBrowserHostState {
 	port: number | null;
 	activity: ManagedBrowserActivity | null;
 	busyTabIds: readonly string[];
+	/** Tabs the user took over: agent commands on them are refused. */
+	userOwnedTabIds: readonly string[];
 	agentActivity: boolean;
 	confirm: ManagedBrowserConfirmRequest | null;
 	/** In-app upload confirmation (site picker or agent tab.uploadFile). */
@@ -155,6 +157,7 @@ let state: ManagedBrowserHostState = {
 	port: null,
 	activity: null,
 	busyTabIds: [],
+	userOwnedTabIds: [],
 	agentActivity: false,
 	confirm: null,
 	upload: null,
@@ -831,6 +834,11 @@ export async function takeoverAgentOp(tabId?: string): Promise<void> {
 	await window.electronAPI?.managedBrowserTakeover(tabId);
 }
 
+/** Give an agent-controlled tab back to the agent (explicit user action). */
+export async function handBackAgentTab(tabId: string): Promise<void> {
+	await window.electronAPI?.managedBrowserHandBack(tabId);
+}
+
 async function requireBrowserActionOk(
 	request: Promise<{ ok: boolean; error?: string }> | undefined,
 	fallback: string,
@@ -967,6 +975,7 @@ export function wireHost(): void {
 				port: push.port ?? null,
 				activity: push.activity ?? null,
 				busyTabIds: push.busyTabIds,
+				userOwnedTabIds: push.userOwnedTabIds ?? [],
 				agentActivity: push.agentActivity === true,
 			});
 		}),

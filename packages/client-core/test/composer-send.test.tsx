@@ -1,4 +1,5 @@
 import { afterAll, afterEach, describe, expect, it, vi } from "bun:test";
+import { EditorView } from "@codemirror/view";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
 import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
@@ -27,6 +28,31 @@ afterEach(async () => {
 afterAll(() => {
 	void GlobalRegistrator.unregister();
 });
+
+function composerHost(): HTMLElement {
+	const host = document.querySelector<HTMLElement>(".sh-composer-editor");
+	if (!host) throw new Error("composer editor did not render");
+	return host;
+}
+
+function composerView(): EditorView {
+	const content = composerHost().querySelector<HTMLElement>(".cm-content");
+	const view = content ? EditorView.findFromDOM(content) : null;
+	if (!view) throw new Error("CodeMirror view not mounted");
+	return view;
+}
+
+function composerDoc(): string {
+	return composerView().state.doc.toString();
+}
+
+function composerCaret(): number {
+	return composerView().state.selection.main.head;
+}
+
+function focusComposer(): void {
+	composerView().focus();
+}
 
 function liveClient(): GuestClient {
 	const client = new GuestClient(LINK, "tester");
@@ -72,10 +98,10 @@ describe("Composer draft sending", () => {
 		const suggestion = document.querySelector<HTMLButtonElement>(".sh-suggest-chip");
 		expect(suggestion).not.toBeNull();
 		await act(async () => suggestion?.click());
-		const textarea = document.querySelector<HTMLTextAreaElement>(".sh-composer-input");
+		const textarea = composerHost();
 		const button = document.querySelector<HTMLButtonElement>('[data-morph-id="composer-send"]');
 		if (!textarea || !button) throw new Error("composer controls did not render");
-		const draft = textarea.value;
+		const draft = composerDoc();
 		expect(draft.length).toBeGreaterThan(0);
 
 		await act(async () => {
@@ -88,7 +114,7 @@ describe("Composer draft sending", () => {
 		pending.reject(new Error("create denied"));
 		await act(async () => await Promise.resolve());
 		expect(document.querySelector('[role="alert"]')?.textContent).toBe("create denied");
-		expect(textarea.value).toBe(draft);
+		expect(composerDoc()).toBe(draft);
 		expect(button.disabled).toBe(false);
 
 		send.mockResolvedValue();
@@ -96,7 +122,7 @@ describe("Composer draft sending", () => {
 			button.click();
 			await Promise.resolve();
 		});
-		expect(textarea.value).toBe("");
+		expect(composerDoc()).toBe("");
 	});
 
 	it("limits a workspace draft to three suggestions without an expansion action", async () => {
@@ -106,25 +132,27 @@ describe("Composer draft sending", () => {
 
 		expect(document.querySelectorAll(".sh-suggest-chip")).toHaveLength(3);
 		expect(document.querySelector(".sh-suggest-chip--more")).toBeNull();
-		const textarea = document.querySelector<HTMLTextAreaElement>(".sh-composer-input");
-		expect(textarea?.disabled).toBe(false);
-		expect(textarea?.placeholder).not.toBe("Waiting for session…");
+		const textarea = composerHost();
+		expect(composerHost().dataset.editable === "1").toBe(false);
+		expect(document.querySelector(".musepi-composer-editor__placeholder")?.textContent).not.toBe(
+			"Waiting for session…",
+		);
 	});
 
 	it("expands a compact composer on focus and keeps it open behind the attachment sheet", async () => {
 		mockViewport(390);
 		await renderComposer(liveClient());
 		const inner = document.querySelector<HTMLElement>(".sh-composer-inner");
-		const textarea = document.querySelector<HTMLTextAreaElement>(".sh-composer-input");
+		const textarea = composerHost();
 		expect(inner?.dataset.expanded).toBe("false");
 		expect(textarea).not.toBeNull();
 
-		await act(async () => textarea?.focus());
+		await act(async () => focusComposer());
 		expect(inner?.dataset.expanded).toBe("true");
 		await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Attachments"]')?.click());
 		expect(document.querySelector('[role="dialog"]')).not.toBeNull();
 		expect(inner?.dataset.expanded).toBe("true");
-		expect(document.querySelector<HTMLTextAreaElement>(".sh-composer-input")).toBe(textarea);
+		expect(composerHost()).toBe(textarea);
 	});
 
 	it("switches the compact end action between voice and send without moving the input", async () => {
@@ -132,10 +160,10 @@ describe("Composer draft sending", () => {
 		await renderComposer(liveClient());
 		expect(document.querySelector(".sh-composer-mic")).not.toBeNull();
 		expect(document.querySelector(".sh-composer-send")).toBeNull();
-		const textarea = document.querySelector<HTMLTextAreaElement>(".sh-composer-input");
+		const textarea = composerHost();
 
 		await act(async () => document.querySelector<HTMLButtonElement>(".sh-suggest-chip")?.click());
-		expect(document.querySelector<HTMLTextAreaElement>(".sh-composer-input")).toBe(textarea);
+		expect(composerHost()).toBe(textarea);
 		expect(document.querySelector(".sh-composer-mic")).toBeNull();
 		expect(document.querySelector(".sh-composer-send")).not.toBeNull();
 	});
@@ -152,8 +180,8 @@ describe("Composer draft sending", () => {
 			},
 		});
 		await renderComposer(client);
-		const textarea = document.querySelector<HTMLTextAreaElement>(".sh-composer-input");
-		await act(async () => textarea?.focus());
+		const textarea = composerHost();
+		await act(async () => focusComposer());
 		const controls = document.querySelectorAll<HTMLButtonElement>(".sh-mt-seg");
 		const modelButton = controls[0];
 		expect(modelButton).not.toBeNull();
@@ -162,10 +190,10 @@ describe("Composer draft sending", () => {
 		await act(async () => {
 			const pointerDown = new Event("pointerdown", { bubbles: true, cancelable: true });
 			modelButton?.dispatchEvent(pointerDown);
-			if (!pointerDown.defaultPrevented) textarea?.blur();
+			if (!pointerDown.defaultPrevented) composerView().contentDOM.blur();
 			modelButton?.click();
 		});
-		expect(document.activeElement).toBe(textarea);
+		expect(document.activeElement).toBe(composerView().contentDOM);
 		expect(document.querySelector(".sh-composer-inner")?.getAttribute("data-expanded")).toBe("true");
 		expect(document.querySelector('[role="dialog"]')).not.toBeNull();
 	});
@@ -181,14 +209,14 @@ describe("Composer draft sending", () => {
 describe("Composer revert restore", () => {
 	it("puts the reverted prompt back into the textarea with the caret at its end", async () => {
 		await renderComposer(liveClient());
-		const textarea = document.querySelector<HTMLTextAreaElement>(".sh-composer-input");
+		const textarea = composerHost();
 		if (!textarea) throw new Error("composer textarea did not render");
 
 		await act(async () => {
 			window.dispatchEvent(new CustomEvent("musepi-gui-restore-prompt", { detail: { text: "原来的问题" } }));
 		});
 
-		expect(textarea.value).toBe("原来的问题");
-		expect(textarea.selectionStart).toBe("原来的问题".length);
+		expect(composerDoc()).toBe("原来的问题");
+		expect(composerCaret()).toBe("原来的问题".length);
 	});
 });

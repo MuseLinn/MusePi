@@ -59,6 +59,7 @@ describe("connector catalog", () => {
 						examplesZh: ["做那件事"],
 					},
 					auth: { mode: "none" },
+					oauth: { clientId: "cid", deviceAuthorizationUrl: "https://github.com/login/device/code" },
 				},
 			},
 		});
@@ -80,6 +81,7 @@ describe("connector catalog", () => {
 		expect(gamma?.version).toBe("1.2.3");
 		expect(gamma?.examples).toEqual(["Do the thing"]);
 		expect(gamma?.examplesZh).toEqual(["做那件事"]);
+		expect(gamma?.oauth?.deviceAuthorizationUrl).toBe("https://github.com/login/device/code");
 		expect(warnings.length).toBe(0);
 	});
 

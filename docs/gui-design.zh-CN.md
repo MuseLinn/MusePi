@@ -40,7 +40,7 @@ lang: zh-CN
 | **会话列表** | 左侧栏上按 分组/项目/日期/定时任务 聚合的**会话**(可多选/置顶/标记状态) | `SessionTree.tsx`(文件名沿旧称,职责是列表) | 不要叫它"会话树";改文档/注释用「会话列表」 |
 | **会话/消息树** | **会话内条目树**:entry 的 id/parentId 层级、fork 分支、叶导航(TUI `/tree` 的语义) | TUI `tree-selector.ts` + 会话级 `session-manager.ts`;GUI 侧载体 `lib/message-tree.ts`(`buildMessageTree`) | 与「会话列表」是两层数据:列表管"选哪个会话",消息树管"会话里怎么分支" |
 | **轨迹** | 当前会话的**事件时间线**:turn 分组 + Overview 时间轴 + 检视 + 跳转 | 右侧 ContextPanel「轨迹」tab(`TrajectoryView` + `TimelineOverview`) | 时间投影轴;与消息树同源(都是同批 entries)但投影维度不同 |
-| **/trace(规划)** | TUI 中消息树×轨迹的融合视图:树结构上叠加时间/成本/令牌列 | TUI 新命令(复用 tree-selector 数据源) | 方案见 `docs/archive/tui-trace-plan.md`;`/tree` 保持纯结构投影 |
+| **/trace(规划)** | TUI 中消息树×轨迹的融合视图:树结构上叠加时间/成本/令牌列 | TUI 新命令(复用 tree-selector 数据源) | `/tree` 保持纯结构投影 |
 
 **命名铁律**:写代码/文档/UI 文案时,「会话树」只准指消息树(/tree 语义);会话语义的树一律叫「会话列表」;时间轴一律叫「轨迹」。
 
@@ -352,11 +352,11 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 
 早期章节之后落地的设计决策与模式;实现契约与坑在 `docs/gui-implementation.md` §18,分特性规格见所列文档。
 
-- **右栏改造 Phase 1–2**(`docs/archive/gui-right-panel-redesign.md`):右栏 ContextPanel 改为**分组 44px 图标 rail**——surface 注册表(`surfaces/registry.ts`)新增 `group` 字段(primary/secondary/tertiary);高频图标固定,secondary 收进 rail 底部「…」溢出;宽度 clamp 放宽到 **260–1200px**(+ maximize 态);**⌘E** 切换面板,**⌘⇧E** 为 focus mode(输入框铺满);关闭动画为 **220ms 宽度折叠**(非 proma overlay)。第二条 TabBar 行与多实例 tab **已被架构否决**("rail 是唯一导航轴");Phase 3 面板级细化继续。
-- **看板/widget 画布**(`docs/archive/board-dashboard.md`、`docs/archive/widget-design-system.md`):`BoardPage` + 白名单 `WidgetRegistry`(18 种 widget)——同一 registry 渲染看板网格、transcript 内联卡与 pin 窗,一个 widget 写一处三处复用。画布固定布局(BASE_W 1092)缩放适配窗口(`transform: scale(窗口宽/1092)`),`overflow-x:hidden` + `overflow-y:auto`;ChromaGroup 辉光(`components/ChromaGroup.tsx`)以单份共享 RGB 偏移径向渐变点亮整组(`mix-blend-mode: screen`,`gui-motion-off` 隐藏)。
+- **右栏改造 Phase 1–2**:右栏 ContextPanel 改为**分组 44px 图标 rail**——surface 注册表(`surfaces/registry.ts`)新增 `group` 字段(primary/secondary/tertiary);高频图标固定,secondary 收进 rail 底部「…」溢出;宽度 clamp 放宽到 **260–1200px**(+ maximize 态);**⌘E** 切换面板,**⌘⇧E** 为 focus mode(输入框铺满);关闭动画为 **220ms 宽度折叠**(非 proma overlay)。第二条 TabBar 行与多实例 tab **已被架构否决**("rail 是唯一导航轴");Phase 3 面板级细化继续。
+- **看板/widget 画布**:`BoardPage` + 白名单 `WidgetRegistry`(18 种 widget)——同一 registry 渲染看板网格、transcript 内联卡与 pin 窗,一个 widget 写一处三处复用。画布固定布局(BASE_W 1092)缩放适配窗口(`transform: scale(窗口宽/1092)`),`overflow-x:hidden` + `overflow-y:auto`;ChromaGroup 辉光(`components/ChromaGroup.tsx`)以单份共享 RGB 偏移径向渐变点亮整组(`mix-blend-mode: screen`,`gui-motion-off` 隐藏)。
 - **Composer 与状态行设置**(daemon schema,设置「交互」/「Shell」tab 中呈现,§4 TUI 设置同步):`composer.shape`(string,默认 `"box"`)选 composer 形态;`statusLine.contextLine`(enum `CONTEXT_LINE_MODE_VALUES`,默认 `"embedded"`)驱动状态行 gauge——`off`(纯 accent 实线)、`percentage`(已用段 accent、其余 border)、`annotated`/`embedded`(百分比 + 窗口标签)。
 - **win32 磨砂玻璃修复(2026-08-26)**:显式 `html:root, html:root body { background: transparent }`——`html` 是被忽略的一层,带着不透明 `var(--bg)` 挡住 DWM Acrylic(Windows)/vibrancy(macOS)透出半透明 scrim。`[data-platform="win32"] .gui-main` 关掉页面 `backdrop-filter`(模糊来自窗口材质,更省 GPU);`[data-platform="win32"][data-theme="light"]` 用薄 22–58% scrim(Acrylic 是亮材质,默认 58–76% 浅色 scrim 会冲掉磨砂)。
-- **OTA 更新 UI**:「检查更新」(§4)从「前往下载」(openExternal)升级为 **下载 → 进度 → 重启**(electron-updater,v0.4.4)——`docs/archive/ota-update-design.md`;toast 现在显示百分比 + 「立即重启」。notes 双通道不变:toast 读 `update-manifest.json.notes`、「What's new」读 `CHANGELOG.musepi.md`。
+- **OTA 更新 UI**:「检查更新」(§4)从「前往下载」(openExternal)升级为 **下载 → 进度 → 重启**(electron-updater,v0.4.4);toast 现在显示百分比 + 「立即重启」。notes 双通道不变:toast 读 `update-manifest.json.notes`、「What's new」读 `CHANGELOG.musepi.md`。
 - **双语文档约定**(`docs/i18n/README.md`):范围内 `docs/**` 每个 markdown 成对 `foo.md` + `foo.zh-CN.md` + `foo.i18n.yaml`(blob 哈希一致性记录);标题后语言切换行(`English | [中文](foo.zh-CN.md)` / `[English](foo.md) | 中文`);`bun run verify-translation-pairing` 执行(`--write` 记录哈希,具名 pair 严格校验);两语言地位平等、结构镜像。
 - **画板 Codex 对齐**(2026-09-19):画板新增**文本工具**(真实 `<textarea>` 浮层,按画布像素定位 —— 输入法/粘贴/选区都是原生行为;失焦或切到别的工具时落成 Konva `Text`,所以待输入的插入符不会丢)、用**形状飞出菜单**取代原来平铺的直线/箭头两个按钮(直线/箭头/矩形/椭圆/菱形/三角形/五角星/心形,4 列玻璃浮层;轨道按钮显示**当前选中**形状的图标,让矩形和菱形一眼可辨)、**12 色调色盘**,以及取代 2/4/8/14 四档的**连续粗细滑杆**(1–24)。**全部几何计算搬进 `lib/sketch-geometry.ts`** —— 拖拽归一化、星形/心形取点、文本度量、命中范围 —— 因为 Konva 离开 canvas 无法断言;由 `test/sketch-geometry.test.ts`(42 个用例)覆盖。画板外壳并入**液态玻璃 + 弹簧动效规范**:78% 半透明表面 + `blur(3xl) saturate(170%)`、`--glass-sheen` 走未被占用的 `::before`、`--glass-shadow`,入场用 240ms `--spring-liquid`(关闭时 180ms `--spring` 的缩小回弹不变,画板仍读作"回落进输入框")。这里每个视觉 `position`/`transform` 都只有一个归属(入场由画板 keyframes 独占,遮罩只负责淡化)。
 - **画板 chip 重开的是 A0,不是 A1 的副本**(2026-09-20):这里的产品规则是**画的连续**,不是**一张能涂的图**。完成时既交付进入消息的 PNG,**也**交付画板的笔画列表(`scene`,`lib/sketch-scene.ts`);chip 两者都带,所以点击它恢复的是对象——每一笔依旧可选、可拖、可缩放、可擦除——再次编辑就是精确地改用户所指的那一笔。旧行为(把导出的 PNG 当底图挂回)让画板自己的产物一步就变成不可再编辑:之后任何修改都只能在栅格上叠涂,这正是它读作"只是粘贴了图片"的原因。scene 同时也是闭环的关键——完成是像素**与** scene 一起换,所以第十次再编辑和第一次一样可编辑。降级只有一个方向且无感:丢了 scene 的 chip(恢复的草稿、改动前的数据)按旧的整图底图打开,而不是拒绝打开。
@@ -459,7 +459,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **挂靠球保留清晰的响应式盒子**：容器查询 clamp 为 48–64px；≤380px 的输入框保持 46px，即完整面部的下限，不进入 micro 变体。矢量球体填满盒子的 100%，不再停留在 fallback 尺寸，因此图形与可点击包装层同步缩放。宿主仍通过 `--gui-composer-pet-size` 覆盖尺寸，不在 JS 中指定像素几何。
 - **耳机作为整体绕球心缩放**(`HEADPHONE_SCALE` 1.08):耳罩、canopy 与轨是按一个刚体授权的,放大就是引擎每帧配件 transform 里的一次 scale——不是重新绘制。1.08 是所有极值都留在 rig padding 内的最大系数;尺寸与 gaze 倾斜搭乘同一属性,因为该属性归引擎所有。
 
-## 5r. 轮渲染视觉语言（M1，评审稿 2026-09-21 转正，源 `docs/archive/0.5.0-m1-transcript-design.md`）
+## 5r. 轮渲染视觉语言（M1，2026-09-21 转正）
 
 参照 ZCode v4 轮渲染单元语义（`zcode/packages/ui/src/v4/conversationTurnRenderUnits.ts`）。**设计基线**：全部视觉值取自 `packages/client-core/src/styles/tokens.css` 暗色段，禁止发明新 token；品牌 accent #d9a441 金禁止改。
 
@@ -500,7 +500,7 @@ turn
 
 **遗留决策点**（随实现推进裁定，未裁定前按现状执行）：① turn header 是否保留模型名段（多模型场景有用，单模型是噪声——现状：接线后缺省不显示）；② 段摘要的 i18n 模板句 vs 规则拼接；③ token 用量行 settings 开关；④ hook 行是否默认聚合 "N 个 hook · 展开"。
 
-## 5u. 弹窗动效与样式规范（2026-09-26 定稿，源 `docs/archive/0.5.0-installer-update-dialogs-design.md` §4，评审决策①-⑧全按默认建议执行）
+## 5u. 弹窗动效与样式规范（2026-09-26 定稿，评审决策①-⑧全按默认建议执行）
 
 > 对桌面 GUI 全部模态弹窗 / 全屏覆盖层生效。**以下全部取值为现存值收编**——§5s M1.10 阶梯 + 各组件现行值；禁止为弹窗发明新 token、新曲线、新 scrim 配方。组件盘点依据 `.workbuddy/tasks/2026-09-26-installer-update-dialogs.report.md` §3.3。
 
@@ -571,7 +571,7 @@ turn
 - Dialog、TaskModal、palette 与确认卡均为 **L3 overlay**（§5s 层级表）：`--glass-bg-strong` + 边框 + 完整上下缘 + `--glass-sheen` + `--glass-shadow`。玻璃只属于容器，卡内内容保持纸面感。
 - `gui-motion-off` / `prefers-reduced-motion` 同时取消入场和出场，不留中间帧。`prefers-reduced-transparency`、不支持 `backdrop-filter` 以及 Windows 无 blur 时使用不透明可读底色，保留边框、上下缘、sheen 和阴影；scrim 也转为不透明。
 
-## 5v. 右栏标签带：tab-primary 补全（M1.12，2026-09-29 批复；源 `docs/archive/0.5.0-promo-gap-analysis.md` 第三版 + 交互原型 `docs/review/tab-primary-prototype.html` v2）
+## 5v. 右栏标签带：tab-primary 补全（M1.12，2026-09-29 批复；交互原型 `docs/review/tab-primary-prototype.html` v2）
 
 > 背景：tab-primary 模型（`lib/panel-tabs.ts`，openchamber ContextPanel parity——一条标签带容纳所有表面的视图，rail 只是 launcher）自 2026-09-15 已在架构层落地，但交互层一直缺位：rail 点击开出的是无 target 的占位标签（身份恒 `surface::`），每个表面永远只有一个 rail 开的标签，标签带退化成 rail 的一对一镜像。M1.12 补的就是交互层，模型层不动。**中心浮面多表面容器已评估并否决**（2026-09-29，小袁总）：产品维持 codex 式布局——主会话独占中心浮面，终端/代码/看板/预览等附加表面全部由右侧面板标签承载。
 
@@ -890,7 +890,7 @@ PR/问题中心是**主视图整页**，不是右侧面板页签（右栏 Git �
 
 ## 5ad.1. 浏览器 Agent 控制与操作转录（2026-10-25）
 
-- **控制界面**：agent 驱动当前可见受管标签时，accent 细环框住页面，底部液态玻璃胶囊显示当前动作、已控制时长和「我来接管」按钮。后台标签的工作显示同一胶囊与「Agent 正在使用浏览器」「查看 Agent 标签页」动作，不在当前页面上绘制细环。只有动作按钮接收指针；细环绝不移动、隐藏或重挂 webview。动作变化经 polite live region 播报，每秒计时只做视觉更新、不重复播报。窄容器收起次要文字，减少动态效果时去掉入場与退出位移。
+- **控制界面**：agent 驱动当前可见受管标签时，accent 细环框住页面，底部液态玻璃胶囊显示当前动作、已控制时长和「我来接管」按钮。后台标签的工作显示同一胶囊与「Agent 正在使用浏览器」「查看 Agent 标签页」动作，不在当前页面上绘制细环。只有动作按钮接收指针；细环绝不移动、隐藏或重挂 webview。动作变化经 polite live region 播报，每秒计时只做视觉更新、不重复播报。窄容器收起次要文字，减少动态效果时去掉入場与退出位移。接管是控制权移交，不是终止回合：胶囊消失、标签归用户，agent 在这张标签上的下一条命令会带着可读原因失败，让它等待用户而不是和指针抢；在 agent 驱动的标签上直接键盘输入执行同一次移交。已接管的标签保留「你已接管此标签 / 交还控制」胶囊，交还是 agent 重新获得该标签的唯一方式（不会自动恢复）。
 - **接管**：按钮取消当前会话回合，把现有页面交还用户，绝不关闭 agent 标签、重载文档或丢弃登录/DOM 状态。后续新消息开启新的自动化回合，不伪造暂停/恢复协议。
 - **视口工具条**：设备预设、数字宽高、显示比例和外框背景集中在一行。显示比例（fit 或 25–200%）只改呈现；页面缩放仍是独立的 per-tab WebContents 设置，设备仿真负责布局尺寸和 UA 身份。放大后的页面允许滚动而不是裁切。背景只影响外框和留白，不改网页自身颜色。
 - **操作转录**：浏览器卡片在流式和重载后显示同一份累计高层操作，包括观察元素数、目标、失败和截图。连续调用汇总页面和最高频的两类操作，其余失败与已恢复重试分别计数。展开保留每次原始调用；只有后续出现同 agent、同 tab、同规范化 run 输入和同操作目标的成功，才把先前失败归为已恢复。

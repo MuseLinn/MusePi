@@ -292,6 +292,9 @@ export type AutocompleteProviderFactory = (current: AutocompleteProvider) => Aut
 export interface ExtensionUIContext {
 	/** True when selector timeouts start only after the dialog is presented. */
 	timeoutStartsOnPresentation?: boolean;
+	/** This host can answer a held `widget` page through `widget.answer`
+	 *  (the desktop/web GUI). Absent in the TUI, which cannot render a page. */
+	widgetAnswers?: boolean;
 	/** Show a selector and return the selected label, even when an option also includes a description. */
 	select(
 		title: string,

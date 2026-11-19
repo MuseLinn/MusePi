@@ -146,9 +146,9 @@ report.measure = await evaluate(MEASURE);
 // screenshot
 const shot = (await cdp("Page.captureScreenshot", { format: "png" })) as { result?: { data?: string } };
 const { writeFileSync, mkdirSync } = await import("node:fs");
-mkdirSync("docs/archive/0.5.0-shell-panels-topbar-design/shots", { recursive: true });
+mkdirSync("docs/gui-verification/shell-panels", { recursive: true });
 writeFileSync(
-	"docs/archive/0.5.0-shell-panels-topbar-design/shots/debug-panel-measure.png",
+	"docs/gui-verification/shell-panels/debug-panel-measure.png",
 	Buffer.from(shot.result?.data ?? "", "base64"),
 );
 console.log(JSON.stringify(report, null, 2));

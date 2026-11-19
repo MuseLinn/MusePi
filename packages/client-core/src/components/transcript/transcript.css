@@ -4192,7 +4192,7 @@ a.tr-tool-search-title:hover {
 	}
 }
 
-/* ── M1 turn header (design doc §A — docs/review/0.5.0-m1-transcript-design.md) ──
+/* ── M1 turn header (design doc §A) ──
  * Light boundary above each turn start: hairline · dot · 序号/模型/时间 · 状态+耗时 ·
  * hairline. Reads as a timeline separator, not a section title. */
 /* Turn separation. This used to be a decorative header row carrying the turn's
@@ -5103,6 +5103,62 @@ a.tr-tool-search-title:hover {
 
 @media (prefers-reduced-motion: reduce) {
 	.tr-tree-outline-undo {
+		animation: none;
+	}
+}
+
+/* Progress update (notify_user): annotated prose, not a tool card. Kimi's
+ * progress-row parity — an accent dot beside a quiet title and the update
+ * rendered as normal Markdown. */
+.tr-progress-update {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 10px 0 12px;
+}
+.tr-progress-dot {
+	width: 7px;
+	height: 7px;
+	margin-top: 7px;
+	flex: none;
+	border-radius: var(--radius-full, 999px);
+	background: var(--color-accent, var(--accent));
+	box-shadow: 0 0 0 3px var(--color-accent-soft, color-mix(in oklab, var(--accent) 18%, transparent));
+}
+.tr-progress-update[data-running="true"] .tr-progress-dot {
+	animation: tr-progress-pulse 1.4s ease-in-out infinite;
+}
+@keyframes tr-progress-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.45;
+	}
+}
+.tr-progress-main {
+	min-width: 0;
+	flex: 1 1 auto;
+}
+.tr-progress-title {
+	color: var(--color-text, var(--fg));
+	font-weight: var(--weight-medium, 550);
+	line-height: 1.4;
+}
+.tr-progress-body {
+	margin-top: 4px;
+	color: var(--color-text, var(--fg));
+}
+.tr-progress-body > :first-child {
+	margin-top: 0;
+}
+.tr-progress-body > :last-child {
+	margin-bottom: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.tr-progress-update[data-running="true"] .tr-progress-dot {
 		animation: none;
 	}
 }

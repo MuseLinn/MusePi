@@ -36,7 +36,7 @@ import {
 	runCliStatus,
 	startCliAuth,
 } from "../../connectors/cli";
-import { collectImportCandidates, importConnectors } from "../../connectors/import";
+import { collectImportCandidates, importConnectors, readCustomEntries } from "../../connectors/import";
 import {
 	deleteConnectorSecrets,
 	hasConnectorSecrets,
@@ -54,6 +54,8 @@ import {
 	connectorCommandFingerprint,
 	connectorServerName,
 } from "../../connectors/types";
+import { lookupMcpOAuthCredentialForServer } from "../../mcp/oauth-credentials";
+import type { AuthStorage } from "../../session/auth-storage";
 import type { ConnectorServerInfo } from "../session-host";
 import type { DaemonService } from "./types";
 
@@ -84,6 +86,12 @@ export interface ConnectorCatalogItem {
 	cliAuth: boolean;
 	server?: { transport: "http" | "sse" | "stdio"; url?: string; command?: string };
 	authMode: ConnectorAuthMode;
+	/**
+	 * The device grant is this row's sign-in path: a pinned client id with no
+	 * secret cannot finish the browser exchange, so the client offers the code
+	 * instead of sending the person to an authorization page that will fail.
+	 */
+	deviceAuth: boolean;
 	/** Token connectors: the form schema; values never leave the daemon. */
 	tokenSchema?: ConnectorTokenSchema;
 	/** Token connectors: every required field already has a stored value. */
@@ -99,6 +107,8 @@ export interface ConnectorCatalogServiceDeps {
 	connectorsSnapshotForCwd(cwd: string): Promise<{ servers: ConnectorServerInfo[] }>;
 	/** Reconcile cached managers after enablement changes. */
 	reloadConnectors(): Promise<unknown>;
+	/** Shared auth storage: tells an already-granted OAuth row from a new one. */
+	authStorage(): Promise<AuthStorage | null>;
 }
 
 export interface ConnectorConnectResult {
@@ -107,6 +117,8 @@ export interface ConnectorConnectResult {
 	name: string;
 	serverName: string;
 	needsAuth: boolean;
+	/** Sign in with the device grant instead of the browser callback. */
+	needsDeviceAuth?: boolean;
 	/** Token connector without its required values: show the form instead. */
 	needsTokenConfig?: boolean;
 	/** Local process waiting for the user's explicit approval. */
@@ -196,6 +208,8 @@ async function toItem(
 				}
 			: {}),
 		authMode: entry.auth.mode,
+		deviceAuth:
+			entry.auth.mode === "oauth" && entry.oauth?.clientId !== undefined && entry.oauth?.clientSecret === undefined,
 		tokenSet: await tokenReady(entry),
 		enabled,
 		status,
@@ -251,6 +265,13 @@ export class ConnectorCatalogService implements DaemonService {
 
 	constructor(deps: ConnectorCatalogServiceDeps) {
 		this.#deps = deps;
+	}
+
+	/** An OAuth row whose grant is already in auth storage can enable directly. */
+	async #oauthGranted(entry: ConnectorCatalogEntry): Promise<boolean> {
+		if (entry.server?.type !== "http" && entry.server?.type !== "sse") return false;
+		const storage = await this.#deps.authStorage();
+		return lookupMcpOAuthCredentialForServer(storage, { type: "oauth" }, entry.server.url) !== undefined;
 	}
 
 	async #statuses(): Promise<Map<string, ConnectorCatalogItem["status"]>> {
@@ -346,8 +367,25 @@ export class ConnectorCatalogService implements DaemonService {
 				status: "disconnected",
 			};
 		}
+		if (entry.server.type === "stdio" && entry.auth.mode === "oauth") {
+			throw new Error("stdio connectors cannot use OAuth");
+		}
+		if (entry.auth.mode === "oauth" && !(await this.#oauthGranted(entry)) && !(await hasPastedToken(entry))) {
+			// Nothing is enabled before the person actually signs in. A failed or
+			// abandoned browser/device flow must leave the row where it started,
+			// not enabled with its primary action reading "disconnect".
+			const deviceOnly = entry.oauth?.clientId !== undefined && entry.oauth?.clientSecret === undefined;
+			return {
+				ok: true,
+				id,
+				name: entry.name,
+				serverName: connectorServerName(id),
+				needsAuth: true,
+				...(deviceOnly ? { needsDeviceAuth: true } : {}),
+				status: "disconnected",
+			};
+		}
 		if (entry.server.type === "stdio") {
-			if (entry.auth.mode === "oauth") throw new Error("stdio connectors cannot use OAuth");
 			if (params.approve !== true) {
 				return {
 					ok: false,
@@ -378,10 +416,7 @@ export class ConnectorCatalogService implements DaemonService {
 			id,
 			name: entry.name,
 			serverName: connectorServerName(id),
-			// A pasted token answers the row on its own, so a browser sign-in
-			// after it would be a second, unneeded step. An OAuth row with no
-			// token still needs one.
-			needsAuth: entry.auth.mode === "oauth" && !(await hasPastedToken(entry)),
+			needsAuth: false,
 			status,
 		};
 	}
@@ -590,10 +625,21 @@ export class ConnectorCatalogService implements DaemonService {
 			url?: string;
 			command?: string;
 			secretFields: string[];
+			/** This endpoint already has an entry in the user's own catalog. */
+			imported: boolean;
 		}>;
 	}> {
 		const cwd = typeof params?.cwd === "string" && params.cwd.length > 0 ? params.cwd : this.#deps.cwd();
-		const candidates = await collectImportCandidates(cwd);
+		const [candidates, existing] = await Promise.all([collectImportCandidates(cwd), readCustomEntries()]);
+		const signature = (transport: string, url?: string, command?: string): string =>
+			`${transport}:${url ?? command ?? ""}`;
+		const entrySignature = (server: ConnectorCatalogEntry["server"] | undefined): string => {
+			if (!server) return "";
+			return server.type === "stdio"
+				? signature(server.type, undefined, server.command)
+				: signature(server.type, server.url, undefined);
+		};
+		const taken = new Set(existing.map(entry => entrySignature(entry.server)));
 		return {
 			candidates: candidates.map(candidate => ({
 				source: candidate.source,
@@ -602,6 +648,7 @@ export class ConnectorCatalogService implements DaemonService {
 				...(candidate.url ? { url: candidate.url } : {}),
 				...(candidate.command ? { command: candidate.command } : {}),
 				secretFields: candidate.secretFields,
+				imported: taken.has(signature(candidate.transport, candidate.url, candidate.command)),
 			})),
 		};
 	}

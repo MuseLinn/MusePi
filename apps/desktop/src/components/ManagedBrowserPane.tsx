@@ -53,6 +53,7 @@ import {
 	getHostState,
 	goBack,
 	goForward,
+	handBackAgentTab,
 	hostElement,
 	navigate as navigateInStore,
 	printActivePage,
@@ -264,7 +265,7 @@ export function ManagedBrowserPane({
 	 *  the pane cannot infer visibility from its own geometry. */
 	open?: boolean;
 	/** Stop the current session turn without closing the managed page. */
-	onTakeover?(): void;
+	onTakeover?(info: { tabId: string; url: string; title: string }): void;
 	/** Daemon RPC bridge (settings.get): reads the browser preferences main
 	 *  applies to the guests. */
 	rpc?: RpcClient | null;
@@ -956,11 +957,20 @@ export function ManagedBrowserPane({
 	const knownTabIds = useMemo(() => sessionTabs.map(tab => tab.id), [sessionTabs]);
 	const { control: agentControl, release: releaseAgentControl } = useAgentTabControl(host.activity, knownTabIds);
 	const agentBusy = agentControl !== null && agentControl.tabId === host.activeId && !isBlank;
-	const handleTakeover = useCallback(async (): Promise<void> => {
-		await takeoverAgentOp(agentControl?.tabId);
-		releaseAgentControl();
-		onTakeover?.();
-	}, [agentControl?.tabId, releaseAgentControl, onTakeover]);
+	const userOwnedActive = Boolean(activeTab && host.userOwnedTabIds.includes(activeTab.id));
+	const handleTakeover = useCallback(
+		async (info: { tabId: string; url: string; title: string }): Promise<void> => {
+			await takeoverAgentOp(info.tabId);
+			releaseAgentControl();
+			// The host (or a plugin) gets the tab facts, never the decision to stop
+			// the turn — takeover is an ownership handoff.
+			onTakeover?.(info);
+		},
+		[releaseAgentControl, onTakeover],
+	);
+	const handleHandBack = useCallback(async (): Promise<void> => {
+		if (activeTab) await handBackAgentTab(activeTab.id);
+	}, [activeTab]);
 	return (
 		<div className="gui-browser-pane relative flex min-h-0 flex-1 flex-col">
 			{/* Chrome bar: nav / address omnibox / zoom / actions (§3.2.4 IA:
@@ -1487,14 +1497,17 @@ export function ManagedBrowserPane({
 				style={{ overflow: pageOverflow.x || pageOverflow.y ? "auto" : "hidden" }}
 			>
 				<div ref={slotRef} className="gui-browser-slot" aria-label={t("tools.managedBrowser")} />
-				{agentControl && (
+				{(agentControl || userOwnedActive) && (
 					<BrowserControlOverlay
-						activity={agentControl.activity}
-						since={agentControl.since}
-						visible
+						activity={agentControl?.activity ?? null}
+						since={agentControl?.since}
+						visible={agentControl !== null}
 						inView={agentBusy}
-						onReveal={() => selectTab(agentControl.tabId)}
+						onReveal={agentControl ? () => selectTab(agentControl.tabId) : undefined}
 						onTakeover={handleTakeover}
+						onHandBack={handleHandBack}
+						userOwned={userOwnedActive}
+						userOwnedTitle={activeTab?.title}
 						frameRect={controlRect ?? undefined}
 					/>
 				)}

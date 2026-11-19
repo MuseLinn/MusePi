@@ -4,6 +4,8 @@ import * as path from "node:path";
 import { getAgentDir } from "@musepi/pi-utils";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "../../../test/helpers/isolate-agent-dir";
 import { readConnectorSecrets } from "../../connectors/secrets";
+import { mcpOAuthCredentialId } from "../../mcp/oauth-flow";
+import type { AuthStorage } from "../../session/auth-storage";
 import { ConnectorCatalogService } from "./connector-catalog-service";
 
 let isolatedDir = "";
@@ -107,6 +109,7 @@ describe("ConnectorCatalogService", () => {
 			reloadConnectors: async () => {
 				reloads += 1;
 			},
+			authStorage: async () => null,
 		});
 
 		const initial = await service.list();
@@ -120,23 +123,51 @@ describe("ConnectorCatalogService", () => {
 			authMode: "oauth",
 		});
 
-		const connected = await service.connect({ id: "alpha" });
-		expect(connected).toMatchObject({
+		const pending = await service.connect({ id: "alpha" });
+		expect(pending).toMatchObject({
 			ok: true,
 			id: "alpha",
 			serverName: "connector:alpha",
 			needsAuth: true,
-			status: "connected",
+			status: "disconnected",
 		});
+		// Nothing is enabled before the sign-in lands: a failed flow must leave
+		// the row where it started.
+		expect(reloads).toBe(0);
+		expect((await service.list({ query: "alph" })).connectors[0]).toMatchObject({ enabled: false });
+
+		// An open row enables immediately and reports the live manager status.
+		const connected = await service.connect({ id: "beta" });
+		expect(connected).toMatchObject({ ok: true, id: "beta", needsAuth: false });
 		expect(reloads).toBe(1);
 
-		const after = await service.list({ query: "alph" });
+		const after = await service.list({ query: "beta" });
 		expect(after.connectors).toHaveLength(1);
-		expect(after.connectors[0]).toMatchObject({ id: "alpha", enabled: true, status: "connected" });
+		expect(after.connectors[0]).toMatchObject({ id: "beta", enabled: true });
 
-		const disconnected = await service.setEnabled({ id: "alpha", enabled: false });
-		expect(disconnected).toEqual({ ok: true, id: "alpha", enabled: false });
+		const disconnected = await service.setEnabled({ id: "beta", enabled: false });
+		expect(disconnected).toEqual({ ok: true, id: "beta", enabled: false });
 		expect(reloads).toBe(2);
+	});
+
+	it("enables an OAuth row whose grant is already stored", async () => {
+		let reloads = 0;
+		const grantUrl = "https://alpha.example/mcp";
+		const service = new ConnectorCatalogService({
+			cwd: () => "/workspace",
+			connectorsSnapshotForCwd: async () => ({ servers: [] }),
+			reloadConnectors: async () => {
+				reloads += 1;
+			},
+			authStorage: async () =>
+				({
+					get: (id: string) => (id === mcpOAuthCredentialId(grantUrl) ? { type: "oauth" } : undefined),
+				}) as unknown as AuthStorage,
+		});
+
+		const result = await service.connect({ id: "alpha" });
+		expect(result).toMatchObject({ ok: true, id: "alpha", needsAuth: false });
+		expect(reloads).toBe(1);
 	});
 
 	it("asks for a browser sign-in unless a pasted token answers the row", async () => {
@@ -144,6 +175,7 @@ describe("ConnectorCatalogService", () => {
 			cwd: () => "/workspace",
 			connectorsSnapshotForCwd: async () => ({ servers: [] }),
 			reloadConnectors: async () => undefined,
+			authStorage: async () => null,
 		});
 
 		// A plain OAuth row still needs a sign-in.
@@ -161,6 +193,7 @@ describe("ConnectorCatalogService", () => {
 			cwd: () => "/workspace",
 			connectorsSnapshotForCwd: async () => ({ servers: [] }),
 			reloadConnectors: async () => undefined,
+			authStorage: async () => null,
 		});
 
 		const blocked = await service.connect({ id: "gamma" });
@@ -189,6 +222,7 @@ describe("ConnectorCatalogService", () => {
 			cwd: () => "/workspace",
 			connectorsSnapshotForCwd: async () => ({ servers: [] }),
 			reloadConnectors: async () => undefined,
+			authStorage: async () => null,
 		});
 
 		const blocked = await service.connect({ id: "delta" });
@@ -216,6 +250,7 @@ describe("ConnectorCatalogService", () => {
 			cwd: () => "/workspace",
 			connectorsSnapshotForCwd: async () => ({ servers: [] }),
 			reloadConnectors: async () => undefined,
+			authStorage: async () => null,
 		});
 
 		const blocked = await service.connect({ id: "echo-cli" });
@@ -243,6 +278,7 @@ describe("ConnectorCatalogService", () => {
 			cwd: () => "/workspace",
 			connectorsSnapshotForCwd: async () => ({ servers: [] }),
 			reloadConnectors: async () => undefined,
+			authStorage: async () => null,
 		});
 
 		await expect(service.connect({ id: "missing" })).rejects.toThrow("unknown connector");

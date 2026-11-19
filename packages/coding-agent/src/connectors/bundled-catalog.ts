@@ -94,7 +94,7 @@ export const BUNDLED_CONNECTORS: readonly Seed[] = [
 		// The browser-callback path still needs a client secret, because GitHub
 		// refuses a PKCE-only exchange. The device-flow path does not, so the
 		// secret stays optional here.
-		oauth: { clientId: "Ov23liWleGB0BcR9IPBm" },
+		oauth: { clientId: "Ov23liWleGB0BcR9IPBm", deviceAuthorizationUrl: "https://github.com/login/device/code" },
 		tokenSchema: {
 			title: "Connect GitHub",
 			description: "Sign in with a device code, or paste a personal access token if the device flow is unavailable.",

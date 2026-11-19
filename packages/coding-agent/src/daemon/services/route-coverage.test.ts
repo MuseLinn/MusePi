@@ -50,6 +50,7 @@ import { TerminalService } from "./terminal-service";
 import { UsageService } from "./usage-service";
 import { ViewStoreService } from "./view-store-service";
 import { VoiceService } from "./voice-service";
+import { WidgetService } from "./widget-service";
 import { WorkspaceRegistry, WorkspaceService } from "./workspace-registry";
 
 /** 路由覆盖快照（P1 服务抽取纪律）：server.ts 巨型 switch 的每个 case
@@ -95,6 +96,7 @@ function buildRegistry(): HostServices {
 	);
 	// LivenessService：无依赖，ping/system.ping 共用同一应答。
 	services.register(new LivenessService());
+	services.register(new WidgetService());
 	// ResourcesService：无依赖，只认领 system.resources（本测试不采样）。
 	services.register(new ResourcesService());
 	// DiagnosticsService：只认领 system.services，快照源在本测试里不触盘。
@@ -288,6 +290,7 @@ function buildRegistry(): HostServices {
 			cwd: () => "",
 			connectorsSnapshotForCwd: async () => ({ servers: [] }),
 			reloadConnectors: async () => undefined,
+			authStorage: async () => null,
 		}),
 	);
 	// CredentialService：凭据 store 指向隔离 temp 文件（本测试不触凭据面）。

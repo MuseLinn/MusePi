@@ -2,15 +2,13 @@ import { loadCapability } from "../capability";
 import { resolvePath, resolveUniquePaths } from "./utils";
 
 /**
- * Extensibility loader utilities — the shared front half of every
- * capability loader's discover→resolve→import→bind pipeline (DSH
- * unification plan retired — see docs/archive/extensibility-architecture.md.
+ * Extensibility loader utilities — the shared front half of a capability
+ * loader's discover→resolve→import→bind pipeline.
  *
  * **Currently unadopted (verified 2026-10-04): no loader imports
- * `discoverCapabilityPaths`.** The plan that produced it was retired with
- * `docs/archive/extensibility-architecture.md`; loaders instead go through
- * the capability registry (`capability/` + `discovery/index.ts`), a wider
- * mechanism that never needed the per-loader discover helper.
+ * `discoverCapabilityPaths`.** Loaders go through the capability registry
+ * (`capability/` + `discovery/index.ts`), a wider mechanism that never needed
+ * the per-loader discover helper.
  *
  * Before this module each loader (extensions / hooks / custom-tools /
  * custom-commands / plugins) re-implemented its own

@@ -98,8 +98,7 @@ export class BoardService implements DaemonService {
 		return { types: widgetTypesWith(widgets), tones: widgetTonesWith(widgets) };
 	}
 
-	/** RPC widget.data：daemon 侧数据源代理（docs/archive/board-dashboard.md
-	 *  §4）：挂件永远不直接抓网络——daemon 按 TTL 每个 feed 只抓一次并进程
+	/** RPC widget.data：daemon 侧数据源代理：挂件永远不直接抓网络——daemon 按 TTL 每个 feed 只抓一次并进程
 	 *  内缓存。首个 feed：FX 汇率（open.er-api.com）。 */
 	async data(params: { feed?: unknown; base?: unknown }): Promise<Record<string, unknown>> {
 		const { getFxRates } = await import("../fx-rates");

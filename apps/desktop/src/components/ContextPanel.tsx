@@ -338,8 +338,10 @@ export function ContextPanel({
 	/** External browser reveal (chat link click / agent browser.open):
 	 *  switches to the browser tool and navigates the active tab. */
 	browserOpenRequest?: { url: string; nonce: number } | null;
-	/** Stop the current session turn while leaving the managed page intact. */
-	onBrowserTakeover?(): void;
+	/** Hand the agent-controlled tab to the user: the managed browser stops and
+	 *  refuses agent commands on it, and the turn keeps running. The payload
+	 *  names the tab so plugins can react without re-deriving it. */
+	onBrowserTakeover?(info: { tabId: string; url: string; title: string }): void;
 	/** Extension panel-tab slots (panel.tab.*); nav items live in the
 	 *  RightRail — the panel only renders their content. */
 	extTabs?: import("../lib/slot-host").SlotComponent[];

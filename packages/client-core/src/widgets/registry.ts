@@ -66,8 +66,9 @@ export interface WidgetDef {
 		/** Push an intent back to the conversation (kimi sendPrompt parity):
 		 *  inline chat widgets call this to hand results to the agent; the
 		 *  board (no conversation) simply never passes it, and components
-		 *  hide their send affordance when absent. */
-		sendPrompt?(text: string): void;
+		 *  hide their send affordance when absent. A held page also carries the
+		 *  face's structured `data` so the tool result can keep it. */
+		sendPrompt?(text: string, data?: unknown): void;
 		/** 统一标注:宿主把整张卡片 rasterize 成图(html 卡片用;桌面渲染器
 		 *  提供,棋盘/导出等无 rasterizer 的宿主不传,标注入口随之隐藏)。 */
 		annotateCapture?(): Promise<Blob | null>;
