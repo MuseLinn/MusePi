@@ -1,7 +1,3 @@
-export function isCloudflaredMissing(error: string): boolean {
-	return /cloudflared\s+is\s+not\s+installed/i.test(error);
-}
-
 export function channelStateText(
 	state: string,
 	detail: string | undefined,

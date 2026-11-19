@@ -1,16 +1,17 @@
-import { Segmented, type SegmentedOption, t } from "@musepi/client-core";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openExternalUrl } from "../lib/electron";
 import { useConfirm } from "../lib/prompt-dialog";
-import { channelStateText, isCloudflaredMissing } from "../lib/remote-access";
+import { channelStateText } from "../lib/remote-access";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { QrCode } from "../vendor/qrcode";
 import { DialogFrame } from "./DialogFrame";
 import { Reveal } from "./Reveal";
 
-type ShareMode = "session" | "workspace" | "tunnel";
+type ShareScope = "workspace" | "session";
+type ExposureHealth = "unavailable" | "starting" | "ready" | "degraded" | "stopped";
 
 interface RemoteAccessGuest {
 	name: string;
@@ -18,12 +19,55 @@ interface RemoteAccessGuest {
 	readOnly: boolean;
 }
 
+interface ShareEnd {
+	exposure: string;
+	health: ExposureHealth;
+	at: string;
+	reason: string;
+	detail?: string;
+	hint?: string;
+}
+
 interface RemoteAccessInfo {
 	hosting: boolean;
+	mode?: ShareScope;
+	sessionId?: string | null;
+	exposure?: string;
+	/** Live exposure status from the daemon; `degraded` invalidates the link. */
+	health?: { health: ExposureHealth; detail?: string } | null;
 	link?: string;
 	webLink?: string;
 	viewLink?: string;
 	participants?: RemoteAccessGuest[];
+	lastEnd?: ShareEnd;
+}
+
+interface ExposureCapabilities {
+	guestInstall: boolean;
+	publicExposure: boolean;
+	stableUrl: boolean;
+	thirdParty: boolean;
+}
+
+interface ExposureInstallHint {
+	url: string;
+	commands: Partial<Record<string, string>>;
+	note?: string;
+}
+
+interface ExposureOption {
+	id: string;
+	label: string;
+	health: ExposureHealth;
+	detail?: string;
+	hint?: string;
+	install?: ExposureInstallHint;
+	capabilities?: ExposureCapabilities;
+}
+
+interface ExposuresInfo {
+	default: string;
+	exposures: ExposureOption[];
 }
 
 interface ChannelInfo {
@@ -40,8 +84,6 @@ interface ChannelPlugin {
 	registered: boolean;
 }
 
-const CLOUDFLARED_INSTALL_URL =
-	"https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/";
 const CHANNEL_NAMES: Record<string, string> = {
 	discord: "Discord",
 	wechat: "WeChat",
@@ -49,6 +91,12 @@ const CHANNEL_NAMES: Record<string, string> = {
 	feishu: "Feishu",
 	lark: "Lark",
 	"huawei-today": "Huawei Today",
+};
+
+const PLATFORM_NAMES: Record<string, string> = {
+	darwin: "macOS",
+	linux: "Linux",
+	win32: "Windows",
 };
 
 function drawQr(canvas: HTMLCanvasElement, text: string): void {
@@ -128,6 +176,7 @@ export function RemoteAccessDialog({
 	rpc,
 	sessionId,
 	sessionTitle,
+	initialScope = "workspace",
 	open,
 	onClose,
 	onOpenDisclaimer,
@@ -135,6 +184,8 @@ export function RemoteAccessDialog({
 	rpc: RpcClient | null;
 	sessionId: string | null;
 	sessionTitle: string | null;
+	/** Scope this entrance belongs to: the session menu shares one session, the environment rail the workspace. */
+	initialScope?: ShareScope;
 	open: boolean;
 	onClose(): void;
 	onOpenDisclaimer(): void;
@@ -142,11 +193,15 @@ export function RemoteAccessDialog({
 	const [info, setInfo] = useState<RemoteAccessInfo | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [errorAction, setErrorAction] = useState<"start" | "pair" | "stop">("start");
 	const [copied, setCopied] = useState(false);
 	const { confirm } = useConfirm();
 	const qrRef = useRef<HTMLCanvasElement | null>(null);
 	const [webLink, setWebLink] = useState<string | null>(null);
-	const [mode, setMode] = useState<ShareMode>("session");
+	const [exposures, setExposures] = useState<ExposureOption[] | null>(null);
+	const [exposureId, setExposureId] = useState<string | null>(null);
+	const [exposuresError, setExposuresError] = useState(false);
+	const [exposuresLoading, setExposuresLoading] = useState(false);
 	const [pairCode, setPairCode] = useState<string | null>(null);
 	const [pairHost, setPairHost] = useState<string | null>(null);
 	const [pairCodeExpiresAt, setPairCodeExpiresAt] = useState<number | null>(null);
@@ -185,22 +240,58 @@ export function RemoteAccessDialog({
 	const refresh = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
 		try {
-			const st = await rpc.request<RemoteAccessInfo>("remote-access.status", {
-				...(sessionId !== null ? { sessionId } : {}),
-			});
+			const st = await rpc.request<RemoteAccessInfo>("remote-access.status", {});
 			setInfo(st);
-			if (st.hosting && st.webLink) setWebLink(st.webLink);
+			// A degraded exposure has already lost its link; showing the old QR
+			// would invite guests into a dead room until the teardown lands.
+			const live = st.hosting && st.health?.health !== "degraded";
+			setWebLink(live && st.webLink ? st.webLink : null);
 		} catch {
 			setInfo({ hosting: false });
+			setWebLink(null);
 		}
-	}, [rpc, sessionId]);
+	}, [rpc]);
+
+	const refreshExposures = useCallback(async (): Promise<void> => {
+		if (!rpc) return;
+		setExposuresLoading(true);
+		try {
+			const res = await rpc.request<ExposuresInfo>("collab.exposures", {});
+			setExposures(res.exposures);
+			setExposuresError(false);
+			setExposureId(current => {
+				if (current && res.exposures.some(entry => entry.id === current)) return current;
+				const preferred =
+					res.exposures.find(entry => entry.id === res.default && entry.health !== "unavailable") ??
+					res.exposures.find(entry => entry.health === "ready") ??
+					res.exposures.find(entry => entry.id === "lan") ??
+					res.exposures[0];
+				return preferred?.id ?? null;
+			});
+		} catch {
+			setExposuresError(true);
+		} finally {
+			setExposuresLoading(false);
+		}
+	}, [rpc]);
 
 	useEffect(() => {
 		if (!open) return;
+		// Drop the previous visit's answer before the first status round-trip:
+		// a share that ended while the panel was closed must not flash its old
+		// QR or link for a frame.
+		setInfo(null);
+		setWebLink(null);
+		setError(null);
+		setErrorAction("start");
+		setPairCode(null);
+		setPairHost(null);
+		setPairCodeExpiresAt(null);
 		void refresh();
+		void refreshExposures();
 		void refreshChannels();
 		void refreshPlugins();
-	}, [open, refresh, refreshChannels, refreshPlugins]);
+	}, [open, initialScope, refresh, refreshExposures, refreshChannels, refreshPlugins]);
 
 	useEffect(() => {
 		if (webLink && qrRef.current) drawQr(qrRef.current, webLink);
@@ -321,27 +412,33 @@ export function RemoteAccessDialog({
 			setPairCode(null);
 			setPairHost(null);
 			setPairCodeExpiresAt(null);
+			setErrorAction("pair");
 			setError(err instanceof Error ? err.message : String(err));
 		}
 	};
 
 	const startShare = async (): Promise<void> => {
-		if (!rpc || busy || (mode === "session" && !sessionId)) return;
+		if (!rpc || busy || exposureId === null || (initialScope === "session" && !sessionId)) return;
 		setBusy(true);
 		setError(null);
 		try {
 			const res = await rpc.request<RemoteAccessInfo>("remote-access.start", {
-				...(sessionId !== null ? { sessionId } : {}),
-				mode,
+				mode: initialScope,
+				exposure: exposureId,
+				...(initialScope === "session" && sessionId !== null ? { sessionId } : {}),
 			});
 			setInfo({ ...res, hosting: true });
-			if (res.webLink) setWebLink(res.webLink);
+			setWebLink(res.webLink ?? null);
 			// A code minted for the previous share was cleared server-side.
 			setPairCode(null);
 			setPairHost(null);
 			setPairCodeExpiresAt(null);
 		} catch (err) {
+			setErrorAction("start");
 			setError(err instanceof Error ? err.message : String(err));
+			// A start failure often means the transport's prerequisite vanished
+			// after the probe; re-probe so its install card appears.
+			void refreshExposures();
 		} finally {
 			setBusy(false);
 		}
@@ -351,15 +448,13 @@ export function RemoteAccessDialog({
 		if (!rpc || busy) return;
 		setBusy(true);
 		try {
-			await rpc.request("remote-access.stop", {
-				...(sessionId !== null ? { sessionId } : {}),
-			});
-			setInfo({ hosting: false });
-			setWebLink(null);
+			await rpc.request("remote-access.stop", {});
+			await refresh();
 			setPairCode(null);
 			setPairHost(null);
 			setPairCodeExpiresAt(null);
 		} catch (err) {
+			setErrorAction("stop");
 			setError(err instanceof Error ? err.message : String(err));
 		} finally {
 			setBusy(false);
@@ -402,27 +497,95 @@ export function RemoteAccessDialog({
 			{ key: "appSecret", label: t("App Secret"), secret: true },
 		],
 	};
-	const shareScopeSegments: SegmentedOption<ShareMode>[] = [
-		{ value: "session", label: t("general.currentSession") },
-		{ value: "workspace", label: t("tools.workspace") },
-		{ value: "tunnel", label: t("settings.publicTunnel") },
-	];
-	const hosting = info?.hosting ?? false;
+
+	const exposureName = (id: string | null | undefined): string => {
+		const found = id ? exposures?.find(entry => entry.id === id) : undefined;
+		if (!found) return id ?? "";
+		return found.id === "lan" ? t("settings.exposureLan") : found.label;
+	};
+	const healthText = (health: ExposureHealth): string => {
+		switch (health) {
+			case "ready":
+				return t("settings.exposureHealthReady");
+			case "starting":
+				return t("settings.exposureHealthStarting");
+			case "unavailable":
+				return t("settings.exposureHealthUnavailable");
+			case "degraded":
+				return t("settings.exposureHealthDegraded");
+			default:
+				return t("settings.exposureHealthStopped");
+		}
+	};
+	const shareEndReason = (end: ShareEnd): string => {
+		switch (end.reason) {
+			case "exposure degraded":
+				return t("settings.shareEndedExposureDegraded");
+			case "session switched":
+				return t("settings.shareEndedSessionSwitched");
+			case "share time limit reached":
+				return t("settings.shareEndedTimeLimit");
+			case "stopped from gui":
+				return t("settings.shareEndedStopped");
+			case "previous share ended":
+			case "restarting share with a different scope":
+				return t("settings.shareEndedRestarted");
+			case "share already ended":
+				return t("settings.shareEndedGeneric");
+			default:
+				return end.reason || t("settings.shareEndedGeneric");
+		}
+	};
+
+	const liveHealth = info?.health?.health;
+	const live = info?.hosting === true && liveHealth !== "degraded";
+	const degraded = info?.hosting === true && liveHealth === "degraded";
+	const currentExposureId = live ? (info?.exposure ?? exposureId) : exposureId;
+	const selectedExposure = exposures?.find(entry => entry.id === exposureId) ?? null;
+	const exposureAvailable = selectedExposure !== null && selectedExposure.health !== "unavailable";
+	const hostingScope = info?.mode ?? initialScope;
 	const pairSecondsLeft = pairCodeExpiresAt === null ? null : Math.max(0, Math.ceil((pairCodeExpiresAt - now) / 1000));
-	const canShare = !busy && rpc !== null && (mode === "workspace" || mode === "tunnel" || sessionId !== null);
-	const sessionHint =
-		sessionId !== null && sessionTitle
-			? t(`share session "{title}" live on the local network`, { title: sessionTitle })
-			: t("settings.shareSessionLiveLocal");
+	const canShare =
+		!busy &&
+		rpc !== null &&
+		!exposuresError &&
+		exposureAvailable &&
+		(initialScope === "workspace" || sessionId !== null);
+	const canRetry =
+		!busy && rpc !== null && (errorAction !== "start" || initialScope === "workspace" || sessionId !== null);
+	const retryError = (): void => {
+		if (errorAction === "pair") void genPairCode();
+		else if (errorAction === "stop") void stopShare();
+		else void startShare();
+	};
 	const scopeHint =
-		sessionId === null && mode === "session"
-			? t("settings.openCreateSessionFirst")
-			: mode === "workspace"
-				? t("general.shareWholeWorkspaceGuests")
-				: mode === "tunnel"
-					? t("settings.publicTunnelAnyone.info")
-					: sessionHint;
-	const tunnelMissing = error !== null && isCloudflaredMissing(error);
+		initialScope === "session"
+			? sessionId !== null
+				? t("settings.shareSessionScopeHint", { title: sessionTitle ?? t("general.currentSession") })
+				: t("settings.openCreateSessionFirst")
+			: t("general.shareWholeWorkspaceGuests");
+	const installs = (exposures ?? []).filter(entry => entry.health === "unavailable" && entry.install);
+	const titleIcon = initialScope === "session" ? "share-2" : "global";
+
+	const errorBlock = error ? (
+		<div className="gui-collab-recovery" role="alert">
+			<Icon name="error-warning" className="h-5 w-5" />
+			<div className="gui-collab-recovery-content">
+				<h3>{errorAction === "start" ? t("settings.shareStartFailed") : t("settings.shareActionFailed")}</h3>
+				<p>{t("settings.shareFailedHint")}</p>
+				<div className="gui-collab-recovery-actions">
+					<button type="button" className="gui-btn gui-btn-primary" disabled={!canRetry} onClick={retryError}>
+						<Icon name="refresh" className="h-3.5 w-3.5" />
+						<span>{busy ? t("settings.starting") : t("settings.retry")}</span>
+					</button>
+				</div>
+				<details className="gui-collab-technical">
+					<summary>{t("settings.technicalDetails")}</summary>
+					<pre>{error}</pre>
+				</details>
+			</div>
+		</div>
+	) : null;
 
 	return (
 		<DialogFrame
@@ -432,7 +595,10 @@ export function RemoteAccessDialog({
 			className="gui-collab-dialog"
 		>
 			<div className="gui-dialog-head">
-				<h1 className="gui-collab-dialog-title">{t("settings.mobileRemoteControl")}</h1>
+				<h1 className="gui-collab-dialog-title flex items-center gap-2">
+					<Icon name={titleIcon} className="h-4 w-4" />
+					{t("settings.mobileRemoteControl")}
+				</h1>
 				<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("settings.close")}>
 					<Icon name="close" className="h-4 w-4" />
 				</button>
@@ -440,15 +606,18 @@ export function RemoteAccessDialog({
 			<div className="gui-collab-grid">
 				<section className="gui-collab-col gui-collab-share">
 					<div className="gui-collab-col-head">
-						<Icon name="smartphone" className="h-4 w-4" />
-						<h2>{t("settings.scanConnect")}</h2>
+						<Icon name={titleIcon} className="h-4 w-4" />
+						<h2>{t("settings.shareLink")}</h2>
 					</div>
-					<p className="gui-collab-desc">{t("settings.scanYourPhoneCamera")}</p>
-					{hosting && webLink ? (
+					{live ? (
 						<div className="gui-collab-hosting">
 							<div className="gui-collab-status">
 								<span className="gui-collab-dot" aria-hidden="true" />
-								<span>{t("settings.waitingPhoneConnection")}</span>
+								<span>{t("settings.shareWaitingGuests")}</span>
+								<span className="text-[11px] text-[var(--color-text-faint)]">
+									{hostingScope === "workspace" ? t("tools.workspace") : t("general.currentSession")} ·{" "}
+									{exposureName(currentExposureId)}
+								</span>
 								<button
 									type="button"
 									className="gui-btn gui-btn-stop gui-collab-stop"
@@ -462,134 +631,267 @@ export function RemoteAccessDialog({
 							{(info?.participants?.length ?? 0) > 0 ? (
 								<div className="gui-collab-participants">
 									{(info?.participants ?? []).map(p => (
-										<span key={`${p.role}:${p.name}`}>
-											{p.readOnly ? t("settings.text", { name: p.name }) : p.name}
+										<span key={`${p.role}:${p.name}`} className="inline-flex items-center gap-1">
+											<span>{p.name}</span>
+											<span className="text-[var(--color-text-faint)]">·</span>
+											<span>
+												{p.role === "host"
+													? t("settings.participantHost")
+													: t("settings.participantDevice")}
+											</span>
+											{p.readOnly ? (
+												<span className="inline-flex items-center gap-0.5 rounded-full border border-[var(--border)] px-1.5 text-[10px] text-[var(--color-text-faint)]">
+													<Icon name="lock-2" className="h-2.5 w-2.5" />
+													{t("general.readOnly")}
+												</span>
+											) : null}
+											<span className="text-[var(--color-text-faint)]">·</span>
+											<span>{exposureName(currentExposureId)}</span>
 										</span>
 									))}
 								</div>
 							) : null}
-							{error ? (
-								<div className="gui-collab-error" role="alert">
-									<Icon name="error-warning" className="h-4 w-4" />
-									<span>{error}</span>
-								</div>
+							{error ? errorBlock : null}
+							{webLink ? (
+								<>
+									<div className="gui-collab-qr">
+										<canvas ref={qrRef} aria-label={t("settings.scanQrCode")} />
+									</div>
+									<div className="gui-collab-actions">
+										<button type="button" className="gui-btn" onClick={() => void refresh()}>
+											<Icon name="refresh" className="h-3.5 w-3.5" />
+											<span>{t("settings.refresh")}</span>
+										</button>
+										<button type="button" className="gui-btn" onClick={() => void copyLink()}>
+											<Icon name={copied ? "check" : "file-copy"} className="h-3.5 w-3.5" />
+											<span aria-live="polite">
+												{copied ? t("settings.copied") : t("settings.copyLink")}
+											</span>
+										</button>
+										{info?.viewLink ? (
+											<button type="button" className="gui-btn" onClick={() => void copyViewLink()}>
+												<Icon name="eye" className="h-3.5 w-3.5" />
+												<span aria-live="polite">
+													{copiedView ? t("settings.copied") : t("settings.copyWatchOnlyLink")}
+												</span>
+											</button>
+										) : null}
+									</div>
+									{currentExposureId === "lan" ? (
+										<div className="gui-collab-pair">
+											<span className="gui-collab-pair-title">{t("settings.useMusepiMobilePair")}</span>
+											<div className="gui-collab-pair-row">
+												<span className="gui-collab-pair-code">{pairCode ?? "——————"}</span>
+												<button type="button" className="gui-btn" onClick={() => void genPairCode()}>
+													<Icon name="refresh" className="h-3.5 w-3.5" />
+													<span>{t("settings.getCode")}</span>
+												</button>
+											</div>
+											<span className="gui-collab-pair-hint">
+												{pairHost
+													? t("settings.pairCodeWithAddress", { host: pairHost })
+													: pairSecondsLeft === null
+														? t("settings.enter6DigitCodeMusepiMobile")
+														: pairSecondsLeft > 0
+															? t("settings.singleUseExpiresSWithSeconds", {
+																	seconds: String(pairSecondsLeft),
+																})
+															: t("settings.codeHasExpiredGet")}
+											</span>
+										</div>
+									) : (
+										<div className="gui-collab-pair">
+											<span className="gui-collab-pair-title">{t("settings.shareDirectLink")}</span>
+											<code className="select-text break-all rounded-lg border border-[var(--border)] bg-[var(--color-surface-raised)] p-2 font-mono text-[11px] text-[var(--color-text-muted)]">
+												{webLink}
+											</code>
+											<span className="gui-collab-pair-hint">{t("settings.shareDirectLinkHint")}</span>
+										</div>
+									)}
+								</>
 							) : null}
-							<div className="gui-collab-qr">
-								<canvas ref={qrRef} aria-label={t("settings.scanQrCode")} />
-							</div>
-							<div className="gui-collab-actions">
-								<button type="button" className="gui-btn" onClick={() => void refresh()}>
-									<Icon name="refresh" className="h-3.5 w-3.5" />
-									<span>{t("settings.refresh")}</span>
-								</button>
-								<button type="button" className="gui-btn" onClick={() => void copyLink()}>
-									<Icon name={copied ? "check" : "file-copy"} className="h-3.5 w-3.5" />
-									<span aria-live="polite">{copied ? t("settings.copied") : t("settings.copyLink")}</span>
-								</button>
-								{info?.viewLink ? (
-									<button type="button" className="gui-btn" onClick={() => void copyViewLink()}>
-										<Icon name="eye" className="h-3.5 w-3.5" />
-										<span aria-live="polite">
-											{copiedView ? t("settings.copied") : t("settings.copyWatchOnlyLink")}
-										</span>
-									</button>
-								) : null}
-							</div>
-							<div className="gui-collab-pair">
-								<span className="gui-collab-pair-title">{t("settings.useMusepiMobilePair")}</span>
-								<div className="gui-collab-pair-row">
-									<span className="gui-collab-pair-code">{pairCode ?? "——————"}</span>
-									<button type="button" className="gui-btn" onClick={() => void genPairCode()}>
-										<Icon name="refresh" className="h-3.5 w-3.5" />
-										<span>{t("settings.getCode")}</span>
-									</button>
-								</div>
-								<span className="gui-collab-pair-hint">
-									{pairHost
-										? t("settings.pairCodeWithAddress", { host: pairHost })
-										: pairSecondsLeft === null
-											? t("settings.enter6DigitCodeMusepiMobile")
-											: pairSecondsLeft > 0
-												? t("settings.singleUseExpiresSWithSeconds", { seconds: String(pairSecondsLeft) })
-												: t("settings.codeHasExpiredGet")}
-								</span>
-							</div>
 						</div>
 					) : (
 						<div className="gui-collab-setup">
-							<Segmented
-								className="gui-collab-scope"
-								value={mode}
-								options={shareScopeSegments}
-								ariaLabel={t("settings.shareScope")}
-								disabled={busy}
-								onChange={next => {
-									setMode(next);
-									setError(null);
-								}}
-							/>
-							<div className="gui-collab-scope-summary">
-								<Icon name={mode === "tunnel" ? "error-warning" : "information"} className="h-4 w-4" />
-								<div>
-									<h3>{shareScopeSegments.find(option => option.value === mode)?.label}</h3>
-									<p>{scopeHint}</p>
-								</div>
-							</div>
-							{tunnelMissing ? (
+							<p className="gui-collab-desc">{t("settings.remoteAccessIntro")}</p>
+							{degraded ? (
 								<div className="gui-collab-recovery" role="alert">
 									<Icon name="error-warning" className="h-5 w-5" />
 									<div className="gui-collab-recovery-content">
-										<h3>{t("settings.cloudflaredRequired")}</h3>
-										<p>{t("settings.cloudflaredRequiredHint")}</p>
-										<div className="gui-collab-recovery-actions">
-											<button
-												type="button"
-												className="gui-btn"
-												onClick={() => void openExternalUrl(CLOUDFLARED_INSTALL_URL)}
-											>
-												<Icon name="external-link" className="h-3.5 w-3.5" />
-												<span>{t("settings.viewInstallGuide")}</span>
-											</button>
-											<button
-												type="button"
-												className="gui-btn gui-btn-primary"
-												disabled={!canShare}
-												onClick={() => void startShare()}
-											>
-												<Icon name="refresh" className="h-3.5 w-3.5" />
-												<span>{busy ? t("settings.starting") : t("settings.retry")}</span>
-											</button>
-										</div>
-										<details className="gui-collab-technical">
-											<summary>{t("settings.technicalDetails")}</summary>
-											<pre>{error}</pre>
-										</details>
+										<h3>{t("settings.shareDegraded")}</h3>
+										<p>{t("settings.shareDegradedHint")}</p>
 									</div>
 								</div>
-							) : (
-								<>
-									{error ? (
-										<div className="gui-collab-error" role="alert">
-											<Icon name="error-warning" className="h-4 w-4" />
-											<span>{error}</span>
-										</div>
-									) : null}
+							) : null}
+							{info?.lastEnd ? (
+								<div className="gui-collab-scope-summary" role="status">
+									<Icon name="information" className="h-4 w-4" />
+									<div>
+										<h3>{t("settings.shareEnded")}</h3>
+										<p>{shareEndReason(info.lastEnd)}</p>
+										<p>{info.lastEnd.hint ?? t("settings.shareEndedNextStep")}</p>
+										{info.lastEnd.detail ? (
+											<details className="gui-collab-technical">
+												<summary>{t("settings.technicalDetails")}</summary>
+												<pre>{info.lastEnd.detail}</pre>
+											</details>
+										) : null}
+									</div>
+								</div>
+							) : null}
+							<p className="gui-collab-desc">{scopeHint}</p>
+							<div className="flex flex-col gap-2">
+								<div className="flex items-center justify-between gap-2">
+									<span className="text-[12px] font-medium text-[var(--color-text-muted)]">
+										{t("settings.shareExposure")}
+									</span>
 									<button
 										type="button"
-										className="gui-btn gui-btn-primary gui-collab-start"
-										disabled={!canShare}
-										onClick={() => void startShare()}
+										className="gui-btn gui-btn-sm"
+										disabled={busy || exposuresLoading}
+										onClick={() => void refreshExposures()}
 									>
-										<Icon name="send-plane" className="h-3.5 w-3.5" />
-										<span>
-											{busy
-												? t("settings.starting")
-												: error
-													? t("settings.retry")
-													: t("settings.startSharing")}
-										</span>
+										<Icon name="refresh" className={`h-3 w-3${exposuresLoading ? " animate-spin" : ""}`} />
+										<span>{t("settings.recheckExposures")}</span>
 									</button>
-								</>
+								</div>
+								{exposuresError ? (
+									<div className="gui-collab-channel-message" role="alert">
+										<Icon name="error-warning" className="h-4 w-4" />
+										<div>
+											<strong>{t("settings.exposuresLoadFailed")}</strong>
+											<p>{t("settings.exposuresLoadFailedHint")}</p>
+											<button
+												type="button"
+												className="gui-btn gui-btn-sm"
+												onClick={() => void refreshExposures()}
+											>
+												<Icon name="refresh" className="h-3 w-3" />
+												<span>{t("settings.retry")}</span>
+											</button>
+										</div>
+									</div>
+								) : exposures === null && exposuresLoading ? (
+									<div className="gui-collab-loading">
+										<Icon name="loader" className="h-3.5 w-3.5 animate-spin" />
+										<span>{t("settings.loadingExposures")}</span>
+									</div>
+								) : (
+									<div
+										role="radiogroup"
+										aria-label={t("settings.shareExposure")}
+										className="flex flex-col gap-1.5"
+									>
+										{(exposures ?? []).map(entry => {
+											const selected = entry.id === exposureId;
+											const ready = entry.health === "ready";
+											return (
+												<button
+													key={entry.id}
+													type="button"
+													role="radio"
+													aria-checked={selected}
+													disabled={busy}
+													onClick={() => {
+														setExposureId(entry.id);
+														setError(null);
+													}}
+													className={`flex w-full items-start gap-2.5 rounded-xl border bg-transparent p-3 text-left transition-colors ${
+														selected
+															? "border-[var(--color-accent)]"
+															: "border-[var(--border)] hover:bg-[var(--color-surface-raised)]"
+													}`}
+												>
+													<span
+														className={`mt-0.5 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full border ${
+															selected ? "border-[var(--color-accent)]" : "border-[var(--border)]"
+														}`}
+													>
+														{selected ? (
+															<span className="h-1.5 w-1.5 rounded-full bg-[var(--color-accent)]" />
+														) : null}
+													</span>
+													<span className="flex min-w-0 flex-1 flex-col gap-0.5">
+														<span className="flex items-center gap-1.5 text-[12.5px] font-medium">
+															<span>{exposureName(entry.id)}</span>
+															{entry.capabilities?.publicExposure ? (
+																<span className="rounded-full border border-[var(--border)] px-1.5 text-[10px] font-normal text-[var(--color-text-faint)]">
+																	{t("settings.exposurePublic")}
+																</span>
+															) : null}
+														</span>
+														<span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-faint)]">
+															<span
+																className={`gui-collab-dot${ready ? "" : " gui-collab-dot--off"}`}
+																aria-hidden="true"
+															/>
+															<span>{healthText(entry.health)}</span>
+														</span>
+													</span>
+												</button>
+											);
+										})}
+									</div>
+								)}
+								{selectedExposure?.hint ? <p className="gui-collab-desc">{selectedExposure.hint}</p> : null}
+								{selectedExposure?.detail ? (
+									<details className="gui-collab-technical">
+										<summary>{t("settings.technicalDetails")}</summary>
+										<pre>{selectedExposure.detail}</pre>
+									</details>
+								) : null}
+							</div>
+							{installs.length > 0 ? (
+								<div className="flex flex-col gap-2">
+									{installs.map(entry => (
+										<div key={entry.id} className="gui-collab-scope-summary">
+											<Icon name="download-cloud" className="h-4 w-4" />
+											<div className="flex min-w-0 flex-1 flex-col gap-1.5">
+												<h3>
+													{t("settings.exposureInstallTitle", {
+														name: exposureName(entry.id),
+													})}
+												</h3>
+												<p>{entry.install?.note ?? t("settings.exposureInstallNote")}</p>
+												<div className="flex flex-col gap-1">
+													{Object.entries(entry.install?.commands ?? {}).map(([platform, command]) => (
+														<div key={platform} className="flex flex-col gap-0.5">
+															<span className="text-[10px] uppercase tracking-wide text-[var(--color-text-faint)]">
+																{PLATFORM_NAMES[platform] ?? platform}
+															</span>
+															<code className="select-text break-all font-mono text-[11px] text-[var(--color-text-muted)]">
+																{command}
+															</code>
+														</div>
+													))}
+												</div>
+												<div className="gui-collab-recovery-actions">
+													<button
+														type="button"
+														className="gui-btn gui-btn-sm"
+														onClick={() => void openExternalUrl(entry.install?.url ?? "")}
+													>
+														<Icon name="external-link" className="h-3 w-3" />
+														<span>{t("settings.viewInstallGuide")}</span>
+													</button>
+												</div>
+											</div>
+										</div>
+									))}
+								</div>
+							) : null}
+							{error ? (
+								errorBlock
+							) : (
+								<button
+									type="button"
+									className="gui-btn gui-btn-primary gui-collab-start"
+									disabled={!canShare}
+									onClick={() => void startShare()}
+								>
+									<Icon name="send-plane" className="h-3.5 w-3.5" />
+									<span>{busy ? t("settings.starting") : t("settings.startSharing")}</span>
+								</button>
 							)}
 						</div>
 					)}

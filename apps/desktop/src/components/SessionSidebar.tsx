@@ -1895,10 +1895,10 @@ export function SessionSidebar({
 								type="button"
 								className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
 								onClick={onOpenCollab}
-								title={t("settings.mobileRemoteControl")}
-								aria-label={t("settings.mobileRemoteControl")}
+								title={t("settings.shareCurrentSession")}
+								aria-label={t("settings.shareCurrentSession")}
 							>
-								<Icon name="smartphone" className="h-4 w-4" />
+								<Icon name="share-2" className="h-4 w-4" />
 							</button>
 						</div>
 					</div>
