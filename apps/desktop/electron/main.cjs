@@ -39,6 +39,7 @@ if (process.env.MUSEPI_CDP_PORT) {
 }
 const { probe, probeWeb, restart, start, kill, portOpen, reapOrphanedDaemons, findOrphanedDaemon, adoptDaemon } = require("./daemon.cjs");
 const { createTrayController } = require("./tray.cjs");
+const { GlobalDictation } = require("./global-dictation.cjs");
 const { trayMenuPosition } = require("./tray-position.cjs");
 const {
 	checkForUpdates,
@@ -1779,6 +1780,21 @@ function trayFetchState() {
 // resolves pending ids first and only then treats "tray" frames as state.
 let trayRequestSeq = 0;
 const trayPending = new Map();
+/** Daemon event envelopes ride the same socket: { kind, seq, payload }. */
+const trayEventListeners = new Set();
+function onTrayEvent(cb) {
+	trayEventListeners.add(cb);
+	return () => trayEventListeners.delete(cb);
+}
+function notifyTrayEvent(event) {
+	for (const cb of trayEventListeners) {
+		try {
+			cb(event);
+		} catch {
+			// a broken listener must not stop the socket
+		}
+	}
+}
 
 function trayRequest(method, params, timeoutMs = 4000) {
 	if (!trayWs || trayWs.readyState !== 1 /* OPEN */) return Promise.resolve(null);
@@ -1800,6 +1816,23 @@ function trayRequest(method, params, timeoutMs = 4000) {
 			resolve(null);
 		}
 	});
+}
+
+/** Wait for the tray socket (created by ensureTray's tick) to open. */
+async function ensureDaemonSocket() {
+	if (trayWs && trayWs.readyState === 1) return true;
+	try {
+		ensureTray();
+	} catch {
+		return false;
+	}
+	await connectTraySocket();
+	const deadline = Date.now() + 3000;
+	while (Date.now() < deadline) {
+		if (trayWs && trayWs.readyState === 1) return true;
+		await new Promise(resolve => setTimeout(resolve, 100));
+	}
+	return false;
 }
 
 /**
@@ -1898,6 +1931,65 @@ function handleTrayAction(action) {
 	}
 }
 
+async function connectTraySocket() {
+	let port = probe();
+	// ws.port can be STALE — a previous daemon's port that no longer
+	// listens (a daemon that fails its writeFile leaves the old value;
+	// observed: ws.port said 8741 while the daemon bound 8300). A dead
+	// port must count as "no daemon": otherwise the tray WS never opens,
+	// update() never runs, and the tray icon is never created.
+	if (port && !(await portOpen(port))) port = null;
+	// Match the renderer's explicit isolation port when a smoke launch sets one.
+	const configuredPort = Number(process.env.MUSEPI_GUI_DAEMON_PORT);
+	const defaultPort = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535 ? configuredPort : 8300;
+	if (!port && (await portOpen(defaultPort))) port = defaultPort;
+	if (!port) {
+		trayController.update([]);
+		closeTrayWs();
+		return;
+	}
+	if (!trayWs || trayWs.readyState === 3 /* CLOSED */) {
+		try {
+			trayWs = new WebSocket(`ws://127.0.0.1:${port}`);
+		} catch {
+			trayWs = null;
+		}
+		if (!trayWs) return false;
+		trayWs.onopen = () => trayFetchState();
+		trayWs.onmessage = (event) => {
+			try {
+				const frame = JSON.parse(event.data);
+				const settle = frame && frame.id ? trayPending.get(frame.id) : undefined;
+				if (settle) {
+					trayPending.delete(frame.id);
+					settle(frame.error ? null : (frame.result ?? null));
+					return;
+				}
+				if (frame && frame.id === "tray" && frame.result && typeof frame.result === "object") {
+					trayController.update(frame.result);
+					return;
+				}
+				if (frame && typeof frame.kind === "string") {
+					if (frame.kind === "batch" && Array.isArray(frame.events)) {
+						for (const inner of frame.events) notifyTrayEvent(inner);
+					} else {
+						notifyTrayEvent(frame);
+					}
+				}
+			} catch {
+				// transient parse noise; next poll refreshes
+			}
+		};
+		trayWs.onclose = () => {
+			trayWs = null;
+		};
+	} else if (trayWs.readyState === 1) {
+		trayFetchState();
+	}
+
+	return Boolean(trayWs && trayWs.readyState !== 3);
+	}
+
 function ensureTray() {
 	if (trayController) return;
 	try {
@@ -1919,53 +2011,16 @@ function ensureTray() {
 			trayFetchState();
 			return;
 		}
-		let port = probe();
-		// ws.port can be STALE — a previous daemon's port that no longer
-		// listens (a daemon that fails its writeFile leaves the old value;
-		// observed: ws.port said 8741 while the daemon bound 8300). A dead
-		// port must count as "no daemon": otherwise the tray WS never opens,
-		// update() never runs, and the tray icon is never created.
-		if (port && !(await portOpen(port))) port = null;
-		// Match the renderer's explicit isolation port when a smoke launch sets one.
-		const configuredPort = Number(process.env.MUSEPI_GUI_DAEMON_PORT);
-		const defaultPort = Number.isInteger(configuredPort) && configuredPort > 0 && configuredPort <= 65535 ? configuredPort : 8300;
-		if (!port && (await portOpen(defaultPort))) port = defaultPort;
-		if (!port) {
+		const connected = await connectTraySocket();
+		if (!connected) {
 			trayController.update([]);
 			closeTrayWs();
 			return;
 		}
-		if (!trayWs || trayWs.readyState === 3 /* CLOSED */) {
-			try {
-				trayWs = new WebSocket(`ws://127.0.0.1:${port}`);
-			} catch {
-				trayWs = null;
-			}
-			if (!trayWs) return;
-			trayWs.onopen = () => trayFetchState();
-			trayWs.onmessage = (event) => {
-				try {
-					const frame = JSON.parse(event.data);
-					const settle = frame && frame.id ? trayPending.get(frame.id) : undefined;
-					if (settle) {
-						trayPending.delete(frame.id);
-						settle(frame.error ? null : (frame.result ?? null));
-						return;
-					}
-					if (frame && frame.id === "tray" && frame.result && typeof frame.result === "object") {
-						trayController.update(frame.result);
-					}
-				} catch {
-					// transient parse noise; next poll refreshes
-				}
-			};
-			trayWs.onclose = () => {
-				trayWs = null;
-			};
-		} else if (trayWs.readyState === 1) {
-			trayFetchState();
-		}
+		trayFetchState();
 	};
+
+
 	tick();
 	trayPollTimer = setInterval(tick, 5000);
 	} catch (err) {
@@ -4352,6 +4407,24 @@ app.whenReady().then(async () => {
 	// Menu-bar tray: session quick-switcher (openchamber parity). Lives
 	// past window close on macOS, so create it once at boot.
 	ensureTray();
+	// Global dictation lives behind the schema switch; it reuses the tray
+	// socket for settings/transcription and never focuses a window.
+	const globalDictation = new GlobalDictation({
+		app,
+		BrowserWindow,
+		globalShortcut,
+		screen,
+		clipboard,
+		shell,
+		path,
+		distDir: DIST_DIR,
+		preloadPath: path.join(__dirname, "preload.cjs"),
+		request: (method, params, timeoutMs) => trayRequest(method, params, timeoutMs),
+		subscribe: cb => onTrayEvent(cb),
+		ensureDaemon: () => ensureDaemonSocket(),
+		log: message => trayLog(`[dictation] ${message}`),
+	});
+	void globalDictation.start();
 	// Warm the tray menu window at boot (hidden): loadFile is async, so a
 	// lazy first-open would show a blank rectangle while tray-menu.html
 	// loads — the "delayed menu" on Windows. Pre-created + hidden, the

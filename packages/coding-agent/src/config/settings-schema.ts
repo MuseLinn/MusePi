@@ -2739,6 +2739,31 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	// Desktop-only: dictate into whichever application has focus, from a
+	// global shortcut. Requires the native AudioCapture + typeText bridge in
+	// the Electron main process; the TUI ignores both keys.
+	"dictation.globalEnabled": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "voice",
+			group: "Speech",
+			label: "Global dictation",
+			description: "Dictate into the focused application with a global shortcut",
+		},
+	},
+
+	"dictation.globalShortcut": {
+		type: "string",
+		default: "CommandOrControl+Shift+Space",
+		ui: {
+			tab: "voice",
+			group: "Speech",
+			label: "Global dictation shortcut",
+			description: "Electron accelerator that starts and stops global dictation",
+		},
+	},
+
 	"stt.language": {
 		type: "string",
 		// "" (auto-detect) — the shipped tiers are multilingual Whisper

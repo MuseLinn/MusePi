@@ -44,6 +44,7 @@ import { Icon } from "../../vendor/oc-icons";
 import { SpeakerEnrollment } from "../composer/speaker-enrollment";
 import { MockComposer, MockConversationPreview, MockUserRow } from "../MockConversationPreview";
 import { VoiceInputDevicePicker } from "../VoiceInputDevicePicker";
+import { GlobalDictationSettings } from "./global-dictation";
 import { SchemaTabSection } from "./schema";
 
 /* ── Speech-model download state (stt/tts .modelStatus / .modelDownload) ──
@@ -932,10 +933,17 @@ export function VoiceSection({ rpc, sessionId }: { rpc: RpcClient | null; sessio
 				rpc={rpc}
 				tabs={["voice"]}
 				groups={["Speech"]}
-				excludeKeys={["stt.modelName", "tts.localModel", ...(ttsOn ? [] : (["providers.tts"] as const))]}
+				excludeKeys={[
+					"stt.modelName",
+					"tts.localModel",
+					"dictation.globalEnabled",
+					"dictation.globalShortcut",
+					...(ttsOn ? [] : (["providers.tts"] as const)),
+				]}
 				excludePrefixes={[...(sttOn ? [] : (["stt."] as const)), ...(ttsOn ? [] : (["tts.", "speech."] as const))]}
 				conditions={schemaConditions}
 			/>
+			<GlobalDictationSettings rpc={rpc} />
 			{ttsOn && (
 				<div className="gui-settings-section">
 					<div className="gui-settings-section-title">{tLoose("How the read-aloud settings fit together")}</div>

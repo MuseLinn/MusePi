@@ -259,7 +259,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		images: Array.isArray(images) ? images : [],
 		files: Array.isArray(files) ? files : [],
 	}),
-	/** Pet window: normalized gaze vector (cursor offset from the window
+	/** Global-dictation HUD: state pushes from main + its three actions. */
+dictationHud: {
+	onState: (cb) => {
+		const listener = (_e, state) => cb(state);
+		ipcRenderer.on("dictation:state", listener);
+		return () => ipcRenderer.removeListener("dictation:state", listener);
+	},
+	action: (type) => ipcRenderer.invoke("dictation:action", { type }),
+},
+/** Pet window: normalized gaze vector (cursor offset from the window
 	 *  centre, clamped to ±1) — drives eye tracking on the builtin sprite. */
 	onPetGaze: (cb) => {
 		const listener = (_e, gaze) => cb(gaze);

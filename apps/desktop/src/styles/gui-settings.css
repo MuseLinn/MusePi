@@ -8480,3 +8480,27 @@ body.gui-resizing {
 	opacity: 0.4;
 	cursor: default;
 }
+
+/* Settings → 语音 → 全局听写: accelerator capture button. It must look like a
+   value field, not a primary action — the row's switch is the action. */
+.gui-dictation-shortcut {
+	padding: 6px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+	font: inherit;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.gui-dictation-shortcut:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+}
+
+.gui-dictation-shortcut--capturing {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
+	color: var(--color-accent);
+}

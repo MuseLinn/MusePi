@@ -1,0 +1,135 @@
+/* Global-dictation HUD: a small glass card shown above the taskbar, never
+ * focused. The card is deliberately quieter than the pet bubbles — it appears
+ * while the user is typing into another application. */
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+	background: transparent;
+	overflow: hidden;
+	-webkit-app-region: no-drag;
+	user-select: none;
+}
+
+body {
+	display: grid;
+	place-items: center;
+	font-family: var(--font-sans, system-ui, sans-serif);
+	color: var(--color-text);
+}
+
+.hud {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 320px;
+	min-height: 64px;
+	padding: 12px 14px;
+	border: 1px solid var(--glass-border, var(--border));
+	border-radius: 18px;
+	background: color-mix(in oklab, var(--color-surface-raised, #1f1f23) 82%, transparent);
+	backdrop-filter: blur(22px) saturate(1.4);
+	-webkit-backdrop-filter: blur(22px) saturate(1.4);
+	box-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
+}
+
+.hud[data-phase="hidden"] {
+	opacity: 0;
+}
+
+.hud-wave {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	width: 34px;
+	height: 30px;
+	flex: 0 0 auto;
+}
+
+.hud-wave span {
+	width: 3px;
+	height: 26px;
+	border-radius: 999px;
+	background: var(--color-accent);
+	transform: scaleY(0.18);
+	transform-origin: center;
+	transition: transform 90ms linear;
+}
+
+.hud[data-phase="downloading"] .hud-wave span,
+.hud[data-phase="done"] .hud-wave span {
+	background: color-mix(in oklab, var(--color-accent) 60%, transparent);
+}
+
+.hud-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.hud-title {
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.hud-sub {
+	font-size: 11px;
+	line-height: 1.3;
+	color: color-mix(in oklab, var(--color-text) 62%, transparent);
+}
+
+.hud-title:empty + .hud-sub:empty {
+	display: none;
+}
+
+.hud-progress {
+	height: 3px;
+	margin-top: 3px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+	overflow: hidden;
+}
+
+.hud-progress i {
+	display: block;
+	height: 100%;
+	width: 0;
+	border-radius: inherit;
+	background: var(--color-accent);
+	transition: width 160ms linear;
+}
+
+.hud-actions {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 0 auto;
+}
+
+.hud-btn {
+	padding: 5px 9px;
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.hud-btn:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.hud-btn--primary {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	color: var(--color-accent);
+}
+
+.hud[data-phase="error"] {
+	border-color: color-mix(in oklab, var(--color-danger, #e5484d) 45%, var(--border));
+}
