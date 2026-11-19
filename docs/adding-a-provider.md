@@ -99,8 +99,10 @@ from the catalog table and `OAuthProvider` from the registry.
 - All OAuth code lives under `registry/oauth/`: the shared flow infra
   (`callback-server`, `pkce`, `google-oauth-shared`, `types`, the runtime API
   `index`) plus every provider flow, including the `github-copilot` / `kimi` /
-  `openai-codex` helpers reused by the streaming and usage layers. The non-OAuth
-  API-key helpers (`api-key-login`, `api-key-validation`) sit beside the def
+  `openai-codex` helpers reused by the streaming and usage layers. The loopback
+  callback page (`registry/oauth/oauth.html`) is the product's own branded
+  surface (MusePi mark and copy); the callback test fails if the pre-rebrand
+  name returns. The non-OAuth API-key helpers (`api-key-login`, `api-key-validation`) sit beside the def
   files in `registry/`, since they back simple paste-an-API-key logins.
 - For a simple OpenAI-compatible gateway, build the manager inline with the
   exported `createSimpleOpenAICompletionsOptions(providerId, baseUrl, config)` —

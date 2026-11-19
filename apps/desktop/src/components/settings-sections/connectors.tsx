@@ -18,6 +18,7 @@ import { copyToClipboard, openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
 import { morphSurfaceBack, morphSurfaceFrom } from "../../lib/view-transition";
+import { DeviceCode } from "../DeviceCode";
 import { DialogFrame } from "../DialogFrame";
 import { CONNECTOR_BRAND_GLYPHS } from "./connector-brand-icons.generated";
 import { ConnectorImportDialog } from "./connector-import-dialog";
@@ -919,9 +920,9 @@ ${connector.category ?? ""}`.toLowerCase();
 								</>
 							)}
 							{cliFlow.code && (
-								<div className="text-[12px]">
-									<span className="text-[var(--color-text-muted)]">{t("settings.connectorsCliAuthCode")}</span>{" "}
-									<code>{cliFlow.code}</code>
+								<div className="flex flex-wrap items-center gap-2 text-[12px]">
+									<span className="text-[var(--color-text-muted)]">{t("settings.connectorsCliAuthCode")}</span>
+									<DeviceCode code={cliFlow.code} />
 								</div>
 							)}
 							<div className="flex items-center gap-1.5">

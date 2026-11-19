@@ -58,6 +58,6 @@ Descriptors、default-model map、env-key map、login 列表和 refresh dispatch
 - 使用 `... as const satisfies ProviderDefinition`，使字面量 `id` 被保留用于 union 推导。
 - 简单 API-key 或 validation-based flow 的 `login` / `refreshToken` 可直接放在 provider def file 中（在那里导出具名 login 函数，以便测试直接导入）。
 - 重型 provider-local OAuth flow 的 `login` / `refreshToken` **必须** 通过 dynamic-import thunk（`const { loginX } = await import("./oauth/x"); return loginX(cb);`）调用相邻的 `registry/oauth/*` 模块，保持这些 flow 不出现在 eager startup graph 中。
-- 所有 OAuth 代码位于 `registry/oauth/` 下：共享 flow infra（`callback-server`、`pkce`、`google-oauth-shared`、`types`、runtime API `index`）以及每个 provider flow，包括被 streaming 和 usage layer 复用的 `github-copilot` / `kimi` / `openai-codex` helpers。非 OAuth 的 API-key helpers（`api-key-login`、`api-key-validation`）位于 `registry/` 下与 def 文件并列，因为它们支持简单 paste-an-API-key 登录。
+- 所有 OAuth 代码位于 `registry/oauth/` 下：共享 flow infra（`callback-server`、`pkce`、`google-oauth-shared`、`types`、runtime API `index`）以及每个 provider flow，包括被 streaming 和 usage layer 复用的 `github-copilot` / `kimi` / `openai-codex` helpers。loopback 回调页（`registry/oauth/oauth.html`）是产品自己的品牌页面（MusePi 标志与文案）；回调测试会在旧品牌名回归时报错。非 OAuth 的 API-key helpers（`api-key-login`、`api-key-validation`）位于 `registry/` 下与 def 文件并列，因为它们支持简单 paste-an-API-key 登录。
 - 简单 OpenAI-compatible gateway 使用与导出 `createSimpleOpenAICompletionsOptions(providerId, baseUrl, config)` 内联构建 manager——无需改动 `openai-compat.ts`。
 - `ProviderDefinition` 也可在 runtime 由扩展通过 `registerOAuthProvider` 注册（`AuthStorage.login` dispatcher 统一处理 built-in 和 extension）。

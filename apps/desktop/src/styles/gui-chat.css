@@ -4661,20 +4661,45 @@ body.gui-resizing .gui-pane-right {
 	gap: 8px;
 	margin-top: 10px;
 }
-.gui-github-flow-code {
-	padding: 8px 14px;
-	font-family: var(--font-mono);
-	font-size: 24px;
-	font-weight: 800;
-	letter-spacing: 3px;
-	color: var(--color-accent);
-	background: var(--color-bg);
-	border: 1px solid var(--color-border);
+/* Device code: the code itself is the copy target (arrival auto-copies; a
+ * click copies again). One surface for the GitHub consent flow and every
+ * connector device grant. */
+.gui-device-code {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 12px;
+	border: 1px solid var(--control-hairline);
 	border-radius: var(--radius-lg);
+	background: var(--control-fill);
+	box-shadow: var(--control-rim);
+	color: var(--color-text);
+	font: inherit;
+	cursor: pointer;
+	transition:
+		border-color 120ms ease,
+		background 120ms ease;
 }
-.gui-github-flow-copy {
-	padding: 4px 10px;
-	font-size: 12.5px;
+.gui-device-code:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+	background: var(--control-fill-hover);
+}
+.gui-device-code-value {
+	font-family: var(--font-mono);
+	font-size: 20px;
+	font-weight: 700;
+	letter-spacing: 2px;
+	color: var(--color-accent);
+}
+.gui-device-code-hint {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+.gui-device-code--copied {
+	border-color: color-mix(in oklab, var(--color-success, oklch(0.72 0.19 150)) 45%, transparent);
+}
+.gui-device-code--copied .gui-device-code-hint {
+	color: var(--color-success, oklch(0.72 0.19 150));
 }
 .gui-github-flow-actions {
 	display: flex;

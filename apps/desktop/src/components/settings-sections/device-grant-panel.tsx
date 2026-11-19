@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
+import { DeviceCode } from "../DeviceCode";
 import { DialogFrame } from "../DialogFrame";
 
 /**
@@ -201,7 +202,10 @@ export function DeviceGrantPanel({
 						<div className="flex flex-col gap-2">
 							{flow.status === "pending" && (
 								<>
-									<div className="text-[13px]">{t("settings.mcpDeviceCode", { code: flow.userCode })}</div>
+									<div className="flex flex-wrap items-center gap-2 text-[13px]">
+										<span className="text-[var(--color-text-muted)]">{t("settings.mcpDeviceCodeLabel")}</span>
+										<DeviceCode code={flow.userCode} />
+									</div>
 									<div className="flex items-center gap-1.5">
 										<button
 											type="button"

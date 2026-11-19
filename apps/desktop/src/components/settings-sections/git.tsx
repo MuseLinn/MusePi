@@ -20,6 +20,7 @@ import {
 	writeUserAvatarMode,
 } from "../../lib/user-avatar";
 import { Icon } from "../../vendor/oc-icons";
+import { DeviceCode } from "../DeviceCode";
 
 /* Both segment lists are built per render instead of at module load: `t()`
  * reads the live locale, so a module-level array would keep the labels of
@@ -133,19 +134,6 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		pollRef.current = null;
 		setFlow(null);
 		setFlowError(null);
-		setCopied(false);
-	};
-
-	const [copied, setCopied] = useState(false);
-	const copyCode = async (): Promise<void> => {
-		if (!flow) return;
-		try {
-			await navigator.clipboard.writeText(flow.userCode);
-			setCopied(true);
-			setTimeout(() => setCopied(false), 1500);
-		} catch {
-			// clipboard unavailable — code stays visible for manual entry
-		}
 	};
 
 	const pollFlow = useCallback(
@@ -418,10 +406,7 @@ export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<div className="gui-github-flow-title">{t("general.authorizeDevice")}</div>
 						<div className="gui-github-flow-hint">{t("general.githubDeviceFlowHint")}</div>
 						<div className="gui-github-flow-code-row">
-							<code className="gui-github-flow-code">{flow.userCode}</code>
-							<button type="button" className="gui-btn gui-github-flow-copy" onClick={() => void copyCode()}>
-								{copied ? t("general.codeCopied") : t("general.copyCode")}
-							</button>
+							<DeviceCode code={flow.userCode} />
 						</div>
 						<div className="gui-github-flow-actions">
 							<button

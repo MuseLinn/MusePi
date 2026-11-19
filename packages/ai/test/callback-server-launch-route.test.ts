@@ -129,6 +129,11 @@ describe("OAuthCallbackFlow /launch route", () => {
 		const html = await callbackResponse.text();
 
 		expect(html).toContain("Authentication Successful");
+		// Brand contract: the callback page is the product's own surface, never
+		// the pre-rebrand kit it was copied from.
+		expect(html).toContain("<title>MusePi · authentication</title>");
+		expect(html).toContain('<span class="wordmark">MusePi</span>');
+		expect(html).not.toContain("oh my pi");
 		expect(html).toContain("You have successfully logged in.<br>You can now close this tab.");
 		expect(html).toContain("Close Window");
 		expect(html).not.toContain("This window will close automatically.");

@@ -70,7 +70,8 @@ describe("DeviceGrantPanel", () => {
 			});
 			await Bun.sleep(10);
 		});
-		expect(document.body.textContent).toContain(t("settings.mcpDeviceCode", { code: "WXYZ-9876" }));
+		expect(document.body.textContent).toContain(t("settings.mcpDeviceCodeLabel"));
+		expect(document.body.textContent).toContain("WXYZ-9876");
 		expect(document.body.textContent).not.toContain(t("settings.mcpDeviceStarting"));
 	});
 });

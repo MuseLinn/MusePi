@@ -300,7 +300,8 @@ export async function openPathInFileManager(target: string): Promise<boolean> {
 	}
 }
 
-/** Clipboard write (openchamber copy-path); browser fallback via execCommand. */
+/** Clipboard write (openchamber copy-path): Electron IPC, then the async
+ *  Clipboard API (web hosts and tests), then the legacy execCommand fallback. */
 export async function copyToClipboard(text: string): Promise<boolean> {
 	if (isElectron()) {
 		const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
@@ -308,6 +309,15 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 			return await electronAPI.copyText(text);
 		} catch {
 			// fall through to the DOM path
+		}
+	}
+	const clipboard = (navigator as Navigator & { clipboard?: Clipboard }).clipboard;
+	if (clipboard?.writeText) {
+		try {
+			await clipboard.writeText(text);
+			return true;
+		} catch {
+			// permission/gesture refused — try the DOM path
 		}
 	}
 	try {
