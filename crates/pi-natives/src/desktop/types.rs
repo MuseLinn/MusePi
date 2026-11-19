@@ -80,6 +80,13 @@ pub struct DesktopCapabilities {
 	pub input_permission: String,
 	pub ax_permission: String,
 	pub display_count: u32,
+	/// Whether `visualRegions` can propose regions from a captured frame.
+	/// True exactly when this backend can capture.
+	pub visual_regions: bool,
+	/// Physical-Escape stop for takeover input on this platform: `available`
+	/// or `unsupported`. `controlState().escapeStop` reports what the held
+	/// lease actually armed.
+	pub escape_stop: String,
 }
 
 impl DesktopCapabilities {
@@ -97,7 +104,43 @@ impl DesktopCapabilities {
 			input_permission: "unavailable".to_string(),
 			ax_permission: "unavailable".to_string(),
 			display_count: 0,
+			visual_regions: false,
+			escape_stop: escape_stop_support().to_string(),
 		}
+	}
+
+	/// Fills the flags the session derives instead of the backend: proposals
+	/// need captured pixels, and the Escape stop depends on the platform (and,
+	/// on Linux, on the display server the session runs under).
+	pub(crate) fn normalize(mut self) -> Self {
+		self.visual_regions = self.capture;
+		self.escape_stop = escape_stop_support().to_string();
+		self
+	}
+}
+
+#[allow(
+	clippy::missing_const_for_fn,
+	reason = "the Linux branch reads the process environment, so this cannot be const there"
+)]
+fn escape_stop_support() -> &'static str {
+	#[cfg(windows)]
+	{
+		"available"
+	}
+	#[cfg(target_os = "linux")]
+	{
+		// The monitor owner answers both the platform capability and whether it
+		// can start here, so the two can never disagree.
+		if super::control::escape_stop_supported() {
+			"available"
+		} else {
+			"unsupported"
+		}
+	}
+	#[cfg(not(any(windows, target_os = "linux")))]
+	{
+		"unsupported"
 	}
 }
 
@@ -112,9 +155,13 @@ pub struct DesktopSessionOptions {
 
 /// Whether this session currently holds explicit task ownership.
 #[napi(object)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct DesktopControlState {
-	pub active: bool,
+	pub active:      bool,
+	/// What the held lease armed for takeover input: `armed`, `unavailable`
+	/// (the platform monitor failed to start), `unsupported` (no monitor on
+	/// this platform), or `not_requested` when no lease is held.
+	pub escape_stop: String,
 }
 
 #[napi(object)]
@@ -132,6 +179,52 @@ pub struct CaptureRegion {
 	pub y:      f64,
 	pub width:  f64,
 	pub height: f64,
+}
+
+#[napi(object)]
+#[derive(Debug, Clone, Default)]
+pub struct VisualRegionsOptions {
+	/// Most proposals to return, 1–64; defaults to 24.
+	pub max_regions: Option<u32>,
+}
+
+/// One proposed region from the last captured frame.
+///
+/// A proposal is not an element: this backend has no OCR or semantics, so
+/// `label` stays absent and the rectangle is the whole claim.
+#[napi(object)]
+#[derive(Debug, Clone)]
+pub struct VisualRegion {
+	/// 1-based position in reading order within this result.
+	pub id:         u32,
+	/// Half-open rectangle in screenshot-frame pixels, left/top origin: `x`
+	/// and `y` are included, `x + width` and `y + height` are excluded.
+	pub x:          u32,
+	pub y:          u32,
+	pub width:      u32,
+	pub height:     u32,
+	/// Coarse shape class: `text`, `row`, or `block`.
+	pub kind:       String,
+	/// Always absent: this backend runs no OCR.
+	pub label:      Option<String>,
+	/// 0–1 boundary-evidence strength, not semantic certainty.
+	pub confidence: f64,
+}
+
+#[napi(object)]
+#[derive(Debug, Clone)]
+pub struct VisualRegions {
+	pub target:    String,
+	/// Screenshot-frame width the rectangles are expressed in.
+	pub width:     u32,
+	/// Screenshot-frame height the rectangles are expressed in.
+	pub height:    u32,
+	pub regions:   Vec<VisualRegion>,
+	/// True when more proposals existed than `maxRegions` allowed.
+	pub truncated: bool,
+	/// Why `regions` is empty: `uniform`, `low_contrast`, or `too_small`;
+	/// absent when proposals exist. An empty list is not an error.
+	pub reason:    Option<String>,
 }
 
 #[napi(object)]
@@ -230,5 +323,27 @@ impl DisplaySelector {
 			Some(id) if !id.trim().is_empty() && !id.eq_ignore_ascii_case("all") => Self::Id(id),
 			_ => Self::All,
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn capture_implies_region_proposals() {
+		let capturing =
+			DesktopCapabilities { capture: true, ..DesktopCapabilities::unavailable() }.normalize();
+		assert!(capturing.visual_regions);
+		let deaf =
+			DesktopCapabilities { capture: false, ..DesktopCapabilities::unavailable() }.normalize();
+		assert!(!deaf.visual_regions);
+	}
+
+	#[test]
+	fn the_unavailable_state_advertises_nothing() {
+		let caps = DesktopCapabilities::unavailable();
+		assert!(!caps.capture && !caps.visual_regions);
+		assert!(matches!(caps.escape_stop.as_str(), "available" | "unsupported"));
 	}
 }

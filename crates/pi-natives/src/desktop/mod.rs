@@ -9,6 +9,7 @@ mod keys;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+mod regions;
 // Menu label matching is shared vocabulary, but only the windows backend has a
 // native menu route today: on linux/macos every helper here is uncalled, so the
 // dead-code and redundant-pub(crate) lints would fire on -Dwarnings.
@@ -57,6 +58,7 @@ enum Response {
 	Windows(Vec<DesktopWindow>),
 	MenuItems(Vec<DesktopMenuItem>),
 	Capture(DesktopCapture),
+	VisualRegions(VisualRegions),
 	Unit,
 	Snapshot(AxSnapshot),
 	Nodes(Vec<AxNode>),
@@ -86,6 +88,11 @@ enum Request {
 		region: CaptureRegion,
 		caps:   CaptureCaps,
 		reply:  Reply,
+	},
+	VisualRegions {
+		target:  Target,
+		options: VisualRegionsOptions,
+		reply:   Reply,
 	},
 	Click {
 		target:  Target,
@@ -225,6 +232,7 @@ impl Request {
 			| Self::ListWindows { reply }
 			| Self::Capture { reply, .. }
 			| Self::CaptureRegion { reply, .. }
+			| Self::VisualRegions { reply, .. }
 			| Self::Click { reply, .. }
 			| Self::MoveMouse { reply, .. }
 			| Self::Drag { reply, .. }
@@ -306,13 +314,22 @@ struct Worker {
 	backend:      CoreResult<Box<dyn Backend>>,
 	registry:     AxRegistry,
 	frames:       HashMap<String, FrameGeometry>,
+	/// Analysis pixels of recent captures, bounded by frame count and bytes.
+	/// Only a full `Capture` writes here: zoom pixels are not frame pixels.
+	pixels:       regions::FrameCache,
 	capabilities: Arc<Mutex<DesktopCapabilities>>,
 }
 
 impl Worker {
 	fn new(selector: DisplaySelector, capabilities: Arc<Mutex<DesktopCapabilities>>) -> Self {
 		let backend = create_backend(selector);
-		Self { backend, registry: AxRegistry::default(), frames: HashMap::new(), capabilities }
+		Self {
+			backend,
+			registry: AxRegistry::default(),
+			frames: HashMap::new(),
+			pixels: regions::FrameCache::new(),
+			capabilities,
+		}
 	}
 
 	fn backend(&mut self) -> CoreResult<&mut Box<dyn Backend>> {
@@ -402,6 +419,14 @@ impl Worker {
 		Ok((x, y, frame))
 	}
 
+	/// Backend capabilities with the flags this session derives, cached for
+	/// callers that read capabilities without a round trip.
+	fn capabilities(&mut self) -> CoreResult<DesktopCapabilities> {
+		let capabilities = self.backend()?.capabilities().normalize();
+		*self.capabilities.lock() = capabilities.clone();
+		Ok(capabilities)
+	}
+
 	fn ax(&mut self) -> CoreResult<&mut dyn backend::AxBackend> {
 		self
 			.backend()?
@@ -428,7 +453,7 @@ impl Worker {
 		match request {
 			Request::Capabilities { .. } => {
 				let caps = match self.backend.as_mut() {
-					Ok(backend) => backend.capabilities(),
+					Ok(backend) => backend.capabilities().normalize(),
 					Err(_) => DesktopCapabilities::unavailable(),
 				};
 				*self.capabilities.lock() = caps.clone();
@@ -468,9 +493,14 @@ impl Worker {
 				geometry.record_layout(&layout)?;
 				let source = self.capture_source(target, width, height, &layout)?;
 				let displays = geometry.display_metadata(&source);
-				let png = encode_png(image)?;
+				let png = encode_png(&image)?;
 				self.frames.insert(target.key().to_string(), geometry);
-				let capabilities = self.backend()?.capabilities();
+				// The full frame is the only capture whose pixels are a
+				// coordinate frame; region proposals read exactly these.
+				self
+					.pixels
+					.insert(target.key().to_string(), regions::luma_frame(&image));
+				let capabilities = self.capabilities()?;
 				*self.capabilities.lock() = capabilities.clone();
 				Ok(Response::Capture(DesktopCapture {
 					data: Uint8Array::from(png),
@@ -509,8 +539,8 @@ impl Worker {
 				let height = image.height();
 				let (coordinate_width, coordinate_height) = base.dimensions();
 				let displays = base.display_metadata(&source);
-				let png = encode_png(image)?;
-				let capabilities = self.backend()?.capabilities();
+				let png = encode_png(&image)?;
+				let capabilities = self.capabilities()?;
 				*self.capabilities.lock() = capabilities.clone();
 				Ok(Response::Capture(DesktopCapture {
 					data: Uint8Array::from(png),
@@ -525,6 +555,86 @@ impl Worker {
 					displays,
 					backend: capabilities.backend,
 					display_server: capabilities.display_server,
+				}))
+			},
+			Request::VisualRegions { target, options, .. } => {
+				if !self.capabilities()?.visual_regions {
+					return Err(DesktopError::unsupported(
+						"region proposals need a backend that can capture frames",
+					));
+				}
+				let key = target.key();
+				// A target without a usable cached frame is `NoFrame`, whether it
+				// was never captured or its frame was evicted: the fix is the same
+				// screenshot, and it is not a coordinate mistake.
+				if self.pixels.get(key).is_none() {
+					return Err(DesktopError::no_frame(format!(
+						"no cached pixels for '{key}' — take a screenshot of this target first; region \
+						 proposals read the pixels of that screenshot"
+					)));
+				}
+				let (frame, _) = self.validated_frame(target)?;
+				if matches!(target, Target::Desktop) {
+					// Proposals are frame coordinates: a desktop layout that moved
+					// since the capture would put every rectangle in the wrong display.
+					let layout = self.backend()?.displays().map_err(|error| {
+						DesktopError::invalid_coordinate_frame(format!(
+							"could not validate the captured display layout: {error}"
+						))
+					})?;
+					frame.validate_layout(&layout)?;
+				}
+				let image = self.pixels.get(key).ok_or_else(|| {
+					DesktopError::no_frame(format!(
+						"no cached pixels for '{key}' — take a screenshot of this target first; region \
+						 proposals read the pixels of that screenshot"
+					))
+				})?;
+				let (frame_width, frame_height) = frame.dimensions();
+				if image.dimensions() != (frame_width, frame_height) {
+					return Err(DesktopError::invalid_coordinate_frame(
+						"cached pixels no longer match the last capture of this target; take a \
+						 screenshot again before asking for region proposals",
+					));
+				}
+				let proposals =
+					regions::propose(image, options.max_regions.unwrap_or(regions::DEFAULT_MAX_REGIONS));
+				let width = frame_width;
+				let height = frame_height;
+				let regions = proposals
+					.regions
+					.into_iter()
+					// The frame is the one coordinate source: a proposal that would
+					// fall outside it is a detector bug, not a clickable region.
+					.filter(|proposal| {
+						frame
+							.validate_region(&CaptureRegion {
+								x:      f64::from(proposal.x),
+								y:      f64::from(proposal.y),
+								width:  f64::from(proposal.width),
+								height: f64::from(proposal.height),
+							})
+							.is_ok()
+					})
+					.enumerate()
+					.map(|(index, proposal)| VisualRegion {
+						id:         u32::try_from(index + 1).unwrap_or(u32::MAX),
+						x:          proposal.x,
+						y:          proposal.y,
+						width:      proposal.width,
+						height:     proposal.height,
+						kind:       proposal.kind.to_string(),
+						label:      None,
+						confidence: proposal.confidence,
+					})
+					.collect();
+				Ok(Response::VisualRegions(VisualRegions {
+					target: key.to_string(),
+					width,
+					height,
+					regions,
+					truncated: proposals.truncated,
+					reason: proposals.reason.map(|reason| reason.as_str().to_string()),
 				}))
 			},
 			Request::Click { target, x, y, options, .. } => {
@@ -1113,6 +1223,29 @@ impl DesktopSession {
 		}))
 	}
 
+	/// Propose clickable regions from the pixels of the most recent screenshot
+	/// of `target`. A pure read: it sends no input, changes no focus and takes
+	/// no input lease. Rectangles are half-open pixels of that screenshot;
+	/// `regions: []` with a `reason` means the frame had nothing to propose.
+	#[napi]
+	pub fn visual_regions(
+		&self,
+		target: String,
+		options: Option<VisualRegionsOptions>,
+	) -> Result<task::Promise<VisualRegions>> {
+		let c = Arc::clone(&self.core);
+		let token = c.cancellation.token();
+		let target = Target::parse(&target);
+		let options = options.unwrap_or_default();
+		Ok(task::blocking("desktop.visualRegions", (), move |_| {
+			match c.call(token, |reply| Request::VisualRegions { target, options, reply })? {
+				Response::VisualRegions(v) => Ok(v),
+				_ => Err(DesktopError::internal("unexpected response")),
+			}
+			.map_err(Into::into)
+		}))
+	}
+
 	#[napi]
 	pub fn click(
 		&self,
@@ -1443,7 +1576,8 @@ impl DesktopSession {
 				c.cancellation.release_control();
 				return Err(error.into());
 			}
-			Ok(DesktopControlState { active: c.cancellation.control_active() })
+			let (active, escape_stop) = c.cancellation.control_state();
+			Ok(DesktopControlState { active, escape_stop: escape_stop.as_str().to_string() })
 		}))
 	}
 
@@ -1454,7 +1588,8 @@ impl DesktopSession {
 
 	#[napi]
 	pub fn control_state(&self) -> DesktopControlState {
-		DesktopControlState { active: self.core.cancellation.control_active() }
+		let (active, escape_stop) = self.core.cancellation.control_state();
+		DesktopControlState { active, escape_stop: escape_stop.as_str().to_string() }
 	}
 
 	/// Retire queued work from a completed helper without revoking held control.
@@ -1554,10 +1689,26 @@ mod capture_tests {
 		window:   DesktopWindow,
 		layout:   Arc<Mutex<Vec<DesktopDisplay>>>,
 		captures: Arc<Mutex<u32>>,
+		scene:    bool,
+		capture:  bool,
 	}
 
 	impl FakeWaylandBackend {
 		fn new() -> Self {
+			Self { scene: true, capture: true, ..Self::empty() }
+		}
+
+		/// A capturable target whose frames carry no structure.
+		fn uniform() -> Self {
+			Self { scene: false, ..Self::new() }
+		}
+
+		/// A backend that reports itself unable to capture.
+		fn deaf() -> Self {
+			Self { capture: false, ..Self::new() }
+		}
+
+		fn empty() -> Self {
 			Self {
 				window:   DesktopWindow {
 					id:      WAYLAND_ID.to_string(),
@@ -1585,6 +1736,8 @@ mod capture_tests {
 					is_primary:   true,
 				}])),
 				captures: Arc::new(Mutex::new(0)),
+				scene:    true,
+				capture:  true,
 			}
 		}
 	}
@@ -1594,7 +1747,7 @@ mod capture_tests {
 			DesktopCapabilities {
 				backend: "wayland".to_string(),
 				display_server: Some("wayland".to_string()),
-				capture: true,
+				capture: self.capture,
 				..DesktopCapabilities::unavailable()
 			}
 		}
@@ -1613,9 +1766,21 @@ mod capture_tests {
 			_caps: &CaptureCaps,
 		) -> CoreResult<(RgbaImage, FrameGeometry)> {
 			*self.captures.lock() += 1;
+			let scene = |width: u32, height: u32| {
+				if !self.scene {
+					return RgbaImage::new(width, height);
+				}
+				let mut image = RgbaImage::from_pixel(width, height, image::Rgba([24, 24, 24, 255]));
+				for y in height / 4..height * 3 / 4 {
+					for x in width / 4..width * 3 / 4 {
+						image.put_pixel(x, y, image::Rgba([230, 230, 230, 255]));
+					}
+				}
+				image
+			};
 			match target {
 				Target::Window(id) if id == &self.window.id => {
-					let image = RgbaImage::new(self.window.width, self.window.height);
+					let image = scene(self.window.width, self.window.height);
 					let geometry =
 						FrameGeometry::for_window(&self.window, image.width(), image.height());
 					Ok((image, geometry))
@@ -1625,7 +1790,7 @@ mod capture_tests {
 				},
 				Target::Desktop => {
 					let layout = self.layout.lock().clone();
-					let image = RgbaImage::new(64, 48);
+					let image = scene(64, 48);
 					Ok((image, FrameGeometry::for_displays(&layout)))
 				},
 			}
@@ -1663,6 +1828,7 @@ mod capture_tests {
 			backend:      Ok(Box::new(backend)),
 			registry:     AxRegistry::default(),
 			frames:       HashMap::new(),
+			pixels:       regions::FrameCache::new(),
 			capabilities: Arc::new(Mutex::new(DesktopCapabilities::unavailable())),
 		}
 	}
@@ -1818,6 +1984,164 @@ mod capture_tests {
 		assert_eq!(error.code, ErrorCode::Cancelled);
 		assert_eq!(*captures.lock(), 1, "a cancelled capture never reaches the backend");
 		assert_eq!(worker.frame(&target).unwrap(), base, "a cancelled capture keeps the frame");
+	}
+
+	fn regions_request(target: Target, options: VisualRegionsOptions) -> Request {
+		let (reply, _rx) = flume::bounded(1);
+		Request::VisualRegions { target, options, reply }
+	}
+
+	/// Proposals read the last screenshot's pixels; with none cached the call
+	/// fails as `NoFrame` and tells the caller to screenshot first.
+	#[test]
+	fn regions_without_a_screenshot_report_no_frame() {
+		let mut worker = worker_with(FakeWaylandBackend::new());
+		let token = control::CancellationSource::default().token();
+		let error = worker
+			.process(
+				&regions_request(
+					Target::Window(WAYLAND_ID.to_string()),
+					VisualRegionsOptions::default(),
+				),
+				&token,
+			)
+			.err()
+			.expect("regions need a captured frame");
+		assert_eq!(error.code, ErrorCode::NoFrame);
+		assert!(error.message.contains("screenshot"), "the error must name screenshot(): {error}");
+	}
+
+	/// Regions reuse the frame the screenshot returned — no second capture —
+	/// and report half-open rectangles inside that frame.
+	#[test]
+	fn regions_reuse_the_last_screenshot_and_stay_inside_its_frame() {
+		let backend = FakeWaylandBackend::new();
+		let captures = Arc::clone(&backend.captures);
+		let mut worker = worker_with(backend);
+		let token = control::CancellationSource::default().token();
+		let target = Target::Window(WAYLAND_ID.to_string());
+		worker
+			.process(&capture_request(target.clone()), &token)
+			.unwrap();
+		let Response::VisualRegions(result) = worker
+			.process(&regions_request(target, VisualRegionsOptions::default()), &token)
+			.unwrap()
+		else {
+			panic!("expected region proposals");
+		};
+		assert_eq!(*captures.lock(), 1, "regions must not capture again");
+		assert_eq!((result.width, result.height), (64, 48));
+		assert!(!result.regions.is_empty(), "the card in the frame is a proposal");
+		assert!(result.reason.is_none());
+		assert!(!result.truncated);
+		for (index, region) in result.regions.iter().enumerate() {
+			assert_eq!(region.id, index as u32 + 1, "ids are reading-order ordinals");
+			assert!(region.x + region.width <= 64 && region.y + region.height <= 48);
+			assert!(region.width > 0 && region.height > 0);
+			assert!((0.0..=1.0).contains(&region.confidence));
+			assert!(region.label.is_none(), "region proposals carry no OCR labels");
+		}
+	}
+
+	/// A flat frame is a successful analysis that found nothing: `regions: []`
+	/// with `reason: "uniform"`, never an error and never a fabricated region.
+	#[test]
+	fn regions_treat_a_uniform_frame_as_an_empty_success() {
+		let backend = FakeWaylandBackend::uniform();
+		let mut worker = worker_with(backend);
+		let token = control::CancellationSource::default().token();
+		let target = Target::Window(WAYLAND_ID.to_string());
+		worker
+			.process(&capture_request(target.clone()), &token)
+			.unwrap();
+		let Response::VisualRegions(result) = worker
+			.process(&regions_request(target, VisualRegionsOptions::default()), &token)
+			.unwrap()
+		else {
+			panic!("expected region proposals");
+		};
+		assert!(result.regions.is_empty());
+		assert_eq!(result.reason.as_deref(), Some("uniform"));
+	}
+
+	/// Proposals are frame coordinates: a desktop layout that moved after the
+	/// screenshot is refused instead of returning rectangles for other displays.
+	#[test]
+	fn regions_refuse_a_layout_that_moved_since_the_screenshot() {
+		let backend = FakeWaylandBackend::new();
+		let layout = Arc::clone(&backend.layout);
+		let captures = Arc::clone(&backend.captures);
+		let mut worker = worker_with(backend);
+		let token = control::CancellationSource::default().token();
+		let target = Target::Desktop;
+		worker
+			.process(&capture_request(target.clone()), &token)
+			.unwrap();
+		layout.lock()[0].scale = 2.0;
+		let error = worker
+			.process(&regions_request(target, VisualRegionsOptions::default()), &token)
+			.err()
+			.expect("a moved layout must be refused");
+		assert_eq!(error.code, ErrorCode::InvalidCoordinateFrame);
+		assert_eq!(*captures.lock(), 1, "a refused request must not capture again");
+	}
+
+	#[test]
+	fn regions_are_unsupported_when_the_backend_cannot_capture() {
+		let mut worker = worker_with(FakeWaylandBackend::deaf());
+		let token = control::CancellationSource::default().token();
+		let error = worker
+			.process(
+				&regions_request(
+					Target::Window(WAYLAND_ID.to_string()),
+					VisualRegionsOptions::default(),
+				),
+				&token,
+			)
+			.err()
+			.expect("region proposals need capture");
+		assert_eq!(error.code, ErrorCode::Unsupported);
+	}
+
+	/// Region proposals are a pure read: holding this process's real input
+	/// ownership must not make them fail.
+	#[test]
+	fn regions_take_no_input_lease() {
+		let _serial = control::OWNERSHIP_TEST.lock();
+		let blocking = control::CancellationSource::default();
+		let blocker_token = blocking.token();
+		let blocker =
+			control::InputLease::acquire(&blocker_token, false).expect("blocker owns input");
+		let mut worker = worker_with(FakeWaylandBackend::new());
+		let token = control::CancellationSource::default().token();
+		let target = Target::Window(WAYLAND_ID.to_string());
+		worker
+			.process(&capture_request(target.clone()), &token)
+			.unwrap();
+		let result = worker
+			.process(&regions_request(target, VisualRegionsOptions::default()), &token)
+			.expect("regions must not wait on the input lease");
+		assert!(matches!(result, Response::VisualRegions(_)));
+		drop(blocker);
+	}
+
+	#[test]
+	fn capabilities_advertise_regions_and_the_escape_stop_state() {
+		let mut worker = worker_with(FakeWaylandBackend::new());
+		let token = control::CancellationSource::default().token();
+		let (reply, _rx) = flume::bounded(1);
+		let Response::Capabilities(capabilities) = worker
+			.process(&Request::Capabilities { reply }, &token)
+			.unwrap()
+		else {
+			panic!("expected capabilities");
+		};
+		assert!(capabilities.visual_regions, "capture implies region proposals");
+		let escape_stop = capabilities.escape_stop.as_str();
+		assert!(
+			matches!(escape_stop, "available" | "unsupported"),
+			"unexpected escape stop state {escape_stop}"
+		);
 	}
 
 	fn ax_click_request(options: Option<PointerOptions>) -> Request {

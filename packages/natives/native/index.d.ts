@@ -39,8 +39,18 @@ export declare class DesktopSession {
   listApplications(query?: ApplicationQuery | undefined | null): Promise<Array<Application>>
   openApplication(target: string, options?: ApplicationOpenOptions | undefined | null): Promise<Application>
   capture(target: string, caps?: CaptureCaps | undefined | null): Promise<DesktopCapture>
-  /** Capture a fresh native-detail region without replacing the full input coordinate frame. */
+  /**
+   * Capture a fresh native-detail region without replacing the full input
+   * coordinate frame.
+   */
   captureRegion(target: string, region: CaptureRegion, caps?: CaptureCaps | undefined | null): Promise<DesktopCapture>
+  /**
+   * Propose clickable regions from the pixels of the most recent screenshot
+   * of `target`. A pure read: it sends no input, changes no focus and takes
+   * no input lease. Rectangles are half-open pixels of that screenshot;
+   * `regions: []` with a `reason` means the frame had nothing to propose.
+   */
+  visualRegions(target: string, options?: VisualRegionsOptions | undefined | null): Promise<VisualRegions>
   click(target: string, x: number, y: number, opts?: PointerOptions | undefined | null): Promise<undefined>
   moveMouse(target: string, x: number, y: number, opts?: PointerOptions | undefined | null): Promise<undefined>
   drag(target: string, path: Array<DesktopPoint>, opts?: PointerOptions | undefined | null): Promise<undefined>
@@ -66,7 +76,10 @@ export declare class DesktopSession {
   axSetValue(reference: string, value: string): Promise<undefined>
   axFocus(reference: string): Promise<undefined>
   axClick(reference: string, opts?: PointerOptions | undefined | null): Promise<undefined>
-  /** Immediately cancel operations submitted before this call. Later operations may proceed. */
+  /**
+   * Immediately cancel operations submitted before this call. Later
+   * operations may proceed.
+   */
   cancel(): void
   /**
    * How many times the user's physical Escape has stopped takeover input in
@@ -74,7 +87,10 @@ export declare class DesktopSession {
    * release never count, so a rise tells the host the user stopped the work.
    */
   get escapeStops(): number
-  /** Native ownership only. Human approval is required by the host before calling this method. */
+  /**
+   * Native ownership only. Human approval is required by the host before
+   * calling this method.
+   */
   acquireControl(): Promise<DesktopControlState>
   releaseControl(): void
   controlState(): DesktopControlState
@@ -721,6 +737,17 @@ export interface DesktopCapabilities {
   inputPermission: string
   axPermission: string
   displayCount: number
+  /**
+   * Whether `visualRegions` can propose regions from a captured frame.
+   * True exactly when this backend can capture.
+   */
+  visualRegions: boolean
+  /**
+   * Physical-Escape stop for takeover input on this platform: `available`
+   * or `unsupported`. `controlState().escapeStop` reports what the held
+   * lease actually armed.
+   */
+  escapeStop: string
 }
 
 export interface DesktopCapture {
@@ -751,6 +778,12 @@ export interface DesktopCapture {
 /** Whether this session currently holds explicit task ownership. */
 export interface DesktopControlState {
   active: boolean
+  /**
+   * What the held lease armed for takeover input: `armed`, `unavailable`
+   * (the platform monitor failed to start), `unsupported` (no monitor on
+   * this platform), or `not_requested` when no lease is held.
+   */
+  escapeStop: string
 }
 
 /**
@@ -2185,6 +2218,52 @@ export interface VectorTopK {
  * Tabs count as a fixed-width cell.
  */
 export declare function visibleWidth(text: string, tabWidth: number): number
+
+/**
+ * One proposed region from the last captured frame.
+ *
+ * A proposal is not an element: this backend has no OCR or semantics, so
+ * `label` stays absent and the rectangle is the whole claim.
+ */
+export interface VisualRegion {
+  /** 1-based position in reading order within this result. */
+  id: number
+  /**
+   * Half-open rectangle in screenshot-frame pixels, left/top origin: `x`
+   * and `y` are included, `x + width` and `y + height` are excluded.
+   */
+  x: number
+  y: number
+  width: number
+  height: number
+  /** Coarse shape class: `text`, `row`, or `block`. */
+  kind: string
+  /** Always absent: this backend runs no OCR. */
+  label?: string
+  /** 0–1 boundary-evidence strength, not semantic certainty. */
+  confidence: number
+}
+
+export interface VisualRegions {
+  target: string
+  /** Screenshot-frame width the rectangles are expressed in. */
+  width: number
+  /** Screenshot-frame height the rectangles are expressed in. */
+  height: number
+  regions: Array<VisualRegion>
+  /** True when more proposals existed than `maxRegions` allowed. */
+  truncated: boolean
+  /**
+   * Why `regions` is empty: `uniform`, `low_contrast`, or `too_small`;
+   * absent when proposals exist. An empty list is not an error.
+   */
+  reason?: string
+}
+
+export interface VisualRegionsOptions {
+  /** Most proposals to return, 1–64; defaults to 24. */
+  maxRegions?: number
+}
 
 /** Profiling results returned to JavaScript. */
 export interface WorkProfile {

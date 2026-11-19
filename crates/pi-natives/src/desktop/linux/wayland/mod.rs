@@ -133,6 +133,9 @@ impl Backend for WaylandBackend {
 				"unavailable".to_string()
 			},
 			display_count: self.displays.len() as u32,
+			// Derived by `DesktopCapabilities::normalize` in the session.
+			visual_regions: false,
+			escape_stop: String::new(),
 		}
 	}
 

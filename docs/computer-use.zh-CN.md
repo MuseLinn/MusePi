@@ -150,6 +150,22 @@ provider 可以发送一个 GA 动作，或有序的 `actions` 批次。MusePi �
 
 worker 在截图返回给 provider 之前会拒绝坐标动作。先以仅截图调用开始。在任何目标可能已移动的视觉过渡之后，完成当前调用并使用其返回的图像作为下一调用中的坐标。
 
+## 区域提案
+
+`win.regions({maxRegions?})` 与 `desktop.regions({maxRegions?})` 从目标最近一次截图的像素中提案可点击矩形。仅在 accessibility 树为空、或完全描述不了界面时使用——canvas、游戏、远程桌面、自绘表面。AX 可用时，区域只会增加噪声，也打不过具名元素。
+
+返回 `{target, width, height, regions, truncated, reason?}`，每个区域是 `{id, x, y, width, height, kind, label?, confidence}`：
+
+- 矩形是该截图的半开像素区间：包含 `x`/`y`，不包含 `x + width`/`y + height`。这正是 `click(x, y)` 读取的空间，因此区域中心可以直接点击。
+- `kind` 只表示形状（`text`、`row`、`block`）；本构建不做 OCR，`label` 恒为空；`confidence`（0–1）衡量边界证据强度，而不是"它是不是控件"的概率。
+- 提案不是元素。没有任何东西保证一个矩形就是一个控件，也不保证它的中心可操作。
+- `regions: []` 是一次成功的分析。`reason` 说明为空的原因：`uniform`（平坦或受保护帧，包括黑帧）、`low_contrast`（没有足够强的边缘可提案，或边缘围出的东西小到不可点击）、`too_small`（帧小于分析下限）。把它当作"没有可提案内容"，而不是失败。
+- `truncated: true` 表示结果是子集：要么提案数量超过 `maxRegions`（1–64，默认 24），要么画面边缘结构超出分析预算。截断时先保留置信度最高的提案，其次面积更大者，最后按阅读顺序。
+
+区域从不主动捕获。它们读取同一目标最近一次整帧截图的像素：session 在 24 MiB luma 预算内保留最近两帧，被淘汰或不存在的帧会以 `NoFrame` 失败并指向 `screenshot()`。缩放（`captureRegion`）的像素不是帧，永不替换它。分析把最长边降采样到 1280 再检测；矩形仍以完整截图像素回报。截图之后窗口被 resize 或桌面布局发生变化时，会以 `InvalidCoordinateFrame` 拒绝，而不是返回对应其他像素的矩形。
+
+对区域采取行动就是像素动作：点它的中心，然后在下一步之前重新观测（`win.ax()` 或新的截图）。提案本身不说明点击产生了什么。
+
 ## 多显示器
 
 `computer.display: all` 产生一张合成图。显示器按逻辑垂直位置、再水平位置、再 ID 排序。具有相同逻辑矩形的镜像显示会被合并；主镜像优先。无效缩放、重复 ID 与重叠的非镜像矩形会失败关闭，而不是猜测。
@@ -250,6 +266,8 @@ computer tool
 
 Bun worker 在第一次 computer 调用时启动，而不是在 MusePi 启动时。启动有 10 秒期限。desktop session 与最后一张截图几何在两调用之间保持存活，因此后续坐标可以对照前一张帧检查。每个成功的有序动作批次都以一次新捕获结束。
 
+输入所有权按操作而非按 session 持有。每个输入操作只在自己的执行期间获取机器级 real-input 租约，因此其他宿主发起的操作可以在你的调用之间交错执行。跨多个操作保持独占必须显式调用 `acquireControl()`；没有它，永远不要假定目标仍停留在上一次调用留下的状态。获取结果报告 `active` 与 `escapeStop`：`armed` 表示物理 Esc 监控正在运行；`unavailable` 表示平台的监控启动失败（输入仍被授予，但用户没有硬件停止手段）；`unsupported` 表示该平台或显示服务器没有监控；未持有租约时为 `not_requested`。`desktop.capabilities().escapeStop` 报告平台级支持情况。
+
 关闭 agent/eval 拥有者会关闭所有拥有的 controller。正常关闭要求 Bun worker 关闭，等待最多 1.5 秒，然后在需要时终止它。原生关闭是幂等且有界的。中止一个调用会终止该 worker 并拒绝待处理请求；后续调用可以启动一个新 worker，并且必须建立新的截图帧。
 
 ## OpenAI 截图引用与 Files
@@ -325,7 +343,7 @@ Computer backend 错误以稳定代码开头：
 | Windows x64 | 原生显示/窗口捕获、Win32 输入与 UI Automation accessibility。 |
 | 其他已发布目标 | 除非原生 addon 报告 capabilities，否则不支持。 |
 
-检查 `desktop.capabilities()` 而不是假定捕获、输入、AX 或权限状态。在 Wayland 上，输入在首次原生输入前报告 `prompt-or-granted`，而不打开 RemoteDesktop session。发布的构建省略 `wayland-pipewire` feature，因此 `capabilities()` 报告 `capture: false`；在存在该 feature 的地方，缺失的 portal/PipeWire feature 或被拒的 RemoteDesktop portal 会作为捕获/输入/权限失败报告，而不是回退到 X11。
+检查 `desktop.capabilities()` 而不是假定捕获、输入、AX 或权限状态。`visualRegions` 恰在后端能捕获时为 true，因为提案读取的是捕获像素；`escapeStop` 报告该平台能否为接管输入启用物理 Esc 停止。在 Wayland 上，输入在首次原生输入前报告 `prompt-or-granted`，而不打开 RemoteDesktop session。发布的构建省略 `wayland-pipewire` feature，因此 `capabilities()` 报告 `capture: false`；在存在该 feature 的地方，缺失的 portal/PipeWire feature 或被拒的 RemoteDesktop portal 会作为捕获/输入/权限失败报告，而不是回退到 X11。
 
 真实宿主验证在真实 macOS 宿主上使用了 `ComputerSupervisor` worker 路径，而不是 mock backend。在授予 macOS Screen Recording 与 Accessibility 后，它用全局热键、双击、点击、输入和截图捕获控制了 TextEdit。返回的 Quartz 帧为 1920×1080。
 

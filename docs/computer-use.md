@@ -148,6 +148,22 @@ If monitor membership, rectangle, or scale changes between the reference frame a
 
 The worker rejects a coordinate action until a screenshot has been returned to the provider. Begin with a screenshot-only call. After any visual transition whose target may have moved, finish the current call and use its returned image for coordinates in the next call.
 
+## Region proposals
+
+`win.regions({maxRegions?})` and `desktop.regions({maxRegions?})` propose clickable rectangles from the pixels of the target's most recent screenshot. Use them only where the accessibility tree is empty or describes nothing — a canvas, a game, a remote desktop, a custom-drawn surface. With usable AX, regions add noise and cannot beat named elements.
+
+The result is `{target, width, height, regions, truncated, reason?}`. Each region is `{id, x, y, width, height, kind, label?, confidence}`:
+
+- Rectangles are half-open pixels of that screenshot: `x`/`y` included, `x + width`/`y + height` excluded. That is exactly the space `click(x, y)` reads, so a region centre can be clicked directly.
+- `kind` is the shape only (`text`, `row`, `block`); `label` is always absent because this build runs no OCR; `confidence` (0–1) measures how much edge evidence supports the boundary, not how likely the rectangle is a control.
+- A proposal is not an element. Nothing guarantees that a rectangle is one control or that its centre is actionable.
+- `regions: []` is a successful analysis. `reason` names why it was empty: `uniform` (flat or protected frame, including a black frame), `low_contrast` (no edge strong enough to propose, or nothing the edges form is large enough to click), or `too_small` (frame below the analysis minimum). Treat it as "nothing to propose", not as a failure.
+- `truncated: true` means the result is a subset, either because more proposals existed than `maxRegions` allowed (1–64, default 24) or because the frame held more edge structure than the analysis budget collects. Truncated results keep the highest-confidence proposals first, then the larger area, then reading order.
+
+Regions never capture. They read the pixels of the last full screenshot of the same target: the session keeps the two most recent frames under a 24 MiB luma budget, and an evicted or missing frame fails with `NoFrame` pointing at `screenshot()`. Zoom (`captureRegion`) pixels are not a frame and never replace it. Analysis downsamples the longest edge to 1280 for detection; the rectangles are reported back in full screenshot pixels. A window resized or a desktop layout changed since that screenshot is refused with `InvalidCoordinateFrame` instead of returning rectangles for other pixels.
+
+Acting on a region is a pixel action: click its centre, then re-observe (`win.ax()` or a fresh screenshot) before the next step. The proposal says nothing about what the click did.
+
 ## Multiple displays
 
 `computer.display: all` produces one composite. Displays are sorted by logical vertical position, then horizontal position, then ID. Mirrored displays with the same logical rectangle are coalesced; the primary mirror wins. Invalid scales, duplicate IDs, and overlapping non-mirrored rectangles fail closed rather than guessing.
@@ -248,6 +264,8 @@ computer tool
 
 The Bun worker starts on the first computer call, not at MusePi startup. Startup has a 10-second deadline. The desktop session and last screenshot geometry remain alive across calls, so later coordinates can be checked against the preceding frame. Each successful ordered action batch ends with one new capture.
 
+Input ownership is per operation, not per session. Every input operation acquires the machine-wide real-input lease for its own duration, so operations from other hosts can interleave between your calls. Exclusivity across several operations requires an explicit `acquireControl()`; without it, never assume that a target is still in the state your previous call left it. The acquisition result reports `active` and `escapeStop`: `armed` when the physical-Escape monitor is running, `unavailable` when the platform monitors failed to start (input is still granted, but the user has no hardware stop), `unsupported` on platforms or display servers without a monitor, and `not_requested` when no lease is held. `desktop.capabilities().escapeStop` reports the platform-level support.
+
 Closing the agent/eval owner closes all owned controllers. Normal close asks the Bun worker to close, waits up to 1.5 seconds, then terminates it if needed. Native close is idempotent and bounded. Aborting a call terminates that worker and rejects pending requests; a later call may start a fresh worker and must establish a new screenshot frame.
 
 ## OpenAI screenshot references and Files
@@ -323,7 +341,7 @@ The native composite safety ceiling is 268,435,456 pixels. Normal defaults are f
 | Windows x64             | Native display/window capture, Win32 input, and UI Automation accessibility.                                                                                                                                                |
 | Other published targets | Unsupported unless the native addon reports capabilities.                                                                                                                                                                   |
 
-Inspect `desktop.capabilities()` rather than assuming capture, input, AX, or permission state. On Wayland, input reports `prompt-or-granted` before first native input without opening a RemoteDesktop session. Released builds are compiled without the `wayland-pipewire` feature, so `capabilities()` reports `capture: false`; where the feature is present, a missing portal/PipeWire feature or denied RemoteDesktop portal is reported as a capture/input/permission failure rather than falling back to X11.
+Inspect `desktop.capabilities()` rather than assuming capture, input, AX, or permission state. `visualRegions` is true exactly when the backend can capture, since proposals read captured pixels; `escapeStop` reports whether the platform can arm a physical-Escape stop for takeover input. On Wayland, input reports `prompt-or-granted` before first native input without opening a RemoteDesktop session. Released builds are compiled without the `wayland-pipewire` feature, so `capabilities()` reports `capture: false`; where the feature is present, a missing portal/PipeWire feature or denied RemoteDesktop portal is reported as a capture/input/permission failure rather than falling back to X11.
 
 The real-host verification used the `ComputerSupervisor` worker path on a real macOS host, not a mock backend. With macOS Screen Recording and Accessibility granted, it controlled TextEdit using a global hotkey, double-click, click, typing, and screenshot capture. The returned Quartz frame was 1920×1080.
 

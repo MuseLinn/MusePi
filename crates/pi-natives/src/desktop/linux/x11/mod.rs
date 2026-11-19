@@ -58,6 +58,9 @@ impl Backend for X11Backend {
 			}
 			.to_string(),
 			display_count: displays.map_or(0, |items| u32::try_from(items.len()).unwrap_or(u32::MAX)),
+			// Derived by `DesktopCapabilities::normalize` in the session.
+			visual_regions: false,
+			escape_stop: String::new(),
 		}
 	}
 

@@ -16,6 +16,8 @@ const capabilities: DesktopCapabilities = {
 	inputPermission: "granted",
 	axPermission: "granted",
 	displayCount: 2,
+	visualRegions: true,
+	escapeStop: "unsupported",
 };
 
 function acpRuntime(options?: {
