@@ -3,7 +3,13 @@ import { Spacer } from "@musepi/pi-tui";
 import { APP_NAME } from "@musepi/pi-utils";
 import { CollabGuestLink } from "../collab/guest";
 import { CollabHost } from "../collab/host";
-import { findLanIpv4, isTailscaleIpv4, type LanShareUrls, LocalShareManager } from "../collab/local-share";
+import {
+	configuredExposure,
+	findLanIpv4,
+	isTailscaleIpv4,
+	type LanShareUrls,
+	LocalShareManager,
+} from "../collab/local-share";
 import type { SettingPath, SettingValue } from "../config/settings";
 import { settings } from "../config/settings";
 import { parseExportArgs } from "../export/html/args";
@@ -105,7 +111,7 @@ interface LocalShareStart {
  */
 async function startLocalShare(
 	ctx: InteractiveModeContext,
-	options: { port?: number; tunnelProvider?: "cloudflared" | "ngrok" } = {},
+	options: { port?: number; tunnelProvider?: string } = {},
 ): Promise<LocalShareStart | null> {
 	const { port, tunnelProvider } = options;
 	const transport = new LocalShareManager({
@@ -217,6 +223,9 @@ function presentLanShare(ctx: InteractiveModeContext, started: LocalShareStart, 
  * change at runtime). Pass already-translated or dynamic text as `state`.
  */
 const statusLine = (prefix: string, state: string): string => `${t(prefix)}: ${state}`;
+
+/** Transports `/collab tunnel` accepts inline; any other id comes from `collab.exposure`. */
+const INLINE_TUNNEL_PROVIDERS = new Set(["cloudflared", "ngrok", "tailscale"]);
 
 export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 	{
@@ -426,12 +435,12 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 		name: "collab",
 		icon: "broadcast",
 		description: "Share this session live via a relay",
-		inlineHint: "[workspace|lan|tunnel [ngrok|cloudflared]|start|view|stop|status] [relayUrl]",
+		inlineHint: "[workspace|lan|tunnel [cloudflared|ngrok|tailscale]|start|view|stop|status] [relayUrl]",
 		subcommands: [
 			{ name: "view", description: "Share a read-only link (guests can watch, not prompt)" },
 			{ name: "workspace", description: "Share the multi-session workspace (guests pick a session to watch)" },
 			{ name: "lan", description: "Share on the local network (self-hosted relay)" },
-			{ name: "tunnel", description: "Share via a public cloudflared tunnel" },
+			{ name: "tunnel", description: "Share via the configured tunnel (cloudflared, ngrok, or tailscale)" },
 			{ name: "status", description: "Show link + participants" },
 			{ name: "stop", description: "Stop sharing" },
 		],
@@ -486,8 +495,12 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 				// Multi-session workspace share: guests land on a directory of
 				// every known session and pick one to watch live. The TUI host
 				// can only stream its own session; others list as history.
-				const [arg0] = rest.trim().split(/\s+/);
+				const [arg0, arg1] = rest.trim().split(/\s+/);
 				const isTunnel = arg0 === "tunnel";
+				// `/collab workspace tunnel [cloudflared|ngrok|tailscale]` mirrors
+				// the session share: an inline transport overrides `collab.exposure`.
+				const providerArg = isTunnel && arg1 && INLINE_TUNNEL_PROVIDERS.has(arg1) ? arg1 : undefined;
+				const provider = providerArg ?? configuredExposure();
 				const transport = new LocalShareManager({
 					onStatus: line => ctx.showStatus(line, { dim: true }),
 				});
@@ -523,7 +536,7 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 				const host = new CollabHost(ctx, "workspace");
 				let urls: LanShareUrls;
 				try {
-					urls = isTunnel ? await transport.startTunnel("cloudflared") : await transport.startLan();
+					urls = isTunnel ? await transport.startTunnel(provider) : await transport.startLan();
 					await host.start(urls.joinUrl, urls.webUrl, urls.webJoinUrl);
 				} catch (err) {
 					await transport.stop().catch(() => {});
@@ -542,11 +555,11 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 			}
 			if (verb === "lan" || verb === "tunnel") {
 				const isTunnel = verb === "tunnel";
-				// `/collab tunnel [ngrok|cloudflared] [port]` — provider mirrors
-				// OpenChamber's cloudflared-vs-ngrok choice; default cloudflared.
+				// `/collab tunnel [cloudflared|ngrok|tailscale] [port]` — an inline
+				// provider overrides `collab.exposure`, which is the default otherwise.
 				const [arg0, arg1] = rest.trim().split(/\s+/);
-				const providerArg = isTunnel && (arg0 === "ngrok" || arg0 === "cloudflared") ? arg0 : undefined;
-				const provider = providerArg ?? "cloudflared";
+				const providerArg = isTunnel && arg0 && INLINE_TUNNEL_PROVIDERS.has(arg0) ? arg0 : undefined;
+				const provider = providerArg ?? configuredExposure();
 				const portArg = providerArg ? arg1 : arg0;
 				const port = parseInt(portArg ?? "", 10) || undefined;
 				if (isTunnel) {

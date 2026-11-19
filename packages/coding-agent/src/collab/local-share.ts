@@ -15,6 +15,7 @@
 import * as fs from "node:fs";
 import { networkInterfaces } from "node:os";
 import * as path from "node:path";
+import { normalizeRelayOrigin } from "@musepi/collab-proto";
 import { settings } from "../config/settings";
 import { ensureLanCertificate } from "./cert";
 import {
@@ -146,7 +147,7 @@ export function isTailscaleIpv4(addr: string): boolean {
  * was unavailable.
  */
 function readSetting<T>(
-	key: "collab.cloudflaredHostname" | "collab.shareTtlMinutes" | "collab.exposure",
+	key: "collab.cloudflaredHostname" | "collab.shareTtlMinutes" | "collab.exposure" | "collab.webUrl",
 	fallback: T,
 ): T {
 	try {
@@ -168,6 +169,52 @@ export function configuredShareTtlMinutes(): number {
 export function configuredExposure(): string {
 	const value = readSetting<string>("collab.exposure", "cloudflared");
 	return typeof value === "string" && value.trim() ? value.trim() : "cloudflared";
+}
+
+/** Prefix of the status line emitted when `collab.webUrl` is unusable; the daemon surfaces it as a share warning. */
+export const COLLAB_WEB_URL_WARNING_PREFIX = "collab: ignoring collab.webUrl";
+
+/**
+ * Browser origins the in-process relay must accept besides its own pages.
+ * `collab.webUrl` hosts the client on a different origin from the websocket
+ * relay; the browser's upgrade then carries that origin, which the relay's
+ * same-origin check would otherwise reject with 403.
+ *
+ * Validation mirrors the web-link formatter: `http(s)` only, `https` for
+ * public hosts, `http` only for localhost/private addresses. Anything else is
+ * ignored with a status hint — a `null` origin from `file:`, `data:`, or a
+ * sandboxed iframe must never reach the relay's allowlist.
+ */
+export function configuredWebOrigins(onStatus?: (line: string) => void): string[] {
+	const value = readSetting<string>("collab.webUrl", "");
+	const text = typeof value === "string" ? value.trim() : "";
+	if (!text) return [];
+	const hint = (reason: string) => onStatus?.(`${COLLAB_WEB_URL_WARNING_PREFIX} "${text}" — ${reason}`);
+	let url: URL;
+	try {
+		url = new URL(text);
+	} catch {
+		hint("must be an http:// or https:// URL");
+		return [];
+	}
+	if (url.protocol !== "http:" && url.protocol !== "https:") {
+		hint("must be an http:// or https:// URL");
+		return [];
+	}
+	if (url.search || url.hash) {
+		hint("must not include a query string or fragment");
+		return [];
+	}
+	const normalized = normalizeRelayOrigin(text);
+	if ("error" in normalized) {
+		hint(url.protocol === "http:" ? "http:// is allowed only for localhost or a private address" : normalized.error);
+		return [];
+	}
+	return [
+		normalized.origin.startsWith("wss://")
+			? `https://${normalized.origin.slice("wss://".length)}`
+			: `http://${normalized.origin.slice("ws://".length)}`,
+	];
 }
 
 export class LocalShareManager {
@@ -221,12 +268,14 @@ export class LocalShareManager {
 		await this.stop();
 		const interfaces = listLanIpv4();
 		if (interfaces.length === 0) throw new Error("no routable LAN IPv4 address found");
+		const allowedOrigins = configuredWebOrigins(this.#onStatus);
 		this.relay = await startRelayServer({
 			port: this.#port,
 			host: "0.0.0.0",
 			staticDir: this.webDistAvailable ? COLLAB_WEB_DIST : undefined,
 			rooms: this.#rooms,
 			onStatus: this.#onStatus,
+			allowedOrigins,
 		});
 		// The self-signed cert must cover EVERY current address (LAN + Tailscale)
 		// so browsers on any of them match the SAN without re-warning.
@@ -238,6 +287,7 @@ export class LocalShareManager {
 			tls: { key: cert.keyPem, cert: cert.certPem },
 			rooms: this.#rooms,
 			onStatus: this.#onStatus,
+			allowedOrigins,
 		});
 		if (!this.webDistAvailable) {
 			this.#onStatus?.("client-core dist not built — browser UI unavailable, terminal join still works");
@@ -283,6 +333,7 @@ export class LocalShareManager {
 			host: "127.0.0.1",
 			staticDir: this.webDistAvailable ? COLLAB_WEB_DIST : undefined,
 			onStatus: this.#onStatus,
+			allowedOrigins: configuredWebOrigins(this.#onStatus),
 		});
 		this.exposure = exposure;
 		this.#unsubscribeExposure = exposure.onChange(status => this.#handleExposureHealth(status));

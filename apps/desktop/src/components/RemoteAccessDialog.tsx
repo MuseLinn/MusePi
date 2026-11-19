@@ -40,6 +40,8 @@ interface RemoteAccessInfo {
 	viewLink?: string;
 	participants?: RemoteAccessGuest[];
 	lastEnd?: ShareEnd;
+	/** A configuration value made part of the share unusable (e.g. collab.webUrl). */
+	warning?: string;
 }
 
 interface ExposureCapabilities {
@@ -587,6 +589,19 @@ export function RemoteAccessDialog({
 		</div>
 	) : null;
 
+	const warningBlock = info?.warning ? (
+		<div className="gui-collab-scope-summary" role="status">
+			<Icon name="information" className="h-4 w-4" />
+			<div>
+				<p>{t("settings.shareConfigWarning")}</p>
+				<details className="gui-collab-technical">
+					<summary>{t("settings.technicalDetails")}</summary>
+					<pre>{info.warning}</pre>
+				</details>
+			</div>
+		</div>
+	) : null;
+
 	return (
 		<DialogFrame
 			open={open}
@@ -652,6 +667,7 @@ export function RemoteAccessDialog({
 								</div>
 							) : null}
 							{error ? errorBlock : null}
+							{warningBlock}
 							{webLink ? (
 								<>
 									<div className="gui-collab-qr">
@@ -739,6 +755,7 @@ export function RemoteAccessDialog({
 									</div>
 								</div>
 							) : null}
+							{warningBlock}
 							<p className="gui-collab-desc">{scopeHint}</p>
 							<div className="flex flex-col gap-2">
 								<div className="flex items-center justify-between gap-2">

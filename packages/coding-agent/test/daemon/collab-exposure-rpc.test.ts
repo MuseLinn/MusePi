@@ -68,6 +68,7 @@ interface StatusReply {
 		detail?: string;
 		hint?: string;
 	};
+	warning?: string;
 	link?: string;
 }
 
@@ -163,6 +164,7 @@ beforeAll(async () => {
 afterAll(async () => {
 	await server.handle("remote-access.stop", {}, conn).catch(() => {});
 	settings.override("collab.shareTtlMinutes", 0);
+	settings.override("collab.webUrl", "");
 	releaseExposure?.();
 	resetSettingsForTest();
 	await restoreAgentDirForTest(isolatedAgentDir);
@@ -281,5 +283,47 @@ describe("collab exposure RPC", () => {
 		expect(fresh.hosting).toBe(true);
 		expect(fresh.lastEnd).toBeUndefined();
 		await server.handle("remote-access.stop", {}, conn);
+	});
+
+	test("an unusable collab.webUrl rides start and status, survives reuse and stop, and is recomputed", async () => {
+		settings.override("collab.webUrl", "file:///x");
+		try {
+			const started = (await server.handle(
+				"remote-access.start",
+				{ mode: "workspace", exposure: "test-exposure" },
+				conn,
+			)) as StatusReply;
+			expect(started.warning).toContain("collab.webUrl");
+
+			const live = await status();
+			expect(live.warning).toBe(started.warning);
+
+			// Reusing the identical share returns the same diagnostic.
+			const reused = (await server.handle(
+				"remote-access.start",
+				{ mode: "workspace", exposure: "test-exposure" },
+				conn,
+			)) as StatusReply;
+			expect(reused.warning).toBe(started.warning);
+
+			// The setup view keeps the explanation after the share stops.
+			await server.handle("remote-access.stop", {}, conn);
+			const ended = await status();
+			expect(ended.hosting).toBe(false);
+			expect(ended.warning).toBe(started.warning);
+
+			// A new share recomputes it from the now-valid setting.
+			settings.override("collab.webUrl", "https://web.example");
+			const fresh = (await server.handle(
+				"remote-access.start",
+				{ mode: "workspace", exposure: "test-exposure" },
+				conn,
+			)) as StatusReply;
+			expect(fresh.warning).toBeUndefined();
+			await server.handle("remote-access.stop", {}, conn);
+			expect((await status()).warning).toBeUndefined();
+		} finally {
+			settings.override("collab.webUrl", "");
+		}
 	});
 });

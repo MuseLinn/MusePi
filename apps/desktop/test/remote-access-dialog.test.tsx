@@ -316,6 +316,40 @@ describe("RemoteAccessDialog sharing surface", () => {
 		}
 	});
 
+	test("an ignored collab.webUrl warning stays visible on the setup view", async () => {
+		const warning = 'collab: ignoring collab.webUrl "file:///x" — must be an http:// or https:// URL';
+		const harness = await renderDialog(rpcStub({ status: { hosting: false, warning } }));
+		try {
+			const dialog = harness.dialog();
+			expect(dialog.textContent).toContain("已忽略 collab.webUrl——该来源的浏览器访客会被拒绝。");
+			expect(dialog.textContent).toContain("http:// or https://");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("an ignored collab.webUrl warning is also shown beside a live share", async () => {
+		const warning = 'collab: ignoring collab.webUrl "file:///x" — must be an http:// or https:// URL';
+		const harness = await renderDialog(
+			rpcStub({
+				status: {
+					hosting: true,
+					exposure: "lan",
+					webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654",
+					health: { health: "ready" },
+					warning,
+				},
+			}),
+		);
+		try {
+			const dialog = harness.dialog();
+			expect(dialog.textContent).toContain("已忽略 collab.webUrl——该来源的浏览器访客会被拒绝。");
+			expect(dialog.textContent).toContain("http:// or https://");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
 	test("a new start clears the previous lastEnd card", async () => {
 		const stub = rpcStub({
 			status: {
