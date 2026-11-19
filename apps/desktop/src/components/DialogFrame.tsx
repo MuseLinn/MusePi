@@ -1,4 +1,4 @@
-import { animateSpring, isTopModal, MORPH_SPRING, useModalFocus } from "@musepi/client-core";
+import { isTopModal, useModalFocus } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -54,6 +54,8 @@ export function DialogFrame({
 }): ReactNode {
 	const [mounted, setMounted] = useState(open);
 	const [phase, setPhase] = useState<"enter" | "open" | "closing">(open ? "enter" : "open");
+	/** True while the shared-origin move runs; suppresses the built-in entrance. */
+	const [originActive, setOriginActive] = useState(false);
 	const rafRef = useRef<number | null>(null);
 	const timerRef = useRef<Timer | null>(null);
 	const dialogRef = useModalFocus<HTMLDivElement>(mounted);
@@ -69,10 +71,15 @@ export function DialogFrame({
 	}, [open]);
 
 	/**
-	 * Shared-origin entrance: the surface travels from the trigger's rectangle
-	 * to the dialog's own, then hands over to the real frame. The dialog itself
-	 * never scales, so text is never stretched — a sheet carries the growing
-	 * surface and the content fades in underneath as it lands.
+	 * Shared-origin entrance: the dialog's own surface travels and scales from
+	 * the trigger's rectangle, so one element carries the whole move — there is
+	 * no second panel to hand over from. The content is counter-scaled to its
+	 * natural size and clipped by the frame, which therefore grows a window
+	 * around the content instead of stretching it.
+	 *
+	 * 260ms with an ease-out curve, not the spring the size morph uses: a
+	 * dialog is an arrival, and a settling spring reads as lag on a move this
+	 * large.
 	 */
 	useLayoutEffect(() => {
 		if (!mounted || !open || !originRect || originPlayed.current) return;
@@ -82,6 +89,9 @@ export function DialogFrame({
 		if (!dialog) return;
 		originPlayed.current = true;
 		dialog.classList.add("gui-dialog--from-origin");
+		// React owns className: a phase re-render would drop the imperative class
+		// and let the entrance animation start underneath the move.
+		setOriginActive(true);
 		// The pending class carries a scale; neutralize it before measuring, or
 		// the target rectangle would be the shrunken one.
 		void dialog.offsetHeight;
@@ -92,41 +102,50 @@ export function DialogFrame({
 		}
 
 		const wrapper = morphRef.current;
-		if (wrapper) wrapper.style.opacity = "0";
-		const sheet = document.createElement("div");
-		sheet.className = "gui-dialog-origin-sheet";
-		sheet.style.left = `${originRect.left}px`;
-		sheet.style.top = `${originRect.top}px`;
-		sheet.style.width = `${originRect.width}px`;
-		sheet.style.height = `${originRect.height}px`;
-		document.body.appendChild(sheet);
-
-		const radiusFrom = Math.min(12, Math.max(6, originRect.height / 6));
+		const scaleX = originRect.width / target.width;
+		const scaleY = originRect.height / target.height;
+		const offsetX = originRect.left - target.left;
+		const offsetY = originRect.top - target.top;
 		const radiusTo = Number.parseFloat(getComputedStyle(dialog).borderRadius) || 16;
-		let settled = false;
-		let stop: (() => void) | undefined;
-		const settle = (): void => {
-			if (settled) return;
-			settled = true;
-			stop?.();
-			sheet.remove();
-			dialog.classList.remove("gui-dialog--from-origin");
-			if (wrapper) wrapper.style.opacity = "";
-		};
-		stop = animateSpring(
-			{ from: 0, to: 1, ...MORPH_SPRING, maxDuration: (MORPH_SPRING.visualDuration ?? 0.44) * 2 },
-			progress => {
-				sheet.style.left = `${originRect.left + (target.left - originRect.left) * progress}px`;
-				sheet.style.top = `${originRect.top + (target.top - originRect.top) * progress}px`;
-				sheet.style.width = `${originRect.width + (target.width - originRect.width) * progress}px`;
-				sheet.style.height = `${originRect.height + (target.height - originRect.height) * progress}px`;
-				sheet.style.borderRadius = `${radiusFrom + (radiusTo - radiusFrom) * progress}px`;
-				if (wrapper) {
-					wrapper.style.opacity = `${Math.max(0, Math.min(1, (progress - 0.6) / 0.4))}`;
-				}
-			},
-			settle,
+		// Pin the first frame inline so no paint can show the dialog at its
+		// final size before the animation's first frame lands.
+		const startTransform = `translate(${offsetX}px, ${offsetY}px) scale(${scaleX}, ${scaleY})`;
+		// Both the frame and its counter-scaled content must share a top-left
+		// origin, or the content slides against the frame while it grows.
+		dialog.style.transformOrigin = "top left";
+		dialog.style.transform = startTransform;
+		dialog.style.borderRadius = `${Math.min(radiusTo, 12)}px`;
+		if (wrapper) {
+			wrapper.style.transformOrigin = "top left";
+			wrapper.style.transform = `scale(${1 / scaleX}, ${1 / scaleY})`;
+		}
+		const overflowBefore = dialog.style.overflow;
+		dialog.style.overflow = "hidden";
+
+		const anim = dialog.animate(
+			[
+				{ transform: startTransform, borderRadius: `${Math.min(radiusTo, 12)}px` },
+				{ transform: "none", borderRadius: `${radiusTo}px` },
+			],
+			{ duration: 260, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "both" },
 		);
+		let done = false;
+		const settle = (): void => {
+			if (done) return;
+			done = true;
+			anim.cancel();
+			setOriginActive(false);
+			dialog.classList.remove("gui-dialog--from-origin");
+			dialog.style.transform = "";
+			dialog.style.transformOrigin = "";
+			dialog.style.borderRadius = "";
+			dialog.style.overflow = overflowBefore;
+			if (wrapper) {
+				wrapper.style.transform = "";
+				wrapper.style.transformOrigin = "";
+			}
+		};
+		anim.addEventListener("finish", settle);
 		return settle;
 	}, [dialogRef, mounted, open, originRect]);
 
@@ -180,7 +199,13 @@ export function DialogFrame({
 				: " gui-dialog-backdrop--entered"
 	}`;
 	const dialogCls = `gui-dialog${className ? ` ${className}` : ""}${
-		phase === "enter" ? " gui-dialog--pending" : phase === "closing" ? " gui-dialog--closing" : " gui-dialog--entered"
+		originActive
+			? " gui-dialog--from-origin"
+			: phase === "enter"
+				? " gui-dialog--pending"
+				: phase === "closing"
+					? " gui-dialog--closing"
+					: " gui-dialog--entered"
 	}`;
 
 	// Portal to document.body: a backdrop-filter ancestor (e.g. the
