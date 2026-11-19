@@ -30,7 +30,7 @@ export const Shell = nativeBindings.Shell;
 
 // functions
 export const __musepiInstallTokioRuntime = nativeBindings.__musepiInstallTokioRuntime;
-export const __piNativesV0_7_6 = nativeBindings.__piNativesV0_7_6;
+export const __piNativesV0_7_7 = nativeBindings.__piNativesV0_7_7;
 export const astEdit = nativeBindings.astEdit;
 export const astGrep = nativeBindings.astGrep;
 export const astMatch = nativeBindings.astMatch;

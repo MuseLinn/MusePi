@@ -4,6 +4,8 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-11-19
+
 - **设置内容区收敛为统一工厂，新增页面不再需要改壳**：已注册的 `settings.section.<id>` 页面由内容区工厂直接渲染（等价 dsh `settings.section.view`），内置页分支只作为未装载/编译失败的回退；原先连接器/索引库的专用分支删除。此前通过槽位新增的页面会出现在导航却渲染空白。
   - EN: The settings content area is now one factory: any registered `settings.section.<id>` page renders directly (the dsh `settings.section.view` equivalent), and the built-in branches are only the fallback when nothing loads — the connector/index special cases are gone. A page added through the slot used to appear in the navigation and render blank.
 
