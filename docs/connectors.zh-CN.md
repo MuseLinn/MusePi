@@ -129,7 +129,7 @@ marketplace/<dir>/
   assets/icon.png  # 可选
 ```
 
-`extensions["musepi.connector"].display` 可携带 `name`、`description`、`examples`、`icon`、`docsUrl`；`auth.mode` 与 `oauth` 与之并列。同时接受旧的 `extensions["ai.workbuddy"]` 键，已有包无需修改即可使用。`ai.workbuddy/` 或 `musepi.connector/` 下的 `token-schema.json` 提供表单 schema；除非 `auth.mode` 另有声明，存在该文件即按 token 认证处理。
+`extensions["musepi.connector"].display` 可携带 `name`、`description`、`examples`、`examplesZh`、`icon`、`docsUrl`；`auth.mode` 与 `oauth` 与之并列。同时接受旧的 `extensions["ai.workbuddy"]` 键，已有包无需修改即可使用。`ai.workbuddy/` 或 `musepi.connector/` 下的 `token-schema.json` 提供表单 schema；除非 `auth.mode` 另有声明，存在该文件即按 token 认证处理。
 
 ## 启用与投影
 
@@ -143,7 +143,7 @@ OAuth 授权仍落在 AuthStorage。MCP 客户端拥有的行（`mcp_oauth:` 与
 
 GUI 如实反映这层包含关系：设置里只有一个入口「连接器」，手写的 `mcp.json` 服务器作为该页底部的「已配置服务器」分区渲染（`apps/desktop/src/components/settings-sections/mcp.tsx`，由 `connectors.tsx` 挂载）。此前目录旁边还有一个独立的「MCP 服务器」页，而它显示得更少——只有开关，没有 transport、URL 与 OAuth 登录。退役的 `mcp` 设置 id 保留在 `SECTION_ALIAS`（`apps/desktop/src/lib/settings-nav.ts`）中，存量深链继续落在连接器页。
 
-页面分两层。列表是索引——图标、名称、一句话、一个动作——按「已连接」「推荐」「分类」分组，每个分类先显示六条，直到用户主动收窄。更长的一切（完整说明、示例、文档、凭据表单、CLI 授权、本地进程批准、探测结果）都在行打开的详情弹窗里。从列表连接时如果确实需要授权、凭据或批准，弹窗会自动打开，流程不会停在用户看不见的行后面。设备码面板留在页面上而不是弹窗里：它的轮询在组件本地，关闭弹窗不能中断一个已经在浏览器里输入的登录。
+页面分两层。列表是索引——图标、名称、一句话、一个动作——按「已连接」「推荐」「分类」分组，每个分类先显示六条，直到用户主动收窄。更长的一切（完整说明、示例、文档、凭据表单、CLI 授权、本地进程批准、探测结果）都在行打开的详情弹窗里。从列表连接时如果确实需要授权、凭据或批准，弹窗会自动打开，流程不会停在用户看不见的行后面。设备码面板留在页面上而不是弹窗里：它的轮询在组件本地，关闭弹窗不能中断一个已经在浏览器里输入的登录。示例跟随界面语言（有 `examplesZh` 时用它），每条都可以复制，或交给输入框——那会关闭设置页并把这句话追加到草稿里。
 
 ## RPC 面
 

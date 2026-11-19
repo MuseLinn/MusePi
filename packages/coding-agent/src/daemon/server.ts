@@ -1436,7 +1436,7 @@ export class DaemonServer {
 	#refreshLiveSkillCatalogs(): void {
 		for (const live of this.#host.allSessions()) {
 			if (isLiveSessionBusy(live)) continue;
-			void live.agentSession.refreshSkills().catch(error => {
+			void live.agentSession.refreshSkills({ prompt: "defer" }).catch(error => {
 				logger.warn("Failed to refresh the skill catalog after a skill change", {
 					sessionId: live.sessionId,
 					error: String(error),

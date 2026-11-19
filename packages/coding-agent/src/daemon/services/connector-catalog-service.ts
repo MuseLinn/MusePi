@@ -77,6 +77,7 @@ export interface ConnectorCatalogItem {
 	icon?: string;
 	docsUrl?: string;
 	examples?: string[];
+	examplesZh?: string[];
 	version?: string;
 	kind: "mcp" | "cli";
 	/** Managed CLI entries whose spec declares an authorization step. */
@@ -209,6 +210,7 @@ async function toItem(
 	if (entry.icon) item.icon = entry.icon;
 	if (entry.docsUrl) item.docsUrl = entry.docsUrl;
 	if (entry.examples) item.examples = entry.examples;
+	if (entry.examplesZh) item.examplesZh = entry.examplesZh;
 	if (entry.version) item.version = entry.version;
 	if (entry.tokenSchema) item.tokenSchema = entry.tokenSchema;
 	return item;

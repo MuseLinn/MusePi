@@ -406,6 +406,8 @@ function parseCatalogEntry(
 	if (version) entry.version = version;
 	const examples = readStringArray(raw.examples);
 	if (examples) entry.examples = examples;
+	const examplesZh = readStringArray(raw.examplesZh);
+	if (examplesZh) entry.examplesZh = examplesZh;
 	const oauth = parseOAuthSpec(raw.oauth);
 	if (oauth) entry.oauth = oauth;
 	return entry;
@@ -567,6 +569,7 @@ interface PackageDisplay {
 	name?: string;
 	description?: string;
 	examples?: string[];
+	examplesZh?: string[];
 	icon?: string;
 	docsUrl?: string;
 	authMode?: ConnectorAuthMode;
@@ -583,6 +586,7 @@ function readPackageDisplay(plugin: Record<string, unknown>): PackageDisplay {
 		name: readString(display.name, 128),
 		description: readString(display.description) ?? readString(plugin.description),
 		examples: readStringArray(display.examples) ?? readStringArray(display.examples_en),
+		examplesZh: readStringArray(display.examplesZh) ?? readStringArray(display.examples_zh),
 		icon: readString(display.icon, 2_048),
 		docsUrl: readString(display.docsUrl, 2_048),
 		authMode: typeof auth.mode === "string" ? parseAuthMode(auth.mode) : undefined,
@@ -690,6 +694,7 @@ async function loadPackageDir(dir: string, warnings: string[]): Promise<Connecto
 	if (icon) entry.icon = icon;
 	if (display.docsUrl && isHttpUrl(display.docsUrl)) entry.docsUrl = display.docsUrl;
 	if (display.examples) entry.examples = display.examples;
+	if (display.examplesZh) entry.examplesZh = display.examplesZh;
 	if (display.oauth) entry.oauth = display.oauth;
 	return entry;
 }

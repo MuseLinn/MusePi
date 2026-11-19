@@ -38,6 +38,7 @@ import {
 import type { ClientBridge, ClientBridgePermissionOutcome } from "./client-bridge";
 import type { CustomMessage } from "./messages";
 import type { SessionManager } from "./session-manager";
+import { diffSkillCatalog, formatSkillCatalogReminder, SKILL_CATALOG_CHANGE_CUSTOM_TYPE } from "./skill-catalog";
 
 /** Result of staging memory prompt injection for one turn. */
 export interface SystemPromptPreparation {
@@ -370,6 +371,11 @@ export class SessionTools {
 	}
 
 	/** Skills currently rendered into the system prompt. */
+	/** Whether this host can rebuild the base prompt after a catalog change. */
+	get promptRebuildable(): boolean {
+		return this.#rebuildSystemPrompt !== undefined;
+	}
+
 	get skills(): Skill[] {
 		return this.#skills;
 	}
@@ -1137,9 +1143,19 @@ export class SessionTools {
 		};
 	}
 
-	/** Rediscovers reloadable skills and refreshes prompt metadata. */
-	async refreshSkills(): Promise<void> {
+	/**
+	 * Rediscovers reloadable skills.
+	 *
+	 * `prompt: "defer"` is for a skill-only change (install/update/delete in a
+	 * live session): the frozen system prompt stays byte-identical, so the
+	 * provider prefix cache survives, and the same message that feeds the
+	 * timeline carries a replacement listing to the model. Directory and reload
+	 * paths keep rebuilding the prompt because they change its workspace and
+	 * context-file sections too.
+	 */
+	async refreshSkills(options: { prompt?: "rebuild" | "defer" } = {}): Promise<void> {
 		resetCapabilities();
+		const previousSkills = this.#skills;
 		if (this.#skillsReloadable) {
 			const skillsSettings = this.#host.settings.getGroup("skills");
 			const discovered = await loadSkillsWithRoots({
@@ -1156,7 +1172,37 @@ export class SessionTools {
 				setActiveSkills(this.#skills);
 			}
 		}
+		const change = diffSkillCatalog(previousSkills, this.#skills);
+		const annotate = change !== null && this.#host.agent.state.messages.length > 0;
+		if (options.prompt === "defer" && annotate && change) {
+			// Kimi-style: freeze the prompt and replace the catalog in one durable
+			// message (UI row + model-visible text), so the provider prefix cache
+			// is not invalidated by appending only.
+			try {
+				this.#host.sessionManager.appendCustomMessageEntry(
+					SKILL_CATALOG_CHANGE_CUSTOM_TYPE,
+					formatSkillCatalogReminder(this.#skills),
+					true,
+					change,
+				);
+			} catch (error) {
+				logger.warn("skill catalog change journaling failed", { error: String(error) });
+			}
+			this.#host.notifyCommandMetadataChanged();
+			return;
+		}
 		await this.refreshBaseSystemPrompt();
+		if (annotate && change) {
+			// The rebuilt base prompt is the model's single source of truth. A host
+			// without a prompt builder gets a compact model-visible reminder instead;
+			// one message, never both.
+			const content = this.promptRebuildable ? "" : formatSkillCatalogReminder(this.#skills);
+			try {
+				this.#host.sessionManager.appendCustomMessageEntry(SKILL_CATALOG_CHANGE_CUSTOM_TYPE, content, true, change);
+			} catch (error) {
+				logger.warn("skill catalog change journaling failed", { error: String(error) });
+			}
+		}
 		this.#host.notifyCommandMetadataChanged();
 	}
 

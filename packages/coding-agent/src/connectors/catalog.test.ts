@@ -56,6 +56,7 @@ describe("connector catalog", () => {
 						name: "Gamma",
 						description: "package display",
 						examples: ["Do the thing"],
+						examplesZh: ["做那件事"],
 					},
 					auth: { mode: "none" },
 				},
@@ -78,6 +79,7 @@ describe("connector catalog", () => {
 		expect(gamma?.name).toBe("Gamma");
 		expect(gamma?.version).toBe("1.2.3");
 		expect(gamma?.examples).toEqual(["Do the thing"]);
+		expect(gamma?.examplesZh).toEqual(["做那件事"]);
 		expect(warnings.length).toBe(0);
 	});
 

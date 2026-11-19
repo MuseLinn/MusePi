@@ -186,6 +186,7 @@ export interface ConnectorCatalogEntry {
 	icon?: string;
 	docsUrl?: string;
 	examples?: string[];
+	examplesZh?: string[];
 	version?: string;
 	/** MCP endpoint/process; absent for CLI connectors. */
 	server?: ConnectorServerSpec;

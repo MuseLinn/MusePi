@@ -5425,8 +5425,8 @@ export class AgentSession {
 	}
 
 	/** Rediscovers reloadable skills and refreshes prompt metadata. */
-	refreshSkills(): Promise<void> {
-		return this.#tools.refreshSkills();
+	refreshSkills(options?: { prompt?: "rebuild" | "defer" }): Promise<void> {
+		return this.#tools.refreshSkills(options);
 	}
 
 	/** Selects enabled tools, ignoring names absent from the registry. */
@@ -9236,10 +9236,15 @@ export class AgentSession {
 		if (!(await this.reload())) {
 			throw new Error("Reload cancelled by a session_before_switch handler.");
 		}
+		const promptRebuilt = this.#tools.promptRebuildable;
 		await this.refreshSkills();
 		await this.refreshSessionStart();
+		// A host that rebuilds the base prompt already gave the model the fresh
+		// skills, context files and workspace roots; a second listing is the
+		// redundant injection this reminder exists to avoid. Hosts without a
+		// prompt builder keep the reminder as their only model-visible update.
 		const reminder =
-			this.#agentKind === "main"
+			this.#agentKind === "main" && !promptRebuilt
 				? buildReloadReminder(
 						before,
 						await this.#captureReloadSnapshot(),
