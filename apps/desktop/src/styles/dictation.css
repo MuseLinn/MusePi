@@ -30,7 +30,7 @@ body {
 	box-sizing: border-box;
 	width: 100%;
 	border: 1px solid var(--glass-border, var(--border));
-	border-radius: 16px;
+	border-radius: var(--radius-2xl);
 	background: color-mix(in oklab, var(--color-surface-raised, #1f1f23) 82%, transparent);
 	backdrop-filter: blur(22px) saturate(1.4);
 	-webkit-backdrop-filter: blur(22px) saturate(1.4);
@@ -138,7 +138,7 @@ body {
 .hud-btn {
 	padding: 4px 8px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	color: var(--color-text);
 	font: inherit;

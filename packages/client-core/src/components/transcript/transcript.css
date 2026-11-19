@@ -5121,7 +5121,7 @@ a.tr-tool-search-title:hover {
 	height: 7px;
 	margin-top: 7px;
 	flex: none;
-	border-radius: var(--radius-full, 999px);
+	border-radius: var(--radius-full);
 	background: var(--color-accent, var(--accent));
 	box-shadow: 0 0 0 3px var(--color-accent-soft, color-mix(in oklab, var(--accent) 18%, transparent));
 }
