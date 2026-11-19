@@ -5,21 +5,52 @@
  * no agent imports. Callers translate close reasons at the UI layer.
  *
  * Connects to a relay room, seals/opens AES-GCM frames, and reconnects with
- * exponential backoff on transient drops. Fatal relay close codes (room gone,
- * host conflict, room full) and decryption failures never reconnect. Host
- * frames get WS backpressure (send stalls past a buffered-amount threshold);
- * guests benefit from the same buffering for pending sends across reconnects.
+ * exponential backoff on transient drops. Close 4001 (host dropped) is
+ * transient inside the relay's host grace — see {@link shouldRetryRoomClosed}
+ * — while a room that is gone (4004), stolen (4009), full (4029), the relay
+ * stopping (1001), and decryption failures never reconnect. Host frames get
+ * WS backpressure (send stalls past a buffered-amount threshold); guests
+ * benefit from the same buffering for pending sends across reconnects.
  */
 import type { RelayControlMessage } from "@musepi/pi-wire";
 import { open, seal } from "./crypto";
 import { packEnvelope, unpackEnvelope } from "./link";
 
 const FATAL_CLOSE_REASONS: Record<number, string> = {
-	4001: "room closed",
 	4004: "no such room",
 	4009: "a host is already connected for this room",
 	4029: "room is full",
+	1001: "sharing stopped",
 };
+
+/** Relay contract: the room closed because its host dropped. */
+export const CLOSE_ROOM_CLOSED = 4001;
+/**
+ * Room-closed retry budget, shared by both collab clients (this one and the
+ * coding agent's terminal client) so a guest behaves the same in a browser and
+ * in a terminal. The relay keeps a room for 30 s after an unexpected host
+ * drop; retries inside that budget may land back in the room, and a room that
+ * is really gone answers 4004 (fatal) first anyway.
+ */
+export const ROOM_CLOSED_RETRY_MS = 30_000;
+/** How many 4001 closes one retry streak tolerates. */
+export const ROOM_CLOSED_MAX_RETRIES = 5;
+
+export interface RoomClosedRetry {
+	/** First 4001 of the current streak. */
+	since: number;
+	/** 4001 closes counted in the streak. */
+	retries: number;
+}
+
+/**
+ * Whether a guest may keep retrying after 4001. A host that stops on purpose
+ * sends a sealed `bye` first (the guest ends its own session); this window only
+ * covers the case where the socket vanished without one.
+ */
+export function shouldRetryRoomClosed(state: RoomClosedRetry, now = Date.now()): boolean {
+	return now - state.since < ROOM_CLOSED_RETRY_MS && state.retries <= ROOM_CLOSED_MAX_RETRIES;
+}
 
 const BACKOFF_BASE_MS = 1_000;
 const BACKOFF_MAX_MS = 30_000;
@@ -63,6 +94,8 @@ export class CollabSocket<TReceive, TSend = TReceive> {
 	#attempt = 0;
 	/** Terminal state: intentional close or fatal failure. Cleared by connect(). */
 	#closed = false;
+	/** 4001 retry streak state; reset by every successful open. */
+	#roomClosed: RoomClosedRetry | undefined;
 	/** Serializes seal() so frames hit the wire in send() order. */
 	#sendChain: Promise<void> = Promise.resolve();
 	/** Serializes open() so frames are delivered in arrival order. */
@@ -82,6 +115,7 @@ export class CollabSocket<TReceive, TSend = TReceive> {
 		if (this.#ws || this.#retryTimer) return;
 		this.#closed = false;
 		this.#attempt = 0;
+		this.#roomClosed = undefined;
 		this.#openSocket();
 	}
 
@@ -136,6 +170,8 @@ export class CollabSocket<TReceive, TSend = TReceive> {
 		ws.onopen = () => {
 			if (this.#ws !== ws) return;
 			this.#attempt = 0;
+			// The relay admitted the room, so any room-closed streak is over.
+			this.#roomClosed = undefined;
 			for (const envelope of this.#pendingSends) ws.send(envelope);
 			this.#pendingSends.length = 0;
 			this.onOpen?.();
@@ -207,6 +243,21 @@ export class CollabSocket<TReceive, TSend = TReceive> {
 			this.#closed = true;
 			this.#pendingSends.length = 0;
 			this.onClose?.(fatalReason, false);
+			return;
+		}
+		if (code === CLOSE_ROOM_CLOSED) {
+			const now = Date.now();
+			this.#roomClosed ??= { since: now, retries: 0 };
+			this.#roomClosed.retries++;
+			if (!shouldRetryRoomClosed(this.#roomClosed, now)) {
+				this.#closed = true;
+				this.#pendingSends.length = 0;
+				this.onClose?.("room closed", false);
+				return;
+			}
+			// Host dropped, relay still holds the room: rejoin instead of dying.
+			this.onClose?.("room closed, waiting for the host", true);
+			this.#scheduleRetry();
 			return;
 		}
 		this.onClose?.(reason || `connection lost (code ${code})`, true);

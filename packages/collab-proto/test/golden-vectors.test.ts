@@ -46,8 +46,15 @@ describe("link format golden vectors", () => {
 		expect(link).toBe("abcdefghij0123456789.AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyBBQkNERUZHSElKS0xNTk9Q");
 	});
 
-	it("non-default wss relay drops the scheme", () => {
+	it("non-default wss relay drops the scheme and keeps the secret in the fragment", () => {
 		const link = formatCollabLink("wss://relay.example.com:8443", "abcdefghij0123456789", KEY32);
+		expect(link).toBe("relay.example.com:8443/r/abcdefghij0123456789#AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA");
+	});
+
+	it("still produces the legacy path form on request", () => {
+		const link = formatCollabLink("wss://relay.example.com:8443", "abcdefghij0123456789", KEY32, undefined, {
+			keyInPath: true,
+		});
 		expect(link).toBe("relay.example.com:8443/r/abcdefghij0123456789.AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA");
 	});
 
@@ -169,7 +176,7 @@ describe("normalizeRelayOrigin plaintext policy", () => {
 	it("formats and parses a LAN share link round-trip", () => {
 		const key = new Uint8Array(32).fill(7);
 		const link = formatCollabLink("ws://192.168.1.5:7654", "roomid123456", key);
-		expect(link).toMatch(/^ws:\/\/192\.168\.1\.5:7654\/r\/roomid123456\.[A-Za-z0-9_-]+$/);
+		expect(link).toMatch(/^ws:\/\/192\.168\.1\.5:7654\/r\/roomid123456#[A-Za-z0-9_-]+$/);
 		const parsed = parseCollabLink(link);
 		if ("error" in parsed) throw new Error(parsed.error);
 		expect(parsed.wsUrl).toBe("ws://192.168.1.5:7654/r/roomid123456");

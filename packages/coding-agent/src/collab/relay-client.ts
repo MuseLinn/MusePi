@@ -2,19 +2,24 @@
  * Client-side WebSocket wrapper for collab live-session sharing.
  *
  * Connects to a relay room, seals/opens AES-GCM frames, and reconnects with
- * exponential backoff on transient drops. Fatal relay close codes (room gone,
- * host conflict, room full) and decryption failures never reconnect.
+ * exponential backoff on transient drops. Close 4001 (host dropped) is
+ * transient inside the shared retry budget — the relay keeps the room briefly
+ * so a host blip does not end every guest session. A room that is gone (4004),
+ * stolen (4009), full (4029), a relay that stopped (1001), and decryption
+ * failures never reconnect.
  */
+import { CLOSE_ROOM_CLOSED, type RoomClosedRetry, shouldRetryRoomClosed } from "@musepi/collab-proto";
 import { logger } from "@musepi/pi-utils";
 import { open, seal } from "./crypto";
 import type { CollabFrame, RelayControlMessage } from "./protocol";
 import { packEnvelope, unpackEnvelope } from "./protocol";
 
 const FATAL_CLOSE_REASONS: Record<number, string> = {
-	4001: "room closed",
 	4004: "no such room",
 	4009: "a host is already connected for this room",
 	4029: "room is full",
+	// The relay itself stopped serving; retrying cannot help.
+	1001: "sharing stopped",
 };
 
 const BACKOFF_BASE_MS = 1_000;
@@ -55,6 +60,8 @@ export class CollabSocket {
 	#attempt = 0;
 	/** Terminal state: intentional close or fatal failure. Cleared by connect(). */
 	#closed = false;
+	/** First 4001 of the current disconnect: bounds the room-closed retry budget. */
+	#roomClosed: RoomClosedRetry | undefined;
 	/** Serializes seal() so frames hit the wire in send() order. */
 	#sendChain: Promise<void> = Promise.resolve();
 	/** Serializes open() so frames are delivered in arrival order. */
@@ -83,6 +90,7 @@ export class CollabSocket {
 		if (this.#ws || this.#retryTimer) return;
 		this.#closed = false;
 		this.#attempt = 0;
+		this.#roomClosed = undefined;
 		this.#openSocket();
 	}
 
@@ -203,6 +211,8 @@ export class CollabSocket {
 		ws.onopen = () => {
 			if (this.#ws !== ws) return;
 			this.#attempt = 0;
+			// The relay admitted the room, so any earlier room-closed streak is over.
+			this.#roomClosed = undefined;
 			if (this.#pendingSends.length > 0) {
 				this.#drainPendingSends(ws);
 				if (this.#pendingSends.length > 0) this.#scheduleBackpressureDrain(ws);
@@ -275,6 +285,21 @@ export class CollabSocket {
 			this.#closed = true;
 			this.#pendingSends.length = 0;
 			this.onClose?.(fatalReason, false);
+			return;
+		}
+		if (code === CLOSE_ROOM_CLOSED) {
+			const now = Date.now();
+			this.#roomClosed ??= { since: now, retries: 0 };
+			this.#roomClosed.retries++;
+			if (!shouldRetryRoomClosed(this.#roomClosed, now)) {
+				this.#closed = true;
+				this.#pendingSends.length = 0;
+				this.onClose?.("room closed", false);
+				return;
+			}
+			// Host dropped, relay still holds the room: rejoin instead of dying.
+			this.onClose?.("room closed, waiting for the host", true);
+			this.#scheduleRetry();
 			return;
 		}
 		this.onClose?.(reason || `connection lost (code ${code})`, true);

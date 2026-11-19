@@ -1255,7 +1255,10 @@ export const ROOM_KEY_BYTES = 32;
  */
 export const WRITE_TOKEN_BYTES = 16;
 
-/** Default public relay; bare `<roomId>.<key>` links resolve against it. */
+/**
+ * Default public relay; generated links for it collapse to the bare
+ * `<roomId>.<key>` form (no origin, no path), which resolves here.
+ */
 export const DEFAULT_RELAY_URL = "wss://my.omp.sh";
 
 /** Default share viewer/upload base; `/share` links resolve against `<base>/<id>#<key>`. */

@@ -89,8 +89,9 @@ describe("CollabSocket + relay server integration", () => {
 		host.socket.close();
 	});
 
-	it("host drop tears the room down with close 4001", async () => {
-		const server = await startServer();
+	it("keeps a guest alive through a host blip: 4001 is retryable during the grace", async () => {
+		const server = await startRelayServer({ port: 0, host: "127.0.0.1", hostGraceMs: 1_000 });
+		servers.push(server);
 		const roomId = generateRoomId();
 		const key = await importRoomKey(generateRoomKey());
 		const host = await connectSocket(server.origin, "host", roomId, key);
@@ -100,8 +101,68 @@ describe("CollabSocket + relay server integration", () => {
 		});
 		await host.socket.close();
 		const result = await closed;
-		expect(result.reason).toBe("room closed");
-		expect(result.willReconnect).toBe(false);
+		expect(result.reason).toBe("room closed, waiting for the host");
+		expect(result.willReconnect).toBe(true);
+		guest.socket.close();
+	});
+
+	it("rejoins the reclaimed room after the guest retried", async () => {
+		const server = await startRelayServer({ port: 0, host: "127.0.0.1", hostGraceMs: 5_000 });
+		servers.push(server);
+		const roomId = generateRoomId();
+		const key = await importRoomKey(generateRoomKey());
+		const host = await connectSocket(server.origin, "host", roomId, key);
+		const guest = await connectSocket(server.origin, "guest", roomId, key);
+
+		const reopened = new Promise<void>(resolve => {
+			guest.socket.onOpen = () => resolve();
+		});
+		await host.socket.close();
+		// The reclaimed host must own the room before the guest's backoff retry
+		// lands; the relay retains it either way and announces the waiter.
+		const hostAgain = await connectSocket(server.origin, "host", roomId, key);
+		await reopened;
+
+		hostAgain.socket.send({ hello: "after reclaim" });
+		await waitFor(() => guest.frames.some(f => JSON.stringify(f.frame).includes("after reclaim")));
+
+		guest.socket.close();
+		hostAgain.socket.close();
+	});
+
+	it("ends guests for good when the relay stops sharing (1001)", async () => {
+		const server = await startRelayServer({ port: 0, host: "127.0.0.1" });
+		servers.push(server);
+		const roomId = generateRoomId();
+		const key = await importRoomKey(generateRoomKey());
+		const host = await connectSocket(server.origin, "host", roomId, key);
+		const guest = await connectSocket(server.origin, "guest", roomId, key);
+		const closed = new Promise<{ reason: string; willReconnect: boolean }>(resolve => {
+			guest.socket.onClose = (reason, willReconnect) => resolve({ reason, willReconnect });
+		});
+		await server.close();
+		expect(await closed).toEqual({ reason: "sharing stopped", willReconnect: false });
+		host.socket.close();
+	});
+
+	it("stays up through relay heartbeats", async () => {
+		const server = await startRelayServer({ port: 0, host: "127.0.0.1", heartbeatIntervalMs: 30 });
+		servers.push(server);
+		const roomId = generateRoomId();
+		const key = await importRoomKey(generateRoomKey());
+		const host = await connectSocket(server.origin, "host", roomId, key);
+		const guest = await connectSocket(server.origin, "guest", roomId, key);
+
+		// Five heartbeat intervals: WebSocket stacks answer pings on their own,
+		// so both peers must still be open and routing afterwards.
+		await new Promise(resolve => setTimeout(resolve, 150));
+		expect(host.socket.isOpen).toBe(true);
+		expect(guest.socket.isOpen).toBe(true);
+		host.socket.send({ hello: "still here" });
+		await waitFor(() => guest.frames.some(f => JSON.stringify(f.frame).includes("still here")));
+
+		guest.socket.close();
+		host.socket.close();
 	});
 
 	it("rejects a second host with a fatal 4009 close", async () => {
