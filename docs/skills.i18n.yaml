@@ -1,5 +1,5 @@
 # Consistency record for skills.md / skills.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/skills
-skills.md: 6f7433dcfe269f8e8d976c9ae564cffa23774937
-skills.zh-CN.md: aae90e2d71281b08239a7d36ed8ff9cf3972455a
+skills.md: 234ca9ce448017a11cf52cb629b12c73d729472c
+skills.zh-CN.md: 8787d8f3e59c3038324501da0a76cf47277d1f41
