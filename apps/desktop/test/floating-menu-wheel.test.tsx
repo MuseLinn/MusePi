@@ -98,6 +98,15 @@ function scrollList(): ReactNode {
 	return createElement("div", { className: "harness-list", style: { overflowY: "auto" } }, "item");
 }
 
+/** The same list under non-scrolling chrome — a search field and an action row,
+ *  which is where the pointer often rests when the user starts to scroll. */
+function chromeWithList(): ReactNode {
+	return [
+		createElement("div", { className: "harness-header", key: "header" }, "search"),
+		createElement("div", { className: "harness-list", key: "list", style: { overflowY: "auto" } }, "item"),
+	];
+}
+
 function wheel(el: HTMLElement, deltaY: number): void {
 	act(() => {
 		el.dispatchEvent(new window.WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true }));
@@ -149,6 +158,39 @@ describe("useFloatingMenu wheel", () => {
 		wheel(list!, 120);
 
 		expect(scrolled(), "the list had room: the transcript must not move").toBe(0);
+		expectStillOpen(menu);
+	});
+
+	test("case 1c: a wheel over the popup's non-scrolling chrome turns its inner list", () => {
+		const { el: scroller, scrolled } = scrollableContainer();
+		const { menu, list } = renderMenu(anchorIn(scroller), chromeWithList());
+		sized(list!, { scrollHeight: 640, clientHeight: 300, scrollTop: 100 });
+		const own: number[] = [];
+		list!.scrollBy = ((options: ScrollToOptions) => own.push(options.top ?? 0)) as typeof list.scrollBy;
+		const header = menu.querySelector<HTMLElement>(".harness-header")!;
+
+		// The pointer rests on the search field, above the list: the wheel must
+		// drive the list the popup frames, not the transcript behind the portal.
+		wheel(header, 120);
+
+		expect(scrolled(), "reported bug: chrome over a list still scrolled the background").toBe(0);
+		expect(own, "the popup's own list must take the wheel").toEqual([120]);
+
+		// Second tick: the resolved owner is cached per placement, so it must
+		// keep driving the same list instead of re-walking the subtree.
+		wheel(header, 120);
+		expect(own, "the cached owner must serve the next tick").toEqual([120, 120]);
+		expect(scrolled()).toBe(0);
+		expectStillOpen(menu);
+	});
+
+	test("case 3b: chrome with nothing scrollable inside still forwards to the page", () => {
+		const { el: scroller, scrolled } = scrollableContainer();
+		const { menu } = renderMenu(anchorIn(scroller), createElement("div", { className: "harness-header" }, "search"));
+
+		wheel(menu.querySelector<HTMLElement>(".harness-header")!, 120);
+
+		expect(scrolled(), "a menu with nothing to scroll must not trap the wheel").toBe(120);
 		expectStillOpen(menu);
 	});
 

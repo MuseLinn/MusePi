@@ -170,9 +170,13 @@ const SURFACES: readonly Surface[] = [
  * Page-level scroll boxes. They must keep chaining: their ancestor is the
  * shell, not the page root, and a transcript that swallows the wheel at its
  * own edge would strand touch users inside the chat.
+ *
+ * `.gui-transcript` is the real chat scroller (`ChatView.tsx:3401` carries
+ * Tailwind `overflow-y-auto`); the `.gui-chat-scroll` rule in gui-chrome.css
+ * has no consumer and is not what these tests are guarding.
  */
 const PAGE_SCROLLERS = [
-	{ file: "apps/desktop/src/styles/gui-chrome.css", selector: ".gui-chat-scroll" },
+	{ file: "apps/desktop/src/styles/gui-chat.css", selector: ".gui-transcript" },
 	{ file: "packages/client-core/src/components/transcript/transcript.css", selector: ".tr-root" },
 	{ file: "apps/desktop/src/styles/gui-chat.css", selector: ".gui-right-rail-scroll" },
 	{ file: "packages/client-core/src/components/shell/shell.css", selector: ".sh-ws-sidebar" },
@@ -326,12 +330,18 @@ describe("floating surfaces contain their scroll chain", () => {
 	});
 
 	test("page-level scrollers keep chaining", () => {
+		// Every sheet is scanned, not just the one that defines the selector: a
+		// later sheet adding containment would trap the wheel just as well.
+		const sheets = new Set(SURFACES.map(surface => surface.file));
+		for (const file of PAGE_SCROLLERS.map(page => page.file)) sheets.add(file);
 		for (const page of PAGE_SCROLLERS) {
-			const declared = rulesOf(page.file)
-				.filter(rule => declares(rule, page.selector))
-				.map(rule => rule.declarations.get("overscroll-behavior"))
-				.filter((value): value is string => value !== undefined);
-			expect(declared, `${page.selector} must not contain: it is a page-level scroller`).toEqual([]);
+			for (const file of sheets) {
+				const declared = rulesOf(file)
+					.filter(rule => declares(rule, page.selector))
+					.map(rule => rule.declarations.get("overscroll-behavior"))
+					.filter((value): value is string => value !== undefined);
+				expect(declared, `${page.selector} must not contain in ${file}: it is a page-level scroller`).toEqual([]);
+			}
 		}
 	});
 });
