@@ -40,16 +40,21 @@ function nearestScrollable(start: HTMLElement | null): HTMLElement | null {
 	return null;
 }
 
+/** Whether `el` scrolls vertically right now. Both callers read the computed
+ *  overflow and the scroll range, so a box that stopped overflowing stops
+ *  being a wheel target. */
+function isVerticalScroller(el: HTMLElement): boolean {
+	const { overflowY } = getComputedStyle(el);
+	return /(auto|scroll|overlay)/.test(overflowY) && el.scrollHeight > el.clientHeight + 1;
+}
+
 /** Nearest box between `node` and `stop` (inclusive) that can scroll vertically.
  *  Measured from the wheel's own target, because a popup can hold a scrolling
  *  list inside a wrapper that does not scroll itself. */
 function scrollableUnder(node: EventTarget | null, stop: HTMLElement): HTMLElement | null {
 	let el: Element | null = node instanceof Element ? node : null;
 	while (el) {
-		if (el instanceof HTMLElement) {
-			const { overflowY } = getComputedStyle(el);
-			if (/(auto|scroll|overlay)/.test(overflowY) && el.scrollHeight > el.clientHeight + 1) return el;
-		}
+		if (el instanceof HTMLElement && isVerticalScroller(el)) return el;
 		if (el === stop) return null;
 		el = el.parentElement;
 	}
@@ -64,8 +69,7 @@ function scrollableUnder(node: EventTarget | null, stop: HTMLElement): HTMLEleme
  *  with hundreds of rows. */
 function firstScrollableWithin(root: HTMLElement): HTMLElement | null {
 	for (const el of root.querySelectorAll<HTMLElement>("*")) {
-		const { overflowY } = getComputedStyle(el);
-		if (/(auto|scroll|overlay)/.test(overflowY) && el.scrollHeight > el.clientHeight + 1) return el;
+		if (isVerticalScroller(el)) return el;
 	}
 	return null;
 }
@@ -429,9 +433,10 @@ export function useFloatingMenu(
 					// padding): the wheel belongs to the list the popup frames,
 					// not to the page behind the portal.
 					let own = scrollOwnerRef.current;
-					// A detached owner (rows re-rendered) must be resolved again,
-					// or the wheel would land on an orphan node and be lost.
-					if (own && !own.isConnected) own = undefined;
+					// A detached owner (rows re-rendered) or one that stopped
+					// overflowing must be resolved again, or the wheel would land
+					// on an orphan box and be lost.
+					if (own && (!own.isConnected || !isVerticalScroller(own))) own = undefined;
 					if (own === undefined) {
 						own = firstScrollableWithin(el);
 						scrollOwnerRef.current = own;

@@ -194,6 +194,26 @@ describe("useFloatingMenu wheel", () => {
 		expectStillOpen(menu);
 	});
 
+	test("case 1d: a cached owner that stops overflowing is resolved again", () => {
+		const { el: scroller, scrolled } = scrollableContainer();
+		const { menu, list } = renderMenu(anchorIn(scroller), chromeWithList());
+		const box = { scrollHeight: 640, clientHeight: 300, scrollTop: 100 };
+		sized(list!, box);
+		const own: number[] = [];
+		list!.scrollBy = ((options: ScrollToOptions) => own.push(options.top ?? 0)) as typeof list.scrollBy;
+		const header = menu.querySelector<HTMLElement>(".harness-header")!;
+
+		wheel(header, 120);
+		// The filtered list no longer overflows; the cached owner must be
+		// re-validated instead of swallowing the next tick.
+		box.scrollHeight = 300;
+		wheel(header, 120);
+
+		expect(own, "only the first tick belonged to the list").toEqual([120]);
+		expect(scrolled(), "with nothing scrollable left, the page takes the wheel").toBe(120);
+		expectStillOpen(menu);
+	});
+
 	test("case 2: a scrollable popup at its end stops instead of chaining to the page", () => {
 		const { el: scroller, scrolled } = scrollableContainer();
 		const { menu } = renderMenu(anchorIn(scroller), "item", {
