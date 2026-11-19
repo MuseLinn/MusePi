@@ -1177,6 +1177,9 @@ export function ModelSection({
 				label={t("settings.loginToWithName", { name: providerDisplayName(s?.providerId ?? "") })}
 				onClose={() => void onCancelLogin()}
 				className="gui-dialog--confirm gui-provider-flow-dialog"
+				morphKey={`${s ? "open" : "closed"}:${s?.url ? "url" : ""}:${s?.instructions ? "instructions" : ""}:${
+					s?.message ? "message" : ""
+				}:${s?.waitingInput ? "input" : ""}`}
 			>
 				{s && (
 					<div className="gui-github-flow">

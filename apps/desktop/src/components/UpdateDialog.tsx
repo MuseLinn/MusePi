@@ -217,7 +217,13 @@ export function UpdateDialog(): ReactNode {
 	// the 180ms exit animation internally; unmounting it here would kill the
 	// closing motion (AGENTS.md GUI rule).
 	return (
-		<DialogFrame open={open} onClose={close} className="gui-dialog--confirm" label={title}>
+		<DialogFrame
+			open={open}
+			onClose={close}
+			className="gui-dialog--confirm"
+			label={title}
+			morphKey={`${mode}:${failureInfo?.kind ?? ""}:${installing}:${localizedNotes ? "notes" : ""}`}
+		>
 			<h3 className="text-base font-semibold">{title}</h3>
 			{mode === "reboot" && version && <div className="mt-1 text-sm opacity-70">v{version}</div>}
 			<p className="mt-2 text-sm">{body}</p>

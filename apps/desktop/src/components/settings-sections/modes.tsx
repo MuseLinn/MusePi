@@ -387,6 +387,7 @@ export function ModesSection({
 				onClose={() => setViewState({ status: "idle" })}
 				label={t("settings.modesViewTitle")}
 				className="w-[560px] max-w-[92vw]"
+				morphKey={viewState.status}
 			>
 				{viewState.status !== "idle" && (
 					<>

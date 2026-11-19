@@ -615,7 +615,12 @@ export function ConnectDialog({
 	);
 	if (!framed) return <div className="gui-connect-embedded">{content}</div>;
 	return (
-		<DialogFrame open={open} onClose={onClose} label={t("settings.remoteConnection")}>
+		<DialogFrame
+			open={open}
+			onClose={onClose}
+			label={t("settings.remoteConnection")}
+			morphKey={`${step}:${method ?? ""}:${selectedHost ?? ""}`}
+		>
 			{content}
 		</DialogFrame>
 	);
