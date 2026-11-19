@@ -411,7 +411,9 @@
 	align-items: center;
 	gap: 4px;
 	height: 22px;
-	overflow: hidden;
+	/* The remove button sits on the thumbnail's corner (−6px), so the row
+	 * must not clip its own children. Four 22px chips always fit the pill. */
+	overflow: visible;
 	animation: pet-quickbar-attachments-in 160ms var(--ease-appear-snappy) 140ms both;
 }
 
@@ -443,12 +445,12 @@
 
 .pet-window__quickbar-attachment-remove {
 	position: absolute;
-	top: -5px;
-	right: -5px;
+	top: -6px;
+	right: -6px;
 	display: grid;
 	place-items: center;
-	width: 13px;
-	height: 13px;
+	width: 16px;
+	height: 16px;
 	padding: 0;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-full);
@@ -457,15 +459,28 @@
 	cursor: pointer;
 }
 
-.pet-window__quickbar-attach-error {
+.pet-window__quickbar-attachment-remove:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, var(--color-surface-raised));
+}
+
+.pet-window__quickbar-btn--lead[data-busy] {
+	color: var(--color-accent);
+	animation: pet-quickbar-busy 700ms ease-in-out infinite;
+}
+
+.pet-window__quickbar-attach-status {
 	position: absolute;
 	right: 6px;
 	bottom: calc(100% + 4px);
-	color: var(--color-danger);
+	color: color-mix(in oklab, var(--color-text) 72%, transparent);
 	font-size: 11px;
 	line-height: 1.3;
 	text-align: right;
 	text-shadow: 0 1px 2px rgb(0 0 0 / 0.55);
+}
+
+.pet-window__quickbar-attach-status--error {
+	color: var(--color-danger);
 }
 
 /* Add menu inside the composer: images, screenshot, voice and the main window

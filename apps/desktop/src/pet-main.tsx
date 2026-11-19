@@ -217,6 +217,10 @@ function PetApp(): ReactNode {
 	attachmentsRef.current = attachments;
 	const [attachError, setAttachError] = useState<string | null>(null);
 	const attachErrorTimer = useRef<number | null>(null);
+	/** A pick or capture is still being read — send waits for it. */
+	const [attachPending, setAttachPending] = useState(false);
+	const composerOpenRef = useRef(false);
+	composerOpenRef.current = composerOpen;
 	const imagePickerRef = useRef<HTMLInputElement>(null);
 	// The OS file dialog takes focus away from this window. That blur is not
 	// a dismissal — the composer must survive the pick and still be there to
@@ -406,6 +410,7 @@ function PetApp(): ReactNode {
 		setComposerText("");
 		setAttachments([]);
 		setAttachError(null);
+		setAttachPending(false);
 		void bridge?.petComposerFocus?.(false);
 	}, [bridge]);
 
@@ -436,14 +441,20 @@ function PetApp(): ReactNode {
 			if (usable.length < images.length) showAttachError(t("settings.petQuickbarImageTooLarge"));
 			if (images.length > room) showAttachError(t("settings.petQuickbarAttachLimit"));
 			if (usable.length === 0) return;
-			void Promise.all(usable.slice(0, room).map(readImageAttachment)).then(loaded => {
-				const accepted = loaded.filter((item): item is PetAttachment => item !== null);
-				if (accepted.length === 0) {
-					showAttachError(t("settings.petQuickbarImageTooLarge"));
-					return;
-				}
-				setAttachments(current => [...current, ...accepted].slice(0, PET_ATTACHMENT_LIMIT));
-			});
+			setAttachPending(true);
+			void Promise.all(usable.slice(0, room).map(readImageAttachment))
+				.then(loaded => {
+					// The field can be folded while the reader runs; thumbnails
+					// belong to the open message, not to the next one.
+					if (!composerOpenRef.current) return;
+					const accepted = loaded.filter((item): item is PetAttachment => item !== null);
+					if (accepted.length === 0) {
+						showAttachError(t("settings.petQuickbarImageTooLarge"));
+						return;
+					}
+					setAttachments(current => [...current, ...accepted].slice(0, PET_ATTACHMENT_LIMIT));
+				})
+				.finally(() => setAttachPending(false));
 		},
 		[showAttachError],
 	);
@@ -457,10 +468,11 @@ function PetApp(): ReactNode {
 			showAttachError(t("settings.petQuickbarAttachLimit"));
 			return;
 		}
+		setAttachPending(true);
 		void capture()
 			.then(result => {
 				const dataUrl = result?.dataUrl;
-				if (!dataUrl?.startsWith("data:image/")) return;
+				if (!dataUrl?.startsWith("data:image/") || !composerOpenRef.current) return;
 				const mimeType = dataUrl.slice(5, dataUrl.indexOf(";")) || "image/png";
 				setAttachments(current =>
 					current.length >= PET_ATTACHMENT_LIMIT
@@ -468,7 +480,8 @@ function PetApp(): ReactNode {
 						: [...current, { id: crypto.randomUUID(), name: "screenshot.png", dataUrl, mimeType }],
 				);
 			})
-			.catch(() => {});
+			.catch(() => {})
+			.finally(() => setAttachPending(false));
 	}, [bridge, showAttachError]);
 
 	const removeAttachment = useCallback((id: string): void => {
@@ -527,6 +540,9 @@ function PetApp(): ReactNode {
 			closeComposer();
 			return;
 		}
+		// A read/capture still in flight: sending now would silently drop the
+		// thumbnails the user just picked.
+		if (attachPending) return;
 		const images = attachmentsRef.current
 			.map(attachment => ({
 				type: "image" as const,
@@ -538,7 +554,7 @@ function PetApp(): ReactNode {
 		// chat first would create a second, empty one.
 		void bridge?.petQuickSend?.(text, images.length > 0 ? images : undefined);
 		closeComposer();
-	}, [composerText, closeComposer]);
+	}, [composerText, closeComposer, attachPending]);
 
 	// Focus the field once the surface has begun morphing, so the caret
 	// appears in a field that is already visible rather than in one that
@@ -560,21 +576,26 @@ function PetApp(): ReactNode {
 		return () => window.removeEventListener("pointerdown", onPointer, true);
 	}, [quickMenuOpen]);
 
-	// Escape closes the composer. It is bound on the window, not only on the
-	// input: the field can lose focus (the click-through poll, a native
-	// focus change) and a key event that goes nowhere would leave the pet
-	// holding an open composer the user cannot dismiss.
+	// Escape dismisses the TOP layer first: the add menu while it is open, and
+	// only then the composer. It is bound on the window, not only on the input:
+	// the field can lose focus (the click-through poll, a native focus change)
+	// and a key event that goes nowhere would leave the pet holding an open
+	// composer the user cannot dismiss.
 	useEffect(() => {
 		if (!composerOpen) return;
 		const onKey = (event: KeyboardEvent): void => {
 			if (event.key === "Escape") {
 				event.preventDefault();
+				if (quickMenuOpen) {
+					setQuickMenuOpen(false);
+					return;
+				}
 				closeComposer();
 			}
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [composerOpen, closeComposer]);
+	}, [composerOpen, closeComposer, quickMenuOpen]);
 
 	// The composer must not survive the pet being hidden: an invisible text
 	// field holding the keyboard focus would strand the user.
@@ -600,13 +621,21 @@ function PetApp(): ReactNode {
 		window.addEventListener("blur", onBlur);
 		// The system picker returning focus is the only signal a cancelled
 		// pick gives — clearing the flag here keeps a later blur honest.
+		// Chromium also fires `cancel` on the input itself; that arrives
+		// without the focus round-trip and is the reliable reset.
 		const onFocus = (): void => {
 			pickingRef.current = false;
 		};
 		window.addEventListener("focus", onFocus);
+		const picker = imagePickerRef.current;
+		const onPickerCancel = (): void => {
+			pickingRef.current = false;
+		};
+		picker?.addEventListener("cancel", onPickerCancel);
 		return () => {
 			window.removeEventListener("blur", onBlur);
 			window.removeEventListener("focus", onFocus);
+			picker?.removeEventListener("cancel", onPickerCancel);
 		};
 	}, [composerOpen, closeComposer]);
 
@@ -1331,6 +1360,19 @@ function PetApp(): ReactNode {
 					aria-label={t("settings.petQuickbarLabel")}
 					aria-hidden={petNear || composerOpen ? undefined : true}
 					onPointerDown={e => e.stopPropagation()}
+					onDragOver={e => {
+						if (!composerOpen) return;
+						if ([...e.dataTransfer.items].some(item => item.kind === "file" && item.type.startsWith("image/"))) {
+							e.preventDefault();
+						}
+					}}
+					onDrop={e => {
+						if (!composerOpen) return;
+						const files = [...e.dataTransfer.files].filter(file => file.type.startsWith("image/"));
+						if (files.length === 0) return;
+						e.preventDefault();
+						addImageFiles(files);
+					}}
 				>
 					<input
 						ref={imagePickerRef}
@@ -1346,11 +1388,14 @@ function PetApp(): ReactNode {
 							requestAnimationFrame(() => composerRef.current?.focus());
 						}}
 					/>
-					{attachError && (
-						<span className="pet-window__quickbar-attach-error" role="alert">
-							{attachError}
+					{attachError || attachPending ? (
+						<span
+							className={`pet-window__quickbar-attach-status${attachError ? " pet-window__quickbar-attach-status--error" : ""}`}
+							role={attachError ? "alert" : "status"}
+						>
+							{attachError ?? t("settings.petQuickbarPreparingImages")}
 						</span>
-					)}
+					) : null}
 					{attachments.length > 0 && (
 						<div
 							className="pet-window__quickbar-attachments"
@@ -1470,6 +1515,8 @@ function PetApp(): ReactNode {
 							aria-label={t("settings.petQuickbarAdd")}
 							title={t("settings.petQuickbarAdd")}
 							aria-expanded={quickMenuOpen}
+							aria-busy={attachPending}
+							data-busy={attachPending ? "" : undefined}
 							tabIndex={composerOpen ? 0 : -1}
 							onClick={() => setQuickMenuOpen(open => !open)}
 						>
@@ -1478,18 +1525,34 @@ function PetApp(): ReactNode {
 						<input
 							ref={composerRef}
 							className="pet-window__quickbar-input"
-							placeholder={t("settings.petQuickbarPlaceholder")}
+							placeholder={
+								attachments.length > 0
+									? t("settings.petQuickbarImagePlaceholder")
+									: t("settings.petQuickbarPlaceholder")
+							}
 							value={composerText}
 							tabIndex={composerOpen ? 0 : -1}
 							aria-label={t("settings.petQuickbarLabel")}
 							onChange={e => setComposerText(e.target.value)}
+							onPaste={e => {
+								// A screenshot lives on the clipboard as an image; a plain
+								// text input would otherwise silently ignore it.
+								const files = Array.from(e.clipboardData?.items ?? [])
+									.filter(item => item.kind === "file" && item.type.startsWith("image/"))
+									.map(item => item.getAsFile())
+									.filter((file): file is File => file !== null);
+								if (files.length === 0) return;
+								e.preventDefault();
+								addImageFiles(files);
+							}}
 							onKeyDown={e => {
 								if (e.key === "Enter") {
 									e.preventDefault();
 									submitComposer();
 								} else if (e.key === "Escape") {
 									e.preventDefault();
-									closeComposer();
+									if (quickMenuOpen) setQuickMenuOpen(false);
+									else closeComposer();
 								}
 							}}
 						/>
@@ -1499,7 +1562,7 @@ function PetApp(): ReactNode {
 							aria-label={t("settings.petQuickbarSend")}
 							title={t("settings.petQuickbarSend")}
 							tabIndex={composerOpen ? 0 : -1}
-							disabled={!composerText.trim()}
+							disabled={!composerText.trim() || attachPending}
 							onClick={() => submitComposer()}
 						>
 							<MorphIcon icon={ArrowUp} size={13} />
