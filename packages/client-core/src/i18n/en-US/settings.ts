@@ -563,7 +563,7 @@ export const settings = {
 	"settings.shareLink": "Share link",
 	"settings.shareCurrentSession": "Share current session",
 	"settings.remoteAccessIntro":
-		"Phones and browsers can join this workspace. Choose a scope and network path, then start sharing; the QR code appears once the share is live.",
+		"Phones and browsers can join this share. Choose a network path, then start sharing; the QR code appears once the share is live.",
 	"settings.shareSessionScopeHint": "Guests only see the session “{title}”.",
 	"settings.shareExposure": "Network path",
 	"settings.exposureLan": "Local network",
@@ -599,7 +599,6 @@ export const settings = {
 	"settings.loadingExposures": "Loading network paths…",
 	"settings.recheckExposures": "Check again",
 	"settings.settings": "Settings",
-	"settings.scanConnect": "Scan to connect",
 	"settings.ready": "Ready",
 	"settings.stop": "Stop",
 	"settings.refreshQrCode": "Refresh QR code",
@@ -607,8 +606,6 @@ export const settings = {
 	"settings.linkCopied": "Copied",
 	"settings.copied": "Copied",
 	"settings.startSharing": "Start sharing",
-	'share session "{title}" live on the local network':
-		"Share the current session “{title}” live on the local network; scan with your phone to join.",
 	"settings.openCreateSessionFirst": "Open or create a session first, then start sharing.",
 	"settings.stopSharing": "Stop sharing",
 	"settings.viewInstallGuide": "View installation guide",

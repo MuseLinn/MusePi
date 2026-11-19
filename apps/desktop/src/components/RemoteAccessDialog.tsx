@@ -530,6 +530,8 @@ export function RemoteAccessDialog({
 			case "previous share ended":
 			case "restarting share with a different scope":
 				return t("settings.shareEndedRestarted");
+			case "share already ended":
+				return t("settings.shareEndedGeneric");
 			default:
 				return end.reason || t("settings.shareEndedGeneric");
 		}
@@ -878,18 +880,19 @@ export function RemoteAccessDialog({
 									))}
 								</div>
 							) : null}
-							{error ? errorBlock : null}
-							<button
-								type="button"
-								className="gui-btn gui-btn-primary gui-collab-start"
-								disabled={!canShare}
-								onClick={() => void startShare()}
-							>
-								<Icon name="send-plane" className="h-3.5 w-3.5" />
-								<span>
-									{busy ? t("settings.starting") : error ? t("settings.retry") : t("settings.startSharing")}
-								</span>
-							</button>
+							{error ? (
+								errorBlock
+							) : (
+								<button
+									type="button"
+									className="gui-btn gui-btn-primary gui-collab-start"
+									disabled={!canShare}
+									onClick={() => void startShare()}
+								>
+									<Icon name="send-plane" className="h-3.5 w-3.5" />
+									<span>{busy ? t("settings.starting") : t("settings.startSharing")}</span>
+								</button>
+							)}
 						</div>
 					)}
 				</section>

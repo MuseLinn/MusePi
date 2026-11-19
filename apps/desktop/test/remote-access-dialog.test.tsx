@@ -192,7 +192,11 @@ describe("RemoteAccessDialog sharing surface", () => {
 			expect(visible?.textContent).toContain("检查网络方式后重试");
 			expect(visible?.textContent).not.toContain("relay port unavailable");
 			expect(alert?.querySelector("details")?.textContent).toContain("relay port unavailable");
-			expect(findButton(dialog, "重试")).toBeDefined();
+			const retries = Array.from(dialog.querySelectorAll("button")).filter(el => el.textContent?.includes("重试"));
+			expect(retries).toHaveLength(1);
+			expect(Array.from(dialog.querySelectorAll("button")).some(el => el.textContent?.includes("开始共享"))).toBe(
+				false,
+			);
 
 			clickRadio(dialog, "网络方式", "Cloudflare Tunnel");
 			expect(dialog.querySelector('.gui-collab-share [role="alert"]')).toBeNull();
@@ -212,6 +216,8 @@ describe("RemoteAccessDialog sharing surface", () => {
 			expect(radioGroup(dialog, "共享范围")).toBeNull();
 			expect(dialog.textContent).not.toContain("Secret Demo");
 			expect(dialog.textContent).toContain("共享整个工作台");
+			expect(dialog.textContent).toContain("选择网络方式后开始共享");
+			expect(dialog.textContent).not.toContain("选择范围");
 
 			clickButton(dialog, "开始共享");
 			await flush();
@@ -282,6 +288,29 @@ describe("RemoteAccessDialog sharing surface", () => {
 			expect(dialog.textContent).toContain("分享链路中断，旧链接已失效。");
 			expect(dialog.textContent).toContain("Check the tunnel and retry.");
 			expect(dialog.textContent).toContain("connection reset by peer");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("a defensive daemon reason stays localized", async () => {
+		const harness = await renderDialog(
+			rpcStub({
+				status: {
+					hosting: false,
+					lastEnd: {
+						exposure: "lan",
+						health: "stopped",
+						at: "2026-11-19T10:00:00.000Z",
+						reason: "share already ended",
+					},
+				},
+			}),
+		);
+		try {
+			const dialog = harness.dialog();
+			expect(dialog.textContent).toContain("分享已结束。");
+			expect(dialog.textContent).not.toContain("share already ended");
 		} finally {
 			await harness.unmount();
 		}
