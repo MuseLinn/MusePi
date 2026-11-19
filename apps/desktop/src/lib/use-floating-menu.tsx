@@ -40,6 +40,40 @@ function nearestScrollable(start: HTMLElement | null): HTMLElement | null {
 	return null;
 }
 
+/** Whether `el` scrolls vertically right now. Both callers read the computed
+ *  overflow and the scroll range, so a box that stopped overflowing stops
+ *  being a wheel target. */
+function isVerticalScroller(el: HTMLElement): boolean {
+	const { overflowY } = getComputedStyle(el);
+	return /(auto|scroll|overlay)/.test(overflowY) && el.scrollHeight > el.clientHeight + 1;
+}
+
+/** Nearest box between `node` and `stop` (inclusive) that can scroll vertically.
+ *  Measured from the wheel's own target, because a popup can hold a scrolling
+ *  list inside a wrapper that does not scroll itself. */
+function scrollableUnder(node: EventTarget | null, stop: HTMLElement): HTMLElement | null {
+	let el: Element | null = node instanceof Element ? node : null;
+	while (el) {
+		if (el instanceof HTMLElement && isVerticalScroller(el)) return el;
+		if (el === stop) return null;
+		el = el.parentElement;
+	}
+	return null;
+}
+
+/** First vertical scroller inside the popup. A wheel over the popup's own
+ *  chrome (search field, header row, padding) belongs to the list it frames,
+ *  not to the page behind the portal. Only read when the pointer missed every
+ *  scroller, and the caller caches it per placement — walking the subtree and
+ *  reading computed styles on each wheel tick is not affordable for a menu
+ *  with hundreds of rows. */
+function firstScrollableWithin(root: HTMLElement): HTMLElement | null {
+	for (const el of root.querySelectorAll<HTMLElement>("*")) {
+		if (isVerticalScroller(el)) return el;
+	}
+	return null;
+}
+
 /**
  * Fixed-position floating menu anchored to a button (openchamber/radix
  * semantics): rendered through a portal into document.body so no ancestor's
@@ -116,6 +150,11 @@ export function useFloatingMenu(
 	// (Base-UI/floating-ui flip+shift parity, hand-rolled).
 	const menuRef = useRef<HTMLDivElement | null>(null);
 	const measuredRef = useRef(false);
+	/** The popup's own scroller, resolved from the subtree on the first wheel
+	 *  that lands on non-scrolling chrome. `undefined` = not resolved yet,
+	 *  `null` = resolved and nothing scrolls. Placements change the clamp and
+	 *  may re-mount rows, so it is dropped on every open / re-position. */
+	const scrollOwnerRef = useRef<HTMLElement | null | undefined>(undefined);
 	// Declarative anchor (Pop parity): an element passed straight in beats
 	// the imperative callback ref — read at positioning time so the layout
 	// effect below sees it on the SAME commit the menu opens. A point
@@ -239,10 +278,19 @@ export function useFloatingMenu(
 	useLayoutEffect(() => {
 		if (!open) {
 			measuredRef.current = false;
+			scrollOwnerRef.current = undefined;
 			return;
 		}
 		positionMenu(true);
 	}, [open, align, side]);
+
+	// A placement change can re-clamp the popup and change which descendant
+	// scrolls, so the cached owner is dropped whenever `pos` becomes a new
+	// object (positionMenu dedupes identical placements, so plain scrolling
+	// does not invalidate it).
+	useEffect(() => {
+		scrollOwnerRef.current = undefined;
+	}, [open, pos]);
 
 	// Re-position on scroll/resize: an anchor inside a scrolling container
 	// (settings provider cards, onboarding provider list) moves with the
@@ -374,17 +422,32 @@ export function useFloatingMenu(
 				onWheel={event => {
 					const el = menuRef.current;
 					if (!el) return;
-					// The popup owns the wheel while it still has room to scroll
-					// in this direction.
-					const canScroll = el.scrollHeight > el.clientHeight + 1;
-					const atTop = el.scrollTop <= 0;
-					const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
-					if (canScroll && !((event.deltaY < 0 && atTop) || (event.deltaY > 0 && atBottom))) return;
-					// At an edge — or too short to scroll at all — the gesture
-					// belongs to the surface the menu is attached to. Closing here
-					// dropped the menu whenever the pointer happened to rest over a
-					// short list while the wheel moved the page; an open menu is
-					// already re-positioned with its anchor by the scroll listener.
+					// A scrollable box under the pointer owns the gesture: it
+					// scrolls natively while it has room, and at either edge its
+					// own `overscroll-behavior: contain` stops the chain. Adding
+					// a forwarded scroll on top of that moved the surface behind
+					// the menu (user: 浮层滚到头后背景跟着滚) — the popup is
+					// portaled, so the gesture never belonged to the page.
+					if (scrollableUnder(event.target, el)) return;
+					// The pointer missed every scroller (search field, header row,
+					// padding): the wheel belongs to the list the popup frames,
+					// not to the page behind the portal.
+					let own = scrollOwnerRef.current;
+					// A detached owner (rows re-rendered) or one that stopped
+					// overflowing must be resolved again, or the wheel would land
+					// on an orphan box and be lost.
+					if (own && (!own.isConnected || !isVerticalScroller(own))) own = undefined;
+					if (own === undefined) {
+						own = firstScrollableWithin(el);
+						scrollOwnerRef.current = own;
+					}
+					if (own) {
+						const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? own.clientHeight : 1;
+						own.scrollBy({ top: event.deltaY * scale });
+						return;
+					}
+					// Nothing inside the popup can scroll at all: the gesture
+					// belongs to the surface the menu is attached to.
 					const target =
 						nearestScrollable(anchorOption instanceof HTMLElement ? anchorOption : anchorRef.current) ??
 						document.querySelector<HTMLElement>(".gui-transcript") ??

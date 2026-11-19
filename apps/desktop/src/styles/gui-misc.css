@@ -673,6 +673,7 @@
 	 * this body a horizontal scroll container: one rounding pixel on the cross
 	 * axis raised a sideways rail in a dialog that has nothing to scroll. */
 	overflow: hidden auto;
+	overscroll-behavior: contain;
 }
 
 .gui-project-dialog-heading {
@@ -3035,6 +3036,7 @@
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	padding: 10px 12px;
 	display: flex;
 	flex-direction: column;

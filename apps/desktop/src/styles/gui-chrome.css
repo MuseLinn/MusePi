@@ -2473,6 +2473,7 @@
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	/* Feather each edge only while content hides behind it. Hard-clipping a
 	 * scrolling list against the dialog's rounded border reads as a rendering
 	 * fault, and a permanent mask would dim the first and last row of a dialog
@@ -2569,6 +2570,7 @@
 	min-height: 0;
 	flex: 1 1 auto;
 	overflow-y: auto;
+	overscroll-behavior: contain;
 	padding: 16px 20px 20px;
 }
 .gui-instance-manager-panel {
