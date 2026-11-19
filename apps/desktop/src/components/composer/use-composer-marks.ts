@@ -1,8 +1,5 @@
+import type { EditorMark, MentionPreview } from "@musepi/client-core/src/components/composer/composer-editor-types";
 import { useCallback, useMemo } from "react";
-import type {
-	EditorMark,
-	MentionPreview,
-} from "@musepi/client-core/src/components/composer/composer-editor-types";
 import { resolveMentionChip } from "./mention-token";
 import { HL_CLASS, parseHighlightSpans } from "./token-spans";
 import type { ComposerAttachment } from "./use-attachments";
