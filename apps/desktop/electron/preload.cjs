@@ -253,7 +253,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	 *  for the caret to land in it, and non-focusable again afterwards. */
 	petComposerFocus: (focusable) => ipcRenderer.invoke("pet-composer-focus", focusable === true),
 	/** Send the quick-bar composer's text (and its image attachments) as a new chat. */
-	petQuickSend: (text, images) => ipcRenderer.invoke("pet-quick-send", { text, images: Array.isArray(images) ? images : [] }),
+	petQuickSend: (text, images, files) =>
+	ipcRenderer.invoke("pet-quick-send", {
+		text,
+		images: Array.isArray(images) ? images : [],
+		files: Array.isArray(files) ? files : [],
+	}),
 	/** Pet window: normalized gaze vector (cursor offset from the window
 	 *  centre, clamped to ±1) — drives eye tracking on the builtin sprite. */
 	onPetGaze: (cb) => {

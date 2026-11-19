@@ -2158,6 +2158,25 @@ ipcMain.handle("pet-quick-send", (_event, payload) => {
 	// { text, images } so photos and screenshots travel with the prompt.
 	const text = typeof payload === "string" ? payload : payload?.text;
 	const rawImages = typeof payload === "object" && payload ? payload.images : null;
+	const rawFiles = typeof payload === "object" && payload ? payload.files : null;
+	const files = Array.isArray(rawFiles)
+		? rawFiles
+				.filter(
+					file =>
+						file &&
+						typeof file.name === "string" &&
+						typeof file.mimeType === "string" &&
+						((typeof file.path === "string" && file.path.length > 0) ||
+							(typeof file.data === "string" && file.data.length > 0)),
+				)
+				.slice(0, 4)
+				.map(file => ({
+					name: file.name,
+					mimeType: file.mimeType,
+					...(typeof file.path === "string" && file.path ? { path: file.path } : {}),
+					...(typeof file.data === "string" && file.data ? { data: file.data } : {}),
+				}))
+		: [];
 	const images = Array.isArray(rawImages)
 		? rawImages
 				.filter(
@@ -2176,6 +2195,7 @@ ipcMain.handle("pet-quick-send", (_event, payload) => {
 			type: "new-chat-send",
 			text: text.trim(),
 			...(images.length > 0 ? { images } : {}),
+			...(files.length > 0 ? { files } : {}),
 		});
 		focusMainFromPet();
 	}

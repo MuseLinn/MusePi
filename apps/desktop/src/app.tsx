@@ -3542,6 +3542,7 @@ function AppInner(): ReactNode {
 							requestId?: string;
 							approved?: boolean;
 							images?: { type: "image"; data: string; mimeType: string }[];
+							files?: { name: string; mimeType: string; path?: string; data?: string }[];
 						}) => void,
 					): () => void;
 					computerGlow?(on: boolean): Promise<unknown>;
@@ -3965,9 +3966,45 @@ function AppInner(): ReactNode {
 						typeof image.mimeType === "string" &&
 						image.mimeType.startsWith("image/"),
 				);
-				void createSession().then(id => {
-					if (id) void sendPrompt(text, images.length > 0 ? images : undefined, id);
-				});
+				const files = (cmd.files ?? []).slice(0, 4);
+				const client = rpcRef.current;
+				if (files.length > 0 && !client) return;
+				// Non-image files travel as attachment references: the daemon
+				// owns the bytes (attachment.putFile for a same-machine path,
+				// attachment.put for an inlined Blob) and the prompt carries the
+				// same [Attachment] lines the main composer emits.
+				void (async () => {
+					const refs: string[] = [];
+					for (const file of files) {
+						try {
+							const result = file.path
+								? await client!.request<{ url?: string; error?: string }>("attachment.putFile", {
+										path: file.path,
+										name: file.name,
+										mimeType: file.mimeType,
+									})
+								: await client!.request<{ url?: string; error?: string }>("attachment.put", {
+										name: file.name,
+										mimeType: file.mimeType,
+										content: file.data ?? "",
+									});
+							const url = result && !result.error ? result.url : undefined;
+							if (url) refs.push("[Attachment] " + url + " (" + file.name + ")");
+							else throw new Error(result?.error ?? "attachment upload failed");
+						} catch {
+							pushActionToast({
+								kind: "warning",
+								message: t("settings.petQuickbarFileUploadFailed"),
+								dedupeKey: "pet:file-upload",
+							});
+							return;
+						}
+					}
+					const prompt = refs.length > 0 ? text + "\n\n" + refs.join("\n") : text;
+					void createSession().then(id => {
+						if (id) void sendPrompt(prompt, images.length > 0 ? images : undefined, id);
+					});
+				})();
 			} else if (cmd.type === "dictate") {
 				// Pet quick bar mic. The composer owns the dictation lifecycle
 				// and its first-use download gate, so the request goes through

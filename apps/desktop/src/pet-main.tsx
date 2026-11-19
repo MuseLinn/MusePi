@@ -29,7 +29,19 @@
  */
 
 import { COMPACT_MORPH_SPRING, setLocale, t } from "@musepi/client-core";
-import { AppWindow, ArrowUp, AudioLines, Camera, ChevronDown, ImagePlus, Plus, SquarePen, X } from "lucide";
+import {
+	AppWindow,
+	ArrowUp,
+	AudioLines,
+	Camera,
+	ChevronDown,
+	FilePlus,
+	FileText,
+	ImagePlus,
+	Plus,
+	SquarePen,
+	X,
+} from "lucide";
 import { MorphIcon } from "morphicons/react";
 import {
 	type CSSProperties,
@@ -108,7 +120,13 @@ interface PetBridge {
 	 *  while it is open, or the caret never lands in it. */
 	petComposerFocus?(focusable: boolean): Promise<unknown>;
 	/** Send the quick-bar composer's text (and attached images) as a new chat. */
-	petQuickSend?(text: string, images?: { type: "image"; data: string; mimeType: string }[]): Promise<unknown>;
+	petQuickSend?(
+		text: string,
+		images?: { type: "image"; data: string; mimeType: string }[],
+		files?: { name: string; mimeType: string; path?: string; data?: string }[],
+	): Promise<unknown>;
+	/** Same-machine path of a dropped or picked file (webUtils). */
+	getDroppedFilePath?(file: File): string;
 	/** Primary-display screenshot (the same capture the main composer's
 	 *  screenshot entry uses) — becomes an image attachment on the bar. */
 	captureScreen?(): Promise<{ dataUrl?: string; error?: string }>;
@@ -143,18 +161,24 @@ const DRAG_THRESHOLD_PX = 8;
  *  greeting before the random pick takes over. */
 const DOUBLE_CLICK_MS = 300;
 
-/** Images the quick bar can carry into one message. Codex's Mini composer
- *  grows its pill by an attachment row; the same model keeps the pet surface
- *  honest — images and screenshots travel with the prompt, while files,
- *  sketches and plugins stay in the main composer where they have a picker. */
+/** Attachments the quick bar can carry into one message. Codex's Mini
+ *  composer grows its pill by an attachment row; the same model keeps the pet
+ *  surface honest — images, screenshots and files travel with the prompt,
+ *  while sketches and plugins stay in the main composer where they have an
+ *  editor and a command surface. */
 const PET_ATTACHMENT_LIMIT = 4;
 const PET_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+const PET_FILE_MAX_BYTES = 12 * 1024 * 1024;
 
 interface PetAttachment {
 	id: string;
+	kind: "image" | "file";
 	name: string;
-	dataUrl: string;
 	mimeType: string;
+	/** Image payloads (thumbnails and the model-facing part). */
+	dataUrl?: string;
+	/** The picked file; read at send time only when it has no local path. */
+	file?: File;
 }
 
 function readImageAttachment(file: File): Promise<PetAttachment | null> {
@@ -168,12 +192,22 @@ function readImageAttachment(file: File): Promise<PetAttachment | null> {
 			}
 			resolve({
 				id: crypto.randomUUID(),
+				kind: "image",
 				name: file.name || "image",
 				dataUrl,
 				mimeType: file.type || "image/png",
 			});
 		};
 		reader.onerror = () => resolve(null);
+		reader.readAsDataURL(file);
+	});
+}
+
+function readFileAsBase64(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(String(reader.result ?? "").split(",")[1] ?? "");
+		reader.onerror = () => reject(reader.error ?? new Error("file read failed"));
 		reader.readAsDataURL(file);
 	});
 }
@@ -222,6 +256,7 @@ function PetApp(): ReactNode {
 	const composerOpenRef = useRef(false);
 	composerOpenRef.current = composerOpen;
 	const imagePickerRef = useRef<HTMLInputElement>(null);
+	const filePickerRef = useRef<HTMLInputElement>(null);
 	// The OS file dialog takes focus away from this window. That blur is not
 	// a dismissal — the composer must survive the pick and still be there to
 	// receive the thumbnails.
@@ -459,6 +494,39 @@ function PetApp(): ReactNode {
 		[showAttachError],
 	);
 
+	/** Files (and folders zipped by the user) join the same message. The
+	 *  bytes stay out of the renderer until send: a same-machine path goes to
+	 *  the daemon directly, and only a pasted Blob needs a base64 read. */
+	const addFiles = useCallback(
+		(files: File[]): void => {
+			const images = files.filter(file => file.type.startsWith("image/"));
+			if (images.length > 0) addImageFiles(images);
+			const others = files.filter(file => !file.type.startsWith("image/"));
+			if (others.length === 0) return;
+			const room = PET_ATTACHMENT_LIMIT - attachmentsRef.current.length - images.length;
+			if (room <= 0) {
+				showAttachError(t("settings.petQuickbarAttachLimit"));
+				return;
+			}
+			const usable = others.filter(file => file.size <= PET_FILE_MAX_BYTES).slice(0, room);
+			if (usable.length < others.length) showAttachError(t("settings.petQuickbarFileTooLarge"));
+			if (usable.length === 0) return;
+			setAttachments(current =>
+				[
+					...current,
+					...usable.map(file => ({
+						id: crypto.randomUUID(),
+						kind: "file" as const,
+						name: file.name || "file",
+						mimeType: file.type || "application/octet-stream",
+						file,
+					})),
+				].slice(0, PET_ATTACHMENT_LIMIT),
+			);
+		},
+		[addImageFiles, showAttachError],
+	);
+
 	/** One primary-display screenshot, same capture the composer's screenshot entry uses. */
 	const attachScreen = useCallback((): void => {
 		setQuickMenuOpen(false);
@@ -477,7 +545,15 @@ function PetApp(): ReactNode {
 				setAttachments(current =>
 					current.length >= PET_ATTACHMENT_LIMIT
 						? current
-						: [...current, { id: crypto.randomUUID(), name: "screenshot.png", dataUrl, mimeType }],
+						: [
+								{
+									id: crypto.randomUUID(),
+									kind: "image" as const,
+									name: "screenshot.png",
+									dataUrl,
+									mimeType,
+								},
+							],
 				);
 			})
 			.catch(() => {})
@@ -543,18 +619,44 @@ function PetApp(): ReactNode {
 		// A read/capture still in flight: sending now would silently drop the
 		// thumbnails the user just picked.
 		if (attachPending) return;
-		const images = attachmentsRef.current
+		const selected = attachmentsRef.current;
+		const images = selected
+			.filter(attachment => attachment.kind === "image" && attachment.dataUrl)
 			.map(attachment => ({
 				type: "image" as const,
-				data: attachment.dataUrl.split(",")[1] ?? "",
+				data: attachment.dataUrl!.split(",")[1] ?? "",
 				mimeType: attachment.mimeType,
 			}))
 			.filter(part => part.data.length > 0);
-		// `new-chat-send` creates the conversation itself; asking for a new
-		// chat first would create a second, empty one.
-		void bridge?.petQuickSend?.(text, images.length > 0 ? images : undefined);
-		closeComposer();
-	}, [composerText, closeComposer, attachPending]);
+		const fileParts = selected.filter(
+			(attachment): attachment is PetAttachment & { file: File } =>
+				attachment.kind === "file" && attachment.file !== undefined,
+		);
+		// A same-machine file travels by path (the daemon reads it); a pasted
+		// Blob has none and is inlined. The field stays open until this settles.
+		void Promise.all(
+			fileParts.map(async attachment => {
+				const path = bridge?.getDroppedFilePath?.(attachment.file) ?? "";
+				if (path) return { name: attachment.name, mimeType: attachment.mimeType, path };
+				return {
+					name: attachment.name,
+					mimeType: attachment.mimeType,
+					data: await readFileAsBase64(attachment.file),
+				};
+			}),
+		)
+			.then(files => {
+				// `new-chat-send` creates the conversation itself; asking for a
+				// new chat first would create a second, empty one.
+				void bridge?.petQuickSend?.(
+					text,
+					images.length > 0 ? images : undefined,
+					files.length > 0 ? files : undefined,
+				);
+				closeComposer();
+			})
+			.catch(() => showAttachError(t("settings.petQuickbarImageTooLarge")));
+	}, [composerText, closeComposer, attachPending, bridge, showAttachError]);
 
 	// Focus the field once the surface has begun morphing, so the caret
 	// appears in a field that is already visible rather than in one that
@@ -588,14 +690,51 @@ function PetApp(): ReactNode {
 				event.preventDefault();
 				if (quickMenuOpen) {
 					setQuickMenuOpen(false);
+					composerRef.current?.focus();
 					return;
 				}
 				closeComposer();
+				return;
 			}
+			if (!quickMenuOpen) return;
+			const step =
+				event.key === "ArrowDown"
+					? 1
+					: event.key === "ArrowUp"
+						? -1
+						: event.key === "Home"
+							? Number.NEGATIVE_INFINITY
+							: event.key === "End"
+								? Number.POSITIVE_INFINITY
+								: 0;
+			if (step === 0) return;
+			// Arrow keys walk the visible menu rows, so the add menu is usable
+			// without a pointer (Codex's list behaves the same way).
+			const rows = [...document.querySelectorAll<HTMLElement>(".pet-window__quickbar-menu-row")];
+			if (rows.length === 0) return;
+			event.preventDefault();
+			const current = rows.indexOf(document.activeElement as HTMLElement);
+			const next =
+				step === Number.NEGATIVE_INFINITY
+					? 0
+					: step === Number.POSITIVE_INFINITY
+						? rows.length - 1
+						: ((current === -1 ? (step > 0 ? -1 : 0) : current) + step + rows.length) % rows.length;
+			rows[next]?.focus();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, [composerOpen, closeComposer, quickMenuOpen]);
+
+	// Opening the add menu hands the keyboard to its first row; closing it
+	// (Escape, a pick, a click outside) hands it back to the field.
+	useEffect(() => {
+		if (!quickMenuOpen) return;
+		const timer = window.setTimeout(() => {
+			document.querySelector<HTMLElement>(".pet-window__quickbar-menu-row")?.focus();
+		}, 0);
+		return () => window.clearTimeout(timer);
+	}, [quickMenuOpen]);
 
 	// The composer must not survive the pet being hidden: an invisible text
 	// field holding the keyboard focus would strand the user.
@@ -627,15 +766,15 @@ function PetApp(): ReactNode {
 			pickingRef.current = false;
 		};
 		window.addEventListener("focus", onFocus);
-		const picker = imagePickerRef.current;
+		const pickers = [imagePickerRef.current, filePickerRef.current];
 		const onPickerCancel = (): void => {
 			pickingRef.current = false;
 		};
-		picker?.addEventListener("cancel", onPickerCancel);
+		for (const picker of pickers) picker?.addEventListener("cancel", onPickerCancel);
 		return () => {
 			window.removeEventListener("blur", onBlur);
 			window.removeEventListener("focus", onFocus);
-			picker?.removeEventListener("cancel", onPickerCancel);
+			for (const picker of pickers) picker?.removeEventListener("cancel", onPickerCancel);
 		};
 	}, [composerOpen, closeComposer]);
 
@@ -1362,16 +1501,16 @@ function PetApp(): ReactNode {
 					onPointerDown={e => e.stopPropagation()}
 					onDragOver={e => {
 						if (!composerOpen) return;
-						if ([...e.dataTransfer.items].some(item => item.kind === "file" && item.type.startsWith("image/"))) {
+						if ([...e.dataTransfer.items].some(item => item.kind === "file")) {
 							e.preventDefault();
 						}
 					}}
 					onDrop={e => {
 						if (!composerOpen) return;
-						const files = [...e.dataTransfer.files].filter(file => file.type.startsWith("image/"));
+						const files = [...e.dataTransfer.files];
 						if (files.length === 0) return;
 						e.preventDefault();
-						addImageFiles(files);
+						addFiles(files);
 					}}
 				>
 					<input
@@ -1385,6 +1524,19 @@ function PetApp(): ReactNode {
 							e.currentTarget.value = "";
 							pickingRef.current = false;
 							addImageFiles(files);
+							requestAnimationFrame(() => composerRef.current?.focus());
+						}}
+					/>
+					<input
+						ref={filePickerRef}
+						type="file"
+						multiple
+						hidden
+						onChange={e => {
+							const files = Array.from(e.currentTarget.files ?? []);
+							e.currentTarget.value = "";
+							pickingRef.current = false;
+							addFiles(files);
 							requestAnimationFrame(() => composerRef.current?.focus());
 						}}
 					/>
@@ -1404,7 +1556,17 @@ function PetApp(): ReactNode {
 						>
 							{attachments.map(attachment => (
 								<span key={attachment.id} className="pet-window__quickbar-attachment" role="listitem">
-									<img src={attachment.dataUrl} alt={attachment.name} />
+									{attachment.kind === "image" && attachment.dataUrl ? (
+										<img src={attachment.dataUrl} alt={attachment.name} />
+									) : (
+										<span
+											className="pet-window__quickbar-attachment-file"
+											title={attachment.name}
+											aria-hidden="true"
+										>
+											<MorphIcon icon={FileText} size={11} />
+										</span>
+									)}
 									<button
 										type="button"
 										className="pet-window__quickbar-attachment-remove"
@@ -1480,6 +1642,19 @@ function PetApp(): ReactNode {
 								type="button"
 								role="menuitem"
 								className="pet-window__quickbar-menu-row"
+								onClick={() => {
+									setQuickMenuOpen(false);
+									pickingRef.current = true;
+									filePickerRef.current?.click();
+								}}
+							>
+								<MorphIcon icon={FilePlus} size={13} />
+								<span>{t("settings.petQuickbarAttachFile")}</span>
+							</button>
+							<button
+								type="button"
+								role="menuitem"
+								className="pet-window__quickbar-menu-row"
 								onClick={attachScreen}
 							>
 								<MorphIcon icon={Camera} size={13} />
@@ -1526,7 +1701,7 @@ function PetApp(): ReactNode {
 							ref={composerRef}
 							className="pet-window__quickbar-input"
 							placeholder={
-								attachments.length > 0
+								attachments.some(attachment => attachment.kind === "image")
 									? t("settings.petQuickbarImagePlaceholder")
 									: t("settings.petQuickbarPlaceholder")
 							}
