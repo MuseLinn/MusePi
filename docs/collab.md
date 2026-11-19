@@ -39,8 +39,71 @@ The guest's previous session is restored on `/leave` (or when the host stops).
 | `/collab view` | Start sharing read-only (or re-print the link/QR when already hosting) |
 | `/collab status` | Show link + participants |
 | `/collab stop` | Stop sharing |
+| `/collab lan` | Share over the local network (self-hosted relay, no public endpoint) |
+| `/collab tunnel [cloudflared\|ngrok]` | Share through a public tunnel |
+| `/pair` | Start a LAN share and show a 6-digit code for the mobile app |
 | `/join <link>` | Join a shared session as a guest |
 | `/leave` | Leave (guest) or stop sharing (host) |
+
+## Sharing outside the default relay
+
+`/collab` uses the production relay by default. When the agent must stay on your machine, a share can run a local relay instead, and only the path guests reach it through changes — the encrypted room protocol is identical in every mode.
+
+| Mode | Command | Guests reach it from | Needs |
+|---|---|---|---|
+| LAN | `/collab lan` or `/pair` | the same network | nothing |
+| Cloudflare Tunnel | `/collab tunnel cloudflared` | anywhere with the link | `cloudflared` binary |
+| ngrok | `/collab tunnel ngrok` | anywhere with the link | `ngrok` binary and its free authtoken |
+| Tailscale Serve | `collab.exposure = tailscale` | your tailnet | Tailscale on both ends |
+
+### LAN
+
+A LAN share binds the relay to `0.0.0.0` and prints one link per routable NIC. Terminals join over plaintext `ws`; browsers need a secure context for WebCrypto, so a second relay with a self-signed certificate serves the `https`/`wss` deep link. When Tailscale is installed and Serve can be used, the share also prints a tailnet URL with a real certificate (no browser warning); that best-effort decoration never fails the LAN share.
+
+### Cloudflare Tunnel
+
+Quick mode is zero-config: `cloudflared tunnel --url ws://localhost:<port>` prints a random `https://<id>.trycloudflare.com` that changes on every start. The URL is parsed from `--logformat json` output (plain-text logs still parse), and the public host is probed before the link is shown — a blocked edge node fails with a diagnosable message instead of a dead WebSocket later.
+
+Named mode needs `collab.cloudflaredHostname` and a tunnel token. The token lives in the encrypted secret store under `collab.cloudflared.<tunnelId>`, never in settings, argv, or logs (the child receives it as `TUNNEL_TOKEN`), and the link is `https://<hostname>` — stable across restarts.
+
+### ngrok
+
+`/collab tunnel ngrok` runs `ngrok http <port>` and parses the public URL from its JSON log. ngrok's free tier requires a one-time `ngrok config add-authtoken <TOKEN>`; MusePi reports that step instead of running it.
+
+### Tailscale Serve
+
+Serve exposes the relay at `https://<machine>.<tailnet>.ts.net`. It does not require an empty Serve configuration: MusePi backs the current config up with `tailscale serve get-config --all`, mounts the relay on 443, and falls back to 8443 (carrying the port into the link) when 443 is already served. Stopping removes exactly its own entry (`tailscale serve --https=<port> off`) and restores the backup with `tailscale serve set-config` — `tailscale serve reset` is never used. MusePi never runs `tailscale up` and stores no Tailscale credential; an unauthenticated node, disabled MagicDNS, or unavailable HTTPS certificates degrade with the specific admin-console toggle to change.
+
+### Health, revocation, and TTL
+
+Every tunnel watches its child process and probes the public host every 30 seconds. A tunnel that dies is revoked immediately: the URL is cleared, health becomes `degraded` with the reason and a next step, and the relay behind it is closed. Share state is authoritative — `remote-access.status` returns `mode`, `sessionId`, `exposure`, and `health`, and reports `hosting: false` once the host ends, the session switches, or the exposure fails, so a share panel never keeps a dead link.
+
+`collab.shareTtlMinutes` (default `0`, no limit) stops a share automatically after the configured number of minutes.
+
+### Privacy boundary
+
+- **LAN** — traffic stays on your network; the browser link is `https` with a self-signed certificate, and the tailnet link (when shown) is encrypted by Tailscale.
+- **Public tunnels** — Cloudflare or ngrok terminates TLS at its edge and can see connection metadata, never room content, which is sealed end to end. The public URL alone is not a secret: the fragment carries the room key, and anyone with the full link can steer the session.
+- **Tailscale** — the relay is reachable only inside your tailnet; guests need Tailscale installed and signed in to the same tailnet.
+
+### Extending exposures
+
+Self-hosting a relay is a plugin, not a built-in: register a transport in the process-wide registry when your plugin loads.
+
+```ts
+import { BaseExposure, exposureRegistry } from "@musepi/pi-coding-agent/collab/exposure";
+
+exposureRegistry.register("my-relay", () => new MyRelayExposure());
+```
+
+An exposure declares `id`, `label`, `capabilities` (`guestInstall`, `publicExposure`, `stableUrl`, `thirdParty`), `probe()`, `start({ port })`, `close()`, and reports health through `onChange` with `unavailable | starting | ready | degraded | stopped`. `LocalShareManager` resolves it by id (`startExposure("my-relay")`), the daemon lists it in `collab.exposures`, and a degraded exposure revokes the relay automatically. The protocol needs no change: a transport only has to provide an origin guests can reach.
+
+### When not to use a public tunnel
+
+- The default relay is enough when both sides can reach the internet and the agent does not need to stay on your machine.
+- Prefer LAN for devices on the same network, and Tailscale when both ends are in your tailnet.
+- Do not expose a machine to the public internet just because it is convenient: a full link reads the entire session history and can steer the agent.
+- Corporate networks often block `trycloudflare.com`; use LAN or a named tunnel on your own domain.
 
 ## Link format
 
@@ -109,6 +172,9 @@ Set `collab.webUrl` when the browser UI is hosted separately from the websocket 
 | `collab.relayUrl` | `wss://my.omp.sh` | Relay used by `/collab` when no relay is passed inline |
 | `collab.webUrl` | empty | Browser UI URL for `/collab` links; empty derives from relay; explicit `http://` is allowed only for localhost |
 | `collab.displayName` | OS username | Name shown to other participants |
+| `collab.exposure` | `cloudflared` | Default transport for a tunnel share that does not name one (a registered exposure id) |
+| `collab.cloudflaredHostname` | empty | Hostname for a named Cloudflare tunnel; empty uses a quick tunnel |
+| `collab.shareTtlMinutes` | `0` | Stop a LAN or tunnel share after this many minutes; `0` keeps it until stopped |
 | `share.serverUrl` | `https://my.omp.sh/s` | Share viewer/upload base used by `/share` (links are `<base>/<id>#<key>`) |
 | `share.redactSecrets` | `true` | Run the secret obfuscator over `/share` snapshots before upload |
 

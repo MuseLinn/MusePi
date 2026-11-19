@@ -11,10 +11,15 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	CloudflaredExposure,
 	extractQuickTunnelUrl,
+	parseCloudflaredLine,
 	probeTunnelReachable,
+	readCloudflaredTunnelToken,
 	startCloudflaredTunnel,
+	storeCloudflaredTunnelToken,
 	TunnelUnreachableError,
+	tunnelIdFromToken,
 } from "@musepi/pi-coding-agent/collab/tunnel";
 
 const FAKE_DIR = mkdtempSync(join(tmpdir(), "cfd-fake-"));
@@ -155,5 +160,144 @@ describe("tunnel reachability probe", () => {
 		const handle = await startCloudflaredTunnel({ port: 7654, binary: SLOW_OK, verifyReachable: false });
 		expect(handle.url).toBe("https://abc123.trycloudflare.com");
 		await handle.close();
+	});
+});
+
+// ── JSON logging, named tunnels, health ─────────────────────────────────────
+
+/** A base64 JSON token in Cloudflare's real shape (`t` carries the tunnel id). */
+const NAMED_TOKEN = Buffer.from(JSON.stringify({ a: "acct", t: "tun-abc", s: "secret" })).toString("base64");
+
+function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
+	const { promise, resolve, reject } = Promise.withResolvers<void>();
+	const started = Date.now();
+	const timer = setInterval(() => {
+		if (predicate()) {
+			clearInterval(timer);
+			resolve();
+		} else if (Date.now() - started > timeoutMs) {
+			clearInterval(timer);
+			reject(new Error("condition not met in time"));
+		}
+	}, 20);
+	timer.unref?.();
+	return promise;
+}
+
+describe("cloudflared log parsing", () => {
+	it("prefers the JSON url field and falls back to plain text", () => {
+		expect(parseCloudflaredLine('{"level":"info","msg":"created","url":"https://json1.trycloudflare.com"}')).toEqual({
+			url: "https://json1.trycloudflare.com",
+			message: "created",
+		});
+		expect(parseCloudflaredLine("Your quick Tunnel: https://plain1.trycloudflare.com").url).toBe(
+			"https://plain1.trycloudflare.com",
+		);
+		expect(parseCloudflaredLine("starting...").url).toBeUndefined();
+	});
+
+	it("ignores JSON lines that carry an unrelated url", () => {
+		expect(parseCloudflaredLine('{"msg":"docs","url":"https://developers.cloudflare.com"}').url).toBeUndefined();
+	});
+});
+
+const JSON_URL_ONLY = fakeBinary(`#!/usr/bin/env node
+if (process.argv.includes("--version")) process.exit(0);
+setTimeout(() => process.stderr.write('{"level":"info","msg":"created","url":"https://json1.trycloudflare.com"}\\n'), 20);
+setInterval(() => {}, 1000);
+`);
+
+describe("CloudflaredExposure", () => {
+	it("quick mode parses JSON logs and reports a ready URL", async () => {
+		const exposure = new CloudflaredExposure({
+			binary: JSON_URL_ONLY,
+			verifyReachable: false,
+			healthIntervalMs: 0,
+		});
+		await exposure.probe();
+		expect(exposure.capabilities.stableUrl).toBe(false);
+		const urls = await exposure.start({ port: 7654 });
+		expect(urls.joinUrl).toBe("https://json1.trycloudflare.com");
+		expect(exposure.status().health).toBe("ready");
+		await exposure.close();
+		expect(exposure.status().health).toBe("stopped");
+	});
+
+	it("probe names the install command when the binary is missing", async () => {
+		const exposure = new CloudflaredExposure({
+			binary: join(FAKE_DIR, "definitely-not-cloudflared"),
+			verifyReachable: false,
+		});
+		const status = await exposure.probe();
+		expect(status.health).toBe("unavailable");
+		expect(status.install?.commands.darwin).toContain("brew");
+		expect(status.install?.commands.win32).toContain("winget");
+	});
+
+	it("named mode keeps the token out of argv and uses the configured hostname", async () => {
+		const record = join(FAKE_DIR, `named-${Math.random().toString(36).slice(2)}.json`);
+		process.env.FAKE_CFD_RECORD = record;
+		const named = fakeBinary(`#!/usr/bin/env node
+if (process.argv.includes("--version")) process.exit(0);
+require("node:fs").writeFileSync(process.env.FAKE_CFD_RECORD, JSON.stringify({
+  argv: process.argv.slice(2),
+  envToken: process.env.TUNNEL_TOKEN ?? null,
+}));
+process.stderr.write('{"msg":"Registered tunnel connection"}\\n');
+setInterval(() => {}, 1000);
+`);
+		const exposure = new CloudflaredExposure({
+			binary: named,
+			hostname: "collab.example.com",
+			token: NAMED_TOKEN,
+			verifyReachable: false,
+			healthIntervalMs: 0,
+		});
+		await exposure.probe();
+		expect(exposure.capabilities.stableUrl).toBe(true);
+		const urls = await exposure.start({ port: 7654 });
+		expect(urls.joinUrl).toBe("https://collab.example.com");
+		const observed = JSON.parse(await (await import("node:fs/promises")).readFile(record, "utf8")) as {
+			argv: string[];
+			envToken: string | null;
+		};
+		expect(observed.argv.join(" ")).not.toContain(NAMED_TOKEN);
+		expect(observed.envToken).toBe(NAMED_TOKEN);
+		await exposure.close();
+	});
+
+	it("degrades and clears the link when cloudflared exits after start", async () => {
+		const diesLater = fakeBinary(`#!/usr/bin/env node
+if (process.argv.includes("--version")) process.exit(0);
+process.stderr.write('{"url":"https://shortlived.trycloudflare.com"}\\n');
+setTimeout(() => process.exit(3), 120);
+setInterval(() => {}, 1000);
+`);
+		const exposure = new CloudflaredExposure({ binary: diesLater, verifyReachable: false, healthIntervalMs: 0 });
+		await exposure.start({ port: 7654 });
+		expect(exposure.status().health).toBe("ready");
+		await waitFor(() => exposure.status().health === "degraded");
+		expect(exposure.status().url).toBeUndefined();
+		expect(exposure.status().detail).toMatch(/exited with code \d+/);
+		await exposure.close();
+	});
+});
+
+describe("named tunnel token storage", () => {
+	it("reads the tunnel id out of the token", () => {
+		expect(tunnelIdFromToken(NAMED_TOKEN)).toBe("tun-abc");
+		expect(tunnelIdFromToken("not-base64-json")).toBeNull();
+	});
+
+	it("round-trips the token through the encrypted store under collab.cloudflared.<id>", async () => {
+		const { mkdtempSync } = await import("node:fs");
+		const agentDir = mkdtempSync(join(tmpdir(), "cfd-token-"));
+		try {
+			const id = await storeCloudflaredTunnelToken(NAMED_TOKEN, agentDir);
+			expect(id).toBe("collab.cloudflared.tun-abc");
+			expect(await readCloudflaredTunnelToken("tun-abc", agentDir)).toBe(NAMED_TOKEN);
+		} finally {
+			rmSync(agentDir, { recursive: true, force: true });
+		}
 	});
 });

@@ -5,6 +5,13 @@
  */
 import { describe, expect, it } from "bun:test";
 import {
+	BaseExposure,
+	type ExposureCapabilities,
+	ExposureRegistry,
+	type ExposureStartOptions,
+	type ExposureStartResult,
+} from "@musepi/pi-coding-agent/collab/exposure";
+import {
 	findLanIpv4,
 	isRfc1918,
 	isTailscaleIpv4,
@@ -93,5 +100,97 @@ describe("LocalShareManager", () => {
 		await manager.stop();
 		expect(manager.relay).toBeNull();
 		expect(manager.tlsRelay).toBeNull();
+	});
+});
+
+/** Registry-driven share: no real tunnel, deterministic URLs. */
+class StubExposure extends BaseExposure {
+	readonly id = "stub";
+	readonly label = "Stub exposure";
+	readonly capabilities: ExposureCapabilities = {
+		guestInstall: false,
+		publicExposure: true,
+		stableUrl: true,
+		thirdParty: false,
+	};
+	closed = false;
+
+	constructor() {
+		super("stub");
+	}
+
+	async probe() {
+		this.setStatus({ id: this.id, health: "ready" });
+		return this.status();
+	}
+
+	async start(_options: ExposureStartOptions): Promise<ExposureStartResult> {
+		this.setStatus({ id: this.id, health: "ready", url: "https://stub.example" });
+		return { joinUrl: "wss://stub.example", webUrl: "https://stub.example", webJoinUrl: "wss://stub.example" };
+	}
+
+	/** Test hook: a transport losing its edge. */
+	degrade(reason: string): void {
+		this.setStatus({ id: this.id, health: "degraded", detail: reason });
+	}
+
+	override async close(): Promise<void> {
+		this.closed = true;
+		await super.close();
+	}
+}
+
+function stubRegistry(): ExposureRegistry {
+	const registry = new ExposureRegistry();
+	registry.register("stub", () => new StubExposure());
+	return registry;
+}
+
+describe("LocalShareManager exposures", () => {
+	it("resolves a registered exposure and reports its health", async () => {
+		const manager = new LocalShareManager({ port: 0, registry: stubRegistry() });
+		const urls = await manager.startExposure("stub", { verifyReachable: false });
+		expect(urls.joinUrl).toBe("wss://stub.example");
+		expect(manager.exposureStatus).toMatchObject({ id: "stub", health: "ready" });
+		expect(manager.relay).not.toBeNull();
+		await manager.stop();
+		expect(manager.exposureStatus).toBeNull();
+		expect(manager.relay).toBeNull();
+	});
+
+	it("rejects an unknown exposure and leaves no relay behind", async () => {
+		const manager = new LocalShareManager({ port: 0, registry: stubRegistry() });
+		await expect(manager.startExposure("nope")).rejects.toThrow(/unknown exposure "nope"/);
+		expect(manager.relay).toBeNull();
+	});
+
+	it("stops the share when the TTL expires and notifies the owner", async () => {
+		const { promise, resolve } = Promise.withResolvers<void>();
+		const manager = new LocalShareManager({
+			port: 0,
+			registry: stubRegistry(),
+			shareTtlMinutes: 0.01,
+			onTtlExpired: () => resolve(),
+		});
+		await manager.startExposure("stub", { verifyReachable: false });
+		expect(manager.relay).not.toBeNull();
+		await promise;
+		expect(manager.relay).toBeNull();
+		expect(manager.exposureStatus).toBeNull();
+	}, 10_000);
+
+	it("a degraded exposure revokes the relay and surfaces the reason", async () => {
+		const statuses: string[] = [];
+		const manager = new LocalShareManager({
+			port: 0,
+			registry: stubRegistry(),
+			onExposureHealth: status => statuses.push(status?.health ?? "null"),
+		});
+		await manager.startExposure("stub", { verifyReachable: false });
+		const exposure = manager.exposure as StubExposure;
+		exposure.degrade("edge gone");
+		await manager.stop();
+		expect(statuses).toContain("ready");
+		expect(statuses.at(-1)).toBe("null");
 	});
 });

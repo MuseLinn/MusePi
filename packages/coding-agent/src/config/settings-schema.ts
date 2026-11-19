@@ -2624,6 +2624,62 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"collab.exposure": {
+		type: "enum",
+		values: ["cloudflared", "ngrok", "tailscale"] as const,
+		default: "cloudflared",
+		ui: {
+			tab: "interaction",
+			group: "Collab",
+			label: "Remote Exposure",
+			description:
+				"Transport used when a share leaves the local network (LAN is always available in the share dialog)",
+			options: [
+				{
+					value: "cloudflared",
+					label: "Cloudflare Tunnel",
+					description: "Quick tunnel with no account, or a named tunnel when a hostname and token are configured",
+				},
+				{ value: "ngrok", label: "ngrok", description: "Public URL; free tier needs a one-time authtoken" },
+				{
+					value: "tailscale",
+					label: "Tailscale Serve",
+					description: "HTTPS link with a real certificate for devices on your tailnet; guests need Tailscale",
+				},
+			],
+		},
+	},
+
+	"collab.cloudflaredHostname": {
+		type: "string",
+		default: "",
+		ui: {
+			tab: "interaction",
+			group: "Collab",
+			label: "Cloudflare Hostname",
+			description:
+				"Hostname routed to a named Cloudflare tunnel, e.g. collab.example.com; empty uses a quick tunnel",
+		},
+	},
+
+	"collab.shareTtlMinutes": {
+		type: "number",
+		default: 0,
+		ui: {
+			tab: "interaction",
+			group: "Collab",
+			label: "Share Time Limit (Minutes)",
+			description: "Stop a LAN or tunnel share automatically after this many minutes; 0 keeps sharing until stopped",
+			options: [
+				{ value: "0", label: "No limit", description: "Share until you stop it" },
+				{ value: "15", label: "15 minutes" },
+				{ value: "30", label: "30 minutes" },
+				{ value: "60", label: "1 hour" },
+				{ value: "120", label: "2 hours" },
+			],
+		},
+	},
+
 	"share.serverUrl": {
 		type: "string",
 		default: DEFAULT_SHARE_URL,
