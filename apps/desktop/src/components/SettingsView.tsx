@@ -523,23 +523,21 @@ export function SettingsView({
 										</>
 									)}
 									{activeSection === "appearance" && (
-										<>
-											<AppearanceSection
-												rpc={rpc}
-												showAvatars={showAvatars}
-												onToggleAvatars={() => {
-													const next = !showAvatars;
-													localStorage.setItem("musepi-gui-avatars", next ? "1" : "0");
-													setShowAvatars(next);
-												}}
-												brandIconStyle={brandIconStyle}
-												onToggleBrandIconStyle={() => {
-													const next: BrandIconStyle = brandIconStyle === "mono" ? "color" : "mono";
-													writeBrandIconStyle(next);
-													setBrandIconStyle(next);
-												}}
-											/>
-										</>
+										<AppearanceSection
+											rpc={rpc}
+											showAvatars={showAvatars}
+											onToggleAvatars={() => {
+												const next = !showAvatars;
+												localStorage.setItem("musepi-gui-avatars", next ? "1" : "0");
+												setShowAvatars(next);
+											}}
+											brandIconStyle={brandIconStyle}
+											onToggleBrandIconStyle={() => {
+												const next: BrandIconStyle = brandIconStyle === "mono" ? "color" : "mono";
+												writeBrandIconStyle(next);
+												setBrandIconStyle(next);
+											}}
+										/>
 									)}
 									{activeSection === "model" && (
 										<ModelSection

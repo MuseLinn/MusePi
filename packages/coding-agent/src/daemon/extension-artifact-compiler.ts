@@ -780,9 +780,7 @@ export async function collectSlotComponents(
 							? { entryKinds: component.entryKinds }
 							: {}),
 						...(component.icon ? { icon: component.icon } : {}),
-						...(component.keywords && component.keywords.length > 0
-							? { keywords: component.keywords }
-							: {}),
+						...(component.keywords && component.keywords.length > 0 ? { keywords: component.keywords } : {}),
 					});
 					continue;
 				}

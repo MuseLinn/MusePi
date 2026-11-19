@@ -3989,7 +3989,7 @@ function AppInner(): ReactNode {
 										content: file.data ?? "",
 									});
 							const url = result && !result.error ? result.url : undefined;
-							if (url) refs.push("[Attachment] " + url + " (" + file.name + ")");
+							if (url) refs.push(`[Attachment] ${url} (${file.name})`);
 							else throw new Error(result?.error ?? "attachment upload failed");
 						} catch {
 							pushActionToast({
@@ -4000,7 +4000,7 @@ function AppInner(): ReactNode {
 							return;
 						}
 					}
-					const prompt = refs.length > 0 ? text + "\n\n" + refs.join("\n") : text;
+					const prompt = refs.length > 0 ? `${text}\n\n${refs.join("\n")}` : text;
 					void createSession().then(id => {
 						if (id) void sendPrompt(prompt, images.length > 0 ? images : undefined, id);
 					});
