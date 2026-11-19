@@ -237,11 +237,13 @@ impl OperationToken {
 	}
 
 	pub(crate) fn check(&self) -> CoreResult<()> {
-		(self.source.0.generation.load(Ordering::Acquire) == self.generation).ok_or_else(|| {
-			DesktopError::cancelled(
+		if self.source.0.generation.load(Ordering::Acquire) == self.generation {
+			Ok(())
+		} else {
+			Err(DesktopError::cancelled(
 				"desktop operation cancelled; input may be partial; inspect before retrying",
-			)
-		})
+			))
+		}
 	}
 
 	pub(crate) fn wait(&self, duration: Duration) -> CoreResult<()> {
@@ -326,7 +328,8 @@ static ESCAPE_STOPS: LazyLock<Mutex<HashMap<String, Arc<AtomicU32>>>> =
 
 /// The shared count for `key`; a session without a key counts alone.
 pub(crate) fn escape_stop_counter(key: Option<&str>) -> Arc<AtomicU32> {
-	key.map_or_default(|key| Arc::clone(ESCAPE_STOPS.lock().entry(key.to_owned()).or_default()))
+	key.map(|key| Arc::clone(ESCAPE_STOPS.lock().entry(key.to_owned()).or_default()))
+		.unwrap_or_default()
 }
 
 /// Physical-Escape stop counts by host-chosen key. A count outlives the session
