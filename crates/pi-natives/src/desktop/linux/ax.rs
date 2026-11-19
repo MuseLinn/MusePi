@@ -1,3 +1,5 @@
+mod menus;
+
 use atspi::{CoordType, ObjectRefOwned, Role, State, proxy::accessible::ObjectRefExt};
 use tokio::runtime::{Builder, Runtime};
 

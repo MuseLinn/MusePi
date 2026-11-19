@@ -163,6 +163,23 @@ export declare class MacAppearanceObserver {
   stop(): void
 }
 
+/** The app the user had in front when `macOSFrontApp()` read it. */
+export declare class MacOSFrontApp {
+  /**
+   * Puts this app back in front, without raising its windows, each time the
+   * app that took the front from it takes it again during the next
+   * `durationMs`. Ends early once the user clicks, holds ⌘/⌃, holds ⌥ or
+   * brings a different app forward: that is the user picking an app.
+   * Typing does not end it. Holds nothing when called over a second after
+   * the read, or when the app is no longer in front when the call starts.
+   * Owns desktop input/focus control only for each hand-back, and rejects if
+   * another operation owns it then. Resolves how many times it put the app
+   * back.
+   */
+  keepInFront(durationMs: number): Promise<number>
+}
+export type MacosFrontApp = MacOSFrontApp
+
 /**
  * Long-lived macOS power assertion.
  *
@@ -1563,6 +1580,12 @@ export declare enum MacOSAppearance {
   /** Light color scheme. */
   Light = 'light'
 }
+
+/**
+ * The app macOS `WindowServer` has in front. `null` off macOS and when the
+ * front-process SPI is unavailable.
+ */
+export declare function macOSFrontApp(): MacOSFrontApp | null
 
 /**
  * Options for starting a macOS power assertion.

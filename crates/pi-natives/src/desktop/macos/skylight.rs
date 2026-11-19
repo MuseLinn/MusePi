@@ -3,17 +3,21 @@ use std::{
 	mem,
 	os::raw::{c_char, c_int, c_uint},
 	ptr,
-	sync::LazyLock,
+	sync::{LazyLock, atomic::Ordering},
 	thread,
-	time::Duration,
+	time::{Duration, Instant},
 };
 
-use core_graphics::{event::CGEvent, geometry::CGPoint};
+use core_graphics::{
+	event::{CGEvent, EventField},
+	geometry::CGPoint,
+};
 use foreign_types::ForeignType;
 use libc::pid_t;
 use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication, NSWorkspace};
 
 use super::super::error::{CoreResult, DesktopError};
+use crate::desktop::control;
 
 const EVENT_RECORD_LENGTH: usize = 248;
 const EVENT_RECORD_LENGTH_BYTE: u8 = 0xf8;
@@ -36,6 +40,7 @@ type SLEventPostToPidFn = unsafe extern "C" fn(pid_t, *mut c_void);
 type SLEventSetIntegerValueFieldFn = unsafe extern "C" fn(*mut c_void, u32, i64);
 type SLPSPostEventRecordToFn = unsafe extern "C" fn(*const ProcessSerialNumber, *const u8) -> i32;
 type SLPSGetFrontProcessFn = unsafe extern "C" fn(*mut ProcessSerialNumber) -> i32;
+type SLPSGetKeyFocusProcessFn = unsafe extern "C" fn(*mut ProcessSerialNumber, *mut u8) -> i32;
 type CGSMainConnectionIDFn = unsafe extern "C" fn() -> u32;
 type SLSGetWindowOwnerFn = unsafe extern "C" fn(u32, u32, *mut u32) -> i32;
 type SLSGetConnectionPSNFn = unsafe extern "C" fn(u32, *mut ProcessSerialNumber) -> i32;
@@ -79,9 +84,12 @@ struct RequiredSpi {
 
 #[derive(Clone, Copy)]
 struct ForegroundSpi {
-	set_front: SLPSSetFrontProcessWithOptionsFn,
-	get_front: SLPSGetFrontProcessFn,
-	psn:       PsnLookup,
+	set_front:     SLPSSetFrontProcessWithOptionsFn,
+	get_front:     SLPSGetFrontProcessFn,
+	/// Differs from the front process while a panel of another process, such
+	/// as Spotlight or a launcher, holds the keyboard.
+	get_key_focus: Option<SLPSGetKeyFocusProcessFn>,
+	psn:           PsnLookup,
 }
 
 #[derive(Clone, Copy)]
@@ -145,6 +153,7 @@ fn resolve_foreground() -> Option<ForegroundSpi> {
 	Some(ForegroundSpi {
 		set_front: symbol(c"_SLPSSetFrontProcessWithOptions")?,
 		get_front: symbol(c"_SLPSGetFrontProcess")?,
+		get_key_focus: symbol(c"SLPSGetKeyFocusProcess"),
 		psn,
 	})
 }
@@ -206,6 +215,7 @@ pub(super) fn stamp_event(
 
 pub(super) fn post_dual(pid: pid_t, event: &CGEvent) -> CoreResult<()> {
 	let spi = required()?;
+	event.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, super::SYNTHETIC_EVENT_TAG);
 	// SAFETY: `event` remains retained for both posts and `post_to_pid` was
 	// atomically resolved with its exact ABI.
 	unsafe { (spi.post_to_pid)(pid, event_ptr(event)) };
@@ -218,6 +228,7 @@ pub(super) fn post_dual(pid: pid_t, event: &CGEvent) -> CoreResult<()> {
 
 pub(super) fn post_keyboard(pid: pid_t, event: &CGEvent) -> CoreResult<()> {
 	let spi = required()?;
+	event.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, super::SYNTHETIC_EVENT_TAG);
 	attach_keyboard_authentication(pid, event);
 	// The authenticated SkyLight route reaches Chromium and AppKit. Posting the
 	// same event through the public per-pid queue as well would deliver every key
@@ -411,4 +422,152 @@ fn attach_keyboard_authentication(pid: pid_t, event: &CGEvent) {
 	// SAFETY: The event and autoreleased authentication object are alive for the
 	// synchronous attachment.
 	unsafe { (spi.set_message)(event_raw, message) };
+}
+
+/// `kCGEventSourceStateHIDSystemState`: the counters and flags of hardware
+/// input, which no process can post into.
+const HID_SYSTEM_STATE: i32 = 1;
+/// `kCGEventLeftMouseDown`, up, right down, up, other down, up: every button
+/// churn of which a press or release is the user picking an app.
+const MOUSE_BUTTON_EVENTS: [u32; 6] = [1, 2, 3, 4, 25, 26];
+/// ⌘ and ⌃. Option is left out: it types characters on many layouts.
+const SWITCH_MODIFIERS: u64 = 0x0010_0000 | 0x0004_0000;
+/// ⌥, which types characters too, but opens launchers on ⌥-Space.
+const OPTION_MODIFIER: u64 = 0x0008_0000;
+/// `kCPSNoWindows`: ask for the front without raising a window.
+const NO_WINDOWS: u32 = 0x400;
+
+unsafe extern "C" {
+	fn CGEventSourceCounterForEventType(state: i32, event_type: u32) -> u32;
+	fn CGEventSourceFlagsState(state: i32) -> u64;
+}
+
+/// The user's app as read, and when.
+#[derive(Clone, Copy)]
+pub(crate) struct FrontApp {
+	psn:         ProcessSerialNumber,
+	read_at:     Instant,
+	/// Button counters at the read: any change is a click since.
+	buttons:     [u32; 6],
+	/// Button events this process had posted at the read, which the counters
+	/// below count too.
+	own_at_read: u32,
+}
+
+/// The app `WindowServer` has in front, or `None` without the focus SPI.
+pub(crate) fn front_app() -> Option<FrontApp> {
+	let spi = FOREGROUND.as_ref()?;
+	let psn = front_psn(spi)?;
+	Some(FrontApp {
+		psn,
+		read_at: Instant::now(),
+		buttons: hid_buttons(),
+		own_at_read: super::input::OWN_BUTTON_EVENTS.load(Ordering::Acquire),
+	})
+}
+
+impl FrontApp {
+	/// Puts this app back in front, without raising its windows, each time the
+	/// first app to take the front takes it again before `deadline`, and
+	/// returns how many times it did. An app no longer in front when the call
+	/// starts is not put back: the user may have picked another one already,
+	/// and undoing a pick is not this call's business.
+	pub(crate) fn keep_in_front(self, deadline: Instant) -> CoreResult<u32> {
+		let spi = FOREGROUND.as_ref().ok_or_else(|| {
+			DesktopError::background_unavailable("the front-process SPI is unavailable")
+		})?;
+		if !super::super::front_app::watch_intact(self.read_at, Instant::now()) {
+			return Ok(0);
+		}
+		if !self.reading(spi).user_in_front {
+			return Ok(0);
+		}
+		let mut hold = super::super::front_app::FrontHold::default();
+		let mut handed_back = 0u32;
+		while Instant::now() < deadline {
+			control::check()?;
+			match hold.step(self.reading(spi)) {
+				super::super::front_app::HoldStep::Wait => {},
+				super::super::front_app::HoldStep::HandBack => {
+					// Owned only for this hand-back: another operation that holds
+					// input then is busy, and this one does not wait for it.
+					let source = control::CancellationSource::default();
+					let _lease = control::InputLease::acquire(&source.token(), false)?;
+					set_front(spi, self.psn)?;
+					handed_back = handed_back.saturating_add(1);
+				},
+				super::super::front_app::HoldStep::Stop => break,
+			}
+			thread::sleep(super::super::front_app::poll_interval());
+		}
+		Ok(handed_back)
+	}
+
+	fn reading(self, spi: &ForegroundSpi) -> super::super::front_app::FrontReading {
+		use super::super::front_app::FrontReading;
+		let front = front_psn(spi);
+		let user_in_front = front == Some(self.psn);
+		let (flags, key_focus) = (flags_now(), key_focus(spi));
+		// The counters count our own posts too, so only button churn beyond what
+		// this process posted is the user's click.
+		let churn = hid_buttons()
+			.iter()
+			.zip(self.buttons.iter())
+			.fold(0u32, |churn, (now, then)| churn.wrapping_add(now.wrapping_sub(*then)));
+		let own = super::input::OWN_BUTTON_EVENTS
+			.load(Ordering::Acquire)
+			.wrapping_sub(self.own_at_read);
+		FrontReading {
+			user_in_front,
+			taker: front.filter(|front| *front != self.psn).map(psn_key),
+			clicked: churn > own,
+			chord: flags & SWITCH_MODIFIERS != 0,
+			option: flags & OPTION_MODIFIER != 0,
+			// A panel of another process holds the keyboard: the user may be
+			// picking an app from it.
+			panel: key_focus.is_some_and(|focus| Some(focus) != front),
+		}
+	}
+}
+
+fn front_psn(spi: &ForegroundSpi) -> Option<ProcessSerialNumber> {
+	let mut psn = ProcessSerialNumber::default();
+	// SAFETY: `psn` is writable and exactly the 8-byte record this SPI writes.
+	(unsafe { (spi.get_front)(&mut psn) } == 0).then_some(psn)
+}
+
+fn key_focus(spi: &ForegroundSpi) -> Option<ProcessSerialNumber> {
+	let get_key_focus = spi.get_key_focus?;
+	let mut psn = ProcessSerialNumber::default();
+	let mut status = 0u8;
+	// SAFETY: both out-pointers are writable for the synchronous call, which
+	// writes the 8-byte PSN and one status byte.
+	(unsafe { get_key_focus(&mut psn, &mut status) } == 0).then_some(psn)
+}
+
+fn flags_now() -> u64 {
+	// SAFETY: HIDSystemState is defined by CGEventSource.h; a read-only query.
+	unsafe { CGEventSourceFlagsState(HID_SYSTEM_STATE) }
+}
+
+fn hid_buttons() -> [u32; 6] {
+	MOUSE_BUTTON_EVENTS.map(|event_type| {
+		// SAFETY: as above; a read-only counter query.
+		unsafe { CGEventSourceCounterForEventType(HID_SYSTEM_STATE, event_type) }
+	})
+}
+
+const fn psn_key(psn: ProcessSerialNumber) -> u64 {
+	((psn.high as u64) << 32) | psn.low as u64
+}
+
+fn set_front(spi: &ForegroundSpi, psn: ProcessSerialNumber) -> CoreResult<()> {
+	// SAFETY: a PSN read from WindowServer and the no-raise window option.
+	let status = unsafe { (spi.set_front)(&psn, 0, NO_WINDOWS) };
+	if status != 0 {
+		return Err(DesktopError::background_unavailable(
+			"WindowServer refused to put the app back in front; the user may be typing",
+		));
+	}
+	Ok(())
 }

@@ -4,21 +4,28 @@ mod backend;
 mod control;
 mod error;
 mod frame;
+// The hand-back rule is read only by the macOS front-app hold; its tests run on
+// every platform, so the rules stay compiled and checked everywhere.
+#[cfg_attr(
+	not(target_os = "macos"),
+	allow(dead_code, reason = "only macOS holds an app to put back")
+)]
+mod front_app;
 mod keys;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
 mod regions;
-// Menu label matching is shared vocabulary, but only the windows backend has a
-// native menu route today: on linux/macos every helper here is uncalled, so the
-// dead-code and redundant-pub(crate) lints would fire on -Dwarnings.
+// Menu label matching is shared vocabulary. Windows and Linux route menus
+// natively; macOS has no menu route yet, where every helper here is uncalled,
+// so the dead-code and redundant-pub(crate) lints would fire on -Dwarnings.
 #[cfg_attr(
-	not(any(target_os = "windows", test)),
+	not(any(target_os = "windows", target_os = "linux", test)),
 	allow(
 		dead_code,
 		clippy::redundant_pub_crate,
-		reason = "consumed by the windows menu backend and by this module's tests"
+		reason = "consumed by the windows and linux menu backends and by this module's tests"
 	)
 )]
 mod menus;
