@@ -195,7 +195,7 @@ export default function (pi: ExtensionAPI): void {
 - `settings.item.<extId>` — 扩展设置卡片(2026-08-17;2026-08-20 起展示于**扩展中心底部**,随插件 inventory):按扩展 id 派发一张卡片,组件经 `settingsScope` prop 读写设置键(见下)。
 - `settings.action.<id>` — 单行偏好槽(2026-08-20):组件挂到设置页"通用"分区末尾,功能插件贡献单行偏好(语言/外观/Enter 行为),无需整 tab 或整卡。
 - `settings.general.item` — 「常规」页的行级偏好席位(dsh `settings.general.item`,精确 list 槽,2026-11-20):功能插件贡献一行偏好即可,无需整页;行自己负责文案、当前值与写入,壳只提供顺序。唯一拼写,旧的 `settings.action.<id>` 前缀已删除。
-- `settings.appearance.item` — 内置外观页的行/分区座位(2026-11-10,list 语义;dsh `settings.general.item` 同构命名):贡献渲染在外观页内容之后。插件**自己选择座位**:只放内置页、只放扩展中心(`settings.item.<extId>`)、或两处都注册;组件收到注入的 `slot`,可为不同座位渲染不同内容。`ui-theme` 用该座位把滚动条设置放回外观页（dsh 的 theme bundle 同构）。
+- `settings.section.<page>.<seat>` — 页面自有行/分区席位(dsh `children` 粒度,2026-11-20):声明了页面 `settings.section.<page>` 之后,`settings.section.<page>.*` 的组件由该页承载并渲染在页面内容之后;导航只把没有第二个点的槽名当页面,行座位不会被误投影成导航项。插件**自己选择座位**:只放内置页、只放扩展中心(`settings.item.<extId>`)、或两处都注册;组件收到注入的 `slot`,可为不同座位渲染不同内容。`ui-theme` 用 `settings.section.appearance.item` 把滚动条设置放回外观页（dsh 的 theme bundle 同构）。
 
 **设置面板宿主**(2026-10-10):注册到 `settings.extensions` 的组件由**扩展控制中心**
 底部的「扩展设置」分区承载 —— 与 `settings.item.<extId>` 卡片同框,按 `extensionId`

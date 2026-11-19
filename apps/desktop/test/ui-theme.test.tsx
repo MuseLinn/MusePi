@@ -14,9 +14,9 @@ describe("ui-theme Cordis bundle", () => {
 				register: component => seats.push(component),
 			},
 		});
-		expect(seats.map(seat => seat.slot)).toEqual(["shell.overlay", "settings.appearance.item"]);
+		expect(seats.map(seat => seat.slot)).toEqual(["shell.overlay", "settings.section.appearance.item"]);
 		expect(() => assertKnownComponentSlot("shell.overlay")).not.toThrow();
-		expect(() => assertKnownComponentSlot("settings.appearance.item")).not.toThrow();
+		expect(() => assertKnownComponentSlot("settings.section.appearance.item")).not.toThrow();
 	});
 
 	it("compiles both components through the real loader pipeline", async () => {
@@ -33,7 +33,7 @@ describe("ui-theme Cordis bundle", () => {
 		);
 		expect(components.map(item => ({ slot: item.slot, error: item.error }))).toEqual([
 			{ slot: "shell.overlay", error: undefined },
-			{ slot: "settings.appearance.item", error: undefined },
+			{ slot: "settings.section.appearance.item", error: undefined },
 		]);
 		// The bundle owns skins.ts in its own folder, but the compiled rail and
 		// settings card must read the HOST instance (shared contributed/imported

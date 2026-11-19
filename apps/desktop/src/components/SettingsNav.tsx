@@ -386,6 +386,8 @@ export function navGroups(
 		const prefix = PAGE_SLOT_PREFIXES.find(candidate => slot.startsWith(candidate));
 		if (!prefix) return null;
 		const suffix = slot.slice(prefix.length);
+		// `settings.section.<page>.<seat>` is a page-OWNED row seat, not a page.
+		if (suffix.includes(".")) return null;
 		// A slot may name a capability alias (sessions / memory → session-memory);
 		// resolve it before deciding whether it takes over a built-in page.
 		return (SECTION_ALIAS as Record<string, string | undefined>)[suffix] ?? suffix;

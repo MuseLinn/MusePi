@@ -225,8 +225,6 @@ export const SETTINGS_SECTION_SLOT_PREFIX = "settings.section.";
 export const RAIL_SLOT_PREFIX = "rail.";
 /** Keyed settings card slot. */
 export const SETTINGS_ITEM_SLOT_PREFIX = "settings.item.";
-/** 内置外观页的行/分区座位。 */
-export const SETTINGS_APPEARANCE_ITEM_SLOT = slot("settings.appearance.item");
 /** Composer 座位槽（见 EXTENSION_SLOT_DECLARATION 的席位表）。 */
 export const COMPOSER_BAR_SLOT = slot("conversation.composer.bar");
 export const COMPOSER_DOCK_SLOT = slot("conversation.composer.dock");
@@ -1468,7 +1466,6 @@ const slotHostBindings = {
 	SETTINGS_SECTION_SLOT_PREFIX,
 	RAIL_SLOT_PREFIX,
 	SETTINGS_ITEM_SLOT_PREFIX,
-	SETTINGS_APPEARANCE_ITEM_SLOT,
 	COMPOSER_BAR_SLOT,
 	COMPOSER_DOCK_SLOT,
 	COMPOSER_INPUT_DOCK_SLOT,

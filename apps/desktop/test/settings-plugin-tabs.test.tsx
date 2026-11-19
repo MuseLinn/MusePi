@@ -71,7 +71,9 @@ describe("settings slot vocabulary (dsh parity)", () => {
 		// Row seat: `settings.general.item` is an exact list seat; the page rows
 		// keep their pattern.
 		expect(slotKindOf("settings.general.item")).toBe("list");
-		expect(slotKindOf("settings.appearance.item")).toBe("list");
+		// Page-owned rows live under the section namespace (dsh `children`),
+		// not in a second exact seat.
+		expect(slotKindOf("settings.section.appearance.item")).toBeUndefined();
 		// One spelling per seat: the retired namespaces are gone, so a stale
 		// plugin fails loud at registration instead of silently mounting nowhere.
 		expect(EXTENSION_SLOT_DECLARATION.prefixes).not.toContain("settings.tab.");

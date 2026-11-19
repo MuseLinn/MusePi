@@ -61,10 +61,12 @@ describe("composer slot capacity", () => {
 		expect(Object.keys(EXTENSION_SLOT_DECLARATION.exact).length).toBe(EXTENSION_SLOT_NAMES.length);
 	});
 
-	it("reserves a list seat for rows inside the Appearance page", () => {
-		// dsh names these page-specific item seats (`settings.general.item`);
-		// MusePi's dedicated Appearance page gets the same shape.
-		expect(slotKindOf("settings.appearance.item")).toBe("list");
+	it("page-owned rows ride the settings.section namespace, not an exact seat", () => {
+		// dsh declares page children inside the section registration; the name
+		// shape is `settings.section.<page>.<seat>`, so the namespace accepts it
+		// while no exact declaration exists for a single page's rows.
+		expect(EXTENSION_SLOT_DECLARATION.prefixes).toContain("settings.section.");
+		expect(slotKindOf("settings.section.appearance.item")).toBeUndefined();
 	});
 
 	it("reports no capacity for an undeclared slot", () => {

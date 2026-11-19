@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **页面自有行席位按 dsh children 的粒度收敛**：设置页的行/分区组件改用命名空间 `settings.section.<page>.<seat>`，专用精确槽 `settings.appearance.item` 删除；当前页只挂载自己的座位、渲染在页面内容之后，导航不会把行座位误当页面。主题 bundle 的滚动条设置随之迁到 `settings.section.appearance.item`。
+  - EN: Page-owned settings rows now follow the dsh `children` granularity. Row/section components mount through the `settings.section.<page>.<seat>` namespace, the dedicated `settings.appearance.item` exact slot is gone, and a page mounts only its own seats after its content; the navigation never mistakes a row seat for a page. The theme bundle's scrollbar settings moved to `settings.section.appearance.item`.
+
 - **「常规」页的行级偏好席位改用 dsh 命名**：「常规」页的行级偏好只走精确槽 `settings.general.item`（list），旧的 `settings.action.<id>` 前缀已删除；功能插件贡献一行偏好不再需要整页或整卡。
   - EN: The General page's row-level preference seat now uses the dsh name. Rows register only into the exact `settings.general.item` list slot; the retired `settings.action.<id>` prefix is gone, so a feature contributes one preference row without a page or a card.
 

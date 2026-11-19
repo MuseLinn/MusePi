@@ -7,7 +7,6 @@ import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
 import { resolveActiveSection, type SectionId, type SectionRequest } from "../lib/settings-nav";
 import { useSettingSearchRows } from "../lib/settings-search";
 import {
-	SETTINGS_APPEARANCE_ITEM_SLOT,
 	SETTINGS_SECTION_SLOT_PREFIX,
 	SlotComponentMount,
 	useSlotComponents,
@@ -118,10 +117,6 @@ export function SettingsView({
 	const extIndexesTab = extTabFor("indexes");
 	// 行级偏好席位(dsh `settings.general.item`):挂到「常规」页末尾。
 	const generalRowItems = useSlotComponents(rpc, "settings.general.item");
-	// 内置外观页的行/分区座位：插件注册 `settings.appearance.item` 即进入该页。
-	// 插件注册 `settings.appearance.item` 即出现在外观页；也可另挂
-	// `settings.item.<extId>`，同一组件用注入的 `slot` 渲染不同内容。
-	const appearanceItems = useSlotComponents(rpc, SETTINGS_APPEARANCE_ITEM_SLOT);
 	// Nav groups are the single source of truth for "which section ids exist":
 	// resolved ONCE per render (the nav below AND the id validation read it) so
 	// a section can never be active without a nav row — and every nav row is
@@ -133,6 +128,10 @@ export function SettingsView({
 	// a retired id) falls back to the default section instead of rendering an
 	// empty content pane. Contract + tests: lib/settings-nav.ts.
 	const activeSection = resolveActiveSection(section, navSectionIds);
+	// 页面自有行席位(dsh `children` 粒度):`settings.section.<page>.*` 的组件由
+	// 该页承载,当前页只挂载自己的座位,渲染在页面内容之后。插件也可另挂
+	// `settings.item.<extId>`,同一组件用注入的 `slot` 区分座位。
+	const sectionItems = useSlotComponentsByPrefix(rpc, `settings.section.${activeSection}.`);
 	// Fixed settings search: filters the nav by section label (live).
 	const [settingsQuery, setSettingsQuery] = useState("");
 	const settingRows = useSettingSearchRows(rpc);
@@ -521,14 +520,6 @@ export function SettingsView({
 											setBrandIconStyle(next);
 										}}
 									/>
-									{appearanceItems.map(item => (
-										<SlotComponentMount
-											key={`${item.slot}:${item.extensionId}`}
-											item={item}
-											rpc={rpc}
-											sessionId={sessionId}
-										/>
-									))}
 								</>
 							)}
 							{activeSection === "model" && (
@@ -631,6 +622,20 @@ export function SettingsView({
 									<IndexesSection rpc={rpc} cwd={cwd} />
 								))}
 							{activeSection === "usage" && <UsageSection rpc={rpc} />}
+							{/* 页面自有行席位(dsh `children` 粒度):`settings.section.<page>.*`
+							 *  的贡献挂在本页内容之后;当前页只挂载自己的座位。 */}
+							{sectionItems.length > 0 && (
+								<div className="gui-settings-row">
+									{sectionItems.map(item => (
+										<SlotComponentMount
+											key={`${item.slot}:${item.extensionId}`}
+											item={item}
+											rpc={rpc}
+											sessionId={sessionId}
+										/>
+									))}
+								</div>
+							)}
 						</HeightMorph>
 					</div>
 				</div>

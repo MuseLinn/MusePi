@@ -87,9 +87,6 @@ export const EXTENSION_SLOT_DECLARATION = {
 		"panel.right": { kind: "list" },
 		"rail.right": { kind: "list" },
 		"settings.extensions": { kind: "list" },
-		/** Row/section seat inside a built-in settings page. A plugin picks the
-		 *  page(s) it contributes to; the component receives its `slot`. */
-		"settings.appearance.item": { kind: "list" },
 		/** Row-level preference in the General settings page (dsh
 		 *  `settings.general.item`): a feature contributes one row without a page
 		 *  of its own. One spelling — no legacy alias. */
