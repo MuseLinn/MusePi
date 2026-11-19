@@ -21,12 +21,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
 import { downloadBlob } from "../../lib/download";
-import { oneTakeMotion } from "../../lib/motion-tokens";
 import { InlineWidget } from "../../tool-render/tools/widget";
 import type { ToolRenderHost } from "../../tool-render/types";
 import { useWidgetRegistryVersion, widgetDef } from "../../widgets/registry";
 import { type WidgetSource, widgetSource } from "../../widgets/source";
-import { computeMorph, type MorphRect, motionDisabled } from "../image-morph";
+import { flyFrame, type MorphRect, motionDisabled } from "../image-morph";
 
 /** localStorage key for the standalone widget display. */
 export const WIDGET_STANDALONE_KEY = "musepi-gui-widget-standalone";
@@ -122,20 +121,9 @@ export function WidgetFullscreen({
 		const body = bodyRef.current;
 		const origin = originRect?.() ?? null;
 		if (!body || !origin || motionDisabled()) return;
-		const m = computeMorph(origin, body.getBoundingClientRect());
-		if (!m) return;
-		const motion = oneTakeMotion();
+		const anim = flyFrame(body, origin, body.getBoundingClientRect());
+		if (!anim) return;
 		setFlying(true);
-		const anim = body.animate(
-			[
-				{
-					transform: `translate(${m.dx}px, ${m.dy}px) scale(${m.sx}, ${m.sy})`,
-					transformOrigin: "top left",
-				},
-				{ transform: "none", transformOrigin: "top left" },
-			],
-			{ duration: motion.durationMs, easing: motion.easing },
-		);
 		anim.onfinish = () => {
 			// A close started mid-flight owns the blur until the panel is gone.
 			if (!closingRef.current) setFlying(false);
@@ -150,24 +138,13 @@ export function WidgetFullscreen({
 			onClose();
 			return;
 		}
-		const m = computeMorph(origin, body.getBoundingClientRect());
-		if (!m) {
+		const anim = flyFrame(body, origin, body.getBoundingClientRect(), { reverse: true, fill: "forwards" });
+		if (!anim) {
 			onClose();
 			return;
 		}
-		const motion = oneTakeMotion();
 		closingRef.current = true;
 		setFlying(true);
-		const anim = body.animate(
-			[
-				{ transform: "none", transformOrigin: "top left" },
-				{
-					transform: `translate(${m.dx}px, ${m.dy}px) scale(${m.sx}, ${m.sy})`,
-					transformOrigin: "top left",
-				},
-			],
-			{ duration: motion.durationMs, easing: motion.easing, fill: "forwards" },
-		);
 		anim.onfinish = () => onClose();
 	}, [onClose, originRect]);
 

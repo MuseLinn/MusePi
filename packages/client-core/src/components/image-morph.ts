@@ -50,10 +50,44 @@ export function computeMorph(origin: MorphRect, target: MorphRect): MorphTransfo
 	};
 }
 
-/** Motion-off degradation: the desktop shell's kill-switch class or the OS
- *  reduced-motion preference skips the morph and every CSS fade. */
-export function motionDisabled(): boolean {
-	if (typeof document === "undefined") return true;
-	if (document.documentElement.classList.contains("gui-motion-off")) return true;
-	return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+import { oneTakeMotion } from "../lib/motion-tokens";
+
+export { motionDisabled } from "../lib/motion-tokens";
+
+export interface FlyOptions {
+	/** Fly the box HOME into the source rectangle instead of out of it. */
+	reverse?: boolean;
+	fill?: FillMode;
+}
+
+/**
+ * The shared-element flight: one recipe for every FLIP in the app (image
+ * lightbox, standalone widget, composer scene swap). Geometry comes from
+ * {@link computeMorph}; duration and curve from the one-take tokens.
+ * Returns null for a degenerate rect, so callers fall back to their plain fade.
+ */
+export function flyFrame(
+	element: HTMLElement,
+	from: MorphRect,
+	to: MorphRect,
+	options: FlyOptions = {},
+): Animation | null {
+	const m = computeMorph(from, to);
+	if (!m) return null;
+	const motion = oneTakeMotion();
+	const away = `translate(${m.dx}px, ${m.dy}px) scale(${m.sx}, ${m.sy})`;
+	const frames = options.reverse
+		? [
+				{ transform: "none", transformOrigin: "top left" },
+				{ transform: away, transformOrigin: "top left" },
+			]
+		: [
+				{ transform: away, transformOrigin: "top left" },
+				{ transform: "none", transformOrigin: "top left" },
+			];
+	return element.animate(frames, {
+		duration: motion.durationMs,
+		easing: motion.easing,
+		...(options.fill ? { fill: options.fill } : {}),
+	});
 }

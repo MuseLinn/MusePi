@@ -1,3 +1,4 @@
+import { motionDisabled } from "@musepi/client-core";
 import { flushSync } from "react-dom";
 
 type ViewTransitionDocument = Document & {
@@ -16,14 +17,30 @@ type ViewTransitionDocument = Document & {
  * is drawn at its own size.
  */
 
+/** A CSS custom-ident for a shared surface: `prefix` + a sanitized id. */
+export function surfaceName(prefix: string, id: string): string {
+	return `${prefix}-${id.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+}
+
 /** Motion must be allowed by the runtime, the app toggle, and the OS setting. */
 export function sharedSurfaceTransitionAllowed(): boolean {
 	const doc = globalThis.document as ViewTransitionDocument | undefined;
 	if (!doc?.startViewTransition) return false;
-	return !(
-		document.documentElement.classList.contains("gui-motion-off") ||
-		window.matchMedia("(prefers-reduced-motion: reduce)").matches
-	);
+	return !motionDisabled();
+}
+
+/**
+ * Marker + transition bootstrap shared by every one-take entry point: the
+ * class tells the dialog CSS to skip its own entrance while the browser owns
+ * the geometry, and it leaves with the transition.
+ */
+function beginTransition(doc: ViewTransitionDocument, update: () => void): { finished: Promise<void> } {
+	document.documentElement.classList.add("gui-view-transition");
+	const transition = doc.startViewTransition(() => flushSync(update));
+	void transition.finished.finally(() => {
+		document.documentElement.classList.remove("gui-view-transition");
+	});
+	return transition;
 }
 
 /**
@@ -47,18 +64,14 @@ export function morphSurfaceFrom(element: Element | null, name: string, update: 
 	}
 	const previous = origin.style.viewTransitionName;
 	origin.style.viewTransitionName = name;
-	document.documentElement.classList.add("gui-view-transition");
-	const transition = doc.startViewTransition(() => {
-		flushSync(() => {
-			// The new state must hold exactly one element with this name: the
-			// destination is what carries it now.
-			origin.style.viewTransitionName = previous;
-			update();
-		});
+	const transition = beginTransition(doc, () => {
+		// The new state must hold exactly one element with this name: the
+		// destination is what carries it now.
+		origin.style.viewTransitionName = previous;
+		update();
 	});
 	void transition.finished.finally(() => {
 		origin.style.viewTransitionName = previous;
-		document.documentElement.classList.remove("gui-view-transition");
 	});
 }
 
@@ -79,18 +92,14 @@ export function morphSurfaceBack(from: Element | null, to: Element | null, name:
 	const destination = to as HTMLElement;
 	const leaving = from as HTMLElement | null;
 	const previous = destination.style.viewTransitionName;
-	document.documentElement.classList.add("gui-view-transition");
-	const transition = doc.startViewTransition(() => {
-		flushSync(() => {
-			if (leaving) leaving.style.viewTransitionName = "none";
-			destination.style.viewTransitionName = name;
-			update();
-		});
+	const transition = beginTransition(doc, () => {
+		if (leaving) leaving.style.viewTransitionName = "none";
+		destination.style.viewTransitionName = name;
+		update();
 	});
 	void transition.finished.finally(() => {
 		destination.style.viewTransitionName = previous;
 		if (leaving) leaving.style.viewTransitionName = "";
-		document.documentElement.classList.remove("gui-view-transition");
 	});
 }
 
@@ -106,9 +115,5 @@ export function withViewTransition(update: () => void): void {
 		update();
 		return;
 	}
-	document.documentElement.classList.add("gui-view-transition");
-	const transition = doc.startViewTransition(() => flushSync(update));
-	void transition.finished.finally(() => {
-		document.documentElement.classList.remove("gui-view-transition");
-	});
+	beginTransition(doc, update);
 }

@@ -1,4 +1,12 @@
-import { getLocaleSnapshot, isTopModal, Markdown, t, useLocale, useModalFocus } from "@musepi/client-core";
+import {
+	getLocaleSnapshot,
+	isTopModal,
+	Markdown,
+	motionDisabled,
+	t,
+	useLocale,
+	useModalFocus,
+} from "@musepi/client-core";
 import {
 	type ChangelogHighlight,
 	type ChangelogHighlightKind,
@@ -104,12 +112,6 @@ const DATE_STYLE: CSSProperties = { fontSize: 12, color: "var(--fg-muted)" };
 /** Reduced-motion probe read once per open: under gui-motion-off /
  *  prefers-reduced-motion the celebrate sprite is dropped entirely (the
  *  builtin engine animates on rAF, and §5u demands no intermediate frames). */
-function motionOff(): boolean {
-	return (
-		document.documentElement.classList.contains("gui-motion-off") ||
-		window.matchMedia("(prefers-reduced-motion: reduce)").matches
-	);
-}
 
 /** One structured highlight card: kind icon + bold title + ≤2-line
  *  description (the parser already provides only the first sentence; the
@@ -320,7 +322,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		if (!open) return;
 		setShowFullLog(false);
 		setExpandedVersions(new Set());
-		setReducedMotion(motionOff());
+		setReducedMotion(motionDisabled());
 	}, [open]);
 
 	// Focus contract (§5u): opening moves focus to the primary action; the

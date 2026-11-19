@@ -3,6 +3,7 @@ import {
 	Markdown,
 	type MarketplaceCardAction,
 	MarketplaceGrid,
+	motionDisabled,
 	t,
 	useLocale,
 	useModalFocus,
@@ -21,7 +22,7 @@ import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { lookupSkillMarketIcon } from "../lib/skill-market";
 import { extensionDisplayName } from "../lib/slot-host";
-import { morphSurfaceFrom, withViewTransition } from "../lib/view-transition";
+import { morphSurfaceFrom, surfaceName, withViewTransition } from "../lib/view-transition";
 import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
 import { StateIcon } from "./StateIcon";
@@ -85,12 +86,12 @@ interface SkillUpdateRow {
 
 /** A stable view-transition name for one skill, valid as a CSS custom-ident. */
 function skillSurfaceName(name: string): string {
-	return `skill-${name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+	return surfaceName("skill", name);
 }
 
 /** The drawer header's name while a card grows into it. */
 function skillPanelName(name: string): string {
-	return `skill-panel-${name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+	return surfaceName("skill-panel", name);
 }
 
 /** One row of daemon skills.list (trimmed to what the UI renders). */
@@ -423,7 +424,7 @@ function SkillDrawer({
 
 	const requestClose = useCallback((): void => {
 		if (closing) return;
-		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+		if (motionDisabled()) {
 			onClose();
 			return;
 		}

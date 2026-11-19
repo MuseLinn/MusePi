@@ -16,6 +16,13 @@ export { Gauge, type GaugeProps } from "./components/charts/Gauge";
 export { KLine, type KLineCandle, type KLineProps } from "./components/charts/KLine";
 export { LineChart, type LineChartProps, type LineChartSerie } from "./components/charts/LineChart";
 export { Sparkline, type SparklineProps } from "./components/charts/Sparkline";
+export { ComposerEditor, type ComposerEditorProps } from "./components/composer/ComposerEditor";
+export type {
+	ComposerEditorHandle,
+	ComposerSelection,
+	EditorMark,
+	MentionPreview,
+} from "./components/composer/composer-editor-types";
 export { ImageLightbox } from "./components/image-lightbox";
 export {
 	clampImageScale,
@@ -166,12 +173,11 @@ export {
 	useAsyncJobs,
 } from "./lib/async-jobs";
 export { type ComposerPlaceholderInput, composerPlaceholder } from "./lib/composer-placeholder";
-export { ComposerEditor, type ComposerEditorProps } from "./components/composer/ComposerEditor";
-export type { ComposerEditorHandle, ComposerSelection, EditorMark, MentionPreview } from "./components/composer/composer-editor-types";
 export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
 export { loadMarketplaceDetailPreference, saveMarketplaceDetailPreference } from "./lib/marketplace-preferences";
 export * from "./lib/modal-focus";
+export { motionDisabled } from "./lib/motion-tokens";
 export {
 	clearPromptSuggestion,
 	getPromptSuggestion,

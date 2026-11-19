@@ -35,7 +35,7 @@
  * above the sprite and follows every pet move.
  */
 
-import { setLocale, t } from "@musepi/client-core";
+import { motionDisabled, setLocale, t } from "@musepi/client-core";
 import { ArrowUp, ArrowUpRight, Check, MessageSquare, Square, X } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type CSSProperties, isValidElement, type ReactNode, useEffect, useRef, useState } from "react";
@@ -96,13 +96,6 @@ const BUBBLE_STAGGER_BASE_MS = 32;
 /** Beyond this many cards the trailing delay stops growing: a long list
  *  would otherwise hold its last card invisible for most of a second. */
 const BUBBLE_STAGGER_MAX = 4;
-
-function bubbleMotionOff(): boolean {
-	return (
-		document.documentElement.classList.contains("gui-motion-off") ||
-		window.matchMedia("(prefers-reduced-motion: reduce)").matches
-	);
-}
 
 /** Stack collapse state (kimi-work parity): the full list, the single
  *  stacked card, or fully hidden behind a count badge by the pet. */
@@ -221,7 +214,7 @@ export function CompanionBubbles(): ReactNode {
 	const exitItems = (keys: string[]): void => {
 		if (keys.length === 0) return;
 		const set = new Set(keys);
-		if (bubbleMotionOff()) {
+		if (motionDisabled()) {
 			dropKeys(set);
 			return;
 		}
@@ -532,7 +525,7 @@ export function CompanionBubbles(): ReactNode {
 	// complete message immediately instead of animating each character.
 	useEffect(() => {
 		if (bubbles.length === 0 || bubbles.every(b => b.visible === b.text)) return;
-		if (bubbleMotionOff()) {
+		if (motionDisabled()) {
 			setBubbles(prev => prev.map(b => (b.visible === b.text ? b : { ...b, visible: b.text })));
 			return;
 		}
@@ -699,7 +692,7 @@ export function CompanionBubbles(): ReactNode {
 		if (next === stackMode) return;
 		const r = stackRef.current?.getBoundingClientRect();
 		setStackMode(next);
-		setStackMorph(!bubbleMotionOff() && r ? { from: { width: r.width, height: r.height } } : null);
+		setStackMorph(!motionDisabled() && r ? { from: { width: r.width, height: r.height } } : null);
 		if (next === "hidden") {
 			setReplyFor(null);
 			setReplyText("");
@@ -722,7 +715,7 @@ export function CompanionBubbles(): ReactNode {
 	useEffect(() => {
 		if (!stackMorph) return;
 		const el = stackRef.current;
-		if (!el || bubbleMotionOff()) {
+		if (!el || motionDisabled()) {
 			setStackMorph(null);
 			return;
 		}

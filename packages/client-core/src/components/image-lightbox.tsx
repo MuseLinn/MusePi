@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { t } from "../i18n/index.js";
 import { isTopModal, useModalFocus } from "../lib/modal-focus";
 import { oneTakeMotion } from "../lib/motion-tokens.js";
-import { computeMorph, type MorphRect, motionDisabled } from "./image-morph.js";
+import { flyFrame, type MorphRect, motionDisabled } from "./image-morph.js";
 import "./image-lightbox.css";
 
 /** Exit animation length — must match tr-img-lb-out in image-lightbox.css. */
@@ -190,20 +190,9 @@ export function ImageLightbox({
 				const frame = frameRef.current;
 				if (!img || !frame) return;
 				const target = img.getBoundingClientRect();
-				const m = computeMorph(origin, target);
-				if (!m) return;
 				// fill:forwards pins the landed transform during the hold;
 				// the animation is cancelled on reopen (open-morph effect).
-				closeAnimRef.current = frame.animate(
-					[
-						{ transform: "none", transformOrigin: "top left" },
-						{
-							transform: `translate(${m.dx}px, ${m.dy}px) scale(${m.sx}, ${m.sy})`,
-							transformOrigin: "top left",
-						},
-					],
-					{ duration: motion.durationMs, easing: motion.easing, fill: "forwards" },
-				);
+				closeAnimRef.current = flyFrame(frame, origin, target, { reverse: true, fill: "forwards" });
 			});
 			exitTimerRef.current = setTimeout(() => {
 				lastOpenRef.current = null;
@@ -247,21 +236,9 @@ export function ImageLightbox({
 		const frame = frameRef.current;
 		if (!img || !frame) return;
 		const fly = (): void => {
-			const motion = oneTakeMotion();
 			const target = img.getBoundingClientRect();
-			const m = computeMorph(originRect, target);
-			if (!m) return;
+			if (!flyFrame(frame, originRect, target)) return;
 			morphLiveRef.current = true;
-			frame.animate(
-				[
-					{
-						transform: `translate(${m.dx}px, ${m.dy}px) scale(${m.sx}, ${m.sy})`,
-						transformOrigin: "top left",
-					},
-					{ transform: "none", transformOrigin: "top left" },
-				],
-				{ duration: motion.durationMs, easing: motion.easing },
-			);
 		};
 		// The stage rect is only meaningful once the image has intrinsic
 		// size; until then the frame is held invisible (a not-yet-loaded

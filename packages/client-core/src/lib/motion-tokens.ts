@@ -30,3 +30,10 @@ export function dismissEasing(): string {
 		"cubic-bezier(0.8, 0, 0.4, 1)"
 	);
 }
+
+/** The app's motion kill-switch and the OS preference, in one place. */
+export function motionDisabled(): boolean {
+	if (typeof document === "undefined") return true;
+	if (document.documentElement.classList.contains("gui-motion-off")) return true;
+	return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}

@@ -40,7 +40,7 @@ import {
 import { tapFeedback } from "../lib/haptic";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
-import { morphSurfaceBack, morphSurfaceFrom } from "../lib/view-transition";
+import { morphSurfaceBack, morphSurfaceFrom, surfaceName } from "../lib/view-transition";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { DialogFrame } from "./DialogFrame";
@@ -60,7 +60,7 @@ import { WorkspacePageHeader } from "./WorkspacePageHeader";
 
 /** Stable shared-surface name for one board widget. */
 function boardSurfaceName(id: string): string {
-	return `board-widget-${id.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+	return surfaceName("board-widget", id);
 }
 
 function focusCardSize(): { width: number; height: number } {

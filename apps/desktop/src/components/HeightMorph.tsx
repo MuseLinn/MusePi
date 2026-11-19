@@ -1,4 +1,4 @@
-import { animateSpring, type SpringOptions } from "@musepi/client-core";
+import { animateSpring, motionDisabled, type SpringOptions } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useLayoutEffect, useRef } from "react";
 
@@ -45,16 +45,6 @@ export function morphBounce(delta: number): number {
 	// Cap the overshoot in pixels as well: a large travel must not turn a
 	// 4% overshoot into a visible bounce.
 	return Math.min(fraction, 12 / Math.max(24, delta));
-}
-
-/** The motion is skipped entirely under reduced motion — the app's
- *  `gui-motion-off` class or the OS setting. The height still changes; it
- *  just arrives without travelling. */
-function motionIsOff(): boolean {
-	return (
-		document.documentElement.classList.contains("gui-motion-off") ||
-		window.matchMedia("(prefers-reduced-motion: reduce)").matches
-	);
 }
 
 /**
@@ -141,7 +131,7 @@ export function HeightMorph({
 		// scrolling for the whole transition window. Keep only the fade.
 		if (delta < 1) return;
 		const from = prevHeight.current;
-		if (motionIsOff()) {
+		if (motionDisabled()) {
 			// The height still changes; it just arrives without travelling.
 			node.style.height = "";
 			node.style.overflow = "";

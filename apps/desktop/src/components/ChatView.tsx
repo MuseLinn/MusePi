@@ -4,6 +4,8 @@ import {
 	ComputerViewerPipView,
 	downloadBlob,
 	isBranchFormingEntry,
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
+	motionDisabled,
 	punkAvatarUri,
 	relTime,
 	SessionErrorDock,
@@ -350,17 +352,6 @@ const COMPOSER_MORPH_EASING = springEasing(
 	COMPOSER_MORPH_MS,
 );
 
-/** Reduced motion: land on the target with no intermediate frames. WAAPI is
- *  not covered by CSS `@media (prefers-reduced-motion: reduce)` — without
- *  this explicit check a user who asked for less motion still gets the
- *  whole 320ms morph on every ⌘⇧E. */
-function composerMotionOff(): boolean {
-	return (
-		document.documentElement.classList.contains("gui-motion-off") ||
-		window.matchMedia("(prefers-reduced-motion: reduce)").matches
-	);
-}
-
 /**
  * Keep a node mounted for one exit animation. `open` mounts on the next
  * render; closing flips `closing` and unmounts after the exit window, so CSS
@@ -377,9 +368,7 @@ function useExitPresence(open: boolean, exitMs: number): { mounted: boolean; clo
 			return;
 		}
 		if (!mounted) return;
-		const reduced =
-			document.documentElement.classList.contains("gui-motion-off") ||
-			window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+		const reduced = motionDisabled();
 		setClosing(true);
 		const timer = window.setTimeout(
 			() => {
@@ -2875,7 +2864,7 @@ export function ChatView({
 		// Reduced motion: land on the target immediately. WAAPI animations
 		// are NOT covered by CSS @media rules, so without this early return
 		// the user who asked for less motion still gets the full morph.
-		if (composerMotionOff()) {
+		if (motionDisabled()) {
 			el.style.height = focusMode ? `${target}px` : "";
 			return;
 		}
