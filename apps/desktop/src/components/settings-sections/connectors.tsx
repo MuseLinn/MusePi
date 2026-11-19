@@ -125,6 +125,11 @@ function reportOutcome(
 	pushActionToast({ ...outcome, dedupeKey: `connector:${connectorId}:outcome` });
 }
 
+/** Viewport rectangle of a connector row, the origin of its dialog. */
+function connectorRowRect(id: string): DOMRect | null {
+	return document.querySelector<HTMLElement>(`[data-connector-id="${id}"]`)?.getBoundingClientRect() ?? null;
+}
+
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
@@ -236,7 +241,10 @@ export function ConnectorsSection({
 	const [warnings, setWarnings] = useState<string[]>([]);
 	const [category, setCategory] = useState<string | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
+	const [importOrigin, setImportOrigin] = useState<DOMRect | null>(null);
 	const [deviceTarget, setDeviceTarget] = useState<string | null>(null);
+	const [deviceOrigin, setDeviceOrigin] = useState<DOMRect | null>(null);
+	const [detailOrigin, setDetailOrigin] = useState<DOMRect | null>(null);
 	const locale = useLocale();
 	const useChineseDescription = locale.toLowerCase().startsWith("zh");
 
@@ -245,6 +253,7 @@ export function ConnectorsSection({
 	 * a 180ms exit, and a shell keyed to the current id would go blank during it.
 	 */
 	const openDetail = useCallback((connector: CatalogConnector): void => {
+		setDetailOrigin(connectorRowRect(connector.id));
 		setDetailConnector(connector);
 		setDetailId(connector.id);
 		setAlternativesOpen(false);
@@ -513,6 +522,7 @@ ${connector.category ?? ""}`.toLowerCase();
 						// This row has a pinned client id but no secret, so the browser
 						// exchange cannot finish. The device grant is its sign-in path and
 						// keeps polling from the page, not from this dialog.
+						setDeviceOrigin(connectorRowRect(connector.id));
 						setDeviceTarget(connector.id);
 						setDetailId(null);
 						return;
@@ -681,7 +691,7 @@ ${connector.category ?? ""}`.toLowerCase();
 		const description =
 			useChineseDescription && connector.descriptionZh ? connector.descriptionZh : connector.description;
 		return (
-			<div key={connector.id} className="gui-agent-card gui-connector-card">
+			<div key={connector.id} data-connector-id={connector.id} className="gui-agent-card gui-connector-card">
 				<button type="button" className="gui-connector-main" onClick={() => openDetail(connector)}>
 					<span className="gui-connector-icon" aria-hidden="true">
 						{renderGlyph(connector, "row")}
@@ -1110,6 +1120,7 @@ ${connector.category ?? ""}`.toLowerCase();
 					rpc={rpc}
 					serverName={`connector:${deviceTarget}`}
 					open={deviceTarget !== null}
+					originRect={deviceOrigin}
 					autoStart
 					onClose={() => setDeviceTarget(null)}
 					onDone={() => {
@@ -1129,7 +1140,14 @@ ${connector.category ?? ""}`.toLowerCase();
 					placeholder={t("settings.connectorsSearch")}
 					aria-label={t("settings.connectorsSearch")}
 				/>
-				<button type="button" className="gui-btn" onClick={() => setImportOpen(true)}>
+				<button
+					type="button"
+					className="gui-btn"
+					onClick={event => {
+						setImportOrigin(event.currentTarget.getBoundingClientRect());
+						setImportOpen(true);
+					}}
+				>
 					{t("settings.connectorsImport")}
 				</button>
 				<button type="button" className="gui-btn" onClick={() => void refresh()}>
@@ -1216,6 +1234,7 @@ ${connector.category ?? ""}`.toLowerCase();
 			<ConnectorImportDialog
 				rpc={rpc}
 				open={importOpen}
+				originRect={importOrigin}
 				onClose={() => setImportOpen(false)}
 				onImported={() => void load()}
 			/>
@@ -1224,6 +1243,7 @@ ${connector.category ?? ""}`.toLowerCase();
 				onClose={() => setDetailId(null)}
 				label={detailConnector?.name ?? t("settings.connectors")}
 				className="gui-dialog--connector"
+				originRect={detailOrigin}
 				morphKey={
 					detailConnector
 						? `${detailConnector.id}:${alternativesOpen}:${tokenTarget === detailConnector.id}:${

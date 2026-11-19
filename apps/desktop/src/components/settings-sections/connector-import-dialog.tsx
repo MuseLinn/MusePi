@@ -40,11 +40,14 @@ export function ConnectorImportDialog({
 	open,
 	onClose,
 	onImported,
+	originRect,
 }: {
 	rpc: RpcClient | null;
 	open: boolean;
 	onClose(): void;
 	onImported(): void;
+	/** The 导入 button's rectangle: the dialog grows from it. */
+	originRect?: { left: number; top: number; width: number; height: number } | null;
 }): ReactNode {
 	const [candidates, setCandidates] = useState<ImportCandidate[] | null>(null);
 	const [picked, setPicked] = useState<Set<string>>(new Set());
@@ -133,6 +136,7 @@ export function ConnectorImportDialog({
 			onClose={onClose}
 			label={t("settings.connectorsImportTitle")}
 			className="gui-dialog--connector-import"
+			originRect={originRect}
 			morphKey={`${step}:${candidates === null ? "loading" : candidates.length}:${Boolean(error)}`}
 		>
 			<div className="gui-import-body">

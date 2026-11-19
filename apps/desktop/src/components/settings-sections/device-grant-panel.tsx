@@ -38,6 +38,7 @@ export function DeviceGrantPanel({
 	open,
 	onClose,
 	onDone,
+	originRect,
 	autoStart = false,
 }: {
 	rpc: RpcClient | null;
@@ -46,6 +47,8 @@ export function DeviceGrantPanel({
 	open: boolean;
 	onClose(): void;
 	onDone(): void;
+	/** The triggering connector row: the dialog grows from it. */
+	originRect?: { left: number; top: number; width: number; height: number } | null;
 	/** Start the flow on mount: the caller already chose the device grant. */
 	autoStart?: boolean;
 }): ReactNode {
@@ -160,6 +163,7 @@ export function DeviceGrantPanel({
 			onClose={dismiss}
 			label={t("settings.mcpDeviceTitle")}
 			className="gui-dialog--device"
+			originRect={originRect}
 			morphKey={`${flow?.status ?? "idle"}:${Boolean(error)}:${starting}`}
 		>
 			<div className="gui-connector-detail">

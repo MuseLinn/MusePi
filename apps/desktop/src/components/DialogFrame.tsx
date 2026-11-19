@@ -1,8 +1,15 @@
-import { isTopModal, useModalFocus } from "@musepi/client-core";
+import { animateSpring, isTopModal, MORPH_SPRING, useModalFocus } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { HeightMorph } from "./HeightMorph";
+
+function motionIsOff(): boolean {
+	return (
+		document.documentElement.classList.contains("gui-motion-off") ||
+		window.matchMedia("(prefers-reduced-motion: reduce)").matches
+	);
+}
 
 /**
  * Modal dialog shell with the same two-phase enter / closing exit the
@@ -22,6 +29,7 @@ export function DialogFrame({
 	className,
 	label,
 	morphKey,
+	originRect,
 }: {
 	open: boolean;
 	onClose(): void;
@@ -35,16 +43,92 @@ export function DialogFrame({
 	 * panels). Omit when the dialog's height is fixed.
 	 */
 	morphKey?: unknown;
+	/**
+	 * Viewport rectangle of the control that opened this dialog. When set, the
+	 * dialog's surface grows from that rectangle into place (one continuous
+	 * move) instead of scaling up on its own; the content fades in as the
+	 * surface lands. Dialogs with no visible trigger omit it and keep the
+	 * standard entrance.
+	 */
+	originRect?: { left: number; top: number; width: number; height: number } | null;
 }): ReactNode {
 	const [mounted, setMounted] = useState(open);
 	const [phase, setPhase] = useState<"enter" | "open" | "closing">(open ? "enter" : "open");
 	const rafRef = useRef<number | null>(null);
 	const timerRef = useRef<Timer | null>(null);
 	const dialogRef = useModalFocus<HTMLDivElement>(mounted);
+	const morphRef = useRef<HTMLDivElement | null>(null);
+	const originPlayed = useRef(false);
 	const onCloseRef = useRef(onClose);
 	const phaseRef = useRef(phase);
 	onCloseRef.current = onClose;
 	phaseRef.current = phase;
+
+	useEffect(() => {
+		if (!open) originPlayed.current = false;
+	}, [open]);
+
+	/**
+	 * Shared-origin entrance: the surface travels from the trigger's rectangle
+	 * to the dialog's own, then hands over to the real frame. The dialog itself
+	 * never scales, so text is never stretched — a sheet carries the growing
+	 * surface and the content fades in underneath as it lands.
+	 */
+	useLayoutEffect(() => {
+		if (!mounted || !open || !originRect || originPlayed.current) return;
+		if (originRect.width < 1 || originRect.height < 1) return;
+		if (motionIsOff()) return;
+		const dialog = dialogRef.current;
+		if (!dialog) return;
+		originPlayed.current = true;
+		dialog.classList.add("gui-dialog--from-origin");
+		// The pending class carries a scale; neutralize it before measuring, or
+		// the target rectangle would be the shrunken one.
+		void dialog.offsetHeight;
+		const target = dialog.getBoundingClientRect();
+		if (target.width < 1 || target.height < 1) {
+			dialog.classList.remove("gui-dialog--from-origin");
+			return;
+		}
+
+		const wrapper = morphRef.current;
+		if (wrapper) wrapper.style.opacity = "0";
+		const sheet = document.createElement("div");
+		sheet.className = "gui-dialog-origin-sheet";
+		sheet.style.left = `${originRect.left}px`;
+		sheet.style.top = `${originRect.top}px`;
+		sheet.style.width = `${originRect.width}px`;
+		sheet.style.height = `${originRect.height}px`;
+		document.body.appendChild(sheet);
+
+		const radiusFrom = Math.min(12, Math.max(6, originRect.height / 6));
+		const radiusTo = Number.parseFloat(getComputedStyle(dialog).borderRadius) || 16;
+		let settled = false;
+		let stop: (() => void) | undefined;
+		const settle = (): void => {
+			if (settled) return;
+			settled = true;
+			stop?.();
+			sheet.remove();
+			dialog.classList.remove("gui-dialog--from-origin");
+			if (wrapper) wrapper.style.opacity = "";
+		};
+		stop = animateSpring(
+			{ from: 0, to: 1, ...MORPH_SPRING, maxDuration: (MORPH_SPRING.visualDuration ?? 0.44) * 2 },
+			progress => {
+				sheet.style.left = `${originRect.left + (target.left - originRect.left) * progress}px`;
+				sheet.style.top = `${originRect.top + (target.top - originRect.top) * progress}px`;
+				sheet.style.width = `${originRect.width + (target.width - originRect.width) * progress}px`;
+				sheet.style.height = `${originRect.height + (target.height - originRect.height) * progress}px`;
+				sheet.style.borderRadius = `${radiusFrom + (radiusTo - radiusFrom) * progress}px`;
+				if (wrapper) {
+					wrapper.style.opacity = `${Math.max(0, Math.min(1, (progress - 0.6) / 0.4))}`;
+				}
+			},
+			settle,
+		);
+		return settle;
+	}, [dialogRef, mounted, open, originRect]);
 
 	useEffect(() => {
 		if (!mounted) return;
@@ -113,7 +197,12 @@ export function DialogFrame({
 				aria-label={label}
 				onClick={e => e.stopPropagation()}
 			>
-				<HeightMorph morphKey={morphKey ?? null} className="gui-dialog-morph">
+				<HeightMorph
+					morphKey={morphKey ?? null}
+					className="gui-dialog-morph"
+					innerRef={morphRef}
+					fade={!originRect}
+				>
 					{children}
 				</HeightMorph>
 			</div>

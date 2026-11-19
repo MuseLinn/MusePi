@@ -6208,6 +6208,27 @@ body.gui-resizing {
 	min-height: 0;
 }
 
+/* Shared-origin entrance: a sheet (not the dialog) carries the surface from
+   the trigger's rectangle, so the content never stretches. The frame stays
+   untransformed; only its opacity is driven by the spring. */
+.gui-dialog-origin-sheet {
+	position: fixed;
+	z-index: calc(var(--z-modal) + 1);
+	pointer-events: none;
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius-lg);
+	background: var(--glass-bg-strong);
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow: var(--glass-shadow);
+}
+
+.gui-dialog.gui-dialog--from-origin {
+	animation: none;
+	opacity: 1;
+	transform: none;
+}
+
 @media (max-width: 900px) {
 	.gui-connector-grid {
 		grid-template-columns: minmax(0, 1fr);
