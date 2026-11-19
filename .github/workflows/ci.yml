@@ -248,6 +248,55 @@ jobs:
          - name: Rustfmt
            run: bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build --config=rustfmt //crates/...
 
+   # `cargo` is what developers run locally (`bun run check:rs`, `cargo test`),
+   # and CI ran none of it: the bazel jobs above build the same crates through
+   # their own toolchain, so a `cfg(target_os = "macos")` branch stayed untyped
+   # until a release darwin build compiled it. Two gaps close here:
+   #
+   # 1. `cargo check` never links, so the darwin target type-checks on this
+   #    Linux runner. The dependencies that build native code for the target
+   #    from their build scripts still need the macOS SDK (`cc` for zstd-sys,
+   #    pcre2-sys and ring, `cmake` for the opus inside webrtc), so
+   #    `scripts/run-rs-task.ts` resolves those drivers to `true` for the
+   #    darwin target only: the build scripts finish, nothing is compiled, and
+   #    nothing links it. The gate therefore covers darwin-only Rust, not darwin
+   #    native objects — the release darwin leg compiles those for real.
+   # 2. The `desktop::` suite on Linux had never run in CI at all; it does not
+   #    need a display on the headless host.
+   #
+   # Cold cost is the one-time dependency graph: roughly 5 min for the darwin
+   # check (metadata only, no C objects) plus 7 min to build and link the Linux
+   # test binary. The registry cache below only removes the download.
+   rust_platform_check:
+      name: Cargo check (macOS target) & desktop tests
+      needs: [changes]
+      if: needs.changes.outputs.code == 'true'
+      runs-on: ubuntu-22.04
+      timeout-minutes: 45
+      steps:
+         - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+         # Only Bun itself is needed: the gate is `scripts/run-rs-task.ts`, and
+         # that script imports nothing from the workspace.
+         - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+           id: bun
+           with:
+              bun-version-file: "package.json"
+         - name: Cache cargo registry
+           uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+           with:
+              path: |
+                 ~/.cargo/registry
+                 ~/.cargo/git
+              key: cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+              restore-keys: cargo-${{ runner.os }}-
+         - name: Type check the macOS target
+           # The C-toolchain stubs that make this possible are exported by
+           # `scripts/run-rs-task.ts` to this command only; the Linux native
+           # step below runs with the plain environment.
+           run: bun scripts/run-rs-task.ts check:rs:darwin
+         - name: Desktop suite on Linux
+           run: bun scripts/run-rs-task.ts check:rs:desktop
+
    # PRs and main build the linux-x64 pair locally; fork runs restore the
    # default-branch bazel cache. Main additionally builds the platforms needed
    # by release artifacts. TS jobs depend only on the x64 artifact, not the
@@ -683,6 +732,7 @@ jobs:
             check,
             docs_spec,
             rust_validate,
+            rust_platform_check,
             native_addons_x64,
             native_addons,
             test_workspace,
@@ -709,6 +759,7 @@ jobs:
       name: Release validation gate
       if: ${{ needs.release_metadata.outputs.is-release == 'true' && !cancelled() &&
          needs.rust_validate.result == 'success' &&
+         needs.rust_platform_check.result == 'success' &&
          needs.native_addons.result == 'success' &&
          needs.test_workspace.result == 'success' &&
          needs.test_coding_agent_singleton.result == 'success' &&
@@ -718,7 +769,7 @@ jobs:
          needs.test_coding_agent_native.result == 'success' &&
          needs.test_smoke.result == 'success' && needs.test_desktop_smoke.result == 'success' &&
          needs.check.result == 'success' && needs.docs_spec.result == 'success' && needs.install_methods.result == 'success' }}
-      needs: [release_metadata, check, docs_spec, rust_validate, native_addons, test_workspace, test_coding_agent_singleton, test_ts_native, test_coding_agent_ui, test_coding_agent_runtime, test_coding_agent_native, test_smoke, test_desktop_smoke, install_methods]
+      needs: [release_metadata, check, docs_spec, rust_validate, rust_platform_check, native_addons, test_workspace, test_coding_agent_singleton, test_ts_native, test_coding_agent_ui, test_coding_agent_runtime, test_coding_agent_native, test_smoke, test_desktop_smoke, install_methods]
       runs-on: ubuntu-22.04
       steps:
          - run: echo "release validation green"

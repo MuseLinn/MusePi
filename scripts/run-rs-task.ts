@@ -24,6 +24,24 @@ const RUST_AFFECTING_FILE_NAMES = [
 // ported third-party code), it is held to default clippy and to zero rustc
 // warnings like everything else.
 const VENDORED_FORK_EXCLUDES = ["--exclude", "brush-core"] as const satisfies readonly string[];
+
+// Platform compile gate: the `cfg(target_os = "macos")` half of `desktop` used
+// to be compiled only by a release darwin build, so a macOS type error reached
+// main untouched. `cargo check` does not link, which is what lets a Linux host
+// type-check the darwin target without a macOS SDK; the dependencies that build
+// native code for the target from their build scripts still need that SDK
+// (`cc` for zstd-sys, pcre2-sys and ring, `cmake` for the opus in webrtc), so
+// every one of those drivers resolves to `true` for this target — the build
+// scripts finish, nothing is compiled, and nothing links it. The gate covers
+// darwin-only Rust, not darwin native objects; the release darwin build
+// compiles those.
+const DARWIN_TARGET = "aarch64-apple-darwin";
+const DARWIN_BUILD_STUBS: Record<string, string> = Object.fromEntries(
+	["CC", "AR", "CXX", "CMAKE"].flatMap(tool => [
+		[`${tool}_${DARWIN_TARGET}`, "true"],
+		[`${tool}_${DARWIN_TARGET.replaceAll("-", "_")}`, "true"],
+	]),
+);
 const TASK_COMMANDS = {
 	"check:rs": [
 		["cargo", "fmt", "--all", "--", "--check"],
@@ -56,9 +74,19 @@ const TASK_COMMANDS = {
 			"--final-status-level=fail",
 		],
 	],
+	// Runs on a Linux host in CI. Two tasks rather than one so the C-toolchain
+	// stubs stay attached to the darwin command alone: nothing in the Linux
+	// native build sees them.
+	"check:rs:darwin": [["cargo", "check", "-p", "pi-natives", "--lib", "--target", DARWIN_TARGET]],
+	"check:rs:desktop": [["cargo", "test", "-p", "pi-natives", "--lib", "desktop::"]],
 } as const satisfies Record<string, readonly (readonly string[])[]>;
 
 type RustTaskName = keyof typeof TASK_COMMANDS;
+
+// Tasks that need environment of their own; everything else inherits ours.
+const TASK_ENV: Partial<Record<RustTaskName, Record<string, string>>> = {
+	"check:rs:darwin": DARWIN_BUILD_STUBS,
+};
 
 const repoRoot = path.join(import.meta.dir, "..");
 const cargoBinary = await resolveCargoBinary(repoRoot);
@@ -74,8 +102,16 @@ if (taskName !== "fmt:rs" && !(isCI() || (await hasRustAffectingChanges()))) {
 	process.exit(0);
 }
 
+if (taskName === "check:rs:darwin") {
+	const exitCode = await prepareDarwinTarget();
+	if (exitCode !== 0) {
+		process.exit(exitCode);
+	}
+}
+
+const taskEnv = TASK_ENV[taskName];
 for (const command of TASK_COMMANDS[taskName]) {
-	const exitCode = await runCommand(command);
+	const exitCode = await runCommand(command, taskEnv);
 	if (exitCode !== 0) {
 		process.exit(exitCode);
 	}
@@ -141,11 +177,33 @@ function isOneOf<T extends string>(value: string, values: readonly T[]): value i
 	return values.some(entry => entry === value);
 }
 
-async function runCommand(command: readonly string[]): Promise<number> {
+// rustup installs the channel and components from rust-toolchain.toml on first
+// use, but an already-installed toolchain never gains a target it was not
+// installed with, so the darwin check adds it. The two hosts that cannot do
+// that say why instead of surfacing as an unhandled spawn failure: `cargo` is
+// a bare `cargo` rather than a rustup-resolved path when rustup is absent, and
+// the build-script stubs are `true`, which only exists on POSIX hosts.
+async function prepareDarwinTarget(): Promise<number> {
+	if (process.platform === "win32") {
+		console.error(
+			`${taskName} runs on POSIX hosts only. Run it inside WSL on Windows; see the platform compile gate in CONTRIBUTING.md.`,
+		);
+		return 1;
+	}
+	if (!path.isAbsolute(cargoBinary)) {
+		console.error(
+			`${taskName} needs rustup to add the ${DARWIN_TARGET} standard library, and \`${cargoBinary}\` did not resolve through it. Install rustup or run this inside WSL.`,
+		);
+		return 1;
+	}
+	return await runCommand(["rustup", "target", "add", DARWIN_TARGET]);
+}
+
+async function runCommand(command: readonly string[], extraEnv?: Record<string, string>): Promise<number> {
 	const [head, ...rest] = command;
 	const isCargo = head === "cargo";
 	const argv = isCargo ? [cargoBinary, ...rest] : [head, ...rest];
-	const env: Record<string, string> = { ...(process.env as Record<string, string>) };
+	const env: Record<string, string> = { ...(process.env as Record<string, string>), ...extraEnv };
 	if (isCargo) {
 		// Cargo subprocesses (notably `rustc -vV` from `cargo metadata`) resolve
 		// via PATH; ensure the active toolchain bin dir wins over Homebrew's

@@ -1,4 +1,13 @@
 [toolchain]
 channel = "nightly-2026-08-08"
 components = ["rustfmt", "clippy", "rust-analyzer"]
-targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+# The Apple triples are here so any host can type-check the darwin half of
+# `desktop` (`bun scripts/run-rs-task.ts check:rs:darwin`); `cargo check` does
+# not link, so neither a macOS host nor its SDK is required. See the platform
+# compile gate in CONTRIBUTING.md.
+targets = [
+   "x86_64-unknown-linux-gnu",
+   "x86_64-pc-windows-msvc",
+   "aarch64-apple-darwin",
+   "x86_64-apple-darwin",
+]

@@ -79,6 +79,33 @@ Keep each pull request to one logical change. Avoid unrelated cleanup,
 drive-by refactors, generated noise, or features that were not part of the
 agreed scope.
 
+## Platform compile gate
+
+CI type-checks the macOS half of `crates/pi-natives` on a Linux runner and runs
+the `desktop` suite there:
+
+```bash
+bun scripts/run-rs-task.ts check:rs:darwin   # cargo check --target aarch64-apple-darwin
+bun scripts/run-rs-task.ts check:rs:desktop  # cargo test -p pi-natives --lib desktop::
+```
+
+`cargo check` does not link, so the darwin target needs neither a macOS host nor
+the macOS SDK. Two consequences bound what the gate proves:
+
+- It covers the darwin `cfg` branches of the Rust code, not darwin native
+  objects. The dependencies that build native code for the target from build
+  scripts (`zstd-sys`, `pcre2-sys` and `ring` through `cc`, and the opus inside
+  `webrtc` through `cmake`) cannot do that on a Linux host without the macOS
+  SDK, so `check:rs:darwin` points `CC`, `AR`, `CXX` and `CMAKE` for that target
+  at `true`. The build scripts finish, nothing links their output, and the
+  darwin-only Rust still has to type-check. The release darwin build compiles
+  those native objects for real.
+- The `desktop::` tests run on the Linux host, so a macOS-only test still needs
+  a Mac to run.
+
+`rust-toolchain.toml` lists both Apple triples, so `rustup` installs their
+standard library on first use. On Windows, run the same commands inside WSL.
+
 ## Review
 
 Maintainers review the submitted behavior and the contributor's understanding

@@ -15,6 +15,7 @@ import sys
 HEAVY = frozenset(
     {
         "rust_validate",
+        "rust_platform_check",
         "native_addons_x64",
         "native_addons",
         "test_workspace",
