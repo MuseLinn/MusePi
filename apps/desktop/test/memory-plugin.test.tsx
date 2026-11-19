@@ -22,7 +22,7 @@ describe("memory Cordis plugin", () => {
 		expect(declaredProvide(entry)).toEqual([]);
 	});
 
-	it("registers the settings.tab.memory page as 记忆", () => {
+	it("registers the settings.section.memory page as 记忆", () => {
 		const registrations: unknown[] = [];
 		apply({
 			setLabel() {},
@@ -34,7 +34,7 @@ describe("memory Cordis plugin", () => {
 		});
 		expect(registrations).toEqual([
 			{
-				slot: "settings.tab.memory",
+				slot: "settings.section.memory",
 				moduleUrl: "./page.tsx",
 				label: "记忆",
 				availability: "always",
@@ -43,8 +43,8 @@ describe("memory Cordis plugin", () => {
 		// The memory page is no longer its own nav row: the merged 会话与记忆 page
 		// owns the row, and this slot renders inside its memory group. The slot
 		// still must not appear as a duplicate extension row.
-		const items = navGroups([{ slot: "settings.tab.memory", label: "记忆" }]).flatMap(group => group.items);
-		expect(items.some(item => item.id === "ext:settings.tab.memory")).toBe(false);
+		const items = navGroups([{ slot: "settings.section.memory", label: "记忆" }]).flatMap(group => group.items);
+		expect(items.some(item => item.id === "ext:settings.section.memory")).toBe(false);
 		expect(items.find(item => item.id === "memory")).toBeUndefined();
 		expect(items.find(item => item.id === "session-memory")?.label).toBe(t("settings.sessionMemory"));
 	});

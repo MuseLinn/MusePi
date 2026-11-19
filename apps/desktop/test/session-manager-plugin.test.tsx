@@ -200,7 +200,7 @@ function message(
 }
 
 describe("session-manager Cordis plugin", () => {
-	it("registers the settings.tab.sessions page as 会话", () => {
+	it("registers the settings.section.sessions page as 会话", () => {
 		const registrations: unknown[] = [];
 		apply({
 			setLabel() {},
@@ -212,7 +212,7 @@ describe("session-manager Cordis plugin", () => {
 		});
 		expect(registrations).toEqual([
 			{
-				slot: "settings.tab.sessions",
+				slot: "settings.section.sessions",
 				moduleUrl: "./page.tsx",
 				label: "会话",
 				availability: "always",
@@ -223,8 +223,8 @@ describe("session-manager Cordis plugin", () => {
 		// no duplicate `ext:` entry. The built-in page's id is `session-memory`
 		// (会话 / 记忆 / 预设提示词 merged into one page); `sessions` is only a
 		// capability alias that resolves to it.
-		const items = navGroups([{ slot: "settings.tab.sessions", label: "会话" }]).flatMap(group => group.items);
-		expect(items.some(item => item.id === "ext:settings.tab.sessions")).toBe(false);
+		const items = navGroups([{ slot: "settings.section.sessions", label: "会话" }]).flatMap(group => group.items);
+		expect(items.some(item => item.id === "ext:settings.section.sessions")).toBe(false);
 		expect(items.find(item => item.id === "session-memory")?.label).toBe(t("settings.sessionMemory"));
 		// The retired 历史会话 page is gone from the 数据与统计 group: message
 		// browsing lives on the session page now.

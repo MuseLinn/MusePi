@@ -102,14 +102,17 @@ export function SettingsView({
 	});
 	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件自动挂载为设置页导航项
 	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献)。
-	const extSettingsTabs = useSlotComponentsByPrefix(rpc, SETTINGS_TAB_SLOT_PREFIX);
+	const extSettingsTabs = useSlotComponentsByPrefix(rpc, ["settings.section.", SETTINGS_TAB_SLOT_PREFIX]);
 	// 会话管理插件页:声明 `settings.tab.sessions` 的扩展接管内置「会话」分区。
 	// 插件停用/未装载时保留内置 SessionsSection(自动清理等保留策略不丢失)。
 	/** A page plugin takes over its nav id when the slot names an existing page
 	 *  (`settings.tab.<id>`); the host keeps the built-in renderer as fallback. */
 	const extTabFor = (id: string) =>
 		extSettingsTabs.find(
-			tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}${id}` && (tab.code.length > 0 || tab.url) && !tab.error,
+			tab =>
+				(tab.slot === `settings.section.${id}` || tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}${id}`) &&
+				(tab.code.length > 0 || tab.url) &&
+				!tab.error,
 		);
 	const extSessionsTab = extTabFor("sessions");
 	// 记忆插件页:声明 `settings.tab.memory` 的扩展接管内置「记忆」分区。
@@ -612,6 +615,7 @@ export function SettingsView({
 										rpc={rpc}
 										sessionId={sessionId}
 										onApplyPrompt={applyPrompt}
+										settingsSection={{ id: activeSection, close: onBack }}
 									/>
 								) : (
 									<ConnectorsSection rpc={rpc} onApplyPrompt={applyPrompt} />
@@ -625,6 +629,7 @@ export function SettingsView({
 										rpc={rpc}
 										sessionId={sessionId}
 										cwd={cwd ?? undefined}
+										settingsSection={{ id: activeSection, close: onBack }}
 									/>
 								) : (
 									<IndexesSection rpc={rpc} cwd={cwd} />

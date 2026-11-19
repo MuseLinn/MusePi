@@ -20,6 +20,9 @@ export interface DeclaredSlot {
 	order?: number;
 	id?: string;
 	availability?: string;
+	/** Settings-page nav identity (dsh `settings.section` owner options). */
+	icon?: string;
+	keywords?: string[];
 }
 
 /** The manifest row a declaration compiles down to. */
@@ -31,6 +34,8 @@ export interface ManifestDeclaration {
 	order?: number;
 	id?: string;
 	availability?: string;
+	icon?: string;
+	keywords?: string[];
 }
 
 /** Every `register({...})` in a plugin entry module, read from its source.
@@ -49,6 +54,11 @@ export function parseDeclaredSlots(source: string): DeclaredSlot[] {
 		const order = /order:\s*(-?\d+)/.exec(body)?.[1];
 		const availability = /availability:\s*"([^"]+)"/.exec(body)?.[1];
 		const id = /(?:^|[\s,{])id:\s*"([^"]+)"/.exec(body)?.[1];
+		const icon = /icon:\s*"([^"]+)"/.exec(body)?.[1];
+		const keywordsRaw = /keywords:\s*\[([^\]]*)\]/.exec(body)?.[1];
+		const keywords = keywordsRaw
+			? [...keywordsRaw.matchAll(/"([^"]+)"/g)].map(match => match[1] as string)
+			: undefined;
 		rows.push({
 			slot,
 			moduleUrl: `./${moduleUrl}`,
@@ -56,6 +66,8 @@ export function parseDeclaredSlots(source: string): DeclaredSlot[] {
 			...(order ? { order: Number(order) } : {}),
 			...(id ? { id } : {}),
 			...(availability ? { availability } : {}),
+			...(icon ? { icon } : {}),
+			...(keywords && keywords.length > 0 ? { keywords } : {}),
 		});
 	}
 	return rows;
@@ -83,6 +95,8 @@ export function mergeDeclarations(
 				...(row.order !== undefined ? { order: row.order } : {}),
 				...(row.id ? { id: row.id } : {}),
 				...(row.availability ? { availability: row.availability } : {}),
+				...(row.icon ? { icon: row.icon } : {}),
+				...(row.keywords && row.keywords.length > 0 ? { keywords: row.keywords } : {}),
 			})),
 	];
 }

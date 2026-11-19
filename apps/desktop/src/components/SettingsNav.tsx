@@ -5,6 +5,7 @@ import { SECTION_ALIAS, type SectionId, type SectionRequest } from "../lib/setti
 import { matchSettingRows, type SettingSearchRow } from "../lib/settings-search";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
+import { iconSpriteData } from "../vendor/oc-icons/sprite";
 import { MenuPopup } from "./MenuPopup";
 
 /**
@@ -23,6 +24,9 @@ import { MenuPopup } from "./MenuPopup";
  * The section id contract lives in lib/settings-nav.ts.
  */
 
+/** Settings page slots: canonical dsh vocabulary + the legacy spelling. */
+const PAGE_SLOT_PREFIXES = ["settings.section.", "settings.tab."] as const;
+
 interface SectionDef {
 	id: SectionId | string;
 	/** Must be a real sprite key — IconName is derived from the sprite, so
@@ -31,6 +35,11 @@ interface SectionDef {
 	label: string;
 	/** Implemented sections are clickable; placeholders stay disabled. */
 	enabled: boolean;
+	/** Owner-provided search terms (settings.section keywords); additive to
+	 *  SECTION_SEARCH_TERMS. */
+	keywords?: readonly string[];
+	/** Owner-provided nav position (settings.section `order`). */
+	order?: number;
 }
 
 /**
@@ -314,7 +323,13 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
  * groups. Evaluated at render so the labels follow locale switches (a
  * module-level const would freeze the first locale's strings). */
 export function navGroups(
-	extTabs: ReadonlyArray<{ slot: string; label?: string }>,
+	extTabs: ReadonlyArray<{
+		slot: string;
+		label?: string;
+		icon?: string;
+		order?: number;
+		keywords?: readonly string[];
+	}>,
 ): { title: string; items: SectionDef[] }[] {
 	const groups: { title: string; items: SectionDef[] }[] = [
 		{
@@ -366,18 +381,64 @@ export function navGroups(
 	// row (and its id, keywords and deep links) stays, and the extension does
 	// not add a second row. Only genuinely new pages get an `ext:` row.
 	const builtinIds = new Set(groups.flatMap(group => group.items.map(item => item.id)));
-	for (const c of extTabs) {
-		const suffix = c.slot.startsWith("settings.tab.") ? c.slot.slice("settings.tab.".length) : null;
+	/** `settings.section.<id>` is the canonical spelling (dsh vocabulary);
+	 *  `settings.tab.<id>` is the legacy spelling, still accepted. */
+	const pageIdOf = (slot: string): string | null => {
+		const prefix = PAGE_SLOT_PREFIXES.find(candidate => slot.startsWith(candidate));
+		if (!prefix) return null;
+		const suffix = slot.slice(prefix.length);
 		// A slot may name a capability alias (sessions / memory → session-memory);
 		// resolve it before deciding whether it takes over a built-in page.
-		const pageId = suffix ? ((SECTION_ALIAS as Record<string, string | undefined>)[suffix] ?? suffix) : null;
-		if (pageId && builtinIds.has(pageId)) continue;
+		return (SECTION_ALIAS as Record<string, string | undefined>)[suffix] ?? suffix;
+	};
+	const iconOf = (name: string | undefined): IconName | undefined =>
+		name && name in iconSpriteData ? (name as IconName) : undefined;
+	const overrides = new Map<
+		string,
+		{ label?: string; icon?: IconName; order?: number; keywords?: readonly string[] }
+	>();
+	for (const c of extTabs) {
+		const pageId = pageIdOf(c.slot);
+		// An alias names a sub-page of a composite page (sessions/memory inside
+		// 会话与记忆): the composite owns its label and position, so only a slot
+		// whose id IS the page id may rewrite the nav identity.
+		const direct = pageId === c.slot.slice((PAGE_SLOT_PREFIXES.find(p => c.slot.startsWith(p)) ?? "").length);
+		if (pageId && builtinIds.has(pageId)) {
+			if (!direct) continue;
+			overrides.set(pageId, {
+				...(c.label ? { label: c.label } : {}),
+				...(iconOf(c.icon) ? { icon: iconOf(c.icon) } : {}),
+				...(c.order !== undefined ? { order: c.order } : {}),
+				...(c.keywords && c.keywords.length > 0 ? { keywords: c.keywords } : {}),
+			});
+			continue;
+		}
 		groups[1]!.items.push({
 			id: `ext:${c.slot}`,
-			icon: "plug",
+			icon: iconOf(c.icon) ?? "plug",
 			label: c.label ?? c.slot,
 			enabled: true,
+			...(c.order !== undefined ? { order: c.order } : {}),
+			...(c.keywords && c.keywords.length > 0 ? { keywords: c.keywords } : {}),
 		});
+	}
+	// Owner options project onto the built-in row (label/icon/keywords); an
+	// explicit order positions the row inside its group, rows without one keep
+	// their built-in position (1000 + index).
+	if (overrides.size > 0) {
+		for (const group of groups) {
+			group.items = group.items.map((item, index) => {
+				const override = overrides.get(item.id);
+				return {
+					...item,
+					...(override?.label ? { label: override.label } : {}),
+					...(override?.icon ? { icon: override.icon } : {}),
+					...(override?.keywords ? { keywords: override.keywords } : {}),
+					order: override?.order ?? index,
+				};
+			});
+			group.items.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+		}
 	}
 	return groups;
 }
@@ -400,7 +461,7 @@ function filterNavGroups(
 				// Extension rows carry `ext:<slot>`; search the underlying
 				// section id so a replaced page keeps the built-in keywords.
 				const termsKey = item.id.startsWith("ext:") ? (item.id.slice(4).split(".").pop() ?? item.id) : item.id;
-				const terms = SECTION_SEARCH_TERMS[termsKey] ?? [];
+				const terms = [...(SECTION_SEARCH_TERMS[termsKey] ?? []), ...(item.keywords ?? [])];
 				return terms.some(k => k.includes(q) || q.includes(k));
 			}),
 		}))
@@ -443,7 +504,13 @@ export function SettingsNav({
 	settingsRows,
 	onSelectRow,
 }: {
-	extTabs: ReadonlyArray<{ slot: string; label?: string }>;
+	extTabs: ReadonlyArray<{
+		slot: string;
+		label?: string;
+		icon?: string;
+		order?: number;
+		keywords?: readonly string[];
+	}>;
 	/** The section SettingsView currently renders — drives the highlight. */
 	activeSection: SectionId | string;
 	onSelect(id: SectionRequest): void;

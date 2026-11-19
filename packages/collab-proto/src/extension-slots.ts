@@ -115,6 +115,9 @@ export const EXTENSION_SLOT_DECLARATION = {
 	} as const satisfies Record<string, SlotDeclaration>,
 	prefixes: [
 		"panel.tab.",
+		/** Settings page (dsh `settings.section` vocabulary): `settings.section.<id>`.
+		 *  `settings.tab.<id>` stays accepted as the legacy spelling. */
+		"settings.section.",
 		"settings.tab.",
 		"rail.",
 		"settings.item.",

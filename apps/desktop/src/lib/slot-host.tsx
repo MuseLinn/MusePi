@@ -381,6 +381,10 @@ export interface SlotComponent {
 	 *  renderer owns. No entryKinds → does not participate in per-kind
 	 *  dispatch (targets other exact slots). */
 	entryKinds?: string[];
+	/** Settings-page nav identity (dsh `settings.section` owner options): the
+	 *  registrant names the icon, search keywords and position of its page. */
+	icon?: string;
+	keywords?: readonly string[];
 }
 
 /** One compiled per-tool view from extensions.list (registerToolView —
@@ -726,9 +730,12 @@ export interface SlotComponentProps {
 	 *  sessions). Absent when the host cannot switch sessions. */
 	onOpenSession?: (sessionId: string) => void;
 	/** Settings-page contract: hand an example sentence to the composer and
-	 *  leave settings. Present only on settings.tab.* mounts whose page offers
-	 *  "apply to composer" (connectors, marketplace examples). */
+	 *  leave settings. Present only on settings.section.* mounts whose page
+	 *  offers "apply to composer" (connectors, marketplace examples). */
 	onApplyPrompt?: (text: string) => void;
+	/** Settings-page view contract (dsh `settings.section.view`): the section
+	 *  id this mount renders and the surface's leave action. */
+	settingsSection?: { id: string; close(): void };
 	/** The slot id this component was registered into. */
 	slot?: string;
 	/** Extension path that contributed this component. */
@@ -991,16 +998,22 @@ export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComp
 	}, [data, slot]);
 }
 
-/** Pick compiled components whose slot starts with a namespace prefix
- *  (内核级 slot:PANEL_TAB_SLOT_PREFIX 等按前缀自动挂载)。 */
-export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string): SlotComponent[] {
+/** Pick compiled components whose slot starts with one of the namespace
+ *  prefixes (内核级 slot:PANEL_TAB_SLOT_PREFIX 等按前缀自动挂载). An array
+ *  accepts a renamed slot alongside its legacy spelling, so a migration needs
+ *  no second registry subscription. */
+export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string | readonly string[]): SlotComponent[] {
 	const data = useExtensionRegistry(rpc);
+	// A fresh array literal is a new dep each render; key the memo on the
+	// joined list so the sort does not rerun under an unchanged registry.
+	const prefixes = typeof prefix === "string" ? [prefix] : prefix;
+	const prefixKey = prefixes.join(" ");
 	return useMemo(() => {
 		const all = data?.components ?? [];
 		return all
-			.filter(c => c.slot.startsWith(prefix) && (c.code.length > 0 || c.url || c.error))
+			.filter(c => prefixes.some(p => c.slot.startsWith(p)) && (c.code.length > 0 || c.url || c.error))
 			.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-	}, [data, prefix]);
+	}, [data, prefixKey]);
 }
 
 /** conversation.chat.node seat 派发: 从注册到 `conversation.chat.node`
@@ -1132,6 +1145,7 @@ export function SlotComponentMount({
 	cwd,
 	onOpenSession,
 	onApplyPrompt,
+	settingsSection,
 	page,
 	chatView,
 	composer,
@@ -1151,6 +1165,7 @@ export function SlotComponentMount({
 	cwd?: string;
 	onOpenSession?: SlotComponentProps["onOpenSession"];
 	onApplyPrompt?: SlotComponentProps["onApplyPrompt"];
+	settingsSection?: SlotComponentProps["settingsSection"];
 	page?: SlotComponentProps["page"];
 	/** Host-owned welcome and session surface contract (main.conversation only). */
 	chatView?: SlotComponentProps["chatView"];
@@ -1303,6 +1318,7 @@ export function SlotComponentMount({
 		cwd,
 		onOpenSession,
 		onApplyPrompt,
+		settingsSection,
 		page,
 		chatView,
 		composer,
@@ -1498,6 +1514,7 @@ const slotHostBindings = {
 	useExtensionToolViews,
 	useExtensionScrollbarSkins,
 	useExtensionWidgets,
+	preloadSlotModules,
 	useSlotComponents,
 	useSlotComponentsByPrefix,
 	useUnhostedSlots,

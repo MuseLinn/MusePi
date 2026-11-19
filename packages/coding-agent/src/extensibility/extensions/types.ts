@@ -3007,6 +3007,13 @@ export interface ExtensionComponent {
 	 *  participate in per-kind node dispatch (it targets other exact slots).
 	 *  DSH `conversation.chat.node` entryKey analog. */
 	entryKinds?: string[];
+	/** Nav glyph for settings pages (IconName or short label). DSH
+	 *  `settings.section.icon` parity: the registrant, not the shell, names the
+	 *  icon its section renders with. */
+	icon?: string;
+	/** Extra search terms for the settings search (owner-provided, like the
+	 *  shell's built-in section keywords). */
+	keywords?: readonly string[];
 }
 
 /**

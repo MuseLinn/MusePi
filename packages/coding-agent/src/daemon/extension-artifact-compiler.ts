@@ -469,6 +469,8 @@ function declaredComponents(entryPath: string):
 			order?: number;
 			id?: string;
 			availability?: "always" | "on-demand";
+			icon?: string;
+			keywords?: string[];
 	  }>
 	| undefined {
 	const dir = process.env.MUSEPI_PLUGIN_ARTIFACTS;
@@ -484,6 +486,8 @@ function declaredComponents(entryPath: string):
 		order?: number;
 		id?: string;
 		availability?: "always" | "on-demand";
+		icon?: string;
+		keywords?: string[];
 	}> = [];
 	for (const row of rows) {
 		const codeFile = path.join(dir, row.file);
@@ -590,6 +594,9 @@ interface PrebuiltManifest {
 			id?: string;
 			/** Written by the host's build; validated on read, never trusted raw. */
 			availability?: string;
+			/** Settings-page nav glyph / search keywords (owner options). */
+			icon?: string;
+			keywords?: string[];
 		}>
 	>;
 	/** What each plugin declares, so a collector can skip a plugin with none. */
@@ -744,6 +751,8 @@ export async function collectSlotComponents(
 					...(row.order !== undefined ? { order: row.order } : {}),
 					...(row.id ? { id: row.id } : {}),
 					...(row.availability ? { availability: row.availability } : {}),
+					...(row.icon ? { icon: row.icon } : {}),
+					...(row.keywords && row.keywords.length > 0 ? { keywords: row.keywords } : {}),
 				});
 			}
 			continue;
@@ -770,6 +779,10 @@ export async function collectSlotComponents(
 						...(component.entryKinds && component.entryKinds.length > 0
 							? { entryKinds: component.entryKinds }
 							: {}),
+						...(component.icon ? { icon: component.icon } : {}),
+						...(component.keywords && component.keywords.length > 0
+							? { keywords: component.keywords }
+							: {}),
 					});
 					continue;
 				}
@@ -784,6 +797,8 @@ export async function collectSlotComponents(
 					...(component.id ? { id: component.id } : {}),
 					...(component.availability ? { availability: component.availability } : {}),
 					...(component.entryKinds && component.entryKinds.length > 0 ? { entryKinds: component.entryKinds } : {}),
+					...(component.icon ? { icon: component.icon } : {}),
+					...(component.keywords && component.keywords.length > 0 ? { keywords: component.keywords } : {}),
 				});
 			} catch (error) {
 				// A broken component must not fail the whole extensions.list —
@@ -797,6 +812,8 @@ export async function collectSlotComponents(
 					...(component.order !== undefined ? { order: component.order } : {}),
 					...(component.id ? { id: component.id } : {}),
 					...(component.availability ? { availability: component.availability } : {}),
+					...(component.icon ? { icon: component.icon } : {}),
+					...(component.keywords && component.keywords.length > 0 ? { keywords: component.keywords } : {}),
 				});
 			}
 		}
