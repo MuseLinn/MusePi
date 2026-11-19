@@ -281,8 +281,12 @@
 		filter var(--duration-quick) var(--ease-appear-snappy);
 }
 
-.pet-window__quickbar--composing .pet-window__quickbar-btn,
-.pet-window__quickbar--composing .pet-window__quickbar-divider {
+/* Only the ROW's own buttons leave when the surface becomes a composer. The
+ * field carries its own controls (add, send, attachment chips) inside
+ * .pet-window__quickbar-composer — the old descendant selector hid those too,
+ * so the leading add button never appeared in the open field. */
+.pet-window__quickbar--composing > .pet-window__quickbar-btn,
+.pet-window__quickbar--composing > .pet-window__quickbar-divider {
 	opacity: 0;
 	pointer-events: none;
 }
