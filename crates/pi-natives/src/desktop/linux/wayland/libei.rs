@@ -39,8 +39,8 @@ async fn until_deadline<T>(future: impl std::future::Future<Output = T>) -> Core
 		.await
 		.map_err(|_| {
 			DesktopError::timeout(concat!(
-				"the RemoteDesktop permission dialog was not answered before the call's deadline, so "
-				"nothing was sent and its portal session is being closed; the dialog can open behind "
+				"the RemoteDesktop permission dialog was not answered before the call's deadline, so ",
+				"nothing was sent and its portal session is being closed; the dialog can open behind ",
 				"other windows. Retry and ask the user to answer the new dialog",
 			))
 		})
