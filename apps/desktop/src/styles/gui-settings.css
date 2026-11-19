@@ -6229,9 +6229,10 @@ body.gui-resizing {
 ::view-transition-group(connector-import),
 ::view-transition-group(device-signin) {
 	z-index: 1;
-	/* 260ms ease-out: a shared surface settles; it does not spring back. */
-	animation-duration: 260ms;
-	animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+	/* A lightly damped spring sampled into linear(); the JS half installs the
+	   curve on :root. The cubic-bezier is the fallback before the first open. */
+	animation-duration: 340ms;
+	animation-timing-function: var(--shared-surface-ease, cubic-bezier(0.2, 0, 0.2, 1));
 }
 
 ::view-transition-group(root) {

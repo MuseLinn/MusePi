@@ -116,9 +116,9 @@
 
 ### 共享元素转场（一镜到底）
 
-有可见触发者的弹窗走浏览器的 View Transitions：触发元素在旧快照里被赋予 `view-transition-name`，目标弹窗的类名携带同名（`connector-surface` / `connector-import` / `device-signin`）。浏览器把两个矩形匹配成一组，在 260ms ease-out 里同时做位置与尺寸过渡，并交叉淡化内容；两侧快照各按自身尺寸绘制，所以任何一边都不会被拉伸。
+有可见触发者的弹窗走浏览器的 View Transitions：触发元素在旧快照里被赋予 `view-transition-name`，目标弹窗的类名携带同名（`connector-surface` / `connector-import` / `device-signin`）。浏览器把两个矩形匹配成一组，同时做位置与尺寸过渡，并交叉淡化内容；两侧快照各按自身尺寸绘制，所以任何一边都不会被拉伸。曲线是共享 spring 采样出的 CSS `linear()`（`visualDuration` 0.34s、`bounce` 0.04，与输入框/设置页同一运动资源），首次触发时由 `lib/view-transition.ts` 写入 `--shared-surface-ease`；未写入前回退 `cubic-bezier(0.2, 0, 0.2, 1)`。
 
-- 触发处调用 `apps/desktop/src/lib/view-transition.ts` 的 `morphSurfaceFrom(element, name, update)`；它在更新后清掉触发元素的临时名字，保证新状态里同名元素只有一个。
+- 触发处调用 `apps/desktop/src/lib/view-transition.ts` 的 `morphSurfaceFrom(element, name, update)`；它在更新后清掉触发元素的临时名字，并先把仍占用同名 `view-transition-name` 的退场弹窗让名——旧状态里出现两个同名元素时，浏览器会忽略这组转场并退回普通淡入。
 - 目标名字由弹窗类名提供，不要在调用处再写内联名字。
 - 过渡期间 `<html>` 带 `gui-view-transition`：弹窗的首帧透明与入场动画在这段时间关闭，避免与浏览器的几何动画叠加。
 - 由转场打开的弹窗在整轮打开周期里不播放入场动画（`gui-dialog--static`）：否则转场结束、标记类移除时，入场动画会从头再播一次，读作闪烁。
