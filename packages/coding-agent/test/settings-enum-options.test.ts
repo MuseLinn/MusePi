@@ -54,6 +54,7 @@ describe("settings enum options", () => {
 			"bnb4",
 			"btrfs",
 			"auto",
+			"ngrok",
 			"minimal",
 			"low",
 			"medium",

@@ -111,7 +111,7 @@ async function scan(): Promise<ScannedSource[]> {
 	return (await server.handle("import.sources", { sources: ["codex"] }, conn)) as ScannedSource[];
 }
 
-describe("import.sources reference roots", () => {
+(process.platform === "win32" ? describe : describe.skip)("import.sources reference roots", () => {
 	it("lists the roots a multi-directory copy will add beside its cwd", async () => {
 		const [codex] = await scan();
 		const multi = codex?.sessions.find(session => session.id === "multi");

@@ -53,11 +53,10 @@ describe("focus-mode composer morph", () => {
 	it("checks reduced motion BEFORE pinning and starting the animation", () => {
 		// The FIRST occurrence is the helper definition; the call site is the
 		// one guarded by `if (...)`.
-		const first = source.indexOf("composerMotionOff()");
-		const check = source.indexOf("composerMotionOff()", first + 1);
+		const check = source.indexOf("if (motionDisabled())");
 		const pin = source.indexOf('el.classList.add("gui-composer-wrap--morphing")');
 		const animate = source.indexOf("el.animate(");
-		expect(check).toBeGreaterThan(first);
+		expect(check).toBeGreaterThan(-1);
 		expect(pin).toBeGreaterThan(check);
 		expect(animate).toBeGreaterThan(check);
 		// The early return must actually bail out, not just set a flag.

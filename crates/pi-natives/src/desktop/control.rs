@@ -1,3 +1,4 @@
+#![allow(clippy::redundant_pub_crate)]
 //! Cancellation and exclusive task/operation ownership of desktop mutations.
 //!
 //! Explicit control keeps the kernel lease between operations. Revocation stops
