@@ -671,14 +671,14 @@ describe("relay server host grace", () => {
 	});
 
 	it("does not replace a host whose pong is merely in flight", async () => {
-		// Ping every 300 ms, answer after 150 ms: the second host lands inside
-		// the round trip. A ping in flight is not a missed heartbeat.
-		const server = await startServer({ heartbeatIntervalMs: 300 });
+		// Ping every 1500 ms, answer after 1200 ms: the second host provably lands
+		// inside the round trip, even with a slow poll and connect.
+		const server = await startServer({ heartbeatIntervalMs: 1_500 });
 		const roomId = "steady-host-room__";
-		const host = await RawWsClient.connect(server.port, "host", { roomId, pongDelayMs: 150 });
+		const host = await RawWsClient.connect(server.port, "host", { roomId, pongDelayMs: 1_200 });
 		const guest = await RawWsClient.connect(server.port, "guest", { roomId });
 
-		await host.waitFor(() => host.messages.some(m => m.opcode === OP_PING), 1_000, "ping in flight");
+		await host.waitFor(() => host.messages.some(m => m.opcode === OP_PING), 3_000, "ping in flight");
 		const second = await RawWsClient.connect(server.port, "host", { roomId });
 		expect((await second.closed).code).toBe(4009);
 		expect(host.readyState).toBe("open");
@@ -791,6 +791,59 @@ describe("relay server protections", () => {
 		await guest.close();
 		await host.close();
 		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("releases a static socket once the response flushes, even if the client never closes", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "relay-static-stall-"));
+		writeFileSync(join(dir, "index.html"), "<html>collab-ui</html>");
+		// Four sockets fill the global cap; the upgrade only fits if the relay
+		// released them instead of waiting for each client's FIN.
+		const server = await startServer({ staticDir: dir, maxConnections: 4 });
+
+		const stalled: net.Socket[] = [];
+		for (let i = 0; i < 4; i++) {
+			// allowHalfOpen keeps our side open after the relay's FIN, so the relay
+			// never receives the close it would otherwise wait for.
+			const socket = net.connect({ port: server.port, host: "127.0.0.1", allowHalfOpen: true });
+			socket.on("error", () => {});
+			stalled.push(socket);
+			await new Promise<void>(resolve => socket.once("connect", () => resolve()));
+			// Drain the response but never close: the client's FIN is what the
+			// relay must not wait for.
+			socket.resume();
+			socket.write(`GET / HTTP/1.1\r\nHost: 127.0.0.1:${server.port}\r\n\r\n`);
+		}
+
+		// Well past the release linger: only then can the upgrade pass the global
+		// cap with four clients that still refuse to send their FIN.
+		await new Promise(resolve => setTimeout(resolve, 500));
+		const host = await RawWsClient.connect(server.port, "host");
+		expect(host.readyState).toBe("open");
+
+		await host.close();
+		rmSync(dir, { recursive: true, force: true });
+	});
+
+	it("bounds un-upgraded sockets per address", async () => {
+		const server = await startServer({ maxPendingConnectionsPerIp: 2 });
+		const idle: net.Socket[] = [];
+		for (let i = 0; i < 2; i++) {
+			const socket = net.connect(server.port, "127.0.0.1");
+			socket.on("error", () => {});
+			idle.push(socket);
+			await new Promise<void>(resolve => socket.once("connect", () => resolve()));
+		}
+
+		// A socket that never sends a request still occupies a pending slot.
+		const rejected = await rawHttpRequest(server.port, "/", {});
+		expect(rejected.startsWith("HTTP/1.1 429")).toBe(true);
+
+		// Freeing the slots lets a real join through again.
+		for (const socket of idle) socket.destroy();
+		await new Promise(resolve => setTimeout(resolve, 50));
+		const host = await RawWsClient.connect(server.port, "host");
+		expect(host.readyState).toBe("open");
+		await host.close();
 	});
 
 	it("caps total connections", async () => {

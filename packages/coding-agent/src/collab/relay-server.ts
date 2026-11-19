@@ -26,12 +26,13 @@
  *   it; guests closed with 4001 retry inside that window instead of dying. A
  *   host that closes normally (1000) or a relay that stops (1001) ends the
  *   room at once — the clients treat those as terminal, not as a blip.
- * - Per-address upgrade counts and new-connection rate, inbound byte rate,
- *   Origin, and connection/room caps bound one-sided abuse. Page and asset
- *   fetches are exempt from the per-address limits: one UI load opens many
- *   short connections, and behind a tunnel they all share the proxy address.
- *   A rejection keeps the existing close meanings (4004/4009/4029); overload
- *   and policy rejections use 1013/1008.
+ * - Per-address limits: a small cap on sockets that have not upgraded yet
+ *   (page/assets, half-sent headers), a live-upgrade count, a new-upgrade rate,
+ *   an inbound byte rate, an Origin check, and global connection/room caps.
+ *   The pending and upgrade budgets are separate so one UI load cannot spend
+ *   the join budget; a response is destroyed once flushed so no client holds a
+ *   slot on a missing FIN. Rejections keep the existing close meanings
+ *   (4004/4009/4029); overload and policy rejections use 1013/1008.
  *
  * The relay never sees plaintext: envelopes carry AES-GCM sealed payloads, and
  * the JSON control channel carries no session data. Clients send no strings —
@@ -58,6 +59,12 @@ const DEFAULT_MAX_GUESTS = 16;
 const DEFAULT_MAX_GUESTS_PER_IP = DEFAULT_MAX_GUESTS / 2;
 const DEFAULT_MAX_CONNECTIONS = 256;
 const DEFAULT_MAX_CONNECTIONS_PER_IP = 32;
+/**
+ * Un-upgraded sockets one address may hold at once: page/asset fetches and
+ * half-sent headers. A browser opens a handful in parallel and each finishes in
+ * milliseconds, so this only bounds a client that parks sockets on purpose.
+ */
+const DEFAULT_MAX_PENDING_CONNECTIONS_PER_IP = 16;
 const DEFAULT_CONNECT_RATE_PER_MINUTE = 60;
 const DEFAULT_MAX_ROOMS = 64;
 const DEFAULT_MAX_FRAME_BYTES = 16 * 1024 * 1024;
@@ -71,6 +78,13 @@ const MAX_REQUEST_HEADER_BYTES = 16 * 1024;
 /** A connection that never completes its upgrade header is dropped. */
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const CONNECT_RATE_WINDOW_MS = 60_000;
+/**
+ * Grace between a terminal write and the socket teardown. The bytes must flush
+ * (and the peer get a chance to send its own FIN) before the socket goes away;
+ * destroying in the write callback can surface as a reset, while never
+ * destroying lets a client that never closes hold its per-address slot.
+ */
+const END_LINGER_MS = 100;
 /** Same shape as @musepi/collab-proto's room path; the legacy `.<key>` suffix may be absent. */
 const ROOM_PATH_RE = /^\/r\/([A-Za-z0-9_-]{10,64})(?:\.([A-Za-z0-9_-]+))?$/;
 
@@ -272,6 +286,8 @@ export interface RelayServerOptions {
 	maxConnections?: number;
 	/** Most simultaneous WebSocket upgrades from one client address; default 32. 0 disables. */
 	maxConnectionsPerIp?: number;
+	/** Most un-upgraded sockets (page/assets, half-sent headers) one client address may hold; default 16. 0 disables. */
+	maxPendingConnectionsPerIp?: number;
 	/** WebSocket upgrades accepted per client address per rolling minute; default 60. 0 disables. */
 	connectRatePerMinutePerIp?: number;
 	/** Most rooms kept at once (host grace counts as kept); default 64. 0 disables. */
@@ -310,10 +326,14 @@ export interface RelayServerHandle {
 }
 
 /**
- * Per-upgrade bookkeeping: whether this socket's upgrade was counted against
- * the per-address limit, so its close releases exactly one slot.
+ * Per-connection bookkeeping: which per-address counters this socket holds, so
+ * its close releases exactly what it took. `pending` is handed over to
+ * `counted` when the socket becomes an upgrade.
  */
-interface UpgradeGate {
+interface ConnectionGate {
+	/** Counted as an un-upgraded socket for this address. */
+	pending: boolean;
+	/** Counted as a live upgraded connection for this address. */
 	counted: boolean;
 }
 
@@ -353,6 +373,7 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 	const maxGuestsPerIp = options.maxGuestsPerIp ?? DEFAULT_MAX_GUESTS_PER_IP;
 	const maxConnections = options.maxConnections ?? DEFAULT_MAX_CONNECTIONS;
 	const maxConnectionsPerIp = options.maxConnectionsPerIp ?? DEFAULT_MAX_CONNECTIONS_PER_IP;
+	const maxPendingConnectionsPerIp = options.maxPendingConnectionsPerIp ?? DEFAULT_MAX_PENDING_CONNECTIONS_PER_IP;
 	const connectRatePerMinutePerIp = options.connectRatePerMinutePerIp ?? DEFAULT_CONNECT_RATE_PER_MINUTE;
 	const maxRooms = options.maxRooms ?? DEFAULT_MAX_ROOMS;
 	const maxBytesPerSecond = options.maxBytesPerSecond ?? DEFAULT_MAX_BYTES_PER_SECOND;
@@ -367,6 +388,8 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 	const peers = new Set<Peer>();
 	/** Live upgraded connections per client address, for the per-address cap. */
 	const connectionsByIp = new Map<string, number>();
+	/** Sockets that have not upgraded yet, per client address. */
+	const pendingByIp = new Map<string, number>();
 	/** Recent upgrade times per client address, for the new-connection rate cap. */
 	const connectTimesByIp = new Map<string, number[]>();
 
@@ -399,13 +422,16 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 		socket.on("close", () => sockets.delete(socket));
 		const ip = normalizeIp(socket.remoteAddress);
 		if (!admitConnection(socket)) return;
-		const gate: UpgradeGate = { counted: false };
+		const gate: ConnectionGate = { counted: false, pending: false };
+		if (!admitPending(socket, ip)) return;
+		gate.pending = true;
 		const handshakeTimer = setTimeout(() => socket.destroy(), HANDSHAKE_TIMEOUT_MS);
 		handshakeTimer.unref?.();
 		socket.setKeepAlive(true, DEFAULT_HEARTBEAT_MS);
 		socket.on("close", () => {
 			clearTimeout(handshakeTimer);
 			if (gate.counted) releaseIpCount(ip);
+			if (gate.pending) releasePendingCount(ip);
 		});
 		let buf = "";
 		const onData = (chunk: Buffer): void => {
@@ -439,13 +465,33 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 	}
 
 	/**
+	 * Per-address bound for sockets that have not upgraded: page/assets and
+	 * half-sent headers. Kept separate from the upgrade counters so a UI load
+	 * cannot spend the join budget, while still stopping one address from
+	 * parking sockets until the global cap refuses everyone.
+	 */
+	function admitPending(socket: net.Socket, ip: string): boolean {
+		const pending = pendingByIp.get(ip) ?? 0;
+		if (maxPendingConnectionsPerIp > 0 && pending + 1 > maxPendingConnectionsPerIp) {
+			rejectHttp(socket, 429, "too many open connections from this address");
+			return false;
+		}
+		pendingByIp.set(ip, pending + 1);
+		return true;
+	}
+
+	function releasePendingCount(ip: string): void {
+		const pending = pendingByIp.get(ip);
+		if (pending === undefined) return;
+		if (pending <= 1) pendingByIp.delete(ip);
+		else pendingByIp.set(ip, pending - 1);
+	}
+
+	/**
 	 * Per-address gates for WebSocket upgrades: live upgraded connections and
-	 * the new-connection rate (429). Page and asset fetches are deliberately
-	 * excluded — one UI load opens dozens of short static connections, and
-	 * behind a tunnel they all arrive from the proxy's loopback address, so
-	 * counting them would spend the budget the join handshake needs. Static
-	 * traffic stays bounded by the global connection cap and the handshake
-	 * timeout.
+	 * the new-connection rate (429). Page and asset fetches keep their own
+	 * bound (see {@link admitPending}), so one UI load cannot spend the budget
+	 * the join handshake needs.
 	 */
 	function admitUpgrade(socket: net.Socket, ip: string): boolean {
 		const live = connectionsByIp.get(ip) ?? 0;
@@ -482,7 +528,7 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 		else connectionsByIp.set(ip, live - 1);
 	}
 
-	function handleRequest(socket: net.Socket, headerText: string, ip: string, gate: UpgradeGate): void {
+	function handleRequest(socket: net.Socket, headerText: string, ip: string, gate: ConnectionGate): void {
 		const lines = headerText.split("\r\n");
 		const requestLine = lines[0] ?? "";
 		const [method, target] = requestLine.split(" ");
@@ -506,6 +552,11 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 		const origin = headers.get("origin");
 		if (origin !== undefined && !isAllowedOrigin(origin, headers.get("host"), allowedOrigins)) {
 			return rejectHttp(socket, 403, "origin not allowed");
+		}
+		// Hand the socket from the pending counter to the upgrade counter.
+		if (gate.pending) {
+			gate.pending = false;
+			releasePendingCount(ip);
 		}
 		if (!admitUpgrade(socket, ip)) return;
 		gate.counted = true;
@@ -580,9 +631,12 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 		);
 		if (reject) {
 			// 101 first (the client's HTTP stack must see a successful upgrade),
-			// then the fatal WS close frame, in a single write + end.
-			socket.write(concatBytes(handshake, encodeFrame(OP_CLOSE, encodeClosePayload(reject.code, reject.reason))));
-			socket.end();
+			// then the fatal WS close frame in a single write + end; the socket is
+			// released shortly after so no client holds a slot on its FIN.
+			endSocket(
+				socket,
+				concatBytes(handshake, encodeFrame(OP_CLOSE, encodeClosePayload(reject.code, reject.reason))),
+			);
 			return;
 		}
 		socket.write(handshake);
@@ -714,8 +768,9 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 			// a FIN to this socket (Bun's WebSocket stack releases the connection
 			// without one), so the socket 'close' event would never fire detachPeer.
 			detachPeer(peer, code === CLOSE_NORMAL);
-			// Single end(data): the echo must ride the same call as the FIN.
-			peer.socket.end(encodeFrame(OP_CLOSE, encodeClosePayload(code, "")));
+			// Single end(data): the echo must ride the same call as the FIN, and
+			// the socket goes away once it flushed rather than on a peer FIN.
+			endSocket(peer.socket, encodeFrame(OP_CLOSE, encodeClosePayload(code, "")));
 			return;
 		}
 		if (frame.opcode !== OP_BINARY || !room) return;
@@ -860,6 +915,7 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 				rooms.clear();
 				peers.clear();
 				connectionsByIp.clear();
+				pendingByIp.clear();
 				connectTimesByIp.clear();
 				// Destroy any stragglers so server.close() always settles even if
 				// a peer never finished its close handshake.
@@ -944,8 +1000,7 @@ function sendControlAndClose(peer: Peer, msg: RelayControlMessage, code: number,
 		encodeFrame(OP_TEXT, new TextEncoder().encode(JSON.stringify(msg))),
 		encodeFrame(OP_CLOSE, encodeClosePayload(code, reason)),
 	);
-	peer.socket.write(payload);
-	peer.socket.end();
+	endSocket(peer.socket, payload);
 }
 
 function closeWithCode(socket: import("node:net").Socket, code: number, reason: string): Promise<void> {
@@ -957,7 +1012,7 @@ function closeWithCode(socket: import("node:net").Socket, code: number, reason: 
 	// Single end(data): the close frame must ride the same call as the FIN
 	// (Bun drops the second of two synchronous writes, and its WebSocket
 	// client waits for the close echo before releasing the connection).
-	socket.end(encodeFrame(OP_CLOSE, encodeClosePayload(code, reason)));
+	endSocket(socket, encodeFrame(OP_CLOSE, encodeClosePayload(code, reason)));
 	resolve();
 	return promise;
 }
@@ -1013,23 +1068,34 @@ function serveStatic(socket: import("node:net").Socket, target: string, method: 
 			`cache-control: no-cache\r\n` +
 			"connection: close\r\n\r\n",
 	);
-	// One merged write: Bun's net compatibility layer drops the second of two
-	// synchronous writes to the same socket.
-	socket.write(Buffer.concat([header, method === "GET" ? body : Buffer.alloc(0)]));
-	socket.end();
+	// One merged write+end (Bun's net compatibility layer drops the second of
+	// two synchronous writes); the socket is released shortly after, so a static
+	// request never holds its per-address slot on a missing client FIN.
+	endSocket(socket, Buffer.concat([header, method === "GET" ? body : Buffer.alloc(0)]));
 }
 
 function rejectHttp(socket: import("node:net").Socket, status: number, message: string): void {
 	const body = `${status} ${message}`;
-	socket.write(
+	const response =
 		`HTTP/1.1 ${status} ${message}\r\n` +
-			"content-type: text/plain\r\n" +
-			`content-length: ${Buffer.byteLength(body)}\r\n` +
-			`Date: ${new Date().toUTCString()}\r\n` +
-			"connection: close\r\n\r\n" +
-			body,
-	);
-	socket.end();
+		"content-type: text/plain\r\n" +
+		`content-length: ${Buffer.byteLength(body)}\r\n` +
+		`Date: ${new Date().toUTCString()}\r\n` +
+		"connection: close\r\n\r\n" +
+		body;
+	endSocket(socket, response);
+}
+
+/**
+ * Finish a terminal response and release the socket shortly afterwards. Every
+ * response path uses this: a client is free to ignore the response and never
+ * close, and the relay must not keep a connection (and a per-address slot) for
+ * it.
+ */
+function endSocket(socket: import("node:net").Socket, payload: Uint8Array | string): void {
+	socket.end(payload);
+	const linger = setTimeout(() => socket.destroy(), END_LINGER_MS);
+	linger.unref?.();
 }
 
 function acceptKey(key: string): string {
