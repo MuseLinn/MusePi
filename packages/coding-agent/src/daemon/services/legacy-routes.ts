@@ -25,6 +25,7 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"channels.start",
 	"channels.stop",
 	"channels.unlink",
+	"collab.exposures",
 	"collab.pair.generate",
 	"collab.start",
 	"collab.status",

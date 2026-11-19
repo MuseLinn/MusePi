@@ -39,8 +39,73 @@ Collab session started!
 | `/collab view` | 开始以只读方式共享；如果已经在共享，则重新打印链接/二维码 |
 | `/collab status` | 显示链接与参与者 |
 | `/collab stop` | 停止共享 |
+| `/collab lan` | 在局域网内共享（自托管 relay，无公网端点） |
+| `/collab tunnel cloudflared` / `ngrok` | 通过公网隧道共享 |
+| `/pair` | 启动局域网共享并显示手机 App 的 6 位配对码 |
 | `/join <link>` | 以访客身份加入共享会话 |
 | `/leave` | 离开（访客）或停止共享（主机） |
+
+## 默认 relay 之外的共享
+
+`/collab` 默认走生产 relay。需要 agent 留在本机时，分享可以改用本地 relay，变化的只是访客抵达它的路径——加密房间协议在所有模式下完全相同。
+
+| 模式 | 命令 | 访客从哪里连 | 需要 |
+|---|---|---|---|
+| 局域网 | `/collab lan` 或 `/pair` | 同一网络 | 无 |
+| Cloudflare Tunnel | `/collab tunnel cloudflared` | 拿着链接即可 | `cloudflared` 二进制 |
+| ngrok | `/collab tunnel ngrok` | 拿着链接即可 | `ngrok` 二进制及其免费 authtoken |
+| Tailscale Serve | daemon/GUI 分享配合 `collab.exposure = tailscale` | 你的 tailnet | 两端都安装 Tailscale |
+
+TUI 的 `/collab tunnel` 只接受内联的 `cloudflared` 或 `ngrok`，不读取 `collab.exposure`；该设置由 daemon/GUI 分享（`collab.start`）读取。
+
+### 局域网
+
+局域网共享把 relay 绑到 `0.0.0.0`，并按每块可路由网卡打印链接。终端用明文 `ws` 加入；浏览器需要安全上下文才能用 WebCrypto，因此第二个带自签名证书的 relay 提供 `https`/`wss` deep link。若已安装 Tailscale 且 Serve 可用，分享还会打印一个带真实证书的 tailnet 链接（浏览器无警告）；这项尽力而为的装饰永远不会让局域网共享失败。
+
+### Cloudflare Tunnel
+
+quick 模式零配置：`cloudflared tunnel --url ws://localhost:<port>` 会打印随机的 `https://<id>.trycloudflare.com`，每次启动都会变。URL 从 `--logformat json` 输出解析（纯文本日志同样可解析），并在展示链接前探测公网主机——被封的边缘节点会立刻给出可诊断的错误，而不是之后一个死掉的 WebSocket。
+
+named 模式需要 `collab.cloudflaredHostname` 和隧道 token。token 存放在加密密钥库的 `collab.cloudflared.<tunnelId>` 下，绝不进入设置、argv 或日志（子进程通过 `TUNNEL_TOKEN` 环境变量接收），链接为 `https://<hostname>`，重启后保持不变。
+
+### ngrok
+
+`/collab tunnel ngrok` 运行 `ngrok http <port>` 并从其 JSON 日志解析公网 URL。ngrok 免费层需要一次性执行 `ngrok config add-authtoken <TOKEN>`；MusePi 会提示这一步，但不会替你执行。
+
+### Tailscale Serve
+
+Serve 通过 `https://<machine>.<tailnet>.ts.net` 暴露 relay。它不再要求 serve 配置为空：MusePi 先用 `tailscale serve get-config --all` 备份当前配置，把 relay 挂到 443，443 已被占用时回退到 8443（端口写进链接）。停止时只移除自己那一条（`tailscale serve --https=<port> off`），再用 `tailscale serve set-config` 恢复备份——绝不使用 `tailscale serve reset`。MusePi 从不运行 `tailscale up`，也不保存任何 Tailscale 凭据；未登录、MagicDNS 关闭或 HTTPS 证书不可用时，会指出具体该去管理后台改哪个开关。
+
+### 健康检查、撤销与时限
+
+每条隧道都盯着自己的子进程，并每 30 秒探测一次公网主机。隧道失效会立即撤销：URL 清空，health 变为 `degraded` 并带上原因与下一步建议，背后的 relay 同时关闭。分享状态是权威的——`remote-access.status` 返回 `mode`、`sessionId`、`exposure` 和 `health`，并在 host 结束、会话切换或曝光失效后报告 `hosting: false`，分享面板不会继续展示死链接。原因不会随记录一起消失：`hosting` 为 `false` 时，同一应答会带上 `lastEnd {exposure, health, at, reason, detail, hint}`（下次 `collab.start` 时清空），失效隧道的 `detail` 与下一步 `hint` 正是从这里到达 UI。
+
+`collab.shareTtlMinutes`（默认 `0`，不自动停止）会在配置的分钟数后自动停止分享。
+
+### 隐私边界
+
+- **局域网** — 流量只在你自己的网络里；浏览器链接是带自签名证书的 `https`，tailnet 链接（若显示）由 Tailscale 加密。
+- **公网隧道** — Cloudflare 或 ngrok 在边缘终结 TLS，能看到连接元数据，但看不到房间内容（内容端到端密封）。公网 URL 本身不是秘密：fragment 里带着房间密钥，拿到完整链接的人就能操控会话。
+- **Tailscale** — relay 只在你的 tailnet 内可达；访客需要安装 Tailscale 并登录同一个 tailnet。
+
+### 扩展曝光方式
+
+自托管 relay 是插件而不是内置功能：在你的插件加载时向进程级 registry 注册一个传输实现。
+
+```ts
+import { BaseExposure, exposureRegistry } from "@musepi/pi-coding-agent/collab/exposure";
+
+exposureRegistry.register("my-relay", () => new MyRelayExposure());
+```
+
+一个曝光声明 `id`、`label`、`capabilities`（`guestInstall`、`publicExposure`、`stableUrl`、`thirdParty`）、`probe()`、`start({ port })`、`close()`，并通过 `onChange` 报告 `unavailable | starting | ready | degraded | stopped` 健康状态。`LocalShareManager` 按 id 解析它（`startExposure("my-relay")`），daemon 在 `collab.exposures` 中列出它，变为 degraded 时会自动撤销 relay。协议无需改动：传输实现只需要提供一个访客能抵达的 origin。
+
+### 什么时候不该用公网隧道
+
+- 两端都能上网、且不需要 agent 留在本机时，默认 relay 就够了。
+- 同网络设备优先用局域网，两端都在同一 tailnet 时优先用 Tailscale。
+- 不要只图方便就把机器暴露到公网：完整链接能读取整个会话历史并操控 agent。
+- 企业网络常屏蔽 `trycloudflare.com`；改用局域网或自有域名上的 named 隧道。
 
 ## 链接格式
 
@@ -109,6 +174,9 @@ https://web.example/collab/#relay.example.com/r/<roomId>.<key>   → web UI 与 
 | `collab.relayUrl` | `wss://my.omp.sh` | `/collab` 未内联传入 relay 时使用的默认 relay |
 | `collab.webUrl` | empty | `/collab` 链接使用的浏览器 UI URL；为空时从 relay 推导；显式 `http://` 仅允许 localhost |
 | `collab.displayName` | OS username | 对其他参与者显示的名称 |
+| `collab.exposure` | `cloudflared` | 未指定传输的隧道分享所用的默认曝光 id |
+| `collab.cloudflaredHostname` | empty | named Cloudflare 隧道的 hostname；为空时使用 quick 隧道 |
+| `collab.shareTtlMinutes` | `0` | 局域网或隧道分享在多少分钟后自动停止；`0` 表示一直共享到手动停止 |
 | `share.serverUrl` | `https://my.omp.sh/s` | `/share` 使用的 viewer/upload base（链接为 `<base>/<id>#<key>`） |
 | `share.redactSecrets` | `true` | `/share` 快照上传前运行密钥混淆器 |
 

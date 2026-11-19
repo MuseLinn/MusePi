@@ -193,12 +193,24 @@ export class CollabHost {
 	#busUnsubscribers: (() => void)[] = [];
 	#registryUnsubscribe?: () => void;
 	#stopped = false;
+	/**
+	 * Called once when the host tears itself down for any reason — explicit
+	 * stop, relay close, or a session switch. Owners use it to clear the share
+	 * state they keep beside the host, so a status query never reports a live
+	 * share with a dead link.
+	 */
+	onEnded?: (reason: string) => void;
 
 	constructor(ctx: InteractiveModeContext, mode: CollabHostMode = "session", approvals?: CollabApprovalProvider) {
 		this.#ctx = ctx;
 		this.#mode = mode;
 		this.#approvals = approvals;
 		this.#focusActive = mode === "session";
+	}
+
+	/** True once the host has torn itself down; links are no longer usable. */
+	get stopped(): boolean {
+		return this.#stopped;
 	}
 
 	get link(): string {
@@ -360,10 +372,10 @@ export class CollabHost {
 	async stop(reason: string): Promise<void> {
 		if (this.#stopped) return;
 		this.#socket?.send({ t: "bye", reason });
-		await this.#teardown();
+		await this.#teardown(reason);
 	}
 
-	async #teardown(): Promise<void> {
+	async #teardown(reason = "stopped"): Promise<void> {
 		if (this.#stopped) return;
 		this.#stopped = true;
 		this.#ctx.sessionManager.onEntryAppended = undefined;
@@ -392,6 +404,7 @@ export class CollabHost {
 		this.#ctx.collabHost = undefined;
 		this.#ctx.statusLine.setCollabStatus(null);
 		this.#ctx.ui.requestRender();
+		this.onEnded?.(reason);
 	}
 
 	#broadcast(frame: CollabFrame): void {

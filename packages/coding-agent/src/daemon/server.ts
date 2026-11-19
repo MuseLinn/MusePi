@@ -65,8 +65,9 @@ import {
 } from "../channels";
 import { loadChannelBindings, saveChannelBindings } from "../channels/bindings";
 import { BUILTIN_PLUGINS, loadChannelPlugins } from "../channels/plugins";
+import { type ExposureStatus, exposureRegistry, LAN_EXPOSURE, lanExposureStatus } from "../collab/exposure";
 import { CollabHost } from "../collab/host";
-import { LocalShareManager } from "../collab/local-share";
+import { configuredExposure, ensureBuiltinExposures, findLanIpv4, LocalShareManager } from "../collab/local-share";
 import { PairCodes } from "../collab/pair-codes";
 import { findConfigFile } from "../config";
 import { resolveProviderModelReference } from "../config/model-resolver";
@@ -408,6 +409,35 @@ export {
 } from "./session-host";
 
 // ── Method dispatch ─────────────────────────────────────────────────────────
+/** How the last share ended, kept after the live record is cleared. */
+interface ShareEnd {
+	/** Exposure id ("lan" for a same-network share). */
+	exposure: string;
+	/** Health at the moment it ended (degraded for a lost tunnel). */
+	health: ExposureStatus["health"];
+	/** ISO timestamp. */
+	at: string;
+	/** Why it ended: "exposure degraded", "session switched", "share time limit reached", … */
+	reason: string;
+	/** Transport's reason when the exposure failed. */
+	detail?: string;
+	/** What the user can do next. */
+	hint?: string;
+}
+
+/** One live share: the host, its transport, and the scope it was started for. */
+interface CollabShare {
+	host: CollabHost;
+	transport: LocalShareManager;
+	mode: "session" | "workspace";
+	/** Session the share is bound to; absent for a workspace share. */
+	sessionId?: string;
+	/** Exposure id ("lan" for a same-network share). */
+	exposure: string;
+	/** Latest exposure health; null until the transport reports one. */
+	health: ExposureStatus | null;
+}
+
 /**
  * Resolve content-addressed image parts before they reach the agent.
  *
@@ -1033,8 +1063,41 @@ export class DaemonServer {
 		void this.#loadChannelPlugins().catch(() => {});
 	}
 
-	/** Active GUI collab share (remote-control dialog). */
-	#collab: { host: CollabHost; transport: LocalShareManager } | null = null;
+	/** Active GUI collab share (remote-control dialog). The record is the
+	 *  single authority for `remote-access.status`: it disappears when the
+	 *  host ends, the exposure dies, or the TTL expires. */
+	#collab: CollabShare | null = null;
+
+	/** Why the last share ended. Clearing the live record is what makes
+	 *  `hosting:false` honest; this keeps the reason (tunnel detail, hint,
+	 *  TTL, session switch) readable right after, so the UI can say what
+	 *  happened instead of only noticing the share vanished. Cleared when the
+	 *  next share starts. */
+	#lastShareEnd: ShareEnd | null = null;
+
+	/** Stop the active share and forget it. The host's own teardown calls this
+	 *  through `onEnded`, so a session switch cannot leave a dead link behind. */
+	async #stopShare(reason: string): Promise<void> {
+		const current = this.#collab;
+		this.#collab = null;
+		if (!current) return;
+		const health = current.health;
+		this.#lastShareEnd = {
+			exposure: current.exposure,
+			health: health?.health ?? "stopped",
+			at: new Date().toISOString(),
+			reason,
+			...(health?.detail ? { detail: health.detail } : {}),
+			...(health?.hint ? { hint: health.hint } : {}),
+		};
+		await current.host.stop(reason).catch(() => {});
+		await current.transport.stop().catch(() => {});
+		this.#pairCodes.clear();
+		if (this.#pairWs) {
+			await this.#pairWs.close().catch(() => {});
+			this.#pairWs = null;
+		}
+	}
 
 	/** Mobile pair codes: 6-digit code → the shared webLink. The GUI displays
 	 *  the code; the mobile app resolves it against the LAN pair endpoint
@@ -3880,19 +3943,60 @@ export class DaemonServer {
 			}
 			case "collab.start":
 			case "remote-access.start": {
-				const p = (params ?? {}) as { sessionId?: string; mode?: "session" | "workspace" | "tunnel" };
+				const p = (params ?? {}) as {
+					sessionId?: string;
+					mode?: "session" | "workspace" | "tunnel";
+					exposure?: string;
+				};
 				const mode = p.mode === "workspace" ? "workspace" : p.mode === "tunnel" ? "tunnel" : "session";
 				if (mode === "session" && !p.sessionId) {
 					throw new Error("open or create a session first to share it");
 				}
+				// A new request supersedes the previous end record; its reason has
+				// been visible since the previous status query.
+				this.#lastShareEnd = null;
+				// Scope is decided before anything is activated: a workspace
+				// share must not silently pre-focus the session the GUI happens
+				// to have open. Tunnel is a transport choice, not a scope.
+				const collabMode: "session" | "workspace" =
+					mode === "workspace" || (mode === "tunnel" && !p.sessionId) ? "workspace" : "session";
+				const requestedExposure =
+					typeof p.exposure === "string" && p.exposure.trim()
+						? p.exposure.trim()
+						: mode === "tunnel"
+							? configuredExposure()
+							: "lan";
+				// An existing share is only reused when the request matches it.
+				// Otherwise it is torn down first: returning the old links made a
+				// scope switch a silent no-op.
+				const hosted = this.#collab;
+				if (hosted?.host.stopped) {
+					await this.#stopShare("previous share ended");
+				} else if (hosted) {
+					const sameScope =
+						hosted.mode === collabMode &&
+						hosted.exposure === requestedExposure &&
+						(collabMode !== "session" || hosted.sessionId === p.sessionId);
+					if (sameScope) {
+						return {
+							link: hosted.host.link,
+							webLink: hosted.host.webLink,
+							viewLink: hosted.host.viewLink,
+							mode: hosted.mode,
+							sessionId: hosted.sessionId ?? null,
+							exposure: hosted.exposure,
+							health: hosted.health,
+						};
+					}
+					await this.#stopShare("restarting share with a different scope");
+				}
 				// History sessions (idle-closed / pre-restart) reactivate on
-				// demand so sharing works from any session the GUI has open.
-				// Workspace mode needs no initial session: the directory is
+				// demand so sharing works from any session the GUI has open. A
+				// workspace share needs no initial session: the directory is
 				// served from the journal and focus binds lazily on the first
-				// guest select. An explicitly passed sessionId still activates
-				// so its card lists as live right away.
+				// guest select.
 				let live: LiveSession | null = null;
-				if (mode === "session" || p.sessionId) {
+				if (collabMode === "session") {
 					live =
 						this.#host.get(p.sessionId!) ??
 						(await this.#host.activate(p.sessionId!).catch((err: unknown) => {
@@ -3903,13 +4007,6 @@ export class DaemonServer {
 							}
 							throw err;
 						}));
-				}
-				if (this.#collab) {
-					return {
-						link: this.#collab.host.link,
-						webLink: this.#collab.host.webLink,
-						viewLink: this.#collab.host.viewLink,
-					};
 				}
 				// The CollabHost expects the TUI interactive context; daemon-side
 				// we hand it a minimal stub covering exactly the members it reads.
@@ -4037,53 +4134,136 @@ export class DaemonServer {
 						},
 					},
 				};
-				const transport = new LocalShareManager({ port: undefined, onStatus: () => {} });
-				// Tunnel mode with no sessionId shares the workspace (like
-				// workspace mode); with a sessionId it shares that session.
-				const collabMode: "session" | "workspace" =
-					mode === "workspace" || (mode === "tunnel" && !p.sessionId) ? "workspace" : "session";
+				// The transport reports health so a dead tunnel cannot keep a
+				// working-looking share alive; TTL expiry stops the host too.
+				let shareRef: CollabShare | null = null;
+				const transport = new LocalShareManager({
+					port: undefined,
+					onStatus: () => {},
+					onExposureHealth: status => {
+						if (!shareRef || this.#collab !== shareRef) return;
+						shareRef.health = status;
+						if (status?.health === "degraded") void this.#stopShare("exposure degraded");
+					},
+					onTtlExpired: () => {
+						if (shareRef && this.#collab === shareRef) void this.#stopShare("share time limit reached");
+					},
+				});
 				const collabHost = new CollabHost(stubCtx as never, collabMode, remoteApprovals);
+				collabHost.onEnded = reason => {
+					if (this.#collab?.host === collabHost) void this.#stopShare(reason);
+				};
 				// Tunnel shares the same loopback relay as the client-core dist;
 				// the public URL is https/wss-same-origin, so webUrl for the
 				// browser deep link is the tunnel URL itself.
-				const urls = mode === "tunnel" ? await transport.startTunnel() : await transport.startLan();
-				await collabHost.start(urls.joinUrl, mode === "tunnel" ? urls.joinUrl : urls.webUrl, urls.webJoinUrl);
-				this.#collab = { host: collabHost, transport };
+				let urls: Awaited<ReturnType<LocalShareManager["startLan"]>>;
+				try {
+					urls =
+						requestedExposure === "lan"
+							? await transport.startLan()
+							: await transport.startExposure(requestedExposure);
+					await collabHost.start(urls.joinUrl, urls.webUrl || urls.joinUrl, urls.webJoinUrl);
+				} catch (err) {
+					await transport.stop().catch(() => {});
+					throw err;
+				}
+				shareRef = {
+					host: collabHost,
+					transport,
+					mode: collabMode,
+					...(live ? { sessionId: live.sessionId } : {}),
+					exposure: requestedExposure,
+					health: transport.exposureStatus,
+				};
+				this.#collab = shareRef;
 				return {
 					link: collabHost.link,
 					webLink: collabHost.webLink,
 					viewLink: collabHost.viewLink,
+					mode: collabMode,
+					sessionId: shareRef.sessionId ?? null,
+					exposure: requestedExposure,
+					health: shareRef.health,
+				};
+			}
+			case "collab.exposures": {
+				// Availability probe for the share dialog: every registered
+				// exposure plus the always-present LAN mode. Probing never
+				// starts a tunnel, so this is safe to call on dialog open.
+				ensureBuiltinExposures();
+				const lanIp = findLanIpv4();
+				const lanStatus = lanExposureStatus(
+					lanIp !== null,
+					lanIp !== null ? `same network only (${lanIp})` : undefined,
+				);
+				const exposures = await Promise.all(
+					exposureRegistry.ids().map(async id => {
+						const exposure = exposureRegistry.create(id);
+						if (!exposure) return null;
+						const status = await exposure.probe().catch((error: unknown) => ({
+							id,
+							health: "unavailable" as const,
+							detail: error instanceof Error ? error.message : String(error),
+						}));
+						// Capabilities are read after probe: named Cloudflare mode
+						// only becomes visible once the token is resolved.
+						return {
+							...status,
+							label: exposure.label,
+							capabilities: exposure.capabilities,
+						};
+					}),
+				);
+				return {
+					default: configuredExposure(),
+					exposures: [
+						{ ...lanStatus, label: LAN_EXPOSURE.label, capabilities: LAN_EXPOSURE.capabilities },
+						...exposures.filter(entry => entry !== null),
+					],
 				};
 			}
 			case "collab.stop":
 			case "remote-access.stop": {
-				if (!this.#collab) return { ok: true };
-				await this.#collab.host.stop("stopped from gui").catch(() => {});
-				await this.#collab.transport.stop().catch(() => {});
-				this.#collab = null;
-				this.#pairCodes.clear();
-				if (this.#pairWs) {
-					await this.#pairWs.close().catch(() => {});
-					this.#pairWs = null;
-				}
+				await this.#stopShare("stopped from gui");
 				return { ok: true };
 			}
 			case "collab.status":
 			case "remote-access.status": {
-				if (!this.#collab) return { hosting: false };
+				const current = this.#collab;
+				if (!current) {
+					return {
+						hosting: false,
+						...(this.#lastShareEnd ? { lastEnd: this.#lastShareEnd } : {}),
+					};
+				}
+				// The host tears itself down when the session switches; a status
+				// query must never resurrect that share as a live one.
+				if (current.host.stopped) {
+					await this.#stopShare("share already ended");
+					return {
+						hosting: false,
+						...(this.#lastShareEnd ? { lastEnd: this.#lastShareEnd } : {}),
+					};
+				}
 				return {
 					hosting: true,
+					// Scope and transport are part of the answer: a reopened
+					// dialog must be able to render which share is live.
+					mode: current.mode,
+					sessionId: current.sessionId ?? null,
+					exposure: current.exposure,
+					health: current.health ?? current.transport.exposureStatus,
 					// Who is actually watching: the share panel renders this list,
 					// which is the only way to tell an idle share from one with a
 					// guest connected (and whether that guest may prompt).
-					participants: this.#collab.host.participants.map(p => ({
+					participants: current.host.participants.map(p => ({
 						name: p.name,
 						role: p.role,
 						readOnly: p.readOnly === true,
 					})),
-					link: this.#collab.host.link,
-					webLink: this.#collab.host.webLink,
-					viewLink: this.#collab.host.viewLink,
+					link: current.host.link,
+					webLink: current.host.webLink,
+					viewLink: current.host.viewLink,
 				};
 			}
 			case "collab.pair.generate":
