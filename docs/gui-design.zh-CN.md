@@ -284,10 +284,11 @@ lang: zh-CN
 - **上下翻转含高度**:`flipUpForBottomOverflow = r.bottom + 6 + menuH > innerHeight − 8` —— 高菜单挂在低锚点下也向上翻,不许底部溢出。
 - **常驻浮卡(非弹出)**:btw 侧问卡/角标卡等 fixed 角卡必须自带视口 clamp(`maxWidth: calc(100vw − 48px)` + `max-height: min(60vh,520px)` + body 滚动),禁止裸 fixed 无边界。
 - **键盘**:浮卡/浮菜单的 Esc 承诺必须接线(如 btw 卡 hint「Esc closes」↔ onKeyDown Escape),不许提示与行为脱节。
-- **三个必须(2026-10-18 定稿)**:每个浮层合入前必须同时满足——
+- **四个必须(2026-10-18 定稿;滚动归属 2026-11-19)**:每个浮层合入前必须同时满足——
   1. **可关闭**:外部点击 + Esc 关闭,Esc 还要 `preventDefault` 认领(否则漏到窗口级 bare-Esc,把正在跑的一轮对话打断)。
   2. **视口内**:flip/shift/max-height clamp,永不出窗、永远内部滚动而不是被截断。
   3. **不被裁剪**:逃出所有 `overflow`/`transform`/`backdrop-filter` 祖先(即走 portal),且不被相邻元素盖住。
+  4. **滚动归属**:浮层自己拥有滚轮。指针落在浮层内的滚动容器上时由该容器原生滚动,到边界就停住,不转发给背景;指针落在浮层的非滚动部分(搜索框、标题行、内边距)时,滚轮驱动浮层内第一个可滚动容器;只有浮层内没有任何可滚动容器时,才交给菜单所依附的表面。浮层自己的滚动容器声明 `overscroll-behavior: contain`,不依赖祖先。
 - **「被裁剪」是这套组件的头号故障,且不是样式写法问题**:`.gui-right-rail` 是 44px 卡片且 `overflow: hidden`(圆角卡片必须裁,否则子元素溢出圆角);任何 `position: absolute` 画在它里面的浮层都会被整块裁掉。这不是某个组件"属性配错了",而是**裁剪容器 + 绝对定位子元素**这个组合本身不允许出现。两条硬规则:
   - **浮层的定位属性(`position/top/right/z-index/animation`)归浮层壳(`.gui-menu-popup`),不归内容类**。内容类只写内部布局(`display/gap/min-width/padding`);壳的 inline `position: fixed` 负责跑出裁剪树。同族先例:`.gui-context-menu` / `.gui-select-menu`。
   - **贴窗口边缘的触发器要往"有空间"的方向开**:右缘 rail 的浮层必须用 `side: "left"`(`useFloatingMenu`)向左 flyout。向下开会被视口 shift 夹成一条——这跟裁剪是两个独立故障,只修 portal 不修方向仍然不可用。
