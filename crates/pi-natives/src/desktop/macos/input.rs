@@ -1,4 +1,5 @@
 use std::{
+	sync::atomic::{AtomicU32, Ordering},
 	thread,
 	time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -939,6 +940,10 @@ fn global_pointer(source: &CGEventSource, event: PointerEvent) -> CoreResult<()>
 	clippy::too_many_arguments,
 	reason = "the parameters are the native CGEvent fields stamped together"
 )]
+/// Mouse button events this process posted, so the front-app hold can tell
+/// the user's clicks from the ones MusePi made. Hardware counters count both.
+pub(crate) static OWN_BUTTON_EVENTS: AtomicU32 = AtomicU32::new(0);
+
 fn post_global_mouse(
 	source: &CGEventSource,
 	event_type: CGEventType,
@@ -956,7 +961,22 @@ fn post_global_mouse(
 		event.set_integer_value_field(EventField::MOUSE_EVENT_BUTTON_NUMBER, button_number);
 	}
 	event.set_flags(flags);
-	post_global(&event)
+	post_global(&event)?;
+	// Counted after the post: a press that never went out leaves no counter
+	// change, and counting it would let the front-app hold mistake a later
+	// user click for this process's own.
+	if matches!(
+		event_type,
+		CGEventType::LeftMouseDown
+			| CGEventType::LeftMouseUp
+			| CGEventType::RightMouseDown
+			| CGEventType::RightMouseUp
+			| CGEventType::OtherMouseDown
+			| CGEventType::OtherMouseUp
+	) {
+		OWN_BUTTON_EVENTS.fetch_add(1, Ordering::AcqRel);
+	}
+	Ok(())
 }
 
 #[allow(
@@ -965,6 +985,7 @@ fn post_global_mouse(
 	          background posting"
 )]
 fn post_global(event: &CGEvent) -> CoreResult<()> {
+	event.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, super::SYNTHETIC_EVENT_TAG);
 	event.post(CGEventTapLocation::HID);
 	Ok(())
 }

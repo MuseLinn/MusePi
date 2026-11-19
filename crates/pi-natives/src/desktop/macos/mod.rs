@@ -5,8 +5,15 @@ mod skylight;
 
 use image::RgbaImage;
 use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
+pub(crate) use skylight::{FrontApp, front_app};
 
 use self::{ax::MacAx, capture::MacCapture, input::MacInput};
+
+/// Marks every event this process posts, so the Escape monitor can tell the
+/// agent's own input from the user's. `WindowServer` may report a posted event
+/// with no source process id, which alone would make it look like hardware.
+pub(crate) const SYNTHETIC_EVENT_TAG: i64 = 0x7069_6465_736b;
+
 use super::{
 	backend::{AxBackend, Backend, DeliveryMode, PointerEvent},
 	error::{CoreResult, DesktopError},

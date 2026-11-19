@@ -242,6 +242,20 @@ impl Backend for WaylandBackend {
 		)))
 	}
 
+	fn menu_items(
+		&mut self,
+		window: &DesktopWindow,
+		path: &[String],
+	) -> CoreResult<Vec<crate::desktop::menus::DesktopMenuItem>> {
+		let ax = self.ax.as_mut().ok_or_else(DesktopError::ax_unsupported)?;
+		super::menus::items(ax, window, path)
+	}
+
+	fn menu_select(&mut self, window: &DesktopWindow, path: &[String]) -> CoreResult<()> {
+		let ax = self.ax.as_mut().ok_or_else(DesktopError::ax_unsupported)?;
+		super::menus::select(ax, window, path)
+	}
+
 	fn ax(&mut self) -> Option<&mut dyn AxBackend> {
 		self.ax.as_mut().map(|ax| ax as &mut dyn AxBackend)
 	}

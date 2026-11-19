@@ -38,11 +38,15 @@ use super::{
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "macos")]
+mod macos;
 #[cfg(windows)]
 mod windows;
 
 #[cfg(target_os = "linux")]
 pub(crate) use linux::escape_stop_supported;
+#[cfg(target_os = "macos")]
+pub(crate) use macos::escape_stop_supported;
 
 /// Reports whether an input request needs the cross-session real-input lease:
 /// any path that moves the shared system cursor or injects into the system
@@ -169,10 +173,11 @@ pub(crate) enum EscapeStop {
 	Unavailable,
 	/// No monitor exists on this platform or display server.
 	#[cfg_attr(
-		windows,
+		any(windows, target_os = "macos"),
 		allow(
 			dead_code,
-			reason = "Windows always offers a monitor; Wayland and test leases report Unsupported"
+			reason = "Windows and macOS always offer a monitor; Wayland and test leases report \
+			          Unsupported"
 		)
 	)]
 	Unsupported,
@@ -371,7 +376,9 @@ fn busy() -> DesktopError {
 type EscapeSlot = Option<windows::EscapeMonitor>;
 #[cfg(target_os = "linux")]
 type EscapeSlot = Option<linux::EscapeMonitor>;
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(target_os = "macos")]
+type EscapeSlot = Option<macos::EscapeMonitor>;
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 type EscapeSlot = ();
 
 /// The kernel owner lives on its own thread: Windows mutex release must happen
@@ -388,13 +395,14 @@ impl ControlLease {
 	/// `takeover` arms the physical-Escape stop; background input keeps the
 	/// user's keyboard untouched.
 	///
-	/// A monitor that cannot start never refuses `takeover`: the platforms that
-	/// offer it need no special permission on Windows, X11 input monitoring can
-	/// be unavailable, and macOS has no monitor yet. Refusing would let a
-	/// missing safety net disable input that works without one, so ownership is
-	/// still granted and `escape_stops` simply never rises. The lease records
-	/// `EscapeStop::Unavailable` instead of dropping the failure, so
-	/// `controlState().escapeStop` reports the missing net to the host.
+	/// A monitor that cannot start never refuses `takeover`: Windows offers one
+	/// without a special permission, X11 input monitoring can be unavailable,
+	/// and macOS gates a listen-only tap on Input Monitoring, which the user may
+	/// not have granted. Refusing would let a missing safety net disable input
+	/// that works without one, so ownership is still granted and `escape_stops`
+	/// simply never rises. The lease records `EscapeStop::Unavailable` instead
+	/// of dropping the failure, so `controlState().escapeStop` reports the
+	/// missing net to the host.
 	fn acquire(source: &CancellationSource, takeover: bool) -> CoreResult<Self> {
 		let kernel = KernelOwner::acquire()?;
 		let stop = || EmergencyStop(Arc::downgrade(&source.0));
@@ -417,7 +425,16 @@ impl ControlLease {
 		} else {
 			(None, EscapeStop::NotRequested)
 		};
-		#[cfg(not(any(windows, target_os = "linux")))]
+		#[cfg(target_os = "macos")]
+		let (escape, escape_stop) = if takeover {
+			match macos::EscapeMonitor::start(stop()) {
+				Ok(monitor) => (Some(monitor), EscapeStop::Armed),
+				Err(_) => (None, EscapeStop::Unavailable),
+			}
+		} else {
+			(None, EscapeStop::NotRequested)
+		};
+		#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 		let (escape, escape_stop) = {
 			let _ = (source, takeover, stop);
 			((), EscapeStop::Unsupported)

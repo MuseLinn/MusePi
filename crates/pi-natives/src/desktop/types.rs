@@ -138,9 +138,19 @@ fn escape_stop_support() -> &'static str {
 			"unsupported"
 		}
 	}
-	#[cfg(not(any(windows, target_os = "linux")))]
+	#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 	{
 		"unsupported"
+	}
+	#[cfg(target_os = "macos")]
+	{
+		// The monitor owner answers whether this process may install a tap, so
+		// the capability and `controlState().escapeStop` come from one rule.
+		if super::control::escape_stop_supported() {
+			"available"
+		} else {
+			"unsupported"
+		}
 	}
 }
 
