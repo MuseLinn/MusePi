@@ -327,6 +327,9 @@ export class LocalShareManager {
 		this.#exposureStatus = status;
 		this.#onExposureHealth?.(status);
 		if (status.health !== "degraded") return;
+		// A transport that cannot report through `onStatus` still surfaces the
+		// reason here; the manager owns this line for every exposure.
+		this.#onStatus?.(`collab: sharing ended — ${status.detail ?? "the tunnel went away"}`);
 		// A dead tunnel leaves the relay serving a room nobody can reach; revoke
 		// both the relay and the TTL so the UI never shows a working share.
 		this.#clearTtl();

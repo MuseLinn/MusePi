@@ -284,7 +284,22 @@ export async function startTailscaleServeDetailed(
 		return { handle: null, failure: { detail: probe.detail, hint: probe.hint, install: probe.install } };
 	}
 
-	const ports = (await servedHttpsPorts(binary)) ?? new Set<number>();
+	const knownPorts = await servedHttpsPorts(binary);
+	// `null` means the status could not be read — not that the ports are free.
+	// Mounting on 443 then could replace a user handler we cannot back up, so
+	// an unreadable status always degrades instead of picking a port.
+	if (!knownPorts) {
+		const detail = "could not read the existing Tailscale Serve configuration";
+		onStatus?.(`tunnel: ${detail} — not mounting a new entry`);
+		return {
+			handle: null,
+			failure: {
+				detail,
+				hint: "Run `tailscale serve status` to check this machine's Serve config, then retry.",
+			},
+		};
+	}
+	const ports = knownPorts;
 	let httpsPort: number;
 	if (options.httpsPort !== undefined) {
 		httpsPort = options.httpsPort;
@@ -328,8 +343,10 @@ export async function startTailscaleServeDetailed(
 		printed ?? (dnsName ? `https://${dnsName}${httpsPort === DEFAULT_HTTPS_PORT ? "" : `:${httpsPort}`}` : undefined);
 	if (!baseUrl) {
 		const detail = "tailscale serve did not report a tailnet URL";
-		onStatus?.(`tunnel: ${detail} — using the self-signed LAN link`);
-		if (backup) await fs.promises.rm(backup.path, { force: true }).catch(() => {});
+		onStatus?.(`tunnel: ${detail} — removing the entry and using the self-signed LAN link`);
+		// The mount succeeded, so the entry exists; leaving it would point at a
+		// dead relay port with no handle left to clean it up.
+		await removeServeEntry(binary, httpsPort, backup, onStatus);
 		return { handle: null, failure: { detail } };
 	}
 
@@ -342,25 +359,35 @@ export async function startTailscaleServeDetailed(
 			stop: async () => {
 				if (stopped) return;
 				stopped = true;
-				// Remove exactly our entry; `serve reset` would wipe the user's own.
-				const off = await runTailscale(binary, ["serve", `--https=${httpsPort}`, "off"]);
-				if (off.code !== 0) {
-					onStatus?.(`tunnel: could not remove the tailscale serve entry (${lastLine(off.stderr)})`);
-				}
-				if (backup && !backupIsEmpty(backup.text)) {
-					const restored = await runTailscale(binary, ["serve", "set-config", backup.path, "--all"]);
-					if (restored.code !== 0) {
-						onStatus?.(
-							`tunnel: could not restore the previous tailscale serve config (${lastLine(restored.stderr)})`,
-						);
-					} else {
-						onStatus?.("tunnel: previous tailscale serve config restored");
-					}
-				}
-				if (backup) await fs.promises.rm(backup.path, { force: true }).catch(() => {});
+				await removeServeEntry(binary, httpsPort, backup, onStatus);
 			},
 		},
 	};
+}
+
+/**
+ * Remove exactly our Serve entry (never `serve reset`), then restore the
+ * pre-existing config when the backup held anything.
+ */
+async function removeServeEntry(
+	binary: string,
+	httpsPort: number,
+	backup: ServeBackup | null,
+	onStatus?: (line: string) => void,
+): Promise<void> {
+	const off = await runTailscale(binary, ["serve", `--https=${httpsPort}`, "off"]);
+	if (off.code !== 0) {
+		onStatus?.(`tunnel: could not remove the tailscale serve entry (${lastLine(off.stderr)})`);
+	}
+	if (backup && !backupIsEmpty(backup.text)) {
+		const restored = await runTailscale(binary, ["serve", "set-config", backup.path, "--all"]);
+		if (restored.code !== 0) {
+			onStatus?.(`tunnel: could not restore the previous tailscale serve config (${lastLine(restored.stderr)})`);
+		} else {
+			onStatus?.("tunnel: previous tailscale serve config restored");
+		}
+	}
+	if (backup) await fs.promises.rm(backup.path, { force: true }).catch(() => {});
 }
 
 /**
@@ -410,7 +437,16 @@ export class TailscaleExposure extends BaseExposure {
 			return this.status();
 		}
 		const ports = await servedHttpsPorts(this.#options.binary);
-		if (ports?.has(DEFAULT_HTTPS_PORT) && ports.has(FALLBACK_HTTPS_PORT)) {
+		if (!ports) {
+			this.setStatus({
+				id: this.id,
+				health: "degraded",
+				detail: "could not read the existing Tailscale Serve configuration",
+				hint: "Run `tailscale serve status` to check this machine's Serve config, then retry.",
+			});
+			return this.status();
+		}
+		if (ports.has(DEFAULT_HTTPS_PORT) && ports.has(FALLBACK_HTTPS_PORT)) {
 			this.setStatus({
 				id: this.id,
 				health: "degraded",

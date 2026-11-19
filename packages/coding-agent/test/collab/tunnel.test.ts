@@ -274,11 +274,14 @@ setTimeout(() => process.exit(3), 120);
 setInterval(() => {}, 1000);
 `);
 		const exposure = new CloudflaredExposure({ binary: diesLater, verifyReachable: false, healthIntervalMs: 0 });
-		await exposure.start({ port: 7654 });
+		const statusLines: string[] = [];
+		await exposure.start({ port: 7654, onStatus: line => statusLines.push(line) });
 		expect(exposure.status().health).toBe("ready");
 		await waitFor(() => exposure.status().health === "degraded");
 		expect(exposure.status().url).toBeUndefined();
 		expect(exposure.status().detail).toMatch(/exited with code \d+/);
+		// The TUI only renders status lines; the reason must travel through one.
+		expect(statusLines.some(line => line.includes("sharing ended"))).toBe(true);
 		await exposure.close();
 	});
 });

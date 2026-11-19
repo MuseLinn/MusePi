@@ -54,7 +54,9 @@ The guest's previous session is restored on `/leave` (or when the host stops).
 | LAN | `/collab lan` or `/pair` | the same network | nothing |
 | Cloudflare Tunnel | `/collab tunnel cloudflared` | anywhere with the link | `cloudflared` binary |
 | ngrok | `/collab tunnel ngrok` | anywhere with the link | `ngrok` binary and its free authtoken |
-| Tailscale Serve | `collab.exposure = tailscale` | your tailnet | Tailscale on both ends |
+| Tailscale Serve | daemon/GUI share with `collab.exposure = tailscale` | your tailnet | Tailscale on both ends |
+
+The TUI's `/collab tunnel` accepts `cloudflared` or `ngrok` inline and does not read `collab.exposure`; that setting is read by daemon/GUI shares (`collab.start`).
 
 ### LAN
 
@@ -76,7 +78,7 @@ Serve exposes the relay at `https://<machine>.<tailnet>.ts.net`. It does not req
 
 ### Health, revocation, and TTL
 
-Every tunnel watches its child process and probes the public host every 30 seconds. A tunnel that dies is revoked immediately: the URL is cleared, health becomes `degraded` with the reason and a next step, and the relay behind it is closed. Share state is authoritative — `remote-access.status` returns `mode`, `sessionId`, `exposure`, and `health`, and reports `hosting: false` once the host ends, the session switches, or the exposure fails, so a share panel never keeps a dead link.
+Every tunnel watches its child process and probes the public host every 30 seconds. A tunnel that dies is revoked immediately: the URL is cleared, health becomes `degraded` with the reason and a next step, and the relay behind it is closed. Share state is authoritative — `remote-access.status` returns `mode`, `sessionId`, `exposure`, and `health`, and reports `hosting: false` once the host ends, the session switches, or the exposure fails, so a share panel never keeps a dead link. The reason survives that clearing: while `hosting` is `false`, the same reply carries `lastEnd {exposure, health, at, reason, detail, hint}` (cleared by the next `collab.start`), which is where a failed tunnel's `detail` and next-step `hint` reach the UI.
 
 `collab.shareTtlMinutes` (default `0`, no limit) stops a share automatically after the configured number of minutes.
 

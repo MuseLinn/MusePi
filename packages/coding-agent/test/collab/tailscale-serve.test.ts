@@ -31,6 +31,7 @@ interface Scenario {
 	serveConfig?: Record<string, unknown>;
 	serveBgExit?: number;
 	serveBgStderr?: string;
+	serveStatusExit?: number;
 }
 
 function fakeBinary(scenario: Scenario): { binary: string; record: string } {
@@ -52,7 +53,11 @@ if (argv[0] === "status") {
 }
 if (argv[0] === "serve") {
   const sub = argv[1];
-  if (sub === "status") { process.stdout.write(JSON.stringify(SERVE_STATUS)); process.exit(0); }
+  if (sub === "status") {
+    ${scenario.serveStatusExit ? `process.stderr.write("serve status failed"); process.exit(${scenario.serveStatusExit});` : ""}
+    process.stdout.write(JSON.stringify(SERVE_STATUS));
+    process.exit(0);
+  }
   if (sub === "get-config") { fs.writeFileSync(argv[2], JSON.stringify(SERVE_CONFIG)); process.exit(0); }
   if (sub === "set-config") { fs.copyFileSync(argv[2], ${JSON.stringify(record)} + ".restored"); process.exit(0); }
   if (sub === "--bg") {
@@ -187,6 +192,15 @@ describe("startTailscaleServe", () => {
 		expect(calls(record).some(args => args[1] === "--bg")).toBe(false);
 	});
 
+	it("never assumes a port is free when serve status cannot be read", async () => {
+		const { binary, record } = fakeBinary({ serveStatusExit: 1 });
+		const { handle, failure } = await startTailscaleServeDetailed({ port: 7654, binary, backupDir });
+		expect(handle).toBeNull();
+		expect(failure?.detail).toContain("could not read");
+		expect(failure?.hint).toContain("tailscale serve status");
+		expect(calls(record).some(args => args[1] === "--bg")).toBe(false);
+	});
+
 	it("degrades with an HTTPS hint when certificates are not enabled", async () => {
 		const { binary } = fakeBinary({
 			serveBgExit: 1,
@@ -214,6 +228,14 @@ describe("TailscaleExposure", () => {
 		expect(exposure.status().health).toBe("ready");
 		await exposure.close();
 		expect(exposure.status().health).toBe("stopped");
+	});
+
+	it("reports degraded instead of ready when serve status is unreadable", async () => {
+		const { binary } = fakeBinary({ serveStatusExit: 1 });
+		const exposure = new TailscaleExposure({ binary, backupDir });
+		const status = await exposure.probe();
+		expect(status.health).toBe("degraded");
+		expect(status.detail).toContain("could not read");
 	});
 
 	it("stays unusable with an install card when tailscale is missing", async () => {

@@ -409,6 +409,22 @@ export {
 } from "./session-host";
 
 // ── Method dispatch ─────────────────────────────────────────────────────────
+/** How the last share ended, kept after the live record is cleared. */
+interface ShareEnd {
+	/** Exposure id ("lan" for a same-network share). */
+	exposure: string;
+	/** Health at the moment it ended (degraded for a lost tunnel). */
+	health: ExposureStatus["health"];
+	/** ISO timestamp. */
+	at: string;
+	/** Why it ended: "exposure degraded", "session switched", "share time limit reached", … */
+	reason: string;
+	/** Transport's reason when the exposure failed. */
+	detail?: string;
+	/** What the user can do next. */
+	hint?: string;
+}
+
 /** One live share: the host, its transport, and the scope it was started for. */
 interface CollabShare {
 	host: CollabHost;
@@ -1052,12 +1068,28 @@ export class DaemonServer {
 	 *  host ends, the exposure dies, or the TTL expires. */
 	#collab: CollabShare | null = null;
 
+	/** Why the last share ended. Clearing the live record is what makes
+	 *  `hosting:false` honest; this keeps the reason (tunnel detail, hint,
+	 *  TTL, session switch) readable right after, so the UI can say what
+	 *  happened instead of only noticing the share vanished. Cleared when the
+	 *  next share starts. */
+	#lastShareEnd: ShareEnd | null = null;
+
 	/** Stop the active share and forget it. The host's own teardown calls this
 	 *  through `onEnded`, so a session switch cannot leave a dead link behind. */
 	async #stopShare(reason: string): Promise<void> {
 		const current = this.#collab;
 		this.#collab = null;
 		if (!current) return;
+		const health = current.health;
+		this.#lastShareEnd = {
+			exposure: current.exposure,
+			health: health?.health ?? "stopped",
+			at: new Date().toISOString(),
+			reason,
+			...(health?.detail ? { detail: health.detail } : {}),
+			...(health?.hint ? { hint: health.hint } : {}),
+		};
 		await current.host.stop(reason).catch(() => {});
 		await current.transport.stop().catch(() => {});
 		this.#pairCodes.clear();
@@ -3920,6 +3952,9 @@ export class DaemonServer {
 				if (mode === "session" && !p.sessionId) {
 					throw new Error("open or create a session first to share it");
 				}
+				// A new request supersedes the previous end record; its reason has
+				// been visible since the previous status query.
+				this.#lastShareEnd = null;
 				// Scope is decided before anything is activated: a workspace
 				// share must not silently pre-focus the session the GUI happens
 				// to have open. Tunnel is a transport choice, not a scope.
@@ -4195,12 +4230,20 @@ export class DaemonServer {
 			case "collab.status":
 			case "remote-access.status": {
 				const current = this.#collab;
-				if (!current) return { hosting: false };
+				if (!current) {
+					return {
+						hosting: false,
+						...(this.#lastShareEnd ? { lastEnd: this.#lastShareEnd } : {}),
+					};
+				}
 				// The host tears itself down when the session switches; a status
 				// query must never resurrect that share as a live one.
 				if (current.host.stopped) {
 					await this.#stopShare("share already ended");
-					return { hosting: false };
+					return {
+						hosting: false,
+						...(this.#lastShareEnd ? { lastEnd: this.#lastShareEnd } : {}),
+					};
 				}
 				return {
 					hosting: true,

@@ -180,6 +180,7 @@ export class NgrokExposure extends BaseExposure {
 	#handle: TunnelHandle | null = null;
 	#monitor: ReturnType<typeof setInterval> | null = null;
 	#closing = false;
+	#statusLine: ((line: string) => void) | undefined;
 
 	constructor(options: NgrokExposureOptions = {}) {
 		super("ngrok");
@@ -205,6 +206,7 @@ export class NgrokExposure extends BaseExposure {
 	async start(options: ExposureStartOptions): Promise<ExposureStartResult> {
 		await this.close();
 		this.#closing = false;
+		this.#statusLine = options.onStatus;
 		this.setStatus({ id: this.id, health: "starting" });
 		try {
 			const handle = await startNgrokTunnel({
@@ -256,11 +258,14 @@ export class NgrokExposure extends BaseExposure {
 			detail,
 			hint: "The public URL stopped working; restart the share.",
 		});
+		// Without this line the TUI only sees the relay socket close.
+		this.#statusLine?.(`tunnel: sharing ended — ${detail} (restart the share to get a new URL)`);
 		void handle?.close().catch(() => {});
 	}
 
 	override async close(): Promise<void> {
 		this.#closing = true;
+		this.#statusLine = undefined;
 		clearInterval(this.#monitor ?? undefined);
 		this.#monitor = null;
 		const handle = this.#handle;

@@ -179,7 +179,7 @@ describe("LocalShareManager exposures", () => {
 		expect(manager.exposureStatus).toBeNull();
 	}, 10_000);
 
-	it("a degraded exposure revokes the relay and surfaces the reason", async () => {
+	it("a degraded exposure revokes the relay without a stop() call", async () => {
 		const statuses: string[] = [];
 		const manager = new LocalShareManager({
 			port: 0,
@@ -187,10 +187,18 @@ describe("LocalShareManager exposures", () => {
 			onExposureHealth: status => statuses.push(status?.health ?? "null"),
 		});
 		await manager.startExposure("stub", { verifyReachable: false });
+		expect(manager.relay).not.toBeNull();
 		const exposure = manager.exposure as StubExposure;
+
 		exposure.degrade("edge gone");
+
+		// Revoking the relay is the manager's own reaction; waiting for stop()
+		// would make this assertion true no matter what.
+		expect(manager.relay).toBeNull();
+		await new Promise(resolve => setTimeout(resolve, 20));
+		expect(manager.relay).toBeNull();
+		expect(manager.exposureStatus).toMatchObject({ health: "degraded", detail: "edge gone" });
+		expect(statuses.at(-1)).toBe("degraded");
 		await manager.stop();
-		expect(statuses).toContain("ready");
-		expect(statuses.at(-1)).toBe("null");
 	});
 });

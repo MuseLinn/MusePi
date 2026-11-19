@@ -54,7 +54,9 @@ Collab session started!
 | 局域网 | `/collab lan` 或 `/pair` | 同一网络 | 无 |
 | Cloudflare Tunnel | `/collab tunnel cloudflared` | 拿着链接即可 | `cloudflared` 二进制 |
 | ngrok | `/collab tunnel ngrok` | 拿着链接即可 | `ngrok` 二进制及其免费 authtoken |
-| Tailscale Serve | `collab.exposure = tailscale` | 你的 tailnet | 两端都安装 Tailscale |
+| Tailscale Serve | daemon/GUI 分享配合 `collab.exposure = tailscale` | 你的 tailnet | 两端都安装 Tailscale |
+
+TUI 的 `/collab tunnel` 只接受内联的 `cloudflared` 或 `ngrok`，不读取 `collab.exposure`；该设置由 daemon/GUI 分享（`collab.start`）读取。
 
 ### 局域网
 
@@ -76,7 +78,7 @@ Serve 通过 `https://<machine>.<tailnet>.ts.net` 暴露 relay。它不再要求
 
 ### 健康检查、撤销与时限
 
-每条隧道都盯着自己的子进程，并每 30 秒探测一次公网主机。隧道失效会立即撤销：URL 清空，health 变为 `degraded` 并带上原因与下一步建议，背后的 relay 同时关闭。分享状态是权威的——`remote-access.status` 返回 `mode`、`sessionId`、`exposure` 和 `health`，并在 host 结束、会话切换或曝光失效后报告 `hosting: false`，分享面板不会继续展示死链接。
+每条隧道都盯着自己的子进程，并每 30 秒探测一次公网主机。隧道失效会立即撤销：URL 清空，health 变为 `degraded` 并带上原因与下一步建议，背后的 relay 同时关闭。分享状态是权威的——`remote-access.status` 返回 `mode`、`sessionId`、`exposure` 和 `health`，并在 host 结束、会话切换或曝光失效后报告 `hosting: false`，分享面板不会继续展示死链接。原因不会随记录一起消失：`hosting` 为 `false` 时，同一应答会带上 `lastEnd {exposure, health, at, reason, detail, hint}`（下次 `collab.start` 时清空），失效隧道的 `detail` 与下一步 `hint` 正是从这里到达 UI。
 
 `collab.shareTtlMinutes`（默认 `0`，不自动停止）会在配置的分钟数后自动停止分享。
 

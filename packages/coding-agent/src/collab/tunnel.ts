@@ -458,6 +458,7 @@ export class CloudflaredExposure extends BaseExposure {
 	#handle: TunnelHandle | null = null;
 	#monitor: ReturnType<typeof setInterval> | null = null;
 	#closing = false;
+	#statusLine: ((line: string) => void) | undefined;
 
 	constructor(options: CloudflaredExposureOptions = {}) {
 		super("cloudflared");
@@ -523,6 +524,7 @@ export class CloudflaredExposure extends BaseExposure {
 	async start(options: ExposureStartOptions): Promise<ExposureStartResult> {
 		await this.close();
 		this.#closing = false;
+		this.#statusLine = options.onStatus;
 		this.setStatus({ id: this.id, health: "starting" });
 		const hostname = this.#options.hostname?.trim();
 		try {
@@ -603,11 +605,15 @@ export class CloudflaredExposure extends BaseExposure {
 		const handle = this.#handle;
 		this.#handle = null;
 		this.#set({ id: this.id, health: "degraded", detail, hint });
+		// The TUI only shows status lines, so a silent degrade reads as "the
+		// share vanished". Detail/hint are transport errors, never the token.
+		this.#statusLine?.(`tunnel: sharing ended — ${detail} (${hint})`);
 		void handle?.close().catch(() => {});
 	}
 
 	override async close(): Promise<void> {
 		this.#closing = true;
+		this.#statusLine = undefined;
 		clearInterval(this.#monitor ?? undefined);
 		this.#monitor = null;
 		const handle = this.#handle;
