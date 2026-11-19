@@ -21,6 +21,7 @@ import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { lookupSkillMarketIcon } from "../lib/skill-market";
 import { extensionDisplayName } from "../lib/slot-host";
+import { withViewTransition } from "../lib/view-transition";
 import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
 import { StateIcon } from "./StateIcon";
@@ -80,6 +81,11 @@ interface SkillUpdateRow {
 	locallyModified?: boolean;
 	alternatives?: SkillUpdateCandidate[];
 	error?: string;
+}
+
+/** A stable view-transition name for one skill, valid as a CSS custom-ident. */
+function skillSurfaceName(name: string): string {
+	return `skill-${name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
 }
 
 /** One row of daemon skills.list (trimmed to what the UI renders). */
@@ -1196,7 +1202,7 @@ function InstalledSkillsPane({
 							className={`gui-cap-viewbtn${view === "grid" ? " gui-cap-viewbtn--on" : ""}`}
 							aria-label={t("tools.skillViewGrid")}
 							aria-pressed={view === "grid"}
-							onClick={() => setView("grid")}
+							onClick={() => withViewTransition(() => setView("grid"))}
 						>
 							<Icon name="split-cells-horizontal" className="h-4 w-4" />
 						</button>
@@ -1205,7 +1211,7 @@ function InstalledSkillsPane({
 							className={`gui-cap-viewbtn${view === "list" ? " gui-cap-viewbtn--on" : ""}`}
 							aria-label={t("tools.skillViewList")}
 							aria-pressed={view === "list"}
-							onClick={() => setView("list")}
+							onClick={() => withViewTransition(() => setView("list"))}
 						>
 							<Icon name="list-check-2" className="h-4 w-4" />
 						</button>
@@ -1234,6 +1240,7 @@ function InstalledSkillsPane({
 										key={s.name}
 										role="button"
 										tabIndex={0}
+										style={{ viewTransitionName: skillSurfaceName(s.name) }}
 										className={`gui-cap-card${picked ? " gui-cap-card--picked" : ""}${s.ignored ? " gui-cap-card--off" : ""}`}
 										onClick={() => (manage ? toggleSelected(s.name) : setDrawerName(s.name))}
 										onKeyDown={e => {
@@ -1301,6 +1308,7 @@ function InstalledSkillsPane({
 										key={s.name}
 										role="button"
 										tabIndex={0}
+										style={{ viewTransitionName: skillSurfaceName(s.name) }}
 										className={`gui-cap-listrow${picked ? " gui-cap-card--picked" : ""}`}
 										onClick={() => (manage ? toggleSelected(s.name) : setDrawerName(s.name))}
 										onKeyDown={e => {

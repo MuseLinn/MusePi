@@ -1379,6 +1379,9 @@
 	overflow-y: auto;
 	min-height: 0;
 	flex: 1;
+	/* Container queries below respond to the pane, not the window: the card
+	   count and the list columns both follow the space the page actually has. */
+	container-type: inline-size;
 }
 
 /* 列宽与间距走自定义属性：网格与卡片共用，避免数字两处漂移。 */
@@ -1391,7 +1394,7 @@
 .gui-skill-market-featured,
 .gui-skill-market-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(var(--cap-card-min), 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--cap-card-min)), 1fr));
 	gap: var(--cap-card-gap);
 }
 
@@ -5033,11 +5036,11 @@
  * focus. Search / select / action share it. The marketplace grid is a
  * shared client-core component, so only this page re-skins it.
  *
- * The tool row is a floating glass card, not a full-bleed band. It carries
- * the shared `.gui-liquid-glass` surface (one project-wide refraction/blur
- * pipeline) instead of a hand-rolled backdrop-filter: the composable
- * warp layer is the only implementation that actually samples the list
- * scrolling beneath a sticky element. */
+ * The tool row floats over the list instead of sitting on a band. It keeps
+ * the shared `.gui-liquid-glass` warp layer (one project-wide refraction/blur
+ * pipeline — the composable layer is the only implementation that actually
+ * samples the list scrolling beneath a sticky element) but not the card skin:
+ * fill, hairline, corners and shadow belong to the list, not to the row. */
 .gui-capability-page :is(.gui-skill-market-bar, .gui-ext-plugins-toolbar, .mp-grid-toolbar) {
 	position: sticky;
 	top: calc(-1 * var(--cap-body-pad, 0px));
@@ -5058,6 +5061,16 @@
 	border: 0;
 	border-radius: 0;
 	box-shadow: none;
+}
+
+/* The specular rim (`::after` of the glass card) is the card's own edge: a
+ * 1.5px white 135° gradient masked to the border box. With the fill, border
+ * and corners above already removed it survived alone as a stray rectangle
+ * fading out across the row (bright at the left edge, gone by two thirds).
+ * The warp/blur layer stays; only the frame goes. */
+.gui-capability-page
+	:is(.gui-skill-market-bar, .gui-ext-plugins-toolbar, .mp-grid-toolbar).gui-liquid-glass::after {
+	content: none;
 }
 
 /* The marketplace grid owned its own scroll; the page body is the single
@@ -7398,4 +7411,23 @@ button.traj-error-note:hover {
 	color: var(--color-text);
 	padding: 4px 10px;
 	font-size: 11.5px;
+}
+
+/* Adaptive list columns: as the pane narrows, the low-priority meta is the
+   first thing to go, then the name column gives way — the description keeps
+   the space instead of every column squeezing at once. */
+@container (max-width: 720px) {
+	.gui-cap-listrow-name {
+		width: 160px;
+	}
+}
+
+@container (max-width: 600px) {
+	.gui-cap-listrow-name {
+		width: 132px;
+	}
+
+	.gui-cap-listrow-meta {
+		display: none;
+	}
 }
