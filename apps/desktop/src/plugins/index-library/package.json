@@ -1,0 +1,13 @@
+{
+	"name": "musepi-index-library",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned file-index settings page: service status, directory, instant search and hit snippets.",
+	"type": "module",
+	"musepi": {
+		"icon": "📚",
+		"label": "MusePi Index Library",
+		"description": "File-index status, workspace directory and instant search in one Cordis-owned settings page.",
+		"extensions": ["./index.ts"]
+	}
+}

@@ -181,7 +181,7 @@ export default function (pi: ExtensionAPI): void {
 - `panel.shell` — full right-panel shell (single). The `panel` plugin owns tabs, split layout, and maximize presentation; `main.conversation` does not bundle it.
 - `shell.overlay` — root-level fixed overlay (single): owns the floating horizontal/vertical scroll rail and portals itself to `document.body`. The host keeps the built-in `<FloatingScrollbar/>` as the fallback when no contribution is mounted.
 - `browser.host` — persistent managed-browser guest host (single), mounted at the app root independently of `panel.tab.browser`. Both artifacts bind the same `window.MusePiManagedBrowserHost` store instead of bundling separate copies.
-- `settings.tab.<id>` — 设置页左侧导航项:扩展声明一个设置页即出现在设置导航,内容区挂载组件。
+- `settings.tab.<id>` — 设置页左侧导航项:扩展声明一个设置页即出现在设置导航,内容区挂载组件。当 `<id>` 命中既有页面(包括 `sessions` / `memory` 这类能力别名,经 `SECTION_ALIAS` 解析)时**原位接管**:内置导航行、id、搜索关键词与深链都保留,扩展不再新增 `ext:` 行;停用或编译失败回退内置页。页面契约除 `rpc` / `sessionId` / `cwd` / `onOpenSession` 外新增 `onApplyPrompt(text)`(把示例交给输入框并关闭设置)。内置连接器页与索引库页现在由 `musepi-connectors-settings` / `musepi-index-library` 原位接管。设置壳本身(导航、路由、搜索、⌘K 定位)是宿主内建,不是插件。
 - `sidebar.panel.<destination id>` — 二级左栏面板(2026-11-08):宿主按 rail 目的地 id 取唯一贡献,挂进 `.gui-side-keeper`,由 `data-panel` 决定显隐;几何读 keeper 上的 `--gui-side-w`,不接宿主专用 props。编译插件通过宿主模块表共享 `lib/scheduled-task-nav`(`task-nav`),否则会拿到另一份快照 store。插件停用或编译失败时宿主回退内置面板,目的地仍可用。
 - `rail.<id>` — 右缘图标轨(前缀命名空间;`rail.right` 是保留的精确槽)
 - `main.conversation` (single) / `main.capability` (single) — root `main` keys: the complete conversation page (welcome + transcript) and the capability-center page. One occupant per key; the host renders its built-in page when nothing is mounted.

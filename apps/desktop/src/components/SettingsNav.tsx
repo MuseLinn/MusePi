@@ -1,7 +1,7 @@
 import { SearchField, t, tLoose } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SectionId, SectionRequest } from "../lib/settings-nav";
+import { SECTION_ALIAS, type SectionId, type SectionRequest } from "../lib/settings-nav";
 import { matchSettingRows, type SettingSearchRow } from "../lib/settings-search";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
@@ -362,11 +362,16 @@ export function navGroups(
 	// 扩展声明一个设置页即出现在导航。
 	// 配置项级贡献走 registerSetting 的 ui.tab(插入现有 tab)或
 	// settings.item 卡片(扩展中心),不设"扩展设置"聚合 tab。
-	// The sessions plugin replaces the built-in 会话 page in place: keep the
-	// built-in nav id (so `sessions` stays a valid section) and skip its
-	// duplicate extension row below.
+	// A page slot whose id names an existing page TAKES IT OVER: the built-in
+	// row (and its id, keywords and deep links) stays, and the extension does
+	// not add a second row. Only genuinely new pages get an `ext:` row.
+	const builtinIds = new Set(groups.flatMap(group => group.items.map(item => item.id)));
 	for (const c of extTabs) {
-		if (c.slot === "settings.tab.sessions" || c.slot === "settings.tab.memory") continue;
+		const suffix = c.slot.startsWith("settings.tab.") ? c.slot.slice("settings.tab.".length) : null;
+		// A slot may name a capability alias (sessions / memory → session-memory);
+		// resolve it before deciding whether it takes over a built-in page.
+		const pageId = suffix ? ((SECTION_ALIAS as Record<string, string | undefined>)[suffix] ?? suffix) : null;
+		if (pageId && builtinIds.has(pageId)) continue;
 		groups[1]!.items.push({
 			id: `ext:${c.slot}`,
 			icon: "plug",

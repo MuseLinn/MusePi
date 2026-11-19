@@ -1,0 +1,13 @@
+{
+	"name": "musepi-connectors-settings",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Cordis-owned connector settings page: catalog, detail dialogs, credentials, device sign-in, CLI authorization.",
+	"type": "module",
+	"musepi": {
+		"icon": "🔌",
+		"label": "MusePi Connectors Settings",
+		"description": "Browse and connect remote MCP servers and managed CLI packages in one Cordis-owned settings page.",
+		"extensions": ["./index.ts"]
+	}
+}

@@ -105,14 +105,18 @@ export function SettingsView({
 	const extSettingsTabs = useSlotComponentsByPrefix(rpc, SETTINGS_TAB_SLOT_PREFIX);
 	// 会话管理插件页:声明 `settings.tab.sessions` 的扩展接管内置「会话」分区。
 	// 插件停用/未装载时保留内置 SessionsSection(自动清理等保留策略不丢失)。
-	const extSessionsTab = extSettingsTabs.find(
-		tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}sessions` && (tab.code.length > 0 || tab.url) && !tab.error,
-	);
+	/** A page plugin takes over its nav id when the slot names an existing page
+	 *  (`settings.tab.<id>`); the host keeps the built-in renderer as fallback. */
+	const extTabFor = (id: string) =>
+		extSettingsTabs.find(
+			tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}${id}` && (tab.code.length > 0 || tab.url) && !tab.error,
+		);
+	const extSessionsTab = extTabFor("sessions");
 	// 记忆插件页:声明 `settings.tab.memory` 的扩展接管内置「记忆」分区。
 	// 插件停用/未装载时保留内置 MemorySection。
-	const extMemoryTab = extSettingsTabs.find(
-		tab => tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}memory` && (tab.code.length > 0 || tab.url) && !tab.error,
-	);
+	const extMemoryTab = extTabFor("memory");
+	const extConnectorsTab = extTabFor("connectors");
+	const extIndexesTab = extTabFor("indexes");
 	// 单行偏好槽:settings.action.<id> 组件。
 	const actionItems = useSlotComponentsByPrefix(rpc, SETTINGS_ACTION_SLOT_PREFIX);
 	// 内置外观页的行/分区座位：插件注册 `settings.appearance.item` 即进入该页。
@@ -142,6 +146,15 @@ export function SettingsView({
 		setSettingsQuery("");
 		if (key) setPendingSetting({ key, nonce: Date.now() });
 	}, []);
+	// The established composer channel: both the session and welcome composers
+	// append the text and focus themselves.
+	const applyPrompt = useCallback(
+		(text: string): void => {
+			window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text } }));
+			onBack();
+		},
+		[onBack],
+	);
 	// A ⌘K settings result hands the pane its target after mount (the palette
 	// closes first, so this cannot be the pane's initial state).
 	useEffect(() => {
@@ -592,20 +605,30 @@ export function SettingsView({
 							{activeSection === "migration" && <MigrationSection rpc={rpc} />}
 							{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
 							{activeSection === "commands" && <CommandsSection rpc={rpc} />}
-							{activeSection === "connectors" && (
-								<ConnectorsSection
-									rpc={rpc}
-									onApplyPrompt={text => {
-										// The established composer channel: both the session and
-										// welcome composers append the text and focus themselves.
-										window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text } }));
-										onBack();
-									}}
-								/>
-							)}
+							{activeSection === "connectors" &&
+								(extConnectorsTab ? (
+									<SlotComponentMount
+										item={extConnectorsTab}
+										rpc={rpc}
+										sessionId={sessionId}
+										onApplyPrompt={applyPrompt}
+									/>
+								) : (
+									<ConnectorsSection rpc={rpc} onApplyPrompt={applyPrompt} />
+								))}
 							{activeSection === "hooks" && <HooksSection rpc={rpc} />}
 							{activeSection === "browser" && <BrowserSection rpc={rpc} />}
-							{activeSection === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
+							{activeSection === "indexes" &&
+								(extIndexesTab ? (
+									<SlotComponentMount
+										item={extIndexesTab}
+										rpc={rpc}
+										sessionId={sessionId}
+										cwd={cwd ?? undefined}
+									/>
+								) : (
+									<IndexesSection rpc={rpc} cwd={cwd} />
+								))}
 							{activeSection === "usage" && <UsageSection rpc={rpc} />}
 						</HeightMorph>
 					</div>

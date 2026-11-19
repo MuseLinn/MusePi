@@ -725,6 +725,10 @@ export interface SlotComponentProps {
 	/** Host-owned navigation into another session (settings pages that list
 	 *  sessions). Absent when the host cannot switch sessions. */
 	onOpenSession?: (sessionId: string) => void;
+	/** Settings-page contract: hand an example sentence to the composer and
+	 *  leave settings. Present only on settings.tab.* mounts whose page offers
+	 *  "apply to composer" (connectors, marketplace examples). */
+	onApplyPrompt?: (text: string) => void;
 	/** The slot id this component was registered into. */
 	slot?: string;
 	/** Extension path that contributed this component. */
@@ -1127,6 +1131,7 @@ export function SlotComponentMount({
 	sessionId,
 	cwd,
 	onOpenSession,
+	onApplyPrompt,
 	page,
 	chatView,
 	composer,
@@ -1145,6 +1150,7 @@ export function SlotComponentMount({
 	sessionId?: string | null;
 	cwd?: string;
 	onOpenSession?: SlotComponentProps["onOpenSession"];
+	onApplyPrompt?: SlotComponentProps["onApplyPrompt"];
 	page?: SlotComponentProps["page"];
 	/** Host-owned welcome and session surface contract (main.conversation only). */
 	chatView?: SlotComponentProps["chatView"];
@@ -1296,6 +1302,7 @@ export function SlotComponentMount({
 		sessionId,
 		cwd,
 		onOpenSession,
+		onApplyPrompt,
 		page,
 		chatView,
 		composer,

@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **连接器与索引库设置页转为 Cordis 页面插件**：两页现在分别由 `musepi-connectors-settings`（`settings.tab.connectors`）与 `musepi-index-library`（`settings.tab.indexes`）声明并挂载；槽位命中既有页面时原位接管导航行与 id，停用或编译失败回退内置页。设置页契约补上 `onApplyPrompt`（示例交给输入框并关闭设置），导航去重从“会话/记忆特例”改为按 `SECTION_ALIAS` 解析后的通用接管规则。
+  - EN: The connector and index-library settings pages are now Cordis page plugins. `musepi-connectors-settings` (`settings.tab.connectors`) and `musepi-index-library` (`settings.tab.indexes`) declare and mount them; a slot whose id names an existing page takes over that page's nav row and id in place, with the built-in renderer as the fallback when the plugin is disabled or fails to compile. The settings-page contract gained `onApplyPrompt` (hand an example to the composer and close settings), and nav de-duplication is now one general rule resolved through `SECTION_ALIAS` instead of the sessions/memory special case.
+
 - **OAuth 回调页换回 MusePi 品牌，验证码出现即复制**：网页授权成功后打开的本机回调页此前仍是旧品牌的标题、字标与标志（紫/青配色）；现在改为 MusePi 的暖金与「IP 球」标志，文案与页面标题一致，回调测试也会在旧品牌名回归时报错。GitHub 授权、连接器设备码与 CLI 授权码统一为可点击的验证码控件：出现即写入剪贴板，点击可再次复制，并短暂显示「已复制」。
   - EN: The OAuth callback page carries the MusePi brand again, and device codes are copied on arrival. The local callback page opened after a successful web authorization still showed the pre-rebrand title, wordmark and logo (purple/cyan palette); it now uses MusePi's warm gold and IP-orb mark, the page title matches the product copy, and the callback test fails if the old name returns. GitHub consent, connector device grants and CLI auth codes share one clickable code chip: it writes the code to the clipboard as soon as it appears, copies again on click, and briefly confirms with 已复制.
 

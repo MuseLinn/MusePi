@@ -29,6 +29,8 @@
 | Cordis 内置浏览器 UI | `apps/desktop/src/plugins/browser-ui/index.ts`（`panel.tab.browser` / `browser.host`） | 同文件头部；页面与常驻 guest 宿主分离，store 经 `MusePiManagedBrowserHost` 共享 |
 | Cordis 文件工作区 | `apps/desktop/src/plugins/file-workspace/index.ts`（`panel.tab.files`） | 同文件头部 |
 | Cordis 会话管理 | `apps/desktop/src/plugins/session-manager/index.ts`（`settings.tab.sessions`） | 同文件头部；接管内置会话设置页，插件缺失或编译失败时宿主回退 `SessionsSection` |
+| Cordis 连接器设置页 | `apps/desktop/src/plugins/connectors-settings/index.ts`（`settings.tab.connectors`） | 同文件头部；原位接管内置连接器页，停用/编译失败回退 `ConnectorsSection`；页面实现暂由宿主源持有、构建期内联 |
+| Cordis 索引库设置页 | `apps/desktop/src/plugins/index-library/index.ts`（`settings.tab.indexes`） | 同文件头部；原位接管内置索引库页，停用/编译失败回退 `IndexesSection` |
 | Cordis 记忆设置页 | `apps/desktop/src/plugins/memory/index.ts`（`settings.tab.memory`） | 同文件头部；接管内置记忆设置页，插件缺失或编译失败时宿主回退 `MemorySection` |
 | Cordis 会话信息分区 | `apps/desktop/src/plugins/session-info-plugins/index.ts`（`chat.session-info.plugins`） | 同文件头部；卡片只透传只读读数，插件停用/编译失败时回退内置列表 |
 | Cordis 会话信息任意分区 | `apps/desktop/src/components/session-info-card.tsx`（`chat.session-info.<id>` 前缀自动挂载） | 同文件头部；按前缀渲染所有贡献，`chat.session-info.plugins` 保留内置回退，插件新增分区无需宿主改动 |
