@@ -41,6 +41,9 @@ mod linux;
 #[cfg(windows)]
 mod windows;
 
+#[cfg(target_os = "linux")]
+pub(crate) use linux::escape_stop_supported;
+
 /// Reports whether an input request needs the cross-session real-input lease:
 /// any path that moves the shared system cursor or injects into the system
 /// input queue. Window-message delivery (`Background` on a window target)
@@ -169,8 +172,7 @@ pub(crate) enum EscapeStop {
 		windows,
 		allow(
 			dead_code,
-			reason = "Windows always offers a monitor; macOS, Wayland and test leases report \
-			          Unsupported"
+			reason = "Windows always offers a monitor; Wayland and test leases report Unsupported"
 		)
 	)]
 	Unsupported,
@@ -362,14 +364,21 @@ fn busy() -> DesktopError {
 	DesktopError::input_busy("another desktop operation owns input/focus control; no input was sent")
 }
 
+/// The platform's Escape monitor handle, or an empty slot where none exists.
+/// Only this type varies by platform: `ControlLease` keeps the field
+/// unconditionally so every platform builds the same literal.
+#[cfg(windows)]
+type EscapeSlot = Option<windows::EscapeMonitor>;
+#[cfg(target_os = "linux")]
+type EscapeSlot = Option<linux::EscapeMonitor>;
+#[cfg(not(any(windows, target_os = "linux")))]
+type EscapeSlot = ();
+
 /// The kernel owner lives on its own thread: Windows mutex release must happen
 /// on the same thread that acquired it, even when the session is disposed from
 /// another host thread. Closing/crashing the process releases the OS resource.
 struct ControlLease {
-	#[cfg(windows)]
-	_escape:     Option<windows::EscapeMonitor>,
-	#[cfg(target_os = "linux")]
-	_escape:     Option<linux::EscapeMonitor>,
+	_escape:     EscapeSlot,
 	escape_stop: EscapeStop,
 	_kernel:     KernelOwner,
 	running:     AtomicBool,
@@ -411,7 +420,7 @@ impl ControlLease {
 		#[cfg(not(any(windows, target_os = "linux")))]
 		let (escape, escape_stop) = {
 			let _ = (source, takeover, stop);
-			(None, EscapeStop::Unsupported)
+			((), EscapeStop::Unsupported)
 		};
 		Ok(Self { _escape: escape, escape_stop, _kernel: kernel, running: AtomicBool::new(false) })
 	}
@@ -656,7 +665,7 @@ pub(crate) fn grant_for_test(source: &CancellationSource) {
 		}
 	};
 	let owner = ControlLease {
-		_escape:     None,
+		_escape:     EscapeSlot::default(),
 		escape_stop: EscapeStop::Unsupported,
 		_kernel:     kernel,
 		running:     AtomicBool::new(false),

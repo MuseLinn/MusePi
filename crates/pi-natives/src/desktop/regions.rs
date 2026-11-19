@@ -35,6 +35,9 @@ const MIN_EDGE_STRENGTH: u32 = 16;
 const MAX_EDGE_STRENGTH: u32 = 96;
 const MIN_EDGE_CELLS: usize = 24;
 const MIN_COMPONENT_CELLS: usize = 3;
+/// Components one analysis may collect. A frame with more structure than this
+/// is scenic rather than an interface, so the scan stops and the result is
+/// reported as truncated.
 const MAX_COMPONENTS: usize = 1024;
 const MIN_REGION_EDGE_PX: u32 = 8;
 const MIN_REGION_AREA_PX: u64 = 64;
@@ -181,7 +184,7 @@ pub(crate) fn propose(frame: &GrayImage, max_regions: u32) -> RegionProposals {
 	if edge_cells < MIN_EDGE_CELLS {
 		return empty(EmptyReason::LowContrast);
 	}
-	let components = grid.components(&mask);
+	let (components, components_capped) = grid.components(&mask);
 	if components.is_empty() {
 		return empty(EmptyReason::LowContrast);
 	}
@@ -216,7 +219,7 @@ pub(crate) fn propose(frame: &GrayImage, max_regions: u32) -> RegionProposals {
 			}
 		})
 		.collect();
-	let truncated = proposals.len() > max_regions as usize;
+	let truncated = components_capped || proposals.len() > max_regions as usize;
 	if truncated {
 		proposals.sort_by(|left, right| {
 			right
@@ -343,10 +346,12 @@ impl Grid {
 	}
 
 	/// 8-connected components of the edge mask, kept as their bounding boxes.
-	fn components(&self, mask: &[bool]) -> Vec<Rect> {
+	/// The flag reports whether the component budget cut the scan short.
+	fn components(&self, mask: &[bool]) -> (Vec<Rect>, bool) {
 		let mut visited = vec![false; mask.len()];
 		let mut components = Vec::new();
 		let mut stack = Vec::new();
+		let mut capped = false;
 		for start in 0..mask.len() {
 			if !mask[start] || visited[start] {
 				continue;
@@ -390,11 +395,12 @@ impl Grid {
 			if cells >= MIN_COMPONENT_CELLS {
 				components.push(rect);
 				if components.len() >= MAX_COMPONENTS {
+					capped = true;
 					break;
 				}
 			}
 		}
-		components
+		(components, capped)
 	}
 
 	fn to_frame(&self, rect: &Rect, width: usize, height: usize) -> (u32, u32, u32, u32) {
@@ -758,6 +764,27 @@ mod tests {
 		cache.insert("huge".into(), oversized);
 		assert!(cache.get("huge").is_none());
 		assert_eq!(cache.len(), 0);
+	}
+
+	#[test]
+	fn a_frame_with_too_many_components_reports_truncated() {
+		// 33×33 isolated boxes: more edge structure than the component budget,
+		// which is what a wallpaper, a dense canvas or a remote desktop looks like.
+		let mut frame = GrayImage::from_pixel(462, 462, Luma([32]));
+		for row in 0..33u32 {
+			for column in 0..33u32 {
+				let x = 4 + column * 14;
+				let y = 4 + row * 14;
+				for py in y..y + 10 {
+					for px in x..x + 10 {
+						frame.put_pixel(px, py, Luma([224]));
+					}
+				}
+			}
+		}
+		let proposals = propose(&frame, DEFAULT_MAX_REGIONS);
+		assert!(proposals.truncated, "the component budget cut the scan short");
+		assert_eq!(proposals.regions.len(), DEFAULT_MAX_REGIONS as usize);
 	}
 
 	#[test]

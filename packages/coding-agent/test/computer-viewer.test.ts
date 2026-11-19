@@ -35,6 +35,8 @@ const capabilities: DesktopCapabilities = {
 	inputPermission: "granted",
 	axPermission: "unavailable",
 	displayCount: 1,
+	visualRegions: true,
+	escapeStop: "unsupported",
 };
 
 interface Captured {

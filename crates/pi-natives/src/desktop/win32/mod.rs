@@ -95,8 +95,8 @@ impl Backend for Win32Backend {
 			ax_permission: "granted".to_string(),
 			display_count,
 			// Derived by `DesktopCapabilities::normalize` in the session.
-			visual_regions: None,
-			escape_stop: None,
+			visual_regions: false,
+			escape_stop: String::new(),
 		}
 	}
 

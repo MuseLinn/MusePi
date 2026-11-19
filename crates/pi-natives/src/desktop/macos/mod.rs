@@ -69,8 +69,8 @@ impl Backend for MacosBackend {
 			ax_permission: permission_label(input_permission),
 			display_count,
 			// Derived by `DesktopCapabilities::normalize` in the session.
-			visual_regions: None,
-			escape_stop: None,
+			visual_regions: false,
+			escape_stop: String::new(),
 		}
 	}
 

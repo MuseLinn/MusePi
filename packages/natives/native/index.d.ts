@@ -39,7 +39,10 @@ export declare class DesktopSession {
   listApplications(query?: ApplicationQuery | undefined | null): Promise<Array<Application>>
   openApplication(target: string, options?: ApplicationOpenOptions | undefined | null): Promise<Application>
   capture(target: string, caps?: CaptureCaps | undefined | null): Promise<DesktopCapture>
-  /** Capture a fresh native-detail region without replacing the full input coordinate frame. */
+  /**
+   * Capture a fresh native-detail region without replacing the full input
+   * coordinate frame.
+   */
   captureRegion(target: string, region: CaptureRegion, caps?: CaptureCaps | undefined | null): Promise<DesktopCapture>
   /**
    * Propose clickable regions from the pixels of the most recent screenshot
@@ -73,7 +76,10 @@ export declare class DesktopSession {
   axSetValue(reference: string, value: string): Promise<undefined>
   axFocus(reference: string): Promise<undefined>
   axClick(reference: string, opts?: PointerOptions | undefined | null): Promise<undefined>
-  /** Immediately cancel operations submitted before this call. Later operations may proceed. */
+  /**
+   * Immediately cancel operations submitted before this call. Later
+   * operations may proceed.
+   */
   cancel(): void
   /**
    * How many times the user's physical Escape has stopped takeover input in
@@ -81,7 +87,10 @@ export declare class DesktopSession {
    * release never count, so a rise tells the host the user stopped the work.
    */
   get escapeStops(): number
-  /** Native ownership only. Human approval is required by the host before calling this method. */
+  /**
+   * Native ownership only. Human approval is required by the host before
+   * calling this method.
+   */
   acquireControl(): Promise<DesktopControlState>
   releaseControl(): void
   controlState(): DesktopControlState
@@ -732,13 +741,13 @@ export interface DesktopCapabilities {
    * Whether `visualRegions` can propose regions from a captured frame.
    * True exactly when this backend can capture.
    */
-  visualRegions?: boolean
+  visualRegions: boolean
   /**
    * Physical-Escape stop for takeover input on this platform: `available`
    * or `unsupported`. `controlState().escapeStop` reports what the held
    * lease actually armed.
    */
-  escapeStop?: string
+  escapeStop: string
 }
 
 export interface DesktopCapture {
@@ -2204,6 +2213,13 @@ export interface VectorTopK {
 }
 
 /**
+ * Calculate visible width of text, excluding ANSI escape sequences.
+ *
+ * Tabs count as a fixed-width cell.
+ */
+export declare function visibleWidth(text: string, tabWidth: number): number
+
+/**
  * One proposed region from the last captured frame.
  *
  * A proposal is not an element: this backend has no OCR or semantics, so
@@ -2248,13 +2264,6 @@ export interface VisualRegionsOptions {
   /** Most proposals to return, 1–64; defaults to 24. */
   maxRegions?: number
 }
-
-/**
- * Calculate visible width of text, excluding ANSI escape sequences.
- *
- * Tabs count as a fixed-width cell.
- */
-export declare function visibleWidth(text: string, tabWidth: number): number
 
 /** Profiling results returned to JavaScript. */
 export interface WorkProfile {

@@ -558,7 +558,7 @@ impl Worker {
 				}))
 			},
 			Request::VisualRegions { target, options, .. } => {
-				if !self.capabilities()?.visual_regions.unwrap_or(false) {
+				if !self.capabilities()?.visual_regions {
 					return Err(DesktopError::unsupported(
 						"region proposals need a backend that can capture frames",
 					));
@@ -2136,8 +2136,8 @@ mod capture_tests {
 		else {
 			panic!("expected capabilities");
 		};
-		assert_eq!(capabilities.visual_regions, Some(true), "capture implies region proposals");
-		let escape_stop = capabilities.escape_stop.as_deref().unwrap_or_default();
+		assert!(capabilities.visual_regions, "capture implies region proposals");
+		let escape_stop = capabilities.escape_stop.as_str();
 		assert!(
 			matches!(escape_stop, "available" | "unsupported"),
 			"unexpected escape stop state {escape_stop}"

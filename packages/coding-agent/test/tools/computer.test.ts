@@ -34,6 +34,8 @@ const capabilities: DesktopCapabilities = {
 	inputPermission: "granted",
 	axPermission: "granted",
 	displayCount: 1,
+	visualRegions: true,
+	escapeStop: "unsupported",
 };
 
 const display: DesktopDisplay = {

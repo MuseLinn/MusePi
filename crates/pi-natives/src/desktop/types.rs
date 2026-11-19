@@ -82,11 +82,11 @@ pub struct DesktopCapabilities {
 	pub display_count: u32,
 	/// Whether `visualRegions` can propose regions from a captured frame.
 	/// True exactly when this backend can capture.
-	pub visual_regions: Option<bool>,
+	pub visual_regions: bool,
 	/// Physical-Escape stop for takeover input on this platform: `available`
 	/// or `unsupported`. `controlState().escapeStop` reports what the held
 	/// lease actually armed.
-	pub escape_stop: Option<String>,
+	pub escape_stop: String,
 }
 
 impl DesktopCapabilities {
@@ -104,17 +104,17 @@ impl DesktopCapabilities {
 			input_permission: "unavailable".to_string(),
 			ax_permission: "unavailable".to_string(),
 			display_count: 0,
-			visual_regions: Some(false),
-			escape_stop: Some("unsupported".to_string()),
+			visual_regions: false,
+			escape_stop: escape_stop_support().to_string(),
 		}
 	}
 
 	/// Fills the flags the session derives instead of the backend: proposals
 	/// need captured pixels, and the Escape stop depends on the platform (and,
-	/// on Linux, on the display server the backend reported).
+	/// on Linux, on the display server the session runs under).
 	pub(crate) fn normalize(mut self) -> Self {
-		self.visual_regions = Some(self.capture);
-		self.escape_stop = Some(escape_stop_support(&self).to_string());
+		self.visual_regions = self.capture;
+		self.escape_stop = escape_stop_support().to_string();
 		self
 	}
 }
@@ -123,29 +123,23 @@ impl DesktopCapabilities {
 	clippy::missing_const_for_fn,
 	reason = "the Linux branch reads the process environment, so this cannot be const there"
 )]
-fn escape_stop_support(capabilities: &DesktopCapabilities) -> &'static str {
+fn escape_stop_support() -> &'static str {
 	#[cfg(windows)]
 	{
-		let _ = capabilities;
 		"available"
 	}
 	#[cfg(target_os = "linux")]
 	{
-		// The X11 monitor has no Wayland equivalent; Wayland input is limited
-		// to windows the compositor already focused.
-		let _ = capabilities;
-		if std::env::var_os("WAYLAND_DISPLAY").is_some()
-			|| std::env::var("XDG_SESSION_TYPE")
-				.is_ok_and(|value| value.eq_ignore_ascii_case("wayland"))
-		{
-			"unsupported"
-		} else {
+		// The monitor owner answers both the platform capability and whether it
+		// can start here, so the two can never disagree.
+		if super::control::escape_stop_supported() {
 			"available"
+		} else {
+			"unsupported"
 		}
 	}
 	#[cfg(not(any(windows, target_os = "linux")))]
 	{
-		let _ = capabilities;
 		"unsupported"
 	}
 }
@@ -340,17 +334,16 @@ mod tests {
 	fn capture_implies_region_proposals() {
 		let capturing =
 			DesktopCapabilities { capture: true, ..DesktopCapabilities::unavailable() }.normalize();
-		assert_eq!(capturing.visual_regions, Some(true));
+		assert!(capturing.visual_regions);
 		let deaf =
 			DesktopCapabilities { capture: false, ..DesktopCapabilities::unavailable() }.normalize();
-		assert_eq!(deaf.visual_regions, Some(false));
+		assert!(!deaf.visual_regions);
 	}
 
 	#[test]
 	fn the_unavailable_state_advertises_nothing() {
 		let caps = DesktopCapabilities::unavailable();
-		assert!(!caps.capture);
-		assert_eq!(caps.visual_regions, Some(false));
-		assert_eq!(caps.escape_stop.as_deref(), Some("unsupported"));
+		assert!(!caps.capture && !caps.visual_regions);
+		assert!(matches!(caps.escape_stop.as_str(), "available" | "unsupported"));
 	}
 }

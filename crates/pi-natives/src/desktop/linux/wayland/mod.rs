@@ -134,8 +134,8 @@ impl Backend for WaylandBackend {
 			},
 			display_count: self.displays.len() as u32,
 			// Derived by `DesktopCapabilities::normalize` in the session.
-			visual_regions: None,
-			escape_stop: None,
+			visual_regions: false,
+			escape_stop: String::new(),
 		}
 	}
 

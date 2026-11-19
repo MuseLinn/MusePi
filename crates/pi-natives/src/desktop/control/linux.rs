@@ -23,12 +23,17 @@ pub(super) struct EscapeMonitor {
 	thread: Option<JoinHandle<()>>,
 }
 
+/// Whether this session can arm a physical-Escape monitor at all. The X11
+/// monitor has no Wayland equivalent, so the platform capability and the
+/// monitor start share this one answer instead of re-deriving the environment.
+pub(crate) fn escape_stop_supported() -> bool {
+	!(std::env::var_os("WAYLAND_DISPLAY").is_some()
+		|| std::env::var("XDG_SESSION_TYPE").is_ok_and(|value| value.eq_ignore_ascii_case("wayland")))
+}
+
 impl EscapeMonitor {
 	pub(super) fn start(emergency: EmergencyStop) -> CoreResult<Option<Self>> {
-		let wayland = std::env::var_os("WAYLAND_DISPLAY").is_some()
-			|| std::env::var("XDG_SESSION_TYPE")
-				.is_ok_and(|value| value.eq_ignore_ascii_case("wayland"));
-		if wayland {
+		if !escape_stop_supported() {
 			return Ok(None);
 		}
 		let (stop, stopped) = UnixStream::pair().map_err(failed)?;
