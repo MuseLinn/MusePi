@@ -181,7 +181,7 @@ export default function (pi: ExtensionAPI): void {
 - `panel.shell` — full right-panel shell (single). The `panel` plugin owns tabs, split layout, and maximize presentation; `main.conversation` does not bundle it.
 - `shell.overlay` — root-level fixed overlay (single): owns the floating horizontal/vertical scroll rail and portals itself to `document.body`. The host keeps the built-in `<FloatingScrollbar/>` as the fallback when no contribution is mounted.
 - `browser.host` — persistent managed-browser guest host (single), mounted at the app root independently of `panel.tab.browser`. Both artifacts bind the same `window.MusePiManagedBrowserHost` store instead of bundling separate copies.
-- `settings.section.<id>` — 设置页左侧导航项(dsh `settings.section` 词汇;`settings.tab.<id>` 为兼容旧拼写,两者等价)。注册者可带导航身份:`label`(显示名)、`order`(组内位置)、`icon`(图标名)、`keywords`(设置搜索关键词)。当 `<id>` 命中既有页面(包括 `sessions` / `memory` 这类能力别名,经 `SECTION_ALIAS` 解析)时**原位接管**:内置导航行、id、深链与搜索保留,注册者的 label/icon/order/keywords 覆盖到该行;扩展不再新增 `ext:` 行。停用或编译失败回退内置页。页面挂载时收到 `settingsSection: { id, close }`(dsh `settings.section.view` 的调用参数)与 `onApplyPrompt(text)`(把示例交给输入框并关闭设置)。设置壳本身(导航、路由、搜索、⌘K 定位)是宿主内建,不是插件。
+- `settings.section.<id>` — 设置页左侧导航项(dsh `settings.section` 词汇,唯一拼写)。注册者可带导航身份:`label`(显示名)、`order`(组内位置)、`icon`(图标名)、`keywords`(设置搜索关键词)。当 `<id>` 命中既有页面(包括 `sessions` / `memory` 这类能力别名,经 `SECTION_ALIAS` 解析)时**原位接管**:内置导航行、id、深链与搜索保留,注册者的 label/icon/order/keywords 覆盖到该行;扩展不再新增 `ext:` 行。停用或编译失败回退内置页。页面挂载时收到 `settingsSection: { id, close }`(dsh `settings.section.view` 的调用参数)与 `onApplyPrompt(text)`(把示例交给输入框并关闭设置)。设置壳本身(导航、路由、搜索、⌘K 定位)是宿主内建,不是插件。
 - `sidebar.panel.<destination id>` — 二级左栏面板(2026-11-08):宿主按 rail 目的地 id 取唯一贡献,挂进 `.gui-side-keeper`,由 `data-panel` 决定显隐;几何读 keeper 上的 `--gui-side-w`,不接宿主专用 props。编译插件通过宿主模块表共享 `lib/scheduled-task-nav`(`task-nav`),否则会拿到另一份快照 store。插件停用或编译失败时宿主回退内置面板,目的地仍可用。
 - `rail.<id>` — 右缘图标轨(前缀命名空间;`rail.right` 是保留的精确槽)
 - `main.conversation` (single) / `main.capability` (single) — root `main` keys: the complete conversation page (welcome + transcript) and the capability-center page. One occupant per key; the host renders its built-in page when nothing is mounted.
@@ -194,6 +194,7 @@ export default function (pi: ExtensionAPI): void {
 - `panel.right` / `settings.extensions` — 旧保留槽(仍可用)。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载,见下):注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染,并注入 `settingsScope` 读写代理。
 - `settings.item.<extId>` — 扩展设置卡片(2026-08-17;2026-08-20 起展示于**扩展中心底部**,随插件 inventory):按扩展 id 派发一张卡片,组件经 `settingsScope` prop 读写设置键(见下)。
 - `settings.action.<id>` — 单行偏好槽(2026-08-20):组件挂到设置页"通用"分区末尾,功能插件贡献单行偏好(语言/外观/Enter 行为),无需整 tab 或整卡。
+- `settings.general.item` — 「常规」页的行级偏好席位(dsh `settings.general.item`,精确 list 槽,2026-11-20):功能插件贡献一行偏好即可,无需整页;行自己负责文案、当前值与写入,壳只提供顺序。唯一拼写,旧的 `settings.action.<id>` 前缀已删除。
 - `settings.appearance.item` — 内置外观页的行/分区座位(2026-11-10,list 语义;dsh `settings.general.item` 同构命名):贡献渲染在外观页内容之后。插件**自己选择座位**:只放内置页、只放扩展中心(`settings.item.<extId>`)、或两处都注册;组件收到注入的 `slot`,可为不同座位渲染不同内容。`ui-theme` 用该座位把滚动条设置放回外观页（dsh 的 theme bundle 同构）。
 
 **设置面板宿主**(2026-10-10):注册到 `settings.extensions` 的组件由**扩展控制中心**

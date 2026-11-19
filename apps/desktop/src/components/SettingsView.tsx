@@ -7,9 +7,8 @@ import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
 import { resolveActiveSection, type SectionId, type SectionRequest } from "../lib/settings-nav";
 import { useSettingSearchRows } from "../lib/settings-search";
 import {
-	SETTINGS_ACTION_SLOT_PREFIX,
 	SETTINGS_APPEARANCE_ITEM_SLOT,
-	SETTINGS_TAB_SLOT_PREFIX,
+	SETTINGS_SECTION_SLOT_PREFIX,
 	SlotComponentMount,
 	useSlotComponents,
 	useSlotComponentsByPrefix,
@@ -100,28 +99,25 @@ export function SettingsView({
 	const [section, setSection] = useState<SectionRequest | string>(() => {
 		return initialSection ?? "appearance";
 	});
-	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件自动挂载为设置页导航项
+	// 内核级 slot(P1):`settings.section.<id>` 槽位组件自动挂载为设置页导航项
 	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献)。
-	const extSettingsTabs = useSlotComponentsByPrefix(rpc, ["settings.section.", SETTINGS_TAB_SLOT_PREFIX]);
-	// 会话管理插件页:声明 `settings.tab.sessions` 的扩展接管内置「会话」分区。
+	const extSettingsTabs = useSlotComponentsByPrefix(rpc, SETTINGS_SECTION_SLOT_PREFIX);
+	// 会话管理插件页:声明 `settings.section.sessions` 的扩展接管内置「会话」分区。
 	// 插件停用/未装载时保留内置 SessionsSection(自动清理等保留策略不丢失)。
 	/** A page plugin takes over its nav id when the slot names an existing page
-	 *  (`settings.tab.<id>`); the host keeps the built-in renderer as fallback. */
+	 *  (`settings.section.<id>`); the host keeps the built-in renderer as fallback. */
 	const extTabFor = (id: string) =>
 		extSettingsTabs.find(
-			tab =>
-				(tab.slot === `settings.section.${id}` || tab.slot === `${SETTINGS_TAB_SLOT_PREFIX}${id}`) &&
-				(tab.code.length > 0 || tab.url) &&
-				!tab.error,
+			tab => tab.slot === `${SETTINGS_SECTION_SLOT_PREFIX}${id}` && (tab.code.length > 0 || tab.url) && !tab.error,
 		);
 	const extSessionsTab = extTabFor("sessions");
-	// 记忆插件页:声明 `settings.tab.memory` 的扩展接管内置「记忆」分区。
+	// 记忆插件页:声明 `settings.section.memory` 的扩展接管内置「记忆」分区。
 	// 插件停用/未装载时保留内置 MemorySection。
 	const extMemoryTab = extTabFor("memory");
 	const extConnectorsTab = extTabFor("connectors");
 	const extIndexesTab = extTabFor("indexes");
-	// 单行偏好槽:settings.action.<id> 组件。
-	const actionItems = useSlotComponentsByPrefix(rpc, SETTINGS_ACTION_SLOT_PREFIX);
+	// 行级偏好席位(dsh `settings.general.item`):挂到「常规」页末尾。
+	const generalRowItems = useSlotComponents(rpc, "settings.general.item");
 	// 内置外观页的行/分区座位：插件注册 `settings.appearance.item` 即进入该页。
 	// 插件注册 `settings.appearance.item` 即出现在外观页；也可另挂
 	// `settings.item.<extId>`，同一组件用注入的 `slot` 渲染不同内容。
@@ -493,11 +489,11 @@ export function SettingsView({
 							{activeSection === "general" && (
 								<>
 									<GeneralSection rpc={rpc} />
-									{/* 单行偏好槽:settings.action.<id> 组件挂到通用分区末尾 —— 功能插件
-									 * 贡献单行偏好,无需整 tab/整卡。 */}
-									{actionItems.length > 0 && (
+									{/* 行级偏好席位(`settings.general.item`,dsh 命名)挂到
+									 * 「常规」页末尾 —— 功能插件贡献单行偏好,无需整页或整卡。 */}
+									{generalRowItems.length > 0 && (
 										<div className="gui-settings-row">
-											{actionItems.map(item => (
+											{generalRowItems.map(item => (
 												<SlotComponentMount
 													key={`${item.slot}:${item.extensionId}`}
 													item={item}

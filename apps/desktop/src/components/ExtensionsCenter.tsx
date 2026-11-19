@@ -982,7 +982,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 			{/* 扩展设置卡片(`settings.item.<extId>`
 			 * 组件按扩展分组渲染在此 —— 插件的运行时配置随插件 inventory 展示,
 			 * 不设设置页聚合 tab(registerSetting 配置项经 ui.tab 进现有 tab,
-			 * settings.tab.<id> 整页进设置页左侧导航)。 */}
+			 * settings.section.<id> 整页进设置页左侧导航)。 */}
 			{extSettingCards.length > 0 && (
 				<div className="gui-ext-itemcards">
 					<div className="gui-ext-slots-head">

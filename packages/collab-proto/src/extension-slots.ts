@@ -90,6 +90,10 @@ export const EXTENSION_SLOT_DECLARATION = {
 		/** Row/section seat inside a built-in settings page. A plugin picks the
 		 *  page(s) it contributes to; the component receives its `slot`. */
 		"settings.appearance.item": { kind: "list" },
+		/** Row-level preference in the General settings page (dsh
+		 *  `settings.general.item`): a feature contributes one row without a page
+		 *  of its own. One spelling — no legacy alias. */
+		"settings.general.item": { kind: "list" },
 		// 输入区(见上表)。list 组在前、single 组在后。
 		/** 整个输入卡本身(single):占住者渲染 hero/session 两种模式,
 		 *  宿主在无贡献或编译失败时渲染内建 Composer。 */
@@ -115,13 +119,11 @@ export const EXTENSION_SLOT_DECLARATION = {
 	} as const satisfies Record<string, SlotDeclaration>,
 	prefixes: [
 		"panel.tab.",
-		/** Settings page (dsh `settings.section` vocabulary): `settings.section.<id>`.
-		 *  `settings.tab.<id>` stays accepted as the legacy spelling. */
+		/** Settings page (dsh vocabulary): `settings.section.<id>`. One
+		 *  spelling — no legacy alias. */
 		"settings.section.",
-		"settings.tab.",
 		"rail.",
 		"settings.item.",
-		"settings.action.",
 		"chat.session-info.",
 		/** Second-tier sidebar panel: `sidebar.panel.<destination id>` (e.g.
 		 *  `scheduled`, `capability`). The host mounts the contribution whose

@@ -25,7 +25,7 @@ import { MenuPopup } from "./MenuPopup";
  */
 
 /** Settings page slots: canonical dsh vocabulary + the legacy spelling. */
-const PAGE_SLOT_PREFIXES = ["settings.section.", "settings.tab."] as const;
+const PAGE_SLOT_PREFIXES = ["settings.section."] as const;
 
 interface SectionDef {
 	id: SectionId | string;
@@ -373,7 +373,7 @@ export function navGroups(
 			],
 		},
 	];
-	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件挂为左侧导航项 ——
+	// 内核级 slot(P1):`settings.section.<id>` 槽位组件挂为左侧导航项 ——
 	// 扩展声明一个设置页即出现在导航。
 	// 配置项级贡献走 registerSetting 的 ui.tab(插入现有 tab)或
 	// settings.item 卡片(扩展中心),不设"扩展设置"聚合 tab。
@@ -381,8 +381,7 @@ export function navGroups(
 	// row (and its id, keywords and deep links) stays, and the extension does
 	// not add a second row. Only genuinely new pages get an `ext:` row.
 	const builtinIds = new Set(groups.flatMap(group => group.items.map(item => item.id)));
-	/** `settings.section.<id>` is the canonical spelling (dsh vocabulary);
-	 *  `settings.tab.<id>` is the legacy spelling, still accepted. */
+	/** Settings page namespace (dsh vocabulary): `settings.section.<id>`. */
 	const pageIdOf = (slot: string): string | null => {
 		const prefix = PAGE_SLOT_PREFIXES.find(candidate => slot.startsWith(candidate));
 		if (!prefix) return null;

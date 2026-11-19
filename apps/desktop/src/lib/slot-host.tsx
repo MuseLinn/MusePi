@@ -219,13 +219,12 @@ export const RIGHT_PANEL_SLOT = slot("panel.right");
 /** Right-edge 44px icon rail slot. */
 export const RIGHT_RAIL_SLOT = slot("rail.right");
 /** 内核级 slot 命名空间(P1 架构开放):slot 名是开放命名空间,前缀决定挂载位置。 */
-export const PANEL_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[0]; // "panel.tab."
-export const SETTINGS_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[1]; // "settings.tab."
-export const RAIL_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[2]; // "rail."
+export const PANEL_TAB_SLOT_PREFIX = "panel.tab.";
+/** Settings page namespace (dsh `settings.section.<id>`; the only spelling). */
+export const SETTINGS_SECTION_SLOT_PREFIX = "settings.section.";
+export const RAIL_SLOT_PREFIX = "rail.";
 /** Keyed settings card slot. */
-export const SETTINGS_ITEM_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[3]; // "settings.item."
-/** 单行偏好槽。 */
-export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4]; // "settings.action."
+export const SETTINGS_ITEM_SLOT_PREFIX = "settings.item.";
 /** 内置外观页的行/分区座位。 */
 export const SETTINGS_APPEARANCE_ITEM_SLOT = slot("settings.appearance.item");
 /** Composer 座位槽（见 EXTENSION_SLOT_DECLARATION 的席位表）。 */
@@ -998,16 +997,14 @@ export function useSlotComponents(rpc: RpcClient | null, slot: string): SlotComp
 	}, [data, slot]);
 }
 
-/** Pick compiled components whose slot starts with one of the namespace
- *  prefixes (内核级 slot:PANEL_TAB_SLOT_PREFIX 等按前缀自动挂载). An array
- *  accepts a renamed slot alongside its legacy spelling, so a migration needs
- *  no second registry subscription. */
-export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string | readonly string[]): SlotComponent[] {
+/** Pick compiled components whose slot starts with a namespace prefix
+ *  (内核级 slot:PANEL_TAB_SLOT_PREFIX 等按前缀自动挂载)。 */
+export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string): SlotComponent[] {
 	const data = useExtensionRegistry(rpc);
 	// A fresh array literal is a new dep each render; key the memo on the
 	// joined list so the sort does not rerun under an unchanged registry.
 	const prefixes = typeof prefix === "string" ? [prefix] : prefix;
-	const prefixKey = prefixes.join(" ");
+	const prefixKey = prefixes.join("\u0000");
 	return useMemo(() => {
 		const all = data?.components ?? [];
 		return all
@@ -1468,10 +1465,9 @@ const slotHostBindings = {
 	RIGHT_PANEL_SLOT,
 	RIGHT_RAIL_SLOT,
 	PANEL_TAB_SLOT_PREFIX,
-	SETTINGS_TAB_SLOT_PREFIX,
+	SETTINGS_SECTION_SLOT_PREFIX,
 	RAIL_SLOT_PREFIX,
 	SETTINGS_ITEM_SLOT_PREFIX,
-	SETTINGS_ACTION_SLOT_PREFIX,
 	SETTINGS_APPEARANCE_ITEM_SLOT,
 	COMPOSER_BAR_SLOT,
 	COMPOSER_DOCK_SLOT,

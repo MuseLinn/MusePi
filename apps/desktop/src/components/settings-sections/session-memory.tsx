@@ -97,9 +97,9 @@ export function SessionMemorySection({
 }: {
 	rpc: RpcClient | null;
 	currentSessionId: string | null;
-	/** Extension takeover of the session group (`settings.tab.sessions`). */
+	/** Extension takeover of the session group (`settings.section.sessions`). */
 	sessionSlot?: ReactNode;
-	/** Extension takeover of the memory group (`settings.tab.memory`). */
+	/** Extension takeover of the memory group (`settings.section.memory`). */
 	memorySlot?: ReactNode;
 }): ReactNode {
 	const [group, setGroup] = useState<MemoryGroup>("session");

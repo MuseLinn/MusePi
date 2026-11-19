@@ -1,5 +1,6 @@
 import "./happy-dom-shim";
 import { describe, expect, test } from "bun:test";
+import { EXTENSION_SLOT_DECLARATION, slotKindOf } from "@musepi/collab-proto/extension-slots";
 import { navGroups } from "../src/components/SettingsNav";
 import { apply as applyConnectors } from "../src/plugins/connectors-settings/index";
 import { apply as applyIndexes } from "../src/plugins/index-library/index";
@@ -22,7 +23,7 @@ describe("settings pages as Cordis plugins", () => {
 			{ slot: "settings.section.connectors", label: "连接器" },
 			{ slot: "settings.section.indexes", label: "索引库" },
 			// Legacy spelling stays accepted (plugins shipped before the rename).
-			{ slot: "settings.tab.widgets", label: "小组件" },
+			{ slot: "settings.section.widgets", label: "小组件" },
 			// The retired page ids stay aliases of 会话与记忆, so a takeover slot
 			// must not sprout a second nav row either.
 			{ slot: "settings.section.sessions", label: "会话" },
@@ -38,7 +39,7 @@ describe("settings pages as Cordis plugins", () => {
 		expect(items.some(item => item.id === "ext:settings.section.memory")).toBe(false);
 		expect(items.some(item => item.id.startsWith("ext:settings.section.memory"))).toBe(false);
 		// A genuinely new page still gets its row, through the legacy prefix too.
-		expect(items.find(item => item.id === "ext:settings.tab.widgets")?.label).toBe("小组件");
+		expect(items.find(item => item.id === "ext:settings.section.widgets")?.label).toBe("小组件");
 	});
 
 	test("owner options name the built-in row's icon, label, order and keywords", () => {
@@ -59,5 +60,21 @@ describe("settings pages as Cordis plugins", () => {
 		// order positions it inside the group (the alias pages keep their own).
 		const agentGroup = groups.find(group => group.items.some(item => item.id === "connectors"))!;
 		expect(agentGroup.items[0]!.id).toBe("connectors");
+	});
+});
+
+describe("settings slot vocabulary (dsh parity)", () => {
+	test("canonical page/row slots are declared and the legacy spellings stay accepted", () => {
+		// Canonical names from the dsh contract.
+		expect(EXTENSION_SLOT_DECLARATION.prefixes).toContain("settings.section.");
+		expect(EXTENSION_SLOT_DECLARATION.exact["settings.general.item"]).toEqual({ kind: "list" });
+		// Row seat: `settings.general.item` is an exact list seat; the page rows
+		// keep their pattern.
+		expect(slotKindOf("settings.general.item")).toBe("list");
+		expect(slotKindOf("settings.appearance.item")).toBe("list");
+		// One spelling per seat: the retired namespaces are gone, so a stale
+		// plugin fails loud at registration instead of silently mounting nowhere.
+		expect(EXTENSION_SLOT_DECLARATION.prefixes).not.toContain("settings.tab.");
+		expect(EXTENSION_SLOT_DECLARATION.prefixes).not.toContain("settings.action.");
 	});
 });
