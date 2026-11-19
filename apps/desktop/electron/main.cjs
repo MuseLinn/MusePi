@@ -39,6 +39,7 @@ if (process.env.MUSEPI_CDP_PORT) {
 }
 const { probe, probeWeb, restart, start, kill, portOpen, reapOrphanedDaemons, findOrphanedDaemon, adoptDaemon } = require("./daemon.cjs");
 const { createTrayController } = require("./tray.cjs");
+const { trayMenuPosition } = require("./tray-position.cjs");
 const {
 	checkForUpdates,
 	downloadUpdate,
@@ -1666,51 +1667,49 @@ function createTrayMenuWindow() {
 	return trayMenuWindow;
 }
 
-function positionTrayMenu(win, bounds) {
+function positionTrayMenu(win, bounds, clickPoint) {
 	const [width, height] = win.getSize();
-	// macOS click events may carry no bounds at all; the caller (tray.cjs)
-	// falls back to tray.getBounds(), but guard against NaN/missing here
-	// too — the menu must never end up off-screen.
-	const b = bounds && Number.isFinite(bounds.x) && Number.isFinite(bounds.y) ? bounds : null;
-	if (!b) {
-		const work = screen.getPrimaryDisplay().workArea;
-		if (process.platform === "darwin") {
-			// Menu bar sits at the top: dock to the top-right corner, NOT
-			// the bottom (the old hardcoded corner rendered the menu in the
-			// wrong half of the screen on macOS).
-			win.setPosition(Math.round(work.x + work.width - width - 12), Math.round(work.y + 4));
+	const trayBounds = bounds && Number.isFinite(bounds.x) && Number.isFinite(bounds.y) ? bounds : null;
+	// macOS click positions are window-relative; Windows reports screen
+	// coordinates. Read the cursor on macOS so the point is comparable to the
+	// display rectangles. A missing point leaves the icon (or the primary work
+	// area) to pick the display.
+	let point = null;
+	try {
+		if (process.platform === "win32" && clickPoint && Number.isFinite(clickPoint.x) && Number.isFinite(clickPoint.y)) {
+			point = { x: clickPoint.x, y: clickPoint.y };
 		} else {
-			win.setPosition(Math.round(work.x + work.width - width - 12), Math.round(work.y + work.height - height - 12));
+			const cursor = screen.getCursorScreenPoint();
+			if (cursor && Number.isFinite(cursor.x) && Number.isFinite(cursor.y)) point = cursor;
 		}
-		return;
+	} catch {
+		point = null;
 	}
-	const display = screen.getDisplayNearestPoint({ x: b.x + b.width / 2, y: b.y + b.height / 2 });
-	const work = display.workArea;
-	// Windows taskbar sits at the bottom by default: pop the menu ABOVE
-	// the icon, right-aligned with the tray column. Taskbar on top/side:
-	// clamp inside the work area.
-	// macOS: the menu-bar icon sits at the very top — drop the menu just
-	// BELOW the icon (bounds.y + height), right-aligned to the tray area.
-	if (process.platform === "darwin") {
-		const x = Math.max(work.x + 12, work.x + work.width - width - 12);
-		const y = bounds.y + bounds.height + 4;
-		win.setPosition(Math.round(x), Math.round(Math.max(work.y, Math.min(y, work.y + work.height - height - 12))));
-		return;
-	}
-	const right = work.x + work.width - 12;
-	const x = Math.max(work.x + 12, right - width);
-	const y = bounds.y - height - 10;
-	win.setPosition(Math.round(x), Math.round(y < work.y ? work.y + 12 : y));
+	const icon =
+		trayBounds && trayBounds.width > 0
+			? { x: trayBounds.x + trayBounds.width / 2, y: trayBounds.y }
+			: null;
+	const displayPoint = point ?? icon ?? screen.getPrimaryDisplay().workArea;
+	const display = screen.getDisplayNearestPoint(displayPoint);
+	const { x, y } = trayMenuPosition({
+		width,
+		height,
+		trayBounds,
+		point,
+		display,
+		platform: process.platform,
+	});
+	win.setPosition(x, y);
 }
 
-function toggleTrayMenu(bounds) {
+function toggleTrayMenu(bounds, clickPoint) {
 	const win = createTrayMenuWindow();
 	if (win.isVisible()) {
 		trayLog("menu hide (was visible)");
 		win.hide();
 		return;
 	}
-	positionTrayMenu(win, bounds);
+	positionTrayMenu(win, bounds, clickPoint);
 	trayMenuLastShow = Date.now();
 	if (win.webContents.isLoading()) {
 		// First open: the window was just created and tray-menu.html is
@@ -1852,7 +1851,7 @@ function handleTrayAction(action) {
 	trayLog(`action ${JSON.stringify(action)}`);
 	switch (action.type) {
 		case "toggle-tray-menu":
-			toggleTrayMenu(action.bounds);
+			toggleTrayMenu(action.bounds, action.point);
 			break;
 		case "focus-session":
 			if (typeof action.sessionId === "string" && mainWindow && !mainWindow.isDestroyed()) {

@@ -263,22 +263,22 @@ function createTrayController({ onAction, onSnapshot }) {
 			tray.setIgnoreDoubleClickEvents(true);
 			// macOS: the click event's `bounds` is NOT provided (unlike
 			// Windows) — tray.getBounds() returns the status-item frame on
-			// both platforms, so it is the reliable fallback. Without it the
-			// menu fell back to the hardcoded screen corner instead of
-			// docking to the icon.
+			// both platforms, so it is the reliable fallback. The click point
+			// rides along too: it picks the display the icon was clicked on
+			// (tray bounds can describe the primary display's menu bar).
 			const iconBounds = () => {
 				try {
 					if (tray && !tray.isDestroyed()) return tray.getBounds();
 				} catch {
-					// tray gone mid-click; caller falls back to the corner.
+					// tray gone mid-click; the pointer still anchors the menu.
 				}
 				return null;
 			};
-			tray.on("click", (event) =>
-				onAction({ type: "toggle-tray-menu", bounds: event.bounds ?? iconBounds() }),
+			tray.on("click", (event, _bounds, position) =>
+				onAction({ type: "toggle-tray-menu", bounds: event.bounds ?? iconBounds(), point: position }),
 			);
-			tray.on("right-click", (event) =>
-				onAction({ type: "toggle-tray-menu", bounds: event.bounds ?? iconBounds() }),
+			tray.on("right-click", (event, _bounds, position) =>
+				onAction({ type: "toggle-tray-menu", bounds: event.bounds ?? iconBounds(), point: position }),
 			);
 		} else if (process.platform === "win32") {
 			tray.setIgnoreDoubleClickEvents(false);
@@ -290,8 +290,8 @@ function createTrayController({ onAction, onSnapshot }) {
 			};
 			tray.on("click", () => onAction({ type: "show-main-window" }));
 			tray.on("double-click", () => onAction({ type: "show-main-window" }));
-			tray.on("right-click", (event) =>
-				onAction({ type: "toggle-tray-menu", bounds: event.bounds ?? iconBounds() }),
+			tray.on("right-click", (event, _bounds, position) =>
+				onAction({ type: "toggle-tray-menu", bounds: event.bounds ?? iconBounds(), point: position }),
 			);
 		} else {
 			tray.setIgnoreDoubleClickEvents(true);
