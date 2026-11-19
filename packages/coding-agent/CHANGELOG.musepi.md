@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **设置内容区收敛为统一工厂，新增页面不再需要改壳**：已注册的 `settings.section.<id>` 页面由内容区工厂直接渲染（等价 dsh `settings.section.view`），内置页分支只作为未装载/编译失败的回退；原先连接器/索引库的专用分支删除。此前通过槽位新增的页面会出现在导航却渲染空白。
+  - EN: The settings content area is now one factory: any registered `settings.section.<id>` page renders directly (the dsh `settings.section.view` equivalent), and the built-in branches are only the fallback when nothing loads — the connector/index special cases are gone. A page added through the slot used to appear in the navigation and render blank.
+
 - **页面自有行席位按 dsh children 的粒度收敛**：设置页的行/分区组件改用命名空间 `settings.section.<page>.<seat>`，专用精确槽 `settings.appearance.item` 删除；当前页只挂载自己的座位、渲染在页面内容之后，导航不会把行座位误当页面。主题 bundle 的滚动条设置随之迁到 `settings.section.appearance.item`。
   - EN: Page-owned settings rows now follow the dsh `children` granularity. Row/section components mount through the `settings.section.<page>.<seat>` namespace, the dedicated `settings.appearance.item` exact slot is gone, and a page mounts only its own seats after its content; the navigation never mistakes a row seat for a page. The theme bundle's scrollbar settings moved to `settings.section.appearance.item`.
 

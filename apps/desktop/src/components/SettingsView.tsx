@@ -105,16 +105,19 @@ export function SettingsView({
 	// 插件停用/未装载时保留内置 SessionsSection(自动清理等保留策略不丢失)。
 	/** A page plugin takes over its nav id when the slot names an existing page
 	 *  (`settings.section.<id>`); the host keeps the built-in renderer as fallback. */
-	const extTabFor = (id: string) =>
-		extSettingsTabs.find(
-			tab => tab.slot === `${SETTINGS_SECTION_SLOT_PREFIX}${id}` && (tab.code.length > 0 || tab.url) && !tab.error,
-		);
+	const extTabFor = (id: string): (typeof extSettingsTabs)[number] | undefined => {
+		// A nav id may be a section id (`connectors`) or an ext page row
+		// (`ext:settings.section.widgets`); both resolve to the one slot.
+		const slot = id.startsWith("ext:") ? id.slice("ext:".length) : `${SETTINGS_SECTION_SLOT_PREFIX}${id}`;
+		return extSettingsTabs.find(tab => tab.slot === slot && (tab.code.length > 0 || tab.url) && !tab.error);
+	};
+	/** The section id a plugin page was registered for (dsh `settings.section.view`
+	 *  `id`): strip the nav `ext:` marker and the slot namespace. */
+	const sectionIdOf = (slot: string): string => slot.slice(SETTINGS_SECTION_SLOT_PREFIX.length);
 	const extSessionsTab = extTabFor("sessions");
 	// 记忆插件页:声明 `settings.section.memory` 的扩展接管内置「记忆」分区。
 	// 插件停用/未装载时保留内置 MemorySection。
 	const extMemoryTab = extTabFor("memory");
-	const extConnectorsTab = extTabFor("connectors");
-	const extIndexesTab = extTabFor("indexes");
 	// 行级偏好席位(dsh `settings.general.item`):挂到「常规」页末尾。
 	const generalRowItems = useSlotComponents(rpc, "settings.general.item");
 	// Nav groups are the single source of truth for "which section ids exist":
@@ -128,6 +131,8 @@ export function SettingsView({
 	// a retired id) falls back to the default section instead of rendering an
 	// empty content pane. Contract + tests: lib/settings-nav.ts.
 	const activeSection = resolveActiveSection(section, navSectionIds);
+	// 已注册页面统一走工厂:声明即渲染,内置分支只做缺席回退。
+	const activeExtTab = extTabFor(activeSection);
 	// 页面自有行席位(dsh `children` 粒度):`settings.section.<page>.*` 的组件由
 	// 该页承载,当前页只挂载自己的座位,渲染在页面内容之后。插件也可另挂
 	// `settings.item.<extId>`,同一组件用注入的 `slot` 区分座位。
@@ -485,142 +490,138 @@ export function SettingsView({
 								activeSection === "model" || activeSection === "skills" ? " gui-settings-content--fill" : ""
 							}`}
 						>
-							{activeSection === "general" && (
-								<>
-									<GeneralSection rpc={rpc} />
-									{/* 行级偏好席位(`settings.general.item`,dsh 命名)挂到
-									 * 「常规」页末尾 —— 功能插件贡献单行偏好,无需整页或整卡。 */}
-									{generalRowItems.length > 0 && (
-										<div className="gui-settings-row">
-											{generalRowItems.map(item => (
-												<SlotComponentMount
-													key={`${item.slot}:${item.extensionId}`}
-													item={item}
-													rpc={rpc}
-												/>
-											))}
-										</div>
-									)}
-								</>
-							)}
-							{activeSection === "appearance" && (
-								<>
-									<AppearanceSection
-										rpc={rpc}
-										showAvatars={showAvatars}
-										onToggleAvatars={() => {
-											const next = !showAvatars;
-											localStorage.setItem("musepi-gui-avatars", next ? "1" : "0");
-											setShowAvatars(next);
-										}}
-										brandIconStyle={brandIconStyle}
-										onToggleBrandIconStyle={() => {
-											const next: BrandIconStyle = brandIconStyle === "mono" ? "color" : "mono";
-											writeBrandIconStyle(next);
-											setBrandIconStyle(next);
-										}}
-									/>
-								</>
-							)}
-							{activeSection === "model" && (
-								<ModelSection
-									providers={providers}
-									apiProviders={apiProviders}
-									custom={custom}
-									loginState={loginState}
-									pendingLogins={pendingLogins}
-									onLogin={login}
-									onLogout={logout}
-									onSubmitInput={submitLoginInput}
-									onCancelLogin={cancelLogin}
-									onChanged={loadProviders}
+							{/* dsh `settings.section.view` factory: a registered page owns its
+							 *  content; the built-in branches below are the fallback when no
+							 *  contribution is loaded. */}
+							{activeExtTab ? (
+								<SlotComponentMount
+									item={activeExtTab}
 									rpc={rpc}
 									sessionId={sessionId}
-									// Only the capability entry (`providers`) opens the add
-									// form — arriving from the nav is a plain visit.
-									openAddProvider={section === "providers"}
+									cwd={cwd ?? undefined}
+									onApplyPrompt={applyPrompt}
+									settingsSection={{ id: sectionIdOf(activeExtTab.slot), close: onBack }}
 								/>
-							)}
-							{activeSection === "shell" && <ShellSection rpc={rpc} />}
-							{activeSection === "tools" && <ToolsSection rpc={rpc} />}
-							{activeSection === "media" && (
-								<MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />
-							)}
-							{activeSection === "notifications" && <NotificationsSection rpc={rpc} />}
-							{activeSection === "pet" && <CompanionSection />}
-							{activeSection === "session-memory" && (
-								<SessionMemorySection
-									rpc={rpc}
-									currentSessionId={sessionId}
-									sessionSlot={
-										extSessionsTab ? (
-											<SlotComponentMount
-												item={extSessionsTab}
+							) : (
+								<>
+									{activeSection === "general" && (
+										<>
+											<GeneralSection rpc={rpc} />
+											{/* 行级偏好席位(`settings.general.item`,dsh 命名)挂到
+											 * 「常规」页末尾 —— 功能插件贡献单行偏好,无需整页或整卡。 */}
+											{generalRowItems.length > 0 && (
+												<div className="gui-settings-row">
+													{generalRowItems.map(item => (
+														<SlotComponentMount
+															key={`${item.slot}:${item.extensionId}`}
+															item={item}
+															rpc={rpc}
+														/>
+													))}
+												</div>
+											)}
+										</>
+									)}
+									{activeSection === "appearance" && (
+										<>
+											<AppearanceSection
 												rpc={rpc}
-												sessionId={sessionId}
-												onOpenSession={onOpenSession}
+												showAvatars={showAvatars}
+												onToggleAvatars={() => {
+													const next = !showAvatars;
+													localStorage.setItem("musepi-gui-avatars", next ? "1" : "0");
+													setShowAvatars(next);
+												}}
+												brandIconStyle={brandIconStyle}
+												onToggleBrandIconStyle={() => {
+													const next: BrandIconStyle = brandIconStyle === "mono" ? "color" : "mono";
+													writeBrandIconStyle(next);
+													setBrandIconStyle(next);
+												}}
 											/>
-										) : null
-									}
-									memorySlot={
-										extMemoryTab ? (
-											<SlotComponentMount item={extMemoryTab} rpc={rpc} sessionId={sessionId} />
-										) : null
-									}
-								/>
+										</>
+									)}
+									{activeSection === "model" && (
+										<ModelSection
+											providers={providers}
+											apiProviders={apiProviders}
+											custom={custom}
+											loginState={loginState}
+											pendingLogins={pendingLogins}
+											onLogin={login}
+											onLogout={logout}
+											onSubmitInput={submitLoginInput}
+											onCancelLogin={cancelLogin}
+											onChanged={loadProviders}
+											rpc={rpc}
+											sessionId={sessionId}
+											// Only the capability entry (`providers`) opens the add
+											// form — arriving from the nav is a plain visit.
+											openAddProvider={section === "providers"}
+										/>
+									)}
+									{activeSection === "shell" && <ShellSection rpc={rpc} />}
+									{activeSection === "tools" && <ToolsSection rpc={rpc} />}
+									{activeSection === "media" && (
+										<MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />
+									)}
+									{activeSection === "notifications" && <NotificationsSection rpc={rpc} />}
+									{activeSection === "pet" && <CompanionSection />}
+									{activeSection === "session-memory" && (
+										<SessionMemorySection
+											rpc={rpc}
+											currentSessionId={sessionId}
+											sessionSlot={
+												extSessionsTab ? (
+													<SlotComponentMount
+														item={extSessionsTab}
+														rpc={rpc}
+														sessionId={sessionId}
+														onOpenSession={onOpenSession}
+													/>
+												) : null
+											}
+											memorySlot={
+												extMemoryTab ? (
+													<SlotComponentMount item={extMemoryTab} rpc={rpc} sessionId={sessionId} />
+												) : null
+											}
+										/>
+									)}
+									{activeSection === "git" && <GitSection rpc={rpc} />}
+									{activeSection === "shortcuts" && <ShortcutsSection />}
+									{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
+									{activeSection === "voice" && <VoiceSection rpc={rpc} sessionId={sessionId} />}
+									{activeSection === "context" && <ContextSection rpc={rpc} />}
+									{activeSection === "files" && <FilesLspSection rpc={rpc} />}
+									{activeSection === "skills" && <SkillsSection rpc={rpc} />}
+									{activeSection.startsWith("ext:")
+										? (() => {
+												const item = extSettingsTabs.find(x => `ext:${x.slot}` === activeSection);
+												return item ? (
+													<div className="px-3 py-2">
+														<SlotComponentMount
+															item={item}
+															rpc={rpc}
+															sessionId={sessionId}
+															onOpenSession={onOpenSession}
+														/>
+													</div>
+												) : null;
+											})()
+										: null}
+									{activeSection === "modes" && <ModesSection rpc={rpc} onCreateChat={onCreateChat} />}
+									{activeSection === "migration" && <MigrationSection rpc={rpc} />}
+									{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
+									{activeSection === "commands" && <CommandsSection rpc={rpc} />}
+									{!activeExtTab && activeSection === "connectors" && (
+										<ConnectorsSection rpc={rpc} onApplyPrompt={applyPrompt} />
+									)}
+									{activeSection === "hooks" && <HooksSection rpc={rpc} />}
+									{activeSection === "browser" && <BrowserSection rpc={rpc} />}
+									{!activeExtTab && activeSection === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
+								</>
 							)}
-							{activeSection === "git" && <GitSection rpc={rpc} />}
-							{activeSection === "shortcuts" && <ShortcutsSection />}
-							{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
-							{activeSection === "voice" && <VoiceSection rpc={rpc} sessionId={sessionId} />}
-							{activeSection === "context" && <ContextSection rpc={rpc} />}
-							{activeSection === "files" && <FilesLspSection rpc={rpc} />}
-							{activeSection === "skills" && <SkillsSection rpc={rpc} />}
-							{activeSection.startsWith("ext:")
-								? (() => {
-										const item = extSettingsTabs.find(x => `ext:${x.slot}` === activeSection);
-										return item ? (
-											<div className="px-3 py-2">
-												<SlotComponentMount
-													item={item}
-													rpc={rpc}
-													sessionId={sessionId}
-													onOpenSession={onOpenSession}
-												/>
-											</div>
-										) : null;
-									})()
-								: null}
-							{activeSection === "modes" && <ModesSection rpc={rpc} onCreateChat={onCreateChat} />}
-							{activeSection === "migration" && <MigrationSection rpc={rpc} />}
-							{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
-							{activeSection === "commands" && <CommandsSection rpc={rpc} />}
-							{activeSection === "connectors" &&
-								(extConnectorsTab ? (
-									<SlotComponentMount
-										item={extConnectorsTab}
-										rpc={rpc}
-										sessionId={sessionId}
-										onApplyPrompt={applyPrompt}
-										settingsSection={{ id: activeSection, close: onBack }}
-									/>
-								) : (
-									<ConnectorsSection rpc={rpc} onApplyPrompt={applyPrompt} />
-								))}
-							{activeSection === "hooks" && <HooksSection rpc={rpc} />}
-							{activeSection === "browser" && <BrowserSection rpc={rpc} />}
-							{activeSection === "indexes" &&
-								(extIndexesTab ? (
-									<SlotComponentMount
-										item={extIndexesTab}
-										rpc={rpc}
-										sessionId={sessionId}
-										cwd={cwd ?? undefined}
-										settingsSection={{ id: activeSection, close: onBack }}
-									/>
-								) : (
-									<IndexesSection rpc={rpc} cwd={cwd} />
-								))}
 							{activeSection === "usage" && <UsageSection rpc={rpc} />}
 							{/* 页面自有行席位(dsh `children` 粒度):`settings.section.<page>.*`
 							 *  的贡献挂在本页内容之后;当前页只挂载自己的座位。 */}

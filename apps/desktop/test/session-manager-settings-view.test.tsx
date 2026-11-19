@@ -56,6 +56,26 @@ function rpcWith(components: unknown[]): {
 	};
 }
 
+async function mountSettings(components: unknown[], initialSection: string): Promise<HTMLElement> {
+	const container = document.createElement("div");
+	document.body.appendChild(container);
+	const root = createRoot(container);
+	roots.add(root);
+	await act(async () =>
+		root.render(
+			<SettingsView
+				rpc={rpcWith(components) as never}
+				sessionId={null}
+				providerEvent={null}
+				onBack={() => {}}
+				initialSection={initialSection}
+			/>,
+		),
+	);
+	await act(async () => Bun.sleep(80));
+	return container;
+}
+
 async function mountSessions(components: unknown[]): Promise<HTMLElement> {
 	const container = document.createElement("div");
 	document.body.appendChild(container);
@@ -116,5 +136,25 @@ describe("SettingsView sessions section", () => {
 		]);
 		expect(container.textContent).toContain(t("general.sessionRetention"));
 		expect(container.textContent).not.toContain(t("settings.sessionManager.title"));
+	});
+});
+
+describe("SettingsView section factory", () => {
+	it("renders a newly registered settings page without a host branch", async () => {
+		// No `activeSection === "widgets"` branch exists in the host: the section
+		// factory (dsh settings.section.view) mounts whatever the slot names.
+		const container = await mountSettings(
+			[
+				{
+					slot: "settings.section.widgets",
+					extensionId: "/plugins/widgets/index.ts",
+					label: "小组件",
+					code: "export default function Page() { return window.MusePiReact.createElement('div', null, 'WIDGET_PAGE'); }",
+					availability: "always",
+				},
+			],
+			"ext:settings.section.widgets",
+		);
+		expect(container.textContent).toContain("WIDGET_PAGE");
 	});
 });
