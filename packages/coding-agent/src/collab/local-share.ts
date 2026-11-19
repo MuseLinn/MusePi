@@ -146,7 +146,7 @@ export function isTailscaleIpv4(addr: string): boolean {
  * was unavailable.
  */
 function readSetting<T>(
-	key: "collab.cloudflaredHostname" | "collab.shareTtlMinutes" | "collab.exposure",
+	key: "collab.cloudflaredHostname" | "collab.shareTtlMinutes" | "collab.exposure" | "collab.webUrl",
 	fallback: T,
 ): T {
 	try {
@@ -168,6 +168,22 @@ export function configuredShareTtlMinutes(): number {
 export function configuredExposure(): string {
 	const value = readSetting<string>("collab.exposure", "cloudflared");
 	return typeof value === "string" && value.trim() ? value.trim() : "cloudflared";
+}
+
+/**
+ * Browser origins the in-process relay must accept besides its own pages.
+ * `collab.webUrl` hosts the client on a different origin from the websocket
+ * relay; the browser's upgrade then carries that origin, which the relay's
+ * same-origin check would otherwise reject with 403.
+ */
+export function configuredWebOrigins(): string[] {
+	const value = readSetting<string>("collab.webUrl", "");
+	if (typeof value !== "string" || !value.trim()) return [];
+	try {
+		return [new URL(value.trim()).origin];
+	} catch {
+		return [];
+	}
 }
 
 export class LocalShareManager {
@@ -221,12 +237,14 @@ export class LocalShareManager {
 		await this.stop();
 		const interfaces = listLanIpv4();
 		if (interfaces.length === 0) throw new Error("no routable LAN IPv4 address found");
+		const allowedOrigins = configuredWebOrigins();
 		this.relay = await startRelayServer({
 			port: this.#port,
 			host: "0.0.0.0",
 			staticDir: this.webDistAvailable ? COLLAB_WEB_DIST : undefined,
 			rooms: this.#rooms,
 			onStatus: this.#onStatus,
+			allowedOrigins,
 		});
 		// The self-signed cert must cover EVERY current address (LAN + Tailscale)
 		// so browsers on any of them match the SAN without re-warning.
@@ -238,6 +256,7 @@ export class LocalShareManager {
 			tls: { key: cert.keyPem, cert: cert.certPem },
 			rooms: this.#rooms,
 			onStatus: this.#onStatus,
+			allowedOrigins,
 		});
 		if (!this.webDistAvailable) {
 			this.#onStatus?.("client-core dist not built — browser UI unavailable, terminal join still works");
@@ -283,6 +302,7 @@ export class LocalShareManager {
 			host: "127.0.0.1",
 			staticDir: this.webDistAvailable ? COLLAB_WEB_DIST : undefined,
 			onStatus: this.#onStatus,
+			allowedOrigins: configuredWebOrigins(),
 		});
 		this.exposure = exposure;
 		this.#unsubscribeExposure = exposure.onChange(status => this.#handleExposureHealth(status));

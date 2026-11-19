@@ -54,9 +54,9 @@ The guest's previous session is restored on `/leave` (or when the host stops).
 | LAN | `/collab lan` or `/pair` | the same network | nothing |
 | Cloudflare Tunnel | `/collab tunnel cloudflared` | anywhere with the link | `cloudflared` binary |
 | ngrok | `/collab tunnel ngrok` | anywhere with the link | `ngrok` binary and its free authtoken |
-| Tailscale Serve | daemon/GUI share with `collab.exposure = tailscale` | your tailnet | Tailscale on both ends |
+| Tailscale Serve | `/collab tunnel tailscale` or a share with `collab.exposure = tailscale` | your tailnet | Tailscale on both ends |
 
-The TUI's `/collab tunnel` accepts `cloudflared` or `ngrok` inline and does not read `collab.exposure`; that setting is read by daemon/GUI shares (`collab.start`).
+`/collab tunnel` uses `collab.exposure` when no transport is named inline, and accepts `cloudflared`, `ngrok`, or `tailscale` inline; any other registered exposure id also works as the configured default. Daemon and GUI shares (`collab.start`) read the same setting.
 
 ### LAN
 
@@ -112,26 +112,30 @@ An exposure declares `id`, `label`, `capabilities` (`guestInstall`, `publicExpos
 Accepted by `/join <link>` and `musepi join "<link>"`:
 
 ```
-<roomId>.<key>                                                    → default relay (wss://my.omp.sh)
-<roomId>#<key>                                                    → legacy bare form
-host[:port]/r/<roomId>.<key>                                     → custom relay, wss:// inferred
-host[:port]/r/<roomId>#<key>                                     → legacy direct relay form
-https://host[:port]/r/<roomId>.<key>                             → direct relay URL, normalized to wss://
-wss://host[:port]/r/<roomId>.<key>                               → direct websocket relay URL
-ws://localhost:7475/r/<roomId>.<key>                             → direct plain ws, localhost only
-https://host[:port]/#<link>                                      → browser deep link when web UI and relay share a host
-https://web-host[:port][/<path>]/#<relay-link>                   → browser UI wrapper with relay link in the fragment
-https://web.example/collab/#relay.example.com/r/<roomId>.<key>   → web UI and relay on different hosts
+<roomId>.<secret>                                                 → default relay (wss://my.omp.sh)
+<roomId>#<secret>                                                 → legacy bare form
+host[:port]/r/<roomId>#<secret>                                   → custom relay, wss:// inferred
+host[:port]/r/<roomId>.<secret>                                   → legacy direct relay form
+https://host[:port]/r/<roomId>#<secret>                           → direct relay URL, normalized to wss://
+https://host[:port]/r/<roomId>.<secret>                           → legacy direct relay form
+wss://host[:port]/r/<roomId>#<secret>                             → direct websocket relay URL
+wss://host[:port]/r/<roomId>.<secret>                             → legacy direct websocket relay form
+ws://localhost:7475/r/<roomId>#<secret>                           → direct plain ws, localhost only
+https://host[:port]/#<link>                                       → browser deep link when web UI and relay share a host
+https://web-host[:port][/<path>]/#<relay-link>                    → browser UI wrapper with relay link in the fragment
+https://web.example/collab/#relay.example.com/r/<roomId>.<secret> → web UI and relay on different hosts
 ```
 
-`<link>` / `<relay-link>` are parsed recursively as any accepted link above. For `http(s)` browser wrappers with a parseable fragment, the fragment wins before the HTTP host/path are treated as a relay. This lets `https://web.example/collab/#relay.example.com/r/<roomId>.<key>` open the web UI at `web.example` while joining `wss://relay.example.com/r/<roomId>`. If the fragment is not a complete collab link, parsing falls back to the legacy direct relay form, so `https://relay.example.com/r/<roomId>#<key>` still means relay `relay.example.com`.
+Newly generated direct links put the room secret in the fragment (`/r/<roomId>#<secret>`): a URL path is sent to, and logged by, the outermost proxy — with a tunnel share that is the tunnel edge — while a fragment never leaves the client. The legacy path form (`/r/<roomId>.<secret>`) is still parsed. Two forms keep generating it: the bare default-relay form (`<roomId>.<secret>`, which has no origin or path to carry a `#`) and the inner link of a browser deep link (a second `#` inside a fragment is what strict URL stacks percent-encode).
 
-The trailing `.<key>` or `#<key>` part is the room secret, base64url-encoded, in one of two strengths:
+`<link>` / `<relay-link>` are parsed recursively as any accepted link above. For `http(s)` browser wrappers with a parseable fragment, the fragment wins before the HTTP host/path are treated as a relay. This lets `https://web.example/collab/#relay.example.com/r/<roomId>.<secret>` open the web UI at `web.example` while joining `wss://relay.example.com/r/<roomId>`. If the fragment is not a complete collab link, parsing falls back to the legacy direct relay form, so `https://relay.example.com/r/<roomId>#<secret>` still means relay `relay.example.com`.
+
+The trailing `.<secret>` or `#<secret>` part is the room secret, base64url-encoded, in one of two strengths:
 
 - **Full link** — 48 bytes: the 32-byte AES-256-GCM room key followed by a 16-byte write token. Grants prompting, interrupting, and subagent control.
 - **View-only link** — the bare 32-byte key, no write token. Grants live read access only. Pre-token links parse as view-only.
 
-The room secret is dot-joined in newly generated links because RFC 3986 forbids a raw `#` inside a URL fragment; parsers still accept legacy `#` forms and `%23`-mangled legacy deep links.
+Parsers accept both secret positions (and `%23`-mangled legacy deep links). Only the fragment position keeps the secret out of proxy logs; links embedded inside another fragment use the path position because RFC 3986 forbids a raw `#` there.
 
 ## End-to-end encryption
 
@@ -165,7 +169,7 @@ Known v1 limit for guests: a turn already streaming when you join becomes visibl
 
 `packages/client-core` is a standalone browser client for the same links — no musepi install needed on the guest side. The relay serves it at `/`, which is what makes the `/collab` deep link click-to-join: `https://<relay>/#<link>` loads the client and auto-connects from the fragment. It renders the live transcript (streaming text, thinking, tool cards), a subagent panel with on-demand transcripts, and a composer with the same guest powers (prompt, interrupt, hub actions). Run `bun run dev` in the package for a local instance, `bun run mock-host` for an offline scripted host to develop against, and `bun run build` to emit a static `dist/` deployable anywhere (HTTPS required for WebCrypto). The client never talks to anything but the relay, and the key stays in the URL fragment.
 
-Set `collab.webUrl` when the browser UI is hosted separately from the websocket relay. When empty, `/collab` derives `http(s)://host[:port]` from `collab.relayUrl`; explicit web UI URLs must use `https://` except for `http://localhost` development origins. The generated browser URL still carries the relay-specific collab link in the fragment.
+Set `collab.webUrl` when the browser UI is hosted separately from the websocket relay. When empty, `/collab` derives `http(s)://host[:port]` from `collab.relayUrl`; explicit web UI URLs must use `https://` except for `http://localhost` development origins. The generated browser URL still carries the relay-specific collab link in the fragment. For a share that runs its own relay, the configured UI origin is also passed to that relay, so the cross-origin WebSocket is accepted instead of failing the Origin gate with `403`.
 
 ## Settings
 
@@ -174,7 +178,7 @@ Set `collab.webUrl` when the browser UI is hosted separately from the websocket 
 | `collab.relayUrl` | `wss://my.omp.sh` | Relay used by `/collab` when no relay is passed inline |
 | `collab.webUrl` | empty | Browser UI URL for `/collab` links; empty derives from relay; explicit `http://` is allowed only for localhost |
 | `collab.displayName` | OS username | Name shown to other participants |
-| `collab.exposure` | `cloudflared` | Default transport for a tunnel share that does not name one (a registered exposure id) |
+| `collab.exposure` | `cloudflared` | Default transport for `/collab tunnel` and tunnel shares that do not name one (a registered exposure id) |
 | `collab.cloudflaredHostname` | empty | Hostname for a named Cloudflare tunnel; empty uses a quick tunnel |
 | `collab.shareTtlMinutes` | `0` | Stop a LAN or tunnel share after this many minutes; `0` keeps it until stopped |
 | `share.serverUrl` | `https://my.omp.sh/s` | Share viewer/upload base used by `/share` (links are `<base>/<id>#<key>`) |
@@ -192,6 +196,29 @@ The relay is a small content-blind Go service. It keeps no state beyond live con
 - `GET /r/<roomId>?role=host|guest` — WebSocket upgrade,
 - `POST /s` / `GET /s/<id>` / `GET /s/<id>/raw` — `/share` blob upload, viewer page, and blob fetch,
 - `GET /healthz` — liveness.
+
+### Relay liveness, limits, and close codes
+
+Every in-process relay — the one LAN, tunnel, and `collab.start` shares run — follows this connection contract, and clients apply the same close-code rules to any relay:
+
+- **Heartbeat** — a WebSocket ping every 25 seconds. A peer that leaves a ping unanswered for a full interval is treated as half-open (Wi-Fi handoff, Doze, NAT expiry) and dropped; the traffic also keeps a quiet tunnel's idle timer from closing a healthy share. Clients answer pings automatically.
+- **Host drops and reclaim** — when a host connection disappears without a close, its room survives for 30 seconds. Guests are closed with `4001` and retry with backoff inside that window (at most 30 seconds and five attempts from the first `4001`); the host reclaims the same room by reconnecting with the same link, and learns about guests that joined during the gap. A host that closes normally ends the room immediately, and a relay that stops closes guests with `1001`.
+- **Close codes** — `4001` means the host is gone but the room may come back: retry. `4004` means the room no longer exists (host stopped, grace expired, or a link from an older share): retry cannot help. `1001` means the relay itself stopped serving: also terminal. `4009` (another host owns the room) and `4029` (room full) are terminal for that attempt; `1008` (policy) and `1013` (relay overload) are retried.
+- **Admission limits** — the in-process relay allows, per client address, 32 live upgrades, 60 new upgrades per minute, and 16 sockets that have not upgraded yet. Those budgets are separate on purpose: loading the browser page and its assets uses the pending budget, never the join budget, so a reload storm cannot lock a real guest out. Globally it keeps 256 connections and 64 rooms; a room holds 16 guests, at most 8 from one address. Rejections before the upgrade are HTTP: `403` for a disallowed origin, `429` for a connection or rate cap, `503` when the relay is at capacity.
+- **Origin gate** — browsers attach `Origin` to the WebSocket upgrade. The relay accepts its own origin, the bundled app shells (`https://localhost`, `capacitor://localhost`, `ionic://localhost`), and any origin passed in `allowedOrigins`; terminal clients that send no `Origin` pass. This is why an in-process share accepts the `collab.webUrl` origin automatically: the UI and the relay may be served from different origins.
+
+### Troubleshooting a join
+
+| Symptom | Meaning | What to do |
+|---|---|---|
+| `403` / "origin not allowed" when a browser joins | the page's origin is neither the relay's nor an allowed one | serve the UI from the relay, set `collab.webUrl` so an in-process share allows it, or add the origin to `allowedOrigins` on a self-hosted relay |
+| `429` / "connection rate limit" | one address opened too many upgrades in a minute, or holds too many live/pending sockets | wait a minute, close extra tabs, and avoid reload loops |
+| `4004` / "no such room" | the host stopped, the share TTL expired, the 30-second reclaim window ended, or the link belongs to an older share | start a new share and hand out its new link |
+| `4001` repeating | the host connection dropped; the room is waiting for it | keep the guest retrying inside 30 seconds, and check the host's network or tunnel; after five attempts start a new share |
+| `1001` / "sharing stopped" | the relay itself shut down | reconnect once the relay is back; the link itself stays valid |
+| `4009` / "host conflict" | another host already owns that room id | stop that host, or let it miss a heartbeat interval; room ids are per share, so a new share avoids the collision |
+| `4029` / "room is full" | the room reached 16 guests, or 8 from one address | start a view-only share with fewer guests, or self-host a relay with higher room/per-address caps |
+| The web UI opens but no session connects | the UI origin and the relay origin differ and the relay does not allow the UI's | set `collab.webUrl` for an in-process share, or allow the UI origin on the relay |
 
 
 ## Architecture notes

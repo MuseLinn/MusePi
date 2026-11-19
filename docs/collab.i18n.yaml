@@ -1,5 +1,5 @@
 # Consistency record for collab.md / collab.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/collab
-collab.md: 6a4334a9fbb0ec2f7efd61c97fa1556e4a52041f
-collab.zh-CN.md: 517a2c5c6ac95ac2fa2b18265d512c9384b453a4
+collab.md: 341f0b191fb6cddd244ee56256cde6afb806b0b3
+collab.zh-CN.md: 97db4fb8d4a18bd91efea76a1bf823271227ab83
