@@ -1064,7 +1064,7 @@ export function GuiHeader({
 								}}
 							>
 								<Icon name="share-2" className="h-3.5 w-3.5" />
-								<span>{t("general.share")}</span>
+								<span>{t("settings.shareCurrentSession")}</span>
 							</button>
 							<button
 								type="button"
