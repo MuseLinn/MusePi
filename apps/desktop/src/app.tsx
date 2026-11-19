@@ -949,7 +949,6 @@ function AppInner(): ReactNode {
 	const [connectOpen, setConnectOpen] = useState(false);
 	const [collabOpen, setCollabOpen] = useState(false);
 	const [collabScope, setCollabScope] = useState<"workspace" | "session">("workspace");
-	const [collabAllowSession, setCollabAllowSession] = useState(true);
 	const [remoteDisclaimerOpen, setRemoteDisclaimerOpen] = useState(false);
 	const [remoteAccessConsented, setRemoteAccessConsented] = useState(() => hasRemoteAccessConsent());
 	const pendingRemoteAction = useRef<(() => void) | null>(null);
@@ -964,14 +963,12 @@ function AppInner(): ReactNode {
 		},
 		[remoteAccessConsented],
 	);
-	// A session-menu entrance shares that one session and hides the scope
-	// switch; the environment rail always opens the workspace panel and never
-	// offers session scope.
+	// The entrance owns the share scope: session menus share that one session,
+	// the environment rail shares the workspace. The dialog has no scope switch.
 	const openRemoteAccess = useCallback(
-		(scope: "workspace" | "session", allowSession: boolean) => {
+		(scope: "workspace" | "session") => {
 			requestRemoteAccess(() => {
 				setCollabScope(scope);
-				setCollabAllowSession(allowSession);
 				setCollabOpen(true);
 			});
 		},
@@ -4668,7 +4665,7 @@ function AppInner(): ReactNode {
 				className="gui-rail-btn"
 				title={t("settings.mobileRemoteControl")}
 				aria-label={t("settings.mobileRemoteControl")}
-				onClick={() => openRemoteAccess("workspace", false)}
+				onClick={() => openRemoteAccess("workspace")}
 			>
 				<Icon name="global" className="gui-rail-icon" />
 			</button>
@@ -4804,7 +4801,7 @@ function AppInner(): ReactNode {
 							onOpenConnect={() => setConnectOpen(true)}
 							onOpenWorkspace={handleOpenRemoteWorkspace}
 							onOpenSettings={openSettings}
-							onOpenCollab={() => openRemoteAccess("session", true)}
+							onOpenCollab={() => openRemoteAccess("session")}
 							onOpenInstanceManager={requestRemoteAccess}
 							onOpenRemoteDisclaimer={viewRemoteDisclaimer}
 							onOpenShortcuts={() => setShortcutsOpen(true)}
@@ -4923,7 +4920,7 @@ function AppInner(): ReactNode {
 								onRenameSession={renameSession}
 								sessionLabel={activeSessionLabel}
 								remote={activeSessionRemote}
-								onOpenCollab={() => openRemoteAccess("session", true)}
+								onOpenCollab={() => openRemoteAccess("session")}
 								onDeleteSession={deleteSession}
 								tabs={sessionTabRows}
 								previewTabId={previewTabId}
@@ -5217,7 +5214,6 @@ function AppInner(): ReactNode {
 				sessionId={store?.sessionId ?? null}
 				sessionTitle={activeSessionLabel}
 				initialScope={collabScope}
-				allowSessionScope={collabAllowSession}
 				open={collabOpen}
 				onClose={() => setCollabOpen(false)}
 				onOpenDisclaimer={viewRemoteDisclaimer}

@@ -205,8 +205,8 @@ daemon RPC:
 
 ## 4a. 移动端远程访问
 
-- `RemoteAccessDialog` 沿用现有 `remote-access.*` 和 `channels.*` RPC 契约。`src/lib/remote-access.ts` 只把 daemon 的 `cloudflared is not installed` 失败（不区分大小写）识别为安装恢复；进程、网络和其它隧道错误保留原始信息。切换共享范围会清除上一次启动错误；启动请求等待结果期间禁用范围控件，避免结果出现在另一种范围下。安装指南经 `openExternalUrl` 打开，渲染器不安装该可执行文件。
-- 渠道启动、配置、停止和解绑共用按 kind 区分的忙碌守卫。切换渠道 kind 会重置配置草稿，保存失败则保留草稿；列表请求失败提供重试，不显示为空配置状态。共享范围标签在渲染时解析，语言切换不会保留模块加载时的语言。聚焦组件测试覆盖隧道恢复、切换范围清错、启动中锁定范围、列表失败和凭据常驻标签。
+- `RemoteAccessDialog` 沿用现有 `remote-access.*` 和 `channels.*` RPC 契约。共享范围由打开它的入口绑定（`initialScope`：会话菜单分享该会话，左栏环境入口分享工作区），面板内没有范围切换；工作区分享启动时不带 `sessionId`，会话分享始终携带当前会话。网络方式逐项来自 `collab.exposures`；条目不可用时按其 probe 返回的 `install` 渲染逐平台命令与文档链接，指南经 `openExternalUrl` 打开——渲染器不安装可执行文件。打开对话框会先清空上一次的状态与链接，避免面板关闭期间结束的分享闪出旧二维码。
+- 渠道启动、配置、停止和解绑共用按 kind 区分的忙碌守卫。切换渠道 kind 会重置配置草稿，保存失败则保留草稿；列表请求失败提供重试，不显示为空配置状态。聚焦组件测试覆盖入口绑定的作用域与 start 载荷、安装指引、`lastEnd`/degraded 分享、仅局域网配对码、列表失败和凭据常驻标签。
 - 共享 `Segmented` 根据标签固有宽度及 padding、图标和间距计算 `--seg-min`，不再使用分段被拉伸后的 `clientWidth`。flex 空闲空间不会推高最小宽度并阻止控件随父列收窄。回归测试使用实际只需 52px、却被拉伸到 156px 的分段；桌面浏览器套件同时验证等宽分段、标签不裁切和滑块几何。
 - `RemoteAccessDisclaimerDialog` 在远程控制和实例管理之间共用一份版本化同意记录（`musepi-gui-remote-access-consent = "1"`）。`requestRemoteAccess` 先保留目标打开动作，同意后才调用一次；关闭会清除该动作且不允许进入，同意后记录当前版本。`InstanceButton` 把自己的实例管理打开动作传入同一门禁，因此侧栏和 rail 行为一致。缺失、旧版本和非法值均不视为同意。测试覆盖存储、首用同意/拒绝和同意后查看行为。
 

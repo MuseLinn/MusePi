@@ -99,7 +99,6 @@ async function renderDialog(
 		sessionId?: string | null;
 		sessionTitle?: string | null;
 		initialScope?: "workspace" | "session";
-		allowSessionScope?: boolean;
 	} = {},
 ): Promise<DialogHarness> {
 	const host = document.createElement("div");
@@ -112,7 +111,6 @@ async function renderDialog(
 				sessionId: props.sessionId === undefined ? "session-1" : props.sessionId,
 				sessionTitle: props.sessionTitle === undefined ? "Demo" : props.sessionTitle,
 				initialScope: props.initialScope,
-				allowSessionScope: props.allowSessionScope,
 				open: true,
 				onClose: () => {},
 				onOpenDisclaimer: () => {},
@@ -187,10 +185,13 @@ describe("RemoteAccessDialog sharing surface", () => {
 			const dialog = harness.dialog();
 			clickButton(dialog, "开始共享");
 			await flush();
-			const alerts = dialog.querySelectorAll('.gui-collab-share [role="alert"]');
+			const alerts = dialog.querySelectorAll<HTMLElement>('.gui-collab-share [role="alert"]');
 			expect(alerts).toHaveLength(1);
-			expect(alerts[0]?.textContent).toContain("relay port unavailable");
-			expect(alerts[0]?.querySelector("details")).not.toBeNull();
+			const alert = alerts[0];
+			const visible = alert?.querySelector("p");
+			expect(visible?.textContent).toContain("检查网络方式后重试");
+			expect(visible?.textContent).not.toContain("relay port unavailable");
+			expect(alert?.querySelector("details")?.textContent).toContain("relay port unavailable");
 			expect(findButton(dialog, "重试")).toBeDefined();
 
 			clickRadio(dialog, "网络方式", "Cloudflare Tunnel");
@@ -205,7 +206,6 @@ describe("RemoteAccessDialog sharing surface", () => {
 		const harness = await renderDialog(stub, {
 			sessionTitle: "Secret Demo",
 			initialScope: "workspace",
-			allowSessionScope: false,
 		});
 		try {
 			const dialog = harness.dialog();
@@ -228,7 +228,6 @@ describe("RemoteAccessDialog sharing surface", () => {
 			sessionId: "session-42",
 			sessionTitle: "Release notes",
 			initialScope: "session",
-			allowSessionScope: false,
 		});
 		try {
 			const dialog = harness.dialog();
@@ -244,46 +243,18 @@ describe("RemoteAccessDialog sharing surface", () => {
 		}
 	});
 
-	test("the default panel offers workspace first and starts a workspace share without a session id", async () => {
+	test("a workspace entrance starts with no session open and omits the session id", async () => {
 		const stub = rpcStub();
-		const harness = await renderDialog(stub, { sessionId: "session-1" });
+		const harness = await renderDialog(stub, { sessionId: null, sessionTitle: null });
 		try {
 			const dialog = harness.dialog();
-			const scopes = radioGroup(dialog, "共享范围")?.querySelectorAll('[role="radio"]') ?? [];
-			expect(scopes).toHaveLength(2);
-			expect(scopes[0]?.textContent).toContain("工作区");
-			expect(scopes[0]?.getAttribute("aria-checked")).toBe("true");
+			expect(radioGroup(dialog, "共享范围")).toBeNull();
+			expect(dialog.textContent).toContain("共享整个工作台");
 
 			clickButton(dialog, "开始共享");
 			await flush();
 			const start = stub.calls.find(call => call.method === "remote-access.start");
 			expect(start?.params).toEqual({ mode: "workspace", exposure: "lan" });
-		} finally {
-			await harness.unmount();
-		}
-	});
-
-	test("sharing scope stays fixed while its start request is pending", async () => {
-		let rejectStart: ((reason: Error) => void) | undefined;
-		const stub = rpcStub({
-			start: () =>
-				new Promise((_resolve, reject) => {
-					rejectStart = reject;
-				}),
-		});
-		const harness = await renderDialog(stub);
-		try {
-			const dialog = harness.dialog();
-			clickButton(dialog, "开始共享");
-			await flush();
-			const scopes = Array.from(
-				radioGroup(dialog, "共享范围")?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [],
-			);
-			expect(scopes).toHaveLength(2);
-			expect(scopes.every(scope => scope.disabled)).toBe(true);
-			await act(async () => {
-				rejectStart?.(new Error("cancelled"));
-			});
 		} finally {
 			await harness.unmount();
 		}
@@ -311,6 +282,38 @@ describe("RemoteAccessDialog sharing surface", () => {
 			expect(dialog.textContent).toContain("分享链路中断，旧链接已失效。");
 			expect(dialog.textContent).toContain("Check the tunnel and retry.");
 			expect(dialog.textContent).toContain("connection reset by peer");
+		} finally {
+			await harness.unmount();
+		}
+	});
+
+	test("a new start clears the previous lastEnd card", async () => {
+		const stub = rpcStub({
+			status: {
+				hosting: false,
+				lastEnd: {
+					exposure: "lan",
+					health: "stopped",
+					at: "2026-11-19T10:00:00.000Z",
+					reason: "stopped from gui",
+				},
+			},
+			start: () => ({
+				hosting: true,
+				exposure: "lan",
+				webLink: "https://192.168.1.7:7654/#ws://192.168.1.7:7654",
+				health: { health: "ready" },
+			}),
+		});
+		const harness = await renderDialog(stub);
+		try {
+			const dialog = harness.dialog();
+			expect(dialog.textContent).toContain("分享已结束");
+
+			clickButton(dialog, "开始共享");
+			await flush();
+			expect(dialog.textContent).not.toContain("分享已结束");
+			expect(dialog.querySelector("canvas")).not.toBeNull();
 		} finally {
 			await harness.unmount();
 		}

@@ -1,4 +1,4 @@
-import { Segmented, type SegmentedOption, t } from "@musepi/client-core";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openExternalUrl } from "../lib/electron";
@@ -177,7 +177,6 @@ export function RemoteAccessDialog({
 	sessionId,
 	sessionTitle,
 	initialScope = "workspace",
-	allowSessionScope = true,
 	open,
 	onClose,
 	onOpenDisclaimer,
@@ -187,8 +186,6 @@ export function RemoteAccessDialog({
 	sessionTitle: string | null;
 	/** Scope this entrance belongs to: the session menu shares one session, the environment rail the workspace. */
 	initialScope?: ShareScope;
-	/** False in the environment panel: it must never offer session scope. */
-	allowSessionScope?: boolean;
 	open: boolean;
 	onClose(): void;
 	onOpenDisclaimer(): void;
@@ -201,7 +198,6 @@ export function RemoteAccessDialog({
 	const { confirm } = useConfirm();
 	const qrRef = useRef<HTMLCanvasElement | null>(null);
 	const [webLink, setWebLink] = useState<string | null>(null);
-	const [scope, setScope] = useState<ShareScope>(initialScope);
 	const [exposures, setExposures] = useState<ExposureOption[] | null>(null);
 	const [exposureId, setExposureId] = useState<string | null>(null);
 	const [exposuresError, setExposuresError] = useState(false);
@@ -219,11 +215,6 @@ export function RemoteAccessDialog({
 	const [busyChannel, setBusyChannel] = useState<string | null>(null);
 	const [plugins, setPlugins] = useState<ChannelPlugin[] | null>(null);
 	const [reloadingPlugins, setReloadingPlugins] = useState(false);
-	// The entrance owns the scope when the switch is hidden; deriving it here
-	// (rather than only resetting state in an effect) keeps one frame of a
-	// previous session's title out of the environment panel.
-	const showScopeSwitch = allowSessionScope && initialScope !== "session";
-	const effectiveScope = showScopeSwitch ? scope : initialScope;
 
 	const refreshChannels = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
@@ -286,7 +277,11 @@ export function RemoteAccessDialog({
 
 	useEffect(() => {
 		if (!open) return;
-		setScope(initialScope);
+		// Drop the previous visit's answer before the first status round-trip:
+		// a share that ended while the panel was closed must not flash its old
+		// QR or link for a frame.
+		setInfo(null);
+		setWebLink(null);
 		setError(null);
 		setErrorAction("start");
 		setPairCode(null);
@@ -423,14 +418,14 @@ export function RemoteAccessDialog({
 	};
 
 	const startShare = async (): Promise<void> => {
-		if (!rpc || busy || exposureId === null || (effectiveScope === "session" && !sessionId)) return;
+		if (!rpc || busy || exposureId === null || (initialScope === "session" && !sessionId)) return;
 		setBusy(true);
 		setError(null);
 		try {
 			const res = await rpc.request<RemoteAccessInfo>("remote-access.start", {
-				mode: effectiveScope,
+				mode: initialScope,
 				exposure: exposureId,
-				...(effectiveScope === "session" && sessionId !== null ? { sessionId } : {}),
+				...(initialScope === "session" && sessionId !== null ? { sessionId } : {}),
 			});
 			setInfo({ ...res, hosting: true });
 			setWebLink(res.webLink ?? null);
@@ -540,33 +535,29 @@ export function RemoteAccessDialog({
 		}
 	};
 
-	const shareScopeSegments: SegmentedOption<ShareScope>[] = [
-		{ value: "workspace", label: t("tools.workspace") },
-		{ value: "session", label: t("general.currentSession") },
-	];
 	const liveHealth = info?.health?.health;
 	const live = info?.hosting === true && liveHealth !== "degraded";
 	const degraded = info?.hosting === true && liveHealth === "degraded";
 	const currentExposureId = live ? (info?.exposure ?? exposureId) : exposureId;
 	const selectedExposure = exposures?.find(entry => entry.id === exposureId) ?? null;
 	const exposureAvailable = selectedExposure !== null && selectedExposure.health !== "unavailable";
-	const hostingScope = info?.mode ?? effectiveScope;
+	const hostingScope = info?.mode ?? initialScope;
 	const pairSecondsLeft = pairCodeExpiresAt === null ? null : Math.max(0, Math.ceil((pairCodeExpiresAt - now) / 1000));
 	const canShare =
 		!busy &&
 		rpc !== null &&
 		!exposuresError &&
 		exposureAvailable &&
-		(effectiveScope === "workspace" || sessionId !== null);
+		(initialScope === "workspace" || sessionId !== null);
 	const canRetry =
-		!busy && rpc !== null && (errorAction !== "start" || effectiveScope === "workspace" || sessionId !== null);
+		!busy && rpc !== null && (errorAction !== "start" || initialScope === "workspace" || sessionId !== null);
 	const retryError = (): void => {
 		if (errorAction === "pair") void genPairCode();
 		else if (errorAction === "stop") void stopShare();
 		else void startShare();
 	};
 	const scopeHint =
-		effectiveScope === "session"
+		initialScope === "session"
 			? sessionId !== null
 				? t("settings.shareSessionScopeHint", { title: sessionTitle ?? t("general.currentSession") })
 				: t("settings.openCreateSessionFirst")
@@ -579,7 +570,7 @@ export function RemoteAccessDialog({
 			<Icon name="error-warning" className="h-5 w-5" />
 			<div className="gui-collab-recovery-content">
 				<h3>{errorAction === "start" ? t("settings.shareStartFailed") : t("settings.shareActionFailed")}</h3>
-				<p>{error}</p>
+				<p>{t("settings.shareFailedHint")}</p>
 				<div className="gui-collab-recovery-actions">
 					<button type="button" className="gui-btn gui-btn-primary" disabled={!canRetry} onClick={retryError}>
 						<Icon name="refresh" className="h-3.5 w-3.5" />
@@ -744,24 +735,6 @@ export function RemoteAccessDialog({
 											</details>
 										) : null}
 									</div>
-								</div>
-							) : null}
-							{showScopeSwitch ? (
-								<div className="flex flex-col gap-2">
-									<span className="text-[12px] font-medium text-[var(--color-text-muted)]">
-										{t("settings.shareScope")}
-									</span>
-									<Segmented
-										className="gui-collab-scope"
-										value={scope}
-										options={shareScopeSegments}
-										ariaLabel={t("settings.shareScope")}
-										disabled={busy}
-										onChange={next => {
-											setScope(next);
-											setError(null);
-										}}
-									/>
 								</div>
 							) : null}
 							<p className="gui-collab-desc">{scopeHint}</p>
