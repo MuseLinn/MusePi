@@ -54,3 +54,35 @@ export function morphSurfaceFrom(element: Element | null, name: string, update: 
 		document.documentElement.classList.remove("gui-view-transition");
 	});
 }
+
+/**
+ * The reverse move, for a dialog that closes back to its trigger.
+ *
+ * The dialog already carries the name in the old snapshot (its class supplies
+ * it). Inside the update the leaving dialog drops it and the destination takes
+ * it, so the new state names exactly one element and the browser pairs the two
+ * rectangles in the other direction.
+ */
+export function morphSurfaceBack(from: Element | null, to: Element | null, name: string, update: () => void): void {
+	const doc = globalThis.document as ViewTransitionDocument | undefined;
+	if (!to || !doc?.startViewTransition || !sharedSurfaceTransitionAllowed()) {
+		update();
+		return;
+	}
+	const destination = to as HTMLElement;
+	const leaving = from as HTMLElement | null;
+	const previous = destination.style.viewTransitionName;
+	document.documentElement.classList.add("gui-view-transition");
+	const transition = doc.startViewTransition(() => {
+		flushSync(() => {
+			if (leaving) leaving.style.viewTransitionName = "none";
+			destination.style.viewTransitionName = name;
+			update();
+		});
+	});
+	void transition.finished.finally(() => {
+		destination.style.viewTransitionName = previous;
+		if (leaving) leaving.style.viewTransitionName = "";
+		document.documentElement.classList.remove("gui-view-transition");
+	});
+}

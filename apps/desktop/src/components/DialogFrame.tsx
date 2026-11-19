@@ -41,6 +41,16 @@ export function DialogFrame({
 	const rafRef = useRef<number | null>(null);
 	const timerRef = useRef<Timer | null>(null);
 	const dialogRef = useModalFocus<HTMLDivElement>(mounted);
+	/**
+	 * Opened by a shared-surface view transition: the browser already animated
+	 * the geometry, so the dialog's own entrance must never start afterwards —
+	 * a second animation on the same open would read as a flash.
+	 */
+	const entranceSuppressed = useRef(false);
+	if (open && !mounted) {
+		entranceSuppressed.current = document.documentElement.classList.contains("gui-view-transition");
+	}
+	if (!open) entranceSuppressed.current = false;
 	const onCloseRef = useRef(onClose);
 	const phaseRef = useRef(phase);
 	onCloseRef.current = onClose;
@@ -88,15 +98,24 @@ export function DialogFrame({
 
 	if (!mounted) return null;
 
+	const suppressed = entranceSuppressed.current;
 	const backdropCls = `gui-dialog-backdrop${
-		phase === "enter"
-			? " gui-dialog-backdrop--pending"
-			: phase === "closing"
-				? " gui-dialog-backdrop--closing"
-				: " gui-dialog-backdrop--entered"
+		phase === "closing"
+			? " gui-dialog-backdrop--closing"
+			: suppressed
+				? " gui-dialog-backdrop--static"
+				: phase === "enter"
+					? " gui-dialog-backdrop--pending"
+					: " gui-dialog-backdrop--entered"
 	}`;
 	const dialogCls = `gui-dialog${className ? ` ${className}` : ""}${
-		phase === "enter" ? " gui-dialog--pending" : phase === "closing" ? " gui-dialog--closing" : " gui-dialog--entered"
+		phase === "closing"
+			? " gui-dialog--closing"
+			: suppressed
+				? " gui-dialog--static"
+				: phase === "enter"
+					? " gui-dialog--pending"
+					: " gui-dialog--entered"
 	}`;
 
 	// Portal to document.body: a backdrop-filter ancestor (e.g. the

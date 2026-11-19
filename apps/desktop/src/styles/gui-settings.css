@@ -6259,6 +6259,19 @@ body.gui-resizing {
 	animation: none;
 }
 
+/* A dialog opened by the transition never runs its own entrance at all, so
+   nothing restarts when the transition ends and the marker class is gone. */
+.gui-dialog--static {
+	animation: none;
+	opacity: 1;
+	transform: none;
+}
+
+.gui-dialog-backdrop--static {
+	animation: none;
+	opacity: 1;
+}
+
 @media (max-width: 900px) {
 	.gui-connector-grid {
 		grid-template-columns: minmax(0, 1fr);

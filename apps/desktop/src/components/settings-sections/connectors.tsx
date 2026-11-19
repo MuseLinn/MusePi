@@ -13,11 +13,11 @@
 import { pushActionToast, t, useLocale } from "@musepi/client-core";
 import { Copy, CornerDownLeft } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { copyToClipboard, openExternalUrl } from "../../lib/electron";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
-import { morphSurfaceFrom } from "../../lib/view-transition";
+import { morphSurfaceBack, morphSurfaceFrom } from "../../lib/view-transition";
 import { DialogFrame } from "../DialogFrame";
 import { CONNECTOR_BRAND_GLYPHS } from "./connector-brand-icons.generated";
 import { ConnectorImportDialog } from "./connector-import-dialog";
@@ -257,6 +257,31 @@ export function ConnectorsSection({
 			setAlternativesOpen(false);
 		});
 	}, []);
+
+	const importButtonRef = useRef<HTMLButtonElement | null>(null);
+
+	/** Closing is the same shared surface travelling back to the card. */
+	const closeDetail = useCallback((): void => {
+		const dialog = document.querySelector(".gui-dialog--connector");
+		const row = detailId ? connectorRowElement(detailId) : null;
+		morphSurfaceBack(dialog, row, "connector-surface", () => setDetailId(null));
+	}, [detailId]);
+
+	const closeImport = useCallback((): void => {
+		morphSurfaceBack(
+			document.querySelector(".gui-dialog--connector-import"),
+			importButtonRef.current,
+			"connector-import",
+			() => setImportOpen(false),
+		);
+	}, []);
+
+	const closeDevice = useCallback((): void => {
+		const row = deviceTarget ? connectorRowElement(deviceTarget) : null;
+		morphSurfaceBack(document.querySelector(".gui-dialog--device"), row, "device-signin", () =>
+			setDeviceTarget(null),
+		);
+	}, [deviceTarget]);
 
 	useEffect(() => {
 		if (detailId === null) return;
@@ -777,7 +802,7 @@ ${connector.category ?? ""}`.toLowerCase();
 							{categoryLabel(connector.category ?? "")} · {description}
 						</div>
 					</div>
-					<button type="button" className="gui-btn" onClick={() => setDetailId(null)}>
+					<button type="button" className="gui-btn" onClick={closeDetail}>
 						{t("settings.close")}
 					</button>
 				</div>
@@ -1122,7 +1147,7 @@ ${connector.category ?? ""}`.toLowerCase();
 					serverName={`connector:${deviceTarget}`}
 					open={deviceTarget !== null}
 					autoStart
-					onClose={() => setDeviceTarget(null)}
+					onClose={closeDevice}
 					onDone={() => {
 						const id = deviceTarget;
 						if (!id) return;
@@ -1141,6 +1166,7 @@ ${connector.category ?? ""}`.toLowerCase();
 					aria-label={t("settings.connectorsSearch")}
 				/>
 				<button
+					ref={importButtonRef}
 					type="button"
 					className="gui-btn"
 					onClick={event => {
@@ -1230,15 +1256,10 @@ ${connector.category ?? ""}`.toLowerCase();
 					})}
 				</>
 			)}
-			<ConnectorImportDialog
-				rpc={rpc}
-				open={importOpen}
-				onClose={() => setImportOpen(false)}
-				onImported={() => void load()}
-			/>
+			<ConnectorImportDialog rpc={rpc} open={importOpen} onClose={closeImport} onImported={() => void load()} />
 			<DialogFrame
 				open={detailId !== null}
-				onClose={() => setDetailId(null)}
+				onClose={closeDetail}
 				label={detailConnector?.name ?? t("settings.connectors")}
 				className="gui-dialog--connector"
 				morphKey={
