@@ -93,3 +93,59 @@ describe("CommandPalette keyboard contract", () => {
 		expect(document.activeElement).toBe(opener);
 	});
 });
+
+describe("CommandPalette result ordering", () => {
+	test("ranks a title hit ahead of body matches and filters commands by the query", async () => {
+		const searchRpc = {
+			request: () =>
+				Promise.resolve({
+					matches: [
+						{ sessionId: "body-only", content: "鹅鹅 出现在这条消息里", timestamp: "" },
+						{ sessionId: "body-heavy", content: "鹅鹅", timestamp: "" },
+					],
+					sessions: [
+						{ sessionId: "body-only", messageCount: 1 },
+						{ sessionId: "body-heavy", messageCount: 9 },
+					],
+				}),
+		} as unknown as RpcClient;
+		const host = document.createElement("div");
+		host.id = "root";
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		roots.push(root);
+		hosts.push(host);
+		act(() =>
+			root.render(
+				<CommandPalette
+					{...props(true)}
+					rpc={searchRpc}
+					sessions={[
+						{ id: "body-only", label: "无关会话" },
+						{ id: "body-heavy", label: "另一条无关会话" },
+						{ id: "title-hit", label: "鹅鹅 与伙伴的自行车小游戏" },
+					]}
+				/>,
+			),
+		);
+		const input = document.querySelector<HTMLInputElement>('[role="combobox"]')!;
+		act(() => {
+			const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+			setValue.call(input, "鹅鹅");
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		// The daemon search is debounced; wait past the 250ms window.
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 320));
+		});
+
+		const rows = [...document.querySelectorAll<HTMLElement>("[data-palette-row]")];
+		const labels = rows.map(row => row.textContent ?? "");
+		// Every command row disappeared: none of their labels contain 鹅鹅.
+		expect(labels[0]).toContain("鹅鹅");
+		expect(labels[0]).toContain("自行车");
+		// Body-heavy (9 matches) outranks body-only (1) after the title hit.
+		expect(labels[1]).toContain("另一条无关会话");
+		expect(labels[2]).toContain("无关会话");
+	});
+});

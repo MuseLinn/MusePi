@@ -5,7 +5,7 @@
  * height. Changing the product's control language means changing those tokens,
  * not the call sites. */
 .gui-search {
-	display: inline-flex;
+	display: flex;
 	align-items: center;
 	gap: 6px;
 	height: var(--control-height-field);

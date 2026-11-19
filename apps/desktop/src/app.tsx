@@ -5282,6 +5282,10 @@ function AppInner(): ReactNode {
 				}}
 				onSelectSession={selectSession}
 				onOpenCapability={capabilityAvailable ? () => viewSwapRef.current("capability") : undefined}
+				onToggleFocusMode={() => setFocusMode(v => !v)}
+				onOpenShortcuts={() => setShortcutsOpen(true)}
+				onImportSessions={() => setImportOpen(true)}
+				onShowWhatsNew={() => window.dispatchEvent(new CustomEvent("musepi-open-announcement"))}
 			/>
 			{/* Process-global freeze overlay: covers the entire window
 			 * (settings dialogs included) with a frosted-glass scrim. */}

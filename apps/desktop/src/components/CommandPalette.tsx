@@ -10,9 +10,10 @@ import { shortcutLabel } from "../lib/shortcuts";
 import { useFocusTrap } from "../lib/use-focus-trap";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
+import { HeightMorph } from "./HeightMorph";
 import { MENU_ANIM_MS } from "./MenuPopup";
 
-type PaletteTab = "all" | "actions" | "tasks";
+type PaletteTab = "all" | "actions" | "sessions";
 
 interface SearchRow {
 	sessionId: string;
@@ -41,6 +42,10 @@ export function CommandPalette({
 	onTogglePreview,
 	onSelectSession,
 	onOpenCapability,
+	onToggleFocusMode,
+	onOpenShortcuts,
+	onImportSessions,
+	onShowWhatsNew,
 }: {
 	open: boolean;
 	onClose(): void;
@@ -56,6 +61,12 @@ export function CommandPalette({
 	onSelectSession(id: string): void;
 	/** 能力中心 (设计稿 05): optional — the palette item hides when absent. */
 	onOpenCapability?(): void;
+	/** 专注模式 / 快捷键 / 导入会话 / 新功能 — optional so a host without the
+	 *  surface hides the row instead of offering a dead command. */
+	onToggleFocusMode?(): void;
+	onOpenShortcuts?(): void;
+	onImportSessions?(): void;
+	onShowWhatsNew?(): void;
 }): ReactNode {
 	const [query, setQuery] = useState("");
 	const [tab, setTab] = useState<PaletteTab>("all");
@@ -194,8 +205,30 @@ export function CommandPalette({
 		onClose();
 	};
 
-	// Flat item list for keyboard navigation: [actions…, tasks…].
-	const actions: { icon: string; label: string; hint?: string; fn(): void }[] = [
+	// Every visible row, flattened for keyboard navigation. Sections own the
+	// grouping; only this list owns the index, so sections never hand-compute
+	// offsets when a tab or query change reshuffles them.
+	interface PaletteItem {
+		icon: string;
+		label: string;
+		hint?: string;
+		snippet?: string;
+		fn(): void;
+	}
+
+	const queryText = query.trim().toLowerCase();
+	/** Local title-match weight: an exact title beats a prefix beats an early
+	 *  substring; 0 means the title does not contain the query. Session hits
+	 *  the daemon found in message bodies arrive through `rows` instead. */
+	const labelScore = (label: string, q: string): number => {
+		const text = label.toLowerCase();
+		const at = text.indexOf(q);
+		if (at < 0) return 0;
+		if (text === q) return 120;
+		return at === 0 ? 100 : 60 - Math.min(at, 50) / 5;
+	};
+
+	const actions: PaletteItem[] = [
 		{
 			icon: "add-circle",
 			label: t("settings.newTask"),
@@ -210,7 +243,7 @@ export function CommandPalette({
 		},
 		{ icon: "settings-3", label: t("settings.settings"), fn: onSettings },
 	];
-	const panels: { icon: string; label: string; hint?: string; fn(): void }[] = [
+	const panels: PaletteItem[] = [
 		{
 			icon: "layout-left",
 			label: t("settings.toggleSidebar"),
@@ -229,6 +262,9 @@ export function CommandPalette({
 			hint: "⌘E",
 			fn: onTogglePreview,
 		},
+		...(onToggleFocusMode
+			? [{ icon: "fullscreen", label: t("general.focusMode"), hint: "⌘⇧E", fn: onToggleFocusMode }]
+			: []),
 		...(onOpenCapability ? [{ icon: "star", label: t("tools.capabilityCenter"), fn: onOpenCapability }] : []),
 		// openchamber parity: a Reload UI escape hatch. Every renderer-side
 		// recovery path (a stale extension slot, derived state blown away by a
@@ -240,27 +276,73 @@ export function CommandPalette({
 			fn: () => window.location.reload(),
 		},
 	];
+	/** Commands that open an existing surface rather than move the layout. */
+	const more: PaletteItem[] = [
+		...(onOpenShortcuts ? [{ icon: "command", label: t("general.keyboardShortcuts"), fn: onOpenShortcuts }] : []),
+		...(onImportSessions ? [{ icon: "download", label: t("settings.importSessions"), fn: onImportSessions }] : []),
+		...(onShowWhatsNew ? [{ icon: "notification-3", label: t("settings.whatSNew"), fn: onShowWhatsNew }] : []),
+	];
 
-	const taskRows = (exactSession ? [exactSession] : (rows ?? sessions.slice(0, 8))).map<{
-		icon: string;
-		label: string;
-		hint?: string;
-		snippet?: string;
-		fn(): void;
-	}>(s => ({
-		icon: "chat-1",
-		label: s.label || t("transcript.untitledSession"),
-		hint: "count" in s ? String(s.count) : undefined,
-		// An exact-id hit shows the id as its own subtitle — otherwise the row
-		// looks identical to a plain recent session and the match reads as a
-		// glitch rather than a deliberate paste.
-		snippet: "snippet" in s ? s.snippet : "sessionId" in s ? undefined : s.id,
-		fn: (): void => onSelectSession("sessionId" in s ? s.sessionId : s.id),
-	}));
-	const showTasks = tab !== "actions";
-	const showActions = tab !== "tasks";
-	const taskOffset = showActions ? actions.length + panels.length : 0;
-	const items = [...(showActions ? actions : []), ...(showActions ? panels : []), ...(showTasks ? taskRows : [])];
+	/** Sessions in relevance order — never the daemon's arrival order.
+	 *  Title hits come from the local session list (the daemon only searches
+	 *  message bodies), body hits carry their match count, and both are
+	 *  ranked together: a title prefix outranks a session with many loose
+	 *  body matches, while a heavily-hit body outranks a weak substring. */
+	const sessionRows = useMemo<PaletteItem[]>(() => {
+		const untitled = t("transcript.untitledSession");
+		if (exactSession) {
+			return [
+				{
+					icon: "chat-1",
+					label: exactSession.label || untitled,
+					fn: () => onSelectSession(exactSession.id),
+				},
+			];
+		}
+		if (!queryText) {
+			return sessions.slice(0, 8).map(s => ({
+				icon: "chat-1",
+				label: s.label || untitled,
+				fn: () => onSelectSession(s.id),
+			}));
+		}
+		const byId = new Map<string, SearchRow>();
+		for (const row of rows ?? []) byId.set(row.sessionId, row);
+		for (const session of sessions) {
+			if (byId.has(session.id) || !session.label.toLowerCase().includes(queryText)) continue;
+			byId.set(session.id, { sessionId: session.id, label: session.label, count: 0, snippet: "" });
+		}
+		const ranked = [...byId.values()]
+			.map(row => ({ row, score: labelScore(row.label, queryText) * 10 + Math.min(row.count, 40) }))
+			.sort((a, b) => b.score - a.score || b.row.count - a.row.count);
+		return ranked.slice(0, 12).map(({ row }) => ({
+			icon: "chat-1",
+			label: row.label || untitled,
+			hint: row.count > 0 ? String(row.count) : undefined,
+			snippet: row.snippet || undefined,
+			fn: () => onSelectSession(row.sessionId),
+		}));
+	}, [exactSession, queryText, rows, sessions, onSelectSession]);
+
+	// A query filters the commands too: with "鹅鹅" typed, the three unrelated
+	// suggestions must not sit above the session that actually matched.
+	const matchLabel = (label: string): boolean => !queryText || label.toLowerCase().includes(queryText);
+	const sections: { title: string; rows: PaletteItem[] }[] = [];
+	if (tab !== "sessions") {
+		const actionRows = actions.filter(item => matchLabel(item.label));
+		const panelRows = panels.filter(item => matchLabel(item.label));
+		const moreRows = more.filter(item => matchLabel(item.label));
+		if (actionRows.length > 0) sections.push({ title: t("general.suggestions"), rows: actionRows });
+		if (panelRows.length > 0) sections.push({ title: t("general.panels"), rows: panelRows });
+		if (moreRows.length > 0) sections.push({ title: t("general.moreActions"), rows: moreRows });
+	}
+	if (tab !== "actions") {
+		sections.push({
+			title: queryText ? t("general.sessions") : t("general.recentSessions"),
+			rows: sessionRows,
+		});
+	}
+	const items = sections.flatMap(section => section.rows);
 	useEffect(() => {
 		setActive(current => Math.max(0, Math.min(current, items.length - 1)));
 	}, [items.length]);
@@ -269,6 +351,12 @@ export function CommandPalette({
 			?.querySelector<HTMLElement>(`[data-palette-row="${active}"]`)
 			?.scrollIntoView({ block: "nearest" });
 	}, [active]);
+
+	// Row index per section, computed once: a filtered section shrinks without
+	// renumbering the ones after it.
+	const sectionOffsets = sections.map((_, index) =>
+		sections.slice(0, index).reduce((sum, section) => sum + section.rows.length, 0),
+	);
 
 	if (!visible) return null;
 	return createPortal(
@@ -304,7 +392,7 @@ export function CommandPalette({
 					/>
 				</div>
 				<div className="gui-palette-tabs">
-					{(["all", "actions", "tasks"] as PaletteTab[]).map(id => (
+					{(["all", "actions", "sessions"] as PaletteTab[]).map(id => (
 						<button
 							key={id}
 							type="button"
@@ -322,102 +410,61 @@ export function CommandPalette({
 								className="h-3.5 w-3.5"
 							/>
 							<span>
-								{id === "all" ? t("tools.all") : id === "actions" ? t("general.actions") : t("general.tasks")}
+								{id === "all"
+									? t("tools.all")
+									: id === "actions"
+										? t("general.actions")
+										: t("general.sessions")}
 							</span>
 						</button>
 					))}
 				</div>
-				<div className="gui-palette-body" id="gui-palette-listbox" role="listbox" key={tab} ref={listRef}>
-					{showActions && (
-						<div className="gui-palette-section">
-							<div className="gui-palette-section-title">{t("general.suggestions")}</div>
-							{actions.map((a, i) => (
-								<button
-									key={a.label}
-									type="button"
-									role="option"
-									id={`gui-palette-option-${i}`}
-									aria-selected={active === i}
-									tabIndex={-1}
-									data-palette-row={i}
-									className={`gui-palette-row${active === i ? " gui-palette-row--active" : ""}`}
-									onMouseEnter={() => setActive(i)}
-									onClick={() => run(a.fn)}
-								>
-									<Icon name={a.icon as never} className="h-4 w-4" />
-									<span className="min-w-0 flex-1 truncate text-left">{a.label}</span>
-									{a.hint && <span className="gui-palette-kbd">{shortcutLabel(a.hint)}</span>}
-								</button>
-							))}
-						</div>
-					)}
-					{showActions && (
-						<div className="gui-palette-section">
-							<div className="gui-palette-section-title">{t("general.panels")}</div>
-							{panels.map((p, i) => {
-								const idx = actions.length + i;
-								return (
-									<button
-										key={p.label}
-										type="button"
-										role="option"
-										id={`gui-palette-option-${idx}`}
-										aria-selected={active === idx}
-										tabIndex={-1}
-										data-palette-row={idx}
-										className={`gui-palette-row${active === idx ? " gui-palette-row--active" : ""}`}
-										onMouseEnter={() => setActive(idx)}
-										onClick={() => run(p.fn)}
-									>
-										<Icon name={p.icon as never} className="h-4 w-4" />
-										<span className="min-w-0 flex-1 truncate text-left">{p.label}</span>
-										{p.hint && <span className="gui-palette-kbd">{shortcutLabel(p.hint)}</span>}
-									</button>
-								);
-							})}
-						</div>
-					)}
-					{showTasks && (
-						<div className="gui-palette-section">
-							<div className="gui-palette-section-title">
-								{query.trim() ? t("general.tasks") : t("general.recentSessions")}
+				<div className="gui-palette-body" id="gui-palette-listbox" role="listbox" ref={listRef}>
+					{/* 高度形变 (HeightMorph): a tab switch morphs the panel from the
+					 * old body height, instead of snapping to the new one. Only the
+					 * tab is the morph key — typing already streams rows in, and a
+					 * height spring per keystroke would read as jitter. */}
+					<HeightMorph morphKey={tab}>
+						{sections.map((section, sectionIndex) => (
+							<div className="gui-palette-section" key={section.title}>
+								<div className="gui-palette-section-title">{section.title}</div>
+								{section.rows.length === 0 ? (
+									queryText ? (
+										<div className="gui-palette-empty">{searching ? "…" : t("general.noResults")}</div>
+									) : null
+								) : (
+									section.rows.map((row, rowIndex) => {
+										const idx = sectionOffsets[sectionIndex] + rowIndex;
+										return (
+											<button
+												key={`${row.label}-${idx}`}
+												type="button"
+												role="option"
+												id={`gui-palette-option-${idx}`}
+												aria-selected={active === idx}
+												tabIndex={-1}
+												data-palette-row={idx}
+												className={`gui-palette-row${active === idx ? " gui-palette-row--active" : ""}`}
+												onMouseEnter={() => setActive(idx)}
+												onClick={() => run(row.fn)}
+											>
+												<Icon name={row.icon as never} className="h-4 w-4 flex-shrink-0" />
+												<span className="min-w-0 flex-1">
+													<span className="block truncate text-left">{row.label}</span>
+													{row.snippet && (
+														<span className="block truncate text-left text-[11.5px] text-[var(--color-text-faint)]">
+															{row.snippet}
+														</span>
+													)}
+												</span>
+												{row.hint && <span className="gui-palette-kbd">{shortcutLabel(row.hint)}</span>}
+											</button>
+										);
+									})
+								)}
 							</div>
-							{searching ? (
-								<div className="gui-palette-empty">…</div>
-							) : query.trim() && rows !== null && rows.length === 0 ? (
-								<div className="gui-palette-empty">{t("general.noResults")}</div>
-							) : (
-								taskRows.map((r, i) => {
-									const idx = taskOffset + i;
-									return (
-										<button
-											key={r.label + idx}
-											type="button"
-											role="option"
-											id={`gui-palette-option-${idx}`}
-											aria-selected={active === idx}
-											tabIndex={-1}
-											data-palette-row={idx}
-											className={`gui-palette-row${active === idx ? " gui-palette-row--active" : ""}`}
-											onMouseEnter={() => setActive(idx)}
-											onClick={() => run(r.fn)}
-										>
-											<Icon name={r.icon as never} className="h-4 w-4 flex-shrink-0" />
-											<span className="min-w-0 flex-1">
-												<span className="block truncate text-left">{r.label}</span>
-												{r.snippet && (
-													<span className="block truncate text-left text-[11.5px] text-[var(--color-text-faint)]">
-														{r.snippet}
-													</span>
-												)}
-											</span>
-											{r.hint && <span className="gui-palette-kbd">{shortcutLabel(r.hint)}</span>}
-										</button>
-									);
-								})
-							)}
-						</div>
-					)}
+						))}
+					</HeightMorph>
 				</div>
 				<div className="gui-palette-footer">
 					<button type="button" className="gui-palette-config" onClick={() => run(onSettings)}>

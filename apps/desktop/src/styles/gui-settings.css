@@ -4357,26 +4357,9 @@
 	overflow-x: hidden;
 	overscroll-behavior: contain;
 	padding: 8px 12px 12px;
-	/* Tab-switch animation: the body is keyed by `tab` (CommandPalette
-	 * key={tab}), so a tab change remounts it and this enter plays — a
-	 * light fade + slide consistent with the palette's own gui-menu-in
-	 * (same motion token + spring). */
-	animation: gui-palette-body-in var(--gui-motion-menu-in) var(--spring);
-}
-
-@keyframes gui-palette-body-in {
-	from {
-		opacity: 0;
-		transform: translateY(var(--gui-motion-slide-y));
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
-}
-
-.gui-motion-off .gui-palette-body {
-	animation: none;
+	/* Tab-switch motion lives on the HeightMorph inside this scroller (the
+	 * height-morph standard); a second body enter animation would replay the
+	 * fade on every keystroke's result update. */
 }
 
 .gui-palette-section {

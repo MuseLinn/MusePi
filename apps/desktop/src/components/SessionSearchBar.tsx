@@ -2,6 +2,7 @@ import { SearchField, t } from "@musepi/client-core";
 import type { ReactNode, RefObject } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
+import { Reveal } from "./Reveal";
 
 /**
  * Sidebar session search (openchamber SidebarHeader parity): the input row plus
@@ -73,8 +74,6 @@ export function SessionSearchBar({
 		return () => document.removeEventListener("mousedown", onPointerDown);
 	}, [open, onOpenChange]);
 
-	if (!open) return null;
-
 	const clear = (): void => {
 		setDraft("");
 		if (query !== "") onQueryChange("");
@@ -85,77 +84,79 @@ export function SessionSearchBar({
 	// result, so the box advertises the pending submit instead of an empty state.
 	const pending = draft.trim() !== query;
 	return (
-		<div ref={boxRef}>
-			{/* openchamber meta line: count on the left, Escape on the right. */}
-			<div className="mx-[10px] flex items-center justify-between pb-0.5 text-[11px] text-[var(--color-text-faint)]">
-				<span aria-live="polite">
-					{!pending && hasQuery && matchCount > 0 ? t("settings.searchMatchCount", { count: matchCount }) : ""}
-				</span>
-				<span>{pending ? t("settings.pressEnterSearch") : t("settings.escClearClose")}</span>
-			</div>
-			<SearchField
-				className="gui-session-search"
-				size="compact"
-				inputRef={inputRef}
-				value={draft}
-				enterKeyHint="search"
-				placeholder={t("settings.searchSessions")}
-				// Draft-only: nothing is filtered until Enter (or a clear).
-				onChange={next => {
-					setDraft(next);
-					if (!composing.current && next.trim().length === 0 && query !== "") onQueryChange("");
-				}}
-				onCompositionStart={() => {
-					composing.current = true;
-				}}
-				onCompositionEnd={e => {
-					composing.current = false;
-					if (e.currentTarget.value.trim().length === 0 && query !== "") onQueryChange("");
-				}}
-				onKeyDown={e => {
-					// Enter during IME composition picks a candidate — it must
-					// never reach the search.
-					if (composing.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
-					if (e.key === "Enter") {
+		<Reveal open={open}>
+			<div ref={boxRef}>
+				{/* openchamber meta line: count on the left, Escape on the right. */}
+				<div className="mx-[10px] flex items-center justify-between pb-0.5 text-[11px] text-[var(--color-text-faint)]">
+					<span aria-live="polite">
+						{!pending && hasQuery && matchCount > 0 ? t("settings.searchMatchCount", { count: matchCount }) : ""}
+					</span>
+					<span>{pending ? t("settings.pressEnterSearch") : t("settings.escClearClose")}</span>
+				</div>
+				<SearchField
+					className="gui-session-search"
+					size="compact"
+					inputRef={inputRef}
+					value={draft}
+					enterKeyHint="search"
+					placeholder={t("settings.searchSessions")}
+					// Draft-only: nothing is filtered until Enter (or a clear).
+					onChange={next => {
+						setDraft(next);
+						if (!composing.current && next.trim().length === 0 && query !== "") onQueryChange("");
+					}}
+					onCompositionStart={() => {
+						composing.current = true;
+					}}
+					onCompositionEnd={e => {
+						composing.current = false;
+						if (e.currentTarget.value.trim().length === 0 && query !== "") onQueryChange("");
+					}}
+					onKeyDown={e => {
+						// Enter during IME composition picks a candidate — it must
+						// never reach the search.
+						if (composing.current || e.nativeEvent.isComposing || e.keyCode === 229) return;
+						if (e.key === "Enter") {
+							e.preventDefault();
+							e.stopPropagation();
+							const next = draft.trim();
+							if (!e.repeat && next !== query) onQueryChange(next);
+							return;
+						}
+						if (e.key !== "Escape") return;
+						// Escape belongs to this field: the window-level bare-Escape
+						// interrupt must not see it (escape-stop field ownership), and
+						// the first press clears while the second dismisses.
 						e.preventDefault();
 						e.stopPropagation();
-						const next = draft.trim();
-						if (!e.repeat && next !== query) onQueryChange(next);
-						return;
+						if (hasDraft || hasQuery) clear();
+						else onOpenChange(false);
+					}}
+					trailing={
+						hasDraft && (
+							<button
+								type="button"
+								className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
+								// Keeps focus (and the open search) while the click lands.
+								onMouseDown={e => e.preventDefault()}
+								onClick={() => {
+									clear();
+									inputRef.current?.focus();
+								}}
+								title={t("settings.clear")}
+								aria-label={t("settings.clear")}
+							>
+								<Icon name="close" className="h-3 w-3" />
+							</button>
+						)
 					}
-					if (e.key !== "Escape") return;
-					// Escape belongs to this field: the window-level bare-Escape
-					// interrupt must not see it (escape-stop field ownership), and
-					// the first press clears while the second dismisses.
-					e.preventDefault();
-					e.stopPropagation();
-					if (hasDraft || hasQuery) clear();
-					else onOpenChange(false);
-				}}
-				trailing={
-					hasDraft && (
-						<button
-							type="button"
-							className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
-							// Keeps focus (and the open search) while the click lands.
-							onMouseDown={e => e.preventDefault()}
-							onClick={() => {
-								clear();
-								inputRef.current?.focus();
-							}}
-							title={t("settings.clear")}
-							aria-label={t("settings.clear")}
-						>
-							<Icon name="close" className="h-3 w-3" />
-						</button>
-					)
-				}
-			/>
-			{!pending && hasQuery && matchCount === 0 && (
-				<p className="px-[10px] py-3 text-[13px] text-[var(--color-text-faint)]">
-					{t("settings.noMatchingSessions")}
-				</p>
-			)}
-		</div>
+				/>
+				{!pending && hasQuery && matchCount === 0 && (
+					<p className="px-[10px] py-3 text-[13px] text-[var(--color-text-faint)]">
+						{t("settings.noMatchingSessions")}
+					</p>
+				)}
+			</div>
+		</Reveal>
 	);
 }

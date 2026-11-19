@@ -170,8 +170,11 @@ describe("session search box", () => {
 		expect(html).not.toContain(t("settings.searchMatchCount", { count: 0 }));
 	});
 
-	test("stays out of the tree while closed", () => {
-		expect(barHtml({ open: false })).toBe("");
+	test("stays inert rather than absent while closed (Reveal standard)", () => {
+		const html = barHtml({ open: false });
+		expect(html).toContain('aria-hidden="true"');
+		expect(html).toContain("inert");
+		expect(html).toContain("gui-collapse");
 	});
 });
 
@@ -192,9 +195,12 @@ describe("row title highlight", () => {
 });
 
 describe("sidebar search affordance", () => {
-	test("offers a keyboard-reachable toggle while the box is closed", () => {
+	test("keeps the closed box mounted but inert (Reveal standard) behind a keyboard toggle", () => {
 		const html = sidebarHtml({ nodes: [node("n1", "Task", ago(HOUR))] });
-		expect(html).not.toContain("<input");
+		// Conditional-block standard: the block stays mounted so its enter/exit
+		// animates and its draft survives, and the closed state is inert +
+		// aria-hidden — unreachable, not unrendered.
+		expect(/class="gui-collapse[^"]*" aria-hidden="true" inert/.test(html)).toBe(true);
 		// The toggle carries its own accelerator hint and reports the collapsed
 		// state, so the box is reachable without a pointer.
 		expect(/data-search-toggle="true"[^>]*aria-expanded="false"/.test(html)).toBe(true);
