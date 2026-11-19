@@ -6304,7 +6304,7 @@ body.gui-resizing {
 	height: 36px;
 	overflow: hidden;
 	border-radius: var(--radius-lg);
-	background: var(--color-bg-elevated);
+	background: var(--color-surface-raised);
 }
 
 .gui-connector-text {
@@ -6534,7 +6534,7 @@ body.gui-resizing {
 	height: 44px;
 	overflow: hidden;
 	border-radius: var(--radius-xl);
-	background: var(--color-bg-elevated);
+	background: var(--color-surface-raised);
 }
 
 .gui-connector-detail-body {
@@ -6555,7 +6555,7 @@ body.gui-resizing {
 	flex-direction: column;
 	gap: 6px;
 	padding-top: 12px;
-	border-top: 1px solid var(--color-border-subtle);
+	border-top: 1px solid var(--color-border);
 }
 
 .gui-connector-examples {
@@ -6570,7 +6570,7 @@ body.gui-resizing {
 	gap: 8px;
 	padding: 4px 4px 4px 8px;
 	border-radius: var(--radius-md);
-	background: var(--color-bg-elevated);
+	background: var(--color-surface-raised);
 }
 
 .gui-connector-example-text {
