@@ -21,7 +21,7 @@ const { ipcMain } = require("electron");
 const SAMPLE_RATE = 16_000;
 const MAX_SECONDS = 30;
 const MIN_SAMPLES = SAMPLE_RATE / 2;
-const HUD_SIZE = { width: 340, height: 92 };
+const HUD_SIZE = { width: 300, height: 190 };
 
 /** Quantise float samples so a 30 s clip stays inside one RPC frame. */
 function quantizeSamples(samples) {
@@ -73,6 +73,7 @@ class GlobalDictation {
 		this.downloadKey = null;
 		this.finishing = false;
 		this.generation = 0;
+		this.registered = null;
 		this.hideTimer = null;
 		this.language = undefined;
 		this.sttEnabled = true;
@@ -80,6 +81,11 @@ class GlobalDictation {
 
 	async start() {
 		ipcMain.handle("dictation:action", (_event, payload) => this.action(payload?.type));
+		ipcMain.handle("dictation:status", () => ({
+			enabled: this.enabled,
+			accelerator: this.accelerator,
+			registered: this.registered,
+		}));
 		this.subscribe(event => this.handleEvent(event));
 		await this.syncSettings();
 		this.settingsTimer = setInterval(() => void this.syncSettings(), 10_000);
@@ -100,7 +106,7 @@ class GlobalDictation {
 		const accelerator =
 			typeof values["dictation.globalShortcut"] === "string" && values["dictation.globalShortcut"].trim()
 				? values["dictation.globalShortcut"].trim()
-				: "CommandOrControl+Shift+Space";
+				: "CommandOrControl+Alt+Space";
 		if (enabled === this.enabled && accelerator === this.accelerator) return;
 		this.unregisterShortcut();
 		this.enabled = enabled;
@@ -108,8 +114,10 @@ class GlobalDictation {
 		if (!enabled) return;
 		try {
 			const ok = this.globalShortcut.register(accelerator, () => void this.toggle());
+			this.registered = ok;
 			this.log(`global dictation shortcut ${accelerator}: ${ok ? "registered" : "unavailable"}`);
 		} catch (err) {
+			this.registered = false;
 			this.log(`global dictation shortcut failed: ${err?.message ?? err}`);
 		}
 	}

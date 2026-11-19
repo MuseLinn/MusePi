@@ -39,9 +39,10 @@ function acceleratorKey(key: string): string | null {
 
 export function GlobalDictationSettings({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [enabled, setEnabled] = useState(false);
-	const [shortcut, setShortcut] = useState("CommandOrControl+Shift+Space");
+	const [shortcut, setShortcut] = useState("CommandOrControl+Alt+Space");
 	const [capturing, setCapturing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [registered, setRegistered] = useState<boolean | null>(null);
 
 	const load = useCallback((): void => {
 		if (!rpc) return;
@@ -60,6 +61,30 @@ export function GlobalDictationSettings({ rpc }: { rpc: RpcClient | null }): Rea
 	useEffect(() => {
 		load();
 	}, [load]);
+
+	useEffect(() => {
+		if (!enabled) {
+			setRegistered(null);
+			return;
+		}
+		let alive = true;
+		const read = (): void => {
+			void (
+				window as unknown as { electronAPI?: { dictationStatus?: () => Promise<{ registered: boolean | null }> } }
+			).electronAPI
+				?.dictationStatus?.()
+				.then(status => {
+					if (alive) setRegistered(status?.registered ?? null);
+				})
+				.catch(() => {});
+		};
+		read();
+		const timer = window.setInterval(read, 2000);
+		return () => {
+			alive = false;
+			window.clearInterval(timer);
+		};
+	}, [enabled, shortcut]);
 
 	const commit = useCallback(
 		(key: string, value: unknown): void => {
@@ -133,6 +158,11 @@ export function GlobalDictationSettings({ rpc }: { rpc: RpcClient | null }): Rea
 					{capturing ? t("settings.globalDictationPressKeys") : shortcutDisplay(shortcut)}
 				</button>
 			</div>
+			{enabled && registered === false && (
+				<div className="gui-settings-row-desc gui-settings-row-desc--warn">
+					{t("settings.globalDictationShortcutUnavailable")}
+				</div>
+			)}
 			{error && <div className="gui-settings-row-desc">{error}</div>}
 		</div>
 	);

@@ -1725,6 +1725,7 @@ export const settings = {
 		"Type speech into the focused application from a shortcut — no need to switch back to MusePi first.",
 	"settings.globalDictationEnable": "Enable global dictation",
 	"settings.globalDictationShortcutLabel": "Global shortcut",
+	"settings.globalDictationShortcutUnavailable": "Another application already owns this shortcut — choose a different chord.",
 	"settings.globalDictationShortcutNote":
 		"Click, then press the new chord (Ctrl/⌘ or Alt is required). Press it again to finish, Esc cancels.",
 	"settings.globalDictationPressKeys": "Press the shortcut…",
@@ -1741,7 +1742,6 @@ export const settings = {
 	"settings.globalDictationFailed": "Dictation failed",
 	"settings.globalDictationMicFailed": "Microphone unavailable",
 	"settings.globalDictationNoDaemon": "The MusePi service is not connected",
-	"settings.globalDictationShortcutUnavailable": "The global shortcut is taken or invalid",
 	"settings.globalDictationDisabled": "Speech input is off",
 	"settings.globalDictationCancel": "Cancel",
 	"settings.globalDictationClose": "Close",

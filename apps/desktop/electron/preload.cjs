@@ -268,6 +268,8 @@ dictationHud: {
 	},
 	action: (type) => ipcRenderer.invoke("dictation:action", { type }),
 },
+/** Global-dictation registration state, so Settings can explain a taken shortcut. */
+dictationStatus: () => ipcRenderer.invoke("dictation:status"),
 /** Pet window: normalized gaze vector (cursor offset from the window
 	 *  centre, clamped to ±1) — drives eye tracking on the builtin sprite. */
 	onPetGaze: (cb) => {

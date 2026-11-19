@@ -1,10 +1,12 @@
-/* Global-dictation HUD: a small glass card shown above the taskbar, never
- * focused. The card is deliberately quieter than the pet bubbles — it appears
- * while the user is typing into another application. */
+/* Global-dictation HUD: a compact glass card above the taskbar that never
+ * takes focus. It is shown while the user types into another application, so
+ * it stays small and still; the only movement is the shared height spring
+ * between phases, the morphing glyph and the rolling status text. */
 
 html,
 body {
 	margin: 0;
+	width: 100%;
 	height: 100%;
 	background: transparent;
 	overflow: hidden;
@@ -13,81 +15,104 @@ body {
 }
 
 body {
-	display: grid;
-	place-items: center;
+	box-sizing: border-box;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	padding: 4px 4px 8px;
 	font-family: var(--font-sans, system-ui, sans-serif);
 	color: var(--color-text);
 }
 
+/* The card itself is the morphing surface: HeightMorph writes its height and
+ * the bottom-anchored body makes it grow upward from the taskbar. */
 .hud {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	width: 320px;
-	min-height: 64px;
-	padding: 12px 14px;
+	box-sizing: border-box;
+	width: 100%;
 	border: 1px solid var(--glass-border, var(--border));
-	border-radius: 18px;
+	border-radius: 16px;
 	background: color-mix(in oklab, var(--color-surface-raised, #1f1f23) 82%, transparent);
 	backdrop-filter: blur(22px) saturate(1.4);
 	-webkit-backdrop-filter: blur(22px) saturate(1.4);
-	box-shadow: 0 12px 32px rgb(0 0 0 / 0.28);
+	box-shadow: 0 8px 22px rgb(0 0 0 / 0.24);
+	overflow: hidden;
 }
 
-.hud[data-phase="hidden"] {
-	opacity: 0;
+.hud:has(.hud-inner[data-phase="error"]) {
+	border-color: color-mix(in oklab, var(--color-danger, #e5484d) 45%, var(--border));
+}
+
+.hud-inner {
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 9px 11px;
+}
+
+.hud-glyph {
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 22px;
+	flex: 0 0 auto;
+	color: var(--color-accent);
+}
+
+.hud-icon--spin {
+	animation: hud-spin 1s linear infinite;
+}
+
+@keyframes hud-spin {
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .hud-wave {
 	display: flex;
 	align-items: center;
-	gap: 3px;
-	width: 34px;
-	height: 30px;
-	flex: 0 0 auto;
+	gap: 2px;
+	height: 22px;
 }
 
 .hud-wave span {
-	width: 3px;
-	height: 26px;
+	width: 2px;
+	height: 18px;
 	border-radius: 999px;
 	background: var(--color-accent);
-	transform: scaleY(0.18);
 	transform-origin: center;
 	transition: transform 90ms linear;
-}
-
-.hud[data-phase="downloading"] .hud-wave span,
-.hud[data-phase="done"] .hud-wave span {
-	background: color-mix(in oklab, var(--color-accent) 60%, transparent);
 }
 
 .hud-copy {
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: 2px;
 	min-width: 0;
 	flex: 1 1 auto;
 }
 
 .hud-title {
-	font-size: 13px;
+	overflow: hidden;
+	font-size: 12.5px;
 	font-weight: 600;
-	line-height: 1.3;
+	line-height: 1.25;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .hud-sub {
-	font-size: 11px;
-	line-height: 1.3;
+	overflow: hidden;
+	font-size: 10.5px;
+	line-height: 1.25;
 	color: color-mix(in oklab, var(--color-text) 62%, transparent);
-}
-
-.hud-title:empty + .hud-sub:empty {
-	display: none;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .hud-progress {
-	height: 3px;
+	height: 2px;
 	margin-top: 3px;
 	border-radius: 999px;
 	background: color-mix(in oklab, var(--color-text) 12%, transparent);
@@ -96,8 +121,8 @@ body {
 
 .hud-progress i {
 	display: block;
-	height: 100%;
 	width: 0;
+	height: 100%;
 	border-radius: inherit;
 	background: var(--color-accent);
 	transition: width 160ms linear;
@@ -106,19 +131,21 @@ body {
 .hud-actions {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 4px;
 	flex: 0 0 auto;
 }
 
 .hud-btn {
-	padding: 5px 9px;
+	padding: 4px 8px;
 	border: 1px solid var(--border);
-	border-radius: 9px;
+	border-radius: 8px;
 	background: transparent;
 	color: var(--color-text);
 	font: inherit;
-	font-size: 11px;
+	font-size: 10.5px;
+	line-height: 1.2;
 	cursor: pointer;
+	white-space: nowrap;
 }
 
 .hud-btn:hover {
@@ -129,7 +156,82 @@ body {
 	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
 	color: var(--color-accent);
 }
+/* TextMorph (shared text-roll): the HUD carries its own copy of the two
+ * animations because this window does not load the board/workspace sheets. */
+.gui-text-morph {
+	position: relative;
+	display: inline-block;
+	white-space: nowrap;
+	vertical-align: baseline;
+}
 
-.hud[data-phase="error"] {
-	border-color: color-mix(in oklab, var(--color-danger, #e5484d) 45%, var(--border));
+.gui-text-morph__layer {
+	display: inline-block;
+}
+
+.gui-text-morph__layer--out {
+	position: absolute;
+	inset-inline-start: 0;
+	top: 0;
+}
+
+.gui-text-morph__char {
+	display: inline-block;
+	white-space: pre;
+	-webkit-text-fill-color: currentColor;
+}
+
+.gui-text-morph__layer--out .gui-text-morph__char {
+	opacity: 1;
+	animation-name: gui-textmorph-out;
+	animation-timing-function: var(--spring);
+	animation-fill-mode: forwards;
+}
+
+.gui-text-morph__layer--in .gui-text-morph__char {
+	opacity: 0;
+	animation-name: gui-textmorph-in;
+	animation-timing-function: var(--spring);
+	animation-fill-mode: forwards;
+}
+
+@keyframes gui-textmorph-out {
+	from {
+		opacity: 1;
+		transform: none;
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-0.35em);
+	}
+}
+
+@keyframes gui-textmorph-in {
+	from {
+		opacity: 0;
+		transform: translateY(0.35em);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.gui-motion-off .gui-text-morph__layer--out {
+	display: none;
+}
+
+.gui-motion-off .gui-text-morph__char {
+	opacity: 1;
+	transform: none;
+	animation: none;
+}
+
+/* The failure message is the one line that must survive: let it take a second
+ * line instead of truncating the recovery instruction. */
+.hud-inner[data-phase="error"] .hud-title {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	white-space: normal;
 }

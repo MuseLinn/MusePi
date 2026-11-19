@@ -2755,7 +2755,7 @@ export const SETTINGS_SCHEMA = {
 
 	"dictation.globalShortcut": {
 		type: "string",
-		default: "CommandOrControl+Shift+Space",
+		default: "CommandOrControl+Alt+Space",
 		ui: {
 			tab: "voice",
 			group: "Speech",
