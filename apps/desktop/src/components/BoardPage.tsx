@@ -40,6 +40,7 @@ import {
 import { tapFeedback } from "../lib/haptic";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
+import { morphSurfaceBack, morphSurfaceFrom } from "../lib/view-transition";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { DialogFrame } from "./DialogFrame";
@@ -56,6 +57,11 @@ import { WorkspacePageHeader } from "./WorkspacePageHeader";
  * push, predictive ghost, hover menu (放大 / 删除), SpotlightCard glow,
  * and localStorage persistence. Legacy cell-layout data migrates on load.
  */
+
+/** Stable shared-surface name for one board widget. */
+function boardSurfaceName(id: string): string {
+	return `board-widget-${id.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+}
 
 function focusCardSize(): { width: number; height: number } {
 	// Larger maximized card (kimi parity — the focused widget gets room to
@@ -782,6 +788,17 @@ export function BoardPage({
 
 	// Maximized-card close: brief blur-out before unmounting.
 	const [focusClosing, setFocusClosing] = useState(false);
+	/** The board card the focused widget grew out of. */
+	const focusOrigin = useRef<HTMLElement | null>(null);
+
+	const openFocus = (widget: BoardWidget): void => {
+		const card =
+			[...document.querySelectorAll<HTMLElement>("[data-board-widget]")].find(
+				el => el.dataset.boardWidget === widget.id,
+			) ?? null;
+		focusOrigin.current = card;
+		morphSurfaceFrom(card, boardSurfaceName(widget.id), () => setFocusWidget(widget));
+	};
 	// Two-phase enter: the frosted scrim paints at opacity 0 first so the
 	// backdrop composites before gui-fade-in (mount-frame animation on a
 	// backdrop-filter element kills the frost — gui-implementation.md §6.5).
@@ -790,11 +807,18 @@ export function BoardPage({
 	const focusRef = useModalFocus<HTMLDivElement>(focusOpen);
 	const closeFocus = (): void => {
 		if (focusClosing) return;
-		setFocusClosing(true);
-		setTimeout(() => {
-			setFocusWidget(null);
-			setFocusClosing(false);
-		}, 150);
+		morphSurfaceBack(
+			document.querySelector(".gui-board-focus-card"),
+			focusOrigin.current,
+			boardSurfaceName(focusWidget?.id ?? ""),
+			() => {
+				setFocusClosing(true);
+				setTimeout(() => {
+					setFocusWidget(null);
+					setFocusClosing(false);
+				}, 150);
+			},
+		);
 	};
 	useEffect(() => {
 		if (!focusOpen) return;
@@ -1300,6 +1324,7 @@ export function BoardPage({
 							<div
 								key={w.id}
 								className={`gui-board-card${dimmed ? " gui-board-card--dimmed" : ""}${editMode && selectedWidgetId === w.id ? " gui-board-card--selected" : ""}`}
+								data-board-widget={w.id}
 								data-tone={def.tone ?? "default"}
 								style={{
 									left: dragRect?.id === w.id ? dragRect.rect.x : w.pos.x,
@@ -1342,7 +1367,7 @@ export function BoardPage({
 												aria-label={t("settings.widgetFocus")}
 												title={t("settings.widgetFocus")}
 												onPointerDown={e => e.stopPropagation()}
-												onClick={() => setFocusWidget(w)}
+												onClick={() => openFocus(w)}
 											>
 												<Icon name="fullscreen" className="h-3.5 w-3.5" />
 											</button>
@@ -1458,7 +1483,7 @@ export function BoardPage({
 					<div
 						className="gui-board-focus-card"
 						data-tone={widgetDef(focusWidget.type)?.tone ?? "default"}
-						style={focusCardSize()}
+						style={{ ...focusCardSize(), viewTransitionName: boardSurfaceName(focusWidget.id) }}
 						onClick={e => e.stopPropagation()}
 					>
 						<div className="gui-board-focus-head">

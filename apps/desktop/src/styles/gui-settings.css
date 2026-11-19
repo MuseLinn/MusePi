@@ -6225,13 +6225,17 @@ body.gui-resizing {
 	view-transition-name: device-signin;
 }
 
+.gui-marketplace-detail {
+	view-transition-name: marketplace-detail;
+}
+
 ::view-transition-group(*) {
 	z-index: 1;
 	/* HarmonyOS's friction curve: it leaves and arrives with weight. A sampled
 	   spring spends most of its time near the endpoint, which reads as "fast,
 	   then a linear settle"; this curve keeps the change continuous. */
-	animation-duration: 320ms;
-	animation-timing-function: cubic-bezier(0.2, 0, 0.2, 1);
+	animation-duration: var(--duration-one-take, 320ms);
+	animation-timing-function: var(--ease-one-take, cubic-bezier(0.2, 0, 0.2, 1));
 }
 
 ::view-transition-group(root) {
@@ -6241,14 +6245,14 @@ body.gui-resizing {
 /* Motion orchestration: the leaving snapshot clears quickly, the entering one
    starts just after, so the two never read as stacked layers. */
 ::view-transition-old(*) {
-	animation-duration: 140ms;
-	animation-timing-function: cubic-bezier(0.4, 0, 1, 1);
+	animation-duration: var(--duration-quick, 150ms);
+	animation-timing-function: var(--ease-dismiss, cubic-bezier(0.8, 0, 0.4, 1));
 }
 
 ::view-transition-new(*) {
-	animation-duration: 200ms;
-	animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
-	animation-delay: 40ms;
+	animation-duration: var(--duration-settle, 200ms);
+	animation-timing-function: var(--ease-appear, cubic-bezier(0.19, 1, 0.22, 1));
+	animation-delay: var(--one-take-offset, 40ms);
 }
 
 /* The new snapshot is taken before the dialog's own entrance advances, so its

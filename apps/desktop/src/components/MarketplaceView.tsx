@@ -8,6 +8,7 @@ import {
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
+import { morphSurfaceBack, morphSurfaceFrom } from "../lib/view-transition";
 import { MarketplaceDetailDialog, type MarketplaceDetailEntry } from "./MarketplaceDetailDialog";
 
 /** Browse, install and inspect marketplace plugins. The detail dialog reads
@@ -45,10 +46,27 @@ export function MarketplaceView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		};
 	}, [rpc, detail?.name, detail?.marketplace]);
 
+	/** The card the detail dialog grew out of, for the reverse move on close. */
+	const detailOrigin = useRef<HTMLElement | null>(null);
+
+	const closeDetail = (): void => {
+		morphSurfaceBack(
+			document.querySelector(".gui-marketplace-detail"),
+			detailOrigin.current,
+			"marketplace-detail",
+			() => setDetail(null),
+		);
+	};
+
 	const handleAction = async (action: MarketplaceCardAction): Promise<void> => {
 		if (!rpc) return;
 		if (action.kind === "open") {
-			setDetail(action.entry);
+			const card =
+				[...document.querySelectorAll<HTMLElement>("[data-marketplace-card]")].find(
+					el => el.dataset.marketplaceCard === action.entry.name,
+				) ?? null;
+			detailOrigin.current = card;
+			morphSurfaceFrom(card, "marketplace-detail", () => setDetail(action.entry));
 			return;
 		}
 		const name = action.entry.name;
@@ -148,7 +166,7 @@ export function MarketplaceView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				entry={shownDetail}
 				busy={toggleBusy}
 				error={detailError}
-				onClose={() => setDetail(null)}
+				onClose={closeDetail}
 				onAction={handleAction}
 				onToggleEnabled={handleToggleEnabled}
 			/>

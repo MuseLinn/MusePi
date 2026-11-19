@@ -21,7 +21,7 @@ import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { lookupSkillMarketIcon } from "../lib/skill-market";
 import { extensionDisplayName } from "../lib/slot-host";
-import { withViewTransition } from "../lib/view-transition";
+import { morphSurfaceFrom, withViewTransition } from "../lib/view-transition";
 import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
 import { StateIcon } from "./StateIcon";
@@ -86,6 +86,11 @@ interface SkillUpdateRow {
 /** A stable view-transition name for one skill, valid as a CSS custom-ident. */
 function skillSurfaceName(name: string): string {
 	return `skill-${name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
+}
+
+/** The drawer header's name while a card grows into it. */
+function skillPanelName(name: string): string {
+	return `skill-panel-${name.replace(/[^A-Za-z0-9_-]/g, "_")}`;
 }
 
 /** One row of daemon skills.list (trimmed to what the UI renders). */
@@ -527,7 +532,7 @@ function SkillDrawer({
 		>
 			<div className="gui-cap-drawer-backdrop" onClick={requestClose} />
 			<div ref={drawerRef} className="gui-cap-drawer" tabIndex={-1}>
-				<div className="gui-cap-drawer-head">
+				<div className="gui-cap-drawer-head" style={{ viewTransitionName: skillPanelName(skill.name) }}>
 					<SkillGlyph skill={skill} size={40} />
 					<div className="gui-cap-drawer-titles">
 						<div className="gui-cap-drawer-name">{skill.name}</div>
@@ -821,6 +826,13 @@ function InstalledSkillsPane({
 	const [origin, setOrigin] = useState<"all" | "official" | "user" | "project" | "extension">("all");
 	const [sortKey, setSortKey] = useState<"recent" | "name" | "level">("recent");
 	const [view, setView] = useState<"grid" | "list">("grid");
+
+	/** The card surface becomes the drawer header; the rest of the drawer fades in. */
+	const openSkillDrawer = (name: string): void => {
+		const card = document.querySelectorAll<HTMLElement>("[data-capability-skill]");
+		const source = [...card].find(el => el.dataset.capabilitySkill === name) ?? null;
+		morphSurfaceFrom(source, skillPanelName(name), () => setDrawerName(name));
+	};
 	const [manage, setManage] = useState(false);
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [busy, setBusy] = useState(false);
@@ -1241,13 +1253,14 @@ function InstalledSkillsPane({
 										role="button"
 										tabIndex={0}
 										style={{ viewTransitionName: skillSurfaceName(s.name) }}
+										data-capability-skill={s.name}
 										className={`gui-cap-card${picked ? " gui-cap-card--picked" : ""}${s.ignored ? " gui-cap-card--off" : ""}`}
-										onClick={() => (manage ? toggleSelected(s.name) : setDrawerName(s.name))}
+										onClick={() => (manage ? toggleSelected(s.name) : openSkillDrawer(s.name))}
 										onKeyDown={e => {
 											if (e.key === "Enter" || e.key === " ") {
 												e.preventDefault();
 												if (manage) toggleSelected(s.name);
-												else setDrawerName(s.name);
+												else openSkillDrawer(s.name);
 											}
 										}}
 									>
@@ -1309,13 +1322,14 @@ function InstalledSkillsPane({
 										role="button"
 										tabIndex={0}
 										style={{ viewTransitionName: skillSurfaceName(s.name) }}
+										data-capability-skill={s.name}
 										className={`gui-cap-listrow${picked ? " gui-cap-card--picked" : ""}`}
-										onClick={() => (manage ? toggleSelected(s.name) : setDrawerName(s.name))}
+										onClick={() => (manage ? toggleSelected(s.name) : openSkillDrawer(s.name))}
 										onKeyDown={e => {
 											if (e.key === "Enter" || e.key === " ") {
 												e.preventDefault();
 												if (manage) toggleSelected(s.name);
-												else setDrawerName(s.name);
+												else openSkillDrawer(s.name);
 											}
 										}}
 									>

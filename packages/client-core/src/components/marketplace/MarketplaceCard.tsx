@@ -93,6 +93,7 @@ export function MarketplaceCard({
 		<article
 			className={classes}
 			data-marketplace={entry.marketplace ?? ""}
+			data-marketplace-card={entry.name}
 			data-busy={isBusy ? "true" : "false"}
 			style={{ ["--mp-i" as string]: String(index) }}
 		>

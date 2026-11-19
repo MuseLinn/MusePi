@@ -33,6 +33,7 @@ scope:
 | `--radius-*` | Six-step radius ladder | **Literals are banned**; enforced by `scripts/check-radius-tokens.ts` |
 | `--space-*` | 4px spacing rhythm | |
 | `--spring-*` / `--gui-motion-*` | Motion curves and durations | Both `prefers-reduced-motion` and the motion toggle must switch off together |
+| `--ease-appear` / `--ease-dismiss` / `--ease-one-take`, `--duration-one-take`, `--one-take-offset` | Arrival/exit fades and shared-surface (one-take) timing | Use `--ease-one-take` with `--duration-one-take` on `::view-transition-group`; the fades take the appear/dismiss pair |
 | `--z-*` | Stacking levels | Floats, modals and tips have their own tiers |
 | `--gui-grip-*` | Splitter grip geometry and three states | See `SplitterGrip` below |
 

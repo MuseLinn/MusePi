@@ -291,6 +291,13 @@
 	--duration-settle: 200ms;
 	--duration-calm: 300ms;
 
+	/* One-take (shared element/container): HarmonyOS's friction curve. It owns
+	 * both ends of a rectangle match, where a spring's tail reads as a linear
+	 * settle. Entrance/exit stay on the bezier ladder above, offset by a beat. */
+	--ease-one-take: cubic-bezier(0.2, 0, 0.2, 1);
+	--duration-one-take: 320ms;
+	--one-take-offset: 40ms;
+
 	/* ── Global liquid-glass ladder (2026-11-08) ─────────────────────────
 	 * L1 cards / L2 floating layers / L3 interaction states. These are
 	 * CONTRAST tokens, not decoration: the dark scheme used to paint card
