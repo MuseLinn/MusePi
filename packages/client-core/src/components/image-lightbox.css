@@ -235,7 +235,7 @@
 	cursor: pointer;
 }
 
-.tr-img-lb-tool:hover {
+.tr-img-lb-tool:hover:not(:disabled) {
 	background: rgba(40, 40, 48, 0.9);
 }
 

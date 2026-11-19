@@ -39,6 +39,7 @@ export function DeviceGrantPanel({
 	onClose,
 	onDone,
 	autoStart = false,
+	initialFlow = null,
 }: {
 	rpc: RpcClient | null;
 	/** The MCP server name, e.g. `connector:github`. */
@@ -48,8 +49,12 @@ export function DeviceGrantPanel({
 	onDone(): void;
 	/** Start the flow on mount: the caller already chose the device grant. */
 	autoStart?: boolean;
+	/** Already-started flow (the caller primed it before the shared-surface
+	 *  transition). Rendering the code on the first frame keeps the dialog's
+	 *  one-take geometry stable instead of growing mid-transition. */
+	initialFlow?: { flowId: string; userCode: string; verificationUri: string; interval: number } | null;
 }): ReactNode {
-	const [flow, setFlow] = useState<DeviceFlowState | null>(null);
+	const [flow, setFlow] = useState<DeviceFlowState | null>(initialFlow ? { ...initialFlow, status: "pending" } : null);
 	const [error, setError] = useState<string | null>(null);
 	const [starting, setStarting] = useState(false);
 	const timerRef = useRef<Timer | null>(null);
@@ -136,8 +141,15 @@ export function DeviceGrantPanel({
 	useEffect(() => {
 		if (!open || !autoStart || startedRef.current) return;
 		startedRef.current = true;
+		// A primed flow already has its code: join the poll loop instead of
+		// asking the daemon for a second code (which would change the digits
+		// under the user right after the dialog opens).
+		if (flow) {
+			void poll(flow.flowId, flow.interval);
+			return;
+		}
 		void start();
-	}, [autoStart, open, start]);
+	}, [autoStart, flow, open, poll, start]);
 
 	if (!open) return null;
 

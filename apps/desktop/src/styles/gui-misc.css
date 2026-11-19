@@ -2075,7 +2075,7 @@
 	transition: color 120ms ease-out, border-color 120ms ease-out;
 }
 
-.gui-goal-btn:hover {
+.gui-goal-btn:hover:not(:disabled) {
 	color: var(--color-text);
 	border-color: var(--color-accent-bd);
 }

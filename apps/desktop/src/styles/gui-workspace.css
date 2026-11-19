@@ -294,7 +294,7 @@
 	cursor: pointer;
 }
 
-.gui-todo-act:hover {
+.gui-todo-act:hover:not(:disabled) {
 	color: var(--color-text);
 	background: var(--color-hover, rgba(128, 128, 128, 0.15));
 }
@@ -5482,7 +5482,7 @@
 	transition: filter 140ms var(--spring);
 }
 
-.gui-skill-market-add:hover {
+.gui-skill-market-add:hover:not(:disabled) {
 	filter: brightness(1.08);
 }
 

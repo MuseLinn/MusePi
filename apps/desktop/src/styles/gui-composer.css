@@ -1561,7 +1561,7 @@ button.gui-stats-pill {
 	cursor: pointer;
 }
 
-.gui-btn:hover {
+.gui-btn:hover:not(:disabled) {
 	background: var(--color-surface-raised);
 }
 
@@ -2751,7 +2751,7 @@ button.gui-stats-pill {
 		transform 120ms var(--spring-snappy, var(--spring));
 }
 
-.gui-sketch-tool:hover {
+.gui-sketch-tool:hover:not(:disabled) {
 	background: color-mix(in oklab, var(--color-text) 8%, transparent);
 	color: var(--color-text);
 }
@@ -3013,7 +3013,7 @@ button.gui-stats-pill {
 	transition: transform 140ms var(--spring-snappy, var(--spring));
 }
 
-.gui-sketch-done:hover {
+.gui-sketch-done:hover:not(:disabled) {
 	transform: scale(1.06);
 }
 
@@ -3343,7 +3343,7 @@ button.gui-stats-pill {
 .gui-style-select-btn:hover,
 .gui-style-select-btn--open,
 .gui-composer-pill:hover,
-.gui-composer-ico:hover,
+.gui-composer-ico:hover:not(:disabled),
 .gui-project-chip:hover,
 .gui-mode-toggle-arm:hover,
 .gui-mode-chip:hover,
@@ -3357,7 +3357,7 @@ button.gui-stats-pill {
 .gui-connector-chip--open,
 .gui-stats-pill:hover,
 .gui-suggest-chip:hover,
-.gui-send-btn:hover {
+.gui-send-btn:hover:not(:disabled) {
 	color: var(--color-text);
 	background-color: var(--glass-bg-strong);
 	box-shadow:

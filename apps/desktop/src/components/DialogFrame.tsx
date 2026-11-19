@@ -92,6 +92,14 @@ export function DialogFrame({
 			};
 		}
 		setPhase("closing");
+		// Handed off to another surface inside a one-take: the browser already
+		// owns the leaving snapshot. Running our own 180ms exit as well leaves a
+		// fading copy of this dialog in the NEW snapshot, which reads as a flash
+		// under the incoming one (detail → device sign-in).
+		if (document.documentElement.classList.contains("gui-view-transition")) {
+			setMounted(false);
+			return;
+		}
 		const t = setTimeout(() => setMounted(false), 180);
 		return () => clearTimeout(t);
 	}, [open]);

@@ -90,6 +90,7 @@ A prose rule is advisory; a check is a contract. Where a standard can be verifie
 | Guard | Enforces |
 | --- | --- |
 | `scripts/check-radius-tokens.ts` | No literal `border-radius`; every `--radius-*` is defined |
+| `scripts/check-disabled-hover.ts` | A class with a `:disabled` rule excludes the pointer in `:hover` (`:hover:not(:disabled)`) or resets it (`:disabled:hover`); generated asset bundles are exempt |
 | `scripts/check-splitter-grip.ts` | Only `SplitterGrip.tsx` may emit the grip class; the drag state keys off the pill's own `data-resizing`, never the global `body.gui-resizing`; the retired `.gui-resize-grip` stays gone |
 | `test/splitter-grip.test.ts` | The grip primitive's tokens, three states, and seam geometry |
 

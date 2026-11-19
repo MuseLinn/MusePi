@@ -1128,7 +1128,7 @@
 		opacity 120ms ease;
 }
 
-.gui-sfx-preview:hover {
+.gui-sfx-preview:hover:not(:disabled) {
 	transform: scale(1.08);
 	opacity: 0.9;
 }
@@ -1592,7 +1592,7 @@
 	margin-left: 2px;
 }
 
-.gui-pause-btn:hover {
+.gui-pause-btn:hover:not(:disabled) {
 	background: var(--color-hover);
 	color: var(--color-text);
 }
@@ -2506,7 +2506,7 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text-faint);
 	transition: background 120ms ease, color 120ms ease;
 }
-.gui-project-action:hover {
+.gui-project-action:hover:not(:disabled) {
 	background: var(--color-surface-raised);
 	color: var(--color-text);
 }

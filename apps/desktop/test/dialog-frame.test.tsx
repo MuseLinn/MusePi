@@ -73,4 +73,47 @@ describe("DialogFrame", () => {
 
 		expect(closed).toEqual(["top"]);
 	});
+
+	test("a handoff inside a one-take drops its own exit animation", () => {
+		const root = mount(
+			<DialogFrame open onClose={() => {}} label="Detail dialog">
+				<button type="button">Detail action</button>
+			</DialogFrame>,
+		);
+		expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+
+		// The shared-surface transition (morphSurfaceFrom/morphSurfaceBack) adds
+		// this marker before flushing its update; running the 180ms exit as well
+		// would leave a fading copy under the incoming surface.
+		document.documentElement.classList.add("gui-view-transition");
+		try {
+			act(() =>
+				root.render(
+					<DialogFrame open={false} onClose={() => {}} label="Detail dialog">
+						<button type="button">Detail action</button>
+					</DialogFrame>,
+				),
+			);
+		} finally {
+			document.documentElement.classList.remove("gui-view-transition");
+		}
+
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+	});
+
+	test("without a one-take the exit animation still keeps the dialog mounted", () => {
+		const root = mount(
+			<DialogFrame open onClose={() => {}} label="Ordinary dialog">
+				<button type="button">Action</button>
+			</DialogFrame>,
+		);
+		act(() =>
+			root.render(
+				<DialogFrame open={false} onClose={() => {}} label="Ordinary dialog">
+					<button type="button">Action</button>
+				</DialogFrame>,
+			),
+		);
+		expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+	});
 });

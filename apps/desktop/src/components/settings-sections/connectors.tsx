@@ -243,6 +243,13 @@ export function ConnectorsSection({
 	const [category, setCategory] = useState<string | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
 	const [deviceTarget, setDeviceTarget] = useState<string | null>(null);
+	/** Code obtained before the device dialog opens (see the connect path). */
+	const [deviceInitialFlow, setDeviceInitialFlow] = useState<{
+		flowId: string;
+		userCode: string;
+		verificationUri: string;
+		interval: number;
+	} | null>(null);
 	const locale = useLocale();
 	const useChineseDescription = locale.toLowerCase().startsWith("zh");
 
@@ -278,9 +285,10 @@ export function ConnectorsSection({
 
 	const closeDevice = useCallback((): void => {
 		const row = deviceTarget ? connectorRowElement(deviceTarget) : null;
-		morphSurfaceBack(document.querySelector(".gui-dialog--device"), row, "device-signin", () =>
-			setDeviceTarget(null),
-		);
+		morphSurfaceBack(document.querySelector(".gui-dialog--device"), row, "device-signin", () => {
+			setDeviceTarget(null);
+			setDeviceInitialFlow(null);
+		});
 	}, [deviceTarget]);
 
 	useEffect(() => {
@@ -544,10 +552,21 @@ ${connector.category ?? ""}`.toLowerCase();
 				if (result.needsAuth && connector.authMode === "oauth") {
 					if (result.needsDeviceAuth) {
 						// This row has a pinned client id but no secret, so the browser
-						// exchange cannot finish. The device grant is its sign-in path and
-						// keeps polling from the page, not from this dialog.
+						// exchange cannot finish. Obtain the code BEFORE the one-take:
+						// opening the dialog first made it grow from a lone button to the
+						// code block while the browser was animating its geometry, which
+						// reads as a flash. The dialog's first frame is now final.
+						const started = await rpc
+							.request<{
+								flowId: string;
+								userCode: string;
+								verificationUri: string;
+								interval: number;
+							}>("mcp.oauth.device.start", { name: `connector:${connector.id}` })
+							.catch(() => null);
 						const origin = document.querySelector(".gui-dialog--connector") ?? connectorRowElement(connector.id);
 						morphSurfaceFrom(origin, "device-signin", () => {
+							setDeviceInitialFlow(started);
 							setDeviceTarget(connector.id);
 							setDetailId(null);
 						});
@@ -1147,11 +1166,13 @@ ${connector.category ?? ""}`.toLowerCase();
 					serverName={`connector:${deviceTarget}`}
 					open={deviceTarget !== null}
 					autoStart
+					initialFlow={deviceInitialFlow}
 					onClose={closeDevice}
 					onDone={() => {
 						const id = deviceTarget;
 						if (!id) return;
 						setDeviceTarget(null);
+						setDeviceInitialFlow(null);
 						void enableAfterLogin(`connector:${id}`);
 					}}
 				/>
