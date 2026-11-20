@@ -694,6 +694,69 @@ try {
 			const rect = document.querySelector(".pet-window__pet")?.getBoundingClientRect();
 			return rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } : null;
 		});
+		// One sample of the quick bar surface: the settled-state waits below
+		// and the assertions they feed share it. Collapsing and expanding are
+		// events, not delays — the leave/enter poll flips the class and the row
+		// then fades over --duration-quick, so a sample read at a fixed time can
+		// land mid-fade. The sample carries the whole surface state, because
+		// "never expanded" and "collapsed but still fading" are different
+		// failures and a bare boolean cannot tell them apart.
+		const readQuickbarSurface = () => petPage.evaluate(() => {
+			const bar = document.querySelector(".pet-window__quickbar");
+			if (!bar) {
+				return {
+					missing: true,
+					expanded: false,
+					composing: false,
+					opacity: "",
+					pointerEvents: "",
+					width: 0,
+					belowSprite: null,
+					buttonSize: [],
+					gaps: [],
+					radius: "",
+					svgCount: 0,
+					buttonOpacity: [],
+					buttonTabIndex: [],
+					labels: [],
+					dividerOpacity: [],
+				};
+			}
+			const style = getComputedStyle(bar);
+			const rect = bar.getBoundingClientRect();
+			const buttons = Array.from(bar.querySelectorAll(".pet-window__quickbar-btn"));
+			const buttonRects = buttons.map(button => button.getBoundingClientRect());
+			const dividers = Array.from(bar.querySelectorAll(".pet-window__quickbar-divider"));
+			const petRect = document.querySelector(".pet-window__pet")?.getBoundingClientRect();
+			return {
+				missing: false,
+				expanded: bar.classList.contains("pet-window__quickbar--expanded"),
+				composing: bar.classList.contains("pet-window__quickbar--composing"),
+				opacity: style.opacity,
+				pointerEvents: style.pointerEvents,
+				width: Math.round(rect.width),
+				belowSprite: petRect ? rect.top >= petRect.bottom - 2 : null,
+				buttonSize: buttonRects.map(buttonRect => ({ width: Math.round(buttonRect.width), height: Math.round(buttonRect.height) })),
+				gaps: buttonRects.slice(1).map((buttonRect, index) => Math.round(buttonRect.left - buttonRects[index].right)),
+				radius: buttons[0] ? getComputedStyle(buttons[0]).borderTopLeftRadius : "",
+				svgCount: buttons.filter(button => button.querySelector("svg")).length,
+				buttonOpacity: buttons.map(button => getComputedStyle(button).opacity),
+				buttonTabIndex: buttons.map(button => button.tabIndex),
+				labels: buttons.map(button => button.getAttribute("aria-label")),
+				dividerOpacity: dividers.map(divider => getComputedStyle(divider).opacity),
+			};
+		});
+		// Polls the surface until it reads as settled, bounded so a bar that
+		// never reaches the state still fails instead of hanging.
+		const waitForQuickbarSurface = async settled => {
+			const deadline = Date.now() + 4000;
+			let sample = await readQuickbarSurface();
+			while (Date.now() < deadline && !settled(sample)) {
+				await sleep(60);
+				sample = await readQuickbarSurface();
+			}
+			return sample;
+		};
 		if (nativeCursorSupported() && petBox) {
 			const origin = await petWindowMetrics(petPage);
 			positionNativeCursor(
@@ -701,27 +764,8 @@ try {
 				Math.max(8, origin.y + (petBox.top + petBox.bottom) / 2),
 				origin.dpr,
 			);
-			await sleep(450);
 		}
-		const quickbarCollapsed = await petPage.evaluate(() => {
-			const bar = document.querySelector(".pet-window__quickbar");
-			if (!bar) return { missing: true };
-			const style = getComputedStyle(bar);
-			const rect = bar.getBoundingClientRect();
-			const buttons = Array.from(bar.querySelectorAll(".pet-window__quickbar-btn"));
-			const petRect = document.querySelector(".pet-window__pet")?.getBoundingClientRect();
-			return {
-				missing: false,
-				expanded: bar.classList.contains("pet-window__quickbar--expanded"),
-				opacity: style.opacity,
-				pointerEvents: style.pointerEvents,
-				width: Math.round(rect.width),
-				buttonOpacity: buttons.map(button => getComputedStyle(button).opacity),
-				buttonTabIndex: buttons.map(button => button.tabIndex),
-				belowSprite: petRect ? rect.top >= petRect.bottom - 2 : null,
-				svgCount: buttons.filter(button => button.querySelector("svg")).length,
-			};
-		});
+		const quickbarCollapsed = await waitForQuickbarSurface(sample => sample.expanded === false && sample.opacity === "0");
 		check(
 			"real pet quick bar starts collapsed, inert and below the sprite",
 			!quickbarCollapsed.missing &&
@@ -741,27 +785,8 @@ try {
 				Math.max(8, origin.y + (petBox.top + petBox.bottom) / 2),
 				origin.dpr,
 			);
-			await sleep(450);
 		}
-		const quickbarExpanded = await petPage.evaluate(() => {
-			const bar = document.querySelector(".pet-window__quickbar");
-			const buttons = Array.from(bar?.querySelectorAll(".pet-window__quickbar-btn") ?? []);
-			const rects = buttons.map(button => button.getBoundingClientRect());
-			const gaps = rects.slice(1).map((rect, index) => Math.round(rect.left - rects[index].right));
-			const dividers = Array.from(bar?.querySelectorAll(".pet-window__quickbar-divider") ?? []);
-			return {
-				expanded: bar?.classList.contains("pet-window__quickbar--expanded") ?? false,
-				opacity: bar ? getComputedStyle(bar).opacity : "",
-				pointerEvents: bar ? getComputedStyle(bar).pointerEvents : "",
-				buttonSize: rects.map(rect => ({ width: Math.round(rect.width), height: Math.round(rect.height) })),
-				width: bar ? Math.round(bar.getBoundingClientRect().width) : 0,
-				gaps,
-				radius: buttons[0] ? getComputedStyle(buttons[0]).borderTopLeftRadius : "",
-				dividerOpacity: dividers.map(divider => getComputedStyle(divider).opacity),
-				buttonTabIndex: buttons.map(button => button.tabIndex),
-				labels: buttons.map(button => button.getAttribute("aria-label")),
-			};
-		});
+		const quickbarExpanded = await waitForQuickbarSurface(sample => sample.expanded === true && sample.opacity === "1");
 		// The ROW carries three buttons; the COMPOSER carries a leading and a
 		// trailing one. Both live in the same surface, so the button list is
 		// five once the composer is mounted — the row's three are faded out
@@ -954,31 +979,9 @@ try {
 				origin.dpr,
 			);
 		}
-		// Sample the whole surface state, not just the boolean: "still expanded"
-		// (the proximity edge never arrived) and "collapsed but still fading"
-		// are different failures, and a bare verdict cannot tell them apart.
-		const readQuickbarSurface = () => petPage.evaluate(() => {
-			const bar = document.querySelector(".pet-window__quickbar");
-			if (!bar) return { missing: true, expanded: false, composing: false, opacity: "" };
-			const style = getComputedStyle(bar);
-			return {
-				missing: false,
-				expanded: bar.classList.contains("pet-window__quickbar--expanded"),
-				composing: bar.classList.contains("pet-window__quickbar--composing"),
-				opacity: style.opacity,
-				pointerEvents: style.pointerEvents,
-			};
-		});
-		// Collapsing is an event, not a delay: the leave poll flips the class
-		// and the row then fades out over --duration-quick, so a sample read at
-		// a fixed time can land mid-fade. Wait for the settled state, bounded
-		// so a bar that never collapses still fails instead of hanging.
-		const collapseDeadline = Date.now() + 4000;
-		let quickbarLeft = await readQuickbarSurface();
-		while (Date.now() < collapseDeadline && !(quickbarLeft.expanded === false && quickbarLeft.opacity === "0")) {
-			await sleep(60);
-			quickbarLeft = await readQuickbarSurface();
-		}
+		// The leave poll flips the class and the row then fades out, so the
+		// settled state is what the assertion reads — never a fixed delay.
+		const quickbarLeft = await waitForQuickbarSurface(sample => sample.expanded === false && sample.opacity === "0");
 		check(
 			"real pet quick bar collapses again when the cursor leaves",
 			!quickbarLeft.missing && !quickbarLeft.expanded && quickbarLeft.opacity === "0",
