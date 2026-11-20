@@ -8729,6 +8729,14 @@ body.gui-resizing {
 	cursor: default;
 }
 
+/* The base sheet turns the whole row into a grab cursor on press. Here the
+ * reorder affordance is the ordinal handle, so only that shows `grabbing`;
+ * a press anywhere else must not advertise a drag the UI no longer teaches.
+ * The row stays draggable — the cursor just matches the visible handle. */
+.gui-model-rail-body .gui-role-fallback-row:active {
+	cursor: default;
+}
+
 .gui-model-rail-body .gui-role-fallback-row--editing {
 	grid-template-columns: minmax(0, 1fr);
 }
@@ -8858,6 +8866,11 @@ body.gui-resizing {
 }
 
 .gui-model-rail-body .gui-role-card > .gui-role-actions > .gui-btn {
+	/* gui-chat.css keeps a 26px toolbar-button rule for this slot; every part
+	 * of it that applies here is restated so the footer reads as one standard
+	 * text button (its leftover min-width would otherwise pin the box). */
+	flex: 0 0 auto;
+	min-width: 0;
 	height: auto;
 	min-height: var(--control-height-sm);
 	padding: 0 10px;
