@@ -1291,47 +1291,52 @@ let petDisplayListenersInstalled = false;
 function updatePetClickThrough() {
 	if (!petWindow || petWindow.isDestroyed() || !petVisible) return;
 	// darwin + win32: transparent pet window must not block the desktop.
-	// (Linux stays fully interactive — unverified on the same poll path.)
-	if (process.platform !== "darwin" && process.platform !== "win32") return;
-	let ignore = true;
-	// Never click-through mid-drag: pointer capture depends on the window
-	// receiving events. petDragArmed covers pointerdown-before-first-move
-	// (the renderer arms on down, disarms via pet-drag-end); petDragLast
-	// covers an in-flight drag (armed on the first pet-drag-client).
-	if (petDragArmed || petDragLast !== null) {
-		ignore = false;
-	} else if (petComposerOpen) {
-		// The quick bar became a text field: the window must keep receiving
-		// mouse and keyboard, or the caret is dropped the moment the cursor
-		// steps off the (now invisible) bar. The composer is dismissed by
-		// Escape or by submitting, not by the cursor leaving.
-		ignore = false;
-	} else if (petHitbox) {
-		// All three spaces (cursor / window position / renderer CSS px) are
-		// converted into window-position space before comparing — on a
-		// contract-holding machine every factor is 1 (zero cost).
-		const cursor = cursorToPos(screen.getCursorScreenPoint());
-		const [wx, wy] = petWindow.getPosition();
-		const hx = wx + cssToPos(petHitbox.x);
-		const hy = wy + cssToPos(petHitbox.y);
-		ignore = !(
-			cursor.x >= hx &&
-			cursor.x <= hx + cssToPos(petHitbox.width) &&
-			cursor.y >= hy &&
-			cursor.y <= hy + cssToPos(petHitbox.height)
-		);
-	}
-	if (ignore !== petIgnoreState) {
-		petIgnoreState = ignore;
-		petWindow.setIgnoreMouseEvents(ignore);
-	}
-	// Push hover to the pet window on change: it must switch to the hover
-	// mood row even when the window flips click-through (pointerleave may
-	// never fire once the window stops receiving events).
-	const hovering = !ignore;
-	if (hovering !== petHoverState && !petWindow.isDestroyed()) {
-		petHoverState = hovering;
-		petWindow.webContents.send("pet:hover", hovering);
+	// (Linux stays fully interactive — click-through via setIgnoreMouseEvents
+	// is unverified on the same poll path, so that arm stays gated.) Proximity
+	// and gaze do not depend on click-through — they only read the OS cursor —
+	// and run everywhere; without them Linux never received pet:proximity and
+	// the quick bar could not expand.
+	if (process.platform === "darwin" || process.platform === "win32") {
+		let ignore = true;
+		// Never click-through mid-drag: pointer capture depends on the window
+		// receiving events. petDragArmed covers pointerdown-before-first-move
+		// (the renderer arms on down, disarms via pet-drag-end); petDragLast
+		// covers an in-flight drag (armed on the first pet-drag-client).
+		if (petDragArmed || petDragLast !== null) {
+			ignore = false;
+		} else if (petComposerOpen) {
+			// The quick bar became a text field: the window must keep receiving
+			// mouse and keyboard, or the caret is dropped the moment the cursor
+			// steps off the (now invisible) bar. The composer is dismissed by
+			// Escape or by submitting, not by the cursor leaving.
+			ignore = false;
+		} else if (petHitbox) {
+			// All three spaces (cursor / window position / renderer CSS px) are
+			// converted into window-position space before comparing — on a
+			// contract-holding machine every factor is 1 (zero cost).
+			const cursor = cursorToPos(screen.getCursorScreenPoint());
+			const [wx, wy] = petWindow.getPosition();
+			const hx = wx + cssToPos(petHitbox.x);
+			const hy = wy + cssToPos(petHitbox.y);
+			ignore = !(
+				cursor.x >= hx &&
+				cursor.x <= hx + cssToPos(petHitbox.width) &&
+				cursor.y >= hy &&
+				cursor.y <= hy + cssToPos(petHitbox.height)
+			);
+		}
+		if (ignore !== petIgnoreState) {
+			petIgnoreState = ignore;
+			petWindow.setIgnoreMouseEvents(ignore);
+		}
+		// Push hover to the pet window on change: it must switch to the hover
+		// mood row even when the window flips click-through (pointerleave may
+		// never fire once the window stops receiving events).
+		const hovering = !ignore;
+		if (hovering !== petHoverState && !petWindow.isDestroyed()) {
+			petHoverState = hovering;
+			petWindow.webContents.send("pet:hover", hovering);
+		}
 	}
 	// Proximity drives the quick bar, and it is deliberately NOT `hovering`:
 	// `hovering` is a strict hitbox test, while the bar has to appear as the

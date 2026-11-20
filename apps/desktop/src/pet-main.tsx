@@ -261,6 +261,11 @@ function PetApp(): ReactNode {
 	// a dismissal — the composer must survive the pick and still be there to
 	// receive the thumbnails.
 	const pickingRef = useRef(false);
+	// Whether this window ever held focus while the composer is open. A blur
+	// only dismisses a field that actually had the keyboard; on a display with
+	// no window manager (the Linux smoke's Xvfb) `focus()` can be refused and
+	// the resulting blur must not close the composer the click just opened.
+	const windowFocusedRef = useRef(false);
 	const composerRef = useRef<HTMLInputElement>(null);
 	// The bar's DOM node, for the focus check that decides whether a blur is
 	// a dismissal or just a move inside the bar. The spring hook has its
@@ -749,11 +754,14 @@ function PetApp(): ReactNode {
 	// the pet scrolled behind another window) is worse than no field at all.
 	useEffect(() => {
 		if (!composerOpen) return;
+		// `window` blur means the WINDOW lost focus, not that focus moved
+		// inside it. The old activeElement guard kept the composer open on
+		// a real blur (the field remains activeElement while blurred), which
+		// is why clicking anywhere else left the field unfolded.
+		windowFocusedRef.current = document.hasFocus();
 		const onBlur = (): void => {
-			// `window` blur means the WINDOW lost focus, not that focus moved
-			// inside it. The old activeElement guard kept the composer open on
-			// a real blur (the field remains activeElement while blurred), which
-			// is why clicking anywhere else left the field unfolded.
+			if (!windowFocusedRef.current) return;
+			windowFocusedRef.current = false;
 			if (pickingRef.current) return;
 			closeComposer();
 		};
@@ -763,6 +771,7 @@ function PetApp(): ReactNode {
 		// Chromium also fires `cancel` on the input itself; that arrives
 		// without the focus round-trip and is the reliable reset.
 		const onFocus = (): void => {
+			windowFocusedRef.current = true;
 			pickingRef.current = false;
 		};
 		window.addEventListener("focus", onFocus);
