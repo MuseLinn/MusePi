@@ -149,6 +149,7 @@ import { readHiddenSurfaces, readSurfaceOrder, surfaceById } from "./lib/surface
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { syncUpdateChannel } from "./lib/update-channel";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
+import { withViewTransition } from "./lib/view-transition";
 import type { WorkspaceMutationResult } from "./lib/workspace-projects";
 import { FloatingScrollbar } from "./plugins/ui-theme/rail";
 import { Icon } from "./vendor/oc-icons";
@@ -4226,7 +4227,7 @@ function AppInner(): ReactNode {
 			} else if (mod && eventMatches(e, "focus-mode")) {
 				// ⌘⇧E: focus mode (composer fills the surface).
 				e.preventDefault();
-				setFocusMode(v => !v);
+				withViewTransition(() => setFocusMode(v => !v), { surfaceOnly: true });
 			} else if (mod && eventMatches(e, "toggle-panel")) {
 				e.preventDefault();
 				setRightCollapsed(v => {
@@ -4572,7 +4573,7 @@ function AppInner(): ReactNode {
 							rightPanelOpen: false,
 							terminalOpen: false,
 							focusMode,
-							onToggleFocus: () => setFocusMode(v => !v),
+							onToggleFocus: () => withViewTransition(() => setFocusMode(v => !v), { surfaceOnly: true }),
 							reminders,
 							onSelectReminder: id => void openSession(id),
 							onMarkAllRead: markAllRead,
@@ -5056,7 +5057,8 @@ function AppInner(): ReactNode {
 												onCloseTerminal: closeTerminalDock,
 												onToggleTerminal: toggleTerminalDock,
 												focusMode,
-												onToggleFocus: () => setFocusMode(v => !v),
+												onToggleFocus: () =>
+													withViewTransition(() => setFocusMode(v => !v), { surfaceOnly: true }),
 												reminders,
 												onSelectReminder: id => void openSession(id),
 												onMarkAllRead: markAllRead,
@@ -5318,7 +5320,7 @@ function AppInner(): ReactNode {
 				}}
 				onSelectSession={selectSession}
 				onOpenCapability={capabilityAvailable ? () => viewSwapRef.current("capability") : undefined}
-				onToggleFocusMode={() => setFocusMode(v => !v)}
+				onToggleFocusMode={() => withViewTransition(() => setFocusMode(v => !v), { surfaceOnly: true })}
 				onOpenShortcuts={() => setShortcutsOpen(true)}
 				onImportSessions={() => setImportOpen(true)}
 				onShowWhatsNew={() => window.dispatchEvent(new CustomEvent("musepi-open-announcement"))}

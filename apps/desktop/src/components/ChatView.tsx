@@ -93,6 +93,7 @@ import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useStore } from "../lib/use-store";
 import { onUserAvatarChanged, readUserAvatarPrefs, type UserAvatarPrefs } from "../lib/user-avatar";
+import { sharedSurfaceTransitionAllowed, withViewTransition } from "../lib/view-transition";
 import { createIncrementalSpeaker, type IncrementalSpeaker, speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
@@ -841,9 +842,38 @@ export function ChatView({
 	const [welcomeLeaving, setWelcomeLeaving] = useState(false);
 	const [showChat, setShowChat] = useState(() => !!store);
 	const [chatLeaving, setChatLeaving] = useState(false);
+	// True for the welcome ⇄ session transition window: the chat shell and its
+	// composer are painted (and morph) while the transcript rows stay
+	// unpainted, so session content loading cannot reflow under the morph.
+	const [sceneMorphing, setSceneMorphing] = useState(false);
 	// Desktop-only tree-sitter highlighting for transcript code blocks.
 	const chatHighlight = useChatHighlight();
+	// A scene flip is the composer changing homes (welcome ⇄ session): run it
+	// as one shared-surface transition when the browser has View Transitions.
+	// The leaving scene leaves inside the update (no 420ms overlap), so exactly
+	// one composer carries `composer-surface` on each side.
+	const sceneRef = useRef<"welcome" | "chat">(store ? "chat" : "welcome");
 	useEffect(() => {
+		const next = store ? "chat" : "welcome";
+		const flip = sceneRef.current !== next;
+		sceneRef.current = next;
+		if (flip && sharedSurfaceTransitionAllowed()) {
+			const landed = (): void => setSceneMorphing(false);
+			withViewTransition(
+				() => {
+					setChatLeaving(false);
+					setWelcomeLeaving(false);
+					setShowChat(Boolean(store));
+					setShowWelcome(!store);
+					setSceneMorphing(true);
+				},
+				{ surfaceOnly: true, extraClass: "gui-scene-vt", onFinished: landed },
+			);
+			// The promise is reliable in Chromium; the timer keeps a cancelled
+			// transition from leaving the transcript hidden forever.
+			const timer = setTimeout(landed, 700);
+			return () => clearTimeout(timer);
+		}
 		if (store) {
 			setChatLeaving(false);
 			setShowChat(true);
@@ -888,13 +918,17 @@ export function ChatView({
 	};
 	const welcomeSceneRef = (el: HTMLDivElement | null): void => {
 		if (el) {
-			sceneMorph('[data-flip-anchor="session"]', '[data-flip-anchor="welcome"]', lastSessionFrameRect);
+			if (!document.documentElement.classList.contains("gui-view-transition")) {
+				sceneMorph('[data-flip-anchor="session"]', '[data-flip-anchor="welcome"]', lastSessionFrameRect);
+			}
 			lastSessionFrameRect = null;
 		}
 	};
 	const chatSceneRef = (el: HTMLDivElement | null): void => {
 		if (el) {
-			sceneMorph('[data-flip-anchor="welcome"]', '[data-flip-anchor="session"]', lastWelcomeFrameRect);
+			if (!document.documentElement.classList.contains("gui-view-transition")) {
+				sceneMorph('[data-flip-anchor="welcome"]', '[data-flip-anchor="session"]', lastWelcomeFrameRect);
+			}
 			lastWelcomeFrameRect = null;
 		}
 	};
@@ -2871,6 +2905,25 @@ export function ChatView({
 			if (!focusMode) el.style.height = "";
 			return;
 		}
+		// A View Transition owns the focus toggle when the browser has it: the
+		// composer wrap carries `composer-surface`, so the browser morphs its
+		// rect on one composited group. Running the WAAPI height animation on
+		// top would double-drive height and read as two competing motions —
+		// settle the final layout inside the transition instead.
+		if (typeof document !== "undefined" && document.documentElement.classList.contains("gui-view-transition")) {
+			// Freeze the CSS height transition for the same window: the browser
+			// owns geometry now, and a 280ms transition running underneath the
+			// transition snapshots is a second motion the user never asked for.
+			el.style.transition = "none";
+			el.style.height = focusMode ? `${target}px` : "";
+			publishComposerInsetRef.current?.();
+			wrapAnimRef.current = null;
+			window.setTimeout(() => {
+				el.style.transition = "";
+				publishComposerInsetRef.current?.();
+			}, 420);
+			return;
+		}
 		// Reduced motion: land on the target immediately. WAAPI animations
 		// are NOT covered by CSS @media rules, so without this early return
 		// the user who asked for less motion still gets the full morph.
@@ -3172,6 +3225,7 @@ export function ChatView({
 							<div
 								ref={chatSceneRef}
 								className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}`}
+								data-scene-morphing={sceneMorphing ? "true" : undefined}
 							>
 								<div className="flex min-h-0 flex-1">
 									{/* Session column: transcript + composer + dock. The

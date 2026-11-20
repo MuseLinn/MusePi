@@ -4,6 +4,15 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **共享面转场全面规范化：欢迎页与会话输入框、图片预览与画板都连成一条**：把 `surfaceOnly` 设为所有命名面形变的默认（对话框也不再整窗闪），只保留普通布局转场的整窗交叉淡化；欢迎页 ⇄ 会话的输入框翻转改成共享面（两侧 `composer-surface`，离开的场景在同一个 update 内卸载）；图片组在转场里是替换而非交叉淡化，缩略图的玻璃/强调色不再在入场/出场时盖在照片上；预览→画板由宿主在同一个 update 内完成（lightbox 不再先自己关闭，之前那会启动第二次转场）。
+  - EN: Shared-surface transitions are normalized: welcome ⇄ session composers, image preview and the drawing board all form one chain. `surfaceOnly` is now the default for every named-surface morph (dialogs included, so they no longer flash the window); only plain layout transitions keep the root cross-fade. The welcome ⇄ session composer flip is a shared surface (both sides name `composer-surface`, and the leaving scene unmounts inside the same update); transcript rows stay laid out but unpainted for the transition window, so session content arriving mid-transition cannot reflow under the morph. Image groups replace instead of cross-fading, so the thumbnail's glass/accent never washes over the photo on entry or exit, and preview→board is completed by the host inside one update (the lightbox no longer closes itself first, which used to start a second transition).
+
+- **专注切换不再整窗闪，图片预览与画板连成一条一镜到底**：专注模式的 View Transition 与图片预览都改成 surface-only——丢弃 root 快照，只让命名面（输入框、预览舞台、画板）参与形变，窗口其余部分不再交叉淡化。会话图片、输入框附件与「预览→画板」共用这套共享面；草稿/画板图片也改成预览优先：单击打开预览，编辑按钮或双击 chip 再进画板。
+  - EN: Focus mode no longer flashes the whole window, and image preview plus the drawing board form one one-take chain. Both the focus toggle and image previews are surface-only transitions now: the root snapshots are dropped, so only the named surface (composer, preview stage, board) morphs and the rest of the window never cross-fades. Session images, composer attachments and preview→board share that surface; a sketch chip is preview-first too — a single click opens the preview, and the edit button or a double-click reopens the board.
+
+- **专注模式切换改成真正的一镜到底**：⌘⇧E 的输入框形变以前是手写的 height + translateY 双动画，尺寸变化看起来不是一次连续转换。现在切换包在 View Transition 里：输入框容器在窗口期内带 `view-transition-name: composer-surface`，浏览器用一个合成组完成位置与尺寸变化，两侧快照各按自身尺寸绘制；WAAPI spring 只作为不支持该 API 时的回退，并在 transition 内跳过、同时冻结 CSS height 过渡，不再出现两条动画抢同一个属性。
+  - EN: Focus mode is a real one-take transition now. ⌘⇧E used to be a hand-written height + translateY pair, which read as a size change rather than one continuous conversion. The toggle now runs inside a View Transition: the composer wrap carries `view-transition-name: composer-surface` for the window, so the browser morphs position and size on one composited group while each snapshot keeps its own size. The WAAPI spring is kept only as the fallback where the API is unavailable, skipped inside a transition with the CSS height transition frozen, so two animations never drive the same property again.
+
 ## [0.7.7] - 2026-11-20
 
 - **Linux 桌面上，鼠标移近桌宠时快速栏现在会展开**：此前快速栏的接近展开只在 Windows 与 macOS 上生效，Linux 上无论怎么靠近都保持收起；现在 Linux 也按同一套 40px 进入 / 56px 离开的判定，靠近桌宠就能展开并操作上面的按钮。

@@ -449,7 +449,7 @@ export function MsgContent({
 	content: string | readonly (TextContent | ImageContent | VideoContent)[];
 	/** Open the full-size image preview lightbox at this message image
 	 *  (all of the message's images form the gallery). */
-	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	onPreviewImage?(images: { src: string; alt: string }[], index: number, element?: HTMLElement | null): void;
 	/** Resolves persisted `blob:sha256:` image refs (guests/exports omit it). */
 	host?: ToolRenderHost;
 }): ReactNode {
@@ -519,7 +519,7 @@ export function MsgContent({
 								key={`img${i}`}
 								items={images}
 								host={host}
-								onOpen={(idx, list) => onPreviewImage?.(list, idx)}
+								onOpen={(idx, list, el) => onPreviewImage?.(list, idx, el)}
 							/>
 						);
 					case "video":
@@ -535,7 +535,7 @@ export function MsgContent({
 				}
 			})}
 			{images.length > 1 && (
-				<ImageCardStack items={images} host={host} onOpen={(i, list) => onPreviewImage?.(list, i)} />
+				<ImageCardStack items={images} host={host} onOpen={(i, list, el) => onPreviewImage?.(list, i, el)} />
 			)}
 		</>
 	);
@@ -681,7 +681,7 @@ export function UserMsgContent({
 	onJumpToMessage?(messageId: string): void;
 	/** Open the full-size image preview lightbox at this message image
 	 *  (all of the message's images form the gallery). */
-	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	onPreviewImage?(images: { src: string; alt: string }[], index: number, element?: HTMLElement | null): void;
 	/** Host capabilities for the non-image attachment cards (size + preview).
 	 *  Absent in guests/exports: the cards still render, without those actions. */
 	host?: ToolRenderHost;
@@ -761,7 +761,7 @@ export function UserMsgContent({
 								key={`img${i}`}
 								items={images}
 								host={host}
-								onOpen={(idx, list) => onPreviewImage?.(list, idx)}
+								onOpen={(idx, list, el) => onPreviewImage?.(list, idx, el)}
 							/>
 						);
 					case "video":
@@ -777,7 +777,7 @@ export function UserMsgContent({
 				}
 			})}
 			{images.length > 1 && (
-				<ImageCardStack items={images} host={host} onOpen={(i, list) => onPreviewImage?.(list, i)} />
+				<ImageCardStack items={images} host={host} onOpen={(i, list, el) => onPreviewImage?.(list, i, el)} />
 			)}
 			{attachments.length > 0 && <UserAttachmentCards refs={attachments} host={host} />}
 			{cards}
@@ -1275,7 +1275,7 @@ export function AssistantBody({
 	thinkingLevel?: string;
 	/** Open the transcript full-size image preview (lightbox) for this turn's
 	 *  hoisted tool-result media. */
-	onPreviewImage?: (images: { src: string; alt: string }[], index: number) => void;
+	onPreviewImage?: (images: { src: string; alt: string }[], index: number, element?: HTMLElement | null) => void;
 	/** Attempt count for a failed turn (see the prop comment above). */
 	errorAttempt?: number;
 }): ReactNode {

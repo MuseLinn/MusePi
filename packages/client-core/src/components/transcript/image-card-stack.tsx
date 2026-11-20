@@ -25,7 +25,7 @@ export function ImageCardStack<T extends BlobImageItem>({
 	/** Open the preview lightbox at this image (message gallery). The second
 	 *  argument is the resolved list, so the lightbox never receives a ref
 	 *  the host could not display. */
-	onOpen(index: number, items: { src: string; alt: string }[]): void;
+	onOpen(index: number, items: { src: string; alt: string }[], element?: HTMLElement | null): void;
 }): ReactNode {
 	// A restored session stores images as blob refs; resolve before painting so
 	// the card and the lightbox share one displayable list.
@@ -51,7 +51,7 @@ export function ImageCardStack<T extends BlobImageItem>({
 		if (!d.moved && (Math.abs(x) > 6 || Math.abs(e.clientY - d.sy) > 6)) d.moved = true;
 		setDx(x);
 	};
-	const onPointerUp = (): void => {
+	const onPointerUp = (e: React.PointerEvent<HTMLDivElement>): void => {
 		const d = dragRef.current;
 		dragRef.current = null;
 		setDragging(false);
@@ -63,7 +63,7 @@ export function ImageCardStack<T extends BlobImageItem>({
 			return;
 		}
 		setDx(0);
-		if (!d.moved) onOpen(index, gallery);
+		if (!d.moved) onOpen(index, gallery, e.currentTarget.querySelector<HTMLElement>("img"));
 	};
 
 	return (

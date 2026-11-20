@@ -822,6 +822,62 @@
 /* ── Floating sidebar toggle on the pane boundary (ZCode immersive) ─── */
 /* Session composer column — focus mode animates height px↔100% (JS pins
  * the current height, then transitions to the target; flex:1 would snap). */
+/* Focus toggle (⌘⇧E) is a same-element size change: while the View
+ * Transition runs, the wrap is the named surface the browser pairs between
+ * the two snapshots. The name exists only inside the transition so unrelated
+ * transitions never capture the composer. */
+/* Welcome ⇄ session: both composer wrappers take the same name for the
+ * scene transition window, so the input card is one continuous surface. */
+/* The scene transition morphs the input card; transcript rows stay laid out
+ * but unpainted for that window, so session content arriving mid-transition
+ * cannot reflow underneath the morph. They reveal when the transition lands. */
+.gui-scene-chat[data-scene-morphing="true"] .gui-transcript {
+	visibility: hidden;
+}
+
+html.gui-scene-vt [data-flip-anchor="welcome"],
+html.gui-scene-vt [data-flip-anchor="session"] {
+	view-transition-name: composer-surface;
+}
+
+html.gui-view-transition:not(.gui-scene-vt) .gui-composer-wrap {
+	view-transition-name: composer-surface;
+}
+
+/* Surface-only transitions (focus toggle, image preview): the named surface
+ * morphs alone. The default root snapshots cross-fade the entire window,
+ * which reads as a flash — drop the leaving snapshot and keep the entering
+ * one static so the live page never blinks. */
+/* Image surfaces replace, they do not cross-fade: the old snapshot is the
+ * thumbnail (glass + accent ring) and fading it over the photo reads as an
+ * accent wash during entry and exit. Only the geometry moves. */
+::view-transition-old(composer-image),
+::view-transition-new(composer-image),
+::view-transition-old(transcript-image),
+::view-transition-new(transcript-image),
+::view-transition-old(sketch-stage),
+::view-transition-new(sketch-stage) {
+	animation: none;
+	mix-blend-mode: normal;
+}
+
+::view-transition-old(composer-image),
+::view-transition-old(transcript-image),
+::view-transition-old(sketch-stage) {
+	display: none;
+}
+
+html.gui-vt-surface-only::view-transition-old(root),
+:root.gui-vt-surface-only::view-transition-old(root) {
+	display: none;
+}
+
+html.gui-vt-surface-only::view-transition-new(root),
+:root.gui-vt-surface-only::view-transition-new(root) {
+	animation: none;
+	mix-blend-mode: normal;
+}
+
 .gui-composer-wrap {
 	transition: height 280ms var(--spring);
 	/* Anchor for the absolutely-positioned AskCard float layer (the ask card

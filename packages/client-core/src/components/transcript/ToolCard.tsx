@@ -73,7 +73,7 @@ export interface ToolCardProps {
 	taskCardStyle?: "swarm" | "classic";
 	/** Open the transcript-level full-size image preview (lightbox) at this
 	 *  tool's inline media; images are hoisted out of the folded card. */
-	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	onPreviewImage?(images: { src: string; alt: string }[], index: number, element?: HTMLElement | null): void;
 	/** Optional: the turn's picture only. A closed turn's reply renders text,
 	 *  but keeps its media row (the card body stays out) — see
 	 *  round-collapse's media exemption. */
@@ -171,7 +171,7 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 	// passes this when the text-only reply is a media row).
 	if (mediaOnly) {
 		return mediaItems.length > 0 ? (
-			<ImageCardStack items={mediaItems} host={host} onOpen={(idx, list) => onPreviewImage?.(list, idx)} />
+			<ImageCardStack items={mediaItems} host={host} onOpen={(idx, list, el) => onPreviewImage?.(list, idx, el)} />
 		) : null;
 	}
 	return (
@@ -195,7 +195,11 @@ export const ToolCard = memo(function ToolCard(props: ToolCardProps): ReactNode 
 				collapseWhenDone={!isArtifact}
 			/>
 			{mediaItems.length > 0 && (
-				<ImageCardStack items={mediaItems} host={host} onOpen={(idx, list) => onPreviewImage?.(list, idx)} />
+				<ImageCardStack
+					items={mediaItems}
+					host={host}
+					onOpen={(idx, list, el) => onPreviewImage?.(list, idx, el)}
+				/>
 			)}
 		</>
 	);

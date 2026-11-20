@@ -34,13 +34,44 @@ export function sharedSurfaceTransitionAllowed(): boolean {
  * class tells the dialog CSS to skip its own entrance while the browser owns
  * the geometry, and it leaves with the transition.
  */
-function beginTransition(doc: ViewTransitionDocument, update: () => void): { finished: Promise<void> } {
+function beginTransition(
+	doc: ViewTransitionDocument,
+	update: () => void,
+	classes: readonly string[],
+	onFinished?: () => void,
+): { finished: Promise<void> } {
 	document.documentElement.classList.add("gui-view-transition");
+	for (const name of classes) document.documentElement.classList.add(name);
 	const transition = doc.startViewTransition(() => flushSync(update));
 	void transition.finished.finally(() => {
 		document.documentElement.classList.remove("gui-view-transition");
+		for (const name of classes) document.documentElement.classList.remove(name);
+		onFinished?.();
 	});
 	return transition;
+}
+
+/** Options shared by every entry point: `surfaceOnly` drops the root
+ *  snapshots, so the surrounding page never cross-fades (a named surface
+ *  morphs alone). Without it a full-window transition reads as a flash. */
+export interface MorphOptions {
+	/** Drop the root snapshots (default for named-surface morphs: the page
+	 *  must never cross-fade, only the named surface moves). Pass false to
+	 *  keep the window cross-fade. */
+	surfaceOnly?: boolean;
+	/** Extra class on <html> for the transition window (per-scene naming). */
+	extraClass?: string;
+	/** Called once the browser has finished the transition (or cancelled it). */
+	onFinished?: () => void;
+}
+
+/** Classes for one transition window. Named-surface morphs default to
+ *  `surfaceOnly`: the root must never cross-fade, or the whole window flashes. */
+function transitionClasses(options: MorphOptions | undefined, surfaceOnlyDefault: boolean): string[] {
+	const classes: string[] = [];
+	if (options?.surfaceOnly ?? surfaceOnlyDefault) classes.push("gui-vt-surface-only");
+	if (options?.extraClass) classes.push(options.extraClass);
+	return classes;
 }
 
 /**
@@ -48,7 +79,12 @@ function beginTransition(doc: ViewTransitionDocument, update: () => void): { fin
  * shared rectangle. Falls back to a plain update where the API or motion is
  * unavailable, so the dialog keeps its ordinary entrance.
  */
-export function morphSurfaceFrom(element: Element | null, name: string, update: () => void): void {
+export function morphSurfaceFrom(
+	element: Element | null,
+	name: string,
+	update: () => void,
+	options?: MorphOptions,
+): void {
 	const doc = globalThis.document as ViewTransitionDocument | undefined;
 	if (!element || !doc?.startViewTransition || !sharedSurfaceTransitionAllowed()) {
 		update();
@@ -64,12 +100,17 @@ export function morphSurfaceFrom(element: Element | null, name: string, update: 
 	}
 	const previous = origin.style.viewTransitionName;
 	origin.style.viewTransitionName = name;
-	const transition = beginTransition(doc, () => {
-		// The new state must hold exactly one element with this name: the
-		// destination is what carries it now.
-		origin.style.viewTransitionName = previous;
-		update();
-	});
+	const transition = beginTransition(
+		doc,
+		() => {
+			// The new state must hold exactly one element with this name: the
+			// destination is what carries it now.
+			origin.style.viewTransitionName = previous;
+			update();
+		},
+		transitionClasses(options, true),
+		options?.onFinished,
+	);
 	void transition.finished.finally(() => {
 		origin.style.viewTransitionName = previous;
 	});
@@ -83,7 +124,13 @@ export function morphSurfaceFrom(element: Element | null, name: string, update: 
  * it, so the new state names exactly one element and the browser pairs the two
  * rectangles in the other direction.
  */
-export function morphSurfaceBack(from: Element | null, to: Element | null, name: string, update: () => void): void {
+export function morphSurfaceBack(
+	from: Element | null,
+	to: Element | null,
+	name: string,
+	update: () => void,
+	options?: MorphOptions,
+): void {
 	const doc = globalThis.document as ViewTransitionDocument | undefined;
 	if (!to || !doc?.startViewTransition || !sharedSurfaceTransitionAllowed()) {
 		update();
@@ -92,11 +139,16 @@ export function morphSurfaceBack(from: Element | null, to: Element | null, name:
 	const destination = to as HTMLElement;
 	const leaving = from as HTMLElement | null;
 	const previous = destination.style.viewTransitionName;
-	const transition = beginTransition(doc, () => {
-		if (leaving) leaving.style.viewTransitionName = "none";
-		destination.style.viewTransitionName = name;
-		update();
-	});
+	const transition = beginTransition(
+		doc,
+		() => {
+			if (leaving) leaving.style.viewTransitionName = "none";
+			destination.style.viewTransitionName = name;
+			update();
+		},
+		transitionClasses(options, true),
+		options?.onFinished,
+	);
 	void transition.finished.finally(() => {
 		destination.style.viewTransitionName = previous;
 		if (leaving) leaving.style.viewTransitionName = "";
@@ -109,11 +161,11 @@ export function morphSurfaceBack(from: Element | null, to: Element | null, name:
  * "shared container" half of Huawei's one-take: the container's bounds and its
  * children's movement read as one continuous change.
  */
-export function withViewTransition(update: () => void): void {
+export function withViewTransition(update: () => void, options?: MorphOptions): void {
 	const doc = globalThis.document as ViewTransitionDocument | undefined;
 	if (!doc?.startViewTransition || !sharedSurfaceTransitionAllowed()) {
 		update();
 		return;
 	}
-	beginTransition(doc, update);
+	beginTransition(doc, update, transitionClasses(options, false), options?.onFinished);
 }

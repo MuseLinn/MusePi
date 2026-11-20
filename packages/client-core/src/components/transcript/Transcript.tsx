@@ -33,6 +33,7 @@ import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
 import { fmtDuration, fmtTokens } from "../../lib/format";
 import { ircPresentation } from "../../lib/irc";
+import { morphSurfaceBack, morphSurfaceFrom, sharedSurfaceTransitionAllowed } from "../../lib/view-transition";
 import type { ToolRenderHost } from "../../tool-render";
 import { ImageLightbox } from "../image-lightbox";
 import { AsyncJobResultCard } from "./async-job-result";
@@ -773,7 +774,7 @@ interface EntryRowProps {
 	onSpeak?(text: string, messageId?: string): void;
 	onSaveImage?(text: string, element: HTMLElement | null): void | Promise<void>;
 	/** Open the full-size image preview lightbox (transcript-level state). */
-	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	onPreviewImage?(images: { src: string; alt: string }[], index: number, element?: HTMLElement | null): void;
 	/** Open the full summary for a compaction entry in the host UI. */
 	onOpenCompaction?(entry: Extract<SessionEntry, { type: "compaction" }>): void;
 	/** Advisor-card expansion for THIS entry (transcript-level state keyed by
@@ -926,7 +927,7 @@ function renderCustomMessage({
 	details: unknown;
 	display: boolean;
 	timestamp: string;
-	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	onPreviewImage?(images: { src: string; alt: string }[], index: number, element?: HTMLElement | null): void;
 	/** Advisor-card expansion (transcript-level, keyed by the entry id). */
 	advisorOpen?: boolean;
 	onToggleAdvisor?(): void;
@@ -1631,10 +1632,54 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	}, []);
 	// Image preview lightbox: full-size view of clicked message images
 	// (all images of the message form the gallery).
-	const [previewImg, setPreviewImg] = useState<{ items: { src: string; alt: string }[]; index: number } | null>(null);
-	const openPreview = useCallback(
-		(images: { src: string; alt: string }[], index: number) => setPreviewImg({ items: images, index }),
-		[],
+	const [previewImg, setPreviewImg] = useState<{
+		items: { src: string; alt: string }[];
+		index: number;
+		/** The clicked thumbnail, for the one-take open/close. */
+		originEl: HTMLElement | null;
+		/** WAAPI fallback rect when View Transitions are unavailable. */
+		originRect: { left: number; top: number; width: number; height: number } | null;
+	} | null>(null);
+	const previewImgRef = useRef(previewImg);
+	previewImgRef.current = previewImg;
+	const openPreview = useCallback((images: { src: string; alt: string }[], index: number, el?: HTMLElement | null) => {
+		const vt = sharedSurfaceTransitionAllowed();
+		const next = {
+			items: images,
+			index,
+			originEl: el ?? null,
+			originRect: vt ? null : (el?.getBoundingClientRect() ?? null),
+		};
+		if (el && vt) morphSurfaceFrom(el, "transcript-image", () => setPreviewImg(next), { surfaceOnly: true });
+		else setPreviewImg(next);
+	}, []);
+	const closePreview = useCallback(() => {
+		const prev = previewImgRef.current;
+		if (!prev) return;
+		const stage = document.querySelector<HTMLElement>("[data-image-stage]");
+		const origin = prev.originEl?.isConnected ? prev.originEl : null;
+		if (stage && origin && sharedSurfaceTransitionAllowed()) {
+			morphSurfaceBack(stage, origin, "transcript-image", () => setPreviewImg(null), { surfaceOnly: true });
+			return;
+		}
+		setPreviewImg(null);
+	}, []);
+	// Preview → board is one continuous move: the stage rect becomes the
+	// board's, and the lightbox leaves inside the same update (the old path
+	// closed the lightbox first, which started a second transition and made
+	// the two overlap).
+	const editFromPreview = useCallback(
+		(src: string) => {
+			if (!onEditImage) return;
+			const stage = document.querySelector<HTMLElement>("[data-image-stage]");
+			const open = (): void => {
+				setPreviewImg(null);
+				onEditImage(src);
+			};
+			if (stage) morphSurfaceFrom(stage, "sketch-stage", open, { surfaceOnly: true });
+			else open();
+		},
+		[onEditImage],
 	);
 	const firstCompactionIdx = useMemo(
 		() => (collapseCompacted ? entries.findIndex(e => e.type === "compaction") : -1),
@@ -2997,9 +3042,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			<ImageLightbox
 				items={previewImg?.items ?? []}
 				index={previewImg?.index ?? null}
-				onClose={() => setPreviewImg(null)}
+				originRect={previewImg?.originRect ?? null}
+				stageName={sharedSurfaceTransitionAllowed() ? "transcript-image" : undefined}
+				onClose={closePreview}
 				onIndexChange={i => setPreviewImg(prev => (prev ? { ...prev, index: i } : prev))}
-				onEdit={onEditImage}
+				onEdit={onEditImage ? editFromPreview : undefined}
 			/>
 			<QuoteHighlightLayer rootRef={rootRef} marks={quoteMarks} />
 		</div>

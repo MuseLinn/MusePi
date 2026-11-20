@@ -443,7 +443,9 @@ export function ImageLightbox({
 						aria-label={t("composer.sketch")}
 						title={t("composer.sketch")}
 						onClick={() => {
-							onClose();
+							// The host owns the handoff: closing here first started a
+							// second transition and the two overlapped. A host that wants
+							// the one-take closes the lightbox inside the same update.
 							onEdit(shownItem.src);
 						}}
 					>

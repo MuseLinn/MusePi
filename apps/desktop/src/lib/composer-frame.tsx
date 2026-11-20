@@ -167,13 +167,16 @@ function SortableAttachmentChip({
 					tabIndex={0}
 					// Close-time re-measure anchor for the lightbox morph.
 					data-attach-id={a.id}
-					title={a.sketch ? t("composer.sketch") : t("settings.previewImage")}
-					onClick={e => (a.sketch ? onEditSketch(a.id) : onPreview(a.id, e.currentTarget))}
+					title={a.sketch ? `${t("settings.previewImage")} · ${t("composer.sketch")}` : t("settings.previewImage")}
+					// Preview first, always — a sketch chip opens the same lightbox, where
+					// the edit button (or a double-click) reopens the board. Jumping
+					// straight into the editor made one scene behave unlike the other.
+					onClick={e => onPreview(a.id, e.currentTarget)}
+					onDoubleClick={a.sketch ? () => onEditSketch(a.id) : undefined}
 					onKeyDown={e => {
 						if (e.key === "Enter" || e.key === " ") {
 							e.preventDefault();
-							if (a.sketch) onEditSketch(a.id);
-							else onPreview(a.id, e.currentTarget);
+							onPreview(a.id, e.currentTarget);
 						}
 					}}
 				/>
@@ -441,7 +444,7 @@ export function ComposerFrame({
 		};
 		// The origin is the chip itself, so the thumbnail must carry the shared
 		// name for the old snapshot; the stage carries it on the other side.
-		if (el && vtAllowed) morphSurfaceFrom(el, "composer-image", () => setPreview(next));
+		if (el && vtAllowed) morphSurfaceFrom(el, "composer-image", () => setPreview(next), { surfaceOnly: true });
 		else setPreview(next);
 	};
 	// Close-time re-measure of the chip the lightbox is currently showing.
@@ -453,7 +456,7 @@ export function ComposerFrame({
 		const trigger = el?.isConnected ? el : null;
 		const stage = document.querySelector<HTMLElement>("[data-image-stage]");
 		if (trigger && stage && vtAllowed) {
-			morphSurfaceBack(stage, trigger, "composer-image", () => setPreview(null));
+			morphSurfaceBack(stage, trigger, "composer-image", () => setPreview(null), { surfaceOnly: true });
 			return;
 		}
 		setPreview(p =>
@@ -592,8 +595,15 @@ export function ComposerFrame({
 			onEdit={
 				onEditImage
 					? src => {
-							setPreview(null);
-							onEditImage(src);
+							const stage = document.querySelector<HTMLElement>("[data-image-stage]");
+							const open = (): void => {
+								setPreview(null);
+								onEditImage(src);
+							};
+							// Preview → board is a shared-surface move too: the browser pairs
+							// the stage rect with the board's (gui-sketch-board names itself).
+							if (stage) morphSurfaceFrom(stage, "sketch-stage", open, { surfaceOnly: true });
+							else open();
 						}
 					: undefined
 			}
