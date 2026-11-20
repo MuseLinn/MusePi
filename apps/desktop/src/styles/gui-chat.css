@@ -6307,6 +6307,20 @@ body.gui-resizing .gui-pane-right {
 	grid-template-columns: 64px minmax(0, 1fr) 28px;
 }
 
+/* A railed row with an empty gutter reserves the ORB column — the shared
+ * transcript's version of that rule is 40px, but this surface's orb column is
+ * 64px. Left unscoped, the activity fold header (which carries the orb) sat 24px
+ * to the right of every following reply row that merely reserved the column:
+ * one turn, two left edges. Higher specificity than the base rule on purpose. */
+.gui-transcript .tr-row--assistant.tr-row--railed:has(> .tr-gutter:empty) {
+	grid-template-columns: 64px minmax(0, 1fr) 28px;
+}
+
+.gui-transcript .tr-row--assistant.tr-row--railed:has(> .tr-gutter:empty) .tr-body,
+.gui-transcript .tr-row--assistant.tr-row--railed:has(> .tr-gutter:empty) .tr-actions {
+	grid-column: 2;
+}
+
 /* Keep the side-by-side avatar layout in narrow windows (mini chat),
  * where the shared transcript collapses rows to a vertical stack. */
 @media (max-width: 640px) {

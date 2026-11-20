@@ -66,6 +66,18 @@
 	 * a second containment layer must not disagree with it about height. */
 }
 
+.tr-row > .tr-gutter {
+	grid-column: 1;
+}
+
+/* Explicit column, not auto-placement: a folded round's reply row can render
+ * with an empty or hidden gutter, and auto-placement then put the answer in
+ * column 1 (flush under the avatar) with the rest of the row blank — the
+ * "活动 present → reply indented" report. The body always owns column 2. */
+.tr-row > .tr-body {
+	grid-column: 2;
+}
+
 .tr-gutter {
 	padding-top: 3px;
 	text-align: right;
@@ -4097,28 +4109,38 @@ a.tr-tool-search-title:hover {
 	 * the message alignment for free. */
 	width: 100%;
 	margin: 0;
-	padding: 4px 10px;
-	border: 1px solid var(--border, color-mix(in oklab, var(--fg) 12%, transparent));
-	border-radius: var(--radius-lg);
+	/* Kimi Code parity: the fold row is a quiet line inside the message column,
+	 * not a bordered pill. Only hover paints, and the glyph is a plain chevron
+	 * with a 18px hit box (no border, no fill). */
+	padding: 3px 6px;
+	margin-left: -6px;
+	border: 0;
+	border-radius: var(--radius-md);
 	white-space: nowrap;
 	overflow: hidden;
-	background: color-mix(in oklab, var(--color-surface-raised, var(--bg-overlay, #222)) 80%, transparent);
+	background: transparent;
 	color: var(--color-text-muted, var(--text-muted, var(--fg-muted)));
 	font-size: 12px;
 	text-align: left;
 	cursor: pointer;
-	transition: background 140ms ease, border-color 140ms ease;
+	transition: background 140ms ease, color 140ms ease;
 }
 .tr-round-fold:hover,
 .tr-run-summary:hover {
-	background: color-mix(in oklab, var(--color-accent, var(--accent, #d9a441)) 10%, var(--color-surface-raised, var(--bg-overlay, #222)));
-	border-color: color-mix(in oklab, var(--color-accent, var(--accent, #d9a441)) 45%, transparent);
+	background: color-mix(in oklab, var(--color-text, var(--fg)) 6%, transparent);
+	color: var(--color-text, var(--text, var(--fg)));
+}
+.tr-round-fold:focus-visible,
+.tr-run-summary:focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--color-accent, var(--accent, #d9a441)) 65%, transparent);
+	outline-offset: 1px;
 }
 /* 工具调用汇总 run summary: the chevron rotates with the run's expand state. */
 .tr-run-summary--open .tr-round-fold-icon svg {
 	transform: rotate(90deg);
 }
-/* Boxed glyph, openchamber parity: the box IS the expand affordance. */
+/* Plain chevron in an 18px hit box (Kimi Code parity): the rotation is the
+ * affordance, and the row's hover is the state that reveals it. */
 .tr-round-fold-icon {
 	display: inline-flex;
 	align-items: center;
@@ -4126,9 +4148,7 @@ a.tr-tool-search-title:hover {
 	flex-shrink: 0;
 	width: 18px;
 	height: 18px;
-	border: 1px solid var(--border, color-mix(in oklab, var(--fg) 14%, transparent));
-	border-radius: var(--radius-sm);
-	background: color-mix(in oklab, var(--color-text, var(--fg)) 6%, transparent);
+	color: var(--color-text-faint, var(--text-faint, var(--fg-faint)));
 }
 .tr-round-fold-icon svg {
 	transition: transform 180ms var(--spring, cubic-bezier(0.22, 1, 0.36, 1));
@@ -4147,8 +4167,8 @@ a.tr-tool-search-title:hover {
 /* 活动 label: the section's name, bold like openchamber's. */
 .tr-round-fold-label {
 	flex-shrink: 0;
-	font-weight: 650;
-	color: var(--color-text, var(--text, var(--fg)));
+	font-weight: 550;
+	color: var(--color-text-muted, var(--text-muted, var(--fg-muted)));
 }
 /* Inter-segment dot for the 更改 · 探索 · 命令 chain. */
 .tr-round-fold-sep {

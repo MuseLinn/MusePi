@@ -4975,7 +4975,12 @@ body.gui-resizing {
 	 * overflowed the 30px strip and a vertical scrollbar appeared (user
 	 * report 2026-09-16). Horizontal-only. */
 	overflow-y: hidden;
+	/* No visible horizontal scrollbar (dsh parity): the row fits by shrinking
+	 * the tabs and ellipsizing their titles; scrolling stays available for the
+	 * pathological case but never paints a track under the strip. */
 	scrollbar-width: none;
+	-ms-overflow-style: none;
+	overscroll-behavior-x: contain;
 }
 
 .gui-surface-tabs::-webkit-scrollbar {
@@ -4987,8 +4992,11 @@ body.gui-resizing {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
+	/* Shrink-to-fit (dsh parity): four surface tabs plus the header controls
+	 * must fit the narrowest right pane without a scrollbar, so the floor is a
+	 * readable glyph+two characters, not a fixed 96px per tab. */
 	flex: 1 1 auto;
-	min-width: 96px;
+	min-width: 48px;
 	max-width: 200px;
 	height: 26px;
 	padding: 0 8px;
