@@ -1,14 +1,21 @@
+import type { ReactNode } from "react";
 import { WelcomeBackdrop } from "../../lib/welcome-backdrop";
 
 /**
- * `conversation.hero.frame` occupant: the dot-matrix brand animation behind
- * the empty-state hero.
+ * `conversation.hero.frame` occupant (hoc seat, dsh `conversation.hero.frame`
+ * parity): the official whale there paints behind the home content and plays
+ * on blank clicks; this one paints the dot-matrix brand animation behind the
+ * hero and renders the host content untouched.
  *
- * The host renders this seat as a background layer (no `children` yet, so the
- * contribution is additive). A later revision can pass the hero body as
- * `children` and wrap it — the seat contract already declares `hoc` for that;
- * this component would then render the backdrop plus `children` untouched.
+ * The fragment adds no box, so the hero's own flex layout keeps the children
+ * as direct flex items. A contribution that dropped `children` would blank the
+ * whole welcome surface — the seat contract requires rendering it as-is.
  */
-export default function HeroFrame(): React.JSX.Element | null {
-	return <WelcomeBackdrop />;
+export default function HeroFrame({ children }: { children?: ReactNode }): React.JSX.Element {
+	return (
+		<>
+			<WelcomeBackdrop />
+			{children}
+		</>
+	);
 }
