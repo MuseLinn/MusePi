@@ -3729,7 +3729,7 @@ export function ChatView({
 										? "gui-composer-wrap gui-composer-wrap--bottom-anchor flex min-h-0 flex-col px-5 pb-3"
 										: store
 											? "gui-composer-wrap gui-composer-wrap--floating flex flex-col px-5 pb-1"
-											: "gui-composer-wrap gui-composer-wrap--hero flex min-h-0 flex-1 flex-col justify-center pb-1"
+											: "gui-composer-wrap gui-composer-wrap--hero flex flex-col pb-1"
 								}
 							>
 								{/* Jump-back dock (TUI navigateTree parity, 2026-08-25):

@@ -907,6 +907,9 @@ html.gui-vt-surface-only::view-transition-new(root),
  * hero keeps its mid-surface position inside the persistent host. */
 .gui-composer-wrap--hero {
 	position: relative;
+	/* auto block margins centre it inside the host's flex column without
+	 * stretching: the card keeps its natural height, the seat does the math. */
+	margin-block: auto;
 }
 
 /* ── Floating composer (openchamber parity) ─────────────────────────────
