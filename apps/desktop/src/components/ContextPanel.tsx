@@ -403,7 +403,10 @@ export function ContextPanel({
 	 *  has loaded. Nonce-bumped by ChatView so a repeat re-opens. */
 	planShowRequest?: { directory: string; id: string; title: string; nonce: number } | null;
 }): ReactNode {
-	const cwd = snap?.state?.cwd ?? cwdOverride ?? "";
+	// `??` is not enough here: the store's view always carries a cwd STRING, so a
+	// session opened without one hands us "" — a non-null value that would
+	// shadow the host's project cwd and leave the files surface unopenable.
+	const cwd = snap?.state?.cwd || cwdOverride || "";
 	const browserSessionId = snap?.sessionId ?? null;
 	const subagentRoster = useSubagentRoster(rpc, browserSessionId, open);
 	const rosterAgents = useMemo(
@@ -1167,6 +1170,18 @@ export function ContextPanel({
 		panelTabs.reorder(active, over);
 	};
 
+	/** A body this build cannot render — an unknown surface id or one whose
+	 *  provider is not installed. Says so instead of borrowing another
+	 *  surface's content (the tab's own label would otherwise lie). */
+	const surfaceUnavailable = (): ReactNode => (
+		<div className="gui-pane-tab-empty">
+			<span className="gui-pane-tab-empty-icon">
+				<Icon name="layout-column" />
+			</span>
+			<p className="gui-pane-tab-empty-title">{t("tools.bundlePluginDisabled")}</p>
+		</div>
+	);
+
 	/** Panel body for ONE column's displayed tab. Both split columns and
 	 *  the single-column layout render through here, so a surface looks
 	 *  identical in either shape. The browser singleton renders only in
@@ -1208,14 +1223,24 @@ export function ContextPanel({
 			)
 		) : bodyView === "git" || bodyView === "diff" || bodyView === "pr" ? (
 			<GitPanel rpc={rpc} cwd={cwd} sessionId={snap?.sessionId ?? null} />
-		) : bodyView === "files" && cwd ? (
+		) : bodyView === "files" ? (
 			/* FilePane is a full-height flex column whose file list owns the
 			 * scroll. Wrapping it in the feather-scroll (padding + overflow-y)
 			 * made the 100%-height child overflow that padded box, so the tab
 			 * painted a second scrollbar beside the list's own. The wrapper
 			 * keeps the shared gutter but never scrolls. */
 			<div className="flex min-h-0 flex-1 flex-col px-2.5 pb-3 pt-1.5">
-				{fileWorkspaceComponent ? (
+				{!cwd ? (
+					/* A workspace is the files surface's whole precondition. Without
+					 * one there is no tree to show, and falling through to another
+					 * surface's body would paint the wrong content under this tab. */
+					<div className="gui-pane-tab-empty">
+						<span className="gui-pane-tab-empty-icon">
+							<Icon name="folder" />
+						</span>
+						<p className="gui-pane-tab-empty-title">{t("settings.noWorkspace")}</p>
+					</div>
+				) : fileWorkspaceComponent ? (
 					<SlotComponentMount
 						item={fileWorkspaceComponent}
 						rpc={rpc}
@@ -1346,7 +1371,11 @@ export function ContextPanel({
 				activeSessionId={snap?.sessionId ?? null}
 				onOpenSession={onOpenSession}
 			/>
-		) : (
+		) : bodyView === "notes" ||
+			bodyView === "artifacts" ||
+			bodyView === "agents" ||
+			bodyView === "context" ||
+			(typeof bodyView === "string" && bodyView.startsWith("ext:")) ? (
 			<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
 				{bodyView === "notes" ? (
 					<NotesPane rpc={rpc} cwd={cwd} showPlanRequest={planShowRequest} />
@@ -1402,99 +1431,105 @@ export function ContextPanel({
 									panelTab={bodyTab ?? undefined}
 								/>
 							</FadeScroll>
-						) : null;
+						) : (
+							surfaceUnavailable()
+						);
 					})()
-				) : !snap?.sessionId ? (
-					/* No session: every readout here is session-scoped, so the
-					 * tab points at the session list instead of painting zeros. */
-					<div className="gui-pane-tab-empty">
-						<span className="gui-pane-tab-empty-icon">
-							<Icon name="donut-chart" />
-						</span>
-						<p className="gui-pane-tab-empty-title">{t("settings.selectSession")}</p>
-						<p className="gui-pane-tab-empty-hint">{t("settings.contextEmptyHint")}</p>
-					</div>
-				) : (
-					<div className="px-1 py-2">
-						{/* Context-window usage: live tokens/capacity bar (product
-						 * parity with the header ring — same RPC). */}
-						{ctxUsage && (
-							<>
-								<div className="gui-group-label px-2 pb-1 pt-1">{t("settings.contextWindow2")}</div>
-								<div className="px-2">
-									<div className="gui-ctx-usage-row">
-										<span className="text-[12px] tabular-nums opacity-80">
-											{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
-										</span>
-										<span className="text-[12px] tabular-nums opacity-70">
-											{Math.round(ctxUsage.percent)}%
-										</span>
-									</div>
-									<div className="gui-ctx-usage-track">
-										<div
-											className={`gui-ctx-usage-bar${ctxUsage.percent > 90 ? " gui-ctx-usage-bar--hot" : ""}`}
-											style={{ width: `${Math.min(100, Math.max(2, ctxUsage.percent))}%` }}
-										/>
-									</div>
-								</div>
-							</>
-						)}
-						{/* Cumulative token usage: per-bucket totals over the
-						 * session's assistant messages, plus how much of the
-						 * input was served from cache. */}
-						{usageTotals.totalTokens > 0 && (
-							<>
-								<div className="gui-group-label px-2 pb-1 pt-3">{t("sessionInfo.tokens")}</div>
-								<div className="grid grid-cols-2 gap-1.5 px-2">
-									<div className="gui-ctx-stat">
-										<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.input)}</div>
-										<div className="gui-ctx-stat-l">{t("sessionInfo.input")}</div>
-									</div>
-									<div className="gui-ctx-stat">
-										<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.output)}</div>
-										<div className="gui-ctx-stat-l">{t("sessionInfo.output")}</div>
-									</div>
-									<div className="gui-ctx-stat">
-										<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.cacheRead)}</div>
-										<div className="gui-ctx-stat-l">{t("sessionInfo.cacheRead")}</div>
-									</div>
-									<div className="gui-ctx-stat">
-										<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.cacheWrite)}</div>
-										<div className="gui-ctx-stat-l">{t("sessionInfo.cacheWrite")}</div>
-									</div>
-								</div>
-								<div className="flex items-baseline justify-between gap-2 px-2 pt-1.5 text-[12px]">
-									<span className="text-[var(--color-text-muted)]">{t("sessionInfo.total")}</span>
-									<span className="tabular-nums">{fmtTokens(usageTotals.totalTokens)}</span>
-								</div>
-								{cacheHitRate !== null && (
-									<div className="flex items-baseline justify-between gap-2 px-2 pt-1 text-[12px]">
-										<span className="text-[var(--color-text-muted)]">{t("sessionInfo.cacheHitRate")}</span>
-										<span className="tabular-nums">{cacheHitRate.toFixed(1)}%</span>
-									</div>
-								)}
-							</>
-						)}
-						{/* Session stats + spend: message count, run time and
-						 * what the session has cost so far. */}
-						<div className="gui-group-label px-2 pb-1 pt-3">{t("general.stats")}</div>
-						<div className="grid grid-cols-2 gap-1.5 px-2">
-							<div className="gui-ctx-stat">
-								<div className="gui-ctx-stat-v">{messageCount}</div>
-								<div className="gui-ctx-stat-l">{t("general.messages")}</div>
-							</div>
-							<div className="gui-ctx-stat">
-								<div className="gui-ctx-stat-v">{runMinutes}</div>
-								<div className="gui-ctx-stat-l">{t("general.minutes")}</div>
-							</div>
+				) : bodyView === "context" ? (
+					!snap?.sessionId ? (
+						/* No session: every readout here is session-scoped, so the
+						 * tab points at the session list instead of painting zeros. */
+						<div className="gui-pane-tab-empty">
+							<span className="gui-pane-tab-empty-icon">
+								<Icon name="donut-chart" />
+							</span>
+							<p className="gui-pane-tab-empty-title">{t("settings.selectSession")}</p>
+							<p className="gui-pane-tab-empty-hint">{t("settings.contextEmptyHint")}</p>
 						</div>
-						{usageTotals.cost > 0 && (
-							<div className="flex items-baseline justify-between gap-2 px-2 pt-1.5 text-[12px]">
-								<span className="text-[var(--color-text-muted)]">{t("sessionInfo.spend")}</span>
-								<span className="tabular-nums">{fmtCost(usageTotals.cost)}</span>
+					) : (
+						<div className="px-1 py-2">
+							{/* Context-window usage: live tokens/capacity bar (product
+							 * parity with the header ring — same RPC). */}
+							{ctxUsage && (
+								<>
+									<div className="gui-group-label px-2 pb-1 pt-1">{t("settings.contextWindow2")}</div>
+									<div className="px-2">
+										<div className="gui-ctx-usage-row">
+											<span className="text-[12px] tabular-nums opacity-80">
+												{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
+											</span>
+											<span className="text-[12px] tabular-nums opacity-70">
+												{Math.round(ctxUsage.percent)}%
+											</span>
+										</div>
+										<div className="gui-ctx-usage-track">
+											<div
+												className={`gui-ctx-usage-bar${ctxUsage.percent > 90 ? " gui-ctx-usage-bar--hot" : ""}`}
+												style={{ width: `${Math.min(100, Math.max(2, ctxUsage.percent))}%` }}
+											/>
+										</div>
+									</div>
+								</>
+							)}
+							{/* Cumulative token usage: per-bucket totals over the
+							 * session's assistant messages, plus how much of the
+							 * input was served from cache. */}
+							{usageTotals.totalTokens > 0 && (
+								<>
+									<div className="gui-group-label px-2 pb-1 pt-3">{t("sessionInfo.tokens")}</div>
+									<div className="grid grid-cols-2 gap-1.5 px-2">
+										<div className="gui-ctx-stat">
+											<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.input)}</div>
+											<div className="gui-ctx-stat-l">{t("sessionInfo.input")}</div>
+										</div>
+										<div className="gui-ctx-stat">
+											<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.output)}</div>
+											<div className="gui-ctx-stat-l">{t("sessionInfo.output")}</div>
+										</div>
+										<div className="gui-ctx-stat">
+											<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.cacheRead)}</div>
+											<div className="gui-ctx-stat-l">{t("sessionInfo.cacheRead")}</div>
+										</div>
+										<div className="gui-ctx-stat">
+											<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.cacheWrite)}</div>
+											<div className="gui-ctx-stat-l">{t("sessionInfo.cacheWrite")}</div>
+										</div>
+									</div>
+									<div className="flex items-baseline justify-between gap-2 px-2 pt-1.5 text-[12px]">
+										<span className="text-[var(--color-text-muted)]">{t("sessionInfo.total")}</span>
+										<span className="tabular-nums">{fmtTokens(usageTotals.totalTokens)}</span>
+									</div>
+									{cacheHitRate !== null && (
+										<div className="flex items-baseline justify-between gap-2 px-2 pt-1 text-[12px]">
+											<span className="text-[var(--color-text-muted)]">{t("sessionInfo.cacheHitRate")}</span>
+											<span className="tabular-nums">{cacheHitRate.toFixed(1)}%</span>
+										</div>
+									)}
+								</>
+							)}
+							{/* Session stats + spend: message count, run time and
+							 * what the session has cost so far. */}
+							<div className="gui-group-label px-2 pb-1 pt-3">{t("general.stats")}</div>
+							<div className="grid grid-cols-2 gap-1.5 px-2">
+								<div className="gui-ctx-stat">
+									<div className="gui-ctx-stat-v">{messageCount}</div>
+									<div className="gui-ctx-stat-l">{t("general.messages")}</div>
+								</div>
+								<div className="gui-ctx-stat">
+									<div className="gui-ctx-stat-v">{runMinutes}</div>
+									<div className="gui-ctx-stat-l">{t("general.minutes")}</div>
+								</div>
 							</div>
-						)}
-					</div>
+							{usageTotals.cost > 0 && (
+								<div className="flex items-baseline justify-between gap-2 px-2 pt-1.5 text-[12px]">
+									<span className="text-[var(--color-text-muted)]">{t("sessionInfo.spend")}</span>
+									<span className="tabular-nums">{fmtCost(usageTotals.cost)}</span>
+								</div>
+							)}
+						</div>
+					)
+				) : (
+					surfaceUnavailable()
 				)}
 				{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
 				 * 挂内容区末尾,随面板滚动。 */}
@@ -1502,6 +1537,11 @@ export function ContextPanel({
 					<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} sessionId={snap?.sessionId} cwd={cwd} />
 				</div>
 			</FadeScroll>
+		) : (
+			/* Unknown surface (a stale persisted tab, or a provider this build
+			 * no longer ships): the strip labels the tab, so the body must say
+			 * why it is blank — never paint another surface's readings. */
+			surfaceUnavailable()
 		);
 
 	const surfaceTabVisual = (tab: PanelTab) => {

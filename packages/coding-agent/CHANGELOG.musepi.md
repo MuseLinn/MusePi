@@ -6,6 +6,8 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 - **欢迎页与会话共用同一个输入框宿主**：输入框不再分别嵌在两张卡片里，而是挂在场景层的常驻宿主上、按当前卡片实测定位（会话信息侧栏收窄列宽时也跟随）。欢迎 ⇄ 会话只移动这一个节点（240ms translate FLIP），卡片在它周围交叉淡化；草稿、附件与焦点留在同一个节点上，不会因为换场景重挂。场景 View Transition 与两套 rect 缓存随之下线。
   - EN: Welcome and session now share one composer host. The input no longer lives inside each card: it hangs off a persistent host above the scenes layer, positioned from the active card's measured box (so the session-info column narrowing is followed). A welcome ⇄ session switch moves that single node with a 240ms translate FLIP while the cards cross-fade around it; the draft, attachments and focus stay on the same node instead of remounting with the scene. The scene View Transition and both cached frame rects are gone with it.
+- **右侧栏「文件」标签不再显示上下文读数**：打开缺少工作区路径的会话时（例如历史会话的快照没有 `cwd`），「文件」标签会落到上下文面板的兜底分支——标签写着「文件」，内容却是上下文窗口与 Token 统计。现在会话 cwd 为空会回退到宿主项目目录，「文件」表面真正没有工作区时显示自己的「未关联工作区」空态；上下文读数只属于「上下文」标签，未知或缺少前置条件的表面一律显示显式空态，不再借用其他表面的内容。
+  - EN: The right sidebar's Files tab no longer shows the context readouts. Opening a session whose snapshot carries no workspace path (a history session without `cwd`, for example) made the Files tab fall through to the context body's catch-all branch — the tab said 文件 while the body showed the context window and token stats. The session cwd now falls back to the host's project directory, the Files surface shows its own "No workspace" empty state when there really is none, and the context readouts belong to the Context tab only: an unknown surface, or one whose precondition is unmet, shows an explicit empty state instead of borrowing another surface's content.
 
 ## [0.7.7] - 2026-11-20
 

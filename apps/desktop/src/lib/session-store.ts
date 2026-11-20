@@ -314,10 +314,16 @@ export class GuiSessionStore {
 		hooks: SessionGapHooks = {},
 	) {
 		this.#sessionId = sessionId;
-		this.#cwd = cwd;
+		// The daemon's snapshot carries the session cwd in `state`; the separate
+		// argument is the host's own resolution (welcome scene / provider cwd).
+		// Either source may be absent, so take the first non-empty one: an empty
+		// string here is frozen into the view, and every cwd-keyed surface (files,
+		// git, notes, artifacts) would then open blank for the session's lifetime.
+		this.#cwd = cwd || snapshot.state?.cwd || "";
 		this.#hooks = hooks;
 		this.#view =
-			MaterializedView.fromSnapshot(sessionId, cwd, snapshot) ?? MaterializedView.replay(sessionId, cwd, []);
+			MaterializedView.fromSnapshot(sessionId, this.#cwd, snapshot) ??
+			MaterializedView.replay(sessionId, this.#cwd, []);
 		// Merge the daemon-recorded totals (rounds completed while this
 		// session was not subscribed) into the GUI-lifetime registry.
 		const merged = roundDurationsFor(sessionId);
