@@ -2077,7 +2077,12 @@ html.gui-vt-surface-only::view-transition-new(root),
 	overflow-x: auto;
 	overflow-y: hidden;
 	padding: 2px 4px;
+	/* No painted horizontal scrollbar: the row fits by shrinking its tabs and
+	 * ellipsizing the titles. Scrolling stays for the pathological case but
+	 * never draws a track under the header. */
 	scrollbar-width: none;
+	-ms-overflow-style: none;
+	overscroll-behavior-x: contain;
 }
 
 .gui-session-tabs-scroll::-webkit-scrollbar {
@@ -2086,8 +2091,12 @@ html.gui-vt-surface-only::view-transition-new(root),
 
 .gui-session-tab-slot {
 	display: flex;
-	flex-shrink: 0;
-	min-width: 0;
+	/* Shrink-to-fit instead of a fixed 176px each: three headers used to total
+	 * more than the strip and the row scrolled. Tabs now share the width down to
+	 * a readable floor, and only a genuinely crowded set scrolls (silently). */
+	flex: 1 1 auto;
+	min-width: 72px;
+	max-width: 176px;
 }
 
 .gui-session-tab-slot--dragging {
@@ -2099,7 +2108,7 @@ html.gui-vt-surface-only::view-transition-new(root),
 	position: relative;
 	display: flex;
 	height: 28px;
-	width: 176px;
+	width: 100%;
 	min-width: 0;
 	align-items: center;
 	gap: 4px;
