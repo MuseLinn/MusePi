@@ -1,4 +1,4 @@
-import { BlurText, composerPlaceholder, DotMatrixMark, t } from "@musepi/client-core";
+import { BlurText, composerPlaceholder, t } from "@musepi/client-core";
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
 import { ComposerEditor } from "@musepi/client-core/src/components/composer/ComposerEditor";
 import {
@@ -44,6 +44,7 @@ import { clampThinkingChipLevel } from "../lib/thinking-chip";
 import { isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import type { SttSubmitTrigger } from "../lib/voice";
+import { WelcomeBackdrop } from "../lib/welcome-backdrop";
 import {
 	readWelcomeGreeting,
 	resolveWelcomeGreeting,
@@ -712,24 +713,6 @@ export function HeroComposer({
 		requestAnimationFrame(() => autosize(taRef.current));
 		requestAnimationFrame(() => taRef.current?.focus());
 	};
-	// Dot-matrix brand backdrop pref (设置 → 常规 toggle + custom text,
-	// musepi-gui-dotmatrix / musepi-gui-dotmatrix-text).
-	const [dotMatrixOn, setDotMatrixOn] = useState(() => localStorage.getItem("musepi-gui-dotmatrix") !== "0");
-	const [dotMatrixText, setDotMatrixText] = useState(
-		() => localStorage.getItem("musepi-gui-dotmatrix-text") ?? "MusePi",
-	);
-	useEffect(() => {
-		const on = (): void => {
-			setDotMatrixOn(localStorage.getItem("musepi-gui-dotmatrix") !== "0");
-			setDotMatrixText(localStorage.getItem("musepi-gui-dotmatrix-text") || "MusePi");
-		};
-		window.addEventListener("musepi-dotmatrix-changed", on);
-		window.addEventListener("storage", on);
-		return () => {
-			window.removeEventListener("musepi-dotmatrix-changed", on);
-			window.removeEventListener("storage", on);
-		};
-	}, []);
 	const [welcomeGreeting, setWelcomeGreeting] = useState(readWelcomeGreeting);
 	useEffect(() => {
 		const onChanged = (event: Event): void => {
@@ -1370,15 +1353,17 @@ export function HeroComposer({
 				className="gui-welcome relative flex h-full flex-1 flex-col items-center justify-center overflow-hidden px-8"
 				data-focused={focused ? "1" : undefined}
 			>
-				{/* Interactive dot-matrix brand backdrop (kimi-style reference):
-				 * "MusePi" rasterized into a breathing dot grid with colored
-				 * accents, feather edge and click ripples; replaces the static
-				 * π watermark. Toggle lives in 设置 → 常规 (musepi-gui-dotmatrix). */}
-				{dotMatrixOn && <DotMatrixMark text={dotMatrixText || "MusePi"} className="gui-welcome-mark" />}
-				{/* conversation.hero.frame 座位槽：欢迎区装饰层（背景/装饰），
-				 * 不接管宿主内容、不拦指针；无贡献时零渲染。 */}
+				{/* conversation.hero.frame 座位槽：欢迎区背景层（装饰动画）。
+				 * 点阵品牌动画现在由内置品牌插件贡献（dsh 的鲸鱼同形），
+				 * 宿主保留同构回退——插件停用或编译失败也不会丢背景。
+				 * 该层不拦指针；点阵的涟漪走 window 捕获监听，与层无关。 */}
 				<div className="pointer-events-none absolute inset-0 z-0">
-					<SlotComponentHost rpc={rpc} slot={HERO_FRAME_SLOT} cwd={project ?? undefined} />
+					<SlotComponentHost
+						rpc={rpc}
+						slot={HERO_FRAME_SLOT}
+						cwd={project ?? undefined}
+						fallback={<WelcomeBackdrop />}
+					/>
 				</div>
 				<div className="relative z-10 flex w-full max-w-[720px] flex-col items-center gui-welcome-inner">
 					{/* Workspace picker: dropdown list attached
