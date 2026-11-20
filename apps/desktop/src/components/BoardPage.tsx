@@ -1,8 +1,13 @@
-import { isTopModal, SpotlightCard, t, useModalFocus } from "@musepi/client-core";
+import { isTopModal, registerTranslations, SpotlightCard, t, tLoose, useModalFocus } from "@musepi/client-core";
 import { WidgetErrorBoundary } from "@musepi/client-core/src/widgets/error-boundary";
 import { WidgetFit } from "@musepi/client-core/src/widgets/fit";
 import { setWidgetResourceResolver, WidgetScopeContext } from "@musepi/client-core/src/widgets/html";
-import { type BoardWidget, useWidgetRegistryVersion, widgetDef } from "@musepi/client-core/src/widgets/registry";
+import {
+	type BoardWidget,
+	useWidgetRegistryVersion,
+	type WidgetDef,
+	widgetDef,
+} from "@musepi/client-core/src/widgets/registry";
 import { hasTask, type WidgetTask } from "@musepi/client-core/src/widgets/task";
 import {
 	executeWidgetTask,
@@ -22,6 +27,7 @@ import {
 	ensureBuiltinSeeds,
 	GAP,
 	type Ghost,
+	legacyWidgetData,
 	loadBoards,
 	MAX_H,
 	MIN_H,
@@ -33,9 +39,11 @@ import {
 	restoreBuiltinBoards,
 	SNAP_H,
 	SNAP_W,
+	sampleTag,
 	sanitizeBoard,
 	snap,
 	tickerFxPatch,
+	upgradeSampleWidget,
 } from "../lib/board-model";
 import { tapFeedback } from "../lib/haptic";
 import { useFloatingMenu } from "../lib/use-floating-menu";
@@ -57,6 +65,53 @@ import { WorkspacePageHeader } from "./WorkspacePageHeader";
  * push, predictive ghost, hover menu (放大 / 删除), SpotlightCard glow,
  * and localStorage persistence. Legacy cell-layout data migrates on load.
  */
+
+/**
+ * Shell-owned copy for the sample-card upgrade affordance. The core
+ * translation map is a frozen client-core dependency and this feature lives
+ * entirely in the board shell, so the strings register through the same
+ * runtime seam `apps/desktop/src/i18n/*` uses.
+ */
+const zhBoardSamples = {
+	"settings.widgetMakeInteractive": "换成可交互",
+	"settings.widgetMakeInteractiveHint": "把这张静态示例换成可操作的版本；原页面会保留在卡片数据里",
+} as const;
+registerTranslations("zh-CN", zhBoardSamples);
+registerTranslations("en-US", {
+	"settings.widgetMakeInteractive": "Make interactive",
+	"settings.widgetMakeInteractiveHint":
+		"Replace this static sample with a working version; the original page stays in the card data",
+} as const satisfies Record<keyof typeof zhBoardSamples, string>);
+
+/** The renderer and data a card draws with. Retired canned types fall back to
+ *  their sample face at render time (never rewriting the stored type), so a
+ *  plugin that registers the type later still takes precedence. */
+function resolveBoardWidget(w: BoardWidget): { def: WidgetDef; data: Record<string, unknown> } | null {
+	const direct = widgetDef(w.type);
+	if (direct) return { def: direct, data: w.data };
+	const legacy = legacyWidgetData(w);
+	const html = widgetDef("html");
+	return legacy && html ? { def: html, data: legacy } : null;
+}
+
+/** Static factory samples that are still on a user board: say so, and offer
+ *  the one-click upgrade instead of leaving the card looking interactive. */
+function SampleNote({ onUpgrade }: { onUpgrade(): void }): ReactNode {
+	return (
+		<div className="gui-board-sample-note">
+			<span className="gui-board-sample-tag">{t("settings.boardExample")}</span>
+			<button
+				type="button"
+				className="gui-board-sample-upgrade"
+				title={tLoose("settings.widgetMakeInteractiveHint")}
+				onClick={onUpgrade}
+			>
+				<Icon name="sparkling" className="h-3 w-3" />
+				<span>{tLoose("settings.widgetMakeInteractive")}</span>
+			</button>
+		</div>
+	);
+}
 
 /** Stable shared-surface name for one board widget. */
 function boardSurfaceName(id: string): string {
@@ -241,8 +296,9 @@ function BoardHome({
 						 * starts only when the real board mounts. */}
 						<div className="gui-board-home-preview" inert aria-hidden="true">
 							{b.widgets.slice(0, 4).map((w, wi) => {
-								const def = widgetDef(w.type);
-								if (!def) return null;
+								const resolved = resolveBoardWidget(w);
+								if (!resolved) return null;
+								const { def, data } = resolved;
 								return (
 									<div
 										key={w.id}
@@ -251,7 +307,7 @@ function BoardHome({
 										style={{ animationDelay: `${bi * 60 + wi * 90}ms` }}
 									>
 										<WidgetFit>
-											<def.Component data={w.data} update={() => {}} preview />
+											<def.Component data={data} update={() => {}} preview />
 										</WidgetFit>
 									</div>
 								);
@@ -820,6 +876,9 @@ export function BoardPage({
 			},
 		);
 	};
+	const focusResolved = focusWidget ? resolveBoardWidget(focusWidget) : null;
+	const focusSample = focusWidget ? sampleTag(focusWidget) : null;
+	const focusStaticSample = focusSample !== null && !focusSample.interactive;
 	useEffect(() => {
 		if (!focusOpen) return;
 		const onKey = (event: KeyboardEvent): void => {
@@ -1113,7 +1172,11 @@ export function BoardPage({
 			// the same aspect (main scales it down to desktop-card bounds).
 			// A plugin card must carry its compiled module: the pin window is a
 			// separate renderer process and never runs extensions.list itself.
-			const def = widgetDef(w.type);
+			// A retired card pins as the html face it renders through, so the
+			// pinned window shows the same page instead of an unknown type.
+			const resolved = resolveBoardWidget(w);
+			const def = resolved?.def;
+			const data = resolved?.data ?? w.data;
 			const widget = def?.code
 				? {
 						type: def.type,
@@ -1127,8 +1190,8 @@ export function BoardPage({
 				: undefined;
 			void api?.pinWidget?.({
 				title: w.title,
-				type: w.type,
-				data: w.data,
+				type: def?.type ?? w.type,
+				data,
 				w: w.pos.w,
 				h: w.pos.h,
 				...(widget ? { widget } : {}),
@@ -1152,6 +1215,19 @@ export function BoardPage({
 		updateBoard(active.id, {
 			widgets: active.widgets.map(w => (w.id === id ? { ...w, data: { ...w.data, ...patch } } : w)),
 		});
+	};
+	/** Lazy sample migration: only the card the reader clicked is rewritten;
+	 *  `upgradeSampleWidget` keeps the old page in `data.previousSample`. */
+	const upgradeSample = (id: string): void => {
+		const widget = active.widgets.find(w => w.id === id);
+		if (!widget) return;
+		const upgraded = upgradeSampleWidget(widget);
+		if (!upgraded) return;
+		tapFeedback();
+		updateBoard(active.id, { widgets: active.widgets.map(w => (w.id === id ? upgraded : w)) });
+		// The maximized card holds its own copy of the widget; without this the
+		// modal kept the old static page after the card behind it upgraded.
+		setFocusWidget(f => (f && f.id === id ? upgraded : f));
 	};
 
 	// ── In-board AI generation (kimi prompt-market parity): type a
@@ -1317,8 +1393,11 @@ export function BoardPage({
 						/>
 					)}
 					{active.widgets.map(w => {
-						const def = widgetDef(w.type);
-						if (!def) return null;
+						const resolved = resolveBoardWidget(w);
+						if (!resolved) return null;
+						const { def, data } = resolved;
+						const sample = sampleTag(w);
+						const staticSample = sample !== null && !sample.interactive;
 						const dimmed = ghost !== null && ghost.id !== w.id;
 						return (
 							<div
@@ -1384,11 +1463,12 @@ export function BoardPage({
 												<WidgetScopeContext.Provider
 													value={{ boardId: active?.id ?? "main", widgetId: w.id }}
 												>
-													<def.Component data={w.data} update={patch => updateWidgetData(w.id, patch)} />
+													<def.Component data={data} update={patch => updateWidgetData(w.id, patch)} />
 												</WidgetScopeContext.Provider>
 											</WidgetErrorBoundary>
 										</WidgetFit>
 									</div>
+									{staticSample && <SampleNote onUpgrade={() => upgradeSample(w.id)} />}
 									{/* Edge/corner resize: right and bottom edges drag
 									 * independently, the corner both — 8px steps. */}
 									<div
@@ -1482,7 +1562,7 @@ export function BoardPage({
 				>
 					<div
 						className="gui-board-focus-card"
-						data-tone={widgetDef(focusWidget.type)?.tone ?? "default"}
+						data-tone={focusResolved?.def.tone ?? "default"}
 						style={{ ...focusCardSize(), viewTransitionName: boardSurfaceName(focusWidget.id) }}
 						onClick={e => e.stopPropagation()}
 					>
@@ -1509,6 +1589,17 @@ export function BoardPage({
 											reducedMotion="user"
 											className="h-3.5 w-3.5"
 										/>
+									</button>
+								)}
+								{focusStaticSample && (
+									<button
+										type="button"
+										className="gui-tool-btn"
+										title={tLoose("settings.widgetMakeInteractiveHint")}
+										aria-label={tLoose("settings.widgetMakeInteractive")}
+										onClick={() => upgradeSample(focusWidget.id)}
+									>
+										<Icon name="sparkling" className="h-3.5 w-3.5" />
 									</button>
 								)}
 								<button
@@ -1540,18 +1631,19 @@ export function BoardPage({
 						</div>
 						<div className="gui-board-focus-body">
 							{(() => {
-								const Comp = widgetDef(focusWidget.type)?.Component;
+								const Comp = focusResolved?.def.Component;
 								if (!Comp) return null;
 								// JSX (not a bare call): widget components carry
-								// hooks (pomodoro timer) and a direct function
-								// invocation violates the rules of hooks — the
-								// modal went blank. WidgetFit keeps the widget's
+								// hooks (the html face owns its frame state, the
+								// block face its store subscription) and a direct
+								// function invocation violates the rules of hooks —
+								// the modal went blank. WidgetFit keeps the widget's
 								// natural content fully visible at any size.
 								return (
 									<WidgetFit>
 										<WidgetErrorBoundary>
 											<Comp
-												data={focusWidget.data}
+												data={focusResolved?.data ?? focusWidget.data}
 												update={patch => {
 													updateWidgetData(focusWidget.id, patch);
 													setFocusWidget(f => (f ? { ...f, data: { ...f.data, ...patch } } : f));
@@ -1562,6 +1654,7 @@ export function BoardPage({
 								);
 							})()}
 						</div>
+						{focusStaticSample && <SampleNote onUpgrade={() => upgradeSample(focusWidget.id)} />}
 					</div>
 				</div>
 			)}

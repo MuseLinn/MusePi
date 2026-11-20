@@ -52,6 +52,19 @@ const SELECTION_TEXT_BLOCK_SELECTOR = "p, h1, h2, h3, h4, h5, h6, li, td, th, su
 
 const isElementNode = (node: Node | null): node is Element => node?.nodeType === 1;
 
+/**
+ * A selection host only owns the toolbar while it is painted. A keep-mounted
+ * ChatView (the board / settings views hide it with `display: none`) keeps its
+ * DOM and listeners alive, so containment alone is not enough: an unpainted
+ * host must never portal a toolbar over another surface.
+ */
+function hostVisible(host: HTMLElement | null): host is HTMLElement {
+	if (!host?.isConnected) return false;
+	if (host.getClientRects().length === 0) return false;
+	const style = window.getComputedStyle(host);
+	return style.display !== "none" && style.visibility !== "hidden";
+}
+
 function longestRun(text: string, char: string): number {
 	let longest = 0;
 	let run = 0;
@@ -447,7 +460,7 @@ export function SelectionToolbar({
 	useEffect(() => {
 		if (selection === undefined) return;
 		window.clearTimeout(hideTimer.current);
-		if (!selection) {
+		if (!selection || !hostVisible(containerRef.current)) {
 			dismiss();
 			return;
 		}
@@ -469,6 +482,9 @@ export function SelectionToolbar({
 		const onMouseUp = (event: MouseEvent): void => {
 			const el = containerRef.current;
 			if (!el) return;
+			// A hidden keep-mounted host (board / settings) must not answer a
+			// release that happened on another surface.
+			if (!hostVisible(el)) return;
 			// Ignore releases outside the pane (other tab, toolbar, composer).
 			if (!(event.target instanceof Node) || !el.contains(event.target)) return;
 			// Let the browser settle the selection (click-drag releases
@@ -481,7 +497,13 @@ export function SelectionToolbar({
 					dismiss();
 					return;
 				}
-				if (!host || !sel.anchorNode || !host.contains(sel.anchorNode)) {
+				if (!host || !hostVisible(host)) {
+					dismiss();
+					return;
+				}
+				// Both ends of the range must sit in this host: a selection
+				// dragged out of the pane belongs to neither surface.
+				if (!sel.anchorNode || !host.contains(sel.anchorNode) || !sel.focusNode || !host.contains(sel.focusNode)) {
 					dismiss();
 					return;
 				}
@@ -540,6 +562,12 @@ export function SelectionToolbar({
 		};
 		const onScroll = (event: Event): void => {
 			const el = containerRef.current;
+			// The host itself scrolling dismisses; so does the host going
+			// away (the scroll event may come from the surface replacing it).
+			if (!hostVisible(el)) {
+				dismiss();
+				return;
+			}
 			if (!el || !(event.target instanceof Node) || !el.contains(event.target)) return;
 			dismiss();
 		};
@@ -570,6 +598,30 @@ export function SelectionToolbar({
 			window.removeEventListener("keydown", onKey, true);
 		};
 	}, [containerRef, dismiss, selection === undefined]);
+
+	// A toolbar already up must go when its host is hidden: switching to the
+	// board or settings hides the keep-mounted chat keeper (display:none)
+	// without unmounting it, and the toolbar is portalled to the app root.
+	// The ancestor class/style chain is observed because the hide lands on a
+	// keeper, not on the transcript host itself.
+	useEffect(() => {
+		if (pop === null) return;
+		const check = (): void => {
+			if (!hostVisible(containerRef.current)) dismiss();
+		};
+		check();
+		const observer = new MutationObserver(check);
+		let node: HTMLElement | null = containerRef.current;
+		while (node && node !== document.body) {
+			observer.observe(node, { attributes: true, attributeFilter: ["class", "style", "hidden"] });
+			node = node.parentElement;
+		}
+		window.addEventListener("resize", check);
+		return () => {
+			observer.disconnect();
+			window.removeEventListener("resize", check);
+		};
+	}, [pop !== null, dismiss, containerRef]);
 
 	const toolbarRef = useRef<HTMLDivElement | null>(null);
 	const [horizontalShift, setHorizontalShift] = useState(0);

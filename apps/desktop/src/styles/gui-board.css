@@ -906,6 +906,74 @@
 	flex-direction: column;
 }
 
+/* The html face offers "引用选中的内容" when the reader selects text inside
+ * its page. That action appends to a conversation composer, and the board /
+ * maximized card has none — the button used to appear over the card and post
+ * into the keep-mounted chat composer. Conversation hosts keep the row
+ * (tool-render.css); board surfaces drop it. */
+.gui-board-card .gui-widget-html-tools,
+.gui-board-focus-card .gui-widget-html-tools,
+.gui-board-home-preview-cell .gui-widget-html-tools {
+	display: none;
+}
+
+/* The maximized card must own the note's containing block (the modal itself
+ * is positioned, the card is not by default). */
+.gui-board-focus-card {
+	position: relative;
+}
+
+/* A factory sample that is still the old static page: the chip says what the
+ * card is, the button is the lazy migration (the page itself stays in the
+ * widget data). */
+.gui-board-sample-note {
+	position: absolute;
+	left: 10px;
+	bottom: 10px;
+	z-index: 6;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	max-width: calc(100% - 20px);
+	padding: 3px 4px 3px 9px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-surface-raised) 84%, transparent);
+	box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.1);
+	backdrop-filter: blur(var(--gui-glass-blur, 12px)) saturate(var(--gui-glass-saturate, 1.4));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur, 12px)) saturate(var(--gui-glass-saturate, 1.4));
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-board-sample-tag {
+	flex: none;
+	letter-spacing: 0.02em;
+}
+
+.gui-board-sample-upgrade {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex: none;
+	padding: 3px 8px;
+	border: 0;
+	border-radius: 999px;
+	background: var(--color-accent-soft);
+	color: var(--color-text);
+	font: inherit;
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-board-sample-upgrade:hover {
+	background: color-mix(in oklab, var(--color-accent) 28%, transparent);
+}
+
+.gui-board-sample-upgrade:focus-visible {
+	outline: 2px solid var(--ring, var(--color-accent));
+	outline-offset: 2px;
+}
+
 /* WidgetFit: shrink natural widget content into a too-short card so
  * nothing is ever clipped (top-anchored, never enlarged). */
 .gui-widget-video {
