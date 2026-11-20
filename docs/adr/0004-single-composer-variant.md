@@ -9,6 +9,7 @@
 - 进度：第 1 步的**文本 + 草稿持久化**已完成（`Composer` 持有 draft 与一次性 `carry`，`useDraftPersistence` 接受 `carryText` 并在本会话无存盘草稿时采用）。实机探针：欢迎页注入 `DRAFT-PROBE-42` → 切会话读到同一文本；会话 → 新建任务回到欢迎页同样保留。附件随后也并入：`Composer` 持有 `useAttachments` 的 intake（`stageFiles` 按 variant 决定），两个 skin 只消费它；`useDraftPersistence` 增加 `keepAttachments`，欢迎页已放置的缩略图在目标会话没有自己的草稿时保留，普通换会话仍以会话 stash 为准。输入注入（pendingEdit/quote）仍属该步余下部分。
 - 剩余部分的真实形状（2026-11-20 复核）：`ComposerFrame`、`ComposerEditor`、`useAttachments`、草稿持久化现在都已在共享层，第 2 步不是"把两块 JSX 挪到一起"这么机械——两个 skin 的 frame body 各约 500 行，引用了各自组件内 ~50 个局部（handlers、refs、派生值），直接抽 `ComposerBody` 等于给每个引用搬一条 prop。可行的切法是先建一个 `ComposerSurfaceContext`（由 entry 提供、skin 消费）把这些局部显式化，再抽 body；否则会得到一条 50+ props 的签名。这一步需要一次独立的实现与验证窗口。
 - 第 2 步起步（2026-11-20）：`apps/desktop/src/components/composer/surface.tsx` 已建立 entry→skin 的 `ComposerSurfaceContext`（variant、intake、draft/carry），两个 skin 优先从它取；无 provider 的直接挂载仍走 props/本地状态。下一步把 body 需要的 handlers/refs 逐项搬进该 surface，直到 frame body 可以整体抽出。
+- 第 2 步续（2026-11-20）：发送合同已收进 surface（`send(text, payload)`，payload 是两边的并集；entry 按 variant 分派到 `onSubmit`/`onSend`），两个 skin 的发送点改走它，直接挂载仍回退到各自 handler。剩下要搬的是编辑器/焦点句柄与工具栏动作。
 - 计划（每步独立提交、各自保绿）：
   1. **状态所有权上移**：text、attachments、draft 持久化、pendingEdit/quote 注入统一由 `Composer` 持有，两个 skin 只收 props（`variant` 之外不再各自 `useState`）。
   2. **共享 body**：把 `ComposerFrame` 的 children 收敛为一个 `ComposerBody`（editor stack + attach row + footer），hero 专属装饰（greeting / tips / reminders / modes / design rail / connector picker）改为 `above`/`below` 槽由 `ChatView` 传入。

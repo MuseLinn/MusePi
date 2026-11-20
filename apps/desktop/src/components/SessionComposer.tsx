@@ -88,7 +88,7 @@ import { QuoteCards } from "./composer/quote-cards";
 import { SessionModeToggles } from "./composer/session-mode-toggles";
 import { SlashCommandTip } from "./composer/slash-command-tip";
 import { QueueToggleChip, SwarmChip, TodoChip } from "./composer/status-chips";
-import { useComposerSurface } from "./composer/surface";
+import { type ComposerSendPayload, useComposerSurface } from "./composer/surface";
 import { SwarmCardPreview } from "./composer/swarm-card-preview";
 import { TodoPanel } from "./composer/todo-panel";
 import type {
@@ -330,6 +330,12 @@ export function SessionComposer({
 	// The entry owns the intake in the app; a direct mount (tests, alternate
 	// hosts) keeps its own so this component never requires the entry.
 	const surface = useComposerSurface();
+	// One send contract (ADR 0004). The positional handler stays for direct
+	// mounts; through the entry the payload is mode-independent.
+	const dispatchSend = (value: string, payload: ComposerSendPayload = {}) =>
+		surface?.send
+			? surface.send(value, payload)
+			: onSend(value, payload.images, payload.deliverAs, payload.displayContext as never, payload.videos);
 	const localIntake = useAttachments(rpc);
 	const { attachments, setAttachments, addFiles, onPaste } = surface?.intake ?? attachmentsApi ?? localIntake;
 	const { marks, resolveMention } = useComposerMarks(text, attachments);
@@ -1390,7 +1396,7 @@ export function SessionComposer({
 					if (res.prompt) {
 						// Residual prompt (e.g. /force <tool> <prompt>): the
 						// command kept the trailing text as a real message.
-						onSend(res.prompt, [], undefined);
+						dispatchSend(res.prompt, { images: [], deliverAs: undefined });
 						sfxFor("send");
 					}
 				})
@@ -1712,22 +1718,26 @@ export function SessionComposer({
 					}
 					const wireText = refs.length > 0 ? `${refs.join("\n")}\n\n${finalMsg}`.trim() : finalMsg;
 					pushHistory(wireText);
-					onSend(wireText, imageParts, delivery, messageDisplayContext(quotes), videos.parts);
+					dispatchSend(wireText, {
+						images: imageParts,
+						deliverAs: delivery,
+						displayContext: messageDisplayContext(quotes),
+						videos: videos.parts,
+					});
 					finishSend();
 				})();
 				return;
 			}
 			pushHistory(finalMsg);
-			onSend(
-				finalMsg,
-				imageParts,
+			dispatchSend(finalMsg, {
+				images: imageParts,
 				// Working → steer (TUI Enter parity: processed immediately);
 				// "/queue"/"=>" → followUp (after the current turn yields);
 				// "." / "c" → continue (hidden synthetic resume, TUI parity).
-				isContinueShortcut ? "continue" : delivery,
-				messageDisplayContext(quotes),
-				videos.parts,
-			);
+				deliverAs: isContinueShortcut ? "continue" : delivery,
+				displayContext: messageDisplayContext(quotes),
+				videos: videos.parts,
+			});
 			finishSend();
 		},
 		[

@@ -78,7 +78,7 @@ import {
 } from "./composer/mention-token";
 import { QuoteCards } from "./composer/quote-cards";
 import { StartFromPicker } from "./composer/start-from-picker";
-import { useComposerSurface } from "./composer/surface";
+import { type ComposerSendPayload, useComposerSurface } from "./composer/surface";
 import { TemplateRail } from "./composer/template-rail";
 import {
 	attachmentFiles,
@@ -403,6 +403,10 @@ export function HeroComposer({
 	// The entry owns the intake in the app; a direct mount (tests, alternate
 	// hosts) keeps its own so this component never requires the entry.
 	const surface = useComposerSurface();
+	// One send contract (ADR 0004): the entry dispatches to whichever variant's
+	// handler is live; a direct mount keeps calling onSubmit itself.
+	const send = (value: string, payload: ComposerSendPayload = {}) =>
+		surface?.send ? surface.send(value, payload) : onSubmit(value, payload as never);
 	const localIntake = useAttachments(rpc, { stageFiles: false });
 	const { attachments, setAttachments, addFiles } = surface?.intake ?? attachmentsApi ?? localIntake;
 	const { marks, resolveMention } = useComposerMarks(text, attachments);
@@ -1217,7 +1221,7 @@ export function HeroComposer({
 		setGoalArmed(false);
 		setPlanArmed(false);
 		const videos = attachmentVideoSelection(attachments);
-		void onSubmit(payload, {
+		void send(payload, {
 			thinkingLevel: thinking,
 			// modelId is the provider/id composite after a pick (setModelId above);
 			// session.create forwards it as modelPattern, which resolves exactly
