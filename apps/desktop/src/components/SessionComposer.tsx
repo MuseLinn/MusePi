@@ -1,6 +1,5 @@
 import { composerPlaceholder } from "@musepi/client-core";
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
-import { ComposerEditor } from "@musepi/client-core/src/components/composer/ComposerEditor";
 import { AsyncJobBar } from "@musepi/client-core/src/components/shell/AsyncJobBar";
 import { normalizeQueueSnapshot, type QueueGroup, type QueueSnapshot } from "@musepi/client-core/src/lib/message-queue";
 import {
@@ -67,6 +66,7 @@ import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
+import { ComposerEditorStack } from "./composer/editor-stack";
 import { GoalDetailCard } from "./composer/goal-detail-card";
 import { LargeTextPasteGesture } from "./composer/large-text-paste";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
@@ -2540,65 +2540,40 @@ export function SessionComposer({
 						e.target.value = "";
 					}}
 				/>
-				<div className="gui-ta-stack">
-					<ComposerEditor
-						ref={el => {
-							taRef.current = el;
-							menuAnchorRef(el?.dom ?? null);
-						}}
-						value={text}
-						dataComposerInput
-						dataFocused={focused}
-						variant="session"
-						className="gui-composer-editor gui-composer-editor--session"
-						onPaste={intake.onPaste}
-						onDragOver={intake.onDragOver}
-						onDrop={intake.onDrop}
-						onChange={intake.onChange}
-						onCompositionStart={() => {
-							composingRef.current = true;
-						}}
-						onCompositionEnd={() => {
-							// Deferred a tick: WebKit dispatches the confirming Enter
-							// after compositionend, when isComposing is already false.
-							setTimeout(() => {
-								composingRef.current = false;
-							}, 0);
-						}}
-						onBlur={() => {
-							// A composition can end WITHOUT compositionend — an IME
-							// cancel, a window switch, Esc, a renderer reload. Losing
-							// focus always terminates it.
-							composingRef.current = false;
-						}}
-						onFocus={() => {
-							composingRef.current = false;
-						}}
-						onKeyDown={onKeyDown}
-						placeholder={
-							shownSuggestion !== null
-								? ""
-								: composerPlaceholder({
-										surface: "session",
-										working,
-										attachmentCount: attachments.length,
-										hasConversation: (entries?.length ?? 0) > 0,
-										designPlaceholder: isDesignSession ? t("composer.designEmptyPlaceholder") : null,
-									})
-						}
-						spellCheck={spellcheckEnabled()}
-						autoComplete="off"
-						marks={marks}
-						resolveMention={resolveMention}
-						onMentionClick={intake.onMentionClick}
-					/>
-					{shownSuggestion !== null && (
-						<span className="gui-composer-suggestion" aria-hidden>
-							<span className="gui-composer-suggestion-text">{shownSuggestion}</span>
-							<kbd className="gui-composer-suggestion-key">{t("composer.promptSuggestionAccept")}</kbd>
-						</span>
-					)}
-				</div>
+				<ComposerEditorStack
+					variant="session"
+					dataComposerInput
+					editorRef={el => {
+						taRef.current = el;
+						menuAnchorRef(el?.dom ?? null);
+					}}
+					value={text}
+					focused={focused}
+					className="gui-composer-editor gui-composer-editor--session"
+					placeholder={
+						shownSuggestion !== null
+							? ""
+							: composerPlaceholder({
+									surface: "session",
+									working,
+									attachmentCount: attachments.length,
+									hasConversation: (entries?.length ?? 0) > 0,
+									designPlaceholder: isDesignSession ? t("composer.designEmptyPlaceholder") : null,
+								})
+					}
+					spellCheck={spellcheckEnabled()}
+					composingRef={composingRef}
+					onChange={intake.onChange}
+					onKeyDown={onKeyDown}
+					onPaste={intake.onPaste}
+					onDragOver={intake.onDragOver}
+					onDrop={intake.onDrop}
+					marks={marks}
+					resolveMention={resolveMention}
+					onMentionClick={intake.onMentionClick}
+					suggestion={shownSuggestion}
+					acceptHint={t("composer.promptSuggestionAccept")}
+				/>
 				{renderFloatMenu(
 					<CompletionMenus
 						slashOpen={slashOpen}

@@ -1,6 +1,5 @@
 import { BlurText, composerPlaceholder, t } from "@musepi/client-core";
 import { ANNOTATION_ATTACH_EVENT, type AnnotationAttachDetail } from "@musepi/client-core/src/annotation";
-import { ComposerEditor } from "@musepi/client-core/src/components/composer/ComposerEditor";
 import {
 	composeDisplayContextPrompt,
 	createChatQuoteContext,
@@ -65,6 +64,7 @@ import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { ConnectorChip, ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { DesignSystemRail } from "./composer/design-system-rail";
+import { ComposerEditorStack } from "./composer/editor-stack";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import {
 	deleteMentionTokenAfter,
@@ -1943,151 +1943,147 @@ export function HeroComposer({
 									onDismiss={() => setEditingPaste(null)}
 								/>
 							)}
-							<div className="gui-ta-stack">
-								<ComposerEditor
-									ref={el => {
-										taRef.current = el;
-										compAnchorRef(el?.dom ?? null);
-									}}
-									value={text}
-									variant="welcome"
-									className="gui-composer-editor gui-composer-editor--welcome"
-									dataFocused={focused}
-									autoFocus
-									onPaste={intake.onPaste}
-									onDragOver={intake.onDragOver}
-									onDrop={intake.onDrop}
-									onChange={intake.onChange}
-									onKeyDown={e => {
-										// IME composition: the confirming Enter commits the
-										// candidate text — never submit while composing.
-										if (e.isComposing || e.keyCode === 229) return;
-										// Attachment keyboard flow (WeChat parity): Backspace/
-										// Delete on an empty input removes the last image chip;
-										// a select-all delete empties attachments too.
-										if (e.key === "Backspace" || e.key === "Delete") {
-											const ta = taRef.current;
-											if (ta) {
-												// Mention tokens are atoms: one key removes the whole
-												// `@图片N` (and its trailing space); unresolved
-												// `@名字` stays prose.
-												if (ta.selectionStart === ta.selectionEnd) {
-													const live = (name: string): boolean =>
-														resolveMentionChip(name, attachments) !== null;
-													const edit =
-														e.key === "Backspace"
-															? deleteMentionTokenBefore(ta.value, ta.selectionStart, live)
-															: deleteMentionTokenAfter(ta.value, ta.selectionStart, live);
-													if (edit) {
-														e.preventDefault();
-														setText(edit.next);
-														const caret = edit.caret;
-														requestAnimationFrame(() => taRef.current?.setSelectionRange(caret, caret));
-														return;
-													}
-												}
-												if (ta.value.length === 0 && attachments.length > 0) {
+							<ComposerEditorStack
+								editorRef={el => {
+									taRef.current = el;
+									compAnchorRef(el?.dom ?? null);
+								}}
+								value={text}
+								variant="welcome"
+								className="gui-composer-editor gui-composer-editor--welcome"
+								focused={focused}
+								autoFocus
+								onPaste={intake.onPaste}
+								onDragOver={intake.onDragOver}
+								onDrop={intake.onDrop}
+								onChange={intake.onChange}
+								onKeyDown={e => {
+									// IME composition: the confirming Enter commits the
+									// candidate text — never submit while composing.
+									if (e.isComposing || e.keyCode === 229) return;
+									// Attachment keyboard flow (WeChat parity): Backspace/
+									// Delete on an empty input removes the last image chip;
+									// a select-all delete empties attachments too.
+									if (e.key === "Backspace" || e.key === "Delete") {
+										const ta = taRef.current;
+										if (ta) {
+											// Mention tokens are atoms: one key removes the whole
+											// `@图片N` (and its trailing space); unresolved
+											// `@名字` stays prose.
+											if (ta.selectionStart === ta.selectionEnd) {
+												const live = (name: string): boolean =>
+													resolveMentionChip(name, attachments) !== null;
+												const edit =
+													e.key === "Backspace"
+														? deleteMentionTokenBefore(ta.value, ta.selectionStart, live)
+														: deleteMentionTokenAfter(ta.value, ta.selectionStart, live);
+												if (edit) {
 													e.preventDefault();
-													setAttachments(prev => prev.slice(0, -1));
+													setText(edit.next);
+													const caret = edit.caret;
+													requestAnimationFrame(() => taRef.current?.setSelectionRange(caret, caret));
 													return;
 												}
-												if (
-													ta.selectionStart === 0 &&
-													ta.selectionEnd === ta.value.length &&
-													ta.value.length > 0
-												) {
-													clearAllRef.current = true;
-												}
+											}
+											if (ta.value.length === 0 && attachments.length > 0) {
+												e.preventDefault();
+												setAttachments(prev => prev.slice(0, -1));
+												return;
+											}
+											if (
+												ta.selectionStart === 0 &&
+												ta.selectionEnd === ta.value.length &&
+												ta.value.length > 0
+											) {
+												clearAllRef.current = true;
 											}
 										}
-										const menus: {
-											open: boolean;
-											list: unknown[];
-											idx: number;
-											setIdx: (n: number) => void;
-											insert: () => void;
-										}[] = [
-											{
-												open: slashOpen,
-												list: slashFilter,
-												idx: slashIdx,
-												setIdx: setSlashIdx,
-												insert: () => slashFilter[slashIdx] && insertSlash(slashFilter[slashIdx]!.name),
-											},
-											{
-												open: atOpen,
-												list: atFilter,
-												idx: atIdx,
-												setIdx: setAtIdx,
-												insert: () =>
-													atFilter[atIdx] &&
-													insertAt(atFilter[atIdx]!.insertPath ?? atFilter[atIdx]!.path),
-											},
-											{
-												open: hashOpen,
-												list: hashFilter,
-												idx: hashIdx,
-												setIdx: setHashIdx,
-												insert: () => hashFilter[hashIdx] && insertHash(hashFilter[hashIdx]!.id),
-											},
-										];
-										for (const m of menus) {
-											if (!m.open || m.list.length === 0) continue;
-											if (e.key === "ArrowDown") {
-												e.preventDefault();
-												m.setIdx((m.idx + 1) % m.list.length);
-												return;
-											}
-											if (e.key === "ArrowUp") {
-												e.preventDefault();
-												m.setIdx((m.idx - 1 + m.list.length) % m.list.length);
-												return;
-											}
-											if (e.key === "Enter" || e.key === "Tab") {
-												e.preventDefault();
-												m.insert();
-												return;
-											}
-											if (e.key === "Escape") {
-												e.preventDefault();
-												setSlashOpen(false);
-												setAtOpen(false);
-												setHashOpen(false);
-												return;
-											}
-										}
-										if (e.key === "Enter" && !e.shiftKey) {
-											e.preventDefault();
-											submit(e as unknown as FormEvent<HTMLFormElement>);
-										}
-									}}
-									placeholder={
-										placeholder ??
-										composerPlaceholder({
-											surface: "welcome",
-											working: busy === true,
-											attachmentCount: attachments.length,
-											designPlaceholder:
-												designActive && railState?.placeholder
-													? railState.placeholder
-													: isDesignArmed
-														? t("composer.designEmptyPlaceholder")
-														: null,
-										})
 									}
-									spellCheck={(() => {
-										try {
-											return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
-										} catch {
-											return false;
+									const menus: {
+										open: boolean;
+										list: unknown[];
+										idx: number;
+										setIdx: (n: number) => void;
+										insert: () => void;
+									}[] = [
+										{
+											open: slashOpen,
+											list: slashFilter,
+											idx: slashIdx,
+											setIdx: setSlashIdx,
+											insert: () => slashFilter[slashIdx] && insertSlash(slashFilter[slashIdx]!.name),
+										},
+										{
+											open: atOpen,
+											list: atFilter,
+											idx: atIdx,
+											setIdx: setAtIdx,
+											insert: () =>
+												atFilter[atIdx] && insertAt(atFilter[atIdx]!.insertPath ?? atFilter[atIdx]!.path),
+										},
+										{
+											open: hashOpen,
+											list: hashFilter,
+											idx: hashIdx,
+											setIdx: setHashIdx,
+											insert: () => hashFilter[hashIdx] && insertHash(hashFilter[hashIdx]!.id),
+										},
+									];
+									for (const m of menus) {
+										if (!m.open || m.list.length === 0) continue;
+										if (e.key === "ArrowDown") {
+											e.preventDefault();
+											m.setIdx((m.idx + 1) % m.list.length);
+											return;
 										}
-									})()}
-									autoComplete="off"
-									marks={marks}
-									resolveMention={resolveMention}
-									onMentionClick={intake.onMentionClick}
-								/>
-							</div>
+										if (e.key === "ArrowUp") {
+											e.preventDefault();
+											m.setIdx((m.idx - 1 + m.list.length) % m.list.length);
+											return;
+										}
+										if (e.key === "Enter" || e.key === "Tab") {
+											e.preventDefault();
+											m.insert();
+											return;
+										}
+										if (e.key === "Escape") {
+											e.preventDefault();
+											setSlashOpen(false);
+											setAtOpen(false);
+											setHashOpen(false);
+											return;
+										}
+									}
+									if (e.key === "Enter" && !e.shiftKey) {
+										e.preventDefault();
+										submit(e as unknown as FormEvent<HTMLFormElement>);
+									}
+								}}
+								placeholder={
+									placeholder ??
+									composerPlaceholder({
+										surface: "welcome",
+										working: busy === true,
+										attachmentCount: attachments.length,
+										designPlaceholder:
+											designActive && railState?.placeholder
+												? railState.placeholder
+												: isDesignArmed
+													? t("composer.designEmptyPlaceholder")
+													: null,
+									})
+								}
+								spellCheck={(() => {
+									try {
+										return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
+									} catch {
+										return false;
+									}
+								})()}
+								marks={marks}
+								resolveMention={resolveMention}
+								onMentionClick={intake.onMentionClick}
+							/>
 						</div>
 					</ComposerFrame>
 				</form>
