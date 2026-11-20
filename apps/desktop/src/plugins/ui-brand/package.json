@@ -1,0 +1,13 @@
+{
+	"name": "musepi-ui-brand",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Brand surfaces: the dot-matrix welcome backdrop contributed into the hero frame seat.",
+	"type": "module",
+	"musepi": {
+		"icon": "◍",
+		"label": "MusePi Brand",
+		"description": "Brand surfaces: the dot-matrix welcome backdrop contributed into the hero frame seat.",
+		"extensions": ["./index.ts"]
+	}
+}
