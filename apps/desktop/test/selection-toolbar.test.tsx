@@ -26,7 +26,9 @@ describe("SelectionToolbar external selections", () => {
 		const rootElement = document.createElement("div");
 		rootElement.id = "root";
 		const container = document.createElement("div");
-		rootElement.appendChild(container);
+		// The React root replaces its children on the first render, so the host
+		// lives beside it in the document rather than inside it.
+		document.body.appendChild(container);
 		document.body.appendChild(rootElement);
 		const root = createRoot(rootElement);
 		mounted.add(root);
@@ -64,7 +66,7 @@ describe("SelectionToolbar external selections", () => {
 		rootElement.id = "root";
 		const container = document.createElement("div");
 		container.getBoundingClientRect = () => ({ top: 200 }) as DOMRect;
-		rootElement.appendChild(container);
+		document.body.appendChild(container);
 		document.body.appendChild(rootElement);
 		const root = createRoot(rootElement);
 		mounted.add(root);
@@ -94,7 +96,7 @@ describe("SelectionToolbar external selections", () => {
 		editorToolbar.getBoundingClientRect = () =>
 			({ left: 60, right: 220, top: 170, bottom: 210, width: 160, height: 40 }) as DOMRect;
 		container.appendChild(editorToolbar);
-		rootElement.appendChild(container);
+		document.body.appendChild(container);
 		document.body.appendChild(rootElement);
 		const root = createRoot(rootElement);
 		mounted.add(root);
@@ -148,6 +150,7 @@ describe("SelectionToolbar DOM selections", () => {
 			isCollapsed: false,
 			toString: () => "selected text",
 			anchorNode: text,
+			focusNode: text,
 			getRangeAt: () => ({
 				getBoundingClientRect: () => ({ left: 100, top: 180, width: 80, height: 20 }),
 				getClientRects: () => [{ left: 100, top: 180, width: 80, height: 20 }],
@@ -192,6 +195,7 @@ describe("SelectionToolbar DOM selections", () => {
 			isCollapsed: false,
 			toString: () => "a long multi-line selection",
 			anchorNode: text,
+			focusNode: text,
 			getRangeAt: () => ({
 				getBoundingClientRect: () => ({ left: 100, top: 180, width: 300, height: 160 }),
 				getClientRects: () => [
@@ -215,6 +219,74 @@ describe("SelectionToolbar DOM selections", () => {
 			window.getSelection = originalSelection;
 		}
 	});
+
+	it("ignores a host hidden by an ancestor and dismisses its toolbar once an ancestor hides", async () => {
+		const rootElement = document.createElement("div");
+		rootElement.id = "root";
+		document.body.appendChild(rootElement);
+		const root = createRoot(rootElement);
+		mounted.add(root);
+		const containerRef: { current: HTMLElement | null } = { current: null };
+		await act(async () =>
+			root.render(
+				<SelectionToolbar
+					containerRef={containerRef}
+					onQuote={() => {}}
+					onAsk={() => {}}
+					onCopy={() => {}}
+					onNewSession={() => {}}
+					onAddNote={() => {}}
+				/>,
+			),
+		);
+
+		// The board / settings surface keeps the transcript mounted but hides
+		// it from an ancestor rather than from the selection host itself.
+		const keeper = document.createElement("div");
+		keeper.style.display = "none";
+		const container = document.createElement("div");
+		const text = document.createTextNode("hidden transcript");
+		container.appendChild(text);
+		keeper.appendChild(container);
+		document.body.appendChild(keeper);
+		containerRef.current = container;
+
+		const originalSelection = window.getSelection;
+		window.getSelection = (() => ({
+			isCollapsed: false,
+			toString: () => "hidden transcript",
+			anchorNode: text,
+			focusNode: text,
+			getRangeAt: () => ({
+				getBoundingClientRect: () => ({ left: 100, top: 180, width: 80, height: 20 }),
+				getClientRects: () => [{ left: 100, top: 180, width: 80, height: 20 }],
+			}),
+		})) as typeof window.getSelection;
+		try {
+			await act(async () => {
+				text.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+				await Bun.sleep(30);
+			});
+			expect(document.querySelector(".gui-select-pop")).toBeNull();
+
+			await act(async () => {
+				keeper.style.display = "block";
+			});
+			await act(async () => {
+				text.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+				await Bun.sleep(30);
+			});
+			expect(document.querySelector(".gui-select-pop")).not.toBeNull();
+
+			await act(async () => {
+				keeper.style.display = "none";
+				await Bun.sleep(0);
+			});
+			expect(document.querySelector(".gui-select-pop--closing")).not.toBeNull();
+		} finally {
+			window.getSelection = originalSelection;
+		}
+	});
 });
 
 describe("SelectionToolbar comment editor", () => {
@@ -225,7 +297,9 @@ describe("SelectionToolbar comment editor", () => {
 		const rootElement = document.createElement("div");
 		rootElement.id = "root";
 		const container = document.createElement("div");
-		rootElement.appendChild(container);
+		// The React root replaces its children on the first render, so the host
+		// lives beside it in the document rather than inside it.
+		document.body.appendChild(container);
 		document.body.appendChild(rootElement);
 		const root = createRoot(rootElement);
 		mounted.add(root);
@@ -356,7 +430,7 @@ describe("SelectionToolbar comment editor", () => {
 		const rootElement = document.createElement("div");
 		rootElement.id = "root";
 		const container = document.createElement("div");
-		rootElement.appendChild(container);
+		document.body.appendChild(container);
 		document.body.appendChild(rootElement);
 		const root = createRoot(rootElement);
 		mounted.add(root);
@@ -484,6 +558,7 @@ describe("SelectionToolbar quote fidelity", () => {
 			isCollapsed: false,
 			toString: () => range.toString(),
 			anchorNode: text,
+			focusNode: text,
 			getRangeAt: () => withLayout(range),
 		})) as unknown as typeof window.getSelection;
 		try {

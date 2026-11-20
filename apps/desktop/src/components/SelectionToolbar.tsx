@@ -57,12 +57,20 @@ const isElementNode = (node: Node | null): node is Element => node?.nodeType ===
  * ChatView (the board / settings views hide it with `display: none`) keeps its
  * DOM and listeners alive, so containment alone is not enough: an unpainted
  * host must never portal a toolbar over another surface.
+ *
+ * "Painted" is read from the computed ancestor chain, not from layout boxes:
+ * a real browser hides a host through an ancestor's `display: none`, while
+ * `getClientRects()`/`offsetParent` also report zero for unlaid-out DOM (the
+ * test DOM produces no boxes at all, so box probes cannot tell a hidden host
+ * from a merely unmeasured one).
  */
 function hostVisible(host: HTMLElement | null): host is HTMLElement {
 	if (!host?.isConnected) return false;
-	if (host.getClientRects().length === 0) return false;
-	const style = window.getComputedStyle(host);
-	return style.display !== "none" && style.visibility !== "hidden";
+	for (let node: HTMLElement | null = host; node; node = node.parentElement) {
+		const style = window.getComputedStyle(node);
+		if (style.display === "none" || style.visibility === "hidden") return false;
+	}
+	return true;
 }
 
 function longestRun(text: string, char: string): number {
