@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **活动折叠行与会话流共用同一条左边缘，右侧面板标签不再横向滚动**：带活动折叠的回合里，折叠头按 64px 头像列排版、后续回复却按共享转录的 40px 预留列排版，一条回合出现两个左边缘；现在 railed 行统一保留 64px 轨道，回复与折叠头对齐。活动行本身去掉边框药丸，改成内容列里的一行安静摘要（悬停才着色、普通箭头做展开指示、键盘聚焦有环）。右侧表面标签条按可用宽度收缩并在标题上省略，不再画出横向滚动条。
+  - EN: The activity fold and the conversation share one left edge, and the right-panel tab strip no longer scrolls sideways. In a round with an activity fold, the fold header used the 64px avatar column while following replies used the shared transcript's 40px reserved column, so one turn showed two left edges; railed rows now always reserve the 64px track, aligning replies with the fold header. The fold itself drops the bordered pill for a quiet line inside the content column (colour only on hover, a plain chevron as the affordance, a focus ring for keyboards). Right-panel surface tabs shrink to the available width and ellipsize their titles instead of painting a horizontal scrollbar.
+
 - **欢迎区外框升级为 hoc 插件座位，点阵背景改由内置品牌插件提供**：`conversation.hero.frame` 现在把整个欢迎区内容作为 `children` 交给贡献组件（fragment 不产生盒子，布局不变），插件可以在内容背后叠加背景或接管空白区域；点阵品牌动画从页面搬进内置插件 `ui-brand`，宿主保留同一份实现作为回退——停用插件或编译失败都不会让欢迎页丢背景。
   - EN: The welcome frame is a hoc seat now, and the dot-matrix backdrop ships as a built-in brand plugin. `conversation.hero.frame` hands the whole hero body to the contribution as `children` (a fragment adds no box, so the layout is untouched); a plugin can layer a background behind that content or own the blank surface. The dot-matrix animation moved out of the page into the `ui-brand` plugin, and the host keeps the same implementation as its fallback, so disabling the plugin or a compile failure never blanks the welcome backdrop.
 
