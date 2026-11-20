@@ -121,6 +121,22 @@ const filesExtTab = {
 const roots: Root[] = [];
 const hosts: HTMLElement[] = [];
 
+async function settle(): Promise<void> {
+	await act(async () => {
+		await Bun.sleep(10);
+	});
+}
+
+/** Bounded poll for the async slot mount: a fixed sleep is either too short
+ *  (flaky under load) or wasted on every case that needs no wait. */
+async function waitFor(predicate: () => boolean): Promise<void> {
+	for (let attempt = 0; attempt < 200; attempt++) {
+		if (predicate()) return;
+		await settle();
+	}
+	throw new Error("condition did not become true");
+}
+
 async function renderPanel(
 	tab: PanelTab,
 	options?: { cwd?: string | null; cwdOverride?: string; extTabs?: readonly (typeof filesExtTab)[] },
@@ -144,11 +160,6 @@ async function renderPanel(
 			/>,
 		);
 	});
-	// Slot modules load through a dynamic import; one microtask turn is not
-	// enough for the mount to publish its props.
-	await act(async () => {
-		await Bun.sleep(20);
-	});
 	return host;
 }
 
@@ -168,6 +179,7 @@ describe("ContextPanel surface body fallthrough", () => {
 
 	it("files tab with a workspace mounts the file workspace with that cwd", async () => {
 		const host = await renderPanel(filesTab(), { cwd: "C:/workspace", extTabs: [filesExtTab] });
+		await waitFor(() => globals.__filesWorkspaceMount !== undefined);
 		expect(globals.__filesWorkspaceMount).toEqual({ cwd: "C:/workspace", sessionId: "s1" });
 		expect(host.textContent).not.toContain(t("settings.noWorkspace"));
 		expect(host.textContent).not.toContain(t("general.stats"));
@@ -175,7 +187,14 @@ describe("ContextPanel surface body fallthrough", () => {
 
 	it("files tab falls back to the host's cwd when the session state carries none", async () => {
 		await renderPanel(filesTab(), { cwd: "", cwdOverride: "D:/project", extTabs: [filesExtTab] });
+		await waitFor(() => globals.__filesWorkspaceMount !== undefined);
 		expect(globals.__filesWorkspaceMount).toEqual({ cwd: "D:/project", sessionId: "s1" });
+	});
+
+	it("files tab falls back to the host's cwd when the snapshot has no state", async () => {
+		await renderPanel(filesTab(), { cwd: null, cwdOverride: "E:/other", extTabs: [filesExtTab] });
+		await waitFor(() => globals.__filesWorkspaceMount !== undefined);
+		expect(globals.__filesWorkspaceMount).toEqual({ cwd: "E:/other", sessionId: "s1" });
 	});
 
 	it("context tab still renders the context readouts", async () => {
