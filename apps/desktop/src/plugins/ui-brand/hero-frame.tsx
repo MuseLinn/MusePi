@@ -2,10 +2,9 @@ import type { ReactNode } from "react";
 import { WelcomeBackdrop } from "../../lib/welcome-backdrop";
 
 /**
- * `conversation.hero.frame` occupant (hoc seat, dsh `conversation.hero.frame`
- * parity): the official whale there paints behind the home content and plays
- * on blank clicks; this one paints the dot-matrix brand animation behind the
- * hero and renders the host content untouched.
+ * `conversation.hero.frame` occupant (hoc seat): it paints the dot-matrix
+ * brand animation behind the hero and renders the host content untouched, so
+ * the fragment adds no box and the hero keeps its own layout.
  *
  * The fragment adds no box, so the hero's own flex layout keeps the children
  * as direct flex items. A contribution that dropped `children` would blank the

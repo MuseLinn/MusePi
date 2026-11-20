@@ -6,10 +6,9 @@ import { useEffect, useState } from "react";
  * behind the empty-state hero.
  *
  * The backdrop is a slot contribution (`conversation.hero.frame`), not a piece
- * of the hero layout — dsh ships its whale the same way (an official brand
- * plugin paints behind the home content). The host keeps this component as the
- * built-in occupant so disabling the plugin, or a compile failure, cannot take
- * the backdrop away with it.
+ * of the hero layout: a brand plugin paints behind the home content. The host
+ * keeps this component as the built-in occupant so disabling the plugin, or a
+ * compile failure, cannot take the backdrop away with it.
  */
 const WELCOME_BACKDROP_CHANGED_EVENT = "musepi-dotmatrix-changed";
 const ON_KEY = "musepi-gui-dotmatrix";

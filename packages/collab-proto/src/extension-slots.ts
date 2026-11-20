@@ -42,7 +42,7 @@
  * | `conversation.input.activity` | **single** | 模型选择器之后的动作 |
  * | `conversation.input.requestDraft` | list | 草稿初始化 |
  * | `conversation.input.for` | list | 「为…生成的输入」上下文 |
- * | `conversation.hero.frame` | **hoc** | 欢迎区外框：贡献组件接收 `children`（宿主内容），可包一层装饰/背景（dsh `conversation.hero.frame` 的鲸鱼就是这个形状）；无贡献时宿主直接渲染 children |
+ * | `conversation.hero.frame` | **hoc** | 欢迎区外框：贡献组件接收 `children`（宿主内容），可包一层装饰/背景（贡献组件可在这层背景里画动画或装饰）；无贡献时宿主直接渲染 children |
  * | `conversation.hero.brand.mark` | **single** | 空态品牌标记 |
  * | `conversation.hero.workspace` | **single** | 空态工作区/项目选择 |
  * | `conversation.hero.agentPreset` | **single** | 空态工作模式选择 |
@@ -64,8 +64,8 @@
  *
  *  `hoc`：包装语义。贡献组件收到宿主内容作为 `children`，必须原样渲染它
  *  （fragment 不产生盒子，布局不变），可在外层叠加自己的装饰/背景层。
- *  无贡献时宿主直接渲染 children——这是 dsh `conversation.hero.frame` 的
- *  形状（官方鲸鱼画布画在 children 之下）。 */
+ *  无贡献时宿主直接渲染 children；贡献组件把画布放在 children 之下即可，
+ *  布局不受影响。 */
 export type SlotKind = "single" | "list" | "hoc";
 
 /** 一个席位的声明。 */
