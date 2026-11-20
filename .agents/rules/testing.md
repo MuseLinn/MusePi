@@ -10,6 +10,7 @@ Tests and smoke runs must never write `~/.musepi/agent/sessions/` or share `%TEM
 - Real session-storage suites use `test/helpers/isolate-agent-dir.ts`: `isolateAgentDirForTest` in `beforeAll`, `restoreAgentDirForTest` in `afterAll`, with a 30-second hook timeout on Windows. Suites passing an explicit isolated session directory for every write are exempt.
 - A temporary cwd only changes the session slug; it does not isolate the session root.
 - Manual desktop, daemon, or real-model smoke runs go through `bun scripts/dev-smoke.ts -- <command>`.
+- Desktop suites are isolated per file: run `bun run test` (or `bun test --isolate test`) inside `apps/desktop`. A bare `bun test` shares one happy-dom/localStorage registry across files and reports cross-file failures that do not exist in the package's own test path; CI's `ci-test-ts.ts` adds `--isolate` for the same reason.
 - Daemon tests inherit isolated `MUSEPI_DAEMON_DIR` from the bunfig preload. Import daemon paths from owning source modules; never hardcode production paths.
 
 ## Test contract
