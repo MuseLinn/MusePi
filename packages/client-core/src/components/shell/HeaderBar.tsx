@@ -35,7 +35,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { thinkingLevelLabel } from "./thinking-level";
 
 /** Guest side panels reachable from the header nav. */
-export type GuestPanel = "board" | "scheduled" | "files" | "marketplace" | "workbench" | "voice" | "settings";
+export type GuestPanel = "board" | "scheduled" | "files" | "marketplace" | "dock" | "voice" | "settings";
 
 export interface HeaderBarProps {
 	client: SessionClient;
@@ -66,7 +66,7 @@ const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: 
 	{ panel: "scheduled", icon: <CalendarClock size={14} />, title: "settings.scheduledTasks" },
 	{ panel: "files", icon: <FolderGit2 size={14} />, title: "tools.workspace" },
 	{ panel: "marketplace", icon: <Package size={14} />, title: "guest.marketplace" },
-	{ panel: "workbench", icon: <PanelRight size={14} />, title: "settings.workbench" },
+	{ panel: "dock", icon: <PanelRight size={14} />, title: "settings.workbench" },
 	{ panel: "voice", icon: <AudioLines size={14} />, title: "settings.voice" },
 ];
 

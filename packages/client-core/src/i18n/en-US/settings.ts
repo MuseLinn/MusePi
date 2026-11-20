@@ -1329,7 +1329,7 @@ export const settings = {
 	"settings.imageWatermarkPlaceholder": "Watermark text",
 	"settings.board": "Board",
 	"settings.prBoard": "Issues & pull requests",
-	"settings.workbench": "Workbench",
+	"settings.workbench": "Right sidebar",
 	"settings.boardTitle": "Board title",
 	"settings.boardHelloTitle": "Workbench",
 	"settings.boardFinanceTitle": "Daily finance",

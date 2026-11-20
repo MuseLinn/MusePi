@@ -177,6 +177,9 @@ export default function (pi: ExtensionAPI): void {
 - **失败可见**:编译失败/加载失败在宿主处以红色错误块显示(不再静默消失);运行时错误有 `gui-slot-error` 样式。
 
 **槽位清单**(daemon `assertKnownComponentSlot` 校验,未知槽名注册会抛错;单一权威见 `packages/collab-proto/src/extension-slots.ts`):
+
+**Slot ids are plugin API.** A rename is a breaking change: migrate every caller explicitly and record it in the CHANGELOG — never rename a slot silently. The right-sidebar panel seat (`panel.tab.dock`) is provided and mounted by the host; plugins contribute only the component rendered inside it, never the host panel itself.
+
 - `panel.tab.<id>` — 右面板动态 tab。默认提供 rail 启动入口；声明 `availability: "on-demand"` 时不进入 rail、空状态或新建菜单，只由会话内容或工具结果中的 `details.panelTab` 描述符打开。描述符使用 `surface: "ext:panel.tab.<id>"`，可携带 `target`、`dedupeKey` 和 `label`；失败工具结果不会打开标签。`panel.tab.files` 是保留特例：它映射到持久化 surface `files`，不进入通用扩展 launcher，也不接受 `ext:panel.tab.files` 作为第二个 surface。
 - `panel.shell` — full right-panel shell (single). The `panel` plugin owns tabs, split layout, and maximize presentation; `main.conversation` does not bundle it.
 - `shell.overlay` — root-level fixed overlay (single): owns the floating horizontal/vertical scroll rail and portals itself to `document.body`. The host keeps the built-in `<FloatingScrollbar/>` as the fallback when no contribution is mounted.
@@ -434,7 +437,7 @@ Electron 壳由第一方 Cordis 包 `desktop-shell` 提供,与其他 MusePi 包�
 
 **Shell 三模式**(DSH compatibility/extended/enhanced):
 - `compatibility`(默认): 注入脚本只注册 `conversation.chat.node` —— 扩展贡献聊天节点。
-- `extended`: 注入脚本额外注册 `conversation.composer.dock` / `panel.tab.workbench` / `statusbar`; guest-client 的 `CompatSlotHost` 按 slot 渲染注册组件(composer 上方 dock、底部状态条、workbench 面板)。
+- `extended`: 注入脚本额外注册 `conversation.composer.dock` / `panel.tab.dock` / `statusbar`; guest-client 的 `CompatSlotHost` 按 slot 渲染注册组件(composer 上方 dock、底部状态条、右侧栏面板)。
 - `enhanced`: 渲染器侧同 extended, 壳保留原生 titlebar(原生 UI 面板预留)。
 
 **注册表契约**: daemon 注入脚本(`static-web.ts` `compatSlotHostScript`, 仅 `?shell=1`) blob-import 已编译组件 → `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`; guest-client 初始化注册表(`main.tsx`), `Transcript`/`CompatSlotHost` 只读消费。纯浏览器 guest 无注入脚本 → 注册表为空 → 内建渲染。

@@ -119,7 +119,7 @@ export function compatSlotHostScript(): string {
 		const slots = new Set(["conversation.chat.node"]);
 		if (mode === "extended" || mode === "enhanced") {
 			slots.add("conversation.composer.dock");
-			slots.add("panel.tab.workbench");
+			slots.add("panel.tab.dock");
 			slots.add("statusbar");
 		}
 		const items = registry && Array.isArray(registry.components)

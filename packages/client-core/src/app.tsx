@@ -1216,9 +1216,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo, mobileTab
 								<WorkspacePanel client={client} cwd={sessionCwd} readOnly={readOnly} />
 							)}
 							{activePanel === "marketplace" && <MarketplacePanel client={client} />}
-							{activePanel === "workbench" && (
-								<CompatSlotHost slot="panel.tab.workbench" className="sh-compat-panel" />
-							)}
+							{activePanel === "dock" && <CompatSlotHost slot="panel.tab.dock" className="sh-compat-panel" />}
 							{activePanel === "voice" && <VoicePanel client={client} />}
 							{activePanel === "settings" && (
 								<MobileSettings

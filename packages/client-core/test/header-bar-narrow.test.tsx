@@ -27,7 +27,7 @@ const props = (client: GuestClient) => ({
 	railOpen: false,
 	onToggleRail: () => {},
 	onLeave: () => {},
-	activePanel: null as "board" | "scheduled" | "files" | "workbench" | null,
+	activePanel: null as "board" | "scheduled" | "files" | "dock" | null,
 	onSelectPanel: () => {},
 	currentLink: LINK,
 	onSwitchTo: () => {},
@@ -63,7 +63,7 @@ describe("HeaderBar narrow-phone panel collapse (≤520px)", () => {
 		expect(html).toContain('title="Board"');
 		expect(html).toContain('title="Task Center"');
 		expect(html).toContain('title="Workspace"');
-		expect(html).toContain('title="Workbench"');
+		expect(html).toContain('title="Right sidebar"');
 		// No collapsed menu.
 		expect(html).not.toContain("sh-panel-menu-pop");
 	});

@@ -31,7 +31,7 @@ const props = (client: GuestClient) => ({
 	railOpen: false,
 	onToggleRail: () => {},
 	onLeave: () => {},
-	activePanel: null as "board" | "scheduled" | "files" | "workbench" | null,
+	activePanel: null as "board" | "scheduled" | "files" | "dock" | null,
 	onSelectPanel: () => {},
 	currentLink: LINK,
 	onSwitchTo: () => {},
