@@ -314,10 +314,23 @@
 .gui-scene-welcome {
 	display: flex;
 	flex-direction: column;
-	/* Paired entrance with the chat scene: 160ms rise on both legs of
-	 * welcome<->session (the chat side uses gui-scene-chat--direct for
-	 * the same duration during the morph overlap). */
+}
+
+/* Entrance rise: only where no View Transition can own the landing. The
+ * VT-capable runtime skips it — the browser already animates the paired
+ * snapshots, and a CSS animation suppressed for the transition window would
+ * restart the moment that window closes (a visible re-pop). */
+.gui-scene-welcome.gui-scene--enter {
 	animation: gui-scene-in 160ms ease;
+}
+
+/* The destination of a scene hand-off mounts one frame early, laid out but
+ * unpainted: the browser's new snapshot then carries a complete scene instead
+ * of the view assembling itself under the morph. */
+.gui-scene[data-scene-arriving="true"] {
+	visibility: hidden;
+	pointer-events: none;
+	animation: none !important;
 }
 
 .gui-scene--leaving {
@@ -355,7 +368,7 @@
 	animation-play-state: paused !important;
 }
 
-.gui-scene-chat {
+.gui-scene-chat.gui-scene--enter {
 	animation: gui-scene-in 360ms ease;
 }
 /* During the welcome→session composer morph the incoming scene must not
@@ -364,7 +377,7 @@
  * with the welcome side's own content transitions (brand width,
  * shimmer) on the reverse leg — both directions then have an incoming
  * fade, none of them a hard pop-in. */
-.gui-scene-chat--direct {
+.gui-scene-chat--direct.gui-scene--enter {
 	animation: gui-scene-in 160ms ease;
 }
 
@@ -828,15 +841,17 @@
  * transitions never capture the composer. */
 /* Welcome ⇄ session: both composer wrappers take the same name for the
  * scene transition window, so the input card is one continuous surface. */
-/* The scene transition morphs the input card; transcript rows stay laid out
- * but unpainted for that window, so session content arriving mid-transition
- * cannot reflow underneath the morph. They reveal when the transition lands. */
-.gui-scene-chat[data-scene-morphing="true"] .gui-transcript {
-	visibility: hidden;
-}
+/* The destination of a scene hand-off is already laid out and painted before
+ * the transition starts, so nothing has to be withheld from paint for the
+ * morph window (the old `data-scene-morphing` transcript hide is gone: it read
+ * as "empty first, content later"). */
 
-html.gui-scene-vt [data-flip-anchor="welcome"],
-html.gui-scene-vt [data-flip-anchor="session"] {
+/* Welcome ⇄ session: the composer wrappers take the same name for the scene
+ * transition window, but only the ACTIVE scene may carry it — the destination
+ * is mounted (hidden) one frame early, and two elements sharing a name would
+ * make the browser drop the pair entirely. */
+html.gui-scene-vt [data-scene-active="true"] [data-flip-anchor="welcome"],
+html.gui-scene-vt [data-scene-active="true"] [data-flip-anchor="session"] {
 	view-transition-name: composer-surface;
 }
 

@@ -842,10 +842,19 @@ export function ChatView({
 	const [welcomeLeaving, setWelcomeLeaving] = useState(false);
 	const [showChat, setShowChat] = useState(() => !!store);
 	const [chatLeaving, setChatLeaving] = useState(false);
-	// True for the welcome ⇄ session transition window: the chat shell and its
-	// composer are painted (and morph) while the transcript rows stay
-	// unpainted, so session content loading cannot reflow under the morph.
-	const [sceneMorphing, setSceneMorphing] = useState(false);
+	// Which scene owns the composer surface right now. While the hand-off runs,
+	// the destination is mounted beside the source but this still names the
+	// source — the browser must see exactly one `composer-surface` per snapshot.
+	const [activeScene, setActiveScene] = useState<"welcome" | "chat">(() => (store ? "chat" : "welcome"));
+	// Destination mounted (laid out, hidden) one frame before the transition
+	// starts. Same order Kimi uses — wait for the view, then project — so the
+	// entering snapshot already carries painted content instead of the scene
+	// assembling itself underneath the morph.
+	const [arrivingScene, setArrivingScene] = useState<"welcome" | "chat" | null>(null);
+	// Entrance animation only where no View Transition can carry the change;
+	// the VT-capable runtime lets the browser own the landing (an extra CSS
+	// rise would replay after the transition clears its class).
+	const sceneVtCapable = sharedSurfaceTransitionAllowed();
 	// Desktop-only tree-sitter highlighting for transcript code blocks.
 	const chatHighlight = useChatHighlight();
 	// A scene flip is the composer changing homes (welcome ⇄ session): run it
@@ -857,23 +866,26 @@ export function ChatView({
 		const next = store ? "chat" : "welcome";
 		const flip = sceneRef.current !== next;
 		sceneRef.current = next;
-		if (flip && sharedSurfaceTransitionAllowed()) {
-			const landed = (): void => setSceneMorphing(false);
-			withViewTransition(
-				() => {
-					setChatLeaving(false);
-					setWelcomeLeaving(false);
-					setShowChat(Boolean(store));
-					setShowWelcome(!store);
-					setSceneMorphing(true);
-				},
-				{ surfaceOnly: true, extraClass: "gui-scene-vt", onFinished: landed },
-			);
-			// The promise is reliable in Chromium; the timer keeps a cancelled
-			// transition from leaving the transcript hidden forever.
-			const timer = setTimeout(landed, 700);
-			return () => clearTimeout(timer);
+		// A store identity change inside the same scene is not a hand-off: the
+		// flags below only move on an actual scene flip.
+		if (!flip) return;
+		// The forward leg morphs the composer into a live chat scene, so the
+		// destination mounts first (laid out but hidden) and the transition runs
+		// from its own effect once that render has landed. Splitting the two
+		// keeps a store update in the pre-paint frames from stranding a hidden
+		// scene. The reverse leg has no live source — a null store unmounts the
+		// chat scene in the same commit that flips the flags — and keeps the
+		// FLIP + fade fallback below.
+		if (flip && store && sharedSurfaceTransitionAllowed()) {
+			setChatLeaving(false);
+			setWelcomeLeaving(false);
+			setShowWelcome(true);
+			setShowChat(true);
+			setArrivingScene("chat");
+			return;
 		}
+		setArrivingScene(null);
+		setActiveScene(next);
 		if (store) {
 			setChatLeaving(false);
 			setShowChat(true);
@@ -887,6 +899,33 @@ export function ChatView({
 		const timer = setTimeout(() => setShowChat(false), 420);
 		return () => clearTimeout(timer);
 	}, [store]);
+	// Scene hand-off, one frame after the destination is painted: the browser
+	// then pairs two painted snapshots, so the session never assembles itself
+	// underneath the morph (Kimi's order — wait for the view, then project).
+	// Runs from its own effect so a store update between the two commits cannot
+	// leave the hidden destination mounted.
+	useEffect(() => {
+		if (arrivingScene === null) return;
+		const target = arrivingScene;
+		let inner = 0;
+		const outer = requestAnimationFrame(() => {
+			inner = requestAnimationFrame(() => {
+				withViewTransition(
+					() => {
+						setArrivingScene(null);
+						setShowWelcome(target === "welcome");
+						setShowChat(target === "chat");
+						setActiveScene(target);
+					},
+					{ surfaceOnly: true, extraClass: "gui-scene-vt" },
+				);
+			});
+		});
+		return () => {
+			cancelAnimationFrame(outer);
+			cancelAnimationFrame(inner);
+		};
+	}, [arrivingScene]);
 	// FLIP morph: when a scene ENTERS (its DOM actually mounted — the
 	// showChat/showWelcome flags can flip before the store populates the
 	// scene, so ref callbacks below are the reliable trigger; a
@@ -917,19 +956,23 @@ export function ChatView({
 		});
 	};
 	const welcomeSceneRef = (el: HTMLDivElement | null): void => {
-		if (el) {
-			if (!document.documentElement.classList.contains("gui-view-transition")) {
-				sceneMorph('[data-flip-anchor="session"]', '[data-flip-anchor="welcome"]', lastSessionFrameRect);
-			}
-			lastSessionFrameRect = null;
+		if (!el) return;
+		const fromRect = lastSessionFrameRect;
+		lastSessionFrameRect = null;
+		// The arriving scene is the View Transition's destination: its frame is
+		// already pinned by the browser, so the FLIP fallback must stay out of it.
+		if (arrivingScene !== null) return;
+		if (!document.documentElement.classList.contains("gui-view-transition")) {
+			sceneMorph('[data-flip-anchor="session"]', '[data-flip-anchor="welcome"]', fromRect);
 		}
 	};
 	const chatSceneRef = (el: HTMLDivElement | null): void => {
-		if (el) {
-			if (!document.documentElement.classList.contains("gui-view-transition")) {
-				sceneMorph('[data-flip-anchor="welcome"]', '[data-flip-anchor="session"]', lastWelcomeFrameRect);
-			}
-			lastWelcomeFrameRect = null;
+		if (!el) return;
+		const fromRect = lastWelcomeFrameRect;
+		lastWelcomeFrameRect = null;
+		if (arrivingScene !== null) return;
+		if (!document.documentElement.classList.contains("gui-view-transition")) {
+			sceneMorph('[data-flip-anchor="welcome"]', '[data-flip-anchor="session"]', fromRect);
 		}
 	};
 	// While the chat scene is mounted, keep the composer frame's rect warm
@@ -3195,7 +3238,9 @@ export function ChatView({
 						{showWelcome && (
 							<div
 								ref={welcomeSceneRef}
-								className={`gui-scene gui-scene-welcome relative min-h-0 flex-1${welcomeLeaving ? " gui-scene--leaving" : ""}`}
+								data-scene-active={activeScene === "welcome" ? "true" : undefined}
+								data-scene-arriving={arrivingScene === "welcome" ? "true" : undefined}
+								className={`gui-scene gui-scene-welcome relative min-h-0 flex-1${welcomeLeaving ? " gui-scene--leaving" : ""}${sceneVtCapable ? "" : " gui-scene--enter"}`}
 							>
 								{/* Same rounded floating card as the chat scene and the
 								 * settings main view: the welcome scene used to sit
@@ -3224,8 +3269,9 @@ export function ChatView({
 						{showChat && store && (
 							<div
 								ref={chatSceneRef}
-								className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}`}
-								data-scene-morphing={sceneMorphing ? "true" : undefined}
+								data-scene-active={activeScene === "chat" ? "true" : undefined}
+								data-scene-arriving={arrivingScene === "chat" ? "true" : undefined}
+								className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}${sceneVtCapable ? "" : " gui-scene--enter"}`}
 							>
 								<div className="flex min-h-0 flex-1">
 									{/* Session column: transcript + composer + dock. The

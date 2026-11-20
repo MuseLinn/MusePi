@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **欢迎页 → 会话的输入框转场先让目标场景就绪，再开始形变**：目标场景提前一帧挂载（完成布局但不绘制），转场只在两张已经画好的快照之间进行，会话不再在输入框飞行途中自己拼装出来；只有当前场景带 `composer-surface`，目标场景的预挂载不会造成同名元素冲突。转录区不再为转场窗口隐藏（此前是"先空、再补上"），场景入场动画只在不支持 View Transition 的环境运行，避免转场结束后重播一次。
+  - EN: The welcome → session composer hand-off now readies the destination before morphing. The destination scene mounts one frame early — laid out but unpainted — so the transition pairs two already-painted snapshots and the session never assembles itself underneath the flight; only the active scene carries `composer-surface`, so the pre-mounted destination can never collide on the name. The transcript is no longer withheld for the transition window (that read as "empty first, content later"), and the scene's CSS entrance runs only where View Transitions are unavailable, so it never replays once the transition closes.
+
 ## [0.7.7] - 2026-11-20
 
 - **共享面转场全面规范化：欢迎页与会话输入框、图片预览与画板都连成一条**：把 `surfaceOnly` 设为所有命名面形变的默认（对话框也不再整窗闪），只保留普通布局转场的整窗交叉淡化；欢迎页 ⇄ 会话的输入框翻转改成共享面（两侧 `composer-surface`，离开的场景在同一个 update 内卸载）；图片组在转场里是替换而非交叉淡化，缩略图的玻璃/强调色不再在入场/出场时盖在照片上；预览→画板由宿主在同一个 update 内完成（lightbox 不再先自己关闭，之前那会启动第二次转场）。
