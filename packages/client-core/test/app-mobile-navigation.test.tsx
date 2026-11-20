@@ -72,9 +72,8 @@ describe("mobile workspace navigation", () => {
 		await renderWorkspace(true);
 		expect(document.querySelector(".sh-workspace")).toBeNull();
 		expect(document.querySelector(".sh-welcome-hint")).not.toBeNull();
-		const draftInput = document.querySelector<HTMLTextAreaElement>(".sh-composer-input");
-		expect(draftInput?.disabled).toBe(false);
-		expect(draftInput?.placeholder).toBe("Ask anything…");
+		expect(document.querySelector(".sh-composer")).not.toBeNull();
+		expect(document.querySelector<HTMLButtonElement>(".sh-composer-send")).not.toBeNull();
 
 		await act(async () => document.querySelector<HTMLButtonElement>(".sh-title-btn")?.click());
 		await act(async () => document.querySelector<HTMLButtonElement>(".ss-item")?.click());

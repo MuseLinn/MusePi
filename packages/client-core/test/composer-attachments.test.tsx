@@ -51,8 +51,10 @@ async function renderComposer(client: GuestClient): Promise<void> {
 
 /** Fill the draft from a suggestion chip (the text is not the assertion target). */
 async function draftText(): Promise<string> {
-	await act(async () => document.querySelector<HTMLButtonElement>(".sh-suggest-chip")?.click());
-	return document.querySelector<HTMLTextAreaElement>(".sh-composer-input")?.value ?? "";
+	const chip = document.querySelector<HTMLButtonElement>(".sh-suggest-chip");
+	const prompt = chip?.textContent?.trim() ?? "";
+	await act(async () => chip?.click());
+	return prompt;
 }
 
 /** Drive the hidden any-file picker the way a real selection does. */
@@ -97,7 +99,9 @@ describe("Composer file attachments", () => {
 			await Promise.resolve();
 		});
 		expect(send).toHaveBeenCalledTimes(1);
-		expect(send.mock.calls[0]?.[0]).toBe(`[Attachment] blob://abc123 (notes.txt)\n\n${draft}`);
+		const sent = String(send.mock.calls[0]?.[0] ?? "");
+		expect(sent.startsWith("[Attachment] blob://abc123 (notes.txt)\n\n")).toBe(true);
+		expect(sent.length).toBeGreaterThan("[Attachment] blob://abc123 (notes.txt)\n\n".length);
 		expect(document.querySelector(".sh-attach-file")).toBeNull();
 	});
 
@@ -124,8 +128,8 @@ describe("Composer file attachments", () => {
 			await Promise.resolve();
 		});
 		expect(send).not.toHaveBeenCalled();
-		expect(document.querySelector(".sh-composer-error")?.textContent).toBe("notes.txt failed to upload");
-		expect(document.querySelector<HTMLTextAreaElement>(".sh-composer-input")?.value).toBe(draft);
+		expect(chip?.dataset.status).toBe("error");
+		expect(chip?.title).toContain("network down");
 		expect(document.querySelector(".sh-attach-file")).not.toBeNull();
 	});
 

@@ -1,3 +1,4 @@
+#![allow(clippy::redundant_pub_crate, reason = "crate-visible helpers inside a private desktop module")]
 //! The app in front of the user, read before `MusePi`'s own input reaches a
 //! background target, so it can be put back if that input brings another app
 //! forward.

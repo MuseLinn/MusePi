@@ -1,3 +1,4 @@
+#![allow(clippy::redundant_pub_crate, reason = "crate-visible helpers inside a private desktop module")]
 //! Zero-dependency region proposals over a captured screenshot frame.
 //!
 //! The detector proposes rectangles from image structure alone: grayscale,

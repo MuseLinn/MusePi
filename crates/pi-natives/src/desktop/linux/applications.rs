@@ -1,3 +1,4 @@
+#![allow(clippy::unnecessary_wraps, reason = "the Linux application backend shares the platform Result shape")]
 //! XDG application inventory and direct desktop-entry launching.
 //!
 //! Discovery reads the desktop entries the XDG data directories install and

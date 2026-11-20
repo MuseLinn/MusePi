@@ -1,4 +1,4 @@
-#![allow(clippy::redundant_pub_crate)]
+#![allow(clippy::redundant_pub_crate, reason = "crate-visible helpers inside a private desktop module")]
 //! Cancellation and exclusive task/operation ownership of desktop mutations.
 //!
 //! Explicit control keeps the kernel lease between operations. Revocation stops

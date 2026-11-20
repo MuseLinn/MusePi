@@ -1,3 +1,4 @@
+#![allow(clippy::redundant_pub_crate, reason = "crate-visible helpers inside a private desktop module")]
 //! Menu access for both Linux display servers.
 //!
 //! Menus are read and commanded through the frame's AT-SPI tree, so X11 and
