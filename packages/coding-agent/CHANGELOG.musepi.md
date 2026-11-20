@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **欢迎区外框升级为 hoc 插件座位，点阵背景改由内置品牌插件提供**：`conversation.hero.frame` 现在把整个欢迎区内容作为 `children` 交给贡献组件（fragment 不产生盒子，布局不变），插件可以在内容背后叠加背景或接管空白区域；点阵品牌动画从页面搬进内置插件 `ui-brand`，宿主保留同一份实现作为回退——停用插件或编译失败都不会让欢迎页丢背景。
+  - EN: The welcome frame is a hoc seat now, and the dot-matrix backdrop ships as a built-in brand plugin. `conversation.hero.frame` hands the whole hero body to the contribution as `children` (a fragment adds no box, so the layout is untouched); a plugin can layer a background behind that content or own the blank surface. The dot-matrix animation moved out of the page into the `ui-brand` plugin, and the host keeps the same implementation as its fallback, so disabling the plugin or a compile failure never blanks the welcome backdrop.
+
 - **欢迎页与会话共用同一个输入框宿主**：输入框不再分别嵌在两张卡片里，而是挂在场景层的常驻宿主上、按当前卡片实测定位（会话信息侧栏收窄列宽时也跟随）。欢迎 ⇄ 会话只移动这一个节点（240ms translate FLIP），卡片在它周围交叉淡化；草稿、附件与焦点留在同一个节点上，不会因为换场景重挂。场景 View Transition 与两套 rect 缓存随之下线。
   - EN: Welcome and session now share one composer host. The input no longer lives inside each card: it hangs off a persistent host above the scenes layer, positioned from the active card's measured box (so the session-info column narrowing is followed). A welcome ⇄ session switch moves that single node with a 240ms translate FLIP while the cards cross-fade around it; the draft, attachments and focus stay on the same node instead of remounting with the scene. The scene View Transition and both cached frame rects are gone with it.
 - **右侧栏「文件」标签不再显示上下文读数**：打开缺少工作区路径的会话时（例如历史会话的快照没有 `cwd`），「文件」标签会落到上下文面板的兜底分支——标签写着「文件」，内容却是上下文窗口与 Token 统计。现在会话 cwd 为空会回退到宿主项目目录，「文件」表面真正没有工作区时显示自己的「未关联工作区」空态；上下文读数只属于「上下文」标签，未知或缺少前置条件的表面一律显示显式空态，不再借用其他表面的内容。

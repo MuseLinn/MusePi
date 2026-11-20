@@ -180,7 +180,7 @@ export default function (pi: ExtensionAPI): void {
 - `conversation.input.dock` / `conversation.composer.dock` —— 输入卡上方 / 下方的整行条目（list，多扩展可同槽）。一个插件可以用不同的 `id` 在同一座位拥有多条条目：stats 插件把 `activity` 与 `usage` 两枚胶囊注册成两条条目（`order` 0/1），第三方可以只替换其中一枚，而不是整行读数。
 - `conversation.input.left` / `conversation.input.right` / `conversation.input.overlay` —— 工具栏两端与输入卡内的浮层（list）。
 - `conversation.input.model` / `.attachments` / `.permission` / `.plan` / `.activity`（single）—— 输入卡控件；后注册者取代先注册者。
-- `conversation.hero.brand.mark` / `.workspace` / `.agentPreset`（single）与 `conversation.hero.options`（list）—— 空态席位，均有内建回退。`conversation.hero.frame` 是欢迎区内的装饰层：本宿主没有 hoc 包装语义，不能接管宿主内容。
+- `conversation.hero.brand.mark` / `.workspace` / `.agentPreset`（single）与 `conversation.hero.options`（list）—— 空态席位，均有内建回退。`conversation.hero.frame` 是 **hoc** 席位（对齐 dsh `conversation.hero.frame`）：贡献组件收到整个 hero body 作为 `children`，必须原样渲染（fragment 不产生盒子，flex 布局不变），并拥有内容背后那一层。内置品牌插件 `apps/desktop/src/plugins/ui-brand` 用它承载点阵背景，宿主保留同一背景作为回退——停用插件也不会让座位变空。丢掉 `children` 会让欢迎区整块消失，这是该座位唯一不能做的事。
 - `conversation.chat.node`（list）—— transcript 节点 seat，按节点 kind 派发（见 §10）。
 - `panel.right` / `settings.extensions` — 旧保留槽（仍可用）。**`settings.extensions` 是插件自带设置面板的推荐槽位**（2026-10-10 起由 `ExtensionsCenter` 承载，见下）：注册到该槽的组件与 `settings.item.<extId>` 卡片一并按扩展分组渲染，并注入 `settingsScope` 读写代理。
 - `settings.item.<extId>` — 扩展设置卡片（2026-08-17；2026-08-20 起展示于**扩展中心底部**，随插件 inventory）：按扩展 id 派发一张卡片，组件经 `settingsScope` prop 读写设置键（见下）。
