@@ -148,21 +148,6 @@ $rows | ConvertTo-Json -Compress
 	);
 }
 
-/** The primary display's size, in physical px — the cursor cannot be
- *  parked outside it, and a pet near the screen edge makes "park it far
- *  away" land off-screen. */
-function primaryScreenSize() {
-	const script = String.raw`
-Add-Type -AssemblyName System.Windows.Forms
-$b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-Write-Output "$($b.Width),$($b.Height)"
-`;
-	const run = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8" });
-	if (run.status !== 0) return { width: 1920, height: 1080 };
-	const [width, height] = String(run.stdout).trim().split(",").map(Number);
-	return { width: Number.isFinite(width) ? width : 1920, height: Number.isFinite(height) ? height : 1080 };
-}
-
 async function createNativeWindowProbe(ownerPid) {
 	const script = String.raw`
 Add-Type -TypeDefinition @'
@@ -291,7 +276,40 @@ async function traceNativeBubbleMorph(petPage, bubblesPage, action) {
 	}
 }
 
+/** The smoke can move the OS cursor on win32 (user32) and Linux (X11), the
+ *  two platforms where the pet smoke runs. CDP input stays in the renderer
+ *  and never moves the cursor the main-process proximity poll reads. */
+function nativeCursorSupported() {
+	return process.platform === "win32" || process.platform === "linux";
+}
+
 function positionNativeCursor(dipX, dipY, dpr, button = null) {
+	if (process.platform === "linux") {
+		// Xvfb has no window manager; XWarpPointer still moves the pointer the
+		// X server reports to Electron. python3 + libX11 ship with the runner.
+		const x = Math.round(dipX * dpr);
+		const y = Math.round(dipY * dpr);
+		const script = `
+import ctypes, sys
+xlib = ctypes.CDLL("libX11.so.6")
+xlib.XOpenDisplay.restype = ctypes.c_void_p
+xlib.XOpenDisplay.argtypes = [ctypes.c_char_p]
+xlib.XDefaultRootWindow.restype = ctypes.c_ulong
+xlib.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+xlib.XWarpPointer.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_int, ctypes.c_int, ctypes.c_uint, ctypes.c_uint, ctypes.c_int, ctypes.c_int]
+xlib.XFlush.argtypes = [ctypes.c_void_p]
+xlib.XCloseDisplay.argtypes = [ctypes.c_void_p]
+display = xlib.XOpenDisplay(None)
+if not display:
+    sys.exit("XOpenDisplay failed")
+xlib.XWarpPointer(display, 0, xlib.XDefaultRootWindow(display), 0, 0, 0, 0, ${x}, ${y})
+xlib.XFlush(display)
+xlib.XCloseDisplay(display)
+`;
+		const run = spawnSync("python3", ["-c", script], { encoding: "utf8" });
+		if (run.status !== 0) throw new Error(`Native cursor positioning failed: ${run.stderr || run.stdout}`);
+		return;
+	}
 	if (process.platform !== "win32") return;
 	const x = Math.round(dipX * dpr);
 	const y = Math.round(dipY * dpr);
@@ -316,6 +334,17 @@ ${buttonScript}
 `;
 	const run = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8" });
 	if (run.status !== 0) throw new Error(`Native cursor positioning failed: ${run.stderr || run.stdout}`);
+}
+
+/** The pet window's on-screen origin in the helper's input space. Chromium's
+ *  screenX/screenY are DIP-true on every platform; the helper applies DPR. */
+async function petWindowMetrics(page) {
+	return page.evaluate(() => ({
+		x: window.screenX,
+		y: window.screenY,
+		dpr: devicePixelRatio,
+		screenWidth: screen.width,
+	}));
 }
 
 try {
@@ -665,13 +694,12 @@ try {
 			const rect = document.querySelector(".pet-window__pet")?.getBoundingClientRect();
 			return rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } : null;
 		});
-		if (process.platform === "win32" && petBox) {
-			const petNativeBounds = nativeWindowBounds()["MusePi Pet"];
-			const dpr = await petPage.evaluate(() => devicePixelRatio);
+		if (nativeCursorSupported() && petBox) {
+			const origin = await petWindowMetrics(petPage);
 			positionNativeCursor(
-				Math.max(8, petNativeBounds.left + petBox.left - 220),
-				Math.max(8, petNativeBounds.top + (petBox.top + petBox.bottom) / 2),
-				dpr,
+				Math.max(8, origin.x + petBox.left - 220),
+				Math.max(8, origin.y + (petBox.top + petBox.bottom) / 2),
+				origin.dpr,
 			);
 			await sleep(450);
 		}
@@ -706,14 +734,12 @@ try {
 		);
 		// Now bring the cursor in: 20px off the sprite's right edge is inside
 		// the 40px enter radius yet outside the sprite, so only proximity fires.
-		if (process.platform === "win32" && petBox) {
-			const petNativeBounds = nativeWindowBounds()["MusePi Pet"];
-			const dpr = await petPage.evaluate(() => devicePixelRatio);
-			const screen = primaryScreenSize();
+		if (nativeCursorSupported() && petBox) {
+			const origin = await petWindowMetrics(petPage);
 			positionNativeCursor(
-				Math.min(screen.width - 8, petNativeBounds.left + petBox.right + 20),
-				Math.max(8, petNativeBounds.top + (petBox.top + petBox.bottom) / 2),
-				dpr,
+				Math.min(origin.screenWidth - 8, origin.x + petBox.right + 20),
+				Math.max(8, origin.y + (petBox.top + petBox.bottom) / 2),
+				origin.dpr,
 			);
 			await sleep(450);
 		}
@@ -920,13 +946,12 @@ try {
 		);
 		// Move the OS cursor far away — the leave threshold is 56px, so park it
 		// well outside and let the poll re-evaluate.
-		if (process.platform === "win32" && petBox) {
-			const petNativeBounds = nativeWindowBounds()["MusePi Pet"];
-			const dpr = await petPage.evaluate(() => devicePixelRatio);
+		if (nativeCursorSupported() && petBox) {
+			const origin = await petWindowMetrics(petPage);
 			positionNativeCursor(
-				Math.max(8, petNativeBounds.left + petBox.left - 220),
-				Math.max(8, petNativeBounds.top + (petBox.top + petBox.bottom) / 2),
-				dpr,
+				Math.max(8, origin.x + petBox.left - 220),
+				Math.max(8, origin.y + (petBox.top + petBox.bottom) / 2),
+				origin.dpr,
 			);
 			await sleep(400);
 		}
