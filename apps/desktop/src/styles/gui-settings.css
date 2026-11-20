@@ -8508,3 +8508,378 @@ body.gui-resizing {
 .gui-settings-row-desc--warn {
 	color: var(--color-danger);
 }
+/* ── Settings → 模型与供应商 → 角色卡片（M27 重构） ─────────────────────
+ * 基础卡片外壳在 gui-chat.css（后于本表加载），因此本节的每条规则都限定在
+ * .gui-model-rail-body 之下：多一层类名稳定压过基础选择器，不靠加载顺序，也
+ * 不需要 !important。尺寸走共享 token——字段类控件 --control-height-field
+ * (34px)、行内次级动作 --control-height-compact (28px)、按钮 --control-height-sm
+ * (32px)——不再沿用旧工具条里逐个手写的 26px；唯一例外是 22px 的序号方块，
+ * 仓内没有这个档位的 token，沿用现有小方块控件的尺寸。 */
+
+/* 卡片按内容高度排布，并给一条回退行留出可用宽度（序号 + 模型 + 级别 + 移除
+ * 已是固定 186px，模型名还要能显示 provider 与 id），所以只有角色列宽到 520px
+ * 以上才并排。auto-fit 按实测宽度决定列数：设置页常见的 550–840px 角色列就是
+ * 一列，模型名不再被挤成「ope... agnes-glo...」。 */
+.gui-model-rail-body .gui-role-grid {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
+	align-items: start;
+	gap: 12px;
+}
+
+.gui-model-rail-body .gui-role-card {
+	gap: 12px;
+	padding: 14px;
+}
+
+/* 卡头只承担身份：角色标签、循环位置、写入作用域。模型归下面的字段行，
+ * 旧卡头为抢右侧 200px 而截断模型名的问题从布局上消失。 */
+.gui-model-rail-body .gui-role-card-head {
+	align-items: center;
+	justify-content: flex-start;
+	gap: 6px;
+}
+
+/* 循环位置既是状态也是开关：徽标本身就是按钮，所以默认态也要有可点可聚焦的
+ * 视觉（旧实现是一个不可交互的 span + 工具条里的无名图标）。 */
+.gui-model-rail-body .gui-role-cycle-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: 2px;
+	padding: 1px 6px;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1.4;
+	color: var(--color-text-faint);
+	background: transparent;
+	cursor: pointer;
+	transition:
+		color 120ms ease,
+		background-color 120ms ease,
+		border-color 120ms ease;
+}
+
+/* 悬停才换配色；键盘聚焦只加 ring，不碰颜色——否则聚焦「在循环中」的徽标会
+ * 被 0,3,0 的 hover 配色盖掉 accent，看起来像未选中。 */
+.gui-model-rail-body .gui-role-cycle-badge:hover {
+	color: var(--color-text);
+	border-color: var(--border);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+.gui-model-rail-body .gui-role-cycle-badge:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+
+.gui-model-rail-body .gui-role-cycle-badge--on,
+.gui-model-rail-body .gui-role-cycle-badge--on:hover {
+	color: var(--color-accent);
+	border-color: transparent;
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+/* 当前模型字段：小标签一行（标签 + 自动选择状态 + 清除），控件一行。 */
+.gui-model-rail-body .gui-role-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-model-rail-body .gui-role-field-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-model-rail-body .gui-role-field-label {
+	flex: none;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--color-text-faint);
+}
+
+/* 自动选择说明取代了旧卡头那段被 max-width:200px 截断的文字：这里允许换行，
+ * 模型名完整可读。 */
+.gui-model-rail-body .gui-role-field .gui-role-status {
+	flex: 1 1 auto;
+	max-width: none;
+	font-size: 11px;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.gui-model-rail-body .gui-role-field .gui-role-field-clear {
+	flex: none;
+	margin-left: auto;
+	font-size: 11px;
+	color: var(--color-text-faint);
+	text-decoration: none;
+}
+
+.gui-model-rail-body .gui-role-field .gui-role-field-clear:hover,
+.gui-model-rail-body .gui-role-field .gui-role-field-clear:focus-visible {
+	color: var(--color-danger);
+}
+
+.gui-model-rail-body .gui-role-field-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+/* 选择器占满剩余宽度，标签在卡片边缘截断，而不是在固定的 230px 胶囊处；
+ * 外形与旁边的级别下拉一致（34px 字段高 + radius-lg + 描边）。 */
+.gui-model-rail-body .gui-role-card .gui-model {
+	flex: 1 1 200px;
+	min-width: 0;
+}
+
+.gui-model-rail-body .gui-role-card .gui-model-btn {
+	width: 100%;
+	height: var(--control-height-field);
+	justify-content: flex-start;
+	padding: 0 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-model-rail-body .gui-role-card .gui-model-btn .truncate {
+	flex: 1 1 auto;
+	min-width: 0;
+	text-align: left;
+}
+
+.gui-model-rail-body .gui-role-field-level {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: 0 1 auto;
+	min-width: 0;
+}
+
+/* 卡片内所有下拉统一到字段规格；级别下拉再窄一些，不与模型按钮抢宽度。 */
+.gui-model-rail-body .gui-role-card .gui-select-trigger {
+	height: var(--control-height-field);
+	min-width: 0;
+	padding: 0 8px;
+	border-radius: var(--radius-lg);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-model-rail-body .gui-role-card .gui-role-field-level .gui-select-trigger {
+	min-width: 104px;
+}
+
+/* 回退链：一个有序列表，不是一串无序号的行。 */
+.gui-model-rail-body .gui-role-fallbacks {
+	gap: 6px;
+	padding: 10px 12px;
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-bg) 40%, transparent);
+}
+
+.gui-model-rail-body .gui-role-fallbacks-title {
+	gap: 6px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+/* 添加回退是本区块唯一的主动作，给成有文字的次级按钮。 */
+.gui-model-rail-body .gui-role-chain-add {
+	min-height: 0;
+	height: var(--control-height-compact);
+	padding: 0 8px;
+	gap: 4px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+	background: transparent;
+	border-color: var(--border);
+}
+
+.gui-model-rail-body .gui-role-chain-add:hover {
+	color: var(--color-text);
+}
+
+.gui-model-rail-body .gui-role-fallback-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+/* 每行同一套栅格：序号 / 模型 / 级别 / 移除 —— 三列在各行之间严格对齐，
+ * 级别下拉定宽 112px，移除键固定在行尾，不再和其它小图标挤在一起。 */
+.gui-model-rail-body .gui-role-fallback-row {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) 112px auto;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	padding: 2px 0;
+	cursor: default;
+}
+
+/* 拖拽只从序号把手发起，行本身不是 drag source；基础表在按下整行时给的
+ * grabbing 光标会让人以为整行可拖，这里复位成 default，只让把手显示可拖。 */
+.gui-model-rail-body .gui-role-fallback-row:active {
+	cursor: default;
+}
+
+.gui-model-rail-body .gui-role-fallback-row--editing {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.gui-model-rail-body .gui-role-fallback-edit {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-model-rail-body .gui-role-fallback-edit .gui-model {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.gui-model-rail-body .gui-role-fallback-cancel {
+	min-height: 0;
+	height: var(--control-height-compact);
+	padding: 0 8px;
+	font-size: var(--ui-font-size-xs);
+}
+
+/* 序号就是调序把手，也是唯一的拖拽起点：位置本来就由它显示，↑/↓ 直接换位，
+ * 所以调序不依赖拖拽；悬停与聚焦时才显出按钮外形。 */
+.gui-model-rail-body .gui-role-fallback-grip {
+	opacity: 1;
+	align-items: center;
+	justify-content: center;
+	/* 22px：仓内没有这个档位的高度 token，沿用现有小方块控件的尺寸。 */
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-faint);
+	font-size: 11px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	cursor: grab;
+}
+
+.gui-model-rail-body .gui-role-fallback-grip:hover,
+.gui-model-rail-body .gui-role-fallback-grip:focus-visible {
+	color: var(--color-text);
+	border-color: var(--border);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+.gui-model-rail-body .gui-role-fallback-grip:active {
+	cursor: grabbing;
+}
+
+/* 模型名是这一行的主体，点击即换成编辑选择器（整行是可点的，不是一段死文字）。 */
+.gui-model-rail-body .gui-role-fallback-model {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
+	margin-left: -4px;
+	padding: 2px 4px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text);
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-model-rail-body .gui-role-fallback-model:hover,
+.gui-model-rail-body .gui-role-fallback-model:focus-visible {
+	border-color: var(--border);
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+
+.gui-model-rail-body .gui-role-fallback-provider {
+	flex: 0 1 auto;
+	max-width: 45%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text-faint);
+}
+
+.gui-model-rail-body .gui-role-fallback-name {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-model-rail-body .gui-role-fallback-remove {
+	flex: none;
+	width: var(--control-height-compact);
+	height: var(--control-height-compact);
+	min-height: 0;
+	padding: 0;
+	justify-content: center;
+	border-color: transparent;
+	background: transparent;
+	color: var(--color-text-faint);
+}
+
+.gui-model-rail-body .gui-role-fallback-remove:hover {
+	color: var(--color-danger);
+	border-color: color-mix(in oklab, var(--color-danger) 45%, var(--border));
+	background: color-mix(in oklab, var(--color-danger) 10%, transparent);
+}
+
+.gui-model-rail-body .gui-role-fallback-add {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	padding-top: 2px;
+}
+
+/* 底部动作区只剩「移除角色」：控件回到标准按钮高度，并与内容用一条细线分隔，
+ * 不再是一排 26px 的无标签图标。 */
+.gui-model-rail-body .gui-role-card > .gui-role-actions {
+	justify-content: flex-end;
+	gap: 8px;
+	padding-top: 10px;
+	border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.gui-model-rail-body .gui-role-card > .gui-role-actions > .gui-btn {
+	/* gui-chat.css keeps a 26px toolbar-button rule for this slot; every part
+	 * of it that applies here is restated so the footer reads as one standard
+	 * text button (its leftover min-width would otherwise pin the box). */
+	flex: 0 0 auto;
+	min-width: 0;
+	height: auto;
+	min-height: var(--control-height-sm);
+	padding: 0 10px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-model-rail-body .gui-role-card > .gui-role-actions > .gui-role-remove:hover {
+	color: var(--color-danger);
+	border-color: color-mix(in oklab, var(--color-danger) 45%, var(--border));
+}

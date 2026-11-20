@@ -10,7 +10,7 @@ import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
 import { ChromaGroup } from "../ChromaGroup";
 import { DialogFrame } from "../DialogFrame";
-import { GuiSelect } from "../GuiSelect";
+import { GuiSelect, type SelectOption } from "../GuiSelect";
 import { HeightMorph } from "../HeightMorph";
 import { MenuPopup } from "../MenuPopup";
 import { ModelSelector } from "../ModelSelector";
@@ -100,6 +100,20 @@ function splitRoleValue(value: string): { model: string; level: string | null } 
  * TUI formatModelSelectorValue parity: only concrete levels persist). */
 function joinRoleValue(model: string, level: string | null): string {
 	return level && level !== "inherit" ? `${model}:${level}` : model;
+}
+
+/** Drag payload type for one fallback row; the value is `<role>:<index>`. */
+const FALLBACK_DRAG_TYPE = "text/fallback-index";
+
+/** Decode a fallback drag payload into its source row index, or null when it
+ * names another card's chain or a row that no longer exists. Rows are drop
+ * targets on every card, so the role must travel with the index — otherwise a
+ * drop lands the source card's ordinal on the target card and rewrites it. */
+function parseFallbackDrag(payload: string, role: string, length: number): number | null {
+	const match = /^(.*):(\d+)$/.exec(payload);
+	if (!match || match[1] !== role) return null;
+	const from = Number(match[2]);
+	return from >= 0 && from < length ? from : null;
 }
 
 /** One stored credential row as exposed by the daemon (providers.credentials). */
@@ -624,308 +638,73 @@ export function ModelSection({
 		{ id: "custom", label: t("settings.customProviders") },
 	] as const;
 
-	// One role row (TUI /model roles-panel parity): tag + assignment state,
-	// thinking level, cycle membership, model picker + clear; custom roles
-	// additionally get a remove button. Fallback chains render as sub-rows
-	// with an inline model picker to append.
+	// Shared thinking-level ladder for a role's own model and each fallback
+	// entry: "inherit"/"auto" are policies, the rest are the selected model's
+	// rungs. Every option carries the same leading glyph so the selector reads
+	// as "thinking level" even where no text label sits beside it.
+	const roleLevelOptions = (efforts: string[]): SelectOption<string>[] => [
+		{
+			value: "inherit",
+			label: t("general.inherit"),
+			leading: <Icon name="brain-ai-3" className="h-3 w-3 opacity-60" />,
+		},
+		{ value: "auto", label: t("general.auto"), leading: <Icon name="brain-ai-3" className="h-3 w-3 opacity-60" /> },
+		{
+			value: "off",
+			label: t("transcript.thinkingOff"),
+			leading: <Icon name="brain-ai-3" className="h-3 w-3 opacity-60" />,
+		},
+		...efforts.map(lv => ({
+			value: lv,
+			label: t(`thinking ${lv}` as TranslationKey),
+			leading: <Icon name="brain-ai-3" className="h-3 w-3 opacity-60" />,
+		})),
+	];
+
+	// One role card answers three questions at a glance: which model the role
+	// uses now (head + current-model field), who it degrades to and in what
+	// order (numbered fallback list), and how an entry is added, removed or
+	// reordered (chain header + per-row handle). Fallback rows share one grid
+	// so the model / level / action columns line up across every entry.
 	const renderRoleRow = (role: string, removable: boolean): ReactNode => {
 		if (!rpc) return null;
 		const raw = roleModels?.[role] ?? "";
 		const { model, level } = splitRoleValue(raw);
 		const resolved = resolvedRoleModels[role];
-		const chain = fallbackChains[role] ?? [];
+		// A chain persisted by an older build (or hand-edited config) can carry
+		// a null entry; anything that is not a selector is dropped instead of
+		// reaching splitRoleValue, which would dereference it and crash the pane.
+		const chain = (fallbackChains[role] ?? []).filter(entry => typeof entry === "string");
 		const cycleIndex = cycleOrder?.indexOf(role) ?? -1;
 		const editingFallback = fallbackEditor === role;
 		const apply = (next: Record<string, string>): void =>
 			applyRoleModels(next, roleStorage === "project" ? (roleScope[role] ?? "project") : undefined);
+		const persistChain = (nextChain: string[]): void => {
+			const next = { ...fallbackChains };
+			if (nextChain.length > 0) next[role] = nextChain;
+			else delete next[role];
+			setFallbackChains(next);
+			void rpc.request("settings.set", { key: "retry.fallbackChains", value: next }).catch(() => {});
+		};
+		const moveChainRow = (from: number, to: number): void => {
+			if (from === to || from < 0 || from >= chain.length) return;
+			if (to < 0 || to >= chain.length) return;
+			const nextChain = [...chain];
+			const [moved] = nextChain.splice(from, 1);
+			nextChain.splice(to, 0, moved);
+			persistChain(nextChain);
+		};
 		return (
 			<div key={role} className="gui-role-card">
 				<div className="gui-role-card-head">
-					<div className="gui-settings-row-label">
-						<span className="gui-role-tag">{BUILTIN_ROLE_TAGS[role] ?? role}</span>
-						{cycleIndex >= 0 && (
-							<span className="gui-role-cycle-badge" title={t("general.cycleOrder")}>
-								⟳{cycleIndex + 1}
-							</span>
-						)}
-						{roleStorage === "project" &&
-							(() => {
-								// openchamber provenance parity: the badge shows the
-								// layer the CURRENT value lives in (dot marker) plus
-								// the next write target (label). When they differ —
-								// e.g. value inherited from global while the target
-								// is project — editing would silently shadow the
-								// source, so title spells that out.
-								const target = roleScope[role] ?? "project";
-								const source = roleSources[role] ?? "default";
-								const sourceLabel =
-									source === "project"
-										? t("general.scopeProject")
-										: source === "global" || source === "overlay" || source === "runtime"
-											? t("general.scopeGlobal")
-											: null;
-								const shadows = sourceLabel !== null && sourceLabel !== target;
-								return (
-									<button
-										type="button"
-										className={`gui-role-scope-badge${shadows ? " gui-role-scope-badge--warn" : ""}`}
-										title={
-											shadows
-												? `${t("general.roleScopeShadowed")} (${sourceLabel} → ${target === "project" ? t("general.scopeProject") : t("general.scopeGlobal")})`
-												: t("general.roleScopeToggle")
-										}
-										aria-label={t("general.roleScopeToggle")}
-										onClick={() =>
-											setRoleScope(prev => ({
-												...prev,
-												[role]: prev[role] === "global" ? "project" : "global",
-											}))
-										}
-									>
-										{sourceLabel && (
-											<span className="gui-role-scope-dot" aria-hidden="true">
-												●
-											</span>
-										)}
-										{target === "project" ? t("general.scopeProject") : t("general.scopeGlobal")}
-									</button>
-								);
-							})()}
-					</div>
-					<div className="gui-role-status" title={model}>
-						{model ? (
-							<div className="truncate">{resolved?.name || model}</div>
-						) : resolved ? (
-							<div className="truncate">
-								{t("general.autoSelection")}: {resolved.name || resolved.id}
-							</div>
-						) : (
-							<div className="italic">{t("general.autoSelectionApplies")}</div>
-						)}
-					</div>
-				</div>
-				<div className="gui-role-model-row">
-					<ModelSelector
-						rpc={rpc}
-						sessionId={null}
-						presetId={model || undefined}
-						maxLabelWidth="230px"
-						onSelect={(id, provider) => {
-							if (!id) return;
-							// Store the provider-qualified reference: the daemon
-							// resolves "provider/id" exactly, so assigning
-							// opencode-go's deepseek-v4-flash never leaks onto
-							// opencode-zen's same-id model.
-							const ref = provider ? `${provider}/${id}` : id;
-							if (role === "default") {
-								// The DEFAULT role IS the default model for new
-								// sessions — keep the welcome-composer preselect
-								// in sync with the role assignment. The bare ref
-								// (no :level suffix) mirrors the daemon's
-								// modelRoles.default value.
-								try {
-									localStorage.setItem("musepi-gui-default-model", ref);
-								} catch {
-									// storage unavailable
-								}
-								window.dispatchEvent(new CustomEvent("musepi-gui-default-model-changed", { detail: ref }));
-							}
-							// Keep the role's thinking suffix when the model
-							// changes (TUI assign preserves the level).
-							const next = { ...roleModels, [role]: joinRoleValue(ref, level) };
-							apply(next);
-						}}
-					/>
-				</div>
-				{(chain.length > 0 || editingFallback) && (
-					<div className="gui-role-fallbacks">
-						{chain.length > 0 && (
-							<div className="gui-role-fallbacks-title">
-								<Icon name="git-branch" className="h-3 w-3" />
-								<span>{t("general.fallbackChain")}</span>
-							</div>
-						)}
-						{chain.map((selector, i) =>
-							fallbackEditIndex === `${role}:${i}` ? (
-								<div key={`${role}-edit-${i}`} className="gui-role-fallback-add">
-									<ModelSelector
-										rpc={rpc}
-										sessionId={null}
-										presetId={selector}
-										onSelect={(id, provider) => {
-											setFallbackEditIndex(null);
-											if (!id || !provider) return;
-											const replacement = `${provider}/${id}`;
-											// Same model re-picked → just close (no-op);
-											// a duplicate of ANOTHER row is rejected so
-											// the chain never carries two identical
-											// selectors.
-											if (replacement === selector || chain.includes(replacement)) return;
-											const nextChain = chain.map((s, idx) => (idx === i ? replacement : s));
-											const next = { ...fallbackChains, [role]: nextChain };
-											setFallbackChains(next);
-											void rpc
-												.request("settings.set", { key: "retry.fallbackChains", value: next })
-												.catch(() => {});
-										}}
-									/>
-								</div>
-							) : (
-								<div
-									key={selector}
-									className="gui-role-fallback-row"
-									draggable
-									onDragStart={e => {
-										e.dataTransfer.setData("text/fallback-index", String(i));
-										e.dataTransfer.effectAllowed = "move";
-									}}
-									onDragOver={e => {
-										if (e.dataTransfer.types.includes("text/fallback-index")) e.preventDefault();
-									}}
-									onDrop={e => {
-										e.preventDefault();
-										const from = Number(e.dataTransfer.getData("text/fallback-index"));
-										if (!Number.isInteger(from) || from === i || from < 0 || from >= chain.length) return;
-										const nextChain = [...chain];
-										const [moved] = nextChain.splice(from, 1);
-										nextChain.splice(i, 0, moved);
-										const next = { ...fallbackChains, [role]: nextChain };
-										setFallbackChains(next);
-										void rpc
-											.request("settings.set", { key: "retry.fallbackChains", value: next })
-											.catch(() => {});
-									}}
-								>
-									<span className="gui-role-fallback-grip" title={t("general.dragReorder")} aria-hidden="true">
-										<Icon name="draggable" className="h-3 w-3" />
-									</span>
-									<span className="gui-role-fallback-arrow">↳</span>
-									{fallbackEditIndex === null ? (
-										<button
-											type="button"
-											className="min-w-0 flex-1 truncate text-left text-[12px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-											title={t("general.editFallback")}
-											onClick={() => setFallbackEditIndex(`${role}:${i}`)}
-										>
-											{selector}
-										</button>
-									) : (
-										<span className="min-w-0 flex-1 truncate text-[12px] text-[var(--color-text-muted)]">
-											{selector}
-										</span>
-									)}
-									<GuiSelect
-										className="gui-role-fallback-thinking"
-										value={splitRoleValue(selector).level ?? "inherit"}
-										ariaLabel={t("general.roleThinkingLevel")}
-										options={[
-											{ value: "inherit", label: t("general.inherit") },
-											{ value: "auto", label: t("general.auto") },
-											{ value: "off", label: t("transcript.thinkingOff") },
-											...(fallbackEfforts[selector] ?? []).map(lv => ({
-												value: lv,
-												label: t(`thinking ${lv}` as TranslationKey),
-											})),
-										]}
-										onChange={nextLevel => {
-											const nextChain = chain.map((entry, idx) =>
-												idx === i ? joinRoleValue(splitRoleValue(entry).model, nextLevel) : entry,
-											);
-											const next = { ...fallbackChains, [role]: nextChain };
-											setFallbackChains(next);
-											void rpc
-												.request("settings.set", { key: "retry.fallbackChains", value: next })
-												.catch(() => {});
-										}}
-									/>
-									<button
-										type="button"
-										className="gui-btn gui-btn--icon"
-										title={t("general.removeFallback")}
-										aria-label={t("general.removeFallback")}
-										onClick={() => {
-											const nextChain = chain.filter((_, idx) => idx !== i);
-											const next = { ...fallbackChains };
-											if (nextChain.length > 0) next[role] = nextChain;
-											else delete next[role];
-											setFallbackChains(next);
-											void rpc
-												.request("settings.set", { key: "retry.fallbackChains", value: next })
-												.catch(() => {});
-										}}
-									>
-										<Icon name="delete-bin" className="h-3 w-3" />
-									</button>
-								</div>
-							),
-						)}
-						{editingFallback && (
-							<div className="gui-role-fallback-add">
-								<ModelSelector
-									rpc={rpc}
-									sessionId={null}
-									onSelect={(id, provider) => {
-										setFallbackEditor(null);
-										if (!id || !provider) return;
-										const selector = `${provider}/${id}`;
-										const nextChain = chain.includes(selector) ? chain : [...chain, selector];
-										const next = { ...fallbackChains, [role]: nextChain };
-										setFallbackChains(next);
-										void rpc
-											.request("settings.set", { key: "retry.fallbackChains", value: next })
-											.catch(() => {});
-									}}
-								/>
-							</div>
-						)}
-					</div>
-				)}
-				<div className="gui-role-actions gui-role-actions--pin">
-					{/* Per-role thinking level (rides the selector suffix, TUI
-					 * formatModelSelectorValue parity). */}
-					<GuiSelect
-						className="gui-input gui-role-thinking"
-						value={level ?? "inherit"}
-						onChange={v => {
-							const nextLevel = v;
-							const next = { ...roleModels, [role]: joinRoleValue(model, nextLevel) };
-							apply(next);
-						}}
-						ariaLabel={t("general.roleThinkingLevel")}
-						options={(() => {
-							// Each role owns its auto policy or a concrete level
-							// from the resolved model's ladder; auto is not a rung.
-							const efforts = resolvedRoleModels[role]?.efforts ?? [];
-							return [
-								{ value: "inherit", label: t("general.inherit") },
-								{ value: "auto", label: t("general.auto") },
-								{ value: "off", label: t("transcript.thinkingOff") },
-								...efforts.map(lv => ({
-									value: lv,
-									label: t(`thinking ${lv}` as TranslationKey),
-								})),
-							];
-						})()}
-					/>
-					{/* Fallback chain editor toggle (TUI `f` parity) — always
-					 * available so the FIRST fallback can be added. */}
+					<span className="gui-role-tag">{BUILTIN_ROLE_TAGS[role] ?? role}</span>
+					{/* Cycle membership is state ("position N in the quick-switch
+					 * cycle"), so it renders as a badge beside the tag and is its
+					 * own toggle — not a nameless icon in a toolbar. */}
 					<button
 						type="button"
-						className="gui-btn"
-						title={editingFallback ? t("general.addFallback") : t("general.fallbackChain")}
-						aria-label={editingFallback ? t("general.addFallback") : t("general.fallbackChain")}
-						onClick={() => {
-							setFallbackEditIndex(null);
-							setFallbackEditor(editingFallback ? null : role);
-						}}
-					>
-						<Icon name="git-branch" className="h-3.5 w-3.5" />
-						{chain.length > 0 && <span className="gui-role-fallback-count">{chain.length}</span>}
-					</button>
-					{/* Cycle membership toggle (TUI ctrl+p cycleOrder parity). */}
-					<button
-						type="button"
-						className="gui-btn"
+						className={`gui-role-cycle-badge${cycleIndex >= 0 ? " gui-role-cycle-badge--on" : ""}`}
+						aria-pressed={cycleIndex >= 0}
 						title={cycleIndex >= 0 ? t("general.removeCycle") : t("general.addCycle")}
 						aria-label={cycleIndex >= 0 ? t("general.removeCycle") : t("general.addCycle")}
 						onClick={() => {
@@ -937,27 +716,286 @@ export function ModelSection({
 							void rpc.request("settings.set", { key: "cycleOrder", value: next }).catch(() => {});
 						}}
 					>
-						<Icon name="loop-right-ai" className="h-3.5 w-3.5" />
+						<Icon name="loop-right-ai" className="h-3 w-3" />
+						{cycleIndex >= 0 && <span>{cycleIndex + 1}</span>}
 					</button>
-					{model && (
-						<button
-							type="button"
-							className="gui-btn"
-							title={t("general.clearRoleModel")}
-							aria-label={t("general.clearRoleModel")}
-							onClick={() => {
-								const next = { ...roleModels };
-								delete next[role];
+					{roleStorage === "project" &&
+						(() => {
+							// openchamber provenance parity: the badge shows the
+							// layer the CURRENT value lives in (dot marker) plus
+							// the next write target (label). When they differ —
+							// e.g. value inherited from global while the target
+							// is project — editing would silently shadow the
+							// source, so title spells that out.
+							const target = roleScope[role] ?? "project";
+							const source = roleSources[role] ?? "default";
+							const sourceLabel =
+								source === "project"
+									? t("general.scopeProject")
+									: source === "global" || source === "overlay" || source === "runtime"
+										? t("general.scopeGlobal")
+										: null;
+							const shadows = sourceLabel !== null && sourceLabel !== target;
+							return (
+								<button
+									type="button"
+									className={`gui-role-scope-badge${shadows ? " gui-role-scope-badge--warn" : ""}`}
+									title={
+										shadows
+											? `${t("general.roleScopeShadowed")} (${sourceLabel} → ${target === "project" ? t("general.scopeProject") : t("general.scopeGlobal")})`
+											: t("general.roleScopeToggle")
+									}
+									aria-label={t("general.roleScopeToggle")}
+									onClick={() =>
+										setRoleScope(prev => ({
+											...prev,
+											[role]: prev[role] === "global" ? "project" : "global",
+										}))
+									}
+								>
+									{sourceLabel && (
+										<span className="gui-role-scope-dot" aria-hidden="true">
+											●
+										</span>
+									)}
+									{target === "project" ? t("general.scopeProject") : t("general.scopeGlobal")}
+								</button>
+							);
+						})()}
+				</div>
+				<div className="gui-role-field">
+					<div className="gui-role-field-head">
+						<span className="gui-role-field-label">{t("general.currentModel")}</span>
+						{!model && (
+							<span className="gui-role-status">
+								{resolved
+									? `${t("general.autoSelection")} · ${resolved.name || resolved.id}`
+									: t("general.autoSelectionApplies")}
+							</span>
+						)}
+						{model && (
+							<button
+								type="button"
+								className="gui-link gui-role-field-clear"
+								title={t("general.clearRoleModel")}
+								aria-label={t("general.clearRoleModel")}
+								onClick={() => {
+									const next = { ...roleModels };
+									delete next[role];
+									apply(next);
+								}}
+							>
+								{t("settings.clear")}
+							</button>
+						)}
+					</div>
+					<div className="gui-role-field-controls">
+						<ModelSelector
+							rpc={rpc}
+							sessionId={null}
+							presetId={model || undefined}
+							maxLabelWidth="100%"
+							onSelect={(id, provider) => {
+								if (!id) return;
+								// Store the provider-qualified reference: the daemon
+								// resolves "provider/id" exactly, so assigning
+								// opencode-go's deepseek-v4-flash never leaks onto
+								// opencode-zen's same-id model.
+								const ref = provider ? `${provider}/${id}` : id;
+								if (role === "default") {
+									// The DEFAULT role IS the default model for new
+									// sessions — keep the welcome-composer preselect
+									// in sync with the role assignment. The bare ref
+									// (no :level suffix) mirrors the daemon's
+									// modelRoles.default value.
+									try {
+										localStorage.setItem("musepi-gui-default-model", ref);
+									} catch {
+										// storage unavailable
+									}
+									window.dispatchEvent(new CustomEvent("musepi-gui-default-model-changed", { detail: ref }));
+								}
+								// Keep the role's thinking suffix when the model
+								// changes (TUI assign preserves the level).
+								const next = { ...roleModels, [role]: joinRoleValue(ref, level) };
 								apply(next);
 							}}
-						>
-							<Icon name="refresh" className="h-3.5 w-3.5" />
-						</button>
-					)}
-					{removable && (
+						/>
+						{/* A level only exists as a suffix of one model selector, so
+						 * the control appears once the role owns a model. */}
+						{model && (
+							<span className="gui-role-field-level">
+								<span className="gui-role-field-label">{t("transcript.thinkingLevel")}</span>
+								<GuiSelect
+									className="gui-role-thinking"
+									value={level ?? "inherit"}
+									onChange={v => {
+										const next = { ...roleModels, [role]: joinRoleValue(model, v) };
+										apply(next);
+									}}
+									ariaLabel={t("general.roleThinkingLevel")}
+									options={roleLevelOptions(resolved?.efforts ?? [])}
+								/>
+							</span>
+						)}
+					</div>
+				</div>
+				<div className="gui-role-fallbacks">
+					<div className="gui-role-fallbacks-title">
+						<Icon name="git-branch" className="h-3 w-3" />
+						<span>{t("general.fallbackChain")}</span>
+						<span className="gui-role-fallback-count">{chain.length}</span>
 						<button
 							type="button"
-							className="gui-btn"
+							className="gui-btn gui-role-chain-add"
+							title={editingFallback ? t("settings.cancel") : t("general.addFallback")}
+							aria-label={editingFallback ? t("settings.cancel") : t("general.addFallback")}
+							onClick={() => {
+								setFallbackEditIndex(null);
+								setFallbackEditor(editingFallback ? null : role);
+							}}
+						>
+							<Icon name={editingFallback ? "close" : "add"} className="h-3 w-3" />
+							<span>{editingFallback ? t("settings.cancel") : t("general.addFallback")}</span>
+						</button>
+					</div>
+					{chain.length > 0 && (
+						<ol className="gui-role-fallback-list">
+							{chain.map((selector, i) => {
+								const entry = splitRoleValue(selector);
+								const slash = entry.model.indexOf("/");
+								const entryProvider = slash > 0 ? entry.model.slice(0, slash) : "";
+								const entryModel = slash > 0 ? entry.model.slice(slash + 1) : entry.model;
+								if (fallbackEditIndex === `${role}:${i}`) {
+									return (
+										<li key={selector} className="gui-role-fallback-row gui-role-fallback-row--editing">
+											<div className="gui-role-fallback-edit">
+												<ModelSelector
+													rpc={rpc}
+													sessionId={null}
+													presetId={selector}
+													maxLabelWidth="100%"
+													onSelect={(id, provider) => {
+														setFallbackEditIndex(null);
+														if (!id || !provider) return;
+														const replacement = `${provider}/${id}`;
+														// Same model re-picked → just close (no-op);
+														// a duplicate of ANOTHER row is rejected so
+														// the chain never carries two identical
+														// selectors.
+														if (replacement === selector || chain.includes(replacement)) return;
+														persistChain(chain.map((s, idx) => (idx === i ? replacement : s)));
+													}}
+												/>
+												<button
+													type="button"
+													className="gui-btn gui-role-fallback-cancel"
+													onClick={() => setFallbackEditIndex(null)}
+												>
+													{t("settings.cancel")}
+												</button>
+											</div>
+										</li>
+									);
+								}
+								return (
+									<li
+										key={selector}
+										className="gui-role-fallback-row"
+										onDragOver={e => {
+											if (e.dataTransfer.types.includes(FALLBACK_DRAG_TYPE)) e.preventDefault();
+										}}
+										onDrop={e => {
+											e.preventDefault();
+											const from = parseFallbackDrag(
+												e.dataTransfer.getData(FALLBACK_DRAG_TYPE),
+												role,
+												chain.length,
+											);
+											if (from === null) return;
+											moveChainRow(from, i);
+										}}
+									>
+										{/* The ordinal is the row's reorder handle and its only
+										 * drag source; ↑/↓ move the row, so reordering never
+										 * needs a pointer. */}
+										<button
+											type="button"
+											draggable
+											className="gui-role-fallback-grip"
+											title={t("general.dragReorder")}
+											aria-label={`${t("general.fallbackChain")} ${i + 1} · ${t("general.dragReorder")}`}
+											aria-keyshortcuts="ArrowUp ArrowDown"
+											onDragStart={e => {
+												e.dataTransfer.setData(FALLBACK_DRAG_TYPE, `${role}:${i}`);
+												e.dataTransfer.effectAllowed = "move";
+											}}
+											onKeyDown={e => {
+												if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+												e.preventDefault();
+												moveChainRow(i, i + (e.key === "ArrowUp" ? -1 : 1));
+											}}
+										>
+											{i + 1}
+										</button>
+										<button
+											type="button"
+											className="gui-role-fallback-model"
+											title={selector}
+											onClick={() => setFallbackEditIndex(`${role}:${i}`)}
+										>
+											{entryProvider && <span className="gui-role-fallback-provider">{entryProvider}</span>}
+											<span className="gui-role-fallback-name">{entryModel}</span>
+										</button>
+										<GuiSelect
+											className="gui-role-thinking gui-role-fallback-thinking"
+											value={entry.level ?? "inherit"}
+											ariaLabel={`${t("general.fallbackChain")} ${i + 1} · ${t("general.roleThinkingLevel")}`}
+											options={roleLevelOptions(fallbackEfforts[selector] ?? [])}
+											onChange={nextLevel => {
+												persistChain(
+													chain.map((value, idx) =>
+														idx === i ? joinRoleValue(splitRoleValue(value).model, nextLevel) : value,
+													),
+												);
+											}}
+										/>
+										<button
+											type="button"
+											className="gui-btn gui-btn--icon gui-role-fallback-remove"
+											title={t("general.removeFallback")}
+											aria-label={t("general.removeFallback")}
+											onClick={() => persistChain(chain.filter((_, idx) => idx !== i))}
+										>
+											<Icon name="close" className="h-3 w-3" />
+										</button>
+									</li>
+								);
+							})}
+						</ol>
+					)}
+					{editingFallback && (
+						<div className="gui-role-fallback-add">
+							<ModelSelector
+								rpc={rpc}
+								sessionId={null}
+								maxLabelWidth="100%"
+								onSelect={(id, provider) => {
+									setFallbackEditor(null);
+									if (!id || !provider) return;
+									const selector = `${provider}/${id}`;
+									if (chain.includes(selector)) return;
+									persistChain([...chain, selector]);
+								}}
+							/>
+						</div>
+					)}
+				</div>
+				{removable && (
+					<div className="gui-role-actions gui-role-actions--pin">
+						<button
+							type="button"
+							className="gui-btn gui-role-remove"
 							title={t("general.removeRole")}
 							aria-label={t("general.removeRole")}
 							onClick={() => {
@@ -967,9 +1005,10 @@ export function ModelSection({
 							}}
 						>
 							<Icon name="delete-bin" className="h-3.5 w-3.5" />
+							<span>{t("general.removeRole")}</span>
 						</button>
-					)}
-				</div>
+					</div>
+				)}
 			</div>
 		);
 	};
