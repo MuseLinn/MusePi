@@ -19,7 +19,7 @@ function validIndex(): unknown {
 		plugins: [
 			{
 				name: "demo-plugin",
-				runtime: "cordis",
+				vendor: "musepi",
 				versions: [
 					{
 						version: "1.0.0",
@@ -259,7 +259,7 @@ describe("PluginIndexSourceReader", () => {
 			const failure = error as PluginIndexSourceError;
 			expect(failure.code).toBe("invalid-index");
 			const paths = failure.diagnostics?.map(diagnostic => diagnostic.path) ?? [];
-			expect(paths).toEqual(expect.arrayContaining(["$.plugins[0].runtime", "$.plugins[0].versions"]));
+			expect(paths).toEqual(expect.arrayContaining(["$.plugins[0].vendor", "$.plugins[0].versions"]));
 		}
 	});
 

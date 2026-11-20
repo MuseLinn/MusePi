@@ -15,9 +15,9 @@ marketplace 系统让你能够从 Git、本地或直接目录源（direct-catalo
 
 ## 概念
 
-**marketplace** 是一个 Git 仓库（或本地目录），其中在 `.omp-plugin/marketplace.json`（首选）或 `.claude-plugin/marketplace.json`（Claude Code 兼容后备）存放 catalog 文件。catalog 列出可用插件及其来源、描述和元数据。
+**configured marketplace（已配置市场）** 是一个 Git 仓库（或本地目录），其中在 `.omp-plugin/marketplace.json`（首选）或 `.claude-plugin/marketplace.json`（Claude Code 兼容后备）存放 catalog 文件。catalog 列出可用插件及其来源、描述和元数据。通过 `/marketplace add` 添加的来源属于这种已配置市场；它与**索引市场**（见[插件索引格式](#插件索引格式musepi-plugin-index)）供给同一个插件市场，但只有索引固定精确版本与 commit。
 
-**plugin** 是一个目录，包含 Claude/OMP 插件内容，如 skills、commands、agents、hooks、tools、MCP servers 或 LSP servers。Marketplace 安装还会加载由 `package.json` 的 `omp.extensions` 声明的扩展模块：安装时把缓存的插件符号链接到 scope 的 `node_modules` 树，并将其记录在 `musepi-plugins.lock.json` 中——这与 npm 安装及 `musepi plugin link` 的插件所用的运行时表面相同。插件以 `name@marketplace` 标识（例如 `code-review@claude-plugins-official`）。
+**catalog plugin directory（目录插件目录）** 存放 Claude 或 OMP 兼容内容，如 skills、commands、agents、hooks、tools、MCP servers 或 LSP servers。安装时把缓存目录符号链接到 scope 的 `node_modules` 树，并将其记录在 `musepi-plugins.lock.json` 中——这与 npm 安装及 `musepi plugin link` 的插件所用的运行时表面相同；由 `package.json` 的 `omp.extensions` 声明的扩展模块也在那里加载。目录插件以 `name@marketplace` 标识（例如 `code-review@claude-plugins-official`）。
 
 **Scopes**（作用域）：marketplace 插件可以安装到两个作用域：
 
@@ -35,14 +35,26 @@ marketplace 系统让你能够从 Git、本地或直接目录源（direct-catalo
 | **index（索引）** | 市场发布的一份 `musepi-plugin-index` JSON 文档。它携带列表行需要显示的全部字段以及每个可安装版本，因此浏览一次读取即可，而不是每行一次请求。 |
 | **catalog（目录）** | 与 Claude 兼容的 `marketplace.json`（优先 `.omp-plugin/`，回退 `.claude-plugin/`）。它列出插件条目与来源，但不固定精确版本或 commit。 |
 | **market（市场）** | 能力中心的插件市场界面，只由用户配置的来源供数。市场发布索引（或目录），本身不是插件宿主。 |
-| **plugin（插件）** | Cordis 插件包：清单是 `package.json` 的 `musepi` 块（旧包接受 `omp`/`pi` 回退）。这是原生 MusePi 能力单元。 |
-| **compat plugin（兼容插件）** | 为其他宿主布局编写的包——Claude Code 的 `.claude-plugin/` 或 Codex 的 `.codex-plugin/`——经兼容层加载。 |
+| **plugin（插件）** | 能力包。原生 MusePi 插件的清单是 `package.json` 的 `musepi` 块；`omp`/`pi` 清单属于 `pi` vendor。 |
+| **vendor（血统）** | 插件声明的宿主血统：`musepi`、`pi`、`claude` 或 `codex`。它表示清单与内容布局，**不表示运行时**——所有插件最终都跑在 Cordis 运行时里。 |
+| **compat plugin（兼容插件）** | vendor 不是 `musepi` 的插件（`pi`、`claude`、`codex`），经兼容层加载。支持程度按 vendor 不同，见下文支持矩阵。 |
 | **dock（停靠位）** | **已加载**插件可以占用的固定 GUI 席位：composer dock（`conversation.composer.dock`）或右侧栏面板中的一个 tab。浏览或安装不会创建停靠位；启用插件才可能。 |
-| **lane（分区）** | 市场列表的一个分区。原生插件占主分区；兼容插件在单独的兼容分区并带徽章。 |
+| **lane（分区）** | 市场列表的一个分区。原生插件（`musepi`）占主分区；`pi`、`claude`、`codex` 在同一个兼容分区中，各带 vendor 徽章。 |
 
-**主列表只列 MusePi 插件。** 索引条目声明 `runtime: "cordis"` 即为原生插件。Claude 与 Codex 兼容包只出现在单独的兼容分区中，并带兼容徽章，绝不混入主列表。`runtime` 表示清单契约，不表示包来自哪里：格式 1 只接受 `"cordis"` 与 `"claude"` 两个值，第三种契约需要新的格式版本。
+**主列表只列原生 MusePi 插件。** 索引条目声明 `vendor: "musepi"` 即为原生插件。`pi`、`claude` 与 `codex` 插件只出现在兼容分区中，各带自己的 vendor 徽章，绝不混入主列表。
 
-**安装后以清单为准。** 安装完成后，宿主会重新读取插件的 `package.json` `musepi` 块（含 `omp`/`pi` 回退），核对清单中的名称、版本与显示标签。索引是市场未经签名的声明：它的标题、标签甚至包名都不能压过真正落盘的清单。
+`vendor` 是索引声明与展示轴，不承诺四种等价支持。**支持程度由宿主按实际安装产物判定**——看它实际找到的清单与内容——而不是看徽章、包名或索引：
+
+| `vendor` | 声明的清单 | 宿主当前支持程度 |
+| --- | --- | --- |
+| `musepi` | `package.json` `musepi` 块 | 完整运行时：作为一等扩展加载的原生 Cordis 插件。 |
+| `pi` | `package.json` `omp` 或 `pi` 块 | 经 `compat/legacy-pi-compat.ts` 作为 legacy 扩展加载；并非所有能力都有保证。 |
+| `claude` | `.claude-plugin/plugin.json` | 内容级：`discovery/claude-plugins.ts` 读取 skills、commands、hooks 与 MCP servers；不执行其 JavaScript。 |
+| `codex` | `.codex-plugin/plugin.json` | 暂无运行时支持：只读取清单图标（`compat/codex-plugin-icon.ts`）。 |
+
+兼容徽章不能被读成「与原生等价」：它表示条目声明的血统，以及由此应预期的支持程度。索引条目若夸大自己的 vendor，安装后仍会得到宿主的真实待遇。
+
+**安装后以实际产物为准。** 安装完成后，宿主检查真正落盘的内容：原生与 `pi` 插件回读 `package.json`（先 `musepi`，再 `omp`/`pi`），`claude` 与 `codex` 插件读取各自的清单。名称、版本与显示标签都来自该产物，宿主的 vendor/支持判定也随之确定。索引是市场未经签名的声明：它的标题、标签甚至包名都不能压过真正落盘的产物。
 
 ## 命令
 
@@ -240,7 +252,7 @@ marketplace catalog 位于仓库根目录的 `.omp-plugin/marketplace.json`。�
   "plugins": [
     {
       "name": "@musepi/auto-review",
-      "runtime": "cordis",
+      "vendor": "musepi",
       "title": { "en": "Auto Review", "zh": "自动审查" },
       "description": { "en": "Per-tool authorization review" },
       "author": "MusePi",
@@ -298,7 +310,7 @@ marketplace catalog 位于仓库根目录的 `.omp-plugin/marketplace.json`。�
 | 字段 | 必需 | 规则 |
 | --- | --- | --- |
 | `name` | 是 | 小写 npm 包名；索引内唯一。 |
-| `runtime` | 是 | `"cordis"`（原生 MusePi 清单）或 `"claude"`（兼容清单）。 |
+| `vendor` | 是 | `"musepi"`（原生）、`"pi"`（`omp`/`pi` 清单）、`"claude"`（`.claude-plugin`）或 `"codex"`（`.codex-plugin`）。 |
 | `title` | 否 | `LocalizedText`；缺失时读取方显示 `name`。 |
 | `description` | 否 | `LocalizedText`。 |
 | `icon` | 否 | 内联 `data:<type>;base64,<payload>`（`image/svg+xml`、`image/png`、`image/jpeg`、`image/webp`；canonical 带填充 base64；解码后最多 32 KiB），或绝对 `https:` URL。 |
@@ -374,3 +386,12 @@ marketplace 和插件名称必须：
 
 有效示例：`my-plugin`、`code-review`、`wordpress.com`、`ai-firstify`
 无效示例：`-bad`、`bad-`、`.bad`、`Bad`、`under_score`
+
+## 发布到市场索引
+
+`musepi-plugin-index` 条目的包名与发现面：
+
+- **官方 MusePi 插件**：`@musepi/plugin-<name>`。scope 已经表明组织身份，与 dsh 的 `@deepseek-ai/dsh-plugin-market` 同构；不要再写成 `@musepi/musepi-plugin-<name>`，那是 `musepi/musepi` 的重复。
+- **社区插件**：`musepi-plugin-<name>` 或 `@author/musepi-plugin-<name>`。
+- **发现约定**：发布 npm keyword `musepi-plugin` 与 GitHub topic `musepi-plugin`。topic 命中只是候选来源；列入索引前必须核对包清单。
+- **官方判定**看 npm scope 前缀（`@musepi/`）；徽章与分区看索引的 `vendor` 值，绝不看包名。

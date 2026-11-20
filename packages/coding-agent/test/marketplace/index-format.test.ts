@@ -31,7 +31,7 @@ function validIndex(): unknown {
 		plugins: [
 			{
 				name: "@musepi/auto-review",
-				runtime: "cordis",
+				vendor: "musepi",
 				title: { en: "Auto Review" },
 				description: { en: "Per-tool authorization review" },
 				icon: TINY_ICON,
@@ -63,7 +63,7 @@ function validIndex(): unknown {
 			},
 			{
 				name: "legacy-compat-plugin",
-				runtime: "claude",
+				vendor: "claude",
 				description: "A Claude-compatible bundle",
 				metadata: { labels: [], keywords: [], sortKeys: {} },
 				versions: [
@@ -119,7 +119,7 @@ describe("parsePluginIndex", () => {
 
 		const [native, compat] = index.plugins;
 		expect(native?.name).toBe("@musepi/auto-review");
-		expect(native?.runtime).toBe("cordis");
+		expect(native?.vendor).toBe("musepi");
 		expect(native?.metadata.category).toBe("productivity");
 		expect(native?.metadata.labels).toEqual(["official"]);
 		expect(native?.metadata.sortKeys).toEqual({ downloads: 12034 });
@@ -128,7 +128,7 @@ describe("parsePluginIndex", () => {
 			registry: "https://registry.example.com/npm",
 		});
 
-		expect(compat?.runtime).toBe("claude");
+		expect(compat?.vendor).toBe("claude");
 		expect(compat?.metadata).toEqual({ labels: [], keywords: [], sortKeys: {} });
 		expect(compat?.versions[0]?.source).toEqual({
 			type: "git",
@@ -196,9 +196,16 @@ describe("parsePluginIndex", () => {
 
 	// ── Plugin rules ────────────────────────────────────────────────
 
-	it("rejects a runtime outside cordis/claude", () => {
-		expect(pathsOf(mutated(doc => (doc.plugins[0].runtime = "codex")))).toContain("$.plugins[0].runtime");
-		expect(pathsOf(mutated(doc => delete doc.plugins[0].runtime))).toContain("$.plugins[0].runtime");
+	it("accepts every declared vendor", () => {
+		for (const vendor of ["musepi", "pi", "claude", "codex"] as const) {
+			const index = accept(mutated(doc => (doc.plugins[0].vendor = vendor)));
+			expect(index.plugins[0]?.vendor).toBe(vendor);
+		}
+	});
+
+	it("rejects a vendor outside the four declared values", () => {
+		expect(pathsOf(mutated(doc => (doc.plugins[0].vendor = "other")))).toContain("$.plugins[0].vendor");
+		expect(pathsOf(mutated(doc => delete doc.plugins[0].vendor))).toContain("$.plugins[0].vendor");
 	});
 
 	it("rejects duplicate plugin names", () => {
@@ -270,7 +277,7 @@ describe("parsePluginIndex", () => {
 			plugins: [
 				{
 					name: "demo-plugin",
-					runtime: "cordis",
+					vendor: "musepi",
 					metadata: { category: "__proto__" },
 					versions: [
 						{
@@ -393,7 +400,7 @@ describe("parsePluginIndex", () => {
 		const errors = errorsOf(
 			mutated(doc => {
 				doc.format = 9;
-				doc.plugins[0].runtime = "other";
+				doc.plugins[0].vendor = "other";
 				doc.plugins[0].versions[0].version = "^1.0.0";
 				doc.plugins[1].versions[0].source.commit = "short";
 				doc.plugins[1].metadata.category = "missing";
@@ -403,7 +410,7 @@ describe("parsePluginIndex", () => {
 		expect(paths).toEqual(
 			expect.arrayContaining([
 				"$.format",
-				"$.plugins[0].runtime",
+				"$.plugins[0].vendor",
 				"$.plugins[0].versions[0].version",
 				"$.plugins[1].versions[0].source.commit",
 				"$.plugins[1].metadata.category",
@@ -427,7 +434,7 @@ function version(overrides: Partial<PluginIndexVersion> = {}): PluginIndexVersio
 function plugin(versions: PluginIndexVersion[]): PluginIndexEntry {
 	return {
 		name: "demo-plugin",
-		runtime: "cordis",
+		vendor: "musepi",
 		metadata: { labels: [], keywords: [], sortKeys: {} },
 		versions,
 	};
@@ -456,6 +463,25 @@ describe("selectDefaultVersion", () => {
 			"2.0.0",
 		);
 		expect(chosen?.version).toBe("2.0.0-rc.2");
+	});
+
+	it("treats a hyphen in build metadata as a stable version", () => {
+		const chosen = selectDefaultVersion(
+			plugin([version({ version: "1.1.0" }), version({ version: "1.2.3+build-1" })]),
+			"1.2.3",
+		);
+		expect(chosen?.version).toBe("1.2.3+build-1");
+	});
+
+	it("prefers a stable version with build metadata over a higher prerelease", () => {
+		const chosen = selectDefaultVersion(
+			plugin([
+				version({ version: "1.2.4-rc.1", engines: { musepi: "^1.2.4-rc.1" } }),
+				version({ version: "1.2.3+build-1" }),
+			]),
+			"1.2.4",
+		);
+		expect(chosen?.version).toBe("1.2.3+build-1");
 	});
 
 	it("never falls back to an incompatible version or an npm latest tag", () => {
@@ -518,5 +544,18 @@ describe("installSpec", () => {
 				commit: "abc123",
 			}),
 		).toThrow();
+	});
+
+	it("re-validates the source with the parser's rules when called directly", () => {
+		const git = (url: string) => ({
+			type: "git" as const,
+			url,
+			commit: COMMIT,
+		});
+		expect(() => installSpec("demo-plugin", "1.0.0", git("https://github.com/a"))).toThrow(/path segments/);
+		expect(() => installSpec("demo-plugin", "1.0.0", git("https://github.com/a/b.tgz"))).toThrow(/archive|tgz/);
+		expect(() =>
+			installSpec("demo-plugin", "1.0.0", { type: "npm", registry: "https://u:p@registry.example.com/npm" }),
+		).toThrow(/registry/);
 	});
 });

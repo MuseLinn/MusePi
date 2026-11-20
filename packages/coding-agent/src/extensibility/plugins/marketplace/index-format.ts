@@ -10,17 +10,20 @@
  * structured `source`, and the host derives the installer argument itself.
  *
  * Vocabulary used here and in `docs/marketplace.md`:
- * - **plugin**: a Cordis plugin bundle whose manifest is the `package.json`
- *   `musepi` block (`omp` and `pi` are accepted for older packages). Native
- *   MusePi capability unit.
- * - **compat plugin**: a bundle written for another host layout (Claude Code's
- *   `.claude-plugin/`, Codex's `.codex-plugin/`) and loaded through the
- *   compatibility layer. `runtime` names the manifest contract, never the
- *   origin: `"cordis"` is native, `"claude"` is the compat lane.
- * - **runtime**: which manifest contract a plugin follows. Format 1 admits
- *   exactly `"cordis"` and `"claude"`; a third contract requires a new format.
- * - **lane**: one partition of the market list. Native plugins fill the main
- *   lane; compat plugins sit in one compat lane with a badge, never mixed in.
+ * - **plugin**: a capability bundle. Every plugin ultimately runs on the
+ *   Cordis runtime; the axis below says which host lineage's manifest and
+ *   content layout it declares.
+ * - **vendor**: the host lineage a plugin declares. `"musepi"` is native
+ *   (`package.json` `musepi` block), `"pi"` is the upstream pi lineage
+ *   (`package.json` `omp`/`pi` block, one value for both), `"claude"` is
+ *   `.claude-plugin/plugin.json`, and `"codex"` is
+ *   `.codex-plugin/plugin.json`.
+ * - **compat plugin**: a non-`musepi` vendor, loaded through the
+ *   compatibility layer. Vendor is an index claim: the installed artifact
+ *   decides the actual support level, which differs per vendor.
+ * - **lane**: one partition of the market list. Native plugins (`musepi`) fill
+ *   the main lane; `pi`, `claude`, and `codex` sit in the compat lane with a
+ *   vendor badge, never mixed into the main lane.
  * - **dock**: a fixed GUI seat a *loaded* plugin may claim
  *   (`conversation.composer.dock`, the right-side panel). Browsing or
  *   installing does not create a dock; enabling a plugin can.
@@ -49,8 +52,16 @@ import { isValidNameSegment } from "./types";
 /** The only index format this reader accepts. */
 export const PLUGIN_INDEX_FORMAT = 1 as const;
 
-/** Which manifest contract a listed plugin follows. */
-export type PluginRuntime = "cordis" | "claude";
+/**
+ * The host lineage a listed plugin declares.
+ *
+ * - `musepi`: native; manifest is the `package.json` `musepi` block.
+ * - `pi`: upstream pi lineage; manifest is the `package.json` `omp` or `pi`
+ *   block (same lineage, one value).
+ * - `claude`: `.claude-plugin/plugin.json`.
+ * - `codex`: `.codex-plugin/plugin.json`.
+ */
+export type PluginVendor = "musepi" | "pi" | "claude" | "codex";
 
 /** A string, or an object of language-id → string (at least one entry). */
 export type LocalizedText = string | Readonly<Record<string, string>>;
@@ -129,7 +140,7 @@ export interface PluginIndexEntryMetadata {
 export interface PluginIndexEntry {
 	/** Package name, unique within the index. */
 	readonly name: string;
-	readonly runtime: PluginRuntime;
+	readonly vendor: PluginVendor;
 	readonly title?: LocalizedText;
 	readonly description?: LocalizedText;
 	/** `data:` artwork (≤ 32 KiB decoded) or an absolute `https:` URL. */
@@ -191,7 +202,7 @@ const ROOT_FIELDS = new Set(["format", "name", "title", "description", "owner", 
 const ROOT_METADATA_FIELDS = new Set(["categories", "labels", "sortKeys"]);
 const PLUGIN_FIELDS = new Set([
 	"name",
-	"runtime",
+	"vendor",
 	"title",
 	"description",
 	"icon",
@@ -482,8 +493,14 @@ export function isCompatibleWithRuntime(enginesRange: string, runtimeVersion: st
 	}
 }
 
+/**
+ * Whether a version carries a prerelease part.
+ *
+ * Build metadata follows `+` and may contain hyphens while the version stays
+ * stable (`1.2.3+build-1`), so only the core before `+` decides.
+ */
 function isPrerelease(version: string): boolean {
-	return version.includes("-");
+	return (version.split("+")[0] ?? version).includes("-");
 }
 
 // ── Root ──────────────────────────────────────────────────────────────
@@ -600,9 +617,12 @@ function readPlugins(
 	return entries;
 }
 
-function readRuntime(value: unknown, path: string, diag: Diagnostics): PluginRuntime | undefined {
-	if (value === "cordis" || value === "claude") return value;
-	diag.fail(path, 'must be "cordis" (native MusePi manifest) or "claude" (compat manifest)');
+function readVendor(value: unknown, path: string, diag: Diagnostics): PluginVendor | undefined {
+	if (value === "musepi" || value === "pi" || value === "claude" || value === "codex") return value;
+	diag.fail(
+		path,
+		'must be "musepi" (native), "pi" (omp/pi manifest), "claude" (.claude-plugin), or "codex" (.codex-plugin)',
+	);
 	return undefined;
 }
 
@@ -804,7 +824,7 @@ function readPlugin(
 	}
 
 	const name = readPackageName(plugin.name, `${path}.name`, diag);
-	const runtime = readRuntime(plugin.runtime, `${path}.runtime`, diag);
+	const vendor = readVendor(plugin.vendor, `${path}.vendor`, diag);
 	const title = readLocalizedText(plugin.title, `${path}.title`, diag, false);
 	const description = readLocalizedText(plugin.description, `${path}.description`, diag, false);
 	const icon = readIcon(plugin.icon, `${path}.icon`, diag);
@@ -822,7 +842,7 @@ function readPlugin(
 
 	return {
 		name: name ?? "",
-		runtime: runtime ?? "cordis",
+		vendor: vendor ?? "musepi",
 		...(title === undefined ? {} : { title }),
 		...(description === undefined ? {} : { description }),
 		...(icon === undefined ? {} : { icon }),
@@ -1082,26 +1102,43 @@ export interface PluginInstallTarget {
  * spec is pinned to what the list displayed. A named npm registry travels
  * beside the spec because the spec grammar has no registry slot; a git package
  * directory rides in the fragment.
+ *
+ * Re-validates the source with the same rules as the parser (canonical git URL
+ * with at least two path segments and no archive suffix, safe package path,
+ * credential-free registry), so a direct caller gets the same refusal instead
+ * of a weaker spec. This makes the helper safe on its own; parsing an index is
+ * still the trust boundary for the market.
  */
 export function installSpec(name: string, version: string, source: PluginIndexSource): PluginInstallTarget {
 	if (!PACKAGE_NAME.test(name)) throw new Error(`Invalid plugin package name: "${name}"`);
 	if (!isExactIndexVersion(version)) throw new Error(`Invalid exact plugin version: "${version}"`);
 
 	if (source.type === "npm") {
-		return source.registry === undefined
-			? { spec: `${name}@${version}` }
-			: { spec: `${name}@${version}`, registry: source.registry };
+		if (source.registry === undefined) return { spec: `${name}@${version}` };
+		const registry = readAbsoluteUrl(
+			source.registry,
+			"source.registry",
+			new Diagnostics(),
+			["http:", "https:"],
+			true,
+		);
+		if (registry === undefined) throw new Error(`Invalid npm registry URL: "${source.registry}"`);
+		return { spec: `${name}@${version}`, registry: registry.href };
 	}
 
 	if (!GIT_COMMIT.test(source.commit))
 		throw new Error(`Invalid Git commit for ${name}@${version}: "${source.commit}"`);
-	const url = readAbsoluteUrl(source.url, "source.url", new Diagnostics(), ["https:"], true);
-	if (url === undefined || url.href !== source.url) throw new Error(`Invalid canonical Git URL: "${source.url}"`);
+	const diagnostics = new Diagnostics();
+	const url = readGitUrl(source.url, "source.url", diagnostics);
+	if (url === undefined) {
+		const reason = diagnostics.errors.map(error => error.message).join("; ");
+		throw new Error(`Invalid Git source URL for ${name}@${version}: ${reason}`);
+	}
 	if (source.path !== undefined && !isSafeRelativeDirectory(source.path)) {
 		throw new Error(`Invalid Git package directory: "${source.path}"`);
 	}
 
-	const cloneUrl = source.url.endsWith(".git") ? source.url : `${source.url}.git`;
+	const cloneUrl = url.endsWith(".git") ? url : `${url}.git`;
 	const pin = source.path === undefined ? source.commit : `${source.commit}&path:/${source.path}`;
 	return { spec: `git+${cloneUrl}#${pin}` };
 }

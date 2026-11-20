@@ -15,9 +15,9 @@ In the TUI, `/marketplace` with no arguments opens the interactive plugin browse
 
 ## Concepts
 
-A **marketplace** is a Git repository (or local directory) containing a catalog file at `.omp-plugin/marketplace.json` (preferred) or `.claude-plugin/marketplace.json` (Claude Code-compatible fallback). The catalog lists available plugins with their sources, descriptions, and metadata.
+A **configured marketplace** is a Git repository (or local directory) containing a catalog file at `.omp-plugin/marketplace.json` (preferred) or `.claude-plugin/marketplace.json` (Claude Code-compatible fallback). The catalog lists available plugins with their sources, descriptions, and metadata. `/marketplace add` adds one of these; it feeds the same plugin market as an **index market** (see [Plugin index format](#plugin-index-format-musepi-plugin-index)), but only an index pins exact versions and commits.
 
-A **plugin** is a directory containing Claude/OMP plugin content such as skills, commands, agents, hooks, tools, MCP servers, or LSP servers. Marketplace installs also load extension modules declared by `package.json` `omp.extensions`: installation symlinks the cached plugin into the scope's `node_modules` tree and records it in `musepi-plugins.lock.json`, the same runtime surfaces used by npm-installed and `musepi plugin link`ed plugins. Plugins are identified by `name@marketplace` (e.g. `code-review@claude-plugins-official`).
+A **catalog plugin directory** holds Claude- or OMP-compatible content such as skills, commands, agents, hooks, tools, MCP servers, or LSP servers. Installing it symlinks the cached directory into the scope's `node_modules` tree and records it in `musepi-plugins.lock.json`, the same runtime surfaces used by npm-installed and `musepi plugin link`ed plugins; extension modules declared by `package.json` `omp.extensions` load there too. Catalog plugins are identified by `name@marketplace` (e.g. `code-review@claude-plugins-official`).
 
 **Scopes**: marketplace plugins can be installed at two scopes:
 
@@ -35,14 +35,26 @@ These terms have one meaning each in the marketplace docs and code:
 | **index** | One `musepi-plugin-index` JSON document that a market publishes. It carries every field a list row shows plus every installable version, so browsing costs one read instead of one request per row. |
 | **catalog** | The Claude-compatible `marketplace.json` (`.omp-plugin/` preferred, `.claude-plugin/` fallback). It lists plugin entries with sources; it does not pin exact versions or commits. |
 | **market** | The capability center's plugin-market surface, fed only by sources the user configured. A market publishes an index (or catalog); it is not a plugin host. |
-| **plugin** | A Cordis plugin bundle: a package whose manifest is the `package.json` `musepi` block (`omp` and `pi` are accepted for older packages). This is the native MusePi capability unit. |
-| **compat plugin** | A bundle written for another host layout — Claude Code's `.claude-plugin/` or Codex's `.codex-plugin/` — and loaded through the compatibility layer. |
+| **plugin** | A capability bundle. The native MusePi plugin is a Cordis bundle whose manifest is the `package.json` `musepi` block; `omp`/`pi` manifests belong to the `pi` vendor. |
+| **vendor** | The host lineage a plugin declares: `musepi`, `pi`, `claude`, or `codex`. It names the manifest and content layout — not the runtime, because every plugin ultimately runs on the Cordis runtime. |
+| **compat plugin** | A plugin whose vendor is not `musepi` (`pi`, `claude`, `codex`), loaded through the compatibility layer. Support differs per vendor; see the support matrix below. |
 | **dock** | A fixed GUI seat a *loaded* plugin can claim: the composer dock (`conversation.composer.dock`) or a tab in the right-side panel. Browsing or installing never creates one; enabling a plugin can. |
-| **lane** | One partition of the market list. Native plugins fill the main lane; compat plugins sit in one compat lane with a badge. |
+| **lane** | One partition of the market list. Native plugins (`musepi`) fill the main lane; `pi`, `claude`, and `codex` sit in one compat lane with their vendor badge. |
 
-**The main list shows MusePi plugins only.** A row is native when its index entry declares `runtime: "cordis"`. Claude- and Codex-compatible bundles appear in one separate compat lane, marked with a compat badge, never mixed into the main list. `runtime` names the manifest contract, not where the bundle came from: format 1 admits exactly `"cordis"` and `"claude"`, and a third contract requires a new format.
+**The main list shows native MusePi plugins only.** A row is native when its index entry declares `vendor: "musepi"`. `pi`, `claude`, and `codex` plugins appear in one compat lane, each with its vendor badge, never mixed into the main list.
 
-**The installed manifest is the authority.** After an install, the host re-reads the plugin's `package.json` `musepi` block (with `omp`/`pi` fallbacks) and checks the manifest's name, version, and display label against the install. An index is an unsigned claim by the market: its title, labels, and even its package name do not outrank the manifest that actually landed on disk.
+`vendor` is an index declaration and a display axis, not a promise of equal support. **The support level is decided by the host from the installed artifact** — the manifest and content it actually finds — not by the badge, the package name, or the index:
+
+| `vendor` | Declared manifest | Host support today |
+| --- | --- | --- |
+| `musepi` | `package.json` `musepi` block | Full runtime: a native Cordis plugin loaded as a first-class extension. |
+| `pi` | `package.json` `omp` or `pi` block | Loaded through `compat/legacy-pi-compat.ts` as a legacy extension; not every capability is guaranteed. |
+| `claude` | `.claude-plugin/plugin.json` | Content-level: `discovery/claude-plugins.ts` reads skills, commands, hooks, and MCP servers; its JavaScript is not executed. |
+| `codex` | `.codex-plugin/plugin.json` | No runtime support yet: only the manifest icon is read (`compat/codex-plugin-icon.ts`). |
+
+The compat badge must not be read as "same as native": it says which lineage the entry declares and therefore which support level to expect. An index entry that overstates its vendor still gets the host's real treatment after install.
+
+**The installed artifact is the authority.** After an install, the host inspects what actually landed: native and `pi` plugins are re-read from `package.json` (`musepi`, then `omp`/`pi`), while `claude` and `codex` plugins are read from their own manifests. Name, version, and display label come from that artifact, and the host's vendor and support decision follows it. An index is an unsigned claim by the market: its title, labels, and even its package name do not outrank what landed on disk.
 
 ## Commands
 
@@ -240,7 +252,7 @@ A market can publish one index instead of a catalog. The index is one document w
   "plugins": [
     {
       "name": "@musepi/auto-review",
-      "runtime": "cordis",
+      "vendor": "musepi",
       "title": { "en": "Auto Review", "zh": "自动审查" },
       "description": { "en": "Per-tool authorization review" },
       "author": "MusePi",
@@ -298,7 +310,7 @@ A market can publish one index instead of a catalog. The index is one document w
 | Field | Required | Rule |
 | --- | --- | --- |
 | `name` | yes | Lowercase npm package name; unique within the index. |
-| `runtime` | yes | `"cordis"` (native MusePi manifest) or `"claude"` (compat manifest). |
+| `vendor` | yes | `"musepi"` (native), `"pi"` (`omp`/`pi` manifest), `"claude"` (`.claude-plugin`), or `"codex"` (`.codex-plugin`). |
 | `title` | no | `LocalizedText`; a reader displays `name` when absent. |
 | `description` | no | `LocalizedText`. |
 | `icon` | no | Inline `data:<type>;base64,<payload>` (`image/svg+xml`, `image/png`, `image/jpeg`, `image/webp`; canonical padded base64; at most 32 KiB decoded) or an absolute `https:` URL. |
@@ -374,3 +386,12 @@ Plugin IDs (`name@marketplace`) must be at most 128 characters total.
 
 Valid examples: `my-plugin`, `code-review`, `wordpress.com`, `ai-firstify`
 Invalid examples: `-bad`, `bad-`, `.bad`, `Bad`, `under_score`
+
+## Publishing to a market index
+
+Package names and discovery surfaces for entries in a `musepi-plugin-index`:
+
+- **Official MusePi plugins**: `@musepi/plugin-<name>`. The scope already names the organization, matching the shape of dsh's `@deepseek-ai/dsh-plugin-market`. Do not repeat the brand as `@musepi/musepi-plugin-<name>`.
+- **Community plugins**: `musepi-plugin-<name>` or `@author/musepi-plugin-<name>`.
+- **Discovery**: publish the npm keyword `musepi-plugin` and the GitHub topic `musepi-plugin`. A topic hit is only a candidate source; verify the package manifest before listing it in an index.
+- **Official status** is read from the npm scope prefix (`@musepi/`). Badges and lane placement come from the index's `vendor` value, never from the package name.
