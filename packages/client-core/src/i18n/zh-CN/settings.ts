@@ -1394,6 +1394,8 @@ export const settings = {
 	"settings.boardEmptyDesc": "从上方添加组件，或一键套用模板开始",
 	"settings.boardHomeDesc": "定制主题，搭一块属于你的看板",
 	"settings.boardExample": "示例",
+	"settings.widgetMakeInteractive": "换成可交互",
+	"settings.widgetMakeInteractiveHint": "把这张静态示例换成可操作的版本；原页面会保留在卡片数据里",
 	"settings.widgetsCount": "个组件",
 	"settings.boardNew": "新建看板",
 	"settings.boardNewTitle": "未命名看板",

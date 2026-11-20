@@ -1,4 +1,4 @@
-import { isTopModal, registerTranslations, SpotlightCard, t, tLoose, useModalFocus } from "@musepi/client-core";
+import { isTopModal, SpotlightCard, t, useModalFocus } from "@musepi/client-core";
 import { WidgetErrorBoundary } from "@musepi/client-core/src/widgets/error-boundary";
 import { WidgetFit } from "@musepi/client-core/src/widgets/fit";
 import { setWidgetResourceResolver, WidgetScopeContext } from "@musepi/client-core/src/widgets/html";
@@ -66,23 +66,6 @@ import { WorkspacePageHeader } from "./WorkspacePageHeader";
  * and localStorage persistence. Legacy cell-layout data migrates on load.
  */
 
-/**
- * Shell-owned copy for the sample-card upgrade affordance. The core
- * translation map is a frozen client-core dependency and this feature lives
- * entirely in the board shell, so the strings register through the same
- * runtime seam `apps/desktop/src/i18n/*` uses.
- */
-const zhBoardSamples = {
-	"settings.widgetMakeInteractive": "换成可交互",
-	"settings.widgetMakeInteractiveHint": "把这张静态示例换成可操作的版本；原页面会保留在卡片数据里",
-} as const;
-registerTranslations("zh-CN", zhBoardSamples);
-registerTranslations("en-US", {
-	"settings.widgetMakeInteractive": "Make interactive",
-	"settings.widgetMakeInteractiveHint":
-		"Replace this static sample with a working version; the original page stays in the card data",
-} as const satisfies Record<keyof typeof zhBoardSamples, string>);
-
 /** The renderer and data a card draws with. Retired canned types fall back to
  *  their sample face at render time (never rewriting the stored type), so a
  *  plugin that registers the type later still takes precedence. */
@@ -103,11 +86,11 @@ function SampleNote({ onUpgrade }: { onUpgrade(): void }): ReactNode {
 			<button
 				type="button"
 				className="gui-board-sample-upgrade"
-				title={tLoose("settings.widgetMakeInteractiveHint")}
+				title={t("settings.widgetMakeInteractiveHint")}
 				onClick={onUpgrade}
 			>
 				<Icon name="sparkling" className="h-3 w-3" />
-				<span>{tLoose("settings.widgetMakeInteractive")}</span>
+				<span>{t("settings.widgetMakeInteractive")}</span>
 			</button>
 		</div>
 	);
@@ -1595,8 +1578,8 @@ export function BoardPage({
 									<button
 										type="button"
 										className="gui-tool-btn"
-										title={tLoose("settings.widgetMakeInteractiveHint")}
-										aria-label={tLoose("settings.widgetMakeInteractive")}
+										title={t("settings.widgetMakeInteractiveHint")}
+										aria-label={t("settings.widgetMakeInteractive")}
 										onClick={() => upgradeSample(focusWidget.id)}
 									>
 										<Icon name="sparkling" className="h-3.5 w-3.5" />
