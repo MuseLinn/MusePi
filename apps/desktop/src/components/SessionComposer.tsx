@@ -63,6 +63,7 @@ import {
 } from "./composer/action-buttons";
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
+import { attachmentChipActions } from "./composer/chip-actions";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
@@ -75,11 +76,7 @@ import {
 	deleteMentionTokenAfter,
 	deleteMentionTokenBefore,
 	expandMentionTokens,
-	mentionTokenName,
-	removeMentionTokens,
 	resolveMentionChip,
-	retargetMentionTokens,
-	spliceMentionToken,
 } from "./composer/mention-token";
 import { GoalChip, PlanChip } from "./composer/mode-chips";
 import { PlanPanel } from "./composer/plan-panel";
@@ -108,7 +105,6 @@ import {
 	dataUrlToFile,
 	markSketchChip,
 	nextSketchFileName,
-	reorderAttachmentChips,
 	uploadAttachmentFiles,
 	useAttachments,
 } from "./composer/use-attachments";
@@ -2151,61 +2147,14 @@ export function SessionComposer({
 				heroActive={working}
 				enhancing={enhance === "enhancing"}
 				attachments={attachments}
-				onRemoveAttachment={id => {
-					// Kimi parity: removing the chip removes the mentions that point at
-					// it, then the survivors are renumbered (retarget rules in
-					// mention-token.ts). The label is captured BEFORE the array changes.
-					const label = mentionTokenName(attachments, id);
-					const next = attachments.filter(p => p.id !== id);
-					setAttachments(next);
-					setText(txt => {
-						const cleaned = label ? removeMentionTokens(txt, label) : txt;
-						return retargetMentionTokens(cleaned, attachments, next);
-					});
-				}}
-				onReorderAttachments={(fromId, toId) => {
-					const next = reorderAttachmentChips(attachments, fromId, toId);
-					if (next === attachments) return;
-					setAttachments(next);
-					setText(txt => retargetMentionTokens(txt, attachments, next));
-				}}
-				onMentionAttachment={id => {
-					// Kimi parity: insert the chip's ordinal token (`@图片N` /
-					// `@文件N`) at the caret — the numbered badge, immune to
-					// duplicate file names. The trailing space also closes the
-					// @ completion panel (its trigger treats a whitespace tail
-					// as prose).
-					const label = mentionTokenName(attachments, id);
-					const ta = taRef.current;
-					if (!label || !ta) return;
-					const { next, caret } = spliceMentionToken(
-						ta.value,
-						ta.selectionStart ?? ta.value.length,
-						ta.selectionEnd ?? ta.value.length,
-						label,
-					);
-					setText(next);
-					requestAnimationFrame(() => {
-						ta.setSelectionRange(caret, caret);
-						ta.focus();
-						autosize(taRef.current);
-					});
-				}}
-				onEditSketch={id => {
-					const chip = attachments.find(x => x.id === id);
-					if (!chip) return;
-					// A chip with a scene reopens its STROKES (A0) — every
-					// object stays editable. Only a scene-less chip (restored
-					// draft, old data) falls back to mounting its PNG.
-					setSketch({
-						open: true,
-						editId: id,
-						initial: chip.sketchScene ? null : chip.dataUrl,
-						scene: chip.sketchScene ?? null,
-					});
-				}}
-				onEditImage={src => setSketch({ open: true, editId: null, initial: src, scene: null })}
-				onAddAttachment={() => anyPickRef.current?.click()}
+				{...attachmentChipActions({
+					attachments,
+					setAttachments,
+					setText,
+					editorRef: taRef,
+					setSketch,
+					openAddMenu: () => anyPickRef.current?.click(),
+				})}
 				// Todo/queue chips + extension dock hang ABOVE the input card
 				// (user direction: the status row belongs above the input,
 				// not inside the framed box).
