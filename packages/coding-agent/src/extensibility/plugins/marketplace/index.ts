@@ -2,6 +2,8 @@ export * from "./cache";
 export * from "./fetcher";
 export * from "./grid-renderer";
 export * from "./icon-resolver";
+export * from "./index-format";
+export * from "./index-source";
 export * from "./list-entries";
 export * from "./manager";
 export * from "./registry";
