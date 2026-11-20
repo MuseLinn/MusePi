@@ -59,7 +59,6 @@ import {
 	RetryButton,
 	SendOrStopButton,
 	VoiceButton,
-	VoiceStatusStrip,
 } from "./composer/action-buttons";
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
@@ -69,6 +68,7 @@ import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { ComposerEditorStack } from "./composer/editor-stack";
 import { GoalDetailCard } from "./composer/goal-detail-card";
+import { insertComposerToken } from "./composer/insert-token";
 import { LargeTextPasteGesture } from "./composer/large-text-paste";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
@@ -118,6 +118,7 @@ import { useInputHistory } from "./composer/use-input-history";
 import { attachPaste, isLongPastedText, saveEditedPaste, useLongTextPaste } from "./composer/use-long-text-paste";
 import { useModes } from "./composer/use-modes";
 import { useSessionDesignSystem } from "./composer/use-session-design-system";
+import { VoiceOverlays } from "./composer/voice-overlays";
 import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
@@ -2280,21 +2281,13 @@ export function SessionComposer({
 							rpc={rpc}
 							cwd={cwd}
 							onFocusComposer={() => taRef.current?.focus()}
-							onInsert={token => {
-								const ta = taRef.current;
-								if (!ta) return;
-								ta.focus();
-								ta.insertText(token);
-								const next = ta.value;
-								setText(next);
-								autosize(ta);
-								// The completion panels are driven off onChange; a
-								// programmatic insert must re-run the same parsers so
-								// "+ → insert command" opens the menu instead of a bare "/".
-								onSlashInput(next);
-								onAtInput(next);
-								onHashInput(next);
-							}}
+							onInsert={token =>
+								insertComposerToken(taRef.current, token, setText, next => {
+									onSlashInput(next);
+									onAtInput(next);
+									onHashInput(next);
+								})
+							}
 						/>
 						{/* (The interactive 队列 toggle chip lives in the status dock
 						 * above — the old informational toolbar chip was a duplicate
@@ -2424,22 +2417,7 @@ export function SessionComposer({
 					</>
 				}
 			>
-				{dictation.phase !== "idle" && (
-					<VoiceStatusStrip
-						phase={dictation.phase}
-						seconds={dictation.seconds}
-						level={dictation.level}
-						partialText={dictation.partialText}
-					/>
-				)}
-				{dictation.error && (
-					<div className="gui-voice-error" role="status" aria-live="polite">
-						<span className="gui-voice-error-dot" aria-hidden />
-						<span className="min-w-0 flex-1">{dictation.error}</span>
-						<span className="gui-voice-error-hint">{t("settings.voiceEscCancel")}</span>
-					</div>
-				)}
-				{voiceSetup.dialog}
+				<VoiceOverlays dictation={dictation} dialog={voiceSetup.dialog} showHint />
 				{slashNotice && (
 					<SlashNotice level={slashNotice.level} text={slashNotice.text} markdown={slashNotice.markdown} />
 				)}

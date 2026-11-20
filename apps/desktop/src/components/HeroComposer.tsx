@@ -59,13 +59,14 @@ import {
 	type CreationRailHandle,
 	type CreationRailState,
 } from "./CreationModeRow";
-import { VoiceButton, VoiceStatusStrip } from "./composer/action-buttons";
+import { FocusButton, VoiceButton } from "./composer/action-buttons";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { attachmentChipActions } from "./composer/chip-actions";
 import { ConnectorChip, ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { DesignSystemRail } from "./composer/design-system-rail";
 import { ComposerEditorStack } from "./composer/editor-stack";
+import { insertComposerToken } from "./composer/insert-token";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import {
 	deleteMentionTokenAfter,
@@ -93,6 +94,7 @@ import { useComposerMarks } from "./composer/use-composer-marks";
 import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { attachPaste, isLongPastedText, saveEditedPaste, useLongTextPaste } from "./composer/use-long-text-paste";
+import { VoiceOverlays } from "./composer/voice-overlays";
 import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize } from "./composer-autosize";
 import { HeightMorph } from "./HeightMorph";
@@ -1686,29 +1688,11 @@ export function HeroComposer({
 									//「＋」sub-pickers stay hidden (M2-2.6 spec), so only
 									// the focus hand-back is wired here.
 									onFocusComposer={() => taRef.current?.focus()}
-									onInsert={token => {
-										const ta = taRef.current;
-										if (!ta) return;
-										ta.focus();
-										ta.insertText(token);
-										setText(ta.value);
-										autosize(ta);
-									}}
+									onInsert={token => insertComposerToken(taRef.current, token, setText)}
 								/>
 								{/* Focus mode sits between the attach menu and the model
 								 * selector — between the attach menu and the model selector. */}
-								{onToggleFocus && (
-									<button
-										type="button"
-										className={`gui-composer-ico${focused ? " gui-composer-ico--active" : ""}`}
-										onClick={onToggleFocus}
-										title={t("general.focusMode")}
-										aria-label={t("general.focusMode")}
-										aria-pressed={focused}
-									>
-										<Icon name="expand-up-down" className="h-3.5 w-3.5" />
-									</button>
-								)}
+								{onToggleFocus && <FocusButton focused={focused ?? false} onPress={onToggleFocus} />}
 								<ModelThinkingCapsule
 									rpc={rpc}
 									sessionId={null}
@@ -1801,21 +1785,7 @@ export function HeroComposer({
 							</>
 						}
 					>
-						{dictation.phase !== "idle" && (
-							<VoiceStatusStrip
-								phase={dictation.phase}
-								seconds={dictation.seconds}
-								level={dictation.level}
-								partialText={dictation.partialText}
-							/>
-						)}
-						{dictation.error && (
-							<div className="gui-voice-error" role="status" aria-live="polite">
-								<span className="gui-voice-error-dot" aria-hidden />
-								<span className="min-w-0 flex-1">{dictation.error}</span>
-							</div>
-						)}
-						{voiceSetup.dialog}
+						<VoiceOverlays dictation={dictation} dialog={voiceSetup.dialog} />
 						<div className="gui-welcome-ta-wrap flex items-start gap-1.5">
 							{quotes.length > 0 && (
 								<div className="gui-welcome-quotes">
