@@ -11,6 +11,7 @@
  */
 import { type ComponentProps, type ReactNode, useCallback, useState } from "react";
 import { registerHostModule } from "../lib/host-modules";
+import { type ComposerSurface, ComposerSurfaceContext } from "./composer/surface";
 import { useAttachments } from "./composer/use-attachments";
 import { HeroComposer } from "./HeroComposer";
 import { SessionComposer, type SessionComposerProps } from "./SessionComposer";
@@ -54,7 +55,18 @@ export function Composer(props: ComposerProps): ReactNode {
 		attachmentsApi: intake,
 		...(hero ? {} : { carryDraft: carry, carryChips }),
 	};
-	return hero ? <HeroComposer {...props} {...handoff} /> : <SessionComposer {...props} {...handoff} />;
+	const surface: ComposerSurface = {
+		variant: hero ? "hero" : "session",
+		intake,
+		initialDraft: draft,
+		onDraftChange,
+		...(hero ? {} : { carryDraft: carry, carryChips }),
+	};
+	return (
+		<ComposerSurfaceContext.Provider value={surface}>
+			{hero ? <HeroComposer {...props} {...handoff} /> : <SessionComposer {...props} {...handoff} />}
+		</ComposerSurfaceContext.Provider>
+	);
 }
 
 // The compiled input-card artifact imports this module through the host table

@@ -78,6 +78,7 @@ import {
 } from "./composer/mention-token";
 import { QuoteCards } from "./composer/quote-cards";
 import { StartFromPicker } from "./composer/start-from-picker";
+import { useComposerSurface } from "./composer/surface";
 import { TemplateRail } from "./composer/template-rail";
 import {
 	attachmentFiles,
@@ -401,8 +402,9 @@ export function HeroComposer({
 	};
 	// The entry owns the intake in the app; a direct mount (tests, alternate
 	// hosts) keeps its own so this component never requires the entry.
+	const surface = useComposerSurface();
 	const localIntake = useAttachments(rpc, { stageFiles: false });
-	const { attachments, setAttachments, addFiles } = attachmentsApi ?? localIntake;
+	const { attachments, setAttachments, addFiles } = surface?.intake ?? attachmentsApi ?? localIntake;
 	const { marks, resolveMention } = useComposerMarks(text, attachments);
 	// Armed plan/goal: one tap arms the mode chip —
 	// NO popup dialog and NO session creation, so the welcome input keeps

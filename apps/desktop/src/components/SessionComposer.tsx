@@ -88,6 +88,7 @@ import { QuoteCards } from "./composer/quote-cards";
 import { SessionModeToggles } from "./composer/session-mode-toggles";
 import { SlashCommandTip } from "./composer/slash-command-tip";
 import { QueueToggleChip, SwarmChip, TodoChip } from "./composer/status-chips";
+import { useComposerSurface } from "./composer/surface";
 import { SwarmCardPreview } from "./composer/swarm-card-preview";
 import { TodoPanel } from "./composer/todo-panel";
 import type {
@@ -328,8 +329,9 @@ export function SessionComposer({
 	// Image paste/drop attachments (extracted: composer/use-attachments).
 	// The entry owns the intake in the app; a direct mount (tests, alternate
 	// hosts) keeps its own so this component never requires the entry.
+	const surface = useComposerSurface();
 	const localIntake = useAttachments(rpc);
-	const { attachments, setAttachments, addFiles, onPaste } = attachmentsApi ?? localIntake;
+	const { attachments, setAttachments, addFiles, onPaste } = surface?.intake ?? attachmentsApi ?? localIntake;
 	const { marks, resolveMention } = useComposerMarks(text, attachments);
 	// Annotation screenshots use the ordinary attachment pipeline; their text
 	// stays in display context until send.
