@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **欢迎页的 `/`、`@`、`#` 补全菜单换成会话同款面板**：两侧不再各写一份菜单。欢迎页现在同样按项类型显示图标（目录高亮、文件灰）、给路径单独的次要列与 `rootLabel` 标签、给会话项显示所属目录，并把键盘选中的那一行滚动到可见范围内。
+  - EN: The welcome page's `/`, `@` and `#` completion panels are the session panels now: the two scenes no longer render separate menus. The welcome menu shows a per-kind icon (directories accented, files muted), a separate secondary path column with the `rootLabel` chip, the owning directory on session rows, and keeps the keyboard-selected row scrolled into view.
+
 ## [0.7.7] - 2026-11-21
 
 - **吸顶提问背后不再铺底色带，药丸下方的正文照常可读**：此前吸顶提问的药丸后面垫着一条 60px 的渐隐底色带，把滚到药丸下方的那几行正文盖掉一截；现在这条带子移除，只有药丸自身的不透明底和阴影覆盖文字，其余滚动内容照常显示。药丸仍贴同一顶边、点击仍跳回该提问所在回合的开头，槽位也仍不拦截指针。
