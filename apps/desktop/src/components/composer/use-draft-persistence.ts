@@ -31,6 +31,7 @@ export function useDraftPersistence({
 	attachments,
 	setAttachments,
 	carryText,
+	keepAttachments,
 }: {
 	sessionId: string;
 	rpc: RpcClient | null;
@@ -40,6 +41,10 @@ export function useDraftPersistence({
 	 *  Used only when this session has no stored draft of its own, so a switch
 	 *  can never resurrect text the user already sent here. */
 	carryText?: string;
+	/** Chips already on the surface when this session mount is a welcome →
+	 *  session flip: keep them when the session has no stash of its own, the
+	 *  same one-shot rule as `carryText`. */
+	keepAttachments?: boolean;
 	attachments: ComposerAttachment[];
 	setAttachments(next: ComposerAttachment[]): void;
 }): void {
@@ -60,6 +65,8 @@ export function useDraftPersistence({
 	// session switch from re-seeding the same text into an empty box.
 	const carryRef = useRef(carryText ?? "");
 	carryRef.current = carryText !== undefined ? carryText : carryRef.current;
+	const keepChipsRef = useRef(keepAttachments === true);
+	keepChipsRef.current = keepAttachments !== undefined ? keepAttachments : keepChipsRef.current;
 	useEffect(() => {
 		// Keyed on sessionId only: re-running on draftEnabled toggles would
 		// clobber in-progress text when the pref flips.
@@ -77,7 +84,11 @@ export function useDraftPersistence({
 		const carried = next === "" ? carryRef.current : "";
 		carryRef.current = "";
 		setText(carried === "" ? next : carried);
-		setAttachments(nextAttachments);
+		// Same one-shot rule for chips: an empty session stash must not wipe the
+		// thumbnails the user staged on the welcome surface.
+		const keepChips = keepChipsRef.current && nextAttachments.length === 0;
+		keepChipsRef.current = false;
+		setAttachments(keepChips ? attachments : nextAttachments);
 	}, [sessionId, draftEnabled]);
 	// Idle-recap editor-draft guard (TUI parity): report the un-sent draft
 	// to the daemon (session.setDraft) so a scheduled idle recap is

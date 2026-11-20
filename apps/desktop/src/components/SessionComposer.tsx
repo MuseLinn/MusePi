@@ -224,7 +224,12 @@ export interface SessionComposerProps {
 	/** Draft carried from the welcome skin (see `Composer`). */
 	initialDraft?: string;
 	carryDraft?: string;
+	/** Chips staged on the welcome surface before the flip. */
+	carryChips?: boolean;
 	onDraftChange?(text: string): void;
+	/** Attachment intake owned by the entry (see `Composer`). A direct mount
+	 *  without it keeps its own state, so the skin stays self-contained. */
+	attachmentsApi?: ReturnType<typeof useAttachments>;
 }
 
 type ComposerKeyEvent = globalThis.KeyboardEvent & { nativeEvent?: { isComposing?: boolean } };
@@ -293,7 +298,9 @@ export function SessionComposer({
 	attachApiRef,
 	initialDraft,
 	carryDraft,
+	carryChips,
 	onDraftChange,
+	attachmentsApi,
 }: SessionComposerProps): ReactNode {
 	const pet = useCompanionArt();
 	// composer 座位槽(dock / left / right):
@@ -319,7 +326,10 @@ export function SessionComposer({
 	}, []);
 	const [enhance, setEnhance] = useState<EnhanceState>("idle");
 	// Image paste/drop attachments (extracted: composer/use-attachments).
-	const { attachments, setAttachments, addFiles, onPaste } = useAttachments(rpc);
+	// The entry owns the intake in the app; a direct mount (tests, alternate
+	// hosts) keeps its own so this component never requires the entry.
+	const localIntake = useAttachments(rpc);
+	const { attachments, setAttachments, addFiles, onPaste } = attachmentsApi ?? localIntake;
 	const { marks, resolveMention } = useComposerMarks(text, attachments);
 	// Annotation screenshots use the ordinary attachment pipeline; their text
 	// stays in display context until send.
@@ -491,7 +501,16 @@ export function SessionComposer({
 		onHashInput,
 		insertHash,
 	} = useCompletion({ rpc, cwd, sessionId, setText });
-	useDraftPersistence({ sessionId, rpc, text, setText, attachments, setAttachments, carryText: carryDraft });
+	useDraftPersistence({
+		sessionId,
+		rpc,
+		text,
+		setText,
+		attachments,
+		setAttachments,
+		carryText: carryDraft,
+		keepAttachments: carryChips,
+	});
 	const { historyIndex, browseHistory, setHistoryIndex, pushHistory } = useInputHistory(cwd);
 	const spellcheckEnabled = (): boolean => {
 		try {

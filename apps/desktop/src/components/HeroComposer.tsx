@@ -194,6 +194,7 @@ export function HeroComposer({
 	attachApiRef,
 	initialDraft,
 	onDraftChange,
+	attachmentsApi,
 }: {
 	/** First prompt; the model/thinking choices made in the composer are
 	 *  carried along so the new session starts with them. planMode/goalMode
@@ -267,6 +268,9 @@ export function HeroComposer({
 	/** Draft handed over by the entry (see `Composer`). */
 	initialDraft?: string;
 	onDraftChange?(text: string): void;
+	/** Attachment intake owned by the entry (see `Composer`). A direct mount
+	 *  without it keeps its own state, so the skin stays self-contained. */
+	attachmentsApi?: ReturnType<typeof useAttachments>;
 }): ReactNode {
 	const pet = useCompanionArt();
 	const [text, setText] = useState(initialDraft ?? "");
@@ -395,7 +399,10 @@ export function HeroComposer({
 		const a = attachments.find(x => x.id === id);
 		if (a?.editText !== undefined) setEditingPaste({ id, text: a.editText });
 	};
-	const { attachments, setAttachments, addFiles } = useAttachments(rpc, { stageFiles: false });
+	// The entry owns the intake in the app; a direct mount (tests, alternate
+	// hosts) keeps its own so this component never requires the entry.
+	const localIntake = useAttachments(rpc, { stageFiles: false });
+	const { attachments, setAttachments, addFiles } = attachmentsApi ?? localIntake;
 	const { marks, resolveMention } = useComposerMarks(text, attachments);
 	// Armed plan/goal: one tap arms the mode chip —
 	// NO popup dialog and NO session creation, so the welcome input keeps

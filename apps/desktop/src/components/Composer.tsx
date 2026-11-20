@@ -11,6 +11,7 @@
  */
 import { type ComponentProps, type ReactNode, useCallback, useState } from "react";
 import { registerHostModule } from "../lib/host-modules";
+import { useAttachments } from "./composer/use-attachments";
 import { HeroComposer } from "./HeroComposer";
 import { SessionComposer, type SessionComposerProps } from "./SessionComposer";
 
@@ -26,18 +27,33 @@ export function Composer(props: ComposerProps): ReactNode {
 	// `useDraftPersistence` restores "" and the carried text disappears.
 	const [draft, setDraft] = useState("");
 	const [carry, setCarry] = useState("");
+	const [carryChips, setCarryChips] = useState(false);
 	const hero = props.mode === "hero";
 	const onDraftChange = useCallback(
 		(text: string) => {
 			setDraft(text);
-			setCarry(prev => {
-				if (hero) return text;
-				return prev !== "" && text === prev ? "" : prev;
-			});
+			if (hero) {
+				// The welcome surface may also hold chips; they ride the same flip.
+				setCarryChips(true);
+				setCarry(text);
+				return;
+			}
+			setCarryChips(false);
+			setCarry(prev => (prev !== "" && text === prev ? "" : prev));
 		},
 		[hero],
 	);
-	const handoff = { initialDraft: draft, onDraftChange, ...(hero ? {} : { carryDraft: carry }) };
+	// Attachment intake lives here too: chips added on the welcome surface are
+	// the same array the session skin sends, so a pre-session chip is not lost
+	// on the flip. Staging stays mode-aware — the draft surface has no session
+	// to upload into yet (`stageFiles: false`), the session surface does.
+	const intake = useAttachments(props.rpc, { stageFiles: !hero });
+	const handoff = {
+		initialDraft: draft,
+		onDraftChange,
+		attachmentsApi: intake,
+		...(hero ? {} : { carryDraft: carry, carryChips }),
+	};
 	return hero ? <HeroComposer {...props} {...handoff} /> : <SessionComposer {...props} {...handoff} />;
 }
 
