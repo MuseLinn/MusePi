@@ -62,6 +62,7 @@ import {
 import { FocusButton, VoiceButton } from "./composer/action-buttons";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { attachmentChipActions } from "./composer/chip-actions";
+import { CompletionMenus } from "./composer/completion-menus";
 import { ConnectorChip, ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { DesignSystemRail } from "./composer/design-system-rail";
@@ -115,7 +116,6 @@ import {
 	type UsageUnreportedAccountView,
 } from "./SessionComposer";
 import { SketchPad } from "./SketchPad";
-import { SlashRow } from "./SlashRow";
 import type { ThinkingLevel } from "./ThinkingSelector";
 
 /** Time-aware greeting: seven brackets — 清晨 / 早上 / 中午 /
@@ -880,14 +880,6 @@ export function HeroComposer({
 	// a single ref tracks whichever is open. The menu scrolls internally
 	// (max-height 300px, overflow-y auto) — keep the active row in view
 	// while arrow-navigating.
-	const completionMenuRef = useRef<HTMLDivElement | null>(null);
-	useEffect(() => {
-		const menu = completionMenuRef.current;
-		if (!menu) return;
-		const active = menu.querySelector(".gui-slash-row--active, .gui-model-opt--active");
-		active?.scrollIntoView({ block: "nearest" });
-	}, [slashIdx, atIdx, hashIdx, slashOpen, atOpen, hashOpen]);
-
 	const formRef = useRef<HTMLFormElement | null>(null);
 	// Select-all + delete clears text AND attachments together (consumed
 	// by onChange once the textarea reports the emptied value).
@@ -1799,55 +1791,21 @@ export function HeroComposer({
 								</div>
 							)}
 							{renderCompMenu(
-								<div
-									className="gui-slash-menu gui-slash-menu--rich"
-									style={{ minWidth: 300 }}
-									ref={completionMenuRef}
-								>
-									{slashOpen && slashFilter.length > 0 && (
-										<>
-											<div className="gui-slash-rows">
-												{slashFilter.map((c, i) => (
-													<SlashRow
-														key={c.name}
-														item={c}
-														active={i === slashIdx}
-														onClick={() => insertSlash(c.name)}
-													/>
-												))}
-											</div>
-											<div className="gui-slash-footer">{t("general.slashCompletionHints")}</div>
-										</>
-									)}
-									{atOpen &&
-										atFilter.length > 0 &&
-										atFilter.map((e, i) => (
-											<button
-												key={e.insertPath ?? e.path}
-												type="button"
-												className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
-												onClick={() => insertAt(e.insertPath ?? e.path)}
-											>
-												<span className="min-w-0 flex-1 truncate">
-													{e.isDir ? "📁 " : "📄 "}
-													{e.path}
-													{e.rootLabel ? ` · ${e.rootLabel}` : ""}
-												</span>
-											</button>
-										))}
-									{hashOpen &&
-										hashFilter.length > 0 &&
-										hashFilter.map((s, i) => (
-											<button
-												key={s.id}
-												type="button"
-												className={`gui-model-opt${i === hashIdx ? " gui-model-opt--active" : ""}`}
-												onClick={() => insertHash(s.id)}
-											>
-												<span className="min-w-0 flex-1 truncate">#{hashLabel(s)}</span>
-											</button>
-										))}
-								</div>,
+								<CompletionMenus
+									slashOpen={slashOpen}
+									slashItems={slashFilter}
+									slashIdx={slashIdx}
+									onPickSlash={insertSlash}
+									atOpen={atOpen}
+									atEntries={atFilter}
+									atIdx={atIdx}
+									onPickAt={insertAt}
+									hashOpen={hashOpen}
+									hashSessions={hashFilter}
+									hashIdx={hashIdx}
+									hashLabel={hashLabel}
+									onPickHash={insertHash}
+								/>,
 							)}
 
 							{editingPaste && (
