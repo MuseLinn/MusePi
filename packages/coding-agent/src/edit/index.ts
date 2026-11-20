@@ -399,6 +399,8 @@ export class EditTool implements AgentTool<TInput> {
 	readonly label = "Edit";
 	readonly loadMode = "essential";
 	readonly concurrency = "exclusive";
+	/** Same wedge class as `write`: the local replace/format path has no timeout. */
+	readonly timeoutMs = 120_000;
 	readonly strict = true;
 
 	readonly #allowFuzzy: boolean;
