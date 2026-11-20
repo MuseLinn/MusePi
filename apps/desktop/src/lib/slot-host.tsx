@@ -717,6 +717,10 @@ export interface CapabilityCenterPageNavigation {
 	onBack(): void;
 }
 export interface SlotComponentProps {
+	/** Host content the entry wraps (hoc seats only). A contribution must
+	 *  render it as-is; a fragment adds no box, so the owner's layout is
+	 *  untouched. Absent on additive seats. */
+	children?: ReactNode;
 	/** Daemon RPC bridge (models.list / session.setModel / …). */
 	rpc?: RpcClient | null;
 	/** Active session id, when the host has one. */
@@ -1092,6 +1096,7 @@ export function SlotComponentHost({
 	browser,
 	sessionInfo,
 	fallback,
+	children,
 }: {
 	rpc: RpcClient | null;
 	slot: string;
@@ -1105,6 +1110,8 @@ export function SlotComponentHost({
 	sessionInfo?: SlotComponentProps["sessionInfo"];
 	/** 无可用贡献时渲染的内容(不传则保持原有「无贡献即空白」语义)。 */
 	fallback?: ReactNode;
+	/** hoc 席位的宿主内容:有贡献时交给组件包装,无贡献时直接渲染。 */
+	children?: ReactNode;
 }): ReactNode {
 	const items = useSlotComponents(rpc, slot);
 	const renderable = fallback === undefined ? items : items.filter(item => item.error === undefined);
@@ -1124,7 +1131,9 @@ export function SlotComponentHost({
 					panelShell={panelShell}
 					browser={browser}
 					sessionInfo={sessionInfo}
-				/>
+				>
+					{children}
+				</SlotComponentMount>
 			))}
 		</>
 	);
@@ -1153,6 +1162,7 @@ export function SlotComponentMount({
 	turn,
 	sessionInfo,
 	configForm,
+	children,
 }: {
 	item: SlotComponent;
 	rpc?: RpcClient | null;
@@ -1184,6 +1194,8 @@ export function SlotComponentMount({
 	/** 该组件的 config form(宿主从 pluginConfig.* 构造);缺省时本组件
 	 *  按 extensionId 自行构造一个。 */
 	configForm?: SlotConfigForm | null;
+	/** hoc seats: the owner's content, rendered by the contribution. */
+	children?: ReactNode;
 }): ReactNode {
 	const [error, setError] = useState<string | null>(null);
 	// This mount's module-level teardown (see the pply(ctx) call below). Held in
@@ -1342,7 +1354,7 @@ export function SlotComponentMount({
 						})
 				: undefined,
 	};
-	return <Comp {...hostProps} />;
+	return <Comp {...hostProps}>{children}</Comp>;
 }
 
 /**
