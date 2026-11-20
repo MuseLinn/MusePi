@@ -1446,9 +1446,19 @@ describe("createAgentSession defaultInactive tool activation", () => {
 		const tempDir = makeTempDir();
 		const releaseStalledRegistration = Promise.withResolvers<void>();
 		const releaseRecoveredRegistration = Promise.withResolvers<void>();
+		const stalledRegistrationAttempted = Promise.withResolvers<void>();
+		// `session_start` fires once during createAgentSession and again inside
+		// initializeExtensions, so both emissions attach these continuations. The
+		// guard keeps one registration per tool: a second, independent registration
+		// gets its own handler budget and can commit after the first timed out,
+		// which would be a duplicate registration, not a resurrected activation.
+		let didRegisterStalled = false;
+		let didRegisterRecovered = false;
 		const detachedRegistrationExtension: ExtensionFactory = pi => {
 			pi.on("session_start", () => {
 				void releaseStalledRegistration.promise.then(() => {
+					if (didRegisterStalled) return;
+					didRegisterStalled = true;
 					pi.registerTool({
 						name: "stalled_detached_tool",
 						label: "Stalled Detached Tool",
@@ -1459,8 +1469,11 @@ describe("createAgentSession defaultInactive tool activation", () => {
 							return { content: [{ type: "text", text: "stalled" }] };
 						},
 					});
+					stalledRegistrationAttempted.resolve();
 				});
 				void releaseRecoveredRegistration.promise.then(() => {
+					if (didRegisterRecovered) return;
+					didRegisterRecovered = true;
 					pi.registerTool({
 						name: "recovered_detached_tool",
 						label: "Recovered Detached Tool",
@@ -1488,7 +1501,7 @@ describe("createAgentSession defaultInactive tool activation", () => {
 			if (!runner) throw new Error("expected extension runner");
 			const detachedFailure = Promise.withResolvers<{ event: string; error: string }>();
 			runner.onError(error => {
-				if (error.event === "tool_registration") {
+				if (error.event === "tool_registration" && error.error.includes("timed out")) {
 					detachedFailure.resolve({ event: error.event, error: error.error });
 				}
 			});
@@ -1505,17 +1518,25 @@ describe("createAgentSession defaultInactive tool activation", () => {
 			testSetExtensionHandlerTimeoutMs(10);
 
 			releaseStalledRegistration.resolve();
+			// Wait for the detached registration attempt itself, not for the registry
+			// to happen to be empty: the stalled activation's presentation never
+			// settles on its own, so the asserted absence below can only follow the
+			// reported timeout and its rollback.
+			await stalledRegistrationAttempted.promise;
 			const failure = await detachedFailure.promise;
 			// Restore the default budget before the recovered registration flush:
 			// the 10ms budget was only for reaping the stalled activation, and the
 			// real presentation pass can exceed it under full-suite load.
 			testSetExtensionHandlerTimeoutMs(EXTENSION_HANDLER_TIMEOUT_MS);
 			releaseRecoveredRegistration.resolve();
+			// Registry mutations are serialized: the recovered activation starts
+			// only after the stalled activation's mutation settled, so completing it
+			// also proves both that the timeout did not block later registrations and
+			// that the stalled activation's rollback has run.
 			await recoveredActivation.promise;
 
 			expect(failure.event).toBe("tool_registration");
 			expect(failure.error).toContain("timed out");
-			await waitForToolAbsent(session, "stalled_detached_tool");
 			expect(session.getToolByName("stalled_detached_tool")).toBeUndefined();
 			expect(session.getToolByName("recovered_detached_tool")?.label).toBe("Recovered Detached Tool");
 		} finally {
