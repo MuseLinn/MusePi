@@ -786,7 +786,17 @@ try {
 				origin.dpr,
 			);
 		}
-		const quickbarExpanded = await waitForQuickbarSurface(sample => sample.expanded === true && sample.opacity === "1");
+		// The dividers fade in through a 0s transition with a delay, so a sample
+		// that only waits for the bar itself reads opacity "0" on the frame the
+		// bar lands. Wait for the seam state too — it is part of the settled
+		// surface, not a second assertion.
+		const quickbarExpanded = await waitForQuickbarSurface(
+			sample =>
+				sample.expanded === true &&
+				sample.opacity === "1" &&
+				sample.dividerOpacity.length === 2 &&
+				sample.dividerOpacity.every(value => value === "1"),
+		);
 		// The ROW carries three buttons; the COMPOSER carries a leading and a
 		// trailing one. Both live in the same surface, so the button list is
 		// five once the composer is mounted — the row's three are faded out

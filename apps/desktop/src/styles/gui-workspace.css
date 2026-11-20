@@ -2974,6 +2974,105 @@
 	font-size: 11px;
 	color: var(--color-text-faint);
 }
+
+/* Context tab token tables (session totals / latest assistant message). */
+.gui-ctx-token-table {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	padding: 8px 10px;
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface-raised) 70%, transparent);
+}
+
+.gui-ctx-token-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 12px;
+}
+
+.gui-ctx-token-row > span:first-child {
+	color: var(--color-text-muted);
+}
+
+/* Context tab raw-message rows: a disclosure head plus its wire JSON. */
+.gui-ctx-raw-row {
+	overflow: hidden;
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface-raised) 70%, transparent);
+}
+
+.gui-ctx-raw-head {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding-right: 4px;
+}
+
+.gui-ctx-raw-expand {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font-size: 11px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.gui-ctx-raw-expand:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+.gui-ctx-raw-copy {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+}
+
+.gui-ctx-raw-copy:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text);
+}
+
+.gui-ctx-raw-copy:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: -2px;
+}
+
+.gui-ctx-raw-json {
+	max-height: 16rem;
+	margin: 0;
+	overflow: auto;
+	padding: 8px 10px;
+	border-top: 1px solid color-mix(in oklab, var(--color-border) 50%, transparent);
+	font-family: var(--font-mono, ui-monospace, "SFMono-Regular", monospace);
+	font-size: 11px;
+	line-height: 1.45;
+	white-space: pre-wrap;
+	word-break: break-all;
+	color: var(--color-text-muted);
+}
+
+.gui-ctx-raw-note {
+	padding: 4px 10px 6px;
+	font-size: 10px;
+	color: var(--color-text-faint);
+}
 .gui-pane-action {
 	display: flex;
 	align-items: center;

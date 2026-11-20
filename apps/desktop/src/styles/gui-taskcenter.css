@@ -736,6 +736,11 @@
 	opacity: 0.95;
 }
 
+.gui-ctx-usage-bar--warn {
+	background: var(--color-warning, #e2b93d);
+	opacity: 0.95;
+}
+
 .gui-pane-tool {
 	display: inline-flex;
 	align-items: center;

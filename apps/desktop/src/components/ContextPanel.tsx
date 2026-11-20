@@ -19,7 +19,7 @@ import {
 	t,
 } from "@musepi/client-core";
 import { fmtCost } from "@musepi/client-core/src/lib/format";
-import type { AgentSnapshot, PdfQuoteAnchor } from "@musepi/pi-wire";
+import type { AgentSnapshot, PdfQuoteAnchor, WireMessage } from "@musepi/pi-wire";
 import {
 	Columns2 as Columns2IconData,
 	Maximize2 as Maximize2IconData,
@@ -158,6 +158,92 @@ function fmtTokens(n: number): string {
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
 	if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
 	return String(n);
+}
+
+/** Share of prompt tokens served from cache — the same ratio for the session
+ *  totals and for one message's usage, so both tables read one rule. */
+function cacheHitPercent(usage: { input: number; cacheRead: number }): number | null {
+	const prompt = usage.cacheRead + usage.input;
+	return prompt > 0 ? (usage.cacheRead / prompt) * 100 : null;
+}
+
+/** Raw-message list cap: recent rows are the ones worth reading, and the
+ *  panel is a fixed-height column over the transcript. */
+const RAW_MESSAGE_LIMIT = 50;
+/** Expanded row preview budget (characters). The copy action always writes the
+ *  whole message; the preview only refuses to build an unbounded DOM node. */
+const RAW_MESSAGE_PREVIEW_CHARS = 4000;
+
+/** Locale time for an epoch-ms number (or an ISO/number string from older
+ *  payloads). One implementation serves job rows and raw-message rows. */
+function fmtTimestamp(ts: number | string, options: Intl.DateTimeFormatOptions): string {
+	const date = new Date(ts);
+	if (Number.isNaN(date.getTime())) return String(ts);
+	return date.toLocaleString(undefined, options);
+}
+
+function fmtMessageTime(ts: number): string {
+	return fmtTimestamp(ts, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+/** Wire roles the panel localizes; anything else keeps its wire identifier,
+ *  which is what a raw-message row is for. */
+function rawRoleLabel(role: WireMessage["role"]): string {
+	if (role === "user") return t("general.user");
+	if (role === "assistant") return t("general.assistant");
+	if (role === "toolResult") return t("context.roleToolResult");
+	return role;
+}
+
+/** Expanded row body. Mounted only for the one open row, so the transcript
+ *  re-renders that stream in do not serialize every collapsed message. */
+function RawMessageJson({ message }: { message: WireMessage }): ReactNode {
+	const json = useMemo(() => JSON.stringify(message, null, 2), [message]);
+	const preview = json.length > RAW_MESSAGE_PREVIEW_CHARS ? `${json.slice(0, RAW_MESSAGE_PREVIEW_CHARS)}…` : json;
+	return (
+		<>
+			<pre className="gui-ctx-raw-json">{preview}</pre>
+			{json.length > RAW_MESSAGE_PREVIEW_CHARS && (
+				<div className="gui-ctx-raw-note">{t("context.rawMessageTruncated")}</div>
+			)}
+		</>
+	);
+}
+
+interface TokenFigures {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	cacheHit: number | null;
+}
+
+/** Five-row token readout (input / output / cache read / cache write / cache
+ *  hit). Used twice: session totals and the latest assistant message. */
+function TokenTable({ title, figures }: { title: string; figures: TokenFigures | null }): ReactNode {
+	const rows: readonly { label: string; value: string }[] = [
+		{ label: t("sessionInfo.input"), value: figures ? fmtTokens(figures.input) : "—" },
+		{ label: t("sessionInfo.output"), value: figures ? fmtTokens(figures.output) : "—" },
+		{ label: t("sessionInfo.cacheRead"), value: figures ? fmtTokens(figures.cacheRead) : "—" },
+		{ label: t("sessionInfo.cacheWrite"), value: figures ? fmtTokens(figures.cacheWrite) : "—" },
+		{
+			label: t("sessionInfo.cacheHitRate"),
+			value: figures === null || figures.cacheHit === null ? "—" : `${figures.cacheHit.toFixed(1)}%`,
+		},
+	];
+	return (
+		<>
+			<div className="gui-group-label px-2 pb-1 pt-3">{title}</div>
+			<div className="gui-ctx-token-table mx-2">
+				{rows.map(row => (
+					<div key={row.label} className="gui-ctx-token-row">
+						<span>{row.label}</span>
+						<span className="tabular-nums">{row.value}</span>
+					</div>
+				))}
+			</div>
+		</>
+	);
 }
 
 function BrowserPanelTabIcon({ favicon }: { favicon: string | null }): ReactNode {
@@ -429,17 +515,25 @@ export function ContextPanel({
 		editorLocationRef.current = null;
 		setEditorHistoryAvailability({ back: false, forward: false });
 	}, [cwd]);
-	// Session stats: message count + wall-clock run time. P1-12: the count
-	// and the first timestamp only move when the entry LIST shape changes —
-	// a streaming content upsert replaces a message object in place — so
-	// the O(n) scan gates on structureRev instead of running on every
+	// Session stats: message counts by role + wall-clock run time. P1-12: the
+	// counts and the first timestamp only move when the entry LIST shape
+	// changes — a streaming content upsert replaces a message object in place —
+	// so the O(n) scan gates on structureRev instead of running on every
 	// streamed frame.
-	const { messageCount, firstTs } = useMemo(() => {
+	const { messageCount, userMessageCount, assistantMessageCount, firstTs } = useMemo(() => {
 		const entries = snap?.entries ?? [];
-		return {
-			messageCount: entries.filter(e => e.type === "message").length,
-			firstTs: entries.find(e => typeof e.timestamp === "string")?.timestamp,
-		};
+		let messages = 0;
+		let user = 0;
+		let assistant = 0;
+		let first: string | undefined;
+		for (const entry of entries) {
+			if (first === undefined && typeof entry.timestamp === "string") first = entry.timestamp;
+			if (entry.type !== "message") continue;
+			messages += 1;
+			if (entry.message.role === "user") user += 1;
+			else if (entry.message.role === "assistant") assistant += 1;
+		}
+		return { messageCount: messages, userMessageCount: user, assistantMessageCount: assistant, firstTs: first };
 	}, [snap?.structureRev]);
 	const runMinutes =
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
@@ -467,10 +561,31 @@ export function ContextPanel({
 		}
 		return totals;
 	}, [snap?.structureRev, snap?.working]);
-	const cacheHitRate =
-		usageTotals.cacheRead + usageTotals.input > 0
-			? (usageTotals.cacheRead / (usageTotals.cacheRead + usageTotals.input)) * 100
-			: null;
+	const cacheHitRate = cacheHitPercent(usageTotals);
+	// Latest settled assistant message (the same `working` settle gate as the
+	// totals memo: its final usage lands through a content upsert).
+	const latestAssistant = useMemo(() => {
+		const entries = snap?.entries ?? [];
+		for (let index = entries.length - 1; index >= 0; index -= 1) {
+			const entry = entries[index];
+			if (entry?.type !== "message" || entry.message.role !== "assistant") continue;
+			return { usage: entry.message.usage ?? null };
+		}
+		return null;
+	}, [snap?.structureRev, snap?.working]);
+	// Raw message rows, newest first and capped. The row keeps the wire message
+	// itself and serializes only when expanded or copied.
+	const rawMessages = useMemo(() => {
+		const entries = snap?.entries ?? [];
+		const rows: { id: string; message: WireMessage }[] = [];
+		for (let index = entries.length - 1; index >= 0 && rows.length < RAW_MESSAGE_LIMIT; index -= 1) {
+			const entry = entries[index];
+			if (entry?.type !== "message") continue;
+			rows.push({ id: entry.id, message: entry.message });
+		}
+		return rows;
+	}, [snap?.structureRev, snap?.working]);
+	const hiddenRawMessageCount = Math.max(0, messageCount - rawMessages.length);
 
 	// Tool selection is controlled from ChatView (shared with RightRail).
 	// Context-window usage (session.contextUsage, same RPC as the header
@@ -506,6 +621,33 @@ export function ContextPanel({
 			clearInterval(t);
 		};
 	}, [rpc, snap?.sessionId, snap?.working]);
+	// Raw-message interactions: one row expands at a time; copy feedback clears
+	// itself after the standard two-second confirmation. Both reset when the
+	// panel switches sessions (ids are only meaningful inside one transcript).
+	const [expandedRawId, setExpandedRawId] = useState<string | null>(null);
+	const [copiedRawId, setCopiedRawId] = useState<string | null>(null);
+	const copyResetRef = useRef<number | null>(null);
+	useEffect(() => {
+		setExpandedRawId(null);
+		setCopiedRawId(null);
+	}, [snap?.sessionId]);
+	useEffect(
+		() => () => {
+			if (copyResetRef.current !== null) window.clearTimeout(copyResetRef.current);
+		},
+		[],
+	);
+	const copyRawMessage = useCallback((id: string, value: string): void => {
+		void copyToClipboard(value).then(ok => {
+			if (!ok) return;
+			setCopiedRawId(id);
+			if (copyResetRef.current !== null) window.clearTimeout(copyResetRef.current);
+			copyResetRef.current = window.setTimeout(() => {
+				setCopiedRawId(current => (current === id ? null : current));
+				copyResetRef.current = null;
+			}, 2000);
+		});
+	}, []);
 	// Docked detail snapshot: the selection is owned by ChatView (the
 	// swarm-card member row in the transcript opens it too), so the layer
 	// resolves against the live snapshot here. The agents-hub rows and the
@@ -1448,84 +1590,172 @@ export function ContextPanel({
 						</div>
 					) : (
 						<div className="px-1 py-2">
-							{/* Context-window usage: live tokens/capacity bar (product
-							 * parity with the header ring — same RPC). */}
-							{ctxUsage && (
-								<>
-									<div className="gui-group-label px-2 pb-1 pt-1">{t("settings.contextWindow2")}</div>
-									<div className="px-2">
+							{/* Context-window card: used / limit, fill bar and percent
+							 * (product parity with the header ring — same RPC). Warning
+							 * colour from 80%, red from 90%. */}
+							<div className="gui-group-label px-2 pb-1 pt-1">{t("settings.contextWindow2")}</div>
+							<div className="px-2">
+								{ctxUsage ? (
+									<>
 										<div className="gui-ctx-usage-row">
 											<span className="text-[12px] tabular-nums opacity-80">
 												{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
 											</span>
-											<span className="text-[12px] tabular-nums opacity-70">
+											<span
+												className={`text-[12px] tabular-nums ${
+													ctxUsage.percent >= 80 ? "text-[var(--color-warning)]" : "opacity-70"
+												}`}
+											>
 												{Math.round(ctxUsage.percent)}%
 											</span>
 										</div>
 										<div className="gui-ctx-usage-track">
 											<div
-												className={`gui-ctx-usage-bar${ctxUsage.percent > 90 ? " gui-ctx-usage-bar--hot" : ""}`}
+												className={`gui-ctx-usage-bar${
+													ctxUsage.percent >= 90
+														? " gui-ctx-usage-bar--hot"
+														: ctxUsage.percent >= 80
+															? " gui-ctx-usage-bar--warn"
+															: ""
+												}`}
 												style={{ width: `${Math.min(100, Math.max(2, ctxUsage.percent))}%` }}
 											/>
 										</div>
-									</div>
-								</>
-							)}
-							{/* Cumulative token usage: per-bucket totals over the
-							 * session's assistant messages, plus how much of the
-							 * input was served from cache. */}
-							{usageTotals.totalTokens > 0 && (
-								<>
-									<div className="gui-group-label px-2 pb-1 pt-3">{t("sessionInfo.tokens")}</div>
-									<div className="grid grid-cols-2 gap-1.5 px-2">
-										<div className="gui-ctx-stat">
-											<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.input)}</div>
-											<div className="gui-ctx-stat-l">{t("sessionInfo.input")}</div>
+										<div
+											className={`pt-1 text-[11px] tabular-nums ${
+												ctxUsage.percent >= 80
+													? "text-[var(--color-warning)]"
+													: "text-[var(--color-text-muted)]"
+											}`}
+										>
+											{t("context.percentUsedWithPercent", {
+												percent: String(Math.round(ctxUsage.percent)),
+											})}
 										</div>
-										<div className="gui-ctx-stat">
-											<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.output)}</div>
-											<div className="gui-ctx-stat-l">{t("sessionInfo.output")}</div>
+									</>
+								) : (
+									<>
+										<div className="gui-ctx-usage-row">
+											<span className="text-[12px] tabular-nums opacity-80">—</span>
+											<span className="text-[12px] tabular-nums opacity-70">—</span>
 										</div>
-										<div className="gui-ctx-stat">
-											<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.cacheRead)}</div>
-											<div className="gui-ctx-stat-l">{t("sessionInfo.cacheRead")}</div>
-										</div>
-										<div className="gui-ctx-stat">
-											<div className="gui-ctx-stat-v tabular-nums">{fmtTokens(usageTotals.cacheWrite)}</div>
-											<div className="gui-ctx-stat-l">{t("sessionInfo.cacheWrite")}</div>
-										</div>
-									</div>
-									<div className="flex items-baseline justify-between gap-2 px-2 pt-1.5 text-[12px]">
-										<span className="text-[var(--color-text-muted)]">{t("sessionInfo.total")}</span>
-										<span className="tabular-nums">{fmtTokens(usageTotals.totalTokens)}</span>
-									</div>
-									{cacheHitRate !== null && (
-										<div className="flex items-baseline justify-between gap-2 px-2 pt-1 text-[12px]">
-											<span className="text-[var(--color-text-muted)]">{t("sessionInfo.cacheHitRate")}</span>
-											<span className="tabular-nums">{cacheHitRate.toFixed(1)}%</span>
-										</div>
-									)}
-								</>
-							)}
-							{/* Session stats + spend: message count, run time and
-							 * what the session has cost so far. */}
+										<div className="gui-ctx-usage-track" />
+									</>
+								)}
+							</div>
+							{/* Token tables: cumulative session totals, then the most recent
+							 * assistant message's own usage. */}
+							<TokenTable
+								title={t("context.sessionTotals")}
+								figures={{
+									input: usageTotals.input,
+									output: usageTotals.output,
+									cacheRead: usageTotals.cacheRead,
+									cacheWrite: usageTotals.cacheWrite,
+									cacheHit: cacheHitRate,
+								}}
+							/>
+							<TokenTable
+								title={t("context.lastAssistantMessage")}
+								figures={
+									latestAssistant?.usage
+										? {
+												input: latestAssistant.usage.input,
+												output: latestAssistant.usage.output,
+												cacheRead: latestAssistant.usage.cacheRead,
+												cacheWrite: latestAssistant.usage.cacheWrite,
+												cacheHit: cacheHitPercent(latestAssistant.usage),
+											}
+										: null
+								}
+							/>
+							{/* Four stat cards: message counts by role + session spend. */}
 							<div className="gui-group-label px-2 pb-1 pt-3">{t("general.stats")}</div>
 							<div className="grid grid-cols-2 gap-1.5 px-2">
 								<div className="gui-ctx-stat">
-									<div className="gui-ctx-stat-v">{messageCount}</div>
+									<div className="gui-ctx-stat-v tabular-nums">{messageCount}</div>
 									<div className="gui-ctx-stat-l">{t("general.messages")}</div>
 								</div>
 								<div className="gui-ctx-stat">
-									<div className="gui-ctx-stat-v">{runMinutes}</div>
-									<div className="gui-ctx-stat-l">{t("general.minutes")}</div>
+									<div className="gui-ctx-stat-v tabular-nums">{userMessageCount}</div>
+									<div className="gui-ctx-stat-l">{t("general.user")}</div>
+								</div>
+								<div className="gui-ctx-stat">
+									<div className="gui-ctx-stat-v tabular-nums">{assistantMessageCount}</div>
+									<div className="gui-ctx-stat-l">{t("general.assistant")}</div>
+								</div>
+								<div className="gui-ctx-stat">
+									<div className="gui-ctx-stat-v tabular-nums">{fmtCost(usageTotals.cost)}</div>
+									<div className="gui-ctx-stat-l">{t("settings.cost")}</div>
 								</div>
 							</div>
-							{usageTotals.cost > 0 && (
-								<div className="flex items-baseline justify-between gap-2 px-2 pt-1.5 text-[12px]">
-									<span className="text-[var(--color-text-muted)]">{t("sessionInfo.spend")}</span>
-									<span className="tabular-nums">{fmtCost(usageTotals.cost)}</span>
-								</div>
-							)}
+							<div className="flex items-baseline justify-between gap-2 px-2 pt-1.5 text-[12px]">
+								<span className="text-[var(--color-text-muted)]">{t("general.minutes")}</span>
+								<span className="tabular-nums">{runMinutes}</span>
+							</div>
+							{/* Raw message list, newest first and capped: a row expands
+							 * into its wire JSON and copies the whole value. */}
+							<div className="gui-group-label px-2 pb-1 pt-3">
+								{t("context.rawMessages")}
+								{hiddenRawMessageCount > 0 && (
+									<span className="font-normal text-[var(--color-text-muted)]">
+										{" "}
+										· {t("context.rawMessagesTruncatedWithCount", { count: String(rawMessages.length) })}
+									</span>
+								)}
+							</div>
+							<div className="flex flex-col gap-1 px-2">
+								{rawMessages.length === 0 ? (
+									<div className="text-[12px] text-[var(--color-text-muted)]">
+										{t("settings.noMessagesYet")}
+									</div>
+								) : (
+									rawMessages.map(row => {
+										const expanded = row.id === expandedRawId;
+										const copied = row.id === copiedRawId;
+										const tokens =
+											row.message.role === "assistant" ? (row.message.usage?.totalTokens ?? null) : null;
+										return (
+											<div key={row.id} className="gui-ctx-raw-row">
+												<div className="gui-ctx-raw-head">
+													<button
+														type="button"
+														className="gui-ctx-raw-expand"
+														aria-expanded={expanded}
+														title={expanded ? t("context.collapseMessage") : t("context.expandMessage")}
+														onClick={() =>
+															setExpandedRawId(current => (current === row.id ? null : row.id))
+														}
+													>
+														<span className="min-w-0 flex-1 truncate font-medium">
+															{rawRoleLabel(row.message.role)}
+														</span>
+														<span
+															className="flex-shrink-0 tabular-nums text-[var(--color-text-muted)]"
+															title={t("context.tokens")}
+														>
+															{tokens === null ? "—" : fmtTokens(tokens)}
+														</span>
+														<span className="flex-shrink-0 tabular-nums text-[var(--color-text-faint)]">
+															{fmtMessageTime(row.message.timestamp)}
+														</span>
+													</button>
+													<button
+														type="button"
+														className="gui-ctx-raw-copy"
+														aria-label={copied ? t("settings.copied") : t("context.copyMessage")}
+														title={copied ? t("settings.copied") : t("context.copyMessage")}
+														onClick={() => copyRawMessage(row.id, JSON.stringify(row.message, null, 2))}
+													>
+														<Icon name={copied ? "check" : "file-copy-2"} className="h-3.5 w-3.5" />
+													</button>
+												</div>
+												{expanded && <RawMessageJson message={row.message} />}
+											</div>
+										);
+									})
+								)}
+							</div>
 						</div>
 					)
 				) : (
@@ -2193,9 +2423,7 @@ interface JobsData {
 
 /** Format a job startTime for the recent list (fallback: raw value). */
 function fmtJobTime(ts: number | string): string {
-	const d = new Date(ts);
-	if (Number.isNaN(d.getTime())) return String(ts);
-	return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+	return fmtTimestamp(ts, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 /** Background jobs block (agents hub, below the roster): the session's

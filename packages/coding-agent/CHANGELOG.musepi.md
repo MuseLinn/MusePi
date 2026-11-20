@@ -4,6 +4,15 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **吸顶提问背后不再铺底色带，药丸下方的正文照常可读**：此前吸顶提问的药丸后面垫着一条 60px 的渐隐底色带，把滚到药丸下方的那几行正文盖掉一截；现在这条带子移除，只有药丸自身的不透明底和阴影覆盖文字，其余滚动内容照常显示。药丸仍贴同一顶边、点击仍跳回该提问所在回合的开头，槽位也仍不拦截指针。
+  - EN: The pinned prompt no longer lays a background band behind its pill, so the text scrolling underneath stays readable. A 60px gradient band in the transcript ground used to cover the rows just below the pill and cut them short; it is gone, and only the pill's own opaque surface and shadow cover text now. The pill still pins at the same top edge, clicking it still jumps to the start of that turn, and the slot still passes pointer events through.
+
+- **右侧「上下文」标签页补齐读数：上下文卡片、消息统计、会话与最近消息的 token 表、原始消息列表**：上下文卡片显示已用/上限与百分比，超过 80% 转为警示色、超过 90% 转为红色；四张统计卡分别是消息、用户、助手与成本；会话总计和最近一条助手消息各有一张 token 表（输入、输出、缓存读、缓存写、缓存命中率）；原始消息列表按时间倒序、最多 50 条，每行显示角色、token 数与时间，点击展开该消息的原始 JSON，悬停可复制。
+  - EN: The right-panel Context tab now carries the full readouts. The context card shows used/limit and the percentage, turning warning-coloured above 80% and red above 90%. Four stat cards cover messages, user messages, assistant messages and cost. Session totals and the latest assistant message each get a token table (input, output, cache read, cache write, cache hit rate). The raw-message list is newest first, capped at 50 rows, showing role, token count and time; a row expands to the message's raw JSON and can be copied.
+
+- **关闭的活动折叠行下方不再留出空白**：折叠收起时隐藏行仍挂在 `.tr-fold-slot` 里保持零高度，但槽位里还挂着第二行（运行中裁剪的「+N 行」提示跟着它那一行进入槽位）时，这第二行会落进 grid 的隐式行、按内容高度撑开槽位，折叠头与回复之间就多出一条空白。现在关闭态把隐式行也压到 0，展开态恢复自然行高；展开布局与关闭时保持阅读位置的滚动固定都不变。
+  - EN: A closed activity fold no longer leaves a blank band under its header. Hidden rows stay mounted in zero-height `.tr-fold-slot` boxes, but when the slot also held a second row (the live-trim "+N more" control rides its row into the slot), that row landed in an implicit grid row sized by its content and opened a gap between the fold header and the reply. The closed state now collapses implicit rows to zero too and the expanded state restores their natural height; the open layout and the scroll pinning that keeps the reader in place on close are unchanged.
+
 ## [0.7.7] - 2026-11-21
 
 - **活动折叠行与会话流共用同一条左边缘，右侧面板标签不再横向滚动**：带活动折叠的回合里，折叠头按 64px 头像列排版、后续回复却按共享转录的 40px 预留列排版，一条回合出现两个左边缘；现在 railed 行统一保留 64px 轨道，回复与折叠头对齐。活动行本身去掉边框药丸，改成内容列里的一行安静摘要（悬停才着色、普通箭头做展开指示、键盘聚焦有环）。右侧表面标签条按可用宽度收缩并在标题上省略，不再画出横向滚动条。

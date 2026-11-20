@@ -4052,6 +4052,12 @@ a.tr-tool-search-title:hover {
 .tr-fold-slot {
 	display: grid;
 	grid-template-rows: minmax(0, 0fr);
+	/* The explicit track collapses the first mounted row. Any further child
+	 * (the live-trim "+N more" line rides its row inside the same slot) lands
+	 * in an implicit row, and `grid-auto-rows` defaults to `auto` — it kept the
+	 * full content height and left that band of blank space under a closed
+	 * fold row. Closed means no height at all, whatever is mounted. */
+	grid-auto-rows: 0;
 	overflow: hidden;
 	opacity: 0;
 	transition:
@@ -4068,6 +4074,8 @@ a.tr-tool-search-title:hover {
 }
 .tr-fold-slot--open {
 	grid-template-rows: minmax(0, 1fr);
+	/* An expanded fold keeps every mounted row at its natural height. */
+	grid-auto-rows: auto;
 	opacity: 1;
 	/* Tool cards inside an expanded turn can open hover popovers. */
 	overflow: visible;
@@ -4234,37 +4242,14 @@ a.tr-tool-search-title:hover {
  * ancestor), and zero flow height keeps the virtualizer's measurements and
  * the scrollbar exactly as they were. Glass-strong + accent mark follow the
  * back-to-bottom recipe; no entrance animation, so reduced motion has
- * nothing to opt out of. */
+ * nothing to opt out of. The slot paints nothing itself: only the pill's own
+ * opaque surface covers the rows scrolling beneath it. */
 .tr-sticky-user-slot {
 	position: sticky;
 	top: 8px;
 	z-index: 4;
 	height: 0;
 	pointer-events: none;
-}
-
-/* Content scrolling under the pinned row fades out instead of running
- * through the pill: a band of the transcript ground sits behind the pill and
- * the orb (both paint above it). The band takes no flow height, so the
- * virtualizer's measurements are untouched. */
-.tr-sticky-user-slot::before {
-	content: "";
-	position: absolute;
-	left: 0;
-	right: 0;
-	top: -8px;
-	height: 60px;
-	z-index: 0;
-	/* Opaque under the pill, fading at its lower edge. The fade token is a
-	 * translucent mix, so the row above the pill showed through and got cut
-	 * mid-glyph on the Harmony and Android shells. */
-	background: linear-gradient(to bottom, var(--color-surface) 62%, transparent 100%);
-	pointer-events: none;
-}
-
-.tr-sticky-user-slot > * {
-	position: relative;
-	z-index: 1;
 }
 
 /* The pill is the only pinned element. An earlier version also pinned the
@@ -4878,9 +4863,8 @@ a.tr-tool-search-title:hover {
 }
 
 /* Touch shells drop the floating prompt reference. It is a desktop reading
- * aid; on a phone the pinned pill overlaps the first visible row, and its
- * fade band cut that row mid-glyph. The original message stays in the
- * transcript, so nothing is lost. */
+ * aid; on a phone the pinned pill overlaps the first visible row. The
+ * original message stays in the transcript, so nothing is lost. */
 .sh-has-tabbar .tr-sticky-user-slot {
 	display: none;
 }
