@@ -11,17 +11,17 @@ import { useEffect, useState } from "react";
  * built-in occupant so disabling the plugin, or a compile failure, cannot take
  * the backdrop away with it.
  */
-export const WELCOME_BACKDROP_CHANGED_EVENT = "musepi-dotmatrix-changed";
+const WELCOME_BACKDROP_CHANGED_EVENT = "musepi-dotmatrix-changed";
 const ON_KEY = "musepi-gui-dotmatrix";
 const TEXT_KEY = "musepi-gui-dotmatrix-text";
 const DEFAULT_TEXT = "MusePi";
 
-export interface WelcomeBackdropPreference {
+interface WelcomeBackdropPreference {
 	on: boolean;
 	text: string;
 }
 
-export function readWelcomeBackdrop(): WelcomeBackdropPreference {
+function readWelcomeBackdrop(): WelcomeBackdropPreference {
 	try {
 		return {
 			on: localStorage.getItem(ON_KEY) !== "0",
@@ -34,7 +34,7 @@ export function readWelcomeBackdrop(): WelcomeBackdropPreference {
 
 /** Settings changes arrive as a custom event; another window's change as a
  *  `storage` event. Both refire the read, so the live preview stays honest. */
-export function subscribeWelcomeBackdrop(onChange: () => void): () => void {
+function subscribeWelcomeBackdrop(onChange: () => void): () => void {
 	const onEvent = (event: Event): void => {
 		if (
 			event.type === "storage" &&
