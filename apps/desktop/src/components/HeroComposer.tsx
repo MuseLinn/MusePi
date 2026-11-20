@@ -1367,7 +1367,7 @@ export function HeroComposer({
 				</div>,
 			)}
 			<div
-				className="gui-welcome gui-pane-glow relative flex h-full flex-1 flex-col items-center justify-center overflow-hidden px-8"
+				className="gui-welcome relative flex h-full flex-1 flex-col items-center justify-center overflow-hidden px-8"
 				data-focused={focused ? "1" : undefined}
 			>
 				{/* Interactive dot-matrix brand backdrop (kimi-style reference):
