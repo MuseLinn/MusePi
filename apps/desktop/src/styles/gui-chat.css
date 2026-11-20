@@ -898,6 +898,15 @@ html.gui-vt-surface-only::view-transition-new(root),
 	display: flex;
 	flex-direction: column;
 	pointer-events: none;
+	/* The host lays over the active card and its wrap carries the hero's own
+	 * pane glow (`.gui-pane-glow`, an opaque Oklch surface). Outside the card
+	 * that surface is no longer clipped by `overflow:hidden`, so its square
+	 * corners paint past the card's rounded ones. Clip the host to the card's
+	 * radius: same box, same radius, so the glow reads as the card's surface
+	 * again — dsh avoids the layer entirely by keeping its hero chrome
+	 * transparent. */
+	border-radius: var(--radius-2xl);
+	overflow: hidden;
 }
 
 .gui-composer-host > .gui-composer-wrap--hero,
