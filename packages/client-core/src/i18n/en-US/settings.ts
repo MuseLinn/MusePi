@@ -1469,6 +1469,9 @@ export const settings = {
 	"settings.boardEmptyDesc": "Add widgets from above, or apply a template in one click to get started",
 	"settings.boardHomeDesc": "Customize the theme and build a board that's yours",
 	"settings.boardExample": "Example",
+	"settings.widgetMakeInteractive": "Make interactive",
+	"settings.widgetMakeInteractiveHint":
+		"Replace this static sample with a working version; the original page stays in the card data",
 	"settings.widgetsCount": " widgets",
 	"settings.boardNew": "New board",
 	"settings.boardNewTitle": "Untitled board",
