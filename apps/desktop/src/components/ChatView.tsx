@@ -2690,22 +2690,43 @@ export function ChatView({
 	// Host box = the active card's rect, measured against the scenes wrapper.
 	// Both modes render one card of the same box (gutter + row), so the host
 	// keeps its geometry and only the wrap inside changes place.
-	useLayoutEffect(() => {
+	const measureComposerHost = useCallback((): void => {
 		const scenes = scenesRef.current;
 		const card = store ? chatColumnRef.current : welcomeCardRef.current;
 		if (!scenes || !card) return;
-		const measure = (): void => {
-			const a = card.getBoundingClientRect();
-			const b = scenes.getBoundingClientRect();
-			setComposerHostBox({ left: a.left - b.left, top: a.top - b.top, width: a.width, height: a.height });
-		};
-		measure();
-		if (typeof ResizeObserver === "undefined") return;
-		const observer = new ResizeObserver(measure);
+		const a = card.getBoundingClientRect();
+		const b = scenes.getBoundingClientRect();
+		const next = { left: a.left - b.left, top: a.top - b.top, width: a.width, height: a.height };
+		setComposerHostBox(prev =>
+			prev &&
+			Math.abs(prev.left - next.left) < 0.5 &&
+			Math.abs(prev.top - next.top) < 0.5 &&
+			Math.abs(prev.width - next.width) < 0.5 &&
+			Math.abs(prev.height - next.height) < 0.5
+				? prev
+				: next,
+		);
+	}, [store]);
+	useLayoutEffect(() => {
+		measureComposerHost();
+	}, [measureComposerHost, showWelcome, showChat]);
+	useLayoutEffect(() => {
+		const card = store ? chatColumnRef.current : welcomeCardRef.current;
+		const scenes = scenesRef.current;
+		if (!card || !scenes || typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(measureComposerHost);
 		observer.observe(card);
 		observer.observe(scenes);
 		return () => observer.disconnect();
-	}, [store, showWelcome, showChat]);
+	}, [measureComposerHost, store, showWelcome, showChat]);
+	// A ResizeObserver only reports size changes; a late banner or status row
+	// can move the card without resizing it, and a stale top reads as the
+	// composer sitting off its seat. One frame per commit closes that window
+	// (the epsilon bail above stops the re-render loop).
+	useEffect(() => {
+		const id = requestAnimationFrame(measureComposerHost);
+		return () => cancelAnimationFrame(id);
+	});
 
 	// Welcome ⇄ session is one node changing place (centered ⇄ docked): a
 	// translate FLIP on the wrap reads as the composer moving, not as a second
@@ -2717,7 +2738,11 @@ export function ChatView({
 		const flipped = composerModeRef.current !== mode;
 		composerModeRef.current = mode;
 		if (!wrap || !flipped || motionDisabled()) return;
-		const next = wrap.getBoundingClientRect();
+		// Anchor on the input card, not the wrap: the hero seat fills the whole
+		// card and centres the card inside it, so the wrap's own top is the
+		// surface top, not where the composer visually sits. A translation
+		// computed from the card moves the wrap's content identically.
+		const next = (wrap.querySelector<HTMLElement>(".gui-composer-frame") ?? wrap).getBoundingClientRect();
 		const prev = composerModeRect.current;
 		composerModeRect.current = next;
 		if (!prev || typeof wrap.animate !== "function") return;
@@ -2766,7 +2791,11 @@ export function ChatView({
 	if (wrapEl) prevWrapTop.current = wrapEl.getBoundingClientRect().top;
 	// Pre-flip rect for the welcome ⇄ session FLIP. Skipped on the render that
 	// flips the mode, so the captured value is still the outgoing layout.
-	if (wrapEl && composerModeRef.current === !!store) composerModeRect.current = wrapEl.getBoundingClientRect();
+	if (wrapEl && composerModeRef.current === !!store) {
+		composerModeRect.current = (
+			wrapEl.querySelector<HTMLElement>(".gui-composer-frame") ?? wrapEl
+		).getBoundingClientRect();
+	}
 	useLayoutEffect(() => {
 		const el = composerWrapRef.current;
 		if (!el) return;
@@ -3729,7 +3758,7 @@ export function ChatView({
 										? "gui-composer-wrap gui-composer-wrap--bottom-anchor flex min-h-0 flex-col px-5 pb-3"
 										: store
 											? "gui-composer-wrap gui-composer-wrap--floating flex flex-col px-5 pb-1"
-											: "gui-composer-wrap gui-composer-wrap--hero flex flex-col pb-1"
+											: "gui-composer-wrap gui-composer-wrap--hero flex min-h-0 flex-1 flex-col justify-center pb-1"
 								}
 							>
 								{/* Jump-back dock (TUI navigateTree parity, 2026-08-25):

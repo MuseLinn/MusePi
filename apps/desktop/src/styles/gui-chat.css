@@ -376,14 +376,16 @@
 	animation: gui-scene-in 160ms ease;
 }
 
+/* Opacity only: the card is the composer host's measured background now, and a
+ * translate here moves the card under a host that already read its box — the
+ * composer would chase it 10px after the flight. The entering card fades, the
+ * composer does the moving. */
 @keyframes gui-scene-in {
 	from {
 		opacity: 0;
-		transform: translateY(10px);
 	}
 	to {
 		opacity: 1;
-		transform: none;
 	}
 }
 
@@ -907,9 +909,12 @@ html.gui-vt-surface-only::view-transition-new(root),
  * hero keeps its mid-surface position inside the persistent host. */
 .gui-composer-wrap--hero {
 	position: relative;
-	/* auto block margins centre it inside the host's flex column without
-	 * stretching: the card keeps its natural height, the seat does the math. */
-	margin-block: auto;
+	/* Fill the host's box: the hero composer root is `h-full flex-1` and
+	 * centres its own sections, exactly as it did inside the welcome card.
+	 * An auto-height wrap would collapse that contract (the seat then reads
+	 * as a bottom-heavy block instead of a centred one). */
+	flex: 1;
+	min-height: 0;
 }
 
 /* ── Floating composer (openchamber parity) ─────────────────────────────
