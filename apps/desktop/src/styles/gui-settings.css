@@ -8509,11 +8509,12 @@ body.gui-resizing {
 	color: var(--color-danger);
 }
 /* ── Settings → 模型与供应商 → 角色卡片（M27 重构） ─────────────────────
- * 基础卡片外壳在 gui-chat.css（后于本表加载），因此这里的每条规则都限定在
- * .gui-model-rail-body 之下：两个类名稳定压过基础选择器，不靠加载顺序，也
- * 不需要 !important。尺寸只用共享 token：字段类控件 --control-height-field
+ * 基础卡片外壳在 gui-chat.css（后于本表加载），因此本节的每条规则都限定在
+ * .gui-model-rail-body 之下：多一层类名稳定压过基础选择器，不靠加载顺序，也
+ * 不需要 !important。尺寸走共享 token——字段类控件 --control-height-field
  * (34px)、行内次级动作 --control-height-compact (28px)、按钮 --control-height-sm
- * (32px)，不再沿用旧工具条里逐个手写的 26px。 */
+ * (32px)——不再沿用旧工具条里逐个手写的 26px；唯一例外是 22px 的序号方块，
+ * 仓内没有这个档位的 token，沿用现有小方块控件的尺寸。 */
 
 /* 卡片按内容高度排布，并给一条回退行留出可用宽度（序号 + 模型 + 级别 + 移除
  * 已是固定 186px，模型名还要能显示 provider 与 id），所以只有角色列宽到 520px
@@ -8560,8 +8561,9 @@ body.gui-resizing {
 		border-color 120ms ease;
 }
 
-.gui-model-rail-body .gui-role-cycle-badge:hover,
-.gui-model-rail-body .gui-role-cycle-badge:focus-visible {
+/* 悬停才换配色；键盘聚焦只加 ring，不碰颜色——否则聚焦「在循环中」的徽标会
+ * 被 0,3,0 的 hover 配色盖掉 accent，看起来像未选中。 */
+.gui-model-rail-body .gui-role-cycle-badge:hover {
 	color: var(--color-text);
 	border-color: var(--border);
 	background: color-mix(in oklab, var(--color-text) 6%, transparent);
@@ -8580,21 +8582,21 @@ body.gui-resizing {
 }
 
 /* 当前模型字段：小标签一行（标签 + 自动选择状态 + 清除），控件一行。 */
-.gui-role-field {
+.gui-model-rail-body .gui-role-field {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 	min-width: 0;
 }
 
-.gui-role-field-head {
+.gui-model-rail-body .gui-role-field-head {
 	display: flex;
 	align-items: baseline;
 	gap: 8px;
 	min-width: 0;
 }
 
-.gui-role-field-label {
+.gui-model-rail-body .gui-role-field-label {
 	flex: none;
 	font-size: 11px;
 	font-weight: 600;
@@ -8612,7 +8614,7 @@ body.gui-resizing {
 	overflow-wrap: anywhere;
 }
 
-.gui-role-field .gui-role-field-clear {
+.gui-model-rail-body .gui-role-field .gui-role-field-clear {
 	flex: none;
 	margin-left: auto;
 	font-size: 11px;
@@ -8620,12 +8622,12 @@ body.gui-resizing {
 	text-decoration: none;
 }
 
-.gui-role-field .gui-role-field-clear:hover,
-.gui-role-field .gui-role-field-clear:focus-visible {
+.gui-model-rail-body .gui-role-field .gui-role-field-clear:hover,
+.gui-model-rail-body .gui-role-field .gui-role-field-clear:focus-visible {
 	color: var(--color-danger);
 }
 
-.gui-role-field-controls {
+.gui-model-rail-body .gui-role-field-controls {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
@@ -8657,7 +8659,7 @@ body.gui-resizing {
 	text-align: left;
 }
 
-.gui-role-field-level {
+.gui-model-rail-body .gui-role-field-level {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
@@ -8708,7 +8710,7 @@ body.gui-resizing {
 	color: var(--color-text);
 }
 
-.gui-role-fallback-list {
+.gui-model-rail-body .gui-role-fallback-list {
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
@@ -8729,10 +8731,8 @@ body.gui-resizing {
 	cursor: default;
 }
 
-/* The base sheet turns the whole row into a grab cursor on press. Here the
- * reorder affordance is the ordinal handle, so only that shows `grabbing`;
- * a press anywhere else must not advertise a drag the UI no longer teaches.
- * The row stays draggable — the cursor just matches the visible handle. */
+/* 拖拽只从序号把手发起，行本身不是 drag source；基础表在按下整行时给的
+ * grabbing 光标会让人以为整行可拖，这里复位成 default，只让把手显示可拖。 */
 .gui-model-rail-body .gui-role-fallback-row:active {
 	cursor: default;
 }
@@ -8741,14 +8741,14 @@ body.gui-resizing {
 	grid-template-columns: minmax(0, 1fr);
 }
 
-.gui-role-fallback-edit {
+.gui-model-rail-body .gui-role-fallback-edit {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	min-width: 0;
 }
 
-.gui-role-fallback-edit .gui-model {
+.gui-model-rail-body .gui-role-fallback-edit .gui-model {
 	flex: 1 1 auto;
 	min-width: 0;
 }
@@ -8760,12 +8760,13 @@ body.gui-resizing {
 	font-size: var(--ui-font-size-xs);
 }
 
-/* 序号兼作调序把手：它是行里本来就表示位置的那一个元素，↑/↓ 直接换位，
+/* 序号就是调序把手，也是唯一的拖拽起点：位置本来就由它显示，↑/↓ 直接换位，
  * 所以调序不依赖拖拽；悬停与聚焦时才显出按钮外形。 */
 .gui-model-rail-body .gui-role-fallback-grip {
 	opacity: 1;
 	align-items: center;
 	justify-content: center;
+	/* 22px：仓内没有这个档位的高度 token，沿用现有小方块控件的尺寸。 */
 	width: 22px;
 	height: 22px;
 	padding: 0;
@@ -8791,7 +8792,7 @@ body.gui-resizing {
 }
 
 /* 模型名是这一行的主体，点击即换成编辑选择器（整行是可点的，不是一段死文字）。 */
-.gui-role-fallback-model {
+.gui-model-rail-body .gui-role-fallback-model {
 	display: flex;
 	align-items: baseline;
 	gap: 6px;
@@ -8807,13 +8808,13 @@ body.gui-resizing {
 	cursor: pointer;
 }
 
-.gui-role-fallback-model:hover,
-.gui-role-fallback-model:focus-visible {
+.gui-model-rail-body .gui-role-fallback-model:hover,
+.gui-model-rail-body .gui-role-fallback-model:focus-visible {
 	border-color: var(--border);
 	background: color-mix(in oklab, var(--color-text) 5%, transparent);
 }
 
-.gui-role-fallback-provider {
+.gui-model-rail-body .gui-role-fallback-provider {
 	flex: 0 1 auto;
 	max-width: 45%;
 	overflow: hidden;
@@ -8822,7 +8823,7 @@ body.gui-resizing {
 	color: var(--color-text-faint);
 }
 
-.gui-role-fallback-name {
+.gui-model-rail-body .gui-role-fallback-name {
 	flex: 1 1 auto;
 	min-width: 0;
 	overflow: hidden;
@@ -8832,8 +8833,8 @@ body.gui-resizing {
 
 .gui-model-rail-body .gui-role-fallback-remove {
 	flex: none;
-	width: 28px;
-	height: 28px;
+	width: var(--control-height-compact);
+	height: var(--control-height-compact);
 	min-height: 0;
 	padding: 0;
 	justify-content: center;

@@ -102,6 +102,20 @@ function joinRoleValue(model: string, level: string | null): string {
 	return level && level !== "inherit" ? `${model}:${level}` : model;
 }
 
+/** Drag payload type for one fallback row; the value is `<role>:<index>`. */
+const FALLBACK_DRAG_TYPE = "text/fallback-index";
+
+/** Decode a fallback drag payload into its source row index, or null when it
+ * names another card's chain or a row that no longer exists. Rows are drop
+ * targets on every card, so the role must travel with the index — otherwise a
+ * drop lands the source card's ordinal on the target card and rewrites it. */
+function parseFallbackDrag(payload: string, role: string, length: number): number | null {
+	const match = /^(.*):(\d+)$/.exec(payload);
+	if (!match || match[1] !== role) return null;
+	const from = Number(match[2]);
+	return from >= 0 && from < length ? from : null;
+}
+
 /** One stored credential row as exposed by the daemon (providers.credentials). */
 interface CredentialInfo {
 	id: number;
@@ -657,7 +671,10 @@ export function ModelSection({
 		const raw = roleModels?.[role] ?? "";
 		const { model, level } = splitRoleValue(raw);
 		const resolved = resolvedRoleModels[role];
-		const chain = fallbackChains[role] ?? [];
+		// A chain persisted by an older build (or hand-edited config) can carry
+		// a null entry; anything that is not a selector is dropped instead of
+		// reaching splitRoleValue, which would dereference it and crash the pane.
+		const chain = (fallbackChains[role] ?? []).filter(entry => typeof entry === "string");
 		const cycleIndex = cycleOrder?.indexOf(role) ?? -1;
 		const editingFallback = fallbackEditor === role;
 		const apply = (next: Record<string, string>): void =>
@@ -670,7 +687,8 @@ export function ModelSection({
 			void rpc.request("settings.set", { key: "retry.fallbackChains", value: next }).catch(() => {});
 		};
 		const moveChainRow = (from: number, to: number): void => {
-			if (from === to || to < 0 || to >= chain.length) return;
+			if (from === to || from < 0 || from >= chain.length) return;
+			if (to < 0 || to >= chain.length) return;
 			const nextChain = [...chain];
 			const [moved] = nextChain.splice(from, 1);
 			nextChain.splice(to, 0, moved);
@@ -884,30 +902,34 @@ export function ModelSection({
 									<li
 										key={selector}
 										className="gui-role-fallback-row"
-										draggable
-										onDragStart={e => {
-											e.dataTransfer.setData("text/fallback-index", String(i));
-											e.dataTransfer.effectAllowed = "move";
-										}}
 										onDragOver={e => {
-											if (e.dataTransfer.types.includes("text/fallback-index")) e.preventDefault();
+											if (e.dataTransfer.types.includes(FALLBACK_DRAG_TYPE)) e.preventDefault();
 										}}
 										onDrop={e => {
 											e.preventDefault();
-											const from = Number(e.dataTransfer.getData("text/fallback-index"));
-											if (!Number.isInteger(from)) return;
+											const from = parseFallbackDrag(
+												e.dataTransfer.getData(FALLBACK_DRAG_TYPE),
+												role,
+												chain.length,
+											);
+											if (from === null) return;
 											moveChainRow(from, i);
 										}}
 									>
-										{/* The ordinal doubles as the reorder handle: it is
-										 * the one element that already shows where the row
-										 * sits, and ↑/↓ move the row so reordering does
-										 * not depend on dragging. */}
+										{/* The ordinal is the row's reorder handle and its only
+										 * drag source; ↑/↓ move the row, so reordering never
+										 * needs a pointer. */}
 										<button
 											type="button"
+											draggable
 											className="gui-role-fallback-grip"
 											title={t("general.dragReorder")}
 											aria-label={`${t("general.fallbackChain")} ${i + 1} · ${t("general.dragReorder")}`}
+											aria-keyshortcuts="ArrowUp ArrowDown"
+											onDragStart={e => {
+												e.dataTransfer.setData(FALLBACK_DRAG_TYPE, `${role}:${i}`);
+												e.dataTransfer.effectAllowed = "move";
+											}}
 											onKeyDown={e => {
 												if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
 												e.preventDefault();
@@ -928,7 +950,7 @@ export function ModelSection({
 										<GuiSelect
 											className="gui-role-thinking gui-role-fallback-thinking"
 											value={entry.level ?? "inherit"}
-											ariaLabel={t("general.roleThinkingLevel")}
+											ariaLabel={`${t("general.fallbackChain")} ${i + 1} · ${t("general.roleThinkingLevel")}`}
 											options={roleLevelOptions(fallbackEfforts[selector] ?? [])}
 											onChange={nextLevel => {
 												persistChain(
