@@ -535,6 +535,17 @@ function createPetWindow() {
 				petWindow.webContents.send("pet:activity", { bubbles: bubblesModeState });
 			}
 		}, 180);
+		// Proximity is an edge-triggered channel: a fresh renderer starts with
+		// the bar collapsed, and if the state it would be told about is already
+		// `true` (the window was re-shown, or reloaded, while the cursor was
+		// still near) no later crossing would arrive and the bar would stay
+		// hidden under a hovering cursor. Replay the main-owned state so the
+		// consumer never starts out of sync.
+		setTimeout(() => {
+			if (petWindow && !petWindow.isDestroyed() && petProximityState) {
+				petWindow.webContents.send("pet:proximity", true);
+			}
+		}, 240);
 	});
 	// Click-through by default (transparent widget pattern): the 320×290
 	// window must not block the desktop — the pet occupies only the bottom.
@@ -553,6 +564,14 @@ function createPetWindow() {
 		petWindow = null;
 		petVisible = false;
 		petDragLast = null;
+		petDragArmed = false;
+		// The window owned the state the renderer was showing: a composer left
+		// open would keep the next window permanently interactive (a transparent
+		// always-on-top window that swallows every click), and a stranded
+		// proximity state would suppress the next window's first crossing.
+		petComposerOpen = false;
+		petProximityState = false;
+		petHoverState = null;
 		clearPetHideTimer();
 		stopPetClickThroughPoll();
 		stopPetTopmostWatchdog();
@@ -682,13 +701,14 @@ function layoutBubblesWindow() {
 /** Bubbles-window arm of the click-through poll: interactive only over the
  *  card union; the transparent padding ring passes clicks to the desktop.
  *  Uses a DIP cursor directly (this window is always DIP, independent of
- *  the pet's measured position space). */
-function updateBubblesClickThrough() {
+ *  the pet's measured position space). `cursorScreenPoint` is the tick's
+ *  shared read — the poll samples the pointer once for both windows. */
+function updateBubblesClickThrough(cursorScreenPoint = null) {
 	if (!bubblesWindow || bubblesWindow.isDestroyed() || !bubblesWindow.isVisible()) return;
 	if (process.platform !== "darwin" && process.platform !== "win32") return;
 	let ignore = true;
 	if (bubblesHitbox) {
-		const raw = screen.getCursorScreenPoint();
+		const raw = cursorScreenPoint ?? screen.getCursorScreenPoint();
 		const curDip = petCursorPhysical ? { x: raw.x / petPosScaleF, y: raw.y / petPosScaleF } : raw;
 		const [wx, wy] = bubblesWindow.getPosition();
 		ignore = !(
@@ -1288,8 +1308,13 @@ function installPetDisplayListeners() {
 }
 let petDisplayListenersInstalled = false;
 
-function updatePetClickThrough() {
+/** One poll pass over the pet window's interactive surface, proximity halo,
+ *  gaze vector and bubbles. `cursorScreenPoint` is the tick's shared cursor
+ *  read; omitting it reads the OS cursor here, which is what the one-shot
+ *  geometry handlers need (they run off a renderer report, not the timer). */
+function updatePetClickThrough(cursorScreenPoint = null) {
 	if (!petWindow || petWindow.isDestroyed() || !petVisible) return;
+	const cursorRaw = cursorScreenPoint ?? screen.getCursorScreenPoint();
 	// darwin + win32: transparent pet window must not block the desktop.
 	// (Linux stays fully interactive — click-through via setIgnoreMouseEvents
 	// is unverified on the same poll path, so that arm stays gated.) Proximity
@@ -1314,7 +1339,7 @@ function updatePetClickThrough() {
 			// All three spaces (cursor / window position / renderer CSS px) are
 			// converted into window-position space before comparing — on a
 			// contract-holding machine every factor is 1 (zero cost).
-			const cursor = cursorToPos(screen.getCursorScreenPoint());
+			const cursor = cursorToPos(cursorRaw);
 			const [wx, wy] = petWindow.getPosition();
 			const hx = wx + cssToPos(petHitbox.x);
 			const hy = wy + cssToPos(petHitbox.y);
@@ -1345,13 +1370,17 @@ function updatePetClickThrough() {
 	// desktop. Enter 40px / leave 56px is the hysteresis that keeps a cursor
 	// resting on the boundary from flickering the whole bar.
 	if (!petWindow.isDestroyed()) {
-		const cursor = cursorToPos(screen.getCursorScreenPoint());
+		const cursor = cursorToPos(cursorRaw);
 		const [wx, wy] = petWindow.getPosition();
 		// Distance to the sprite rect (the interaction target), not to the
 		// window: the 320×290 window is mostly transparent padding, so a
 		// window-rect test would pop the bar ~100px early on every side.
 		const rect = petRect ?? petHitbox;
-		let near = petProximityState;
+		// No rect means the renderer has not reported the sprite yet (or
+		// reported it gone). Proximity is measured FROM the sprite, so there is
+		// nothing to be near: holding the previous value here kept an open bar
+		// expanded for as long as the report stayed missing.
+		let near = false;
 		if (rect) {
 			const left = wx + cssToPos(rect.x);
 			const top = wy + cssToPos(rect.y);
@@ -1369,9 +1398,9 @@ function updatePetClickThrough() {
 	// eye-following costs one subtraction and a bounded send. The vector is
 	// the cursor offset from the window centre, normalized by GAZE_RANGE
 	// CSS px (full deflection well before the screen edge) and clamped —
-	// the renderer eases the eyes toward it, so 120ms updates read smooth.
+	// the renderer eases the eyes toward it, so the poll cadence reads smooth.
 	if (!petWindow.isDestroyed()) {
-		const cursor = cursorToPos(screen.getCursorScreenPoint());
+		const cursor = cursorToPos(cursorRaw);
 		const bounds = petWindow.getBounds();
 		const cx = petWindow.getPosition()[0] + cssToPos(bounds.width / 2);
 		const cy = petWindow.getPosition()[1] + cssToPos(bounds.height / 2);
@@ -1410,18 +1439,30 @@ const PET_GAZE_EPSILON = 0.01;
 /** Last pushed gaze vector — also the "window hidden" reset handle. */
 let petGazeState = null;
 
-// BitFun's pointer poll interval; cheap and bounded. Runs ONLY while the
-// pet is visible — an always-on 120ms interval would wake the main process
-// (and hit screen.getCursorScreenPoint) even on machines that never enable
-// the pet. Started by setPetVisible(true), stopped on hide/close.
+// Pointer poll interval. Runs ONLY while the pet is visible — an always-on
+// interval would wake the main process (and hit screen.getCursorScreenPoint)
+// even on machines that never enable the pet. Started by setPetVisible(true),
+// stopped on hide/close.
+//
+// 60ms, not BitFun's 120ms, because the leave is a sampled edge: the bar
+// fades out over --duration-quick (150ms), so a cursor that crosses the 56px
+// exit radius costs one tick plus the fade before the bar is invisible. At
+// 120ms that is 270ms worst case — under a second of a loaded CI runner's
+// software rendering the user could still see the bar while the pointer is
+// long gone. Halving the period takes the worst case to ~210ms. It is not a
+// CPU regression: the tick samples the pointer ONCE and shares it with both
+// windows (three reads per pass before), so the OS round-trip rate drops from
+// ~33/s to ~17/s on win/mac and stays ~17/s on Linux.
+const PET_CURSOR_POLL_MS = 60;
 let petClickThroughTimer = null;
 
 function startPetClickThroughPoll() {
 	if (petClickThroughTimer !== null) return;
 	petClickThroughTimer = setInterval(() => {
-		updatePetClickThrough();
-		updateBubblesClickThrough();
-	}, 120);
+		const cursor = screen.getCursorScreenPoint();
+		updatePetClickThrough(cursor);
+		updateBubblesClickThrough(cursor);
+	}, PET_CURSOR_POLL_MS);
 }
 
 function stopPetClickThroughPoll() {

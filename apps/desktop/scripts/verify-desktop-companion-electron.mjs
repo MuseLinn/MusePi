@@ -955,12 +955,26 @@ try {
 			);
 			await sleep(400);
 		}
+		// Sample the whole surface state, not just the boolean: "still expanded"
+		// (the proximity edge never arrived) and "collapsed but still fading"
+		// are different failures, and the assertion's bare verdict could not
+		// tell them apart in CI.
+		const quickbarLeft = await petPage.evaluate(() => {
+			const bar = document.querySelector(".pet-window__quickbar");
+			if (!bar) return { missing: true, expanded: false, composing: false, opacity: "" };
+			const style = getComputedStyle(bar);
+			return {
+				missing: false,
+				expanded: bar.classList.contains("pet-window__quickbar--expanded"),
+				composing: bar.classList.contains("pet-window__quickbar--composing"),
+				opacity: style.opacity,
+				pointerEvents: style.pointerEvents,
+			};
+		});
 		check(
 			"real pet quick bar collapses again when the cursor leaves",
-			await petPage.evaluate(() => {
-				const bar = document.querySelector(".pet-window__quickbar");
-				return Boolean(bar) && !bar.classList.contains("pet-window__quickbar--expanded") && getComputedStyle(bar).opacity === "0";
-			}),
+			!quickbarLeft.missing && !quickbarLeft.expanded && quickbarLeft.opacity === "0",
+			quickbarLeft,
 		);
 		if (!quickbarExpanded.expanded) {
 			check(
