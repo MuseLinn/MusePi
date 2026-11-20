@@ -953,13 +953,11 @@ try {
 				Math.max(8, origin.y + (petBox.top + petBox.bottom) / 2),
 				origin.dpr,
 			);
-			await sleep(400);
 		}
 		// Sample the whole surface state, not just the boolean: "still expanded"
 		// (the proximity edge never arrived) and "collapsed but still fading"
-		// are different failures, and the assertion's bare verdict could not
-		// tell them apart in CI.
-		const quickbarLeft = await petPage.evaluate(() => {
+		// are different failures, and a bare verdict cannot tell them apart.
+		const readQuickbarSurface = () => petPage.evaluate(() => {
 			const bar = document.querySelector(".pet-window__quickbar");
 			if (!bar) return { missing: true, expanded: false, composing: false, opacity: "" };
 			const style = getComputedStyle(bar);
@@ -971,6 +969,16 @@ try {
 				pointerEvents: style.pointerEvents,
 			};
 		});
+		// Collapsing is an event, not a delay: the leave poll flips the class
+		// and the row then fades out over --duration-quick, so a sample read at
+		// a fixed time can land mid-fade. Wait for the settled state, bounded
+		// so a bar that never collapses still fails instead of hanging.
+		const collapseDeadline = Date.now() + 4000;
+		let quickbarLeft = await readQuickbarSurface();
+		while (Date.now() < collapseDeadline && !(quickbarLeft.expanded === false && quickbarLeft.opacity === "0")) {
+			await sleep(60);
+			quickbarLeft = await readQuickbarSurface();
+		}
 		check(
 			"real pet quick bar collapses again when the cursor leaves",
 			!quickbarLeft.missing && !quickbarLeft.expanded && quickbarLeft.opacity === "0",
