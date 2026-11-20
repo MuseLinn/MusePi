@@ -1678,7 +1678,6 @@ export function HeroComposer({
 							hero
 							heroActive={beamOn}
 							chatInput
-							flipAnchor="welcome"
 							onEditTextAttachment={onEditPaste}
 							pet={
 								pet.enabled && pet.mode === "input"

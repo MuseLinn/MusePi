@@ -15,8 +15,6 @@ import { morphSurfaceBack, morphSurfaceFrom, sharedSurfaceTransitionAllowed } fr
  * scenes, so the welcome→session transition can morph one container into
  * the other (FLIP in ChatView) instead of cross-fading two different trees.
  *
- * `flipAnchor` marks the frame for the morph measurement; the incoming
- * frame animates from the outgoing frame's rect via gui-flip-morph.
  */
 /** Icon name for a file chip by extension (icon-set parity: the same
  *  mapping the workspace tree uses for its entries). */
@@ -343,7 +341,6 @@ export function ComposerFrame({
 	hero = false,
 	heroActive = false,
 	enhancing = false,
-	flipAnchor,
 	pet = null,
 	chatInput = false,
 }: {
@@ -404,7 +401,6 @@ export function ComposerFrame({
 	heroActive?: boolean;
 	/** data-enhancing marker (session). */
 	enhancing?: boolean;
-	flipAnchor?: "welcome" | "session";
 	/** Companion pet, docked outside the input's top edge, right-aligned
 	 *  (input mode). Rendered absolutely against the frame so welcome and
 	 *  session scenes share one placement. Pass a function to react to the
@@ -502,10 +498,6 @@ export function ComposerFrame({
 			data-enhancing={enhancing || undefined}
 			data-chat-input={chatInput ? "true" : undefined}
 			data-pet={pet ? "true" : undefined}
-			// data-flip-anchor rides on the hero wrapper (BorderBeam) when
-			// present — the morph must transform the element that carries
-			// the shadow + beam, not the frame inside it.
-			data-flip-anchor={flipAnchor && !hero ? flipAnchor : undefined}
 		>
 			{pet && <ComposerPet>{pet}</ComposerPet>}
 			{children}
@@ -621,10 +613,6 @@ export function ComposerFrame({
 				{aboveRow}
 				<BorderBeam
 					className={`gui-border-beam${pet ? " gui-border-beam--pet" : ""}`}
-					// The scene-switch FLIP morph transforms this wrapper (not
-					// the frame): the shadow and beam stroke live on the wrapper,
-					// so the whole card — card, shadow, beam — morphs together.
-					data-flip-anchor={flipAnchor}
 					size="md"
 					colorVariant="ocean"
 					theme="auto"

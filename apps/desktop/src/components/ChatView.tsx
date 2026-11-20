@@ -93,7 +93,6 @@ import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useStore } from "../lib/use-store";
 import { onUserAvatarChanged, readUserAvatarPrefs, type UserAvatarPrefs } from "../lib/user-avatar";
-import { sharedSurfaceTransitionAllowed, withViewTransition } from "../lib/view-transition";
 import { createIncrementalSpeaker, type IncrementalSpeaker, speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
@@ -235,95 +234,6 @@ function UserAvatar({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
  * surface; the global session sidebar stays a separate full-height pane
  * whose controls float on the boundary next to this surface.
  */
-// Measure the outgoing frame and transform the incoming one onto it,
-// then transition back to identity (gui-flip-morph transition). Runs
-// in the layout phase so no un-morphed frame ever paints. Module-scope:
-// pure DOM work, no component state to close over.
-function morphFrame(
-	fromSel: string,
-	toSel: string,
-	fromRect?: { left: number; top: number; width: number; height: number } | null,
-): void {
-	const to = document.querySelector<HTMLElement>(toSel);
-	if (!to) return;
-	// The incoming frame animates FROM the outgoing anchor's rect — hide
-	// that anchor while it morphs, or the original double-paints as a
-	// fading copy next to the flying one (most visible welcome→session,
-	// where the big welcome composer + dot-matrix brand fade out).
-	const fromEl = document.querySelector<HTMLElement>(fromSel);
-	if (fromEl) fromEl.style.opacity = "0";
-	const from = fromRect ?? fromEl?.getBoundingClientRect() ?? null;
-	if (!from) {
-		if (fromEl) fromEl.style.opacity = "";
-		return;
-	}
-	const b = to.getBoundingClientRect();
-	if (from.width === 0 || b.width === 0 || from.height === 0) return;
-	const dx = from.left - b.left;
-	const dy = from.top - b.top;
-	const sx = from.width / b.width;
-	const sy = from.height / b.height;
-	// Web Animations API (same as the focus morph): a transition on the
-	// class needs the offset transform to actually paint a frame first —
-	// under headless (and on fast compositors) the class-toggle rAF dance
-	// can collapse into one frame and the morph snaps. An explicit
-	// animation always plays its timeline.
-	//
-	// Motion smoothness: a long-distance scale morph reads as choppy
-	// (each frame moves a lot and the mid-scale text shimmers). Five
-	// keyframes distribute the travel into short linear segments — each
-	// frame then moves little, so the flight looks continuous — and the
-	// blur ramp (heavy while fast, clear on landing) fakes motion blur
-	// over the mid-scale shimmer.
-	const t = (k: number) => `translate(${dx * k}px, ${dy * k}px) scale(${1 + (sx - 1) * k}, ${1 + (sy - 1) * k})`;
-	// Mark the morph window on the scenes container: a spinning composer
-	// beam (focused welcome composer, or the session one while the agent
-	// works) repaints a masked conic gradient every frame, and stacked on
-	// the morph's own transform+blur animation that was the transition
-	// stutter. The CSS freezes beams inside the container for exactly the
-	// flight (both scenes host a beam — the fade alone misses the incoming
-	// side, whose beam is active from `working` before the flight ends).
-	const scenes = to.closest(".gui-scenes");
-	const flight = to.animate(
-		[
-			{ transform: t(1), transformOrigin: "top left", filter: "blur(7px)" },
-			{ transform: t(0.8), transformOrigin: "top left", filter: "blur(4px)" },
-			{ transform: t(0.55), transformOrigin: "top left", filter: "blur(2.5px)" },
-			{ transform: t(0.28), transformOrigin: "top left", filter: "blur(1px)" },
-			{ transform: "translate(0px, 0px) scale(1, 1)", transformOrigin: "top left", filter: "blur(0px)" },
-		],
-		{ duration: 580, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
-	);
-	if (scenes instanceof HTMLElement) {
-		scenes.dataset.sceneMorph = "";
-		// Generation counter: a quick welcome⇄session round trip starts a
-		// new flight before the old one's `finished` resolves — that stale
-		// resolve must not clear the fresh flight's marker.
-		sceneMorphGeneration += 1;
-		const generation = sceneMorphGeneration;
-		flight.finished.then(
-			() => {
-				if (generation === sceneMorphGeneration) delete scenes.dataset.sceneMorph;
-			},
-			() => {
-				if (generation === sceneMorphGeneration) delete scenes.dataset.sceneMorph;
-			},
-		);
-	}
-}
-
-/** Last-seen session composer rect — the reverse morph (session → welcome)
- * needs it after the chat scene unmounted. */
-let lastSessionFrameRect: { left: number; top: number; width: number; height: number } | null = null;
-/** Monotonic flight id for the scene-morph beam freeze (data-scene-morph):
- * each morphFrame bumps it, and only the latest flight's `finished` clears
- * the marker. */
-let sceneMorphGeneration = 0;
-/** Last-seen welcome composer rect — symmetric warm cache for the
- * welcome → session morph: the welcome scene is mid-fade when the chat
- * scene mounts, so a live measure at that moment is unstable; the
- * steady-state rect (captured during showWelcome renders) is not. */
-let lastWelcomeFrameRect: { left: number; top: number; width: number; height: number } | null = null;
 
 function openChatViewBrowserPanel(panelTabs: UsePanelTabsResult, sessionId: string | null, forceNew = false): void {
 	const managed = resolveManagedBrowserPanelTab({ forceNew, sessionId });
@@ -842,50 +752,15 @@ export function ChatView({
 	const [welcomeLeaving, setWelcomeLeaving] = useState(false);
 	const [showChat, setShowChat] = useState(() => !!store);
 	const [chatLeaving, setChatLeaving] = useState(false);
-	// Which scene owns the composer surface right now. While the hand-off runs,
-	// the destination is mounted beside the source but this still names the
-	// source — the browser must see exactly one `composer-surface` per snapshot.
-	const [activeScene, setActiveScene] = useState<"welcome" | "chat">(() => (store ? "chat" : "welcome"));
-	// Destination mounted (laid out, hidden) one frame before the transition
-	// starts. Same order Kimi uses — wait for the view, then project — so the
-	// entering snapshot already carries painted content instead of the scene
-	// assembling itself underneath the morph.
-	const [arrivingScene, setArrivingScene] = useState<"welcome" | "chat" | null>(null);
-	// Entrance animation only where no View Transition can carry the change;
-	// the VT-capable runtime lets the browser own the landing (an extra CSS
-	// rise would replay after the transition clears its class).
-	const sceneVtCapable = sharedSurfaceTransitionAllowed();
-	// Desktop-only tree-sitter highlighting for transcript code blocks.
-	const chatHighlight = useChatHighlight();
-	// A scene flip is the composer changing homes (welcome ⇄ session): run it
-	// as one shared-surface transition when the browser has View Transitions.
-	// The leaving scene leaves inside the update (no 420ms overlap), so exactly
-	// one composer carries `composer-surface` on each side.
+	// Which scene's card is on screen. The composer is no longer part of either
+	// card — it lives in the persistent host below the scenes — so a flip only
+	// swaps the card surfaces and the composer travels with its own FLIP.
 	const sceneRef = useRef<"welcome" | "chat">(store ? "chat" : "welcome");
 	useEffect(() => {
 		const next = store ? "chat" : "welcome";
 		const flip = sceneRef.current !== next;
 		sceneRef.current = next;
-		// A store identity change inside the same scene is not a hand-off: the
-		// flags below only move on an actual scene flip.
 		if (!flip) return;
-		// The forward leg morphs the composer into a live chat scene, so the
-		// destination mounts first (laid out but hidden) and the transition runs
-		// from its own effect once that render has landed. Splitting the two
-		// keeps a store update in the pre-paint frames from stranding a hidden
-		// scene. The reverse leg has no live source — a null store unmounts the
-		// chat scene in the same commit that flips the flags — and keeps the
-		// FLIP + fade fallback below.
-		if (flip && store && sharedSurfaceTransitionAllowed()) {
-			setChatLeaving(false);
-			setWelcomeLeaving(false);
-			setShowWelcome(true);
-			setShowChat(true);
-			setArrivingScene("chat");
-			return;
-		}
-		setArrivingScene(null);
-		setActiveScene(next);
 		if (store) {
 			setChatLeaving(false);
 			setShowChat(true);
@@ -899,105 +774,8 @@ export function ChatView({
 		const timer = setTimeout(() => setShowChat(false), 420);
 		return () => clearTimeout(timer);
 	}, [store]);
-	// Scene hand-off, one frame after the destination is painted: the browser
-	// then pairs two painted snapshots, so the session never assembles itself
-	// underneath the morph (Kimi's order — wait for the view, then project).
-	// Runs from its own effect so a store update between the two commits cannot
-	// leave the hidden destination mounted.
-	useEffect(() => {
-		if (arrivingScene === null) return;
-		const target = arrivingScene;
-		let inner = 0;
-		const outer = requestAnimationFrame(() => {
-			inner = requestAnimationFrame(() => {
-				withViewTransition(
-					() => {
-						setArrivingScene(null);
-						setShowWelcome(target === "welcome");
-						setShowChat(target === "chat");
-						setActiveScene(target);
-					},
-					{ surfaceOnly: true, extraClass: "gui-scene-vt" },
-				);
-			});
-		});
-		return () => {
-			cancelAnimationFrame(outer);
-			cancelAnimationFrame(inner);
-		};
-	}, [arrivingScene]);
-	// FLIP morph: when a scene ENTERS (its DOM actually mounted — the
-	// showChat/showWelcome flags can flip before the store populates the
-	// scene, so ref callbacks below are the reliable trigger; a
-	// flag-diff-based layout effect misses that window), morph its
-	// composer frame from the outgoing scene's frame rect (both are
-	// mounted in the overlap window).
-	const sceneMorphPend = useRef<{
-		to: string;
-		from: string;
-		fromRect?: { left: number; top: number; width: number; height: number } | null;
-	} | null>(null);
-	const sceneMorphScheduled = useRef(false);
-	const sceneMorph = (
-		fromSel: string,
-		toSel: string,
-		fromRect?: { left: number; top: number; width: number; height: number } | null,
-	): void => {
-		sceneMorphPend.current = { to: toSel, from: fromSel, fromRect };
-		if (sceneMorphScheduled.current) return;
-		sceneMorphScheduled.current = true;
-		// Defer past the commit so both scenes are laid out; the frame
-		// rects (and the outgoing scene's existence) are then reliable.
-		requestAnimationFrame(() => {
-			sceneMorphScheduled.current = false;
-			const pend = sceneMorphPend.current;
-			sceneMorphPend.current = null;
-			if (pend) morphFrame(pend.from, pend.to, pend.fromRect);
-		});
-	};
-	const welcomeSceneRef = (el: HTMLDivElement | null): void => {
-		if (!el) return;
-		const fromRect = lastSessionFrameRect;
-		lastSessionFrameRect = null;
-		// The arriving scene is the View Transition's destination: its frame is
-		// already pinned by the browser, so the FLIP fallback must stay out of it.
-		if (arrivingScene !== null) return;
-		if (!document.documentElement.classList.contains("gui-view-transition")) {
-			sceneMorph('[data-flip-anchor="session"]', '[data-flip-anchor="welcome"]', fromRect);
-		}
-	};
-	const chatSceneRef = (el: HTMLDivElement | null): void => {
-		if (!el) return;
-		const fromRect = lastWelcomeFrameRect;
-		lastWelcomeFrameRect = null;
-		if (arrivingScene !== null) return;
-		if (!document.documentElement.classList.contains("gui-view-transition")) {
-			sceneMorph('[data-flip-anchor="welcome"]', '[data-flip-anchor="session"]', fromRect);
-		}
-	};
-	// While the chat scene is mounted, keep the composer frame's rect warm
-	// for the reverse morph (session → welcome): the ref callback for the
-	// incoming welcome scene runs before the unmounting chat scene is
-	// measurable, so the rect is captured here, during render (same
-	// measurement pattern as the welcome composer's prevSize).
-	if (showChat) {
-		const frame = document.querySelector<HTMLElement>('[data-flip-anchor="session"]');
-		if (frame) {
-			const r = frame.getBoundingClientRect();
-			if (r.width > 0) lastSessionFrameRect = { left: r.left, top: r.top, width: r.width, height: r.height };
-		}
-	}
-	// Symmetric warm cache for the welcome composer: capture its rect in
-	// steady state so the welcome → session morph starts from a stable
-	// position instead of a live measure taken while the welcome scene is
-	// mid-fade (which jumps).
-	if (showWelcome) {
-		const frame = document.querySelector<HTMLElement>('[data-flip-anchor="welcome"]');
-		if (frame) {
-			const r = frame.getBoundingClientRect();
-			if (r.width > 0) lastWelcomeFrameRect = { left: r.left, top: r.top, width: r.width, height: r.height };
-		}
-	}
+	// Desktop-only tree-sitter highlighting for transcript code blocks.
+	const chatHighlight = useChatHighlight();
 	// Agent status via the thinking-orb state (avatar, not labels).
 	// streaming = the assistant message has started streaming (view folds it
 	// into entries at message_start — no separate ghost is kept). Pending
@@ -2808,6 +2586,21 @@ export function ChatView({
 	// 280ms` double-drove the WAAPI animation on the same property — two
 	// competing 280ms curves fighting every frame (the frame-rate collapse).
 	const composerWrapRef = useRef<HTMLDivElement | null>(null);
+	// Persistent composer host (one node for BOTH scenes): the wrap lives under
+	// `.gui-scenes` and is positioned over the active card, so welcome ⇄ session
+	// moves the composer instead of mounting a second one. The box is measured
+	// from the card (the session-info seat narrows the column) and the mode
+	// change is carried by a translate FLIP on the wrap itself.
+	const composerHostRef = useRef<HTMLDivElement | null>(null);
+	const scenesRef = useRef<HTMLDivElement | null>(null);
+	const [composerHostBox, setComposerHostBox] = useState<{
+		left: number;
+		top: number;
+		width: number;
+		height: number;
+	} | null>(null);
+	const composerModeRef = useRef<boolean>(!!store);
+	const composerModeRect = useRef<DOMRect | null>(null);
 	const wrapMorphVer = useRef(0);
 	/** The in-flight morph animation. Held so a rapid toggle can cancel it
 	 *  instead of letting two animations write the same height property. */
@@ -2894,6 +2687,50 @@ export function ChatView({
 		};
 	}, [showChat]);
 
+	// Host box = the active card's rect, measured against the scenes wrapper.
+	// Both modes render one card of the same box (gutter + row), so the host
+	// keeps its geometry and only the wrap inside changes place.
+	useLayoutEffect(() => {
+		const scenes = scenesRef.current;
+		const card = store ? chatColumnRef.current : welcomeCardRef.current;
+		if (!scenes || !card) return;
+		const measure = (): void => {
+			const a = card.getBoundingClientRect();
+			const b = scenes.getBoundingClientRect();
+			setComposerHostBox({ left: a.left - b.left, top: a.top - b.top, width: a.width, height: a.height });
+		};
+		measure();
+		if (typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(measure);
+		observer.observe(card);
+		observer.observe(scenes);
+		return () => observer.disconnect();
+	}, [store, showWelcome, showChat]);
+
+	// Welcome ⇄ session is one node changing place (centered ⇄ docked): a
+	// translate FLIP on the wrap reads as the composer moving, not as a second
+	// card appearing. The pre-flip rect is captured during render (the same
+	// pattern as prevWrapTop below — the DOM still shows the old layout).
+	useLayoutEffect(() => {
+		const wrap = composerWrapRef.current;
+		const mode = !!store;
+		const flipped = composerModeRef.current !== mode;
+		composerModeRef.current = mode;
+		if (!wrap || !flipped || motionDisabled()) return;
+		const next = wrap.getBoundingClientRect();
+		const prev = composerModeRect.current;
+		composerModeRect.current = next;
+		if (!prev || typeof wrap.animate !== "function") return;
+		const dx = prev.left - next.left;
+		const dy = prev.top - next.top;
+		if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+		wrap.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0, 0)" }], {
+			duration: 240,
+			easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+			composite: "replace",
+		});
+	}, [store]);
+
 	// The ask card floats ABOVE the composer (`bottom: calc(100% + 4px)` in
 	// gui-misc.css — the 4px gap is part of the clearance). Its box never
 	// enters the wrap, so the wrap's ResizeObserver cannot measure it; without
@@ -2927,6 +2764,9 @@ export function ChatView({
 	const prevWrapTop = useRef<number | null>(null);
 	const wrapEl = composerWrapRef.current;
 	if (wrapEl) prevWrapTop.current = wrapEl.getBoundingClientRect().top;
+	// Pre-flip rect for the welcome ⇄ session FLIP. Skipped on the render that
+	// flips the mode, so the captured value is still the outgoing layout.
+	if (wrapEl && composerModeRef.current === !!store) composerModeRect.current = wrapEl.getBoundingClientRect();
 	useLayoutEffect(() => {
 		const el = composerWrapRef.current;
 		if (!el) return;
@@ -3234,13 +3074,10 @@ export function ChatView({
 					 * full-surface). The wrapper itself is IN FLOW — the terminal
 					 * dock after it genuinely pushes the scenes up instead of the
 					 * dock becoming the only in-flow child and landing on top. */}
-					<div className="gui-scenes relative min-h-0 min-w-0 flex-1">
+					<div ref={scenesRef} className="gui-scenes relative min-h-0 min-w-0 flex-1">
 						{showWelcome && (
 							<div
-								ref={welcomeSceneRef}
-								data-scene-active={activeScene === "welcome" ? "true" : undefined}
-								data-scene-arriving={arrivingScene === "welcome" ? "true" : undefined}
-								className={`gui-scene gui-scene-welcome relative min-h-0 flex-1${welcomeLeaving ? " gui-scene--leaving" : ""}${sceneVtCapable ? "" : " gui-scene--enter"}`}
+								className={`gui-scene gui-scene-welcome relative min-h-0 flex-1 gui-scene--enter${welcomeLeaving ? " gui-scene--leaving" : ""}`}
 							>
 								{/* Same rounded floating card as the chat scene and the
 								 * settings main view: the welcome scene used to sit
@@ -3257,21 +3094,15 @@ export function ChatView({
 										paddingRight: terminalPlacement === "right" && terminalOpen ? rightWidth : 0,
 									}}
 								>
-									<SlotComponentHost
-										rpc={rpc}
-										slot={COMPOSER_BAR_SLOT}
-										composer={heroComposerProps}
-										fallback={<Composer {...heroComposerProps} />}
-									/>
+									{/* Background card only: the composer itself lives in the
+									 * persistent host below the scenes, so welcome ⇄ session
+									 * moves one DOM node instead of mounting a second one. */}
 								</div>
 							</div>
 						)}
 						{showChat && store && (
 							<div
-								ref={chatSceneRef}
-								data-scene-active={activeScene === "chat" ? "true" : undefined}
-								data-scene-arriving={arrivingScene === "chat" ? "true" : undefined}
-								className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}${sceneVtCapable ? "" : " gui-scene--enter"}`}
+								className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col gui-scene--enter${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}`}
 							>
 								<div className="flex min-h-0 flex-1">
 									{/* Session column: transcript + composer + dock. The
@@ -3846,146 +3677,6 @@ export function ChatView({
 												onJumpTo={jumpToHit}
 											/>
 										)}
-										<div
-											ref={composerWrapRef}
-											className={
-												focusMode
-													? "gui-composer-wrap gui-composer-wrap--bottom-anchor flex min-h-0 flex-col px-5 pb-3"
-													: "gui-composer-wrap gui-composer-wrap--floating flex flex-col px-5 pb-1"
-											}
-										>
-											{/* Jump-back dock (TUI navigateTree parity, 2026-08-25):
-											 * a floating card above the input — shows the target of the
-											 * last 撤回 (non-destructive branchAt leaf move) with an
-											 * explicit undo (jump back to the leaf we came from; the
-											 * old tail stays on the tree as a sibling branch either
-											 * way). Lives OUTSIDE the transcript so it never scrolls
-											 * away; appears/disappears and expands with the shared
-											 * Reveal motion (fade + collapse). */}
-											<Reveal open={jumpBack !== null}>
-												<div className="gui-revert-dock" role="region" aria-label={t("general.jumpedBack")}>
-													<div
-														role="button"
-														tabIndex={0}
-														className="gui-revert-dock-head"
-														onClick={() => setJumpDockOpen(v => !v)}
-														onKeyDown={e => {
-															if (e.key === "Enter" || e.key === " ") {
-																e.preventDefault();
-																setJumpDockOpen(v => !v);
-															}
-														}}
-														aria-expanded={jumpDockOpen}
-													>
-														<Icon
-															name="arrow-go-back"
-															className="h-3.5 w-3.5 flex-shrink-0 text-[var(--color-warning)]"
-														/>
-														<span className="gui-revert-dock-title" title={jumpBack?.text}>
-															{jumpBack
-																? t("general.jumpedBack2") + (jumpBack.text ? `: ${jumpBack.text}` : "")
-																: t("general.jumpedBack")}
-														</span>
-														<button
-															type="button"
-															className="gui-pane-action !w-auto px-1.5"
-															title={t("general.undoJump")}
-															onClick={e => {
-																// The head is a click target for collapse/expand —
-																// don't toggle it when the undo button fires.
-																e.stopPropagation();
-																void undoJumpBack();
-															}}
-														>
-															<Icon name="arrow-go-forward" className="h-3 w-3" />
-														</button>
-														<button
-															type="button"
-															className="gui-pane-action !w-auto px-1.5"
-															title={t("settings.close")}
-															onClick={e => {
-																// #12: dismiss the dock but STAY at the reverted
-																// position — the sibling branch stays on the tree,
-																// reachable again via the breadcrumb or the row
-																// buttons. The undo button above keeps its role.
-																e.stopPropagation();
-																setJumpBack(null);
-																setJumpDockOpen(false);
-															}}
-														>
-															<Icon name="close" className="h-3 w-3" />
-														</button>
-														<Icon
-															name="arrow-down-s"
-															className={`gui-revert-dock-chevron${jumpDockOpen ? " gui-revert-dock-chevron--open" : ""}`}
-															aria-hidden="true"
-														/>
-													</div>
-
-													<Reveal open={jumpDockOpen}>
-														<div className="gui-revert-dock-body">
-															<div className="gui-revert-item">
-																<span className="gui-revert-item-text" title={jumpBack?.text}>
-																	{jumpBack?.text ?? ""}
-																</span>
-															</div>
-															<p className="gui-revert-hint">{t("general.jumpBackHint")}</p>
-														</div>
-													</Reveal>
-												</div>
-											</Reveal>
-											{/* Session-level failure dock: a round the runtime gave up on, or one
-											 *  that produced neither a reply nor an error. Docked above the composer
-											 *  rather than in the message flow, and cleared by the next send. */}
-											{!readOnly && (
-												<SessionErrorDock
-													entries={visibleEntries}
-													working={snap?.working ?? false}
-													verifyTranscript={verifyTranscript}
-												/>
-											)}
-											{snap?.approvals.map(a => (
-												<ApprovalCard
-													key={a.requestId}
-													requestId={a.requestId}
-													tool={a.tool}
-													prompt={a.prompt}
-													onDecide={onDecideApproval}
-												/>
-											))}
-											{ask && onAskAnswer && (
-												<div className="gui-ask-float" ref={askFloatRef}>
-													<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />
-												</div>
-											)}
-											{/* Layer-1 session-tree nav chrome: breadcrumb path + fork hint
-											 * above the composer (root > … > leaf, click any segment to jump). */}
-											{currentLeafKey !== null && (
-												<SessionTreeNav
-													segments={breadcrumb}
-													activeLeafIsHistorical={leafChildren.length > 0}
-													activeLeafLabel={labelOf({ id: effectiveLeaf ?? "" }, t("transcript.thisNode"))}
-													onJump={id => {
-														// /tree parity: 点击路径段 = 切换 leaf 到该节点
-														// (旧尾部保留为 sibling branch),非仅滚动。
-														switchToNode(id);
-													}}
-												/>
-											)}
-											{readOnly ? (
-												<div className="gui-readonly-bar" role="note">
-													<Icon name="sparkling" className="h-3.5 w-3.5" />
-													<span>{t("general.advisorTranscriptReadonly")}</span>
-												</div>
-											) : sessionComposerProps ? (
-												<SlotComponentHost
-													rpc={rpc}
-													slot={COMPOSER_BAR_SLOT}
-													composer={sessionComposerProps}
-													fallback={<Composer {...sessionComposerProps} />}
-												/>
-											) : null}
-										</div>
 										{/* Floating session info card — only the explicit reveal of a
 										 * row too narrow to dock. INSIDE the chat body (never over
 										 * the rail or the panel) and below the header row; z-index 3
@@ -4025,6 +3716,164 @@ export function ChatView({
 								</div>
 							</div>
 						)}
+						<div
+							ref={composerHostRef}
+							className="gui-composer-host"
+							data-mode={store ? "session" : "welcome"}
+							style={composerHostBox ?? undefined}
+						>
+							<div
+								ref={composerWrapRef}
+								className={
+									focusMode
+										? "gui-composer-wrap gui-composer-wrap--bottom-anchor flex min-h-0 flex-col px-5 pb-3"
+										: store
+											? "gui-composer-wrap gui-composer-wrap--floating flex flex-col px-5 pb-1"
+											: "gui-composer-wrap gui-composer-wrap--hero flex min-h-0 flex-1 flex-col justify-center pb-1"
+								}
+							>
+								{/* Jump-back dock (TUI navigateTree parity, 2026-08-25):
+								 * a floating card above the input — shows the target of the
+								 * last 撤回 (non-destructive branchAt leaf move) with an
+								 * explicit undo (jump back to the leaf we came from; the
+								 * old tail stays on the tree as a sibling branch either
+								 * way). Lives OUTSIDE the transcript so it never scrolls
+								 * away; appears/disappears and expands with the shared
+								 * Reveal motion (fade + collapse). */}
+								<Reveal open={jumpBack !== null}>
+									<div className="gui-revert-dock" role="region" aria-label={t("general.jumpedBack")}>
+										<div
+											role="button"
+											tabIndex={0}
+											className="gui-revert-dock-head"
+											onClick={() => setJumpDockOpen(v => !v)}
+											onKeyDown={e => {
+												if (e.key === "Enter" || e.key === " ") {
+													e.preventDefault();
+													setJumpDockOpen(v => !v);
+												}
+											}}
+											aria-expanded={jumpDockOpen}
+										>
+											<Icon
+												name="arrow-go-back"
+												className="h-3.5 w-3.5 flex-shrink-0 text-[var(--color-warning)]"
+											/>
+											<span className="gui-revert-dock-title" title={jumpBack?.text}>
+												{jumpBack
+													? t("general.jumpedBack2") + (jumpBack.text ? `: ${jumpBack.text}` : "")
+													: t("general.jumpedBack")}
+											</span>
+											<button
+												type="button"
+												className="gui-pane-action !w-auto px-1.5"
+												title={t("general.undoJump")}
+												onClick={e => {
+													// The head is a click target for collapse/expand —
+													// don't toggle it when the undo button fires.
+													e.stopPropagation();
+													void undoJumpBack();
+												}}
+											>
+												<Icon name="arrow-go-forward" className="h-3 w-3" />
+											</button>
+											<button
+												type="button"
+												className="gui-pane-action !w-auto px-1.5"
+												title={t("settings.close")}
+												onClick={e => {
+													// #12: dismiss the dock but STAY at the reverted
+													// position — the sibling branch stays on the tree,
+													// reachable again via the breadcrumb or the row
+													// buttons. The undo button above keeps its role.
+													e.stopPropagation();
+													setJumpBack(null);
+													setJumpDockOpen(false);
+												}}
+											>
+												<Icon name="close" className="h-3 w-3" />
+											</button>
+											<Icon
+												name="arrow-down-s"
+												className={`gui-revert-dock-chevron${jumpDockOpen ? " gui-revert-dock-chevron--open" : ""}`}
+												aria-hidden="true"
+											/>
+										</div>
+
+										<Reveal open={jumpDockOpen}>
+											<div className="gui-revert-dock-body">
+												<div className="gui-revert-item">
+													<span className="gui-revert-item-text" title={jumpBack?.text}>
+														{jumpBack?.text ?? ""}
+													</span>
+												</div>
+												<p className="gui-revert-hint">{t("general.jumpBackHint")}</p>
+											</div>
+										</Reveal>
+									</div>
+								</Reveal>
+								{/* Session-level failure dock: a round the runtime gave up on, or one
+								 *  that produced neither a reply nor an error. Docked above the composer
+								 *  rather than in the message flow, and cleared by the next send. */}
+								{!readOnly && (
+									<SessionErrorDock
+										entries={visibleEntries}
+										working={snap?.working ?? false}
+										verifyTranscript={verifyTranscript}
+									/>
+								)}
+								{snap?.approvals.map(a => (
+									<ApprovalCard
+										key={a.requestId}
+										requestId={a.requestId}
+										tool={a.tool}
+										prompt={a.prompt}
+										onDecide={onDecideApproval}
+									/>
+								))}
+								{ask && onAskAnswer && (
+									<div className="gui-ask-float" ref={askFloatRef}>
+										<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />
+									</div>
+								)}
+								{/* Layer-1 session-tree nav chrome: breadcrumb path + fork hint
+								 * above the composer (root > … > leaf, click any segment to jump). */}
+								{currentLeafKey !== null && (
+									<SessionTreeNav
+										segments={breadcrumb}
+										activeLeafIsHistorical={leafChildren.length > 0}
+										activeLeafLabel={labelOf({ id: effectiveLeaf ?? "" }, t("transcript.thisNode"))}
+										onJump={id => {
+											// /tree parity: 点击路径段 = 切换 leaf 到该节点
+											// (旧尾部保留为 sibling branch),非仅滚动。
+											switchToNode(id);
+										}}
+									/>
+								)}
+								{store ? (
+									readOnly ? (
+										<div className="gui-readonly-bar" role="note">
+											<Icon name="sparkling" className="h-3.5 w-3.5" />
+											<span>{t("general.advisorTranscriptReadonly")}</span>
+										</div>
+									) : sessionComposerProps ? (
+										<SlotComponentHost
+											rpc={rpc}
+											slot={COMPOSER_BAR_SLOT}
+											composer={sessionComposerProps}
+											fallback={<Composer {...sessionComposerProps} />}
+										/>
+									) : null
+								) : (
+									<SlotComponentHost
+										rpc={rpc}
+										slot={COMPOSER_BAR_SLOT}
+										composer={heroComposerProps}
+										fallback={<Composer {...heroComposerProps} />}
+									/>
+								)}
+							</div>
+						</div>
 					</div>
 					{/* Right panel stays mounted so the width collapse animates;
 					 * `open` folds it to a 0px sliver instead of unmounting. The

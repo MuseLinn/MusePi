@@ -324,14 +324,9 @@
 	animation: gui-scene-in 160ms ease;
 }
 
-/* The destination of a scene hand-off mounts one frame early, laid out but
- * unpainted: the browser's new snapshot then carries a complete scene instead
- * of the view assembling itself under the morph. */
-.gui-scene[data-scene-arriving="true"] {
-	visibility: hidden;
-	pointer-events: none;
-	animation: none !important;
-}
+/* Card surfaces only cross-fade around the traveling composer; nothing is
+ * withheld from paint during a hand-off (the old `data-scene-morphing`
+ * transcript hide is gone — it read as "empty first, content later"). */
 
 .gui-scene--leaving {
 	opacity: 0;
@@ -839,23 +834,11 @@
  * Transition runs, the wrap is the named surface the browser pairs between
  * the two snapshots. The name exists only inside the transition so unrelated
  * transitions never capture the composer. */
-/* Welcome ⇄ session: both composer wrappers take the same name for the
- * scene transition window, so the input card is one continuous surface. */
-/* The destination of a scene hand-off is already laid out and painted before
- * the transition starts, so nothing has to be withheld from paint for the
- * morph window (the old `data-scene-morphing` transcript hide is gone: it read
- * as "empty first, content later"). */
+/* Welcome ⇄ session no longer runs a scene transition: the composer is one
+ * node in the persistent host and moves with its own translate FLIP, so the
+ * cards only cross-fade around it and no second composer is ever captured. */
 
-/* Welcome ⇄ session: the composer wrappers take the same name for the scene
- * transition window, but only the ACTIVE scene may carry it — the destination
- * is mounted (hidden) one frame early, and two elements sharing a name would
- * make the browser drop the pair entirely. */
-html.gui-scene-vt [data-scene-active="true"] [data-flip-anchor="welcome"],
-html.gui-scene-vt [data-scene-active="true"] [data-flip-anchor="session"] {
-	view-transition-name: composer-surface;
-}
-
-html.gui-view-transition:not(.gui-scene-vt) .gui-composer-wrap {
+html.gui-view-transition .gui-composer-wrap {
 	view-transition-name: composer-surface;
 }
 
@@ -897,6 +880,32 @@ html.gui-vt-surface-only::view-transition-new(root),
 	transition: height 280ms var(--spring);
 	/* Anchor for the absolutely-positioned AskCard float layer (the ask card
 	 * must float over the transcript's bottom edge, never resize it). */
+	position: relative;
+}
+
+/* ── Persistent composer host (one node for both scenes) ────────────────
+ * The wrap lives under `.gui-scenes`, laid over the active card's box (the
+ * view writes left/top/width/height against that wrapper). Welcome ⇄ session
+ * therefore moves ONE node — a translate FLIP reads as the composer walking
+ * to its new seat — instead of mounting a second composer and cross-fading
+ * two cards. The host is transparent to the pointer; the wrap and its
+ * children opt back in. */
+.gui-composer-host {
+	position: absolute;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	pointer-events: none;
+}
+
+.gui-composer-host > .gui-composer-wrap--hero,
+.gui-composer-host > .gui-composer-wrap--bottom-anchor {
+	pointer-events: auto;
+}
+
+/* Welcome seat: the wrap fills the card box and centers the input, so the
+ * hero keeps its mid-surface position inside the persistent host. */
+.gui-composer-wrap--hero {
 	position: relative;
 }
 

@@ -2039,7 +2039,6 @@ export function SessionComposer({
 			 * status line is gone; only the compaction spinner remains while compacting. */}
 			{compacting && <CompactionStatusLine onCancel={cancelCompaction} />}
 			<ComposerFrame
-				flipAnchor="session"
 				onEditTextAttachment={onEditPaste}
 				belowRow={
 					<>

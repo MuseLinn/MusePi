@@ -4,8 +4,8 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
-- **欢迎页 → 会话的输入框转场先让目标场景就绪，再开始形变**：目标场景提前一帧挂载（完成布局但不绘制），转场只在两张已经画好的快照之间进行，会话不再在输入框飞行途中自己拼装出来；只有当前场景带 `composer-surface`，目标场景的预挂载不会造成同名元素冲突。转录区不再为转场窗口隐藏（此前是"先空、再补上"），场景入场动画只在不支持 View Transition 的环境运行，避免转场结束后重播一次。
-  - EN: The welcome → session composer hand-off now readies the destination before morphing. The destination scene mounts one frame early — laid out but unpainted — so the transition pairs two already-painted snapshots and the session never assembles itself underneath the flight; only the active scene carries `composer-surface`, so the pre-mounted destination can never collide on the name. The transcript is no longer withheld for the transition window (that read as "empty first, content later"), and the scene's CSS entrance runs only where View Transitions are unavailable, so it never replays once the transition closes.
+- **欢迎页与会话共用同一个输入框宿主**：输入框不再分别嵌在两张卡片里，而是挂在场景层的常驻宿主上、按当前卡片实测定位（会话信息侧栏收窄列宽时也跟随）。欢迎 ⇄ 会话只移动这一个节点（240ms translate FLIP），卡片在它周围交叉淡化；草稿、附件与焦点留在同一个节点上，不会因为换场景重挂。场景 View Transition 与两套 rect 缓存随之下线。
+  - EN: Welcome and session now share one composer host. The input no longer lives inside each card: it hangs off a persistent host above the scenes layer, positioned from the active card's measured box (so the session-info column narrowing is followed). A welcome ⇄ session switch moves that single node with a 240ms translate FLIP while the cards cross-fade around it; the draft, attachments and focus stay on the same node instead of remounting with the scene. The scene View Transition and both cached frame rects are gone with it.
 
 ## [0.7.7] - 2026-11-20
 
