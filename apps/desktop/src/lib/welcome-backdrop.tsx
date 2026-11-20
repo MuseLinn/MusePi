@@ -1,4 +1,4 @@
-import { DotMatrixMark } from "@musepi/client-core";
+import { DotMatrixMark, t } from "@musepi/client-core";
 import { useEffect, useState } from "react";
 
 /**
@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 const WELCOME_BACKDROP_CHANGED_EVENT = "musepi-dotmatrix-changed";
 const ON_KEY = "musepi-gui-dotmatrix";
 const TEXT_KEY = "musepi-gui-dotmatrix-text";
-const DEFAULT_TEXT = "MusePi";
+
 
 interface WelcomeBackdropPreference {
 	on: boolean;
@@ -24,10 +24,10 @@ function readWelcomeBackdrop(): WelcomeBackdropPreference {
 	try {
 		return {
 			on: localStorage.getItem(ON_KEY) !== "0",
-			text: localStorage.getItem(TEXT_KEY) || DEFAULT_TEXT,
+			text: localStorage.getItem(TEXT_KEY) || t("settings.musepi"),
 		};
 	} catch {
-		return { on: true, text: DEFAULT_TEXT };
+		return { on: true, text: t("settings.musepi") };
 	}
 }
 
