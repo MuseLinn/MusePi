@@ -10,6 +10,11 @@
 - 剩余部分的真实形状（2026-11-20 复核）：`ComposerFrame`、`ComposerEditor`、`useAttachments`、草稿持久化现在都已在共享层，第 2 步不是"把两块 JSX 挪到一起"这么机械——两个 skin 的 frame body 各约 500 行，引用了各自组件内 ~50 个局部（handlers、refs、派生值），直接抽 `ComposerBody` 等于给每个引用搬一条 prop。可行的切法是先建一个 `ComposerSurfaceContext`（由 entry 提供、skin 消费）把这些局部显式化，再抽 body；否则会得到一条 50+ props 的签名。这一步需要一次独立的实现与验证窗口。
 - 第 2 步起步（2026-11-20）：`apps/desktop/src/components/composer/surface.tsx` 已建立 entry→skin 的 `ComposerSurfaceContext`（variant、intake、draft/carry），两个 skin 优先从它取；无 provider 的直接挂载仍走 props/本地状态。下一步把 body 需要的 handlers/refs 逐项搬进该 surface，直到 frame body 可以整体抽出。
 - 第 2 步续（2026-11-20）：发送合同已收进 surface（`send(text, payload)`，payload 是两边的并集；entry 按 variant 分派到 `onSubmit`/`onSend`），两个 skin 的发送点改走它，直接挂载仍回退到各自 handler。剩下要搬的是编辑器/焦点句柄与工具栏动作。
+- 重写清单（2026-11-21 盘点，供下一次连续实现使用）：`HeroComposer` 有 25 个 `useEffect`、17 个 `useState`、6 个 `useRef`；`SessionComposer` 19/12/7。这些 hook 按所有权分三类：
+  1. **共享**（已在 entry 或共享模块）：text/draft、`useAttachments`、draft persistence、`ComposerFrame`、`ComposerEditor`、发送路由（`createSurfaceSend`）。
+  2. **session 专有**：`useDraftPersistence` 的会话键、`useInputHistory`、队列/目标/计划/权限/模型 ladder、`swarmHost`、`onBtw`、`useCompletion` 的会话命令集。
+  3. **hero 专有**：首次发送载荷（planMode/goalMode/guidedGoal/files/videos）、模式 chip、设计体系 rail、连接器选择、问候/提示/提醒、连接器/项目行。
+  合并时的规则：hero 专有 hook 必须留在 hero 分支渲染的子树里（或在 `variant === "hero"` 下用独立子组件承载），否则会话态会多跑 25 条监听/RPC；session 专有同理。这也是为什么不能把两份 body 直接塞进一个函数——hook 不能条件调用，必须先把「专有 hook + 其 JSX」打包成两个子组件，再由 `variant` 选择。
 - 计划（每步独立提交、各自保绿）：
   1. **状态所有权上移**：text、attachments、draft 持久化、pendingEdit/quote 注入统一由 `Composer` 持有，两个 skin 只收 props（`variant` 之外不再各自 `useState`）。
   2. **共享 body**：把 `ComposerFrame` 的 children 收敛为一个 `ComposerBody`（editor stack + attach row + footer），hero 专属装饰（greeting / tips / reminders / modes / design rail / connector picker）改为 `above`/`below` 槽由 `ChatView` 传入。
