@@ -104,21 +104,13 @@
 	line-height: 20px;
 }
 
-.musepi-composer-editor--welcome .musepi-composer-editor[data-editable="0"] {
-	opacity: 0.55;
-}
-
-.musepi-composer-editor__placeholder {
+.musepi-composer-editor--welcome .musepi-composer-editor__placeholder {
 	padding: 14px 4px;
 	font-size: 14px;
 	line-height: 1.625;
 }
 
-.musepi-composer-editor--compact .musepi-composer-editor[data-editable="0"] {
-	opacity: 0.55;
-}
-
-.musepi-composer-editor__placeholder {
+.musepi-composer-editor--compact .musepi-composer-editor__placeholder {
 	padding: 6px 8px;
 	font-size: var(--ui-font-size);
 	line-height: 22px;

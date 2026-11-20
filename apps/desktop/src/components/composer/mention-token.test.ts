@@ -3,6 +3,7 @@ import { pastedImageMentionLabels } from "./attachment-mention-paste";
 import {
 	deleteMentionTokenAfter,
 	deleteMentionTokenBefore,
+	removeMentionTokens,
 	spliceMentionToken,
 	spliceMentionTokens,
 } from "./mention-token";
@@ -78,5 +79,27 @@ describe("atomic mention deletion", () => {
 
 	test("a caret inside the token is not an atomic boundary", () => {
 		expect(deleteMentionTokenBefore("@图片1", 2, liveImages)).toBeNull();
+	});
+});
+
+describe("removeMentionTokens (chip removal sync)", () => {
+	test("removes the token and one trailing space", () => {
+		expect(removeMentionTokens("看图：@图片1 @图片2 ", "图片1")).toBe("看图：@图片2 ");
+	});
+
+	test("removes several references to the same chip", () => {
+		expect(removeMentionTokens("@图片1 和 @图片1 都看", "图片1")).toBe("和 都看");
+	});
+
+	test("a token at the end takes the space before it", () => {
+		expect(removeMentionTokens("看这个 @图片2", "图片2")).toBe("看这个");
+	});
+
+	test("a longer ordinal is never mistaken for a prefix", () => {
+		expect(removeMentionTokens("@图片10 @图片1", "图片1")).toBe("@图片10");
+	});
+
+	test("no matching token leaves the draft untouched", () => {
+		expect(removeMentionTokens("普通文本", "图片1")).toBe("普通文本");
 	});
 });

@@ -3438,14 +3438,11 @@ button.gui-stats-pill {
  * carry the material, so a token reads as a small piece of the same glass as
  * the composer's other pills instead of a flat text highlight.
  *
- * Metric-neutrality is the law here: anything that changes glyph advance
- * (font family/weight, letter-spacing, horizontal padding without the twin
- * negative margin) desyncs the mirror from the transparent textarea and the
- * caret drifts off the painted characters. `padding: 1px 5px` is repaid by
- * `margin: -1px -5px`, so the capsule paints outside its box without
- * occupying it. CodeMirror token marks are inline spans with no inner wrapper,
- * so the sheen rides `background-image` (not a ::before that would paint over
- * the text), and pointer-events stay off — the editor resolves hover/click
+ * CodeMirror owns the text and the caret, so a token is a plain inline span
+ * with real padding — nothing needs the mirror-era twin negative margin that
+ * made adjacent pills overlap. The sheen rides `background-image` (a ::before
+ * would paint over the text); mention pills override it to carry a type glyph
+ * before the label. Pointer events stay off — the editor resolves hover/click
  * from coordinates. `box-decoration-break: clone` keeps a wrapped token
  * looking like two pill fragments instead of one stretched box. */
 .gui-ta-hl-slash,
@@ -3473,6 +3470,44 @@ button.gui-stats-pill {
 .gui-ta-hl-magic::before,
 .gui-ta-hl-mention::before {
 	display: none;
+}
+
+/* Mention pills: a type glyph plus the label, and their own advance.
+ *
+ * The old `padding: 1px 5px` + `margin: -1px -5px` pair existed to keep a
+ * transparent textarea's mirror in sync with the painted glyphs. CodeMirror
+ * owns the text now, so the twin negative margin has no job left — and with
+ * two tokens separated by a single space it made them overlap by ~6px. The
+ * pill occupies its padding, keeps a 1px breathing gap, and leads with the
+ * attachment's type icon (Kimi desktop's icon+text mention). */
+.gui-ta-hl-mention {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 18px;
+	padding: 0 6px;
+	margin: 0 1px;
+	line-height: 18px;
+	vertical-align: middle;
+}
+
+.gui-ta-hl-mention::before {
+	content: "";
+	display: block;
+	width: 13px;
+	height: 13px;
+	flex: none;
+	background-color: currentColor;
+	-webkit-mask: var(--gui-mention-icon) center / contain no-repeat;
+	mask: var(--gui-mention-icon) center / contain no-repeat;
+}
+
+.gui-ta-hl-mention--image {
+	--gui-mention-icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='black' d='M4%205a2%202%200%200%201%202-2h12a2%202%200%200%201%202%202v14a2%202%200%200%201-2%202H6a2%202%200%200%201-2-2V5zm2%2012h12l-3.5-4.5L12%2016l-2-2.5L6%2017z'/><circle cx='8.5' cy='8.5' r='1.5' fill='black'/></svg>");
+}
+
+.gui-ta-hl-mention--file {
+	--gui-mention-icon: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='black' d='M6%202h7l5%205v15H6V2zm7%201.6V8h4.4L13%203.6z'/></svg>");
 }
 
 .gui-style-select-caret {

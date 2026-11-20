@@ -34,6 +34,7 @@ export function ImageLightbox({
 	onAnnotate,
 	onEdit,
 	originRect = null,
+	stageName,
 }: {
 	items: readonly { src: string; alt?: string }[];
 	/** Currently shown item; null hides the lightbox (no portal). */
@@ -47,6 +48,11 @@ export function ImageLightbox({
 	 *  host re-measures at close time: a chip deleted or scrolled away
 	 *  mid-preview yields null and the close degrades to the fade. */
 	originRect?: MorphRect | null;
+	/** View Transition name for the image stage (一镜到底). The host wraps the
+	 *  open/close state update in `morphSurfaceFrom` / `morphSurfaceBack` with
+	 *  the same name; the stage carries it so the browser pairs the thumbnail
+	 *  and stage rectangles. Omitted → the WAAPI morph or the plain fade. */
+	stageName?: string;
 	/** Open-science FigureBlock parity: click-to-pin annotations with a
 	 * note, delivered back to the host (forwarded to the agent / pasted
 	 * into the composer). Optional — omit for plain preview. */
@@ -177,6 +183,15 @@ export function ImageLightbox({
 			return;
 		}
 		if (!lastOpenRef.current) return;
+		if (stageName) {
+			// A View Transition drives this close: the browser already holds the
+			// old snapshot, so the lightbox must leave the DOM inside the same
+			// update — holding the frame for an exit animation would keep the
+			// old page in the new snapshot and the morph would never pair.
+			lastOpenRef.current = null;
+			setExited(true);
+			return;
+		}
 		// Close flight (M1.10 §3.3): when the open morph played, fly the
 		// frame back into the source chip's rect before unmounting. The host
 		// re-measures the chip at close time, so a chip deleted/scrolled away
@@ -211,7 +226,7 @@ export function ImageLightbox({
 			setExited(true);
 		}, EXIT_MS);
 		return () => clearTimeout(exitTimerRef.current);
-	}, [open, items, index, originRect]);
+	}, [open, items, index, originRect, stageName]);
 
 	// ── Open morph (M1.10 §3.3 一镜到底): render at final layout, measure
 	// the stage rect, then fly the frame FROM the source thumbnail's rect
@@ -502,7 +517,8 @@ export function ImageLightbox({
 			<div
 				ref={stageRef}
 				className="tr-img-lb-stage"
-				style={{ cursor }}
+				data-image-stage=""
+				style={{ cursor, viewTransitionName: stageName }}
 				onPointerDown={e => {
 					e.stopPropagation();
 					onPointerDown(e);

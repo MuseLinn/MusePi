@@ -29,12 +29,22 @@ export function useComposerMarks(
 	);
 	const marks = useMemo<EditorMark[]>(
 		() =>
-			parseHighlightSpans(text, resolveMention).map(span => ({
-				from: span.start,
-				to: span.end,
-				className: HL_CLASS[span.kind],
-				...(span.kind === "mention" ? { mentionName: text.slice(span.start + 1, span.end) } : {}),
-			})),
+			parseHighlightSpans(text, resolveMention).map(span => {
+				if (span.kind !== "mention") {
+					return { from: span.start, to: span.end, className: HL_CLASS[span.kind] };
+				}
+				// The pill carries a type glyph (image/file), so the class says which.
+				// The span was painted only after resolving, so this second lookup
+				// returns the same chip.
+				const mentionName = text.slice(span.start + 1, span.end);
+				const kind = resolveMention(mentionName)?.kind ?? "file";
+				return {
+					from: span.start,
+					to: span.end,
+					className: `${HL_CLASS.mention} gui-ta-hl-mention--${kind}`,
+					mentionName,
+				};
+			}),
 		[text, resolveMention],
 	);
 	return { marks, resolveMention };

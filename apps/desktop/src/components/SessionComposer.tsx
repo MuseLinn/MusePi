@@ -76,6 +76,7 @@ import {
 	deleteMentionTokenBefore,
 	expandMentionTokens,
 	mentionTokenName,
+	removeMentionTokens,
 	resolveMentionChip,
 	retargetMentionTokens,
 	spliceMentionToken,
@@ -2110,11 +2111,16 @@ export function SessionComposer({
 				enhancing={enhance === "enhancing"}
 				attachments={attachments}
 				onRemoveAttachment={id => {
+					// Kimi parity: removing the chip removes the mentions that point at
+					// it, then the survivors are renumbered (retarget rules in
+					// mention-token.ts). The label is captured BEFORE the array changes.
+					const label = mentionTokenName(attachments, id);
 					const next = attachments.filter(p => p.id !== id);
 					setAttachments(next);
-					// Ordinal tokens keep pointing at the same chip: renumber
-					// after the removal (retarget rules in mention-token.ts).
-					setText(txt => retargetMentionTokens(txt, attachments, next));
+					setText(txt => {
+						const cleaned = label ? removeMentionTokens(txt, label) : txt;
+						return retargetMentionTokens(cleaned, attachments, next);
+					});
 				}}
 				onReorderAttachments={(fromId, toId) => {
 					const next = reorderAttachmentChips(attachments, fromId, toId);

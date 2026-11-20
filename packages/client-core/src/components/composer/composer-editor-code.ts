@@ -1,4 +1,12 @@
-import { Annotation, type EditorState, type Extension, Prec, StateEffect, StateField } from "@codemirror/state";
+import {
+	Annotation,
+	type EditorState,
+	type Extension,
+	Prec,
+	type Range,
+	StateEffect,
+	StateField,
+} from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap } from "@codemirror/view";
 import type { ComposerSelection, EditorMark } from "./composer-editor-types";
 
@@ -9,11 +17,21 @@ export const refreshMarks = StateEffect.define<null>();
 
 /** EditorMarks -> CodeMirror mark decorations, rebuilt on doc/context change. */
 export function marksField(marksRef: { current: readonly EditorMark[] }): Extension {
-	const build = (): DecorationSet =>
-		Decoration.set(
-			marksRef.current.map(mark => Decoration.mark({ class: mark.className }).range(mark.from, mark.to)),
-			true,
-		);
+	const build = (): DecorationSet => {
+		const ranges: Range<Decoration>[] = [];
+		for (const mark of marksRef.current) {
+			if (mark.mentionName !== undefined && mark.to - mark.from > 1) {
+				// The `@` is syntax, not content: the pill shows an icon + `图片1`.
+				// Replace the sigil with nothing while the document keeps it — the
+				// send path and the ordinal parser still need `@图片N`.
+				ranges.push(Decoration.replace({}).range(mark.from, mark.from + 1));
+				ranges.push(Decoration.mark({ class: mark.className }).range(mark.from + 1, mark.to));
+				continue;
+			}
+			ranges.push(Decoration.mark({ class: mark.className }).range(mark.from, mark.to));
+		}
+		return Decoration.set(ranges, true);
+	};
 	return StateField.define<DecorationSet>({
 		create: build,
 		update(decorations, transaction) {

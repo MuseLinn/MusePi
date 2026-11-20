@@ -216,6 +216,27 @@ export function retargetMentionTokens<T extends { id: number; kind: "image" | "f
 	});
 }
 
+/**
+ * Remove every token that points at `name` (a token BODY, e.g. `图片1`),
+ * together with one adjacent space. Called when the user removes the chip
+ * itself: Kimi desktop deletes the mention with the attachment, and leaving
+ * it behind turns a reference into stray prose (`@图片1` that no longer
+ * resolves). Ordinal tokens are removed by their CURRENT label — callers
+ * capture it before changing the chip array, then retarget the survivors.
+ */
+export function removeMentionTokens(text: string, name: string): string {
+	const spans = parseMentionTokens(text).filter(span => span.name === name);
+	if (spans.length === 0) return text;
+	let out = text;
+	for (let i = spans.length - 1; i >= 0; i--) {
+		let { start, end } = spans[i]!;
+		if (/\s/.test(out[end] ?? "")) end += 1;
+		else if (start > 0 && /\s/.test(out[start - 1] ?? "")) start -= 1;
+		out = out.slice(0, start) + out.slice(end);
+	}
+	return out;
+}
+
 /** Splice a mention token (plus one trailing space, which both reads
  *  naturally and closes the `@` completion panel — its trigger rule
  *  (lib/completion-trigger) treats a whitespace-bearing tail as prose) at

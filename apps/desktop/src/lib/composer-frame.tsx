@@ -7,6 +7,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BorderBeam } from "../vendor/border-beam";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { type CompanionInteraction, randomCompanionInteraction } from "./companion";
+import { morphSurfaceBack, morphSurfaceFrom, sharedSurfaceTransitionAllowed } from "./view-transition";
 
 /**
  * Shared composer container (welcome + in-session parity): one frame shell
@@ -424,24 +425,47 @@ export function ComposerFrame({
 		originRect: { left: number; top: number; width: number; height: number } | null;
 	} | null>(null);
 	const imageChips = attachments.filter(a => a.kind !== "file" && a.dataUrl);
-	const openPreview = (chipId: number, el: HTMLElement | null) =>
-		setPreview({
+	// One mirror of the preview state for the close path: a View Transition must
+	// read the showing image and re-measure its chip synchronously, outside a
+	// state updater.
+	const previewRef = useRef(preview);
+	previewRef.current = preview;
+	const vtAllowed = sharedSurfaceTransitionAllowed();
+	const openPreview = (chipId: number, el: HTMLElement | null) => {
+		const next = {
 			items: imageChips.map(x => ({ src: x.dataUrl, alt: x.name, id: x.id })),
 			index: imageChips.findIndex(x => x.id === chipId),
-			originRect: el?.getBoundingClientRect() ?? null,
-		});
+			// With a View Transition the browser owns the geometry; the WAAPI
+			// origin rect is only the fallback for runtimes without it.
+			originRect: vtAllowed ? null : (el?.getBoundingClientRect() ?? null),
+		};
+		// The origin is the chip itself, so the thumbnail must carry the shared
+		// name for the old snapshot; the stage carries it on the other side.
+		if (el && vtAllowed) morphSurfaceFrom(el, "composer-image", () => setPreview(next));
+		else setPreview(next);
+	};
 	// Close-time re-measure of the chip the lightbox is currently showing.
-	const closePreview = () =>
-		setPreview(prev => {
-			if (!prev || prev.index === null) return null;
-			const id = prev.items[prev.index]?.id;
-			const el = id === undefined ? null : document.querySelector<HTMLImageElement>(`img[data-attach-id="${id}"]`);
-			return {
-				...prev,
-				index: null,
-				originRect: el?.isConnected ? el.getBoundingClientRect() : null,
-			};
-		});
+	const closePreview = () => {
+		const prev = previewRef.current;
+		if (!prev || prev.index === null) return;
+		const id = prev.items[prev.index]?.id;
+		const el = id === undefined ? null : document.querySelector<HTMLImageElement>(`img[data-attach-id="${id}"]`);
+		const trigger = el?.isConnected ? el : null;
+		const stage = document.querySelector<HTMLElement>("[data-image-stage]");
+		if (trigger && stage && vtAllowed) {
+			morphSurfaceBack(stage, trigger, "composer-image", () => setPreview(null));
+			return;
+		}
+		setPreview(p =>
+			p
+				? {
+						...p,
+						index: null,
+						originRect: trigger?.getBoundingClientRect() ?? null,
+					}
+				: null,
+		);
+	};
 	// Drag-sort (Kimi desktop parity): same sensor tuning as surface-tabs —
 	// distance 8 keeps clicks click-y, the touch long-press delay keeps
 	// scrolling scrolling. rectSortingStrategy because the chip row is a
@@ -562,6 +586,7 @@ export function ComposerFrame({
 			items={preview?.items ?? []}
 			index={preview?.index ?? null}
 			originRect={preview?.originRect ?? null}
+			stageName={vtAllowed ? "composer-image" : undefined}
 			onClose={closePreview}
 			onIndexChange={i => setPreview(prev => (prev ? { ...prev, index: i } : prev))}
 			onEdit={
