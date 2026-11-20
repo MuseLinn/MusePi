@@ -11,7 +11,7 @@
  */
 import { type ComponentProps, type ReactNode, useCallback, useState } from "react";
 import { registerHostModule } from "../lib/host-modules";
-import { type ComposerSendPayload, type ComposerSurface, ComposerSurfaceContext } from "./composer/surface";
+import { type ComposerSurface, ComposerSurfaceContext, createSurfaceSend } from "./composer/surface";
 import { useAttachments } from "./composer/use-attachments";
 import { HeroComposer } from "./HeroComposer";
 import { SessionComposer, type SessionComposerProps } from "./SessionComposer";
@@ -55,25 +55,14 @@ export function Composer(props: ComposerProps): ReactNode {
 		attachmentsApi: intake,
 		...(hero ? {} : { carryDraft: carry, carryChips }),
 	};
-	const send = useCallback(
-		(text: string, payload: ComposerSendPayload = {}) => {
-			if (props.mode === "hero") {
-				return props.onSubmit(text, {
-					thinkingLevel: payload.thinkingLevel as never,
-					modelId: payload.modelId,
-					images: payload.images,
-					displayContext: payload.displayContext as never,
-					files: payload.files,
-					videos: payload.videos,
-					planMode: payload.planMode,
-					goalMode: payload.goalMode,
-					guidedGoal: payload.guidedGoal,
+	const send =
+		props.mode === "hero"
+			? createSurfaceSend({ variant: "hero", onSubmit: (text, payload) => props.onSubmit(text, payload as never) })
+			: createSurfaceSend({
+					variant: "session",
+					onSend: (text, images, deliverAs, displayContext, videos) =>
+						props.onSend(text, images, deliverAs, displayContext as never, videos),
 				});
-			}
-			return props.onSend(text, payload.images, payload.deliverAs, payload.displayContext as never, payload.videos);
-		},
-		[props],
-	);
 	const surface: ComposerSurface = {
 		variant: hero ? "hero" : "session",
 		intake,

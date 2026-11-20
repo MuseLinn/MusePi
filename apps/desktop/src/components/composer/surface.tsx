@@ -39,3 +39,27 @@ export const ComposerSurfaceContext = createContext<ComposerSurface | null>(null
 export function useComposerSurface(): ComposerSurface | null {
 	return useContext(ComposerSurfaceContext);
 }
+
+/**
+ * Route one send payload to the variant's handler. Lives here (pure, no React)
+ * so the contract is testable without mounting either skin — the entry keeps
+ * only the wiring.
+ */
+export function createSurfaceSend(handlers: {
+	variant: "hero" | "session";
+	onSubmit?: (text: string, payload?: ComposerSendPayload) => void | Promise<void>;
+	onSend?: (
+		text: string,
+		images?: ComposerSendPayload["images"],
+		deliverAs?: ComposerSendPayload["deliverAs"],
+		displayContext?: ComposerSendPayload["displayContext"],
+		videos?: ComposerSendPayload["videos"],
+	) => void;
+}): (text: string, payload?: ComposerSendPayload) => void | Promise<void> {
+	return (text, payload = {}) => {
+		if (handlers.variant === "hero") {
+			return handlers.onSubmit?.(text, payload);
+		}
+		return handlers.onSend?.(text, payload.images, payload.deliverAs, payload.displayContext, payload.videos);
+	};
+}
