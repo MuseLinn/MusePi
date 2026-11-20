@@ -14,7 +14,6 @@ const WELCOME_BACKDROP_CHANGED_EVENT = "musepi-dotmatrix-changed";
 const ON_KEY = "musepi-gui-dotmatrix";
 const TEXT_KEY = "musepi-gui-dotmatrix-text";
 
-
 interface WelcomeBackdropPreference {
 	on: boolean;
 	text: string;
