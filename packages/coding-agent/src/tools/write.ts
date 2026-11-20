@@ -561,6 +561,9 @@ export class WriteTool implements AgentTool<typeof writeSchema, WriteToolDetails
 	readonly strict = true;
 	readonly concurrency = "exclusive";
 	readonly loadMode = "essential";
+	/** A wedged filesystem (network share, blocked device, frozen remote SSH)
+	 *  used to hold the whole turn; the local write path itself has no timeout. */
+	readonly timeoutMs = 120_000;
 
 	/** Stream matchers should see the real file content, not its JSON-escaped argument encoding. */
 	matcherDigest(args: unknown): string | undefined {

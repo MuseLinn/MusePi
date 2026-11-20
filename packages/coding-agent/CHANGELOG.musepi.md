@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **单次工具执行有了自己的上限，写文件卡死不再拖住整轮**：`AgentTool` 新增 `timeoutMs`（这一次执行的上限）。到期时 loop 放弃该次执行、中止交给它的组合 signal，并结算一条超时错误结果，回合照常继续——模型可以换路径重试或报告失败，而不是整轮无声挂住。`write` 先接入（120 秒），覆盖网络盘、被占用设备、冻结的远程写入这些自身没有超时的路径；没有上限的工具（等待人工的 `ask`、自带超时的 `bash` 等）保持原有语义。
+  - EN: A single tool execution now has its own ceiling, so a wedged file write can no longer hold the whole turn. `AgentTool` gains `timeoutMs`; on expiry the loop abandons that execution, aborts the combined per-call signal it handed the tool, and settles one timeout error result while the turn continues — the model can retry another path or report the failure instead of the session hanging silently. `write` opts in first (120s), covering network shares, blocked devices and frozen remote writes, which have no timeout of their own; tools without a ceiling (human-facing `ask`, self-bounded `bash`) keep their current semantics.
+
 - **欢迎页的 `/`、`@`、`#` 补全菜单换成会话同款面板**：两侧不再各写一份菜单。欢迎页现在同样按项类型显示图标（目录高亮、文件灰）、给路径单独的次要列与 `rootLabel` 标签、给会话项显示所属目录，并把键盘选中的那一行滚动到可见范围内。
   - EN: The welcome page's `/`, `@` and `#` completion panels are the session panels now: the two scenes no longer render separate menus. The welcome menu shows a per-kind icon (directories accented, files muted), a separate secondary path column with the `rootLabel` chip, the owning directory on session rows, and keeps the keyboard-selected row scrolled into view.
 

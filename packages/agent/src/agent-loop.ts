@@ -941,6 +941,28 @@ function isDeadlineExceeded(deadline: number | undefined): boolean {
 	return deadline !== undefined && Date.now() >= deadline;
 }
 
+/** Race one tool execution against its own ceiling.
+ *
+ * The abandoned run keeps its own promise; `run.catch` keeps the loser of the
+ * race observed so a late rejection cannot surface as an unhandled rejection.
+ * The caller aborts the per-call signal from `onExpire` — deliberately AFTER
+ * the timeout rejection is queued, so the result the model sees is the timeout
+ * rather than whichever error the tool's own abort handler raised.
+ */
+function withToolDeadline<T>(run: Promise<T>, timeoutMs: number, onExpire: () => void, label: string): Promise<T> {
+	void run.catch(() => {});
+	let timer: Timer | undefined;
+	const deadline = new Promise<never>((_, reject) => {
+		timer = setTimeout(() => {
+			reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s and was abandoned`));
+			onExpire();
+		}, timeoutMs);
+	});
+	return Promise.race([run, deadline]).finally(() => {
+		if (timer !== undefined) clearTimeout(timer);
+	});
+}
+
 function endAgentStream(
 	stream: EventStream<AgentEvent, AgentMessage[]>,
 	newMessages: AgentMessage[],
@@ -2608,11 +2630,21 @@ async function executeToolCalls(
 					);
 				}
 				executionStarted = true;
-				const rawResult = await tool.execute(
+				// One execution must not hold the turn: a wedged syscall (network
+				// path, blocked device) would otherwise wait forever. The ceiling is
+				// the tool's own declaration; the abort rides a per-call signal
+				// combined with the batch signal, so a tool that honors aborts
+				// cleans up while one that does not simply loses the race.
+				const timeoutMs = tool.timeoutMs !== undefined && tool.timeoutMs > 0 ? tool.timeoutMs : undefined;
+				const deadlineController = timeoutMs === undefined ? undefined : new AbortController();
+				let deadlineExpired = false;
+				const execution = tool.execute(
 					toolCall.id,
 					executionArgs,
-					record.signal,
+					deadlineController ? AbortSignal.any([record.signal, deadlineController.signal]) : record.signal,
 					partialResult => {
+						// Late updates from an abandoned run must not repaint a settled call.
+						if (deadlineExpired) return;
 						stream.push({
 							type: "tool_execution_update",
 							toolCallId: toolCall.id,
@@ -2623,6 +2655,20 @@ async function executeToolCalls(
 					},
 					toolContext,
 				);
+				const rawResult =
+					timeoutMs === undefined
+						? await execution
+						: await withToolDeadline(
+								execution,
+								timeoutMs,
+								() => {
+									deadlineExpired = true;
+									deadlineController?.abort(
+										new DOMException(`Tool ${toolCall.name} exceeded ${timeoutMs}ms`, "TimeoutError"),
+									);
+								},
+								`Tool ${toolCall.name}`,
+							);
 				completedToolExecution = true;
 				const coerced = coerceToolResult(rawResult);
 				result = coerced.result;

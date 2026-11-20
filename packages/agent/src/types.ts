@@ -863,6 +863,19 @@ export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any
 
 	/** Whether execution needs a durable start intent. Defaults to true; a predicate may exempt read-only calls. */
 	requiresDurableIntent?: boolean | ((args: unknown) => boolean);
+	/**
+	 * Wall-clock ceiling for ONE execution, in milliseconds.
+	 *
+	 * The loop races the tool against this timer, aborting a per-call signal
+	 * combined with the batch signal, and settles a timeout error result — so a
+	 * wedged syscall (a network path, a blocked device) cannot hold the turn.
+	 * The abandon still lets the tool observe the abort; ignore it and the loop
+	 * moves on without that execution's result.
+	 *
+	 * Omit for tools that legitimately wait on a human (`ask`), on a long build,
+	 * or that already bound themselves (`bash`).
+	 */
+	timeoutMs?: number;
 	/** Capability tier declaration used by approval gates. Omitted means "exec". */
 	approval?: ToolApproval;
 
