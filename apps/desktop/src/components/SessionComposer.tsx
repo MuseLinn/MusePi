@@ -221,6 +221,10 @@ export interface SessionComposerProps {
 	swarmHost?: import("@musepi/client-core").ToolRenderHost;
 	/** Chat drop-anchor handoff: the anchor stages OS files here. */
 	attachApiRef?: ComposerAttachRef;
+	/** Draft carried from the welcome skin (see `Composer`). */
+	initialDraft?: string;
+	carryDraft?: string;
+	onDraftChange?(text: string): void;
 }
 
 type ComposerKeyEvent = globalThis.KeyboardEvent & { nativeEvent?: { isComposing?: boolean } };
@@ -287,6 +291,9 @@ export function SessionComposer({
 	swarmHost,
 	welcome,
 	attachApiRef,
+	initialDraft,
+	carryDraft,
+	onDraftChange,
 }: SessionComposerProps): ReactNode {
 	const pet = useCompanionArt();
 	// composer 座位槽(dock / left / right):
@@ -294,7 +301,11 @@ export function SessionComposer({
 	// list 语义 —— 扩展声明 conversation.composer.dock/left/right 槽位即注入组件。
 	const composerDockItems = useSlotComponents(rpc, COMPOSER_DOCK_SLOT);
 	const composerLeftItems = useSlotComponents(rpc, COMPOSER_LEFT_SLOT);
-	const [text, setText] = useState("");
+	const [text, setText] = useState(initialDraft ?? "");
+	// Report every change up to the entry so a mode flip keeps the draft.
+	useEffect(() => {
+		onDraftChange?.(text);
+	}, [text, onDraftChange]);
 	// Element picker (browser tool) inserts picked-page text into the draft.
 	useEffect(() => {
 		const onInsert = (e: Event): void => {
@@ -480,7 +491,7 @@ export function SessionComposer({
 		onHashInput,
 		insertHash,
 	} = useCompletion({ rpc, cwd, sessionId, setText });
-	useDraftPersistence({ sessionId, rpc, text, setText, attachments, setAttachments });
+	useDraftPersistence({ sessionId, rpc, text, setText, attachments, setAttachments, carryText: carryDraft });
 	const { historyIndex, browseHistory, setHistoryIndex, pushHistory } = useInputHistory(cwd);
 	const spellcheckEnabled = (): boolean => {
 		try {

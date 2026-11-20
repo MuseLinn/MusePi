@@ -30,11 +30,16 @@ export function useDraftPersistence({
 	setText,
 	attachments,
 	setAttachments,
+	carryText,
 }: {
 	sessionId: string;
 	rpc: RpcClient | null;
 	text: string;
 	setText(value: string): void;
+	/** Text the other composer skin carried across the welcome ⇄ session flip.
+	 *  Used only when this session has no stored draft of its own, so a switch
+	 *  can never resurrect text the user already sent here. */
+	carryText?: string;
 	attachments: ComposerAttachment[];
 	setAttachments(next: ComposerAttachment[]): void;
 }): void {
@@ -51,6 +56,10 @@ export function useDraftPersistence({
 		}
 	}, []);
 	const sessionResetRef = useRef(true);
+	// The carry is one-shot: consuming it on the next restore keeps a later
+	// session switch from re-seeding the same text into an empty box.
+	const carryRef = useRef(carryText ?? "");
+	carryRef.current = carryText !== undefined ? carryText : carryRef.current;
 	useEffect(() => {
 		// Keyed on sessionId only: re-running on draftEnabled toggles would
 		// clobber in-progress text when the pref flips.
@@ -65,7 +74,9 @@ export function useDraftPersistence({
 				// localStorage unavailable — start empty
 			}
 		}
-		setText(next);
+		const carried = next === "" ? carryRef.current : "";
+		carryRef.current = "";
+		setText(carried === "" ? next : carried);
 		setAttachments(nextAttachments);
 	}, [sessionId, draftEnabled]);
 	// Idle-recap editor-draft guard (TUI parity): report the un-sent draft

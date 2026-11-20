@@ -192,6 +192,8 @@ export function HeroComposer({
 	designSubmit,
 	placeholder,
 	attachApiRef,
+	initialDraft,
+	onDraftChange,
 }: {
 	/** First prompt; the model/thinking choices made in the composer are
 	 *  carried along so the new session starts with them. planMode/goalMode
@@ -262,9 +264,16 @@ export function HeroComposer({
 	placeholder?: string;
 	/** Chat drop-anchor handoff: the anchor stages OS files here. */
 	attachApiRef?: ComposerAttachRef;
+	/** Draft handed over by the entry (see `Composer`). */
+	initialDraft?: string;
+	onDraftChange?(text: string): void;
 }): ReactNode {
 	const pet = useCompanionArt();
-	const [text, setText] = useState("");
+	const [text, setText] = useState(initialDraft ?? "");
+	// Report every change up to the entry so a mode flip keeps the draft.
+	useEffect(() => {
+		onDraftChange?.(text);
+	}, [text, onDraftChange]);
 	// Hour-of-day clock: re-renders only when the greeting bracket flips
 	// (早上好→下午好…), so the TextMorph greeting rolls over at the
 	// boundary instead of freezing at mount time.
