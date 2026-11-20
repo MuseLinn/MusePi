@@ -1,4 +1,7 @@
-#![allow(clippy::redundant_pub_crate, reason = "crate-visible helpers inside a private desktop module")]
+#![allow(
+	clippy::redundant_pub_crate,
+	reason = "crate-visible helpers inside a private desktop module"
+)]
 //! Menu vocabulary and label matching shared by platform backends.
 //!
 //! A menu path is a list of native labels. Matching is deliberately strict:
