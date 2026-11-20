@@ -36,8 +36,8 @@ marketplace 系统让你能够从 Git、本地或直接目录源（direct-catalo
 | **catalog（目录）** | 与 Claude 兼容的 `marketplace.json`（优先 `.omp-plugin/`，回退 `.claude-plugin/`）。它列出插件条目与来源，但不固定精确版本或 commit。 |
 | **market（市场）** | 能力中心的插件市场界面，只由用户配置的来源供数。市场发布索引（或目录），本身不是插件宿主。 |
 | **plugin（插件）** | 能力包。原生 MusePi 插件的清单是 `package.json` 的 `musepi` 块；`omp`/`pi` 清单属于 `pi` vendor。 |
-| **vendor（血统）** | 插件声明的宿主血统：`musepi`、`pi`、`claude` 或 `codex`。它表示清单与内容布局，**不表示运行时**——所有插件最终都跑在 Cordis 运行时里。 |
-| **compat plugin（兼容插件）** | vendor 不是 `musepi` 的插件（`pi`、`claude`、`codex`），经兼容层加载。支持程度按 vendor 不同，见下文支持矩阵。 |
+| **vendor（血统）** | 插件声明的宿主血统：`musepi`、`pi`、`claude` 或 `codex`。它表示清单与内容布局；实际能跑什么由宿主按安装产物判定，下方支持矩阵就是该判定。 |
+| **compat plugin（兼容插件）** | vendor 不是 `musepi` 的插件（`pi`、`claude`、`codex`），经兼容层处理。支持程度按 vendor 不同，见下文支持矩阵。 |
 | **dock（停靠位）** | **已加载**插件可以占用的固定 GUI 席位：composer dock（`conversation.composer.dock`）或右侧栏面板中的一个 tab。浏览或安装不会创建停靠位；启用插件才可能。 |
 | **lane（分区）** | 市场列表的一个分区。原生插件（`musepi`）占主分区；`pi`、`claude`、`codex` 在同一个兼容分区中，各带 vendor 徽章。 |
 
@@ -49,8 +49,8 @@ marketplace 系统让你能够从 Git、本地或直接目录源（direct-catalo
 | --- | --- | --- |
 | `musepi` | `package.json` `musepi` 块 | 完整运行时：作为一等扩展加载的原生 Cordis 插件。 |
 | `pi` | `package.json` `omp` 或 `pi` 块 | 经 `compat/legacy-pi-compat.ts` 作为 legacy 扩展加载；并非所有能力都有保证。 |
-| `claude` | `.claude-plugin/plugin.json` | 内容级：`discovery/claude-plugins.ts` 读取 skills、commands、hooks 与 MCP servers；不执行其 JavaScript。 |
-| `codex` | `.codex-plugin/plugin.json` | 暂无运行时支持：只读取清单图标（`compat/codex-plugin-icon.ts`）。 |
+| `claude` | `.claude-plugin/plugin.json` | 部分支持：`discovery/claude-plugins.ts` 读取 skills、commands、hooks、MCP servers 与 custom tools；Claude 扩展入口不会被加载，但 `tools/` 下的工具模块会被 custom-tools loader 导入执行。 |
+| `codex` | `.codex-plugin/plugin.json` | 暂无运行时支持：市场详情读取其 `interface` 展示字段、`skills/*/SKILL.md` 与图标（列表卡片也使用该图标）；不加载也不执行任何内容。 |
 
 兼容徽章不能被读成「与原生等价」：它表示条目声明的血统，以及由此应预期的支持程度。索引条目若夸大自己的 vendor，安装后仍会得到宿主的真实待遇。
 

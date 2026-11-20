@@ -10,17 +10,17 @@
  * structured `source`, and the host derives the installer argument itself.
  *
  * Vocabulary used here and in `docs/marketplace.md`:
- * - **plugin**: a capability bundle. Every plugin ultimately runs on the
- *   Cordis runtime; the axis below says which host lineage's manifest and
- *   content layout it declares.
+ * - **plugin**: a capability bundle; `vendor` says which host lineage's
+ *   manifest and content layout it declares.
  * - **vendor**: the host lineage a plugin declares. `"musepi"` is native
  *   (`package.json` `musepi` block), `"pi"` is the upstream pi lineage
  *   (`package.json` `omp`/`pi` block, one value for both), `"claude"` is
  *   `.claude-plugin/plugin.json`, and `"codex"` is
- *   `.codex-plugin/plugin.json`.
- * - **compat plugin**: a non-`musepi` vendor, loaded through the
- *   compatibility layer. Vendor is an index claim: the installed artifact
- *   decides the actual support level, which differs per vendor.
+ *   `.codex-plugin/plugin.json`. It is a declaration, not a support promise:
+ *   the host decides what it can actually run from the installed artifact.
+ * - **compat plugin**: a non-`musepi` vendor, handled by the compatibility
+ *   layer. Vendor is an index claim: the installed artifact decides the
+ *   actual support level, which differs per vendor.
  * - **lane**: one partition of the market list. Native plugins (`musepi`) fill
  *   the main lane; `pi`, `claude`, and `codex` sit in the compat lane with a
  *   vendor badge, never mixed into the main lane.

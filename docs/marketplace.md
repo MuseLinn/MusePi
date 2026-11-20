@@ -36,8 +36,8 @@ These terms have one meaning each in the marketplace docs and code:
 | **catalog** | The Claude-compatible `marketplace.json` (`.omp-plugin/` preferred, `.claude-plugin/` fallback). It lists plugin entries with sources; it does not pin exact versions or commits. |
 | **market** | The capability center's plugin-market surface, fed only by sources the user configured. A market publishes an index (or catalog); it is not a plugin host. |
 | **plugin** | A capability bundle. The native MusePi plugin is a Cordis bundle whose manifest is the `package.json` `musepi` block; `omp`/`pi` manifests belong to the `pi` vendor. |
-| **vendor** | The host lineage a plugin declares: `musepi`, `pi`, `claude`, or `codex`. It names the manifest and content layout — not the runtime, because every plugin ultimately runs on the Cordis runtime. |
-| **compat plugin** | A plugin whose vendor is not `musepi` (`pi`, `claude`, `codex`), loaded through the compatibility layer. Support differs per vendor; see the support matrix below. |
+| **vendor** | The host lineage a plugin declares: `musepi`, `pi`, `claude`, or `codex`. It names the manifest and content layout; what the host can actually run is decided from the installed artifact, and the support matrix below is that decision. |
+| **compat plugin** | A plugin whose vendor is not `musepi` (`pi`, `claude`, `codex`), handled by the compatibility layer. Support differs per vendor; see the support matrix below. |
 | **dock** | A fixed GUI seat a *loaded* plugin can claim: the composer dock (`conversation.composer.dock`) or a tab in the right-side panel. Browsing or installing never creates one; enabling a plugin can. |
 | **lane** | One partition of the market list. Native plugins (`musepi`) fill the main lane; `pi`, `claude`, and `codex` sit in one compat lane with their vendor badge. |
 
@@ -49,8 +49,8 @@ These terms have one meaning each in the marketplace docs and code:
 | --- | --- | --- |
 | `musepi` | `package.json` `musepi` block | Full runtime: a native Cordis plugin loaded as a first-class extension. |
 | `pi` | `package.json` `omp` or `pi` block | Loaded through `compat/legacy-pi-compat.ts` as a legacy extension; not every capability is guaranteed. |
-| `claude` | `.claude-plugin/plugin.json` | Content-level: `discovery/claude-plugins.ts` reads skills, commands, hooks, and MCP servers; its JavaScript is not executed. |
-| `codex` | `.codex-plugin/plugin.json` | No runtime support yet: only the manifest icon is read (`compat/codex-plugin-icon.ts`). |
+| `claude` | `.claude-plugin/plugin.json` | Partial: `discovery/claude-plugins.ts` reads skills, commands, hooks, MCP servers, and custom tools; a Claude extension entry point is not loaded, while tool modules under `tools/` are imported by the custom-tools loader. |
+| `codex` | `.codex-plugin/plugin.json` | No runtime support yet: the marketplace detail view reads its `interface` display fields, its `skills/*/SKILL.md`, and its icon (also used on list cards); nothing is loaded or executed. |
 
 The compat badge must not be read as "same as native": it says which lineage the entry declares and therefore which support level to expect. An index entry that overstates its vendor still gets the host's real treatment after install.
 
