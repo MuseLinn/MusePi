@@ -7083,10 +7083,20 @@ export const settings = {
 	"settings.memoryWorkspaceEmptyHint": "本地摘要流水线尚未写入记忆文件。",
 	"settings.memoryStatusDescription": "实时后端状态与维护操作。",
 	"settings.secrets": "密钥",
+	"settings.secretsDescription": "Agent 可以使用、但始终读不到真实值的密钥。",
 	"settings.secretsEncrypted": "已加密（本机主密钥）",
 	"settings.secretsEncryptedDescription":
-		"值只在本机解密；Agent 在 shell 中通过 $MUSEPI_SECRET_<NAME> 使用。模型只看到本机生成的占位符（名称为 NAME），真实值不出本机。",
-	"settings.secretsStoredCount": "已存密钥：{count}",
+		"每个值都是以本机该配置的主密钥加密的 AES-256-GCM 信封，没有明文模式，只在本机解密。",
+	"settings.secretsWhereTitle": "存放在哪",
+	"settings.secretsWhereValue":
+		"该配置的 Agent 目录下的 agent-secrets/，文件仅本人可读。密钥库保存名称、用途、范围与加密后的值，从不保存可读的值。",
+	"settings.secretsBashTitle": "在 shell 里",
+	"settings.secretsBashValue":
+		"只有 bash 子进程会拿到 $MUSEPI_SECRET_<NAME>。工具输出若会打印该值，会显示为 [secret:NAME]。",
+	"settings.secretsModelTitle": "模型能看到什么",
+	"settings.secretsModelValue":
+		"发给模型服务的请求里是可逆占位符（名称加本机生成的哈希）；list_secrets 只返回名称、用途、范围与可用性。真实值从不出现。",
+	"settings.secretsStoredCount": "密钥 · {count}",
 	"settings.secretsAdd": "添加密钥",
 	"settings.secretsAddTitle": "添加密钥",
 	"settings.secretsReplaceTitle": "替换值",
@@ -7099,11 +7109,14 @@ export const settings = {
 	"settings.secretsPurpose": "用途",
 	"settings.secretsPurposePlaceholder": "Agent 用它做什么",
 	"settings.secretsScope": "范围",
-	"settings.secretsScopeAll": "全部项目",
+	"settings.secretsScopeAll": "所有会话",
 	"settings.secretsLastUsed": "最后使用 {when}",
 	"settings.secretsNeverUsed": "从未使用",
 	"settings.secretsNoPurpose": "未填写用途",
 	"settings.secretsEmpty": "还没有密钥。Agent 需要时会弹卡片。",
+	"settings.secretsEmptyTitle": "还没有密钥",
+	"settings.secretsEmptyBody":
+		"当某次工具调用需要你还没保存的凭据时，Agent 会暂停这次调用，在输入框上方弹出请求卡片。它只提交名称与用途，值由你在卡片里输入，之后保存下来供后续调用使用。",
 	"settings.secretsReplace": "替换值",
 	"settings.secretsDelete": "删除",
 	"settings.secretsDeleteConfirm": "删除密钥 {name}？Agent 下次需要时会重新询问，删除后无法恢复。",

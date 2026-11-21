@@ -8918,3 +8918,388 @@ body.gui-resizing {
 	color: var(--color-danger);
 	border-color: color-mix(in oklab, var(--color-danger) 45%, var(--border));
 }
+/* ── Settings → 智能体 → 密钥：密钥库面板 ───────────────────────────────
+ * 三段式：静态加密状态卡（唯一一处声明存储事实）、`密钥 · N` 列头 + 添加
+ * 动作、然后要么是一张同面式的添加/替换表单，要么是密钥行列表，要么是解释
+ * request_secret 卡片的空态。
+ *
+ * 卡片面全部复用 `.gui-agent-card`（本节只改内部排布），因此状态卡、表单、
+ * 列表行属于同一个视觉族，玻璃层也只认那一个 L1 面。控件尺寸走共享 token：
+ * 字段 --control-height-field、按钮 --control-height-sm，圆角走 --radius-*
+ * 阶梯，不为本页新开一套几何。 */
+
+/* 页面标题下的状态卡：头部一行（图标 + 标题 + 一句机制说明），下面三条事实
+ * 各自成列（存放位置 / shell 用法 / 模型可见内容），窄屏折成单列。 */
+.gui-secret-section .gui-secret-state {
+	align-items: stretch;
+	flex-direction: column;
+	gap: var(--space-4);
+	margin-top: 18px;
+	padding: var(--space-4);
+}
+
+.gui-secret-section .gui-secret-state-head {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-3);
+}
+
+.gui-secret-state-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 30px;
+	height: 30px;
+	border-radius: var(--radius-lg);
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-secret-state-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.gui-secret-state-title {
+	font-size: var(--ui-font-size);
+	font-weight: 600;
+	line-height: 1.3;
+	color: var(--color-text);
+}
+
+.gui-secret-state-desc {
+	font-size: 12.5px;
+	line-height: 1.45;
+	color: var(--color-text-muted);
+}
+
+/* 三条事实：等宽三列，靠列间距和一条上分隔线与头部区分，不加第二层卡片。 */
+.gui-secret-facts {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: var(--space-4);
+	padding-top: var(--space-3);
+	border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+
+.gui-secret-fact {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.gui-secret-fact-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 18px;
+	height: 18px;
+	margin-top: 1px;
+	color: var(--color-text-faint);
+}
+
+.gui-secret-fact-body {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.gui-secret-fact-title {
+	font-size: 11px;
+	line-height: 1.4;
+	color: var(--color-text-faint);
+}
+
+.gui-secret-fact-value {
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--color-text-muted);
+	overflow-wrap: anywhere;
+}
+
+/* `密钥 · N` 列头：计数在左、主操作在右，与下方列表同宽。 */
+.gui-secret-listhead {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+	margin-top: var(--space-5);
+	margin-bottom: var(--space-2);
+}
+
+.gui-secret-count {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+/* 添加 / 替换共用的表单：同一张面，字段用一条 224px 标签列排布（设置页既有
+ * 字段行语法），动作在底部右侧成组，不再是一条条上下堆叠的输入框。 */
+.gui-secret-section .gui-secret-form {
+	align-items: stretch;
+	flex-direction: column;
+	gap: var(--space-3);
+	padding: var(--space-4);
+}
+
+.gui-secret-form-head {
+	display: flex;
+	align-items: baseline;
+	gap: var(--space-2);
+}
+
+.gui-secret-form-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-secret-form .gui-secret-field {
+	display: grid;
+	grid-template-columns: 152px minmax(0, 1fr);
+	grid-template-areas: "label control" "hint control";
+	column-gap: var(--space-4);
+	row-gap: 2px;
+	align-items: center;
+}
+
+.gui-secret-field-label {
+	grid-area: label;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.3;
+	color: var(--color-text);
+}
+
+.gui-secret-field-hint {
+	grid-area: hint;
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--color-text-muted);
+}
+
+/* 字段本体：高度、圆角、填充与焦点环全部取自共享控件 token，与设置页其它
+ * 字段行是同一套表层，不再各自派生。 */
+.gui-secret-input {
+	grid-area: control;
+	width: 100%;
+	height: var(--control-height-field);
+	padding: 0 10px;
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--control-hairline);
+	background: var(--control-fill);
+	box-shadow: var(--control-rim);
+	color: var(--color-text);
+	font-size: var(--control-font-size);
+	transition:
+		border-color 140ms ease,
+		background-color 140ms ease;
+}
+
+.gui-secret-input--name,
+.gui-secret-form input[data-secret-field="value"] {
+	font-family: var(--font-mono);
+}
+
+.gui-secret-input:hover:not(:disabled) {
+	background: var(--control-fill-hover);
+}
+
+.gui-secret-input:focus-visible {
+	outline: none;
+	border-color: var(--control-focus-border);
+	box-shadow: var(--control-rim), var(--control-focus-ring);
+}
+
+.gui-secret-input:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+/* 底部：作用域提示在左、取消/保存在右，右侧成组而不是两个落单按钮。 */
+.gui-secret-form-foot {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-3);
+	padding-top: var(--space-1);
+}
+
+.gui-secret-form-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+/* 失败原因整行铺开：daemon 的原话完整可读，不被按钮挤压。 */
+.gui-secret-form-error {
+	padding: var(--space-2) 10px;
+	border-radius: var(--radius-lg);
+	border: 1px solid color-mix(in oklab, var(--color-danger) 35%, var(--border));
+	background: color-mix(in oklab, var(--color-danger) 10%, transparent);
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--color-danger);
+	overflow-wrap: anywhere;
+}
+
+/* 密钥行：同一张 L1 面，名字/范围在上、用途在中、行尾是最后使用与两个动作。
+ * 行内不再自己画边框或底色。 */
+.gui-secret-section .gui-secret-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+}
+
+.gui-secret-section .gui-secret-row {
+	align-items: center;
+	gap: var(--space-3);
+	margin-bottom: 0;
+	padding: 10px var(--space-4);
+}
+
+.gui-secret-row-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 26px;
+	height: 26px;
+	border-radius: var(--radius-md);
+	color: var(--color-text-faint);
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+.gui-secret-row-main {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.gui-secret-row-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+/* 名字是行的身份：等宽字体（它同时就是环境变量后缀），过长省略。 */
+.gui-secret-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-mono);
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-text);
+}
+
+.gui-secret-row-purpose {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+.gui-secret-row-meta {
+	flex: none;
+	font-size: 11px;
+	color: var(--color-text-faint);
+	white-space: nowrap;
+}
+
+/* 行内动作：常规与键盘焦点都可用，不靠悬停才出现——删除是不可逆操作，
+ * 藏起来只会让人误点替换。 */
+.gui-secret-row-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+	flex: none;
+}
+
+/* 图标按钮：正方形触达区，与同行的文本按钮共享高度。只在本页收窄——全局
+ * `.gui-btn-icon` 还服务面板、预览和笔记，改它会连带改变那些表面的几何。 */
+.gui-secret-section .gui-btn-icon {
+	padding: 0;
+	min-width: var(--control-height-sm);
+	justify-content: center;
+}
+
+/* 空态：不是一句灰字，而是说明请求卡片长什么样——标题 + 一段做法。列表为空
+ * 时它替代列表位，仍与状态卡同宽。 */
+.gui-secret-empty {
+	padding: var(--space-4);
+	border-radius: var(--radius-lg);
+	border: 1px dashed color-mix(in oklab, var(--border) 80%, transparent);
+	background: color-mix(in oklab, var(--color-surface-raised) 40%, transparent);
+}
+
+.gui-secret-empty-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-secret-empty-body {
+	margin: var(--space-1) 0 0;
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
+.gui-secret-loading {
+	padding: var(--space-3) 0;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-muted);
+}
+
+/* 读取失败 / 离线 / 动作失败：一行提示加可选重试，贴在该区块上方。 */
+.gui-secret-warning {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	margin-top: var(--space-3);
+	padding: var(--space-2) 10px;
+	border-radius: var(--radius-lg);
+	border: 1px solid color-mix(in oklab, var(--color-danger) 30%, var(--border));
+	background: color-mix(in oklab, var(--color-danger) 8%, transparent);
+	font-size: 12px;
+	line-height: 1.45;
+	color: var(--color-text);
+}
+
+.gui-secret-warning-text {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+	.gui-secret-facts {
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--space-3);
+	}
+
+	.gui-secret-form .gui-secret-field {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-areas: "label" "control" "hint";
+		align-items: start;
+	}
+
+	.gui-secret-section .gui-secret-row {
+		flex-wrap: wrap;
+	}
+
+	.gui-secret-row-meta {
+		order: 3;
+	}
+}
+

@@ -7400,10 +7400,20 @@ export const settings = {
 	"settings.memoryWorkspaceEmptyHint": "The local summary pipeline has not written memory files yet.",
 	"settings.memoryStatusDescription": "Live backend status and maintenance actions.",
 	"settings.secrets": "Secrets",
+	"settings.secretsDescription": "Values the agent can use without ever reading them.",
 	"settings.secretsEncrypted": "Encrypted (local master key)",
 	"settings.secretsEncryptedDescription":
-		"Values are decrypted only on this machine; the agent uses them in its shell as $MUSEPI_SECRET_<NAME>. The model only sees a locally generated placeholder (named NAME), never the real value.",
-	"settings.secretsStoredCount": "Stored secrets: {count}",
+		"Every value is an AES-256-GCM envelope under this machine's profile master key. There is no plaintext mode, and a value is only decrypted here.",
+	"settings.secretsWhereTitle": "On disk",
+	"settings.secretsWhereValue":
+		"agent-secrets/ under this profile's agent directory, owner-only files. The vault holds name, purpose, scope and the encrypted value — never a readable value.",
+	"settings.secretsBashTitle": "In the shell",
+	"settings.secretsBashValue":
+		"Only a bash child process receives $MUSEPI_SECRET_<NAME>. Tool output that would print the value shows [secret:NAME] instead.",
+	"settings.secretsModelTitle": "What the model sees",
+	"settings.secretsModelValue":
+		"A keyed placeholder for provider requests (name plus a local hash), and name, purpose, scope and availability from list_secrets. Never the value.",
+	"settings.secretsStoredCount": "Secrets · {count}",
 	"settings.secretsAdd": "Add secret",
 	"settings.secretsAddTitle": "New secret",
 	"settings.secretsReplaceTitle": "Replace value",
@@ -7416,11 +7426,14 @@ export const settings = {
 	"settings.secretsPurpose": "Purpose",
 	"settings.secretsPurposePlaceholder": "What the agent uses it for",
 	"settings.secretsScope": "Scope",
-	"settings.secretsScopeAll": "All projects",
+	"settings.secretsScopeAll": "Every session",
 	"settings.secretsLastUsed": "Last used {when}",
 	"settings.secretsNeverUsed": "Never used",
 	"settings.secretsNoPurpose": "No purpose recorded",
 	"settings.secretsEmpty": "No secrets yet. The agent asks with a card when it needs one.",
+	"settings.secretsEmptyTitle": "No secrets yet",
+	"settings.secretsEmptyBody":
+		"When a tool call needs a credential the agent does not have, it parks the call and shows a request card above the composer. It submits the name and purpose only; you type the value there, and it is stored for later calls.",
 	"settings.secretsReplace": "Replace value",
 	"settings.secretsDelete": "Delete",
 	"settings.secretsDeleteConfirm":
