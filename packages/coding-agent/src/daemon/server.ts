@@ -2209,8 +2209,16 @@ export class DaemonServer {
 				// 子代理数(侧栏会话行展开):来自磁盘名册的父子关系,而不是注册表
 				// ——一次性子代理跑完即 unregister,注册表口径会让历史会话的
 				// chevron 消失,子会话再也展不开。
+				//
+				// TWO hazards, both covered by the comment rather than a silent change:
+				//  - it is computed over the WHOLE listing, not over `rows`: a
+				//    `sessionId`-scoped read would otherwise report `agentCount: 0`
+				//    for every row, silently changing an existing field's meaning
+				//    on a reused route (the chat capsule reads exactly that way);
+				//  - advisor transcripts are children too but are not task
+				//    subagents, so they never inflate the chevron count.
 				const subagentCounts = new Map<string, number>();
-				for (const r of rows) {
+				for (const r of listed) {
 					if (r.subagent !== true || r.advisor === true || !r.parentId) continue;
 					subagentCounts.set(r.parentId, (subagentCounts.get(r.parentId) ?? 0) + 1);
 				}

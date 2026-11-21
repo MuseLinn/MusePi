@@ -6370,6 +6370,21 @@ body.gui-resizing .gui-pane-right {
 .gui-fade-scroll[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
 	mask-image: linear-gradient(to top, transparent 0, #000 24px);
 }
+/* The Agent tab's scroller drops only the TOP feather (2026-11-22): the tab's
+ * identity head is `position: sticky; top: 0`, i.e. it sits exactly where the
+ * 20px top stop fades, so the mask dimmed the top third of its 64px orb and
+ * washed out the band's own edge. A pinned, opaque band has nothing to soften
+ * there — the content never shows through at the top edge — while the bottom
+ * feather still tells the reader the metadata continues. Scoped to the pane's
+ * own container by ancestry; every other `FadeScroll` keeps both stops.
+ * Covered by test/agent-info-head-geometry.test.ts, which samples the real
+ * container's pixels. */
+.gui-fade-scroll:has(> .gui-agent-info)[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent 100%);
+}
+.gui-fade-scroll:has(> .gui-agent-info)[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: none;
+}
 /* ── 横向内容边界羽化(2026-09-27:全局滚动容器羽化通用化)───────────
  * 与纵向同配方(useScrollShadow 的 data-left/right-scroll 属性),覆盖
  * 桌面端全部横向滚动容器:模型/扩展中心/多实例 tab 条、主题代码预览、
