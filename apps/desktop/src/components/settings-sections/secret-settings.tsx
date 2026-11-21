@@ -403,7 +403,13 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 				</div>
 			)}
 
-			{form && (
+			{/* One body, never two: the open form replaces the rows/empty state
+			 * instead of stacking above them. `密钥 · N` stays visible because it
+			 * is a fact about the list, and the add action is disabled while a
+			 * form is open (a second form is not a state this page has). */}
+			{loading ? (
+				<div className="gui-secret-loading">{t("settings.loading")}</div>
+			) : form ? (
 				<SecretForm
 					form={form}
 					busy={busy}
@@ -412,10 +418,6 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 					onCancel={closeForm}
 					onSubmit={() => void submitForm()}
 				/>
-			)}
-
-			{loading ? (
-				<div className="gui-secret-loading">{t("settings.loading")}</div>
 			) : !listKnown ? null : entries.length === 0 ? (
 				<div className="gui-secret-empty">
 					<div className="gui-secret-empty-title">{t("settings.secretsEmptyTitle")}</div>

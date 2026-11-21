@@ -7095,7 +7095,7 @@ export const settings = {
 		"只有 bash 子进程会拿到 $MUSEPI_SECRET_<NAME>。工具输出若会打印该值，会显示为 [secret:NAME]。",
 	"settings.secretsModelTitle": "模型能看到什么",
 	"settings.secretsModelValue":
-		"发给模型服务的请求里是可逆占位符（名称加本机生成的哈希）；list_secrets 只返回名称、用途、范围与可用性。真实值从不出现。",
+		"发给模型服务的请求里是本机密钥生成的占位符（名称加本机生成的哈希，对模型不可还原）；list_secrets 只返回名称、用途、范围与可用性。真实值从不出现。",
 	"settings.secretsStoredCount": "密钥 · {count}",
 	"settings.secretsAdd": "添加密钥",
 	"settings.secretsAddTitle": "添加密钥",

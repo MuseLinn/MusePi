@@ -236,6 +236,41 @@ describe("设置页密钥", () => {
 		expect(scope.querySelector('[data-secret-name="GITHUB_TOKEN"]')).toBeNull();
 	});
 
+	test("状态模型：表单打开时独占正文，不与行列表或空态并存", async () => {
+		// 已存 + 打开表单：只有表单，列表行和空态都不渲染。
+		const withRows = new FakeRpc();
+		withRows.responses.set("secret.status", { mode: "encrypted", count: 2 });
+		withRows.responses.set("secret.list", {
+			entries: [secretEntry(), secretEntry({ name: "STRIPE_KEY" })],
+			count: 2,
+		});
+		const storedScope = await mount(withRows);
+		expect(storedScope.querySelectorAll("[data-secret-name]")).toHaveLength(2);
+
+		await act(async () => buttonByText(storedScope, "添加密钥").click());
+		expect(storedScope.querySelector("form[data-secret-form]")).not.toBeNull();
+		expect(storedScope.querySelectorAll("[data-secret-name]")).toHaveLength(0);
+		// 计数行仍可见（列表事实），但添加动作在表单打开时禁用，避免叠出第二个表单。
+		expect(storedScope.textContent).toContain("密钥 · 2");
+		expect(buttonByText(storedScope, "添加密钥").disabled).toBe(true);
+
+		// 空库 + 打开表单：只有表单，不再出现「还没有密钥」。
+		const empty = new FakeRpc();
+		empty.responses.set("secret.status", { mode: "encrypted", count: 0 });
+		empty.responses.set("secret.list", { entries: [], count: 0 });
+		const emptyScope = await mount(empty);
+		expect(emptyScope.textContent).toContain("还没有密钥");
+
+		await act(async () => buttonByText(emptyScope, "添加密钥").click());
+		expect(emptyScope.querySelector("form[data-secret-form]")).not.toBeNull();
+		expect(emptyScope.textContent).not.toContain("还没有密钥");
+		expect(emptyScope.querySelector(".gui-secret-empty")).toBeNull();
+		// 关闭表单后回到空态，两种正文不会同时存在。
+		await act(async () => buttonByText(emptyScope, "取消").click());
+		expect(emptyScope.querySelector("form[data-secret-form]")).toBeNull();
+		expect(emptyScope.textContent).toContain("还没有密钥");
+	});
+
 	test("表单字段行消费共享的 gui-settings-field 原语，不再是本页私有的字段语法", async () => {
 		const fake = new FakeRpc();
 		fake.responses.set("secret.status", { mode: "encrypted", count: 0 });

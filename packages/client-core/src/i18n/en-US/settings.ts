@@ -7412,7 +7412,7 @@ export const settings = {
 		"Only a bash child process receives $MUSEPI_SECRET_<NAME>. Tool output that would print the value shows [secret:NAME] instead.",
 	"settings.secretsModelTitle": "What the model sees",
 	"settings.secretsModelValue":
-		"A keyed placeholder for provider requests (name plus a local hash), and name, purpose, scope and availability from list_secrets. Never the value.",
+		"A keyed placeholder for provider requests (name plus a local hash, not reversible by the model), and name, purpose, scope and availability from list_secrets. Never the value.",
 	"settings.secretsStoredCount": "Secrets · {count}",
 	"settings.secretsAdd": "Add secret",
 	"settings.secretsAddTitle": "New secret",
