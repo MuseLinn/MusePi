@@ -795,7 +795,7 @@
 	cursor: pointer;
 }
 
-.tr-ui-repair:hover {
+.tr-ui-repair:hover:not(:disabled) {
 	border-color: var(--accent);
 	color: var(--accent);
 }

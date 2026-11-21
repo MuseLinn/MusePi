@@ -1,5 +1,5 @@
 # Consistency record for ui-blocks.md / ui-blocks.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/ui-blocks
-ui-blocks.md: 15a8d6d37f0028e6b853e119eb78f44b302b61fe
-ui-blocks.zh-CN.md: 9343b0897d5e27ef60cedb6813ed46cdb6adc46f
+ui-blocks.md: 25f1284d4a4920e9415eeaea6aaa3d38ae2c093a
+ui-blocks.zh-CN.md: 925507415f086afcc31576930d0ae044fbeefffd
