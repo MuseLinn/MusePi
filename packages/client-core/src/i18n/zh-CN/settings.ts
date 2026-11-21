@@ -7113,7 +7113,6 @@ export const settings = {
 	"settings.secretsLastUsed": "最后使用 {when}",
 	"settings.secretsNeverUsed": "从未使用",
 	"settings.secretsNoPurpose": "未填写用途",
-	"settings.secretsEmpty": "还没有密钥。Agent 需要时会弹卡片。",
 	"settings.secretsEmptyTitle": "还没有密钥",
 	"settings.secretsEmptyBody":
 		"当某次工具调用需要你还没保存的凭据时，Agent 会暂停这次调用，在输入框上方弹出请求卡片。它只提交名称与用途，值由你在卡片里输入，之后保存下来供后续调用使用。",

@@ -164,52 +164,58 @@ function SecretForm({
 				{form.mode === "replace" && <span className="gui-secret-name">{form.name}</span>}
 			</div>
 			{form.mode === "add" && (
-				<label className="gui-secret-field">
-					<span className="gui-secret-field-label">{t("settings.secretsName")}</span>
-					<input
-						className="gui-input gui-secret-input gui-secret-input--name"
-						data-secret-field="name"
-						value={form.name}
-						placeholder={t("settings.secretsNamePlaceholder")}
-						spellCheck={false}
-						autoComplete="off"
-						disabled={busy}
-						onChange={event => onChange({ name: event.target.value })}
-					/>
-					<span className="gui-secret-field-hint">{t("settings.secretsNameHint")}</span>
+				<label className="gui-settings-field">
+					<span className="gui-settings-field-label">{t("settings.secretsName")}</span>
+					<span className="gui-settings-field-hint">{t("settings.secretsNameHint")}</span>
+					<span className="gui-settings-field-control">
+						<input
+							className="gui-secret-input gui-secret-input--mono"
+							data-secret-field="name"
+							value={form.name}
+							placeholder={t("settings.secretsNamePlaceholder")}
+							spellCheck={false}
+							autoComplete="off"
+							disabled={busy}
+							onChange={event => onChange({ name: event.target.value })}
+						/>
+					</span>
 				</label>
 			)}
-			<label className="gui-secret-field">
-				<span className="gui-secret-field-label">{t("settings.secretsValue")}</span>
-				<input
-					// Masked control; no reveal affordance on this page.
-					type="password"
-					className="gui-input gui-secret-input"
-					data-secret-field="value"
-					value={form.value}
-					placeholder={t("settings.secretsValuePlaceholder")}
-					spellCheck={false}
-					autoComplete="new-password"
-					disabled={busy}
-					onChange={event => onChange({ value: event.target.value })}
-				/>
-				<span className="gui-secret-field-hint">{t("settings.secretsValueHint")}</span>
+			<label className="gui-settings-field">
+				<span className="gui-settings-field-label">{t("settings.secretsValue")}</span>
+				<span className="gui-settings-field-hint">{t("settings.secretsValueHint")}</span>
+				<span className="gui-settings-field-control">
+					<input
+						// Masked control; no reveal affordance on this page.
+						type="password"
+						className="gui-secret-input gui-secret-input--mono"
+						data-secret-field="value"
+						value={form.value}
+						placeholder={t("settings.secretsValuePlaceholder")}
+						spellCheck={false}
+						autoComplete="new-password"
+						disabled={busy}
+						onChange={event => onChange({ value: event.target.value })}
+					/>
+				</span>
 			</label>
 			{form.mode === "add" && (
-				<label className="gui-secret-field">
-					<span className="gui-secret-field-label">{t("settings.secretsPurpose")}</span>
-					<input
-						className="gui-input gui-secret-input"
-						data-secret-field="purpose"
-						value={form.purpose}
-						placeholder={t("settings.secretsPurposePlaceholder")}
-						disabled={busy}
-						onChange={event => onChange({ purpose: event.target.value })}
-					/>
+				<label className="gui-settings-field">
+					<span className="gui-settings-field-label">{t("settings.secretsPurpose")}</span>
+					<span className="gui-settings-field-control">
+						<input
+							className="gui-secret-input"
+							data-secret-field="purpose"
+							value={form.purpose}
+							placeholder={t("settings.secretsPurposePlaceholder")}
+							disabled={busy}
+							onChange={event => onChange({ purpose: event.target.value })}
+						/>
+					</span>
 				</label>
 			)}
 			<div className="gui-secret-form-foot">
-				<span className="gui-secret-field-hint">
+				<span className="gui-settings-field-hint">
 					{t("settings.secretsScope")}: {t("settings.secretsScopeAll")}
 				</span>
 				<div className="gui-secret-form-actions">

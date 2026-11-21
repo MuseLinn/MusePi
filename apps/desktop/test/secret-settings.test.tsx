@@ -236,6 +236,27 @@ describe("设置页密钥", () => {
 		expect(scope.querySelector('[data-secret-name="GITHUB_TOKEN"]')).toBeNull();
 	});
 
+	test("表单字段行消费共享的 gui-settings-field 原语，不再是本页私有的字段语法", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("secret.status", { mode: "encrypted", count: 0 });
+		fake.responses.set("secret.list", { entries: [], count: 0 });
+
+		const scope = await mount(fake);
+		await act(async () => buttonByText(scope, "添加密钥").click());
+
+		// 每一行都是共享原语：标签 / 提示挂在 grid area，控件在 control 格里。
+		const fields = [...scope.querySelectorAll(".gui-settings-field")];
+		expect(fields.length).toBe(3);
+		for (const field of fields) {
+			expect(field.querySelector(".gui-settings-field-label")).not.toBeNull();
+			const control = field.querySelector(".gui-settings-field-control");
+			expect(control?.querySelector("input")).not.toBeNull();
+		}
+		// 页面私有的那套字段类不得再出现（否则就是第二份近似语法）。
+		expect(scope.querySelector(".gui-secret-field")).toBeNull();
+		expect(scope.querySelector(".gui-secret-field-label")).toBeNull();
+	});
+
 	test("添加表单提交名字、值和用途，值输入已遮罩且提交后不回显", async () => {
 		const fake = new FakeRpc();
 		fake.responses.set("secret.status", { mode: "encrypted", count: 0 });

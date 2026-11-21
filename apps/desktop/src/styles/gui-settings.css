@@ -9060,33 +9060,30 @@ body.gui-resizing {
 	color: var(--color-text);
 }
 
-.gui-secret-form .gui-secret-field {
-	display: grid;
-	grid-template-columns: 152px minmax(0, 1fr);
-	grid-template-areas: "label control" "hint control";
-	column-gap: var(--space-4);
-	row-gap: 2px;
-	align-items: center;
+.gui-secret-form .gui-settings-field {
+	/* 共享字段行原语：224px 标签列 + `--ui-font-size` 标签 + 12.5px 提示，
+	 * 与设置页其它字段同一套语法（gui-chat.css 中的 .gui-settings-field*）。
+	 * 本页只覆盖两条：表单里字段行不再自带纵向 padding（间距由表单 gap 给），
+	 * 且控件格要能放下铺满宽度的输入框。 */
+	padding: 0;
 }
 
-.gui-secret-field-label {
-	grid-area: label;
-	font-size: var(--ui-font-size-sm);
-	line-height: 1.3;
-	color: var(--color-text);
+/* 共享的控件格是 `display:flex; justify-content:flex-end`，为下拉/分段这类
+ * 内容宽度控件设计；本页的输入框铺满整列，因此让它吃掉控件格的剩余宽度。
+ * 网格归属仍由原语的 grid-area 决定，不另立一份字段语法。 */
+.gui-secret-form .gui-settings-field-control {
+	justify-content: stretch;
 }
 
-.gui-secret-field-hint {
-	grid-area: hint;
-	font-size: 11.5px;
-	line-height: 1.4;
-	color: var(--color-text-muted);
+.gui-secret-form .gui-settings-field-control > .gui-secret-input {
+	flex: 1 1 auto;
+	min-width: 0;
 }
 
 /* 字段本体：高度、圆角、填充与焦点环全部取自共享控件 token，与设置页其它
- * 字段行是同一套表层，不再各自派生。 */
+ * 字段行是同一套表层，不再各自派生。排布由外层 `.gui-settings-field-control`
+ * 的网格格位决定，本类只管输入框自己的表层。 */
 .gui-secret-input {
-	grid-area: control;
 	width: 100%;
 	height: var(--control-height-field);
 	padding: 0 10px;
@@ -9101,8 +9098,7 @@ body.gui-resizing {
 		background-color 140ms ease;
 }
 
-.gui-secret-input--name,
-.gui-secret-form input[data-secret-field="value"] {
+.gui-secret-input--mono {
 	font-family: var(--font-mono);
 }
 
@@ -9288,7 +9284,7 @@ body.gui-resizing {
 		gap: var(--space-3);
 	}
 
-	.gui-secret-form .gui-secret-field {
+	.gui-secret-form .gui-settings-field {
 		grid-template-columns: minmax(0, 1fr);
 		grid-template-areas: "label" "control" "hint";
 		align-items: start;

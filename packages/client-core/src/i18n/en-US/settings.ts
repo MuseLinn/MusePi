@@ -7430,7 +7430,6 @@ export const settings = {
 	"settings.secretsLastUsed": "Last used {when}",
 	"settings.secretsNeverUsed": "Never used",
 	"settings.secretsNoPurpose": "No purpose recorded",
-	"settings.secretsEmpty": "No secrets yet. The agent asks with a card when it needs one.",
 	"settings.secretsEmptyTitle": "No secrets yet",
 	"settings.secretsEmptyBody":
 		"When a tool call needs a credential the agent does not have, it parks the call and shows a request card above the composer. It submits the name and purpose only; you type the value there, and it is stored for later calls.",
