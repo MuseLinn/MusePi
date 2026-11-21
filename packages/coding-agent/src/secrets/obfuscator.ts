@@ -243,12 +243,11 @@ export class SecretObfuscator {
 	addSecret(content: string, friendlyName?: string): void {
 		if (content.length === 0) return;
 		if (this.#plainMappings.has(content) || this.#replaceMappings.has(content)) return;
-		// Resolve a human-readable label to the agent secret NAME. Collision and
-		// sanitization rules are the constructor's, so a name that embeds the
-		// value itself cannot leak through the placeholder prefix.
-		const requestedFriendlyName = friendlyName ? sanitizeSecretFriendlyName(friendlyName) : undefined;
+		// Pass the RAW label, exactly like the constructor path:
+		// `#createPlaceholder` both sanitizes it and checks the raw string against
+		// configured secrets/regexes. Pre-sanitizing here would hide collisions.
 		this.#configuredSecretValues.add(content);
-		const placeholder = this.#createPlaceholder(content, requestedFriendlyName);
+		const placeholder = this.#createPlaceholder(content, friendlyName);
 		const index = this.#nextIndex++;
 		this.#plainMappings.set(content, index);
 		this.#obfuscateMappings.set(index, { secret: content, placeholder });

@@ -13,24 +13,19 @@
  * here rather than in callers.
  */
 
+import * as path from "node:path";
+import { logger } from "@musepi/pi-utils";
 import { agentSecretEnvName, getAgentSecretStore, type SecretEntryView, type SecretScope } from "./agent-store";
 import type { SecretEntry, SecretObfuscator } from "./obfuscator";
 
 /** A live obfuscator per session, weakly held so a disposed session is collectable. */
 const obfuscators = new Map<string, Set<WeakRef<SecretObfuscator>>>();
 
-/** Session-scoped grants for `secret-request` kind "allow". */
-const granted = new Map<string, Set<string>>();
-
 /** Names already touched in this process (one metadata write per name). */
 const touched = new Map<string, Set<string>>();
 
 function agentKey(agentDir: string): string {
-	return agentDir;
-}
-
-function sessionKey(agentDir: string, sessionId: string | null | undefined): string {
-	return `${agentDir}\0${sessionId ?? "<no-session>"}`;
+	return path.resolve(agentDir);
 }
 
 /** Stored agent secrets as constructor entries for a session obfuscator. */
@@ -43,9 +38,13 @@ export async function loadAgentSecretEntries(agentDir: string): Promise<SecretEn
 			mode: "obfuscate" as const,
 			friendlyName: name,
 		}));
-	} catch {
-		// An unreadable store must not block session startup; the tools and bash
-		// injection degrade to "no available secret" and the user sees the form.
+	} catch (error) {
+		// A failed load is a degraded security control, not a normal empty store.
+		// Startup must continue, but the failure has to be observable.
+		logger.warn("Agent secrets could not be loaded into the session obfuscator", {
+			agentDir: agentKey(agentDir),
+			error: error instanceof Error ? error.message : String(error),
+		});
 		return [];
 	}
 }
@@ -81,26 +80,6 @@ export function notifyAgentSecretSaved(agentDir: string, name: string, value: st
 	}
 }
 
-/** Record a session-level allow for an already-stored value. */
-export function grantAgentSecret(agentDir: string, sessionId: string | null | undefined, name: string): void {
-	const key = sessionKey(agentDir, sessionId);
-	let set = granted.get(key);
-	if (!set) {
-		set = new Set();
-		granted.set(key, set);
-	}
-	set.add(name);
-}
-
-export function isAgentSecretGranted(agentDir: string, sessionId: string | null | undefined, name: string): boolean {
-	return granted.get(sessionKey(agentDir, sessionId))?.has(name) === true;
-}
-
-/** Drop grants when a session goes away (best effort; process memory only). */
-export function forgetAgentSecretSession(agentDir: string, sessionId: string | null | undefined): void {
-	granted.delete(sessionKey(agentDir, sessionId));
-}
-
 /** Child-process environment for a bash call: `MUSEPI_SECRET_<NAME>` → value. */
 export interface AgentSecretSnapshot {
 	/** Only values that reached the child environment. */
@@ -114,16 +93,21 @@ export interface AgentSecretSnapshot {
  * redactor. The synchronous part matters because output streaming callbacks
  * cannot await a store read on every chunk.
  */
-export async function agentSecretSnapshot(agentDir: string): Promise<AgentSecretSnapshot> {
+export async function agentSecretSnapshot(agentDir: string, cwd: string): Promise<AgentSecretSnapshot> {
 	const store = getAgentSecretStore(agentDir);
 	const values = await store.values();
-	let touchedNames = touched.get(agentDir);
+	const key = agentKey(agentDir);
+	let touchedNames = touched.get(key);
 	if (!touchedNames) {
 		touchedNames = new Set();
-		touched.set(agentDir, touchedNames);
+		touched.set(key, touchedNames);
 	}
 	const env: Record<string, string> = {};
-	const sorted = [...values].sort((a, b) => b.value.length - a.value.length);
+	// P0 scope is `"all"`; the filter is the single seam a future workspace/bot
+	// scope extends, rather than every injection path re-deciding.
+	const sorted = values
+		.filter(({ scope }) => scopeMatches(scope, cwd))
+		.sort((a, b) => b.value.length - a.value.length);
 	for (const { name, value } of sorted) {
 		env[agentSecretEnvName(name)] = value;
 		// lastUsedAt is best-effort: a metadata failure must not break the command.
@@ -141,20 +125,6 @@ export async function agentSecretSnapshot(agentDir: string): Promise<AgentSecret
 			return output;
 		},
 	};
-}
-
-export async function agentSecretEnv(agentDir: string): Promise<Record<string, string>> {
-	return (await agentSecretSnapshot(agentDir)).env;
-}
-
-/** Scrub stored values from bash output before it becomes a tool result. */
-export async function redactAgentSecretText(agentDir: string, text: string): Promise<string> {
-	if (text.length === 0) return text;
-	try {
-		return await getAgentSecretStore(agentDir).redact(text);
-	} catch {
-		return text;
-	}
 }
 
 /** Names that are available right now (decryptable), for `list_secrets`. */

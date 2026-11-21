@@ -33,7 +33,7 @@ scope:
 1. 读取元数据 sidecar，并尝试解密每个列出的条目。
 2. 信封无法解密的条目仍会列出，标记为
    `unavailable: value unreadable`，方便用户通过
-   [`request_secret`](./request_secret.zh-CN.md) 或「设置 → 密钥」替换。
+   [`request_secret`](./request_secret.zh-CN.md) 或「设置 → 密钥」重新保存该值。
 
 ## 参见
 - [`docs/secrets.md`](../secrets.zh-CN.md) —— 存储布局、RPC、scope、限制

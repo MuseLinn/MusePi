@@ -23,7 +23,7 @@ import type {
 	ClientBridgeTerminalHandle,
 	ClientBridgeTerminalOutput,
 } from "../session/client-bridge";
-import { DEFAULT_MAX_BYTES, enforceInlineByteCap, streamTailUpdates, TailBuffer } from "../session/streaming-output";
+import { DEFAULT_MAX_BYTES, enforceInlineByteCap, TailBuffer } from "../session/streaming-output";
 import { renderStatusLine } from "../tui";
 import { CachedOutputBlock, markFramedBlockComponent, outputBlockContentWidth } from "../tui/output-block";
 import { getSixelLineMask } from "../utils/sixel";
@@ -403,6 +403,23 @@ function formatBashEnvAssignments(env: Record<string, unknown> | undefined): str
 		.sort(([a], [b]) => a.localeCompare(b))
 		.map(([key, value]) => `${key}="${escapeBashEnvValueForDisplay(value)}"`)
 		.join(" ");
+}
+
+/**
+ * Streaming update helper that redacts the ACCUMULATED tail, never a single
+ * chunk: a value split across two chunks is still visible to the redactor once
+ * both halves are in the tail. Callers keep the raw chunks in the buffer so the
+ * final result path can redact the complete output again.
+ */
+export function createRedactedTailStreamer(
+	tailBuffer: TailBuffer,
+	redact: (text: string) => string,
+	emit: (text: string) => void,
+): (chunk: string) => void {
+	return chunk => {
+		tailBuffer.append(chunk);
+		emit(redact(tailBuffer.text()));
+	};
 }
 
 function unescapePartialJsonString(value: string): string {
@@ -845,12 +862,10 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 						env: options.resolvedEnv,
 						artifactPath,
 						artifactId,
-						onChunk: chunk => {
-							const safeChunk = redact(chunk);
-							tailBuffer.append(safeChunk);
-							latestText = tailBuffer.text();
+						onChunk: createRedactedTailStreamer(tailBuffer, redact, text => {
+							latestText = text;
 							void reportProgress(latestText, { async: { state: "running", jobId, type: "bash" } });
-						},
+						}),
 						onMinimizedSave: originalText => saveBashOriginalArtifact(this.session, originalText),
 					});
 					const wallTimeMs = performance.now() - wallTimeStart;
@@ -1037,9 +1052,10 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 		// the caller env keeps a model-supplied `MUSEPI_SECRET_*` from shadowing
 		// the stored value; `process.env` is never touched. The snapshot's
 		// synchronous redactor scrubs the same values from every output path.
-		const secretSnapshot: AgentSecretSnapshot = await agentSecretSnapshot(this.session.settings.getAgentDir()).catch(
-			() => ({ env: {}, redact: (text: string) => text }),
-		);
+		const secretSnapshot: AgentSecretSnapshot = await agentSecretSnapshot(
+			this.session.settings.getAgentDir(),
+			this.session.cwd,
+		).catch(() => ({ env: {}, redact: (text: string) => text }));
 		const childEnv =
 			Object.keys(secretSnapshot.env).length > 0 ? { ...(resolvedEnv ?? {}), ...secretSnapshot.env } : resolvedEnv;
 		const redactOutput = (text: string): string => secretSnapshot.redact(text);
@@ -1499,7 +1515,9 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 					env: childEnv,
 					artifactPath,
 					artifactId,
-					onChunk: streamTailUpdates(tailBuffer, onUpdate),
+					onChunk: createRedactedTailStreamer(tailBuffer, redactOutput, text => {
+						onUpdate?.({ content: [{ type: "text", text }], details: {} as BashToolDetails });
+					}),
 					onMinimizedSave: originalText => saveBashOriginalArtifact(this.session, originalText),
 				});
 		const wallTimeMs = performance.now() - wallTimeStart;

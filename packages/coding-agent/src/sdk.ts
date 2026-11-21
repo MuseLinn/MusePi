@@ -177,7 +177,7 @@ import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
 import {
-	buildSecretObfuscator,
+	buildSessionSecretObfuscator,
 	deobfuscateSessionContext,
 	deobfuscateToolArguments,
 	obfuscateMessages,
@@ -1826,11 +1826,17 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	// key is resolved lazily per request via ModelRegistry.resolver.
 	const hasModelAuth = (candidate: Model): boolean => modelRegistry.hasConfiguredAuth(candidate);
 
-	// Load and create secret obfuscator early so resumed session state and prompt warnings
-	// reflect actual loaded secrets, not just the setting toggle.
-	const obfuscator: SecretObfuscator | undefined = settings.get("secrets.enabled")
-		? await buildSecretObfuscator(cwd, agentDir, options.agentDir)
-		: undefined;
+	// Load and create the secret obfuscator early so resumed session state and prompt
+	// warnings reflect actual loaded secrets, not just the setting toggle. Agent-card
+	// secrets are explicit user grants: the same single instance always includes them,
+	// even when the generic scanner is off (`secrets.enabled: false`). The provider
+	// boundary trusts `hasSecrets()` and never re-checks the setting.
+	const obfuscator: SecretObfuscator | undefined = await buildSessionSecretObfuscator(
+		cwd,
+		agentDir,
+		options.agentDir,
+		settings.get("secrets.enabled"),
+	);
 	const secretsEnabled = obfuscator?.hasSecrets() === true;
 
 	// An abnormal process exit after a non-terminal message tail is durable

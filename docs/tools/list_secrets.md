@@ -33,7 +33,7 @@ None.
 ## Flow
 1. Reads the metadata sidecar and attempts to decrypt each listed entry.
 2. An entry whose envelope cannot be decrypted stays listed as
-   `unavailable: value unreadable` so the user can replace it via
+   `unavailable: value unreadable` so the user can save the value again via
    [`request_secret`](./request_secret.md) or Settings → Secrets.
 
 ## See also

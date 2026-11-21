@@ -14,27 +14,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { isEnoent, logger } from "@musepi/pi-utils";
+import type { SecretEntryView, SecretScope, SecretStatus } from "@musepi/pi-wire";
 import { writeFileAtomically } from "../utils/atomic-file";
 import { deleteSecret as deleteEnvelope, encryptedStore, mergeSecret, readSecret } from "./encrypted-store";
 
-/** P0 has one audience. Workspace/bot scopes extend this union later. */
-export type SecretScope = "all";
+export type { SecretEntryView, SecretScope, SecretStatus };
 
-/** Public metadata shape — the daemon RPC and the settings page consume it. */
-export interface SecretEntryView {
-	name: string;
-	purpose: string;
-	scope: SecretScope;
-	createdAt: number;
-	updatedAt: number;
-	lastUsedAt?: number;
-}
-
-export interface SecretStatus {
-	mode: "encrypted";
-	count: number;
-}
-
+/** Store/internal view of an entry including its decrypted value. */
 export interface SecretValue extends SecretEntryView {
 	/** Decrypted value. Only store/runtime internals ever see this field. */
 	value: string;
@@ -210,14 +196,6 @@ export class AgentSecretStore {
 		return values?.[VALUE_KEY];
 	}
 
-	/** Metadata plus its decrypted value in one call; undefined if either is unusable. */
-	async get(name: string): Promise<SecretValue | undefined> {
-		const entry = await this.getEntry(name);
-		if (!entry) return undefined;
-		const value = await this.getValue(name);
-		return value === undefined ? undefined : { ...entry, value };
-	}
-
 	async set(name: string, value: string, purpose?: string, scope?: unknown): Promise<SecretEntryView> {
 		validateSecretName(name);
 		validateSecretValue(value);
@@ -271,16 +249,16 @@ export class AgentSecretStore {
 	}
 
 	/** Every decryptable entry, for bash child environments and redaction. */
-	async values(): Promise<Array<{ name: string; purpose: string; value: string }>> {
+	async values(): Promise<Array<{ name: string; purpose: string; scope: SecretScope; value: string }>> {
 		const metadata = await this.#readMetadata();
-		const out: Array<{ name: string; purpose: string; value: string }> = [];
+		const out: Array<{ name: string; purpose: string; scope: SecretScope; value: string }> = [];
 		for (const [name, entry] of Object.entries(metadata.entries)) {
 			const value = await this.getValue(name);
 			if (value === undefined) {
 				logger.warn("Agent secret could not be decrypted; skipping it", { name });
 				continue;
 			}
-			out.push({ name, purpose: entry.purpose, value });
+			out.push({ name, purpose: entry.purpose, scope: entry.scope, value });
 		}
 		return out.sort((a, b) => a.name.localeCompare(b.name));
 	}

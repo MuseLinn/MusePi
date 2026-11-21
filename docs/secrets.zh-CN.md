@@ -27,9 +27,11 @@ secrets:
 
 ## 工作原理
 
-1. 会话启动时，从两个来源收集密钥：
+1. 会话启动时，条目来自配置来源与 Agent 密钥存储：
    - **环境变量**：名称匹配常见密钥模式（`KEY`、`SECRET`、`TOKEN`、`PASSWORD`、`PASS`、`AUTH`、`CREDENTIAL`、`PRIVATE`、`OAUTH`），且值长度不少于 8 个字符
    - **`secrets.yml` 文件**（见下文）
+   - **内置凭据模式**（GitHub/GitLab/OpenAI 风格 Token），首次匹配时惰性解析
+   - **Agent 密钥**：通过 `request_secret` 卡片保存（始终加载，不依赖 `secrets.enabled`；见 [Agent 密钥](#agent-密钥)）
 
 2. 发给 LLM 的出站文本消息中，密钥值会被替换为确定性占位符，例如 `#AB12#`、`#AB12:L#` 或 `#GITHUBTOKEN_AB12:L#`。
 
@@ -167,15 +169,18 @@ P0 的 `scope` 为 `"all"`：每个已存储密钥对所有会话可用。worksp
 
 ### Bash 注入
 
-每个可解密的已存储条目都会以 `MUSEPI_SECRET_<NAME>` 进入每个 bash 子进程。值只存在于该子进程的环境里：
+每个可解密且 scope 与当前会话匹配的已存储条目，都会以 `MUSEPI_SECRET_<NAME>` 进入每个 bash 子进程（P0：`"all"`）。值只存在于该子进程的环境里：
 
 - 从不修改 `process.env`。
 - 模型通过 `env` 参数传入同名变量时，已存储的值会覆盖它。
-- 工具输出（前台结果、超时/取消错误、流式分块、异步作业文本、ACP 终端轮询）会把值替换为 `[secret:NAME]`。
+- 工具输出（前台结果、超时/取消错误、流式分块、异步作业文本、ACP 终端轮询）会把值替换为 `[secret:NAME]`。流式分块按累计 tail 脱敏，因此被切成两半的值仍会被替换。
+- 命令打印该变量时，`[secret:NAME]` 是预期的脱敏标记，不是命令失败；模型会被告知不要因此重试或报错。
 
 ### Provider 边界
 
-会话启动时，已存储的 Agent 密钥以 plain、obfuscate 模式条目加入会话的 `SecretObfuscator`，`friendlyName` 为密钥名。会话中途保存时，值会立即注册进每个活跃会话的 obfuscator。因此 provider 请求只会携带可逆占位符（如 `#GITHUBTOKEN_AB12:L#`），永不携带值。这条覆盖跟随 `secrets.enabled` 开关：关闭混淆时，bash 注入与工具输出清洗仍然生效，但 provider 边界替换不生效。
+会话启动时，已存储的 Agent 密钥以 plain、obfuscate 模式条目加入会话的 `SecretObfuscator`，`friendlyName` 为密钥名。会话中途保存时，值会立即注册进每个活跃会话的 obfuscator。因此 provider 请求只会携带可逆占位符（如 `#GITHUBTOKEN_AB12:L#`），永不携带值。
+
+Agent 密钥**始终**受覆盖：用户在安全检查卡中显式保存的值，与通用扫描特性是两份不同的授权。即使 `secrets.enabled=false`，会话也会构建 Agent 密钥 obfuscator。该开关只控制通用来源（环境变量扫描、`secrets.yml`、内置凭据模式）；关闭时这些来源不注册，但 Agent 卡片保存的值仍然注册。
 
 ### Daemon RPC
 
@@ -193,8 +198,9 @@ P0 的 `scope` 为 `"all"`：每个已存储密钥对所有会话可用。worksp
 
 - 短于 8 个字符的值会被拒绝（`Secret value must be at least 8 characters`）。混淆器只为至少 8 个字符的 plain 值生成可逆占位符，若允许 4 位 PIN，它会被原样发给模型。支持短密钥需要独立的 replace 模式实现，而不是绕过阈值。
 - P0 的 scope 为 `"all"`；按 workspace、按 bot 的 scope 是未来扩展。
-- 格式错误的键/值对仍需通过 `secret.set` 才能进入在值出现之前启动的会话；之后启动的会话会从磁盘加载。
-- Bash 的原始输出 artifact 由执行器在输出清洗之前写入，因此回显了值的命令可能把值留在该本地 artifact 文件里。值不会进入工具结果；若该 artifact 被读回模型上下文，provider 边界混淆仍会替换它。
+- 信封无法解密的条目仍会列为不可用。通过 `request_secret` 或「设置 → 密钥」重新保存该值来修复；不要手工编辑 sidecar。
+- 删除密钥会从磁盘和未来的 bash 注入中移除它，但运行中会话里已经存活的 obfuscator 会在该会话生命周期内继续替换这个旧值。这是有意为之：撤掉覆盖可能让已经出现过的值重新对 provider 可见。
+- Bash 的原始输出 artifact 由执行器在输出清洗之前写入，因此回显了值的命令可能把值留在该本地 artifact 文件里。值不会进入工具结果；若该 artifact 被读回模型上下文，provider 边界混淆（对 Agent 密钥始终生效）仍会替换它。
 - 信封与元数据是两次独立的原子写。两者之间崩溃可能留下孤儿加密值（不可见、无害），或留下一个已列出但值缺失的名字（显示为不可用）。
 
 ## 关键文件

@@ -4,11 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionUIContext } from "../src/extensibility/extensions/types";
 import { buildSecretObfuscator } from "../src/secrets";
-import {
-	forgetAgentSecretSession,
-	notifyAgentSecretSaved,
-	registerAgentSecretObfuscator,
-} from "../src/secrets/agent-runtime";
+import { notifyAgentSecretSaved, registerAgentSecretObfuscator } from "../src/secrets/agent-runtime";
 import {
 	type AgentSecretAnswer,
 	type AgentSecretRequest,
@@ -94,34 +90,24 @@ describe("request_secret tool", () => {
 		expect(await store.list()).toEqual([]);
 	});
 
-	it("asks once for a stored value and then returns immediately in the same session", async () => {
+	it("returns immediately for a stored, decryptable value without a second card", async () => {
 		const dir = makeDir();
 		const store = new AgentSecretStore(dir);
 		await store.set("API_TOKEN", VALUE, "curl");
 
-		let calls = 0;
-		const ui = secretUi(async request => {
-			calls++;
-			expect(request.kind).toBe("allow");
-			return { action: "allow" };
-		});
-		const tool = new RequestSecretTool(makeSession(dir, ui));
-		const first = await tool.execute("call-allow", { name: "API_TOKEN", purpose: "curl" });
-		expect(first.details?.status).toBe("available");
-		expect(textOf(first)).not.toContain(VALUE);
-
-		// A second call with a UI that refuses to answer must not re-open a card.
-		const silent = new RequestSecretTool(
+		// Saving was the consent: no per-session grant card, including after a
+		// restart (this session never granted anything).
+		const tool = new RequestSecretTool(
 			makeSession(dir, {
 				requestSecret: () => {
-					throw new Error("card must not reopen");
+					throw new Error("card must not reopen for a stored value");
 				},
 			} as unknown as ExtensionUIContext & AgentSecretUIContext),
 		);
-		const second = await silent.execute("call-again", { name: "API_TOKEN", purpose: "curl" });
-		expect(second.details?.status).toBe("available");
-		expect(calls).toBe(1);
-		forgetAgentSecretSession(dir, "session-1");
+		const result = await tool.execute("call-available", { name: "API_TOKEN", purpose: "curl" });
+		expect(result.details?.status).toBe("available");
+		expect(textOf(result)).toContain("$MUSEPI_SECRET_API_TOKEN");
+		expect(textOf(result)).not.toContain(VALUE);
 	});
 
 	it("refuses a host with no interactive secret channel", async () => {

@@ -41,21 +41,26 @@ The full contract — storage, scope, RPC, timeout and known limits — lives in
 
 ## Flow
 1. The tool validates the name and purpose.
-2. If the name is stored, decryptable and already granted in this session, it
-   returns the environment variable name immediately.
-3. Otherwise it sends a `secret-request` to the host UI: `kind:"fill"` when no
-   usable value exists, `kind:"allow"` when one is already stored.
+2. If the name is stored and decryptable, it returns the environment variable
+   name immediately. Saving was the consent: there is no second per-session
+   grant card, including after a restart.
+3. Otherwise it sends a `secret-request` to the host UI with `kind:"fill"`.
 4. The user types (or replaces) the value in the card and answers `save`, or
-   approves the stored value with `allow`, or cancels. The daemon persists a
-   `save` before the tool's promise settles; the tool only learns the action.
+   cancels. The daemon persists a `save` before the tool's promise settles; the
+   tool only learns the action.
 5. On success the value is available only as `$MUSEPI_SECRET_<NAME>` in bash
    child processes and is registered into the session obfuscator. The tool
    result never carries it.
+6. If a command prints the variable, the output shows `[secret:<NAME>]`. That
+   marker is expected redaction, not a failure; the model is told not to retry
+   or report an error because of it.
 
 ## Side Effects
-- Persists an encrypted value (save) or records a session-level grant (allow).
+- Persists an encrypted value (save).
 - Registers the value with live session obfuscators.
 - Cancelling and timeouts write nothing.
+- A stored value needs no session grant: later calls return the environment
+  variable name without reopening the card.
 
 ## See also
 - [`docs/secrets.md`](../secrets.md) — storage layout, RPCs, scope, limitations

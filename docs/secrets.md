@@ -15,9 +15,11 @@ secrets:
 
 ## How it works
 
-1. On session startup, secrets are collected from two sources:
+1. On session startup, entries come from configured sources and the agent secret store:
    - **Environment variables** whose names match common secret patterns (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PASS`, `AUTH`, `CREDENTIAL`, `PRIVATE`, `OAUTH`) with values >= 8 characters
    - **`secrets.yml` files** (see below)
+   - **Built-in credential patterns** (GitHub/GitLab/OpenAI-style tokens), matched lazily
+   - **Agent secrets** saved through the `request_secret` card (always loaded, independent of `secrets.enabled`; see [Agent secrets](#agent-secrets))
 
 2. Outbound text messages to the LLM have secret values replaced with deterministic placeholders like `#AB12#`, `#AB12:L#`, or `#GITHUBTOKEN_AB12:L#`.
 
@@ -167,13 +169,18 @@ Workspace/bot scopes are a future union extension, not a current field.
 ### Bash injection
 
 Every bash child process receives `MUSEPI_SECRET_<NAME>`, for every decryptable
-stored entry. The value is only in that child's environment:
+stored entry whose scope matches the session (P0: `"all"`). The value is only
+in that child's environment:
 
 - `process.env` is never modified.
 - A model-supplied `env` entry of the same name is overridden by the stored
   value.
 - Tool output (foreground, timeout/cancel errors, streamed chunks, async job
-  text, ACP terminal polls) replaces the value with `[secret:NAME]`.
+  text, ACP terminal polls) replaces the value with `[secret:NAME]`. Streamed
+  partials are redacted from the accumulated tail, so a value split across two
+  chunks is still replaced.
+- If a command prints the variable, `[secret:NAME]` is the expected marker, not
+  a command failure; the model is told not to retry or report an error for it.
 
 ### Provider boundary
 
@@ -181,9 +188,14 @@ At session start, stored agent secrets join the session's `SecretObfuscator` as
 plain obfuscate-mode entries with `friendlyName` = the secret name. A save
 mid-session registers the value into every live session's obfuscator
 immediately. Provider requests therefore carry a reversible placeholder such as
-`#GITHUBTOKEN_AB12:L#`, never the value. This coverage follows the
-`secrets.enabled` toggle: with obfuscation disabled, bash injection and tool
-output scrubbing still apply, but provider-boundary replacement does not.
+`#GITHUBTOKEN_AB12:L#`, never the value.
+
+Agent secrets are **always** covered: a value the user explicitly saved in the
+safety card is a separate grant from the generic scanning feature. The session
+builds an agent-secret obfuscator even when `secrets.enabled` is false. That
+toggle only controls the generic sources (environment scanning, `secrets.yml`,
+built-in credential patterns); with it off, those sources are not registered,
+while agent-card values still are.
 
 ### Daemon RPC
 
@@ -209,13 +221,18 @@ value.
   the model unredacted. Supporting short secrets requires a separate
   replace-mode implementation, not a threshold bypass.
 - P0 scope is `"all"`; per-workspace and per-bot scoping are future extensions.
-- Malformed key/value pairs still need `secret.set` to reach a session started
-  before the value existed; sessions started afterwards pick it up from disk.
+- An entry whose envelope cannot be decrypted stays listed as unavailable.
+  Save the value again through `request_secret` or Settings → Secrets to repair
+  it; do not edit the sidecar by hand.
+- Deleting a secret removes it from disk and from future bash injection, but an
+  obfuscator already live in a running session keeps replacing that old value
+  for the session's lifetime. This is intentional: removing coverage could make
+  an already-seen value provider-visible again.
 - Bash's raw-output artifact is written by the executor before output
   redaction, so a command that echoes a value can leave it in that local
   artifact file. The value never enters the tool result, and the
-  provider-boundary obfuscator still replaces it if the artifact is read back
-  into the model context.
+  provider-boundary obfuscator (always active for agent secrets) still replaces
+  it if the artifact is read back into the model context.
 - The envelope and metadata writes are separate atomic writes. A crash between
   them can leave an orphaned encrypted value (invisible, harmless) or a listed
   name whose value is missing (reported as unavailable).
