@@ -105,6 +105,9 @@ export async function runSessionReopen(options: SessionReopenOptions): Promise<S
 }
 
 export interface SessionOpenHooks {
+	/** Make this session the current intent. Called by `open` before the first
+	 *  `wanted` check; the attempt must never be the thing that records it. */
+	select: (sessionId: string) => void;
 	/** One open attempt; the scheduler re-issues it with backoff. */
 	open: (sessionId: string) => Promise<SessionOpenOutcome>;
 	/** The session the user currently wants; null on the welcome page. */
@@ -120,13 +123,19 @@ export interface SessionOpenHooks {
  * Owns every open intent for the app, so a user open and the reconnect restore
  * cannot undercut each other.
  *
+ * `open` is the user's pick: it records the intent through `select` before the
+ * first `wanted` check, because an intent recorded only inside the attempt
+ * would let the run cancel itself before that attempt ever runs (the reported
+ * "click another session, no request" failure). `restore` deliberately does
+ * not record anything — it only re-opens a session the screen already shows,
+ * and stops immediately when the user has moved on.
+ *
  * Every call starts a new run and supersedes the previous one. A replaced run
  * stops before its next attempt (never after), which is what keeps the newest
- * intent — the session the user just picked — from inheriting a cancellation:
- * the run it replaced cannot fail silently and leave the screen claiming a
- * session nobody is fetching. Runs that lose their generation do nothing at
- * all; the winner retries on its own bounded schedule and falls back to the
- * visible failure through `abandon` only when the attempts are used up.
+ * intent from inheriting a cancellation: the run it replaced cannot fail
+ * silently and leave the screen claiming a session nobody is fetching. The
+ * winner retries on its own bounded schedule and falls back to the visible
+ * failure through `abandon` only when the attempts are used up.
  */
 export class SessionOpenScheduler {
 	#generation = 0;
@@ -136,7 +145,19 @@ export class SessionOpenScheduler {
 		this.#hooks = hooks;
 	}
 
+	/** User-initiated open (row pick, create, deep link, tab): commits the pick
+	 *  first, then retries on the bounded schedule. */
 	open(sessionId: string): Promise<SessionReopenResult> {
+		this.#hooks.select(sessionId);
+		return this.#start(sessionId);
+	}
+
+	/** Reconnect restore of the session already on screen; never invents intent. */
+	restore(sessionId: string): Promise<SessionReopenResult> {
+		return this.#start(sessionId);
+	}
+
+	#start(sessionId: string): Promise<SessionReopenResult> {
 		const generation = ++this.#generation;
 		const stillWanted = (): boolean => this.#generation === generation && this.#hooks.wanted() === sessionId;
 		return runSessionReopen({

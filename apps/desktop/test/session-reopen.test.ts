@@ -129,10 +129,12 @@ test("a newer open that owns the session ends this restore", async () => {
 });
 
 // ── Scheduler: every open intent shares one bounded chain ────────────────
-// The app layer used to let a user-initiated open sit outside these retries:
-// it failed silently on "not connected" while cancelling the restore of the
-// session it replaced, leaving the sidebar on the new row and the transcript
-// on the old one. These cover the scheduler contract that closes that hole.
+// The app wires `select` to the same ref `wanted` reads (`selectedIdRef`) and
+// `open` to one RPC attempt. The scheduler must record a user's pick BEFORE
+// its first `wanted` check: an intent recorded only inside the attempt makes
+// the run cancel itself (zero requests) and, together with the replaced
+// restore, leaves both sessions unopened. These cover that order and the
+// restore/pick interleaving.
 
 /** Let a started run reach its first wait without touching real timers. */
 const flush = async (): Promise<void> => {
@@ -149,14 +151,77 @@ function gatedWait() {
 	return { wait, release: (): void => void gates.shift()?.(), pending: (): number => gates.length };
 }
 
+/** App-shaped scheduler: one mutable selection drives both `select` and
+ *  `wanted`, exactly like `selectedIdRef` in app.tsx. */
+function harness(
+	open: (sessionId: string) => Promise<SessionOpenOutcome>,
+	options?: { selected?: string | null; wait?: (ms: number) => Promise<void> },
+) {
+	let selected: string | null = options?.selected ?? null;
+	const abandons: Array<{ id: string; error: unknown }> = [];
+	const scheduler = new SessionOpenScheduler({
+		select: sessionId => {
+			selected = sessionId;
+		},
+		open,
+		wanted: () => selected,
+		abandon: (id, error) => void abandons.push({ id, error }),
+		wait: options?.wait,
+	});
+	return {
+		scheduler,
+		selected: (): string | null => selected,
+		setSelected: (sessionId: string | null): void => {
+			selected = sessionId;
+		},
+		abandons,
+	};
+}
+
+test("a user pick is recorded before the first check, so the pick itself issues a resume", async () => {
+	const requests: string[] = [];
+	const app = harness(
+		async sessionId => {
+			requests.push(sessionId);
+			return { status: "opened" };
+		},
+		{ selected: "A" },
+	);
+	const result = await app.scheduler.open("B");
+	expect(result.status).toBe("opened");
+	// Before the fix the first `wanted` check saw the stale selection A and the
+	// run cancelled with no request at all.
+	expect(requests).toEqual(["B"]);
+	expect(app.selected()).toBe("B");
+});
+
+test("a pick recorded only by the attempt cancels the run (the wiring this replaces)", async () => {
+	// Characterizes the old app order: `select` does nothing up front and the
+	// selection only flips when the attempt itself runs. The scheduler must not
+	// hide that failure, because the app must commit the pick first.
+	let selected: string | null = "A";
+	let attempts = 0;
+	const scheduler = new SessionOpenScheduler({
+		select: () => {},
+		open: async sessionId => {
+			attempts++;
+			selected = sessionId;
+			return { status: "opened" };
+		},
+		wanted: () => selected,
+		abandon: () => {},
+		wait: noopWait,
+	});
+	expect((await scheduler.open("B")).status).toBe("cancelled");
+	expect(attempts).toBe(0);
+});
+
 test("a session picked during a restore owns the retries and the restore stops", async () => {
-	let wanted: string | null = "A";
 	const gate = gatedWait();
 	const calls = new Map<string, number>();
 	const opened: string[] = [];
-	const abandoned: Array<{ id: string; error: unknown }> = [];
-	const scheduler = new SessionOpenScheduler({
-		open: async sessionId => {
+	const app = harness(
+		async sessionId => {
 			const seen = (calls.get(sessionId) ?? 0) + 1;
 			calls.set(sessionId, seen);
 			// The daemon is not accepting requests yet for the first try of each.
@@ -164,17 +229,14 @@ test("a session picked during a restore owns the retries and the restore stops",
 			opened.push(sessionId);
 			return { status: "opened" };
 		},
-		wanted: () => wanted,
-		abandon: (id, error) => void abandoned.push({ id, error }),
-		wait: gate.wait,
-	});
-	const restoringA = scheduler.open("A");
+		{ selected: "A", wait: gate.wait },
+	);
+	const restoringA = app.scheduler.restore("A");
 	await flush();
 	expect(calls.get("A")).toBe(1);
 
 	// The user picks B while A is waiting out its backoff.
-	wanted = "B";
-	const openingB = scheduler.open("B");
+	const openingB = app.scheduler.open("B");
 	await flush();
 	expect(calls.get("B")).toBe(1);
 
@@ -189,129 +251,105 @@ test("a session picked during a restore owns the retries and the restore stops",
 	expect(result).toMatchObject({ status: "opened", attempts: 2 });
 	expect(opened).toEqual(["B"]);
 	// Neither intent tore the session down while the daemon was refusing.
-	expect(abandoned).toEqual([]);
+	expect(app.abandons).toEqual([]);
 });
 
 test("a user open that never succeeds fails visibly instead of vanishing", async () => {
-	const abandoned: Array<{ id: string; error: unknown }> = [];
-	const scheduler = new SessionOpenScheduler({
-		open: async () => ({ status: "transient", error: new Error("not connected") }),
-		wanted: () => "B",
-		abandon: (id, error) => void abandoned.push({ id, error }),
-		wait: noopWait,
-	});
-	const result = await scheduler.open("B");
+	const app = harness(async () => ({ status: "transient", error: new Error("not connected") }), { wait: noopWait });
+	const result = await app.scheduler.open("B");
 	expect(result.status).toBe("exhausted");
 	expect(result.attempts).toBe(SESSION_REOPEN_MAX_ATTEMPTS);
-	expect(abandoned).toHaveLength(1);
-	expect(abandoned[0]?.id).toBe("B");
+	expect(app.abandons).toHaveLength(1);
+	expect(app.abandons[0]?.id).toBe("B");
 });
 
 test("retries only re-issue opens, never a session teardown on the way", async () => {
 	let attempts = 0;
-	let abandoned = 0;
-	const scheduler = new SessionOpenScheduler({
-		open: async () => {
+	const app = harness(
+		async () => {
 			attempts++;
 			if (attempts < 3) return { status: "transient", error: new Error("not connected") };
 			return { status: "opened" };
 		},
-		wanted: () => "A",
-		abandon: () => void abandoned++,
-		wait: noopWait,
-	});
-	expect((await scheduler.open("A")).status).toBe("opened");
+		{ selected: "A", wait: noopWait },
+	);
+	expect((await app.scheduler.open("A")).status).toBe("opened");
 	expect(attempts).toBe(3);
 	// The transcript keeps the idle snapshot: only opens were issued, so no
 	// retry could present a turn as running.
-	expect(abandoned).toBe(0);
+	expect(app.abandons).toEqual([]);
 });
 
 test("a session deleted during the restore is not restored on reconnect", async () => {
-	let wanted: string | null = "A";
 	const gate = gatedWait();
 	const calls: string[] = [];
-	const abandoned: string[] = [];
-	const scheduler = new SessionOpenScheduler({
-		open: async sessionId => {
+	const app = harness(
+		async sessionId => {
 			calls.push(sessionId);
 			return { status: "transient", error: new Error("not connected") };
 		},
-		wanted: () => wanted,
-		abandon: id => void abandoned.push(id),
-		wait: gate.wait,
-	});
-	const restoring = scheduler.open("A");
+		{ selected: "A", wait: gate.wait },
+	);
+	const restoring = app.scheduler.restore("A");
 	await flush();
 	expect(calls).toEqual(["A"]);
 
 	// Deleting the selected session clears the ref the scheduler reads.
-	wanted = null;
+	app.setSelected(null);
 	gate.release();
 	expect((await restoring).status).toBe("cancelled");
 	expect(calls).toEqual(["A"]);
 
-	// A later reconnect must not target the deleted session at all.
-	expect((await scheduler.open("A")).status).toBe("cancelled");
+	// A later reconnect restore must not target the deleted session. It also
+	// must not re-select it: a restore never invents intent.
+	expect((await app.scheduler.restore("A")).status).toBe("cancelled");
 	expect(calls).toEqual(["A"]);
-	expect(abandoned).toEqual([]);
+	expect(app.selected()).toBeNull();
+	expect(app.abandons).toEqual([]);
 });
 
 test("a request timeout is a verdict, not a connection gap", async () => {
-	const outcomes: Array<{ status: "failed"; error: unknown }> = [
-		{ status: "failed", error: new Error("request timeout: session.resume") },
-	];
 	let calls = 0;
-	let abandoned = 0;
-	const scheduler = new SessionOpenScheduler({
-		open: async () => {
+	const app = harness(
+		async () => {
 			calls++;
-			return outcomes[0]!;
+			return { status: "failed", error: new Error("request timeout: session.resume") };
 		},
-		wanted: () => "A",
-		abandon: () => void abandoned++,
-		wait: noopWait,
-	});
-	const result = await scheduler.open("A");
+		{ selected: "A", wait: noopWait },
+	);
+	const result = await app.scheduler.open("A");
 	expect(result.status).toBe("failed");
 	expect(calls).toBe(1);
 	// The open path already showed the failure; the scheduler must not stack
 	// a second, later one on top of it.
-	expect(abandoned).toBe(0);
+	expect(app.abandons).toEqual([]);
 });
 
 test("an open that throws a connection error is retried, not lost", async () => {
 	let attempts = 0;
-	const scheduler = new SessionOpenScheduler({
-		open: async () => {
+	const app = harness(
+		async () => {
 			attempts++;
 			if (attempts === 1) throw new Error("not connected");
 			return { status: "opened" };
 		},
-		wanted: () => "A",
-		abandon: () => {
-			throw new Error("abandon must not run for a recoverable open");
-		},
-		wait: noopWait,
-	});
-	expect((await scheduler.open("A")).status).toBe("opened");
+		{ selected: "A", wait: noopWait },
+	);
+	expect((await app.scheduler.open("A")).status).toBe("opened");
 	expect(attempts).toBe(2);
 });
 
 test("an open that throws a session verdict fails once, visibly", async () => {
 	let attempts = 0;
-	const abandoned: string[] = [];
-	const scheduler = new SessionOpenScheduler({
-		open: async () => {
+	const app = harness(
+		async () => {
 			attempts++;
 			throw new Error("session not found: gone");
 		},
-		wanted: () => "gone",
-		abandon: id => void abandoned.push(id),
-		wait: noopWait,
-	});
-	expect((await scheduler.open("gone")).status).toBe("failed");
+		{ selected: "gone", wait: noopWait },
+	);
+	expect((await app.scheduler.open("gone")).status).toBe("failed");
 	expect(attempts).toBe(1);
 	// The open path showed this one; the scheduler only adds the give-up case.
-	expect(abandoned).toEqual([]);
+	expect(app.abandons).toEqual([]);
 });

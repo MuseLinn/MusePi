@@ -2363,6 +2363,31 @@ function AppInner(): ReactNode {
 		viewSwapRef.current("chat");
 		setError(fmtError("session.open", err));
 	}, []);
+	// The user's pick is the scheduler's `wanted` fact, so it is recorded BEFORE
+	// the open is scheduled: an intent recorded only inside the attempt would
+	// let the run cancel itself before that attempt asks the daemon (a click on
+	// another session during a restore then issued no request at all). Retries
+	// do not repeat this — the pick is made once per user action.
+	const commitSelection = useCallback(
+		(sessionId: string): void => {
+			// Cursor-based read markers: the session being left was read up to
+			// its current count at the moment of the switch (otherwise the poll
+			// would mark it unread with a ≤5s-stale cursor); the incoming
+			// session is read by definition.
+			const metaNow = sessionMetaRef.current;
+			const prevId = selectedIdRef.current;
+			if (prevId && prevId !== sessionId) {
+				const prevCount = metaNow.get(prevId)?.messageCount;
+				if (typeof prevCount === "number") readCountRef.current.set(prevId, prevCount);
+			}
+			const openCount = metaNow.get(sessionId)?.messageCount;
+			if (typeof openCount === "number") readCountRef.current.set(sessionId, openCount);
+			persistReadCount();
+			setSelectedId(sessionId);
+			selectedIdRef.current = sessionId;
+		},
+		[persistReadCount],
+	);
 	// 真正的打开逻辑(openSession 的防重入包装内执行)。
 	const doOpenSession = useCallback(
 		async (sessionId: string): Promise<SessionOpenOutcome> => {
@@ -2384,21 +2409,6 @@ function AppInner(): ReactNode {
 			// animation) on every session switch. Only on failure do we fall
 			// back to the welcome state.
 			const previous = storeRef.current;
-			// Cursor-based read markers: the session being left was read up to
-			// its current count at the moment of the switch (otherwise the poll
-			// would mark it unread with a ≤5s-stale cursor); the incoming
-			// session is read by definition.
-			const metaNow = sessionMetaRef.current;
-			const prevId = selectedIdRef.current;
-			if (prevId && prevId !== sessionId) {
-				const prevCount = metaNow.get(prevId)?.messageCount;
-				if (typeof prevCount === "number") readCountRef.current.set(prevId, prevCount);
-			}
-			const openCount = metaNow.get(sessionId)?.messageCount;
-			if (typeof openCount === "number") readCountRef.current.set(sessionId, openCount);
-			persistReadCount();
-			setSelectedId(sessionId);
-			selectedIdRef.current = sessionId;
 			// Session-open loading overlay (React-Bits-style skeleton): history
 			// sessions are reactivated on demand and the RPC can take seconds on
 			// a cold open — show the skeleton only when the wait actually
@@ -2695,7 +2705,7 @@ function AppInner(): ReactNode {
 				return { status: "failed", error: err };
 			}
 		},
-		[abandonSession, persistReadCount, refreshSessions],
+		[abandonSession, refreshSessions],
 	);
 	const openSessionAttempt = useCallback(
 		(sessionId: string): Promise<SessionOpenOutcome> => {
@@ -2719,14 +2729,17 @@ function AppInner(): ReactNode {
 	// Its hooks read refs so they always call the current callbacks.
 	const openAttemptRef = useRef(openSessionAttempt);
 	const abandonRef = useRef(abandonSession);
+	const selectRef = useRef(commitSelection);
 	const schedulerRef = useRef<SessionOpenScheduler | null>(null);
 	schedulerRef.current ??= new SessionOpenScheduler({
+		select: sessionId => selectRef.current(sessionId),
 		open: sessionId => openAttemptRef.current(sessionId),
 		wanted: () => selectedIdRef.current,
 		abandon: (sessionId, err) => abandonRef.current(sessionId, err),
 	});
 	openAttemptRef.current = openSessionAttempt;
 	abandonRef.current = abandonSession;
+	selectRef.current = commitSelection;
 	const scheduler = schedulerRef.current;
 	const openSession = useCallback(
 		async (sessionId: string): Promise<void> => {
@@ -2741,9 +2754,10 @@ function AppInner(): ReactNode {
 	// A drop keeps the session selected (adoptIdleState leaves the idle
 	// transcript up), so this brings back exactly what was on screen. The
 	// restore is one more open intent: the welcome page (null) or another
-	// session ends it, so it never resurrects a session the user left.
+	// session ends it, so it never resurrects a session the user left — and it
+	// never records a pick of its own.
 	restoreSessionRef.current = (sessionId: string): void => {
-		void scheduler.open(sessionId).catch(err => console.error("[open] restore error", err));
+		void scheduler.restore(sessionId).catch(err => console.error("[open] restore error", err));
 	};
 	// Mini chat deep-link (?mini=1&session=<id>, Electron mini-chat-open IPC):
 	// open the requested session once the socket is up. The id is consumed
