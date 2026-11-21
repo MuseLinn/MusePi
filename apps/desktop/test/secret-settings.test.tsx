@@ -124,7 +124,7 @@ describe("设置页密钥", () => {
 		expect(resolveActiveSection("secrets", new Set(items.map(item => item.id)))).toBe("secrets");
 	});
 
-	test("空态显示加密状态行、本机解密说明和「Agent 需要时会弹卡片」", async () => {
+	test("空态：状态卡陈述存储事实，空态解释请求卡片，计数与添加动作并列", async () => {
 		const fake = new FakeRpc();
 		fake.responses.set("secret.status", { mode: "encrypted", count: 0 });
 		fake.responses.set("secret.list", { entries: [], count: 0 });
@@ -132,12 +132,22 @@ describe("设置页密钥", () => {
 		const scope = await mount(fake);
 
 		expect(scope.textContent).toContain("已加密（本机主密钥）");
+		// 机制一句话：AES-256-GCM + 无明文模式。
+		expect(scope.textContent).toContain("AES-256-GCM");
+		expect(scope.textContent).toContain("没有明文模式");
+		// 三条事实各自落在状态卡里。
+		expect(scope.textContent).toContain("存放在哪");
+		expect(scope.textContent).toContain("agent-secrets/");
+		expect(scope.textContent).toContain("在 shell 里");
 		expect(scope.textContent).toContain("$MUSEPI_SECRET_<NAME>");
-		expect(scope.textContent).toContain("模型只看到本机生成的占位符");
-		expect(scope.textContent).toContain("真实值不出本机");
-		expect(scope.textContent).toContain("还没有密钥。Agent 需要时会弹卡片。");
-		expect(scope.textContent).toContain("已存密钥：0");
-		// There is no plaintext → encrypt action on this page.
+		expect(scope.textContent).toContain("[secret:NAME]");
+		expect(scope.textContent).toContain("模型能看到什么");
+		expect(scope.textContent).toContain("list_secrets");
+		// 空态不是一句灰字：标题 + 说明请求卡片怎么来。
+		expect(scope.textContent).toContain("还没有密钥");
+		expect(scope.textContent).toContain("请求卡片");
+		// 列头是「密钥 · N」并带一个添加动作。
+		expect(scope.textContent).toContain("密钥 · 0");
 		expect(buttonByText(scope, "添加密钥").type).toBe("button");
 		expect(fake.calls("secret.status")).toEqual([{}]);
 		expect(fake.calls("secret.list")).toEqual([{}]);
@@ -148,7 +158,9 @@ describe("设置页密钥", () => {
 
 		expect(scope.textContent).toContain("后台服务未连接");
 		expect(scope.textContent).not.toContain("还没有密钥");
-		expect(scope.textContent).not.toContain("已存密钥：0");
+		expect(scope.textContent).not.toContain("密钥 · 0");
+		// 存储事实与后台可用性无关，离线时仍然显示。
+		expect(scope.textContent).toContain("已加密（本机主密钥）");
 	});
 
 	test("list 失败时隐藏数量与空态，只保留读取失败回退", async () => {
@@ -160,8 +172,8 @@ describe("设置页密钥", () => {
 
 		expect(scope.textContent).toContain("无法加载密钥列表：list unavailable");
 		expect(scope.textContent).not.toContain("还没有密钥");
-		expect(scope.textContent).not.toContain("已存密钥：0");
-		expect(scope.textContent).not.toContain("已存密钥：3");
+		expect(scope.textContent).not.toContain("密钥 · 0");
+		expect(scope.textContent).not.toContain("密钥 · 3");
 		expect(scope.textContent).toContain("已加密（本机主密钥）");
 	});
 
@@ -182,16 +194,18 @@ describe("设置页密钥", () => {
 
 		expect(scope.textContent).toContain("GITHUB_TOKEN");
 		expect(scope.textContent).toContain("拉取私有仓库");
-		expect(scope.textContent).toContain("全部项目");
+		expect(scope.textContent).toContain("所有会话");
 		expect(scope.textContent).toContain("最后使用");
 		expect(scope.textContent).toContain("STRIPE_KEY");
 		expect(scope.textContent).toContain("未填写用途");
 		expect(scope.textContent).toContain("从未使用");
-		expect(scope.textContent).toContain("已存密钥：2");
+		expect(scope.textContent).toContain("密钥 · 2");
 		expect(scope.textContent).not.toContain("sk-live-LEAKED");
+		// 行不再靠悬停才出现动作：替换与删除始终在 DOM 里可点。
+		const row = scope.querySelector<HTMLElement>('[data-secret-name="GITHUB_TOKEN"]');
+		expect(row?.querySelector('[data-secret-action="delete"]')).not.toBeNull();
 
 		// Replace opens a masked field with no stored value echoed back.
-		const row = scope.querySelector<HTMLElement>('[data-secret-name="GITHUB_TOKEN"]');
 		const replace = row?.querySelector<HTMLButtonElement>('[data-secret-action="replace"]');
 		await act(async () => replace?.click());
 		const valueInput = scope.querySelector<HTMLInputElement>('[data-secret-field="value"]');
@@ -220,6 +234,62 @@ describe("设置页密钥", () => {
 		await waitFor(() => fake.calls("secret.delete").length === 1, "secret.delete");
 		expect(fake.calls("secret.delete")).toEqual([{ name: "GITHUB_TOKEN" }]);
 		expect(scope.querySelector('[data-secret-name="GITHUB_TOKEN"]')).toBeNull();
+	});
+
+	test("状态模型：表单打开时独占正文，不与行列表或空态并存", async () => {
+		// 已存 + 打开表单：只有表单，列表行和空态都不渲染。
+		const withRows = new FakeRpc();
+		withRows.responses.set("secret.status", { mode: "encrypted", count: 2 });
+		withRows.responses.set("secret.list", {
+			entries: [secretEntry(), secretEntry({ name: "STRIPE_KEY" })],
+			count: 2,
+		});
+		const storedScope = await mount(withRows);
+		expect(storedScope.querySelectorAll("[data-secret-name]")).toHaveLength(2);
+
+		await act(async () => buttonByText(storedScope, "添加密钥").click());
+		expect(storedScope.querySelector("form[data-secret-form]")).not.toBeNull();
+		expect(storedScope.querySelectorAll("[data-secret-name]")).toHaveLength(0);
+		// 计数行仍可见（列表事实），但添加动作在表单打开时禁用，避免叠出第二个表单。
+		expect(storedScope.textContent).toContain("密钥 · 2");
+		expect(buttonByText(storedScope, "添加密钥").disabled).toBe(true);
+
+		// 空库 + 打开表单：只有表单，不再出现「还没有密钥」。
+		const empty = new FakeRpc();
+		empty.responses.set("secret.status", { mode: "encrypted", count: 0 });
+		empty.responses.set("secret.list", { entries: [], count: 0 });
+		const emptyScope = await mount(empty);
+		expect(emptyScope.textContent).toContain("还没有密钥");
+
+		await act(async () => buttonByText(emptyScope, "添加密钥").click());
+		expect(emptyScope.querySelector("form[data-secret-form]")).not.toBeNull();
+		expect(emptyScope.textContent).not.toContain("还没有密钥");
+		expect(emptyScope.querySelector(".gui-secret-empty")).toBeNull();
+		// 关闭表单后回到空态，两种正文不会同时存在。
+		await act(async () => buttonByText(emptyScope, "取消").click());
+		expect(emptyScope.querySelector("form[data-secret-form]")).toBeNull();
+		expect(emptyScope.textContent).toContain("还没有密钥");
+	});
+
+	test("表单字段行消费共享的 gui-settings-field 原语，不再是本页私有的字段语法", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("secret.status", { mode: "encrypted", count: 0 });
+		fake.responses.set("secret.list", { entries: [], count: 0 });
+
+		const scope = await mount(fake);
+		await act(async () => buttonByText(scope, "添加密钥").click());
+
+		// 每一行都是共享原语：标签 / 提示挂在 grid area，控件在 control 格里。
+		const fields = [...scope.querySelectorAll(".gui-settings-field")];
+		expect(fields.length).toBe(3);
+		for (const field of fields) {
+			expect(field.querySelector(".gui-settings-field-label")).not.toBeNull();
+			const control = field.querySelector(".gui-settings-field-control");
+			expect(control?.querySelector("input")).not.toBeNull();
+		}
+		// 页面私有的那套字段类不得再出现（否则就是第二份近似语法）。
+		expect(scope.querySelector(".gui-secret-field")).toBeNull();
+		expect(scope.querySelector(".gui-secret-field-label")).toBeNull();
 	});
 
 	test("添加表单提交名字、值和用途，值输入已遮罩且提交后不回显", async () => {
@@ -261,6 +331,45 @@ describe("设置页密钥", () => {
 		await act(async () => scope.querySelector<HTMLFormElement>("form")?.requestSubmit());
 		await waitFor(() => (scope.textContent ?? "").includes("至少 8 个字符。"), "value length error");
 
+		expect(fake.calls("secret.set")).toEqual([]);
+	});
+
+	test("写入失败时在表单里显示 daemon 的原因，而不是静默无动作", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("secret.status", { mode: "encrypted", count: 0 });
+		fake.responses.set("secret.list", { entries: [], count: 0 });
+		// The store refuses (e.g. an unwritable master-key directory); the
+		// reason it gives is the only thing that tells the user what to fix.
+		fake.failures.set("secret.set", new Error("secret master key is invalid"));
+
+		const scope = await mount(fake);
+		await act(async () => buttonByText(scope, "添加密钥").click());
+		setInput(scope.querySelector<HTMLInputElement>('[data-secret-field="name"]')!, "OPENAI_API_KEY");
+		setInput(scope.querySelector<HTMLInputElement>('[data-secret-field="value"]')!, "sk-test-123456");
+		await act(async () => scope.querySelector<HTMLFormElement>("form")?.requestSubmit());
+		await waitFor(() => (scope.textContent ?? "").includes("secret master key is invalid"), "daemon reason");
+
+		expect(scope.textContent).toContain("保存密钥失败：secret master key is invalid");
+		// The form stays open with the reason inside it, so the value is not lost.
+		expect(scope.querySelector<HTMLFormElement>("form")).not.toBeNull();
+		// A failed write must not fabricate a row or a count.
+		expect(scope.textContent).toContain("密钥 · 0");
+		expect(scope.querySelector('[data-secret-name="OPENAI_API_KEY"]')).toBeNull();
+		expect(scope.textContent).not.toContain("sk-test-123456");
+	});
+
+	test("取消表单丢弃输入的值，不保留在组件状态里", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("secret.status", { mode: "encrypted", count: 0 });
+		fake.responses.set("secret.list", { entries: [], count: 0 });
+
+		const scope = await mount(fake);
+		await act(async () => buttonByText(scope, "添加密钥").click());
+		setInput(scope.querySelector<HTMLInputElement>('[data-secret-field="value"]')!, "sk-test-123456");
+		await act(async () => buttonByText(scope, "取消").click());
+
+		expect(scope.querySelector('[data-secret-field="value"]')).toBeNull();
+		expect(scope.textContent).not.toContain("sk-test-123456");
 		expect(fake.calls("secret.set")).toEqual([]);
 	});
 

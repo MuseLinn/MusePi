@@ -2,17 +2,22 @@
  * Settings → 智能体 → 密钥: the agent secret vault.
  *
  * Values are write-only over this page: the daemon returns metadata only
- * (`secret.list`), and every input that accepts a value is a password field.
+ * (`secret.list`), and every input that accepts a value is a masked field.
  * The page never renders a stored value, offers a reveal toggle, or keeps a
  * value after its form closes.
  *
  * The store is always encrypted with a local per-profile master key, so the
- * status row is static — there is no plaintext mode and no unlock step.
+ * state card is static — there is no plaintext mode, no unlock step, and
+ * nothing for the page to switch on. Its copy stays on what the code does:
+ * `packages/coding-agent/src/secrets/agent-store.ts` writes one AES-256-GCM
+ * envelope per name and a metadata sidecar at 0600; a value reaches a bash
+ * child as `$MUSEPI_SECRET_<NAME>`, tool output shows `[secret:NAME]`, and the
+ * provider boundary carries a keyed placeholder instead of the value.
  */
 
 import { t } from "@musepi/client-core";
 import { formatWhen } from "@musepi/client-core/src/lib/format";
-import { KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Eye, FolderLock, KeyRound, Plus, RefreshCw, ShieldCheck, Terminal, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
@@ -42,6 +47,7 @@ interface SecretListResult {
 }
 
 const SECRET_NAME_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;
+const MIN_SECRET_VALUE_LENGTH = 8;
 
 interface SecretFormState {
 	mode: "add" | "replace";
@@ -54,7 +60,7 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-function statusLine(entry: SecretEntryView): string {
+function lastUsedText(entry: SecretEntryView): string {
 	return entry.lastUsedAt && entry.lastUsedAt > 0
 		? t("settings.secretsLastUsed", { when: formatWhen(entry.lastUsedAt) })
 		: t("settings.secretsNeverUsed");
@@ -62,14 +68,66 @@ function statusLine(entry: SecretEntryView): string {
 
 function WarningLine({ message, onRetry }: { message: string; onRetry?: () => void }): ReactNode {
 	return (
-		<div className="gui-settings-row-desc--warn flex items-center gap-2 text-[12px]">
-			<span className="min-w-0 flex-1">{message}</span>
+		<div className="gui-secret-warning">
+			<span className="gui-secret-warning-text">{message}</span>
 			{onRetry && (
-				<button type="button" className="gui-btn-ghost shrink-0" onClick={onRetry}>
+				<button type="button" className="gui-btn gui-btn-ghost gui-btn-icon" onClick={onRetry}>
 					<RefreshCw size={12} aria-hidden="true" /> {t("settings.secretsRetry")}
 				</button>
 			)}
 		</div>
+	);
+}
+
+/** One fact of the state card: what is protected, and by which mechanism. */
+function SecretFact({ icon, title, value }: { icon: ReactNode; title: string; value: string }): ReactNode {
+	return (
+		<div className="gui-secret-fact">
+			<span className="gui-secret-fact-icon">{icon}</span>
+			<div className="gui-secret-fact-body">
+				<div className="gui-secret-fact-title">{title}</div>
+				<div className="gui-secret-fact-value">{value}</div>
+			</div>
+		</div>
+	);
+}
+
+/**
+ * The page's single claim about storage. Static on purpose: the daemon reports
+ * `mode: "encrypted"` from the same store implementation, and there is no
+ * second mode for a status read to discover — only whether it could be read,
+ * which the warnings beside this card report.
+ */
+function SecretStateCard(): ReactNode {
+	return (
+		<section className="gui-agent-card gui-secret-state" aria-label={t("settings.secretsEncrypted")}>
+			<div className="gui-secret-state-head">
+				<span className="gui-secret-state-icon">
+					<ShieldCheck size={16} aria-hidden="true" />
+				</span>
+				<div className="gui-secret-state-text">
+					<div className="gui-secret-state-title">{t("settings.secretsEncrypted")}</div>
+					<div className="gui-secret-state-desc">{t("settings.secretsEncryptedDescription")}</div>
+				</div>
+			</div>
+			<div className="gui-secret-facts">
+				<SecretFact
+					icon={<FolderLock size={13} aria-hidden="true" />}
+					title={t("settings.secretsWhereTitle")}
+					value={t("settings.secretsWhereValue")}
+				/>
+				<SecretFact
+					icon={<Terminal size={13} aria-hidden="true" />}
+					title={t("settings.secretsBashTitle")}
+					value={t("settings.secretsBashValue")}
+				/>
+				<SecretFact
+					icon={<Eye size={13} aria-hidden="true" />}
+					title={t("settings.secretsModelTitle")}
+					value={t("settings.secretsModelValue")}
+				/>
+			</div>
+		</section>
 	);
 }
 
@@ -92,81 +150,88 @@ function SecretForm({
 }): ReactNode {
 	return (
 		<form
-			className="gui-agent-card flex-col items-stretch gap-2"
+			className="gui-agent-card gui-secret-form"
+			data-secret-form={form.mode}
 			onSubmit={event => {
 				event.preventDefault();
 				onSubmit();
 			}}
 		>
-			<div className="flex items-center justify-between gap-2">
-				<div className="gui-settings-row-label">
+			<div className="gui-secret-form-head">
+				<span className="gui-secret-form-title">
 					{form.mode === "add" ? t("settings.secretsAddTitle") : t("settings.secretsReplaceTitle")}
-				</div>
-				<button type="button" className="gui-btn-ghost" onClick={onCancel} disabled={busy}>
-					{t("settings.cancel")}
-				</button>
+				</span>
+				{form.mode === "replace" && <span className="gui-secret-name">{form.name}</span>}
 			</div>
-			{form.mode === "add" ? (
-				<label className="block">
-					<span className="text-[11.5px] text-[var(--color-text-muted)]">{t("settings.secretsName")}</span>
-					<input
-						className="gui-input mt-1 w-full font-mono"
-						data-secret-field="name"
-						value={form.name}
-						placeholder={t("settings.secretsNamePlaceholder")}
-						spellCheck={false}
-						autoComplete="off"
-						disabled={busy}
-						onChange={event => onChange({ name: event.target.value })}
-					/>
-					<span className="mt-1 block text-[11px] text-[var(--color-text-muted)]">
-						{t("settings.secretsNameHint")}
+			{form.mode === "add" && (
+				<label className="gui-settings-field">
+					<span className="gui-settings-field-label">{t("settings.secretsName")}</span>
+					<span className="gui-settings-field-hint">{t("settings.secretsNameHint")}</span>
+					<span className="gui-settings-field-control">
+						<input
+							className="gui-secret-input gui-secret-input--mono"
+							data-secret-field="name"
+							value={form.name}
+							placeholder={t("settings.secretsNamePlaceholder")}
+							spellCheck={false}
+							autoComplete="off"
+							disabled={busy}
+							onChange={event => onChange({ name: event.target.value })}
+						/>
 					</span>
 				</label>
-			) : (
-				<div className="font-mono text-[13px]">{form.name}</div>
 			)}
-			<label className="block">
-				<span className="text-[11.5px] text-[var(--color-text-muted)]">{t("settings.secretsValue")}</span>
-				<input
-					// Masked control; no reveal affordance on this page.
-					type="password"
-					className="gui-input mt-1 w-full"
-					data-secret-field="value"
-					value={form.value}
-					placeholder={t("settings.secretsValuePlaceholder")}
-					spellCheck={false}
-					autoComplete="new-password"
-					disabled={busy}
-					onChange={event => onChange({ value: event.target.value })}
-				/>
-				<span className="mt-1 block text-[11px] text-[var(--color-text-muted)]">
-					{t("settings.secretsValueHint")}
+			<label className="gui-settings-field">
+				<span className="gui-settings-field-label">{t("settings.secretsValue")}</span>
+				<span className="gui-settings-field-hint">{t("settings.secretsValueHint")}</span>
+				<span className="gui-settings-field-control">
+					<input
+						// Masked control; no reveal affordance on this page.
+						type="password"
+						className="gui-secret-input gui-secret-input--mono"
+						data-secret-field="value"
+						value={form.value}
+						placeholder={t("settings.secretsValuePlaceholder")}
+						spellCheck={false}
+						autoComplete="new-password"
+						disabled={busy}
+						onChange={event => onChange({ value: event.target.value })}
+					/>
 				</span>
 			</label>
 			{form.mode === "add" && (
-				<label className="block">
-					<span className="text-[11.5px] text-[var(--color-text-muted)]">{t("settings.secretsPurpose")}</span>
-					<input
-						className="gui-input mt-1 w-full"
-						data-secret-field="purpose"
-						value={form.purpose}
-						placeholder={t("settings.secretsPurposePlaceholder")}
-						disabled={busy}
-						onChange={event => onChange({ purpose: event.target.value })}
-					/>
+				<label className="gui-settings-field">
+					<span className="gui-settings-field-label">{t("settings.secretsPurpose")}</span>
+					<span className="gui-settings-field-control">
+						<input
+							className="gui-secret-input"
+							data-secret-field="purpose"
+							value={form.purpose}
+							placeholder={t("settings.secretsPurposePlaceholder")}
+							disabled={busy}
+							onChange={event => onChange({ purpose: event.target.value })}
+						/>
+					</span>
 				</label>
 			)}
-			<div className="flex items-center gap-2">
-				<span className="text-[11px] text-[var(--color-text-muted)]">
+			<div className="gui-secret-form-foot">
+				<span className="gui-settings-field-hint">
 					{t("settings.secretsScope")}: {t("settings.secretsScopeAll")}
 				</span>
-				<span className="flex-1" />
-				<button type="submit" className="gui-btn gui-btn-primary" disabled={busy}>
-					{busy ? t("settings.secretsSaving") : t("general.save")}
-				</button>
+				<div className="gui-secret-form-actions">
+					<button type="button" className="gui-btn" onClick={onCancel} disabled={busy}>
+						{t("settings.cancel")}
+					</button>
+					<button type="submit" className="gui-btn gui-btn-primary" disabled={busy}>
+						{busy ? t("settings.secretsSaving") : t("general.save")}
+					</button>
+				</div>
 			</div>
-			{error && <div className="text-[12px] text-[var(--color-warning)]">{error}</div>}
+			{error && (
+				<div className="gui-secret-form-error" role="alert">
+					{error}
+				</div>
+			)}
 		</form>
 	);
 }
@@ -252,7 +317,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			setFormError(t("settings.secretsValueRequired"));
 			return;
 		}
-		if (value.length < 8) {
+		if (value.length < MIN_SECRET_VALUE_LENGTH) {
 			setFormError(t("settings.secretsValueTooShort"));
 			return;
 		}
@@ -281,6 +346,8 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			}
 			setForm(null);
 		} catch (error) {
+			// The daemon's own reason stays in the form: it names what was
+			// refused, which a generic "could not save" would drop.
 			setFormError(t("settings.secretsSetFailed", { error: errorText(error) }));
 		} finally {
 			setBusy(false);
@@ -300,7 +367,6 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 		try {
 			await rpc.request("secret.delete", { name: entry.name });
 			setEntries(current => current.filter(item => item.name !== entry.name));
-			if (form?.mode === "replace" && form.name === entry.name) closeForm();
 		} catch (error) {
 			setActionError(t("settings.secretsDeleteFailed", { error: errorText(error) }));
 		} finally {
@@ -314,39 +380,38 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 	const listKnown = rpc !== null && !loading && !listError;
 
 	return (
-		<div className="gui-settings-section">
+		<div className="gui-settings-section gui-secret-section">
 			<h2 className="gui-settings-page-title">{t("settings.secrets")}</h2>
-			<div className="gui-agent-card">
-				<span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-bg-elevated)]">
-					<KeyRound size={15} aria-hidden="true" />
-				</span>
-				<div className="min-w-0 flex-1">
-					<div className="gui-settings-row-label">{t("settings.secretsEncrypted")}</div>
-					<div className="gui-settings-row-desc">{t("settings.secretsEncryptedDescription")}</div>
-				</div>
-			</div>
+			<p className="gui-settings-page-desc">{t("settings.secretsDescription")}</p>
+
+			<SecretStateCard />
+
 			{!rpc && <WarningLine message={t("settings.secretsOffline")} />}
 			{statusError && (
 				<WarningLine message={t("settings.secretsStatusFailed", { error: statusError })} onRetry={reload} />
 			)}
 			{listError && <WarningLine message={t("settings.secretsListFailed", { error: listError })} onRetry={reload} />}
 			{actionError && <WarningLine message={actionError} />}
+
 			{listKnown && (
-				<div className="mt-3 flex items-center justify-between gap-2">
-					<div className="text-[12px] text-[var(--color-text-muted)]">
-						{t("settings.secretsStoredCount", { count: entries.length })}
-					</div>
-					<button
-						type="button"
-						className="gui-btn gui-btn-primary shrink-0"
-						disabled={form !== null}
-						onClick={openAdd}
-					>
+				<div className="gui-secret-listhead">
+					<span className="gui-secret-count">{t("settings.secretsStoredCount", { count: entries.length })}</span>
+					<button type="button" className="gui-btn gui-btn-primary" disabled={form !== null} onClick={openAdd}>
 						<Plus size={13} aria-hidden="true" /> {t("settings.secretsAdd")}
 					</button>
 				</div>
 			)}
-			{form && (
+
+			{/* One body, never two: the open form replaces the rows/empty state
+			 * instead of stacking above them. `密钥 · N` stays visible because it
+			 * is a fact about the list, and the add action is disabled while a
+			 * form is open (a second form is not a state this page has).
+			 * Consequence: delete only exists in the rows branch, so a delete
+			 * can never need to close a form — `remove()` carries no such guard.
+			 * Restoring the stacked shape would need one again. */}
+			{loading ? (
+				<div className="gui-secret-loading">{t("settings.loading")}</div>
+			) : form ? (
 				<SecretForm
 					form={form}
 					busy={busy}
@@ -355,46 +420,49 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 					onCancel={closeForm}
 					onSubmit={() => void submitForm()}
 				/>
-			)}
-			{loading ? (
-				<div className="gui-settings-row">{t("settings.loading")}</div>
 			) : !listKnown ? null : entries.length === 0 ? (
-				<div className="gui-agent-card text-[12.5px] text-[var(--color-text-muted)]">
-					{t("settings.secretsEmpty")}
+				<div className="gui-secret-empty">
+					<div className="gui-secret-empty-title">{t("settings.secretsEmptyTitle")}</div>
+					<p className="gui-secret-empty-body">{t("settings.secretsEmptyBody")}</p>
 				</div>
 			) : (
-				entries.map(entry => (
-					<div key={entry.name} className="gui-agent-card" data-secret-name={entry.name}>
-						<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-							<div className="flex items-center gap-1.5">
-								<span className="truncate font-mono text-[13px] font-medium">{entry.name}</span>
-								<span className="gui-provider-chip">{t("settings.secretsScopeAll")}</span>
+				<div className="gui-secret-list">
+					{entries.map(entry => (
+						<section key={entry.name} className="gui-agent-card gui-secret-row" data-secret-name={entry.name}>
+							<span className="gui-secret-row-icon">
+								<KeyRound size={13} aria-hidden="true" />
+							</span>
+							<div className="gui-secret-row-main">
+								<div className="gui-secret-row-head">
+									<span className="gui-secret-name">{entry.name}</span>
+									<span className="gui-provider-chip">{t("settings.secretsScopeAll")}</span>
+								</div>
+								<div className="gui-secret-row-purpose">{entry.purpose || t("settings.secretsNoPurpose")}</div>
 							</div>
-							<div className="truncate text-[12px] text-[var(--color-text-muted)]">
-								{entry.purpose || t("settings.secretsNoPurpose")}
+							<span className="gui-secret-row-meta">{lastUsedText(entry)}</span>
+							<div className="gui-secret-row-actions">
+								<button
+									type="button"
+									className="gui-btn gui-btn-ghost"
+									data-secret-action="replace"
+									onClick={() => openReplace(entry)}
+								>
+									{t("settings.secretsReplace")}
+								</button>
+								<button
+									type="button"
+									className="gui-btn gui-btn-ghost gui-btn-icon"
+									data-secret-action="delete"
+									aria-label={`${t("settings.secretsDelete")} ${entry.name}`}
+									disabled={deleting === entry.name}
+									onClick={() => void remove(entry)}
+								>
+									<Trash2 size={13} aria-hidden="true" />
+								</button>
 							</div>
-							<div className="text-[11px] text-[var(--color-text-muted)]">{statusLine(entry)}</div>
-						</div>
-						<button
-							type="button"
-							className="gui-btn-ghost shrink-0"
-							data-secret-action="replace"
-							onClick={() => openReplace(entry)}
-						>
-							{t("settings.secretsReplace")}
-						</button>
-						<button
-							type="button"
-							className="gui-btn-ghost shrink-0"
-							data-secret-action="delete"
-							aria-label={`${t("settings.secretsDelete")} ${entry.name}`}
-							disabled={deleting === entry.name}
-							onClick={() => void remove(entry)}
-						>
-							<Trash2 size={13} aria-hidden="true" />
-						</button>
-					</div>
-				))
+						</section>
+					))}
+				</div>
 			)}
 		</div>
 	);
