@@ -9,8 +9,11 @@ export const transcript = {
 	"transcript.uiBlockRepair": "让 agent 修一下",
 	"transcript.uiBlockRepairRequest":
 		"这块界面没画出来，请修好它并保留原有意图：\n\n```ui\n{source}\n```\n\n错误：\n{errors}",
+	"transcript.uiBlockRepairRequestMany": "这段回复有 {count} 块界面没画出来，请一起修好并保留原有意图：\n\n{blocks}",
+	"transcript.uiBlockRepairErrors": "错误：",
 	"transcript.uiBlockEmpty": "这块界面没有可显示的内容。",
 	"transcript.uiBlockPartial": "这块界面有 {count} 处没能画出：",
+	"transcript.uiBlockTruncated": "这条回复结束时，这块界面还没写完。",
 	"transcript.uiBlockLine": "第 {line} 行：{reason}",
 	"transcript.uiBlockSource": "源码",
 	"transcript.roundToolsWithCount": "工具 ×{count}",

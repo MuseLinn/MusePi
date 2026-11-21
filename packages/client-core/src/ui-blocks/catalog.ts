@@ -357,6 +357,8 @@ function toTree(node: { typeName?: string; props?: Record<string, unknown> } | u
 export interface UiBlockParse {
 	tree: UiBlockTree | null;
 	errors: string[];
+	/** The source stopped mid-statement: a truncated stream, not a wrong program. */
+	incomplete: boolean;
 }
 
 const tokenKind = (text: string): number => tokenize(text)[0]?.t ?? -1;
@@ -406,7 +408,7 @@ function namedArgument(source: string): string | null {
  * and can be fixed in the next turn.
  */
 export function parseUiBlock(source: string): UiBlockParse {
-	if (!source.trim()) return { tree: null, errors: ["The block needs root = Stack([...])"] };
+	if (!source.trim()) return { tree: null, errors: ["The block needs root = Stack([...])"], incomplete: false };
 	const result = parser.parse(source);
 	const named = namedArgument(source);
 	const errors = (named ? [] : result.meta.errors).map(
@@ -414,10 +416,16 @@ export function parseUiBlock(source: string): UiBlockParse {
 	);
 	if (named) errors.unshift(named);
 	else if (result.meta.unresolved.length) errors.push(`Undefined names: ${result.meta.unresolved.join(", ")}`);
-	if (result.meta.incomplete) errors.push("The block ends in the middle of a statement");
+	const incomplete = result.meta.incomplete;
+	if (incomplete) errors.push("The block ends in the middle of a statement");
+	// The parser reports the same cascade once per statement; a repeated reason
+	// reads as several mistakes in the note and the repair message.
+	const reasons = [...new Set(errors)];
 	const tree = toTree(result.root ?? undefined);
-	if (!tree) return { tree: null, errors: errors.length ? errors : ["The block needs root = Stack([...])"] };
-	return { tree, errors };
+	if (!tree) {
+		return { tree: null, errors: reasons.length ? reasons : ["The block needs root = Stack([...])"], incomplete };
+	}
+	return { tree, errors: reasons, incomplete };
 }
 
 /** Every component name, for the guidance parity test. */

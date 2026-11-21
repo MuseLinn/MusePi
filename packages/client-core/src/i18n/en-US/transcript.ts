@@ -11,8 +11,12 @@ export const transcript = {
 	"transcript.uiBlockRepair": "Ask the agent to fix it",
 	"transcript.uiBlockRepairRequest":
 		"This block did not draw. Fix it, keeping the intent:\n\n```ui\n{source}\n```\n\nErrors:\n{errors}",
+	"transcript.uiBlockRepairRequestMany":
+		"This reply has {count} blocks that did not draw. Fix them together, keeping the intent:\n\n{blocks}",
+	"transcript.uiBlockRepairErrors": "Errors:",
 	"transcript.uiBlockEmpty": "This block has nothing to show.",
 	"transcript.uiBlockPartial": "This block could not draw {count} part(s):",
+	"transcript.uiBlockTruncated": "The reply ended before this block was finished.",
 	"transcript.uiBlockLine": "Line {line}: {reason}",
 	"transcript.uiBlockSource": "Source",
 	"transcript.roundToolsWithCount": "{count} tools",

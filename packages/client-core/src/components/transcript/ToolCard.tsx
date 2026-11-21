@@ -49,7 +49,7 @@ function ProgressUpdate({ args, running }: { args: unknown; running?: boolean })
 				<div className="tr-progress-title">{title || t("tools.toolNotifyUser")}</div>
 				{message ? (
 					<div className="tr-progress-body">
-						<Markdown text={message} />
+						<Markdown text={message} repair="off" />
 					</div>
 				) : null}
 			</div>

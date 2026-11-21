@@ -69,15 +69,21 @@ with: `Choice Input Button`.
 
 `UI_BLOCK_TYPES` in `render.ts` is the one list the renderer and the guidance test read.
 
-## 4. Failure is visible
+## 4. Failure is visible after the reply settles
 
-A finished block that lost parts is not rendered silently short:
+A block is diagnosed only once the reply has stopped generating. While it streams, a closed or half-written fence shows just the nodes that parsed: a token gap is not a finished program, and an error card that appears mid-answer interrupts the agent with its own repair request.
 
-- the sound nodes still draw;
-- a note names each failed line and the parser's reason;
-- the source folds under it.
+When the reply settles:
 
-A block with nothing drawable shows the same note plus its source. The rule behind it: a silently partial block reads as an app bug, while a named reason reads as the model's mistake and can be corrected in the next turn.
+- a complete block that lost parts keeps its sound nodes, names each failed line and the parser's reason once, folds its source, and offers **one** repair action;
+- a block with nothing drawable shows the same note plus its source;
+- a reply that ended mid-statement (an unclosed fence, or output cut by a limit) names the truncation and folds its source, but offers no repair — quoting the prefix back cannot repair it.
+
+Repair is one user turn: pressing the action once sends the source and reasons, and a second press or a redraw does not send again. When a settled reply holds several failed blocks, the automatic repair sends them together as one message instead of one turn per block. It also waits for the turn itself to end, not only this reply: an answer that is already final while the agent runs a later step keeps its note but is not pulled back into the loop.
+
+Diagnostics belong to the reply body. A ```` ```ui ```` fence inside a thinking draft, a tool's output, the user's own message or a document preview draws the nodes that parse and says nothing — no truncation note, no failure note, no repair action. Those words are not the answer the agent would be asked to fix, and a draft still being written is not a broken program. `Markdown` takes this surface explicitly (`repair: "reply" | "off"`), and `"off"` is the default so a new host cannot publish diagnostics by accident.
+
+Truncation takes no repair. This is a deliberate divergence from GenUI, which treats `parse-incomplete` as repair-worthy: GenUI's model retries inside its tool loop, while MusePi can only quote the fence prefix back as a user turn, and a prefix that stops mid-statement gives the next turn nothing to correct.
 
 ## 5. What a block asks
 
@@ -119,7 +125,10 @@ from that:
   fence but not closed it yet has the fence split off before the markdown parse
   and rendered from the partial tree, so the block grows with the reply. The
   markdown parser never sees it, which is why it cannot be held back as an
-  unfinished code block.
+  unfinished code block. The split stays in place after the block idles: an
+  unclosed fence at the end of a settled reply is the truncated output, not
+  prose. Fences are paired while scanning, so a ```` ```ui ```` written as an
+  example inside another fence is not mistaken for a live block.
 
 ## 7. Blocking is a different surface
 

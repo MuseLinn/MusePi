@@ -110,20 +110,45 @@ describe("rendering", () => {
 });
 
 describe("failure is visible", () => {
-	test("a block that cannot parse shows the reasons and its source", () => {
+	test("a complete broken block shows one announced note, its source and one repair", () => {
 		const html = renderUiBlockFence('root = Stack([Card(title: "x")])');
 		expect(html).toContain("tr-ui--empty");
 		expect(html).toContain("tr-ui-src");
 		expect(html).toContain("tr-ui-errors");
+		expect(html).toContain('role="status"');
+		expect(html.match(/data-ui-repair/g) ?? []).toHaveLength(1);
 	});
 
-	test("a drawn block with a leftover error notes it underneath", () => {
+	test("a truncated block names the cut and offers no repair", () => {
+		const partial = 'root = Stack([Card("t", [Text("x")])';
+		expect(renderUiBlock(partial).incomplete).toBe(true);
+		const drawn = renderUiBlockFence(partial);
+		expect(drawn).toContain("tr-ui--truncated");
+		expect(drawn).toContain('role="status"');
+		expect(drawn).toContain("x");
+		expect(drawn).not.toContain("tr-ui-errors");
+		expect(drawn).not.toContain("data-ui-repair");
+
+		const empty = renderUiBlockFence("root = Stack([");
+		expect(empty).toContain("tr-ui--truncated");
+		expect(empty).toContain("tr-ui-src");
+		expect(empty).not.toContain("data-ui-repair");
+	});
+
+	test("a block with nothing drawable and no reasons offers no dead repair", () => {
+		const html = renderUiBlockFence("root = Stack([])");
+		expect(html).toContain("tr-ui--empty");
+		expect(html).not.toContain("data-ui-repair");
+	});
+
+	test("a drawn block with no leftover error notes nothing", () => {
 		const html = renderUiBlockFence('root = Stack([Text("ok")])');
 		expect(html).not.toContain("tr-ui-note");
 	});
 
-	test("the fence always wraps its output", () => {
-		expect(renderUiBlockFence('root = Stack([Text("ok")])').startsWith('<div class="tr-ui">')).toBe(true);
+	test("the fence always wraps its output in a block host", () => {
+		const html = renderUiBlockFence('root = Stack([Text("ok")])');
+		expect(html.startsWith('<div class="tr-ui" data-ui-block=')).toBe(true);
 	});
 });
 
@@ -140,10 +165,54 @@ describe("streaming fences", () => {
 		expect(splitOpenUiFence("```ui\nroot = Stack([])\n```")).toBeNull();
 	});
 
+	test("a ui example inside another fence is not a live block", async () => {
+		const { splitOpenUiFence } = await import("./render");
+		expect(splitOpenUiFence("示例：\n\n```text\n```ui\nroot = Stack([])\n```\n```\n")).toBeNull();
+	});
+
 	test("a partial block draws what parsed and stays quiet about the truncation", () => {
-		const html = renderUiBlockFence('root = Stack([Text("已经到达")]\n', false);
+		const html = renderUiBlockFence('root = Stack([Text("已经到达")]\n', { settled: false });
 		expect(html).toContain("已经到达");
 		expect(html).not.toContain("tr-ui-note");
+	});
+
+	test("a closed broken block stays quiet while the reply is still growing", () => {
+		const source = 'root = Stack([Stat("a", 1), Stat("b")])';
+		const live = renderUiBlockFence(source, { settled: false });
+		expect(live).toContain("tr-ui--streaming");
+		expect(live).toContain("a");
+		expect(live).not.toContain("tr-ui-note");
+		expect(live).not.toContain("data-ui-repair");
+	});
+
+	test("several fences in one growing reply never offer a repair", () => {
+		const sources = ['root = Stack([Stat("a", 1), Stat("b")])', 'root = Stack([Card(title: "x")])', "root = Stack(["];
+		for (const source of sources) {
+			expect(renderUiBlockFence(source, { settled: false })).not.toContain("data-ui-repair");
+		}
+	});
+});
+
+describe("diagnostics belong to the reply body", () => {
+	test("a broken fence on another surface draws what parsed and says nothing", () => {
+		const source = 'root = Stack([Stat("a", 1), Stat("b")])';
+		const html = renderUiBlockFence(source, { settled: true, repair: false });
+		expect(html).toContain("tr-ui--streaming");
+		expect(html).toContain("a");
+		expect(html).not.toContain("tr-ui-note");
+		expect(html).not.toContain("tr-ui-errors");
+		expect(html).not.toContain("tr-ui-src");
+		expect(html).not.toContain("data-ui-repair");
+	});
+
+	test("a truncated fence on another surface names no cut", () => {
+		for (const source of ["root = Stack([", 'root = Stack([Card("t", [Text("x")])']) {
+			const html = renderUiBlockFence(source, { settled: true, repair: false });
+			expect(html).not.toContain("tr-ui-note");
+			expect(html).not.toContain("tr-ui--truncated");
+			expect(html).not.toContain("tr-ui--empty");
+			expect(html).not.toContain("data-ui-repair");
+		}
 	});
 });
 

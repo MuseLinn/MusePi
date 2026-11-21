@@ -511,6 +511,12 @@
 	color: var(--warn);
 }
 
+/* A reply cut off mid-block is an output limit, not the model's mistake: the
+ * notice stays readable without the warning colour. */
+.tr-ui--truncated .tr-ui-note {
+	color: var(--fg-muted);
+}
+
 .tr-ui-note ul {
 	margin: 4px 0 0;
 	padding-inline-start: 18px;
@@ -792,6 +798,15 @@
 .tr-ui-repair:hover {
 	border-color: var(--accent);
 	color: var(--accent);
+}
+
+/* One repair request per block: after it is sent the action is spent, and a
+ * redraw must not invite a second turn. */
+.tr-ui-repair:disabled {
+	opacity: 0.55;
+	cursor: default;
+	border-color: var(--border);
+	color: var(--fg-muted);
 }
 
 /* ---- list / quote / link / divider / code ----
