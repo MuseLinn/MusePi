@@ -2046,6 +2046,21 @@ export const tools = {
 	"tools.attachmentPreviewFailed": "无法读取附件",
 	"tools.attachmentLoadMore": "继续加载",
 	"tools.attachmentSave": "另存为",
+	// 密钥请求卡（secret-request）：值只单向进入本机加密存储
+	"tools.secretTitle": "需要一个密钥",
+	"tools.secretAllowTitle": "密钥使用许可",
+	"tools.secretValuePlaceholder": "粘贴密钥值",
+	"tools.secretMinLength": "至少 {count} 个字符",
+	"tools.secretHiddenNote": "Agent 看不到这个值，它只以 {env} 到达。",
+	"tools.secretAlreadySaved": "这个密钥已保存，Agent 请求使用它（{env}）。",
+	"tools.secretScopeAll": "所有会话可用；值只保存在本机并加密存储。",
+	"tools.secretSave": "保存",
+	"tools.secretSaving": "保存中…",
+	"tools.secretAllow": "允许",
+	"tools.secretAllowing": "允许中…",
+	"tools.secretSavedLine": "已安全保存 {name}",
+	"tools.secretAllowedLine": "已允许 {name}",
+	"tools.secretCancelledLine": "已取消",
 } as const;
 
 /** Key union for the tools domain (source of truth). */

@@ -112,6 +112,7 @@ import type { ReminderRow } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
 import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
+import { type SecretAnswer, SecretCard, type SecretRequest } from "./SecretCard";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionArtifactPreviewDialog, type SessionArtifactPreviewRequest } from "./SessionArtifactPreviewDialog";
 import type { SessionComposerProps } from "./SessionComposer";
@@ -507,6 +508,55 @@ export function ChatView({
 		};
 		return onSettingsChanged(sync);
 	}, [rpc, store?.sessionId]);
+	// Secret request card: the daemon pushes `secret-request` on this session's
+	// stream. The value never enters the store — SecretCard holds it for the
+	// duration of the input and answers through secret.answer.
+	const [secretRequest, setSecretRequest] = useState<SecretRequest | null>(null);
+	useEffect(() => {
+		const sessionId = store?.sessionId;
+		return rpc.addEventListener(event => {
+			if (event.kind === "secret-request") {
+				const payload = event.payload as Partial<SecretRequest> | undefined;
+				if (
+					!payload ||
+					typeof payload.requestId !== "string" ||
+					typeof payload.name !== "string" ||
+					typeof payload.purpose !== "string" ||
+					(payload.kind !== "fill" && payload.kind !== "allow")
+				) {
+					return;
+				}
+				// A request raised by a side session gets that session's own
+				// card; only this chat's envelopes mount here.
+				if (event.sessionId && sessionId && event.sessionId !== sessionId) return;
+				setSecretRequest({
+					requestId: payload.requestId,
+					name: payload.name,
+					purpose: payload.purpose,
+					kind: payload.kind,
+				});
+				return;
+			}
+			// Another device answered, or the request timed out as cancel.
+			if (event.kind === "secret-request-end") {
+				const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
+				if (typeof requestId === "string") {
+					setSecretRequest(current => (current?.requestId === requestId ? null : current));
+				}
+			}
+		});
+	}, [rpc, store?.sessionId]);
+	const answerSecret = useCallback(
+		async (answer: SecretAnswer): Promise<void> => {
+			await rpc.request("secret.answer", {
+				requestId: answer.requestId,
+				action: answer.action,
+				...(answer.value !== undefined ? { value: answer.value } : {}),
+				...(answer.scope !== undefined ? { scope: answer.scope } : {}),
+			});
+		},
+		[rpc],
+	);
 	// Pause banner hold timer: tick every second while the freeze is engaged
 	// so the "paused · mm:ss" clock advances.
 	const [, setPauseTick] = useState(0);
@@ -3922,6 +3972,16 @@ export function ChatView({
 										onDecide={onDecideApproval}
 									/>
 								))}
+								{secretRequest && (
+									<SecretCard
+										key={secretRequest.requestId}
+										request={secretRequest}
+										onAnswer={answerSecret}
+										onSettled={requestId =>
+											setSecretRequest(current => (current?.requestId === requestId ? null : current))
+										}
+									/>
+								)}
 								{ask && onAskAnswer && (
 									<div className="gui-ask-float" ref={askFloatRef}>
 										<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />

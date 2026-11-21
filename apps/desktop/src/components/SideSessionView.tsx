@@ -14,6 +14,7 @@ import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
 import { Composer } from "./Composer";
 import { ScrollEdgeBlur } from "./ScrollEdgeBlur";
+import { type SecretAnswer, SecretCard, type SecretRequest } from "./SecretCard";
 
 function clientId(): string {
 	let id = localStorage.getItem("musepi-gui-client-id");
@@ -112,6 +113,7 @@ function SideSessionBody({
 	const getSnapshot = useMemo(() => () => store.getSnapshot(), [store]);
 	const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 	const [asks, setAsks] = useState<readonly AskRequest[]>([]);
+	const [secretRequest, setSecretRequest] = useState<SecretRequest | null>(null);
 	const [quotes, setQuotes] = useState<DisplayContext[]>([]);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(bodyRef);
@@ -141,6 +143,41 @@ function SideSessionBody({
 		[sessionId],
 	);
 
+	// Secret requests arrive on the same session-scoped stream. The card
+	// answers through secret.answer; the value never leaves its own state.
+	useEffect(() => {
+		if (!rpc) return;
+		return rpc.addEventListener(event => {
+			if (event.sessionId !== sessionId) return;
+			if (event.kind === "secret-request") {
+				const payload = event.payload as Partial<SecretRequest> | undefined;
+				if (
+					!payload ||
+					typeof payload.requestId !== "string" ||
+					typeof payload.name !== "string" ||
+					typeof payload.purpose !== "string" ||
+					(payload.kind !== "fill" && payload.kind !== "allow")
+				) {
+					return;
+				}
+				setSecretRequest({
+					requestId: payload.requestId,
+					name: payload.name,
+					purpose: payload.purpose,
+					kind: payload.kind,
+				});
+				return;
+			}
+			// Another device answered, or the request timed out as cancel.
+			if (event.kind === "secret-request-end") {
+				const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
+				if (typeof requestId === "string") {
+					setSecretRequest(current => (current?.requestId === requestId ? null : current));
+				}
+			}
+		});
+	}, [rpc, sessionId]);
+
 	const decide = (requestId: string, approved: boolean, note?: string): void => {
 		if (!rpc) return;
 		const trimmed = note?.trim();
@@ -164,6 +201,18 @@ function SideSessionBody({
 				answer: value,
 			})
 			.catch(() => {});
+	};
+
+	const answerSecret = (value: SecretAnswer): Promise<void> => {
+		if (!rpc) return Promise.reject(new Error(t("general.sideSessionError")));
+		return rpc
+			.request("secret.answer", {
+				requestId: value.requestId,
+				action: value.action,
+				...(value.value !== undefined ? { value: value.value } : {}),
+				...(value.scope !== undefined ? { scope: value.scope } : {}),
+			})
+			.then(() => undefined);
 	};
 
 	const send = (
@@ -234,7 +283,7 @@ function SideSessionBody({
 				<ScrollEdgeBlur edge="end" />
 			</div>
 
-			{snap.approvals.length > 0 || asks.length > 0 ? (
+			{snap.approvals.length > 0 || asks.length > 0 || secretRequest !== null ? (
 				<div className="gui-side-session-approvals">
 					{snap.approvals.map(approval => (
 						<ApprovalCard
@@ -248,6 +297,16 @@ function SideSessionBody({
 					{asks.map(ask => (
 						<AskCard key={ask.requestId} ask={ask} onAnswer={value => answer(ask, value)} />
 					))}
+					{secretRequest && (
+						<SecretCard
+							key={secretRequest.requestId}
+							request={secretRequest}
+							onAnswer={answerSecret}
+							onSettled={requestId =>
+								setSecretRequest(current => (current?.requestId === requestId ? null : current))
+							}
+						/>
+					)}
 				</div>
 			) : null}
 

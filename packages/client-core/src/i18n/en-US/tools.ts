@@ -2102,4 +2102,20 @@ export const tools = {
 	"tools.attachmentPreviewFailed": "Could not read attachment",
 	"tools.attachmentLoadMore": "Load more",
 	"tools.attachmentSave": "Save as",
+	// Secret request card (secret-request): the value only travels one way
+	// into the local encrypted store.
+	"tools.secretTitle": "Secret required",
+	"tools.secretAllowTitle": "Secret access",
+	"tools.secretValuePlaceholder": "Paste the secret value",
+	"tools.secretMinLength": "At least {count} characters",
+	"tools.secretHiddenNote": "The agent cannot see this value — it reaches the agent only as {env}.",
+	"tools.secretAlreadySaved": "This secret is already saved; the agent asks to use it ({env}).",
+	"tools.secretScopeAll": "Available to all sessions; the value stays local and encrypted.",
+	"tools.secretSave": "Save",
+	"tools.secretSaving": "Saving…",
+	"tools.secretAllow": "Allow",
+	"tools.secretAllowing": "Allowing…",
+	"tools.secretSavedLine": "Saved securely: {name}",
+	"tools.secretAllowedLine": "Allowed: {name}",
+	"tools.secretCancelledLine": "Cancelled",
 } as const satisfies Record<ToolsKey, string>;
