@@ -224,6 +224,51 @@ function classNameTokens(source: string): string[] {
 	return tokens;
 }
 
+/** Every JSX opening tag in a source file, as { text, line }. A tag runs from
+ *  `<Name` to its closing `>`; braces are tracked so an arrow function or a
+ *  nested `{}` inside an attribute does not end the tag early. Line-based
+ *  scanning misses the contradiction formatter output actually produces
+ *  (one attribute per line). */
+function jsxTags(source: string): { text: string; line: number }[] {
+	const tags: { text: string; line: number }[] = [];
+	const opener = /<([A-Za-z][\w.]*)/g;
+	for (let match = opener.exec(source); match !== null; match = opener.exec(source)) {
+		// Skip TSX generics and comparisons: a tag needs an attribute or a close.
+		let index = match.index + match[0].length;
+		let depth = 0;
+		let close = -1;
+		while (index < source.length) {
+			const char = source[index];
+			if (char === "{") depth++;
+			else if (char === "}") depth--;
+			else if (char === ">" && depth === 0) {
+				close = index;
+				break;
+			} else if (char === "/" && source[index + 1] === ">" && depth === 0) {
+				close = index + 1;
+				break;
+			}
+			index++;
+		}
+		if (close === -1) break;
+		const text = source.slice(match.index, close + 1);
+		if (text.includes("=") || /^<[A-Za-z][\w.]*\s*\/?>$/.test(text)) {
+			const line = source.slice(0, match.index).split(/\r?\n/).length;
+			tags.push({ text, line });
+		}
+	}
+	return tags;
+}
+
+/** Relative import specifiers in a module, both static and dynamic. */
+function relativeImports(source: string): string[] {
+	const specifiers: string[] = [];
+	for (const match of source.matchAll(/(?:from|import)\s*\(?\s*"(\.{1,2}\/[^"]+)"/g)) {
+		specifiers.push(match[1]);
+	}
+	return specifiers;
+}
+
 /** Every file under `directory` with the given extension, recursively. */
 function walkSources(directory: string, extension: string): string[] {
 	const out: string[] = [];
@@ -500,45 +545,56 @@ describe("window drag — one owner for the property", () => {
 		]);
 	});
 
-	it("mounts every listed band from a component that is imported somewhere", () => {
-		// A class mentioned only in prose, or in a file nothing imports, is not
-		// a mounted band. Mounting means: some component's `className` carries
-		// the band, and that component is reachable from an entry point.
-		const files = walkSources(SRC, ".tsx");
-		// Renderer entry points: the HTML shells load them directly.
-		const entryPoints = new Set(
-			fs
-				.readdirSync(path.resolve(SRC, ".."))
-				.filter(name => name.endsWith(".html"))
-				.flatMap(name =>
-					Array.from(
-						fs.readFileSync(path.resolve(SRC, "..", name), "utf8").matchAll(/src="\.?\/?src\/([\w-]+)\.tsx"/g),
-						match => match[1],
-					),
-				),
-		);
-		const sources = new Map(files.map(file => [file, fs.readFileSync(file, "utf8")]));
-		const imports = new Set<string>();
-		for (const source of sources.values()) {
-			for (const match of source.matchAll(/from\s+"(\.[^"]+)"/g)) {
-				imports.add(match[1]);
-			}
-			for (const match of source.matchAll(/import\("(\.[^"]+)"\)/g)) {
-				imports.add(match[1]);
+	it("mounts every listed band from a module reachable from a renderer entry", () => {
+		// A class mentioned only in prose is not a mount; neither is a component
+		// that nothing loads. Mounting means: some module's `className` carries
+		// the band AND that module is reachable through the real import graph
+		// from an HTML entry point — one hop is not enough, because a two-file
+		// orphan also has an importer.
+		const sources = new Map(walkSources(SRC, ".tsx").map(file => [file, fs.readFileSync(file, "utf8")]));
+		const entryFiles = new Set<string>();
+		const appDir = path.resolve(SRC, "..");
+		for (const name of fs.readdirSync(appDir).filter(entry => entry.endsWith(".html"))) {
+			const html = fs.readFileSync(path.join(appDir, name), "utf8");
+			for (const match of html.matchAll(/src="\.?\/?src\/([\w-]+)\.tsx"/g)) {
+				entryFiles.add(path.join(SRC, `${match[1]}.tsx`).replaceAll("\\", "/"));
 			}
 		}
+		expect(entryFiles.size).toBeGreaterThan(0);
+
+		/** Resolve a relative specifier against the importing file, trying the
+		 *  extensions a bundler would. */
+		const resolve = (from: string, specifier: string): string | null => {
+			const base = path.resolve(path.dirname(from), specifier).replaceAll("\\", "/");
+			for (const candidate of [base, `${base}.tsx`, `${base}.ts`, `${base}/index.tsx`, `${base}/index.ts`]) {
+				if (sources.has(candidate)) return candidate;
+			}
+			return null;
+		};
+
+		// Breadth-first over the import graph, starting at the entry points.
+		const reachable = new Set<string>([...entryFiles].filter(file => sources.has(file)));
+		const queue = [...reachable];
+		while (queue.length > 0) {
+			const file = queue.shift()!;
+			for (const specifier of relativeImports(sources.get(file) ?? "")) {
+				const resolved = resolve(file, specifier);
+				if (resolved && !reachable.has(resolved)) {
+					reachable.add(resolved);
+					queue.push(resolved);
+				}
+			}
+		}
+
+		const unreachable: string[] = [];
 		for (const band of classBands(dragSelectors())) {
-			const mounts = [...sources.entries()].filter(([, source]) => classNameTokens(source).includes(band));
-			expect({ band, mounts: mounts.length > 0 }).toEqual({ band, mounts: true });
-			// Reachability: the mounting file is an HTML entry point, or another
-			// module imports it. A dead `__ghost.tsx` that nothing loads cannot
-			// satisfy the check.
-			const reachable = mounts.some(([file]) => {
-				const stem = path.basename(file, ".tsx");
-				return entryPoints.has(stem) || [...imports].some(specifier => specifier.endsWith(`/${stem}`));
-			});
-			expect({ band, reachable }).toEqual({ band, reachable: true });
+			const mounted = [...sources.entries()]
+				.filter(([, source]) => classNameTokens(source).includes(band))
+				.map(([file]) => file);
+			expect({ band, mounted: mounted.length > 0 }).toEqual({ band, mounted: true });
+			if (!mounted.some(file => reachable.has(file))) unreachable.push(band);
 		}
+		expect(unreachable).toEqual([]);
 	});
 
 	it("marks the pinned card's drag strip as a band", async () => {
@@ -562,14 +618,16 @@ describe("window drag — one owner for the property", () => {
 	});
 
 	it("never marks one element as both a band and an opt-out", () => {
-		// The owner sheet reads the attribute; an element claiming both would
-		// be a contradiction whose winner depends on source order inside it.
+		// Scanned per JSX TAG, not per line: a formatter puts every attribute on
+		// its own line, and the contradiction only becomes visible when the
+		// whole tag is read. A spread attribute is out of reach for a string
+		// scan; `check:types` rejects the duplicate-attribute spelling (TS17001)
+		// and a spread that overrides at runtime is simply the later value.
 		const contradictions: string[] = [];
 		for (const file of walkSources(SRC, ".tsx")) {
-			const source = fs.readFileSync(file, "utf8");
-			for (const [index, line] of source.split(/\r?\n/).entries()) {
-				const modes = new Set(Array.from(line.matchAll(/data-gui-window-drag="(band|off)"/g), m => m[1]));
-				if (modes.size > 1) contradictions.push(`${path.relative(SRC, file)}:${index + 1}`);
+			for (const tag of jsxTags(fs.readFileSync(file, "utf8"))) {
+				const modes = new Set(Array.from(tag.text.matchAll(/data-gui-window-drag="(band|off)"/g), m => m[1]));
+				if (modes.size > 1) contradictions.push(`${path.relative(SRC, file)}:${tag.line}`);
 			}
 		}
 		expect(contradictions).toEqual([]);
