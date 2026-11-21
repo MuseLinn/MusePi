@@ -523,20 +523,33 @@ export function ChatView({
 			return;
 		}
 		let cancelled = false;
-		void (async () => {
+		const current = store;
+		const check = async (): Promise<void> => {
 			try {
-				const res = await rpc.request<{ calls: PendingToolCallWire[] }>("session.pendingToolCalls", {
-					sessionId: sessionIdForPending,
-				});
-				if (!cancelled) setPendingToolCalls(res?.calls ?? []);
+				const res = await rpc.request<{ calls: PendingToolCallWire[]; working?: boolean }>(
+					"session.pendingToolCalls",
+					{ sessionId: sessionIdForPending },
+				);
+				if (cancelled) return;
+				setPendingToolCalls(res?.calls ?? []);
+				// The daemon's own flag settles a run state this view inherited
+				// from a crashed connection: no agent_end ever arrives, so a
+				// reopened store can keep reporting a turn nobody is running.
+				if (res?.working === false && current?.getSnapshot().working) current.adoptIdleState();
 			} catch {
 				if (!cancelled) setPendingToolCalls(null);
 			}
-		})();
+		};
+		void check();
+		// Keep asking while this view believes a turn runs. The stream cannot
+		// correct it by itself — the process that would have sent agent_end is
+		// gone — and the flag would otherwise pin the stop capsule forever.
+		const timer = workingForPending ? setInterval(() => void check(), 5_000) : null;
 		return () => {
 			cancelled = true;
+			if (timer !== null) clearInterval(timer);
 		};
-	}, [rpc, sessionIdForPending, workingForPending]);
+	}, [rpc, sessionIdForPending, workingForPending, store]);
 	const pendingCallsNotice = useMemo(
 		() => (workingForPending ? null : pendingToolCallsNotice(pendingToolCalls ?? [])),
 		[workingForPending, pendingToolCalls],

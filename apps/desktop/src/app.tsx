@@ -1757,6 +1757,11 @@ function AppInner(): ReactNode {
 				if (phase === "closed") {
 					if (expectedDisconnectsRef.current.consume(client)) return;
 					setStatus("closed");
+					// The daemon that would have sent `agent_end` is gone, so the
+					// turn the store shows cannot be running: a pinned stop capsule
+					// would be a lie. The reconnect's snapshot restores the true
+					// flag if the daemon (or a resumed turn) is in fact alive.
+					storeRef.current?.adoptIdleState();
 					// Unannounced drop (daemon restart / machine sleep): the
 					// in-place auto-reconnect restore froze the main-window
 					// renderer (ce1c9284d — CPU idle, clicks dead); recover

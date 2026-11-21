@@ -679,6 +679,26 @@ export class GuiSessionStore {
 		return this.#snapshot;
 	}
 
+	/**
+	 * Adopt the daemon's word that nothing is running.
+	 *
+	 * A crashed turn never emits `agent_end`, so a reopen can restore a
+	 * `working` flag whose work no longer exists anywhere — the stop capsule
+	 * then stays pinned and the composer reports a turn that cannot be stopped.
+	 * `session.list` carries the daemon's live `isStreaming`, which is the truth
+	 * after a reconnect. Clearing invents no entries: the only state dropped is
+	 * the in-memory run flag, the partial stream and the tool rows that were
+	 * never persisted.
+	 */
+	adoptIdleState(): void {
+		if (!this.#working && !this.#streaming && this.#activeTools.size === 0) return;
+		this.#working = false;
+		this.#streaming = false;
+		this.#activeTools = new Map();
+		this.#snapshot = this.#buildSnapshot();
+		this.#emit();
+	}
+
 	#buildSnapshot(): GuiSessionState {
 		const snap = this.#view.snapshot();
 		// 乐观回显条目:发送瞬间本地插入的用户消息,追加在 entries 尾部

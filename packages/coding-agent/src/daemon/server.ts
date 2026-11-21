@@ -2677,7 +2677,10 @@ export class DaemonServer {
 						summary,
 					};
 				});
-				return { calls };
+				// The daemon's live truth, so a client that lost its connection can
+				// settle a run flag the crash never ended.
+				const state = snap.state as { isStreaming?: boolean } | undefined;
+				return { calls, working: state?.isStreaming === true };
 			}
 			case "daemon.pauseStatus": {
 				// Process-global freeze (TUI /pause parity) across every session
