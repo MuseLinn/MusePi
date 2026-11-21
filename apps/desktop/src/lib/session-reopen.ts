@@ -21,7 +21,7 @@ export type SessionOpenOutcome =
 	/** A verdict on the session itself (gone, unreadable): retrying repeats it. */
 	| { status: "failed"; error: unknown };
 
-export type SessionReopenStatus = "opened" | "cancelled" | "superseded" | "failed" | "exhausted";
+type SessionReopenStatus = "opened" | "cancelled" | "superseded" | "failed" | "exhausted";
 
 export interface SessionReopenResult {
 	status: SessionReopenStatus;
