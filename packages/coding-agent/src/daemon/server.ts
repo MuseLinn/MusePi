@@ -2799,6 +2799,10 @@ export class DaemonServer {
 			case "marketplace.sources.refresh": {
 				return this.#services.get<MarketplaceService>("marketplace").refreshSources(params ?? {});
 			}
+			case "marketplace.topic": {
+				// 按 `musepi-plugin` topic 发现仓库（未审阅，单独于精选目录）。
+				return this.#services.get<MarketplaceService>("marketplace").topicPlugins(params ?? {});
+			}
 			case "skills.list": {
 				return this.#services.get<MarketplaceService>("marketplace").listSkills();
 			}
@@ -3007,6 +3011,17 @@ export class DaemonServer {
 			}
 			case "board.save": {
 				return this.#services.get<BoardService>("boards").save((params ?? {}) as { boards?: unknown });
+			}
+			case "board.resource.list": {
+				// 一张卡工作区里的文件（卡目录内，一层）。
+				return this.#services
+					.get<BoardService>("boards")
+					.resourceList((params ?? {}) as { boardId?: unknown; widgetId?: unknown });
+			}
+			case "board.resource.read": {
+				return this.#services
+					.get<BoardService>("boards")
+					.resourceRead((params ?? {}) as { boardId?: unknown; widgetId?: unknown; path?: unknown });
 			}
 			case "cron.list": {
 				// 实现归 ScheduleService（cron 状态机语义不变）。

@@ -198,6 +198,7 @@ export class MarketplaceService implements DaemonService {
 		"skills.marketplace.detail": "skillDetail",
 		"skills.marketplace.install": "installMarketSkill",
 		"skills.marketplace.preview": "previewMarketSkill",
+		"skills.marketplace.updates": "checkSkillUpdates",
 		"skills.marketplace.status": "installStatus",
 		"skills.marketplace.cancel": "cancelMarketInstall",
 		"skills.marketplace.approve": "approveMarketInstall",
