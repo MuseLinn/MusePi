@@ -4160,7 +4160,22 @@
 
 .gui-range {
 	width: 160px;
-	accent-color: var(--color-accent);
+	/* Native range input: the track and thumb keep the platform's drawing,
+	 * but every colour (and the filled portion) follows the shared slider
+	 * family, so Settings → sound / voice / pet size / notifications read as
+	 * the same control as the two custom ladders. */
+	accent-color: var(--gui-slider-fill);
+	height: var(--gui-slider-knob-size);
+	cursor: pointer;
+}
+
+.gui-range:hover:not(:disabled) {
+	accent-color: var(--gui-slider-fill-hot);
+}
+
+.gui-range:disabled {
+	opacity: var(--gui-slider-disabled-opacity);
+	cursor: default;
 }
 
 .gui-color {

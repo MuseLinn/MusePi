@@ -36,6 +36,7 @@ scope:
 | `--ease-appear` / `--ease-dismiss` / `--ease-one-take`, `--duration-one-take`, `--one-take-offset`, `--one-take-exit`, `--one-take-enter` | Arrival/exit fades and shared-surface (one-take) timing | `::view-transition-group` takes `--ease-one-take` + `--duration-one-take` (280ms); its old/new snapshots take `--one-take-exit` (120ms) / `--one-take-enter` (180ms) with the appear/dismiss pair and `--one-take-offset`. WAAPI flights read the same pair through `oneTakeMotion()` |
 | `--z-*` | Stacking levels | Floats, modals and tips have their own tiers |
 | `--gui-grip-*` | Splitter grip geometry and three states | See `SplitterGrip` below |
+| `--gui-slider-*` | Slider track, fill, detents, knob, focus, hover and disabled states | Declared in `gui-chat.css` (this family's authority); one family for **every** slider — see `LadderSlider` below |
 
 ## Desktop shell (`apps/desktop/src/components/`)
 
@@ -47,6 +48,9 @@ scope:
 | `WorkspacePageHeader` | Page-level title header (icon/title/description/actions) | Board, task center, capability center and similar pages |
 | `RightRail` | The 44px right-edge icon column | The entry point to the right panel; **must render even while the panel is collapsed** |
 | `ContextPanel` | The right panel itself (tabs, split, maximize) | The only container for right-panel content |
+| `LadderSlider` (thinking) | The model's thinking-level slider, with `Auto` and the model ceiling | `components/LadderSlider.tsx`, under the agent tab's model card; a drag commits on release, rungs above the ceiling stay visible but unreachable |
+| `LadderSlider` (settings) | Detent ladder for a numeric setting that declares presets | `components/settings-controls/LadderSlider.tsx`; the pointer/keys can only land on declared values |
+| `--gui-slider-*` consumers | Any slider | Both ladders draw the full track; native `<input class="gui-range">` (sound, voice, pet size, notifications) takes the same fill/disabled colours |
 | Host bands for `SplitterGrip` | `.gui-resize-x--side` / `.gui-pane-resize-x` / `.gui-dock-handle` | The positioning layer for each of the three seams |
 
 ## Shared components (`packages/client-core/src/components/`)
@@ -93,7 +97,7 @@ Shared by desktop and mobile; changes must be verified on both.
 Building this catalog surfaced two places that are still not converged. Keep them in mind when changing things:
 
 1. **Interaction-state naming is not unified.** `--glass-hover*` covers generic hover, while component-specific three-state sets like `--gui-grip-*` are newer; a new component must decide whether to reuse the former or open a family by the naming rule.
-2. **CSS contract tests cover only radius and the grip.** Outside `scripts/check-radius-tokens.ts` and `test/splitter-grip.test.ts`, most component styles have no guard.
+2. **CSS contract tests cover only radius, the grip and the slider family.** Outside `scripts/check-radius-tokens.ts`, `test/splitter-grip.test.ts` and `test/slider-tokens.test.ts`, most component styles have no guard.
 
 When adding a component, update its row here and record the contract it follows in `docs/gui-design.md`.
 
@@ -107,5 +111,6 @@ A prose rule is advisory; a check is a contract. Where a standard can be verifie
 | `scripts/check-disabled-hover.ts` | A class with a `:disabled` rule excludes the pointer in `:hover` (`:hover:not(:disabled)`) or resets it (`:disabled:hover`); generated asset bundles are exempt |
 | `scripts/check-splitter-grip.ts` | Only `SplitterGrip.tsx` may emit the grip class; the drag state keys off the pill's own `data-resizing`, never the global `body.gui-resizing`; the retired `.gui-resize-grip` stays gone |
 | `test/splitter-grip.test.ts` | The grip primitive's tokens, three states, and seam geometry |
+| `test/slider-tokens.test.ts` | The shared slider token family, both ladders, the native range colours and the model disclosure's focus contract |
 
 A new guard must be proven to fail on the unfixed tree before it is trusted (see `.agents/rules/testing.md`: a guard that passes both ways guards nothing).

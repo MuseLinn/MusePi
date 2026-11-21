@@ -13,11 +13,13 @@
 import { t } from "@musepi/client-core";
 import { fmtCost } from "@musepi/client-core/src/lib/format";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AgentAvatar } from "../../components/AgentAvatar";
 import { clampLadderValue, LadderSlider } from "../../components/LadderSlider";
 import { ModelSelector } from "../../components/ModelSelector";
 import { ModelBrandIcon } from "../../components/model-brand-icon";
+import { Reveal } from "../../components/Reveal";
+import { thinkingLabel } from "../../components/thinking-selector-shared";
 import { Icon, type IconName } from "../../vendor/oc-icons";
 import { agentSignalsFromSnapshot } from "../agent-signals";
 import { thinkingOrbStateFromSession } from "../companion";
@@ -162,6 +164,17 @@ export function AgentInfoPane({
 		? `${info.model.provider ? `${info.model.provider}/` : ""}${info.model.id}`
 		: (usage?.model ?? null);
 	const modelName = info?.model?.name ?? info?.model?.id ?? null;
+	// The model card's collapsed readout: the model reference with the level it
+	// is running at. Expanding the card is the only way into the picker.
+	const [modelOpen, setModelOpen] = useState(false);
+	const modelCardRef = useRef<HTMLButtonElement | null>(null);
+	const modelListId = useId();
+	const collapseModel = useCallback((): void => {
+		setModelOpen(false);
+		// The disclosure's trigger is the keyboard's next stop, not the list
+		// that is folding away.
+		modelCardRef.current?.focus();
+	}, []);
 
 	const notify = useCallback((message: string): void => {
 		setFailed(message);
@@ -267,39 +280,67 @@ export function AgentInfoPane({
 			)}
 
 			<section className="gui-agent-info-section">
-				<div className="gui-agent-info-section-head">
-					<span>{t("general.agentInfoModel")}</span>
-				</div>
-				<div className="gui-agent-info-model">
-					{modelRef ? (
-						<>
+				<button
+					type="button"
+					ref={modelCardRef}
+					className="gui-agent-model-card"
+					aria-expanded={modelOpen}
+					aria-controls={modelListId}
+					onClick={() => (modelOpen ? collapseModel() : setModelOpen(true))}
+					onKeyDown={event => {
+						// Focus can be back on the card while the list is open
+						// (shift-Tab); Escape still folds the disclosure and keeps
+						// the turn's own Escape for the composer.
+						if (event.key === "Escape" && modelOpen) {
+							event.preventDefault();
+							collapseModel();
+						}
+					}}
+					title={modelRef ?? undefined}
+				>
+					<span className="gui-agent-model-card-main">
+						{modelRef ? (
 							<ModelBrandIcon
 								provider={info?.model?.provider ?? modelRef.split("/")[0] ?? ""}
 								modelId={info?.model?.id ?? modelRef.split("/").pop() ?? ""}
-								size={14}
+								size={16}
 							/>
-							<span className="gui-agent-info-model-name" title={modelRef}>
-								{modelName ?? modelRef}
-							</span>
-							<span className="gui-agent-info-model-ref" title={modelRef}>
-								{modelRef}
-							</span>
-						</>
-					) : (
-						<span className="gui-agent-info-note">
-							{info === null && !infoError ? t("sessionInfo.loading") : t("sessionInfo.unavailable")}
+						) : (
+							<Icon name="ai-agent" className="gui-agent-info-row-icon" />
+						)}
+						<span className="gui-agent-model-card-name">
+							{modelName ??
+								modelRef ??
+								(info === null && !infoError ? t("sessionInfo.loading") : t("sessionInfo.unavailable"))}
 						</span>
-					)}
-				</div>
-				<ModelSelector
-					inline
-					rpc={rpc}
-					sessionId={sessionId}
-					currentModelId={modelRef}
-					onSelect={() => afterSwitch()}
-					onSwitchError={onSwitchError}
-					onAddProvider={onAddProvider}
-				/>
+						<span className="gui-agent-model-card-level" title={t("general.agentInfoThinking")}>
+							{info
+								? thinkingLabel(configured)
+								: infoError
+									? t("sessionInfo.unavailable")
+									: t("sessionInfo.loading")}
+						</span>
+						<Icon name="arrow-down-s" className="gui-agent-model-card-caret" />
+					</span>
+					<span className="gui-agent-model-card-ref" title={modelRef ?? undefined}>
+						{modelRef ?? (info === null && !infoError ? t("sessionInfo.loading") : t("sessionInfo.unavailable"))}
+					</span>
+				</button>
+				<Reveal open={modelOpen}>
+					<div id={modelListId}>
+						<ModelSelector
+							inline
+							active={modelOpen}
+							rpc={rpc}
+							sessionId={sessionId}
+							currentModelId={modelRef}
+							onSelect={() => afterSwitch()}
+							onSwitchError={onSwitchError}
+							onAddProvider={onAddProvider}
+							onDismiss={collapseModel}
+						/>
+					</div>
+				</Reveal>
 			</section>
 
 			<section className="gui-agent-info-section">
