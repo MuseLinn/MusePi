@@ -119,6 +119,13 @@ async function mount(rpc: RpcClient, state: GuiSessionState = snap()) {
 		root.render(
 			<AgentInfoPane rpc={rpc} sessionId="session-1" cwd="C:/workspace" title="Refactor the panel" snap={state} />,
 		);
+		// Settle the pane's initial reads INSIDE mount. `thinkingInfo`,
+		// `contextUsage` and the agent-role `session.list` each resolve into a
+		// state update; one landing after mount would re-render the pane while a
+		// test is mid-assertion. The macrotask turn is what lets a read that
+		// settles a frame late (slow machine, batched run) be flushed here
+		// instead of during the next `expect`.
+		await new Promise(resolve => setTimeout(resolve, 0));
 	});
 	return {
 		host,
