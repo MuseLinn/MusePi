@@ -242,6 +242,17 @@ function clampDockRightWidth(width: number): number {
 	return Math.min(TERMINAL_DOCK_RIGHT_WIDTH_MAX, Math.max(TERMINAL_DOCK_RIGHT_WIDTH_MIN, width));
 }
 
+/**
+ * 消息流顶部预留的头部带(px)。`.gui-chat-column .gui-transcript` 的
+ * padding-top 与它同名同值(gui-chat.css,由 transcript-top-fade.test 守住):
+ * 内容在这段距离内还没滑到头部行之下,顶部羽化不得出现——否则那条 56px
+ * 的带子整块盖在空白头部带上,读成容器上边缘的高亮。
+ */
+export const TRANSCRIPT_HEAD_INSET = 52;
+
+/** 模块级冻结对象:两个 hook 都按引用比较依赖,内联对象会每次渲染重挂。 */
+const TRANSCRIPT_SCROLL_EDGE = { topInset: TRANSCRIPT_HEAD_INSET } as const;
+
 export function ChatView({
 	store,
 	rpc,
@@ -1007,9 +1018,10 @@ export function ChatView({
 	}, []);
 	// 内容边界羽化:纵向上下羽化(transcript 自身,修复静态 data 属性从不
 	// 更新的死接线)+ 深扫描消息内的工具渲染横向滚动块(tv-pre / diff,
-	// 同 mask 配方,只在横向溢出时显示左右羽化)。
-	useScrollShadow(transcriptRef);
-	useDeepScrollShadow(transcriptRef, ".tv-pre, .tv-diff, .tv-diff-sbs-cell");
+	// 同 mask 配方,只在横向溢出时显示左右羽化)。顶部羽化带滚过 52px
+	// 头部预留才出现——见 TRANSCRIPT_HEAD_INSET。
+	useScrollShadow(transcriptRef, undefined, TRANSCRIPT_SCROLL_EDGE);
+	useDeepScrollShadow(transcriptRef, ".tv-pre, .tv-diff, .tv-diff-sbs-cell", TRANSCRIPT_SCROLL_EDGE);
 
 	/**
 	 * Type anywhere, land in the composer.

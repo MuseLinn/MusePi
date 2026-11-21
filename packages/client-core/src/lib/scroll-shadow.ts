@@ -41,29 +41,43 @@ export interface ScrollEdgeState {
 	right: boolean;
 }
 
+export interface ScrollEdgeOptions {
+	/**
+	 * 顶部预留带(px):容器在内容起点之上留了一段浮层区域(例如
+	 * transcript 的头部行),内容滚过这段距离才真正贴到顶缘之下。在这
+	 * 段距离内显示顶部羽化只会覆盖空白带和容器边缘,读成一条高亮带。
+	 * 默认 0(只有自身溢出的容器与既有调用方行为不变)。
+	 */
+	topInset?: number;
+}
+
 /**
  * 由滚动几何算出四方向羽化状态。纯函数:内容不溢出时四个方向全是
  * false(scrollTop/scrollLeft 恒为 0,scrollHeight==clientHeight),
  * 所以"只在可滚动时显示羽化"不需要额外判断。
  */
-export function computeScrollEdgeState(m: ScrollEdgeMetrics): ScrollEdgeState {
+export function computeScrollEdgeState(m: ScrollEdgeMetrics, options: ScrollEdgeOptions = {}): ScrollEdgeState {
+	const topThreshold = SCROLL_EDGE_THRESHOLD + Math.max(0, options.topInset ?? 0);
 	return {
-		top: m.scrollTop > SCROLL_EDGE_THRESHOLD,
+		top: m.scrollTop > topThreshold,
 		bottom: m.scrollTop + m.clientHeight < m.scrollHeight - SCROLL_EDGE_THRESHOLD,
 		left: m.scrollLeft > SCROLL_EDGE_THRESHOLD,
 		right: m.scrollLeft + m.clientWidth < m.scrollWidth - SCROLL_EDGE_THRESHOLD,
 	};
 }
 
-function applyScrollEdgeState(el: HTMLElement): ScrollEdgeState {
-	const state = computeScrollEdgeState({
-		scrollTop: el.scrollTop,
-		clientHeight: el.clientHeight,
-		scrollHeight: el.scrollHeight,
-		scrollLeft: el.scrollLeft,
-		clientWidth: el.clientWidth,
-		scrollWidth: el.scrollWidth,
-	});
+function applyScrollEdgeState(el: HTMLElement, options?: ScrollEdgeOptions): ScrollEdgeState {
+	const state = computeScrollEdgeState(
+		{
+			scrollTop: el.scrollTop,
+			clientHeight: el.clientHeight,
+			scrollHeight: el.scrollHeight,
+			scrollLeft: el.scrollLeft,
+			clientWidth: el.clientWidth,
+			scrollWidth: el.scrollWidth,
+		},
+		options,
+	);
 	el.dataset.topScroll = String(state.top);
 	el.dataset.bottomScroll = String(state.bottom);
 	el.dataset.leftScroll = String(state.left);
@@ -76,10 +90,14 @@ function applyScrollEdgeState(el: HTMLElement): ScrollEdgeState {
  * 子树内容变化(流式输出、列表更新不改 scrollTop 但改 scrollHeight)
  * 都会重新测量。返回解绑函数。
  */
-export function attachScrollShadow(el: HTMLElement, onMeasure?: (el: HTMLElement) => void): () => void {
+export function attachScrollShadow(
+	el: HTMLElement,
+	onMeasure?: (el: HTMLElement) => void,
+	options?: ScrollEdgeOptions,
+): () => void {
 	const measure = (): void => {
 		if (!el.isConnected) return;
-		applyScrollEdgeState(el);
+		applyScrollEdgeState(el, options);
 		onMeasure?.(el);
 	};
 	el.addEventListener("scroll", measure, { passive: true });
@@ -113,12 +131,16 @@ export function attachScrollShadow(el: HTMLElement, onMeasure?: (el: HTMLElement
  * 浮层、菜单),也可能开关时被整体替换——200ms 轮询在元素变化时重新订阅,
  * 缺失期间开销可忽略。
  */
-export function useScrollShadow(rootRef: RefObject<HTMLElement | null>, onMeasure?: (el: HTMLElement) => void): void {
+export function useScrollShadow(
+	rootRef: RefObject<HTMLElement | null>,
+	onMeasure?: (el: HTMLElement) => void,
+	options?: ScrollEdgeOptions,
+): void {
 	useEffect(() => {
 		let cleanup: (() => void) | undefined;
 		let lastEl: HTMLElement | null = rootRef.current;
 		const setup = (root: HTMLElement): void => {
-			cleanup = attachScrollShadow(root, onMeasure);
+			cleanup = attachScrollShadow(root, onMeasure, options);
 		};
 		if (lastEl) setup(lastEl);
 		const iv = window.setInterval(() => {
@@ -132,7 +154,7 @@ export function useScrollShadow(rootRef: RefObject<HTMLElement | null>, onMeasur
 			window.clearInterval(iv);
 			cleanup?.();
 		};
-	}, [rootRef, onMeasure]);
+	}, [rootRef, onMeasure, options]);
 }
 
 /**
@@ -142,7 +164,11 @@ export function useScrollShadow(rootRef: RefObject<HTMLElement | null>, onMeasur
  * React 拿不到每个内部元素的 ref)和一棵子树里散落多个横向滚动容器的
  * 面板(右栏 workspace / 扩展中心)。
  */
-export function useDeepScrollShadow(rootRef: RefObject<HTMLElement | null>, selector: string): void {
+export function useDeepScrollShadow(
+	rootRef: RefObject<HTMLElement | null>,
+	selector: string,
+	options?: ScrollEdgeOptions,
+): void {
 	useEffect(() => {
 		let disposed = false;
 		let cleanupIv = 0;
@@ -158,8 +184,10 @@ export function useDeepScrollShadow(rootRef: RefObject<HTMLElement | null>, sele
 					attached.delete(el);
 				}
 			}
-			if (!attached.has(root)) attached.set(root, attachScrollShadow(root));
+			if (!attached.has(root)) attached.set(root, attachScrollShadow(root, undefined, options));
 			for (const el of root.querySelectorAll<HTMLElement>(selector)) {
+				// inset 描述的是 ROOT 容器预留的头部带;raw-HTML 子容器
+				// (表格 / 代码块等)仍用普通边缘阈值。
 				if (!attached.has(el)) attached.set(el, attachScrollShadow(el));
 			}
 		};
@@ -193,5 +221,5 @@ export function useDeepScrollShadow(rootRef: RefObject<HTMLElement | null>, sele
 			for (const detach of attached.values()) detach();
 			attached.clear();
 		};
-	}, [rootRef, selector]);
+	}, [rootRef, selector, options]);
 }
