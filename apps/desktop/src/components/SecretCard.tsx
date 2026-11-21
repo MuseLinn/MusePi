@@ -19,7 +19,7 @@ export interface SecretRequest {
 	kind: "fill" | "allow";
 }
 
-export type SecretAction = "save" | "allow" | "cancel";
+type SecretAction = "save" | "allow" | "cancel";
 
 export interface SecretAnswer {
 	requestId: string;
@@ -31,7 +31,7 @@ export interface SecretAnswer {
 
 /** The obfuscator collects env-var secrets of 8+ characters; the card holds
  *  the same floor so a saved value is never too short to be usable. */
-export const MIN_SECRET_VALUE_LENGTH = 8;
+const MIN_SECRET_VALUE_LENGTH = 8;
 
 /** How long the one-line outcome stays before the host drops the request. */
 const SETTLED_LINGER_MS = 2400;
