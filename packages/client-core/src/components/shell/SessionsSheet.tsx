@@ -27,6 +27,10 @@ import { SearchField } from "../common/SearchField.js";
 
 const DRAG_DISMISS_PX = 120; // downward drag past this dismisses the sheet
 
+/** Host read state for one row (`sessionStatus.list`): the daemon owns the
+ *  record, so the phone shows exactly what the desktop shows. */
+type SessionReadMark = { unread?: boolean; failed?: boolean };
+
 /** Filter sessions by title or cwd (case-insensitive, trimmed query). */
 export function filterSessions(
 	sessions: readonly WorkspaceSessionInfo[],
@@ -72,6 +76,50 @@ export function SessionsSheet({
 	const velocity = useRef(0);
 	const [query, setQuery] = useState("");
 	const filtered = useMemo(() => filterSessions(sessions, query), [sessions, query]);
+	// Unread / failed markers come from the same host-authoritative read state
+	// the desktop polls; the sheet only needs them while it is visible, so the
+	// fetch arms on open and stops on close.
+	const [readMarks, setReadMarks] = useState<ReadonlyMap<string, SessionReadMark>>(() => new Map());
+	useEffect(() => {
+		if (!open) return;
+		let alive = true;
+		const load = (): void => {
+			void client
+				.rpc<{ states?: Array<{ sessionId?: unknown; unread?: unknown; failed?: unknown }> }>("sessionStatus.list")
+				.then(result => {
+					if (!alive) return;
+					const next = new Map<string, SessionReadMark>();
+					for (const state of result?.states ?? []) {
+						if (typeof state?.sessionId !== "string") continue;
+						next.set(state.sessionId, { unread: state.unread === true, failed: state.failed === true });
+					}
+					setReadMarks(prev => {
+						if (prev.size === next.size) {
+							let same = true;
+							for (const [id, mark] of next) {
+								const old = prev.get(id);
+								if (old?.unread !== mark.unread || old?.failed !== mark.failed) {
+									same = false;
+									break;
+								}
+							}
+							if (same) return prev;
+						}
+						return next;
+					});
+				})
+				.catch(() => {
+					// Older daemon without sessionStatus.list: no markers, no error
+					// surface — the sheet still switches sessions.
+				});
+		};
+		load();
+		const timer = setInterval(load, 5_000);
+		return () => {
+			alive = false;
+			clearInterval(timer);
+		};
+	}, [open, client]);
 	// Only one row may sit open at a time (iOS list convention) — the sheet
 	// owns the swiped id so opening row B snaps row A shut.
 	const [swipedId, setSwipedId] = useState<string | null>(null);
@@ -268,9 +316,13 @@ export function SessionsSheet({
 								client={client}
 								session={session}
 								active={active}
+								read={readMarks.get(session.id)}
 								anySwiped={swipedId !== null && swipedId !== session.id}
 								onSwiped={setSwipedId}
 								onSelect={() => {
+									// Opening is the explicit read shared by every client:
+									// the daemon clears the dot on the desktop too.
+									void client.rpc("sessionStatus.mark", { sessionId: session.id, read: true }).catch(() => {});
 									onSelect(session.id);
 									onClose();
 								}}
@@ -326,6 +378,7 @@ function SwipeableRow({
 	client,
 	session,
 	active,
+	read,
 	anySwiped,
 	onSwiped,
 	onSelect,
@@ -333,6 +386,8 @@ function SwipeableRow({
 	client: SessionClient;
 	session: WorkspaceSessionInfo;
 	active: boolean;
+	/** Host read state for this row; absent = read (no record). */
+	read?: SessionReadMark;
 	anySwiped: boolean;
 	onSwiped(id: string | null): void;
 	onSelect(): void;
@@ -351,9 +406,21 @@ function SwipeableRow({
 	const velocity = useRef(0);
 
 	const open = offset <= -SWIPE_ACTIONS_PX + 2;
-	// 标题之外，运行/暂停是列表里唯一无法从文本得知的状态；行尾菜单区整体
-	// aria-hidden，读屏拿不到。空闲行保持静默——每行都念「空闲」会淹掉标题。
-	const statusLabel = session.working ? t("shell.sessionWorking") : session.paused ? t("shell.sessionPaused") : null;
+	// 标题之外，运行/未读/失败/暂停是列表里唯一无法从文本得知的状态；行尾
+	// 菜单区整体 aria-hidden，读屏拿不到。空闲行保持静默——每行都念「空闲」
+	// 会淹掉标题。失败只表示「未读且最近一轮失败」，与桌面同一语义。
+	const failed = read?.unread === true && read.failed === true;
+	const unread = read?.unread === true;
+	const statusLabel = session.working
+		? t("shell.sessionWorking")
+		: failed
+			? t("general.sessionUnreadFailed")
+			: unread
+				? t("general.sessionUnread")
+				: session.paused
+					? t("shell.sessionPaused")
+					: null;
+	const dotState = failed ? "failed" : unread ? "unread" : session.paused ? "paused" : "idle";
 	// Row state resets when another row opens.
 	useEffect(() => {
 		if (anySwiped) {
@@ -521,7 +588,10 @@ function SwipeableRow({
 						{session.working ? (
 							<Loader2 size={13} className="ss-spin" aria-hidden />
 						) : (
-							<span className={`ss-item-dot${session.paused ? " ss-item-dot--paused" : ""}`} aria-hidden />
+							<span
+								className={`ss-item-dot${dotState === "idle" ? "" : ` ss-item-dot--${dotState}`}`}
+								aria-hidden
+							/>
 						)}
 					</span>
 					<span className="ss-item-body">

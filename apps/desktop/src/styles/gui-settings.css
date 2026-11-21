@@ -3699,6 +3699,17 @@
 	vertical-align: 2px;
 }
 
+/* Failure marker for an unread turn whose latest completion failed. The dot
+ * shape and danger tone come from the shared primitives (.gui-dot +
+ * .gui-dot-danger) — the host read state decides when it appears, so the
+ * marker always means "unread failure", not the row's persisted lifecycle
+ * status. The two markers never coexist: SessionList drops the unread class
+ * when a row is failed. */
+.gui-session-failed {
+	flex: none;
+	margin-left: 6px;
+}
+
 .gui-group-head--dragover {
 	box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--color-accent-bd) 35%, transparent);
 	border-radius: var(--radius-lg);

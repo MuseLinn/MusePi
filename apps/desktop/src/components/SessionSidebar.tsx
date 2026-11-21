@@ -161,6 +161,7 @@ export function SessionSidebar({
 	onRetitleSession,
 	onReloadSession,
 	unread,
+	failed,
 	onToggleUnread,
 	onImportSessions,
 	modeCatalog,
@@ -234,9 +235,12 @@ export function SessionSidebar({
 	onReloadSession?(sessionId: string): void;
 	/** Pane width in px (draggable resize). */
 	width?: number;
-	/** Unread session ids (single source: app-level unread set — pet
-	 *  bubbles, cursor-based derivation, and manual context-menu toggles). */
+	/** Unread session ids (daemon-owned read state, projected by the app's
+	 *  `session.list` poll — shared with the phone and other windows). */
 	unread?: ReadonlySet<string>;
+	/** Unread ids whose latest completed turn failed — rendered with the
+	 *  failure marker instead of the plain unread dot. */
+	failed?: ReadonlySet<string>;
 	/** Context-menu 标记为已读/未读 toggle. */
 	onToggleUnread?(sessionId: string): void;
 	/** Open the session-import dialog (projects tab entry). */
@@ -1436,6 +1440,7 @@ export function SessionSidebar({
 												onSelect={onSelect}
 												onContextMenu={openSessionCtx}
 												unread={unread}
+												failed={failed}
 												pausedIds={pausedIds}
 												workingIds={workingIds}
 												statuses={statuses}
@@ -1688,6 +1693,7 @@ export function SessionSidebar({
 																			onSelect={onSelect}
 																			onContextMenu={openSessionCtx}
 																			unread={unread}
+																			failed={failed}
 																			pausedIds={pausedIds}
 																			workingIds={workingIds}
 																			statuses={statuses}
@@ -1719,6 +1725,7 @@ export function SessionSidebar({
 																onSelect={onSelect}
 																onContextMenu={openSessionCtx}
 																unread={unread}
+																failed={failed}
 																pausedIds={pausedIds}
 																workingIds={workingIds}
 																statuses={statuses}
@@ -1820,6 +1827,7 @@ export function SessionSidebar({
 											)
 										}
 										unread={unread}
+										failed={failed}
 										pausedIds={pausedIds}
 										workingIds={workingIds}
 										statuses={statuses}
@@ -1836,6 +1844,7 @@ export function SessionSidebar({
 										onSelect={onSelect}
 										onContextMenu={openSessionCtx}
 										unread={unread}
+										failed={failed}
 										pausedIds={pausedIds}
 										workingIds={workingIds}
 										statuses={statuses}

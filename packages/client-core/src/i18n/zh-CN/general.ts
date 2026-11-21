@@ -1587,6 +1587,8 @@ export const general = {
 	"general.sessionInfoSurfaces": "可打开",
 	"general.sessionInfoUntitled": "未命名会话",
 	"general.sessionInfoPlugins": "插件",
+	"general.sessionUnread": "未读",
+	"general.sessionUnreadFailed": "未读 · 最近一轮失败",
 	"general.appRail": "应用导航",
 	"general.home": "首页",
 } as const;

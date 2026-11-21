@@ -4584,6 +4584,17 @@
 	background: var(--fg-faint);
 }
 
+/* Host read state (shared with the desktop): an unread completed turn uses the
+ * accent, a failed still-unread turn the danger tone. Same geometry as the
+ * idle dot so the row's leading slot never shifts; the pair is exclusive. */
+.ss-item-dot--unread {
+	background: var(--accent);
+}
+
+.ss-item-dot--failed {
+	background: var(--err);
+}
+
 .ss-spin {
 	animation: ss-spin 900ms linear infinite;
 }

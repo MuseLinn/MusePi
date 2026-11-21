@@ -402,6 +402,7 @@ const SessionRow = memo(function SessionRow({
 	updatedAt,
 	selected,
 	unread,
+	failed,
 	paused,
 	working,
 	retitling,
@@ -433,6 +434,9 @@ const SessionRow = memo(function SessionRow({
 	updatedAt?: string;
 	selected: boolean;
 	unread: boolean;
+	/** Unread AND the latest completed turn failed (host read state) — the
+	 *  row shows the failure marker instead of the plain unread dot. */
+	failed: boolean;
 	paused: boolean;
 	working: boolean;
 	/** An AI rename (`session.retitle`) is generating this row's title — the
@@ -521,7 +525,9 @@ const SessionRow = memo(function SessionRow({
 			<div
 				role="button"
 				tabIndex={0}
-				className={`gui-session-row${selected ? " gui-session-row-active" : ""}${unread ? " gui-session-row--unread" : ""}`}
+				className={`gui-session-row${selected ? " gui-session-row-active" : ""}${
+					unread && !failed ? " gui-session-row--unread" : ""
+				}`}
 				onClick={() => {
 					tapFeedback();
 					clearSessionHover();
@@ -631,6 +637,16 @@ const SessionRow = memo(function SessionRow({
 						{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
 					</span>
 				)}
+				{failed && (
+					// Accessible marker: the row's dot is otherwise a ::after the
+					// screen reader never sees. Same reason as the working chip.
+					<span
+						className="gui-dot gui-dot-danger gui-session-failed"
+						role="img"
+						aria-label={t("general.sessionUnreadFailed")}
+						title={t("general.sessionUnreadFailed")}
+					/>
+				)}
 				{retitling && (
 					<span
 						className="gui-tree-working"
@@ -723,6 +739,7 @@ function SessionListComponent({
 	onSelect,
 	onContextMenu,
 	unread,
+	failed,
 	pausedIds,
 	workingIds,
 	statuses,
@@ -743,6 +760,9 @@ function SessionListComponent({
 	retitlingId?: string | null;
 	/** Session ids with the 未读 marker. */
 	unread?: ReadonlySet<string>;
+	/** Unread ids whose latest completed turn failed — the failure marker
+	 *  (host read state; never the lifecycle status, which may be older). */
+	failed?: ReadonlySet<string>;
 	/** Paused session ids — render a pause chip so frozen sessions are
 	 *  visible in the sidebar (per-session pause, TUI `/pause` parity). */
 	pausedIds?: ReadonlySet<string>;
@@ -869,6 +889,7 @@ function SessionListComponent({
 						updatedAt={node.entry.updatedAt}
 						selected={node.entry.id === selectedId}
 						unread={unread?.has(node.entry.id) ?? false}
+						failed={failed?.has(node.entry.id) ?? false}
 						paused={pausedIds?.has(node.entry.id) ?? false}
 						working={workingIds?.has(node.entry.id) ?? false}
 						retitling={retitlingId === node.entry.id}
