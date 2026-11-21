@@ -13,12 +13,22 @@
 // expression-bodied members, async Task Main, and nullable reference types.
 //
 // Protocol (page <-> host)
-//   page -> host : drag | minimize | close | finish | launch
+//   page -> host : drag | minimize | close | finish | launch | cancel
 //                  pick-directory | ui-ready | install:<json>
-//   host -> page : JSON { type: ready|progress|installed|error|directory-picked }
+//   host -> page : JSON { type: ready|progress|installed|cancelled|failed|error
+//                         |directory-picked }
 //
-// The host owns progress: the page renders what it is told and never invents a
-// percentage.
+// The host owns progress. A silent NSIS install cannot report a percentage, so
+// the host reports the phase the installer marked (install-status.ini) and the
+// bytes actually written under the target; the page never invents a number.
+//
+// Liveness and cancellation
+//   The installer holds "Local\MusePi.Installer.Setup" for its lifetime and this
+//   host holds "Local\MusePi.Installer.Host". Existence checks use OpenMutex
+//   rather than image-name matching, so a same-named process elsewhere cannot
+//   pass for the installer. Cancelling terminates the installer with exit code
+//   2 (TerminateProcess), then removes a fresh install's files, shortcuts and
+//   registry entries; an upgrade cannot be rolled back and says so.
 
 using System;
 using System.Collections.Generic;
@@ -28,9 +38,11 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
+using Microsoft.Win32;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -61,9 +73,24 @@ namespace MusePiInstallerHost
                 return 2;
             }
 
+            // The installer's wait loop watches this mutex to learn when the
+            // finished page was closed. Held for the life of the process; a
+            // failure to create it only costs one fallback (the installer times
+            // out after 30 minutes), never the wizard itself.
+            Mutex hostMutex = null;
+            try { hostMutex = new Mutex(false, InstallerWindow.HostMutexName); }
+            catch (Exception) { }
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new InstallerWindow(options));
+            try
+            {
+                Application.Run(new InstallerWindow(options));
+            }
+            finally
+            {
+                if (hostMutex != null) hostMutex.Dispose();
+            }
             return Environment.ExitCode;
         }
 
@@ -85,7 +112,7 @@ namespace MusePiInstallerHost
             {
                 string target = InstallerWindow.ResolveDefaultPath(options);
                 Directory.CreateDirectory(target);
-                InstallerWindow.WriteAnswers(target, "zh-CN", "1", "1");
+                InstallerWindow.WriteAnswers(options.AnswersPath, target, "zh-CN", "1", "1");
                 Console.WriteLine("[auto-install] answers written for " + target);
                 return 0;
             }
@@ -109,25 +136,66 @@ namespace MusePiInstallerHost
     {
         public string UiIndex;
         public string InstallRoot;
+        public string AnswersPath;
+        public string StatusFile;
+        public string HostStatusFile;
+        public string ShortcutName;
+        public string AppExe;
+        public int InstallerPid;
         public bool SmokeTest;
         public bool ShowHelp;
         public bool AutoInstall;
         public bool SelfTest;
         public bool CheckRunning;
+        public bool UiFlow;
+        public bool UiFlowCancel;
+
+        /// <summary>
+        /// Directory of the installer channel files. The NSIS script passes every
+        /// path explicitly; these defaults only serve --auto-install and a manual
+        /// launch, and match what the script falls back to.
+        /// </summary>
+        internal static string DefaultStateDirectory()
+        {
+            string overrideDirectory = Environment.GetEnvironmentVariable("MUSEPI_ANSWERS_DIR");
+            if (!string.IsNullOrEmpty(overrideDirectory)) return overrideDirectory;
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "MusePi",
+                "Installer");
+        }
 
         public const string Usage =
-            "MusePiInstallerHost.exe --ui <index.html> [--install-root <dir>] [--smoke-test] [--auto-install]\n" +
-            "  --ui            path to installer/ui/index.html\n" +
-            "  --install-root  default target directory shown on the location page\n" +
-            "  --smoke-test    verify the real WebView2 layout and exit\n" +
-            "  --auto-install  write answers and exit (NSIS integration test only)\n" +
-            "  --check-running exit 10 when MusePi is running, otherwise 0\n" +
-            "  --self-test     verify localized running-client retry behavior";
+            "MusePiInstallerHost.exe --ui <index.html> [options]\n" +
+            "  --ui              path to installer/ui/index.html\n" +
+            "  --install-root    default target directory shown on the location page\n" +
+            "  --answers         answers.ini path written on install (default: state dir)\n" +
+            "  --status          install-status.ini the installer writes phases into\n" +
+            "  --host-status     host-status.ini this host writes its exit code into\n" +
+            "  --installer-pid   process id of the installer, for liveness and cancel\n" +
+            "  --shortcut-name   shortcut base name used by a rollback\n" +
+            "  --app-exe         application executable name used by a rollback\n" +
+            "  --smoke-test      verify the real WebView2 layout and exit\n" +
+            "  --auto-install    write answers and exit (NSIS integration test only)\n" +
+            "  --check-running   exit 10 when MusePi is running, otherwise 0\n" +
+            "  --self-test       verify the exit/status contracts\n" +
+            "  --ui-flow         click through the wizard automatically (capture only)";
 
         public static HostOptions Parse(string[] args)
         {
             HostOptions options = new HostOptions();
+            string stateDirectory = DefaultStateDirectory();
             options.UiIndex = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ui", "index.html");
+            options.AnswersPath = Path.Combine(stateDirectory, "answers.ini");
+            options.StatusFile = Path.Combine(stateDirectory, "install-status.ini");
+            options.HostStatusFile = Path.Combine(stateDirectory, "host-status.ini");
+            options.ShortcutName = "MusePi";
+            options.AppExe = "MusePi.exe";
+            // The NSIS script's command line is fixed, so the capture harness
+            // hands this flag to the child process through the environment.
+            string uiFlow = Environment.GetEnvironmentVariable("MUSEPI_INSTALLER_UI_FLOW");
+            options.UiFlow = !string.IsNullOrEmpty(uiFlow) && uiFlow != "0";
+            options.UiFlowCancel = uiFlow == "cancel";
             for (int i = 0; i < args.Length; i++)
             {
                 string arg = args[i];
@@ -139,10 +207,36 @@ namespace MusePiInstallerHost
                 {
                     options.InstallRoot = Path.GetFullPath(args[++i]);
                 }
+                else if (arg == "--answers" && i + 1 < args.Length)
+                {
+                    options.AnswersPath = Path.GetFullPath(args[++i]);
+                }
+                else if (arg == "--status" && i + 1 < args.Length)
+                {
+                    options.StatusFile = Path.GetFullPath(args[++i]);
+                }
+                else if (arg == "--host-status" && i + 1 < args.Length)
+                {
+                    options.HostStatusFile = Path.GetFullPath(args[++i]);
+                }
+                else if (arg == "--installer-pid" && i + 1 < args.Length)
+                {
+                    int pid;
+                    if (int.TryParse(args[++i], NumberStyles.Integer, CultureInfo.InvariantCulture, out pid)) options.InstallerPid = pid;
+                }
+                else if (arg == "--shortcut-name" && i + 1 < args.Length)
+                {
+                    options.ShortcutName = args[++i];
+                }
+                else if (arg == "--app-exe" && i + 1 < args.Length)
+                {
+                    options.AppExe = args[++i];
+                }
                 else if (arg == "--smoke-test") options.SmokeTest = true;
                 else if (arg == "--auto-install") options.AutoInstall = true;
                 else if (arg == "--check-running") options.CheckRunning = true;
                 else if (arg == "--self-test") options.SelfTest = true;
+                else if (arg == "--ui-flow") options.UiFlow = true;
                 else if (arg == "--help" || arg == "-h") options.ShowHelp = true;
             }
             return options;
@@ -155,11 +249,26 @@ namespace MusePiInstallerHost
         private const int ViewWidth = 760;
         private const int ViewHeight = 560;
 
+        /// <summary>Object name shared with installer-branding.nsh (MUSE_HOST_MUTEX).</summary>
+        internal const string HostMutexName = "Local\\MusePi.Installer.Host";
+
+        /// <summary>Object name shared with installer-branding.nsh (MUSE_SETUP_MUTEX).</summary>
+        internal const string SetupMutexName = "Local\\MusePi.Installer.Setup";
+
+        internal const int ExitSuccess = 0;
+        internal const int ExitCancelled = 2;
+        internal const int ExitFailed = 3;
+
         private readonly HostOptions _options;
         private readonly WebView2 _view;
-        private bool _installing;
-        private bool _answersWritten;
+        private volatile bool _installing;
+        private volatile bool _cancelRequested;
+        private volatile bool _installSucceeded;
         private string _language;
+        private string _target;
+        private bool _targetHadFiles;
+        private DateTime _installStartedUtc;
+        private int _exitCode = ExitCancelled;
 
         /// <summary>
         /// Convert CSS pixels to physical pixels for the current display.
@@ -306,6 +415,8 @@ namespace MusePiInstallerHost
             // the page can round the actual window edge.
             ApplyDwmWindowChrome();
 
+            StartInstallerMonitor();
+
             Shown += async delegate
             {
                 // Force the DPI-scaled geometry through Win32.
@@ -326,11 +437,20 @@ namespace MusePiInstallerHost
 
             FormClosing += delegate(object sender, FormClosingEventArgs e)
             {
-                if (_installing && e.CloseReason == CloseReason.UserClosing) e.Cancel = true;
+                // Closing during the install means "cancel it": the install runs in
+                // a silent installer that cannot be paused, so the only truthful
+                // option is to stop it, undo what this run wrote, and show the
+                // result. The window stays open for that result page.
+                if (_installing && e.CloseReason == CloseReason.UserClosing)
+                {
+                    e.Cancel = true;
+                    CancelRequested();
+                }
             };
             FormClosed += delegate
             {
-                Environment.ExitCode = ExitCodeForClose(_answersWritten);
+                Environment.ExitCode = _exitCode;
+                WriteHostStatus(_exitCode);
             };
         }
 
@@ -415,6 +535,11 @@ namespace MusePiInstallerHost
             }
             catch (Exception ex)
             {
+                // A host that cannot open its WebView2 is a failed install, not a
+                // cancel: the receipt must say 3 so the launcher does not report
+                // "user cancelled" for a broken runtime.
+                _exitCode = ExitFailed;
+                WriteHostStatus(ExitFailed);
                 Program.ShowFailure("无法初始化安装界面。\n\n" + ex.GetType().Name + ": " + ex.Message);
                 Close();
             }
@@ -491,6 +616,7 @@ namespace MusePiInstallerHost
                 Post("{\"type\":\"ready\",\"appVersion\":\"" + Escape(AppVersion())
                      + "\",\"defaultPath\":\"" + Escape(DefaultInstallPath())
                      + "\",\"language\":\"" + Escape(_language) + "\"}");
+                if (_options.UiFlow) StartHarnessFlow();
                 return;
             }
 
@@ -506,6 +632,13 @@ namespace MusePiInstallerHost
                 case "close":
                 case "finish":
                     Close();
+                    break;
+                case "launch":
+                    LaunchInstalled();
+                    Close();
+                    break;
+                case "cancel":
+                    CancelRequested();
                     break;
                 case "pick-directory":
                     PickDirectory();
@@ -572,28 +705,23 @@ namespace MusePiInstallerHost
             Text = Localized("windowTitle");
         }
 
+        /// <summary>
+        /// Native-only strings. Everything the page renders is localized in
+        /// installer-locales.js, so the two catalogs never drift.
+        /// </summary>
         private string Localized(string key)
         {
             if (_language == "zh-TW")
             {
-                if (key == "clientRunning") return "MusePi 正在執行。請先關閉所有 MusePi 視窗，再按「重試」。安裝程式不會強制結束你的應用程式。";
                 if (key == "pickDirectory") return "選擇 MusePi 的安裝位置";
-                if (key == "checking") return "正在檢查用戶端與安裝位置…";
-                if (key == "handoff") return "安裝選項已確認，正在開啟實際檔案安裝進度…";
                 return "MusePi 安裝程式";
             }
             if (_language == "zh-CN")
             {
-                if (key == "clientRunning") return "MusePi 正在运行。请先关闭所有 MusePi 窗口，再点击“重试”。安装程序不会强制结束你的应用。";
                 if (key == "pickDirectory") return "选择 MusePi 的安装位置";
-                if (key == "checking") return "正在检查客户端与安装位置…";
-                if (key == "handoff") return "安装选项已确认，正在打开真实文件安装进度…";
                 return "MusePi 安装程序";
             }
-            if (key == "clientRunning") return "MusePi is running. Close all MusePi windows, then select Retry. Setup will not force your application to close.";
             if (key == "pickDirectory") return "Choose the MusePi install location";
-            if (key == "checking") return "Checking the client and install location…";
-            if (key == "handoff") return "Setup is ready. Opening the file installation progress…";
             return "MusePi Setup";
         }
 
@@ -611,7 +739,7 @@ namespace MusePiInstallerHost
             }
         }
 
-        private async void RunInstall(string json)
+        private void RunInstall(string json)
         {
             string target = DefaultInstallPath();
             string desktopShortcut = "1";
@@ -638,22 +766,455 @@ namespace MusePiInstallerHost
 
             if (_installing) return;
             _installing = true;
+            _cancelRequested = false;
+            _installSucceeded = false;
+            _exitCode = ExitCancelled;
+            _installStartedUtc = DateTime.UtcNow;
+            Post("{\"type\":\"progress\",\"phase\":\"preparing\"}");
+
+            Thread worker = new Thread(delegate() { PrepareAndInstall(target, desktopShortcut, startMenu); });
+            worker.IsBackground = true;
+            worker.Start();
+        }
+
+        /// <summary>
+        /// Validate, hand the answers to the installer, then follow the silent
+        /// install until the installer marks it done. Runs off the UI thread.
+        /// </summary>
+        private void PrepareAndInstall(string target, string desktopShortcut, string startMenu)
+        {
             try
             {
-                Post("{\"type\":\"progress\",\"percent\":5,\"step\":\"" + Escape(Localized("checking")) + "\"}");
-                EnsureClientNotRunning(IsClientRunning, Localized("clientRunning"));
-                await Task.Run(delegate { ValidateDirectory(target); });
-                WriteAnswers(target, _language, desktopShortcut, startMenu);
-                _answersWritten = true;
-                Post("{\"type\":\"handoff\"}");
-                _installing = false;
-                Close();
+                if (IsClientRunningUnder(target))
+                {
+                    throw new SetupBlockedException(
+                        "clientRunning",
+                        "MusePi is running from the install folder. Close it, then retry.");
+                }
+
+                _target = target;
+                _targetHadFiles = DirectoryHasFiles(target);
+                ValidateDirectory(target);
+                WriteAnswers(_options.AnswersPath, target, _language, desktopShortcut, startMenu);
+                Post("{\"type\":\"progress\",\"phase\":\"awaiting\",\"upgrade\":"
+                     + (_targetHadFiles ? "true" : "false") + "}");
+                WatchInstall();
             }
-            catch (Exception ex)
+            catch (SetupBlockedException blocked)
             {
-                Post("{\"type\":\"error\",\"message\":\"" + Escape(ex.Message) + "\"}");
                 _installing = false;
+                Post("{\"type\":\"error\",\"reason\":\"" + Escape(blocked.Reason) + "\"}");
+                CapturePageAfter("9-error", 400);
             }
+            catch (Exception error)
+            {
+                _installing = false;
+                Post("{\"type\":\"error\",\"reason\":\"directory\",\"message\":\""
+                     + Escape(error.Message) + "\"}");
+                Console.Error.WriteLine("[install] " + error.GetType().Name + ": " + error.Message);
+                CapturePageAfter("9-error", 400);
+            }
+        }
+
+        /// <summary>
+        /// The installer runs its own sections silently; it cannot report how far
+        /// a File copy has got. So this reports what is observable and true: the
+        /// phase the installer published, and the bytes that actually exist under
+        /// the target directory. No percentage is invented.
+        /// </summary>
+        private void WatchInstall()
+        {
+            string lastPhase = "";
+            long lastBytes = -1;
+            DateTime lastMeasure = DateTime.MinValue;
+            DateTime started = DateTime.UtcNow;
+
+            while (true)
+            {
+                // The phase is read before the cancel request is honoured: if the
+                // installer had already published "done", the install succeeded and
+                // a late cancel must show the finish page, not destroy the result.
+                string phase = InstallerStatus.ReadPhase(_options.StatusFile);
+                if (phase == "done")
+                {
+                    Succeed();
+                    return;
+                }
+
+                if (_cancelRequested)
+                {
+                    CancelInstall();
+                    return;
+                }
+
+                if (!InstallerAlive())
+                {
+                    // The installer writes "done" before it can exit, so a late
+                    // write between these two reads is still a success.
+                    Thread.Sleep(400);
+                    if (InstallerStatus.ReadPhase(_options.StatusFile) == "done")
+                    {
+                        Succeed();
+                        return;
+                    }
+                    FailInstall("installerExited");
+                    return;
+                }
+
+                if (phase == "installing" && lastPhase != "installing")
+                {
+                    lastPhase = "installing";
+                    Post("{\"type\":\"progress\",\"phase\":\"installing\",\"upgrade\":"
+                         + (_targetHadFiles ? "true" : "false") + "}");
+                    CapturePageAfter("3-progress", 900);
+                }
+
+                if (phase == "" && (DateTime.UtcNow - started).TotalSeconds > 180)
+                {
+                    // No answers were applied and no liveness signal was given:
+                    // this host was launched outside an installer that drives it.
+                    FailInstall("installerSilent");
+                    return;
+                }
+
+                if (phase == "installing"
+                    && (DateTime.UtcNow - lastMeasure).TotalMilliseconds >= 900)
+                {
+                    lastMeasure = DateTime.UtcNow;
+                    long bytes = MeasureBytes(_target);
+                    if (bytes > 0 && bytes != lastBytes)
+                    {
+                        lastBytes = bytes;
+                        Post("{\"type\":\"progress\",\"phase\":\"installing\",\"bytes\":" + bytes + "}");
+                    }
+                }
+
+                Thread.Sleep(180);
+            }
+        }
+
+        private void Succeed()
+        {
+            _installSucceeded = true;
+            _installing = false;
+            _exitCode = ExitSuccess;
+            // The launcher reads this receipt after the installer exits; write it
+            // when the outcome is known, not when the window finally closes.
+            WriteHostStatus(ExitSuccess);
+            Post("{\"type\":\"installed\",\"path\":\"" + Escape(_target) + "\"}");
+            if (_options.UiFlow)
+            {
+                CapturePageAfter("4-finish", 500);
+                CloseAfterDelay(3000);
+            }
+        }
+
+        private void FailInstall(string reason)
+        {
+            bool upgrade = _targetHadFiles;
+            Rollback(_target, !upgrade);
+            _installing = false;
+            _exitCode = ExitFailed;
+            WriteHostStatus(ExitFailed);
+            Post("{\"type\":\"failed\",\"reason\":\"" + Escape(reason)
+                 + "\",\"upgrade\":" + (upgrade ? "true" : "false") + "}");
+            if (_options.UiFlow)
+            {
+                CapturePageAfter("6-failed", 400);
+                CloseAfterDelay(3000);
+            }
+        }
+
+        private void CancelRequested()
+        {
+            if (!_installing || _cancelRequested) return;
+            _cancelRequested = true;
+            Post("{\"type\":\"progress\",\"phase\":\"cancelling\"}");
+        }
+
+        private void CancelInstall()
+        {
+            // TerminateProcess with our documented cancel code: the installer has
+            // no interrupt point inside its File section, so a signal-based cancel
+            // would lie about stopping it.
+            TerminateInstaller(ExitCancelled);
+            bool upgrade = _targetHadFiles;
+            Rollback(_target, !upgrade);
+            _installing = false;
+            _exitCode = ExitCancelled;
+            WriteHostStatus(ExitCancelled);
+            Post("{\"type\":\"cancelled\",\"upgrade\":" + (upgrade ? "true" : "false") + "}");
+            if (_options.UiFlow)
+            {
+                CapturePageAfter("5-cancelled", 400);
+                CloseAfterDelay(3000);
+            }
+        }
+
+        private void CloseAfterDelay(int milliseconds)
+        {
+            try
+            {
+                Thread closeThread = new Thread(delegate()
+                {
+                    Thread.Sleep(milliseconds);
+                    try { BeginInvoke(new Action(delegate { Close(); })); }
+                    catch (Exception) { }
+                });
+                closeThread.IsBackground = true;
+                closeThread.Start();
+            }
+            catch (Exception) { }
+        }
+
+        private void LaunchInstalled()
+        {
+            if (!_installSucceeded || string.IsNullOrEmpty(_target)) return;
+            try
+            {
+                string executable = Path.Combine(_target, _options.AppExe);
+                if (!File.Exists(executable)) return;
+                ProcessStartInfo start = new ProcessStartInfo();
+                start.FileName = executable;
+                start.WorkingDirectory = _target;
+                start.UseShellExecute = true;
+                Process.Start(start);
+            }
+            catch (Exception)
+            {
+                // A launch failure must not turn a completed install into an error.
+            }
+        }
+
+        /// <summary>
+        /// Undo what this run created. A fresh install is removed completely; an
+        /// upgrade keeps the (partially replaced) directory because deleting it
+        /// would also delete the working version the user had before, and there is
+        /// no staging copy to restore. The UI says exactly which case happened.
+        /// </summary>
+        private void Rollback(string target, bool removeFiles)
+        {
+            if (string.IsNullOrEmpty(target)) return;
+
+            // An upgrade keeps its directory, shortcuts and registration: they
+            // belong to the previous install, and "run setup again to repair" only
+            // reaches the same folder while that registration still names it. Only
+            // a fresh install has anything of its own to remove.
+            if (!removeFiles) return;
+
+            try
+            {
+                if (Directory.Exists(target)) Directory.Delete(target, true);
+            }
+            catch (Exception) { }
+
+            RemoveShortcuts(target);
+            RemoveRegistryInstallInfo(target);
+        }
+
+        private void RemoveShortcuts(string target)
+        {
+            bool executableExists = true;
+            try { executableExists = File.Exists(Path.Combine(target, _options.AppExe)); }
+            catch (Exception) { }
+
+            string[] links = new string[]
+            {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                    _options.ShortcutName + ".lnk"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+                    _options.ShortcutName + ".lnk"),
+            };
+            foreach (string link in links)
+            {
+                try
+                {
+                    if (!File.Exists(link)) continue;
+                    if (!ShouldRemoveShortcut(
+                            executableExists, File.GetLastWriteTimeUtc(link), _installStartedUtc)) continue;
+                    File.Delete(link);
+                }
+                catch (Exception) { }
+            }
+        }
+
+        /// <summary>
+        /// A shortcut belongs to this run only when the installed executable is
+        /// gone (a usable install keeps its icons) and the link itself was written
+        /// while this run was running (an older install elsewhere keeps its own).
+        /// </summary>
+        internal static bool ShouldRemoveShortcut(
+            bool executableExists, DateTime linkWrittenUtc, DateTime installStartedUtc)
+        {
+            return !executableExists && linkWrittenUtc >= installStartedUtc;
+        }
+
+        private static void RemoveRegistryInstallInfo(string target)
+        {
+            RemoveUninstallEntries(target);
+            try
+            {
+                using (RegistryKey software = Registry.CurrentUser.OpenSubKey("Software"))
+                {
+                    if (software == null) return;
+                    foreach (string name in software.GetSubKeyNames())
+                    {
+                        RemoveMatchingInstallLocation("Software\\" + name, target);
+                    }
+                }
+            }
+            catch (Exception) { }
+        }
+
+        /// <summary>
+        /// Delete Add/Remove Programs entries that launch something inside the target.
+        ///
+        /// electron-builder writes no InstallLocation here: only the install-state
+        /// key (HKCU\Software\{APP_GUID}) carries it, while the Uninstall key holds
+        /// DisplayName / UninstallString / QuietUninstallString. Matching
+        /// InstallLocation therefore never reaches this entry; the uninstall
+        /// command's path is what identifies it.
+        /// </summary>
+        private static void RemoveUninstallEntries(string target)
+        {
+            const string uninstallRoot = @"Software\Microsoft\Windows\CurrentVersion\Uninstall";
+            try
+            {
+                using (RegistryKey root = Registry.CurrentUser.OpenSubKey(uninstallRoot))
+                {
+                    if (root == null) return;
+                    foreach (string name in root.GetSubKeyNames())
+                    {
+                        string path = uninstallRoot + "\\" + name;
+                        bool matches;
+                        using (RegistryKey key = Registry.CurrentUser.OpenSubKey(path))
+                        {
+                            if (key == null) continue;
+                            matches = UninstallPointsInto(
+                                          key.GetValue("UninstallString") as string, target)
+                                      || UninstallPointsInto(
+                                          key.GetValue("QuietUninstallString") as string, target);
+                        }
+                        if (!matches) continue;
+                        try { Registry.CurrentUser.DeleteSubKeyTree(path, false); }
+                        catch (Exception) { }
+                    }
+                }
+            }
+            catch (Exception) { }
+        }
+
+        /// <summary>
+        /// True when an UninstallString launches something inside the target.
+        /// electron-builder writes '"$INSTDIR\Uninstall MusePi.exe" --currentuser'
+        /// (and the /S variant), so the path prefix identifies the entry; a bare
+        /// unquoted path is accepted too. The trailing separator keeps "MusePi2"
+        /// from matching "MusePi".
+        /// </summary>
+        internal static bool UninstallPointsInto(string uninstallString, string target)
+        {
+            if (string.IsNullOrEmpty(uninstallString) || string.IsNullOrEmpty(target)) return false;
+            string value = uninstallString.Trim();
+            string root = target.Trim().TrimEnd('\\');
+            if (root.Length == 0) return false;
+            return value.StartsWith("\"" + root + "\\", StringComparison.OrdinalIgnoreCase)
+                   || value.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void RemoveMatchingInstallLocation(string path, string target)
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(path))
+                {
+                    if (key == null) return;
+                    string location = key.GetValue("InstallLocation") as string;
+                    if (location == null) return;
+                    if (!string.Equals(location.Trim().TrimEnd('\\'), target.Trim().TrimEnd('\\'),
+                            StringComparison.OrdinalIgnoreCase)) return;
+                }
+                Registry.CurrentUser.DeleteSubKeyTree(path, false);
+            }
+            catch (Exception) { }
+        }
+
+        private void TerminateInstaller(int exitCode)
+        {
+            if (_options.InstallerPid <= 0) return;
+            IntPtr handle = OpenProcess(PROCESS_TERMINATE, false, _options.InstallerPid);
+            if (handle != IntPtr.Zero)
+            {
+                TerminateProcess(handle, (uint)exitCode);
+                CloseHandle(handle);
+            }
+            DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < deadline && InstallerAlive())
+            {
+                Thread.Sleep(100);
+            }
+        }
+
+        /// <summary>
+        /// The installer creates "Local\MusePi.Installer.Setup" in customInit and
+        /// keeps the handle for its lifetime. A missing object is the only truthful
+        /// "it is gone": PIDs are reused, and an image-name scan matches processes
+        /// from a different install directory.
+        /// </summary>
+        private static bool InstallerAlive()
+        {
+            IntPtr handle = OpenMutex(SYNCHRONIZE, false, SetupMutexName);
+            if (handle == IntPtr.Zero) return false;
+            CloseHandle(handle);
+            return true;
+        }
+
+        private static bool DirectoryHasFiles(string path)
+        {
+            try
+            {
+                if (!Directory.Exists(path)) return false;
+                using (IEnumerator<string> entries = Directory.EnumerateFileSystemEntries(path).GetEnumerator())
+                {
+                    return entries.MoveNext();
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static long MeasureBytes(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return 0;
+            long total = 0;
+            try
+            {
+                DirectoryInfo root = new DirectoryInfo(path);
+                if (!root.Exists) return 0;
+                foreach (FileInfo file in root.EnumerateFiles("*", SearchOption.AllDirectories))
+                {
+                    try { total += file.Length; }
+                    catch (Exception) { }
+                }
+            }
+            catch (Exception) { }
+            return total;
+        }
+
+        private void WriteHostStatus(int exitCode)
+        {
+            if (string.IsNullOrEmpty(_options.HostStatusFile)) return;
+            try
+            {
+                string directory = Path.GetDirectoryName(_options.HostStatusFile);
+                if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+                File.WriteAllText(
+                    _options.HostStatusFile,
+                    "exit=" + exitCode.ToString(CultureInfo.InvariantCulture) + "\r\n",
+                    new UTF8Encoding(false));
+            }
+            catch (Exception) { }
         }
 
         /// <summary>
@@ -664,31 +1225,30 @@ namespace MusePiInstallerHost
         /// installers get subtle bugs. Only the FIRST '=' splits a line, so
         /// Windows paths containing '=' survive.
         ///
-        /// Path matches what installer-branding.nsh reads:
-        ///   %LOCALAPPDATA%\MusePi\Installer\answers.ini
-        /// MUSEPI_ANSWERS_DIR overrides it: the integration test needs a writable
-        /// location on machines where the host cannot create that directory.
+        /// The installer passes the exact path, so both sides always agree; the
+        /// write goes through a temp file and a rename because NSIS polls for the
+        /// file's existence and must never read a half-written line.
         /// </summary>
-        internal static void WriteAnswers(string path, string language, string desktopShortcut, string startMenu)
+        internal static void WriteAnswers(
+            string answersFile, string path, string language, string desktopShortcut, string startMenu)
         {
-            string directory = Environment.GetEnvironmentVariable("MUSEPI_ANSWERS_DIR");
-            if (string.IsNullOrEmpty(directory))
+            if (string.IsNullOrEmpty(answersFile))
             {
-                directory = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "MusePi",
-                    "Installer");
+                answersFile = Path.Combine(HostOptions.DefaultStateDirectory(), "answers.ini");
             }
-            Directory.CreateDirectory(directory);
+            string directory = Path.GetDirectoryName(answersFile);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
 
-            string answersFile = Path.Combine(directory, "answers.ini");
             StringBuilder builder = new StringBuilder();
             builder.AppendLine("path=" + path);
             builder.AppendLine("language=" + language);
             builder.AppendLine("desktopShortcut=" + desktopShortcut);
             builder.AppendLine("startMenu=" + startMenu);
 
-            File.WriteAllText(answersFile, builder.ToString(), new UTF8Encoding(false));
+            string staging = answersFile + ".tmp";
+            File.WriteAllText(staging, builder.ToString(), new UTF8Encoding(false));
+            if (File.Exists(answersFile)) File.Delete(answersFile);
+            File.Move(staging, answersFile);
         }
 
         private static string GetString(Dictionary<string, object> payload, string key)
@@ -725,41 +1285,294 @@ namespace MusePiInstallerHost
             }
         }
 
-        internal static void EnsureClientNotRunning(Func<bool> probe, string message)
+        /// <summary>
+        /// Only a client running FROM the target directory locks the files this
+        /// install replaces. Refusing because MusePi runs anywhere would block a
+        /// side-by-side install (and the preview harness, which installs into a
+        /// scratch directory while the developer has the app open). This matches
+        /// ensure-shortcuts.nsh's customCheckAppRunning, which also filters by
+        /// executable path instead of image name.
+        /// </summary>
+        internal static bool IsClientRunningUnder(string target)
         {
-            if (probe()) throw new InvalidOperationException(message);
+            if (string.IsNullOrEmpty(target)) return IsClientRunning();
+            string prefix = target.TrimEnd('\\') + "\\";
+            Process[] processes = Process.GetProcessesByName("MusePi");
+            try
+            {
+                foreach (Process process in processes)
+                {
+                    string path = null;
+                    try { path = process.MainModule == null ? null : process.MainModule.FileName; }
+                    catch (Exception) { }
+                    if (path != null && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+                }
+                return false;
+            }
+            finally
+            {
+                foreach (Process process in processes) process.Dispose();
+            }
         }
 
-        internal static int ExitCodeForClose(bool answersWritten)
+        internal static void EnsureClientNotRunning(Func<bool> probe, string message, string reason)
         {
-            return answersWritten ? 0 : 2;
+            if (probe()) throw new SetupBlockedException(reason, message);
         }
 
         internal static int SelfTest()
         {
-            EnsureClientNotRunning(delegate { return false; }, "not running");
+            EnsureClientNotRunning(delegate { return false; }, "not running", "clientRunning");
             bool blocked = false;
-            try { EnsureClientNotRunning(delegate { return true; }, "running"); }
+            try { EnsureClientNotRunning(delegate { return true; }, "running", "clientRunning"); }
             catch (InvalidOperationException ex) { blocked = ex.Message == "running"; }
             if (!blocked) throw new InvalidOperationException("running client was not blocked");
 
             int attempts = 0;
             Func<bool> retryProbe = delegate { attempts++; return attempts == 1; };
-            try { EnsureClientNotRunning(retryProbe, "close before retry"); }
+            try { EnsureClientNotRunning(retryProbe, "close before retry", "clientRunning"); }
             catch (InvalidOperationException) { }
-            EnsureClientNotRunning(retryProbe, "close before retry");
+            EnsureClientNotRunning(retryProbe, "close before retry", "clientRunning");
             if (attempts != 2) throw new InvalidOperationException("retry probe did not run twice");
-            if (ExitCodeForClose(false) != 2 || ExitCodeForClose(true) != 0)
-                throw new InvalidOperationException("cancel exit contract failed");
+
+            if (ExitSuccess != 0 || ExitCancelled != 2 || ExitFailed != 3)
+                throw new InvalidOperationException("exit-code contract changed");
+
+            string statusFile = Path.Combine(
+                Path.GetTempPath(), "musepi-host-self-test-" + Guid.NewGuid().ToString("N") + ".ini");
+            try
+            {
+                File.WriteAllText(statusFile, "phase=installing\r\n", new UTF8Encoding(false));
+                if (InstallerStatus.ReadPhase(statusFile) != "installing")
+                    throw new InvalidOperationException("status phase was not read back");
+                File.WriteAllText(statusFile, "phase=do", new UTF8Encoding(false));
+                if (InstallerStatus.ReadPhase(statusFile) != "do")
+                    throw new InvalidOperationException("partial phase was not tolerated");
+            }
+            finally
+            {
+                try { File.Delete(statusFile); }
+                catch (Exception) { }
+            }
+
+            // Rollback predicates. These are the claims the mission and the docs
+            // make about a cancelled fresh install, so they are gated here.
+            Require(UninstallPointsInto(
+                        "\"C:\\Programs\\MusePi\\Uninstall MusePi.exe\" --currentuser",
+                        "C:\\Programs\\MusePi"),
+                    "quoted uninstall string matches its own folder");
+            Require(UninstallPointsInto(
+                        "C:\\Programs\\MusePi\\Uninstall MusePi.exe /S",
+                        "C:\\programs\\musepi\\"),
+                    "bare uninstall string matches case-insensitively");
+            Require(!UninstallPointsInto(
+                        "\"C:\\Programs\\MusePi2\\Uninstall MusePi.exe\" --currentuser",
+                        "C:\\Programs\\MusePi"),
+                    "a sibling folder is not our uninstall entry");
+            Require(!UninstallPointsInto("", "C:\\Programs\\MusePi"), "an empty uninstall string matches nothing");
+            Require(!UninstallPointsInto("\"C:\\Programs\\MusePi\\Uninstall MusePi.exe\"", ""),
+                    "an empty target matches nothing");
+
+            DateTime started = new DateTime(2026, 11, 21, 10, 0, 0, DateTimeKind.Utc);
+            Require(ShouldRemoveShortcut(false, started.AddSeconds(5), started),
+                    "a shortcut written by this run is removed");
+            Require(!ShouldRemoveShortcut(false, started.AddSeconds(-5), started),
+                    "an older shortcut is kept");
+            Require(!ShouldRemoveShortcut(true, started.AddSeconds(5), started),
+                    "a usable install keeps its shortcut");
+
+            // End-to-end: a disposable Add/Remove Programs entry that points into
+            // a temp folder must disappear; entries for other folders must not.
+            string tempRoot = Path.Combine(
+                Path.GetTempPath(), "musepi-rollback-self-test-" + Guid.NewGuid().ToString("N"));
+            const string uninstallRoot = @"Software\Microsoft\Windows\CurrentVersion\Uninstall";
+            string ownKey = uninstallRoot + "\\MusePiRollbackSelfTest-" + Guid.NewGuid().ToString("N");
+            string otherKey = uninstallRoot + "\\MusePiRollbackSelfTestOther-" + Guid.NewGuid().ToString("N");
+            Directory.CreateDirectory(tempRoot);
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(ownKey))
+                {
+                    key.SetValue("UninstallString", "\"" + tempRoot + "\\Uninstall MusePi.exe\" --currentuser");
+                }
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(otherKey))
+                {
+                    key.SetValue("UninstallString", "\"C:\\Programs\\OtherApp\\uninstall.exe\"");
+                }
+
+                RemoveUninstallEntries(tempRoot);
+
+                if (Registry.CurrentUser.OpenSubKey(ownKey) != null)
+                    throw new InvalidOperationException("the target's uninstall entry was not removed");
+                if (Registry.CurrentUser.OpenSubKey(otherKey) == null)
+                    throw new InvalidOperationException("an unrelated uninstall entry was removed");
+            }
+            finally
+            {
+                try { Registry.CurrentUser.DeleteSubKeyTree(ownKey, false); }
+                catch (Exception) { }
+                try { Registry.CurrentUser.DeleteSubKeyTree(otherKey, false); }
+                catch (Exception) { }
+                try { Directory.Delete(tempRoot, true); }
+                catch (Exception) { }
+            }
+
             Console.WriteLine("installer host self-test: PASS");
             return 0;
+        }
+
+        private static void Require(bool condition, string name)
+        {
+            if (!condition) throw new InvalidOperationException("self-test failed: " + name);
+        }
+
+        private const int PROCESS_TERMINATE = 0x0001;
+        private const int SYNCHRONIZE = 0x00100000;
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr OpenMutex(uint access, bool inheritHandle, string name);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(int access, bool inheritHandle, int processId);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CloseHandle(IntPtr handle);
+
+        /// <summary>
+        /// While the wizard is still asking questions, a vanished installer means
+        /// it gave up (bad payload, WebView2 missing, another instance) and quit.
+        /// This host must not survive that: it holds the host mutex, and an orphan
+        /// would make the next installer believe its own host is still running.
+        /// Once the install starts, WatchInstall owns liveness instead.
+        /// </summary>
+        private void StartInstallerMonitor()
+        {
+            if (_options.InstallerPid <= 0) return;
+            Thread thread = new Thread(delegate()
+            {
+                while (!_installing)
+                {
+                    Thread.Sleep(700);
+                    if (_installing) return;
+                    if (InstallerAlive()) continue;
+                    _exitCode = ExitFailed;
+                    try { BeginInvoke(new Action(delegate { Close(); })); }
+                    catch (Exception) { }
+                    return;
+                }
+            });
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        /// <summary>
+        /// Capture harness only (--ui-flow): clicks Continue and Install on the
+        /// real page so the capture script can screenshot each stage without
+        /// driving WebView2 from outside. Never enabled by the installer.
+        /// </summary>
+        private void StartHarnessFlow()
+        {
+            bool cancel = _options.UiFlowCancel;
+            Thread thread = new Thread(delegate()
+            {
+                Thread.Sleep(700);
+                CapturePage("1-language");
+                Thread.Sleep(700);
+                ExecuteScript("document.querySelector('[data-next=\"location\"]').click()");
+                Thread.Sleep(1200);
+                CapturePage("2-location");
+                Thread.Sleep(400);
+                ExecuteScript("var b = document.getElementById('btn-install'); if (b) b.click()");
+                if (!cancel) return;
+                // Cancel run: wait until the installer has accepted the answers
+                // (the button unlocks on awaiting/installing), confirm, and let
+                // the terminal state close the window by itself.
+                Thread.Sleep(2500);
+                ExecuteScript("var c = document.getElementById('btn-cancel'); if (c && !c.disabled) c.click()");
+                Thread.Sleep(500);
+                ExecuteScript("var k = document.getElementById('btn-cancel-confirm');"
+                             + " if (k && !document.getElementById('cancel-confirm').hidden) k.click()");
+            });
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        /// <summary>
+        /// Capture the real WebView2 surface to PNG when the capture harness sets
+        /// MUSEPI_INSTALLER_CAPTURE_DIR. Screen capture from another process is not
+        /// reliable for a GPU-composited WebView2 (it can come back black), and the
+        /// page pixels are the evidence that matters here.
+        /// </summary>
+        private void CapturePage(string name)
+        {
+            string directory = Environment.GetEnvironmentVariable("MUSEPI_INSTALLER_CAPTURE_DIR");
+            if (string.IsNullOrEmpty(directory)) return;
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action(delegate { CapturePage(name); })); }
+                catch (Exception) { }
+                return;
+            }
+            try
+            {
+                CoreWebView2 core = _view.CoreWebView2;
+                if (core == null) return;
+                Directory.CreateDirectory(directory);
+                FileStream stream = File.Create(Path.Combine(directory, name + ".png"));
+                Task capture = core.CapturePreviewAsync(
+                    CoreWebView2CapturePreviewImageFormat.Png, stream);
+                capture.ContinueWith(delegate(Task finished)
+                {
+                    try { stream.Dispose(); }
+                    catch (Exception) { }
+                    if (finished.IsFaulted && finished.Exception != null)
+                    {
+                        Console.Error.WriteLine("[capture] " + name + " failed: "
+                            + finished.Exception.GetBaseException().Message);
+                    }
+                });
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine("[capture] " + name + ": " + error.Message);
+            }
+        }
+
+        private void CapturePageAfter(string name, int milliseconds)
+        {
+            Thread thread = new Thread(delegate()
+            {
+                Thread.Sleep(milliseconds);
+                CapturePage(name);
+            });
+            thread.IsBackground = true;
+            thread.Start();
+        }
+
+        private void ExecuteScript(string script)
+        {
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action(delegate { ExecuteScript(script); })); }
+                catch (Exception) { }
+                return;
+            }
+            try
+            {
+                if (_view.CoreWebView2 != null) _view.CoreWebView2.ExecuteScriptAsync(script);
+            }
+            catch (Exception) { }
         }
 
         private void Post(string json)
         {
             if (InvokeRequired)
             {
-                BeginInvoke(new Action(delegate { PostOnUiThread(json); }));
+                try { BeginInvoke(new Action(delegate { PostOnUiThread(json); })); }
+                catch (Exception) { }
             }
             else
             {
@@ -783,6 +1596,61 @@ namespace MusePiInstallerHost
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+    }
+
+    /// <summary>
+    /// A pre-install check refused to start. The page maps the reason to its own
+    /// localized copy; the message stays for logs.
+    /// </summary>
+    internal sealed class SetupBlockedException : InvalidOperationException
+    {
+        public readonly string Reason;
+
+        public SetupBlockedException(string reason, string message) : base(message)
+        {
+            Reason = reason;
+        }
+    }
+
+    /// <summary>
+    /// The installer's phase file (install-status.ini). It is written by NSIS with
+    /// FileOpen/FileWrite, so a read can land on a partial line: only an exact
+    /// "phase=..." line counts, and a half-written value reads as no phase.
+    /// </summary>
+    internal static class InstallerStatus
+    {
+        public static string ReadPhase(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return "";
+            string text = ReadTextShared(path);
+            if (text == null) return "";
+            foreach (string raw in text.Split('\n'))
+            {
+                string line = raw.Trim();
+                if (line.StartsWith("phase=", StringComparison.Ordinal))
+                {
+                    return line.Substring("phase=".Length).Trim();
+                }
+            }
+            return "";
+        }
+
+        private static string ReadTextShared(string path)
+        {
+            try
+            {
+                using (FileStream stream = new FileStream(
+                    path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
+                {
+                    return reader.ReadToEnd();
+                }
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
     }
 
     /// <summary>
@@ -924,6 +1792,8 @@ namespace MusePiInstallerHost
                             "sidebarTransparent: getComputedStyle(document.querySelector('.brandpane')).backgroundColor," +
                             "checkedOptions: document.querySelectorAll('.langs [aria-checked=\"true\"]').length," +
                             "pageCount: document.querySelectorAll('.page').length," +
+                            "barBusy: document.getElementById('bar').getAttribute('aria-busy')," +
+                            "percentGone: !document.getElementById('progress-percent')," +
                             "noHScroll: document.documentElement.scrollWidth <= innerWidth," +
                             "title: document.title})";
                         string raw = await core.ExecuteScriptAsync(script);
@@ -943,6 +1813,8 @@ namespace MusePiInstallerHost
                                   && raw.Contains("checkedOptions\\\":1")
                                   && raw.Contains("traditionalTitle\\\":\\\"選擇語言")
                                   && raw.Contains("pageCount\\\":5")
+                                  && raw.Contains("barBusy\\\":\\\"true")
+                                  && raw.Contains("percentGone\\\":true")
                                   && raw.Contains("noHScroll\\\":true");
                         Console.WriteLine(ok ? "[smoke] PASS" : "[smoke] FAIL");
                         exitCode = ok ? 0 : 1;
