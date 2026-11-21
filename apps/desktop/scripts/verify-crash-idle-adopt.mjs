@@ -49,7 +49,12 @@ const puppeteer = require("puppeteer-core");
 // provider's port is fixed by its own module.
 const DAEMON_PORT = 8699 + (process.pid % 300);
 const CDP_PORT = 9524 + (process.pid % 300);
-const FAKE_PORT = 8499;
+// 8499 is the fake provider's historical fixed port and can be held by another
+// checkout's probe; this run gets its own and passes it to the server. Deriving
+// it from the daemon port keeps the two apart: independent pid formulas can
+// (and did) land on the same number, and the fake would then own the port the
+// shell needs for its daemon.
+const FAKE_PORT = DAEMON_PORT + 500;
 const TOOL_SLEEP_SECONDS = 45;
 /** The stop capsule must clear within this budget (the pinned-state regression). */
 const IDLE_TARGET_MS = 10_000;
@@ -61,6 +66,10 @@ const DAEMON_RESPAWN_TIMEOUT_MS = 180_000;
 const SEND_AFTER_RESPAWN_TIMEOUT_MS = 45_000;
 /** Observe no phantom run for longer than the 5-second pending check. */
 const QUIET_WINDOW_MS = 7_500;
+
+if (FAKE_PORT === DAEMON_PORT || FAKE_PORT === CDP_PORT || DAEMON_PORT === CDP_PORT) {
+	throw new Error(`derived ports collide: daemon=${DAEMON_PORT} fake=${FAKE_PORT} cdp=${CDP_PORT}`);
+}
 
 const workRoot = process.env.MUSEPI_CRASH_VERIFY_OUT
 	? path.resolve(process.env.MUSEPI_CRASH_VERIFY_OUT)
@@ -272,6 +281,27 @@ const probeUi = page =>
 		};
 	});
 
+/** Open closed round folds / tool-run summaries so rows inside them render.
+ *  A closed fold renders the reply text only, so the in-card state (and the
+ *  live spinner) is only observable after this. */
+const expandActivity = async page => {
+	for (let pass = 0; pass < 3; pass++) {
+		const opened = await page
+			.evaluate(() => {
+				const closed = [
+					...document.querySelectorAll(
+						'.tr-round-fold[aria-expanded="false"], .tr-run-summary[aria-expanded="false"]',
+					),
+				];
+				for (const button of closed) button.click();
+				return closed.length;
+			})
+			.catch(() => 0);
+		if (opened === 0) break;
+		await sleep(500);
+	}
+};
+
 const promptToken = `CRASH-PROBE-${process.pid}`;
 const crashCommand =
 	process.platform !== "win32" ||
@@ -350,6 +380,7 @@ try {
 	fake = spawnLogged("fake", bunExecutable, [path.join(desktopDir, "scripts", "fake-openai-server.mjs")], {
 		...isoEnv,
 		FAKE_TOOL_COMMAND: crashCommand,
+		FAKE_PORT: String(FAKE_PORT),
 	});
 	if (!(await waitFor(() => tail("fake").includes("fake openai endpoint on"), 15_000))) {
 		fatal("fake provider did not bind:\n" + tail("fake"));
@@ -419,6 +450,8 @@ try {
 		console.log(line);
 	});
 	await page.setViewport({ width: 1100, height: 760 });
+	// A stuck pointer/key interaction must fail the check, not hang the run.
+	page.setDefaultTimeout(15_000);
 	const shot = name => page.screenshot({ path: path.join(dirs.shots, `${name}.png`) });
 
 	// The first run opens the setup wizard, whose modal owns input and cannot
@@ -458,10 +491,19 @@ try {
 	const initialRows = await rpc.request("session.list");
 	check("0. shell spawned its own isolated daemon", Array.isArray(initialRows), `sessions=${initialRows?.length ?? "?"}`);
 
-	// Dismiss a first-run modal if one is still mounted.
-	if (await page.evaluate(() => !!document.querySelector('[aria-modal="true"], .gui-dialog-backdrop, .gui-obo'))) {
+	// Dismiss the first-run wizard if it is still mounted. Only `.gui-obo` is
+	// treated as a wizard: the pause overlay is always mounted and carries
+	// `aria-modal`, so a generic test clicks into a surface nobody can see.
+	const wizardUp = () =>
+		page.evaluate(() => {
+			const host = document.querySelector(".gui-obo");
+			if (!host) return false;
+			const rect = host.getBoundingClientRect();
+			return rect.width > 0 && rect.height > 0;
+		});
+	if (await wizardUp()) {
 		await page.evaluate(() => {
-			const host = document.querySelector(".gui-obo, [aria-modal='true']");
+			const host = document.querySelector(".gui-obo");
 			const skip = host ? [...host.querySelectorAll("button")].find(b => /跳过|Skip/.test(b.textContent ?? "")) : null;
 			skip?.click();
 		});
@@ -474,8 +516,30 @@ try {
 	// editor exactly as a user would. The editor is CodeMirror (a
 	// `contenteditable`), not a textarea, so it needs real key events.
 	const knownIds = new Set((initialRows ?? []).map(row => row.id));
-	await page.click(".gui-welcome-form .cm-content, .gui-welcome-form .gui-composer-editor--welcome .cm-content");
+	const welcomeEditor = ".gui-welcome-form .cm-content";
+	const welcomeText = () =>
+		page.evaluate(selector => (document.querySelector(selector)?.textContent ?? "").trim(), welcomeEditor);
+	if (
+		!(await waitFor(
+			() => page.evaluate(selector => !!document.querySelector(selector), welcomeEditor),
+			20_000,
+			200,
+		))
+	) {
+		await shot("no-welcome-editor");
+		fatal("the welcome editor never mounted");
+	}
+	await page.focus(welcomeEditor);
 	await page.keyboard.type(`${promptToken} run the long command`);
+	let typedWelcome = await welcomeText();
+	if (!typedWelcome.includes(promptToken)) {
+		// Focus alone can lose the race against a scene transition; a real click
+		// on the editor is the fallback, then type again.
+		await page.click(welcomeEditor);
+		await page.keyboard.type(`${promptToken} run the long command`);
+		typedWelcome = await welcomeText();
+	}
+	check("1a. prompt text reached the welcome composer", typedWelcome.includes(promptToken), typedWelcome.slice(0, 80));
 	await page.keyboard.press("Enter");
 	let sessionId = null;
 	await waitFor(async () => {
@@ -519,6 +583,8 @@ try {
 		livePending = response?.calls?.[0] ?? null;
 		return livePending?.toolName === "bash";
 	}, 30_000, 400);
+	await expandActivity(page);
+	await waitFor(async () => ((await probeUi(page).catch(() => null))?.spinners.length ?? 0) > 0, 5_000, 200);
 	const beforeKill = await probeUi(page).catch(() => null);
 	if (!beforeKill) fatal("could not read the GUI state before the crash");
 	check("3. tool execution started (persisted pending call)", livePending?.toolName === "bash", livePending);
@@ -544,30 +610,54 @@ try {
 	let sendVisibleMs = null;
 	let workingAgain = false;
 	let splashSeen = false;
+	let daemonRespawned = false;
+	// What the window looked like at the exact sample where the capsule left.
+	// The drop handler sets `booting` in the same tick, so the capsule can go
+	// away because the whole shell was replaced by the splash — this sample is
+	// what separates that from a stop→send render.
+	const capsuleClearView = { splash: null, composer: null, sendButton: null };
 	const probe = async () => {
 		const snapshot = await probeUi(page).catch(() => null);
 		if (!snapshot) return;
 		const at = Date.now() - killT0;
 		if (snapshot.splash) splashSeen = true;
-		if (capsuleClearedMs === null && !snapshot.stopCapsule) capsuleClearedMs = at;
+		if (capsuleClearedMs === null && !snapshot.stopCapsule) {
+			capsuleClearedMs = at;
+			capsuleClearView.splash = snapshot.splash;
+			capsuleClearView.composer = snapshot.composer;
+			capsuleClearView.sendButton = snapshot.sendButton;
+		}
 		if (capsuleClearedMs !== null && snapshot.stopCapsule) workingAgain = true;
-		if (sendVisibleMs === null && snapshot.composer && snapshot.sendButton && !snapshot.stopCapsule) {
+		// Only accepted once the replacement daemon is confirmed: the assertion
+		// is "the reconnected GUI comes back in send state", not any transient.
+		if (
+			daemonRespawned &&
+			sendVisibleMs === null &&
+			snapshot.composer &&
+			snapshot.sendButton &&
+			!snapshot.stopCapsule
+		) {
 			sendVisibleMs = at;
 		}
 	};
 	// The store settles the run flag at the close; sample long enough to catch an
 	// early re-render flash, not to wait out the daemon respawn (step 7 does).
 	const earlyDeadline = killT0 + 30_000;
-	while (Date.now() < earlyDeadline && sendVisibleMs === null) {
+	let capsuleSettledAt = null;
+	while (Date.now() < earlyDeadline) {
 		await probe();
+		if (capsuleClearedMs !== null && capsuleSettledAt === null) capsuleSettledAt = Date.now();
+		if (capsuleSettledAt !== null && Date.now() - capsuleSettledAt > 2_000) break;
 		await sleep(120);
 	}
 	await shot("2-after-kill");
 	check(
 		"5. stop capsule clears within seconds (adoptIdleState, not pinned)",
 		capsuleClearedMs !== null && capsuleClearedMs <= IDLE_TARGET_MS,
-		`${capsuleClearedMs}ms`,
+		`${capsuleClearedMs}ms (at that sample: splash=${capsuleClearView.splash}, composer=${capsuleClearView.composer})`,
 	);
+	timing.capsuleClearSplash = capsuleClearView.splash;
+	timing.capsuleClearComposer = capsuleClearView.composer;
 
 	// ── 7. Auto-reconnect: a DIFFERENT daemon takes over ───────────────────
 	let recoveredPid = null;
@@ -587,21 +677,7 @@ try {
 		fatal("no replacement daemon appeared; the GUI could not recover in place");
 	}
 	if (!(await waitFor(() => portOpen(DAEMON_PORT), 30_000, 300))) fatal("replacement daemon never bound");
-	// The composer returns once the boot path finishes; the daemon's own boot is
-	// what took the time above, so this window only covers the reconnect render.
-	const sendDeadline = Date.now() + SEND_AFTER_RESPAWN_TIMEOUT_MS;
-	while (sendVisibleMs === null && Date.now() < sendDeadline) {
-		await probe();
-		await sleep(150);
-	}
-	timing.capsuleClearedMs = capsuleClearedMs;
-	timing.sendVisibleMs = sendVisibleMs;
-	timing.splashSeen = splashSeen;
-	check(
-		"6. composer back in send state after the reconnect",
-		sendVisibleMs !== null,
-		`${sendVisibleMs}ms since the kill (splash seen: ${splashSeen})`,
-	);
+	daemonRespawned = true;
 	rpc.close();
 	rpc = await openRpc(DAEMON_PORT);
 
@@ -614,13 +690,98 @@ try {
 	const crashedRow = (crashedRows ?? []).find(row => row.id === sessionId);
 	check("8. crashed session still present on the new daemon", Boolean(crashedRow), crashedRow?.title);
 	check("9. daemon reports the crashed session idle", crashedRow?.working === false, crashedRow?.working);
-	const crashedPending = await rpc
-		.request("session.pendingToolCalls", { sessionId })
-		.catch(() => null);
+
+	// Read this before the GUI opens the session: the reopen triggers its own
+	// snapshot/resume, and a second scan can queue behind it.
+	let crashedPending = null;
+	let pendingError = null;
+	// A freshly respawned daemon may still be activating the session's plugin
+	// surface; the first snapshot can take tens of seconds, so give the scan a
+	// budget beyond the default 8-second RPC ceiling.
+	await waitFor(async () => {
+		try {
+			crashedPending = await rpc.request("session.pendingToolCalls", { sessionId }, 45_000);
+			pendingError = null;
+			return crashedPending?.calls?.[0]?.toolName === "bash";
+		} catch (error) {
+			pendingError = String(error);
+			return false;
+		}
+	}, 120_000, 1_000);
 	check(
 		"10. daemon still names the unanswered tool call",
 		crashedPending?.calls?.[0]?.toolName === "bash",
-		crashedPending?.calls,
+		crashedPending?.calls ?? pendingError,
+	);
+
+	// The reconnect restores the session through boot(); a fast replacement
+	// daemon can race that reopen and leave the welcome scene with a one-shot
+	// "session.open: not connected". Record which happened; when the reopen was
+	// lost, open the row the way a user would so the crash state can be judged.
+	const shellBack = await waitFor(
+		() =>
+			page.evaluate(
+				() =>
+					!!document.querySelector(
+						".gui-welcome-form, .gui-chat-column, .gui-transcript, .gui-pane-side",
+					),
+			),
+		40_000,
+		300,
+	);
+	const autoReopened =
+		shellBack &&
+		(await page.evaluate(() => !!document.querySelector(".gui-chat-column, .gui-transcript")));
+	timing.autoReopen = autoReopened;
+	if (!autoReopened) {
+		// The pause overlay is always mounted inside an aria-modal shell; only a
+		// rendered dialog (nonzero box, visible) may block the row click.
+		timing.reopenDialog = await page.evaluate(() => {
+			const dialogs = [...document.querySelectorAll('[aria-modal="true"], .gui-dialog-backdrop')];
+			const visible = dialogs.find(element => {
+				const rect = element.getBoundingClientRect();
+				const style = getComputedStyle(element);
+				return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.opacity !== "0";
+			});
+			if (!visible) return null;
+			const close = [...visible.querySelectorAll("button")].find(button =>
+				/关闭|知道了|取消|Close|Dismiss/i.test(button.textContent ?? ""),
+			);
+			close?.click();
+			return (visible.textContent ?? "").trim().slice(0, 160);
+		});
+		if (timing.reopenDialog) console.log(`reconnect left a dialog up: ${timing.reopenDialog}`);
+		await page.keyboard.press("Escape");
+		await sleep(400);
+		const clicked = await page.evaluate(title => {
+			const rows = [...document.querySelectorAll(".gui-session-row")];
+			const row = title ? rows.find(candidate => (candidate.textContent ?? "").includes(title)) : rows[0];
+			if (!row) return false;
+			row.click();
+			return true;
+		}, crashedRow?.title ?? "");
+		timing.reopenedByRowClick = clicked;
+		await waitFor(
+			() => page.evaluate(() => !!document.querySelector(".gui-chat-column, .gui-transcript")),
+			20_000,
+			300,
+		);
+	}
+
+	// The composer returns once the boot path finishes; the daemon's own boot is
+	// what took the time above, so this window only covers the reconnect render.
+	const sendDeadline = Date.now() + SEND_AFTER_RESPAWN_TIMEOUT_MS;
+	while (sendVisibleMs === null && Date.now() < sendDeadline) {
+		await probe();
+		await sleep(150);
+	}
+	timing.capsuleClearedMs = capsuleClearedMs;
+	timing.sendVisibleMs = sendVisibleMs;
+	timing.splashSeen = splashSeen;
+	check(
+		"6. composer in send state after the replacement daemon was confirmed",
+		sendVisibleMs !== null,
+		`${sendVisibleMs}ms since the kill (splash seen: ${splashSeen}, auto-reopen: ${autoReopened})`,
 	);
 
 	// ── 9. GUI restore: interrupted marker, resume banner, no duplicates ───
@@ -628,17 +789,7 @@ try {
 	// the reply text only, so open the fold (and the tool-run summary inside it)
 	// the way a reader would before judging the marker.
 	await waitFor(() => page.evaluate(() => document.querySelectorAll(".tr-round-fold").length > 0), 60_000, 500);
-	for (let pass = 0; pass < 3; pass++) {
-		const opened = await page.evaluate(() => {
-			const closed = [
-				...document.querySelectorAll('.tr-round-fold[aria-expanded="false"], .tr-run-summary[aria-expanded="false"]'),
-			];
-			for (const button of closed) button.click();
-			return closed.length;
-		});
-		if (opened === 0) break;
-		await sleep(700);
-	}
+	await expandActivity(page);
 	let settled = null;
 	await waitFor(async () => {
 		const snapshot = await probeUi(page).catch(() => null);

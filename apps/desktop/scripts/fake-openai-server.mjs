@@ -14,7 +14,10 @@
  *
  * Usage: bun apps/desktop/scripts/fake-openai-server.mjs
  */
-const PORT = 8499;
+// The port is overridable so two checkouts can run their own fake endpoint
+// side by side; the historical fixed port stays the default for existing
+// probes.
+const PORT = Number(process.env.FAKE_PORT ?? 8499);
 /** Seconds of streaming per request — long enough to drive Escape probes. */
 const STREAM_SECONDS = Number(process.env.FAKE_STREAM_SECONDS ?? 45);
 /** When set, answer the first tool-bearing turn with this bash command. */
