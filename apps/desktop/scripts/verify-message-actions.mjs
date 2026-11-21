@@ -9,6 +9,7 @@
  * Usage: bun apps/desktop/scripts/verify-message-actions.mjs
  */
 import puppeteer from "puppeteer-core";
+import { COMPOSER_INPUT_SELECTOR, composerValue, sendComposerPrompt, waitForComposer } from "./composer-probe.mjs";
 
 const browser = await puppeteer.connect({ browserURL: "http://127.0.0.1:9224" });
 const page = (await browser.pages()).find(p => p.url().includes("dist/index.html"));
@@ -36,7 +37,7 @@ await page.evaluate(() => {
 
 const mark = () => page.evaluate(() => window.__rpc.length);
 const since = async from => (await page.evaluate(() => window.__rpc)).slice(from);
-const draft = () => page.evaluate(() => document.querySelector('[data-chat-input="true"] textarea')?.value ?? "");
+const draft = () => composerValue(page);
 const dockShown = () => page.evaluate(() => !!document.querySelector(".gui-revert-dock"));
 
 const audit = () =>
@@ -67,27 +68,25 @@ const clickIn = (rowIndex, match) =>
 	);
 
 // Reach the composer.
+let composerReady = false;
 for (let i = 0; i < 12; i++) {
-	const ok = await page.evaluate(() => {
+	composerReady = await page.evaluate(sel => {
 		[...document.querySelectorAll("button")].find(b => /跳过|Skip/.test(b.textContent ?? ""))?.click();
-		return !!document.querySelector('[data-chat-input="true"] textarea');
-	});
-	if (ok) break;
+		const visible = el => el.isConnected && (el.getClientRects().length > 0 || el.offsetParent !== null);
+		return [...document.querySelectorAll(sel)].some(visible);
+	}, COMPOSER_INPUT_SELECTOR);
+	if (composerReady) break;
 	await sleep(1000);
 }
+if (!composerReady) throw new Error(`composer input never appeared: ${COMPOSER_INPUT_SELECTOR}`);
 await page.evaluate(() => {
 	[...document.querySelectorAll("button")]
 		.find(b => /新建任务|新建会话/.test(`${b.getAttribute("aria-label") ?? ""}${b.textContent ?? ""}`))
 		?.click();
 });
 await sleep(5000);
-await page.evaluate(() => {
-	const ta = document.querySelector('[data-chat-input="true"] textarea');
-	if (!ta) return;
-	Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, "探针消息 A");
-	ta.dispatchEvent(new Event("input", { bubbles: true }));
-	ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-});
+await waitForComposer(page, 20_000, { session: true });
+await sendComposerPrompt(page, "探针消息 A", { session: true });
 // Wait for the reply to SETTLE (an assistant entry row with action buttons).
 let rows = [];
 for (let i = 0; i < 30; i++) {
