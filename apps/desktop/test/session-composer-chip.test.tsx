@@ -7,11 +7,13 @@ import { SessionComposer } from "../src/components/SessionComposer";
 import type { RpcClient } from "../src/lib/rpc";
 
 /**
- * The model/thinking chip left the active chat's input row — the capsule
- * opens the agent info tab instead. A side session has no capsule (its tab
- * address is the session itself, and `session.agent` only addresses the
- * active chat), so its composer keeps the chip. `keepModelChip` defaults on
- * for exactly that reason; the active chat turns it off explicitly.
+ * The model chip left the active chat's input row — the capsule opens the
+ * agent info tab instead. A side session has no capsule (its tab address is
+ * the session itself, and `session.agent` only addresses the active chat),
+ * so its composer keeps the model selector. `keepModelChip` defaults on for
+ * exactly that reason; the active chat turns it off explicitly. Thinking
+ * needs an `onSetThinking` the side session does not pass, so that segment
+ * stays absent there — the Agent tab is the only thinking control.
  */
 
 const rpc = {
@@ -24,7 +26,7 @@ const rpc = {
 	addEventListener: () => () => {},
 } as unknown as RpcClient;
 
-async function mount(keepModelChip?: boolean) {
+async function mount(keepModelChip?: boolean, withThinkingSetter = true) {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
@@ -39,7 +41,7 @@ async function mount(keepModelChip?: boolean) {
 				quotes={[]}
 				onQuotesChange={() => {}}
 				thinkingLevel="medium"
-				onSetThinking={() => {}}
+				{...(withThinkingSetter ? { onSetThinking: () => {} } : {})}
 				keepModelChip={keepModelChip}
 			/>,
 		);
@@ -68,9 +70,16 @@ afterAll(() => {
 });
 
 describe("session composer model chip", () => {
-	it("keeps the model/thinking chip by default (a side session has no capsule)", async () => {
+	it("keeps the model chip by default (a side session has no capsule)", async () => {
 		const { host, unmount } = await mount();
 		expect(host.querySelector(".gui-model-capsule")).not.toBeNull();
+		await unmount();
+	});
+
+	it("keeps only the model segment when the host passes no thinking setter", async () => {
+		const { host, unmount } = await mount(undefined, false);
+		expect(host.querySelector(".gui-model-capsule")).not.toBeNull();
+		expect(host.querySelector(".gui-model-capsule-sep")).toBeNull();
 		await unmount();
 	});
 
