@@ -5943,9 +5943,11 @@
 .tm-topbar {
 	position: absolute;
 	/* The chat head floats over the whole card (absolute, hit-transparent), so
-	 * the map's own chrome clears its band instead of sharing it. */
+	 * the map's own chrome clears its band instead of sharing it. The left edge
+	 * is the card gutter: the turn strip lives at the bottom, so nothing
+	 * reserves a column here. */
 	top: 46px;
-	left: 64px;
+	left: 12px;
 	right: 12px;
 	z-index: 6;
 	display: flex;
@@ -6090,16 +6092,19 @@ button.traj-error-note:hover {
 	border-color: color-mix(in oklab, var(--color-text) 12%, transparent);
 }
 
-/* 迷你导航条:全轮次剪影 + 视口映射。纵向 = 左侧竖条;横向 = 底部横条。 */
+/* 迷你导航条:全轮次剪影 + 视口映射。两种主线方向共用底部横条——
+ * 纵向也放在画布底缘,不占左侧竖带(不压顶栏 tab,也不给画布留空列)。 */
 .tm-nav {
 	position: absolute;
-	top: 16px;
-	bottom: 16px;
-	left: 10px;
-	width: 30px;
+	top: auto;
+	right: 56px;
+	bottom: 10px;
+	left: 16px;
+	width: auto;
+	height: 30px;
 	z-index: 5;
 	display: flex;
-	flex-direction: column;
+	flex-direction: row;
 	justify-content: center;
 	gap: 0;
 	padding: 4px;
@@ -6111,47 +6116,28 @@ button.traj-error-note:hover {
 	cursor: pointer;
 }
 
-/* 横向模式:条目沿 X 轴展开;右侧让位给缩放控件。 */
-.tm-nav[data-orient="h"] {
-	top: auto;
-	left: 16px;
-	right: 56px;
-	bottom: 10px;
-	width: auto;
-	height: 30px;
-	flex-direction: row;
-}
-
-.tm-nav[data-orient="h"] .tm-nav-band {
+/* 条目宽度由组件按主轴跨度计算;右侧留 56px 给缩放控件。 */
+.tm-nav-band {
+	display: block;
 	width: auto;
 	height: 100%;
 	min-width: 2px;
 	min-height: 0;
-}
-
-.tm-nav[data-orient="h"] .tm-nav-viewport {
-	top: 1px;
-	height: calc(100% - 2px);
-	transition: left 120ms ease-out, width 120ms ease-out;
-}
-
-.tm-nav-band {
-	display: block;
-	width: 100%;
-	min-height: 2px;
 	border-radius: var(--radius-xs);
 	opacity: 0.75;
 }
 
 .tm-nav-viewport {
 	position: absolute;
+	top: 1px;
 	left: 1px;
 	width: calc(100% - 2px);
+	height: calc(100% - 2px);
 	border-radius: var(--radius-sm);
 	border: 1px solid color-mix(in oklab, var(--color-accent) 65%, transparent);
 	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 	pointer-events: none;
-	transition: top 120ms ease-out, height 120ms ease-out;
+	transition: left 120ms ease-out, width 120ms ease-out;
 }
 
 /* 事件构成条颜色(与轨迹 KIND_COLOR 同源)。 */
