@@ -142,12 +142,14 @@ the name but never the value.
 | `request_secret` | `name`, `purpose`    | Environment variable name and a status; never the value   |
 | `list_secrets`   | none                 | Name, purpose, scope and availability; never the value    |
 
-`name` must match `/^[A-Z][A-Z0-9_]{0,63}$/`. The daemon pushes a
-`secret-request` card with `kind:"fill"` when no value is stored and
-`kind:"allow"` when one already exists. A card times out as a cancel after ten
-minutes. Interactive collection requires a host that implements the
-`requestSecret` UI channel (the daemon approval bridge); a headless/TUI host
-returns an error telling the user to add the secret from Settings → Secrets.
+`name` must match `/^[A-Z][A-Z0-9_]{0,63}$/`. A stored, decryptable value
+answers immediately with the environment variable name; the only card the tool
+ever pushes is a `secret-request` with `kind:"fill"`. `kind:"allow"` remains an
+accepted action at the wire/service level for future hosts that add a consent
+policy. A card times out as a cancel after ten minutes. Interactive collection
+requires a host that implements the `requestSecret` UI channel (the daemon
+approval bridge); a headless/TUI host returns an error telling the user to add
+the secret from Settings → Secrets.
 
 ### Storage
 
@@ -187,8 +189,9 @@ in that child's environment:
 At session start, stored agent secrets join the session's `SecretObfuscator` as
 plain obfuscate-mode entries with `friendlyName` = the secret name. A save
 mid-session registers the value into every live session's obfuscator
-immediately. Provider requests therefore carry a reversible placeholder such as
-`#GITHUBTOKEN_AB12:L#`, never the value.
+immediately, including the session that performed the first save when the store
+was empty at startup. Provider requests therefore carry a reversible
+placeholder such as `#GITHUBTOKEN_AB12:L#`, never the value.
 
 Agent secrets are **always** covered: a value the user explicitly saved in the
 safety card is a separate grant from the generic scanning feature. The session

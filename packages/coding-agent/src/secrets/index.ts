@@ -306,10 +306,20 @@ export async function buildSessionSecretObfuscator(
 	agentDir: string,
 	keyDir: string | undefined,
 	genericSecretsEnabled: boolean,
-): Promise<SecretObfuscator | undefined> {
-	return await buildSecretObfuscator(cwd, agentDir, keyDir, {
+): Promise<SecretObfuscator> {
+	const obfuscator = await buildSecretObfuscator(cwd, agentDir, keyDir, {
 		includeConfiguredSecrets: genericSecretsEnabled,
 	});
+	if (obfuscator) return obfuscator;
+	// Inert session instance for the default first-use path: empty entries plus
+	// the lazy key provider. `hasSecrets()` stays false (no prompt copy, no key
+	// file), but the session is registered so a save in THIS session can call
+	// `addSecret` and flip every boundary check on immediately. Without this,
+	// a fresh user with `secrets.enabled=false` would save their first secret
+	// into an unregistered session and get pass-through provider coverage.
+	const inert = new SecretObfuscator([], () => getSecretPlaceholderKeySync(keyDir));
+	registerAgentSecretObfuscator(agentDir, inert);
+	return inert;
 }
 
 async function loadSecretsFile(filePath: string): Promise<SecretEntry[]> {

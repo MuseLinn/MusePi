@@ -20,12 +20,6 @@ import { deleteSecret as deleteEnvelope, encryptedStore, mergeSecret, readSecret
 
 export type { SecretEntryView, SecretScope, SecretStatus };
 
-/** Store/internal view of an entry including its decrypted value. */
-export interface SecretValue extends SecretEntryView {
-	/** Decrypted value. Only store/runtime internals ever see this field. */
-	value: string;
-}
-
 export const AGENT_SECRET_DIR = "agent-secrets";
 export const AGENT_SECRET_NAME_RE = /^[A-Z][A-Z0-9_]{0,63}$/;
 export const AGENT_SECRET_ENV_PREFIX = "MUSEPI_SECRET_";
@@ -268,18 +262,6 @@ export class AgentSecretStore {
 		return (await this.getValue(name)) !== undefined;
 	}
 
-	/** Replace every known value in text with `[secret:NAME]` (tool output). */
-	async redact(text: string): Promise<string> {
-		if (text.length === 0) return text;
-		const values = await this.values();
-		let output = text;
-		for (const { name, value } of values.sort((a, b) => b.value.length - a.value.length)) {
-			if (value.length === 0) continue;
-			output = output.split(value).join(`[secret:${name}]`);
-		}
-		return output;
-	}
-
 	#toView(name: string, entry: SecretMetadata["entries"][string]): SecretEntryView {
 		return {
 			name,
@@ -305,7 +287,10 @@ export function getAgentSecretStore(agentDir: string): AgentSecretStore {
 	return store;
 }
 
-/** What the card must collect: `fill` for a new value, `allow` for a stored one. */
+/**
+ * What the card must collect. `fill` is the only kind the tool sends today;
+ * `allow` remains accepted at the wire level for future consent hosts.
+ */
 export type AgentSecretRequestKind = "fill" | "allow";
 
 /** Tool → UI request. Carries no value and no request id; the host assigns one. */

@@ -1055,7 +1055,16 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 		const secretSnapshot: AgentSecretSnapshot = await agentSecretSnapshot(
 			this.session.settings.getAgentDir(),
 			this.session.cwd,
-		).catch(() => ({ env: {}, redact: (text: string) => text }));
+		).catch(error => {
+			// Losing the snapshot also loses injection AND `[secret:NAME]`
+			// scrubbing for this call. Keep the command runnable, but make the
+			// security degradation observable instead of silent.
+			logger.warn("Agent secret snapshot failed; running without injection or output scrubbing", {
+				agentDir: this.session.settings.getAgentDir(),
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return { env: {}, redact: (text: string) => text };
+		});
 		const childEnv =
 			Object.keys(secretSnapshot.env).length > 0 ? { ...(resolvedEnv ?? {}), ...secretSnapshot.env } : resolvedEnv;
 		const redactOutput = (text: string): string => secretSnapshot.redact(text);

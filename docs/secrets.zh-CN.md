@@ -151,8 +151,7 @@ Agent 密钥是模型在运行时才发现需要的凭据——例如 `curl` 用
 | `request_secret` | `name`、`purpose`   | 环境变量名与状态；永不包含值                             |
 | `list_secrets`   | 无                  | 名字、用途、scope 与可用性；永不包含值                   |
 
-`name` 必须匹配 `/^[A-Z][A-Z0-9_]{0,63}$/`。没有已存储值时，daemon 推送
-`kind:"fill"` 的 `secret-request` 卡片；已有值时推送 `kind:"allow"`。卡片十分钟无应答按取消处理。交互式收集要求宿主实现 `requestSecret` UI 通道（daemon 的 approval bridge）；无头/TUI 宿主会返回错误，提示用户到「设置 → 密钥」添加。
+`name` 必须匹配 `/^[A-Z][A-Z0-9_]{0,63}$/`。已存储且可解密的值会立即返回环境变量名；工具唯一会推送的卡片是 `kind:"fill"` 的 `secret-request`。`kind:"allow"` 仍作为 wire/service 层可接受的动作，留给未来增加同意策略的宿主。卡片十分钟无应答按取消处理。交互式收集要求宿主实现 `requestSecret` UI 通道（daemon 的 approval bridge）；无头/TUI 宿主会返回错误，提示用户到「设置 → 密钥」添加。
 
 ### 存储
 
@@ -178,7 +177,7 @@ P0 的 `scope` 为 `"all"`：每个已存储密钥对所有会话可用。worksp
 
 ### Provider 边界
 
-会话启动时，已存储的 Agent 密钥以 plain、obfuscate 模式条目加入会话的 `SecretObfuscator`，`friendlyName` 为密钥名。会话中途保存时，值会立即注册进每个活跃会话的 obfuscator。因此 provider 请求只会携带可逆占位符（如 `#GITHUBTOKEN_AB12:L#`），永不携带值。
+会话启动时，已存储的 Agent 密钥以 plain、obfuscate 模式条目加入会话的 `SecretObfuscator`，`friendlyName` 为密钥名。会话中途保存时，值会立即注册进每个活跃会话的 obfuscator，包括启动时存储为空、由这次保存第一次写入密钥的那个会话。因此 provider 请求只会携带可逆占位符（如 `#GITHUBTOKEN_AB12:L#`），永不携带值。
 
 Agent 密钥**始终**受覆盖：用户在安全检查卡中显式保存的值，与通用扫描特性是两份不同的授权。即使 `secrets.enabled=false`，会话也会构建 Agent 密钥 obfuscator。该开关只控制通用来源（环境变量扫描、`secrets.yml`、内置凭据模式）；关闭时这些来源不注册，但 Agent 卡片保存的值仍然注册。
 

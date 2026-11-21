@@ -7,11 +7,12 @@
  * a pending request and returns a promise that only resolves when a GUI
  * client answers via `tool.approve` / `tool.deny` (daemon RPC → resolve).
  *
- * Only the approval surface is implemented; every other UI-context method is
- * a no-op so interactive-only tools degrade to "no UI" behaviour instead of
- * hanging. (The wrapper also emits `tool_approval_requested` before select,
- * but the ExtensionRunner is internal to session creation — the daemon
- * cannot subscribe, so the request carries the rendered prompt only.)
+ * Only the approval select, generic ask prompts and the agent-secret card are
+ * implemented; every other UI-context method is a no-op so interactive-only
+ * tools degrade to "no UI" behaviour instead of hanging. (The wrapper also
+ * emits `tool_approval_requested` before select, but the ExtensionRunner is
+ * internal to session creation — the daemon cannot subscribe, so the request
+ * carries the rendered prompt only.)
  */
 import type {
 	ExtensionAskDialogQuestion,
@@ -60,6 +61,8 @@ export interface PendingSecret {
 	requestId: string;
 	name: string;
 	purpose: string;
+	/** `"fill"` is the only kind the tool sends today. `"allow"` remains in the
+	 *  wire contract for future consent hosts; nothing pushes it now. */
 	kind: "fill" | "allow";
 	resolve(answer: AgentSecretAnswer): void;
 }
@@ -116,7 +119,7 @@ export interface RecentApprovalResolution {
 }
 
 export interface ApprovalBridge {
-	/** UI context injected into the session (approval + ask). */
+	/** UI context injected into the session (approval + ask + secret). */
 	uiContext: ExtensionUIContext;
 	/** Active approval requests keyed by requestId. */
 	pending: Map<string, PendingApproval>;

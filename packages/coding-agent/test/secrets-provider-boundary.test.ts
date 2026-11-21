@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Message } from "@musepi/pi-ai";
+import { SecretService } from "../src/daemon/services/secret-service";
 import { buildSessionSecretObfuscator, obfuscateMessages } from "../src/secrets";
 import { AgentSecretStore } from "../src/secrets/agent-store";
 import type { ToolSession } from "../src/tools";
@@ -40,6 +41,36 @@ function makeSession(agentDir: string): ToolSession {
 }
 
 describe("agent-secret provider boundary without secrets.enabled", () => {
+	it("covers the first save made in the same session startup instance", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "musepi-agent-first-save-"));
+		const keyFile = join(dir, "secret-placeholder.key");
+
+		// Default configuration: empty store + generic scanner off. The session
+		// still gets an inert obfuscator, without prompt copy or a key file.
+		const obfuscator = await buildSessionSecretObfuscator(dir, dir, dir, false);
+		expect(obfuscator.hasSecrets()).toBe(false);
+		expect(existsSync(keyFile)).toBe(false);
+
+		// The save path used by the tool card: SecretService.set persists and
+		// notifies the live obfuscator registered above.
+		const service = new SecretService({
+			agentDir: () => dir,
+			get: () => undefined,
+			allSessions: () => [][Symbol.iterator](),
+		});
+		await service.set({ name: "API_TOKEN", value: VALUE, purpose: "curl the API" });
+
+		expect(obfuscator.hasSecrets()).toBe(true);
+		const providerMessages = obfuscateMessages(obfuscator, [
+			{ role: "user", content: [{ type: "text", text: `env capture: ${VALUE}` }] } as Message,
+		]);
+		const serialized = JSON.stringify(providerMessages);
+		expect(serialized).not.toContain(VALUE);
+		expect(serialized).toContain("APITOKEN");
+		// The key file appears only when the save actually mints a placeholder.
+		expect(existsSync(keyFile)).toBe(true);
+	});
+
 	it("covers an env->file->read round trip when generic secret sources are off", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "musepi-agent-boundary-"));
 		const store = new AgentSecretStore(dir);

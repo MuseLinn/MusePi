@@ -122,9 +122,11 @@ export type SessionStreamEvent =
 	// Settlement broadcast for an ask (including a cancel). Same rationale as
 	// approval-request-end: the card is app-level state, not a transcript row.
 	| { kind: "ask-request-end"; seq: number; payload: { requestId: string } }
-	// Agent secret card: `fill` collects a new value, `allow` covers an
-	// already-stored one. The value never rides this envelope; the client sends
-	// it to `secret.answer`, and this event only carries the request metadata.
+	// Agent secret card: `fill` collects a new value. `allow` stays in the wire
+	// contract for future consent hosts, but the current tool never pushes it
+	// (a stored, decryptable value answers immediately). The value never rides
+	// this envelope; the client sends it to `secret.answer`, and this event only
+	// carries the request metadata.
 	| { kind: "secret-request"; seq: number; payload: SecretRequestPayload }
 	// Settlement broadcast for a secret card (including timeout/cancel).
 	| { kind: "secret-request-end"; seq: number; payload: SecretRequestEndPayload }

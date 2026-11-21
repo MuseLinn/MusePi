@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { agentSecretSnapshot } from "../src/secrets/agent-runtime";
 import {
 	AGENT_SECRET_NAME_RE,
 	AgentSecretStore,
@@ -82,11 +83,13 @@ describe("agent secret store", () => {
 		expect(await store.getValue("TOKEN")).toBeUndefined();
 	});
 
-	it("redacts stored values and exposes the child environment names", async () => {
-		const { store } = makeStore();
+	it("exposes the child environment and redacts stored values through the runtime snapshot", async () => {
+		const { dir, store } = makeStore();
 		await store.set("API_TOKEN", VALUE, "test");
 		expect(agentSecretEnvName("API_TOKEN")).toBe("MUSEPI_SECRET_API_TOKEN");
-		expect(await store.redact(`token=${VALUE}; again ${VALUE}`)).toBe(
+		const snapshot = await agentSecretSnapshot(dir, dir);
+		expect(snapshot.env.MUSEPI_SECRET_API_TOKEN).toBe(VALUE);
+		expect(snapshot.redact(`token=${VALUE}; again ${VALUE}`)).toBe(
 			"token=[secret:API_TOKEN]; again [secret:API_TOKEN]",
 		);
 	});
