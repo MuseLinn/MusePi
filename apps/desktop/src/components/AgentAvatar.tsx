@@ -12,7 +12,8 @@ import { AVATAR_STORAGE_KEY, avatarPreset, ORB_TO_SIGNALS } from "./avatar-prese
  * declare `renderSignals` (Aora) instead receive the shared `AgentSignals`
  * contract when the call site supplies it; OrbState stays the fallback for
  * previews and legacy call sites.
- * Theme-aware via data-theme. Sizes: 20 (toolbar), 32, or 64 (chat avatar).
+ * Theme-aware via data-theme. Sizes: 20 (toolbar), 24 (chat capsule),
+ * 32 (surfaces), or 64 (the agent tab's identity head / chat avatar).
  *
  * While idle (`listening`) the orb leisurely cycles through a few pleasant
  * effects (wave → globe → morph) every few seconds, crossfaded — a subtle
@@ -32,7 +33,9 @@ export function AgentAvatar({
 	signals,
 }: {
 	state?: OrbState;
-	size?: 20 | 32 | 64;
+	/** Rendered box in px. Presets receive the number as-is (a literal union
+	 *  here would force call sites to fake a size they do not want). */
+	size?: number;
 	/** Identity-bound avatar seed (session id, agent id, model…) — punk
 	 *  preset renders a deterministic face per seed. */
 	seed?: string;

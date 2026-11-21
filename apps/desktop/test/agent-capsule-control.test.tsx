@@ -134,7 +134,7 @@ afterAll(() => {
 });
 
 describe("agent capsule control", () => {
-	it("is a button that reports its expanded state", async () => {
+	it("is a button that reports its expanded state and the agent's role", async () => {
 		const { host, unmount } = await mount({
 			rightPanelOpen: false,
 			onExpandRightPanel: () => {},
@@ -145,10 +145,14 @@ describe("agent capsule control", () => {
 		expect(capsule?.getAttribute("type")).toBe("button");
 		expect(capsule?.getAttribute("aria-expanded")).toBe("false");
 		expect(capsule?.querySelector(".gui-agent-capsule-go")).not.toBeNull();
+		// The role id is data; the visible name is its localized reading (the
+		// workbench lane's coder before any row lands).
+		expect(capsule?.dataset.agentRole).toBe("coder");
 		// The visible reading IS the accessible name: no aria-label may replace
-		// "助手 · 空闲" (label-in-name), and the action is the tooltip.
+		// "助手 编码 · 空闲" (label-in-name), and the action is the tooltip.
 		expect(capsule?.getAttribute("aria-label")).toBeNull();
 		expect(capsule?.textContent).toContain("助手");
+		expect(capsule?.querySelector(".gui-agent-role-tag")?.textContent).toBe("编码");
 		expect(capsule?.textContent).toContain("空闲");
 		expect(capsule?.getAttribute("title")).toBe("展开 Agent 详情");
 		await unmount();

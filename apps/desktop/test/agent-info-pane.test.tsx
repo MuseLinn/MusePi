@@ -37,7 +37,15 @@ interface Call {
 	params: Record<string, unknown> | undefined;
 }
 
-function makeRpc(options: { failModel?: boolean; failThinking?: boolean; failReads?: boolean } = {}) {
+function makeRpc(
+	options: {
+		failModel?: boolean;
+		failThinking?: boolean;
+		failReads?: boolean;
+		/** One `agentRole` payload from the session row, or a failed read. */
+		role?: { id: string; name?: string } | "fail";
+	} = {},
+) {
 	const calls: Call[] = [];
 	const failReads = { current: options.failReads === true };
 	// The daemon is the authority: a successful write is what the next
@@ -46,6 +54,10 @@ function makeRpc(options: { failModel?: boolean; failThinking?: boolean; failRea
 	const rpc = {
 		request: async (method: string, params?: Record<string, unknown>) => {
 			calls.push({ method, params });
+			if (method === "session.list") {
+				if (options.role === "fail") throw new Error("daemon unreachable");
+				return [{ id: "session-1", agentRole: options.role ?? { id: "coder" } }];
+			}
 			if (method === "session.thinkingInfo") {
 				if (failReads.current) throw new Error("daemon unreachable");
 				return { ...thinkingInfo, ...thinking };
@@ -201,6 +213,36 @@ afterAll(() => {
 });
 
 describe("agent info pane", () => {
+	it("shows the agent's vertical identity head with its role in the Agent tab", async () => {
+		const { rpc, calls } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const head = host.querySelector(".gui-agent-info-head");
+		const name = host.querySelector(".gui-agent-info-name");
+		expect(name?.textContent).toBe("助手");
+		// The role id is the contract; the head shows its readable lane tag.
+		expect(head?.getAttribute("data-agent-role")).toBe("coder");
+		expect(head?.querySelector(".gui-agent-role-tag")?.textContent).toBe("编码");
+		expect(calls.find(call => call.method === "session.list")?.params).toEqual({ sessionId: "session-1" });
+		await unmount();
+	});
+
+	it("shows a subagent's own name rather than the workbench coder role", async () => {
+		const { rpc } = makeRpc({ role: { id: "subagent", name: "sonic" } });
+		const { host, unmount } = await mount(rpc);
+		expect(host.querySelector(".gui-agent-info-name")?.textContent).toBe("sonic");
+		expect(host.querySelector(".gui-agent-info-head")?.getAttribute("data-agent-role")).toBe("subagent");
+		expect(host.querySelector(".gui-agent-role-tag")?.textContent).toBe("子代理");
+		await unmount();
+	});
+
+	it("keeps the coder identity when the session row cannot be read", async () => {
+		const { rpc } = makeRpc({ role: "fail" });
+		const { host, unmount } = await mount(rpc);
+		expect(host.querySelector(".gui-agent-info-name")?.textContent).toBe("助手");
+		expect(host.querySelector(".gui-agent-info-head")?.getAttribute("data-agent-role")).toBe("coder");
+		await unmount();
+	});
+
 	it("collapses the model area to the current provider/id and thinking level", async () => {
 		const { rpc } = makeRpc();
 		const { host, unmount } = await mount(rpc);

@@ -6954,11 +6954,16 @@ body.gui-resizing .gui-pane-right {
 	min-width: 0;
 }
 /* ── Agent identity capsule ────────────────────────────────────────────
- * ONE avatar per conversation instead of one per row. The orb and the live
- * state sit in a pill centered over the transcript's top band; the scroller
- * reserves 52px for this row (`.gui-chat-column .gui-transcript`), so the
- * pill covers no message at rest and nothing of the sticky ask or the
- * composer.
+ * ONE avatar per conversation instead of one per row. The orb, the assistant
+ * name, the agent's role tag and the live state sit in a pill centered over
+ * the transcript's top band; the scroller reserves 52px for this row
+ * (`.gui-chat-column .gui-transcript`), so the pill covers no message at rest
+ * and nothing of the sticky ask or the composer.
+ *
+ * The pill stays HORIZONTAL. The tall, pinned identity head belongs to the
+ * right panel's Agent tab (`.gui-agent-info-head`), where the role and the
+ * session title get a column of their own; the chat keeps a one-line chrome
+ * strip so the transcript keeps its top band.
  *
  * Positioning is against the CHAT COLUMN (`left: 50%` inside the head, which
  * spans the column), not the window: opening the right rail, the side panel
@@ -6983,9 +6988,9 @@ body.gui-resizing .gui-pane-right {
 	/* Border-box: the hairline border must not grow the pill out of the 52px
 	 * band the scroller reserves (measured by the geometry test). */
 	box-sizing: border-box;
-	height: 28px;
+	height: 30px;
 	padding: 0 10px 0 6px;
-	max-width: min(46%, 300px);
+	max-width: min(54%, 330px);
 	border: 1px solid var(--glass-hairline);
 	border-radius: 999px;
 	background: color-mix(in srgb, var(--color-surface-raised) 76%, transparent);
@@ -6998,6 +7003,14 @@ body.gui-resizing .gui-pane-right {
 	font-size: var(--ui-font-size-xs);
 	line-height: 1;
 	white-space: nowrap;
+}
+/* The orb ships as an inline span around an inline svg; inside the pill it
+ * must own exactly its size (a baseline descender would otherwise add ~4px
+ * and grow the pill past its height). */
+.gui-agent-capsule > .gui-agent-avatar {
+	display: block;
+	line-height: 0;
+	flex: none;
 }
 /* A control, and the only opaque hit target in the head row: the row stays
  * hit-transparent so a message underneath keeps its hover and quote pointer,
@@ -7067,6 +7080,19 @@ body.gui-resizing .gui-pane-right {
 	font-weight: 600;
 	color: var(--color-text);
 }
+/* The lane the agent runs in (`编码`/`Coder`, `子代理`, `顾问`) — one chip,
+ * shared by the chat capsule and the Agent tab's identity head. Short by
+ * design: it must never squeeze the live state beside it. */
+.gui-agent-role-tag {
+	flex: none;
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	color: var(--color-text-muted);
+	font-size: 10px;
+	line-height: 1.4;
+	white-space: nowrap;
+}
 .gui-agent-capsule-sep {
 	flex: none;
 	width: 1px;
@@ -7082,7 +7108,8 @@ body.gui-resizing .gui-pane-right {
 }
 /* The sides of the head row (Chat|Canvas, parent-back, tree, info) need the
  * middle band before the pill can show its text; below that it degrades to
- * orb + state rather than colliding with them. */
+ * orb + role + state rather than colliding with them. The role tag stays: it
+ * is the identity the capsule exists to show. */
 @media (max-width: 720px) {
 	.gui-agent-capsule-name,
 	.gui-agent-capsule-sep {
@@ -7100,23 +7127,55 @@ body.gui-resizing .gui-pane-right {
 	gap: 14px;
 	padding: 10px 12px 16px;
 }
+/* Identity head (2026-11-22): the tab's one pinned element. The avatar is the
+ * chat avatar at its full 64px, centered at the top, with the agent's name,
+ * lane and live state stacked beneath it and the session title as the last
+ * line. It sticks to the top of the pane's scroller so the sections below
+ * scroll underneath it — the identity stays readable while the model list and
+ * the metadata move. The band is full-bleed (the pane's own 10/12px padding is
+ * pulled out on the three open sides) with a glass backdrop and a hairline, the
+ * same header treatment the settings panels use. */
 .gui-agent-info-head {
+	position: sticky;
+	top: 0;
+	z-index: 4;
 	display: flex;
+	flex-direction: column;
 	align-items: center;
-	gap: 10px;
+	gap: 6px;
 	min-width: 0;
+	margin: -10px -12px 0;
+	padding: 14px 12px 12px;
+	background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+	backdrop-filter: blur(14px) saturate(1.4);
+	-webkit-backdrop-filter: blur(14px) saturate(1.4);
+	border-bottom: 1px solid color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+/* The orb ships as an inline span around an inline svg; the head owns exactly
+ * its size so the centered column below it does not inherit a baseline gap. */
+.gui-agent-info-head > .gui-agent-avatar {
+	display: block;
+	line-height: 0;
+	flex: none;
 }
 .gui-agent-info-identity {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	align-items: center;
+	gap: 3px;
 	min-width: 0;
+	max-width: 100%;
+	text-align: center;
 }
 .gui-agent-info-name {
-	font-size: var(--ui-font-size-sm);
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 15px;
 	font-weight: 600;
 	color: var(--color-text);
 	line-height: 1.2;
+	white-space: nowrap;
 }
 .gui-agent-info-status {
 	font-size: var(--ui-font-size-xs);
@@ -7130,7 +7189,7 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-warning);
 }
 .gui-agent-info-title {
-	min-width: 0;
+	max-width: 100%;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	font-size: var(--ui-font-size-xs);

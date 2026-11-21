@@ -26,6 +26,7 @@ import { thinkingOrbStateFromSession } from "../companion";
 import { pathBaseName } from "../project-label";
 import type { RpcClient } from "../rpc";
 import type { GuiSessionState } from "../session-store";
+import { agentDisplayName, agentRoleLabel, useAgentRole } from "./agent-role";
 
 interface ThinkingInfo {
 	ceiling?: string | null;
@@ -242,6 +243,12 @@ export function AgentInfoPane({
 	const statusKey = pendingApprovals > 0 ? "waiting" : snap?.working ? "working" : "idle";
 	const orb = thinkingOrbStateFromSession(snap);
 	const signals = useMemo(() => agentSignalsFromSnapshot(snap, { now: Date.now() }), [snap]);
+	// Same role contract as the chat capsule: the daemon's `session.list` row,
+	// falling back to the workbench lane's `coder`. The id drives the
+	// `data-agent-role` hook; the head shows the agent's name plus the lane tag.
+	const role = useAgentRole(rpc, sessionId);
+	const roleName = agentRoleLabel(role);
+	const displayName = agentDisplayName(role);
 	const sessionTitle = title?.trim() || t("general.sessionInfoUntitled");
 
 	const contextWindow = usage?.contextWindow ?? null;
@@ -256,10 +263,17 @@ export function AgentInfoPane({
 
 	return (
 		<div className="gui-agent-info">
-			<header className="gui-agent-info-head">
-				<AgentAvatar state={orb} size={32} seed={sessionId} signals={signals} />
+			{/* Identity head: the agent's avatar, name, lane and live state, stacked
+			 * and pinned to the scroller's top so the sections below scroll beneath
+			 * it. The chat capsule carries the same facts in one line; this is the
+			 * full reading, with the session title. */}
+			<header className="gui-agent-info-head" data-agent-role={role.id}>
+				<AgentAvatar state={orb} size={64} seed={sessionId} signals={signals} />
 				<div className="gui-agent-info-identity">
-					<span className="gui-agent-info-name">{t("general.assistant")}</span>
+					<span className="gui-agent-info-name" title={displayName}>
+						{displayName}
+					</span>
+					{roleName !== displayName ? <span className="gui-agent-role-tag">{roleName}</span> : null}
 					<span className="gui-agent-info-status" data-state={statusKey}>
 						{status}
 					</span>
