@@ -5,6 +5,7 @@ import {
 	deleteMentionTokenBefore,
 	removeMentionTokens,
 	spliceMentionToken,
+	spliceMentionTokenAfterSelection,
 	spliceMentionTokens,
 } from "./mention-token";
 import type { ComposerAttachment } from "./use-attachments";
@@ -29,6 +30,41 @@ describe("spliceMentionTokens (paste intake)", () => {
 
 	test("matches the single-token splice for one name", () => {
 		expect(spliceMentionTokens("x", 1, 1, ["图片1"]).next).toBe(spliceMentionToken("x", 1, 1, "图片1").next);
+	});
+});
+
+describe("spliceMentionTokenAfterSelection (file menu add-to-chat)", () => {
+	test("a collapsed caret keeps its position and gains the token after it", () => {
+		expect(spliceMentionTokenAfterSelection("hello", 5, 5, "文件1")).toEqual({
+			next: "hello @文件1 ",
+			selection: { start: 5, end: 5 },
+		});
+	});
+
+	test("selected text is preserved, not replaced", () => {
+		const result = spliceMentionTokenAfterSelection("keep me", 0, 7, "文件1");
+		expect(result.next).toBe("keep me @文件1 ");
+		// The same characters stay selected; the end offset is unchanged
+		// because the token lands after it.
+		expect(result.selection).toEqual({ start: 0, end: 7 });
+		expect(result.next.slice(result.selection.start, result.selection.end)).toBe("keep me");
+	});
+
+	test("the caret sits before the token when the selection end is mid-text", () => {
+		const result = spliceMentionTokenAfterSelection("前缀 tail", 3, 3, "文件2");
+		expect(result.next).toBe("前缀 @文件2 tail");
+		expect(result.selection).toEqual({ start: 3, end: 3 });
+	});
+
+	test("reversed and out-of-range offsets are normalized", () => {
+		expect(spliceMentionTokenAfterSelection("abc", 3, 1, "文件1")).toEqual({
+			next: "abc @文件1 ",
+			selection: { start: 1, end: 3 },
+		});
+		expect(spliceMentionTokenAfterSelection("abc", 99, 99, "文件1")).toEqual({
+			next: "abc @文件1 ",
+			selection: { start: 3, end: 3 },
+		});
 	});
 });
 

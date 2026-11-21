@@ -3,9 +3,11 @@ import type {
 	ComposerSelection,
 } from "@musepi/client-core/src/components/composer/composer-editor-types";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { readPasteImageMention } from "../../lib/composer-prefs";
+import { noteAddToChatFocus, registerAddToChatDraft } from "./add-to-chat";
 import { imageChipCount, insertPastedImageMentions } from "./attachment-mention-paste";
+import { spliceMentionTokenAfterSelection } from "./mention-token";
 import { insertPastedPlainText } from "./paste-text";
 import type { ComposerAttachment } from "./use-attachments";
 
@@ -124,6 +126,72 @@ export function useComposerIntake(options: ComposerIntakeOptions): {
 		},
 		[options.onMentionClick],
 	);
+
+	// File-menu "Add to chat": publish the draft side so the workspace tree can
+	// insert a reference without owning the editor. The setters ride a ref so
+	// the mount-scoped registration never captures a stale closure.
+	const latestRef = useRef({ setText, autosize });
+	latestRef.current = { setText, autosize };
+	useEffect(
+		() =>
+			registerAddToChatDraft(setAttachments, {
+				canInsert: () => {
+					const el = editor.current;
+					if (!el) return false;
+					const dom = el.dom;
+					// A composer in a hidden scene (welcome ⇄ session cross-fade)
+					// is still mounted but must not take the insertion.
+					if (!dom.isConnected || dom.getClientRects().length === 0) return false;
+					return dom.dataset.editable !== "0";
+				},
+				containsFocus: () => {
+					const dom = editor.current?.dom;
+					// The handle falls back to `document.body` when nothing is
+					// mounted; that must not count as owning the focus.
+					const active = document.activeElement;
+					return !!dom && dom !== document.body && dom.isConnected && !!active && dom.contains(active);
+				},
+				insertMention: label => {
+					const el = editor.current;
+					if (!el) return;
+					const { next, selection } = spliceMentionTokenAfterSelection(
+						el.value,
+						el.selectionStart,
+						el.selectionEnd,
+						label,
+					);
+					latestRef.current.setText(next);
+					// After the commit: restore the retained selection (the gesture
+					// must not eat it), return focus, and re-measure the wider box.
+					requestAnimationFrame(() => {
+						el.setSelectionRange(selection.start, selection.end);
+						el.focus();
+						latestRef.current.autosize();
+					});
+				},
+			}),
+		[editor, setAttachments],
+	);
+
+	// Which live composer "Add to chat" belongs to: focus and pointer presses
+	// on its editor are the only signals a mounted-but-idle composer gives. The
+	// listeners sit on the document because the editor can mount after this
+	// effect; the press is captured so an inner handler cannot hide it.
+	useEffect(() => {
+		const note = (event: Event): void => {
+			const dom = editor.current?.dom;
+			if (!dom || dom === document.body || !dom.isConnected) return;
+			const target = event.target;
+			if (!(target instanceof Node) || !dom.contains(target)) return;
+			noteAddToChatFocus(setAttachments);
+		};
+		document.addEventListener("focusin", note);
+		document.addEventListener("pointerdown", note, true);
+		return () => {
+			document.removeEventListener("focusin", note);
+			document.removeEventListener("pointerdown", note, true);
+		};
+	}, [editor, setAttachments]);
 
 	return { onPaste, onDrop, onDragOver, onChange, onMentionClick: mentionClick };
 }

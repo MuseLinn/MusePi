@@ -65,6 +65,7 @@ English | [中文](gui-components.zh-CN.md)
 | `marketplace/` | `MarketplaceGrid` / `MarketplaceCard` / `MarketplacePanel` | 市场网格（能力中心只重皮肤，不复制） |
 | `charts/` | `BarChart` / `LineChart` / `Donut` / `Gauge` / `KLine` / `Sparkline` | 图表 |
 | `progress/` | `ProgressMeter` | 进度 |
+| `transcript/` | `BranchSummaryDivider` | 继承历史的分界行；以共享 `GitFork` 图标打头，文案仍是可访问名 |
 | — | `image-lightbox` / `image-morph` / `image-zoom` | 图片查看 |
 
 ## 对话框与看板

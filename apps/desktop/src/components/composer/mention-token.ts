@@ -262,6 +262,23 @@ export function spliceMentionToken(
 	return { next, caret: start + glue.length + token.length };
 }
 
+/** Splice one token AFTER the retained selection, never replacing it
+ *  (file-menu "Add to chat"): the right-click gesture names a file to
+ *  reference, it does not mean "overwrite what I had selected". The insertion
+ *  lands at the selection end, so the original range still covers the same
+ *  characters; the caller restores that range after the programmatic value
+ *  write. Same glue rule as `spliceMentionToken`. */
+export function spliceMentionTokenAfterSelection(
+	value: string,
+	selectionStart: number,
+	selectionEnd: number,
+	name: string,
+): { next: string; selection: { start: number; end: number } } {
+	const start = Math.min(Math.max(0, Math.min(selectionStart, selectionEnd)), value.length);
+	const end = Math.min(Math.max(0, Math.max(selectionStart, selectionEnd)), value.length);
+	return { next: spliceMentionToken(value, end, end, name).next, selection: { start, end } };
+}
+
 /** Splice several tokens in one gesture (paste intake). Same glue rule as
  *  `spliceMentionToken`; tokens are separated by the trailing space each one
  *  carries, so the result reads as `@图片1 @图片2 ` and closes the `@`

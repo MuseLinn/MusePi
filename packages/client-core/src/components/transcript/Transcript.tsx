@@ -38,6 +38,7 @@ import type { ToolRenderHost } from "../../tool-render";
 import { ImageLightbox } from "../image-lightbox";
 import { AsyncJobResultCard } from "./async-job-result";
 import { BashCard } from "./bash-card";
+import { BranchSummaryDivider } from "./branch-summary-divider";
 import { TurnErrorBody } from "./error-notice";
 import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
@@ -1397,11 +1398,7 @@ const EntryRow = memo(function EntryRow({
 				);
 			}
 			case "branch_summary":
-				return (
-					<div className="tr-divider" title={entry.summary}>
-						<span>{t("settings.branchSummary")}</span>
-					</div>
-				);
+				return <BranchSummaryDivider summary={entry.summary} />;
 			case "model_change":
 				// No marker row: the composer's model selector shows the live
 				// model, and mid-session switches are just noise in the flow

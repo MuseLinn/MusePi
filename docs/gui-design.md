@@ -101,6 +101,7 @@ English | [中文](gui-design.zh-CN.md)
 - **Session and overview geometry**: the Transcript remounts on session identity changes so advisor navigation cannot leak folds, jumps, or virtualized state into the main session. Map fit, focus, culling, minimap viewport, and zoom controls use the rectangle left after subtracting the floating composer's height in both orientations. Trajectory model and thinking-level changes show the previous and new parameter values rather than only a generic marker.
 - **Composer and document surfaces**: `conversation.input.left` chips share the above-input status row with connectors, and queue chips use the same leading alignment. Visual Markdown uses compact horizontal margins and a 36px toolbar. The managed browser uses actual URLs for visibility, waits for renderer readiness before creating guests, and completes close with target detach events. HTML previews resolve relative resources against the current file without weakening their sandbox.
 - **Compaction summaries**: a native transcript button shows before → after token counts when available and opens the full summary in a restorable right-panel tab. Tabs persist only the compaction id and re-read content from the daemon; legacy entries keep the before-only display. The bundled Cordis panel uses the shared glass surface and token formatter, and reports loading, missing and failed states instead of substituting stale content.
+- **Inherited-history divider (2026-11-21)**: a `branch_summary` entry draws the boundary between inherited history and this branch's own turns. Its caption leads with the same `GitFork` glyph the branch switcher and tree outline use, inside one caption group (`.tr-branch-summary-caption`, 6px gap, the label's own faint ink), so the line reads as a fork rather than a bare rule. The glyph is `aria-hidden`; the label keeps its text and its accessible name (`role="separator"` + `aria-label`), and the summary stays the hover title.
 
 ### Trajectory timeline & inspector (DSH Trajectory Overview parity, 2026-08-21)
 
@@ -918,7 +919,17 @@ toolchain traps they exposed live in `gui-implementation.md` §45.
     original source. YAML Front Matter shows a notice with an immediate source-code
     action. Markdown also exports the current buffer as a real `.docx`. A constrained
     breadcrumb path scrolls horizontally. Clickable segments open an anchored,
-    searchable, non-modal directory menu. The expanded file tree shares the content
+    searchable, non-modal directory menu. Right-clicking a file row there offers
+    Add to chat: the file is staged as the same atomic `@` chip a mention
+    produces and its token lands after the retained selection, so the draft text
+    and the selection survive and nothing is sent. The path never enters the
+    draft, which is why a name containing spaces or brackets cannot break the
+    token. A directory row, or a composer that cannot take the reference right
+    now, disables the item and states the reason instead of failing silently.
+    With the main chat and a side session both live, the reference goes to the
+    composer that holds focus, else the one the user worked in last, so closing
+    either one never disables the item while the other can still take it.
+    The expanded file tree shares the content
     row with the editor and leaves the path row unchanged; long editor lines scroll
     horizontally instead of being rewrapped. Clicking the already-open file in that
     tree does not open another tab. Editor selections feed the full five-action

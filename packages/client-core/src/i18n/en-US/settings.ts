@@ -274,6 +274,10 @@ export const settings = {
 	"settings.noText": "(No text)",
 	"settings.thinking": "Thinking…",
 	"settings.branchSummary": "Branch summary",
+	"settings.addToChat": "Add to chat",
+	"settings.addToChatFolder": "Folders can't be added to chat — pick a file",
+	"settings.addToChatUnavailable": "The message box can't take a file reference right now",
+	"settings.addToChatFailed": "Could not add {name} to the chat",
 	"settings.loadMorePrompts": "Load more prompts",
 	"settings.olderHistoryUnavailable": "Older history is unavailable — the session history was compacted or replaced.",
 

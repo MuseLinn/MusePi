@@ -1,10 +1,12 @@
 import { arrayMove } from "@dnd-kit/sortable";
 import { fileUrlFromPath } from "@musepi/client-core";
 import type { AttachmentPutResult } from "@musepi/pi-wire";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../../lib/image-resize";
 import type { RpcClient } from "../../lib/rpc";
 import { parseSketchScene, type SketchScene, sceneHasImage } from "../../lib/sketch-scene";
+import { type AddToChatFile, registerAddToChatFiles } from "./add-to-chat";
+import { ordinalMentionLabel } from "./mention-token";
 
 /**
  * One attachment chip.
@@ -29,6 +31,10 @@ export interface ComposerAttachment {
 	size: number;
 	/** Raw bytes for file chips (not persisted with the draft). */
 	file?: File;
+	/** Workspace path for chips staged from the file menu ("Add to chat"):
+	 *  the bytes stay on the daemon's disk and upload through
+	 *  `attachment.putFile`. Memory-only, like `file`. */
+	sourcePath?: string;
 	/** Collapsed-paste marker: the chip opens the text editor on click. */
 	paste?: boolean;
 	/** Full text behind a collapsed-paste chip. */
@@ -197,18 +203,36 @@ export async function uploadOneAttachment(rpc: RpcClient, file: File, name: stri
 	return rpc.request<AttachmentPutResult | { error: string }>("attachment.put", { name, mimeType, content });
 }
 
+/** Upload one workspace-path chip: the daemon reads the file itself, so a
+ *  large or binary file never crosses the frame boundary. Unlike a picked
+ *  file there is no `File` to fall back to, hence the separate call. */
+function uploadOneAttachmentByPath(rpc: RpcClient, path: string, name: string): Promise<AttachmentUploadResult> {
+	return rpc.request<AttachmentUploadResult>("attachment.putFile", { path, name });
+}
+
 export async function uploadAttachmentFiles(
 	rpc: RpcClient,
 	_cwd: string | null | undefined,
-	files: readonly { file?: File; name: string; staged?: Promise<AttachmentUploadResult> }[],
+	files: readonly {
+		file?: File;
+		sourcePath?: string;
+		name: string;
+		staged?: Promise<AttachmentUploadResult>;
+	}[],
 ): Promise<string[]> {
 	const refs: string[] = [];
 	for (const chip of files) {
-		if (!chip.file) throw new Error("attachment expired re-add");
+		// A restored draft chip has neither bytes nor a path — the send refuses
+		// it rather than claiming an attachment that never landed.
+		if (!chip.file && !chip.sourcePath) throw new Error("attachment expired re-add");
 		// A staged upload started when the chip appeared; send only waits for
 		// whatever is left of it. A stale failure falls through to a fresh one.
 		let res = chip.staged ? await chip.staged : null;
-		if (!res || "error" in res) res = await uploadOneAttachment(rpc, chip.file, chip.name);
+		if (!res || "error" in res) {
+			res = chip.file
+				? await uploadOneAttachment(rpc, chip.file, chip.name)
+				: await uploadOneAttachmentByPath(rpc, chip.sourcePath!, chip.name);
+		}
 		if (!res || "error" in res) throw new Error(res?.error ?? "attachment upload failed");
 		refs.push(`[Attachment] ${res.url} (${chip.name})`);
 	}
@@ -420,6 +444,9 @@ export function useAttachments(
 	 *  the intake into the draft (paste-image mentions) need their final
 	 *  names and order. */
 	addFiles(files: File[]): Promise<ComposerAttachment[]>;
+	/** File-menu "Add to chat": stage a workspace path as a chip and resolve
+	 *  with its ordinal mention label; null when this intake has no session. */
+	addWorkspaceFile(file: AddToChatFile): Promise<string | null>;
 	onPaste(e: ComposerClipboardEvent): Promise<ComposerAttachment[]>;
 	onDragOver(e: ComposerDragEvent): void;
 	onDrop(e: ComposerDragEvent): Promise<ComposerAttachment[]>;
@@ -476,6 +503,47 @@ export function useAttachments(
 		return named;
 	};
 
+	/** File-menu "Add to chat": stage a workspace path as a `file` chip. The
+	 *  bytes stay on the daemon's disk (`sourcePath` → `attachment.putFile`),
+	 *  so no read crosses the RPC frame and large files work unchanged. The
+	 *  returned label is the chip's ordinal `@文件N` token — the same style the
+	 *  chip's own mention button inserts. */
+	const addWorkspaceFile = async (file: AddToChatFile): Promise<string | null> => {
+		// The welcome skin stages chips into a draft it cannot upload from; it
+		// registers no capability, so the menu never half-works there.
+		if (!stageFiles) return null;
+		const taken = new Set(attachmentsRef.current.map(p => p.name));
+		const name = uniqueAttachmentName(file.name, taken);
+		const ordinal = attachmentsRef.current.filter(a => a.kind === "file").length + 1;
+		const chip: ComposerAttachment = {
+			id: attachSeq++,
+			kind: "file",
+			dataUrl: "",
+			// The daemon infers the real type from the path; the chip itself
+			// only needs to stay out of the image branch.
+			mimeType: "application/octet-stream",
+			name,
+			size: file.size ?? 0,
+			sourcePath: file.path,
+			staged: uploadOneAttachmentByPath(rpc, file.path, name).catch(() => null),
+		};
+		setAttachments(prev => [...prev, chip]);
+		return ordinalMentionLabel("file", ordinal);
+	};
+	// Publish the capability to the file menu. Only this intake (session mode,
+	// or the shared entry's intake while a session is live) may stage; the
+	// effect withdraws on unmount so the menu cannot target a dead composer.
+	// The key is this intake's own setter, the same one the draft half gets,
+	// so a chip can never be staged here and referenced in another composer.
+	const addWorkspaceFileRef = useRef(addWorkspaceFile);
+	addWorkspaceFileRef.current = addWorkspaceFile;
+	useEffect(() => {
+		if (!stageFiles) return;
+		return registerAddToChatFiles(setAttachments, {
+			addWorkspaceFile: file => addWorkspaceFileRef.current(file),
+		});
+	}, [stageFiles, setAttachments]);
+
 	const onPaste = (e: ComposerClipboardEvent): Promise<ComposerAttachment[]> => {
 		// Any pasted file (image or not) becomes a chip; plain text is left
 		// to the editor / long-paste gate.
@@ -504,5 +572,5 @@ export function useAttachments(
 		return addFiles(files);
 	};
 
-	return { attachments, setAttachments, addFiles, onPaste, onDragOver, onDrop };
+	return { attachments, setAttachments, addFiles, addWorkspaceFile, onPaste, onDragOver, onDrop };
 }
