@@ -103,6 +103,7 @@ import { ExpectedDisconnects, RpcClient, type StreamEvent } from "./lib/rpc";
 import { captureSelectionContext, captureSelectionText } from "./lib/selection-capture";
 import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
 import { buildSessionMarkdown, markdownFileName } from "./lib/session-markdown";
+import { isConnectionNotReadyError, runSessionReopen, type SessionOpenOutcome } from "./lib/session-reopen";
 import {
 	type CompanionBubbleKind,
 	clearRoundDurations,
@@ -379,7 +380,7 @@ export function retitleFailureReason(error: unknown): SessionRetitleResult["reas
 	const message = error instanceof Error ? error.message : String(error);
 	if (/unknown method/i.test(message)) return "unsupported";
 	if (/request timeout/i.test(message)) return "timeout";
-	if (/not connected|connection closed|cannot connect/i.test(message)) return "offline";
+	if (isConnectionNotReadyError(error)) return "offline";
 	return "failed";
 }
 
@@ -1487,6 +1488,9 @@ function AppInner(): ReactNode {
 	// refs so onStatus (wired before openSession exists) can reach them.
 	const selectedIdRef = useRef<string | null>(null);
 	const openSessionRef = useRef<(sessionId: string) => Promise<void>>(async () => {});
+	/** Bounded reconnect restore of the session on screen when the socket
+	 *  dropped; assigned below, once the open path exists. */
+	const restoreSessionRef = useRef<(sessionId: string) => void>(() => {});
 	// Header tab strip (multi-session tabs, settings 外观 → 聊天): ids, order,
 	// and the single preview id persist independently; titles and live status
 	// resolve from session metadata.
@@ -1783,7 +1787,7 @@ function AppInner(): ReactNode {
 					);
 					const active = selectedIdRef.current;
 					console.log("[gui] reopen session", active?.slice(0, 8));
-					if (active) void openSessionRef.current?.(active);
+					if (active) restoreSessionRef.current(active);
 				}
 			};
 			// Route subscription envelopes to the active session store; provider
@@ -2338,13 +2342,38 @@ function AppInner(): ReactNode {
 	// (modes.list failed 的根源)。同一 session 的重复打开直接丢弃——数据由
 	// 第一次订阅/恢复持续推送,重复激活没有增量收益。
 	const openInFlightRef = useRef<string | null>(null);
-	// 真正的打开逻辑(openSession 的防重入包装内执行)。
+	// Give up on a session and return to the welcome page: dispose the dead
+	// store and clear the selection so the next open starts clean. Only the
+	// session still on screen may be abandoned — a newer selection owns the
+	// view now and its own open paints over this failure.
+	const abandonSession = useCallback((sessionId: string, err: unknown): void => {
+		if (selectedIdRef.current !== sessionId) return;
+		if (sessionLoadingTimerRef.current !== null) {
+			clearTimeout(sessionLoadingTimerRef.current);
+			sessionLoadingTimerRef.current = null;
+		}
+		setSessionLoading(false);
+		setWaitSeconds(0);
+		storeRef.current?.dispose();
+		storeRef.current = null;
+		setStore(null);
+		setSelectedId(null);
+		selectedIdRef.current = null;
+		// Still leave the board on failure — the error shows in chat.
+		viewSwapRef.current("chat");
+		setError(fmtError("session.open", err));
+	}, []);
+	// 真正的打开逻辑(openSession 的防重入包装内执行)。`quiet` marks the
+	// reconnect restore: it re-opens the session already on screen, which is
+	// not a user switch and must not replay the switch sound per retry.
 	const doOpenSession = useCallback(
-		async (sessionId: string): Promise<void> => {
+		async (sessionId: string, opts?: { quiet?: boolean }): Promise<SessionOpenOutcome> => {
 			// Session switch sound (page flip) — only when another session was open.
-			if (storeRef.current) sfxFor("switch");
+			if (!opts?.quiet && storeRef.current) sfxFor("switch");
 			const client = rpcRef.current;
-			if (!client) return;
+			// No live client (the socket dropped again / boot is still running):
+			// the daemon may be available by the next retry.
+			if (!client) return { status: "transient", error: new Error("not connected") };
 			// A new user action supersedes any stale failure banner — if this
 			// open fails too, the error below re-surfaces it.
 			setError(null);
@@ -2497,7 +2526,7 @@ function AppInner(): ReactNode {
 				// in flight) supersedes this result: mounting the stale session's
 				// store would paint the wrong transcript under the new highlight
 				// and leak its model into the composer preselect.
-				if (selectedIdRef.current !== sessionId) return;
+				if (selectedIdRef.current !== sessionId) return { status: "superseded" };
 
 				const cwd =
 					typeof (initial as { header?: { cwd?: unknown } } | null)?.header?.cwd === "string"
@@ -2641,48 +2670,88 @@ function AppInner(): ReactNode {
 				} catch {
 					// older daemon without pause RPC — header button stays hidden
 				}
+				return { status: "opened" };
 			} catch (err) {
-				// Load failed: dispose the stale store and return to welcome.
 				if (sessionLoadingTimerRef.current !== null) {
 					clearTimeout(sessionLoadingTimerRef.current);
 					sessionLoadingTimerRef.current = null;
 				}
 				setSessionLoading(false);
 				setWaitSeconds(0);
-				previous?.dispose();
-				storeRef.current = null;
-				setStore(null);
-				setSelectedId(null);
-				selectedIdRef.current = null;
-				// Still leave the board on failure — the error shows in chat.
-				viewSwapRef.current("chat");
+				if (isConnectionNotReadyError(err)) {
+					// The socket is up but not accepting requests yet (the shell
+					// reconnected to a daemon that is still rebuilding). That is no
+					// verdict on the session: keep the selection and the idle
+					// transcript on screen and let the reconnect restore retry,
+					// instead of dropping the user onto the welcome page.
+					console.error("[open] deferred", err);
+					return { status: "transient", error: err };
+				}
+				// A verdict on the session: return to the welcome page so its row
+				// stays clickable instead of erroring on every attempt.
+				abandonSession(sessionId, err);
 				// The failing session may have been deleted while the tree was
 				// stale — refresh so its row disappears instead of erroring on
 				// every click (the 5s poll would catch it eventually; this is
 				// immediate).
 				void refreshSessions(client);
 				console.error("[open] failed", err);
-				setError(fmtError("session.open", err));
+				return { status: "failed", error: err };
 			}
 		},
-		[persistReadCount, refreshSessions],
+		[abandonSession, persistReadCount, refreshSessions],
 	);
 	// 防重入包装:重连风暴(rpc open 反复触发 reopen)会让多个 openSession
 	// 并发,同一 sessionId 重复 resume 会在 daemon 端撞上 "Agent was replaced"
 	// 竞态(modes.list failed 的根源)。同一 session 的重复打开直接丢弃。
-	const openSession = useCallback(
-		async (sessionId: string): Promise<void> => {
-			if (openInFlightRef.current === sessionId) return;
+	const openSessionAttempt = useCallback(
+		async (sessionId: string, opts?: { quiet?: boolean }): Promise<SessionOpenOutcome> => {
+			if (openInFlightRef.current === sessionId) return { status: "superseded" };
 			openInFlightRef.current = sessionId;
 			try {
-				await doOpenSession(sessionId);
+				return await doOpenSession(sessionId, opts);
 			} finally {
 				openInFlightRef.current = null;
 			}
 		},
 		[doOpenSession],
 	);
+	const openSession = useCallback(
+		async (sessionId: string): Promise<void> => {
+			await openSessionAttempt(sessionId);
+		},
+		[openSessionAttempt],
+	);
 	openSessionRef.current = openSession;
+	// ── Reconnect restore ─────────────────────────────────────────────────
+	// A drop keeps the session selected (adoptIdleState leaves the idle
+	// transcript up), so this brings back exactly what was on screen. Each
+	// run supersedes the previous one, and `selectedIdRef` is the "user wants
+	// this session" fact: the welcome page (null) or another session ends the
+	// retries, so the restore never resurrects a session the user left.
+	const restoreRunRef = useRef(0);
+	const restoreSession = useCallback(
+		(sessionId: string): void => {
+			const run = ++restoreRunRef.current;
+			const stillWanted = (): boolean => restoreRunRef.current === run && selectedIdRef.current === sessionId;
+			void runSessionReopen({
+				sessionId,
+				open: id => openSessionAttempt(id, { quiet: true }),
+				stillWanted,
+			})
+				.then(result => {
+					if (result.status !== "exhausted" || !stillWanted()) return;
+					// The daemon refused every bounded attempt: the session cannot
+					// come back on this connection, so return to the welcome page
+					// with the reason rather than wait forever.
+					console.error("[open] restore gave up", result.error);
+					abandonSession(sessionId, result.error);
+				})
+				.catch(err => console.error("[open] restore error", err));
+		},
+		[abandonSession, openSessionAttempt],
+	);
+	restoreSessionRef.current = restoreSession;
 	// Mini chat deep-link (?mini=1&session=<id>, Electron mini-chat-open IPC):
 	// open the requested session once the socket is up. The id is consumed
 	// once — a later reconnect must not silently re-steal the mini window.
