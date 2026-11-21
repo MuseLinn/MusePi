@@ -104,7 +104,9 @@ import {
 	selectPanelTabComponent,
 } from "../lib/slot-host";
 import { surfaceGlyph } from "../lib/surface-glyphs";
+import { AgentInfoPane } from "../lib/surfaces/agent-info-pane";
 import {
+	AGENT_INFO_SURFACE,
 	agentTabDescriptor,
 	panelWidth,
 	SURFACES,
@@ -396,6 +398,8 @@ export function ContextPanel({
 	overviewLoading,
 	overviewError,
 	onLoadOlderHistory,
+	onOpenSettings,
+	onAddProvider,
 	cwd: cwdOverride,
 }: {
 	/** 无会话时的目录（欢迎页右栏）：会话内仍以 `snap.state.cwd` 为准。 */
@@ -488,6 +492,12 @@ export function ContextPanel({
 	 *  project-knowledge surface consumes it to open that plan once its list
 	 *  has loaded. Nonce-bumped by ChatView so a repeat re-opens. */
 	planShowRequest?: { directory: string; id: string; title: string; nonce: number } | null;
+	/** Open the settings surface at a section — the agent info tab's memory
+	 *  entrance uses it (`memory`). */
+	onOpenSettings?(section?: string): void;
+	/** The agent info tab's model list carries the same add-a-provider action
+	 *  the composer menu has. */
+	onAddProvider?(): void;
 }): ReactNode {
 	// `??` is not enough here: the store's view always carries a cwd STRING, so a
 	// session opened without one hands us "" — a non-null value that would
@@ -1513,6 +1523,28 @@ export function ContextPanel({
 				activeSessionId={snap?.sessionId ?? null}
 				onOpenSession={onOpenSession}
 			/>
+		) : bodyView === AGENT_INFO_SURFACE ? (
+			snap?.sessionId ? (
+				<FadeScroll className="min-h-0 flex-1 overflow-y-auto">
+					<AgentInfoPane
+						rpc={rpc}
+						sessionId={snap.sessionId}
+						cwd={cwd}
+						title={snap.state?.sessionName ?? null}
+						snap={snap}
+						onOpenSurface={onViewChange}
+						onOpenSettings={onOpenSettings}
+						onAddProvider={onAddProvider}
+					/>
+				</FadeScroll>
+			) : (
+				<div className="gui-pane-tab-empty">
+					<span className="gui-pane-tab-empty-icon">
+						<Icon name="ai-agent" />
+					</span>
+					<p className="gui-pane-tab-empty-title">{t("general.sessionRequired")}</p>
+				</div>
+			)
 		) : bodyView === "notes" ||
 			bodyView === "artifacts" ||
 			bodyView === "agents" ||

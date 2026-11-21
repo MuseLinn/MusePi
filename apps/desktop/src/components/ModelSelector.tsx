@@ -184,6 +184,8 @@ export function ModelSelector({
 	allowSetDefault = false,
 	currentModelId = null,
 	capsule = false,
+	inline = false,
+	onSwitchModel,
 	onAddProvider,
 	allowNone = false,
 }: {
@@ -210,6 +212,14 @@ export function ModelSelector({
 	 *  the chevron, and anchor the menu on the button (ThinkingSelector
 	 *  parity). */
 	capsule?: boolean;
+	/** Render the searchable list in place instead of behind a trigger — the
+	 *  agent info tab shows the list itself, not a menu that has to be opened
+	 *  first. Sections, favorites, recents and search are the same code. */
+	inline?: boolean;
+	/** Hand the session write to the caller. The agent info tab owns it so a
+	 *  failed switch can be reported instead of swallowed; the selector still
+	 *  runs the pick (favorite, recents, highlight) before calling this. */
+	onSwitchModel?(model: { id: string; provider: string }): Promise<unknown>;
 	/** Top-menu action (openchamber 添加新提供商): opens the settings
 	 *  providers page; omitted where no settings opener is reachable. */
 	onAddProvider?(): void;
@@ -580,17 +590,18 @@ export function ModelSelector({
 				// in-flight setModel and read the OLD model's data. The provider
 				// rides along so the daemon resolves the exact model, not the first
 				// provider that happens to serve the same id.
-				void setSessionModel(rpc, {
-					sessionId,
-					model: { id: selected.id, provider: selected.provider },
-				})
+				const write = onSwitchModel
+					? onSwitchModel({ id: selected.id, provider: selected.provider })
+					: setSessionModel(rpc, {
+							sessionId,
+							model: { id: selected.id, provider: selected.provider },
+						});
+				void write
 					.then(() => onSelect?.(selected.id, selected.provider))
 					.catch((err: unknown) => {
 						// The daemon kept the old model: put the label back and say
-						// why. A silent revert reads as "the click missed", and the
-						// old swallowed rejection is how the renamed route stayed
-						// invisible. Only our own optimistic label is undone — a later
-						// pick that already succeeded keeps its selection.
+						// why. Only our own optimistic label is undone — a later pick
+						// that already succeeded keeps its selection.
 						userPicked.current = false;
 						setModelId(current => (current === optimistic ? previous : current));
 						reportRequestFailure(t("settings.switchModel"), err);
@@ -599,136 +610,94 @@ export function ModelSelector({
 				onSelect?.(selected.id, selected.provider);
 			}
 		},
-		[sessionId, onSelect, modelId],
+		[sessionId, onSelect, onSwitchModel, modelId],
 	);
 	// Published for onMenuKeyDown (declared above): Enter resolves the
 	// highlighted row through the latest select.
 	selectRef.current = select;
 
-	return (
-		<div className={capsule ? "gui-model-capsule-seg" : "gui-model"} ref={capsule ? undefined : anchorRef}>
-			<button
-				type="button"
-				className={capsule ? "gui-model-capsule-seg-btn" : "gui-model-btn"}
-				ref={capsule ? anchorRef : undefined}
-				onClick={() => setOpen(v => !v)}
-				title={current ? `${current.provider}/${current.id} · ${current.name}` : t("settings.model")}
-				aria-label={t("settings.selectModel")}
-			>
-				{current ? (
-					<ModelBrandIcon provider={current.provider} modelId={current.id} size={14} />
-				) : (
-					<Icon name="ai-agent" className="h-3.5 w-3.5" />
-				)}
-				<span className="gui-model-capsule-seg-text truncate" style={{ maxWidth: maxLabelWidth }}>
-					{label}
-				</span>
-				{!capsule && <Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />}
-			</button>
-			{renderMenu(
-				<div className="gui-model-menu" onKeyDown={onMenuKeyDown}>
-					{onAddProvider && (
-						<button type="button" className="gui-model-add" onClick={onAddProvider}>
-							<Icon name="add" className="h-3.5 w-3.5" />
-							<span>{t("settings.addProvider")}</span>
+	const menu = (
+		<div className={`gui-model-menu${inline ? " gui-model-menu--inline" : ""}`} onKeyDown={onMenuKeyDown}>
+			{onAddProvider && (
+				<button type="button" className="gui-model-add" onClick={onAddProvider}>
+					<Icon name="add" className="h-3.5 w-3.5" />
+					<span>{t("settings.addProvider")}</span>
+				</button>
+			)}
+			<div className="gui-model-menu-search">
+				<Icon name="search" className="h-3.5 w-3.5 text-[var(--color-text-faint)]" />
+				<input
+					value={query}
+					onChange={e => setQuery(e.target.value)}
+					placeholder={t("settings.searchModels")}
+					className="gui-model-menu-input"
+					aria-label={t("settings.searchModels")}
+					/* Focused on open so ↑↓/Enter navigation works without a
+					 * pointing-device detour. Inline lists stay unfocused —
+					 * the panel already owns the keyboard when it mounts. */
+					autoFocus={!inline}
+				/>
+			</div>
+			<div className="gui-model-list" ref={listRef} data-kbd-nav={kbdOwner || undefined}>
+				{/* "settings.notSelected" clearing row (openchamber includeNotSelected
+				 * parity): lives OUTSIDE the ↑↓/Enter flat list, exactly like
+				 * the reference — it's an action, not a model row. */}
+				{allowNone && (
+					<>
+						<button
+							type="button"
+							className="gui-model-none"
+							onClick={() => {
+								tapFeedback(1);
+								setOpen(false);
+								onSelect?.(null);
+							}}
+						>
+							<Icon name="close" className="h-3.5 w-3.5" />
+							<span>{t("settings.notSelected")}</span>
+							{!current && <Icon name="check" className="h-3.5 w-3.5" />}
 						</button>
-					)}
-					<div className="gui-model-menu-search">
-						<Icon name="search" className="h-3.5 w-3.5 text-[var(--color-text-faint)]" />
-						<input
-							value={query}
-							onChange={e => setQuery(e.target.value)}
-							placeholder={t("settings.searchModels")}
-							className="gui-model-menu-input"
-							aria-label={t("settings.searchModels")}
-							/* Focused on open so ↑↓/Enter navigation works without a
-							 * pointing-device detour (openchamber menu parity). */
-							autoFocus
-						/>
-					</div>
-					<div className="gui-model-list" ref={listRef} data-kbd-nav={kbdOwner || undefined}>
-						{/* "settings.notSelected" clearing row (openchamber includeNotSelected
-						 * parity): lives OUTSIDE the ↑↓/Enter flat list, exactly like
-						 * the reference — it's an action, not a model row. */}
-						{allowNone && (
-							<>
+						<div className="gui-model-sep" aria-hidden="true" />
+					</>
+				)}
+				{filtered.length === 0 && <div className="gui-model-empty">{t("settings.noMatchingModels")}</div>}
+				{sections.map(sec => {
+					const closed = secClosed[sec.key] === true;
+					return (
+						<div key={sec.key} className="gui-model-sec">
+							{sec.label && (
 								<button
 									type="button"
-									className="gui-model-none"
-									onClick={() => {
-										tapFeedback(1);
-										setOpen(false);
-										onSelect?.(null);
-									}}
+									className="gui-model-sec-head"
+									aria-expanded={!closed}
+									onClick={() => setSecClosed(prev => ({ ...prev, [sec.key]: !closed }))}
 								>
-									<Icon name="close" className="h-3.5 w-3.5" />
-									<span>{t("settings.notSelected")}</span>
-									{!current && <Icon name="check" className="h-3.5 w-3.5" />}
+									<Icon
+										name="arrow-down-s"
+										className={`h-3 w-3 transition-transform${closed ? " -rotate-90" : ""}`}
+									/>
+									<span>{sec.labelKey ? t(sec.labelKey) : sec.label}</span>
+									<span className="gui-model-sec-count">{sec.rows.length}</span>
 								</button>
-								<div className="gui-model-sep" aria-hidden="true" />
-							</>
-						)}
-						{filtered.length === 0 && <div className="gui-model-empty">{t("settings.noMatchingModels")}</div>}
-						{sections.map(sec => {
-							const closed = secClosed[sec.key] === true;
-							return (
-								<div key={sec.key} className="gui-model-sec">
-									{sec.label && (
-										<button
-											type="button"
-											className="gui-model-sec-head"
-											aria-expanded={!closed}
-											onClick={() => setSecClosed(prev => ({ ...prev, [sec.key]: !closed }))}
+							)}
+							{/* Standard height-collapse (§3 motion): the section body
+							 * eases instead of snapping — matches every other fold.
+							 * Favorite rows are sortable (@dnd-kit, openchamber
+							 * parity) — DndContext lives at the section level so the
+							 * sensors only cover favorites. */}
+							<Reveal open={!closed}>
+								{favDragEnabled && sec.key === "fav" ? (
+									<DndContext sensors={favSensors} collisionDetection={closestCenter} onDragEnd={onFavDragEnd}>
+										<SortableContext
+											items={sec.rows.map(m => favKeyOf(m))}
+											strategy={verticalListSortingStrategy}
 										>
-											<Icon
-												name="arrow-down-s"
-												className={`h-3 w-3 transition-transform${closed ? " -rotate-90" : ""}`}
-											/>
-											<span>{sec.labelKey ? t(sec.labelKey) : sec.label}</span>
-											<span className="gui-model-sec-count">{sec.rows.length}</span>
-										</button>
-									)}
-									{/* Standard height-collapse (§3 motion): the section body
-									 * eases instead of snapping — matches every other fold.
-									 * Favorite rows are sortable (@dnd-kit, openchamber
-									 * parity) — DndContext lives at the section level so the
-									 * sensors only cover favorites. */}
-									<Reveal open={!closed}>
-										{favDragEnabled && sec.key === "fav" ? (
-											<DndContext
-												sensors={favSensors}
-												collisionDetection={closestCenter}
-												onDragEnd={onFavDragEnd}
-											>
-												<SortableContext
-													items={sec.rows.map(m => favKeyOf(m))}
-													strategy={verticalListSortingStrategy}
-												>
-													{sec.rows.map(m => (
-														<SortableModelRow
-															key={`${m.provider}/${m.id}`}
-															m={m}
-															fav={isFav(m)}
-															sortable
-															modelId={modelId}
-															defaultRoleModel={defaultRoleModel}
-															allowSetDefault={allowSetDefault}
-															kbdIndex={kbdIndexOf(m)}
-															kbd={kbd}
-															onRowMouseMove={onRowMouseMove}
-															onSelectRow={select}
-															onToggleFav={toggleFavModel}
-															onSetDefault={setAsDefault}
-														/>
-													))}
-												</SortableContext>
-											</DndContext>
-										) : (
-											sec.rows.map(m => (
-												<ModelRow
+											{sec.rows.map(m => (
+												<SortableModelRow
 													key={`${m.provider}/${m.id}`}
 													m={m}
 													fav={isFav(m)}
+													sortable
 													modelId={modelId}
 													defaultRoleModel={defaultRoleModel}
 													allowSetDefault={allowSetDefault}
@@ -739,16 +708,62 @@ export function ModelSelector({
 													onToggleFav={toggleFavModel}
 													onSetDefault={setAsDefault}
 												/>
-											))
-										)}
-									</Reveal>
-								</div>
-							);
-						})}
-					</div>
-					<div className="gui-model-menu-foot">{t("settings.modelMenuHint")}</div>
-				</div>,
+											))}
+										</SortableContext>
+									</DndContext>
+								) : (
+									sec.rows.map(m => (
+										<ModelRow
+											key={`${m.provider}/${m.id}`}
+											m={m}
+											fav={isFav(m)}
+											modelId={modelId}
+											defaultRoleModel={defaultRoleModel}
+											allowSetDefault={allowSetDefault}
+											kbdIndex={kbdIndexOf(m)}
+											kbd={kbd}
+											onRowMouseMove={onRowMouseMove}
+											onSelectRow={select}
+											onToggleFav={toggleFavModel}
+											onSetDefault={setAsDefault}
+										/>
+									))
+								)}
+							</Reveal>
+						</div>
+					);
+				})}
+			</div>
+			<div className="gui-model-menu-foot">{t("settings.modelMenuHint")}</div>
+		</div>
+	);
+
+	return (
+		<div
+			className={inline ? "gui-model gui-model--inline" : capsule ? "gui-model-capsule-seg" : "gui-model"}
+			ref={inline || capsule ? undefined : anchorRef}
+		>
+			{!inline && (
+				<button
+					type="button"
+					className={capsule ? "gui-model-capsule-seg-btn" : "gui-model-btn"}
+					ref={capsule ? anchorRef : undefined}
+					onClick={() => setOpen(v => !v)}
+					title={current ? `${current.provider}/${current.id} · ${current.name}` : t("settings.model")}
+					aria-label={t("settings.selectModel")}
+				>
+					{current ? (
+						<ModelBrandIcon provider={current.provider} modelId={current.id} size={14} />
+					) : (
+						<Icon name="ai-agent" className="h-3.5 w-3.5" />
+					)}
+					<span className="gui-model-capsule-seg-text truncate" style={{ maxWidth: maxLabelWidth }}>
+						{label}
+					</span>
+					{!capsule && <Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />}
+				</button>
 			)}
+			{inline ? menu : renderMenu(menu)}
 		</div>
 	);
 }

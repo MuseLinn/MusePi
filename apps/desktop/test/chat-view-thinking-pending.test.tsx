@@ -53,12 +53,12 @@ afterEach(() => {
 	localStorage.clear();
 });
 
-describe("ChatView thinking chip before the ladder resolves", () => {
-	it("renders instead of crashing while session.thinkingInfo is still pending", async () => {
+describe("session view with a pending thinking ladder", () => {
+	it("renders the chat while session.thinkingInfo never answers", async () => {
 		// Regression: the model-switch clamp read `thinkingEfforts.length` on the
 		// null initial state and the app error boundary covered the whole window
-		// ("界面渲染出错，重新连接即可恢复"). A session that already carries a
-		// thinking_level_change renders the chip before the RPC answers.
+		// ("界面渲染出错，重新连接即可恢复"). The ladder now lives in the agent info
+		// tab, so the session view must paint without waiting for that RPC at all.
 		const rpc = {
 			request: async (method: string) => {
 				if (method === "session.thinkingInfo") return new Promise(() => {});
@@ -76,7 +76,8 @@ describe("ChatView thinking chip before the ladder resolves", () => {
 		await act(async () => root.render(view(store, rpc)));
 
 		expect(host.querySelector(".gui-chat-body")).not.toBeNull();
-		expect(host.querySelector(".gui-model-capsule-seg-text--thinking")?.textContent).not.toBe("");
+		// The composer no longer waits on the ladder for a chip of its own.
+		expect(host.querySelector(".gui-composer .gui-model-capsule")).toBeNull();
 
 		await act(async () => root.unmount());
 		host.remove();

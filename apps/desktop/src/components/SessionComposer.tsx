@@ -122,10 +122,8 @@ import { VoiceOverlays } from "./composer/voice-overlays";
 import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
-import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ScreenshotEditorDialog } from "./ScreenshotEditorDialog";
 import { SketchPad } from "./SketchPad";
-import type { ThinkingLevel } from "./ThinkingSelector";
 
 // Design style chips (设计稿 08) live in composer/design-styles.tsx —
 // shared with the welcome empty-state composer (same chips, same
@@ -172,15 +170,23 @@ export interface SessionComposerProps {
 	 *  fold re-derives cheaply and the memoized row only re-renders when the
 	 *  derived figures move. */
 	entries?: readonly SessionEntry[];
-	/** Current session thinking effort (snap.state.thinkingLevel). */
+	/** @deprecated Model and thinking live in the agent info tab now; the
+	 *  props stay accepted so side-session and plugin callers keep compiling. */
 	thinkingLevel?: string | null;
-	/** Configured selector state (auto vs pinned) — menu highlight. */
+	/** @deprecated See {@link thinkingLevel}. */
 	thinkingConfigLevel?: string | null;
-	/** Per-model effort ceiling; higher ladder rungs disable. */
+	/** @deprecated See {@link thinkingLevel}. */
 	thinkingCeiling?: string | null;
-	/** Current model's exact effort ladder (getSupportedEfforts); undefined
-	 *  shows the full fixed ladder. */
+	/** @deprecated See {@link thinkingLevel}. */
 	thinkingEfforts?: readonly string[] | null;
+	/** @deprecated See {@link thinkingLevel}. */
+	onSetThinking?(level: string | null): void;
+	/** @deprecated See {@link thinkingLevel}. */
+	onModelChange?(modelId: string): void;
+	/** @deprecated See {@link thinkingLevel}. */
+	onAddProvider?(): void;
+	/** @deprecated See {@link thinkingLevel}. */
+	presetModelId?: string | null;
 	/** Staged quote and annotation contexts. Their model text is derived at send. */
 	quotes: DisplayContext[];
 	onQuotesChange(next: DisplayContext[]): void;
@@ -192,15 +198,6 @@ export interface SessionComposerProps {
 		images?: { type: "image"; data: string; mimeType: string }[];
 	} | null;
 	onEditConsumed?(): void;
-	onSetThinking?(level: ThinkingLevel | null): void;
-	/** Model switch inside the composer (session.setModel) — parent re-fetches
-	 *  per-model thinking info (ceiling/ladder) that the wire event can't
-	 *  drive (the session store reference is stable across model changes). */
-	onModelChange?(modelId: string): void;
-	/** 添加新提供商 menu action — opens the settings providers page. */
-	onAddProvider?(): void;
-	/** Model preselect carried from the welcome composer. */
-	presetModelId?: string | null;
 	/** welcome 空态(会话态不传)。 */
 	welcome?: boolean;
 	/** Focus mode (⌘⇧E): the composer fills the surface. */
@@ -275,18 +272,10 @@ export function SessionComposer({
 	sessionId,
 	cwd,
 	entries,
-	thinkingLevel,
-	thinkingConfigLevel,
-	onSetThinking,
-	onModelChange,
-	onAddProvider,
-	thinkingCeiling,
-	thinkingEfforts,
 	quotes,
 	onQuotesChange,
 	pendingEdit,
 	onEditConsumed,
-	presetModelId,
 	focused,
 	onToggleFocus,
 	onBtw,
@@ -2293,29 +2282,10 @@ export function SessionComposer({
 						 * above — the old informational toolbar chip was a duplicate
 						 * badge and is gone.) */}
 						{/* Focus mode sits between the attach menu and the model
-						 * selector. */}
+						 * slot. The model and thinking selectors moved to the
+						 * agent info tab (the capsule opens it), so the input row
+						 * keeps only what acts on the message being written. */}
 						{onToggleFocus && <FocusButton focused={focused ?? false} onPress={onToggleFocus} />}
-						<ModelThinkingCapsule
-							rpc={rpc}
-							sessionId={sessionId}
-							presetModelId={presetModelId}
-							currentModelId={contextUsage?.model ?? null}
-							thinkingLevel={thinkingLevel}
-							thinkingConfigLevel={thinkingConfigLevel}
-							thinkingCeiling={thinkingCeiling}
-							thinkingEfforts={thinkingEfforts}
-							allowSetDefault
-							onAddProvider={onAddProvider}
-							onModelSelect={id => {
-								if (id) onModelChange?.(id);
-								// The daemon finished the switch before this
-								// fires — refresh the ring/card immediately so
-								// they show the new model's window without
-								// waiting for the next 3s poll.
-								refreshUsage();
-							}}
-							onSetThinking={onSetThinking}
-						/>
 						{/* conversation.input.model 座位槽:
 						 * 模型选择器旁的事实位——积分余额、模型配额、该模型的
 						 * 专属控件都挂这里,而不是挤进模型菜单里。 */}
