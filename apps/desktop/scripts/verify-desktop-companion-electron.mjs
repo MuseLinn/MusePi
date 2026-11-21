@@ -711,6 +711,7 @@ try {
 					opacity: "",
 					pointerEvents: "",
 					width: 0,
+					height: 0,
 					belowSprite: null,
 					buttonSize: [],
 					gaps: [],
@@ -735,6 +736,7 @@ try {
 				opacity: style.opacity,
 				pointerEvents: style.pointerEvents,
 				width: Math.round(rect.width),
+				height: Math.round(rect.height),
 				belowSprite: petRect ? rect.top >= petRect.bottom - 2 : null,
 				buttonSize: buttonRects.map(buttonRect => ({ width: Math.round(buttonRect.width), height: Math.round(buttonRect.height) })),
 				gaps: buttonRects.slice(1).map((buttonRect, index) => Math.round(buttonRect.left - buttonRects[index].right)),
@@ -756,6 +758,46 @@ try {
 				sample = await readQuickbarSurface();
 			}
 			return sample;
+		};
+		// The bar's SIZE is a JS spring (use-spring-size), and its bounce carries
+		// the surface PAST the target before it settles. Closing the composer
+		// therefore passes through a row narrower than the one it returns to, so
+		// a sample taken at a fixed delay can land on that overshoot or on the
+		// way back — both are silhouettes the resting row never holds. Rest is a
+		// state, not a duration: the same reading has to repeat, and it has to be
+		// the row this session already measured at rest (`restingWidth`), not
+		// another in-flight number. Bounded, so a bar that never returns still
+		// fails instead of hanging, and the width trace is kept as the evidence
+		// of where it actually stopped.
+		const waitForQuickbarRest = async restingWidth => {
+			const stableReads = 3;
+			// animateSpring holds the element at its inline size until its
+			// maxDuration cap (4s) and only then hands the size back to the
+			// element's own layout. The cap can land after the motion has
+			// visibly stopped — the hook's cached content size and the live
+			// content can differ by a few pixels — so the budget has to
+			// outlast that hand-back instead of racing it.
+			const deadline = Date.now() + 6000;
+			const widthTrace = [];
+			let previous = await readQuickbarSurface();
+			let repeats = 0;
+			while (Date.now() < deadline) {
+				await sleep(60);
+				const sample = await readQuickbarSurface();
+				widthTrace.push(sample.width);
+				const atRest =
+					!sample.missing &&
+					!sample.composing &&
+					// The at-rest shape hands its size back to the content, so only
+					// subpixel rounding of the border can separate it from the row
+					// measured earlier in this session.
+					Math.abs(sample.width - restingWidth) <= 1 &&
+					sample.buttonOpacity.slice(0, 3).every(value => value === "1");
+				repeats = atRest ? (sample.width === previous.width ? repeats + 1 : 1) : 0;
+				if (repeats >= stableReads) return { ...sample, widthTrace };
+				previous = sample;
+			}
+			return { ...previous, widthTrace };
 		};
 		if (nativeCursorSupported() && petBox) {
 			const origin = await petWindowMetrics(petPage);
@@ -886,22 +928,14 @@ try {
 			springOvershoot,
 		);
 		// Put the bar back into its button row so the morph assertions below
-		// start from the state they describe.
+		// start from the state they describe — the spring's landing, not a
+		// frame on the way back to it.
 		await petPage.keyboard.press("Escape");
-		await sleep(400);
+		const morphBefore = await waitForQuickbarRest(quickbarExpanded.width);
 		// The morph: the row IS the composer. Clicking 新聊天 must widen the
 		// same surface into a text field — the buttons leave, the field
 		// arrives, and the element's own width/height change. A second panel
 		// opening next to the bar would not satisfy this.
-		const morphBefore = await petPage.evaluate(() => {
-			const bar = document.querySelector(".pet-window__quickbar");
-			const rect = bar?.getBoundingClientRect();
-			return {
-				width: rect ? Math.round(rect.width) : 0,
-				height: rect ? Math.round(rect.height) : 0,
-				composing: bar?.classList.contains("pet-window__quickbar--composing") ?? false,
-			};
-		});
 		await petPage.click(".pet-window__quickbar-btn");
 		await sleep(500);
 		const morphAfter = await petPage.evaluate(() => {
@@ -956,26 +990,20 @@ try {
 			morphAfter,
 		);
 		// Escape closes the composer and the surface returns to the button row.
+		// The spring undershoots the resting width on the way back, so the row
+		// is only "returned" once it repeats at the width this session measured
+		// for it with the composer closed.
 		await petPage.keyboard.press("Escape");
-		await sleep(400);
-		const morphClosed = await petPage.evaluate(() => {
-			const bar = document.querySelector(".pet-window__quickbar");
-			const rect = bar?.getBoundingClientRect();
-			return {
-				composing: bar?.classList.contains("pet-window__quickbar--composing") ?? false,
-				width: rect ? Math.round(rect.width) : 0,
-				buttonOpacity: Array.from(bar?.querySelectorAll(".pet-window__quickbar-btn") ?? []).map(
-					button => getComputedStyle(button).opacity,
-				),
-			};
-		});
+		const morphClosed = await waitForQuickbarRest(quickbarExpanded.width);
 		check(
 			"real pet quick bar returns to its button row when the composer closes",
 			morphClosed.composing === false &&
-				// The row returns to the width it had before the morph — not
-				// to a hard-coded number: the row's width is measured from
-				// its content (three buttons, two hairlines, gaps).
-				Math.abs(morphClosed.width - morphBefore.width) <= 2 &&
+				// The row returns to the width this session already measured
+				// at rest — not to a hard-coded number, and not to another
+				// in-flight reading. The collapsed shape is sized by its own
+				// content (three buttons, two hairlines, gaps), so only
+				// subpixel rounding of the border can separate the two.
+				Math.abs(morphClosed.width - quickbarExpanded.width) <= 1 &&
 				morphClosed.buttonOpacity.slice(0, 3).every(value => value === "1"),
 			morphClosed,
 		);
