@@ -357,7 +357,16 @@ describe("window drag — one owner for the property", () => {
 	/** Comments legitimately discuss the property; declarations do not. */
 	const stripCssComments = (source: string): string => source.replace(/\/\*[\s\S]*?\*\//g, "");
 	const DECLARATION = /(?:^|[\s;{])(?:-webkit-)?app-region\s*:/;
-	/** Entry points that load gui.css. */
+	/** Every entry point that declares a region outside this owner sheet, with
+	 *  the reason it cannot read the owner: the stylesheet it loads instead. */
+	const SECOND_ROOTS = {
+		"apps/desktop/src/styles/dictation.css": 1,
+		"apps/desktop/installer/ui/installer.css": 2,
+		"packages/client-core/src/components/shell/shell.css": 1,
+	};
+	const REPO = path.resolve(SRC, "../../..");
+	/** Entry points that load gui.css: the owner sheet must stay their only
+	 *  source of the property. */
 	const RENDERER_ENTRY_STYLES = [
 		"gui-base.css",
 		"gui-chat.css",
@@ -366,23 +375,48 @@ describe("window drag — one owner for the property", () => {
 		"gui-settings.css",
 	];
 
-	it("declares the region only in the owner stylesheet", () => {
+	/** The band list exactly as the owner sheet declares it: the rule whose
+	 *  selector opens with the band attribute. Parsing it (instead of repeating
+	 *  the names here) is what keeps a new band from shipping unasserted. */
+	const ownerBands = (): string[] => {
+		const owner = stripCssComments(fs.readFileSync(path.join(STYLES, OWNER_STYLE), "utf8"));
+		const rule = owner.match(/\[data-gui-window-drag="band"\],([\s\S]*?)\{/);
+		expect(rule).not.toBeNull();
+		return Array.from(rule![1].matchAll(/\.([\w-]+)/g), match => match[1]);
+	};
+
+	it("declares the region only in the owner stylesheet and its second roots", () => {
 		const counts: Record<string, number> = {};
-		for (const file of fs.readdirSync(STYLES).filter(name => name.endsWith(".css"))) {
-			if (file === OWNER_STYLE) continue;
-			const declarations = stripCssComments(fs.readFileSync(path.join(STYLES, file), "utf8"))
-				.split("\n")
+		const cssFiles: string[] = [];
+		const collect = (directory: string): void => {
+			for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+				const full = path.join(directory, entry.name);
+				if (entry.isDirectory()) {
+					if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+					collect(full);
+				} else if (entry.name.endsWith(".css")) {
+					cssFiles.push(full.replaceAll("\\", "/"));
+				}
+			}
+		};
+		collect(path.join(REPO, "apps"));
+		collect(path.join(REPO, "packages"));
+		for (const file of cssFiles) {
+			const relative = path.relative(REPO, file).replaceAll("\\", "/");
+			if (relative === `apps/desktop/src/styles/${OWNER_STYLE}`) continue;
+			const declarations = stripCssComments(fs.readFileSync(file, "utf8"))
+				.split(/\r?\n/)
 				.filter(line => DECLARATION.test(line)).length;
-			if (declarations > 0) counts[file] = declarations;
+			if (declarations > 0) counts[relative] = declarations;
 		}
-		// dictation.css is a separate HTML entry point (it does not load gui.css),
-		// so it keeps its own opt-out; no renderer sheet may declare the property.
-		expect(counts).toEqual({ "dictation.css": 1 });
+		expect(counts).toEqual(SECOND_ROOTS);
 	});
 
-	it("covers every band its components mount", () => {
-		const owner = fs.readFileSync(path.join(STYLES, OWNER_STYLE), "utf8");
-		const bands = [
+	it("asserts every band the owner lists, derived from the sheet itself", () => {
+		const bands = ownerBands();
+		// The list is the contract: a band added to the sheet is asserted here
+		// without a second edit, and a band removed here cannot linger there.
+		expect(bands).toEqual([
 			"gui-rail-top",
 			"gui-header",
 			"gui-pane-drag",
@@ -391,9 +425,49 @@ describe("window drag — one owner for the property", () => {
 			"gui-mini-drag",
 			"gui-settings-drag",
 			"gui-settings-nav-slot",
+			"gui-pin-drag",
 			"gui-splash",
-		];
-		for (const band of bands) expect(owner).toContain(`.${band}`);
+		]);
+		// A band the sheet lists but nothing mounts is the other drift: the
+		// selector must own at least one component, or the list documents a
+		// strip that no window has.
+		const sources: string[] = [];
+		const collect = (directory: string): void => {
+			for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+				const full = path.join(directory, entry.name);
+				if (entry.isDirectory()) {
+					if (entry.name.startsWith(".")) continue;
+					collect(full);
+				} else if (entry.name.endsWith(".tsx")) {
+					sources.push(fs.readFileSync(full, "utf8"));
+				}
+			}
+		};
+		collect(SRC);
+		for (const band of bands) {
+			const mounted = sources.some(source => source.includes(band));
+			expect({ band, mounted }).toEqual({ band, mounted: true });
+		}
+	});
+
+	it("marks the pinned card's drag strip as a band", async () => {
+		// The pin window is frameless, transparent and has no IPC move path, so
+		// its strip is the window's only way to move. pin.html's real markup.
+		await load(`
+			<div class="gui-pin" data-tone="default" style="width: 320px; height: 420px; position: relative">
+				<div class="gui-pin-drag">
+					<div class="gui-pin-actions"><button class="gui-pin-btn" type="button">pin</button></div>
+				</div>
+				<div class="gui-pin-body" style="padding-top: 48px">body</div>
+			</div>`);
+		const probes = await probe([
+			[150, 40],
+			[20, 40],
+		]);
+		for (const entry of probes)
+			expect({ hit: entry.hit, region: entry.region }).toEqual({ hit: entry.hit, region: "drag" });
+		// The hover actions keep their clicks.
+		expect(await regionOf(".gui-pin-btn")).toBe("no-drag");
 	});
 
 	it("never marks one element as both a band and an opt-out", () => {

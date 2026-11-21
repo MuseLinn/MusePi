@@ -22,37 +22,28 @@
  *      native controls either way.
  *   2. `band` and `off` on one element is a contradiction (a guard test in
  *      apps/desktop/test rejects it).
- *   3. The OS titlebar is drawn OVER the page, so a band is transparent to it
- *      and needs no carve of its own; a band that places a control at a
- *      leading edge reads the inset tokens instead of a literal.
+ *   3. The OS titlebar is drawn OVER the page, so a band never receives its
+ *      clicks and needs no carve of its own; a band that places a control at
+ *      a leading edge reserves the platform inset in its own geometry.
  *
  * Platform inset (apps/desktop/electron/main.cjs: titleBarStyle "hidden"):
  *   macOS  trafficLightPosition {x:16,y:17}, three 14px buttons → the leading
- *          88px of the top band belongs to the system.
- *   win32  titleBarOverlay height 48, ~150px trailing → the header reserves it
- *          with paddingRight; bands keep their full width.
- *   linux  falls back to the distro's own title bar; the inset tokens stay 0
- *          and no band relies on them.
+ *          ~88px of the top row belongs to the system (the mini window pads
+ *          past it, `.gui-mini-drag`).
+ *   win32  titleBarOverlay height 48 draws min/max/close at the top-right;
+ *          the chat header reserves 150px with `paddingRight` and the mini
+ *          window pads 130px, because its 28px-tall row ends above the
+ *          buttons. Both are per-surface values, not a shared token.
+ *   linux  falls back to the distro's own title bar, so nothing is reserved.
+ *
+ * Three entry points keep their own declaration because they do not load
+ * this sheet: `packages/client-core/src/components/shell/shell.css`
+ * (`.compat-titlebar`, a page hosted inside the Electron frame without
+ * `gui.css`), `apps/desktop/src/styles/dictation.css` (the no-focus HUD) and
+ * `apps/desktop/installer/ui/installer.css` (the installer's own window).
+ * The contract test requires exactly this set, so a fourth one is a decision
+ * rather than a surprise.
  */
-
-:root {
-	/* The OS titlebar row the bands align to (`titleBarOverlay.height` in the
-	 * main process, and the header's own h-12). */
-	--gui-chrome-band-h: 48px;
-	/* Reserved leading edge of a band (macOS traffic lights). */
-	--gui-chrome-inset-left: 0px;
-	/* Reserved trailing edge of a band (win32 / linux overlay buttons). */
-	--gui-chrome-inset-right: 0px;
-}
-
-:root[data-platform="darwin"] {
-	--gui-chrome-inset-left: 88px;
-}
-
-:root[data-platform="win32"],
-:root[data-platform="linux"] {
-	--gui-chrome-inset-right: 150px;
-}
 
 [data-gui-window-drag="band"] {
 	-webkit-app-region: drag;
@@ -62,17 +53,43 @@
 	-webkit-app-region: no-drag;
 }
 
+/* ── The bands ────────────────────────────────────────────────────────
+ * One list, so every strip that moves the window is greppable in one place,
+ * and the contract test parses this rule to know what to assert. Class-based
+ * entries predate the attribute: their components (GuiHeader, SessionSidebar,
+ * the rail, the second-tier panels, the mini and pinned windows) live outside
+ * the files this contract was introduced with, so the classes stay as the
+ * components' public contract and are aliased here. New surfaces mark the
+ * attribute on their own markup instead. */
+[data-gui-window-drag="band"],
+.gui-rail-top,
+.gui-header,
+.gui-pane-drag,
+.gui-drag-strip,
+.gui-side-keeper,
+.gui-mini-drag,
+.gui-settings-drag,
+.gui-settings-nav-slot,
+.gui-pin-drag,
+.gui-splash {
+	-webkit-app-region: drag;
+}
+
 /* Safety net, not a substitute for marking a subtree `off`: a control that
- * lands in a band still clicks even when its surface forgot the marker.
- * Rows built from plain elements are covered by `off` on their container. */
+ * lands in a band still clicks even when its surface forgot the marker. It
+ * reads the SAME selector list as the band rule above, so a band added there
+ * is covered here without a second edit. */
 :is(
+		[data-gui-window-drag="band"],
 		.gui-rail-top,
 		.gui-header,
 		.gui-pane-drag,
 		.gui-drag-strip,
+		.gui-side-keeper,
 		.gui-mini-drag,
 		.gui-settings-drag,
 		.gui-settings-nav-slot,
+		.gui-pin-drag,
 		.gui-splash
 	)
 	:is(
@@ -88,44 +105,8 @@
 		[role="link"],
 		[role="menuitem"],
 		[role="separator"]
-	),
-[data-gui-window-drag="band"]
-	:is(
-		button,
-		a[href],
-		input,
-		textarea,
-		select,
-		label,
-		[contenteditable="true"],
-		[role="button"],
-		[role="tab"],
-		[role="link"],
-		[role="menuitem"],
-		[role="separator"]
 	) {
 	-webkit-app-region: no-drag;
-}
-
-/* ── The bands ────────────────────────────────────────────────────────
- * One list, so every strip that moves the window is greppable in one place.
- * Class-based entries predate the attribute: their components (GuiHeader,
- * SessionSidebar, the rail, the second-tier panels, the mini window) live
- * outside the settings-tree files this contract was introduced with, so the
- * classes stay as the components' public contract and are aliased here. New
- * surfaces mark the attribute on their own markup instead. */
-[data-gui-window-drag="band"],
-.gui-rail-top,
-.gui-header,
-.gui-pane-drag,
-.gui-drag-strip,
-.gui-side-keeper,
-.gui-mini-drag,
-.gui-settings-drag,
-.gui-settings-nav-slot,
-.gui-splash,
-.compat-titlebar {
-	-webkit-app-region: drag;
 }
 
 /* ── The opt-outs ─────────────────────────────────────────────────────
