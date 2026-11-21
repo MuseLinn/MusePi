@@ -1608,6 +1608,8 @@ export const general = {
 	"general.sessionInfoSurfaces": "Open a surface",
 	"general.sessionInfoUntitled": "Untitled session",
 	"general.sessionInfoPlugins": "Plugins",
+	"general.sessionUnread": "Unread",
+	"general.sessionUnreadFailed": "Unread — the last turn failed",
 	"general.appRail": "App navigation",
 	"general.home": "Home",
 } as const satisfies Record<GeneralKey, string>;

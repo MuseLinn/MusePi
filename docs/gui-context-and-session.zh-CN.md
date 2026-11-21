@@ -2,11 +2,12 @@
 layout: default
 title: GUI 上下文、会话层级与角色模型
 status: living
-summary: 结构化引用上下文、子会话折叠和角色/回退模型思考等级契约。
+summary: 结构化引用上下文、子会话折叠、宿主权威的会话阅读状态，以及角色/回退模型思考等级契约。
 scope:
   - packages/client-core/src/messages
   - apps/desktop/src/components
   - packages/coding-agent/src/session
+  - packages/coding-agent/src/daemon
 lang: zh-CN
 ---
 
@@ -14,7 +15,7 @@ lang: zh-CN
 
 [English](gui-context-and-session.md) | 中文
 
-本文统一管理三个此前不断追加到 GUI 总规范中的契约：结构化引用卡、子会话折叠、角色与回退模型思考等级。
+本文统一管理四个此前不断追加到 GUI 总规范中的契约：结构化引用卡、子会话折叠、会话阅读状态，以及角色与回退模型思考等级。
 
 ## 结构化 display context
 
@@ -49,6 +50,27 @@ FilePane 的引用动作发送 `file-quote`，不再把 `@path` 裸文本放进�
 - `setGroupsAll` 接收 `open`，`setAllSubtreesCollapsed` 接收 `collapse`。
 - 没有组覆盖（`groupsAll === null`）时，以真实子树状态决定下一动作。
 - 每个 tab 先应用项目/组状态，再按同方向调用 `setAllSubtreesCollapsed`。
+
+## 会话阅读状态
+
+会话是否未读、是否失败由 daemon 决定。`SessionReadStateService` 在宿主上按会话保存一条记录，并以 tmp+rename 持久化到 daemon 状态目录的 `session-read-state.json`，因此标记能跨 daemon 重启保持，同一宿主上的所有客户端看到同一个答案：在手机上打开会话会清掉桌面上的点，已清掉的失败提示重启后不会复活。fork、子会话与 advisor 会话是独立 session id，因此各有独立记录；显示哪些行由客户端筛选。
+
+记录统计的是**完成轮**，不是消息数：
+
+| 字段 | 含义 |
+| --- | --- |
+| `completedTurn` | 本宿主上观察到的已完成 agent run 数，单调递增。 |
+| `readTurn` | 用户最后一次已读到的 `completedTurn`。 |
+| `lastFailed` | 最近一次完成轮是否以错误结束。 |
+| `manualUnread` | 用户手动把会话标为未读；只有显式已读能清除。 |
+
+派生状态为 `unread = manualUnread || completedTurn > readTurn`，`failed = unread && lastFailed`。因此失败提示只在该失败轮仍未读时存在：打开会话会清掉它，之后成功的一轮也会清掉它，而中止是用户的决定、不算失败通知。有客户端正在订阅该会话时，完成轮会推进 `readTurn`（转录就在屏幕上），但绝不会清除 `manualUnread`——手动固定的会话保持未读，直到显式已读。
+
+客户端不再用消息数推导未读。`session.list` 的每行携带 `read`（`unread`、`failed`、`manualUnread`、计数与 `completedAt`），`sessionStatus.list` 返回完整跟踪集合。打开会话发送 `sessionStatus.mark { sessionId, read: true }`，清除手动固定并追上最新完成轮；侧栏菜单的 标记为已读/未读 走同一路由，以 `unread: true` 固定。`sessionStatus.markAll` 把全部跟踪会话加上调用方列出的 id 一起置为已读，欢迎页提醒面板与桌宠角标消费轮询投影出的 `unread` 集合；点桌宠气泡的 ✓ 也是同一次显式已读。没有记录的会话表示本宿主上从未完成过轮次，按已读处理。
+
+旧 localStorage 游标（`musepi-gui-unread`、`musepi-gui-read-count`）已不存在。升级后首次启动时，所有既有会话本来就是已读，因为宿主初始没有任何完成轮记录；旧键直接删除，不再解释。
+
+桌面侧栏对普通未读行画 accent 点，对未读失败行画 danger 点；两者互斥（失败行撤掉 accent 类），失败标记带可访问名称。移动端 `SessionsSheet` 读取同一状态，行首点采用相同的 accent/danger 区分。两个界面都不从会话持久化的生命周期状态渲染失败：生命周期可能描述更早的一轮，而阅读状态始终描述最近完成的一轮。
 
 ## 角色与回退模型思考等级
 

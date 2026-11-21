@@ -372,6 +372,7 @@ import { ScheduleService } from "./services/schedule-service";
 import { SecretService } from "./services/secret-service";
 import { SessionInspectionService } from "./services/session-inspection-service";
 import { SessionPresenceService } from "./services/session-presence-service";
+import { SessionReadStateService } from "./services/session-read-state-service";
 import { SessionService } from "./services/session-service";
 import { SettingsService } from "./services/settings-service";
 import { SpeechService } from "./services/speech-service";
@@ -906,6 +907,13 @@ export class DaemonServer {
 		// Public per-session presence; mounted on the cordis host as
 		// `ctx.sessionPresence` and claimed as the `session.presence` route.
 		this.#services.register(new SessionPresenceService(this.#host));
+		// Host-owned per-session read state: completed turns (success/failure),
+		// read cursors and manual-unread pins. Persisted in the daemon dir, so
+		// every connected client and every restart see the same unread/failed
+		// markers instead of each deriving a private localStorage cursor.
+		this.#services.register(
+			new SessionReadStateService({ storePath: path.join(SOCKET_DIR, "session-read-state.json") }),
+		);
 		// Agent control surface (roster, live progress, transcript, lifecycle
 		// actions); mounted as `ctx.agents` on the cordis host.
 		this.#services.register(new AgentsService(this.#host));
@@ -1079,6 +1087,17 @@ export class DaemonServer {
 		host.onAgentEnd = (live, event) => {
 			void this.#pushChannelReplies(live, event).catch(() => {});
 			void this.#pushTaskCompletion(live).catch(() => {});
+			// A finished run is a completed turn for the host-owned read state.
+			// It counts as failed when the last assistant message stopped on an
+			// error — an abort is the user's decision, not a failure notice. A
+			// live subscriber means a client is showing the transcript, so the
+			// turn is read on arrival; a manual-unread pin is never cleared here.
+			const lastAssistant = [...event.messages].reverse().find(message => message.role === "assistant");
+			void this.#services.get<SessionReadStateService>("sessionReadState").recordCompletion({
+				sessionId: live.sessionId,
+				failed: (lastAssistant as { stopReason?: unknown } | undefined)?.stopReason === "error",
+				watched: live.subscribers.size > 0,
+			});
 		};
 		void this.#channels.startAll().catch(() => {});
 		// Hot-pluggable channel plugins: scan ~/.musepi/agent/channels/*.ts
@@ -2220,6 +2239,9 @@ export class DaemonServer {
 						working: presence.working,
 						live: presence.live,
 						presence,
+						// Host-owned read state (`sessionStatus.mark`): unread and
+						// failed markers shared by every client of this host.
+						read: this.#services.get<SessionReadStateService>("sessionReadState").stateOf(r.sessionId),
 						source: cronIds.has(r.sessionId) ? "cron" : undefined,
 						// Lifecycle status (TUI session-list parity): derived from
 						// the session file tail (complete/interrupted/aborted/
@@ -2239,6 +2261,18 @@ export class DaemonServer {
 				return this.#services
 					.get<SessionPresenceService>("sessionPresence")
 					.presence((params ?? {}) as { sessionId?: unknown });
+			case "sessionStatus.list":
+				return this.#services.get<SessionReadStateService>("sessionReadState").list();
+			case "sessionStatus.mark":
+				// Explicit read / manual unread from any client. A read clears a
+				// manual pin; an unread pin survives automatic reads.
+				return this.#services
+					.get<SessionReadStateService>("sessionReadState")
+					.mark((params ?? {}) as { sessionId?: unknown; read?: unknown; unread?: unknown });
+			case "sessionStatus.markAll":
+				return this.#services
+					.get<SessionReadStateService>("sessionReadState")
+					.markAll((params ?? {}) as { sessionIds?: unknown });
 			case "session.agents": {
 				// 单个会话的子代理名册（agents hub / 侧边栏展开）。口径与三个
 				// id 的用途见 AgentsService.roster；实现归该服务。

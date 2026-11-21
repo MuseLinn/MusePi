@@ -44,6 +44,7 @@ import { ScheduleService } from "./schedule-service";
 import { SecretService } from "./secret-service";
 import { SessionInspectionService } from "./session-inspection-service";
 import { SessionPresenceService } from "./session-presence-service";
+import { SessionReadStateService } from "./session-read-state-service";
 import { SessionService } from "./session-service";
 import { SettingsService } from "./settings-service";
 import { SpeechService } from "./speech-service";
@@ -246,6 +247,13 @@ function buildRegistry(): HostServices {
 	);
 	// SessionPresenceService：只认领 session.presence，宿主访问桩化。
 	services.register(new SessionPresenceService({ get: () => undefined, knownSessions: async () => [] }));
+	// SessionReadStateService：只认领 sessionStatus.*，journal 指向隔离 temp
+	// （本测试不记录任何完成轮）。
+	services.register(
+		new SessionReadStateService({
+			storePath: join(mkdtempSync(join(tmpdir(), "musepi-read-state-")), "session-read-state.json"),
+		}),
+	);
 	// VoiceService：只认领路由（本测试不触发语音引擎），广播桩吞掉分片事件。
 	services.register(new VoiceService({ broadcast: () => {} }));
 	// ExtensionService：stub 化宿主访问，仅参与路由表。

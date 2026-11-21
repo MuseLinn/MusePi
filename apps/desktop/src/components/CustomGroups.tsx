@@ -50,6 +50,7 @@ export function CustomGroups({
 	onRename,
 	onReorderMember,
 	unread,
+	failed,
 	pausedIds,
 	workingIds,
 	statuses,
@@ -83,6 +84,8 @@ export function CustomGroups({
 	onReorderMember?(groupIndex: number, sessionId: string, to: number): void;
 	/** Session ids with the 未读 marker. */
 	unread?: ReadonlySet<string>;
+	/** Unread ids whose latest completed turn failed (host read state). */
+	failed?: ReadonlySet<string>;
 	/** Paused session ids — pause chip on rows. */
 	pausedIds?: ReadonlySet<string>;
 	/** Live sessions with a running agent turn — pulsing dot on rows. */
@@ -146,6 +149,7 @@ export function CustomGroups({
 					onRename={onRename}
 					onReorderMember={onReorderMember}
 					unread={unread}
+					failed={failed}
 					pausedIds={pausedIds}
 					workingIds={workingIds}
 					statuses={statuses}
@@ -179,6 +183,7 @@ function GroupBlock({
 	onRename,
 	onReorderMember,
 	unread,
+	failed,
 	pausedIds,
 	workingIds,
 	statuses,
@@ -210,6 +215,8 @@ function GroupBlock({
 	onReorderMember?(groupIndex: number, sessionId: string, to: number): void;
 	/** Session ids with the 未读 marker. */
 	unread?: ReadonlySet<string>;
+	/** Unread ids whose latest completed turn failed (host read state). */
+	failed?: ReadonlySet<string>;
 	/** Paused session ids — pause chip on rows. */
 	pausedIds?: ReadonlySet<string>;
 	/** Live sessions with a running agent turn — pulsing dot on rows. */
@@ -387,6 +394,7 @@ function GroupBlock({
 							onSelect={onSelect}
 							onContextMenu={onSessionContextMenu}
 							unread={unread}
+							failed={failed}
 							pausedIds={pausedIds}
 							workingIds={workingIds}
 							statuses={statuses}

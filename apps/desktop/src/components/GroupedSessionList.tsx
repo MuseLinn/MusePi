@@ -33,6 +33,7 @@ function GroupedSessionListInner({
 	onSelect,
 	onContextMenu,
 	unread,
+	failed,
 	pausedIds,
 	workingIds,
 	statuses,
@@ -47,6 +48,8 @@ function GroupedSessionListInner({
 	onSelect(id: string): void;
 	onContextMenu?(sessionId: string, x: number, y: number): void;
 	unread?: ReadonlySet<string>;
+	/** Unread ids whose latest completed turn failed (host read state). */
+	failed?: ReadonlySet<string>;
 	pausedIds?: ReadonlySet<string>;
 	workingIds?: ReadonlySet<string>;
 	/** Session id whose title an AI rename is generating — forwarded so that
@@ -105,6 +108,7 @@ function GroupedSessionListInner({
 						onSelect={onSelect}
 						onContextMenu={onContextMenu}
 						unread={unread}
+						failed={failed}
 						pausedIds={pausedIds}
 						workingIds={workingIds}
 						statuses={statuses}

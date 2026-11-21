@@ -2,18 +2,19 @@
 layout: default
 title: GUI context, session hierarchy, and role models
 status: living
-summary: Structured quote contexts, session subtree collapse, and per-role/fallback thinking-level contracts.
+summary: Structured quote contexts, session subtree collapse, host-owned session read state, and per-role/fallback thinking-level contracts.
 scope:
   - packages/client-core/src/messages
   - apps/desktop/src/components
   - packages/coding-agent/src/session
+  - packages/coding-agent/src/daemon
 ---
 
 # GUI context, session hierarchy, and role models
 
 English | [中文](gui-context-and-session.zh-CN.md)
 
-This document owns three related GUI contracts that were previously appended to the general GUI specs: structured context cards, session subtree collapse, and role/fallback thinking levels.
+This document owns four related GUI contracts that were previously appended to the general GUI specs: structured context cards, session subtree collapse, session read state, and role/fallback thinking levels.
 
 ## Structured display context
 
@@ -48,6 +49,27 @@ The header's global action coordinates projects and subtrees:
 - `setGroupsAll` takes `open`, while `setAllSubtreesCollapsed` takes `collapse`.
 - With no group override (`groupsAll === null`), the actual subtree state determines the next action.
 - Each tab applies its project/group state and then calls `setAllSubtreesCollapsed` in the same direction.
+
+## Session read state
+
+The daemon owns whether a session is unread or failed. `SessionReadStateService` holds one record per session on the host and persists it to `session-read-state.json` in the daemon state directory with tmp+rename, so the markers survive a daemon restart and every client connected to the same host renders the same answer: reading a session on the phone clears the desktop dot, and a cleared failure notice does not come back on relaunch. Forks, subagent sessions and advisor sessions are separate session ids and therefore separate records; clients filter which rows they show.
+
+A record counts **completed turns**, not messages:
+
+| Field | Meaning |
+| --- | --- |
+| `completedTurn` | Monotonic count of finished agent runs observed on this host. |
+| `readTurn` | `completedTurn` value the user last read up to. |
+| `lastFailed` | Whether the most recent completed turn ended in an error. |
+| `manualUnread` | The user pinned the session unread; only an explicit read clears it. |
+
+Derived state is `unread = manualUnread || completedTurn > readTurn`, and `failed = unread && lastFailed`. A failure notice therefore only exists while the failed turn is still unread: reading the session clears it, a later successful completion clears it, and an abort is the user's decision rather than a failure notice. A completion of a session that a client is currently subscribed to advances `readTurn` (the transcript is on screen), but never clears `manualUnread` — a pinned session stays unread until an explicit read.
+
+Clients never derive unread from message counts. `session.list` rows carry `read` (`unread`, `failed`, `manualUnread`, the counters and `completedAt`), and `sessionStatus.list` returns the tracked set. Opening a session sends `sessionStatus.mark { sessionId, read: true }`, which clears the pin and catches up to the latest completed turn; the sidebar menu's 标记为已读/未读 sends the same route with `unread: true` to pin. `sessionStatus.markAll` reads every tracked session plus the ids the caller lists, and the welcome reminders panel and the pet badge consume the `unread` set projected from the poll. Approving a pet bubble's ✓ is the same explicit read. Sessions without a record have never completed a turn on this host and read as read.
+
+The retired localStorage cursors (`musepi-gui-unread`, `musepi-gui-read-count`) no longer exist. On the first launch after the upgrade every existing session is already read, because the host starts with no completed turns recorded; the old keys are removed rather than interpreted.
+
+The desktop sidebar draws an accent dot for a plain unread row and a danger dot for an unread failure; the two markers are exclusive (a failed row drops the accent class), and the failure marker carries an accessible label. The mobile `SessionsSheet` reads the same state and uses the same accent/danger split on its leading dot. Neither surface renders a failure from the session's persisted lifecycle status: lifecycle may describe an older turn, while the read state always describes the latest completed one.
 
 ## Role and fallback thinking levels
 

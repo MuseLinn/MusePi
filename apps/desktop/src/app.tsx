@@ -288,6 +288,9 @@ interface SessionMetaRow {
 	advisor?: boolean;
 	/** Structured presence from `session.list` / `session.presence`. */
 	presence?: SessionPresence;
+	/** Host-owned read state: the daemon compares completed turns, so the
+	 *  marker survives restarts and is identical on every client. */
+	read?: { unread?: boolean; failed?: boolean; manualUnread?: boolean };
 }
 
 function samePresence(a?: SessionPresence, b?: SessionPresence): boolean {
@@ -661,29 +664,31 @@ function AppInner(): ReactNode {
 		return () => window.removeEventListener(UI_BLOCK_ANSWER_EVENT, onAnswer);
 	}, []);
 	const [tree, setTree] = useState<SessionListNode[]>([]);
-	// Sessions with an undismissed completion (pet badge + persistent
-	// bubble + sidebar 未读 marker + welcome reminders panel) — cleared
-	// when the user opens the session. Seeded from localStorage, grown by
-	// pet completions and the cursor-based derivation (message-count
-	// growth past the last read count, kimi 实时提醒 parity).
+	// Sessions whose latest completed turn is unread on this host. The daemon
+	// owns the record (`session.list` → `read`), persisted across restarts and
+	// shared by every window and the phone shell; this state is only the poll's
+	// projection of that answer, never a local cursor.
 	const [unreadSessions, setUnreadSessions] = useState<Set<string>>(() => {
+		// One-time upgrade from the retired localStorage cursor: sessions that
+		// completed before the daemon kept a record are read (the host starts
+		// with no completed turns), so the legacy keys only need removing —
+		// nothing is retroactively marked unread.
 		try {
-			return new Set(JSON.parse(localStorage.getItem("musepi-gui-unread") ?? "[]") as string[]);
-		} catch {
-			return new Set();
-		}
-	});
-	const unreadSessionsRef = useRef<Set<string>>(new Set());
-	unreadSessionsRef.current = unreadSessions;
-	// Persist the unread set so the sidebar/reminders agree across
-	// relaunches (single source, owned here).
-	useEffect(() => {
-		try {
-			localStorage.setItem("musepi-gui-unread", JSON.stringify([...unreadSessions]));
+			localStorage.removeItem("musepi-gui-unread");
+			localStorage.removeItem("musepi-gui-read-count");
+			localStorage.removeItem("musepi-gui-read-count-seeded");
 		} catch {
 			// storage unavailable
 		}
-	}, [unreadSessions]);
+		return new Set();
+	});
+	const unreadSessionsRef = useRef<Set<string>>(new Set());
+	unreadSessionsRef.current = unreadSessions;
+	/** Session ids whose latest completed turn failed and is still unread —
+	 *  rendered with the failure marker instead of the plain unread dot. */
+	const [failedSessions, setFailedSessions] = useState<Set<string>>(() => new Set());
+	const failedSessionsRef = useRef<Set<string>>(new Set());
+	failedSessionsRef.current = failedSessions;
 	const treeRef = useRef<SessionListNode[]>([]);
 	treeRef.current = tree;
 	// refreshSessions 并发守卫: 多个 refresh 同时进行时(发送/删除/打开/标题事件
@@ -703,23 +708,6 @@ function AppInner(): ReactNode {
 	useEffect(() => {
 		petPushRef.current?.();
 	}, [sessionMeta]);
-	// Per-session "last seen message count" — the source of truth for the
-	// cursor-based unread derivation: a session whose count grew past the
-	// last count the user had it open at is unread. Persisted so sessions
-	// that completed while the app was closed still surface as reminders.
-	const readCountRef = useRef<Map<string, number>>(new Map());
-	const readCountLoadedRef = useRef(false);
-	const readSeededRef = useRef(false);
-	if (!readCountLoadedRef.current) {
-		readCountLoadedRef.current = true;
-		try {
-			const raw = localStorage.getItem("musepi-gui-read-count");
-			if (raw) readCountRef.current = new Map(JSON.parse(raw) as [string, number][]);
-			readSeededRef.current = localStorage.getItem("musepi-gui-read-count-seeded") === "1";
-		} catch {
-			// storage unavailable
-		}
-	}
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	/** 当前会话的父会话（「父级」返回按钮数据源）：侧栏树中
 	 *  选中节点的父节点。fork 与子代理会话均可返回;无父 = null。 */
@@ -1527,95 +1515,84 @@ function AppInner(): ReactNode {
 	welcomeModeIdRef.current = welcomeModeId;
 
 	// ── Connect to the daemon ──────────────────────────────────────────────
-	/** Persist the per-session read cursors (best-effort; storage can be
-	 *  unavailable in sandboxed contexts). */
-	const persistReadCount = useCallback((): void => {
-		try {
-			localStorage.setItem("musepi-gui-read-count", JSON.stringify([...readCountRef.current]));
-		} catch {
-			// storage unavailable
-		}
-	}, []);
-	/** Cursor-based unread derivation (kimi 实时提醒 parity): a session is
-	 *  unread once its message count grows past the last count the user had
-	 *  it open at. Seeded on first sight so pre-existing sessions never
-	 *  retroactively unread — only activity AFTER this feature exists marks
-	 *  unread. The selected session is kept read while the user watches it. */
-	const applyReadStatus = useCallback(
-		(rows: ReadonlyArray<{ id: string; messageCount?: number; subagent?: boolean; advisor?: boolean }>): void => {
-			if (!readSeededRef.current) {
-				readCountRef.current = new Map(rows.map(r => [r.id, r.messageCount ?? 0]));
-				readSeededRef.current = true;
-				try {
-					localStorage.setItem("musepi-gui-read-count-seeded", "1");
-				} catch {
-					// storage unavailable
-				}
-				persistReadCount();
-				return;
+	/** Project the host read state into the local marker sets. The daemon answers
+	 *  `session.list.read`; every client shows that answer instead of tracking a
+	 *  private message-count cursor. `failed` is already "unread AND the latest
+	 *  completed turn failed", so it never outlives the unread dot. Identity is
+	 *  preserved when nothing moved so the sidebar does not re-render per poll. */
+	const syncUnread = useCallback(
+		(rows: ReadonlyArray<{ id: string; read?: { unread?: boolean; failed?: boolean } }>): void => {
+			const nextUnread = new Set<string>();
+			const nextFailed = new Set<string>();
+			for (const row of rows) {
+				if (row.read?.unread === true) nextUnread.add(row.id);
+				if (row.read?.failed === true) nextFailed.add(row.id);
 			}
-			const selected = selectedIdRef.current;
-			const seen = new Set<string>();
-			const grew: string[] = [];
-			for (const r of rows) {
-				seen.add(r.id);
-				const count = r.messageCount ?? 0;
-				const prev = readCountRef.current.get(r.id) ?? 0;
-				if (count <= prev) continue;
-				readCountRef.current.set(r.id, count);
-				if (r.id !== selected && r.subagent !== true && r.advisor !== true) grew.push(r.id);
-			}
-			// Prune read-cursors of deleted sessions.
-			for (const id of [...readCountRef.current.keys()]) {
-				if (!seen.has(id)) readCountRef.current.delete(id);
-			}
-			if (grew.length > 0) {
-				persistReadCount();
-				setUnreadSessions(prev => {
-					if (grew.every(id => prev.has(id))) return prev;
-					const next = new Set(prev);
-					for (const id of grew) next.add(id);
-					return next;
-				});
-			}
+			setUnreadSessions(prev =>
+				prev.size === nextUnread.size && [...nextUnread].every(id => prev.has(id)) ? prev : nextUnread,
+			);
+			setFailedSessions(prev =>
+				prev.size === nextFailed.size && [...nextFailed].every(id => prev.has(id)) ? prev : nextFailed,
+			);
 		},
-		[persistReadCount],
+		[],
 	);
-	/** 一键已读 (reminders panel + pet badge): every session is read up to
-	 *  its current message count; the unread set clears. Also dismisses the
-	 *  pet's completion/error bubbles for those sessions — the badge and
-	 *  the bubbles track the same signal, so clearing one must clear both
-	 *  (read 闭环), or the bubbles linger after 全部已读. */
+	/** 一键已读 (reminders panel + pet badge): the daemon clears every record and
+	 *  the unread set empties. Also dismisses the pet's completion/error bubbles
+	 *  for those sessions — the badge and the bubbles track the same signal, so
+	 *  clearing one must clear both (read 闭环). */
 	const markAllRead = useCallback((): void => {
-		for (const [id, meta] of sessionMetaRef.current) {
-			if (typeof meta.messageCount === "number") readCountRef.current.set(id, meta.messageCount);
-		}
-		persistReadCount();
 		const ids = [...unreadSessionsRef.current];
-		if (ids.length === 0) return;
-		try {
-			const api = (
-				window as unknown as {
-					electronAPI?: { petActivity?(p: unknown): Promise<unknown> };
+		void rpcRef.current
+			?.request("sessionStatus.markAll", { sessionIds: [...sessionMetaRef.current.keys()] })
+			.catch(() => {});
+		if (ids.length > 0) {
+			try {
+				const api = (
+					window as unknown as {
+						electronAPI?: { petActivity?(p: unknown): Promise<unknown> };
+					}
+				).electronAPI;
+				if (companionEnabled() && companionPlacement() === "desktop") {
+					void api?.petActivity?.({ dismissSessions: ids });
 				}
-			).electronAPI;
-			if (companionEnabled() && companionPlacement() === "desktop") {
-				void api?.petActivity?.({ dismissSessions: ids });
+			} catch {
+				// pet bridge unavailable — bubbles just stay until dismissed
 			}
-		} catch {
-			// pet bridge unavailable — bubbles just stay until dismissed
 		}
 		setUnreadSessions(new Set());
-	}, [persistReadCount]);
-	/** Sidebar context-menu toggle (标记为已读/未读) — manual override that
-	 *  survives until the session is opened or marked read. */
+		setFailedSessions(new Set());
+	}, []);
+	/** Sidebar context-menu toggle (标记为已读/未读). The host owns the pin, so
+	 *  the choice sticks across clients and restarts; an explicit read later
+	 *  clears it. The row updates immediately and the 5s poll reconciles. */
 	const toggleUnread = useCallback((sessionId: string): void => {
+		const markUnread = !unreadSessionsRef.current.has(sessionId);
 		setUnreadSessions(prev => {
 			const next = new Set(prev);
-			if (next.has(sessionId)) next.delete(sessionId);
-			else next.add(sessionId);
+			if (markUnread) next.add(sessionId);
+			else next.delete(sessionId);
 			return next;
 		});
+		// A read clears the failure marker at once; a fresh pin learns whether
+		// the latest completed turn failed from the daemon's answer.
+		void rpcRef.current
+			?.request<{ failed?: boolean }>(
+				"sessionStatus.mark",
+				markUnread ? { sessionId, unread: true } : { sessionId, read: true },
+			)
+			.then(state => {
+				setFailedSessions(prev => {
+					const has = prev.has(sessionId);
+					const wants = state?.failed === true;
+					if (has === wants) return prev;
+					const next = new Set(prev);
+					if (wants) next.add(sessionId);
+					else next.delete(sessionId);
+					return next;
+				});
+			})
+			.catch(() => {});
 	}, []);
 
 	const refreshSessions = useCallback(
@@ -1667,7 +1644,7 @@ function AppInner(): ReactNode {
 							]),
 						),
 					);
-					applyReadStatus(list);
+					syncUnread(list);
 				} catch {
 					if (mSeq !== metaRefreshSeqRef.current) return;
 					setSessionMeta(new Map());
@@ -1675,13 +1652,12 @@ function AppInner(): ReactNode {
 			})();
 			await Promise.all([treeTask, metaTask]);
 		},
-		[applyReadStatus],
+		[syncUnread],
 	);
 	// Real-time session status (kimi 实时提醒 parity): poll session.list so
 	// the sidebar's 进行中 dot and the welcome reminders panel track sessions
 	// working in the background (streaming turns, cron runs), and the
-	// cursor-based unread derivation catches message growth the pet bubbles
-	// never see (sessions completed while the app was closed). One light RPC
+	// host-owned read state updates the unread/failed markers. One light RPC
 	// per 5s. The merge is field-level: unchanged rows keep their object
 	// identity and an unchanged payload keeps the map's identity, so React
 	// skips the sidebar subtree entirely when nothing the GUI tracks moved.
@@ -1719,7 +1695,7 @@ function AppInner(): ReactNode {
 						}
 						return next ?? prev;
 					});
-					applyReadStatus(list);
+					syncUnread(list);
 					// Tree sync: session.list is the freshest source of which
 					// sessions exist. If its id set drifts from the sidebar
 					// tree's (a session created or deleted outside this window,
@@ -1748,7 +1724,7 @@ function AppInner(): ReactNode {
 			alive = false;
 			clearInterval(timer);
 		};
-	}, [rpc, applyReadStatus, refreshSessions]);
+	}, [rpc, syncUnread, refreshSessions]);
 
 	const connect = useCallback(
 		async (targetUrl: string): Promise<boolean> => {
@@ -2368,26 +2344,27 @@ function AppInner(): ReactNode {
 	// let the run cancel itself before that attempt asks the daemon (a click on
 	// another session during a restore then issued no request at all). Retries
 	// do not repeat this — the pick is made once per user action.
-	const commitSelection = useCallback(
-		(sessionId: string): void => {
-			// Cursor-based read markers: the session being left was read up to
-			// its current count at the moment of the switch (otherwise the poll
-			// would mark it unread with a ≤5s-stale cursor); the incoming
-			// session is read by definition.
-			const metaNow = sessionMetaRef.current;
-			const prevId = selectedIdRef.current;
-			if (prevId && prevId !== sessionId) {
-				const prevCount = metaNow.get(prevId)?.messageCount;
-				if (typeof prevCount === "number") readCountRef.current.set(prevId, prevCount);
-			}
-			const openCount = metaNow.get(sessionId)?.messageCount;
-			if (typeof openCount === "number") readCountRef.current.set(sessionId, openCount);
-			persistReadCount();
-			setSelectedId(sessionId);
-			selectedIdRef.current = sessionId;
-		},
-		[persistReadCount],
-	);
+	const commitSelection = useCallback((sessionId: string): void => {
+		// Opening is the explicit read shared by every client of this host:
+		// the daemon clears the unread dot and any manual-unread pin, so the
+		// phone and other windows agree. Drop the markers locally first so
+		// the row reacts before the next poll.
+		setUnreadSessions(prev => {
+			if (!prev.has(sessionId)) return prev;
+			const next = new Set(prev);
+			next.delete(sessionId);
+			return next;
+		});
+		setFailedSessions(prev => {
+			if (!prev.has(sessionId)) return prev;
+			const next = new Set(prev);
+			next.delete(sessionId);
+			return next;
+		});
+		void rpcRef.current?.request("sessionStatus.mark", { sessionId, read: true }).catch(() => {});
+		setSelectedId(sessionId);
+		selectedIdRef.current = sessionId;
+	}, []);
 	// 真正的打开逻辑(openSession 的防重入包装内执行)。
 	const doOpenSession = useCallback(
 		async (sessionId: string): Promise<SessionOpenOutcome> => {
@@ -3667,6 +3644,7 @@ function AppInner(): ReactNode {
 			};
 			const cards: CompanionSessionCard[] = [];
 			const unread = unreadSessionsRef.current;
+			const failedUnread = failedSessionsRef.current;
 			const selected = selectedIdRef.current;
 			// Only the selected session has the full store snapshot. Background
 			// sessions carry session.list facts, so their state degrades to
@@ -3721,13 +3699,17 @@ function AppInner(): ReactNode {
 						attention,
 					});
 				} else if (unread.has(id)) {
-					const state: CompanionState = meta.status === "error" ? "alerting" : "celebrate";
+					// The failure card keys off the host read state: a failed
+					// completed turn that is still unread. A read failure (or a
+					// non-failed completion) is a normal "done" card / no card.
+					const failedCard = failedUnread.has(id);
+					const state: CompanionState = failedCard ? "alerting" : "celebrate";
 					cards.push({
 						sessionId: id,
 						activityKey: `${meta.updatedAt ?? ""}:${meta.messageCount ?? 0}`,
 						title,
-						phase: meta.status === "error" ? "error" : "done",
-						statusText: meta.status === "error" ? t("settings.petSessionError") : t("settings.petSessionDone"),
+						phase: failedCard ? "error" : "done",
+						statusText: failedCard ? t("settings.petSessionError") : t("settings.petSessionDone"),
 						replyPreview: id === selected ? activeLastMessage : null,
 						mood: companionMoodOfState(state),
 						companionState: state,
@@ -3877,22 +3859,10 @@ function AppInner(): ReactNode {
 					sessionId?: string;
 				}>
 			).detail;
-			// Completion notifications keep the pet bubble + badge until the
-			// user opens that session (or dismisses the bubble). The session
-			// the user is actively reading is never "unread" (kimi parity —
-			// the cursor-based derivation keeps its read cursor current).
-			if (
-				(detail.kind === "completed" || detail.kind === "error") &&
-				detail.sessionId &&
-				detail.sessionId !== selectedIdRef.current
-			) {
-				setUnreadSessions(prev => {
-					if (prev.has(detail.sessionId!)) return prev;
-					const next = new Set(prev);
-					next.add(detail.sessionId!);
-					return next;
-				});
-			}
+			// The bubble is a delivery surface only: the daemon already recorded the
+			// completed turn in the host read state, so the unread badge and the
+			// sidebar marker come from `session.list` — a window that missed the
+			// event (or the phone) sees the same thing on its next read.
 			void electronAPI.petActivity?.({
 				bubble: {
 					kind: detail.kind,
@@ -4096,15 +4066,18 @@ function AppInner(): ReactNode {
 				// its event instead of duplicating the flow here.
 				window.dispatchEvent(new CustomEvent("musepi-gui-dictate-start"));
 			} else if (cmd.type === "mark-read" && typeof cmd.sessionId === "string") {
-				// Pet bubble ✓: the user acknowledged that notification —
-				// clear the session's unread badge and advance its read
-				// cursor so the next poll does not immediately re-mark it
-				// (new activity on the session would, correctly, re-add).
+				// Pet bubble ✓: the user acknowledged that notification — clear
+				// the host's unread record so no poll or other client resurrects
+				// it. New activity on the session marks it unread again.
 				const id = cmd.sessionId;
-				const meta = sessionMetaRef.current.get(id);
-				if (meta && typeof meta.messageCount === "number") readCountRef.current.set(id, meta.messageCount);
-				persistReadCount();
+				void rpcRef.current?.request("sessionStatus.mark", { sessionId: id, read: true }).catch(() => {});
 				setUnreadSessions(prev => {
+					if (!prev.has(id)) return prev;
+					const next = new Set(prev);
+					next.delete(id);
+					return next;
+				});
+				setFailedSessions(prev => {
 					if (!prev.has(id)) return prev;
 					const next = new Set(prev);
 					next.delete(id);
@@ -4187,7 +4160,7 @@ function AppInner(): ReactNode {
 			window.removeEventListener("musepi-gui-default-mode-changed", onDefaultModeChanged);
 			window.removeEventListener("omp-glow-setting", onGlowSetting);
 		};
-	}, [store, sendPrompt, decideApproval, createSession, markAllRead, persistReadCount]);
+	}, [store, sendPrompt, decideApproval, createSession, markAllRead]);
 
 	// ── Window shortcuts (settings → 快捷键 reference). ──────────────────
 	useEffect(() => {
@@ -4932,6 +4905,7 @@ function AppInner(): ReactNode {
 							onOpenSearch={() => setPaletteOpen(true)}
 							onOpenMiniChat={openMiniChatFor}
 							unread={unreadSessions}
+							failed={failedSessions}
 							onToggleUnread={toggleUnread}
 							onAddProject={() => {
 								addProject();
