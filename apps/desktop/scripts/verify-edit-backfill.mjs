@@ -1,8 +1,9 @@
 import puppeteer from "puppeteer-core";
+import { composerValue, waitForComposer } from "./composer-probe.mjs";
 const browser = await puppeteer.connect({ browserURL: "http://127.0.0.1:9224" });
 const page = (await browser.pages()).find(p => p.url().includes("dist/index.html"));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const draft = () => page.evaluate(() => document.querySelector('[data-chat-input="true"] textarea')?.value ?? "<none>");
+const draft = () => composerValue(page);
 const click = m =>
 	page.evaluate(mm => {
 		const row = [...document.querySelectorAll(".tr-row")].find(r => r.className.includes("tr-row--user"));
@@ -25,6 +26,7 @@ const poll = async label => {
 await page.reload({ waitUntil: "domcontentloaded" });
 await sleep(12000);
 await page.evaluate(() => document.querySelector(".gui-session-row")?.click());
+await waitForComposer(page, 20_000, { session: true });
 for (let i = 0; i < 25; i++) {
 	await sleep(1000);
 	if ((await page.evaluate(() => document.querySelectorAll(".tr-row").length)) > 1) break;

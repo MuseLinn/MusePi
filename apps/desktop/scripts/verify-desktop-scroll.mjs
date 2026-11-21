@@ -30,6 +30,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
+import { COMPOSER_INPUT_SELECTOR, sendComposerPrompt, waitForComposer } from "./composer-probe.mjs";
 import { repoElectronPids } from "./repo-electron.mjs";
 
 // Per-run ports: a prior crashed run can leave a ZOMBIE listener behind
@@ -55,7 +56,12 @@ const dirs = {
 	userData: path.join(workRoot, "electron-user-data"),
 	logs: path.join(workRoot, "logs"),
 };
-const bun = path.join(process.env.USERPROFILE ?? "", ".bun", "bin", "bun.exe");
+// `bun run` knows its own executable; installs via WinGet/pkg managers do not
+// live in ~/.bun, so prefer the runtime's own path and fall back to the
+// conventional dotfile install.
+const bun = process.versions.bun
+	? process.execPath
+	: path.join(process.env.USERPROFILE ?? "", ".bun", "bin", "bun.exe");
 const electronBin =
 	process.platform === "win32"
 		? path.join(desktopDir, "node_modules", "electron", "dist", "electron.exe")
@@ -290,7 +296,7 @@ try {
 		);
 	}
 
-	browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${CDP_PORT}` });
+	browser = await puppeteer.connect({ browserURL: `http://127.0.0.1:${CDP_PORT}`, protocolTimeout: 45_000 });
 	const page = await (async () => {
 		const deadline = Date.now() + 20_000;
 		while (Date.now() < deadline) {
@@ -322,8 +328,15 @@ try {
 		{ url: `ws://127.0.0.1:${DAEMON_PORT}`, doneKey: "musepi-gui-onboarding-done" },
 	);
 	await page.reload({ waitUntil: "domcontentloaded" });
+	// The composer is CodeMirror now: require its content node, not a textarea
+	// that no longer exists. The transcript mounts only once a session opens, so
+	// boot proves the input surface here and the session step proves the rest.
 	const booted = await waitFor(
-		() => page.evaluate(() => !!document.querySelector('[data-chat-input="true"] textarea, .gui-transcript')),
+		() =>
+			page.evaluate(sel => {
+				const visible = el => el.isConnected && (el.getClientRects().length > 0 || el.offsetParent !== null);
+				return [...document.querySelectorAll(sel)].some(visible);
+			}, COMPOSER_INPUT_SELECTOR),
 		40_000,
 		500,
 	);
@@ -395,11 +408,28 @@ try {
 		});
 
 	// ── 5. Onboarding modal (first-run temp root cannot finish setup) ─────
+	// `[aria-modal="true"]` is not proof of a visible dialog: the global-pause
+	// overlay keeps one while hidden (visibility:hidden/opacity:0). Require a
+	// laid-out, visible surface before treating it as an input owner.
 	const modalUp = () =>
-		page.evaluate(() => !!document.querySelector('[aria-modal="true"], .gui-dialog-backdrop, .gui-obo, [class*=onboard]'));
+		page.evaluate(() => {
+			const visible = el => {
+				if (!el.isConnected || el.getClientRects().length === 0) return false;
+				const style = getComputedStyle(el);
+				return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) > 0;
+			};
+			return [...document.querySelectorAll('[aria-modal="true"], .gui-dialog-backdrop, .gui-obo, [class*=onboard]')].some(
+				visible,
+			);
+		});
 	if (await modalUp()) {
 		await page.evaluate(() => {
-			const host = document.querySelector(".gui-obo, [class*=onboard], [aria-modal='true']");
+			const visible = el => {
+				if (!el.isConnected || el.getClientRects().length === 0) return false;
+				const style = getComputedStyle(el);
+				return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) > 0;
+			};
+			const host = [...document.querySelectorAll(".gui-obo, [class*=onboard], [aria-modal='true']")].find(visible);
 			const b = host ? [...host.querySelectorAll("button")].find(x => /跳过|Skip/.test(x.textContent ?? "")) : null;
 			b?.click();
 		});
@@ -416,23 +446,46 @@ try {
 		fresh?.click();
 	});
 	await sleep(5000);
+	// Boot/welcome already proved a composer. The session skin mounts only
+	// after the first prompt is submitted from the welcome surface, so the
+	// session-editor wait happens below, after that send.
+	await waitForComposer(page, 10_000);
 
-	const sendPrompt = text =>
-		page.evaluate(text => {
-			const ta = document.querySelector('[data-chat-input="true"] textarea');
-			if (!ta) return "no composer";
-			Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(ta, text);
-			ta.dispatchEvent(new Event("input", { bubbles: true }));
-			ta.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-			return "sent";
-		}, text);
+	/** Type into the CodeMirror composer and prove the send actually happened
+	 *  (document held the text, Enter consumed, the editor cleared or handed
+	 *  off to the session). A failure is fatal — the old textarea locator
+	 *  returned "no composer" and let the run continue into vacuous scroll
+	 *  assertions. */
+	async function sendPrompt(text, options = { session: true }) {
+		try {
+			await sendComposerPrompt(page, text, options);
+		} catch (err) {
+			fatal(`prompt not sent: ${err instanceof Error ? err.message : err}`);
+		}
+	}
 
 	let workingSeen = false;
+	let lastPrompt = "";
 	for (let i = 1; i <= TURNS; i++) {
-		const sent = await sendPrompt(`第 ${i} 轮：回复 working 一百遍`);
-		if (sent !== "sent") {
-			console.log(`WARNING: prompt ${i} not sent (${sent}) — composer missing`);
-			break;
+		lastPrompt = `第 ${i} 轮：回复 working 一百遍`;
+		if (i === 1) {
+			// The first send may run on the welcome composer, which unmounts as
+			// the app opens the new session.
+			const sessionAlreadyUp = await page.evaluate(() => {
+				const visible = el => el.isConnected && (el.getClientRects().length > 0 || el.offsetParent !== null);
+				return [...document.querySelectorAll(".musepi-composer-editor[data-composer-input] .cm-content")].some(
+					visible,
+				);
+			});
+			await sendPrompt(lastPrompt, { session: sessionAlreadyUp });
+			await waitForComposer(page, 20_000, { session: true });
+			// The scroll assertions need the transcript scroller itself; a session
+			// that opened without it would otherwise report "no scroller".
+			if (!(await waitFor(() => page.evaluate(() => !!document.querySelector(".gui-transcript")), 20_000, 500))) {
+				fatal("session opened without a .gui-transcript scroller");
+			}
+		} else {
+			await sendPrompt(lastPrompt, { session: true });
 		}
 		const started = await waitFor(working, 30_000, 500);
 		workingSeen ||= started;
@@ -444,11 +497,18 @@ try {
 			await sleep(800);
 		}
 	}
-	if (!workingSeen) console.log("WARNING: no running turn observed — scroll assertions may be vacuous");
+	const promptInTranscript = await page.evaluate(
+		text => [...document.querySelectorAll(".tr-row--user")].some(row => (row.textContent ?? "").includes(text)),
+		lastPrompt,
+	);
+	check("0. submitted prompt reached the transcript", workingSeen && promptInTranscript, lastPrompt);
+	if (!workingSeen) fatal("no turn ever started — the scroll assertions would be vacuous");
 
-	// ── 7. Assertion 1: turn headers render on desktop ────────────────────
-	const turnHeads = await page.evaluate(() => document.querySelectorAll(".tr-turn-head").length);
-	check("1. .tr-turn-head renders in desktop", turnHeads > 0, `${turnHeads} headers`);
+	// ── 7. Assertion 1: transcript rows render on desktop ─────────────────
+	// The old `.tr-turn-head` marker no longer exists in the transcript; rows
+	// (`.tr-row`, Transcript.tsx) are the current per-message surface.
+	const turnRows = await page.evaluate(() => document.querySelectorAll(".tr-row").length);
+	check("1. .tr-row renders in desktop", turnRows > 0, `${turnRows} rows`);
 	await shot("d1-after-turns");
 
 	// Ensure the transcript overflows so unpin/back-to-bottom are meaningful.
@@ -465,7 +525,7 @@ try {
 	// ── 8. Assertion 2: reload (session restore) lands on the bottom ─────
 	await page.reload({ waitUntil: "domcontentloaded" });
 	const restored = await waitFor(
-		() => page.evaluate(() => document.querySelectorAll(".tr-turn-head").length > 0),
+		() => page.evaluate(() => document.querySelectorAll(".tr-row").length > 0),
 		30_000,
 		500,
 	);
