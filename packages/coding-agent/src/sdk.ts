@@ -3545,7 +3545,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					...(settings.get("disabledExtensions") ?? []),
 				]);
 				toolSession.contextFiles = contextFiles;
-				session.setAdvisorContextPrompt(formatAdvisorContextPrompt(contextFiles));
+				session.setAdvisorContextPrompt(
+					formatAdvisorContextPrompt(contextFiles, sessionManager.getAdditionalDirectories()),
+				);
 			}
 			const memoryBackend = restrictToolNames ? undefined : await resolveMemoryBackend(settings);
 			const memoryInstructions = memoryBackend
@@ -4465,7 +4467,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			logger.info("Mode hot-switched", { modeId, sessionId: session.sessionId });
 			return { ok: true };
 		};
-		const advisorContextPrompt = formatAdvisorContextPrompt(contextFiles);
+		const advisorContextPrompt = formatAdvisorContextPrompt(contextFiles, sessionManager.getAdditionalDirectories());
 		// Owned only when this session created the manager; subagents receive a
 		// parent's manager via `options.mcpManager` and MUST NOT disconnect it.
 		const ownedMcpManager = options.mcpManager ? undefined : mcpManager;
@@ -4569,7 +4571,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					...(settings.get("disabledExtensions") ?? []),
 				]);
 				toolSession.contextFiles = contextFiles;
-				session.setAdvisorContextPrompt(formatAdvisorContextPrompt(contextFiles));
+				session.setAdvisorContextPrompt(
+					formatAdvisorContextPrompt(contextFiles, sessionManager.getAdditionalDirectories()),
+				);
 			},
 			getXdevToolEntries: () => (toolSession.xdev ? xdevEntries(toolSession.xdev) : []),
 			xdev: toolSession.xdev,
