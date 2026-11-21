@@ -449,7 +449,7 @@ export class ReadTool implements AgentTool<typeof readSchema, ReadToolDetails> {
 	readonly label = "Read";
 	readonly loadMode = "essential";
 	/** A device/FIFO/remote target can block the read forever; conversions get room. */
-	readonly timeoutMs = 300_000;
+	readonly timeoutMs = 600_000;
 	description: string;
 	get parameters(): typeof readSchema {
 		return this.session.settings.get("memory.backend") === "off" ? readSchemaWithoutMemory : readSchema;

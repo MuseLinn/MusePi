@@ -954,7 +954,11 @@ function withToolDeadline<T>(run: Promise<T>, timeoutMs: number, onExpire: () =>
 	let timer: Timer | undefined;
 	const deadline = new Promise<never>((_, reject) => {
 		timer = setTimeout(() => {
-			reject(new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s and was abandoned`));
+			reject(
+				new Error(
+					`${label} timed out after ${Math.round(timeoutMs / 1000)}s and was abandoned; re-check the target before retrying`,
+				),
+			);
 			onExpire();
 		}, timeoutMs);
 	});

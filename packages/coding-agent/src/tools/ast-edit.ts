@@ -203,7 +203,7 @@ export class AstEditTool implements AgentTool<typeof astEditSchema, AstEditToolD
 	};
 	readonly label = "AST Edit";
 	/** Structural edits rewrite many files and may run a formatter afterwards. */
-	readonly timeoutMs = 600_000;
+	readonly timeoutMs = 900_000;
 	readonly summary = "Perform AST-aware code edits (structural refactoring)";
 	readonly description: string;
 	readonly parameters = astEditSchema;
