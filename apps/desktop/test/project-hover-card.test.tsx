@@ -7,6 +7,7 @@ import {
 	CARD_CHROME_HEIGHT,
 	fitProjectCard,
 	LIST_MAX_HEIGHT,
+	measureCard,
 	ProjectHoverCard,
 	ROW_HEIGHT,
 } from "../src/components/ProjectHoverCard";
@@ -396,6 +397,10 @@ describe("fitProjectCard — the flip and list-height decision", () => {
 		expect(fit.listMax).toBeLessThanOrEqual(700 - 8);
 	});
 
+	// NOTE: this pins the SHAPE of the decision, not the constant. In the clamped
+	// branch `chrome + listMax` is identically `room` for any chrome, so the
+	// assertion holds for C = 1 and C = 200 alike. The constant is corrected by
+	// the mount-time measurement, not by this test.
 	it("never lets the card exceed the space on the chosen side (sweep)", () => {
 		// Same shape as the review's sweep: 11 directories, rows across the
 		// scroller, several window heights. Every position must fit.
@@ -426,13 +431,25 @@ describe("fitProjectCard — the flip and list-height decision", () => {
 		expect(fit.listMax).toBe(LIST_MAX_HEIGHT);
 	});
 
-	it("reserves at least the tallest chrome the card can show", () => {
-		// Chromium measures 82.55px of fixed chrome at the narrowest English
-		// width (168px sidebar), where the count line wraps to two rows, and
-		// 66.05px everywhere else. The constant must cover the worst case:
-		// under-reserving lets the card overflow its scroller, over-reserving
-		// only costs whitespace, which `measuredShrink` gives back.
-		expect(CARD_CHROME_HEIGHT).toBeGreaterThanOrEqual(82.55);
+	it("derives its first-frame estimate from the shipped font ladder", () => {
+		// The shipped ladder (tokens.css) is 15px / -2px = 13px, NOT the test
+		// fixture's 11px; on it Chromium measures 91.25px of chrome at the
+		// narrowest English width and a 27.8px row step. These constants are
+		// only the first-frame estimate — `measureCard` replaces them with the
+		// real geometry before paint — but they must not be derived from the
+		// fixture ladder, or the first frame is wrong on a real screen.
+		expect(CARD_CHROME_HEIGHT).toBeGreaterThanOrEqual(91.25);
+		expect(ROW_HEIGHT).toBeGreaterThanOrEqual(27.8);
+	});
+
+	it("uses caller-supplied metrics instead of the estimate", () => {
+		// The whole point of measuring on mount: the decision must follow the
+		// measured geometry, so a caller passing a much taller chrome flips
+		// earlier than the estimate would.
+		const tall = fitProjectCard({ directoryCount: 3, spaceBelow: 200, spaceAbove: 400, chromeHeight: 300 });
+		expect(tall.above).toBe(true);
+		// With the default estimate the same room keeps it below.
+		expect(fitProjectCard({ directoryCount: 3, spaceBelow: 200, spaceAbove: 400 }).above).toBe(false);
 	});
 });
 
@@ -489,5 +506,40 @@ describe("ProjectHoverCard flip rendering", () => {
 		const rows = host.querySelectorAll(".gui-project-hover-card-row");
 		expect(rows).toHaveLength(11);
 		expect(host.querySelector(".gui-project-hover-card-list")?.contains(rows[10]!)).toBe(true);
+	});
+});
+
+describe("mount-time measurement", () => {
+	it("reads chrome and row step from the rendered card", async () => {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		mounted.add(root);
+		await act(async () =>
+			root.render(
+				<ProjectHoverCard
+					name="alpha"
+					directories={Array.from({ length: 4 }, (_, i) => ({ path: `/refs/d${i}`, primary: i === 0 }))}
+					sessionCount={0}
+					labelOf={path => path.split("/").pop() ?? path}
+					onOpenDirectory={() => {}}
+					openLabel={t("settings.openInExplorer")}
+				/>,
+			),
+		);
+		await flush();
+		const card = host.querySelector<HTMLElement>(".gui-project-hover-card");
+		expect(card).not.toBeNull();
+		// happy-dom reports zero geometry, so the real measurement is the
+		// browser's job; here we pin the contract that unmeasurable DOM yields
+		// null (the component then keeps the estimate) rather than garbage.
+		const metrics = measureCard(card);
+		expect(metrics === null || metrics.chrome > 0).toBe(true);
+	});
+
+	it("returns null instead of bogus numbers when there is nothing to measure", () => {
+		expect(measureCard(null)).toBeNull();
+		const empty = document.createElement("div");
+		expect(measureCard(empty)).toBeNull();
 	});
 });

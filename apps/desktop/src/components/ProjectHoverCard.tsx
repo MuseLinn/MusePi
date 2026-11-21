@@ -33,26 +33,26 @@ import { Icon } from "../vendor/oc-icons";
  * 0%,每个目录的打开按钮都能滚进视野并命中。
  */
 
-/** 卡片除目录列表之外的固定高度。取实测的**最坏**组合,不是常态值——这个
- *  常量只用来在渲染前决定翻转方向与列表上限,偏小会让卡片溢出滚动容器。
+/**
+ * 卡片除目录列表之外的固定高度 —— **仅作首帧的估值**,挂载后立刻用实测替换。
  *
- *  Chromium 实测(卡片宽度 / 语言 → chrome = 卡片高 − 列表高;`body` 上
- *  继承 `line-height:1.5`,与真实应用一致):
- *  - 152px(168 侧栏)/ en → 82.55  ← 最坏:说明行折成两行(33 vs 16.5)
- *  - 152px / zh            → 66.05
- *  - 164px(180 侧栏)/ 任一 → 66.05
- *  - 224px、240px / 任一    → 66.05
+ * 数值来自随发布版的字号阶梯(`tokens.css` 的 `--ui-font-size` 15px /
+ * `--ui-font-size-xs` 13px),不是测试夹具那套 11px/13px:
+ * Chromium 实测(卡片宽 / 语言 → 卡片高 − 列表高)
+ *  - 152px(168 侧栏)/ en → 91.25  ← 最坏:「11 个目录 · 4 个会话」折两行(39 vs 19.5)
+ *  - 152px 或 164px / zh → 71.75
+ *  - 224px、240px / 任一  → 71.75
  *
- *  折行的分界不在语言本身,而在「11 个目录 · 4 个会话」这一行是否放得下:
- *  英文多出的字符让它在最窄的侧栏里折成两行。常量按**最坏**值取 83——偏小
- *  会让卡片溢出滚动容器(用户要滚才能看到、而滚动又会收卡),偏大只是多留
- *  一点空白。其余宽度下多算的 17px 由 `measuredShrink` 在渲染后按实测收回,
- *  所以宽卡片不会白留空白。 */
-export const CARD_CHROME_HEIGHT = 83;
+ * 这组数字只保证首帧不差太远:实测(`measureCard`)在 useLayoutEffect 里跑在
+ * 首次绘制之前,真实的 chrome 与行高会回灌给 {@link fitProjectCard},所以
+ * 翻转方向与列表上限用的是真值,而不是这套估值。字号被放大、语言换掉、主题
+ * 改行高都不再依赖常量正确。 */
+export const CARD_CHROME_HEIGHT = 92;
 /** 目录列表自身的高度上限:`min(280px, 50vh)`(见 `gui-chrome.css`)。 */
 export const LIST_MAX_HEIGHT = 280;
-/** 一行目录的高度:内容行 ≈17 + 上下 padding 2×3 + 行间距 1。 */
-export const ROW_HEIGHT = 24;
+/** 一行目录的步进(行高 + 1px 行间距)。实测值同上:随发布版阶梯为 26.8 行高 /
+ *  27.8 步进;这里的 28 同样是首帧估值。 */
+export const ROW_HEIGHT = 28;
 /** 卡片贴边时至少留出的空隙,不顶到滚动容器的边上。 */
 const EDGE_INSET = 8;
 
@@ -61,7 +61,7 @@ export interface CardFit {
 	above: boolean;
 	/** 列表实际可用的高度(像素)—— 永远不超过真实可占空间。 */
 	listMax: number;
-	/** 未受可用空间限制时的列表高度,用于实测兜底判断。 */
+	/** 未受可用空间限制时的列表高度(目录数 × 行步进,封顶 listMax)。 */
 	naturalList: number;
 }
 
@@ -81,14 +81,20 @@ export function fitProjectCard({
 	spaceBelow,
 	spaceAbove,
 	listMax = LIST_MAX_HEIGHT,
+	chromeHeight = CARD_CHROME_HEIGHT,
+	rowHeight = ROW_HEIGHT,
 }: {
 	directoryCount: number;
 	spaceBelow?: number;
 	spaceAbove?: number;
 	listMax?: number;
+	/** 卡片固定部分的高度。挂载实测后回灌,不传则用常量估值。 */
+	chromeHeight?: number;
+	/** 一行目录的步进(行高 + 间距)。同上。 */
+	rowHeight?: number;
 }): CardFit {
-	const naturalList = Math.min(Math.max(directoryCount, 0) * ROW_HEIGHT, listMax);
-	const natural = CARD_CHROME_HEIGHT + naturalList;
+	const naturalList = Math.min(Math.max(directoryCount, 0) * rowHeight, listMax);
+	const natural = chromeHeight + naturalList;
 	// 没有测量信息(测试/首帧)时按首选方向贴下沿。
 	if (spaceBelow === undefined && spaceAbove === undefined) {
 		return { above: false, listMax: naturalList, naturalList };
@@ -98,10 +104,38 @@ export function fitProjectCard({
 	const above = Math.max(0, (spaceAbove ?? 0) - EDGE_INSET);
 	// 首选:下方装得下就贴下沿。否则翻到更宽裕的一侧——装得下就整张放进去,
 	// 都装不下就选装得更多的那侧,由 listMax 把列表夹进剩余空间(滚动可达)。
+	//
+	// 注意这里 listMax 恒等于 min(room − chrome, natural),所以
+	// 「chrome + listMax ≤ room」在夹取分支里**对任何 chrome 都成立**。也就是说
+	// 扫描只能证明决策形状自洽,证明不了常量是对的——常量靠挂载实测来纠偏。
 	const flip = natural > below && above > below;
 	const room = flip ? above : below;
-	// room 是卡片整体可占的高度:列表只能拿掉固定部分之后剩下的那一段。
-	return { above: flip, listMax: clamp(room - CARD_CHROME_HEIGHT, 0, naturalList), naturalList };
+	return { above: flip, listMax: clamp(room - chromeHeight, 0, naturalList), naturalList };
+}
+
+/** 挂载实测:卡片固定部分的高度与一行目录的步进。 */
+export interface CardMetrics {
+	chrome: number;
+	row: number;
+}
+
+/** 读一次真实布局。取不到(未布局 / happy-dom)时返回 null。 */
+export function measureCard(card: HTMLElement | null): CardMetrics | null {
+	if (!card) return null;
+	const list = card.querySelector<HTMLElement>(".gui-project-hover-card-list");
+	if (!list) return null;
+	const cardHeight = card.getBoundingClientRect().height;
+	// 未布局时为 0,读数不可信。
+	if (cardHeight <= 0) return null;
+	const chrome = cardHeight - list.getBoundingClientRect().height;
+	const rows = list.querySelectorAll<HTMLElement>(".gui-project-hover-card-row");
+	if (rows.length === 0) return null;
+	const row =
+		rows.length > 1
+			? rows[1]!.getBoundingClientRect().top - rows[0]!.getBoundingClientRect().top
+			: rows[0]!.getBoundingClientRect().height;
+	if (!(chrome > 0) || !(row > 0)) return null;
+	return { chrome, row };
 }
 
 export interface ProjectHoverCardProps {
@@ -138,27 +172,26 @@ export function ProjectHoverCard({
 	spaceAbove,
 }: ProjectHoverCardProps): ReactNode {
 	const cardRef = useRef<HTMLDivElement | null>(null);
-	// 实测兜底:字号被放大时布局常量会偏小,渲染后按真实高度再收缩列表。
-	const [measuredShrink, setMeasuredShrink] = useState(0);
-	const fit = fitProjectCard({ directoryCount: directories.length, spaceBelow, spaceAbove });
-	const listMax = Math.max(0, fit.listMax - measuredShrink);
-	// 调用方没给测量信息时不做兜底,否则「可用空间 0」会把卡片压没。
-	const measured = spaceBelow !== undefined || spaceAbove !== undefined;
-	const room = Math.max(0, (fit.above ? (spaceAbove ?? 0) : (spaceBelow ?? 0)) - EDGE_INSET);
+	// 挂载实测出来的真实几何。首帧用常量估值,`useLayoutEffect` 在绘制前跑完,
+	// 所以用户看到的第一次定位就已经按实测算过;常量只是"还没量到"时的过渡值。
+	const [metrics, setMetrics] = useState<CardMetrics | null>(null);
+	const fit = fitProjectCard({
+		directoryCount: directories.length,
+		spaceBelow,
+		spaceAbove,
+		...(metrics ? { chromeHeight: metrics.chrome, rowHeight: metrics.row } : {}),
+	});
 
 	useLayoutEffect(() => {
-		const card = cardRef.current;
-		// 未布局(happy-dom、隐藏中)时高度为 0,不做判断。
-		if (!card || !measured) return;
-		const height = card.getBoundingClientRect().height;
-		if (height <= 0) return;
-		// 只收缩、不放大:常量算出的列表已按可用空间夹过,实测只补常量偏小的
-		// 那部分(例如用户放大字号)。收缩量恰为溢出量,重排后即收敛。
-		const shrink = Math.max(0, height - room);
-		setMeasuredShrink(prev => (prev === shrink ? prev : shrink));
-	}, [measured, room, fit.above, fit.listMax]);
+		const next = measureCard(cardRef.current);
+		if (!next) return;
+		// 只在读数真的变了才重渲染,避免每次父组件重渲染都触发一轮 setState。
+		setMetrics(prev =>
+			prev && Math.abs(prev.chrome - next.chrome) < 0.5 && Math.abs(prev.row - next.row) < 0.5 ? prev : next,
+		);
+	});
 
-	const style = { "--gui-project-list-max": `${Math.max(0, listMax)}px` } as CSSProperties;
+	const style = { "--gui-project-list-max": `${Math.max(0, fit.listMax)}px` } as CSSProperties;
 	return (
 		<div
 			ref={cardRef}
