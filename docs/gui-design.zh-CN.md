@@ -355,6 +355,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 ### 设置搜索与新建项目
 
 - **设置搜索**:侧栏搜索过滤**配置项级**(section label 或 `SECTION_SEARCH_TERMS` 关键词命中,双语);内容区匹配行 `.gui-settings-match`(accent 13% 底 + 24% 描边)命令式高亮 + 首个匹配 `scrollIntoView`(新查询/section 切换滚一次,继续打字不滚防抖动);`aria-hidden/inert` 折叠行跳过。
+- **搜索规则（2026-11-21）**：列表搜索按用户的输入方式匹配，而不是按数据的存储方式。匹配折叠全半角、大小写与变音符号（`web` 命中 `ＷＥＢ`，`lodz` 命中 `Łódź`），名称接受词首子序列（`cpt` 命中 `Compact`）；描述、配置键与不透明 id 只接受连续子串，散落在长句里的字母不会变成噪声。标签的每种语言都是独立键，所以设置行、设置页、命令与会话标题在任一界面语言下都能用中文或英文命中。结果按「标签优先」分层——精确、前缀、子串、词首子序列、描述——空查询保持列表自身顺序而不是重新排序。唯一实现是 `TextSearchIndex`（`packages/client-core/src/lib/text-search.ts`，契约见 `docs/gui-components.md`）；新增搜索框必须用它，不得再写 `toLowerCase().includes`。会话正文搜索（`session.search`）与插件市场保留各自的索引。
 - **新建空白项目**(kimiwork parity):侧栏项目 tab「添加项目/远程」菜单 + composer 项目菜单 → DialogFrame(名称 + 父路径 native picker)→ daemon `fs.mkdir { cwd: 父路径, path: 名称 }` → 打开 + `musepi-gui-project-added`;保存按钮双字段齐备才启用,失败内联展示。字段 = label 上控件下的紧凑布局(`gui-settings-field` 两列 grid 在紧凑弹窗里会把 input 挤到 76px)。
 
 ## 5g. 近期落地特性(2026-08-24 → 2026-08-26)

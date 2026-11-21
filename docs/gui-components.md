@@ -70,6 +70,19 @@ Shared by desktop and mobile; changes must be verified on both.
 | `transcript/` | `BranchSummaryDivider` | The inherited-history boundary; leads with the shared `GitFork` glyph and keeps the label as its accessible name |
 | — | `image-lightbox` / `image-morph` / `image-zoom` | Image viewing |
 
+## Search (`packages/client-core/src/`)
+
+- **`SearchField`** (`components/common/SearchField.tsx`) is the only search input — see its row above. Matching is never the field's job.
+- **`TextSearchIndex`** (`lib/text-search.ts`) is the only matcher behind a search field:
+  - **Two key kinds.** `fuzzy` holds short identifying text (names, titles, labels, readable ids) and matches as a substring or a word-start subsequence; `substring` holds long text and opaque ids (descriptions, config keys, paths, UUIDs) and matches only as a contiguous substring.
+  - **One fold.** Both key kinds and the query ignore case, width (NFKC), U+0300–U+036F diacritics and letter strokes (`ł`, `ø`); marks that change a letter, such as kana voicing, stay. So `web` finds `ＷＥＢ` and `lodz` finds `Łódź`.
+  - **Word-start fuzzy.** A subsequence must start at a word start — after a separator, at a camel-case hump, or at any CJK character — so `cpt` finds `Compact` while `fab` does not match inside `Refactor build`.
+  - **Terms and tiers.** The query splits on whitespace and every term must match some key. A term scores its best tier: fuzzy exact, fuzzy prefix, fuzzy substring, fuzzy word-start subsequence, then a substring-key hit; equal totals keep build order. `search` returns the build list itself for a blank query; `rank` returns scored hits and nothing for a blank query.
+  - **Every language is a key.** Pass the translated and source text — the settings search passes en-US, zh-CN and the active locale — so a query in either language hits.
+  - **Immutable and DOM-free.** Build an index when the list or a label's language changes, not per keystroke; the settings search caches one index per rows array and locale, and the palette builds small per-query indexes.
+
+**Consumers:** the settings nav and its schema-row results (`apps/desktop/src/lib/settings-search.ts`) and the command palette (`apps/desktop/src/components/CommandPalette.tsx` — commands in both languages, settings pages and rows, session titles). Session content search (`session.search`) and the plugin market keep their own indexes and are not routed through this primitive.
+
 ## Dialogs and boards
 
 - Every dialog goes through `DialogFrame`; rules in `docs/gui-dialog-spec.md` (size tiers, scroll container, focus, modifier specificity).

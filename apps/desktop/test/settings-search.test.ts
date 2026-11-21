@@ -1,7 +1,9 @@
 import "./dom-shim"; // MUST be first: @musepi/client-core defines HTMLElement subclasses at module evaluation.
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { setLocale } from "@musepi/client-core";
 import { matchSettingRows, type SettingSearchRow, settingSectionFor } from "../src/lib/settings-search";
+
+afterEach(() => setLocale("en-US"));
 
 const rows: SettingSearchRow[] = [
 	{
@@ -26,6 +28,14 @@ const rows: SettingSearchRow[] = [
 		tab: "interaction",
 		group: "Approvals",
 		label: "Tool Approval Policies",
+	},
+	{
+		key: "appearance.accent",
+		section: "appearance",
+		tab: "appearance",
+		group: "Theme",
+		label: "Café accent",
+		description: "ＷＥＢ résumé palette",
 	},
 ];
 
@@ -62,6 +72,40 @@ describe("matchSettingRows", () => {
 
 	it("is case-insensitive and matches within a word", () => {
 		expect(matchSettingRows(rows, "APPROVAL").map(row => row.key)).toEqual(["tools.approval"]);
+	});
+
+	it("matches a word-start subsequence of the label", () => {
+		expect(matchSettingRows(rows, "tmprtr").map(row => row.key)).toEqual(["temperature"]);
+	});
+
+	it("matches both languages of a label regardless of the active locale", () => {
+		setLocale("en-US");
+		expect(matchSettingRows(rows, "压缩阈值").map(row => row.key)).toEqual(["compaction.thresholdPercent"]);
+		setLocale("zh-CN");
+		expect(matchSettingRows(rows, "compaction").map(row => row.key)).toEqual(["compaction.thresholdPercent"]);
+	});
+
+	it("ignores width and diacritics in labels and descriptions", () => {
+		setLocale("en-US");
+		expect(matchSettingRows(rows, "cafe").map(row => row.key)).toEqual(["appearance.accent"]);
+		expect(matchSettingRows(rows, "web").map(row => row.key)).toEqual(["appearance.accent"]);
+		expect(matchSettingRows(rows, "resume").map(row => row.key)).toEqual(["appearance.accent"]);
+	});
+
+	it("matches the description only as a contiguous substring", () => {
+		expect(matchSettingRows(rows, "context maintenance").map(row => row.key)).toEqual([
+			"compaction.thresholdPercent",
+		]);
+		// The letters run in order across the description, but never contiguously.
+		expect(matchSettingRows(rows, "ctxmn")).toEqual([]);
+	});
+
+	it("ranks a label hit above a description-only hit", () => {
+		const input: SettingSearchRow[] = [
+			{ key: "desc", section: "model", tab: "model", label: "Sampling", description: "Temperature unit" },
+			{ key: "label", section: "model", tab: "model", label: "Temperature", description: "Unit" },
+		];
+		expect(matchSettingRows(input, "temperature").map(row => row.key)).toEqual(["label", "desc"]);
 	});
 
 	it("returns nothing for a blank query and caps the result list", () => {

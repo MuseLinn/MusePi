@@ -68,6 +68,19 @@ English | [中文](gui-components.zh-CN.md)
 | `transcript/` | `BranchSummaryDivider` | 继承历史的分界行；以共享 `GitFork` 图标打头，文案仍是可访问名 |
 | — | `image-lightbox` / `image-morph` / `image-zoom` | 图片查看 |
 
+## 搜索（`packages/client-core/src/`）
+
+- **`SearchField`**（`components/common/SearchField.tsx`）是唯一的搜索输入框——见上表那一行；匹配不是它的职责。
+- **`TextSearchIndex`**（`lib/text-search.ts`）是搜索框背后唯一的匹配器：
+  - **两类键。** `fuzzy` 放短标识文本（名称、标题、标签、可读 id），按子串或词首子序列匹配；`substring` 放长文本与不透明 id（描述、配置键、路径、UUID），只按连续子串匹配。
+  - **一次折叠。** 两类键与查询都不区分大小写、全半角（NFKC）、U+0300–U+036F 变音符号与字母笔画（`ł`、`ø`）；改变字母的符号（如日语浊音点）保留。于是 `web` 命中 `ＷＥＢ`，`lodz` 命中 `Łódź`。
+  - **词首模糊。** 子序列必须从词首开始——分隔符之后、驼峰处、或任意 CJK 字符处——所以 `cpt` 命中 `Compact`，而 `fab` 不会命中 `Refactor build` 内部。
+  - **词项与层级。** 查询按空白切分，每个词项都必须命中某个键；每个词项取其最高层级：fuzzy 精确、fuzzy 前缀、fuzzy 子串、fuzzy 词首子序列，最后是 substring 键命中；总分相同保持构建顺序。`search` 对空查询返回构建列表本身，`rank` 返回带分数的命中、空查询返回空。
+  - **每种语言都是独立键。** 同时传入译文与源文——设置搜索传入 en-US、zh-CN 与当前语言——任一语言的查询都能命中。
+  - **不可变、无 DOM。** 列表或标签语言变化时构建索引，不要每次按键重建；设置搜索按 rows 数组与语言缓存一份，命令面板按查询构建小索引。
+
+**消费者：** 设置导航与其 schema 行结果（`apps/desktop/src/lib/settings-search.ts`）和命令面板（`apps/desktop/src/components/CommandPalette.tsx`——双语命令、设置页与 schema 行、会话标题）。会话正文搜索（`session.search`）与插件市场保留各自的索引，不经过这个原语。
+
 ## 对话框与看板
 
 - 对话框统一走 `DialogFrame`，规则见 `docs/gui-dialog-spec.md`（尺寸档位、滚动容器、焦点、修饰类特异度）。

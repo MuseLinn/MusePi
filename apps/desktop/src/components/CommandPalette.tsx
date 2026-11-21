@@ -1,4 +1,6 @@
-import { t, tLoose } from "@musepi/client-core";
+import { type TranslationKey, t, tLoose } from "@musepi/client-core";
+import { tFor } from "@musepi/client-core/src/i18n/index";
+import { TextSearchIndex } from "@musepi/client-core/src/lib/text-search";
 import { ListChecks as ListChecksIconData, Menu as MenuIconData, Rocket as RocketIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
@@ -16,6 +18,11 @@ import { MENU_ANIM_MS } from "./MenuPopup";
 import { navGroups } from "./SettingsNav";
 
 type PaletteTab = "all" | "actions" | "sessions";
+
+/** One session-title tier step is worth this many body matches: a title hit
+ *  always outranks the daemon's content hits, while the tiers still order the
+ *  titles themselves. */
+const TITLE_SCORE_WEIGHT = 20;
 
 interface SearchRow {
 	sessionId: string;
@@ -216,83 +223,64 @@ export function CommandPalette({
 	interface PaletteItem {
 		icon: string;
 		label: string;
+		/** Every language the label was declared in; a query in either one finds
+		 *  the row, so a command keeps its name across a UI language switch. */
+		terms?: readonly string[];
 		hint?: string;
 		snippet?: string;
 		fn(): void;
 	}
 
-	const queryText = query.trim().toLowerCase();
-	/** Local title-match weight: an exact title beats a prefix beats an early
-	 *  substring; 0 means the title does not contain the query. Session hits
-	 *  the daemon found in message bodies arrive through `rows` instead. */
-	const labelScore = (label: string, q: string): number => {
-		const text = label.toLowerCase();
-		const at = text.indexOf(q);
-		if (at < 0) return 0;
-		if (text === q) return 120;
-		return at === 0 ? 100 : 60 - Math.min(at, 50) / 5;
-	};
+	/** A command row: the label renders in the current locale, and the search
+	 *  matches both languages through the shared text-search primitive. */
+	const command = (icon: string, key: TranslationKey, fn: () => void, hint?: string): PaletteItem => ({
+		icon,
+		label: t(key),
+		terms: [t(key), tFor("en-US", key)],
+		hint,
+		fn,
+	});
+
+	const queryText = query.trim();
 
 	const actions: PaletteItem[] = [
-		{
-			icon: "add-circle",
-			label: t("settings.newTask"),
-			hint: "⌘N",
-			fn: onNewSession,
-		},
-		{
-			icon: "folder-open",
-			label: t("settings.addProject"),
-			hint: "⌘O",
-			fn: onOpenWorkspace,
-		},
-		{ icon: "settings-3", label: t("settings.settings"), fn: onSettings },
+		command("add-circle", "settings.newTask", onNewSession, "⌘N"),
+		command("folder-open", "settings.addProject", onOpenWorkspace, "⌘O"),
+		command("settings-3", "settings.settings", onSettings),
 	];
 	const panels: PaletteItem[] = [
-		{
-			icon: "layout-left",
-			label: t("settings.toggleSidebar"),
-			hint: "⌘B",
-			fn: onToggleSidebar,
-		},
-		{
-			icon: "terminal-box",
-			label: t("general.toggleTerminal"),
-			hint: "⌘J",
-			fn: onToggleTerminal,
-		},
-		{
-			icon: "equalizer-2",
-			label: t("general.togglePreview"),
-			hint: "⌘E",
-			fn: onTogglePreview,
-		},
-		...(onToggleFocusMode
-			? [{ icon: "fullscreen", label: t("general.focusMode"), hint: "⌘⇧E", fn: onToggleFocusMode }]
-			: []),
-		...(onOpenCapability ? [{ icon: "star", label: t("tools.capabilityCenter"), fn: onOpenCapability }] : []),
+		command("layout-left", "settings.toggleSidebar", onToggleSidebar, "⌘B"),
+		command("terminal-box", "general.toggleTerminal", onToggleTerminal, "⌘J"),
+		command("equalizer-2", "general.togglePreview", onTogglePreview, "⌘E"),
+		...(onToggleFocusMode ? [command("fullscreen", "general.focusMode", onToggleFocusMode, "⌘⇧E")] : []),
+		...(onOpenCapability ? [command("star", "tools.capabilityCenter", onOpenCapability)] : []),
 		// openchamber parity: a Reload UI escape hatch. Every renderer-side
 		// recovery path (a stale extension slot, derived state blown away by a
 		// hot reload) bottoms out in one full reload; without this command the
 		// user has to restart the window by hand.
-		{
-			icon: "refresh",
-			label: t("general.reloadUi"),
-			fn: () => window.location.reload(),
-		},
+		command("refresh", "general.reloadUi", () => window.location.reload()),
 	];
 	/** Commands that open an existing surface rather than move the layout. */
 	const more: PaletteItem[] = [
-		...(onOpenShortcuts ? [{ icon: "command", label: t("general.keyboardShortcuts"), fn: onOpenShortcuts }] : []),
-		...(onImportSessions ? [{ icon: "download", label: t("settings.importSessions"), fn: onImportSessions }] : []),
-		...(onShowWhatsNew ? [{ icon: "notification-3", label: t("settings.whatSNew"), fn: onShowWhatsNew }] : []),
+		...(onOpenShortcuts ? [command("command", "general.keyboardShortcuts", onOpenShortcuts)] : []),
+		...(onImportSessions ? [command("download", "settings.importSessions", onImportSessions)] : []),
+		...(onShowWhatsNew ? [command("notification-3", "settings.whatSNew", onShowWhatsNew)] : []),
 	];
+
+	/** Title hits over the local session list, through the same primitive the
+	 *  settings search uses: the daemon only searches message bodies, so a
+	 *  session named after the query is scored here. */
+	const titleHits = useMemo(() => {
+		if (!queryText) return new Map<string, number>();
+		const hits = new TextSearchIndex(sessions, session => ({ fuzzy: [session.label] })).rank(queryText);
+		return new Map(hits.map(hit => [hit.item.id, hit.score]));
+	}, [queryText, sessions]);
 
 	/** Sessions in relevance order — never the daemon's arrival order.
 	 *  Title hits come from the local session list (the daemon only searches
 	 *  message bodies), body hits carry their match count, and both are
-	 *  ranked together: a title prefix outranks a session with many loose
-	 *  body matches, while a heavily-hit body outranks a weak substring. */
+	 *  ranked together: any title hit outranks a session with many loose body
+	 *  matches, while a heavily-hit body outranks a session with no title hit. */
 	const sessionRows = useMemo<PaletteItem[]>(() => {
 		const untitled = t("transcript.untitledSession");
 		if (exactSession) {
@@ -314,11 +302,14 @@ export function CommandPalette({
 		const byId = new Map<string, SearchRow>();
 		for (const row of rows ?? []) byId.set(row.sessionId, row);
 		for (const session of sessions) {
-			if (byId.has(session.id) || !session.label.toLowerCase().includes(queryText)) continue;
+			if (byId.has(session.id) || !titleHits.has(session.id)) continue;
 			byId.set(session.id, { sessionId: session.id, label: session.label, count: 0, snippet: "" });
 		}
 		const ranked = [...byId.values()]
-			.map(row => ({ row, score: labelScore(row.label, queryText) * 10 + Math.min(row.count, 40) }))
+			.map(row => ({
+				row,
+				score: (titleHits.get(row.sessionId) ?? 0) * TITLE_SCORE_WEIGHT + Math.min(row.count, 40),
+			}))
 			.sort((a, b) => b.score - a.score || b.row.count - a.row.count);
 		return ranked.slice(0, 12).map(({ row }) => ({
 			icon: "chat-1",
@@ -327,7 +318,7 @@ export function CommandPalette({
 			snippet: row.snippet || undefined,
 			fn: () => onSelectSession(row.sessionId),
 		}));
-	}, [exactSession, queryText, rows, sessions, onSelectSession]);
+	}, [exactSession, queryText, rows, sessions, onSelectSession, titleHits]);
 
 	/** Settings pages and schema rows for the current query. The same index
 	 *  the settings pane searches (`settings.schema {all:true}`), so ⌘K can name
@@ -336,19 +327,16 @@ export function CommandPalette({
 	const settingItems = useMemo<PaletteItem[]>(() => {
 		if (!queryText || !onOpenSetting) return [];
 		const items: PaletteItem[] = [];
-		const pageLabels = new Map<string, string>();
-		for (const group of navGroups([])) {
-			for (const item of group.items) {
-				pageLabels.set(item.id, item.label);
-				if (item.label.toLowerCase().includes(queryText) || item.id.toLowerCase().includes(queryText)) {
-					items.push({
-						icon: item.icon,
-						label: item.label,
-						hint: t("settings.settings"),
-						fn: () => onOpenSetting(item.id, ""),
-					});
-				}
-			}
+		const pages = navGroups([]).flatMap(group => group.items);
+		const pageLabels = new Map(pages.map(item => [item.id, item.label] as const));
+		const pageIndex = new TextSearchIndex(pages, item => ({ fuzzy: [item.label, item.id] }));
+		for (const item of pageIndex.search(queryText).slice(0, 6)) {
+			items.push({
+				icon: item.icon,
+				label: item.label,
+				hint: t("settings.settings"),
+				fn: () => onOpenSetting(item.id, ""),
+			});
 		}
 		for (const row of matchSettingRows(settingRows, queryText, 6)) {
 			items.push({
@@ -362,14 +350,17 @@ export function CommandPalette({
 		return items;
 	}, [onOpenSetting, queryText, settingRows]);
 
-	// A query filters the commands too: with "鹅鹅" typed, the three unrelated
-	// suggestions must not sit above the session that actually matched.
-	const matchLabel = (label: string): boolean => !queryText || label.toLowerCase().includes(queryText);
+	// A query filters the commands too, ranked by the same tiers: with "鹅鹅"
+	// typed, the three unrelated suggestions must not sit above the session
+	// that actually matched.
+	const matchItems = (items: readonly PaletteItem[]): PaletteItem[] => [
+		...new TextSearchIndex(items, item => ({ fuzzy: item.terms ?? [item.label] })).search(queryText),
+	];
 	const sections: { title: string; rows: PaletteItem[] }[] = [];
 	if (tab !== "sessions") {
-		const actionRows = actions.filter(item => matchLabel(item.label));
-		const panelRows = panels.filter(item => matchLabel(item.label));
-		const moreRows = more.filter(item => matchLabel(item.label));
+		const actionRows = matchItems(actions);
+		const panelRows = matchItems(panels);
+		const moreRows = matchItems(more);
 		if (actionRows.length > 0) sections.push({ title: t("general.suggestions"), rows: actionRows });
 		if (panelRows.length > 0) sections.push({ title: t("general.panels"), rows: panelRows });
 		if (moreRows.length > 0) sections.push({ title: t("general.moreActions"), rows: moreRows });

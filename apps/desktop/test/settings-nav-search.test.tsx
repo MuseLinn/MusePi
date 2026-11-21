@@ -60,6 +60,13 @@ describe("settings search results", () => {
 		expect(rows[0]?.textContent).toContain("Compaction Threshold");
 	});
 
+	it("finds a setting by a word-start subsequence", () => {
+		const scope = mount("cmpct", () => {});
+		const rows = scope.querySelectorAll<HTMLButtonElement>(".gui-settings-nav--setting");
+		expect(rows.length).toBe(1);
+		expect(rows[0]?.textContent).toContain("Compaction Threshold");
+	});
+
 	it("hands the owning page and the row key to the view", () => {
 		const selections: [string, string][] = [];
 		const scope = mount("threshold", (section, key) => selections.push([section, key]));
