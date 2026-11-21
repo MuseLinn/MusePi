@@ -29,6 +29,8 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 - **daemon 崩溃后输入框不再停在幻影「进行中」**：连接意外断开时，这条回合已经没有任何进程能继续，GUI 立即收起运行态（停止按钮回到发送、工具行按中断结算），而不是等一个永远不会到达的 `agent_end`；重连拿到快照后，真正还在跑的回合会把状态恢复回来。会话页同时每 5 秒向 daemon 核对一次运行真值，顺带让崩溃留下的未结算调用提示及时出现。
   - EN: A daemon crash no longer leaves the composer showing a phantom running turn. An unexpected disconnect means no process can continue that turn, so the GUI drops the run state at once (the stop capsule returns to send, tool rows settle as interrupted) instead of waiting for an `agent_end` that will never arrive; a snapshot after reconnecting restores the flag if the turn really is alive. The session view also re-checks the daemon's live truth every 5 seconds, which lets the unanswered-tool-call notice appear as soon as the crash left one behind.
+- **会话列表滚动时的上下渐隐只作用在列表本身，不再覆盖整个左侧面板**：此前列表顶部的羽化带按整块左侧面板定位，滚动时会把面板头部与底部区域一起渐隐；现在渐隐跟随列表自身的高度，只让滚出列表的内容淡出，列表之外的侧栏内容保持清晰。
+  - EN: The fade at the top and bottom of the session list now stays inside the list instead of covering the whole left panel. The bands used to be positioned by the whole panel, so scrolling dimmed the panel's header and bottom region too; they now follow the list's own bounds, fading only the rows that scroll out of it while the rest of the sidebar stays sharp.
 
 ## [0.7.7] - 2026-11-21
 

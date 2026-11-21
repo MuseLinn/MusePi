@@ -602,6 +602,15 @@ html.gui-glass-adaptive {
  * paint only the tint (measured — same layer, blur with no mask, sharp with
  * one). Masking the parent fades the already-blurred stack, so the three
  * strengths (6 / 14 / 22px) blend into one continuous edge. */
+/* The frame is the band's containing block. `.gui-edge-blur` is absolutely
+ * positioned with `inset-inline: 0`, so an unpositioned frame lets the band
+ * size to the nearest positioned ancestor (the sidebar card or app shell) and
+ * the feather spans that whole panel instead of the scroller. The overlay form
+ * is unaffected: its page still owns `display` and placement. */
+.gui-scroll-frame {
+	position: relative;
+}
+
 .gui-edge-blur {
 	--edge-blur-size: 44px;
 	position: absolute;
