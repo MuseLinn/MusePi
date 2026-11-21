@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { t } from "../../i18n/index.js";
+import { pushActionToast } from "../../lib/action-toast";
 import type { SessionClient } from "../../lib/client";
 import { MarketplaceGrid } from "./MarketplaceGrid";
 import type { MarketplaceCardAction } from "./types";
@@ -24,9 +26,10 @@ export interface MarketplacePanelProps {
 
 async function handleAction(client: SessionClient, action: MarketplaceCardAction): Promise<void> {
 	if (action.kind === "open") {
-		// Detail view is a future milestone; surface as a non-fatal notice so
-		// the user isn't left wondering why their click vanished.
-		await client.rpc("notice", { level: "info", message: `${action.entry.name}: details coming soon` });
+		// Detail view is a future milestone; surface a local notice so the user
+		// isn't left wondering why their click vanished. Neither host answers a
+		// `notice` RPC — the old request rejected as an unknown method.
+		pushActionToast({ kind: "info", message: `${action.entry.name} · ${t("settings.comingSoon")}` });
 		return;
 	}
 	const marketplace = action.entry.marketplace ?? "default";

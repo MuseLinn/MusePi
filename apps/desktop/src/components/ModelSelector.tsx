@@ -7,7 +7,9 @@ import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { matchesModelQuery } from "../lib/fuzzy-model-match";
 import { tapFeedback } from "../lib/haptic";
+import { reportRequestFailure } from "../lib/report-request-failure";
 import type { RpcClient } from "../lib/rpc";
+import { setSessionModel } from "../lib/rpc-commands";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
@@ -261,7 +263,10 @@ export function ModelSelector({
 			.then(res => {
 				if (alive) setDefaultRoleModel(res?.modelRoles?.default ?? null);
 			})
-			.catch(() => {});
+			.catch((err: unknown) => {
+				// Only the DEFAULT-role marker is lost; the list still works.
+				console.warn("[gui] settings.get modelRoles failed", err);
+			});
 		return () => {
 			alive = false;
 		};
@@ -301,7 +306,11 @@ export function ModelSelector({
 				if (!alive) return;
 				setModels(list ?? []);
 			})
-			.catch(() => {});
+			.catch((err: unknown) => {
+				// An empty list here is indistinguishable from "no models", so
+				// keep the reason traceable instead of swallowing it.
+				console.error("[gui] model catalog request failed", method, err);
+			});
 		return () => {
 			alive = false;
 		};
@@ -350,7 +359,11 @@ export function ModelSelector({
 				// task (app.tsx listens and refreshes).
 				window.dispatchEvent(new CustomEvent("musepi-gui-default-model-changed", { detail: ref }));
 			})
-			.catch(() => {});
+			.catch((err: unknown) => {
+				// The star did not light: the next new task still starts on the old
+				// default. Say so instead of leaving the click looking ignored.
+				reportRequestFailure(t("general.setDefault"), err);
+			});
 	};
 
 	const current = models.find(m => m.id === modelId || `${m.provider}/${m.id}` === modelId);
@@ -557,7 +570,9 @@ export function ModelSelector({
 			// Selection state is the provider/id composite: two providers serving
 			// the same bare id (opencode-go vs opencode-zen both offer
 			// deepseek-v4-flash) must highlight only the picked row.
-			setModelId(`${selected.provider}/${selected.id}`);
+			const previous = modelId;
+			const optimistic = `${selected.provider}/${selected.id}`;
+			setModelId(optimistic);
 			setOpen(false);
 			if (sessionId) {
 				// Notify AFTER the daemon switched the model — consumers re-fetch
@@ -565,18 +580,26 @@ export function ModelSelector({
 				// in-flight setModel and read the OLD model's data. The provider
 				// rides along so the daemon resolves the exact model, not the first
 				// provider that happens to serve the same id.
-				void rpc
-					.request("settings.sessionSetmodel", {
-						sessionId,
-						model: { id: selected.id, provider: selected.provider },
-					})
+				void setSessionModel(rpc, {
+					sessionId,
+					model: { id: selected.id, provider: selected.provider },
+				})
 					.then(() => onSelect?.(selected.id, selected.provider))
-					.catch(() => {});
+					.catch((err: unknown) => {
+						// The daemon kept the old model: put the label back and say
+						// why. A silent revert reads as "the click missed", and the
+						// old swallowed rejection is how the renamed route stayed
+						// invisible. Only our own optimistic label is undone — a later
+						// pick that already succeeded keeps its selection.
+						userPicked.current = false;
+						setModelId(current => (current === optimistic ? previous : current));
+						reportRequestFailure(t("settings.switchModel"), err);
+					});
 			} else {
 				onSelect?.(selected.id, selected.provider);
 			}
 		},
-		[sessionId, onSelect],
+		[sessionId, onSelect, modelId],
 	);
 	// Published for onMenuKeyDown (declared above): Enter resolves the
 	// highlighted row through the latest select.
