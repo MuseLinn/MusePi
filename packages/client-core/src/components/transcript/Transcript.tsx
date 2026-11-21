@@ -809,54 +809,80 @@ function advisorKeyOf(entry: SessionEntry): string {
 	return entry.id;
 }
 
-/* ── Round-fold deviation persistence ──────────────────────────────────
- * Which rounds a reader left OPEN or CLOSED, per session.
+/* ── Round-fold open-state persistence ─────────────────────────────────
+ * Which rounds a reader left OPEN or CLOSED, per session — stored as
+ * ABSOLUTE states, not deviations from the default.
  *
- * Without this a fold the reader expanded collapses again on the next visit,
- * and a reading position restored inside an open fold lands on a closed one.
- * The set holds DEVIATIONS from the default (see `roundFoldOpen`), so it is
- * written verbatim and read back verbatim — no interpretation at the boundary.
+ * The default is dynamic: a grouping mode opens its running round, a
+ * deferred completion stays open until the next prompt, and a historical
+ * round follows the global 消息自动折叠 choice. A keyset meaning "differs
+ * from the default" would silently invert the reader's choice whenever the
+ * same round moved from running to completed or from deferred to history —
+ * the key would then mean the opposite. Absolute states keep the choice.
  *
- * Two guards, both learned the hard way elsewhere:
- *  - a corrupt or foreign payload yields an empty set rather than throwing, so
- *    one bad entry cannot take the transcript down;
- *  - the set is capped: a long session's reader can open every round, and an
- *    unbounded key list would grow until the write fails.
+ * Legacy payloads (a JSON array of keys) meant "differs from the pre-
+ * preference default"; they are resolved with that default at load time and
+ * rewritten in the absolute format.
+ *
+ * Guards: a corrupt payload yields an empty map rather than throwing (one
+ * bad entry must not take the transcript down), and the map is capped (a
+ * reader can open every round of a long session).
  */
 const FOLD_STORAGE_PREFIX = "musepi-transcript-folds:";
 const FOLD_MAX_KEYS = 2000;
 
 // Exported for the persistence contract test; not a public surface.
-export { FOLD_MAX_KEYS, readFoldDeviations, writeFoldDeviations };
+export { FOLD_MAX_KEYS, readFoldStates, writeFoldStates };
 
 function foldStorageKey(sessionKey: string): string {
 	return `${FOLD_STORAGE_PREFIX}${sessionKey}`;
 }
 
-function readFoldDeviations(sessionKey: string): ReadonlySet<string> {
+/**
+ * Stored open states for a session.
+ * @param sessionKey - session identity the map belongs to.
+ * @param defaultExpanded - the global 消息自动折叠 choice. Only used to
+ *   resolve a legacy relative payload (a key meant "the opposite of this
+ *   default"); absolute payloads ignore it.
+ */
+function readFoldStates(sessionKey: string, defaultExpanded: boolean): ReadonlyMap<string, boolean> {
 	try {
 		const raw = localStorage.getItem(foldStorageKey(sessionKey));
-		if (!raw) return new Set();
+		if (!raw) return new Map();
 		const parsed = JSON.parse(raw) as unknown;
-		if (!Array.isArray(parsed)) return new Set();
-		return new Set(parsed.filter((k): k is string => typeof k === "string"));
+		if (Array.isArray(parsed)) {
+			const states = new Map<string, boolean>();
+			for (const key of parsed) {
+				if (typeof key === "string") states.set(key, !defaultExpanded);
+			}
+			// One-time migration: rewrite the resolved states so later default
+			// changes cannot invert them again.
+			writeFoldStates(sessionKey, states);
+			return states;
+		}
+		if (parsed === null || typeof parsed !== "object") return new Map();
+		const states = new Map<string, boolean>();
+		for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+			if (typeof value === "boolean") states.set(key, value);
+		}
+		return states;
 	} catch {
-		// Unavailable or corrupt: a fresh set is always safe, and a throw here
+		// Unavailable or corrupt: a fresh map is always safe, and a throw here
 		// would break rendering for a preference.
-		return new Set();
+		return new Map();
 	}
 }
 
-function writeFoldDeviations(sessionKey: string, keys: ReadonlySet<string>): void {
+function writeFoldStates(sessionKey: string, states: ReadonlyMap<string, boolean>): void {
 	try {
-		if (keys.size === 0) {
+		if (states.size === 0) {
 			localStorage.removeItem(foldStorageKey(sessionKey));
 			return;
 		}
-		// Cap by DROPPING the oldest deviations rather than refusing the write:
-		// the newest toggle is what the reader just made, so it must survive.
-		const capped = [...keys].slice(-FOLD_MAX_KEYS);
-		localStorage.setItem(foldStorageKey(sessionKey), JSON.stringify(capped));
+		// Cap by DROPPING the oldest states rather than refusing the write: the
+		// newest toggle is what the reader just made, so it must survive.
+		const capped = [...states].slice(-FOLD_MAX_KEYS);
+		localStorage.setItem(foldStorageKey(sessionKey), JSON.stringify(Object.fromEntries(capped)));
 	} catch {
 		// Storage full or blocked: the in-memory state still drives this render.
 	}
@@ -1599,14 +1625,15 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// history"). Virtualization renders the folded prefix as zero-height
 	// rows (estimate 0), so the compaction fold costs no DOM.
 	const [compactedOpen, setCompactedOpen] = useState(false);
-	// Completed-round folds: per-round toggle
-	// state, keyed by the round's user-message ENTRY ID (stable across
-	// history prepends — index keys dropped deviations before). The set
-	// stores DEVIATIONS from the default:
-	// when the default is collapsed it holds OPEN rounds; when expanded,
-	// CLOSED ones — so a settings flip re-reads existing rounds without
-	// migration.
-	const [roundFoldOpen, setRoundFoldOpen] = useState<ReadonlySet<string>>(() => readFoldDeviations(sessionKey ?? ""));
+	// Completed-round folds: per-round toggle state, keyed by the round's
+	// user-message ENTRY ID (stable across history prepends). The map stores
+	// the reader's ABSOLUTE open/closed choice so a default that moves with
+	// the round's state (running → open, deferred → open, history → global
+	// default) never inverts it. Rounds the reader never touched follow the
+	// default (`foldOpenOf`).
+	const [roundFoldStates, setRoundFoldStates] = useState<ReadonlyMap<string, boolean>>(() =>
+		readFoldStates(sessionKey ?? "", defaultRoundFoldExpanded && !hideToolActivity),
+	);
 	/** Epoch-ms until which virtualizer measure compensation stays off
 	 *  (prepend anchor-restore window). 0 = inactive. */
 	const sizeAdjustSuppressUntilRef = useRef(0);
@@ -1622,17 +1649,19 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		window.setTimeout(() => virtualizerMeasureRef.current?.(), FOLD_TRANSITION_MS + 40);
 	}, []);
 	const toggleFold = useCallback(
-		(key: string): void => {
+		(key: string, open: boolean): void => {
 			markFoldTransition();
-			setRoundFoldOpen(prev => {
-				const next = new Set(prev);
-				if (next.has(key)) next.delete(key);
-				else next.add(key);
+			setRoundFoldStates(prev => {
+				const next = new Map(prev);
+				// Absolute state, not a deviation: the default moves with the
+				// round, and storing only "differs from it" would invert the
+				// reader's choice on the next transition.
+				next.set(key, open);
 				// Persist per session: a reader returning to a session expects the
 				// folds as they left them, and a restored reading position inside an
 				// open fold depends on it. Best-effort — storage unavailable (private
 				// mode, quota) must not break the toggle.
-				writeFoldDeviations(sessionKey ?? "", next);
+				writeFoldStates(sessionKey ?? "", next);
 				return next;
 			});
 		},
@@ -1642,8 +1671,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// ENTRY ID (falling back to the entry timestamp): rows unmount once the
 	// virtualizer scrolls them out of its overscan window, and the card's own
 	// useState reset the manual expansion when the row remounted. Same
-	// deviation-set shape as roundFoldOpen: auto-collapse applies at row
-	// mount; the user's toggle wins from then on.
+	// entry-id-keyed transcript-level shape as the fold open states:
+	// auto-collapse applies at row mount; the user's toggle wins from then on.
 	const [advisorOpenIds, setAdvisorOpenIds] = useState<ReadonlySet<string>>(() => new Set());
 	const toggleAdvisorOpen = useCallback((key: string): void => {
 		setAdvisorOpenIds(prev => {
@@ -1895,8 +1924,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		[entries.length, working, defaultRoundFoldExpanded, hideToolActivity],
 	);
 	const foldOpenOf = useCallback(
-		(f: RoundFold): boolean => roundFoldOpen.has(foldKeyOf(f)) !== foldDefaultOpenOf(f),
-		[roundFoldOpen, foldDefaultOpenOf, foldKeyOf],
+		(f: RoundFold): boolean => roundFoldStates.get(foldKeyOf(f)) ?? foldDefaultOpenOf(f),
+		[roundFoldStates, foldDefaultOpenOf, foldKeyOf],
 	);
 
 	// 工具调用汇总 (Kimi parity): consecutive work runs (round-collapse
@@ -2888,7 +2917,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					<RoundFoldHeader
 						fold={row.fold}
 						open={foldOpenOf(row.fold)}
-						onToggle={() => toggleFold(foldKeyOf(row.fold))}
+						onToggle={() => toggleFold(foldKeyOf(row.fold), !foldOpenOf(row.fold))}
 						startTs={entries[row.fold.startIdx]?.timestamp}
 						detail={detail}
 					/>

@@ -5,7 +5,7 @@
  */
 import "./happy-dom-shim"; // MUST be first: installs the DOM globals.
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { t } from "@musepi/client-core";
+import { Transcript, t } from "@musepi/client-core";
 import {
 	presentationPolicyFor,
 	transcriptPresentationPolicy,
@@ -315,6 +315,136 @@ describe("grouping modes defer the trailing fold instead of hiding it", () => {
 			deriveTurns(twoStepRound(), false, createTurnDeriveCache(), presentationPolicyFor("detailed", "next-input"))
 				.folds,
 		).toHaveLength(0);
+	});
+
+	it.each(["compact", "standard"] as const)("%s clears deferred in deriveTurns once the next prompt arrives", mode => {
+		const entries = [...twoStepRound(), userMsg("next question"), assistantText("next answer")];
+		const folds = deriveTurns(
+			entries,
+			false,
+			createTurnDeriveCache(),
+			presentationPolicyFor(mode, "next-input"),
+		).folds;
+		expect(folds).toHaveLength(1);
+		expect(folds[0]!.deferred).toBe(false);
+	});
+});
+
+// ── Transcript: reader choices survive default changes ───────────────────
+
+describe("transcript fold choices survive dynamic defaults", () => {
+	let root: Root | null = null;
+	let host: HTMLDivElement | null = null;
+
+	beforeEach(() => {
+		localStorage.clear();
+		setTranscriptView("compact");
+		setCollapseTiming("completion");
+		setFoldedReplies("final");
+	});
+
+	afterEach(() => {
+		if (root) act(() => root?.unmount());
+		root = null;
+		host?.remove();
+		host = null;
+		localStorage.clear();
+	});
+
+	function mountFold(foldEntries: SessionEntry[], working: boolean, sessionKey: string): HTMLDivElement {
+		const el = document.createElement("div");
+		document.body.appendChild(el);
+		root = createRoot(el);
+		act(() => {
+			root?.render(
+				<Transcript
+					entries={foldEntries}
+					stream={null}
+					streamDone
+					activeTools={new Map()}
+					working={working}
+					defaultRoundFoldExpanded={false}
+					sessionKey={sessionKey}
+				/>,
+			);
+		});
+		host = el;
+		return el;
+	}
+
+	function rerenderFold(foldEntries: SessionEntry[], working: boolean, sessionKey: string): void {
+		act(() => {
+			root?.render(
+				<Transcript
+					entries={foldEntries}
+					stream={null}
+					streamDone
+					activeTools={new Map()}
+					working={working}
+					defaultRoundFoldExpanded={false}
+					sessionKey={sessionKey}
+				/>,
+			);
+		});
+	}
+
+	function foldHeader(el: HTMLElement): HTMLButtonElement {
+		const header = el.querySelector<HTMLButtonElement>("button.tr-round-fold");
+		if (!header) throw new Error("no fold header rendered");
+		return header;
+	}
+
+	function storedStates(sessionKey: string): Record<string, boolean> {
+		const raw = localStorage.getItem(`musepi-transcript-folds:${sessionKey}`);
+		return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+	}
+
+	it("keeps a reader's closed fold across running → completed", () => {
+		const entries = twoStepRound();
+		const ownerId = entries[0]!.id!;
+		const el = mountFold(entries, true, "prefs-fold-running");
+		// A grouped running round opens by default; the reader closes it.
+		expect(foldHeader(el).getAttribute("aria-expanded")).toBe("true");
+		act(() => foldHeader(el).click());
+		expect(foldHeader(el).getAttribute("aria-expanded")).toBe("false");
+		expect(storedStates("prefs-fold-running")).toEqual({ [ownerId]: false });
+
+		// The same round completes: its default becomes closed, but the stored
+		// choice is absolute, so it must not invert to open.
+		rerenderFold(entries, false, "prefs-fold-running");
+		expect(foldHeader(el).getAttribute("aria-expanded")).toBe("false");
+	});
+
+	it("keeps a reader's closed fold across deferred → history", () => {
+		setCollapseTiming("next-input");
+		const round = twoStepRound();
+		const ownerId = round[0]!.id!;
+		const el = mountFold(round, false, "prefs-fold-deferred");
+		// The deferred completion opens by default; the reader closes it.
+		expect(foldHeader(el).getAttribute("aria-expanded")).toBe("true");
+		act(() => foldHeader(el).click());
+		expect(foldHeader(el).getAttribute("aria-expanded")).toBe("false");
+		expect(storedStates("prefs-fold-deferred")).toEqual({ [ownerId]: false });
+
+		// The next prompt turns the round into history (default closed): the
+		// reader's closed choice must stay closed.
+		const history = [...round, userMsg("next question"), assistantText("next answer")];
+		rerenderFold(history, false, "prefs-fold-deferred");
+		expect(foldHeader(el).getAttribute("aria-expanded")).toBe("false");
+	});
+
+	it("keeps a reader's opened fold when the default collapses again", () => {
+		setCollapseTiming("next-input");
+		const round = twoStepRound();
+		const el = mountFold(round, false, "prefs-fold-opened");
+		// Reader opens nothing (already open), closes then re-opens: two toggles.
+		act(() => foldHeader(el).click());
+		act(() => foldHeader(el).click());
+		expect(foldHeader(el).getAttribute("aria-expanded")).toBe("true");
+
+		const history = [...round, userMsg("next question"), assistantText("next answer")];
+		rerenderFold(history, false, "prefs-fold-opened");
+		expect(foldHeader(el).getAttribute("aria-expanded")).toBe("true");
 	});
 });
 
