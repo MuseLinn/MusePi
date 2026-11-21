@@ -9060,29 +9060,16 @@ body.gui-resizing {
 	color: var(--color-text);
 }
 
+/* 共享字段行原语自带 7px 上下 padding；表单自己的 gap 已经负责行距，再叠一层
+ * 会读成松散。只清掉这一条，网格仍由 `.gui-settings-field` 决定。 */
 .gui-secret-form .gui-settings-field {
-	/* 共享字段行原语：224px 标签列 + `--ui-font-size` 标签 + 12.5px 提示，
-	 * 与设置页其它字段同一套语法（gui-chat.css 中的 .gui-settings-field*）。
-	 * 本页只覆盖两条：表单里字段行不再自带纵向 padding（间距由表单 gap 给），
-	 * 且控件格要能放下铺满宽度的输入框。 */
 	padding: 0;
 }
 
-/* 共享的控件格是 `display:flex; justify-content:flex-end`，为下拉/分段这类
- * 内容宽度控件设计；本页的输入框铺满整列，因此让它吃掉控件格的剩余宽度。
- * 网格归属仍由原语的 grid-area 决定，不另立一份字段语法。 */
-.gui-secret-form .gui-settings-field-control {
-	justify-content: stretch;
-}
-
-.gui-secret-form .gui-settings-field-control > .gui-secret-input {
-	flex: 1 1 auto;
-	min-width: 0;
-}
-
 /* 字段本体：高度、圆角、填充与焦点环全部取自共享控件 token，与设置页其它
- * 字段行是同一套表层，不再各自派生。排布由外层 `.gui-settings-field-control`
- * 的网格格位决定，本类只管输入框自己的表层。 */
+ * 字段行是同一套表层。宽度只需 `width: 100%`：共享控件格是 flex 容器，而
+ * Tailwind preflight 已把 `box-sizing` 设为 `border-box`，因此输入框正好落在
+ * 格内（120–900px 实测 ratio 均为 1.0），不需要额外的 flex 规则。 */
 .gui-secret-input {
 	width: 100%;
 	height: var(--control-height-field);
