@@ -746,14 +746,15 @@
 	opacity: 0.6;
 }
 
-/* 目录数上限 64（daemon 侧 MAX_WORKSPACE_DIRECTORIES）：卡片高度封顶，
- * 超出时列表自己滚，绝不顶到侧栏之外。 */
+/* 列表高度由组件按真实可用空间算好（`fitProjectCard` + 实测兜底），经
+ * `--gui-project-list-max` 传进来：64 个目录的卡片在任何窗口高度下都缩进
+ * 滚动容器，而不是被裁掉。这里的 `min()` 只是组件未给值时的兜底。 */
 .gui-project-hover-card-list {
 	display: flex;
 	flex-direction: column;
 	gap: 1px;
 	min-width: 0;
-	max-height: min(280px, 50vh);
+	max-height: var(--gui-project-list-max, min(280px, 50vh));
 	margin: 0;
 	padding: 0;
 	list-style: none;

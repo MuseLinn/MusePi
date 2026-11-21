@@ -3,7 +3,13 @@ import { afterEach, describe, expect, it } from "bun:test";
 import { t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ProjectHoverCard } from "../src/components/ProjectHoverCard";
+import {
+	CARD_CHROME_HEIGHT,
+	fitProjectCard,
+	LIST_MAX_HEIGHT,
+	ProjectHoverCard,
+	ROW_HEIGHT,
+} from "../src/components/ProjectHoverCard";
 import type { SessionListNode } from "../src/components/SessionList";
 import { SessionSidebar } from "../src/components/SessionSidebar";
 
@@ -306,5 +312,132 @@ describe("ProjectHoverCard component", () => {
 			),
 		);
 		expect(noAction.querySelector(".gui-project-hover-card-open")).toBeNull();
+	});
+});
+
+describe("fitProjectCard — the flip and list-height decision", () => {
+	const card = (dirs: number) => CARD_CHROME_HEIGHT + Math.min(dirs * ROW_HEIGHT, LIST_MAX_HEIGHT);
+
+	it("does not flip when the space below holds the whole card", () => {
+		const fit = fitProjectCard({ directoryCount: 3, spaceBelow: 400, spaceAbove: 400 });
+		expect(fit.above).toBe(false);
+		expect(fit.listMax).toBe(3 * ROW_HEIGHT);
+	});
+
+	it("flips when the row sits near the bottom and there is room above", () => {
+		const fit = fitProjectCard({ directoryCount: 3, spaceBelow: 60, spaceAbove: 500 });
+		expect(fit.above).toBe(true);
+		expect(fit.listMax).toBe(3 * ROW_HEIGHT);
+	});
+
+	it("keeps the more spacious side and bounds the list at a tall window", () => {
+		// The reviewer's case: 11 directories; 100px below, 600 above.
+		const fit = fitProjectCard({ directoryCount: 11, spaceBelow: 100, spaceAbove: 600 });
+		expect(fit.above).toBe(true);
+		// 600px above holds the whole card, so the list gets its natural height.
+		expect(fit.listMax).toBe(Math.min(11 * ROW_HEIGHT, LIST_MAX_HEIGHT));
+	});
+
+	it("bounds the list by the available space when neither side fits the card", () => {
+		// 11 directories (~324px) in an 800px window, row 60px above the bottom.
+		const fit = fitProjectCard({ directoryCount: 11, spaceBelow: 60, spaceAbove: 700 });
+		expect(fit.above).toBe(true);
+		// Flips up, and the list is capped by the room above, not the natural height.
+		expect(fit.listMax).toBeLessThanOrEqual(700 - 8);
+	});
+
+	it("never lets the card exceed the space on the chosen side (sweep)", () => {
+		// Same shape as the review's sweep: 11 directories, rows across the
+		// scroller, several window heights. Every position must fit.
+		for (const windowHeight of [480, 700, 800, 1000]) {
+			const rowBottom = 40;
+			for (let offset = 0; offset <= windowHeight; offset += 10) {
+				const top = rowBottom + offset;
+				const bottom = top + 28;
+				const spaceBelow = Math.max(0, windowHeight - bottom);
+				const spaceAbove = Math.max(0, top - 40);
+				if (spaceBelow <= 0 && spaceAbove <= 0) continue;
+				const fit = fitProjectCard({ directoryCount: 11, spaceBelow, spaceAbove });
+				const room = Math.max(0, (fit.above ? spaceAbove : spaceBelow) - 8);
+				const rendered = CARD_CHROME_HEIGHT + fit.listMax;
+				expect(rendered).toBeLessThanOrEqual(room + 0.01);
+			}
+		}
+	});
+
+	it("falls back to the natural list when no measurement is available", () => {
+		const fit = fitProjectCard({ directoryCount: 4 });
+		expect(fit.above).toBe(false);
+		expect(fit.listMax).toBe(4 * ROW_HEIGHT);
+	});
+
+	it("caps the natural list at LIST_MAX_HEIGHT regardless of directory count", () => {
+		const fit = fitProjectCard({ directoryCount: 64, spaceBelow: 5000, spaceAbove: 5000 });
+		expect(fit.listMax).toBe(LIST_MAX_HEIGHT);
+	});
+
+	it("keeps CARD_CHROME_HEIGHT in step with the real measured card", () => {
+		// Measured in Chromium at the sidebar's narrowest practical width (180px):
+		// padding 20, title 17.55, meta 28 (the count line wraps), gaps 12 =
+		// 77.55. A too-small constant silently overflows the card, which the
+		// sweep below then catches — this pins the input.
+		expect(CARD_CHROME_HEIGHT).toBeGreaterThanOrEqual(76);
+		expect(CARD_CHROME_HEIGHT).toBeLessThanOrEqual(80);
+	});
+});
+
+describe("ProjectHoverCard flip rendering", () => {
+	async function render(props: { count: number; spaceBelow?: number; spaceAbove?: number }): Promise<HTMLElement> {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		mounted.add(root);
+		await act(async () =>
+			root.render(
+				<ProjectHoverCard
+					name="alpha"
+					directories={Array.from({ length: props.count }, (_, i) => ({
+						path: `/refs/d${i}`,
+						primary: i === 0,
+					}))}
+					sessionCount={0}
+					labelOf={path => path.split("/").pop() ?? path}
+					onOpenDirectory={() => {}}
+					openLabel={t("settings.openInExplorer")}
+					spaceBelow={props.spaceBelow}
+					spaceAbove={props.spaceAbove}
+				/>,
+			),
+		);
+		await flush();
+		return host;
+	}
+
+	it("renders the flip modifier when the row is near the bottom", async () => {
+		const host = await render({ count: 3, spaceBelow: 60, spaceAbove: 500 });
+		expect(host.querySelector(".gui-project-hover-card--above")).not.toBeNull();
+	});
+
+	it("stays anchored below when there is room", async () => {
+		const host = await render({ count: 3, spaceBelow: 500, spaceAbove: 60 });
+		expect(host.querySelector(".gui-project-hover-card--above")).toBeNull();
+	});
+
+	it("passes the available space as the list's max height so the last row is reachable", async () => {
+		// 11 rows (264px) + chrome cannot fit in 240px: the list must be clamped
+		// and scroll, which keeps the last directory's open button reachable.
+		const host = await render({ count: 11, spaceBelow: 240, spaceAbove: 40 });
+		const cardEl = host.querySelector<HTMLElement>(".gui-project-hover-card");
+		expect(cardEl).not.toBeNull();
+		const raw = cardEl!.style.getPropertyValue("--gui-project-list-max");
+		expect(raw).toMatch(/px$/);
+		const listMax = Number.parseFloat(raw);
+		expect(listMax).toBeLessThan(11 * ROW_HEIGHT);
+		// Bounded by the room below minus the card's fixed chrome.
+		expect(listMax).toBeLessThanOrEqual(240 - 8 - CARD_CHROME_HEIGHT);
+		// Every row still renders inside that scrollable list.
+		const rows = host.querySelectorAll(".gui-project-hover-card-row");
+		expect(rows).toHaveLength(11);
+		expect(host.querySelector(".gui-project-hover-card-list")?.contains(rows[10]!)).toBe(true);
 	});
 });
