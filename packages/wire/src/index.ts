@@ -1290,6 +1290,9 @@ export type RelayControlMessage = RelayControlToHost | RelayControlToGuest;
 /** 插件声明式配置契约(§4 管理页 schema 驱动表单,daemon/GUI 共用)。 */
 export * from "./plugin-config";
 
+/** Agent 密钥 wire 契约(daemon ↔ GUI,值永不回传)。 */
+export * from "./secret";
+
 /** 可见窗口性能折叠(`session.contextUsage.windowStats`,daemon 与 renderer 共用)。 */
 export * from "./window-stats";
 

@@ -41,6 +41,7 @@ import { HostServices } from "./registry";
 import { RemoteService } from "./remote-service";
 import { ResourcesService } from "./resources-service";
 import { ScheduleService } from "./schedule-service";
+import { SecretService } from "./secret-service";
 import { SessionInspectionService } from "./session-inspection-service";
 import { SessionPresenceService } from "./session-presence-service";
 import { SessionService } from "./session-service";
@@ -145,6 +146,14 @@ function buildRegistry(): HostServices {
 	);
 	// ApprovalService 只认领路由（本测试不应答任何审批），stub 掉会话访问。
 	services.register(new ApprovalService({ get: () => undefined }));
+	// SecretService：只认领路由（本测试不读写密钥），agent dir 与 session 桩化。
+	services.register(
+		new SecretService({
+			agentDir: () => tmpdir(),
+			get: () => undefined,
+			allSessions: () => [][Symbol.iterator](),
+		}),
+	);
 	// BrowserService 只认领路由（本测试不触发浏览器/CDP），stub 掉设置与 cwd。
 	services.register(
 		new BrowserService({

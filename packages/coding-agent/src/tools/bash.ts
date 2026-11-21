@@ -17,6 +17,7 @@ import { InternalUrlRouter } from "../internal-urls";
 import { truncateToVisualLines } from "../modes/components/visual-truncate";
 import { highlightCode, type Theme } from "../modes/theme/theme";
 import bashDescription from "../prompts/tools/bash.md" with { type: "text" };
+import { type AgentSecretSnapshot, agentSecretSnapshot } from "../secrets/agent-runtime";
 import type {
 	ClientBridgeTerminalExitStatus,
 	ClientBridgeTerminalHandle,
@@ -622,8 +623,11 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 		this.parameters = this.#asyncEnabled ? bashSchemaWithAsync : bashSchemaBase;
 	}
 
-	#formatResultOutput(result: BashResult | BashInteractiveResult): string {
-		const outputText = normalizeResultOutput(result);
+	#formatResultOutput(
+		result: BashResult | BashInteractiveResult,
+		redact: (text: string) => string = text => text,
+	): string {
+		const outputText = redact(normalizeResultOutput(result));
 		return outputText || "(no output)";
 	}
 
@@ -642,17 +646,18 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 		result: BashResult | BashInteractiveResult,
 		timeoutSec: number | undefined,
 		outputText: string,
+		redact: (text: string) => string = text => text,
 	): void {
 		if (result.cancelled) {
 			// Local executor output already carries a leading `[Command cancelled]`
 			// notice from the sink; PTY/bridge output does not, so annotate only
 			// the latter.
-			const out = normalizeResultOutput(result);
+			const out = redact(normalizeResultOutput(result));
 			const annotated = out.startsWith("[Command cancelled]") ? out : out ? `${out}\n\n[Command aborted]` : out;
 			throw new ToolError(annotated || "Command aborted");
 		}
 		if (result.timedOut === true) {
-			const out = normalizeResultOutput(result);
+			const out = redact(normalizeResultOutput(result));
 			const message =
 				timeoutSec === undefined ? "Command timed out" : `Command timed out after ${timeoutSec} seconds`;
 			throw new ToolError(out ? `${out}\n\n[${message}]` : message);
@@ -670,12 +675,15 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 			notices?: readonly string[];
 			terminalId?: string;
 			wallTimeMs?: number;
+			/** Scrubs agent-secret values from every output line. */
+			redact?: (text: string) => string;
 		} = {},
 	): Promise<AgentToolResult<BashToolDetails>> {
 		const exitCode = result.exitCode;
 		const failedExit = exitCode !== undefined && exitCode !== 0;
+		const redact = options.redact ?? ((text: string) => text);
 
-		const outputLines = [this.#formatResultOutput(result)];
+		const outputLines = [this.#formatResultOutput(result, redact)];
 		const notices: string[] = [];
 		if (options.wallTimeMs !== undefined) {
 			notices.push(formatWallTimeNotice(options.wallTimeMs));
@@ -739,7 +747,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 			if (!normalizeResultOutput(result).startsWith(`[${message}]\n`)) {
 				outputLines.push("", `[${message}]`);
 			}
-			const timeoutOutputText = await enforceInlineByteCap(outputLines.join("\n"), inlineCap);
+			const timeoutOutputText = await enforceInlineByteCap(redact(outputLines.join("\n")), inlineCap);
 			return toolResult(details)
 				.text(timeoutOutputText)
 				.truncationFromSummary(result, { direction: "tail" })
@@ -748,10 +756,10 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 		}
 
 		// Non-timeout cancellations and missing exit status still propagate as thrown errors.
-		this.#throwIfUnfinished(result, timeoutSec, outputText);
+		this.#throwIfUnfinished(result, timeoutSec, outputText, redact);
 
 		// No-op for already-bounded output; see `inlineCap` above.
-		const cappedOutputText = await enforceInlineByteCap(outputText, inlineCap);
+		const cappedOutputText = await enforceInlineByteCap(redact(outputText), inlineCap);
 
 		const resultBuilder = toolResult(details)
 			.text(cappedOutputText)
@@ -805,6 +813,8 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 		notices?: readonly string[];
 
 		resolvedEnv?: Record<string, string>;
+		/** Scrubs agent-secret values from streamed and final job output. */
+		redact?: (text: string) => string;
 		onUpdate?: AgentToolUpdateCallback<BashToolDetails>;
 		forwardUpdates: boolean;
 	}): ManagedBashJobHandle {
@@ -812,6 +822,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 		if (!manager) {
 			throw new ToolError("Background job manager unavailable for this session.");
 		}
+		const redact = options.redact ?? ((text: string) => text);
 
 		const label = options.command.length > 120 ? `${options.command.slice(0, 117)}...` : options.command;
 		let latestText = "";
@@ -835,7 +846,8 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 						artifactPath,
 						artifactId,
 						onChunk: chunk => {
-							tailBuffer.append(chunk);
+							const safeChunk = redact(chunk);
+							tailBuffer.append(safeChunk);
 							latestText = tailBuffer.text();
 							void reportProgress(latestText, { async: { state: "running", jobId, type: "bash" } });
 						},
@@ -846,6 +858,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 						requestedTimeoutSec: options.requestedTimeoutSec,
 						notices: options.notices ?? [],
 						wallTimeMs,
+						redact,
 					});
 					const finalText = this.#extractTextResult(finalResult);
 					latestText = finalText;
@@ -862,7 +875,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 					await reportProgress(finalText, { async: { state: "completed", jobId, type: "bash" } });
 					return finalText;
 				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
+					const message = redact(error instanceof Error ? error.message : String(error));
 					latestText = message;
 					completion.resolve({ kind: "failed", error });
 					await reportProgress(message, { async: { state: "failed", jobId, type: "bash" } });
@@ -1020,6 +1033,17 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 				)
 			: undefined;
 
+		// Agent secrets enter ONLY this call's child environment. Merging after
+		// the caller env keeps a model-supplied `MUSEPI_SECRET_*` from shadowing
+		// the stored value; `process.env` is never touched. The snapshot's
+		// synchronous redactor scrubs the same values from every output path.
+		const secretSnapshot: AgentSecretSnapshot = await agentSecretSnapshot(this.session.settings.getAgentDir()).catch(
+			() => ({ env: {}, redact: (text: string) => text }),
+		);
+		const childEnv =
+			Object.keys(secretSnapshot.env).length > 0 ? { ...(resolvedEnv ?? {}), ...secretSnapshot.env } : resolvedEnv;
+		const redactOutput = (text: string): string => secretSnapshot.redact(text);
+
 		// Resolve protocol URLs (skill://, agent://, etc.) in extracted cwd.
 		if (cwd?.includes("://") || cwd?.includes("local:/")) {
 			cwd = await expandInternalUrls(cwd, { ...internalUrlOptions, noEscape: true });
@@ -1070,7 +1094,8 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 				requestedTimeoutSec,
 				notices: pendingNotices,
 
-				resolvedEnv,
+				resolvedEnv: childEnv,
+				redact: redactOutput,
 				onUpdate,
 				forwardUpdates: false,
 			});
@@ -1108,7 +1133,8 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 				requestedTimeoutSec,
 				notices: pendingNotices,
 
-				resolvedEnv,
+				resolvedEnv: childEnv,
+				redact: redactOutput,
 				onUpdate,
 				forwardUpdates: !startBackgrounded,
 			});
@@ -1166,7 +1192,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 			(clientBridge?.capabilities.terminal && clientBridge.createTerminal && !pty) ||
 			canUseInteractiveBashPty(pty, ctx)
 				? await applyDirenvPreflight(command, commandCwd, {
-						callerEnv: resolvedEnv,
+						callerEnv: childEnv,
 						signal,
 						timeoutMs: this.session.settings.get("bash.direnvLoadTimeoutMs"),
 						callerTimeoutMs: timeoutMs,
@@ -1238,7 +1264,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 				// direnv-transformed command (carries any `unset -v` prefix) + merged
 				// env; falls back to the raw command/env when direnv is off/absent.
 				const bridgeCommand = backendPreflight?.command ?? command;
-				const bridgeEnv = backendPreflight?.env ?? resolvedEnv;
+				const bridgeEnv = backendPreflight?.env ?? childEnv;
 				const shellSpawn = wrapShellLineForClientTerminal(bridgeCommand, this.session.settings.getShellConfig());
 				const createP = clientBridge.createTerminal({
 					command: shellSpawn.command,
@@ -1271,7 +1297,12 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 						outputLines: 0,
 						outputBytes: 0,
 					};
-					this.#throwIfUnfinished(timedOutResult, timeoutSec, this.#formatResultOutput(timedOutResult));
+					this.#throwIfUnfinished(
+						timedOutResult,
+						timeoutSec,
+						this.#formatResultOutput(timedOutResult, redactOutput),
+						redactOutput,
+					);
 					throw new ToolError("Command timed out");
 				}
 
@@ -1341,7 +1372,12 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 							outputLines: current.output.length > 0 ? current.output.split("\n").length : 0,
 							outputBytes: current.output.length,
 						};
-						this.#throwIfUnfinished(timedOutResult, timeoutSec, this.#formatResultOutput(timedOutResult));
+						this.#throwIfUnfinished(
+							timedOutResult,
+							timeoutSec,
+							this.#formatResultOutput(timedOutResult, redactOutput),
+							redactOutput,
+						);
 						throw new ToolError("Command timed out");
 					}
 
@@ -1361,7 +1397,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 					}
 					lastPolledOutput = pollOutput;
 					onUpdate?.({
-						content: [{ type: "text", text: pollOutput.output }],
+						content: [{ type: "text", text: redactOutput(pollOutput.output) }],
 						details: { terminalId: handle.terminalId },
 					});
 				}
@@ -1409,6 +1445,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 					notices: bridgeNotices,
 					terminalId: handle.terminalId,
 					wallTimeMs: performance.now() - bridgeWallTimeStart,
+					redact: redactOutput,
 				});
 			} finally {
 				clearTimeout(timeoutTimer);
@@ -1447,7 +1484,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 					cwd: commandCwd,
 					timeoutMs,
 					signal,
-					env: backendPreflight?.env ?? resolvedEnv,
+					env: backendPreflight?.env ?? childEnv,
 					artifactPath,
 					artifactId,
 				})
@@ -1459,7 +1496,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 					sessionKey: this.session.getSessionId?.() ?? undefined,
 					timeout: timeoutMs ?? 0,
 					signal,
-					env: resolvedEnv,
+					env: childEnv,
 					artifactPath,
 					artifactId,
 					onChunk: streamTailUpdates(tailBuffer, onUpdate),
@@ -1475,7 +1512,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 			// `timedOut` field from the executor/PTY layer.
 			const isTimeout = result.timedOut === true;
 			if (!isTimeout) {
-				const out = normalizeResultOutput(result);
+				const out = redactOutput(normalizeResultOutput(result));
 				// The local executor already prepends `[Command cancelled]`; PTY
 				// output does not, so preserve one cancellation notice in either case.
 				const message = out.startsWith("[Command cancelled]")
@@ -1493,6 +1530,7 @@ export class BashTool implements AgentTool<typeof bashSchemaBase | typeof bashSc
 			requestedTimeoutSec,
 			notices: pendingNotices,
 			wallTimeMs,
+			redact: redactOutput,
 		});
 	}
 }

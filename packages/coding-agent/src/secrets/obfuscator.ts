@@ -233,6 +233,29 @@ export class SecretObfuscator {
 		return this.#hasAny;
 	}
 
+	/**
+	 * Register one plain obfuscate-mode secret after construction. Agent
+	 * secrets saved mid-session reach the provider boundary immediately: the
+	 * placeholder base is keyed on the exact value like constructor entries.
+	 * Re-registering the same value is a no-op, including when it was already
+	 * covered by a replace-mode entry.
+	 */
+	addSecret(content: string, friendlyName?: string): void {
+		if (content.length === 0) return;
+		if (this.#plainMappings.has(content) || this.#replaceMappings.has(content)) return;
+		// Resolve a human-readable label to the agent secret NAME. Collision and
+		// sanitization rules are the constructor's, so a name that embeds the
+		// value itself cannot leak through the placeholder prefix.
+		const requestedFriendlyName = friendlyName ? sanitizeSecretFriendlyName(friendlyName) : undefined;
+		this.#configuredSecretValues.add(content);
+		const placeholder = this.#createPlaceholder(content, requestedFriendlyName);
+		const index = this.#nextIndex++;
+		this.#plainMappings.set(content, index);
+		this.#obfuscateMappings.set(index, { secret: content, placeholder });
+		this.#generatedPlaceholders.add(placeholder);
+		this.#hasAny = true;
+	}
+
 	/** Obfuscate all secrets in text. Bidirectional placeholders for obfuscate mode, one-way for replace. */
 	obfuscate(text: string, sharedRegexSecretValues?: ReadonlySet<string>): string {
 		if (!this.#hasAny) return text;

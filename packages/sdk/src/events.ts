@@ -19,6 +19,8 @@
 import type {
 	AgentEvent,
 	AgentSnapshot,
+	SecretRequestEndPayload,
+	SecretRequestPayload,
 	SessionEntry,
 	SessionHeader,
 	SessionState,
@@ -62,6 +64,8 @@ export const sessionStreamEnvelope = Type.Object({
 		Type.Literal("state"),
 		Type.Literal("approval-request"),
 		Type.Literal("ask-request"),
+		Type.Literal("secret-request"),
+		Type.Literal("secret-request-end"),
 		Type.Literal("agent-lifecycle"),
 		Type.Literal("agent-progress"),
 		Type.Literal("pause-state"),
@@ -118,6 +122,12 @@ export type SessionStreamEvent =
 	// Settlement broadcast for an ask (including a cancel). Same rationale as
 	// approval-request-end: the card is app-level state, not a transcript row.
 	| { kind: "ask-request-end"; seq: number; payload: { requestId: string } }
+	// Agent secret card: `fill` collects a new value, `allow` covers an
+	// already-stored one. The value never rides this envelope; the client sends
+	// it to `secret.answer`, and this event only carries the request metadata.
+	| { kind: "secret-request"; seq: number; payload: SecretRequestPayload }
+	// Settlement broadcast for a secret card (including timeout/cancel).
+	| { kind: "secret-request-end"; seq: number; payload: SecretRequestEndPayload }
 	| { kind: "agent-lifecycle"; seq: number; payload: SubagentLifecyclePayload }
 	// Daemon forwards the EventBus wrapper (SubagentProgressPayload), not the
 	// bare AgentProgress — the AgentProgress lives at `payload.progress`.

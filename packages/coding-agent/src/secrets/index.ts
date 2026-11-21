@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { SENSITIVE_TOKEN_RE } from "@musepi/pi-ai/providers/transform-messages";
 import { getSecretPlaceholderKeyPath, isEnoent, logger } from "@musepi/pi-utils";
 import { YAML } from "bun";
+import { loadAgentSecretEntries, registerAgentSecretObfuscator } from "./agent-runtime";
 import { type SecretEntry, SecretObfuscator } from "./obfuscator";
 import { sanitizeSecretFriendlyName, secretEntriesNeedPlaceholderKey } from "./placeholder";
 import { compileSecretRegex } from "./regex";
@@ -149,6 +150,8 @@ async function readPlaceholderKeyFile(keyPath: string, retry: boolean): Promise<
 
 type RawSecretEntry = Omit<SecretEntry, "friendlyName"> & { friendlyName?: unknown };
 
+export * from "./agent-runtime";
+export * from "./agent-store";
 export {
 	deobfuscateSessionContext,
 	deobfuscateToolArguments,
@@ -250,11 +253,12 @@ export async function buildSecretObfuscator(
 	keyDir?: string,
 ): Promise<SecretObfuscator | undefined> {
 	const fileEntries = await logger.time("loadSecrets", loadSecrets, cwd, agentDir);
+	const agentEntries = await logger.time("loadAgentSecretEntries", loadAgentSecretEntries, agentDir);
 	const envEntries = collectEnvSecrets();
 	// Built-in credential-pattern entries come last so user-configured entries
 	// (plain literals, custom regexes) take precedence in the scan order.
-	const allEntries = [...envEntries, ...fileEntries, ...builtinCredentialSecretEntries()];
-	const needsPlaceholderKey = secretEntriesNeedPlaceholderKey([...envEntries, ...fileEntries]);
+	const allEntries = [...envEntries, ...fileEntries, ...agentEntries, ...builtinCredentialSecretEntries()];
+	const needsPlaceholderKey = secretEntriesNeedPlaceholderKey([...envEntries, ...fileEntries, ...agentEntries]);
 	const placeholderKey = needsPlaceholderKey
 		? await getSecretPlaceholderKey(keyDir)
 		: await getExistingSecretPlaceholderKey(keyDir);
@@ -265,6 +269,9 @@ export async function buildSecretObfuscator(
 	if (obfuscator?.hasSecrets() !== true && placeholderKey !== undefined) {
 		obfuscator = new SecretObfuscator([{ type: "plain", mode: "replace", content: placeholderKey }], placeholderKey);
 	}
+	// Mid-session saves reach this instance through `addSecret`; a session that
+	// starts later gets the same values from `loadAgentSecretEntries` above.
+	if (obfuscator) registerAgentSecretObfuscator(agentDir, obfuscator);
 	return obfuscator;
 }
 

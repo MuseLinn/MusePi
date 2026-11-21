@@ -306,6 +306,7 @@ import {
 	askRequestPayload,
 	createApprovalBridge,
 	type PendingApproval,
+	secretRequestPayload,
 } from "./approval-bridge";
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { AppendJournal, catchupPlan, catchupRecordsPlan } from "./journal";
@@ -1704,6 +1705,28 @@ export class DaemonSessionHost {
 					}
 				}
 			},
+			{
+				onSecretRequest: record => {
+					// The card carries name/purpose only; the value is typed in the
+					// GUI and sent straight to `secret.answer`, never through the tool.
+					for (const send of live.subscribers.values()) {
+						try {
+							send({ kind: "secret-request", seq: 0, payload: secretRequestPayload(record) });
+						} catch {
+							// subscriber socket died; removed on close
+						}
+					}
+				},
+				onSecretResolved: requestId => {
+					for (const send of live.subscribers.values()) {
+						try {
+							send({ kind: "secret-request-end", seq: 0, payload: { requestId } });
+						} catch {
+							// subscriber socket died; removed on close
+						}
+					}
+				},
+			},
 		);
 		setToolUIContext(approvals.uiContext, true);
 		// Keep the first session's registry for provider/model management RPCs
@@ -2652,6 +2675,7 @@ export class DaemonSessionHost {
 			const snap = live.view.snapshot() as Static<typeof sessionSnapshot> & {
 				pendingApprovals?: ReturnType<typeof approvalRequestPayload>[];
 				pendingAsks?: ReturnType<typeof askRequestPayload>[];
+				pendingSecrets?: ReturnType<typeof secretRequestPayload>[];
 				state: {
 					goalMode?: unknown;
 					planMode?: unknown;
@@ -2698,6 +2722,7 @@ export class DaemonSessionHost {
 			// broadcast remains the fast path; this is the hydration path.
 			snap.pendingApprovals = [...live.approvals.pending.values()].map(approvalRequestPayload);
 			snap.pendingAsks = [...live.approvals.pendingAsks.values()].map(askRequestPayload);
+			snap.pendingSecrets = [...live.approvals.pendingSecrets.values()].map(secretRequestPayload);
 			return snap;
 		}
 		// History path: no running session — serve the persisted materialized
@@ -3266,7 +3291,7 @@ export class DaemonSessionHost {
 	replayRecentResolutions(sessionId: string, conn: DaemonConnection): void {
 		const live = this.#sessions.get(sessionId);
 		if (!live) return;
-		const { approvals, asks } = live.approvals.recentResolutions();
+		const { approvals, asks, secrets } = live.approvals.recentResolutions();
 		for (const resolution of approvals) {
 			this.emitEvent(conn, {
 				kind: "approval-request-end",
@@ -3281,6 +3306,9 @@ export class DaemonSessionHost {
 		}
 		for (const requestId of asks) {
 			this.emitEvent(conn, { kind: "ask-request-end", seq: 0, sessionId, payload: { requestId } });
+		}
+		for (const requestId of secrets) {
+			this.emitEvent(conn, { kind: "secret-request-end", seq: 0, sessionId, payload: { requestId } });
 		}
 	}
 
@@ -3314,6 +3342,9 @@ export class DaemonSessionHost {
 		}
 		for (const record of live.approvals.pendingAsks.values()) {
 			this.emitEvent(conn, { kind: "ask-request", seq: 0, sessionId, payload: askRequestPayload(record) });
+		}
+		for (const record of live.approvals.pendingSecrets.values()) {
+			this.emitEvent(conn, { kind: "secret-request", seq: 0, sessionId, payload: secretRequestPayload(record) });
 		}
 		this.replayRecentResolutions(sessionId, conn);
 		// The subscribe watermark is the journal tail, never the non-journal
