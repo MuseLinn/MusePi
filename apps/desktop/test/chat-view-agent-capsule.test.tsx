@@ -51,7 +51,7 @@ const entries = [
 	},
 ] as unknown as SessionEntry[];
 
-function view(store: GuiSessionStore) {
+function view(store: GuiSessionStore, focusMode = false) {
 	return (
 		<ChatView
 			store={store}
@@ -65,7 +65,7 @@ function view(store: GuiSessionStore) {
 			onSubmitNewSession={() => {}}
 			rightPanelOpen={false}
 			terminalOpen={false}
-			focusMode={false}
+			focusMode={focusMode}
 			onToggleFocus={() => {}}
 			sessionInfoOpen
 			onToggleSessionInfo={() => {}}
@@ -73,11 +73,14 @@ function view(store: GuiSessionStore) {
 	);
 }
 
-async function mount(store: GuiSessionStore): Promise<{ host: HTMLElement; unmount: () => Promise<void> }> {
+async function mount(
+	store: GuiSessionStore,
+	focusMode = false,
+): Promise<{ host: HTMLElement; unmount: () => Promise<void> }> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
-	await act(async () => root.render(view(store)));
+	await act(async () => root.render(view(store, focusMode)));
 	return {
 		host,
 		unmount: async () => {
@@ -133,6 +136,16 @@ describe("agent identity capsule", () => {
 		const capsule = host.querySelector<HTMLElement>(".gui-agent-capsule");
 		expect(capsule?.dataset.agentStatus).toBe("waiting");
 		expect(capsule?.querySelector(".gui-agent-capsule-status")?.textContent).toBe("等待批准");
+		await unmount();
+	});
+
+	it("leaves the head row in focus mode, which hides the capsule with it", async () => {
+		const store = new GuiSessionStore("session-1", { entries, cursor: 0 }, "C:/workspace");
+		const { host, unmount } = await mount(store, true);
+		const head = host.querySelector<HTMLElement>(".gui-chat-head");
+		expect(head?.classList.contains("gui-chat-head--focused-hidden")).toBe(true);
+		// Still the one capsule — it must not float over the full-screen composer.
+		expect(head?.querySelectorAll(".gui-agent-capsule").length).toBe(1);
 		await unmount();
 	});
 
