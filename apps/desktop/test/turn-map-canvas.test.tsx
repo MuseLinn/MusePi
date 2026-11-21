@@ -227,7 +227,8 @@ describe("TurnMapCanvas SSR 冒烟", () => {
 
 	it("导航框与缩放控件避让浮动输入区", () => {
 		const html = renderToStaticMarkup(<TurnMapCanvas entries={entries} composerInset={120} />);
-		expect(html).toContain("bottom:136px");
+		// 轮次条是底部横条(bottom 10 + inset),缩放控件 bottom 14 + inset。
+		expect(html).toContain("bottom:130px");
 		expect(html).toContain("bottom:134px");
 	});
 
@@ -389,6 +390,54 @@ function windowEntries(from: number, to: number): unknown[] {
 	}
 	return result;
 }
+
+describe("轮次条锚定画布底缘(纵向/横向同一横条)", () => {
+	const resetDirection = (): void => {
+		try {
+			localStorage.removeItem("musepi.map.direction");
+		} catch {
+			// happy-dom 一定有 localStorage;这里只是与 readMapDirection 同构。
+		}
+	};
+
+	async function mountMap(composerInset = 0): Promise<HTMLElement> {
+		resetDirection();
+		const container = document.createElement("div");
+		document.body.appendChild(container);
+		const root = createRoot(container);
+		mountedRoots.add(root);
+		await act(async () => root.render(<TurnMapCanvas entries={windowEntries(1, 3)} composerInset={composerInset} />));
+		return container;
+	}
+
+	it("纵向:nav 是 tm-wrap 的直接子元素,只锚底边(bottom),不占左侧/顶部", async () => {
+		const container = await mountMap(120);
+		const wrap = container.querySelector<HTMLElement>(".tm-wrap")!;
+		const nav = container.querySelector<HTMLElement>(".tm-nav")!;
+		expect(nav.parentElement).toBe(wrap);
+		expect(nav.getAttribute("data-orient")).toBe("v");
+		// 底部横条:bottom = 10 + composerInset;没有 top 锚点(旧左侧竖条是 top:16/bottom:16)。
+		expect(nav.style.bottom).toBe("130px");
+		expect(nav.style.top).toBe("");
+		// 视口指示窗走横条几何(start/width),纵向视图的世界 Y 轴映射到横条 X。
+		const viewport = nav.querySelector<HTMLElement>(".tm-nav-viewport");
+		if (viewport) {
+			expect(viewport.style.left).not.toBe("");
+			expect(viewport.style.top).toBe("");
+		}
+	});
+
+	it("方向切换后仍是底部横条:data-orient 变化,bottom 与锚点容器不变", async () => {
+		const container = await mountMap(0);
+		const nav = container.querySelector<HTMLElement>(".tm-nav")!;
+		const buttons = container.querySelectorAll<HTMLButtonElement>(".tm-topbar-btn");
+		await act(async () => buttons[buttons.length - 1]!.click());
+		expect(nav.getAttribute("data-orient")).toBe("h");
+		expect(nav.style.bottom).toBe("10px");
+		expect(nav.style.top).toBe("");
+		expect(nav.parentElement).toBe(container.querySelector<HTMLElement>(".tm-wrap")!);
+	});
+});
 
 describe("history-window map interaction", () => {
 	it("preserves the expanded turn and zoom transform when older history arrives", async () => {

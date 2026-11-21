@@ -29,7 +29,7 @@ import {
  * 父轮结束后的干线上形成独立交汇圆点(git 树式),兄弟分支共享;
  * 单击切换轮卡折叠/展开(折叠 = 单行紧凑卡,展开 = 全卡 + 轮内事件卡),
  * 双击跳回对话定位该轮,事件卡单击 = 定位到该事件对应的消息(entry 级,
- * 同 onJumpToEntry 通道)。左侧(横向模式为底部)迷你导航条 = 全轮次剪影。
+ * 同 onJumpToEntry 通道)。底部迷你导航条 = 全轮次剪影(两种主线方向共用)。
  * 消息级画布(SessionTreeCanvas)已下线——单一轮级视图。
  *
  * 性能:节点数 = 轮数(≤ 数百),布局 O(n);进入视图无整树 mount 卡顿。
@@ -43,6 +43,10 @@ const MAX_SCALE = 2.2;
 
 /** 方向持久化键(读不到/非法值默认纵向)。 */
 const MAP_DIRECTION_KEY = "musepi.map.direction";
+
+/** 底部轮次条的左右留边(与 .tm-nav 的 left/right 一致,右侧让位缩放控件)。 */
+const TURN_NAV_INSET_LEFT = 16;
+const TURN_NAV_INSET_RIGHT = 56;
 
 /**
  * 空白拖拽 → 点击的门控。
@@ -828,16 +832,16 @@ export function TurnMapCanvas({
 
 	const hasSearch = searchQuery.trim().length > 0;
 
-	// 迷你导航条几何:整条按主轴世界跨度等比,视口窗口实时映射。
-	// v = 左侧竖条(条目高 = band);h = 底部横条(条目宽 = band)。
+	// 迷你导航条几何:底部横条按主轴世界跨度等比,视口窗口实时映射。
+	// 两种主线方向共用横条(条目宽 = band);纵向的视口仍映射世界 Y 轴。
 	const navGeo = useMemo(() => {
 		const wrap = wrapRef.current;
-		const railSize = horizontal
-			? (wrap?.clientWidth ?? 600) - 32
-			: Math.max(0, (wrap?.clientHeight ?? 600) - composerInset) - 32;
+		// 横条实际跨度 = 容器宽 - 左右留边(.tm-nav border box);按它取条目
+		// 宽度和居中量,点击命中与视口指示才和画出来的条目对齐。
+		const railSize = (wrap?.clientWidth ?? 600) - TURN_NAV_INSET_LEFT - TURN_NAV_INSET_RIGHT;
 		const band = Math.max(2, Math.min(6, railSize / Math.max(nodes.length, 1)));
 		return { railSize, band };
-	}, [nodes.length, horizontal, composerInset, wrapSize]);
+	}, [nodes.length, wrapSize]);
 	const viewportBand = useMemo(() => {
 		const wrap = wrapRef.current;
 		if (!wrap || nodes.length === 0) return null;
@@ -868,18 +872,15 @@ export function TurnMapCanvas({
 			const t = a1.c > a0.c ? (clamped - a0.c) / (a1.c - a0.c) : 0;
 			return a0.r + t * (a1.r - a0.r);
 		};
-		if (horizontal) {
-			const worldLeft = -view.x / view.scale;
-			const worldRight = (wrap.clientWidth - view.x) / view.scale;
-			const x1 = worldToRail(worldLeft);
-			const x2 = worldToRail(worldRight);
-			return { start: Math.max(0, x1), size: Math.min(railSize, Math.max(10, x2 - x1)) };
-		}
-		const worldTop = -view.y / view.scale;
-		const worldBottom = (Math.max(0, wrap.clientHeight - composerInset) - view.y) / view.scale;
-		const y1 = worldToRail(worldTop);
-		const y2 = worldToRail(worldBottom);
-		return { start: Math.max(0, y1), size: Math.min(railSize, Math.max(10, y2 - y1)) };
+		// 视口世界区间沿主轴(纵向 = Y,横向 = X)映射到横条的 X 坐标:
+		// 指示窗与条目共用同一段线性插值,点击定位不会各说各话。
+		const worldStart = horizontal ? -view.x / view.scale : -view.y / view.scale;
+		const worldEnd = horizontal
+			? (wrap.clientWidth - view.x) / view.scale
+			: (Math.max(0, wrap.clientHeight - composerInset) - view.y) / view.scale;
+		const start = worldToRail(worldStart);
+		const end = worldToRail(worldEnd);
+		return { start: Math.max(0, start), size: Math.min(railSize, Math.max(10, end - start)) };
 	}, [view, navGeo, width, height, nodes, horizontal, composerInset]);
 
 	return (
@@ -964,16 +965,17 @@ export function TurnMapCanvas({
 				<p className="tm-empty">{t("settings.trajectoryEmpty")}</p>
 			) : (
 				<>
-					{/* 迷你导航条:全轮次剪影 + 视口映射 + 点击/拖动跳转。 */}
+					{/* 迷你导航条:全轮次剪影 + 视口映射 + 点击/拖动跳转。
+						两种主线方向都锚在画布底缘横条,不占左侧、不压顶栏。 */}
 					<div
 						className="tm-nav"
 						data-orient={direction}
-						style={{ bottom: (horizontal ? 10 : 16) + composerInset }}
+						style={{ bottom: 10 + composerInset }}
 						onPointerDown={e => e.stopPropagation()}
 						onClick={e => {
 							const rect = e.currentTarget.getBoundingClientRect();
 							const { band } = navGeo;
-							const along = horizontal ? e.clientX - rect.left : e.clientY - rect.top;
+							const along = e.clientX - rect.left;
 							const idx = Math.floor((along - Math.max(0, (navGeo.railSize - nodes.length * band) / 2)) / band);
 							const clamped = Math.max(0, Math.min(nodes.length - 1, idx));
 							const turn = nodes[clamped]?.group.turn;
@@ -985,18 +987,11 @@ export function TurnMapCanvas({
 							<span
 								key={trajectoryTurnKey(n.group)}
 								className={`tm-nav-band tm-comp--${n.advisor ? "advisor" : (n.group.events[0]?.kind ?? "user")}`}
-								style={horizontal ? { width: navGeo.band } : { height: navGeo.band }}
+								style={{ width: navGeo.band }}
 							/>
 						))}
 						{viewportBand && (
-							<span
-								className="tm-nav-viewport"
-								style={
-									horizontal
-										? { left: viewportBand.start, width: viewportBand.size }
-										: { top: viewportBand.start, height: viewportBand.size }
-								}
-							/>
+							<span className="tm-nav-viewport" style={{ left: viewportBand.start, width: viewportBand.size }} />
 						)}
 					</div>
 					<div
