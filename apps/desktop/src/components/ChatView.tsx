@@ -6,7 +6,6 @@ import {
 	isBranchFormingEntry,
 	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	motionDisabled,
-	punkAvatarUri,
 	relTime,
 	SessionErrorDock,
 	springEasing,
@@ -51,7 +50,6 @@ import {
 } from "../lib/composer-tail-inset";
 import { containingBlockOrigin } from "../lib/containing-block-origin";
 import { FILE_WORKSPACE_SURFACE } from "../lib/file-workspace";
-import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { HISTORY_PAGE_MESSAGES } from "../lib/history-batch";
 import { type JumpTarget, resolveJumpEntryId } from "../lib/jump-target";
@@ -93,14 +91,12 @@ import { type UsePanelTabsResult, usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useStore } from "../lib/use-store";
-import { onUserAvatarChanged, readUserAvatarPrefs, type UserAvatarPrefs } from "../lib/user-avatar";
 import { createIncrementalSpeaker, type IncrementalSpeaker, speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
 import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
 import { AskPopover } from "./AskPopover";
-import { PunkAvatar } from "./avatar-presets";
 import { BtwFloatingCard } from "./BtwFloatingCard";
 import { ChatDropAnchor } from "./ChatDropAnchor";
 import { ChatFind, type FindHit } from "./ChatFind";
@@ -157,71 +153,6 @@ function activityRowsToNumber(value: unknown): number {
 	if (value === "all") return 0;
 	const n = Number.parseInt(value, 10);
 	return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-/**
- * User gutter avatar — one of three sources (设置 → Git → 用户头像来源,
- * `lib/user-avatar.ts`): `auto` = GitHub avatar (`https://github.com/
- * <login>.png`) → the identity-derived pixel face → the initial chip;
- * `punk` = the user-chosen pixel face; `initial` = the letter chip only
- * (no network). The title carries the git name/email (falls back to the
- * generic user chip).
- */
-function UserAvatar({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
-	const [user, setUser] = useState<GitUser | null>(null);
-	const [avatarFailed, setAvatarFailed] = useState(false);
-	const [prefs, setPrefs] = useState<UserAvatarPrefs>(readUserAvatarPrefs);
-	useEffect(() => {
-		let cancelled = false;
-		void readGitUser(rpc, cwd).then(u => {
-			if (!cancelled) setUser(u);
-		});
-		return () => {
-			cancelled = true;
-		};
-	}, [rpc, cwd]);
-	// The picture can change under a mounted bubble (login, logout, a new
-	// GitHub account), so the source is state, not a render-time read:
-	// without this the bubble kept the URL it first painted with.
-	useEffect(() => {
-		const sync = (): void => {
-			const next = readUserAvatarPrefs();
-			setPrefs(prev => (prev.mode === next.mode && prev.url === next.url ? prev : next));
-		};
-		return onUserAvatarChanged(sync);
-	}, []);
-	const { mode: avatarMode, url: avatarUrl } = prefs;
-	// A new picture (or a retry after switching back) must clear the failure
-	// latch; otherwise one broken URL pins every bubble to the fallback face
-	// for the life of the session.
-	useEffect(() => {
-		setAvatarFailed(false);
-	}, [avatarUrl, avatarMode]);
-	const initial = user?.name?.trim().charAt(0)?.toLocaleUpperCase() ?? "";
-	const title = user ? (user.email ? `${user.name} <${user.email}>` : user.name) : t("settings.you");
-	const punkFace = user?.name?.trim() ? (
-		<img src={punkAvatarUri(user.name.trim())} alt="" className="gui-user-avatar-img gui-avatar-punk" />
-	) : null;
-	const letterFace = initial ? <span className="gui-user-avatar-letter">{initial}</span> : null;
-	return (
-		<span className="gui-user-avatar" title={title}>
-			{avatarMode === "initial" ? (
-				(letterFace ?? <Icon name="user" className="h-3.5 w-3.5" />)
-			) : avatarMode === "punk" ? (
-				/* Explicit pixel-face mode: the user-chosen seed (设置 → 常规
-				 * 换一个 / seed 输入, PUNK_SEED_KEY) — NOT the git-identity
-				 * face, so the chat bubble follows the settings control and
-				 * never degrades to a blank icon when git identity is absent.
-				 * PunkAvatar listens for omp-avatar-changed, so 换一个/apply
-				 * re-renders every mounted bubble live. */
-				<PunkAvatar size={20} />
-			) : avatarUrl && !avatarFailed ? (
-				<img src={avatarUrl} alt="" className="gui-user-avatar-img" onError={() => setAvatarFailed(true)} />
-			) : (
-				(punkFace ?? letterFace ?? <Icon name="user" className="h-3.5 w-3.5" />)
-			)}
-		</span>
-	);
 }
 
 /**
@@ -943,7 +874,16 @@ export function ChatView({
 		[snap, nowMs, turnOutcome],
 	);
 	// Avatar display toggle lives in Settings → appearance (musepi-gui-avatars).
+	// The per-row avatars are gone (one identity per conversation), so this now
+	// decides whether the agent capsule carries the orb or the status text alone.
 	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
+	// The capsule's status line. Approvals lead: the agent is parked on a
+	// decision, which is the one state the human can act on.
+	const agentCapsuleStatus = snap?.approvals.length
+		? t("general.agentCapsuleWaiting")
+		: snap?.working
+			? t("general.agentCapsuleWorking")
+			: t("general.agentCapsuleIdle");
 	// Resizable terminal dock (drag the top edge).
 	const [dockHeight, setDockHeight] = useState(176);
 	// Dock side (bottom vs right). The TerminalPanel stays mounted across
@@ -3320,6 +3260,35 @@ export function ChatView({
 													</button>
 												</div>
 											</div>
+											{/* Agent identity capsule — the conversation's ONE agent avatar,
+											 * centered inside the band the scroller reserves for the
+											 * head row, so it covers no message, none of the sticky
+											 * prompt and none of the composer; scrolling moves only
+											 * the rows beneath it (pinned chrome, never faded).
+											 * Chat only: the canvas has its own top controls and no
+											 * reserved band. `data-agent-status` is the stable hook
+											 * the geometry test asserts on. */}
+											{viewMode === "chat" && (
+												<div
+													className={`gui-agent-capsule${snap?.working ? " gui-agent-capsule--working" : ""}`}
+													data-agent-status={
+														snap?.approvals.length ? "waiting" : snap?.working ? "working" : "idle"
+													}
+													title={`${t("general.assistant")} · ${agentCapsuleStatus}`}
+												>
+													{showAvatars && (
+														<AgentAvatar
+															state={orb}
+															size={20}
+															signals={agentSignals}
+															seed={store.sessionId}
+														/>
+													)}
+													<span className="gui-agent-capsule-name">{t("general.assistant")}</span>
+													<span className="gui-agent-capsule-sep" aria-hidden="true" />
+													<span className="gui-agent-capsule-status">{agentCapsuleStatus}</span>
+												</div>
+											)}
 											{/* Message-tree navigation sits in the header row, left of the
 											 * session-info toggle. The old absolute button floated over
 											 * the first transcript row and stole its hover/quote pill.
@@ -3646,22 +3615,16 @@ export function ChatView({
 																		setSpeakingId(null);
 																	}}
 																	onSaveImage={text => setSaveImageText(text)}
-																	/* avatars replace the 宿主/代理 gutter labels. */
-																	userGutter={
-																		showAvatars ? <UserAvatar rpc={rpc} cwd={store.cwd} /> : ""
-																	}
-																	agentGutter={
-																		showAvatars ? (
-																			<AgentAvatar
-																				state={orb}
-																				size={64}
-																				signals={agentSignals}
-																				seed={store.sessionId}
-																			/>
-																		) : (
-																			""
-																		)
-																	}
+																	/* One identity per conversation, not one per
+																	 * row: the agent's orb lives in the centered
+																	 * capsule above the transcript and the user's
+																	 * picture is the rail's account button. Empty
+																	 * gutters let every row reclaim the 64px orb /
+																	 * 28px user column (`.tr-gutter:empty`,
+																	 * gui-chat.css) so the text gets the full
+																	 * width. */
+																	userGutter=""
+																	agentGutter=""
 																	/* Layer-1 branch topology: multi-child messages render a
 																	 * switchable branch bar; off-path entries collapse. */
 																	branchInfo={{

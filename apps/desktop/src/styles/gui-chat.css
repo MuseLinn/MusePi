@@ -1655,6 +1655,131 @@ html.gui-vt-surface-only::view-transition-new(root),
 	transform: none;
 }
 
+/* ── Account control (rail + sidebar footer) ───────────────────────────
+ * The user's picture IS the account entry: it replaced the rail's settings
+ * gear and absorbed the shortcut / remote-control buttons that used to sit
+ * beside it (all three are rows in the menu). One control, one place for the
+ * user identity; the status dot carries the daemon connection so the rail
+ * still answers "am I connected" without opening the menu. */
+.gui-account {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+}
+.gui-account-btn {
+	position: relative;
+}
+.gui-account-btn .gui-user-avatar {
+	width: 26px;
+	height: 26px;
+}
+.gui-account-dot {
+	position: absolute;
+	right: 3px;
+	bottom: 3px;
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	background: var(--color-text-faint);
+	box-shadow: 0 0 0 2px var(--color-surface);
+}
+.gui-account-dot--on {
+	background: var(--color-success);
+}
+/* Sidebar-footer variant: a bare inline control, like the buttons it
+ * replaces (the footer supplies the row layout). */
+.gui-account-btn--footer {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	cursor: pointer;
+	transition: background 120ms ease-out;
+}
+.gui-account-btn--footer:hover {
+	background: var(--color-surface-raised);
+}
+.gui-account-btn--footer:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 1px;
+}
+.gui-account-menu {
+	width: 232px;
+	padding: 4px;
+}
+.gui-account-head {
+	padding: 6px 10px 6px;
+}
+.gui-account-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--color-text);
+}
+.gui-account-mail {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+.gui-account-divider {
+	height: 1px;
+	margin: 4px 8px;
+	background: var(--border);
+}
+.gui-account-section {
+	padding: 4px 10px 2px;
+	font-size: 10.5px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--color-text-faint);
+}
+.gui-account-host {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 10px;
+	border: 0;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		color 120ms ease-out;
+}
+.gui-account-host:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+.gui-account-host--active {
+	color: var(--color-text);
+}
+.gui-account-host-dot {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 999px;
+	background: var(--color-text-faint);
+}
+.gui-account-host-dot--on {
+	background: var(--color-success);
+}
+.gui-account-host-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 /* ── Per-session pause/resume (TUI /pause parity) ────────────────────── */
 /* Pause chip on paused session rows in the sidebar. */
 .gui-tree-pause {
@@ -6331,12 +6456,29 @@ body.gui-resizing .gui-pane-right {
 	opacity: 1;
 }
 
-/* ── Transcript avatars: 64px agent orb + 28px user letter chip ───────
+/* ── Transcript rows: one avatar per conversation ─────────────────────
+ * The avatar columns stay part of the transcript contract (side sessions and
+ * subagent drawers still paint an orb gutter), but the main chat now passes
+ * empty gutters: the agent orb lives in the head capsule and the user's
+ * picture in the rail account button. The rules below give that width back to
+ * the text at EVERY width — the shared transcript only collapses the rail at
+ * ≥641px, and this surface's orb column is 64px, so narrow windows (mini
+ * chat) would otherwise keep a blank band and start the body in column 2.
+ *
  * Scoped under .gui-transcript so the shared guest-client grid rules stay
- * untouched for other consumers; specificity (0,2,0) beats the base. */
+ * untouched for other consumers. */
 .gui-transcript .tr-row {
 	grid-template-columns: 64px minmax(0, 1fr);
 	gap: 0 12px;
+}
+
+.gui-transcript .tr-row:has(> .tr-gutter:empty) {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.gui-transcript .tr-row:has(> .tr-gutter:empty) > .tr-body,
+.gui-transcript .tr-row:has(> .tr-gutter:empty) > .tr-actions {
+	grid-column: 1;
 }
 
 .gui-transcript .tr-row--user {
@@ -6366,8 +6508,10 @@ body.gui-resizing .gui-pane-right {
 	grid-column: 2;
 }
 
-/* Keep the side-by-side avatar layout in narrow windows (mini chat),
- * where the shared transcript collapses rows to a vertical stack. */
+/* Keep the grid in narrow windows (mini chat), where the shared transcript
+ * collapses rows to a vertical stack. Rows with content in the gutter (side
+ * sessions) stay side-by-side; empty-gutter rows keep the full width via the
+ * rules above. */
 @media (max-width: 640px) {
 	.gui-transcript .tr-row,
 	.gui-transcript .tr-row--user {
@@ -6747,6 +6891,84 @@ body.gui-resizing .gui-pane-right {
 	gap: 6px;
 	flex: 1;
 	min-width: 0;
+}
+/* ── Agent identity capsule ────────────────────────────────────────────
+ * ONE avatar per conversation instead of one per row. The orb and the live
+ * state sit in a pill centered over the transcript's top band; the scroller
+ * reserves 52px for this row (`.gui-chat-column .gui-transcript`), so the
+ * pill covers no message at rest and nothing of the sticky ask or the
+ * composer.
+ *
+ * Positioning is against the CHAT COLUMN (`left: 50%` inside the head, which
+ * spans the column), not the window: opening the right rail, the side panel
+ * or the page destinations changes the column and the pill re-centers with
+ * it. Verified by test/agent-capsule-geometry.test.ts.
+ *
+ * Scroll behaviour is PINNED, not faded: the pill is chrome, so the messages
+ * scroll beneath it and the capsule never moves or dims — the live state is
+ * worth reading at any scroll position, and a fade would make the agent
+ * vanish exactly when a long answer is being read. */
+.gui-agent-capsule {
+	position: absolute;
+	left: 50%;
+	top: 4px;
+	transform: translateX(-50%);
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	/* Border-box: the hairline border must not grow the pill out of the 52px
+	 * band the scroller reserves (measured by the geometry test). */
+	box-sizing: border-box;
+	height: 28px;
+	padding: 0 10px 0 6px;
+	max-width: min(46%, 300px);
+	border: 1px solid var(--glass-hairline);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--color-surface-raised) 76%, transparent);
+	backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(var(--gui-glass-saturate, 140%));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(var(--gui-glass-saturate, 140%));
+	box-shadow:
+		inset 0 1px 0 var(--glass-rim-hi),
+		0 6px 18px rgb(0 0 0 / 16%);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1;
+	white-space: nowrap;
+}
+/* A readout, not a control: the head row is hit-transparent and the pill
+ * must not swallow clicks aimed at the first message row underneath it. */
+.gui-agent-capsule,
+.gui-agent-capsule * {
+	pointer-events: none;
+}
+.gui-agent-capsule-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-weight: 600;
+	color: var(--color-text);
+}
+.gui-agent-capsule-sep {
+	flex: none;
+	width: 1px;
+	height: 10px;
+	background: var(--border);
+}
+.gui-agent-capsule-status {
+	flex: none;
+	color: var(--color-text-faint);
+}
+.gui-agent-capsule--working .gui-agent-capsule-status {
+	color: var(--color-accent);
+}
+/* The sides of the head row (Chat|Canvas, parent-back, tree, info) need the
+ * middle band before the pill can show its text; below that it degrades to
+ * orb + state rather than colliding with them. */
+@media (max-width: 720px) {
+	.gui-agent-capsule-name,
+	.gui-agent-capsule-sep {
+		display: none;
+	}
 }
 /* Focus mode hides the row without removing its flow slot: the composer morph
  * starts from the measured layout, so a removed row would shift the composer
