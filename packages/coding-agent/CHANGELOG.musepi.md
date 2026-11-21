@@ -23,6 +23,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ### 改进
 
+- **应用图标换成带修订耳机的香槟金球**：桌面、网站、PWA、鸿蒙和 Android 启动图标现在共用一张母稿：香槟金色的球、修订后的白色耳机，放在官方 S5 超椭圆卡上再缩放。32px 及以上是这张 1024 图的纯缩放；16px 只在原有的白色五官和头箍上加了浅暗缝，耳机和表情都还在。原先的真矢量 SVG 改成这张母稿的光栅嵌入，不是新描的一张脸。通知栏那枚 24dp 小图标、托盘里正在用的帧、营销横幅和分享图都没有换。
+  - EN: The app icon is now the champagne-gold orb with the revised headset. Desktop, site, PWA, Harmony and Android launcher icons share one master: that orb and its white headset on the official S5 squircle card, then scaled. 32px and above are a pure scale of the 1024 image; 16px only adds a light dark seam on the white features and the headband that were already there, and the headset and expression stay. SVGs that used to be true vectors are raster embeds of this master, not a newly traced face. The 24dp notification glyph, the tray frames in use, the marketing banners and the share images are unchanged.
+
 - **设置与命令搜索支持模糊匹配和中英混合**：搜索不再要求逐字连续命中。名称、标题与命令可以按词首缩写找到（`cpt` 找到 `Compact`），全半角、大小写与变音符号不再影响结果（`web` 找到 `ＷＥＢ`，`lodz` 找到 `Łódź`）；描述、配置键等长文本仍只按连续子串命中，散落在句子里的字母不会变成噪声。设置项、设置页、命令与会话标题在中文和英文下都能命中，即使界面当前是另一种语言；结果按「精确 → 前缀 → 子串 → 词首缩写 → 描述」分层排序，空查询保持原有顺序。会话正文搜索与插件市场仍使用各自索引。
   - EN: Settings and command search now match fuzzily and across both languages. A name, title or command can be found by its word-start initials (`cpt` finds `Compact`), and width, case and diacritics no longer change the result (`web` finds `ＷＥＢ`, `lodz` finds `Łódź`); descriptions and config keys still match only as a contiguous substring, so letters scattered through a sentence do not count. Settings rows, settings pages, commands and session titles match in Chinese and English whichever language the UI is in, and hits rank by exact, prefix, substring, word-start initials, then description, while a blank query keeps the list's own order. Session content search and the plugin market keep their own indexes.
 
