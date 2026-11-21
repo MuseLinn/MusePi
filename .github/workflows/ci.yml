@@ -28,6 +28,20 @@ on:
          - "package.json"
          - "patches/**"
          - ".github/**"
+         # A documentation-only push starts a run for `docs_spec` (the pairing,
+         # changelog and docs gates) without paying for the code matrix: a
+         # docs-only commit once reached main with no run at all. This list
+         # only decides whether a push starts a run; `changes` decides on its
+         # own what documentation is, so a family added here later counts as
+         # code rather than being skipped by default.
+         #
+         # The root README is inside the strict pairing gate (`README.md` +
+         # `README.zh-CN.md` + `README.i18n.yaml`), so a README-only commit can
+         # ship a stale record exactly like a docs one did.
+         - "docs/**"
+         - "README.md"
+         - "README.zh-CN.md"
+         - "README.i18n.yaml"
    pull_request:
       branches: [main]
       # No path filter: branch protection requires the `CI required` check, and a
@@ -121,7 +135,7 @@ jobs:
    # Path gate for the heavy matrix. It always runs, so every PR produces the
    # required check; the build/test jobs below are skipped when a PR touches no
    # build input. `check` and `docs_spec` always run because they own the
-   # documentation gates that a docs-only PR needs.
+   # documentation gates that a PR or a docs-only push needs.
    changes:
       name: Detect code changes
       runs-on: ubuntu-22.04
@@ -133,21 +147,65 @@ jobs:
               fetch-depth: 1
          - id: diff
            shell: bash
+           # `BASE_SHA` is the commit this run ships: a PR's base sha, or for a
+           # push the pre-push tip from `github.event.before`. Diffing a push
+           # against its own `before` is what keeps a docs-only push out of the
+           # matrix — the trigger filter alone cannot, because this job runs
+           # too and used to answer `code=true` for every non-PR event.
+           env:
+              BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
            run: |
               set -euo pipefail
-              if [ "${{ github.event_name }}" != "pull_request" ]; then
+              if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]] || ! git fetch --no-tags --depth=1 origin "$BASE_SHA"; then
+                # A new branch, a force-push to an unfetched commit or a missing
+                # payload leaves no comparable range; run the matrix rather than
+                # guess that the push shipped nothing.
+                echo "base '$BASE_SHA' is not comparable; treating the run as a code change"
                 echo "code=true" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-              git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-              if git diff --quiet FETCH_HEAD HEAD -- \
-                packages apps tools crates scripts bazel \
-                MODULE.bazel MODULE.bazel.lock BUILD.bazel \
-                .bazelrc .bazelignore .bazelversion \
-                Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml \
-                bun.lock bunfig.toml package.json patches .github; then
+              # "Documentation only" is the single fact this job needs, so it
+              # reads the changed paths instead of re-parsing the workflow's
+              # trigger filter: a path family added to `on.push.paths` later is
+              # unknown here and therefore counts as code, which runs the matrix
+              # rather than skipping it. Documentation is `docs/` plus the root
+              # README pair the strict pairing gate reads; those three are
+              # listed explicitly because they live at the repository root,
+              # where a prefix rule would also swallow every other root file.
+              # `--no-renames` matters — git otherwise reports a file moved out
+              # of `packages/` into `docs/` under its new name alone, which
+              # would read as documentation-only. `-z` goes through a file
+              # because a shell variable cannot hold NUL, and it keeps
+              # non-ASCII names (this repo's Chinese docs) raw instead of
+              # quoted, so they still match the cases below.
+              changed="$(mktemp)"
+              if ! git diff --name-only -z --no-renames FETCH_HEAD HEAD > "$changed"; then
+                rm -f "$changed"
+                echo "::error::could not diff $BASE_SHA..HEAD"
+                exit 1
+              fi
+              code=0
+              seen=0
+              while IFS= read -r -d '' path; do
+                seen=$((seen + 1))
+                case "$path" in
+                  docs/* | README.md | README.zh-CN.md | README.i18n.yaml) ;;
+                  *) code=1; break ;;
+                esac
+              done < "$changed"
+              rm -f "$changed"
+              if [ "$seen" -eq 0 ]; then
+                # An empty range would satisfy "every path is docs" vacuously; a
+                # base that resolves to this very commit proves nothing shipped.
+                echo "no changed paths between $BASE_SHA and HEAD; treating the run as a code change"
+                echo "code=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if [ "$code" -eq 0 ]; then
+                echo "every changed path is under docs/"
                 echo "code=false" >> "$GITHUB_OUTPUT"
               else
+                echo "code inputs changed"
                 echo "code=true" >> "$GITHUB_OUTPUT"
               fi
 

@@ -70,11 +70,17 @@ export function useComposerIntake(options: ComposerIntakeOptions): {
 				.filter(item => item.kind === "file")
 				.map(item => item.getAsFile())
 				.filter((file): file is File => file !== null);
-			const added = onPasteFiles
-				? onPasteFiles(event)
-				: files.length > 0
-					? (event.preventDefault(), addFiles(files))
-					: Promise.resolve([]);
+			let added: Promise<ComposerAttachment[]>;
+			if (onPasteFiles) {
+				added = onPasteFiles(event);
+			} else if (files.length > 0) {
+				// The paste is consumed, so the browser must not insert the files
+				// as text; the guard below reads `defaultPrevented` right after.
+				event.preventDefault();
+				added = addFiles(files);
+			} else {
+				added = Promise.resolve([]);
+			}
 			if (event.defaultPrevented || files.length > 0) {
 				// Mixed clipboard: keep the text half the attachment branch lost.
 				insertPastedPlainText(editor.current, pastedText);
