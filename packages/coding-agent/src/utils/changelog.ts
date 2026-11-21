@@ -35,7 +35,15 @@ export interface StartupChangelogSelection {
 	categoryCounts: Record<string, number>;
 }
 
+/**
+ * Startup summary order: the canonical Chinese categories first, then the
+ * English headings still present in released sections. Anything else is an
+ * unknown category and falls into the alphabetical tail.
+ */
 const CHANGELOG_CATEGORY_ORDER = [
+	"新功能",
+	"改进",
+	"修复",
 	"Breaking Changes",
 	"Added",
 	"Changed",
@@ -44,6 +52,13 @@ const CHANGELOG_CATEGORY_ORDER = [
 	"Fixed",
 	"Security",
 ] as const;
+
+/** English labels for the canonical Chinese category headings. */
+const CHANGELOG_CATEGORY_LABELS: Record<string, readonly [one: string, many: string]> = {
+	新功能: ["new feature", "new features"],
+	改进: ["improvement", "improvements"],
+	修复: ["fix", "fixes"],
+};
 
 function emptyStartupSelection(persistCurrentVersion: boolean): StartupChangelogSelection {
 	return {
@@ -83,6 +98,8 @@ function summarizeChangelogEntries(entries: readonly ChangelogEntry[]): {
 }
 
 function categoryLabel(category: string, count: number): string {
+	const labels = CHANGELOG_CATEGORY_LABELS[category];
+	if (labels) return count === 1 ? labels[0] : labels[1];
 	if (category === "Breaking Changes") {
 		return count === 1 ? "breaking change" : "breaking changes";
 	}
@@ -244,7 +261,8 @@ export function getNewEntries(entries: ChangelogEntry[], lastVersion: string): C
  * CHANGELOG.musepi.md). Rendering picks one language per entry:
  *
  * - `"zh-CN"` (default): keep the Chinese line, drop the `- EN:` sub-line.
- * - `"en-US"`: swap the Chinese line for the `- EN:` content.
+ * - `"en-US"`: swap the Chinese line for the `- EN:` content and translate
+ *   the canonical `### 新功能/改进/修复` headings.
  *
  * Entries without a bilingual sub-line pass through unchanged (older
  * single-language notes stay as authored).
@@ -254,11 +272,26 @@ export type ChangelogLocale = "zh-CN" | "en-US";
 /** Default locale for changelog rendering (MusePi is Chinese-first). */
 export const CHANGELOG_DEFAULT_LOCALE: ChangelogLocale = "zh-CN";
 
+/** English projection of the canonical Chinese category headings. */
+const CHANGELOG_CATEGORY_HEADING_EN: Record<string, string> = {
+	新功能: "New features",
+	改进: "Improvements",
+	修复: "Fixes",
+};
+
 function localizeChangelogContent(content: string, locale: ChangelogLocale): string {
 	const lines = content.split("\n");
 	const out: string[] = [];
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i];
+		if (locale === "en-US") {
+			const heading = line.match(/^###\s+(.+?)\s*$/);
+			const translated = heading ? CHANGELOG_CATEGORY_HEADING_EN[heading[1]] : undefined;
+			if (translated) {
+				out.push(`### ${translated}`);
+				continue;
+			}
+		}
 		const enSub = line.match(/^\s*- EN: (.*)$/);
 		if (enSub) {
 			// `- EN:` sub-line: dropped in zh, consumed by the parent in en.

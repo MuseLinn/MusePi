@@ -187,6 +187,77 @@ describe("flat release notes (this repository's shape)", () => {
 	});
 });
 
+describe("Chinese category headings", () => {
+	const CATEGORIZED = `## [0.8.0] - 2026-11-21
+
+### 新功能
+
+- **新卡片**：说明。
+- **第二项新功能**：说明。
+
+### 改进
+
+- **更顺的流程**：说明。
+
+### 修复
+
+- **修好崩溃**：说明。
+- 没有加粗的修复：也计数。
+
+### 其他
+
+- **未知分类**：只计入总数。
+`;
+
+	test("kinds come from 新功能/改进/修复 and per-kind counts stay exact", () => {
+		const [version] = parseChangelogHighlights(CATEGORIZED);
+		expect(version.highlights.map(h => h.kind)).toEqual(["added", "added", "changed"]);
+		expect(version.counts).toEqual({ added: 2, fixed: 2, changed: 1, removed: 0 });
+		expect(version.count).toBe(6);
+	});
+
+	test("unknown headings stay uncategorized and only feed the total", () => {
+		const [version] = parseChangelogHighlights(CATEGORIZED);
+		expect(version.highlights.every(h => h.kind !== "note")).toBe(true);
+		const unknown = parseChangelogHighlights(`## [1.0.0]\n\n### 其他\n\n- **条目**：说明。`);
+		expect(unknown[0]?.highlights[0]?.kind).toBe("note");
+		expect(unknown[0]?.counts).toEqual({ added: 0, fixed: 0, changed: 0, removed: 0 });
+	});
+
+	test("en-US projects the Chinese headings to English; zh-CN keeps them", () => {
+		const english = localizeChangelogMarkdown(CATEGORIZED, "en-US");
+		expect(english).toContain("### New features");
+		expect(english).toContain("### Improvements");
+		expect(english).toContain("### Fixes");
+		expect(english).not.toMatch(/###\s+(新功能|改进|修复)/);
+		expect(parseChangelogHighlights(english)[0]?.counts).toEqual({
+			added: 2,
+			fixed: 2,
+			changed: 1,
+			removed: 0,
+		});
+
+		const chinese = localizeChangelogMarkdown(CATEGORIZED, "zh-CN");
+		expect(chinese).toContain("### 新功能");
+		expect(chinese).toContain("### 改进");
+		expect(chinese).toContain("### 修复");
+	});
+
+	test("English headings keep working alongside the Chinese ones", () => {
+		const [version] = parseChangelogHighlights(`## [1.0.0]
+
+### Added
+
+- **新条目**：说明。
+
+### Fixed
+
+- **修复项**：说明。`);
+		expect(version.highlights.map(h => h.kind)).toEqual(["added", "fixed"]);
+		expect(version.counts).toEqual({ added: 1, fixed: 1, changed: 0, removed: 0 });
+	});
+});
+
 describe("localizeChangelogMarkdown", () => {
 	test("Chinese keeps the main bullet and drops every EN child", () => {
 		const localized = localizeChangelogMarkdown(FIXTURE, "zh-CN");

@@ -215,6 +215,69 @@ describe("formatStartupChangelogSummary", () => {
 		);
 	});
 
+	test("orders Chinese categories as new features, improvements, fixes and labels them in English", () => {
+		const selection = selectStartupChangelog(
+			[
+				release(
+					2,
+					0,
+					0,
+					"### 修复\n\n- Fix one.\n\n### 新功能\n\n- Feature one.\n- Feature two.\n\n### 改进\n\n- Improvement one.",
+				),
+				release(1, 9, 0, "### 新功能\n\n- Another feature."),
+			],
+			"1.8.0",
+			"2.0.0",
+		);
+
+		expect(formatStartupChangelogSummary(selection)).toBe(
+			[
+				"Updated to v2.0.0 · 5 changes across 2 releases",
+				"3 new features · 1 improvement · 1 fix · Use /changelog for details.",
+			].join("\n"),
+		);
+	});
+
+	test("Chinese categories precede the legacy English ones and unknown headings stay last", () => {
+		const selection = selectStartupChangelog(
+			[
+				release(
+					2,
+					0,
+					0,
+					"### 修复\n\n- A fix.\n\n### Added\n\n- An addition.\n\n### 性能实验\n\n- Unlabelled bucket.",
+				),
+				release(1, 9, 0, "### Changed\n\n- A change."),
+			],
+			"1.8.0",
+			"2.0.0",
+		);
+
+		expect(formatStartupChangelogSummary(selection)).toBe(
+			[
+				"Updated to v2.0.0 · 4 changes across 2 releases",
+				"1 fix · 1 added · 1 changed · 1 性能实验 · Use /changelog for details.",
+			].join("\n"),
+		);
+	});
+
+	test("English rendering projects the Chinese category headings", () => {
+		const rendered = renderChangelogEntries(
+			[
+				{
+					major: 2,
+					minor: 0,
+					patch: 0,
+					content: "## [2.0.0] - 2026-11-21\n\n### 新功能\n\n- **卡片**：说明。\n  - EN: **Card**: Detail.",
+				},
+			],
+			{ locale: "en-US", oldestFirst: false },
+		);
+
+		expect(rendered.markdown).toContain("### New features");
+		expect(rendered.markdown).not.toContain("### 新功能");
+	});
+
 	test("uses the recent-details hint when every unseen release is represented", () => {
 		const selection = selectStartupChangelog(
 			[release(2, 0, 0, "### Breaking Changes\n\n- Removed the old wire format.")],
