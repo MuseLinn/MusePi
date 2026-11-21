@@ -926,6 +926,9 @@ toolchain traps they exposed live in `gui-implementation.md` §45.
     draft, which is why a name containing spaces or brackets cannot break the
     token. A directory row, or a composer that cannot take the reference right
     now, disables the item and states the reason instead of failing silently.
+    With the main chat and a side session both live, the reference goes to the
+    composer that holds focus, else the one the user worked in last, so closing
+    either one never disables the item while the other can still take it.
     The expanded file tree shares the content
     row with the editor and leaves the path row unchanged; long editor lines scroll
     horizontally instead of being rewrapped. Clicking the already-open file in that

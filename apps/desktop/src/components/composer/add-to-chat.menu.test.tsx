@@ -75,15 +75,16 @@ async function mountMenu(options: {
 	const inserted: string[] = [];
 	const staged: AddToChatFile[] = [];
 	const opened: string[] = [];
+	const key = {};
 	let closed = false;
 	if (options.withDraft) {
 		const draft: AddToChatDraftApi = {
 			canInsert: () => true,
 			insertMention: label => inserted.push(label),
 		};
-		disposers.push(registerAddToChatDraft(draft));
+		disposers.push(registerAddToChatDraft(key, draft));
 		disposers.push(
-			registerAddToChatFiles({
+			registerAddToChatFiles(key, {
 				addWorkspaceFile: async (file: AddToChatFile) => {
 					staged.push(file);
 					return "文件1";
@@ -91,7 +92,7 @@ async function mountMenu(options: {
 			}),
 		);
 	} else {
-		disposers.push(registerAddToChatFiles({ addWorkspaceFile: async () => null }));
+		disposers.push(registerAddToChatFiles({}, { addWorkspaceFile: async () => null }));
 	}
 
 	host = document.createElement("div");

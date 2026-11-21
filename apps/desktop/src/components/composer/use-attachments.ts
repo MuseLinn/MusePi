@@ -533,12 +533,16 @@ export function useAttachments(
 	// Publish the capability to the file menu. Only this intake (session mode,
 	// or the shared entry's intake while a session is live) may stage; the
 	// effect withdraws on unmount so the menu cannot target a dead composer.
+	// The key is this intake's own setter, the same one the draft half gets,
+	// so a chip can never be staged here and referenced in another composer.
 	const addWorkspaceFileRef = useRef(addWorkspaceFile);
 	addWorkspaceFileRef.current = addWorkspaceFile;
 	useEffect(() => {
 		if (!stageFiles) return;
-		return registerAddToChatFiles({ addWorkspaceFile: file => addWorkspaceFileRef.current(file) });
-	}, [stageFiles]);
+		return registerAddToChatFiles(setAttachments, {
+			addWorkspaceFile: file => addWorkspaceFileRef.current(file),
+		});
+	}, [stageFiles, setAttachments]);
 
 	const onPaste = (e: ComposerClipboardEvent): Promise<ComposerAttachment[]> => {
 		// Any pasted file (image or not) becomes a chip; plain text is left
