@@ -70,22 +70,20 @@ async function waitFor(check: () => boolean, label: string): Promise<void> {
 	throw new Error(`timed out waiting for ${label}`);
 }
 
-async function mount(fake: FakeRpc): Promise<HTMLDivElement> {
+async function mountRpc(rpc: RpcClient | null): Promise<HTMLDivElement> {
 	const element = document.createElement("div");
 	document.body.appendChild(element);
 	root = createRoot(element);
 	await act(async () => {
-		root?.render(
-			createElement(
-				PromptProvider,
-				null,
-				createElement(SecretSettingsSection, { rpc: fake as unknown as RpcClient }),
-			),
-		);
+		root?.render(createElement(PromptProvider, null, createElement(SecretSettingsSection, { rpc })));
 	});
 	await flush();
 	host = element;
 	return element;
+}
+
+async function mount(fake: FakeRpc): Promise<HTMLDivElement> {
+	return mountRpc(fake as unknown as RpcClient);
 }
 
 function setInput(input: HTMLInputElement, value: string): void {
@@ -143,6 +141,28 @@ describe("设置页密钥", () => {
 		expect(buttonByText(scope, "添加密钥").type).toBe("button");
 		expect(fake.calls("secret.status")).toEqual([{}]);
 		expect(fake.calls("secret.list")).toEqual([{}]);
+	});
+
+	test("后台未连接时不把「未读取」当成空列表", async () => {
+		const scope = await mountRpc(null);
+
+		expect(scope.textContent).toContain("后台服务未连接");
+		expect(scope.textContent).not.toContain("还没有密钥");
+		expect(scope.textContent).not.toContain("已存密钥：0");
+	});
+
+	test("list 失败时隐藏数量与空态，只保留读取失败回退", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("secret.status", { mode: "encrypted", count: 3 });
+		fake.failures.set("secret.list", new Error("list unavailable"));
+
+		const scope = await mount(fake);
+
+		expect(scope.textContent).toContain("无法加载密钥列表：list unavailable");
+		expect(scope.textContent).not.toContain("还没有密钥");
+		expect(scope.textContent).not.toContain("已存密钥：0");
+		expect(scope.textContent).not.toContain("已存密钥：3");
+		expect(scope.textContent).toContain("已加密（本机主密钥）");
 	});
 
 	test("列表显示名字、用途、scope 和最后使用时间，且永不渲染值", async () => {

@@ -173,7 +173,6 @@ function SecretForm({
 
 export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const { confirm } = useConfirm();
-	const [status, setStatus] = useState<SecretStatusResult | null>(null);
 	const [entries, setEntries] = useState<SecretEntryView[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [statusError, setStatusError] = useState<string | null>(null);
@@ -191,7 +190,6 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 
 	useEffect(() => {
 		if (!rpc) {
-			setStatus(null);
 			setEntries([]);
 			setLoading(false);
 			setStatusError(null);
@@ -207,10 +205,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			rpc.request<SecretListResult>("secret.list", {}),
 		]).then(([statusResult, listResult]) => {
 			if (!alive) return;
-			if (statusResult.status === "fulfilled") {
-				setStatus(statusResult.value);
-			} else {
-				setStatus(null);
+			if (statusResult.status === "rejected") {
 				setStatusError(errorText(statusResult.reason));
 			}
 			if (listResult.status === "fulfilled") {
@@ -313,9 +308,10 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 		}
 	};
 
-	// The visible list is authoritative once it loads; the status count covers
-	// the one case it cannot (the list request failed).
-	const count = listError ? (status?.count ?? entries.length) : entries.length;
+	// The count and empty state are facts about the list, not about the
+	// daemon: without a readable list ("0 entries" included) they would
+	// contradict the offline/read-failure warning above them.
+	const listKnown = rpc !== null && !loading && !listError;
 
 	return (
 		<div className="gui-settings-section">
@@ -335,19 +331,21 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			)}
 			{listError && <WarningLine message={t("settings.secretsListFailed", { error: listError })} onRetry={reload} />}
 			{actionError && <WarningLine message={actionError} />}
-			<div className="mt-3 flex items-center justify-between gap-2">
-				<div className="text-[12px] text-[var(--color-text-muted)]">
-					{t("settings.secretsStoredCount", { count })}
+			{listKnown && (
+				<div className="mt-3 flex items-center justify-between gap-2">
+					<div className="text-[12px] text-[var(--color-text-muted)]">
+						{t("settings.secretsStoredCount", { count: entries.length })}
+					</div>
+					<button
+						type="button"
+						className="gui-btn gui-btn-primary shrink-0"
+						disabled={form !== null}
+						onClick={openAdd}
+					>
+						<Plus size={13} aria-hidden="true" /> {t("settings.secretsAdd")}
+					</button>
 				</div>
-				<button
-					type="button"
-					className="gui-btn gui-btn-primary shrink-0"
-					disabled={!rpc || form !== null || loading || listError !== null}
-					onClick={openAdd}
-				>
-					<Plus size={13} aria-hidden="true" /> {t("settings.secretsAdd")}
-				</button>
-			</div>
+			)}
 			{form && (
 				<SecretForm
 					form={form}
@@ -360,7 +358,7 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			)}
 			{loading ? (
 				<div className="gui-settings-row">{t("settings.loading")}</div>
-			) : listError ? null : entries.length === 0 ? (
+			) : !listKnown ? null : entries.length === 0 ? (
 				<div className="gui-agent-card text-[12.5px] text-[var(--color-text-muted)]">
 					{t("settings.secretsEmpty")}
 				</div>
