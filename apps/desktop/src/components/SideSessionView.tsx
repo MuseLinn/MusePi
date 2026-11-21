@@ -114,6 +114,11 @@ function SideSessionBody({
 	const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 	const [asks, setAsks] = useState<readonly AskRequest[]>([]);
 	const [secretRequests, setSecretRequests] = useState<readonly SecretRequest[]>([]);
+	// Requests this view already answered. The daemon's `secret-request-end`
+	// broadcast comes back to the answering connection too; a local id keeps
+	// its resolved line until SecretCard's linger calls onSettled, while a
+	// foreign end (other device answered, or timeout) drops the card at once.
+	const answeredSecretRequestsRef = useRef<Set<string>>(new Set());
 	const [quotes, setQuotes] = useState<DisplayContext[]>([]);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(bodyRef);
@@ -148,6 +153,7 @@ function SideSessionBody({
 	// leaves its own state.
 	useEffect(() => {
 		setSecretRequests([]);
+		answeredSecretRequestsRef.current.clear();
 	}, [sessionId]);
 	useEffect(() => {
 		if (!rpc) return;
@@ -178,7 +184,9 @@ function SideSessionBody({
 			// Another device answered, or the request timed out as cancel.
 			if (event.kind === "secret-request-end") {
 				const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
-				if (typeof requestId === "string") {
+				// This view's own answer comes back as an end too — leave it
+				// to the card's linger instead of flashing the line away.
+				if (typeof requestId === "string" && !answeredSecretRequestsRef.current.has(requestId)) {
 					setSecretRequests(current => current.filter(item => item.requestId !== requestId));
 				}
 			}
@@ -212,6 +220,9 @@ function SideSessionBody({
 
 	const answerSecret = (value: SecretAnswer): Promise<void> => {
 		if (!rpc) return Promise.reject(new Error(t("general.sideSessionError")));
+		// Mark before the send: the end broadcast can arrive before the RPC
+		// result resolves. Failure rolls the mark back.
+		answeredSecretRequestsRef.current.add(value.requestId);
 		return rpc
 			.request("secret.answer", {
 				requestId: value.requestId,
@@ -219,7 +230,11 @@ function SideSessionBody({
 				...(value.value !== undefined ? { value: value.value } : {}),
 				...(value.scope !== undefined ? { scope: value.scope } : {}),
 			})
-			.then(() => undefined);
+			.then(() => undefined)
+			.catch((err: unknown) => {
+				answeredSecretRequestsRef.current.delete(value.requestId);
+				throw err;
+			});
 	};
 
 	const send = (
@@ -309,9 +324,10 @@ function SideSessionBody({
 							key={request.requestId}
 							request={request}
 							onAnswer={answerSecret}
-							onSettled={requestId =>
-								setSecretRequests(current => current.filter(item => item.requestId !== requestId))
-							}
+							onSettled={requestId => {
+								answeredSecretRequestsRef.current.delete(requestId);
+								setSecretRequests(current => current.filter(item => item.requestId !== requestId));
+							}}
 						/>
 					))}
 				</div>

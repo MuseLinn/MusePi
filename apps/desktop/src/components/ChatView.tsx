@@ -514,6 +514,12 @@ export function ChatView({
 	// SecretCard holds it for the duration of the input and answers through
 	// secret.answer.
 	const [secretRequests, setSecretRequests] = useState<readonly SecretRequest[]>([]);
+	// Requests this window has already answered. The daemon broadcasts
+	// `secret-request-end` to every subscriber — including this one, one
+	// batcher beat after the RPC result. Those local ids keep their resolved
+	// line until SecretCard's linger calls onSettled; only foreign ends
+	// (another device answered, or the ten-minute timeout) drop a card.
+	const answeredSecretRequestsRef = useRef<Set<string>>(new Set());
 	useEffect(() => {
 		const sessionId = store?.sessionId;
 		return rpc.addEventListener(event => {
@@ -546,7 +552,9 @@ export function ChatView({
 			// Another device answered, or the request timed out as cancel.
 			if (event.kind === "secret-request-end") {
 				const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
-				if (typeof requestId === "string") {
+				// A locally answered request keeps its settled line — the end
+				// broadcast for it is this window's own write coming back.
+				if (typeof requestId === "string" && !answeredSecretRequestsRef.current.has(requestId)) {
 					setSecretRequests(current => current.filter(item => item.requestId !== requestId));
 				}
 			}
@@ -554,12 +562,21 @@ export function ChatView({
 	}, [rpc, store?.sessionId]);
 	const answerSecret = useCallback(
 		async (answer: SecretAnswer): Promise<void> => {
-			await rpc.request("secret.answer", {
-				requestId: answer.requestId,
-				action: answer.action,
-				...(answer.value !== undefined ? { value: answer.value } : {}),
-				...(answer.scope !== undefined ? { scope: answer.scope } : {}),
-			});
+			// Mark before the send: the end broadcast can arrive before the RPC
+			// response resolves, so marking on success would race the card off
+			// screen. Failure rolls the mark back.
+			answeredSecretRequestsRef.current.add(answer.requestId);
+			try {
+				await rpc.request("secret.answer", {
+					requestId: answer.requestId,
+					action: answer.action,
+					...(answer.value !== undefined ? { value: answer.value } : {}),
+					...(answer.scope !== undefined ? { scope: answer.scope } : {}),
+				});
+			} catch (err) {
+				answeredSecretRequestsRef.current.delete(answer.requestId);
+				throw err;
+			}
 		},
 		[rpc],
 	);
@@ -1125,6 +1142,7 @@ export function ChatView({
 		// Secret cards belong to the session that raised them — leaving the
 		// session drops the card; the daemon replays it on return.
 		setSecretRequests([]);
+		answeredSecretRequestsRef.current.clear();
 		const timer = setTimeout(() => {
 			if (el) delete el.dataset.switched;
 		}, 700);
@@ -3986,9 +4004,10 @@ export function ChatView({
 										key={request.requestId}
 										request={request}
 										onAnswer={answerSecret}
-										onSettled={requestId =>
-											setSecretRequests(current => current.filter(item => item.requestId !== requestId))
-										}
+										onSettled={requestId => {
+											answeredSecretRequestsRef.current.delete(requestId);
+											setSecretRequests(current => current.filter(item => item.requestId !== requestId));
+										}}
 									/>
 								))}
 								{ask && onAskAnswer && (

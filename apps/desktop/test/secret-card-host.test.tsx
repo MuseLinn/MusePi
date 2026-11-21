@@ -34,7 +34,7 @@ afterEach(async () => {
 	document.body.innerHTML = "";
 });
 
-function makeRpc(): {
+function makeRpc(shouldFail?: (requestId: string) => boolean): {
 	rpc: RpcClient;
 	answers: { requestId: string; action: string; value?: string; scope?: string }[];
 	emit(event: StreamEvent): void;
@@ -44,7 +44,9 @@ function makeRpc(): {
 	const rpc = {
 		request: async (method: string, params?: unknown) => {
 			if (method === "secret.answer") {
-				answers.push(params as { requestId: string; action: string; value?: string; scope?: string });
+				const answer = params as { requestId: string; action: string; value?: string; scope?: string };
+				answers.push(answer);
+				if (shouldFail?.(answer.requestId)) throw new Error(`Unknown secret request: ${answer.requestId}`);
 				return { ok: true };
 			}
 			if (method.startsWith("models.list")) return [];
@@ -105,6 +107,10 @@ function requestEvent(
 		...(sessionId ? { sessionId } : {}),
 		payload: { requestId, name, purpose: `Need ${name}`, kind },
 	};
+}
+
+function endEvent(sessionId: string, requestId: string): StreamEvent {
+	return { kind: "secret-request-end", seq: 2, sessionId, payload: { requestId } };
 }
 
 async function emit(emitEvent: (event: StreamEvent) => void, event: StreamEvent): Promise<void> {
@@ -190,5 +196,54 @@ describe("SecretCard host 并发请求", () => {
 		]);
 		expect(host.textContent).toContain("已允许 FIRST_KEY");
 		expect(host.textContent).toContain("已允许 SECOND_KEY");
+	});
+});
+
+describe("SecretCard host 本地作答与 end 广播", () => {
+	test("本地作答后的 end 保留确认行，未作答的 end 立即清卡", async () => {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		mounted.add(root);
+		const { rpc, emit: emitEvent } = makeRpc();
+		const store = makeStore("session-a");
+
+		await act(async () => root.render(view(store, rpc)));
+		await emit(emitEvent, requestEvent("session-a", "r1", "FIRST_KEY"));
+		await emit(emitEvent, requestEvent("session-a", "r2", "SECOND_KEY"));
+		await act(async () => buttonIn(cards(host)[0]!, "允许").click());
+		await flush();
+		expect(host.textContent).toContain("已允许 FIRST_KEY");
+
+		// 作答连接也会收到自己的 end（RPC 结果后一个 batcher 窗口）：
+		// 不能把刚出现的确认行按 id 删掉。
+		await emit(emitEvent, endEvent("session-a", "r1"));
+		expect(cards(host)).toHaveLength(2);
+		expect(host.textContent).toContain("已允许 FIRST_KEY");
+		expect(host.textContent).toContain("$MUSEPI_SECRET_SECOND_KEY");
+
+		// 没有本地作答的 r2：别的设备已答/超时仍要立刻消失。
+		await emit(emitEvent, endEvent("session-a", "r2"));
+		expect(cards(host)).toHaveLength(1);
+		expect(host.textContent).not.toContain("$MUSEPI_SECRET_SECOND_KEY");
+		expect(host.textContent).toContain("已允许 FIRST_KEY");
+	});
+
+	test("作答失败回滚本地标记，随后的 end 仍会清卡", async () => {
+		const host = document.createElement("div");
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		mounted.add(root);
+		const { rpc, emit: emitEvent } = makeRpc(requestId => requestId === "r3");
+		const store = makeStore("session-a");
+
+		await act(async () => root.render(view(store, rpc)));
+		await emit(emitEvent, requestEvent("session-a", "r3", "FAIL_KEY"));
+		await act(async () => buttonIn(cards(host)[0]!, "允许").click());
+		await flush();
+		expect(host.querySelector('[role="alert"]')?.textContent).toContain("Unknown secret request: r3");
+
+		await emit(emitEvent, endEvent("session-a", "r3"));
+		expect(cards(host)).toHaveLength(0);
 	});
 });
