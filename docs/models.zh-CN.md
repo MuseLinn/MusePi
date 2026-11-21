@@ -415,9 +415,11 @@ providers:
 3. 扩展凭据解析器（`registerProvider({ resolveApiKey })`）
 4. 存储的 OAuth 凭据（含刷新）
 5. 登录来源的存储 API key
-6. 环境变量映射（`OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 等）
-7. 其他存储的 API key，例如 broker-migrated 副本
+6. 其他存储的 API key——导入或恢复的 key（Setup、broker 快照）、broker 迁移的副本，或无来源记录的旧记录
+7. 环境变量映射（`OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 等），仅当存储中没有该 provider 的 key 时查询
 8. ModelRegistry 回退解析器（`models.yml` 自定义 provider，使用 env-name-or-literal 语义）
+
+完整理由与「单次运行覆盖」的正确做法见 [Providers 的「凭据与优先级」](providers.md)；shell 导出的同名变量不再压过已保存的 key。
 
 `models.yml` 的 `apiKey` 行为：
 
@@ -435,7 +437,7 @@ providers:
 
 ### Broker 模式
 
-当设置了 `MUSEPI_AUTH_BROKER_URL`（或 `auth.broker.url`）时，本地 SQLite 凭据存储会被 `RemoteAuthCredentialStore` 替换。上述第 3、4、6 层（存储的 OAuth 和 API key 凭据）由 broker 提供的快照提供服务，其 `refresh` token 会被脱敏；过期会触发 broker 上的 `POST /v1/credential/:id/refresh`，而非本地刷新。
+当设置了 `MUSEPI_AUTH_BROKER_URL`（或 `auth.broker.url`）时，本地 SQLite 凭据存储会被 `RemoteAuthCredentialStore` 替换。上述第 4、5、6 层（存储的 OAuth 和 API key 凭据）由 broker 提供的快照提供服务，其 `refresh` token 会被脱敏；过期会触发 broker 上的 `POST /v1/credential/:id/refresh`，而非本地刷新。
 
 `AuthStorage.setConfigApiKey` 可以让 `models.yml` 的 `apiKey` 胜出 broker 解析的 OAuth token，且不覆盖运行时的 `--api-key`。完整的 broker/gateway 设计与 env 表面（`MUSEPI_AUTH_BROKER_URL`、`MUSEPI_AUTH_BROKER_TOKEN`、`auth.broker.url`、`auth.broker.token`）见 [`auth-broker-gateway.md`](./auth-broker-gateway.html)。
 

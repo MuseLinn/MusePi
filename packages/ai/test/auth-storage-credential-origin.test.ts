@@ -79,13 +79,13 @@ describe("AuthStorage.getCredentialOrigin", () => {
 		});
 	});
 
-	test("an explicit env var outranks a stored api key", async () => {
-		// Regression: a live env var is the user's current choice and must win over a stored
-		// static api_key (e.g. a stale broker-migrated copy) so `GEMINI_API_KEY` etc. take effect.
+	test("a stored api key outranks an explicit env var", async () => {
+		// A credential the user saved must take effect for every provider; a same-named
+		// launch-environment value applies only while storage holds no key.
 		await withEnv({ ...SUPPRESS_ENV, OPENAI_API_KEY: "sk-env" }, async () => {
 			await auth?.set("openai", [{ type: "api_key", key: "sk-stored" }]);
-			expect(auth?.getCredentialOrigin("openai")).toEqual({ kind: "env", envVar: "OPENAI_API_KEY" });
-			expect(await auth?.getApiKey("openai")).toBe("sk-env");
+			expect(auth?.getCredentialOrigin("openai")).toEqual({ kind: "api_key" });
+			expect(await auth?.getApiKey("openai")).toBe("sk-stored");
 		});
 	});
 

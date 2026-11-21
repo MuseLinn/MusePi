@@ -1,5 +1,5 @@
 # Consistency record for providers.md / providers.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/providers
-providers.md: 54ae91d77f9952f2d692a63b2153464d2b03d83c
-providers.zh-CN.md: 5e843ec416dfa75a82a8316f9e31e0f50ce9a238
+providers.md: aadd10bfd064dde031de4f935c65dc8df0d99b18
+providers.zh-CN.md: 77094417520d6b219fe5a578b59f06a235950f01
