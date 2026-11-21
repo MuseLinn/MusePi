@@ -17,9 +17,13 @@ const CARD_ROOM_BELOW = 150;
  * - **不用模块级 bus**:卡片就是项目块内的一个子元素,由块自身的 hover /
  *   focus 状态控制(见 `SessionSidebar` 的项目块)。总线只适合"同一时刻只有
  *   一行"的会话行;项目块数量少,就地持有状态才能让键盘真正走进去。
- * - **不 portal**:会话卡必须 portal 是因为侧栏链路的 backdrop-filter 会劫持
- *   fixed 定位;本卡 `position: absolute` 贴着块的下沿,留在侧栏卡片内部,
- *   天然满足"只在卡片表面内出现",也保住了 Tab 顺序。
+ * - **不 portal,且**渲染在 `.gui-project-block` **内部**:会话卡必须 portal
+ *   是因为侧栏链路的 backdrop-filter 会劫持 fixed 定位;本卡
+ *   `position: absolute` 相对已定位的 `.gui-project-block`(`position:
+ *   relative`)定位,`top:100%` 就是那一行的下沿。放在块内而不是块后面的
+ *   兄弟位置,是为了让「块→卡」的指针移动与 Tab 进卡都还在块的
+ *   mouseleave / blur 包含关系内(否则卡片会被 120ms 宽限当场收掉),也让
+ *   卡片避开 `ProjectCollapse` 的 `overflow:hidden` 与列表滚动容器的裁剪。
  */
 
 export interface ProjectHoverCardProps {

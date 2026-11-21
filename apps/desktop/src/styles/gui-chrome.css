@@ -690,7 +690,10 @@
 	flex-direction: column;
 	gap: 6px;
 	width: 240px;
-	max-width: min(240px, calc(100vw - 24px));
+	/* 侧栏可窄至 180px(SIDE_WIDTH_MIN):只按视口钳制会让卡片比滚动容器宽,
+	 * 在 overflow-y:auto 里逼出横向滚动条。`100%` 相对包含块(.gui-project-block
+	 * 整行宽),与视口取更小的一条。 */
+	max-width: min(240px, 100%, calc(100vw - 24px));
 	padding: 10px 12px;
 	border-radius: var(--radius-lg);
 	background-color: var(--bg-overlay, var(--bg));
@@ -813,7 +816,7 @@
 	flex: none;
 	padding: 0 5px;
 	border-radius: var(--radius-xs);
-	font-size: 10px;
+	font-size: var(--ui-font-size-xs);
 	line-height: 1.6;
 	font-weight: 600;
 	color: var(--color-accent);

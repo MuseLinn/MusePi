@@ -167,15 +167,94 @@ describe("project hover card", () => {
 		expect(document.querySelector(".gui-project-hover-card")).toBeNull();
 	});
 
-	it("closes when the pointer leaves the block", async () => {
+	it("closes once the pointer leaves the block for somewhere outside it", async () => {
+		const container = await mountSidebar([project("/work/solo", "solo")], [node("s1", "solo", "/work/solo")]);
+		await hoverBlock(container);
+		const block = container.querySelector<HTMLElement>(".gui-project-block");
+		expect(block).not.toBeNull();
+		// A real pointer exit: `relatedTarget` outside the block and its card.
+		await act(async () => {
+			block?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: document.body }));
+		});
+		await flush(20);
+		expect(document.querySelector(".gui-project-hover-card")).toBeNull();
+	});
+
+	// The structural contracts the placement bug broke. Asserting the card exists
+	// in `document` was not enough: it rendered as a SIBLING of the block, so
+	// `top:100%` resolved against the scroll frame, the scroller clipped it to a
+	// couple of pixels, and the block's containment no longer covered it.
+	it("renders the card inside the project block, positioned against it", async () => {
+		const container = await mountSidebar(
+			[project("/work/alpha", "alpha", ["/refs/shared"])],
+			[node("s1", "alpha", "/work/alpha")],
+		);
+		await hoverBlock(container);
+		const block = container.querySelector<HTMLElement>(".gui-project-block");
+		const card = document.querySelector<HTMLElement>(".gui-project-hover-card");
+		expect(block).not.toBeNull();
+		expect(card).not.toBeNull();
+		// (a) containment: block-bound pointer/focus handlers must cover the card.
+		expect(block!.contains(card!)).toBe(true);
+		// The card is the block's own child, so an absolutely positioned card
+		// resolves `top:100%` against the block (which declares position:
+		// relative) instead of the scroll frame. happy-dom implements neither
+		// `offsetParent` nor layout geometry, so parent identity is the available
+		// proxy for the containing block.
+		expect(card!.parentElement).toBe(block);
+		// And it is not inside the collapsible body that clips to the row height.
+		expect(card!.closest(".gui-collapse")).toBeNull();
+	});
+
+	it("survives a pointer path from the block toward the card", async () => {
+		const container = await mountSidebar(
+			[project("/work/alpha", "alpha", ["/refs/shared"])],
+			[node("s1", "alpha", "/work/alpha")],
+		);
+		await hoverBlock(container);
+		const block = container.querySelector<HTMLElement>(".gui-project-block");
+		const card = document.querySelector<HTMLElement>(".gui-project-hover-card");
+		expect(card).not.toBeNull();
+		// (b) Moving onto the card fires `mouseout` on the block child with the
+		// card as relatedTarget — the browser's own block→card transition.
+		await act(async () => {
+			block
+				?.querySelector(".gui-project-head")
+				?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true, relatedTarget: card }));
+		});
+		await flush(20);
+		expect(document.querySelector(".gui-project-hover-card")).not.toBeNull();
+	});
+
+	it("keeps the card open when focus moves to one of its buttons", async () => {
+		const container = await mountSidebar(
+			[project("/work/alpha", "alpha", ["/refs/shared"])],
+			[node("s1", "alpha", "/work/alpha")],
+		);
+		await hoverBlock(container);
+		const block = container.querySelector<HTMLElement>(".gui-project-block");
+		const open = document.querySelector<HTMLButtonElement>(".gui-project-hover-card-open");
+		expect(open).not.toBeNull();
+		// (c) Tab into the card: focusout's relatedTarget is a card button, which
+		// the block contains, so the 120ms grace must not start.
+		await act(async () => {
+			block
+				?.querySelector(".gui-project-head")
+				?.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: open }));
+		});
+		await flush(20);
+		expect(document.querySelector(".gui-project-hover-card")).not.toBeNull();
+		expect(block!.contains(document.activeElement === open ? open : block)).toBe(true);
+	});
+
+	it("closes when the session list scrolls under it", async () => {
 		const container = await mountSidebar([project("/work/solo", "solo")], [node("s1", "solo", "/work/solo")]);
 		await hoverBlock(container);
 		expect(document.querySelector(".gui-project-hover-card")).not.toBeNull();
-		const block = container.querySelector<HTMLElement>(".gui-project-block");
 		await act(async () => {
-			block?.querySelector(".gui-project-head")?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
+			container.querySelector(".gui-sessions-list")?.dispatchEvent(new Event("scroll", { bubbles: false }));
 		});
-		await flush(20);
+		await flush();
 		expect(document.querySelector(".gui-project-hover-card")).toBeNull();
 	});
 });

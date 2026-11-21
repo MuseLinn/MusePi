@@ -480,8 +480,16 @@ export function SessionSidebar({
 			event.preventDefault();
 			setProjectCard(null);
 		};
+		// 滚动即收卡:卡片按项目行位置定位,行一滚就会离位(与会话悬浮卡
+		// `SessionHoverCard.tsx` 的 scroll 处理同一理由)。scroll 不冒泡,
+		// 捕获阶段挂 window 才能覆盖侧栏内层的滚动容器。
+		const onScroll = (): void => setProjectCard(null);
 		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
+		window.addEventListener("scroll", onScroll, true);
+		return () => {
+			window.removeEventListener("keydown", onKeyDown);
+			window.removeEventListener("scroll", onScroll, true);
+		};
 	}, [projectCard]);
 	useEffect(
 		() => () => {
@@ -1744,6 +1752,24 @@ export function SessionSidebar({
 																			<Icon name="add" className="h-3 w-3" />
 																		</button>
 																	</span>
+																	{projectCard?.path === path && (
+																		<ProjectHoverCard
+																			name={label}
+																			directories={[
+																				{ path, primary: true },
+																				...project.additionalDirs.map(root => ({
+																					path: root,
+																					primary: false,
+																				})),
+																			]}
+																			sessionCount={list.length}
+																			labelOf={pathBaseName}
+																			onOpenDirectory={openFolder}
+																			openLabel={openFolderLabel()}
+																			spaceBelow={projectCard.spaceBelow}
+																			spaceAbove={projectCard.spaceAbove}
+																		/>
+																	)}
 																</div>
 																<ProjectCollapse collapsed={isCollapsed}>
 																	{list.length === 0 ? (
@@ -1767,24 +1793,6 @@ export function SessionSidebar({
 																		/>
 																	)}
 																</ProjectCollapse>
-																{projectCard?.path === path && (
-																	<ProjectHoverCard
-																		name={label}
-																		directories={[
-																			{ path, primary: true },
-																			...project.additionalDirs.map(root => ({
-																				path: root,
-																				primary: false,
-																			})),
-																		]}
-																		sessionCount={list.length}
-																		labelOf={pathBaseName}
-																		onOpenDirectory={openFolder}
-																		openLabel={openFolderLabel()}
-																		spaceBelow={projectCard.spaceBelow}
-																		spaceAbove={projectCard.spaceAbove}
-																	/>
-																)}
 															</div>
 														);
 													})}
