@@ -1,7 +1,9 @@
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { type BrandIconStyle, readBrandIconStyle, writeBrandIconStyle } from "../lib/brand-icon-style";
+import { reportRequestFailure } from "../lib/report-request-failure";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
 import { cancelProviderLogin, logoutProvider, submitProviderLoginInput } from "../lib/rpc-commands";
@@ -312,6 +314,14 @@ export function SettingsView({
 				setProviders(Array.isArray(raw?.oauth) ? (raw.oauth as ProviderInfo[]) : []);
 				setApiProviders(Array.isArray(raw?.api) ? (raw.api as ApiProviderInfo[]) : []);
 			}
+		} catch (err) {
+			// An empty list is the honest fallback for "the read failed", but
+			// without this trace it is indistinguishable from "nothing is
+			// configured" — the login/logout entry points then look deleted.
+			console.error("[gui] providers.list failed", err);
+			setProviders([]);
+		}
+		try {
 			const cfg = await rpc.request<{
 				providers?: Record<
 					string,
@@ -338,8 +348,10 @@ export function SettingsView({
 					models: Array.isArray(v?.models) ? v.models : [],
 				})),
 			);
-		} catch {
-			setProviders([]);
+		} catch (err) {
+			// Separate from providers.list on purpose: a failed custom-model
+			// read must not wipe the providers that just loaded.
+			console.warn("[gui] models.listCustom failed", err);
 		}
 	}, [rpc, sessionId]);
 
@@ -450,7 +462,9 @@ export function SettingsView({
 			await logoutProvider(rpc, { providerId });
 			await loadProviders();
 		} catch (err) {
-			setLoginState({ providerId, message: err instanceof Error ? err.message : String(err) });
+			// A failed logout used to write loginState, which renders the
+			// "Login to …" panel — i.e. failure looked like a login prompt.
+			reportRequestFailure(t("settings.logout"), err);
 		}
 	};
 
