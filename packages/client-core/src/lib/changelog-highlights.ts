@@ -53,11 +53,27 @@ export const HIGHLIGHTS_PER_VERSION = 3;
 /** A category heading never yields the neutral `note` kind. */
 type ChangelogCategory = Exclude<ChangelogHighlightKind, "note">;
 
+/** Chinese headings are the canonical release-note structure; the English
+ *  names keep released sections and older checkouts readable. */
 const KIND_BY_HEADING: Record<string, ChangelogCategory> = {
+	新功能: "added",
+	改进: "changed",
+	修复: "fixed",
 	added: "added",
 	fixed: "fixed",
 	changed: "changed",
 	removed: "removed",
+	"new features": "added",
+	improvements: "changed",
+	fixes: "fixed",
+};
+
+/** English projection of the Chinese category headings, used only for the
+ *  en-US view — the parser itself accepts either language. */
+const ENGLISH_KIND_HEADING: Record<string, string> = {
+	新功能: "New features",
+	改进: "Improvements",
+	修复: "Fixes",
 };
 
 /** First sentence: up to and including the first CJK sentence terminator.
@@ -93,8 +109,10 @@ function extractHighlight(line: string): { title: string; description: string } 
  * body rather than the Chinese one. For English the EN line is promoted to
  * the bullet and keeps the bold title (feature names are often proper nouns);
  * an entry without an EN child keeps its Chinese line so an older release
- * never loses rows. Runs BEFORE `parseChangelogHighlights`, so highlight
- * cards and the full-log markdown share one projection.
+ * never loses rows. English also projects the canonical Chinese category
+ * headings (`### 新功能/改进/修复`) to their English names. Runs BEFORE
+ * `parseChangelogHighlights`, so highlight cards and the full-log markdown
+ * share one projection.
  */
 export function localizeChangelogMarkdown(markdown: string, locale: string): string {
 	const english = !locale.toLowerCase().startsWith("zh");
@@ -103,6 +121,14 @@ export function localizeChangelogMarkdown(markdown: string, locale: string): str
 	const out: string[] = [];
 	for (let index = 0; index < lines.length; index += 1) {
 		const line = lines[index] ?? "";
+		const heading = line.match(/^###\s+(.+?)\s*$/);
+		if (heading) {
+			const translated = ENGLISH_KIND_HEADING[heading[1]];
+			if (translated) {
+				out.push(`### ${translated}`);
+				continue;
+			}
+		}
 		const child = lines[index + 1]?.match(/^[ \t]+- EN:\s?(.*)$/);
 		if (line.startsWith("- ") && child) {
 			const title = line.match(/^-\s+(\*\*[^*]+\*\*)/)?.[1];
@@ -120,10 +146,11 @@ export function localizeChangelogMarkdown(markdown: string, locale: string): str
  *  version section yields [] (the caller falls back to the raw rendering).
  *  Document order is preserved — the array head is the current version.
  *
- *  Both shapes count: entries filed under `### Added/Fixed/Changed/Removed`
- *  (upstream-style) and the flat bold-bullet list this repository writes
- *  directly under the version heading. Flat entries get the neutral `note`
- *  kind so they still become highlight cards instead of disappearing. */
+ *  Both shapes count: entries filed under the canonical `### 新功能/改进/修复`
+ *  headings (or the older `### Added/Fixed/Changed/Removed` names) and the
+ *  flat bold-bullet list this repository writes directly under the version
+ *  heading. Flat entries get the neutral `note` kind so they still become
+ *  highlight cards instead of disappearing. */
 export function parseChangelogHighlights(markdown: string): ChangelogVersion[] {
 	if (markdown.trim() === "") return [];
 	const versions: ChangelogVersion[] = [];
