@@ -31,6 +31,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { tapFeedback } from "../lib/haptic";
 import { DONE_KEY, onboardingPending } from "../lib/onboarding";
 import { usePrompt } from "../lib/prompt-dialog";
+import { reportRequestFailure } from "../lib/report-request-failure";
 import { addProviderModels, cancelProviderLogin, logoutProvider, submitProviderLoginInput } from "../lib/rpc-commands";
 import { readSessionTabsEnabled, setSessionTabsEnabled } from "../lib/session-tabs";
 import { useFloatingMenu } from "../lib/use-floating-menu";
@@ -523,7 +524,9 @@ function ProviderSetup({
 					try {
 						const creds = await rpc.request<CredentialInfo[]>("providers.credentials", { providerId: id });
 						return [id, creds ?? []] as [string, CredentialInfo[]];
-					} catch {
+					} catch (err) {
+						// An empty list here reads as "no accounts"; keep the reason.
+						console.warn("[gui] providers.credentials failed", id, err);
 						return [id, []] as [string, CredentialInfo[]];
 					}
 				}),
@@ -535,7 +538,10 @@ function ProviderSetup({
 			// welcome recovery card (and any other readiness listener) so it
 			// re-evaluates setup.status without waiting for a window refocus.
 			window.dispatchEvent(new Event("musepi-gui-providers-changed"));
-		} catch {
+		} catch (err) {
+			// The list is empty either way — name the failure so a broken
+			// providers.list is not read as "no providers configured".
+			console.error("[gui] providers.list failed", err);
 			setBuiltins([]);
 		}
 	}, [rpc]);
@@ -647,9 +653,9 @@ function ProviderSetup({
 			await logoutProvider(rpc, { providerId, credentialId });
 			await loadProviders();
 		} catch (err) {
-			// The row stays; report the reason instead of pretending it went.
-			const message = err instanceof Error ? err.message : String(err);
-			setLoginState({ providerId, message });
+			// The row stays; report the reason instead of pretending it went. A
+			// logout is not a login flow, so it must not raise the auth dialog.
+			reportRequestFailure(t("settings.logout"), err);
 		}
 	};
 
@@ -661,8 +667,7 @@ function ProviderSetup({
 			await logoutProvider(rpc, { providerId });
 			await loadProviders();
 		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			setLoginState({ providerId, message });
+			reportRequestFailure(t("settings.logout"), err);
 		}
 	};
 
@@ -678,8 +683,9 @@ function ProviderSetup({
 		try {
 			await rpc.request("providers.setCredentialNote", { providerId, credentialId, note });
 			await loadProviders();
-		} catch {
-			// keep the row
+		} catch (err) {
+			// The note did not persist; report instead of leaving the old one shown.
+			reportRequestFailure(t("general.credentialNote"), err);
 		}
 	};
 

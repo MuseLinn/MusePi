@@ -11,6 +11,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { reportRequestFailure } from "../../lib/report-request-failure";
 import type { RpcClient } from "../../lib/rpc";
 import { logoutProvider } from "../../lib/rpc-commands";
 import { Icon } from "../../vendor/oc-icons";
@@ -92,8 +93,9 @@ export function MediaSection({
 			await rpc.request("providers.importApiKey", { providerId: id, apiKey: key.trim() });
 			setApiKeys(prev => ({ ...prev, [id]: "" }));
 			load.current();
-		} catch {
-			// daemon error is non-fatal
+		} catch (err) {
+			// The key was not stored; the row would look unchanged for no reason.
+			reportRequestFailure(t("general.importApiKey"), err);
 		} finally {
 			setBusy(false);
 		}
@@ -105,8 +107,9 @@ export function MediaSection({
 		try {
 			await logoutProvider(rpc, { providerId: id });
 			load.current();
-		} catch {
-			// non-fatal
+		} catch (err) {
+			// The key is still stored; the row would look cleared for no reason.
+			reportRequestFailure(t("settings.logout"), err);
 		} finally {
 			setBusy(false);
 		}

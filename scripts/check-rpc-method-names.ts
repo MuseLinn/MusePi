@@ -16,12 +16,19 @@
  * - `DaemonServer.handle` (desktop/CLI daemon, WS JSON-RPC);
  * - `CollabHost.#rpcDispatch` (guest link over the collab relay).
  *
- * Call sites are the two client bridges in `apps/desktop/src` and
- * `packages/client-core/src`: `RpcClient.request` and `SessionClient.rpc`.
+ * Callers are every GUI surface that speaks the host contract:
+ * - `RpcClient.request` in `apps/desktop/src` and `packages/client-core/src`;
+ * - `SessionClient.rpc` over the collab relay;
+ * - the bundled plugin panels under `packages/coding-agent/src/bundled-plugins`,
+ *   which draw their panels through the same daemon methods.
  * Only values that can become the method argument are read — a literal and the
  * arms of a selector, or a local `const method = …` the call passes through.
  * A name that reaches the call through a prop or another module's parameter is
  * not traced; the caller that supplies it is the place to look.
+ *
+ * `ROUTE_LISTS` covers the one form that carries route names without a
+ * `.request()` call: a client-side list of methods it probes before trusting
+ * the daemon. Those names are validated against the same route set.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
@@ -33,7 +40,15 @@ const ROUTE_SOURCES = [
 	["packages/coding-agent/src/collab/host.ts", "#rpcDispatch(method: string", "switch (method)"],
 ] as const;
 /** GUI surfaces that speak a host RPC contract. */
-export const CLIENT_ROOTS = ["apps/desktop/src", "packages/client-core/src"];
+export const CLIENT_ROOTS = [
+	"apps/desktop/src",
+	"packages/client-core/src",
+	"packages/coding-agent/src/bundled-plugins",
+];
+/** Route-name arrays a client relies on without sending them inline. */
+export const ROUTE_LISTS = [
+	{ file: "apps/desktop/src/lib/daemon-version.ts", exported: "REQUIRED_DAEMON_METHODS" },
+] as const;
 /** The calls that carry a route name on these clients. */
 const RPC_CALL = /\.(?:request|rpc)\s*(?:<[^;()]*?>)?\s*\(/g;
 const SOURCE_FILE = /\.(ts|tsx)$/;
@@ -225,13 +240,53 @@ export function clientMethods(root: string): Map<string, string[]> {
 	return uses;
 }
 
+/** Route names a client declares in an array literal (probe/capability lists). */
+export function declaredMethods(root: string): Map<string, string[]> {
+	const uses = new Map<string, string[]>();
+	for (const { file, exported } of ROUTE_LISTS) {
+		const path = join(root, file);
+		if (!existsSync(path)) throw new Error(`${file}: route-name list source missing`);
+		const text = readFileSync(path, "utf8");
+		const declaration = new RegExp(`export\\s+const\\s+${exported}\\s*(?::[^=]+)?=`).exec(text);
+		if (!declaration) throw new Error(`${file}: ${exported} not found`);
+		const open = text.indexOf("[", declaration.index + declaration[0].length);
+		const close = open < 0 ? -1 : closingIndex(text, open);
+		if (open < 0 || close < 0) throw new Error(`${file}: ${exported} is not an array literal`);
+		// Blank comments in place so a quoted word in prose is not read as a route
+		// and offsets still map back to the original lines.
+		const body = text
+			.slice(open + 1, close)
+			.replace(/\/\*[\s\S]*?\*\//g, comment => comment.replace(/[^\n]/g, " "))
+			.replace(/\/\/[^\n]*/g, comment => " ".repeat(comment.length));
+		for (const match of body.matchAll(/"([^"]+)"/g)) {
+			const line = text.slice(0, open + 1 + match.index).split("\n").length;
+			const place = `${file}:${line} (${exported})`;
+			const places = uses.get(match[1]) ?? [];
+			if (!places.includes(place)) places.push(place);
+			uses.set(match[1], places);
+		}
+	}
+	return uses;
+}
+
+/** Every literal route a client sends or declares, with each place it appears. */
+export function methodUses(root: string): Map<string, string[]> {
+	const uses = clientMethods(root);
+	for (const [method, places] of declaredMethods(root)) {
+		const existing = uses.get(method) ?? [];
+		for (const place of places) if (!existing.includes(place)) existing.push(place);
+		uses.set(method, existing);
+	}
+	return uses;
+}
+
 /** Literal client names with no matching route, sorted by name. */
 export function unroutedMethods(
 	root: string,
 	known: { routes?: Set<string>; uses?: Map<string, string[]> } = {},
 ): ClientMethodUse[] {
 	const routes = known.routes ?? dispatchedRoutes(root);
-	const uses = known.uses ?? clientMethods(root);
+	const uses = known.uses ?? methodUses(root);
 	return [...uses.entries()]
 		.filter(([method]) => !routes.has(method))
 		.map(([method, places]) => ({ method, places }))
@@ -241,7 +296,7 @@ export function unroutedMethods(
 function main(): number {
 	const root = process.env.RPC_METHOD_ROOT ? resolve(process.env.RPC_METHOD_ROOT) : DEFAULT_ROOT;
 	const routes = dispatchedRoutes(root);
-	const uses = clientMethods(root);
+	const uses = methodUses(root);
 	const unrouted = unroutedMethods(root, { routes, uses });
 	if (unrouted.length === 0) {
 		console.log(`check-rpc-method-names: OK — ${uses.size} client method(s) all routed (${routes.size} routes)`);

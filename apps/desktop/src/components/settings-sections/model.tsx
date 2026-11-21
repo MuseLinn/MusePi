@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
 import { usePrompt } from "../../lib/prompt-dialog";
+import { reportRequestFailure } from "../../lib/report-request-failure";
 import type { RpcClient } from "../../lib/rpc";
 import { logoutProvider } from "../../lib/rpc-commands";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
@@ -224,17 +225,23 @@ export function ModelSection({
 		void rpc
 			.request<{ id: string; name?: string }[]>("models.list", {})
 			.then(list => setCatalogModels(list ?? []))
-			.catch(() => {});
+			.catch((err: unknown) => {
+				// No catalog to pick from; keep the reason traceable.
+				console.warn("[gui] models.list failed", err);
+			});
 		void rpc
 			.request<CatalogProvider[]>("models.catalog", {})
 			.then(list => setCatalog(list ?? null))
-			.catch(() => setCatalog(null));
+			.catch((err: unknown) => {
+				console.warn("[gui] models.catalog failed", err);
+				setCatalog(null);
+			});
 		void rpc
 			.request<Record<string, unknown> | null>("settings.get", {
 				keys: ["modelRoles", "cycleOrder", "sideChannelModel"],
 			})
 			.then(v => setSideChannelModel((v?.sideChannelModel as string | undefined) ?? ""))
-			.catch(() => {});
+			.catch((err: unknown) => console.warn("[gui] settings.get sideChannelModel failed", err));
 	}, [rpc]);
 
 	useEffect(() => {
@@ -393,7 +400,7 @@ export function ModelSection({
 					}>("settings.get", { keys: ["resolvedRoleModels"] })
 					.then(res => setResolvedRoleModels(res?.resolvedRoleModels ?? {})),
 			)
-			.catch(() => {});
+			.catch((err: unknown) => console.error("[gui] settings.set modelRoles failed", err));
 	};
 	// TUI #assignRole parity: when a role's resolved model changes, drop a
 	// stored concrete thinking level the new model doesn't support (off is
@@ -438,7 +445,9 @@ export function ModelSection({
 				try {
 					const detail = await rpc.request<{ efforts?: string[] } | null>("models.detail", { id: selector });
 					return [selector, detail?.efforts ?? []] as const;
-				} catch {
+				} catch (err) {
+					// Empty efforts means the ladder cannot be shown; keep the reason.
+					console.warn("[gui] models.detail failed", selector, err);
 					return [selector, []] as const;
 				}
 			}),
@@ -488,7 +497,10 @@ export function ModelSection({
 				if (res?.modelRoleStorage === "project") setRoleStorage("project");
 				setRoleSources(res?.modelRoleSources ?? {});
 			})
-			.catch(() => {
+			.catch((err: unknown) => {
+				// Nothing to show, but an empty pane should not masquerade as
+				// "this profile has no role settings".
+				console.error("[gui] settings.get model roles failed", err);
 				setRoleModels({});
 				setCycleOrder(null);
 				setKnownRoleIds(null);
@@ -512,7 +524,8 @@ export function ModelSection({
 					globalValue: entry.globalValue == null ? null : String(entry.globalValue),
 				})),
 			);
-		} catch {
+		} catch (err) {
+			console.warn("[gui] settings.projectOverrides list failed", err);
 			setProjectOverrides([]);
 		}
 	}, [rpc]);
@@ -541,9 +554,10 @@ export function ModelSection({
 						if (res?.resolvedRoleModels) setResolvedRoleModels(res.resolvedRoleModels);
 						setRoleSources((res as { modelRoleSources?: Record<string, string> } | null)?.modelRoleSources ?? {});
 					})
-					.catch(() => {});
-			} catch {
-				// keep the row; the daemon error is non-fatal for the list
+					.catch((err: unknown) => console.warn("[gui] settings.get resolvedRoleModels failed", err));
+			} catch (err) {
+				// The override is still there; say why the revert did not land.
+				console.error("[gui] settings.projectOverrides delete failed", overridePath, err);
 			}
 		},
 		[rpc, loadProjectOverrides],
@@ -566,7 +580,10 @@ export function ModelSection({
 				try {
 					const creds = await rpc.request<CredentialInfo[]>("providers.credentials", { providerId: id });
 					return [id, creds ?? []] as [string, CredentialInfo[]];
-				} catch {
+				} catch (err) {
+					// An empty list here reads as "no accounts"; keep the reason
+					// traceable so the menu is not silently wrong.
+					console.warn("[gui] providers.credentials failed", id, err);
 					return [id, []] as [string, CredentialInfo[]];
 				}
 			}),
@@ -589,8 +606,9 @@ export function ModelSection({
 			await logoutProvider(rpc, { providerId, credentialId });
 			onChanged();
 			await loadCredentials();
-		} catch {
-			// keep the row; the daemon error is non-fatal for the list
+		} catch (err) {
+			// The row stays because the credential is still stored — say why.
+			reportRequestFailure(t("settings.logout"), err);
 		}
 	};
 
@@ -612,8 +630,9 @@ export function ModelSection({
 				note,
 			});
 			await loadCredentials();
-		} catch {
-			// keep the row; the daemon error is non-fatal for the list
+		} catch (err) {
+			// The note did not persist; report instead of leaving the old one shown.
+			reportRequestFailure(t("general.credentialNote"), err);
 		}
 	};
 
@@ -685,7 +704,9 @@ export function ModelSection({
 			if (nextChain.length > 0) next[role] = nextChain;
 			else delete next[role];
 			setFallbackChains(next);
-			void rpc.request("settings.set", { key: "retry.fallbackChains", value: next }).catch(() => {});
+			void rpc
+				.request("settings.set", { key: "retry.fallbackChains", value: next })
+				.catch((err: unknown) => console.error("[gui] settings.set retry.fallbackChains failed", err));
 		};
 		const moveChainRow = (from: number, to: number): void => {
 			if (from === to || from < 0 || from >= chain.length) return;
@@ -714,7 +735,9 @@ export function ModelSection({
 							if (at >= 0) next.splice(at, 1);
 							else next.push(role);
 							setCycleOrder(next);
-							void rpc.request("settings.set", { key: "cycleOrder", value: next }).catch(() => {});
+							void rpc
+								.request("settings.set", { key: "cycleOrder", value: next })
+								.catch((err: unknown) => console.error("[gui] settings.set cycleOrder failed", err));
 						}}
 					>
 						<Icon name="loop-right-ai" className="h-3 w-3" />
@@ -1588,7 +1611,9 @@ export function ModelSection({
 											setSideChannelModel(next);
 											void rpc
 												.request("settings.set", { key: "sideChannelModel", value: next })
-												.catch(() => {});
+												.catch((err: unknown) =>
+													console.error("[gui] settings.set sideChannelModel failed", err),
+												);
 										}}
 										ariaLabel={t("settings.sideChannelModel")}
 										options={[

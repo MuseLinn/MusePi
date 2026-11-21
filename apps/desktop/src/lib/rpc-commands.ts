@@ -6,8 +6,9 @@
  * became `settings.providersLogininput`): a wire method is an opaque string, so
  * the compiler sees nothing and the miss only shows up at runtime — where most
  * call sites swallowed the rejection. Each route now has one spelling shared by
- * every surface that sends it, and `scripts/check-rpc-method-names.test.ts`
- * pins each spelling to the dispatcher.
+ * every surface that sends it, and `scripts/rpc-commands.test.ts` pins each
+ * spelling to the dispatcher (`scripts/check-rpc-method-names.test.ts` covers
+ * the gate that keeps those spellings honest).
  */
 import type { CustomProviderPayload } from "../components/CustomProviderForm";
 

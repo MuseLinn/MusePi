@@ -7,6 +7,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { reportRequestFailure } from "../../lib/report-request-failure";
 import type { RpcClient } from "../../lib/rpc";
 import { addProviderModels } from "../../lib/rpc-commands";
 import { Icon } from "../../vendor/oc-icons";
@@ -96,8 +97,10 @@ export function CustomProviderPane({
 			setFormError(null);
 			setFormEpoch(epoch => epoch + 1);
 			setAddOpen(true);
-		} catch {
-			// keep the row; the daemon error is non-fatal for the list
+		} catch (err) {
+			// The editor could not read the provider; opening it empty would let
+			// the user save over the real config.
+			reportRequestFailure(t("settings.editCustomProvider"), err);
 		}
 	};
 
@@ -128,8 +131,9 @@ export function CustomProviderPane({
 		try {
 			await rpc.request("models.remove", { sessionId, providerName: name });
 			onChanged();
-		} catch {
-			// keep the row; the daemon error is non-fatal for the list
+		} catch (err) {
+			// The provider is still registered; say why it did not go away.
+			reportRequestFailure(t("settings.delete"), err);
 		}
 	};
 

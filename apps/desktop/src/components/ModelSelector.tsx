@@ -5,9 +5,9 @@ import { t } from "@musepi/client-core";
 import { Star, Target } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { pushActionToast } from "../lib/action-toast";
 import { matchesModelQuery } from "../lib/fuzzy-model-match";
 import { tapFeedback } from "../lib/haptic";
+import { reportRequestFailure } from "../lib/report-request-failure";
 import type { RpcClient } from "../lib/rpc";
 import { setSessionModel } from "../lib/rpc-commands";
 import { useFloatingMenu } from "../lib/use-floating-menu";
@@ -359,7 +359,11 @@ export function ModelSelector({
 				// task (app.tsx listens and refreshes).
 				window.dispatchEvent(new CustomEvent("musepi-gui-default-model-changed", { detail: ref }));
 			})
-			.catch(() => {});
+			.catch((err: unknown) => {
+				// The star did not light: the next new task still starts on the old
+				// default. Say so instead of leaving the click looking ignored.
+				reportRequestFailure(t("general.setDefault"), err);
+			});
 	};
 
 	const current = models.find(m => m.id === modelId || `${m.provider}/${m.id}` === modelId);
@@ -589,12 +593,7 @@ export function ModelSelector({
 						// pick that already succeeded keeps its selection.
 						userPicked.current = false;
 						setModelId(current => (current === optimistic ? previous : current));
-						pushActionToast({
-							kind: "error",
-							title: t("settings.switchModel"),
-							message: t("general.requestFailed"),
-							details: err instanceof Error ? err.message : String(err),
-						});
+						reportRequestFailure(t("settings.switchModel"), err);
 					});
 			} else {
 				onSelect?.(selected.id, selected.provider);

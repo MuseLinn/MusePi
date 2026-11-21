@@ -109,19 +109,16 @@ const nativeAndIntegrationPackages = ["packages/natives", "packages/client-core"
 // runners (so it flakes/times out there).
 const localOnlyWorkspacePackages = ["packages/mnemopi"];
 
-// Repo-level script tests. CI's `workspace` bucket only runs the merge gates:
-// the concurrency regression (the GHA-config guard), the cache-prune planner
-// (destructive rules: a bad predicate deletes caches CI still needs) and the
-// .d.ts extension rewrite (guards published-type resolution; hermetic temp-dir
-// suite). A local full run also exercises the release-notes tests. (A
-// `ci-test-ts.test.ts` entry used to sit here but the file never existed — bun
-// silently ignores unmatched filters when at least one other filter matches.)
-const repoScriptTests = [
+// Repo-level script tests that guard the repository itself: the CI-config
+// concurrency regression, the workflow contract, the destructive cache-prune
+// rules, the .d.ts extension rewrite, and the wire-method gates. CI's
+// `workspace` bucket runs this list, so a regression in a gate (or in the gate
+// that keeps RPC method names honest) turns CI red rather than only a local run.
+const ciScriptTests = [
 	"./scripts/ci-concurrency.test.ts",
 	"./scripts/ci-contract.test.ts",
 	"./scripts/ci-require-workflow-success.test.ts",
 	"./scripts/bazel-natives.test.ts",
-	"./scripts/ci-release-notes.test.ts",
 	"./scripts/ci-release-publish.test.ts",
 	"./scripts/fix-dts-extensions.test.ts",
 	"./scripts/prune-caches.test.ts",
@@ -129,6 +126,12 @@ const repoScriptTests = [
 	"./scripts/check-rpc-method-names.test.ts",
 	"./scripts/rpc-commands.test.ts",
 ];
+
+// A local full run additionally exercises the release-notes suite, which CI's
+// `workspace` bucket deliberately leaves out. (A `ci-test-ts.test.ts` entry
+// used to sit in this list but the file never existed — bun silently ignores
+// unmatched filters when at least one other filter matches.)
+const repoScriptTests = [...ciScriptTests, "./scripts/ci-release-notes.test.ts"];
 
 const codingAgentNativePathPatterns = [
 	/(^|\/)[^/]*(bash|native|browser|cmux|mnemopi|hindsight|memory)[^/]*\.test\.ts$/i,
@@ -357,20 +360,7 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 				{
 					label: "scripts",
 					cwd: ".",
-					command: [
-						"bun",
-						"test",
-						"--parallel=4",
-						...onlyFailuresArgs,
-						"./scripts/ci-concurrency.test.ts",
-						"./scripts/ci-contract.test.ts",
-						"./scripts/ci-require-workflow-success.test.ts",
-						"./scripts/bazel-natives.test.ts",
-						"./scripts/ci-release-publish.test.ts",
-						"./scripts/fix-dts-extensions.test.ts",
-						"./scripts/prune-caches.test.ts",
-						"./scripts/check-peer-compat.test.ts",
-					],
+					command: ["bun", "test", "--parallel=4", ...onlyFailuresArgs, ...ciScriptTests],
 				},
 			];
 		case "native":

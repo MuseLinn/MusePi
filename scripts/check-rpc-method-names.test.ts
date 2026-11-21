@@ -2,7 +2,13 @@ import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { clientMethods, dispatchedRoutes, methodLiterals, unroutedMethods } from "./check-rpc-method-names";
+import {
+	clientMethods,
+	declaredMethods,
+	dispatchedRoutes,
+	methodLiterals,
+	unroutedMethods,
+} from "./check-rpc-method-names";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const dirs: string[] = [];
@@ -17,7 +23,7 @@ function writeFile(file: string, content: string): void {
 }
 
 /** A tree with both dispatchers and one client file, so the gate can be tested end to end. */
-function fixture(clientSource: string, hostRoutes: string[] = []): string {
+function fixture(clientSource: string, hostRoutes: string[] = [], requiredMethods: string[] = []): string {
 	const root = fs.mkdtempSync(path.join(os.tmpdir(), "rpc-method-names-"));
 	dirs.push(root);
 	writeFile(
@@ -59,6 +65,14 @@ ${hostRoutes.map(route => `			case "${route}":`).join("\n") || '			case "ping":'
 `,
 	);
 	writeFile(path.join(root, "apps/desktop/src/components/Calls.tsx"), clientSource);
+	writeFile(
+		path.join(root, "apps/desktop/src/lib/daemon-version.ts"),
+		`/** Methods the GUI probes before trusting the daemon. */
+export const REQUIRED_DAEMON_METHODS: readonly string[] = [
+${requiredMethods.map(route => `	"${route}",`).join("\n")}
+];
+`,
+	);
 	return root;
 }
 
@@ -135,6 +149,45 @@ rpc.request(method, {});
 		const root = fixture(`client.rpc("workspace.tree", {});`, ["workspace.tree"]);
 		expect(unroutedMethods(root)).toEqual([]);
 		expect(clientMethods(root).has("workspace.tree")).toBe(true);
+	});
+
+	test("scans the bundled plugin panels", () => {
+		const root = fixture(`rpc.request("session.setModel", {});`);
+		writeFile(
+			path.join(root, "packages/coding-agent/src/bundled-plugins/demo/ui/panel.tsx"),
+			`host.request("settings.sessionSetmodel", {});`,
+		);
+		expect(unroutedMethods(root).map(entry => entry.method)).toEqual(["settings.sessionSetmodel"]);
+	});
+
+	test("flags a misspelt route in the daemon probe list", () => {
+		const root = fixture(
+			`rpc.request("session.setModel", {});`,
+			[],
+			["skills.marketplace.query", "settings.sessionSetmodel"],
+		);
+		const [miss] = unroutedMethods(root);
+		expect(miss?.method).toBe("settings.sessionSetmodel");
+		expect(miss?.places[0]).toContain("apps/desktop/src/lib/daemon-version.ts");
+		expect(miss?.places[0]).toContain("REQUIRED_DAEMON_METHODS");
+	});
+
+	test("does not read quoted words from the probe list's comments", () => {
+		const root = fixture(`rpc.request("session.setModel", {});`);
+		writeFile(
+			path.join(root, "apps/desktop/src/lib/daemon-version.ts"),
+			`export const REQUIRED_DAEMON_METHODS: readonly string[] = [
+	// the daemon answered "not-a-route" in a comment
+	"session.setModel",
+];
+`,
+		);
+		expect(unroutedMethods(root)).toEqual([]);
+	});
+
+	test("every route the GUI requires is a real dispatcher route", () => {
+		const routes = dispatchedRoutes(REPO_ROOT);
+		for (const method of declaredMethods(REPO_ROOT).keys()) expect(routes.has(method)).toBe(true);
 	});
 
 	test("fails the CLI with the offending name and place", () => {
