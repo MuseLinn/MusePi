@@ -160,7 +160,10 @@ const LOCAL_DAEMON_URL = "ws://127.0.0.1:8300";
  *
  * The gear was a single-purpose button for a menu of account/session actions,
  * so the picture now owns that slot and the menu behind it: Settings,
- * keyboard shortcuts, sharing, host switching and disconnecting. The rail
+ * keyboard shortcuts, session sharing, workspace remote access, host
+ * switching and disconnecting. Remote access keeps BOTH entrances the rail
+ * and header owned — the session share needs an open session, so the
+ * workspace (mobile/browser join) row could not be folded into it. The rail
  * keeps one permanent entry (the user), and the sidebar footer mounts the
  * same control, so a gear never has to be duplicated.
  *
@@ -175,6 +178,7 @@ export function UserAccountButton({
 	onOpenSettings,
 	onOpenShortcuts,
 	onOpenCollab,
+	onOpenRemoteAccess,
 	onSwitchHost,
 	onDisconnect,
 	compact = true,
@@ -187,7 +191,12 @@ export function UserAccountButton({
 	connected: boolean;
 	onOpenSettings(): void;
 	onOpenShortcuts?(): void;
+	/** Share the CURRENT session (entries in the header/session menus). */
 	onOpenCollab?(): void;
+	/** Share the WORKSPACE (mobile/browser join QR) — the rail's old
+	 *  remote-control entry, kept as its own row because the session share
+	 *  needs an open session and cannot replace it. */
+	onOpenRemoteAccess?(): void;
 	onSwitchHost(host: RemoteHost | null): void;
 	onDisconnect(): void;
 	/** Rail geometry (36px square) vs the sidebar footer's inline control. */
@@ -200,7 +209,7 @@ export function UserAccountButton({
 	const localActive = daemonUrl === LOCAL_DAEMON_URL;
 	const close = (): void => setOpen(false);
 	return (
-		<div className={compact ? "gui-account" : "gui-account gui-account--footer"}>
+		<div className="gui-account">
 			<button
 				type="button"
 				ref={btnRef}
@@ -262,6 +271,22 @@ export function UserAccountButton({
 						<span>{t("settings.shareCurrentSession")}</span>
 					</button>
 				)}
+				{/* Workspace sharing is its own entrance: the session share needs an
+				 * open session, so folding remote control into that row would make
+				 * mobile/browser joining unreachable on the welcome page. */}
+				{onOpenRemoteAccess && (
+					<button
+						type="button"
+						className="gui-menu-item"
+						onClick={() => {
+							close();
+							onOpenRemoteAccess();
+						}}
+					>
+						<Icon name="global" className="h-3.5 w-3.5" />
+						<span>{t("settings.mobileRemoteControl")}</span>
+					</button>
+				)}
 				<div className="gui-account-divider" />
 				<div className="gui-account-section">{t("general.switchHost")}</div>
 				<button
@@ -273,7 +298,10 @@ export function UserAccountButton({
 						if (!localActive) onSwitchHost(null);
 					}}
 				>
-					<span className="gui-account-host-dot gui-account-host-dot--on" aria-hidden="true" />
+					<span
+						className={`gui-account-host-dot${localActive && connected ? " gui-account-host-dot--on" : ""}`}
+						aria-hidden="true"
+					/>
 					<span className="gui-account-host-label">{t("general.local")}</span>
 					{localActive && <Icon name="check" className="h-3 w-3 ml-auto" />}
 				</button>
@@ -326,13 +354,14 @@ export function AppRail({
 }: {
 	destinations: readonly RailItem[];
 	/** The persistent user/account entry that replaced the settings
-	 *  destination button (and the shortcuts / remote-control buttons that
-	 *  moved into its menu). Rendered last, so the account owns the rail's
-	 *  bottom corner. */
+	 *  destination button, and absorbed the shortcut / remote-control buttons
+	 *  (the two remote-access scopes stay separate rows). Rendered last, so
+	 *  the account owns the rail's bottom corner. */
 	account?: ReactNode;
-	/** Instance / shortcuts / remote-control entries that used to live only
-	 *  in the sidebar footer. They stay reachable when the panel is folded
-	 *  or a page destination replaces it (ChatGPT's rail footer parity). */
+	/** Instance status that used to live only in the sidebar footer; the rest
+	 *  of those entries moved into the account menu. Stays reachable when the
+	 *  panel is folded or a page destination replaces it (ChatGPT's rail
+	 *  footer parity). */
 	footerActions?: ReactNode;
 	/** The active destination owns a left panel (首页 / 任务中心). Page
 	 *  destinations without one do not offer folding. */

@@ -1330,9 +1330,9 @@ html.gui-vt-surface-only::view-transition-new(root),
 
 /* ── Effects preview (Settings → 外观 → 效果预览) ────────────────────────
  * One mock scene for the whole effects block (code-preview parity): the
- * transcript rows reuse the REAL tr-* classes so bubbles and avatars
- * match the chat surface, then the live status line hangs above a mock
- * input card — exactly like the real composer column. */
+ * transcript rows reuse the REAL tr-* classes, the identity capsule reuses
+ * the real pill, and the live status line hangs above a mock input card —
+ * exactly like the real composer column. */
 .gui-effect-preview {
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
@@ -1341,6 +1341,20 @@ html.gui-vt-surface-only::view-transition-new(root),
 	padding: 10px 14px;
 	display: flex;
 	flex-direction: column;
+}
+
+/* The capsule is pinned inside the chat head; the preview has no head, so it
+ * gets its own centered band and drops that absolute positioning. */
+.gui-effect-preview-identity {
+	position: relative;
+	display: flex;
+	justify-content: center;
+	padding: 2px 0 8px;
+}
+.gui-effect-preview-identity > .gui-agent-capsule {
+	position: static;
+	top: auto;
+	transform: none;
 }
 
 .gui-effect-preview .tr-gutter {

@@ -15,8 +15,9 @@ import type { RpcClient } from "../src/lib/rpc";
  * The assertions pin the user report (「用户头像放在左边栏底部替代设置按钮」):
  *  * exactly one account entry, and NO settings destination button anywhere
  *    in the rail (the old gear must not survive as a duplicate);
- *  * the menu reaches settings, shortcuts, sharing, a host list and
- *    disconnect;
+ *  * the menu reaches settings, shortcuts, session sharing, WORKSPACE
+ *    remote access (the old rail entry, needed with no session open), a host
+ *    list and disconnect;
  *  * disconnect is disabled while no daemon is connected (no dead control);
  *  * Settings closes the menu and calls the host.
  */
@@ -53,8 +54,15 @@ const destination = (id: string): RailItem => ({
 	onSelect: () => {},
 });
 
-function renderRail(overrides: { connected?: boolean; onOpenSettings?: () => void; onDisconnect?: () => void } = {}) {
-	const calls = { settings: 0, disconnect: 0 };
+function renderRail(
+	overrides: {
+		connected?: boolean;
+		onOpenSettings?: () => void;
+		onOpenRemoteAccess?: () => void;
+		onDisconnect?: () => void;
+	} = {},
+) {
+	const calls = { settings: 0, remoteAccess: 0, disconnect: 0 };
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
@@ -75,6 +83,10 @@ function renderRail(overrides: { connected?: boolean; onOpenSettings?: () => voi
 					},
 					onOpenShortcuts: () => {},
 					onOpenCollab: () => {},
+					onOpenRemoteAccess: () => {
+						calls.remoteAccess += 1;
+						overrides.onOpenRemoteAccess?.();
+					},
 					onSwitchHost: () => {},
 					onDisconnect: () => {
 						calls.disconnect += 1;
@@ -120,11 +132,38 @@ describe("rail account control", () => {
 		expect(text).toContain("设置");
 		expect(text).toContain("快捷键");
 		expect(text).toContain("分享当前会话");
+		expect(text).toContain("远程访问");
 		expect(text).toContain("切换主机");
 		expect(text).toContain("本地");
 		expect(text).toContain("工作室");
 		expect(text).toContain("断开");
 		expect(menu.querySelectorAll(".gui-account-host").length).toBe(2);
+	});
+
+	test("workspace remote access is reachable without a session", async () => {
+		const rail = renderRail();
+		const menu = rail.openMenu();
+		const remote = [...menu.querySelectorAll("button")].find(el => el.textContent?.includes("远程访问"));
+		expect(remote).toBeDefined();
+		await act(async () => remote?.click());
+		expect(rail.calls.remoteAccess).toBe(1);
+		// It is not the session-share row: that one needs an open session.
+		expect(menu.textContent ?? "").toContain("分享当前会话");
+	});
+
+	test("workspace remote access stays reachable with no connection/session", () => {
+		// The welcome shape has no session and may be disconnected; the row is
+		// chrome-owned and must not be gated on either.
+		const rail = renderRail({ connected: false });
+		const menu = rail.openMenu();
+		expect(menu.textContent ?? "").toContain("远程访问");
+	});
+
+	test("the local host dot follows the daemon connection", () => {
+		const rail = renderRail({ connected: false });
+		const menu = rail.openMenu();
+		const local = [...menu.querySelectorAll(".gui-account-host")].find(el => el.textContent?.includes("本地"));
+		expect(local?.querySelector(".gui-account-host-dot--on")).toBeNull();
 	});
 
 	test("settings is reachable from the menu and closes it", async () => {

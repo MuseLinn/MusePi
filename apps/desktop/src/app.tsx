@@ -4746,10 +4746,13 @@ function AppInner(): ReactNode {
 	}
 	// The user picture replaced the rail's settings gear: the gear was a
 	// single-purpose button for a menu of account/session actions, so the
-	// picture now owns that slot and the menu (Settings / shortcuts / share /
-	// host switching / disconnect). One permanent entry, no duplicated gear —
-	// and it renders in every shape (welcome included), so settings stays one
-	// click away with no session.
+	// picture now owns that slot and the menu (Settings / shortcuts / session
+	// share / workspace remote access / host switching / disconnect). Remote
+	// access keeps BOTH entrances: the session share needs an open session,
+	// while the workspace share (mobile/browser join links) must work on the
+	// welcome page, so they stay separate rows. One permanent entry, no
+	// duplicated gear — it renders in every shape, so settings and remote
+	// access stay reachable with no session.
 	const railAccount = (
 		<UserAccountButton
 			rpc={rpc ?? null}
@@ -4760,6 +4763,7 @@ function AppInner(): ReactNode {
 			onOpenSettings={openSettings}
 			onOpenShortcuts={() => setShortcutsOpen(true)}
 			onOpenCollab={() => openRemoteAccess("session")}
+			onOpenRemoteAccess={() => openRemoteAccess("workspace")}
 			onSwitchHost={switchHost}
 			onDisconnect={disconnect}
 		/>
