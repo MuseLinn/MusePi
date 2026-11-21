@@ -41,6 +41,22 @@ export function shouldEscapeStopTurn(input: EscapeStopInput): boolean {
 	return input.working;
 }
 
+/**
+ * The window-level bare-Escape binding's decision, read straight off the key
+ * event so every caller resolves the four inputs in one place.
+ */
+export function escapeStopsTurn(
+	event: Pick<KeyboardEvent, "defaultPrevented" | "repeat" | "target">,
+	working: boolean,
+): boolean {
+	return shouldEscapeStopTurn({
+		claimed: event.defaultPrevented,
+		owner: escapeOwner(event.target),
+		repeat: event.repeat,
+		working,
+	});
+}
+
 /** Dialogs, menus and listboxes own Escape while they are open. */
 const OVERLAY_SELECTOR =
 	'[role="dialog"], [role="listbox"], [role="menu"], [role="tooltip"], [aria-modal="true"], [data-escape-owner]';

@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import type { PdfQuoteAnchor } from "@musepi/pi-wire";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { MENU_ANIM_MS } from "../src/components/MenuPopup";
 import { rangeToMarkdown, type SelectionQuoteSource, SelectionToolbar } from "../src/components/SelectionToolbar";
+import { escapeStopsTurn } from "../src/lib/escape-stop";
 
 const mounted = new Set<Root>();
 let clipboardDescriptor: PropertyDescriptor | undefined;
@@ -286,6 +288,135 @@ describe("SelectionToolbar DOM selections", () => {
 		} finally {
 			window.getSelection = originalSelection;
 		}
+	});
+});
+
+describe("SelectionToolbar Escape ownership", () => {
+	// The window-level binding from app.tsx: bubble phase, after every capture
+	// handler, deciding through the real `escapeStopsTurn`. ChatView mounts the
+	// toolbar unconditionally, so a hidden toolbar must not claim the key.
+	let interrupted = 0;
+	const onWindowKey = (event: KeyboardEvent): void => {
+		if (event.key !== "Escape") return;
+		if (escapeStopsTurn(event, true)) interrupted += 1;
+	};
+
+	beforeEach(() => {
+		interrupted = 0;
+		window.addEventListener("keydown", onWindowKey);
+	});
+	afterEach(() => window.removeEventListener("keydown", onWindowKey));
+
+	async function mountToolbar(): Promise<{ rootElement: HTMLElement; text: Text }> {
+		const rootElement = document.createElement("div");
+		rootElement.id = "root";
+		document.body.appendChild(rootElement);
+		const root = createRoot(rootElement);
+		mounted.add(root);
+		const container = document.createElement("div");
+		const text = document.createTextNode("escaping selection");
+		container.appendChild(text);
+		document.body.appendChild(container);
+		await act(async () =>
+			root.render(
+				<SelectionToolbar
+					containerRef={{ current: container }}
+					onQuote={() => {}}
+					onAsk={() => {}}
+					onCopy={() => {}}
+					onNewSession={() => {}}
+					onAddNote={() => {}}
+				/>,
+			),
+		);
+		return { rootElement, text };
+	}
+
+	/** Select inside the transcript host, as a drag release would. */
+	async function selectAndShow(text: Text): Promise<void> {
+		const originalSelection = window.getSelection;
+		window.getSelection = (() => ({
+			isCollapsed: false,
+			toString: () => "escaping selection",
+			anchorNode: text,
+			focusNode: text,
+			getRangeAt: () => ({
+				getBoundingClientRect: () => ({ left: 100, top: 180, width: 120, height: 20 }),
+				getClientRects: () => [{ left: 100, top: 180, width: 120, height: 20 }],
+			}),
+		})) as unknown as typeof window.getSelection;
+		try {
+			await act(async () => {
+				text.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 160, clientY: 200 }));
+				await Bun.sleep(30);
+			});
+		} finally {
+			window.getSelection = originalSelection;
+		}
+	}
+
+	async function pressEscape(): Promise<KeyboardEvent> {
+		let event!: KeyboardEvent;
+		await act(async () => {
+			event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+			document.body.dispatchEvent(event);
+		});
+		return event;
+	}
+
+	it("lets a hidden toolbar's Escape interrupt the running turn", async () => {
+		await mountToolbar();
+		const event = await pressEscape();
+		expect(interrupted).toBe(1);
+		expect(event.defaultPrevented).toBe(false);
+	});
+
+	it("closes the visible toolbar on the first Escape without interrupting the turn", async () => {
+		const { rootElement, text } = await mountToolbar();
+		await selectAndShow(text);
+		expect(rootElement.querySelector(".gui-select-pop")).not.toBeNull();
+
+		const event = await pressEscape();
+		expect(event.defaultPrevented).toBe(true);
+		expect(interrupted).toBe(0);
+		expect(rootElement.querySelector(".gui-select-pop--closing")).not.toBeNull();
+
+		// The chip keeps the key only while it is painted: once it is gone the
+		// next Escape is a bare Escape again.
+		await act(async () => {
+			await Bun.sleep(MENU_ANIM_MS + 40);
+		});
+		expect(rootElement.querySelector(".gui-select-pop")).toBeNull();
+		await pressEscape();
+		expect(interrupted).toBe(1);
+	});
+
+	it("keeps a field's and an open menu's Escape with them, and interrupts from the composer", async () => {
+		await mountToolbar();
+		const input = document.createElement("input");
+		document.body.appendChild(input);
+		const menu = document.createElement("div");
+		menu.setAttribute("role", "menu");
+		const item = document.createElement("button");
+		menu.appendChild(item);
+		document.body.appendChild(menu);
+		const composer = document.createElement("div");
+		composer.setAttribute("data-chat-input", "true");
+		const textarea = document.createElement("textarea");
+		composer.appendChild(textarea);
+		document.body.appendChild(composer);
+
+		const aimed = (target: Element): KeyboardEvent => {
+			const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+			target.dispatchEvent(event);
+			return event;
+		};
+		expect(aimed(input).defaultPrevented).toBe(false);
+		expect(interrupted).toBe(0);
+		expect(aimed(item).defaultPrevented).toBe(false);
+		expect(interrupted).toBe(0);
+		aimed(textarea);
+		expect(interrupted).toBe(1);
 	});
 });
 
