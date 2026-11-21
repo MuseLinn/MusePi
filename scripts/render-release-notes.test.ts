@@ -257,3 +257,100 @@ describe("building blocks", () => {
 		expect(links).toContain("https://github.com/o/r/compare/v1.1.0...v1.2.0");
 	});
 });
+
+describe("renderReleaseNotes --max-chars", () => {
+	const body = "这是一段足够长的正文，用来把页面撑到需要截断的长度。".repeat(12);
+	const entry = (title: string): string[] => [`- **${title}**：${body}`, `  - EN: ${body}`];
+	const LONG_CHANGELOG = [
+		"## [2.0.0] - 2026-11-21",
+		"",
+		"### 新功能",
+		"",
+		...entry("甲"),
+		"",
+		...entry("乙"),
+		"",
+		...entry("丙"),
+		"",
+		"### 改进",
+		"",
+		...entry("丁"),
+		"",
+		...entry("戊"),
+		"",
+		"### 修复",
+		"",
+		...entry("己"),
+		"",
+		"## [1.0.0] - 2026-09-01",
+		"",
+		"### 修复",
+		"",
+		...entry("庚"),
+		"",
+	].join("\n");
+	const chars = (text: string): number => [...text].length;
+	const render = (maxChars?: number): string =>
+		renderReleaseNotes({ changelog: LONG_CHANGELOG, version: "2.0.0", tag: "v2.0.0", maxChars });
+	const SHOWN_TITLES = ["甲", "乙", "丙", "丁", "戊", "己"];
+
+	test("keeps the body unchanged when it fits the budget", () => {
+		const full = render();
+		expect(render(chars(full))).toBe(full);
+		expect(render(chars(full) + 1)).toBe(full);
+	});
+
+	test("trims whole entries and keeps the counts and omitted total consistent", () => {
+		const full = render();
+		const budget = Math.floor(chars(full) * 0.6);
+		const capped = render(budget);
+		expect(chars(capped)).toBeLessThanOrEqual(budget);
+
+		const shown = [...capped.matchAll(/^- \*\*(.+?)\*\*/gm)].map(match => match[1]!);
+		const omitted = Number(/还有 (\d+) 项变更未在此页展开/.exec(capped)?.[1]);
+		expect(shown.length).toBeGreaterThan(0);
+		expect(shown.length).toBeLessThan(SHOWN_TITLES.length);
+		expect(Number.isInteger(omitted)).toBe(true);
+		expect(shown.length + omitted).toBe(SHOWN_TITLES.length);
+		expect(capped).toContain("本次发布：3 项新功能 · 2 项改进 · 1 项修复");
+		expect(capped).toContain(
+			`[完整更新日志](https://github.com/${DEFAULT_REPO}/blob/main/packages/coding-agent/CHANGELOG.musepi.md)`,
+		);
+
+		const shownByCategory = new Map<string, string[]>();
+		let heading = "";
+		for (const block of capped.split("\n\n")) {
+			if (block.startsWith("### ")) {
+				heading = block;
+				shownByCategory.set(heading, []);
+			} else if (block.startsWith("- **")) {
+				shownByCategory.get(heading)?.push(/^- \*\*(.+?)\*\*/.exec(block)?.[1] ?? "");
+			}
+		}
+		for (const [category, titles] of [
+			["### 新功能", ["甲", "乙", "丙"]],
+			["### 改进", ["丁", "戊"]],
+			["### 修复", ["己"]],
+		] as const) {
+			const visible = shownByCategory.get(category) ?? [];
+			expect(visible).toEqual(titles.slice(0, visible.length));
+		}
+	});
+
+	test("never ends an entry mid-way", () => {
+		const capped = render(Math.floor(chars(render()) * 0.6));
+		const entries = capped.split("\n\n").filter(block => block.startsWith("- "));
+		expect(entries.length).toBeGreaterThan(0);
+		for (const block of entries) {
+			expect(block.split("\n").at(-1)?.startsWith("  - EN: ")).toBe(true);
+		}
+		const shown = new Set([...capped.matchAll(/^- \*\*(.+?)\*\*/gm)].map(match => match[1]));
+		for (const title of SHOWN_TITLES) {
+			if (!shown.has(title)) expect(capped).not.toContain(`- **${title}**`);
+		}
+	});
+
+	test("refuses a budget that cannot hold the fixed blocks", () => {
+		expect(() => render(100)).toThrow("nothing is left to fit --max-chars 100");
+	});
+});
