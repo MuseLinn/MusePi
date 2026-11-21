@@ -185,6 +185,8 @@ export function ModelSelector({
 	currentModelId = null,
 	capsule = false,
 	inline = false,
+	active = false,
+	onDismiss,
 	onSwitchError,
 	onAddProvider,
 	allowNone = false,
@@ -216,6 +218,13 @@ export function ModelSelector({
 	 *  agent info tab shows the list itself, not a menu that has to be opened
 	 *  first. Sections, favorites, recents and search are the same code. */
 	inline?: boolean;
+	/** An inline list can sit in a disclosure that is open right now. `true`
+	 *  moves focus to the search field, so the keyboard reaches the list in
+	 *  the same step that expanded it. */
+	active?: boolean;
+	/** Escape, or a completed pick, asks the owner to fold the disclosure. The
+	 *  owner keeps the selection and puts focus back on its trigger. */
+	onDismiss?(): void;
 	/** Run after a refused switch, before the optimistic label is undone. The
 	 *  caller (the agent info tab) owns the message there — it can show it
 	 *  beside the list instead of only as a toast. Without a callback the
@@ -241,6 +250,12 @@ export function ModelSelector({
 	// Content-boundary feather on the scrolling list (sessions-list parity).
 	const listRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(listRef);
+	// The inline disclosure focuses this field on open, so the keyboard can
+	// search and step the rows without a pointer detour.
+	const searchRef = useRef<HTMLInputElement | null>(null);
+	useEffect(() => {
+		if (active) searchRef.current?.focus();
+	}, [active]);
 	// Only a real user pick (select()) wins over re-seeding. The daemon's
 	// live model (currentModelId) and the DEFAULT-role model arrive
 	// asynchronously AFTER models.list — a naive `prev ||` guard would let
@@ -541,6 +556,13 @@ export function ModelSelector({
 	}, [open, inline, query]);
 	const onMenuKeyDown = useCallback(
 		(e: React.KeyboardEvent): void => {
+			// An inline list lives inside a disclosure: Escape folds it back to
+			// the row that opened it (the owner restores focus there).
+			if (e.key === "Escape" && inline && onDismiss) {
+				e.preventDefault();
+				onDismiss();
+				return;
+			}
 			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
 				e.preventDefault();
 				if (flatRows.length === 0) return;
@@ -564,7 +586,7 @@ export function ModelSelector({
 				}
 			}
 		},
-		[flatRows, kbd],
+		[flatRows, kbd, inline, onDismiss],
 	);
 
 	const select = useCallback(
@@ -594,6 +616,10 @@ export function ModelSelector({
 			const optimistic = `${selected.provider}/${selected.id}`;
 			setModelId(optimistic);
 			setOpen(false);
+			// An inline list is the body of a disclosure: the pick is complete,
+			// so fold it back to the (now updated) trigger. The popup closes
+			// itself through useFloatingMenu instead.
+			if (inline) onDismiss?.();
 			if (sessionId) {
 				// Notify AFTER the daemon switched the model — consumers re-fetch
 				// per-model state (thinkingInfo ceiling/ladder) and would race the
@@ -619,7 +645,7 @@ export function ModelSelector({
 				onSelect?.(selected.id, selected.provider);
 			}
 		},
-		[sessionId, onSelect, onSwitchError, modelId],
+		[sessionId, onSelect, onSwitchError, modelId, inline, onDismiss],
 	);
 	// Published for onMenuKeyDown (declared above): Enter resolves the
 	// highlighted row through the latest select.
@@ -636,14 +662,15 @@ export function ModelSelector({
 			<div className="gui-model-menu-search">
 				<Icon name="search" className="h-3.5 w-3.5 text-[var(--color-text-faint)]" />
 				<input
+					ref={searchRef}
 					value={query}
 					onChange={e => setQuery(e.target.value)}
 					placeholder={t("settings.searchModels")}
 					className="gui-model-menu-input"
 					aria-label={t("settings.searchModels")}
-					/* Focused on open so ↑↓/Enter navigation works without a
-					 * pointing-device detour. Inline lists stay unfocused —
-					 * the panel already owns the keyboard when it mounts. */
+					/* The popup focuses on open so ↑↓/Enter navigation works
+					 * without a pointing-device detour. An inline list is focused
+					 * by the disclosure that reveals it (`active`). */
 					autoFocus={!inline}
 				/>
 			</div>

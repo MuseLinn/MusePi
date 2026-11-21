@@ -10,6 +10,32 @@
 	 * 会话圆角容器要和空态主视图一样的边距). Tailwind m-2/gap-2 literals drift
 	 * apart when one scene is tuned; the token cannot. */
 	--gui-card-gutter: 8px;
+	/* Slider primitive: one geometry and one state vocabulary for the GUI's
+	 * two custom ladders — the settings detent ladder and the thinking
+	 * ladder — plus the native `.gui-range` inputs that opt in (notification
+	 * master volume, companion size). A slider that needs a new size or colour
+	 * extends THIS family instead of painting its own rail. The inset is the
+	 * knob radius: the rail is laid out inset by it, so an end stop never
+	 * hangs past the rail, and the thinking slider measures that rail instead
+	 * of restating the radius in JS. Desktop voice settings have no slider
+	 * (`tts.rate` is a rolling counter); the mobile `VoicePanel` rate is its
+	 * own control in `packages/client-core`. */
+	--gui-slider-track: 6px;
+	--gui-slider-dot-size: 4px;
+	--gui-slider-knob-size: 18px;
+	--gui-slider-inset: calc(var(--gui-slider-knob-size) / 2);
+	--gui-slider-rest: color-mix(in oklab, var(--color-text) 16%, transparent);
+	--gui-slider-fill: var(--color-accent);
+	--gui-slider-fill-hot: color-mix(in oklab, var(--color-accent) 72%, var(--color-text));
+	--gui-slider-dot: color-mix(in oklab, var(--color-text) 42%, transparent);
+	--gui-slider-dot-on: color-mix(in oklab, var(--color-accent) 70%, var(--color-text));
+	--gui-slider-knob: var(--color-accent);
+	--gui-slider-knob-rim: var(--color-surface-raised);
+	--gui-slider-knob-shadow: 0 1px 3px color-mix(in oklab, var(--color-text) 28%, transparent);
+	--gui-slider-focus: 0 0 0 3px color-mix(in oklab, var(--color-accent) 40%, transparent);
+	--gui-slider-hover-scale: 1.08;
+	--gui-slider-ease: 140ms cubic-bezier(0.22, 1, 0.36, 1);
+	--gui-slider-disabled-opacity: 0.45;
 }
 
 .gui-terminal-host {
@@ -3304,7 +3330,10 @@ body.gui-resizing .gui-pane-right {
 
 /* Numeric setting with a declared preset ladder: one detent per preset, so
  * the wheel and the pointer can only land on supported values. Index-spaced
- * because preset values are frequently non-linear (1, 2.5, 5, 10, 20, 50…). */
+ * because preset values are frequently non-linear (1, 2.5, 5, 10, 20, 50…).
+ * Geometry and states come from the shared slider family (`--gui-slider-*`,
+ * declared in gui-chat.css): the settings ladder and the thinking ladder are
+ * the same track, fill, detents and knob; only the labels differ. */
 .gui-ladder {
 	display: flex;
 	flex-direction: column;
@@ -3327,10 +3356,10 @@ body.gui-resizing .gui-pane-right {
 
 .gui-ladder-track {
 	position: relative;
-	/* Inset by the thumb radius so the extreme detents stay inside the row
+	/* Inset by the knob radius so the extreme detents stay inside the row
 	 * instead of hanging half a circle past its right edge. */
-	width: calc(100% - 14px);
-	margin: 0 7px;
+	width: calc(100% - var(--gui-slider-inset) * 2);
+	margin: 0 var(--gui-slider-inset);
 	height: 22px;
 	cursor: pointer;
 	touch-action: none;
@@ -3344,7 +3373,7 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-ladder-track:focus-visible .gui-ladder-thumb {
-	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 40%, transparent);
+	box-shadow: var(--gui-slider-focus);
 }
 
 .gui-ladder-rail,
@@ -3352,49 +3381,62 @@ body.gui-resizing .gui-pane-right {
 	position: absolute;
 	top: 50%;
 	left: 0;
-	height: 3px;
-	border-radius: 999px;
+	height: var(--gui-slider-track);
+	border-radius: var(--radius-full);
 	transform: translateY(-50%);
 }
 
 .gui-ladder-rail {
 	right: 0;
-	background: color-mix(in oklab, var(--color-text) 16%, transparent);
+	background: var(--gui-slider-rest);
 }
 
 .gui-ladder-fill {
-	background: var(--color-accent);
+	background: linear-gradient(90deg, var(--gui-slider-fill-hot), var(--gui-slider-fill));
 }
 
 .gui-ladder-tick {
 	position: absolute;
 	top: 50%;
-	width: 3px;
-	height: 3px;
-	border-radius: 999px;
+	width: var(--gui-slider-dot-size);
+	height: var(--gui-slider-dot-size);
+	border-radius: var(--radius-full);
 	transform: translate(-50%, -50%);
-	background: color-mix(in oklab, var(--color-text) 42%, transparent);
+	background: var(--gui-slider-dot);
 }
 
 .gui-ladder-tick--on {
-	background: color-mix(in oklab, var(--color-accent) 70%, var(--color-text));
+	background: var(--gui-slider-dot-on);
 }
 
 .gui-ladder-thumb {
 	position: absolute;
 	top: 50%;
-	width: 13px;
-	height: 13px;
-	border-radius: 999px;
+	width: var(--gui-slider-knob-size);
+	height: var(--gui-slider-knob-size);
+	border-radius: var(--radius-full);
 	transform: translate(-50%, -50%);
-	background: var(--color-surface-raised);
-	border: 1.5px solid var(--color-accent);
-	box-shadow: 0 1px 3px color-mix(in oklab, var(--color-text) 22%, transparent);
-	transition: left 140ms cubic-bezier(0.22, 1, 0.36, 1);
+	background: var(--gui-slider-knob);
+	border: 2px solid var(--gui-slider-knob-rim);
+	box-shadow: var(--gui-slider-knob-shadow);
+	transition:
+		left var(--gui-slider-ease),
+		scale 120ms ease;
+}
+
+/* Same gate as the thinking ladder: `.gui-ladder--disabled` dims the ladder,
+ * and a dimmed ladder must not lift its thumb on hover. */
+.gui-ladder:not(.gui-ladder--disabled) .gui-ladder-track:hover .gui-ladder-thumb {
+	scale: var(--gui-slider-hover-scale);
+}
+
+/* Pressed: the thumb must sit under the pointer, not lag one frame. */
+.gui-ladder-track:active .gui-ladder-thumb {
+	transition: none;
 }
 
 .gui-ladder--disabled {
-	opacity: 0.45;
+	opacity: var(--gui-slider-disabled-opacity);
 }
 
 /* Free numeric setting: rolling counter. Drag or wheel to step, click the
@@ -7110,24 +7152,76 @@ body.gui-resizing .gui-pane-right {
 	letter-spacing: 0.02em;
 	color: var(--color-text-faint);
 }
-.gui-agent-info-model {
+/* The model area is one card: the collapsed face is the running model plus
+ * its thinking level, and the picker lives inside the same disclosure. */
+.gui-agent-model-card {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	width: 100%;
+	min-width: 0;
+	padding: 9px 10px;
+	border: 1px solid var(--glass-hairline);
+	border-radius: var(--radius-lg);
+	background: var(--glass-hover);
+	color: var(--color-text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background 120ms ease,
+		border-color 120ms ease;
+}
+.gui-agent-model-card:hover {
+	background: var(--glass-hover-strong);
+}
+.gui-agent-model-card:focus-visible {
+	outline: none;
+	box-shadow: var(--gui-slider-focus);
+}
+.gui-agent-model-card-main {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 8px;
 	min-width: 0;
-	font-size: var(--ui-font-size-sm);
-	color: var(--color-text);
 }
-.gui-agent-info-model-name {
+.gui-agent-model-card-name {
+	flex: 1;
 	min-width: 0;
 	overflow: hidden;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.gui-agent-info-model-ref {
+.gui-agent-model-card-level {
 	flex: none;
+	padding: 1px 7px;
+	border-radius: var(--radius-full);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	white-space: nowrap;
+}
+.gui-agent-model-card-caret {
+	flex: none;
+	width: 12px;
+	height: 12px;
+	color: var(--color-text-faint);
+	transition: transform 160ms ease;
+}
+.gui-agent-model-card[aria-expanded="true"] .gui-agent-model-card-caret {
+	transform: rotate(180deg);
+}
+.gui-agent-model-card-ref {
+	min-width: 0;
+	overflow: hidden;
+	padding-left: 24px;
 	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 .gui-agent-info-row {
 	display: flex;
@@ -7199,69 +7293,117 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-danger);
 }
 
-/* Thinking ladder: a discrete range over the model's real rungs. The tick
- * labels carry the ladder, so the knob has no bubble of its own. */
-.gui-ladder {
+/* Thinking ladder: the shared slider primitive over the model's real rungs.
+ * A thick rail, a fill that ends under the knob, one detent per rung and a
+ * knob that lifts on hover/drag; the rung names sit below the track because a
+ * thinking level is read as a word. `--gui-slider-p` is the only value the
+ * pointer writes — the release is what commits. */
+.gui-slider {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 6px;
 	min-width: 0;
 }
-.gui-ladder-range {
-	width: 100%;
-	height: 18px;
-	margin: 0;
-	appearance: none;
-	background: transparent;
+.gui-slider-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	min-width: 0;
+}
+.gui-slider-value {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text);
+}
+.gui-slider-resolved {
+	min-width: 0;
+	overflow: hidden;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gui-slider-track {
+	position: relative;
+	height: 28px;
 	cursor: pointer;
+	/* A drag belongs to the track, never to text selection or the panel's
+	 * scroll gesture. */
+	touch-action: none;
+	user-select: none;
 }
-.gui-ladder-range::-webkit-slider-runnable-track {
-	height: 4px;
+.gui-slider-track:focus-visible {
+	outline: none;
+}
+.gui-slider-track:focus-visible .gui-slider-knob {
+	box-shadow: var(--gui-slider-knob-shadow), var(--gui-slider-focus);
+}
+.gui-slider-rail,
+.gui-slider-fill {
+	position: absolute;
+	top: 50%;
+	left: var(--gui-slider-inset);
+	height: var(--gui-slider-track);
 	border-radius: var(--radius-full);
-	background: linear-gradient(
-		to right,
-		var(--color-accent) 0,
-		var(--color-accent) var(--gui-ladder-fill, 50%),
-		var(--color-surface-sunken) var(--gui-ladder-fill, 50%),
-		var(--color-surface-sunken) 100%
-	);
+	transform: translateY(-50%);
 }
-.gui-ladder-range::-webkit-slider-thumb {
-	appearance: none;
-	width: 14px;
-	height: 14px;
-	margin-top: -5px;
-	border: 1px solid var(--glass-rim-hi);
+.gui-slider-rail {
+	right: var(--gui-slider-inset);
+	background: var(--gui-slider-rest);
+}
+.gui-slider-fill {
+	width: calc((100% - var(--gui-slider-inset) * 2) * var(--gui-slider-p, 0));
+	background: linear-gradient(90deg, var(--gui-slider-fill-hot), var(--gui-slider-fill));
+}
+.gui-slider-dot {
+	position: absolute;
+	top: 50%;
+	left: calc(var(--gui-slider-inset) + (100% - var(--gui-slider-inset) * 2) * var(--gui-slider-dot-p, 0));
+	width: var(--gui-slider-dot-size);
+	height: var(--gui-slider-dot-size);
 	border-radius: var(--radius-full);
-	background: var(--color-surface-raised);
-	box-shadow: inset 0 1px 0 var(--glass-rim-hi);
+	transform: translate(-50%, -50%);
+	background: var(--gui-slider-dot);
+	pointer-events: none;
+	transition: background-color 120ms ease;
 }
-.gui-ladder-range::-moz-range-track {
-	height: 4px;
+.gui-slider-dot--on {
+	background: var(--gui-slider-dot-on);
+}
+.gui-slider-dot[data-capped] {
+	opacity: 0.35;
+}
+.gui-slider-knob {
+	position: absolute;
+	top: 50%;
+	left: calc(var(--gui-slider-inset) + (100% - var(--gui-slider-inset) * 2) * var(--gui-slider-p, 0));
+	width: var(--gui-slider-knob-size);
+	height: var(--gui-slider-knob-size);
+	border: 2px solid var(--gui-slider-knob-rim);
 	border-radius: var(--radius-full);
-	background: var(--color-surface-sunken);
+	transform: translate(-50%, -50%);
+	background: var(--gui-slider-knob);
+	box-shadow: var(--gui-slider-knob-shadow);
+	pointer-events: none;
+	transition:
+		left var(--gui-slider-ease),
+		scale 120ms ease;
 }
-.gui-ladder-range::-moz-range-progress {
-	height: 4px;
-	border-radius: var(--radius-full);
-	background: var(--color-accent);
+/* Hover lift is gated on the enabled state: a control that cannot act must
+ * not change its fill or scale on hover (docs/gui-design.md §4 "Disabled
+ * controls never react to the pointer"). */
+.gui-slider:not([data-disabled="true"]) .gui-slider-track:hover .gui-slider-knob,
+.gui-slider-track[data-dragging] .gui-slider-knob {
+	scale: var(--gui-slider-hover-scale);
 }
-.gui-ladder-range::-moz-range-thumb {
-	width: 12px;
-	height: 12px;
-	border: 1px solid var(--glass-rim-hi);
-	border-radius: var(--radius-full);
-	background: var(--color-surface-raised);
+/* While the pointer owns the knob it must sit under it, not lag one frame. */
+.gui-slider-track[data-dragging] .gui-slider-fill,
+.gui-slider-track[data-dragging] .gui-slider-knob {
+	transition: none;
 }
-.gui-ladder-range:focus-visible {
-	outline: 2px solid var(--color-accent);
-	outline-offset: 2px;
-}
-.gui-ladder-range:disabled {
-	cursor: default;
-	opacity: 0.5;
-}
-.gui-ladder-ticks {
+.gui-slider-ticks {
 	display: flex;
 	justify-content: space-between;
 	gap: 4px;
@@ -7269,21 +7411,40 @@ body.gui-resizing .gui-pane-right {
 	line-height: 1.2;
 	color: var(--color-text-faint);
 }
-.gui-ladder-tick {
+.gui-slider-tick {
 	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.gui-ladder-tick--on {
+.gui-slider-tick--on {
 	color: var(--color-text);
 }
-.gui-ladder-tick--capped {
+.gui-slider-tick--capped {
 	opacity: 0.45;
 	text-decoration: line-through;
 }
-.gui-ladder-resolved {
-	margin-top: 2px;
+.gui-slider[data-disabled="true"] {
+	opacity: var(--gui-slider-disabled-opacity);
+}
+.gui-slider[data-disabled="true"] .gui-slider-track {
+	cursor: default;
+}
+.gui-motion-off .gui-slider-knob,
+.gui-motion-off .gui-slider-fill,
+.gui-motion-off .gui-slider-dot,
+.gui-motion-off .gui-agent-model-card-caret,
+.gui-motion-off .gui-agent-model-card {
+	transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-slider-knob,
+	.gui-slider-fill,
+	.gui-slider-dot,
+	.gui-agent-model-card-caret,
+	.gui-agent-model-card {
+		transition: none;
+	}
 }
 
 /* The model list in place (agent info tab): the menu's own rows and search,

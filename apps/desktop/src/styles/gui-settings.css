@@ -4160,7 +4160,23 @@
 
 .gui-range {
 	width: 160px;
-	accent-color: var(--color-accent);
+	/* Native range input: the track and thumb keep the platform's drawing,
+	 * but every colour (and the filled portion) follows the shared slider
+	 * family, so the two opt-ins — the notification master volume and the
+	 * companion size — read as the same control as the two custom ladders.
+	 * Desktop voice settings have no range (`tts.rate` is a rolling counter). */
+	accent-color: var(--gui-slider-fill);
+	height: var(--gui-slider-knob-size);
+	cursor: pointer;
+}
+
+.gui-range:hover:not(:disabled) {
+	accent-color: var(--gui-slider-fill-hot);
+}
+
+.gui-range:disabled {
+	opacity: var(--gui-slider-disabled-opacity);
+	cursor: default;
 }
 
 .gui-color {

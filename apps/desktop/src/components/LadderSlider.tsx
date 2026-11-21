@@ -1,6 +1,6 @@
 import { t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { THINKING_LEVELS, thinkingLabel } from "./thinking-selector-shared";
 
 /**
@@ -14,6 +14,10 @@ import { THINKING_LEVELS, thinkingLabel } from "./thinking-selector-shared";
  * `ceiling` is the model's top supported rung: rungs above it stay visible,
  * struck through, and neither the draft nor the commit can land on them, so the
  * model's limit is readable instead of silently missing.
+ *
+ * The track is the shared slider primitive (`.gui-slider`, `--gui-slider-*`):
+ * the same rail, fill, detents and knob as the settings detent ladder, with the
+ * ladder labels below because a thinking level is read as a word, not a value.
  */
 
 interface LadderRung {
@@ -110,72 +114,154 @@ export function LadderSlider({
 }: LadderSliderProps): ReactNode {
 	const rungs = ladderRungs(efforts, ceiling, thinkingLabel);
 	const committed = ladderIndex(rungs, value);
-	const [draft, setDraft] = useState(committed);
+	const [draft, setDraftState] = useState(committed);
 	const [dragging, setDragging] = useState(false);
+	const trackRef = useRef<HTMLDivElement | null>(null);
+	// The rail is the laid-out span between the two end stops: `--gui-slider-inset`
+	// insets it in CSS, so measuring it keeps the knob size out of the pointer
+	// math instead of restating half of it here.
+	const railRef = useRef<HTMLSpanElement | null>(null);
+	const dragRef = useRef<{ pointerId: number } | null>(null);
+	// The pointer sequence reads the draft between renders: `pointerup` can
+	// arrive in the same tick as its `pointerdown` (a click without a move),
+	// before React has re-rendered from the press. The ref is the source of
+	// truth so that release commits the rung the press landed on.
+	const draftRef = useRef(draft);
+	const applyDraft = useCallback((next: number): void => {
+		draftRef.current = next;
+		setDraftState(next);
+	}, []);
 
 	useEffect(() => {
-		if (!dragging) setDraft(committed);
-	}, [committed, dragging]);
+		if (!dragging) applyDraft(committed);
+	}, [committed, dragging, applyDraft]);
 
 	if (efforts.length === 0) {
 		return <p className="gui-agent-info-note">{t("general.agentInfoThinkingUnsupported")}</p>;
 	}
 
+	const last = Math.max(1, rungs.length - 1);
 	const rung = rungs[draft] ?? rungs[0]!;
-	const commit = (): void => {
-		if (dragging) setDragging(false);
-		const settled = clampLadderIndex(rungs, draft);
-		if (settled !== draft) setDraft(settled);
+
+	const write = (index: number): void => {
+		const settled = clampLadderIndex(rungs, index);
+		dragRef.current = null;
+		setDragging(false);
+		applyDraft(settled);
 		const next = rungs[settled]?.level ?? null;
 		if (next !== (value ?? null)) onCommit(next);
 	};
 	// A cancelled drag never commits: drop the draft and let the committed
-	// value drive the knob again (the following blur then sees no change).
+	// value drive the knob again. `lostpointercapture` also fires after a
+	// normal release, so a settled drag is left alone (its commit owns the
+	// knob from here).
 	const cancel = (): void => {
-		if (!dragging) return;
+		if (!dragRef.current) return;
+		dragRef.current = null;
 		setDragging(false);
-		setDraft(committed);
+		applyDraft(committed);
 	};
+	/** Pointer x → nearest rung, or null while the rail has no laid-out width
+	 *  (the first frame, a hidden panel). The rail already excludes the knob
+	 *  inset, so its rect is exactly the travel span. */
+	const indexAt = (clientX: number): number | null => {
+		const rect = railRef.current?.getBoundingClientRect();
+		if (!rect || rect.width <= 0) return null;
+		const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+		return Math.round(ratio * last);
+	};
+
 	return (
-		<div className="gui-ladder" data-disabled={disabled ? "true" : undefined}>
-			<input
-				type="range"
-				className="gui-ladder-range"
-				min={0}
-				max={rungs.length - 1}
-				step={1}
-				value={draft}
-				disabled={disabled}
+		<div className="gui-slider" data-disabled={disabled ? "true" : undefined}>
+			<div className="gui-slider-head">
+				<span className="gui-slider-value">{rung.label}</span>
+				{rung.auto && resolved ? (
+					<span className="gui-slider-resolved">{`${t("transcript.thinkingAuto")} · ${thinkingLabel(resolved)}`}</span>
+				) : null}
+			</div>
+			<div
+				ref={trackRef}
+				className="gui-slider-track"
+				role="slider"
+				tabIndex={disabled ? -1 : 0}
 				aria-label={t("general.agentInfoThinking")}
+				aria-disabled={disabled || undefined}
+				aria-valuemin={0}
+				aria-valuemax={last}
+				aria-valuenow={draft}
 				aria-valuetext={rung.label}
-				style={
-					{
-						"--gui-ladder-fill": `${(draft / Math.max(1, rungs.length - 1)) * 100}%`,
-					} as CSSProperties
-				}
-				onChange={event => {
+				data-dragging={dragging ? "" : undefined}
+				style={{ "--gui-slider-p": draft / last } as CSSProperties}
+				onPointerDown={event => {
+					if (disabled || event.button !== 0) return;
+					event.preventDefault();
+					try {
+						event.currentTarget.setPointerCapture?.(event.pointerId);
+					} catch {
+						/* capture is best-effort; the release still commits */
+					}
+					dragRef.current = { pointerId: event.pointerId };
 					setDragging(true);
-					setDraft(Number(event.currentTarget.value));
+					const next = indexAt(event.clientX);
+					if (next != null) applyDraft(clampLadderIndex(rungs, next));
+					event.currentTarget.focus();
 				}}
-				onPointerUp={commit}
+				onPointerMove={event => {
+					const drag = dragRef.current;
+					if (!drag || drag.pointerId !== event.pointerId) return;
+					const next = indexAt(event.clientX);
+					if (next == null) return;
+					const settled = clampLadderIndex(rungs, next);
+					if (settled !== draftRef.current) applyDraft(settled);
+				}}
+				onPointerUp={event => {
+					const drag = dragRef.current;
+					if (!drag || drag.pointerId !== event.pointerId) return;
+					write(draftRef.current);
+				}}
 				onPointerCancel={cancel}
 				onLostPointerCapture={cancel}
-				onKeyUp={commit}
-				onBlur={commit}
-			/>
-			<div className="gui-ladder-ticks" aria-hidden="true">
+				onKeyDown={event => {
+					if (disabled) return;
+					const step: Record<string, number> = {
+						ArrowLeft: -1,
+						ArrowDown: -1,
+						ArrowRight: 1,
+						ArrowUp: 1,
+					};
+					let next: number | null = null;
+					const delta = step[event.key];
+					if (delta !== undefined) next = draftRef.current + delta;
+					else if (event.key === "Home") next = 0;
+					else if (event.key === "End") next = last;
+					if (next == null) return;
+					event.preventDefault();
+					write(next);
+				}}
+			>
+				<span ref={railRef} className="gui-slider-rail" aria-hidden="true" />
+				<span className="gui-slider-fill" aria-hidden="true" />
 				{rungs.map((item, index) => (
 					<span
 						key={item.level ?? "off"}
-						className={`gui-ladder-tick${index === draft ? " gui-ladder-tick--on" : ""}${item.capped ? " gui-ladder-tick--capped" : ""}`}
+						className={`gui-slider-dot${index <= draft ? " gui-slider-dot--on" : ""}`}
+						data-capped={item.capped ? "" : undefined}
+						style={{ "--gui-slider-dot-p": index / last } as CSSProperties}
+						aria-hidden="true"
+					/>
+				))}
+				<span className="gui-slider-knob" aria-hidden="true" />
+			</div>
+			<div className="gui-slider-ticks" aria-hidden="true">
+				{rungs.map((item, index) => (
+					<span
+						key={item.level ?? "off"}
+						className={`gui-slider-tick${index === draft ? " gui-slider-tick--on" : ""}${item.capped ? " gui-slider-tick--capped" : ""}`}
 					>
 						{item.label}
 					</span>
 				))}
 			</div>
-			{rung.auto && resolved ? (
-				<p className="gui-agent-info-note gui-ladder-resolved">{thinkingLabel(resolved)}</p>
-			) : null}
 			{rungs.some(item => item.capped) && ceiling ? (
 				<p className="gui-agent-info-note">
 					{`${t("transcript.thinkingCappedModel")} · ${t("transcript.modelCap")} ${thinkingLabel(ceiling)}`}

@@ -35,6 +35,7 @@ English | [中文](gui-components.zh-CN.md)
 | `--spring-*` / `--gui-motion-*` | 动效曲线与时长 | `prefers-reduced-motion` 与动效开关需同时关闭 |
 | `--z-*` | 层级 | 浮层、模态、提示各有档位 |
 | `--gui-grip-*` | 分割握柄几何与三态 | 见下方 `SplitterGrip` |
+| `--gui-slider-*` | 滑块轨道、填充、档位点、滑块、焦点、悬停与禁用态 | 声明在 `gui-chat.css`（该族的权威位置）；覆盖范围内的滑块共用一族——见下方 `LadderSlider` 与紧随其后的例外清单 |
 
 ## 桌面壳（`apps/desktop/src/components/`）
 
@@ -46,7 +47,12 @@ English | [中文](gui-components.zh-CN.md)
 | `WorkspacePageHeader` | 页面级标题头（图标/标题/描述/动作） | 看板、任务中心、能力中心等页面 |
 | `RightRail` | 右边缘 44px 图标栏 | 右面板的入口；**面板收起时也必须渲染** |
 | `ContextPanel` | 右侧面板本体（标签页、分栏、最大化） | 右面板内容的唯一容器 |
+| `LadderSlider`（思考） | 模型思考强度滑块，含 `Auto` 与模型上限 | `components/LadderSlider.tsx`，位于 Agent 标签页模型卡片下方；拖动松手才提交，上限以上档位可见但不可选 |
+| `LadderSlider`（设置） | 带预设档位的数值设置阶梯 | `components/settings-controls/LadderSlider.tsx`；指针与方向键只能落在已声明档位 |
+| `--gui-slider-*` 消费方 | 两套自定义阶梯 + 两个自愿接入的原生 range | 两套阶梯共用完整轨道；原生 `<input class="gui-range">` 全仓只有两处：通知主音量（`settings-sections/notifications.tsx`）与桌宠尺寸（`settings-sections/companion.tsx`）。适用范围与例外见下 |
 | `SplitterGrip` 的宿主命中带 | `.gui-resize-x--side` / `.gui-pane-resize-x` / `.gui-dock-handle` | 三条接缝各自的定位层 |
+
+**滑块适用范围。** 该族覆盖两套阶梯与上述两个原生 range。有四处已发布滑块**有意**留在族外，各自属于独立表面：`.gui-sketch-range`（画板笔宽，`gui-composer.css`）、浏览器设备栏的宽高 range（`gui-browser-toolbar.css`）、截图编辑器的描边宽度（`.gui-shot-weight input`，`ScreenshotEditorDialog.tsx`）与 `.tr-ui-range`（`packages/client-core/src/ui-blocks/ui-blocks.css`）；移动端 `VoicePanel` 的语速是第五处。它们可以在各自的 scope 内收敛到该族；在此之前不得手抄族内几何。桌面端语音设置没有滑块——`tts.rate` 是 schema 数值，渲染成滚动数字。
 
 ## 共享组件（`packages/client-core/src/components/`）
 
@@ -92,7 +98,7 @@ English | [中文](gui-components.zh-CN.md)
 
 1. **控制高度没有 token。** 搜索框在基础规则是 32px、在 `.gui-capability-page` 覆盖为 34px，各自写死；没有 `--control-h-*`。
 2. **交互态命名未统一。** `--glass-hover*` 覆盖了通用悬停，但握柄这类「组件自有三态」是新加的 `--gui-grip-*`；新组件需要先判断该复用前者还是按命名规则新开一族。
-3. **CSS 契约测试只覆盖了圆角与握柄。** `scripts/check-radius-tokens.ts` + `test/splitter-grip.test.ts` 之外，多数组件的样式没有守护。
+3. **CSS 契约测试只覆盖了圆角、握柄与滑块族。** `scripts/check-radius-tokens.ts` + `test/splitter-grip.test.ts` + `test/slider-tokens.test.ts` 之外，多数组件的样式没有守护。
 
 新增组件时，请同时更新本目录的这一行，并在 `docs/gui-design.md` 记录它遵守的契约。
 
@@ -105,5 +111,6 @@ English | [中文](gui-components.zh-CN.md)
 | `scripts/check-radius-tokens.ts` | 禁止字面量 `border-radius`;每个 `--radius-*` 都必须有定义 |
 | `scripts/check-splitter-grip.ts` | 只有 `SplitterGrip.tsx` 能输出握柄类名;拖动态挂在胶囊自身的 `data-resizing` 上,绝不用全局 `body.gui-resizing`;已退役的 `.gui-resize-grip` 不得回归 |
 | `test/splitter-grip.test.ts` | 握柄原语的 token、三态与接缝几何 |
+| `test/slider-tokens.test.ts` | 共享滑块 token 族、两套阶梯、原生 range 配色与模型折叠卡片的焦点契约 |
 
 新写的护栏必须先证明它在未修复的代码上会失败,才可信任(见 `.agents/rules/testing.md`:双向都通过的守卫什么都没守住)。

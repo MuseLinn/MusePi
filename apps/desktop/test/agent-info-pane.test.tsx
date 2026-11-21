@@ -8,11 +8,16 @@ import type { GuiSessionState } from "../src/lib/session-store";
 import { AgentInfoPane } from "../src/lib/surfaces/agent-info-pane";
 
 /**
- * Agent info tab body: the two writes it owns and the readouts it shows.
+ * Agent info tab body: the model disclosure, the two writes it owns and the
+ * readouts it shows.
  *
- * - the model list is the shared selector rendered in place, addressed by
- *   `provider/id`; a pick writes `session.setModel` and re-reads
- *   `session.thinkingInfo` (the daemon's re-clamped level is the authority);
+ * - the model area is one card: collapsed it reads the running `provider/id`
+ *   and its thinking level; the searchable list lives inside the same
+ *   disclosure and only opens on a click/keyboard activation;
+ * - opening moves focus to the search field, Escape folds it and returns focus
+ *   to the card, a pick folds it and keeps the selection;
+ * - a pick writes `session.setModel` and re-reads `session.thinkingInfo` (the
+ *   daemon's re-clamped level is the authority);
  * - a refused write is reported, never swallowed;
  * - the thinking slider only writes on release, clamps to the model's ceiling,
  *   and rolls its optimistic readout back when the daemon refuses.
@@ -35,12 +40,15 @@ interface Call {
 function makeRpc(options: { failModel?: boolean; failThinking?: boolean; failReads?: boolean } = {}) {
 	const calls: Call[] = [];
 	const failReads = { current: options.failReads === true };
+	// The daemon is the authority: a successful write is what the next
+	// `thinkingInfo` read reports, so the slider's post-write re-seed is real.
+	const thinking = { level: thinkingInfo.level as string | null, auto: false, resolved: null as string | null };
 	const rpc = {
 		request: async (method: string, params?: Record<string, unknown>) => {
 			calls.push({ method, params });
 			if (method === "session.thinkingInfo") {
 				if (failReads.current) throw new Error("daemon unreachable");
-				return { ...thinkingInfo };
+				return { ...thinkingInfo, ...thinking };
 			}
 			if (method === "session.contextUsage") {
 				if (failReads.current) throw new Error("daemon unreachable");
@@ -58,6 +66,10 @@ function makeRpc(options: { failModel?: boolean; failThinking?: boolean; failRea
 			}
 			if (method === "session.setThinkingLevel") {
 				if (options.failThinking) throw new Error("thinking rejected");
+				const level = (params?.thinkingLevel as string | null) ?? null;
+				thinking.level = level;
+				thinking.auto = level === "auto";
+				thinking.resolved = level === "auto" ? "high" : null;
 				return { ok: true };
 			}
 			return {};
@@ -105,14 +117,6 @@ async function mount(rpc: RpcClient, state: GuiSessionState = snap()) {
 	};
 }
 
-/** React tracks the DOM value; set it through the prototype so the input
- *  event is not swallowed as "unchanged". */
-function setRangeValue(input: HTMLInputElement, value: number): void {
-	const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-	setter?.call(input, String(value));
-	input.dispatchEvent(new Event("input", { bubbles: true }));
-}
-
 function setTextValue(input: HTMLInputElement, value: string): void {
 	const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
 	setter?.call(input, value);
@@ -123,10 +127,60 @@ function key(target: HTMLElement, name: string): void {
 	target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
 }
 
-function range(host: HTMLElement): HTMLInputElement {
-	const input = host.querySelector<HTMLInputElement>("input[type=range]");
-	expect(input).not.toBeNull();
-	return input!;
+function card(host: HTMLElement): HTMLButtonElement {
+	const button = host.querySelector<HTMLButtonElement>(".gui-agent-model-card");
+	expect(button).not.toBeNull();
+	return button!;
+}
+
+function disclosure(host: HTMLElement): HTMLElement {
+	const collapse = host.querySelector<HTMLElement>(".gui-agent-info .gui-collapse");
+	expect(collapse).not.toBeNull();
+	return collapse!;
+}
+
+async function expand(host: HTMLElement): Promise<void> {
+	await act(async () => card(host).click());
+}
+
+function slider(host: HTMLElement): HTMLElement {
+	const track = host.querySelector<HTMLElement>('[role="slider"]');
+	expect(track).not.toBeNull();
+	return track!;
+}
+
+/** Happy-dom lays nothing out; give the track and its rail real widths so the
+ *  pointer position maps onto rungs the way it does in the app. The rail is
+ *  the CSS-inset travel span (`--gui-slider-inset`), which is exactly what the
+ *  component measures — passing a different knob size here is how the tests
+ *  prove the pointer math follows layout instead of a baked-in radius. */
+function stubTrackWidth(track: HTMLElement, width = 200, knob = 18): void {
+	const rect = (left: number, span: number): DOMRect =>
+		({
+			left,
+			top: 0,
+			right: left + span,
+			bottom: 28,
+			width: span,
+			height: 28,
+			x: left,
+			y: 0,
+			toJSON: () => ({}),
+		}) as DOMRect;
+	track.getBoundingClientRect = () => rect(0, width);
+	const rail = track.querySelector<HTMLElement>(".gui-slider-rail");
+	expect(rail).not.toBeNull();
+	const inset = knob / 2;
+	rail!.getBoundingClientRect = () => rect(inset, width - inset * 2);
+}
+
+/** x of rung `index` on a 200px track with an 18px knob (9px inset a side). */
+function rungX(index: number, rungs = 6, width = 200): number {
+	return 9 + (width - 18) * (index / rungs);
+}
+
+function pointer(target: HTMLElement, type: string, clientX: number): void {
+	target.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX }));
 }
 
 const level = (calls: Call[]): unknown =>
@@ -147,18 +201,40 @@ afterAll(() => {
 });
 
 describe("agent info pane", () => {
-	it("shows the model as a provider/id reference and the session metadata", async () => {
+	it("collapses the model area to the current provider/id and thinking level", async () => {
 		const { rpc } = makeRpc();
 		const { host, unmount } = await mount(rpc);
-		expect(host.querySelector(".gui-agent-info-model-ref")?.textContent).toBe("prov/m1");
+		const trigger = card(host);
+		expect(trigger.getAttribute("aria-expanded")).toBe("false");
+		expect(trigger.textContent).toContain("Model One");
+		expect(trigger.textContent).toContain("prov/m1");
+		expect(trigger.textContent).toContain("中");
+		// The list exists behind the disclosure but is closed and inert.
+		expect(disclosure(host).getAttribute("aria-hidden")).toBe("true");
 		expect(host.textContent).toContain("Refactor the panel");
 		expect(host.textContent).toContain("10%");
+		await unmount();
+	});
+
+	it("opens the list on click, focuses search, and folds it back on Escape", async () => {
+		const { rpc } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		await expand(host);
+		expect(card(host).getAttribute("aria-expanded")).toBe("true");
+		expect(disclosure(host).getAttribute("aria-hidden")).toBe("false");
+		const input = host.querySelector<HTMLInputElement>(".gui-model-menu-input")!;
+		expect(document.activeElement).toBe(input);
+
+		await act(async () => key(input, "Escape"));
+		expect(card(host).getAttribute("aria-expanded")).toBe("false");
+		expect(document.activeElement).toBe(card(host));
 		await unmount();
 	});
 
 	it("renders the searchable model list in place and switches with the picked provider", async () => {
 		const { rpc, calls } = makeRpc();
 		const { host, unmount } = await mount(rpc);
+		await expand(host);
 		expect(host.querySelector(".gui-model-menu--inline")).not.toBeNull();
 		expect(host.querySelector(".gui-model-menu-input")).not.toBeNull();
 		const rows = host.querySelectorAll(".gui-model-opt");
@@ -171,12 +247,19 @@ describe("agent info pane", () => {
 		expect(setModel?.params).toEqual({ sessionId: "session-1", model: { id: "m2", provider: "prov2" } });
 		// Re-read after the switch: the daemon re-clamps the level for the new model.
 		expect(calls.filter(call => call.method === "session.thinkingInfo").length).toBeGreaterThan(thinkingReads);
+		// A complete pick folds the card and hands focus back to it; the
+		// selection survives the fold.
+		expect(card(host).getAttribute("aria-expanded")).toBe("false");
+		expect(document.activeElement).toBe(card(host));
+		await expand(host);
+		expect(host.querySelector(".gui-model-opt--active")?.textContent).toContain("Model Two");
 		await unmount();
 	});
 
 	it("picks the top match with Enter after typing in the inline list", async () => {
 		const { rpc, calls } = makeRpc();
 		const { host, unmount } = await mount(rpc);
+		await expand(host);
 		const input = host.querySelector<HTMLInputElement>(".gui-model-menu-input")!;
 		await act(async () => {
 			setTextValue(input, "two");
@@ -197,6 +280,7 @@ describe("agent info pane", () => {
 	it("enters the inline list from the last row when ↑ starts without a highlight", async () => {
 		const { rpc } = makeRpc();
 		const { host, unmount } = await mount(rpc);
+		await expand(host);
 		const input = host.querySelector<HTMLInputElement>(".gui-model-menu-input")!;
 		// A real pointer move yields the resting highlight back (kbd → -1);
 		// ↑ then enters at the LAST row, not the second-to-last.
@@ -219,6 +303,7 @@ describe("agent info pane", () => {
 		const onToast = (event: Event): void => toasts.push(String((event as CustomEvent).detail));
 		window.addEventListener("musepi-gui-toast", onToast);
 		const { host, unmount } = await mount(rpc);
+		await expand(host);
 		const activeBefore = host.querySelector(".gui-model-opt--active")?.textContent ?? null;
 		expect(activeBefore).toContain("Model One");
 		const rows = host.querySelectorAll(".gui-model-opt");
@@ -229,6 +314,7 @@ describe("agent info pane", () => {
 		expect(toasts.some(text => text.includes("切换模型失败"))).toBe(true);
 		expect(host.querySelector(".gui-agent-info-error")?.textContent).toContain("切换模型失败");
 		// The refused model is not left checked: the daemon kept the old one.
+		await expand(host);
 		expect(host.querySelector(".gui-model-opt--active")?.textContent).toBe(activeBefore);
 		window.removeEventListener("musepi-gui-toast", onToast);
 		await unmount();
@@ -250,44 +336,82 @@ describe("agent info pane", () => {
 			await new Promise(resolve => setTimeout(resolve, 0));
 		});
 		expect(host.querySelector(".gui-agent-info-error")).toBeNull();
-		expect(host.querySelector(".gui-agent-info-model-ref")?.textContent).toBe("prov/m1");
+		expect(card(host).textContent).toContain("prov/m1");
 		await unmount();
 	});
 
 	it("cancels a dragged ladder without writing the draft", async () => {
 		const { rpc, calls } = makeRpc();
 		const { host, unmount } = await mount(rpc);
-		const input = range(host);
-		const before = input.getAttribute("aria-valuetext");
-		await act(async () => setRangeValue(input, 4));
-		await act(async () => input.dispatchEvent(new Event("pointercancel", { bubbles: true })));
+		const track = slider(host);
+		stubTrackWidth(track);
+		const before = track.getAttribute("aria-valuenow");
+		await act(async () => {
+			pointer(track, "pointerdown", rungX(0));
+			pointer(track, "pointermove", rungX(5));
+			pointer(track, "pointercancel", rungX(5));
+		});
 		expect(level(calls)).toBeUndefined();
-		expect(range(host).getAttribute("aria-valuetext")).toBe(before);
+		expect(slider(host).getAttribute("aria-valuenow")).toBe(before);
 		await unmount();
 	});
 
 	it("commits the thinking level only on release", async () => {
 		const { rpc, calls } = makeRpc();
 		const { host, unmount } = await mount(rpc);
-		const input = range(host);
-		// off + five efforts + auto
-		expect(input.max).toBe("6");
-		await act(async () => setRangeValue(input, 2));
+		const track = slider(host);
+		stubTrackWidth(track);
+		await act(async () => {
+			pointer(track, "pointerdown", rungX(3));
+			pointer(track, "pointermove", rungX(2));
+		});
 		expect(level(calls)).toBeUndefined();
-		await act(async () => input.dispatchEvent(new Event("pointerup", { bubbles: true })));
+		expect(track.getAttribute("aria-valuenow")).toBe("2");
+		await act(async () => pointer(track, "pointerup", rungX(2)));
 		expect(level(calls)).toBe("low");
+		await unmount();
+	});
+
+	it("maps the press through the laid-out rail, not a baked-in knob radius", async () => {
+		const { rpc } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const track = slider(host);
+		// A 60px knob means 30px of inset a side. The old hardcoded 9px would
+		// read the 30px,200px track as rung 1 and 170px as rung 5.
+		stubTrackWidth(track, 200, 60);
+		await act(async () => pointer(track, "pointerdown", 30));
+		expect(slider(host).getAttribute("aria-valuenow")).toBe("0");
+		await act(async () => pointer(track, "pointercancel", 30));
+		await act(async () => pointer(track, "pointerdown", 170));
+		expect(slider(host).getAttribute("aria-valuenow")).toBe("6");
+		await act(async () => pointer(track, "pointercancel", 170));
 		await unmount();
 	});
 
 	it("clamps a release above the model ceiling to the ceiling", async () => {
 		const { rpc, calls } = makeRpc();
 		const { host, unmount } = await mount(rpc);
-		const input = range(host);
-		await act(async () => setRangeValue(input, 5));
-		await act(async () => input.dispatchEvent(new Event("pointerup", { bubbles: true })));
+		const track = slider(host);
+		stubTrackWidth(track);
+		await act(async () => {
+			pointer(track, "pointerdown", rungX(5));
+			pointer(track, "pointerup", rungX(5));
+		});
 		expect(level(calls)).toBe("high");
-		const ticks = [...host.querySelectorAll(".gui-ladder-tick")];
-		expect(ticks[5]?.classList.contains("gui-ladder-tick--capped")).toBe(true);
+		const ticks = [...host.querySelectorAll(".gui-slider-tick")];
+		expect(ticks[5]?.classList.contains("gui-slider-tick--capped")).toBe(true);
+		await unmount();
+	});
+
+	it("steps one rung per arrow key with the same commit path", async () => {
+		const { rpc, calls } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const track = slider(host);
+		await act(async () => key(track, "ArrowRight"));
+		expect(level(calls)).toBe("high");
+		expect(slider(host).getAttribute("aria-valuetext")).toBe("高");
+		await act(async () => key(track, "End"));
+		expect(level(calls)).toBe("auto");
 		await unmount();
 	});
 
@@ -297,12 +421,18 @@ describe("agent info pane", () => {
 		const onToast = (event: Event): void => toasts.push(String((event as CustomEvent).detail));
 		window.addEventListener("musepi-gui-toast", onToast);
 		const { host, unmount } = await mount(rpc);
-		const input = range(host);
-		const before = input.getAttribute("aria-valuetext");
-		await act(async () => setRangeValue(input, 4));
-		await act(async () => input.dispatchEvent(new Event("pointerup", { bubbles: true })));
+		const track = slider(host);
+		stubTrackWidth(track);
+		const before = track.getAttribute("aria-valuetext");
+		// Separate turns: the drag renders, the release commits optimistically,
+		// then the daemon's refusal rolls the whole block back.
+		await act(async () => pointer(track, "pointerdown", rungX(4)));
+		await act(async () => pointer(track, "pointerup", rungX(4)));
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 0));
+		});
 		expect(toasts.some(text => text.includes("修改思考强度失败"))).toBe(true);
-		expect(range(host).getAttribute("aria-valuetext")).toBe(before);
+		expect(slider(host).getAttribute("aria-valuetext")).toBe(before);
 		window.removeEventListener("musepi-gui-toast", onToast);
 		await unmount();
 	});
@@ -320,9 +450,9 @@ describe("agent info pane", () => {
 			},
 		} as unknown as RpcClient;
 		const { host, unmount } = await mount(autoRpc);
-		const input = range(host);
-		expect(input.value).toBe("6");
-		expect(host.querySelector(".gui-ladder-resolved")).not.toBeNull();
+		const track = slider(host);
+		expect(track.getAttribute("aria-valuenow")).toBe("6");
+		expect(host.querySelector(".gui-slider-resolved")?.textContent).toContain("高");
 		await unmount();
 	});
 });
