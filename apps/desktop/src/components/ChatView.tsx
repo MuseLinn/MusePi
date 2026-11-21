@@ -112,6 +112,7 @@ import type { ReminderRow } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
 import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
+import { type SecretAnswer, SecretCard, type SecretRequest } from "./SecretCard";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionArtifactPreviewDialog, type SessionArtifactPreviewRequest } from "./SessionArtifactPreviewDialog";
 import type { SessionComposerProps } from "./SessionComposer";
@@ -507,6 +508,78 @@ export function ChatView({
 		};
 		return onSettingsChanged(sync);
 	}, [rpc, store?.sessionId]);
+	// Secret request cards: the daemon pushes `secret-request` on this
+	// session's stream. Requests stay independent per requestId (parallel
+	// tool calls can raise several); the value never enters the store —
+	// SecretCard holds it for the duration of the input and answers through
+	// secret.answer.
+	const [secretRequests, setSecretRequests] = useState<readonly SecretRequest[]>([]);
+	// Requests this window has already answered. The daemon broadcasts
+	// `secret-request-end` to every subscriber — including this one, one
+	// batcher beat after the RPC result. Those local ids keep their resolved
+	// line until SecretCard's linger calls onSettled; only foreign ends
+	// (another device answered, or the ten-minute timeout) drop a card.
+	const answeredSecretRequestsRef = useRef<Set<string>>(new Set());
+	useEffect(() => {
+		const sessionId = store?.sessionId;
+		return rpc.addEventListener(event => {
+			// Own session only: an envelope without a session id is not this
+			// chat's request, and a foreign session gets its own card.
+			if (!sessionId || event.sessionId !== sessionId) return;
+			if (event.kind === "secret-request") {
+				const payload = event.payload as Partial<SecretRequest> | undefined;
+				if (
+					!payload ||
+					typeof payload.requestId !== "string" ||
+					typeof payload.name !== "string" ||
+					typeof payload.purpose !== "string" ||
+					(payload.kind !== "fill" && payload.kind !== "allow")
+				) {
+					return;
+				}
+				const next: SecretRequest = {
+					requestId: payload.requestId,
+					name: payload.name,
+					purpose: payload.purpose,
+					kind: payload.kind,
+				};
+				// A subscribe replay of a request already on screen keeps one card.
+				setSecretRequests(current =>
+					current.some(item => item.requestId === next.requestId) ? current : [...current, next],
+				);
+				return;
+			}
+			// Another device answered, or the request timed out as cancel.
+			if (event.kind === "secret-request-end") {
+				const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
+				// A locally answered request keeps its settled line — the end
+				// broadcast for it is this window's own write coming back.
+				if (typeof requestId === "string" && !answeredSecretRequestsRef.current.has(requestId)) {
+					setSecretRequests(current => current.filter(item => item.requestId !== requestId));
+				}
+			}
+		});
+	}, [rpc, store?.sessionId]);
+	const answerSecret = useCallback(
+		async (answer: SecretAnswer): Promise<void> => {
+			// Mark before the send: the end broadcast can arrive before the RPC
+			// response resolves, so marking on success would race the card off
+			// screen. Failure rolls the mark back.
+			answeredSecretRequestsRef.current.add(answer.requestId);
+			try {
+				await rpc.request("secret.answer", {
+					requestId: answer.requestId,
+					action: answer.action,
+					...(answer.value !== undefined ? { value: answer.value } : {}),
+					...(answer.scope !== undefined ? { scope: answer.scope } : {}),
+				});
+			} catch (err) {
+				answeredSecretRequestsRef.current.delete(answer.requestId);
+				throw err;
+			}
+		},
+		[rpc],
+	);
 	// Pause banner hold timer: tick every second while the freeze is engaged
 	// so the "paused · mm:ss" clock advances.
 	const [, setPauseTick] = useState(0);
@@ -1066,6 +1139,10 @@ export function ChatView({
 		setCurrentLeafKey(null);
 		setPinnedPathIds(null);
 		setViewModeState("chat");
+		// Secret cards belong to the session that raised them — leaving the
+		// session drops the card; the daemon replays it on return.
+		setSecretRequests([]);
+		answeredSecretRequestsRef.current.clear();
 		const timer = setTimeout(() => {
 			if (el) delete el.dataset.switched;
 		}, 700);
@@ -3920,6 +3997,17 @@ export function ChatView({
 										tool={a.tool}
 										prompt={a.prompt}
 										onDecide={onDecideApproval}
+									/>
+								))}
+								{secretRequests.map(request => (
+									<SecretCard
+										key={request.requestId}
+										request={request}
+										onAnswer={answerSecret}
+										onSettled={requestId => {
+											answeredSecretRequestsRef.current.delete(requestId);
+											setSecretRequests(current => current.filter(item => item.requestId !== requestId));
+										}}
 									/>
 								))}
 								{ask && onAskAnswer && (

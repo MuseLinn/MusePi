@@ -14,6 +14,7 @@ import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
 import { Composer } from "./Composer";
 import { ScrollEdgeBlur } from "./ScrollEdgeBlur";
+import { type SecretAnswer, SecretCard, type SecretRequest } from "./SecretCard";
 
 function clientId(): string {
 	let id = localStorage.getItem("musepi-gui-client-id");
@@ -112,6 +113,12 @@ function SideSessionBody({
 	const getSnapshot = useMemo(() => () => store.getSnapshot(), [store]);
 	const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 	const [asks, setAsks] = useState<readonly AskRequest[]>([]);
+	const [secretRequests, setSecretRequests] = useState<readonly SecretRequest[]>([]);
+	// Requests this view already answered. The daemon's `secret-request-end`
+	// broadcast comes back to the answering connection too; a local id keeps
+	// its resolved line until SecretCard's linger calls onSettled, while a
+	// foreign end (other device answered, or timeout) drops the card at once.
+	const answeredSecretRequestsRef = useRef<Set<string>>(new Set());
 	const [quotes, setQuotes] = useState<DisplayContext[]>([]);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(bodyRef);
@@ -141,6 +148,51 @@ function SideSessionBody({
 		[sessionId],
 	);
 
+	// Secret requests arrive on the same session-scoped stream, one card per
+	// requestId. The card answers through secret.answer; the value never
+	// leaves its own state.
+	useEffect(() => {
+		setSecretRequests([]);
+		answeredSecretRequestsRef.current.clear();
+	}, [sessionId]);
+	useEffect(() => {
+		if (!rpc) return;
+		return rpc.addEventListener(event => {
+			if (event.sessionId !== sessionId) return;
+			if (event.kind === "secret-request") {
+				const payload = event.payload as Partial<SecretRequest> | undefined;
+				if (
+					!payload ||
+					typeof payload.requestId !== "string" ||
+					typeof payload.name !== "string" ||
+					typeof payload.purpose !== "string" ||
+					(payload.kind !== "fill" && payload.kind !== "allow")
+				) {
+					return;
+				}
+				const next: SecretRequest = {
+					requestId: payload.requestId,
+					name: payload.name,
+					purpose: payload.purpose,
+					kind: payload.kind,
+				};
+				setSecretRequests(current =>
+					current.some(item => item.requestId === next.requestId) ? current : [...current, next],
+				);
+				return;
+			}
+			// Another device answered, or the request timed out as cancel.
+			if (event.kind === "secret-request-end") {
+				const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
+				// This view's own answer comes back as an end too — leave it
+				// to the card's linger instead of flashing the line away.
+				if (typeof requestId === "string" && !answeredSecretRequestsRef.current.has(requestId)) {
+					setSecretRequests(current => current.filter(item => item.requestId !== requestId));
+				}
+			}
+		});
+	}, [rpc, sessionId]);
+
 	const decide = (requestId: string, approved: boolean, note?: string): void => {
 		if (!rpc) return;
 		const trimmed = note?.trim();
@@ -164,6 +216,25 @@ function SideSessionBody({
 				answer: value,
 			})
 			.catch(() => {});
+	};
+
+	const answerSecret = (value: SecretAnswer): Promise<void> => {
+		if (!rpc) return Promise.reject(new Error(t("general.sideSessionError")));
+		// Mark before the send: the end broadcast can arrive before the RPC
+		// result resolves. Failure rolls the mark back.
+		answeredSecretRequestsRef.current.add(value.requestId);
+		return rpc
+			.request("secret.answer", {
+				requestId: value.requestId,
+				action: value.action,
+				...(value.value !== undefined ? { value: value.value } : {}),
+				...(value.scope !== undefined ? { scope: value.scope } : {}),
+			})
+			.then(() => undefined)
+			.catch((err: unknown) => {
+				answeredSecretRequestsRef.current.delete(value.requestId);
+				throw err;
+			});
 	};
 
 	const send = (
@@ -234,7 +305,7 @@ function SideSessionBody({
 				<ScrollEdgeBlur edge="end" />
 			</div>
 
-			{snap.approvals.length > 0 || asks.length > 0 ? (
+			{snap.approvals.length > 0 || asks.length > 0 || secretRequests.length > 0 ? (
 				<div className="gui-side-session-approvals">
 					{snap.approvals.map(approval => (
 						<ApprovalCard
@@ -247,6 +318,17 @@ function SideSessionBody({
 					))}
 					{asks.map(ask => (
 						<AskCard key={ask.requestId} ask={ask} onAnswer={value => answer(ask, value)} />
+					))}
+					{secretRequests.map(request => (
+						<SecretCard
+							key={request.requestId}
+							request={request}
+							onAnswer={answerSecret}
+							onSettled={requestId => {
+								answeredSecretRequestsRef.current.delete(requestId);
+								setSecretRequests(current => current.filter(item => item.requestId !== requestId));
+							}}
+						/>
 					))}
 				</div>
 			) : null}
