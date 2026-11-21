@@ -191,7 +191,18 @@ ipcMain.on("startup-mark", (_event, phase) => {
 	process.stdout.write(`[renderer-startup] ${phase}\n`);
 });
 const DIST_DIR = path.resolve(__dirname, "..", "dist");
+// Window/taskbar icon. In dev this is apps/desktop/build/icon.png; packaged it
+// resolves inside app.asar, which carries this one file through the
+// electron-builder `files` entry `build/icon.png` (buildResources as a whole is
+// excluded from the app archive). Only taskbar-visible windows pass it —
+// pet/bubbles/tray-menu/pin/glow set skipTaskbar, so they never get a taskbar
+// button to put an icon on.
 const ICON_PATH = path.resolve(__dirname, "..", "build", "icon.png");
+if (!fs.existsSync(ICON_PATH)) {
+	console.error(
+		`[main] window icon missing at ${ICON_PATH} — taskbar and window icons fall back to Electron's default icon`,
+	);
+}
 
 // Dev data isolation (dsh-desktop parity; set by dev-desktop.mjs): point
 // userData at .desktop-build/development/ BEFORE anything resolves it —
@@ -344,6 +355,8 @@ const ICON_DOCK_PATH = path.resolve(__dirname, "..", "build", "icon-dock.png");
 // the OS cannot attribute the toast to this app (Electron shows it under a
 // generic/blank source or drops it). Set once at startup; the packaged
 // installer (electron-builder) also sets it, so this covers dev mode too.
+// Must stay above every window creation: Windows binds each taskbar button's
+// grouping identity when the window is created.
 app.setAppUserModelId("com.musepi.gui");
 
 /** Cached window handle (single-window app). */
@@ -4359,6 +4372,9 @@ function openMiniChatWindow(sessionId) {
 		resizable: true,
 		titleBarStyle: "hidden",
 		trafficLightPosition: { x: 16, y: 17 },
+		// Mini chat is the second taskbar-visible window, so it carries the
+		// same brand icon as the main window.
+		icon: ICON_PATH,
 		// Windows/Linux: titleBarStyle "hidden" draws no window controls on
 		// its own (traffic lights are macOS-only) — the same problem as the
 		// main window. titleBarOverlay puts native min/max/close at the

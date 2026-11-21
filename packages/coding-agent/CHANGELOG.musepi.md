@@ -30,6 +30,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ### 修复
 
+- **Windows 安装版的任务栏和窗口显示 MusePi 图标**：窗口图标原先指向 `build/icon.png`，但打包清单没有带上这个文件，安装后的应用读不到图标，任务栏回退成 Electron 默认图标；现在图标随应用归档发布，主窗口与迷你对话窗口都显式使用它，启动时缺失还会在主进程日志中报错。可执行文件本身的图标一直是品牌图标，未改动。
+  - EN: Windows builds now show the MusePi icon in the taskbar and on both the main and mini chat windows. The window icon pointed at `build/icon.png`, which the packaging list never shipped, so the installed app could not load it and the taskbar fell back to the Electron default. The icon now ships with the app and is used explicitly by the main and mini windows; a missing file is logged as an error at startup. The executable's own icon was already the brand icon and is unchanged.
+
 - **daemon 崩溃后自动回到原来那个会话**：daemon 被外壳快速重建时，重连后第一次打开会话可能赶上新 daemon 还没开始响应请求（`not connected`），此前这一步只试一次就退回欢迎页；现在同一个会话会按退避重试（最多 6 次，约 7 秒），daemon 就绪后直接回到离开前的对话。恢复期间点开另一个会话，重试会转到那个会话上，你不会被留在「高亮 B、界面还是 A」的状态；你主动回到欢迎页或删掉当前会话，重试就停下。恢复期间界面仍是空闲快照，不会把重试显示成新的运行状态。
   - EN: After a daemon crash the GUI now returns to the session you were reading. When the shell reconnects faster than the restarted daemon starts answering, the first reopen came back `not connected` and gave up on the welcome page; the same session is now retried with backoff (six attempts at most, about seven seconds) and lands back on the conversation as soon as the daemon is ready. Picking another session during the recovery moves the retries to that session, so you are never left highlighting one session while the transcript still shows another; returning to the welcome page or deleting the current session ends them. The transcript stays the idle snapshot, so a retry never reads as a new running turn.
 - **Esc 又能中断正在运行的回合**：聊天视图里没有文本选区时，选区工具条虽然不可见，仍会抢先认领每一次 Esc，窗口层的「停止回合」绑定因此永远看不到它；现在只有工具条真正显示（有选区）时才由它接住 Esc 并关闭自己，其余情况下 Esc 照常停止正在运行的回合。工具条打开时的优先级不变：第一次 Esc 只关工具条，不会顺带中断回合；输入框、菜单与对话框里的 Esc 归属也保持原样。
