@@ -67,6 +67,7 @@ Shared by desktop and mobile; changes must be verified on both.
 | `marketplace/` | `MarketplaceGrid` / `MarketplaceCard` / `MarketplacePanel` | Marketplace grid (the capability page re-skins it, never copies it) |
 | `charts/` | `BarChart` / `LineChart` / `Donut` / `Gauge` / `KLine` / `Sparkline` | Charts |
 | `progress/` | `ProgressMeter` | Progress |
+| `transcript/` | `BranchSummaryDivider` | The inherited-history boundary; leads with the shared `GitFork` glyph and keeps the label as its accessible name |
 | — | `image-lightbox` / `image-morph` / `image-zoom` | Image viewing |
 
 ## Dialogs and boards

@@ -33,6 +33,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 - **欢迎页的 `/`、`@`、`#` 补全菜单换成会话同款面板**：两侧不再各写一份菜单。欢迎页现在同样按项类型显示图标（目录高亮、文件灰）、给路径单独的次要列与 `rootLabel` 标签、给会话项显示所属目录，并把键盘选中的那一行滚动到可见范围内。
   - EN: The welcome page's `/`, `@` and `#` completion panels are the session panels now: the two scenes no longer render separate menus. The welcome menu shows a per-kind icon (directories accented, files muted), a separate secondary path column with the `rootLabel` chip, the owning directory on session rows, and keeps the keyboard-selected row scrolled into view.
 
+- **文件可以先从目录菜单「加入对话」，继承历史的分界行改用分叉图标**：在路径栏的目录菜单里右键任意文件，选「加入对话」，文件就以与 `@` 引用同型的原子 chip 进入当前草稿，并插入对应的 `@文件N` 标记——原有文字与选区都保留，草稿不会被发送，含空格或方括号的路径也不会破坏引用。目录行、或此刻不能接收引用的输入框，会把该菜单项置灰并写明原因，不会点下去毫无反应。会话里承接历史的那条分界行现在以分叉图标打头，与分支切换器用的是同一个图标，文案与可访问名不变。
+  - EN: Right-clicking a file in the breadcrumb's directory menu now offers Add to chat: the file joins the current draft as the same atomic `@` reference a mention produces, its `@文件N` token is inserted after the text and selection you already had, the draft is not sent, and a path containing spaces or brackets leaves the reference intact. Directory rows, and a composer that cannot take the reference right now, gray the item out and say why instead of doing nothing. The line that marks where inherited history ends now leads with the fork icon the branch switcher uses, with its wording and accessible name unchanged.
+
 ### 修复
 
 - **会话地图的轮次条改到画布底边，不再压住顶部切换 tab、也不留左侧空列**：纵向布局原先是一条贴左的竖带，从顶栏下方一直延伸，既盖住 Chat / Canvas 切换按钮，又在画布左侧空出一条宽带；现在纵向与横向都使用同一条底部横条（全轮次剪影、视口指示、点击跳转与方向切换不变），顶栏也回到卡片左缘，画布占满整个宽度。

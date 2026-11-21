@@ -1096,6 +1096,20 @@ button.tr-display-context-source:hover {
 	background: var(--border);
 }
 
+/* Branch boundary (branch_summary): the caption leads with the shared fork
+ * glyph in one group — 6px inset like the flow-row leading icons, both in the
+ * label's ink — so the divider reads as a fork rather than a bare rule. */
+.tr-branch-summary-caption {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.tr-branch-summary-caption > svg {
+	flex: none;
+}
+
 /* display.collapseCompacted parity: the fold row replacing the first
  * compaction divider is a full-width button with the divider chrome. */
 .tr-compacted-fold {

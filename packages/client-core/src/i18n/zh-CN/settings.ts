@@ -250,6 +250,10 @@ export const settings = {
 	"settings.noText": "（无文本）",
 	"settings.thinking": "思考中…",
 	"settings.branchSummary": "分支摘要",
+	"settings.addToChat": "加入对话",
+	"settings.addToChatFolder": "目录不能加入对话，请选择文件",
+	"settings.addToChatUnavailable": "当前输入框无法接收文件引用",
+	"settings.addToChatFailed": "无法将 {name} 加入对话",
 	"settings.loadMorePrompts": "加载更多提示",
 	"settings.olderHistoryUnavailable": "无法加载更早的对话：会话历史已被压缩或替换。",
 
