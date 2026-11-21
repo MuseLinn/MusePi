@@ -6602,6 +6602,24 @@ body.gui-resizing .gui-pane-right {
 	position: relative;
 }
 
+/* ── One gutter below the header ─────────────────────────────────────
+ * The surface's window gutter is invisible on the top edge — the surface
+ * paints no box — but it stacked with the card's own gutter into a 16px band
+ * under the header, so every rounded card read as far from the titlebar as
+ * from the window sides (user: 各圆角容器与顶栏之间有较大的空白区域). The
+ * top edge keeps only the card gutter; left/right/bottom keep the window
+ * gutter. ChatView still writes the surface margin inline, so this override
+ * has to win the cascade explicitly rather than by source order. */
+.gui-chat-surface {
+	margin-top: 0 !important;
+}
+
+/* Sidebar seam handle: its band starts at the card's top edge, so it follows
+ * the card up one gutter (the base geometry lives in gui-settings.css). */
+.gui-main > .gui-resize-x--side {
+	top: calc(var(--gui-header-h) + var(--gui-card-gutter));
+}
+
 /* ── Workspace card gutters (user: 会话卡、右面板、rail 都拥有空态卡的
  * 那一层外距) — every card carries the gutter margin so card-to-card and
  * card-to-window spacing read as one uniform breath. Appended last so the
