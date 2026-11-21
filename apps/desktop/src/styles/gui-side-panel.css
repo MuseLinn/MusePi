@@ -33,11 +33,9 @@
 	position: relative;
 	/* Window drag: the rail's top band stops at its 52px edge and the chat
 	 * header only spans the chat column, so the sidebar width above the card
-	 * used to be dead space that could not move the window (user: 顶栏在左侧
-	 * 面板的区域无法鼠标拖动移动窗口). The card opts out below, which leaves
-	 * exactly the empty strip above it draggable. Peek (zero width) and the
+	 * used to be dead space that could not move the window. The band and the
+	 * card's opt-out live in gui-window-drag.css; peek (zero width) and the
 	 * closed drawer (parked off-screen) keep no stray region. */
-	-webkit-app-region: drag;
 }
 
 .gui-side-keeper > .gui-pane-side {
@@ -80,15 +78,14 @@
 }
 
 /* ── Rounded card surface: same tokens as .gui-chat-column / .gui-page-card
- * Electron honors no-drag on DESCENDANTS of a drag region, so the card keeps
- * every click while the keeper's empty strip above it moves the window; the
- * card's own `.gui-pane-drag` row stays a drag strip. */
+ * The card opts out of the keeper's band (gui-window-drag.css), so every click
+ * inside it lands while the empty strip above moves the window; the card's own
+ * `.gui-pane-drag` row stays a band. */
 .gui-side-keeper > .gui-pane-side {
 	border-radius: var(--radius-2xl);
 	box-shadow: var(--gui-card-shadow);
 	background: var(--color-surface);
 	overflow: hidden;
-	-webkit-app-region: no-drag;
 }
 
 /* The drag band used to clear the frameless titlebar; the card now starts

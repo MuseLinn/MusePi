@@ -1,0 +1,165 @@
+/*
+ * Window drag contract — the single owner of `-webkit-app-region` for the
+ * desktop renderer. Component sheets describe geometry and paint; whether a
+ * pixel moves the window is decided here.
+ *
+ * Two ways to opt in:
+ *
+ *   data-gui-window-drag="band"   a chrome strip that moves the window
+ *   data-gui-window-drag="off"    an interactive subtree that never does
+ *
+ * Chromium computes `-webkit-app-region` as an INHERITED property: a `drag`
+ * element makes every descendant compute `drag`, and only an explicit
+ * `no-drag` descendant escapes. That is why per-component declarations kept
+ * losing a strip: the band a user sees is rarely the element that owns it, and
+ * a surface whose ancestry never declared a region painted a dead strip — the
+ * settings rail above 返回 / 搜索, whose nav column is portalled into a slot
+ * that declared nothing.
+ *
+ * Rules for a band:
+ *   1. It paints EMPTY chrome. Controls live in a sibling `off` surface, or
+ *      inside the band with their own `off`; the safety net below covers the
+ *      native controls either way.
+ *   2. `band` and `off` on one element is a contradiction (a guard test in
+ *      apps/desktop/test rejects it).
+ *   3. The OS titlebar is drawn OVER the page, so a band is transparent to it
+ *      and needs no carve of its own; a band that places a control at a
+ *      leading edge reads the inset tokens instead of a literal.
+ *
+ * Platform inset (apps/desktop/electron/main.cjs: titleBarStyle "hidden"):
+ *   macOS  trafficLightPosition {x:16,y:17}, three 14px buttons → the leading
+ *          88px of the top band belongs to the system.
+ *   win32  titleBarOverlay height 48, ~150px trailing → the header reserves it
+ *          with paddingRight; bands keep their full width.
+ *   linux  falls back to the distro's own title bar; the inset tokens stay 0
+ *          and no band relies on them.
+ */
+
+:root {
+	/* The OS titlebar row the bands align to (`titleBarOverlay.height` in the
+	 * main process, and the header's own h-12). */
+	--gui-chrome-band-h: 48px;
+	/* Reserved leading edge of a band (macOS traffic lights). */
+	--gui-chrome-inset-left: 0px;
+	/* Reserved trailing edge of a band (win32 / linux overlay buttons). */
+	--gui-chrome-inset-right: 0px;
+}
+
+:root[data-platform="darwin"] {
+	--gui-chrome-inset-left: 88px;
+}
+
+:root[data-platform="win32"],
+:root[data-platform="linux"] {
+	--gui-chrome-inset-right: 150px;
+}
+
+[data-gui-window-drag="band"] {
+	-webkit-app-region: drag;
+}
+
+[data-gui-window-drag="off"] {
+	-webkit-app-region: no-drag;
+}
+
+/* Safety net, not a substitute for marking a subtree `off`: a control that
+ * lands in a band still clicks even when its surface forgot the marker.
+ * Rows built from plain elements are covered by `off` on their container. */
+:is(
+		.gui-rail-top,
+		.gui-header,
+		.gui-pane-drag,
+		.gui-drag-strip,
+		.gui-mini-drag,
+		.gui-settings-drag,
+		.gui-settings-nav-slot,
+		.gui-splash
+	)
+	:is(
+		button,
+		a[href],
+		input,
+		textarea,
+		select,
+		label,
+		[contenteditable="true"],
+		[role="button"],
+		[role="tab"],
+		[role="link"],
+		[role="menuitem"],
+		[role="separator"]
+	),
+[data-gui-window-drag="band"]
+	:is(
+		button,
+		a[href],
+		input,
+		textarea,
+		select,
+		label,
+		[contenteditable="true"],
+		[role="button"],
+		[role="tab"],
+		[role="link"],
+		[role="menuitem"],
+		[role="separator"]
+	) {
+	-webkit-app-region: no-drag;
+}
+
+/* ── The bands ────────────────────────────────────────────────────────
+ * One list, so every strip that moves the window is greppable in one place.
+ * Class-based entries predate the attribute: their components (GuiHeader,
+ * SessionSidebar, the rail, the second-tier panels, the mini window) live
+ * outside the settings-tree files this contract was introduced with, so the
+ * classes stay as the components' public contract and are aliased here. New
+ * surfaces mark the attribute on their own markup instead. */
+[data-gui-window-drag="band"],
+.gui-rail-top,
+.gui-header,
+.gui-pane-drag,
+.gui-drag-strip,
+.gui-side-keeper,
+.gui-mini-drag,
+.gui-settings-drag,
+.gui-settings-nav-slot,
+.gui-splash,
+.compat-titlebar {
+	-webkit-app-region: drag;
+}
+
+/* ── The opt-outs ─────────────────────────────────────────────────────
+ * Grouped for the same reason: a control that stops clicking because someone
+ * added a band above it should be traceable to this list. */
+[data-gui-window-drag="off"],
+.gui-side-keeper > .gui-pane-side,
+.gui-rail-btn,
+.gui-float-controls--overlay,
+.gui-session-tab,
+.gui-splash-handoff,
+.gui-splash button,
+.gui-splash a,
+.gui-error-toast,
+.gui-pause-banner,
+.gui-pending-calls,
+.gui-global-pause,
+.gui-parent-back,
+.gui-pin-actions,
+.pet-window {
+	-webkit-app-region: no-drag;
+}
+
+/* Portalled overlays (menus, palettes, tooltips) become siblings of the shell
+ * instead of descendants of a band, so they cannot inherit a band's region;
+ * they opt out at their root. Electron ignores a `no-drag` outside a drag
+ * region, and a menu floating over empty chrome must not drag either. */
+.gui-menu-popup,
+.gui-context-menu,
+.gui-palette,
+.gui-palette-backdrop,
+.gui-btw-card,
+.gui-tooltip,
+.gui-rail-tooltip,
+.gui-session-hover-card {
+	-webkit-app-region: no-drag;
+}

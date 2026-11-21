@@ -2487,6 +2487,17 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	min-width: 0;
 	height: 100%;
 	overflow: hidden;
+	/* Window band: this slot is the band (gui-window-drag.css), and the strip
+	 * its padding reserves is the part that actually drags; the nav column
+	 * portalled into it opts out.
+	 *
+	 * The top padding is the SAME clearance the main sidebar's card gets
+	 * (header + one card gutter): the slot starts at the window top, so
+	 * without it the nav painted into the titlebar row and its first row sat
+	 * above where the main view's first row sits — and, because the 48px
+	 * `.gui-settings-drag` only spans the chat column, that whole strip was
+	 * dead for dragging too. */
+	padding-top: calc(var(--gui-header-h) + var(--gui-card-gutter));
 	/* Transparent like .gui-sidebar: .gui-main already paints the single
 	 * workspace glass layer; a second scrim here stacked on top of it and
 	 * read darker than the shell (settings/main 色差). */

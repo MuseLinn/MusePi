@@ -7,6 +7,9 @@ import { ensureChromiumExecutable } from "../../../packages/coding-agent/src/too
 const STYLES = path.resolve(import.meta.dir, "../src/styles");
 const SIDE_PANEL_CSS = fs.readFileSync(path.join(STYLES, "gui-side-panel.css"), "utf8");
 const CHAT_CSS = fs.readFileSync(path.join(STYLES, "gui-chat.css"), "utf8");
+/** The single owner of -webkit-app-region: the keeper band and the card's
+ *  opt-out are declared there, not in the component sheets. */
+const WINDOW_DRAG_CSS = fs.readFileSync(path.join(STYLES, "gui-window-drag.css"), "utf8");
 
 /** The real cascade, in gui.css order: the winning rule for every card edge
  *  may come from any of these files, so the fixture loads them all. */
@@ -24,6 +27,7 @@ const CASCADE = [
 	"gui-widgets.css",
 	"gui-misc.css",
 	"gui-side-panel.css",
+	"gui-window-drag.css",
 	"gui-glass.css",
 ]
 	.map(file => fs.readFileSync(path.join(STYLES, file), "utf8"))
@@ -282,14 +286,17 @@ describe("shell top geometry", () => {
 
 describe("shell top css contract", () => {
 	it("declares the sidebar keeper as the drag region and the card as no-drag", () => {
-		const keeperRule = SIDE_PANEL_CSS.match(/\.gui-side-keeper\s*\{[^}]*\}/);
-		expect(keeperRule).not.toBeNull();
-		expect(keeperRule![0]).toContain("-webkit-app-region: drag");
-		const paneRule = SIDE_PANEL_CSS.match(
-			/\.gui-side-keeper > \.gui-pane-side\s*\{[^}]*?-webkit-app-region:\s*no-drag/,
-		);
-		expect(paneRule).not.toBeNull();
-		expect(paneRule![0]).toContain("-webkit-app-region: no-drag");
+		// One owner (gui-window-drag.css) lists both sides of the contract.
+		const bandList = WINDOW_DRAG_CSS.match(/\[data-gui-window-drag="band"\],[\s\S]*?\{[^}]*\}/);
+		expect(bandList).not.toBeNull();
+		expect(bandList![0]).toContain(".gui-side-keeper");
+		expect(bandList![0]).toContain("-webkit-app-region: drag");
+		const optOuts = WINDOW_DRAG_CSS.match(/\[data-gui-window-drag="off"\],[\s\S]*?\{[^}]*\}/);
+		expect(optOuts).not.toBeNull();
+		expect(optOuts![0]).toContain(".gui-side-keeper > .gui-pane-side");
+		expect(optOuts![0]).toContain("-webkit-app-region: no-drag");
+		// The component sheet keeps geometry only.
+		expect(SIDE_PANEL_CSS).not.toMatch(/-webkit-app-region/);
 	});
 
 	it("folds only the chat surface's top window gutter", () => {

@@ -553,7 +553,10 @@ export function SettingsNav({
 		return () => window.removeEventListener("resize", close);
 	}, [searchOpen, closeSearch]);
 	return (
-		<nav className="gui-settings-nav-col flex h-full w-full flex-shrink-0 flex-col overflow-hidden">
+		<nav
+			className="gui-settings-nav-col flex h-full w-full flex-shrink-0 flex-col overflow-hidden"
+			data-gui-window-drag="off"
+		>
 			<div className="gui-settings-nav-head">
 				<button type="button" className="gui-settings-back" onClick={onBack}>
 					<Icon name="arrow-left-s" className="h-4 w-4" />

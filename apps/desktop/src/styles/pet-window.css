@@ -74,7 +74,6 @@
 	width: 100vw;
 	height: 100vh;
 	cursor: grab;
-	-webkit-app-region: no-drag;
 }
 
 .pet-window:active {
