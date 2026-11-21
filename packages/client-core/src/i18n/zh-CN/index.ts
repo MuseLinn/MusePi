@@ -8,6 +8,7 @@ import { context } from "./context.js";
 import { creation } from "./creation.js";
 import { general } from "./general.js";
 import { guest } from "./guest.js";
+import { marketplace } from "./marketplace.js";
 import { release } from "./release.js";
 import { reward } from "./reward.js";
 import { sessions } from "./sessions.js";
@@ -36,6 +37,7 @@ export const zhCN = {
 	...companion,
 	...general,
 	...guest,
+	...marketplace,
 	...reward,
 	...update,
 	...release,
@@ -60,6 +62,7 @@ const parts = {
 	companion,
 	general,
 	guest,
+	marketplace,
 	reward,
 	update,
 	release,

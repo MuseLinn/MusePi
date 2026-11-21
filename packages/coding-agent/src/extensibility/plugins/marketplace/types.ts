@@ -184,6 +184,15 @@ export interface InstalledPluginEntry {
 	lastUpdated: string;
 	/** For git-sourced plugins. */
 	gitCommitSha?: string;
+	/**
+	 * Repository the installed copy was read from (Git URL or local path).
+	 * An upgrade must stay inside it: the catalog pointing somewhere else is a
+	 * replacement, not an update. Absent on entries installed before this
+	 * field existed, which makes the check unknown rather than failing.
+	 */
+	sourceRepo?: string;
+	/** Directory inside `sourceRepo` the copy was read from. */
+	sourcePath?: string;
 	/** OMP extension — not in Claude Code's type. CLI/UI concern only in v1. */
 	enabled?: boolean;
 }

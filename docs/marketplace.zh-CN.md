@@ -103,6 +103,27 @@ musepi plugin enable [--scope user|project] name@marketplace
 musepi plugin disable [--scope user|project] name@marketplace
 ```
 
+## 插件版本与升级
+
+catalog 里每个插件只写一个版本——也就是此刻安装会拿到的版本。真实存在的旧版本通常就是提供该插件的仓库里的 Git tag，所以插件详情页会列出这些版本，让用户选择升到哪一个。
+
+**版本列表从哪来。** 提供插件文件的仓库：
+
+- `github` / `url` / `git-subdir` 来源读它自己的仓库；
+- 相对路径来源（`./plugins/x`）读 marketplace 自己的仓库。
+
+tag 取自 `git ls-remote --tags`。前导 `v` 会被去掉（`v1.2.3` 显示并登记为 `1.2.3`，安装时 checkout 的是 `v1.2.3` 这个 ref）。列表里始终包含 catalog 版本与已装版本，因此没有 tag 的仓库（或不是 Git 仓库的本地目录）只有一项，保留原来「升到 catalog 版本」的行为。读取列表是软失败：仓库离线或不可达时退回 catalog/已装版本，不会让详情页整体报错。
+
+**按选定版本升级**安装的是那个 tag 的内容，而不是当前 checkout——即使 catalog 版本恰好也发布了同名 tag（`v2.0.0`），选它安装的仍是 tag 而不是可能已领先的分支 HEAD。版本号认 tag 优先。请求带 `targetVersion` 与 `expectedVersion`（用户在确认框里看到的 catalog 版本），展示与确认之间 catalog 漂移会在写入缓存或登记表之前被拒绝。
+
+**降级被显式拒绝。** 从 `2.0.0` 到 `1.9.0` 会直接报错；要退回去得先卸载，再显式安装旧版本。无法排序的版本（例如 `build-42` 这类自由 tag）按候选处理，与 catalog「tag 变了就是更新」的既有规则一致。
+
+**同仓同目录。** 安装时会记录 `sourceRepo` 与 `sourcePath`，升级只能停在这个仓库、这个目录里。catalog 若改指别处，那是「替换」而不是「更新」：未确认前拒绝，确认重新安装（`replace: true`）后才执行；GUI 的确认框写明 catalog 现在从哪个仓库（有目录时带上目录）读取——插件名里的 marketplace 名称本身不是新信息，所以不拿它当「新来源」。早于这两个字段安装的条目没有仓库信息，此时校验按「未知」处理，不会误拦。
+
+**失败保留旧副本。** 旧缓存目录会保留到新安装全部登记完成。任一步失败——克隆、兼容性预检、缓存写入、登记表写入、运行时链接——都会恢复旧的登记条目与运行时链接，并清掉装了一半的副本。取消确认不写任何东西。
+
+RPC 面：`marketplace.detail` 返回 `versions`（新版本在前）与 `sourceChanged`；`marketplace.upgrade` 接受 `targetVersion`、`expectedVersion`、`replace`。CLI 仍只升到 catalog 版本；选择已发布版本是 GUI 的能力。
+
 ## Marketplace 来源
 
 当你运行 `/marketplace add <source>` 时，系统会对来源进行分类：

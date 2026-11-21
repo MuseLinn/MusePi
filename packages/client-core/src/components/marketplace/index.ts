@@ -4,5 +4,7 @@ export type { MarketplaceGridProps } from "./MarketplaceGrid";
 export { MarketplaceGrid } from "./MarketplaceGrid";
 export type { MarketplacePanelProps } from "./MarketplacePanel";
 export { MarketplacePanel } from "./MarketplacePanel";
+export type { MarketplaceVersionChoiceProps } from "./MarketplaceVersionChoice";
+export { MarketplaceVersionChoice } from "./MarketplaceVersionChoice";
 export type { MarketplaceCardAction, MarketplaceCardEntry, MarketplaceSource } from "./types";
-export { resolveCardIcon } from "./types";
+export { resolveCardIcon, upgradableVersions } from "./types";

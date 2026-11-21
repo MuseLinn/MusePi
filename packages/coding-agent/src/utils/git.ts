@@ -1886,6 +1886,27 @@ export const remote = {
 	},
 
 	/**
+	 * Tag names published by `repository` (a URL or local path), without the
+	 * `refs/tags/` prefix. Annotated tags' peeled `^{}` entries are excluded.
+	 * Does not need a local checkout: `ls-remote` only reads the remote.
+	 */
+	async lsTags(repository: string, options: { timeoutMs?: number; signal?: AbortSignal } = {}): Promise<string[]> {
+		const output = await runText(process.cwd(), ["ls-remote", "--tags", "--refs", "--", repository], {
+			readOnly: true,
+			signal: options.signal,
+			timeoutMs: resolveTimeoutMs(options.timeoutMs, GIT_NETWORK_TIMEOUT_MS),
+		});
+		const tags: string[] = [];
+		for (const line of splitLines(output)) {
+			const tab = line.indexOf("\t");
+			if (tab < 0) continue;
+			const ref = line.slice(tab + 1).trim();
+			if (ref.startsWith("refs/tags/")) tags.push(ref.slice("refs/tags/".length));
+		}
+		return tags;
+	},
+
+	/**
 	 * Add a remote pointing at `url`. Idempotent: if a remote named `name`
 	 * already exists with the same URL (e.g. an in-process race or a leftover
 	 * remote from a previous run), this is treated as success. Throws when the

@@ -7,7 +7,7 @@ import type { Settings } from "../../config/settings";
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from "../../discovery/helpers";
 import type { Extension } from "../../extensibility/extensions-center/types";
 import type { MarketplaceListEntry } from "../../extensibility/plugins/marketplace/list-entries";
-import type { MarketplaceManager } from "../../extensibility/plugins/marketplace/manager";
+import type { MarketplaceManager, PluginVersionChoices } from "../../extensibility/plugins/marketplace/manager";
 import type {
 	InstalledPluginsRegistry,
 	MarketplacePluginEntry,
@@ -27,8 +27,9 @@ import type { DaemonService } from "./types";
  *
  * 能力缝声明（M2-2.4）：
  * - 输入：RPC `marketplace.list` / `marketplace.detail` / `marketplace.install` / `marketplace.remove`
- *   （GUI 商店面板：目录浏览/安装/移除）、`marketplace.updates` /
- *   `marketplace.upgrade`（已装版本对 catalog 的升级清单与升级执行）、
+ *   （GUI 商店面板：目录浏览/安装/移除；detail 另带可选版本与换源标记）、
+ *   `marketplace.updates` / `marketplace.upgrade`（已装版本对 catalog 的升级
+ *   清单与升级执行，可带 `targetVersion` / `expectedVersion` / `replace`）、
  *   `marketplace.sources.list` / `marketplace.sources.add` /
  *   `marketplace.sources.remove` / `marketplace.sources.refresh`（自定义
  *   marketplace 源的增删查刷新，持久化在 marketplaces.json）、
@@ -398,7 +399,9 @@ export class MarketplaceService implements DaemonService {
 		return await discoverPluginsByTopic({ topic: p.topic });
 	}
 
-	/** RPC marketplace.detail：读取完整插件介绍与技能，复用持久化源码缓存。 */
+	/** RPC marketplace.detail：读取完整插件介绍与技能，复用持久化源码缓存。
+	 *  同时给出可选版本（仓库 tag + catalog/已装版本），详情页据此提供选择升级；
+	 *  版本列表读取失败按空处理——它只是升级入口，不该拦住宿主读详情。 */
 	async detail(params: unknown) {
 		const p = (params ?? {}) as { name?: unknown; marketplace?: unknown };
 		if (typeof p.name !== "string" || typeof p.marketplace !== "string") {
@@ -408,8 +411,27 @@ export class MarketplaceService implements DaemonService {
 		const entry = entries.find(item => item.name === p.name && item.marketplace === p.marketplace);
 		if (!entry) throw new Error(`Plugin "${p.name}@${p.marketplace}" not found`);
 		const manager = await this.#buildMarketplaceManager();
-		const detail = await manager.getPluginDetail(p.name, p.marketplace);
-		return { ...entry, ...detail };
+		const [detail, choices] = await Promise.all([
+			manager.getPluginDetail(p.name, p.marketplace),
+			// Only installed plugins can be upgraded, so browsing a catalog entry
+			// does not spend a network read on versions nobody can pick. Version
+			// discovery is also a network read; a plugin whose detail still renders
+			// must not lose its whole dialog to an offline repository.
+			entry.installed === true
+				? manager
+						.pluginVersionChoices(p.name, p.marketplace)
+						.catch((): PluginVersionChoices => ({ versions: [], sourceChanged: false }))
+				: Promise.resolve<PluginVersionChoices>({ versions: [], sourceChanged: false }),
+		]);
+		return {
+			...entry,
+			...detail,
+			versions: choices.versions.map(version => version.version),
+			sourceChanged: choices.sourceChanged,
+			// Where the catalog resolves now; the reinstall confirmation names it,
+			// because the marketplace name it replaces is not new information.
+			...(choices.source !== undefined ? { source: choices.source } : {}),
+		};
 	}
 
 	/** RPC marketplace.install：安装一个 marketplace 插件（GUI 商店 → Install）。
@@ -479,11 +501,19 @@ export class MarketplaceService implements DaemonService {
 		return { updates: await manager.checkForUpdates() };
 	}
 
-	/** RPC marketplace.upgrade：升级单个插件（pluginId + scope）或全部可
-	 *  升级项（`all: true`）。升级即按 catalog 版本重装，成功后与 install
-	 *  同款失效 + 广播，装包贡献的设计体系立即重放。 */
+	/** RPC marketplace.upgrade：升级单个插件（pluginId + scope）到 catalog 版本或
+	 *  用户在详情页选定的 `targetVersion`，或全部可升级项（`all: true`）。
+	 *  降级由 manager 显式拒绝；`replace: true` 仅在用户确认了「跨仓重新安装」
+	 *  后由 GUI 传入。成功后与 install 同款失效 + 广播，装包贡献的设计体系立即重放。 */
 	async upgrade(params: unknown) {
-		const p = (params ?? {}) as { pluginId?: string; scope?: "user" | "project"; all?: boolean };
+		const p = (params ?? {}) as {
+			pluginId?: string;
+			scope?: "user" | "project";
+			all?: boolean;
+			targetVersion?: string;
+			expectedVersion?: string;
+			replace?: boolean;
+		};
 		const manager = await this.#buildMarketplaceManager();
 
 		let upgraded: MarketplaceUpdate[];
@@ -506,7 +536,11 @@ export class MarketplaceService implements DaemonService {
 				);
 			}
 			const target = scoped[0]!;
-			const entry = await manager.upgradePlugin(p.pluginId, target.scope);
+			const entry = await manager.upgradePlugin(p.pluginId, target.scope, {
+				targetVersion: typeof p.targetVersion === "string" ? p.targetVersion : undefined,
+				expectedVersion: typeof p.expectedVersion === "string" ? p.expectedVersion : undefined,
+				allowReplace: p.replace === true,
+			});
 			upgraded = [
 				{
 					pluginId: p.pluginId,

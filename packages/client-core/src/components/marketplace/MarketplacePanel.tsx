@@ -34,6 +34,10 @@ async function handleAction(client: SessionClient, action: MarketplaceCardAction
 		await client.rpc("marketplace.upgrade", {
 			pluginId: `${action.entry.name}@${marketplace}`,
 			scope: action.entry.installedScope ?? undefined,
+			...(action.targetVersion !== undefined
+				? { targetVersion: action.targetVersion, expectedVersion: action.entry.version }
+				: {}),
+			...(action.entry.sourceChanged === true ? { replace: true } : {}),
 		});
 		return;
 	}

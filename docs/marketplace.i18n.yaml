@@ -1,5 +1,5 @@
 # Consistency record for marketplace.md / marketplace.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/marketplace
-marketplace.md: 2f55763c0686ca930df25816d36dba92c1fee9c0
-marketplace.zh-CN.md: 6ac769cd027788ee8c9369627f2ad852dfc0cf56
+marketplace.md: 0114e19deaf7434574ccfc007cfc71f62144a984
+marketplace.zh-CN.md: 7db6f53a712914c1beb150a1ea25985b5e31a998

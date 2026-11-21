@@ -72,6 +72,19 @@ export interface MarketplaceCardEntry {
 	installedVersion?: string;
 	/** Catalog version is newer than the active install. */
 	updateAvailable?: boolean;
+	/**
+	 * Versions the plugin's repository publishes, newest first (detail only).
+	 * Always contains the catalog and installed versions; a repository with no
+	 * tags therefore yields the single version the catalog names.
+	 */
+	versions?: readonly string[];
+	/** Catalog now resolves to a different source than the installed copy. */
+	sourceChanged?: boolean;
+	/**
+	 * Where the catalog resolves now (`repo` or `repo (dir)`), shown by the
+	 * reinstall confirmation. Present with {@link sourceChanged}.
+	 */
+	source?: string;
 	/** True while an install/remove/upgrade request is in flight. */
 	busy?: boolean;
 	/** Total installs across the marketplace; omit if unknown. */
@@ -99,6 +112,29 @@ export interface MarketplaceCardEntry {
 export interface MarketplaceCardAction {
 	kind: "open" | "install" | "remove" | "upgrade";
 	entry: MarketplaceCardEntry;
+	/**
+	 * Version chosen in the detail dialog. Omitted means the catalog's
+	 * current version, which is the only option when the repository
+	 * publishes no tags.
+	 */
+	targetVersion?: string;
+}
+
+/**
+ * Versions that are actually ahead of the installed one, newest first.
+ *
+ * The list arrives sorted (see the daemon's `marketplace.detail`), so the
+ * installed version's position is the whole comparison — the browser never
+ * needs a second, drifting copy of the version comparator. When the installed
+ * version is absent from the list every entry is a candidate.
+ */
+export function upgradableVersions(
+	versions: readonly string[] | undefined,
+	installedVersion: string | undefined,
+): string[] {
+	if (versions === undefined || versions.length === 0) return [];
+	const installedIndex = installedVersion === undefined ? -1 : versions.indexOf(installedVersion);
+	return installedIndex === -1 ? [...versions] : versions.slice(0, installedIndex);
 }
 
 /** One custom marketplace source as served by `marketplace.sources.list`. */

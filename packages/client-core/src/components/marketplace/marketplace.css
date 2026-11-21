@@ -671,3 +671,65 @@
 .mp-grid-shell[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
 	mask-image: linear-gradient(to top, transparent 0, #000 16px);
 }
+
+/* --- version choice (plugin detail dialog) ------------------------------ */
+
+.mp-version-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.mp-version {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	padding: 3px 10px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	transition:
+		border-color 120ms ease-out,
+		background 120ms ease-out,
+		color 120ms ease-out;
+}
+
+.mp-version:hover:not(:disabled) {
+	border-color: var(--border-strong);
+}
+
+.mp-version:disabled {
+	cursor: default;
+}
+
+.mp-version--current {
+	color: var(--fg-muted);
+	border-color: var(--border);
+}
+
+.mp-version--blocked {
+	color: var(--fg-muted);
+	border-style: dashed;
+	opacity: 0.6;
+}
+
+.mp-version--selected {
+	color: var(--accent-fg);
+	background: var(--accent-muted);
+	border-color: var(--accent-bd);
+}
+
+.mp-version:focus-visible {
+	outline: none;
+	border-color: var(--accent-bd);
+	box-shadow: 0 0 0 2px var(--ring);
+}
+
+.mp-version-tag {
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-xs);
+}
