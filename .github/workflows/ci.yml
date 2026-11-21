@@ -28,6 +28,14 @@ on:
          - "package.json"
          - "patches/**"
          - ".github/**"
+         # Documentation-only pushes start a run for `docs_spec` (the pairing,
+         # changelog and docs gates) without paying for the code matrix: a
+         # docs-only commit once reached main with no run at all. The `changes`
+         # classifier reads this block and stops at the marker below, so the
+         # paths under it start a run without counting as a code change.
+         #
+         # Trigger-only paths, not code inputs:
+         - "docs/**"
    pull_request:
       branches: [main]
       # No path filter: branch protection requires the `CI required` check, and a
@@ -121,7 +129,7 @@ jobs:
    # Path gate for the heavy matrix. It always runs, so every PR produces the
    # required check; the build/test jobs below are skipped when a PR touches no
    # build input. `check` and `docs_spec` always run because they own the
-   # documentation gates that a docs-only PR needs.
+   # documentation gates that a PR or a docs-only push needs.
    changes:
       name: Detect code changes
       runs-on: ubuntu-22.04
@@ -133,23 +141,47 @@ jobs:
               fetch-depth: 1
          - id: diff
            shell: bash
+           # `BASE_SHA` is the commit this run ships: a PR's base sha, or for a
+           # push the pre-push tip from `github.event.before`. Diffing a push
+           # against its own `before` is what keeps a docs-only push out of the
+           # matrix — the trigger filter alone cannot, because this job runs
+           # too and used to answer `code=true` for every non-PR event.
+           env:
+              BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
            run: |
               set -euo pipefail
-              if [ "${{ github.event_name }}" != "pull_request" ]; then
+              # The watched paths come from `on.push.paths`, so the trigger and
+              # this classifier stay one list; entries after the trigger-only
+              # marker only start a run and never count as code.
+              mapfile -t inputs < <(
+                awk '
+                  /^   push:/ { in_push = 1; next }
+                  /^   [a-z_]+:/ { in_push = 0 }
+                  in_push && /^         # Trigger-only/ { exit }
+                  in_push && /^         - "/ { print }
+                ' .github/workflows/ci.yml | sed -e 's/^ *- "//' -e 's/"$//'
+              )
+              if [ "${#inputs[@]}" -eq 0 ]; then
+                echo "::error::no push path filters found in .github/workflows/ci.yml"
+                exit 1
+              fi
+              if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]] || ! git fetch --no-tags --depth=1 origin "$BASE_SHA"; then
+                # A new branch, a force-push to an unfetched commit or a missing
+                # payload leaves no comparable range; run the matrix rather than
+                # guess that the push shipped nothing.
+                echo "base '$BASE_SHA' is not comparable; treating the run as a code change"
                 echo "code=true" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-              git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-              if git diff --quiet FETCH_HEAD HEAD -- \
-                packages apps tools crates scripts bazel \
-                MODULE.bazel MODULE.bazel.lock BUILD.bazel \
-                .bazelrc .bazelignore .bazelversion \
-                Cargo.toml Cargo.lock rust-toolchain.toml rustfmt.toml \
-                bun.lock bunfig.toml package.json patches .github; then
-                echo "code=false" >> "$GITHUB_OUTPUT"
-              else
-                echo "code=true" >> "$GITHUB_OUTPUT"
-              fi
+              # Glob magic per pathspec so `dir/**` means the directory and
+              # everything below it, matching how GitHub reads the filter.
+              status=0
+              git diff --quiet FETCH_HEAD HEAD -- "${inputs[@]/#/:(glob)}" || status=$?
+              case "$status" in
+                0) echo "code=false" >> "$GITHUB_OUTPUT" ;;
+                1) echo "code=true" >> "$GITHUB_OUTPUT" ;;
+                *) echo "::error::git diff failed with status $status"; exit "$status" ;;
+              esac
 
    check:
       name: Lint, type check & web build

@@ -1,12 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 const repoRoot = path.resolve(import.meta.dir, "..");
 
 interface WorkflowStep {
+	id?: string;
 	uses?: string;
 	run?: string;
+	env?: Record<string, string>;
 	with?: Record<string, unknown>;
 }
 
@@ -161,6 +164,11 @@ describe("CI merge gate", () => {
 		expect(workflow.on?.pull_request?.paths).toBeUndefined();
 	});
 
+	it("starts a push run for docs-only commits", () => {
+		const paths = (workflow.on?.push?.paths ?? []) as string[];
+		expect(paths).toContain("docs/**");
+	});
+
 	it("aggregates every blocking job into one always-run check", () => {
 		const gate = jobs.ci_required;
 		expect(gate).toBeDefined();
@@ -250,6 +258,123 @@ function requiredChecksInterpreter(): string | undefined {
 	}
 	return undefined;
 }
+
+describe("changes classifier", () => {
+	// The step's own script, run against throwaway repositories: the trigger
+	// filter and the classification must agree, and a docs-only push must not
+	// buy the build matrix.
+	const bash = Bun.which("bash");
+	const git = Bun.which("git");
+	const diffStep = readYaml(".github/workflows/ci.yml").jobs?.changes?.steps?.find(step => step.id === "diff");
+	const script = diffStep?.run ?? "";
+
+	function skipIfNoShell(): boolean {
+		if (bash && git) return false;
+		console.warn("bash/git unavailable; skipping the changes classifier contract");
+		return true;
+	}
+
+	function gitIn(cwd: string, ...args: string[]): string {
+		const result = Bun.spawnSync([git!, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+		// Windows git reports line-ending normalization as `warning:` lines on a
+		// successful command; a real failure is never just a warning.
+		const errors = result.stderr
+			.toString()
+			.split("\n")
+			.filter(line => line.trim() !== "" && !line.startsWith("warning:"));
+		expect(errors, `git ${args.join(" ")}`).toEqual([]);
+		expect(result.exitCode).toBe(0);
+		return result.stdout.toString().trim();
+	}
+
+	/** A clone with an `origin`, so the step's `git fetch origin <sha>` works. */
+	function fixture(files: Record<string, string>): string {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "musepi-ci-contract-"));
+		const origin = path.join(root, "origin.git");
+		const work = path.join(root, "work");
+		gitIn(root, "init", "--quiet", "--bare", origin);
+		gitIn(root, "init", "--quiet", "--initial-branch=main", work);
+		gitIn(work, "config", "user.email", "ci-contract@example.invalid");
+		gitIn(work, "config", "user.name", "CI contract");
+		fs.mkdirSync(path.join(work, ".github/workflows"), { recursive: true });
+		fs.copyFileSync(path.join(repoRoot, ".github/workflows/ci.yml"), path.join(work, ".github/workflows/ci.yml"));
+		for (const [file, content] of Object.entries(files)) {
+			fs.mkdirSync(path.dirname(path.join(work, file)), { recursive: true });
+			fs.writeFileSync(path.join(work, file), content);
+		}
+		gitIn(work, "add", "-A");
+		gitIn(work, "commit", "--quiet", "-m", "base");
+		gitIn(work, "remote", "add", "origin", origin);
+		gitIn(work, "push", "--quiet", "--set-upstream", "origin", "main");
+		return work;
+	}
+
+	/** Commit `changes`, push, and classify the pushed range. */
+	function classify(work: string, changes: Record<string, string>, baseSha?: string): string {
+		const before = gitIn(work, "rev-parse", "HEAD");
+		for (const [file, content] of Object.entries(changes)) {
+			fs.mkdirSync(path.dirname(path.join(work, file)), { recursive: true });
+			fs.writeFileSync(path.join(work, file), content);
+		}
+		gitIn(work, "add", "-A");
+		gitIn(work, "commit", "--quiet", "-m", "change");
+		gitIn(work, "push", "--quiet", "origin", "main");
+		const output = path.join(path.dirname(work), "github-output");
+		fs.writeFileSync(output, "");
+		const result = Bun.spawnSync([bash!, "-c", script], {
+			cwd: work,
+			env: {
+				...process.env,
+				GITHUB_OUTPUT: output,
+				BASE_SHA: baseSha ?? before,
+			},
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		// git writes fetch progress and tolerated ref errors (the unreachable base
+		// case) to stderr; only the step's own `::error::` annotations matter.
+		expect(result.stderr.toString()).not.toContain("::error::");
+		expect(result.exitCode).toBe(0);
+		const match = /^code=(true|false)$/m.exec(fs.readFileSync(output, "utf8"));
+		expect(match, fs.readFileSync(output, "utf8")).toBeDefined();
+		return match![1]!;
+	}
+
+	it("exists as a script the contract test can run", () => {
+		expect(script).toContain("git diff --quiet");
+		expect(diffStep?.env?.BASE_SHA).toContain("github.event.before");
+	});
+
+	it("classifies a docs-only push as no code change", () => {
+		if (skipIfNoShell()) return;
+		const work = fixture({ "packages/x/entry.ts": "export {};\n", "docs/guide.md": "# guide\n" });
+		expect(classify(work, { "docs/guide.md": "# guide\n\nmore\n" })).toBe("false");
+	});
+
+	it("classifies a code push as a code change", () => {
+		if (skipIfNoShell()) return;
+		const work = fixture({ "packages/x/entry.ts": "export {};\n", "docs/guide.md": "# guide\n" });
+		expect(classify(work, { "packages/x/entry.ts": "export const x = 1;\n" })).toBe("true");
+		expect(classify(work, { "docs/guide.md": "# guide\n\nmore\n", "package.json": "{}\n" })).toBe("true");
+	});
+
+	it("runs the matrix when the pre-push tip cannot be compared", () => {
+		if (skipIfNoShell()) return;
+		const work = fixture({ "packages/x/entry.ts": "export {};\n", "docs/guide.md": "# guide\n" });
+		const zeros = "0".repeat(40);
+		expect(classify(work, { "docs/guide.md": "# guide\n\nnew branch\n" }, zeros)).toBe("true");
+		expect(classify(work, { "docs/guide.md": "# guide\n\nmissing base\n" }, "f".repeat(40))).toBe("true");
+	});
+
+	it("reads the watched paths from the push trigger it ships with", () => {
+		if (skipIfNoShell()) return;
+		const work = fixture({ "packages/x/entry.ts": "export {};\n", "docs/guide.md": "# guide\n" });
+		// A trigger-only path stays out of the code set even though it starts a run.
+		expect(classify(work, { "docs/deep/nested.md": "# nested\n" })).toBe("false");
+		expect(classify(work, { ".github/workflows/nix.yml": "# edited\n" })).toBe("true");
+		expect(classify(work, { "scripts/tool.ts": "export {};\n" })).toBe("true");
+	});
+});
 
 describe("CI contract coverage", () => {
 	it("runs the CI contract test inside the required check", () => {
