@@ -8,6 +8,7 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
+import { addProviderModels } from "../../lib/rpc-commands";
 import { Icon } from "../../vendor/oc-icons";
 import {
 	type CustomProviderDraft,
@@ -105,7 +106,7 @@ export function CustomProviderPane({
 		setFormBusy(true);
 		setFormError(null);
 		try {
-			await rpc.request("models.add", { sessionId, provider });
+			await addProviderModels(rpc, provider, sessionId);
 			const wasEditing = editingProvider !== null;
 			closeForm();
 			setAddedName(

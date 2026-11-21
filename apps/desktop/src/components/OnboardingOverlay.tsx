@@ -31,6 +31,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { tapFeedback } from "../lib/haptic";
 import { DONE_KEY, onboardingPending } from "../lib/onboarding";
 import { usePrompt } from "../lib/prompt-dialog";
+import { addProviderModels, cancelProviderLogin, logoutProvider, submitProviderLoginInput } from "../lib/rpc-commands";
 import { readSessionTabsEnabled, setSessionTabsEnabled } from "../lib/session-tabs";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { ColorPickerPanel } from "./ColorPicker";
@@ -614,20 +615,25 @@ function ProviderSetup({
 	const submitLoginInput = async (): Promise<void> => {
 		if (!rpc || !loginState) return;
 		try {
-			await rpc.request("settings.providersLogininput", { providerId: loginState.providerId, value: promptValue });
+			await submitProviderLoginInput(rpc, loginState.providerId, promptValue);
 			setLoginState(s => (s ? { ...s, waitingInput: false } : s));
 			setPromptValue("");
-		} catch {
-			// daemon rejects — keep the input open
+		} catch (err) {
+			// Keep the input open and say why it did not take — an unanswered
+			// prompt looked like a dead button.
+			const message = err instanceof Error ? err.message : String(err);
+			setLoginState(s => (s ? { ...s, message } : s));
 		}
 	};
 
 	const cancelLogin = async (): Promise<void> => {
 		if (!rpc || !loginState) return;
 		try {
-			await rpc.request("settings.providersLogincancel", { providerId: loginState.providerId });
-		} catch {
-			// ignore
+			await cancelProviderLogin(rpc, loginState.providerId);
+		} catch (err) {
+			// The dialog closes either way; a failed abort would otherwise leave
+			// the daemon flow running with no trace.
+			console.warn("[gui] providers.loginCancel failed", err);
 		}
 		setLoginState(null);
 	};
@@ -638,10 +644,12 @@ function ProviderSetup({
 		if (!rpc) return;
 		setCredsMenu(null);
 		try {
-			await rpc.request("settings.providersLogout", { providerId, credentialId });
+			await logoutProvider(rpc, { providerId, credentialId });
 			await loadProviders();
-		} catch {
-			// keep the row; the daemon error is non-fatal for the list
+		} catch (err) {
+			// The row stays; report the reason instead of pretending it went.
+			const message = err instanceof Error ? err.message : String(err);
+			setLoginState({ providerId, message });
 		}
 	};
 
@@ -650,10 +658,11 @@ function ProviderSetup({
 		if (!rpc) return;
 		setCredsMenu(null);
 		try {
-			await rpc.request("settings.providersLogout", { providerId });
+			await logoutProvider(rpc, { providerId });
 			await loadProviders();
-		} catch {
-			// keep the row
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			setLoginState({ providerId, message });
 		}
 	};
 
@@ -702,7 +711,7 @@ function ProviderSetup({
 		}
 		setBusy(true);
 		try {
-			await rpc.request("settings.modelsAdd", { provider });
+			await addProviderModels(rpc, provider);
 			setAdded({ name: provider.label ?? provider.name });
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));

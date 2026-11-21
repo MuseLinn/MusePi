@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { type BrandIconStyle, readBrandIconStyle, writeBrandIconStyle } from "../lib/brand-icon-style";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
+import { cancelProviderLogin, logoutProvider, submitProviderLoginInput } from "../lib/rpc-commands";
 import { resolveActiveSection, type SectionId, type SectionRequest } from "../lib/settings-nav";
 import { useSettingSearchRows } from "../lib/settings-search";
 import {
@@ -415,19 +416,24 @@ export function SettingsView({
 	const submitLoginInput = async (value: string): Promise<void> => {
 		if (!rpc || !loginState) return;
 		try {
-			await rpc.request("providers.loginInput", { providerId: loginState.providerId, value });
+			await submitProviderLoginInput(rpc, loginState.providerId, value);
 			setLoginState(s => (s ? { ...s, waitingInput: false } : s));
-		} catch {
-			// daemon rejects — keep the input open
+		} catch (err) {
+			// Keep the input open and say why it did not take — an unanswered
+			// prompt looked like a dead button.
+			const message = err instanceof Error ? err.message : String(err);
+			setLoginState(s => (s ? { ...s, message } : s));
 		}
 	};
 
 	const cancelLogin = async (): Promise<void> => {
 		if (!rpc || !loginState) return;
 		try {
-			await rpc.request("providers.loginCancel", { providerId: loginState.providerId });
-		} catch {
-			// ignore
+			await cancelProviderLogin(rpc, loginState.providerId);
+		} catch (err) {
+			// The dialog closes either way; a failed abort would otherwise leave
+			// the daemon flow running with no trace.
+			console.warn("[gui] providers.loginCancel failed", err);
 		}
 		setLoginState(null);
 		// loginCancel aborts the daemon flow, which settles the providers.login
@@ -441,7 +447,7 @@ export function SettingsView({
 	const logout = async (providerId: string): Promise<void> => {
 		if (!rpc) return;
 		try {
-			await rpc.request("providers.logout", { providerId });
+			await logoutProvider(rpc, { providerId });
 			await loadProviders();
 		} catch (err) {
 			setLoginState({ providerId, message: err instanceof Error ? err.message : String(err) });

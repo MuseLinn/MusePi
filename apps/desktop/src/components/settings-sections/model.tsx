@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
 import { usePrompt } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
+import { logoutProvider } from "../../lib/rpc-commands";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
 import { ChromaGroup } from "../ChromaGroup";
@@ -585,7 +586,7 @@ export function ModelSection({
 		if (!rpc) return;
 		setCredsMenu(null);
 		try {
-			await rpc.request("providers.logout", { sessionId: sessionId ?? undefined, providerId, credentialId });
+			await logoutProvider(rpc, { providerId, credentialId });
 			onChanged();
 			await loadCredentials();
 		} catch {

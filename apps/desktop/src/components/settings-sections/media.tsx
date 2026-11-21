@@ -12,6 +12,7 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
+import { logoutProvider } from "../../lib/rpc-commands";
 import { Icon } from "../../vendor/oc-icons";
 
 interface MediaProviderEntry {
@@ -102,7 +103,7 @@ export function MediaSection({
 		if (!rpc) return;
 		setBusy(true);
 		try {
-			await rpc.request("providers.logout", { providerId: id });
+			await logoutProvider(rpc, { providerId: id });
 			load.current();
 		} catch {
 			// non-fatal

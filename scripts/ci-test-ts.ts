@@ -126,6 +126,8 @@ const repoScriptTests = [
 	"./scripts/fix-dts-extensions.test.ts",
 	"./scripts/prune-caches.test.ts",
 	"./scripts/check-peer-compat.test.ts",
+	"./scripts/check-rpc-method-names.test.ts",
+	"./scripts/rpc-commands.test.ts",
 ];
 
 const codingAgentNativePathPatterns = [
