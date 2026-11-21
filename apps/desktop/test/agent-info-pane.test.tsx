@@ -113,6 +113,16 @@ function setRangeValue(input: HTMLInputElement, value: number): void {
 	input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+function setTextValue(input: HTMLInputElement, value: string): void {
+	const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+	setter?.call(input, value);
+	input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function key(target: HTMLElement, name: string): void {
+	target.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
+}
+
 function range(host: HTMLElement): HTMLInputElement {
 	const input = host.querySelector<HTMLInputElement>("input[type=range]");
 	expect(input).not.toBeNull();
@@ -161,6 +171,45 @@ describe("agent info pane", () => {
 		expect(setModel?.params).toEqual({ sessionId: "session-1", model: { id: "m2", provider: "prov2" } });
 		// Re-read after the switch: the daemon re-clamps the level for the new model.
 		expect(calls.filter(call => call.method === "session.thinkingInfo").length).toBeGreaterThan(thinkingReads);
+		await unmount();
+	});
+
+	it("picks the top match with Enter after typing in the inline list", async () => {
+		const { rpc, calls } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const input = host.querySelector<HTMLInputElement>(".gui-model-menu-input")!;
+		await act(async () => {
+			setTextValue(input, "two");
+			await new Promise(resolve => setTimeout(resolve, 0));
+		});
+		expect(host.querySelectorAll(".gui-model-opt").length).toBe(1);
+		// No ↑↓ yet: the narrowed list is pre-highlighted on its top row, so
+		// Enter selects it — the popup's resting-highlight contract, kept inline.
+		expect(host.querySelector(".gui-model-opt--kbd")?.getAttribute("data-kbd-idx")).toBe("0");
+		await act(async () => key(input, "Enter"));
+		expect(calls.find(call => call.method === "session.setModel")?.params).toEqual({
+			sessionId: "session-1",
+			model: { id: "m2", provider: "prov2" },
+		});
+		await unmount();
+	});
+
+	it("enters the inline list from the last row when ↑ starts without a highlight", async () => {
+		const { rpc } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const input = host.querySelector<HTMLInputElement>(".gui-model-menu-input")!;
+		// A real pointer move yields the resting highlight back (kbd → -1);
+		// ↑ then enters at the LAST row, not the second-to-last.
+		await act(async () => {
+			host
+				.querySelectorAll(".gui-model-opt")[0]
+				.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 7, clientY: 7 }));
+		});
+		expect(host.querySelector(".gui-model-opt--kbd")).toBeNull();
+		await act(async () => key(input, "ArrowUp"));
+		expect(host.querySelector(".gui-model-opt--kbd")?.getAttribute("data-kbd-idx")).toBe("1");
+		await act(async () => key(input, "ArrowUp"));
+		expect(host.querySelector(".gui-model-opt--kbd")?.getAttribute("data-kbd-idx")).toBe("0");
 		await unmount();
 	});
 

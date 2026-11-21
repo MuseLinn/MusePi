@@ -530,14 +530,15 @@ export function ModelSelector({
 	}, [kbd]);
 	// Pre-highlight the first visible row on open and after every search
 	// keystroke (openchamber selectionStore.set(0) parity — Enter without
-	// ↑↓ picks the top row). Closing clears the highlight AND the mouse
-	// tracking so the next open starts fresh.
+	// ↑↓ picks the top row). An inline list is never "opened" — it is the
+	// list — so it carries the same resting highlight. Closing clears the
+	// highlight AND the mouse tracking so the next open starts fresh.
 	useEffect(() => {
-		setKbd(open ? 0 : -1);
-		if (!open) {
+		setKbd(open || inline ? 0 : -1);
+		if (!open && !inline) {
 			lastMouseRef.current = null;
 		}
-	}, [open, query]);
+	}, [open, inline, query]);
 	const onMenuKeyDown = useCallback(
 		(e: React.KeyboardEvent): void => {
 			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -549,6 +550,10 @@ export function ModelSelector({
 				lastMouseRef.current = null;
 				setKbd(prev => {
 					const delta = e.key === "ArrowDown" ? 1 : -1;
+					// From the resting -1 (pointer yielded the highlight):
+					// ↑ enters at the last row, ↓ at the first — the same
+					// endpoints a wrap from index 0/len-1 would give.
+					if (prev < 0) return delta > 0 ? 0 : flatRows.length - 1;
 					return (prev + delta + flatRows.length) % flatRows.length;
 				});
 			} else if (e.key === "Enter") {

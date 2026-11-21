@@ -171,10 +171,12 @@ export interface SessionComposerProps {
 	 *  fold re-derives cheaply and the memoized row only re-renders when the
 	 *  derived figures move. */
 	entries?: readonly SessionEntry[];
-	/** Render the model/thinking chip in the input row. On by default: a plain
-	 *  session host has no agent info tab (the right-panel side session), so
-	 *  it keeps both controls; the active chat passes false because its capsule
-	 *  opens `session.agent` instead, and its composer stays free of the chip. */
+	/** Render the model selector in the input row. On by default: a session
+	 *  host with no agent info tab (the right-panel side session) gets its model
+	 *  switch back that way; the active chat passes false because its capsule
+	 *  opens `session.agent` instead, and its composer stays free of the chip.
+	 *  The thinking segment renders only when the host supplies
+	 *  {@link onSetThinking} — the side session does not. */
 	keepModelChip?: boolean;
 	/** Chip props — read only while {@link keepModelChip} is set. */
 	thinkingLevel?: string | null;
@@ -2297,7 +2299,9 @@ export function SessionComposer({
 						 * moved to the agent info tab (the capsule opens it), so
 						 * the input row keeps only what acts on the message being
 						 * written. A surface with no capsule — the side session —
-						 * asks for the chip so it keeps both controls. */}
+						 * asks for the chip to get its model selector back; the
+						 * thinking segment appears only when the host supplies
+						 * `onSetThinking`, which the side session does not. */}
 						{onToggleFocus && <FocusButton focused={focused ?? false} onPress={onToggleFocus} />}
 						{keepModelChip ? (
 							<ModelThinkingCapsule
