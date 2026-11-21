@@ -421,6 +421,32 @@ describe("agent info pane", () => {
 		await unmount();
 	});
 
+	it("puts the thumb under the cursor on the press frame, not on a detent", async () => {
+		const { rpc, calls } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const track = slider(host);
+		// 300px track, 18px knob: rung k sits at 9 + (282 * k) / 6, so rungs 1 and
+		// 2 are at x=56 and x=103 and x=90 is between them. The old render snapped
+		// the press to the magnetic rung and only followed the pointer after a
+		// 2px threshold, so the first move hopped ~20px backwards.
+		stubTrackWidth(track, 300);
+		const thumb = (): number => Number(track.style.getPropertyValue("--gui-slider-p")) * 282;
+		await act(async () => pointer(track, "pointerdown", 90));
+		// The thumb is at the pointer on the first frame: 90 - 9 = 81px of travel.
+		expect(thumb()).toBeCloseTo(81, 6);
+		// The readout, however, already names the rung the release would land on.
+		expect(track.getAttribute("aria-valuenow")).toBe("2");
+		// A 3px move keeps it under the cursor instead of hopping to a detent.
+		await act(async () => pointer(track, "pointermove", 93));
+		expect(thumb()).toBeCloseTo(84, 6);
+		expect(level(calls)).toBeUndefined();
+		// A press with no travel still commits the rung under the pointer.
+		await act(async () => pointer(track, "pointerup", 93));
+		expect(track.getAttribute("aria-valuenow")).toBe("2");
+		expect(level(calls)).toBe("low");
+		await unmount();
+	});
+
 	it("glues the thumb to the pointer instead of hopping between rungs", async () => {
 		const { rpc, calls } = makeRpc();
 		const { host, unmount } = await mount(rpc);

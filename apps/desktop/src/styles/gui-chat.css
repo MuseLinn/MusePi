@@ -3319,9 +3319,9 @@ body.gui-resizing .gui-pane-right {
  * the same track, fill, detents and knob; only the labels differ.
  *
  * `--gui-ladder-p` is the fractional rung the thumb is drawn at: the pointer
- * glues the thumb to itself and the release animates it onto
- * `--gui-ladder-snap-p` (the magnetic detent), so a drag reads as one
- * continuous travel, not a row of jumps. */
+ * glues the thumb to itself for the whole gesture, and the release drops
+ * `[data-dragging]` so `left` eases from that position to the committed rung —
+ * a drag reads as one continuous travel, not a row of jumps. */
 .gui-ladder {
 	display: flex;
 	flex-direction: column;
@@ -3631,12 +3631,14 @@ body.gui-resizing .gui-pane-right {
 }
 
 .gui-motion-off .gui-ladder-thumb,
+.gui-motion-off .gui-ladder-tick,
 .gui-motion-off .gui-rollnum-reel {
 	transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
 	.gui-ladder-thumb,
+	.gui-ladder-tick,
 	.gui-rollnum-reel {
 		transition: none;
 	}

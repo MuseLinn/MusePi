@@ -49,19 +49,13 @@ export interface SliderDrag {
 	step(index: number): void;
 }
 
-/** A pointer that has not travelled this far has not started a drag: a press
- *  and release still moves the thumb straight onto a detent instead of letting
- *  it slide sideways under a still cursor. */
-const DRAG_THRESHOLD_PX = 2;
-
 export function useSliderDrag({ last, value, reachable, onSettle, disabled = false }: SliderDragOptions): SliderDrag {
 	const rail = useRef<HTMLElement | null>(null);
-	const dragRef = useRef<{ pointerId: number; pressX: number } | null>(null);
+	const dragRef = useRef<{ pointerId: number } | null>(null);
 	const rawRef = useRef<number | null>(null);
-	const movedRef = useRef(false);
 	// The fractional pointer position while a gesture is live; `null` when the
 	// pointer does not own the thumb.
-	const [drag, setDrag] = useState<{ raw: number; moved: boolean } | null>(null);
+	const [drag, setDrag] = useState<number | null>(null);
 
 	const settle = (index: number): number => {
 		const rounded = Math.round(index);
@@ -81,11 +75,10 @@ export function useSliderDrag({ last, value, reachable, onSettle, disabled = fal
 		if (!dragRef.current) return;
 		dragRef.current = null;
 		rawRef.current = null;
-		movedRef.current = false;
 		setDrag(null);
 		// A cancelled gesture writes nothing; an ended one settles on its rung and
 		// the committed prop — updated optimistically by the owner in the same
-		// batch — becomes the thumb's target, so the CSS transition snaps it there.
+		// batch — becomes the thumb's target, so the CSS transition eases it there.
 		if (index != null) onSettle(settle(index));
 	};
 
@@ -93,11 +86,14 @@ export function useSliderDrag({ last, value, reachable, onSettle, disabled = fal
 		onSettle(settle(index));
 	};
 
-	const magnetic = drag ? settle(drag.raw) : null;
-	// A press that has not travelled yet puts the thumb straight on the detent
-	// under the pointer instead of sliding it there.
-	const position = drag ? (drag.moved ? drag.raw : (magnetic ?? value)) : value;
-	const target = drag ? (magnetic ?? value) : value;
+	// The pointer owns the thumb for the whole gesture: the rendered position is
+	// the raw pointer position from the first frame, so a press between detents
+	// never jumps the thumb to a detent and back. The readout and ARIA follow the
+	// magnetic target instead, and a release under the pointer's last position
+	// lands on the detent it resolves to — so a click without travel still picks
+	// the rung under the cursor.
+	const position = drag ?? value;
+	const target = drag == null ? value : settle(drag);
 
 	return {
 		setRail: useCallback((node: HTMLElement | null) => {
@@ -117,10 +113,9 @@ export function useSliderDrag({ last, value, reachable, onSettle, disabled = fal
 				} catch {
 					/* capture is best-effort; the release still settles */
 				}
-				dragRef.current = { pointerId: event.pointerId, pressX: event.clientX };
+				dragRef.current = { pointerId: event.pointerId };
 				rawRef.current = raw;
-				movedRef.current = false;
-				setDrag({ raw, moved: false });
+				setDrag(raw);
 				event.currentTarget.focus();
 			},
 			onPointerMove: event => {
@@ -129,9 +124,7 @@ export function useSliderDrag({ last, value, reachable, onSettle, disabled = fal
 				const raw = positionAt(event.clientX);
 				if (raw == null) return;
 				rawRef.current = raw;
-				if (!movedRef.current && Math.abs(event.clientX - state.pressX) > DRAG_THRESHOLD_PX)
-					movedRef.current = true;
-				setDrag({ raw, moved: movedRef.current });
+				setDrag(raw);
 			},
 			onPointerUp: event => {
 				const state = dragRef.current;
