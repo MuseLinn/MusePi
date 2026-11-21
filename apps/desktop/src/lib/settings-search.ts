@@ -1,4 +1,5 @@
-import { tLoose } from "@musepi/client-core";
+import { getLocaleSnapshot, type TranslationKey, tFor, tLoose } from "@musepi/client-core/src/i18n/index";
+import { TextSearchIndex } from "@musepi/client-core/src/lib/text-search";
 import { useEffect, useState } from "react";
 import type { RpcClient } from "./rpc";
 
@@ -54,36 +55,16 @@ export function useSettingSearchRows(rpc: RpcClient | null): SettingSearchRow[] 
 	return rows;
 }
 
-/** Relevance of one row for a query: label hits outrank description hits, and
- *  an exact/prefix label outranks a later substring. 0 = no hit. */
-function settingScore(row: SettingSearchRow, needle: string): number {
-	const label = tLoose(row.label).toLowerCase();
-	const source = row.label.toLowerCase();
-	const at = label.indexOf(needle);
-	const sourceAt = source.indexOf(needle);
-	const best = at >= 0 ? at : sourceAt;
-	let score =
-		best === 0 ? (label === needle || source === needle ? 120 : 100) : best > 0 ? 60 - Math.min(best, 50) / 5 : 0;
-	if (row.key.toLowerCase().includes(needle)) score = Math.max(score, 40);
-	if (row.description && tLoose(row.description).toLowerCase().includes(needle)) score = Math.max(score, 30);
-	return score;
-}
-
-/**
- * Cross-page index of the schema-driven settings rows, so the settings search
- * can find "temperature" while the user is on 常规 and jump to it. The daemon
- * schema is the single source of these rows; only the tab → page mapping lives
- * here, because one schema tab can be re-sliced across pages (the interaction
- * tab renders its Approvals/Speech/Language groups on other pages).
- */
-
+/** One schema row the settings search can name. Labels are the English schema
+ *  text, translated at render and match time; the search matches both
+ *  languages. */
 export interface SettingSearchRow {
 	key: string;
 	/** Nav section id that renders the row. */
 	section: string;
 	tab: string;
 	group?: string;
-	/** English schema label; translated at render time (tLoose). */
+	/** English schema label; translated for display and for matching. */
 	label: string;
 	description?: string;
 }
@@ -127,27 +108,39 @@ export function settingSectionFor(tab: string, group?: string): string | null {
 	}
 }
 
-/** Rows matching the query, capped for the nav list. Matches the translated
- *  label, the English source label, the key and the description; a blank query
- *  matches nothing (the nav shows its normal tree instead). */
+/** Cross-page schema index, prepared once per rows array and locale: a search
+ *  keystroke reuses the folded keys, and a locale switch rebuilds the labels. */
+let settingIndex: {
+	rows: readonly SettingSearchRow[];
+	locale: string;
+	index: TextSearchIndex<SettingSearchRow>;
+} | null = null;
+
+/** Both shipped languages of one schema string: the active locale's text plus
+ *  en-US and zh-CN, so a query in either language hits even while the UI is in
+ *  the other. Loose schema keys fall back to their English source. */
+function languagesOf(text: string | undefined): (string | undefined)[] {
+	if (!text) return [undefined];
+	return [tLoose(text), tFor("en-US", text as TranslationKey), tFor("zh-CN", text as TranslationKey)];
+}
+
+function indexFor(rows: readonly SettingSearchRow[]): TextSearchIndex<SettingSearchRow> {
+	const locale = getLocaleSnapshot();
+	if (settingIndex?.rows === rows && settingIndex.locale === locale) return settingIndex.index;
+	const index = new TextSearchIndex(rows, row => ({
+		fuzzy: languagesOf(row.label),
+		substring: [row.key, ...languagesOf(row.description)],
+	}));
+	settingIndex = { rows, locale, index };
+	return index;
+}
+
+/** Rows matching the query, capped for the nav list. Both languages of the
+ *  label and description match; a blank query matches nothing (the nav shows
+ *  its normal tree instead). */
 export function matchSettingRows(rows: readonly SettingSearchRow[], query: string, limit = 12): SettingSearchRow[] {
-	const needle = query.trim().toLowerCase();
-	if (!needle) return [];
-	const matches: { row: SettingSearchRow; score: number }[] = [];
-	for (const row of rows) {
-		const label = tLoose(row.label).toLowerCase();
-		const description = row.description ? tLoose(row.description).toLowerCase() : "";
-		if (
-			label.includes(needle) ||
-			row.label.toLowerCase().includes(needle) ||
-			row.key.toLowerCase().includes(needle) ||
-			description.includes(needle)
-		) {
-			matches.push({ row, score: settingScore(row, needle) });
-		}
-	}
-	return matches
-		.sort((a, b) => b.score - a.score)
+	return indexFor(rows)
+		.rank(query)
 		.slice(0, limit)
-		.map(match => match.row);
+		.map(hit => hit.item);
 }

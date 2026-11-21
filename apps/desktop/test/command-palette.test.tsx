@@ -1,6 +1,6 @@
 import "./happy-dom-shim";
 import { afterEach, describe, expect, test } from "bun:test";
-import { t } from "@musepi/client-core";
+import { setLocale, t } from "@musepi/client-core";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { CommandPalette } from "../src/components/CommandPalette";
@@ -44,6 +44,7 @@ function mount(open = true): { root: Root; opener: HTMLButtonElement } {
 afterEach(() => {
 	while (roots.length) act(() => roots.pop()?.unmount());
 	while (hosts.length) hosts.pop()?.remove();
+	setLocale("en-US");
 });
 
 describe("CommandPalette keyboard contract", () => {
@@ -137,6 +138,78 @@ describe("CommandPalette settings search", () => {
 		expect(row!.textContent).toContain(t("settings.appearance"));
 		act(() => row!.click());
 		expect(opened).toEqual([["appearance", "ui.accent"]]);
+	});
+});
+
+describe("CommandPalette search language and fuzziness", () => {
+	async function type(input: HTMLInputElement, text: string, settleMs = 40): Promise<void> {
+		act(() => {
+			const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+			setValue.call(input, text);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, settleMs));
+		});
+	}
+
+	test("finds a command by a word-start subsequence of its name", async () => {
+		mount();
+		const input = document.querySelector<HTMLInputElement>('[role="combobox"]')!;
+		await type(input, "nwt");
+		const rows = [...document.querySelectorAll<HTMLElement>("[data-palette-row]")];
+		expect(rows[0]?.textContent).toContain(t("settings.newTask"));
+	});
+
+	test("finds a command by its English name while the UI is Chinese", async () => {
+		setLocale("zh-CN");
+		try {
+			mount();
+			const input = document.querySelector<HTMLInputElement>('[role="combobox"]')!;
+			await type(input, "new task");
+			const rows = [...document.querySelectorAll<HTMLElement>("[data-palette-row]")];
+			expect(rows[0]?.textContent).toContain(t("settings.newTask"));
+			expect(rows[0]?.textContent).toContain("新建任务");
+		} finally {
+			setLocale("en-US");
+		}
+	});
+
+	test("finds a session by a fuzzy title, not only a substring", async () => {
+		const emptyRpc = { request: () => Promise.resolve({ matches: [], sessions: [] }) } as unknown as RpcClient;
+		const host = document.createElement("div");
+		host.id = "root";
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		roots.push(root);
+		hosts.push(host);
+		act(() =>
+			root.render(
+				<CommandPalette
+					{...props(true)}
+					rpc={emptyRpc}
+					sessions={[{ id: "layout-session", label: "Global layout review" }]}
+				/>,
+			),
+		);
+		const input = document.querySelector<HTMLInputElement>('[role="combobox"]')!;
+		await type(input, "glb", 320);
+		const rows = [...document.querySelectorAll<HTMLElement>("[data-palette-row]")];
+		expect(rows.some(row => row.textContent?.includes("Global layout review"))).toBe(true);
+	});
+
+	test("finds a settings page by a word-start subsequence", async () => {
+		const host = document.createElement("div");
+		host.id = "root";
+		document.body.appendChild(host);
+		const root = createRoot(host);
+		roots.push(root);
+		hosts.push(host);
+		act(() => root.render(<CommandPalette {...props(true)} onOpenSetting={() => {}} />));
+		const input = document.querySelector<HTMLInputElement>('[role="combobox"]')!;
+		await type(input, "apr");
+		const rows = [...document.querySelectorAll<HTMLElement>("[data-palette-row]")];
+		expect(rows.some(row => row.textContent?.includes(t("settings.appearance")))).toBe(true);
 	});
 });
 
