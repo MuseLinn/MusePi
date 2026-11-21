@@ -224,38 +224,83 @@ function classNameTokens(source: string): string[] {
 	return tokens;
 }
 
-/** Every JSX opening tag in a source file, as { text, line }. A tag runs from
- *  `<Name` to its closing `>`; braces are tracked so an arrow function or a
- *  nested `{}` inside an attribute does not end the tag early. Line-based
- *  scanning misses the contradiction formatter output actually produces
- *  (one attribute per line). */
-function jsxTags(source: string): { text: string; line: number }[] {
+/** Every JSX opening tag in a source file, as { text, line }.
+ *
+ *  The scan is quote-aware: a `>` inside an attribute string
+ *  (`title="a > b"`) must not end the tag, and braces inside a string are
+ *  literal (`aria-label={"a } b"}` must not drive the depth negative). A tag
+ *  that cannot be closed at depth 0 outside quotes is a hard failure, not a
+ *  silent stop — this helper exists so the guard cannot quietly fall behind.
+ */
+export function jsxTags(source: string, file: string): { text: string; line: number }[] {
 	const tags: { text: string; line: number }[] = [];
 	const opener = /<([A-Za-z][\w.]*)/g;
+	// Every string and comment span in the file, so a `<svg"` inside a test
+	// assertion or a comment is not mistaken for a JSX tag.
+	const inert: [number, number][] = [];
+	for (let index = 0; index < source.length; index++) {
+		const char = source[index];
+		if (char === "/" && (source[index + 1] === "/" || source[index + 1] === "*")) {
+			const end = source[index + 1] === "/" ? source.indexOf("\n", index) : source.indexOf("*/", index + 2);
+			const stop = end === -1 ? source.length : end + (source[index + 1] === "/" ? 1 : 2);
+			inert.push([index, stop]);
+			index = stop - 1;
+			continue;
+		}
+		if (char === '"' || char === "'" || char === "`") {
+			let cursor = index + 1;
+			while (cursor < source.length && source[cursor] !== char) {
+				if (source[cursor] === "\\") cursor++;
+				cursor++;
+			}
+			inert.push([index, cursor + 1]);
+			index = cursor;
+		}
+	}
+	const isInert = (position: number): boolean => inert.some(([from, to]) => position >= from && position < to);
 	for (let match = opener.exec(source); match !== null; match = opener.exec(source)) {
-		// Skip TSX generics and comparisons: a tag needs an attribute or a close.
+		if (isInert(match.index)) continue;
+		const line = source.slice(0, match.index).split(/\r?\n/).length;
 		let index = match.index + match[0].length;
 		let depth = 0;
 		let close = -1;
 		while (index < source.length) {
 			const char = source[index];
+			// Comments inside a tag (`// row's nav action`) carry prose, not
+			// syntax: an apostrophe there must not open a string.
+			if (char === "/" && source[index + 1] === "/") {
+				const newline = source.indexOf("\n", index);
+				index = newline === -1 ? source.length : newline + 1;
+				continue;
+			}
+			if (char === "/" && source[index + 1] === "*") {
+				const end = source.indexOf("*/", index + 2);
+				index = end === -1 ? source.length : end + 2;
+				continue;
+			}
+			if (char === '"' || char === "'" || char === "`") {
+				// Skip the whole string literal; escapes do not end it early.
+				let cursor = index + 1;
+				while (cursor < source.length && source[cursor] !== char) {
+					if (source[cursor] === "\\") cursor++;
+					cursor++;
+				}
+				index = cursor + 1;
+				continue;
+			}
 			if (char === "{") depth++;
 			else if (char === "}") depth--;
 			else if (char === ">" && depth === 0) {
 				close = index;
 				break;
-			} else if (char === "/" && source[index + 1] === ">" && depth === 0) {
-				close = index + 1;
-				break;
 			}
 			index++;
 		}
-		if (close === -1) break;
-		const text = source.slice(match.index, close + 1);
-		if (text.includes("=") || /^<[A-Za-z][\w.]*\s*\/?>$/.test(text)) {
-			const line = source.slice(0, match.index).split(/\r?\n/).length;
-			tags.push({ text, line });
+		if (close === -1) {
+			throw new Error(`window-drag guard: unbalanced JSX tag at ${file}:${line}`);
 		}
+		const text = source.slice(match.index, close + 1);
+		if (text.includes("=") || /^<[A-Za-z][\w.]*\s*\/?>$/.test(text)) tags.push({ text, line });
 	}
 	return tags;
 }
@@ -625,12 +670,40 @@ describe("window drag — one owner for the property", () => {
 		// and a spread that overrides at runtime is simply the later value.
 		const contradictions: string[] = [];
 		for (const file of walkSources(SRC, ".tsx")) {
-			for (const tag of jsxTags(fs.readFileSync(file, "utf8"))) {
+			for (const tag of jsxTags(fs.readFileSync(file, "utf8"), path.relative(SRC, file))) {
 				const modes = new Set(Array.from(tag.text.matchAll(/data-gui-window-drag="(band|off)"/g), m => m[1]));
 				if (modes.size > 1) contradictions.push(`${path.relative(SRC, file)}:${tag.line}`);
 			}
 		}
 		expect(contradictions).toEqual([]);
+	});
+
+	it("reads a tag past a quoted > and past a brace inside a string", () => {
+		// Both shapes used to make the scan lie: a quoted `>` truncated the tag
+		// (contradiction missed), and an unbalanced brace inside a string drove
+		// the depth negative (the rest of the file silently skipped).
+		const quoted = '<div title="a > b" data-gui-window-drag="band" data-gui-window-drag="off" />';
+		const [tag] = jsxTags(quoted, "fixture.tsx");
+		expect(tag.text).toBe(quoted);
+		expect(Array.from(tag.text.matchAll(/data-gui-window-drag="(band|off)"/g), m => m[1])).toEqual(["band", "off"]);
+
+		const braced = '<nav aria-label={"a } b"} data-gui-window-drag="band" data-gui-window-drag="off">';
+		const [nav] = jsxTags(braced, "fixture.tsx");
+		expect(nav.text).toBe(braced);
+		expect(nav.text.includes('data-gui-window-drag="off"')).toBe(true);
+
+		// A following tag in the same file is still scanned (no silent stop).
+		const two = `${quoted}
+<span className="x" />`;
+		expect(jsxTags(two, "fixture.tsx")).toHaveLength(2);
+	});
+
+	it("fails loudly on a tag it cannot close instead of skipping it", () => {
+		// An unbalanced tag must not be dropped quietly; the guard's whole job is
+		// to never fall behind without saying so.
+		expect(() => jsxTags('<div data-gui-window-drag="band"', "broken.tsx")).toThrow(
+			/unbalanced JSX tag at broken\.tsx:1/,
+		);
 	});
 
 	it("keeps the renderer sheets free of the property", () => {
