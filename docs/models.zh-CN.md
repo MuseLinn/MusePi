@@ -419,7 +419,7 @@ providers:
 7. 环境变量映射（`OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 等），仅当存储中没有该 provider 的 key 时查询
 8. ModelRegistry 回退解析器（`models.yml` 自定义 provider，使用 env-name-or-literal 语义）
 
-完整理由与「单次运行覆盖」的正确做法见 [Providers 的「凭据与优先级」](providers.md)；shell 导出的同名变量不再压过已保存的 key。
+完整理由与「单次运行覆盖」的正确做法见 [Providers 的「凭据与优先级」](providers.zh-CN.md#凭据与优先级)；shell 导出的同名变量不再压过已保存的 key。
 
 `models.yml` 的 `apiKey` 行为：
 

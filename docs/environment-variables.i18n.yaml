@@ -1,5 +1,5 @@
 # Consistency record for environment-variables.md / environment-variables.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/environment-variables
-environment-variables.md: d11eb46f8a187efd37670e2180a0904c81e8d63c
-environment-variables.zh-CN.md: 08bb4523312861dcb6b1ef0fa39fabc618988b71
+environment-variables.md: 40d9c2a3cc30b8382072e42743a7e26306002503
+environment-variables.zh-CN.md: 34c478549e85b4693075e351658cfc08c4da1ea9
