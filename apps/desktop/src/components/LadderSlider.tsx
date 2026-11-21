@@ -11,9 +11,9 @@ import { THINKING_LEVELS, thinkingLabel } from "./thinking-selector-shared";
  * only the release writes — a slider that committed every pointer tick would
  * send one RPC per pixel and race its own optimistic state.
  *
- * `ceiling` is the model's top supported rung: rungs above it stay visible and
- * labelled with the cap, but neither the draft nor the commit can land on them,
- * so the model's limit is readable instead of silently missing.
+ * `ceiling` is the model's top supported rung: rungs above it stay visible,
+ * struck through, and neither the draft nor the commit can land on them, so the
+ * model's limit is readable instead of silently missing.
  */
 
 interface LadderRung {
@@ -129,6 +129,13 @@ export function LadderSlider({
 		const next = rungs[settled]?.level ?? null;
 		if (next !== (value ?? null)) onCommit(next);
 	};
+	// A cancelled drag never commits: drop the draft and let the committed
+	// value drive the knob again (the following blur then sees no change).
+	const cancel = (): void => {
+		if (!dragging) return;
+		setDragging(false);
+		setDraft(committed);
+	};
 	return (
 		<div className="gui-ladder" data-disabled={disabled ? "true" : undefined}>
 			<input
@@ -151,6 +158,8 @@ export function LadderSlider({
 					setDraft(Number(event.currentTarget.value));
 				}}
 				onPointerUp={commit}
+				onPointerCancel={cancel}
+				onLostPointerCapture={cancel}
 				onKeyUp={commit}
 				onBlur={commit}
 			/>
@@ -168,7 +177,9 @@ export function LadderSlider({
 				<p className="gui-agent-info-note gui-ladder-resolved">{thinkingLabel(resolved)}</p>
 			) : null}
 			{rungs.some(item => item.capped) && ceiling ? (
-				<p className="gui-agent-info-note">{t("transcript.thinkingCappedModel")}</p>
+				<p className="gui-agent-info-note">
+					{`${t("transcript.thinkingCappedModel")} · ${t("transcript.modelCap")} ${thinkingLabel(ceiling)}`}
+				</p>
 			) : null}
 		</div>
 	);

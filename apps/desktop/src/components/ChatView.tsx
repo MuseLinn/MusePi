@@ -3049,6 +3049,8 @@ export function ChatView({
 				cwd: store.cwd,
 				attachApiRef,
 				welcome: showWelcome,
+				// The capsule opens the agent info tab; the chip would duplicate it.
+				keepModelChip: false,
 				quotes,
 				onQuotesChange: setQuotes,
 				pendingEdit,
@@ -3215,14 +3217,11 @@ export function ChatView({
 											{viewMode === "chat" && (
 												<button
 													type="button"
-													className={`gui-agent-capsule${snap?.working ? " gui-agent-capsule--working" : ""}${agentInfoExpanded ? " gui-agent-capsule--open" : ""}`}
+													className={`gui-agent-capsule${snap?.working ? " gui-agent-capsule--working" : ""}`}
 													data-agent-status={
 														snap?.approvals.length ? "waiting" : snap?.working ? "working" : "idle"
 													}
 													aria-expanded={agentInfoExpanded}
-													aria-label={t(
-														agentInfoExpanded ? "general.agentInfoHide" : "general.agentInfoShow",
-													)}
 													title={t(agentInfoExpanded ? "general.agentInfoHide" : "general.agentInfoShow")}
 													onClick={toggleAgentInfo}
 												>

@@ -122,6 +122,7 @@ import { VoiceOverlays } from "./composer/voice-overlays";
 import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
+import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ScreenshotEditorDialog } from "./ScreenshotEditorDialog";
 import { SketchPad } from "./SketchPad";
 
@@ -170,22 +171,23 @@ export interface SessionComposerProps {
 	 *  fold re-derives cheaply and the memoized row only re-renders when the
 	 *  derived figures move. */
 	entries?: readonly SessionEntry[];
-	/** @deprecated Model and thinking live in the agent info tab now; the
-	 *  props stay accepted so side-session and plugin callers keep compiling. */
+	/** Render the model/thinking chip in the input row. On by default: a plain
+	 *  session host has no agent info tab (the right-panel side session), so
+	 *  it keeps both controls; the active chat passes false because its capsule
+	 *  opens `session.agent` instead, and its composer stays free of the chip. */
+	keepModelChip?: boolean;
+	/** Chip props — read only while {@link keepModelChip} is set. */
 	thinkingLevel?: string | null;
-	/** @deprecated See {@link thinkingLevel}. */
+	/** Configured selector state (auto vs pinned) — menu highlight; the chip
+	 *  label shows the resolved effort. */
 	thinkingConfigLevel?: string | null;
-	/** @deprecated See {@link thinkingLevel}. */
+	/** Model's top supported effort — rendered rungs above it are capped. */
 	thinkingCeiling?: string | null;
-	/** @deprecated See {@link thinkingLevel}. */
+	/** Model's real efforts, lowest first. */
 	thinkingEfforts?: readonly string[] | null;
-	/** @deprecated See {@link thinkingLevel}. */
 	onSetThinking?(level: string | null): void;
-	/** @deprecated See {@link thinkingLevel}. */
 	onModelChange?(modelId: string): void;
-	/** @deprecated See {@link thinkingLevel}. */
 	onAddProvider?(): void;
-	/** @deprecated See {@link thinkingLevel}. */
 	presetModelId?: string | null;
 	/** Staged quote and annotation contexts. Their model text is derived at send. */
 	quotes: DisplayContext[];
@@ -288,6 +290,15 @@ export function SessionComposer({
 	carryChips,
 	onDraftChange,
 	attachmentsApi,
+	keepModelChip = true,
+	thinkingLevel,
+	thinkingConfigLevel,
+	thinkingCeiling,
+	thinkingEfforts,
+	onSetThinking,
+	onModelChange,
+	onAddProvider,
+	presetModelId,
 }: SessionComposerProps): ReactNode {
 	const pet = useCompanionArt();
 	// composer 座位槽(dock / left / right):
@@ -2282,10 +2293,35 @@ export function SessionComposer({
 						 * above — the old informational toolbar chip was a duplicate
 						 * badge and is gone.) */}
 						{/* Focus mode sits between the attach menu and the model
-						 * slot. The model and thinking selectors moved to the
-						 * agent info tab (the capsule opens it), so the input row
-						 * keeps only what acts on the message being written. */}
+						 * slot. The active chat's model and thinking selectors
+						 * moved to the agent info tab (the capsule opens it), so
+						 * the input row keeps only what acts on the message being
+						 * written. A surface with no capsule — the side session —
+						 * asks for the chip so it keeps both controls. */}
 						{onToggleFocus && <FocusButton focused={focused ?? false} onPress={onToggleFocus} />}
+						{keepModelChip ? (
+							<ModelThinkingCapsule
+								rpc={rpc}
+								sessionId={sessionId}
+								presetModelId={presetModelId}
+								currentModelId={contextUsage?.model ?? null}
+								thinkingLevel={thinkingLevel}
+								thinkingConfigLevel={thinkingConfigLevel}
+								thinkingCeiling={thinkingCeiling}
+								thinkingEfforts={thinkingEfforts}
+								allowSetDefault
+								onAddProvider={onAddProvider}
+								onModelSelect={id => {
+									if (id) onModelChange?.(id);
+									// The daemon finished the switch before this
+									// fires — refresh the ring/card immediately so
+									// they show the new model's window without
+									// waiting for the next 3s poll.
+									refreshUsage();
+								}}
+								onSetThinking={onSetThinking}
+							/>
+						) : null}
 						{/* conversation.input.model 座位槽:
 						 * 模型选择器旁的事实位——积分余额、模型配额、该模型的
 						 * 专属控件都挂这里,而不是挤进模型菜单里。 */}

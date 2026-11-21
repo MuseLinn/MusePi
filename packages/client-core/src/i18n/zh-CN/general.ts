@@ -409,6 +409,8 @@ export const general = {
 	"general.agentInfoMemory": "记忆",
 	"general.agentInfoModelSwitchFailed": "切换模型失败：{detail}",
 	"general.agentInfoThinkingFailed": "修改思考强度失败：{detail}",
+	"general.agentInfoUnavailable": "无法读取会话信息",
+	"general.agentInfoRefreshFailed": "操作已完成，但会话信息未能刷新：{detail}",
 	"general.accountMenu": "账户与设置",
 	"general.switchHost": "切换主机",
 	"general.sideSessionLoading": "加载会话…",

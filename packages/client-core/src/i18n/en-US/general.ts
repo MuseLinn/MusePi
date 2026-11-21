@@ -421,6 +421,8 @@ export const general = {
 	"general.agentInfoMemory": "Memory",
 	"general.agentInfoModelSwitchFailed": "Could not switch model: {detail}",
 	"general.agentInfoThinkingFailed": "Could not change thinking level: {detail}",
+	"general.agentInfoUnavailable": "Could not read this session’s details",
+	"general.agentInfoRefreshFailed": "That worked, but the session details could not refresh: {detail}",
 	"general.accountMenu": "Account and settings",
 	"general.switchHost": "Switch host",
 	"general.sideSessionLoading": "Loading session…",

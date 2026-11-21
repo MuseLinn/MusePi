@@ -101,7 +101,10 @@ export function AgentInfoPane({
 }: AgentInfoPaneProps): ReactNode {
 	const [info, setInfo] = useState<ThinkingInfo | null>(null);
 	const [usage, setUsage] = useState<SessionUsage | null>(null);
+	const [infoError, setInfoError] = useState<string | null>(null);
+	const [usageError, setUsageError] = useState<string | null>(null);
 	const [failed, setFailed] = useState<string | null>(null);
+	const [retrying, setRetrying] = useState(false);
 	const aliveRef = useRef(true);
 	useEffect(() => {
 		aliveRef.current = true;
@@ -110,20 +113,38 @@ export function AgentInfoPane({
 		};
 	}, []);
 
-	const refresh = useCallback(async (): Promise<void> => {
+	/** Read both session views. Returns the first failure message (null when
+	 *  both settled) so a write followed by a failed re-read can say so —
+	 *  the pane must never look merely "slow" after a hard failure. */
+	const refresh = useCallback(async (): Promise<string | null> => {
 		const [thinking, context] = await Promise.allSettled([
 			rpc.request<ThinkingInfo>("session.thinkingInfo", { sessionId }),
 			rpc.request<SessionUsage | null>("session.contextUsage", { sessionId }),
 		]);
-		if (!aliveRef.current) return;
+		if (!aliveRef.current) return null;
+		const thinkingFailure = thinking.status === "rejected" ? errorText(thinking.reason) : null;
+		const usageFailure = context.status === "rejected" ? errorText(context.reason) : null;
 		if (thinking.status === "fulfilled") setInfo(thinking.value ?? null);
 		if (context.status === "fulfilled") setUsage(context.value ?? null);
+		setInfoError(thinkingFailure);
+		setUsageError(usageFailure);
+		return thinkingFailure ?? usageFailure;
 	}, [rpc, sessionId]);
 
 	useEffect(() => {
 		setInfo(null);
 		setUsage(null);
+		setInfoError(null);
+		setUsageError(null);
 		void refresh();
+	}, [refresh]);
+
+	const retry = useCallback((): void => {
+		setFailed(null);
+		setRetrying(true);
+		void refresh().finally(() => {
+			if (aliveRef.current) setRetrying(false);
+		});
 	}, [refresh]);
 
 	// A finished turn is the natural refresh point for the usage readout.
@@ -142,25 +163,27 @@ export function AgentInfoPane({
 		: (usage?.model ?? null);
 	const modelName = info?.model?.name ?? info?.model?.id ?? null;
 
-	const notify = (message: string): void => {
+	const notify = useCallback((message: string): void => {
 		setFailed(message);
 		window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: message }));
-	};
+	}, []);
 
-	const switchModel = useCallback(
-		async (model: { id: string; provider: string }): Promise<void> => {
-			setFailed(null);
-			try {
-				// The daemon re-clamps the thinking level for the new model; the
-				// refetch below is what reads that bounded value back.
-				await rpc.request("session.setModel", { sessionId, model });
-				await refresh();
-			} catch (error) {
-				if (aliveRef.current) notify(t("general.agentInfoModelSwitchFailed", { detail: errorText(error) }));
-				throw error;
-			}
+	/** A switch that landed still has to re-read the daemon's re-clamped level
+	 *  and window; if that read fails the content is stale and the user is told
+	 *  instead of being left with a quiet readout. */
+	const afterSwitch = useCallback((): void => {
+		void refresh().then(error => {
+			if (error && aliveRef.current) notify(t("general.agentInfoRefreshFailed", { detail: error }));
+		});
+	}, [refresh, notify]);
+
+	// Model-switch refusals are reported HERE (the pane can show the message
+	// beside the list); the selector rolls its own highlight back.
+	const onSwitchError = useCallback(
+		(error: unknown): void => {
+			if (aliveRef.current) notify(t("general.agentInfoModelSwitchFailed", { detail: errorText(error) }));
 		},
-		[rpc, sessionId, refresh],
+		[notify],
 	);
 
 	// Level writes are SERIAL: the daemon clamps per model, so two overlapping
@@ -182,7 +205,9 @@ export function AgentInfoPane({
 			thinkingChain.current = thinkingChain.current.then(async () => {
 				try {
 					await rpc.request("session.setThinkingLevel", { sessionId, thinkingLevel: level });
-					await refresh();
+					const error = await refresh();
+					if (error && aliveRef.current && seq === thinkingSeq.current)
+						notify(t("general.agentInfoRefreshFailed", { detail: error }));
 				} catch (error) {
 					// Only the newest write may roll the readout back — an older
 					// refusal arriving late must not undo a newer choice.
@@ -231,6 +256,16 @@ export function AgentInfoPane({
 				</div>
 			</header>
 
+			{(infoError || usageError) && (
+				<p className="gui-agent-info-note gui-agent-info-error">
+					<span role="alert">{t("general.agentInfoUnavailable")}</span>
+					<button type="button" className="gui-agent-info-link" onClick={retry} disabled={retrying}>
+						<Icon name="refresh" className="gui-agent-info-row-icon" />
+						<span>{t("general.retry")}</span>
+					</button>
+				</p>
+			)}
+
 			<section className="gui-agent-info-section">
 				<div className="gui-agent-info-section-head">
 					<span>{t("general.agentInfoModel")}</span>
@@ -252,7 +287,7 @@ export function AgentInfoPane({
 						</>
 					) : (
 						<span className="gui-agent-info-note">
-							{info === null ? t("sessionInfo.loading") : t("sessionInfo.unavailable")}
+							{info === null && !infoError ? t("sessionInfo.loading") : t("sessionInfo.unavailable")}
 						</span>
 					)}
 				</div>
@@ -261,7 +296,8 @@ export function AgentInfoPane({
 					rpc={rpc}
 					sessionId={sessionId}
 					currentModelId={modelRef}
-					onSwitchModel={switchModel}
+					onSelect={() => afterSwitch()}
+					onSwitchError={onSwitchError}
 					onAddProvider={onAddProvider}
 				/>
 			</section>
@@ -271,7 +307,9 @@ export function AgentInfoPane({
 					<span>{t("general.agentInfoThinking")}</span>
 				</div>
 				{info === null ? (
-					<p className="gui-agent-info-note">{t("sessionInfo.loading")}</p>
+					<p className="gui-agent-info-note">
+						{infoError ? t("sessionInfo.unavailable") : t("sessionInfo.loading")}
+					</p>
 				) : (
 					<LadderSlider
 						efforts={efforts}

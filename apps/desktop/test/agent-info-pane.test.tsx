@@ -32,13 +32,18 @@ interface Call {
 	params: Record<string, unknown> | undefined;
 }
 
-function makeRpc(options: { failModel?: boolean; failThinking?: boolean } = {}) {
+function makeRpc(options: { failModel?: boolean; failThinking?: boolean; failReads?: boolean } = {}) {
 	const calls: Call[] = [];
+	const failReads = { current: options.failReads === true };
 	const rpc = {
 		request: async (method: string, params?: Record<string, unknown>) => {
 			calls.push({ method, params });
-			if (method === "session.thinkingInfo") return { ...thinkingInfo };
+			if (method === "session.thinkingInfo") {
+				if (failReads.current) throw new Error("daemon unreachable");
+				return { ...thinkingInfo };
+			}
 			if (method === "session.contextUsage") {
+				if (failReads.current) throw new Error("daemon unreachable");
 				return { model: "prov/m1", tokens: 1000, contextWindow: 10_000, percent: 10, usage: { cost: 0.25 } };
 			}
 			if (method === "models.list") {
@@ -59,7 +64,7 @@ function makeRpc(options: { failModel?: boolean; failThinking?: boolean } = {}) 
 		},
 		addEventListener: () => () => {},
 	} as unknown as RpcClient;
-	return { rpc, calls };
+	return { rpc, calls, failReads };
 }
 
 function snap(overrides: Partial<GuiSessionState> = {}): GuiSessionState {
@@ -165,11 +170,50 @@ describe("agent info pane", () => {
 		const onToast = (event: Event): void => toasts.push(String((event as CustomEvent).detail));
 		window.addEventListener("musepi-gui-toast", onToast);
 		const { host, unmount } = await mount(rpc);
+		const activeBefore = host.querySelector(".gui-model-opt--active")?.textContent ?? null;
+		expect(activeBefore).toContain("Model One");
 		const rows = host.querySelectorAll(".gui-model-opt");
-		await act(async () => (rows[1] as HTMLElement).click());
+		await act(async () => {
+			(rows[1] as HTMLElement).click();
+			await new Promise(resolve => setTimeout(resolve, 0));
+		});
 		expect(toasts.some(text => text.includes("切换模型失败"))).toBe(true);
 		expect(host.querySelector(".gui-agent-info-error")?.textContent).toContain("切换模型失败");
+		// The refused model is not left checked: the daemon kept the old one.
+		expect(host.querySelector(".gui-model-opt--active")?.textContent).toBe(activeBefore);
 		window.removeEventListener("musepi-gui-toast", onToast);
+		await unmount();
+	});
+
+	it("shows a retry when the session reads fail instead of loading forever", async () => {
+		const { rpc, failReads } = makeRpc({ failReads: true });
+		const { host, unmount } = await mount(rpc);
+		const banner = host.querySelector(".gui-agent-info-error");
+		expect(banner?.textContent).toContain("无法读取会话信息");
+		expect(banner?.querySelector("button")?.textContent).toContain("重试");
+		expect(host.textContent).not.toContain("正在读取会话信息");
+
+		// The retry reuses the same read path; a recovered daemon fills the pane.
+		failReads.current = false;
+		const retryButton = banner!.querySelector("button") as HTMLButtonElement;
+		await act(async () => {
+			retryButton.click();
+			await new Promise(resolve => setTimeout(resolve, 0));
+		});
+		expect(host.querySelector(".gui-agent-info-error")).toBeNull();
+		expect(host.querySelector(".gui-agent-info-model-ref")?.textContent).toBe("prov/m1");
+		await unmount();
+	});
+
+	it("cancels a dragged ladder without writing the draft", async () => {
+		const { rpc, calls } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const input = range(host);
+		const before = input.getAttribute("aria-valuetext");
+		await act(async () => setRangeValue(input, 4));
+		await act(async () => input.dispatchEvent(new Event("pointercancel", { bubbles: true })));
+		expect(level(calls)).toBeUndefined();
+		expect(range(host).getAttribute("aria-valuetext")).toBe(before);
 		await unmount();
 	});
 

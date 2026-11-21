@@ -145,6 +145,12 @@ describe("agent capsule control", () => {
 		expect(capsule?.getAttribute("type")).toBe("button");
 		expect(capsule?.getAttribute("aria-expanded")).toBe("false");
 		expect(capsule?.querySelector(".gui-agent-capsule-go")).not.toBeNull();
+		// The visible reading IS the accessible name: no aria-label may replace
+		// "助手 · 空闲" (label-in-name), and the action is the tooltip.
+		expect(capsule?.getAttribute("aria-label")).toBeNull();
+		expect(capsule?.textContent).toContain("助手");
+		expect(capsule?.textContent).toContain("空闲");
+		expect(capsule?.getAttribute("title")).toBe("展开 Agent 详情");
 		await unmount();
 	});
 

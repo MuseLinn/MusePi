@@ -185,7 +185,7 @@ export function ModelSelector({
 	currentModelId = null,
 	capsule = false,
 	inline = false,
-	onSwitchModel,
+	onSwitchError,
 	onAddProvider,
 	allowNone = false,
 }: {
@@ -216,10 +216,12 @@ export function ModelSelector({
 	 *  agent info tab shows the list itself, not a menu that has to be opened
 	 *  first. Sections, favorites, recents and search are the same code. */
 	inline?: boolean;
-	/** Hand the session write to the caller. The agent info tab owns it so a
-	 *  failed switch can be reported instead of swallowed; the selector still
-	 *  runs the pick (favorite, recents, highlight) before calling this. */
-	onSwitchModel?(model: { id: string; provider: string }): Promise<unknown>;
+	/** Run after a refused switch, before the optimistic label is undone. The
+	 *  caller (the agent info tab) owns the message there — it can show it
+	 *  beside the list instead of only as a toast. Without a callback the
+	 *  selector reports the failure itself. Either way the highlight rolls
+	 *  back to the model the daemon kept. */
+	onSwitchError?(error: unknown): void;
 	/** Top-menu action (openchamber 添加新提供商): opens the settings
 	 *  providers page; omitted where no settings opener is reachable. */
 	onAddProvider?(): void;
@@ -579,7 +581,10 @@ export function ModelSelector({
 			pushRecentModel(selected.id, selected.provider);
 			// Selection state is the provider/id composite: two providers serving
 			// the same bare id (opencode-go vs opencode-zen both offer
-			// deepseek-v4-flash) must highlight only the picked row.
+			// deepseek-v4-flash) must highlight only the picked row. The label
+			// moves BEFORE the write (the pick must feel instant) and is rolled
+			// back only if THIS write is refused — a later successful pick keeps
+			// its own selection.
 			const previous = modelId;
 			const optimistic = `${selected.provider}/${selected.id}`;
 			setModelId(optimistic);
@@ -590,27 +595,26 @@ export function ModelSelector({
 				// in-flight setModel and read the OLD model's data. The provider
 				// rides along so the daemon resolves the exact model, not the first
 				// provider that happens to serve the same id.
-				const write = onSwitchModel
-					? onSwitchModel({ id: selected.id, provider: selected.provider })
-					: setSessionModel(rpc, {
-							sessionId,
-							model: { id: selected.id, provider: selected.provider },
-						});
-				void write
+				void setSessionModel(rpc, {
+					sessionId,
+					model: { id: selected.id, provider: selected.provider },
+				})
 					.then(() => onSelect?.(selected.id, selected.provider))
 					.catch((err: unknown) => {
 						// The daemon kept the old model: put the label back and say
 						// why. Only our own optimistic label is undone — a later pick
-						// that already succeeded keeps its selection.
+						// that already succeeded keeps its selection. The agent tab
+						// owns the message there; without one, the toast reports it.
 						userPicked.current = false;
 						setModelId(current => (current === optimistic ? previous : current));
-						reportRequestFailure(t("settings.switchModel"), err);
+						if (onSwitchError) onSwitchError(err);
+						else reportRequestFailure(t("settings.switchModel"), err);
 					});
 			} else {
 				onSelect?.(selected.id, selected.provider);
 			}
 		},
-		[sessionId, onSelect, onSwitchModel, modelId],
+		[sessionId, onSelect, onSwitchError, modelId],
 	);
 	// Published for onMenuKeyDown (declared above): Enter resolves the
 	// highlighted row through the latest select.
