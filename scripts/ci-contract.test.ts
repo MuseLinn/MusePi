@@ -169,6 +169,14 @@ describe("CI merge gate", () => {
 		expect(paths).toContain("docs/**");
 	});
 
+	it("starts a push run for the root README pair the pairing gate reads", () => {
+		// The classifier side is guarded by the README classify cases; this is the
+		// half that decides whether a run starts at all, and losing one entry here
+		// lets a stale pairing record ship with a green suite.
+		const paths = (workflow.on?.push?.paths ?? []) as string[];
+		expect(paths).toEqual(expect.arrayContaining(["README.md", "README.zh-CN.md", "README.i18n.yaml"]));
+	});
+
 	it("aggregates every blocking job into one always-run check", () => {
 		const gate = jobs.ci_required;
 		expect(gate).toBeDefined();
