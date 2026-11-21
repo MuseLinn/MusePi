@@ -71,7 +71,7 @@ function button(host: HTMLElement, text: string): HTMLButtonElement {
 }
 
 function isMasked(input: HTMLInputElement): boolean {
-	return input.type === "password" || input.style.getPropertyValue("-webkit-text-security") === "disc";
+	return input.type === "password" && (input.getAttribute("style") ?? "").includes("-webkit-text-security: disc");
 }
 
 /** A rejected answer must reach the card as an Error carrying the daemon's
@@ -81,10 +81,12 @@ async function rejectWith(message: string): Promise<never> {
 }
 
 describe("SecretCard 遮罩与说明", () => {
-	test("输入始终遮罩：disc 或 password 回退，并关闭自动填充", async () => {
+	test("输入同时使用 password 字段与 -webkit-text-security: disc，并关闭自动填充", async () => {
 		const { host } = await renderCard();
 		const input = host.querySelector<HTMLInputElement>("input")!;
 		expect(isMasked(input)).toBe(true);
+		expect(input.type).toBe("password");
+		expect(input.getAttribute("style")).toContain("-webkit-text-security: disc");
 		expect(input.getAttribute("autocomplete")).toBe("off");
 		expect(input.hasAttribute("data-1p-ignore")).toBe(true);
 		expect(input.getAttribute("data-lpignore")).toBe("true");

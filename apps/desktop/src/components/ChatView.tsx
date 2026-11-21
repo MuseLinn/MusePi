@@ -508,13 +508,18 @@ export function ChatView({
 		};
 		return onSettingsChanged(sync);
 	}, [rpc, store?.sessionId]);
-	// Secret request card: the daemon pushes `secret-request` on this session's
-	// stream. The value never enters the store — SecretCard holds it for the
-	// duration of the input and answers through secret.answer.
-	const [secretRequest, setSecretRequest] = useState<SecretRequest | null>(null);
+	// Secret request cards: the daemon pushes `secret-request` on this
+	// session's stream. Requests stay independent per requestId (parallel
+	// tool calls can raise several); the value never enters the store —
+	// SecretCard holds it for the duration of the input and answers through
+	// secret.answer.
+	const [secretRequests, setSecretRequests] = useState<readonly SecretRequest[]>([]);
 	useEffect(() => {
 		const sessionId = store?.sessionId;
 		return rpc.addEventListener(event => {
+			// Own session only: an envelope without a session id is not this
+			// chat's request, and a foreign session gets its own card.
+			if (!sessionId || event.sessionId !== sessionId) return;
 			if (event.kind === "secret-request") {
 				const payload = event.payload as Partial<SecretRequest> | undefined;
 				if (
@@ -526,22 +531,23 @@ export function ChatView({
 				) {
 					return;
 				}
-				// A request raised by a side session gets that session's own
-				// card; only this chat's envelopes mount here.
-				if (event.sessionId && sessionId && event.sessionId !== sessionId) return;
-				setSecretRequest({
+				const next: SecretRequest = {
 					requestId: payload.requestId,
 					name: payload.name,
 					purpose: payload.purpose,
 					kind: payload.kind,
-				});
+				};
+				// A subscribe replay of a request already on screen keeps one card.
+				setSecretRequests(current =>
+					current.some(item => item.requestId === next.requestId) ? current : [...current, next],
+				);
 				return;
 			}
 			// Another device answered, or the request timed out as cancel.
 			if (event.kind === "secret-request-end") {
 				const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
 				if (typeof requestId === "string") {
-					setSecretRequest(current => (current?.requestId === requestId ? null : current));
+					setSecretRequests(current => current.filter(item => item.requestId !== requestId));
 				}
 			}
 		});
@@ -1116,6 +1122,9 @@ export function ChatView({
 		setCurrentLeafKey(null);
 		setPinnedPathIds(null);
 		setViewModeState("chat");
+		// Secret cards belong to the session that raised them — leaving the
+		// session drops the card; the daemon replays it on return.
+		setSecretRequests([]);
 		const timer = setTimeout(() => {
 			if (el) delete el.dataset.switched;
 		}, 700);
@@ -3972,16 +3981,16 @@ export function ChatView({
 										onDecide={onDecideApproval}
 									/>
 								))}
-								{secretRequest && (
+								{secretRequests.map(request => (
 									<SecretCard
-										key={secretRequest.requestId}
-										request={secretRequest}
+										key={request.requestId}
+										request={request}
 										onAnswer={answerSecret}
 										onSettled={requestId =>
-											setSecretRequest(current => (current?.requestId === requestId ? null : current))
+											setSecretRequests(current => current.filter(item => item.requestId !== requestId))
 										}
 									/>
-								)}
+								))}
 								{ask && onAskAnswer && (
 									<div className="gui-ask-float" ref={askFloatRef}>
 										<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />

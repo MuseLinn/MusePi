@@ -39,10 +39,13 @@ const SETTLED_LINGER_MS = 2400;
 /** Flush-left with the composer column: overrides the ask card's inset. */
 const CARD_STYLE: CSSProperties = { width: "100%", maxWidth: 460, marginLeft: 0 };
 
-/** Hide the glyphs in WebKit through the descriptor; the input is also a
- *  real password field so every other engine (and happy-dom) masks it too.
+/** Hide the glyphs in WebKit through the vendor property. Written as a style
+ *  attribute because CSS declaration objects may drop the vendor property;
+ *  the field is also a real password input so engines without it still mask.
  *  Autofill opt-outs below keep password managers from offering it. */
-const DISC_STYLE: CSSProperties = { WebkitTextSecurity: "disc" } as CSSProperties;
+const maskStyleRef = (el: HTMLInputElement | null): void => {
+	el?.setAttribute("style", "-webkit-text-security: disc");
+};
 
 function envVarName(name: string): string {
 	return `$MUSEPI_SECRET_${name}`;
@@ -154,8 +157,9 @@ export function SecretCard({
 	const canSave = !tooShort && value.length >= MIN_SECRET_VALUE_LENGTH && !busy;
 
 	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
-		// Claim Escape so it cancels the card instead of interrupting the
-		// running turn (same contract as AskCard).
+		// Escape pressed inside the value field cancels the card and keeps the
+		// key away from the turn-interrupt handler. Cards without a field
+		// (allow) have no local Escape binding.
 		if (e.key === "Escape") {
 			e.preventDefault();
 			e.stopPropagation();
@@ -196,9 +200,9 @@ export function SecretCard({
 				{isFill ? (
 					<>
 						<input
+							ref={maskStyleRef}
 							className="gui-input w-full"
 							type="password"
-							style={DISC_STYLE}
 							value={value}
 							placeholder={t("tools.secretValuePlaceholder")}
 							aria-label={t("tools.secretValuePlaceholder")}

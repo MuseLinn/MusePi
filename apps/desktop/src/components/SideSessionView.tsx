@@ -113,7 +113,7 @@ function SideSessionBody({
 	const getSnapshot = useMemo(() => () => store.getSnapshot(), [store]);
 	const snap = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 	const [asks, setAsks] = useState<readonly AskRequest[]>([]);
-	const [secretRequest, setSecretRequest] = useState<SecretRequest | null>(null);
+	const [secretRequests, setSecretRequests] = useState<readonly SecretRequest[]>([]);
 	const [quotes, setQuotes] = useState<DisplayContext[]>([]);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(bodyRef);
@@ -143,8 +143,12 @@ function SideSessionBody({
 		[sessionId],
 	);
 
-	// Secret requests arrive on the same session-scoped stream. The card
-	// answers through secret.answer; the value never leaves its own state.
+	// Secret requests arrive on the same session-scoped stream, one card per
+	// requestId. The card answers through secret.answer; the value never
+	// leaves its own state.
+	useEffect(() => {
+		setSecretRequests([]);
+	}, [sessionId]);
 	useEffect(() => {
 		if (!rpc) return;
 		return rpc.addEventListener(event => {
@@ -160,19 +164,22 @@ function SideSessionBody({
 				) {
 					return;
 				}
-				setSecretRequest({
+				const next: SecretRequest = {
 					requestId: payload.requestId,
 					name: payload.name,
 					purpose: payload.purpose,
 					kind: payload.kind,
-				});
+				};
+				setSecretRequests(current =>
+					current.some(item => item.requestId === next.requestId) ? current : [...current, next],
+				);
 				return;
 			}
 			// Another device answered, or the request timed out as cancel.
 			if (event.kind === "secret-request-end") {
 				const requestId = (event.payload as { requestId?: unknown } | undefined)?.requestId;
 				if (typeof requestId === "string") {
-					setSecretRequest(current => (current?.requestId === requestId ? null : current));
+					setSecretRequests(current => current.filter(item => item.requestId !== requestId));
 				}
 			}
 		});
@@ -283,7 +290,7 @@ function SideSessionBody({
 				<ScrollEdgeBlur edge="end" />
 			</div>
 
-			{snap.approvals.length > 0 || asks.length > 0 || secretRequest !== null ? (
+			{snap.approvals.length > 0 || asks.length > 0 || secretRequests.length > 0 ? (
 				<div className="gui-side-session-approvals">
 					{snap.approvals.map(approval => (
 						<ApprovalCard
@@ -297,16 +304,16 @@ function SideSessionBody({
 					{asks.map(ask => (
 						<AskCard key={ask.requestId} ask={ask} onAnswer={value => answer(ask, value)} />
 					))}
-					{secretRequest && (
+					{secretRequests.map(request => (
 						<SecretCard
-							key={secretRequest.requestId}
-							request={secretRequest}
+							key={request.requestId}
+							request={request}
 							onAnswer={answerSecret}
 							onSettled={requestId =>
-								setSecretRequest(current => (current?.requestId === requestId ? null : current))
+								setSecretRequests(current => current.filter(item => item.requestId !== requestId))
 							}
 						/>
-					)}
+					))}
 				</div>
 			) : null}
 
