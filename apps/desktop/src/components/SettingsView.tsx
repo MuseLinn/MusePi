@@ -615,6 +615,7 @@ export function SettingsView({
 									{!activeExtTab && activeSection === "connectors" && (
 										<ConnectorsSection rpc={rpc} onApplyPrompt={applyPrompt} />
 									)}
+									{activeSection === "secrets" && <SecretSettingsSection rpc={rpc} />}
 									{activeSection === "hooks" && <HooksSection rpc={rpc} />}
 									{activeSection === "browser" && <BrowserSection rpc={rpc} />}
 									{!activeExtTab && activeSection === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
@@ -662,6 +663,7 @@ import {
 	ModelSection,
 	ModesSection,
 	NotificationsSection,
+	SecretSettingsSection,
 	SessionMemorySection,
 	ShellSection,
 	ShortcutsSection,

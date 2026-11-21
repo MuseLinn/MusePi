@@ -41,6 +41,7 @@ export type SectionId =
 	| "subagents"
 	| "commands"
 	| "connectors"
+	| "secrets"
 	| "hooks"
 	| "indexes"
 	| "usage"
