@@ -11,15 +11,24 @@
     drag                 begin window drag (frameless titlebar)
     minimize             minimize
     close                close without installing
-    back                 request previous page (host decides if legal)
-    install:<json>       run install; json = { path, desktopShortcut, startMenu }
+    pick-directory       choose the install folder
+    install:<json>       run install; json = { path, desktopShortcut, startMenu, language }
+    cancel               stop an install this run started, then roll back
     launch               launch the installed app
     finish               close after successful install
+    ui-ready             page mounted; host answers with ready
 
-  Host -> page:
-    host:progress        { percent, step }
-    host:error           { message }
-    host:ready           { version, defaultPath, appVersion }
+  Host -> page (JSON):
+    ready                { appVersion, defaultPath, language }
+    progress             { phase: preparing|awaiting|installing|cancelling, bytes? }
+    installed            { path }
+    cancelled            { upgrade }
+    failed               { reason: installerExited|installerSilent, upgrade }
+    error                { reason: clientRunning|directory, message? }
+    directory-picked     { path }
+
+  There is no percentage: the installer runs its file section silently and
+  cannot report one, and the page must not invent one.
 -->
 <html lang="zh-CN" data-theme="dark">
 <head>
@@ -120,20 +129,30 @@
         </section>
 
         <!-- ── 3. 进度 ────────────────────────────────────────────── -->
+        <!-- 静默安装段不提供精确进度，这里只显示安装器发布的阶段与已写入字节数。 -->
         <section class="page" id="page-progress" aria-labelledby="h-progress">
             <div class="progress-wrap">
                 <div class="progress-orb"></div>
                 <div class="page-head" style="text-align:center">
                     <h2 id="h-progress">正在安装</h2>
-                    <p class="lede" id="progress-step">准备中…</p>
+                    <p class="lede" id="progress-step">正在检查安装环境…</p>
                 </div>
-                <div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar">
+                <div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-busy="true" id="bar">
                     <div class="fill"></div>
                 </div>
                 <div class="progress-meta">
-                    <span id="progress-label">准备中…</span>
-                    <span id="progress-percent">0%</span>
+                    <span id="progress-bytes"></span>
                 </div>
+            </div>
+            <div class="cancel-confirm" id="cancel-confirm" hidden>
+                <p class="cancel-hint" id="cancel-hint">取消会停止安装并移除本次写入的文件。</p>
+                <div class="cancel-buttons">
+                    <button class="btn btn-ghost" id="btn-cancel-keep">继续安装</button>
+                    <button class="btn btn-danger" id="btn-cancel-confirm">确认取消</button>
+                </div>
+            </div>
+            <div class="progress-actions">
+                <button class="btn btn-ghost" id="btn-cancel">取消安装</button>
             </div>
         </section>
 
@@ -164,13 +183,15 @@
         </section>
 
         <!-- ── 错误层 ─────────────────────────────────────────────── -->
+        <!-- 两种形态：可重试（装前检查没过）与已终止（取消/安装器退出，只能关闭）。 -->
         <section class="page" id="page-error" aria-labelledby="h-error">
             <div class="page-head">
                 <h2 id="h-error">安装失败</h2>
                 <p class="lede" id="error-message">未知错误</p>
             </div>
             <div class="footer">
-                <button class="btn btn-ghost" data-back="location">返回</button>
+                <button class="btn btn-ghost" data-back="location" id="error-back">返回</button>
+                <button class="btn btn-ghost" id="error-close" hidden>关闭</button>
                 <button class="btn btn-primary" id="btn-retry">重试</button>
             </div>
         </section>

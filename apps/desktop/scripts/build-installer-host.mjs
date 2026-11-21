@@ -29,6 +29,14 @@
  * path is NOT writable when the installer runs from %ProgramFiles%, the NSIS
  * installer must extract this directory to a writable location (e.g. %TEMP%)
  * and run it from there — the standard approach for WebView2-based installers.
+ *
+ * The NSIS side launches this exe once and keeps it in front for the whole
+ * install (see release/installer-branding.nsh and
+ * docs/review/2026-11-21-installer-host-continuity.md): the host writes
+ * answers.ini, the installer switches itself to silent, and the host follows
+ * install-status.ini / the installer process to render the progress and finish
+ * pages. The host also holds "Local\MusePi.Installer.Host" for its lifetime so
+ * the installer knows when the finish page has been closed.
  */
 
 import { execFileSync } from "node:child_process";

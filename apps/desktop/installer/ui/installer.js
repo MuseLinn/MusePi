@@ -1,9 +1,10 @@
 /**
  * MusePi installer UI controller.
  *
- * The native host owns validation and writes the wizard answers. After the
- * Install command succeeds, the host closes and NSIS shows the real extraction
- * progress and completion page. This controller never simulates file progress.
+ * The host owns validation, the answers file and the install itself: it starts
+ * the installer, polls the phase it publishes (install-status.ini) and the bytes
+ * that actually exist under the target. This controller renders exactly those
+ * facts — there is no percentage, because a silent NSIS file section has none.
  * Browser preview mode only demonstrates navigation.
  */
 
@@ -89,13 +90,17 @@ const pathInput = document.getElementById("path");
 const desktopCheckbox = document.getElementById("chk-desktop");
 const startMenuCheckbox = document.getElementById("chk-startmenu");
 const launchCheckbox = document.getElementById("chk-launch");
+const cancelButton = document.getElementById("btn-cancel");
+const cancelConfirm = document.getElementById("cancel-confirm");
+const cancelConfirmButton = document.getElementById("btn-cancel-confirm");
+const cancelKeepButton = document.getElementById("btn-cancel-keep");
 let installing = false;
 
 function beginInstall() {
 	if (installing) return;
 	installing = true;
+	resetProgress();
 	showPage("progress");
-	setProgress(0, locale.preparing);
 	send("install", {
 		path: pathInput.value,
 		desktopShortcut: desktopCheckbox.checked,
@@ -103,9 +108,12 @@ function beginInstall() {
 		language: selectedLanguage,
 	});
 	if (!host) {
-		// Explicit preview-only feedback. Production waits for the native host.
-		installing = false;
-		showPage("location");
+		// Preview-only demo of the two states; no installation is performed.
+		setTimeout(() => {
+			setPhase(locale.writingFiles);
+			setBytes(18 * 1024 * 1024);
+		}, 500);
+		setTimeout(() => showPage("done"), 1400);
 	}
 }
 
@@ -117,22 +125,61 @@ document.getElementById("btn-finish").addEventListener("click", () => {
 	send(launchCheckbox.checked ? "launch" : "finish");
 });
 
+// ── Cancel ─────────────────────────────────────────────────────────────
+function openCancelConfirm() {
+	if (!installing) return;
+	cancelConfirm.hidden = false;
+	cancelConfirmButton.focus();
+}
+
+function closeCancelConfirm() {
+	cancelConfirm.hidden = true;
+	cancelButton.focus();
+}
+
+cancelButton.addEventListener("click", openCancelConfirm);
+cancelKeepButton.addEventListener("click", closeCancelConfirm);
+cancelConfirmButton.addEventListener("click", () => {
+	cancelConfirm.hidden = true;
+	cancelButton.disabled = true;
+	setPhase(locale.cancelling);
+	send("cancel");
+});
+
 // ── Progress rendering ─────────────────────────────────────────────────
 const bar = document.getElementById("bar");
-const barFill = bar.querySelector(".fill");
-const percentLabel = document.getElementById("progress-percent");
-const stepLabel = document.getElementById("progress-label");
+const bytesLabel = document.getElementById("progress-bytes");
 const headingStep = document.getElementById("progress-step");
 
-function setProgress(percent, step) {
-	const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
-	barFill.style.width = `${clamped}%`;
-	bar.setAttribute("aria-valuenow", String(Math.round(clamped)));
-	percentLabel.textContent = `${Math.round(clamped)}%`;
-	if (step) {
-		stepLabel.textContent = step;
-		headingStep.textContent = step;
+/**
+ * The installer cannot say how far its file copy has got. `phase` is the stage
+ * the installer published, and the bar stays indeterminate on purpose.
+ */
+function setPhase(text) {
+	headingStep.textContent = text;
+}
+
+function setBytes(bytes) {
+	const value = Number(bytes);
+	if (!value || value <= 0) {
+		bytesLabel.textContent = "";
+		return;
 	}
+	if (value < 1024 * 1024) {
+		const kilobytes = Math.max(1, Math.round(value / 1024));
+		bytesLabel.textContent = locale.bytesWrittenKb.replace("{size}", String(kilobytes));
+		return;
+	}
+	const megabytes = (value / (1024 * 1024)).toFixed(1);
+	bytesLabel.textContent = locale.bytesWritten.replace("{size}", megabytes);
+}
+
+function resetProgress() {
+	cancelButton.disabled = false;
+	cancelConfirm.hidden = true;
+	bar.setAttribute("aria-busy", "true");
+	setBytes(0);
+	setPhase(locale.preparing);
 }
 
 // ── Host bridge ────────────────────────────────────────────────────────
@@ -142,7 +189,7 @@ function onHostMessage(event) {
 		try {
 			message = JSON.parse(message);
 		} catch {
-			showError(String(event.data));
+			showRetryable(String(event.data));
 			return;
 		}
 	}
@@ -164,14 +211,33 @@ function handleHostMessage(message) {
 			break;
 		}
 		case "progress":
-			setProgress(message.percent, message.step);
+			if (message.phase === "preparing") setPhase(locale.preparing);
+			else if (message.phase === "awaiting") setPhase(locale.awaitingInstaller);
+			else if (message.phase === "installing") setPhase(locale.writingFiles);
+			else if (message.phase === "cancelling") setPhase(locale.cancelling);
+			if (typeof message.bytes === "number") setBytes(message.bytes);
 			break;
-		case "handoff":
-			setProgress(100, locale.handingOff);
+		case "installed":
+			installing = false;
+			bar.setAttribute("aria-busy", "false");
+			showPage("done");
+			break;
+		case "cancelled":
+			installing = false;
+			showFinished(locale.cancelledTitle, message.upgrade ? locale.cancelledUpgrade : locale.cancelledFresh);
+			break;
+		case "failed":
+			installing = false;
+			showFinished(locale.failedTitle,
+				message.reason === "installerExited"
+					? (message.upgrade ? locale.failedUpgrade : locale.failedFresh)
+					: locale.failedSilent);
 			break;
 		case "error":
 			installing = false;
-			showError(message.message || locale.unknownError);
+			showRetryable(message.reason === "clientRunning"
+				? locale.clientRunning
+				: message.message || locale.unknownError);
 			break;
 		case "directory-picked":
 			if (message.path) pathInput.value = message.path;
@@ -181,10 +247,30 @@ function handleHostMessage(message) {
 	}
 }
 
-function showError(text) {
+/** Pre-install refusal: the user can fix the cause and retry here. */
+function showRetryable(text) {
+	document.getElementById("h-error").textContent = locale.errorTitle;
 	document.getElementById("error-message").textContent = text;
+	document.getElementById("error-back").hidden = false;
+	document.getElementById("error-close").hidden = true;
+	document.getElementById("btn-retry").hidden = false;
 	showPage("error");
 }
+
+/**
+ * The install this run started is over and the installer is gone: retrying here
+ * would start nothing, so the only action is to close and run setup again.
+ */
+function showFinished(title, text) {
+	document.getElementById("h-error").textContent = title;
+	document.getElementById("error-message").textContent = text;
+	document.getElementById("error-back").hidden = true;
+	document.getElementById("error-close").hidden = false;
+	document.getElementById("btn-retry").hidden = true;
+	showPage("error");
+}
+
+document.getElementById("error-close").addEventListener("click", () => send("close"));
 
 if (host) {
 	host.addEventListener("message", onHostMessage);
@@ -209,6 +295,10 @@ document.addEventListener("keydown", event => {
 	}
 	if (event.key === "Escape") {
 		event.preventDefault();
+		if (!cancelConfirm.hidden) {
+			closeCancelConfirm();
+			return;
+		}
 		send("close");
 	}
 });

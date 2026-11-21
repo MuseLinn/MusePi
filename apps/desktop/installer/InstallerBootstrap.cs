@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -30,6 +31,12 @@ namespace MusePiInstallerBootstrap
                     source.CopyTo(target);
                 }
 
+                // The installer reads its answers/status channel from this directory, so
+                // it lives and dies with this run: a cancelled install cannot leave
+                // stale answers behind in %LOCALAPPDATA%.
+                string stateDir = Path.Combine(workDir, "state");
+                Directory.CreateDirectory(stateDir);
+
                 ProcessStartInfo start = new ProcessStartInfo();
                 start.FileName = payload;
                 start.WorkingDirectory = workDir;
@@ -38,10 +45,16 @@ namespace MusePiInstallerBootstrap
                 start.Arguments = JoinArguments(args);
                 start.EnvironmentVariables["TEMP"] = workDir;
                 start.EnvironmentVariables["TMP"] = workDir;
+                start.EnvironmentVariables["MUSEPI_ANSWERS_DIR"] = stateDir;
                 using (Process process = Process.Start(start))
                 {
                     process.WaitForExit();
-                    return process.ExitCode;
+                    int exitCode = process.ExitCode;
+                    // Cancelling terminates the installer, so its own exit code is
+                    // a termination status (or a crash code). The host's receipt is
+                    // the documented contract.
+                    int hostExit = ReadHostExit(Path.Combine(stateDir, "host-status.ini"));
+                    return hostExit >= 0 ? hostExit : exitCode;
                 }
             }
             catch (Exception error)
@@ -71,8 +84,50 @@ namespace MusePiInstallerBootstrap
             Require(QuoteArgument("--updated") == "--updated", "update flag");
             Require(QuoteArgument("C:\\A B\\setup.exe") == "\"C:\\A B\\setup.exe\"", "space quoting");
             Require(QuoteArgument("C:\\A B\\") == "\"C:\\A B\\\\\"", "trailing slash quoting");
+
+            string statusFile = Path.Combine(
+                Path.GetTempPath(), "musepi-bootstrap-self-test-" + Guid.NewGuid().ToString("N") + ".ini");
+            try
+            {
+                Require(ReadHostExit(statusFile) == -1, "missing host status is unknown");
+                File.WriteAllText(statusFile, "exit=2\r\n");
+                Require(ReadHostExit(statusFile) == 2, "cancel is read back");
+                File.WriteAllText(statusFile, "garbage\r\n");
+                Require(ReadHostExit(statusFile) == -1, "garbage host status is unknown");
+            }
+            finally
+            {
+                try { File.Delete(statusFile); }
+                catch (Exception) { }
+            }
+
             Console.WriteLine("installer bootstrap self-test: PASS");
             return 0;
+        }
+
+        /// <summary>Host receipt written by MusePiInstallerHost.exe; -1 when absent.</summary>
+        private static int ReadHostExit(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return -1;
+                foreach (string line in File.ReadAllLines(path))
+                {
+                    string trimmed = line.Trim();
+                    if (!trimmed.StartsWith("exit=", StringComparison.Ordinal)) continue;
+                    int value;
+                    if (int.TryParse(trimmed.Substring("exit=".Length), NumberStyles.Integer,
+                            CultureInfo.InvariantCulture, out value))
+                    {
+                        return value;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // An unreadable receipt leaves the child's exit code in charge.
+            }
+            return -1;
         }
 
         private static void Require(bool condition, string name)
