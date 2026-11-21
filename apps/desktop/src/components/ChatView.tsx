@@ -80,13 +80,14 @@ import {
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
 import {
+	AGENT_INFO_SURFACE,
 	COMPACTION_PANEL_SURFACE,
 	compactionTabDescriptor,
+	sessionAgentTabDescriptor,
 	surfaceById,
 	surfaceRequiresSession,
 } from "../lib/surfaces/registry";
 import { setDockOpen } from "../lib/terminal-dock-state";
-import { clampThinkingChipLevel } from "../lib/thinking-chip";
 import { type UsePanelTabsResult, usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -266,7 +267,6 @@ export function ChatView({
 	onDecideApproval,
 	onReloadSession,
 	onForkSession,
-	presetModelId,
 	modes,
 	modeId,
 	onModeChange,
@@ -336,8 +336,9 @@ export function ChatView({
 	/** Open a forked session (session.forkAt result) — switches the UI to
 	 *  the new branch and refreshes the tree. */
 	onForkSession?(sessionId: string): Promise<void> | void;
-	/** Model chosen in the welcome composer before the session existed —
-	 *  carried into the session composer as its initial seed. */
+	/** @deprecated The session composer no longer seeds a model — a live
+	 *  session reads its own model and the agent info tab owns the switch.
+	 *  Kept on the prop surface for the app's handoff wiring. */
 	presetModelId?: string | null;
 	/** Welcome 预设(mode)chip(welcome 场景;modes 未传则不渲染,见 Composer)。 */
 	modes?: { id: string; label: string }[] | null;
@@ -1271,6 +1272,44 @@ export function ChatView({
 		},
 		[openBrowserPanel, panelTabs.open, tabLabelFor, store?.sessionId],
 	);
+	// The capsule's tab: one per session, opened in the right panel. Clicking
+	// while it is the visible tab folds the panel (the rail's own rule) instead
+	// of leaving the user on a tab they just asked to close.
+	const agentInfoTabOpen =
+		activePanelTab?.surface === AGENT_INFO_SURFACE && activePanelTab.target === (store?.sessionId ?? null);
+	const agentInfoExpanded = agentInfoTabOpen && rightPanelOpen && !focusMode;
+	const toggleAgentInfo = useCallback((): void => {
+		const sessionId = store?.sessionId;
+		if (!sessionId) return;
+		if (agentInfoExpanded && onToggleRightPanel) {
+			onToggleRightPanel();
+			return;
+		}
+		panelTabs.open(sessionAgentTabDescriptor(sessionId, tabLabelFor(AGENT_INFO_SURFACE)));
+		if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+	}, [
+		agentInfoExpanded,
+		store?.sessionId,
+		onToggleRightPanel,
+		panelTabs.open,
+		tabLabelFor,
+		rightPanelOpen,
+		focusMode,
+		onExpandRightPanel,
+	]);
+	// The agent info tab's approvals row is a jump, not a second decision
+	// surface: it brings the chat's approval card into view and focuses its
+	// first action.
+	useEffect(() => {
+		const onFocusApprovals = (): void => {
+			const card = document.querySelector<HTMLElement>(".gui-approval-wrap");
+			if (!card) return;
+			card.scrollIntoView({ block: "nearest" });
+			card.querySelector<HTMLElement>("button")?.focus();
+		};
+		window.addEventListener("musepi-gui-focus-approvals", onFocusApprovals);
+		return () => window.removeEventListener("musepi-gui-focus-approvals", onFocusApprovals);
+	}, []);
 	const openCompaction = useCallback(
 		(entry: Extract<SessionEntry, { type: "compaction" }>): void => {
 			if (!extTabsRef.current.some(item => `ext:${item.slot}` === COMPACTION_PANEL_SURFACE)) {
@@ -1427,19 +1466,6 @@ export function ChatView({
 		window.addEventListener("musepi-open-plan", onOpenPlan);
 		return () => window.removeEventListener("musepi-open-plan", onOpenPlan);
 	}, [setActiveView, rightPanelOpen, focusMode, onExpandRightPanel]);
-	const setThinking = (level: ThinkingLevel | null): void => {
-		if (!store) return;
-		void rpc
-			.request("session.setThinkingLevel", { sessionId: store.sessionId, thinkingLevel: level ?? null })
-			.then(() => {
-				// Refresh auto flag + level immediately: thinkingInfoAuto is
-				// the chip's authority, and without this it would keep showing
-				// "auto" after the user pins a concrete level (the 3s poll is
-				// too slow for a click → chip latency the user can see).
-				fetchThinkingInfo();
-			})
-			.catch(() => {});
-	};
 	// Tree-path transcript pulse (TUI parity): branchAt / revertTo /
 	// forkAt / btwBranch all mutate the CURRENT session's message flow
 	// without a sessionId change, so the session-switch effect below (keyed
@@ -2422,40 +2448,9 @@ export function ChatView({
 			host.style.removeProperty("--gui-find-inset-end");
 		};
 	}, [findRailMounted]);
-	// Per-model thinking ceiling + exact ladder (TUI /model parity): higher
-	// ladder rungs are disabled in the composer's ThinkingSelector, and the
-	// ladder itself is the current model's supported efforts. GuiHeader runs
-	// the same query for its title label; this one feeds the selector.
-	const [thinkingInfoLevel, setThinkingInfoLevel] = useState<string | null>(null);
-	const [thinkingInfoResolved, setThinkingInfoResolved] = useState<string | null>(null);
-	const [thinkingInfoAuto, setThinkingInfoAuto] = useState(false);
-	const [thinkingCeiling, setThinkingCeiling] = useState<string | null>(null);
-	const [thinkingEfforts, setThinkingEfforts] = useState<string[] | null>(null);
-	// TUI status-line parity: auto shows the CONCRETE resolved effort once
-	// the daemon classifies the turn ("◉ high"), "auto" while pending. The
-	// configured selector state (auto vs pinned) is passed separately as
-	// configValue so the menu can still highlight "auto" while the chip
-	// shows the resolved level. Non-auto falls through to the wire entry /
-	// session.thinkingInfo level.
-	const thinkingLevel: string | null = (() => {
-		if (!snap) return null;
-		if (thinkingInfoAuto) return thinkingInfoResolved ?? "auto";
-		let level: string | null = snap.state?.thinkingLevel ?? null;
-		for (const entry of snap.entries) {
-			if (entry.type === "thinking_level_change") level = entry.thinkingLevel ?? null;
-		}
-		// A model switch re-clamps the level without necessarily appending a new
-		// thinking_level_change (the clamped value can equal the old one), so the
-		// transcript's last entry can name a rung the NEW model does not have —
-		// the chip read "medium" on a model offering only low/high/max. The live
-		// ladder is the authority on what the session now runs at; it is null
-		// until session.thinkingInfo resolves, which must not crash the render.
-		return clampThinkingChipLevel(level, thinkingEfforts, thinkingInfoLevel);
-	})();
 	// The work-timer badge wants the ACTUAL effort this round used — the
 	// last thinking_level_change entry carries the auto-classified resolved
-	// level (the composer chip above intentionally shows "auto", the
-	// configured state; the badge must not).
+	// level (the agent info tab shows the configured state; the badge must not).
 	const resolvedThinkingLevel: string | null = (() => {
 		if (!snap) return null;
 		let level: string | null = null;
@@ -2579,61 +2574,6 @@ export function ChatView({
 			return rasterizeToBlob(element, { pixelRatio: 2, backgroundColor });
 		},
 	};
-	const fetchThinkingInfo = useCallback((): void => {
-		if (!rpc || !store) return;
-		void rpc
-			.request<{
-				ceiling?: string | null;
-				efforts?: string[];
-				level?: string | null;
-				auto?: boolean;
-				resolved?: string | null;
-			}>("session.thinkingInfo", { sessionId: store.sessionId })
-			.then(info => {
-				setThinkingCeiling(info?.ceiling ?? null);
-				setThinkingEfforts(info?.efforts?.length ? info.efforts : []);
-				setThinkingInfoLevel(info?.level ?? null);
-				setThinkingInfoResolved(info?.resolved ?? null);
-				setThinkingInfoAuto(info?.auto === true);
-			})
-			.catch(() => {});
-	}, [rpc, store]);
-	useEffect(() => {
-		if (!store) return;
-		let cancelled = false;
-		const load = (): void => {
-			void rpc
-				.request<{
-					ceiling?: string | null;
-					efforts?: string[];
-					level?: string | null;
-					auto?: boolean;
-					resolved?: string | null;
-				}>("session.thinkingInfo", { sessionId: store.sessionId })
-				.then(info => {
-					if (cancelled) return;
-					setThinkingCeiling(info?.ceiling ?? null);
-					setThinkingEfforts(info?.efforts?.length ? info.efforts : []);
-					setThinkingInfoLevel(info?.level ?? null);
-					setThinkingInfoResolved(info?.resolved ?? null);
-					setThinkingInfoAuto(info?.auto === true);
-				})
-				.catch(() => {});
-		};
-		load();
-		return () => {
-			cancelled = true;
-		};
-	}, [rpc, store]);
-	// The composer switches models itself (session.setModel) and the daemon
-	// pushes a model_changed wire event — that re-renders the view but the
-	// store reference stays stable, so the effect above never re-runs and the
-	// selector would keep the OLD model's effort ladder. Refetch explicitly on
-	// model change (ModelSection does the same via its own refreshThinking).
-	const onComposerModelChange = useCallback((): void => {
-		fetchThinkingInfo();
-	}, [fetchThinkingInfo]);
-
 	// Stop is immediate, matching bare Escape: the daemon keeps queued
 	// messages. A blocking confirm made the button a no-op whenever its
 	// context was unavailable, so the click always reaches `onStop`.
@@ -3107,16 +3047,10 @@ export function ChatView({
 				rpc,
 				sessionId: store.sessionId,
 				cwd: store.cwd,
-				thinkingLevel,
-				thinkingConfigLevel: thinkingInfoAuto ? "auto" : thinkingLevel,
-				onSetThinking: setThinking,
-				onModelChange: onComposerModelChange,
-				onAddProvider,
 				attachApiRef,
-				thinkingCeiling,
-				thinkingEfforts,
-				presetModelId,
 				welcome: showWelcome,
+				// The capsule opens the agent info tab; the chip would duplicate it.
+				keepModelChip: false,
 				quotes,
 				onQuotesChange: setQuotes,
 				pendingEdit,
@@ -3281,12 +3215,15 @@ export function ChatView({
 											 * reserved band. `data-agent-status` is the stable hook
 											 * the geometry test asserts on. */}
 											{viewMode === "chat" && (
-												<div
+												<button
+													type="button"
 													className={`gui-agent-capsule${snap?.working ? " gui-agent-capsule--working" : ""}`}
 													data-agent-status={
 														snap?.approvals.length ? "waiting" : snap?.working ? "working" : "idle"
 													}
-													title={`${t("general.assistant")} · ${agentCapsuleStatus}`}
+													aria-expanded={agentInfoExpanded}
+													title={t(agentInfoExpanded ? "general.agentInfoHide" : "general.agentInfoShow")}
+													onClick={toggleAgentInfo}
 												>
 													{showAvatars && (
 														<AgentAvatar
@@ -3299,7 +3236,10 @@ export function ChatView({
 													<span className="gui-agent-capsule-name">{t("general.assistant")}</span>
 													<span className="gui-agent-capsule-sep" aria-hidden="true" />
 													<span className="gui-agent-capsule-status">{agentCapsuleStatus}</span>
-												</div>
+													<span className="gui-agent-capsule-go" aria-hidden="true">
+														<Icon name="arrow-right-s" className="h-3 w-3" />
+													</span>
+												</button>
 											)}
 											{/* Message-tree navigation sits in the header row, left of the
 											 * session-info toggle. The old absolute button floated over
@@ -4069,6 +4009,8 @@ export function ChatView({
 								activePathIds: trustedPathIds,
 								pathEntries: pathEntriesOrNull,
 								modeCatalog: modes,
+								onOpenSettings,
+								onAddProvider,
 								planShowRequest,
 								onBranchTo: id => {
 									void branchTo(id, id).then(res => {

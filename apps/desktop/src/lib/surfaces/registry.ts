@@ -22,6 +22,7 @@ export type SurfaceId =
 	| "browser"
 	| "agent"
 	| "session"
+	| "session.agent"
 	| (string & {}); // 扩展槽注入（panel.tab.* / rail.*）
 
 export interface SurfaceProps {
@@ -60,6 +61,20 @@ export interface SurfaceDescriptor {
 }
 
 export const COMPACTION_PANEL_SURFACE = "ext:panel.tab.compaction";
+
+/** The agent's own session metadata tab, opened from the chat capsule. */
+export const AGENT_INFO_SURFACE = "session.agent";
+
+/** One tab per session (the target and the dedupe key are the session id). */
+export function sessionAgentTabDescriptor(sessionId: string, label: string): PanelTabDescriptor {
+	return {
+		surface: AGENT_INFO_SURFACE,
+		target: sessionId,
+		dedupeKey: sessionId,
+		label,
+		readOnly: false,
+	};
+}
 
 /** Address-only descriptor: summary content is re-read from the daemon. */
 export function compactionTabDescriptor(entryId: string, label: string): PanelTabDescriptor {
@@ -215,6 +230,19 @@ export const SURFACES: SurfaceDescriptor[] = [
 		group: "tertiary",
 		availability: "always",
 		defaultWidthFraction: 0.5,
+	},
+	// The ACTIVE session's own identity and controls, opened by the chat
+	// capsule: the agent's orb and live state, the model list, the thinking
+	// ladder, and the metadata the composer no longer carries. Tertiary —
+	// the capsule is its launcher, never the rail.
+	{
+		id: AGENT_INFO_SURFACE,
+		label: "general.agentInfoTab",
+		icon: "ai-agent",
+		group: "tertiary",
+		availability: "always",
+		requiresSession: true,
+		defaultWidthFraction: 0.42,
 	},
 ];
 

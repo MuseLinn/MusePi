@@ -71,11 +71,14 @@ const FIXTURE = `
 			<div class="gui-chat-column gui-float-card flex min-h-0 min-w-0 flex-1 flex-col" style="height: 620px; width: 760px; background: var(--color-surface)">
 				<div class="gui-chat-head">
 					<div class="gui-chat-head-left"><div class="gui-surface-mode"><button type="button">对话</button></div></div>
-					<div class="gui-agent-capsule" data-agent-status="idle">
+					<button type="button" class="gui-agent-capsule" aria-expanded="false" data-agent-status="idle">
 						<span class="gui-agent-capsule-name">助手</span>
 						<span class="gui-agent-capsule-sep" aria-hidden="true"></span>
 						<span class="gui-agent-capsule-status">空闲</span>
-					</div>
+						<span class="gui-agent-capsule-go" aria-hidden="true">
+							<svg width="12" height="12" viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor"/></svg>
+						</span>
+					</button>
 					<button class="gui-chat-info-toggle" type="button">i</button>
 				</div>
 				<div class="gui-chat-body relative flex min-h-0 min-w-0 flex-1 flex-col">
@@ -213,6 +216,131 @@ describe("agent capsule geometry", () => {
 		expect(after.capsuleOpacity).toBe("1");
 		// The messages really moved under it.
 		expect(after.firstRow.top).toBeLessThan(before.firstRow.top - 100);
+	});
+
+	test("is the head row's only pointer target", async () => {
+		const events = await page.evaluate(() => {
+			const head = document.querySelector<HTMLElement>(".gui-chat-head")!;
+			const capsule = document.querySelector<HTMLElement>(".gui-agent-capsule")!;
+			return {
+				headEvents: getComputedStyle(head).pointerEvents,
+				capsuleEvents: getComputedStyle(capsule).pointerEvents,
+				capsuleTag: capsule.tagName,
+			};
+		});
+		expect(events.headEvents).toBe("none");
+		expect(events.capsuleEvents).toBe("auto");
+		expect(events.capsuleTag).toBe("BUTTON");
+	});
+
+	test("activates from the keyboard as a button", async () => {
+		await page.evaluate(() => {
+			const capsule = document.querySelector<HTMLElement>(".gui-agent-capsule")!;
+			capsule.dataset.pressed = "0";
+			capsule.addEventListener("click", () => {
+				capsule.dataset.pressed = "1";
+			});
+			capsule.focus();
+		});
+		await page.keyboard.press("Enter");
+		expect(
+			await page.evaluate(() => document.querySelector<HTMLElement>(".gui-agent-capsule")!.dataset.pressed),
+		).toBe("1");
+	});
+
+	test("hover, keyboard focus and the expanded state reveal the trailing arrow", async () => {
+		const read = () =>
+			page.evaluate(() => {
+				const arrow = document.querySelector<HTMLElement>(".gui-agent-capsule-go")!;
+				const capsule = document.querySelector<HTMLElement>(".gui-agent-capsule")!;
+				const style = getComputedStyle(arrow);
+				return {
+					opacity: style.opacity,
+					transform: style.transform,
+					expanded: capsule.getAttribute("aria-expanded"),
+				};
+			});
+		// Resting: muted, pulled back.
+		const resting = await read();
+		expect(Number(resting.opacity)).toBeLessThan(0.5);
+
+		/** The arrow fades in 160ms; read after the transition, not on its frame. */
+		const settle = () =>
+			page.evaluate(() =>
+				Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))).then(() => {}),
+			);
+
+		await page.hover(".gui-agent-capsule");
+		await settle();
+		const hovered = await read();
+		expect(hovered.opacity).toBe("1");
+
+		await page.mouse.move(0, 0);
+		await page.focus(".gui-agent-capsule");
+		await settle();
+		const focused = await read();
+		expect(focused.opacity).toBe("1");
+		// The glyph rotates to point back towards the chat once its tab is open.
+		await page.evaluate(() => document.querySelector(".gui-agent-capsule")!.setAttribute("aria-expanded", "true"));
+		await settle();
+		const expanded = await read();
+		expect(expanded.expanded).toBe("true");
+		expect(expanded.opacity).toBe("1");
+		expect(expanded.transform.startsWith("matrix(-1")).toBe(true);
+		await page.evaluate(() => document.querySelector(".gui-agent-capsule")!.setAttribute("aria-expanded", "false"));
+		await page.evaluate(() => document.querySelector<HTMLElement>(".gui-agent-capsule")!.blur());
+	});
+
+	test("keeps a visible focus ring outside the pill, unclipped", async () => {
+		const ring = await page.evaluate(() => {
+			const capsule = document.querySelector<HTMLElement>(".gui-agent-capsule")!;
+			const column = document.querySelector<HTMLElement>(".gui-chat-column")!;
+			const head = document.querySelector<HTMLElement>(".gui-chat-head")!;
+			capsule.focus();
+			const style = getComputedStyle(capsule);
+			const box = capsule.getBoundingClientRect();
+			const card = column.getBoundingClientRect();
+			// The chat card clips its overflow, so the ring's extent (outline
+			// width + offset) must stay inside the card box.
+			const extent = Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+			return {
+				width: style.outlineWidth,
+				style: style.outlineStyle,
+				offset: style.outlineOffset,
+				focused: document.activeElement === capsule,
+				headOverflow: getComputedStyle(head).overflow,
+				slack: {
+					top: box.top - card.top,
+					left: box.left - card.left,
+					right: card.right - box.right,
+					bottom: card.bottom - box.bottom,
+				},
+				extent,
+			};
+		});
+		expect(ring.focused).toBe(true);
+		expect(ring.style).toBe("solid");
+		expect(ring.width).toBe("2px");
+		expect(ring.offset).toBe("2px");
+		// The head row itself never clips; the card's clip only trims what does
+		// not fit, and the ring keeps its full extent inside it.
+		expect(ring.headOverflow).toBe("visible");
+		for (const edge of Object.values(ring.slack)) expect(edge).toBeGreaterThanOrEqual(ring.extent);
+		await page.evaluate(() => document.querySelector<HTMLElement>(".gui-agent-capsule")!.blur());
+	});
+
+	test("drops the arrow transition under reduced motion", async () => {
+		await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "reduce" }]);
+		const durations = await page.evaluate(() => {
+			const capsule = document.querySelector<HTMLElement>(".gui-agent-capsule")!;
+			const arrow = document.querySelector<HTMLElement>(".gui-agent-capsule-go")!;
+			return [getComputedStyle(capsule).transitionDuration, getComputedStyle(arrow).transitionDuration];
+		});
+		// Chromium normalizes a zero duration to `1e-05s`; compare the time.
+		for (const duration of durations) {
+			for (const part of duration.split(",")) expect(Number.parseFloat(part)).toBeLessThan(0.001);
+		}
+		await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "no-preference" }]);
 	});
 
 	test("empty gutters give the body the full row width", async () => {

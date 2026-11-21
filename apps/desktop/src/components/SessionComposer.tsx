@@ -125,7 +125,6 @@ import { DebugToolsPanel } from "./DebugToolsPanel";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ScreenshotEditorDialog } from "./ScreenshotEditorDialog";
 import { SketchPad } from "./SketchPad";
-import type { ThinkingLevel } from "./ThinkingSelector";
 
 // Design style chips (设计稿 08) live in composer/design-styles.tsx —
 // shared with the welcome empty-state composer (same chips, same
@@ -172,15 +171,26 @@ export interface SessionComposerProps {
 	 *  fold re-derives cheaply and the memoized row only re-renders when the
 	 *  derived figures move. */
 	entries?: readonly SessionEntry[];
-	/** Current session thinking effort (snap.state.thinkingLevel). */
+	/** Render the model selector in the input row. On by default: a session
+	 *  host with no agent info tab (the right-panel side session) gets its model
+	 *  switch back that way; the active chat passes false because its capsule
+	 *  opens `session.agent` instead, and its composer stays free of the chip.
+	 *  The thinking segment renders only when the host supplies
+	 *  {@link onSetThinking} — the side session does not. */
+	keepModelChip?: boolean;
+	/** Chip props — read only while {@link keepModelChip} is set. */
 	thinkingLevel?: string | null;
-	/** Configured selector state (auto vs pinned) — menu highlight. */
+	/** Configured selector state (auto vs pinned) — menu highlight; the chip
+	 *  label shows the resolved effort. */
 	thinkingConfigLevel?: string | null;
-	/** Per-model effort ceiling; higher ladder rungs disable. */
+	/** Model's top supported effort — rendered rungs above it are capped. */
 	thinkingCeiling?: string | null;
-	/** Current model's exact effort ladder (getSupportedEfforts); undefined
-	 *  shows the full fixed ladder. */
+	/** Model's real efforts, lowest first. */
 	thinkingEfforts?: readonly string[] | null;
+	onSetThinking?(level: string | null): void;
+	onModelChange?(modelId: string): void;
+	onAddProvider?(): void;
+	presetModelId?: string | null;
 	/** Staged quote and annotation contexts. Their model text is derived at send. */
 	quotes: DisplayContext[];
 	onQuotesChange(next: DisplayContext[]): void;
@@ -192,15 +202,6 @@ export interface SessionComposerProps {
 		images?: { type: "image"; data: string; mimeType: string }[];
 	} | null;
 	onEditConsumed?(): void;
-	onSetThinking?(level: ThinkingLevel | null): void;
-	/** Model switch inside the composer (session.setModel) — parent re-fetches
-	 *  per-model thinking info (ceiling/ladder) that the wire event can't
-	 *  drive (the session store reference is stable across model changes). */
-	onModelChange?(modelId: string): void;
-	/** 添加新提供商 menu action — opens the settings providers page. */
-	onAddProvider?(): void;
-	/** Model preselect carried from the welcome composer. */
-	presetModelId?: string | null;
 	/** welcome 空态(会话态不传)。 */
 	welcome?: boolean;
 	/** Focus mode (⌘⇧E): the composer fills the surface. */
@@ -275,18 +276,10 @@ export function SessionComposer({
 	sessionId,
 	cwd,
 	entries,
-	thinkingLevel,
-	thinkingConfigLevel,
-	onSetThinking,
-	onModelChange,
-	onAddProvider,
-	thinkingCeiling,
-	thinkingEfforts,
 	quotes,
 	onQuotesChange,
 	pendingEdit,
 	onEditConsumed,
-	presetModelId,
 	focused,
 	onToggleFocus,
 	onBtw,
@@ -299,6 +292,15 @@ export function SessionComposer({
 	carryChips,
 	onDraftChange,
 	attachmentsApi,
+	keepModelChip = true,
+	thinkingLevel,
+	thinkingConfigLevel,
+	thinkingCeiling,
+	thinkingEfforts,
+	onSetThinking,
+	onModelChange,
+	onAddProvider,
+	presetModelId,
 }: SessionComposerProps): ReactNode {
 	const pet = useCompanionArt();
 	// composer 座位槽(dock / left / right):
@@ -2293,29 +2295,37 @@ export function SessionComposer({
 						 * above — the old informational toolbar chip was a duplicate
 						 * badge and is gone.) */}
 						{/* Focus mode sits between the attach menu and the model
-						 * selector. */}
+						 * slot. The active chat's model and thinking selectors
+						 * moved to the agent info tab (the capsule opens it), so
+						 * the input row keeps only what acts on the message being
+						 * written. A surface with no capsule — the side session —
+						 * asks for the chip to get its model selector back; the
+						 * thinking segment appears only when the host supplies
+						 * `onSetThinking`, which the side session does not. */}
 						{onToggleFocus && <FocusButton focused={focused ?? false} onPress={onToggleFocus} />}
-						<ModelThinkingCapsule
-							rpc={rpc}
-							sessionId={sessionId}
-							presetModelId={presetModelId}
-							currentModelId={contextUsage?.model ?? null}
-							thinkingLevel={thinkingLevel}
-							thinkingConfigLevel={thinkingConfigLevel}
-							thinkingCeiling={thinkingCeiling}
-							thinkingEfforts={thinkingEfforts}
-							allowSetDefault
-							onAddProvider={onAddProvider}
-							onModelSelect={id => {
-								if (id) onModelChange?.(id);
-								// The daemon finished the switch before this
-								// fires — refresh the ring/card immediately so
-								// they show the new model's window without
-								// waiting for the next 3s poll.
-								refreshUsage();
-							}}
-							onSetThinking={onSetThinking}
-						/>
+						{keepModelChip ? (
+							<ModelThinkingCapsule
+								rpc={rpc}
+								sessionId={sessionId}
+								presetModelId={presetModelId}
+								currentModelId={contextUsage?.model ?? null}
+								thinkingLevel={thinkingLevel}
+								thinkingConfigLevel={thinkingConfigLevel}
+								thinkingCeiling={thinkingCeiling}
+								thinkingEfforts={thinkingEfforts}
+								allowSetDefault
+								onAddProvider={onAddProvider}
+								onModelSelect={id => {
+									if (id) onModelChange?.(id);
+									// The daemon finished the switch before this
+									// fires — refresh the ring/card immediately so
+									// they show the new model's window without
+									// waiting for the next 3s poll.
+									refreshUsage();
+								}}
+								onSetThinking={onSetThinking}
+							/>
+						) : null}
 						{/* conversation.input.model 座位槽:
 						 * 模型选择器旁的事实位——积分余额、模型配额、该模型的
 						 * 专属控件都挂这里,而不是挤进模型菜单里。 */}
