@@ -7,11 +7,12 @@
  * a pending request and returns a promise that only resolves when a GUI
  * client answers via `tool.approve` / `tool.deny` (daemon RPC → resolve).
  *
- * Only the approval surface is implemented; every other UI-context method is
- * a no-op so interactive-only tools degrade to "no UI" behaviour instead of
- * hanging. (The wrapper also emits `tool_approval_requested` before select,
- * but the ExtensionRunner is internal to session creation — the daemon
- * cannot subscribe, so the request carries the rendered prompt only.)
+ * Only the approval select, generic ask prompts and the agent-secret card are
+ * implemented; every other UI-context method is a no-op so interactive-only
+ * tools degrade to "no UI" behaviour instead of hanging. (The wrapper also
+ * emits `tool_approval_requested` before select, but the ExtensionRunner is
+ * internal to session creation — the daemon cannot subscribe, so the request
+ * carries the rendered prompt only.)
  */
 import type {
 	ExtensionAskDialogQuestion,
@@ -19,6 +20,7 @@ import type {
 	ExtensionUIContext,
 } from "../extensibility/extensions/types";
 import type { Theme } from "../modes/theme/theme";
+import type { AgentSecretAnswer, AgentSecretRequest, AgentSecretUIContext } from "../secrets/agent-store";
 
 export interface PendingApproval {
 	requestId: string;
@@ -48,6 +50,31 @@ export interface PendingAsk {
 	 *  GUI card renders as tabs; single-select/input modes leave this null. */
 	questions: ExtensionAskDialogQuestion[] | null;
 	resolve(choice: PendingAskAnswer): void;
+}
+
+/**
+ * A `request_secret` call parked on user input. `name`/`purpose` come from the
+ * tool; the value never enters this record. The daemon's SecretService answers
+ * it (persisting a `save` itself), then resolves the promise the tool awaits.
+ */
+export interface PendingSecret {
+	requestId: string;
+	name: string;
+	purpose: string;
+	/** `"fill"` is the only kind the tool sends today. `"allow"` remains in the
+	 *  wire contract for future consent hosts; nothing pushes it now. */
+	kind: "fill" | "allow";
+	resolve(answer: AgentSecretAnswer): void;
+}
+
+/** Wire payload for a `secret-request` push; shared by live broadcast and replay. */
+export function secretRequestPayload(record: PendingSecret): {
+	requestId: string;
+	name: string;
+	purpose: string;
+	kind: "fill" | "allow";
+} {
+	return { requestId: record.requestId, name: record.name, purpose: record.purpose, kind: record.kind };
 }
 
 /** Wire payload for an `approval-request` push. Shared by the live broadcast,
@@ -92,7 +119,7 @@ export interface RecentApprovalResolution {
 }
 
 export interface ApprovalBridge {
-	/** UI context injected into the session (approval + ask). */
+	/** UI context injected into the session (approval + ask + secret). */
 	uiContext: ExtensionUIContext;
 	/** Active approval requests keyed by requestId. */
 	pending: Map<string, PendingApproval>;
@@ -107,10 +134,15 @@ export interface ApprovalBridge {
 	 *  select/input modes take a label/text (string, null cancels); dialog
 	 *  mode takes the full ExtensionAskDialogResult shape. */
 	resolveAsk(requestId: string, answer: string | ExtensionAskDialogResult | null): boolean;
+	/** Active secret requests keyed by requestId. */
+	pendingSecrets: Map<string, PendingSecret>;
+	/** Answer a pending secret request. Persistence happens in SecretService
+	 *  before this settlement; the tool only learns which action won. */
+	resolveSecret(requestId: string, action: AgentSecretAnswer["action"]): boolean;
 	/** Recently settled requests (bounded TTL). A client that fetched a
 	 *  snapshot before attaching its stream replays these to clear cards that
 	 *  were resolved in the snapshot→subscribe window. */
-	recentResolutions(): { approvals: RecentApprovalResolution[]; asks: string[] };
+	recentResolutions(): { approvals: RecentApprovalResolution[]; asks: string[]; secrets: string[] };
 }
 
 let counter = 0;
@@ -122,6 +154,10 @@ export const DEFAULT_APPROVAL_TIMEOUT_MS = 10 * 60_000;
 export interface ApprovalBridgeOptions {
 	/** 0 disables the timeout (tests and deliberate always-wait setups). */
 	timeoutMs?: number;
+	/** Push a newly parked secret request to subscribers. */
+	onSecretRequest?: (record: PendingSecret) => void;
+	/** Called after a secret request settles, including the timeout cancel. */
+	onSecretResolved?: (requestId: string) => void;
 }
 
 export function createApprovalBridge(
@@ -136,11 +172,13 @@ export function createApprovalBridge(
 ): ApprovalBridge {
 	const pending = new Map<string, PendingApproval>();
 	const pendingAsks = new Map<string, PendingAsk>();
+	const pendingSecrets = new Map<string, PendingSecret>();
 	const listeners = new Set<() => void>();
 	const timeoutMs = options.timeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
 	const timers = new Map<string, ReturnType<typeof setTimeout>>();
 	const recentApprovals = new Map<string, RecentApprovalResolution>();
 	const recentAsks = new Map<string, number>();
+	const recentSecrets = new Map<string, number>();
 	const RECENT_TTL_MS = 60_000;
 	const RECENT_MAX = 64;
 	const pruneRecent = (): void => {
@@ -150,6 +188,9 @@ export function createApprovalBridge(
 		}
 		for (const [requestId, at] of recentAsks) {
 			if (at < cutoff) recentAsks.delete(requestId);
+		}
+		for (const [requestId, at] of recentSecrets) {
+			if (at < cutoff) recentSecrets.delete(requestId);
 		}
 		while (recentApprovals.size > RECENT_MAX) {
 			const oldest = recentApprovals.keys().next().value;
@@ -161,6 +202,11 @@ export function createApprovalBridge(
 			if (oldest === undefined) break;
 			recentAsks.delete(oldest);
 		}
+		while (recentSecrets.size > RECENT_MAX) {
+			const oldest = recentSecrets.keys().next().value;
+			if (oldest === undefined) break;
+			recentSecrets.delete(oldest);
+		}
 	};
 	const rememberApproval = (requestId: string, approved: boolean, note?: string): void => {
 		recentApprovals.set(requestId, { requestId, approved, ...(note ? { note } : {}), at: Date.now() });
@@ -168,6 +214,10 @@ export function createApprovalBridge(
 	};
 	const rememberAsk = (requestId: string): void => {
 		recentAsks.set(requestId, Date.now());
+		pruneRecent();
+	};
+	const rememberSecret = (requestId: string): void => {
+		recentSecrets.set(requestId, Date.now());
 		pruneRecent();
 	};
 	const notifyApprovals = (): void => {
@@ -190,7 +240,7 @@ export function createApprovalBridge(
 		timers.set(requestId, timer);
 	};
 
-	const uiContext: ExtensionUIContext = {
+	const uiContext: ExtensionUIContext & AgentSecretUIContext = {
 		// A page that holds the turn is answered through the GUI's widget card.
 		widgetAnswers: true,
 		// The approval gate awaits this exact select; any OTHER select (ask
@@ -329,6 +379,33 @@ export function createApprovalBridge(
 			onAsk(record);
 			return await promise;
 		},
+		async requestSecret(request: AgentSecretRequest) {
+			const requestId = `daemon-secret-${Date.now()}-${++counter}`;
+			const { promise, resolve } = Promise.withResolvers<AgentSecretAnswer | undefined>();
+			const record: PendingSecret = {
+				requestId,
+				name: request.name,
+				purpose: request.purpose,
+				kind: request.kind,
+				resolve: answer => {
+					if (!pendingSecrets.has(requestId)) return;
+					pendingSecrets.delete(requestId);
+					notifyApprovals();
+					resolve(answer);
+				},
+			};
+			pendingSecrets.set(requestId, record);
+			armTimeout(requestId, () => {
+				// Walking away is a cancel, never an implicit save.
+				if (!pendingSecrets.has(requestId)) return;
+				record.resolve({ action: "cancel" });
+				options.onSecretResolved?.(requestId);
+				rememberSecret(requestId);
+			});
+			options.onSecretRequest?.(record);
+			notifyApprovals();
+			return await promise;
+		},
 		setEditorText: () => {},
 		pasteToEditor: () => {},
 		getEditorText: () => "",
@@ -380,11 +457,22 @@ export function createApprovalBridge(
 			rememberAsk(requestId);
 			return true;
 		},
+		pendingSecrets,
+		resolveSecret(requestId, action) {
+			const record = pendingSecrets.get(requestId);
+			if (!record) return false;
+			clearTimer(requestId);
+			record.resolve({ action });
+			options.onSecretResolved?.(requestId);
+			rememberSecret(requestId);
+			return true;
+		},
 		recentResolutions() {
 			pruneRecent();
 			return {
 				approvals: [...recentApprovals.values()],
 				asks: [...recentAsks.keys()],
+				secrets: [...recentSecrets.keys()],
 			};
 		},
 	};

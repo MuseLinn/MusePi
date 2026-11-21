@@ -42,6 +42,9 @@ import {
 import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
 import type {
 	MessageDisplayContext,
+	SecretAnswerParams,
+	SecretDeleteParams,
+	SecretSetParams,
 	SessionEntry,
 	AgentEvent as WireAgentEvent,
 	WireMessage,
@@ -366,6 +369,7 @@ import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
 import { ResourcesService } from "./services/resources-service";
 import { ScheduleService } from "./services/schedule-service";
+import { SecretService } from "./services/secret-service";
 import { SessionInspectionService } from "./services/session-inspection-service";
 import { SessionPresenceService } from "./services/session-presence-service";
 import { SessionService } from "./services/session-service";
@@ -732,6 +736,13 @@ export class DaemonServer {
 		this.#services.register(
 			new ApprovalService({
 				get: sessionId => this.#host.get(sessionId),
+			}),
+		);
+		this.#services.register(
+			new SecretService({
+				agentDir: () => this.#host.settings()?.getAgentDir() ?? getAgentDir(),
+				get: sessionId => this.#host.get(sessionId),
+				allSessions: () => this.#host.allSessions(),
 			}),
 		);
 		this.#services.register(
@@ -6358,6 +6369,21 @@ export class DaemonServer {
 				return this.#services
 					.get<ApprovalService>("approvals")
 					.answer((params ?? {}) as { sessionId: string; requestId: string; answer: string | null });
+			}
+			case "secret.status": {
+				return this.#services.get<SecretService>("secrets").status();
+			}
+			case "secret.list": {
+				return this.#services.get<SecretService>("secrets").list();
+			}
+			case "secret.set": {
+				return this.#services.get<SecretService>("secrets").set((params ?? {}) as SecretSetParams);
+			}
+			case "secret.delete": {
+				return this.#services.get<SecretService>("secrets").delete((params ?? {}) as SecretDeleteParams);
+			}
+			case "secret.answer": {
+				return this.#services.get<SecretService>("secrets").answer((params ?? {}) as SecretAnswerParams);
 			}
 			case "usage.reports": {
 				// 委托 UsageService（P1 服务抽取；原实现整体搬移至

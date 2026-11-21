@@ -58,6 +58,7 @@ import { HubTool, isIrcEnabled } from "./hub";
 import { InspectImageTool } from "./inspect-image";
 import { KnowledgeTool } from "./knowledge";
 import { LearnTool } from "./learn";
+import { ListSecretsTool } from "./list-secrets";
 import { ManageSkillTool } from "./manage-skill";
 import { MemoryEditTool } from "./memory-edit";
 import { MemoryRecallTool } from "./memory-recall";
@@ -66,6 +67,7 @@ import { MemoryRetainTool } from "./memory-retain";
 import { NotifyUserTool } from "./notify-user";
 import { wrapToolWithMetaNotice } from "./output-meta";
 import { ReadTool } from "./read";
+import { RequestSecretTool } from "./request-secret";
 import type { PlanProposalHandler } from "./resolve";
 import { SecurityScanTool } from "./security-scan";
 import { supportsExternalThinking, ThinkTool } from "./think";
@@ -100,6 +102,7 @@ export * from "./hub";
 export * from "./image-gen";
 export * from "./inspect-image";
 export * from "./learn";
+export * from "./list-secrets";
 export * from "./manage-skill";
 export * from "./memory-edit";
 export * from "./memory-recall";
@@ -107,6 +110,7 @@ export * from "./memory-reflect";
 export * from "./memory-retain";
 export * from "./read";
 export * from "./report-tool-issue";
+export * from "./request-secret";
 export * from "./resolve";
 export * from "./review";
 export * from "./security-scan";
@@ -467,6 +471,8 @@ export const BUILTIN_TOOLS: Record<BuiltinToolName, ToolFactory> = {
 	hub: s => new HubTool(s),
 	todo: s => new TodoTool(s),
 	knowledge: s => new KnowledgeTool(s),
+	request_secret: s => new RequestSecretTool(s),
+	list_secrets: s => new ListSecretsTool(s),
 	// Session-creation gate: the prompt and tool schema are fixed once a
 	// session starts, so the toggle only applies to sessions created after it.
 	notify_user: s => (s.settings.get("notifyUser") ? new NotifyUserTool(s) : null),

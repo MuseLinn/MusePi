@@ -1,5 +1,7 @@
 # Secret Obfuscation
 
+English | [中文](secrets.zh-CN.md)
+
 Prevents sensitive values (API keys, tokens, passwords) from being sent to LLM providers. When enabled, secrets are replaced before outbound text content leaves the process. Reversible obfuscation placeholders are restored when session context is rebuilt for display or resume.
 
 ## Enabling
@@ -13,9 +15,11 @@ secrets:
 
 ## How it works
 
-1. On session startup, secrets are collected from two sources:
+1. On session startup, entries come from configured sources and the agent secret store:
    - **Environment variables** whose names match common secret patterns (`KEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PASS`, `AUTH`, `CREDENTIAL`, `PRIVATE`, `OAUTH`) with values >= 8 characters
    - **`secrets.yml` files** (see below)
+   - **Built-in credential patterns** (GitHub/GitLab/OpenAI-style tokens), matched lazily
+   - **Agent secrets** saved through the `request_secret` card (always loaded, independent of `secrets.enabled`; see [Agent secrets](#agent-secrets))
 
 2. Outbound text messages to the LLM have secret values replaced with deterministic placeholders like `#AB12#`, `#AB12:L#`, or `#GITHUBTOKEN_AB12:L#`.
 
@@ -124,11 +128,130 @@ Regex entries always scan globally (the `g` flag is enforced automatically). The
 
 Environment variables are collected first, then file-defined entries are appended. File entries can cover secrets that don't live in env vars (config files, hardcoded values, etc.). Env and file entries are not deduplicated against each other, so a plain value present in both is registered twice; both placeholders restore to the same secret, so deobfuscation is unaffected.
 
+## Agent secrets
+
+Agent secrets are credentials the model discovers it needs at runtime — an API
+token for a `curl`, a registry password. Unlike `secrets.yml`, the value is
+typed by the user into a card after the agent asks for it, so the model knows
+the name but never the value.
+
+### Tools
+
+| Tool             | Input                | Result                                                    |
+| ---------------- | -------------------- | --------------------------------------------------------- |
+| `request_secret` | `name`, `purpose`    | Environment variable name and a status; never the value   |
+| `list_secrets`   | none                 | Name, purpose, scope and availability; never the value    |
+
+`name` must match `/^[A-Z][A-Z0-9_]{0,63}$/`. A stored, decryptable value
+answers immediately with the environment variable name; the only card the tool
+ever pushes is a `secret-request` with `kind:"fill"`. `kind:"allow"` remains an
+accepted action at the wire/service level for future hosts that add a consent
+policy. A card times out as a cancel after ten minutes. Interactive collection
+requires a host that implements the `requestSecret` UI channel (the daemon
+approval bridge); a headless/TUI host returns an error telling the user to add
+the secret from Settings → Secrets.
+
+### Storage
+
+```
+<agentDir>/agent-secrets/
+  secrets.json    # AES-256-GCM envelope per name (values only)
+  metadata.json   # name, purpose, scope, timestamps (0600, atomic write)
+  .master.key     # per-profile master key (0600; optional MUSEPI_AGENT_SECRET_KEY override)
+```
+
+The store is always encrypted; there is no plaintext mode. Values are
+AES-256-GCM envelopes derived with HKDF from the profile master key, reusing
+the connector vault envelope implementation. The metadata sidecar never
+contains a value, and the encrypted file never contains one either.
+
+`scope` is `"all"` in P0: every stored secret is available to every session.
+Workspace/bot scopes are a future union extension, not a current field.
+
+### Bash injection
+
+Every bash child process receives `MUSEPI_SECRET_<NAME>`, for every decryptable
+stored entry whose scope matches the session (P0: `"all"`). The value is only
+in that child's environment:
+
+- `process.env` is never modified.
+- A model-supplied `env` entry of the same name is overridden by the stored
+  value.
+- Tool output (foreground, timeout/cancel errors, streamed chunks, async job
+  text, ACP terminal polls) replaces the value with `[secret:NAME]`. Streamed
+  partials are redacted from the accumulated tail, so a value split across two
+  chunks is still replaced.
+- If a command prints the variable, `[secret:NAME]` is the expected marker, not
+  a command failure; the model is told not to retry or report an error for it.
+
+### Provider boundary
+
+At session start, stored agent secrets join the session's `SecretObfuscator` as
+plain obfuscate-mode entries with `friendlyName` = the secret name. A save
+mid-session registers the value into every live session's obfuscator
+immediately, including the session that performed the first save when the store
+was empty at startup. Provider requests therefore carry a reversible
+placeholder such as `#GITHUBTOKEN_AB12:L#`, never the value.
+
+Agent secrets are **always** covered: a value the user explicitly saved in the
+safety card is a separate grant from the generic scanning feature. The session
+builds an agent-secret obfuscator even when `secrets.enabled` is false. That
+toggle only controls the generic sources (environment scanning, `secrets.yml`,
+built-in credential patterns); with it off, those sources are not registered,
+while agent-card values still are.
+
+### Daemon RPC
+
+| RPC              | Params                                           | Result                                     |
+| ---------------- | ------------------------------------------------ | ------------------------------------------ |
+| `secret.status`  | `{}`                                             | `{ mode: "encrypted", count }`             |
+| `secret.list`    | `{}`                                             | `{ entries: SecretEntryView[], count }`    |
+| `secret.set`     | `{ name, value, purpose?, scope? }`              | `{ entry }`                                |
+| `secret.delete`  | `{ name }`                                       | `{ ok: true }` (idempotent)                |
+| `secret.answer`  | `{ requestId, action, value?, scope? }`          | `{ ok: true }`                             |
+
+Timestamps in `SecretEntryView` are epoch milliseconds. `secret.answer` saves
+the value in the daemon before resolving the tool's promise, so the tool only
+sees which action won. Unknown or expired request ids fail with
+`Unknown secret request: <id>`. No response, push, log or transcript contains a
+value.
+
+### Known limitations
+
+- Values shorter than 8 characters are rejected (`Secret value must be at least
+  8 characters`). The obfuscator only mints reversible placeholders for plain
+  values of at least 8 characters, so allowing a 4-digit PIN would send it to
+  the model unredacted. Supporting short secrets requires a separate
+  replace-mode implementation, not a threshold bypass.
+- P0 scope is `"all"`; per-workspace and per-bot scoping are future extensions.
+- An entry whose envelope cannot be decrypted stays listed as unavailable.
+  Save the value again through `request_secret` or Settings → Secrets to repair
+  it; do not edit the sidecar by hand.
+- Deleting a secret removes it from disk and from future bash injection, but an
+  obfuscator already live in a running session keeps replacing that old value
+  for the session's lifetime. This is intentional: removing coverage could make
+  an already-seen value provider-visible again.
+- Bash's raw-output artifact is written by the executor before output
+  redaction, so a command that echoes a value can leave it in that local
+  artifact file. The value never enters the tool result, and the
+  provider-boundary obfuscator (always active for agent secrets) still replaces
+  it if the artifact is read back into the model context.
+- The envelope and metadata writes are separate atomic writes. A crash between
+  them can leave an orphaned encrypted value (invisible, harmless) or a listed
+  name whose value is missing (reported as unavailable).
+
 ## Key files
 
 - `packages/coding-agent/src/secrets/index.ts` -- loading, merging, env var collection
 - `packages/coding-agent/src/secrets/obfuscator.ts` -- `SecretObfuscator` class, placeholder generation, message obfuscation
 - `packages/coding-agent/src/secrets/regex.ts` -- regex literal parsing and compilation
+- `packages/coding-agent/src/secrets/agent-store.ts` -- encrypted agent secret store, metadata sidecar, validation
+- `packages/coding-agent/src/secrets/agent-runtime.ts` -- session loading, dynamic obfuscator registration, bash env and output scrub
+- `packages/coding-agent/src/tools/request-secret.ts` -- the interactive secret card tool
+- `packages/coding-agent/src/tools/list-secrets.ts` -- metadata-only listing tool
+- `packages/coding-agent/src/daemon/services/secret-service.ts` -- `secret.*` RPC implementation
+- `packages/coding-agent/src/daemon/approval-bridge.ts` -- secret card pending table, timeout and settlement
+- `packages/wire/src/secret.ts` -- daemon/GUI secret contract
 - `packages/coding-agent/src/config/settings-schema.ts` -- `secrets.enabled` setting definition
 
 ## See also

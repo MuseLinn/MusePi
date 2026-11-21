@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { SENSITIVE_TOKEN_RE } from "@musepi/pi-ai/providers/transform-messages";
 import { getSecretPlaceholderKeyPath, isEnoent, logger } from "@musepi/pi-utils";
 import { YAML } from "bun";
+import { loadAgentSecretEntries, registerAgentSecretObfuscator } from "./agent-runtime";
 import { type SecretEntry, SecretObfuscator } from "./obfuscator";
 import { sanitizeSecretFriendlyName, secretEntriesNeedPlaceholderKey } from "./placeholder";
 import { compileSecretRegex } from "./regex";
@@ -149,6 +150,8 @@ async function readPlaceholderKeyFile(keyPath: string, retry: boolean): Promise<
 
 type RawSecretEntry = Omit<SecretEntry, "friendlyName"> & { friendlyName?: unknown };
 
+export * from "./agent-runtime";
+export * from "./agent-store";
 export {
 	deobfuscateSessionContext,
 	deobfuscateToolArguments,
@@ -223,10 +226,21 @@ export function builtinCredentialSecretEntries(): SecretEntry[] {
 	];
 }
 
+export interface BuildSecretObfuscatorOptions {
+	/**
+	 * When false, build from agent-card secrets only: the generic sources
+	 * (`secrets.yml`, env scanning, built-in credential patterns) stay behind
+	 * the `secrets.enabled` toggle, while explicitly user-saved agent secrets
+	 * are always covered.
+	 */
+	includeConfiguredSecrets?: boolean;
+}
+
 /**
  * Build the session secret obfuscator from every configured source: secrets.yml
- * (project + global), secret-shaped environment variables, and the built-in
- * credential patterns. Callers gate on `secrets.enabled`.
+ * (project + global), secret-shaped environment variables, the built-in
+ * credential patterns, and agent-card secrets. The generic sources follow
+ * `secrets.enabled` through `includeConfiguredSecrets`; agent secrets do not.
  *
  * Only CONFIGURED entries force startup key creation: a configured
  * obfuscate-mode secret — or a default (no custom `replacement`) replace-mode
@@ -248,13 +262,21 @@ export async function buildSecretObfuscator(
 	cwd: string,
 	agentDir: string,
 	keyDir?: string,
+	options: BuildSecretObfuscatorOptions = {},
 ): Promise<SecretObfuscator | undefined> {
-	const fileEntries = await logger.time("loadSecrets", loadSecrets, cwd, agentDir);
-	const envEntries = collectEnvSecrets();
+	const includeConfigured = options.includeConfiguredSecrets ?? true;
+	const fileEntries = includeConfigured ? await logger.time("loadSecrets", loadSecrets, cwd, agentDir) : [];
+	const agentEntries = await logger.time("loadAgentSecretEntries", loadAgentSecretEntries, agentDir);
+	const envEntries = includeConfigured ? collectEnvSecrets() : [];
 	// Built-in credential-pattern entries come last so user-configured entries
 	// (plain literals, custom regexes) take precedence in the scan order.
-	const allEntries = [...envEntries, ...fileEntries, ...builtinCredentialSecretEntries()];
-	const needsPlaceholderKey = secretEntriesNeedPlaceholderKey([...envEntries, ...fileEntries]);
+	const allEntries = [
+		...envEntries,
+		...fileEntries,
+		...agentEntries,
+		...(includeConfigured ? builtinCredentialSecretEntries() : []),
+	];
+	const needsPlaceholderKey = secretEntriesNeedPlaceholderKey([...envEntries, ...fileEntries, ...agentEntries]);
 	const placeholderKey = needsPlaceholderKey
 		? await getSecretPlaceholderKey(keyDir)
 		: await getExistingSecretPlaceholderKey(keyDir);
@@ -262,10 +284,42 @@ export async function buildSecretObfuscator(
 	if (allEntries.length > 0) {
 		obfuscator = new SecretObfuscator(allEntries, placeholderKey ?? (() => getSecretPlaceholderKeySync(keyDir)));
 	}
-	if (obfuscator?.hasSecrets() !== true && placeholderKey !== undefined) {
+	// The redaction-only fallback protects the placeholder key itself. It belongs
+	// to the generic feature: with configured secrets off and no agent entry,
+	// callers must get undefined so `secretsEnabled`-driven prompt copy stays off.
+	if (includeConfigured && obfuscator?.hasSecrets() !== true && placeholderKey !== undefined) {
 		obfuscator = new SecretObfuscator([{ type: "plain", mode: "replace", content: placeholderKey }], placeholderKey);
 	}
+	// Mid-session saves reach this instance through `addSecret`; a session that
+	// starts later gets the same values from `loadAgentSecretEntries` above.
+	if (obfuscator) registerAgentSecretObfuscator(agentDir, obfuscator);
 	return obfuscator;
+}
+
+/**
+ * Session-start entry point. One merged obfuscator: generic sources follow
+ * `secrets.enabled`, while agent-card secrets are always included because the
+ * user explicitly saved them.
+ */
+export async function buildSessionSecretObfuscator(
+	cwd: string,
+	agentDir: string,
+	keyDir: string | undefined,
+	genericSecretsEnabled: boolean,
+): Promise<SecretObfuscator> {
+	const obfuscator = await buildSecretObfuscator(cwd, agentDir, keyDir, {
+		includeConfiguredSecrets: genericSecretsEnabled,
+	});
+	if (obfuscator) return obfuscator;
+	// Inert session instance for the default first-use path: empty entries plus
+	// the lazy key provider. `hasSecrets()` stays false (no prompt copy, no key
+	// file), but the session is registered so a save in THIS session can call
+	// `addSecret` and flip every boundary check on immediately. Without this,
+	// a fresh user with `secrets.enabled=false` would save their first secret
+	// into an unregistered session and get pass-through provider coverage.
+	const inert = new SecretObfuscator([], () => getSecretPlaceholderKeySync(keyDir));
+	registerAgentSecretObfuscator(agentDir, inert);
+	return inert;
 }
 
 async function loadSecretsFile(filePath: string): Promise<SecretEntry[]> {
