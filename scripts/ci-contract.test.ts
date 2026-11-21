@@ -260,19 +260,13 @@ function requiredChecksInterpreter(): string | undefined {
 }
 
 describe("changes classifier", () => {
-	// The step's own script, run against throwaway repositories: the trigger
-	// filter and the classification must agree, and a docs-only push must not
-	// buy the build matrix.
+	// The step's own script, run against throwaway repositories. The step must
+	// not re-parse the workflow to learn what "code" means: it refuses the
+	// matrix only when every changed path is documentation.
 	const bash = Bun.which("bash");
 	const git = Bun.which("git");
 	const diffStep = readYaml(".github/workflows/ci.yml").jobs?.changes?.steps?.find(step => step.id === "diff");
 	const script = diffStep?.run ?? "";
-
-	function skipIfNoShell(): boolean {
-		if (bash && git) return false;
-		console.warn("bash/git unavailable; skipping the changes classifier contract");
-		return true;
-	}
 
 	function gitIn(cwd: string, ...args: string[]): string {
 		const result = Bun.spawnSync([git!, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
@@ -309,25 +303,13 @@ describe("changes classifier", () => {
 		return work;
 	}
 
-	/** Commit `changes`, push, and classify the pushed range. */
-	function classify(work: string, changes: Record<string, string>, baseSha?: string): string {
-		const before = gitIn(work, "rev-parse", "HEAD");
-		for (const [file, content] of Object.entries(changes)) {
-			fs.mkdirSync(path.dirname(path.join(work, file)), { recursive: true });
-			fs.writeFileSync(path.join(work, file), content);
-		}
-		gitIn(work, "add", "-A");
-		gitIn(work, "commit", "--quiet", "-m", "change");
-		gitIn(work, "push", "--quiet", "origin", "main");
+	/** Run the step as the runner does, returning `code` and the raw output. */
+	function runStep(work: string, baseSha: string, env: Record<string, string> = {}): { code: string; log: string } {
 		const output = path.join(path.dirname(work), "github-output");
 		fs.writeFileSync(output, "");
 		const result = Bun.spawnSync([bash!, "-c", script], {
 			cwd: work,
-			env: {
-				...process.env,
-				GITHUB_OUTPUT: output,
-				BASE_SHA: baseSha ?? before,
-			},
+			env: { ...process.env, GITHUB_OUTPUT: output, BASE_SHA: baseSha, ...env },
 			stdout: "pipe",
 			stderr: "pipe",
 		});
@@ -335,44 +317,157 @@ describe("changes classifier", () => {
 		// case) to stderr; only the step's own `::error::` annotations matter.
 		expect(result.stderr.toString()).not.toContain("::error::");
 		expect(result.exitCode).toBe(0);
-		const match = /^code=(true|false)$/m.exec(fs.readFileSync(output, "utf8"));
-		expect(match, fs.readFileSync(output, "utf8")).toBeDefined();
-		return match![1]!;
+		const written = fs.readFileSync(output, "utf8");
+		const match = /^code=(true|false)$/m.exec(written);
+		expect(match, written).toBeDefined();
+		return { code: match![1]!, log: `${result.stdout.toString()}${result.stderr.toString()}` };
 	}
 
+	function commit(work: string, mutate: () => void): string {
+		mutate();
+		gitIn(work, "add", "-A");
+		gitIn(work, "commit", "--quiet", "-m", "change");
+		gitIn(work, "push", "--quiet", "origin", "main");
+		return gitIn(work, "rev-parse", "HEAD~1");
+	}
+
+	function classify(work: string, changes: Record<string, string>, baseSha?: string): string {
+		const before = commit(work, () => {
+			for (const [file, content] of Object.entries(changes)) {
+				fs.mkdirSync(path.dirname(path.join(work, file)), { recursive: true });
+				fs.writeFileSync(path.join(work, file), content);
+			}
+		});
+		return runStep(work, baseSha ?? before).code;
+	}
+
+	const BASE_FILES = {
+		"packages/x/entry.ts": "export {};\n",
+		"docs/guide.md": "# guide\n",
+		"patches/a.patch": "patch\n",
+		"bazel/defs.bzl": "# defs\n",
+	};
+
 	it("exists as a script the contract test can run", () => {
-		expect(script).toContain("git diff --quiet");
+		expect(script).toContain("git diff --name-only");
 		expect(diffStep?.env?.BASE_SHA).toContain("github.event.before");
 	});
 
 	it("classifies a docs-only push as no code change", () => {
-		if (skipIfNoShell()) return;
-		const work = fixture({ "packages/x/entry.ts": "export {};\n", "docs/guide.md": "# guide\n" });
+		if (!bash || !git) return;
+		const work = fixture(BASE_FILES);
 		expect(classify(work, { "docs/guide.md": "# guide\n\nmore\n" })).toBe("false");
 	});
 
-	it("classifies a code push as a code change", () => {
-		if (skipIfNoShell()) return;
-		const work = fixture({ "packages/x/entry.ts": "export {};\n", "docs/guide.md": "# guide\n" });
-		expect(classify(work, { "packages/x/entry.ts": "export const x = 1;\n" })).toBe("true");
-		expect(classify(work, { "docs/guide.md": "# guide\n\nmore\n", "package.json": "{}\n" })).toBe("true");
+	it("classifies every non-docs family as a code change", () => {
+		if (!bash || !git) return;
+		// One worktree, one push per family: each push diffs its own range, which
+		// is what the runner sees. Covers the families a re-parsed trigger list
+		// could silently drop, including `patches/**` and an inline-commented entry.
+		const work = fixture(BASE_FILES);
+		for (const [file, content] of [
+			["packages/x/entry.ts", "export const x = 1;\n"],
+			["patches/a.patch", "patch 2\n"],
+			["bazel/defs.bzl", "# defs 2\n"],
+			["scripts/tool.ts", "export {};\n"],
+			[".github/workflows/nix.yml", "# edited\n"],
+			["package.json", "{}\n"],
+			["Cargo.toml", "[workspace]\n"],
+		] as const) {
+			expect(classify(work, { [file]: content }), file).toBe("true");
+		}
+	}, 60000);
+
+	it("classifies a mixed push as a code change", () => {
+		if (!bash || !git) return;
+		const work = fixture(BASE_FILES);
+		expect(classify(work, { "docs/guide.md": "# guide\n\nmixed\n", "package.json": "{}\n" })).toBe("true");
+	});
+
+	it("runs the matrix when the range holds no paths at all", () => {
+		if (!bash || !git) return;
+		// An empty diff would vacuously satisfy "every path is docs"; the step
+		// must treat a bogus base that resolves but matches nothing as code.
+		const work = fixture(BASE_FILES);
+		const base = commit(work, () => fs.writeFileSync(path.join(work, "docs/guide.md"), "# guide\n\nbase\n"));
+		expect(runStep(work, base).code).toBe("false");
+		expect(runStep(work, gitIn(work, "rev-parse", "HEAD")).code).toBe("true");
+	});
+
+	it("treats a file moved out of code and into docs as a code change", () => {
+		if (!bash || !git) return;
+		const work = fixture(BASE_FILES);
+		const before = commit(work, () => {
+			fs.mkdirSync(path.join(work, "docs"), { recursive: true });
+			fs.renameSync(path.join(work, "packages/x/entry.ts"), path.join(work, "docs/entry.md"));
+		});
+		// With rename detection git reports only `docs/entry.md`, which would read
+		// as documentation-only; the step must still see the removal.
+		expect(runStep(work, before).code).toBe("true");
 	});
 
 	it("runs the matrix when the pre-push tip cannot be compared", () => {
-		if (skipIfNoShell()) return;
-		const work = fixture({ "packages/x/entry.ts": "export {};\n", "docs/guide.md": "# guide\n" });
+		if (!bash || !git) return;
+		const work = fixture(BASE_FILES);
 		const zeros = "0".repeat(40);
 		expect(classify(work, { "docs/guide.md": "# guide\n\nnew branch\n" }, zeros)).toBe("true");
 		expect(classify(work, { "docs/guide.md": "# guide\n\nmissing base\n" }, "f".repeat(40))).toBe("true");
 	});
 
-	it("reads the watched paths from the push trigger it ships with", () => {
-		if (skipIfNoShell()) return;
-		const work = fixture({ "packages/x/entry.ts": "export {};\n", "docs/guide.md": "# guide\n" });
-		// A trigger-only path stays out of the code set even though it starts a run.
-		expect(classify(work, { "docs/deep/nested.md": "# nested\n" })).toBe("false");
-		expect(classify(work, { ".github/workflows/nix.yml": "# edited\n" })).toBe("true");
-		expect(classify(work, { "scripts/tool.ts": "export {};\n" })).toBe("true");
+	it("does not re-parse the workflow trigger to decide what code is", () => {
+		if (!bash || !git) return;
+		// A commented trigger entry is legal YAML that a line-regex parse mangles;
+		// the step must not depend on that parse at all.
+		const work = fixture(BASE_FILES);
+		const ciPath = path.join(work, ".github/workflows/ci.yml");
+		const original = fs.readFileSync(ciPath, "utf8");
+		fs.writeFileSync(ciPath, original.replace('         - "patches/**"', '         - "patches/**" # root deps'));
+		gitIn(work, "commit", "--quiet", "-am", "comment the trigger entry");
+		gitIn(work, "push", "--quiet", "origin", "main");
+		expect(classify(work, { "patches/a.patch": "patch 3\n" })).toBe("true");
+		expect(script).not.toContain("awk");
+		expect(script).not.toContain("mapfile");
+		expect(script).not.toContain("in_push");
+	});
+
+	it.skipIf(process.platform === "win32")("classifies a Chinese-named docs file as no code change", () => {
+		if (!bash || !git) return;
+		// git quotes non-ASCII paths unless asked not to; a quoted
+		// `"docs/\345..."` does not start with `docs/` and would run the matrix.
+		const work = fixture(BASE_FILES);
+		expect(classify(work, { "docs/发布说明.md": "# 发布说明\n" })).toBe("false");
+	});
+
+	it.skipIf(process.platform === "win32")("runs under a bash without bash-4 builtins", () => {
+		if (!bash || !git) return;
+		// The runner's bash is 5.x, but a contributor's macOS bash is 3.2; the
+		// step must not need mapfile/associative arrays/`${x,,}` to be testable.
+		expect(script).not.toMatch(/\b(mapfile|readarray|declare\s+-A)\b/);
+		expect(script).not.toMatch(/\$\{[A-Za-z_][A-Za-z0-9_]*(,,|\^\^)\}/);
+		// `read -d ''` is bash-3.2 syntax, so restrict it to Unix where an old bash
+		// can actually be found: pick the oldest one on PATH, if there is one.
+		const candidates = ["/bin/bash", "/usr/bin/bash", "/usr/local/bin/bash"].filter(candidate =>
+			fs.existsSync(candidate),
+		);
+		const old = candidates.find(candidate => {
+			const version = Bun.spawnSync([candidate, "--version"], { stdout: "pipe" }).stdout.toString();
+			const major = /version (\d+)\./.exec(version)?.[1];
+			return major !== undefined && Number(major) < 4;
+		});
+		if (!old) {
+			console.warn("no bash < 4 on this host; the step's syntax was reviewed, not executed, against bash 3.2");
+			return;
+		}
+		const work = fixture(BASE_FILES);
+		commit(work, () => fs.writeFileSync(path.join(work, "docs/guide.md"), "# guide\n\nold bash\n"));
+		const result = Bun.spawnSync([old, "-c", script], {
+			cwd: work,
+			env: { ...process.env, GITHUB_OUTPUT: path.join(path.dirname(work), "github-output"), BASE_SHA: "HEAD~1" },
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		expect(result.exitCode).toBe(0);
+		expect(fs.readFileSync(path.join(path.dirname(work), "github-output"), "utf8")).toContain("code=false");
 	});
 });
 

@@ -28,13 +28,12 @@ on:
          - "package.json"
          - "patches/**"
          - ".github/**"
-         # Documentation-only pushes start a run for `docs_spec` (the pairing,
+         # A documentation-only push starts a run for `docs_spec` (the pairing,
          # changelog and docs gates) without paying for the code matrix: a
-         # docs-only commit once reached main with no run at all. The `changes`
-         # classifier reads this block and stops at the marker below, so the
-         # paths under it start a run without counting as a code change.
-         #
-         # Trigger-only paths, not code inputs:
+         # docs-only commit once reached main with no run at all. This list
+         # only decides whether a push starts a run; `changes` decides on its
+         # own that `docs/` is not a code input, so a family added here later
+         # counts as code rather than being skipped by default.
          - "docs/**"
    pull_request:
       branches: [main]
@@ -150,21 +149,6 @@ jobs:
               BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
            run: |
               set -euo pipefail
-              # The watched paths come from `on.push.paths`, so the trigger and
-              # this classifier stay one list; entries after the trigger-only
-              # marker only start a run and never count as code.
-              mapfile -t inputs < <(
-                awk '
-                  /^   push:/ { in_push = 1; next }
-                  /^   [a-z_]+:/ { in_push = 0 }
-                  in_push && /^         # Trigger-only/ { exit }
-                  in_push && /^         - "/ { print }
-                ' .github/workflows/ci.yml | sed -e 's/^ *- "//' -e 's/"$//'
-              )
-              if [ "${#inputs[@]}" -eq 0 ]; then
-                echo "::error::no push path filters found in .github/workflows/ci.yml"
-                exit 1
-              fi
               if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]] || ! git fetch --no-tags --depth=1 origin "$BASE_SHA"; then
                 # A new branch, a force-push to an unfetched commit or a missing
                 # payload leaves no comparable range; run the matrix rather than
@@ -173,15 +157,46 @@ jobs:
                 echo "code=true" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-              # Glob magic per pathspec so `dir/**` means the directory and
-              # everything below it, matching how GitHub reads the filter.
-              status=0
-              git diff --quiet FETCH_HEAD HEAD -- "${inputs[@]/#/:(glob)}" || status=$?
-              case "$status" in
-                0) echo "code=false" >> "$GITHUB_OUTPUT" ;;
-                1) echo "code=true" >> "$GITHUB_OUTPUT" ;;
-                *) echo "::error::git diff failed with status $status"; exit "$status" ;;
-              esac
+              # "Documentation only" is the single fact this job needs, so it
+              # reads the changed paths instead of re-parsing the workflow's
+              # trigger filter: a path family added to `on.push.paths` later is
+              # unknown here and therefore counts as code, which runs the matrix
+              # rather than skipping it. `--no-renames` matters — git otherwise
+              # reports a file moved out of `packages/` into `docs/` under its
+              # new name alone, which would read as documentation-only. `-z`
+              # goes through a file because a shell variable cannot hold NUL,
+              # and it keeps non-ASCII names (this repo's Chinese docs) raw
+              # instead of quoted, so they still match the prefix below.
+              changed="$(mktemp)"
+              if ! git diff --name-only -z --no-renames FETCH_HEAD HEAD > "$changed"; then
+                rm -f "$changed"
+                echo "::error::could not diff $BASE_SHA..HEAD"
+                exit 1
+              fi
+              code=0
+              seen=0
+              while IFS= read -r -d '' path; do
+                seen=$((seen + 1))
+                case "$path" in
+                  docs/*) ;;
+                  *) code=1; break ;;
+                esac
+              done < "$changed"
+              rm -f "$changed"
+              if [ "$seen" -eq 0 ]; then
+                # An empty range would satisfy "every path is docs" vacuously; a
+                # base that resolves to this very commit proves nothing shipped.
+                echo "no changed paths between $BASE_SHA and HEAD; treating the run as a code change"
+                echo "code=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if [ "$code" -eq 0 ]; then
+                echo "every changed path is under docs/"
+                echo "code=false" >> "$GITHUB_OUTPUT"
+              else
+                echo "code inputs changed"
+                echo "code=true" >> "$GITHUB_OUTPUT"
+              fi
 
    check:
       name: Lint, type check & web build

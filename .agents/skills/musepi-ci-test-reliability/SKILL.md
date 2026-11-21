@@ -34,7 +34,7 @@ description: Use when designing, modifying, or diagnosing MusePi CI workflows, t
 - Rust 与 TS 的消费者都应在合并前验证。main/release 的额外平台构建不能成为跳过 PR Rust 验证的理由。
 - 发布 job 必须在 `needs` 和 `if` 中要求实际验证门禁成功。只创建 gate、打印状态或保留注释不构成发布保护。
 - Path filters 必须覆盖会影响该工作流的 manifest、lockfile、脚本、生成器、action 和配置。新增输入时同步 push 与 pull_request。
-- push 触发器与 `changes` 判定是同一份事实：`changes` 从 `ci.yml` 的 `on.push.paths` 读取路径清单，在 `# Trigger-only` 标记处截断，再对 `github.event.before`（PR 用 base sha）做 diff；无法比较的基线（新分支的全零 sha、取不到的 `before`）一律按 code change 处理。只应该启动文档门禁的路径放在标记之后，不要再复制第三份列表。
+- push 触发器与 `changes` 判定职责分开、各自单一：`on.push.paths` 只决定 push 是否启动一次 run；`changes` 只回答"这次 run 改动里有没有代码"——它 diff `github.event.before`（PR 用 base sha）的变更文件，只有全部路径都在 `docs/` 下才报 `code=false`，其它任何路径（包括以后新增的触发族）都按 code change 处理，取不到基线或 diff 失败也按 code change。不要在 runner 里用正则重新解析 `on.push.paths`：那是第二份事实，一条行内注释或单引号条目就能让它静默漏判。`git diff --name-only` 要用 `--no-renames`（否则从 `packages/` 移到 `docs/` 的重命名只报新名字）和 `-z` 落文件（shell 变量存不住 NUL，非 ASCII 文件名默认还会被加引号）；脚本保持 bash 3.2 可用，不要用 `mapfile`/`readarray`。
 - 对运行时版本、测试清单和发布依赖等 CI 契约，在 `scripts/ci-contract.test.ts` 添加少量解析或行为检查；不要为每一行 YAML 复制静态回声测试。
 
 ## 异步测试按状态同步
