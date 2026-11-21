@@ -6,8 +6,9 @@
  * parser slices it into per-version `## [x.y.z] - date` sections and extracts
  * up to three bold "highlights" per version plus per-kind entry counts.
  * Pure line-level state machine: no regex segmentation, no side effects, no
- * React, no imports.
+ * React; the only dependency is the release-note i18n projection.
  */
+import { localizeReleaseHeading, releaseHeadingAliases } from "../i18n/release-notes.js";
 
 /** Highlight kinds. The four categorized sections map to their heading; a
  *  bullet that sits directly under the version heading (this changelog's
@@ -54,27 +55,16 @@ export const HIGHLIGHTS_PER_VERSION = 3;
 type ChangelogCategory = Exclude<ChangelogHighlightKind, "note">;
 
 /** Chinese headings are the canonical release-note structure; the English
- *  names keep released sections and older checkouts readable. */
-const KIND_BY_HEADING: Record<string, ChangelogCategory> = {
-	新功能: "added",
-	改进: "changed",
-	修复: "fixed",
-	added: "added",
-	fixed: "fixed",
-	changed: "changed",
-	removed: "removed",
-	"new features": "added",
-	improvements: "changed",
-	fixes: "fixed",
-};
-
-/** English projection of the Chinese category headings, used only for the
- *  en-US view — the parser itself accepts either language. */
-const ENGLISH_KIND_HEADING: Record<string, string> = {
-	新功能: "New features",
-	改进: "Improvements",
-	修复: "Fixes",
-};
+ *  names keep released sections and older checkouts readable. The canonical
+ *  and en-US headings come from the release domain so parsing and display
+ *  cannot drift; the bare English aliases are historical section names. */
+const KIND_BY_HEADING = new Map<string, ChangelogCategory>([
+	["added", "added"],
+	["fixed", "fixed"],
+	["changed", "changed"],
+	["removed", "removed"],
+]);
+for (const [heading, kind] of releaseHeadingAliases()) KIND_BY_HEADING.set(heading, kind);
 
 /** First sentence: up to and including the first CJK sentence terminator.
  *  Text without any terminator is kept whole (single-sentence bullets). */
@@ -123,7 +113,7 @@ export function localizeChangelogMarkdown(markdown: string, locale: string): str
 		const line = lines[index] ?? "";
 		const heading = line.match(/^###\s+(.+?)\s*$/);
 		if (heading) {
-			const translated = ENGLISH_KIND_HEADING[heading[1]];
+			const translated = localizeReleaseHeading(heading[1], locale);
 			if (translated) {
 				out.push(`### ${translated}`);
 				continue;
@@ -203,7 +193,7 @@ export function parseChangelogHighlights(markdown: string): ChangelogVersion[] {
 
 		const kindHeading = line.match(/^###\s+(.+?)\s*$/);
 		if (kindHeading) {
-			kind = KIND_BY_HEADING[kindHeading[1].toLowerCase()] ?? null;
+			kind = KIND_BY_HEADING.get(kindHeading[1].toLowerCase()) ?? null;
 			continue;
 		}
 		// Top-level bullets only — the indented `  - EN:` child lines never

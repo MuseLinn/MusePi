@@ -8,6 +8,7 @@ import { context } from "./context.js";
 import { creation } from "./creation.js";
 import { general } from "./general.js";
 import { guest } from "./guest.js";
+import { release } from "./release.js";
 import { reward } from "./reward.js";
 import { sessions } from "./sessions.js";
 import { settings } from "./settings.js";
@@ -38,6 +39,7 @@ export const enUS = {
 	...guest,
 	...reward,
 	...update,
+	...release,
 	...creation,
 	...announcement,
 } as const;
@@ -59,6 +61,7 @@ const parts = {
 	guest,
 	reward,
 	update,
+	release,
 	creation,
 	announcement,
 };

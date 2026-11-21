@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { enUS, enUSDomainCount, enUSDuplicates } from "./en-US/index.js";
-import { getLocaleSnapshot, registerTranslations, setLocale, t, tLoose } from "./index.js";
+import { getLocaleSnapshot, registerTranslations, setLocale, t, tFor, tLoose } from "./index.js";
 import { collectDomainDuplicates } from "./merge-domains.js";
 import { zhCN, zhCNDomainCount, zhCNDuplicates } from "./zh-CN/index.js";
 
@@ -24,9 +24,9 @@ describe("i18n maps (per-domain split)", () => {
 	});
 
 	test("域文件数不缩小(防缩小守卫:扫描面收窄比漏检更糟)", () => {
-		// 新增域文件时同步调高;当前 16 个域。
-		expect(zhCNDomainCount).toBeGreaterThanOrEqual(16);
-		expect(enUSDomainCount).toBeGreaterThanOrEqual(16);
+		// 新增域文件时同步调高;当前 17 个域。
+		expect(zhCNDomainCount).toBeGreaterThanOrEqual(17);
+		expect(enUSDomainCount).toBeGreaterThanOrEqual(17);
 		expect(Object.keys(zhCN).length).toBeGreaterThan(3000);
 	});
 
@@ -60,6 +60,17 @@ describe("i18n API (split surface)", () => {
 		setLocale("en-US");
 		expect(t("tools.usage")).toBe("Usage");
 		expect(t("general.resetsInWithTime", { time: "1h" })).toBe("Resets in 1h");
+	});
+
+	test("tFor resolves an explicit locale without changing the current one", () => {
+		setLocale("zh-CN");
+		expect(tFor("en-US", "release heading new features")).toBe("New features");
+		expect(tFor("zh-CN", "release heading new features")).toBe("新功能");
+		// Unknown tags project to the release-note policy: zh* → zh-CN, else en-US.
+		expect(tFor("zh-TW", "release heading new features")).toBe("新功能");
+		expect(tFor("en-GB", "release heading new features")).toBe("New features");
+		expect(getLocaleSnapshot()).toBe("zh-CN");
+		setLocale("en-US");
 	});
 
 	test("registerTranslations overlays new + existing keys for the locale", () => {

@@ -162,6 +162,25 @@ export function tLoose(key: string, params?: Record<string, string | number>): s
 }
 
 /**
+ * Translate `key` for an explicitly requested locale instead of the current
+ * UI locale. Release notes and changelogs project the document's own language
+ * while the app chrome may be in another; `zh*` resolves to zh-CN and every
+ * other tag to en-US. Runtime overlays apply, and a missing key falls back to
+ * its en-US value.
+ */
+export function tFor<K extends TranslationKey>(locale: string, key: K, params?: ParamsOf<K>): string {
+	const tag = locale.toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
+	const base = locales[tag] ?? enUS;
+	let translated = overlays[tag]?.[key] ?? base[key] ?? enUS[key] ?? key;
+	if (params) {
+		for (const [name, value] of Object.entries(params)) {
+			translated = translated.split(`{${name}}`).join(String(value));
+		}
+	}
+	return translated;
+}
+
+/**
  * Register (or override) translations for a locale at runtime — the seam
  * for plugins / host apps contributing UI strings. Overlays the base map:
  * existing keys are replaced, new keys are added. Emits so live UI
