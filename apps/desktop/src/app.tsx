@@ -88,7 +88,7 @@ import {
 	shouldRestartForMissingMethods,
 } from "./lib/daemon-version";
 import { openMiniChat } from "./lib/electron";
-import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
+import { escapeStopsTurn } from "./lib/escape-stop";
 import { invalidateGitStatuses } from "./lib/git-status-cache";
 import { applyGlass, applyGlassMaterial } from "./lib/glass";
 import { ensureLiquidGlass } from "./lib/liquid-glass";
@@ -4207,14 +4207,7 @@ function AppInner(): ReactNode {
 					// menu, a held key, a field's own Escape) aborts the turn
 					// and the transcript records "Interrupted by user" for a
 					// keypress the user aimed elsewhere.
-					if (
-						shouldEscapeStopTurn({
-							claimed: e.defaultPrevented,
-							owner: escapeOwner(e.target),
-							repeat: e.repeat,
-							working: storeRef.current?.getSnapshot().working === true,
-						})
-					) {
+					if (escapeStopsTurn(e, storeRef.current?.getSnapshot().working === true)) {
 						void stop();
 					}
 				}
