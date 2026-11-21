@@ -95,6 +95,8 @@ const cancelConfirm = document.getElementById("cancel-confirm");
 const cancelConfirmButton = document.getElementById("btn-cancel-confirm");
 const cancelKeepButton = document.getElementById("btn-cancel-keep");
 let installing = false;
+/** Set by the host once the installer accepted the answers. */
+let upgradeMode = false;
 
 function beginInstall() {
 	if (installing) return;
@@ -128,6 +130,9 @@ document.getElementById("btn-finish").addEventListener("click", () => {
 // ── Cancel ─────────────────────────────────────────────────────────────
 function openCancelConfirm() {
 	if (!installing) return;
+	document.getElementById("cancel-hint").textContent = upgradeMode
+		? locale.cancelHintUpgrade
+		: locale.cancelHint;
 	cancelConfirm.hidden = false;
 	cancelConfirmButton.focus();
 }
@@ -175,7 +180,9 @@ function setBytes(bytes) {
 }
 
 function resetProgress() {
-	cancelButton.disabled = false;
+	// Nothing is written yet, so there is nothing to cancel until the installer
+	// accepts the answers (the host then also knows whether this is an upgrade).
+	cancelButton.disabled = true;
 	cancelConfirm.hidden = true;
 	bar.setAttribute("aria-busy", "true");
 	setBytes(0);
@@ -211,10 +218,20 @@ function handleHostMessage(message) {
 			break;
 		}
 		case "progress":
-			if (message.phase === "preparing") setPhase(locale.preparing);
-			else if (message.phase === "awaiting") setPhase(locale.awaitingInstaller);
-			else if (message.phase === "installing") setPhase(locale.writingFiles);
-			else if (message.phase === "cancelling") setPhase(locale.cancelling);
+			if (message.phase === "preparing") {
+				setPhase(locale.preparing);
+			} else if (message.phase === "awaiting") {
+				upgradeMode = message.upgrade === true;
+				cancelButton.disabled = false;
+				setPhase(locale.awaitingInstaller);
+			} else if (message.phase === "installing") {
+				upgradeMode = message.upgrade === true;
+				cancelButton.disabled = false;
+				setPhase(locale.writingFiles);
+			} else if (message.phase === "cancelling") {
+				cancelButton.disabled = true;
+				setPhase(locale.cancelling);
+			}
 			if (typeof message.bytes === "number") setBytes(message.bytes);
 			break;
 		case "installed":

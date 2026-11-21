@@ -76,6 +76,9 @@ OutFile "${OUTDIR}\MusePi-installer-preview.exe"
 Function PreviewStartApp
 FunctionEnd
 
+Var PreviewTestUninstallKey
+Var PreviewFailBeforeDone
+
 Function .onInit
   ; 截图脚本用这个环境变量把安装目标放到仓库的临时目录里。
   ReadEnvStr $0 "MUSEPI_PREVIEW_INSTALL_ROOT"
@@ -85,6 +88,15 @@ Function .onInit
     StrCpy $INSTDIR "$LOCALAPPDATA\Programs\MusePiPreview"
   ${EndIf}
 
+  ; 回滚证据用的一次性卸载键名（由截图脚本生成，随机后缀）。设置后本预览会
+  ; 在目标的 HKCU Uninstall 下写一条指向 $INSTDIR 的条目，取消/失败回滚必须
+  ; 把它删掉；成功路径不设置，因此不会留下任何注册表残留。
+  ReadEnvStr $PreviewTestUninstallKey "MUSEPI_PREVIEW_TEST_UNINSTALL_KEY"
+
+  ; 模拟"在 customInstall 之前失败"：写完部分文件后直接以 3 退出，安装器不进
+  ; 入完成握手，宿主必须按失败回滚。
+  ReadEnvStr $PreviewFailBeforeDone "MUSEPI_PREVIEW_FAIL_BEFORE_DONE"
+
   !ifmacrodef customInit
     !insertmacro customInit
   !endif
@@ -92,6 +104,15 @@ FunctionEnd
 
 Section "install"
   SetOutPath "$INSTDIR"
+
+  ; 生产模板在解压前写注册表（registryAddInstallInfo 在 installApplicationFiles
+  ; 之后；这里提前写，是为了让"解压中途取消/失败"也能测到卸载条目回滚）。
+  ${If} $PreviewTestUninstallKey != ""
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\$PreviewTestUninstallKey" \
+      "UninstallString" '"$INSTDIR\Uninstall MusePi.exe" --currentuser'
+    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\$PreviewTestUninstallKey" \
+      "QuietUninstallString" '"$INSTDIR\Uninstall MusePi.exe" --currentuser /S'
+  ${EndIf}
 
   ; 约 5.6 秒的"文件释放"阶段：宿主的阶段文案与字节数必须在这段时间里
   ; 如实变化，截图脚本也在这里取进度页证据。
@@ -109,6 +130,12 @@ Section "install"
     ${Loop}
     FileClose $0
     Sleep 700
+    ; 失败模式：写到一半直接以 3 退出，永不进入 customInstall 的完成握手。
+    ${If} $PreviewFailBeforeDone != ""
+    ${AndIf} $2 >= 3
+      SetErrorLevel 3
+      Quit
+    ${EndIf}
     ${If} $2 >= 8
       ${ExitDo}
     ${EndIf}

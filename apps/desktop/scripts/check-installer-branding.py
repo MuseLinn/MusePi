@@ -41,6 +41,8 @@ BRANDING = RELEASE_DIR / "installer-branding.nsh"
 SHORTCUTS = RELEASE_DIR / "ensure-shortcuts.nsh"
 UI_DIR = APP_DIR / "installer" / "ui"
 PREVIEW = APP_DIR / "installer" / "preview" / "installer-preview.nsi"
+HOST_SOURCE = APP_DIR / "installer" / "InstallerHost.cs"
+LOCALE_SOURCE = APP_DIR / "installer" / "ui" / "installer-locales.js"
 CAPTURE = APP_DIR / "scripts" / "capture-installer-pages.ps1"
 HARNESS = APP_DIR / "test" / "installer-branding-compile-check.nsi"
 
@@ -209,6 +211,79 @@ def check_progress_contract() -> list[str]:
     return problems
 
 
+def check_rollback_contract() -> list[str]:
+    """Cancel/failure must undo exactly what the run created.
+
+    The mission and the changelog promise that a fresh install removes its files,
+    shortcuts and Add/Remove Programs entry while an upgrade keeps the previous
+    install's registration. The uninstall entry carries no InstallLocation (only
+    the install-state key does), so it is identified by its UninstallString; and
+    an upgrade must not have its registry written off. Both are asserted here so a
+    later refactor cannot quietly undo the rollback contract.
+    """
+    problems: list[str] = []
+    host = HOST_SOURCE.read_text(encoding="utf-8")
+
+    if "UninstallString" not in host or "UninstallPointsInto" not in host:
+        problems.append(
+            "InstallerHost.cs: the uninstall entry must be matched by UninstallString "
+            "(it carries no InstallLocation)"
+        )
+    if "QuietUninstallString" not in host:
+        problems.append("InstallerHost.cs: QuietUninstallString is not considered for rollback")
+    if "if (!removeFiles) return;" not in host:
+        problems.append(
+            "InstallerHost.cs: Rollback must return before touching anything when the target "
+            "already had files (an upgrade keeps its registration)"
+        )
+    elif host.find("if (!removeFiles) return;") > host.find("RemoveRegistryInstallInfo(target);"):
+        problems.append("InstallerHost.cs: registry cleanup runs before the upgrade guard")
+    if "ShouldRemoveShortcut" not in host:
+        problems.append("InstallerHost.cs: shortcut cleanup has no testable predicate")
+
+    locales = LOCALE_SOURCE.read_text(encoding="utf-8")
+    if locales.count("cancelHintUpgrade") < 3:
+        problems.append("installer-locales.js: every locale needs cancelHintUpgrade for the upgrade copy")
+
+    preview = PREVIEW.read_text(encoding="utf-8")
+    for mode in ("MUSEPI_PREVIEW_FAIL_BEFORE_DONE", "MUSEPI_PREVIEW_TEST_UNINSTALL_KEY"):
+        if mode not in preview:
+            problems.append(f"preview harness: {mode} is missing (no failure/cancel evidence path)")
+
+    capture = CAPTURE.read_text(encoding="utf-8")
+    for evidence in ("5-cancelled", "6-failed", "Test-UninstallKey"):
+        if evidence not in capture:
+            problems.append(f"capture script: rollback evidence '{evidence}' is missing")
+    return problems
+
+
+def check_template_order() -> list[str]:
+    """The real electron-builder template must call customInit inside .onInit.
+
+    The preview harness has its own .onInit, so a template change could move the
+    call after page creation while every local gate still passes. Checked when the
+    dependency is present; a missing store only prints a note.
+    """
+    candidates = sorted(APP_DIR.glob("node_modules/app-builder-lib/templates/nsis/installer.nsi"))
+    node_modules = APP_DIR.parent.parent / "node_modules"
+    candidates += sorted(node_modules.glob("app-builder-lib/templates/nsis/installer.nsi"))
+    candidates += sorted(node_modules.glob(".bun/app-builder-lib*/node_modules/app-builder-lib/templates/nsis/installer.nsi"))
+    if not candidates:
+        print("  note: app-builder-lib templates not found — template-order check skipped")
+        return []
+
+    text = candidates[0].read_text(encoding="utf-8")
+    problems: list[str] = []
+    on_init = text.find("Function .onInit")
+    custom_init = text.find("!insertmacro customInit")
+    section = text.find('Section "install"')
+    if on_init < 0 or custom_init < 0:
+        problems.append("app-builder-lib installer.nsi: .onInit no longer calls customInit")
+    elif custom_init < on_init or (section >= 0 and custom_init > section):
+        problems.append("app-builder-lib installer.nsi: customInit is no longer inside .onInit")
+    return problems
+
+
 def check_preview_pipeline() -> list[str]:
     """The preview and its capture script are the runtime gate for native pages."""
     problems: list[str] = []
@@ -264,6 +339,8 @@ def main() -> int:
         + check_flow_contract()
         + check_progress_contract()
         + check_preview_pipeline()
+        + check_rollback_contract()
+        + check_template_order()
     )
 
     makensis = find_makensis()

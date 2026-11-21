@@ -70,22 +70,24 @@ bootstrap (InstallerBootstrap.cs)
 
 ## 取消、失败与回滚
 
-**取消**：进度页有"取消安装"按钮，先展开行内确认（不弹原生对话框）。确认后宿主用 `TerminateProcess(installerPid, 2)` 结束安装器——NSIS 的文件段没有可中断点，发信号或假装"已停止"都是撒谎。随后：
+**取消**：进度页有"取消安装"按钮，先展开行内确认（不弹原生对话框）。按钮在安装器接受答案之前不可用——那时还没有写入任何东西，而且宿主也只有到 `awaiting` 才知道这是不是升级。确认后宿主用 `TerminateProcess(installerPid, 2)` 结束安装器——NSIS 的文件段没有可中断点，发信号或假装"已停止"都是撒谎。随后：
 
-- 新装（目标目录本次之前不存在或为空）：删除目标目录、删除本次运行期间创建的桌面/开始菜单快捷方式（按时间戳只删本次创建的）、删除 `InstallLocation` 指向该目录的卸载注册项与安装信息键。
-- 升级（目标目录已有文件）：**不删目录**。旧版本可能已被卸载器移除、新文件只写了一半，删除会把用户原本能用的版本一起毁掉。界面如实说明"升级未完成，重新运行安装程序即可修复"。
+- 新装（目标目录本次之前不存在或为空）：删除目标目录、删除本次运行期间创建的桌面/开始菜单快捷方式（`ShouldRemoveShortcut`：只有目标 exe 已不在且链接写入时间不早于本次开始时才删）、删除本次写入的卸载注册：**添加/删除程序条目按 `UninstallString`/`QuietUninstallString` 的 `"<target>\` 前缀识别**（electron-builder 不给这个键写 `InstallLocation`，只有内部状态键 `HKCU\Software\{APP_GUID}` 有，所以两种匹配都要做），以及该内部状态键本身。
+- 升级（目标目录已有文件）：**什么都不删**。目录、快捷方式与注册项都属于上一个版本：删掉目录会连带毁掉用户原本能用的版本；删掉 `InstallLocation` 会让下一次安装回落到默认目录、在旧副本之外再装一份，反而修不好。界面用自己的文案说明"升级未完成，重新运行安装程序即可修复"。
 
-**失败**：宿主每 180ms 检查安装器进程。安装器在写出 `phase=done` 之前消失，就按失败处理，回滚规则同上；界面区分新装/升级两种情况。
+**失败**：宿主每 180ms 检查安装器进程（`Local\MusePi.Installer.Setup` 互斥体）。安装器在写出 `phase=done` 之前消失，就按失败处理，回滚规则同上；界面区分新装/升级两种情况。
 
-**退出码**（由 `InstallerBootstrap.cs` 归一到宿主回执，避免把被终止的进程状态码透传给调用方）：
+**退出码**：
 
 | 码 | 含义 |
 | --- | --- |
 | 0 | 安装完成（不论是否勾选立即启动） |
 | 2 | 用户取消（装前关闭窗口，或安装中取消并回滚） |
-| 3 | 安装失败（宿主启动失败、安装器提前退出） |
+| 3 | 安装失败（WebView2 初始化失败、宿主启动失败、安装器提前退出且未写 `phase=done`） |
 
-OTA 的 `/S` 路径不写状态文件、不启动宿主，退出码保持 electron-updater 既有语义。
+宿主在**进入终态的那一刻**写 `host-status.ini`（`Succeed`/`FailInstall`/`CancelInstall`，在展示结果页之前），所以取消终止安装器之后启动器仍能拿到 2/3；`InitialiseAsync` 失败（WebView2 不可用）先置 3 再报错关闭，不会再被当成"用户取消"。
+
+`InstallerBootstrap.cs` 的归一顺序：有回执 → 用回执；无回执且交互安装 → 轮询 3 秒；仍无回执时，`install-status.ini` 有 `phase=done` 记 0，否则记 3。OTA 的 `/S` 路径不写状态文件、不启动宿主，直接沿用 NSIS 子进程退出码。
 
 ## 对既有契约的影响
 
@@ -97,14 +99,15 @@ OTA 的 `/S` 路径不写状态文件、不启动宿主，退出码保持 electr
 
 ## 验证
 
+0. **宿主自检**（`MusePiInstallerHost.exe --self-test`）：退出码契约、阶段解析，以及回滚谓词矩阵——`UninstallPointsInto`（带引号/裸路径/大小写/相邻目录 `MusePi2`/空值）与 `ShouldRemoveShortcut`（本次创建删、旧链接留、可用安装留），再真实创建一条指向临时目录的一次性卸载键，断言 `RemoveUninstallEntries` 只删它、不碰无关键。
 1. **宿主 smoke**（`node apps/desktop/scripts/build-installer-host.mjs --smoke`）：WebView2 绑定、玻璃层、`#bar` 为 busy、无百分比、页面数 5、无横向滚动。PASS。
-2. **NSIS 编译门禁**（`python apps/desktop/scripts/check-installer-branding.py`）：位图、无 BOM、`build.nsis.include` 接线，外加本次新增的静态契约——
-   - `customInit` 内顺序必须是"等答案 → 应用答案 → SetSilent"；
-   - `HideWindow` 存在；
+2. **NSIS 编译门禁**（`python apps/desktop/scripts/check-installer-branding.py`）：位图、无 BOM、`build.nsis.include` 接线，外加静态契约——
+   - `customInit` 内顺序必须是"等答案 → 应用答案 → SetSilent"，`HideWindow` 存在；
    - 宿主命令行带 `--answers/--status/--installer-pid`，两个互斥体名字与宿主一致；
    - `customInstall` 写 `phase=done` 并等待宿主；
    - 进度页不确定态、无百分比，宿主状态 `installed/cancelled/failed` 都有渲染分支；
-   - 预览 harness 与截图脚本存在且带窗口断言。
+   - **回滚策略**：卸载条目按 `UninstallString` 匹配、升级在 `Rollback` 开头直接返回、快捷方式有可测谓词、三语都有升级取消文案、预览与截图脚本具备失败/取消证据路径；
+   - 预览 harness 与截图脚本存在且带窗口断言（真实模板 `.onInit` 调用 `customInit` 的检查在装了 `node_modules` 的环境执行，本 worktree 未安装时打印跳过说明）。
 3. **本机实跑**（`pwsh -File apps/desktop/scripts/capture-installer-pages.ps1`）：用 `installer/preview/installer-preview.nsi` 编译出的预览走同一条生产时序。断言安装器进程在整个交互安装期间**没有任何可见窗口**（每 100–150ms 采样一次），宿主产出 4 张 WebView2 页面截图（语言/位置/进度/完成），点击完成后的进程退出码为 0；静默 `/S` 运行全程无窗口、退出 0、不写答案。本机（Windows 11 / 175% DPI）实测：
 
    | 断言 | 结果 |
@@ -115,6 +118,8 @@ OTA 的 `/S` 路径不写状态文件、不启动宿主，退出码保持 electr
    | 进度页显示 | `正在写入应用文件…` + `已写入 190 KB`（无百分比） |
    | 交互安装退出码 | 0 |
    | `/S` 静默安装 | 无窗口、退出 0、不写 `answers.ini` |
+   | 取消安装 | 退出 2、目标目录已删、一次性卸载条目已删、宿主写了回执、`5-cancelled.png` |
+   | `customInstall` 前失败 | 退出 3、目标目录已删、一次性卸载条目已删、`6-failed.png` |
 
    截图与日志：`.tmp/installer-shots/`（`1-language.png` … `4-finish.png`、`capture.log`）。预览截图由宿主的 `CoreWebView2.CapturePreviewAsync` 产出——外部进程对 GPU 合成的 WebView2 做屏幕抓取会得到全黑图，页面像素才是有效证据。
 
@@ -122,5 +127,6 @@ OTA 的 `/S` 路径不写状态文件、不启动宿主，退出码保持 electr
 
 - **升级无法真正回滚**：没有暂存目录，旧版本可能已被卸载器删除。界面如实说明并提示重新运行安装程序，不宣称"已恢复"。
 - **取消依赖终止进程**：NSIS 文件段无法从外部安全中断；被终止的安装器不会执行自身清理，可能在自己的 `%TEMP%\ns*.tmp` 里留下解包残留（不影响目标目录与系统状态）。
+- **启动器的私有目录**：成功路径下宿主的窗口先关闭，启动器随即删除目录；取消/失败时宿主仍在显示结果页，启动器会等它退出（最多 10 分钟）再删，期间目录保留。
 - **进度是"阶段 + 已写入字节"**，不是百分比；目录遍历每秒一次，极慢的磁盘上刷新频率会自然降低。
 - **预览的安装段是 Sleep 出来的占位写入**，只验证时序与界面，不验证 200MB 真实载荷的耗时。

@@ -2,4 +2,4 @@
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/gui-implementation
 gui-implementation.md: 8863ab350fc6802cdf3953208acfbaf09835d5ca
-gui-implementation.zh-CN.md: 818bb3416a520953f724f14dc350a6614059b52f
+gui-implementation.zh-CN.md: b0f1a19035ce95740d27abb1be5614986a095a20

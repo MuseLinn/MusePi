@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace MusePiInstallerBootstrap
@@ -46,15 +47,34 @@ namespace MusePiInstallerBootstrap
                 start.EnvironmentVariables["TEMP"] = workDir;
                 start.EnvironmentVariables["TMP"] = workDir;
                 start.EnvironmentVariables["MUSEPI_ANSWERS_DIR"] = stateDir;
+                bool silent = IsSilentRun(args);
                 using (Process process = Process.Start(start))
                 {
                     process.WaitForExit();
-                    int exitCode = process.ExitCode;
-                    // Cancelling terminates the installer, so its own exit code is
-                    // a termination status (or a crash code). The host's receipt is
-                    // the documented contract.
+                    int childCode = process.ExitCode;
+
+                    // The host's receipt is the documented contract: it writes 0/2/3
+                    // when the outcome is known, before it shows the result page.
                     int hostExit = ReadHostExit(Path.Combine(stateDir, "host-status.ini"));
-                    return hostExit >= 0 ? hostExit : exitCode;
+                    if (hostExit < 0 && !silent)
+                    {
+                        // A cancelled install kills the installer, so its exit code
+                        // is a termination status; give the receipt a moment.
+                        hostExit = WaitForExitCode(stateDir, 3000);
+                    }
+                    if (hostExit >= 0) return hostExit;
+
+                    // Silent updates never start the host and keep the installer's
+                    // own exit code.
+                    if (silent) return childCode;
+
+                    // No receipt but the installer published done: the host was
+                    // killed after a completed install.
+                    if (HasPublishedDone(stateDir)) return 0;
+
+                    // Interactive install that died before the host could report:
+                    // a failure, not a user cancel.
+                    return 3;
                 }
             }
             catch (Exception error)
@@ -70,11 +90,7 @@ namespace MusePiInstallerBootstrap
             }
             finally
             {
-                if (workDir != null)
-                {
-                    try { Directory.Delete(workDir, true); }
-                    catch { }
-                }
+                if (workDir != null) CleanUp(workDir);
             }
         }
 
@@ -103,6 +119,88 @@ namespace MusePiInstallerBootstrap
 
             Console.WriteLine("installer bootstrap self-test: PASS");
             return 0;
+        }
+
+        /// <summary>OTA updates pass /S (or --updated); they never start the host.</summary>
+        private static bool IsSilentRun(string[] args)
+        {
+            foreach (string arg in args)
+            {
+                if (arg == "/S" || arg == "/s") return true;
+                if (arg.StartsWith("--updated", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>The installer's phase file, install-status.ini.</summary>
+        private static bool HasPublishedDone(string stateDir)
+        {
+            try
+            {
+                string file = Path.Combine(stateDir, "install-status.ini");
+                if (!File.Exists(file)) return false;
+                foreach (string line in File.ReadAllLines(file))
+                {
+                    if (line.Trim().Equals("phase=done", StringComparison.OrdinalIgnoreCase)) return true;
+                }
+            }
+            catch (Exception) { }
+            return false;
+        }
+
+        private static int WaitForExitCode(string stateDir, int timeoutMs)
+        {
+            DateTime deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+            while (true)
+            {
+                int receipt = ReadHostExit(Path.Combine(stateDir, "host-status.ini"));
+                if (receipt >= 0) return receipt;
+                if (DateTime.UtcNow >= deadline) return -1;
+                Thread.Sleep(150);
+            }
+        }
+
+        /// <summary>
+        /// Remove the private run directory once nothing is running from it.
+        ///
+        /// On cancel/failure the installer has already exited while the host is
+        /// still showing the result page FROM this directory; deleting it then
+        /// would fail on the running exe and let Windows remove the UI assets under
+        /// the live page. So the first attempt is the fast path (success), and a
+        /// refusal is followed by waiting for the host to close.
+        /// </summary>
+        private static void CleanUp(string workDir)
+        {
+            try { Directory.Delete(workDir, true); return; }
+            catch (Exception) { }
+
+            DateTime deadline = DateTime.UtcNow.AddMinutes(10);
+            while (DateTime.UtcNow < deadline)
+            {
+                if (!HostStillRunning(workDir)) break;
+                Thread.Sleep(500);
+            }
+            try { Directory.Delete(workDir, true); }
+            catch (Exception) { }
+        }
+
+        private static bool HostStillRunning(string workDir)
+        {
+            try
+            {
+                foreach (Process process in Process.GetProcessesByName("MusePiInstallerHost"))
+                {
+                    using (process)
+                    {
+                        string path = null;
+                        try { path = process.MainModule == null ? null : process.MainModule.FileName; }
+                        catch (Exception) { }
+                        if (path != null && path.StartsWith(workDir, StringComparison.OrdinalIgnoreCase)) return true;
+                    }
+                }
+            }
+            catch (Exception) { }
+            return false;
         }
 
         /// <summary>Host receipt written by MusePiInstallerHost.exe; -1 when absent.</summary>

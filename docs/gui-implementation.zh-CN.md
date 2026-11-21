@@ -672,8 +672,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 **验证**(真实安装器,0.4.7):
 - 全新安装 → 桌面(本机桌面被重定向到 `D:\Desktop`;用 `[Environment]::GetFolderPath('Desktop')` 查,不是 `%USERPROFILE%\Desktop`)+ 开始菜单快捷方式均创建。
 - **OTA 路径**:删掉桌面快捷方式 → 带 `--updated` 重装(electron-updater parity)→ 桌面快捷方式重建——`KeepShortcuts=true` + `isUpdated=true` 下默认模板做不到,可归因于该宏。
-- 注册表核对:测试期间确认 `HKCU\Software
-e444d0e-2326-5f07-be39-027b4a8e8598`(APP_GUID)的 `KeepShortcuts=true`。
+- 注册表核对:测试期间确认 `HKCU\Software\fe444d0e-2326-5f07-be39-027b4a8e8598`(APP_GUID)的 `KeepShortcuts=true`。
 
 ## 21. 任务中心加固（2026-09-03）：cron 契约、时区语义、运行历史
 

@@ -15,9 +15,13 @@
 #   1. while the host window is up, the preview process has zero *visible*
 #      top-level windows (sampled every 120-150 ms for the whole install)
 #   2. the flow reaches phase=installing and phase=done in install-status.ini
-#   3. the host produced four page captures (language, location, progress, finish)
+#   3. the host produced the page captures (language, location, progress, finish,
+#      plus cancelled/failed for the rollback runs)
 #   4. the clicked-through run exits 0 after the finish page closes
 #   5. a /S run installs silently with no window at all and exits 0
+#   6. a cancel run exits 2, removes the target directory and the disposable
+#      Add/Remove Programs entry the preview created for it
+#   7. a run that dies before customInstall exits 3 and removes the same things
 #
 # Usage: pwsh -File apps/desktop/scripts/capture-installer-pages.ps1
 #        (build first: node apps/desktop/scripts/build-installer-host.mjs
@@ -82,6 +86,16 @@ function Get-VisibleWindows([int]$ProcessId) {
     return ,$found
 }
 
+$uninstallKeyRoot = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall"
+
+function Test-UninstallKey([string]$Name) {
+    return $null -ne (Get-Item -LiteralPath (Join-Path $uninstallKeyRoot $Name) -ErrorAction SilentlyContinue)
+}
+
+function Remove-UninstallKey([string]$Name) {
+    Remove-Item -LiteralPath (Join-Path $uninstallKeyRoot $Name) -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 function Read-Phase([string]$StateDir) {
     $file = Join-Path $StateDir "install-status.ini"
     if (-not (Test-Path $file)) { return "" }
@@ -98,7 +112,7 @@ function Measure-Tree([string]$Path) {
     } catch { return 0 }
 }
 
-function Start-Preview([string]$StateDir, [string]$InstallRoot, [string]$Arguments = "", [bool]$UiFlow = $false) {
+function Start-Preview([string]$StateDir, [string]$InstallRoot, [string]$Arguments = "", [string]$UiFlow = "0", [string]$TestUninstallKey = "", [bool]$FailBeforeDone = $false) {
     $si = New-Object System.Diagnostics.ProcessStartInfo
     $si.FileName = $exe
     $si.UseShellExecute = $false
@@ -108,7 +122,13 @@ function Start-Preview([string]$StateDir, [string]$InstallRoot, [string]$Argumen
     $si.EnvironmentVariables["MUSEPI_ANSWERS_DIR"] = $StateDir
     $si.EnvironmentVariables["MUSEPI_PREVIEW_INSTALL_ROOT"] = $InstallRoot
     $si.EnvironmentVariables["MUSEPI_INSTALLER_CAPTURE_DIR"] = $outPath
-    $si.EnvironmentVariables["MUSEPI_INSTALLER_UI_FLOW"] = $(if ($UiFlow) { "1" } else { "0" })
+    $si.EnvironmentVariables["MUSEPI_INSTALLER_UI_FLOW"] = $UiFlow
+    if ($TestUninstallKey) {
+        $si.EnvironmentVariables["MUSEPI_PREVIEW_TEST_UNINSTALL_KEY"] = $TestUninstallKey
+    }
+    if ($FailBeforeDone) {
+        $si.EnvironmentVariables["MUSEPI_PREVIEW_FAIL_BEFORE_DONE"] = "1"
+    }
     return [System.Diagnostics.Process]::Start($si)
 }
 
@@ -142,7 +162,7 @@ $silentInstall = Join-Path $outPath "install-silent"
 # ── 1. Interactive run: the host must be the only visible window ──────────
 Write-Host "[capture] interactive install"
 Reset-Scratch $interactiveState $interactiveInstall
-$proc = Start-Preview $interactiveState $interactiveInstall "" $true
+$proc = Start-Preview $interactiveState $interactiveInstall "" "1"
 
 $hostProc = $null
 $sawHost = Wait-For {
@@ -211,6 +231,53 @@ Record ($silent.HasExited -and $silent.ExitCode -eq 0) "silent run exited 0 (cod
 Record ($silentNative -eq 0) "silent run created no visible window (samples: $silentNative)"
 Record (Test-Path (Join-Path $silentInstall "PREVIEW-ONLY.txt")) "silent run installed into the scratch root"
 Record (-not (Test-Path (Join-Path $silentState "answers.ini"))) "silent run never asked for answers"
+
+# ── 3. Cancel run: exit 2, files and uninstall entry removed ─────────────
+Write-Host "[capture] cancel install"
+$cancelState = Join-Path $outPath "state-cancel"
+$cancelInstall = Join-Path $outPath "install-cancel"
+$cancelKey = "MusePiPreviewCancelTest-" + [guid]::NewGuid().ToString("N")
+Reset-Scratch $cancelState $cancelInstall
+Remove-UninstallKey $cancelKey
+try {
+    $cancel = Start-Preview $cancelState $cancelInstall "" "cancel" $cancelKey
+    $cancelExited = Wait-For { $cancel.HasExited } 90
+    if (-not $cancelExited) { try { $cancel.Kill() } catch {} }
+    Record ($cancelExited -and $cancel.ExitCode -eq 2) "cancel run exited 2 (code $(if ($cancelExited) { $cancel.ExitCode } else { 'still running' }))"
+    Wait-Shot "5-cancelled" 20
+    $cancelTargetGone = Wait-For { -not (Test-Path $cancelInstall) } 20
+    Record $cancelTargetGone "cancel removed the scratch install directory"
+    $cancelKeyGone = Wait-For { -not (Test-UninstallKey $cancelKey) } 20
+    Record $cancelKeyGone "cancel removed the disposable Add/Remove Programs entry"
+    Record (Test-Path (Join-Path $cancelState "host-status.ini")) "cancel wrote a host receipt"
+}
+finally {
+    Remove-UninstallKey $cancelKey
+    if ($cancel -and -not $cancel.HasExited) { try { $cancel.Kill() } catch {} }
+}
+
+# ── 4. Failure before customInstall: exit 3, same cleanup ────────────────
+Write-Host "[capture] failing install"
+$failState = Join-Path $outPath "state-fail"
+$failInstall = Join-Path $outPath "install-fail"
+$failKey = "MusePiPreviewFailTest-" + [guid]::NewGuid().ToString("N")
+Reset-Scratch $failState $failInstall
+Remove-UninstallKey $failKey
+try {
+    $failing = Start-Preview $failState $failInstall "" "1" $failKey $true
+    $failExited = Wait-For { $failing.HasExited } 90
+    if (-not $failExited) { try { $failing.Kill() } catch {} }
+    Record ($failExited -and $failing.ExitCode -eq 3) "failing run exited 3 (code $(if ($failExited) { $failing.ExitCode } else { 'still running' }))"
+    Wait-Shot "6-failed" 20
+    $failTargetGone = Wait-For { -not (Test-Path $failInstall) } 20
+    Record $failTargetGone "failure removed the scratch install directory"
+    $failKeyGone = Wait-For { -not (Test-UninstallKey $failKey) } 20
+    Record $failKeyGone "failure removed the disposable Add/Remove Programs entry"
+}
+finally {
+    Remove-UninstallKey $failKey
+    if ($failing -and -not $failing.HasExited) { try { $failing.Kill() } catch {} }
+}
 
 # ── Summary ──────────────────────────────────────────────────────────────
 $summary = @(
