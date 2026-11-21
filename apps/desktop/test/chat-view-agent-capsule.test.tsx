@@ -11,9 +11,9 @@ import { GuiSessionStore } from "../src/lib/session-store";
 /**
  * One agent identity per conversation.
  *
- * The per-row orb / user chip are gone: the agent orb lives in the vertical
- * capsule pinned above the transcript, and every row receives an EMPTY gutter
- * so the body reclaims that column (geometry is pinned by
+ * The per-row orb / user chip are gone: the agent orb lives in the centered
+ * capsule above the transcript, and every row receives an EMPTY gutter so the
+ * body reclaims that column (geometry is pinned by
  * agent-capsule-geometry.test.ts — happy-dom lays nothing out).
  *
  * These assertions are structural: one capsule inside the chat head, correct
