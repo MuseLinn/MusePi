@@ -263,6 +263,56 @@ describe("project hover card", () => {
 		await flush();
 		expect(document.querySelector(".gui-project-hover-card")).toBeNull();
 	});
+
+	it("survives a scroll of its own directory list", async () => {
+		// 12 directories overflow the card's capped list, so scrolling that list
+		// is how the user reaches the rest — it must not be the event that
+		// dismisses the card. The window listener runs in the capture phase and
+		// would otherwise see this scroll too.
+		// 11 additional + the root = 12 rows, just past the capped list height.
+		const dirs = Array.from({ length: 11 }, (_, i) => `/refs/d${i}`);
+		const container = await mountSidebar(
+			[project("/work/alpha", "alpha", dirs)],
+			[node("s1", "alpha", "/work/alpha")],
+		);
+		await hoverBlock(container);
+		const list = document.querySelector<HTMLElement>(".gui-project-hover-card-list");
+		expect(list).not.toBeNull();
+		// One card, one list: a stray card from a previous test would make the
+		// row count below meaningless.
+		expect(document.querySelectorAll(".gui-project-hover-card")).toHaveLength(1);
+		await act(async () => {
+			list?.dispatchEvent(new Event("scroll", { bubbles: false }));
+		});
+		await flush(20);
+		expect(document.querySelector(".gui-project-hover-card")).not.toBeNull();
+		// Root + 11 additional.
+		expect(document.querySelectorAll(".gui-project-hover-card-row")).toHaveLength(12);
+	});
+
+	it("stays open when focus reaches the last directory's open button", async () => {
+		// Focusing a button below the fold scrolls the card's own list, which
+		// emits exactly the scroll event the dismissal used to key on.
+		// 11 additional + the root = 12 rows, just past the capped list height.
+		const dirs = Array.from({ length: 11 }, (_, i) => `/refs/d${i}`);
+		const container = await mountSidebar(
+			[project("/work/alpha", "alpha", dirs)],
+			[node("s1", "alpha", "/work/alpha")],
+		);
+		await hoverBlock(container);
+		expect(document.querySelectorAll(".gui-project-hover-card")).toHaveLength(1);
+		const buttons = [...document.querySelectorAll<HTMLButtonElement>(".gui-project-hover-card-open")];
+		expect(buttons).toHaveLength(12);
+		const last = buttons[11]!;
+		await act(async () => {
+			last.focus();
+			// The browser scrolls the focused element's list into view.
+			document.querySelector(".gui-project-hover-card-list")?.dispatchEvent(new Event("scroll", { bubbles: false }));
+		});
+		await flush(20);
+		expect(document.querySelector(".gui-project-hover-card")).not.toBeNull();
+		expect(last.isConnected).toBe(true);
+	});
 });
 
 describe("ProjectHoverCard component", () => {
@@ -376,13 +426,13 @@ describe("fitProjectCard — the flip and list-height decision", () => {
 		expect(fit.listMax).toBe(LIST_MAX_HEIGHT);
 	});
 
-	it("keeps CARD_CHROME_HEIGHT in step with the real measured card", () => {
-		// Measured in Chromium at the sidebar's narrowest practical width (180px):
-		// padding 20, title 17.55, meta 28 (the count line wraps), gaps 12 =
-		// 77.55. A too-small constant silently overflows the card, which the
-		// sweep below then catches — this pins the input.
-		expect(CARD_CHROME_HEIGHT).toBeGreaterThanOrEqual(76);
-		expect(CARD_CHROME_HEIGHT).toBeLessThanOrEqual(80);
+	it("reserves at least the tallest chrome the card can show", () => {
+		// Chromium measures 82.55px of fixed chrome at the narrowest English
+		// width (168px sidebar), where the count line wraps to two rows, and
+		// 66.05px everywhere else. The constant must cover the worst case:
+		// under-reserving lets the card overflow its scroller, over-reserving
+		// only costs whitespace, which `measuredShrink` gives back.
+		expect(CARD_CHROME_HEIGHT).toBeGreaterThanOrEqual(82.55);
 	});
 });
 

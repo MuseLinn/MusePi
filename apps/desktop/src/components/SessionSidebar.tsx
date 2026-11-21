@@ -483,7 +483,16 @@ export function SessionSidebar({
 		// 滚动即收卡:卡片按项目行位置定位,行一滚就会离位(与会话悬浮卡
 		// `SessionHoverCard.tsx` 的 scroll 处理同一理由)。scroll 不冒泡,
 		// 捕获阶段挂 window 才能覆盖侧栏内层的滚动容器。
-		const onScroll = (): void => setProjectCard(null);
+		//
+		// 但卡片**自己的**目录列表必须能滚(12 个目录起就超出一屏),滚它就
+		// 收卡等于把刚做出来的可达性当场收走——包括键盘聚焦第 11 个打开按钮
+		// 时列表自动滚出的那一次。所以卡片内部的滚动一律忽略,只收外层
+		// (`.gui-sessions-list` / 滚动框架)的。
+		const onScroll = (event: Event): void => {
+			const target = event.target;
+			if (target instanceof Element && target.closest(".gui-project-hover-card")) return;
+			setProjectCard(null);
+		};
 		window.addEventListener("keydown", onKeyDown);
 		window.addEventListener("scroll", onScroll, true);
 		return () => {
