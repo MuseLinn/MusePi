@@ -16,6 +16,11 @@
  * the section in place, so a compliant `[Unreleased]` becomes a compliant
  * release section with its categories intact.
  *
+ * Titles are unique inside the section: a merge can leave the same entry
+ * under two categories, and every release surface renders each bullet, so
+ * the reader would see the change twice. Only top-level bullets participate;
+ * the nested `- EN:` line and continuation lines belong to their parent.
+ *
  * Exit 0 when compliant (or when `[Unreleased]` has no entries), exit 1 with
  * a per-bullet report otherwise.
  */
@@ -36,6 +41,8 @@ const ANY_RELEASE_HEADING = /^## \[/;
 const SECTION_HEADING = /^###\s+(.+?)\s*$/;
 /** `- ` at column 0 opens a bullet; the indented `- EN:` child never matches. */
 const TOP_BULLET = /^- /;
+/** The bold span that becomes the release-notes card title: `- **title**：…`. */
+const BOLD_TITLE = /^\*\*([^*]+)\*\*/;
 
 export interface CategoryProblem {
 	/** 1-based line number of the offending bullet or heading. */
@@ -59,6 +66,22 @@ function emptyCounts(): Record<ChangelogCategory, number> {
 	return { 新功能: 0, 改进: 0, 修复: 0 };
 }
 
+/** The bullet's title: its bold span, or the whole line when it has none. */
+function entryTitle(line: string): string {
+	const text = line.slice(TOP_BULLET.exec(line)?.[0].length ?? 2).trim();
+	return (BOLD_TITLE.exec(text)?.[1] ?? text).trim();
+}
+
+/** Case- and spacing-insensitive identity, so a reflowed or re-cased copy
+ *  still counts as the same title. */
+function titleKey(title: string): string {
+	return title
+		.replace(/[\s\u3000]+/g, " ")
+		.replace(/[：:]$/, "")
+		.trim()
+		.toLowerCase();
+}
+
 export function checkChangelogCategories(content: string): CategoryCheckResult {
 	const lines = content.split(/\r?\n/);
 	const problems: CategoryProblem[] = [];
@@ -66,6 +89,8 @@ export function checkChangelogCategories(content: string): CategoryCheckResult {
 	let checked = 0;
 	let inUnreleased = false;
 	let category: ChangelogCategory | null = null;
+	/** First sighting of each title inside `[Unreleased]`, keyed by its normalized form. */
+	const seenTitles = new Map<string, { line: number }>();
 
 	for (let i = 0; i < lines.length; i++) {
 		const line = lines[i] ?? "";
@@ -98,6 +123,19 @@ export function checkChangelogCategories(content: string): CategoryCheckResult {
 
 		if (!TOP_BULLET.test(line)) continue;
 		checked++;
+		const title = entryTitle(line);
+		const key = titleKey(title);
+		if (key !== "") {
+			const first = seenTitles.get(key);
+			if (first) {
+				problems.push({
+					line: i + 1,
+					message: `duplicate entry title \`${title}\` — already listed at line ${first.line}`,
+				});
+			} else {
+				seenTitles.set(key, { line: i + 1 });
+			}
+		}
 		if (category === null) {
 			problems.push({
 				line: i + 1,
@@ -142,7 +180,7 @@ function main(): number {
 		console.error(`  ${rel}:${p.line}  ${p.message}`);
 	}
 	console.error("");
-	console.error("Every [Unreleased] entry files under one category, with the heading above it:");
+	console.error("Every [Unreleased] title appears once, under one category, with the heading above it:");
 	console.error("  ### 新功能");
 	console.error("  ### 改进");
 	console.error("  ### 修复");

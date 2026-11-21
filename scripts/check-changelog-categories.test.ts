@@ -59,6 +59,45 @@ describe("checkChangelogCategories", () => {
 		expect(result.counts).toEqual({ 新功能: 1, 改进: 0, 修复: 2 });
 	});
 
+	test("flags a title copied into a second category", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 新功能\n\n- **同一条目**：正文。\n  - EN: Same entry.\n\n### 修复\n\n- **同一条目**：另一处正文。\n  - EN: Same entry.\n`;
+		const result = checkChangelogCategories(content);
+		expect(result.problems).toHaveLength(1);
+		expect(result.problems[0]?.line).toBe(12);
+		expect(result.problems[0]?.message).toContain("duplicate entry title");
+		expect(result.problems[0]?.message).toContain("line 7");
+	});
+
+	test("compares titles after collapsing spacing and case", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 改进\n\n- **Fix  the Thing**：一。\n- **fix the thing**：二。\n`;
+		const result = checkChangelogCategories(content);
+		expect(result.problems).toHaveLength(1);
+		expect(result.problems[0]?.line).toBe(8);
+		expect(result.problems[0]?.message).toContain("duplicate entry title");
+	});
+
+	test("flags repeated plain bullets without a bold title", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 修复\n\n- 甲。\n- 甲。\n`;
+		const result = checkChangelogCategories(content);
+		expect(result.problems).toHaveLength(1);
+		expect(result.problems[0]?.line).toBe(8);
+		expect(result.problems[0]?.message).toContain("duplicate entry title");
+	});
+
+	test("ignores a title repeated only in the EN child or a continuation line", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 新功能\n\n- **甲条目**：正文。\n  - EN: **甲条目** in English.\n  - 续行也写 **甲条目**。\n\n- **乙条目**：正文。\n  - EN: **乙条目**.\n`;
+		const result = checkChangelogCategories(content);
+		expect(result.problems).toEqual([]);
+		expect(result.checked).toBe(2);
+	});
+
+	test("does not compare titles with or inside released sections", () => {
+		const content = `${HEADER}## [Unreleased]\n\n### 修复\n\n- **同一条目**：未发布。\n\n## [1.2.3] - 2026-01-01\n\n- **同一条目**：已发布。\n\n- **同一条目**：已发布重复。\n`;
+		const result = checkChangelogCategories(content);
+		expect(result.problems).toEqual([]);
+		expect(result.checked).toBe(1);
+	});
+
 	test("exposes the canonical category order", () => {
 		expect(CHANGELOG_CATEGORIES).toEqual(["新功能", "改进", "修复"]);
 	});

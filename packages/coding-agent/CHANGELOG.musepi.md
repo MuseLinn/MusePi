@@ -16,6 +16,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ### 改进
 
+- **顶栏下的空带现在能拖动窗口，圆角容器也更贴近顶栏**：左侧面板上方原本是一条只能看不能拖的空白带（只有 52px 宽的图标栏顶部能拖动窗口），现在整块侧栏宽度、从窗口顶到卡片上沿都能拖动窗口，卡片里的按钮、列表行与输入照常点击；两侧圆角卡片与顶栏之间的间距也从 16px 收到 8px，侧栏与会话卡片的上沿重新落在同一条线上。
+  - EN: The strip under the titlebar now moves the window, and the rounded cards sit closer to it. The area above the left sidebar used to be dead space — only the 52px icon rail's top band dragged — and now the whole sidebar width, from the window top down to the card edge, moves the window while buttons, list rows and inputs inside the card keep their clicks. The gap between both cards and the titlebar also drops from 16px to 8px, and the sidebar and session cards share the same top edge.
+
 - **单次工具执行有了自己的上限，写文件卡死不再拖住整轮**：`AgentTool` 新增 `timeoutMs`（这一次执行的上限）。到期时 loop 放弃该次执行、中止交给它的组合 signal，并结算一条超时错误结果，回合照常继续——模型可以换路径重试或报告失败，而不是整轮无声挂住。`write`/`edit`（300 秒）、`read`（600 秒）、`ast_edit`（900 秒）先接入，覆盖网络盘、被占用设备、冻结的远程写入这些自身没有超时的路径；超时结果会提示先核对目标再重试，因为放弃执行不等于副作用没有落地。没有上限的工具（等待人工的 `ask`、自带超时的 `bash`、子代理 `task`、转后台的作业）保持原有语义。
   - EN: A single tool execution now has its own ceiling, so a wedged file write can no longer hold the whole turn. `AgentTool` gains `timeoutMs`; on expiry the loop abandons that execution, aborts the combined per-call signal it handed the tool, and settles one timeout error result while the turn continues — the model can retry another path or report the failure instead of the session hanging silently. `write`/`edit` (300s), `read` (600s) and `ast_edit` (900s) opt in first, covering network shares, blocked devices and frozen remote writes, which have no timeout of their own. The timeout result tells the model to re-check the target before retrying, because abandoning an execution does not mean its side effect never landed. Tools without a ceiling (human-facing `ask`, self-bounded `bash`, subagent `task`, backgrounded jobs) keep their current semantics.
 

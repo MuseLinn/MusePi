@@ -31,6 +31,13 @@
  * width, fades and becomes inert; visibility is delayed until the fold ends. */
 .gui-side-keeper {
 	position: relative;
+	/* Window drag: the rail's top band stops at its 52px edge and the chat
+	 * header only spans the chat column, so the sidebar width above the card
+	 * used to be dead space that could not move the window (user: 顶栏在左侧
+	 * 面板的区域无法鼠标拖动移动窗口). The card opts out below, which leaves
+	 * exactly the empty strip above it draggable. Peek (zero width) and the
+	 * closed drawer (parked off-screen) keep no stray region. */
+	-webkit-app-region: drag;
 }
 
 .gui-side-keeper > .gui-pane-side {
@@ -56,26 +63,32 @@
 .gui-side-keeper[data-panel="capability"] > .gui-capability-slot {
 	position: relative;
 	width: var(--gui-side-w) !important;
-	/* The content column puts a gutter on BOTH .gui-chat-surface and the card,
-	 * so its top/bottom sit 48px + 16px in. Mirroring that two-layer gutter
-	 * makes both cards report the same top/bottom/height. */
-	height: calc(100% - var(--gui-header-h) - var(--gui-card-gutter) * 4);
+	/* The chat card starts ONE gutter below the header (gui-chat.css folds the
+	 * surface's invisible top gutter into the card's own, see
+	 * `.gui-chat-surface`), so the sidebar mirrors that single top gutter.
+	 * Both cards then report the same top edge and — with the same
+	 * two-gutter bottom — the same height. */
+	height: calc(100% - var(--gui-header-h) - var(--gui-card-gutter) * 3);
 	/* One gutter between the sidebar card and the chat card: both sides used
 	 * to contribute a full --gui-card-gutter, so the seam read as wasted
 	 * width. The chat surface keeps its half, the pane drops its own. */
-	margin: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2) 0 calc(var(--gui-card-gutter) * 2)
+	margin: calc(var(--gui-header-h) + var(--gui-card-gutter)) 0 calc(var(--gui-card-gutter) * 2)
 		var(--gui-card-gutter);
 	opacity: 1;
 	visibility: visible;
 	pointer-events: auto;
 }
 
-/* ── Rounded card surface: same tokens as .gui-chat-column / .gui-page-card */
+/* ── Rounded card surface: same tokens as .gui-chat-column / .gui-page-card
+ * Electron honors no-drag on DESCENDANTS of a drag region, so the card keeps
+ * every click while the keeper's empty strip above it moves the window; the
+ * card's own `.gui-pane-drag` row stays a drag strip. */
 .gui-side-keeper > .gui-pane-side {
 	border-radius: var(--radius-2xl);
 	box-shadow: var(--gui-card-shadow);
 	background: var(--color-surface);
 	overflow: hidden;
+	-webkit-app-region: no-drag;
 }
 
 /* The drag band used to clear the frameless titlebar; the card now starts
@@ -124,7 +137,7 @@
 	/* The docked active-pane selector is more specific; these geometry
 	 * overrides must win or the floating card keeps its in-flow box. */
 	position: fixed !important;
-	top: calc(var(--gui-header-h) + var(--gui-card-gutter) * 2);
+	top: calc(var(--gui-header-h) + var(--gui-card-gutter));
 	bottom: calc(var(--gui-card-gutter) * 2);
 	left: calc(var(--gui-rail-w) + var(--gui-card-gutter));
 	z-index: 42;
