@@ -80,6 +80,11 @@ export interface MarketplaceCardEntry {
 	versions?: readonly string[];
 	/** Catalog now resolves to a different source than the installed copy. */
 	sourceChanged?: boolean;
+	/**
+	 * Where the catalog resolves now (`repo` or `repo (dir)`), shown by the
+	 * reinstall confirmation. Present with {@link sourceChanged}.
+	 */
+	source?: string;
 	/** True while an install/remove/upgrade request is in flight. */
 	busy?: boolean;
 	/** Total installs across the marketplace; omit if unknown. */

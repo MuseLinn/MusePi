@@ -55,10 +55,6 @@ export function compareVersionsDescending(left: string, right: string): number {
 	return right.localeCompare(left, undefined, { numeric: true });
 }
 
-export function sortVersionsDescending(versions: readonly string[]): string[] {
-	return [...versions].sort(compareVersionsDescending);
-}
-
 export function sortVersionRefs(refs: readonly PluginVersionRef[]): PluginVersionRef[] {
 	return [...refs].sort((left, right) => compareVersionsDescending(left.version, right.version));
 }

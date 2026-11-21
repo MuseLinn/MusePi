@@ -122,12 +122,16 @@ function installedEntry(manager: MarketplaceManager) {
 describe("plugin version choices", () => {
 	test("tag 列表新版本在前，并补齐 catalog 版本", async () => {
 		const h = await setup();
-		const { versions, sourceChanged } = await h.manager.pluginVersionChoices("hello-plugin", "test-marketplace");
+		const { versions, sourceChanged, source } = await h.manager.pluginVersionChoices(
+			"hello-plugin",
+			"test-marketplace",
+		);
 
 		expect(versions.map(version => version.version)).toEqual(["2.0.0", "1.5.0", "1.0.0"]);
 		// The ref is what the installer actually checks out.
 		expect(versions[0]).toEqual({ version: "2.0.0", ref: "v2.0.0" });
 		expect(sourceChanged).toBe(false);
+		expect(source).toBe(`${path.resolve(h.marketplaceRoot)} (plugins/hello-plugin)`);
 	});
 
 	test("同一个版本只出现一次（catalog 版本与 tag 归一后合并）", async () => {
@@ -157,6 +161,19 @@ describe("installing a chosen version", () => {
 			h.manager.installPlugin("hello-plugin", "test-marketplace", { targetVersion: "9.9.9" }),
 		).rejects.toThrow(/Version 9\.9\.9 is not published/);
 		expect(await installedVersion(h.manager)).toBeUndefined();
+	});
+
+	test("选中 catalog 版本时按同名 tag 安装，而不是分支 HEAD", async () => {
+		const h = await setup();
+		// HEAD is already ahead of the last tag, as on a branch mid-development;
+		// the catalog still names 2.0.0.
+		await commitVersion(h.marketplaceRoot, "2.1.0-dev");
+
+		const entry = await h.manager.installPlugin("hello-plugin", "test-marketplace", { targetVersion: "2.0.0" });
+
+		expect(entry.version).toBe("2.0.0");
+		// The chosen version, not the head of the default branch.
+		expect(fs.readFileSync(path.join(entry.installPath, "index.ts"), "utf8")).toContain('"2.0.0"');
 	});
 });
 

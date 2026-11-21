@@ -94,17 +94,11 @@ function expandHome(value: string): string {
 }
 
 /**
- * True when two identities name the same code location. `repo` comparison is
- * optional: a caller that only knows one side's repository (the catalog list,
- * which has no catalog metadata for relative sources) compares repositories
- * alone and leaves the directory check to the install-time guard.
+ * True when two identities name the same code location: the same repository
+ * and, unless one side reports no directory at all, the same directory inside
+ * it. Callers only compare identities built from catalog metadata.
  */
-export function samePluginSource(
-	left: PluginSourceIdentity,
-	right: PluginSourceIdentity,
-	options: { includePath?: boolean } = {},
-): boolean {
+export function samePluginSource(left: PluginSourceIdentity, right: PluginSourceIdentity): boolean {
 	if (normalizeRepoKey(left.repo) !== normalizeRepoKey(right.repo)) return false;
-	if (options.includePath === false) return true;
 	return normalizeSourcePath(left.path) === normalizeSourcePath(right.path);
 }

@@ -8,7 +8,8 @@ export const marketplace = {
 	"marketplace.versionCurrent": "当前",
 	"marketplace.versionDowngradeBlocked": "已装版本更新，不支持降级",
 	"marketplace.upgradeToVersion": "升级到 v{version}",
-	"marketplace.replaceConfirm": "{name} 现在来自 “{source}”，与已装副本不是同一来源。要从那里重新安装 v{version} 吗？",
+	"marketplace.replaceConfirm":
+		"{name} 现在改为从 “{source}” 读取，与已装副本不是同一来源。要从那里重新安装 v{version} 吗？",
 } as const;
 
 /** Key union for the marketplace domain (source of truth). */

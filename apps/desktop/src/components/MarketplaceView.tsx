@@ -117,7 +117,9 @@ export function MarketplaceView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			action.entry.sourceChanged === true
 				? t("marketplace.replaceConfirm", {
 						name,
-						source: marketplace,
+						// The marketplace name is already part of the plugin ID, so
+						// only the resolved repository says what changed.
+						source: action.entry.source ?? marketplace,
 						version: action.targetVersion ?? action.entry.version ?? "?",
 					})
 				: t("guest.marketplaceUpgradeConfirm", {

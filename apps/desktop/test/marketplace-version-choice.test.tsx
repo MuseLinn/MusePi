@@ -232,23 +232,25 @@ describe("插件详情版本选择", () => {
 		await h.unmount();
 	});
 
-	test("catalog 换源时走重新安装确认，并带 replace", async () => {
+	test("catalog 换源时走重新安装确认，并写明新来源", async () => {
 		const h = await openView({
 			...BASE,
 			versions: ["2.0.0", "1.5.0"],
 			sourceChanged: true,
+			source: "https://github.com/other/hello-plugin.git",
 		});
 
 		await act(async () => {
 			footerUpgrade()!.click();
 		});
-		expect(confirmTitle()).toBe(
-			t("marketplace.replaceConfirm", {
-				name: "hello-plugin",
-				source: "test-marketplace",
-				version: "2.0.0",
-			}),
-		);
+		const confirm = t("marketplace.replaceConfirm", {
+			name: "hello-plugin",
+			source: "https://github.com/other/hello-plugin.git",
+			version: "2.0.0",
+		});
+		expect(confirmTitle()).toBe(confirm);
+		// The marketplace name the plugin id already carries is not the news.
+		expect(confirm).not.toContain("test-marketplace");
 
 		await clickOk();
 		expect(callsOf(h.requestSpy, "marketplace.upgrade")).toEqual([

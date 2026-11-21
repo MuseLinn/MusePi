@@ -80,8 +80,11 @@ function withSourceRef(entry: MarketplacePluginEntry, ref: string): MarketplaceP
 	return { ...entry, source: { ...rest, ref } as PluginSource };
 }
 
-/** Human-readable source for guard messages: `repo` or `repo (dir)`. */
-function describeSource(identity: PluginSourceIdentity): string {
+/**
+ * Human-readable source for guard and confirmation messages: `repo` or
+ * `repo (dir)`.
+ */
+export function describeSource(identity: PluginSourceIdentity): string {
 	const repo = identity.repo ?? "its marketplace";
 	const dir = normalizeSourcePath(identity.path);
 	return dir.length > 0 ? `${repo} (${dir})` : repo;
@@ -127,6 +130,12 @@ export interface PluginVersionChoices {
 	 * the installed copy — replacing it is a reinstall, not an update.
 	 */
 	sourceChanged: boolean;
+	/**
+	 * Where the catalog resolves now (`repo` or `repo (dir)`), shown by the
+	 * reinstall confirmation so the user can judge the replacement. Absent when
+	 * the source has no repository (`npm`), where the check cannot apply.
+	 */
+	source?: string;
 }
 
 export interface PluginInstallOptions {
@@ -684,23 +693,25 @@ export class MarketplaceManager {
 			active?.sourceRepo !== undefined &&
 			!samePluginSource(identity, { repo: active.sourceRepo, path: active.sourcePath ?? "" });
 
-		return { versions: sortVersionRefs([...byVersion.values()]), sourceChanged };
+		return {
+			versions: sortVersionRefs([...byVersion.values()]),
+			sourceChanged,
+			...(identity.repo !== undefined ? { source: describeSource(identity) } : {}),
+		};
 	}
 
-	/** Git ref that delivers `targetVersion`, or undefined when the catalog already is that version. */
+	/** Git ref that delivers `targetVersion`; undefined when only the catalog's own checkout carries it. */
 	async #resolveTargetRef(name: string, marketplace: string, targetVersion: string): Promise<string | undefined> {
-		const marketplaceEntry = await this.#resolveMarketplaceEntry(marketplace);
-		const catalog = await this.#readCatalog(marketplaceEntry);
-		const pluginEntry = catalog.plugins.find(p => p.name === name);
-		if (!pluginEntry) throw new Error(`Plugin "${name}" not found in marketplace "${marketplace}"`);
-		if (pluginEntry.version === targetVersion) return undefined;
-
 		const { versions } = await this.pluginVersionChoices(name, marketplace);
 		const match = versions.find(candidate => candidate.version === targetVersion);
-		if (!match || match.ref.length === 0) {
+		if (!match) {
 			throw new Error(`Version ${targetVersion} is not published for plugin "${name}@${marketplace}".`);
 		}
-		return match.ref;
+		// A published tag is installed by its ref even when the catalog names the
+		// same version: the catalog checkout follows the branch head, which may
+		// have moved past the last tag. Only a catalog version no tag publishes
+		// falls through to the current checkout.
+		return match.ref.length > 0 ? match.ref : undefined;
 	}
 
 	/**

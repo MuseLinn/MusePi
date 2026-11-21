@@ -7,7 +7,7 @@ import type { Settings } from "../../config/settings";
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from "../../discovery/helpers";
 import type { Extension } from "../../extensibility/extensions-center/types";
 import type { MarketplaceListEntry } from "../../extensibility/plugins/marketplace/list-entries";
-import type { MarketplaceManager } from "../../extensibility/plugins/marketplace/manager";
+import type { MarketplaceManager, PluginVersionChoices } from "../../extensibility/plugins/marketplace/manager";
 import type {
 	InstalledPluginsRegistry,
 	MarketplacePluginEntry,
@@ -418,14 +418,19 @@ export class MarketplaceService implements DaemonService {
 			// discovery is also a network read; a plugin whose detail still renders
 			// must not lose its whole dialog to an offline repository.
 			entry.installed === true
-				? manager.pluginVersionChoices(p.name, p.marketplace).catch(() => ({ versions: [], sourceChanged: false }))
-				: Promise.resolve({ versions: [], sourceChanged: false }),
+				? manager
+						.pluginVersionChoices(p.name, p.marketplace)
+						.catch((): PluginVersionChoices => ({ versions: [], sourceChanged: false }))
+				: Promise.resolve<PluginVersionChoices>({ versions: [], sourceChanged: false }),
 		]);
 		return {
 			...entry,
 			...detail,
 			versions: choices.versions.map(version => version.version),
 			sourceChanged: choices.sourceChanged,
+			// Where the catalog resolves now; the reinstall confirmation names it,
+			// because the marketplace name it replaces is not new information.
+			...(choices.source !== undefined ? { source: choices.source } : {}),
 		};
 	}
 
