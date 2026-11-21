@@ -269,7 +269,9 @@ SearXNG also reads the equivalent `searxng.endpoint`, `searxng.token`, `searxng.
 `searchAnthropic()` resolves credentials in this order:
 
 1. `ANTHROPIC_SEARCH_API_KEY`
-2. `authStorage.getApiKey("anthropic")` fallback credentials (runtime and config overrides, stored OAuth, a login-sourced API key, generic Anthropic environment fallback, then other stored API keys; the environment fallback is `ANTHROPIC_FOUNDRY_API_KEY` → `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY` in Foundry mode, or `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY` otherwise)
+2. The `authStorage.getApiKey("anthropic")` cascade — runtime and config overrides, stored OAuth, a `/login`-saved API key, other stored API keys, then the Anthropic environment fallback (`ANTHROPIC_FOUNDRY_API_KEY` → `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY` in Foundry mode, or `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY` otherwise), consulted only when nothing is stored for the provider
+
+`ANTHROPIC_SEARCH_API_KEY` sits ahead of the whole cascade, so a saved credential never displaces it: set it when search calls need a different credential from chat. Without it, a stored key or OAuth session wins over a same-named shell variable — see [Providers → Credentials and precedence](./providers.md#credentials-and-precedence). A stored key that holds a variable name still resolves through that variable, so its value never leaves the environment — see the `apiKey` behavior in [Model and Provider Configuration](./models.md#auth-and-api-key-resolution-order).
 
 For either credential path, base URL resolution is:
 
@@ -282,7 +284,7 @@ Related vars:
 
 | Variable                    | Default / behavior                                                                                                                                                                                |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_SEARCH_API_KEY`  | API key used exclusively for the Anthropic web search provider. Highest-priority search auth; overrides `ANTHROPIC_API_KEY` / OAuth / Foundry for search calls without affecting chat completions. |
+| `ANTHROPIC_SEARCH_API_KEY`  | API key used exclusively for the Anthropic web search provider. Resolved ahead of the whole `getApiKey("anthropic")` cascade, so it takes precedence over stored OAuth, stored API keys, `ANTHROPIC_API_KEY` and Foundry for search calls without affecting chat completions. |
 | `ANTHROPIC_SEARCH_BASE_URL` | Base URL used exclusively for the Anthropic web search provider. Applied to either `ANTHROPIC_SEARCH_API_KEY` or fallback Anthropic credentials; overrides `ANTHROPIC_BASE_URL` (and `FOUNDRY_BASE_URL` in Foundry mode) for search calls. |
 | `ANTHROPIC_SEARCH_MODEL`    | Search model override. Defaults to `claude-haiku-4-5`.                                                                                                                                             |
 | `ANTHROPIC_BASE_URL`        | Generic fallback base URL for Anthropic requests when no search-specific base URL is set.                                                                                                          |

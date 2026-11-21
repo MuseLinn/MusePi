@@ -34,9 +34,11 @@ Keyless 本地引擎是特例：当没有配置 key 时，`ollama`、`llama.cpp`
 2. **`models.yml` 配置 key**：固定在一个自定义 provider 上的 `apiKey`，以 config-sourced bearer 注册。它刻意压过存储的 OAuth，这样为自定义 `baseUrl` 或网关提供的 key 会被采用，而不是转发代理会拒绝的上游 OAuth token。
 3. **存储的 OAuth 凭据**：在需要时刷新；多个账户自动排序并轮换。对于 Anthropic 和 ChatGPT (Codex)，每个 organization 或 workspace 算作一个账户：同一个 email 持有 Team 或 Enterprise seat 及 personal plan 时可以按订阅各登录一次（在浏览器同意页选择 workspace），轮换会把它当作两个账户。
 4. **登录来源的存储 API key**：由一次成功的 `/login` 保存的 API-key 凭据。
-5. **Provider 环境变量**：包括从 `.env` 文件加载的值（见 [env-var 表](#环境变量与-env-文件)）。
-6. **其他存储的 API key**：例如 broker 迁移的 key。这是最后手段，以确保显式环境变量胜出。
+5. **其他存储的 API key**：导入或恢复的 key（Setup、`importApiKey`、broker 快照）、broker 迁移的副本，以及早于来源记录写入的旧记录。
+6. **Provider 环境变量**：包括从 `.env` 文件加载的值（见 [env-var 表](#环境变量与-env-文件)）。仅当存储中没有该 provider 的凭据时才会查询。
 7. **`models.yml` fallback resolver**：未以其他方式注册的自定义 provider 的 key。
+
+保存的凭据始终优先于启动环境，无论它由谁写入：通过 `/login`、Setup 导入或 broker 恢复存入的 key 都会生效，即使 shell 导出了同名的 provider 变量。来源只决定存储内部的顺序——`/login` 写入的 key 优先于导入的 key。若要覆盖已保存的 key，使用 `--api-key`（仅作用于当前进程，从不持久化），或在 `models.yml` 固定 `apiKey`（在你移除之前一直生效）；在该 shell 里导出 provider 变量不算覆盖，因为只有存储中没有 key 时它才提供值。
 
 存储的凭据位于 auth store，本地认证在 `~/.musepi/agent/agent.db`，以 broker 模式运行时在配置的 auth-broker snapshot 中。（`PI_CODING_AGENT_DIR` 会重定位 `~/.musepi/agent` 基础目录，auth store 也随之移动。）
 
@@ -351,7 +353,7 @@ disabledProviders:
 
 **某个 provider 的模型不可选择。** 确认该 provider 有凭据（`/login <provider>`、导出的环境变量或 `models.yml` 的 `apiKey`），并且它的 ID 不在生效的 `disabledProviders` 列表中。记住规则：未被禁用**且**（keyless **或**有凭据）。Keyless 本地引擎只在引擎实际运行并有响应时才出现。
 
-**使用了错误的 key（来自 `.env` 的过期 key）。** 解析优先 runtime `--api-key`，然后是 `models.yml` 配置 key、存储的 OAuth、由 `/login` 保存的 key、环境变量或 `.env`、其他存储的 API key，最后是 `models.yml` fallback resolver。已设置的进程环境变量也胜过每个 `.env` 文件，且 `<cwd>/.env` 胜过 `~/.env`。如果意外 key 胜出，检查是否有导出的 shell 变量以及按优先级顺序的四个 `.env` 文件，并清除那个本不应生效的。
+**使用了错误的 key（来自 `.env` 的过期 key）。** 解析优先 runtime `--api-key`，然后是 `models.yml` 配置 key、存储的 OAuth、由 `/login` 保存的 key、其他存储的 API key、环境变量或 `.env`，最后是 `models.yml` fallback resolver。已设置的进程环境变量也胜过每个 `.env` 文件，且 `<cwd>/.env` 胜过 `~/.env`。如果意外 key 胜出，检查是否有导出的 shell 变量以及按优先级顺序的四个 `.env` 文件，并清除那个本不应生效的。
 
 **即使我禁用了，某个 provider 仍然出现。** `disabledProviders` 数组是被替换而不是合并：项目的 `<project>/.musepi/config.yml` 数组会完全覆盖全局数组。验证你所在目录的*生效*列表（路径作用域条目只在其配置路径处或路径之下适用），并确认 ID 拼写精确。用 `musepi config get disabledProviders` 检查合并后的值（见 [设置](./settings.md)）。
 

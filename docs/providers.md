@@ -34,9 +34,11 @@ When a provider needs an API key, `musepi` resolves it in this order (first matc
 2. **`models.yml` config key**: an `apiKey` pinned on a custom provider, registered as a config-sourced bearer. This deliberately beats stored OAuth, so a key supplied for a custom `baseUrl` or gateway is honored instead of forwarding an upstream OAuth token the proxy would reject.
 3. **Stored OAuth credential**: refreshed when needed; multiple accounts are ranked and rotated automatically. For Anthropic and ChatGPT (Codex), each organization or workspace counts as its own account: one email holding both a Team or Enterprise seat and a personal plan can log in once per subscription (pick the workspace on the browser consent page), and rotation treats them as two accounts.
 4. **Login-sourced stored API key**: an API-key credential saved by a successful `/login`.
-5. **Provider environment variable**: including values loaded from `.env` files (see [the env-var table](#environment-variables-and-env-files)).
-6. **Other stored API key**: for example, a broker-migrated key. This is a last resort so an explicit environment variable wins.
+5. **Other stored API key**: an imported or restored key (Setup, `importApiKey`, a broker snapshot), a broker-migrated copy, or a legacy row written before provenance was recorded.
+6. **Provider environment variable**: including values loaded from `.env` files (see [the env-var table](#environment-variables-and-env-files)). Consulted only when the store holds no credential for the provider.
 7. **`models.yml` fallback resolver**: keys for custom providers not otherwise registered.
+
+A saved credential always outranks the launch environment, whatever wrote it: a key stored through `/login`, Setup import, or a broker restore takes effect even when the shell exports the same provider variable. Provenance only orders credentials inside the store — a `/login`-written key is preferred over an imported one. To override a stored key, pass `--api-key` (process-scoped, never persisted) or pin `models.yml` `apiKey` (which keeps winning until you remove it); exporting the provider variable in that shell is not an override, because it only supplies a key when nothing is stored.
 
 Stored credentials live in the auth store at `~/.musepi/agent/agent.db` for local auth, or in the configured auth-broker snapshot when running in broker mode. (`PI_CODING_AGENT_DIR` relocates the `~/.musepi/agent` base, and the auth store moves with it.)
 
@@ -351,7 +353,7 @@ disabledProviders:
 
 **A provider's models are not selectable.** Confirm the provider has credentials (`/login <provider>`, an exported environment variable, or a `models.yml` `apiKey`) and that its ID is not in the effective `disabledProviders` list. Remember the rule: not disabled **and** (keyless **or** has credentials). Keyless local engines only appear once the engine is actually running and responding.
 
-**The wrong key is being used (a stale key from `.env`).** Resolution favors runtime `--api-key`, then a `models.yml` config key, stored OAuth, a key saved by `/login`, environment or `.env`, other stored API keys, and finally the `models.yml` fallback resolver. An already-set process environment variable also beats every `.env` file, and `<cwd>/.env` beats `~/.env`. If an unexpected key wins, check for an exported shell variable and the four `.env` files in precedence order, and clear the one that should not apply.
+**The wrong key is being used (a stale key from `.env`).** Resolution favors runtime `--api-key`, then a `models.yml` config key, stored OAuth, a key saved by `/login`, other stored API keys, environment or `.env`, and finally the `models.yml` fallback resolver. An already-set process environment variable also beats every `.env` file, and `<cwd>/.env` beats `~/.env`. If an unexpected key wins, check for an exported shell variable and the four `.env` files in precedence order, and clear the one that should not apply.
 
 **A provider still appears even though I disabled it.** `disabledProviders` arrays are replaced, not merged: a project `<project>/.musepi/config.yml` array fully overrides the global one. Verify the *effective* list for the directory you are in (path-scoped entries only apply at or under their configured path), and confirm the ID is spelled exactly. Use `musepi config get disabledProviders` to inspect the merged value (see [Settings](./settings.html)).
 

@@ -2828,7 +2828,7 @@ export class AuthStorage {
 	/**
 	 * Classify where a provider's auth comes from, following the same precedence
 	 * as {@link AuthStorage.getApiKey}: runtime override → config override →
-	 * stored OAuth → login-stored api_key → env var → stored api_key →
+	 * stored OAuth → login-stored api_key → any other stored api_key → env var →
 	 * fallback resolver. Returns undefined when no auth is configured.
 	 *
 	 * Compact, structured counterpart to {@link describeCredentialSource}.
@@ -2841,8 +2841,8 @@ export class AuthStorage {
 		if (stored.some(credential => credential.type === "api_key" && credential.source === "login")) {
 			return { kind: "api_key" };
 		}
-		if (getEnvApiKey(provider)) return { kind: "env", envVar: getEnvApiKeyName(provider) };
 		if (stored.some(credential => credential.type === "api_key")) return { kind: "api_key" };
+		if (getEnvApiKey(provider)) return { kind: "env", envVar: getEnvApiKeyName(provider) };
 		if (this.#fallbackResolver?.(provider)) return { kind: "fallback" };
 		return undefined;
 	}
@@ -5463,8 +5463,8 @@ export class AuthStorage {
 			return configKey;
 		}
 
-		// Precedence: a deliberate OAuth/login credential wins, then an explicit env var,
-		// then a stored static api_key (which may be a stale broker-migrated copy) as a last resort.
+		// Precedence: a deliberate OAuth/login credential wins, then any other stored
+		// api_key; the launch environment applies only when storage holds no key.
 		const oauthSelection = this.#selectCredentialByType(provider, "oauth");
 		if (oauthSelection) {
 			const expiresAt = oauthSelection.credential.expires;
@@ -5490,13 +5490,13 @@ export class AuthStorage {
 			return this.#configValueResolver(loginApiKeySelection.credential.key);
 		}
 
-		const envKey = getEnvApiKey(provider);
-		if (envKey) return envKey;
-
 		const apiKeySelection = this.#selectCredentialByType(provider, "api_key");
 		if (apiKeySelection) {
 			return this.#configValueResolver(apiKeySelection.credential.key);
 		}
+
+		const envKey = getEnvApiKey(provider);
+		if (envKey) return envKey;
 
 		return this.#fallbackResolver?.(provider) ?? undefined;
 	}
@@ -5508,8 +5508,8 @@ export class AuthStorage {
 	 * 2. Config override (models.yml `providers.<name>.apiKey`)
 	 * 3. OAuth token from storage (auto-refreshed)
 	 * 4. API key persisted by a successful `/login`
-	 * 5. Environment variable
-	 * 6. Stored API key (e.g. a broker-migrated copy) — last resort, so an explicit env var wins
+	 * 5. Any other stored API key (imported, restored, broker-migrated, legacy rows without a source)
+	 * 6. Environment variable (including `.env` files) — applies only when storage has no key
 	 * 7. Fallback resolver (models.yml custom providers, last-resort)
 	 */
 	async getApiKey(provider: string, sessionId?: string, options?: AuthApiKeyOptions): Promise<string | undefined> {
@@ -5529,8 +5529,11 @@ export class AuthStorage {
 			return configKey;
 		}
 
-		// Precedence: a deliberate OAuth/login credential wins, then an explicit env var,
-		// then a stored static api_key (which may be a stale broker-migrated copy) as a last resort.
+		// A saved credential always wins over the launch environment: a key the
+		// user stored must take effect for every provider, or a same-named shell
+		// variable silently displaces it. Source only orders credentials inside
+		// the store (login first, matching /login's deliberate write); it never
+		// decides whether storage beats the environment.
 		const oauthResolved = await this.#resolveOAuthSelection(provider, sessionId, options);
 		if (oauthResolved) {
 			return oauthResolved.apiKey;
@@ -5547,12 +5550,10 @@ export class AuthStorage {
 		}
 
 		// Past OAuth: the session sticky (if any) is stale — the request authenticates via
-		// env/api_key/fallback, not OAuth, so clear it now so getOAuthAccountId() correctly
-		// suppresses account_uuid for this session.
+		// stored api_key/env/fallback, not OAuth, so clear it now so getOAuthAccountId()
+		// correctly suppresses account_uuid for this session.
 		if (sessionId) this.#sessionLastCredential.get(provider)?.delete(sessionId);
 
-		const envKey = getEnvApiKey(provider);
-		if (envKey) return envKey;
 		const apiKeySelection = await this.#selectApiKeyCredential(
 			provider,
 			sessionId,
@@ -5563,6 +5564,9 @@ export class AuthStorage {
 			this.#recordSessionCredential(provider, sessionId, "api_key", apiKeySelection.index);
 			return this.#configValueResolver(apiKeySelection.credential.key);
 		}
+
+		const envKey = getEnvApiKey(provider);
+		if (envKey) return envKey;
 
 		// Fall back to custom resolver (e.g., models.json custom providers)
 		return this.#fallbackResolver?.(provider) ?? undefined;
@@ -6712,8 +6716,9 @@ export class AuthStorage {
 	 *   2. Config override (`models.yml` `providers.<name>.apiKey`).
 	 *   3. Stored OAuth credential.
 	 *   4. API key persisted by a successful `/login`.
-	 *   5. Env var — overrides a stored static api_key (e.g. a stale broker copy).
-	 *   6. Stored api_key credential.
+	 *   5. Any other stored api_key credential (imported, restored, broker-migrated,
+	 *      or a legacy row without a source).
+	 *   6. Env var — applies only when storage holds no key.
 	 *   7. Fallback resolver.
 	 *
 	 * The string is purely informational; consumers must not parse it.
@@ -6747,7 +6752,8 @@ export class AuthStorage {
 			return `${baseLabel} · ${type} #${chosen.id} (${identity})`;
 		};
 
-		// Deliberate login credentials win; then an explicit env var; then a stored static api_key.
+		// Deliberate login credentials win, then any other stored api_key; the
+		// launch environment is reported only when storage holds no key.
 		const oauthSource = describeStored("oauth");
 		if (oauthSource) return oauthSource;
 		const loginApiKeySource = describeStored(
@@ -6755,12 +6761,12 @@ export class AuthStorage {
 			credential => credential.type === "api_key" && credential.source === "login",
 		);
 		if (loginApiKeySource) return loginApiKeySource;
-		if (getEnvApiKey(provider)) return `env (over ${baseLabel})`;
 		const apiKeySource = describeStored(
 			"api_key",
 			credential => credential.type !== "api_key" || credential.source !== "login",
 		);
 		if (apiKeySource) return apiKeySource;
+		if (getEnvApiKey(provider)) return `env (no stored key in ${baseLabel})`;
 		if (this.#fallbackResolver?.(provider) !== undefined) return "fallback resolver";
 		return undefined;
 	}

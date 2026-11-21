@@ -439,9 +439,11 @@ When requesting a key for a provider, effective order is:
 3. Extension credential resolver (`registerProvider({ resolveApiKey })`)
 4. Stored OAuth credential (with refresh)
 5. Login-sourced stored API key
-6. Environment variable mapping (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.)
-7. Other stored API key, such as a broker-migrated copy
+6. Other stored API key — imported or restored (Setup, broker snapshot), broker-migrated, or a legacy row without provenance
+7. Environment variable mapping (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.), consulted only when storage holds no key for the provider
 8. ModelRegistry fallback resolver (`models.yml` custom providers, using env-name-or-literal semantics)
+
+The full rationale and the single-run override are documented under [Providers → Credentials and precedence](providers.md#credentials-and-precedence); a shell-exported variable no longer displaces a stored key.
 
 `models.yml` `apiKey` behavior:
 
@@ -459,7 +461,7 @@ Keyless providers:
 
 ### Broker mode
 
-When `MUSEPI_AUTH_BROKER_URL` (or `auth.broker.url`) is set, the local SQLite credential store is replaced by `RemoteAuthCredentialStore`. Layers 3, 4, and 6 above (stored OAuth and API-key credentials) are served from a broker-supplied snapshot whose `refresh` tokens are redacted; expiry triggers `POST /v1/credential/:id/refresh` on the broker rather than a local refresh.
+When `MUSEPI_AUTH_BROKER_URL` (or `auth.broker.url`) is set, the local SQLite credential store is replaced by `RemoteAuthCredentialStore`. Layers 4, 5, and 6 above (stored OAuth and API-key credentials) are served from a broker-supplied snapshot whose `refresh` tokens are redacted; expiry triggers `POST /v1/credential/:id/refresh` on the broker rather than a local refresh.
 
 `AuthStorage.setConfigApiKey` lets a `models.yml` `apiKey` win over a broker-resolved OAuth token without overriding a runtime `--api-key`. See [`auth-broker-gateway.md`](./auth-broker-gateway.html) for the full broker / gateway design and env surface (`MUSEPI_AUTH_BROKER_URL`, `MUSEPI_AUTH_BROKER_TOKEN`, `auth.broker.url`, `auth.broker.token`).
 

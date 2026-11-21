@@ -270,7 +270,9 @@ SearXNG 还从 `~/.musepi/agent/config.yml` 读取等价的 `searxng.endpoint`�
 `searchAnthropic()` 按此顺序解析凭据：
 
 1. `ANTHROPIC_SEARCH_API_KEY`
-2. `authStorage.getApiKey("anthropic")` 回退凭据（运行时与配置覆盖、存储的 OAuth、登录来源的 API key、通用 Anthropic 环境回退，然后是其他存储的 API key；环境回退在 Foundry 模式下为 `ANTHROPIC_FOUNDRY_API_KEY` → `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY`，否则为 `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY`）
+2. `authStorage.getApiKey("anthropic")` 级联——运行时与配置覆盖、存储的 OAuth、由 `/login` 保存的 API key、其他存储的 API key，最后是 Anthropic 环境回退（在 Foundry 模式下为 `ANTHROPIC_FOUNDRY_API_KEY` → `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY`，否则为 `ANTHROPIC_OAUTH_TOKEN` → `ANTHROPIC_API_KEY`），仅在存储中没有该 provider 的凭据时才查询
+
+`ANTHROPIC_SEARCH_API_KEY` 位于整个级联之前，因此保存的凭据不会挤掉它：当搜索调用需要与聊天不同的凭据时设置它。未设置时，存储的 key 或 OAuth session 会压过同名的 shell 变量——见 [Providers 的「凭据与优先级」](./providers.zh-CN.md#凭据与优先级)。若存储的 key 存的是变量名，它仍通过该变量解析，因此其值始终留在环境里——见 [Model 与 Provider 配置](./models.zh-CN.md#auth-与-api-key-解析顺序) 中 `apiKey` 的行为。
 
 对于任一条凭据路径，base URL 解析为：
 
@@ -283,7 +285,7 @@ SearXNG 还从 `~/.musepi/agent/config.yml` 读取等价的 `searxng.endpoint`�
 
 | 变量                        | 默认 / 行为                                                                                                                                                                                 |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ANTHROPIC_SEARCH_API_KEY`  | 专用于 Anthropic 网页搜索 provider 的 API key。最高优先级的搜索认证；在不影响聊天补全的情况下，为搜索调用覆盖 `ANTHROPIC_API_KEY` / OAuth / Foundry。 |
+| `ANTHROPIC_SEARCH_API_KEY`  | 专用于 Anthropic 网页搜索 provider 的 API key。在整个 `getApiKey("anthropic")` 级联之前解析，因此对搜索调用而言优先于存储的 OAuth、存储的 API key、`ANTHROPIC_API_KEY` 与 Foundry，同时不影响聊天补全。 |
 | `ANTHROPIC_SEARCH_BASE_URL` | 专用于 Anthropic 网页搜索 provider 的 base URL。应用于 `ANTHROPIC_SEARCH_API_KEY` 或回退 Anthropic 凭据；为搜索调用覆盖 `ANTHROPIC_BASE_URL`（以及 Foundry 模式下的 `FOUNDRY_BASE_URL`）。 |
 | `ANTHROPIC_SEARCH_MODEL`    | 搜索模型覆盖。默认为 `claude-haiku-4-5`。                                                                                                                                                         |
 | `ANTHROPIC_BASE_URL`        | 在未设置搜索专属 base URL 时，Anthropic 请求的通用回退 base URL。                                                                                                                              |
