@@ -112,6 +112,20 @@ describe("advisor", () => {
 		it("returns undefined when there are no context files", () => {
 			expect(formatAdvisorContextPrompt([])).toBeUndefined();
 		});
+
+		it("renders the session's additional workspace roots", () => {
+			const rendered = formatAdvisorContextPrompt([], ["/projects/references", "/projects/vscode"]);
+			expect(rendered).toContain("<workspace-roots>");
+			expect(rendered).toContain("- /projects/references");
+			expect(rendered).toContain("- /projects/vscode");
+			expect(rendered).toContain("NEVER report them as missing or absent");
+		});
+
+		it("omits the project-context block when there are only additional roots", () => {
+			const rendered = formatAdvisorContextPrompt([], ["/projects/references"]);
+			expect(rendered).not.toContain("<project-context>");
+			expect(rendered).toContain("<workspace-roots>");
+		});
 	});
 
 	describe("formatSessionHistoryMarkdown includeThinking", () => {

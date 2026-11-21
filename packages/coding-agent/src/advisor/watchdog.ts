@@ -17,17 +17,26 @@ export function formatActiveRepoWatchdogPrompt(activeRepoContext: ActiveRepoCont
 }
 
 /**
- * Render the project context files (AGENTS.md and the like) into a block for the
- * advisor's system prompt, mirroring how the primary agent receives them. Gives
- * the read-only reviewer the user's standing project instructions so it can hold
- * the driving agent to them instead of advising against project conventions it
- * cannot otherwise see. Returns undefined when there are no context files.
+ * Render the workspace facts the advisor needs into its system prompt: the
+ * project context files (AGENTS.md and the like) and the session's additional
+ * workspace roots. Mirrors how the primary agent receives them so the
+ * read-only reviewer can hold the driving agent to the user's standing
+ * instructions and find files outside the working directory instead of
+ * judging them absent. Returns undefined when there is nothing to render.
  */
 export function formatAdvisorContextPrompt(
 	contextFiles: ReadonlyArray<{ path: string; content: string }>,
+	additionalDirectories: readonly string[] = [],
 ): string | undefined {
-	if (contextFiles.length === 0) return undefined;
-	return prompt.render(contextFilesTemplate, { contextFiles }).trim() || undefined;
+	if (contextFiles.length === 0 && additionalDirectories.length === 0) return undefined;
+	return (
+		prompt
+			.render(contextFilesTemplate, {
+				contextFiles,
+				additionalWorkspaceRoots: additionalDirectories,
+			})
+			.trim() || undefined
+	);
 }
 
 /**
