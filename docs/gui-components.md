@@ -36,7 +36,7 @@ scope:
 | `--ease-appear` / `--ease-dismiss` / `--ease-one-take`, `--duration-one-take`, `--one-take-offset`, `--one-take-exit`, `--one-take-enter` | Arrival/exit fades and shared-surface (one-take) timing | `::view-transition-group` takes `--ease-one-take` + `--duration-one-take` (280ms); its old/new snapshots take `--one-take-exit` (120ms) / `--one-take-enter` (180ms) with the appear/dismiss pair and `--one-take-offset`. WAAPI flights read the same pair through `oneTakeMotion()` |
 | `--z-*` | Stacking levels | Floats, modals and tips have their own tiers |
 | `--gui-grip-*` | Splitter grip geometry and three states | See `SplitterGrip` below |
-| `--gui-slider-*` | Slider track, fill, detents, knob, focus, hover and disabled states | Declared in `gui-chat.css` (this family's authority); one family for **every** slider — see `LadderSlider` below |
+| `--gui-slider-*` | Slider track, fill, detents, knob, focus, hover and disabled states | Declared in `gui-chat.css` (this family's authority); one family for the in-scope sliders — see `LadderSlider` below and the exception list under it |
 
 ## Desktop shell (`apps/desktop/src/components/`)
 
@@ -50,8 +50,10 @@ scope:
 | `ContextPanel` | The right panel itself (tabs, split, maximize) | The only container for right-panel content |
 | `LadderSlider` (thinking) | The model's thinking-level slider, with `Auto` and the model ceiling | `components/LadderSlider.tsx`, under the agent tab's model card; a drag commits on release, rungs above the ceiling stay visible but unreachable |
 | `LadderSlider` (settings) | Detent ladder for a numeric setting that declares presets | `components/settings-controls/LadderSlider.tsx`; the pointer/keys can only land on declared values |
-| `--gui-slider-*` consumers | Any slider | Both ladders draw the full track; native `<input class="gui-range">` (sound, voice, pet size, notifications) takes the same fill/disabled colours |
+| `--gui-slider-*` consumers | The two custom ladders and two opted-in native ranges | Both ladders draw the full track; the only native `<input class="gui-range">` call sites are the notification master volume (`settings-sections/notifications.tsx`) and the companion size (`settings-sections/companion.tsx`). Scope and exceptions: see below |
 | Host bands for `SplitterGrip` | `.gui-resize-x--side` / `.gui-pane-resize-x` / `.gui-dock-handle` | The positioning layer for each of the three seams |
+
+**Slider scope.** The family covers the two ladders and those two native ranges. Four shipped sliders stay outside it on purpose, each in its own surface: `.gui-sketch-range` (SketchPad thickness, `gui-composer.css`), the browser device-toolbar range (`gui-browser-toolbar.css`), the screenshot stroke width (`.gui-shot-weight input`, `ScreenshotEditorDialog.tsx`) and `.tr-ui-range` (`packages/client-core/src/ui-blocks/ui-blocks.css`); the mobile `VoicePanel` rate (`packages/client-core`) is a fifth. They may adopt the family inside their own scopes; until then they must not copy its geometry by hand. Desktop voice settings have no slider at all — `tts.rate` is a schema number that renders as the rolling counter.
 
 ## Shared components (`packages/client-core/src/components/`)
 

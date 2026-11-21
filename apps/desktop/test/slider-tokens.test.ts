@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 /**
- * One slider contract for every slider in the GUI (2026-11-22).
+ * One slider contract for the GUI's in-scope sliders (2026-11-22).
  *
  * The thinking ladder used to be a native `<input type=range>` with its own
  * 4px rail and 14px thumb while the settings detent ladder carried a second,
@@ -11,9 +11,10 @@ import * as path from "node:path";
  * later rule silently gave the agent slider the settings ladder's 210px width.
  * They now share ONE token family (`--gui-slider-*`) and one visual
  * vocabulary: thick rail, gradient fill, detent dots, a knob that lifts on
- * hover/drag, the same focus halo and disabled opacity. The native
- * `.gui-range` inputs (sound, voice, pet size, notifications) consume the
- * same colours through `accent-color`.
+ * hover/drag, the same focus halo and disabled opacity. The two native
+ * `.gui-range` opt-ins (notification master volume, companion size) consume
+ * the same colours through `accent-color`; the sliders listed under "Slider
+ * scope" in `docs/gui-components.md` stay outside the family.
  */
 
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
@@ -120,6 +121,37 @@ describe("shared slider tokens", () => {
 		expect(pane).toContain("aria-expanded={modelOpen}");
 		expect(pane).toContain("active={modelOpen}");
 		expect(pane).toContain("onDismiss={collapseModel}");
+	});
+
+	test("a disabled slider never lifts its knob on hover", () => {
+		const chat = read(CHAT);
+		// `scripts/check-disabled-hover.ts` only understands the `:disabled`
+		// pseudo-class, so a disabled state carried on `data-disabled` needs its
+		// own gate: the hover rule must exclude it at the wrapper.
+		const knob = rules(chat, ".gui-slider-knob").filter(rule => rule.body.includes("hover-scale"));
+		expect(knob.length).toBeGreaterThan(0);
+		for (const rule of knob) {
+			expect(rule.selector).toContain(':not([data-disabled="true"])');
+		}
+		// Same for the settings ladder's `--disabled` modifier class.
+		const thumb = rules(chat, ".gui-ladder-thumb").filter(rule => rule.body.includes("hover-scale"));
+		expect(thumb.length).toBeGreaterThan(0);
+		for (const rule of thumb) {
+			expect(rule.selector).toContain(":not(.gui-ladder--disabled)");
+		}
+	});
+
+	test("pointer math reads the laid-out rail, never a restated knob radius", () => {
+		const component = read(COMPONENT);
+		// `--gui-slider-inset` is the single authority for the end-stop inset;
+		// the component measures the CSS-inset rail so a knob-size change moves
+		// hit-testing with it.
+		expect(component).not.toContain("KNOB_INSET");
+		expect(component).toContain("railRef");
+		expect(component).toContain('className="gui-slider-rail"');
+		expect(component).toContain("railRef.current?.getBoundingClientRect()");
+		// The drag delta was dead: the drag maps absolute pointer x.
+		expect(component).not.toContain("startX");
 	});
 
 	test("reduced motion drops the new transitions", () => {

@@ -35,7 +35,7 @@ English | [中文](gui-components.zh-CN.md)
 | `--spring-*` / `--gui-motion-*` | 动效曲线与时长 | `prefers-reduced-motion` 与动效开关需同时关闭 |
 | `--z-*` | 层级 | 浮层、模态、提示各有档位 |
 | `--gui-grip-*` | 分割握柄几何与三态 | 见下方 `SplitterGrip` |
-| `--gui-slider-*` | 滑块轨道、填充、档位点、滑块、焦点、悬停与禁用态 | 声明在 `gui-chat.css`（该族的权威位置）；**所有**滑块共用一族——见下方 `LadderSlider` |
+| `--gui-slider-*` | 滑块轨道、填充、档位点、滑块、焦点、悬停与禁用态 | 声明在 `gui-chat.css`（该族的权威位置）；覆盖范围内的滑块共用一族——见下方 `LadderSlider` 与紧随其后的例外清单 |
 
 ## 桌面壳（`apps/desktop/src/components/`）
 
@@ -49,8 +49,10 @@ English | [中文](gui-components.zh-CN.md)
 | `ContextPanel` | 右侧面板本体（标签页、分栏、最大化） | 右面板内容的唯一容器 |
 | `LadderSlider`（思考） | 模型思考强度滑块，含 `Auto` 与模型上限 | `components/LadderSlider.tsx`，位于 Agent 标签页模型卡片下方；拖动松手才提交，上限以上档位可见但不可选 |
 | `LadderSlider`（设置） | 带预设档位的数值设置阶梯 | `components/settings-controls/LadderSlider.tsx`；指针与方向键只能落在已声明档位 |
-| `--gui-slider-*` 消费方 | 任何滑块 | 两套阶梯共用完整轨道；原生 `<input class="gui-range">`（音量、语音、宠物大小、通知）复用同一填充/禁用色 |
+| `--gui-slider-*` 消费方 | 两套自定义阶梯 + 两个自愿接入的原生 range | 两套阶梯共用完整轨道；原生 `<input class="gui-range">` 全仓只有两处：通知主音量（`settings-sections/notifications.tsx`）与桌宠尺寸（`settings-sections/companion.tsx`）。适用范围与例外见下 |
 | `SplitterGrip` 的宿主命中带 | `.gui-resize-x--side` / `.gui-pane-resize-x` / `.gui-dock-handle` | 三条接缝各自的定位层 |
+
+**滑块适用范围。** 该族覆盖两套阶梯与上述两个原生 range。有四处已发布滑块**有意**留在族外，各自属于独立表面：`.gui-sketch-range`（画板笔宽，`gui-composer.css`）、浏览器设备栏的宽高 range（`gui-browser-toolbar.css`）、截图编辑器的描边宽度（`.gui-shot-weight input`，`ScreenshotEditorDialog.tsx`）与 `.tr-ui-range`（`packages/client-core/src/ui-blocks/ui-blocks.css`）；移动端 `VoicePanel` 的语速是第五处。它们可以在各自的 scope 内收敛到该族；在此之前不得手抄族内几何。桌面端语音设置没有滑块——`tts.rate` 是 schema 数值，渲染成滚动数字。
 
 ## 共享组件（`packages/client-core/src/components/`）
 

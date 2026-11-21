@@ -149,24 +149,32 @@ function slider(host: HTMLElement): HTMLElement {
 	return track!;
 }
 
-/** Happy-dom lays nothing out; give the track a real width so the pointer
- *  position maps onto rungs the way it does in the app. */
-function stubTrackWidth(track: HTMLElement, width = 200): void {
-	track.getBoundingClientRect = () =>
+/** Happy-dom lays nothing out; give the track and its rail real widths so the
+ *  pointer position maps onto rungs the way it does in the app. The rail is
+ *  the CSS-inset travel span (`--gui-slider-inset`), which is exactly what the
+ *  component measures — passing a different knob size here is how the tests
+ *  prove the pointer math follows layout instead of a baked-in radius. */
+function stubTrackWidth(track: HTMLElement, width = 200, knob = 18): void {
+	const rect = (left: number, span: number): DOMRect =>
 		({
-			left: 0,
+			left,
 			top: 0,
-			right: width,
+			right: left + span,
 			bottom: 28,
-			width,
+			width: span,
 			height: 28,
-			x: 0,
+			x: left,
 			y: 0,
 			toJSON: () => ({}),
 		}) as DOMRect;
+	track.getBoundingClientRect = () => rect(0, width);
+	const rail = track.querySelector<HTMLElement>(".gui-slider-rail");
+	expect(rail).not.toBeNull();
+	const inset = knob / 2;
+	rail!.getBoundingClientRect = () => rect(inset, width - inset * 2);
 }
 
-/** x of rung `index` on a 200px track (9px knob inset each side). */
+/** x of rung `index` on a 200px track with an 18px knob (9px inset a side). */
 function rungX(index: number, rungs = 6, width = 200): number {
 	return 9 + (width - 18) * (index / rungs);
 }
@@ -361,6 +369,22 @@ describe("agent info pane", () => {
 		expect(track.getAttribute("aria-valuenow")).toBe("2");
 		await act(async () => pointer(track, "pointerup", rungX(2)));
 		expect(level(calls)).toBe("low");
+		await unmount();
+	});
+
+	it("maps the press through the laid-out rail, not a baked-in knob radius", async () => {
+		const { rpc } = makeRpc();
+		const { host, unmount } = await mount(rpc);
+		const track = slider(host);
+		// A 60px knob means 30px of inset a side. The old hardcoded 9px would
+		// read the 30px,200px track as rung 1 and 170px as rung 5.
+		stubTrackWidth(track, 200, 60);
+		await act(async () => pointer(track, "pointerdown", 30));
+		expect(slider(host).getAttribute("aria-valuenow")).toBe("0");
+		await act(async () => pointer(track, "pointercancel", 30));
+		await act(async () => pointer(track, "pointerdown", 170));
+		expect(slider(host).getAttribute("aria-valuenow")).toBe("6");
+		await act(async () => pointer(track, "pointercancel", 170));
 		await unmount();
 	});
 

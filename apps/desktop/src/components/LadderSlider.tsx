@@ -90,10 +90,6 @@ export function clampLadderValue(
 	return settled;
 }
 
-/** Half the knob, mirroring `--gui-slider-inset`: the extreme rungs sit this
- *  far inside the track so an end knob never hangs past the rail. */
-const KNOB_INSET = 9;
-
 interface LadderSliderProps {
 	/** The current model's supported efforts, lowest first. Empty means the
 	 *  model has no thinking ladder. */
@@ -121,7 +117,11 @@ export function LadderSlider({
 	const [draft, setDraftState] = useState(committed);
 	const [dragging, setDragging] = useState(false);
 	const trackRef = useRef<HTMLDivElement | null>(null);
-	const dragRef = useRef<{ pointerId: number; startX: number } | null>(null);
+	// The rail is the laid-out span between the two end stops: `--gui-slider-inset`
+	// insets it in CSS, so measuring it keeps the knob size out of the pointer
+	// math instead of restating half of it here.
+	const railRef = useRef<HTMLSpanElement | null>(null);
+	const dragRef = useRef<{ pointerId: number } | null>(null);
 	// The pointer sequence reads the draft between renders: `pointerup` can
 	// arrive in the same tick as its `pointerdown` (a click without a move),
 	// before React has re-rendered from the press. The ref is the source of
@@ -161,13 +161,13 @@ export function LadderSlider({
 		setDragging(false);
 		applyDraft(committed);
 	};
-	/** Track x → nearest rung, or null while the track has no laid-out width
-	 *  (the first frame, a hidden panel). */
+	/** Pointer x → nearest rung, or null while the rail has no laid-out width
+	 *  (the first frame, a hidden panel). The rail already excludes the knob
+	 *  inset, so its rect is exactly the travel span. */
 	const indexAt = (clientX: number): number | null => {
-		const rect = trackRef.current?.getBoundingClientRect();
+		const rect = railRef.current?.getBoundingClientRect();
 		if (!rect || rect.width <= 0) return null;
-		const span = Math.max(1, rect.width - KNOB_INSET * 2);
-		const ratio = Math.min(1, Math.max(0, (clientX - rect.left - KNOB_INSET) / span));
+		const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
 		return Math.round(ratio * last);
 	};
 
@@ -200,7 +200,7 @@ export function LadderSlider({
 					} catch {
 						/* capture is best-effort; the release still commits */
 					}
-					dragRef.current = { pointerId: event.pointerId, startX: event.clientX };
+					dragRef.current = { pointerId: event.pointerId };
 					setDragging(true);
 					const next = indexAt(event.clientX);
 					if (next != null) applyDraft(clampLadderIndex(rungs, next));
@@ -239,7 +239,7 @@ export function LadderSlider({
 					write(next);
 				}}
 			>
-				<span className="gui-slider-rail" aria-hidden="true" />
+				<span ref={railRef} className="gui-slider-rail" aria-hidden="true" />
 				<span className="gui-slider-fill" aria-hidden="true" />
 				{rungs.map((item, index) => (
 					<span

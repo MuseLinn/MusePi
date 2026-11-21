@@ -10,13 +10,16 @@
 	 * 会话圆角容器要和空态主视图一样的边距). Tailwind m-2/gap-2 literals drift
 	 * apart when one scene is tuned; the token cannot. */
 	--gui-card-gutter: 8px;
-	/* Slider primitive: one geometry and one state vocabulary for every
-	 * slider in the GUI — the settings detent ladder, the thinking ladder and
-	 * the native `.gui-range` inputs (audio, voice, pet size, notifications).
-	 * A slider that needs a new size or colour extends THIS family instead of
-	 * painting its own rail. The inset is the knob radius so an end stop never
-	 * hangs past the rail; CSS and the thinking slider's pointer math both
-	 * read 9px from an 18px knob. */
+	/* Slider primitive: one geometry and one state vocabulary for the GUI's
+	 * two custom ladders — the settings detent ladder and the thinking
+	 * ladder — plus the native `.gui-range` inputs that opt in (notification
+	 * master volume, companion size). A slider that needs a new size or colour
+	 * extends THIS family instead of painting its own rail. The inset is the
+	 * knob radius: the rail is laid out inset by it, so an end stop never
+	 * hangs past the rail, and the thinking slider measures that rail instead
+	 * of restating the radius in JS. Desktop voice settings have no slider
+	 * (`tts.rate` is a rolling counter); the mobile `VoicePanel` rate is its
+	 * own control in `packages/client-core`. */
 	--gui-slider-track: 6px;
 	--gui-slider-dot-size: 4px;
 	--gui-slider-knob-size: 18px;
@@ -3421,7 +3424,9 @@ body.gui-resizing .gui-pane-right {
 		scale 120ms ease;
 }
 
-.gui-ladder-track:hover .gui-ladder-thumb {
+/* Same gate as the thinking ladder: `.gui-ladder--disabled` dims the ladder,
+ * and a dimmed ladder must not lift its thumb on hover. */
+.gui-ladder:not(.gui-ladder--disabled) .gui-ladder-track:hover .gui-ladder-thumb {
 	scale: var(--gui-slider-hover-scale);
 }
 
@@ -7386,7 +7391,10 @@ body.gui-resizing .gui-pane-right {
 		left var(--gui-slider-ease),
 		scale 120ms ease;
 }
-.gui-slider-track:hover .gui-slider-knob,
+/* Hover lift is gated on the enabled state: a control that cannot act must
+ * not change its fill or scale on hover (docs/gui-design.md §4 "Disabled
+ * controls never react to the pointer"). */
+.gui-slider:not([data-disabled="true"]) .gui-slider-track:hover .gui-slider-knob,
 .gui-slider-track[data-dragging] .gui-slider-knob {
 	scale: var(--gui-slider-hover-scale);
 }
