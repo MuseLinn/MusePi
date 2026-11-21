@@ -285,6 +285,7 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 	subagents: ["子代理", "subagent", "任务", "task", "并行", "parallel", "并发", "concurrency", "数量", "count"],
 	mcp: ["mcp", "服务", "server", "工具", "tool", "端点", "endpoint", "url"],
 	connectors: ["连接器", "connector", "市场", "market", "oauth", "授权", "远端", "remote", "mcp"],
+	secrets: ["密钥", "secret", "secrets", "key", "api key", "token", "凭证", "环境变量", "env", "加密", "encrypted"],
 	commands: ["命令", "command", "slash", "斜杠", "自定义", "custom", "快捷", "quick"],
 	hooks: ["钩子", "hook", "事件", "event", "触发", "trigger", "toml", "脚本", "script"],
 	browser: [
@@ -358,6 +359,7 @@ export function navGroups(
 				{ id: "skills", icon: "sparkling", label: t("tools.extensionsPlugins"), enabled: true },
 				{ id: "subagents", icon: "user", label: t("settings.tasksSubagents"), enabled: true },
 				{ id: "connectors", icon: "plug", label: t("settings.connectors"), enabled: true },
+				{ id: "secrets", icon: "key", label: t("settings.secrets"), enabled: true },
 				{ id: "commands", icon: "terminal-box", label: t("settings.commands"), enabled: true },
 				{ id: "hooks", icon: "node-tree", label: t("settings.hooks"), enabled: true },
 				{ id: "modes", icon: "stack", label: t("settings.modesTitle"), enabled: true },

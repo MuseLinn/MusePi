@@ -24,6 +24,7 @@ export { ModelSection } from "./settings-sections/model";
 export { ModesSection } from "./settings-sections/modes";
 export { NotificationsSection, SoundEventRow } from "./settings-sections/notifications";
 export { SchemaTabSection } from "./settings-sections/schema";
+export { SecretSettingsSection } from "./settings-sections/secret-settings";
 export { SessionMemorySection } from "./settings-sections/session-memory";
 export { hitText, NumberStepper } from "./settings-sections/shared";
 export { ShellSection } from "./settings-sections/shell";
