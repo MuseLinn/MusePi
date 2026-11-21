@@ -18,6 +18,7 @@
  */
 
 import type { SessionEntry } from "@musepi/pi-wire";
+import { DEFAULT_PRESENTATION_POLICY, type TranscriptPresentationPolicy } from "./presentation-policy.js";
 import { buildTurnRenderUnits, type TurnRenderUnit, turnUnitSpan } from "./render-units.js";
 import {
 	buildRoundFolds,
@@ -76,21 +77,28 @@ function entryUserId(e: SessionEntry): string | null {
  * Derive the completed-round folds and turn render units for a transcript,
  * reusing cached per-round spans wherever the round's content is unchanged.
  * Output shape is identical to `buildRoundFolds` + `buildTurnRenderUnits`.
+ *
+ * The presentation policy only decides which rounds MATERIALIZE a fold; the
+ * per-round span itself is cached by content, so switching mode, timing, or
+ * folded replies never recomputes a round's counts.
  */
 export function deriveTurns(
 	entries: readonly SessionEntry[],
 	working: boolean,
 	cache?: TurnDeriveCache,
+	policy: TranscriptPresentationPolicy = DEFAULT_PRESENTATION_POLICY,
 ): TurnDeriveResult {
 	const c = cache ?? createTurnDeriveCache();
 
 	// Structural signature — when nothing changed since the last call the
 	// previous result is returned BY REFERENCE (downstream memos stay valid).
+	// The policy belongs to the signature: a preference change must rebuild the
+	// materialized fold list even when the entries are identical.
 	const firstEntry = entries[0];
 	const lastEntry = entries[entries.length - 1];
 	const sig = `${entries.length}:${entryId(firstEntry, 0)}:${entryId(lastEntry, entries.length - 1)}:${
 		working ? 1 : 0
-	}`;
+	}:${policy.mode}:${policy.collapseTiming}:${policy.foldedReplies}`;
 	if (
 		c.lastResult !== null &&
 		c.lastSig === sig &&
@@ -120,21 +128,27 @@ export function deriveTurns(
 		const startEntry = entries[startIdx]!;
 		const endEntry = entries[endIdx]!;
 		const startId = entryId(startEntry, startIdx);
-		const key = `${startId}→${entryId(endEntry, endIdx)}#${endIdx - startIdx + 1}`;
+		const key = `${startId}→${entryId(endEntry, endIdx)}#${endIdx - startIdx + 1}:${policy.foldedReplies}`;
 		seenKeys.add(key);
 		let span = c.spans.get(key);
 		if (span === undefined || span.startObj !== startEntry || span.endObj !== endEntry) {
 			// The span body is computed identically whether or not the round
-			// is in flight — the `working` gate is applied at MATERIALIZATION
+			// is in flight — the policy gate is applied at MATERIALIZATION
 			// (below), so a working→idle flip reuses the cached span.
-			const fold = foldSpan(entries, startIdx, entryUserId(startEntry), endIdx);
+			const fold = foldSpan(entries, startIdx, entryUserId(startEntry), endIdx, policy.foldedReplies);
 			const unit = turnUnitSpan(entries, startIdx, endIdx);
 			span = { startObj: startEntry, endObj: endEntry, fold, unit };
 			c.spans.set(key, span);
 		}
-		// Trailing round folds only once the agent stops (same boundary
-		// buildRoundFolds uses).
-		const fold = isLastTurn && working ? null : span.fold;
+		// Whether this round materializes its fold is the policy's decision:
+		// historical rounds always fold; the trailing (still-latest) round
+		// folds when the mode groups live turns, or when the timing says the
+		// completion itself returns it to history.
+		const foldable =
+			policy.foldCompletedTurns &&
+			policy.stepGrouping !== "none" &&
+			(!isLastTurn || policy.stepGrouping === "collapsed" || (policy.collapseTiming === "completion" && !working));
+		const fold = foldable ? span.fold : null;
 		if (fold !== null) {
 			folds.push(roundFoldFromSpan(fold, startIdx, endIdx, entryUserId(startEntry)));
 		}
@@ -170,9 +184,13 @@ export function deriveTurns(
  * Parity baseline for tests and diagnostics: the uncached full-list
  * derivation (existing builders, kept as the ground truth).
  */
-export function deriveTurnsUncached(entries: readonly SessionEntry[], working: boolean): TurnDeriveResult {
+export function deriveTurnsUncached(
+	entries: readonly SessionEntry[],
+	working: boolean,
+	policy: TranscriptPresentationPolicy = DEFAULT_PRESENTATION_POLICY,
+): TurnDeriveResult {
 	return {
-		folds: buildRoundFolds(entries, working),
+		folds: buildRoundFolds(entries, working, policy),
 		units: buildTurnRenderUnits(entries, working),
 		runs: buildToolRuns(entries, working),
 	};

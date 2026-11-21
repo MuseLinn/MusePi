@@ -57,6 +57,7 @@ export function ThinkingBlock({
 	redacted,
 	streaming = false,
 	durationMs,
+	settledDetail = true,
 }: {
 	text: string;
 	redacted?: boolean;
@@ -66,6 +67,9 @@ export function ThinkingBlock({
 	streaming?: boolean;
 	/** Request duration for the settled label (`思考过程 · 12s`). */
 	durationMs?: number;
+	/** Presentation policy: a settled row keeps its duration detail. Compact
+	 *  mode drops it so the label carries status without numbers. */
+	settledDetail?: boolean;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	// Auto-open while the model is thinking, auto-collapse ~1s after it
@@ -104,19 +108,9 @@ export function ThinkingBlock({
 	const [showAll, setShowAll] = useState(false);
 	const shownSentences = showAll ? sentences : sentences.slice(0, MAX_THINK_SENTENCES);
 	const thinkTruncated = !showAll && sentences.length > MAX_THINK_SENTENCES;
-	// Settled first-line preview: a collapsed, finished think block shows its
-	//  opening line next to the label so the row says WHAT was reasoned about,
-	//  not just that thinking happened. Streaming blocks keep the shimmer
-	//  label-only look.
-	const previewLine = useMemo(() => {
-		if (redacted || streaming || open) return null;
-		const line = text
-			.split("\n")
-			.map(l => l.trim())
-			.find(l => l.length > 0);
-		if (!line) return null;
-		return line.length > 80 ? `${line.slice(0, 80)}…` : line;
-	}, [text, redacted, streaming, open]);
+	// Settled label detail: the duration distinguishes a settled thought row
+	// from a bare status line. Compact mode drops it.
+	const showDuration = settledDetail && !streaming && !redacted && durationMs !== undefined;
 	return (
 		<div className="tr-think">
 			<button type="button" className="tr-think-head" onClick={toggle}>
@@ -135,7 +129,7 @@ export function ThinkingBlock({
 						? t("transcript.redacted")
 						: streaming
 							? t("transcript.thinkingInProgress")
-							: durationMs !== undefined
+							: showDuration
 								? `${t("transcript.thinkingProcess")} · ${fmtDuration(durationMs)}`
 								: t("transcript.thinkingDone")}
 				</span>
@@ -868,6 +862,7 @@ export function RoundFoldHeader({
 	fold,
 	open,
 	startTs,
+	detail,
 	onToggle,
 }: {
 	fold: RoundFold;
@@ -875,6 +870,10 @@ export function RoundFoldHeader({
 	/** 轮起始(user 消息)时间戳:折叠态 user 行不挂载,导航条 scroll-spy
 	 *  靠这个 data 锚点把折叠轮纳入当前轮高亮(isTurnStart 同口径)。 */
 	startTs?: string;
+	/** Running-process detail (`liveProcessDetail`): the latest work snippet
+	 *  while the round is still executing. Omitted for settled rounds, which
+	 *  keep the category summary only. */
+	detail?: string;
 	onToggle(): void;
 }): ReactNode {
 	const changed = fold.filesChanged > 0;
@@ -943,6 +942,12 @@ export function RoundFoldHeader({
 					{seg}
 				</Fragment>
 			))}
+			{detail !== undefined && (
+				<>
+					<span className="tr-round-fold-sep">·</span>
+					<span className="tr-round-fold-preview">{detail}</span>
+				</>
+			)}
 			{/* No raw preview and no revert action: the row is the turn's summary
 			 *  and its toggle. Revert belongs to the message it reverts (the user
 			 *  row's own affordance), not to a collapsed-process header. */}
@@ -1208,6 +1213,7 @@ export function AssistantBody({
 	host,
 	hideToolActivity = false,
 	textOnly = false,
+	settledReasoningPreview = true,
 	showTokenUsage = false,
 	usageHere = false,
 	smoothStreaming = true,
@@ -1253,6 +1259,9 @@ export function AssistantBody({
 	 *  into the activity row, so the closed turn reads as "活动 … " + the
 	 *  answer, openchamber's model. */
 	textOnly?: boolean;
+	/** Keep a settled reasoning row's duration detail (`思考过程 · 12s`). The
+	 *  presentation policy clears it in compact mode. */
+	settledReasoningPreview?: boolean;
 	/** display.showTokenUsage parity: gate the per-turn usage row. */
 	showTokenUsage?: boolean;
 	/** The usage row renders on the ROUND's final reply only — every assistant
@@ -1313,6 +1322,7 @@ export function AssistantBody({
 						text={block.thinking}
 						streaming={pending}
 						durationMs={pending ? undefined : message.duration}
+						settledDetail={settledReasoningPreview}
 					/>
 				);
 			}

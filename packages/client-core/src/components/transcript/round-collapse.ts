@@ -1,12 +1,17 @@
 /**
  * Completed-round collapse: a "round" is a
  * user message through the final assistant reply of that turn. When a round
- * is complete (its final assistant message has a frozen round duration) and
- * is NOT the live tail, the working entries between user and final reply —
- * tool calls/results, bash executions, thinking — fold behind a header:
- * `已工作 hh:mm:ss · N 个工具 · M 个命令` with an intent preview. The final
+ * folds, the working entries between user and final reply — tool
+ * calls/results, bash executions, thinking — hide behind a header:
+ * `活动 · 更改了 N 个文件 +A/−R · 探索了代码库 · 运行了 M 条命令`. The final
  * assistant message (text + artifacts) stays visible; media/widgets inside
  * the folded span ride along and re-appear on expand.
+ *
+ * Which rounds fold — and which assistant replies survive the fold — is the
+ * presentation policy's decision (`presentation-policy.ts`); this module
+ * only turns that decision into fold descriptors. The default policy folds
+ * completed history, leaves the running round flat, and keeps only the
+ * round's final answer.
  *
  * Pure functions only — the renderer owns the fold state per round.
  */
@@ -20,8 +25,10 @@ import {
 } from "../../tool-render/tools/browser-activity";
 import { diffStats } from "../../tool-render/tools/edit";
 import { isRecord } from "../../tool-render/util";
+import { DEFAULT_PRESENTATION_POLICY, type TranscriptPresentationPolicy } from "./presentation-policy";
 import { classifyTranscriptRow, isProgressUpdateRow } from "./row-kinds";
 import { isArtifactTool, resultPicturesOf } from "./tool-media";
+import type { FoldedReplies } from "./transcript-prefs";
 
 export { isTurnStartEntry as isTurnStart };
 
@@ -126,6 +133,12 @@ export interface RoundFold {
 	 *  process); (c) tail and hook rows (design doc §C) — turn
 	 *  accompaniment, not process. */
 	exempt: number[];
+	/** Absolute indexes of assistant replies kept visible by
+	 *  `foldedReplies: "all"`. The final reply is already visible via
+	 *  `finalIdx` and is not repeated here. Each kept reply renders TEXT
+	 *  only — its reasoning and tool cards are process, so they fold with
+	 *  the rest of the round. Empty under the default `"final"`. */
+	replies: number[];
 }
 
 /** Last non-empty text snippet of a toolResult, for the fold preview. */
@@ -263,33 +276,28 @@ function countWorkInside(
 }
 
 /**
- * Compute the completed-round folds for a transcript. A round is complete
- * when its final assistant message has a frozen duration; the LAST complete
- * round is excluded (it is the live tail and stays expanded). Work without a
- * preceding user message in the window is not folded.
-/**
  * Compute the completed-round folds for a transcript (openchamber
  * projectTurnRecords parity — STRUCTURAL, no duration data involved): a
  * round is a user message through its last assistant reply, and any round
  * containing tool/command work folds, INCLUDING the last completed one
- * (the 活动 header then sits directly above the final reply). The only
- * exempt span is the IN-FLIGHT round — while `working`, entries after the
- * last user message stream live and stay expanded; once the agent stops,
- * that round folds like every other.
+ * (the 活动 header then sits directly above the final reply).
+ *
+ * The presentation policy decides which rounds fold:
+ * - `stepGrouping: "collapsed"` folds every round, including the one still
+ *   running; its reply row keeps streaming while the work folds above it.
+ * - `"history"` (the default) folds only rounds that are history: the
+ *   in-flight round streams flat, and the last completed round folds
+ *   according to `collapseTiming` — `completion` folds it as soon as the
+ *   agent stops, `next-input` leaves it expanded until the next user
+ *   message turns it into history.
+ * - `"none"` (and `foldCompletedTurns: false`) folds nothing.
  */
-export function buildRoundFolds(entries: readonly SessionEntry[], working: boolean): RoundFold[] {
-	// While a turn is in flight, its entries (after the last user message)
-	// stream live — find that boundary so the in-flight round never folds.
-	let inFlightFrom = -1;
-	if (working) {
-		for (let i = entries.length - 1; i >= 0; i--) {
-			const e = entries[i];
-			if (e?.type === "message" && e.message.role === "user") {
-				inFlightFrom = i;
-				break;
-			}
-		}
-	}
+export function buildRoundFolds(
+	entries: readonly SessionEntry[],
+	working: boolean,
+	policy: TranscriptPresentationPolicy = DEFAULT_PRESENTATION_POLICY,
+): RoundFold[] {
+	if (!policy.foldCompletedTurns || policy.stepGrouping === "none") return [];
 	const folds: RoundFold[] = [];
 	let userIdx = -1;
 	let userId: string | null = null;
@@ -297,18 +305,25 @@ export function buildRoundFolds(entries: readonly SessionEntry[], working: boole
 		const e = entries[i];
 		if (!isTurnStart(e)) continue;
 		// Close the previous turn: it runs up to the row BEFORE this one.
-		if (userIdx >= 0) pushFold(folds, entries, userIdx, userId, i - 1);
+		if (userIdx >= 0) pushFold(folds, entries, userIdx, userId, i - 1, policy.foldedReplies);
 		userIdx = i;
 		// Revert anchors on a real user message only (an advisor has no text to
 		// put back in the composer).
 		userId = e?.type === "message" ? (e.id ?? null) : null;
 	}
-	// Trailing round: everything after the last user message. While working
-	// it is the in-flight turn (exempt); once idle it folds like the rest.
-	if (!working && userIdx >= 0) {
-		pushFold(folds, entries, userIdx, userId, entries.length - 1);
+	// Trailing round: everything after the last user message. Whether it folds
+	// is the policy's decision (see the doc above).
+	if (userIdx >= 0 && trailingRoundFolds(policy, working)) {
+		pushFold(folds, entries, userIdx, userId, entries.length - 1, policy.foldedReplies);
 	}
 	return folds;
+}
+
+/** Whether the trailing (still-latest) round folds under this policy. */
+function trailingRoundFolds(policy: TranscriptPresentationPolicy, working: boolean): boolean {
+	if (policy.stepGrouping === "collapsed") return true;
+	if (policy.collapseTiming === "next-input") return false;
+	return !working;
 }
 
 /** A turn can start at a prompt OR at an advisor note: an advisory that lands
@@ -350,6 +365,22 @@ function lastAssistantIdx(entries: readonly SessionEntry[], from: number, to: nu
 	return -1;
 }
 
+/** Assistant-message indexes in `(from, to)` carrying non-empty text, in CLI
+ *  order — the round's replies (`foldedReplies: "all"` keeps them visible). */
+function replyIndexes(entries: readonly SessionEntry[], from: number, to: number): number[] {
+	const idxs: number[] = [];
+	for (let i = from + 1; i < to; i++) {
+		const e = entries[i];
+		if (e?.type !== "message" || e.message.role !== "assistant") continue;
+		const content = (e.message as { content?: unknown }).content;
+		const blocks = Array.isArray(content) ? (content as Array<{ type?: string; text?: string }>) : [];
+		if (blocks.some(b => b?.type === "text" && typeof b.text === "string" && b.text.trim().length > 0)) {
+			idxs.push(i);
+		}
+	}
+	return idxs;
+}
+
 /** One round's fold computation with INDEX-RELATIVE exempt list — the
  *  cache-friendly shape: a round's span content is stable across history
  *  prepends (only absolute indexes shift), so `turn-derive.ts` caches this
@@ -370,6 +401,10 @@ export interface FoldSpan {
 	/** Span-row indexes relative to `startIdx` that stay visible while the
 	 *  fold is closed (widget cards / tail / hook rows). Absolute = startIdx + rel. */
 	exemptRel: number[];
+	/** Span-row indexes relative to `startIdx` of assistant replies kept
+	 *  visible by `foldedReplies: "all"` (the final reply is excluded; it is
+	 *  visible through `finalRel`). */
+	repliesRel: number[];
 }
 
 /** Compute one round's fold (pushFold's body, relative-exempt shape).
@@ -380,6 +415,7 @@ export function foldSpan(
 	startIdx: number,
 	userId: string | null,
 	endIdx: number,
+	foldedReplies: FoldedReplies = "final",
 ): FoldSpan | null {
 	// The turn must have something between the prompt and its end.
 	if (endIdx <= startIdx + 1) return null;
@@ -393,6 +429,15 @@ export function foldSpan(
 		endIdx + 1,
 	);
 	if (toolCount === 0 && commandCount === 0) return null; // text-only round
+	// `foldedReplies: "all"` keeps every reply row visible; `"final"` (the
+	// default) folds intermediate replies with the process, so they need no
+	// entry of their own.
+	const repliesRel =
+		foldedReplies === "all"
+			? replyIndexes(entries, startIdx, endIdx + 1)
+					.filter(i => i !== replyIdx)
+					.map(i => i - startIdx)
+			: [];
 	return {
 		finalRel: replyIdx - startIdx,
 		toolCount,
@@ -405,6 +450,7 @@ export function foldSpan(
 		removed: changes.removed,
 		preview,
 		exemptRel: exempt.map(i => i - startIdx),
+		repliesRel,
 	};
 }
 
@@ -430,6 +476,7 @@ export function roundFoldFromSpan(span: FoldSpan, startIdx: number, endIdx: numb
 		userId,
 		preview: span.preview,
 		exempt: span.exemptRel.map(r => r + startIdx),
+		replies: span.repliesRel.map(r => r + startIdx),
 	};
 }
 
@@ -439,8 +486,9 @@ function pushFold(
 	startIdx: number,
 	userId: string | null,
 	endIdx: number,
+	foldedReplies: FoldedReplies,
 ): void {
-	const span = foldSpan(entries, startIdx, userId, endIdx);
+	const span = foldSpan(entries, startIdx, userId, endIdx, foldedReplies);
 	if (span === null) return;
 	folds.push(roundFoldFromSpan(span, startIdx, endIdx, userId));
 }
@@ -449,9 +497,17 @@ function pushFold(
 export function isInsideFold(folds: readonly RoundFold[], idx: number): boolean {
 	// The reply row is never hidden (see finalIdx): expanding a fold must not
 	// swallow the answer the turn produced. Exempt rows (artifact cards,
-	// pictures, tail/hook accompaniment) stay visible too — see `exempt`.
+	// pictures, tail/hook accompaniment) and kept replies stay visible too —
+	// see `exempt` and `replies`.
 	// endIdx is INCLUSIVE (it is the turn's last row).
-	return folds.some(f => idx > f.startIdx && idx <= f.endIdx && idx !== f.finalIdx && !f.exempt.includes(idx));
+	return folds.some(
+		f =>
+			idx > f.startIdx &&
+			idx <= f.endIdx &&
+			idx !== f.finalIdx &&
+			!f.exempt.includes(idx) &&
+			!f.replies.includes(idx),
+	);
 }
 
 /** Tools whose calls WRITE files — the run-summary edit segment (DIFF_TOOLS

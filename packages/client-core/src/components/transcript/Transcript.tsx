@@ -43,6 +43,7 @@ import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
 import { IrcCard, ircPairKeyOf } from "./irc-message";
+import { type TranscriptPresentationPolicy, transcriptPresentationPolicy } from "./presentation-policy.js";
 import { collectQuoteMarks } from "./quote-anchor";
 import { QuoteHighlightLayer } from "./quote-highlight";
 import { roundTimerKeyByRow } from "./render-units";
@@ -89,6 +90,7 @@ import {
 	UserMsgContent,
 	WorkingLine,
 } from "./transcript-content";
+import { TRANSCRIPT_PREFS_CHANGED_EVENT } from "./transcript-prefs.js";
 import { createTurnDeriveCache, deriveTurns } from "./turn-derive.js";
 import { collectTurnFiles, type TurnFileChange } from "./turn-files.js";
 import { collectTurnSources, type TurnSources } from "./turn-sources.js";
@@ -746,6 +748,9 @@ interface EntryRowProps {
 	/** Collapsed 活动 fold: render this row's TEXT blocks plus the media a tool
 	 *  call produced (see AssistantBody). */
 	textOnly?: boolean;
+	/** Presentation policy: a settled reasoning row keeps its duration detail
+	 *  (`思考过程 · 12s`); compact mode drops it. */
+	settledReasoningPreview?: boolean;
 	showTokenUsage?: boolean;
 	/** The usage row renders on the round's FINAL reply only (the wire stamps
 	 *  usage on every assistant message, tool-call carriers included). */
@@ -867,6 +872,7 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 		prev.runStartTs !== next.runStartTs ||
 		prev.roundDuration !== next.roundDuration ||
 		prev.hideToolActivity !== next.hideToolActivity ||
+		prev.settledReasoningPreview !== next.settledReasoningPreview ||
 		prev.showTokenUsage !== next.showTokenUsage ||
 		prev.smoothStreaming !== next.smoothStreaming ||
 		prev.taskCardStyle !== next.taskCardStyle
@@ -1180,6 +1186,7 @@ const EntryRow = memo(function EntryRow({
 	hideToolActivity = false,
 	foldHeader,
 	textOnly = false,
+	settledReasoningPreview = true,
 	showTokenUsage = false,
 	usageHere = false,
 	smoothStreaming = true,
@@ -1299,6 +1306,7 @@ const EntryRow = memo(function EntryRow({
 									host={host}
 									hideToolActivity={hideToolActivity}
 									textOnly={textOnly}
+									settledReasoningPreview={settledReasoningPreview}
 									showTokenUsage={showTokenUsage}
 									usageHere={usageHere}
 									smoothStreaming={smoothStreaming}
@@ -1448,6 +1456,19 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		branchInfo,
 		renderTranscriptNode,
 	} = props;
+
+	// Transcript-reading preferences (Settings → 聊天 → 会话): work-details
+	// mode, collapse timing, and folded replies. Read here rather than
+	// forwarded by every host (the transcript owns its renderer-local prefs —
+	// mermaid mode reads the same way) and re-read on the companion settings
+	// event, because localStorage events do not fire in the writing document.
+	// The default reading is exactly the pre-preference transcript.
+	const [policy, setPolicy] = useState<TranscriptPresentationPolicy>(transcriptPresentationPolicy);
+	useEffect(() => {
+		const onChanged = (): void => setPolicy(transcriptPresentationPolicy());
+		window.addEventListener(TRANSCRIPT_PREFS_CHANGED_EVENT, onChanged);
+		return () => window.removeEventListener(TRANSCRIPT_PREFS_CHANGED_EVENT, onChanged);
+	}, []);
 
 	const results = useMemo(() => {
 		const map = new Map<string, ToolResultMessage>();
@@ -1841,7 +1862,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		folds,
 		units: turnUnits,
 		runs,
-	} = useMemo(() => deriveTurns(entries, working, deriveCacheRef.current), [entries, working]);
+	} = useMemo(() => deriveTurns(entries, working, deriveCacheRef.current, policy), [entries, working, policy]);
 	// Frozen-total lookup: each turn's LAST assistant row → the turn-start ts
 	// key the daemon/GUI recorders freeze the total under (one key space —
 	// daemon-seeded snapshots and live GUI writes hit the same entry).
@@ -1971,7 +1992,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		for (const f of folds) {
 			if (foldOpenOf(f)) continue;
 			for (let i = f.startIdx + 1; i <= f.endIdx; i++) {
-				if (i !== f.finalIdx && !f.exempt.includes(i)) set.add(i);
+				if (i !== f.finalIdx && !f.exempt.includes(i) && !f.replies.includes(i)) set.add(i);
 			}
 		}
 		// 工具调用汇总: summarized run tail rows collapse into zero-height
@@ -2636,6 +2657,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// round-collapse `exempt`) stay mounted while the fold is closed: they
 		// are the turn's output, not its process noise.
 		const isExemptRow = fold?.exempt.includes(absIdx) === true;
+		// A reply kept visible by `foldedReplies: "all"`: it renders TEXT only
+		// while the fold is closed, exactly like the final answer, so the
+		// intermediate answer stays readable without its process.
+		const isKeptReplyRow = fold?.replies.includes(absIdx) === true;
 		// A folded turn's avatar lives on its fold row (see renderRows); entries
 		// never carry it, so the header row and the orb cannot drift apart.
 		const rowOwnsOrb =
@@ -2647,7 +2672,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// Every process row of a closed fold collapses — the 活动 header is its own
 		// row now, so the row it used to host no longer has to stay visible to carry
 		// it.
-		const inHiddenSpan = fold !== undefined && !isReplyRow && !isExemptRow;
+		const inHiddenSpan = fold !== undefined && !isReplyRow && !isExemptRow && !isKeptReplyRow;
 		// ── 工具调用汇总 (Kimi parity) ────────────────────────────────────
 		// An active run renders its HEAD slot as the one-line summary and
 		// collapses its tail rows into zero-height slots (same .tr-fold-slot
@@ -2671,14 +2696,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const collapsible = inHiddenSpan || isRunHidden;
 		// Collapsed turn = 活动 row + the answer: the reply row renders its
 		// TEXT only (thinking/tool parts fold into the activity row).
-		const rowTextOnly = foldClosed && isReplyRow;
+		const rowTextOnly = foldClosed && (isReplyRow || isKeptReplyRow);
 		// A closed fold shows the 活动 header row + the reply (+ exempt widget
 		// rows): every other row of the turn loses its body. The header keeps its
 		// OWN row in both states — hoisting it onto the reply made the turn's
 		// first row render nothing, which is why the avatar vanished on collapse
 		// and why expanding jumped (the header moved rows instead of the content
 		// growing).
-		const hideRowContent = foldClosed && !isReplyRow && !isExemptRow;
+		const hideRowContent = foldClosed && !isReplyRow && !isExemptRow && !isKeptReplyRow;
 		// Per-round work timer: the live tail row ticks from the
 		// round start (last user message); completed rounds show
 		// their frozen total under the final message. The frozen
@@ -2743,6 +2768,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							collapseLongUserMessages={collapseLongUserMessages}
 							hideToolActivity={rowHideTools}
 							textOnly={rowTextOnly}
+							settledReasoningPreview={policy.settledReasoningPreview}
 							showTokenUsage={showTokenUsage}
 							usageHere={usageHere}
 							smoothStreaming={smoothStreaming}
@@ -2835,6 +2861,13 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// of their own, so no content row ever hosts them.
 	const renderRow = (row: RenderRow): ReactNode => {
 		if (row.kind === "fold") {
+			// `liveProcessDetail`: while a round is still running (only
+			// compact/standard fold it), its header names what is happening now
+			// instead of only category counts.
+			const detail =
+				policy.liveProcessDetail && working && row.fold.endIdx === entries.length - 1 && row.fold.preview !== ""
+					? row.fold.preview
+					: undefined;
 			return (
 				<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
 					<RoundFoldHeader
@@ -2842,6 +2875,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						open={foldOpenOf(row.fold)}
 						onToggle={() => toggleFold(foldKeyOf(row.fold))}
 						startTs={entries[row.fold.startIdx]?.timestamp}
+						detail={detail}
 					/>
 				</Row>
 			);
