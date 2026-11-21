@@ -3545,6 +3545,13 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					...(settings.get("disabledExtensions") ?? []),
 				]);
 				toolSession.contextFiles = contextFiles;
+			}
+			// Every base-prompt rebuild refreshes the advisor's workspace facts, not
+			// only a context-file rediscovery: the daemon seeds project roots into the
+			// SessionManager after creating the session (and preloads contextFiles),
+			// so gating this on rediscovery left the advisor's prompt without the
+			// roots the primary agent had just been told about.
+			if (hasSession) {
 				session.setAdvisorContextPrompt(
 					formatAdvisorContextPrompt(contextFiles, sessionManager.getAdditionalDirectories()),
 				);

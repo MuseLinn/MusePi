@@ -32,7 +32,13 @@ describe("advisor reference directories", () => {
 	});
 
 	async function withAdvisorSession(
-		run: (context: { session: AgentSession; referenceDir: string; referenceFile: string }) => Promise<void>,
+		run: (context: {
+			session: AgentSession;
+			sessionManager: SessionManager;
+			referenceDir: string;
+			referenceFile: string;
+		}) => Promise<void>,
+		options: { seedAdditionalDirectoriesAtCreate?: boolean } = {},
 	): Promise<void> {
 		const tempDir = TempDir.createSync("@pi-advisor-reference-dirs-");
 		tempDirs.push(tempDir);
@@ -51,7 +57,7 @@ describe("advisor reference directories", () => {
 			const sessionManager = SessionManager.create(cwd, tempDir.join("sessions"));
 			const result = await createAgentSession({
 				cwd,
-				additionalDirectories: [referenceDir],
+				...(options.seedAdditionalDirectoriesAtCreate === false ? {} : { additionalDirectories: [referenceDir] }),
 				agentDir: tempDir.path(),
 				sessionManager,
 				authStorage,
@@ -76,7 +82,7 @@ describe("advisor reference directories", () => {
 			session = result.session;
 
 			expect(session.isAdvisorActive()).toBe(true);
-			await run({ session, referenceDir, referenceFile });
+			await run({ session, sessionManager, referenceDir, referenceFile });
 		} finally {
 			try {
 				await session?.dispose();
@@ -124,5 +130,35 @@ describe("advisor reference directories", () => {
 			});
 			expect(textOf(globResult)).toContain("shared.md");
 		});
+	}, 30_000);
+
+	it("refreshes the advisor prompt when the daemon seeds project roots after creation", async () => {
+		await withAdvisorSession(
+			async ({ session, sessionManager, referenceDir }) => {
+				// Daemon order: create with preloaded contextFiles, then merge the
+				// project's source folders into the SessionManager and refresh.
+				await sessionManager.setAdditionalDirectories([referenceDir]);
+				await session.refreshSkills();
+				// A second rebuild replaces the block instead of appending a copy.
+				await session.refreshSkills();
+
+				const advisorDump = session.formatAdvisorHistoryAsText();
+				expect(advisorDump).not.toBeNull();
+				expect(advisorDump?.match(/<workspace-roots>/g)).toHaveLength(1);
+				expect(advisorDump).toContain(`- ${referenceDir}`);
+
+				const primaryDump = session.formatSessionAsText();
+				expect(primaryDump.match(/<workspace-roots>/g)).toHaveLength(1);
+				expect(primaryDump).toContain(`- ${referenceDir}`);
+
+				// Removing the root drops the stale list rather than keeping it.
+				await sessionManager.setAdditionalDirectories([]);
+				await session.refreshSkills();
+				const afterRemoval = session.formatAdvisorHistoryAsText();
+				expect(afterRemoval).not.toContain("<workspace-roots>");
+				expect(afterRemoval).not.toContain(referenceDir);
+			},
+			{ seedAdditionalDirectoriesAtCreate: false },
+		);
 	}, 30_000);
 });
