@@ -978,7 +978,8 @@ html.gui-vt-surface-only::view-transition-new(root),
  * pane-level backdrop-filter is disabled on win32/linux).
  * The end band still tracks `--chat-composer-inset` from the reader channel
  * and collapses its ramp while a live reply streams; the top band follows
- * the scroller's scroll-shadow attribute. */
+ * the scroller's scroll-shadow attribute, whose threshold includes the
+ * reserved head band (TRANSCRIPT_HEAD_INSET) so it only covers real rows. */
 .gui-chat-fade {
 	position: absolute;
 	inset-inline: 0;
@@ -6147,7 +6148,11 @@ body.gui-resizing .gui-pane-right {
 
 /* The chat head floats over this scroller (absolute in `.gui-chat-column`);
  * reserve its footprint inside the scroll content only, so the first row
- * starts below the controls while scrolled rows pass underneath them. */
+ * starts below the controls while scrolled rows pass underneath them.
+ * ChatView's TRANSCRIPT_HEAD_INSET mirrors this value: the shared scroll-edge
+ * hook adds it to the top-feather threshold, so the band only appears once
+ * content has really slid under the head — never over the empty reserved
+ * strip (that reads as a highlight along the container's top edge). */
 .gui-chat-column .gui-transcript {
 	padding-top: 52px;
 }
