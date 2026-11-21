@@ -43,10 +43,11 @@ import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
 import { IrcCard, ircPairKeyOf } from "./irc-message";
+import { type TranscriptPresentationPolicy, transcriptPresentationPolicy } from "./presentation-policy.js";
 import { collectQuoteMarks } from "./quote-anchor";
 import { QuoteHighlightLayer } from "./quote-highlight";
 import { roundTimerKeyByRow } from "./render-units";
-import { planLiveActivityTrim, type RoundFold, type ToolRunSummary } from "./round-collapse";
+import { foldDefaultOpen, planLiveActivityTrim, type RoundFold, type ToolRunSummary } from "./round-collapse";
 import { classifyTranscriptRow, hasTextBlock } from "./row-kinds";
 import {
 	anchorActionAfterContentChange,
@@ -89,6 +90,7 @@ import {
 	UserMsgContent,
 	WorkingLine,
 } from "./transcript-content";
+import { TRANSCRIPT_PREFS_CHANGED_EVENT } from "./transcript-prefs.js";
 import { createTurnDeriveCache, deriveTurns } from "./turn-derive.js";
 import { collectTurnFiles, type TurnFileChange } from "./turn-files.js";
 import { collectTurnSources, type TurnSources } from "./turn-sources.js";
@@ -230,7 +232,9 @@ export interface TranscriptProps {
 	/** Long user messages clamp to two lines with an expand toggle. */
 	collapseLongUserMessages?: boolean;
 	/** Completed-round activity folds default EXPANDED — default false (collapsed).
-	 *  User toggles per round still win either way. */
+	 *  User toggles per round still win either way. A grouping mode's RUNNING
+	 *  round and a round whose collapse is deferred (`next-input`) open
+	 *  regardless of this default (see `foldDefaultOpen`). */
 	defaultRoundFoldExpanded?: boolean;
 	/** 工具调用汇总 (Kimi parity, default ON): within a turn, stretches of ≥2
 	 *  consecutive work rows summarize into ONE category-aggregated line
@@ -746,6 +750,9 @@ interface EntryRowProps {
 	/** Collapsed 活动 fold: render this row's TEXT blocks plus the media a tool
 	 *  call produced (see AssistantBody). */
 	textOnly?: boolean;
+	/** Presentation policy: a settled reasoning row keeps its duration detail
+	 *  (`思考过程 · 12s`); compact mode drops it. */
+	settledReasoningPreview?: boolean;
 	showTokenUsage?: boolean;
 	/** The usage row renders on the round's FINAL reply only (the wire stamps
 	 *  usage on every assistant message, tool-call carriers included). */
@@ -802,54 +809,80 @@ function advisorKeyOf(entry: SessionEntry): string {
 	return entry.id;
 }
 
-/* ── Round-fold deviation persistence ──────────────────────────────────
- * Which rounds a reader left OPEN or CLOSED, per session.
+/* ── Round-fold open-state persistence ─────────────────────────────────
+ * Which rounds a reader left OPEN or CLOSED, per session — stored as
+ * ABSOLUTE states, not deviations from the default.
  *
- * Without this a fold the reader expanded collapses again on the next visit,
- * and a reading position restored inside an open fold lands on a closed one.
- * The set holds DEVIATIONS from the default (see `roundFoldOpen`), so it is
- * written verbatim and read back verbatim — no interpretation at the boundary.
+ * The default is dynamic: a grouping mode opens its running round, a
+ * deferred completion stays open until the next prompt, and a historical
+ * round follows the global 消息自动折叠 choice. A keyset meaning "differs
+ * from the default" would silently invert the reader's choice whenever the
+ * same round moved from running to completed or from deferred to history —
+ * the key would then mean the opposite. Absolute states keep the choice.
  *
- * Two guards, both learned the hard way elsewhere:
- *  - a corrupt or foreign payload yields an empty set rather than throwing, so
- *    one bad entry cannot take the transcript down;
- *  - the set is capped: a long session's reader can open every round, and an
- *    unbounded key list would grow until the write fails.
+ * Legacy payloads (a JSON array of keys) meant "differs from the pre-
+ * preference default"; they are resolved with that default at load time and
+ * rewritten in the absolute format.
+ *
+ * Guards: a corrupt payload yields an empty map rather than throwing (one
+ * bad entry must not take the transcript down), and the map is capped (a
+ * reader can open every round of a long session).
  */
 const FOLD_STORAGE_PREFIX = "musepi-transcript-folds:";
 const FOLD_MAX_KEYS = 2000;
 
 // Exported for the persistence contract test; not a public surface.
-export { FOLD_MAX_KEYS, readFoldDeviations, writeFoldDeviations };
+export { FOLD_MAX_KEYS, readFoldStates, writeFoldStates };
 
 function foldStorageKey(sessionKey: string): string {
 	return `${FOLD_STORAGE_PREFIX}${sessionKey}`;
 }
 
-function readFoldDeviations(sessionKey: string): ReadonlySet<string> {
+/**
+ * Stored open states for a session.
+ * @param sessionKey - session identity the map belongs to.
+ * @param defaultExpanded - the global 消息自动折叠 choice. Only used to
+ *   resolve a legacy relative payload (a key meant "the opposite of this
+ *   default"); absolute payloads ignore it.
+ */
+function readFoldStates(sessionKey: string, defaultExpanded: boolean): ReadonlyMap<string, boolean> {
 	try {
 		const raw = localStorage.getItem(foldStorageKey(sessionKey));
-		if (!raw) return new Set();
+		if (!raw) return new Map();
 		const parsed = JSON.parse(raw) as unknown;
-		if (!Array.isArray(parsed)) return new Set();
-		return new Set(parsed.filter((k): k is string => typeof k === "string"));
+		if (Array.isArray(parsed)) {
+			const states = new Map<string, boolean>();
+			for (const key of parsed) {
+				if (typeof key === "string") states.set(key, !defaultExpanded);
+			}
+			// One-time migration: rewrite the resolved states so later default
+			// changes cannot invert them again.
+			writeFoldStates(sessionKey, states);
+			return states;
+		}
+		if (parsed === null || typeof parsed !== "object") return new Map();
+		const states = new Map<string, boolean>();
+		for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+			if (typeof value === "boolean") states.set(key, value);
+		}
+		return states;
 	} catch {
-		// Unavailable or corrupt: a fresh set is always safe, and a throw here
+		// Unavailable or corrupt: a fresh map is always safe, and a throw here
 		// would break rendering for a preference.
-		return new Set();
+		return new Map();
 	}
 }
 
-function writeFoldDeviations(sessionKey: string, keys: ReadonlySet<string>): void {
+function writeFoldStates(sessionKey: string, states: ReadonlyMap<string, boolean>): void {
 	try {
-		if (keys.size === 0) {
+		if (states.size === 0) {
 			localStorage.removeItem(foldStorageKey(sessionKey));
 			return;
 		}
-		// Cap by DROPPING the oldest deviations rather than refusing the write:
-		// the newest toggle is what the reader just made, so it must survive.
-		const capped = [...keys].slice(-FOLD_MAX_KEYS);
-		localStorage.setItem(foldStorageKey(sessionKey), JSON.stringify(capped));
+		// Cap by DROPPING the oldest states rather than refusing the write: the
+		// newest toggle is what the reader just made, so it must survive.
+		const capped = [...states].slice(-FOLD_MAX_KEYS);
+		localStorage.setItem(foldStorageKey(sessionKey), JSON.stringify(Object.fromEntries(capped)));
 	} catch {
 		// Storage full or blocked: the in-memory state still drives this render.
 	}
@@ -867,6 +900,7 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 		prev.runStartTs !== next.runStartTs ||
 		prev.roundDuration !== next.roundDuration ||
 		prev.hideToolActivity !== next.hideToolActivity ||
+		prev.settledReasoningPreview !== next.settledReasoningPreview ||
 		prev.showTokenUsage !== next.showTokenUsage ||
 		prev.smoothStreaming !== next.smoothStreaming ||
 		prev.taskCardStyle !== next.taskCardStyle
@@ -1180,6 +1214,7 @@ const EntryRow = memo(function EntryRow({
 	hideToolActivity = false,
 	foldHeader,
 	textOnly = false,
+	settledReasoningPreview = true,
 	showTokenUsage = false,
 	usageHere = false,
 	smoothStreaming = true,
@@ -1299,6 +1334,7 @@ const EntryRow = memo(function EntryRow({
 									host={host}
 									hideToolActivity={hideToolActivity}
 									textOnly={textOnly}
+									settledReasoningPreview={settledReasoningPreview}
 									showTokenUsage={showTokenUsage}
 									usageHere={usageHere}
 									smoothStreaming={smoothStreaming}
@@ -1449,6 +1485,19 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		renderTranscriptNode,
 	} = props;
 
+	// Transcript-reading preferences (Settings → 聊天 → 会话): work-details
+	// mode, collapse timing, and folded replies. Read here rather than
+	// forwarded by every host (the transcript owns its renderer-local prefs —
+	// mermaid mode reads the same way) and re-read on the companion settings
+	// event, because localStorage events do not fire in the writing document.
+	// The default reading is exactly the pre-preference transcript.
+	const [policy, setPolicy] = useState<TranscriptPresentationPolicy>(transcriptPresentationPolicy);
+	useEffect(() => {
+		const onChanged = (): void => setPolicy(transcriptPresentationPolicy());
+		window.addEventListener(TRANSCRIPT_PREFS_CHANGED_EVENT, onChanged);
+		return () => window.removeEventListener(TRANSCRIPT_PREFS_CHANGED_EVENT, onChanged);
+	}, []);
+
 	const results = useMemo(() => {
 		const map = new Map<string, ToolResultMessage>();
 		for (const entry of entries) {
@@ -1576,14 +1625,15 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// history"). Virtualization renders the folded prefix as zero-height
 	// rows (estimate 0), so the compaction fold costs no DOM.
 	const [compactedOpen, setCompactedOpen] = useState(false);
-	// Completed-round folds: per-round toggle
-	// state, keyed by the round's user-message ENTRY ID (stable across
-	// history prepends — index keys dropped deviations before). The set
-	// stores DEVIATIONS from the default:
-	// when the default is collapsed it holds OPEN rounds; when expanded,
-	// CLOSED ones — so a settings flip re-reads existing rounds without
-	// migration.
-	const [roundFoldOpen, setRoundFoldOpen] = useState<ReadonlySet<string>>(() => readFoldDeviations(sessionKey ?? ""));
+	// Completed-round folds: per-round toggle state, keyed by the round's
+	// user-message ENTRY ID (stable across history prepends). The map stores
+	// the reader's ABSOLUTE open/closed choice so a default that moves with
+	// the round's state (running → open, deferred → open, history → global
+	// default) never inverts it. Rounds the reader never touched follow the
+	// default (`foldOpenOf`).
+	const [roundFoldStates, setRoundFoldStates] = useState<ReadonlyMap<string, boolean>>(() =>
+		readFoldStates(sessionKey ?? "", defaultRoundFoldExpanded && !hideToolActivity),
+	);
 	/** Epoch-ms until which virtualizer measure compensation stays off
 	 *  (prepend anchor-restore window). 0 = inactive. */
 	const sizeAdjustSuppressUntilRef = useRef(0);
@@ -1599,17 +1649,19 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		window.setTimeout(() => virtualizerMeasureRef.current?.(), FOLD_TRANSITION_MS + 40);
 	}, []);
 	const toggleFold = useCallback(
-		(key: string): void => {
+		(key: string, open: boolean): void => {
 			markFoldTransition();
-			setRoundFoldOpen(prev => {
-				const next = new Set(prev);
-				if (next.has(key)) next.delete(key);
-				else next.add(key);
+			setRoundFoldStates(prev => {
+				const next = new Map(prev);
+				// Absolute state, not a deviation: the default moves with the
+				// round, and storing only "differs from it" would invert the
+				// reader's choice on the next transition.
+				next.set(key, open);
 				// Persist per session: a reader returning to a session expects the
 				// folds as they left them, and a restored reading position inside an
 				// open fold depends on it. Best-effort — storage unavailable (private
 				// mode, quota) must not break the toggle.
-				writeFoldDeviations(sessionKey ?? "", next);
+				writeFoldStates(sessionKey ?? "", next);
 				return next;
 			});
 		},
@@ -1619,8 +1671,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// ENTRY ID (falling back to the entry timestamp): rows unmount once the
 	// virtualizer scrolls them out of its overscan window, and the card's own
 	// useState reset the manual expansion when the row remounted. Same
-	// deviation-set shape as roundFoldOpen: auto-collapse applies at row
-	// mount; the user's toggle wins from then on.
+	// entry-id-keyed transcript-level shape as the fold open states:
+	// auto-collapse applies at row mount; the user's toggle wins from then on.
 	const [advisorOpenIds, setAdvisorOpenIds] = useState<ReadonlySet<string>>(() => new Set());
 	const toggleAdvisorOpen = useCallback((key: string): void => {
 		setAdvisorOpenIds(prev => {
@@ -1841,7 +1893,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		folds,
 		units: turnUnits,
 		runs,
-	} = useMemo(() => deriveTurns(entries, working, deriveCacheRef.current), [entries, working]);
+	} = useMemo(() => deriveTurns(entries, working, deriveCacheRef.current, policy), [entries, working, policy]);
 	// Frozen-total lookup: each turn's LAST assistant row → the turn-start ts
 	// key the daemon/GUI recorders freeze the total under (one key space —
 	// daemon-seeded snapshots and live GUI writes hit the same entry).
@@ -1857,10 +1909,23 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// other on its own.
 	const errorPlan = useMemo(() => planErrorSurfaces(entries), [entries]);
 
-	const foldsExpanded = defaultRoundFoldExpanded && !hideToolActivity;
+	// Default open state: a grouping mode's header on the RUNNING round stays
+	// open (the process is what the reader is watching), and a round whose
+	// collapse is deferred by `next-input` stays open until the next prompt.
+	// Per-round reader deviations still win either way.
+	const foldDefaultOpenOf = useCallback(
+		(f: RoundFold): boolean =>
+			foldDefaultOpen(f, {
+				working,
+				lastEntryIdx: entries.length - 1,
+				defaultExpanded: defaultRoundFoldExpanded,
+				hideToolActivity,
+			}),
+		[entries.length, working, defaultRoundFoldExpanded, hideToolActivity],
+	);
 	const foldOpenOf = useCallback(
-		(f: RoundFold): boolean => roundFoldOpen.has(foldKeyOf(f)) !== foldsExpanded,
-		[roundFoldOpen, foldsExpanded, foldKeyOf],
+		(f: RoundFold): boolean => roundFoldStates.get(foldKeyOf(f)) ?? foldDefaultOpenOf(f),
+		[roundFoldStates, foldDefaultOpenOf, foldKeyOf],
 	);
 
 	// 工具调用汇总 (Kimi parity): consecutive work runs (round-collapse
@@ -1971,7 +2036,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		for (const f of folds) {
 			if (foldOpenOf(f)) continue;
 			for (let i = f.startIdx + 1; i <= f.endIdx; i++) {
-				if (i !== f.finalIdx && !f.exempt.includes(i)) set.add(i);
+				if (i !== f.finalIdx && !f.exempt.includes(i) && !f.replies.includes(i)) set.add(i);
 			}
 		}
 		// 工具调用汇总: summarized run tail rows collapse into zero-height
@@ -2610,7 +2675,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// header renders ABOVE the final assistant message; the in-span
 		// working rows render only while that fold is expanded.
 		// 隐藏工具活动 implies "collapsed into 活动": the fold owns the
-		// process so nothing becomes unreachable. (foldOpenOf / foldsExpanded
+		// process so nothing becomes unreachable. (foldOpenOf / foldDefaultOpen
 		// live at component scope — fold keys are the round's user-message id,
 		// stable across history prepends.)
 		// The fold this row belongs to — by header row, by reply row, or by
@@ -2636,6 +2701,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// round-collapse `exempt`) stay mounted while the fold is closed: they
 		// are the turn's output, not its process noise.
 		const isExemptRow = fold?.exempt.includes(absIdx) === true;
+		// A reply kept visible by `foldedReplies: "all"`: it renders TEXT only
+		// while the fold is closed, exactly like the final answer, so the
+		// intermediate answer stays readable without its process.
+		const isKeptReplyRow = fold?.replies.includes(absIdx) === true;
 		// A folded turn's avatar lives on its fold row (see renderRows); entries
 		// never carry it, so the header row and the orb cannot drift apart.
 		const rowOwnsOrb =
@@ -2647,7 +2716,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// Every process row of a closed fold collapses — the 活动 header is its own
 		// row now, so the row it used to host no longer has to stay visible to carry
 		// it.
-		const inHiddenSpan = fold !== undefined && !isReplyRow && !isExemptRow;
+		const inHiddenSpan = fold !== undefined && !isReplyRow && !isExemptRow && !isKeptReplyRow;
 		// ── 工具调用汇总 (Kimi parity) ────────────────────────────────────
 		// An active run renders its HEAD slot as the one-line summary and
 		// collapses its tail rows into zero-height slots (same .tr-fold-slot
@@ -2671,14 +2740,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const collapsible = inHiddenSpan || isRunHidden;
 		// Collapsed turn = 活动 row + the answer: the reply row renders its
 		// TEXT only (thinking/tool parts fold into the activity row).
-		const rowTextOnly = foldClosed && isReplyRow;
+		const rowTextOnly = foldClosed && (isReplyRow || isKeptReplyRow);
 		// A closed fold shows the 活动 header row + the reply (+ exempt widget
 		// rows): every other row of the turn loses its body. The header keeps its
 		// OWN row in both states — hoisting it onto the reply made the turn's
 		// first row render nothing, which is why the avatar vanished on collapse
 		// and why expanding jumped (the header moved rows instead of the content
 		// growing).
-		const hideRowContent = foldClosed && !isReplyRow && !isExemptRow;
+		const hideRowContent = foldClosed && !isReplyRow && !isExemptRow && !isKeptReplyRow;
 		// Per-round work timer: the live tail row ticks from the
 		// round start (last user message); completed rounds show
 		// their frozen total under the final message. The frozen
@@ -2743,6 +2812,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							collapseLongUserMessages={collapseLongUserMessages}
 							hideToolActivity={rowHideTools}
 							textOnly={rowTextOnly}
+							settledReasoningPreview={policy.settledReasoningPreview}
 							showTokenUsage={showTokenUsage}
 							usageHere={usageHere}
 							smoothStreaming={smoothStreaming}
@@ -2835,13 +2905,21 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// of their own, so no content row ever hosts them.
 	const renderRow = (row: RenderRow): ReactNode => {
 		if (row.kind === "fold") {
+			// `liveProcessDetail`: while a round is still running (only
+			// compact/standard fold it), its header names what is happening now
+			// instead of only category counts.
+			const detail =
+				policy.liveProcessDetail && working && row.fold.endIdx === entries.length - 1 && row.fold.preview !== ""
+					? row.fold.preview
+					: undefined;
 			return (
 				<Row kind="assistant" gutter={agentGutter ?? t("settings.agent")}>
 					<RoundFoldHeader
 						fold={row.fold}
 						open={foldOpenOf(row.fold)}
-						onToggle={() => toggleFold(foldKeyOf(row.fold))}
+						onToggle={() => toggleFold(foldKeyOf(row.fold), !foldOpenOf(row.fold))}
 						startTs={entries[row.fold.startIdx]?.timestamp}
+						detail={detail}
 					/>
 				</Row>
 			);

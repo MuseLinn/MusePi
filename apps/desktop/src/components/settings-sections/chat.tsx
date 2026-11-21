@@ -1,10 +1,31 @@
-import { CodeHighlightProvider, renderMermaidHtml, Segmented, type SegmentedOption, t } from "@musepi/client-core";
+import {
+	CodeHighlightProvider,
+	renderMermaidHtml,
+	Segmented,
+	type SegmentedOption,
+	type TranslationKey,
+	t,
+} from "@musepi/client-core";
+import {
+	COLLAPSE_TIMINGS,
+	type CollapseTiming,
+	FOLDED_REPLIES,
+	type FoldedReplies,
+	readTranscriptPrefs,
+	setCollapseTiming,
+	setFoldedReplies,
+	setTranscriptView,
+	TRANSCRIPT_VIEW_MODES,
+	type TranscriptPrefs,
+	type TranscriptViewMode,
+} from "@musepi/client-core/src/components/transcript/transcript-prefs";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
 import { useChatHighlight } from "../../lib/highlight";
 import { SESSION_TABS_CHANGED_EVENT, SESSION_TABS_ENABLED_KEY } from "../../lib/session-tabs";
 import { STATS_MODE_EVENT, STATS_MODE_KEY } from "../composer/stats-pills";
+import { GuiSelect } from "../GuiSelect";
 
 /** Segmented option tables — module scope is fine, the labels are static
  * per locale and the settings view remounts on a language switch. */
@@ -190,6 +211,104 @@ function AutoFoldToggle(): ReactNode {
 	);
 }
 
+/** 会话 — how a finished turn's work reads: how much detail survives, when
+ *  the round folds, and which assistant replies stay visible afterwards.
+ *  Three independent renderer-local preferences (localStorage), read back by
+ *  the transcript through the companion `musepi-transcript-prefs-changed`
+ *  event so a change applies to already rendered rounds without a reload. */
+export function TranscriptReadingSection(): ReactNode {
+	const [prefs, setPrefs] = useState<TranscriptPrefs>(readTranscriptPrefs);
+	const modeOptions = useMemo(
+		() =>
+			TRANSCRIPT_VIEW_MODES.map(mode => ({
+				value: mode,
+				label: t(TRANSCRIPT_VIEW_LABELS[mode]),
+			})),
+		[],
+	);
+	return (
+		<div className="gui-settings-section">
+			<div className="gui-settings-section-title">{t("general.sessions")}</div>
+			<div className="gui-settings-row">
+				<div>
+					<div className="gui-settings-row-label">{t("general.transcriptView")}</div>
+					<div className="gui-settings-row-desc">{t("general.transcriptViewDescription")}</div>
+				</div>
+				<GuiSelect
+					ariaLabel={t("general.transcriptView")}
+					value={prefs.transcriptView}
+					options={modeOptions}
+					onChange={mode => {
+						tapFeedback();
+						setTranscriptView(mode);
+						setPrefs(readTranscriptPrefs());
+					}}
+				/>
+			</div>
+			<div className="gui-settings-row">
+				<div>
+					<div className="gui-settings-row-label">{t("general.collapseTiming")}</div>
+					<div className="gui-settings-row-desc">{t("general.collapseTimingDescription")}</div>
+				</div>
+				<GuiSelect
+					ariaLabel={t("general.collapseTiming")}
+					value={prefs.collapseTiming}
+					options={COLLAPSE_TIMING_OPTIONS.map(option => ({ value: option.id, label: t(option.label) }))}
+					onChange={timing => {
+						tapFeedback();
+						setCollapseTiming(timing);
+						setPrefs(readTranscriptPrefs());
+					}}
+				/>
+			</div>
+			<div className="gui-settings-row">
+				<div>
+					<div className="gui-settings-row-label">{t("general.foldedReplies")}</div>
+					<div className="gui-settings-row-desc">{t("general.foldedRepliesDescription")}</div>
+				</div>
+				<GuiSelect
+					ariaLabel={t("general.foldedReplies")}
+					value={prefs.foldedReplies}
+					options={FOLDED_REPLIES_OPTIONS.map(option => ({ value: option.id, label: t(option.label) }))}
+					onChange={replies => {
+						tapFeedback();
+						setFoldedReplies(replies);
+						setPrefs(readTranscriptPrefs());
+					}}
+				/>
+			</div>
+		</div>
+	);
+}
+
+/** Mode labels — the same four names the reference implementation uses. */
+const TRANSCRIPT_VIEW_LABELS = {
+	compact: "general.transcriptViewCompact",
+	standard: "general.transcriptViewStandard",
+	detailed: "general.transcriptViewDetailed",
+	verbose: "general.transcriptViewVerbose",
+} as const satisfies Record<TranscriptViewMode, TranslationKey>;
+
+const COLLAPSE_TIMING_LABELS: Record<CollapseTiming, TranslationKey> = {
+	completion: "general.collapseTimingCompletion",
+	"next-input": "general.collapseTimingNextInput",
+};
+
+const FOLDED_REPLIES_LABELS: Record<FoldedReplies, TranslationKey> = {
+	all: "general.foldedRepliesAll",
+	final: "general.foldedRepliesFinal",
+};
+
+const COLLAPSE_TIMING_OPTIONS: readonly { id: CollapseTiming; label: TranslationKey }[] = COLLAPSE_TIMINGS.map(id => ({
+	id,
+	label: COLLAPSE_TIMING_LABELS[id],
+}));
+
+const FOLDED_REPLIES_OPTIONS: readonly { id: FoldedReplies; label: TranslationKey }[] = FOLDED_REPLIES.map(id => ({
+	id,
+	label: FOLDED_REPLIES_LABELS[id],
+}));
+
 /** Chat display settings (transcript rendering) — rendered as a block at
  *  the bottom of 外观 (previously the standalone 聊天设置 tab; merged
  *  2026-08-12 so transcript rendering prefs live with the rest of the
@@ -257,6 +376,7 @@ export function ChatSection(): ReactNode {
 				<div className="gui-settings-section-title">{t("settings.chatSettings")}</div>
 				<div className="gui-settings-section-desc">{t("settings.chatSettingsDescription")}</div>
 			</div>
+			<TranscriptReadingSection />
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("tools.messageRendering")}</div>
 				<PrefSegmented
