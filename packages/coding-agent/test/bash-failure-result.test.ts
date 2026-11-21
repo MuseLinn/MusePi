@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import * as os from "node:os";
+import * as path from "node:path";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { BashTool } from "@musepi/pi-coding-agent/tools/bash";
 
@@ -9,6 +11,11 @@ function makeSession(): ToolSession {
 		skills: [],
 		getSessionFile: () => null,
 		settings: {
+			// Bash reads the agent secret store through the real settings surface;
+			// a mock without it makes every command throw before it can run.
+			getAgentDir() {
+				return path.join(os.tmpdir(), "musepi-bash-test-no-secrets");
+			},
 			get(key: string) {
 				if (key === "async.enabled") return false;
 				if (key === "bash.autoBackground.enabled") return false;

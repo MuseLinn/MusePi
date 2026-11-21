@@ -6,6 +6,8 @@
  * the event loop alive until the threshold expires; the fix clears it, so the
  * process must exit promptly. The parent test measures wall-clock exit time.
  */
+import * as os from "node:os";
+import * as path from "node:path";
 import { AsyncJobManager } from "@musepi/pi-coding-agent/async";
 import type { ToolSession } from "@musepi/pi-coding-agent/tools";
 import { BashTool } from "@musepi/pi-coding-agent/tools/bash";
@@ -25,6 +27,10 @@ const session = {
 	getAgentId: () => null,
 	asyncJobManager: manager,
 	settings: {
+		// Bash reads the agent secret store through the real settings surface.
+		getAgentDir() {
+			return path.join(os.tmpdir(), "musepi-bash-test-no-secrets");
+		},
 		get(key: string) {
 			if (key === "bash.autoBackground.enabled") return true;
 			if (key === "bash.autoBackground.thresholdMs") return THRESHOLD_MS;

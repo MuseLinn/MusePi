@@ -397,6 +397,8 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 				"learn",
 				"manage_skill",
 				"connector_catalog",
+				"request_secret",
+				"list_secrets",
 			],
 		},
 	},
@@ -417,7 +419,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 };
 
 /** 内置模板修订号:内置模板内容变更后递增(见 ensureModeTemplates 的升级规则)。 */
-export const BUILTIN_TEMPLATE_REVISION = 11;
+export const BUILTIN_TEMPLATE_REVISION = 12;
 
 /**
  * 历史修订的形状 —— 升级比对链。ensureModeTemplates 只在"文件内容仍等于
@@ -773,6 +775,56 @@ export const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = 
 					text: "你是一名 MusePi 插件与预设创作者。\n\n输入边界：快捷创建时，用户消息只包含创作需求。不要把宿主界面的操作说明当作用户要求，也不要要求用户补发本提示已经提供的信息。\n\n创建预设时，按以下顺序工作：\n1. 根据需求设计预设的 plugins、prompt、settings，以及可选的 extends 组合。内置预设不可覆盖；快捷创建必须使用新的预设 id。\n2. 用 modes.save 提交完整的新预设定义。该接口在写盘前执行结构、继承和扩展存在性校验。保存失败时，根据错误修正定义后重试；不要绕过接口手写字段或猜测保存结果。\n3. 保存成功后，用 modes.validate 按 id 做挂载自检。校验未通过时继续修正并重新保存、校验，不要把未通过校验的预设报告为完成。\n4. 完成后报告预设 id、保存结果和校验结果。\n\n创建或修改扩展时，遵循 musepi-extension-dev 技能。创造模式已自动激活扩展自举工具环（extension_load/extension_reload/extension_status/extension_validate/extension_rollback 与 ext_define/ext_run/ext_stop/ext_undefine/ext_inspect；extensions_list 常激活）。创建扩展后用它加载、自查、热修和回退，不要只靠写文件猜状态。\n",
 				},
 			],
+		},
+	},
+	// v11: chat 已 deny connector_catalog,但尚未 deny request_secret/list_secrets。
+	11: {
+		chat: {
+			id: "chat",
+			label: "Chat",
+			description: "极简对话:仅核心对话工具 + 固定 prompt + 无压缩",
+			modelRole: "fast",
+			extensions: [],
+			promptComplete: true,
+			runtimeContext: false,
+			plugins: [{ name: "musepi-preset-chat" }],
+			settings: {
+				"compaction.enabled": false,
+				"tools.disabled": [
+					"read",
+					"edit",
+					"ast_grep",
+					"ast_edit",
+					"debug",
+					"eval",
+					"github",
+					"glob",
+					"grep",
+					"lsp",
+					"inspect_image",
+					"browser",
+					"computer",
+					"checkpoint",
+					"rewind",
+					"security_scan",
+					"task",
+					"hub",
+					"knowledge",
+					"notify_user",
+					"todo",
+					"web_search",
+					"write",
+					"board",
+					"widget",
+					"memory_edit",
+					"retain",
+					"recall",
+					"reflect",
+					"learn",
+					"manage_skill",
+					"connector_catalog",
+				],
+			},
 		},
 	},
 };

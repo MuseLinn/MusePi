@@ -1,8 +1,16 @@
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
+import * as path from "node:path";
 import { Settings } from "@musepi/pi-coding-agent/config/settings";
 import { BUILTIN_TOOLS, createTools, type ToolSession } from "@musepi/pi-coding-agent/tools";
-import { BUILTIN_MODE_TEMPLATES, BUILTIN_TEMPLATE_REVISION, LEGACY_TEMPLATES } from "../../src/presets/resolve";
+import {
+	BUILTIN_MODE_TEMPLATES,
+	BUILTIN_TEMPLATE_REVISION,
+	ensureModeTemplates,
+	LEGACY_TEMPLATES,
+	modeFilePath,
+} from "../../src/presets/resolve";
 
 /**
  * Chat's minimal preset is defined by what it removes (DSH minimal parity: the
@@ -29,24 +37,56 @@ describe("chat preset tool narrowing", () => {
 
 	it("makes an explicit choice for every current built-in tool", () => {
 		const denylist = BUILTIN_MODE_TEMPLATES.chat?.settings?.["tools.disabled"] as string[];
+		// A builtin that is neither in the keep-set nor in the denylist fails here:
+		// the chat slate grows silently otherwise, which is how the secret tools
+		// slipped in before revision 12.
 		const keep = new Set(["bash", "ask"]);
 		for (const name of Object.keys(BUILTIN_TOOLS)) {
 			if (!keep.has(name)) expect(denylist).toContain(name);
 		}
+		expect(denylist).toContain("request_secret");
+		expect(denylist).toContain("list_secrets");
 	});
 
-	it("upgrades revision-5 and revision-6 chat files but keeps edited ones", () => {
+	it("upgrades revision-5, 6, and 11 chat files but keeps edited ones", () => {
 		// The upgrade chain is what puts the narrowing in front of existing users
-		// without trampling their edits: a file still matching the v5 snapshot
-		// moves up; anything else stays as the person wrote it.
+		// without trampling their edits: a file still matching a snapshot moves up;
+		// anything else stays as the person wrote it.
 		const rev5 = LEGACY_TEMPLATES[5]?.chat;
 		expect(rev5).toBeDefined();
 		expect(rev5?.settings?.["tools.disabled"]).toBeUndefined();
 		const rev6 = LEGACY_TEMPLATES[6]?.chat;
 		expect(rev6).toBeDefined();
 		expect(rev6?.settings?.["tools.disabled"]).not.toContain("knowledge");
+		const rev11 = LEGACY_TEMPLATES[11]?.chat;
+		expect(rev11).toBeDefined();
+		expect(rev11?.settings?.["tools.disabled"]).toContain("connector_catalog");
+		expect(rev11?.settings?.["tools.disabled"]).not.toContain("request_secret");
+		expect(rev11?.settings?.["tools.disabled"]).not.toContain("list_secrets");
 		// And the current template stamps the new revision.
-		expect(BUILTIN_TEMPLATE_REVISION).toBe(11);
+		expect(BUILTIN_TEMPLATE_REVISION).toBe(12);
+	});
+
+	it("upgrades an unedited revision-11 chat file and denies the secret tools", () => {
+		const rev11 = LEGACY_TEMPLATES[11]?.chat;
+		if (!rev11) throw new Error("revision 11 chat snapshot is missing");
+		const dir = mkdtempSync(path.join(os.tmpdir(), "musepi-chat-preset-"));
+		try {
+			const file = modeFilePath(dir, "chat");
+			writeFileSync(file, `${JSON.stringify({ ...rev11, builtinRevision: 11 }, null, 2)}\n`, "utf8");
+
+			ensureModeTemplates(dir);
+
+			const upgraded = JSON.parse(readFileSync(file, "utf8")) as {
+				builtinRevision: number;
+				settings: Record<string, unknown>;
+			};
+			expect(upgraded.builtinRevision).toBe(BUILTIN_TEMPLATE_REVISION);
+			expect(upgraded.settings["tools.disabled"]).toContain("request_secret");
+			expect(upgraded.settings["tools.disabled"]).toContain("list_secrets");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	it("createTools honours the denylist the template writes", async () => {
