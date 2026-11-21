@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
-import { clearSessionHover, reportSessionHover } from "./SessionHoverCard";
+import { clearSessionHover, isUserFork, reportSessionHover } from "./SessionHoverCard";
 import { flattenTree, sessionAncestorIds, sessionSortKey, sortSessionTree } from "./session-list-shared";
 
 /**
@@ -11,10 +11,10 @@ import { flattenTree, sessionAncestorIds, sessionSortKey, sortSessionTree } from
  * 是一个会话记录,可按 分组/项目/日期 聚合,行上带生命周期状态/置顶/工作脉动)。
  *
  * ⚠️ 命名陷阱:这里的 "SessionList" 与 TUI 的 `/tree`(**会话内消息树**:
- * entry id/parentId 层级、分支导航)是**两个不同的概念**。本组件仅在"会话
- * 由另一会话 fork 而来"时借用 /tree 的父子结构画分支标记(见 fork 标记处),
- * 它本身不是消息树。消息树的 GUI 侧载体见 `lib/message-tree.ts`(buildMessageTree),
- * 对应 TUI `/tree` / 未来 `/trace`。
+ * entry id/parentId 层级、分支导航)是**两个不同的概念**。本组件仅在"用户
+ * 从另一会话分叉出新会话"时借用 /tree 的父子结构画分支标记(判定见
+ * {@link isUserFork}),它本身不是消息树。消息树的 GUI 侧载体见
+ * `lib/message-tree.ts`(buildMessageTree),对应 TUI `/tree` / 未来 `/trace`。
  */
 
 /** Session status labels are keyed per status id (closed set, from
@@ -398,6 +398,7 @@ const SessionRow = memo(function SessionRow({
 	editableLabel,
 	emoji,
 	parentLabel,
+	forked,
 	timestamp,
 	updatedAt,
 	selected,
@@ -427,8 +428,12 @@ const SessionRow = memo(function SessionRow({
 	/** Raw label used when entering inline rename (empty for untitled). */
 	editableLabel: string;
 	emoji?: string;
-	/** Fork source label, or null when the session is not a fork. */
+	/** Fork source label, or null when the parent row is absent. Only rendered
+	 *  when `forked` is true — a subagent/advisor row has a parentId too. */
 	parentLabel: string | null;
+	/** 这一行由用户分叉而来({@link isUserFork})——分支标记只在为真时出现;
+	 *  子代理/顾问行有父但不算分叉。由列表算好传入,行内不再重算血缘。 */
+	forked: boolean;
 	timestamp: string;
 	/** Last-activity time; the row's compact label prefers it over `timestamp`. */
 	updatedAt?: string;
@@ -549,6 +554,7 @@ const SessionRow = memo(function SessionRow({
 					reportSessionHover({
 						id,
 						label,
+						forked,
 						parentLabel,
 						timestamp,
 						updatedAt,
@@ -678,7 +684,7 @@ const SessionRow = memo(function SessionRow({
 						</svg>
 					</span>
 				)}
-				{parentLabel && (
+				{forked && parentLabel && (
 					<span
 						className="gui-tree-fork"
 						role="img"
@@ -877,6 +883,9 @@ function SessionListComponent({
 				// Advisor transcripts are created without a title; showing the
 				// untitled placeholder hides what the row actually is.
 				const advisorUntitled = node.entry.advisor === true && !rawLabel.trim();
+				// 分叉判定只在这里做一次({@link isUserFork});行标记与悬浮卡
+				// 文案读同一个结论,不给第二处留第二份规则。
+				const forked = isUserFork(node.entry);
 				return (
 					<SessionRow
 						key={node.entry.id}
@@ -885,6 +894,7 @@ function SessionListComponent({
 						editableLabel={rawLabel}
 						emoji={emojis?.get(node.entry.id)}
 						parentLabel={parent ? (parent.entry.label ?? t("transcript.untitledSession")) : null}
+						forked={forked}
 						timestamp={node.entry.timestamp}
 						updatedAt={node.entry.updatedAt}
 						selected={node.entry.id === selectedId}
