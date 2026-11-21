@@ -79,7 +79,11 @@ When the reply settles:
 - a block with nothing drawable shows the same note plus its source;
 - a reply that ended mid-statement (an unclosed fence, or output cut by a limit) names the truncation and folds its source, but offers no repair — quoting the prefix back cannot repair it.
 
-Repair is one user turn: pressing the action once sends the source and reasons, and a second press or a redraw does not send again. When a settled reply holds several failed blocks, the automatic repair sends them together as one message instead of one turn per block.
+Repair is one user turn: pressing the action once sends the source and reasons, and a second press or a redraw does not send again. When a settled reply holds several failed blocks, the automatic repair sends them together as one message instead of one turn per block. It also waits for the turn itself to end, not only this reply: an answer that is already final while the agent runs a later step keeps its note but is not pulled back into the loop.
+
+Diagnostics belong to the reply body. A ```` ```ui ```` fence inside a thinking draft, a tool's output, the user's own message or a document preview draws the nodes that parse and says nothing — no truncation note, no failure note, no repair action. Those words are not the answer the agent would be asked to fix, and a draft still being written is not a broken program. `Markdown` takes this surface explicitly (`repair: "reply" | "off"`), and `"off"` is the default so a new host cannot publish diagnostics by accident.
+
+Truncation takes no repair. This is a deliberate divergence from GenUI, which treats `parse-incomplete` as repair-worthy: GenUI's model retries inside its tool loop, while MusePi can only quote the fence prefix back as a user turn, and a prefix that stops mid-statement gives the next turn nothing to correct.
 
 ## 5. What a block asks
 

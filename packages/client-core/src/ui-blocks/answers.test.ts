@@ -182,8 +182,15 @@ describe("repairing a block that never drew", () => {
 });
 
 describe("automatic repair", () => {
+	/** The commit pass queries the rendered buttons; a test stands in for one. */
+	const repairRoot = (hashes: readonly string[]): ParentNode =>
+		({
+			querySelectorAll: () =>
+				hashes.map(hash => ({ getAttribute: (name: string) => (name === "data-ui-repair" ? hash : null) })),
+		}) as unknown as ParentNode;
+
 	test("one failed signature repairs once, then stops", async () => {
-		const { rememberBlockFailure, maybeAutoRepair, UI_BLOCK_ANSWER_EVENT } = await import("./answers");
+		const { rememberBlockFailure, autoRepairFailedBlocks, UI_BLOCK_ANSWER_EVENT } = await import("./answers");
 		const store = new Map<string, string>();
 		(globalThis as { localStorage?: unknown }).localStorage = {
 			getItem: (key: string) => store.get(key) ?? null,
@@ -191,24 +198,28 @@ describe("automatic repair", () => {
 		};
 		dispatched.length = 0;
 		rememberBlockFailure("auto1", 'root = Stack([Card(title: "x")])', ["unexpected token ("]);
-		expect(maybeAutoRepair("auto1")).toBe(true);
+		autoRepairFailedBlocks(repairRoot(["auto1"]));
 		expect(dispatched).toHaveLength(1);
 		expect(dispatched[0]?.text).toContain('root = Stack([Card(title: "x")])');
 		// the same failure, seen again after a re-render or a reload, must not loop
-		expect(maybeAutoRepair("auto1")).toBe(false);
+		autoRepairFailedBlocks(repairRoot(["auto1"]));
 		expect(dispatched).toHaveLength(1);
 		expect(UI_BLOCK_ANSWER_EVENT).toBe("musepi-ui-block-answer");
 	});
 
 	test("a different failure gets its own single attempt", async () => {
-		const { rememberBlockFailure, maybeAutoRepair } = await import("./answers");
+		const { rememberBlockFailure, autoRepairFailedBlocks } = await import("./answers");
 		rememberBlockFailure("auto2", "root = Stack([Bogus()])", ["unknown component Bogus"]);
-		expect(maybeAutoRepair("auto2")).toBe(true);
+		autoRepairFailedBlocks(repairRoot(["auto2"]));
+		expect(dispatched).toHaveLength(1);
+		expect(dispatched[0]?.text).toContain("unknown component Bogus");
 	});
 
 	test("a block this build never saw is not repaired", async () => {
-		const { maybeAutoRepair } = await import("./answers");
-		expect(maybeAutoRepair("never-seen")).toBe(false);
+		const { autoRepairFailedBlocks } = await import("./answers");
+		dispatched.length = 0;
+		autoRepairFailedBlocks(repairRoot(["never-seen"]));
+		expect(dispatched).toHaveLength(0);
 	});
 
 	test("several failed blocks in one reply cost one request, then none", async () => {

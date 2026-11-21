@@ -193,6 +193,29 @@ describe("streaming fences", () => {
 	});
 });
 
+describe("diagnostics belong to the reply body", () => {
+	test("a broken fence on another surface draws what parsed and says nothing", () => {
+		const source = 'root = Stack([Stat("a", 1), Stat("b")])';
+		const html = renderUiBlockFence(source, { settled: true, repair: false });
+		expect(html).toContain("tr-ui--streaming");
+		expect(html).toContain("a");
+		expect(html).not.toContain("tr-ui-note");
+		expect(html).not.toContain("tr-ui-errors");
+		expect(html).not.toContain("tr-ui-src");
+		expect(html).not.toContain("data-ui-repair");
+	});
+
+	test("a truncated fence on another surface names no cut", () => {
+		for (const source of ["root = Stack([", 'root = Stack([Card("t", [Text("x")])']) {
+			const html = renderUiBlockFence(source, { settled: true, repair: false });
+			expect(html).not.toContain("tr-ui-note");
+			expect(html).not.toContain("tr-ui--truncated");
+			expect(html).not.toContain("tr-ui--empty");
+			expect(html).not.toContain("data-ui-repair");
+		}
+	});
+});
+
 describe("reading blocks", () => {
 	test("a List draws its items and numbers them when ordered", () => {
 		const block = renderUiBlock('root = Stack([List(["alpha", "beta"], true), List(["gamma"])])');

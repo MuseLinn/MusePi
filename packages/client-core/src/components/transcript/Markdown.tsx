@@ -133,12 +133,14 @@ function safeHref(href: string): string | null {
 }
 
 /**
- * Whether the ui fences in the next parse belong to a reply that has settled.
- * marked's renderer is shared by every message, so the flag travels beside the
- * synchronous parse rather than through the renderer API; {@link parseMarkdown}
- * restores it even when parsing throws.
+ * How the ui fences in the next parse read. marked's renderer is shared by
+ * every message, so the flags travel beside the synchronous parse rather than
+ * through the renderer API; {@link parseMarkdown} restores them even when
+ * parsing throws. `settled` asks whether diagnostics may appear; `repair` says
+ * whether this surface is the assistant's answer at all.
  */
 let uiFenceSettled = true;
+let uiFenceRepair = true;
 
 const md = new Marked({
 	gfm: true,
@@ -209,7 +211,7 @@ const md = new Marked({
 			// rather than describe. Rendered from JSON Lines so a fence still
 			// streaming draws its finished lines.
 			if (isUiBlockLanguage(l)) {
-				return renderUiBlockFence(text, { settled: uiFenceSettled });
+				return renderUiBlockFence(text, { settled: uiFenceSettled, repair: uiFenceRepair });
 			}
 			const langAttr = lang ? ` class="language-${escapeHtml(lang)}"` : "";
 			const body = escaped ? text : escapeHtml(text);
@@ -450,6 +452,9 @@ export interface StreamingRenderState {
 	 *  quiet fence cannot be reused once the reply settles, because its HTML
 	 *  has no diagnostics yet. */
 	uiSettled: boolean;
+	/** Whether that surface publishes diagnostics at all (see `Markdown`'s
+	 *  `repair`); a cached reply body must not be reused on a silent surface. */
+	uiRepair: boolean;
 }
 
 /** Are emphasis, links, inline code and autolinks closed before `s` ends?
@@ -536,14 +541,17 @@ function streamingBoundaryAt(text: string, i: number): { end: number; weak: bool
 }
 
 /** Parse one markdown region with the ui-fence state that belongs to this
- *  reply. Fences read the flag synchronously while the parse runs, which is
- *  how a settled reply exposes diagnostics and a growing one stays quiet. */
-function parseMarkdown(text: string, settled: boolean): string {
+ *  reply. Fences read the flags synchronously while the parse runs, which is
+ *  how a settled reply exposes diagnostics, a growing one stays quiet, and a
+ *  non-reply surface stays silent throughout. */
+function parseMarkdown(text: string, settled: boolean, repair: boolean): string {
 	uiFenceSettled = settled;
+	uiFenceRepair = repair;
 	try {
 		return decorateTables(md.parse(text, { async: false }));
 	} finally {
 		uiFenceSettled = true;
+		uiFenceRepair = true;
 	}
 }
 
@@ -566,9 +574,10 @@ export function renderStreamingMarkdown(
 	text: string,
 	streaming: boolean,
 	prev: StreamingRenderState | null,
-	options: { uiSettled?: boolean } = {},
+	options: { uiSettled?: boolean; uiRepair?: boolean } = {},
 ): { html: string; tail: string | null; state: StreamingRenderState | null } {
 	const uiSettled = options.uiSettled ?? true;
+	const uiRepair = options.uiRepair ?? true;
 	if (!streaming) {
 		// Settle: the STRONG head blocks before the first weak one are complete
 		// markdown — reuse them verbatim and re-parse only the rest. WEAK cuts
@@ -578,7 +587,13 @@ export function renderStreamingMarkdown(
 		// block onward. The final layout then matches a fresh full parse (what
 		// a reload shows); the cost is one parse of the weak region, paid once
 		// at settle.
-		if (prev && prev.uiSettled === uiSettled && prev.blocks.length > 0 && text.startsWith(prev.text)) {
+		if (
+			prev &&
+			prev.uiSettled === uiSettled &&
+			prev.uiRepair === uiRepair &&
+			prev.blocks.length > 0 &&
+			text.startsWith(prev.text)
+		) {
 			const firstWeak = prev.blocks.findIndex(b => b.weak);
 			const keep = firstWeak === -1 ? prev.blocks.length : firstWeak;
 			const head = prev.blocks
@@ -586,13 +601,19 @@ export function renderStreamingMarkdown(
 				.map(b => b.html)
 				.join("");
 			const tailText = text.slice(keep > 0 ? prev.blocks[keep - 1].end : 0);
-			const tailHtml = parseMarkdown(tailText, uiSettled);
+			const tailHtml = parseMarkdown(tailText, uiSettled, uiRepair);
 			return { html: head + tailHtml, tail: null, state: null };
 		}
-		return { html: parseMarkdown(text, uiSettled), tail: null, state: null };
+		return { html: parseMarkdown(text, uiSettled, uiRepair), tail: null, state: null };
 	}
 	try {
-		if (prev && prev.uiSettled === uiSettled && text.length > prev.text.length && text.startsWith(prev.text)) {
+		if (
+			prev &&
+			prev.uiSettled === uiSettled &&
+			prev.uiRepair === uiRepair &&
+			text.length > prev.text.length &&
+			text.startsWith(prev.text)
+		) {
 			// Append-only growth: the frozen head ADVANCES by promoting every
 			// region that has just reached a boundary — a cut that did not
 			// exist on the previous frame. Promoting it now is what lets
@@ -617,7 +638,7 @@ export function renderStreamingMarkdown(
 					start: tailStart,
 					end: b.end,
 					weak: b.weak,
-					html: parseMarkdown(text.slice(tailStart, b.end), uiSettled),
+					html: parseMarkdown(text.slice(tailStart, b.end), uiSettled, uiRepair),
 				});
 				tailStart = b.end;
 				if (!b.weak) i += 1; // skip the second \n of a blank-line cut
@@ -625,7 +646,7 @@ export function renderStreamingMarkdown(
 			return {
 				html: blocks.map(b => b.html).join(""),
 				tail: text.slice(tailStart),
-				state: { text, blocks, tailStart, uiSettled },
+				state: { text, blocks, tailStart, uiSettled, uiRepair },
 			};
 		}
 		// First streaming frame / non-append growth: parse once, split into
@@ -642,7 +663,7 @@ export function renderStreamingMarkdown(
 				start: from,
 				end: b.end,
 				weak: b.weak,
-				html: parseMarkdown(text.slice(from, b.end), uiSettled),
+				html: parseMarkdown(text.slice(from, b.end), uiSettled, uiRepair),
 			});
 			from = b.end;
 			if (!b.weak) i += 1;
@@ -650,7 +671,7 @@ export function renderStreamingMarkdown(
 		return {
 			html: blocks.map(b => b.html).join(""),
 			tail: text.slice(from),
-			state: { text, blocks, tailStart: from, uiSettled },
+			state: { text, blocks, tailStart: from, uiSettled, uiRepair },
 		};
 	} catch {
 		return { html: "", tail: text, state: null };
@@ -816,6 +837,8 @@ export const Markdown = memo(function Markdown({
 	basePath,
 	streaming = false,
 	pending = false,
+	working = false,
+	repair = "off",
 	smoothStreaming,
 }: {
 	text: string;
@@ -826,6 +849,15 @@ export const Markdown = memo(function Markdown({
 	 *  `streaming`, which only follows markdown's idle cadence: ui-block
 	 *  diagnostics wait for this to clear. */
 	pending?: boolean;
+	/** The agent is still working on this turn. Only the automatic repair
+	 *  waits for it: a settled reply inside a running turn must not interrupt
+	 *  the agent, but its diagnostics are already final. */
+	working?: boolean;
+	/** Which surface this text belongs to. Only the assistant's reply
+	 *  (`"reply"`) publishes ui-block diagnostics and offers a repair; thinking
+	 *  drafts, tool output, user text and document previews (`"off"`, the
+	 *  default) draw what parses and stay silent. */
+	repair?: "reply" | "off";
 	/** display.smoothStreaming parity (TUI): false disables the reveal.
 	 *  Omitted → falls back to the `gui-chat-no-smooth` html class (the
 	 *  desktop chat pref), so guests and the web shell keep their behavior. */
@@ -919,13 +951,15 @@ export const Markdown = memo(function Markdown({
 		// only follows this block's markdown cadence, so a 700ms token gap must
 		// not turn a half-written block into a final one.
 		const settled = !pending;
+		const replySurface = repair === "reply";
 		const result = renderStreamingMarkdown(open ? open.head : text, streaming && !open, streamRef.current, {
 			uiSettled: settled,
+			uiRepair: replySurface,
 		});
 		streamRef.current = result.state;
-		if (open) result.html = `${result.html}${renderUiBlockFence(open.source, { settled })}`;
+		if (open) result.html = `${result.html}${renderUiBlockFence(open.source, { settled, repair: replySurface })}`;
 		return result;
-	}, [text, streaming, pending]);
+	}, [text, streaming, pending, repair]);
 
 	// Copy-button delegation: blocks render through dangerouslySetInnerHTML,
 	// so clicks arrive here. Code blocks copy the <code> textContent —
@@ -1256,14 +1290,15 @@ export const Markdown = memo(function Markdown({
 		if (!root) return;
 		applyAnswers(root);
 		// A settled reply with a block that never drew asks for one repair by
-		// itself (GenUI auto-repair parity). It waits for both flags: a block
-		// whose markdown has idled is still part of a running turn, and sending
-		// its repair now would interrupt the agent mid-answer. One call repairs
-		// every failed block in this reply as a single message.
-		if (!streaming && !pending) autoRepairFailedBlocks(root);
+		// itself (GenUI auto-repair parity). It waits for the reply to settle
+		// AND the turn to end: a later tool round would otherwise be interrupted
+		// by a repair for an earlier answer. Only the reply surface takes part —
+		// a thinking draft or a tool's output is not the answer being repaired.
+		// One call repairs every failed block in this reply as a single message.
+		if (repair === "reply" && !streaming && !pending && !working) autoRepairFailedBlocks(root);
 		setAnswerMarks(() => applyAnswers(document));
 		return () => setAnswerMarks(null);
-	}, [text, streaming, pending]);
+	}, [text, streaming, pending, working, repair]);
 
 	// Text typed into a block's field never reaches React: it belongs to the
 	// block's own answer state.

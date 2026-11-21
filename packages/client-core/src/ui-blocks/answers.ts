@@ -168,15 +168,9 @@ export function hasAnyAnswer(hash: string): boolean {
 	return state.values.size > 0 || state.note.trim() !== "" || state.cardNotes.size > 0;
 }
 
-/** Compose the message a block sends. Empty when nothing was chosen. */
-/**
- * Ask the agent to repair a block that never drew — automatically, once.
- *
- * This mirrors GenUI's auto-repair: the host, not the user, files the evidence;
- * but it is bounded where the reference bounds it — the document must be
- * visible, and one error signature is repaired at most once per browser, so a
- * regeneration that fails the same way stops instead of looping.
- */
+/** The message that asks the agent to repair a block that never drew. The host
+ *  files the evidence, not the user: one block's source and the reasons it
+ *  failed, so the next turn can fix exactly what broke. */
 function repairText(failure: { source: string; errors: readonly string[] }): string {
 	return t("transcript.uiBlockRepairRequest", {
 		source: failure.source,
@@ -194,25 +188,6 @@ function repairTextMany(failures: readonly { source: string; errors: readonly st
 		)
 		.join("\n\n");
 	return t("transcript.uiBlockRepairRequestMany", { count: String(failures.length), blocks });
-}
-
-export function maybeAutoRepair(hash: string): boolean {
-	if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
-	if (sentRepairs.has(hash)) return false;
-	const failure = failures.get(hash);
-	if (!failure || failure.errors.length === 0) return false;
-	const key = signature(failure.errors);
-	const repaired = readRepaired();
-	if (repaired.includes(key)) return false;
-	repaired.push(key);
-	try {
-		globalThis.localStorage?.setItem(REPAIR_STORAGE, JSON.stringify(repaired.slice(-50)));
-	} catch {
-		// A browser without storage still gets one attempt this page load.
-	}
-	sentRepairs.add(hash);
-	emitRepair(repairText(failure));
-	return true;
 }
 
 /**
@@ -246,6 +221,7 @@ export function autoRepairFailedBlocks(root: ParentNode): void {
 	emitRepair(batch.length === 1 && only ? repairText(only) : repairTextMany(batch.map(item => item.failure)));
 }
 
+/** Compose the message a block sends. Empty when nothing was chosen. */
 export function composeAnswer(hash: string): string {
 	const state = blocks.get(hash);
 	if (!state) return "";

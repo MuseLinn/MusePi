@@ -782,6 +782,11 @@ export interface UiBlockFenceOptions {
 	 *  still streams a closed fence may be revised and a partial one is not an
 	 *  error. */
 	settled?: boolean;
+	/** The fence is the assistant's answer. Thinking drafts, tool output, the
+	 *  user's own text and document previews are somebody else's words: they
+	 *  draw what parses and publish nothing — no truncation note, no failure
+	 *  record, no repair action. */
+	repair?: boolean;
 }
 
 /**
@@ -791,7 +796,7 @@ export interface UiBlockFenceOptions {
  */
 export function renderUiBlockFence(source: string, options: UiBlockFenceOptions = {}): string {
 	const rendered = renderUiBlock(source);
-	if (!(options.settled ?? true)) return streamingHtml(rendered);
+	if (!(options.settled ?? true) || options.repair === false) return streamingHtml(rendered);
 	const hash = hashOf(source);
 	if (rendered.incomplete) return truncatedHtml(source, hash, rendered);
 	// The repair button quotes this; keep it where the click can find it. With

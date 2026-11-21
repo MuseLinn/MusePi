@@ -145,11 +145,11 @@ export function ThinkingBlock({
 							// supports inline markdown); the div wrapper keeps the reveal
 							// animation outside the markdown tree.
 							<div key={i} className={`tr-think-sentence${streaming ? " tr-think-sentence--live" : ""}`}>
-								<Markdown text={s} />
+								<Markdown text={s} repair="off" />
 							</div>
 						))
 					) : (
-						<Markdown text={text} />
+						<Markdown text={text} repair="off" />
 					)}
 					{thinkTruncated && (
 						<button type="button" className="tr-think-more" onClick={() => setShowAll(true)}>
@@ -472,7 +472,7 @@ export function MsgContent({
 		const { content: rest, blocks } = extractCanvasJumpBlocks(content);
 		return (
 			<>
-				<Markdown text={rest} />
+				<Markdown text={rest} repair="off" />
 				{blocks.map(b => (
 					// Extracted blocks have no stable id — index is identity.
 					<CanvasJumpCard key={b.canvasId} block={b} />
@@ -494,7 +494,7 @@ export function MsgContent({
 						const { content: rest, blocks: jumps } = extractCanvasJumpBlocks(block.text);
 						return (
 							<Fragment key={`t${i}`}>
-								<Markdown text={rest} />
+								<Markdown text={rest} repair="off" />
 								{jumps.map(j => (
 									// Extracted blocks have no stable id — index is identity.
 									<CanvasJumpCard key={j.canvasId} block={j} />
@@ -561,7 +561,7 @@ export function UserText({ text, plain, collapse }: { text: string; plain: boole
 			if (!isOpen) setClamped(true);
 		},
 	});
-	const body = plain ? <span className="tr-md tr-user-plain">{text}</span> : <Markdown text={text} />;
+	const body = plain ? <span className="tr-md tr-user-plain">{text}</span> : <Markdown text={text} repair="off" />;
 	if (!collapse || text.length <= USER_COLLAPSE_MIN_CHARS) return body;
 	return (
 		<div className={`tr-md tr-user-collapse${clamped ? " tr-user-collapse--clamped" : ""}`}>
@@ -1180,6 +1180,7 @@ function StreamingTextBlock({
 	text,
 	live,
 	pending,
+	working,
 	smoothStreaming,
 }: {
 	text: string;
@@ -1189,6 +1190,9 @@ function StreamingTextBlock({
 	/** The reply can still grow (the turn is running). Unlike `live`, an idle
 	 *  gap does not clear it: ui-block diagnostics wait for the turn to end. */
 	pending: boolean;
+	/** The agent is still working on this turn — the automatic repair waits
+	 *  for it, a settled reply's diagnostics do not. */
+	working?: boolean;
 	smoothStreaming?: boolean;
 }): ReactNode {
 	const [streaming, setStreaming] = useState(live);
@@ -1203,7 +1207,16 @@ function StreamingTextBlock({
 		const timer = setTimeout(() => setStreaming(false), STREAM_IDLE_MS);
 		return () => clearTimeout(timer);
 	}, [text, live]);
-	return <Markdown text={text} streaming={streaming} pending={pending} smoothStreaming={smoothStreaming} />;
+	return (
+		<Markdown
+			text={text}
+			streaming={streaming}
+			pending={pending}
+			working={working}
+			repair="reply"
+			smoothStreaming={smoothStreaming}
+		/>
+	);
 }
 
 export function AssistantBody({
@@ -1339,7 +1352,8 @@ export function AssistantBody({
 						key={`t${i}`}
 						text={block.text}
 						live={pending && i === lastTextIdx}
-						pending={pending || working === true}
+						pending={pending}
+						working={working}
 						smoothStreaming={smoothStreaming}
 					/>
 				);
