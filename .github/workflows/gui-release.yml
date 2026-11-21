@@ -292,6 +292,20 @@ jobs:
               fi
               bun scripts/gui-release-channel.ts merge-windows dist "$channel"
 
+         - name: Generate release notes
+           shell: bash
+           run: |
+              set -euo pipefail
+              assets_tag="${GITHUB_REF_NAME}"
+              if [[ "${GITHUB_REF_NAME}" == *-beta.* ]]; then
+                assets_tag=channel-beta
+              fi
+              bun scripts/render-release-notes.ts \
+                --tag "${GITHUB_REF_NAME}" \
+                --assets-tag "${assets_tag}" \
+                --out dist/RELEASE_NOTES.md \
+                --ota-out dist/RELEASE_NOTES.ota.md
+
          - name: Generate OTA update-manifest
            shell: bash
            run: |
@@ -304,9 +318,7 @@ jobs:
               import fs from "node:fs";
               const pkg = JSON.parse(fs.readFileSync("apps/desktop/package.json", "utf8"));
               const releaseTag = process.env.RELEASE_TAG;
-              const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
-              const sectionMatch = changelog.split(/^## \[/m).slice(1).find(s => /^\d+\.\d+\.\d+/.test(s));
-              const notes = sectionMatch ? `## [${sectionMatch}`.trim() : "";
+              const notes = fs.readFileSync("dist/RELEASE_NOTES.ota.md", "utf8").trim();
               const asset = (name) => `https://github.com/MuseLinn/MusePi/releases/download/${releaseTag}/${name}`;
               const manifest = {
                 version: pkg.version,
@@ -324,26 +336,6 @@ jobs:
               console.log("update-manifest:", manifest.version, manifest.url);
               EOF
               cp apps/desktop/update-manifest.json dist/update-manifest.json
-              node --input-type=module <<'EOF'
-              import fs from "node:fs";
-              const pkg = JSON.parse(fs.readFileSync("apps/desktop/package.json", "utf8"));
-              const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
-              const sectionMatch = changelog.split(/^## \[/m).slice(1).find(s => /^\d+\.\d+\.\d+/.test(s));
-              const notes = sectionMatch ? `## [${sectionMatch}`.trim() : "";
-              const dl = (name) => `https://github.com/MuseLinn/MusePi/releases/download/${process.env.RELEASE_TAG}/${name}`;
-              const body =
-                `# MusePi ${pkg.version}\n\n` +
-                `| Platform | 下载 |\n` +
-                `| --- | --- |\n` +
-                `| macOS (Apple Silicon) | [MusePi-${pkg.version}-arm64.dmg](${dl(`MusePi-${pkg.version}-arm64.dmg`)}) |\n` +
-                `| Windows | [MusePi-${pkg.version}-setup.exe](${dl(`MusePi-${pkg.version}-setup.exe`)}) · [MusePi-${pkg.version}-arm64-setup.exe](${dl(`MusePi-${pkg.version}-arm64-setup.exe`)}) |\n` +
-                `| Linux x64 | [MusePi-${pkg.version}-x86_64.AppImage](${dl(`MusePi-${pkg.version}-x86_64.AppImage`)}) · [MusePi-${pkg.version}-amd64.deb](${dl(`MusePi-${pkg.version}-amd64.deb`)}) |\n` +
-                `| Linux arm64 | [MusePi-${pkg.version}-arm64.AppImage](${dl(`MusePi-${pkg.version}-arm64.AppImage`)}) · [MusePi-${pkg.version}-arm64.deb](${dl(`MusePi-${pkg.version}-arm64.deb`)}) |\n` +
-                `| Android | [MusePi-${pkg.version}-app-debug.apk](${dl(`MusePi-${pkg.version}-app-debug.apk`)}) (debug build, adb 安装) |\n\n` +
-                notes;
-              fs.writeFileSync("dist/RELEASE_NOTES.md", body);
-              console.log("release notes written");
-              EOF
 
          - name: Reject beta channel rollback
            if: contains(github.ref_name, '-beta.')
