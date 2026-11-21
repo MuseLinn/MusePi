@@ -4,6 +4,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ## [Unreleased]
 
+- **重启或崩溃后打开会话，界面会说明上次哪个工具调用没有结果**：daemon 新增只读 `session.pendingToolCalls`，用与 TUI `--resume` 相同的判据列出未结算的调用（工具名 + 命令/路径），不激活也不订阅会话；GUI 在会话空闲时于时间线顶部显示一条可关闭的提示，正在运行的会话不显示——那时同样的「没有结果」只是还没跑完。
+  - EN: Opening a session after a restart or a crash now names the tool calls the previous run left unanswered. A read-only `session.pendingToolCalls` RPC lists them with the same predicate the TUI's `--resume` warning uses (tool name plus the command or path), without activating or subscribing to the session; the GUI shows a dismissible line above the timeline once the session is idle, and suppresses it while a turn is running, where a call without a result is simply still in flight.
+
 - **单次工具执行有了自己的上限，写文件卡死不再拖住整轮**：`AgentTool` 新增 `timeoutMs`（这一次执行的上限）。到期时 loop 放弃该次执行、中止交给它的组合 signal，并结算一条超时错误结果，回合照常继续——模型可以换路径重试或报告失败，而不是整轮无声挂住。`write`/`edit`（300 秒）、`read`（600 秒）、`ast_edit`（900 秒）先接入，覆盖网络盘、被占用设备、冻结的远程写入这些自身没有超时的路径；超时结果会提示先核对目标再重试，因为放弃执行不等于副作用没有落地。没有上限的工具（等待人工的 `ask`、自带超时的 `bash`、子代理 `task`、转后台的作业）保持原有语义。
   - EN: A single tool execution now has its own ceiling, so a wedged file write can no longer hold the whole turn. `AgentTool` gains `timeoutMs`; on expiry the loop abandons that execution, aborts the combined per-call signal it handed the tool, and settles one timeout error result while the turn continues — the model can retry another path or report the failure instead of the session hanging silently. `write`/`edit` (300s), `read` (600s) and `ast_edit` (900s) opt in first, covering network shares, blocked devices and frozen remote writes, which have no timeout of their own. The timeout result tells the model to re-check the target before retrying, because abandoning an execution does not mean its side effect never landed. Tools without a ceiling (human-facing `ask`, self-bounded `bash`, subagent `task`, backgrounded jobs) keep their current semantics.
 

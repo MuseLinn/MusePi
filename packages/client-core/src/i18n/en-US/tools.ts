@@ -199,6 +199,9 @@ export const tools = {
 	"tools.resumeAllSessions": "Resume all sessions",
 	"tools.allSessionsFrozenUntil":
 		"All sessions are frozen (main agent, subagents, advisors) — click anywhere to resume",
+	"tools.pendingToolCalls":
+		"The previous session ended while {count} tool call(s) remained unanswered: {calls}. The process exited before recording a result.",
+	"tools.dismissNotice": "Dismiss",
 	"tools.noChanges": "No changes",
 	"tools.notGitRepository": "Not a git repository",
 	"tools.daemonMetaUnavailableWithReason": "Daemon metadata unavailable: {reason}",

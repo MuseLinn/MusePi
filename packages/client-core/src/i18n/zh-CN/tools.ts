@@ -195,6 +195,8 @@ export const tools = {
 	"tools.pauseAllSessions": "全局暂停所有会话",
 	"tools.resumeAllSessions": "恢复所有会话",
 	"tools.allSessionsFrozenUntil": "所有会话已冻结（主代理、子代理、顾问），点击任意处恢复",
+	"tools.pendingToolCalls": "上次会话结束时还有 {count} 个工具调用没有结果：{calls}。进程在写入结果前退出了。",
+	"tools.dismissNotice": "知道了",
 	"tools.noChanges": "无更改",
 	"tools.notGitRepository": "不是 git 仓库",
 	"tools.daemonMetaUnavailableWithReason": "daemon 信息不可用：{reason}",

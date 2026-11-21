@@ -105,6 +105,7 @@ import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compa
 import { createRemoteApprovalProvider } from "../remote-access/approval-provider";
 import { BlobStore, isBlobRef, resolveImageData } from "../session/blob-store";
 import type { CompactMode } from "../session/compact-modes";
+import { collectPendingToolCalls } from "../session/exit-diagnostics";
 import {
 	createForeignSessionStore,
 	foreignSessionRow,
@@ -128,6 +129,10 @@ import { getExtensionMediaProviders, IMAGE_PROVIDER_CHOICES, VIDEO_PROVIDER_CHOI
 import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
+
+/** The scanner reads the persisted entries behind the snapshot's JSON boundary. */
+type AgentSessionEntries = Parameters<typeof collectPendingToolCalls>[0];
+
 import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import type { CordisDynamicPluginRuntime } from "./cordis-dynamic-plugins";
@@ -2643,6 +2648,36 @@ export class DaemonServer {
 				const live = this.#host.get(p.sessionId) ?? (await this.#host.activate(p.sessionId));
 				const duration = live.pauseGate.resume();
 				return { duration: duration ?? null, paused: live.pauseGate.paused };
+			}
+			case "session.pendingToolCalls": {
+				// TUI resume parity for the GUI: name the tool calls a branch ended
+				// with unanswered (process killed, daemon crash). Read-only — a
+				// snapshot read never activates or subscribes to the session. The
+				// client suppresses this while its own view is working: a call
+				// without a result is then in flight, not abandoned.
+				const p = (params ?? {}) as { sessionId?: string };
+				if (!p.sessionId) throw new Error("sessionId required");
+				const snap = await this.#host.snapshot(p.sessionId);
+				// The snapshot is the persisted JSON of the same entries (its rendered
+				// subset types the compaction method as a plain string), so the
+				// scanner reads the real shape behind the boundary cast.
+				const calls = collectPendingToolCalls(snap.entries as unknown as AgentSessionEntries).map(call => {
+					const args = call.args;
+					const summary =
+						args && typeof args === "object"
+							? typeof (args as { command?: unknown }).command === "string"
+								? { kind: "command" as const, value: (args as { command: string }).command }
+								: typeof (args as { path?: unknown }).path === "string"
+									? { kind: "path" as const, value: (args as { path: string }).path }
+									: null
+							: null;
+					return {
+						toolName: call.toolName,
+						toolCallId: call.toolCallId ?? null,
+						summary,
+					};
+				});
+				return { calls };
 			}
 			case "daemon.pauseStatus": {
 				// Process-global freeze (TUI /pause parity) across every session

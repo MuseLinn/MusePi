@@ -1762,6 +1762,42 @@ html.gui-vt-surface-only::view-transition-new(root),
 	background: var(--color-hover);
 }
 
+/* ── Pending tool calls (TUI resume parity): a branch ended mid-call, so the
+ * row names the abandoned calls the same way the CLI warning does. ── */
+.gui-pending-calls {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 12px;
+	margin: 8px 12px 0;
+	border-radius: var(--radius-lg);
+	border: 1px solid color-mix(in oklab, var(--color-warning, var(--color-accent)) 35%, transparent);
+	background: color-mix(in oklab, var(--color-warning, var(--color-accent)) 10%, var(--color-surface));
+	color: var(--color-text);
+	font-size: 12.5px;
+	-webkit-app-region: no-drag;
+}
+
+.gui-pending-calls-text {
+	min-width: 0;
+	flex: 1;
+}
+
+.gui-pending-calls-dismiss {
+	flex: none;
+	padding: 3px 10px;
+	border-radius: var(--radius-md);
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+	transition: background 140ms ease;
+}
+
+.gui-pending-calls-dismiss:hover {
+	background: var(--color-hover);
+}
+
 /* ── Global pause overlay (TUI /pause parity): fullscreen frosted glass ──
  * Always mounted; the `--active` class animates the backdrop blur in/out
  * (dynamic blur over whatever the window shows underneath — transcript,

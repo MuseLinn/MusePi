@@ -58,6 +58,7 @@ import { type JumpTarget, resolveJumpEntryId } from "../lib/jump-target";
 import { EMPTY_TRUSTED_WALK, filterVisibleEntries, walkLeafPath } from "../lib/leaf-walk";
 import { dispatchNotification } from "../lib/notify";
 import { toolPanelTabDescriptor } from "../lib/panel-tabs";
+import { type PendingToolCallWire, pendingToolCallsNotice } from "../lib/pending-tool-calls";
 import { useConfirm } from "../lib/prompt-dialog";
 import { rasterizeToBlob } from "../lib/rasterize";
 import type { RpcClient } from "../lib/rpc";
@@ -509,6 +510,37 @@ export function ChatView({
 	// Pause banner hold timer: tick every second while the freeze is engaged
 	// so the "paused · mm:ss" clock advances.
 	const [, setPauseTick] = useState(0);
+	// A branch that ended mid-tool-call gets the TUI's resume warning here. The
+	// daemon owns the detection; this re-reads it when the session opens and
+	// whenever a turn settles, so a crash-then-reattach still reports it.
+	const [pendingToolCalls, setPendingToolCalls] = useState<readonly PendingToolCallWire[] | null>(null);
+	const [dismissedPendingCalls, setDismissedPendingCalls] = useState<string | null>(null);
+	const sessionIdForPending = store?.sessionId;
+	const workingForPending = snap?.working === true;
+	useEffect(() => {
+		if (!rpc || !sessionIdForPending) {
+			setPendingToolCalls(null);
+			return;
+		}
+		let cancelled = false;
+		void (async () => {
+			try {
+				const res = await rpc.request<{ calls: PendingToolCallWire[] }>("session.pendingToolCalls", {
+					sessionId: sessionIdForPending,
+				});
+				if (!cancelled) setPendingToolCalls(res?.calls ?? []);
+			} catch {
+				if (!cancelled) setPendingToolCalls(null);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [rpc, sessionIdForPending, workingForPending]);
+	const pendingCallsNotice = useMemo(
+		() => (workingForPending ? null : pendingToolCallsNotice(pendingToolCalls ?? [])),
+		[workingForPending, pendingToolCalls],
+	);
 	// Round-activity fold default (settings → 聊天). localStorage events do
 	// not fire in the same document, so PrefToggle dispatches the companion
 	// event; re-rendering here lets the Transcript reinterpret ALL existing
@@ -3291,6 +3323,23 @@ export function ChatView({
 															{t("tools.resume")}
 														</button>
 													)}
+												</div>
+											)}
+											{pendingCallsNotice && dismissedPendingCalls !== pendingCallsNotice.signature && (
+												<div className="gui-pending-calls" role="status" aria-live="polite">
+													<span className="gui-pending-calls-text">
+														{t("tools.pendingToolCalls", {
+															count: pendingCallsNotice.count,
+															calls: pendingCallsNotice.calls,
+														})}
+													</span>
+													<button
+														type="button"
+														className="gui-pending-calls-dismiss"
+														onClick={() => setDismissedPendingCalls(pendingCallsNotice.signature)}
+													>
+														{t("tools.dismissNotice")}
+													</button>
 												</div>
 											)}
 											{/* Scroll-shadow: a real
