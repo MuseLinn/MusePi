@@ -210,4 +210,30 @@ describe("automatic repair", () => {
 		const { maybeAutoRepair } = await import("./answers");
 		expect(maybeAutoRepair("never-seen")).toBe(false);
 	});
+
+	test("several failed blocks in one reply cost one request, then none", async () => {
+		const { rememberBlockFailure, autoRepairFailedBlocks } = await import("./answers");
+		const store = new Map<string, string>();
+		(globalThis as { localStorage?: unknown }).localStorage = {
+			getItem: (key: string) => store.get(key) ?? null,
+			setItem: (key: string, value: string) => void store.set(key, value),
+		};
+		dispatched.length = 0;
+		rememberBlockFailure("batch1", 'root = Stack([Bogus("one")])', ["unknown component Bogus (one)"]);
+		rememberBlockFailure("batch2", 'root = Stack([Bogus("two")])', ["unknown component Bogus (two)"]);
+		const root = {
+			querySelectorAll: () => [
+				{ getAttribute: (name: string) => (name === "data-ui-repair" ? "batch1" : null) },
+				{ getAttribute: (name: string) => (name === "data-ui-repair" ? "batch2" : null) },
+			],
+		};
+		autoRepairFailedBlocks(root as unknown as ParentNode);
+		expect(dispatched).toHaveLength(1);
+		expect(dispatched[0]?.text).toContain('Bogus("one")');
+		expect(dispatched[0]?.text).toContain('Bogus("two")');
+		// One commit later the same buttons are still in the DOM; the batch has
+		// already spent its single chance.
+		autoRepairFailedBlocks(root as unknown as ParentNode);
+		expect(dispatched).toHaveLength(1);
+	});
 });

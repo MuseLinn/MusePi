@@ -79,6 +79,22 @@ const blocks = new Map<string, BlockAnswers>();
  */
 const failures = new Map<string, { source: string; errors: readonly string[] }>();
 
+/** A repair asks for one user turn. A second click on the same block must not
+ *  repeat it, and an automatic repair spends that one chance too. */
+const sentRepairs = new Set<string>();
+
+function emitRepair(text: string): void {
+	if (typeof window !== "undefined") {
+		window.dispatchEvent(new CustomEvent<UiBlockAnswerDetail>(UI_BLOCK_ANSWER_EVENT, { detail: { text } }));
+	}
+}
+
+function setRepairSpent(button: Element, spent: boolean): void {
+	const element = button as HTMLElement;
+	if (element.dataset) element.dataset.uiSent = spent ? "true" : "false";
+	if (typeof HTMLButtonElement !== "undefined" && button instanceof HTMLButtonElement) button.disabled = spent;
+}
+
 export function rememberBlockFailure(hash: string, source: string, errors: readonly string[]): void {
 	if (errors.length > 0) failures.set(hash, { source: source.trim(), errors });
 	else failures.delete(hash);
@@ -168,8 +184,21 @@ function repairText(failure: { source: string; errors: readonly string[] }): str
 	});
 }
 
+/** Several failed blocks in one reply: each keeps its own source and reasons,
+ *  but they travel as one request instead of one user turn per block. */
+function repairTextMany(failures: readonly { source: string; errors: readonly string[] }[]): string {
+	const blocks = failures
+		.map(
+			(failure, index) =>
+				`${index + 1}.\n\n\`\`\`ui\n${failure.source}\n\`\`\`\n\n${t("transcript.uiBlockRepairErrors")}\n${failure.errors.join("\n")}`,
+		)
+		.join("\n\n");
+	return t("transcript.uiBlockRepairRequestMany", { count: String(failures.length), blocks });
+}
+
 export function maybeAutoRepair(hash: string): boolean {
 	if (typeof document !== "undefined" && document.visibilityState === "hidden") return false;
+	if (sentRepairs.has(hash)) return false;
 	const failure = failures.get(hash);
 	if (!failure || failure.errors.length === 0) return false;
 	const key = signature(failure.errors);
@@ -181,23 +210,40 @@ export function maybeAutoRepair(hash: string): boolean {
 	} catch {
 		// A browser without storage still gets one attempt this page load.
 	}
-	const text = repairText(failure);
-	if (typeof window !== "undefined") {
-		window.dispatchEvent(new CustomEvent<UiBlockAnswerDetail>(UI_BLOCK_ANSWER_EVENT, { detail: { text } }));
-	}
+	sentRepairs.add(hash);
+	emitRepair(repairText(failure));
 	return true;
 }
 
 /**
  * Repair every failed block on this surface that has not been repaired before.
- * Called after a commit, while the reply is settled: a streaming block is still
- * arriving and its errors are not final.
+ * Called after a commit, only while the reply is settled: a streaming block is
+ * still arriving and its errors are not final. One call sends one message for
+ * the whole reply, so several failed blocks cost one turn rather than one each.
  */
 export function autoRepairFailedBlocks(root: ParentNode): void {
+	if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+	const repaired = readRepaired();
+	const batch: Array<{ hash: string; failure: { source: string; errors: readonly string[] } }> = [];
 	for (const button of root.querySelectorAll<HTMLElement>("[data-ui-repair]")) {
 		const hash = button.getAttribute("data-ui-repair");
-		if (hash) maybeAutoRepair(hash);
+		if (!hash || sentRepairs.has(hash) || batch.some(item => item.hash === hash)) continue;
+		const failure = failures.get(hash);
+		if (!failure || failure.errors.length === 0) continue;
+		const key = signature(failure.errors);
+		if (repaired.includes(key)) continue;
+		repaired.push(key);
+		batch.push({ hash, failure });
 	}
+	if (batch.length === 0) return;
+	try {
+		globalThis.localStorage?.setItem(REPAIR_STORAGE, JSON.stringify(repaired.slice(-50)));
+	} catch {
+		// A browser without storage still gets one attempt this page load.
+	}
+	for (const item of batch) sentRepairs.add(item.hash);
+	const only = batch[0]?.failure;
+	emitRepair(batch.length === 1 && only ? repairText(only) : repairTextMany(batch.map(item => item.failure)));
 }
 
 export function composeAnswer(hash: string): string {
@@ -268,6 +314,9 @@ export function applyAnswers(root: ParentNode): void {
 		// The answer bar appears as soon as ANY decision or note exists — a card
 		// answered only with a note has to be sendable too.
 		host.dataset.uiReady = hasAnyAnswer(hash) ? "true" : "false";
+		for (const repair of host.querySelectorAll<HTMLElement>("[data-ui-repair]")) {
+			setRepairSpent(repair, sentRepairs.has(repair.getAttribute("data-ui-repair") ?? ""));
+		}
 		for (const control of host.querySelectorAll<HTMLElement>("[data-ui-name]")) {
 			const name = control.getAttribute("data-ui-name") ?? "";
 			// Notes are not decisions: re-applying one from `values` would wipe
@@ -341,13 +390,10 @@ export function handleAnswerClick(target: Element): boolean {
 		const hash = repair.getAttribute("data-ui-repair") ?? "";
 		const failure = failures.get(hash);
 		if (!failure) return false;
-		const text = t("transcript.uiBlockRepairRequest", {
-			source: failure.source,
-			errors: failure.errors.join("\n"),
-		});
-		if (typeof window !== "undefined") {
-			window.dispatchEvent(new CustomEvent<UiBlockAnswerDetail>(UI_BLOCK_ANSWER_EVENT, { detail: { text } }));
-		}
+		if (sentRepairs.has(hash)) return true;
+		sentRepairs.add(hash);
+		setRepairSpent(repair, true);
+		emitRepair(repairText(failure));
 		return true;
 	}
 	const link = target.closest<HTMLElement>("[data-ui-link-send]");

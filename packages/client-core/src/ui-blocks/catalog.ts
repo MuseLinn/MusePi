@@ -418,11 +418,14 @@ export function parseUiBlock(source: string): UiBlockParse {
 	else if (result.meta.unresolved.length) errors.push(`Undefined names: ${result.meta.unresolved.join(", ")}`);
 	const incomplete = result.meta.incomplete;
 	if (incomplete) errors.push("The block ends in the middle of a statement");
+	// The parser reports the same cascade once per statement; a repeated reason
+	// reads as several mistakes in the note and the repair message.
+	const reasons = [...new Set(errors)];
 	const tree = toTree(result.root ?? undefined);
 	if (!tree) {
-		return { tree: null, errors: errors.length ? errors : ["The block needs root = Stack([...])"], incomplete };
+		return { tree: null, errors: reasons.length ? reasons : ["The block needs root = Stack([...])"], incomplete };
 	}
-	return { tree, errors, incomplete };
+	return { tree, errors: reasons, incomplete };
 }
 
 /** Every component name, for the guidance parity test. */

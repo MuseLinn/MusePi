@@ -1179,12 +1179,16 @@ const STREAM_IDLE_MS = 700;
 function StreamingTextBlock({
 	text,
 	live,
+	pending,
 	smoothStreaming,
 }: {
 	text: string;
 	/** This block is the message's last text block and the message is
 	 *  pending — the only case where the block can still be growing. */
 	live: boolean;
+	/** The reply can still grow (the turn is running). Unlike `live`, an idle
+	 *  gap does not clear it: ui-block diagnostics wait for the turn to end. */
+	pending: boolean;
 	smoothStreaming?: boolean;
 }): ReactNode {
 	const [streaming, setStreaming] = useState(live);
@@ -1199,7 +1203,7 @@ function StreamingTextBlock({
 		const timer = setTimeout(() => setStreaming(false), STREAM_IDLE_MS);
 		return () => clearTimeout(timer);
 	}, [text, live]);
-	return <Markdown text={text} streaming={streaming} smoothStreaming={smoothStreaming} />;
+	return <Markdown text={text} streaming={streaming} pending={pending} smoothStreaming={smoothStreaming} />;
 }
 
 export function AssistantBody({
@@ -1335,6 +1339,7 @@ export function AssistantBody({
 						key={`t${i}`}
 						text={block.text}
 						live={pending && i === lastTextIdx}
+						pending={pending || working === true}
 						smoothStreaming={smoothStreaming}
 					/>
 				);

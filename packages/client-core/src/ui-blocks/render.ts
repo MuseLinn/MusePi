@@ -707,72 +707,110 @@ function sourceHtml(source: string): string {
 	return `<details class="tr-ui-src"><summary>${esc(t("transcript.uiBlockSource"))}</summary><pre>${esc(source.trim())}</pre></details>`;
 }
 
-function errorsHtml(errors: readonly string[], source: string, hash: string, repairable: boolean): string {
-	const reasons = errors.map(item => `<li>${esc(item)}</li>`).join("");
-	const repair = repairable
-		? `<button type="button" class="tr-ui-repair" data-ui-repair="${esc(hash)}">${esc(t("transcript.uiBlockRepair"))}</button>`
-		: "";
+/** A diagnostic line a screen reader announces once, when it appears. */
+function noteHtml(message: string, reasons: readonly string[] = []): string {
+	const list = reasons.length ? `<ul>${reasons.map(item => `<li>${esc(item)}</li>`).join("")}</ul>` : "";
+	return `<div class="tr-ui-note" role="status">${esc(message)}${list}</div>`;
+}
+
+function repairButton(hash: string): string {
+	return `<button type="button" class="tr-ui-repair" data-ui-repair="${esc(hash)}">${esc(t("transcript.uiBlockRepair"))}</button>`;
+}
+
+function errorsHtml(errors: readonly string[], source: string, hash: string): string {
 	return (
-		`<div class="tr-ui-note">${esc(t("transcript.uiBlockPartial", { count: String(errors.length) }))}<ul>${reasons}</ul></div>` +
-		repair +
+		noteHtml(t("transcript.uiBlockPartial", { count: String(errors.length) }), errors) +
+		repairButton(hash) +
 		sourceHtml(source)
 	);
 }
 
 /**
- * The ```` ```ui ```` fence a streaming reply has opened but not closed, with
- * the text before it. Drawing the partial block is what makes it grow with the
- * reply instead of appearing when the fence finally closes.
+ * The ```` ```ui ```` fence a reply has opened but not closed, with the text
+ * before it. Drawing the partial block is what makes it grow with the reply
+ * instead of appearing when the fence finally closes.
+ *
+ * Fences are paired, not just counted: a ```` ```ui ```` written as an example
+ * inside a ```` ```text ```` fence is sample content, not a block.
  */
 export function splitOpenUiFence(text: string): { head: string; source: string } | null {
 	const lines = text.split("\n");
+	let openLang: string | null = null;
 	let openAt = -1;
+	let uiOpenAt = -1;
 	for (const [index, line] of lines.entries()) {
 		const trimmed = line.trim();
 		if (!trimmed.startsWith("```")) continue;
-		const lang = trimmed.slice(3).trim().toLowerCase();
-		if (openAt === -1) {
-			if (isUiBlockLanguage(lang)) openAt = index;
+		if (openLang === null) {
+			openLang = trimmed.slice(3).trim().toLowerCase();
+			openAt = index;
+			if (isUiBlockLanguage(openLang)) uiOpenAt = index;
 			continue;
 		}
+		if (openAt === uiOpenAt) uiOpenAt = -1;
+		openLang = null;
 		openAt = -1;
 	}
-	if (openAt === -1) return null;
+	if (uiOpenAt === -1) return null;
 	return {
-		head: lines.slice(0, openAt).join("\n"),
-		source: lines.slice(openAt + 1).join("\n"),
+		head: lines.slice(0, uiOpenAt).join("\n"),
+		source: lines.slice(uiOpenAt + 1).join("\n"),
 	};
 }
 
+/** While a reply grows, a block shows only what parsed: a partial program is
+ *  not a mistake yet, and its source changes on the next token. */
+function streamingHtml(rendered: UiBlockRender): string {
+	return rendered.nodes > 0 ? `<div class="tr-ui tr-ui--streaming">${rendered.html}</div>` : "";
+}
+
+/** A reply that ended mid-statement: name the cut and fold the source, with no
+ *  action — quoting the prefix back cannot repair it. */
+function truncatedHtml(source: string, hash: string, rendered: UiBlockRender): string {
+	return (
+		`<div class="tr-ui tr-ui--truncated" data-ui-block="${esc(hash)}">` +
+		(rendered.nodes > 0 ? rendered.html : "") +
+		noteHtml(t("transcript.uiBlockTruncated")) +
+		sourceHtml(source) +
+		`</div>`
+	);
+}
+
+export interface UiBlockFenceOptions {
+	/** The enclosing reply has stopped generating. Diagnostics, the failure
+	 *  record and the repair action only belong to a settled reply: while it
+	 *  still streams a closed fence may be revised and a partial one is not an
+	 *  error. */
+	settled?: boolean;
+}
+
 /**
- * Markdown-fence entry point: the whole block as HTML. A reply has no second
- * try, so a block that drew nothing falls back to its source and reasons rather
- * than vanishing.
+ * Markdown-fence entry point: the whole block as HTML. A settled reply has no
+ * second try, so a block that drew nothing falls back to its source and reasons
+ * rather than vanishing; a streaming reply stays quiet until it settles.
  */
-export function renderUiBlockFence(source: string, complete = true): string {
+export function renderUiBlockFence(source: string, options: UiBlockFenceOptions = {}): string {
 	const rendered = renderUiBlock(source);
-	if (!complete) return rendered.nodes > 0 ? `<div class="tr-ui tr-ui--streaming">${rendered.html}</div>` : "";
+	if (!(options.settled ?? true)) return streamingHtml(rendered);
 	const hash = hashOf(source);
-	// A truncated source is not a program the model can repair from the text it
-	// would be quoted: resending the prefix loops. Only complete blocks qualify.
-	const repairable = !rendered.incomplete;
-	// The repair button quotes this; keep it where the click can find it.
-	if (repairable) rememberBlockFailure(hash, source, rendered.errors);
+	if (rendered.incomplete) return truncatedHtml(source, hash, rendered);
+	// The repair button quotes this; keep it where the click can find it. With
+	// no reasons this clears a stale record instead.
+	rememberBlockFailure(hash, source, rendered.errors);
+	const repairable = rendered.errors.length > 0;
 	if (rendered.nodes === 0) {
 		return (
 			`<div class="tr-ui tr-ui--empty" data-ui-block="${esc(hash)}">` +
-			`<div class="tr-ui-note">${esc(t("transcript.uiBlockEmpty"))}</div>` +
-			(rendered.errors.length
-				? `<ul class="tr-ui-errors">${rendered.errors.map(e => `<li>${esc(e)}</li>`).join("")}</ul>`
-				: "") +
+			noteHtml(t("transcript.uiBlockEmpty")) +
 			(repairable
-				? `<button type="button" class="tr-ui-repair" data-ui-repair="${esc(hash)}">${esc(t("transcript.uiBlockRepair"))}</button>`
+				? `<ul class="tr-ui-errors">${rendered.errors.map(e => `<li>${esc(e)}</li>`).join("")}</ul>` +
+					repairButton(hash)
 				: "") +
 			sourceHtml(source) +
 			`</div>`
 		);
 	}
-	const note = rendered.errors.length > 0 ? errorsHtml(rendered.errors, source, hash, repairable) : "";
+	const note = repairable ? errorsHtml(rendered.errors, source, hash) : "";
 	const asking = parsedAsks(source);
 	if (asking) {
 		return (
@@ -781,5 +819,5 @@ export function renderUiBlockFence(source: string, complete = true): string {
 			`</div>`
 		);
 	}
-	return `<div class="tr-ui">${rendered.html}${note}</div>`;
+	return `<div class="tr-ui" data-ui-block="${esc(hash)}">${rendered.html}${note}</div>`;
 }
