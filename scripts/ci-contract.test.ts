@@ -304,12 +304,12 @@ describe("changes classifier", () => {
 	}
 
 	/** Run the step as the runner does, returning `code` and the raw output. */
-	function runStep(work: string, baseSha: string, env: Record<string, string> = {}): { code: string; log: string } {
+	function runStep(work: string, baseSha: string, shell: string = bash!): { code: string; log: string } {
 		const output = path.join(path.dirname(work), "github-output");
 		fs.writeFileSync(output, "");
-		const result = Bun.spawnSync([bash!, "-c", script], {
+		const result = Bun.spawnSync([shell, "-c", script], {
 			cwd: work,
-			env: { ...process.env, GITHUB_OUTPUT: output, BASE_SHA: baseSha, ...env },
+			env: { ...process.env, GITHUB_OUTPUT: output, BASE_SHA: baseSha },
 			stdout: "pipe",
 			stderr: "pipe",
 		});
@@ -346,6 +346,9 @@ describe("changes classifier", () => {
 		"docs/guide.md": "# guide\n",
 		"patches/a.patch": "patch\n",
 		"bazel/defs.bzl": "# defs\n",
+		"README.md": "# MusePi\n",
+		"README.zh-CN.md": "# MusePi\n",
+		"README.i18n.yaml": "stem: README\n",
 	};
 
 	it("exists as a script the contract test can run", () => {
@@ -406,6 +409,31 @@ describe("changes classifier", () => {
 		expect(runStep(work, before).code).toBe("true");
 	});
 
+	it("classifies a README-only push as no code change", () => {
+		if (!bash || !git) return;
+		// The root README pair is inside the strict pairing gate, so a commit that
+		// only re-records the pair is the `477f6c9c` shape one path over.
+		const work = fixture(BASE_FILES);
+		expect(classify(work, { "README.md": "# MusePi\n\nnew line\n" })).toBe("false");
+		expect(classify(work, { "README.i18n.yaml": "stem: README\nrecorded: 2\n" })).toBe("false");
+	});
+
+	it("classifies a mixed README and code push as a code change", () => {
+		if (!bash || !git) return;
+		const work = fixture(BASE_FILES);
+		expect(
+			classify(work, { "README.md": "# MusePi\n\nmixed\n", "packages/x/entry.ts": "export const y = 1;\n" }),
+		).toBe("true");
+	});
+
+	it("keeps every other root file out of the documentation set", () => {
+		if (!bash || !git) return;
+		// `README.md` is allowlisted by name, not by a root-wide rule.
+		const work = fixture(BASE_FILES);
+		expect(classify(work, { "CONTRIBUTING.md": "# Contributing\n" })).toBe("true");
+		expect(classify(work, { LICENSE: "license\n" })).toBe("true");
+	});
+
 	it("runs the matrix when the pre-push tip cannot be compared", () => {
 		if (!bash || !git) return;
 		const work = fixture(BASE_FILES);
@@ -416,15 +444,22 @@ describe("changes classifier", () => {
 
 	it("does not re-parse the workflow trigger to decide what code is", () => {
 		if (!bash || !git) return;
-		// A commented trigger entry is legal YAML that a line-regex parse mangles;
-		// the step must not depend on that parse at all.
+		// A commented trigger entry is legal YAML that a line-regex parse mangles.
 		const work = fixture(BASE_FILES);
 		const ciPath = path.join(work, ".github/workflows/ci.yml");
 		const original = fs.readFileSync(ciPath, "utf8");
 		fs.writeFileSync(ciPath, original.replace('         - "patches/**"', '         - "patches/**" # root deps'));
 		gitIn(work, "commit", "--quiet", "-am", "comment the trigger entry");
 		gitIn(work, "push", "--quiet", "origin", "main");
-		expect(classify(work, { "patches/a.patch": "patch 3\n" })).toBe("true");
+		// `:33` is `- "README.md"`: a trigger re-parse that needs an exact-string
+		// match would drop this family and classify the push as documentation,
+		// while the real rule ignores the trigger list entirely.
+		const markdown = original.replace('         - "README.md"', "         - 'README.md'  # quoting variant");
+		fs.writeFileSync(ciPath, markdown);
+		gitIn(work, "commit", "--quiet", "-am", "quote the trigger entry");
+		gitIn(work, "push", "--quiet", "origin", "main");
+		expect(classify(work, { "packages/x/entry.ts": "export const quoted = 1;\n" })).toBe("true");
+		expect(classify(work, { "README.md": "# MusePi\n\nstill docs\n" })).toBe("false");
 		expect(script).not.toContain("awk");
 		expect(script).not.toContain("mapfile");
 		expect(script).not.toContain("in_push");
@@ -438,36 +473,30 @@ describe("changes classifier", () => {
 		expect(classify(work, { "docs/发布说明.md": "# 发布说明\n" })).toBe("false");
 	});
 
-	it.skipIf(process.platform === "win32")("runs under a bash without bash-4 builtins", () => {
+	it.skipIf(process.platform === "win32")("classifies correctly under a bash older than 4", () => {
 		if (!bash || !git) return;
-		// The runner's bash is 5.x, but a contributor's macOS bash is 3.2; the
-		// step must not need mapfile/associative arrays/`${x,,}` to be testable.
+		// The runner's bash is 5.x, but a contributor's macOS bash is 3.2, so the
+		// step must not need mapfile/associative arrays/`${x,,}` to be runnable.
 		expect(script).not.toMatch(/\b(mapfile|readarray|declare\s+-A)\b/);
 		expect(script).not.toMatch(/\$\{[A-Za-z_][A-Za-z0-9_]*(,,|\^\^)\}/);
-		// `read -d ''` is bash-3.2 syntax, so restrict it to Unix where an old bash
-		// can actually be found: pick the oldest one on PATH, if there is one.
-		const candidates = ["/bin/bash", "/usr/bin/bash", "/usr/local/bin/bash"].filter(candidate =>
-			fs.existsSync(candidate),
-		);
-		const old = candidates.find(candidate => {
-			const version = Bun.spawnSync([candidate, "--version"], { stdout: "pipe" }).stdout.toString();
-			const major = /version (\d+)\./.exec(version)?.[1];
-			return major !== undefined && Number(major) < 4;
-		});
-		if (!old) {
-			console.warn("no bash < 4 on this host; the step's syntax was reviewed, not executed, against bash 3.2");
+		const oldest = ["/bin/bash", "/usr/bin/bash", "/usr/local/bin/bash"]
+			.filter(candidate => fs.existsSync(candidate))
+			.map(candidate => {
+				const version = Bun.spawnSync([candidate, "--version"], { stdout: "pipe" }).stdout.toString();
+				return { candidate, major: Number(/version (\d+)\./.exec(version)?.[1]) };
+			})
+			.find(({ major }) => Number.isFinite(major) && major < 4);
+		if (!oldest) {
+			// Ubuntu runners have no bash 3.2, so this cannot execute there. Name
+			// the reason instead of passing quietly: everything else above still
+			// holds, but nothing here has run the step under an old bash.
+			console.warn("SKIPPED bash<4 execution: no bash older than 4 on this host (ubuntu runners have none)");
 			return;
 		}
 		const work = fixture(BASE_FILES);
-		commit(work, () => fs.writeFileSync(path.join(work, "docs/guide.md"), "# guide\n\nold bash\n"));
-		const result = Bun.spawnSync([old, "-c", script], {
-			cwd: work,
-			env: { ...process.env, GITHUB_OUTPUT: path.join(path.dirname(work), "github-output"), BASE_SHA: "HEAD~1" },
-			stdout: "pipe",
-			stderr: "pipe",
-		});
-		expect(result.exitCode).toBe(0);
-		expect(fs.readFileSync(path.join(path.dirname(work), "github-output"), "utf8")).toContain("code=false");
+		const before = commit(work, () => fs.writeFileSync(path.join(work, "docs/guide.md"), "# guide\n\nold bash\n"));
+		expect(runStep(work, before, oldest.candidate).code).toBe("false");
+		expect(runStep(work, gitIn(work, "rev-parse", "HEAD"), oldest.candidate).code).toBe("true");
 	});
 });
 
