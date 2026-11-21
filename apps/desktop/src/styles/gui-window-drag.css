@@ -30,10 +30,12 @@
  *   macOS  trafficLightPosition {x:16,y:17}, three 14px buttons → the leading
  *          ~88px of the top row belongs to the system (the mini window pads
  *          past it, `.gui-mini-drag`).
- *   win32  titleBarOverlay height 48 draws min/max/close at the top-right;
- *          the chat header reserves 150px with `paddingRight` and the mini
- *          window pads 130px, because its 28px-tall row ends above the
- *          buttons. Both are per-surface values, not a shared token.
+ *   win32  titleBarOverlay draws min/max/close at the top-right, sized to
+ *          the window's own overlay height: 48px for the main window (the
+ *          chat header reserves 150px with `paddingRight`) and 28px for the
+ *          mini window (`.gui-mini-drag`, same 28px row, pads 130px). Each
+ *          reserve is measured against that window's native button cluster,
+ *          so they stay per-surface literals rather than one shared token.
  *   linux  falls back to the distro's own title bar, so nothing is reserved.
  *
  * Three entry points keep their own declaration because they do not load
@@ -44,10 +46,6 @@
  * The contract test requires exactly this set, so a fourth one is a decision
  * rather than a surprise.
  */
-
-[data-gui-window-drag="band"] {
-	-webkit-app-region: drag;
-}
 
 [data-gui-window-drag="off"] {
 	-webkit-app-region: no-drag;
@@ -75,24 +73,10 @@
 	-webkit-app-region: drag;
 }
 
-/* Safety net, not a substitute for marking a subtree `off`: a control that
- * lands in a band still clicks even when its surface forgot the marker. It
- * reads the SAME selector list as the band rule above, so a band added there
- * is covered here without a second edit. */
+/* A control never drags the window — app-wide, not per band, so this needs no
+ * copy of the band list and cannot fall behind it. Outside a drag region the
+ * declaration is inert; inside one it is what keeps the click. */
 :is(
-		[data-gui-window-drag="band"],
-		.gui-rail-top,
-		.gui-header,
-		.gui-pane-drag,
-		.gui-drag-strip,
-		.gui-side-keeper,
-		.gui-mini-drag,
-		.gui-settings-drag,
-		.gui-settings-nav-slot,
-		.gui-pin-drag,
-		.gui-splash
-	)
-	:is(
 		button,
 		a[href],
 		input,

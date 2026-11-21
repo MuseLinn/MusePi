@@ -211,6 +211,31 @@ const navMarkup = (): string => {
 	);
 };
 
+/** Class names a component applies through `className`, in any JSX form:
+ *  a string, a template, or an array/expression (`.gui-side-keeper` is built
+ *  from an array). Comments and prose are not class names, so they cannot
+ *  satisfy a mount check. */
+function classNameTokens(source: string): string[] {
+	const tokens: string[] = [];
+	const pattern = /className\s*=\s*(?:"([^"]*)"|\{([\s\S]*?)\}\s*(?=[/>\n]))/g;
+	for (const match of source.matchAll(pattern)) {
+		for (const token of (match[1] ?? match[2] ?? "").matchAll(/([A-Za-z][\w-]*)/g)) tokens.push(token[1]);
+	}
+	return tokens;
+}
+
+/** Every file under `directory` with the given extension, recursively. */
+function walkSources(directory: string, extension: string): string[] {
+	const out: string[] = [];
+	for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+		if (entry.name.startsWith(".")) continue;
+		const full = path.join(directory, entry.name);
+		if (entry.isDirectory()) out.push(...walkSources(full, extension));
+		else if (entry.name.endsWith(extension)) out.push(full.replaceAll("\\", "/"));
+	}
+	return out;
+}
+
 const executablePath = await ensureChromiumExecutable();
 if (!executablePath) throw new Error("No Chromium executable resolved");
 const browser: Browser = await puppeteer.launch({ executablePath, headless: true });
@@ -375,15 +400,53 @@ describe("window drag — one owner for the property", () => {
 		"gui-settings.css",
 	];
 
-	/** The band list exactly as the owner sheet declares it: the rule whose
-	 *  selector opens with the band attribute. Parsing it (instead of repeating
-	 *  the names here) is what keeps a new band from shipping unasserted. */
-	const ownerBands = (): string[] => {
-		const owner = stripCssComments(fs.readFileSync(path.join(STYLES, OWNER_STYLE), "utf8"));
-		const rule = owner.match(/\[data-gui-window-drag="band"\],([\s\S]*?)\{/);
-		expect(rule).not.toBeNull();
-		return Array.from(rule![1].matchAll(/\.([\w-]+)/g), match => match[1]);
+	/** Every CSS rule in the sheet, as { selectors, body }. A rule-level parse
+	 *  (not a regex over the whole file) is what makes the band list
+	 *  unambiguous: the sheet may hold one copy of the list, and the test reads
+	 *  the rule that actually applies `drag`. */
+	const parseRules = (source: string): { selectors: string; body: string }[] => {
+		const rules: { selectors: string; body: string }[] = [];
+		const css = stripCssComments(source);
+		const depth = 0;
+		let start = 0;
+		for (let index = 0; index < css.length; index++) {
+			const char = css[index];
+			if (char === "{") {
+				if (depth === 0) {
+					const selectors = css.slice(start, index).trim();
+					let inner = index + 1;
+					let innerDepth = 1;
+					for (inner = index + 1; inner < css.length && innerDepth > 0; inner++) {
+						if (css[inner] === "{") innerDepth++;
+						else if (css[inner] === "}") innerDepth--;
+					}
+					rules.push({ selectors, body: css.slice(index + 1, inner - 1) });
+					index = inner - 1;
+					start = inner;
+				}
+			}
+		}
+		return rules;
 	};
+
+	/** The band list as the sheet applies it: every selector in the rule that
+	 *  declares `-webkit-app-region: drag`. Selector text is split on commas so
+	 *  a reformat (attribute in its own rule, classes in another) changes the
+	 *  list only if the drag declaration moves too. */
+	const dragSelectors = (): string[] => {
+		const owner = fs.readFileSync(path.join(STYLES, OWNER_STYLE), "utf8");
+		const selectors = parseRules(owner)
+			.filter(rule => /-webkit-app-region:\s*drag/.test(rule.body))
+			.flatMap(rule => rule.selectors.split(","))
+			.map(selector => selector.trim())
+			.filter(Boolean);
+		return selectors;
+	};
+
+	const classBands = (selectors: string[]): string[] =>
+		selectors.flatMap(selector => Array.from(selector.matchAll(/\.(gui-[\w-]+)/g), match => match[1]));
+
+	const BAND_ATTRIBUTE = '[data-gui-window-drag="band"]';
 
 	it("declares the region only in the owner stylesheet and its second roots", () => {
 		const counts: Record<string, number> = {};
@@ -412,10 +475,17 @@ describe("window drag — one owner for the property", () => {
 		expect(counts).toEqual(SECOND_ROOTS);
 	});
 
-	it("asserts every band the owner lists, derived from the sheet itself", () => {
-		const bands = ownerBands();
-		// The list is the contract: a band added to the sheet is asserted here
-		// without a second edit, and a band removed here cannot linger there.
+	it("declares the band attribute exactly once, so the list has one copy", () => {
+		// A second copy is how the safety net silently fell behind the band
+		// rule; the sheet may name the attribute in exactly one selector.
+		const selectors = dragSelectors().filter(selector => selector.includes(BAND_ATTRIBUTE));
+		expect(selectors).toEqual([BAND_ATTRIBUTE]);
+		const owner = stripCssComments(fs.readFileSync(path.join(STYLES, OWNER_STYLE), "utf8"));
+		expect(owner.split(BAND_ATTRIBUTE).length - 1).toBe(1);
+	});
+
+	it("asserts every band the drag rule actually applies, derived from the sheet", () => {
+		const bands = classBands(dragSelectors());
 		expect(bands).toEqual([
 			"gui-rail-top",
 			"gui-header",
@@ -428,25 +498,46 @@ describe("window drag — one owner for the property", () => {
 			"gui-pin-drag",
 			"gui-splash",
 		]);
-		// A band the sheet lists but nothing mounts is the other drift: the
-		// selector must own at least one component, or the list documents a
-		// strip that no window has.
-		const sources: string[] = [];
-		const collect = (directory: string): void => {
-			for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-				const full = path.join(directory, entry.name);
-				if (entry.isDirectory()) {
-					if (entry.name.startsWith(".")) continue;
-					collect(full);
-				} else if (entry.name.endsWith(".tsx")) {
-					sources.push(fs.readFileSync(full, "utf8"));
-				}
+	});
+
+	it("mounts every listed band from a component that is imported somewhere", () => {
+		// A class mentioned only in prose, or in a file nothing imports, is not
+		// a mounted band. Mounting means: some component's `className` carries
+		// the band, and that component is reachable from an entry point.
+		const files = walkSources(SRC, ".tsx");
+		// Renderer entry points: the HTML shells load them directly.
+		const entryPoints = new Set(
+			fs
+				.readdirSync(path.resolve(SRC, ".."))
+				.filter(name => name.endsWith(".html"))
+				.flatMap(name =>
+					Array.from(
+						fs.readFileSync(path.resolve(SRC, "..", name), "utf8").matchAll(/src="\.?\/?src\/([\w-]+)\.tsx"/g),
+						match => match[1],
+					),
+				),
+		);
+		const sources = new Map(files.map(file => [file, fs.readFileSync(file, "utf8")]));
+		const imports = new Set<string>();
+		for (const source of sources.values()) {
+			for (const match of source.matchAll(/from\s+"(\.[^"]+)"/g)) {
+				imports.add(match[1]);
 			}
-		};
-		collect(SRC);
-		for (const band of bands) {
-			const mounted = sources.some(source => source.includes(band));
-			expect({ band, mounted }).toEqual({ band, mounted: true });
+			for (const match of source.matchAll(/import\("(\.[^"]+)"\)/g)) {
+				imports.add(match[1]);
+			}
+		}
+		for (const band of classBands(dragSelectors())) {
+			const mounts = [...sources.entries()].filter(([, source]) => classNameTokens(source).includes(band));
+			expect({ band, mounts: mounts.length > 0 }).toEqual({ band, mounts: true });
+			// Reachability: the mounting file is an HTML entry point, or another
+			// module imports it. A dead `__ghost.tsx` that nothing loads cannot
+			// satisfy the check.
+			const reachable = mounts.some(([file]) => {
+				const stem = path.basename(file, ".tsx");
+				return entryPoints.has(stem) || [...imports].some(specifier => specifier.endsWith(`/${stem}`));
+			});
+			expect({ band, reachable }).toEqual({ band, reachable: true });
 		}
 	});
 
@@ -474,11 +565,11 @@ describe("window drag — one owner for the property", () => {
 		// The owner sheet reads the attribute; an element claiming both would
 		// be a contradiction whose winner depends on source order inside it.
 		const contradictions: string[] = [];
-		for (const file of fs.readdirSync(SRC).filter(name => name.endsWith(".tsx"))) {
-			const source = fs.readFileSync(path.join(SRC, file), "utf8");
-			for (const [index, line] of source.split("\n").entries()) {
+		for (const file of walkSources(SRC, ".tsx")) {
+			const source = fs.readFileSync(file, "utf8");
+			for (const [index, line] of source.split(/\r?\n/).entries()) {
 				const modes = new Set(Array.from(line.matchAll(/data-gui-window-drag="(band|off)"/g), m => m[1]));
-				if (modes.size > 1) contradictions.push(`${file}:${index + 1}`);
+				if (modes.size > 1) contradictions.push(`${path.relative(SRC, file)}:${index + 1}`);
 			}
 		}
 		expect(contradictions).toEqual([]);
