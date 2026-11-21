@@ -367,7 +367,6 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 		try {
 			await rpc.request("secret.delete", { name: entry.name });
 			setEntries(current => current.filter(item => item.name !== entry.name));
-			if (form?.mode === "replace" && form.name === entry.name) closeForm();
 		} catch (error) {
 			setActionError(t("settings.secretsDeleteFailed", { error: errorText(error) }));
 		} finally {
@@ -406,7 +405,10 @@ export function SecretSettingsSection({ rpc }: { rpc: RpcClient | null }): React
 			{/* One body, never two: the open form replaces the rows/empty state
 			 * instead of stacking above them. `密钥 · N` stays visible because it
 			 * is a fact about the list, and the add action is disabled while a
-			 * form is open (a second form is not a state this page has). */}
+			 * form is open (a second form is not a state this page has).
+			 * Consequence: delete only exists in the rows branch, so a delete
+			 * can never need to close a form — `remove()` carries no such guard.
+			 * Restoring the stacked shape would need one again. */}
 			{loading ? (
 				<div className="gui-secret-loading">{t("settings.loading")}</div>
 			) : form ? (

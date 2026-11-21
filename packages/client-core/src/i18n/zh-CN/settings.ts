@@ -7089,7 +7089,7 @@ export const settings = {
 		"每个值都是以本机该配置的主密钥加密的 AES-256-GCM 信封，没有明文模式，只在本机解密。",
 	"settings.secretsWhereTitle": "存放在哪",
 	"settings.secretsWhereValue":
-		"该配置的 Agent 目录下的 agent-secrets/，文件仅本人可读。密钥库保存名称、用途、范围与加密后的值，从不保存可读的值。",
+		"该配置的 Agent 目录下的 agent-secrets/，在支持 POSIX 权限的平台上以 0600 权限原子写入。Windows 不适用这些权限位，那里的保护来自加密本身与所在目录的访问控制。密钥库保存名称、用途、范围与加密后的值，从不保存可读的值。",
 	"settings.secretsBashTitle": "在 shell 里",
 	"settings.secretsBashValue":
 		"只有 bash 子进程会拿到 $MUSEPI_SECRET_<NAME>。工具输出若会打印该值，会显示为 [secret:NAME]。",

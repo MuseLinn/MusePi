@@ -7406,7 +7406,7 @@ export const settings = {
 		"Every value is an AES-256-GCM envelope under this machine's profile master key. There is no plaintext mode, and a value is only decrypted here.",
 	"settings.secretsWhereTitle": "On disk",
 	"settings.secretsWhereValue":
-		"agent-secrets/ under this profile's agent directory, owner-only files. The vault holds name, purpose, scope and the encrypted value — never a readable value.",
+		"agent-secrets/ under this profile's agent directory, written atomically with 0600 permissions where the platform has POSIX modes. On Windows those bits are not honoured, so protection there is the encryption plus the directory's access control. The vault holds name, purpose, scope and the encrypted value — never a readable value.",
 	"settings.secretsBashTitle": "In the shell",
 	"settings.secretsBashValue":
 		"Only a bash child process receives $MUSEPI_SECRET_<NAME>. Tool output that would print the value shows [secret:NAME] instead.",
