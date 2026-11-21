@@ -135,6 +135,13 @@ describe("advisor reference directories", () => {
 	it("refreshes the advisor prompt when the daemon seeds project roots after creation", async () => {
 		await withAdvisorSession(
 			async ({ session, sessionManager, referenceDir }) => {
+				// Baseline: the session was created without project roots, so the advisor
+				// runtime is live but its prompt has nothing to say about workspace roots.
+				const beforeInjection = session.formatAdvisorHistoryAsText();
+				expect(beforeInjection).not.toBeNull();
+				expect(beforeInjection).not.toContain("<workspace-roots>");
+				expect(beforeInjection).not.toContain(referenceDir);
+
 				// Daemon order: create with preloaded contextFiles, then merge the
 				// project's source folders into the SessionManager and refresh.
 				await sessionManager.setAdditionalDirectories([referenceDir]);
@@ -151,10 +158,13 @@ describe("advisor reference directories", () => {
 				expect(primaryDump.match(/<workspace-roots>/g)).toHaveLength(1);
 				expect(primaryDump).toContain(`- ${referenceDir}`);
 
-				// Removing the root drops the stale list rather than keeping it.
+				// Removing the root drops the stale list rather than keeping it: the
+				// advisor stays live, so a transcript that still carries the old root
+				// means the prompt was never refreshed.
 				await sessionManager.setAdditionalDirectories([]);
 				await session.refreshSkills();
 				const afterRemoval = session.formatAdvisorHistoryAsText();
+				expect(afterRemoval).not.toBeNull();
 				expect(afterRemoval).not.toContain("<workspace-roots>");
 				expect(afterRemoval).not.toContain(referenceDir);
 			},
