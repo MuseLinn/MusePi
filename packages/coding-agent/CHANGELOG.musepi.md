@@ -27,6 +27,9 @@ MusePi 的发布说明,供启动时的「新功能」面板(`changelog.startup`)
 
 ### 修复
 
+- **daemon 崩溃后自动回到原来那个会话**：daemon 被外壳快速重建时，重连后第一次打开会话可能赶上新 daemon 还没开始响应请求（`not connected`），此前这一步只试一次就退回欢迎页；现在同一个会话会按退避重试（最多 6 次，约 7 秒），daemon 就绪后直接回到离开前的对话。恢复期间点开另一个会话，重试会转到那个会话上，你不会被留在「高亮 B、界面还是 A」的状态；你主动回到欢迎页或删掉当前会话，重试就停下。恢复期间界面仍是空闲快照，不会把重试显示成新的运行状态。
+  - EN: After a daemon crash the GUI now returns to the session you were reading. When the shell reconnects faster than the restarted daemon starts answering, the first reopen came back `not connected` and gave up on the welcome page; the same session is now retried with backoff (six attempts at most, about seven seconds) and lands back on the conversation as soon as the daemon is ready. Picking another session during the recovery moves the retries to that session, so you are never left highlighting one session while the transcript still shows another; returning to the welcome page or deleting the current session ends them. The transcript stays the idle snapshot, so a retry never reads as a new running turn.
+
 - **看板卡片里的资源列表与文本读取、以及市场按 topic 发现的插件，现在都能正常打开**：看板卡片现在能列出并打开它自己工作区里的文件，越界路径、二进制文件和大文件仍会被拒绝；插件市场按 `musepi-plugin` topic 发现仓库的结果也会重新出现在列表里。此前这些请求在运行时没有接上，界面只会报「未知方法」。
   - EN: A board card can now list and open the files in its own workspace, and marketplace topic discovery brings its results back into the list. Out-of-scope paths, binary files and oversized files are still refused. These requests previously had no handler at runtime, so the interface only reported "Unknown method".
 
