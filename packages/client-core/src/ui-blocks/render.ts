@@ -36,6 +36,8 @@ export interface UiBlockRender {
 	nodes: number;
 	/** Reasons the block could not draw as written; empty when it drew whole. */
 	errors: string[];
+	/** The source stopped mid-statement; quoting it back cannot repair it. */
+	incomplete: boolean;
 }
 
 function esc(value: unknown): string {
@@ -695,21 +697,24 @@ function parsedAsks(source: string): boolean {
 /** Render one block source. Diagnostics stay visible — see `renderUiBlockFence`. */
 export function renderUiBlock(source: string): UiBlockRender {
 	const parsed = parseUiBlock(source);
-	if (!parsed.tree) return { html: "", nodes: 0, errors: parsed.errors };
+	if (!parsed.tree) return { html: "", nodes: 0, errors: parsed.errors, incomplete: parsed.incomplete };
 	const html = renderNode(parsed.tree);
-	if (!html) return { html: "", nodes: 0, errors: parsed.errors };
-	return { html, nodes: countNodes(parsed.tree), errors: parsed.errors };
+	if (!html) return { html: "", nodes: 0, errors: parsed.errors, incomplete: parsed.incomplete };
+	return { html, nodes: countNodes(parsed.tree), errors: parsed.errors, incomplete: parsed.incomplete };
 }
 
 function sourceHtml(source: string): string {
 	return `<details class="tr-ui-src"><summary>${esc(t("transcript.uiBlockSource"))}</summary><pre>${esc(source.trim())}</pre></details>`;
 }
 
-function errorsHtml(errors: readonly string[], source: string, hash: string): string {
+function errorsHtml(errors: readonly string[], source: string, hash: string, repairable: boolean): string {
 	const reasons = errors.map(item => `<li>${esc(item)}</li>`).join("");
+	const repair = repairable
+		? `<button type="button" class="tr-ui-repair" data-ui-repair="${esc(hash)}">${esc(t("transcript.uiBlockRepair"))}</button>`
+		: "";
 	return (
 		`<div class="tr-ui-note">${esc(t("transcript.uiBlockPartial", { count: String(errors.length) }))}<ul>${reasons}</ul></div>` +
-		`<button type="button" class="tr-ui-repair" data-ui-repair="${esc(hash)}">${esc(t("transcript.uiBlockRepair"))}</button>` +
+		repair +
 		sourceHtml(source)
 	);
 }
@@ -748,8 +753,11 @@ export function renderUiBlockFence(source: string, complete = true): string {
 	const rendered = renderUiBlock(source);
 	if (!complete) return rendered.nodes > 0 ? `<div class="tr-ui tr-ui--streaming">${rendered.html}</div>` : "";
 	const hash = hashOf(source);
+	// A truncated source is not a program the model can repair from the text it
+	// would be quoted: resending the prefix loops. Only complete blocks qualify.
+	const repairable = !rendered.incomplete;
 	// The repair button quotes this; keep it where the click can find it.
-	rememberBlockFailure(hash, source, rendered.errors);
+	if (repairable) rememberBlockFailure(hash, source, rendered.errors);
 	if (rendered.nodes === 0) {
 		return (
 			`<div class="tr-ui tr-ui--empty" data-ui-block="${esc(hash)}">` +
@@ -757,12 +765,14 @@ export function renderUiBlockFence(source: string, complete = true): string {
 			(rendered.errors.length
 				? `<ul class="tr-ui-errors">${rendered.errors.map(e => `<li>${esc(e)}</li>`).join("")}</ul>`
 				: "") +
-			`<button type="button" class="tr-ui-repair" data-ui-repair="${esc(hash)}">${esc(t("transcript.uiBlockRepair"))}</button>` +
+			(repairable
+				? `<button type="button" class="tr-ui-repair" data-ui-repair="${esc(hash)}">${esc(t("transcript.uiBlockRepair"))}</button>`
+				: "") +
 			sourceHtml(source) +
 			`</div>`
 		);
 	}
-	const note = rendered.errors.length > 0 ? errorsHtml(rendered.errors, source, hash) : "";
+	const note = rendered.errors.length > 0 ? errorsHtml(rendered.errors, source, hash, repairable) : "";
 	const asking = parsedAsks(source);
 	if (asking) {
 		return (

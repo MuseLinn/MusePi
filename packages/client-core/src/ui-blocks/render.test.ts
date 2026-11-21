@@ -117,6 +117,23 @@ describe("failure is visible", () => {
 		expect(html).toContain("tr-ui-errors");
 	});
 
+	test("a truncated block keeps its reasons but offers no repair", () => {
+		const partial = 'root = Stack([Card("t", [Text("x")])';
+		expect(renderUiBlock(partial).incomplete).toBe(true);
+		const drawn = renderUiBlockFence(partial);
+		expect(drawn).toContain("ends in the middle of a statement");
+		expect(drawn).not.toContain("data-ui-repair");
+
+		const empty = renderUiBlockFence("root = Stack([");
+		expect(empty).toContain("tr-ui--empty");
+		expect(empty).toContain("tr-ui-errors");
+		expect(empty).not.toContain("data-ui-repair");
+	});
+
+	test("a complete broken block still offers repair", () => {
+		expect(renderUiBlockFence('root = Stack([Card(title: "x")])')).toContain("data-ui-repair");
+	});
+
 	test("a drawn block with a leftover error notes it underneath", () => {
 		const html = renderUiBlockFence('root = Stack([Text("ok")])');
 		expect(html).not.toContain("tr-ui-note");
