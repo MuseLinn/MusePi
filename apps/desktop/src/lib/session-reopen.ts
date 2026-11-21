@@ -1,12 +1,14 @@
 /**
- * Reconnect restore of the session that was on screen when the daemon dropped.
+ * Bounded retries for opening a session.
  *
- * The shell re-opens that session when the socket comes back. A daemon that was
- * rebuilt faster than the shell noticed the drop accepts the socket before it
- * accepts requests, so the first open comes back "not connected". One refusal
- * is not a verdict on the session: a bounded retry covers that gap, and
- * `stillWanted` ends it the moment the user takes over (the welcome page or
- * another session), so a deliberate leave is never undone by the restore.
+ * A daemon rebuilt faster than the shell noticed the drop accepts the socket
+ * before it accepts requests, so an open can come back "not connected" while
+ * the daemon is still starting. One refusal is not a verdict on the session:
+ * `runSessionReopen` retries on a bounded backoff, and `stillWanted` ends the
+ * retries the moment the user takes over (the welcome page or another
+ * session), so a deliberate leave is never undone. `SessionOpenScheduler`
+ * gives every open intent — the reconnect restore and a user pick during it —
+ * the same chain, with only the newest intent surviving.
  */
 
 /** What one open attempt settled to. `transient` is the only retryable one. */
@@ -70,6 +72,17 @@ const defaultWait = (ms: number): Promise<void> =>
 		setTimeout(resolve, ms);
 	});
 
+/** One attempt, with a thrown request folded into the same outcome the caller
+ *  would have returned — an exception must not escape the retry chain and turn
+ *  a refused open into a silent one. */
+async function settleOpen(open: SessionReopenOptions["open"], sessionId: string): Promise<SessionOpenOutcome> {
+	try {
+		return await open(sessionId);
+	} catch (error) {
+		return isConnectionNotReadyError(error) ? { status: "transient", error } : { status: "failed", error };
+	}
+}
+
 /** Re-open one session with bounded backoff; resolves once it is open, the
  *  user left, another open took over, or a non-transient failure settled it. */
 export async function runSessionReopen(options: SessionReopenOptions): Promise<SessionReopenResult> {
@@ -80,7 +93,7 @@ export async function runSessionReopen(options: SessionReopenOptions): Promise<S
 	while (attempts < maxAttempts) {
 		if (!options.stillWanted()) return { status: "cancelled", attempts, error };
 		attempts++;
-		const outcome = await options.open(options.sessionId);
+		const outcome = await settleOpen(options.open, options.sessionId);
 		if (outcome.status === "opened") return { status: "opened", attempts, error: null };
 		if (outcome.status === "superseded") return { status: "superseded", attempts, error: null };
 		if (outcome.status === "failed") return { status: "failed", attempts, error: outcome.error };
@@ -89,4 +102,52 @@ export async function runSessionReopen(options: SessionReopenOptions): Promise<S
 		await wait(reopenRetryDelay(attempts));
 	}
 	return { status: "exhausted", attempts, error };
+}
+
+export interface SessionOpenHooks {
+	/** One open attempt; the scheduler re-issues it with backoff. */
+	open: (sessionId: string) => Promise<SessionOpenOutcome>;
+	/** The session the user currently wants; null on the welcome page. */
+	wanted: () => string | null;
+	/** Ran out of bounded attempts: return to the welcome page with the reason. */
+	abandon: (sessionId: string, error: unknown) => void;
+	/** Injectable for tests; a real timer by default. */
+	wait?: (ms: number) => Promise<void>;
+	maxAttempts?: number;
+}
+
+/**
+ * Owns every open intent for the app, so a user open and the reconnect restore
+ * cannot undercut each other.
+ *
+ * Every call starts a new run and supersedes the previous one. A replaced run
+ * stops before its next attempt (never after), which is what keeps the newest
+ * intent — the session the user just picked — from inheriting a cancellation:
+ * the run it replaced cannot fail silently and leave the screen claiming a
+ * session nobody is fetching. Runs that lose their generation do nothing at
+ * all; the winner retries on its own bounded schedule and falls back to the
+ * visible failure through `abandon` only when the attempts are used up.
+ */
+export class SessionOpenScheduler {
+	#generation = 0;
+	readonly #hooks: SessionOpenHooks;
+
+	constructor(hooks: SessionOpenHooks) {
+		this.#hooks = hooks;
+	}
+
+	open(sessionId: string): Promise<SessionReopenResult> {
+		const generation = ++this.#generation;
+		const stillWanted = (): boolean => this.#generation === generation && this.#hooks.wanted() === sessionId;
+		return runSessionReopen({
+			sessionId,
+			open: this.#hooks.open,
+			stillWanted,
+			wait: this.#hooks.wait,
+			maxAttempts: this.#hooks.maxAttempts,
+		}).then(result => {
+			if (result.status === "exhausted" && stillWanted()) this.#hooks.abandon(sessionId, result.error);
+			return result;
+		});
+	}
 }

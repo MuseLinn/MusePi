@@ -6,6 +6,7 @@ import {
 	SESSION_REOPEN_MAX_ATTEMPTS,
 	SESSION_REOPEN_RETRY_DELAYS_MS,
 	type SessionOpenOutcome,
+	SessionOpenScheduler,
 } from "../src/lib/session-reopen";
 
 const noopWait = async (): Promise<void> => {};
@@ -125,4 +126,192 @@ test("a newer open that owns the session ends this restore", async () => {
 		wait: noopWait,
 	});
 	expect(result).toEqual({ status: "superseded", attempts: 1, error: null });
+});
+
+// ── Scheduler: every open intent shares one bounded chain ────────────────
+// The app layer used to let a user-initiated open sit outside these retries:
+// it failed silently on "not connected" while cancelling the restore of the
+// session it replaced, leaving the sidebar on the new row and the transcript
+// on the old one. These cover the scheduler contract that closes that hole.
+
+/** Let a started run reach its first wait without touching real timers. */
+const flush = async (): Promise<void> => {
+	for (let i = 0; i < 4; i++) await Promise.resolve();
+};
+
+/** A wait that parks until the test releases it, so two runs can interleave. */
+function gatedWait() {
+	const gates: Array<() => void> = [];
+	const wait = (): Promise<void> =>
+		new Promise<void>(resolve => {
+			gates.push(resolve);
+		});
+	return { wait, release: (): void => void gates.shift()?.(), pending: (): number => gates.length };
+}
+
+test("a session picked during a restore owns the retries and the restore stops", async () => {
+	let wanted: string | null = "A";
+	const gate = gatedWait();
+	const calls = new Map<string, number>();
+	const opened: string[] = [];
+	const abandoned: Array<{ id: string; error: unknown }> = [];
+	const scheduler = new SessionOpenScheduler({
+		open: async sessionId => {
+			const seen = (calls.get(sessionId) ?? 0) + 1;
+			calls.set(sessionId, seen);
+			// The daemon is not accepting requests yet for the first try of each.
+			if (seen === 1) return { status: "transient", error: new Error("not connected") };
+			opened.push(sessionId);
+			return { status: "opened" };
+		},
+		wanted: () => wanted,
+		abandon: (id, error) => void abandoned.push({ id, error }),
+		wait: gate.wait,
+	});
+	const restoringA = scheduler.open("A");
+	await flush();
+	expect(calls.get("A")).toBe(1);
+
+	// The user picks B while A is waiting out its backoff.
+	wanted = "B";
+	const openingB = scheduler.open("B");
+	await flush();
+	expect(calls.get("B")).toBe(1);
+
+	// A is superseded: releasing its backoff must not issue another request.
+	gate.release();
+	expect((await restoringA).status).toBe("cancelled");
+	expect(calls.get("A")).toBe(1);
+
+	// B keeps its own chain and opens on the retry.
+	gate.release();
+	const result = await openingB;
+	expect(result).toMatchObject({ status: "opened", attempts: 2 });
+	expect(opened).toEqual(["B"]);
+	// Neither intent tore the session down while the daemon was refusing.
+	expect(abandoned).toEqual([]);
+});
+
+test("a user open that never succeeds fails visibly instead of vanishing", async () => {
+	const abandoned: Array<{ id: string; error: unknown }> = [];
+	const scheduler = new SessionOpenScheduler({
+		open: async () => ({ status: "transient", error: new Error("not connected") }),
+		wanted: () => "B",
+		abandon: (id, error) => void abandoned.push({ id, error }),
+		wait: noopWait,
+	});
+	const result = await scheduler.open("B");
+	expect(result.status).toBe("exhausted");
+	expect(result.attempts).toBe(SESSION_REOPEN_MAX_ATTEMPTS);
+	expect(abandoned).toHaveLength(1);
+	expect(abandoned[0]?.id).toBe("B");
+});
+
+test("retries only re-issue opens, never a session teardown on the way", async () => {
+	let attempts = 0;
+	let abandoned = 0;
+	const scheduler = new SessionOpenScheduler({
+		open: async () => {
+			attempts++;
+			if (attempts < 3) return { status: "transient", error: new Error("not connected") };
+			return { status: "opened" };
+		},
+		wanted: () => "A",
+		abandon: () => void abandoned++,
+		wait: noopWait,
+	});
+	expect((await scheduler.open("A")).status).toBe("opened");
+	expect(attempts).toBe(3);
+	// The transcript keeps the idle snapshot: only opens were issued, so no
+	// retry could present a turn as running.
+	expect(abandoned).toBe(0);
+});
+
+test("a session deleted during the restore is not restored on reconnect", async () => {
+	let wanted: string | null = "A";
+	const gate = gatedWait();
+	const calls: string[] = [];
+	const abandoned: string[] = [];
+	const scheduler = new SessionOpenScheduler({
+		open: async sessionId => {
+			calls.push(sessionId);
+			return { status: "transient", error: new Error("not connected") };
+		},
+		wanted: () => wanted,
+		abandon: id => void abandoned.push(id),
+		wait: gate.wait,
+	});
+	const restoring = scheduler.open("A");
+	await flush();
+	expect(calls).toEqual(["A"]);
+
+	// Deleting the selected session clears the ref the scheduler reads.
+	wanted = null;
+	gate.release();
+	expect((await restoring).status).toBe("cancelled");
+	expect(calls).toEqual(["A"]);
+
+	// A later reconnect must not target the deleted session at all.
+	expect((await scheduler.open("A")).status).toBe("cancelled");
+	expect(calls).toEqual(["A"]);
+	expect(abandoned).toEqual([]);
+});
+
+test("a request timeout is a verdict, not a connection gap", async () => {
+	const outcomes: Array<{ status: "failed"; error: unknown }> = [
+		{ status: "failed", error: new Error("request timeout: session.resume") },
+	];
+	let calls = 0;
+	let abandoned = 0;
+	const scheduler = new SessionOpenScheduler({
+		open: async () => {
+			calls++;
+			return outcomes[0]!;
+		},
+		wanted: () => "A",
+		abandon: () => void abandoned++,
+		wait: noopWait,
+	});
+	const result = await scheduler.open("A");
+	expect(result.status).toBe("failed");
+	expect(calls).toBe(1);
+	// The open path already showed the failure; the scheduler must not stack
+	// a second, later one on top of it.
+	expect(abandoned).toBe(0);
+});
+
+test("an open that throws a connection error is retried, not lost", async () => {
+	let attempts = 0;
+	const scheduler = new SessionOpenScheduler({
+		open: async () => {
+			attempts++;
+			if (attempts === 1) throw new Error("not connected");
+			return { status: "opened" };
+		},
+		wanted: () => "A",
+		abandon: () => {
+			throw new Error("abandon must not run for a recoverable open");
+		},
+		wait: noopWait,
+	});
+	expect((await scheduler.open("A")).status).toBe("opened");
+	expect(attempts).toBe(2);
+});
+
+test("an open that throws a session verdict fails once, visibly", async () => {
+	let attempts = 0;
+	const abandoned: string[] = [];
+	const scheduler = new SessionOpenScheduler({
+		open: async () => {
+			attempts++;
+			throw new Error("session not found: gone");
+		},
+		wanted: () => "gone",
+		abandon: id => void abandoned.push(id),
+		wait: noopWait,
+	});
+	expect((await scheduler.open("gone")).status).toBe("failed");
+	expect(attempts).toBe(1);
+	// The open path showed this one; the scheduler only adds the give-up case.
+	expect(abandoned).toEqual([]);
 });
