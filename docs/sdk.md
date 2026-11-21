@@ -175,8 +175,8 @@ If restore fails, `modelFallbackMessage` explains fallback.
 2. config-sourced API key override (`models.yml` provider `apiKey`)
 3. stored OAuth credential, including refresh when needed
 4. API key persisted by a successful `/login`
-5. provider environment variables
-6. other stored API-key credential in `agent.db` / broker-backed storage
+5. other stored API-key credential — imported or restored (Settings import, broker snapshot), broker-migrated, or a legacy row without provenance
+6. provider environment variables — consulted only when storage holds no key for the provider
 7. custom-provider resolver fallback
 
 ## Event subscription model
