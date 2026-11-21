@@ -945,7 +945,8 @@ export const settings = {
 	"settings.showAvatars": "Show avatars",
 	"settings.brandIconsColor": "Brand-coloured icons",
 	"settings.brandIconsColorHint": "Mono follows the theme colour; colour uses each brand's own colour.",
-	"settings.agentOrbAvatar.info": "Animated orb avatar beside agent replies; your avatar at the message bubble",
+	"settings.agentOrbAvatar.info":
+		"Shows the agent's animated orb in the capsule above the conversation; when off, the capsule keeps the status text only. Your avatar sits in the account entry at the bottom of the left rail, which opens the account and settings menu.",
 	"settings.previewImage": "Preview image",
 	"settings.previewStatusbarModel": "GLM-5.3-Flash",
 	"settings.previewStatusbarContext": "12.4K / 200K",
@@ -1246,7 +1247,7 @@ export const settings = {
 	"settings.dotMatrixBackground": "Dot matrix brand background",
 	"settings.agentAvatarStyle": "Agent avatar style",
 	"settings.agentAvatarStyleDescription":
-		"Animation style for the agent avatar in chat (orbs is the default thinking orb; swap in the desktop pet orb, a hexagon or spark glyph)",
+		"Animation style for the agent avatar in the capsule above the conversation (orbs is the default thinking orb; swap in the desktop pet orb, a hexagon or spark glyph). Side-session transcripts use the same style.",
 	"settings.avatarOrbs": "Orbs",
 	"settings.avatarPet": "Pet orb",
 	"settings.avatarHex": "Hexagon",
@@ -1254,12 +1255,12 @@ export const settings = {
 	"settings.avatarPunk": "Pixel punk",
 	"settings.pixelFace": "Pixel face",
 	"settings.pixelFaceDescription":
-		"Pixel-punk face for the main agent (deterministic per seed). Identity-bound avatars — swarm members, your user bubble — always derive from their own id, so only the main agent face changes here.",
+		"Pixel-punk face for the main agent (deterministic per seed). Identity-bound avatars — swarm members and the account picture at the bottom of the left rail — always derive from their own source, so only the main agent face changes here.",
 	"settings.changeFace": "Shuffle face",
 	"settings.faceSeed": "Face seed",
 	"settings.userAvatarSource": "User avatar source",
 	"settings.userAvatarSourceDescription":
-		"Your avatar in the chat bubble: GitHub photo → identity-derived pixel face → initial letter.",
+		"Your avatar in the account entry at the bottom of the left rail: GitHub photo → identity-derived pixel face → initial letter.",
 	"settings.userAvatarAuto": "Auto",
 	"settings.userAvatarPunk": "Pixel face",
 	"settings.userAvatarInitial": "Initial letter",
