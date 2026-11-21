@@ -20,8 +20,12 @@
  *   1. It paints EMPTY chrome. Controls live in a sibling `off` surface, or
  *      inside the band with their own `off`; the safety net below covers the
  *      native controls either way.
- *   2. `band` and `off` on one element is a contradiction (a guard test in
- *      apps/desktop/test rejects it).
+ *   2. `band` and `off` on one element is a contradiction. The PRIMARY
+ *      enforcement is the type checker: two `data-*` literals on one element is
+ *      TS17001, so `check:types` blocks it. The contract test parses the JSX
+ *      (`@babel/parser`) and reports the same contradiction as fast local
+ *      feedback — it is a convenience over the same rule, not a second line of
+ *      defense, and it deliberately does not try to out-parse the compiler.
  *   3. The OS titlebar is drawn OVER the page, so a band never receives its
  *      clicks and needs no carve of its own; a band that places a control at
  *      a leading edge reserves the platform inset in its own geometry.

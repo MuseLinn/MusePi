@@ -2,6 +2,7 @@ import "./happy-dom-shim";
 import { afterAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parse as babelParse } from "@babel/parser";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { ensureChromiumExecutable } from "../../../packages/coding-agent/src/tools/browser/launch";
 import { SettingsNav } from "../src/components/SettingsNav";
@@ -226,81 +227,55 @@ function classNameTokens(source: string): string[] {
 
 /** Every JSX opening tag in a source file, as { text, line }.
  *
- *  The scan is quote-aware: a `>` inside an attribute string
- *  (`title="a > b"`) must not end the tag, and braces inside a string are
- *  literal (`aria-label={"a } b"}` must not drive the depth negative). A tag
- *  that cannot be closed at depth 0 outside quotes is a hard failure, not a
- *  silent stop — this helper exists so the guard cannot quietly fall behind.
+ *  Parsed, not scanned: `@babel/parser` tokenizes TSX for us, so quotes,
+ *  template literals, regex literals, comments, braces and JSX text are the
+ *  parser's problem rather than ours. The hand-rolled scanner this replaced
+ *  mis-read a regex at `GuiHeader.tsx:399` and silently lost the rest of the
+ *  file — including `.gui-header`, a band the contract asserts.
+ *
+ *  The text is rebuilt from the node's source range, so callers can look for
+ *  attributes in it exactly as before. A file that cannot be parsed throws with
+ *  its path: a guard that skips a file quietly is the failure mode this test
+ *  exists to prevent.
  */
-export function jsxTags(source: string, file: string): { text: string; line: number }[] {
-	const tags: { text: string; line: number }[] = [];
-	const opener = /<([A-Za-z][\w.]*)/g;
-	// Every string and comment span in the file, so a `<svg"` inside a test
-	// assertion or a comment is not mistaken for a JSX tag.
-	const inert: [number, number][] = [];
-	for (let index = 0; index < source.length; index++) {
-		const char = source[index];
-		if (char === "/" && (source[index + 1] === "/" || source[index + 1] === "*")) {
-			const end = source[index + 1] === "/" ? source.indexOf("\n", index) : source.indexOf("*/", index + 2);
-			const stop = end === -1 ? source.length : end + (source[index + 1] === "/" ? 1 : 2);
-			inert.push([index, stop]);
-			index = stop - 1;
-			continue;
-		}
-		if (char === '"' || char === "'" || char === "`") {
-			let cursor = index + 1;
-			while (cursor < source.length && source[cursor] !== char) {
-				if (source[cursor] === "\\") cursor++;
-				cursor++;
-			}
-			inert.push([index, cursor + 1]);
-			index = cursor;
-		}
+export function jsxTags(
+	source: string,
+	file: string,
+	parseOptions: { sourceType?: "module" | "script"; plugins?: string[] } = {},
+): { text: string; line: number }[] {
+	let ast: ReturnType<typeof babelParse>;
+	try {
+		// `jsx` is only legal together with a JS/TS dialect; every file this
+		// guard reads is renderer TSX.
+		ast = babelParse(source, {
+			plugins: parseOptions.plugins ?? ["typescript", "jsx"],
+			sourceType: parseOptions.sourceType ?? "module",
+			errorRecovery: false,
+		});
+	} catch (error) {
+		throw new Error(`window-drag guard: could not scan ${file}: ${(error as Error).message}`);
 	}
-	const isInert = (position: number): boolean => inert.some(([from, to]) => position >= from && position < to);
-	for (let match = opener.exec(source); match !== null; match = opener.exec(source)) {
-		if (isInert(match.index)) continue;
-		const line = source.slice(0, match.index).split(/\r?\n/).length;
-		let index = match.index + match[0].length;
-		let depth = 0;
-		let close = -1;
-		while (index < source.length) {
-			const char = source[index];
-			// Comments inside a tag (`// row's nav action`) carry prose, not
-			// syntax: an apostrophe there must not open a string.
-			if (char === "/" && source[index + 1] === "/") {
-				const newline = source.indexOf("\n", index);
-				index = newline === -1 ? source.length : newline + 1;
-				continue;
-			}
-			if (char === "/" && source[index + 1] === "*") {
-				const end = source.indexOf("*/", index + 2);
-				index = end === -1 ? source.length : end + 2;
-				continue;
-			}
-			if (char === '"' || char === "'" || char === "`") {
-				// Skip the whole string literal; escapes do not end it early.
-				let cursor = index + 1;
-				while (cursor < source.length && source[cursor] !== char) {
-					if (source[cursor] === "\\") cursor++;
-					cursor++;
-				}
-				index = cursor + 1;
-				continue;
-			}
-			if (char === "{") depth++;
-			else if (char === "}") depth--;
-			else if (char === ">" && depth === 0) {
-				close = index;
-				break;
-			}
-			index++;
+	const tags: { text: string; line: number }[] = [];
+	const visit = (node: unknown): void => {
+		if (node === null || typeof node !== "object") return;
+		const record = node as { type?: string; start?: number; end?: number; loc?: { start: { line: number } } };
+		if (
+			(record.type === "JSXOpeningElement" || record.type === "JSXSelfClosingElement") &&
+			record.start !== undefined &&
+			record.end !== undefined
+		) {
+			tags.push({ text: source.slice(record.start, record.end), line: record.loc?.start.line ?? 0 });
 		}
-		if (close === -1) {
-			throw new Error(`window-drag guard: unbalanced JSX tag at ${file}:${line}`);
+		for (const [key, value] of Object.entries(record)) {
+			if (key === "loc" || key === "leadingComments" || key === "trailingComments") continue;
+			if (Array.isArray(value)) for (const item of value) visit(item);
+			else visit(value);
 		}
-		const text = source.slice(match.index, close + 1);
-		if (text.includes("=") || /^<[A-Za-z][\w.]*\s*\/?>$/.test(text)) tags.push({ text, line });
+	};
+	try {
+		visit(ast);
+	} catch (error) {
+		throw new Error(`window-drag guard: could not scan ${file}: ${(error as Error).message}`);
 	}
 	return tags;
 }
@@ -678,31 +653,56 @@ describe("window drag — one owner for the property", () => {
 		expect(contradictions).toEqual([]);
 	});
 
-	it("reads a tag past a quoted > and past a brace inside a string", () => {
-		// Both shapes used to make the scan lie: a quoted `>` truncated the tag
-		// (contradiction missed), and an unbalanced brace inside a string drove
-		// the depth negative (the rest of the file silently skipped).
-		const quoted = '<div title="a > b" data-gui-window-drag="band" data-gui-window-drag="off" />';
-		const [tag] = jsxTags(quoted, "fixture.tsx");
-		expect(tag.text).toBe(quoted);
-		expect(Array.from(tag.text.matchAll(/data-gui-window-drag="(band|off)"/g), m => m[1])).toEqual(["band", "off"]);
+	it("reads the shapes that broke the hand-rolled scanner, from real files", () => {
+		// Regression cases taken from shipped files, not inline fixtures: the
+		// previous scanner lost 121 of GuiHeader.tsx's 123 tags to a regex
+		// literal, and an inline fixture could never show that.
+		const guiHeader = path.join(SRC, "components/GuiHeader.tsx");
+		const headerTags = jsxTags(fs.readFileSync(guiHeader, "utf8"), "GuiHeader.tsx");
+		const header = headerTags.find(tag => tag.text.includes('"gui-header'));
+		expect(header).toBeDefined();
+		// The regex at line 399 used to swallow everything after it.
+		expect(headerTags.length).toBeGreaterThan(100);
+		expect(headerTags.some(tag => tag.text.includes('"gui-header-spacer"'))).toBe(true);
 
-		const braced = '<nav aria-label={"a } b"} data-gui-window-drag="band" data-gui-window-drag="off">';
-		const [nav] = jsxTags(braced, "fixture.tsx");
-		expect(nav.text).toBe(braced);
-		expect(nav.text.includes('data-gui-window-drag="off"')).toBe(true);
+		const companion = path.join(SRC, "components/settings-sections/companion.tsx");
+		const companionTags = jsxTags(fs.readFileSync(companion, "utf8"), "companion.tsx");
+		expect(companionTags.length).toBeGreaterThan(80);
+		// Past the old desync boundary (~line 668) the scan must still see tags.
+		expect(companionTags.filter(tag => tag.line > 668).length).toBeGreaterThan(0);
 
-		// A following tag in the same file is still scanned (no silent stop).
-		const two = `${quoted}
-<span className="x" />`;
-		expect(jsxTags(two, "fixture.tsx")).toHaveLength(2);
+		// The literal `<svg"` inside this test file's own strings is not a tag:
+		// the parser knows it is data, the regex-based opener did not.
+		const stringLiteral = path.join(SRC, "components/import-source-glyph.test.tsx");
+		const glyphTags = jsxTags(fs.readFileSync(stringLiteral, "utf8"), "import-source-glyph.test.tsx");
+		expect(glyphTags.every(tag => !tag.text.startsWith("<svg"))).toBe(true);
 	});
 
-	it("fails loudly on a tag it cannot close instead of skipping it", () => {
-		// An unbalanced tag must not be dropped quietly; the guard's whole job is
-		// to never fall behind without saying so.
-		expect(() => jsxTags('<div data-gui-window-drag="band"', "broken.tsx")).toThrow(
-			/unbalanced JSX tag at broken\.tsx:1/,
+	it("still reports a contradiction that a quoted > sits in front of", () => {
+		// `title="a > b"` used to truncate the tag so the duplicate never surfaced.
+		const source = `const A = () => (
+			<div title="a > b" data-gui-window-drag="band" data-gui-window-drag="off" />
+		);`;
+		const [tag] = jsxTags(source, "fixture.tsx");
+		expect(Array.from(tag.text.matchAll(/data-gui-window-drag="(band|off)"/g), m => m[1])).toEqual(["band", "off"]);
+	});
+
+	it("does not let a brace inside a string abort the scan", () => {
+		// `{"a } b"}` used to drive the depth negative and skip the rest of the file.
+		const source = `const A = () => (
+			<nav aria-label={"a } b"} data-gui-window-drag="off">x</nav>
+		);
+		const B = () => <footer className="after" />;`;
+		const tags = jsxTags(source, "fixture.tsx");
+		expect(tags.some(tag => tag.text.includes("aria-label"))).toBe(true);
+		expect(tags.some(tag => tag.text.includes('"after"'))).toBe(true);
+	});
+
+	it("fails loudly when a file cannot be parsed instead of skipping it", () => {
+		// The guard's whole job is never to fall behind without saying so: an
+		// unparsable file names itself rather than contributing zero tags.
+		expect(() => jsxTags('const A = () => <div data-gui-window-drag="band"', "broken.tsx")).toThrow(
+			/could not scan broken\.tsx/,
 		);
 	});
 
