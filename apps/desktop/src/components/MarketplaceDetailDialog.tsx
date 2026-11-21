@@ -1,6 +1,7 @@
 import type { MarketplaceCardAction, MarketplaceCardEntry } from "@musepi/client-core";
 import { t, useScrollShadow } from "@musepi/client-core";
-import { type ReactNode, useRef } from "react";
+import { MarketplaceVersionChoice, upgradableVersions } from "@musepi/client-core/src/components/marketplace";
+import { type ReactNode, useRef, useState } from "react";
 import { openExternalUrl } from "../lib/electron";
 import { DialogFrame } from "./DialogFrame";
 import { PluginIcon } from "./PluginIcon";
@@ -32,6 +33,16 @@ export function MarketplaceDetailDialog({
 }): ReactNode {
 	const scrollRef = useRef<HTMLDivElement>(null);
 	useScrollShadow(scrollRef);
+	// Selection is scoped to the entry it was made in: opening another plugin
+	// (or the same one after a refresh changed its versions) starts fresh
+	// instead of carrying a version across plugins.
+	const versionsKey = [
+		entry?.name ?? "",
+		entry?.marketplace ?? "",
+		(entry?.versions ?? []).join(","),
+		entry?.installedVersion ?? "",
+	].join(":");
+	const [picked, setPicked] = useState<{ key: string; version: string } | null>(null);
 	if (!entry)
 		return (
 			<DialogFrame open={false} onClose={onClose} label={t("guest.pluginDetails")}>
@@ -40,6 +51,14 @@ export function MarketplaceDetailDialog({
 		);
 	const name = entry.displayName ?? entry.name;
 	const description = entry.longDescription ?? entry.description;
+	const versions = entry.versions ?? [];
+	const installableVersions = upgradableVersions(versions, entry.installedVersion);
+	const selection = picked?.key === versionsKey ? picked.version : null;
+	const targetVersion = selection ?? installableVersions[0];
+	// One version is not a choice: a repository with no tags only adds the
+	// catalog and installed versions, and a single chip would be pure chrome.
+	const showVersionList = entry.installed === true && versions.length > 1;
+	const showUpgrade = entry.installed === true && (targetVersion !== undefined || entry.updateAvailable === true);
 	return (
 		<DialogFrame open={open} onClose={onClose} label={name} className="gui-dialog--shortcuts gui-marketplace-detail">
 			<div className="gui-marketplace-detail-shell">
@@ -88,6 +107,18 @@ export function MarketplaceDetailDialog({
 						<section className="gui-marketplace-detail-section">
 							<h3>{t("guest.pluginDetailIntro")}</h3>
 							<p className="gui-marketplace-detail-prose">{description}</p>
+						</section>
+					)}
+					{showVersionList && (
+						<section className="gui-marketplace-detail-section">
+							<h3>{t("marketplace.versions")}</h3>
+							<MarketplaceVersionChoice
+								versions={versions}
+								installedVersion={entry.installedVersion}
+								selected={targetVersion ?? null}
+								onSelect={version => setPicked({ key: versionsKey, version })}
+								busy={busy}
+							/>
 						</section>
 					)}
 					{entry.capabilities && entry.capabilities.length > 0 && (
@@ -145,14 +176,16 @@ export function MarketplaceDetailDialog({
 								{t("guest.pluginInstall")}
 							</button>
 						)}
-						{entry.updateAvailable && (
+						{showUpgrade && (
 							<button
 								type="button"
 								className="gui-btn gui-btn-primary"
 								disabled={busy}
-								onClick={() => void onAction({ kind: "upgrade", entry })}
+								onClick={() => void onAction({ kind: "upgrade", entry, targetVersion })}
 							>
-								{t("guest.pluginUpgrade")}
+								{targetVersion !== undefined
+									? t("marketplace.upgradeToVersion", { version: targetVersion })
+									: t("guest.pluginUpgrade")}
 							</button>
 						)}
 						{entry.installed && (

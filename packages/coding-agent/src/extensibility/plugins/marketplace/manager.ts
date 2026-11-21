@@ -6,11 +6,13 @@
  * the real `clearClaudePluginRootsCache` while tests supply a counter stub.
  */
 
+import * as crypto from "node:crypto";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 
 import { isEnoent, logger, pathIsWithin } from "@musepi/pi-utils";
+import * as git from "../../../utils/git";
 import { codexPluginIcon } from "../compat/codex-plugin-icon";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../compat/compatibility-store";
 import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../compat/plugin-compatibility";
@@ -21,7 +23,13 @@ import type { PluginRuntimeConfig } from "../runtime/types";
 import { cachePlugin } from "./cache";
 import { defaultMarketplaceCatalog, withDefaultMarketplaces } from "./default-marketplaces";
 import { readMarketplacePluginDetail } from "./detail";
-import { classifySource, fetchMarketplace, parseMarketplaceCatalog, promoteCloneToCache } from "./fetcher";
+import {
+	classifySource,
+	fetchMarketplace,
+	parseMarketplaceCatalog,
+	promoteCloneToCache,
+	readMarketplaceCatalog,
+} from "./fetcher";
 import {
 	addInstalledPlugin,
 	addMarketplaceEntry,
@@ -35,18 +43,22 @@ import {
 	writeInstalledPluginsRegistry,
 	writeMarketplacesRegistry,
 } from "./registry";
+import type { PluginSourceIdentity } from "./source-identity";
+import { normalizeSourcePath, pluginSourceIdentity, samePluginSource } from "./source-identity";
 import { resolvePluginSource } from "./source-resolver";
 import type {
 	InstalledPluginEntry,
 	InstalledPluginSummary,
 	InstalledPluginsRegistry,
 	MarketplaceCatalog,
+	MarketplaceCatalogMetadata,
 	MarketplacePluginEntry,
 	MarketplaceRegistryEntry,
 	MarketplacesRegistry,
+	PluginSource,
 } from "./types";
 import { buildPluginId, parsePluginId } from "./types";
-import { isNewerVersion } from "./version";
+import { isNewerVersion, listRemotePluginVersions, type PluginVersionRef, sortVersionRefs } from "./version";
 
 const RUNTIME_PACKAGE_NAME_RE = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/;
 const MAX_RUNTIME_PACKAGE_NAME_LENGTH = 214;
@@ -56,6 +68,23 @@ function assertRuntimePackageName(name: string): string {
 		throw new Error(`Invalid marketplace plugin package name: ${JSON.stringify(name)}`);
 	}
 	return name;
+}
+
+/**
+ * Pin a catalog entry's source to one Git ref. A catalog `sha` would win over
+ * the tag inside `git.clone`, so it is dropped when the user chose a version.
+ */
+function withSourceRef(entry: MarketplacePluginEntry, ref: string): MarketplacePluginEntry {
+	const source = entry.source as Exclude<PluginSource, string> & { sha?: string };
+	const { sha: _sha, ...rest } = source;
+	return { ...entry, source: { ...rest, ref } as PluginSource };
+}
+
+/** Human-readable source for guard messages: `repo` or `repo (dir)`. */
+function describeSource(identity: PluginSourceIdentity): string {
+	const repo = identity.repo ?? "its marketplace";
+	const dir = normalizeSourcePath(identity.path);
+	return dir.length > 0 ? `${repo} (${dir})` : repo;
 }
 
 // ── Options ──────────────────────────────────────────────────────────────────
@@ -82,6 +111,44 @@ export interface MarketplaceManagerOptions {
 	compatibilityExemptionsPath?: string;
 	/** Include the two reviewed built-in catalogs without installing their plugins. */
 	includeDefaultMarketplaces?: boolean;
+	/**
+	 * 可选版本来源：插件仓库的 tag 列表。缺省读 `git ls-remote --tags`；
+	 * 返回空数组 = 该仓库没有可选版本（回退 catalog 版本）。
+	 */
+	listVersions?: (repo: string) => Promise<PluginVersionRef[]>;
+}
+
+/** What the detail dialog shows for one plugin's version list. */
+export interface PluginVersionChoices {
+	/** Newest first. Always includes the catalog version and the installed version. */
+	versions: PluginVersionRef[];
+	/**
+	 * The catalog now resolves to a different repository (or directory) than
+	 * the installed copy — replacing it is a reinstall, not an update.
+	 */
+	sourceChanged: boolean;
+}
+
+export interface PluginInstallOptions {
+	force?: boolean;
+	scope?: "user" | "project";
+	expectedVersion?: string;
+	/** Install exactly this published version instead of the catalog's latest. */
+	targetVersion?: string;
+	/** Keep the previous install's cache directory on disk until the caller commits. */
+	retainPrevious?: boolean;
+}
+
+export interface PluginUpgradeOptions {
+	/** Move to this published version; omitted means the catalog's version. */
+	targetVersion?: string;
+	/** Version the user saw when confirming — refuses a catalog that moved. */
+	expectedVersion?: string;
+	/**
+	 * Allow a catalog that now resolves to a different repository/directory.
+	 * The caller sets this only after an explicit reinstall confirmation.
+	 */
+	allowReplace?: boolean;
 }
 
 // ── Manager ──────────────────────────────────────────────────────────────────
@@ -265,25 +332,36 @@ export class MarketplaceManager {
 	async installPlugin(
 		name: string,
 		marketplace: string,
-		options?: { force?: boolean; scope?: "user" | "project"; expectedVersion?: string },
+		options?: PluginInstallOptions,
 	): Promise<InstalledPluginEntry> {
 		const force = options?.force ?? false;
 		const scope = options?.scope ?? "user";
 		const registryPath = this.#registryPath(scope);
+		const targetVersion = options?.targetVersion;
 
-		const { pluginEntry, sourcePath, tempCloneRoot } = await this.#preparePluginSource(name, marketplace);
+		// A target version has to be a ref the repository really publishes:
+		// resolve it before any clone, so an unavailable version fails before
+		// the first disk write.
+		const ref =
+			targetVersion === undefined ? undefined : await this.#resolveTargetRef(name, marketplace, targetVersion);
+
+		const { pluginEntry, sourcePath, tempCloneRoot, marketplaceEntry, catalogMetadata, catalogVersion } =
+			await this.#preparePluginSource(name, marketplace, { ref });
 
 		// Trust gate for GUI confirmations: the caller approved a specific
-		// catalog version, so refuse to install a different one. Checked
-		// before any disk write; catalogs without a version cannot be pinned.
+		// catalog version, so refuse to install a different one. Checked before
+		// the cache or registry is written; a source clone lives in a temp dir
+		// either way. Catalogs without a version cannot be pinned. A chosen
+		// target version is compared against the catalog, not the tag: the user
+		// picked that tag, and an older catalog still named it.
 		if (
 			options?.expectedVersion !== undefined &&
-			pluginEntry.version !== undefined &&
-			pluginEntry.version !== options.expectedVersion
+			catalogVersion !== undefined &&
+			catalogVersion !== options.expectedVersion
 		) {
 			throw new Error(
 				`Plugin "${name}@${marketplace}" changed since it was reviewed: ` +
-					`expected version ${options.expectedVersion}, catalog now has ${pluginEntry.version}`,
+					`expected version ${options.expectedVersion}, catalog now has ${catalogVersion}`,
 			);
 		}
 
@@ -315,11 +393,12 @@ export class MarketplaceManager {
 			if (gate) logger.warn("compatibility exemption active, installing anyway", { plugin: name });
 		}
 
-		// 5. Determine version: catalog entry > plugin manifest > git SHA > fallback
+		// 5. Determine version: an explicitly chosen version wins, then catalog
+		//    entry > plugin manifest > git SHA > fallback
 		let version!: string;
 		let cachePath!: string;
 		try {
-			version = await this.#resolvePluginVersion(pluginEntry, sourcePath);
+			version = targetVersion ?? (await this.#resolvePluginVersion(pluginEntry, sourcePath));
 			cachePath = await cachePlugin(sourcePath, this.#opts.pluginsCacheDir, marketplace, name, version);
 			await adaptThirdPartyCordisPlugin(cachePath);
 			await this.#writeEmbeddedLspConfig(pluginEntry, cachePath);
@@ -335,37 +414,29 @@ export class MarketplaceManager {
 		const previousPackageNames = await this.#resolveInstalledPackageNames(existing ?? [], name);
 
 		// Only now clean up old entries — new cache succeeded, so it is safe to remove old ones.
+		// An upgrade keeps them until it commits (`retainPrevious`), so a failure in
+		// the steps below still has the previous copy to restore.
 		if (existing && existing.length > 0) {
 			// Remove from scope-appropriate registry first, then cross-check refs before disk deletion.
 			const prunedReg = removeInstalledPlugin(await readInstalledPluginsRegistry(registryPath), pluginId);
 			await writeInstalledPluginsRegistry(registryPath, prunedReg);
 
-			// Read both registries AFTER removal — only delete paths no longer referenced by either.
-			const [userReg, projectReg] = await Promise.all([
-				readInstalledPluginsRegistry(this.#opts.installedRegistryPath),
-				this.#opts.projectInstalledRegistryPath
-					? readInstalledPluginsRegistry(this.#opts.projectInstalledRegistryPath)
-					: Promise.resolve({ version: 2 as const, plugins: {} as Record<string, InstalledPluginEntry[]> }),
-			]);
-			const referenced = collectReferencedPaths(userReg, projectReg);
-
-			for (const entry of existing) {
-				if (entry.installPath !== cachePath && !referenced.has(entry.installPath)) {
-					await fs.rm(entry.installPath, { recursive: true, force: true });
-				}
-			}
+			if (!options?.retainPrevious) await this.#deleteUnreferencedInstalls(existing, cachePath);
 		}
 
 		// 6. Build and register the entry, preserving enabled state from previous install
 		const now = new Date().toISOString();
 		// Carry over enabled flag from existing entry — a disabled plugin must stay disabled after upgrade
 		const wasDisabled = existing?.some(e => e.enabled === false);
+		const sourceIdentity = pluginSourceIdentity(pluginEntry, marketplaceEntry, catalogMetadata);
 		const installedEntry: InstalledPluginEntry = {
 			scope,
 			installPath: cachePath,
 			version,
 			installedAt: now,
 			lastUpdated: now,
+			...(sourceIdentity.repo ? { sourceRepo: sourceIdentity.repo } : {}),
+			...(sourceIdentity.path ? { sourcePath: sourceIdentity.path } : {}),
 			...(wasDisabled ? { enabled: false } : {}),
 		};
 
@@ -373,12 +444,15 @@ export class MarketplaceManager {
 		const newInstReg = addInstalledPlugin(freshInstReg, pluginId, installedEntry);
 		await writeInstalledPluginsRegistry(registryPath, newInstReg);
 
+		await this.#registerRuntimePlugin(scope, packageName, cachePath, version, wasDisabled ? false : undefined);
+		// Retire the old package name only once the new link exists: a failure
+		// before this point leaves the previous runtime config (feature toggles
+		// included) untouched for the caller's rollback.
 		for (const previousPackageName of previousPackageNames) {
 			if (previousPackageName !== packageName) {
 				await this.#removeRuntimePlugin(scope, previousPackageName);
 			}
 		}
-		await this.#registerRuntimePlugin(scope, packageName, cachePath, version, wasDisabled ? false : undefined);
 
 		this.#clearCache();
 
@@ -463,7 +537,8 @@ export class MarketplaceManager {
 		return icons;
 	}
 
-	async #preparePluginSource(name: string, marketplace: string) {
+	/** Marketplace registry entry for `marketplace`, re-fetching a default catalog whose cache is gone. */
+	async #resolveMarketplaceEntry(marketplace: string): Promise<MarketplaceRegistryEntry> {
 		const mktReg = await this.#readMarketplacesRegistry();
 		let mktEntry = getMarketplaceEntry(mktReg, marketplace);
 		if (!mktEntry) throw new Error(`Marketplace "${marketplace}" not found`);
@@ -485,24 +560,168 @@ export class MarketplaceManager {
 				mktEntry = refreshed;
 			}
 		}
+		return mktEntry;
+	}
 
+	/**
+	 * Resolve a plugin to a source directory.
+	 *
+	 * With `ref`, the source is read at that Git tag instead of the catalog's
+	 * current state: an object source just takes the ref, a relative source
+	 * clones the marketplace repository at the tag and resolves the same
+	 * relative path in that checkout (its catalog names the plugin there).
+	 */
+	async #preparePluginSource(name: string, marketplace: string, options?: { ref?: string }) {
+		const mktEntry = await this.#resolveMarketplaceEntry(marketplace);
 		const catalog = await this.#readCatalog(mktEntry);
-		const pluginEntry = catalog.plugins.find(p => p.name === name);
-		if (!pluginEntry) throw new Error(`Plugin "${name}" not found in marketplace "${marketplace}"`);
-		const marketplaceClonePath = this.#resolveMarketplaceRoot(mktEntry);
+		const catalogEntry = catalog.plugins.find(p => p.name === name);
+		if (!catalogEntry) throw new Error(`Plugin "${name}" not found in marketplace "${marketplace}"`);
+		// The catalog's own version, captured before a pin can replace it: the
+		// trust gate below compares against what the catalog names, not against
+		// the older tag the caller deliberately chose.
+		const catalogVersion = catalogEntry.version;
+		let pluginEntry = catalogEntry;
+
+		let marketplaceClonePath = this.#resolveMarketplaceRoot(mktEntry);
+		let catalogMetadata: MarketplaceCatalogMetadata | undefined = catalog.metadata;
+		let pinnedCloneRoot: string | undefined;
+
+		if (options?.ref) {
+			if (typeof pluginEntry.source === "string") {
+				const repo = pluginSourceIdentity(pluginEntry, mktEntry, catalogMetadata).repo;
+				if (!repo) {
+					throw new Error(
+						`Plugin "${name}@${marketplace}" has no Git-backed repository; version selection is unavailable.`,
+					);
+				}
+				pinnedCloneRoot = path.join(os.tmpdir(), `marketplace-${crypto.randomUUID()}`);
+				try {
+					await git.clone(repo, pinnedCloneRoot, { ref: options.ref });
+					const { catalogPath, content } = await readMarketplaceCatalog(pinnedCloneRoot, {
+						relativeDisplayPaths: true,
+					});
+					const pinnedCatalog = parseMarketplaceCatalog(content, catalogPath);
+					const pinnedEntry = pinnedCatalog.plugins.find(p => p.name === name);
+					if (!pinnedEntry) {
+						throw new Error(`Plugin "${name}" is not part of marketplace "${marketplace}" at ${options.ref}.`);
+					}
+					pluginEntry = pinnedEntry;
+					marketplaceClonePath = pinnedCloneRoot;
+					catalogMetadata = pinnedCatalog.metadata;
+				} catch (err) {
+					await fs.rm(pinnedCloneRoot, { recursive: true, force: true }).catch(() => {});
+					throw err;
+				}
+			} else {
+				pluginEntry = withSourceRef(pluginEntry, options.ref);
+			}
+		}
+
 		if (mktEntry.sourceType === "url" && typeof pluginEntry.source === "string") {
+			if (pinnedCloneRoot) await fs.rm(pinnedCloneRoot, { recursive: true, force: true }).catch(() => {});
 			throw new Error(
 				`Plugin "${name}" uses a relative source path but marketplace "${marketplace}" was added via URL. ` +
 					`Relative sources require a git or local marketplace. Re-add the marketplace using its git URL.`,
 			);
 		}
 
-		const { dir: sourcePath, tempCloneRoot } = await resolvePluginSource(pluginEntry, {
-			marketplaceClonePath,
-			catalogMetadata: catalog.metadata,
-			tmpDir: os.tmpdir(),
-		});
-		return { pluginEntry, sourcePath, tempCloneRoot };
+		let resolved: { dir: string; tempCloneRoot?: string };
+		try {
+			resolved = await resolvePluginSource(pluginEntry, {
+				marketplaceClonePath,
+				catalogMetadata,
+				tmpDir: os.tmpdir(),
+			});
+		} catch (err) {
+			if (pinnedCloneRoot) await fs.rm(pinnedCloneRoot, { recursive: true, force: true }).catch(() => {});
+			throw err;
+		}
+		return {
+			pluginEntry,
+			sourcePath: resolved.dir,
+			tempCloneRoot: resolved.tempCloneRoot ?? pinnedCloneRoot,
+			marketplaceEntry: mktEntry,
+			catalogMetadata,
+			catalogVersion,
+		};
+	}
+
+	/**
+	 * Selectable versions for one plugin: the repository's tags, plus the
+	 * catalog version and the installed version so the list always explains
+	 * both ends even when the repository publishes no tags.
+	 */
+	async pluginVersionChoices(name: string, marketplace: string): Promise<PluginVersionChoices> {
+		const marketplaceEntry = await this.#resolveMarketplaceEntry(marketplace);
+		const catalog = await this.#readCatalog(marketplaceEntry);
+		const pluginEntry = catalog.plugins.find(p => p.name === name);
+		if (!pluginEntry) throw new Error(`Plugin "${name}" not found in marketplace "${marketplace}"`);
+
+		const identity = pluginSourceIdentity(pluginEntry, marketplaceEntry, catalog.metadata);
+		let listed: PluginVersionRef[] = [];
+		if (identity.repo) {
+			try {
+				listed = await (this.#opts.listVersions ?? listRemotePluginVersions)(identity.repo);
+			} catch (err) {
+				logger.warn("Failed to list plugin versions", { plugin: name, marketplace, error: String(err) });
+			}
+		}
+
+		const byVersion = new Map(listed.map(version => [version.version, version]));
+		const ensure = (version: string | undefined): void => {
+			if (version !== undefined && version.length > 0 && !byVersion.has(version)) {
+				// No tag publishes it; the catalog (or the installed copy) is the
+				// only source, so there is no ref an install could check out.
+				byVersion.set(version, { version, ref: "" });
+			}
+		};
+		ensure(pluginEntry.version);
+		const installed = await this.#findInBothRegistries(buildPluginId(name, marketplace));
+		ensure(installed.projectEntries?.[0]?.version ?? installed.userEntries?.[0]?.version);
+
+		const active = installed.projectEntries?.[0] ?? installed.userEntries?.[0];
+		const sourceChanged =
+			active?.sourceRepo !== undefined &&
+			!samePluginSource(identity, { repo: active.sourceRepo, path: active.sourcePath ?? "" });
+
+		return { versions: sortVersionRefs([...byVersion.values()]), sourceChanged };
+	}
+
+	/** Git ref that delivers `targetVersion`, or undefined when the catalog already is that version. */
+	async #resolveTargetRef(name: string, marketplace: string, targetVersion: string): Promise<string | undefined> {
+		const marketplaceEntry = await this.#resolveMarketplaceEntry(marketplace);
+		const catalog = await this.#readCatalog(marketplaceEntry);
+		const pluginEntry = catalog.plugins.find(p => p.name === name);
+		if (!pluginEntry) throw new Error(`Plugin "${name}" not found in marketplace "${marketplace}"`);
+		if (pluginEntry.version === targetVersion) return undefined;
+
+		const { versions } = await this.pluginVersionChoices(name, marketplace);
+		const match = versions.find(candidate => candidate.version === targetVersion);
+		if (!match || match.ref.length === 0) {
+			throw new Error(`Version ${targetVersion} is not published for plugin "${name}@${marketplace}".`);
+		}
+		return match.ref;
+	}
+
+	/**
+	 * Delete cache directories of `entries` that neither registry references
+	 * any more. `keepPath` is the directory the caller is about to register,
+	 * so a same-version reinstall never deletes the copy it just wrote.
+	 */
+	async #deleteUnreferencedInstalls(entries: readonly InstalledPluginEntry[], keepPath?: string): Promise<void> {
+		if (entries.length === 0) return;
+		const [userReg, projectReg] = await Promise.all([
+			readInstalledPluginsRegistry(this.#opts.installedRegistryPath),
+			this.#opts.projectInstalledRegistryPath
+				? readInstalledPluginsRegistry(this.#opts.projectInstalledRegistryPath)
+				: Promise.resolve({ version: 2 as const, plugins: {} as Record<string, InstalledPluginEntry[]> }),
+		]);
+		const referenced = collectReferencedPaths(userReg, projectReg);
+		for (const entry of entries) {
+			if (entry.installPath === keepPath) continue;
+			if (referenced.has(entry.installPath)) continue;
+			await fs.rm(entry.installPath, { recursive: true, force: true }).catch(() => {});
+		}
 	}
 
 	/**
@@ -767,8 +986,25 @@ export class MarketplaceManager {
 		return updates;
 	}
 
-	// Re-install a specific plugin at the latest catalog version (force-overwrites).
-	async upgradePlugin(pluginId: string, scope?: "user" | "project"): Promise<InstalledPluginEntry> {
+	/**
+	 * Move an installed plugin to a newer version.
+	 *
+	 * - `targetVersion` picks a published version; omitted means the catalog's
+	 *   current version (the pre-existing "latest" behaviour).
+	 * - A target older than the installed version is refused: the only way to
+	 *   go back is removing the plugin and installing explicitly.
+	 * - A catalog that now resolves to another repository or directory is a
+	 *   replacement, not an update; it is refused unless `allowReplace` was
+	 *   confirmed as a reinstall.
+	 * - The previous cache directory survives the install, so any failure
+	 *   restores the previous registry entry and runtime link instead of
+	 *   leaving the plugin half-installed.
+	 */
+	async upgradePlugin(
+		pluginId: string,
+		scope?: "user" | "project",
+		options: PluginUpgradeOptions = {},
+	): Promise<InstalledPluginEntry> {
 		const parsed = parsePluginId(pluginId);
 		if (!parsed) {
 			throw new Error(`Invalid plugin ID: "${pluginId}". Expected "name@marketplace".`);
@@ -799,12 +1035,126 @@ export class MarketplaceManager {
 			resolvedScope = "user";
 		}
 
-		return this.installPlugin(parsed.name, parsed.marketplace, { force: true, scope: resolvedScope });
+		const previousEntries = (resolvedScope === "project" ? projectEntries : userEntries)!;
+		const previous = previousEntries[0]!;
+
+		const marketplaceEntry = await this.#resolveMarketplaceEntry(parsed.marketplace);
+		const catalog = await this.#readCatalog(marketplaceEntry);
+		const catalogEntry = catalog.plugins.find(p => p.name === parsed.name);
+		if (!catalogEntry) {
+			throw new Error(`Plugin "${pluginId}" is no longer in marketplace "${parsed.marketplace}".`);
+		}
+
+		const targetVersion = options.targetVersion ?? catalogEntry.version;
+		if (
+			targetVersion !== undefined &&
+			targetVersion !== previous.version &&
+			!isNewerVersion(targetVersion, previous.version)
+		) {
+			throw new Error(
+				`Plugin "${pluginId}" is installed at ${previous.version}; refusing to downgrade to ${targetVersion}. ` +
+					`Remove the plugin and install the older version explicitly.`,
+			);
+		}
+
+		// Same repository, same directory: an update moves the copy, it never
+		// swaps it for another project's code.
+		if (previous.sourceRepo !== undefined) {
+			const targetIdentity = pluginSourceIdentity(catalogEntry, marketplaceEntry, catalog.metadata);
+			const installedIdentity = { repo: previous.sourceRepo, path: previous.sourcePath ?? "" };
+			if (!samePluginSource(targetIdentity, installedIdentity) && !options.allowReplace) {
+				throw new Error(
+					`Plugin "${pluginId}" now resolves to ${describeSource(targetIdentity)} ` +
+						`instead of ${describeSource(installedIdentity)}. Replacing a plugin with a different ` +
+						`Git source requires an explicit reinstall.`,
+				);
+			}
+		}
+
+		let installed: InstalledPluginEntry;
+		try {
+			installed = await this.installPlugin(parsed.name, parsed.marketplace, {
+				force: true,
+				scope: resolvedScope,
+				targetVersion: options.targetVersion,
+				expectedVersion: options.expectedVersion,
+				retainPrevious: true,
+			});
+		} catch (error) {
+			await this.#restorePreviousInstall(resolvedScope, pluginId, previousEntries);
+			await this.#prunePluginCache(parsed.marketplace, parsed.name);
+			throw error;
+		}
+		// The upgrade is committed; cleaning up the previous copy is best-effort
+		// and must not undo a successful install.
+		await this.#deleteUnreferencedInstalls(previousEntries);
+		return installed;
+	}
+
+	/**
+	 * Put the previous registry entry and runtime link back after a failed
+	 * upgrade. Best-effort: the registry write is what matters, and a failure
+	 * here must not mask the original error.
+	 */
+	async #restorePreviousInstall(
+		scope: "user" | "project",
+		pluginId: string,
+		entries: readonly InstalledPluginEntry[],
+	): Promise<void> {
+		const registryPath = this.#registryPath(scope);
+		try {
+			const reg = await readInstalledPluginsRegistry(registryPath);
+			await writeInstalledPluginsRegistry(registryPath, {
+				...reg,
+				plugins: { ...reg.plugins, [pluginId]: [...entries] },
+			});
+		} catch (err) {
+			logger.warn("Failed to restore the previous plugin registry entry", { pluginId, error: String(err) });
+		}
+
+		const active = entries[0];
+		if (active) {
+			try {
+				const fallbackName = parsePluginId(pluginId)?.name ?? pluginId;
+				const packageName = await this.#resolvePluginPackageName(active.installPath, fallbackName);
+				await this.#registerRuntimePlugin(scope, packageName, active.installPath, active.version, active.enabled);
+			} catch (err) {
+				logger.warn("Failed to restore the previous plugin runtime link", { pluginId, error: String(err) });
+			}
+		}
+		this.#clearCache();
+	}
+
+	/** Drop cache directories of `name@marketplace` that no registry references. */
+	async #prunePluginCache(marketplace: string, name: string): Promise<void> {
+		const prefix = `${marketplace}___${name}___`;
+		let entries: string[];
+		try {
+			entries = await fs.readdir(this.#opts.pluginsCacheDir);
+		} catch {
+			return;
+		}
+		const [userReg, projectReg] = await Promise.all([
+			readInstalledPluginsRegistry(this.#opts.installedRegistryPath),
+			this.#opts.projectInstalledRegistryPath
+				? readInstalledPluginsRegistry(this.#opts.projectInstalledRegistryPath)
+				: Promise.resolve({ version: 2 as const, plugins: {} as Record<string, InstalledPluginEntry[]> }),
+		]);
+		const referenced = collectReferencedPaths(userReg, projectReg);
+		for (const entry of entries) {
+			if (!entry.startsWith(prefix)) continue;
+			const fullPath = path.join(this.#opts.pluginsCacheDir, entry);
+			if (referenced.has(fullPath)) continue;
+			await fs.rm(fullPath, { recursive: true, force: true }).catch(() => {});
+		}
 	}
 
 	// Upgrade a plugin across all scopes where it is installed.
 	// Returns one entry per scope upgraded (0–2 entries).
-	async upgradePluginAcrossScopes(pluginId: string): Promise<InstalledPluginEntry[]> {
+	async upgradePluginAcrossScopes(
+		pluginId: string,
+		options: PluginUpgradeOptions = {},
+	): Promise<InstalledPluginEntry[]> {
 		const parsed = parsePluginId(pluginId);
 		if (!parsed) {
 			throw new Error(`Invalid plugin ID: "${pluginId}". Expected "name@marketplace".`);
@@ -822,11 +1172,11 @@ export class MarketplaceManager {
 		const results: InstalledPluginEntry[] = [];
 
 		if (inProject) {
-			const entry = await this.installPlugin(parsed.name, parsed.marketplace, { force: true, scope: "project" });
+			const entry = await this.upgradePlugin(pluginId, "project", options);
 			results.push(entry);
 		}
 		if (inUser) {
-			const entry = await this.installPlugin(parsed.name, parsed.marketplace, { force: true, scope: "user" });
+			const entry = await this.upgradePlugin(pluginId, "user", options);
 			results.push(entry);
 		}
 

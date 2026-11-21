@@ -103,6 +103,27 @@ musepi plugin enable [--scope user|project] name@marketplace
 musepi plugin disable [--scope user|project] name@marketplace
 ```
 
+## Plugin versions and upgrades
+
+A catalog entry names one version per plugin: the version installing it would deliver now. Older-but-real versions usually exist as Git tags in the repository that serves the plugin, so the plugin detail page lists them and lets you pick which one to move to.
+
+**Where the list comes from.** The repository that supplies the plugin's files:
+
+- a `github` / `url` / `git-subdir` source reads from that repository;
+- a relative `./plugins/x` source reads from the marketplace's own repository.
+
+Tags come from `git ls-remote --tags`. A leading `v` is dropped (`v1.2.3` displays and records as `1.2.3`; the installer checks out the `v1.2.3` ref). The list always contains the catalog version and the installed version, so a repository with no tags — or a local directory that is not a Git repository — shows exactly one version and keeps the original "upgrade to the catalog version" behaviour. Reading the list is best-effort: an offline or unreachable repository yields the catalog/installed versions instead of failing the detail page.
+
+**Upgrading to a chosen version** installs that tag's content, not the current checkout, and records the tag's normalized version as the installed version. The request carries `targetVersion` and `expectedVersion` (the catalog version the user saw), so a catalog that moved between display and confirmation is refused before the cache or registry is written.
+
+**Downgrades are refused.** Moving from `2.0.0` to `1.9.0` fails with an explicit error. Going back is an uninstall plus an explicit install of the older version. A version that cannot be ordered (a free-form tag such as `build-42`) is treated as a candidate, matching the catalog rule that any changed tag is an update.
+
+**Same repository, same directory.** Installation records `sourceRepo` and `sourcePath`. An upgrade may only stay inside that repository and directory. A catalog that now resolves somewhere else is a replacement, not an update: it is refused until the caller confirms a reinstall (`replace: true`), and the GUI confirmation states where the catalog now ships from. Entries installed before these fields existed carry no repository, so the check is unknown rather than failing.
+
+**Failure keeps the previous copy.** The previous cache directory is retained until the new installation is fully registered. If any step fails — clone, compatibility gate, cache write, registry write, runtime link — the previous registry entry and runtime link are restored and the half-installed copy is removed. Cancelling the confirmation writes nothing.
+
+RPC surface: `marketplace.detail` returns `versions` (newest first) and `sourceChanged`; `marketplace.upgrade` accepts `targetVersion`, `expectedVersion`, and `replace`. The CLI keeps upgrading to the catalog version; choosing a published version is a GUI action.
+
 ## Marketplace sources
 
 When you run `/marketplace add <source>`, the system classifies the source:

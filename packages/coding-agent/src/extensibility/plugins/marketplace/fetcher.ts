@@ -198,7 +198,7 @@ export function parseMarketplaceCatalog(content: string, filePath: string): Mark
  */
 const CATALOG_RELATIVE_PATHS: readonly string[] = [".omp-plugin/marketplace.json", ".claude-plugin/marketplace.json"];
 
-async function readMarketplaceCatalog(
+export async function readMarketplaceCatalog(
 	root: string,
 	options: { relativeDisplayPaths?: boolean } = {},
 ): Promise<{ catalogPath: string; displayPath: string; content: string }> {

@@ -114,22 +114,37 @@ export function MarketplaceView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		}
 
 		const ok = await confirm(
-			t("guest.marketplaceUpgradeConfirm", {
-				name,
-				from: action.entry.installedVersion ?? "?",
-				to: action.entry.version ?? "?",
-				source: marketplace,
-			}),
+			action.entry.sourceChanged === true
+				? t("marketplace.replaceConfirm", {
+						name,
+						source: marketplace,
+						version: action.targetVersion ?? action.entry.version ?? "?",
+					})
+				: t("guest.marketplaceUpgradeConfirm", {
+						name,
+						from: action.entry.installedVersion ?? "?",
+						to: action.targetVersion ?? action.entry.version ?? "?",
+						source: marketplace,
+					}),
 			t("guest.pluginUpgrade"),
 		);
 		if (!ok) return;
 		await rpc.request("marketplace.upgrade", {
 			pluginId: `${name}@${marketplace}`,
 			scope: action.entry.installedScope ?? undefined,
+			// Version choice and the drift guard travel together: the user picked
+			// a specific version, so a catalog that moved must not be installed.
+			...(action.targetVersion !== undefined
+				? { targetVersion: action.targetVersion, expectedVersion: action.entry.version }
+				: {}),
+			// Only sent when the source itself changed, i.e. after the user
+			// confirmed replacing the plugin rather than updating it.
+			...(action.entry.sourceChanged === true ? { replace: true } : {}),
 		});
 		if (detail?.name === name && detail.marketplace === marketplace) {
+			const nextVersion = action.targetVersion ?? action.entry.version;
 			setDetail(current =>
-				current ? { ...current, installedVersion: action.entry.version, updateAvailable: false } : current,
+				current ? { ...current, installedVersion: nextVersion, updateAvailable: false } : current,
 			);
 		}
 	};
