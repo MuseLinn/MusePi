@@ -238,20 +238,12 @@ function classNameTokens(source: string): string[] {
  *  its path: a guard that skips a file quietly is the failure mode this test
  *  exists to prevent.
  */
-export function jsxTags(
-	source: string,
-	file: string,
-	parseOptions: { sourceType?: "module" | "script"; plugins?: string[] } = {},
-): { text: string; line: number }[] {
+export function jsxTags(source: string, file: string): { text: string; line: number }[] {
 	let ast: ReturnType<typeof babelParse>;
 	try {
 		// `jsx` is only legal together with a JS/TS dialect; every file this
 		// guard reads is renderer TSX.
-		ast = babelParse(source, {
-			plugins: parseOptions.plugins ?? ["typescript", "jsx"],
-			sourceType: parseOptions.sourceType ?? "module",
-			errorRecovery: false,
-		});
+		ast = babelParse(source, { plugins: ["typescript", "jsx"], sourceType: "module", errorRecovery: false });
 	} catch (error) {
 		throw new Error(`window-drag guard: could not scan ${file}: ${(error as Error).message}`);
 	}
