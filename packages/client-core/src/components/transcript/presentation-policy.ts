@@ -3,7 +3,7 @@
  * independent reading preferences. Renderers select the capabilities below
  * instead of intersecting preference flags at each call site.
  *
- * Mode capabilities (mirroring dsh's presentation policy):
+ * Mode capabilities:
  *
  * - `compact`   — group every round, including the running one; no live
  *                 process detail and no settled reasoning detail.
@@ -38,6 +38,12 @@ export interface TranscriptPresentationPolicy {
 	/** Step group headers for every round (including the running one),
 	 *  historical rounds only, or no rounds. */
 	readonly stepGrouping: "collapsed" | "history" | "none";
+	/** Whether the latest completed round stays expanded until the next user
+	 *  message (`collapseTiming: "next-input"`). Grouping modes keep their
+	 *  header on that round and hold it open; history mode leaves it flat.
+	 *  The fold engine records this on `RoundFold.deferred`, which the
+	 *  transcript's default-open rule consumes. */
+	readonly deferTrailingFold: boolean;
 	/** Show the running command/path/query detail in a live group header. */
 	readonly liveProcessDetail: boolean;
 	/** Whether a settled reasoning row keeps its duration detail
@@ -47,7 +53,7 @@ export interface TranscriptPresentationPolicy {
 	readonly settledReasoningPreview: boolean;
 }
 
-type ModeCapabilities = Omit<TranscriptPresentationPolicy, "collapseTiming" | "foldedReplies">;
+type ModeCapabilities = Omit<TranscriptPresentationPolicy, "collapseTiming" | "foldedReplies" | "deferTrailingFold">;
 
 const MODE_CAPABILITIES: Readonly<Record<TranscriptViewMode, ModeCapabilities>> = {
 	compact: {
@@ -103,11 +109,12 @@ function buildTimingTable(
 	collapseTiming: CollapseTiming,
 	foldedReplies: FoldedReplies,
 ): Readonly<Record<TranscriptViewMode, TranscriptPresentationPolicy>> {
+	const deferTrailingFold = collapseTiming === "next-input";
 	return {
-		compact: { ...MODE_CAPABILITIES.compact, collapseTiming, foldedReplies },
-		standard: { ...MODE_CAPABILITIES.standard, collapseTiming, foldedReplies },
-		detailed: { ...MODE_CAPABILITIES.detailed, collapseTiming, foldedReplies },
-		verbose: { ...MODE_CAPABILITIES.verbose, collapseTiming, foldedReplies },
+		compact: { ...MODE_CAPABILITIES.compact, collapseTiming, foldedReplies, deferTrailingFold },
+		standard: { ...MODE_CAPABILITIES.standard, collapseTiming, foldedReplies, deferTrailingFold },
+		detailed: { ...MODE_CAPABILITIES.detailed, collapseTiming, foldedReplies, deferTrailingFold },
+		verbose: { ...MODE_CAPABILITIES.verbose, collapseTiming, foldedReplies, deferTrailingFold },
 	};
 }
 

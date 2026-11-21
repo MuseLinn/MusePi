@@ -141,16 +141,20 @@ export function deriveTurns(
 			c.spans.set(key, span);
 		}
 		// Whether this round materializes its fold is the policy's decision:
-		// historical rounds always fold; the trailing (still-latest) round
-		// folds when the mode groups live turns, or when the timing says the
-		// completion itself returns it to history.
+		// historical rounds always fold; grouping modes keep a header on the
+		// latest round too (open while running and while deferred), and
+		// history mode folds the trailing round only when the timing says so.
+		const groupsLatestRound = policy.stepGrouping === "collapsed";
 		const foldable =
 			policy.foldCompletedTurns &&
 			policy.stepGrouping !== "none" &&
-			(!isLastTurn || policy.stepGrouping === "collapsed" || (policy.collapseTiming === "completion" && !working));
+			(!isLastTurn || groupsLatestRound || (!policy.deferTrailingFold && !working));
+		// next-input keeps the latest COMPLETED round open until the next
+		// prompt; `RoundFold.deferred` carries that decision to the renderer.
+		const deferred = isLastTurn && !working && policy.deferTrailingFold;
 		const fold = foldable ? span.fold : null;
 		if (fold !== null) {
-			folds.push(roundFoldFromSpan(fold, startIdx, endIdx, entryUserId(startEntry)));
+			folds.push(roundFoldFromSpan(fold, startIdx, endIdx, entryUserId(startEntry), deferred));
 		}
 		units.push({
 			key: startId.startsWith("pos:") ? `turn-${t}` : startId,

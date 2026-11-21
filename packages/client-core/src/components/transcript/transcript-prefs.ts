@@ -58,14 +58,29 @@ export interface TranscriptPrefs {
 	foldedReplies: FoldedReplies;
 }
 
+/** In-memory mirror of the values this session has read or written. Storage
+ *  can be blocked or full (private mode, quota, sandboxed origin); the mirror
+ *  keeps the reader's choice effective for this session instead of silently
+ *  reverting the row to an older stored value. */
+const memory = new Map<string, string>();
+
+/** Keys whose last write failed. Their mirror value outranks a stale stored
+ *  value until a later write succeeds. */
+const unsynced = new Set<string>();
+
 function readEnum<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+	const remembered = memory.get(key);
+	// A failed write means the stored value is older than the reader's choice.
+	if (unsynced.has(key) && allowed.includes(remembered as T)) return remembered as T;
 	try {
 		const value = localStorage.getItem(key);
-		return allowed.includes(value as T) ? (value as T) : fallback;
+		const next = allowed.includes(value as T) ? (value as T) : fallback;
+		memory.set(key, next);
+		return next;
 	} catch {
-		// Storage unavailable (private mode, blocked origin): the default is
-		// always a valid reading of the preference.
-		return fallback;
+		// Storage unreadable: the session's last known choice is the best
+		// available answer, then the default.
+		return allowed.includes(remembered as T) ? (remembered as T) : fallback;
 	}
 }
 
@@ -79,11 +94,16 @@ export function readTranscriptPrefs(): TranscriptPrefs {
 }
 
 function writePref(key: string, value: string): void {
+	// Mirror first: when the write fails the in-memory choice still drives
+	// this session's transcript and settings row; only persistence is lost.
+	memory.set(key, value);
 	try {
 		localStorage.setItem(key, value);
+		unsynced.delete(key);
 	} catch {
-		// Storage full or blocked: the in-memory settings state still drives
-		// the current render; only persistence is lost.
+		// Storage full or blocked — the mirror above is the fallback until a
+		// later write succeeds.
+		unsynced.add(key);
 	}
 	window.dispatchEvent(new Event(TRANSCRIPT_PREFS_CHANGED_EVENT));
 }

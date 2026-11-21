@@ -139,6 +139,11 @@ export interface RoundFold {
 	 *  only — its reasoning and tool cards are process, so they fold with
 	 *  the rest of the round. Empty under the default `"final"`. */
 	replies: number[];
+	/** True when this is the latest completed round and the policy defers its
+	 *  collapse to the next user message (`collapseTiming: "next-input"`).
+	 *  The fold exists (grouping modes keep their header) but the transcript
+	 *  renders it OPEN by default until a later prompt makes it history. */
+	deferred: boolean;
 }
 
 /** Last non-empty text snippet of a toolResult, for the fold preview. */
@@ -282,14 +287,16 @@ function countWorkInside(
  * containing tool/command work folds, INCLUDING the last completed one
  * (the 活动 header then sits directly above the final reply).
  *
- * The presentation policy decides which rounds fold:
+ * The presentation policy decides which rounds fold and how they open:
  * - `stepGrouping: "collapsed"` folds every round, including the one still
- *   running; its reply row keeps streaming while the work folds above it.
+ *   running. The header groups the work; the transcript keeps a RUNNING
+ *   round open by default (see `foldDefaultOpen`), and `collapseTiming`
+ *   decides when the finished one closes.
  * - `"history"` (the default) folds only rounds that are history: the
  *   in-flight round streams flat, and the last completed round folds
  *   according to `collapseTiming` — `completion` folds it as soon as the
- *   agent stops, `next-input` leaves it expanded until the next user
- *   message turns it into history.
+ *   agent stops, `next-input` leaves it flat until the next user message
+ *   turns it into history.
  * - `"none"` (and `foldCompletedTurns: false`) folds nothing.
  */
 export function buildRoundFolds(
@@ -305,24 +312,37 @@ export function buildRoundFolds(
 		const e = entries[i];
 		if (!isTurnStart(e)) continue;
 		// Close the previous turn: it runs up to the row BEFORE this one.
-		if (userIdx >= 0) pushFold(folds, entries, userIdx, userId, i - 1, policy.foldedReplies);
+		if (userIdx >= 0) pushFold(folds, entries, userIdx, userId, i - 1, policy.foldedReplies, false);
 		userIdx = i;
 		// Revert anchors on a real user message only (an advisor has no text to
 		// put back in the composer).
 		userId = e?.type === "message" ? (e.id ?? null) : null;
 	}
 	// Trailing round: everything after the last user message. Whether it folds
-	// is the policy's decision (see the doc above).
+	// is the policy's decision; a deferred completion keeps its header (if the
+	// mode groups) but opens until the next prompt.
 	if (userIdx >= 0 && trailingRoundFolds(policy, working)) {
-		pushFold(folds, entries, userIdx, userId, entries.length - 1, policy.foldedReplies);
+		pushFold(
+			folds,
+			entries,
+			userIdx,
+			userId,
+			entries.length - 1,
+			policy.foldedReplies,
+			!working && policy.deferTrailingFold,
+		);
 	}
 	return folds;
 }
 
 /** Whether the trailing (still-latest) round folds under this policy. */
 function trailingRoundFolds(policy: TranscriptPresentationPolicy, working: boolean): boolean {
+	// Grouping modes keep a header on the latest round in every state — a
+	// deferred round is still grouped, it just opens by default (`deferred`).
 	if (policy.stepGrouping === "collapsed") return true;
-	if (policy.collapseTiming === "next-input") return false;
+	// Historical grouping: next-input leaves the completed trailing round flat
+	// until a later prompt turns it into history; the running round is flat.
+	if (policy.deferTrailingFold) return false;
 	return !working;
 }
 
@@ -459,7 +479,13 @@ export function foldSpan(
  *  and the cached `turn-derive` path both go through it, so a new header field
  *  cannot be added to one builder and forgotten in the other (the web/subagent
  *  counts had to be patched in two places before this existed). */
-export function roundFoldFromSpan(span: FoldSpan, startIdx: number, endIdx: number, userId: string | null): RoundFold {
+export function roundFoldFromSpan(
+	span: FoldSpan,
+	startIdx: number,
+	endIdx: number,
+	userId: string | null,
+	deferred = false,
+): RoundFold {
 	return {
 		startIdx,
 		endIdx,
@@ -477,6 +503,7 @@ export function roundFoldFromSpan(span: FoldSpan, startIdx: number, endIdx: numb
 		preview: span.preview,
 		exempt: span.exemptRel.map(r => r + startIdx),
 		replies: span.repliesRel.map(r => r + startIdx),
+		deferred,
 	};
 }
 
@@ -487,10 +514,44 @@ function pushFold(
 	userId: string | null,
 	endIdx: number,
 	foldedReplies: FoldedReplies,
+	deferred: boolean,
 ): void {
 	const span = foldSpan(entries, startIdx, userId, endIdx, foldedReplies);
 	if (span === null) return;
-	folds.push(roundFoldFromSpan(span, startIdx, endIdx, userId));
+	folds.push(roundFoldFromSpan(span, startIdx, endIdx, userId, deferred));
+}
+
+/**
+ * Default open state of one fold, before per-round reader deviations.
+ *
+ * A grouping mode's fold is a group header, not a request to hide the live
+ * process: while its round is still running the fold opens so the work stays
+ * visible. A deferred completion (`collapseTiming: "next-input"`) also stays
+ * open until a later prompt makes the round history. Everything else follows
+ * the global default (collapsed unless the reader picked expanded), and
+ * `hideToolActivity` still forces the collapsed reading.
+ *
+ * @param fold - the round's fold descriptor.
+ * @param options.working - the agent is running.
+ * @param options.lastEntryIdx - index of the transcript's last row, used to
+ *   recognize the running/in-flight round.
+ * @param options.defaultExpanded - the global 消息自动折叠 choice.
+ * @param options.hideToolActivity - `display.hideToolActivity` owns the
+ *   process behind the fold.
+ */
+export function foldDefaultOpen(
+	fold: RoundFold,
+	options: {
+		working: boolean;
+		lastEntryIdx: number;
+		defaultExpanded: boolean;
+		hideToolActivity?: boolean;
+	},
+): boolean {
+	if (options.hideToolActivity === true) return false;
+	if (fold.deferred) return true;
+	if (options.working && fold.endIdx === options.lastEntryIdx) return true;
+	return options.defaultExpanded;
 }
 
 /** True when the entry at `idx` belongs inside a fold's foldable span. */

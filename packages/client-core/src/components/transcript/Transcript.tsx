@@ -47,7 +47,7 @@ import { type TranscriptPresentationPolicy, transcriptPresentationPolicy } from 
 import { collectQuoteMarks } from "./quote-anchor";
 import { QuoteHighlightLayer } from "./quote-highlight";
 import { roundTimerKeyByRow } from "./render-units";
-import { planLiveActivityTrim, type RoundFold, type ToolRunSummary } from "./round-collapse";
+import { foldDefaultOpen, planLiveActivityTrim, type RoundFold, type ToolRunSummary } from "./round-collapse";
 import { classifyTranscriptRow, hasTextBlock } from "./row-kinds";
 import {
 	anchorActionAfterContentChange,
@@ -232,7 +232,9 @@ export interface TranscriptProps {
 	/** Long user messages clamp to two lines with an expand toggle. */
 	collapseLongUserMessages?: boolean;
 	/** Completed-round activity folds default EXPANDED — default false (collapsed).
-	 *  User toggles per round still win either way. */
+	 *  User toggles per round still win either way. A grouping mode's RUNNING
+	 *  round and a round whose collapse is deferred (`next-input`) open
+	 *  regardless of this default (see `foldDefaultOpen`). */
 	defaultRoundFoldExpanded?: boolean;
 	/** 工具调用汇总 (Kimi parity, default ON): within a turn, stretches of ≥2
 	 *  consecutive work rows summarize into ONE category-aggregated line
@@ -1878,10 +1880,23 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// other on its own.
 	const errorPlan = useMemo(() => planErrorSurfaces(entries), [entries]);
 
-	const foldsExpanded = defaultRoundFoldExpanded && !hideToolActivity;
+	// Default open state: a grouping mode's header on the RUNNING round stays
+	// open (the process is what the reader is watching), and a round whose
+	// collapse is deferred by `next-input` stays open until the next prompt.
+	// Per-round reader deviations still win either way.
+	const foldDefaultOpenOf = useCallback(
+		(f: RoundFold): boolean =>
+			foldDefaultOpen(f, {
+				working,
+				lastEntryIdx: entries.length - 1,
+				defaultExpanded: defaultRoundFoldExpanded,
+				hideToolActivity,
+			}),
+		[entries.length, working, defaultRoundFoldExpanded, hideToolActivity],
+	);
 	const foldOpenOf = useCallback(
-		(f: RoundFold): boolean => roundFoldOpen.has(foldKeyOf(f)) !== foldsExpanded,
-		[roundFoldOpen, foldsExpanded, foldKeyOf],
+		(f: RoundFold): boolean => roundFoldOpen.has(foldKeyOf(f)) !== foldDefaultOpenOf(f),
+		[roundFoldOpen, foldDefaultOpenOf, foldKeyOf],
 	);
 
 	// 工具调用汇总 (Kimi parity): consecutive work runs (round-collapse
@@ -2631,7 +2646,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// header renders ABOVE the final assistant message; the in-span
 		// working rows render only while that fold is expanded.
 		// 隐藏工具活动 implies "collapsed into 活动": the fold owns the
-		// process so nothing becomes unreachable. (foldOpenOf / foldsExpanded
+		// process so nothing becomes unreachable. (foldOpenOf / foldDefaultOpen
 		// live at component scope — fold keys are the round's user-message id,
 		// stable across history prepends.)
 		// The fold this row belongs to — by header row, by reply row, or by

@@ -10,7 +10,12 @@ import {
 	presentationPolicyFor,
 	transcriptPresentationPolicy,
 } from "@musepi/client-core/src/components/transcript/presentation-policy";
-import { buildRoundFolds, foldSpan, isInsideFold } from "@musepi/client-core/src/components/transcript/round-collapse";
+import {
+	buildRoundFolds,
+	foldDefaultOpen,
+	foldSpan,
+	isInsideFold,
+} from "@musepi/client-core/src/components/transcript/round-collapse";
 import {
 	COLLAPSE_TIMING_KEY,
 	FOLDED_REPLIES_KEY,
@@ -21,7 +26,11 @@ import {
 	TRANSCRIPT_PREFS_CHANGED_EVENT,
 	TRANSCRIPT_VIEW_KEY,
 } from "@musepi/client-core/src/components/transcript/transcript-prefs";
-import { createTurnDeriveCache, deriveTurns } from "@musepi/client-core/src/components/transcript/turn-derive";
+import {
+	createTurnDeriveCache,
+	deriveTurns,
+	deriveTurnsUncached,
+} from "@musepi/client-core/src/components/transcript/turn-derive";
 import type { SessionEntry } from "@musepi/pi-wire";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -83,6 +92,7 @@ describe("transcript presentation policy", () => {
 			mode: "compact",
 			foldCompletedTurns: true,
 			stepGrouping: "collapsed",
+			deferTrailingFold: false,
 			liveProcessDetail: false,
 			settledReasoningPreview: false,
 		});
@@ -90,6 +100,7 @@ describe("transcript presentation policy", () => {
 			mode: "standard",
 			foldCompletedTurns: true,
 			stepGrouping: "collapsed",
+			deferTrailingFold: false,
 			liveProcessDetail: true,
 			settledReasoningPreview: true,
 		});
@@ -97,6 +108,7 @@ describe("transcript presentation policy", () => {
 			mode: "detailed",
 			foldCompletedTurns: true,
 			stepGrouping: "history",
+			deferTrailingFold: false,
 			liveProcessDetail: true,
 			settledReasoningPreview: true,
 		});
@@ -104,15 +116,23 @@ describe("transcript presentation policy", () => {
 			mode: "verbose",
 			foldCompletedTurns: false,
 			stepGrouping: "none",
+			deferTrailingFold: false,
 			liveProcessDetail: false,
 			settledReasoningPreview: true,
 		});
+		// Every mode defers the trailing round under next-input — the timing
+		// is independent of the grouping choice.
+		for (const mode of ["compact", "standard", "detailed", "verbose"] as const) {
+			expect(presentationPolicyFor(mode, "next-input").deferTrailingFold).toBe(true);
+			expect(presentationPolicyFor(mode, "completion").deferTrailingFold).toBe(false);
+		}
 	});
 
 	it("defaults to the behavior the transcript had before these preferences", () => {
 		const policy = presentationPolicyFor("detailed");
 		expect(policy.collapseTiming).toBe("completion");
 		expect(policy.foldedReplies).toBe("final");
+		expect(policy.deferTrailingFold).toBe(false);
 		expect(presentationPolicyFor("detailed", "completion", "final")).toBe(policy);
 		expect(presentationPolicyFor("detailed", "completion")).toBe(policy);
 	});
@@ -155,6 +175,12 @@ describe("default reading equals the previous fixed collapse policy", () => {
 		);
 		// The running round streams flat (the old behavior).
 		expect(buildRoundFolds(entries, true)).toHaveLength(0);
+		// The finished round folds closed: no deferral, global default decides.
+		const fold = folds[0]!;
+		expect(fold.deferred).toBe(false);
+		expect(foldDefaultOpen(fold, { working: false, lastEntryIdx: entries.length - 1, defaultExpanded: false })).toBe(
+			false,
+		);
 	});
 
 	it("keeps only the final reply visible by default", () => {
@@ -202,6 +228,93 @@ describe("collapseTiming=next-input defers the latest completed round", () => {
 		const folds = buildRoundFolds(entries, false, immediate);
 		expect(folds).toHaveLength(1);
 		expect(folds[0]!.startIdx).toBe(0);
+	});
+});
+
+// ── Grouping modes + next-input (running round stays open) ───────────────
+
+describe("grouping modes defer the trailing fold instead of hiding it", () => {
+	it.each(["compact", "standard"] as const)(
+		"%s keeps a running group open and defers the finished one (builder)",
+		mode => {
+			const entries = twoStepRound();
+			const lastEntryIdx = entries.length - 1;
+			const deferred = presentationPolicyFor(mode, "next-input");
+			expect(deferred.deferTrailingFold).toBe(true);
+			expect(deferred.stepGrouping).toBe("collapsed");
+
+			// Running: the header groups the in-flight round but must not hide
+			// its process (dsh turnClosed === false → always open).
+			const running = buildRoundFolds(entries, true, deferred);
+			expect(running).toHaveLength(1);
+			expect(running[0]!.deferred).toBe(false);
+			expect(foldDefaultOpen(running[0]!, { working: true, lastEntryIdx, defaultExpanded: false })).toBe(true);
+
+			// Finished: the round stays open until the next prompt.
+			const idle = buildRoundFolds(entries, false, deferred);
+			expect(idle).toHaveLength(1);
+			expect(idle[0]!.deferred).toBe(true);
+			expect(foldDefaultOpen(idle[0]!, { working: false, lastEntryIdx, defaultExpanded: false })).toBe(true);
+
+			// Next prompt: the earlier round is history and closes under the
+			// global default; the new trailing round has no work to fold.
+			const history = [...entries, userMsg("next question"), assistantText("next answer")];
+			const folds = buildRoundFolds(history, false, deferred);
+			expect(folds).toHaveLength(1);
+			expect(folds[0]!.deferred).toBe(false);
+			expect(
+				foldDefaultOpen(folds[0]!, {
+					working: false,
+					lastEntryIdx: history.length - 1,
+					defaultExpanded: false,
+				}),
+			).toBe(false);
+
+			// completion closes the finished trailing round immediately.
+			const completed = buildRoundFolds(entries, false, presentationPolicyFor(mode, "completion"))[0]!;
+			expect(completed.deferred).toBe(false);
+			expect(foldDefaultOpen(completed, { working: false, lastEntryIdx, defaultExpanded: false })).toBe(false);
+		},
+	);
+
+	it.each(["compact", "standard"] as const)("%s materializes the deferred fold in deriveTurns", mode => {
+		const entries = twoStepRound();
+		const cache = createTurnDeriveCache();
+		const deferred = presentationPolicyFor(mode, "next-input");
+		const idle = deriveTurns(entries, false, cache, deferred);
+		expect(idle.folds).toHaveLength(1);
+		expect(idle.folds[0]!.deferred).toBe(true);
+		expect(idle.folds).toEqual(deriveTurnsUncached(entries, false, deferred).folds);
+
+		const running = deriveTurns(entries, true, cache, deferred);
+		expect(running.folds).toHaveLength(1);
+		expect(running.folds[0]!.deferred).toBe(false);
+
+		const completed = deriveTurns(entries, false, cache, presentationPolicyFor(mode, "completion"));
+		expect(completed.folds[0]!.deferred).toBe(false);
+	});
+
+	it("opens only the running group, not earlier history", () => {
+		const entries = [
+			...twoStepRound(),
+			userMsg("next question"),
+			assistantToolCall("c3"),
+			toolResult("c3"),
+			assistantText("next answer"),
+		];
+		const folds = buildRoundFolds(entries, true, presentationPolicyFor("compact", "completion"));
+		expect(folds).toHaveLength(2);
+		const options = { working: true, lastEntryIdx: entries.length - 1, defaultExpanded: false };
+		expect(foldDefaultOpen(folds[0]!, options)).toBe(false);
+		expect(foldDefaultOpen(folds[1]!, options)).toBe(true);
+	});
+
+	it("detailed next-input still leaves the trailing round flat", () => {
+		expect(buildRoundFolds(twoStepRound(), false, presentationPolicyFor("detailed", "next-input"))).toHaveLength(0);
+		expect(
+			deriveTurns(twoStepRound(), false, createTurnDeriveCache(), presentationPolicyFor("detailed", "next-input"))
+				.folds,
+		).toHaveLength(0);
 	});
 });
 
@@ -277,6 +390,36 @@ describe("transcript preferences", () => {
 			foldedReplies: "all",
 		});
 		expect(events).toBe(3);
+	});
+
+	it("keeps the chosen value when storage rejects writes", () => {
+		// happy-dom's WebIDL storage cannot be patched per method, so swap the
+		// global for a stub that accepts reads but refuses writes.
+		const realStorage = globalThis.localStorage;
+		const stored = new Map<string, string>();
+		const stub = {
+			getItem: (key: string): string | null => stored.get(key) ?? null,
+			setItem: (): void => {
+				throw new Error("blocked");
+			},
+			removeItem: (): void => {},
+			clear: (): void => {
+				stored.clear();
+			},
+		} as unknown as Storage;
+		Object.defineProperty(globalThis, "localStorage", { configurable: true, value: stub });
+		try {
+			setTranscriptView("compact");
+			setCollapseTiming("next-input");
+			// The mirror carries the choice even though nothing was stored.
+			expect(readTranscriptPrefs()).toMatchObject({ transcriptView: "compact", collapseTiming: "next-input" });
+			expect(stored.size).toBe(0);
+		} finally {
+			Object.defineProperty(globalThis, "localStorage", { configurable: true, value: realStorage });
+			// A successful write re-syncs the mirror and clears the unsynced mark.
+			setTranscriptView("detailed");
+			setCollapseTiming("completion");
+		}
 	});
 });
 
