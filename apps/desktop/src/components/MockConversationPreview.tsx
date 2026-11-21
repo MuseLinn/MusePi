@@ -37,21 +37,28 @@ import { ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import "../i18n/preview";
+import { agentDisplayName, agentRoleLabel, DEFAULT_AGENT_ROLE } from "../lib/surfaces/agent-role";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
 
 /**
  * Agent identity capsule for the mock — the real `.gui-agent-capsule` pill,
  * centered in its own band because the chat's absolutely-positioned head row
- * has no counterpart here. `showAvatar` is the 显示头像 toggle: it drops the
- * orb and keeps the status text, exactly as the real capsule behaves.
+ * has no counterpart here. Same reading as the chat's, in the same order: the
+ * orb at the capsule's 24px, the agent name, the workbench lane's role tag,
+ * then the live state. `showAvatar` is the 显示头像 toggle: it drops the orb
+ * and keeps the rest, exactly as the real capsule behaves.
  */
 function MockAgentCapsule({ showAvatar = true }: { showAvatar?: boolean }): ReactNode {
+	const role = DEFAULT_AGENT_ROLE;
+	const displayName = agentDisplayName(role);
+	const roleLabel = agentRoleLabel(role);
 	return (
 		<div className="gui-effect-preview-identity">
-			<div className="gui-agent-capsule" data-agent-status="idle" title={t("general.assistant")}>
-				{showAvatar && <AgentAvatar state="listening" size={20} />}
-				<span className="gui-agent-capsule-name">{t("general.assistant")}</span>
+			<div className="gui-agent-capsule" data-agent-status="idle" data-agent-role={role.id} title={displayName}>
+				{showAvatar && <AgentAvatar state="listening" size={24} />}
+				<span className="gui-agent-capsule-name">{displayName}</span>
+				{roleLabel !== displayName && <span className="gui-agent-role-tag">{roleLabel}</span>}
 				<span className="gui-agent-capsule-sep" aria-hidden="true" />
 				<span className="gui-agent-capsule-status">{t("general.agentCapsuleIdle")}</span>
 			</div>

@@ -106,6 +106,7 @@ import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compa
 	type: "text",
 };
 import { createRemoteApprovalProvider } from "../remote-access/approval-provider";
+import { agentRoleOf } from "../session/agent-role";
 import { BlobStore, isBlobRef, resolveImageData } from "../session/blob-store";
 import type { CompactMode } from "../session/compact-modes";
 import { collectPendingToolCalls } from "../session/exit-diagnostics";
@@ -2191,17 +2192,33 @@ export class DaemonServer {
 				// not bring the old workspace's history back — only sessions created
 				// after the removal show (sessionHiddenByWorkspace).
 				const deletedWorkspaces = await this.#services.get<WorkspaceService>("workspaces").deletedWorkspaces();
-				const rows =
+				const listed =
 					deletedWorkspaces.roots.size === 0 && Object.keys(deletedWorkspaces.deletedAt).length === 0
 						? await this.#host.knownSessions()
 						: (await this.#host.knownSessions()).filter(
 								r => !sessionHiddenByWorkspace(r.cwd, r.createdAt, deletedWorkspaces),
 							);
+				// Optional single-session scope (the chat capsule reads its own
+				// row instead of the whole list). Unknown ids return an empty list,
+				// exactly like a list that does not contain them.
+				const only =
+					typeof (params as { sessionId?: unknown } | undefined)?.sessionId === "string"
+						? (params as { sessionId: string }).sessionId
+						: null;
+				const rows = only === null ? listed : listed.filter(r => r.sessionId === only);
 				// 子代理数(侧栏会话行展开):来自磁盘名册的父子关系,而不是注册表
 				// ——一次性子代理跑完即 unregister,注册表口径会让历史会话的
 				// chevron 消失,子会话再也展不开。
+				//
+				// TWO hazards, both covered by the comment rather than a silent change:
+				//  - it is computed over the WHOLE listing, not over `rows`: a
+				//    `sessionId`-scoped read would otherwise report `agentCount: 0`
+				//    for every row, silently changing an existing field's meaning
+				//    on a reused route (the chat capsule reads exactly that way);
+				//  - advisor transcripts are children too but are not task
+				//    subagents, so they never inflate the chevron count.
 				const subagentCounts = new Map<string, number>();
-				for (const r of rows) {
+				for (const r of listed) {
 					if (r.subagent !== true || r.advisor === true || !r.parentId) continue;
 					subagentCounts.set(r.parentId, (subagentCounts.get(r.parentId) ?? 0) + 1);
 				}
@@ -2221,6 +2238,10 @@ export class DaemonServer {
 						subagent: r.subagent === true,
 						/** 顾问 transcript 行:GUI 渲染顾问标记且保持只读。 */
 						advisor: r.advisor === true,
+						/** 这段会话的 agent 坐在哪个角色里(`coder` 工作台 / `subagent`
+						 *  任务子代理 / `advisor` 顾问记录):`id` 是契约,可读名由客户端
+						 *  本地化。无角色信息的历史会话回退 `coder`。 */
+						agentRole: agentRoleOf(r),
 						/** 是哪个子代理(`session_init.agent`):侧栏子行据此标注,
 						 *  行标题是实例 id,回答不了这个问题。 */
 						agentName: r.advisor === true ? undefined : r.agentName,

@@ -80,6 +80,13 @@ import {
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
 import {
+	ADVISOR_AGENT_ROLE,
+	agentDisplayName,
+	agentRoleLabel,
+	DEFAULT_AGENT_ROLE,
+	useAgentRole,
+} from "../lib/surfaces/agent-role";
+import {
 	AGENT_INFO_SURFACE,
 	COMPACTION_PANEL_SURFACE,
 	compactionTabDescriptor,
@@ -887,8 +894,14 @@ export function ChatView({
 	);
 	// Avatar display toggle lives in Settings → appearance (musepi-gui-avatars).
 	// The per-row avatars are gone (one identity per conversation), so this now
-	// decides whether the agent capsule carries the orb or the status text alone.
+	// decides whether the agent capsule carries the orb or the text alone.
 	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
+	// The agent's role: the daemon's `session.list` row is the source, with a
+	// synchronous fallback so the capsule never waits to show an identity — the
+	// workbench lane's `coder`, or `advisor` for the read-only transcript the app
+	// already identified. A subagent session reads back as its own agent; it is
+	// never relabeled as the session's coder.
+	const agentRole = useAgentRole(rpc, store?.sessionId ?? null, readOnly ? ADVISOR_AGENT_ROLE : DEFAULT_AGENT_ROLE);
 	// The capsule's status line. Approvals lead: the agent is parked on a
 	// decision, which is the one state the human can act on.
 	const agentCapsuleStatus = snap?.approvals.length
@@ -3211,9 +3224,12 @@ export function ChatView({
 											 * head row, so it covers no message, none of the sticky
 											 * prompt and none of the composer; scrolling moves only
 											 * the rows beneath it (pinned chrome, never faded).
+											 * Horizontal: the orb, the assistant name, a compact role
+											 * tag (the lane the agent runs in), then the live state.
 											 * Chat only: the canvas has its own top controls and no
-											 * reserved band. `data-agent-status` is the stable hook
-											 * the geometry test asserts on. */}
+											 * reserved band. `data-agent-status` / `data-agent-role`
+											 * are the stable hooks the geometry and role tests assert
+											 * on. */}
 											{viewMode === "chat" && (
 												<button
 													type="button"
@@ -3221,6 +3237,7 @@ export function ChatView({
 													data-agent-status={
 														snap?.approvals.length ? "waiting" : snap?.working ? "working" : "idle"
 													}
+													data-agent-role={agentRole.id}
 													aria-expanded={agentInfoExpanded}
 													title={t(agentInfoExpanded ? "general.agentInfoHide" : "general.agentInfoShow")}
 													onClick={toggleAgentInfo}
@@ -3228,12 +3245,15 @@ export function ChatView({
 													{showAvatars && (
 														<AgentAvatar
 															state={orb}
-															size={20}
+															size={24}
 															signals={agentSignals}
 															seed={store.sessionId}
 														/>
 													)}
-													<span className="gui-agent-capsule-name">{t("general.assistant")}</span>
+													<span className="gui-agent-capsule-name">{agentDisplayName(agentRole)}</span>
+													{agentRoleLabel(agentRole) !== agentDisplayName(agentRole) && (
+														<span className="gui-agent-role-tag">{agentRoleLabel(agentRole)}</span>
+													)}
 													<span className="gui-agent-capsule-sep" aria-hidden="true" />
 													<span className="gui-agent-capsule-status">{agentCapsuleStatus}</span>
 													<span className="gui-agent-capsule-go" aria-hidden="true">

@@ -7,14 +7,21 @@ import { ensureChromiumExecutable } from "../../../packages/coding-agent/src/too
 /**
  * Agent capsule geometry (puppeteer, real cascade).
  *
- * The capsule replaced the per-row orb; two facts are geometric and cannot be
- * asserted in happy-dom:
+ * The capsule replaced the per-row orb; the facts below are geometric and
+ * cannot be asserted in happy-dom:
  *  1. it is centered against the CHAT COLUMN (so the right panel, side panel
  *     and rail all move its center with the column, never the window), and it
  *     sits inside the 52px band the transcript reserves — no message row is
  *     covered at rest;
- *  2. it is pinned, not faded: scrolling the transcript moves the rows and
- *     leaves the capsule's box and opacity untouched.
+ *  2. it stays HORIZONTAL: the orb (enlarged to 24px), the assistant name, the
+ *     role tag and the live state read left to right in one pill;
+ *  3. it is pinned, not faded: scrolling the transcript moves the rows and
+ *     leaves the pill's box and opacity untouched;
+ *  4. at a narrow WINDOW the name folds first, keeping the orb, the role tag
+ *     and the live state clear of the Chat|Canvas switch and the toggle.
+ *
+ * The tall stacked identity head is the right panel's Agent tab — its sticky
+ * geometry lives in test/agent-info-head-geometry.test.ts.
  *
  * The row-width assertions guard the other half of the change: empty gutters
  * reclaim the desktop's 64px orb column + 12px gap at EVERY width (the shared
@@ -71,8 +78,12 @@ const FIXTURE = `
 			<div class="gui-chat-column gui-float-card flex min-h-0 min-w-0 flex-1 flex-col" style="height: 620px; width: 760px; background: var(--color-surface)">
 				<div class="gui-chat-head">
 					<div class="gui-chat-head-left"><div class="gui-surface-mode"><button type="button">对话</button></div></div>
-					<button type="button" class="gui-agent-capsule" aria-expanded="false" data-agent-status="idle">
+					<button type="button" class="gui-agent-capsule" aria-expanded="false" data-agent-status="idle" data-agent-role="coder">
+						<span class="gui-agent-avatar" role="img" aria-label="agent listening">
+							<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor"/></svg>
+						</span>
 						<span class="gui-agent-capsule-name">助手</span>
+						<span class="gui-agent-role-tag">编码</span>
 						<span class="gui-agent-capsule-sep" aria-hidden="true"></span>
 						<span class="gui-agent-capsule-status">空闲</span>
 						<span class="gui-agent-capsule-go" aria-hidden="true">
@@ -186,10 +197,32 @@ async function readBoxes() {
 			column: box(column),
 			capsule: box(capsule),
 			capsuleOpacity: getComputedStyle(capsule).opacity,
+			capsuleName: box(select(".gui-agent-capsule-name")),
+			capsuleNameDisplay: getComputedStyle(select(".gui-agent-capsule-name")).display,
+			roleTag: box(select(".gui-agent-capsule .gui-agent-role-tag")),
+			roleTagDisplay: getComputedStyle(select(".gui-agent-capsule .gui-agent-role-tag")).display,
+			capsuleSep: box(select(".gui-agent-capsule-sep")),
+			capsuleSepDisplay: getComputedStyle(select(".gui-agent-capsule-sep")).display,
+			capsuleStatus: box(select(".gui-agent-capsule-status")),
+			avatar: box(select(".gui-agent-capsule .gui-agent-avatar")),
+			headMode: box(select(".gui-surface-mode")),
+			infoToggle: box(select(".gui-chat-info-toggle")),
 			firstRow: box(rows[0]!),
 			assistantBodies,
 		};
 	});
+}
+
+/** Resize the chat COLUMN the way the side panel and right rail do. */
+async function setColumnWidth(width: number): Promise<void> {
+	await page.evaluate(w => {
+		const column = document.querySelector<HTMLElement>(".gui-chat-column")!;
+		column.style.flex = `0 0 ${w}px`;
+		column.style.width = `${w}px`;
+	}, width);
+	await page.evaluate(() =>
+		Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))),
+	);
 }
 
 describe("agent capsule geometry", () => {
@@ -203,7 +236,29 @@ describe("agent capsule geometry", () => {
 		// so the first message row is never covered at rest.
 		const band = before.firstRow.top - before.column.top;
 		expect(before.capsule.bottom - before.column.top).toBeLessThanOrEqual(band);
-		expect(before.capsule.height).toBe(28);
+		// Still the one-line chrome strip (30px with the enlarged orb), never the
+		// Agent tab's tall identity head.
+		expect(before.capsule.height).toBe(30);
+	});
+
+	test("stays horizontal: enlarged orb, name, role tag, state, arrow in one line", async () => {
+		const boxes = await readBoxes();
+		// The orb grew from 20 to 24 but stays a single-row leading glyph.
+		expect(boxes.avatar.width).toBe(24);
+		expect(boxes.avatar.height).toBe(24);
+		// The orb is vertically centered in the pill.
+		const pillCenter = boxes.capsule.top + boxes.capsule.height / 2;
+		expect(Math.abs(boxes.avatar.top + boxes.avatar.height / 2 - pillCenter)).toBeLessThanOrEqual(1);
+		// Reading order: orb → name → role tag → separator → state.
+		expect(boxes.avatar.right).toBeLessThanOrEqual(boxes.capsuleName.left);
+		expect(boxes.capsuleName.right).toBeLessThanOrEqual(boxes.roleTag.left);
+		expect(boxes.roleTag.right).toBeLessThanOrEqual(boxes.capsuleSep.left);
+		expect(boxes.capsuleSep.right).toBeLessThanOrEqual(boxes.capsuleStatus.left);
+		// Every part stays inside the pill.
+		for (const part of [boxes.avatar, boxes.capsuleName, boxes.roleTag, boxes.capsuleStatus]) {
+			expect(part.top).toBeGreaterThanOrEqual(boxes.capsule.top);
+			expect(part.bottom).toBeLessThanOrEqual(boxes.capsule.bottom);
+		}
 	});
 
 	test("pinned, not faded: scrolling moves rows and leaves the capsule alone", async () => {
@@ -343,7 +398,48 @@ describe("agent capsule geometry", () => {
 		await page.emulateMediaFeatures([{ name: "prefers-reduced-motion", value: "no-preference" }]);
 	});
 
-	test("empty gutters give the body the full row width", async () => {
+	test("folds the name before the role on a narrow window, never colliding with the head", async () => {
+		await page.setViewport({ width: 700, height: 800 });
+		// The pinning test above left the transcript scrolled; the band is only
+		// measurable from the resting position.
+		await page.evaluate(() => {
+			document.querySelector<HTMLElement>(".gui-transcript")!.scrollTop = 0;
+		});
+		const narrow = await readBoxes();
+		// The name and its separator fold; the role tag — what the capsule exists
+		// to show — and the live state stay.
+		expect(narrow.capsuleNameDisplay).toBe("none");
+		expect(narrow.capsuleSepDisplay).toBe("none");
+		expect(narrow.roleTagDisplay).not.toBe("none");
+		expect(narrow.roleTag.width).toBeGreaterThan(0);
+		// Still centered, still inside the band, clear of the head's own controls.
+		const center = narrow.capsule.left + narrow.capsule.width / 2;
+		const columnCenter = narrow.column.left + narrow.column.width / 2;
+		expect(Math.abs(center - columnCenter)).toBeLessThanOrEqual(1);
+		expect(narrow.capsule.left).toBeGreaterThanOrEqual(narrow.headMode.right);
+		expect(narrow.capsule.right).toBeLessThanOrEqual(narrow.infoToggle.left);
+		expect(narrow.capsule.bottom - narrow.column.top).toBeLessThanOrEqual(narrow.firstRow.top - narrow.column.top);
+		await page.setViewport({ width: 1100, height: 800 });
+	});
+
+	test("stays on one line when the column is widened or narrowed", async () => {
+		await setColumnWidth(620);
+		const narrowColumn = await readBoxes();
+		expect(narrowColumn.capsule.height).toBe(30);
+		expect(
+			Math.abs(
+				narrowColumn.capsule.left +
+					narrowColumn.capsule.width / 2 -
+					(narrowColumn.column.left + narrowColumn.column.width / 2),
+			),
+		).toBeLessThanOrEqual(1);
+		await setColumnWidth(900);
+		const wideColumn = await readBoxes();
+		expect(wideColumn.capsule.height).toBe(30);
+		await setColumnWidth(760);
+	});
+
+	test("an empty gutter gives the body the full row width", async () => {
 		const boxes = await readBoxes();
 		const collapsed = boxes.assistantBodies.find(row => row.gutterEmpty);
 		const reserved = boxes.assistantBodies.find(row => !row.gutterEmpty);

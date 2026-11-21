@@ -36,11 +36,36 @@ export const sessionCreate = {
 	impl: "createAgentSession() (daemon runtime)",
 } satisfies MethodEntry;
 
+/** The seat a session's agent runs in — the daemon's own fact, not a label.
+ *  `id` is the contract (`coder` workbench / `subagent` task child /
+ *  `advisor`); a client localizes it and renders an id it does not know from
+ *  the row's `agentName` or the id itself. */
+const agentRoleSchema = Type.Object({
+	id: Type.String({ minLength: 1 }),
+	name: Type.Optional(Type.String()),
+});
+
+/** Host-owned read state of one session (`sessionStatus.list` / the read-reason
+ *  projection `session.list` embeds on every row). */
+const sessionReadStateSchema = Type.Object({
+	sessionId,
+	unread: Type.Boolean(),
+	/** Unread AND the latest completed turn failed — the red sidebar marker. */
+	failed: Type.Boolean(),
+	manualUnread: Type.Boolean(),
+	completedTurn: Type.Integer({ minimum: 0 }),
+	readTurn: Type.Integer({ minimum: 0 }),
+	completedAt: Type.Optional(Type.String()),
+});
+
 export const sessionList = {
 	method: "session.list",
 	auth: "session",
 	params: Type.Object({
 		scope: Type.Optional(Type.Union([Type.Literal("active"), Type.Literal("all")], { default: "active" })),
+		/** Read exactly one row (the chat capsule reads its own session).
+		 *  An unknown id returns `[]`, the same answer as a list without it. */
+		sessionId: Type.Optional(sessionId),
 	}),
 	result: Type.Array(
 		Type.Object({
@@ -57,6 +82,30 @@ export const sessionList = {
 			cwd: Type.Optional(Type.String()),
 			/** Structured session presence; the same shape as `session.presence`. */
 			presence: Type.Optional(sessionPresenceSchema),
+			/** Hierarchical child transcript (the sidebar nests it). */
+			subagent: Type.Optional(Type.Boolean()),
+			/** Advisor transcript: rendered as an advisor and read-only. */
+			advisor: Type.Optional(Type.Boolean()),
+			/** Subagent definition name (`session_init.agent`); the row title is
+			 *  the instance id and cannot answer "which subagent is this". */
+			agentName: Type.Optional(Type.String()),
+			/** The seat this session's agent runs in; always present. */
+			agentRole: agentRoleSchema,
+			/** Child subagent transcripts (advisors excluded) — >0 shows the
+			 *  sidebar's expand chevron. Counted over the whole listing, so a
+			 *  `sessionId`-scoped parent row still reports its subagents. */
+			agentCount: Type.Optional(Type.Integer({ minimum: 0 })),
+			/** Host-owned read state; `sessionStatus.mark` mutates the same record. */
+			read: Type.Optional(sessionReadStateSchema),
+			/** Lifecycle tail (`complete` / `interrupted` / …), for coloring. */
+			status: Type.Optional(Type.String()),
+			/** Set when a cron schedule owns the session. */
+			source: Type.Optional(Type.String({ description: '"cron" when a schedule owns the row' })),
+			working: Type.Optional(Type.Boolean()),
+			live: Type.Optional(Type.Boolean()),
+			updatedAt: Type.Optional(Type.String()),
+			modeId: Type.Optional(Type.String()),
+			paused: Type.Optional(Type.Boolean()),
 		}),
 	),
 	impl: "SessionManager.getTree() / session/session-entries.ts",
