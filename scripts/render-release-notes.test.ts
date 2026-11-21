@@ -11,6 +11,7 @@ import {
 	formatReleaseSummary,
 	listReleaseSections,
 	renderReleaseNotes,
+	resolveReleaseVersion,
 } from "./render-release-notes.ts";
 
 const CHANGELOG = [
@@ -155,14 +156,34 @@ describe("renderReleaseNotes", () => {
 	});
 
 	test("uses the asset tag for downloads but the release tag for comparison", () => {
+		const beta = [
+			"## [1.2.0-beta.1] - 2026-11-22",
+			"",
+			"### 修复",
+			"",
+			"- **乙**：beta 修复。",
+			"",
+			"## [1.1.0] - 2026-10-01",
+			"",
+			"### 修复",
+			"",
+			"- **甲**：上一条修复。",
+			"",
+		].join("\n");
 		const body = renderReleaseNotes({
-			changelog: CHANGELOG,
-			version: "1.2.0",
+			changelog: beta,
+			version: "1.2.0-beta.1",
 			tag: "v1.2.0-beta.1",
 			assetsTag: "channel-beta",
 		});
-		expect(body).toContain(`/releases/download/channel-beta/MusePi-1.2.0-arm64.dmg`);
+		expect(body).toContain(`/releases/download/channel-beta/MusePi-1.2.0-beta.1-arm64.dmg`);
 		expect(body).toContain("/compare/v1.1.0...v1.2.0-beta.1");
+	});
+
+	test("refuses a tag that does not match the version", () => {
+		expect(() => renderReleaseNotes({ changelog: CHANGELOG, version: "1.2.0", tag: "v1.1.0" })).toThrow(
+			'tag "v1.1.0" does not match version 1.2.0',
+		);
 	});
 
 	test("falls back to the releases list when no older section exists", () => {
@@ -189,6 +210,38 @@ describe("buildUpdateNotes", () => {
 		expect(head).toContain("### 新功能");
 		expect(notes).toContain("**甲**：新东西。");
 		expect(notes).toContain("  - EN: A.");
+	});
+});
+
+describe("resolveReleaseVersion", () => {
+	test("derives the version from --tag when --version is omitted", () => {
+		expect(resolveReleaseVersion({ tag: "v1.2.0", packageVersion: "1.1.0" })).toEqual({
+			version: "1.2.0",
+			tag: "v1.2.0",
+		});
+	});
+
+	test("keeps a beta tag and its version aligned", () => {
+		expect(resolveReleaseVersion({ tag: "v1.2.0-beta.1", packageVersion: "1.1.0" })).toEqual({
+			version: "1.2.0-beta.1",
+			tag: "v1.2.0-beta.1",
+		});
+	});
+
+	test("falls back to the package version and v<version>", () => {
+		expect(resolveReleaseVersion({ packageVersion: "1.2.0" })).toEqual({ version: "1.2.0", tag: "v1.2.0" });
+	});
+
+	test("rejects an explicit tag that differs from the version", () => {
+		expect(() => resolveReleaseVersion({ version: "1.2.0", tag: "v1.1.0", packageVersion: "1.2.0" })).toThrow(
+			'tag "v1.1.0" does not match version 1.2.0',
+		);
+	});
+
+	test("rejects a tag without the v prefix", () => {
+		expect(() => resolveReleaseVersion({ tag: "1.2.0", packageVersion: "1.2.0" })).toThrow(
+			'must use the release form "v<version>"',
+		);
 	});
 });
 

@@ -300,7 +300,9 @@ jobs:
               if [[ "${GITHUB_REF_NAME}" == *-beta.* ]]; then
                 assets_tag=channel-beta
               fi
+              app_version="$(node -p "require('./apps/desktop/package.json').version")"
               bun scripts/render-release-notes.ts \
+                --version "${app_version}" \
                 --tag "${GITHUB_REF_NAME}" \
                 --assets-tag "${assets_tag}" \
                 --out dist/RELEASE_NOTES.md \

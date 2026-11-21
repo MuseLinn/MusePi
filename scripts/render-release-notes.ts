@@ -180,6 +180,31 @@ export function buildReleaseLinks(input: {
 	return `${changelog} · ${comparison}`;
 }
 
+/** Derive the released version from a `v<version>` tag. */
+function versionFromTag(tag: string): string {
+	if (!tag.startsWith("v") || tag.length === 1) {
+		throw new Error(`tag "${tag}" must use the release form "v<version>"`);
+	}
+	return tag.slice(1);
+}
+
+/**
+ * Resolve the version and tag the body is rendered for. `--tag` alone derives
+ * the version, so a tag can never silently render another release's section;
+ * when both are given they must agree on `v<version>`.
+ */
+export function resolveReleaseVersion(input: { version?: string; tag?: string; packageVersion: string }): {
+	version: string;
+	tag: string;
+} {
+	const version = input.version ?? (input.tag ? versionFromTag(input.tag) : input.packageVersion);
+	const tag = input.tag ?? `v${version}`;
+	if (tag !== `v${version}`) {
+		throw new Error(`tag "${tag}" does not match version ${version} (expected "v${version}")`);
+	}
+	return { version, tag };
+}
+
 export interface RenderReleaseNotesInput {
 	changelog: string;
 	/** Version being released; must exist as a `## [version]` section. */
@@ -193,6 +218,9 @@ export interface RenderReleaseNotesInput {
 
 /** The GitHub release body: download table, counts line, entries, links. */
 export function renderReleaseNotes(input: RenderReleaseNotesInput): string {
+	if (input.tag !== `v${input.version}`) {
+		throw new Error(`tag "${input.tag}" does not match version ${input.version} (expected "v${input.version}")`);
+	}
 	const sections = listReleaseSections(input.changelog);
 	const index = sections.findIndex(section => section.version === input.version);
 	if (index < 0) {
@@ -265,8 +293,8 @@ function parseOptions(argv: string[]): CliOptions {
 				"Usage: bun scripts/render-release-notes.ts [options]",
 				"  --changelog <path>     CHANGELOG.musepi.md to read",
 				"  --app-package <path>   package.json carrying the app version",
-				"  --version <x.y.z>      released version (default: app package version)",
-				"  --tag <tag>            release tag for the compare link (default: v<version>)",
+				"  --version <x.y.z>      released version (default: --tag without its leading v, else the app package version)",
+				"  --tag <tag>            release tag; must equal v<version> (default: v<version>)",
 				"  --assets-tag <tag>     tag the assets are published under (default: --tag)",
 				"  --repo <owner/name>    repository (default: MuseLinn/MusePi)",
 				"  --out <path>           release body output (default: dist/RELEASE_NOTES.md)",
@@ -298,8 +326,11 @@ async function readAppVersion(packagePath: string): Promise<string> {
 async function main(): Promise<number> {
 	try {
 		const options = parseOptions(process.argv.slice(2));
-		const version = options.version ?? (await readAppVersion(options.appPackagePath));
-		const tag = options.tag ?? `v${version}`;
+		const { version, tag } = resolveReleaseVersion({
+			version: options.version,
+			tag: options.tag,
+			packageVersion: await readAppVersion(options.appPackagePath),
+		});
 		const changelog = await Bun.file(options.changelogPath).text();
 		const section = findReleaseSection(changelog, version);
 		if (!section) throw new Error(`no \`## [${version}]\` section in the changelog`);
