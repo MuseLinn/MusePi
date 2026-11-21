@@ -35,6 +35,7 @@ import {
 } from "../lib/workspace-projects";
 import { fileRootSelection, isRemoteMirrorCwd, resolveWorkspaceRoot, rootSelectionKey } from "../lib/workspace-roots";
 import { Icon } from "../vendor/oc-icons";
+import { UserAccountButton } from "./AppRail";
 import { ContextMenu } from "./ContextMenu";
 import { type CustomGroup, CustomGroups } from "./CustomGroups";
 import { DialogFrame } from "./DialogFrame";
@@ -243,9 +244,10 @@ export function SessionSidebar({
 	/** modes.list catalog (builtin + user-created presets) — forwarded to the
 	 *  hover card's mode row (shared naming chain, lib/mode-label.ts). */
 	modeCatalog?: readonly ModeLabelEntry[] | null;
-	/** Render the bottom instance/shortcuts/settings/remote footer. The two-
-	 *  tier shell hosts those entries in the permanent rail, so app.tsx sets
-	 *  false; other hosts (and the sidebar contract tests) keep the default. */
+	/** Render the bottom footer: instance status on the left, the user/account
+	 *  entry on the right. The two-tier shell hosts both in the permanent rail,
+	 *  so app.tsx sets false; other hosts (and the sidebar contract tests) keep
+	 *  the default. */
 	showFooter?: boolean;
 	/** Bottom-of-panel getting-started checklist. The host owns the card and
 	 *  its actions; the sidebar only supplies the layout slot so the card
@@ -1852,9 +1854,10 @@ export function SessionSidebar({
 				</div>
 				{gettingStarted}
 				{/* User footer: instance info (connection state, latency, host
-				 * switcher) on the left; settings/session actions on the right.
-				 * `showFooter` lets a host move these entries into a permanent
-				 * rail instead of losing them when this panel folds. */}
+				 * switcher) on the left; the account entry (Settings, shortcuts,
+				 * share, hosts, disconnect) on the right. `showFooter` lets a host
+				 * move these entries into a permanent rail instead of losing them
+				 * when this panel folds. */}
 				{showFooter && (
 					<div className="gui-sidebar-footer flex items-center justify-between gap-1.5 border-t border-[var(--border)] px-3 py-2">
 						<InstanceButton
@@ -1872,35 +1875,23 @@ export function SessionSidebar({
 							onOpenManager={onOpenInstanceManager}
 							onOpenDisclaimer={onOpenRemoteDisclaimer}
 						/>
-						<div className="flex items-center gap-1.5">
-							<button
-								type="button"
-								className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-								onClick={onOpenShortcuts}
-								title={t("general.keyboardShortcuts")}
-								aria-label={t("general.keyboardShortcuts")}
-							>
-								<Icon name="command" className="h-4 w-4" />
-							</button>{" "}
-							<button
-								type="button"
-								className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-								onClick={onOpenSettings}
-								title={t("settings.settings")}
-								aria-label={t("settings.settings")}
-							>
-								<Icon name="settings-3" className="h-4 w-4" />
-							</button>
-							<button
-								type="button"
-								className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
-								onClick={onOpenCollab}
-								title={t("settings.shareCurrentSession")}
-								aria-label={t("settings.shareCurrentSession")}
-							>
-								<Icon name="share-2" className="h-4 w-4" />
-							</button>
-						</div>
+						{/* The account control, not a settings gear: the same user
+						 * picture the rail carries, so a host that renders this
+						 * footer gets one settings entry (in the menu) and never a
+						 * second gear. */}
+						<UserAccountButton
+							rpc={rpc ?? null}
+							cwd={sessionMeta.get(selectedId ?? "")?.cwd ?? ""}
+							hosts={hosts}
+							daemonUrl={daemonUrl}
+							connected={connected}
+							onOpenSettings={onOpenSettings}
+							onOpenShortcuts={onOpenShortcuts}
+							onOpenCollab={onOpenCollab}
+							onSwitchHost={onSwitchHost}
+							onDisconnect={onDisconnect}
+							compact={false}
+						/>
 					</div>
 				)}
 			</div>

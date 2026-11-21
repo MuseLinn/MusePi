@@ -5,12 +5,15 @@
  * tr-* classes the chat surface renders), so a setting toggle reads in the
  * preview exactly as it lands in a conversation:
  *
+ *  - one agent identity capsule (.gui-agent-capsule, the real pill) over the
+ *    rows: its orb follows the avatar toggle while the status text stays, so
+ *    the toggle previews what it does in the chat (the user picture lives in
+ *    the rail's account entry and is not part of this preview)
  *  - user messages: .tr-row--user right-side bubble (the transcript's user
- *    row), with the user gutter chip when avatars are on
- *  - assistant messages: .tr-row--assistant with the live AgentAvatar orb
- *    in the gutter (avatar display toggle drives it) + optional row actions
- *    (the voice test mounts its read-aloud button there, same .tr-action
- *    slot the transcript's speak button uses)
+ *    row) with an EMPTY gutter, like the real chat
+ *  - assistant messages: .tr-row--assistant with an empty gutter + optional
+ *    row actions (the voice test mounts its read-aloud button there, same
+ *    .tr-action slot the transcript's speak button uses)
  *  - a collapsed-round 活动 summary row (.tr-round-fold, the real fold
  *    classes) between the sample turns, in BOTH fold states
  *  - the composer card mock (.gui-effect-preview-composer, the frosted-glass
@@ -37,26 +40,34 @@ import "../i18n/preview";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
 
-/** User gutter chip for the mock — the real UserAvatar resolves git/GitHub
- *  identity over RPC; the preview renders the same .gui-user-avatar chip
- *  with the generic user glyph (identity is irrelevant to what is being
- *  previewed). */
-function MockUserAvatar(): ReactNode {
+/**
+ * Agent identity capsule for the mock — the real `.gui-agent-capsule` pill,
+ * centered in its own band because the chat's absolutely-positioned head row
+ * has no counterpart here. `showAvatar` is the 显示头像 toggle: it drops the
+ * orb and keeps the status text, exactly as the real capsule behaves.
+ */
+function MockAgentCapsule({ showAvatar = true }: { showAvatar?: boolean }): ReactNode {
 	return (
-		<span className="gui-user-avatar" title={t("settings.you")}>
-			<Icon name="user" className="h-3.5 w-3.5" />
-		</span>
+		<div className="gui-effect-preview-identity">
+			<div className="gui-agent-capsule" data-agent-status="idle" title={t("general.assistant")}>
+				{showAvatar && <AgentAvatar state="listening" size={20} />}
+				<span className="gui-agent-capsule-name">{t("general.assistant")}</span>
+				<span className="gui-agent-capsule-sep" aria-hidden="true" />
+				<span className="gui-agent-capsule-status">{t("general.agentCapsuleIdle")}</span>
+			</div>
+		</div>
 	);
 }
 
 /** Mock user message — the transcript's user-row markup (right-aligned
- *  bubble); body goes through the shared Markdown renderer. The gutter
- *  carries the user chip only when avatars are on (the real transcript
- *  renders an empty gutter with avatars disabled). */
-export function MockUserRow({ markdown, showAvatar = true }: { markdown: string; showAvatar?: boolean }): ReactNode {
+ *  bubble); body goes through the shared Markdown renderer. The gutter is
+ *  empty like the real chat, where the user picture lives in the rail's
+ *  account entry. `showAvatar` is accepted for existing callers (the voice
+ *  page) and no longer affects the row. */
+export function MockUserRow({ markdown }: { markdown: string; showAvatar?: boolean }): ReactNode {
 	return (
 		<div className="tr-row tr-row--user">
-			<div className="tr-gutter">{showAvatar && <MockUserAvatar />}</div>
+			<div className="tr-gutter" />
 			<div className="tr-body">
 				<Markdown text={markdown} />
 			</div>
@@ -64,23 +75,22 @@ export function MockUserRow({ markdown, showAvatar = true }: { markdown: string;
 	);
 }
 
-/** Mock assistant message — the transcript's assistant-row markup with the
- *  live orb avatar in the gutter; `actions` mounts into the real .tr-actions
- *  slot (voice passes its read-aloud button there). */
+/** Mock assistant message — the transcript's assistant-row markup with an
+ *  empty gutter (the orb is the capsule above); `actions` mounts into the
+ *  real .tr-actions slot (voice passes its read-aloud button there).
+ *  `showAvatar` is accepted for existing callers and no longer affects the
+ *  row. */
 export function MockAssistantRow({
 	markdown,
-	showAvatar = true,
 	actions,
 }: {
 	markdown: string;
-	/** Avatar display toggle (设置 → 外观 → 显示头像) — off renders the bare
-	 *  left column, exactly like the transcript with avatars disabled. */
 	showAvatar?: boolean;
 	actions?: ReactNode;
 }): ReactNode {
 	return (
 		<div className="tr-row tr-row--assistant">
-			<div className="tr-gutter">{showAvatar && <AgentAvatar state="working" size={32} />}</div>
+			<div className="tr-gutter" />
 			<div className="tr-body">
 				<Markdown text={markdown} />
 			</div>
@@ -177,11 +187,12 @@ export function MockComposer({
 	);
 }
 
-/** Assembled simulated conversation: sample user turn → 活动 fold → sample
- *  assistant reply, over the mock composer. Setting toggles drive the
- *  chrome (avatars / info status bar); `extraMessages` appends rows before
- *  the composer (voice accumulates dictated user messages there);
- *  `composer` replaces the static mock input card with a live one. */
+/** Assembled simulated conversation: identity capsule → sample user turn →
+ *  活动 fold → sample assistant reply, over the mock composer. Setting
+ *  toggles drive the chrome (capsule orb / info status bar);
+ *  `extraMessages` appends rows before the composer (voice accumulates
+ *  dictated user messages there); `composer` replaces the static mock input
+ *  card with a live one. */
 export function MockConversationPreview({
 	showAvatars = true,
 	userMarkdown,
@@ -191,7 +202,7 @@ export function MockConversationPreview({
 	composer,
 	streamingDemo = false,
 }: {
-	/** 显示头像 toggle — drives both gutters. */
+	/** 显示头像 toggle — drives the capsule's orb (rows carry no avatars). */
 	showAvatars?: boolean;
 	/** Sample user message (defaults to the appearance sample). */
 	userMarkdown?: string;
@@ -208,14 +219,14 @@ export function MockConversationPreview({
 }): ReactNode {
 	return (
 		<div className="gui-effect-preview">
-			<MockUserRow markdown={userMarkdown ?? t("general.previewUserMessage")} showAvatar={showAvatars} />
+			<MockAgentCapsule showAvatar={showAvatars} />
+			<MockUserRow markdown={userMarkdown ?? t("general.previewUserMessage")} />
 			{/* The opened 活动 block stands for both states: its header IS the
 			 * collapsed summary, and the rows below it are what the toggle
 			 * reveals. One block, aligned to the reply's column. */}
 			<MockExpandedActivity />
 			<MockAssistantRow
 				markdown={assistantMarkdown ?? t("general.previewAgentMessage")}
-				showAvatar={showAvatars}
 				actions={assistantActions}
 			/>
 			{/* The streaming motion demo lives with the sample it animates, so the

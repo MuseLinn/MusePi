@@ -55,7 +55,8 @@ function destinations(): RailItem[] {
 function renderRail(overrides: { onPeekPanel?(id: string): void; onPeekEnd?(): void }) {
 	return createElement(AppRail, {
 		destinations: destinations(),
-		settings: { id: "settings", label: "settings.settings", icon: "settings-3", onSelect() {} },
+		// The account control replaced the settings destination button.
+		account: createElement("button", { type: "button", "data-rail-account": "user" }, "U"),
 		panelAvailable: true,
 		onTogglePanel() {},
 		...overrides,

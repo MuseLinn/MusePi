@@ -17,7 +17,7 @@ import { ActionToastStack } from "./components/ActionToast";
 // to `window.MusePiHostModules.composer`.
 import "./components/Composer";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
-import { AppRail, type RailItem } from "./components/AppRail";
+import { AppRail, type RailItem, UserAccountButton } from "./components/AppRail";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
 import { CapabilitySidePanel } from "./components/CapabilitySidePanel";
@@ -4744,17 +4744,35 @@ function AppInner(): ReactNode {
 			},
 		});
 	}
-	const railSettings: RailItem = {
-		id: "settings",
-		label: "settings.settings",
-		icon: "settings-3",
-		active: settingsActive,
-		onSelect: () => openSettings(),
-	};
+	// The user picture replaced the rail's settings gear: the gear was a
+	// single-purpose button for a menu of account/session actions, so the
+	// picture now owns that slot and the menu (Settings / shortcuts / session
+	// share / workspace remote access / host switching / disconnect). Remote
+	// access keeps BOTH entrances: the session share needs an open session,
+	// while the workspace share (mobile/browser join links) must work on the
+	// welcome page, so they stay separate rows. One permanent entry, no
+	// duplicated gear — it renders in every shape, so settings and remote
+	// access stay reachable with no session.
+	const railAccount = (
+		<UserAccountButton
+			rpc={rpc ?? null}
+			cwd={sessionMeta.get(selectedId ?? "")?.cwd ?? project ?? ""}
+			hosts={hosts}
+			daemonUrl={url}
+			connected={status === "open"}
+			onOpenSettings={openSettings}
+			onOpenShortcuts={() => setShortcutsOpen(true)}
+			onOpenCollab={() => openRemoteAccess("session")}
+			onOpenRemoteAccess={() => openRemoteAccess("workspace")}
+			onSwitchHost={switchHost}
+			onDisconnect={disconnect}
+		/>
+	);
 	/** The old sidebar footer lived INSIDE the collapsible panel, so folding
 	 *  it or switching to a page destination hid the instance menu, shortcuts
 	 *  and remote control. The rail is the only permanent chrome — keep one
-	 *  copy of those entries there (ChatGPT's account/more rail footer). */
+	 *  copy of the instance status there (ChatGPT's account/more rail footer
+	 *  parity); the rest moved into the account menu above. */
 	const railFooter = (
 		<>
 			<InstanceButton
@@ -4773,24 +4791,6 @@ function AppInner(): ReactNode {
 				onOpenManager={requestRemoteAccess}
 				onOpenDisclaimer={viewRemoteDisclaimer}
 			/>
-			<button
-				type="button"
-				className="gui-rail-btn"
-				title={t("general.keyboardShortcuts")}
-				aria-label={t("general.keyboardShortcuts")}
-				onClick={() => setShortcutsOpen(true)}
-			>
-				<Icon name="command" className="gui-rail-icon" />
-			</button>
-			<button
-				type="button"
-				className="gui-rail-btn"
-				title={t("settings.mobileRemoteControl")}
-				aria-label={t("settings.mobileRemoteControl")}
-				onClick={() => openRemoteAccess("workspace")}
-			>
-				<Icon name="global" className="gui-rail-icon" />
-			</button>
 		</>
 	);
 
@@ -4831,7 +4831,7 @@ function AppInner(): ReactNode {
 					 * itself is display:none. */}
 					<AppRail
 						destinations={railDestinations}
-						settings={railSettings}
+						account={railAccount}
 						footerActions={railFooter}
 						panelAvailable={(!pageDestinationActive || secondTierPanelVisible) && !settingsActive}
 						onTogglePanel={toggleSidebar}

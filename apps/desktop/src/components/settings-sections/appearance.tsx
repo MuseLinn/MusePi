@@ -597,9 +597,10 @@ export function AppearanceSection({
 			</div>
 
 			{/* ── 效果预览 — the shared simulated conversation view (voice-test
-			 * parity): REAL tr-* row markup (user bubble, assistant reply with
-			 * the live orb, collapsed 活动 fold) + the current composer card,
-			 * driven live by the toggles above (avatars / info status bar). ── */}
+			 * parity): REAL tr-* row markup (user bubble, assistant reply, collapsed
+			 * 活动 fold) with the identity capsule on top, plus the current
+			 * composer card, driven live by the toggles above (the capsule's orb /
+			 * info status bar). ── */}
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("general.effectsPreview")}</div>
 				<div className="gui-settings-section-desc">{t("general.effectsPreviewDescription")}</div>

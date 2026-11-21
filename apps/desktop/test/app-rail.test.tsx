@@ -19,8 +19,9 @@ import { AppRail, type RailItem } from "../src/components/AppRail";
  *  * a page destination has no panel: the double-click gesture is inert
  *    rather than doing something invisible;
  *  * the unread dot is decorative and never becomes the accessible name;
- *  * footer actions (instance / shortcuts / remote) mount in the rail's
- *    bottom group so folding the panel cannot hide them.
+ *  * footer actions (instance status) mount in the rail's bottom group so
+ *    folding the panel cannot hide them; the account control sits below them
+ *    and the settings destination button no longer exists.
  */
 
 setLocale("zh-CN");
@@ -48,7 +49,9 @@ function renderRail(
 		root.render(
 			createElement(AppRail, {
 				destinations: [item("home"), item("board")],
-				settings: item("settings"),
+				// The account control replaced the settings destination; it is a
+				// prepared node, exactly like footer actions.
+				account: createElement("button", { type: "button", "data-rail-account": "user" }, "U"),
 				footerActions: overrides.footerActions,
 				panelAvailable: overrides.panelAvailable ?? true,
 				onTogglePanel: () => {
