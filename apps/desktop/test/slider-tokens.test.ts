@@ -23,6 +23,7 @@ const read = (rel: string): string => fs.readFileSync(path.join(REPO_ROOT, rel),
 const CHAT = "apps/desktop/src/styles/gui-chat.css";
 const SETTINGS = "apps/desktop/src/styles/gui-settings.css";
 const COMPONENT = "apps/desktop/src/components/LadderSlider.tsx";
+const SETTINGS_COMPONENT = "apps/desktop/src/components/settings-controls/LadderSlider.tsx";
 const PANE = "apps/desktop/src/lib/surfaces/agent-info-pane.tsx";
 
 const FAMILY = [
@@ -144,14 +145,33 @@ describe("shared slider tokens", () => {
 	test("pointer math reads the laid-out rail, never a restated knob radius", () => {
 		const component = read(COMPONENT);
 		// `--gui-slider-inset` is the single authority for the end-stop inset;
-		// the component measures the CSS-inset rail so a knob-size change moves
-		// hit-testing with it.
+		// the shared drag hook measures the CSS-inset rail so a knob-size change
+		// moves hit-testing with it.
 		expect(component).not.toContain("KNOB_INSET");
-		expect(component).toContain("railRef");
+		expect(component).toContain("rail.current?.getBoundingClientRect()");
 		expect(component).toContain('className="gui-slider-rail"');
-		expect(component).toContain("railRef.current?.getBoundingClientRect()");
 		// The drag delta was dead: the drag maps absolute pointer x.
 		expect(component).not.toContain("startX");
+	});
+
+	test("both ladders draw the thumb from a fractional position, never a rung index", () => {
+		const chat = read(CHAT);
+		const settings = read(SETTINGS_COMPONENT);
+		// One pointer implementation: the settings ladder imports the thinking
+		// ladder's hook instead of restating the math.
+		expect(settings).toContain('from "../LadderSlider"');
+		expect(settings).toContain("useSliderDrag");
+		expect(settings).not.toContain("getBoundingClientRect");
+		// The rendered position is `--gui-slider-p` / `--gui-ladder-p`, and the
+		// knob is placed by it in both primitives.
+		const sliderKnob = rules(chat, ".gui-slider-knob");
+		expect(sliderKnob.some(rule => uses(rule.body, "--gui-slider-p"))).toBe(true);
+		const ladderThumb = rules(chat, ".gui-ladder-thumb");
+		expect(ladderThumb.some(rule => uses(rule.body, "--gui-ladder-p"))).toBe(true);
+		// A held thumb must not lag its pointer; the release restores the ease so
+		// the detent snaps it in.
+		expect(chat).toContain(".gui-slider-track[data-dragging] .gui-slider-fill");
+		expect(chat).toContain(".gui-ladder-track[data-dragging] .gui-ladder-thumb");
 	});
 
 	test("reduced motion drops the new transitions", () => {

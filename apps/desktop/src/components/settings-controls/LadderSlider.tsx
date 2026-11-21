@@ -1,5 +1,6 @@
 import { useLocale } from "@musepi/client-core";
-import { type ReactNode, useRef } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useSliderDrag } from "../LadderSlider";
 
 /** One detent on a preset ladder. */
 export interface LadderStep {
@@ -29,8 +30,11 @@ function withCurrent(steps: readonly LadderStep[], value: number): LadderStep[] 
  *
  * A plain number input let the user store values the setting does not
  * support and hid every preset label. This control owns one detent per
- * declared preset, so dragging, the wheel and the arrow keys can only land on
- * legal values, and the current preset's label is always on screen.
+ * declared preset, so a release and the arrow keys can only land on legal
+ * values, and the current preset's label is always on screen. The pointer
+ * math is the thinking ladder's (`useSliderDrag`): the thumb tracks the
+ * pointer continuously and snaps to the nearest detent on release, and the
+ * gesture writes once instead of once per pointer tick.
  */
 export function LadderSlider({
 	steps,
@@ -46,31 +50,25 @@ export function LadderSlider({
 	disabled?: boolean;
 }): ReactNode {
 	const locale = useLocale();
-	const trackRef = useRef<HTMLDivElement>(null);
-	const dragging = useRef(false);
 	const points = withCurrent(steps, value);
 	const index = Math.max(
 		0,
 		points.findIndex(step => step.value === value),
 	);
 	const last = Math.max(1, points.length - 1);
-	const ratio = index / last;
-	const active = points[index] ?? points[0];
 
-	const pick = (nextIndex: number): void => {
-		const step = points[Math.max(0, Math.min(points.length - 1, nextIndex))];
+	// The ladder is index-spaced, not value-spaced: presets are frequently
+	// non-linear (1, 2.5, 5, 10, 20, 50…), and a value-spaced rail would bunch
+	// most detents into one edge.
+	const pick = (target: number): void => {
+		const step = points[target];
 		if (step && step.value !== value) onChange(step.value);
 	};
+	const slider = useSliderDrag({ last, value: index, onSettle: pick, disabled });
 
-	// Pointer position → nearest detent. The ladder is index-spaced, not
-	// value-spaced: presets are frequently non-linear (1, 2.5, 5, 10, 20,
-	// 50…), and a value-spaced rail would bunch most detents into one edge.
-	const pickAt = (clientX: number): void => {
-		const rect = trackRef.current?.getBoundingClientRect();
-		if (!rect || rect.width === 0) return;
-		const ratioAt = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-		pick(Math.round(ratioAt * last));
-	};
+	// The readout names the rung the release would land on, so the label and
+	// `aria-valuetext` never disagree with the magnetic target.
+	const active = points[slider.target] ?? points[0];
 
 	return (
 		<div className={`gui-ladder${disabled ? " gui-ladder--disabled" : ""}`}>
@@ -78,7 +76,6 @@ export function LadderSlider({
 				{active?.label ?? Number(value).toLocaleString(locale, { maximumFractionDigits: 3 })}
 			</span>
 			<div
-				ref={trackRef}
 				className="gui-ladder-track"
 				role="slider"
 				tabIndex={disabled ? -1 : 0}
@@ -86,28 +83,11 @@ export function LadderSlider({
 				aria-disabled={disabled || undefined}
 				aria-valuemin={0}
 				aria-valuemax={last}
-				aria-valuenow={index}
+				aria-valuenow={slider.target}
 				aria-valuetext={active?.label}
-				onPointerDown={event => {
-					if (disabled || event.button !== 0) return;
-					event.preventDefault();
-					dragging.current = true;
-					event.currentTarget.setPointerCapture(event.pointerId);
-					event.currentTarget.focus();
-					pickAt(event.clientX);
-				}}
-				onPointerMove={event => {
-					if (dragging.current) pickAt(event.clientX);
-				}}
-				onPointerUp={event => {
-					dragging.current = false;
-					if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-						event.currentTarget.releasePointerCapture(event.pointerId);
-					}
-				}}
-				onPointerCancel={() => {
-					dragging.current = false;
-				}}
+				data-dragging={slider.dragging ? "" : undefined}
+				style={{ "--gui-ladder-p": slider.position / last } as CSSProperties}
+				{...slider.handlers}
 				onKeyDown={event => {
 					if (disabled) return;
 					const moves: Record<string, number> = {
@@ -121,27 +101,27 @@ export function LadderSlider({
 					const delta = moves[event.key];
 					if (delta !== undefined) {
 						event.preventDefault();
-						pick(index + delta);
+						slider.step(slider.target + delta);
 					} else if (event.key === "Home") {
 						event.preventDefault();
-						pick(0);
+						slider.step(0);
 					} else if (event.key === "End") {
 						event.preventDefault();
-						pick(last);
+						slider.step(last);
 					}
 				}}
 			>
-				<span className="gui-ladder-rail" aria-hidden />
-				<span className="gui-ladder-fill" style={{ width: `${ratio * 100}%` }} aria-hidden />
+				<span ref={slider.setRail} className="gui-ladder-rail" aria-hidden />
+				<span className="gui-ladder-fill" aria-hidden />
 				{points.map((step, stop) => (
 					<span
 						key={`${stop}:${step.value}`}
-						className={`gui-ladder-tick${stop <= index ? " gui-ladder-tick--on" : ""}`}
-						style={{ left: `${(stop / last) * 100}%` }}
+						className={`gui-ladder-tick${stop <= slider.target ? " gui-ladder-tick--on" : ""}`}
+						style={{ "--gui-ladder-dot-p": stop / last } as CSSProperties}
 						aria-hidden
 					/>
 				))}
-				<span className="gui-ladder-thumb" style={{ left: `${ratio * 100}%` }} aria-hidden />
+				<span className="gui-ladder-thumb" aria-hidden />
 			</div>
 		</div>
 	);
