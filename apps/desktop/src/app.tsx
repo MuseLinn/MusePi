@@ -2450,6 +2450,7 @@ function AppInner(): ReactNode {
 		// failure, so the gate must show the connection manager, not 无法连接.
 		setDisconnectedByUser(true);
 		setAttempting(false);
+		setAttemptTargetId(null);
 	}, []);
 
 	/** Connect from one stored target: the only path the manager uses. */
