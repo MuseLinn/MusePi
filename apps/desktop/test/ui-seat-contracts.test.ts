@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { defineSlot } from "@musepi/client-ui-slots";
-import { COMPOSER_BAR_SLOT, COMPOSER_DOCK_SLOT, HERO_FRAME_SLOT, SESSION_INFO_SLOT } from "@musepi/client-ui-conversation/client";
-import { CONVERSATION_SLOT, PANEL_SHELL_SLOT } from "@musepi/client-ui-shell/client";
+import {
+	COMPOSER_BAR_SLOT,
+	COMPOSER_DOCK_SLOT,
+	HERO_FRAME_SLOT,
+	SESSION_INFO_SLOT,
+} from "@musepi/client-ui-conversation/client";
 import { SETTINGS_EXTENSION_SLOT } from "@musepi/client-ui-settings/client";
+import { CONVERSATION_SLOT, PANEL_SHELL_SLOT } from "@musepi/client-ui-shell/client";
 import { CAPABILITY_PANEL_SLOT, SIDEBAR_PANEL_SLOT_PREFIX } from "@musepi/client-ui-sidebar/client";
+import { defineSlot } from "@musepi/client-ui-slots";
 
 describe("UI seat contracts", () => {
 	test("rejects a seat the declaration authority does not know", () => {
