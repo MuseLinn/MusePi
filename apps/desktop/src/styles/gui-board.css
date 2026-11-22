@@ -402,6 +402,7 @@
 	padding: 8px 10px;
 	border-radius: var(--radius-lg);
 	background: var(--color-surface-sunken);
+	overflow-x: clip;
 }
 
 .gui-ask-pop-markdown .tr-md {
@@ -835,6 +836,7 @@
 	box-shadow: var(--glass-shadow);
 	padding: 16px;
 	box-sizing: border-box;
+	overflow-x: clip;
 }
 
 .gui-board-focus-head {
@@ -2055,6 +2057,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	/* Fill the board view so the create bar can stick to the bottom. */
 	flex: 1;
 	min-height: 0;
+	overflow-x: clip;
 }
 .gui-board-home-head {
 	margin-bottom: 14px;
@@ -2565,6 +2568,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	flex-direction: column;
 	gap: 10px;
 	animation: gui-focus-zoom 220ms var(--spring);
+	overflow-x: clip;
 }
 /* Exit: brief scale-down + blur before unmount. */
 .gui-widget-editor--closing {

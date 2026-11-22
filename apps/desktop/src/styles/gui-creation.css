@@ -25,6 +25,7 @@
 	overflow-x: auto;
 	scrollbar-width: none;
 	padding: 2px;
+	overflow-y: clip;
 }
 .gui-creation-chiprail::-webkit-scrollbar {
 	display: none;
@@ -94,6 +95,7 @@
 	overflow-x: auto;
 	scrollbar-width: none;
 	padding: 2px;
+	overflow-y: clip;
 }
 
 .gui-creation-startfrom-row::-webkit-scrollbar {

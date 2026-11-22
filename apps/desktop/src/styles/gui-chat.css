@@ -2486,6 +2486,12 @@ html.gui-vt-surface-only::view-transition-new(root),
  * keyframes' 200px fallback and snap back to the strip width when it ended. */
 .gui-surface-tabs {
 	overflow-x: auto;
+	/* The counterpart sits in this rule, not across the cascade: M78 wrote the
+	 * panel strip's live geometry here (its own declarations are in
+	 * gui-settings.css, which it could not touch), and relying on that sheet's
+	 * `overflow-y: hidden` would re-introduce the one-axis scroller the
+	 * overflow contract forbids. Same shape as `.gui-session-tabs-scroll`. */
+	overflow-y: hidden;
 	scrollbar-width: none;
 	-ms-overflow-style: none;
 	overscroll-behavior-x: contain;
@@ -3137,6 +3143,7 @@ body.gui-resizing .gui-pane-right {
 	min-height: 0;
 	max-height: 40%;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 /* Model pane fill (设置 → 模型与供应商): the pane card fills the settings
@@ -3160,6 +3167,7 @@ body.gui-resizing .gui-pane-right {
 	display: flex;
 	flex-direction: column;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 /* Children keep their natural height so the pane body can scroll instead
@@ -3875,6 +3883,7 @@ body.gui-resizing .gui-pane-right {
 	padding: 2px 0 10px;
 	border-bottom: 1px solid var(--border);
 	margin-bottom: 12px;
+	overflow-y: clip;
 }
 
 .gui-model-tab {
@@ -3926,6 +3935,7 @@ body.gui-resizing .gui-pane-right {
 	overflow-y: auto;
 	padding-right: 10px;
 	border-right: 1px solid var(--border);
+	overflow-x: clip;
 }
 
 .gui-model-rail-entry {
@@ -5955,6 +5965,7 @@ body.gui-resizing .gui-pane-right {
 	padding: 0 8px 8px;
 	max-height: 168px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 .gui-revert-item {
@@ -7611,6 +7622,7 @@ body.gui-resizing .gui-pane-right {
 .gui-model-menu--inline .gui-model-list {
 	max-height: 240px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 .gui-model-menu--inline .gui-model-menu-foot {
 	display: none;
@@ -7682,6 +7694,7 @@ body.gui-resizing .gui-pane-right {
 	--color-text-muted: color-mix(in oklab, var(--color-text) 78%, var(--color-bg));
 	--color-text-faint: color-mix(in oklab, var(--color-text) 64%, var(--color-bg));
 	animation: gui-session-info-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+	overflow-x: clip;
 }
 /* Native button chrome (buttonface fill, outset border, default padding)
  * survived on the icon-only and disclosure controls: on dark presets they
@@ -8503,6 +8516,7 @@ body.gui-resizing .gui-pane-right {
 	flex-shrink: 0;
 	max-height: 46%;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 .gui-side-session-empty {
 	display: flex;

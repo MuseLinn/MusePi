@@ -195,6 +195,7 @@
 	gap: 2px;
 	overflow-y: auto;
 	scrollbar-width: none;
+	overflow-x: clip;
 }
 
 .gui-rail-scroll::-webkit-scrollbar {
@@ -674,26 +675,31 @@
  * 「这个项目铺在哪几个文件夹上」在界面上根本看不见。悬停项目块即浮出这张
  * 240px 卡：每个目录一行（主目录带 chip）、目录数与会话数。
  *
- * 与会话悬浮卡的分工：同一条玻璃/尺寸语言（L2 float，`--z-hover-card`、
- * `--radius-lg`、一个次要字号），但**不 portal**——`position: absolute`
- * 贴在项目块下沿，卡片和它的按钮始终留在侧栏卡片内部、也在 Tab 顺序里。
- * 展开/收起由 React 状态驱动（见 SessionSidebar 的 projectCard），CSS 只
+ * 与会话悬浮卡同一条定位路线（同一条玻璃/尺寸语言：L2 float、
+ * `--z-hover-card`、`--radius-lg`、一个次要字号）：**portal 到 body +
+ * `position: fixed`**，由组件按项目行矩形算出 `left`/`top` 内联写死。
+ * 卡片贴在侧栏右缘之外、与悬停行顶对齐；右侧放不下才翻到侧栏左侧。
+ *
+ * 为什么不留在块内：`absolute` 的卡片只能落在 `.gui-project-block` 的
+ * 包含块里，也就是压在侧栏自己的会话列表上，用户看到的是"卡片盖住了下面
+ * 的行"；而块内任何定位都会被 `.gui-sessions-list` 的滚动裁剪到几像素。
+ * 侧栏链路带 `backdrop-filter`（`.gui-main` / 卡片表面），含
+ * transform/filter 的祖先会劫持 `fixed`，所以必须 portal 出这条链路——
+ * 与会话悬浮卡当初的结论一致（见 `SessionHoverCard.tsx`）。
+ *
+ * 展开/收起仍由 React 状态驱动（见 SessionSidebar 的 projectCard），CSS 只
  * 负责出场动效。入场动画只动 transform + opacity，且 reduced motion 下
  * 直接落位。 */
 .gui-project-hover-card {
-	position: absolute;
-	left: 0;
-	/* 卡片浮在块的下沿之外，不推开下方会话行。 */
-	top: calc(100% - 2px);
+	position: fixed;
 	z-index: var(--z-hover-card);
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 	width: 240px;
-	/* 侧栏可窄至 180px(SIDE_WIDTH_MIN):只按视口钳制会让卡片比滚动容器宽,
-	 * 在 overflow-y:auto 里逼出横向滚动条。`100%` 相对包含块(.gui-project-block
-	 * 整行宽),与视口取更小的一条。 */
-	max-width: min(240px, 100%, calc(100vw - 24px));
+	/* 视口兜底：窄窗口里卡片不准比窗口宽。侧栏宽度不再参与——卡片已经
+	 * 不在这条滚动容器里了。 */
+	max-width: calc(100vw - 16px);
 	padding: 10px 12px;
 	border-radius: var(--radius-lg);
 	background-color: var(--bg-overlay, var(--bg));
@@ -748,7 +754,13 @@
 
 /* 列表高度由组件按真实可用空间算好（`fitProjectCard` + 实测兜底），经
  * `--gui-project-list-max` 传进来：64 个目录的卡片在任何窗口高度下都缩进
- * 滚动容器，而不是被裁掉。这里的 `min()` 只是组件未给值时的兜底。 */
+ * 滚动容器，而不是被裁掉。这里的 `min()` 只是组件未给值时的兜底。
+ *
+ * 只滚动一个轴就必须显式声明另一个：`overflow-y: auto` 单独出现时
+ * `overflow-x` 按规范计算为 `auto`，于是任何比内容盒宽一点的行都会在
+ * "内容其实完整"的卡片里长出一条横向滚动条（用户原话：内容明明显示完整
+ * 却出现了不该出现的横向滚动）。行内路径用 `nowrap` + 省略号 + `title`
+ * 收尾（见 `.gui-project-hover-card-text`），所以这一轴永远不该滚。 */
 .gui-project-hover-card-list {
 	display: flex;
 	flex-direction: column;
@@ -759,14 +771,13 @@
 	padding: 0;
 	list-style: none;
 	overflow-y: auto;
+	overflow-x: clip;
 	overscroll-behavior: contain;
 }
 
-/* 列表下方的项目行没有空间时整卡翻到块上方（组件按块在滚动视口中的位置
- * 决定），这样卡片不会被列表容器的下沿裁掉。 */
+/* 行在侧栏下方没有空间时整卡翻到行的上方（组件按行的矩形决定）。定位
+ * 坐标已是内联的视口值，这里只换出场方向。 */
 .gui-project-hover-card--above {
-	top: auto;
-	bottom: calc(100% - 2px);
 	animation-name: gui-project-hover-card-in-from-below;
 }
 
@@ -1640,6 +1651,7 @@
 	max-height: min(320px, 45vh);
 	padding: 2px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 .gui-filepane-directory-entry {
@@ -2654,6 +2666,7 @@
 		#000 calc(100% - var(--fade-bottom) - 1px),
 		transparent 100%
 	);
+	overflow-x: clip;
 }
 .gui-shortcuts-grid[data-scrolled-top="true"] {
 	--fade-top: var(--shortcut-fade);
@@ -2740,6 +2753,7 @@
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	padding: 16px 20px 20px;
+	overflow-x: clip;
 }
 .gui-instance-manager-panel {
 	display: flex;

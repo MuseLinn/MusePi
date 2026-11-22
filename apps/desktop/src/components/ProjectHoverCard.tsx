@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "../vendor/oc-icons";
 
 /**
@@ -10,28 +11,33 @@ import { Icon } from "../vendor/oc-icons";
  * 行只写一个名字 —— 用户看不出「这个项目其实铺在几个文件夹上」。悬停项目块
  * 即浮出一张 240px 卡片,列出主目录 + 每个附加目录、会话数与打开动作。
  *
- * 与 `SessionHoverCard` 的两处关键差别:
- * - **不用模块级 bus**:卡片就是项目块内的一个子元素,由块自身的 hover /
- *   focus 状态控制(见 `SessionSidebar` 的项目块)。总线只适合"同一时刻只有
- *   一行"的会话行;项目块数量少,就地持有状态才能让键盘真正走进去。
- * - **不 portal,且**渲染在 `.gui-project-block` **内部**:会话卡必须 portal
- *   是因为侧栏链路的 backdrop-filter 会劫持 fixed 定位;本卡
- *   `position: absolute` 相对已定位的 `.gui-project-block`(`position:
- *   relative`)定位,`top:100%` 就是那一行的下沿。放在块内而不是块后面的
- *   兄弟位置,是为了让「块→卡」的指针移动与 Tab 进卡都还在块的
- *   mouseleave / blur 包含关系内(否则卡片会被 120ms 宽限当场收掉),也让
- *   卡片避开 `ProjectCollapse` 的 `overflow:hidden` 与列表滚动容器的裁剪。
+ * **位置:侧栏右侧、与悬停行顶对齐**——卡片不在侧栏里,所以不遮挡下面的
+ * 会话行;右侧放不下才翻到侧栏左侧。纵向贴行顶向下生长,下方装不下就改为
+ * 向上生长。
+ *
+ * **为什么 portal 到 body**:侧栏链路上有 `backdrop-filter`
+ * (`.gui-main`、侧栏卡片表面),含 transform/filter/backdrop-filter 的祖先
+ * 会成为 `position: fixed` 的包含块,于是卡片的 `left`/`top` 不再是视口坐标,
+ * 还会被中途的 `overflow: hidden` 裁掉;而在块内用 `absolute` 则只能压在
+ * 侧栏上、并被 `.gui-sessions-list` 的滚动裁剪。portal 出这条链路后,卡片
+ * 的坐标就是视口坐标,滚动容器也碰不到它 —— 与会话悬浮卡同一结论。
+ *
+ * **包含关系由状态而非 DOM 承担**:卡片离开块的 DOM 子树后,块的
+ * `mouseleave`/`blur` 不再覆盖它,所以卡片自己接管指针进入(取消收卡)、离开
+ * (重新计时),块的处理器则把「落点在卡片内」的离开判为没有离开。Tab 进卡由
+ * 两端的显式交棒完成(见 {@link firstCardFocusable} / {@link lastFocusable}),
+ * 因为 portal 节点在 body 末尾,原生 Tab 顺序够不到它。
  *
  * **高度随目录数增长,适配按实测几何算**:64 个目录的卡片在 800px 高的窗口里
- * 接近 1.4k px,任何固定阈值都装不下,会被滚动容器裁掉——而卡片又在滚动时
- * 收起,裁掉的部分再也够不到。所以挂载后先量出卡片真实几何(见 `measureCard`),
- * 交给 {@link fitProjectCard} 决定翻不翻、列表能有多高,再把列表的 `max-height`
- * 夹到真实可用空间(装不下就让列表自己滚)。常量只是**首帧估值**:测量在绘制前
- * 的 layout effect 里完成,用户看到的第一帧已经按实测值算过。
+ * 接近 1.4k px,任何固定阈值都装不下。挂载后先量出卡片真实几何(见
+ * {@link measureCard}),交给 {@link fitProjectCard} 决定翻不翻、列表能有多高,
+ * 再把列表的 `max-height` 夹到真实可用空间(装不下就让列表自己滚)。常量只是
+ * **首帧估值**:测量在绘制前的 layout effect 里完成,用户看到的第一帧已经按
+ * 实测值算过。
  *
- * 真实 Chromium 扫描(11 目录、180px 侧栏、480/700/800/1000 四种窗高、覆盖
- * 全部滚动位置):修复前 33–77% 的位置被裁(最差 300px),修复后四种窗高均为
- * 0%,每个目录的打开按钮都能滚进视野并命中。
+ * 只滚一个轴就必须显式声明另一个轴(见 `gui-chrome.css` 的
+ * `.gui-project-hover-card-list`):目录行是 `nowrap` + 省略号 + 全路径
+ * `title`,列表永远不该横向滚。
  */
 
 /**
@@ -54,11 +60,15 @@ export const LIST_MAX_HEIGHT = 280;
 /** 一行目录的步进(行高 + 1px 行间距)。实测值同上:随发布版阶梯为 26.8 行高 /
  *  27.8 步进;这里的 28 同样是首帧估值。 */
 export const ROW_HEIGHT = 28;
-/** 卡片贴边时至少留出的空隙,不顶到滚动容器的边上。 */
+/** 卡片宽度 —— 与 `gui-chrome.css` 的 `width: 240px` 同一事实,定位需要它。 */
+export const CARD_WIDTH = 240;
+/** 卡片与侧栏之间的空隙(以及翻到左侧时的同一空隙)。 */
+export const CARD_GAP = 8;
+/** 卡片贴视口边缘时至少留出的空隙,不顶到窗口边上。 */
 const EDGE_INSET = 8;
 
 export interface CardFit {
-	/** 翻到块上方(`--above`)。 */
+	/** 贴行上方生长(`--above`)。 */
 	above: boolean;
 	/** 列表实际可用的高度(像素)—— 永远不超过真实可占空间。 */
 	listMax: number;
@@ -72,8 +82,8 @@ const clamp = (value: number, low: number, high: number): number => Math.min(Mat
  * 纯函数,便于单测:不读 DOM、不读视口。
  *
  * 顺序:先算「首选高度」(列表按 `min(目录数×行高, listMax)`);下方装得下就
- * 贴下沿;否则翻到更宽裕的一侧;最后把列表夹进那一侧的可用空间(扣掉卡片
- * 固定部分)——装不下就滚动,而不是让卡片溢出被裁。
+ * 贴行顶向下;否则翻到更宽裕的一侧;最后把列表夹进那一侧的可用空间(扣掉
+ * 卡片固定部分)——装不下就滚动,而不是让卡片溢出被裁。
  */
 export function fitProjectCard({
 	directoryCount,
@@ -101,7 +111,7 @@ export function fitProjectCard({
 
 	const below = Math.max(0, (spaceBelow ?? 0) - EDGE_INSET);
 	const above = Math.max(0, (spaceAbove ?? 0) - EDGE_INSET);
-	// 首选:下方装得下就贴下沿。否则翻到更宽裕的一侧——装得下就整张放进去,
+	// 首选:下方装得下就贴行顶向下。否则翻到更宽裕的一侧——装得下就整张放进去,
 	// 都装不下就选装得更多的那侧,由 listMax 把列表夹进剩余空间(滚动可达)。
 	//
 	// 注意这里 listMax 恒等于 min(room − chrome, natural),所以
@@ -110,6 +120,77 @@ export function fitProjectCard({
 	const flip = natural > below && above > below;
 	const room = flip ? above : below;
 	return { above: flip, listMax: clamp(room - chromeHeight, 0, naturalList) };
+}
+
+/** 悬停项目行的视口矩形(只需纵向边,横向由侧栏决定)。 */
+interface ProjectRowRect {
+	top: number;
+	bottom: number;
+}
+
+/** 侧栏的视口矩形 —— 卡片贴在它的外侧。 */
+export interface SidebarRect {
+	left: number;
+	right: number;
+}
+
+interface ProjectAnchor {
+	row: ProjectRowRect;
+	sidebar: SidebarRect;
+}
+
+export interface CardPlacement {
+	/** 卡片左缘(视口坐标)。 */
+	left: number;
+	/** 翻到了侧栏左侧(右侧放不下)。 */
+	flipped: boolean;
+}
+
+/**
+ * 卡片该站在侧栏哪一侧。
+ *
+ * 首选永远是右侧(`sidebar.right + gap`)——用户要在侧栏之外看这张卡,而不是
+ * 让它盖住自己的列表。只有右侧真放不下、且左侧放得下时才翻到左侧;两侧都
+ * 放不下时留在右侧并夹进视口(窗口窄于侧栏 + 卡片时,无论如何都会压住点
+ * 东西,压聊天区好过压侧栏本身)。
+ */
+export function placeProjectCard({
+	sidebar,
+	viewportWidth,
+	width = CARD_WIDTH,
+	gap = CARD_GAP,
+	inset = EDGE_INSET,
+}: {
+	sidebar: SidebarRect;
+	viewportWidth: number;
+	width?: number;
+	gap?: number;
+	inset?: number;
+}): CardPlacement {
+	const right = sidebar.right + gap;
+	const leftSide = sidebar.left - gap - width;
+	const fitsRight = right + width <= viewportWidth - inset;
+	const fitsLeft = leftSide >= inset;
+	const flipped = !fitsRight && fitsLeft;
+	const preferred = flipped ? leftSide : right;
+	return {
+		left: clamp(preferred, inset, Math.max(inset, viewportWidth - inset - width)),
+		flipped,
+	};
+}
+
+const FOCUSABLE =
+	'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
+/** 卡片里的第一个可聚焦控件 —— 键盘从项目块进卡的落点。 */
+export function firstCardFocusable(card: HTMLElement | null): HTMLElement | null {
+	return card?.querySelector<HTMLElement>(FOCUSABLE) ?? null;
+}
+
+/** 元素子树里最后一个可聚焦控件 —— Tab 交棒前的「块内最后一站」。 */
+export function lastFocusable(root: HTMLElement | null): HTMLElement | null {
+	const all = root?.querySelectorAll<HTMLElement>(FOCUSABLE);
+	return all && all.length > 0 ? (all[all.length - 1] ?? null) : null;
 }
 
 /** 挂载实测:卡片固定部分的高度与一行目录的步进。 */
@@ -154,10 +235,16 @@ export interface ProjectHoverCardProps {
 	onOpenDirectory?(path: string): void;
 	/** OS 打开动作的名称随 shell 走(资源管理器 ≠ Finder)。 */
 	openLabel: string;
-	/** 项目块下方 / 上方各自还有多少可用高度。调用方按「视口与滚动容器取更近
-	 *  的那条边、再减去块自身」算好;这里只做几何适配。 */
-	spaceBelow?: number;
-	spaceAbove?: number;
+	/** 悬停行与侧栏的视口矩形。缺省时卡片按 CSS 静态位置渲染(仅测试/首帧)。 */
+	anchor?: ProjectAnchor;
+	/** 指针进入卡片 —— 取消块的收卡计时。 */
+	onPointerEnter?(): void;
+	/** 指针离开卡片 —— 重新开始收卡计时。 */
+	onPointerLeave?(): void;
+	/** Shift+Tab 从卡的第一个控件退出时,把焦点交回项目块。 */
+	onRequestReturnFocus?(): void;
+	/** 块 → 卡的 Tab 交棒需要拿到卡片元素。 */
+	cardRef?: (element: HTMLDivElement | null) => void;
 }
 
 export function ProjectHoverCard({
@@ -167,22 +254,32 @@ export function ProjectHoverCard({
 	labelOf,
 	onOpenDirectory,
 	openLabel,
-	spaceBelow,
-	spaceAbove,
+	anchor,
+	onPointerEnter,
+	onPointerLeave,
+	onRequestReturnFocus,
+	cardRef,
 }: ProjectHoverCardProps): ReactNode {
-	const cardRef = useRef<HTMLDivElement | null>(null);
+	const localRef = useRef<HTMLDivElement | null>(null);
 	// 挂载实测出来的真实几何。首帧用常量估值,`useLayoutEffect` 在绘制前跑完,
 	// 所以用户看到的第一次定位就已经按实测算过;常量只是"还没量到"时的过渡值。
 	const [metrics, setMetrics] = useState<CardMetrics | null>(null);
+	// 视口只在浏览器里存在;SSR/无 DOM 时 anchor 也不会给出,退回静态渲染。
+	const viewport = typeof window === "undefined" ? null : { width: window.innerWidth, height: window.innerHeight };
 	const fit = fitProjectCard({
 		directoryCount: directories.length,
-		spaceBelow,
-		spaceAbove,
+		// 卡片已 portal 出滚动容器,可用空间只由视口与行决定。
+		...(anchor && viewport
+			? {
+					spaceBelow: Math.max(0, viewport.height - anchor.row.bottom),
+					spaceAbove: Math.max(0, anchor.row.top),
+				}
+			: {}),
 		...(metrics ? { chromeHeight: metrics.chrome, rowHeight: metrics.row } : {}),
 	});
 
 	useLayoutEffect(() => {
-		const next = measureCard(cardRef.current);
+		const next = measureCard(localRef.current);
 		if (!next) return;
 		// 只在读数真的变了才重渲染,避免每次父组件重渲染都触发一轮 setState。
 		setMetrics(prev =>
@@ -190,14 +287,41 @@ export function ProjectHoverCard({
 		);
 	});
 
-	const style = { "--gui-project-list-max": `${Math.max(0, fit.listMax)}px` } as CSSProperties;
-	return (
+	const placement =
+		anchor && viewport ? placeProjectCard({ sidebar: anchor.sidebar, viewportWidth: viewport.width }) : null;
+
+	const style: CSSProperties = {
+		"--gui-project-list-max": `${Math.max(0, fit.listMax)}px`,
+	} as CSSProperties;
+	if (placement) style.left = `${placement.left}px`;
+	if (anchor && viewport) {
+		// 向下:卡片顶边贴行顶。向上:卡片底边贴行顶 —— 用 `bottom` 而不是
+		// `top`,这样卡片按自身高度向上生长,无需先量高度再定位。
+		if (fit.above) style.bottom = `${Math.max(0, viewport.height - anchor.row.top)}px`;
+		else style.top = `${Math.max(0, anchor.row.top)}px`;
+	}
+
+	const card = (
 		<div
-			ref={cardRef}
+			ref={element => {
+				localRef.current = element;
+				cardRef?.(element);
+			}}
 			className={`gui-project-hover-card${fit.above ? " gui-project-hover-card--above" : ""}`}
 			style={style}
 			role="group"
 			aria-label={name}
+			onMouseEnter={onPointerEnter}
+			onMouseLeave={onPointerLeave}
+			onKeyDown={event => {
+				// 卡的第一个控件 Shift+Tab 回到项目块:portal 节点在 body 末尾,
+				// 原生顺序回不去,必须显式交棒。
+				if (event.key !== "Tab" || !event.shiftKey) return;
+				if (event.target !== firstCardFocusable(localRef.current)) return;
+				if (!onRequestReturnFocus) return;
+				event.preventDefault();
+				onRequestReturnFocus();
+			}}
 		>
 			<div className="gui-project-hover-card-title" title={name}>
 				{name}
@@ -245,4 +369,8 @@ export function ProjectHoverCard({
 			</ul>
 		</div>
 	);
+
+	// SSR/首帧没有 body 时退回内联渲染(happy-dom 单测以外不会发生)。
+	if (typeof document === "undefined") return card;
+	return createPortal(card, document.body);
 }

@@ -5,10 +5,14 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import {
 	CARD_CHROME_HEIGHT,
+	CARD_GAP,
+	CARD_WIDTH,
+	firstCardFocusable,
 	fitProjectCard,
 	LIST_MAX_HEIGHT,
 	measureCard,
 	ProjectHoverCard,
+	placeProjectCard,
 	ROW_HEIGHT,
 } from "../src/components/ProjectHoverCard";
 import type { SessionListNode } from "../src/components/SessionList";
@@ -195,7 +199,11 @@ describe("project hover card", () => {
 	// in `document` was not enough: it rendered as a SIBLING of the block, so
 	// `top:100%` resolved against the scroll frame, the scroller clipped it to a
 	// couple of pixels, and the block's containment no longer covered it.
-	it("renders the card inside the project block, positioned against it", async () => {
+	// The placement contract that replaced "inside the block". The card used to
+	// render as the block's own child so `top: 100%` was that row's lower edge —
+	// which meant it opened OVER the sidebar and was clipped by the scroller.
+	// It now portals to `document.body` and is positioned from the row's rect.
+	it("portals the card out of the block so it can open beside the sidebar", async () => {
 		const container = await mountSidebar(
 			[project("/work/alpha", "alpha", ["/refs/shared"])],
 			[node("s1", "alpha", "/work/alpha")],
@@ -205,16 +213,26 @@ describe("project hover card", () => {
 		const card = document.querySelector<HTMLElement>(".gui-project-hover-card");
 		expect(block).not.toBeNull();
 		expect(card).not.toBeNull();
-		// (a) containment: block-bound pointer/focus handlers must cover the card.
-		expect(block!.contains(card!)).toBe(true);
-		// The card is the block's own child, so an absolutely positioned card
-		// resolves `top:100%` against the block (which declares position:
-		// relative) instead of the scroll frame. happy-dom implements neither
-		// `offsetParent` nor layout geometry, so parent identity is the available
-		// proxy for the containing block.
-		expect(card!.parentElement).toBe(block);
-		// And it is not inside the collapsible body that clips to the row height.
-		expect(card!.closest(".gui-collapse")).toBeNull();
+		// Escaped the scroller: no clipping, no `top: 100%` resolved against the
+		// scroll frame.
+		expect(block!.contains(card!)).toBe(false);
+		expect(card!.closest(".gui-sessions-list")).toBeNull();
+		expect(card!.parentElement).toBe(document.body);
+	});
+
+	it("writes viewport coordinates that clear the sidebar", async () => {
+		const container = await mountSidebar(
+			[project("/work/alpha", "alpha", ["/refs/shared"])],
+			[node("s1", "alpha", "/work/alpha")],
+		);
+		await hoverBlock(container);
+		const card = document.querySelector<HTMLElement>(".gui-project-hover-card");
+		expect(card).not.toBeNull();
+		// happy-dom has no layout, so the rects are zeros; what this pins is that
+		// the component wrote the placement it computed (the number itself is
+		// the pure function's business, covered below and in Chromium).
+		expect(card!.style.left).toMatch(/^-?\d+(\.\d+)?px$/);
+		expect(card!.style.top !== "" || card!.style.bottom !== "").toBe(true);
 	});
 
 	it("survives a pointer path from the block toward the card", async () => {
@@ -320,10 +338,64 @@ describe("project hover card", () => {
 	});
 });
 
-describe("ProjectHoverCard component", () => {
-	afterEach(() => {
-		document.body.innerHTML = "";
+describe("placeProjectCard — beside the sidebar, flipping only when it must", () => {
+	const sidebar = { left: 0, right: 256 };
+
+	it("opens past the sidebar's right edge at a comfortable width", () => {
+		const placement = placeProjectCard({ sidebar, viewportWidth: 1280 });
+		expect(placement.flipped).toBe(false);
+		// Exactly the gap past the rail — not over it, not floating in the chat.
+		expect(placement.left).toBe(256 + CARD_GAP);
 	});
+
+	it("flips to the sidebar's left side when the window leaves no room on the right", () => {
+		// A rail pushed in from the left edge: the card does not fit to its
+		// right at this width, but does fit to its left.
+		const insetSidebar = { left: 300, right: 556 };
+		const placement = placeProjectCard({ sidebar: insetSidebar, viewportWidth: 800 });
+		expect(placement.flipped).toBe(true);
+		// Gap-left of the rail, fully on screen.
+		expect(placement.left).toBe(300 - CARD_GAP - CARD_WIDTH);
+		expect(placement.left).toBeGreaterThanOrEqual(8);
+	});
+
+	it("stays on the right at exactly the width that still fits", () => {
+		const exact = 256 + CARD_GAP + CARD_WIDTH + 8;
+		expect(placeProjectCard({ sidebar, viewportWidth: exact }).flipped).toBe(false);
+		// One pixel narrower and the card would overhang the window's inset, but
+		// there is still no room on the left of a flush rail either.
+		expect(placeProjectCard({ sidebar, viewportWidth: exact - 1 }).flipped).toBe(false);
+	});
+
+	it("prefers the right side when neither side fits, clamped into the window", () => {
+		// A 360px window cannot hold a 240px card beside a 256px rail. The card
+		// stays on the right — covering chat, never the sidebar it describes —
+		// and is clamped inside the viewport; `max-width` keeps it within the
+		// window.
+		const placement = placeProjectCard({ sidebar, viewportWidth: 360 });
+		expect(placement.flipped).toBe(false);
+		expect(placement.left).toBeGreaterThanOrEqual(8);
+		// No overhang on the right either.
+		expect(placement.left).toBeLessThanOrEqual(360 - 8 - CARD_WIDTH);
+	});
+});
+
+describe("keyboard bridge — portal moves the card out of the Tab order", () => {
+	it("finds the first control a keyboard reader should land on", () => {
+		const host = document.createElement("div");
+		host.innerHTML = '<ul><li><span>a</span></li></ul><button id="first">1</button><button>2</button>';
+		document.body.appendChild(host);
+		expect(firstCardFocusable(host)?.id).toBe("first");
+		expect(firstCardFocusable(document.createElement("div"))).toBeNull();
+	});
+});
+
+describe("ProjectHoverCard component", () => {
+	// No local `document.body.innerHTML = ""` here: the card portals into
+	// `document.body`, and wiping the body out from under a still-mounted root
+	// leaves React removing nodes it no longer owns — which surfaced as a later
+	// unrelated assertion failing on a corrupted tree. The file-level `afterEach`
+	// unmounts first, then clears.
 
 	it("keeps every directory row reachable and labelled", async () => {
 		const container = document.createElement("div");
@@ -345,7 +417,8 @@ describe("ProjectHoverCard component", () => {
 				/>,
 			),
 		);
-		const buttons = [...container.querySelectorAll<HTMLButtonElement>(".gui-project-hover-card-open")];
+		// The card portals to document.body, so it is not inside `container`.
+		const buttons = [...document.querySelectorAll<HTMLButtonElement>(".gui-project-hover-card-open")];
 		expect(buttons).toHaveLength(2);
 		for (const button of buttons) {
 			expect(button.getAttribute("aria-label")).toContain(t("settings.openInExplorer"));
@@ -366,7 +439,12 @@ describe("ProjectHoverCard component", () => {
 				/>,
 			),
 		);
-		expect(noAction.querySelector(".gui-project-hover-card-open")).toBeNull();
+		// The second card is a separate mount, so both live in the body; the
+		// point of this half is that a project with no open handler gets no
+		// dead buttons.
+		expect(document.querySelectorAll(".gui-project-hover-card")).toHaveLength(2);
+		expect(noAction.contains(document.querySelector(".gui-project-hover-card"))).toBe(false);
+		expect(container.querySelector(".gui-project-hover-card-open")).toBeNull();
 	});
 });
 
@@ -458,11 +536,20 @@ describe("fitProjectCard — the flip and list-height decision", () => {
 });
 
 describe("ProjectHoverCard flip rendering", () => {
-	async function render(props: { count: number; spaceBelow?: number; spaceAbove?: number }): Promise<HTMLElement> {
+	/**
+	 * The card portals to `document.body`, so it lives in the document rather
+	 * than the React host. `anchor` drives the flip: the row's rect decides how
+	 * much room the chosen side has.
+	 */
+	async function render(props: { count: number; rowTop?: number; rowBottom?: number }): Promise<HTMLElement> {
 		const host = document.createElement("div");
 		document.body.appendChild(host);
 		const root = createRoot(host);
 		mounted.add(root);
+		const anchor =
+			props.rowTop === undefined || props.rowBottom === undefined
+				? undefined
+				: { row: { top: props.rowTop, bottom: props.rowBottom }, sidebar: { left: 0, right: 256 } };
 		await act(async () =>
 			root.render(
 				<ProjectHoverCard
@@ -475,8 +562,7 @@ describe("ProjectHoverCard flip rendering", () => {
 					labelOf={path => path.split("/").pop() ?? path}
 					onOpenDirectory={() => {}}
 					openLabel={t("settings.openInExplorer")}
-					spaceBelow={props.spaceBelow}
-					spaceAbove={props.spaceAbove}
+					anchor={anchor}
 				/>,
 			),
 		);
@@ -484,32 +570,33 @@ describe("ProjectHoverCard flip rendering", () => {
 		return host;
 	}
 
-	it("renders the flip modifier when the row is near the bottom", async () => {
-		const host = await render({ count: 3, spaceBelow: 60, spaceAbove: 500 });
-		expect(host.querySelector(".gui-project-hover-card--above")).not.toBeNull();
+	it("renders the flip modifier when the row sits near the bottom", async () => {
+		// Row at 740 of an 800px-tall viewport: 60px below it, 740 above.
+		await render({ count: 3, rowTop: 740, rowBottom: 768 });
+		expect(document.querySelector(".gui-project-hover-card--above")).not.toBeNull();
 	});
 
 	it("stays anchored below when there is room", async () => {
-		const host = await render({ count: 3, spaceBelow: 500, spaceAbove: 60 });
-		expect(host.querySelector(".gui-project-hover-card--above")).toBeNull();
+		await render({ count: 3, rowTop: 40, rowBottom: 68 });
+		expect(document.querySelector(".gui-project-hover-card--above")).toBeNull();
 	});
 
-	it("passes the available space as the list's max height so the last row is reachable", async () => {
-		// 11 rows (264px) + chrome cannot fit in 240px: the list must be clamped
-		// and scroll, which keeps the last directory's open button reachable.
-		const host = await render({ count: 11, spaceBelow: 240, spaceAbove: 40 });
-		const cardEl = host.querySelector<HTMLElement>(".gui-project-hover-card");
+	it("bounds the list by the room on the chosen side so the last row is reachable", async () => {
+		// 11 rows (264px) + chrome cannot fit below a row near the bottom, so it
+		// flips and the list is clamped by the room above instead.
+		await render({ count: 11, rowTop: 660, rowBottom: 688 });
+		const cardEl = document.querySelector<HTMLElement>(".gui-project-hover-card");
 		expect(cardEl).not.toBeNull();
 		const raw = cardEl!.style.getPropertyValue("--gui-project-list-max");
 		expect(raw).toMatch(/px$/);
 		const listMax = Number.parseFloat(raw);
 		expect(listMax).toBeLessThan(11 * ROW_HEIGHT);
-		// Bounded by the room below minus the card's fixed chrome.
-		expect(listMax).toBeLessThanOrEqual(240 - 8 - CARD_CHROME_HEIGHT);
+		// Bounded by the room above the row minus the fixed chrome.
+		expect(listMax).toBeLessThanOrEqual(660 - 8 - CARD_CHROME_HEIGHT);
 		// Every row still renders inside that scrollable list.
-		const rows = host.querySelectorAll(".gui-project-hover-card-row");
+		const rows = document.querySelectorAll(".gui-project-hover-card-row");
 		expect(rows).toHaveLength(11);
-		expect(host.querySelector(".gui-project-hover-card-list")?.contains(rows[10]!)).toBe(true);
+		expect(document.querySelector(".gui-project-hover-card-list")?.contains(rows[10]!)).toBe(true);
 	});
 });
 
@@ -532,7 +619,7 @@ describe("mount-time measurement", () => {
 			),
 		);
 		await flush();
-		const card = host.querySelector<HTMLElement>(".gui-project-hover-card");
+		const card = document.querySelector<HTMLElement>(".gui-project-hover-card");
 		expect(card).not.toBeNull();
 		// happy-dom reports zero geometry, so the real measurement is the
 		// browser's job; here we pin the contract that unmeasurable DOM yields
@@ -570,8 +657,8 @@ describe("card counts read as English prose", () => {
 	}
 
 	it("says 1 directory/1 session for a root-only project — the default shape", async () => {
-		const host = await render(1, 1);
-		const text = host.textContent ?? "";
+		await render(1, 1);
+		const text = document.body.textContent ?? "";
 		expect(text).toContain("1 directory");
 		expect(text).toContain("1 session");
 		// The bug: every single-root project hover read "1 directories".
@@ -580,16 +667,16 @@ describe("card counts read as English prose", () => {
 	});
 
 	it("pluralizes above one", async () => {
-		const host = await render(3, 4);
-		const text = host.textContent ?? "";
+		await render(3, 4);
+		const text = document.body.textContent ?? "";
 		expect(text).toContain("3 directories");
 		expect(text).toContain("4 sessions");
 	});
 
 	it("does not say 2 directories for a one-directory card", async () => {
 		// Guard the branch itself: count 0 must not read as "1 directory".
-		const host = await render(1, 0);
-		const text = host.textContent ?? "";
+		await render(1, 0);
+		const text = document.body.textContent ?? "";
 		expect(text).toContain("1 directory");
 		expect(text).toContain("0 sessions");
 	});

@@ -67,6 +67,7 @@
 	max-height: 96px;
 	overflow-y: auto;
 	flex-shrink: 0;
+	overflow-x: clip;
 }
 
 .gui-approval-actions {
@@ -99,6 +100,7 @@
 	font-family: inherit;
 	font-size: var(--ui-font-size-xs);
 	line-height: 1.45;
+	overflow-x: clip;
 }
 
 .gui-approval-note textarea:focus {
@@ -888,6 +890,7 @@
 	max-height: 42vh;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+	overflow-x: clip;
 }
 
 /* Keyboard-driven highlight — same wash as :hover so mouse and keyboard
@@ -3763,6 +3766,7 @@ button.gui-stats-pill {
 	max-height: 280px;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+	overflow-x: clip;
 }
 
 .gui-connector-panel--empty {

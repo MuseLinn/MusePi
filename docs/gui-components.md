@@ -92,6 +92,17 @@ Shared by desktop and mobile; changes must be verified on both.
 
 **Consumers:** the settings nav and its schema-row results (`apps/desktop/src/lib/settings-search.ts`) and the command palette (`apps/desktop/src/components/CommandPalette.tsx` — commands in both languages, settings pages and rows, session titles). Session content search (`session.search`) and the plugin market keep their own indexes and are not routed through this primitive.
 
+## Overflow contract
+
+A scroll container declares **the axis it uses and the axis it must not use**. Setting only one of `overflow-x` / `overflow-y` leaves the other computing to `auto` (the CSS spec forbids `visible` as a companion), so a vertical list silently becomes a horizontal scroller too — and the first row wider than the content box grows a scrollbar under content that was already complete. That shipped on the project hover card ("内容明明显示完整却出现了不该出现的横向滚动") and appeared in ~70 other desktop rules, which is why this is a class rule with a guard rather than a card patch.
+
+1. **One axis scrolls; the counterpart is explicit.** `overflow-y: auto; overflow-x: clip;` is the standard vertical-list shape. Use `clip` rather than `hidden` when the container may hold `position: sticky` children: `hidden` makes the box a scroll container, which silently breaks the sticky offset, while `clip` does not.
+2. **`nowrap` content ellipsizes or wraps.** A single-line row that must not wrap gets `overflow: hidden; text-overflow: ellipsis` on the text cell plus a `title` carrying the full value. It never relies on horizontal scrolling to reveal something already shown.
+3. **Horizontal scrolling only where it is declared and named.** A genuinely horizontal container (tab strip, code block, data table) declares both axes and is listed by selector in `scripts/check-overflow-axis.ts` → `HORIZONTAL_SCROLLERS` with a one-line reason. The list is the single source of truth; this document names it instead of copying it, so an entry cannot go stale here while the guard still enforces it.
+4. **Shorthand is fine.** `overflow: hidden` sets both axes by definition, so it needs no counterpart.
+
+The guard fails on: a rule that declares one axis alone, a horizontal scroller that is not on the list, and a list entry that no longer scrolls sideways or no longer exists (a stale exemption is how an allowlist turns into a place bugs hide). Contracts: `scripts/check-overflow-axis.ts` + `scripts/check-overflow-axis.test.ts`; the card's real-Chromium proof (both `scrollWidth === clientWidth` and its placement beside the sidebar) is `apps/desktop/test/project-hover-card-geometry.test.ts`.
+
 ## Dialogs and boards
 
 - Every dialog goes through `DialogFrame`; rules in `docs/gui-dialog-spec.md` (size tiers, scroll container, focus, modifier specificity).
@@ -113,6 +124,7 @@ A prose rule is advisory; a check is a contract. Where a standard can be verifie
 | Guard | Enforces |
 | --- | --- |
 | `scripts/check-radius-tokens.ts` | No literal `border-radius`; every `--radius-*` is defined |
+| `scripts/check-overflow-axis.ts` | A stylesheet rule sets both overflow axes (or the shorthand); a horizontal scroller is named in the guard's allowlist with a reason; no stale allowlist entry |
 | `scripts/check-disabled-hover.ts` | A class with a `:disabled` rule excludes the pointer in `:hover` (`:hover:not(:disabled)`) or resets it (`:disabled:hover`); generated asset bundles are exempt |
 | `scripts/check-splitter-grip.ts` | Only `SplitterGrip.tsx` may emit the grip class; the drag state keys off the pill's own `data-resizing`, never the global `body.gui-resizing`; the retired `.gui-resize-grip` stays gone |
 | `test/splitter-grip.test.ts` | The grip primitive's tokens, three states, and seam geometry |

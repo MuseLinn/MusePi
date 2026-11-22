@@ -44,6 +44,7 @@
 	 * read full-width — a 60-char compile error in a content-width box
 	 * wraps into dozens of lines. */
 	align-self: stretch;
+	overflow-x: clip;
 }
 .gui-slot-error strong {
 	font-weight: 600;
@@ -182,6 +183,7 @@
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	padding: 10px 12px;
+	overflow-x: clip;
 }
 
 /* Expanded todo board (TUI todo panel parity): phases with per-phase bars,
@@ -1227,6 +1229,7 @@
 	overflow-x: auto;
 	padding: 2px 0 4px;
 	flex-shrink: 0;
+	overflow-y: clip;
 }
 .gui-ext-tab {
 	display: inline-flex;
@@ -1382,6 +1385,7 @@
 	/* Container queries below respond to the pane, not the window: the card
 	   count and the list columns both follow the space the page actually has. */
 	container-type: inline-size;
+	overflow-x: clip;
 }
 
 /* 列宽与间距走自定义属性：网格与卡片共用，避免数字两处漂移。 */
@@ -1496,6 +1500,7 @@
 	overflow-y: auto;
 	min-height: 0;
 	flex: 1;
+	overflow-x: clip;
 }
 
 .gui-cap-install-card {
@@ -1824,6 +1829,7 @@
 	overscroll-behavior: contain;
 	padding: 12px 16px 16px;
 	font-size: var(--ui-font-size-sm);
+	overflow-x: clip;
 }
 
 .gui-cap-drawer-overview {
@@ -1899,6 +1905,7 @@
 	overflow-y: auto;
 	min-height: 0;
 	flex: 1;
+	overflow-x: clip;
 }
 
 .gui-cap-diag-clear {
@@ -2843,6 +2850,7 @@
 	white-space: pre-wrap;
 	word-break: break-word;
 	color: var(--color-text-muted);
+	overflow-y: clip;
 }
 .gui-ext-detail-actions {
 	margin-top: 14px;
@@ -4043,6 +4051,7 @@
 .traj-inspector-overlay .traj-inspector-body {
 	overflow-y: auto;
 	min-height: 0;
+	overflow-x: clip;
 }
 .traj-inspector-value {
 	font-size: 11px;
@@ -4073,6 +4082,7 @@
 	white-space: pre-wrap;
 	word-break: break-all;
 	background: transparent;
+	overflow-x: clip;
 }
 
 /* Installed-plugin inventory (settings → plugins tab): version chip +
@@ -4396,6 +4406,7 @@
 	transform: none;
 	overflow-y: auto;
 	overscroll-behavior: contain;
+	overflow-x: clip;
 }
 .tr-branch-item {
 	display: flex;
@@ -4723,6 +4734,7 @@
 	margin: 0 auto;
 	padding: 16px 4px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 .gui-ext-stat-row {
@@ -6373,6 +6385,7 @@ button.traj-error-note:hover {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
+	overflow-x: clip;
 }
 
 /* 折叠态紧凑卡:单行(徽章 + 摘要 + 计数 + 用时),与展开态共用玻璃底。 */
@@ -6949,6 +6962,7 @@ button.traj-error-note:hover {
 	box-shadow: var(--glass-shadow);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	overflow-x: clip;
 }
 
 .gui-pr-detail-title {
@@ -7139,6 +7153,7 @@ button.traj-error-note:hover {
 	border-radius: var(--radius-lg);
 	background: var(--color-surface-raised);
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+	overflow-x: clip;
 }
 
 .gui-prboard-picker-item {

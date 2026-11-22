@@ -43,7 +43,7 @@ import { GroupedSessionList } from "./GroupedSessionList";
 import { InstanceButton } from "./InstanceButton";
 import { MenuPopup } from "./MenuPopup";
 import { ProjectDialog, type ProjectDialogTarget } from "./ProjectDialog";
-import { ProjectHoverCard } from "./ProjectHoverCard";
+import { firstCardFocusable, lastFocusable, ProjectHoverCard } from "./ProjectHoverCard";
 import { Reveal } from "./Reveal";
 import { ScrollEdgeBlur } from "./ScrollEdgeBlur";
 import { SessionHoverCard } from "./SessionHoverCard";
@@ -445,33 +445,58 @@ export function SessionSidebar({
 	/** 项目行悬浮卡当前展开的项目根。pointer hover 与键盘 focus 写同一个值:
 	 *  `:focus-visible` 由 CSS 决定,而真正的显示/隐藏必须由 React 状态驱动
 	 *  (卡片里有按钮,纯 CSS 的 `:focus-within` 会把鼠标点击后的焦点留在块
-	 *  内,卡片再也关不掉)。卡片要调 openFolder,所以放在它之后。 */
+	 *  内,卡片再也关不掉)。卡片要调 openFolder,所以放在它之后。
+	 *
+	 *  锚点存的是**视口矩形**而不是「还有多少高度」:卡片已 portal 到 body
+	 *  (`position: fixed`),它要的是视口坐标 —— 侧栏外缘在哪、悬停行在哪。 */
 	const [projectCard, setProjectCard] = useState<{
 		path: string;
-		spaceBelow: number;
-		spaceAbove: number;
+		row: { top: number; bottom: number };
+		sidebar: { left: number; right: number };
 	} | null>(null);
 	const projectCardTimer = useRef<number | null>(null);
+	/** 当前打开的卡片元素 + 触发它的项目块 —— portal 之后两者不再同源,
+	 *  `Tab` 交棒与「焦点是否仍在卡内」都需要直接持有它们。 */
+	const projectCardEl = useRef<HTMLDivElement | null>(null);
+	const projectBlockEl = useRef<HTMLElement | null>(null);
 	const showProjectCard = useCallback((path: string, block?: HTMLElement): void => {
 		if (projectCardTimer.current !== null) window.clearTimeout(projectCardTimer.current);
 		projectCardTimer.current = null;
-		// 卡片高度上限取「视口」与「会话列表滚动容器」中更近的那条边——
-		// 列表自己可滚，视口高度说明不了块下方还剩多少。
+		// 卡片贴在**侧栏**外缘,不是贴在块上:块只有一行宽,侧栏才是那一列。
+		// 侧栏矩形取块最近的 `.gui-pane-side`;取不到(单测/独立渲染)时退回块
+		// 自身,卡片至少贴着那一行。
 		const rect = block?.getBoundingClientRect();
-		const scroller = block?.closest(".gui-sessions-list")?.getBoundingClientRect();
-		const top = rect?.top ?? 0;
-		const bottom = rect?.bottom ?? 0;
-		const limitBottom = Math.min(scroller?.bottom ?? window.innerHeight, window.innerHeight);
-		const limitTop = Math.max(scroller?.top ?? 0, 0);
-		setProjectCard({ path, spaceBelow: limitBottom - bottom, spaceAbove: top - limitTop });
+		const rail = (block?.closest(".gui-pane-side") ?? block)?.getBoundingClientRect();
+		projectBlockEl.current = block ?? null;
+		setProjectCard({
+			path,
+			row: { top: rect?.top ?? 0, bottom: rect?.bottom ?? 0 },
+			sidebar: { left: rail?.left ?? 0, right: rail?.right ?? rect?.right ?? 0 },
+		});
 	}, []);
 	/** 指针/焦点离开后延迟收卡:跨块移动(离块→进卡)不闪灭。 */
 	const hideProjectCardSoon = useCallback((): void => {
 		if (projectCardTimer.current !== null) window.clearTimeout(projectCardTimer.current);
 		projectCardTimer.current = window.setTimeout(() => {
 			projectCardTimer.current = null;
+			projectCardEl.current = null;
+			projectBlockEl.current = null;
 			setProjectCard(null);
 		}, 120);
+	}, []);
+	/** 键盘从项目块进入卡片:portal 节点在 body 末尾,原生 Tab 顺序够不到,
+	 *  所以在块的最后一个控件上显式交棒。 */
+	const focusIntoProjectCard = useCallback((): void => {
+		firstCardFocusable(projectCardEl.current)?.focus();
+	}, []);
+	/** Shift+Tab 从卡片首控件回到项目块:回到触发它的那个控件。 */
+	const returnFocusToProjectBlock = useCallback((): void => {
+		const block = projectBlockEl.current;
+		if (!block) return;
+		const controls = block.querySelectorAll<HTMLElement>(
+			'button:not(:disabled), [href], input:not(:disabled), [tabindex]:not([tabindex="-1"])',
+		);
+		(controls[0] ?? block).focus();
 	}, []);
 	useEffect(() => {
 		if (projectCard === null) return;
@@ -484,10 +509,10 @@ export function SessionSidebar({
 		// `SessionHoverCard.tsx` 的 scroll 处理同一理由)。scroll 不冒泡,
 		// 捕获阶段挂 window 才能覆盖侧栏内层的滚动容器。
 		//
-		// 但卡片**自己的**目录列表必须能滚(12 个目录起就超出一屏),滚它就
-		// 收卡等于把刚做出来的可达性当场收走——包括键盘聚焦第 11 个打开按钮
-		// 时列表自动滚出的那一次。所以卡片内部的滚动一律忽略,只收外层
-		// (`.gui-sessions-list` / 滚动框架)的。
+		// 卡片已 portal 到 body,所以它的**自己的**目录列表滚动也走这条捕获
+		// 链,必须显式放过:12 个目录起列表就超出一屏,滚它就收卡等于把刚做
+		// 出来的可达性当场收走——包括键盘聚焦第 11 个打开按钮时列表自动滚出
+		// 的那一次。
 		const onScroll = (event: Event): void => {
 			const target = event.target;
 			if (target instanceof Element && target.closest(".gui-project-hover-card")) return;
@@ -1615,10 +1640,24 @@ export function SessionSidebar({
 																		showProjectCard(path, e.currentTarget);
 																	}}
 																	onBlur={e => {
-																		// 焦点仍在块内(移到另一个控件)时不收。
-																		if (e.currentTarget.contains(e.relatedTarget as Node | null))
+																		// 焦点仍在块内(移到另一个控件)时不收;移进卡片也不收。
+																		const next = e.relatedTarget as Node | null;
+																		if (e.currentTarget.contains(next)) return;
+																		if (
+																			next instanceof Element &&
+																			next.closest(".gui-project-hover-card")
+																		)
 																			return;
 																		hideProjectCardSoon();
+																	}}
+																	onKeyDown={e => {
+																		// 卡片 portal 在 body 末尾,原生 Tab 顺序从块内最后一个控件会跳到
+																		// 文档后续内容,永远进不了卡片。在最后那一站显式交棒。
+																		if (e.key !== "Tab" || e.shiftKey) return;
+																		if (projectCard?.path !== path) return;
+																		if (e.target !== lastFocusable(e.currentTarget)) return;
+																		e.preventDefault();
+																		focusIntoProjectCard();
 																	}}
 																>
 																	<button
@@ -1775,8 +1814,17 @@ export function SessionSidebar({
 																			labelOf={pathBaseName}
 																			onOpenDirectory={openFolder}
 																			openLabel={openFolderLabel()}
-																			spaceBelow={projectCard.spaceBelow}
-																			spaceAbove={projectCard.spaceAbove}
+																			anchor={projectCard}
+																			cardRef={element => {
+																				projectCardEl.current = element;
+																			}}
+																			onPointerEnter={() => {
+																				if (projectCardTimer.current !== null)
+																					window.clearTimeout(projectCardTimer.current);
+																				projectCardTimer.current = null;
+																			}}
+																			onPointerLeave={hideProjectCardSoon}
+																			onRequestReturnFocus={returnFocusToProjectBlock}
 																		/>
 																	)}
 																</div>
