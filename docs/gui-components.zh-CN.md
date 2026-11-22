@@ -127,7 +127,9 @@ scope:
 
 **命中区是诚实的。** 只有真的会响应的行才带 `.gui-hover-card-row--action`。项目卡的目录行会打开文件夹，所以有 hover；会话卡的行是只读的，所以没有 hover 底色——给只读行铺底色等于承诺一个不存在的点击。`.gui-hover-card-chip` 两张卡共用（主目录 / 会话模式），chip 的文案来源各自保留。
 
-契约：`apps/desktop/test/project-hover-card.test.tsx`（状态、portal、翻转）、`apps/desktop/test/session-fork-badge.test.tsx`（会话卡的「分叉自」行）与 `apps/desktop/test/hover-card-geometry.test.ts`（真实 Chromium：两张卡的内边距、行步进、标题截断、入场同时动 opacity 与 transform、减弱动效直接落位）。
+**不透明回落也是配方的一部分。** `packages/client-core/src/styles/overlay-fallback.css` 在所有组件样式表之后加载，在三种情况下把半透明填充换成 `--color-surface-raised` 加 sheen 并去掉 `backdrop-filter`：`[data-platform="win32"]`、`prefers-reduced-transparency: reduce` 与 `@supports not (backdrop-filter: …)`。它写的是 **`.gui-hover-card`** 而不是某一张卡，所以第三张用配方的卡不需要改这个文件。win32 与减弱透明度两个分支由 `hover-card-geometry.test.ts` 按计算样式对两张卡逐一验证（同一条测试还验证离开这些分支时玻璃态保持不变）；`@supports` 分支在支持该特性的浏览器里无法强制触发，但它与其他两个分支共用同一份选择器列表。
+
+契约：`apps/desktop/test/project-hover-card.test.tsx`（状态、portal、翻转）、`apps/desktop/test/session-fork-badge.test.tsx`（会话卡的「分叉自」行）与 `apps/desktop/test/hover-card-geometry.test.ts`（真实 Chromium：两张卡的内边距、行步进、标题截断、入场同时动 opacity 与 transform、减弱动效直接落位，以及 win32 / 减弱透明度下的不透明回落）。
 
 ## 溢出契约
 

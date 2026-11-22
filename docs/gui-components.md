@@ -114,7 +114,9 @@ Both sidebar hover cards — the session card (`SessionHoverCard.tsx`, 288px) an
 
 **Hit areas are honest.** A row carries `.gui-hover-card-row--action` only when it does something. The project card's directory rows open a folder, so they hover; the session card's rows are read-only, so they have no hover wash — a wash there would promise a click that does not exist. `.gui-hover-card-chip` is shared (primary directory / session mode) and both cards keep their own chip label source.
 
-Contracts: `apps/desktop/test/project-hover-card.test.tsx` (state, portal, flip), `apps/desktop/test/session-fork-badge.test.tsx` (the session card's fork line), and `apps/desktop/test/hover-card-geometry.test.ts` (real Chromium: both cards' padding, row step, title clamp, entrance animating opacity and transform together, and reduced motion landing immediately).
+**The opaque fallback is part of the recipe.** `packages/client-core/src/styles/overlay-fallback.css` loads after every component sheet and replaces the translucent fill with `--color-surface-raised` plus the sheen, dropping `backdrop-filter`, in three situations: `[data-platform="win32"]`, `prefers-reduced-transparency: reduce`, and `@supports not (backdrop-filter: …)`. It names **`.gui-hover-card`**, not either card, so a third card on the recipe is covered without editing that file. The win32 and reduced-transparency branches are proved for both cards by computed style in `hover-card-geometry.test.ts` (and the test also proves the glass state survives off those branches); the `@supports` branch cannot be forced in a supporting browser but shares the same selector list.
+
+Contracts: `apps/desktop/test/project-hover-card.test.tsx` (state, portal, flip), `apps/desktop/test/session-fork-badge.test.tsx` (the session card's fork line), and `apps/desktop/test/hover-card-geometry.test.ts` (real Chromium: both cards' padding, row step, title clamp, entrance animating opacity and transform together, reduced motion landing immediately, and the opaque fallback on win32 / reduced transparency).
 
 ### The convergence rule behind it
 

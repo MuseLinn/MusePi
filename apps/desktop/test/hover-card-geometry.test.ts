@@ -29,6 +29,7 @@ import { ensureChromiumExecutable } from "../../../packages/coding-agent/src/too
  */
 
 const STYLES = path.resolve(import.meta.dir, "../src/styles");
+const FALLBACKS = path.resolve(import.meta.dir, "../../../packages/client-core/src/styles/overlay-fallback.css");
 const CASCADE = [
 	"gui-base.css",
 	"gui-tone.css",
@@ -44,9 +45,12 @@ const CASCADE = [
 	"gui-misc.css",
 	"gui-side-panel.css",
 	"gui-glass.css",
+	// Loaded last by every desktop entry point (`main.tsx` and the four
+	// auxiliary windows), so its opaque fallbacks win the real cascade.
+	FALLBACKS,
 ]
 	.map(file => {
-		const full = path.join(STYLES, file);
+		const full = path.isAbsolute(file) ? file : path.join(STYLES, file);
 		return fs.existsSync(full) ? fs.readFileSync(full, "utf8") : "";
 	})
 	.join("\n");
@@ -106,6 +110,7 @@ const PROJECT_CARD = `
 
 let browser: Browser;
 let page: Page;
+let mediaSession: Awaited<ReturnType<Page["createCDPSession"]>> | null = null;
 
 const ROOT_TOKENS = `
 	:root {
@@ -139,13 +144,62 @@ const ROOT_TOKENS = `
 	*, *::before, *::after { box-sizing: border-box; }
 `;
 
-async function mount(markup: string, options: { reducedMotion?: boolean; motionOff?: boolean } = {}): Promise<void> {
-	await page.emulateMediaFeatures([
-		{ name: "prefers-reduced-motion", value: options.reducedMotion ? "reduce" : "no-preference" },
-	]);
+async function mount(
+	markup: string,
+	options: { reducedMotion?: boolean; motionOff?: boolean; platform?: string; reducedTransparency?: boolean } = {},
+): Promise<void> {
+	// `prefers-reduced-transparency` is not in puppeteer's allowlist, so it goes
+	// through CDP directly; `emulateMediaFeatures` would throw on it. The session
+	// is kept alive for the page's lifetime — detaching it discards the override.
+	mediaSession ??= await page.createCDPSession();
+	await mediaSession.send("Emulation.setEmulatedMedia", {
+		features: [
+			{ name: "prefers-reduced-motion", value: options.reducedMotion ? "reduce" : "no-preference" },
+			{ name: "prefers-reduced-transparency", value: options.reducedTransparency ? "reduce" : "no-preference" },
+		],
+	});
 	await page.setContent(`
 		<style>${ROOT_TOKENS}${CASCADE}</style>
 		<body class="${options.motionOff ? "gui-motion-off" : ""}">${markup}</body>`);
+	// `initTooltips()` writes this from `shellPlatform()`; the fallbacks key on it.
+	if (options.platform) {
+		await page.evaluate(platform => {
+			document.documentElement.dataset.platform = platform;
+		}, options.platform);
+	}
+}
+
+interface Surface {
+	backdropFilter: string;
+	webkitBackdropFilter: string;
+	backgroundColor: string;
+	backgroundImage: string;
+}
+
+/** The computed surface of a card, read from the live cascade. */
+async function readSurface(selector: string): Promise<Surface> {
+	return page.evaluate((cardSelector: string) => {
+		const style = getComputedStyle(document.querySelector<HTMLElement>(cardSelector)!);
+		return {
+			backdropFilter: style.backdropFilter,
+			webkitBackdropFilter: (style as unknown as { webkitBackdropFilter?: string }).webkitBackdropFilter ?? "",
+			backgroundColor: style.backgroundColor,
+			backgroundImage: style.backgroundImage,
+		};
+	}, selector);
+}
+
+/** Is the fill opaque? An opaque card paints a solid colour; the glass state
+ *  is a `color-mix` alpha blend, so its computed background-color carries an
+ *  alpha below 1. Chromium reports that blend as `oklab(L a b / alpha)`, not
+ *  `rgba()`, so both notations are read here. */
+function alphaOf(color: string): number {
+	const match = color.match(/^[a-z-]+\(([^)]*)\)$/i);
+	if (!match) return 1;
+	const body = match[1]!.trim();
+	const slash = body.lastIndexOf("/");
+	if (slash === -1) return 1;
+	return Number(body.slice(slash + 1).trim());
 }
 
 interface CardGeometry {
@@ -402,5 +456,71 @@ describe("project hover card geometry", () => {
 			Number(getComputedStyle(document.querySelector<HTMLElement>(".gui-project-hover-card")!).opacity),
 		);
 		expect(off).toBe(1);
+	});
+});
+
+/**
+ * Opaque fallback on the platforms and settings that have no glass to sample.
+ *
+ * `overlay-fallback.css` loads after every component sheet and replaces the
+ * translucent `color-mix` fill with `--color-surface-raised` plus the sheen.
+ * Both cards must be covered by it: a hover card that keeps a translucent fill
+ * with no blur behind it reads as text floating over the chat content.
+ *
+ * The file keys on three mechanisms, and this suite exercises the two that can
+ * be reached from a test browser:
+ *
+ *  1. `[data-platform="win32"]` — the real attribute `initTooltips()` writes
+ *     from `shellPlatform()`; the fixture sets `documentElement.dataset.platform`
+ *     the same way the app does.
+ *  2. `@media (prefers-reduced-transparency: reduce)` — driven by
+ *     `page.emulateMediaFeatures`.
+ *  3. `@supports not (backdrop-filter: …)` — a browser either supports it or
+ *     not, and Chromium always does, so this branch cannot be forced from a
+ *     test. It is the same selector list as the other two, so a class missing
+ *     there is already caught by the two branches above.
+ */
+describe("hover-card opaque fallback", () => {
+	const CARDS = [
+		{ name: "session", selector: ".gui-session-hover-card" },
+		{ name: "project", selector: ".gui-project-hover-card" },
+	] as const;
+
+	/** Opaque: no backdrop filter left, and a fully opaque fill. */
+	function expectOpaque(surface: Surface, label: string): void {
+		expect(`${label} backdrop-filter: ${surface.backdropFilter}`).toBe(`${label} backdrop-filter: none`);
+		// `--glass-sheen` is a gradient; the solid fill underneath is what makes
+		// the card readable.
+		expect(alphaOf(surface.backgroundColor)).toBe(1);
+	}
+
+	test("the win32 platform attribute makes both cards opaque", async () => {
+		for (const card of CARDS) {
+			await mount(card.selector === ".gui-session-hover-card" ? SESSION_CARD : PROJECT_CARD, {
+				platform: "win32",
+			});
+			expectOpaque(await readSurface(card.selector), `${card.name} on win32`);
+		}
+	});
+
+	test("prefers-reduced-transparency makes both cards opaque", async () => {
+		for (const card of CARDS) {
+			await mount(card.selector === ".gui-session-hover-card" ? SESSION_CARD : PROJECT_CARD, {
+				reducedTransparency: true,
+			});
+			expectOpaque(await readSurface(card.selector), `${card.name} under reduced transparency`);
+		}
+	});
+
+	test("the glass state is untouched: still translucent with a blur, off those platforms", async () => {
+		// The guard against over-applying the fallback: with no platform
+		// attribute and no reduced-transparency preference, the card keeps the
+		// recipe's translucent fill and its backdrop filter.
+		for (const card of CARDS) {
+			await mount(card.selector === ".gui-session-hover-card" ? SESSION_CARD : PROJECT_CARD);
+			const surface = await readSurface(card.selector);
+			expect(surface.backdropFilter).not.toBe("none");
+			expect(alphaOf(surface.backgroundColor)).toBeLessThan(1);
+		}
 	});
 });
