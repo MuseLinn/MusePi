@@ -1109,7 +1109,10 @@ try {
 		check("real expanded bubble controls stay inside the window", expandedGeometry.ok, expandedGeometry);
 		check(
 			"real expanded mode removes the duplicate fab and exposes unread actions",
-			!expandedGeometry.fabPresent && Math.abs(expandedGeometry.unreadActionsWidth - 80) < 0.01,
+			// The row is max-content; Electron lays the same 3 × 24px buttons out
+			// at 79.6px on one run and 80px on the next. Hold the exposed-row
+			// contract with the file's usual 1px tolerance, not an exact float.
+			!expandedGeometry.fabPresent && Math.abs(expandedGeometry.unreadActionsWidth - 80) <= 1,
 			expandedGeometry,
 		);
 		const horizontalActionSamples = await traceNativeBubbleMorph(petPage, bubblesPage, () =>
