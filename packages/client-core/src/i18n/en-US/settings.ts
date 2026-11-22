@@ -7462,6 +7462,7 @@ export const settings = {
 	"settings.connectionStatusConnected": "Connected",
 	"settings.connectionStatusConnecting": "Connecting",
 	"settings.connectionStatusFailed": "Unreachable",
+	"settings.connectionStatusLastUsed": "Last used",
 	"settings.connectionStatusUnknown": "Not tried yet",
 	"settings.connectionDisconnected": "Disconnected. Pick an endpoint to reconnect.",
 	"settings.connectionUnconfigured": "No endpoint has been used yet. Connect to the local daemon or add one.",

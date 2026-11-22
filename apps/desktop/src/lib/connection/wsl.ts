@@ -14,11 +14,10 @@
  *     {@link WslRunner} — so the parser is fully testable today and a shell
  *     bridge can be wired to the same seam later without touching the UI.
  *
- * The distinction between "no distributions" and "could not ask" is the same
- * one bitfun's `useWslSupport` makes (supported / unsupported / unavailable):
- * an empty list from a successful probe is a real answer, a failed probe is
- * not. Collapsing them would make a broken bridge look like a Windows install
- * with no WSL.
+ * The distinction between "no distributions" and "could not ask" is kept
+ * three ways (supported / unsupported / unavailable): an empty list from a
+ * successful probe is a real answer, a failed probe is not. Collapsing them
+ * would make a broken bridge look like a Windows install with no WSL.
  */
 
 /** A distribution as `wsl.exe -l -q` reports it. */

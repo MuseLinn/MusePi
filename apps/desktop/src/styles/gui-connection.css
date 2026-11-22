@@ -167,6 +167,12 @@
 	color: var(--color-danger);
 }
 
+/* A past success is history, not a live socket: it must not read as
+ * 已连接 while the header says 已断开. */
+.gui-conn-status[data-status="last-used"] {
+	color: var(--color-text-secondary);
+}
+
 .gui-conn-actions {
 	display: flex;
 	align-items: center;

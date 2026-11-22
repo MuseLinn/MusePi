@@ -7142,6 +7142,7 @@ export const settings = {
 	"settings.connectionStatusConnected": "已连接",
 	"settings.connectionStatusConnecting": "连接中",
 	"settings.connectionStatusFailed": "无法连接",
+	"settings.connectionStatusLastUsed": "上次用过",
 	"settings.connectionStatusUnknown": "尚未尝试",
 	"settings.connectionDisconnected": "已断开。选择一个端点即可重新连接。",
 	"settings.connectionUnconfigured": "还没有使用过任何端点。连接本地守护进程，或添加一个端点。",

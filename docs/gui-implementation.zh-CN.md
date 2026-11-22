@@ -106,7 +106,9 @@ TUI `recap.enabled`/`recap.idleSeconds`(schema tab `interaction`、group Notific
 
 ## 1d-bis. 连接状态与端点(2026-11-22)
 
-启动门不再是 `if (!rpc)`。事实(`connected`、`attempting`、`disconnectedByUser`、`lastAttemptFailed`、`hasTargets`)经 `lib/connection/state.ts` 的纯函数 `deriveConnectionState` 归约(顺序:已连接 → 连接中 → 用户断开 → 失败 → 未配置),于是每种原因渲染自己的界面。`disconnect()` 置 `disconnectedByUser`;`boot()` 与 `connect()` 清除它并结算 `lastAttemptFailed`(`boot` 在每条退出路径结算,`connect()` 仅在非 boot 驱动时结算)。`showsFailureCopy(state)` 同时约束失败文案与 `BootRecoveryActions`,这正是「导出诊断」不会出现在平静界面的原因。
+启动门不再是 `if (!rpc)`。事实(`connected`、`attempting`、`disconnectedByUser`、`lastAttemptFailed`、`hasTargets`)经 `lib/connection/state.ts` 的纯函数 `deriveConnectionState` 归约(顺序:已连接 → 连接中 → 用户断开 → 失败 → 未配置),于是每种原因渲染自己的界面。`components/ConnectionGate.tsx` 是唯一把这些事实变成界面的地方(失败文案与 `BootRecoveryActions` 只在 `unreachable` 下),所以应用层测试不必挂载整个壳层就能断言这个选择。`disconnect()` 置 `disconnectedByUser`;`boot()` 与 `connect()` 清除它并结算 `lastAttemptFailed`(`boot` 在每条退出路径结算,`connect()` 仅在非 boot 驱动时结算)。`showsFailureCopy(state)` 同时约束失败文案与 `BootRecoveryActions`,这正是「导出诊断」不会出现在平静界面的原因。
+
+行状态是派生的、从不存储,且只有活的客户端才产生 `connected`:上次成功读作「上次用过」(`settings.connectionStatusLastUsed`),所以列表绝不会与页头的「已断开」自相矛盾,两行都成功过时也不可能同时宣称那唯一一条连接。`unconfigured` 刻意只在「没有存过任何行、且没有尝试失败」时可达:`boot` 在每条失败路径都会结算 `lastAttemptFailed`,所以首次启动遇到一个死掉的守护进程会落在 `unreachable`——这是诚实的答案,因为确实尝试过。平静的首次启动界面因此只在尝试发生之前可达;这一点是刻意接受的,而不是把 boot 的失败特判成「什么都没发生」。
 
 存储沿用既有槽位、不新增存储:`lib/connection/target-store.ts` 拥有 `musepi-gui-hosts`(行加宽出 `kind` 与参数;旧行读作 `manual`)、`musepi-gui-url`(上次成功的端点)、`musepi-gui-target-id`(上次尝试起始的行)与 `musepi-gui-target-status`(每行上次尝试与错误,放在列表旁,失败绝不改写行)。`loadTargets` 始终先返回本机行且能承受损坏的槽位;`app.tsx` 里的 `hosts` 由端点列表派生,实例切换器与管理器因此不会漂移。启动从选中行的端点进入,而 `bootTargetFor` 不让一个连不上的 `wsl`/`ssh`/`docker` 行成为下次启动的端点——这些行要靠本构建尚未托管的外部进程才能到达,于是行带着错误留在列表里,启动回退到可以探测和拉起本机守护进程的本机行;`manual` 行是用户自己的地址,绝不会被静默替换。一次尝试记在真正应答的那个端点上,而不是传进来的那一行:启动会逐个探测本机守护进程的端口,所以到达守护进程的那一行才是显示结果的那一行。`stripToken` 是这里唯一的去 token 端点比较,归属与当前行标记共用它。
 
@@ -114,7 +116,7 @@ WSL:`lib/connection/wsl.ts` 解析 `wsl.exe -l -q` 输出(UTF-16 按 Latin-1 读
 
 本模块不托管隧道与容器:行上以可复制文本给出 `wsl.exe -d <发行版> -- musepi serve --port N`、`ssh -N -L <本地>:127.0.0.1:<远端> <user@host>`、`docker exec <容器> musepi serve --port N`(外加 `docker run -p` 发布提示),并说明生命周期托管后续再做。
 
-验证:`test/connection-targets.test.ts`(状态纯函数、目标命令、持久化往返、WSL 解析 + 三种 runner 结果)与 `test/connection-manager.test.tsx`(每个状态的界面、主动断开不出现失败文案、失败尝试带诊断、从已存端点连接、WSL 两/零/失败/无桥/非 Windows、无嵌套滚动条)。
+验证:`test/connection-targets.test.ts`(状态纯函数、目标命令、持久化往返、WSL 解析 + 三种 runner 结果)、`test/connection-manager.test.tsx`(每个状态的界面、主动断开不出现失败文案、失败尝试带诊断、从已存端点连接、上次成功读作「上次用过」而非「已连接」、两行都成功过时不会同时显示已连接、WSL 两/零/失败/无桥/非 Windows、无嵌套滚动条)与 `test/connection-gate.test.tsx`(门本身对每个状态的选择——也就是这起报告出问题的那一层)。
 
 ## 1e. 自定义供应商模型发现(models.discover,2026-08-22)
 

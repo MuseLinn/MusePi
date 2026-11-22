@@ -24,6 +24,7 @@ import { CapabilitySidePanel } from "./components/CapabilitySidePanel";
 import { ChatBootPlaceholder } from "./components/ChatBootPlaceholder";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
+import { ConnectionGate } from "./components/ConnectionGate";
 import { ConnectionManager } from "./components/ConnectionManager";
 import type { CreationMessage } from "./components/CreationModeRow";
 import { uploadAttachmentFiles } from "./components/composer/use-attachments";
@@ -49,13 +50,7 @@ import type { SessionTabRow } from "./components/SessionTabsStrip";
 import { SettingsView } from "./components/SettingsView";
 import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { SplitterGrip } from "./components/SplitterGrip";
-import {
-	type BootPhase,
-	BootRecoveryActions,
-	StartupSplash,
-	useBootStatus,
-	useSplashHold,
-} from "./components/StartupSplash";
+import { type BootPhase, StartupSplash, useBootStatus, useSplashHold } from "./components/StartupSplash";
 import { useSessionInfoCardVisibility } from "./components/session-info-card";
 import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
@@ -78,7 +73,6 @@ import {
 	companionStateFromSignals,
 } from "./lib/companion";
 import { applyCompanionPalette, resolvedAccent } from "./lib/companion-palette";
-import { deriveConnectionState } from "./lib/connection/state";
 import {
 	bootTargetFor,
 	dropTarget,
@@ -4530,60 +4524,46 @@ function AppInner(): ReactNode {
 		);
 	}
 	if (!rpc) {
-		// The gate used to be exactly this boolean: any reason for "no client"
-		// produced 无法连接本地守护进程. The state below is what separates them —
-		// a deliberate disconnect renders the manager, a failed attempt renders
-		// the failure page, and only the latter carries 导出诊断 / 重启应用.
-		const connectionState = deriveConnectionState({
-			connected: false,
-			attempting: attempting,
-			disconnectedByUser,
-			lastAttemptFailed,
-			hasTargets: configured,
-		});
-		const busyTarget = connTargets.find(target => target.id === attemptTargetId) ?? null;
+		// One gate, one decision: `ConnectionGate` maps the connection facts to
+		// a surface, so a deliberate disconnect can never render the failure copy.
 		return (
-			<div className="gui-shell">
-				<ConnectionManager
-					state={connectionState}
-					targets={connTargets}
-					statuses={targetStatuses}
-					daemonUrl={url}
-					activeTargetId={resolveActiveTargetId(connTargets, url, chosenTargetIdRef.current)}
-					busyId={attempting ? (busyTarget?.id ?? null) : null}
-					lastError={connectError}
-					detect={defaultWslRunner}
-					platform={
-						isElectron()
-							? (window as unknown as { electronAPI?: { platform?: string } }).electronAPI?.platform
-							: undefined
-					}
-					onConnect={target => void connectToTarget(target)}
-					onAdd={addTarget}
-					onRemove={removeConnTarget}
-					onCopy={text => void copyToClipboard(text)}
-				>
-					{connectionState === "unreachable" ? (
-						<>
-							{connectError && <p className="gui-error">{connectError}</p>}
-							{error && <p className="gui-error">{error}</p>}
-							<BootRecoveryActions />
-						</>
-					) : (
-						connectionState === "unconfigured" && (
-							<p className="gui-note">{t("settings.connectionUnconfigured")}</p>
-						)
-					)}
-				</ConnectionManager>
-				{/* Boot hand-off: the splash fades over whatever the boot settled
+			<ConnectionGate
+				facts={{
+					connected: false,
+					attempting,
+					disconnectedByUser,
+					lastAttemptFailed,
+					hasTargets: configured,
+				}}
+				targets={connTargets}
+				statuses={targetStatuses}
+				daemonUrl={url}
+				activeTargetId={resolveActiveTargetId(connTargets, url, chosenTargetIdRef.current)}
+				busyId={attempting ? attemptTargetId : null}
+				lastError={connectError}
+				connectError={connectError}
+				error={error}
+				detect={defaultWslRunner}
+				platform={
+					isElectron()
+						? (window as unknown as { electronAPI?: { platform?: string } }).electronAPI?.platform
+						: undefined
+				}
+				onConnect={target => void connectToTarget(target)}
+				onAdd={addTarget}
+				onRemove={removeConnTarget}
+				onCopy={text => void copyToClipboard(text)}
+				/* Boot hand-off: the splash fades over whatever the boot settled
 				 * on, instead of the shell mounting only after the hold and
-				 * cutting in. */}
-				{splashHold && (
-					<div className="gui-splash-handoff" aria-hidden="true">
-						<StartupSplash ready />
-					</div>
-				)}
-			</div>
+				 * cutting in. */
+				overlay={
+					splashHold ? (
+						<div className="gui-splash-handoff" aria-hidden="true">
+							<StartupSplash ready />
+						</div>
+					) : null
+				}
+			/>
 		);
 	}
 

@@ -142,6 +142,53 @@ describe("connection manager rows", () => {
 		expect(q(host, '.gui-conn-row[data-status="unknown"]')).not.toBeNull();
 	});
 
+	test("a past success reads as last used, never as a live connection", () => {
+		// The reported flow: connect → 断开. The header says 已断开, so a row
+		// claiming 已连接 would contradict it — the exact defect this pins.
+		const host = render({
+			state: "disconnected-by-user",
+			targets: [localTarget(), ssh],
+			statuses: { s1: { lastAttemptAt: 1_700_000_000_000, lastError: null } },
+			activeTargetId: "s1",
+		});
+		expect(q(host, '.gui-conn-row[data-status="connected"]')).toBeNull();
+		expect(q(host, '.gui-conn-status[data-status="connected"]')).toBeNull();
+		expect(text(host)).not.toContain(t("settings.connectionStatusConnected"));
+		expect(q(host, '.gui-conn-row[data-status="last-used"]')).not.toBeNull();
+		expect(text(host)).toContain(t("settings.connectionDisconnected"));
+	});
+
+	test("two previously successful rows cannot both claim the connection", () => {
+		const other: ConnectionTarget = createTarget({ id: "m1", label: "Laptop", url: "ws://h:1", kind: "manual" });
+		const host = render({
+			state: "disconnected-by-user",
+			targets: [localTarget(), ssh, other],
+			statuses: {
+				s1: { lastAttemptAt: 1_700_000_000_000, lastError: null },
+				m1: { lastAttemptAt: 1_700_000_100_000, lastError: null },
+			},
+			activeTargetId: "s1",
+		});
+		expect(host.querySelectorAll('.gui-conn-row[data-status="connected"]').length).toBe(0);
+		expect(host.querySelectorAll('.gui-conn-row[data-status="last-used"]').length).toBe(2);
+	});
+
+	test("only the live client marks its own row connected", () => {
+		const other: ConnectionTarget = createTarget({ id: "m1", label: "Laptop", url: "ws://h:1", kind: "manual" });
+		const host = render({
+			state: "connected",
+			targets: [localTarget(), ssh, other],
+			statuses: {
+				s1: { lastAttemptAt: 1_700_000_000_000, lastError: null },
+				m1: { lastAttemptAt: 1_700_000_100_000, lastError: null },
+			},
+			activeTargetId: "s1",
+		});
+		const connectedRows = host.querySelectorAll('.gui-conn-row[data-status="connected"]');
+		expect(connectedRows.length).toBe(1);
+		expect(connectedRows[0]?.getAttribute("data-kind")).toBe("ssh");
+	});
+
 	test("ssh rows explain the endpoint and expose a copyable tunnel command", () => {
 		const copied: string[] = [];
 		const host = render({

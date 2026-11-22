@@ -6,7 +6,7 @@
  * connection section. There is no second implementation, so the list a user
  * sees after 断开 is the same list they see when a connect attempt failed.
  *
- * Model (openchamber's host switcher / bitfun's workspace sources):
+ * Model:
  *  - every known endpoint is a ROW with its own status, never just "the
  *    current one";
  *  - a failed row keeps its error inline and stays in the list — a failure
@@ -76,6 +76,7 @@ type CopyKey =
 	| "settings.connectionStatusConnected"
 	| "settings.connectionStatusConnecting"
 	| "settings.connectionStatusFailed"
+	| "settings.connectionStatusLastUsed"
 	| "settings.connectionStatusUnknown";
 
 /** Seed the form from an existing row so editing reuses one code path. */
@@ -108,8 +109,15 @@ const KIND_GLYPH: Record<ConnectionTargetKind, IconName> = {
 	manual: "link-unlink-m",
 };
 
-/** Human status for one row. Derived, never stored. */
-type RowStatus = "connected" | "connecting" | "failed" | "unknown";
+/**
+ * Human status for one row. Derived, never stored.
+ *
+ * Only a live socket may read `connected`. A past attempt that succeeded is
+ * `last-used`: after 断开 the header says 已断开, so a row claiming 已连接
+ * would contradict it — and two rows that each succeeded once would both
+ * claim the one connection that cannot exist twice.
+ */
+type RowStatus = "connected" | "connecting" | "failed" | "last-used" | "unknown";
 
 function rowStatus(
 	target: ConnectionTarget,
@@ -119,22 +127,17 @@ function rowStatus(
 	connected: boolean,
 ): RowStatus {
 	if (busyId === target.id) return "connecting";
-	// The surface state is the authority for the CURRENT target: the gate only
-	// renders `connected` when the client is open, and per-target history must
-	// neither overrule a live socket nor claim one that is gone.
 	if (connected && target.id === activeTargetId) return "connected";
-	if (target.id === activeTargetId && statuses[target.id]?.lastError === null && statuses[target.id]?.lastAttemptAt) {
-		return "connected";
-	}
 	const status = statuses[target.id];
 	if (!status || status.lastAttemptAt === null) return "unknown";
-	return status.lastError ? "failed" : "connected";
+	return status.lastError ? "failed" : "last-used";
 }
 
 const STATUS_LABEL: Record<RowStatus, CopyKey> = {
 	connected: "settings.connectionStatusConnected",
 	connecting: "settings.connectionStatusConnecting",
 	failed: "settings.connectionStatusFailed",
+	"last-used": "settings.connectionStatusLastUsed",
 	unknown: "settings.connectionStatusUnknown",
 } as const;
 
