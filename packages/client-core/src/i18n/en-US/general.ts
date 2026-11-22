@@ -341,6 +341,11 @@ export const general = {
 	"general.fileRootSelected": "File pane root switched to {path}",
 	"general.doubleClickRename": "Double-click to rename",
 	"general.revertMessage": "Revert this message",
+	"general.withdrawConfirm":
+		"This turn moves to a side branch — nothing is deleted. Its text and pictures go back to the composer, and the dock above the input offers one undo.",
+	"general.withdrawConfirmBusy": "The reply still being written stops when you withdraw.",
+	"general.withdrawConfirmEarlierTurn": "An earlier turn",
+	"general.withdrawConfirmAction": "Withdraw turn",
 	"general.removeQuote": "Remove quote",
 	"general.fileReferences": "File references",
 	"general.chatReferences": "Chat references",

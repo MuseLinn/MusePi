@@ -79,28 +79,53 @@ export function walkLeafPath<T>(entries: readonly T[], leafId: string | null): L
  * Transcript 可见集:活跃路径过滤。
  *
  * complete=false(拓扑不可信)时绝不藏行 —— 除非 daemon 随本次移动捎来
- * 权威活跃路径(pinnedPathIds,长会话 rewind 的存活路径,它不受加载窗
- * 限制)。complete=true 时按活跃路径过滤;pin 到会话根时第一条 user
- * 消息是 rewind 越过的节点,必须离开 transcript。无父链的条目(轮标记、
- * 合成行)挂在会话根上,永远保留(pinnedToRoot 时的 user 消息除外)。
+ * 活跃路径(pinnedPathIds,长会话 rewind 的存活路径,它不受加载窗
+ * 限制),或调用方给出 authoritativePathIds。complete=true 时按活跃
+ * 路径过滤;pin 到会话根时第一条 user 消息是 rewind 越过的节点,必须
+ * 离开 transcript。无父链的条目(轮标记、合成行)挂在会话根上,永远保留
+ * (pinnedToRoot 时的 user 消息除外)。
+ *
+ * 为什么需要 authoritativePathIds:walk 的可信度取决于加载窗内的
+ * parentId 打标,而 live 消息不一定带(见 packages/wire 的 parentId 注释)。
+ * 一整段 parentId 都缺失的尾部与会话根部的连续段无法区分,walk 会据此
+ * 报告 complete=true 却在描述一条错误的路径,过滤层于是把所有兄弟分支
+ * 连同刚撤回的回合一起渲染出来(用户报告:撤回后这回合消息还在)。
+ * daemon 按真实会话树算出的路径(`session.branchAt` / `session_leaf_moved`
+ * 的 `path`)不受打标影响,存在时压过 walk。
+ *
+ * 但那个路径是一段**窗口**,不是全路径:daemon 只回 `TAIL_ENTRIES`
+ * (200)条(`daemon/server.ts` 的 `pathEntries.slice(-TAIL_ENTRIES)`),
+ * 而客户端保留它翻页加载的每一页。所以权威只在窗口内成立:窗口起点之前
+ * 的行(加载序早于 daemon 路径的首个 id)仍由 walk 决定 —— 否则任何加载
+ * 超过 200 行的会话,一撤回就把窗口外的真实历史整段删掉(评审实测:
+ * 260 行 → 200 行)。
+ *
+ * 同一原因还有第二类行:daemon 的 path 只收 message(`server.ts` 的
+ * `if (!m) continue`),压在活跃路径上的 compaction 分隔等非 message 行
+ * 不在集合里。它们若被 walk 放上活跃路径就保留,不能因为"不在集合"而消失。
  */
 export function filterVisibleEntries<T>(
 	entries: readonly T[],
 	walk: LeafWalk,
 	activePathIds: ReadonlySet<string>,
-	opts: { pinnedPathIds?: ReadonlySet<string>; pinnedToRoot: boolean },
+	opts: {
+		pinnedPathIds?: ReadonlySet<string>;
+		/** 权威活跃路径:daemon 按真实会话树算出的路径(`session.branchAt` /
+		 *  `session_leaf_moved` 的 `path`)。与 pinnedPathIds 的区别是语义上
+		 *  的——pin 是"拓扑不可信时的兜底",authoritative 是"窗口内就是
+		 *  答案":walk 报告 complete 也可能是错的(live 消息漏打 parentId
+		 *  时整段尾部与根部连续段无法区分),所以窗口内 authoritative 压过
+		 *  walk;窗口外(daemon 只发最后 200 条)仍按 walk。 */
+		authoritativePathIds?: ReadonlySet<string>;
+		pinnedToRoot: boolean;
+	},
 ): T[] {
+	const authoritative = opts.authoritativePathIds;
+	if (authoritative) return authoritativeVisible(entries, walk, activePathIds, authoritative, opts.pinnedToRoot);
 	if (!walk.complete) {
 		const pinned = opts.pinnedPathIds;
 		if (!pinned) return [...entries];
-		return entries.filter(entry => {
-			const e = entry as { id?: unknown; parentId?: unknown; type?: string };
-			if (typeof e.id !== "string") return true;
-			if (typeof e.parentId !== "string") {
-				return e.type !== "message" || pinned.has(e.id);
-			}
-			return pinned.has(e.id);
-		});
+		return filteredBy(entries, pinned, false);
 	}
 	return entries.filter(entry => {
 		const e = entry as { id?: unknown; parentId?: unknown; type?: string };
@@ -110,5 +135,73 @@ export function filterVisibleEntries<T>(
 			return true;
 		}
 		return activePathIds.has(e.id);
+	});
+}
+
+/** 权威路径的窗口边界 = 加载序上第一个属于 daemon 路径的条目。它之前的
+ *  行比 daemon 窗口更老,集合里没有它们不代表不在活跃路径上。
+ *  边界不存在(daemon 路径与加载窗完全不相交,或路径为空)时无法定位
+ *  窗口,此时交给 walk:把"没交集"当成"全在窗口内"会把转录整段清空。 */
+function authoritativeVisible<T>(
+	entries: readonly T[],
+	walk: LeafWalk,
+	activePathIds: ReadonlySet<string>,
+	pathIds: ReadonlySet<string>,
+	pinnedToRoot: boolean,
+): T[] {
+	const boundary = entries.findIndex(entry => {
+		const id = (entry as { id?: unknown }).id;
+		return typeof id === "string" && pathIds.has(id);
+	});
+	if (boundary < 0 && pathIds.size > 0) {
+		if (!walk.complete) return [...entries];
+		return entries.filter(entry => {
+			const e = entry as { id?: unknown; parentId?: unknown; type?: string };
+			if (typeof e.id !== "string") return true;
+			if (typeof e.parentId !== "string") {
+				if (pinnedToRoot && e.type === "message") return false;
+				return true;
+			}
+			return activePathIds.has(e.id);
+		});
+	}
+	return entries.filter((entry, index) => {
+		const e = entry as { id?: unknown; parentId?: unknown; type?: string };
+		if (typeof e.id !== "string") return true;
+		if (boundary >= 0 && index < boundary) {
+			// Older than the daemon window: the walk decides, and an untrustworthy
+			// walk hides nothing (the module's standing rule).
+			if (!walk.complete) return true;
+			if (typeof e.parentId !== "string") {
+				if (pinnedToRoot && e.type === "message") return false;
+				return true;
+			}
+			return activePathIds.has(e.id);
+		}
+		if (pathIds.has(e.id)) return true;
+		if (typeof e.parentId !== "string") {
+			// Root-level rows hang off the session root, not a branch point.
+			if (e.type !== "message") return true;
+			return pinnedToRoot ? false : pathIds.has(e.id);
+		}
+		// The daemon path carries messages only; a non-message row the walk puts
+		// on the active path (compaction divider) is still on it.
+		return e.type !== "message" && activePathIds.has(e.id);
+	});
+}
+
+/** 按一个 id 集过滤(权威路径 / daemon pin 用):无父链的消息行只有在
+ *  集合明确收录时保留——集合本身就是完整答案,不像 walk 那样需要给
+ *  "读不到的节点"留回退余地。 */
+function filteredBy<T>(entries: readonly T[], pathIds: ReadonlySet<string>, pinnedToRoot: boolean): T[] {
+	return entries.filter(entry => {
+		const e = entry as { id?: unknown; parentId?: unknown; type?: string };
+		if (typeof e.id !== "string") return true;
+		if (typeof e.parentId !== "string") {
+			if (e.type !== "message") return true;
+			if (pinnedToRoot) return false;
+			return pathIds.has(e.id);
+		}
+		return pathIds.has(e.id);
 	});
 }

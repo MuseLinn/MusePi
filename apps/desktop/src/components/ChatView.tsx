@@ -1525,6 +1525,14 @@ export function ChatView({
 			// the view follows the new tip. Without this the transcript filter
 			// (visibleEntries, anchored on the leaf) would hide the very answer
 			// the send just produced.
+			//
+			// This also hands authority BACK to the local walk. After a withdraw
+			// the daemon's post-move path is authoritative and decides the
+			// transcript; keeping it past this send would keep filtering the
+			// transcript by a path that predates the new prompt and hide the
+			// fresh answer. The daemon will broadcast the new path when the run
+			// starts; until then the walk follows the optimistic echo (which is
+			// parented to `parentId` for exactly this reason).
 			setCurrentLeafKey(null);
 			setPinnedPathIds(null);
 			onSend(text, images, deliverAs, displayContext, videos, parentId);
@@ -1721,8 +1729,11 @@ export function ChatView({
 	// 会把回复挂错节点,2026-09-16 用户报告)。纯导航(jump)不走此守卫。
 	// 返回 false = 用户取消了确认(操作未执行)。
 	const runTreeOp = useCallback(
-		async (op: () => unknown): Promise<boolean> => {
-			if (!(await confirmTreeOpWhileWorking())) return false;
+		async (op: () => unknown, opts?: { confirmed?: boolean }): Promise<boolean> => {
+			// `confirmed`: the caller already asked its own question, which named
+			// this very operation (withdrawSettled). Asking again here stacked a
+			// generic "interrupt the run?" under the named one.
+			if (!opts?.confirmed && !(await confirmTreeOpWhileWorking())) return false;
 			if (snapRef.current?.working) onStop();
 			await waitWorkingCleared();
 			await op();
@@ -1761,6 +1772,45 @@ export function ChatView({
 			}
 		});
 	};
+	/** One-line excerpt of the turn being withdrawn — the dialog must name the
+	 *  turn, not describe an anonymous action. The full message is quoted in the
+	 *  body below it; this is the title's recognition anchor. */
+	const withdrawExcerpt = (text: string): string => {
+		const flat = text.replace(/\s+/g, " ").trim();
+		return flat.length > 48 ? `${flat.slice(0, 48)}…` : flat;
+	};
+	/** The ONE question every leaf-moving undo asks (撤回 / 编辑并重发 / 地图与
+	 *  面板的重答): the turn moves to a side branch, nothing is deleted, what
+	 *  the user can do next. `quote` is the turn's prompt as they wrote it; a
+	 *  tree node whose content the client could not read gets the generic "an
+	 *  earlier turn" — naming an empty turn would be a false statement, not a
+	 *  neutral one. A running turn is named in the same dialog: the leaf cannot
+	 *  move under the run, so the question also has to say it will be stopped.
+	 *  Not the bare "are you sure": the action looks destructive and is not. */
+	const confirmWithdraw = async (quote: string, busy: boolean): Promise<boolean> => {
+		const flat = quote.replace(/\s+/g, " ").trim();
+		const named = flat ? `“${withdrawExcerpt(flat)}”` : t("general.withdrawConfirmEarlierTurn");
+		const body = [
+			flat ? `“${flat}”` : "",
+			t("general.withdrawConfirm"),
+			busy ? t("general.withdrawConfirmBusy") : "",
+		];
+		return confirm(`${named}\n\n${body.filter(Boolean).join("\n\n")}`, t("general.withdrawConfirmAction"));
+	};
+	/** Order matters: name the turn WHILE the run still stands, then stop it. The
+	 *  interrupt guard used to fire first, so a working-run withdraw asked twice
+	 *  (interrupt? then withdraw?) and, read backwards, told the user the run
+	 *  was being interrupted before they had decided to interrupt it.
+	 *
+	 *  `confirmed: true` is what makes the named question the ONLY one: the
+	 *  guard would otherwise ask its own generic "interrupt the run?" right
+	 *  after the user answered this one. The stop itself still happens here,
+	 *  after the answer — the confirmation only owns the question. */
+	const withdrawSettled = async (quote: string, op: () => Promise<unknown>): Promise<boolean> => {
+		if (!(await confirmWithdraw(quote, snapRef.current?.working === true))) return false;
+		await runTreeOp(op, { confirmed: true });
+		return true;
+	};
 	// Rewind (撤回, the ⤺ action under a USER message): branch to the user
 	// message's PARENT — the node BEFORE it — so the user message itself also
 	// drops out of the active path (user-reported semantics, 2026-09-15).
@@ -1768,7 +1818,14 @@ export function ChatView({
 	// from retry, which keeps the node and re-answers it. The dropped tail
 	// stays on the tree (map/trajectory) as a sibling branch; nothing is
 	// truncated.
+	//
+	// EVERY 撤回 entry point funnels here — the transcript row button, the
+	// message-tree panel row, the panel's turn re-answer and the map's — so this
+	// is the one place the confirmation belongs. Cancelling returns before any
+	// RPC, so the leaf cannot move; a running turn is named in the same dialog
+	// (confirmWithdraw) instead of a second interrupt question.
 	const rewindFromUserMessage = async (messageId: string, text: string): Promise<void> => {
+		if (!store) return;
 		// Converged path: branchAt AFTER the run actually unwinds (runTreeOp).
 		// Hand the message's own id to branchAt: the daemon's user→parent
 		// mapping covers rewind-to-root natively. The old entry lookup +
@@ -1778,7 +1835,7 @@ export function ChatView({
 		// Kimi parity: the reverted prompt goes back into the composer. The
 		// transcript passes the message text; an empty one still moves the leaf
 		// without touching the draft (structural tree revert).
-		await runTreeOp(() => jumpBackToMessage(messageId, text));
+		await withdrawSettled(text, () => jumpBackToMessage(messageId, text));
 	};
 	/** Prompt text carried by a user entry (tree/menu revert needs the same
 	 *  backfill without the transcript row's quoteText plumbing). */
@@ -1972,10 +2029,19 @@ export function ChatView({
 	// skipping the filter on re-entry rendered every sibling at once. Entries
 	// without a parent chain (round markers, synthetic rows) always stay: they
 	// hang off the session root, not off a branch point.
+	//
+	// The daemon's post-move path OVERRIDES the walk (user report: 撤回 left the
+	// withdrawn turn in the transcript). The walk is only as good as the
+	// parentId stamps in the loaded window, and live wire messages may omit
+	// them — a tail whose parentIds all read null is indistinguishable from a
+	// root run, so `complete` can be true while the path is wrong, and the
+	// filter then rendered every sibling including the turn just withdrawn.
+	// The branchAt/leaf_moved response is computed daemon-side from the real
+	// session tree, so when it is present it IS the active path.
 	const visibleEntries = useMemo(
 		() =>
 			filterVisibleEntries(snap?.entries ?? [], leafWalk, activePathIds, {
-				pinnedPathIds: pinnedPathIds ?? undefined,
+				authoritativePathIds: pinnedPathIds ?? undefined,
 				pinnedToRoot: currentLeafKey === "root",
 			}),
 		[snap?.entries, activePathIds, leafWalk, currentLeafKey, pinnedPathIds],
@@ -2264,7 +2330,10 @@ export function ChatView({
 	const pathEntries = useMemo(
 		() =>
 			filterVisibleEntries(overviewEntries, leafWalk, activePathIds, {
-				pinnedPathIds: pinnedPathIds ?? undefined,
+				// Same authority as the transcript: the daemon's post-move path
+				// decides which turns are on the active path, so the rail and the
+				// map agree with what the conversation shows.
+				authoritativePathIds: pinnedPathIds ?? undefined,
 				pinnedToRoot: currentLeafKey === "root",
 			}),
 		[overviewEntries, leafWalk, activePathIds, currentLeafKey, pinnedPathIds],
@@ -2391,12 +2460,19 @@ export function ChatView({
 	// 重答;运行中保护在 runTreeOp)。
 	const handleCanvasBranchTo = useCallback(
 		(id: string): void => {
-			void runTreeOp(async () => {
+			// Re-answer is the same leaf move as 撤回 (the turn leaves the active
+			// path and its text comes back), so it asks the same question — once.
+			const quote = userMessageText(snap?.entries.find(entry => entry.id === id));
+			void withdrawSettled(quote, async () => {
 				const res = await branchTo(id, id);
 				if (res?.editorText) setPendingEdit({ text: res.editorText });
 			});
 		},
-		[runTreeOp, branchTo],
+		// Deliberately not listing withdrawSettled: it is a fresh closure each
+		// render, and listing it would rebuild this card callback (fed to the
+		// memo'd canvas) on every frame. It reads only confirm/runTreeOp/snapRef.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[runTreeOp, branchTo, snap?.entries],
 	);
 	const handleCanvasForkAt = useCallback(
 		(id: string): void => {
@@ -3529,8 +3605,11 @@ export function ChatView({
 																	/* 编辑并重发 (TUI navigateTree 选用户消息 parity):
 																	 * branchAt 到该消息(leaf 落父节点,旧尾部成为
 																	 * sibling branch)+ 原文回填 composer——发送即在
-																	 * 该位置重答。 */
-																	onEdit={(id, text) => void jumpBackToMessage(id, text)}
+																	 * 该位置重答。后果与撤回相同(唯一的区别是草稿
+																	 * 里已经填好原文),所以问同一句。 */
+																	onEdit={(id, text) =>
+																		void withdrawSettled(text, () => jumpBackToMessage(id, text))
+																	}
 																	onFork={(id, text, includeTarget) =>
 																		void forkFromMessage(id, text, includeTarget)
 																	}
@@ -4033,7 +4112,11 @@ export function ChatView({
 								onAddProvider,
 								planShowRequest,
 								onBranchTo: id => {
-									void branchTo(id, id).then(res => {
+									// Same question as the map and the transcript row: the
+									// panel's re-answer moves the leaf exactly like 撤回.
+									const quote = userMessageText(snap?.entries.find(entry => entry.id === id));
+									void withdrawSettled(quote, async () => {
+										const res = await branchTo(id, id);
 										if (res?.editorText) setPendingEdit({ text: res.editorText });
 									});
 								},

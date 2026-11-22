@@ -1,5 +1,5 @@
 # Consistency record for gui-context-and-session.md / gui-context-and-session.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/gui-context-and-session
-gui-context-and-session.md: e5a36ecbb2df1abd0754e0bc9cb5e033bcafca23
-gui-context-and-session.zh-CN.md: c01912f3f663770f589b66790528d045d4d04de2
+gui-context-and-session.md: f9dd3e23e732628cc32b86e8346a2eb244d53aec
+gui-context-and-session.zh-CN.md: 4d368344d9dfba35c6977eb17042b31af1c9fbae

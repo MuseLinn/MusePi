@@ -118,3 +118,80 @@ describe("filterVisibleEntries — pinned contracts", () => {
 		expect(visible.map(e => (e as { id: string }).id)).toEqual(["user:9", "assistant:10"]);
 	});
 });
+
+describe("filterVisibleEntries — the daemon path is a window, not the whole path", () => {
+	/** 130 turns = 260 rows, all on one chain. */
+	function longSession(turns = 130) {
+		const entries: Array<ReturnType<typeof msg>> = [];
+		let parent: string | null = null;
+		for (let i = 1; i <= turns; i += 1) {
+			const user = `u${i}`;
+			const assistant = `a${i}`;
+			entries.push(msg(user, parent));
+			entries.push(msg(assistant, user, "assistant"));
+			parent = assistant;
+		}
+		return entries;
+	}
+
+	it("keeps rows older than the daemon's 200-row tail window", () => {
+		// 评审实测(撤回第 130 轮):daemon 只回 `pathEntries.slice(-200)`,
+		// 客户端保留全部已加载页。若把这段窗口当全路径,窗口外的真实历史
+		// 会在一撤回的瞬间整段消失(260 行 → 200 行)。
+		const entries = longSession();
+		const leaf = "a129";
+		const walk = walkLeafPath(entries, leaf);
+		expect(walk.complete).toBe(true);
+		const fullPath = walk.path.map(p => p.id);
+		const daemonWindow = new Set(fullPath.slice(-200));
+		const visible = filterVisibleEntries(entries, walk, new Set(fullPath), {
+			authoritativePathIds: daemonWindow,
+			pinnedToRoot: false,
+		});
+		expect(visible).toHaveLength(258);
+		expect(visible[0]).toBe(entries[0]!);
+	});
+
+	it("still drops the abandoned tail inside the daemon window", () => {
+		// 窗口内的权威必须照旧生效:撤回第 2 轮后,尾部的 user/assistant 行
+		// 不在 daemon 路径里,一行都不能留。
+		const walk = walkLeafPath(BRANCHED, "assistant:2");
+		const daemon = new Set(["user:1", "assistant:2"]);
+		const visible = filterVisibleEntries(BRANCHED, walk, new Set(walk.path.map(p => p.id)), {
+			authoritativePathIds: daemon,
+			pinnedToRoot: false,
+		});
+		expect(visible.map(e => (e as { id: string }).id)).toEqual(["user:1", "assistant:2"]);
+	});
+
+	it("keeps a non-message row the walk puts on the active path (the daemon ships messages only)", () => {
+		// daemon 的 path 只收 message(`server.ts`: `if (!m) continue`),压在
+		// 活跃路径上的 compaction 分隔不在集合里。它是路径上的行,不能因为
+		// "不在集合"而消失。
+		const entries = [
+			msg("user:1", null),
+			{ type: "compaction", id: "c1", parentId: "user:1", summary: "s" },
+			msg("assistant:2", "c1", "assistant"),
+		];
+		const walk = walkLeafPath(entries, "assistant:2");
+		expect(walk.complete).toBe(true);
+		const visible = filterVisibleEntries(entries, walk, new Set(walk.path.map(p => p.id)), {
+			authoritativePathIds: new Set(["user:1", "assistant:2"]),
+			pinnedToRoot: false,
+		});
+		expect(visible.map(e => (e as { id: string }).id)).toEqual(["user:1", "c1", "assistant:2"]);
+	});
+
+	it("falls back to the walk when the daemon path shares no id with the loaded rows", () => {
+		// 空集或与加载窗完全不相交(daemon 换了 key 空间、路径只覆盖别处)时
+		// 定位不到窗口边界。此时把"没有交集"当成"全在窗口内"会把转录整段
+		// 清空 —— 宁可交给 walk。
+		const entries = [msg("user:1", null), msg("assistant:2", "user:1", "assistant")];
+		const walk = walkLeafPath(entries, "assistant:2");
+		const visible = filterVisibleEntries(entries, walk, new Set(walk.path.map(p => p.id)), {
+			authoritativePathIds: new Set(["elsewhere:1"]),
+			pinnedToRoot: false,
+		});
+		expect(visible.map(e => (e as { id: string }).id)).toEqual(["user:1", "assistant:2"]);
+	});
+});
