@@ -4533,6 +4533,102 @@ button.gui-stats-pill {
 	}
 }
 
+/* Per-model compaction thresholds: rows instead of a JSON blob. Each row is
+ * one override (selector + trigger); the add row is a plain inline form so it
+ * sits inside the settings row's control column without a second card face. */
+.gui-threshold-editor {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
+	max-width: 520px;
+}
+
+.gui-threshold-editor-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.gui-threshold-editor-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto 24px;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 0;
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-threshold-editor-key {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text);
+}
+
+.gui-threshold-editor-value {
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-muted);
+}
+
+.gui-threshold-editor-remove {
+	width: 24px;
+	height: 24px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-muted, var(--color-text-dim));
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.gui-threshold-editor-remove:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text);
+}
+
+.gui-threshold-editor-remove:focus-visible {
+	outline: var(--gui-slider-focus);
+	outline-offset: 1px;
+}
+
+.gui-threshold-editor-add {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 110px auto;
+	gap: 6px;
+	align-items: center;
+}
+
+.gui-threshold-editor-save {
+	padding: 4px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: none;
+	color: var(--color-text);
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.gui-threshold-editor-save:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.gui-threshold-editor-empty {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-muted, var(--color-text-dim));
+}
+
+.gui-threshold-editor-error {
+	font-size: 11.5px;
+	line-height: 1.4;
+	color: var(--color-danger, #e5484d);
+}
+
 .gui-motion-off .gui-shot-veil,
 .gui-motion-off .gui-shot-bar,
 .gui-motion-off .gui-shot-loupe,

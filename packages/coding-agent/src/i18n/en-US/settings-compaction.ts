@@ -116,4 +116,15 @@ export const settingsCompaction = {
 	"settings.compaction.idleDelay.option.10m": "10 minutes",
 	"settings.compaction.idleDelay.option.30m": "30 minutes",
 	"settings.compaction.idleDelay.option.1h": "1 hour",
+
+	"settings.compaction.editor.title": "Edit per model",
+	"settings.compaction.editor.model": "Model",
+	"settings.compaction.editor.pick": "Pick a model",
+	"settings.compaction.editor.value": "Trigger",
+	"settings.compaction.editor.save": "Save",
+	"settings.compaction.editor.remove": "Remove",
+	"settings.compaction.editor.empty": "No per-model override yet.",
+	"settings.compaction.editor.invalid":
+		"Use `provider/model-id` or `provider/*`; the value is a token count, `f90000` or `80%`.",
+	"settings.compaction.editor.hint": "Save from the fields above; `{}` means no override.",
 } satisfies Record<SettingsCompactionKey, string>;

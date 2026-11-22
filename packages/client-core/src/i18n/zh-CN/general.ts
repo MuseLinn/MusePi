@@ -303,7 +303,6 @@ export const general = {
 	"general.autoCompactSwitchToPercent": "改用百分比",
 	"general.autoCompactResetAuto": "恢复自动",
 	"general.autoCompactFollowGlobal": "跟随全局设置",
-	"general.autoCompactHint": "达到占比时自动压缩，并随模型窗口缩放。",
 	"general.cacheHit": "缓存命中",
 	"general.sessionSpend": "本次会话花费",
 	"general.cacheReadTokens": "缓存读取",
@@ -1630,6 +1629,17 @@ export const general = {
 	"general.sessionUnreadFailed": "未读 · 最近一轮失败",
 	"general.appRail": "应用导航",
 	"general.home": "首页",
+	"general.autoCompactHint": "达到占比时自动压缩，并随模型窗口缩放。",
+	"general.compactionEditorEmpty": "还没有按模型覆盖。",
+	"general.compactionEditorModel": "模型",
+	"general.compactionEditorValue": "触发值",
+	"general.compactionEditorTriggerPlaceholder": "80% / f90k / 90k",
+	"general.compactionEditorSave": "保存",
+	"general.compactionEditorRemove": "移除",
+	"general.compactionEditorInvalidKey": "使用 provider/model-id 或 provider/*",
+	"general.compactionEditorInvalidValue": "填百分比（80%）、固定触发点（f90k）或 token 数（90k）",
+	"general.compactionEditorValueRequired": "请填写触发值",
+	"general.compactionEditorKeyPlaceholder": "provider/model-id",
 } as const;
 
 /** Key union for the general settings domain (source of truth). */

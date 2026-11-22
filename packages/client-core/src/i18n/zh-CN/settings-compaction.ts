@@ -1,10 +1,10 @@
 /**
  * `settings.compaction` namespace dictionaries (context → compaction rows).
  *
- * dsh organisation: the Chinese dictionary defines the key set; the English
- * dictionary is checked complete against it at compile time. Schema UI fields
- * carry these keys (not English source text), and the merged domain map makes
- * `t(key)` resolve them on both surfaces.
+ * The Chinese dictionary defines the key set; the English one is checked
+ * complete against it at compile time. Schema UI fields carry these keys (not
+ * English source text), and the merged domain map resolves them on both
+ * surfaces (GUI and TUI).
  */
 export const settingsCompaction = {
 	"settings.compaction.group.core": "压缩",
@@ -110,6 +110,16 @@ export const settingsCompaction = {
 	"settings.compaction.idleDelay.option.10m": "10 分钟",
 	"settings.compaction.idleDelay.option.30m": "30 分钟",
 	"settings.compaction.idleDelay.option.1h": "1 小时",
+
+	"settings.compaction.editor.title": "按模型编辑",
+	"settings.compaction.editor.model": "模型",
+	"settings.compaction.editor.pick": "选择模型",
+	"settings.compaction.editor.value": "触发值",
+	"settings.compaction.editor.save": "保存",
+	"settings.compaction.editor.remove": "移除",
+	"settings.compaction.editor.empty": "还没有按模型覆盖。",
+	"settings.compaction.editor.invalid": "使用 `provider/model-id` 或 `provider/*`，值填 token 数、`f90000` 或 `80%`。",
+	"settings.compaction.editor.hint": "在上方填写后保存；`{}` 表示没有任何覆盖。",
 } as const;
 
 /** The `settings.compaction` key union (the zh dictionary is the source). */

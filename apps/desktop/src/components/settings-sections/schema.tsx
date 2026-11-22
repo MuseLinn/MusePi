@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
+import { CompactionThresholdRowEditor } from "../composer/compaction-threshold-editor";
 import { type SchemaItem, SchemaSettings } from "../SchemaSettings";
 import { TaskCardStylePreview } from "./general";
 
@@ -102,6 +103,11 @@ export function SchemaTabSection({
 			renderExtra={(key, value, commit) =>
 				key === "display.taskCardStyle" ? (
 					<TaskCardStylePreview value={value} onPick={style => commit("display.taskCardStyle", style)} />
+				) : key === "compaction.modelThresholds" ? (
+					<CompactionThresholdRowEditor
+						value={value}
+						onCommit={next => commit("compaction.modelThresholds", next)}
+					/>
 				) : null
 			}
 		/>
